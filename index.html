@@ -1,0 +1,4419 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Central de Análise · Estoque</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Sora:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+<style>
+  /* ── Reset & Variables ── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0f1117;
+    --bg2: #161a24;
+    --bg3: #1e2332;
+    --border: rgba(255,255,255,0.08);
+    --border2: rgba(255,255,255,0.15);
+    --text: #e8eaf0;
+    --text2: #8b90a0;
+    --text3: #555b6e;
+    --accent: #4f9cf9;
+    --accent2: #2563eb;
+    --green: #22c55e;
+    --green-bg: rgba(34,197,94,0.1);
+    --red: #ef4444;
+    --red-bg: rgba(239,68,68,0.1);
+    --amber: #f59e0b;
+    --amber-bg: rgba(245,158,11,0.1);
+    --purple: #a78bfa;
+    --purple-bg: rgba(167,139,250,0.1);
+    --teal: #2dd4bf;
+    --teal-bg: rgba(45,212,191,0.1);
+    --radius: 10px;
+    --radius-lg: 16px;
+    --font: 'Sora', sans-serif;
+    --mono: 'IBM Plex Mono', monospace;
+    --sidebar-w: 220px;
+  }
+
+  html, body { height: 100%; }
+
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── Layout ── */
+  .layout {
+    display: flex;
+    min-height: 100vh;
+    width: 100%;
+  }
+
+  /* ── Sidebar ── */
+  .sidebar {
+    width: var(--sidebar-w);
+    min-width: var(--sidebar-w);
+    background: var(--bg2);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+    flex-shrink: 0;
+    z-index: 50;
+  }
+
+  .logo-concrelagos {
+      max-width: 100%;
+      height: auto;
+      filter: invert(1) hue-rotate(180deg) brightness(1.2); 
+  }
+
+  .sidebar-logo {
+    text-align: center;
+    padding: 24px 2px 2px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .sidebar-logo .logo-mark {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    color: var(--text3);
+    text-transform: uppercase;
+    margin-bottom: 24px;
+  }
+  .sidebar-logo h1 {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text);
+    line-height: 1.3;
+    padding-bottom: 5px;
+  }
+
+  .sidebar-nav { padding: 12px 10px; flex: 1; overflow-y: auto; }
+
+  .nav-section-label {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text3);
+    font-family: var(--mono);
+    padding: 8px 10px 4px;
+    margin-top: 8px;
+  }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 10px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-size: 13.5px;
+    color: var(--text2);
+    font-weight: 400;
+    transition: all 0.15s;
+    border: none;
+    background: none;
+    width: 100%;
+    text-align: left;
+    margin-bottom: 2px;
+    white-space: nowrap;
+  }
+  .nav-item i { font-size: 17px; flex-shrink: 0; }
+  .nav-item:hover { background: var(--bg3); color: var(--text); }
+  .nav-item.active {
+    background: rgba(79,156,249,0.12);
+    color: var(--accent);
+    font-weight: 500;
+  }
+
+  .sidebar-footer {
+    padding: 16px;
+    border-top: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--text3);
+    font-family: var(--mono);
+    flex-shrink: 0;
+  }
+
+  /* ── Mobile nav overlay ── */
+  .mobile-nav-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 49;
+  }
+  .mobile-nav-overlay.open { display: block; }
+
+  /* ── Main ── */
+  .main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;   /* prevents flex child from overflowing */
+    overflow: hidden;
+  }
+
+  /* ── Topbar ── */
+  .topbar {
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+  }
+
+  .topbar-left { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1; }
+
+  .menu-toggle {
+    display: none;
+    background: none;
+    border: 1px solid var(--border2);
+    border-radius: var(--radius);
+    color: var(--text);
+    cursor: pointer;
+    padding: 6px 8px;
+    font-size: 18px;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .topbar-title {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .topbar-sub {
+    font-size: 12px;
+    color: var(--text3);
+    font-family: var(--mono);
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .topbar-actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+
+  /* ── Buttons ── */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 12px;
+    border-radius: var(--radius);
+    font-size: 13px;
+    font-family: var(--font);
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid var(--border2);
+    background: var(--bg3);
+    color: var(--text);
+    transition: all 0.15s;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn i { font-size: 15px; }
+
+  .btn-primary {
+    background: var(--accent2);
+    border-color: var(--accent2);
+    color: #fff;
+  }
+  .btn-primary:hover { background: #1d4ed8; border-color: #1d4ed8; color: #fff; }
+
+  .btn-icon {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text3);
+    padding: 4px 6px;
+    border-radius: 6px;
+    font-size: 15px;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+  }
+  .btn-icon:hover { color: var(--text); background: var(--bg3); }
+  .btn-icon.danger:hover { color: var(--red); }
+
+  /* ── Page content ── */
+  .page-content {
+    flex: 1;
+    padding: 24px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    min-width: 0;
+  }
+
+  .page { display: none; }
+  .page.active { display: block; }
+
+  /* ── Metrics ── */
+  .metrics-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 20px;
+    align-items: stretch;
+  }
+
+  .metric-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 16px 18px;
+    min-height: 110px;
+    height: auto;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    overflow: hidden;
+    flex: 1 1 240px;
+    min-width: 0;
+    width: auto;
+  }
+  .metric-label {
+    font-size: 11px;
+    font-family: var(--mono);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text3);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .metric-label i { font-size: 14px; }
+  .metric-value {
+    font-size: clamp(18px, 2vw, 24px);
+    font-weight: 600;
+    line-height: 1.25;
+    font-family: var(--mono);
+    white-space: nowrap;
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .metric-sub {
+    font-size: 11px;
+    color: var(--text3);
+    margin-top: 6px;
+    line-height: 1.5;
+    white-space: normal;
+  }
+
+  .c-green .metric-value { color: var(--green); }
+  .c-red   .metric-value { color: var(--red); }
+  .c-amber .metric-value { color: var(--amber); }
+  .c-purple .metric-value { color: var(--purple); }
+  .c-blue  .metric-value { color: var(--accent); }
+  .c-teal  .metric-value { color: var(--teal); }
+
+  /* ── Table card ── */
+  .table-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    margin-bottom: 20px;
+  }
+
+  .table-header {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .table-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+  }
+  .table-title i { font-size: 16px; color: var(--text2); }
+
+  .table-toolbar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  /* ── Table scroll wrapper ── */
+  .table-scroll {
+    overflow-x: auto;
+    overflow-y: auto;
+    max-height: 58vh;
+    -webkit-overflow-scrolling: touch;
+  }
+  .table-scroll::-webkit-scrollbar { width: 5px; height: 5px; }
+  .table-scroll::-webkit-scrollbar-track { background: transparent; }
+  .table-scroll::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 10px; }
+
+  /* ── Table ── */
+  table {
+    width: max-content;
+    min-width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    table-layout: fixed;
+  }
+
+  thead th {
+    position: relative;
+    padding: 10px 16px;
+    text-align: left;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text3);
+    border-bottom: 1px solid var(--border);
+    background: var(--bg3);
+    font-weight: 500;
+    white-space: nowrap;
+    min-width: 80px;
+    user-select: none;
+  }
+
+  thead th .col-resizer {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 5px;
+    cursor: col-resize;
+    z-index: 1;
+  }
+  thead th .col-resizer:hover,
+  thead th .col-resizer.dragging {
+    background: var(--accent);
+    opacity: 0.5;
+  }
+
+  tbody tr {
+    border-bottom: 1px solid var(--border);
+    transition: background 0.1s;
+    cursor: pointer;
+  }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: var(--bg3); }
+
+  tbody td {
+    padding: 10px 16px;
+    color: var(--text);
+    vertical-align: middle;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 240px;
+  }
+
+  .td-mono  { font-family: var(--mono); font-size: 12px; }
+  .td-muted { color: var(--text2); font-size: 12px; }
+
+  /* ── Search ── */
+  .search-input {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 6px 12px 6px 30px;
+    font-size: 12.5px;
+    color: var(--text);
+    font-family: var(--font);
+    outline: none;
+    width: 180px;
+    transition: border 0.15s;
+  }
+  .search-input:focus { border-color: var(--accent); }
+  .search-wrap { position: relative; }
+  .search-wrap i {
+    position: absolute;
+    left: 9px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 14px;
+    color: var(--text3);
+    pointer-events: none;
+  }
+
+  /* ── Pagination ── */
+  .pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 18px;
+    border-top: 1px solid var(--border);
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .page-info {
+    font-size: 11.5px;
+    color: var(--text3);
+    font-family: var(--mono);
+    white-space: nowrap;
+  }
+  .page-btns { display: flex; gap: 5px; }
+
+  /* ── Badge ── */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 500;
+    font-family: var(--mono);
+    white-space: nowrap;
+  }
+  .badge-green  { background: var(--green-bg);              color: var(--green); }
+  .badge-red    { background: var(--red-bg);                color: var(--red); }
+  .badge-amber  { background: var(--amber-bg);              color: var(--amber); }
+  .badge-blue   { background: rgba(79,156,249,0.1);         color: var(--accent); }
+  .badge-purple { background: var(--purple-bg);             color: var(--purple); }
+  .badge-teal   { background: var(--teal-bg);               color: var(--teal); }
+
+  /* ── Import area ── */
+  .import-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 14px;
+    margin-bottom: 20px;
+  }
+
+  .import-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .import-card-header { display: flex; align-items: center; gap: 10px; }
+  .import-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: var(--radius);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 19px;
+    flex-shrink: 0;
+  }
+  .import-card-title { font-size: 13.5px; font-weight: 500; }
+  .import-card-desc  { font-size: 11.5px; color: var(--text2); line-height: 1.6; }
+
+  .drop-zone {
+    border: 1.5px dashed var(--border2);
+    border-radius: var(--radius);
+    padding: 18px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-size: 12px;
+    color: var(--text3);
+  }
+  .drop-zone:hover { border-color: var(--accent); color: var(--accent); background: rgba(79,156,249,0.04); }
+  .drop-zone i { display: block; font-size: 22px; margin-bottom: 6px; }
+  .file-input { display: none; }
+
+  /* ── Form ── */
+  .form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .form-group { display: flex; flex-direction: column; gap: 5px; }
+  .form-label {
+    font-size: 11px;
+    font-family: var(--mono);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text3);
+  }
+  .form-input, .form-select {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 8px 12px;
+    font-size: 13px;
+    color: var(--text);
+    font-family: var(--font);
+    outline: none;
+    transition: border 0.15s;
+    -webkit-appearance: none;
+    width: 100%;
+  }
+  .form-input:focus, .form-select:focus { border-color: var(--accent); }
+  .form-select option { background: var(--bg2); }
+  .form-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; flex-wrap: wrap; }
+
+  /* ── Modal ── */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--bg2);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius-lg);
+    padding: 24px;
+    width: 100%;
+    max-width: 540px;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+  .modal-title {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .modal-title i { color: var(--accent); }
+  .modal-sub { font-size: 12px; color: var(--text3); margin-bottom: 20px; font-family: var(--mono); }
+
+  /* ── Tabs ── */
+  .tabs {
+    display: flex;
+    gap: 2px;
+    background: var(--bg3);
+    border-radius: var(--radius);
+    padding: 3px;
+    margin-bottom: 20px;
+    border: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+  .tab-btn {
+    flex: 1;
+    min-width: 80px;
+    padding: 7px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text2);
+    cursor: pointer;
+    border: none;
+    background: none;
+    font-family: var(--font);
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+  }
+  .tab-btn i { font-size: 14px; }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active { background: var(--bg2); color: var(--text); border: 1px solid var(--border2); }
+
+  /* ── Empty state ── */
+  .empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text3);
+  }
+  .empty-state i { font-size: 34px; margin-bottom: 10px; display: block; }
+  .empty-state p  { font-size: 13px; line-height: 1.6; }
+
+  /* ── Toast ── */
+  .toast {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: var(--bg2);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    z-index: 200;
+    transform: translateY(80px);
+    opacity: 0;
+    transition: all 0.3s;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    max-width: calc(100vw - 40px);
+  }
+  .toast.show { transform: translateY(0); opacity: 1; }
+  .toast i { font-size: 17px; flex-shrink: 0; }
+  .toast.success i { color: var(--green); }
+  .toast.error   i { color: var(--red); }
+
+  /* ── Global scrollbar ── */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 10px; }
+
+  /* ── Section title ── */
+  .section-title {
+    font-size: 11px;
+    font-family: var(--mono);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text3);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .section-title::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* ── Config rows ── */
+  .config-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--border);
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .config-row:last-child { border-bottom: none; }
+  .config-key  { font-family: var(--mono); font-size: 12px; color: var(--text2); min-width: 140px; }
+  .config-val  { font-size: 13px; color: var(--text); flex: 1; min-width: 100px; }
+  .config-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+  /* ── Stat inline ── */
+  .stat-inline { display: flex; align-items: center; gap: 4px; font-size: 11.5px; font-family: var(--mono); }
+  .stat-up   { color: var(--green); }
+  .stat-down { color: var(--red); }
+
+  /* ── Responsive: tablet ── */
+  @media (max-width: 900px) {
+    .topbar-sub { display: none; }
+    .search-input { width: 140px; }
+    .metric-card { flex: 1 1 140px; }
+  }
+
+  /* ── Responsive: mobile ── */
+  @media (max-width: 640px) {
+    /* Sidebar becomes a slide-in drawer */
+    .sidebar {
+      position: fixed;
+      left: -100%;
+      top: 0;
+      height: 100vh;
+      transition: left 0.25s ease;
+      z-index: 50;
+      box-shadow: 4px 0 24px rgba(0,0,0,0.5);
+    }
+    .sidebar.open { left: 0; }
+
+    /* Show hamburger */
+    .menu-toggle { display: flex; }
+
+    .page-content { padding: 14px; }
+
+    .topbar { padding: 10px 14px; }
+    .topbar-actions .btn span { display: none; }   /* hide button text, keep icon */
+    .topbar-actions .btn { padding: 7px 9px; }
+
+    .metrics-grid { gap: 10px; }
+    .metric-card { flex: 1 1 calc(50% - 5px); min-width: 0; }
+    .metric-value { font-size: 20px; }
+
+    .table-header { flex-direction: column; align-items: flex-start; }
+    .table-toolbar { width: 100%; }
+    .search-input  { flex: 1; width: 100%; }
+
+    .pagination { flex-direction: column; align-items: flex-start; gap: 8px; }
+
+    .import-grid { grid-template-columns: 1fr; }
+
+    .form-grid { grid-template-columns: 1fr; }
+
+    .modal { padding: 18px; }
+    .tabs { flex-wrap: wrap; }
+    .tab-btn { min-width: calc(50% - 2px); }
+
+    .config-key { min-width: unset; width: 100%; }
+    .config-row { flex-direction: column; align-items: flex-start; }
+  }
+  /* ── Dashboard Analítico ── */
+  .analitico-toolbar {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 16px 20px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
+  .analitico-period {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    flex: 1;
+  }
+  .period-field {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-width: 150px;
+  }
+
+  /* Macro table row coloring */
+  .var-pos td.var-cell { color: var(--amber); font-weight: 600; }
+  .var-neg td.var-cell { color: var(--red);   font-weight: 600; }
+  .var-zero td.var-cell { color: var(--text3); }
+  td.var-cell-pos { color: var(--amber) !important; font-weight: 600; }
+  td.var-cell-neg { color: var(--red)   !important; font-weight: 600; }
+  td.var-cell-zero{ color: var(--text3) !important; }
+  td.pending-cell { color: var(--text3) !important; font-style: italic; font-size: 11px; }
+
+  /* Micro filial cards */
+  .micro-filial-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    margin-bottom: 20px;
+    overflow: hidden;
+  }
+  .micro-filial-header {
+    background: var(--bg3);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    cursor: pointer;
+    user-select: none;
+  }
+  .micro-filial-header:hover { background: rgba(79,156,249,0.06); }
+  .micro-filial-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .micro-filial-name i { color: var(--accent); font-size: 16px; }
+  .micro-filial-summary {
+    display: flex;
+    gap: 20px;
+    font-size: 12px;
+    font-family: var(--mono);
+    color: var(--text3);
+    flex-wrap: wrap;
+  }
+  .micro-filial-summary span { display: flex; align-items: center; gap: 5px; }
+  .micro-filial-body { display: none; }
+  .micro-filial-body.open { display: block; }
+  .micro-body-section {
+    padding: 16px 18px 0;
+  }
+  .micro-section-title {
+    font-size: 10px;
+    font-family: var(--mono);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text3);
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .micro-section-title::after { content:''; flex:1; height:1px; background:var(--border); }
+
+  /* Prod badge in micro */
+  .prod-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--purple-bg);
+    color: var(--purple);
+    border-radius: var(--radius);
+    padding: 4px 12px;
+    font-family: var(--mono);
+    font-size: 12px;
+    margin-bottom: 16px;
+  }
+
+  /* Diff row highlight */
+  .diff-pos { color: var(--amber); font-weight: 600; }
+  .diff-neg { color: var(--red);   font-weight: 600; }
+  .diff-zero{ color: var(--green); }
+
+  @media (max-width: 640px) {
+    .analitico-toolbar { flex-direction: column; align-items: flex-start; }
+    .analitico-period { flex-direction: column; width: 100%; }
+    .period-field { width: 100%; }
+    .micro-filial-summary { gap: 10px; }
+  }
+
+</style>
+</head>
+<body>
+
+<div class="layout">
+
+<div class="mobile-nav-overlay" id="nav-overlay" onclick="closeSidebar()"></div>
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <img class="logo-concrelagos" src="https://concrelagos.com.br/wp-content/uploads/2021/10/Ativo-3.svg" alt="Logo Concrelagos" style="max-width: 85%; height: auto; object-fit: contain; margin-bottom: 5px;">
+      <h1 style="font-size: 0.9rem; font-weight: 500; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px;">SYSTOQUE</h2>
+      <div class="logo-mark">Gestão · Estoque</div>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-section-label">Visão Geral</div>
+      <button class="nav-item active" onclick="navigate('dashboard')">
+        <i class="ti ti-layout-dashboard"></i> Dashboard
+      </button>
+      <button class="nav-item" onclick="navigate('analitico')">
+        <i class="ti ti-chart-area"></i> Dashboard Analítico
+      </button>
+
+      <div class="nav-section-label">Módulos</div>
+      <button class="nav-item" onclick="navigate('entradas')">
+        <i class="ti ti-package-import"></i> Entradas (NF)
+      </button>
+      <button class="nav-item" onclick="navigate('saidas')">
+        <i class="ti ti-package-export"></i> Saídas (OS)
+      </button>
+      <button class="nav-item" onclick="navigate('lancamentos')">
+        <i class="ti ti-clipboard-list"></i> Lançamentos
+      </button>
+      <button class="nav-item" onclick="navigate('sap')">
+        <i class="ti ti-database"></i> SAP
+      </button>
+      <button class="nav-item" onclick="navigate('producao')">
+        <i class="ti ti-chart-bar"></i> Produção
+      </button>
+
+      <div class="nav-section-label">Gestão</div>
+      <button class="nav-item" onclick="navigate('importar')">
+        <i class="ti ti-file-upload"></i> Importar Dados
+      </button>
+      <button class="nav-item" onclick="navigate('configuracoes')">
+        <i class="ti ti-settings"></i> Configurações
+      </button>
+    </nav>
+    <div class="sidebar-footer">
+      v1.0.0 · local
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar-left">
+        <button class="menu-toggle" onclick="toggleSidebar()" aria-label="Menu"><i class="ti ti-menu-2"></i></button>
+        <div>
+          <div class="topbar-title" id="page-title">Dashboard</div>
+          <div class="topbar-sub" id="page-sub">visão consolidada de todos os módulos</div>
+        </div>
+      </div>
+      <div class="topbar-actions">
+        <button class="btn" onclick="exportarDados()"><i class="ti ti-download"></i> <span>Exportar</span></button>
+        <button class="btn btn-primary" onclick="openModal('modal-manual')"><i class="ti ti-plus"></i> <span>Novo Registro</span></button>
+      </div>
+    </div>
+
+    <div class="page-content">
+
+      <!-- DASHBOARD -->
+      <div class="page active" id="page-dashboard">
+        <div class="metrics-grid">
+          <div class="metric-card c-green">
+            <div class="metric-label"><i class="ti ti-package-import"></i>Entradas</div>
+            <div class="metric-value" id="m-entradas">0</div>
+            <div class="metric-sub">notas fiscais cadastradas</div>
+          </div>
+          <div class="metric-card c-red">
+            <div class="metric-label"><i class="ti ti-package-export"></i>Saídas</div>
+            <div class="metric-value" id="m-saidas">0</div>
+            <div class="metric-sub">ordens de serviço</div>
+          </div>
+          <div class="metric-card c-amber">
+            <div class="metric-label"><i class="ti ti-clipboard-list"></i>Lançamentos</div>
+            <div class="metric-value" id="m-lancamentos">0</div>
+            <div class="metric-sub">saldo real registrado</div>
+          </div>
+          <div class="metric-card c-blue">
+            <div class="metric-label"><i class="ti ti-database"></i>Registros SAP</div>
+            <div class="metric-value" id="m-sap">0</div>
+            <div class="metric-sub">movimentações importadas</div>
+          </div>
+          <div class="metric-card c-purple">
+            <div class="metric-label"><i class="ti ti-stack-2"></i>Materiais</div>
+            <div class="metric-value" id="m-materiais">0</div>
+            <div class="metric-sub">códigos únicos</div>
+          </div>
+          <div class="metric-card c-teal">
+            <div class="metric-label"><i class="ti ti-building-warehouse"></i>Centrais</div>
+            <div class="metric-value" id="m-centrais">0</div>
+            <div class="metric-sub">centrais identificadas</div>
+          </div>
+
+          <div class="metric-card c-purple">
+            <div class="metric-label"><i class="ti ti-chart-bar"></i>Produção</div>
+            <div class="metric-value" id="m-producao">0</div>
+            <div class="metric-sub">registros de produção</div>
+          </div>
+        </div>
+
+        <div class="section-title">Últimas Movimentações</div>
+        <div class="table-card">
+          <div class="table-header">
+            <span class="table-title"><i class="ti ti-clock"></i> Feed de registros recentes</span>
+            <div class="table-toolbar">
+              <div class="search-wrap">
+                <i class="ti ti-search"></i>
+                <input type="text" class="search-input" placeholder="Buscar em todas as colunas..." oninput="filtrarLista('dashboard', this.value)">
+              </div>
+            </div>
+          </div>
+          <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Módulo</th>
+                <th>Material</th>
+                <th>Central</th>
+                <th>Qtd / Valor</th>
+                <th>Data</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="tb-dashboard">
+              <tr><td colspan="7"><div class="empty-state"><i class="ti ti-inbox"></i><p>Nenhum registro ainda.<br>Importe dados ou cadastre manualmente.</p></div></td></tr>
+            </tbody>
+          </table>
+          </div><!-- /table-scroll dashboard -->
+          <div class="pagination">
+            <span class="page-info" id="pi-dashboard">0 registros</span>
+            <div class="page-btns">
+              <button class="btn" title="Primeiro" onclick="irParaPagina('dashboard',0)"><i class="ti ti-chevrons-left"></i></button>
+              <button class="btn" title="Anterior" onclick="paginaAnterior('dashboard')"><i class="ti ti-chevron-left"></i></button>
+              <button class="btn" title="Próxima" onclick="proximaPagina('dashboard')"><i class="ti ti-chevron-right"></i></button>
+              <button class="btn" title="Último" onclick="irParaUltima('dashboard')"><i class="ti ti-chevrons-right"></i></button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- DASHBOARD ANALÍTICO -->
+      <div class="page" id="page-analitico">
+
+        <!-- ── Barra de período ── -->
+        <div class="analitico-toolbar">
+          <div class="analitico-period">
+            <div class="period-field">
+              <label class="form-label">Data Início</label>
+              <input type="date" class="form-input" id="an-dt-ini" onchange="rodarAnalitico()">
+            </div>
+            <div class="period-field">
+              <label class="form-label">Data Fim</label>
+              <input type="date" class="form-input" id="an-dt-fim" onchange="rodarAnalitico()">
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:flex-end">
+            <button class="btn btn-primary" onclick="rodarAnalitico()">
+              <i class="ti ti-player-play"></i> <span>Analisar</span>
+            </button>
+            <button class="btn" onclick="limparAnalitico()">
+              <i class="ti ti-x"></i>
+            </button>
+          </div>
+        </div>
+
+        <div id="an-empty" class="empty-state" style="padding:60px 20px">
+          <i class="ti ti-chart-area" style="font-size:40px;margin-bottom:12px;display:block"></i>
+          <p>Selecione um período e clique em <strong>Analisar</strong> para gerar o relatório.</p>
+        </div>
+
+        <div id="an-content" style="display:none">
+
+          <!-- ═══ MACRO ═══ -->
+          <div class="section-title">Visão Macro — Todas as Filiais</div>
+
+          <div class="table-card" style="margin-bottom:24px">
+            <div class="table-header">
+              <span class="table-title"><i class="ti ti-building-warehouse"></i> Resumo por Filial</span>
+              <span class="table-title" id="an-periodo-label" style="color:var(--text3);font-size:12px;font-family:var(--mono)"></span>
+            </div>
+            <div class="table-scroll">
+              <table id="an-macro-table">
+                <thead>
+                  <tr>
+                    <th>Filial</th>
+                    <th title="Movimentos 101 e 801 no SAP com peso positivo">Entradas SAP<br><span style="font-size:9px;font-weight:400;opacity:.7">(101 + 801)</span></th>
+                    <th title="Movimentos 201 no SAP com peso negativo">Saídas SAP<br><span style="font-size:9px;font-weight:400;opacity:.7">(201)</span></th>
+                    <th title="1º Lançamento + Entradas SAP + Saídas SAP vs. Último Lançamento">Variação de Estoque<br><span style="font-size:9px;font-weight:400;opacity:.7">Real − Teórico</span></th>
+                    <th title="Em construção">Variação de Custo<br><span style="font-size:9px;font-weight:400;opacity:.7">a consolidar</span></th>
+                  </tr>
+                </thead>
+                <tbody id="an-macro-body">
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- ═══ MICRO ═══ -->
+          <div class="section-title">Visão Micro — Por Filial e Material</div>
+
+          <div id="an-micro-container"></div>
+
+        </div>
+      </div>
+
+      <!-- ENTRADAS -->
+      <div class="page" id="page-entradas">
+        <div class="table-card">
+          <div class="table-header">
+            <span class="table-title"><i class="ti ti-package-import"></i> Notas Fiscais de Entrada</span>
+            <div class="table-toolbar">
+              <div class="search-wrap">
+                <i class="ti ti-search"></i>
+                <input type="text" class="search-input" placeholder="Buscar qualquer coluna..." oninput="filtrarTabela('tb-entradas', this.value)">
+              </div>
+              <button class="btn" onclick="openModal('modal-manual'); setModulo('Entrada')"><i class="ti ti-plus"></i> Adicionar</button>
+            </div>
+          </div>
+          <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Central Compra</th>
+                <th>Central Destino</th>
+                <th>Nº NF</th>
+                <th>Dt. Emissão</th>
+                <th>Dt. Descarga</th>
+                <th>Fornecedor</th>
+                <th>Categoria</th>
+                <th>Material</th>
+                <th>Peso</th>
+                <th>UM</th>
+                <th>Custo Unit.</th>
+                <th>Valor Total</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="tb-entradas">
+              <tr><td colspan="13"><div class="empty-state"><i class="ti ti-package"></i><p>Nenhuma entrada cadastrada.<br>Importe uma planilha ou adicione manualmente.</p></div></td></tr>
+            </tbody>
+          </table>
+          </div><!-- /table-scroll entradas -->
+          <div class="pagination">
+            <span class="page-info" id="pi-entradas">0 registros</span>
+            <div class="page-btns">
+              <button class="btn" title="Primeiro" onclick="irParaPagina('entradas',0)"><i class="ti ti-chevrons-left"></i></button>
+              <button class="btn" title="Anterior" onclick="paginaAnterior('entradas')"><i class="ti ti-chevron-left"></i></button>
+              <button class="btn" title="Próxima" onclick="proximaPagina('entradas')"><i class="ti ti-chevron-right"></i></button>
+              <button class="btn" title="Último" onclick="irParaUltima('entradas')"><i class="ti ti-chevrons-right"></i></button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SAÍDAS -->
+      <div class="page" id="page-saidas">
+        <div class="table-card">
+          <div class="table-header">
+            <span class="table-title"><i class="ti ti-package-export"></i> Ordens de Serviço — Saídas</span>
+            <div class="table-toolbar">
+              <div class="search-wrap">
+                <i class="ti ti-search"></i>
+                <input type="text" class="search-input" placeholder="Buscar qualquer coluna..." oninput="filtrarTabela('tb-saidas', this.value)">
+              </div>
+              <button class="btn" onclick="openModal('modal-manual'); setModulo('Saída')"><i class="ti ti-plus"></i> Adicionar</button>
+            </div>
+          </div>
+          <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Central Saída</th>
+                <th>Dt. Emissão</th>
+                <th>Nº OS</th>
+                <th>Contrato</th>
+                <th>Categoria</th>
+                <th>Fornecedor</th>
+                <th>Material</th>
+                <th>Peso</th>
+                <th>UM</th>
+                <th>Custo Unit.</th>
+                <th>Valor Total</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="tb-saidas">
+              <tr><td colspan="12"><div class="empty-state"><i class="ti ti-truck"></i><p>Nenhuma saída cadastrada.</p></div></td></tr>
+            </tbody>
+          </table>
+          </div><!-- /table-scroll saidas -->
+          <div class="pagination">
+            <span class="page-info" id="pi-saidas">0 registros</span>
+            <div class="page-btns">
+              <button class="btn" title="Primeiro" onclick="irParaPagina('saidas',0)"><i class="ti ti-chevrons-left"></i></button>
+              <button class="btn" title="Anterior" onclick="paginaAnterior('saidas')"><i class="ti ti-chevron-left"></i></button>
+              <button class="btn" title="Próxima" onclick="proximaPagina('saidas')"><i class="ti ti-chevron-right"></i></button>
+              <button class="btn" title="Último" onclick="irParaUltima('saidas')"><i class="ti ti-chevrons-right"></i></button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- LANÇAMENTOS -->
+      <div class="page" id="page-lancamentos">
+        <div class="table-card">
+          <div class="table-header">
+            <span class="table-title"><i class="ti ti-clipboard-list"></i> Lançamentos — Saldo Real</span>
+            <div class="table-toolbar">
+              <div class="search-wrap">
+                <i class="ti ti-search"></i>
+                <input type="text" class="search-input" placeholder="Buscar qualquer coluna..." oninput="filtrarTabela('tb-lancamentos', this.value)">
+              </div>
+              <button class="btn" onclick="openModal('modal-manual'); setModulo('Lançamento')"><i class="ti ti-plus"></i> Adicionar</button>
+            </div>
+          </div>
+          <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Central Estoque</th>
+                <th>Dt. Lançamento</th>
+                <th>Fornecedor</th>
+                <th>Categoria</th>
+                <th>Material</th>
+                <th>Peso</th>
+                <th>UM</th>
+                <th>Custo Unit.</th>
+                <th>Valor Total</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="tb-lancamentos">
+              <tr><td colspan="10"><div class="empty-state"><i class="ti ti-clipboard"></i><p>Nenhum lançamento de saldo real.</p></div></td></tr>
+            </tbody>
+          </table>
+          </div><!-- /table-scroll lancamentos -->
+          <div class="pagination">
+            <span class="page-info" id="pi-lancamentos">0 registros</span>
+            <div class="page-btns">
+              <button class="btn" title="Primeiro" onclick="irParaPagina('lancamentos',0)"><i class="ti ti-chevrons-left"></i></button>
+              <button class="btn" title="Anterior" onclick="paginaAnterior('lancamentos')"><i class="ti ti-chevron-left"></i></button>
+              <button class="btn" title="Próxima" onclick="proximaPagina('lancamentos')"><i class="ti ti-chevron-right"></i></button>
+              <button class="btn" title="Último" onclick="irParaUltima('lancamentos')"><i class="ti ti-chevrons-right"></i></button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SAP -->
+      <div class="page" id="page-sap">
+        <div class="table-card">
+          <div class="table-header">
+            <span class="table-title"><i class="ti ti-database"></i> Movimentações SAP</span>
+            <div class="table-toolbar">
+              <div class="search-wrap">
+                <i class="ti ti-search"></i>
+                <input type="text" class="search-input" placeholder="Buscar qualquer coluna..." oninput="filtrarTabela('tb-sap', this.value)">
+              </div>
+              <button class="btn" onclick="navigate('importar')"><i class="ti ti-file-upload"></i> Importar</button>
+            </div>
+          </div>
+          <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Usuário</th>
+                <th>Movimento</th>
+                <th>Ref.</th>
+                <th>Documento</th>
+                <th>Central</th>
+                <th>Depósito</th>
+                <th>Dt. Doc.</th>
+                <th>Dt. Lançamento</th>
+                <th>Dt. Registro</th>
+                <th>Material</th>
+                <th>Peso</th>
+                <th>UM</th>
+                <th>Custo Unit.</th>
+                <th>Custo Total</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="tb-sap">
+              <tr><td colspan="15"><div class="empty-state"><i class="ti ti-database"></i><p>Nenhuma movimentação SAP importada.</p></div></td></tr>
+            </tbody>
+          </table>
+          </div><!-- /table-scroll sap -->
+          <div class="pagination">
+            <span class="page-info" id="pi-sap">0 registros</span>
+            <div class="page-btns">
+              <button class="btn" title="Primeiro" onclick="irParaPagina('sap',0)"><i class="ti ti-chevrons-left"></i></button>
+              <button class="btn" title="Anterior" onclick="paginaAnterior('sap')"><i class="ti ti-chevron-left"></i></button>
+              <button class="btn" title="Próxima" onclick="proximaPagina('sap')"><i class="ti ti-chevron-right"></i></button>
+              <button class="btn" title="Último" onclick="irParaUltima('sap')"><i class="ti ti-chevrons-right"></i></button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      
+      
+      <!-- PRODUÇÃO -->
+      <div class="page" id="page-producao">
+
+        <div class="metrics-grid">
+          <div class="metric-card c-green">
+            <div class="metric-label"><i class="ti ti-building-factory"></i>Centrais</div>
+            <div class="metric-value" id="prod-centrais">0</div>
+            <div class="metric-sub">centrais produtivas</div>
+          </div>
+
+          <div class="metric-card c-purple">
+            <div class="metric-label"><i class="ti ti-chart-bar"></i>Produção Total</div>
+            <div class="metric-value" id="prod-total">0</div>
+            <div class="metric-sub">m³ produzidos</div>
+          </div>
+
+          <div class="metric-card c-teal">
+            <div class="metric-label"><i class="ti ti-cash"></i>Total Vendas</div>
+            <div class="metric-value" id="prod-vendas">R$ 0</div>
+            <div class="metric-sub">faturamento consolidado</div>
+          </div>
+
+          <div class="metric-card c-amber">
+            <div class="metric-label"><i class="ti ti-coins"></i>Custo Médio</div>
+            <div class="metric-value" id="prod-custo">R$ 0</div>
+            <div class="metric-sub">custo médio consolidado</div>
+          </div>
+
+          <div class="metric-card c-red">
+            <div class="metric-label"><i class="ti ti-report-money"></i>Margem</div>
+            <div class="metric-value" id="prod-margem">—</div>
+            <div class="metric-sub">valor contábil</div>
+          </div>
+        </div>
+
+        <div class="table-card">
+          <div class="table-header">
+            <span class="table-title">
+              <i class="ti ti-chart-bar"></i>
+              Produção — Produção Real
+            </span>
+
+            <div class="table-toolbar">
+              <div class="search-wrap">
+                <i class="ti ti-search"></i>
+                <input type="text"
+                       class="search-input"
+                       placeholder="Buscar qualquer coluna..."
+                       oninput="filtrarProducao(this.value)">
+              </div>
+
+              <button class="btn" onclick="openModal('modal-producao')">
+                <i class="ti ti-plus"></i>
+                Adicionar
+              </button>
+            </div>
+          </div>
+
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Mês</th>
+                  <th>Central Prod.</th>
+                  <th>Produção</th>
+                  <th>UM</th>
+                  <th>Preço Médio</th>
+                  <th>Custo Médio</th>
+                  <th>Margem</th>
+                  <th>Total Vendas</th>
+                  <th></th>
+                </tr>
+              </thead>
+
+              <tbody id="tb-producao">
+                <tr>
+                  <td colspan="9">
+                    <div class="empty-state">
+                      <i class="ti ti-chart-bar"></i>
+                      <p>Nenhum registro de produção importado.</p>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="pagination">
+            <span class="page-info" id="pi-producao">0 registros</span>
+
+            <div class="page-btns">
+              <button class="btn" onclick="primeiraPaginaProducao()">
+                <i class="ti ti-chevrons-left"></i>
+              </button>
+
+              <button class="btn" onclick="paginaAnteriorProducao()">
+                <i class="ti ti-chevron-left"></i>
+              </button>
+
+              <button class="btn" onclick="proximaPaginaProducao()">
+                <i class="ti ti-chevron-right"></i>
+              </button>
+
+              <button class="btn" onclick="ultimaPaginaProducao()">
+                <i class="ti ti-chevrons-right"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- IMPORTAR -->
+
+      <div class="page" id="page-importar">
+        <div class="import-grid">
+          <!-- Entradas -->
+          <div class="import-card">
+            <div class="import-card-header">
+              <div class="import-icon" style="background:var(--green-bg);color:var(--green)"><i class="ti ti-package-import"></i></div>
+              <div>
+                <div class="import-card-title">Entradas (NF)</div>
+                <div style="font-size:11px;color:var(--text3);font-family:var(--mono)">Notas Fiscais</div>
+              </div>
+            </div>
+            <div class="import-card-desc">Importe o arquivo Excel exportado do POWERBI (RESUMO DE ENTRADAS - PUZL) para extrair os dados de entradas.</div>
+            <div class="drop-zone" onclick="document.getElementById('file-entradas').click()">
+              <i class="ti ti-upload"></i>
+              Arraste ou clique para selecionar
+            </div>
+            <input type="file" id="file-entradas" class="file-input" accept=".xlsx,.csv" onchange="handleImport(event, 'Entrada')">
+          </div>
+
+          <!-- Saídas -->
+          <div class="import-card">
+            <div class="import-card-header">
+              <div class="import-icon" style="background:var(--red-bg);color:var(--red)"><i class="ti ti-package-export"></i></div>
+              <div>
+                <div class="import-card-title">Saídas (OS)</div>
+                <div style="font-size:11px;color:var(--text3);font-family:var(--mono)">Ordens de Serviço</div>
+              </div>
+            </div>
+            <div class="import-card-desc">Importe o arquivo Excel exportado do POWERBI (SAÍDA DE MATERIAL POR OS - PUZL) para extrair os dados de saídas.</div>
+            <div class="drop-zone" onclick="document.getElementById('file-saidas').click()">
+              <i class="ti ti-upload"></i>
+              Arraste ou clique para selecionar
+            </div>
+            <input type="file" id="file-saidas" class="file-input" accept=".xlsx,.csv" onchange="handleImport(event, 'Saída')">
+          </div>
+
+          <!-- Lançamentos -->
+          <div class="import-card">
+            <div class="import-card-header">
+              <div class="import-icon" style="background:var(--amber-bg);color:var(--amber)"><i class="ti ti-clipboard-list"></i></div>
+              <div>
+                <div class="import-card-title">Lançamentos</div>
+                <div style="font-size:11px;color:var(--text3);font-family:var(--mono)">Saldo Real</div>
+              </div>
+            </div>
+            <div class="import-card-desc">Importe o arquivo Excel exportado da PUZL (ESTOQUE MCC) para extrair os dados de lançamentos de estoque.</div>
+            <div class="drop-zone" onclick="document.getElementById('file-lanc').click()">
+              <i class="ti ti-upload"></i>
+              Arraste ou clique para selecionar
+            </div>
+            <input type="file" id="file-lanc" class="file-input" accept=".xlsx,.csv" onchange="handleImport(event, 'Lançamento')">
+          </div>
+
+          <!-- SAP -->
+          <div class="import-card">
+            <div class="import-card-header">
+              <div class="import-icon" style="background:rgba(79,156,249,0.1);color:var(--accent)"><i class="ti ti-database"></i></div>
+              <div>
+                <div class="import-card-title">SAP</div>
+                <div style="font-size:11px;color:var(--text3);font-family:var(--mono)">Movimentações</div>
+              </div>
+            </div>
+            <div class="import-card-desc">Importe o arquivo Excel exportado do SAP (TRANSAÇÃO MB51) para extrair os dados de movimentações de saldo.</div>
+            <div class="drop-zone" onclick="document.getElementById('file-sap').click()">
+              <i class="ti ti-upload"></i>
+              Arraste ou clique para selecionar
+            </div>
+            <input type="file" id="file-sap" class="file-input" accept=".xlsx,.csv" onchange="handleImport(event, 'SAP')">
+          </div>
+
+          <!-- Produção -->
+          <div class="import-card">
+            <div class="import-card-header">
+              <div class="import-icon" style="background:var(--purple-bg);color:var(--purple)"><i class="ti ti-chart-bar"></i></div>
+              <div>
+                <div class="import-card-title">Produção</div>
+                <div style="font-size:11px;color:var(--text3);font-family:var(--mono)">Produção por Central</div>
+              </div>
+            </div>
+            <div class="import-card-desc">Importe o arquivo Excel exportado da PUZL (GERENCIAL - RESUMO GERAL) para extrair os dados de produção mensal.</div>
+            <div class="drop-zone" onclick="document.getElementById('file-producao').click()">
+              <i class="ti ti-upload"></i>
+              Arraste ou clique para selecionar
+            </div>
+            <input type="file" id="file-producao" class="file-input" accept=".xlsx,.csv" onchange="handleImport(event, 'Produção')">
+          </div>
+
+
+        </div>
+
+        <!-- Histórico de importações -->
+        <div class="section-title">Histórico de Importações</div>
+        <div class="table-card">
+          <div class="table-header">
+            <span class="table-title"><i class="ti ti-file-upload"></i> Importações registradas</span>
+            <div class="table-toolbar">
+              <div class="search-wrap">
+                <i class="ti ti-search"></i>
+                <input type="text" class="search-input" placeholder="Buscar arquivo, módulo, status..." oninput="filtrarLista('imports', this.value)">
+              </div>
+            </div>
+          </div>
+          <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Arquivo</th>
+                <th>Módulo</th>
+                <th>Registros</th>
+                <th>Data/Hora</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="tb-imports">
+              <tr><td colspan="6"><div class="empty-state"><i class="ti ti-file-off"></i><p>Nenhum arquivo importado ainda.</p></div></td></tr>
+            </tbody>
+          </table>
+          </div><!-- /table-scroll imports -->
+          <div class="pagination">
+            <span class="page-info" id="pi-imports">0 registros</span>
+            <div class="page-btns">
+              <button class="btn" title="Primeiro" onclick="irParaPagina('imports',0)"><i class="ti ti-chevrons-left"></i></button>
+              <button class="btn" title="Anterior" onclick="paginaAnterior('imports')"><i class="ti ti-chevron-left"></i></button>
+              <button class="btn" title="Próxima" onclick="proximaPagina('imports')"><i class="ti ti-chevron-right"></i></button>
+              <button class="btn" title="Último" onclick="irParaUltima('imports')"><i class="ti ti-chevrons-right"></i></button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- CONFIGURAÇÕES -->
+      <div class="page" id="page-configuracoes">
+        <div class="section-title">Configurações do Sistema</div>
+        <div class="table-card" style="margin-bottom:24px">
+          <div class="table-header">
+            <span class="table-title"><i class="ti ti-settings"></i> Parâmetros Gerais</span>
+            <button class="btn" onclick="openModal('modal-config')"><i class="ti ti-plus"></i> Nova Configuração</button>
+          </div>
+          <div id="config-list">
+            <div class="config-row">
+              <span class="config-key">empresa</span>
+              <span class="config-val" id="cfg-empresa">—</span>
+              <div class="config-actions">
+                <button class="btn-icon" onclick="editConfig('empresa')"><i class="ti ti-edit"></i></button>
+                <button class="btn-icon danger" onclick="deleteConfig('empresa')"><i class="ti ti-trash"></i></button>
+              </div>
+            </div>
+            <div class="config-row">
+              <span class="config-key">centrais_ativas</span>
+              <span class="config-val" id="cfg-centrais">—</span>
+              <div class="config-actions">
+                <button class="btn-icon" onclick="editConfig('centrais_ativas')"><i class="ti ti-edit"></i></button>
+                <button class="btn-icon danger" onclick="deleteConfig('centrais_ativas')"><i class="ti ti-trash"></i></button>
+              </div>
+            </div>
+            <div class="config-row">
+              <span class="config-key">responsavel_padrao</span>
+              <span class="config-val" id="cfg-resp">—</span>
+              <div class="config-actions">
+                <button class="btn-icon" onclick="editConfig('responsavel_padrao')"><i class="ti ti-edit"></i></button>
+                <button class="btn-icon danger" onclick="deleteConfig('responsavel_padrao')"><i class="ti ti-trash"></i></button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+
+        <div class="section-title">Filiais / Aliases</div>
+        <div class="table-card" style="margin-bottom:24px">
+          <div class="table-header">
+            <span class="table-title"><i class="ti ti-map-pin"></i> Padronização de Centrais</span>
+            <div class="table-toolbar">
+              <div class="search-wrap">
+                <i class="ti ti-search"></i>
+                <input type="text" class="search-input" placeholder="Buscar origem, padronização..." oninput="filtrarLista('filiais', this.value)">
+              </div>
+              <button class="btn" onclick="openModal('modal-filiais')">
+                <i class="ti ti-plus"></i> Novo Cadastro
+              </button>
+              <button class="btn" onclick="openModal('modal-filiais'); focusFilialImport()">
+                <i class="ti ti-file-upload"></i> Importar em lote
+              </button>
+              <button class="btn" onclick="limparFiliais()">
+                <i class="ti ti-trash"></i> Excluir todas
+              </button>
+            </div>
+          </div>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Original</th>
+                  <th>Padronizada</th>
+                  <th>Descrição</th>
+                  <th>Criado em</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="tb-filiais">
+                <tr><td colspan="5"><div class="empty-state"><i class="ti ti-map-pin"></i><p>Nenhuma filial cadastrada.</p></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="pagination">
+            <span class="page-info" id="pi-filiais">0 registros</span>
+            <div class="page-btns">
+              <button class="btn" title="Primeiro" onclick="irParaPagina('filiais',0)"><i class="ti ti-chevrons-left"></i></button>
+              <button class="btn" title="Anterior" onclick="paginaAnterior('filiais')"><i class="ti ti-chevron-left"></i></button>
+              <button class="btn" title="Próxima" onclick="proximaPagina('filiais')"><i class="ti ti-chevron-right"></i></button>
+              <button class="btn" title="Último" onclick="irParaUltima('filiais')"><i class="ti ti-chevrons-right"></i></button>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-title">Materiais / Grupo SAP</div>
+        <div class="table-card" style="margin-bottom:24px">
+          <div class="table-header">
+            <span class="table-title"><i class="ti ti-stack-2"></i> Padronização de Materiais</span>
+            <div class="table-toolbar">
+              <div class="search-wrap">
+                <i class="ti ti-search"></i>
+                <input type="text" class="search-input" placeholder="Buscar origem, grupo SAP..." oninput="filtrarLista('materiais', this.value)">
+              </div>
+              <button class="btn" onclick="openModal('modal-materiais')">
+                <i class="ti ti-plus"></i> Novo Cadastro
+              </button>
+              <button class="btn" onclick="openModal('modal-materiais'); focusMaterialImport()">
+                <i class="ti ti-file-upload"></i> Importar em lote
+              </button>
+              <button class="btn" onclick="limparMateriais()">
+                <i class="ti ti-trash"></i> Excluir todas
+              </button>
+            </div>
+          </div>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Original</th>
+                  <th>Grupo SAP</th>
+                  <th>Descrição</th>
+                  <th>Criado em</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="tb-materiais">
+                <tr><td colspan="5"><div class="empty-state"><i class="ti ti-stack-2"></i><p>Nenhum material cadastrado.</p></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="pagination">
+            <span class="page-info" id="pi-materiais">0 registros</span>
+            <div class="page-btns">
+              <button class="btn" title="Primeiro" onclick="irParaPagina('materiais',0)"><i class="ti ti-chevrons-left"></i></button>
+              <button class="btn" title="Anterior" onclick="paginaAnterior('materiais')"><i class="ti ti-chevron-left"></i></button>
+              <button class="btn" title="Próxima" onclick="proximaPagina('materiais')"><i class="ti ti-chevron-right"></i></button>
+              <button class="btn" title="Último" onclick="irParaUltima('materiais')"><i class="ti ti-chevrons-right"></i></button>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-title">Configurações Personalizadas</div>
+        <div class="table-card">
+          <div class="table-header">
+            <span class="table-title"><i class="ti ti-adjustments"></i> Configurações Personalizadas</span>
+            <div class="table-toolbar">
+              <div class="search-wrap">
+                <i class="ti ti-search"></i>
+                <input type="text" class="search-input" placeholder="Buscar chave, valor, descrição..." oninput="filtrarLista('configs', this.value)">
+              </div>
+            </div>
+          </div>
+          <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Chave</th>
+                <th>Valor</th>
+                <th>Descrição</th>
+                <th>Criado em</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="tb-configs">
+              <tr><td colspan="5"><div class="empty-state"><i class="ti ti-adjustments"></i><p>Nenhuma configuração personalizada.</p></div></td></tr>
+            </tbody>
+          </table>
+          </div><!-- /table-scroll configs -->
+          <div class="pagination">
+            <span class="page-info" id="pi-configs">0 registros</span>
+            <div class="page-btns">
+              <button class="btn" title="Primeiro" onclick="irParaPagina('configs',0)"><i class="ti ti-chevrons-left"></i></button>
+              <button class="btn" title="Anterior" onclick="paginaAnterior('configs')"><i class="ti ti-chevron-left"></i></button>
+              <button class="btn" title="Próxima" onclick="proximaPagina('configs')"><i class="ti ti-chevron-right"></i></button>
+              <button class="btn" title="Último" onclick="irParaUltima('configs')"><i class="ti ti-chevrons-right"></i></button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Novo Registro Manual -->
+<div class="modal-overlay" id="modal-manual">
+  <div class="modal">
+    <div class="modal-title"><i class="ti ti-edit"></i> Novo Registro Manual</div>
+    <div class="modal-sub">preencha os campos e salve para adicionar ao módulo selecionado</div>
+
+    <div class="tabs">
+      <button class="tab-btn active" onclick="setTab('tab-entrada', this)"><i class="ti ti-package-import"></i> Entrada</button>
+      <button class="tab-btn" onclick="setTab('tab-saida', this)"><i class="ti ti-package-export"></i> Saída</button>
+      <button class="tab-btn" onclick="setTab('tab-lancamento', this)"><i class="ti ti-clipboard-list"></i> Lançamento</button>
+      <button class="tab-btn" onclick="setTab('tab-sap', this)"><i class="ti ti-database"></i> SAP</button>
+    </div>
+
+    <!-- Tab Entrada -->
+    <div id="tab-entrada">
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">Nº Nota Fiscal</label>
+          <input type="text" class="form-input" id="e-nf" placeholder="Ex: 000123">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Código Material</label>
+          <input type="text" class="form-input" id="e-mat" placeholder="Ex: 10000456">
+        </div>
+        <div class="form-group" style="grid-column: span 2">
+          <label class="form-label">Descrição</label>
+          <input type="text" class="form-input" id="e-desc" placeholder="Descrição do material">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Central</label>
+          <input type="text" class="form-input" id="e-central" placeholder="Ex: 1001">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Qtd Entrada</label>
+          <input type="number" class="form-input" id="e-qtd" placeholder="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Valor Unitário (R$)</label>
+          <input type="number" class="form-input" id="e-valor" placeholder="0,00">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Data</label>
+          <input type="date" class="form-input" id="e-data">
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn" onclick="closeModal('modal-manual')">Cancelar</button>
+        <button class="btn btn-primary" onclick="salvarEntrada()"><i class="ti ti-check"></i> Salvar Entrada</button>
+      </div>
+    </div>
+
+    <!-- Tab Saída -->
+    <div id="tab-saida" style="display:none">
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">Nº Ordem de Serviço</label>
+          <input type="text" class="form-input" id="s-os" placeholder="Ex: OS-0045">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Código Material</label>
+          <input type="text" class="form-input" id="s-mat" placeholder="Ex: 10000456">
+        </div>
+        <div class="form-group" style="grid-column: span 2">
+          <label class="form-label">Descrição</label>
+          <input type="text" class="form-input" id="s-desc" placeholder="Descrição do material">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Central</label>
+          <input type="text" class="form-input" id="s-central" placeholder="Ex: 1001">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Qtd Saída</label>
+          <input type="number" class="form-input" id="s-qtd" placeholder="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Valor Unitário (R$)</label>
+          <input type="number" class="form-input" id="s-valor" placeholder="0,00">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Data</label>
+          <input type="date" class="form-input" id="s-data">
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn" onclick="closeModal('modal-manual')">Cancelar</button>
+        <button class="btn btn-primary" onclick="salvarSaida()"><i class="ti ti-check"></i> Salvar Saída</button>
+      </div>
+    </div>
+
+    <!-- Tab Lançamento -->
+    <div id="tab-lancamento" style="display:none">
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">Código Material</label>
+          <input type="text" class="form-input" id="l-mat" placeholder="Ex: 10000456">
+        </div>
+        <div class="form-group" style="grid-column: span 2">
+          <label class="form-label">Descrição</label>
+          <input type="text" class="form-input" id="l-desc" placeholder="Descrição do material">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Central</label>
+          <input type="text" class="form-input" id="l-central" placeholder="Ex: 1001">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Saldo Real</label>
+          <input type="number" class="form-input" id="l-saldo-real" placeholder="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Saldo SAP</label>
+          <input type="number" class="form-input" id="l-saldo-sap" placeholder="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Data Contagem</label>
+          <input type="date" class="form-input" id="l-data">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Responsável</label>
+          <input type="text" class="form-input" id="l-resp" placeholder="Nome">
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn" onclick="closeModal('modal-manual')">Cancelar</button>
+        <button class="btn btn-primary" onclick="salvarLancamento()"><i class="ti ti-check"></i> Salvar Lançamento</button>
+      </div>
+    </div>
+
+    <!-- Tab SAP -->
+    <div id="tab-sap" style="display:none">
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">Código Material</label>
+          <input type="text" class="form-input" id="sap-mat" placeholder="Ex: 10000456">
+        </div>
+        <div class="form-group" style="grid-column: span 2">
+          <label class="form-label">Descrição</label>
+          <input type="text" class="form-input" id="sap-desc" placeholder="Descrição do material">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Central</label>
+          <input type="text" class="form-input" id="sap-central" placeholder="Ex: 1001">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Tipo Movimentação</label>
+          <input type="text" class="form-input" id="sap-tipo" placeholder="Ex: 101, 201, 501">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Quantidade</label>
+          <input type="number" class="form-input" id="sap-qtd" placeholder="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Valor (R$)</label>
+          <input type="number" class="form-input" id="sap-valor" placeholder="0,00">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Data Movimentação</label>
+          <input type="date" class="form-input" id="sap-data">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Documento SAP</label>
+          <input type="text" class="form-input" id="sap-doc" placeholder="Ex: 4900012345">
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn" onclick="closeModal('modal-manual')">Cancelar</button>
+        <button class="btn btn-primary" onclick="salvarSAP()"><i class="ti ti-check"></i> Salvar Movimentação</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- MODAL: Nova Configuração -->
+<div class="modal-overlay" id="modal-config">
+  <div class="modal" style="width:420px">
+    <div class="modal-title"><i class="ti ti-adjustments"></i> Nova Configuração</div>
+    <div class="modal-sub">cadastre parâmetros e informações de referência</div>
+    <div class="form-grid" style="grid-template-columns: 1fr">
+      <div class="form-group">
+        <label class="form-label">Chave</label>
+        <input type="text" class="form-input" id="cfg-key" placeholder="Ex: limite_divergencia">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Valor</label>
+        <input type="text" class="form-input" id="cfg-val-input" placeholder="Ex: 5%">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Descrição</label>
+        <input type="text" class="form-input" id="cfg-desc" placeholder="Descreva esta configuração">
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn" onclick="closeModal('modal-config')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarConfig()"><i class="ti ti-check"></i> Salvar</button>
+    </div>
+  </div>
+</div>
+
+
+
+<!-- MODAL: Produção -->
+<div class="modal-overlay" id="modal-producao">
+  <div class="modal">
+    <div class="modal-title">
+      <i class="ti ti-chart-bar"></i>
+      Novo Registro de Produção
+    </div>
+
+    <div class="modal-sub">
+      adicione manualmente um registro de produção
+    </div>
+
+    <div class="form-grid">
+      <div class="form-group">
+        <label class="form-label">Mês</label>
+        <input type="text" class="form-input" id="p-mes" placeholder="Ex: Janeiro/2026">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Central</label>
+        <input type="text" class="form-input" id="p-central" placeholder="Ex: 70 | MARICÁ">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Produção</label>
+        <input type="number" class="form-input" id="p-producao" placeholder="0">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Preço Médio</label>
+        <input type="number" class="form-input" id="p-preco" placeholder="0">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Custo Médio</label>
+        <input type="number" class="form-input" id="p-custo" placeholder="0">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Margem</label>
+        <input type="text" class="form-input" id="p-margem" placeholder="Valor contábil">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Total Vendas</label>
+        <input type="number" class="form-input" id="p-vendas" placeholder="0">
+      </div>
+    </div>
+
+    <div class="form-actions">
+      <button class="btn" onclick="closeModal('modal-producao')">
+        Cancelar
+      </button>
+
+      <button class="btn btn-primary" onclick="salvarProducao()">
+        <i class="ti ti-check"></i>
+        Salvar Produção
+      </button>
+    </div>
+  </div>
+</div>
+
+
+
+<!-- MODAL: Filiais / Aliases -->
+<div class="modal-overlay" id="modal-filiais">
+  <div class="modal" style="max-width:760px">
+    <div class="modal-title"><i class="ti ti-map-pin"></i> Cadastro de Filiais / Aliases</div>
+    <div class="modal-sub">Use uma linha por cadastro. Formatos aceitos: <span class="td-mono">origem = sigla</span>, <span class="td-mono">origem;sigla</span> ou importação por arquivo.</div>
+
+    <div class="form-grid" style="grid-template-columns:1fr">
+      <div class="form-group">
+        <label class="form-label">Cadastro em lote</label>
+        <textarea id="filiais-text" class="form-input" style="min-height:220px; resize:vertical" placeholder="83 | JFO | JUIZ DE FORA II = JFO2&#10;91 | ABC | FILIAL EXEMPLO = ABC1"></textarea>
+      </div>
+    </div>
+
+    <div class="form-actions" style="justify-content:space-between">
+      <div style="display:flex; gap:8px; flex-wrap:wrap">
+        <input type="file" id="file-filiais" class="file-input" accept=".xlsx,.csv" onchange="handleFiliaisImport(event)">
+        <button class="btn" onclick="focusFilialImport()"><i class="ti ti-file-upload"></i> Importar arquivo</button>
+        <button class="btn" onclick="document.getElementById('file-filiais').click()"><i class="ti ti-folder-open"></i> Selecionar arquivo</button>
+      </div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap">
+        <button class="btn" onclick="closeModal('modal-filiais')">Cancelar</button>
+        <button class="btn btn-primary" onclick="salvarFiliais()"><i class="ti ti-check"></i> Salvar cadastros</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Materiais / Grupo SAP -->
+<div class="modal-overlay" id="modal-materiais">
+  <div class="modal" style="max-width:760px">
+    <div class="modal-title"><i class="ti ti-stack-2"></i> Cadastro de Materiais / Grupo SAP</div>
+    <div class="modal-sub">Use uma linha por cadastro. Formatos aceitos: <span class="td-mono">origem = grupo</span>, <span class="td-mono">origem;grupo</span> ou importação por arquivo. O grupo será o nome exibido em Lançamentos.</div>
+
+    <div class="form-grid" style="grid-template-columns:1fr">
+      <div class="form-group">
+        <label class="form-label">Cadastro em lote</label>
+        <textarea id="materiais-text" class="form-input" style="min-height:220px; resize:vertical" placeholder="AREIA LAVADA = AREIA&#10;BRITA 01 = BRITA&#10;PÓ DE PEDRA = PÓ DE PEDRA"></textarea>
+      </div>
+    </div>
+
+    <div class="form-actions" style="justify-content:space-between">
+      <div style="display:flex; gap:8px; flex-wrap:wrap">
+        <input type="file" id="file-materiais" class="file-input" accept=".xlsx,.csv" onchange="handleMateriaisImport(event)">
+        <button class="btn" onclick="focusMaterialImport()"><i class="ti ti-file-upload"></i> Importar arquivo</button>
+        <button class="btn" onclick="document.getElementById('file-materiais').click()"><i class="ti ti-folder-open"></i> Selecionar arquivo</button>
+      </div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap">
+        <button class="btn" onclick="closeModal('modal-materiais')">Cancelar</button>
+        <button class="btn btn-primary" onclick="salvarMateriais()"><i class="ti ti-check"></i> Salvar cadastros</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast">
+  <i class="ti ti-circle-check"></i>
+  <span id="toast-msg">Salvo com sucesso</span>
+</div>
+
+
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script>
+(() => {
+  'use strict';
+
+  const STORAGE_KEY = 'central_analise_state_v4';
+  const PAGE_SIZE = 50;
+
+  const defaultState = () => ({
+    entradas: [],
+    saidas: [],
+    lancamentos: [],
+    sap: [],
+    producao: [],
+    imports: [],
+    configs: [],
+    filiais: [],
+    materiais: []
+  });
+
+  const state = defaultState();
+
+  const pages = {
+    entradas: 0,
+    saidas: 0,
+    lancamentos: 0,
+    sap: 0
+  };
+
+  const filters = {
+    entradas: '',
+    saidas: '',
+    lancamentos: '',
+    sap: ''
+  };
+
+  const listFilters = {
+    dashboard: '',
+    imports: '',
+    configs: '',
+    filiais: '',
+    materiais: ''
+  };
+
+  const listPages = {
+    dashboard: 0,
+    imports: 0,
+    configs: 0,
+    filiais: 0,
+    materiais: 0
+  };
+
+  let currentPageProducao = 0;
+  let filtroProducao = '';
+
+  const moduleMap = {
+    'tb-entradas': 'entradas',
+    'tb-saidas': 'saidas',
+    'tb-lancamentos': 'lancamentos',
+    'tb-sap': 'sap',
+    'tb-producao': 'producao'
+  };
+
+  const moduleTableMap = {
+    entradas: 'tb-entradas',
+    saidas: 'tb-saidas',
+    lancamentos: 'tb-lancamentos',
+    sap: 'tb-sap',
+    producao: 'tb-producao'
+  };
+
+  const pageTitleMap = {
+    dashboard: { title: 'Dashboard', sub: 'visão consolidada de todos os módulos' },
+    entradas: { title: 'Entradas (NF)', sub: 'notas fiscais que geram saldo de estoque' },
+    saidas: { title: 'Saídas (OS)', sub: 'ordens de serviço que consomem saldo' },
+    lancamentos: { title: 'Lançamentos', sub: 'saldo real por material e central' },
+    sap: { title: 'Movimentações SAP', sub: 'extrato consolidado de todas as movimentações' },
+    producao: { title: 'Produção', sub: 'produção consolidada por central' },
+    analitico: { title: 'Dashboard Analítico', sub: 'análise de estoque por período e filial' },
+    configuracoes: { title: 'Configurações', sub: 'parâmetros e informações de referência do sistema' }
+  };
+
+  function qs(sel, root = document) { return root.querySelector(sel); }
+  function qsa(sel, root = document) { return Array.from(root.querySelectorAll(sel)); }
+  function val(id) { return document.getElementById(id)?.value?.trim() || ''; }
+  function setVal(id, value) { const el = document.getElementById(id); if (el) el.value = value ?? ''; }
+
+
+  function normalizeText(v) {
+    return String(v ?? '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toUpperCase();
+  }
+
+  function normalizeSearchKey(v) {
+    return normalizeText(v).replace(/[^A-Z0-9]/g, '');
+  }
+
+  function tokenizeSearch(query) {
+    const text = String(query ?? '').trim();
+    if (!text) return [];
+    const tokens = [];
+    const re = /"([^"]+)"|'([^']+)'|(\S+)/g;
+    let m;
+    while ((m = re.exec(text))) {
+      const token = (m[1] || m[2] || m[3] || '').trim();
+      if (token) tokens.push(token);
+    }
+    return tokens;
+  }
+
+  const searchFieldAliases = {
+    central: ['central', 'centralcompra', 'centraldestino', 'centralsaida', 'centralestoque', 'centralprod', 'centralprodutiva'],
+    material: ['material', 'materialoriginal', 'grupo', 'gruposap'],
+    fornecedor: ['fornecedor'],
+    categoria: ['categoria'],
+    documento: ['documento'],
+    ref: ['ref', 'referencia'],
+    os: ['os'],
+    nf: ['nf', 'notafiscal'],
+    contrato: ['contrato'],
+    deposito: ['deposito'],
+    usuario: ['usuario'],
+    movimento: ['movimento'],
+    mes: ['mes'],
+    arquivo: ['arquivo'],
+    modulo: ['modulo'],
+    registros: ['registros'],
+    datahora: ['datahora'],
+    status: ['status'],
+    key: ['key', 'chave'],
+    value: ['value', 'valor'],
+    desc: ['desc', 'descricao', 'descricao'],
+    created: ['created', 'criadoem', 'criado'],
+    origem: ['origem', 'original'],
+    alias: ['alias', 'padronizada'],
+    peso: ['peso'],
+    um: ['um'],
+    custo: ['custo', 'custounit', 'customedio'],
+    valortotal: ['valortotal', 'valor', 'totalvendas'],
+    producao: ['producao'],
+    margem: ['margem']
+  };
+
+  function getFieldCandidates(field) {
+    const key = normalizeSearchKey(field);
+    return searchFieldAliases[key] || [key];
+  }
+
+  function getSearchableFields(scope) {
+    const map = {
+      entradas: ['centralCompra', 'centralDestino', 'nf', 'dtEmissao', 'dtDescarga', 'fornecedor', 'categoria', 'material', 'materialOriginal', 'peso', 'um', 'custo', 'valorTotal'],
+      saidas: ['central', 'dtEmissao', 'os', 'contrato', 'categoria', 'fornecedor', 'material', 'materialOriginal', 'peso', 'um', 'custo', 'valorTotal'],
+      lancamentos: ['central', 'dtLanc', 'fornecedor', 'municipio', 'categoria', 'material', 'materialOriginal', 'peso', 'um', 'custo', 'valorTotal'],
+      sap: ['usuario', 'movimento', 'ref', 'documento', 'central', 'deposito', 'dtDoc', 'dtLanc', 'dtReg', 'material', 'materialOriginal', 'peso', 'um', 'custoUnit', 'valorTotal'],
+      producao: ['mes', 'central', 'producao', 'um', 'precoMedio', 'custoMedio', 'margem', 'totalVendas'],
+      dashboard: ['modulo', 'material', 'central', 'valor', 'data', 'status'],
+      imports: ['arquivo', 'modulo', 'registros', 'dataHora', 'status'],
+      configs: ['key', 'value', 'desc', 'created'],
+      filiais: ['origem', 'alias', 'desc', 'created'],
+      materiais: ['origem', 'alias', 'desc', 'created']
+    };
+    return map[scope] || [];
+  }
+
+  function recordMatchesSearch(record, query, fields) {
+    const tokens = tokenizeSearch(query);
+    if (!tokens.length) return true;
+
+    return tokens.every(token => {
+      const pair = token.match(/^([^:=\s]+)\s*[:=]\s*(.+)$/);
+      if (pair) {
+        const field = pair[1];
+        const value = pair[2].trim().toLowerCase();
+        const candidates = getFieldCandidates(field);
+        return candidates.some(candidate => String(record?.[candidate] ?? '').toLowerCase().includes(value));
+      }
+
+      const needle = token.toLowerCase();
+      return fields.some(field => String(record?.[field] ?? '').toLowerCase().includes(needle));
+    });
+  }
+
+  function filterRecords(records, query, fields) {
+    const q = String(query ?? '').trim();
+    if (!q) return records;
+    return records.filter(rec => recordMatchesSearch(rec, q, fields));
+  }
+
+  function persist() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        entradas: state.entradas,
+        saidas: state.saidas,
+        lancamentos: state.lancamentos,
+        sap: state.sap,
+        producao: state.producao,
+        imports: state.imports,
+        configs: state.configs,
+        filiais: state.filiais,
+        materiais: state.materiais
+      }));
+    } catch (err) {
+      console.warn('Não foi possível salvar o estado localmente.', err);
+    }
+  }
+
+  function loadState() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      const saved = JSON.parse(raw);
+      for (const key of Object.keys(state)) {
+        if (Array.isArray(saved?.[key])) state[key] = saved[key];
+      }
+      state.materiais = state.materiais.map(item => ({
+        id: item.id || makeMaterialId(),
+        ...item
+      }));
+      reaplicarPadronizacaoMateriais();
+    } catch (err) {
+      console.warn('Não foi possível restaurar o estado.', err);
+    }
+  }
+
+  function stamp(obj) {
+    return { ...obj, createdAt: Date.now() };
+  }
+
+
+  function normalizarCentral(valor) {
+    const raw = String(valor ?? '').trim();
+    if (!raw) return '';
+    const key = normalizeText(raw);
+
+    const found = state.filiais.find(item => {
+      const origem = normalizeText(item.origem);
+      const alias = normalizeText(item.alias);
+      return key === origem || key === alias;
+    });
+
+    return found ? found.alias : raw;
+  }
+
+  function normalizarCentraisRecord(rec, keys) {
+    const out = { ...rec };
+    keys.forEach(k => {
+      if (out[k] !== undefined) out[k] = normalizarCentral(out[k]);
+    });
+    return out;
+  }
+
+  function normalizeLooseText(v) {
+    return String(v ?? '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^\p{L}\p{N}]+/gu, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toUpperCase();
+  }
+
+  function materialSearchTerms(valor) {
+    const raw = String(valor ?? '').trim();
+    if (!raw) return [];
+    return [...new Set([
+      raw,
+      ...raw.split('|').map(s => s.trim()).filter(Boolean)
+    ])];
+  }
+
+  function tokenPrefixScore(a, b) {
+    const aa = a.split(' ').filter(Boolean);
+    const bb = b.split(' ').filter(Boolean);
+    const len = Math.min(aa.length, bb.length);
+    let i = 0;
+    while (i < len && aa[i] === bb[i]) i += 1;
+    return i;
+  }
+
+  function scoreMaterialMatch(searchValue, item) {
+    const terms = materialSearchTerms(searchValue).map(normalizeLooseText).filter(Boolean);
+    const targets = [item.origem, item.alias].map(normalizeLooseText).filter(Boolean);
+    let best = 0;
+
+    for (const term of terms) {
+      for (const target of targets) {
+        if (!term || !target) continue;
+
+        if (term === target) {
+          best = Math.max(best, 1000 + target.length);
+          continue;
+        }
+
+        // Match por prefixo/termo completo, privilegiando o mais específico.
+        const tScore = tokenPrefixScore(term, target);
+        const rScore = tokenPrefixScore(target, term);
+
+        if (tScore > 0) {
+          best = Math.max(best, 700 + (tScore * 20) + target.length);
+        }
+        if (rScore > 0) {
+          best = Math.max(best, 650 + (rScore * 20) + term.length);
+        }
+
+        // Match como palavra inteira dentro de uma string maior.
+        const paddedTerm = ` ${term} `;
+        const paddedTarget = ` ${target} `;
+        if (paddedTerm.includes(` ${target} `)) {
+          best = Math.max(best, 600 + target.length);
+        }
+        if (paddedTarget.includes(` ${term} `)) {
+          best = Math.max(best, 550 + term.length);
+        }
+      }
+    }
+
+    return best;
+  }
+
+  function findMaterialMatch(valor) {
+    const list = Array.isArray(state.materiais) ? [...state.materiais] : [];
+    if (!list.length) return null;
+
+    const ordered = list
+      .map((item, index) => ({ item, index, size: Math.max(
+        normalizeLooseText(item.origem).length,
+        normalizeLooseText(item.alias).length
+      ) }))
+      .sort((a, b) => b.size - a.size || a.index - b.index);
+
+    let bestItem = null;
+    let bestScore = 0;
+
+    for (const entry of ordered) {
+      const score = scoreMaterialMatch(valor, entry.item);
+      if (score > bestScore) {
+        bestScore = score;
+        bestItem = entry.item;
+      }
+    }
+
+    return bestItem;
+  }
+
+  function normalizarMaterial(valor) {
+    const raw = String(valor ?? '').trim();
+    if (!raw) return '';
+    const found = findMaterialMatch(raw);
+    return found ? found.alias : raw;
+  }
+
+  function normalizarMateriaisRecord(rec, keys) {
+    const out = { ...rec };
+    keys.forEach(k => {
+      if (out[k] !== undefined) {
+        const raw = String(out[k] ?? '').trim();
+        out[`${k}Original`] = out[`${k}Original`] ?? raw;
+        out[k] = normalizarMaterial(raw);
+      }
+    });
+    return out;
+  }
+
+  function reaplicarPadronizacaoMateriais() {
+    const aplicar = rec => {
+      const raw = String(rec.materialOriginal ?? rec.material ?? '').trim();
+      if (!raw) return { ...rec, materialOriginal: rec.materialOriginal ?? '', material: rec.material ?? '' };
+      const material = normalizarMaterial(raw);
+      return {
+        ...rec,
+        materialOriginal: rec.materialOriginal ?? raw,
+        material
+      };
+    };
+
+    ['entradas', 'saidas', 'lancamentos', 'sap'].forEach(modulo => {
+      state[modulo] = state[modulo].map(aplicar);
+    });
+  }
+
+  function fmtDate(v) {
+    if (v === '' || v === null || v === undefined) return '—';
+    if (typeof v === 'number' && window.XLSX?.SSF) {
+      const d = XLSX.SSF.parse_date_code(v);
+      if (d) return `${String(d.d).padStart(2, '0')}/${String(d.m).padStart(2, '0')}/${d.y}`;
+    }
+    return String(v);
+  }
+
+  function num(v) {
+    const n = parseFloat(String(v).replace(',', '.'));
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  function money(v, decimals = 2) {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return '—';
+    return 'R$ ' + n.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+  }
+
+  function toast(msg, type = 'success') {
+    const el = document.getElementById('toast');
+    const icon = el?.querySelector('i');
+    const msgEl = document.getElementById('toast-msg');
+    if (!el || !icon || !msgEl) return;
+    msgEl.textContent = msg;
+    el.className = 'toast ' + type;
+    icon.className = type === 'success' ? 'ti ti-circle-check' : 'ti ti-circle-x';
+    el.classList.add('show');
+    setTimeout(() => el.classList.remove('show'), 3000);
+  }
+
+  function openModal(id) {
+    document.getElementById(id)?.classList.add('open');
+  }
+
+  function closeModal(id) {
+    document.getElementById(id)?.classList.remove('open');
+  }
+
+  function toggleSidebar() {
+    document.querySelector('.sidebar')?.classList.toggle('open');
+    document.getElementById('nav-overlay')?.classList.toggle('open');
+  }
+
+  function closeSidebar() {
+    document.querySelector('.sidebar')?.classList.remove('open');
+    document.getElementById('nav-overlay')?.classList.remove('open');
+  }
+
+  function navigate(page) {
+    qsa('.page').forEach(p => p.classList.remove('active'));
+    qsa('.nav-item').forEach(n => n.classList.remove('active'));
+    document.getElementById('page-' + page)?.classList.add('active');
+    qsa('.nav-item').forEach(n => {
+      const onclick = n.getAttribute('onclick') || '';
+      if (onclick.includes("'" + page + "'")) n.classList.add('active');
+    });
+
+    const info = pageTitleMap[page] || { title: page, sub: '' };
+    const title = document.getElementById('page-title');
+    const sub = document.getElementById('page-sub');
+    if (title) title.textContent = info.title;
+    if (sub) sub.textContent = info.sub;
+
+    if (page === 'dashboard') updateDashboard();
+    closeSidebar();
+  }
+
+  function setTab(tabId, btn) {
+    ['tab-entrada', 'tab-saida', 'tab-lancamento', 'tab-sap'].forEach(t => {
+      const el = document.getElementById(t);
+      if (el) el.style.display = 'none';
+    });
+    const activeTab = document.getElementById(tabId);
+    if (activeTab) activeTab.style.display = '';
+    qsa('.tab-btn').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+  }
+
+  function setModulo(mod) {
+    const map = {
+      'Entrada': 'tab-entrada',
+      'Saída': 'tab-saida',
+      'Lançamento': 'tab-lancamento'
+    };
+    const tabId = map[mod];
+    if (!tabId) return;
+    const btn = qs(`.tab-btn[onclick*="${tabId}"]`);
+    if (btn) setTab(tabId, btn);
+  }
+
+  function exportarDados() {
+    const data = JSON.stringify({
+      entradas: state.entradas,
+      saidas: state.saidas,
+      lancamentos: state.lancamentos,
+      sap: state.sap,
+      producao: state.producao,
+      imports: state.imports,
+      configs: state.configs,
+      filiais: state.filiais,
+      materiais: state.materiais
+    }, null, 2);
+    const blob = new Blob([data], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'central_analise_' + new Date().toISOString().slice(0, 10) + '.json';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    toast('Dados exportados com sucesso');
+  }
+
+  function updatePageInfo(module) {
+    const data = getFilteredData(module);
+    const total = data.length;
+    const page = module === 'producao' ? currentPageProducao : pages[module];
+    const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    const start = total === 0 ? 0 : (page * PAGE_SIZE) + 1;
+    const end = Math.min((page + 1) * PAGE_SIZE, total);
+    const el = document.getElementById('pi-' + module);
+    if (el) {
+      el.textContent = total === 0
+        ? '0 registros'
+        : `${start}-${end} de ${total} registros (pág. ${page + 1}/${totalPages})`;
+    }
+  }
+
+  function getFilteredData(module) {
+    const data = state[module] || [];
+    const f = module === 'producao' ? filtroProducao : filters[module];
+    return filterRecords(data, f, getSearchableFields(module));
+  }
+
+  function pageSlice(module) {
+    const data = getFilteredData(module);
+    const page = module === 'producao' ? currentPageProducao : pages[module];
+    const totalPages = Math.max(1, Math.ceil(data.length / PAGE_SIZE));
+    const safePage = Math.min(Math.max(page, 0), totalPages - 1);
+    if (module === 'producao') currentPageProducao = safePage;
+    else pages[module] = safePage;
+    return data.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE);
+  }
+
+  function getListFilteredData(scope) {
+    if (scope === 'dashboard') {
+      const feed = [
+        ...state.entradas.map(r => ({ modulo: 'Entrada', material: r.material, central: r.centralDestino || r.centralCompra, valor: money(r.valorTotal), data: r.createdAt || 0, status: 'badge-green' })),
+        ...state.saidas.map(r => ({ modulo: 'Saída', material: r.material, central: r.central, valor: money(r.valorTotal), data: r.createdAt || 0, status: 'badge-red' })),
+        ...state.lancamentos.map(r => ({ modulo: 'Lançamento', material: r.material, central: r.central, valor: `${num(r.peso)} KG`, data: r.createdAt || 0, status: 'badge-amber' })),
+        ...state.sap.map(r => ({ modulo: 'SAP', material: r.material, central: r.central, valor: money(r.valorTotal), data: r.createdAt || 0, status: 'badge-blue' })),
+        ...state.producao.map(r => ({ modulo: 'Produção', material: 'Produção', central: r.central, valor: `${num(r.producao)} m³`, data: r.createdAt || 0, status: 'badge-purple' }))
+      ].sort((a, b) => (b.data || 0) - (a.data || 0));
+      return filterRecords(feed, listFilters.dashboard, getSearchableFields('dashboard'));
+    }
+
+    if (scope === 'imports') {
+      return filterRecords(
+        state.imports.slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)),
+        listFilters.imports,
+        getSearchableFields('imports')
+      );
+    }
+
+    return filterRecords(state[scope] || [], listFilters[scope], getSearchableFields(scope));
+  }
+
+  function getListPageData(scope) {
+    const data = getListFilteredData(scope);
+    const page = Math.max(0, listPages[scope] || 0);
+    const totalPages = Math.max(1, Math.ceil(data.length / PAGE_SIZE));
+    const safePage = Math.min(page, totalPages - 1);
+    listPages[scope] = safePage;
+    return {
+      data,
+      page: safePage,
+      totalPages,
+      pageData: data.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE)
+    };
+  }
+
+  function updateListPageInfo(scope) {
+    const { data, page, totalPages } = getListPageData(scope);
+    const el = document.getElementById('pi-' + scope);
+    if (!el) return;
+    el.textContent = data.length === 0
+      ? '0 registros'
+      : `${Math.min(page * PAGE_SIZE + 1, data.length)}-${Math.min((page + 1) * PAGE_SIZE, data.length)} de ${data.length} registros (pág. ${page + 1}/${totalPages})`;
+  }
+
+  function renderScope(scope) {
+    if (scope in pages || scope === 'producao') return renderModule(scope);
+    if (scope === 'dashboard') return renderDashboardFeed();
+    if (scope === 'imports') return renderImports();
+    if (scope === 'configs') return renderConfigs();
+    if (scope === 'filiais') return renderFiliais();
+    if (scope === 'materiais') return renderMateriais();
+  }
+
+  function irParaPagina(module, page) {
+    if (module in pages) {
+      pages[module] = Math.max(0, page);
+      renderModule(module);
+      return;
+    }
+    if (module in listPages) {
+      listPages[module] = Math.max(0, page);
+      renderScope(module);
+    }
+  }
+
+  function paginaAnterior(module) {
+    if (module in pages) {
+      pages[module] = Math.max(0, pages[module] - 1);
+      renderModule(module);
+      return;
+    }
+    if (module in listPages) {
+      listPages[module] = Math.max(0, listPages[module] - 1);
+      renderScope(module);
+    }
+  }
+
+  function proximaPagina(module) {
+    if (module in pages) {
+      const total = Math.ceil(getFilteredData(module).length / PAGE_SIZE);
+      if (pages[module] < Math.max(total - 1, 0)) pages[module]++;
+      renderModule(module);
+      return;
+    }
+    if (module in listPages) {
+      const total = Math.ceil(getListFilteredData(module).length / PAGE_SIZE);
+      if (listPages[module] < Math.max(total - 1, 0)) listPages[module]++;
+      renderScope(module);
+    }
+  }
+
+  function irParaUltima(module) {
+    if (module in pages) {
+      pages[module] = Math.max(Math.ceil(getFilteredData(module).length / PAGE_SIZE) - 1, 0);
+      renderModule(module);
+      return;
+    }
+    if (module in listPages) {
+      listPages[module] = Math.max(Math.ceil(getListFilteredData(module).length / PAGE_SIZE) - 1, 0);
+      renderScope(module);
+    }
+  }
+
+  function primeiraPaginaProducao() { currentPageProducao = 0; renderProducao(); }
+  function paginaAnteriorProducao() { currentPageProducao = Math.max(0, currentPageProducao - 1); renderProducao(); }
+  function proximaPaginaProducao() {
+    const total = Math.ceil(getFilteredData('producao').length / PAGE_SIZE);
+    currentPageProducao = Math.min(Math.max(total - 1, 0), currentPageProducao + 1);
+    renderProducao();
+  }
+  function ultimaPaginaProducao() {
+    currentPageProducao = Math.max(Math.ceil(getFilteredData('producao').length / PAGE_SIZE) - 1, 0);
+    renderProducao();
+  }
+
+  function filtrarTabela(tbodyId, value) {
+    const module = moduleMap[tbodyId];
+    if (!module) return;
+    filters[module] = String(value || '').toLowerCase().trim();
+    pages[module] = 0;
+    renderModule(module);
+  }
+
+  function filtrarProducao(value) {
+    filtroProducao = String(value || '').trim();
+    currentPageProducao = 0;
+    renderProducao();
+  }
+
+  function filtrarLista(scope, value) {
+    if (!(scope in listFilters)) return;
+    listFilters[scope] = String(value || '').trim();
+    listPages[scope] = 0;
+    renderScope(scope);
+  }
+
+  function makeResizable(table) {
+    if (!table) return;
+    const ths = table.querySelectorAll('thead th');
+    ths.forEach(th => {
+      if (th.querySelector('.col-resizer')) return;
+      const resizer = document.createElement('div');
+      resizer.className = 'col-resizer';
+      th.appendChild(resizer);
+
+      let startX, startW;
+      resizer.addEventListener('mousedown', e => {
+        startX = e.clientX;
+        startW = th.offsetWidth;
+        resizer.classList.add('dragging');
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+
+        function onMove(ev) {
+          const newW = Math.max(60, startW + (ev.clientX - startX));
+          th.style.width = newW + 'px';
+          th.style.minWidth = newW + 'px';
+        }
+        function onUp() {
+          resizer.classList.remove('dragging');
+          document.body.style.cursor = '';
+          document.body.style.userSelect = '';
+          document.removeEventListener('mousemove', onMove);
+          document.removeEventListener('mouseup', onUp);
+        }
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+        e.preventDefault();
+      });
+    });
+  }
+
+  function initResizable() {
+    qsa('.table-scroll table').forEach(makeResizable);
+  }
+
+  function renderImports() {
+    const tb = document.getElementById('tb-imports');
+    if (!tb) return;
+
+    const { data, pageData } = getListPageData('imports');
+    updateListPageInfo('imports');
+
+    if (!data.length) {
+      tb.innerHTML = '<tr><td colspan="6"><div class="empty-state"><i class="ti ti-file-off"></i><p>Nenhum arquivo importado ainda.</p></div></td></tr>';
+      return;
+    }
+
+    tb.innerHTML = pageData.map(r => `
+        <tr>
+          <td>${r.arquivo || '—'}</td>
+          <td><span class="badge badge-purple">${r.modulo || '—'}</span></td>
+          <td class="td-mono">${r.registros ?? 0}</td>
+          <td class="td-muted">${r.dataHora || '—'}</td>
+          <td><span class="badge badge-green">${r.status || 'Importado'}</span></td>
+          <td style="width:56px">
+            <button class="btn-icon danger" title="Excluir importação"
+              onclick="excluirImportacao('${r.id}')">
+              <i class="ti ti-trash"></i>
+            </button>
+          </td>
+        </tr>
+      `).join('');
+    makeResizable(tb.closest('table'));
+  }
+
+  function excluirImportacao(importId) {
+    if (!confirm('Excluir esta importação e todos os registros vinculados?')) return;
+
+    const removeByImport = arr => arr.filter(r => r.importId !== importId);
+
+    state.entradas = removeByImport(state.entradas);
+    state.saidas = removeByImport(state.saidas);
+    state.lancamentos = removeByImport(state.lancamentos);
+    state.sap = removeByImport(state.sap);
+    state.producao = removeByImport(state.producao);
+    state.imports = state.imports.filter(r => r.id !== importId);
+
+    persist();
+    renderAll();
+    toast('Importação excluída com sucesso');
+  }
+
+  function excluirProducao(absIndex) {
+    if (!confirm('Deseja realmente excluir este registro?')) return;
+    const filtered = getFilteredData('producao');
+    const rec = filtered[absIndex];
+    if (!rec) return;
+    state.producao = state.producao.filter(r => r !== rec);
+    persist();
+    renderProducao();
+    updateDashboard();
+    toast('Registro excluído com sucesso');
+  }
+
+  function salvarProducao() {
+    const rec = stamp({
+      mes: val('p-mes'),
+      central: normalizarCentral(val('p-central')),
+      producao: num(val('p-producao')),
+      um: 'm³',
+      precoMedio: num(val('p-preco')),
+      custoMedio: num(val('p-custo')),
+      margem: val('p-margem'),
+      totalVendas: num(val('p-vendas'))
+    });
+
+    if (!rec.mes || !rec.central) {
+      toast('Preencha mês e central', 'error');
+      return;
+    }
+
+    state.producao.unshift(rec);
+    persist();
+    closeModal('modal-producao');
+    renderProducao();
+    updateDashboard();
+    toast('Registro de produção adicionado com sucesso');
+  }
+
+
+  function salvarEntrada() {
+    const qtd = num(val('e-qtd'));
+    const custo = num(val('e-valor'));
+    const rec = stamp({
+      centralCompra: normalizarCentral(val('e-central')),
+      centralDestino: normalizarCentral(val('e-central')),
+      nf: val('e-nf'),
+      dtEmissao: val('e-data') || new Date().toLocaleDateString('pt-BR'),
+      dtDescarga: val('e-data') || new Date().toLocaleDateString('pt-BR'),
+      fornecedor: '—',
+      categoria: '—',
+      materialOriginal: val('e-desc') || val('e-mat'),
+      material: normalizarMaterial(val('e-desc') || val('e-mat')),
+      peso: qtd,
+      um: 'KG',
+      custo,
+      valorTotal: qtd * custo
+    });
+
+    if (!rec.nf && !rec.material) {
+      toast('Preencha a nota fiscal ou o material', 'error');
+      return;
+    }
+
+    state.entradas.unshift(rec);
+    persist();
+    closeModal('modal-manual');
+    renderEntradas();
+    updateDashboard();
+    toast('Entrada salva com sucesso');
+  }
+
+  function salvarSaida() {
+    const qtd = num(val('s-qtd'));
+    const custo = num(val('s-valor'));
+    const rec = stamp({
+      central: normalizarCentral(val('s-central')),
+      dtEmissao: val('s-data') || new Date().toLocaleDateString('pt-BR'),
+      os: val('s-os'),
+      contrato: '—',
+      categoria: '—',
+      fornecedor: '—',
+      materialOriginal: val('s-desc') || val('s-mat'),
+      material: normalizarMaterial(val('s-desc') || val('s-mat')),
+      peso: qtd,
+      um: 'KG',
+      custo,
+      valorTotal: qtd * custo
+    });
+
+    if (!rec.os && !rec.material) {
+      toast('Preencha a OS ou o material', 'error');
+      return;
+    }
+
+    state.saidas.unshift(rec);
+    persist();
+    closeModal('modal-manual');
+    renderSaidas();
+    updateDashboard();
+    toast('Saída salva com sucesso');
+  }
+
+  function salvarLancamento() {
+    const saldoReal = num(val('l-saldo-real'));
+    const saldoSap = num(val('l-saldo-sap'));
+    const rec = stamp({
+      central: normalizarCentral(val('l-central')),
+      dtLanc: val('l-data') || new Date().toLocaleDateString('pt-BR'),
+      fornecedor: val('l-resp') || '—',
+      categoria: '—',
+      materialOriginal: val('l-desc') || val('l-mat'),
+      material: normalizarMaterial(val('l-desc') || val('l-mat')),
+      peso: saldoReal,
+      um: 'KG',
+      custo: saldoSap,
+      valorTotal: saldoReal * saldoSap
+    });
+
+    if (!rec.central || !rec.material) {
+      toast('Preencha central e material', 'error');
+      return;
+    }
+
+    state.lancamentos.unshift(rec);
+    persist();
+    closeModal('modal-manual');
+    renderLancamentos();
+    updateDashboard();
+    toast('Lançamento salvo com sucesso');
+  }
+
+  function salvarSAP() {
+    const peso = num(val('sap-qtd'));
+    const total = num(val('sap-valor'));
+    const rec = stamp({
+      usuario: val('sap-mat') || '—',
+      movimento: val('sap-tipo') || '—',
+      ref: '—',
+      documento: val('sap-doc'),
+      central: normalizarCentral(val('sap-central')),
+      deposito: '—',
+      dtDoc: val('sap-data') || new Date().toLocaleDateString('pt-BR'),
+      dtLanc: val('sap-data') || new Date().toLocaleDateString('pt-BR'),
+      dtReg: val('sap-data') || new Date().toLocaleDateString('pt-BR'),
+      materialOriginal: val('sap-desc') || val('sap-mat'),
+      material: normalizarMaterial(val('sap-desc') || val('sap-mat')),
+      peso,
+      um: 'KG',
+      custoUnit: peso !== 0 ? total / peso : 0,
+      valorTotal: total
+    });
+
+    if (!rec.documento && !rec.material) {
+      toast('Preencha documento ou material', 'error');
+      return;
+    }
+
+    state.sap.unshift(rec);
+    persist();
+    closeModal('modal-manual');
+    renderSAP();
+    updateDashboard();
+    toast('Movimentação SAP salva com sucesso');
+  }
+
+  function salvarConfig() {
+    const key = val('cfg-key');
+    const value = val('cfg-val-input');
+    const desc = val('cfg-desc');
+    if (!key) { toast('Informe a chave', 'error'); return; }
+
+    const existing = state.configs.findIndex(c => normalizeText(c.key) === normalizeText(key));
+    const rec = { key, value, desc, created: new Date().toLocaleDateString('pt-BR') };
+    if (existing >= 0) state.configs[existing] = rec; else state.configs.unshift(rec);
+
+    persist();
+    renderConfigs();
+    toast('Configuração salva');
+    closeModal('modal-config');
+  }
+
+  function removerConfig(i) {
+    state.configs.splice(i, 1);
+    persist();
+    renderConfigs();
+    toast('Configuração removida', 'error');
+  }
+
+  function editConfig(key) {
+    const item = state.configs.find(c => normalizeText(c.key) === normalizeText(key));
+    if (!item) { toast('Configuração não encontrada', 'error'); return; }
+    setVal('cfg-key', item.key);
+    setVal('cfg-val-input', item.value);
+    setVal('cfg-desc', item.desc || '');
+    openModal('modal-config');
+  }
+
+  function deleteConfig(key) {
+    const idx = state.configs.findIndex(c => normalizeText(c.key) === normalizeText(key));
+    if (idx < 0) { toast('Configuração não encontrada', 'error'); return; }
+    if (!confirm(`Excluir configuração "${key}"?`)) return;
+    state.configs.splice(idx, 1);
+    persist();
+    renderConfigs();
+    toast('Configuração excluída', 'error');
+  }
+
+
+  function salvarMateriais() {
+    const text = val('materiais-text');
+    const lines = text.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+    if (!lines.length) { toast('Informe ao menos um cadastro', 'error'); return; }
+
+    const imported = parseMateriaisLines(lines);
+    if (!imported.length) { toast('Nenhum cadastro válido encontrado', 'error'); return; }
+
+    upsertMateriais(imported);
+    listPages.materiais = 0;
+    setVal('materiais-text', '');
+    reaplicarPadronizacaoMateriais();
+    persist();
+    renderAll();
+    toast(`${imported.length} material(is) cadastrado(s)`);
+    closeModal('modal-materiais');
+  }
+
+  function parseMateriaisLines(lines) {
+    const items = [];
+
+    for (const rawLine of lines) {
+      const line = String(rawLine || '').trim();
+      if (!line) continue;
+
+      let origem = '';
+      let alias = '';
+      let desc = '';
+
+      const direct = line.match(/^(.*?)(?:\s*(?:=>|=|;|\t)\s*)(.+)$/);
+      if (direct) {
+        origem = direct[1].trim();
+        const right = direct[2].trim();
+        const parts = right.split('|').map(s => s.trim()).filter(Boolean);
+        alias = parts[0] || '';
+        desc = parts.slice(1).join(' | ');
+      } else {
+        const parts = line.split('|').map(s => s.trim()).filter(Boolean);
+        if (parts.length >= 2) {
+          origem = parts[0];
+          alias = parts[1];
+          desc = parts.slice(2).join(' | ');
+        }
+      }
+
+      if (!origem || !alias) continue;
+
+      items.push({
+        origem,
+        alias,
+        desc,
+        created: new Date().toLocaleDateString('pt-BR')
+      });
+    }
+
+    return items;
+  }
+
+  function materialMatchKey(item) {
+    return [
+      normalizeText(item?.origem),
+      normalizeText(item?.alias),
+      normalizeText(item?.desc)
+    ].join('||');
+  }
+
+  function makeMaterialId() {
+    if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+    return 'mat_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 10);
+  }
+
+  function upsertMateriais(items) {
+    items.forEach(item => {
+      const rec = {
+        id: item.id || makeMaterialId(),
+        ...item,
+        created: item.created || new Date().toLocaleDateString('pt-BR')
+      };
+
+      const key = materialMatchKey(rec);
+      const idx = state.materiais.findIndex(f => materialMatchKey(f) === key);
+      if (idx >= 0) state.materiais[idx] = { ...state.materiais[idx], ...rec };
+      else state.materiais.unshift(rec);
+    });
+  }
+
+  function parseMateriaisRows(rows) {
+    const cleaned = (rows || []).filter(row => Array.isArray(row) && row.some(c => c !== '' && c !== null && c !== undefined));
+    if (!cleaned.length) return [];
+
+    const norm = v => normalizeText(v);
+    const header = cleaned[0].map(norm);
+
+    const findIdx = (...names) => {
+      for (const name of names) {
+        const idx = header.findIndex(h => h === norm(name));
+        if (idx >= 0) return idx;
+      }
+      return -1;
+    };
+
+    const headerLooksLikeMeta = header.some(h => [
+      'ORIGEM', 'ORIGINAL', 'MATERIAL', 'MATERIAL ORIGINAL', 'GRUPO', 'GRUPO SAP', 'SAP', 'DESCRICAO', 'DESCRIÇÃO'
+    ].includes(h));
+
+    let startRow = 0;
+    let origemIdx = 0;
+    let aliasIdx = 1;
+    let descIdx = 2;
+
+    if (headerLooksLikeMeta) {
+      startRow = 1;
+      origemIdx = findIdx('origem', 'original', 'material', 'material original', 'nome');
+      aliasIdx = findIdx('grupo', 'grupo sap', 'sap', 'padronizada', 'padronizado', 'padronizacao', 'padronização');
+      descIdx = findIdx('descricao', 'descrição', 'descricao do material', 'observacao', 'observação');
+      if (origemIdx < 0) origemIdx = 0;
+      if (aliasIdx < 0) aliasIdx = 1;
+      if (descIdx < 0) descIdx = 2;
+    }
+
+    return cleaned.slice(startRow).map(row => ({
+      origem: String(row[origemIdx] || '').trim(),
+      alias: String(row[aliasIdx] || '').trim(),
+      desc: String(row[descIdx] || '').trim(),
+      created: new Date().toLocaleDateString('pt-BR')
+    })).filter(r => r.origem && r.alias);
+  }
+
+  function handleMateriaisImport(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (typeof XLSX === 'undefined') {
+      toast('Biblioteca XLSX não carregada.', 'error');
+      return;
+    }
+
+    const fileName = file.name.toLowerCase();
+    const reader = new FileReader();
+
+    reader.onload = function(e) {
+      try {
+        let rows = [];
+
+        if (fileName.endsWith('.csv')) {
+          const wb = XLSX.read(String(e.target.result || ''), { type: 'string', raw: true });
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' });
+        } else {
+          const wb = XLSX.read(e.target.result, { type: 'array', cellDates: false });
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' });
+        }
+
+        const items = parseMateriaisRows(rows);
+
+        if (!items.length) {
+          toast('Arquivo sem cadastros válidos', 'error');
+          return;
+        }
+
+        upsertMateriais(items);
+        listPages.materiais = 0;
+        reaplicarPadronizacaoMateriais();
+        persist();
+        renderAll();
+        closeModal('modal-materiais');
+        toast(`${items.length} material(is) importado(s)`);
+        event.target.value = '';
+      } catch (err) {
+        console.error(err);
+        toast('Falha ao importar materiais', 'error');
+      }
+    };
+
+    if (fileName.endsWith('.csv')) reader.readAsText(file, 'utf-8');
+    else reader.readAsArrayBuffer(file);
+  }
+
+  function focusMaterialImport() {
+    document.getElementById('file-materiais')?.click();
+  }
+
+  function removerMaterial(id) {
+    const idx = state.materiais.findIndex(m => m.id === id);
+    if (idx < 0) {
+      toast('Material não encontrado', 'error');
+      return;
+    }
+    state.materiais.splice(idx, 1);
+    reaplicarPadronizacaoMateriais();
+    persist();
+    renderAll();
+    toast('Material removido');
+  }
+
+  function limparMateriais() {
+    if (!state.materiais.length) return toast('Nenhum material cadastrado', 'error');
+    if (!confirm('Excluir todos os materiais cadastrados?')) return;
+    state.materiais = [];
+    reaplicarPadronizacaoMateriais();
+    persist();
+    renderAll();
+    toast('Todos os materiais foram excluídos', 'error');
+  }
+
+
+  function salvarFiliais() {
+    const text = val('filiais-text');
+    const lines = text.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+    if (!lines.length) { toast('Informe ao menos um cadastro', 'error'); return; }
+
+    const imported = parseFiliaisLines(lines);
+    if (!imported.length) { toast('Nenhum cadastro válido encontrado', 'error'); return; }
+
+    upsertFiliais(imported);
+    setVal('filiais-text', '');
+    persist();
+    renderFiliais();
+    toast(`${imported.length} filial(is) cadastrada(s)`);
+  }
+
+  function parseFiliaisLines(lines) {
+    const items = [];
+
+    for (const rawLine of lines) {
+      const line = String(rawLine || '').trim();
+      if (!line) continue;
+
+      let origem = '';
+      let alias = '';
+      let desc = '';
+
+      const direct = line.match(/^(.*?)(?:\s*(?:=>|=|;|\t)\s*)(.+)$/);
+      if (direct) {
+        origem = direct[1].trim();
+        alias = direct[2].trim();
+      } else {
+        const parts = line.split('|').map(s => s.trim()).filter(Boolean);
+        if (parts.length >= 2) {
+          origem = parts.slice(0, -1).join(' | ');
+          alias = parts.at(-1);
+        }
+      }
+
+      if (!origem || !alias) continue;
+
+      items.push({
+        origem,
+        alias,
+        desc,
+        created: new Date().toLocaleDateString('pt-BR')
+      });
+    }
+
+    return items;
+  }
+
+  function upsertFiliais(items) {
+    items.forEach(item => {
+      const key = normalizeText(item.origem);
+      const aliasKey = normalizeText(item.alias);
+      const idx = state.filiais.findIndex(f => normalizeText(f.origem) === key || normalizeText(f.alias) === aliasKey);
+      const rec = { ...item, created: item.created || new Date().toLocaleDateString('pt-BR') };
+      if (idx >= 0) state.filiais[idx] = rec; else state.filiais.unshift(rec);
+    });
+  }
+
+  function parseFiliaisRows(rows) {
+    const cleaned = (rows || []).filter(row => Array.isArray(row) && row.some(c => c !== '' && c !== null && c !== undefined));
+    if (!cleaned.length) return [];
+
+    const norm = v => normalizeText(v);
+    const header = cleaned[0].map(norm);
+
+    const findIdx = (...names) => {
+      for (const name of names) {
+        const idx = header.findIndex(h => h === norm(name));
+        if (idx >= 0) return idx;
+      }
+      return -1;
+    };
+
+    const headerLooksLikeMeta = header.some(h => [
+      'ORIGEM', 'ORIGINAL', 'ALIAS', 'SIGLA', 'DESCRICAO', 'DESCRIÇÃO', 'FILIAL', 'CENTRAL'
+    ].includes(h));
+
+    let startRow = 0;
+    let origemIdx = 0;
+    let aliasIdx = 1;
+    let descIdx = 2;
+
+    if (headerLooksLikeMeta) {
+      startRow = 1;
+      origemIdx = findIdx('origem', 'original', 'central', 'filial', 'central origem', 'central original');
+      aliasIdx = findIdx('alias', 'sigla', 'padronizada', 'central padrão', 'central padrao');
+      descIdx = findIdx('descricao', 'descrição', 'nome', 'observacao', 'observação');
+      if (origemIdx < 0) origemIdx = 0;
+      if (aliasIdx < 0) aliasIdx = 1;
+      if (descIdx < 0) descIdx = 2;
+    }
+
+    return cleaned.slice(startRow).map(row => ({
+      origem: String(row[origemIdx] || '').trim(),
+      alias: String(row[aliasIdx] || '').trim(),
+      desc: String(row[descIdx] || '').trim(),
+      created: new Date().toLocaleDateString('pt-BR')
+    })).filter(r => r.origem && r.alias);
+  }
+
+  function handleFiliaisImport(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (typeof XLSX === 'undefined') {
+      toast('Biblioteca XLSX não carregada.', 'error');
+      return;
+    }
+
+    const fileName = file.name.toLowerCase();
+    const reader = new FileReader();
+
+    reader.onload = function(e) {
+      try {
+        let rows = [];
+
+        if (fileName.endsWith('.csv')) {
+          const wb = XLSX.read(String(e.target.result || ''), { type: 'string', raw: true });
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' });
+        } else {
+          const wb = XLSX.read(e.target.result, { type: 'array', cellDates: false });
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' });
+        }
+
+        const items = parseFiliaisRows(rows);
+
+        if (!items.length) {
+          toast('Arquivo sem cadastros válidos', 'error');
+          return;
+        }
+
+        upsertFiliais(items);
+        persist();
+        renderFiliais();
+        closeModal('modal-filiais');
+        toast(`${items.length} filial(is) importada(s)`);
+        event.target.value = '';
+      } catch (err) {
+        console.error(err);
+        toast('Falha ao importar filiais', 'error');
+      }
+    };
+
+    if (fileName.endsWith('.csv')) reader.readAsText(file, 'utf-8');
+    else reader.readAsArrayBuffer(file);
+  }
+
+  function focusFilialImport() {
+    document.getElementById('file-filiais')?.click();
+  }
+
+  function removerFilial(index) {
+    state.filiais.splice(index, 1);
+    persist();
+    renderFiliais();
+    toast('Filial removida', 'error');
+  }
+
+  function limparFiliais() {
+    if (!state.filiais.length) return toast('Nenhuma filial cadastrada', 'error');
+    if (!confirm('Excluir todas as filiais cadastradas?')) return;
+    state.filiais = [];
+    persist();
+    renderFiliais();
+    toast('Todas as filiais foram excluídas', 'error');
+  }
+
+  function renderDashboardFeed() {
+    const tb = document.getElementById('tb-dashboard');
+    if (!tb) return;
+
+    const { data, pageData } = getListPageData('dashboard');
+    updateListPageInfo('dashboard');
+
+    if (!data.length) {
+      tb.innerHTML = '<tr><td colspan="7"><div class="empty-state"><i class="ti ti-inbox"></i><p>Nenhum registro ainda.<br>Importe dados ou cadastre manualmente.</p></div></td></tr>';
+      return;
+    }
+
+    tb.innerHTML = pageData.map(r => `
+      <tr>
+        <td><span class="badge ${r.status}">${r.modulo}</span></td>
+        <td class="td-mono">${r.material || r.materialOriginal || '—'}</td>
+        <td class="td-muted">${r.central || '—'}</td>
+        <td class="td-mono">${r.valor || '—'}</td>
+        <td class="td-muted">${r.data ? new Date(r.data).toLocaleString('pt-BR') : '—'}</td>
+        <td><span class="badge ${r.status}">OK</span></td>
+      </tr>
+    `).join('');
+    makeResizable(tb.closest('table'));
+  }
+
+  function updateDashboard() {
+    const set = (id, value) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = value;
+    };
+
+    set('m-entradas', state.entradas.length);
+    set('m-saidas', state.saidas.length);
+    set('m-lancamentos', state.lancamentos.length);
+    set('m-sap', state.sap.length);
+    set('m-producao', state.producao.length);
+
+    const materiais = new Set([
+      ...state.entradas.map(r => r.material),
+      ...state.saidas.map(r => r.material),
+      ...state.lancamentos.map(r => r.material),
+      ...state.sap.map(r => r.material)
+    ].filter(Boolean));
+
+    const centrais = new Set([
+      ...state.entradas.flatMap(r => [r.centralCompra, r.centralDestino]),
+      ...state.saidas.map(r => r.central),
+      ...state.lancamentos.map(r => r.central),
+      ...state.sap.map(r => r.central),
+      ...state.producao.map(r => r.central)
+    ].filter(Boolean));
+
+    set('m-materiais', materiais.size);
+    set('m-centrais', centrais.size);
+
+    renderDashboardFeed();
+  }
+
+  function renderEntradas() {
+    const tb = document.getElementById('tb-entradas');
+    if (!tb) return;
+    const data = pageSlice('entradas');
+    updatePageInfo('entradas');
+
+    if (!getFilteredData('entradas').length) {
+      tb.innerHTML = '<tr><td colspan="13"><div class="empty-state"><i class="ti ti-package"></i><p>Nenhuma entrada cadastrada.</p></div></td></tr>';
+      return;
+    }
+
+    tb.innerHTML = data.map((r, i) => `
+      <tr>
+        <td class="td-mono">${r.centralCompra || '—'}</td>
+        <td class="td-mono">${r.centralDestino || '—'}</td>
+        <td class="td-mono">${r.nf || '—'}</td>
+        <td class="td-muted">${r.dtEmissao || '—'}</td>
+        <td class="td-muted">${r.dtDescarga || '—'}</td>
+        <td>${r.fornecedor || '—'}</td>
+        <td class="td-muted">${r.categoria || '—'}</td>
+        <td class="td-mono">${r.material || r.materialOriginal || '—'}</td>
+        <td class="td-mono" style="color:var(--teal)">${num(r.peso) || 0}</td>
+        <td>${r.um || '—'}</td>
+        <td class="td-mono">${money(r.custo)}</td>
+        <td class="td-mono" style="color:var(--green)">${money(r.valorTotal)}</td>
+        <td><button class="btn-icon danger" onclick="removerRegistro('entradas', ${i})"><i class="ti ti-trash"></i></button></td>
+      </tr>
+    `).join('');
+    makeResizable(tb.closest('table'));
+  }
+
+  function renderSaidas() {
+    const tb = document.getElementById('tb-saidas');
+    if (!tb) return;
+    const data = pageSlice('saidas');
+    updatePageInfo('saidas');
+
+    if (!getFilteredData('saidas').length) {
+      tb.innerHTML = '<tr><td colspan="12"><div class="empty-state"><i class="ti ti-truck"></i><p>Nenhuma saída cadastrada.</p></div></td></tr>';
+      return;
+    }
+
+    tb.innerHTML = data.map((r, i) => `
+      <tr>
+        <td class="td-mono">${r.central || '—'}</td>
+        <td class="td-muted">${r.dtEmissao || '—'}</td>
+        <td class="td-mono">${r.os || '—'}</td>
+        <td class="td-muted">${r.contrato || '—'}</td>
+        <td class="td-muted">${r.categoria || '—'}</td>
+        <td>${r.fornecedor || '—'}</td>
+        <td class="td-mono">${r.material || r.materialOriginal || '—'}</td>
+        <td class="td-mono" style="color:var(--teal)">${num(r.peso) || 0}</td>
+        <td>${r.um || '—'}</td>
+        <td class="td-mono">${money(r.custo)}</td>
+        <td class="td-mono" style="color:var(--green)">${money(r.valorTotal)}</td>
+        <td><button class="btn-icon danger" onclick="removerRegistro('saidas', ${i})"><i class="ti ti-trash"></i></button></td>
+      </tr>
+    `).join('');
+    makeResizable(tb.closest('table'));
+  }
+
+  function renderLancamentos() {
+    const tb = document.getElementById('tb-lancamentos');
+    if (!tb) return;
+    const data = pageSlice('lancamentos');
+    updatePageInfo('lancamentos');
+
+    if (!getFilteredData('lancamentos').length) {
+      tb.innerHTML = '<tr><td colspan="10"><div class="empty-state"><i class="ti ti-clipboard"></i><p>Nenhum lançamento de saldo real.</p></div></td></tr>';
+      return;
+    }
+
+    tb.innerHTML = data.map((r, i) => `
+      <tr>
+        <td class="td-mono">${r.central || '—'}</td>
+        <td class="td-muted">${r.dtLanc || '—'}</td>
+        <td>${r.fornecedor || '—'}</td>
+        <td class="td-muted">${r.categoria || '—'}</td>
+        <td class="td-mono">${r.material || r.materialOriginal || '—'}</td>
+        <td class="td-mono" style="color:var(--teal)">${num(r.peso) || 0}</td>
+        <td>${r.um || '—'}</td>
+        <td class="td-mono">${money(r.custo)}</td>
+        <td class="td-mono">${money(r.valorTotal)}</td>
+        <td><button class="btn-icon danger" onclick="removerRegistro('lancamentos', ${i})"><i class="ti ti-trash"></i></button></td>
+      </tr>
+    `).join('');
+    makeResizable(tb.closest('table'));
+  }
+
+  function renderSAP() {
+    const tb = document.getElementById('tb-sap');
+    if (!tb) return;
+    const data = pageSlice('sap');
+    updatePageInfo('sap');
+
+    if (!getFilteredData('sap').length) {
+      tb.innerHTML = '<tr><td colspan="15"><div class="empty-state"><i class="ti ti-database"></i><p>Nenhuma movimentação SAP importada.</p></div></td></tr>';
+      return;
+    }
+
+    tb.innerHTML = data.map((r, i) => {
+      const neg = num(r.peso) < 0;
+      const red = '#ef4444';
+      const green = '#22c55e';
+      const text = 'inherit';
+      return `
+      <tr>
+        <td class="td-mono">${r.usuario || '—'}</td>
+        <td class="td-mono" style="color:${neg ? red : green}">${r.movimento || '—'}</td>
+        <td class="td-muted">${r.ref || '—'}</td>
+        <td class="td-mono">${r.documento || '—'}</td>
+        <td class="td-mono">${r.central || '—'}</td>
+        <td class="td-muted">${r.deposito || '—'}</td>
+        <td class="td-muted">${r.dtDoc || '—'}</td>
+        <td class="td-muted">${r.dtLanc || '—'}</td>
+        <td class="td-muted">${r.dtReg || '—'}</td>
+        <td class="td-mono">${r.material || r.materialOriginal || '—'}</td>
+        <td class="td-mono" style="color:${neg ? red : green}">${num(r.peso).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+        <td>${r.um || '—'}</td>
+        <td class="td-mono" style="color:${neg ? red : text}">${money(r.custoUnit, 4)}</td>
+        <td class="td-mono" style="color:#60a5fa">${money(r.valorTotal, 2)}</td>
+        <td><button class="btn-icon danger" onclick="removerRegistro('sap', ${i})"><i class="ti ti-trash"></i></button></td>
+      </tr>`;
+    }).join('');
+    makeResizable(tb.closest('table'));
+  }
+
+  function renderProducao() {
+    const tb = document.getElementById('tb-producao');
+    if (!tb) return;
+
+    const data = getFilteredData('producao');
+    const totalPages = Math.max(1, Math.ceil(data.length / PAGE_SIZE));
+    if (currentPageProducao >= totalPages) currentPageProducao = totalPages - 1;
+    if (currentPageProducao < 0) currentPageProducao = 0;
+
+    const pageData = data.slice(currentPageProducao * PAGE_SIZE, (currentPageProducao + 1) * PAGE_SIZE);
+    updatePageInfo('producao');
+
+    const centrais = new Set(state.producao.map(r => r.central).filter(Boolean));
+    const prodTotal = state.producao.reduce((a, b) => a + num(b.producao), 0);
+    const vendasTotal = state.producao.reduce((a, b) => a + num(b.totalVendas), 0);
+    const custoMedio = state.producao.length ? state.producao.reduce((a, b) => a + num(b.custoMedio), 0) / state.producao.length : 0;
+
+    const set = (id, value) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = value;
+    };
+    set('prod-centrais', centrais.size);
+    set('prod-total', prodTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+    set('prod-vendas', money(vendasTotal));
+    set('prod-custo', money(custoMedio));
+    set('prod-margem', state.producao.length ? '—' : '—');
+
+    if (!data.length) {
+      tb.innerHTML = '<tr><td colspan="9"><div class="empty-state"><i class="ti ti-chart-bar"></i><p>Nenhum registro de produção importado.</p></div></td></tr>';
+      return;
+    }
+
+    tb.innerHTML = pageData.map((r, i) => `
+      <tr>
+        <td class="td-mono">${r.mes || '—'}</td>
+        <td class="td-mono">${r.central || '—'}</td>
+        <td class="td-mono" style="color:var(--teal)">${num(r.producao).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+        <td>${r.um || 'm³'}</td>
+        <td class="td-mono">${money(r.precoMedio)}</td>
+        <td class="td-mono">${money(r.custoMedio)}</td>
+        <td class="td-mono">${r.margem || '—'}</td>
+        <td class="td-mono" style="color:#f59e0b">${money(r.totalVendas)}</td>
+        <td><button class="btn-icon danger" onclick="excluirProducao(${currentPageProducao * PAGE_SIZE + i})"><i class="ti ti-trash"></i></button></td>
+      </tr>
+    `).join('');
+    makeResizable(tb.closest('table'));
+  }
+
+  function renderConfigs() {
+    const tb = document.getElementById('tb-configs');
+    if (!tb) return;
+    const { data, pageData } = getListPageData('configs');
+    updateListPageInfo('configs');
+    if (!data.length) {
+      tb.innerHTML = '<tr><td colspan="5"><div class="empty-state"><i class="ti ti-adjustments"></i><p>Nenhuma configuração personalizada.</p></div></td></tr>';
+      return;
+    }
+    tb.innerHTML = pageData.map((c, i) => `
+      <tr>
+        <td class="td-mono">${c.key}</td>
+        <td>${c.value}</td>
+        <td class="td-muted">${c.desc || '—'}</td>
+        <td class="td-muted">${c.created || '—'}</td>
+        <td><button class="btn-icon danger" onclick="removerConfig(${listPages.configs * PAGE_SIZE + i})"><i class="ti ti-trash"></i></button></td>
+      </tr>
+    `).join('');
+  }
+
+  function renderFiliais() {
+    const tb = document.getElementById('tb-filiais');
+    if (!tb) return;
+    const { data, pageData } = getListPageData('filiais');
+    updateListPageInfo('filiais');
+    if (!data.length) {
+      tb.innerHTML = '<tr><td colspan="5"><div class="empty-state"><i class="ti ti-map-pin"></i><p>Nenhuma filial cadastrada.</p></div></td></tr>';
+      return;
+    }
+    tb.innerHTML = pageData.map((f, i) => `
+      <tr>
+        <td class="td-mono">${f.origem}</td>
+        <td class="td-mono">${f.alias}</td>
+        <td class="td-muted">${f.desc || '—'}</td>
+        <td class="td-muted">${f.created || '—'}</td>
+        <td><button class="btn-icon danger" onclick="removerFilial(${listPages.filiais * PAGE_SIZE + i})"><i class="ti ti-trash"></i></button></td>
+      </tr>
+    `).join('');
+  }
+
+  function renderMateriais() {
+    const tb = document.getElementById('tb-materiais');
+    if (!tb) return;
+    const { data, pageData } = getListPageData('materiais');
+    updateListPageInfo('materiais');
+    if (!data.length) {
+      tb.innerHTML = '<tr><td colspan="5"><div class="empty-state"><i class="ti ti-stack-2"></i><p>Nenhum material cadastrado.</p></div></td></tr>';
+      return;
+    }
+    tb.innerHTML = pageData.map((m, i) => `
+      <tr>
+        <td class="td-mono">${m.origem}</td>
+        <td class="td-mono">${m.alias}</td>
+        <td class="td-muted">${m.desc || '—'}</td>
+        <td class="td-muted">${m.created || '—'}</td>
+        <td><button class="btn-icon danger" onclick="removerMaterial('${m.id}')"><i class="ti ti-trash"></i></button></td>
+      </tr>
+    `).join('');
+  }
+
+  function renderModule(module) {
+    switch (module) {
+      case 'entradas': return renderEntradas();
+      case 'saidas': return renderSaidas();
+      case 'lancamentos': return renderLancamentos();
+      case 'sap': return renderSAP();
+      case 'producao': return renderProducao();
+      default: return;
+    }
+  }
+
+  function removerRegistro(module, index) {
+    const data = getFilteredData(module);
+    const actual = data[(module === 'producao' ? currentPageProducao : pages[module]) * PAGE_SIZE + index];
+    if (!actual) return;
+    if (!confirm('Deseja realmente excluir este registro?')) return;
+
+    state[module] = state[module].filter(r => r !== actual);
+    persist();
+    renderModule(module);
+    updateDashboard();
+    toast('Registro excluído com sucesso');
+  }
+
+  function removerImportById(importId) {
+    const removeFrom = key => { state[key] = state[key].filter(r => r.importId !== importId); };
+    ['entradas','saidas','lancamentos','sap','producao'].forEach(removeFrom);
+    state.imports = state.imports.filter(r => r.id !== importId);
+  }
+
+  function processImportedRows(modulo, rows, fileName, extra = {}) {
+    const importId = `imp_${modulo}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    let parsed = [];
+
+    if (modulo === 'Entrada') {
+      parsed = rows.map(r => {
+        const materialOriginal = String(r[10] || '').trim();
+        return stamp(normalizarCentraisRecord({
+          importId,
+          centralCompra: String(r[0] || ''),
+          centralDestino: String(r[1] || ''),
+          nf: String(r[11] || ''),
+          dtEmissao: fmtDate(r[13]),
+          dtDescarga: fmtDate(r[3]),
+          fornecedor: String(r[4] || ''),
+          categoria: String(r[9] || ''),
+          materialOriginal,
+          material: normalizarMaterial(materialOriginal),
+          peso: num(r[18]),
+          um: String(r[17] || ''),
+          custo: num(r[19]),
+          valorTotal: num(r[20])
+        }, ['centralCompra','centralDestino']));
+      }).filter(r => r.material || r.nf);
+
+      state.entradas.unshift(...parsed);
+    }
+
+    if (modulo === 'Saída') {
+      parsed = rows.map(r => {
+        const materialOriginal = String(r[6] || '').trim();
+        return stamp(normalizarCentraisRecord({
+          importId,
+          central: String(r[0] || ''),
+          dtEmissao: fmtDate(r[1]),
+          os: String(r[2] || ''),
+          contrato: String(r[3] || ''),
+          categoria: String(r[4] || ''),
+          fornecedor: String(r[5] || ''),
+          materialOriginal,
+          material: normalizarMaterial(materialOriginal),
+          peso: num(r[9]),
+          um: 'KG',
+          custo: num(r[10]),
+          valorTotal: num(r[9]) * num(r[10])
+        }, ['central']));
+      }).filter(r => r.material || r.os);
+
+      state.saidas.unshift(...parsed);
+    }
+
+    if (modulo === 'Lançamento') {
+      parsed = rows.map(r => {
+        const partes = String(r[2] || '')
+          .split(/\s*\|\s*/)
+          .map(v => v.trim())
+          .filter(Boolean);
+
+        const materialOriginal = partes[0] || '';
+        const fornecedor = partes[1] || '';
+        const municipio = partes[2] || '';
+        const material = normalizarMaterial(materialOriginal);
+
+        return stamp(normalizarCentraisRecord({
+          importId,
+          dtLanc: fmtDate(r[0]),
+          central: String(r[1] || ''),
+          fornecedor: fornecedor,
+          municipio: municipio,
+          categoria: String(r[3] || ''),
+          materialOriginal,
+          material,
+          peso: num(r[4]),
+          um: 'KG',
+          custo: num(r[5]),
+          valorTotal: num(r[4]) * num(r[5])
+        }, ['central']));
+      }).filter(r => r.material);
+
+      state.lancamentos.unshift(...parsed);
+    }
+
+    if (modulo === 'SAP') {
+      parsed = rows.map(r => {
+        const peso = num(r[11]);
+        const valorTotal = num(r[13]);
+        const materialOriginal = String(r[10] || '').trim();
+        return stamp(normalizarCentraisRecord({
+          importId,
+          usuario: String(r[0] || ''),
+          movimento: String(r[1] || ''),
+          ref: String(r[3] || ''),
+          documento: String(r[4] || ''),
+          central: String(r[5] || ''),
+          deposito: String(r[6] || ''),
+          dtDoc: fmtDate(r[7]),
+          dtLanc: fmtDate(r[8]),
+          dtReg: fmtDate(r[9]),
+          materialOriginal,
+          material: normalizarMaterial(materialOriginal),
+          peso,
+          um: String(r[12] || ''),
+          custoUnit: peso !== 0 ? valorTotal / peso : 0,
+          valorTotal
+        }, ['central']));
+      }).filter(r => r.material || r.documento);
+
+      state.sap.unshift(...parsed);
+    }
+
+    if (modulo === 'Produção') {
+      const mes = extra.mes || prompt('Informe o mês da produção importada:');
+      if (!mes || !String(mes).trim()) {
+        toast('Importação cancelada: mês não informado', 'error');
+        return;
+      }
+
+      parsed = rows.map(r => stamp(normalizarCentraisRecord({
+        importId,
+        mes: String(mes).trim(),
+        central: String(r[0] || ''),
+        producao: num(r[1]),
+        um: 'm³',
+        precoMedio: num(r[5]),
+        margem: String(r[6] || '').trim() || '—',
+        custoMedio: num(r[7]),
+        totalVendas: num(r[8])
+      }, ['central']))).filter(r => r.central || r.producao);
+
+      state.producao.unshift(...parsed);
+    }
+
+    if (!parsed.length) {
+      toast('Nenhum registro válido encontrado', 'error');
+      return;
+    }
+
+    state.imports.unshift({
+      id: importId,
+      arquivo: fileName,
+      modulo,
+      registros: parsed.length,
+      dataHora: new Date().toLocaleString('pt-BR'),
+      status: 'Importado',
+      createdAt: Date.now()
+    });
+
+    persist();
+    renderAll();
+    toast(`${parsed.length} registros importados de "${fileName}"`);
+  }
+
+  function handleImport(event, modulo) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (typeof XLSX === 'undefined') {
+      toast('Biblioteca XLSX não carregada. Verifique a conexão.', 'error');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      try {
+        const wb = XLSX.read(e.target.result, { type: 'array', cellDates: false });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' });
+        const data = rows.slice(1).filter(r => r.some(c => c !== '' && c !== null && c !== undefined));
+        processImportedRows(modulo, data, file.name, {});
+        event.target.value = '';
+      } catch (err) {
+        console.error(err);
+        toast('Erro ao processar o arquivo', 'error');
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+
+
+  function renderAll() {
+    renderEntradas();
+    renderSaidas();
+    renderLancamentos();
+    renderSAP();
+    renderProducao();
+    renderImports();
+    renderConfigs();
+    renderFiliais();
+    renderMateriais();
+    updateDashboard();
+    initResizable();
+  }
+
+
+
+  function initDropZones() {
+    qsa('.drop-zone').forEach(zone => {
+      zone.addEventListener('dragover', e => {
+        e.preventDefault();
+        zone.style.borderColor = 'var(--accent)';
+      });
+      zone.addEventListener('dragleave', () => zone.style.borderColor = '');
+      zone.addEventListener('drop', e => {
+        e.preventDefault();
+        zone.style.borderColor = '';
+        toast('Arraste e solte: use o botão para selecionar o arquivo.', 'error');
+      });
+    });
+  }
+
+  function restoreAndRender() {
+    loadState();
+    reaplicarPadronizacaoMateriais();
+    renderAll();
+  }
+
+  // expose globals used by inline onclick
+  // ═══════════════════════════════════════════════════════════
+  // DASHBOARD ANALÍTICO
+  // ═══════════════════════════════════════════════════════════
+
+  /**
+   * Parse a date string "DD/MM/AAAA" → Date (midnight local).
+   * Returns null for invalid strings.
+   */
+  function parseDate(str) {
+    if (!str || str === '—') return null;
+    // Accept DD/MM/AAAA or AAAA-MM-DD
+    let d, m, y;
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(str)) {
+      [d, m, y] = str.split('/').map(Number);
+    } else if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+      [y, m, d] = str.split('-').map(Number);
+    } else {
+      return null;
+    }
+    const dt = new Date(y, m - 1, d);
+    return isNaN(dt) ? null : dt;
+  }
+
+  function dateCmp(a, b) { return a - b; }
+
+  function fmtPtDate(d) {
+    if (!d) return '—';
+    return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+  }
+
+  function fmtKg(v, decimals = 3) {
+    const n = num(v);
+    return n.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+  }
+
+  function varClass(v) {
+    if (v > 0.0001)  return 'diff-pos';
+    if (v < -0.0001) return 'diff-neg';
+    return 'diff-zero';
+  }
+  function varIcon(v) {
+    if (v > 0.0001)  return '<i class="ti ti-trending-up" style="color:var(--amber)"></i>';
+    if (v < -0.0001) return '<i class="ti ti-trending-down" style="color:var(--red)"></i>';
+    return '<i class="ti ti-minus" style="color:var(--text3)"></i>';
+  }
+
+  /**
+   * Normalise a movement code: trim, uppercase, strip leading zeros.
+   * "101" → "101", " 101 " → "101", "0101" → "101"
+   */
+  function normMov(v) {
+    return String(v ?? '').trim().toUpperCase().replace(/^0+/, '') || '0';
+  }
+
+  const CODIGOS_ENTRADA = new Set(['101', '801']);
+  const CODIGOS_SAIDA   = new Set(['201']);
+
+  function rodarAnalitico() {
+    const iniStr = document.getElementById('an-dt-ini')?.value;
+    const fimStr = document.getElementById('an-dt-fim')?.value;
+    if (!iniStr || !fimStr) return;
+
+    // Parse period bounds (YYYY-MM-DD from <input type=date>)
+    const dtIni = new Date(iniStr + 'T00:00:00');
+    const dtFim = new Date(fimStr + 'T23:59:59');
+    if (isNaN(dtIni) || isNaN(dtFim) || dtIni > dtFim) {
+      toast('Período inválido', 'error');
+      return;
+    }
+
+    // ── Build date-bound helpers ──────────────────────────────
+    function inPeriod(dateStr) {
+      const d = parseDate(dateStr);
+      if (!d) return false;
+      return d >= dtIni && d <= dtFim;
+    }
+
+    // ── Collect all central keys ──────────────────────────────
+    const allCentrals = new Set([
+      ...state.lancamentos.map(r => r.central),
+      ...state.sap.map(r => r.central)
+    ].filter(Boolean));
+
+    if (!allCentrals.size) {
+      toast('Nenhum dado para o período selecionado', 'error');
+      return;
+    }
+
+    // ── Per-central analysis ──────────────────────────────────
+    const results = [];
+
+    allCentrals.forEach(central => {
+
+      // ── Lançamentos desta central dentro do período ──
+      const lancsNoPeriodo = state.lancamentos
+        .filter(r => r.central === central && inPeriod(r.dtLanc))
+        .sort((a, b) => {
+          const da = parseDate(a.dtLanc), db = parseDate(b.dtLanc);
+          return dateCmp(da || 0, db || 0);
+        });
+
+      // ── SAP desta central dentro do período ──
+      const sapNoPeriodo = state.sap.filter(r => r.central === central && inPeriod(r.dtDoc));
+
+      // ── SAP: entradas (101, 801) ──
+      const sapEntradas = sapNoPeriodo.filter(r => CODIGOS_ENTRADA.has(normMov(r.movimento)) && num(r.peso) > 0);
+      const totalEntradas = sapEntradas.reduce((s, r) => s + num(r.peso), 0);
+
+      // ── SAP: saídas (201) ──
+      const sapSaidas = sapNoPeriodo.filter(r => CODIGOS_SAIDA.has(normMov(r.movimento)) && num(r.peso) < 0);
+      const totalSaidas = sapSaidas.reduce((s, r) => s + num(r.peso), 0); // negative
+
+      // ── Primeiro lançamento do período (mais antigo) ──
+      // Agrupado por material → pega a versão mais antiga de cada material
+      const materiaisLancPrimeiro = {};
+      lancsNoPeriodo.forEach(r => {
+        const mat = r.material || '—';
+        if (!materiaisLancPrimeiro[mat]) materiaisLancPrimeiro[mat] = r;
+      });
+
+      // ── Último lançamento do período (mais recente) ──
+      const lancsDesc = [...lancsNoPeriodo].sort((a, b) => {
+        const da = parseDate(a.dtLanc), db = parseDate(b.dtLanc);
+        return dateCmp(db || 0, da || 0);
+      });
+      const materiaisLancUltimo = {};
+      lancsDesc.forEach(r => {
+        const mat = r.material || '—';
+        if (!materiaisLancUltimo[mat]) materiaisLancUltimo[mat] = r;
+      });
+
+      // ── All materials seen in this central ──
+      const allMats = new Set([
+        ...Object.keys(materiaisLancPrimeiro),
+        ...Object.keys(materiaisLancUltimo),
+        ...sapNoPeriodo.map(r => r.material || '—')
+      ]);
+
+      // ── Macro: sum across all materials ──
+      let somaPrimeiro = 0;
+      let somaUltimo   = 0;
+      allMats.forEach(mat => {
+        somaPrimeiro += num(materiaisLancPrimeiro[mat]?.peso);
+        somaUltimo   += num(materiaisLancUltimo[mat]?.peso);
+      });
+
+      // Teórico = 1º lançamento + entradas SAP + saídas SAP
+      const estoqueTeoricoMacro = somaPrimeiro + totalEntradas + totalSaidas;
+      const variacaoEstoque = somaUltimo - estoqueTeoricoMacro;
+
+      // ── SAP breakdown by movement code ──
+      const movBreakdown = {};
+      sapNoPeriodo.forEach(r => {
+        const cod = normMov(r.movimento);
+        if (!movBreakdown[cod]) movBreakdown[cod] = 0;
+        movBreakdown[cod] += num(r.peso);
+      });
+
+      // ── Produção do período (match por mês dentro do range) ──
+      const prodNoPeriodo = state.producao.filter(r => {
+        if (r.central !== central) return false;
+        // r.mes is like "Janeiro/2026" — try to match months inside period
+        // Check if any day of the month falls inside the period
+        const mesMatch = r.mes ? parseMes(r.mes) : null;
+        if (!mesMatch) return false;
+        // include if the 1st of that month <= dtFim and last day >= dtIni
+        const firstDay = new Date(mesMatch.y, mesMatch.m - 1, 1);
+        const lastDay  = new Date(mesMatch.y, mesMatch.m, 0);
+        return firstDay <= dtFim && lastDay >= dtIni;
+      });
+
+      results.push({
+        central,
+        totalEntradas,
+        totalSaidas,
+        estoqueTeoricoMacro,
+        somaUltimo,
+        variacaoEstoque,
+        movBreakdown,
+        allMats: [...allMats].sort(),
+        materiaisLancPrimeiro,
+        materiaisLancUltimo,
+        sapNoPeriodo,
+        prodNoPeriodo
+      });
+    });
+
+    // Sort by central name
+    results.sort((a, b) => String(a.central).localeCompare(String(b.central), 'pt-BR'));
+
+    renderAnaliticoMacro(results, dtIni, dtFim);
+    renderAnaliticoMicro(results, dtIni, dtFim);
+
+    document.getElementById('an-empty').style.display = 'none';
+    document.getElementById('an-content').style.display = '';
+    document.getElementById('an-periodo-label').textContent =
+      `${fmtPtDate(dtIni)} a ${fmtPtDate(dtFim)}`;
+  }
+
+  function parseMes(str) {
+    // "Janeiro/2026" → {m:1, y:2026}
+    if (!str) return null;
+    const meses = {
+      janeiro:1, fevereiro:2, março:3, marco:3, abril:4, maio:5, junho:6,
+      julho:7, agosto:8, setembro:9, outubro:10, novembro:11, dezembro:12
+    };
+    const parts = str.toLowerCase().replace('ç','c').split(/[\s\/\-]+/);
+    let m = null, y = null;
+    parts.forEach(p => {
+      const n = Number(p);
+      if (!isNaN(n) && n > 1900) { y = n; }
+      else if (meses[p]) { m = meses[p]; }
+      // Handle "01/2026" style
+      else if (/^\d{1,2}$/.test(p) && !m) { m = Number(p); }
+    });
+    return m && y ? { m, y } : null;
+  }
+
+  function renderAnaliticoMacro(results, dtIni, dtFim) {
+    const tb = document.getElementById('an-macro-body');
+    if (!tb) return;
+
+    if (!results.length) {
+      tb.innerHTML = '<tr><td colspan="5"><div class="empty-state"><i class="ti ti-database-off"></i><p>Sem dados para o período selecionado.</p></div></td></tr>';
+      return;
+    }
+
+    tb.innerHTML = results.map(r => {
+      const varCls = r.variacaoEstoque > 0.001 ? 'var-cell-pos'
+                   : r.variacaoEstoque < -0.001 ? 'var-cell-neg'
+                   : 'var-cell-zero';
+      const varPfx = r.variacaoEstoque > 0 ? '+' : '';
+      return `<tr>
+        <td class="td-mono" style="font-weight:600">${r.central}</td>
+        <td class="td-mono" style="color:var(--green)">${fmtKg(r.totalEntradas)}</td>
+        <td class="td-mono" style="color:var(--red)">${fmtKg(r.totalSaidas)}</td>
+        <td class="td-mono ${varCls}">${varPfx}${fmtKg(r.variacaoEstoque)}</td>
+        <td class="pending-cell">A consolidar</td>
+      </tr>`;
+    }).join('');
+
+    makeResizable(document.getElementById('an-macro-table'));
+  }
+
+  function renderAnaliticoMicro(results, dtIni, dtFim) {
+    const container = document.getElementById('an-micro-container');
+    if (!container) return;
+    container.innerHTML = '';
+
+    results.forEach((r, idx) => {
+      // ── Movement codes for this central ──
+      const entradasCods = {};
+      const saidasCods   = {};
+      r.sapNoPeriodo.forEach(s => {
+        const cod = normMov(s.movimento);
+        const p   = num(s.peso);
+        if (p > 0) {
+          if (!entradasCods[cod]) entradasCods[cod] = 0;
+          entradasCods[cod] += p;
+        } else if (p < 0) {
+          if (!saidasCods[cod]) saidasCods[cod] = 0;
+          saidasCods[cod] += p;
+        }
+      });
+
+      const prodHtml = r.prodNoPeriodo.length
+        ? r.prodNoPeriodo.map(p => `
+            <span class="prod-badge">
+              <i class="ti ti-building-factory"></i>
+              ${p.mes} · ${fmtKg(p.producao, 2)} m³ ·
+              Preço Médio: ${money(p.precoMedio)} ·
+              Custo Médio: ${money(p.custoMedio)} ·
+              Faturamento: ${money(p.totalVendas)}
+            </span>`).join('')
+        : `<span class="prod-badge" style="color:var(--text3);background:var(--bg3)">
+             <i class="ti ti-info-circle"></i> Sem produção no período
+           </span>`;
+
+      // ── Per-material rows ──
+      let matRowsHtml = '';
+      r.allMats.forEach(mat => {
+        const lancIni   = r.materiaisLancPrimeiro[mat];
+        const lancFim   = r.materiaisLancUltimo[mat];
+        const pesoIni   = num(lancIni?.peso);
+        const pesoFim   = num(lancFim?.peso);
+
+        // SAP for this material
+        const sapMat = r.sapNoPeriodo.filter(s => (s.material || '—') === mat);
+
+        // Entradas (positive) and saídas (negative) per code for this material
+        const entMatCods = {};
+        const saiMatCods = {};
+        sapMat.forEach(s => {
+          const cod = normMov(s.movimento);
+          const p   = num(s.peso);
+          if (p > 0) { entMatCods[cod] = (entMatCods[cod] || 0) + p; }
+          else if (p < 0) { saiMatCods[cod] = (saiMatCods[cod] || 0) + p; }
+        });
+
+        const totalEntMat = Object.values(entMatCods).reduce((a, b) => a + b, 0);
+        const totalSaiMat = Object.values(saiMatCods).reduce((a, b) => a + b, 0);
+        const estTeoricoMat = pesoIni + totalEntMat + totalSaiMat;
+        const diffMat = pesoFim - estTeoricoMat;
+        const dCls = varClass(diffMat);
+        const dPfx = diffMat > 0 ? '+' : '';
+
+        const entCodsHtml = Object.entries(entMatCods).length
+          ? Object.entries(entMatCods).map(([cod, v]) =>
+              `<span class="badge badge-green" style="margin:1px">${cod}: +${fmtKg(v)}</span>`).join(' ')
+          : '<span style="color:var(--text3);font-size:11px">—</span>';
+
+        const saiCodsHtml = Object.entries(saiMatCods).length
+          ? Object.entries(saiMatCods).map(([cod, v]) =>
+              `<span class="badge badge-red" style="margin:1px">${cod}: ${fmtKg(v)}</span>`).join(' ')
+          : '<span style="color:var(--text3);font-size:11px">—</span>';
+
+        const dtIniLabel = lancIni?.dtLanc || '—';
+        const dtFimLabel = lancFim?.dtLanc || '—';
+
+        matRowsHtml += `
+          <tr>
+            <td class="td-mono" style="font-weight:600">${mat}</td>
+            <td class="td-mono" style="color:var(--text2);font-size:11px">${dtIniLabel}</td>
+            <td class="td-mono" style="color:var(--teal)">${fmtKg(pesoIni)}</td>
+            <td>${entCodsHtml}</td>
+            <td>${saiCodsHtml}</td>
+            <td class="td-mono" style="color:var(--accent)">${fmtKg(estTeoricoMat)}</td>
+            <td class="td-mono" style="color:var(--text2);font-size:11px">${dtFimLabel}</td>
+            <td class="td-mono" style="color:var(--teal)">${fmtKg(pesoFim)}</td>
+            <td class="td-mono ${dCls}">${dPfx}${fmtKg(diffMat)}</td>
+          </tr>`;
+      });
+
+      // Total de entradas e saídas SAP nesta central para o summary
+      const totalEntCentral  = r.totalEntradas;
+      const totalSaiCentral  = r.totalSaidas;
+      const varMacro         = r.variacaoEstoque;
+      const varCls           = varClass(varMacro);
+
+      const card = document.createElement('div');
+      card.className = 'micro-filial-card';
+      card.innerHTML = `
+        <div class="micro-filial-header" onclick="toggleMicro(this)">
+          <div class="micro-filial-name">
+            <i class="ti ti-building-warehouse"></i>
+            ${r.central}
+          </div>
+          <div class="micro-filial-summary">
+            <span><i class="ti ti-package-import" style="color:var(--green)"></i> Entradas SAP: ${fmtKg(totalEntCentral)}</span>
+            <span><i class="ti ti-package-export" style="color:var(--red)"></i> Saídas SAP: ${fmtKg(totalSaiCentral)}</span>
+            <span class="${varCls}">
+              ${varIcon(varMacro)} Variação: ${varMacro > 0 ? '+' : ''}${fmtKg(varMacro)}
+            </span>
+          </div>
+          <i class="ti ti-chevron-down" style="color:var(--text3);font-size:16px;flex-shrink:0;transition:transform 0.2s" id="chev-${idx}"></i>
+        </div>
+
+        <div class="micro-filial-body" id="micro-body-${idx}">
+
+          <!-- Produção -->
+          <div class="micro-body-section">
+            <div class="micro-section-title"><i class="ti ti-building-factory"></i> Produção no Período</div>
+            ${prodHtml}
+          </div>
+
+          <!-- Materiais -->
+          <div class="micro-body-section">
+            <div class="micro-section-title"><i class="ti ti-box"></i> Análise por Material</div>
+          </div>
+
+          <div class="table-scroll" style="max-height:none">
+            <table>
+              <thead>
+                <tr>
+                  <th>Material</th>
+                  <th>Dt. 1º Lançamento</th>
+                  <th>Est. Inicial<br><span style="font-size:9px;font-weight:400;opacity:.7">(1º Lançamento)</span></th>
+                  <th>Entradas<br><span style="font-size:9px;font-weight:400;opacity:.7">(por código)</span></th>
+                  <th>Saídas<br><span style="font-size:9px;font-weight:400;opacity:.7">(por código)</span></th>
+                  <th>Est. Teórico<br><span style="font-size:9px;font-weight:400;opacity:.7">(Ini+Ent+Sai)</span></th>
+                  <th>Dt. Últ. Lançamento</th>
+                  <th>Est. Real<br><span style="font-size:9px;font-weight:400;opacity:.7">(Últ. Lançamento)</span></th>
+                  <th>Variação<br><span style="font-size:9px;font-weight:400;opacity:.7">(Real − Teórico)</span></th>
+                </tr>
+              </thead>
+              <tbody>${matRowsHtml || '<tr><td colspan="9"><div class="empty-state" style="padding:24px"><i class="ti ti-box-off"></i><p>Nenhum material encontrado.</p></div></td></tr>'}</tbody>
+            </table>
+          </div>
+
+        </div>`;
+
+      container.appendChild(card);
+    });
+  }
+
+  function toggleMicro(header) {
+    const idx = header.getAttribute('onclick') === null
+      ? null
+      : [...document.querySelectorAll('.micro-filial-header')].indexOf(header);
+    const body  = header.nextElementSibling;
+    const chev  = header.querySelector('[id^="chev-"]');
+    if (!body) return;
+    const open = body.classList.toggle('open');
+    if (chev) chev.style.transform = open ? 'rotate(180deg)' : '';
+  }
+
+  function limparAnalitico() {
+    document.getElementById('an-dt-ini').value = '';
+    document.getElementById('an-dt-fim').value = '';
+    document.getElementById('an-empty').style.display = '';
+    document.getElementById('an-content').style.display = 'none';
+  }
+
+  // ═══════════════════════════════════════════════════════════
+
+  Object.assign(window, {
+    toggleSidebar,
+    closeSidebar,
+    navigate,
+    openModal,
+    closeModal,
+    setTab,
+    setModulo,
+    exportarDados,
+    toast,
+    handleImport,
+    handleFiliaisImport,
+    salvarEntrada,
+    salvarSaida,
+    salvarLancamento,
+    salvarSAP,
+    salvarProducao,
+    salvarConfig,
+    salvarFiliais,
+    salvarMateriais,
+    renderConfigs,
+    renderFiliais,
+    renderMateriais,
+    renderImports,
+    excluirImportacao,
+    excluirProducao,
+    removerConfig,
+    editConfig,
+    deleteConfig,
+    filtrarTabela,
+    filtrarProducao,
+    filtrarLista,
+    irParaPagina,
+    paginaAnterior,
+    proximaPagina,
+    irParaUltima,
+    primeiraPaginaProducao,
+    paginaAnteriorProducao,
+    proximaPaginaProducao,
+    ultimaPaginaProducao,
+    removerRegistro,
+    removerFilial,
+    removerMaterial,
+    limparFiliais,
+    limparMateriais,
+    focusFilialImport,
+    focusMaterialImport,
+    handleMateriaisImport,
+    rodarAnalitico,
+    limparAnalitico,
+    toggleMicro
+  });
+
+  function setupModalCloseOnBackdrop() {
+    qsa('.modal-overlay').forEach(m => {
+      m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); });
+    });
+  }
+
+  function init() {
+    setupModalCloseOnBackdrop();
+    initDropZones();
+    restoreAndRender();
+    if (document.getElementById('page-dashboard')?.classList.contains('active')) updateDashboard();
+  }
+
+  document.addEventListener('DOMContentLoaded', init);
+})();
+</script>
+</body>
+</html>
