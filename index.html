@@ -1266,6 +1266,100 @@
   .micro-table-wrap::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 4px; }
   .micro-table-wrap table { width: max-content; min-width: 100%; }
   .micro-table-wrap tbody td { padding: 9px 14px; vertical-align: middle; }
+
+.material-row {
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+.material-row:hover {
+  background: rgba(79,156,249,0.06);
+}
+.material-row.open {
+  background: rgba(79,156,249,0.08);
+}
+.material-row-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.material-row-chev {
+  color: var(--accent);
+  font-size: 14px;
+  flex-shrink: 0;
+  transition: transform 0.18s ease;
+}
+.material-detail-row td {
+  padding: 0;
+  background: var(--bg2);
+  border-top: none;
+}
+.material-detail-wrap {
+  display: none;
+  border-top: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0));
+  overflow: hidden;
+}
+.material-detail-row.open .material-detail-wrap {
+  display: block;
+}
+.material-detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px 10px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.material-detail-title {
+  font-size: 11px;
+  font-family: var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text3);
+}
+.material-detail-sub {
+  font-size: 12px;
+  color: var(--text2);
+  font-family: var(--mono);
+}
+.material-detail-table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+}
+.material-detail-table thead th {
+  white-space: normal;
+  min-width: 92px;
+  background: var(--bg3);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+.material-detail-table tbody td {
+  padding: 9px 14px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.material-detail-table .day-col {
+  font-family: var(--mono);
+  color: var(--text);
+  font-weight: 600;
+}
+.material-detail-scroll {
+  max-height: min(360px, 55vh);
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.material-detail-scroll::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+.material-detail-scroll::-webkit-scrollbar-thumb {
+  background: var(--border2);
+  border-radius: 10px;
+}
   /* Diff classes */
   .diff-pos  { color: var(--amber); font-weight: 600; }
   .diff-neg  { color: var(--red);   font-weight: 600; }
@@ -1283,6 +1377,373 @@
     .prod-badge { font-size: 11px; }
   }
 
+  
+/* ── Refactor / Performance Patch ── */
+.sidebar-brand-title{
+  font-size:0.9rem;
+  font-weight:500;
+  color:#94a3b8;
+  letter-spacing:1px;
+}
+.sidebar-brand-image{
+  max-width:85%;
+  height:auto;
+  object-fit:contain;
+  margin-bottom:5px;
+}
+
+.metric-card,
+.table-card,
+.import-card,
+.micro-filial-card{
+  contain: layout paint;
+}
+
+.table-scroll,
+.micro-table-wrap{
+  overscroll-behavior: contain;
+}
+
+img{
+  max-width:100%;
+}
+
+@media (prefers-reduced-motion: reduce){
+  *,
+  *::before,
+  *::after{
+    animation:none !important;
+    transition:none !important;
+    scroll-behavior:auto !important;
+  }
+}
+
+
+  /* ── Analítico: modal de detalhamento ── */
+  body.analitico-modal-open {
+    overflow: hidden;
+  }
+  .analitico-detail-overlay {
+    z-index: 260;
+  }
+  .analitico-detail-modal {
+    width: min(1200px, calc(100vw - 24px));
+    max-height: min(88vh, 920px);
+    background: var(--bg2);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 28px 80px rgba(0,0,0,0.55);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .analitico-detail-overlay.is-fullscreen .analitico-detail-modal {
+    width: calc(100vw - 16px);
+    height: calc(100vh - 16px);
+    max-height: none;
+    border-radius: 14px;
+  }
+  .analitico-detail-header {
+    padding: 16px 18px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0));
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+  }
+  .analitico-detail-heading {
+    min-width: 0;
+    flex: 1;
+  }
+  .analitico-detail-kicker {
+    font-size: 10px;
+    font-family: var(--mono);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text3);
+    margin-bottom: 4px;
+  }
+  .analitico-detail-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text);
+    line-height: 1.35;
+    word-break: break-word;
+  }
+  .analitico-detail-sub {
+    font-size: 12px;
+    color: var(--text2);
+    font-family: var(--mono);
+    margin-top: 4px;
+    word-break: break-word;
+  }
+  .analitico-detail-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-shrink: 0;
+  }
+  .analitico-detail-body {
+    padding: 16px 18px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-height: 0;
+    flex: 1;
+  }
+  .analitico-detail-body::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+  .analitico-detail-body::-webkit-scrollbar-thumb {
+    background: var(--border2);
+    border-radius: 10px;
+  }
+  .analitico-detail-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .analitico-detail-card {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 12px 14px;
+    min-width: 0;
+  }
+  .analitico-detail-card-label {
+    font-size: 10px;
+    font-family: var(--mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text3);
+    margin-bottom: 6px;
+  }
+  .analitico-detail-card-value {
+    font-size: 20px;
+    font-family: var(--mono);
+    font-weight: 600;
+    color: var(--text);
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .analitico-detail-card-value.c-green { color: var(--green); }
+  .analitico-detail-card-value.c-red { color: var(--red); }
+  .analitico-detail-card-value.c-amber { color: var(--amber); }
+  .analitico-detail-card-value.c-blue { color: var(--accent); }
+  .analitico-detail-card-value.c-purple { color: var(--purple); }
+  .analitico-detail-card-value.c-teal { color: var(--teal); }
+  .analitico-detail-card-sub {
+    font-size: 11px;
+    color: var(--text3);
+    margin-top: 6px;
+    line-height: 1.45;
+    word-break: break-word;
+  }
+  .analitico-detail-table-shell {
+    overflow: auto;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--bg2);
+    flex: 1;
+    min-height: 220px;
+    max-height: none;
+  }
+  .analitico-detail-table-shell::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+  .analitico-detail-table-shell::-webkit-scrollbar-thumb {
+    background: var(--border2);
+    border-radius: 10px;
+  }
+  .analitico-detail-overlay.is-fullscreen .analitico-detail-table-shell {
+    min-height: 260px;
+  }
+  .analitico-detail-table {
+    width: max-content;
+    min-width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .analitico-detail-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--bg3);
+    white-space: normal;
+    min-width: 92px;
+    line-height: 1.25;
+  }
+  .analitico-detail-table tbody td {
+    white-space: nowrap;
+  }
+  .analitico-detail-empty {
+    color: var(--text3);
+    font-size: 12px;
+    font-family: var(--mono);
+    padding: 18px;
+    text-align: center;
+  }
+  @media (max-width: 640px) {
+    .analitico-detail-modal {
+      width: calc(100vw - 12px);
+      max-height: calc(100vh - 12px);
+    }
+    .analitico-detail-header {
+      padding: 14px 14px 12px;
+    }
+    .analitico-detail-body {
+      padding: 12px 14px 14px;
+    }
+    .analitico-detail-actions .btn span {
+      display: none;
+    }
+  }
+
+/* ── Column Filter (Excel/Sheets style) ── */
+  thead th {
+    padding-right: 28px; /* make room for filter button */
+  }
+  .cf-btn {
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text3);
+    padding: 2px 3px;
+    border-radius: 4px;
+    font-size: 11px;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.12s, color 0.12s, background 0.12s;
+  }
+  thead th:hover .cf-btn,
+  .cf-btn--active {
+    opacity: 1 !important;
+  }
+  .cf-btn:hover { color: var(--accent); background: var(--bg3); }
+  .cf-btn--active { color: var(--accent) !important; }
+  .cf-active-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11.5px;
+    font-family: var(--mono);
+    color: var(--amber);
+    background: var(--amber-bg);
+    border: 1px solid rgba(245,158,11,.25);
+    border-radius: var(--radius);
+    padding: 4px 10px;
+    cursor: pointer;
+    transition: background 0.15s;
+    white-space: nowrap;
+    margin-left: auto;
+  }
+  .cf-active-badge:hover { background: rgba(245,158,11,.2); }
+
+  /* Popover */
+  .cf-popover {
+    position: fixed;
+    z-index: 300;
+    background: var(--bg2);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 12px 40px rgba(0,0,0,.5);
+    display: flex;
+    flex-direction: column;
+    max-height: 380px;
+    overflow: hidden;
+    font-size: 13px;
+  }
+  .cf-header {
+    padding: 10px 10px 8px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .cf-search-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 5px 9px;
+  }
+  .cf-search {
+    background: none;
+    border: none;
+    outline: none;
+    font-size: 12.5px;
+    color: var(--text);
+    font-family: var(--font);
+    width: 100%;
+  }
+  .cf-select-all {
+    padding: 8px 10px 6px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    border-radius: 4px;
+  }
+  .cf-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px 6px;
+  }
+  .cf-list::-webkit-scrollbar { width: 4px; }
+  .cf-list::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 4px; }
+  .cf-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 4px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+  .cf-row:hover { background: var(--bg3); }
+  .cf-check { flex-shrink: 0; accent-color: var(--accent); width: 14px; height: 14px; cursor: pointer; }
+  .cf-label {
+    font-size: 12.5px;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 170px;
+  }
+  .cf-empty {
+    padding: 16px;
+    text-align: center;
+    color: var(--text3);
+    font-size: 12px;
+    font-family: var(--mono);
+  }
+  .cf-footer {
+    display: flex;
+    gap: 6px;
+    padding: 8px 10px;
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+    justify-content: flex-end;
+  }
+  .cf-btn-clear  { font-size: 12px; padding: 5px 12px; }
+  .cf-btn-apply  { font-size: 12px; padding: 5px 12px; }
+
 </style>
 </head>
 <body>
@@ -1294,8 +1755,8 @@
   <!-- Sidebar -->
   <aside class="sidebar">
     <div class="sidebar-logo">
-      <img class="logo-concrelagos" src="https://concrelagos.com.br/wp-content/uploads/2021/10/Ativo-3.svg" alt="Logo Concrelagos" style="max-width: 85%; height: auto; object-fit: contain; margin-bottom: 5px;">
-      <h1 style="font-size: 0.9rem; font-weight: 500; color: #94a3b8; letter-spacing: 1px;">AnalyticSys</h1>
+      <img class="logo-concrelagos sidebar-brand-image" src="https://concrelagos.com.br/wp-content/uploads/2021/10/Ativo-3.svg" alt="Logo Concrelagos" loading="lazy">
+      <h1 class="sidebar-brand-title">AnalyticSys</h1>
       <div class="logo-mark">Estoque · Insumos</div>
     </div>
     <nav class="sidebar-nav">
@@ -1428,10 +1889,6 @@
           <div class="table-header">
             <span class="table-title"><i class="ti ti-clock"></i> Feed de registros recentes</span>
             <div class="table-toolbar">
-              <div class="search-wrap">
-                <i class="ti ti-search"></i>
-                <input type="text" class="search-input" placeholder="Buscar em todas as colunas..." oninput="filtrarLista('dashboard', this.value)">
-              </div>
             </div>
           </div>
           <div class="table-scroll">
@@ -1536,10 +1993,6 @@
           <div class="table-header">
             <span class="table-title"><i class="ti ti-package-import"></i> Notas Fiscais de Entrada</span>
             <div class="table-toolbar">
-              <div class="search-wrap">
-                <i class="ti ti-search"></i>
-                <input type="text" class="search-input" placeholder="Buscar qualquer coluna..." oninput="filtrarTabela('tb-entradas', this.value)">
-              </div>
               <button class="btn" onclick="openModal('modal-manual'); setModulo('Entrada')"><i class="ti ti-plus"></i> Adicionar</button>
             </div>
           </div>
@@ -1585,10 +2038,6 @@
           <div class="table-header">
             <span class="table-title"><i class="ti ti-package-export"></i> Ordens de Serviço — Saídas</span>
             <div class="table-toolbar">
-              <div class="search-wrap">
-                <i class="ti ti-search"></i>
-                <input type="text" class="search-input" placeholder="Buscar qualquer coluna..." oninput="filtrarTabela('tb-saidas', this.value)">
-              </div>
               <button class="btn" onclick="openModal('modal-manual'); setModulo('Saída')"><i class="ti ti-plus"></i> Adicionar</button>
             </div>
           </div>
@@ -1633,10 +2082,6 @@
           <div class="table-header">
             <span class="table-title"><i class="ti ti-clipboard-list"></i> Lançamentos — Saldo Real</span>
             <div class="table-toolbar">
-              <div class="search-wrap">
-                <i class="ti ti-search"></i>
-                <input type="text" class="search-input" placeholder="Buscar qualquer coluna..." oninput="filtrarTabela('tb-lancamentos', this.value)">
-              </div>
               <button class="btn" onclick="openModal('modal-manual'); setModulo('Lançamento')"><i class="ti ti-plus"></i> Adicionar</button>
             </div>
           </div>
@@ -1679,10 +2124,6 @@
           <div class="table-header">
             <span class="table-title"><i class="ti ti-database"></i> Movimentações SAP</span>
             <div class="table-toolbar">
-              <div class="search-wrap">
-                <i class="ti ti-search"></i>
-                <input type="text" class="search-input" placeholder="Buscar qualquer coluna..." oninput="filtrarTabela('tb-sap', this.value)">
-              </div>
               <button class="btn" onclick="navigate('importar')"><i class="ti ti-file-upload"></i> Importar</button>
             </div>
           </div>
@@ -1769,13 +2210,6 @@
             </span>
 
             <div class="table-toolbar">
-              <div class="search-wrap">
-                <i class="ti ti-search"></i>
-                <input type="text"
-                       class="search-input"
-                       placeholder="Buscar qualquer coluna..."
-                       oninput="filtrarProducao(this.value)">
-              </div>
 
               <button class="btn" onclick="openModal('modal-producao')">
                 <i class="ti ti-plus"></i>
@@ -1935,10 +2369,6 @@
           <div class="table-header">
             <span class="table-title"><i class="ti ti-file-upload"></i> Importações registradas</span>
             <div class="table-toolbar">
-              <div class="search-wrap">
-                <i class="ti ti-search"></i>
-                <input type="text" class="search-input" placeholder="Buscar arquivo, módulo, status..." oninput="filtrarLista('imports', this.value)">
-              </div>
             </div>
           </div>
           <div class="table-scroll">
@@ -2013,10 +2443,6 @@
           <div class="table-header">
             <span class="table-title"><i class="ti ti-map-pin"></i> Padronização de Centrais</span>
             <div class="table-toolbar">
-              <div class="search-wrap">
-                <i class="ti ti-search"></i>
-                <input type="text" class="search-input" placeholder="Buscar origem, padronização..." oninput="filtrarLista('filiais', this.value)">
-              </div>
               <button class="btn" onclick="openModal('modal-filiais')">
                 <i class="ti ti-plus"></i> Novo Cadastro
               </button>
@@ -2060,10 +2486,6 @@
           <div class="table-header">
             <span class="table-title"><i class="ti ti-stack-2"></i> Padronização de Materiais</span>
             <div class="table-toolbar">
-              <div class="search-wrap">
-                <i class="ti ti-search"></i>
-                <input type="text" class="search-input" placeholder="Buscar origem, grupo SAP..." oninput="filtrarLista('materiais', this.value)">
-              </div>
               <button class="btn" onclick="openModal('modal-materiais')">
                 <i class="ti ti-plus"></i> Novo Cadastro
               </button>
@@ -2107,10 +2529,6 @@
           <div class="table-header">
             <span class="table-title"><i class="ti ti-adjustments"></i> Configurações Personalizadas</span>
             <div class="table-toolbar">
-              <div class="search-wrap">
-                <i class="ti ti-search"></i>
-                <input type="text" class="search-input" placeholder="Buscar chave, valor, descrição..." oninput="filtrarLista('configs', this.value)">
-              </div>
             </div>
           </div>
           <div class="table-scroll">
@@ -2495,7 +2913,18 @@
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script>
 (() => {
-  'use strict';
+  
+'use strict';
+
+const domCache = new Map();
+
+function $(selector) {
+  if (!domCache.has(selector)) {
+    domCache.set(selector, document.querySelector(selector));
+  }
+  return domCache.get(selector);
+}
+
 
   const STORAGE_KEY = 'central_analise_state_v4';
   const THEME_KEY = 'central_analise_theme_v1';
@@ -2513,7 +2942,26 @@
     materiais: []
   });
 
-  const state = defaultState();
+  
+const state = defaultState();
+
+function safeJSONParse(value, fallback = null) {
+  try {
+    return JSON.parse(value);
+  } catch (error) {
+    console.warn('Falha ao interpretar JSON persistido:', error);
+    return fallback;
+  }
+}
+
+function debounce(fn, delay = 120) {
+  let timeout;
+  return (...args) => {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => fn(...args), delay);
+  };
+}
+
 
   const pages = {
     entradas: 0,
@@ -2926,7 +3374,7 @@
         if (isLoadingOverlayVisible()) updateLoadingOverlay('Restaurando o armazenamento antigo...', 'Carregando informações');
         const raw = localStorage.getItem(legacyStateKey);
         if (raw) {
-          loaded = applySavedState(JSON.parse(raw));
+          loaded = applySavedState(safeJSONParse(raw, {}));
         }
       } catch (err) {
         console.warn('Não foi possível restaurar o estado local.', err);
@@ -3354,7 +3802,10 @@
   function getFilteredData(module) {
     const data = state[module] || [];
     const f = module === 'producao' ? filtroProducao : filters[module];
-    return filterRecords(data, f, getSearchableFields(module));
+    const textFiltered = filterRecords(data, f, getSearchableFields(module));
+    // Apply column filters on top of text search
+    if (!moduleHasColFilter(module)) return textFiltered;
+    return textFiltered.filter(r => recordPassesColFilters(module, r));
   }
 
   function pageSlice(module) {
@@ -3368,6 +3819,7 @@
   }
 
   function getListFilteredData(scope) {
+    let data;
     if (scope === 'dashboard') {
       const feed = [
         ...state.entradas.map(r => ({ modulo: 'Entrada', material: r.material, central: r.centralDestino || r.centralCompra, valor: money(r.valorTotal), data: r.createdAt || 0, status: 'badge-green' })),
@@ -3376,18 +3828,21 @@
         ...state.sap.map(r => ({ modulo: 'SAP', material: r.material, central: r.central, valor: money(r.valorTotal), data: r.createdAt || 0, status: 'badge-blue' })),
         ...state.producao.map(r => ({ modulo: 'Produção', material: 'Produção', central: r.central, valor: `${num(r.producao)} m³`, data: r.createdAt || 0, status: 'badge-purple' }))
       ].sort((a, b) => (b.data || 0) - (a.data || 0));
-      return filterRecords(feed, listFilters.dashboard, getSearchableFields('dashboard'));
-    }
-
-    if (scope === 'imports') {
-      return filterRecords(
+      data = filterRecords(feed, listFilters.dashboard, getSearchableFields('dashboard'));
+    } else if (scope === 'imports') {
+      data = filterRecords(
         state.imports.slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)),
         listFilters.imports,
         getSearchableFields('imports')
       );
+    } else {
+      data = filterRecords(state[scope] || [], listFilters[scope], getSearchableFields(scope));
     }
-
-    return filterRecords(state[scope] || [], listFilters[scope], getSearchableFields(scope));
+    // Apply column filters
+    if (moduleHasColFilter(scope)) {
+      data = data.filter(r => recordPassesColFilters(scope, r));
+    }
+    return data;
   }
 
   function getListPageData(scope) {
@@ -3484,6 +3939,536 @@
     renderProducao();
   }
 
+  // ═══════════════════════════════════════════════════════════
+  // COLUMN FILTER ENGINE — estilo Excel/Google Sheets
+  // ═══════════════════════════════════════════════════════════
+
+  // colFilters[module] = { colIndex: Set<string> }
+  // An empty Set or missing entry = no filter on that column
+  const colFilters = {};
+
+  // Map each module to its tbody id and the data-field for each column index
+  // (same order as the thead <th> elements)
+  const colFilterMeta = {
+    entradas:    { tbodyId: 'tb-entradas',    fields: ['centralCompra','centralDestino','nf','dtEmissao','dtDescarga','fornecedor','categoria','material','peso','um','custo','valorTotal',null] },
+    saidas:      { tbodyId: 'tb-saidas',      fields: ['central','dtEmissao','os','contrato','categoria','fornecedor','material','peso','um','custo','valorTotal',null] },
+    lancamentos: { tbodyId: 'tb-lancamentos', fields: ['central','dtLanc','fornecedor','categoria','material','peso','um','custo','valorTotal',null] },
+    sap:         { tbodyId: 'tb-sap',         fields: ['usuario','movimento','ref','documento','central','deposito','dtDoc','dtLanc','dtReg','material','peso','um','custoUnit','valorTotal',null] },
+    producao:    { tbodyId: 'tb-producao',    fields: ['mes','central','producao','um','precoMedio','custoMedio','margem','totalVendas',null] },
+    imports:     { tbodyId: 'tb-imports',     fields: ['arquivo','modulo','registros','dataHora','status',null] },
+    configs:     { tbodyId: 'tb-configs',     fields: ['key','value','desc','created',null] },
+    filiais:     { tbodyId: 'tb-filiais',     fields: ['origem','alias','desc','created',null] },
+    materiais:   { tbodyId: 'tb-materiais',   fields: ['origem','alias','desc','created',null] },
+    dashboard:   { tbodyId: 'tb-dashboard',   fields: ['modulo','material','central','valor','data','status',null] }
+  };
+
+  // Returns true if a record passes all active column filters for a module
+  function recordPassesColFilters(module, record) {
+    const cf = colFilters[module];
+    if (!cf) return true;
+    const meta = colFilterMeta[module];
+    if (!meta) return true;
+    for (const [colIdx, activeSet] of Object.entries(cf)) {
+      if (!activeSet || !activeSet.size) continue;
+      const field = meta.fields[Number(colIdx)];
+      if (!field) continue;
+      const cellVal = normalizeText(String(record[field] ?? '—'));
+      if (!activeSet.has(cellVal)) return false;
+    }
+    return true;
+  }
+
+  // Collect unique display values for a column from the FULL (unfiltered) dataset
+  function getColUniqueValues(module, colIdx) {
+    const meta = colFilterMeta[module];
+    if (!meta) return [];
+    const field = meta.fields[colIdx];
+    if (!field) return [];
+    const data = module === 'producao' ? state.producao
+                 : (module in state) ? state[module] : [];
+    const seen = new Set();
+    data.forEach(r => seen.add(normalizeText(String(r[field] ?? '—'))));
+    return [...seen].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }
+
+  // Initialise colFilters for a module if needed
+  function ensureColFilters(module) {
+    if (!colFilters[module]) colFilters[module] = {};
+  }
+
+  // Check if a column has any active filter
+  function colHasFilter(module, colIdx) {
+    const cf = colFilters[module];
+    return cf && cf[colIdx] && cf[colIdx].size > 0;
+  }
+
+  // Check if module has ANY active column filter
+  function moduleHasColFilter(module) {
+    const cf = colFilters[module];
+    if (!cf) return false;
+    return Object.values(cf).some(s => s && s.size > 0);
+  }
+
+  // ── Popover state ──────────────────────────────────────────
+  let _cfPopover      = null;   // current open popover element
+  let _cfModule       = null;
+  let _cfColIdx       = null;
+  let _cfSearchQuery  = '';
+
+  function openColFilterPopover(thEl, module, colIdx) {
+    closeColFilterPopover();
+    _cfModule  = module;
+    _cfColIdx  = colIdx;
+    _cfSearchQuery = '';
+
+    ensureColFilters(module);
+    const activeSet = colFilters[module][colIdx] || new Set();
+    const allVals   = getColUniqueValues(module, colIdx);
+
+    if (!allVals.length) return;
+
+    const pop = document.createElement('div');
+    pop.className = 'cf-popover';
+    pop.setAttribute('role', 'dialog');
+    pop.innerHTML = buildColFilterHTML(allVals, activeSet, '');
+    document.body.appendChild(pop);
+    _cfPopover = pop;
+
+    positionColFilterPopover(thEl, pop);
+
+    pop.querySelector('.cf-search')?.focus();
+    pop.addEventListener('mousedown', e => e.stopPropagation());
+  }
+
+  function buildColFilterHTML(allVals, activeSet, query) {
+    const q = normalizeText(query);
+    const filtered = q ? allVals.filter(v => v.includes(q)) : allVals;
+    const allChecked = filtered.length > 0 && filtered.every(v => activeSet.has(v));
+    const someChecked = filtered.some(v => activeSet.has(v));
+
+    const rows = filtered.map(v => {
+      const checked = activeSet.has(v) ? 'checked' : '';
+      const label = v === '' || v === '—' ? '<em style="opacity:.5">vazio</em>' : escapeHtml(v);
+      return `<label class="cf-row">
+        <input type="checkbox" class="cf-check" value="${escapeHtml(v)}" ${checked}>
+        <span class="cf-label">${label}</span>
+      </label>`;
+    }).join('');
+
+    const noResults = !filtered.length
+      ? `<div class="cf-empty">Nenhum valor encontrado</div>` : '';
+
+    return `
+      <div class="cf-header">
+        <div class="cf-search-wrap">
+          <i class="ti ti-search" style="font-size:12px;color:var(--text3)"></i>
+          <input class="cf-search" type="text" placeholder="Buscar valores…" value="${escapeHtml(query)}" autocomplete="off">
+        </div>
+      </div>
+      <label class="cf-row cf-select-all" style="border-bottom:1px solid var(--border);margin-bottom:4px;padding-bottom:6px">
+        <input type="checkbox" class="cf-check-all" data-indeterminate="${someChecked && !allChecked}" ${allChecked ? 'checked' : ''}>
+        <span class="cf-label" style="font-weight:600">Selecionar tudo</span>
+      </label>
+      <div class="cf-list">${rows}${noResults}</div>
+      <div class="cf-footer">
+        <button class="btn cf-btn-clear" data-cf-action="clear">Limpar</button>
+        <button class="btn btn-primary cf-btn-apply" data-cf-action="apply">Aplicar</button>
+      </div>`;
+  }
+
+  function positionColFilterPopover(thEl, pop) {
+    const rect = thEl.getBoundingClientRect();
+    const popW = 240;
+    const popH = 340;
+
+    let left = rect.left;
+    if (left + popW > window.innerWidth - 8) left = window.innerWidth - popW - 8;
+    left = Math.max(4, left);
+
+    let top = rect.bottom + 4;
+    if (top + popH > window.innerHeight - 8) top = rect.top - popH - 4;
+    top = Math.max(4, top);
+
+    pop.style.left = left + 'px';
+    pop.style.top  = top  + 'px';
+    pop.style.width = popW + 'px';
+
+    // Wire up events
+    const searchEl = pop.querySelector('.cf-search');
+    if (searchEl) {
+      searchEl.addEventListener('input', () => {
+        _cfSearchQuery = searchEl.value;
+        refreshColFilterList();
+      });
+    }
+
+    const checkAll = pop.querySelector('.cf-check-all');
+    if (checkAll) {
+      checkAll.indeterminate = checkAll.dataset.indeterminate === 'true';
+      checkAll.addEventListener('change', () => {
+        pop.querySelectorAll('.cf-check').forEach(c => { c.checked = checkAll.checked; });
+      });
+    }
+
+    pop.querySelector('[data-cf-action="apply"]')?.addEventListener('click', e => {
+      e.stopPropagation();
+      applyColFilter();
+    });
+    pop.querySelector('[data-cf-action="clear"]')?.addEventListener('click', e => {
+      e.stopPropagation();
+      clearColFilter();
+    });
+  }
+
+  function refreshColFilterList() {
+    if (!_cfPopover || _cfModule === null || _cfColIdx === null) return;
+    ensureColFilters(_cfModule);
+
+    // Save current checked state
+    const currentChecked = new Set();
+    _cfPopover.querySelectorAll('.cf-check:checked').forEach(c => currentChecked.add(c.value));
+
+    // Merge with saved active set
+    const saved = colFilters[_cfModule][_cfColIdx] || new Set();
+    const merged = new Set([...saved, ...currentChecked]);
+
+    const allVals = getColUniqueValues(_cfModule, _cfColIdx);
+    const q = normalizeText(_cfSearchQuery);
+    const filtered = q ? allVals.filter(v => v.includes(q)) : allVals;
+    const allChecked = filtered.length > 0 && filtered.every(v => merged.has(v));
+    const someChecked = filtered.some(v => merged.has(v));
+
+    const list = _cfPopover.querySelector('.cf-list');
+    const checkAll = _cfPopover.querySelector('.cf-check-all');
+    if (checkAll) {
+      checkAll.checked = allChecked;
+      checkAll.indeterminate = !allChecked && someChecked;
+    }
+
+    if (list) {
+      list.innerHTML = filtered.length ? filtered.map(v => {
+        const checked = merged.has(v) ? 'checked' : '';
+        const label = v === '' || v === '—' ? '<em style="opacity:.5">vazio</em>' : escapeHtml(v);
+        return `<label class="cf-row">
+          <input type="checkbox" class="cf-check" value="${escapeHtml(v)}" ${checked}>
+          <span class="cf-label">${label}</span>
+        </label>`;
+      }).join('') : `<div class="cf-empty">Nenhum valor encontrado</div>`;
+    }
+  }
+
+  function applyColFilter() {
+    if (!_cfPopover || _cfModule === null || _cfColIdx === null) return;
+    ensureColFilters(_cfModule);
+
+    const checked = new Set();
+    _cfPopover.querySelectorAll('.cf-check:checked').forEach(c => checked.add(c.value));
+    colFilters[_cfModule][_cfColIdx] = checked;
+
+    // Capture before closeColFilterPopover() nulls them
+    const module = _cfModule;
+    const colIdx = _cfColIdx;
+
+    closeColFilterPopover();
+    resetPageForModule(module);
+    renderModuleByName(module);
+    updateAllColFilterIcons(module);
+  }
+
+  function clearColFilter() {
+    if (_cfModule === null || _cfColIdx === null) return;
+    ensureColFilters(_cfModule);
+    colFilters[_cfModule][_cfColIdx] = new Set();
+
+    // Capture before closeColFilterPopover() nulls them
+    const module = _cfModule;
+
+    closeColFilterPopover();
+    resetPageForModule(module);
+    renderModuleByName(module);
+    updateAllColFilterIcons(module);
+  }
+
+  function clearAllColFilters(module) {
+    colFilters[module] = {};
+    resetPageForModule(module);
+    renderModuleByName(module);
+    updateAllColFilterIcons(module);
+  }
+
+  function closeColFilterPopover() {
+    if (_cfPopover) {
+      _cfPopover.remove();
+      _cfPopover = null;
+    }
+    _cfModule = null;
+    _cfColIdx = null;
+    _cfSearchQuery = '';
+  }
+
+  function resetPageForModule(module) {
+    if (module in pages) pages[module] = 0;
+    else if (module in listPages) listPages[module] = 0;
+    else if (module === 'producao') currentPageProducao = 0;
+  }
+
+  function renderModuleByName(module) {
+    const map = {
+      entradas: renderEntradas,
+      saidas: renderSaidas,
+      lancamentos: renderLancamentos,
+      sap: renderSAP,
+      producao: renderProducao,
+      imports: renderImports,
+      configs: renderConfigs,
+      filiais: renderFiliais,
+      materiais: renderMateriais,
+      dashboard: renderDashboardFeed
+    };
+    if (map[module]) map[module]();
+  }
+
+  // Update filter icon indicators on all ths of a table
+  function updateAllColFilterIcons(module) {
+    const meta = colFilterMeta[module];
+    if (!meta) return;
+    const tbody = document.getElementById(meta.tbodyId);
+    if (!tbody) return;
+    const table = tbody.closest('table');
+    if (!table) return;
+    const ths = table.querySelectorAll('thead th');
+    ths.forEach((th, idx) => {
+      const btn = th.querySelector('.cf-btn');
+      if (!btn) return;
+      const active = colHasFilter(module, idx);
+      btn.classList.toggle('cf-btn--active', active);
+      btn.title = active ? 'Filtro ativo — clique para editar' : 'Filtrar coluna';
+    });
+    // Show/hide "clear all" badge
+    const card = tbody.closest('.table-card');
+    if (card) {
+      let badge = card.querySelector('.cf-active-badge');
+      if (moduleHasColFilter(module)) {
+        if (!badge) {
+          badge = document.createElement('button');
+          badge.className = 'cf-active-badge';
+          badge.innerHTML = '<i class="ti ti-filter-off"></i> Limpar filtros';
+          badge.onclick = () => clearAllColFilters(module);
+          const header = card.querySelector('.table-header');
+          if (header) header.appendChild(badge);
+        }
+      } else {
+        badge?.remove();
+      }
+    }
+  }
+
+  // Inject filter buttons into all <th> of a table after render
+  function injectColFilterButtons(table, module) {
+    if (!table || !module) return;
+    const meta = colFilterMeta[module];
+    if (!meta) return;
+    const ths = table.querySelectorAll('thead th');
+    ths.forEach((th, idx) => {
+      if (meta.fields[idx] === null) return; // action column
+      if (th.querySelector('.cf-btn')) return; // already injected
+      const btn = document.createElement('button');
+      btn.className = 'cf-btn';
+      btn.innerHTML = '<i class="ti ti-filter"></i>';
+      btn.title = 'Filtrar coluna';
+      btn.setAttribute('aria-label', 'Filtrar coluna');
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        if (_cfPopover && _cfModule === module && _cfColIdx === idx) {
+          closeColFilterPopover();
+          return;
+        }
+        openColFilterPopover(th, module, idx);
+      });
+      if (colHasFilter(module, idx)) btn.classList.add('cf-btn--active');
+      th.appendChild(btn);
+    });
+  }
+
+  function escapeHtml(str) {
+    return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  const analiticoDetailState = {
+    key: null,
+    fullscreen: false
+  };
+
+  window.__analiticoDetailCache = new Map();
+
+  function buildAnaliticoDetailBreakdown(entries, total, colorVar, title) {
+    if (!entries.length) {
+      return `<span class="analitico-detail-empty">—</span>`;
+    }
+
+    const rows = entries
+      .map(([cod, value]) => `
+        <div class="breakdown-row">
+          <span class="breakdown-cod">${escapeHtml(cod)}</span>
+          <span class="breakdown-val" style="color:${colorVar}">${fmtKg(value)}</span>
+        </div>`)
+      .join('');
+
+    return `
+      <span class="breakdown-trigger" onclick="event.stopPropagation(); toggleBreakdown(this)" title="Clique para ver por código" style="color:${colorVar}">
+        ${fmtKg(total)}
+        <i class="ti ti-chevron-down breakdown-chev"></i>
+      </span>
+      <div class="breakdown-popover" onclick="event.stopPropagation()">
+        <div class="breakdown-popover-title">${escapeHtml(title)} por código</div>
+        ${rows}
+      </div>`;
+  }
+
+  function buildAnaliticoDetailHtml(payload) {
+    const s = payload.summary;
+    const rows = payload.days.map(day => {
+      const dCls = varClass(day.diff);
+      const dPfx = day.diff > 0 ? '+' : '';
+      return `
+        <tr>
+          <td class="day-col">${escapeHtml(day.dateLabel)}</td>
+          <td class="td-mono" style="color:var(--text2);font-size:11px">${escapeHtml(day.firstLaunchLabel)}</td>
+          <td class="td-mono" style="color:var(--teal)">${fmtKg(day.initialStock)}</td>
+          <td>${buildAnaliticoDetailBreakdown(day.entEntries, day.totalEnt, 'var(--green)', 'Entradas')}</td>
+          <td>${buildAnaliticoDetailBreakdown(day.saiEntries, day.totalSai, 'var(--red)', 'Saídas')}</td>
+          <td class="td-mono" style="color:var(--accent)">${fmtKg(day.theoreticalStock)}</td>
+          <td class="td-mono" style="color:var(--text2);font-size:11px">${escapeHtml(day.lastLaunchLabel)}</td>
+          <td class="td-mono" style="color:var(--teal)">${fmtKg(day.realStock)}</td>
+          <td class="td-mono ${dCls}">${dPfx}${fmtKg(day.diff)}</td>
+        </tr>`;
+    }).join('');
+
+    return `
+      <div class="analitico-detail-summary">
+        <div class="analitico-detail-card">
+          <div class="analitico-detail-card-label">Est. Inicial</div>
+          <div class="analitico-detail-card-value c-teal">${fmtKg(s.pesoIni)}</div>
+          <div class="analitico-detail-card-sub">${escapeHtml(s.dtIniLabel)}</div>
+        </div>
+        <div class="analitico-detail-card">
+          <div class="analitico-detail-card-label">Entradas SAP</div>
+          <div class="analitico-detail-card-value c-green">${fmtKg(s.totalEnt)}</div>
+          <div class="analitico-detail-card-sub">${escapeHtml(s.entLabel)}</div>
+        </div>
+        <div class="analitico-detail-card">
+          <div class="analitico-detail-card-label">Saídas SAP</div>
+          <div class="analitico-detail-card-value c-red">${fmtKg(s.totalSai)}</div>
+          <div class="analitico-detail-card-sub">${escapeHtml(s.saiLabel)}</div>
+        </div>
+        <div class="analitico-detail-card">
+          <div class="analitico-detail-card-label">Est. Teórico</div>
+          <div class="analitico-detail-card-value c-blue">${fmtKg(s.estTeorico)}</div>
+          <div class="analitico-detail-card-sub">Ini + Entradas + Saídas</div>
+        </div>
+        <div class="analitico-detail-card">
+          <div class="analitico-detail-card-label">Est. Real</div>
+          <div class="analitico-detail-card-value c-teal">${fmtKg(s.pesoFim)}</div>
+          <div class="analitico-detail-card-sub">${escapeHtml(s.dtFimLabel)}</div>
+        </div>
+        <div class="analitico-detail-card">
+          <div class="analitico-detail-card-label">Variação</div>
+          <div class="analitico-detail-card-value ${varClass(s.diff)}">${s.diff > 0 ? '+' : ''}${fmtKg(s.diff)}</div>
+          <div class="analitico-detail-card-sub">Real − Teórico</div>
+        </div>
+      </div>
+
+      <div class="analitico-detail-table-shell">
+        <table class="analitico-detail-table">
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Dt. 1º Lançamento</th>
+              <th>Est. Inicial<br><span style="font-size:9px;font-weight:400;opacity:.7">(1º Lançamento)</span></th>
+              <th>Entradas<br><span style="font-size:9px;font-weight:400;opacity:.7">(por código)</span></th>
+              <th>Saídas<br><span style="font-size:9px;font-weight:400;opacity:.7">(por código)</span></th>
+              <th>Est. Teórico<br><span style="font-size:9px;font-weight:400;opacity:.7">(Ini+Ent+Sai)</span></th>
+              <th>Dt. Últ. Lançamento</th>
+              <th>Est. Real<br><span style="font-size:9px;font-weight:400;opacity:.7">(Últ. Lançamento)</span></th>
+              <th>Variação<br><span style="font-size:9px;font-weight:400;opacity:.7">(Real − Teórico)</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows || '<tr><td colspan="9"><div class="analitico-detail-empty"><i class="ti ti-calendar-off"></i> Sem dados para o período.</div></td></tr>'}
+          </tbody>
+        </table>
+      </div>`;
+  }
+
+  function openAnaliticoDetailModal(detailKey) {
+    const payload = window.__analiticoDetailCache?.get(String(detailKey));
+    if (!payload) {
+      toast('Detalhamento não encontrado.', 'error');
+      return;
+    }
+
+    const overlay = document.getElementById('analitico-detail-overlay');
+    const title = document.getElementById('analitico-detail-title');
+    const sub = document.getElementById('analitico-detail-sub');
+    const body = document.getElementById('analitico-detail-body');
+    const fullBtn = document.getElementById('analitico-detail-fullscreen-btn');
+    if (!overlay || !title || !sub || !body || !fullBtn) return;
+
+    analiticoDetailState.key = String(detailKey);
+    analiticoDetailState.fullscreen = false;
+    overlay.classList.remove('is-fullscreen');
+    title.textContent = `${payload.material}`;
+    sub.textContent = `${payload.central} · ${payload.periodLabel}`;
+    body.innerHTML = buildAnaliticoDetailHtml(payload);
+    overlay.classList.add('open');
+    overlay.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('analitico-modal-open');
+    fullBtn.innerHTML = '<i class="ti ti-maximize"></i> <span>Expandir</span>';
+  }
+
+  function closeAnaliticoDetailModal() {
+    const overlay = document.getElementById('analitico-detail-overlay');
+    if (!overlay) return;
+    overlay.classList.remove('open', 'is-fullscreen');
+    overlay.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('analitico-modal-open');
+    analiticoDetailState.key = null;
+    analiticoDetailState.fullscreen = false;
+  }
+
+  function toggleAnaliticoDetailFullscreen() {
+    const overlay = document.getElementById('analitico-detail-overlay');
+    const fullBtn = document.getElementById('analitico-detail-fullscreen-btn');
+    if (!overlay || !fullBtn) return;
+
+    analiticoDetailState.fullscreen = !analiticoDetailState.fullscreen;
+    overlay.classList.toggle('is-fullscreen', analiticoDetailState.fullscreen);
+    fullBtn.innerHTML = analiticoDetailState.fullscreen
+      ? '<i class="ti ti-minimize"></i> <span>Recolher</span>'
+      : '<i class="ti ti-maximize"></i> <span>Expandir</span>';
+  }
+
+  // Close popover on outside click
+  document.addEventListener('mousedown', e => {
+    if (_cfPopover && !_cfPopover.contains(e.target)) {
+      closeColFilterPopover();
+    }
+  });
+
+  // Close popover on scroll OUTSIDE it (not inside .cf-list)
+  document.addEventListener('scroll', e => {
+    if (!_cfPopover) return;
+    if (_cfPopover.contains(e.target)) return;   // scrolling inside popover — keep open
+    closeColFilterPopover();
+  }, true);
+
+  // ── Patch getFilteredData to also apply colFilters ─────────
+  // We wrap the existing logic: after the text-search filter,
+  // also run recordPassesColFilters.
+  const _origGetFilteredData = getFilteredData;
+  // (We redefine getFilteredData below after reading it)
+
+  // ── Keep old filtrar* functions as stubs (called from window.assign) ──────
   function filtrarTabela(tbodyId, value) {
     const module = moduleMap[tbodyId];
     if (!module) return;
@@ -3573,6 +4558,7 @@
         </tr>
       `).join('');
     makeResizable(tb.closest('table'));
+    injectColFilterButtons(tb.closest('table'), 'imports');
   }
 
   function excluirImportacao(importId) {
@@ -4231,6 +5217,7 @@
       </tr>
     `).join('');
     makeResizable(tb.closest('table'));
+    injectColFilterButtons(tb.closest('table'), 'dashboard');
   }
 
   function updateDashboard() {
@@ -4295,6 +5282,7 @@
       </tr>
     `).join('');
     makeResizable(tb.closest('table'));
+    injectColFilterButtons(tb.closest('table'), 'entradas');
   }
 
   function renderSaidas() {
@@ -4325,6 +5313,7 @@
       </tr>
     `).join('');
     makeResizable(tb.closest('table'));
+    injectColFilterButtons(tb.closest('table'), 'saidas');
   }
 
   function renderLancamentos() {
@@ -4353,6 +5342,7 @@
       </tr>
     `).join('');
     makeResizable(tb.closest('table'));
+    injectColFilterButtons(tb.closest('table'), 'lancamentos');
   }
 
   function renderSAP() {
@@ -4391,6 +5381,7 @@
       </tr>`;
     }).join('');
     makeResizable(tb.closest('table'));
+    injectColFilterButtons(tb.closest('table'), 'sap');
   }
 
   function renderProducao() {
@@ -4439,6 +5430,7 @@
       </tr>
     `).join('');
     makeResizable(tb.closest('table'));
+    injectColFilterButtons(tb.closest('table'), 'producao');
   }
 
   function renderConfigs() {
@@ -4459,6 +5451,8 @@
         <td><button class="btn-icon danger" onclick="removerConfig(${listPages.configs * PAGE_SIZE + i})"><i class="ti ti-trash"></i></button></td>
       </tr>
     `).join('');
+    const _tbl_configs = document.getElementById('tb-configs')?.closest('table');
+    if (_tbl_configs) injectColFilterButtons(_tbl_configs, 'configs');
   }
 
   function renderFiliais() {
@@ -4479,6 +5473,8 @@
         <td><button class="btn-icon danger" onclick="removerFilial(${listPages.filiais * PAGE_SIZE + i})"><i class="ti ti-trash"></i></button></td>
       </tr>
     `).join('');
+    const _tbl_filiais = document.getElementById('tb-filiais')?.closest('table');
+    if (_tbl_filiais) injectColFilterButtons(_tbl_filiais, 'filiais');
   }
 
   function renderMateriais() {
@@ -4499,6 +5495,8 @@
         <td><button class="btn-icon danger" onclick="removerMaterial('${m.id}')"><i class="ti ti-trash"></i></button></td>
       </tr>
     `).join('');
+    const _tbl_materiais = document.getElementById('tb-materiais')?.closest('table');
+    if (_tbl_materiais) injectColFilterButtons(_tbl_materiais, 'materiais');
   }
 
   function pageFromModulo(modulo) {
@@ -5032,6 +6030,7 @@
         materiaisLancPrimeiro,
         materiaisLancUltimo,
         sapNoPeriodo,
+        lancsNoPeriodo,
         prodNoPeriodo
       });
     });
@@ -5171,27 +6170,79 @@
     }
   }, true);
 
-  function renderAnaliticoMicro(results, dtIni, dtFim) {
+  
+
+function renderAnaliticoMicro(results, dtIni, dtFim) {
     const container = document.getElementById('an-micro-container');
     if (!container) return;
     container.innerHTML = '';
+    window.__analiticoDetailCache = new Map();
 
-    results.forEach((r, idx) => {
-      // ── Movement codes for this central ──
-      const entradasCods = {};
-      const saidasCods   = {};
-      r.sapNoPeriodo.forEach(s => {
-        const cod = normMov(s.movimento);
-        const p   = num(s.peso);
-        if (p > 0) {
-          if (!entradasCods[cod]) entradasCods[cod] = 0;
-          entradasCods[cod] += p;
-        } else if (p < 0) {
-          if (!saidasCods[cod]) saidasCods[cod] = 0;
-          saidasCods[cod] += p;
-        }
+    const start = new Date(dtIni);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(dtFim);
+    end.setHours(0, 0, 0, 0);
+
+    const dateKey = (d) => {
+      const dt = d instanceof Date ? d : parseDate(d);
+      if (!dt) return '';
+      return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+    };
+
+    const buildDayList = () => {
+      const days = [];
+      const cursor = new Date(start);
+      while (cursor <= end) {
+        days.push(new Date(cursor));
+        cursor.setDate(cursor.getDate() + 1);
+      }
+      return days;
+    };
+
+    const dayList = buildDayList();
+
+    const buildSnapshot = ({ lancs, sap }) => {
+      const lancsOrdenados = [...lancs].sort((a, b) => {
+        const da = parseDate(a.dtLanc), db = parseDate(b.dtLanc);
+        return dateCmp(da ?? new Date(0), db ?? new Date(0));
       });
 
+      const lancIni = lancsOrdenados[0];
+      const lancFim = lancsOrdenados[lancsOrdenados.length - 1];
+      const pesoIni = num(lancIni?.peso);
+      const pesoFim = num(lancFim?.peso);
+
+      const entCods = {};
+      const saiCods = {};
+      sap.forEach(s => {
+        const cod = normMov(s.movimento);
+        const p = num(s.peso);
+        if (p > 0) entCods[cod] = (entCods[cod] || 0) + p;
+        else if (p < 0) saiCods[cod] = (saiCods[cod] || 0) + p;
+      });
+
+      const totalEnt = Object.values(entCods).reduce((a, b) => a + b, 0);
+      const totalSai = Object.values(saiCods).reduce((a, b) => a + b, 0);
+      const estTeorico = pesoIni + totalEnt + totalSai;
+      const diff = pesoFim - estTeorico;
+
+      return {
+        lancIni,
+        lancFim,
+        pesoIni,
+        pesoFim,
+        entCods,
+        saiCods,
+        totalEnt,
+        totalSai,
+        estTeorico,
+        diff,
+        dtIniLabel: lancIni?.dtLanc || '—',
+        dtFimLabel: lancFim?.dtLanc || '—'
+      };
+    };
+
+    results.forEach((r, idx) => {
       const prodHtml = r.prodNoPeriodo.length
         ? r.prodNoPeriodo.map(p => `
             <span class="prod-badge">
@@ -5205,108 +6256,103 @@
              <i class="ti ti-info-circle"></i> Sem produção no período
            </span>`;
 
-      // ── Per-material rows ──
+      const lancsByMat = new Map();
+      const sapByMat = new Map();
+
+      (r.lancsNoPeriodo || []).forEach(rec => {
+        const mat = rec.material || '—';
+        if (!lancsByMat.has(mat)) lancsByMat.set(mat, []);
+        lancsByMat.get(mat).push(rec);
+      });
+
+      (r.sapNoPeriodo || []).forEach(rec => {
+        const mat = rec.material || '—';
+        if (!sapByMat.has(mat)) sapByMat.set(mat, []);
+        sapByMat.get(mat).push(rec);
+      });
+
       let matRowsHtml = '';
       let variacaoCentralMicro = 0;
-      r.allMats.forEach(mat => {
-        const lancIni   = r.materiaisLancPrimeiro[mat];
-        const lancFim   = r.materiaisLancUltimo[mat];
-        const pesoIni   = num(lancIni?.peso);
-        const pesoFim   = num(lancFim?.peso);
 
-        // SAP for this material
-        const sapMat = r.sapNoPeriodo.filter(s => (s.material || '—') === mat);
+      r.allMats.forEach((mat, matIdx) => {
+        const lancsMat = lancsByMat.get(mat) || [];
+        const sapMat = sapByMat.get(mat) || [];
+        const snapshot = buildSnapshot({ lancs: lancsMat, sap: sapMat });
+        variacaoCentralMicro += snapshot.diff;
 
-        // Entradas (positive) and saídas (negative) per code for this material
-        const entMatCods = {};
-        const saiMatCods = {};
-        sapMat.forEach(s => {
-          const cod = normMov(s.movimento);
-          const p   = num(s.peso);
-          if (p > 0) { entMatCods[cod] = (entMatCods[cod] || 0) + p; }
-          else if (p < 0) { saiMatCods[cod] = (saiMatCods[cod] || 0) + p; }
+        const dCls = varClass(snapshot.diff);
+        const dPfx = snapshot.diff > 0 ? '+' : '';
+        const entEntries = Object.entries(snapshot.entCods).sort((a, b) => b[1] - a[1]);
+        const saiEntries = Object.entries(snapshot.saiCods).sort((a, b) => a[1] - b[1]);
+
+        const dailyRows = dayList.map(day => {
+          const key = dateKey(day);
+          const dayLancs = lancsMat.filter(rec => dateKey(parseDate(rec.dtLanc)) === key);
+          const daySap = sapMat.filter(rec => dateKey(parseDate(rec.dtDoc)) === key);
+          const daySnap = buildSnapshot({ lancs: dayLancs, sap: daySap });
+
+          const dayEntEntries = Object.entries(daySnap.entCods).sort((a, b) => b[1] - a[1]);
+          const daySaiEntries = Object.entries(daySnap.saiCods).sort((a, b) => a[1] - b[1]);
+
+          return {
+            dateLabel: fmtPtDate(day),
+            firstLaunchLabel: daySnap.dtIniLabel,
+            initialStock: daySnap.pesoIni,
+            entEntries: dayEntEntries,
+            saiEntries: daySaiEntries,
+            totalEnt: daySnap.totalEnt,
+            totalSai: daySnap.totalSai,
+            theoreticalStock: daySnap.estTeorico,
+            lastLaunchLabel: daySnap.dtFimLabel,
+            realStock: daySnap.pesoFim,
+            diff: daySnap.diff
+          };
         });
 
-        const totalEntMat = Object.values(entMatCods).reduce((a, b) => a + b, 0);
-        const totalSaiMat = Object.values(saiMatCods).reduce((a, b) => a + b, 0);
-        const estTeoricoMat = pesoIni + totalEntMat + totalSaiMat;
-        const diffMat = pesoFim - estTeoricoMat;
-        variacaoCentralMicro += diffMat;
-        const dCls = varClass(diffMat);
-        const dPfx = diffMat > 0 ? '+' : '';
-
-        // Build clickable cell for entradas
-        const entEntries = Object.entries(entMatCods).sort((a, b) => b[1] - a[1]);
-        const entCellHtml = entEntries.length
-          ? `<span class="breakdown-trigger" onclick="toggleBreakdown(this)" title="Clique para ver por código" style="color:var(--green)">
-               ${fmtKg(totalEntMat)}<i class="ti ti-chevron-down breakdown-chev"></i>
-             </span>
-             <div class="breakdown-popover">
-               <div class="breakdown-popover-title">Entradas por código</div>
-               ${entEntries.map(([cod, v]) => `<div class="breakdown-row"><span class="breakdown-cod">${cod}</span><span class="breakdown-val" style="color:var(--green)">${fmtKg(v)}</span></div>`).join('')}
-             </div>`
-          : `<span style="color:var(--text3);font-size:11px">—</span>`;
-
-        // Build clickable cell for saídas
-        const saiEntries = Object.entries(saiMatCods).sort((a, b) => a[1] - b[1]);
-        const saiCellHtml = saiEntries.length
-          ? `<span class="breakdown-trigger" onclick="toggleBreakdown(this)" title="Clique para ver por código" style="color:var(--red)">
-               ${fmtKg(totalSaiMat)}<i class="ti ti-chevron-down breakdown-chev"></i>
-             </span>
-             <div class="breakdown-popover">
-               <div class="breakdown-popover-title">Saídas por código</div>
-               ${saiEntries.map(([cod, v]) => `<div class="breakdown-row"><span class="breakdown-cod">${cod}</span><span class="breakdown-val" style="color:var(--red)">${fmtKg(v)}</span></div>`).join('')}
-             </div>`
-          : `<span style="color:var(--text3);font-size:11px">—</span>`;
-
-        const dtIniLabel = lancIni?.dtLanc || '—';
-        const dtFimLabel = lancFim?.dtLanc || '—';
+        const detailKey = `${idx}-${matIdx}-${String(mat).replace(/[^a-zA-Z0-9_-]+/g, '_')}`;
+        window.__analiticoDetailCache.set(detailKey, {
+          key: detailKey,
+          central: r.central,
+          material: mat,
+          periodLabel: `${fmtPtDate(dtIni)} a ${fmtPtDate(dtFim)}`,
+          summary: {
+            pesoIni: snapshot.pesoIni,
+            dtIniLabel: snapshot.dtIniLabel,
+            totalEnt: snapshot.totalEnt,
+            entLabel: entEntries.length ? `${entEntries.length} códigos · ${entEntries.map(([cod]) => cod).join(', ')}` : 'Sem entradas no período',
+            totalSai: snapshot.totalSai,
+            saiLabel: saiEntries.length ? `${saiEntries.length} códigos · ${saiEntries.map(([cod]) => cod).join(', ')}` : 'Sem saídas no período',
+            estTeorico: snapshot.estTeorico,
+            pesoFim: snapshot.pesoFim,
+            dtFimLabel: snapshot.dtFimLabel,
+            diff: snapshot.diff
+          },
+          days: dailyRows
+        });
 
         matRowsHtml += `
-          <tr>
-            <td class="td-mono" style="font-weight:600">${mat}</td>
-            <td class="td-mono" style="color:var(--text2);font-size:11px">${dtIniLabel}</td>
-            <td class="td-mono" style="color:var(--teal)">${fmtKg(pesoIni)}</td>
-            <td>${entCellHtml}</td>
-            <td>${saiCellHtml}</td>
-            <td class="td-mono" style="color:var(--accent)">${fmtKg(estTeoricoMat)}</td>
-            <td class="td-mono" style="color:var(--text2);font-size:11px">${dtFimLabel}</td>
-            <td class="td-mono" style="color:var(--teal)">${fmtKg(pesoFim)}</td>
-            <td class="td-mono ${dCls}">${dPfx}${fmtKg(diffMat)}</td>
+          <tr class="material-row" data-detail-key="${detailKey}" onclick="toggleMaterialDetail(this, event)">
+            <td class="td-mono" style="font-weight:600">
+              <span class="material-row-title">
+                <i class="ti ti-eye-search material-row-chev"></i>
+                ${escapeHtml(mat)}
+              </span>
+            </td>
+            <td class="td-mono" style="color:var(--text2);font-size:11px">${snapshot.dtIniLabel}</td>
+            <td class="td-mono" style="color:var(--teal)">${fmtKg(snapshot.pesoIni)}</td>
+            <td>${buildAnaliticoDetailBreakdown(entEntries, snapshot.totalEnt, 'var(--green)', 'Entradas')}</td>
+            <td>${buildAnaliticoDetailBreakdown(saiEntries, snapshot.totalSai, 'var(--red)', 'Saídas')}</td>
+            <td class="td-mono" style="color:var(--accent)">${fmtKg(snapshot.estTeorico)}</td>
+            <td class="td-mono" style="color:var(--text2);font-size:11px">${snapshot.dtFimLabel}</td>
+            <td class="td-mono" style="color:var(--teal)">${fmtKg(snapshot.pesoFim)}</td>
+            <td class="td-mono ${dCls}">${dPfx}${fmtKg(snapshot.diff)}</td>
           </tr>`;
       });
 
       const totalEntCentral = r.totalEntradas;
       const totalSaiCentral = r.totalSaidas;
       const varCentralMicro = variacaoCentralMicro;
-      const varCls          = varClass(varCentralMicro);
-
-      // Build summary entry breakdown popovers
-      const entSumEntries = Object.entries(r.entradasPorCod).sort((a, b) => b[1] - a[1]);
-      const saiSumEntries = Object.entries(r.saidasPorCod).sort((a, b) => a[1] - b[1]);
-
-      const entSumPopover = entSumEntries.length
-        ? `<div class="breakdown-popover">
-             <div class="breakdown-popover-title">Entradas por código</div>
-             ${entSumEntries.map(([cod, v]) => `<div class="breakdown-row"><span class="breakdown-cod">${cod}</span><span class="breakdown-val" style="color:var(--green)">${fmtKg(v)}</span></div>`).join('')}
-           </div>` : '';
-      const saiSumPopover = saiSumEntries.length
-        ? `<div class="breakdown-popover">
-             <div class="breakdown-popover-title">Saídas por código</div>
-             ${saiSumEntries.map(([cod, v]) => `<div class="breakdown-row"><span class="breakdown-cod">${cod}</span><span class="breakdown-val" style="color:var(--red)">${fmtKg(v)}</span></div>`).join('')}
-           </div>` : '';
-
-      const entSumHtml = entSumPopover
-        ? `<span class="breakdown-trigger" onclick="toggleBreakdown(this)" style="color:var(--green)">
-             <i class="ti ti-package-import" style="color:var(--green)"></i> Entradas: ${fmtKg(totalEntCentral)}<i class="ti ti-chevron-down breakdown-chev"></i>
-           </span>${entSumPopover}`
-        : `<span><i class="ti ti-package-import" style="color:var(--green)"></i> Entradas: ${fmtKg(totalEntCentral)}</span>`;
-
-      const saiSumHtml = saiSumPopover
-        ? `<span class="breakdown-trigger" onclick="toggleBreakdown(this)" style="color:var(--red)">
-             <i class="ti ti-package-export" style="color:var(--red)"></i> Saídas: ${fmtKg(totalSaiCentral)}<i class="ti ti-chevron-down breakdown-chev"></i>
-           </span>${saiSumPopover}`
-        : `<span><i class="ti ti-package-export" style="color:var(--red)"></i> Saídas: ${fmtKg(totalSaiCentral)}</span>`;
+      const varCls = varClass(varCentralMicro);
 
       const card = document.createElement('div');
       card.className = 'micro-filial-card';
@@ -5314,7 +6360,7 @@
         <div class="micro-filial-header" onclick="toggleMicro(this)">
           <div class="micro-filial-name">
             <i class="ti ti-building-warehouse"></i>
-            ${r.central}
+            ${escapeHtml(r.central)}
           </div>
           <div class="micro-filial-summary">
             <span><i class="ti ti-package-import" style="color:var(--green)"></i> Entradas SAP: ${fmtKg(totalEntCentral)}</span>
@@ -5327,19 +6373,16 @@
         </div>
 
         <div class="micro-filial-body" id="micro-body-${idx}">
-
-          <!-- Produção -->
           <div class="micro-body-section">
             <div class="micro-section-title"><i class="ti ti-building-factory"></i> Produção no Período</div>
             ${prodHtml}
           </div>
 
-          <!-- Materiais -->
           <div class="micro-body-section">
             <div class="micro-section-title"><i class="ti ti-box"></i> Análise por Material</div>
           </div>
 
-          <div class="table-scroll" style="max-height:none">
+          <div class="micro-table-wrap">
             <table>
               <thead>
                 <tr>
@@ -5357,14 +6400,31 @@
               <tbody>${matRowsHtml || '<tr><td colspan="9"><div class="empty-state" style="padding:24px"><i class="ti ti-box-off"></i><p>Nenhum material encontrado.</p></div></td></tr>'}</tbody>
             </table>
           </div>
-
         </div>`;
 
       container.appendChild(card);
     });
   }
 
+
+  
+function toggleMaterialDetail(row, event) {
+    if (event && (
+      event.target.closest('.breakdown-trigger') ||
+      event.target.closest('.breakdown-popover') ||
+      event.target.closest('button, a, input, select, label')
+    )) {
+      return;
+    }
+
+    const key = row?.dataset?.detailKey;
+    if (!key) return;
+    openAnaliticoDetailModal(key);
+  }
+
+
   function toggleMicro(header) {
+
     const body = header.nextElementSibling;
     const chev = header.querySelector('[id^="chev-"]');
     if (!body) return;
@@ -5410,6 +6470,9 @@
     removerConfig,
     editConfig,
     deleteConfig,
+    applyColFilter,
+    clearColFilter,
+    clearAllColFilters,
     filtrarTabela,
     filtrarProducao,
     filtrarLista,
@@ -5436,13 +6499,24 @@
     applyTheme,
     closeThemeMenu,
     getSavedTheme,
+    openAnaliticoDetailModal,
+    closeAnaliticoDetailModal,
+    toggleAnaliticoDetailFullscreen,
     toggleMicro,
+    toggleMaterialDetail,
     toggleBreakdown
   });
 
   function setupModalCloseOnBackdrop() {
     qsa('.modal-overlay').forEach(m => {
-      m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); });
+      m.addEventListener('click', e => {
+        if (e.target !== m) return;
+        if (m.id === 'analitico-detail-overlay') {
+          closeAnaliticoDetailModal();
+        } else {
+          m.classList.remove('open');
+        }
+      });
     });
   }
 
@@ -5458,10 +6532,43 @@
       if (!switcher) return;
       if (!switcher.contains(event.target)) closeThemeMenu();
     });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') closeAnaliticoDetailModal();
+    });
   }
 
   document.addEventListener('DOMContentLoaded', init);
 })();
 </script>
+
+<!-- MODAL: Detalhamento Analítico -->
+<div class="modal-overlay analitico-detail-overlay" id="analitico-detail-overlay" aria-hidden="true">
+  <div class="analitico-detail-modal" role="dialog" aria-modal="true" aria-labelledby="analitico-detail-title">
+    <div class="analitico-detail-header">
+      <div class="analitico-detail-heading">
+        <div class="analitico-detail-kicker">Detalhamento do material</div>
+        <div class="analitico-detail-title" id="analitico-detail-title">Material</div>
+        <div class="analitico-detail-sub" id="analitico-detail-sub">Período</div>
+      </div>
+      <div class="analitico-detail-actions">
+        <button class="btn" type="button" id="analitico-detail-fullscreen-btn" onclick="toggleAnaliticoDetailFullscreen()">
+          <i class="ti ti-maximize"></i> <span>Expandir</span>
+        </button>
+        <button class="btn btn-primary" type="button" onclick="closeAnaliticoDetailModal()">
+          <i class="ti ti-x"></i> <span>Fechar</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="analitico-detail-body" id="analitico-detail-body">
+      <div class="empty-state" style="padding:28px 16px">
+        <i class="ti ti-loader"></i>
+        <p>Selecione um material para carregar os detalhes.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
