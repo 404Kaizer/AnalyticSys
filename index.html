@@ -24,7 +24,7 @@
     --accent2: #2563eb;
     --green: #22c55e;
     --green-bg: rgba(34,197,94,0.1);
-    --red: #675656;
+    --red: #ef4444;
     --red-bg: rgba(239,68,68,0.1);
     --amber: #f59e0b;
     --amber-bg: rgba(245,158,11,0.1);
@@ -37,6 +37,83 @@
     --font: 'Sora', sans-serif;
     --mono: 'IBM Plex Mono', monospace;
     --sidebar-w: 220px;
+    --logo-filter: invert(1) hue-rotate(180deg) brightness(1.2);
+  }
+  body[data-theme="dark"] { color-scheme: dark; }
+
+  body[data-theme="graphite"] {
+    --bg: #10141d;
+    --bg2: #171d29;
+    --bg3: #21283a;
+    --border: rgba(255,255,255,0.09);
+    --border2: rgba(255,255,255,0.16);
+    --text: #edf2ff;
+    --text2: #a1a8b8;
+    --text3: #6b7280;
+    --accent: #38bdf8;
+    --accent2: #0ea5e9;
+    --green: #22c55e;
+    --green-bg: rgba(34,197,94,0.12);
+    --red: #f87171;
+    --red-bg: rgba(248,113,113,0.12);
+    --amber: #f59e0b;
+    --amber-bg: rgba(245,158,11,0.12);
+    --purple: #c084fc;
+    --purple-bg: rgba(192,132,252,0.12);
+    --teal: #2dd4bf;
+    --teal-bg: rgba(45,212,191,0.12);
+    --logo-filter: invert(1) hue-rotate(180deg) brightness(1.15);
+    color-scheme: dark;
+  }
+
+  body[data-theme="light"] {
+    --bg: #f6f8fc;
+    --bg2: #ffffff;
+    --bg3: #eef2f7;
+    --border: rgba(15,23,42,0.10);
+    --border2: rgba(15,23,42,0.18);
+    --text: #0f172a;
+    --text2: #334155;
+    --text3: #64748b;
+    --accent: #2563eb;
+    --accent2: #1d4ed8;
+    --green: #15803d;
+    --green-bg: rgba(21,128,61,0.10);
+    --red: #dc2626;
+    --red-bg: rgba(220,38,38,0.10);
+    --amber: #b45309;
+    --amber-bg: rgba(180,83,9,0.10);
+    --purple: #7c3aed;
+    --purple-bg: rgba(124,58,237,0.10);
+    --teal: #0f766e;
+    --teal-bg: rgba(15,118,110,0.10);
+    --logo-filter: none;
+    color-scheme: light;
+  }
+
+  body[data-theme="sand"] {
+    --bg: #f3efe6;
+    --bg2: #fffaf1;
+    --bg3: #efe3cf;
+    --border: rgba(71,85,105,0.14);
+    --border2: rgba(71,85,105,0.22);
+    --text: #1f2937;
+    --text2: #455468;
+    --text3: #6b7280;
+    --accent: #0f766e;
+    --accent2: #0f766e;
+    --green: #166534;
+    --green-bg: rgba(22,101,52,0.10);
+    --red: #b91c1c;
+    --red-bg: rgba(185,28,28,0.10);
+    --amber: #b45309;
+    --amber-bg: rgba(180,83,9,0.10);
+    --purple: #6d28d9;
+    --purple-bg: rgba(109,40,217,0.10);
+    --teal: #0f766e;
+    --teal-bg: rgba(15,118,110,0.10);
+    --logo-filter: none;
+    color-scheme: light;
   }
 
   html, body { height: 100%; }
@@ -75,7 +152,8 @@
   .logo-concrelagos {
       max-width: 100%;
       height: auto;
-      filter: invert(1) hue-rotate(180deg) brightness(1.2); 
+      filter: var(--logo-filter);
+      transition: filter 0.2s ease;
   }
 
   .sidebar-logo {
@@ -214,6 +292,72 @@
   }
 
   .topbar-actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+
+  .theme-switcher {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+  .theme-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    min-width: 220px;
+    background: var(--bg2);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 18px 40px rgba(0,0,0,0.30);
+    padding: 8px;
+    z-index: 120;
+    display: none;
+  }
+  .theme-menu.open { display: block; }
+  .theme-option {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--text);
+    border-radius: 12px;
+    padding: 10px 12px;
+    cursor: pointer;
+    font-family: var(--font);
+    font-size: 13px;
+    text-align: left;
+    transition: all 0.15s;
+  }
+  .theme-option:hover {
+    background: var(--bg3);
+    border-color: var(--border);
+  }
+  .theme-option.active {
+    background: rgba(79,156,249,0.10);
+    border-color: rgba(79,156,249,0.25);
+  }
+  .theme-option .theme-check {
+    margin-left: auto;
+    color: var(--accent);
+    opacity: 0;
+  }
+  .theme-option.active .theme-check {
+    opacity: 1;
+  }
+  .theme-option .theme-swatch {
+    width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    flex-shrink: 0;
+    border: 1px solid var(--border2);
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);
+  }
+  .theme-swatch.dark { background: linear-gradient(135deg, #111827, #1e293b); }
+  .theme-swatch.graphite { background: linear-gradient(135deg, #0f172a, #334155); }
+  .theme-swatch.light { background: linear-gradient(135deg, #ffffff, #cbd5e1); }
+  .theme-swatch.sand { background: linear-gradient(135deg, #fff7e8, #d6c4a3); }
+
 
   /* ── Buttons ── */
   .btn {
@@ -680,6 +824,150 @@
   .toast.success i { color: var(--green); }
   .toast.error   i { color: var(--red); }
 
+
+  /* ── Loading overlay ── */
+  .loading-overlay {
+    position: fixed;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    background: linear-gradient(180deg, rgba(7,10,18,0.78), rgba(7,10,18,0.88));
+    backdrop-filter: blur(10px);
+    z-index: 220;
+  }
+  .loading-overlay.open { display: flex; }
+
+  .loading-card {
+    width: min(520px, 100%);
+    background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+    border: 1px solid var(--border2);
+    border-radius: var(--radius-lg);
+    padding: 22px 22px 20px;
+    box-shadow: 0 24px 70px rgba(0,0,0,0.55);
+    color: var(--text);
+  }
+
+  .loading-head {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    min-width: 0;
+  }
+
+  .loading-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    background: rgba(79,156,249,0.10);
+    border: 1px solid rgba(79,156,249,0.20);
+    position: relative;
+    overflow: hidden;
+  }
+  .loading-icon::before {
+    content: '';
+    width: 22px;
+    height: 22px;
+    border-radius: 999px;
+    border: 3px solid rgba(79,156,249,0.25);
+    border-top-color: var(--accent);
+    animation: loading-spin 0.85s linear infinite;
+  }
+
+  .loading-copy { min-width: 0; flex: 1; }
+  .loading-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text);
+    line-height: 1.35;
+    margin-bottom: 4px;
+  }
+  .loading-status {
+    font-size: 12px;
+    color: var(--text2);
+    line-height: 1.5;
+    word-break: break-word;
+    min-height: 22px;
+  }
+  .loading-hint {
+    font-size: 11.5px;
+    color: var(--text3);
+    line-height: 1.5;
+    margin-top: 6px;
+    min-height: 18px;
+    font-family: var(--mono);
+    letter-spacing: 0.02em;
+    opacity: 0.95;
+    word-break: break-word;
+  }
+
+  .loading-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 18px;
+    flex-wrap: wrap;
+  }
+  .loading-time {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--text);
+    letter-spacing: 0.02em;
+  }
+  .loading-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--border2);
+    background: var(--bg3);
+    color: var(--text2);
+    font-family: var(--mono);
+    font-size: 11px;
+    white-space: nowrap;
+  }
+  .loading-bar {
+    margin-top: 14px;
+    height: 8px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.06);
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .loading-bar > span {
+    display: block;
+    height: 100%;
+    width: 40%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, rgba(79,156,249,0.2), var(--accent), rgba(79,156,249,0.2));
+    animation: loading-sweep 1.35s ease-in-out infinite;
+  }
+
+  body.loading-active {
+    overflow: hidden;
+  }
+
+  @keyframes loading-spin {
+    to { transform: rotate(360deg); }
+  }
+  @keyframes loading-sweep {
+    0%   { transform: translateX(-40%); opacity: .55; }
+    50%  { opacity: 1; }
+    100% { transform: translateX(160%); opacity: .55; }
+  }
+
+  @media (max-width: 640px) {
+    .loading-card { padding: 18px; }
+    .loading-title { font-size: 14px; }
+    .loading-meta { margin-top: 14px; }
+  }
+
   /* ── Global scrollbar ── */
   ::-webkit-scrollbar { width: 5px; height: 5px; }
   ::-webkit-scrollbar-track { background: transparent; }
@@ -775,17 +1063,75 @@
     .config-key { min-width: unset; width: 100%; }
     .config-row { flex-direction: column; align-items: flex-start; }
   }
-  /* ── Dashboard Analítico ── */
+
+  /* ── Breakdown popover ── */
+  .breakdown-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    border-radius: 6px;
+    padding: 2px 6px;
+    margin: -2px -6px;
+    transition: background 0.12s;
+    white-space: nowrap;
+    text-underline-offset: 3px;
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .breakdown-trigger:hover { background: var(--bg3); }
+  .breakdown-chev {
+    font-size: 11px;
+    color: var(--text3);
+    transition: transform 0.18s;
+    flex-shrink: 0;
+  }
+  .breakdown-popover {
+    display: none;
+    position: fixed;
+    z-index: 200;
+    background: var(--bg2);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    min-width: 200px;
+    box-shadow: 0 10px 36px rgba(0,0,0,0.45);
+  }
+  .breakdown-popover.open { display: block; }
+  .breakdown-popover-title {
+    font-size: 10px;
+    font-family: var(--mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text3);
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+  .breakdown-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+    padding: 4px 0;
+    border-bottom: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .breakdown-row:last-child { border-bottom: none; }
+  .breakdown-cod { color: var(--text2); }
+  .breakdown-val { font-weight: 600; text-align: right; }
+
   .analitico-toolbar {
     background: var(--bg2);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
-    padding: 16px 20px;
+    padding: 18px 20px;
     display: flex;
     align-items: flex-end;
     justify-content: space-between;
     gap: 16px;
-    margin-bottom: 24px;
+    margin-bottom: 20px;
     flex-wrap: wrap;
   }
   .analitico-period {
@@ -793,44 +1139,66 @@
     gap: 16px;
     flex-wrap: wrap;
     flex: 1;
+    align-items: flex-end;
+  }
+  .analitico-actions {
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+    flex-shrink: 0;
   }
   .period-field {
     display: flex;
     flex-direction: column;
     gap: 5px;
     min-width: 150px;
+    flex: 1 1 150px;
   }
-
-  /* Macro table row coloring */
-  .var-pos td.var-cell { color: var(--amber); font-weight: 600; }
-  .var-neg td.var-cell { color: var(--red);   font-weight: 600; }
-  .var-zero td.var-cell { color: var(--text3); }
-  td.var-cell-pos { color: var(--amber) !important; font-weight: 600; }
-  td.var-cell-neg { color: var(--red)   !important; font-weight: 600; }
-  td.var-cell-zero{ color: var(--text3) !important; }
-  td.pending-cell { color: var(--text3) !important; font-style: italic; font-size: 11px; }
-
+  /* Macro table coloring */
+  td.var-cell-pos  { color: var(--amber) !important; font-weight: 600; }
+  td.var-cell-neg  { color: var(--red)   !important; font-weight: 600; }
+  td.var-cell-zero { color: var(--text3) !important; }
+  td.pending-cell  { color: var(--text3) !important; font-style: italic; font-size: 11px; }
+  /* Macro/micro table headers */
+  #an-macro-table thead th,
+  .micro-table-wrap thead th {
+    line-height: 1.3;
+    vertical-align: bottom;
+    white-space: normal;
+    padding: 9px 14px;
+    min-width: 90px;
+  }
+  #an-macro-table thead th span,
+  .micro-table-wrap thead th span {
+    display: block;
+    margin-top: 3px;
+    font-size: 9px;
+    font-weight: 400;
+    opacity: .65;
+    line-height: 1.2;
+  }
   /* Micro filial cards */
   .micro-filial-card {
     background: var(--bg2);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
-    margin-bottom: 20px;
-    overflow: hidden;
+    margin-bottom: 16px;
+    overflow: visible;
   }
   .micro-filial-header {
     background: var(--bg3);
     border-bottom: 1px solid var(--border);
-    padding: 12px 18px;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    padding: 13px 18px;
     display: flex;
     align-items: center;
-    justify-content: space-between;
     gap: 12px;
     flex-wrap: wrap;
     cursor: pointer;
     user-select: none;
+    transition: background 0.15s;
   }
-  .micro-filial-header:hover { background: rgba(79,156,249,0.06); }
+  .micro-filial-header:hover { background: rgba(79,156,249,0.07); }
   .micro-filial-name {
     font-size: 13px;
     font-weight: 600;
@@ -838,59 +1206,80 @@
     display: flex;
     align-items: center;
     gap: 8px;
+    flex-shrink: 0;
   }
   .micro-filial-name i { color: var(--accent); font-size: 16px; }
   .micro-filial-summary {
     display: flex;
-    gap: 20px;
+    gap: 16px;
     font-size: 12px;
     font-family: var(--mono);
-    color: var(--text3);
+    color: var(--text2);
     flex-wrap: wrap;
+    flex: 1;
+    min-width: 0;
   }
-  .micro-filial-summary span { display: flex; align-items: center; gap: 5px; }
+  .micro-filial-summary > span {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    white-space: nowrap;
+  }
   .micro-filial-body { display: none; }
   .micro-filial-body.open { display: block; }
-  .micro-body-section {
-    padding: 16px 18px 0;
-  }
+  .micro-body-section { padding: 16px 18px 12px; }
   .micro-section-title {
     font-size: 10px;
     font-family: var(--mono);
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--text3);
-    margin-bottom: 10px;
+    margin-bottom: 12px;
     display: flex;
     align-items: center;
     gap: 8px;
   }
-  .micro-section-title::after { content:''; flex:1; height:1px; background:var(--border); }
-
-  /* Prod badge in micro */
+  .micro-section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+  .prod-badges-row { display: flex; flex-wrap: wrap; gap: 8px; padding-bottom: 4px; }
   .prod-badge {
     display: inline-flex;
     align-items: center;
     gap: 6px;
     background: var(--purple-bg);
     color: var(--purple);
+    border: 1px solid rgba(167,139,250,0.2);
     border-radius: var(--radius);
-    padding: 4px 12px;
+    padding: 6px 12px;
     font-family: var(--mono);
-    font-size: 12px;
-    margin-bottom: 16px;
+    font-size: 11.5px;
+    flex-wrap: wrap;
+    line-height: 1.5;
   }
-
-  /* Diff row highlight */
-  .diff-pos { color: var(--amber); font-weight: 600; }
-  .diff-neg { color: var(--red);   font-weight: 600; }
-  .diff-zero{ color: var(--green); }
-
+  .micro-table-wrap {
+    overflow-x: auto;
+    overflow-y: visible;
+    border-top: 1px solid var(--border);
+    -webkit-overflow-scrolling: touch;
+  }
+  .micro-table-wrap::-webkit-scrollbar { width: 4px; height: 4px; }
+  .micro-table-wrap::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 4px; }
+  .micro-table-wrap table { width: max-content; min-width: 100%; }
+  .micro-table-wrap tbody td { padding: 9px 14px; vertical-align: middle; }
+  /* Diff classes */
+  .diff-pos  { color: var(--amber); font-weight: 600; }
+  .diff-neg  { color: var(--red);   font-weight: 600; }
+  .diff-zero { color: var(--green); }
+  /* Responsive analítico */
+  @media (max-width: 900px) { .micro-filial-summary { gap: 12px; } }
   @media (max-width: 640px) {
-    .analitico-toolbar { flex-direction: column; align-items: flex-start; }
-    .analitico-period { flex-direction: column; width: 100%; }
-    .period-field { width: 100%; }
-    .micro-filial-summary { gap: 10px; }
+    .analitico-toolbar  { flex-direction: column; align-items: stretch; }
+    .analitico-period   { flex-direction: column; }
+    .period-field       { min-width: 0; flex: none; width: 100%; }
+    .analitico-actions  { width: 100%; justify-content: flex-end; }
+    .micro-filial-header { gap: 8px; }
+    .micro-filial-summary { flex-direction: column; gap: 6px; }
+    .micro-body-section { padding: 12px 14px 10px; }
+    .prod-badge { font-size: 11px; }
   }
 
 </style>
@@ -905,12 +1294,12 @@
   <aside class="sidebar">
     <div class="sidebar-logo">
       <img class="logo-concrelagos" src="https://concrelagos.com.br/wp-content/uploads/2021/10/Ativo-3.svg" alt="Logo Concrelagos" style="max-width: 85%; height: auto; object-fit: contain; margin-bottom: 5px;">
-      <h1 style="font-size: 0.9rem; font-weight: 500; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px;">SYSTOQUE</h2>
+      <h1 style="font-size: 0.9rem; font-weight: 500; color: #94a3b8; letter-spacing: 1px;">AnalyticSys</h1>
       <div class="logo-mark">Gestão · Estoque</div>
     </div>
     <nav class="sidebar-nav">
       <div class="nav-section-label">Visão Geral</div>
-      <button class="nav-item active" onclick="navigate('dashboard')">
+      <button class="nav-item" onclick="navigate('dashboard')">
         <i class="ti ti-layout-dashboard"></i> Dashboard
       </button>
       <button class="nav-item" onclick="navigate('analitico')">
@@ -935,7 +1324,7 @@
       </button>
 
       <div class="nav-section-label">Gestão</div>
-      <button class="nav-item" onclick="navigate('importar')">
+      <button class="nav-item active" onclick="navigate('importar')">
         <i class="ti ti-file-upload"></i> Importar Dados
       </button>
       <button class="nav-item" onclick="navigate('configuracoes')">
@@ -958,6 +1347,33 @@
         </div>
       </div>
       <div class="topbar-actions">
+        <div class="theme-switcher">
+          <button class="btn" type="button" onclick="toggleThemeMenu(event)" aria-haspopup="true" aria-expanded="false">
+            <i class="ti ti-palette"></i> <span id="theme-label">Tema</span>
+          </button>
+          <div class="theme-menu" id="theme-menu" role="menu" aria-label="Seleção de tema">
+            <button class="theme-option" type="button" data-theme="dark" onclick="setTheme('dark')">
+              <span class="theme-swatch dark"></span>
+              <span>Escuro</span>
+              <i class="ti ti-check theme-check"></i>
+            </button>
+            <button class="theme-option" type="button" data-theme="graphite" onclick="setTheme('graphite')">
+              <span class="theme-swatch graphite"></span>
+              <span>Grafite</span>
+              <i class="ti ti-check theme-check"></i>
+            </button>
+            <button class="theme-option" type="button" data-theme="light" onclick="setTheme('light')">
+              <span class="theme-swatch light"></span>
+              <span>Claro</span>
+              <i class="ti ti-check theme-check"></i>
+            </button>
+            <button class="theme-option" type="button" data-theme="sand" onclick="setTheme('sand')">
+              <span class="theme-swatch sand"></span>
+              <span>Areia</span>
+              <i class="ti ti-check theme-check"></i>
+            </button>
+          </div>
+        </div>
         <button class="btn" onclick="exportarDados()"><i class="ti ti-download"></i> <span>Exportar</span></button>
         <button class="btn btn-primary" onclick="openModal('modal-manual')"><i class="ti ti-plus"></i> <span>Novo Registro</span></button>
       </div>
@@ -966,7 +1382,7 @@
     <div class="page-content">
 
       <!-- DASHBOARD -->
-      <div class="page active" id="page-dashboard">
+      <div class="page" id="page-dashboard">
         <div class="metrics-grid">
           <div class="metric-card c-green">
             <div class="metric-label"><i class="ti ti-package-import"></i>Entradas</div>
@@ -1063,7 +1479,7 @@
               <input type="date" class="form-input" id="an-dt-fim" onchange="rodarAnalitico()">
             </div>
           </div>
-          <div style="display:flex;gap:8px;align-items:flex-end">
+          <div class="analitico-actions">
             <button class="btn btn-primary" onclick="rodarAnalitico()">
               <i class="ti ti-player-play"></i> <span>Analisar</span>
             </button>
@@ -1422,7 +1838,7 @@
 
       <!-- IMPORTAR -->
 
-      <div class="page" id="page-importar">
+      <div class="page active" id="page-importar">
         <div class="import-grid">
           <!-- Entradas -->
           <div class="import-card">
@@ -2054,12 +2470,34 @@
 </div>
 
 
+<!-- Loading Overlay -->
+<div class="loading-overlay" id="loading-overlay" aria-live="polite" aria-busy="true" aria-hidden="true">
+  <div class="loading-card" role="status" aria-label="Processando dados">
+    <div class="loading-head">
+      <div class="loading-icon" aria-hidden="true"></div>
+      <div class="loading-copy">
+        <div class="loading-title" id="loading-title">Carregando</div>
+        <div class="loading-status" id="loading-status">Inicializando o sistema...</div>
+        <div class="loading-hint" id="loading-hint">Preparando o ambiente local...</div>
+      </div>
+    </div>
+    <div class="loading-meta">
+      <div class="loading-time" id="loading-time">0s</div>
+      <div class="loading-badge"><i class="ti ti-clock"></i><span id="loading-badge">Processando</span></div>
+    </div>
+    <div class="loading-bar"><span id="loading-bar-fill"></span></div>
+  </div>
+</div>
+
+
+
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script>
 (() => {
   'use strict';
 
   const STORAGE_KEY = 'central_analise_state_v4';
+  const THEME_KEY = 'central_analise_theme_v1';
   const PAGE_SIZE = 50;
 
   const defaultState = () => ({
@@ -2133,8 +2571,79 @@
     sap: { title: 'Movimentações SAP', sub: 'extrato consolidado de todas as movimentações' },
     producao: { title: 'Produção', sub: 'produção consolidada por central' },
     analitico: { title: 'Dashboard Analítico', sub: 'análise de estoque por período e filial' },
+    importar: { title: 'Importar Dados', sub: 'importe arquivos .xlsx ou .csv para cada módulo' },
     configuracoes: { title: 'Configurações', sub: 'parâmetros e informações de referência do sistema' }
   };
+
+
+  const themeLabels = {
+    dark: 'Escuro',
+    graphite: 'Grafite',
+    light: 'Claro',
+    sand: 'Areia'
+  };
+
+  function getSavedTheme() {
+    try {
+      const saved = localStorage.getItem(THEME_KEY);
+      return themeLabels[saved] ? saved : 'dark';
+    } catch (err) {
+      return 'dark';
+    }
+  }
+
+  function updateThemeUI(theme) {
+    const menu = document.getElementById('theme-menu');
+    const label = document.getElementById('theme-label');
+    if (label) label.textContent = themeLabels[theme] || 'Tema';
+
+    if (menu) {
+      qsa('.theme-option', menu).forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.theme === theme);
+      });
+    }
+
+    const toggle = document.querySelector('.theme-switcher .btn');
+    if (toggle) toggle.setAttribute('aria-expanded', menu?.classList.contains('open') ? 'true' : 'false');
+  }
+
+  function applyTheme(theme) {
+    const selected = themeLabels[theme] ? theme : 'dark';
+    document.body.dataset.theme = selected;
+    try { localStorage.setItem(THEME_KEY, selected); } catch (err) {}
+    updateThemeUI(selected);
+  }
+
+  function openThemeMenu() {
+    const menu = document.getElementById('theme-menu');
+    if (!menu) return;
+    menu.classList.add('open');
+    updateThemeUI(document.body.dataset.theme || 'dark');
+  }
+
+  function closeThemeMenu() {
+    const menu = document.getElementById('theme-menu');
+    if (!menu) return;
+    menu.classList.remove('open');
+    updateThemeUI(document.body.dataset.theme || 'dark');
+  }
+
+  function toggleThemeMenu(ev) {
+    if (ev) {
+      ev.preventDefault();
+      ev.stopPropagation();
+    }
+    const menu = document.getElementById('theme-menu');
+    if (!menu) return;
+    const isOpen = menu.classList.contains('open');
+    if (isOpen) closeThemeMenu();
+    else openThemeMenu();
+  }
+
+  function setTheme(theme) {
+    applyTheme(theme);
+    closeThemeMenu();
+  }
 
   function qs(sel, root = document) { return root.querySelector(sel); }
   function qsa(sel, root = document) { return Array.from(root.querySelectorAll(sel)); }
@@ -2246,46 +2755,193 @@
     return records.filter(rec => recordMatchesSearch(rec, q, fields));
   }
 
-  function persist() {
+
+  const STATE_VERSION = 5;
+  const IDB_DB_NAME = 'central_analise_db_v1';
+  const IDB_STORE = 'kv';
+  const legacyStateKey = STORAGE_KEY;
+  const saveSnapshotKeys = Object.keys(state);
+
+  let idbOpenPromise = null;
+  let persistTimer = null;
+  let persistInFlight = false;
+  let persistQueued = false;
+  let stateHydrated = false;
+
+  function openDb() {
+    if (!('indexedDB' in window)) return Promise.resolve(null);
+    if (idbOpenPromise) return idbOpenPromise;
+
+    idbOpenPromise = new Promise((resolve, reject) => {
+      const request = indexedDB.open(IDB_DB_NAME, 1);
+
+      request.onupgradeneeded = () => {
+        const db = request.result;
+        if (!db.objectStoreNames.contains(IDB_STORE)) {
+          db.createObjectStore(IDB_STORE, { keyPath: 'key' });
+        }
+      };
+
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+      request.onblocked = () => console.warn('IndexedDB bloqueado por outra aba.');
+    });
+
+    return idbOpenPromise;
+  }
+
+  function idbGet(db, key) {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readonly');
+      const store = tx.objectStore(IDB_STORE);
+      const req = store.get(key);
+      req.onsuccess = () => resolve(req.result?.value ?? null);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  function idbPut(db, key, value) {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      const store = tx.objectStore(IDB_STORE);
+      const req = store.put({
+        key,
+        value,
+        updatedAt: Date.now(),
+        version: STATE_VERSION
+      });
+      req.onsuccess = () => resolve(true);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  function buildStateSnapshot() {
+    return {
+      version: STATE_VERSION,
+      savedAt: Date.now(),
+      entradas: state.entradas,
+      saidas: state.saidas,
+      lancamentos: state.lancamentos,
+      sap: state.sap,
+      producao: state.producao,
+      imports: state.imports,
+      configs: state.configs,
+      filiais: state.filiais,
+      materiais: state.materiais
+    };
+  }
+
+  function applySavedState(saved) {
+    if (!saved || typeof saved !== 'object') return false;
+
+    for (const key of saveSnapshotKeys) {
+      if (Array.isArray(saved[key])) state[key] = saved[key];
+    }
+
+    state.materiais = (state.materiais || []).map(item => ({
+      id: item?.id || makeMaterialId(),
+      ...item
+    }));
+
+    reaplicarPadronizacaoMateriais();
+    stateHydrated = true;
+    return true;
+  }
+
+  async function persistStateNow() {
+    if (!stateHydrated && !state.entradas.length && !state.saidas.length && !state.lancamentos.length && !state.sap.length && !state.producao.length && !state.imports.length && !state.configs.length && !state.filiais.length && !state.materiais.length) {
+      return;
+    }
+
+    const snapshot = buildStateSnapshot();
+
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        entradas: state.entradas,
-        saidas: state.saidas,
-        lancamentos: state.lancamentos,
-        sap: state.sap,
-        producao: state.producao,
-        imports: state.imports,
-        configs: state.configs,
-        filiais: state.filiais,
-        materiais: state.materiais
-      }));
+      const db = await openDb();
+      if (db) {
+        await Promise.all(saveSnapshotKeys.map(key => idbPut(db, key, snapshot[key])));
+        await idbPut(db, 'meta', { version: STATE_VERSION, savedAt: snapshot.savedAt });
+        return;
+      }
+    } catch (err) {
+      console.warn('Falha ao salvar no IndexedDB, tentando fallback.', err);
+    }
+
+    try {
+      localStorage.setItem(legacyStateKey, JSON.stringify(snapshot));
     } catch (err) {
       console.warn('Não foi possível salvar o estado localmente.', err);
     }
   }
 
-  function loadState() {
+  function flushPersistQueue() {
+    if (persistInFlight) {
+      persistQueued = true;
+      return;
+    }
+
+    persistInFlight = true;
+    Promise.resolve()
+      .then(() => persistStateNow())
+      .catch(err => console.warn('Falha na persistência assíncrona.', err))
+      .finally(() => {
+        persistInFlight = false;
+        if (persistQueued) {
+          persistQueued = false;
+          flushPersistQueue();
+        }
+      });
+  }
+
+  function persist() {
+    clearTimeout(persistTimer);
+    persistTimer = setTimeout(() => {
+      flushPersistQueue();
+    }, 500);
+  }
+
+  async function loadState() {
+    let loaded = false;
+
+    if (isLoadingOverlayVisible()) updateLoadingOverlay('Buscando os dados salvos...', 'Carregando informações');
+
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return;
-      const saved = JSON.parse(raw);
-      for (const key of Object.keys(state)) {
-        if (Array.isArray(saved?.[key])) state[key] = saved[key];
+      const db = await openDb();
+      if (db) {
+        if (isLoadingOverlayVisible()) updateLoadingOverlay('Lendo o banco local do navegador...', 'Carregando informações');
+        const saved = {};
+        for (const key of saveSnapshotKeys) {
+          const value = await idbGet(db, key);
+          if (Array.isArray(value)) saved[key] = value;
+        }
+        if (isLoadingOverlayVisible()) updateLoadingOverlay('Aplicando o estado salvo na interface...', 'Carregando informações');
+        loaded = applySavedState(saved);
       }
-      state.materiais = state.materiais.map(item => ({
-        id: item.id || makeMaterialId(),
-        ...item
-      }));
-      reaplicarPadronizacaoMateriais();
     } catch (err) {
-      console.warn('Não foi possível restaurar o estado.', err);
+      console.warn('Não foi possível restaurar o estado do IndexedDB.', err);
+    }
+
+    if (!loaded) {
+      try {
+        if (isLoadingOverlayVisible()) updateLoadingOverlay('Restaurando o armazenamento antigo...', 'Carregando informações');
+        const raw = localStorage.getItem(legacyStateKey);
+        if (raw) {
+          loaded = applySavedState(JSON.parse(raw));
+        }
+      } catch (err) {
+        console.warn('Não foi possível restaurar o estado local.', err);
+      }
+    }
+
+    if (loaded) {
+      persist();
+    } else {
+      stateHydrated = true;
     }
   }
 
   function stamp(obj) {
     return { ...obj, createdAt: Date.now() };
   }
-
 
   function normalizarCentral(valor) {
     const raw = String(valor ?? '').trim();
@@ -2470,6 +3126,134 @@
     setTimeout(() => el.classList.remove('show'), 3000);
   }
 
+  const loadingOverlayState = {
+    visible: false,
+    startedAt: 0,
+    timer: null,
+    hintTimer: null,
+    closeTimer: null,
+    hintIndex: 0
+  };
+
+  const loadingHints = [
+    'Lendo banco de dados',
+    'Atualizando os dados',
+    'Convertendo valores',
+    'Normalizando centrais',
+    'Organizando materiais',
+    'Sincronizando registros',
+    'Aplicando filtros e índices',
+    'Montando a interface'
+  ];
+
+  function formatLoadingElapsed(ms) {
+    const safeMs = Math.max(0, ms);
+    if (safeMs < 10000) {
+      return `${(safeMs / 1000).toFixed(1)}s`;
+    }
+    const totalSeconds = Math.floor(safeMs / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return minutes > 0
+      ? `${minutes}m ${String(seconds).padStart(2, '0')}s`
+      : `${totalSeconds}s`;
+  }
+
+  function syncLoadingElapsed() {
+    const timeEl = document.getElementById('loading-time');
+    if (!timeEl || !loadingOverlayState.visible) return;
+    timeEl.textContent = formatLoadingElapsed(performance.now() - loadingOverlayState.startedAt);
+  }
+
+  function syncLoadingHint() {
+    const hintEl = document.getElementById('loading-hint');
+    if (!hintEl || !loadingOverlayState.visible) return;
+    const hint = loadingHints[loadingOverlayState.hintIndex % loadingHints.length];
+    hintEl.textContent = hint;
+    loadingOverlayState.hintIndex += 1;
+  }
+
+  function isLoadingOverlayVisible() {
+    return loadingOverlayState.visible;
+  }
+
+  function showLoadingOverlay(title = 'Carregando', status = 'Processando dados...') {
+    const overlay = document.getElementById('loading-overlay');
+    const titleEl = document.getElementById('loading-title');
+    const statusEl = document.getElementById('loading-status');
+    const hintEl = document.getElementById('loading-hint');
+    const badgeEl = document.getElementById('loading-badge');
+    const timeEl = document.getElementById('loading-time');
+    if (!overlay || !titleEl || !statusEl || !hintEl || !badgeEl || !timeEl) return;
+
+    clearTimeout(loadingOverlayState.closeTimer);
+    clearInterval(loadingOverlayState.timer);
+    clearInterval(loadingOverlayState.hintTimer);
+
+    loadingOverlayState.visible = true;
+    loadingOverlayState.startedAt = performance.now();
+    loadingOverlayState.hintIndex = 0;
+
+    document.body.classList.add('loading-active');
+    overlay.classList.add('open');
+    overlay.setAttribute('aria-hidden', 'false');
+
+    titleEl.textContent = title;
+    statusEl.textContent = status;
+    hintEl.textContent = loadingHints[0];
+    badgeEl.textContent = 'Processando';
+    timeEl.textContent = '0.0s';
+
+    syncLoadingElapsed();
+    syncLoadingHint();
+    loadingOverlayState.timer = setInterval(syncLoadingElapsed, 100);
+    loadingOverlayState.hintTimer = setInterval(syncLoadingHint, 2600);
+  }
+
+  function updateLoadingOverlay(status, title, hint) {
+    if (!loadingOverlayState.visible) return;
+    const titleEl = document.getElementById('loading-title');
+    const statusEl = document.getElementById('loading-status');
+    const hintEl = document.getElementById('loading-hint');
+    const badgeEl = document.getElementById('loading-badge');
+    if (title && titleEl) titleEl.textContent = title;
+    if (status && statusEl) statusEl.textContent = status;
+    if (hint && hintEl) hintEl.textContent = hint;
+    if (badgeEl) badgeEl.textContent = 'Processando';
+    syncLoadingElapsed();
+  }
+
+  function hideLoadingOverlay(status = 'Concluído', delay = 220) {
+    const overlay = document.getElementById('loading-overlay');
+    const statusEl = document.getElementById('loading-status');
+    const hintEl = document.getElementById('loading-hint');
+    const badgeEl = document.getElementById('loading-badge');
+    if (!overlay || !statusEl || !hintEl || !badgeEl) return;
+    if (!loadingOverlayState.visible) return;
+
+    if (status) statusEl.textContent = status;
+    hintEl.textContent = 'Finalizando a sessão local...';
+    badgeEl.textContent = 'Finalizado';
+    syncLoadingElapsed();
+
+    clearInterval(loadingOverlayState.timer);
+    clearInterval(loadingOverlayState.hintTimer);
+    loadingOverlayState.timer = null;
+    loadingOverlayState.hintTimer = null;
+
+    loadingOverlayState.closeTimer = setTimeout(() => {
+      overlay.classList.remove('open');
+      overlay.setAttribute('aria-hidden', 'true');
+      document.body.classList.remove('loading-active');
+      loadingOverlayState.visible = false;
+    }, delay);
+  }
+
+
+  function nextFrame() {
+    return new Promise(resolve => requestAnimationFrame(() => resolve()));
+  }
+
   function openModal(id) {
     document.getElementById(id)?.classList.add('open');
   }
@@ -2503,7 +3287,7 @@
     if (title) title.textContent = info.title;
     if (sub) sub.textContent = info.sub;
 
-    if (page === 'dashboard') updateDashboard();
+    renderPage(page);
     closeSidebar();
   }
 
@@ -2849,8 +3633,8 @@
     const qtd = num(val('e-qtd'));
     const custo = num(val('e-valor'));
     const rec = stamp({
-      centralCompra: normalizarCentral(val('e-central')),
-      centralDestino: normalizarCentral(val('e-central')),
+      centralCompra: normalizarCentral(val('e-central-compra')),
+      centralDestino: normalizarCentral(val('e-central-destino') || val('e-central-compra')),
       nf: val('e-nf'),
       dtEmissao: val('e-data') || new Date().toLocaleDateString('pt-BR'),
       dtDescarga: val('e-data') || new Date().toLocaleDateString('pt-BR'),
@@ -2987,8 +3771,13 @@
     closeModal('modal-config');
   }
 
-  function removerConfig(i) {
-    state.configs.splice(i, 1);
+  function removerConfig(pagedIndex) {
+    const { data } = getListPageData('configs');
+    const rec = data[pagedIndex];
+    if (!rec) return;
+    const idx = state.configs.indexOf(rec);
+    if (idx < 0) return;
+    state.configs.splice(idx, 1);
     persist();
     renderConfigs();
     toast('Configuração removida', 'error');
@@ -3142,7 +3931,7 @@
     })).filter(r => r.origem && r.alias);
   }
 
-  function handleMateriaisImport(event) {
+  async function handleMateriaisImport(event) {
     const file = event.target.files?.[0];
     if (!file) return;
     if (typeof XLSX === 'undefined') {
@@ -3150,11 +3939,14 @@
       return;
     }
 
+    showLoadingOverlay('Importando materiais', 'Lendo o arquivo de materiais...');
+
     const fileName = file.name.toLowerCase();
     const reader = new FileReader();
 
-    reader.onload = function(e) {
+    reader.onload = async function(e) {
       try {
+        updateLoadingOverlay('Separando os registros de materiais...', 'Importando materiais');
         let rows = [];
 
         if (fileName.endsWith('.csv')) {
@@ -3174,10 +3966,11 @@
           return;
         }
 
+        updateLoadingOverlay('Atualizando cadastros salvos...', 'Importando materiais');
         upsertMateriais(items);
         listPages.materiais = 0;
         reaplicarPadronizacaoMateriais();
-        persist();
+        await persistStateNow();
         renderAll();
         closeModal('modal-materiais');
         toast(`${items.length} material(is) importado(s)`);
@@ -3185,7 +3978,14 @@
       } catch (err) {
         console.error(err);
         toast('Falha ao importar materiais', 'error');
+      } finally {
+        hideLoadingOverlay('Importação concluída');
       }
+    };
+
+    reader.onerror = () => {
+      toast('Não foi possível ler o arquivo selecionado', 'error');
+      hideLoadingOverlay('Falha na importação');
     };
 
     if (fileName.endsWith('.csv')) reader.readAsText(file, 'utf-8');
@@ -3323,7 +4123,7 @@
     })).filter(r => r.origem && r.alias);
   }
 
-  function handleFiliaisImport(event) {
+  async function handleFiliaisImport(event) {
     const file = event.target.files?.[0];
     if (!file) return;
     if (typeof XLSX === 'undefined') {
@@ -3331,11 +4131,14 @@
       return;
     }
 
+    showLoadingOverlay('Importando centrais', 'Lendo o arquivo de filiais...');
+
     const fileName = file.name.toLowerCase();
     const reader = new FileReader();
 
-    reader.onload = function(e) {
+    reader.onload = async function(e) {
       try {
+        updateLoadingOverlay('Separando os registros de centrais...', 'Importando centrais');
         let rows = [];
 
         if (fileName.endsWith('.csv')) {
@@ -3355,8 +4158,9 @@
           return;
         }
 
+        updateLoadingOverlay('Atualizando cadastros salvos...', 'Importando centrais');
         upsertFiliais(items);
-        persist();
+        await persistStateNow();
         renderFiliais();
         closeModal('modal-filiais');
         toast(`${items.length} filial(is) importada(s)`);
@@ -3364,7 +4168,14 @@
       } catch (err) {
         console.error(err);
         toast('Falha ao importar filiais', 'error');
+      } finally {
+        hideLoadingOverlay('Importação concluída');
       }
+    };
+
+    reader.onerror = () => {
+      toast('Não foi possível ler o arquivo selecionado', 'error');
+      hideLoadingOverlay('Falha na importação');
     };
 
     if (fileName.endsWith('.csv')) reader.readAsText(file, 'utf-8');
@@ -3375,8 +4186,13 @@
     document.getElementById('file-filiais')?.click();
   }
 
-  function removerFilial(index) {
-    state.filiais.splice(index, 1);
+  function removerFilial(pagedIndex) {
+    const { data } = getListPageData('filiais');
+    const rec = data[pagedIndex];
+    if (!rec) return;
+    const idx = state.filiais.indexOf(rec);
+    if (idx < 0) return;
+    state.filiais.splice(idx, 1);
     persist();
     renderFiliais();
     toast('Filial removida', 'error');
@@ -3684,13 +4500,29 @@
     `).join('');
   }
 
+  function pageFromModulo(modulo) {
+    const map = {
+      'Entrada': 'entradas',
+      'Saída': 'saidas',
+      'Lançamento': 'lancamentos',
+      'SAP': 'sap',
+      'Produção': 'producao'
+    };
+    return map[modulo] || 'dashboard';
+  }
+
   function renderModule(module) {
     switch (module) {
+      case 'dashboard': return updateDashboard();
       case 'entradas': return renderEntradas();
       case 'saidas': return renderSaidas();
       case 'lancamentos': return renderLancamentos();
       case 'sap': return renderSAP();
       case 'producao': return renderProducao();
+      case 'importar': return renderImports();
+      case 'configuracoes': return renderConfigs();
+      case 'filiais': return renderFiliais();
+      case 'materiais': return renderMateriais();
       default: return;
     }
   }
@@ -3714,142 +4546,165 @@
     state.imports = state.imports.filter(r => r.id !== importId);
   }
 
-  function processImportedRows(modulo, rows, fileName, extra = {}) {
+  async function processImportedRows(modulo, rows, fileName, extra = {}) {
     const importId = `imp_${modulo}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-    let parsed = [];
+    const parsed = [];
+    const total = rows.length || 0;
+    const batchSize = Math.max(200, Math.min(700, Math.floor(total / 8) || 300));
+
+    const updateStep = (message) => {
+      if (isLoadingOverlayVisible()) {
+        updateLoadingOverlay(message, `Importando ${modulo}`, message);
+      }
+    };
+
+    const processSlice = async (start, end, handler) => {
+      for (let i = start; i < end; i++) {
+        const item = handler(rows[i]);
+        if (item) parsed.push(item);
+      }
+      if (isLoadingOverlayVisible()) {
+        updateLoadingOverlay(`Lidos ${Math.min(end, total)} de ${total} registros`, `Importando ${modulo}`, 'Convertendo lotes para o armazenamento local...');
+      }
+      await nextFrame();
+    };
 
     if (modulo === 'Entrada') {
-      parsed = rows.map(r => {
-        const materialOriginal = String(r[10] || '').trim();
-        return stamp(normalizarCentraisRecord({
-          importId,
-          centralCompra: String(r[0] || ''),
-          centralDestino: String(r[1] || ''),
-          nf: String(r[11] || ''),
-          dtEmissao: fmtDate(r[13]),
-          dtDescarga: fmtDate(r[3]),
-          fornecedor: String(r[4] || ''),
-          categoria: String(r[9] || ''),
-          materialOriginal,
-          material: normalizarMaterial(materialOriginal),
-          peso: num(r[18]),
-          um: String(r[17] || ''),
-          custo: num(r[19]),
-          valorTotal: num(r[20])
-        }, ['centralCompra','centralDestino']));
-      }).filter(r => r.material || r.nf);
+      for (let i = 0; i < total; i += batchSize) {
+        updateStep('Lendo entradas e normalizando materiais...');
+        await processSlice(i, Math.min(i + batchSize, total), (r) => {
+          const materialOriginal = String(r[10] || '').trim();
+          return stamp(normalizarCentraisRecord({
+            importId,
+            centralCompra: String(r[0] || ''),
+            centralDestino: String(r[1] || ''),
+            nf: String(r[11] || ''),
+            dtEmissao: fmtDate(r[13]),
+            dtDescarga: fmtDate(r[3]),
+            fornecedor: String(r[4] || ''),
+            categoria: String(r[9] || ''),
+            materialOriginal,
+            material: normalizarMaterial(materialOriginal),
+            peso: num(r[18]),
+            um: String(r[17] || ''),
+            custo: num(r[19]),
+            valorTotal: num(r[20])
+          }, ['centralCompra','centralDestino']));
+        });
+      }
+      state.entradas.unshift(...parsed.filter(r => r.material || r.nf));
+    } else if (modulo === 'Saída') {
+      for (let i = 0; i < total; i += batchSize) {
+        updateStep('Lendo saídas e conferindo saldos...');
+        await processSlice(i, Math.min(i + batchSize, total), (r) => {
+          const materialOriginal = String(r[6] || '').trim();
+          return stamp(normalizarCentraisRecord({
+            importId,
+            central: String(r[0] || ''),
+            dtEmissao: fmtDate(r[1]),
+            os: String(r[2] || ''),
+            contrato: String(r[3] || ''),
+            categoria: String(r[4] || ''),
+            fornecedor: String(r[5] || ''),
+            materialOriginal,
+            material: normalizarMaterial(materialOriginal),
+            peso: num(r[9]),
+            um: 'KG',
+            custo: num(r[10]),
+            valorTotal: num(r[9]) * num(r[10])
+          }, ['central']));
+        });
+      }
+      state.saidas.unshift(...parsed.filter(r => r.material || r.os));
+    } else if (modulo === 'Lançamento') {
+      for (let i = 0; i < total; i += batchSize) {
+        updateStep('Consolidando lançamentos...');
+        await processSlice(i, Math.min(i + batchSize, total), (r) => {
+          const partes = String(r[2] || '')
+            .split(/\s*\|\s*/)
+            .map(v => v.trim())
+            .filter(Boolean);
 
-      state.entradas.unshift(...parsed);
-    }
+          const materialOriginal = partes[0] || '';
+          const fornecedor = partes[1] || '';
+          const municipio = partes[2] || '';
+          const material = normalizarMaterial(materialOriginal);
 
-    if (modulo === 'Saída') {
-      parsed = rows.map(r => {
-        const materialOriginal = String(r[6] || '').trim();
-        return stamp(normalizarCentraisRecord({
-          importId,
-          central: String(r[0] || ''),
-          dtEmissao: fmtDate(r[1]),
-          os: String(r[2] || ''),
-          contrato: String(r[3] || ''),
-          categoria: String(r[4] || ''),
-          fornecedor: String(r[5] || ''),
-          materialOriginal,
-          material: normalizarMaterial(materialOriginal),
-          peso: num(r[9]),
-          um: 'KG',
-          custo: num(r[10]),
-          valorTotal: num(r[9]) * num(r[10])
-        }, ['central']));
-      }).filter(r => r.material || r.os);
-
-      state.saidas.unshift(...parsed);
-    }
-
-    if (modulo === 'Lançamento') {
-      parsed = rows.map(r => {
-        const partes = String(r[2] || '')
-          .split(/\s*\|\s*/)
-          .map(v => v.trim())
-          .filter(Boolean);
-
-        const materialOriginal = partes[0] || '';
-        const fornecedor = partes[1] || '';
-        const municipio = partes[2] || '';
-        const material = normalizarMaterial(materialOriginal);
-
-        return stamp(normalizarCentraisRecord({
-          importId,
-          dtLanc: fmtDate(r[0]),
-          central: String(r[1] || ''),
-          fornecedor: fornecedor,
-          municipio: municipio,
-          categoria: String(r[3] || ''),
-          materialOriginal,
-          material,
-          peso: num(r[4]),
-          um: 'KG',
-          custo: num(r[5]),
-          valorTotal: num(r[4]) * num(r[5])
-        }, ['central']));
-      }).filter(r => r.material);
-
-      state.lancamentos.unshift(...parsed);
-    }
-
-    if (modulo === 'SAP') {
-      parsed = rows.map(r => {
-        const peso = num(r[11]);
-        const valorTotal = num(r[13]);
-        const materialOriginal = String(r[10] || '').trim();
-        return stamp(normalizarCentraisRecord({
-          importId,
-          usuario: String(r[0] || ''),
-          movimento: String(r[1] || ''),
-          ref: String(r[3] || ''),
-          documento: String(r[4] || ''),
-          central: String(r[5] || ''),
-          deposito: String(r[6] || ''),
-          dtDoc: fmtDate(r[7]),
-          dtLanc: fmtDate(r[8]),
-          dtReg: fmtDate(r[9]),
-          materialOriginal,
-          material: normalizarMaterial(materialOriginal),
-          peso,
-          um: String(r[12] || ''),
-          custoUnit: peso !== 0 ? valorTotal / peso : 0,
-          valorTotal
-        }, ['central']));
-      }).filter(r => r.material || r.documento);
-
-      state.sap.unshift(...parsed);
-    }
-
-    if (modulo === 'Produção') {
+          return stamp(normalizarCentraisRecord({
+            importId,
+            dtLanc: fmtDate(r[0]),
+            central: String(r[1] || ''),
+            fornecedor,
+            municipio,
+            categoria: String(r[3] || ''),
+            materialOriginal,
+            material,
+            peso: num(r[4]),
+            um: 'KG',
+            custo: num(r[5]),
+            valorTotal: num(r[4]) * num(r[5])
+          }, ['central']));
+        });
+      }
+      state.lancamentos.unshift(...parsed.filter(r => r.material));
+    } else if (modulo === 'SAP') {
+      for (let i = 0; i < total; i += batchSize) {
+        updateStep('Lendo banco de dados SAP...');
+        await processSlice(i, Math.min(i + batchSize, total), (r) => {
+          const peso = num(r[11]);
+          const valorTotal = num(r[13]);
+          const materialOriginal = String(r[10] || '').trim();
+          return stamp(normalizarCentraisRecord({
+            importId,
+            usuario: String(r[0] || ''),
+            movimento: String(r[1] || ''),
+            ref: String(r[3] || ''),
+            documento: String(r[4] || ''),
+            central: String(r[5] || ''),
+            deposito: String(r[6] || ''),
+            dtDoc: fmtDate(r[7]),
+            dtLanc: fmtDate(r[8]),
+            dtReg: fmtDate(r[9]),
+            materialOriginal,
+            material: normalizarMaterial(materialOriginal),
+            peso,
+            um: String(r[12] || ''),
+            custoUnit: peso !== 0 ? valorTotal / peso : 0,
+            valorTotal
+          }, ['central']));
+        });
+      }
+      state.sap.unshift(...parsed.filter(r => r.material || r.documento));
+    } else if (modulo === 'Produção') {
       const mes = extra.mes || prompt('Informe o mês da produção importada:');
       if (!mes || !String(mes).trim()) {
         toast('Importação cancelada: mês não informado', 'error');
         return;
       }
 
-      parsed = rows.map(r => stamp(normalizarCentraisRecord({
-        importId,
-        mes: String(mes).trim(),
-        central: String(r[0] || ''),
-        producao: num(r[1]),
-        um: 'm³',
-        precoMedio: num(r[5]),
-        margem: String(r[6] || '').trim() || '—',
-        custoMedio: num(r[7]),
-        totalVendas: num(r[8])
-      }, ['central']))).filter(r => r.central || r.producao);
-
-      state.producao.unshift(...parsed);
+      for (let i = 0; i < total; i += batchSize) {
+        updateStep('Organizando produção importada...');
+        await processSlice(i, Math.min(i + batchSize, total), (r) => stamp(normalizarCentraisRecord({
+          importId,
+          mes: String(mes).trim(),
+          central: String(r[0] || ''),
+          producao: num(r[1]),
+          um: 'm³',
+          precoMedio: num(r[5]),
+          margem: String(r[6] || '').trim() || '—',
+          custoMedio: num(r[7]),
+          totalVendas: num(r[8])
+        }, ['central'])));
+      }
+      state.producao.unshift(...parsed.filter(r => r.central || r.producao));
     }
 
     if (!parsed.length) {
       toast('Nenhum registro válido encontrado', 'error');
       return;
     }
+
+    updateStep('Salvando e atualizando os painéis...');
 
     state.imports.unshift({
       id: importId,
@@ -3862,11 +4717,15 @@
     });
 
     persist();
-    renderAll();
+    renderImports();
+    renderModule(pageFromModulo(modulo));
+    updateDashboard();
+    await nextFrame();
+    initResizable();
     toast(`${parsed.length} registros importados de "${fileName}"`);
   }
 
-  function handleImport(event, modulo) {
+  async function handleImport(event, modulo) {
     const file = event.target.files?.[0];
     if (!file) return;
     if (typeof XLSX === 'undefined') {
@@ -3874,19 +4733,30 @@
       return;
     }
 
+    showLoadingOverlay(`Importando ${modulo}`, 'Lendo o arquivo selecionado...');
+
     const reader = new FileReader();
-    reader.onload = function(e) {
+    reader.onload = async function(e) {
       try {
+        updateLoadingOverlay('Lendo planilha e extraindo linhas...', `Importando ${modulo}`, 'Interpretando a estrutura do arquivo...');
         const wb = XLSX.read(e.target.result, { type: 'array', cellDates: false });
+        updateLoadingOverlay('Separando os registros válidos...', `Importando ${modulo}`, 'Convertendo valores e limpando vazios...');
         const ws = wb.Sheets[wb.SheetNames[0]];
         const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' });
         const data = rows.slice(1).filter(r => r.some(c => c !== '' && c !== null && c !== undefined));
-        processImportedRows(modulo, data, file.name, {});
+        updateLoadingOverlay('Aplicando a importação no sistema...', `Importando ${modulo}`, 'Gravando dados no armazenamento local...');
+        await processImportedRows(modulo, data, file.name, {});
         event.target.value = '';
       } catch (err) {
         console.error(err);
         toast('Erro ao processar o arquivo', 'error');
+      } finally {
+        hideLoadingOverlay('Importação concluída');
       }
+    };
+    reader.onerror = () => {
+      toast('Não foi possível ler o arquivo selecionado', 'error');
+      hideLoadingOverlay('Falha na importação');
     };
     reader.readAsArrayBuffer(file);
   }
@@ -3908,6 +4778,25 @@
   }
 
 
+  const pageRenderers = {
+    dashboard: () => updateDashboard(),
+    entradas: () => renderEntradas(),
+    saidas: () => renderSaidas(),
+    lancamentos: () => renderLancamentos(),
+    sap: () => renderSAP(),
+    producao: () => renderProducao(),
+    importar: () => renderImports(),
+    configuracoes: () => renderConfigs(),
+    filiais: () => renderFiliais(),
+    materiais: () => renderMateriais()
+  };
+
+  function renderPage(page) {
+    const fn = pageRenderers[page];
+    if (fn) fn();
+  }
+
+
 
   function initDropZones() {
     qsa('.drop-zone').forEach(zone => {
@@ -3924,13 +4813,29 @@
     });
   }
 
-  function restoreAndRender() {
-    loadState();
-    reaplicarPadronizacaoMateriais();
-    renderAll();
+  async function restoreAndRender() {
+    showLoadingOverlay('Carregando informações salvas', 'Restaurando os dados persistidos no navegador...');
+    try {
+      await loadState();
+      if (isLoadingOverlayVisible()) updateLoadingOverlay('Montando a interface...', 'Carregando informações salvas', 'Ajustando métricas e listas...');
+      await nextFrame();
+      updateDashboard();
+      const activePage = document.querySelector('.page.active')?.id?.replace('page-', '') || 'importar';
+      renderPage(activePage);
+      if (isLoadingOverlayVisible()) updateLoadingOverlay('Finalizando o carregamento...', 'Carregando informações salvas', 'Quase pronto...');
+      await nextFrame();
+      initResizable();
+    } finally {
+      hideLoadingOverlay('Dados carregados');
+    }
   }
 
-  // expose globals used by inline onclick
+
+
+
+  // ═══════════════════════════════════════════════════════════
+  // DASHBOARD ANALÍTICO
+
   // ═══════════════════════════════════════════════════════════
   // DASHBOARD ANALÍTICO
   // ═══════════════════════════════════════════════════════════
@@ -4029,19 +4934,29 @@
         .filter(r => r.central === central && inPeriod(r.dtLanc))
         .sort((a, b) => {
           const da = parseDate(a.dtLanc), db = parseDate(b.dtLanc);
-          return dateCmp(da || 0, db || 0);
+          return dateCmp(da ?? new Date(0), db ?? new Date(0));
         });
 
       // ── SAP desta central dentro do período ──
       const sapNoPeriodo = state.sap.filter(r => r.central === central && inPeriod(r.dtDoc));
 
-      // ── SAP: entradas (101, 801) ──
-      const sapEntradas = sapNoPeriodo.filter(r => CODIGOS_ENTRADA.has(normMov(r.movimento)) && num(r.peso) > 0);
-      const totalEntradas = sapEntradas.reduce((s, r) => s + num(r.peso), 0);
+      // ── SAP: entradas = tudo positivo, saídas = tudo negativo ──
+      // Breakdown por código para cada tipo
+      const entradasPorCod = {};   // cod → soma positiva
+      const saidasPorCod   = {};   // cod → soma negativa
 
-      // ── SAP: saídas (201) ──
-      const sapSaidas = sapNoPeriodo.filter(r => CODIGOS_SAIDA.has(normMov(r.movimento)) && num(r.peso) < 0);
-      const totalSaidas = sapSaidas.reduce((s, r) => s + num(r.peso), 0); // negative
+      sapNoPeriodo.forEach(r => {
+        const cod = normMov(r.movimento);
+        const p   = num(r.peso);
+        if (p > 0) {
+          entradasPorCod[cod] = (entradasPorCod[cod] || 0) + p;
+        } else if (p < 0) {
+          saidasPorCod[cod] = (saidasPorCod[cod] || 0) + p;
+        }
+      });
+
+      const totalEntradas = Object.values(entradasPorCod).reduce((s, v) => s + v, 0);
+      const totalSaidas   = Object.values(saidasPorCod).reduce((s, v) => s + v, 0);
 
       // ── Primeiro lançamento do período (mais antigo) ──
       // Agrupado por material → pega a versão mais antiga de cada material
@@ -4054,7 +4969,7 @@
       // ── Último lançamento do período (mais recente) ──
       const lancsDesc = [...lancsNoPeriodo].sort((a, b) => {
         const da = parseDate(a.dtLanc), db = parseDate(b.dtLanc);
-        return dateCmp(db || 0, da || 0);
+        return dateCmp(db ?? new Date(0), da ?? new Date(0));
       });
       const materiaisLancUltimo = {};
       lancsDesc.forEach(r => {
@@ -4106,6 +5021,8 @@
         central,
         totalEntradas,
         totalSaidas,
+        entradasPorCod,
+        saidasPorCod,
         estoqueTeoricoMacro,
         somaUltimo,
         variacaoEstoque,
@@ -4158,15 +5075,47 @@
       return;
     }
 
-    tb.innerHTML = results.map(r => {
+    // Build popover HTML for a cod→value map
+    function buildPopover(codMap, colorVar, label) {
+      const entries = Object.entries(codMap).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]));
+      if (!entries.length) return '';
+      const rows = entries.map(([cod, v]) =>
+        `<div class="breakdown-row">
+          <span class="breakdown-cod">${cod}</span>
+          <span class="breakdown-val" style="color:${colorVar}">${fmtKg(v)}</span>
+        </div>`
+      ).join('');
+      return `<div class="breakdown-popover">
+        <div class="breakdown-popover-title">${label} por código</div>
+        ${rows}
+      </div>`;
+    }
+
+    tb.innerHTML = results.map((r, i) => {
       const varCls = r.variacaoEstoque > 0.001 ? 'var-cell-pos'
                    : r.variacaoEstoque < -0.001 ? 'var-cell-neg'
                    : 'var-cell-zero';
       const varPfx = r.variacaoEstoque > 0 ? '+' : '';
+
+      const entPopover = buildPopover(r.entradasPorCod, 'var(--green)', 'Entradas');
+      const saiPopover = buildPopover(r.saidasPorCod,   'var(--red)',   'Saídas');
+
       return `<tr>
         <td class="td-mono" style="font-weight:600">${r.central}</td>
-        <td class="td-mono" style="color:var(--green)">${fmtKg(r.totalEntradas)}</td>
-        <td class="td-mono" style="color:var(--red)">${fmtKg(r.totalSaidas)}</td>
+        <td class="td-mono" style="color:var(--green)">
+          ${entPopover
+            ? `<span class="breakdown-trigger" onclick="toggleBreakdown(this)" title="Clique para ver por código">
+                ${fmtKg(r.totalEntradas)}<i class="ti ti-chevron-down breakdown-chev"></i>
+              </span>${entPopover}`
+            : fmtKg(r.totalEntradas)}
+        </td>
+        <td class="td-mono" style="color:var(--red)">
+          ${saiPopover
+            ? `<span class="breakdown-trigger" onclick="toggleBreakdown(this)" title="Clique para ver por código">
+                ${fmtKg(r.totalSaidas)}<i class="ti ti-chevron-down breakdown-chev"></i>
+              </span>${saiPopover}`
+            : fmtKg(r.totalSaidas)}
+        </td>
         <td class="td-mono ${varCls}">${varPfx}${fmtKg(r.variacaoEstoque)}</td>
         <td class="pending-cell">A consolidar</td>
       </tr>`;
@@ -4174,6 +5123,52 @@
 
     makeResizable(document.getElementById('an-macro-table'));
   }
+
+  function toggleBreakdown(trigger) {
+    const popover = trigger.nextElementSibling;
+    if (!popover || !popover.classList.contains('breakdown-popover')) return;
+    const chev = trigger.querySelector('.breakdown-chev');
+    const isOpen = popover.classList.contains('open');
+
+    // Close all open popovers first
+    document.querySelectorAll('.breakdown-popover.open').forEach(p => {
+      p.classList.remove('open');
+      const c = p.previousElementSibling?.querySelector('.breakdown-chev');
+      if (c) c.style.transform = '';
+    });
+
+    if (!isOpen) {
+      // Position with fixed coords to escape any overflow:hidden ancestor
+      const rect = trigger.getBoundingClientRect();
+      const popW = 220;
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceRight = window.innerWidth - rect.left;
+
+      popover.style.left = spaceRight >= popW
+        ? rect.left + 'px'
+        : Math.max(4, rect.right - popW) + 'px';
+
+      popover.style.top = spaceBelow >= 180
+        ? (rect.bottom + 6) + 'px'
+        : (rect.top - 6) + 'px';
+      // If opening above, translate up after measuring
+      popover.style.transform = spaceBelow >= 180 ? '' : 'translateY(-100%)';
+
+      popover.classList.add('open');
+      if (chev) chev.style.transform = 'rotate(180deg)';
+    }
+  }
+
+  // Close breakdown popovers when clicking outside
+  document.addEventListener('click', e => {
+    if (!e.target.closest('.breakdown-trigger') && !e.target.closest('.breakdown-popover')) {
+      document.querySelectorAll('.breakdown-popover.open').forEach(p => {
+        p.classList.remove('open');
+        const c = p.previousElementSibling?.querySelector('.breakdown-chev');
+        if (c) c.style.transform = '';
+      });
+    }
+  }, true);
 
   function renderAnaliticoMicro(results, dtIni, dtFim) {
     const container = document.getElementById('an-micro-container');
@@ -4211,6 +5206,7 @@
 
       // ── Per-material rows ──
       let matRowsHtml = '';
+      let variacaoCentralMicro = 0;
       r.allMats.forEach(mat => {
         const lancIni   = r.materiaisLancPrimeiro[mat];
         const lancFim   = r.materiaisLancUltimo[mat];
@@ -4234,18 +5230,33 @@
         const totalSaiMat = Object.values(saiMatCods).reduce((a, b) => a + b, 0);
         const estTeoricoMat = pesoIni + totalEntMat + totalSaiMat;
         const diffMat = pesoFim - estTeoricoMat;
+        variacaoCentralMicro += diffMat;
         const dCls = varClass(diffMat);
         const dPfx = diffMat > 0 ? '+' : '';
 
-        const entCodsHtml = Object.entries(entMatCods).length
-          ? Object.entries(entMatCods).map(([cod, v]) =>
-              `<span class="badge badge-green" style="margin:1px">${cod}: +${fmtKg(v)}</span>`).join(' ')
-          : '<span style="color:var(--text3);font-size:11px">—</span>';
+        // Build clickable cell for entradas
+        const entEntries = Object.entries(entMatCods).sort((a, b) => b[1] - a[1]);
+        const entCellHtml = entEntries.length
+          ? `<span class="breakdown-trigger" onclick="toggleBreakdown(this)" title="Clique para ver por código" style="color:var(--green)">
+               ${fmtKg(totalEntMat)}<i class="ti ti-chevron-down breakdown-chev"></i>
+             </span>
+             <div class="breakdown-popover">
+               <div class="breakdown-popover-title">Entradas por código</div>
+               ${entEntries.map(([cod, v]) => `<div class="breakdown-row"><span class="breakdown-cod">${cod}</span><span class="breakdown-val" style="color:var(--green)">${fmtKg(v)}</span></div>`).join('')}
+             </div>`
+          : `<span style="color:var(--text3);font-size:11px">—</span>`;
 
-        const saiCodsHtml = Object.entries(saiMatCods).length
-          ? Object.entries(saiMatCods).map(([cod, v]) =>
-              `<span class="badge badge-red" style="margin:1px">${cod}: ${fmtKg(v)}</span>`).join(' ')
-          : '<span style="color:var(--text3);font-size:11px">—</span>';
+        // Build clickable cell for saídas
+        const saiEntries = Object.entries(saiMatCods).sort((a, b) => a[1] - b[1]);
+        const saiCellHtml = saiEntries.length
+          ? `<span class="breakdown-trigger" onclick="toggleBreakdown(this)" title="Clique para ver por código" style="color:var(--red)">
+               ${fmtKg(totalSaiMat)}<i class="ti ti-chevron-down breakdown-chev"></i>
+             </span>
+             <div class="breakdown-popover">
+               <div class="breakdown-popover-title">Saídas por código</div>
+               ${saiEntries.map(([cod, v]) => `<div class="breakdown-row"><span class="breakdown-cod">${cod}</span><span class="breakdown-val" style="color:var(--red)">${fmtKg(v)}</span></div>`).join('')}
+             </div>`
+          : `<span style="color:var(--text3);font-size:11px">—</span>`;
 
         const dtIniLabel = lancIni?.dtLanc || '—';
         const dtFimLabel = lancFim?.dtLanc || '—';
@@ -4255,8 +5266,8 @@
             <td class="td-mono" style="font-weight:600">${mat}</td>
             <td class="td-mono" style="color:var(--text2);font-size:11px">${dtIniLabel}</td>
             <td class="td-mono" style="color:var(--teal)">${fmtKg(pesoIni)}</td>
-            <td>${entCodsHtml}</td>
-            <td>${saiCodsHtml}</td>
+            <td>${entCellHtml}</td>
+            <td>${saiCellHtml}</td>
             <td class="td-mono" style="color:var(--accent)">${fmtKg(estTeoricoMat)}</td>
             <td class="td-mono" style="color:var(--text2);font-size:11px">${dtFimLabel}</td>
             <td class="td-mono" style="color:var(--teal)">${fmtKg(pesoFim)}</td>
@@ -4264,11 +5275,37 @@
           </tr>`;
       });
 
-      // Total de entradas e saídas SAP nesta central para o summary
-      const totalEntCentral  = r.totalEntradas;
-      const totalSaiCentral  = r.totalSaidas;
-      const varMacro         = r.variacaoEstoque;
-      const varCls           = varClass(varMacro);
+      const totalEntCentral = r.totalEntradas;
+      const totalSaiCentral = r.totalSaidas;
+      const varCentralMicro = variacaoCentralMicro;
+      const varCls          = varClass(varCentralMicro);
+
+      // Build summary entry breakdown popovers
+      const entSumEntries = Object.entries(r.entradasPorCod).sort((a, b) => b[1] - a[1]);
+      const saiSumEntries = Object.entries(r.saidasPorCod).sort((a, b) => a[1] - b[1]);
+
+      const entSumPopover = entSumEntries.length
+        ? `<div class="breakdown-popover">
+             <div class="breakdown-popover-title">Entradas por código</div>
+             ${entSumEntries.map(([cod, v]) => `<div class="breakdown-row"><span class="breakdown-cod">${cod}</span><span class="breakdown-val" style="color:var(--green)">${fmtKg(v)}</span></div>`).join('')}
+           </div>` : '';
+      const saiSumPopover = saiSumEntries.length
+        ? `<div class="breakdown-popover">
+             <div class="breakdown-popover-title">Saídas por código</div>
+             ${saiSumEntries.map(([cod, v]) => `<div class="breakdown-row"><span class="breakdown-cod">${cod}</span><span class="breakdown-val" style="color:var(--red)">${fmtKg(v)}</span></div>`).join('')}
+           </div>` : '';
+
+      const entSumHtml = entSumPopover
+        ? `<span class="breakdown-trigger" onclick="toggleBreakdown(this)" style="color:var(--green)">
+             <i class="ti ti-package-import" style="color:var(--green)"></i> Entradas: ${fmtKg(totalEntCentral)}<i class="ti ti-chevron-down breakdown-chev"></i>
+           </span>${entSumPopover}`
+        : `<span><i class="ti ti-package-import" style="color:var(--green)"></i> Entradas: ${fmtKg(totalEntCentral)}</span>`;
+
+      const saiSumHtml = saiSumPopover
+        ? `<span class="breakdown-trigger" onclick="toggleBreakdown(this)" style="color:var(--red)">
+             <i class="ti ti-package-export" style="color:var(--red)"></i> Saídas: ${fmtKg(totalSaiCentral)}<i class="ti ti-chevron-down breakdown-chev"></i>
+           </span>${saiSumPopover}`
+        : `<span><i class="ti ti-package-export" style="color:var(--red)"></i> Saídas: ${fmtKg(totalSaiCentral)}</span>`;
 
       const card = document.createElement('div');
       card.className = 'micro-filial-card';
@@ -4282,7 +5319,7 @@
             <span><i class="ti ti-package-import" style="color:var(--green)"></i> Entradas SAP: ${fmtKg(totalEntCentral)}</span>
             <span><i class="ti ti-package-export" style="color:var(--red)"></i> Saídas SAP: ${fmtKg(totalSaiCentral)}</span>
             <span class="${varCls}">
-              ${varIcon(varMacro)} Variação: ${varMacro > 0 ? '+' : ''}${fmtKg(varMacro)}
+              ${varIcon(varCentralMicro)} Variação: ${varCentralMicro > 0 ? '+' : ''}${fmtKg(varCentralMicro)}
             </span>
           </div>
           <i class="ti ti-chevron-down" style="color:var(--text3);font-size:16px;flex-shrink:0;transition:transform 0.2s" id="chev-${idx}"></i>
@@ -4327,11 +5364,8 @@
   }
 
   function toggleMicro(header) {
-    const idx = header.getAttribute('onclick') === null
-      ? null
-      : [...document.querySelectorAll('.micro-filial-header')].indexOf(header);
-    const body  = header.nextElementSibling;
-    const chev  = header.querySelector('[id^="chev-"]');
+    const body = header.nextElementSibling;
+    const chev = header.querySelector('[id^="chev-"]');
     if (!body) return;
     const open = body.classList.toggle('open');
     if (chev) chev.style.transform = open ? 'rotate(180deg)' : '';
@@ -4396,7 +5430,13 @@
     handleMateriaisImport,
     rodarAnalitico,
     limparAnalitico,
-    toggleMicro
+    setTheme,
+    toggleThemeMenu,
+    applyTheme,
+    closeThemeMenu,
+    getSavedTheme,
+    toggleMicro,
+    toggleBreakdown
   });
 
   function setupModalCloseOnBackdrop() {
@@ -4405,11 +5445,18 @@
     });
   }
 
-  function init() {
+  async function init() {
+    applyTheme(getSavedTheme());
     setupModalCloseOnBackdrop();
     initDropZones();
-    restoreAndRender();
+    await restoreAndRender();
     if (document.getElementById('page-dashboard')?.classList.contains('active')) updateDashboard();
+
+    document.addEventListener('click', (event) => {
+      const switcher = document.querySelector('.theme-switcher');
+      if (!switcher) return;
+      if (!switcher.contains(event.target)) closeThemeMenu();
+    });
   }
 
   document.addEventListener('DOMContentLoaded', init);
