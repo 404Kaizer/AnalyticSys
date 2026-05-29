@@ -1451,7 +1451,7 @@ td.pending-cell  { color: var(--text3) !important; font-style: italic; font-size
 .breakdown-popover {
   display: none;
   position: fixed;
-  z-index: 200;
+  z-index: 400;
   background: var(--bg2);
   border: 1px solid var(--border2);
   border-radius: var(--radius-lg);
@@ -1471,22 +1471,194 @@ td.pending-cell  { color: var(--text3) !important; font-style: italic; font-size
   border-bottom: 1px solid var(--border);
 }
 .breakdown-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 20px;
-  padding: 4px 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  gap: 4px 12px;
+  padding: 5px 0;
   border-bottom: 1px solid var(--border);
   font-family: var(--mono);
   font-size: 11.5px;
 }
 .breakdown-row:last-child { border-bottom: none; }
-.breakdown-cod { color: var(--text2); }
-.breakdown-val { font-weight: 600; text-align: right; }
+.breakdown-cod { color: var(--text2); grid-column: 1; }
+.breakdown-val { font-weight: 600; text-align: right; grid-column: 2; }
+.breakdown-ref {
+  grid-column: 1 / -1;
+  font-size: 10px;
+  color: var(--text3);
+  font-family: var(--mono);
+  letter-spacing: 0.02em;
+  margin-top: -2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 /* ══════════════════════════════════════════
-   ANALÍTICO: DETAIL MODAL
+   BREAKDOWN MODAL (micro detail)
 ══════════════════════════════════════════ */
+.bdm-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 2px 7px;
+  margin: -2px -7px;
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  font-weight: 600;
+  transition: background 0.13s, border-color 0.13s;
+  white-space: nowrap;
+}
+.bdm-trigger:hover {
+  background: var(--bg3);
+  border-color: var(--border2);
+}
+.bdm-icon {
+  font-size: 12px;
+  color: var(--text3);
+  flex-shrink: 0;
+  transition: color 0.13s;
+}
+.bdm-trigger:hover .bdm-icon { color: var(--text2); }
+.bdm-total { }
+
+/* Overlay */
+.bdm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 600;
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s;
+}
+.bdm-overlay.open {
+  opacity: 1;
+  pointer-events: all;
+}
+
+/* Dialog box */
+.bdm-dialog {
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-xl);
+  box-shadow: 0 24px 64px rgba(0,0,0,0.55), 0 0 0 1px var(--border);
+  width: 100%;
+  max-width: 520px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  animation: popIn 0.16s ease;
+  overflow: hidden;
+}
+
+.bdm-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px 14px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  gap: 12px;
+}
+.bdm-header-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.bdm-kicker {
+  font-size: 9.5px;
+  font-family: var(--mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text3);
+}
+.bdm-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bdm-body {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: auto;
+}
+.bdm-body::-webkit-scrollbar { width: 4px; height: 4px; }
+.bdm-body::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 8px; }
+
+.bdm-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+.bdm-table thead th {
+  position: sticky;
+  top: 0;
+  padding: 9px 16px;
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--text3);
+  background: var(--bg3);
+  border-bottom: 1px solid var(--border);
+  font-weight: 500;
+  white-space: nowrap;
+  z-index: 1;
+}
+.bdm-table thead th:last-child { text-align: right; }
+.bdm-table tbody tr {
+  border-bottom: 1px solid var(--border);
+  transition: background 0.1s;
+}
+.bdm-table tbody tr:last-child { border-bottom: none; }
+.bdm-table tbody tr:hover { background: var(--bg3); }
+.bdm-table tbody td {
+  padding: 9px 16px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.bdm-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 11px 20px;
+  border-top: 1px solid var(--border);
+  background: var(--bg3);
+  flex-shrink: 0;
+  gap: 12px;
+}
+.bdm-footer-label {
+  font-size: 10px;
+  font-family: var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text3);
+}
+.bdm-footer-total {
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
 body.analitico-modal-open { overflow: hidden; }
 .analitico-detail-overlay { z-index: 260; }
 
@@ -1698,6 +1870,215 @@ body.analitico-modal-open { overflow: hidden; }
   white-space: nowrap;
 }
 .lanc-missing-badge i { font-size: 11px; }
+
+/* Lançamentos em conflito (mesmo dia, mesmo material) */
+@keyframes pulse-red {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.55; }
+}
+.lanc-conflict-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-family: var(--font);
+  font-weight: 600;
+  background: var(--red-bg);
+  color: var(--red);
+  border: 1px solid var(--red-border);
+  border-radius: 4px;
+  padding: 2px 7px;
+  white-space: nowrap;
+  cursor: pointer;
+  animation: pulse-red 1.8s ease-in-out infinite;
+  transition: background 0.13s, filter 0.13s;
+}
+.lanc-conflict-badge:hover {
+  animation: none;
+  filter: brightness(1.15);
+  background: var(--red-bg);
+}
+.lanc-conflict-badge i { font-size: 11px; }
+
+/* Modal de resolução de conflito */
+.lrc-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 700;
+  background: rgba(0,0,0,0.62);
+  backdrop-filter: blur(5px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s;
+}
+.lrc-overlay.open { opacity: 1; pointer-events: all; }
+.lrc-dialog {
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-xl);
+  box-shadow: 0 24px 64px rgba(0,0,0,0.6), 0 0 0 1px var(--border);
+  width: 100%;
+  max-width: 560px;
+  max-height: 82vh;
+  display: flex;
+  flex-direction: column;
+  animation: popIn 0.16s ease;
+  overflow: hidden;
+}
+.lrc-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  gap: 12px;
+}
+.lrc-header-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.lrc-kicker {
+  font-size: 9.5px;
+  font-family: var(--mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--red);
+}
+.lrc-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+.lrc-sub {
+  font-size: 11.5px;
+  color: var(--text2);
+  font-family: var(--mono);
+}
+.lrc-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.lrc-body::-webkit-scrollbar { width: 4px; }
+.lrc-body::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 8px; }
+.lrc-card {
+  border: 1.5px solid var(--border2);
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--bg3);
+  transition: border-color 0.13s, background 0.13s;
+  cursor: pointer;
+}
+.lrc-card:hover { border-color: var(--border3); background: var(--bg4); }
+.lrc-card.selected {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+.lrc-card-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.lrc-radio {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--border3);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.13s;
+}
+.lrc-card.selected .lrc-radio {
+  border-color: var(--accent);
+}
+.lrc-radio-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0;
+  transition: opacity 0.13s;
+}
+.lrc-card.selected .lrc-radio-dot { opacity: 1; }
+.lrc-peso {
+  font-family: var(--mono);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--teal);
+  letter-spacing: -0.02em;
+  flex: 1;
+}
+.lrc-delete-btn {
+  background: none;
+  border: 1px solid var(--red-border);
+  border-radius: var(--radius);
+  color: var(--red);
+  padding: 4px 10px;
+  font-size: 11.5px;
+  font-family: var(--font);
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.13s;
+  flex-shrink: 0;
+}
+.lrc-delete-btn:hover { background: var(--red-bg); }
+.lrc-delete-btn i { font-size: 12px; }
+.lrc-card-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 6px 14px;
+}
+.lrc-meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.lrc-meta-label {
+  font-size: 9px;
+  font-family: var(--mono);
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--text3);
+}
+.lrc-meta-val {
+  font-size: 12px;
+  color: var(--text2);
+  font-family: var(--mono);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lrc-hint {
+  font-size: 11.5px;
+  color: var(--text3);
+  text-align: center;
+  padding: 4px 0 2px;
+  font-family: var(--mono);
+}
+.lrc-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--border);
+  background: var(--bg3);
+  flex-shrink: 0;
+}
 
 /* ══════════════════════════════════════════
    COLUMN FILTER
@@ -5452,29 +5833,225 @@ function debounce(fn, delay = 120) {
       return `<span class="analitico-detail-empty">—</span>`;
     }
 
-    const rows = entries
-      .map(([cod, value]) => `
-        <div class="breakdown-row">
-          <span class="breakdown-cod">${escapeHtml(cod)}</span>
-          <span class="breakdown-val" style="color:${colorVar}">${fmtKg(value)}</span>
-        </div>`)
-      .join('');
+    // Serialise entries into a data attribute so the modal can read them on click
+    const encoded = escapeHtml(JSON.stringify(entries));
 
     return `
-      <span class="breakdown-trigger" onclick="event.stopPropagation(); toggleBreakdown(this)" title="Clique para ver por código" style="color:${colorVar}">
-        ${fmtKg(total)}
-        <i class="ti ti-chevron-down breakdown-chev"></i>
-      </span>
-      <div class="breakdown-popover" onclick="event.stopPropagation()">
-        <div class="breakdown-popover-title">${escapeHtml(title)} por código</div>
-        ${rows}
-      </div>`;
+      <button class="bdm-trigger" style="color:${colorVar}"
+        onclick="event.stopPropagation(); openBreakdownModal(this)"
+        data-entries="${encoded}"
+        data-title="${escapeHtml(title)}"
+        data-color="${escapeHtml(colorVar)}"
+        title="Clique para ver detalhes">
+        <span class="bdm-total">${fmtKg(total)}</span>
+        <i class="ti ti-table-options bdm-icon"></i>
+      </button>`;
   }
+
+  // ── Breakdown Modal ─────────────────────────────────────────
+  function openBreakdownModal(trigger) {
+    const overlay = document.getElementById('breakdown-modal-overlay');
+    const titleEl = document.getElementById('bdm-title');
+    const tbody   = document.getElementById('bdm-tbody');
+    const totalEl = document.getElementById('bdm-total-val');
+    if (!overlay || !titleEl || !tbody || !totalEl) return;
+
+    let entries = [];
+    try { entries = JSON.parse(trigger.dataset.entries || '[]'); } catch(e) {}
+    const title    = trigger.dataset.title  || '';
+    const colorVar = trigger.dataset.color  || 'var(--text)';
+
+    titleEl.textContent = title + ' — Movimentações';
+
+    let grandTotal = 0;
+    tbody.innerHTML = entries.map(([cod, value, ref, usuario]) => {
+      grandTotal += value;
+      const sign = value >= 0 ? '+' : '';
+      return `<tr>
+        <td class="td-mono" style="color:var(--text2)">${escapeHtml(cod)}</td>
+        <td class="td-muted">${escapeHtml(ref || '—')}</td>
+        <td class="td-muted">${escapeHtml(usuario || '—')}</td>
+        <td class="td-mono" style="color:${colorVar};text-align:right;font-weight:600">${sign}${fmtKg(value)}</td>
+      </tr>`;
+    }).join('');
+
+    const sign = grandTotal >= 0 ? '+' : '';
+    totalEl.textContent = sign + fmtKg(grandTotal);
+    totalEl.style.color = colorVar;
+
+    overlay.classList.add('open');
+    overlay.setAttribute('aria-hidden', 'false');
+  }
+
+  function closeBreakdownModal() {
+    const overlay = document.getElementById('breakdown-modal-overlay');
+    if (!overlay) return;
+    overlay.classList.remove('open');
+    overlay.setAttribute('aria-hidden', 'true');
+  }
+
+  Object.assign(window, { openBreakdownModal, closeBreakdownModal });
+
+  // ── Conflict Resolution Modal ───────────────────────────────
+  let _lrcDetailKey = null;
+  let _lrcSelectedIdx = null;
+
+  function openLancConflictModal(trigger) {
+    const overlay = document.getElementById('lrc-overlay');
+    if (!overlay) return;
+
+    let lancs = [];
+    try { lancs = JSON.parse(trigger.dataset.lancs || '[]'); } catch(e) {}
+    const date      = trigger.dataset.date      || '';
+    _lrcDetailKey   = trigger.dataset.detailKey || null;
+    _lrcSelectedIdx = 0;
+
+    document.getElementById('lrc-date').textContent  = date;
+    document.getElementById('lrc-count').textContent = lancs.length + ' lançamentos';
+
+    const body = document.getElementById('lrc-body');
+    body.innerHTML = lancs.map((l, i) => `
+      <div class="lrc-card${i === 0 ? ' selected' : ''}" onclick="lrcSelect(this, ${i})">
+        <div class="lrc-card-top">
+          <div class="lrc-radio"><div class="lrc-radio-dot"></div></div>
+          <span class="lrc-peso">${fmtKg(num(l.peso))}</span>
+          <button class="lrc-delete-btn" onclick="event.stopPropagation(); lrcDelete(${i})"
+            title="Excluir este lançamento do módulo Lançamentos">
+            <i class="ti ti-trash"></i> Excluir
+          </button>
+        </div>
+        <div class="lrc-card-meta">
+          <div class="lrc-meta-item">
+            <span class="lrc-meta-label">Fornecedor</span>
+            <span class="lrc-meta-val">${escapeHtml(l.fornecedor || '—')}</span>
+          </div>
+          <div class="lrc-meta-item">
+            <span class="lrc-meta-label">Categoria</span>
+            <span class="lrc-meta-val">${escapeHtml(l.categoria || '—')}</span>
+          </div>
+          <div class="lrc-meta-item">
+            <span class="lrc-meta-label">Un. Medida</span>
+            <span class="lrc-meta-val">${escapeHtml(l.um || '—')}</span>
+          </div>
+          <div class="lrc-meta-item">
+            <span class="lrc-meta-label">Custo Unit.</span>
+            <span class="lrc-meta-val">${money(l.custo)}</span>
+          </div>
+        </div>
+      </div>`).join('') +
+      `<p class="lrc-hint">Selecione o lançamento correto para usar como Est. Final. Os demais serão excluídos.</p>`;
+
+    // Store lancs list for confirm/delete actions
+    overlay._lancs = lancs;
+
+    overlay.classList.add('open');
+    overlay.setAttribute('aria-hidden', 'false');
+  }
+
+  function closeLancConflictModal() {
+    const overlay = document.getElementById('lrc-overlay');
+    if (!overlay) return;
+    overlay.classList.remove('open');
+    overlay.setAttribute('aria-hidden', 'true');
+    _lrcDetailKey   = null;
+    _lrcSelectedIdx = null;
+  }
+
+  function lrcSelect(card, idx) {
+    document.querySelectorAll('#lrc-body .lrc-card').forEach(c => c.classList.remove('selected'));
+    card.classList.add('selected');
+    _lrcSelectedIdx = idx;
+  }
+
+  async function lrcConfirm() {
+    const overlay = document.getElementById('lrc-overlay');
+    if (!overlay || _lrcSelectedIdx === null) return;
+    const lancs = overlay._lancs || [];
+    if (!lancs.length) return;
+
+    const keep = lancs[_lrcSelectedIdx];
+    const remove = lancs.filter((_, i) => i !== _lrcSelectedIdx);
+
+    // Remove the others from state.lancamentos
+    remove.forEach(l => {
+      state.lancamentos = state.lancamentos.filter(r => r !== l);
+    });
+
+    await persistStateNow();
+    closeLancConflictModal();
+    toast('Conflito resolvido — ' + remove.length + ' lançamento(s) excluído(s)');
+
+    // Re-run the analítico to refresh the detail modal
+    rodarAnalitico();
+  }
+
+  async function lrcDelete(idx) {
+    const overlay = document.getElementById('lrc-overlay');
+    if (!overlay) return;
+    const lancs = overlay._lancs || [];
+    const target = lancs[idx];
+    if (!target) return;
+
+    if (!confirm('Excluir este lançamento do módulo Lançamentos?')) return;
+
+    state.lancamentos = state.lancamentos.filter(r => r !== target);
+    await persistStateNow();
+
+    // Remove from local list and re-render cards
+    overlay._lancs = lancs.filter((_, i) => i !== idx);
+
+    if (overlay._lancs.length <= 1) {
+      // Conflict resolved automatically
+      closeLancConflictModal();
+      toast('Lançamento excluído — conflito resolvido');
+      rodarAnalitico();
+      return;
+    }
+
+    // Re-render remaining cards
+    _lrcSelectedIdx = 0;
+    const body = document.getElementById('lrc-body');
+    body.innerHTML = overlay._lancs.map((l, i) => `
+      <div class="lrc-card${i === 0 ? ' selected' : ''}" onclick="lrcSelect(this, ${i})">
+        <div class="lrc-card-top">
+          <div class="lrc-radio"><div class="lrc-radio-dot"></div></div>
+          <span class="lrc-peso">${fmtKg(num(l.peso))}</span>
+          <button class="lrc-delete-btn" onclick="event.stopPropagation(); lrcDelete(${i})"
+            title="Excluir este lançamento do módulo Lançamentos">
+            <i class="ti ti-trash"></i> Excluir
+          </button>
+        </div>
+        <div class="lrc-card-meta">
+          <div class="lrc-meta-item">
+            <span class="lrc-meta-label">Fornecedor</span>
+            <span class="lrc-meta-val">${escapeHtml(l.fornecedor || '—')}</span>
+          </div>
+          <div class="lrc-meta-item">
+            <span class="lrc-meta-label">Categoria</span>
+            <span class="lrc-meta-val">${escapeHtml(l.categoria || '—')}</span>
+          </div>
+          <div class="lrc-meta-item">
+            <span class="lrc-meta-label">Un. Medida</span>
+            <span class="lrc-meta-val">${escapeHtml(l.um || '—')}</span>
+          </div>
+          <div class="lrc-meta-item">
+            <span class="lrc-meta-label">Custo Unit.</span>
+            <span class="lrc-meta-val">${money(l.custo)}</span>
+          </div>
+        </div>
+      </div>`).join('') +
+      `<p class="lrc-hint">Selecione o lançamento correto para usar como Est. Final. Os demais serão excluídos.</p>`;
+
+    toast('Lançamento excluído');
+    rodarAnalitico();
+  }
+
+  Object.assign(window, { openLancConflictModal, closeLancConflictModal, lrcSelect, lrcConfirm, lrcDelete });
 
   function buildAnaliticoDetailHtml(payload) {
     const s = payload.summary;
 
-    // Helper: célula de saldo real (Est. Inicial ou Est. Real confirmado)
+    // Helper: célula de saldo real (Est. Inicial ou Est. Final confirmado)
     const realSaldoCell = (value, title = '') =>
       `<span class="td-mono stock-real" title="${title}">${fmtKg(value)}</span>`;
 
@@ -5526,10 +6103,10 @@ function debounce(fn, delay = 120) {
       );
 
       const realCell = saldoCell(
-        day.realStock,
-        day.realIsEstimated,
-        'Est. Real — confirmado por lançamento',
-        'Est. Real estimado — sem lançamento nesta data'
+        day.finalStock,
+        day.finalIsEstimated,
+        'Est. Final — confirmado por lançamento',
+        'Est. Final estimado — sem lançamento nesta data'
       );
 
       const varCell = (day.diff === null)
@@ -5537,7 +6114,17 @@ function debounce(fn, delay = 120) {
         : `<span class="td-mono ${dCls}">${dPfx}${fmtKg(day.diff)}</span>`;
 
       const lancCell = day.hasLanc
-        ? `<span class="lanc-count-badge">${day.lancCount} lançamento${day.lancCount !== 1 ? 's' : ''}</span>`
+        ? (day.hasConflict
+            ? `<button class="lanc-conflict-badge"
+                onclick="event.stopPropagation(); openLancConflictModal(this)"
+                data-lancs="${escapeHtml(JSON.stringify(day.lancamentos))}"
+                data-date="${escapeHtml(day.dateLabel)}"
+                data-detail-key="${escapeHtml(payload.key)}"
+                title="Múltiplos lançamentos no mesmo dia — clique para resolver">
+                <i class="ti ti-alert-triangle"></i>
+                ${day.lancCount} lançamentos
+              </button>`
+            : `<span class="lanc-count-badge">${day.lancCount} lançamento${day.lancCount !== 1 ? 's' : ''}</span>`)
         : (day.precisaLanc
             ? `<span class="lanc-missing-badge"><i class="ti ti-alert-circle"></i> Sem lançamento</span>`
             : emptyCell());
@@ -5560,7 +6147,7 @@ function debounce(fn, delay = 120) {
     }).join('');
 
     // Legenda: só aparece se houver algum dia estimado no período
-    const temEstimado = payload.days.some(d => d.initialIsEstimated || d.realIsEstimated);
+    const temEstimado = payload.days.some(d => d.initialIsEstimated || d.finalIsEstimated);
     const legendaHtml = temEstimado ? `
       <div class="estimated-legend">
         <i class="ti ti-alert-triangle"></i>
@@ -5585,7 +6172,7 @@ function debounce(fn, delay = 120) {
           <div class="analitico-detail-card-sub">${escapeHtml(s.saiLabel)}</div>
         </div>
         <div class="analitico-detail-card">
-          <div class="analitico-detail-card-label">Est. Real</div>
+          <div class="analitico-detail-card-label">Est. Final</div>
           <div class="analitico-detail-card-value c-teal">${fmtKg(s.pesoFim)}</div>
           <div class="analitico-detail-card-sub">${escapeHtml(s.dtFimLabel)}</div>
         </div>
@@ -5612,7 +6199,7 @@ function debounce(fn, delay = 120) {
               <th>Est. Inicial<br><span style="font-size:9px;font-weight:400;opacity:.7">(Saldo Anterior)</span></th>
               <th>Entradas<br><span style="font-size:9px;font-weight:400;opacity:.7">(por código)</span></th>
               <th>Saídas<br><span style="font-size:9px;font-weight:400;opacity:.7">(por código)</span></th>
-              <th>Est. Real<br><span style="font-size:9px;font-weight:400;opacity:.7">(Últ. Lançamento)</span></th>
+              <th>Est. Final<br><span style="font-size:9px;font-weight:400;opacity:.7">(Últ. Lançamento)</span></th>
               <th>Est. Teórico<br><span style="font-size:9px;font-weight:400;opacity:.7">(Ini+Ent+Sai)</span></th>
               <th>Variação<br><span style="font-size:9px;font-weight:400;opacity:.7">(Real − Teórico)</span></th>
             </tr>
@@ -7390,49 +7977,71 @@ function debounce(fn, delay = 120) {
     makeResizable(document.getElementById('an-macro-table'));
   }
 
-  function toggleBreakdown(trigger) {
-    const popover = trigger.nextElementSibling;
-    if (!popover || !popover.classList.contains('breakdown-popover')) return;
-    const chev = trigger.querySelector('.breakdown-chev');
-    const isOpen = popover.classList.contains('open');
+  // ── Breakdown popover: portal pattern ──────────────────────
+  // A single floating popover node is reused for all breakdown triggers.
+  // It lives directly on <body> so position:fixed is never offset by
+  // any CSS transform / overflow:hidden ancestor inside the table.
+  let _bdPortal = null;
+  let _bdActiveTrigger = null;
 
-    // Close all open popovers first
-    document.querySelectorAll('.breakdown-popover.open').forEach(p => {
-      p.classList.remove('open');
-      const c = p.previousElementSibling?.querySelector('.breakdown-chev');
+  function _ensureBdPortal() {
+    if (_bdPortal) return _bdPortal;
+    _bdPortal = document.createElement('div');
+    _bdPortal.className = 'breakdown-popover';
+    _bdPortal.addEventListener('click', e => e.stopPropagation());
+    document.body.appendChild(_bdPortal);
+    return _bdPortal;
+  }
+
+  function _closeBdPortal() {
+    if (!_bdPortal) return;
+    _bdPortal.classList.remove('open');
+    if (_bdActiveTrigger) {
+      const c = _bdActiveTrigger.querySelector('.breakdown-chev');
       if (c) c.style.transform = '';
-    });
-
-    if (!isOpen) {
-      // Position with fixed coords to escape any overflow:hidden ancestor
-      const rect = trigger.getBoundingClientRect();
-      const popW = 220;
-      const spaceBelow = window.innerHeight - rect.bottom;
-      const spaceRight = window.innerWidth - rect.left;
-
-      popover.style.left = spaceRight >= popW
-        ? rect.left + 'px'
-        : Math.max(4, rect.right - popW) + 'px';
-
-      popover.style.top = spaceBelow >= 180
-        ? (rect.bottom + 6) + 'px'
-        : (rect.top - 6) + 'px';
-      // If opening above, translate up after measuring
-      popover.style.transform = spaceBelow >= 180 ? '' : 'translateY(-100%)';
-
-      popover.classList.add('open');
-      if (chev) chev.style.transform = 'rotate(180deg)';
+      _bdActiveTrigger = null;
     }
   }
 
-  // Close breakdown popovers when clicking outside
+  function toggleBreakdown(trigger) {
+    const portal = _ensureBdPortal();
+    const inlinePopover = trigger.nextElementSibling;
+    if (!inlinePopover || !inlinePopover.classList.contains('breakdown-popover')) return;
+    const chev = trigger.querySelector('.breakdown-chev');
+
+    // Clicking the same trigger again → close
+    if (_bdActiveTrigger === trigger && portal.classList.contains('open')) {
+      _closeBdPortal();
+      return;
+    }
+
+    // Close previous popover (resets old chev) before populating the new one
+    _closeBdPortal();
+
+    // Copy content from the inline template into the portal
+    portal.innerHTML = inlinePopover.innerHTML;
+
+    // Position: measure BEFORE making visible so we get real viewport coords
+    const rect = trigger.getBoundingClientRect();
+    const popW = 220;
+    const spaceRight = window.innerWidth - rect.left;
+    const spaceBelow = window.innerHeight - rect.bottom;
+
+    portal.style.width   = popW + 'px';
+    portal.style.left    = (spaceRight >= popW ? rect.left : Math.max(4, rect.right - popW)) + 'px';
+    portal.style.top     = (spaceBelow >= 180 ? rect.bottom + 6 : rect.top - 6) + 'px';
+    portal.style.transform = spaceBelow >= 180 ? '' : 'translateY(-100%)';
+
+    _bdActiveTrigger = trigger;
+    portal.classList.add('open');
+    if (chev) chev.style.transform = 'rotate(180deg)';
+  }
+
+  // Close breakdown portal when clicking outside
   document.addEventListener('click', e => {
+    if (!_bdPortal) return;
     if (!e.target.closest('.breakdown-trigger') && !e.target.closest('.breakdown-popover')) {
-      document.querySelectorAll('.breakdown-popover.open').forEach(p => {
-        p.classList.remove('open');
-        const c = p.previousElementSibling?.querySelector('.breakdown-chev');
-        if (c) c.style.transform = '';
-      });
+      _closeBdPortal();
     }
   }, true);
 
@@ -7480,17 +8089,37 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
 
       const entCods = {};
       const saiCods = {};
+      const entRefs = {};
+      const saiRefs = {};
       sap.forEach(s => {
         const cod = normMov(s.movimento);
         const p = num(s.peso);
-        if (p > 0) entCods[cod] = (entCods[cod] || 0) + p;
-        else if (p < 0) saiCods[cod] = (saiCods[cod] || 0) + p;
+        const refVal = (s.ref && String(s.ref).trim()) ? String(s.ref).trim()
+                     : (s.documento && String(s.documento).trim()) ? String(s.documento).trim()
+                     : '';
+        if (p > 0) {
+          entCods[cod] = (entCods[cod] || 0) + p;
+          if (refVal) {
+            if (!entRefs[cod]) entRefs[cod] = new Set();
+            entRefs[cod].add(refVal);
+          }
+        } else if (p < 0) {
+          saiCods[cod] = (saiCods[cod] || 0) + p;
+          if (refVal) {
+            if (!saiRefs[cod]) saiRefs[cod] = new Set();
+            saiRefs[cod].add(refVal);
+          }
+        }
       });
 
       const totalEnt = Object.values(entCods).reduce((a, b) => a + b, 0);
       const totalSai = Object.values(saiCods).reduce((a, b) => a + b, 0);
       const estTeorico = pesoIni + totalEnt + totalSai;
       const diff = pesoFim - estTeorico;
+
+      // Registros individuais ordenados por peso desc (entradas) e asc (saídas)
+      const entRecords = sap.filter(s => num(s.peso) > 0).sort((a, b) => num(b.peso) - num(a.peso));
+      const saiRecords = sap.filter(s => num(s.peso) < 0).sort((a, b) => num(a.peso) - num(b.peso));
 
       return {
         lancIni,
@@ -7499,6 +8128,10 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
         pesoFim,
         entCods,
         saiCods,
+        entRefs,
+        saiRefs,
+        entRecords,
+        saiRecords,
         totalEnt,
         totalSai,
         estTeorico,
@@ -7555,8 +8188,13 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
 
         const dCls = varClass(snapshot.diff);
         const dPfx = snapshot.diff > 0 ? '+' : '';
-        const entEntries = Object.entries(snapshot.entCods).sort((a, b) => b[1] - a[1]);
-        const saiEntries = Object.entries(snapshot.saiCods).sort((a, b) => a[1] - b[1]);
+        const toEntry = s => {
+          const ref = (s.ref && String(s.ref).trim()) ? String(s.ref).trim()
+                    : (s.documento && String(s.documento).trim()) ? String(s.documento).trim() : '';
+          return [normMov(s.movimento), num(s.peso), ref, String(s.usuario || '').trim()];
+        };
+        const entEntries = snapshot.entRecords.map(toEntry);
+        const saiEntries = snapshot.saiRecords.map(toEntry);
 
         // ── Classificação de categoria do material ──────────────────────────
         // Categorias de lançamento SEMANAL (toda terça-feira):
@@ -7606,8 +8244,13 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
           const daySap   = sapMat.filter(rec => dateKey(parseDate(rec.dtDoc)) === key);
           const daySnap  = buildSnapshot({ lancs: dayLancs, sap: daySap });
 
-          const dayEntEntries = Object.entries(daySnap.entCods).sort((a, b) => b[1] - a[1]);
-          const daySaiEntries = Object.entries(daySnap.saiCods).sort((a, b) => a[1] - b[1]);
+          const toDayEntry = s => {
+            const ref = (s.ref && String(s.ref).trim()) ? String(s.ref).trim()
+                      : (s.documento && String(s.documento).trim()) ? String(s.documento).trim() : '';
+            return [normMov(s.movimento), num(s.peso), ref, String(s.usuario || '').trim()];
+          };
+          const dayEntEntries = daySnap.entRecords.map(toDayEntry);
+          const daySaiEntries = daySnap.saiRecords.map(toDayEntry);
 
           const hasLanc = dayLancs.length > 0;
           const isTerca = day.getDay() === 2; // 2 = terça-feira
@@ -7645,8 +8288,8 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
                 totalEnt: daySnap.totalEnt,
                 totalSai: daySnap.totalSai,
                 theoreticalStock: null,
-                realStock: null,
-                realIsEstimated: false,
+                finalStock: null,
+                finalIsEstimated: false,
                 hasLanc: false,
                 precisaLanc: false,
                 isSemanalNaoConferencia: true,
@@ -7670,23 +8313,29 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
             const snapSemana = buildSnapshot({ lancs: [], sap: sapSemana });
             const estTeorico = initialStock + snapSemana.totalEnt + snapSemana.totalSai;
 
-            let realStock, realIsEstimated;
+            const hasConflict = dayLancs.length > 1;
+            let finalStock, finalIsEstimated;
             if (hasLanc) {
-              realStock = daySnap.pesoFim;
-              realIsEstimated = false;
-              carry = { value: realStock, isEstimated: false };
+              // Com conflito: soma todos os pesos (opção conservadora até o usuário resolver)
+              finalStock = hasConflict
+                ? dayLancs.reduce((acc, l) => acc + num(l.peso), 0)
+                : daySnap.pesoFim;
+              finalIsEstimated = false;
+              carry = { value: finalStock, isEstimated: false };
             } else {
-              // Terça sem lançamento: Est. Real = Est. Teórico (estimado)
-              realStock = estTeorico;
-              realIsEstimated = true;
+              // Terça sem lançamento: Est. Final = Est. Teórico (estimado)
+              finalStock = estTeorico;
+              finalIsEstimated = true;
               carry = { value: estTeorico, isEstimated: true };
             }
 
-            const diff = hasLanc ? (realStock - estTeorico) : null;
+            const diff = hasLanc ? (finalStock - estTeorico) : null;
 
             return {
               dateLabel: fmtPtDate(day),
               lancCount: dayLancs.length,
+              hasConflict,
+              lancamentos: dayLancs,
               initialStock,
               initialIsEstimated,
               entEntries: dayEntEntries,
@@ -7694,8 +8343,8 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
               totalEnt: snapSemana.totalEnt,
               totalSai: snapSemana.totalSai,
               theoreticalStock: estTeorico,
-              realStock,
-              realIsEstimated,
+              finalStock,
+              finalIsEstimated,
               hasLanc,
               precisaLanc: true,
               isSemanalNaoConferencia: false,
@@ -7710,22 +8359,27 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
 
             const estTeorico = initialStock + daySnap.totalEnt + daySnap.totalSai;
 
-            let realStock, realIsEstimated;
+            const hasConflict = dayLancs.length > 1;
+            let finalStock, finalIsEstimated;
             if (hasLanc) {
-              realStock = daySnap.pesoFim;
-              realIsEstimated = false;
-              carry = { value: realStock, isEstimated: false };
+              finalStock = hasConflict
+                ? dayLancs.reduce((acc, l) => acc + num(l.peso), 0)
+                : daySnap.pesoFim;
+              finalIsEstimated = false;
+              carry = { value: finalStock, isEstimated: false };
             } else {
-              realStock = estTeorico;
-              realIsEstimated = true;
+              finalStock = estTeorico;
+              finalIsEstimated = true;
               carry = { value: estTeorico, isEstimated: true };
             }
 
-            const diff = hasLanc ? (realStock - estTeorico) : null;
+            const diff = hasLanc ? (finalStock - estTeorico) : null;
 
             return {
               dateLabel: fmtPtDate(day),
               lancCount: dayLancs.length,
+              hasConflict,
+              lancamentos: dayLancs,
               initialStock,
               initialIsEstimated,
               entEntries: dayEntEntries,
@@ -7733,8 +8387,8 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
               totalEnt: daySnap.totalEnt,
               totalSai: daySnap.totalSai,
               theoreticalStock: estTeorico,
-              realStock,
-              realIsEstimated,
+              finalStock,
+              finalIsEstimated,
               hasLanc,
               precisaLanc: true,
               isSemanalNaoConferencia: false,
@@ -7753,9 +8407,9 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
             pesoIni: snapshot.pesoIni,
             dtIniLabel: snapshot.dtIniLabel,
             totalEnt: snapshot.totalEnt,
-            entLabel: entEntries.length ? `${entEntries.length} códigos · ${entEntries.map(([cod]) => cod).join(', ')}` : 'Sem entradas no período',
+            entLabel: (() => { const uCods = [...new Set(entEntries.map(([cod]) => cod))]; return uCods.length ? `${uCods.length} código${uCods.length !== 1 ? 's' : ''} · ${uCods.join(', ')}` : 'Sem entradas no período'; })(),
             totalSai: snapshot.totalSai,
-            saiLabel: saiEntries.length ? `${saiEntries.length} códigos · ${saiEntries.map(([cod]) => cod).join(', ')}` : 'Sem saídas no período',
+            saiLabel: (() => { const uCods = [...new Set(saiEntries.map(([cod]) => cod))]; return uCods.length ? `${uCods.length} código${uCods.length !== 1 ? 's' : ''} · ${uCods.join(', ')}` : 'Sem saídas no período'; })(),
             estTeorico: snapshot.estTeorico,
             pesoFim: snapshot.pesoFim,
             dtFimLabel: snapshot.dtFimLabel,
@@ -7825,9 +8479,9 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
                   <th>Est. Inicial<br><span style="font-size:9px;font-weight:400;opacity:.7">(1º Lançamento)</span></th>
                   <th>Entradas<br><span style="font-size:9px;font-weight:400;opacity:.7">(por código)</span></th>
                   <th>Saídas<br><span style="font-size:9px;font-weight:400;opacity:.7">(por código)</span></th>
-                  <th>Est. Teórico<br><span style="font-size:9px;font-weight:400;opacity:.7">(Ini+Ent+Sai)</span></th>
                   <th>Dt. Últ. Lançamento</th>
-                  <th>Est. Real<br><span style="font-size:9px;font-weight:400;opacity:.7">(Últ. Lançamento)</span></th>
+                  <th>Est. Final<br><span style="font-size:9px;font-weight:400;opacity:.7">(Últ. Lançamento)</span></th>
+                  <th>Est. Teórico<br><span style="font-size:9px;font-weight:400;opacity:.7">(Ini+Ent+Sai)</span></th>
                   <th>Variação<br><span style="font-size:9px;font-weight:400;opacity:.7">(Real − Teórico)</span></th>
                 </tr>
               </thead>
@@ -8118,6 +8772,7 @@ function toggleMaterialDetail(row, event) {
       // Escape — close search dropdown
       if (e.key === 'Escape') {
         closeGlobalSearch();
+        closeBreakdownModal();
         closeAnaliticoDetailModal();
       }
       // Ctrl+1..9 — navigate pages
@@ -8190,6 +8845,14 @@ function toggleMaterialDetail(row, event) {
 
     document.addEventListener('keydown', (event) => {
       if (event.key === 'Escape') {
+        if (document.getElementById('lrc-overlay')?.classList.contains('open')) {
+          closeLancConflictModal();
+          return;
+        }
+        if (document.getElementById('breakdown-modal-overlay')?.classList.contains('open')) {
+          closeBreakdownModal();
+          return;
+        }
         if (document.getElementById('startup-restore-overlay')?.classList.contains('open')) {
           decideStartupRestore(false);
           return;
@@ -8226,6 +8889,65 @@ function toggleMaterialDetail(row, event) {
         <i class="ti ti-loader"></i>
         <p>Selecione um material para carregar os detalhes.</p>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Breakdown de Movimentações (Micro) -->
+<div class="bdm-overlay" id="breakdown-modal-overlay" aria-hidden="true"
+     onclick="if(event.target===this) closeBreakdownModal()">
+  <div class="bdm-dialog" role="dialog" aria-modal="true" aria-labelledby="bdm-title">
+    <div class="bdm-header">
+      <div class="bdm-header-text">
+        <div class="bdm-kicker">Movimentações SAP</div>
+        <div class="bdm-title" id="bdm-title">Detalhamento</div>
+      </div>
+      <button class="btn btn-primary" type="button" onclick="closeBreakdownModal()">
+        <i class="ti ti-x"></i> <span>Fechar</span>
+      </button>
+    </div>
+    <div class="bdm-body">
+      <table class="bdm-table">
+        <thead>
+          <tr>
+            <th>Movimento</th>
+            <th>Ref. / Doc.</th>
+            <th>Usuário</th>
+            <th style="text-align:right">Saldo</th>
+          </tr>
+        </thead>
+        <tbody id="bdm-tbody"></tbody>
+      </table>
+    </div>
+    <div class="bdm-footer">
+      <span class="bdm-footer-label">Total</span>
+      <span class="bdm-footer-total" id="bdm-total-val">—</span>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Resolução de Conflito de Lançamentos -->
+<div class="lrc-overlay" id="lrc-overlay" aria-hidden="true"
+     onclick="if(event.target===this) closeLancConflictModal()">
+  <div class="lrc-dialog" role="dialog" aria-modal="true">
+    <div class="lrc-header">
+      <div class="lrc-header-text">
+        <div class="lrc-kicker"><i class="ti ti-alert-triangle"></i> Conflito de lançamentos</div>
+        <div class="lrc-title">Múltiplos lançamentos no mesmo dia</div>
+        <div class="lrc-sub">
+          <span id="lrc-date">—</span> &nbsp;·&nbsp; <span id="lrc-count">—</span>
+        </div>
+      </div>
+      <button class="btn" type="button" onclick="closeLancConflictModal()">
+        <i class="ti ti-x"></i>
+      </button>
+    </div>
+    <div class="lrc-body" id="lrc-body"></div>
+    <div class="lrc-footer">
+      <button class="btn" type="button" onclick="closeLancConflictModal()">Cancelar</button>
+      <button class="btn btn-primary" type="button" onclick="lrcConfirm()">
+        <i class="ti ti-check"></i> Confirmar seleção
+      </button>
     </div>
   </div>
 </div>
