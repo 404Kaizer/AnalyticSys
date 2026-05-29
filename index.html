@@ -1606,6 +1606,99 @@ body.analitico-modal-open { overflow: hidden; }
 .analitico-detail-table tbody td { white-space: nowrap; }
 .analitico-detail-empty { color: var(--text3); font-size: 12px; font-family: var(--mono); padding: 18px; text-align: center; }
 
+/* ── Saldo estimado (sem lançamento real) ── */
+.estimated-stock-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--amber);
+  cursor: default;
+}
+/* Saldo real confirmado por lançamento — cor neutra distinta do Teórico */
+.stock-real {
+  color: var(--text) !important;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.estimated-badge {
+  display: inline-block;
+  font-size: 9px;
+  font-family: var(--font);
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  background: var(--amber-bg);
+  color: var(--amber);
+  border: 1px solid var(--amber-border);
+  border-radius: 4px;
+  padding: 1px 4px;
+  line-height: 1.4;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+/* Linha sem lançamento quando era esperado */
+.analitico-detail-table tbody tr.row-no-lanc {
+  background: rgba(245, 158, 11, 0.04);
+}
+.analitico-detail-table tbody tr.row-no-lanc:hover {
+  background: rgba(245, 158, 11, 0.09);
+}
+/* Linha de dia sem conferência (semanal, não é terça) — esmaecida */
+.analitico-detail-table tbody tr.row-sem-conferencia {
+  opacity: 0.45;
+}
+.analitico-detail-table tbody tr.row-sem-conferencia:hover {
+  opacity: 0.7;
+}
+/* Legenda de estimados */
+.estimated-legend {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 0 12px 0;
+  padding: 10px 14px;
+  background: var(--amber-bg);
+  border: 1px solid var(--amber-border);
+  border-radius: var(--radius);
+  color: var(--amber);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.estimated-legend i { flex-shrink: 0; font-size: 15px; margin-top: 1px; }
+.estimated-legend strong { font-weight: 600; }
+
+/* ── Badges de lançamento por dia ── */
+.lanc-count-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-family: var(--font);
+  font-weight: 500;
+  background: var(--accent-dim);
+  color: var(--accent);
+  border: 1px solid var(--accent-glow);
+  border-radius: 4px;
+  padding: 2px 7px;
+  white-space: nowrap;
+}
+.lanc-missing-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-family: var(--font);
+  font-weight: 500;
+  background: var(--amber-bg);
+  color: var(--amber);
+  border: 1px solid var(--amber-border);
+  border-radius: 4px;
+  padding: 2px 7px;
+  white-space: nowrap;
+}
+.lanc-missing-badge i { font-size: 11px; }
+
 /* ══════════════════════════════════════════
    COLUMN FILTER
 ══════════════════════════════════════════ */
@@ -4233,6 +4326,8 @@ function debounce(fn, delay = 120) {
       ...item
     }));
 
+    invalidateMaterialLookup();
+    invalidateFilialLookup();
     reaplicarPadronizacaoMateriais();
     stateHydrated = true;
     return true;
@@ -4343,14 +4438,15 @@ function debounce(fn, delay = 120) {
     const raw = String(valor ?? '').trim();
     if (!raw) return '';
     const key = normalizeText(raw);
+    const index = getFilialLookupIndex();
 
-    const found = state.filiais.find(item => {
-      const origem = normalizeText(item.origem);
-      const alias = normalizeText(item.alias);
-      return key === origem || key === alias;
-    });
+    const cached = index.cache.get(key);
+    if (cached) return cached;
 
-    return found ? found.alias : raw;
+    const found = index.exact.get(key);
+    const resolved = found ? found.alias : raw;
+    index.cache.set(key, resolved);
+    return resolved;
   }
 
   function normalizarCentraisRecord(rec, keys) {
@@ -4391,7 +4487,7 @@ function debounce(fn, delay = 120) {
 
   function scoreMaterialMatch(searchValue, item) {
     const terms = materialSearchTerms(searchValue).map(normalizeLooseText).filter(Boolean);
-    const targets = [item.origem, item.alias].map(normalizeLooseText).filter(Boolean);
+    const targets = [item.origemNorm, item.aliasNorm].filter(Boolean);
     let best = 0;
 
     for (const term of terms) {
@@ -4403,7 +4499,6 @@ function debounce(fn, delay = 120) {
           continue;
         }
 
-        // Match por prefixo/termo completo, privilegiando o mais específico.
         const tScore = tokenPrefixScore(term, target);
         const rScore = tokenPrefixScore(target, term);
 
@@ -4414,7 +4509,6 @@ function debounce(fn, delay = 120) {
           best = Math.max(best, 650 + (rScore * 20) + term.length);
         }
 
-        // Match como palavra inteira dentro de uma string maior.
         const paddedTerm = ` ${term} `;
         const paddedTarget = ` ${target} `;
         if (paddedTerm.includes(` ${target} `)) {
@@ -4429,28 +4523,114 @@ function debounce(fn, delay = 120) {
     return best;
   }
 
-  function findMaterialMatch(valor) {
-    const list = Array.isArray(state.materiais) ? [...state.materiais] : [];
-    if (!list.length) return null;
+  function makeMaterialIndexItem(item) {
+    const origem = String(item?.origem ?? '').trim();
+    const alias = String(item?.alias ?? '').trim();
+    const origemNorm = normalizeLooseText(origem);
+    const aliasNorm = normalizeLooseText(alias);
+    return {
+      item,
+      origemNorm,
+      aliasNorm,
+      size: Math.max(origemNorm.length, aliasNorm.length)
+    };
+  }
 
+  let _materialLookupVersion = 0;
+  let _materialLookupIndex = null;
+  let _filialLookupVersion = 0;
+  let _filialLookupIndex = null;
+
+  function invalidateMaterialLookup() {
+    _materialLookupVersion += 1;
+    _materialLookupIndex = null;
+  }
+
+  function invalidateFilialLookup() {
+    _filialLookupVersion += 1;
+    _filialLookupIndex = null;
+  }
+
+  function buildMaterialLookupIndex() {
+    const list = Array.isArray(state.materiais) ? state.materiais : [];
     const ordered = list
-      .map((item, index) => ({ item, index, size: Math.max(
-        normalizeLooseText(item.origem).length,
-        normalizeLooseText(item.alias).length
-      ) }))
+      .map((item, index) => ({ ...makeMaterialIndexItem(item), index }))
       .sort((a, b) => b.size - a.size || a.index - b.index);
+
+    const exact = new Map();
+    for (const entry of ordered) {
+      if (entry.origemNorm) exact.set(entry.origemNorm, entry.item);
+      if (entry.aliasNorm) exact.set(entry.aliasNorm, entry.item);
+    }
+
+    _materialLookupIndex = {
+      version: _materialLookupVersion,
+      ordered,
+      exact,
+      cache: new Map()
+    };
+    return _materialLookupIndex;
+  }
+
+  function getMaterialLookupIndex() {
+    if (!_materialLookupIndex || _materialLookupIndex.version !== _materialLookupVersion) {
+      return buildMaterialLookupIndex();
+    }
+    return _materialLookupIndex;
+  }
+
+  function buildFilialLookupIndex() {
+    const list = Array.isArray(state.filiais) ? state.filiais : [];
+    const exact = new Map();
+    for (const item of list) {
+      const origem = normalizeText(item.origem);
+      const alias = normalizeText(item.alias);
+      if (origem) exact.set(origem, item);
+      if (alias) exact.set(alias, item);
+    }
+
+    _filialLookupIndex = {
+      version: _filialLookupVersion,
+      exact,
+      cache: new Map()
+    };
+    return _filialLookupIndex;
+  }
+
+  function getFilialLookupIndex() {
+    if (!_filialLookupIndex || _filialLookupIndex.version !== _filialLookupVersion) {
+      return buildFilialLookupIndex();
+    }
+    return _filialLookupIndex;
+  }
+
+  function findMaterialMatch(valor) {
+    const raw = String(valor ?? '').trim();
+    if (!raw) return null;
+
+    const index = getMaterialLookupIndex();
+    const key = normalizeLooseText(raw);
+
+    const cached = index.cache.get(key);
+    if (cached) return cached;
+
+    const exact = index.exact.get(key);
+    if (exact) {
+      index.cache.set(key, exact);
+      return exact;
+    }
 
     let bestItem = null;
     let bestScore = 0;
-
-    for (const entry of ordered) {
-      const score = scoreMaterialMatch(valor, entry.item);
+    for (const entry of index.ordered) {
+      const score = scoreMaterialMatch(raw, entry);
       if (score > bestScore) {
         bestScore = score;
         bestItem = entry.item;
       }
     }
 
+    if (bestItem) index.cache.set(key, bestItem);
     return bestItem;
   }
 
@@ -4473,7 +4653,7 @@ function debounce(fn, delay = 120) {
     return out;
   }
 
-  function reaplicarPadronizacaoMateriais() {
+  function reaplicarPadronizacaoMateriais(modulos = ['entradas', 'saidas', 'lancamentos']) {
     const aplicar = rec => {
       const raw = String(rec.materialOriginal ?? rec.material ?? '').trim();
       if (!raw) return { ...rec, materialOriginal: rec.materialOriginal ?? '', material: rec.material ?? '' };
@@ -4485,9 +4665,10 @@ function debounce(fn, delay = 120) {
       };
     };
 
-    ['entradas', 'saidas', 'lancamentos', 'sap'].forEach(modulo => {
+    for (const modulo of modulos) {
+      if (!Array.isArray(state[modulo])) continue;
       state[modulo] = state[modulo].map(aplicar);
-    });
+    }
   }
 
   function fmtDate(v) {
@@ -5292,22 +5473,99 @@ function debounce(fn, delay = 120) {
 
   function buildAnaliticoDetailHtml(payload) {
     const s = payload.summary;
+
+    // Helper: célula de saldo real (Est. Inicial ou Est. Real confirmado)
+    const realSaldoCell = (value, title = '') =>
+      `<span class="td-mono stock-real" title="${title}">${fmtKg(value)}</span>`;
+
+    // Helper: célula de saldo estimado (sem lançamento real)
+    const estimatedSaldoCell = (value, title = '') => `
+      <span class="estimated-stock-cell" title="${title || 'Saldo estimado — sem lançamento no período esperado'}">
+        <i class="ti ti-alert-triangle" style="font-size:11px;margin-right:3px;opacity:.9"></i>${fmtKg(value)}
+        <span class="estimated-badge">Est.</span>
+      </span>`;
+
+    // Helper: célula vazia (não aplicável)
+    const emptyCell = () => `<span class="td-mono" style="color:var(--text3)">—</span>`;
+
+    const saldoCell = (value, isEstimated, realTitle, estTitle) => {
+      if (value === null || value === undefined) return emptyCell();
+      return isEstimated ? estimatedSaldoCell(value, estTitle) : realSaldoCell(value, realTitle);
+    };
+
     const rows = payload.days.map(day => {
+      // Linha de dia sem conferência (semanal, não-terça, sem lançamento)
+      if (day.isSemanalNaoConferencia) {
+        const temSap = day.totalEnt !== 0 || day.totalSai !== 0;
+        return `
+          <tr class="row-sem-conferencia">
+            <td class="day-col" style="color:var(--text3)">${escapeHtml(day.dateLabel)}</td>
+            <td><span class="td-mono" style="color:var(--text3)">—</span></td>
+            <td><span class="td-mono" style="color:var(--text3)">—</span></td>
+            <td>${temSap ? buildAnaliticoDetailBreakdown(day.entEntries, day.totalEnt, 'var(--green)', 'Entradas') : emptyCell()}</td>
+            <td>${temSap ? buildAnaliticoDetailBreakdown(day.saiEntries, day.totalSai, 'var(--red)', 'Saídas') : emptyCell()}</td>
+            <td><span class="td-mono" style="color:var(--text3)">—</span></td>
+            <td><span class="td-mono" style="color:var(--text3)">—</span></td>
+            <td><span class="td-mono" style="color:var(--text3)">—</span></td>
+          </tr>`;
+      }
+
       const dCls = varClass(day.diff);
       const dPfx = day.diff > 0 ? '+' : '';
+
+      // Linha sem lançamento quando era esperado → fundo âmbar suave
+      const rowStyle = (!day.hasLanc && day.precisaLanc)
+        ? ' class="row-no-lanc"'
+        : '';
+
+      const iniCell = saldoCell(
+        day.initialStock,
+        day.initialIsEstimated,
+        'Est. Inicial — saldo real do último lançamento anterior',
+        'Est. Inicial estimado — herdado do Est. Teórico anterior (sem lançamento real)'
+      );
+
+      const realCell = saldoCell(
+        day.realStock,
+        day.realIsEstimated,
+        'Est. Real — confirmado por lançamento',
+        'Est. Real estimado — sem lançamento nesta data'
+      );
+
+      const varCell = (day.diff === null)
+        ? emptyCell()
+        : `<span class="td-mono ${dCls}">${dPfx}${fmtKg(day.diff)}</span>`;
+
+      const lancCell = day.hasLanc
+        ? `<span class="lanc-count-badge">${day.lancCount} lançamento${day.lancCount !== 1 ? 's' : ''}</span>`
+        : (day.precisaLanc
+            ? `<span class="lanc-missing-badge"><i class="ti ti-alert-circle"></i> Sem lançamento</span>`
+            : emptyCell());
+
+      const teoCell = (day.theoreticalStock === null)
+        ? emptyCell()
+        : `<span class="td-mono" style="color:var(--purple)">${fmtKg(day.theoreticalStock)}</span>`;
+
       return `
-        <tr>
+        <tr${rowStyle}>
           <td class="day-col">${escapeHtml(day.dateLabel)}</td>
-          <td class="td-mono" style="color:var(--text2);font-size:11px">${escapeHtml(day.firstLaunchLabel)}</td>
-          <td class="td-mono" style="color:var(--teal)">${fmtKg(day.initialStock)}</td>
+          <td>${lancCell}</td>
+          <td>${iniCell}</td>
           <td>${buildAnaliticoDetailBreakdown(day.entEntries, day.totalEnt, 'var(--green)', 'Entradas')}</td>
           <td>${buildAnaliticoDetailBreakdown(day.saiEntries, day.totalSai, 'var(--red)', 'Saídas')}</td>
-          <td class="td-mono" style="color:var(--accent)">${fmtKg(day.theoreticalStock)}</td>
-          <td class="td-mono" style="color:var(--text2);font-size:11px">${escapeHtml(day.lastLaunchLabel)}</td>
-          <td class="td-mono" style="color:var(--teal)">${fmtKg(day.realStock)}</td>
-          <td class="td-mono ${dCls}">${dPfx}${fmtKg(day.diff)}</td>
+          <td>${realCell}</td>
+          <td>${teoCell}</td>
+          <td>${varCell}</td>
         </tr>`;
     }).join('');
+
+    // Legenda: só aparece se houver algum dia estimado no período
+    const temEstimado = payload.days.some(d => d.initialIsEstimated || d.realIsEstimated);
+    const legendaHtml = temEstimado ? `
+      <div class="estimated-legend">
+        <i class="ti ti-alert-triangle"></i>
+        <span>Saldos marcados com <strong>Est.</strong> são estimados — não houve lançamento real nesta data. O sistema utilizou o Est. Teórico do período anterior como base.</span>
+      </div>` : '';
 
     return `
       <div class="analitico-detail-summary">
@@ -5327,14 +5585,14 @@ function debounce(fn, delay = 120) {
           <div class="analitico-detail-card-sub">${escapeHtml(s.saiLabel)}</div>
         </div>
         <div class="analitico-detail-card">
-          <div class="analitico-detail-card-label">Est. Teórico</div>
-          <div class="analitico-detail-card-value c-blue">${fmtKg(s.estTeorico)}</div>
-          <div class="analitico-detail-card-sub">Ini + Entradas + Saídas</div>
-        </div>
-        <div class="analitico-detail-card">
           <div class="analitico-detail-card-label">Est. Real</div>
           <div class="analitico-detail-card-value c-teal">${fmtKg(s.pesoFim)}</div>
           <div class="analitico-detail-card-sub">${escapeHtml(s.dtFimLabel)}</div>
+        </div>
+        <div class="analitico-detail-card">
+          <div class="analitico-detail-card-label">Est. Teórico</div>
+          <div class="analitico-detail-card-value c-blue">${fmtKg(s.estTeorico)}</div>
+          <div class="analitico-detail-card-sub">Ini + Entradas + Saídas</div>
         </div>
         <div class="analitico-detail-card">
           <div class="analitico-detail-card-label">Variação</div>
@@ -5343,23 +5601,24 @@ function debounce(fn, delay = 120) {
         </div>
       </div>
 
+      ${legendaHtml}
+
       <div class="analitico-detail-table-shell">
         <table class="analitico-detail-table">
           <thead>
             <tr>
               <th>Data</th>
-              <th>Dt. 1º Lançamento</th>
-              <th>Est. Inicial<br><span style="font-size:9px;font-weight:400;opacity:.7">(1º Lançamento)</span></th>
+              <th>Lançamentos</th>
+              <th>Est. Inicial<br><span style="font-size:9px;font-weight:400;opacity:.7">(Saldo Anterior)</span></th>
               <th>Entradas<br><span style="font-size:9px;font-weight:400;opacity:.7">(por código)</span></th>
               <th>Saídas<br><span style="font-size:9px;font-weight:400;opacity:.7">(por código)</span></th>
-              <th>Est. Teórico<br><span style="font-size:9px;font-weight:400;opacity:.7">(Ini+Ent+Sai)</span></th>
-              <th>Dt. Últ. Lançamento</th>
               <th>Est. Real<br><span style="font-size:9px;font-weight:400;opacity:.7">(Últ. Lançamento)</span></th>
+              <th>Est. Teórico<br><span style="font-size:9px;font-weight:400;opacity:.7">(Ini+Ent+Sai)</span></th>
               <th>Variação<br><span style="font-size:9px;font-weight:400;opacity:.7">(Real − Teórico)</span></th>
             </tr>
           </thead>
           <tbody>
-            ${rows || '<tr><td colspan="9"><div class="analitico-detail-empty"><i class="ti ti-calendar-off"></i> Sem dados para o período.</div></td></tr>'}
+            ${rows || '<tr><td colspan="8"><div class="analitico-detail-empty"><i class="ti ti-calendar-off"></i> Sem dados para o período.</div></td></tr>'}
           </tbody>
         </table>
       </div>`;
@@ -5841,6 +6100,7 @@ function debounce(fn, delay = 120) {
       if (idx >= 0) state.materiais[idx] = { ...state.materiais[idx], ...rec };
       else state.materiais.unshift(rec);
     });
+    invalidateMaterialLookup();
   }
 
   function registrarImportacaoCadastro(modulo, arquivo, registros, importId) {
@@ -5980,6 +6240,7 @@ function debounce(fn, delay = 120) {
       return;
     }
     state.materiais.splice(idx, 1);
+    invalidateMaterialLookup();
     reaplicarPadronizacaoMateriais();
     await persistStateNow();
     renderAll();
@@ -5990,6 +6251,7 @@ function debounce(fn, delay = 120) {
     if (!state.materiais.length) return toast('Nenhum material cadastrado', 'error');
     if (!confirm('Excluir todos os materiais cadastrados?')) return;
     state.materiais = [];
+    invalidateMaterialLookup();
     reaplicarPadronizacaoMateriais();
     await persistStateNow();
     renderAll();
@@ -6056,6 +6318,7 @@ function debounce(fn, delay = 120) {
       const rec = { ...item, created: item.created || new Date().toLocaleDateString('pt-BR') };
       if (idx >= 0) state.filiais[idx] = rec; else state.filiais.unshift(rec);
     });
+    invalidateFilialLookup();
   }
 
   function parseFiliaisRows(rows) {
@@ -6181,6 +6444,7 @@ function debounce(fn, delay = 120) {
     const idx = state.filiais.indexOf(rec);
     if (idx < 0) return;
     state.filiais.splice(idx, 1);
+    invalidateFilialLookup();
     await persistStateNow();
     renderFiliais();
     toast('Filial removida', 'error');
@@ -6190,6 +6454,7 @@ function debounce(fn, delay = 120) {
     if (!state.filiais.length) return toast('Nenhuma filial cadastrada', 'error');
     if (!confirm('Excluir todas as filiais cadastradas?')) return;
     state.filiais = [];
+    invalidateFilialLookup();
     await persistStateNow();
     renderFiliais();
     toast('Todas as filiais foram excluídas', 'error');
@@ -7275,7 +7540,14 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
       let matRowsHtml = '';
       let variacaoCentralMicro = 0;
 
-      r.allMats.forEach((mat, matIdx) => {
+      // Ordena materiais: maior desfalque (diff mais negativo) → maior sobra (diff mais positivo)
+      const allMatsSorted = [...r.allMats].sort((a, b) => {
+        const diffA = buildSnapshot({ lancs: lancsByMat.get(a) || [], sap: sapByMat.get(a) || [] }).diff;
+        const diffB = buildSnapshot({ lancs: lancsByMat.get(b) || [], sap: sapByMat.get(b) || [] }).diff;
+        return diffA - diffB;
+      });
+
+      allMatsSorted.forEach((mat, matIdx) => {
         const lancsMat = lancsByMat.get(mat) || [];
         const sapMat = sapByMat.get(mat) || [];
         const snapshot = buildSnapshot({ lancs: lancsMat, sap: sapMat });
@@ -7286,28 +7558,189 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
         const entEntries = Object.entries(snapshot.entCods).sort((a, b) => b[1] - a[1]);
         const saiEntries = Object.entries(snapshot.saiCods).sort((a, b) => a[1] - b[1]);
 
+        // ── Classificação de categoria do material ──────────────────────────
+        // Categorias de lançamento SEMANAL (toda terça-feira):
+        //   AGREGADO MIÚDO e AGREGADO GRAÚDO
+        // Todas as demais: lançamento DIÁRIO
+        const matCategoria = (lancsMat[0]?.categoria || sapMat[0]?.categoria || '').trim().toUpperCase();
+        const isSemanal = /AGREGADO[S]?\s*(MI[\u00DA\u0055]DO[S]?|GRA[\u00DA\u0055]DO[S]?)/i.test(matCategoria);
+
+        // ── Último lançamento ANTES do início do período ─────────────────
+        // Usado como Est. Inicial do primeiro dia (ou da primeira semana, para semanais).
+        // Busca em state.lancamentos sem restrição de período.
+        const lancsAnteriores = (state.lancamentos || [])
+          .filter(rec => {
+            if ((rec.material || '—') !== mat) return false;
+            if (rec.central !== r.central) return false;
+            const d = parseDate(rec.dtLanc);
+            return d && d < start;
+          })
+          .sort((a, b) => dateCmp(parseDate(b.dtLanc) ?? new Date(0), parseDate(a.dtLanc) ?? new Date(0)));
+        const ultimoLancAnterior = lancsAnteriores[0] ?? null;
+
+        // ── Carry entre períodos (diário ou semanal) ─────────────────────
+        // Para DIÁRIOS: carry avança a cada dia.
+        // Para SEMANAIS: carry avança a cada terça (semana a semana).
+        //   carry = { value, isEstimated }
+        //   isEstimated = true quando o saldo veio do Est. Teórico (sem lançamento)
+        let carry = ultimoLancAnterior
+          ? { value: num(ultimoLancAnterior.peso), isEstimated: false }
+          : null; // null = sem histórico anterior conhecido
+
+        // Para semanais: rastreia se a semana corrente já teve lançamento
+        let semanaComLanc = false;
+        let semanaAtualLunes = null; // segunda-feira da semana corrente
+
+        const getSegundaFeira = (d) => {
+          const dt = new Date(d);
+          const dow = dt.getDay(); // 0=Dom
+          const diff = (dow === 0) ? -6 : 1 - dow; // volta até segunda
+          dt.setDate(dt.getDate() + diff);
+          dt.setHours(0,0,0,0);
+          return dt.toISOString().slice(0,10);
+        };
+
         const dailyRows = dayList.map(day => {
           const key = dateKey(day);
           const dayLancs = lancsMat.filter(rec => dateKey(parseDate(rec.dtLanc)) === key);
-          const daySap = sapMat.filter(rec => dateKey(parseDate(rec.dtDoc)) === key);
-          const daySnap = buildSnapshot({ lancs: dayLancs, sap: daySap });
+          const daySap   = sapMat.filter(rec => dateKey(parseDate(rec.dtDoc)) === key);
+          const daySnap  = buildSnapshot({ lancs: dayLancs, sap: daySap });
 
           const dayEntEntries = Object.entries(daySnap.entCods).sort((a, b) => b[1] - a[1]);
           const daySaiEntries = Object.entries(daySnap.saiCods).sort((a, b) => a[1] - b[1]);
 
-          return {
-            dateLabel: fmtPtDate(day),
-            firstLaunchLabel: daySnap.dtIniLabel,
-            initialStock: daySnap.pesoIni,
-            entEntries: dayEntEntries,
-            saiEntries: daySaiEntries,
-            totalEnt: daySnap.totalEnt,
-            totalSai: daySnap.totalSai,
-            theoreticalStock: daySnap.estTeorico,
-            lastLaunchLabel: daySnap.dtFimLabel,
-            realStock: daySnap.pesoFim,
-            diff: daySnap.diff
-          };
+          const hasLanc = dayLancs.length > 0;
+          const isTerca = day.getDay() === 2; // 2 = terça-feira
+
+          if (isSemanal) {
+            // ── LÓGICA SEMANAL ───────────────────────────────────────────
+            // Controle de semana: ao entrar numa nova semana, verifica se
+            // a semana anterior teve lançamento.
+            const semanaKey = getSegundaFeira(day);
+            if (semanaKey !== semanaAtualLunes) {
+              // Nova semana: se a semana anterior não teve lançamento,
+              // o carry passa a ser estimado (Est. Teórico da semana anterior)
+              if (semanaAtualLunes !== null && !semanaComLanc) {
+                // carry já foi propagado como estimado ao longo dos dias
+                // não precisa fazer nada aqui
+              }
+              semanaAtualLunes = semanaKey;
+              semanaComLanc = false;
+            }
+
+            if (hasLanc) semanaComLanc = true;
+
+            // Dias não-terça: exibir apenas SAP (entradas/saídas) e data.
+            // Sem Est. Inicial, Teórico, Real ou Variação — não é dia de conferência.
+            if (!isTerca && !hasLanc) {
+              // Apenas SAP do dia interessa; carry não muda
+              // (SAP acumula no Est. Teórico que será calculado na terça)
+              return {
+                dateLabel: fmtPtDate(day),
+                lancCount: 0,
+                initialStock: null,
+                initialIsEstimated: false,
+                entEntries: dayEntEntries,
+                saiEntries: daySaiEntries,
+                totalEnt: daySnap.totalEnt,
+                totalSai: daySnap.totalSai,
+                theoreticalStock: null,
+                realStock: null,
+                realIsEstimated: false,
+                hasLanc: false,
+                precisaLanc: false,
+                isSemanalNaoConferencia: true,
+                diff: null
+              };
+            }
+
+            // Terça OU dia com lançamento inesperado:
+            // Est. Inicial = carry atual (último lançamento real ou teórico anterior)
+            const initialStock = carry ? carry.value : 0;
+            const initialIsEstimated = carry ? carry.isEstimated : false;
+
+            // SAP acumulado da semana toda (seg a ter) para o Est. Teórico semanal
+            const semanaStart = new Date(day);
+            semanaStart.setDate(semanaStart.getDate() - (isTerca ? 6 : 0));
+            semanaStart.setHours(0,0,0,0);
+            const sapSemana = sapMat.filter(rec => {
+              const d = parseDate(rec.dtDoc);
+              return d && d >= semanaStart && d <= day;
+            });
+            const snapSemana = buildSnapshot({ lancs: [], sap: sapSemana });
+            const estTeorico = initialStock + snapSemana.totalEnt + snapSemana.totalSai;
+
+            let realStock, realIsEstimated;
+            if (hasLanc) {
+              realStock = daySnap.pesoFim;
+              realIsEstimated = false;
+              carry = { value: realStock, isEstimated: false };
+            } else {
+              // Terça sem lançamento: Est. Real = Est. Teórico (estimado)
+              realStock = estTeorico;
+              realIsEstimated = true;
+              carry = { value: estTeorico, isEstimated: true };
+            }
+
+            const diff = hasLanc ? (realStock - estTeorico) : null;
+
+            return {
+              dateLabel: fmtPtDate(day),
+              lancCount: dayLancs.length,
+              initialStock,
+              initialIsEstimated,
+              entEntries: dayEntEntries,
+              saiEntries: daySaiEntries,
+              totalEnt: snapSemana.totalEnt,
+              totalSai: snapSemana.totalSai,
+              theoreticalStock: estTeorico,
+              realStock,
+              realIsEstimated,
+              hasLanc,
+              precisaLanc: true,
+              isSemanalNaoConferencia: false,
+              diff
+            };
+
+          } else {
+            // ── LÓGICA DIÁRIA ────────────────────────────────────────────
+            // Est. Inicial = carry (último lançamento real ou teórico anterior)
+            const initialStock = carry ? carry.value : 0;
+            const initialIsEstimated = carry ? carry.isEstimated : false;
+
+            const estTeorico = initialStock + daySnap.totalEnt + daySnap.totalSai;
+
+            let realStock, realIsEstimated;
+            if (hasLanc) {
+              realStock = daySnap.pesoFim;
+              realIsEstimated = false;
+              carry = { value: realStock, isEstimated: false };
+            } else {
+              realStock = estTeorico;
+              realIsEstimated = true;
+              carry = { value: estTeorico, isEstimated: true };
+            }
+
+            const diff = hasLanc ? (realStock - estTeorico) : null;
+
+            return {
+              dateLabel: fmtPtDate(day),
+              lancCount: dayLancs.length,
+              initialStock,
+              initialIsEstimated,
+              entEntries: dayEntEntries,
+              saiEntries: daySaiEntries,
+              totalEnt: daySnap.totalEnt,
+              totalSai: daySnap.totalSai,
+              theoreticalStock: estTeorico,
+              realStock,
+              realIsEstimated,
+              hasLanc,
+              precisaLanc: true,
+              isSemanalNaoConferencia: false,
+              diff
+            };
+          }
         });
 
         const detailKey = `${idx}-${matIdx}-${String(mat).replace(/[^a-zA-Z0-9_-]+/g, '_')}`;
