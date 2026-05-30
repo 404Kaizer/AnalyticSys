@@ -667,7 +667,6 @@ body {
   border-radius: var(--radius-lg);
   overflow: hidden;
   margin-bottom: 20px;
-  contain: layout paint;
 }
 
 .table-header {
@@ -1259,7 +1258,9 @@ td.pending-cell  { color: var(--text3) !important; font-style: italic; font-size
 .micro-table-wrap thead th {
   line-height: 1.3;
   vertical-align: bottom;
-  white-space: normal;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   padding: 9px 14px;
   min-width: 90px;
 }
@@ -1271,6 +1272,9 @@ td.pending-cell  { color: var(--text3) !important; font-style: italic; font-size
   font-weight: 400;
   opacity: .6;
   line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ══════════════════════════════════════════
@@ -1342,6 +1346,264 @@ td.pending-cell  { color: var(--text3) !important; font-style: italic; font-size
   gap: 8px;
 }
 .micro-section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+/* ══════════════════════════════════════════
+   MICRO DIVERGENCE PANEL
+══════════════════════════════════════════ */
+.micro-div-panel {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+  flex-wrap: wrap;
+  padding: 12px 18px 14px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg3) 60%, transparent);
+}
+
+.micro-div-stat {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 13px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg2);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+.micro-div-stat i { font-size: 13px; flex-shrink: 0; }
+.micro-div-stat .mds-count { font-weight: 700; font-size: 13px; }
+.micro-div-stat.mds-neg   { border-color: var(--red-border);   background: var(--red-bg);   color: var(--red);   }
+.micro-div-stat.mds-pos   { border-color: var(--green-border); background: var(--green-bg); color: var(--green); }
+.micro-div-stat.mds-zero  { border-color: var(--border2);      background: var(--bg3);      color: var(--text3); }
+.micro-div-stat.mds-total { border-color: var(--border2);      background: var(--bg3);      color: var(--text2); }
+
+.micro-div-top {
+  flex: 1;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px 13px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg2);
+}
+.micro-div-top-label {
+  font-size: 9px;
+  font-family: var(--mono);
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--text3);
+  margin-bottom: 2px;
+}
+.micro-div-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--text);
+}
+.micro-div-top-mat { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.micro-div-top-val { white-space: nowrap; font-weight: 700; }
+.micro-div-top-val.neg { color: var(--red); }
+.micro-div-top-val.pos { color: var(--green); }
+
+/* ══════════════════════════════════════════
+   SAÚDE DA CENTRAL (health panel)
+══════════════════════════════════════════ */
+.health-panel {
+  padding: 14px 18px 16px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg3) 50%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.health-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.health-title {
+  font-size: 9.5px;
+  font-family: var(--mono);
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--text3);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.health-score-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.health-score-label {
+  font-size: 10px;
+  font-family: var(--mono);
+  color: var(--text3);
+  letter-spacing: 0.06em;
+}
+
+.health-score-value {
+  font-size: 22px;
+  font-weight: 700;
+  font-family: var(--mono);
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
+.health-score-value.hs-ok       { color: var(--green); }
+.health-score-value.hs-atencao  { color: var(--amber); }
+.health-score-value.hs-urgente  { color: #f97316; }
+.health-score-value.hs-critico  { color: var(--red); }
+
+.health-bar-wrap {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--bg4);
+  overflow: hidden;
+  flex: 1;
+  min-width: 80px;
+}
+.health-bar-fill {
+  height: 100%;
+  border-radius: inherit;
+  transition: width 0.4s ease;
+}
+.health-bar-fill.hs-ok      { background: var(--green); }
+.health-bar-fill.hs-atencao { background: var(--amber); }
+.health-bar-fill.hs-urgente { background: #f97316; }
+.health-bar-fill.hs-critico { background: var(--red); }
+
+.health-stats-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.health-stat {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg2);
+  font-family: var(--mono);
+  font-size: 11px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.health-stat i { font-size: 12px; flex-shrink: 0; }
+.health-stat .hs-n { font-weight: 700; font-size: 12.5px; }
+
+.hs-bom     { border-color: var(--green-border); background: var(--green-bg); color: var(--green); }
+.hs-atencao-chip { border-color: var(--amber-border); background: var(--amber-bg); color: var(--amber); }
+.hs-urgente-chip { border-color: rgba(249,115,22,0.22); background: rgba(249,115,22,0.10); color: #f97316; }
+.hs-critico-chip { border-color: var(--red-border); background: var(--red-bg); color: var(--red); }
+.hs-neutro  { border-color: var(--border2); background: var(--bg3); color: var(--text3); }
+
+.health-worst {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg2);
+  min-width: 200px;
+  flex: 1;
+}
+.health-worst-title {
+  font-size: 9px;
+  font-family: var(--mono);
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--text3);
+  margin-bottom: 2px;
+}
+.health-worst-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+.health-worst-mat { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font-weight: 600; }
+.health-worst-val { white-space: nowrap; font-weight: 700; }
+.health-worst-badge {
+  font-size: 9px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+}
+
+/* Config section for health thresholds */
+.health-cfg-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+.health-cfg-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.health-cfg-card-header {
+  padding: 10px 14px;
+  background: var(--bg3);
+  border-bottom: 1px solid var(--border);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.health-cfg-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  gap: 10px;
+  font-size: 12px;
+}
+.health-cfg-row:last-child { border-bottom: none; }
+.health-cfg-label { color: var(--text2); font-size: 11px; font-family: var(--mono); }
+.health-cfg-input {
+  width: 90px;
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  padding: 4px 8px;
+  font-size: 12px;
+  color: var(--text);
+  font-family: var(--mono);
+  outline: none;
+  text-align: right;
+  transition: border 0.15s;
+}
+.health-cfg-input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-dim); }
 
 .prod-badges-row { display: flex; flex-wrap: wrap; gap: 8px; padding-bottom: 4px; }
 .prod-badge {
@@ -1494,6 +1756,271 @@ td.pending-cell  { color: var(--text3) !important; font-style: italic; font-size
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* ══════════════════════════════════════════
+   MICRO FILTER BAR
+══════════════════════════════════════════ */
+.micro-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 10px 0 14px;
+}
+
+.micro-filter-divider {
+  width: 1px;
+  height: 24px;
+  background: var(--border2);
+  flex-shrink: 0;
+}
+
+.micro-filter-group {
+  position: relative;
+}
+
+.micro-filter-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 13px;
+  border-radius: var(--radius);
+  font-size: 12.5px;
+  font-family: var(--font);
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--border2);
+  background: var(--bg3);
+  color: var(--text2);
+  transition: all 0.13s;
+  white-space: nowrap;
+  flex-shrink: 0;
+  letter-spacing: -0.01em;
+}
+.micro-filter-trigger:hover { border-color: var(--border3); color: var(--text); background: var(--bg4); }
+.micro-filter-trigger i { font-size: 14px; }
+.micro-filter-trigger.active {
+  background: var(--accent-dim);
+  border-color: var(--accent-glow);
+  color: var(--accent);
+}
+
+.micro-filter-chev {
+  transition: transform 0.18s;
+  font-size: 13px !important;
+  opacity: 0.7;
+}
+.micro-filter-chev.open { transform: rotate(180deg); }
+
+.micro-filter-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 240px;
+  max-width: 320px;
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 16px 40px rgba(0,0,0,0.3), 0 0 0 1px var(--border);
+  z-index: 200;
+  display: none;
+  flex-direction: column;
+  overflow: hidden;
+  animation: popIn 0.15s ease;
+}
+.micro-filter-dropdown.open { display: flex; }
+
+.micro-filter-search-wrap {
+  position: relative;
+  padding: 10px 10px 6px;
+  border-bottom: 1px solid var(--border);
+}
+.micro-filter-search-wrap i {
+  position: absolute;
+  left: 19px;
+  top: 50%;
+  transform: translateY(-30%);
+  font-size: 13px;
+  color: var(--text3);
+  pointer-events: none;
+}
+.micro-filter-search {
+  width: 100%;
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  padding: 6px 10px 6px 28px;
+  font-size: 12px;
+  color: var(--text);
+  font-family: var(--font);
+  outline: none;
+  transition: border 0.15s;
+}
+.micro-filter-search:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
+
+.micro-filter-options {
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 6px;
+}
+.micro-filter-options::-webkit-scrollbar { width: 3px; }
+.micro-filter-options::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 4px; }
+
+.micro-filter-option {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 9px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12.5px;
+  color: var(--text);
+  transition: background 0.1s;
+  user-select: none;
+}
+.micro-filter-option:hover { background: var(--bg3); }
+.micro-filter-option input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--accent);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.micro-filter-option-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+
+.micro-filter-footer {
+  display: flex;
+  gap: 6px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--border);
+  justify-content: flex-end;
+}
+.micro-filter-footer .btn { padding: 6px 11px; font-size: 12px; }
+
+.micro-filter-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent);
+  color: #fff;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 700;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 5px;
+  line-height: 1;
+}
+
+/* Range-style filter dropdown (Variação %) */
+.micro-filter-dropdown--range {
+  min-width: 280px;
+  max-width: 320px;
+}
+.mfr-body {
+  padding: 14px 14px 10px;
+}
+.mfr-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.mfr-title i { color: var(--accent); font-size: 14px; }
+.mfr-desc {
+  font-size: 11px;
+  color: var(--text3);
+  line-height: 1.4;
+  margin-bottom: 12px;
+}
+.mfr-section-label {
+  font-size: 10px;
+  font-family: var(--mono);
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--text3);
+  margin-bottom: 7px;
+}
+.mfr-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.mfr-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border2);
+  background: var(--bg3);
+  font-size: 12px;
+  color: var(--text2);
+  cursor: pointer;
+  transition: all 0.13s;
+  user-select: none;
+  font-family: var(--font);
+}
+.mfr-chip:hover { border-color: var(--border3); color: var(--text); background: var(--bg4); }
+.mfr-chip input[type="checkbox"] { display: none; }
+.mfr-chip.checked {
+  background: var(--accent-dim);
+  border-color: var(--accent-glow);
+  color: var(--accent);
+  font-weight: 500;
+}
+.mfr-range-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.mfr-range-field {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.mfr-range-label {
+  font-size: 10px;
+  color: var(--text3);
+  font-family: var(--mono);
+  letter-spacing: 0.06em;
+}
+.mfr-range-input {
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  padding: 6px 10px;
+  font-size: 12.5px;
+  color: var(--text);
+  font-family: var(--mono);
+  outline: none;
+  width: 100%;
+  transition: border 0.15s;
+}
+.mfr-range-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
+.mfr-range-sep {
+  font-size: 14px;
+  color: var(--text3);
+  margin-top: 16px;
+}
+.mfr-hint {
+  font-size: 11px;
+  color: var(--text3);
+  margin-top: 8px;
+  min-height: 16px;
+  font-family: var(--mono);
+}
+.mfr-hint.warn { color: var(--amber); }
+.mfr-hint.active { color: var(--accent); }
 
 /* ══════════════════════════════════════════
    BREAKDOWN MODAL (micro detail)
@@ -2164,12 +2691,11 @@ thead th:hover .cf-btn,
    PERFORMANCE
 ══════════════════════════════════════════ */
 .metric-card,
-.table-card,
 .import-card,
 .micro-filial-card { contain: layout paint; }
 
 .table-scroll,
-.micro-table-wrap { overscroll-behavior: contain; }
+.micro-table-wrap { overscroll-behavior-x: contain; overscroll-behavior-y: auto; }
 
 img { max-width: 100%; }
 
@@ -3350,6 +3876,92 @@ tbody tr:nth-child(even):hover {
           <!-- ═══ MICRO ═══ -->
           <div class="section-title">Visão Micro — Por Filial e Material</div>
 
+          <!-- Barra de filtros da Visão Micro -->
+          <div class="micro-filter-bar" id="micro-filter-bar" style="display:none">
+            <!-- Filtro Central -->
+            <div class="micro-filter-group" id="mfg-central">
+              <button class="micro-filter-trigger" id="mft-central" onclick="toggleMicroFilter('central')">
+                <i class="ti ti-building-warehouse"></i>
+                <span id="mft-central-label">Central</span>
+                <i class="ti ti-chevron-down micro-filter-chev" id="mfc-central"></i>
+              </button>
+              <div class="micro-filter-dropdown" id="mfd-central">
+                <div class="micro-filter-search-wrap">
+                  <i class="ti ti-search"></i>
+                  <input class="micro-filter-search" id="mfs-central" type="text" placeholder="Buscar central…" oninput="filterMicroOptions('central',this.value)">
+                </div>
+                <div class="micro-filter-options" id="mfo-central"></div>
+                <div class="micro-filter-footer">
+                  <button class="btn" onclick="cancelMicroFilter('central')"><i class="ti ti-x"></i> Cancelar</button>
+                  <button class="btn btn-primary" onclick="applyMicroFilter('central')"><i class="ti ti-check"></i> Aplicar</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Filtro Material -->
+            <div class="micro-filter-group" id="mfg-material">
+              <button class="micro-filter-trigger" id="mft-material" onclick="toggleMicroFilter('material')">
+                <i class="ti ti-box"></i>
+                <span id="mft-material-label">Material</span>
+                <i class="ti ti-chevron-down micro-filter-chev" id="mfc-material"></i>
+              </button>
+              <div class="micro-filter-dropdown" id="mfd-material">
+                <div class="micro-filter-search-wrap">
+                  <i class="ti ti-search"></i>
+                  <input class="micro-filter-search" id="mfs-material" type="text" placeholder="Buscar material…" oninput="filterMicroOptions('material',this.value)">
+                </div>
+                <div class="micro-filter-options" id="mfo-material"></div>
+                <div class="micro-filter-footer">
+                  <button class="btn" onclick="cancelMicroFilter('material')"><i class="ti ti-x"></i> Cancelar</button>
+                  <button class="btn btn-primary" onclick="applyMicroFilter('material')"><i class="ti ti-check"></i> Aplicar</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Filtro Variação % -->
+            <div class="micro-filter-group" id="mfg-variacao">
+              <button class="micro-filter-trigger" id="mft-variacao" onclick="toggleMicroFilter('variacao')">
+                <i class="ti ti-heartbeat"></i>
+                <span id="mft-variacao-label">Saúde</span>
+                <i class="ti ti-chevron-down micro-filter-chev" id="mfc-variacao"></i>
+              </button>
+              <div class="micro-filter-dropdown micro-filter-dropdown--range" id="mfd-variacao">
+                <div class="mfr-body">
+                  <div class="mfr-title"><i class="ti ti-heartbeat"></i> Nível de saúde da central</div>
+                  <div class="mfr-desc">Filtra centrais pelo nível calculado no painel de saúde (requer ≥ 5 materiais).</div>
+                  <div class="mfr-section-label" style="margin-top:8px">Nível</div>
+                  <div class="mfr-chips" id="mfr-health-levels">
+                    <label class="mfr-chip"><input type="checkbox" value="ok"      onchange="_varFilterChange()"> <i class="ti ti-circle-check"   style="color:var(--green)"></i> Saudável</label>
+                    <label class="mfr-chip"><input type="checkbox" value="atencao" onchange="_varFilterChange()"> <i class="ti ti-alert-triangle" style="color:var(--amber)"></i> Atenção</label>
+                    <label class="mfr-chip"><input type="checkbox" value="urgente" onchange="_varFilterChange()"> <i class="ti ti-alert-circle"   style="color:#f97316"></i> Urgente</label>
+                    <label class="mfr-chip"><input type="checkbox" value="critico" onchange="_varFilterChange()"> <i class="ti ti-flame"          style="color:var(--red)"></i> Crítico</label>
+                    <label class="mfr-chip"><input type="checkbox" value="none"    onchange="_varFilterChange()"> <i class="ti ti-minus"          style="color:var(--text3)"></i> Sem saúde</label>
+                  </div>
+                  <div class="mfr-hint" id="mfr-hint"></div>
+                </div>
+                <div class="micro-filter-footer">
+                  <button class="btn" onclick="cancelMicroFilter('variacao')"><i class="ti ti-x"></i> Cancelar</button>
+                  <button class="btn btn-primary" onclick="applyMicroFilter('variacao')"><i class="ti ti-check"></i> Aplicar</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="micro-filter-divider"></div>
+
+            <!-- Expand / Collapse -->
+            <button class="btn" onclick="expandAllMicro()" title="Expandir todos os cards">
+              <i class="ti ti-layout-list"></i> Expandir Todos
+            </button>
+            <button class="btn" onclick="collapseAllMicro()" title="Recolher todos os cards">
+              <i class="ti ti-layout-rows"></i> Recolher Todos
+            </button>
+
+            <!-- Limpar filtros (aparece só quando há algo ativo) -->
+            <button class="btn micro-filter-clear" id="micro-filter-clear-btn" onclick="clearAllMicroFilters()" style="display:none">
+              <i class="ti ti-filter-off"></i> Limpar Filtros
+            </button>
+          </div>
+
           <div id="an-micro-container"></div>
 
         </div>
@@ -3776,35 +4388,71 @@ tbody tr:nth-child(even):hover {
 
       <!-- CONFIGURAÇÕES -->
       <div class="page" id="page-configuracoes">
+        <div class="section-title">Saúde das Centrais — Limites de Variação</div>
+        <div class="table-card" style="margin-bottom:24px">
+          <div class="table-header">
+            <span class="table-title"><i class="ti ti-heartbeat"></i> Critérios por Categoria de Material</span>
+            <button class="btn btn-primary" onclick="salvarHealthConfig()"><i class="ti ti-device-floppy"></i> Salvar Limites</button>
+          </div>
+          <div style="padding:16px 18px">
+            <div style="font-size:11.5px;color:var(--text2);margin-bottom:14px;line-height:1.6">
+              Defina os limites de variação absoluta (em kg) para cada categoria. O sistema classifica automaticamente cada material e calcula a saúde da central.
+            </div>
+            <div class="health-cfg-grid">
+              <div class="health-cfg-card">
+                <div class="health-cfg-card-header"><i class="ti ti-droplet" style="color:var(--amber)"></i> Aglomerantes</div>
+                <div class="health-cfg-row"><span class="health-cfg-label">BOM — até</span><input class="health-cfg-input" id="hcfg-aglomerante-bom" type="number" placeholder="5000"></div>
+                <div class="health-cfg-row"><span class="health-cfg-label">ATENÇÃO — até</span><input class="health-cfg-input" id="hcfg-aglomerante-atencao" type="number" placeholder="10000"></div>
+                <div class="health-cfg-row"><span class="health-cfg-label">URGENTE — até</span><input class="health-cfg-input" id="hcfg-aglomerante-urgente" type="number" placeholder="15000"></div>
+                <div class="health-cfg-row"><span class="health-cfg-label" style="color:var(--red)">CRÍTICO — acima de urgente</span><span style="font-size:11px;color:var(--text3);font-family:var(--mono)">automático</span></div>
+              </div>
+              <div class="health-cfg-card">
+                <div class="health-cfg-card-header"><i class="ti ti-mountain" style="color:var(--teal)"></i> Agregados</div>
+                <div class="health-cfg-row"><span class="health-cfg-label">BOM — até</span><input class="health-cfg-input" id="hcfg-agregado-bom" type="number" placeholder="30000"></div>
+                <div class="health-cfg-row"><span class="health-cfg-label">ATENÇÃO — até</span><input class="health-cfg-input" id="hcfg-agregado-atencao" type="number" placeholder="45000"></div>
+                <div class="health-cfg-row"><span class="health-cfg-label">URGENTE — até</span><input class="health-cfg-input" id="hcfg-agregado-urgente" type="number" placeholder="60000"></div>
+                <div class="health-cfg-row"><span class="health-cfg-label" style="color:var(--red)">CRÍTICO — acima de urgente</span><span style="font-size:11px;color:var(--text3);font-family:var(--mono)">automático</span></div>
+              </div>
+              <div class="health-cfg-card">
+                <div class="health-cfg-card-header"><i class="ti ti-flask" style="color:var(--purple)"></i> Aditivos</div>
+                <div class="health-cfg-row"><span class="health-cfg-label">BOM — até</span><input class="health-cfg-input" id="hcfg-aditivo-bom" type="number" placeholder="120"></div>
+                <div class="health-cfg-row"><span class="health-cfg-label">ATENÇÃO — até</span><input class="health-cfg-input" id="hcfg-aditivo-atencao" type="number" placeholder="250"></div>
+                <div class="health-cfg-row"><span class="health-cfg-label">URGENTE — até</span><input class="health-cfg-input" id="hcfg-aditivo-urgente" type="number" placeholder="350"></div>
+                <div class="health-cfg-row"><span class="health-cfg-label" style="color:var(--red)">CRÍTICO — acima de urgente</span><span style="font-size:11px;color:var(--text3);font-family:var(--mono)">automático</span></div>
+              </div>
+              <div class="health-cfg-card">
+                <div class="health-cfg-card-header"><i class="ti ti-flask-2" style="color:var(--accent)"></i> Adições</div>
+                <div class="health-cfg-row"><span class="health-cfg-label">BOM — até</span><input class="health-cfg-input" id="hcfg-adicao-bom" type="number" placeholder="30"></div>
+                <div class="health-cfg-row"><span class="health-cfg-label">ATENÇÃO — até</span><input class="health-cfg-input" id="hcfg-adicao-atencao" type="number" placeholder="60"></div>
+                <div class="health-cfg-row"><span class="health-cfg-label">URGENTE — até</span><input class="health-cfg-input" id="hcfg-adicao-urgente" type="number" placeholder="90"></div>
+                <div class="health-cfg-row"><span class="health-cfg-label" style="color:var(--red)">CRÍTICO — acima de urgente</span><span style="font-size:11px;color:var(--text3);font-family:var(--mono)">automático</span></div>
+              </div>
+            </div>
+            <div style="font-size:10.5px;color:var(--text3);font-family:var(--mono);margin-top:4px">
+              <i class="ti ti-info-circle" style="margin-right:4px"></i>
+              Pesos de penalização: Atenção −1pt · Urgente −3pt · Crítico −6pt por material. Saúde = max(0, 100 − penalização_total / total_não_neutros × 100).
+            </div>
+          </div>
+        </div>
+
         <div class="section-title">Configurações do Sistema</div>
         <div class="table-card" style="margin-bottom:24px">
           <div class="table-header">
             <span class="table-title"><i class="ti ti-settings"></i> Parâmetros Gerais</span>
-            <button class="btn" onclick="openModal('modal-config')"><i class="ti ti-plus"></i> Nova Configuração</button>
           </div>
           <div id="config-list">
             <div class="config-row">
               <span class="config-key">empresa</span>
-              <span class="config-val" id="cfg-empresa">—</span>
-              <div class="config-actions">
-                <button class="btn-icon" onclick="editConfig('empresa')"><i class="ti ti-edit"></i></button>
-                <button class="btn-icon danger" onclick="deleteConfig('empresa')"><i class="ti ti-trash"></i></button>
-              </div>
+              <span class="config-val" id="cfg-empresa" style="color:var(--text)">Concrelagos Concreto</span>
             </div>
             <div class="config-row">
               <span class="config-key">centrais_ativas</span>
               <span class="config-val" id="cfg-centrais">—</span>
-              <div class="config-actions">
-                <button class="btn-icon" onclick="editConfig('centrais_ativas')"><i class="ti ti-edit"></i></button>
-                <button class="btn-icon danger" onclick="deleteConfig('centrais_ativas')"><i class="ti ti-trash"></i></button>
-              </div>
             </div>
             <div class="config-row">
               <span class="config-key">responsavel_padrao</span>
-              <span class="config-val" id="cfg-resp">—</span>
-              <div class="config-actions">
-                <button class="btn-icon" onclick="editConfig('responsavel_padrao')"><i class="ti ti-edit"></i></button>
-                <button class="btn-icon danger" onclick="deleteConfig('responsavel_padrao')"><i class="ti ti-trash"></i></button>
+              <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0">
+                <input type="text" id="cfg-resp-input" class="health-cfg-input" placeholder="Nome do analista responsável…" style="max-width:300px;flex:1" oninput="saveResponsavel(this.value)">
               </div>
             </div>
           </div>
@@ -6070,7 +6718,27 @@ function debounce(fn, delay = 120) {
       return isEstimated ? estimatedSaldoCell(value, estTitle) : realSaldoCell(value, realTitle);
     };
 
-    const rows = payload.days.map(day => {
+    // Pre-compute accumulated variation (running sum of day.diff where not null)
+    let _accum = 0;
+    const _dayAccum = payload.days.map(day => {
+      if (day.diff !== null) _accum += day.diff;
+      return { accum: _accum, hasAny: day.diff !== null };
+    });
+    // Reset: accum starts from first day that has a diff
+    _accum = 0;
+    let _accumStarted = false;
+    const dayAccum = payload.days.map(day => {
+      if (day.diff !== null) { _accumStarted = true; _accum += day.diff; }
+      return _accumStarted ? _accum : null;
+    });
+
+    const rows = payload.days.map((day, _di) => {
+      const accumVal = dayAccum[_di];
+      const accumCls = accumVal === null ? '' : varClass(accumVal);
+      const accumCell = accumVal === null
+        ? `<span class="td-mono" style="color:var(--text3)">—</span>`
+        : `<span class="td-mono ${accumCls}" style="white-space:nowrap">${varSymbol(accumVal)} ${fmtKg(Math.abs(accumVal))}</span>`;
+
       // Linha de dia sem conferência (semanal, não-terça, sem lançamento)
       if (day.isSemanalNaoConferencia) {
         const temSap = day.totalEnt !== 0 || day.totalSai !== 0;
@@ -6084,11 +6752,11 @@ function debounce(fn, delay = 120) {
             <td><span class="td-mono" style="color:var(--text3)">—</span></td>
             <td><span class="td-mono" style="color:var(--text3)">—</span></td>
             <td><span class="td-mono" style="color:var(--text3)">—</span></td>
+            <td>${accumCell}</td>
           </tr>`;
       }
 
       const dCls = varClass(day.diff);
-      const dPfx = day.diff > 0 ? '+' : '';
 
       // Linha sem lançamento quando era esperado → fundo âmbar suave
       const rowStyle = (!day.hasLanc && day.precisaLanc)
@@ -6111,7 +6779,7 @@ function debounce(fn, delay = 120) {
 
       const varCell = (day.diff === null)
         ? emptyCell()
-        : `<span class="td-mono ${dCls}">${dPfx}${fmtKg(day.diff)}</span>`;
+        : `<span class="td-mono ${dCls}" style="white-space:nowrap">${varSymbol(day.diff)} ${fmtKg(Math.abs(day.diff))}</span>`;
 
       const lancCell = day.hasLanc
         ? (day.hasConflict
@@ -6143,6 +6811,7 @@ function debounce(fn, delay = 120) {
           <td>${realCell}</td>
           <td>${teoCell}</td>
           <td>${varCell}</td>
+          <td>${accumCell}</td>
         </tr>`;
     }).join('');
 
@@ -6183,7 +6852,7 @@ function debounce(fn, delay = 120) {
         </div>
         <div class="analitico-detail-card">
           <div class="analitico-detail-card-label">Variação</div>
-          <div class="analitico-detail-card-value ${varClass(s.diff)}">${s.diff > 0 ? '+' : ''}${fmtKg(s.diff)}</div>
+          <div class="analitico-detail-card-value ${varClass(s.diff)}">${varSymbol(s.diff)} ${fmtKg(Math.abs(s.diff))}</div>
           <div class="analitico-detail-card-sub">Real − Teórico</div>
         </div>
       </div>
@@ -6202,10 +6871,11 @@ function debounce(fn, delay = 120) {
               <th>Est. Final<br><span style="font-size:9px;font-weight:400;opacity:.7">(Últ. Lançamento)</span></th>
               <th>Est. Teórico<br><span style="font-size:9px;font-weight:400;opacity:.7">(Ini+Ent+Sai)</span></th>
               <th>Variação<br><span style="font-size:9px;font-weight:400;opacity:.7">(Real − Teórico)</span></th>
+              <th>Var. Acumulada<br><span style="font-size:9px;font-weight:400;opacity:.7">(Σ variações do período)</span></th>
             </tr>
           </thead>
           <tbody>
-            ${rows || '<tr><td colspan="8"><div class="analitico-detail-empty"><i class="ti ti-calendar-off"></i> Sem dados para o período.</div></td></tr>'}
+            ${rows || '<tr><td colspan="9"><div class="analitico-detail-empty"><i class="ti ti-calendar-off"></i> Sem dados para o período.</div></td></tr>'}
           </tbody>
         </table>
       </div>`;
@@ -6301,7 +6971,275 @@ function debounce(fn, delay = 120) {
     renderScope(scope);
   }
 
-  function makeResizable(table) {
+  // ═══════════════════════════════════════════════════════════
+  // SAÚDE DA CENTRAL
+  // ═══════════════════════════════════════════════════════════
+
+  const HEALTH_DEFAULTS = {
+    aglomerante: { bom: 5000,  atencao: 10000, urgente: 15000 },
+    agregado:    { bom: 30000, atencao: 45000, urgente: 60000 },
+    aditivo:     { bom: 120,   atencao: 250,   urgente: 350   },
+    adicao:      { bom: 30,    atencao: 60,    urgente: 90    }
+  };
+
+  // Detect category from categoria field
+  function detectCatKey(categoria) {
+    const c = String(categoria || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().trim();
+    if (/AGLOMERANTE/.test(c) || /CIMENTO/.test(c) || /POZOLANA/.test(c)) return 'aglomerante';
+    if (/AGREGA/.test(c)) return 'agregado';
+    if (/ADITIV/.test(c)) return 'aditivo';
+    if (/ADIC[AÃ]O/.test(c) || /ADICAO/.test(c) || /ADIC/.test(c)) return 'adicao';
+    // fallback: try material name heuristics handled at call site
+    return null;
+  }
+
+  function detectCatFromMat(matName) {
+    const m = String(matName || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().trim();
+    if (/CIMENTO|POZOLANA|ESCORIA|CALCARIO/.test(m)) return 'aglomerante';
+    if (/BRITA|AREIA|AGREGAD|PEDRISCO|PEDRA/.test(m)) return 'agregado';
+    if (/ADITIV|PLASTIF|SUPERPLAST|INCORPOR|POLIFUNC|ESTABILIZ|RETARD|ACELER/.test(m)) return 'aditivo';
+    if (/ADIC[AO]|CINZA|SILICA|METACAOLIN/.test(m)) return 'adicao';
+    return 'aglomerante'; // safe fallback
+  }
+
+  function getHealthThresholds() {
+    const t = JSON.parse(JSON.stringify(HEALTH_DEFAULTS));
+    const cfgKey = key => (state.configs.find(c => normalizeText(c.key) === normalizeText(key)) || {}).value;
+    const cats = ['aglomerante','agregado','aditivo','adicao'];
+    const levels = ['bom','atencao','urgente'];
+    cats.forEach(cat => {
+      levels.forEach(lvl => {
+        const v = parseFloat(cfgKey(`saude_${cat}_${lvl}`));
+        if (Number.isFinite(v) && v > 0) t[cat][lvl] = v;
+      });
+    });
+    return t;
+  }
+
+  function classifyVariation(absVal, catKey, thresholds) {
+    const t = thresholds[catKey] || thresholds.aglomerante;
+    if (absVal <= t.bom)     return 'bom';
+    if (absVal <= t.atencao) return 'atencao';
+    if (absVal <= t.urgente) return 'urgente';
+    return 'critico';
+  }
+
+  // Penalty weights per level
+  const HEALTH_PENALTIES = { bom: 0, atencao: 1, urgente: 3, critico: 6 };
+
+  function calcHealthScore(matDiffs, lancsByMat, sapByMat, thresholds) {
+    // matDiffs: array of { mat, diff, categoria }
+    const nonNeutral = matDiffs.filter(m => Math.abs(m.diff) > 0.0001);
+    if (!nonNeutral.length) return { score: 100, level: 'ok', counts: { bom:0, atencao:0, urgente:0, critico:0, neutro: matDiffs.length } };
+
+    let totalPenalty = 0;
+    const counts = { bom:0, atencao:0, urgente:0, critico:0, neutro: matDiffs.length - nonNeutral.length };
+
+    nonNeutral.forEach(m => {
+      const catKey = m.catKey;
+      const lvl = classifyVariation(Math.abs(m.diff), catKey, thresholds);
+      counts[lvl]++;
+      totalPenalty += HEALTH_PENALTIES[lvl];
+    });
+
+    // Max possible penalty = all critico
+    const maxPenalty = nonNeutral.length * HEALTH_PENALTIES.critico;
+    const score = maxPenalty === 0 ? 100 : Math.max(0, Math.round((1 - totalPenalty / maxPenalty) * 100));
+
+    let level;
+    if (score >= 80)      level = 'ok';
+    else if (score >= 55) level = 'atencao';
+    else if (score >= 30) level = 'urgente';
+    else                  level = 'critico';
+
+    return { score, level, counts };
+  }
+
+  // ── buildSnapshot: moved to module scope so buildHealthPanel and
+  //    renderAnaliticoMicro can both use it ────────────────────────────────
+  function buildSnapshot({ lancs, sap }) {
+      const lancsOrdenados = [...lancs].sort((a, b) => {
+        const da = parseDate(a.dtLanc), db = parseDate(b.dtLanc);
+        return dateCmp(da ?? new Date(0), db ?? new Date(0));
+      });
+
+      const lancIni = lancsOrdenados[0];
+      const lancFim = lancsOrdenados[lancsOrdenados.length - 1];
+
+      // Agrupa lançamentos por data para somar corretamente múltiplos no mesmo dia
+      const _dtKey = (rec) => {
+        const d = parseDate(rec.dtLanc);
+        return d ? `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}` : null;
+      };
+      const _dtIniKey = lancIni ? _dtKey(lancIni) : null;
+      const _dtFimKey = lancFim ? _dtKey(lancFim) : null;
+
+      // pesoIni: soma de todos os lançamentos do primeiro dia (caso haja múltiplos)
+      const pesoIni = _dtIniKey
+        ? lancsOrdenados
+            .filter(l => _dtKey(l) === _dtIniKey)
+            .reduce((acc, l) => acc + num(l.peso), 0)
+        : num(lancIni?.peso);
+
+      // pesoFim: soma de todos os lançamentos do último dia (caso haja múltiplos)
+      // Se primeiro e último dia forem o mesmo, pesoFim já inclui os mesmos registros
+      const pesoFim = _dtFimKey
+        ? lancsOrdenados
+            .filter(l => _dtKey(l) === _dtFimKey)
+            .reduce((acc, l) => acc + num(l.peso), 0)
+        : num(lancFim?.peso);
+
+      const entCods = {};
+      const saiCods = {};
+      const entRefs = {};
+      const saiRefs = {};
+      sap.forEach(s => {
+        const cod = normMov(s.movimento);
+        const p = num(s.peso);
+        const refVal = (s.ref && String(s.ref).trim()) ? String(s.ref).trim()
+                     : (s.documento && String(s.documento).trim()) ? String(s.documento).trim()
+                     : '';
+        if (p > 0) {
+          entCods[cod] = (entCods[cod] || 0) + p;
+          if (refVal) {
+            if (!entRefs[cod]) entRefs[cod] = new Set();
+            entRefs[cod].add(refVal);
+          }
+        } else if (p < 0) {
+          saiCods[cod] = (saiCods[cod] || 0) + p;
+          if (refVal) {
+            if (!saiRefs[cod]) saiRefs[cod] = new Set();
+            saiRefs[cod].add(refVal);
+          }
+        }
+      });
+
+      const totalEnt = Object.values(entCods).reduce((a, b) => a + b, 0);
+      const totalSai = Object.values(saiCods).reduce((a, b) => a + b, 0);
+      const estTeorico = pesoIni + totalEnt + totalSai;
+      const diff = pesoFim - estTeorico;
+
+      const entRecords = sap.filter(s => num(s.peso) > 0).sort((a, b) => num(b.peso) - num(a.peso));
+      const saiRecords = sap.filter(s => num(s.peso) < 0).sort((a, b) => num(a.peso) - num(b.peso));
+
+      return {
+        lancIni, lancFim, pesoIni, pesoFim,
+        entCods, saiCods, entRefs, saiRefs,
+        entRecords, saiRecords,
+        totalEnt, totalSai, estTeorico, diff,
+        dtIniLabel: lancIni?.dtLanc || '—',
+        dtFimLabel: lancFim?.dtLanc || '—'
+      };
+  }
+
+  function buildHealthPanel(allMatsSorted, lancsByMat, sapByMat, categoriaByMat) {
+    const thresholds = getHealthThresholds();
+
+    const matDiffs = allMatsSorted.map(mat => {
+      const snap = buildSnapshot({ lancs: lancsByMat.get(mat) || [], sap: sapByMat.get(mat) || [] });
+      const rawCat = categoriaByMat.get(mat) || '';
+      const catKey = detectCatKey(rawCat) || detectCatFromMat(mat);
+      return { mat, diff: snap.diff, catKey };
+    });
+
+    const { score, level, counts } = calcHealthScore(matDiffs, lancsByMat, sapByMat, thresholds);
+
+    const levelLabel = { ok: 'SAUDÁVEL', atencao: 'ATENÇÃO', urgente: 'URGENTE', critico: 'CRÍTICO' };
+    const levelCls   = { ok: 'hs-ok', atencao: 'hs-atencao', urgente: 'hs-urgente', critico: 'hs-critico' };
+
+    // Top worst materials (non-neutral, sorted by |diff| desc)
+    const nonNeutral = matDiffs.filter(m => Math.abs(m.diff) > 0.0001);
+    const sorted = [...nonNeutral].sort((a,b) => Math.abs(b.diff) - Math.abs(a.diff));
+    const top3 = sorted.slice(0, 3);
+
+    const badgeStyle = {
+      bom:     'background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)',
+      atencao: 'background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border)',
+      urgente: 'background:rgba(249,115,22,0.10);color:#f97316;border:1px solid rgba(249,115,22,0.22)',
+      critico: 'background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)'
+    };
+
+    const worstRows = top3.map(m => {
+      const lvl = classifyVariation(Math.abs(m.diff), m.catKey, thresholds);
+      const lvlLabel = { bom:'BOM', atencao:'ATENÇÃO', urgente:'URGENTE', critico:'CRÍTICO' }[lvl];
+      const valCls = m.diff < 0 ? 'neg' : 'pos';
+      return `<div class="health-worst-row">
+        <span class="health-worst-mat" title="${escapeHtml(m.mat)}">${escapeHtml(m.mat)}</span>
+        <span class="health-worst-val ${valCls}" style="color:${m.diff < 0 ? 'var(--red)' : 'var(--green)'}">${varSymbol(m.diff)} ${fmtKg(Math.abs(m.diff))}</span>
+        <span class="health-worst-badge" style="${badgeStyle[lvl]};border-radius:4px;padding:1px 6px;font-size:9px;font-weight:700;font-family:var(--mono)">${lvlLabel}</span>
+      </div>`;
+    }).join('');
+
+    return `
+      <div class="health-panel">
+        <div class="health-top">
+          <span class="health-title"><i class="ti ti-heartbeat"></i> Saúde da Central</span>
+          <div class="health-score-wrap">
+            <div class="health-bar-wrap" style="width:120px">
+              <div class="health-bar-fill ${levelCls[level]}" style="width:${score}%"></div>
+            </div>
+            <span class="health-score-value ${levelCls[level]}">${score}%</span>
+            <span style="font-size:10px;font-family:var(--mono);font-weight:700;padding:2px 8px;border-radius:5px;${badgeStyle[level] || ''}">${levelLabel[level]}</span>
+          </div>
+        </div>
+        <div class="health-stats-row">
+          <div class="health-stat hs-bom"><i class="ti ti-circle-check"></i><span class="hs-n">${counts.bom}</span><span>bom</span></div>
+          <div class="health-stat hs-atencao-chip"><i class="ti ti-alert-triangle"></i><span class="hs-n">${counts.atencao}</span><span>atenção</span></div>
+          <div class="health-stat hs-urgente-chip"><i class="ti ti-alert-circle"></i><span class="hs-n">${counts.urgente}</span><span>urgente</span></div>
+          <div class="health-stat hs-critico-chip"><i class="ti ti-flame"></i><span class="hs-n">${counts.critico}</span><span>crítico</span></div>
+          <div class="health-stat hs-neutro"><i class="ti ti-equal"></i><span class="hs-n">${counts.neutro}</span><span>neutro</span></div>
+          ${top3.length ? `
+          <div class="health-worst" style="flex:1;min-width:220px">
+            <div class="health-worst-title"><i class="ti ti-sort-descending" style="font-size:10px;margin-right:3px"></i>Maiores variações</div>
+            ${worstRows}
+          </div>` : ''}
+        </div>
+      </div>`;
+  }
+
+  function salvarHealthConfig() {
+    const cats = ['aglomerante','agregado','aditivo','adicao'];
+    const levels = ['bom','atencao','urgente'];
+    const catLabels = { aglomerante:'Aglomerantes', agregado:'Agregados', aditivo:'Aditivos', adicao:'Adições' };
+    const lvlLabels = { bom:'BOM', atencao:'ATENÇÃO', urgente:'URGENTE' };
+    let saved = 0;
+    cats.forEach(cat => {
+      levels.forEach(lvl => {
+        const input = document.getElementById(`hcfg-${cat}-${lvl}`);
+        if (!input) return;
+        const v = input.value.trim();
+        if (!v) return;
+        const n = parseFloat(v);
+        if (!Number.isFinite(n) || n <= 0) return;
+        const key = `saude_${cat}_${lvl}`;
+        const desc = `Limite ${lvlLabels[lvl]} para ${catLabels[cat]}`;
+        const existing = state.configs.findIndex(c => normalizeText(c.key) === normalizeText(key));
+        const rec = { key, value: String(n), desc, created: new Date().toLocaleDateString('pt-BR') };
+        if (existing >= 0) state.configs[existing] = rec; else state.configs.unshift(rec);
+        saved++;
+      });
+    });
+    persistStateNow();
+    renderConfigs();
+    toast(saved > 0 ? `${saved} limite(s) salvo(s)` : 'Nenhum valor preenchido', saved > 0 ? 'success' : 'error');
+  }
+
+  function loadHealthConfigInputs() {
+    const cats = ['aglomerante','agregado','aditivo','adicao'];
+    const levels = ['bom','atencao','urgente'];
+    cats.forEach(cat => {
+      levels.forEach(lvl => {
+        const input = document.getElementById(`hcfg-${cat}-${lvl}`);
+        if (!input) return;
+        const cfg = state.configs.find(c => normalizeText(c.key) === normalizeText(`saude_${cat}_${lvl}`));
+        if (cfg) input.value = cfg.value;
+      });
+    });
+  }
+
+  Object.assign(window, { salvarHealthConfig, loadHealthConfigInputs });
+
+    function makeResizable(table) {
     if (!table) return;
     const ths = table.querySelectorAll('thead th');
     ths.forEach(th => {
@@ -6339,6 +7277,7 @@ function debounce(fn, delay = 120) {
 
   function initResizable() {
     qsa('.table-scroll table').forEach(makeResizable);
+    qsa('.micro-table-wrap table').forEach(makeResizable);
   }
 
   function renderImports() {
@@ -7104,6 +8043,10 @@ function debounce(fn, delay = 120) {
     set('m-centrais', centrais.size);
 
     renderDashboardFeed();
+    // keep param gerais display in sync whenever data changes
+    if (document.getElementById('page-configuracoes')?.classList.contains('active')) {
+      updateParamGerais();
+    }
   }
 
   function renderEntradas() {
@@ -7308,6 +8251,34 @@ function debounce(fn, delay = 120) {
     if (_tbl_configs) injectColFilterButtons(_tbl_configs, 'configs');
   }
 
+  function updateParamGerais() {
+    // centrais_ativas — unique centrals from SAP module
+    const centraisSap = new Set(state.sap.map(r => r.central).filter(Boolean));
+    const cfgCentrais = document.getElementById('cfg-centrais');
+    if (cfgCentrais) {
+      const count = centraisSap.size;
+      cfgCentrais.textContent = count > 0 ? count : '—';
+      cfgCentrais.style.color = count > 0 ? 'var(--accent)' : '';
+      cfgCentrais.title = count > 0 ? [...centraisSap].sort().join(', ') : '';
+    }
+
+    // responsavel_padrao — load from configs state
+    const respInput = document.getElementById('cfg-resp-input');
+    if (respInput) {
+      const saved = (state.configs.find(c => c.key === '__responsavel_padrao__') || {}).value || '';
+      respInput.value = saved;
+    }
+  }
+
+  function saveResponsavel(value) {
+    const trimmed = value.trim();
+    const existing = state.configs.findIndex(c => c.key === '__responsavel_padrao__');
+    const rec = { key: '__responsavel_padrao__', value: trimmed, desc: 'Analista responsável padrão', created: new Date().toLocaleDateString('pt-BR') };
+    if (existing >= 0) state.configs[existing] = rec;
+    else state.configs.unshift(rec);
+    persist();
+  }
+
   function renderFiliais() {
     const tb = document.getElementById('tb-filiais');
     if (!tb) return;
@@ -7372,7 +8343,7 @@ function debounce(fn, delay = 120) {
       case 'sap': return renderSAP();
       case 'producao': return renderProducao();
       case 'importar': return renderImports();
-      case 'configuracoes': return renderConfigs();
+      case 'configuracoes': renderConfigs(); loadHealthConfigInputs(); updateParamGerais(); return;
       case 'filiais': return renderFiliais();
       case 'materiais': return renderMateriais();
       default: return;
@@ -7638,7 +8609,7 @@ function debounce(fn, delay = 120) {
     sap: () => renderSAP(),
     producao: () => renderProducao(),
     importar: () => renderImports(),
-    configuracoes: () => renderConfigs(),
+    configuracoes: () => { renderConfigs(); loadHealthConfigInputs(); updateParamGerais(); },
     filiais: () => renderFiliais(),
     materiais: () => renderMateriais()
   };
@@ -7672,6 +8643,9 @@ function debounce(fn, delay = 120) {
       if (isLoadingOverlayVisible()) updateLoadingOverlay('Montando a interface...', 'Carregando informações salvas', 'Ajustando métricas e listas...');
       await nextFrame();
       updateDashboard();
+      updateParamGerais();
+      renderFiliais();
+      renderMateriais();
       const activePage = document.querySelector('.page.active')?.id?.replace('page-', '') || 'importar';
       renderPage(activePage);
       if (isLoadingOverlayVisible()) updateLoadingOverlay('Finalizando o carregamento...', 'Carregando informações salvas', 'Quase pronto...');
@@ -7733,6 +8707,11 @@ function debounce(fn, delay = 120) {
     if (v < -0.0001) return '<i class="ti ti-trending-down" style="color:var(--red)"></i>';
     return '<i class="ti ti-minus" style="color:var(--text3)"></i>';
   }
+  function varSymbol(v) {
+    if (v > 0.0001)  return '<i class="ti ti-arrow-up" style="font-size:10px;vertical-align:middle"></i>';
+    if (v < -0.0001) return '<i class="ti ti-arrow-down" style="font-size:10px;vertical-align:middle"></i>';
+    return '<i class="ti ti-line" style="font-size:10px;vertical-align:middle"></i>';
+  }
 
   /**
    * Normalise a movement code: trim, uppercase, strip leading zeros.
@@ -7790,7 +8769,7 @@ function debounce(fn, delay = 120) {
         });
 
       // ── SAP desta central dentro do período ──
-      const sapNoPeriodo = state.sap.filter(r => r.central === central && inPeriod(r.dtDoc));
+      const sapNoPeriodo = state.sap.filter(r => r.central === central && inPeriod(r.dtLanc));
 
       // ── SAP: entradas = tudo positivo, saídas = tudo negativo ──
       // Breakdown por código para cada tipo
@@ -7818,6 +8797,25 @@ function debounce(fn, delay = 120) {
         if (!materiaisLancPrimeiro[mat]) materiaisLancPrimeiro[mat] = r;
       });
 
+      // Soma todos os lançamentos do primeiro dia por material (caso haja múltiplos)
+      const _macroIniDayKey = {};
+      lancsNoPeriodo.forEach(r => {
+        const mat = r.material || '—';
+        if (!_macroIniDayKey[mat]) {
+          const d = parseDate(r.dtLanc);
+          _macroIniDayKey[mat] = d ? `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}` : null;
+        }
+      });
+      const _macroPesoIniSoma = {};
+      lancsNoPeriodo.forEach(r => {
+        const mat = r.material || '—';
+        const d = parseDate(r.dtLanc);
+        const dk = d ? `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}` : null;
+        if (dk && dk === _macroIniDayKey[mat]) {
+          _macroPesoIniSoma[mat] = (_macroPesoIniSoma[mat] || 0) + num(r.peso);
+        }
+      });
+
       // ── Último lançamento do período (mais recente) ──
       const lancsDesc = [...lancsNoPeriodo].sort((a, b) => {
         const da = parseDate(a.dtLanc), db = parseDate(b.dtLanc);
@@ -7837,11 +8835,30 @@ function debounce(fn, delay = 120) {
       ]);
 
       // ── Macro: sum across all materials ──
+      // Para o Est. Final de cada material, soma todos os lançamentos
+      // da data mais recente (consistente com buildSnapshot e modal diário)
+      const _macroUltDayKey = {};
+      lancsDesc.forEach(r => {
+        const mat = r.material || '—';
+        if (!_macroUltDayKey[mat]) {
+          const d = parseDate(r.dtLanc);
+          _macroUltDayKey[mat] = d ? `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}` : null;
+        }
+      });
+      const _macroPesoFimSoma = {};
+      lancsNoPeriodo.forEach(r => {
+        const mat = r.material || '—';
+        const d = parseDate(r.dtLanc);
+        const dk = d ? `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}` : null;
+        if (dk && dk === _macroUltDayKey[mat]) {
+          _macroPesoFimSoma[mat] = (_macroPesoFimSoma[mat] || 0) + num(r.peso);
+        }
+      });
       let somaPrimeiro = 0;
       let somaUltimo   = 0;
       allMats.forEach(mat => {
-        somaPrimeiro += num(materiaisLancPrimeiro[mat]?.peso);
-        somaUltimo   += num(materiaisLancUltimo[mat]?.peso);
+        somaPrimeiro += (_macroPesoIniSoma[mat] ?? num(materiaisLancPrimeiro[mat]?.peso));
+        somaUltimo   += (_macroPesoFimSoma[mat] ?? num(materiaisLancUltimo[mat]?.peso));
       });
 
       // Teórico = 1º lançamento + entradas SAP + saídas SAP
@@ -7869,6 +8886,23 @@ function debounce(fn, delay = 120) {
         return firstDay <= dtFim && lastDay >= dtIni;
       });
 
+      // ── Saídas (módulo Saídas) desta central no período ──
+      // Custo médio ponderado por material: R$/kg → usado no badge de custo da variação
+      const saidasNoPeriodo = state.saidas.filter(s =>
+        s.central === central && inPeriod(s.dtEmissao)
+      );
+      const _custoPorMat = {};
+      const _pesoPorMat  = {};
+      saidasNoPeriodo.forEach(s => {
+        const mat = s.material || '—';
+        _custoPorMat[mat] = (_custoPorMat[mat] || 0) + num(s.valorTotal);
+        _pesoPorMat[mat]  = (_pesoPorMat[mat]  || 0) + Math.abs(num(s.peso));
+      });
+      const custoMedioPorMat = {};
+      Object.keys(_custoPorMat).forEach(mat => {
+        custoMedioPorMat[mat] = _pesoPorMat[mat] > 0 ? _custoPorMat[mat] / _pesoPorMat[mat] : 0;
+      });
+
       results.push({
         central,
         totalEntradas,
@@ -7884,7 +8918,8 @@ function debounce(fn, delay = 120) {
         materiaisLancUltimo,
         sapNoPeriodo,
         lancsNoPeriodo,
-        prodNoPeriodo
+        prodNoPeriodo,
+        custoMedioPorMat
       });
     });
 
@@ -7948,8 +8983,7 @@ function debounce(fn, delay = 120) {
       const varCls = r.variacaoEstoque > 0.001 ? 'var-cell-pos'
                    : r.variacaoEstoque < -0.001 ? 'var-cell-neg'
                    : 'var-cell-zero';
-      const varPfx = r.variacaoEstoque > 0 ? '+' : '';
-
+      
       const entPopover = buildPopover(r.entradasPorCod, 'var(--green)', 'Entradas');
       const saiPopover = buildPopover(r.saidasPorCod,   'var(--red)',   'Saídas');
 
@@ -7969,7 +9003,7 @@ function debounce(fn, delay = 120) {
               </span>${saiPopover}`
             : fmtKg(r.totalSaidas)}
         </td>
-        <td class="td-mono ${varCls}">${varPfx}${fmtKg(r.variacaoEstoque)}</td>
+        <td class="td-mono ${varCls}" style="white-space:nowrap">${varSymbol(r.variacaoEstoque)} ${fmtKg(Math.abs(r.variacaoEstoque))}</td>
         <td class="pending-cell">A consolidar</td>
       </tr>`;
     }).join('');
@@ -8047,7 +9081,7 @@ function debounce(fn, delay = 120) {
 
 
 
-function renderAnaliticoMicro(results, dtIni, dtFim) {
+  function renderAnaliticoMicro(results, dtIni, dtFim) {
     const container = document.getElementById('an-micro-container');
     if (!container) return;
     container.innerHTML = '';
@@ -8076,70 +9110,26 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
 
     const dayList = buildDayList();
 
-    const buildSnapshot = ({ lancs, sap }) => {
-      const lancsOrdenados = [...lancs].sort((a, b) => {
-        const da = parseDate(a.dtLanc), db = parseDate(b.dtLanc);
-        return dateCmp(da ?? new Date(0), db ?? new Date(0));
+    // Ordena centrais: maior desfalque (variação mais negativa) → maior sobra (mais positiva)
+    const calcVariacaoCentral = (r) => {
+      const lancsByMat = new Map();
+      const sapByMat = new Map();
+      (r.lancsNoPeriodo || []).forEach(rec => {
+        const mat = rec.material || '—';
+        if (!lancsByMat.has(mat)) lancsByMat.set(mat, []);
+        lancsByMat.get(mat).push(rec);
       });
-
-      const lancIni = lancsOrdenados[0];
-      const lancFim = lancsOrdenados[lancsOrdenados.length - 1];
-      const pesoIni = num(lancIni?.peso);
-      const pesoFim = num(lancFim?.peso);
-
-      const entCods = {};
-      const saiCods = {};
-      const entRefs = {};
-      const saiRefs = {};
-      sap.forEach(s => {
-        const cod = normMov(s.movimento);
-        const p = num(s.peso);
-        const refVal = (s.ref && String(s.ref).trim()) ? String(s.ref).trim()
-                     : (s.documento && String(s.documento).trim()) ? String(s.documento).trim()
-                     : '';
-        if (p > 0) {
-          entCods[cod] = (entCods[cod] || 0) + p;
-          if (refVal) {
-            if (!entRefs[cod]) entRefs[cod] = new Set();
-            entRefs[cod].add(refVal);
-          }
-        } else if (p < 0) {
-          saiCods[cod] = (saiCods[cod] || 0) + p;
-          if (refVal) {
-            if (!saiRefs[cod]) saiRefs[cod] = new Set();
-            saiRefs[cod].add(refVal);
-          }
-        }
+      (r.sapNoPeriodo || []).forEach(rec => {
+        const mat = rec.material || '—';
+        if (!sapByMat.has(mat)) sapByMat.set(mat, []);
+        sapByMat.get(mat).push(rec);
       });
-
-      const totalEnt = Object.values(entCods).reduce((a, b) => a + b, 0);
-      const totalSai = Object.values(saiCods).reduce((a, b) => a + b, 0);
-      const estTeorico = pesoIni + totalEnt + totalSai;
-      const diff = pesoFim - estTeorico;
-
-      // Registros individuais ordenados por peso desc (entradas) e asc (saídas)
-      const entRecords = sap.filter(s => num(s.peso) > 0).sort((a, b) => num(b.peso) - num(a.peso));
-      const saiRecords = sap.filter(s => num(s.peso) < 0).sort((a, b) => num(a.peso) - num(b.peso));
-
-      return {
-        lancIni,
-        lancFim,
-        pesoIni,
-        pesoFim,
-        entCods,
-        saiCods,
-        entRefs,
-        saiRefs,
-        entRecords,
-        saiRecords,
-        totalEnt,
-        totalSai,
-        estTeorico,
-        diff,
-        dtIniLabel: lancIni?.dtLanc || '—',
-        dtFimLabel: lancFim?.dtLanc || '—'
-      };
+      return [...(r.allMats || [])].reduce((acc, mat) => {
+        return acc + buildSnapshot({ lancs: lancsByMat.get(mat) || [], sap: sapByMat.get(mat) || [] }).diff;
+      }, 0);
     };
+
+    results = [...results].sort((a, b) => calcVariacaoCentral(a) - calcVariacaoCentral(b));
 
     results.forEach((r, idx) => {
       const prodHtml = r.prodNoPeriodo.length
@@ -8172,6 +9162,7 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
 
       let matRowsHtml = '';
       let variacaoCentralMicro = 0;
+      let custoVariacaoTotal = 0;  // R$ implicados pela variação de estoque
 
       // Ordena materiais: maior desfalque (diff mais negativo) → maior sobra (diff mais positivo)
       const allMatsSorted = [...r.allMats].sort((a, b) => {
@@ -8185,10 +9176,12 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
         const sapMat = sapByMat.get(mat) || [];
         const snapshot = buildSnapshot({ lancs: lancsMat, sap: sapMat });
         variacaoCentralMicro += snapshot.diff;
+        // acumula custo implicado: diff (kg) × custo médio do material (R$/kg)
+        const custoMedMat = (r.custoMedioPorMat || {})[mat] || 0;
+        if (custoMedMat > 0) custoVariacaoTotal += snapshot.diff * custoMedMat;
 
         const dCls = varClass(snapshot.diff);
-        const dPfx = snapshot.diff > 0 ? '+' : '';
-        const toEntry = s => {
+                const toEntry = s => {
           const ref = (s.ref && String(s.ref).trim()) ? String(s.ref).trim()
                     : (s.documento && String(s.documento).trim()) ? String(s.documento).trim() : '';
           return [normMov(s.movimento), num(s.peso), ref, String(s.usuario || '').trim()];
@@ -8238,10 +9231,13 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
           return dt.toISOString().slice(0,10);
         };
 
+        const firstDayKey = dateKey(dayList[0]);
+
         const dailyRows = dayList.map(day => {
           const key = dateKey(day);
+          const isFirstDay = key === firstDayKey;
           const dayLancs = lancsMat.filter(rec => dateKey(parseDate(rec.dtLanc)) === key);
-          const daySap   = sapMat.filter(rec => dateKey(parseDate(rec.dtDoc)) === key);
+          const daySap   = sapMat.filter(rec => dateKey(parseDate(rec.dtLanc)) === key);
           const daySnap  = buildSnapshot({ lancs: dayLancs, sap: daySap });
 
           const toDayEntry = s => {
@@ -8307,7 +9303,7 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
             semanaStart.setDate(semanaStart.getDate() - (isTerca ? 6 : 0));
             semanaStart.setHours(0,0,0,0);
             const sapSemana = sapMat.filter(rec => {
-              const d = parseDate(rec.dtDoc);
+              const d = parseDate(rec.dtLanc);
               return d && d >= semanaStart && d <= day;
             });
             const snapSemana = buildSnapshot({ lancs: [], sap: sapSemana });
@@ -8329,7 +9325,15 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
               carry = { value: estTeorico, isEstimated: true };
             }
 
-            const diff = hasLanc ? (finalStock - estTeorico) : null;
+            const diff = hasLanc
+              ? (() => {
+                  if (isFirstDay) {
+                    const rawDiff = finalStock - estTeorico;
+                    return (Math.abs(rawDiff) < 0.0001) ? 0 : null;
+                  }
+                  return finalStock - estTeorico;
+                })()
+              : null;
 
             return {
               dateLabel: fmtPtDate(day),
@@ -8340,8 +9344,8 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
               initialIsEstimated,
               entEntries: dayEntEntries,
               saiEntries: daySaiEntries,
-              totalEnt: snapSemana.totalEnt,
-              totalSai: snapSemana.totalSai,
+              totalEnt: daySnap.totalEnt,
+              totalSai: daySnap.totalSai,
               theoreticalStock: estTeorico,
               finalStock,
               finalIsEstimated,
@@ -8373,7 +9377,21 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
               carry = { value: estTeorico, isEstimated: true };
             }
 
-            const diff = hasLanc ? (finalStock - estTeorico) : null;
+            // No primeiro dia do período não há lançamento inicial confiável
+            // para calcular variação — suprimir diff (→ "—") exceto quando o
+            // lançamento final coincide com o inicial (diff seria 0 de qualquer modo).
+            let diff;
+            if (!hasLanc) {
+              diff = null;
+            } else if (isFirstDay) {
+              // Só exibe variação se o carry anterior for confiável E
+              // o finalStock igual ao carry (diff = 0); qualquer diferença
+              // seria espúria por falta de lançamento inicial no período.
+              const rawDiff = finalStock - estTeorico;
+              diff = (Math.abs(rawDiff) < 0.0001) ? 0 : null;
+            } else {
+              diff = finalStock - estTeorico;
+            }
 
             return {
               dateLabel: fmtPtDate(day),
@@ -8418,8 +9436,19 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
           days: dailyRows
         });
 
+        const _rowCustoMed  = (r.custoMedioPorMat || {})[mat] || 0;
+        const _rowCustoVar  = _rowCustoMed > 0 ? snapshot.diff * _rowCustoMed : null;
+        const _rowVarCls    = _rowCustoVar === null ? '' : varClass(_rowCustoVar);
+        const _rowVarPfx    = _rowCustoVar !== null && _rowCustoVar > 0 ? '+' : '';
+        const custoMedCell  = _rowCustoMed > 0
+          ? `<span class="td-mono" style="color:var(--text2);font-size:11.5px">${money(_rowCustoMed)}<span style="font-size:9.5px;opacity:.6">/kg</span></span>`
+          : `<span style="color:var(--text3);font-size:11px">—</span>`;
+        const custoVarCell  = _rowCustoVar !== null
+          ? `<span class="td-mono ${_rowVarCls}" style="font-size:11.5px;white-space:nowrap">${varSymbol(_rowCustoVar)} ${money(Math.abs(_rowCustoVar))}</span>`
+          : `<span style="color:var(--text3);font-size:11px">—</span>`;
+
         matRowsHtml += `
-          <tr class="material-row" data-detail-key="${detailKey}" onclick="toggleMaterialDetail(this, event)">
+          <tr class="material-row" data-detail-key="${detailKey}" data-diff="${snapshot.diff}" data-peso-fim="${snapshot.pesoFim}" onclick="toggleMaterialDetail(this, event)">
             <td class="td-mono" style="font-weight:600">
               <span class="material-row-title">
                 <i class="ti ti-eye-search material-row-chev"></i>
@@ -8433,7 +9462,9 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
             <td class="td-mono" style="color:var(--accent)">${fmtKg(snapshot.estTeorico)}</td>
             <td class="td-mono" style="color:var(--text2);font-size:11px">${snapshot.dtFimLabel}</td>
             <td class="td-mono" style="color:var(--teal)">${fmtKg(snapshot.pesoFim)}</td>
-            <td class="td-mono ${dCls}">${dPfx}${fmtKg(snapshot.diff)}</td>
+            <td class="td-mono ${dCls}" style="white-space:nowrap">${varSymbol(snapshot.diff)} ${fmtKg(Math.abs(snapshot.diff))}</td>
+            <td style="text-align:right">${custoMedCell}</td>
+            <td style="text-align:right">${custoVarCell}</td>
           </tr>`;
       });
 
@@ -8442,8 +9473,93 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
       const varCentralMicro = variacaoCentralMicro;
       const varCls = varClass(varCentralMicro);
 
+      // ── Produção badge (header) ───────────────────────────────────────────
+      const prodBadge = r.prodNoPeriodo.length
+        ? r.prodNoPeriodo.map(p =>
+            `<span style="display:inline-flex;align-items:center;gap:5px;background:var(--purple-bg);color:var(--purple);border:1px solid var(--purple-border);border-radius:6px;padding:2px 9px;font-family:var(--mono);font-size:10.5px;font-weight:600;white-space:nowrap">
+              <i class="ti ti-building-factory" style="font-size:12px"></i>
+              ${p.mes} · ${fmtKg(p.producao, 2)} m³
+            </span>`).join('')
+        : `<span style="display:inline-flex;align-items:center;gap:5px;background:var(--bg3);color:var(--text3);border:1px solid var(--border2);border-radius:6px;padding:2px 9px;font-family:var(--mono);font-size:10.5px;white-space:nowrap">
+            <i class="ti ti-building-factory" style="font-size:12px"></i> Sem produção
+           </span>`;
+
+      // ── Health panel (body, only when >= 5 materials) ────────────────────
+      let divPanelHtml = '';
+      let healthBadge  = '';
+      const totalMats = allMatsSorted.length;
+      if (totalMats >= 5) {
+        // Build categoria lookup for this central
+        const categoriaByMat = new Map();
+        allMatsSorted.forEach(mat => {
+          const lancs = lancsByMat.get(mat) || [];
+          const saps  = sapByMat.get(mat) || [];
+          const cat = (lancs[0]?.categoria || saps[0]?.categoria || '');
+          categoriaByMat.set(mat, cat);
+        });
+        divPanelHtml = buildHealthPanel(allMatsSorted, lancsByMat, sapByMat, categoriaByMat);
+
+        // ── Badge de saúde para a barra do header ──────────────────────────
+        const thresholds = getHealthThresholds();
+        const matDiffs = allMatsSorted.map(mat => {
+          const snap = buildSnapshot({ lancs: lancsByMat.get(mat) || [], sap: sapByMat.get(mat) || [] });
+          const rawCat = categoriaByMat.get(mat) || '';
+          const catKey = detectCatKey(rawCat) || detectCatFromMat(mat);
+          return { mat, diff: snap.diff, catKey };
+        });
+        const healthResult = calcHealthScore(matDiffs, lancsByMat, sapByMat, thresholds);
+        const hLevel = healthResult.level;
+        const hScore = healthResult.score;
+        const hLabelMap  = { ok: 'SAUDÁVEL', atencao: 'ATENÇÃO', urgente: 'URGENTE', critico: 'CRÍTICO' };
+        const hIconMap   = { ok: 'ti-heartbeat', atencao: 'ti-alert-triangle', urgente: 'ti-alert-circle', critico: 'ti-flame' };
+        const hStyleMap  = {
+          ok:      'background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)',
+          atencao: 'background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border)',
+          urgente: 'background:rgba(249,115,22,0.10);color:#f97316;border:1px solid rgba(249,115,22,0.22)',
+          critico: 'background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)'
+        };
+        healthBadge = `<span style="display:inline-flex;align-items:center;gap:5px;${hStyleMap[hLevel]};border-radius:6px;padding:2px 9px;font-family:var(--mono);font-size:10.5px;font-weight:700;white-space:nowrap">
+          <i class="ti ${hIconMap[hLevel]}" style="font-size:12px"></i>
+          Saúde: ${hScore}% · ${hLabelMap[hLevel]}
+        </span>`;
+      }
+
       const card = document.createElement('div');
       card.className = 'micro-filial-card';
+      card.dataset.centralDiff = varCentralMicro;
+      card.dataset.healthLevel = healthBadge ? (() => {
+        const thresholds = getHealthThresholds();
+        const categoriaByMatLocal = new Map();
+        allMatsSorted.forEach(mat => {
+          const lancs = lancsByMat.get(mat) || [];
+          const saps  = sapByMat.get(mat) || [];
+          categoriaByMatLocal.set(mat, lancs[0]?.categoria || saps[0]?.categoria || '');
+        });
+        const matDiffsLocal = allMatsSorted.map(mat => {
+          const snap = buildSnapshot({ lancs: lancsByMat.get(mat) || [], sap: sapByMat.get(mat) || [] });
+          const catKey = detectCatKey(categoriaByMatLocal.get(mat) || '') || detectCatFromMat(mat);
+          return { mat, diff: snap.diff, catKey };
+        });
+        return calcHealthScore(matDiffsLocal, lancsByMat, sapByMat, thresholds).level;
+      })() : 'none';
+      // ── Badge de custo da variação ──────────────────────────────────────────
+      let custoBadge = '';
+      if (custoVariacaoTotal !== 0) {
+        const hasCustos = Object.keys(r.custoMedioPorMat || {}).length > 0;
+        if (hasCustos) {
+          const isNeg = custoVariacaoTotal < 0;
+          const isPos = custoVariacaoTotal > 0;
+          const custoStyle = isNeg
+            ? 'background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)'
+            : 'background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)';
+          const custoIcon = isNeg ? 'ti-trending-down' : 'ti-trending-up';
+          custoBadge = `<span style="display:inline-flex;align-items:center;gap:5px;${custoStyle};border-radius:6px;padding:2px 9px;font-family:var(--mono);font-size:10.5px;font-weight:700;white-space:nowrap" title="Custo médio ponderado (Saídas) × variação de estoque por material">
+            <i class="ti ${custoIcon}" style="font-size:12px"></i>
+            Custo variação: ${money(Math.abs(custoVariacaoTotal))}
+          </span>`;
+        }
+      }
+
       card.innerHTML = `
         <div class="micro-filial-header" onclick="toggleMicro(this)">
           <div class="micro-filial-name">
@@ -8454,17 +9570,17 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
             <span><i class="ti ti-package-import" style="color:var(--green)"></i> Entradas SAP: ${fmtKg(totalEntCentral)}</span>
             <span><i class="ti ti-package-export" style="color:var(--red)"></i> Saídas SAP: ${fmtKg(totalSaiCentral)}</span>
             <span class="${varCls}">
-              ${varIcon(varCentralMicro)} Variação: ${varCentralMicro > 0 ? '+' : ''}${fmtKg(varCentralMicro)}
+              ${varIcon(varCentralMicro)} Variação: ${fmtKg(Math.abs(varCentralMicro))}
             </span>
+            ${custoBadge}
+            ${prodBadge}
+            ${healthBadge}
           </div>
           <i class="ti ti-chevron-down" style="color:var(--text3);font-size:16px;flex-shrink:0;transition:transform 0.2s" id="chev-${idx}"></i>
         </div>
 
         <div class="micro-filial-body" id="micro-body-${idx}">
-          <div class="micro-body-section">
-            <div class="micro-section-title"><i class="ti ti-building-factory"></i> Produção no Período</div>
-            ${prodHtml}
-          </div>
+          ${divPanelHtml}
 
           <div class="micro-body-section">
             <div class="micro-section-title"><i class="ti ti-box"></i> Análise por Material</div>
@@ -8479,24 +9595,32 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
                   <th>Est. Inicial<br><span style="font-size:9px;font-weight:400;opacity:.7">(1º Lançamento)</span></th>
                   <th>Entradas<br><span style="font-size:9px;font-weight:400;opacity:.7">(por código)</span></th>
                   <th>Saídas<br><span style="font-size:9px;font-weight:400;opacity:.7">(por código)</span></th>
+                  <th>Est. Teórico<br><span style="font-size:9px;font-weight:400;opacity:.7">(Ini+Ent+Sai)</span></th>
                   <th>Dt. Últ. Lançamento</th>
                   <th>Est. Final<br><span style="font-size:9px;font-weight:400;opacity:.7">(Últ. Lançamento)</span></th>
-                  <th>Est. Teórico<br><span style="font-size:9px;font-weight:400;opacity:.7">(Ini+Ent+Sai)</span></th>
                   <th>Variação<br><span style="font-size:9px;font-weight:400;opacity:.7">(Real − Teórico)</span></th>
+                  <th style="text-align:right">Custo Médio<br><span style="font-size:9px;font-weight:400;opacity:.7">(Saídas · R$/kg)</span></th>
+                  <th style="text-align:right">Custo Variação<br><span style="font-size:9px;font-weight:400;opacity:.7">(Var. × C. Médio)</span></th>
                 </tr>
               </thead>
-              <tbody>${matRowsHtml || '<tr><td colspan="9"><div class="empty-state" style="padding:24px"><i class="ti ti-box-off"></i><p>Nenhum material encontrado.</p></div></td></tr>'}</tbody>
+              <tbody>${matRowsHtml || '<tr><td colspan="11"><div class="empty-state" style="padding:24px"><i class="ti ti-box-off"></i><p>Nenhum material encontrado.</p></div></td></tr>'}</tbody>
             </table>
           </div>
         </div>`;
 
       container.appendChild(card);
+      card.querySelectorAll('.micro-table-wrap table').forEach(makeResizable);
     });
+
+    // Populate filter dropdowns with available centrais and materiais
+    populateMicroFilterOptions(results);
+    // Reset applied filters whenever a new analysis runs
+    clearAllMicroFilters();
   }
 
 
 
-function toggleMaterialDetail(row, event) {
+  function toggleMaterialDetail(row, event) {
     if (event && (
       event.target.closest('.breakdown-trigger') ||
       event.target.closest('.breakdown-popover') ||
@@ -8526,6 +9650,327 @@ function toggleMaterialDetail(row, event) {
     document.getElementById('an-empty').style.display = '';
     document.getElementById('an-content').style.display = 'none';
   }
+
+  // ═══════════════════════════════════════════════════════════
+  // MICRO FILTER BAR
+  // ═══════════════════════════════════════════════════════════
+  const _microFilter = {
+    // Pending selections (while dropdown is open)
+    pending: { central: new Set(), material: new Set() },
+    // Applied selections
+    applied: { central: new Set(), material: new Set() },
+    // All available options extracted from last renderAnaliticoMicro call
+    options: { central: [], material: [] },
+    // variação data keyed by "central|||material" for row-level filtering
+    variacaoData: new Map()
+  };
+
+  function _microFilterBar() { return document.getElementById('micro-filter-bar'); }
+
+  /** Populate filter options from the rendered results data */
+  function populateMicroFilterOptions(results) {
+    const centrais = [...new Set(results.map(r => r.central).filter(Boolean))].sort();
+    const mats = [...new Set(results.flatMap(r => r.allMats || []).filter(Boolean))].sort();
+    _microFilter.options.central  = centrais;
+    _microFilter.options.material = mats;
+    _buildOptionsList('central');
+    _buildOptionsList('material');
+    _syncTriggerLabel('central');
+    _syncTriggerLabel('material');
+    _syncTriggerLabel('variacao');
+    _syncClearBtn();
+    // Show bar only when there is data
+    const bar = _microFilterBar();
+    if (bar) bar.style.display = results.length ? 'flex' : 'none';
+  }
+
+  function _buildOptionsList(key, query = '') {
+    const container = document.getElementById(`mfo-${key}`);
+    if (!container) return;
+    const opts = _microFilter.options[key];
+    const q = query.toLowerCase().trim();
+    const filtered = q ? opts.filter(o => o.toLowerCase().includes(q)) : opts;
+    const applied = _microFilter.applied[key];
+    const pending = _microFilter.pending[key];
+
+    if (!filtered.length) {
+      container.innerHTML = `<div style="padding:12px 10px;color:var(--text3);font-size:12px;text-align:center">Nenhum resultado</div>`;
+      return;
+    }
+    container.innerHTML = filtered.map(opt => {
+      const checked = pending.size ? pending.has(opt) : applied.has(opt);
+      const id = `mfopt-${key}-${opt.replace(/[^a-z0-9]/gi,'_')}`;
+      return `<label class="micro-filter-option" for="${id}">
+        <input type="checkbox" id="${id}" value="${escapeHtml(opt)}" ${checked ? 'checked' : ''}
+          onchange="_microFilterCheckChange('${key}', this)">
+        <span class="micro-filter-option-label" title="${escapeHtml(opt)}">${escapeHtml(opt)}</span>
+      </label>`;
+    }).join('');
+  }
+
+  function _microFilterCheckChange(key, checkbox) {
+    const val = checkbox.value;
+    const pending = _microFilter.pending[key];
+    if (checkbox.checked) pending.add(val);
+    else pending.delete(val);
+  }
+
+  function toggleMicroFilter(key) {
+    const dd = document.getElementById(`mfd-${key}`);
+    const chev = document.getElementById(`mfc-${key}`);
+    const allKeys = ['central', 'material', 'variacao'];
+    // Close all other dropdowns first
+    allKeys.filter(k => k !== key).forEach(otherKey => {
+      const otherDd = document.getElementById(`mfd-${otherKey}`);
+      const otherChev = document.getElementById(`mfc-${otherKey}`);
+      if (otherDd?.classList.contains('open')) {
+        otherDd.classList.remove('open');
+        otherChev?.classList.remove('open');
+        if (otherKey === 'variacao') {
+          _varFilter.pending.levels = new Set(_varFilter.applied.levels);
+        } else {
+          _microFilter.pending[otherKey] = new Set(_microFilter.applied[otherKey]);
+        }
+      }
+    });
+    const isOpen = dd.classList.toggle('open');
+    chev.classList.toggle('open', isOpen);
+    if (isOpen) {
+      // Sync pending with applied when opening
+      if (key === 'variacao') {
+        _varFilter.pending.levels = new Set(_varFilter.applied.levels);
+        _buildVariacaoOptions();
+      } else {
+        _microFilter.pending[key] = new Set(_microFilter.applied[key]);
+        // Reset search
+        const searchEl = document.getElementById(`mfs-${key}`);
+        if (searchEl) searchEl.value = '';
+        _buildOptionsList(key);
+        // Focus search
+        setTimeout(() => searchEl?.focus(), 50);
+      }
+    }
+  }
+
+  function filterMicroOptions(key, query) {
+    _buildOptionsList(key, query);
+  }
+
+  function applyMicroFilter(key) {
+    if (key === 'variacao') {
+      _readVarPending();
+      _varFilter.applied.levels = new Set(_varFilter.pending.levels);
+    } else {
+      _microFilter.applied[key] = new Set(_microFilter.pending[key]);
+    }
+    _closeMicroFilterDropdown(key);
+    _syncTriggerLabel(key);
+    _syncClearBtn();
+    _applyMicroVisibility();
+  }
+
+  function cancelMicroFilter(key) {
+    if (key === 'variacao') {
+      _varFilter.pending.levels = new Set(_varFilter.applied.levels);
+    } else {
+      _microFilter.pending[key] = new Set(_microFilter.applied[key]);
+    }
+    _closeMicroFilterDropdown(key);
+  }
+
+  function _closeMicroFilterDropdown(key) {
+    document.getElementById(`mfd-${key}`)?.classList.remove('open');
+    document.getElementById(`mfc-${key}`)?.classList.remove('open');
+  }
+
+  function _syncTriggerLabel(key) {
+    const btn = document.getElementById(`mft-${key}`);
+    const label = document.getElementById(`mft-${key}-label`);
+    if (!label || !btn) return;
+    const keyLabels = { central: 'Central', material: 'Material', variacao: 'Saúde' };
+    const keyLabel = keyLabels[key] || key;
+
+    if (key === 'variacao') {
+      const st = _varFilter.applied;
+      if (!_varFilterIsActive(st)) {
+        label.innerHTML = keyLabel;
+        btn.classList.remove('active');
+      } else {
+        const labelMap = { ok: 'Saudável', atencao: 'Atenção', urgente: 'Urgente', critico: 'Crítico', none: 'Sem saúde' };
+        const summary = [...st.levels].map(l => labelMap[l] || l).join(', ');
+        label.innerHTML = st.levels.size === 1
+          ? `${keyLabel}: <strong>${summary}</strong>`
+          : `${keyLabel} <span class="micro-filter-badge">${st.levels.size}</span>`;
+        btn.classList.add('active');
+      }
+      return;
+    }
+
+    const applied = _microFilter.applied[key];
+    if (!applied.size) {
+      label.innerHTML = keyLabel;
+      btn.classList.remove('active');
+    } else if (applied.size === 1) {
+      const val = [...applied][0];
+      label.innerHTML = `${keyLabel}: <strong>${escapeHtml(val.length > 18 ? val.slice(0,18)+'…' : val)}</strong>`;
+      btn.classList.add('active');
+    } else {
+      label.innerHTML = `${keyLabel} <span class="micro-filter-badge">${applied.size}</span>`;
+      btn.classList.add('active');
+    }
+  }
+
+  function _syncClearBtn() {
+    const btn = document.getElementById('micro-filter-clear-btn');
+    if (!btn) return;
+    const hasAny = _microFilter.applied.central.size || _microFilter.applied.material.size || _varFilterIsActive(_varFilter.applied);
+    btn.style.display = hasAny ? '' : 'none';
+  }
+
+  function clearAllMicroFilters() {
+    _microFilter.applied.central  = new Set();
+    _microFilter.applied.material = new Set();
+    _microFilter.pending.central  = new Set();
+    _microFilter.pending.material = new Set();
+    _varFilter.applied  = { levels: new Set() };
+    _varFilter.pending  = { levels: new Set() };
+    _syncTriggerLabel('central');
+    _syncTriggerLabel('material');
+    _syncTriggerLabel('variacao');
+    _syncClearBtn();
+    _applyMicroVisibility();
+  }
+
+  // ── Saúde filter state (replaces old variação % filter) ──
+  const _varFilter = {
+    pending:  { levels: new Set() },
+    applied:  { levels: new Set() },
+  };
+
+  function _varFilterChange() {
+    // Sync chip visual state
+    document.querySelectorAll('#mfr-health-levels .mfr-chip').forEach(chip => {
+      const cb = chip.querySelector('input[type="checkbox"]');
+      chip.classList.toggle('checked', cb.checked);
+    });
+    _updateVarHint();
+  }
+
+  function _updateVarHint() {
+    const hint = document.getElementById('mfr-hint');
+    if (!hint) return;
+    const levels = [...document.querySelectorAll('#mfr-health-levels input:checked')].map(i => i.value);
+    if (!levels.length) {
+      hint.textContent = 'Nenhum filtro definido.';
+      hint.className = 'mfr-hint';
+      return;
+    }
+    const labelMap = { ok: 'Saudável', atencao: 'Atenção', urgente: 'Urgente', critico: 'Crítico', none: 'Sem saúde' };
+    hint.textContent = 'Exibindo: ' + levels.map(l => labelMap[l] || l).join(', ');
+    hint.className = 'mfr-hint active';
+  }
+
+  function _syncVarDropdownToState(state) {
+    document.querySelectorAll('#mfr-health-levels input[type="checkbox"]').forEach(cb => {
+      cb.checked = state.levels.has(cb.value);
+      cb.closest('.mfr-chip').classList.toggle('checked', cb.checked);
+    });
+    _updateVarHint();
+  }
+
+  function _readVarPending() {
+    const levels = new Set([...document.querySelectorAll('#mfr-health-levels input:checked')].map(i => i.value));
+    _varFilter.pending.levels = levels;
+  }
+
+  function _varFilterIsActive(state) {
+    return state.levels.size > 0;
+  }
+
+  function _buildVariacaoOptions() {
+    _syncVarDropdownToState(_varFilter.pending);
+  }
+
+  function _applyMicroVisibility() {
+    const appliedCentrals  = _microFilter.applied.central;
+    const appliedMaterials = _microFilter.applied.material;
+    const varState = _varFilter.applied;
+    const varActive = _varFilterIsActive(varState);
+
+    const cards = document.querySelectorAll('#an-micro-container .micro-filial-card');
+    cards.forEach(card => {
+      const header = card.querySelector('.micro-filial-name');
+      const centralName = header ? header.textContent.trim() : '';
+
+      // Central filter
+      if (appliedCentrals.size && !appliedCentrals.has(centralName)) {
+        card.style.display = 'none'; return;
+      }
+
+      // Saúde filter — match dataset.healthLevel against selected levels
+      if (varActive) {
+        const cardLevel = card.dataset.healthLevel || 'none';
+        if (!varState.levels.has(cardLevel)) {
+          card.style.display = 'none'; return;
+        }
+      }
+
+      // Material filter — row level only
+      const rows = card.querySelectorAll('tbody tr.material-row');
+      if (appliedMaterials.size) {
+        let visibleRows = 0;
+        rows.forEach(row => {
+          const matCell = row.querySelector('td:first-child');
+          const matName = matCell ? matCell.textContent.trim() : '';
+          const show = appliedMaterials.has(matName);
+          row.style.display = show ? '' : 'none';
+          if (show) visibleRows++;
+        });
+        card.style.display = visibleRows > 0 ? '' : 'none';
+      } else {
+        rows.forEach(r => r.style.display = '');
+        card.style.display = '';
+      }
+    });
+  }
+
+  function expandAllMicro() {
+    document.querySelectorAll('#an-micro-container .micro-filial-card').forEach((card, idx) => {
+      const body = card.querySelector('.micro-filial-body');
+      const chev = card.querySelector('[id^="chev-"]');
+      if (body) body.classList.add('open');
+      if (chev) chev.style.transform = 'rotate(180deg)';
+    });
+  }
+
+  function collapseAllMicro() {
+    document.querySelectorAll('#an-micro-container .micro-filial-card').forEach(card => {
+      const body = card.querySelector('.micro-filial-body');
+      const chev = card.querySelector('[id^="chev-"]');
+      if (body) body.classList.remove('open');
+      if (chev) chev.style.transform = '';
+    });
+  }
+
+  // Close dropdowns when clicking outside
+  document.addEventListener('click', e => {
+    ['central','material','variacao'].forEach(key => {
+      const group = document.getElementById(`mfg-${key}`);
+      if (group && !group.contains(e.target)) {
+        const dd = document.getElementById(`mfd-${key}`);
+        if (dd?.classList.contains('open')) {
+          // Cancel pending on outside click
+          _microFilter.pending[key] = new Set(_microFilter.applied[key]);
+          _closeMicroFilterDropdown(key);
+        }
+      }
+    });
+  });
+
+  Object.assign(window, { _microFilterCheckChange, toggleMicroFilter, filterMicroOptions,
+    applyMicroFilter, cancelMicroFilter, clearAllMicroFilters,
+    expandAllMicro, collapseAllMicro, populateMicroFilterOptions,
+    _buildVariacaoOptions, _varFilterChange });
 
   // ═══════════════════════════════════════════════════════════
 
@@ -8558,6 +10003,8 @@ function toggleMaterialDetail(row, event) {
     removerConfig,
     editConfig,
     deleteConfig,
+    saveResponsavel,
+    updateParamGerais,
     applyColFilter,
     clearColFilter,
     clearAllColFilters,
@@ -8592,7 +10039,14 @@ function toggleMaterialDetail(row, event) {
     toggleAnaliticoDetailFullscreen,
     toggleMicro,
     toggleMaterialDetail,
-    toggleBreakdown
+    toggleBreakdown,
+    expandAllMicro,
+    collapseAllMicro,
+    toggleMicroFilter,
+    filterMicroOptions,
+    applyMicroFilter,
+    cancelMicroFilter,
+    clearAllMicroFilters
   });
 
   // ═══════════════════════════════════════════════════════════
@@ -8814,6 +10268,9 @@ function toggleMaterialDetail(row, event) {
     stateHydrated = true;
     const activePage = document.querySelector('.page.active')?.id?.replace('page-', '') || 'importar';
     updateDashboard();
+    updateParamGerais();
+    renderFiliais();
+    renderMateriais();
     renderPage(activePage);
     initResizable();
   }
