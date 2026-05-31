@@ -7590,7 +7590,7 @@ function debounce(fn, delay = 120) {
     const blob = new Blob([data], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'central_analise_' + new Date().toISOString().slice(0, 10) + '.json';
+    a.download = 'central_analise_' + localISODate(new Date()) + '.json';
     a.click();
     URL.revokeObjectURL(a.href);
     toast('Dados exportados com sucesso');
@@ -9252,12 +9252,37 @@ function debounce(fn, delay = 120) {
     return 'mat_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 10);
   }
 
+  function normalizeImportedMaterial(item, importId) {
+    const src = item && typeof item === 'object' ? item : {};
+    return {
+      id: src.id || makeMaterialId(),
+      origem: String(src.origem || '').trim(),
+      alias: String(src.alias || '').trim(),
+      desc: String(src.desc || '').trim(),
+      created: src.created || new Date().toLocaleDateString('pt-BR'),
+      importId
+    };
+  }
+
+  function normalizeImportedFilial(item, importId) {
+    const src = item && typeof item === 'object' ? item : {};
+    return {
+      origem: String(src.origem || '').trim(),
+      alias: String(src.alias || '').trim(),
+      cnpj: String(src.cnpj || '').trim(),
+      regional: String(src.regional || '').trim(),
+      created: src.created || new Date().toLocaleDateString('pt-BR'),
+      importId
+    };
+  }
+
   function upsertMateriais(items) {
-    items.forEach(item => {
+    (items || []).forEach(item => {
+      const src = item && typeof item === 'object' ? item : {};
       const rec = {
-        id: item.id || makeMaterialId(),
-        ...item,
-        created: item.created || new Date().toLocaleDateString('pt-BR')
+        id: src.id || makeMaterialId(),
+        ...src,
+        created: src.created || new Date().toLocaleDateString('pt-BR')
       };
 
       const key = materialMatchKey(rec);
@@ -9360,7 +9385,7 @@ function debounce(fn, delay = 120) {
         const importId = `cad_materiais_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
 
         updateLoadingOverlay('Atualizando cadastros salvos...', 'Importando materiais');
-        upsertMateriais(items.map(item => ({ ...item, importId })));
+        upsertMateriais(items.map(item => normalizeImportedMaterial(item, importId)));
         state.imports.unshift({
           id: importId,
           arquivo: file.name,
@@ -9485,11 +9510,15 @@ function debounce(fn, delay = 120) {
   }
 
   function upsertFiliais(items) {
-    items.forEach(item => {
-      const key = normalizeText(item.origem);
-      const aliasKey = normalizeText(item.alias);
+    (items || []).forEach(item => {
+      const src = item && typeof item === 'object' ? item : {};
+      const key = normalizeText(src.origem);
+      const aliasKey = normalizeText(src.alias);
       const idx = state.filiais.findIndex(f => normalizeText(f.origem) === key || normalizeText(f.alias) === aliasKey);
-      const rec = { ...item, created: item.created || new Date().toLocaleDateString('pt-BR') };
+      const rec = {
+        ...src,
+        created: src.created || new Date().toLocaleDateString('pt-BR')
+      };
       if (idx >= 0) state.filiais[idx] = rec; else state.filiais.unshift(rec);
     });
     invalidateFilialLookup();
@@ -9579,7 +9608,7 @@ function debounce(fn, delay = 120) {
         const importId = `cad_centrais_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
 
         updateLoadingOverlay('Atualizando cadastros salvos...', 'Importando centrais');
-        upsertFiliais(items.map(item => ({ ...item, importId })));
+        upsertFiliais(items.map(item => normalizeImportedFilial(item, importId)));
         state.imports.unshift({
           id: importId,
           arquivo: file.name,
@@ -11235,6 +11264,12 @@ function debounce(fn, delay = 120) {
 
   function dateCmp(a, b) { return a - b; }
 
+  function localISODate(d) {
+    const dt = d instanceof Date ? new Date(d.getTime()) : new Date(d);
+    if (!(dt instanceof Date) || Number.isNaN(dt.getTime())) return '';
+    return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+  }
+
   function fmtPtDate(d) {
     if (!d) return '—';
     return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
@@ -12221,7 +12256,18 @@ function debounce(fn, delay = 120) {
       }, 0);
     };
 
-    results = [...results].sort((a, b) => calcVariacaoCentral(a) - calcVariacaoCentral(b));
+        const variacaoCentralCache = new Map();
+    const getVariacaoCentral = (item) => {
+      if (variacaoCentralCache.has(item)) return variacaoCentralCache.get(item);
+      const value = calcVariacaoCentral(item);
+      variacaoCentralCache.set(item, value);
+      return value;
+    };
+
+    results = [...results]
+      .map(item => ({ item, score: getVariacaoCentral(item) }))
+      .sort((a, b) => a.score - b.score)
+      .map(entry => entry.item);
     window._microAnaliticoRows = results;
 
     const _cardBuffer = []; // collects cards before grouping
@@ -12323,7 +12369,7 @@ function debounce(fn, delay = 120) {
           const diff = (dow === 0) ? -6 : 1 - dow; // volta até segunda
           dt.setDate(dt.getDate() + diff);
           dt.setHours(0,0,0,0);
-          return dt.toISOString().slice(0,10);
+          return localISODate(dt);
         };
 
         const firstDayKey = dateKey(dayList[0]);
@@ -13376,7 +13422,7 @@ function debounce(fn, delay = 120) {
   // QUICK PERIOD SHORTCUTS
   // ═══════════════════════════════════════════════════════════
   function toISODate(d) {
-    return d.toISOString().split('T')[0];
+    return localISODate(d);
   }
 
   function setQuickPeriod(days) {
@@ -13610,7 +13656,7 @@ function debounce(fn, delay = 120) {
   // ═══════════════════════════════════════════════════════════
   (function() {
     function toISO(d) {
-      return d.toISOString().slice(0, 10);
+      return localISODate(d);
     }
 
     // Detect which page is active: 'dashboard' | 'analitico' | null
