@@ -861,6 +861,39 @@ tbody td {
 /* ══════════════════════════════════════════
    BDM TRIGGER
 ══════════════════════════════════════════ */
+.import-prereq-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--amber-border);
+  background: var(--amber-bg);
+  color: var(--amber);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.import-prereq-banner i {
+  font-size: 16px;
+  margin-top: 1px;
+  flex-shrink: 0;
+}
+.import-prereq-banner strong {
+  display: block;
+  font-size: 12.5px;
+  margin-bottom: 2px;
+  color: var(--text);
+}
+.import-prereq-banner span {
+  color: var(--text2);
+}
+
+/* ══════════════════════════════════════════
+   IMPORT CARDS
+/* ══════════════════════════════════════════
+   BDM TRIGGER
+══════════════════════════════════════════ */
 .import-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
@@ -5843,6 +5876,13 @@ tbody tr:nth-child(even):hover {
       <!-- IMPORTAR -->
 
       <div class="page active" id="page-importar">
+        <div class="import-prereq-banner" id="import-prereq-banner">
+          <i class="ti ti-lock"></i>
+          <div>
+            <strong>Importação bloqueada até a padronização obrigatória.</strong>
+            <span>Primeiro cadastre PADRONIZAÇÃO DE CENTRAIS e PADRONIZAÇÃO DE MATERIAIS em Configurações. Só depois os módulos podem ser importados.</span>
+          </div>
+        </div>
         <div class="import-grid">
           <!-- Entradas -->
           <div class="import-card">
@@ -6590,7 +6630,56 @@ function $(selector) {
 
 const state = defaultState();
 
+function normalizeConfigKey(key) {
+  return String(key ?? '').trim().toLowerCase();
+}
+
+function mergePersistentConfigs(existing, incoming) {
+  const merged = new Map();
+
+  const push = (rec) => {
+    if (!rec || typeof rec !== 'object') return;
+    const key = String(rec.key ?? '').trim();
+    if (!key) return;
+    const norm = normalizeConfigKey(key);
+    if (!norm) return;
+    merged.set(norm, {
+      ...rec,
+      key
+    });
+  };
+
+  if (Array.isArray(incoming)) incoming.forEach(push);
+  if (Array.isArray(existing)) {
+    existing.forEach(rec => {
+      const norm = normalizeConfigKey(rec?.key);
+      if (!norm || merged.has(norm)) return;
+      push(rec);
+    });
+  }
+
+  return [...merged.values()];
+}
+
+function hasRequiredReferenceData() {
+  return Array.isArray(state.filiais) && state.filiais.length > 0 &&
+         Array.isArray(state.materiais) && state.materiais.length > 0;
+}
+
+function updateImportPrereqUI() {
+  const banner = document.getElementById('import-prereq-banner');
+  if (banner) {
+    banner.style.display = hasRequiredReferenceData() ? 'none' : 'flex';
+  }
+}
+
+function showImportPrereqMessage() {
+  toast('Bloqueado: importe primeiro PADRONIZAÇÃO DE CENTRAIS e PADRONIZAÇÃO DE MATERIAIS em Configurações.', 'error');
+  updateImportPrereqUI();
+}
+
 function safeJSONParse(value, fallback = null) {
+
   try {
     return JSON.parse(value);
   } catch (error) {
@@ -6857,7 +6946,7 @@ function debounce(fn, delay = 120) {
   const IDB_STORE = 'kv';
   const IDB_STATE_KEY = 'appState';
   const legacyStateKey = STORAGE_KEY;
-  const saveSnapshotKeys = Object.keys(state);
+  const saveSnapshotKeys = ['configs', 'filiais', 'materiais', 'entradas', 'saidas', 'lancamentos', 'sap', 'producao', 'imports'];
 
   let idbOpenPromise = null;
   let persistTimer = null;
@@ -6915,27 +7004,40 @@ function debounce(fn, delay = 120) {
     });
   }
 
+  // Mantém os registros SAP completos na persistência.
+  // O módulo exibe e utiliza campos como ref, depósito e dt. registro.
+  // Se eles forem descartados no snapshot, reaparecem vazios após o reload.
+  function compactSapRecords(records) {
+    if (!Array.isArray(records) || records.length === 0) return records;
+    return records.map(r => ({ ...r }));
+  }
+
   function buildStateSnapshot() {
     return {
       version: STATE_VERSION,
       savedAt: Date.now(),
+      configs: state.configs,
+      filiais: state.filiais,
+      materiais: state.materiais,
       entradas: state.entradas,
       saidas: state.saidas,
       lancamentos: state.lancamentos,
-      sap: state.sap,
+      sap: compactSapRecords(state.sap),
       producao: state.producao,
-      imports: state.imports,
-      configs: state.configs,
-      filiais: state.filiais,
-      materiais: state.materiais
+      imports: state.imports
     };
   }
 
   function applySavedState(saved) {
     if (!saved || typeof saved !== 'object') return false;
 
+    const incomingConfigs = Array.isArray(saved.configs) ? saved.configs : [];
+    state.configs = mergePersistentConfigs(state.configs, incomingConfigs);
+
     for (const key of saveSnapshotKeys) {
-      if (Array.isArray(saved[key])) state[key] = saved[key];
+      if (key === 'configs') continue;
+      if (!Array.isArray(saved[key])) continue;
+      state[key] = saved[key];
     }
 
     state.materiais = (state.materiais || []).map(item => ({
@@ -6951,7 +7053,16 @@ function debounce(fn, delay = 120) {
   }
 
   async function persistStateNow() {
-    if (!stateHydrated && !state.entradas.length && !state.saidas.length && !state.lancamentos.length && !state.sap.length && !state.producao.length && !state.imports.length && !state.configs.length && !state.filiais.length && !state.materiais.length) {
+    // Bail-out de segurança: só pula a gravação se o estado NÃO tiver sido hidratado
+    // E todas as coleções estiverem vazias — incluindo configs.
+    // configs é verificada separadamente para garantir que configurações salvas pelo
+    // usuário nunca sejam descartadas mesmo quando os demais módulos estão vazios.
+    const hasData = state.entradas.length  || state.saidas.length     ||
+                    state.lancamentos.length || state.sap.length       ||
+                    state.producao.length  || state.imports.length     ||
+                    state.configs.length   || state.filiais.length     ||
+                    state.materiais.length;
+    if (!stateHydrated && !hasData) {
       return;
     }
 
@@ -7239,6 +7350,10 @@ function debounce(fn, delay = 120) {
     return _filialLookupIndex;
   }
 
+  // Flag global: durante importações em batch, findMaterialMatch usa apenas
+  // lookup exato (sem fuzzy scan), evitando Maximum call stack size exceeded.
+  let _batchImportMode = false;
+
   function findMaterialMatch(valor) {
     const raw = String(valor ?? '').trim();
     if (!raw) return null;
@@ -7254,6 +7369,9 @@ function debounce(fn, delay = 120) {
       index.cache.set(key, exact);
       return exact;
     }
+
+    // Durante importação em batch, não fazer fuzzy scan para evitar stack overflow.
+    if (_batchImportMode) return null;
 
     let bestItem = null;
     let bestScore = 0;
@@ -7308,16 +7426,48 @@ function debounce(fn, delay = 120) {
 
   function fmtDate(v) {
     if (v === '' || v === null || v === undefined) return '—';
+    if (typeof v === 'object') return '—'; // objeto de erro XLSX {t:'e', v:n}
+    const s = String(v).trim();
+    if (/^#/.test(s)) return '—'; // strings de erro Excel (#VALUE!, #N/A, etc.)
     if (typeof v === 'number' && window.XLSX?.SSF) {
       const d = XLSX.SSF.parse_date_code(v);
       if (d) return `${String(d.d).padStart(2, '0')}/${String(d.m).padStart(2, '0')}/${d.y}`;
     }
-    return String(v);
+    return s || '—';
   }
 
   function num(v) {
-    const n = parseFloat(String(v).replace(',', '.'));
+    if (v === null || v === undefined) return 0;
+    if (typeof v === 'object') return 0; // cobre objetos de erro XLSX {t:'e', v:n}
+    const s = String(v).trim();
+    if (/^#/.test(s)) return 0; // strings de erro Excel: #VALUE!, #N/A, etc.
+    const n = parseFloat(s.replace(',', '.'));
     return Number.isFinite(n) ? n : 0;
+  }
+
+  /**
+   * Sanitiza um worksheet XLSX antes do sheet_to_json.
+   * Células com erro (type 'e') são substituídas por células vazias,
+   * evitando que #VALUE!, #DIV/0!, #N/A, etc. corrompam a importação.
+   * Também converte valores de texto que sejam strings de erro Excel.
+   */
+  function sanitizeWorksheet(ws) {
+    const EXCEL_ERR_RE = /^#(VALUE|DIV\/0|N\/A|REF|NAME\?|NUM|NULL|CALC|SPILL|FIELD|BLOCKED|CONNECT)!?$/i;
+    Object.keys(ws).forEach(addr => {
+      if (addr.startsWith('!')) return; // metadata da planilha — não tocar
+      const cell = ws[addr];
+      if (!cell) return;
+      // Célula com tipo erro (e = error no formato XLSX)
+      if (cell.t === 'e') {
+        ws[addr] = { t: 's', v: '', w: '' };
+        return;
+      }
+      // String que contém um erro Excel (pode ocorrer em CSV ou planilhas mistas)
+      if (cell.t === 's' && typeof cell.v === 'string' && EXCEL_ERR_RE.test(cell.v.trim())) {
+        ws[addr] = { t: 's', v: '', w: '' };
+      }
+    });
+    return ws;
   }
 
   function money(v, decimals = 2) {
@@ -7501,6 +7651,40 @@ function debounce(fn, delay = 120) {
   }
 
   let startupRestoreResolver = null;
+
+  // Verifica se há dados de importação no storage (entradas, saídas, SAP,
+  // lançamentos, produção ou imports). configs/filiais/materiais são dados
+  // de cadastro do sistema e nunca disparam o modal.
+  async function storageHasImportedData() {
+    const importKeys = ['entradas', 'saidas', 'lancamentos', 'sap', 'producao', 'imports'];
+    try {
+      const db = await openDb();
+      if (db) {
+        for (const key of importKeys) {
+          const val = await idbGet(db, key).catch(() => null);
+          if (Array.isArray(val) && val.length > 0) return true;
+        }
+        const snapshot = await idbGet(db, IDB_STATE_KEY).catch(() => null);
+        if (snapshot && typeof snapshot === 'object') {
+          for (const key of importKeys) {
+            if (Array.isArray(snapshot[key]) && snapshot[key].length > 0) return true;
+          }
+        }
+      }
+    } catch (_) {}
+    try {
+      const raw = localStorage.getItem(legacyStateKey);
+      if (raw) {
+        const parsed = safeJSONParse(raw, {});
+        if (parsed && typeof parsed === 'object') {
+          for (const key of importKeys) {
+            if (Array.isArray(parsed[key]) && parsed[key].length > 0) return true;
+          }
+        }
+      }
+    } catch (_) {}
+    return false;
+  }
 
   function openStartupRestoreModal() {
     return new Promise(resolve => {
@@ -8694,9 +8878,34 @@ function debounce(fn, delay = 120) {
     return { score, level, counts };
   }
 
+
+  function getPrePeriodLaunchStock({ central, material, dtIni }) {
+    const cutoff = dtIni instanceof Date ? dtIni : new Date(dtIni);
+    if (!(cutoff instanceof Date) || Number.isNaN(cutoff.getTime())) return null;
+
+    const materialKey = material || '—';
+    const prev = (state.lancamentos || [])
+      .filter(rec => rec.central === central && (rec.material || '—') === materialKey)
+      .map(rec => ({ rec, dt: parseDate(rec.dtLanc) }))
+      .filter(item => item.dt && item.dt < cutoff)
+      .sort((a, b) => dateCmp(b.dt, a.dt));
+
+    if (!prev.length) return null;
+
+    const targetKey = localISODate(prev[0].dt);
+    const sameDay = prev
+      .filter(item => localISODate(item.dt) === targetKey)
+      .map(item => item.rec);
+
+    return {
+      value: sameDay.reduce((acc, rec) => acc + num(rec.peso), 0),
+      dtLabel: fmtPtDate(prev[0].dt)
+    };
+  }
+
   // ── buildSnapshot: moved to module scope so buildHealthPanel and
   //    renderAnaliticoMicro can both use it ────────────────────────────────
-  function buildSnapshot({ lancs, sap }) {
+  function buildSnapshot({ lancs, sap, initialStockOverride = null, initialDateLabelOverride = null }) {
       const lancsOrdenados = [...lancs].sort((a, b) => {
         const da = parseDate(a.dtLanc), db = parseDate(b.dtLanc);
         return dateCmp(da ?? new Date(0), db ?? new Date(0));
@@ -8713,12 +8922,15 @@ function debounce(fn, delay = 120) {
       const _dtIniKey = lancIni ? _dtKey(lancIni) : null;
       const _dtFimKey = lancFim ? _dtKey(lancFim) : null;
 
-      // pesoIni: soma de todos os lançamentos do primeiro dia (caso haja múltiplos)
-      const pesoIni = _dtIniKey
-        ? lancsOrdenados
-            .filter(l => _dtKey(l) === _dtIniKey)
-            .reduce((acc, l) => acc + num(l.peso), 0)
-        : num(lancIni?.peso);
+      // Est. Inicial: usa o saldo do dia anterior quando disponível.
+      // Caso contrário, mantém a heurística antiga com o primeiro lançamento do período.
+      const pesoIni = Number.isFinite(initialStockOverride)
+        ? num(initialStockOverride)
+        : (_dtIniKey
+            ? lancsOrdenados
+                .filter(l => _dtKey(l) === _dtIniKey)
+                .reduce((acc, l) => acc + num(l.peso), 0)
+            : num(lancIni?.peso));
 
       // pesoFim: soma de todos os lançamentos do último dia (caso haja múltiplos)
       // Se primeiro e último dia forem o mesmo, pesoFim já inclui os mesmos registros
@@ -8766,16 +8978,30 @@ function debounce(fn, delay = 120) {
         entCods, saiCods, entRefs, saiRefs,
         entRecords, saiRecords,
         totalEnt, totalSai, estTeorico, diff,
-        dtIniLabel: lancIni?.dtLanc || '—',
-        dtFimLabel: lancFim?.dtLanc || '—'
+        dtIniLabel: initialDateLabelOverride || (lancIni?.dtLanc ? fmtPtDate(parseDate(lancIni.dtLanc) || new Date(lancIni.dtLanc)) : '—'),
+        dtFimLabel: lancFim?.dtLanc ? fmtPtDate(parseDate(lancFim.dtLanc) || new Date(lancFim.dtLanc)) : '—'
       };
   }
 
-  function buildHealthPanel(allMatsSorted, lancsByMat, sapByMat, categoriaByMat) {
+  function buildHealthPanel(central, dtIni, allMatsSorted, lancsByMat, sapByMat, categoriaByMat) {
     const thresholds = getHealthThresholds();
 
+    const prePeriodStockCache = new Map();
+    const getPrePeriodStock = (mat) => {
+      if (prePeriodStockCache.has(mat)) return prePeriodStockCache.get(mat);
+      const stock = getPrePeriodLaunchStock({ central, material: mat, dtIni });
+      prePeriodStockCache.set(mat, stock);
+      return stock;
+    };
+
     const matDiffs = allMatsSorted.map(mat => {
-      const snap = buildSnapshot({ lancs: lancsByMat.get(mat) || [], sap: sapByMat.get(mat) || [] });
+      const prev = getPrePeriodStock(mat);
+      const snap = buildSnapshot({
+        lancs: lancsByMat.get(mat) || [],
+        sap: sapByMat.get(mat) || [],
+        initialStockOverride: prev?.value,
+        initialDateLabelOverride: prev?.dtLabel
+      });
       const rawCat = categoriaByMat.get(mat) || '';
       const catKey = detectCatKey(rawCat) || detectCatFromMat(mat);
       return { mat, diff: snap.diff, catKey };
@@ -8860,6 +9086,7 @@ function debounce(fn, delay = 120) {
     });
     persistStateNow();
     renderConfigs();
+    updateImportPrereqUI();
     toast(saved > 0 ? `${saved} limite(s) salvo(s)` : 'Nenhum valor preenchido', saved > 0 ? 'success' : 'error');
   }
 
@@ -8948,6 +9175,7 @@ function debounce(fn, delay = 120) {
       `).join('');
     makeResizable(tb.closest('table'));
     injectColFilterButtons(tb.closest('table'), 'imports');
+    updateImportPrereqUI();
   }
 
   function excluirImportacao(importId) {
@@ -8955,14 +9183,18 @@ function debounce(fn, delay = 120) {
 
     const removeByImport = arr => arr.filter(r => r.importId !== importId);
 
-    state.entradas = removeByImport(state.entradas);
-    state.saidas = removeByImport(state.saidas);
+    state.entradas    = removeByImport(state.entradas);
+    state.saidas      = removeByImport(state.saidas);
     state.lancamentos = removeByImport(state.lancamentos);
-    state.sap = removeByImport(state.sap);
-    state.producao = removeByImport(state.producao);
-    state.filiais = removeByImport(state.filiais);
-    state.materiais = removeByImport(state.materiais);
-    state.imports = state.imports.filter(r => r.id !== importId);
+    state.sap         = removeByImport(state.sap);
+    state.producao    = removeByImport(state.producao);
+    state.filiais     = removeByImport(state.filiais);
+    state.materiais   = removeByImport(state.materiais);
+    state.imports     = state.imports.filter(r => r.id !== importId);
+    // state.configs é INTENCIONALMENTE omitido aqui:
+    // configurações não pertencem a nenhuma importação e jamais devem
+    // ser excluídas por esta função. Só o próprio usuário pode removê-las
+    // manualmente pela tela de Configurações.
 
     persist();
     renderAll();
@@ -9195,6 +9427,7 @@ function debounce(fn, delay = 120) {
     reaplicarPadronizacaoMateriais();
     await persistStateNow();
     renderAll();
+    updateImportPrereqUI();
     toast(`${imported.length} material(is) cadastrado(s)`);
     closeModal('modal-materiais');
   }
@@ -9367,11 +9600,11 @@ function debounce(fn, delay = 120) {
 
         if (fileName.endsWith('.csv')) {
           const wb = XLSX.read(String(e.target.result || ''), { type: 'string', raw: true });
-          const ws = wb.Sheets[wb.SheetNames[0]];
+          const ws = sanitizeWorksheet(wb.Sheets[wb.SheetNames[0]]);
           rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' });
         } else {
           const wb = XLSX.read(e.target.result, { type: 'array', cellDates: false });
-          const ws = wb.Sheets[wb.SheetNames[0]];
+          const ws = sanitizeWorksheet(wb.Sheets[wb.SheetNames[0]]);
           rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' });
         }
 
@@ -9399,6 +9632,7 @@ function debounce(fn, delay = 120) {
         reaplicarPadronizacaoMateriais();
         await persistStateNow();
         renderAll();
+        updateImportPrereqUI();
         closeModal('modal-materiais');
         toast(`${items.length} material(is) importado(s)`);
         event.target.value = '';
@@ -9434,6 +9668,7 @@ function debounce(fn, delay = 120) {
     reaplicarPadronizacaoMateriais();
     await persistStateNow();
     renderAll();
+    updateImportPrereqUI();
     toast('Material removido');
   }
 
@@ -9445,6 +9680,7 @@ function debounce(fn, delay = 120) {
     reaplicarPadronizacaoMateriais();
     await persistStateNow();
     renderAll();
+    updateImportPrereqUI();
     toast('Todos os materiais foram excluídos', 'error');
   }
 
@@ -9461,6 +9697,7 @@ function debounce(fn, delay = 120) {
     setVal('filiais-text', '');
     await persistStateNow();
     renderFiliais();
+    updateImportPrereqUI();
     toast(`${imported.length} filial(is) cadastrada(s)`);
   }
 
@@ -9590,11 +9827,11 @@ function debounce(fn, delay = 120) {
 
         if (fileName.endsWith('.csv')) {
           const wb = XLSX.read(String(e.target.result || ''), { type: 'string', raw: true });
-          const ws = wb.Sheets[wb.SheetNames[0]];
+          const ws = sanitizeWorksheet(wb.Sheets[wb.SheetNames[0]]);
           rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' });
         } else {
           const wb = XLSX.read(e.target.result, { type: 'array', cellDates: false });
-          const ws = wb.Sheets[wb.SheetNames[0]];
+          const ws = sanitizeWorksheet(wb.Sheets[wb.SheetNames[0]]);
           rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' });
         }
 
@@ -9654,6 +9891,7 @@ function debounce(fn, delay = 120) {
     invalidateFilialLookup();
     await persistStateNow();
     renderFiliais();
+    updateImportPrereqUI();
     toast('Filial removida', 'error');
   }
 
@@ -9664,6 +9902,7 @@ function debounce(fn, delay = 120) {
     invalidateFilialLookup();
     await persistStateNow();
     renderFiliais();
+    updateImportPrereqUI();
     toast('Todas as filiais foram excluídas', 'error');
   }
 
@@ -10825,6 +11064,7 @@ function debounce(fn, delay = 120) {
     `).join('');
     const _tbl_configs = document.getElementById('tb-configs')?.closest('table');
     if (_tbl_configs) injectColFilterButtons(_tbl_configs, 'configs');
+    updateImportPrereqUI();
   }
 
   function updateParamGerais() {
@@ -10853,6 +11093,7 @@ function debounce(fn, delay = 120) {
     if (existing >= 0) state.configs[existing] = rec;
     else state.configs.unshift(rec);
     persist();
+    updateImportPrereqUI();
   }
 
   function renderFiliais() {
@@ -10876,6 +11117,7 @@ function debounce(fn, delay = 120) {
     `).join('');
     const _tbl_filiais = document.getElementById('tb-filiais')?.closest('table');
     if (_tbl_filiais) injectColFilterButtons(_tbl_filiais, 'filiais');
+    updateImportPrereqUI();
   }
 
   function renderMateriais() {
@@ -10898,6 +11140,7 @@ function debounce(fn, delay = 120) {
     `).join('');
     const _tbl_materiais = document.getElementById('tb-materiais')?.closest('table');
     if (_tbl_materiais) injectColFilterButtons(_tbl_materiais, 'materiais');
+    updateImportPrereqUI();
   }
 
   function pageFromModulo(modulo) {
@@ -10947,6 +11190,10 @@ function debounce(fn, delay = 120) {
   }
 
   async function processImportedRows(modulo, rows, fileName, extra = {}) {
+    // Ativa modo batch: desabilita fuzzy matching em normalizarMaterial
+    // para evitar Maximum call stack size exceeded com arquivos grandes.
+    _batchImportMode = true;
+    try {
     const importId = `imp_${modulo}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
     const parsed = [];
     const total = rows.length || 0;
@@ -10992,7 +11239,7 @@ function debounce(fn, delay = 120) {
           }, ['centralCompra','centralDestino']));
         });
       }
-      state.entradas.unshift(...parsed.filter(r => r.material || r.nf));
+      state.entradas = [...parsed.filter(r => r.material || r.nf), ...state.entradas];
     } else if (modulo === 'Saída') {
       for (let i = 0; i < total; i += batchSize) {
         updateStep('Lendo saídas e conferindo saldos...');
@@ -11015,7 +11262,7 @@ function debounce(fn, delay = 120) {
           }, ['central']));
         });
       }
-      state.saidas.unshift(...parsed.filter(r => r.material || r.os));
+      state.saidas = [...parsed.filter(r => r.material || r.os), ...state.saidas];
     } else if (modulo === 'Lançamento') {
       for (let i = 0; i < total; i += batchSize) {
         updateStep('Consolidando lançamentos...');
@@ -11046,35 +11293,59 @@ function debounce(fn, delay = 120) {
           }, ['central']));
         });
       }
-      state.lancamentos.unshift(...parsed.filter(r => r.material));
+      state.lancamentos = [...parsed.filter(r => r.material), ...state.lancamentos];
     } else if (modulo === 'SAP') {
+      // Usa mapeamento dinâmico de colunas (passado via extra.sapColMap) quando disponível.
+      // Fallback para índices fixos do layout padrão MB51 caso o mapa não seja fornecido.
+      const cm = extra.sapColMap || {};
+      const ci = (field, fallback) => cm[field] !== undefined ? cm[field] : fallback;
+
+
       for (let i = 0; i < total; i += batchSize) {
         updateStep('Lendo banco de dados SAP...');
         await processSlice(i, Math.min(i + batchSize, total), (r) => {
-          const peso = num(r[11]);
-          const valorTotal = num(r[13]);
-          const materialOriginal = String(r[10] || '').trim();
+          if (!r || !Array.isArray(r)) return null;
+
+          // ── Detectar e descartar linhas de SUBTOTAL do MB51 ──────────────
+          // O MB51 insere 1 linha de total por material ao final de cada grupo.
+          // Essas linhas têm: usuário='', tipo_movimento='', documento='', datas=''
+          // mas TÊM material e quantidade preenchidos (totais agregados).
+          // Se entrassem como dados, corromperiam todos os cálculos de estoque.
+          const usuarioRaw  = String(r[ci('usuario',   0)] ?? '').trim();
+          const movRaw      = String(r[ci('movimento', 1)] ?? '').trim();
+          const docRaw      = String(r[ci('documento', 4)] ?? '').trim();
+          const isSubtotal  = !usuarioRaw && !movRaw && !docRaw;
+          if (isSubtotal) return null;
+
+          const peso = num(r[ci('peso', 11)]);
+          const valorTotal = num(r[ci('valorTotal', 13)]);
+          const materialOriginal = String(r[ci('material', 10)] || '').trim();
+
+          // Descarta linhas completamente vazias
+          if (!materialOriginal && !docRaw) return null;
+
           return stamp(normalizarCentraisRecord({
             importId,
-            usuario: String(r[0] || ''),
-            movimento: String(r[1] || ''),
-            ref: String(r[3] || ''),
-            documento: String(r[4] || ''),
-            central: String(r[5] || ''),
-            deposito: String(r[6] || ''),
-            dtDoc: fmtDate(r[7]),
-            dtLanc: fmtDate(r[8]),
-            dtReg: fmtDate(r[9]),
+            usuario:    usuarioRaw,
+            movimento:  movRaw,
+            txtMov:     String(r[ci('txtMov',     2)] || ''),
+            ref:        String(r[ci('ref',         3)] || ''),
+            documento:  docRaw,
+            central:    String(r[ci('central',    5)] || ''),
+            deposito:   String(r[ci('deposito',   6)] || ''),
+            dtDoc:      fmtDate(r[ci('dtDoc',     7)]),
+            dtLanc:     fmtDate(r[ci('dtLanc',    8)]),
+            dtReg:      fmtDate(r[ci('dtReg',     9)]),
             materialOriginal,
             material: normalizarMaterial(materialOriginal),
             peso,
-            um: String(r[12] || ''),
-            custoUnit: peso !== 0 ? valorTotal / peso : 0,
+            um:         'KG',
+            custoUnit:  peso !== 0 ? valorTotal / peso : 0,
             valorTotal
           }, ['central']));
         });
       }
-      state.sap.unshift(...parsed.filter(r => r.material || r.documento));
+      state.sap = [...parsed.filter(r => r.material || r.documento), ...state.sap];
     } else if (modulo === 'Produção') {
       const mes = extra.mes || prompt('Informe o mês da produção importada:');
       if (!mes || !String(mes).trim()) {
@@ -11096,7 +11367,7 @@ function debounce(fn, delay = 120) {
           totalVendas: num(r[8])
         }, ['central'])));
       }
-      state.producao.unshift(...parsed.filter(r => r.central || r.producao));
+      state.producao = [...parsed.filter(r => r.central || r.producao), ...state.producao];
     }
 
     if (!parsed.length) {
@@ -11123,6 +11394,153 @@ function debounce(fn, delay = 120) {
     await nextFrame();
     initResizable();
     toast(`${parsed.length} registros importados de "${fileName}"`);
+    } finally {
+      // Desativa modo batch — fuzzy matching volta a funcionar normalmente
+      _batchImportMode = false;
+    }
+  }
+
+  // ─── Detecção automática da linha de cabeçalho para o MB51 do SAP ───────────
+  // O relatório MB51 exportado do SAP costuma ter linhas de título/metadados
+  // ANTES da linha de cabeçalho real das colunas. Esta função varre as primeiras
+  // linhas em busca de palavras-chave típicas do cabeçalho do MB51.
+  function detectSapHeaderRow(rows) {
+    // Palavras-chave que tipicamente aparecem no cabeçalho real do MB51
+    const SAP_HEADER_KEYWORDS = [
+      'usuario', 'usuário', 'user', 'nome do usuario',
+      'tp.mv', 'tp. mv', 'tipo', 'movimento', 'tpmv', 't.mv',
+      'material', 'cod.', 'código',
+      'quantidade', 'qtde', 'qtd.', 'amount',
+      'valor', 'value',
+      'centro', 'depot', 'deposito', 'depósito',
+      'data', 'date', 'dt.'
+    ];
+
+    const normalize = s => String(s ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+
+    // Testa se uma linha parece ser cabeçalho: ≥3 colunas contendo keywords
+    const looksLikeHeader = (row) => {
+      const cells = row.map(normalize).filter(Boolean);
+      if (cells.length < 3) return false;
+      let hits = 0;
+      for (const cell of cells) {
+        if (SAP_HEADER_KEYWORDS.some(kw => cell.includes(kw))) hits++;
+      }
+      return hits >= 2;
+    };
+
+    // Varre as primeiras 20 linhas
+    for (let i = 0; i < Math.min(rows.length, 20); i++) {
+      if (looksLikeHeader(rows[i])) return i;
+    }
+    // Fallback: linha 0 (comportamento anterior)
+    return 0;
+  }
+
+  // ─── Mapeia índices de coluna do MB51 por nome ────────────────────────────
+  // Permite que a importação SAP funcione independentemente da ordem das colunas
+  // ou de colunas extras presentes no arquivo exportado.
+  function buildSapColumnMap(headerRow) {
+    const normalize = s => String(s ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+    const map = {};
+
+    // Cada campo possui duas listas de aliases:
+    //   exact  → o cabeçalho normalizado deve ser IGUAL ao alias (match exato)
+    //   starts → o cabeçalho normalizado deve COMEÇAR com o alias
+    //            (nunca "includes" puro para evitar que "doc.material" capture "material")
+    // A resolução é feita em dois passos: primeiro todos os exatos, depois todos os starts.
+    // Isso garante que "texto breve material" (exato) seja mapeado para `material` antes de
+    // qualquer tentativa de match parcial, e que "doc.material" nunca seja confundido com
+    // a descrição do material.
+    const COL_DEFS = {
+      usuario:   {
+        exact:  ['usuario', 'nome do usuario', 'user', 'nome usuario', 'nome do usuário', 'usuário'],
+        starts: ['nome do usu']
+      },
+      movimento: {
+        exact:  ['tp.mv', 'tp. mv', 'tpmv', 't.mv', 'tipo de movimento', 'movimento', 'mov', 'mvt', 'tipo mov', 'tipo mvt'],
+        starts: ['tp.mv', 'tp. mv', 'tipo de mov', 'tipo mov']
+      },
+      ref:       {
+        exact:  ['ref.doc.', 'ref. doc.', 'ref doc', 'referencia', 'referência', 'nro.ref.', 'nro. ref.', 'ref'],
+        starts: ['ref.doc', 'ref. doc', 'nro.ref', 'nro. ref']
+      },
+      documento: {
+        // "doc.material" é o número do documento SAP — NÃO é a descrição do material.
+        exact:  ['doc.material', 'doc. material', 'documento', 'doc.mat.', 'doc. mat.', 'num.doc.mat.', 'num doc mat', 'doc material'],
+        starts: ['doc.mat', 'num.doc.mat', 'doc.material', 'doc. material']
+      },
+      central:   {
+        exact:  ['centro', 'central', 'plant', 'filial', 'unidade'],
+        starts: ['centro', 'plant']
+      },
+      deposito:  {
+        exact:  ['deposito', 'depósito', 'dep', 'almoxarifado', 'sloc', 'estoque', 'storage location'],
+        starts: ['deposito', 'depósito', 'almox', 'storage loc']
+      },
+      dtDoc:     {
+        exact:  ['data do documento', 'dt.doc.', 'dt. doc.', 'data doc', 'data documento', 'posting date'],
+        starts: ['dt.doc', 'dt. doc', 'data doc', 'data do doc']
+      },
+      dtLanc:    {
+        exact:  ['dt.lancamento', 'dt. lancamento', 'data lancamento', 'data lançamento', 'dt.lanc.', 'dt. lanç.', 'entry date', 'data entrada'],
+        starts: ['dt.lanc', 'dt. lanc', 'data lanc', 'data lança', 'entry date']
+      },
+      dtReg:     {
+        exact:  ['dt.registro', 'dt. registro', 'data registro', 'dt.reg.', 'dt. reg.', 'creation date'],
+        starts: ['dt.reg', 'dt. reg', 'data reg', 'creation date']
+      },
+      material:  {
+        // SOMENTE aliases que identificam inequivocamente a descrição do material.
+        // "material" sozinho foi REMOVIDO: "doc.material" contém essa string e seria
+        // capturado erroneamente. O campo correto no MB51 é "Texto breve material".
+        exact:  ['texto breve material', 'texto breve do material', 'texto breve', 'descricao material',
+                 'descrição material', 'texto breve de material', 'short text', 'material description', 'material text'],
+        starts: ['texto breve', 'descricao material', 'descrição material', 'short text', 'material desc', 'material text']
+      },
+      peso:      {
+        exact:  ['quantidade', 'qtde', 'qtd.', 'qtd', 'qty', 'amount', 'quantidade em um.', 'quant.', 'quantidade em um'],
+        starts: ['quantidade', 'qtde', 'qtd', 'qty', 'quant']
+      },
+      um:        {
+        exact:  ['umb', 'um', 'u.m.', 'unid.', 'unidade', 'unit', 'u.m.b.', 'um base'],
+        starts: ['u.m.', 'u.m.b', 'unid']
+      },
+      valorTotal:{
+        exact:  ['montante em mi', 'montante em moeda interna', 'montante', 'val.em mo.co.', 'val. em mo.co.',
+                 'valor', 'valor total', 'amount in lc', 'val.mo.co.', 'valor mo local', 'total'],
+        starts: ['montante', 'val.em mo', 'val. em mo', 'valor total', 'amount in lc', 'val.mo.co']
+      },
+      txtMov:    {
+        exact:  ['txt.tipo movimento', 'txt. tipo movimento', 'texto tipo movimento', 'descricao movimento',
+                 'descrição movimento', 'texto movimento', 'txt movimento'],
+        starts: ['txt.tipo mov', 'txt. tipo mov', 'texto tipo mov', 'texto mov']
+      }
+    };
+
+    // Passo 1 — match exato para todos os campos
+    headerRow.forEach((cell, idx) => {
+      const norm = normalize(cell);
+      for (const [field, { exact }] of Object.entries(COL_DEFS)) {
+        if (map[field] !== undefined) continue;
+        if (exact.some(a => norm === a)) {
+          map[field] = idx;
+        }
+      }
+    });
+
+    // Passo 2 — match startsWith apenas para campos ainda não mapeados
+    headerRow.forEach((cell, idx) => {
+      const norm = normalize(cell);
+      for (const [field, { starts }] of Object.entries(COL_DEFS)) {
+        if (map[field] !== undefined) continue;
+        if (starts.some(a => norm.startsWith(a))) {
+          map[field] = idx;
+        }
+      }
+    });
+
+    return map;
   }
 
   async function handleImport(event, modulo) {
@@ -11133,23 +11551,99 @@ function debounce(fn, delay = 120) {
       return;
     }
 
+    if (!hasRequiredReferenceData()) {
+      showImportPrereqMessage();
+      return;
+    }
+
     showLoadingOverlay(`Importando ${modulo}`, 'Lendo o arquivo selecionado...');
 
     const reader = new FileReader();
     reader.onload = async function(e) {
       try {
         updateLoadingOverlay('Lendo planilha e extraindo linhas...', `Importando ${modulo}`, 'Interpretando a estrutura do arquivo...');
-        const wb = XLSX.read(e.target.result, { type: 'array', cellDates: false });
+
+        // ── Leitura do workbook ──────────────────────────────────────────────
+        let wb;
+        try {
+          // Para arquivos SAP/MB51 potencialmente grandes, usa sheetRows limitado
+          // na leitura inicial para evitar stack overflow no parser XLSX
+          const xlsxOpts = { type: 'array', cellDates: false, dense: false };
+          wb = XLSX.read(e.target.result, xlsxOpts);
+          console.info('[Import] Workbook lido. Abas:', wb.SheetNames);
+        } catch (readErr) {
+          console.error('[Import] Erro na leitura do arquivo:', readErr);
+          throw new Error('Não foi possível ler o arquivo Excel: ' + (readErr.message || String(readErr)));
+        }
+
+        if (!wb || !wb.SheetNames || wb.SheetNames.length === 0) {
+          toast('Arquivo inválido ou corrompido: nenhuma planilha encontrada.', 'error');
+          hideLoadingOverlay('Falha na importação');
+          event.target.value = '';
+          return;
+        }
+
         updateLoadingOverlay('Separando os registros válidos...', `Importando ${modulo}`, 'Convertendo valores e limpando vazios...');
-        const ws = wb.Sheets[wb.SheetNames[0]];
+
+        // ── Seleção da aba ───────────────────────────────────────────────────
+        // Para o SAP, tenta encontrar a aba mais relevante (pode se chamar "MB51",
+        // "Sheet1", "Planilha1", etc.) — usa a primeira aba disponível como fallback
+        let sheetName = wb.SheetNames[0];
+        if (modulo === 'SAP' && wb.SheetNames.length > 1) {
+          const sapSheetHints = ['mb51', 'sap', 'movimentacao', 'movimentações', 'dados', 'data', 'sheet1', 'planilha1'];
+          const norm = s => String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+          const found = wb.SheetNames.find(n => sapSheetHints.some(h => norm(n).includes(h)));
+          if (found) sheetName = found;
+        }
+
+        const ws = sanitizeWorksheet(wb.Sheets[sheetName]);
         const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' });
-        const data = rows.slice(1).filter(r => r.some(c => c !== '' && c !== null && c !== undefined));
+
+        if (!rows || rows.length < 2) {
+          toast('O arquivo parece estar vazio ou não contém linhas de dados.', 'error');
+          hideLoadingOverlay('Falha na importação');
+          event.target.value = '';
+          return;
+        }
+
+        let data;
+        let extra = {};
+
+        if (modulo === 'SAP') {
+          // Detecta automaticamente onde está a linha de cabeçalho real
+          const headerIdx = detectSapHeaderRow(rows);
+          const headerRow = rows[headerIdx] || [];
+          const colMap = buildSapColumnMap(headerRow);
+          // Dados começam na linha seguinte ao cabeçalho
+          data = rows.slice(headerIdx + 1).filter(r => r.some(c => c !== '' && c !== null && c !== undefined));
+          extra = { sapColMap: colMap, sapHeaderFound: headerIdx };
+
+          // Log diagnóstico no console — abra o DevTools (F12) para ver detalhes
+          console.info('[SAP Import] ✓ Aba usada:', sheetName);
+          console.info('[SAP Import] ✓ Cabeçalho detectado na linha:', headerIdx, '| Conteúdo:', rows[headerIdx]);
+          console.info('[SAP Import] ✓ Mapeamento de colunas:', colMap);
+          console.info('[SAP Import] ✓ Total de linhas de dados (após cabeçalho):', data.length);
+          console.info('[SAP Import] ✓ Amostra da 1ª linha de dados:', data[0]);
+
+          if (data.length === 0) {
+            toast('Nenhuma linha de dados encontrada. Verifique se o arquivo é o MB51 correto.', 'error');
+            hideLoadingOverlay('Falha na importação');
+            event.target.value = '';
+            return;
+          }
+        } else {
+          data = rows.slice(1).filter(r => r.some(c => c !== '' && c !== null && c !== undefined));
+        }
+
         updateLoadingOverlay('Aplicando a importação no sistema...', `Importando ${modulo}`, 'Gravando dados no armazenamento local...');
-        await processImportedRows(modulo, data, file.name, {});
+        await processImportedRows(modulo, data, file.name, extra);
         event.target.value = '';
       } catch (err) {
-        console.error(err);
-        toast('Erro ao processar o arquivo', 'error');
+        console.error('[Import Error]', modulo, err);
+        // Mostra a mensagem real do erro para facilitar o diagnóstico
+        const msg = (err && err.message) ? err.message : String(err);
+        const shortMsg = msg.length > 100 ? msg.slice(0, 100) + '…' : msg;
+        toast('Erro ao processar: ' + shortMsg, 'error');
       } finally {
         hideLoadingOverlay('Importação concluída');
       }
@@ -11173,6 +11667,7 @@ function debounce(fn, delay = 120) {
     renderConfigs();
     renderFiliais();
     renderMateriais();
+    updateImportPrereqUI();
     updateDashboard();
     initResizable();
   }
@@ -11454,10 +11949,16 @@ function debounce(fn, delay = 120) {
           _macroPesoFimSoma[mat] = (_macroPesoFimSoma[mat] || 0) + num(r.peso);
         }
       });
+      const _prePeriodoStockByMat = {};
+      allMats.forEach(mat => {
+        const prev = getPrePeriodLaunchStock({ central, material: mat, dtIni });
+        if (prev) _prePeriodoStockByMat[mat] = prev.value;
+      });
+
       let somaPrimeiro = 0;
       let somaUltimo   = 0;
       allMats.forEach(mat => {
-        somaPrimeiro += (_macroPesoIniSoma[mat] ?? num(materiaisLancPrimeiro[mat]?.peso));
+        somaPrimeiro += (_prePeriodoStockByMat[mat] ?? _macroPesoIniSoma[mat] ?? num(materiaisLancPrimeiro[mat]?.peso));
         somaUltimo   += (_macroPesoFimSoma[mat] ?? num(materiaisLancUltimo[mat]?.peso));
       });
 
@@ -12315,7 +12816,13 @@ function debounce(fn, delay = 120) {
       allMatsSorted.forEach((mat, matIdx) => {
         const lancsMat = lancsByMat.get(mat) || [];
         const sapMat = sapByMat.get(mat) || [];
-        const snapshot = buildSnapshot({ lancs: lancsMat, sap: sapMat });
+        const prev = getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni });
+        const snapshot = buildSnapshot({
+          lancs: lancsMat,
+          sap: sapMat,
+          initialStockOverride: prev?.value,
+          initialDateLabelOverride: prev?.dtLabel
+        });
         variacaoCentralMicro += snapshot.diff;
         // acumula custo implicado: diff (kg) × custo médio do material (R$/kg)
         const custoMedMat = (r.custoMedioPorMat || {})[mat] || 0;
@@ -12662,7 +13169,7 @@ function debounce(fn, delay = 120) {
       </span>`;
 
       if (totalMats >= 5) {
-        divPanelHtml = buildHealthPanel(allMatsSorted, lancsByMat, sapByMat, categoriaByMat);
+        divPanelHtml = buildHealthPanel(r.central, dtIni, allMatsSorted, lancsByMat, sapByMat, categoriaByMat);
       }
 
       const card = document.createElement('div');
@@ -13588,13 +14095,92 @@ function debounce(fn, delay = 120) {
   }
 
   async function startupRestoreFlow() {
-    const shouldRestore = await openStartupRestoreModal();
+    // O modal de restauração só faz sentido quando há dados de importação
+    // (entradas, saídas, SAP, etc.) salvos no storage. Se só existirem dados
+    // de cadastro (configs, filiais, materiais), eles são carregados
+    // silenciosamente sem interromper o usuário.
+    const hasImported = await storageHasImportedData();
+    const shouldRestore = hasImported ? await openStartupRestoreModal() : true;
     if (shouldRestore) {
       await restoreAndRender();
       return;
     }
 
+    // O usuário optou por NÃO restaurar os dados importados (entradas, saídas,
+    // SAP, lançamentos, etc.), mas as CONFIGURAÇÕES, PADRONIZAÇÃO DE CENTRAIS e
+    // PADRONIZAÇÃO DE MATERIAIS são independentes disso: pertencem ao sistema,
+    // não a uma importação, e jamais devem ser descartadas sem ação explícita
+    // do usuário na tela de Configurações.
+    //
+    // Por isso, mesmo no caminho "não carregar", lemos o storage para extrair
+    // configs, filiais e materiais salvos e os mantemos em memória. Os demais
+    // módulos permanecem com o estado vazio, respeitando a escolha do usuário.
+    try {
+      const db = await openDb();
+      let savedConfigs  = null;
+      let savedFiliais  = null;
+      let savedMateriais = null;
+
+      if (db) {
+        // Tenta primeiro as chaves individuais (mais eficiente)
+        savedConfigs   = await idbGet(db, 'configs').catch(() => null);
+        savedFiliais   = await idbGet(db, 'filiais').catch(() => null);
+        savedMateriais = await idbGet(db, 'materiais').catch(() => null);
+
+        // Fallback: lê o snapshot completo e extrai as chaves necessárias
+        if (!Array.isArray(savedConfigs) || !Array.isArray(savedFiliais) || !Array.isArray(savedMateriais)) {
+          const snapshot = await idbGet(db, IDB_STATE_KEY).catch(() => null);
+          if (snapshot && typeof snapshot === 'object') {
+            if (!Array.isArray(savedConfigs)   && Array.isArray(snapshot.configs))   savedConfigs   = snapshot.configs;
+            if (!Array.isArray(savedFiliais)   && Array.isArray(snapshot.filiais))   savedFiliais   = snapshot.filiais;
+            if (!Array.isArray(savedMateriais) && Array.isArray(snapshot.materiais)) savedMateriais = snapshot.materiais;
+          }
+        }
+      }
+
+      // Fallback final: localStorage legado
+      const needsLegacy = (!Array.isArray(savedConfigs)   || savedConfigs.length   === 0) ||
+                          (!Array.isArray(savedFiliais)   || savedFiliais.length   === 0) ||
+                          (!Array.isArray(savedMateriais) || savedMateriais.length === 0);
+      if (needsLegacy) {
+        try {
+          const raw = localStorage.getItem(legacyStateKey);
+          if (raw) {
+            const parsed = safeJSONParse(raw, {});
+            if ((!Array.isArray(savedConfigs)   || savedConfigs.length   === 0) && Array.isArray(parsed.configs)   && parsed.configs.length   > 0) savedConfigs   = parsed.configs;
+            if ((!Array.isArray(savedFiliais)   || savedFiliais.length   === 0) && Array.isArray(parsed.filiais)   && parsed.filiais.length   > 0) savedFiliais   = parsed.filiais;
+            if ((!Array.isArray(savedMateriais) || savedMateriais.length === 0) && Array.isArray(parsed.materiais) && parsed.materiais.length > 0) savedMateriais = parsed.materiais;
+          }
+        } catch (_) {}
+      }
+
+      if (Array.isArray(savedConfigs) && savedConfigs.length > 0) {
+        state.configs = mergePersistentConfigs(state.configs, savedConfigs);
+      }
+      if (Array.isArray(savedFiliais) && savedFiliais.length > 0) {
+        state.filiais = savedFiliais;
+        invalidateFilialLookup();
+      }
+      if (Array.isArray(savedMateriais) && savedMateriais.length > 0) {
+        state.materiais = savedMateriais.map(item => ({
+          id: item?.id || makeMaterialId(),
+          ...item
+        }));
+        invalidateMaterialLookup();
+        reaplicarPadronizacaoMateriais();
+      }
+    } catch (err) {
+      console.warn('[startupRestoreFlow] Não foi possível recuperar configs/filiais/materiais do storage:', err);
+    }
+
     stateHydrated = true;
+    updateImportPrereqUI();
+
+    // Persiste imediatamente para garantir que os configs recuperados acima
+    // sejam regravados no storage junto ao estado limpo dos demais módulos,
+    // evitando que um persist() posterior sobrescreva com um snapshot vazio.
+    await persistStateNow();
+
     const activePage = document.querySelector('.page.active')?.id?.replace('page-', '') || 'importar';
     updateDashboard();
     updateParamGerais();
@@ -13617,6 +14203,7 @@ function debounce(fn, delay = 120) {
     startupYesBtn?.addEventListener('click', () => decideStartupRestore(true));
 
     await startupRestoreFlow();
+    updateImportPrereqUI();
     if (document.getElementById('page-dashboard')?.classList.contains('active')) updateDashboard();
 
     // Start clock
