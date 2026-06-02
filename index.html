@@ -1956,6 +1956,183 @@ td.pending-cell  { color: var(--text3) !important; font-style: italic; font-size
 .micro-filial-body.open { display: block; }
 .micro-body-section { padding: 16px 18px 12px; }
 
+/* ── Pendentes de Integração SAP ───────────────────────── */
+.pend-integ-section {
+  padding: 14px 18px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.pend-integ-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.pend-integ-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-family: var(--mono);
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: opacity .15s, box-shadow .15s;
+}
+.pend-integ-chip:hover { opacity: .82; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+.pend-integ-chip-nf {
+  background: var(--green-bg);
+  color: var(--green);
+  border: 1px solid var(--green-border);
+}
+.pend-integ-chip-os {
+  background: var(--red-bg);
+  color: var(--red);
+  border: 1px solid var(--red-border);
+}
+.pend-integ-chip-ok {
+  background: var(--bg3);
+  color: var(--text3);
+  border: 1px solid var(--border);
+  cursor: default;
+  pointer-events: none;
+}
+.pend-integ-chip .pend-count-badge {
+  background: rgba(0,0,0,.13);
+  border-radius: 10px;
+  padding: 0 6px;
+  font-size: 10px;
+  font-weight: 700;
+  min-width: 18px;
+  text-align: center;
+}
+
+/* ── Modal de Pendentes de Integração ─────────────────── */
+.pim-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.45);
+  z-index: 1100;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.pim-overlay.open { display: flex; }
+.pim-dialog {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  width: 100%;
+  max-width: 700px;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 24px 64px rgba(0,0,0,.28);
+  animation: popIn .13s ease;
+}
+.pim-header {
+  padding: 18px 22px 14px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-shrink: 0;
+}
+.pim-header-text { display: flex; flex-direction: column; gap: 3px; }
+.pim-kicker {
+  font-size: 9.5px;
+  font-family: var(--mono);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--text3);
+}
+.pim-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.3;
+}
+.pim-sub {
+  font-size: 11.5px;
+  color: var(--text3);
+  margin-top: 2px;
+}
+.pim-body {
+  overflow-y: auto;
+  flex: 1;
+  padding: 0;
+}
+.pim-body::-webkit-scrollbar { width: 4px; }
+.pim-body::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 8px; }
+.pim-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+.pim-table thead th {
+  padding: 9px 14px;
+  text-align: left;
+  font-size: 10px;
+  font-family: var(--mono);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--text3);
+  background: var(--bg3);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  white-space: nowrap;
+}
+.pim-table tbody tr { border-bottom: 1px solid var(--border); }
+.pim-table tbody tr:last-child { border-bottom: none; }
+.pim-table tbody tr:hover { background: var(--bg3); }
+.pim-table tbody td { padding: 8px 14px; color: var(--text); vertical-align: middle; }
+.pim-footer {
+  padding: 12px 22px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+.pim-footer-count {
+  font-size: 11.5px;
+  color: var(--text3);
+  font-family: var(--mono);
+}
+.pim-tab-bar {
+  display: flex;
+  gap: 6px;
+  padding: 12px 22px 0;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.pim-tab {
+  padding: 7px 16px;
+  border-radius: 6px 6px 0 0;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  border-bottom: none;
+  cursor: pointer;
+  background: transparent;
+  color: var(--text3);
+  position: relative;
+  bottom: -1px;
+  transition: color .15s, background .15s;
+}
+.pim-tab.active {
+  background: var(--bg2);
+  border-color: var(--border);
+  color: var(--text);
+  border-bottom-color: var(--bg2);
+}
+.pim-tab:not(.active):hover { color: var(--text2); background: var(--bg3); }
+
 .micro-section-title {
   font-size: 9.5px;
   font-family: var(--mono);
@@ -9017,7 +9194,244 @@ function debounce(fn, delay = 120) {
     overlay.setAttribute('aria-hidden', 'true');
   }
 
-  Object.assign(window, { openBreakdownModal, closeBreakdownModal });
+  // ── Pendentes de Integração SAP ──────────────────────────────────────────
+  /**
+   * Given a central's entradas/saidas in the period and the sapNoPeriodo,
+   * returns { pendNF: [...], pendOS: [...] } — records NOT matched in SAP.
+   *
+   * Matching logic:
+   *   NF  (mov 101/801) → entrada.nf matched against sap.ref OR sap.documento.
+   *       Normalisation: strip leading zeros from the numeric part before the
+   *       last "-N" suffix so that "000642190-1" matches "642190-1" in SAP.
+   *       Format: both sides are reduced to "<digits>-<suffix>" e.g. "642190-1".
+   *
+   *   OS  (mov 201) → saida.os (plain number, e.g. "6047") matched against
+   *       sap.ref which the SAP exports as "I004-6047" (prefix-NNNN).
+   *       Normalisation: from the SAP ref, extract only the numeric part after
+   *       the last "-" and compare against the OS number (also stripped of
+   *       leading zeros), so "I004-6047" → "6047" matches os "6047".
+   */
+  function calcPendentesIntegracao({ central, dtIni, dtFim, sapNoPeriodo }) {
+
+    /**
+     * Normalise a NF number for matching.
+     *
+     * The local system stores only the numeric part, e.g. "15464", "5151".
+     * SAP stores it with a check-digit suffix, e.g. "15464-2", "0005151-7".
+     *
+     * Strategy: always reduce to just the numeric base (strip leading zeros,
+     * discard the "-suffix" check digit entirely), so both sides compare equal.
+     *
+     * Examples:
+     *   Local "15464"      → "15464"
+     *   SAP   "15464-2"    → "15464"
+     *   SAP   "0005151-7"  → "5151"
+     *   Local "555555"     → "555555"
+     *   SAP   "555555-2"   → "555555"
+     */
+    function normNF(raw) {
+      const s = String(raw || '').trim().toUpperCase();
+      const dashIdx = s.lastIndexOf('-');
+      // Drop the check-digit suffix (everything after the last dash)
+      const base = dashIdx > 0 ? s.slice(0, dashIdx) : s;
+      return base.replace(/^0+/, '') || '0';
+    }
+
+    /**
+     * Normalise a SAP ref for OS matching: extract the numeric portion after
+     * the last "-". "I004-6047" → "6047", "6047" → "6047".
+     * Leading zeros are stripped so "I004-00123" → "123".
+     */
+    function normSapRefOS(raw) {
+      const s = String(raw || '').trim().toUpperCase();
+      const dashIdx = s.lastIndexOf('-');
+      if (dashIdx >= 0) {
+        return s.slice(dashIdx + 1).replace(/^0+/, '') || '0';
+      }
+      return s.replace(/^0+/, '') || '0';
+    }
+
+    /**
+     * Normalise an OS number from the Saídas module: strip leading zeros.
+     * "06047" → "6047", "6047" → "6047".
+     */
+    function normOS(raw) {
+      return String(raw || '').trim().toUpperCase().replace(/^0+/, '') || '0';
+    }
+
+    // Build lookup sets from SAP records for this central+period.
+    // Two sets: one for NF matching (normalised NF format),
+    //           one for OS matching (numeric part of ref only).
+    const sapNFRefs  = new Set(); // normalised NF values
+    const sapOSRefs  = new Set(); // numeric part of SAP ref (for OS lookup)
+
+    sapNoPeriodo.forEach(s => {
+      const cod = normMov(s.movimento);
+      const ref = String(s.ref       || '').trim().toUpperCase();
+      const doc = String(s.documento || '').trim().toUpperCase();
+
+      if (CODIGOS_ENTRADA.has(cod)) {
+        // Entradas SAP (101/801) → used for NF matching
+        if (ref) sapNFRefs.add(normNF(ref));
+        if (doc) sapNFRefs.add(normNF(doc));
+      } else if (cod === '201') {
+        // Saídas SAP mov 201 ONLY → used for OS matching (numeric part of ref)
+        if (ref) sapOSRefs.add(normSapRefOS(ref));
+        if (doc) sapOSRefs.add(normSapRefOS(doc));
+      }
+    });
+
+    const inPeriodLocal = (dateStr) => {
+      const d = parseDate(dateStr);
+      return d && d >= dtIni && d <= dtFim;
+    };
+
+    // NFs pendentes: entradas desta central no período cujo NF não aparece no SAP
+    // Only check mov 101 and 801 (CODIGOS_ENTRADA).
+    const pendNF = (state.entradas || []).filter(r => {
+      const cent = (r.centralDestino || r.centralCompra || '');
+      if (cent !== central) return false;
+      if (!inPeriodLocal(r.dtEmissao)) return false;
+      if (!r.nf) return false; // sem NF cadastrada — ignorar
+      const nfNorm = normNF(r.nf);
+      return !sapNFRefs.has(nfNorm);
+    });
+
+    // OS pendentes: saídas desta central no período cujo OS não aparece no SAP.
+    // SAP stores the OS reference as "I004-NNNN"; the local Saídas module stores
+    // just the number (e.g. "6047"). We match on the numeric part only.
+    const pendOS = (state.saidas || []).filter(r => {
+      if (r.central !== central) return false;
+      if (!inPeriodLocal(r.dtEmissao)) return false;
+      if (!r.os) return false; // sem OS cadastrada — ignorar
+      const osNorm = normOS(r.os);
+      return !sapOSRefs.has(osNorm);
+    });
+
+    return { pendNF, pendOS };
+  }
+
+  /**
+   * Builds the "Pendentes de Integração SAP" section HTML for a central card.
+   */
+  function buildPendIntegSection({ central, dtIni, dtFim, sapNoPeriodo }) {
+    const { pendNF, pendOS } = calcPendentesIntegracao({ central, dtIni, dtFim, sapNoPeriodo });
+    const nfCount = pendNF.length;
+    const osCount = pendOS.length;
+
+    let chipsHtml = '';
+
+    if (nfCount === 0 && osCount === 0) {
+      chipsHtml = `<span class="pend-integ-chip pend-integ-chip-ok">
+        <i class="ti ti-circle-check" style="font-size:13px"></i>
+        Todas NFs e OS integradas
+      </span>`;
+    } else {
+      if (nfCount > 0) {
+        const encoded = escapeHtml(JSON.stringify(pendNF.map(r => ({
+          nf: r.nf, material: r.material || '—', peso: r.peso || 0,
+          dtEmissao: r.dtEmissao || '—', fornecedor: r.fornecedor || '—'
+        }))));
+        chipsHtml += `<button class="pend-integ-chip pend-integ-chip-nf"
+          onclick="event.stopPropagation(); openPendIntegModal(this)"
+          data-tipo="NF" data-central="${escapeHtml(central)}" data-items="${encoded}"
+          title="Ver NFs não integradas no SAP">
+          <i class="ti ti-file-invoice" style="font-size:13px"></i>
+          NFs pendentes SAP
+          <span class="pend-count-badge">${nfCount}</span>
+        </button>`;
+      }
+      if (osCount > 0) {
+        const encoded = escapeHtml(JSON.stringify(pendOS.map(r => ({
+          os: r.os, material: r.material || '—', peso: r.peso || 0,
+          dtEmissao: r.dtEmissao || '—', fornecedor: r.fornecedor || '—'
+        }))));
+        chipsHtml += `<button class="pend-integ-chip pend-integ-chip-os"
+          onclick="event.stopPropagation(); openPendIntegModal(this)"
+          data-tipo="OS" data-central="${escapeHtml(central)}" data-items="${encoded}"
+          title="Ver OS não integradas no SAP">
+          <i class="ti ti-clipboard-list" style="font-size:13px"></i>
+          OS pendentes SAP
+          <span class="pend-count-badge">${osCount}</span>
+        </button>`;
+      }
+    }
+
+    return `
+      <div class="pend-integ-section">
+        <div class="micro-section-title">
+          <i class="ti ti-cloud-off"></i>
+          Integração SAP
+        </div>
+        <div class="pend-integ-chips">${chipsHtml}</div>
+      </div>`;
+  }
+
+  function openPendIntegModal(trigger) {
+    const overlay = document.getElementById('pim-overlay');
+    if (!overlay) return;
+
+    const tipo    = trigger.dataset.tipo || '?';
+    const central = trigger.dataset.central || '—';
+    let items = [];
+    try { items = JSON.parse(trigger.dataset.items || '[]'); } catch(e) {}
+
+    // Title/sub
+    document.getElementById('pim-title').textContent =
+      tipo === 'NF' ? 'NFs sem integração SAP' : 'OS sem integração SAP';
+    document.getElementById('pim-sub').textContent =
+      `Central: ${central} · ${items.length} registro${items.length !== 1 ? 's' : ''} pendente${items.length !== 1 ? 's' : ''}`;
+
+    const tbody = document.getElementById('pim-tbody');
+    const thead = document.getElementById('pim-thead');
+
+    if (tipo === 'NF') {
+      thead.innerHTML = `<tr>
+        <th>NF</th>
+        <th>Material</th>
+        <th>Fornecedor</th>
+        <th>Dt. Emissão</th>
+        <th style="text-align:right">Peso</th>
+      </tr>`;
+      tbody.innerHTML = items.map(it => `<tr>
+        <td class="td-mono" style="font-weight:600;color:var(--green)">${escapeHtml(String(it.nf || '—'))}</td>
+        <td>${escapeHtml(String(it.material || '—'))}</td>
+        <td class="td-muted">${escapeHtml(String(it.fornecedor || '—'))}</td>
+        <td class="td-muted">${escapeHtml(String(it.dtEmissao || '—'))}</td>
+        <td class="td-mono" style="text-align:right;color:var(--green)">${fmtKg(Math.abs(num(it.peso)))}</td>
+      </tr>`).join('');
+    } else {
+      thead.innerHTML = `<tr>
+        <th>OS</th>
+        <th>Material</th>
+        <th>Fornecedor</th>
+        <th>Dt. Emissão</th>
+        <th style="text-align:right">Peso</th>
+      </tr>`;
+      tbody.innerHTML = items.map(it => `<tr>
+        <td class="td-mono" style="font-weight:600;color:var(--red)">${escapeHtml(String(it.os || '—'))}</td>
+        <td>${escapeHtml(String(it.material || '—'))}</td>
+        <td class="td-muted">${escapeHtml(String(it.fornecedor || '—'))}</td>
+        <td class="td-muted">${escapeHtml(String(it.dtEmissao || '—'))}</td>
+        <td class="td-mono" style="text-align:right;color:var(--red)">${fmtKg(Math.abs(num(it.peso)))}</td>
+      </tr>`).join('');
+    }
+
+    document.getElementById('pim-count').textContent =
+      `${items.length} registro${items.length !== 1 ? 's' : ''} pendente${items.length !== 1 ? 's' : ''}`;
+
+    overlay.classList.add('open');
+    overlay.setAttribute('aria-hidden', 'false');
+  }
+
+  function closePendIntegModal() {
+    const overlay = document.getElementById('pim-overlay');
+    if (!overlay) return;
+    overlay.classList.remove('open');
+    overlay.setAttribute('aria-hidden', 'true');
+  }
+
+  Object.assign(window, { openBreakdownModal, closeBreakdownModal, openPendIntegModal, closePendIntegModal });
 
   // ── Conflict Resolution Modal ───────────────────────────────
   let _lrcDetailKey = null;
@@ -14217,6 +14631,8 @@ function debounce(fn, delay = 120) {
         <div class="micro-filial-body" id="micro-body-${idx}">
           ${divPanelHtml}
 
+          ${buildPendIntegSection({ central: r.central, dtIni, dtFim, sapNoPeriodo: r.sapNoPeriodo || [] })}
+
           <div class="micro-body-section">
             <div class="micro-section-title"><i class="ti ti-box"></i> Análise por Material</div>
           </div>
@@ -15421,6 +15837,10 @@ function debounce(fn, delay = 120) {
 
     document.addEventListener('keydown', (event) => {
       if (event.key === 'Escape') {
+        if (document.getElementById('pim-overlay')?.classList.contains('open')) {
+          closePendIntegModal();
+          return;
+        }
         if (document.getElementById('lrc-overlay')?.classList.contains('open')) {
           closeLancConflictModal();
           return;
@@ -15626,6 +16046,33 @@ function debounce(fn, delay = 120) {
 </div>
 
 <!-- MODAL: Breakdown de Movimentações (Micro) -->
+<!-- MODAL: Pendentes de Integração SAP -->
+<div class="pim-overlay" id="pim-overlay" aria-hidden="true"
+     onclick="if(event.target===this) closePendIntegModal()">
+  <div class="pim-dialog" role="dialog" aria-modal="true" aria-labelledby="pim-title">
+    <div class="pim-header">
+      <div class="pim-header-text">
+        <div class="pim-kicker"><i class="ti ti-cloud-off"></i> Integração SAP — Pendentes</div>
+        <div class="pim-title" id="pim-title">Pendentes</div>
+        <div class="pim-sub" id="pim-sub">—</div>
+      </div>
+      <button class="btn btn-primary" type="button" onclick="closePendIntegModal()">
+        <i class="ti ti-x"></i> <span>Fechar</span>
+      </button>
+    </div>
+    <div class="pim-body">
+      <table class="pim-table">
+        <thead id="pim-thead"></thead>
+        <tbody id="pim-tbody"></tbody>
+      </table>
+    </div>
+    <div class="pim-footer">
+      <span class="pim-footer-count" id="pim-count">—</span>
+      <span style="font-size:11px;color:var(--text3)">Registros PUZL sem correspondência no SAP (ref/documento)</span>
+    </div>
+  </div>
+</div>
+
 <div class="bdm-overlay" id="breakdown-modal-overlay" aria-hidden="true"
      onclick="if(event.target===this) closeBreakdownModal()">
   <div class="bdm-dialog" role="dialog" aria-modal="true" aria-labelledby="bdm-title">
