@@ -1705,6 +1705,173 @@ td.pending-cell  { color: var(--text3) !important; font-style: italic; font-size
 .v-neg { color: var(--red); }
 .v-zero { color: var(--teal); }
 
+/* ══════════════════════════════════════════
+   CRITICALITY RANKINGS
+══════════════════════════════════════════ */
+.criticality-rankings-wrap {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+@media (max-width: 900px) {
+  .criticality-rankings-wrap { grid-template-columns: 1fr; }
+}
+
+.crank-card { display: flex; flex-direction: column; overflow: hidden; }
+
+.crank-header { gap: 8px; justify-content: flex-start; }
+.crank-header .table-title { flex: 1; }
+
+.crank-badge-count {
+  font-size: 10px;
+  font-family: var(--mono);
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+.crank-critico .crank-badge-count { background: var(--red-bg); color: var(--red); border: 1px solid var(--red-border); }
+.crank-urgente .crank-badge-count { background: rgba(249,115,22,0.10); color: #f97316; border: 1px solid rgba(249,115,22,0.22); }
+.crank-atencao .crank-badge-count { background: var(--amber-bg); color: var(--amber); border: 1px solid var(--amber-border); }
+
+/* top bar accent */
+.crank-critico { border-top: 2px solid var(--red); }
+.crank-urgente { border-top: 2px solid #f97316; }
+.crank-atencao { border-top: 2px solid var(--amber); }
+
+.crank-action-banner {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 10.5px;
+  font-family: var(--mono);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 7px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.crank-banner-critico { background: var(--red-bg); color: var(--red); }
+.crank-banner-urgente { background: rgba(249,115,22,0.08); color: #f97316; }
+.crank-banner-atencao { background: var(--amber-bg); color: var(--amber); }
+.crank-action-banner i { font-size: 13px; flex-shrink: 0; }
+
+.crank-body {
+  flex: 1;
+  overflow-y: auto;
+  max-height: 340px;
+  padding: 4px 0;
+}
+
+.crank-empty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 24px 16px;
+  color: var(--text3);
+  font-size: 12px;
+  font-family: var(--mono);
+}
+.crank-empty i { font-size: 15px; color: var(--green); }
+
+.crank-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.12s;
+  cursor: default;
+}
+.crank-row:last-child { border-bottom: none; }
+.crank-row:hover { background: var(--bg3); }
+
+.crank-row-left { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+
+.crank-row-mat {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.crank-row-meta {
+  display: flex;
+  gap: 6px;
+  font-size: 9.5px;
+  font-family: var(--mono);
+  color: var(--text3);
+  flex-wrap: wrap;
+}
+.crank-row-meta .sep { opacity: 0.4; }
+
+.crank-row-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.crank-row-var {
+  font-size: 11px;
+  font-family: var(--mono);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.crank-row-var.neg { color: var(--red); }
+.crank-row-var.pos { color: var(--green); }
+
+.crank-impact-bar-wrap {
+  width: 64px;
+  height: 4px;
+  background: var(--bg4);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.crank-impact-bar-fill {
+  height: 4px;
+  border-radius: 2px;
+  min-width: 4px;
+}
+.crank-critico .crank-impact-bar-fill { background: var(--red); }
+.crank-urgente .crank-impact-bar-fill { background: #f97316; }
+.crank-atencao .crank-impact-bar-fill { background: var(--amber); }
+
+.crank-impact-label {
+  font-size: 9px;
+  font-family: var(--mono);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.crank-impact-alto  { color: var(--red); }
+.crank-impact-medio { color: var(--amber); }
+.crank-impact-baixo { color: var(--text3); }
+
+/* Trend indicator */
+.crank-trend {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 5px;
+  font-size: 11px;
+  vertical-align: middle;
+  opacity: 0.9;
+}
+.crank-trend-worse  { color: var(--red); }
+.crank-trend-better { color: var(--green); }
+.crank-trend-stable { color: var(--text3); opacity: 0.5; }
+
+/* Copy button */
+.crank-copy-btn {
+  flex-shrink: 0;
+  opacity: 0.5;
+  transition: opacity 0.13s, color 0.13s;
+}
+.crank-copy-btn:hover { opacity: 1; color: var(--accent); background: var(--accent-dim); }
+
 #an-macro-table thead th,
 .micro-table-wrap thead th {
   line-height: 1.3;
@@ -5056,6 +5223,306 @@ tbody tr:nth-child(even):hover {
   color: #fff;
 }
 .fab-period-label { max-width: 200px; overflow: hidden; text-overflow: ellipsis; }
+
+/* ══════════════════════════════════════════
+   CUSTOM CALENDAR DATE PICKER
+══════════════════════════════════════════ */
+.cal-picker-wrap {
+  position: relative;
+}
+
+.cal-picker-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  padding: 8px 14px;
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+  min-width: 210px;
+}
+.cal-picker-trigger:hover {
+  border-color: var(--border3);
+  background: var(--bg4);
+}
+.cal-picker-trigger.has-value {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-dim);
+}
+.cal-picker-trigger i { font-size: 15px; }
+.cal-picker-trigger .cal-chev {
+  font-size: 12px;
+  color: var(--text3);
+  margin-left: auto;
+  transition: transform 0.2s;
+}
+.cal-picker-trigger.open .cal-chev { transform: rotate(180deg); }
+
+.cal-picker-dropdown {
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 300;
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 12px 48px rgba(0,0,0,0.4);
+  animation: popIn 0.15s ease;
+  min-width: 280px;
+}
+.cal-picker-dropdown.open { display: block; }
+
+.cal-picker-inner {
+  padding: 0;
+}
+
+/* Calendar header: month/year nav */
+.cal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.cal-header-center {
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--font);
+  color: var(--text2);
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  padding: 6px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border2);
+  background: var(--bg3);
+  transition: all 0.13s;
+}
+.cal-header-center:hover { border-color: var(--border3); color: var(--text); background: var(--bg4); }
+.cal-nav-btn {
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  color: var(--text2);
+  width: 30px; height: 30px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.13s;
+}
+.cal-nav-btn:hover { border-color: var(--border3); color: var(--text); background: var(--bg4); }
+
+/* Day-of-week labels */
+.cal-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  padding: 8px 12px 4px;
+  gap: 2px;
+}
+.cal-weekday {
+  text-align: center;
+  font-size: 10px;
+  font-family: var(--mono);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--text3);
+  text-transform: uppercase;
+}
+
+/* Days grid */
+.cal-days {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  padding: 4px 12px 12px;
+  gap: 2px;
+}
+.cal-day {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  font-size: 12.5px;
+  font-family: var(--mono);
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.1s;
+  border: none;
+  background: none;
+  font-weight: 500;
+  position: relative;
+}
+.cal-day:hover:not(.cal-day-other):not(.cal-day-selected):not(.cal-day-disabled) {
+  background: var(--bg3);
+  color: var(--text);
+}
+.cal-day-other { color: var(--text3); opacity: 0.4; }
+.cal-day-today { font-weight: 700; color: var(--accent); }
+.cal-day-today::after {
+  content: '';
+  position: absolute;
+  bottom: 3px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4px; height: 4px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.cal-day-selected {
+  background: var(--accent) !important;
+  color: #fff !important;
+  font-weight: 700;
+}
+.cal-day-in-range {
+  background: var(--accent-dim);
+  color: var(--accent);
+  border-radius: 0;
+}
+.cal-day-range-start {
+  background: var(--accent) !important;
+  color: #fff !important;
+  border-radius: 50% 0 0 50%;
+}
+.cal-day-range-end {
+  background: var(--accent) !important;
+  color: #fff !important;
+  border-radius: 0 50% 50% 0;
+}
+.cal-day-range-start.cal-day-range-end { border-radius: 50% !important; }
+.cal-day-disabled { opacity: 0.25; cursor: not-allowed; }
+
+/* Month/Year grid view */
+.cal-month-grid, .cal-year-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  padding: 12px 14px 14px;
+}
+.cal-grid-item {
+  padding: 9px 6px;
+  border-radius: var(--radius);
+  font-size: 12.5px;
+  font-family: var(--mono);
+  font-weight: 500;
+  text-align: center;
+  cursor: pointer;
+  border: 1px solid transparent;
+  color: var(--text2);
+  background: none;
+  transition: all 0.13s;
+}
+.cal-grid-item:hover { background: var(--bg3); color: var(--text); border-color: var(--border); }
+.cal-grid-item.active {
+  background: var(--accent-dim);
+  color: var(--accent);
+  border-color: var(--accent-glow);
+  font-weight: 700;
+}
+
+/* Year decade nav */
+.cal-year-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px 6px;
+  border-bottom: 1px solid var(--border);
+}
+.cal-year-range {
+  font-size: 13px;
+  font-weight: 700;
+  font-family: var(--mono);
+  color: var(--text);
+}
+
+/* Quick chips row inside calendar (footer) */
+.cal-footer {
+  display: flex;
+  gap: 6px;
+  padding: 10px 14px 14px;
+  border-top: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.cal-footer-chip {
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-family: var(--font);
+  font-weight: 500;
+  border: 1px solid var(--border2);
+  background: var(--bg3);
+  color: var(--text2);
+  cursor: pointer;
+  transition: all 0.13s;
+}
+.cal-footer-chip:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-dim);
+}
+.cal-footer-chip.active {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* Quick chips outside the calendar */
+.cal-quick-chips {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.cal-chip {
+  padding: 7px 13px;
+  border-radius: var(--radius);
+  font-size: 12px;
+  font-family: var(--font);
+  font-weight: 500;
+  border: 1px solid var(--border2);
+  background: var(--bg3);
+  color: var(--text2);
+  cursor: pointer;
+  transition: all 0.13s;
+  white-space: nowrap;
+}
+.cal-chip:hover {
+  border-color: var(--border3);
+  color: var(--text);
+  background: var(--bg4);
+}
+.cal-chip.active {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* Range label shown inside calendar when both dates set */
+.cal-range-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px 0;
+  font-size: 11.5px;
+  font-family: var(--mono);
+  color: var(--text2);
+}
+.cal-range-dash { color: var(--text3); }
+.cal-range-date {
+  font-weight: 600;
+  color: var(--accent);
+}
+.cal-range-date.empty { color: var(--text3); font-style: italic; font-weight: 400; }
 </style>
 </head>
 <body>
@@ -5207,27 +5674,32 @@ tbody tr:nth-child(even):hover {
 
         <!-- ── Filtro de período ── -->
         <div class="analitico-toolbar" id="dg-toolbar">
-          <div class="analitico-period">
-            <div class="period-field">
-              <label class="form-label">Data Início</label>
-              <input type="date" class="form-input" id="dg-dt-ini">
+          <div class="analitico-period" style="align-items:center;gap:10px">
+            <!-- Custom date range picker trigger -->
+            <div class="cal-picker-wrap" id="dg-cal-wrap">
+              <button class="cal-picker-trigger" id="dg-cal-trigger" onclick="toggleCalPicker('dg')" type="button">
+                <i class="ti ti-calendar-event"></i>
+                <span id="dg-cal-label">Selecionar período</span>
+                <i class="ti ti-chevron-down cal-chev" id="dg-cal-chev"></i>
+              </button>
+              <!-- Hidden inputs for compatibility -->
+              <input type="hidden" id="dg-dt-ini">
+              <input type="hidden" id="dg-dt-fim">
+              <!-- Dropdown calendar -->
+              <div class="cal-picker-dropdown" id="dg-cal-dropdown">
+                <div class="cal-picker-inner" id="dg-cal-inner" data-pfx="dg"></div>
+              </div>
             </div>
-            <div class="period-field">
-              <label class="form-label">Data Fim</label>
-              <input type="date" class="form-input" id="dg-dt-fim">
+            <!-- Quick period chips -->
+            <div class="cal-quick-chips">
+              <button class="cal-chip" onclick="calQuickHoje('dg')" type="button">Hoje</button>
+              <button class="cal-chip" onclick="calQuickMesAtual('dg')" type="button">Mês atual</button>
+              <button class="cal-chip" onclick="calQuickMesAnterior('dg')" type="button">Mês anterior</button>
             </div>
-          </div>
-          <div class="quick-periods">
-            <span class="quick-periods-label">Atalhos</span>
-            <button class="qp-btn" onclick="setDgQuickPeriod(7)"  title="Últimos 7 dias">7d</button>
-            <button class="qp-btn" onclick="setDgQuickPeriod(30)" title="Últimos 30 dias">30d</button>
-            <button class="qp-btn" onclick="setDgQuickPeriodMes()"  title="Mês atual">Mês</button>
-            <button class="qp-btn" onclick="setDgQuickPeriod(90)" title="Últimos 90 dias">90d</button>
-            <button class="qp-btn" onclick="setDgQuickPeriodAno()"  title="Ano atual">Ano</button>
           </div>
           <div class="analitico-actions">
             <button class="btn btn-primary" onclick="rodarDashboardGerencial()">
-              <i class="ti ti-player-play"></i> <span>Analisar</span>
+              <i class="ti ti-refresh"></i> <span>Atualizar</span>
             </button>
             <button class="btn" onclick="limparDashboardGerencial()" title="Limpar">
               <i class="ti ti-x"></i>
@@ -5351,27 +5823,32 @@ tbody tr:nth-child(even):hover {
 
         <!-- ── Barra de período ── -->
         <div class="analitico-toolbar">
-          <div class="analitico-period">
-            <div class="period-field">
-              <label class="form-label">Data Início</label>
-              <input type="date" class="form-input" id="an-dt-ini" onchange="rodarAnalitico()">
+          <div class="analitico-period" style="align-items:center;gap:10px">
+            <!-- Custom date range picker trigger -->
+            <div class="cal-picker-wrap" id="an-cal-wrap">
+              <button class="cal-picker-trigger" id="an-cal-trigger" onclick="toggleCalPicker('an')" type="button">
+                <i class="ti ti-calendar-event"></i>
+                <span id="an-cal-label">Selecionar período</span>
+                <i class="ti ti-chevron-down cal-chev" id="an-cal-chev"></i>
+              </button>
+              <!-- Hidden inputs for compatibility -->
+              <input type="hidden" id="an-dt-ini">
+              <input type="hidden" id="an-dt-fim">
+              <!-- Dropdown calendar -->
+              <div class="cal-picker-dropdown" id="an-cal-dropdown">
+                <div class="cal-picker-inner" id="an-cal-inner" data-pfx="an"></div>
+              </div>
             </div>
-            <div class="period-field">
-              <label class="form-label">Data Fim</label>
-              <input type="date" class="form-input" id="an-dt-fim" onchange="rodarAnalitico()">
+            <!-- Quick period chips -->
+            <div class="cal-quick-chips">
+              <button class="cal-chip" onclick="calQuickHoje('an')" type="button">Hoje</button>
+              <button class="cal-chip" onclick="calQuickMesAtual('an')" type="button">Mês atual</button>
+              <button class="cal-chip" onclick="calQuickMesAnterior('an')" type="button">Mês anterior</button>
             </div>
-          </div>
-          <div class="quick-periods">
-            <span class="quick-periods-label">Atalhos</span>
-            <button class="qp-btn" onclick="setQuickPeriod(7)" title="Últimos 7 dias">7d</button>
-            <button class="qp-btn" onclick="setQuickPeriod(30)" title="Últimos 30 dias">30d</button>
-            <button class="qp-btn" onclick="setQuickPeriodCurrentMonth()" title="Mês atual">Mês</button>
-            <button class="qp-btn" onclick="setQuickPeriod(90)" title="Últimos 90 dias">90d</button>
-            <button class="qp-btn" onclick="setQuickPeriodCurrentYear()" title="Ano atual">Ano</button>
           </div>
           <div class="analitico-actions">
             <button class="btn btn-primary" onclick="rodarAnalitico()">
-              <i class="ti ti-player-play"></i> <span>Analisar</span>
+              <i class="ti ti-refresh"></i> <span>Atualizar</span>
             </button>
             <button class="btn" onclick="limparAnalitico()" title="Limpar">
               <i class="ti ti-x"></i>
@@ -5436,33 +5913,101 @@ tbody tr:nth-child(even):hover {
             </div>
           </div>
 
-          <!-- Linha 4: Materiais maior var custo — barras full-width -->
-          <div class="table-card chart-card" style="margin-bottom:20px">
-            <div class="table-header">
-              <span class="table-title"><i class="ti ti-currency-dollar"></i> Materiais — Maior Var. de Custo</span>
-              <span style="font-size:10px;font-family:var(--mono);color:var(--text3)">top 8 — valor absoluto</span>
-            </div>
-            <div id="chart-custo-mats-wrap" class="chart-body" style="padding:16px 24px"></div>
-            <table style="display:none"><tbody id="an-macro-custo-mats-body"></tbody></table>
+          <!-- Botão de relatório -->
+          <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
+            <button class="btn btn-primary" onclick="gerarRelatorioGerencial()" style="gap:7px;font-size:13px;padding:8px 18px;background:linear-gradient(135deg,#1d4ed8,#2563eb);border:none;border-radius:8px;cursor:pointer;display:flex;align-items:center">
+              <i class="ti ti-file-report" style="font-size:15px"></i>
+              <span>Gerar Relatório Gerencial</span>
+            </button>
           </div>
 
-          <!-- Linha 4: Tabela completa por filial -->
+          <!-- Linha 4: Rankings de Criticidade — 3 colunas -->
+          <div class="criticality-rankings-wrap" style="margin-bottom:20px">
+            <!-- CRÍTICO -->
+            <div class="table-card crank-card crank-critico">
+              <div class="table-header crank-header">
+                <span class="table-title"><i class="ti ti-flame"></i> Crítico</span>
+                <span class="crank-badge-count" id="crank-critico-count">—</span>
+                <button class="btn-icon crank-copy-btn" onclick="_crankCopy('critico')" title="Copiar lista para área de transferência"><i class="ti ti-copy"></i></button>
+              </div>
+              <div class="crank-action-banner crank-banner-critico">
+                <i class="ti ti-alert-octagon"></i>
+                <span>Ação imediata · Escalar à gerência</span>
+              </div>
+              <div class="crank-body" id="crank-critico-body">
+                <div class="crank-empty"><i class="ti ti-check"></i><span>Nenhum material crítico</span></div>
+              </div>
+            </div>
+            <!-- URGENTE -->
+            <div class="table-card crank-card crank-urgente">
+              <div class="table-header crank-header">
+                <span class="table-title"><i class="ti ti-alert-circle"></i> Urgente</span>
+                <span class="crank-badge-count crank-urgente-cnt" id="crank-urgente-count">—</span>
+                <button class="btn-icon crank-copy-btn" onclick="_crankCopy('urgente')" title="Copiar lista para área de transferência"><i class="ti ti-copy"></i></button>
+              </div>
+              <div class="crank-action-banner crank-banner-urgente">
+                <i class="ti ti-antenna-bars-5"></i>
+                <span>Atenção redobrada · Repassar aos regionais</span>
+              </div>
+              <div class="crank-body" id="crank-urgente-body">
+                <div class="crank-empty"><i class="ti ti-check"></i><span>Nenhum material urgente</span></div>
+              </div>
+            </div>
+            <!-- ATENÇÃO -->
+            <div class="table-card crank-card crank-atencao">
+              <div class="table-header crank-header">
+                <span class="table-title"><i class="ti ti-alert-triangle"></i> Atenção</span>
+                <span class="crank-badge-count crank-atencao-cnt" id="crank-atencao-count">—</span>
+                <button class="btn-icon crank-copy-btn" onclick="_crankCopy('atencao')" title="Copiar lista para área de transferência"><i class="ti ti-copy"></i></button>
+              </div>
+              <div class="crank-action-banner crank-banner-atencao">
+                <i class="ti ti-phone-call"></i>
+                <span>Alerta de escalada · Contatar operador</span>
+              </div>
+              <div class="crank-body" id="crank-atencao-body">
+                <div class="crank-empty"><i class="ti ti-check"></i><span>Nenhum material em atenção</span></div>
+              </div>
+            </div>
+          </div>
+          <!-- hidden table kept for potential export -->
+          <table style="display:none"><tbody id="an-macro-custo-mats-body"></tbody></table>
+
+          <!-- Linha 4a: Resumo por Regional -->
+          <div class="table-card" style="margin-bottom:16px">
+            <div class="table-header">
+              <span class="table-title"><i class="ti ti-map-2"></i> Resumo por Regional</span>
+              <span class="table-title" id="an-periodo-label" style="color:var(--text3);font-size:12px;font-family:var(--mono)"></span>
+            </div>
+            <div class="table-scroll">
+              <table id="an-macro-table-regionais">
+                <thead>
+                  <tr>
+                    <th>Regional</th>
+                    <th style="text-align:center">Nº Centrais</th>
+                    <th>Variação de Estoque</th>
+                    <th>Custo Variação<br><span style="font-size:9px;font-weight:400;opacity:.7">Var × C. Médio</span></th>
+                    <th>Criticidade</th>
+                    <th style="text-align:center">Saúde</th>
+                  </tr>
+                </thead>
+                <tbody id="an-macro-body-regionais"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Linha 4b: Resumo por Central -->
           <div class="table-card" style="margin-bottom:24px">
             <div class="table-header">
-              <span class="table-title"><i class="ti ti-table"></i> Resumo Completo por Filial</span>
-              <span class="table-title" id="an-periodo-label" style="color:var(--text3);font-size:12px;font-family:var(--mono)"></span>
+              <span class="table-title"><i class="ti ti-building-warehouse"></i> Resumo por Central</span>
             </div>
             <div class="table-scroll">
               <table id="an-macro-table">
                 <thead>
                   <tr>
-                    <th>Filial</th>
-                    <th title="Movimentos 101 e 801 no SAP com peso positivo">Entradas SAP<br><span style="font-size:9px;font-weight:400;opacity:.7">(101 + 801)</span></th>
-                    <th title="Movimentos 201 no SAP com peso negativo">Saídas SAP<br><span style="font-size:9px;font-weight:400;opacity:.7">(201)</span></th>
-                    <th>Est. Inicial<br><span style="font-size:9px;font-weight:400;opacity:.7">1º Lançamento</span></th>
-                    <th>Est. Final<br><span style="font-size:9px;font-weight:400;opacity:.7">Últ. Lançamento</span></th>
-                    <th title="Real − Teórico">Var. Estoque<br><span style="font-size:9px;font-weight:400;opacity:.7">Real − Teórico</span></th>
-                    <th>Var. Custo<br><span style="font-size:9px;font-weight:400;opacity:.7">Var × C. Médio</span></th>
+                    <th>Central</th>
+                    <th>Regional</th>
+                    <th>Variação de Estoque</th>
+                    <th>Custo Variação<br><span style="font-size:9px;font-weight:400;opacity:.7">Var × C. Médio</span></th>
                     <th style="text-align:center">Saúde</th>
                   </tr>
                 </thead>
@@ -6916,6 +7461,52 @@ function debounce(fn, delay = 120) {
     return map[scope] || [];
   }
 
+  // ═══════════════════════════════════════════════════════════
+  // ÍNDICE DE BUSCA INVERTIDO — evita scan linear em 1M+ registros
+  // ═══════════════════════════════════════════════════════════
+  // Estratégia: para cada módulo, mantemos um Array de strings de busca
+  // pré-computadas (uma por registro). A busca percorre apenas esse array
+  // de strings simples em vez de acessar cada campo de cada objeto.
+  // O índice é invalidado (= null) sempre que os dados do módulo mudam,
+  // e reconstruído de forma lazy na próxima chamada de filterRecords.
+
+  const _searchIndex = {
+    // { scope: { version: number, index: string[] } }
+    // version é o comprimento do array no momento da construção;
+    // qualquer push/clear invalida pelo tamanho diferente.
+  };
+
+  // Retorna o índice para o scope, construindo-o se necessário.
+  function _getOrBuildIndex(scope, records, fields) {
+    const cached = _searchIndex[scope];
+    if (cached && cached.version === records.length) return cached.index;
+
+    // Reconstrói — concatena os campos buscáveis de cada registro em uma
+    // única string lowercase separada por \x00 (nunca aparece nos dados).
+    const index = new Array(records.length);
+    for (let i = 0; i < records.length; i++) {
+      const r = records[i];
+      let s = '';
+      for (let j = 0; j < fields.length; j++) {
+        const v = r[fields[j]];
+        if (v != null && v !== '') s += String(v).toLowerCase() + '\x00';
+      }
+      index[i] = s;
+    }
+    _searchIndex[scope] = { version: records.length, index };
+    return index;
+  }
+
+  // Invalida o índice de um módulo (chame após importar ou remover registros).
+  function invalidateSearchIndex(scope) {
+    delete _searchIndex[scope];
+  }
+
+  // Invalida todos os índices de uma vez (ex: ao limpar tudo).
+  function invalidateAllSearchIndexes() {
+    for (const k of Object.keys(_searchIndex)) delete _searchIndex[k];
+  }
+
   function recordMatchesSearch(record, query, fields) {
     const tokens = tokenizeSearch(query);
     if (!tokens.length) return true;
@@ -6934,10 +7525,48 @@ function debounce(fn, delay = 120) {
     });
   }
 
-  function filterRecords(records, query, fields) {
+  // filterRecords — versão com índice invertido para buscas simples (sem field:value)
+  // e fallback para a lógica completa quando há tokens field:value ou múltiplos tokens.
+  function filterRecords(records, query, fields, scope) {
     const q = String(query ?? '').trim();
     if (!q) return records;
+
+    const tokens = tokenizeSearch(q);
+    if (!tokens.length) return records;
+
+    // Verifica se há algum token com sintaxe field:value (requer acesso ao objeto)
+    const hasFieldToken = tokens.some(t => /^[^:=\s]+\s*[:=]\s*.+$/.test(t));
+
+    if (!hasFieldToken && scope) {
+      // Caminho rápido: usa o índice invertido — só strings, sem acessar objetos
+      const index = _getOrBuildIndex(scope, records, fields);
+      const needles = tokens.map(t => t.toLowerCase());
+      const result = [];
+      for (let i = 0; i < index.length; i++) {
+        const s = index[i];
+        let ok = true;
+        for (let j = 0; j < needles.length; j++) {
+          if (!s.includes(needles[j])) { ok = false; break; }
+        }
+        if (ok) result.push(records[i]);
+      }
+      return result;
+    }
+
+    // Caminho completo: suporta field:value e lógica de aliases
     return records.filter(rec => recordMatchesSearch(rec, q, fields));
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // DEBOUNCE DOS INPUTS DE FILTRO — evita re-render a cada tecla
+  // ═══════════════════════════════════════════════════════════
+  // Mapa de timers por módulo para debounce individual.
+  const _filterDebounceTimers = {};
+  const FILTER_DEBOUNCE_MS = 180; // ms de espera após o último keystroke
+
+  function debouncedFilter(module, value, renderFn) {
+    clearTimeout(_filterDebounceTimers[module]);
+    _filterDebounceTimers[module] = setTimeout(() => renderFn(value), FILTER_DEBOUNCE_MS);
   }
 
 
@@ -7048,6 +7677,11 @@ function debounce(fn, delay = 120) {
     invalidateMaterialLookup();
     invalidateFilialLookup();
     reaplicarPadronizacaoMateriais();
+    // Invalida todos os índices de busca e de lançamentos/SAP ao restaurar estado
+    invalidateLancIndex();
+    invalidateSapIndex();
+    invalidateSaidasIndex();
+    invalidateAllSearchIndexes();
     stateHydrated = true;
     return true;
   }
@@ -7798,7 +8432,8 @@ function debounce(fn, delay = 120) {
   function getFilteredData(module) {
     const data = state[module] || [];
     const f = module === 'producao' ? filtroProducao : filters[module];
-    const textFiltered = filterRecords(data, f, getSearchableFields(module));
+    // Passa o scope para que filterRecords use o índice invertido quando possível
+    const textFiltered = filterRecords(data, f, getSearchableFields(module), module);
     // Apply column filters on top of text search
     if (!moduleHasColFilter(module)) return textFiltered;
     return textFiltered.filter(r => recordPassesColFilters(module, r));
@@ -7824,15 +8459,17 @@ function debounce(fn, delay = 120) {
         ...state.sap.map(r => ({ modulo: 'SAP', material: r.material, central: r.central, valor: money(r.valorTotal), data: r.createdAt || 0, status: 'badge-blue' })),
         ...state.producao.map(r => ({ modulo: 'Produção', material: 'Produção', central: r.central, valor: `${num(r.producao)} m³`, data: r.createdAt || 0, status: 'badge-purple' }))
       ].sort((a, b) => (b.data || 0) - (a.data || 0));
+      // Feed do dashboard é recriado a cada chamada — não tem scope fixo para indexar
       data = filterRecords(feed, listFilters.dashboard, getSearchableFields('dashboard'));
     } else if (scope === 'imports') {
       data = filterRecords(
         state.imports.slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)),
         listFilters.imports,
-        getSearchableFields('imports')
+        getSearchableFields('imports'),
+        'imports'
       );
     } else {
-      data = filterRecords(state[scope] || [], listFilters[scope], getSearchableFields(scope));
+      data = filterRecords(state[scope] || [], listFilters[scope], getSearchableFields(scope), scope);
     }
     // Apply column filters
     if (moduleHasColFilter(scope)) {
@@ -7954,7 +8591,9 @@ function debounce(fn, delay = 120) {
     imports:     { tbodyId: 'tb-imports',     fields: ['arquivo','modulo','registros','dataHora','status',null] },
     configs:     { tbodyId: 'tb-configs',     fields: ['key','value','desc','created',null] },
     filiais:     { tbodyId: 'tb-filiais',     fields: ['origem','alias','cnpj','regional','created',null] },
-    materiais:   { tbodyId: 'tb-materiais',   fields: ['origem','alias','desc','created',null] }
+    materiais:   { tbodyId: 'tb-materiais',   fields: ['origem','alias','desc','created',null] },
+    'an-resumo-regionais': { tbodyId: 'an-macro-body-regionais', fields: ['regional','nCentralis','variacaoKg','custoVar','critico','saude'] },
+    'an-resumo-centrais':  { tbodyId: 'an-macro-body',           fields: ['central','regional','variacaoKg','custoVar','saude'] }
   };
 
   // Returns true if a record passes all active column filters for a module
@@ -7973,12 +8612,27 @@ function debounce(fn, delay = 120) {
     return true;
   }
 
+  // Global cache for summary table data (populated by renderAnaliticoMacro)
+  window._anResumoRegionaisData = [];
+  window._anResumoCentraisData  = [];
+
   // Collect unique display values for a column from the FULL (unfiltered) dataset
   function getColUniqueValues(module, colIdx) {
     const meta = colFilterMeta[module];
     if (!meta) return [];
     const field = meta.fields[colIdx];
     if (!field) return [];
+    // Custom data sources for the two new summary tables
+    if (module === 'an-resumo-regionais') {
+      const seen = new Set();
+      (window._anResumoRegionaisData || []).forEach(r => seen.add(normalizeText(String(r[field] ?? '—'))));
+      return [...seen].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    }
+    if (module === 'an-resumo-centrais') {
+      const seen = new Set();
+      (window._anResumoCentraisData || []).forEach(r => seen.add(normalizeText(String(r[field] ?? '—'))));
+      return [...seen].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    }
     const data = module === 'producao' ? state.producao
                  : (module in state) ? state[module] : [];
     const seen = new Set();
@@ -8217,7 +8871,9 @@ function debounce(fn, delay = 120) {
       imports: renderImports,
       configs: renderConfigs,
       filiais: renderFiliais,
-      materiais: renderMateriais
+      materiais: renderMateriais,
+      'an-resumo-regionais': () => _renderResumoRegionais(window._anResumoRegionaisData || []),
+      'an-resumo-centrais':  () => _renderResumoCentrais(window._anResumoCentraisData  || [])
     };
     if (map[module]) map[module]();
   }
@@ -8447,6 +9103,7 @@ function debounce(fn, delay = 120) {
     remove.forEach(l => {
       state.lancamentos = state.lancamentos.filter(r => r !== l);
     });
+    invalidateLancIndex();
 
     await persistStateNow();
     closeLancConflictModal();
@@ -8466,6 +9123,7 @@ function debounce(fn, delay = 120) {
     if (!confirm('Excluir este lançamento do módulo Lançamentos?')) return;
 
     state.lancamentos = state.lancamentos.filter(r => r !== target);
+    invalidateLancIndex();
     await persistStateNow();
 
     // Remove from local list and re-render cards
@@ -8776,22 +9434,213 @@ function debounce(fn, delay = 120) {
   function filtrarTabela(tbodyId, value) {
     const module = moduleMap[tbodyId];
     if (!module) return;
+    // Atualiza o filtro imediatamente para manter estado correto,
+    // mas só dispara o render após o debounce.
     filters[module] = String(value || '').toLowerCase().trim();
     pages[module] = 0;
-    renderModule(module);
+    debouncedFilter(module, value, () => renderModule(module));
   }
 
   function filtrarProducao(value) {
     filtroProducao = String(value || '').trim();
     currentPageProducao = 0;
-    renderProducao();
+    debouncedFilter('producao', value, () => renderProducao());
   }
 
   function filtrarLista(scope, value) {
     if (!(scope in listFilters)) return;
     listFilters[scope] = String(value || '').trim();
     listPages[scope] = 0;
-    renderScope(scope);
+    debouncedFilter(scope, value, () => renderScope(scope));
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // ÍNDICE DE LANÇAMENTOS E SAP POR CENTRAL+MATERIAL
+  // ═══════════════════════════════════════════════════════════
+  // Problema original: getPrePeriodLaunchStock e o loop do analítico
+  // fazem .filter() linear sobre state.lancamentos e state.sap a cada
+  // chamada — O(n) por material × central. Com 1M de registros isso é
+  // dezenas de segundos de processamento.
+  //
+  // Solução: mantemos dois índices Map-of-Map que agrupam os registros
+  // por central → material e os ordenam por data de forma lazy.
+  // O índice é invalidado sempre que os arrays mudam (após import/remoção).
+  //
+  // Chave composta: `central\x00material` para evitar colisões.
+
+  let _lancIndexBuilt = false;
+  let _sapIndexBuilt  = false;
+
+  // Map<central, Map<material, Record[]>> — ordenado por dtLanc ASC
+  const _lancByCentralMat = new Map();
+  // Map<central, Map<material, Record[]>>
+  const _sapByCentralMat  = new Map();
+  // Map<central, Record[]> — todos os lançamentos da central (qualquer material), ASC
+  const _lancByCentral    = new Map();
+  // Map<central, Record[]> — todos os SAP da central
+  const _sapByCentral     = new Map();
+
+  function _buildLancIndex() {
+    _lancByCentralMat.clear();
+    _lancByCentral.clear();
+    const recs = state.lancamentos;
+    for (let i = 0; i < recs.length; i++) {
+      const r = recs[i];
+      const c = r.central || '';
+      const m = r.material || '—';
+      if (!_lancByCentralMat.has(c)) _lancByCentralMat.set(c, new Map());
+      const matMap = _lancByCentralMat.get(c);
+      if (!matMap.has(m)) matMap.set(m, []);
+      matMap.get(m).push(r);
+      if (!_lancByCentral.has(c)) _lancByCentral.set(c, []);
+      _lancByCentral.get(c).push(r);
+    }
+    // Ordena cada bucket por data ASC (necessário para getPrePeriodLaunchStock)
+    _lancByCentralMat.forEach(matMap => {
+      matMap.forEach((arr, mat) => {
+        arr.sort((a, b) => {
+          const da = parseDate(a.dtLanc), db = parseDate(b.dtLanc);
+          return (da ? da.getTime() : 0) - (db ? db.getTime() : 0);
+        });
+      });
+    });
+    _lancByCentral.forEach(arr => {
+      arr.sort((a, b) => {
+        const da = parseDate(a.dtLanc), db = parseDate(b.dtLanc);
+        return (da ? da.getTime() : 0) - (db ? db.getTime() : 0);
+      });
+    });
+    _lancIndexBuilt = true;
+  }
+
+  function _buildSapIndex() {
+    _sapByCentralMat.clear();
+    _sapByCentral.clear();
+    const recs = state.sap;
+    for (let i = 0; i < recs.length; i++) {
+      const r = recs[i];
+      const c = r.central || '';
+      const m = r.material || '—';
+      if (!_sapByCentralMat.has(c)) _sapByCentralMat.set(c, new Map());
+      const matMap = _sapByCentralMat.get(c);
+      if (!matMap.has(m)) matMap.set(m, []);
+      matMap.get(m).push(r);
+      if (!_sapByCentral.has(c)) _sapByCentral.set(c, []);
+      _sapByCentral.get(c).push(r);
+    }
+    _sapIndexBuilt = true;
+  }
+
+  function invalidateLancIndex() {
+    _lancIndexBuilt = false;
+    _lancByCentralMat.clear();
+    _lancByCentral.clear();
+    invalidateSearchIndex('lancamentos');
+  }
+
+  function invalidateSapIndex() {
+    _sapIndexBuilt = false;
+    _sapByCentralMat.clear();
+    _sapByCentral.clear();
+    invalidateSearchIndex('sap');
+  }
+
+  // Índice simples de saídas por central (não precisa de material nem data pré-ordenada)
+  const _saidasByCentral = new Map();
+  let _saidasIndexBuilt = false;
+
+  function _buildSaidasIndex() {
+    _saidasByCentral.clear();
+    const recs = state.saidas;
+    for (let i = 0; i < recs.length; i++) {
+      const r = recs[i];
+      const c = r.central || '';
+      if (!_saidasByCentral.has(c)) _saidasByCentral.set(c, []);
+      _saidasByCentral.get(c).push(r);
+    }
+    _saidasIndexBuilt = true;
+  }
+
+  function invalidateSaidasIndex() {
+    _saidasIndexBuilt = false;
+    _saidasByCentral.clear();
+    invalidateSearchIndex('saidas');
+  }
+
+  function ensureSaidasIndex() {
+    if (!_saidasIndexBuilt) _buildSaidasIndex();
+  }
+
+  function getLancIndex() {
+    if (!_lancIndexBuilt) _buildLancIndex();
+    return { byCentralMat: _lancByCentralMat, byCentral: _lancByCentral };
+  }
+
+  function getSapIndex() {
+    if (!_sapIndexBuilt) _buildSapIndex();
+    return { byCentralMat: _sapByCentralMat, byCentral: _sapByCentral };
+  }
+
+  // Retorna todos os lançamentos de uma central+material dentro de um período.
+  // Usa o índice para evitar scan linear.
+  function getLancsByCentralMatInPeriod(central, material, dtIni, dtFim) {
+    const { byCentralMat } = getLancIndex();
+    const matMap = byCentralMat.get(central);
+    if (!matMap) return [];
+    const arr = matMap.get(material || '—') || [];
+    if (!dtIni && !dtFim) return arr;
+    // Filtra por período — o array já está ordenado por data
+    return arr.filter(r => {
+      const d = parseDate(r.dtLanc);
+      if (!d) return false;
+      if (dtIni && d < dtIni) return false;
+      if (dtFim && d > dtFim) return false;
+      return true;
+    });
+  }
+
+  // Retorna todos os SAP de uma central+material dentro de um período.
+  function getSapByCentralMatInPeriod(central, material, dtIni, dtFim) {
+    const { byCentralMat } = getSapIndex();
+    const matMap = byCentralMat.get(central);
+    if (!matMap) return [];
+    const arr = matMap.get(material || '—') || [];
+    if (!dtIni && !dtFim) return arr;
+    return arr.filter(r => {
+      const d = parseDate(r.dtLanc);
+      if (!d) return false;
+      if (dtIni && d < dtIni) return false;
+      if (dtFim && d > dtFim) return false;
+      return true;
+    });
+  }
+
+  // Retorna todos os lançamentos de uma central dentro de um período.
+  function getLancsByCentralInPeriod(central, dtIni, dtFim) {
+    const { byCentral } = getLancIndex();
+    const arr = byCentral.get(central) || [];
+    if (!dtIni && !dtFim) return arr;
+    return arr.filter(r => {
+      const d = parseDate(r.dtLanc);
+      if (!d) return false;
+      if (dtIni && d < dtIni) return false;
+      if (dtFim && d > dtFim) return false;
+      return true;
+    });
+  }
+
+  // Retorna todos os SAP de uma central dentro de um período.
+  function getSapByCentralInPeriod(central, dtIni, dtFim) {
+    const { byCentral } = getSapIndex();
+    const arr = byCentral.get(central) || [];
+    if (!dtIni && !dtFim) return arr;
+    return arr.filter(r => {
+      const d = parseDate(r.dtLanc);
+      if (!d) return false;
+      if (dtIni && d < dtIni) return false;
+      if (dtFim && d > dtFim) return false;
+      return true;
+    });
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -8884,22 +9733,37 @@ function debounce(fn, delay = 120) {
     if (!(cutoff instanceof Date) || Number.isNaN(cutoff.getTime())) return null;
 
     const materialKey = material || '—';
-    const prev = (state.lancamentos || [])
-      .filter(rec => rec.central === central && (rec.material || '—') === materialKey)
-      .map(rec => ({ rec, dt: parseDate(rec.dtLanc) }))
-      .filter(item => item.dt && item.dt < cutoff)
-      .sort((a, b) => dateCmp(b.dt, a.dt));
 
-    if (!prev.length) return null;
+    // Usa o índice por central+material para evitar scan linear de state.lancamentos
+    const { byCentralMat } = getLancIndex();
+    const matMap = byCentralMat.get(central);
+    if (!matMap) return null;
+    const arr = matMap.get(materialKey) || [];
+    if (!arr.length) return null;
 
-    const targetKey = localISODate(prev[0].dt);
-    const sameDay = prev
-      .filter(item => localISODate(item.dt) === targetKey)
-      .map(item => item.rec);
+    // O array já está ordenado ASC — encontramos o último registro antes do cutoff
+    // com busca binária para máxima eficiência
+    let lo = 0, hi = arr.length - 1, lastBeforeIdx = -1;
+    while (lo <= hi) {
+      const mid = (lo + hi) >>> 1;
+      const d = parseDate(arr[mid].dtLanc);
+      if (d && d < cutoff) { lastBeforeIdx = mid; lo = mid + 1; }
+      else hi = mid - 1;
+    }
+    if (lastBeforeIdx < 0) return null;
+
+    const targetKey = localISODate(parseDate(arr[lastBeforeIdx].dtLanc));
+    // Soma todos os registros do mesmo dia (pode haver múltiplos)
+    let total = 0;
+    for (let i = lastBeforeIdx; i >= 0; i--) {
+      const d = parseDate(arr[i].dtLanc);
+      if (!d || localISODate(d) !== targetKey) break;
+      total += num(arr[i].peso);
+    }
 
     return {
-      value: sameDay.reduce((acc, rec) => acc + num(rec.peso), 0),
-      dtLabel: fmtPtDate(prev[0].dt)
+      value: total,
+      dtLabel: fmtPtDate(parseDate(arr[lastBeforeIdx].dtLanc))
     };
   }
 
@@ -9918,22 +10782,27 @@ function debounce(fn, delay = 120) {
       return d >= dtIni && d <= dtFim;
     }
 
+    const _dgLancIdx = getLancIndex();
+    const _dgSapIdx  = getSapIndex();
+    ensureSaidasIndex();
     const allCentrals = new Set([
-      ...state.lancamentos.map(r => r.central),
-      ...state.sap.map(r => r.central)
-    ].filter(Boolean));
+      ..._dgLancIdx.byCentral.keys(),
+      ..._dgSapIdx.byCentral.keys()
+    ]);
 
     const results = [];
 
     allCentrals.forEach(central => {
-      const lancsNoPeriodo = state.lancamentos
-        .filter(r => r.central === central && inPeriod(r.dtLanc))
-        .sort((a, b) => {
-          const da = parseDate(a.dtLanc), db = parseDate(b.dtLanc);
-          return dateCmp(da ?? new Date(0), db ?? new Date(0));
-        });
+      const lancsNoPeriodo = (dtIni && dtFim)
+        ? getLancsByCentralInPeriod(central, dtIni, dtFim).slice().sort((a, b) => {
+            const da = parseDate(a.dtLanc), db = parseDate(b.dtLanc);
+            return dateCmp(da ?? new Date(0), db ?? new Date(0));
+          })
+        : (_dgLancIdx.byCentral.get(central) || []).slice();
 
-      const sapNoPeriodo = state.sap.filter(r => r.central === central && inPeriod(r.dtLanc));
+      const sapNoPeriodo = (dtIni && dtFim)
+        ? getSapByCentralInPeriod(central, dtIni, dtFim)
+        : (_dgSapIdx.byCentral.get(central) || []);
 
       const entradasPorCod = {};
       const saidasPorCod   = {};
@@ -10014,7 +10883,13 @@ function debounce(fn, delay = 120) {
       const estoqueTeoricoMacro = somaPrimeiro + totalEntradas + totalSaidas;
       const variacaoEstoque     = somaUltimo - estoqueTeoricoMacro;
 
-      const saidasCentral = state.saidas.filter(s => s.central === central && inPeriod(s.dtEmissao));
+      const saidasCentral = _saidasByCentral.size > 0
+        ? (_saidasByCentral.get(central) || []).filter(s => {
+            if (!dtIni || !dtFim) return true;
+            const d = parseDate(s.dtEmissao);
+            return d && d >= dtIni && d <= dtFim;
+          })
+        : state.saidas.filter(s => s.central === central && inPeriod(s.dtEmissao));
       const _custoPorMat  = {};
       const _pesoPorMat   = {};
       saidasCentral.forEach(s => {
@@ -11177,6 +12052,13 @@ function debounce(fn, delay = 120) {
     if (!confirm('Deseja realmente excluir este registro?')) return;
 
     state[module] = state[module].filter(r => r !== actual);
+
+    // Invalida índices do módulo removido
+    if (module === 'lancamentos') invalidateLancIndex();
+    else if (module === 'sap')    invalidateSapIndex();
+    else if (module === 'saidas') invalidateSaidasIndex();
+    else invalidateSearchIndex(module);
+
     persist();
     renderModule(module);
     updateDashboard();
@@ -11187,6 +12069,11 @@ function debounce(fn, delay = 120) {
     const removeFrom = key => { state[key] = state[key].filter(r => r.importId !== importId); };
     ['entradas','saidas','lancamentos','sap','producao','filiais','materiais'].forEach(removeFrom);
     state.imports = state.imports.filter(r => r.id !== importId);
+    // Invalida todos os índices ao remover uma importação inteira
+    invalidateLancIndex();
+    invalidateSapIndex();
+    invalidateSaidasIndex();
+    invalidateAllSearchIndexes();
   }
 
   async function processImportedRows(modulo, rows, fileName, extra = {}) {
@@ -11376,6 +12263,12 @@ function debounce(fn, delay = 120) {
     }
 
     updateStep('Salvando e atualizando os painéis...');
+
+    // Invalida os índices dos módulos que foram alterados para forçar reconstrução
+    if (modulo === 'Entrada')     invalidateSearchIndex('entradas');
+    if (modulo === 'Saída')       { invalidateSaidasIndex(); }
+    if (modulo === 'Lançamento')  invalidateLancIndex();
+    if (modulo === 'SAP')         invalidateSapIndex();
 
     state.imports.unshift({
       id: importId,
@@ -11840,10 +12733,14 @@ function debounce(fn, delay = 120) {
     }
 
     // ── Collect all central keys ──────────────────────────────
+    // Usa os índices pré-computados — O(1) para obter as chaves
+    const lancIdx = getLancIndex();
+    const sapIdx  = getSapIndex();
+    ensureSaidasIndex();
     const allCentrals = new Set([
-      ...state.lancamentos.map(r => r.central),
-      ...state.sap.map(r => r.central)
-    ].filter(Boolean));
+      ...lancIdx.byCentral.keys(),
+      ...sapIdx.byCentral.keys()
+    ]);
 
     if (!allCentrals.size) {
       toast('Nenhum dado para o período selecionado', 'error');
@@ -11855,16 +12752,16 @@ function debounce(fn, delay = 120) {
 
     allCentrals.forEach(central => {
 
-      // ── Lançamentos desta central dentro do período ──
-      const lancsNoPeriodo = state.lancamentos
-        .filter(r => r.central === central && inPeriod(r.dtLanc))
+      // ── Lançamentos desta central dentro do período — via índice ──
+      const lancsNoPeriodo = getLancsByCentralInPeriod(central, dtIni, dtFim)
+        .slice() // não muta o array do índice
         .sort((a, b) => {
           const da = parseDate(a.dtLanc), db = parseDate(b.dtLanc);
           return dateCmp(da ?? new Date(0), db ?? new Date(0));
         });
 
-      // ── SAP desta central dentro do período ──
-      const sapNoPeriodo = state.sap.filter(r => r.central === central && inPeriod(r.dtLanc));
+      // ── SAP desta central dentro do período — via índice ──
+      const sapNoPeriodo = getSapByCentralInPeriod(central, dtIni, dtFim);
 
       // ── SAP: entradas = tudo positivo, saídas = tudo negativo ──
       // Breakdown por código para cada tipo
@@ -11975,13 +12872,11 @@ function debounce(fn, delay = 120) {
       });
 
       // ── Produção do período (match por mês dentro do range) ──
+      // Filtra apenas os registros desta central (produção é pequena, sem índice dedicado)
       const prodNoPeriodo = state.producao.filter(r => {
         if (r.central !== central) return false;
-        // r.mes is like "Janeiro/2026" — try to match months inside period
-        // Check if any day of the month falls inside the period
         const mesMatch = r.mes ? parseMes(r.mes) : null;
         if (!mesMatch) return false;
-        // include if the 1st of that month <= dtFim and last day >= dtIni
         const firstDay = new Date(mesMatch.y, mesMatch.m - 1, 1);
         const lastDay  = new Date(mesMatch.y, mesMatch.m, 0);
         return firstDay <= dtFim && lastDay >= dtIni;
@@ -11989,9 +12884,14 @@ function debounce(fn, delay = 120) {
 
       // ── Saídas (módulo Saídas) desta central no período ──
       // Custo médio ponderado por material: R$/kg → usado no badge de custo da variação
-      const saidasNoPeriodo = state.saidas.filter(s =>
-        s.central === central && inPeriod(s.dtEmissao)
-      );
+      // Usa índice de saídas pré-computado se disponível, senão linear (saídas é menor)
+      const _saidasIdx = _saidasByCentral.size > 0 ? _saidasByCentral : null;
+      const saidasNoPeriodo = _saidasIdx
+        ? (_saidasIdx.get(central) || []).filter(s => {
+            const d = parseDate(s.dtEmissao);
+            return d && d >= dtIni && d <= dtFim;
+          })
+        : state.saidas.filter(s => s.central === central && inPeriod(s.dtEmissao));
       const _custoPorMat = {};
       const _pesoPorMat  = {};
       saidasNoPeriodo.forEach(s => {
@@ -12568,75 +13468,172 @@ function debounce(fn, delay = 120) {
       }).join('');
     })();
 
-    // ─── MATERIAIS MAIOR VAR. CUSTO — barras full-width ───────────────────
-    const chartCustoMatsWrap = document.getElementById('chart-custo-mats-wrap');
-    (function renderCustoMatsChart() {
-      const matList = [];
+    // ─── RANKINGS DE CRITICIDADE — 3 colunas ─────────────────────────────
+    (function renderCriticalityRankings() {
+      // Build a flat list: one entry per (central × material), enriched with level + regional + trend
+      const rankItems = [];
+      const midDate = new Date((dtIni.getTime() + dtFim.getTime()) / 2); // mid-point of selected period
+
       enriched.forEach(r => {
         const lancsByMat = new Map();
         const sapByMat   = new Map();
         r.lancsNoPeriodo.forEach(l => { const m=l.material||'—'; if(!lancsByMat.has(m))lancsByMat.set(m,[]); lancsByMat.get(m).push(l); });
         r.sapNoPeriodo.forEach(s => { const m=s.material||'—'; if(!sapByMat.has(m))sapByMat.set(m,[]); sapByMat.get(m).push(s); });
+
+        // resolve regional using the same normalised lookup the rest of the system uses
+        const _fIdx    = getFilialLookupIndex();
+        const _fRec    = _fIdx.exact.get(normalizeText(r.central));
+        const regional = (_fRec?.regional || '').trim() || '—';
+
         (r.allMats||[]).forEach(mat => {
-          const snap    = buildSnapshot({ lancs: lancsByMat.get(mat)||[], sap: sapByMat.get(mat)||[] });
+          const lancArr = lancsByMat.get(mat)||[];
+          const sapArr  = sapByMat.get(mat)||[];
+          const prev    = getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni });
+          const snap    = buildSnapshot({ lancs: lancArr, sap: sapArr, initialStockOverride: prev?.value, initialDateLabelOverride: prev?.dtLabel });
           const custMed = (r.custoMedioPorMat||{})[mat] || 0;
-          const custoV  = custMed > 0 ? snap.diff * custMed : 0;
-          if (custMed > 0) matList.push({ mat, diff: snap.diff, custMed, custoVar: custoV });
+          const custoVar= custMed > 0 ? snap.diff * custMed : 0;
+          const catKey  = detectCatKey(lancArr[0]?.categoria||'') || detectCatFromMat(mat);
+          const lvl     = classifyVariation(Math.abs(snap.diff), catKey, thresholds);
+          if (lvl === 'bom') return;
+
+          // ── Tendência: compara 1ª metade vs 2ª metade do período ──
+          // Divide lançamentos pelo ponto médio e compara |diff| de cada metade
+          const lancFirst  = lancArr.filter(l => { const d = parseDate(l.dtLanc); return d && d <= midDate; });
+          const lancSecond = lancArr.filter(l => { const d = parseDate(l.dtLanc); return d && d > midDate; });
+          const sapFirst   = sapArr.filter(s => { const d = parseDate(s.dtLanc); return d && d <= midDate; });
+          const sapSecond  = sapArr.filter(s => { const d = parseDate(s.dtLanc); return d && d > midDate; });
+
+          let trend = 'stable'; // 'improving' | 'worsening' | 'stable'
+          if (lancFirst.length >= 2 && lancSecond.length >= 2) {
+            const snapA = buildSnapshot({ lancs: lancFirst, sap: sapFirst });
+            const snapB = buildSnapshot({ lancs: lancSecond, sap: sapSecond });
+            const absA  = Math.abs(snapA.diff);
+            const absB  = Math.abs(snapB.diff);
+            // Threshold: at least 5% relative change to avoid noise
+            if (absA > 0.001 || absB > 0.001) {
+              const maxHalf = Math.max(absA, absB, 1);
+              const delta   = (absB - absA) / maxHalf;
+              if (delta > 0.08)       trend = 'worsening';
+              else if (delta < -0.08) trend = 'improving';
+            }
+          }
+
+          rankItems.push({ mat, central: r.central, regional, diff: snap.diff, custoVar, catKey, level: lvl, trend });
         });
       });
-      matList.sort((a,b) => Math.abs(b.custoVar)-Math.abs(a.custoVar));
-      const top8 = matList.slice(0,8);
 
-      // populate hidden tbody
+      // Sort by |diff| descending within each level
+      const byLevel = { critico: [], urgente: [], atencao: [] };
+      rankItems.forEach(item => { if (byLevel[item.level]) byLevel[item.level].push(item); });
+      ['critico','urgente','atencao'].forEach(lvl => {
+        byLevel[lvl].sort((a,b) => a.diff - b.diff); // maior desfalque (mais negativo) → maior sobra
+      });
+
+      // Helper: classify financial impact label (relative to all items in this level)
+      function impactLabel(absVal, maxVal) {
+        if (maxVal <= 0) return { label: '—', cls: 'crank-impact-baixo', pct: 0 };
+        const pct = Math.round(absVal / maxVal * 100);
+        if (pct >= 70) return { label: 'ALTO', cls: 'crank-impact-alto', pct };
+        if (pct >= 35) return { label: 'MÉDIO', cls: 'crank-impact-medio', pct };
+        return { label: 'BAIXO', cls: 'crank-impact-baixo', pct };
+      }
+
+      // Trend icon + tooltip
+      const trendMeta = {
+        worsening: { icon: 'ti-trending-up',   cls: 'crank-trend-worse',    tip: 'Piorando no período' },
+        improving: { icon: 'ti-trending-down',  cls: 'crank-trend-better',   tip: 'Melhorando no período' },
+        stable:    { icon: 'ti-minus',          cls: 'crank-trend-stable',   tip: 'Estável no período' }
+      };
+
+      // Copy-to-clipboard helper: builds formatted text for a level list
+      function buildCopyText(levelLabel, items) {
+        if (!items.length) return `${levelLabel}\nNenhum material.\n`;
+        const lines = items.slice(0, 15).map((item, idx) => {
+          const trendStr = item.trend === 'worsening' ? '↑ Piorando' : item.trend === 'improving' ? '↓ Melhorando' : '→ Estável';
+          const varStr   = `${item.diff < 0 ? '-' : '+'}${fmtKg(Math.abs(item.diff))}`;
+          return `${idx+1}. ${item.mat} | ${item.regional} › ${item.central} | Var: ${varStr} | ${trendStr}`;
+        });
+        return `${levelLabel} (${items.length} material${items.length > 1 ? 'is' : ''})\n${lines.join('\n')}\n`;
+      }
+
+      // Expose copy function globally (called from onclick)
+      window._crankCopy = function(lvl) {
+        const labels = { critico: '🔴 CRÍTICO', urgente: '🟠 URGENTE', atencao: '🟡 ATENÇÃO' };
+        const text = buildCopyText(labels[lvl] || lvl, byLevel[lvl] || []);
+        navigator.clipboard.writeText(text).then(() => {
+          toast('Lista copiada para a área de transferência', 'success');
+        }).catch(() => {
+          // fallback for older browsers
+          const ta = document.createElement('textarea');
+          ta.value = text;
+          ta.style.position = 'fixed';
+          ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+          toast('Lista copiada para a área de transferência', 'success');
+        });
+      };
+
+      function renderRankList(containerId, countId, items) {
+        const body  = document.getElementById(containerId);
+        const badge = document.getElementById(countId);
+        if (!body) return;
+        if (badge) badge.textContent = items.length ? `${items.length} material${items.length > 1 ? 'is' : ''}` : '0';
+        if (!items.length) {
+          body.innerHTML = '<div class="crank-empty"><i class="ti ti-check"></i><span>Nenhum material</span></div>';
+          return;
+        }
+        const maxAbs = Math.max(...items.map(i => Math.abs(i.custoVar)), 1);
+        body.innerHTML = items.slice(0, 15).map((item, idx) => {
+          const varCls  = item.diff < 0 ? 'neg' : 'pos';
+          const imp     = impactLabel(Math.abs(item.custoVar), maxAbs);
+          const rank    = idx + 1;
+          const tm      = trendMeta[item.trend] || trendMeta.stable;
+          return `<div class="crank-row">
+            <div class="crank-row-left">
+              <div class="crank-row-mat" title="${escapeHtml(item.mat)}">
+                <span style="font-size:9.5px;font-family:var(--mono);color:var(--text3);margin-right:5px">${rank}.</span>${escapeHtml(item.mat)}
+                <span class="crank-trend ${tm.cls}" title="${tm.tip}"><i class="ti ${tm.icon}"></i></span>
+              </div>
+              <div class="crank-row-meta">
+                <span>${escapeHtml(item.regional)}</span>
+                <span class="sep">·</span>
+                <span>${escapeHtml(item.central)}</span>
+              </div>
+            </div>
+            <div class="crank-row-right">
+              <span class="crank-row-var ${varCls}">${varSymbol(item.diff)} ${fmtKg(Math.abs(item.diff))}</span>
+              ${item.custoVar !== 0 ? `
+              <div class="crank-impact-bar-wrap">
+                <div class="crank-impact-bar-fill" style="width:${imp.pct}%"></div>
+              </div>
+              <span class="crank-impact-label ${imp.cls}">↑${imp.label}</span>` : ''}
+            </div>
+          </div>`;
+        }).join('');
+      }
+
+      renderRankList('crank-critico-body', 'crank-critico-count', byLevel.critico);
+      renderRankList('crank-urgente-body', 'crank-urgente-count', byLevel.urgente);
+      renderRankList('crank-atencao-body', 'crank-atencao-count', byLevel.atencao);
+
+      // Expose data globally for the report generator
+      window._rankByLevel = {
+        critico: byLevel.critico.slice(),
+        urgente: byLevel.urgente.slice(),
+        atencao: byLevel.atencao.slice()
+      };
+
+      // Populate hidden export tbody (kept for potential CSV export)
       const custMatsTb = document.getElementById('an-macro-custo-mats-body');
-      if (custMatsTb) custMatsTb.innerHTML = top8.map(m => `<tr><td>${escapeHtml(m.mat)}</td><td>${fmtKg(m.diff)}</td><td>${money(m.custMed)}</td><td>${money(m.custoVar)}</td></tr>`).join('');
-
-      if (!chartCustoMatsWrap) return;
-      if (!top8.length) { chartCustoMatsWrap.innerHTML = '<div style="color:var(--text3);font-size:12px;padding:12px 0">Sem materiais com custo médio cadastrado.</div>'; return; }
-
-      const maxAbs = Math.max(...top8.map(m => Math.abs(m.custoVar)), 1);
-      chartCustoMatsWrap.innerHTML = `<div style="display:flex;flex-direction:column;gap:0">` + top8.map((m, i) => {
-        const pct = Math.round(Math.abs(m.custoVar) / maxAbs * 100);
-        const barColor = m.custoVar < -0.001 ? 'var(--red)' : m.custoVar > 0.001 ? 'var(--amber)' : 'var(--teal)';
-        const valCls = m.custoVar < -0.001 ? 'v-neg' : m.custoVar > 0.001 ? 'v-pos' : 'v-zero';
-        const estCls = m.diff < -0.001 ? 'v-neg' : m.diff > 0.001 ? 'v-pos' : 'v-zero';
-        const rank = i + 1;
-        return `<div class="cbar-full-row">
-          <div style="display:flex;align-items:center;gap:8px;min-width:0">
-            <span style="font-size:10px;font-family:var(--mono);color:var(--text3);width:14px;flex-shrink:0;text-align:right">${rank}</span>
-            <span class="cbar-full-label">${escapeHtml(m.mat)}</span>
-          </div>
-          <div style="display:flex;flex-direction:column;gap:3px;min-width:0">
-            <div class="cbar-track" style="height:10px">
-              <div class="cbar-fill" style="width:${pct}%;background:${barColor};opacity:.85;height:10px"></div>
-            </div>
-            <div style="display:flex;gap:12px;font-size:9.5px;font-family:var(--mono);color:var(--text3)">
-              <span class="${estCls}">Est. ${varSymbol(m.diff)} ${fmtKg(Math.abs(m.diff))}</span>
-              <span>${money(m.custMed)}/kg</span>
-            </div>
-          </div>
-          <div class="cbar-full-val ${valCls}">${varSymbol(m.custoVar)} ${money(Math.abs(m.custoVar))}</div>
-        </div>`;
-      }).join('') + '</div>';
+      if (custMatsTb) {
+        const allSorted = [...byLevel.critico, ...byLevel.urgente, ...byLevel.atencao];
+        custMatsTb.innerHTML = allSorted.map(m => `<tr><td>${escapeHtml(m.level)}</td><td>${escapeHtml(m.regional)}</td><td>${escapeHtml(m.central)}</td><td>${escapeHtml(m.mat)}</td><td>${fmtKg(m.diff)}</td><td>${money(Math.abs(m.custoVar))}</td><td>${m.trend}</td></tr>`).join('');
+      }
     })();
 
-    // ─── TABELA COMPLETA POR FILIAL ───────────────────────────────────────
-    tb.innerHTML = enriched.map(r => {
-      const varEstCls = r.variacaoEstoque > 0.001 ? 'var-cell-pos' : r.variacaoEstoque < -0.001 ? 'var-cell-neg' : 'var-cell-zero';
-      const cvCls2    = r.custoVar > 0.001 ? 'diff-pos' : r.custoVar < -0.001 ? 'diff-neg' : 'diff-zero';
-      return `<tr>
-        <td class="td-mono" style="font-weight:600">${escapeHtml(r.central)}</td>
-        <td class="td-mono" style="color:var(--green)">${fmtKg(r.totalEntradas)}</td>
-        <td class="td-mono" style="color:var(--red)">${fmtKg(Math.abs(r.totalSaidas))}</td>
-        <td class="td-mono" style="color:var(--text)">${fmtKg(r.somaPrimeiro)}</td>
-        <td class="td-mono" style="color:var(--text)">${fmtKg(r.somaUltimo)}</td>
-        <td class="td-mono ${varEstCls}" style="white-space:nowrap">${varSymbol(r.variacaoEstoque)} ${fmtKg(Math.abs(r.variacaoEstoque))}</td>
-        <td class="td-mono ${cvCls2}" style="white-space:nowrap">${r.custoVar!==0?varSymbol(r.custoVar)+' '+money(Math.abs(r.custoVar)):'<span style="color:var(--text3)">—</span>'}</td>
-        <td style="text-align:center">${healthBadge(r.health)}</td>
-      </tr>`;
-    }).join('');
-
-    makeResizable(document.getElementById('an-macro-table'));
   }
 
   // ── Breakdown popover: portal pattern ──────────────────────
@@ -13390,7 +14387,213 @@ function debounce(fn, delay = 120) {
       container.appendChild(group);
     });
 
-    // Populate filter dropdowns with available centrais and materiais
+    // ─── RESUMO POR CENTRAL (dados do card) ─────────────────────────────
+    window._anResumoCentraisData = _cardBuffer.map(card => ({
+      central:      card.dataset.central     || '—',
+      regional:     card.dataset.regional    || '—',
+      variacaoKg:   card.dataset.centralDiff || '0',
+      custoVar:     card.dataset.custoVariacao || '0',
+      saude:        card.dataset.healthScore != null && card.dataset.healthScore !== ''
+                      ? card.dataset.healthScore + '% · ' + (card.dataset.healthLevel || '—').toUpperCase()
+                      : '—',
+      healthLevel:  card.dataset.healthLevel || 'none',
+      healthScore:  card.dataset.healthScore || ''
+    }));
+
+    // Ordered by worst criticality then central name
+    const _hOrdRes = { critico: 0, urgente: 1, atencao: 2, ok: 3, none: 4 };
+    const centralRowsSorted = [...window._anResumoCentraisData].sort((a, b) => {
+      const la = _hOrdRes[a.healthLevel] ?? 4;
+      const lb = _hOrdRes[b.healthLevel] ?? 4;
+      if (la !== lb) return la - lb;
+      return a.central.localeCompare(b.central, 'pt-BR');
+    });
+
+    window._renderResumoCentrais = function(data) {
+      const tbEl = document.getElementById('an-macro-body');
+      if (!tbEl) return;
+      const cf = colFilters['an-resumo-centrais'];
+      const metaCf = colFilterMeta['an-resumo-centrais'];
+      // Filter using display fields
+      const filtered = data.filter(rec => {
+        if (!cf) return true;
+        for (const [colIdx, activeSet] of Object.entries(cf)) {
+          if (!activeSet || !activeSet.size) continue;
+          const field = metaCf.fields[Number(colIdx)];
+          if (!field) continue;
+          const cellVal = normalizeText(String(rec[field] ?? '—'));
+          if (!activeSet.has(cellVal)) return false;
+        }
+        return true;
+      });
+
+      const filteredCentralSet = new Set(filtered.map(r => r.central));
+      const filteredRows = centralRowsSorted.filter(r => filteredCentralSet.has(r.central));
+
+      if (!filteredRows.length) {
+        tbEl.innerHTML = '<tr><td colspan="5"><div class="empty-state"><i class="ti ti-filter-off"></i><p>Nenhum resultado com os filtros ativos.</p></div></td></tr>';
+        return;
+      }
+
+      const hClsMap = { critico:'hb-critico', urgente:'hb-urgente', atencao:'hb-atencao', ok:'hb-ok', none:'hb-none' };
+      const hIconMap = { critico:'ti-flame', urgente:'ti-alert-circle', atencao:'ti-alert-triangle', ok:'ti-heartbeat', none:'ti-minus' };
+      const hLabelMap = { critico:'CRÍTICO', urgente:'URGENTE', atencao:'ATENÇÃO', ok:'SAUDÁVEL', none:'—' };
+
+      tbEl.innerHTML = filteredRows.map(r => {
+        const diff = parseFloat(r.variacaoKg || 0);
+        const custo = parseFloat(r.custoVar || 0);
+        const diffCls = diff < 0 ? 'var-cell-neg' : diff > 0 ? 'var-cell-pos' : 'var-cell-zero';
+        const custoCls = custo < 0 ? 'diff-neg' : custo > 0 ? 'diff-pos' : 'diff-zero';
+        const diffLabel = diff < 0 ? 'Desfalque' : diff > 0 ? 'Sobra' : 'Neutro';
+        const diffIcon = diff < 0 ? 'ti-trending-down' : diff > 0 ? 'ti-trending-up' : 'ti-minus';
+        const custo_html = custo !== 0
+          ? `<span class="${custoCls}" style="display:inline-flex;align-items:center;gap:4px"><i class="ti ${custo < 0 ? 'ti-trending-down' : 'ti-trending-up'}"></i>${money(Math.abs(custo))}</span>`
+          : '<span style="color:var(--text3)">—</span>';
+        const lvl = r.healthLevel || 'none';
+        const scoreStr = r.healthScore !== '' ? ` ${r.healthScore}%` : '';
+        const healthHtml = lvl !== 'none'
+          ? `<span class="health-badge-inline ${hClsMap[lvl]}"><i class="ti ${hIconMap[lvl]}"></i>${hLabelMap[lvl]}${scoreStr}</span>`
+          : '<span style="color:var(--text3);font-size:11px">—</span>';
+        return `<tr>
+          <td class="td-mono" style="font-weight:600">${escapeHtml(r.central)}</td>
+          <td class="td-muted">${escapeHtml(r.regional)}</td>
+          <td class="td-mono ${diffCls}" style="white-space:nowrap">
+            <span style="display:inline-flex;align-items:center;gap:4px"><i class="ti ${diffIcon}" style="font-size:11px"></i>${diffLabel}: ${fmtKg(Math.abs(diff))}</span>
+          </td>
+          <td class="td-mono" style="white-space:nowrap">${custo_html}</td>
+          <td style="text-align:center">${healthHtml}</td>
+        </tr>`;
+      }).join('');
+    };
+    window._renderResumoCentrais(window._anResumoCentraisData);
+    const _tblCentrais = document.getElementById('an-macro-table');
+    makeResizable(_tblCentrais);
+    injectColFilterButtons(_tblCentrais, 'an-resumo-centrais');
+
+    // ─── RESUMO POR REGIONAL (dados do card de regional) ─────────────────
+    const regionalSummaryRows = groupOrder.map(reg => {
+      const cards = groupMap.get(reg);
+      let totalDiffR = 0, totalCustoR = 0;
+      const aggR = { critico: 0, urgente: 0, atencao: 0, bom: 0 };
+      let scoreSum = 0, scoreCount = 0;
+      cards.forEach(c => {
+        totalDiffR  += parseFloat(c.dataset.centralDiff   || 0);
+        totalCustoR += parseFloat(c.dataset.custoVariacao || 0);
+        const lvl = c.dataset.healthLevel;
+        if      (lvl === 'critico') aggR.critico++;
+        else if (lvl === 'urgente') aggR.urgente++;
+        else if (lvl === 'atencao') aggR.atencao++;
+        else if (lvl === 'ok')      aggR.bom++;
+        const sc = parseFloat(c.dataset.healthScore);
+        if (!isNaN(sc)) { scoreSum += sc; scoreCount++; }
+      });
+      const avgScoreR = scoreCount > 0 ? Math.round(scoreSum / scoreCount) : null;
+      const domLvlR = aggR.critico ? 'critico' : aggR.urgente ? 'urgente' : aggR.atencao ? 'atencao' : aggR.bom ? 'ok' : 'none';
+      return { regional: reg || '—', nCentralis: cards.length, totalDiff: totalDiffR, totalCusto: totalCustoR, agg: aggR, avgScore: avgScoreR, domLevel: domLvlR };
+    });
+
+    // Sort by worst level then regional name
+    const regRowsSorted = [...regionalSummaryRows].sort((a, b) => {
+      const la = _hOrdRes[a.domLevel] ?? 4;
+      const lb = _hOrdRes[b.domLevel] ?? 4;
+      if (la !== lb) return la - lb;
+      if (!a.regional || a.regional === '—') return 1;
+      if (!b.regional || b.regional === '—') return -1;
+      return a.regional.localeCompare(b.regional, 'pt-BR');
+    });
+
+    window._anResumoRegionaisData = regRowsSorted.map(r => ({
+      regional:      r.regional,
+      nCentralis:    String(r.nCentralis),
+      variacaoKg:    String(r.totalDiff),
+      custoVar:      String(r.totalCusto),
+      critico:       String(r.agg.critico),
+      urgente:       String(r.agg.urgente),
+      atencao:       String(r.agg.atencao),
+      bom:           String(r.agg.bom),
+      saude:         r.avgScore !== null ? r.avgScore + '% · ' + r.domLevel.toUpperCase() : r.domLevel.toUpperCase(),
+      domLevel:      r.domLevel,
+      avgScore:      r.avgScore !== null ? String(r.avgScore) : ''
+    }));
+
+    window._renderResumoRegionais = function(data) {
+      const tbEl = document.getElementById('an-macro-body-regionais');
+      if (!tbEl) return;
+      const cf = colFilters['an-resumo-regionais'];
+      const metaCf = colFilterMeta['an-resumo-regionais'];
+      const filtered = data.filter(rec => {
+        if (!cf) return true;
+        for (const [colIdx, activeSet] of Object.entries(cf)) {
+          if (!activeSet || !activeSet.size) continue;
+          const field = metaCf.fields[Number(colIdx)];
+          if (!field) continue;
+          const cellVal = normalizeText(String(rec[field] ?? '—'));
+          if (!activeSet.has(cellVal)) return false;
+        }
+        return true;
+      });
+
+      const filteredRegSet = new Set(filtered.map(r => r.regional));
+      const filteredRows = regRowsSorted.filter(r => filteredRegSet.has(r.regional));
+
+      if (!filteredRows.length) {
+        tbEl.innerHTML = '<tr><td colspan="5"><div class="empty-state"><i class="ti ti-filter-off"></i><p>Nenhum resultado com os filtros ativos.</p></div></td></tr>';
+        return;
+      }
+
+      const hClsMap  = { critico:'hb-critico', urgente:'hb-urgente', atencao:'hb-atencao', ok:'hb-ok', none:'hb-none' };
+      const hIconMap = { critico:'ti-flame', urgente:'ti-alert-circle', atencao:'ti-alert-triangle', ok:'ti-heartbeat', none:'ti-minus' };
+      const hLabelMap = { critico:'CRÍTICO', urgente:'URGENTE', atencao:'ATENÇÃO', ok:'SAUDÁVEL', none:'—' };
+      const chipStyle = {
+        critico: 'background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)',
+        urgente: 'background:rgba(249,115,22,0.10);color:#f97316;border:1px solid rgba(249,115,22,0.22)',
+        atencao: 'background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border)',
+        bom:     'background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)'
+      };
+
+      tbEl.innerHTML = filteredRows.map(r => {
+        const diff = r.totalDiff;
+        const custo = r.totalCusto;
+        const diffCls = diff < 0 ? 'var-cell-neg' : diff > 0 ? 'var-cell-pos' : 'var-cell-zero';
+        const custoCls = custo < 0 ? 'diff-neg' : custo > 0 ? 'diff-pos' : 'diff-zero';
+        const diffLabel = diff < 0 ? 'Desfalque' : diff > 0 ? 'Sobra' : 'Neutro';
+        const diffIcon = diff < 0 ? 'ti-trending-down' : diff > 0 ? 'ti-trending-up' : 'ti-minus';
+        const custo_html = custo !== 0
+          ? `<span class="${custoCls}" style="display:inline-flex;align-items:center;gap:4px"><i class="ti ${custo < 0 ? 'ti-trending-down' : 'ti-trending-up'}"></i>${money(Math.abs(custo))}</span>`
+          : '<span style="color:var(--text3)">—</span>';
+
+        // Count chips
+        const chips = [
+          r.agg.critico ? `<span style="display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:700;${chipStyle.critico};border-radius:4px;padding:1px 6px"><i class="ti ti-flame" style="font-size:10px"></i>${r.agg.critico} crítico</span>` : '',
+          r.agg.urgente ? `<span style="display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:700;${chipStyle.urgente};border-radius:4px;padding:1px 6px"><i class="ti ti-alert-circle" style="font-size:10px"></i>${r.agg.urgente} urgente</span>` : '',
+          r.agg.atencao ? `<span style="display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:700;${chipStyle.atencao};border-radius:4px;padding:1px 6px"><i class="ti ti-alert-triangle" style="font-size:10px"></i>${r.agg.atencao} atenção</span>` : '',
+          r.agg.bom     ? `<span style="display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:700;${chipStyle.bom};border-radius:4px;padding:1px 6px"><i class="ti ti-circle-check" style="font-size:10px"></i>${r.agg.bom} bom</span>` : ''
+        ].filter(Boolean).join(' ');
+
+        const lvl = r.domLevel || 'none';
+        const scoreStr = r.avgScore !== null ? ` ${r.avgScore}%` : '';
+        const healthHtml = lvl !== 'none'
+          ? `<span class="health-badge-inline ${hClsMap[lvl]}"><i class="ti ${hIconMap[lvl]}"></i>Saúde:${scoreStr} · ${hLabelMap[lvl]}</span>`
+          : '<span style="color:var(--text3);font-size:11px">—</span>';
+
+        return `<tr>
+          <td class="td-mono" style="font-weight:700">${escapeHtml(r.regional)}</td>
+          <td class="td-mono" style="color:var(--accent);text-align:center">${r.nCentralis}</td>
+          <td class="td-mono ${diffCls}" style="white-space:nowrap">
+            <span style="display:inline-flex;align-items:center;gap:4px"><i class="ti ${diffIcon}" style="font-size:11px"></i>${diffLabel}: ${fmtKg(Math.abs(diff))}</span>
+          </td>
+          <td class="td-mono" style="white-space:nowrap">${custo_html}</td>
+          <td style="white-space:nowrap">${chips}</td>
+          <td style="text-align:center">${healthHtml}</td>
+        </tr>`;
+      }).join('');
+    };
+    window._renderResumoRegionais(window._anResumoRegionaisData);
+    const _tblRegionais = document.getElementById('an-macro-table-regionais');
+    makeResizable(_tblRegionais);
+    injectColFilterButtons(_tblRegionais, 'an-resumo-regionais');
+
+    // Populate filter dropdowns with available centrais e materiais
     populateMicroFilterOptions(results);
     // Reset applied filters whenever a new analysis runs
     clearAllMicroFilters();
@@ -14347,6 +15550,26 @@ function debounce(fn, delay = 120) {
       document.querySelectorAll('#fab-qp-btns .qp-btn').forEach(b => b.classList.remove('active'));
       event?.target?.classList.add('active');
     };
+    window.fabQuickPeriodHoje = function() {
+      const today = new Date();
+      const ini = document.getElementById('fab-dt-ini');
+      const fim = document.getElementById('fab-dt-fim');
+      if (ini) ini.value = toISO(today);
+      if (fim) fim.value = toISO(today);
+      document.querySelectorAll('#fab-qp-btns .qp-btn').forEach(b => b.classList.remove('active'));
+      event?.target?.classList.add('active');
+    };
+    window.fabQuickPeriodMesAnterior = function() {
+      const now = new Date();
+      const prevMonth = now.getMonth() === 0 ? 11 : now.getMonth() - 1;
+      const prevYear = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
+      const ini = document.getElementById('fab-dt-ini');
+      const fim = document.getElementById('fab-dt-fim');
+      if (ini) ini.value = toISO(new Date(prevYear, prevMonth, 1));
+      if (fim) fim.value = toISO(new Date(prevYear, prevMonth + 1, 0));
+      document.querySelectorAll('#fab-qp-btns .qp-btn').forEach(b => b.classList.remove('active'));
+      event?.target?.classList.add('active');
+    };
     window.fabQuickPeriodMes = function() {
       const now = new Date();
       const ini = document.getElementById('fab-dt-ini');
@@ -14462,6 +15685,1074 @@ function debounce(fn, delay = 120) {
 </div>
 
 
+<!-- CALENDAR DATE PICKER SCRIPT -->
+<script>
+(function() {
+  'use strict';
+
+  // ── State per picker ──────────────────────────────────────────
+  const pickers = {};
+
+  function getPicker(pfx) {
+    if (!pickers[pfx]) {
+      pickers[pfx] = {
+        pfx,
+        viewMode: 'days', // 'days' | 'months' | 'years'
+        viewYear: new Date().getFullYear(),
+        viewMonth: new Date().getMonth(), // 0-based
+        startDate: null,  // Date | null
+        endDate: null,    // Date | null
+        selecting: 'start', // 'start' | 'end'
+        hoverDate: null,  // Date | null
+        decadeStart: Math.floor(new Date().getFullYear() / 10) * 10,
+      };
+    }
+    return pickers[pfx];
+  }
+
+  function toISO(d) {
+    if (!d) return '';
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${dd}`;
+  }
+
+  function fmtDisplay(d) {
+    if (!d) return null;
+    return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+  }
+
+  function sameDay(a, b) {
+    return a && b && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  }
+
+  function stripTime(d) {
+    if (!d) return null;
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  }
+
+  // ── Sync hidden inputs ────────────────────────────────────────
+  function syncInputs(pfx) {
+    const p = getPicker(pfx);
+    const iniEl = document.getElementById(pfx + '-dt-ini');
+    const fimEl = document.getElementById(pfx + '-dt-fim');
+    if (iniEl) iniEl.value = p.startDate ? toISO(p.startDate) : '';
+    if (fimEl) fimEl.value = p.endDate ? toISO(p.endDate) : '';
+  }
+
+  // ── Update trigger button label ───────────────────────────────
+  function updateTriggerLabel(pfx) {
+    const p = getPicker(pfx);
+    const label = document.getElementById(pfx + '-cal-label');
+    const trigger = document.getElementById(pfx + '-cal-trigger');
+    if (!label || !trigger) return;
+    if (p.startDate && p.endDate) {
+      label.textContent = fmtDisplay(p.startDate) + ' → ' + fmtDisplay(p.endDate);
+      trigger.classList.add('has-value');
+    } else if (p.startDate) {
+      label.textContent = fmtDisplay(p.startDate) + ' → …';
+      trigger.classList.add('has-value');
+    } else {
+      label.textContent = 'Selecionar período';
+      trigger.classList.remove('has-value');
+    }
+    // Update FAB if present
+    if (window.updatePeriodFab) updatePeriodFab();
+  }
+
+  // ── MESES names ────────────────────────────────────────────────
+  const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  const DIAS_SEMANA = ['D','S','T','Q','Q','S','S'];
+
+  // ── Render calendar ───────────────────────────────────────────
+  function renderCal(pfx) {
+    const p = getPicker(pfx);
+    const container = document.getElementById(pfx + '-cal-inner');
+    if (!container) return;
+
+    if (p.viewMode === 'months') {
+      renderMonthGrid(pfx, container);
+    } else if (p.viewMode === 'years') {
+      renderYearGrid(pfx, container);
+    } else {
+      renderDaysView(pfx, container);
+    }
+  }
+
+  function renderDaysView(pfx, container) {
+    const p = getPicker(pfx);
+    const today = stripTime(new Date());
+    const year = p.viewYear;
+    const month = p.viewMonth;
+
+    // Range info
+    const startDisp = p.startDate ? `<span class="cal-range-date">${fmtDisplay(p.startDate)}</span>` : `<span class="cal-range-date empty">início</span>`;
+    const endDisp = p.endDate ? `<span class="cal-range-date">${fmtDisplay(p.endDate)}</span>` : `<span class="cal-range-date empty">fim</span>`;
+
+    // Build days grid
+    const firstDay = new Date(year, month, 1).getDay(); // 0=Sun
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const daysInPrev = new Date(year, month, 0).getDate();
+
+    let daysHtml = DIAS_SEMANA.map(d => `<div class="cal-weekday">${d}</div>`).join('');
+
+    // Previous month filler
+    for (let i = firstDay - 1; i >= 0; i--) {
+      const dayNum = daysInPrev - i;
+      daysHtml += `<button class="cal-day cal-day-other" data-pfx="${pfx}" data-y="${month === 0 ? year-1 : year}" data-m="${month === 0 ? 11 : month-1}" data-d="${dayNum}" onclick="calDayClick(this)">${dayNum}</button>`;
+    }
+
+    // Current month
+    for (let d = 1; d <= daysInMonth; d++) {
+      const thisDate = new Date(year, month, d);
+      const isToday = sameDay(thisDate, today);
+      const isStart = p.startDate && sameDay(thisDate, p.startDate);
+      const isEnd = p.endDate && sameDay(thisDate, p.endDate);
+
+      let rangeFrom = p.startDate;
+      let rangeTo = p.endDate;
+      if (!rangeTo && p.hoverDate) rangeTo = p.hoverDate;
+      if (rangeFrom && rangeTo && rangeFrom > rangeTo) { [rangeFrom, rangeTo] = [rangeTo, rangeFrom]; }
+
+      const inRange = rangeFrom && rangeTo && thisDate > rangeFrom && thisDate < rangeTo;
+      const isRangeStart = rangeFrom && sameDay(thisDate, rangeFrom) && rangeTo && !sameDay(rangeFrom, rangeTo);
+      const isRangeEnd = rangeTo && sameDay(thisDate, rangeTo) && rangeFrom && !sameDay(rangeFrom, rangeTo);
+
+      let cls = 'cal-day';
+      if (isToday) cls += ' cal-day-today';
+      if (isStart || isEnd) cls += ' cal-day-selected';
+      if (inRange) cls += ' cal-day-in-range';
+      if (isRangeStart) cls += ' cal-day-range-start';
+      if (isRangeEnd) cls += ' cal-day-range-end';
+
+      daysHtml += `<button class="${cls}" data-pfx="${pfx}" data-y="${year}" data-m="${month}" data-d="${d}" onclick="calDayClick(this)" onmouseenter="calDayHover(this)" onmouseleave="calDayLeave(this)">${d}</button>`;
+    }
+
+    // Next month filler
+    const totalCells = firstDay + daysInMonth;
+    const remaining = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
+    for (let d = 1; d <= remaining; d++) {
+      daysHtml += `<button class="cal-day cal-day-other" data-pfx="${pfx}" data-y="${month === 11 ? year+1 : year}" data-m="${month === 11 ? 0 : month+1}" data-d="${d}" onclick="calDayClick(this)">${d}</button>`;
+    }
+
+    container.innerHTML = `
+      <div class="cal-range-info">
+        ${startDisp}
+        <span class="cal-range-dash">→</span>
+        ${endDisp}
+      </div>
+      <div class="cal-header">
+        <button class="cal-nav-btn" onclick="calNavMonth('${pfx}', -1)" type="button"><i class="ti ti-chevron-left"></i></button>
+        <button class="cal-header-center" onclick="calSwitchView('${pfx}', 'months')" type="button">${MESES[month].toUpperCase()} ${year}</button>
+        <button class="cal-nav-btn" onclick="calNavMonth('${pfx}', 1)" type="button"><i class="ti ti-chevron-right"></i></button>
+      </div>
+      <div class="cal-weekdays">${daysHtml.slice(0, DIAS_SEMANA.length * 30)}</div>
+      <div class="cal-days">${daysHtml.slice(DIAS_SEMANA.length * 30)}</div>
+      `;
+
+    // Re-render weekday labels and days properly
+    container.innerHTML = `
+      <div class="cal-range-info">
+        ${startDisp}
+        <span class="cal-range-dash">→</span>
+        ${endDisp}
+      </div>
+      <div class="cal-header">
+        <button class="cal-nav-btn" onclick="calNavMonth('${pfx}', -1)" type="button"><i class="ti ti-chevron-left"></i></button>
+        <button class="cal-header-center" onclick="calSwitchView('${pfx}', 'months')" type="button">${MESES[month].toUpperCase()} ${year}</button>
+        <button class="cal-nav-btn" onclick="calNavMonth('${pfx}', 1)" type="button"><i class="ti ti-chevron-right"></i></button>
+      </div>
+      <div class="cal-weekdays">
+        ${DIAS_SEMANA.map(d => `<div class="cal-weekday">${d}</div>`).join('')}
+      </div>
+      <div class="cal-days" id="${pfx}-cal-days-grid"></div>
+      `;
+
+    // Build day cells
+    const grid = document.getElementById(pfx + '-cal-days-grid');
+    if (!grid) return;
+
+    // Previous month filler
+    const fillerPrev = [];
+    for (let i = firstDay - 1; i >= 0; i--) {
+      const dayNum = daysInPrev - i;
+      const prevM = month === 0 ? 11 : month - 1;
+      const prevY = month === 0 ? year - 1 : year;
+      const btn = document.createElement('button');
+      btn.className = 'cal-day cal-day-other';
+      btn.type = 'button';
+      btn.textContent = dayNum;
+      btn.dataset.pfx = pfx;
+      btn.dataset.y = prevY;
+      btn.dataset.m = prevM;
+      btn.dataset.d = dayNum;
+      btn.addEventListener('click', () => { btn.dataset.pfx = pfx; calDayClick(btn); });
+      grid.appendChild(btn);
+    }
+
+    // Current month days
+    for (let d = 1; d <= daysInMonth; d++) {
+      const thisDate = new Date(year, month, d);
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = d;
+      btn.dataset.pfx = pfx;
+      btn.dataset.y = year;
+      btn.dataset.m = month;
+      btn.dataset.d = d;
+
+      const isToday = sameDay(thisDate, today);
+      let cls = 'cal-day';
+      if (isToday) cls += ' cal-day-today';
+
+      btn.className = cls;
+      applyRangeClass(btn, thisDate, p);
+
+      btn.addEventListener('click', () => calDayClick(btn));
+      btn.addEventListener('mouseenter', () => calDayHover(btn));
+      btn.addEventListener('mouseleave', () => calDayLeave(btn));
+      grid.appendChild(btn);
+    }
+
+    // Next month filler
+    const totalCells2 = firstDay + daysInMonth;
+    const rem2 = totalCells2 % 7 === 0 ? 0 : 7 - (totalCells2 % 7);
+    for (let d = 1; d <= rem2; d++) {
+      const nextM = month === 11 ? 0 : month + 1;
+      const nextY = month === 11 ? year + 1 : year;
+      const btn = document.createElement('button');
+      btn.className = 'cal-day cal-day-other';
+      btn.type = 'button';
+      btn.textContent = d;
+      btn.dataset.pfx = pfx;
+      btn.dataset.y = nextY;
+      btn.dataset.m = nextM;
+      btn.dataset.d = d;
+      btn.addEventListener('click', () => calDayClick(btn));
+      grid.appendChild(btn);
+    }
+  }
+
+  function applyRangeClass(btn, thisDate, p) {
+    let rangeFrom = p.startDate ? stripTime(p.startDate) : null;
+    let rangeTo = p.endDate ? stripTime(p.endDate) : (p.hoverDate ? stripTime(p.hoverDate) : null);
+    if (rangeFrom && rangeTo && rangeFrom > rangeTo) { [rangeFrom, rangeTo] = [rangeTo, rangeFrom]; }
+
+    const isStart = rangeFrom && sameDay(thisDate, rangeFrom);
+    const isEnd = rangeTo && sameDay(thisDate, rangeTo);
+    const inRange = rangeFrom && rangeTo && thisDate > rangeFrom && thisDate < rangeTo;
+    const isSingle = rangeFrom && rangeTo && sameDay(rangeFrom, rangeTo);
+
+    btn.classList.remove('cal-day-selected', 'cal-day-in-range', 'cal-day-range-start', 'cal-day-range-end');
+
+    if (isStart && isEnd) { btn.classList.add('cal-day-selected'); }
+    else if (isStart) { btn.classList.add('cal-day-range-start'); }
+    else if (isEnd) { btn.classList.add('cal-day-range-end'); }
+    else if (inRange) { btn.classList.add('cal-day-in-range'); }
+  }
+
+  function renderMonthGrid(pfx, container) {
+    const p = getPicker(pfx);
+    const year = p.viewYear;
+    const curMonth = new Date().getMonth();
+    const curYear = new Date().getFullYear();
+
+    const items = MESES.map((name, i) => {
+      const active = i === p.viewMonth && year === p.viewYear ? ' active' : '';
+      const shortName = name.slice(0, 3);
+      return `<button class="cal-grid-item${active}" onclick="calSelectMonth('${pfx}', ${i})" type="button">${shortName}</button>`;
+    }).join('');
+
+    container.innerHTML = `
+      <div class="cal-header">
+        <button class="cal-nav-btn" onclick="calNavYear('${pfx}', -1)" type="button"><i class="ti ti-chevron-left"></i></button>
+        <button class="cal-header-center" onclick="calSwitchView('${pfx}', 'years')" type="button">${year}</button>
+        <button class="cal-nav-btn" onclick="calNavYear('${pfx}', 1)" type="button"><i class="ti ti-chevron-right"></i></button>
+      </div>
+      <div class="cal-month-grid">${items}</div>`;
+  }
+
+  function renderYearGrid(pfx, container) {
+    const p = getPicker(pfx);
+    const start = p.decadeStart;
+    const years = Array.from({length: 12}, (_, i) => start + i);
+
+    const items = years.map(y => {
+      const active = y === p.viewYear ? ' active' : '';
+      return `<button class="cal-grid-item${active}" onclick="calSelectYear('${pfx}', ${y})" type="button">${y}</button>`;
+    }).join('');
+
+    container.innerHTML = `
+      <div class="cal-year-header">
+        <button class="cal-nav-btn" onclick="calNavDecade('${pfx}', -1)" type="button"><i class="ti ti-chevron-left"></i></button>
+        <span class="cal-year-range">${start} – ${start + 11}</span>
+        <button class="cal-nav-btn" onclick="calNavDecade('${pfx}', 1)" type="button"><i class="ti ti-chevron-right"></i></button>
+      </div>
+      <div class="cal-year-grid">${items}</div>`;
+  }
+
+  // ── Navigation ─────────────────────────────────────────────────
+  window.calNavMonth = function(pfx, dir) {
+    const p = getPicker(pfx);
+    p.viewMonth += dir;
+    if (p.viewMonth > 11) { p.viewMonth = 0; p.viewYear++; }
+    if (p.viewMonth < 0)  { p.viewMonth = 11; p.viewYear--; }
+    renderCal(pfx);
+  };
+
+  window.calNavYear = function(pfx, dir) {
+    const p = getPicker(pfx);
+    p.viewYear += dir;
+    renderCal(pfx);
+  };
+
+  window.calNavDecade = function(pfx, dir) {
+    const p = getPicker(pfx);
+    p.decadeStart += dir * 12;
+    renderCal(pfx);
+  };
+
+  window.calSwitchView = function(pfx, mode) {
+    const p = getPicker(pfx);
+    p.viewMode = mode;
+    if (mode === 'years') {
+      p.decadeStart = Math.floor(p.viewYear / 12) * 12;
+    }
+    renderCal(pfx);
+  };
+
+  window.calSelectMonth = function(pfx, month) {
+    const p = getPicker(pfx);
+    p.viewMonth = month;
+    p.viewMode = 'days';
+    renderCal(pfx);
+  };
+
+  window.calSelectYear = function(pfx, year) {
+    const p = getPicker(pfx);
+    p.viewYear = year;
+    p.viewMode = 'months';
+    renderCal(pfx);
+  };
+
+  // ── Day selection ──────────────────────────────────────────────
+  window.calDayClick = function(btn) {
+    const pfx = btn.dataset.pfx;
+    const p = getPicker(pfx);
+    const clicked = new Date(Number(btn.dataset.y), Number(btn.dataset.m), Number(btn.dataset.d));
+
+    // If cross-month click, navigate to that month
+    const clickedMonth = Number(btn.dataset.m);
+    const clickedYear = Number(btn.dataset.y);
+    if (clickedMonth !== p.viewMonth || clickedYear !== p.viewYear) {
+      p.viewMonth = clickedMonth;
+      p.viewYear = clickedYear;
+    }
+
+    if (!p.startDate || p.selecting === 'start' || (p.startDate && p.endDate)) {
+      // Start fresh selection
+      p.startDate = clicked;
+      p.endDate = null;
+      p.selecting = 'end';
+    } else {
+      // Second click = end
+      if (clicked < p.startDate) {
+        p.endDate = p.startDate;
+        p.startDate = clicked;
+      } else {
+        p.endDate = clicked;
+      }
+      p.selecting = 'start';
+    }
+
+    p.hoverDate = null;
+    syncInputs(pfx);
+    updateTriggerLabel(pfx);
+    renderCal(pfx);
+  };
+
+  window.calDayHover = function(btn) {
+    const pfx = btn.dataset.pfx;
+    const p = getPicker(pfx);
+    if (p.startDate && !p.endDate) {
+      p.hoverDate = new Date(Number(btn.dataset.y), Number(btn.dataset.m), Number(btn.dataset.d));
+      // Re-apply range classes to all day cells
+      const grid = document.getElementById(pfx + '-cal-days-grid');
+      if (grid) {
+        grid.querySelectorAll('.cal-day:not(.cal-day-other)').forEach(b => {
+          const d = new Date(Number(b.dataset.y), Number(b.dataset.m), Number(b.dataset.d));
+          applyRangeClass(b, d, p);
+        });
+      }
+    }
+  };
+
+  window.calDayLeave = function(btn) {
+    const pfx = btn.dataset.pfx;
+    const p = getPicker(pfx);
+    if (p.hoverDate) {
+      p.hoverDate = null;
+      const grid = document.getElementById(pfx + '-cal-days-grid');
+      if (grid) {
+        grid.querySelectorAll('.cal-day:not(.cal-day-other)').forEach(b => {
+          const d = new Date(Number(b.dataset.y), Number(b.dataset.m), Number(b.dataset.d));
+          applyRangeClass(b, d, p);
+        });
+      }
+    }
+  };
+
+  // ── Quick period setters ───────────────────────────────────────
+  function setRange(pfx, startDate, endDate) {
+    const p = getPicker(pfx);
+    p.startDate = startDate;
+    p.endDate = endDate;
+    p.selecting = 'start';
+    p.hoverDate = null;
+    p.viewYear = startDate.getFullYear();
+    p.viewMonth = startDate.getMonth();
+    syncInputs(pfx);
+    updateTriggerLabel(pfx);
+    renderCal(pfx);
+    // Clear active state on chips
+    const wrap = document.getElementById(pfx + '-cal-wrap');
+    if (wrap) wrap.querySelectorAll('.cal-footer-chip').forEach(b => b.classList.remove('active'));
+  }
+
+  // Outside chips
+  window.calQuickHoje = function(pfx) {
+    const d = new Date();
+    const today = stripTime(d);
+    setRange(pfx, today, today);
+    markOutsideChip(pfx, 0);
+  };
+  window.calQuickMesAtual = function(pfx) {
+    const now = new Date();
+    setRange(pfx, new Date(now.getFullYear(), now.getMonth(), 1), new Date(now.getFullYear(), now.getMonth() + 1, 0));
+    markOutsideChip(pfx, 1);
+  };
+  window.calQuickMesAnterior = function(pfx) {
+    const now = new Date();
+    const prevMonth = now.getMonth() === 0 ? 11 : now.getMonth() - 1;
+    const prevYear = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
+    setRange(pfx, new Date(prevYear, prevMonth, 1), new Date(prevYear, prevMonth + 1, 0));
+    markOutsideChip(pfx, 2);
+  };
+
+  // Footer chips inside calendar
+  window.calFooterHoje = function(pfx) { window.calQuickHoje(pfx); };
+  window.calFooterMesAtual = function(pfx) { window.calQuickMesAtual(pfx); };
+  window.calFooterMesAnterior = function(pfx) { window.calQuickMesAnterior(pfx); };
+
+  function markOutsideChip(pfx, idx) {
+    const chips = document.querySelectorAll(`[onclick^="calQuick"][onclick*="'${pfx}'"]`);
+    chips.forEach((c, i) => c.classList.toggle('active', i === idx));
+  }
+
+  // ── Toggle dropdown ───────────────────────────────────────────
+  window.toggleCalPicker = function(pfx) {
+    const dropdown = document.getElementById(pfx + '-cal-dropdown');
+    const trigger = document.getElementById(pfx + '-cal-trigger');
+    if (!dropdown) return;
+    const isOpen = dropdown.classList.contains('open');
+    // Close all other pickers first
+    document.querySelectorAll('.cal-picker-dropdown.open').forEach(el => {
+      if (el !== dropdown) {
+        el.classList.remove('open');
+        const t = document.getElementById(el.id.replace('-cal-dropdown', '-cal-trigger'));
+        if (t) t.classList.remove('open');
+      }
+    });
+    if (isOpen) {
+      dropdown.classList.remove('open');
+      if (trigger) trigger.classList.remove('open');
+    } else {
+      dropdown.classList.add('open');
+      if (trigger) trigger.classList.add('open');
+      renderCal(pfx);
+    }
+  };
+
+  // Prevent clicks INSIDE the dropdown from bubbling to document
+  document.addEventListener('DOMContentLoaded', function() {
+    ['dg-cal-dropdown', 'an-cal-dropdown'].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) el.addEventListener('click', function(e) { e.stopPropagation(); });
+    });
+  });
+
+  // Close when clicking outside
+  document.addEventListener('click', function(e) {
+    document.querySelectorAll('.cal-picker-dropdown.open').forEach(function(el) {
+      var wrap = el.closest('.cal-picker-wrap');
+      if (wrap && !wrap.contains(e.target)) {
+        el.classList.remove('open');
+        var pfx = el.id.replace('-cal-dropdown', '');
+        var t = document.getElementById(pfx + '-cal-trigger');
+        if (t) t.classList.remove('open');
+      }
+    });
+  });
+
+  // ── limparAnalitico patch: also reset picker ──────────────────
+  const _origLimparAn = window.limparAnalitico;
+  window.limparAnalitico = function() {
+    const p = getPicker('an');
+    p.startDate = null;
+    p.endDate = null;
+    p.selecting = 'start';
+    p.hoverDate = null;
+    syncInputs('an');
+    updateTriggerLabel('an');
+    // Clear chip active states
+    document.querySelectorAll('[onclick^="calQuick"][onclick*="\'an\'"]').forEach(b => b.classList.remove('active'));
+    if (_origLimparAn) _origLimparAn();
+  };
+
+  const _origLimparDg = window.limparDashboardGerencial;
+  window.limparDashboardGerencial = function() {
+    const p = getPicker('dg');
+    p.startDate = null;
+    p.endDate = null;
+    p.selecting = 'start';
+    p.hoverDate = null;
+    syncInputs('dg');
+    updateTriggerLabel('dg');
+    document.querySelectorAll('[onclick^="calQuick"][onclick*="\'dg\'"]').forEach(b => b.classList.remove('active'));
+    if (_origLimparDg) _origLimparDg();
+  };
+
+})();
+</script>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     GERADOR DE RELATÓRIO GERENCIAL
+═══════════════════════════════════════════════════════════════════════ -->
+<script>
+window.gerarRelatorioGerencial = function() {
+  const byLevel = window._rankByLevel;
+  if (!byLevel || (!byLevel.critico.length && !byLevel.urgente.length)) {
+    alert('Nenhum dado de criticidade disponível. Execute a análise primeiro.');
+    return;
+  }
+
+  const dtIniEl = document.getElementById('an-dt-ini');
+  const dtFimEl = document.getElementById('an-dt-fim');
+  const periodo = (() => {
+    const ini = dtIniEl?.value || '';
+    const fim = dtFimEl?.value || '';
+    if (!ini && !fim) return 'Período não especificado';
+    const fmt = v => { if (!v) return ''; const [y,m,d] = v.split('-'); return `${d}/${m}/${y}`; };
+    if (ini === fim) return fmt(ini);
+    return `${fmt(ini)} a ${fmt(fim)}`;
+  })();
+
+  const now = new Date().toLocaleString('pt-BR');
+
+  // ── Flatten all items ──
+  const allItems = [
+    ...byLevel.critico.map(i => ({...i, levelLabel:'CRÍTICO', levelPriority:0, levelColor:'#ef4444', levelBg:'#fef2f2', levelBorder:'#fca5a5', levelBgDark:'#7f1d1d'})),
+    ...byLevel.urgente.map(i => ({...i, levelLabel:'URGENTE', levelPriority:1, levelColor:'#f97316', levelBg:'#fff7ed', levelBorder:'#fdba74', levelBgDark:'#7c2d12'})),
+  ];
+
+  // ── Group by regional ──
+  const byRegional = {};
+  allItems.forEach(item => {
+    const reg = item.regional || '—';
+    if (!byRegional[reg]) byRegional[reg] = { critico:[], urgente:[] };
+    if (item.levelPriority === 0) byRegional[reg].critico.push(item);
+    else byRegional[reg].urgente.push(item);
+  });
+
+  // Sort regionals: those with critico first, then urgente
+  const regionalOrder = Object.entries(byRegional).sort((a, b) => {
+    const aScore = a[1].critico.length * 1000 + a[1].urgente.length * 100;
+    const bScore = b[1].critico.length * 1000 + b[1].urgente.length * 100;
+    return bScore - aScore;
+  });
+
+  // ── Summary totals ──
+  const totalCritico = byLevel.critico.length;
+  const totalUrgente = byLevel.urgente.length;
+  const totalGeral   = totalCritico + totalUrgente;
+
+  // ── Helpers ──
+  function fmtKgRel(v) {
+    const n = Number(v) || 0;
+    const abs = Math.abs(n);
+    return abs.toLocaleString('pt-BR', {minimumFractionDigits:2,maximumFractionDigits:2}) + ' kg';
+  }
+  function varDir(v) { return v < -0.001 ? 'Desfalque' : v > 0.001 ? 'Sobra' : 'Equil.'; }
+  function varDirColor(v) { return v < -0.001 ? '#ef4444' : v > 0.001 ? '#10b981' : '#6b7280'; }
+  function trendLabel(t) {
+    if (t === 'worsening') return '▲ Piorando';
+    if (t === 'improving') return '▼ Melhorando';
+    return '→ Estável';
+  }
+  function trendColor(t) {
+    if (t === 'worsening') return '#ef4444';
+    if (t === 'improving') return '#10b981';
+    return '#6b7280';
+  }
+  function escRel(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  // ── Build central summary per regional ──
+  function buildCentralSummary(items) {
+    const centrais = {};
+    items.forEach(i => {
+      if (!centrais[i.central]) centrais[i.central] = {critico:0, urgente:0, worstDiff:0};
+      const c = centrais[i.central];
+      if (i.levelPriority===0) c.critico++;
+      else if (i.levelPriority===1) c.urgente++;
+      if (i.diff < c.worstDiff) c.worstDiff = i.diff;
+    });
+    return Object.entries(centrais).sort((a,b) => {
+      const as = a[1].critico*100 + a[1].urgente*10;
+      const bs = b[1].critico*100 + b[1].urgente*10;
+      return bs - as;
+    });
+  }
+
+  // ── Build rows for a level table ──
+  function buildLevelRows(items, levelColor) {
+    return items.slice(0,20).map((item, idx) => {
+      const dir = varDir(item.diff);
+      const dc  = varDirColor(item.diff);
+      const tc  = trendColor(item.trend);
+      const tl  = trendLabel(item.trend);
+      return `<tr class="data-row">
+        <td class="rank-cell">${idx+1}</td>
+        <td class="mat-cell"><span class="mat-name">${escRel(item.mat)}</span></td>
+        <td class="central-cell">${escRel(item.central)}</td>
+        <td class="var-cell" style="color:${dc}"><strong>${dir}</strong><br><span style="font-size:11px;font-weight:500">${fmtKgRel(item.diff)}</span></td>
+        <td class="trend-cell" style="color:${tc}">${tl}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  function buildRegionalSection(regName, data, regIdx) {
+    const allRegItems = [...data.critico, ...data.urgente];
+    const centrais = buildCentralSummary(allRegItems);
+    const hasC = data.critico.length > 0;
+    const hasU = data.urgente.length > 0;
+    const regPriority = hasC ? 'CRÍTICO' : 'URGENTE';
+    const regPriorityColor = hasC ? '#ef4444' : '#f97316';
+    const regPriorityBg = hasC ? '#fef2f2' : '#fff7ed';
+    const regPriorityBorder = hasC ? '#fca5a5' : '#fdba74';
+
+    // Worst central badges
+    const centralBadges = centrais.slice(0,5).map(([cn, cs]) => {
+      const cl = cs.critico > 0 ? '#ef4444' : '#f97316';
+      const cb = cs.critico > 0 ? '#fff1f2' : '#fff7ed';
+      const cIcon = cs.critico > 0 ? '🔴' : '🟠';
+      return `<span class="central-badge" style="background:${cb};border:1px solid ${cl}40;color:${cl}">${cIcon} ${escRel(cn)} <span style="opacity:.7">${cs.critico+cs.urgente} mat.</span></span>`;
+    }).join('');
+
+    // Level tables — only critico and urgente
+    const levelSections = [];
+    if (hasC) levelSections.push({
+      color:'#ef4444', bg:'#fef2f2', border:'#fca5a5', icon:'🔴',
+      label:'CRÍTICO', sublabel:'Ação imediata — escalar à gerência',
+      items: data.critico, count: data.critico.length
+    });
+    if (hasU) levelSections.push({
+      color:'#f97316', bg:'#fff7ed', border:'#fdba74', icon:'🟠',
+      label:'URGENTE', sublabel:'Atenção redobrada — repassar aos regionais',
+      items: data.urgente, count: data.urgente.length
+    });
+
+    const levelTablesHtml = levelSections.map(ls => `
+      <div class="level-section" style="border-left:4px solid ${ls.color};margin-bottom:20px;page-break-inside:avoid">
+        <div class="level-header" style="background:${ls.bg};border-bottom:1px solid ${ls.border}">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-size:20px">${ls.icon}</span>
+            <div>
+              <div class="level-title" style="color:${ls.color}">${ls.label}</div>
+              <div class="level-subtitle">${ls.sublabel}</div>
+            </div>
+          </div>
+          <span class="level-count" style="background:${ls.color};color:#fff">${ls.count} material${ls.count>1?'is':''}</span>
+        </div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="width:36px">#</th>
+              <th>Material</th>
+              <th>Central</th>
+              <th>Variação</th>
+              <th>Tendência</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${buildLevelRows(ls.items, ls.color)}
+          </tbody>
+        </table>
+        ${ls.items.length > 20 ? `<div class="overflow-note">+ ${ls.items.length - 20} materiais adicionais não exibidos</div>` : ''}
+      </div>
+    `).join('');
+
+    const bgColor = regIdx % 2 === 0 ? '#f8fafc' : '#ffffff';
+
+    return `
+    <div class="regional-section" style="page-break-inside:avoid">
+      <div class="regional-header" style="background:${regPriorityBg};border:2px solid ${regPriorityBorder};border-left:6px solid ${regPriorityColor}">
+        <div class="regional-header-left">
+          <div class="regional-name">
+            <span class="regional-icon" style="background:${regPriorityColor}20;color:${regPriorityColor}">R</span>
+            ${escRel(regName)}
+          </div>
+          <div class="regional-centrais-wrap">${centralBadges}</div>
+        </div>
+        <div class="regional-header-right">
+          <div class="reg-stat-block">
+            <span class="reg-stat-num" style="color:#ef4444">${data.critico.length}</span>
+            <span class="reg-stat-label">Críticos</span>
+          </div>
+          <div class="reg-stat-sep"></div>
+          <div class="reg-stat-block">
+            <span class="reg-stat-num" style="color:#f97316">${data.urgente.length}</span>
+            <span class="reg-stat-label">Urgentes</span>
+          </div>
+          <div class="priority-badge" style="background:${regPriorityColor};color:#fff;margin-left:16px">${regPriority}</div>
+        </div>
+      </div>
+      <div class="regional-body">
+        ${levelTablesHtml}
+      </div>
+    </div>`;
+  }
+
+  // ── Generate full HTML ──
+  const html = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Relatório Gerencial de Criticidade — ${periodo}</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  * { box-sizing: border-box; margin:0; padding:0; }
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background: #f1f5f9;
+    color: #0f172a;
+    font-size: 13px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Print wrapper */
+  .page-wrap { max-width:1100px; margin:0 auto; padding:20px; }
+
+  /* Top action bar */
+  .action-bar {
+    position: sticky; top: 0; z-index: 100;
+    background: #1e293b;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 24px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+  }
+  .action-bar-title { color: #e2e8f0; font-size: 13px; font-weight: 500; }
+  .action-bar-title span { color: #64748b; font-size: 12px; margin-left: 10px; }
+  .action-bar-btns { display: flex; gap: 10px; }
+  .btn-print {
+    background: #2563eb; color: #fff; border: none; border-radius: 7px;
+    padding: 8px 18px; font-size: 13px; font-weight: 600; cursor: pointer;
+    display: flex; align-items: center; gap: 7px; transition: background .15s;
+  }
+  .btn-print:hover { background: #1d4ed8; }
+  .btn-close {
+    background: #334155; color: #cbd5e1; border: none; border-radius: 7px;
+    padding: 8px 14px; font-size: 13px; font-weight: 500; cursor: pointer;
+    transition: background .15s;
+  }
+  .btn-close:hover { background: #475569; }
+
+  /* Report header */
+  .report-header {
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    color: #fff;
+    border-radius: 14px;
+    padding: 32px 36px;
+    margin-bottom: 24px;
+    position: relative;
+    overflow: hidden;
+  }
+  .report-header::before {
+    content: '';
+    position: absolute; top:-40px; right:-40px;
+    width:200px; height:200px;
+    border-radius:50%;
+    background: rgba(239,68,68,0.08);
+    border: 2px solid rgba(239,68,68,0.12);
+  }
+  .report-header::after {
+    content: '';
+    position: absolute; bottom:-60px; right:80px;
+    width:150px; height:150px;
+    border-radius:50%;
+    background: rgba(245,158,11,0.06);
+    border: 2px solid rgba(245,158,11,0.10);
+  }
+  .report-header-top { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:24px; }
+  .report-logo-area { display:flex; align-items:center; gap:12px; }
+  .report-logo-icon {
+    width:48px; height:48px; border-radius:12px;
+    background: rgba(239,68,68,0.18);
+    border: 1px solid rgba(239,68,68,0.3);
+    display:flex; align-items:center; justify-content:center;
+    font-size:22px;
+  }
+  .report-logo-text h1 { font-size:20px; font-weight:800; color:#f8fafc; letter-spacing:-0.01em; }
+  .report-logo-text p { font-size:12px; color:#94a3b8; font-weight:400; margin-top:2px; }
+  .report-meta { text-align:right; }
+  .report-meta .meta-label { font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:.06em; }
+  .report-meta .meta-value { font-size:13px; color:#cbd5e1; font-weight:500; margin-top:2px; }
+  .report-urgency-banner {
+    background: rgba(239,68,68,0.12);
+    border: 1px solid rgba(239,68,68,0.25);
+    border-radius: 10px;
+    padding: 14px 20px;
+    display: flex; align-items: center; gap: 14px;
+    margin-bottom: 20px;
+  }
+  .urgency-icon { font-size: 24px; }
+  .urgency-title { font-size: 14px; font-weight: 700; color: #fca5a5; letter-spacing:.01em; }
+  .urgency-desc { font-size: 12px; color: #94a3b8; margin-top:2px; }
+  .report-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .stat-card {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    padding: 16px 18px;
+    text-align: center;
+    transition: transform .15s;
+  }
+  .stat-card-num { font-size: 32px; font-weight: 800; line-height: 1; margin-bottom: 6px; font-family: 'JetBrains Mono', monospace; }
+  .stat-card-label { font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: .05em; font-weight: 500; }
+  .stat-card.s-critico .stat-card-num { color: #f87171; }
+  .stat-card.s-urgente .stat-card-num { color: #fb923c; }
+  .stat-card.s-atencao .stat-card-num { color: #fbbf24; }
+  .stat-card.s-total .stat-card-num { color: #e2e8f0; }
+
+  /* Section title */
+  .section-title {
+    font-size: 13px; font-weight: 700; color: #475569; text-transform: uppercase;
+    letter-spacing: .08em; margin: 28px 0 14px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .section-title::after {
+    content: ''; flex: 1; height: 1px; background: #e2e8f0;
+  }
+
+  /* Regional section */
+  .regional-section { margin-bottom: 28px; }
+  .regional-header {
+    border-radius: 12px 12px 0 0;
+    padding: 18px 22px;
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 12px;
+  }
+  .regional-header-left { display:flex; flex-direction:column; gap:10px; }
+  .regional-name {
+    font-size: 18px; font-weight: 800; color: #0f172a;
+    display: flex; align-items: center; gap: 10px;
+    letter-spacing: -0.01em;
+  }
+  .regional-icon {
+    width: 32px; height: 32px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 800;
+  }
+  .regional-centrais-wrap { display: flex; flex-wrap: wrap; gap: 6px; }
+  .central-badge {
+    padding: 4px 10px; border-radius: 20px;
+    font-size: 11px; font-weight: 600;
+  }
+  .regional-header-right { display:flex; align-items:center; gap:0; }
+  .reg-stat-block { text-align: center; padding: 0 18px; }
+  .reg-stat-num { display: block; font-size: 26px; font-weight: 800; font-family: 'JetBrains Mono', monospace; line-height:1; }
+  .reg-stat-label { font-size: 10px; text-transform: uppercase; letter-spacing:.06em; color: #64748b; font-weight: 600; margin-top:3px; display:block; }
+  .reg-stat-sep { width: 1px; height: 40px; background: #e2e8f0; }
+  .priority-badge {
+    padding: 6px 14px; border-radius: 20px;
+    font-size: 11px; font-weight: 800; letter-spacing: .08em;
+  }
+
+  /* Regional body */
+  .regional-body { background: #fff; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 12px 12px; padding: 18px; }
+
+  /* Level section */
+  .level-section { border-radius: 8px; overflow: hidden; border: 1px solid #e2e8f0; }
+  .level-header {
+    padding: 14px 18px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .level-title { font-size: 14px; font-weight: 800; letter-spacing: .04em; }
+  .level-subtitle { font-size: 11px; color: #64748b; font-weight: 500; margin-top: 2px; }
+  .level-count {
+    padding: 4px 12px; border-radius: 20px;
+    font-size: 11px; font-weight: 700; letter-spacing: .04em;
+  }
+
+  /* Data table */
+  .data-table { width: 100%; border-collapse: collapse; }
+  .data-table thead tr { background: #f8fafc; }
+  .data-table th {
+    padding: 10px 14px;
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .07em; color: #64748b;
+    text-align: left; border-bottom: 1px solid #e2e8f0;
+  }
+  .data-table tbody tr.data-row { border-bottom: 1px solid #f1f5f9; transition: background .1s; }
+  .data-table tbody tr.data-row:last-child { border-bottom: none; }
+  .data-table tbody tr.data-row:hover { background: #f8fafc; }
+  .data-table td { padding: 10px 14px; vertical-align: middle; }
+  .rank-cell { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #94a3b8; font-weight: 600; }
+  .mat-cell { }
+  .mat-name { font-weight: 700; font-size: 13px; color: #1e293b; }
+  .central-cell { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #475569; font-weight: 500; }
+  .var-cell { font-size: 12px; }
+  .trend-cell { font-size: 11px; font-weight: 600; }
+
+  .overflow-note {
+    padding: 8px 14px; font-size: 11px; color: #94a3b8;
+    background: #f8fafc; border-top: 1px solid #f1f5f9;
+    font-style: italic;
+  }
+
+  /* Footer */
+  .report-footer {
+    margin-top: 36px; padding: 20px 24px;
+    background: #1e293b; border-radius: 12px; color: #64748b;
+    display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+    font-size: 11px;
+  }
+  .report-footer strong { color: #94a3b8; }
+
+  /* Confidential strip */
+  .confidential-strip {
+    text-align: center; padding: 10px;
+    background: #fef2f2; border: 1px solid #fca5a5;
+    border-radius: 8px; margin-bottom: 20px;
+    font-size: 11px; color: #dc2626; font-weight: 700; letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+
+  /* Print */
+  @media print {
+    body { background: #fff !important; }
+    .action-bar { display: none !important; }
+    .page-wrap { padding: 0 !important; max-width: 100% !important; }
+    .regional-section { page-break-inside: avoid; }
+    .level-section { page-break-inside: avoid; }
+    .report-header { background: #0f172a !important; -webkit-print-color-adjust: exact; color-adjust: exact; }
+    .stat-card { -webkit-print-color-adjust: exact; color-adjust: exact; }
+    .regional-header { -webkit-print-color-adjust: exact; color-adjust: exact; }
+    .level-header { -webkit-print-color-adjust: exact; color-adjust: exact; }
+    .priority-badge { -webkit-print-color-adjust: exact; color-adjust: exact; }
+    .level-count { -webkit-print-color-adjust: exact; color-adjust: exact; }
+    .action-bar { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Action bar (hidden on print) -->
+<div class="action-bar">
+  <div class="action-bar-title">
+    Relatório Gerencial de Criticidade
+    <span>Período: ${periodo} · Gerado em ${now}</span>
+  </div>
+  <div class="action-bar-btns">
+    <button class="btn-print" onclick="window.print()">
+      🖨️ Imprimir / Salvar PDF
+    </button>
+    <button class="btn-close" onclick="window.close()">✕ Fechar</button>
+  </div>
+</div>
+
+<div class="page-wrap">
+
+  <!-- Confidential strip -->
+  <div class="confidential-strip" style="margin-top:18px">
+    ⚠ Documento Confidencial — Uso interno · Diretoria e Regionais
+  </div>
+
+  <!-- Report header -->
+  <div class="report-header">
+    <div class="report-header-top">
+      <div class="report-logo-area">
+        <div class="report-logo-icon">📊</div>
+        <div class="report-logo-text">
+          <h1>Relatório Gerencial de Criticidade</h1>
+          <p>AnalyticSys · Gestão Centralizada de Materiais</p>
+        </div>
+      </div>
+      <div class="report-meta">
+        <div class="meta-label">Período analisado</div>
+        <div class="meta-value">${periodo}</div>
+        <div class="meta-label" style="margin-top:8px">Gerado em</div>
+        <div class="meta-value">${now}</div>
+      </div>
+    </div>
+
+    <div class="report-urgency-banner">
+      <span class="urgency-icon">🚨</span>
+      <div>
+        <div class="urgency-title">ALERTA DE CRITICIDADE — AÇÃO REQUERIDA</div>
+        <div class="urgency-desc">Este relatório identifica materiais com variações críticas de estoque. Cada item listado representa um risco operacional que requer atenção imediata ou monitoramento reforçado.</div>
+      </div>
+    </div>
+
+    <div class="report-stats">
+      <div class="stat-card s-critico">
+        <div class="stat-card-num">${totalCritico}</div>
+        <div class="stat-card-label">🔴 Críticos</div>
+      </div>
+      <div class="stat-card s-urgente">
+        <div class="stat-card-num">${totalUrgente}</div>
+        <div class="stat-card-label">🟠 Urgentes</div>
+      </div>
+      <div class="stat-card s-total">
+        <div class="stat-card-num">${totalGeral}</div>
+        <div class="stat-card-label">⚪ Total no Relatório</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Rankings por Regional -->
+  <div class="section-title">Rankings por Regional — Piores Centrais e Materiais</div>
+
+  ${regionalOrder.map(([regName, data], idx) => buildRegionalSection(regName, data, idx)).join('')}
+
+  <!-- Footer -->
+  <div class="report-footer">
+    <div>
+      <strong>AnalyticSys</strong> · Gestão Centralizada de Materiais<br>
+      Documento gerado automaticamente em ${now}
+    </div>
+    <div style="text-align:right">
+      Período: <strong style="color:#94a3b8">${periodo}</strong><br>
+      ${totalGeral} ocorrência${totalGeral !== 1 ? 's' : ''} (crítico + urgente) em ${regionalOrder.length} regional${regionalOrder.length !== 1 ? 'is' : ''}
+    </div>
+  </div>
+</div>
+
+</body>
+</html>`;
+
+  // ── Open in new window ──
+  const w = window.open('', '_blank', 'width=1200,height=900,scrollbars=yes,resizable=yes');
+  if (!w) { alert('Popups bloqueados! Permita pop-ups para este site para gerar o relatório.'); return; }
+  w.document.write(html);
+  w.document.close();
+  w.focus();
+};
+</script>
+
 <!-- PERIOD FAB -->
 <div id="period-fab">
   <div id="period-fab-popover">
@@ -14476,11 +16767,9 @@ function debounce(fn, delay = 120) {
       </div>
     </div>
     <div class="fab-popover-qp" id="fab-qp-btns">
-      <button class="qp-btn" onclick="fabQuickPeriod(7)">7d</button>
-      <button class="qp-btn" onclick="fabQuickPeriod(30)">30d</button>
-      <button class="qp-btn" onclick="fabQuickPeriodMes()">Mês</button>
-      <button class="qp-btn" onclick="fabQuickPeriod(90)">90d</button>
-      <button class="qp-btn" onclick="fabQuickPeriodAno()">Ano</button>
+      <button class="qp-btn" onclick="fabQuickPeriodHoje()">Hoje</button>
+      <button class="qp-btn" onclick="fabQuickPeriodMes()">Mês atual</button>
+      <button class="qp-btn" onclick="fabQuickPeriodMesAnterior()">Mês anterior</button>
     </div>
     <div class="fab-popover-actions">
       <button class="btn" onclick="closePeriodFab()"><i class="ti ti-x"></i></button>
