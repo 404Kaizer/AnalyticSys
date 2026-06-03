@@ -687,6 +687,298 @@ body {
   margin-bottom: 20px;
 }
 
+/* ══════════════════════════════════════════
+   INVENTÁRIO — KPI CARDS REDESENHADOS
+══════════════════════════════════════════ */
+.inv-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.inv-kpi-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px 18px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
+  position: relative;
+  overflow: hidden;
+}
+.inv-kpi-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  opacity: 0;
+  transition: opacity 0.2s;
+  background: linear-gradient(135deg, rgba(255,255,255,0.02), transparent);
+}
+.inv-kpi-card:hover { transform: translateY(-2px); border-color: var(--border2); box-shadow: 0 8px 24px rgba(0,0,0,0.18); }
+.inv-kpi-card:hover::after { opacity: 1; }
+
+.inv-kpi-icon {
+  width: 40px; height: 40px;
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.inv-kpi-body { min-width: 0; flex: 1; overflow: hidden; }
+.inv-kpi-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--text2);
+  margin-bottom: 4px;
+}
+.inv-kpi-value {
+  font-size: 14px;
+  font-weight: 700;
+  font-family: var(--mono);
+  color: var(--text);
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.inv-kpi-unit {
+  font-size: 10px;
+  color: var(--text3);
+  font-family: var(--mono);
+  margin-top: 2px;
+}
+.inv-kpi-adj {
+  margin-top: 6px;
+  padding-top: 5px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.inv-kpi-adj-label {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--text3);
+  font-family: var(--mono);
+}
+.inv-kpi-adj-value {
+  font-size: 11.5px;
+  font-weight: 600;
+  font-family: var(--mono);
+  color: var(--text3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: -0.01em;
+}
+
+/* ══ FILTER BAR ══ */
+.inv-filter-bar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 10px 14px;
+}
+
+.inv-filter-search {
+  position: relative;
+  flex: 1;
+  min-width: 200px;
+}
+
+.inv-search-input {
+  width: 100%;
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  color: var(--text);
+  border-radius: var(--radius);
+  padding: 7px 11px 7px 34px;
+  font-size: 12px;
+  font-family: var(--font);
+  outline: none;
+  transition: border-color 0.15s;
+}
+.inv-search-input:focus { border-color: var(--accent); }
+.inv-search-input::placeholder { color: var(--text3); }
+
+.inv-filter-select {
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  color: var(--text);
+  border-radius: var(--radius);
+  padding: 7px 10px;
+  font-size: 12px;
+  font-family: var(--font);
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.inv-filter-select:focus { border-color: var(--accent); }
+
+.inv-filter-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text2);
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+}
+.inv-filter-toggle input[type=checkbox] { accent-color: var(--accent); width: 13px; height: 13px; cursor: pointer; }
+
+/* ══ TABLE ══ */
+.inv-table-wrap {
+  overflow: hidden !important;
+}
+
+.inv-table-wrap {
+  overflow-x: auto !important;
+  overflow-y: visible;
+}
+
+.inv-data-table {
+  width: auto;
+  min-width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  table-layout: auto;
+}
+
+/* Colunas de texto: ajustam ao conteúdo, sem largura mínima forçada */
+.inv-data-table th,
+.inv-data-table td {
+  width: 1px; /* força cada coluna a ser exatamente do tamanho do conteúdo */
+}
+
+.inv-data-table thead tr {
+  background: var(--bg3);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.inv-data-table th {
+  padding: 10px 12px;
+  text-align: left;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--text2);
+  border-bottom: 2px solid var(--border2);
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.13s, background 0.13s;
+}
+.inv-data-table th[data-align="right"] { text-align: right; }
+.inv-data-table th[data-align="center"] { text-align: center; }
+.inv-data-table th:hover { color: var(--text); background: var(--bg4); }
+.inv-data-table th.sort-asc,
+.inv-data-table th.sort-desc { color: var(--accent); }
+.inv-data-table th.sort-asc .inv-sort-icon::before { content: '\ea30'; } /* ti-sort-ascending */
+.inv-data-table th.sort-desc .inv-sort-icon::before { content: '\ea31'; } /* ti-sort-descending */
+
+.inv-sort-icon {
+  font-size: 12px;
+  opacity: 0.4;
+  margin-left: 3px;
+  vertical-align: middle;
+  transition: opacity 0.13s;
+}
+.inv-data-table th:hover .inv-sort-icon,
+.inv-data-table th.sort-asc .inv-sort-icon,
+.inv-data-table th.sort-desc .inv-sort-icon { opacity: 1; }
+
+.inv-data-table tbody tr {
+  border-bottom: 1px solid var(--border);
+  transition: background 0.1s;
+}
+.inv-data-table tbody tr:last-child { border-bottom: none; }
+.inv-data-table tbody tr:hover { background: var(--bg3); }
+
+.inv-data-table td {
+  padding: 9px 12px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+/* ── Inventário: value badges (pos / neg / zero / neutral) ── */
+.inv-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 20px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  border: 1px solid transparent;
+  line-height: 1.4;
+}
+.inv-badge i { font-size: 10px; flex-shrink: 0; }
+
+/* Negativo → vermelho */
+.inv-badge-neg {
+  background: var(--red-bg);
+  color: var(--red);
+  border-color: var(--red-border);
+}
+/* Positivo → verde */
+.inv-badge-pos {
+  background: var(--green-bg);
+  color: var(--green);
+  border-color: var(--green-border);
+}
+/* Zero → neutro apagado */
+.inv-badge-zero {
+  background: var(--bg4);
+  color: var(--text3);
+  border-color: var(--border2);
+}
+/* Entradas: sempre verde */
+.inv-badge-entrada {
+  background: var(--green-bg);
+  color: var(--green);
+  border-color: var(--green-border);
+}
+/* Saídas: sempre vermelho */
+.inv-badge-saida {
+  background: var(--red-bg);
+  color: var(--red);
+  border-color: var(--red-border);
+}
+/* Custo negativo → vermelho (perda) */
+.inv-badge-custo-neg {
+  background: var(--red-bg);
+  color: var(--red);
+  border-color: var(--red-border);
+}
+/* Custo positivo → âmbar (sobra inesperada) */
+.inv-badge-custo-pos {
+  background: var(--amber-bg);
+  color: var(--amber);
+  border-color: var(--amber-border);
+}
+
 .table-header {
   padding: 14px 18px;
   border-bottom: 1px solid var(--border);
@@ -3780,6 +4072,9 @@ img { max-width: 100%; }
   transition: width var(--sidebar-transition), min-width var(--sidebar-transition);
   /* overflow: hidden removed — it clips the collapse button and tooltips.
      The nav/logo areas manage their own overflow. */
+  /* Isola o reflow do sidebar do restante do layout durante a animação */
+  will-change: width;
+  contain: layout style;
 }
 
 .sidebar.collapsed {
@@ -3883,6 +4178,7 @@ img { max-width: 100%; }
 .sidebar.collapsed .nav-item[data-label="Lançamentos"] i { color: var(--amber); }
 .sidebar.collapsed .nav-item[data-label="SAP"] i { color: var(--blue, var(--accent)); }
 .sidebar.collapsed .nav-item[data-label="Produção"] i { color: var(--purple); }
+.sidebar.collapsed .nav-item[data-label="Inventário"] i { color: var(--green); }
 .sidebar.collapsed .nav-item[data-label="Importar"] i { color: var(--teal); }
 .sidebar.collapsed .nav-item[data-label="Config."] i { color: var(--text2); }
 
@@ -5755,6 +6051,11 @@ tbody tr:nth-child(even):hover {
         <i class="ti ti-chart-bar"></i> <span class="nav-item-label">Produção</span>
       </button>
 
+      <div class="nav-section-label">Auditoria</div>
+      <button class="nav-item" onclick="navigate('inventario')" data-label="Inventário">
+        <i class="ti ti-clipboard-check"></i> <span class="nav-item-label">Inventário</span>
+      </button>
+
       <div class="nav-section-label">Gestão</div>
       <button class="nav-item active" onclick="navigate('importar')" data-label="Importar">
         <i class="ti ti-file-upload"></i> <span class="nav-item-label">Importar Dados</span>
@@ -6144,52 +6445,6 @@ tbody tr:nth-child(even):hover {
               <div class="crank-body" id="crank-atencao-body">
                 <div class="crank-empty"><i class="ti ti-check"></i><span>Nenhum material em atenção</span></div>
               </div>
-            </div>
-          </div>
-          <!-- hidden table kept for potential export -->
-          <table style="display:none"><tbody id="an-macro-custo-mats-body"></tbody></table>
-
-          <!-- Linha 4a: Resumo por Regional -->
-          <div class="table-card" style="margin-bottom:16px">
-            <div class="table-header">
-              <span class="table-title"><i class="ti ti-map-2"></i> Resumo por Regional</span>
-              <span class="table-title" id="an-periodo-label" style="color:var(--text3);font-size:12px;font-family:var(--mono)"></span>
-            </div>
-            <div class="table-scroll">
-              <table id="an-macro-table-regionais">
-                <thead>
-                  <tr>
-                    <th>Regional</th>
-                    <th style="text-align:center">Nº Centrais</th>
-                    <th>Variação de Estoque</th>
-                    <th>Custo Variação<br><span style="font-size:9px;font-weight:400;opacity:.7">Var × C. Médio</span></th>
-                    <th>Criticidade</th>
-                    <th style="text-align:center">Saúde</th>
-                  </tr>
-                </thead>
-                <tbody id="an-macro-body-regionais"></tbody>
-              </table>
-            </div>
-          </div>
-
-          <!-- Linha 4b: Resumo por Central -->
-          <div class="table-card" style="margin-bottom:24px">
-            <div class="table-header">
-              <span class="table-title"><i class="ti ti-building-warehouse"></i> Resumo por Central</span>
-            </div>
-            <div class="table-scroll">
-              <table id="an-macro-table">
-                <thead>
-                  <tr>
-                    <th>Central</th>
-                    <th>Regional</th>
-                    <th>Variação de Estoque</th>
-                    <th>Custo Variação<br><span style="font-size:9px;font-weight:400;opacity:.7">Var × C. Médio</span></th>
-                    <th style="text-align:center">Saúde</th>
-                  </tr>
-                </thead>
-                <tbody id="an-macro-body"></tbody>
-              </table>
             </div>
           </div>
 
@@ -6731,6 +6986,178 @@ tbody tr:nth-child(even):hover {
 
         </div>
       </div>
+
+      <!-- INVENTÁRIO -->
+      <div class="page" id="page-inventario">
+
+        <!-- ══ TOOLBAR igual ao dashboard analítico ══ -->
+        <div class="analitico-toolbar" id="inv-toolbar" style="margin-bottom:18px">
+          <div class="analitico-period" style="align-items:center;gap:10px;flex-wrap:wrap">
+            <!-- Cal picker igual ao dashboard -->
+            <div class="cal-picker-wrap" id="inv-cal-wrap">
+              <button class="cal-picker-trigger" id="inv-cal-trigger" onclick="toggleCalPicker('inv')" type="button">
+                <i class="ti ti-calendar-event"></i>
+                <span id="inv-cal-label">Selecionar período</span>
+                <i class="ti ti-chevron-down cal-chev" id="inv-cal-chev"></i>
+              </button>
+              <input type="hidden" id="inv-dt-ini">
+              <input type="hidden" id="inv-dt-fim">
+              <div class="cal-picker-dropdown" id="inv-cal-dropdown">
+                <div class="cal-picker-inner" id="inv-cal-inner" data-pfx="inv"></div>
+              </div>
+            </div>
+            <!-- Quick chips -->
+            <div class="cal-quick-chips">
+              <button class="cal-chip" onclick="calQuickHoje('inv')" type="button">Hoje</button>
+              <button class="cal-chip" onclick="calQuickMesAtual('inv')" type="button">Mês atual</button>
+              <button class="cal-chip" onclick="calQuickMesAnterior('inv')" type="button">Mês anterior</button>
+            </div>
+          </div>
+          <div class="analitico-actions">
+            <button class="btn btn-primary" onclick="invGerar()">
+              <i class="ti ti-calculator"></i> <span>Gerar Inventário</span>
+            </button>
+            <button class="btn" onclick="invExportar()" title="Exportar CSV">
+              <i class="ti ti-file-spreadsheet"></i>
+            </button>
+            <button class="btn" onclick="invAbrirAlertasPendentes()" id="inv-btn-alertas" title="Itens sem justificativa" style="position:relative">
+              <i class="ti ti-alert-triangle"></i>
+              <span id="inv-alertas-count" style="background:var(--amber);color:#000;border-radius:20px;padding:0 6px;font-size:10px;font-weight:700;min-width:18px;text-align:center">0</span>
+              Pendentes
+            </button>
+          </div>
+        </div>
+
+        <!-- ══ EMPTY STATE ══ -->
+        <div id="inv-empty-state" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 20px;gap:12px;color:var(--text3)">
+          <i class="ti ti-clipboard-check" style="font-size:48px;opacity:0.35"></i>
+          <p style="font-size:13px;text-align:center">Selecione um período e clique em <strong style="color:var(--text2)">Gerar Inventário</strong> para<br>calcular o fechamento de estoque.</p>
+        </div>
+
+        <!-- ══ CONTEÚDO (visível após Gerar) ══ -->
+        <div id="inv-content" style="display:none">
+        <div class="inv-kpi-grid" id="inv-kpis">
+          <div class="inv-kpi-card" id="inv-kpi-ini">
+            <div class="inv-kpi-icon" style="background:var(--accent-dim);color:var(--accent)"><i class="ti ti-archive"></i></div>
+            <div class="inv-kpi-body">
+              <div class="inv-kpi-label">Est. Inicial</div>
+              <div class="inv-kpi-value" id="inv-kpi-ini-v">—</div>
+              <div class="inv-kpi-unit">kg</div>
+            </div>
+          </div>
+          <div class="inv-kpi-card" id="inv-kpi-ent">
+            <div class="inv-kpi-icon" style="background:var(--green-bg);color:var(--green)"><i class="ti ti-arrow-bar-to-down"></i></div>
+            <div class="inv-kpi-body">
+              <div class="inv-kpi-label">Entradas</div>
+              <div class="inv-kpi-value" id="inv-kpi-ent-v">—</div>
+              <div class="inv-kpi-unit">kg</div>
+            </div>
+          </div>
+          <div class="inv-kpi-card" id="inv-kpi-sai">
+            <div class="inv-kpi-icon" style="background:var(--red-bg);color:var(--red)"><i class="ti ti-arrow-bar-up"></i></div>
+            <div class="inv-kpi-body">
+              <div class="inv-kpi-label">Saídas</div>
+              <div class="inv-kpi-value" id="inv-kpi-sai-v">—</div>
+              <div class="inv-kpi-unit">kg</div>
+            </div>
+          </div>
+          <div class="inv-kpi-card" id="inv-kpi-fin">
+            <div class="inv-kpi-icon" style="background:var(--purple-bg);color:var(--purple)"><i class="ti ti-box"></i></div>
+            <div class="inv-kpi-body">
+              <div class="inv-kpi-label">Est. Final</div>
+              <div class="inv-kpi-value" id="inv-kpi-fin-v">—</div>
+              <div class="inv-kpi-unit">kg</div>
+            </div>
+          </div>
+          <div class="inv-kpi-card" id="inv-kpi-var">
+            <div class="inv-kpi-icon" style="background:var(--teal-bg);color:var(--teal)"><i class="ti ti-trending-up"></i></div>
+            <div class="inv-kpi-body">
+              <div class="inv-kpi-label">Variação</div>
+              <div class="inv-kpi-value" id="inv-kpi-var-v">—</div>
+              <div class="inv-kpi-unit">kg bruto</div>
+              <div class="inv-kpi-adj" id="inv-kpi-var-adj-wrap" style="display:none">
+                <span class="inv-kpi-adj-label">Ajustado (c/ justif.)</span>
+                <span class="inv-kpi-adj-value" id="inv-kpi-var-adj-v">—</span>
+              </div>
+            </div>
+          </div>
+          <div class="inv-kpi-card" id="inv-kpi-cst">
+            <div class="inv-kpi-icon" style="background:var(--amber-bg);color:var(--amber)"><i class="ti ti-coin"></i></div>
+            <div class="inv-kpi-body">
+              <div class="inv-kpi-label">Custo Var.</div>
+              <div class="inv-kpi-value" id="inv-kpi-cst-v">—</div>
+              <div class="inv-kpi-unit">R$ bruto</div>
+              <div class="inv-kpi-adj" id="inv-kpi-cst-adj-wrap" style="display:none">
+                <span class="inv-kpi-adj-label">Ajustado (c/ justif.)</span>
+                <span class="inv-kpi-adj-value" id="inv-kpi-cst-adj-v">—</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Alertas pendentes -->
+        <div id="inv-alertas-panel" style="display:none;background:var(--amber-bg);border:1px solid var(--amber-border);border-radius:var(--radius);padding:12px 16px;margin-bottom:14px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <span style="font-size:12px;font-weight:700;color:var(--amber)"><i class="ti ti-alert-triangle"></i> Itens com variação sem justificativa</span>
+            <button onclick="invAbrirAlertasPendentes()" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:13px"><i class="ti ti-x"></i></button>
+          </div>
+          <div id="inv-alertas-list" style="font-size:11px;color:var(--text2);max-height:120px;overflow-y:auto"></div>
+        </div>
+
+        <!-- ══ FILTROS DA TABELA — aprimorados ══ -->
+        <div class="inv-filter-bar">
+          <div class="inv-filter-search">
+            <i class="ti ti-search" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:14px;pointer-events:none"></i>
+            <input type="text" id="inv-filtro" placeholder="Buscar regional, filial, material..." oninput="invFiltrar()" class="inv-search-input">
+          </div>
+          <select id="inv-filtro-cat" onchange="invFiltrar()" class="inv-filter-select">
+            <option value="">Todas as categorias</option>
+          </select>
+          <select id="inv-filtro-regional" onchange="invFiltrar()" class="inv-filter-select">
+            <option value="">Todas as regionais</option>
+          </select>
+          <select id="inv-filtro-material" onchange="invFiltrar()" class="inv-filter-select">
+            <option value="">Todos os materiais</option>
+          </select>
+          <label class="inv-filter-toggle">
+            <input type="checkbox" id="inv-filtro-sovar" onchange="invFiltrar()">
+            <span>Só com variação</span>
+          </label>
+          <div style="margin-left:auto;font-size:11px;color:var(--text3)" id="inv-count-label"></div>
+        </div>
+
+        <!-- ══ TABELA — redesenhada com sort ══ -->
+        <div class="table-card inv-table-wrap">
+          <table class="inv-data-table" id="inv-table">
+            <thead>
+              <tr>
+                <th data-col="regional" data-align="left" onclick="invSortBy('regional')">Regional <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="central" data-align="left" onclick="invSortBy('central')">Filial <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="material" data-align="left" onclick="invSortBy('material')">Material <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="categoria" data-align="left" onclick="invSortBy('categoria')">Cat. <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="estoqueIni" data-align="right" onclick="invSortBy('estoqueIni')" title="Est. Inicial (1º lançamento)">Est. Inicial<br><span style="font-size:9px;font-weight:400;opacity:.6;text-transform:none;letter-spacing:0">(1º lanç.)</span> <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="entradasKg" data-align="right" onclick="invSortBy('entradasKg')" title="Entradas (por código SAP)">Entradas<br><span style="font-size:9px;font-weight:400;opacity:.6;text-transform:none;letter-spacing:0">(por código)</span> <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="saidasKg" data-align="right" onclick="invSortBy('saidasKg')" title="Saídas (por código SAP)">Saídas<br><span style="font-size:9px;font-weight:400;opacity:.6;text-transform:none;letter-spacing:0">(por código)</span> <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="estoqueFimReal" data-align="right" onclick="invSortBy('estoqueFimReal')" title="Est. Final (últ. lançamento)">Est. Final<br><span style="font-size:9px;font-weight:400;opacity:.6;text-transform:none;letter-spacing:0">(últ. lanç.)</span> <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="estTeor" data-align="right" onclick="invSortBy('estTeor')" title="Est. Teórico = Ini + Ent − Saí">Est. Teórico<br><span style="font-size:9px;font-weight:400;opacity:.6;text-transform:none;letter-spacing:0">(ini+ent−saí)</span> <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="varKg" data-align="right" onclick="invSortBy('varKg')" title="Variação = Real − Teórico">Variação<br><span style="font-size:9px;font-weight:400;opacity:.6;text-transform:none;letter-spacing:0">(real − teór.)</span> <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="saldoJust" data-align="right" onclick="invSortBy('saldoJust')">Saldo Just. <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="varAdj" data-align="right" onclick="invSortBy('varAdj')">Var.Ajust. <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="custoMedio" data-align="right" onclick="invSortBy('custoMedio')" title="Custo médio (Saídas → fallback SAP)">Custo Médio<br><span style="font-size:9px;font-weight:400;opacity:.6;text-transform:none;letter-spacing:0">(saídas · R$/kg)</span> <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="custo" data-align="right" onclick="invSortBy('custo')" title="Custo da variação ajustada">Custo Var.<br><span style="font-size:9px;font-weight:400;opacity:.6;text-transform:none;letter-spacing:0">(var. · R$/kg)</span> <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-align="center" style="cursor:default">Justificativa</th>
+              </tr>
+            </thead>
+            <tbody id="inv-tbody"></tbody>
+          </table>
+          <div id="inv-empty" style="display:none;padding:60px;text-align:center;color:var(--text3)">
+            <i class="ti ti-clipboard-off" style="font-size:40px;display:block;margin-bottom:10px;opacity:0.4"></i>
+            <div style="font-size:13px;font-weight:600;margin-bottom:4px">Nenhum dado encontrado</div>
+            <div style="font-size:12px">Ajuste o período e clique em <strong style="color:var(--text2)">Gerar Inventário</strong>.</div>
+          </div>
+        </div>
+        </div><!-- /inv-content -->
+      </div><!-- /page-inventario -->
 
       <!-- CONFIGURAÇÕES -->
       <div class="page" id="page-configuracoes">
@@ -7476,6 +7903,7 @@ function debounce(fn, delay = 120) {
     sap: { title: 'Movimentações SAP', sub: 'extrato consolidado de todas as movimentações' },
     producao: { title: 'Produção', sub: 'produção consolidada por central' },
     analitico: { title: 'Dashboard Analítico', sub: 'análise de estoque por período e filial' },
+    inventario: { title: 'Inventário', sub: 'fechamento semanal e mensal de estoque por usina' },
     importar: { title: 'Importar Dados', sub: 'importe arquivos .xlsx ou .csv para cada módulo' },
     configuracoes: { title: 'Configurações', sub: 'parâmetros e informações de referência do sistema' }
   };
@@ -8217,7 +8645,7 @@ function debounce(fn, delay = 120) {
     return out;
   }
 
-  function reaplicarPadronizacaoMateriais(modulos = ['entradas', 'saidas', 'lancamentos']) {
+  function reaplicarPadronizacaoMateriais(modulos = ['entradas', 'saidas', 'lancamentos', 'sap']) {
     const aplicar = rec => {
       const raw = String(rec.materialOriginal ?? rec.material ?? '').trim();
       if (!raw) return { ...rec, materialOriginal: rec.materialOriginal ?? '', material: rec.material ?? '' };
@@ -8523,18 +8951,47 @@ function debounce(fn, delay = 120) {
     document.getElementById('nav-overlay')?.classList.remove('open');
   }
 
+  // Cache de referências DOM para o navigate (populado no primeiro uso)
+  let _navCache = null;
+  function _buildNavCache() {
+    const navItems = qsa('.nav-item');
+    const pages = qsa('.page');
+    // Mapeia page-key → nav-item element
+    const navByPage = {};
+    navItems.forEach(n => {
+      const onclick = n.getAttribute('onclick') || '';
+      const m = onclick.match(/navigate\('([^']+)'\)/);
+      if (m) navByPage[m[1]] = n;
+    });
+    // Mapeia page-key → page element
+    const pageById = {};
+    pages.forEach(p => {
+      const key = p.id?.replace('page-', '');
+      if (key) pageById[key] = p;
+    });
+    return { navItems, pages, navByPage, pageById };
+  }
+
   function navigate(page) {
     // FAB will update itself via setTimeout after DOM settles
+    if (!_navCache) _navCache = _buildNavCache();
+    const { navItems, pages, navByPage, pageById } = _navCache;
+
     const currentPage = document.querySelector('.page.active')?.id?.replace('page-', '');
     const alreadyActive = currentPage === page;
 
-    qsa('.page').forEach(p => p.classList.remove('active'));
-    qsa('.nav-item').forEach(n => n.classList.remove('active'));
-    document.getElementById('page-' + page)?.classList.add('active');
-    qsa('.nav-item').forEach(n => {
-      const onclick = n.getAttribute('onclick') || '';
-      if (onclick.includes("'" + page + "'")) n.classList.add('active');
-    });
+    // Remover active da página atual (sem varrer todas)
+    if (currentPage && pageById[currentPage]) pageById[currentPage].classList.remove('active');
+    else pages.forEach(p => p.classList.remove('active'));
+
+    // Ativar a nova página
+    const newPage = pageById[page] || document.getElementById('page-' + page);
+    if (newPage) newPage.classList.add('active');
+
+    // Remover active do nav-item atual e ativar o novo
+    if (currentPage && navByPage[currentPage]) navByPage[currentPage].classList.remove('active');
+    else navItems.forEach(n => n.classList.remove('active'));
+    if (navByPage[page]) navByPage[page].classList.add('active');
 
     const info = pageTitleMap[page] || { title: page, sub: '' };
     const title = document.getElementById('page-title');
@@ -8769,8 +9226,6 @@ function debounce(fn, delay = 120) {
     configs:     { tbodyId: 'tb-configs',     fields: ['key','value','desc','created',null] },
     filiais:     { tbodyId: 'tb-filiais',     fields: ['origem','alias','cnpj','regional','created',null] },
     materiais:   { tbodyId: 'tb-materiais',   fields: ['origem','alias','desc','created',null] },
-    'an-resumo-regionais': { tbodyId: 'an-macro-body-regionais', fields: ['regional','nCentralis','variacaoKg','custoVar','critico','saude'] },
-    'an-resumo-centrais':  { tbodyId: 'an-macro-body',           fields: ['central','regional','variacaoKg','custoVar','saude'] }
   };
 
   // Returns true if a record passes all active column filters for a module
@@ -8790,8 +9245,6 @@ function debounce(fn, delay = 120) {
   }
 
   // Global cache for summary table data (populated by renderAnaliticoMacro)
-  window._anResumoRegionaisData = [];
-  window._anResumoCentraisData  = [];
 
   // Collect unique display values for a column from the FULL (unfiltered) dataset
   function getColUniqueValues(module, colIdx) {
@@ -8799,17 +9252,6 @@ function debounce(fn, delay = 120) {
     if (!meta) return [];
     const field = meta.fields[colIdx];
     if (!field) return [];
-    // Custom data sources for the two new summary tables
-    if (module === 'an-resumo-regionais') {
-      const seen = new Set();
-      (window._anResumoRegionaisData || []).forEach(r => seen.add(normalizeText(String(r[field] ?? '—'))));
-      return [...seen].sort((a, b) => a.localeCompare(b, 'pt-BR'));
-    }
-    if (module === 'an-resumo-centrais') {
-      const seen = new Set();
-      (window._anResumoCentraisData || []).forEach(r => seen.add(normalizeText(String(r[field] ?? '—'))));
-      return [...seen].sort((a, b) => a.localeCompare(b, 'pt-BR'));
-    }
     const data = module === 'producao' ? state.producao
                  : (module in state) ? state[module] : [];
     const seen = new Set();
@@ -9049,8 +9491,6 @@ function debounce(fn, delay = 120) {
       configs: renderConfigs,
       filiais: renderFiliais,
       materiais: renderMateriais,
-      'an-resumo-regionais': () => _renderResumoRegionais(window._anResumoRegionaisData || []),
-      'an-resumo-centrais':  () => _renderResumoCentrais(window._anResumoCentraisData  || [])
     };
     if (map[module]) map[module]();
   }
@@ -9134,11 +9574,11 @@ function debounce(fn, delay = 120) {
     }
 
     // Serialise entries into a data attribute so the modal can read them on click
-    const encoded = escapeHtml(JSON.stringify(entries));
+    const encoded = encodeURIComponent(JSON.stringify(entries));
 
     return `
       <button class="bdm-trigger" style="color:${colorVar}"
-        onclick="event.stopPropagation(); openBreakdownModal(this)"
+        onclick="event.stopPropagation(); openBreakdownModal(event.currentTarget)"
         data-entries="${encoded}"
         data-title="${escapeHtml(title)}"
         data-color="${escapeHtml(colorVar)}"
@@ -9157,7 +9597,7 @@ function debounce(fn, delay = 120) {
     if (!overlay || !titleEl || !tbody || !totalEl) return;
 
     let entries = [];
-    try { entries = JSON.parse(trigger.dataset.entries || '[]'); } catch(e) {}
+    try { entries = JSON.parse(decodeURIComponent(trigger.dataset.entries || '[]')); } catch(e) {}
     const title    = trigger.dataset.title  || '';
     const colorVar = trigger.dataset.color  || 'var(--text)';
 
@@ -9328,12 +9768,12 @@ function debounce(fn, delay = 120) {
       </span>`;
     } else {
       if (nfCount > 0) {
-        const encoded = escapeHtml(JSON.stringify(pendNF.map(r => ({
+        const encoded = encodeURIComponent(JSON.stringify(pendNF.map(r => ({
           nf: r.nf, material: r.material || '—', peso: r.peso || 0,
-          dtEmissao: r.dtEmissao || '—', fornecedor: r.fornecedor || '—'
+          um: r.um || 'kg', dtEmissao: r.dtEmissao || '—', fornecedor: r.fornecedor || '—'
         }))));
         chipsHtml += `<button class="pend-integ-chip pend-integ-chip-nf"
-          onclick="event.stopPropagation(); openPendIntegModal(this)"
+          onclick="event.stopPropagation(); openPendIntegModal(event.currentTarget)"
           data-tipo="NF" data-central="${escapeHtml(central)}" data-items="${encoded}"
           title="Ver NFs não integradas no SAP">
           <i class="ti ti-file-invoice" style="font-size:13px"></i>
@@ -9342,12 +9782,12 @@ function debounce(fn, delay = 120) {
         </button>`;
       }
       if (osCount > 0) {
-        const encoded = escapeHtml(JSON.stringify(pendOS.map(r => ({
+        const encoded = encodeURIComponent(JSON.stringify(pendOS.map(r => ({
           os: r.os, material: r.material || '—', peso: r.peso || 0,
-          dtEmissao: r.dtEmissao || '—', fornecedor: r.fornecedor || '—'
+          um: r.um || 'kg', dtEmissao: r.dtEmissao || '—', fornecedor: r.fornecedor || '—'
         }))));
         chipsHtml += `<button class="pend-integ-chip pend-integ-chip-os"
-          onclick="event.stopPropagation(); openPendIntegModal(this)"
+          onclick="event.stopPropagation(); openPendIntegModal(event.currentTarget)"
           data-tipo="OS" data-central="${escapeHtml(central)}" data-items="${encoded}"
           title="Ver OS não integradas no SAP">
           <i class="ti ti-clipboard-list" style="font-size:13px"></i>
@@ -9371,10 +9811,14 @@ function debounce(fn, delay = 120) {
     const overlay = document.getElementById('pim-overlay');
     if (!overlay) return;
 
+    // helpers locais independentes de escopo externo
+    const _num = v => { const n = parseFloat(String(v ?? 0).replace(',','.')); return Number.isFinite(n) ? n : 0; };
+    const _fmt = n => isNaN(n) ? '—' : Math.abs(n).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
+
     const tipo    = trigger.dataset.tipo || '?';
     const central = trigger.dataset.central || '—';
     let items = [];
-    try { items = JSON.parse(trigger.dataset.items || '[]'); } catch(e) {}
+    try { items = JSON.parse(decodeURIComponent(trigger.dataset.items || '[]')); } catch(e) {}
 
     // Title/sub
     document.getElementById('pim-title').textContent =
@@ -9391,14 +9835,14 @@ function debounce(fn, delay = 120) {
         <th>Material</th>
         <th>Fornecedor</th>
         <th>Dt. Emissão</th>
-        <th style="text-align:right">Peso</th>
+        <th style="text-align:right">Quantidade</th>
       </tr>`;
       tbody.innerHTML = items.map(it => `<tr>
         <td class="td-mono" style="font-weight:600;color:var(--green)">${escapeHtml(String(it.nf || '—'))}</td>
         <td>${escapeHtml(String(it.material || '—'))}</td>
         <td class="td-muted">${escapeHtml(String(it.fornecedor || '—'))}</td>
         <td class="td-muted">${escapeHtml(String(it.dtEmissao || '—'))}</td>
-        <td class="td-mono" style="text-align:right;color:var(--green)">${fmtKg(Math.abs(num(it.peso)))}</td>
+        <td class="td-mono" style="text-align:right;color:var(--green)">${_fmt(_num(it.peso))} ${escapeHtml(String(it.um || 'kg'))}</td>
       </tr>`).join('');
     } else {
       thead.innerHTML = `<tr>
@@ -9406,14 +9850,14 @@ function debounce(fn, delay = 120) {
         <th>Material</th>
         <th>Fornecedor</th>
         <th>Dt. Emissão</th>
-        <th style="text-align:right">Peso</th>
+        <th style="text-align:right">Quantidade</th>
       </tr>`;
       tbody.innerHTML = items.map(it => `<tr>
         <td class="td-mono" style="font-weight:600;color:var(--red)">${escapeHtml(String(it.os || '—'))}</td>
         <td>${escapeHtml(String(it.material || '—'))}</td>
         <td class="td-muted">${escapeHtml(String(it.fornecedor || '—'))}</td>
         <td class="td-muted">${escapeHtml(String(it.dtEmissao || '—'))}</td>
-        <td class="td-mono" style="text-align:right;color:var(--red)">${fmtKg(Math.abs(num(it.peso)))}</td>
+        <td class="td-mono" style="text-align:right;color:var(--red)">${_fmt(_num(it.peso))} ${escapeHtml(String(it.um || 'kg'))}</td>
       </tr>`).join('');
     }
 
@@ -9442,7 +9886,7 @@ function debounce(fn, delay = 120) {
     if (!overlay) return;
 
     let lancs = [];
-    try { lancs = JSON.parse(trigger.dataset.lancs || '[]'); } catch(e) {}
+    try { lancs = JSON.parse(decodeURIComponent(trigger.dataset.lancs || '[]')); } catch(e) {}
     const date      = trigger.dataset.date      || '';
     _lrcDetailKey   = trigger.dataset.detailKey || null;
     _lrcSelectedIdx = 0;
@@ -9679,8 +10123,8 @@ function debounce(fn, delay = 120) {
       const lancCell = day.hasLanc
         ? (day.hasConflict
             ? `<button class="lanc-conflict-badge"
-                onclick="event.stopPropagation(); openLancConflictModal(this)"
-                data-lancs="${escapeHtml(JSON.stringify(day.lancamentos))}"
+                onclick="event.stopPropagation(); openLancConflictModal(event.currentTarget)"
+                data-lancs="${encodeURIComponent(JSON.stringify(day.lancamentos))}"
                 data-date="${escapeHtml(day.dateLabel)}"
                 data-detail-key="${escapeHtml(payload.key)}"
                 title="Múltiplos lançamentos no mesmo dia — clique para resolver">
@@ -11270,27 +11714,33 @@ function debounce(fn, delay = 120) {
         ...sapNoPeriodo.map(r => r.material || '—')
       ]);
 
-      const _macroUltDayKey = {};
-      lancsDesc.forEach(r => {
-        const mat = r.material || '—';
-        if (!_macroUltDayKey[mat]) {
-          const d = parseDate(r.dtLanc);
-          _macroUltDayKey[mat] = d ? `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}` : null;
-        }
-      });
+      // Correção 2: Est. Final — itera de trás para frente acumulando o último dia,
+      // igual ao Inventário, garantindo ordem correta independente da posição nos dados.
       const _macroPesoFimSoma = {};
-      lancsNoPeriodo.forEach(r => {
-        const mat = r.material || '—';
-        const d = parseDate(r.dtLanc);
-        const dk = d ? `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}` : null;
-        if (dk && dk === _macroUltDayKey[mat]) {
-          _macroPesoFimSoma[mat] = (_macroPesoFimSoma[mat] || 0) + num(r.peso);
+      allMats.forEach(mat => {
+        const lancAteFimMat = lancsNoPeriodo.filter(r => {
+          const d = parseDate(r.dtLanc);
+          return (r.material || '—') === mat && d && d <= (dtFim || new Date(8640000000000000));
+        });
+        if (!lancAteFimMat.length) return;
+        const lastD = parseDate(lancAteFimMat[lancAteFimMat.length - 1].dtLanc);
+        if (!lastD) return;
+        const lastISO = lastD.toISOString().substring(0, 10);
+        let tot = 0;
+        for (let i = lancAteFimMat.length - 1; i >= 0; i--) {
+          const d = parseDate(lancAteFimMat[i].dtLanc);
+          if (d && d.toISOString().substring(0, 10) === lastISO) tot += num(lancAteFimMat[i].peso);
+          else break;
         }
+        _macroPesoFimSoma[mat] = tot;
       });
 
+      // Correção 1: usa getPrePeriodLaunchStock como prioridade para Est. Inicial,
+      // igual ao Analítico — garante consistência quando há lançamentos antes do período.
       let somaPrimeiro = 0, somaUltimo = 0;
       allMats.forEach(mat => {
-        somaPrimeiro += (_macroPesoIniSoma[mat] ?? num(materiaisLancPrimeiro[mat]?.peso));
+        const prev = dtIni ? getPrePeriodLaunchStock({ central, material: mat, dtIni }) : null;
+        somaPrimeiro += (prev != null ? prev.value : (_macroPesoIniSoma[mat] ?? num(materiaisLancPrimeiro[mat]?.peso)));
         somaUltimo   += (_macroPesoFimSoma[mat] ?? num(materiaisLancUltimo[mat]?.peso));
       });
 
@@ -11314,6 +11764,26 @@ function debounce(fn, delay = 120) {
       const custoMedioPorMat = {};
       Object.keys(_custoPorMat).forEach(mat => {
         custoMedioPorMat[mat] = _pesoPorMat[mat] > 0 ? _custoPorMat[mat] / _pesoPorMat[mat] : 0;
+      });
+      // Fallback: materiais sem custo nas Saídas usam custoUnit/valorTotal do SAP
+      sapNoPeriodo.forEach(s => {
+        const mat = s.material || '—';
+        if (custoMedioPorMat[mat]) return;
+        const p  = Math.abs(num(s.peso));
+        if (!p) return;
+        const vt = num(s.valorTotal);
+        const cu = num(s.custoUnit);
+        const valor = vt !== 0 ? Math.abs(vt) : (cu !== 0 ? Math.abs(cu) * p : 0);
+        if (!valor) return;
+        if (!_custoPorMat['_sap_' + mat]) { _custoPorMat['_sap_' + mat] = 0; _pesoPorMat['_sap_' + mat] = 0; }
+        _custoPorMat['_sap_' + mat] += valor;
+        _pesoPorMat['_sap_' + mat]  += p;
+      });
+      Object.keys(_custoPorMat).forEach(key => {
+        if (!key.startsWith('_sap_')) return;
+        const mat = key.slice(5);
+        if (custoMedioPorMat[mat]) return;
+        custoMedioPorMat[mat] = _pesoPorMat[key] > 0 ? _custoPorMat[key] / _pesoPorMat[key] : 0;
       });
 
       results.push({
@@ -11424,28 +11894,68 @@ function debounce(fn, delay = 120) {
     const totalVarEst   = results.reduce((s, r) => s + r.variacaoEstoque, 0);
 
     // Custo por período
+    // Est. Inicial e Est. Final: usa os volumes já calculados corretamente em
+    // buildDashboardGerencialResults (somaPrimeiro / somaUltimo por material),
+    // que respeitam getPrePeriodLaunchStock e a soma do último dia do período.
     let custoEstIni = 0, custoEntradas = 0, custoSaidas = 0, custoEstFim = 0;
     results.forEach(r => {
       const cmp = r.custoMedioPorMat || {};
+      // Para Est. Ini e Est. Fim, recalcula por material usando os mesmos volumes
+      // que buildDashboardGerencialResults usa para somaPrimeiro/somaUltimo,
+      // garantindo consistência com os valores exibidos nas colunas de volume.
       const lancsByMat = new Map();
       r.lancsNoPeriodo.forEach(l => {
         const m = l.material || '—'; if (!lancsByMat.has(m)) lancsByMat.set(m, []); lancsByMat.get(m).push(l);
       });
       (r.allMats || []).forEach(mat => {
         const cm = cmp[mat] || 0; if (!cm) return;
-        const ini = (r.materiaisLancPrimeiro?.[mat] ? num(r.materiaisLancPrimeiro[mat].peso) : 0);
-        const fim = (r.materiaisLancUltimo?.[mat]   ? num(r.materiaisLancUltimo[mat].peso)   : 0);
-        custoEstIni += ini * cm;
-        custoEstFim += fim * cm;
+        // Est. Inicial por material: getPrePeriodLaunchStock (dia anterior ao período)
+        // com fallback para primeiro dia dentro do período — mesmo que buildDashboardGerencialResults
+        const prevStock = dtIni ? getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni }) : null;
+        const lancsMat = lancsByMat.get(mat) || [];
+        let iniVol = 0;
+        if (prevStock != null) {
+          iniVol = prevStock.value;
+        } else if (lancsMat.length) {
+          // fallback: soma do primeiro dia dentro do período
+          const lancsAsc = [...lancsMat].sort((a, b) => {
+            const da = parseDate(a.dtLanc), db = parseDate(b.dtLanc);
+            return dateCmp(da ?? new Date(0), db ?? new Date(0));
+          });
+          const firstDKey = localISODate(parseDate(lancsAsc[0].dtLanc));
+          iniVol = lancsAsc
+            .filter(l => localISODate(parseDate(l.dtLanc)) === firstDKey)
+            .reduce((s, l) => s + num(l.peso), 0);
+        }
+        // Est. Final por material: soma do último dia dentro do período
+        let fimVol = 0;
+        if (lancsMat.length) {
+          const lancsDesc = [...lancsMat].sort((a, b) => {
+            const da = parseDate(a.dtLanc), db = parseDate(b.dtLanc);
+            return dateCmp(db ?? new Date(0), da ?? new Date(0));
+          });
+          const lastDKey = localISODate(parseDate(lancsDesc[0].dtLanc));
+          fimVol = lancsDesc
+            .filter(l => localISODate(parseDate(l.dtLanc)) === lastDKey)
+            .reduce((s, l) => s + num(l.peso), 0);
+        }
+        custoEstIni += iniVol * cm;
+        custoEstFim += fimVol * cm;
       });
-      const avgCm = Object.values(cmp).length ? Object.values(cmp).reduce((a,b)=>a+b,0)/Object.values(cmp).length : 0;
-      if (avgCm) {
-        custoEntradas += r.totalEntradas > 0 ? r.totalEntradas * avgCm : 0;
-        custoSaidas   += Math.abs(r.totalSaidas) > 0 ? Math.abs(r.totalSaidas) * avgCm : 0;
-      }
+      // Entradas e Saídas SAP: custo por movimento × custo médio do material
+      r.sapNoPeriodo.forEach(s => {
+        const mat = s.material || '—';
+        const cm  = cmp[mat] || 0;
+        if (!cm) return;
+        const p = num(s.peso);
+        if (p > 0) custoEntradas += p * cm;
+        else if (p < 0) custoSaidas += Math.abs(p) * cm;
+      });
     });
 
-    // Custo variação
+    // Custo variação: para cada material, variação (diff) × custo médio.
+    // Usa initialStockOverride (getPrePeriodLaunchStock) para garantir que o
+    // diff seja idêntico ao calculado no Dashboard Analítico para o mesmo período.
     let totalCustoVar = 0;
     results.forEach(r => {
       const cmp        = r.custoMedioPorMat || {};
@@ -11454,7 +11964,13 @@ function debounce(fn, delay = 120) {
       r.lancsNoPeriodo.forEach(l => { const m = l.material||'—'; if(!lancsByMat.has(m)) lancsByMat.set(m,[]); lancsByMat.get(m).push(l); });
       r.sapNoPeriodo.forEach(s => { const m = s.material||'—'; if(!sapByMat.has(m)) sapByMat.set(m,[]); sapByMat.get(m).push(s); });
       (r.allMats||[]).forEach(mat => {
-        const snap    = buildSnapshot({ lancs: lancsByMat.get(mat)||[], sap: sapByMat.get(mat)||[] });
+        const prev    = dtIni ? getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni }) : null;
+        const snap    = buildSnapshot({
+          lancs: lancsByMat.get(mat)||[],
+          sap:   sapByMat.get(mat)||[],
+          initialStockOverride: prev?.value ?? null,
+          initialDateLabelOverride: prev?.dtLabel ?? null
+        });
         const custMed = cmp[mat] || 0;
         if (custMed > 0) totalCustoVar += snap.diff * custMed;
       });
@@ -12987,15 +13503,30 @@ function debounce(fn, delay = 120) {
     lancamentos: () => renderLancamentos(),
     sap: () => renderSAP(),
     producao: () => renderProducao(),
+    inventario: () => renderInventario(),
     importar: () => renderImports(),
     configuracoes: () => { renderConfigs(); loadHealthConfigInputs(); updateParamGerais(); },
     filiais: () => renderFiliais(),
     materiais: () => renderMateriais()
   };
 
+  // Páginas que são estáticas após o primeiro render (sem dados que mudam externamente)
+  const _staticPages = new Set(['configuracoes', 'filiais', 'materiais']);
+  const _renderedPages = new Set();
+
   function renderPage(page) {
+    // Páginas estáticas: renderizar só uma vez
+    if (_staticPages.has(page) && _renderedPages.has(page)) return;
     const fn = pageRenderers[page];
-    if (fn) fn();
+    if (fn) {
+      fn();
+      _renderedPages.add(page);
+    }
+  }
+
+  // Invalida o cache de uma página (chamar quando os dados dessa página mudam)
+  function invalidatePageCache(page) {
+    _renderedPages.delete(page);
   }
 
 
@@ -13318,6 +13849,29 @@ function debounce(fn, delay = 120) {
         custoMedioPorMat[mat] = _pesoPorMat[mat] > 0 ? _custoPorMat[mat] / _pesoPorMat[mat] : 0;
       });
 
+      // Fallback: materiais sem custo nas Saídas usam custoUnit/valorTotal do SAP.
+      // Isso cobre casos onde o material existe no SAP mas não tem registro no módulo Saídas,
+      // ou onde o nome do material difere após normalização.
+      sapNoPeriodo.forEach(s => {
+        const mat = s.material || '—';
+        if (custoMedioPorMat[mat]) return; // já tem custo pelas Saídas
+        const p  = Math.abs(num(s.peso));
+        if (!p) return;
+        const vt = num(s.valorTotal);
+        const cu = num(s.custoUnit);
+        const valor = vt !== 0 ? Math.abs(vt) : (cu !== 0 ? Math.abs(cu) * p : 0);
+        if (!valor) return;
+        if (!_custoPorMat['_sap_' + mat]) { _custoPorMat['_sap_' + mat] = 0; _pesoPorMat['_sap_' + mat] = 0; }
+        _custoPorMat['_sap_' + mat] += valor;
+        _pesoPorMat['_sap_' + mat]  += p;
+      });
+      Object.keys(_custoPorMat).forEach(key => {
+        if (!key.startsWith('_sap_')) return;
+        const mat = key.slice(5);
+        if (custoMedioPorMat[mat]) return;
+        custoMedioPorMat[mat] = _pesoPorMat[key] > 0 ? _custoPorMat[key] / _pesoPorMat[key] : 0;
+      });
+
       results.push({
         central,
         totalEntradas,
@@ -13342,14 +13896,11 @@ function debounce(fn, delay = 120) {
     // Sort by central name
     results.sort((a, b) => String(a.central).localeCompare(String(b.central), 'pt-BR'));
 
-    renderAnaliticoMacro(results, dtIni, dtFim);
     renderAnaliticoMicro(results, dtIni, dtFim);
 
     document.getElementById('an-empty').style.display = 'none';
     document.getElementById('an-content').style.display = '';
     if (window.updatePeriodFab) updatePeriodFab();
-    document.getElementById('an-periodo-label').textContent =
-      `${fmtPtDate(dtIni)} a ${fmtPtDate(dtFim)}`;
   }
 
   function parseMes(str) {
@@ -13369,685 +13920,6 @@ function debounce(fn, delay = 120) {
       else if (/^\d{1,2}$/.test(p) && !m) { m = Number(p); }
     });
     return m && y ? { m, y } : null;
-  }
-
-  function renderAnaliticoMacro(results, dtIni, dtFim) {
-    const tb   = document.getElementById('an-macro-body');
-    if (!tb) return;
-
-    if (!results.length) {
-      tb.innerHTML = '<tr><td colspan="8"><div class="empty-state"><i class="ti ti-database-off"></i><p>Sem dados para o período selecionado.</p></div></td></tr>';
-      return;
-    }
-
-    const thresholds = getHealthThresholds();
-
-    // ── Helper: saúde de uma central a partir do results item ─────────────
-    function centralHealth(r) {
-      const lancsByMat = new Map();
-      const sapByMat   = new Map();
-      r.lancsNoPeriodo.forEach(l => {
-        const m = l.material || '—';
-        if (!lancsByMat.has(m)) lancsByMat.set(m, []);
-        lancsByMat.get(m).push(l);
-      });
-      r.sapNoPeriodo.forEach(s => {
-        const m = s.material || '—';
-        if (!sapByMat.has(m)) sapByMat.set(m, []);
-        sapByMat.get(m).push(s);
-      });
-      const mats = [...new Set([...lancsByMat.keys(), ...sapByMat.keys()])];
-      if (mats.length < 5) return { score: null, level: 'none' };
-      const diffs = mats.map(mat => {
-        const snap   = buildSnapshot({ lancs: lancsByMat.get(mat) || [], sap: sapByMat.get(mat) || [] });
-        const lancArr = lancsByMat.get(mat) || [];
-        const catKey  = detectCatKey(lancArr[0]?.categoria || '') || detectCatFromMat(mat);
-        return { mat, diff: snap.diff, catKey };
-      });
-      return calcHealthScore(diffs, lancsByMat, sapByMat, thresholds);
-    }
-
-    // ── Helper: custo total de variação de uma central ────────────────────
-    function centralCustoVar(r) {
-      let total = 0;
-      const mats = r.allMats || [];
-      const lancsByMat = new Map();
-      const sapByMat   = new Map();
-      r.lancsNoPeriodo.forEach(l => {
-        const m = l.material || '—'; if (!lancsByMat.has(m)) lancsByMat.set(m, []); lancsByMat.get(m).push(l);
-      });
-      r.sapNoPeriodo.forEach(s => {
-        const m = s.material || '—'; if (!sapByMat.has(m)) sapByMat.set(m, []); sapByMat.get(m).push(s);
-      });
-      mats.forEach(mat => {
-        const snap    = buildSnapshot({ lancs: lancsByMat.get(mat) || [], sap: sapByMat.get(mat) || [] });
-        const custMed = (r.custoMedioPorMat || {})[mat] || 0;
-        if (custMed > 0) total += snap.diff * custMed;
-      });
-      return total;
-    }
-
-    // ── Enrich results with health + custo ────────────────────────────────
-    const enriched = results.map(r => {
-      const health   = centralHealth(r);
-      const custoVar = centralCustoVar(r);
-      return { ...r, health, custoVar };
-    });
-
-    // ─── Health badge helper ──────────────────────────────────────────────
-    const hIcon  = { ok:'ti-circle-check', atencao:'ti-alert-triangle', urgente:'ti-alert-circle', critico:'ti-flame', none:'ti-minus' };
-    const hLabel = { ok:'Saudável', atencao:'Atenção', urgente:'Urgente', critico:'Crítico', none:'—' };
-    const hCls   = { ok:'hb-ok', atencao:'hb-atencao', urgente:'hb-urgente', critico:'hb-critico', none:'hb-none' };
-    const hOrder = { critico:0, urgente:1, atencao:2, ok:3, none:4 };
-
-    function healthBadge(h) {
-      const lvl = h.level || 'none';
-      const icon = hIcon[lvl] || 'ti-minus';
-      const lbl  = hLabel[lvl] || '—';
-      const cls  = hCls[lvl]   || 'hb-none';
-      const scoreStr = h.score !== null ? ` ${h.score}%` : '';
-      return `<span class="health-badge-inline ${cls}"><i class="ti ${icon}"></i>${lbl}${scoreStr}</span>`;
-    }
-
-
-    const macroLevelMeta = {
-      ok:      { label: 'Bom',      chip: 'hs-bom',         color: 'var(--green)', dot: 'var(--green)', icon: 'ti-circle-check' },
-      atencao: { label: 'Atenção',  chip: 'hs-atencao-chip', color: 'var(--amber)', dot: 'var(--amber)', icon: 'ti-alert-triangle' },
-      urgente: { label: 'Urgente',  chip: 'hs-urgente-chip', color: '#f97316',      dot: '#f97316',      icon: 'ti-alert-circle' },
-      critico: { label: 'Crítico',  chip: 'hs-critico-chip', color: 'var(--red)',    dot: 'var(--red)',    icon: 'ti-flame' },
-      none:    { label: 'Sem base',  chip: 'hs-neutro',       color: 'var(--text3)',  dot: 'var(--text3)',   icon: 'ti-minus' }
-    };
-    const macroLevelOrder = ['critico', 'urgente', 'atencao', 'ok'];
-
-    function pctStr(n) {
-      return `${n.toFixed(1)}%`;
-    }
-
-    function levelCountsFrom(items, keyGetter) {
-      const counts = { ok: 0, atencao: 0, urgente: 0, critico: 0, none: 0 };
-      items.forEach(item => {
-        const lvl = keyGetter(item) || 'none';
-        counts[lvl] = (counts[lvl] || 0) + 1;
-      });
-      return counts;
-    }
-
-    function renderSummaryChips(container, counts) {
-      if (!container) return;
-      const classifiedTotal = macroLevelOrder.reduce((sum, k) => sum + (counts[k] || 0), 0);
-      const chips = macroLevelOrder.map(key => {
-        const c = counts[key] || 0;
-        const pct = classifiedTotal ? (c / classifiedTotal) * 100 : 0;
-        const meta = macroLevelMeta[key];
-        return `
-          <div class="health-stat ${meta.chip}">
-            <i class="ti ${meta.icon}"></i>
-            <span class="hs-n">${c}</span>
-            <span>${meta.label.toLowerCase()}</span>
-            <span style="opacity:.8">${pctStr(pct)}</span>
-          </div>`;
-      }).join('');
-      const noneChip = (counts.none || 0) > 0 ? `
-        <div class="health-stat hs-neutro">
-          <i class="ti ti-dots"></i>
-          <span class="hs-n">${counts.none}</span>
-          <span>sem base</span>
-        </div>` : '';
-      container.innerHTML = chips + noneChip;
-    }
-
-        function renderCriticalityDonut(svgEl, tooltipEl, counts, impacts, centerTop, centerBottom, centerNote, itemLabelSingular, itemLabelPlural) {
-      if (!itemLabelPlural) itemLabelPlural = itemLabelSingular + 's';
-      if (!svgEl) return;
-      const total = macroLevelOrder.reduce((sum, key) => sum + (counts[key] || 0), 0);
-      if (!total) {
-        svgEl.innerHTML = '<text x="240" y="150" text-anchor="middle" font-size="12" font-family="var(--mono)" fill="var(--text3)">Sem dados</text>';
-        return;
-      }
-
-      const segDefs = macroLevelOrder.map(key => ({
-        key,
-        label: macroLevelMeta[key].label,
-        color: macroLevelMeta[key].color,
-        count: counts[key] || 0,
-        stockImpact: num(impacts?.[key]?.stock || 0),
-        financeImpact: num(impacts?.[key]?.finance || 0)
-      })).filter(s => s.count > 0);
-
-      const VW = 480, VH = 300;
-      const cx = 200, cy = 150;
-      const R = 96, strokeW = 34;
-      const GAP_DEG = segDefs.length > 1 ? 2 : 0;
-      const GAP_RAD = GAP_DEG * Math.PI / 180;
-
-      let startAngle = -Math.PI / 2;
-      const segments = segDefs.map(s => {
-        const frac = s.count / total;
-        const sweep = frac * 2 * Math.PI - GAP_RAD;
-        const midAngle = startAngle + GAP_RAD / 2 + sweep / 2;
-        const seg = {
-          ...s,
-          frac,
-          pctStr: pctStr(frac * 100),
-          startAngle: startAngle + GAP_RAD / 2,
-          sweep,
-          midAngle
-        };
-        startAngle += frac * 2 * Math.PI;
-        return seg;
-      });
-
-      function arcPath(cx, cy, r, startA, sweepA) {
-        const x1 = cx + r * Math.cos(startA);
-        const y1 = cy + r * Math.sin(startA);
-        const endA = startA + sweepA;
-        const x2 = cx + r * Math.cos(endA);
-        const y2 = cy + r * Math.sin(endA);
-        const large = sweepA > Math.PI ? 1 : 0;
-        return `M ${x1.toFixed(3)} ${y1.toFixed(3)} A ${r} ${r} 0 ${large} 1 ${x2.toFixed(3)} ${y2.toFixed(3)}`;
-      }
-
-      const svgParts = [];
-      svgParts.push(`<circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="var(--bg3)" stroke-width="${strokeW}"/>`);
-
-      segments.forEach(s => {
-        const d = arcPath(cx, cy, R, s.startAngle, s.sweep);
-        svgParts.push(`<path d="${d}" fill="none" stroke="${s.color}" stroke-width="${strokeW}" stroke-linecap="butt"
-          data-label="${s.label}" data-count="${s.count}" data-pct="${s.pctStr}" data-color="${s.color}"
-          data-stock="${s.stockImpact}" data-finance="${s.financeImpact}"
-          style="cursor:pointer;transition:stroke-width .15s"/>`);
-      });
-
-      svgParts.push(`
-        <text x="${cx}" y="${cy - 12}" text-anchor="middle" font-size="34" font-weight="700"
-          font-family="var(--mono)" fill="var(--text)" letter-spacing="-1">${centerTop}</text>
-        <text x="${cx}" y="${cy + 10}" text-anchor="middle" font-size="10" font-family="var(--mono)"
-          fill="var(--text3)" text-transform="uppercase" letter-spacing="1">${centerBottom}</text>
-        <text x="${cx}" y="${cy + 24}" text-anchor="middle" font-size="8" font-family="var(--mono)"
-          fill="var(--text3)" opacity=".6" letter-spacing=".5">${centerNote}</text>
-      `);
-
-      const LABEL_R = R + strokeW / 2 + 18;
-      const ELBOW_R = R + strokeW / 2 + 38;
-      const TEXT_MARGIN = 10;
-
-      segments.forEach(s => {
-        const p1x = cx + LABEL_R * Math.cos(s.midAngle);
-        const p1y = cy + LABEL_R * Math.sin(s.midAngle);
-        const p2x = cx + ELBOW_R * Math.cos(s.midAngle);
-        const p2y = cy + ELBOW_R * Math.sin(s.midAngle);
-        const goRight = p2x >= cx;
-        const p3x = goRight ? VW - 16 : 16;
-        const anchor = goRight ? 'start' : 'end';
-        const labelX = goRight ? p3x + TEXT_MARGIN : p3x - TEXT_MARGIN;
-
-        svgParts.push(`
-          <line x1="${p1x.toFixed(1)}" y1="${p1y.toFixed(1)}"
-                x2="${p2x.toFixed(1)}" y2="${p2y.toFixed(1)}"
-                stroke="${s.color}" stroke-width="1.2" opacity=".72"/>
-          <line x1="${p2x.toFixed(1)}" y1="${p2y.toFixed(1)}"
-                x2="${p3x}" y2="${p2y.toFixed(1)}"
-                stroke="${s.color}" stroke-width="1.2" opacity=".72"/>
-          <text x="${labelX}" y="${(p2y - 7).toFixed(1)}" text-anchor="${anchor}"
-                font-size="11" font-weight="700" font-family="var(--font)"
-                fill="var(--text)" letter-spacing=".02em">${s.label.toUpperCase()}</text>
-          <text x="${labelX}" y="${(p2y + 6).toFixed(1)}" text-anchor="${anchor}"
-                font-size="10" font-family="var(--mono)" fill="${s.color}">${s.pctStr}
-            <tspan fill="var(--text3)" font-size="9"> · ${s.count} ${s.count === 1 ? itemLabelSingular : itemLabelPlural}</tspan>
-          </text>
-        `);
-      });
-
-      svgEl.innerHTML = svgParts.join('\n');
-
-      svgEl.querySelectorAll('path[data-label]').forEach(path => {
-        path.addEventListener('mouseenter', () => { path.style.strokeWidth = strokeW + 6; });
-        path.addEventListener('mouseleave', () => { path.style.strokeWidth = strokeW; });
-      });
-
-      if (tooltipEl) {
-        svgEl.querySelectorAll('path[data-label]').forEach(path => {
-          path.addEventListener('mousemove', (e) => {
-            const label = path.getAttribute('data-label');
-            const count = Number(path.getAttribute('data-count') || 0);
-            const pct = path.getAttribute('data-pct');
-            const color = path.getAttribute('data-color');
-            const stock = Number(path.getAttribute('data-stock') || 0);
-            const finance = Number(path.getAttribute('data-finance') || 0);
-            const stockColor = stock > 0.0001 ? 'var(--amber)' : stock < -0.0001 ? 'var(--red)' : 'var(--teal)';
-            const financeColor = finance > 0.0001 ? 'var(--amber)' : finance < -0.0001 ? 'var(--red)' : 'var(--teal)';
-            const stockAbs = fmtKg(Math.abs(stock));
-            const financeAbs = moneyShort(Math.abs(finance));
-            const stockSymbol = varSymbol(stock);
-            const financeSymbol = varSymbol(finance);
-            tooltipEl.innerHTML = `
-              <div style="display:flex;align-items:center;gap:7px;margin-bottom:6px">
-                <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0"></span>
-                <span style="font-size:11px;font-weight:700;color:var(--text);text-transform:uppercase;letter-spacing:.05em">${label}</span>
-              </div>
-              <div style="font-size:19px;font-weight:700;color:${color};line-height:1.1">${pct}</div>
-              <div style="font-size:10px;color:var(--text3);margin-top:2px">${count} ${count === 1 ? itemLabelSingular : itemLabelPlural}</div>
-              <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:5px">
-                <div style="display:flex;justify-content:space-between;gap:12px;align-items:baseline">
-                  <span style="font-size:9px;font-family:var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--text3)">Impacto estoque</span>
-                  <span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:${stockColor};font-family:var(--mono);white-space:nowrap">${stockSymbol}<span>${stockAbs}</span></span>
-                </div>
-                <div style="display:flex;justify-content:space-between;gap:12px;align-items:baseline">
-                  <span style="font-size:9px;font-family:var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--text3)">Impacto financeiro</span>
-                  <span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:${financeColor};font-family:var(--mono);white-space:nowrap">${financeSymbol}<span>${financeAbs}</span></span>
-                </div>
-              </div>
-            `;
-            tooltipEl.style.display = 'block';
-            const tw = tooltipEl.offsetWidth || 180, th = tooltipEl.offsetHeight || 110;
-            let tx = e.clientX + 12, ty = e.clientY - 10;
-            if (tx + tw > window.innerWidth - 8) tx = e.clientX - tw - 12;
-            if (ty + th > window.innerHeight - 8) ty = e.clientY - th - 4;
-            tooltipEl.style.left = tx + 'px';
-            tooltipEl.style.top = ty + 'px';
-          });
-          path.addEventListener('mouseleave', () => { tooltipEl.style.display = 'none'; });
-        });
-      }
-    }
-
-    function renderImpactList(container, rows, kind) {
-      if (!container) return;
-      if (!rows.length) {
-        container.innerHTML = '<div style="color:var(--text3);font-size:12px;padding:12px 0">Sem dados</div>';
-        return;
-      }
-
-      const maxAbs = Math.max(...rows.map(r => Math.abs(r.impact || 0)), 1);
-      const hBg = { ok: 'var(--green-bg)', atencao: 'var(--amber-bg)', urgente: 'rgba(249,115,22,.12)', critico: 'var(--red-bg)', none: 'var(--bg3)' };
-      const hColor = { ok: 'var(--green)', atencao: 'var(--amber)', urgente: '#f97316', critico: 'var(--red)', none: 'var(--text3)' };
-      const hBorder = { ok: 'var(--green-border)', atencao: 'var(--amber-border)', urgente: 'rgba(249,115,22,.25)', critico: 'var(--red-border)', none: 'var(--border2)' };
-
-      container.innerHTML = rows.map((row, i) => {
-        const lvl = row.level || row.health?.level || 'none';
-        const lvlMeta = macroLevelMeta[lvl] || macroLevelMeta.none;
-        const impact = num(row.impact || row.custoVar || 0);
-        const pct = Math.round(Math.abs(impact) / maxAbs * 100);
-        const barColor = impact < -0.001 ? 'var(--red)' : impact > 0.001 ? 'var(--amber)' : 'var(--teal)';
-        const valCls = impact < -0.001 ? 'v-neg' : impact > 0.001 ? 'v-pos' : 'v-zero';
-
-        let sub1 = '';
-        let sub2 = '';
-        if (kind === 'central') {
-          const score = row.health?.score;
-          sub1 = score != null ? `Saúde ${score}%` : 'Saúde n/d';
-          const variacao = num(row.variacaoEstoque || row.diff || 0);
-          sub2 = `Est. ${varSymbol(variacao)} ${fmtKg(Math.abs(variacao))}`;
-        } else {
-          sub1 = `${row.occurrences || 1} ${(row.occurrences || 1) === 1 ? 'central' : 'centrais'}`;
-          const variacao = num(row.diff || 0);
-          sub2 = `Δ est. ${varSymbol(variacao)} ${fmtKg(Math.abs(variacao))}`;
-        }
-
-        const rank = i + 1;
-        const title = kind === 'central' ? row.central : row.mat;
-        return `<div class="cbar-row">
-          <div class="cbar-meta">
-            <div style="display:flex;align-items:center;gap:8px;min-width:0">
-              <span style="font-size:10px;font-family:var(--mono);color:var(--text3);width:14px;flex-shrink:0;text-align:right">${rank}</span>
-              <span class="cbar-label cbar-label-wrap" title="${escapeHtml(title)}">${escapeHtml(title)}</span>
-            </div>
-            <span class="cbar-value ${valCls}">${impact !== 0 ? varSymbol(impact) + ' ' + money(Math.abs(impact)) : '—'}</span>
-          </div>
-          <div class="cbar-track">
-            <div class="cbar-fill" style="width:${pct}%;background:${barColor};opacity:.85"></div>
-          </div>
-          <div class="cbar-sub">
-            <span class="health-badge-inline ${lvlMeta.chip}"><i class="ti ${lvlMeta.icon}"></i>${lvlMeta.label}${kind === 'central' && row.health?.score != null ? ` ${row.health.score}%` : ''}</span>
-            <span>${sub1}</span>
-            <span>·</span>
-            <span>${sub2}</span>
-          </div>
-        </div>`;
-      }).join('');
-    }
-
-    (function renderMacroFocus() {
-      const centralItems = enriched.map(r => ({
-        central: r.central,
-        impact: num(r.custoVar || 0),
-        variacaoEstoque: num(r.variacaoEstoque || 0),
-        health: r.health || { level: 'none', score: null }
-      }));
-
-      const centralCounts = levelCountsFrom(centralItems, item => item.health?.level || 'none');
-      const centralClassified = macroLevelOrder.reduce((sum, key) => sum + (centralCounts[key] || 0), 0);
-      renderSummaryChips(document.getElementById('chart-centrais-summary'), centralCounts);
-      const centralImpactByLevel = { ok: { stock: 0, finance: 0 }, atencao: { stock: 0, finance: 0 }, urgente: { stock: 0, finance: 0 }, critico: { stock: 0, finance: 0 }, none: { stock: 0, finance: 0 } };
-      centralItems.forEach(item => {
-        const lvl = item.health?.level || 'none';
-        if (!centralImpactByLevel[lvl]) centralImpactByLevel[lvl] = { stock: 0, finance: 0 };
-        centralImpactByLevel[lvl].stock += num(item.variacaoEstoque || 0);
-        centralImpactByLevel[lvl].finance += num(item.impact || 0);
-      });
-      renderCriticalityDonut(
-        document.getElementById('chart-centrais-donut'),
-        document.getElementById('chart-centrais-tooltip'),
-        centralCounts,
-        centralImpactByLevel,
-        String(centralClassified || 0),
-        'CENTRAIS',
-        'POR CRITICIDADE',
-        'central',
-        'centrais'
-      );
-
-      const centralImpactRows = [...centralItems]
-        .sort((a, b) => Math.abs(b.impact) - Math.abs(a.impact))
-        .slice(0, 5);
-      renderImpactList(document.getElementById('chart-centrais-impact'), centralImpactRows, 'central');
-
-      const allLancsByMat = new Map();
-      const allSapByMat = new Map();
-      enriched.forEach(r => {
-        r.lancsNoPeriodo.forEach(l => {
-          const m = l.material || '—';
-          if (!allLancsByMat.has(m)) allLancsByMat.set(m, []);
-          allLancsByMat.get(m).push(l);
-        });
-        r.sapNoPeriodo.forEach(s => {
-          const m = s.material || '—';
-          if (!allSapByMat.has(m)) allSapByMat.set(m, []);
-          allSapByMat.get(m).push(s);
-        });
-      });
-
-      const materialMap = new Map();
-      enriched.forEach(r => {
-        const lancsByMat = new Map();
-        const sapByMat = new Map();
-        r.lancsNoPeriodo.forEach(l => {
-          const m = l.material || '—';
-          if (!lancsByMat.has(m)) lancsByMat.set(m, []);
-          lancsByMat.get(m).push(l);
-        });
-        r.sapNoPeriodo.forEach(s => {
-          const m = s.material || '—';
-          if (!sapByMat.has(m)) sapByMat.set(m, []);
-          sapByMat.get(m).push(s);
-        });
-        const mats = [...new Set([...lancsByMat.keys(), ...sapByMat.keys()])];
-        mats.forEach(mat => {
-          const lancArr = lancsByMat.get(mat) || [];
-          const sapArr = sapByMat.get(mat) || [];
-          const snap = buildSnapshot({ lancs: lancArr, sap: sapArr });
-          const catKey = detectCatKey(lancArr[0]?.categoria || '') || detectCatFromMat(mat);
-          const custMed = (r.custoMedioPorMat || {})[mat] || 0;
-          const impact = custMed > 0 ? snap.diff * custMed : 0;
-
-          if (!materialMap.has(mat)) {
-            materialMap.set(mat, { mat, diff: 0, impact: 0, occurrences: 0, catKey });
-          }
-          const item = materialMap.get(mat);
-          item.diff += snap.diff;
-          item.impact += impact;
-          item.occurrences += 1;
-          if (!item.catKey && catKey) item.catKey = catKey;
-        });
-      });
-
-      const materialItems = [...materialMap.values()].map(item => {
-        const level = classifyVariation(Math.abs(item.diff), item.catKey, thresholds);
-        return { ...item, level };
-      });
-
-      const materialCounts = levelCountsFrom(materialItems, item => item.level || 'none');
-      const materialClassified = macroLevelOrder.reduce((sum, key) => sum + (materialCounts[key] || 0), 0);
-      renderSummaryChips(document.getElementById('chart-mats-summary'), materialCounts);
-      const materialImpactByLevel = { ok: { stock: 0, finance: 0 }, atencao: { stock: 0, finance: 0 }, urgente: { stock: 0, finance: 0 }, critico: { stock: 0, finance: 0 }, none: { stock: 0, finance: 0 } };
-      materialItems.forEach(item => {
-        const lvl = item.level || 'none';
-        if (!materialImpactByLevel[lvl]) materialImpactByLevel[lvl] = { stock: 0, finance: 0 };
-        materialImpactByLevel[lvl].stock += num(item.diff || 0);
-        materialImpactByLevel[lvl].finance += num(item.impact || 0);
-      });
-      renderCriticalityDonut(
-        document.getElementById('chart-mats-donut'),
-        document.getElementById('chart-mats-tooltip'),
-        materialCounts,
-        materialImpactByLevel,
-        String(materialClassified || 0),
-        'MATERIAIS',
-        'POR CRITICIDADE',
-        'material',
-        'materiais'
-      );
-
-      const materialImpactRows = [...materialItems]
-        .sort((a, b) => Math.abs(b.impact) - Math.abs(a.impact))
-        .slice(0, 5);
-      renderImpactList(document.getElementById('chart-mats-impact'), materialImpactRows, 'material');
-    })();
-
-    // ─── VARIAÇÃO POR CATEGORIA — barras horizontais ──────────────────────
-    const chartCatWrap = document.getElementById('chart-cat-wrap');
-    (function renderCatChart() {
-      const catMap = {};
-      enriched.forEach(r => {
-        const lancsByMat = new Map();
-        const sapByMat   = new Map();
-        r.lancsNoPeriodo.forEach(l => { const m=l.material||'—'; if(!lancsByMat.has(m))lancsByMat.set(m,[]); lancsByMat.get(m).push(l); });
-        r.sapNoPeriodo.forEach(s => { const m=s.material||'—'; if(!sapByMat.has(m))sapByMat.set(m,[]); sapByMat.get(m).push(s); });
-        (r.allMats||[]).forEach(mat => {
-          const lancArr = lancsByMat.get(mat)||[];
-          const catKey  = detectCatKey(lancArr[0]?.categoria||'') || detectCatFromMat(mat) || 'outros';
-          const snap    = buildSnapshot({ lancs: lancArr, sap: sapByMat.get(mat)||[] });
-          const custMed = (r.custoMedioPorMat||{})[mat] || 0;
-          if (!catMap[catKey]) catMap[catKey] = { varEst:0, varCusto:0, mats: new Set() };
-          catMap[catKey].varEst   += snap.diff;
-          catMap[catKey].varCusto += custMed > 0 ? snap.diff * custMed : 0;
-          catMap[catKey].mats.add(mat);
-        });
-      });
-      const catRows = Object.entries(catMap).sort((a,b) => Math.abs(b[1].varCusto)-Math.abs(a[1].varCusto));
-      const catLabel = { aglomerante:'Aglomerante', ferragem:'Ferragem', combustivel:'Combustível', outro:'Outros', outros:'Outros' };
-      // Keep hidden tbody populated for potential downstream use
-      const catTb = document.getElementById('an-macro-cat-body');
-      if (catTb) catTb.innerHTML = catRows.map(([cat, d]) => {
-        const veCls = d.varEst > 0.001 ? 'diff-pos' : d.varEst < -0.001 ? 'diff-neg' : 'diff-zero';
-        const vcCls = d.varCusto > 0.001 ? 'diff-pos' : d.varCusto < -0.001 ? 'diff-neg' : 'diff-zero';
-        const lbl = catLabel[cat] || cat.charAt(0).toUpperCase() + cat.slice(1);
-        return `<tr><td>${escapeHtml(lbl)}</td><td class="${veCls}">${fmtKg(Math.abs(d.varEst))}</td><td class="${vcCls}">${money(Math.abs(d.varCusto))}</td><td>${d.mats.size}</td></tr>`;
-      }).join('');
-
-      if (!chartCatWrap) return;
-      if (!catRows.length) { chartCatWrap.innerHTML = '<div style="color:var(--text3);font-size:12px;padding:20px 0">Sem dados</div>'; return; }
-
-      const maxAbs = Math.max(...catRows.map(([,d]) => Math.abs(d.varCusto)), 1);
-      // Palette for categories
-      const catColors = ['var(--accent)', 'var(--purple)', 'var(--teal)', 'var(--amber)', 'var(--green)'];
-      chartCatWrap.innerHTML = catRows.map(([cat, d], i) => {
-        const lbl = catLabel[cat] || cat.charAt(0).toUpperCase() + cat.slice(1);
-        const pct = Math.round(Math.abs(d.varCusto) / maxAbs * 100);
-        const barColor = d.varCusto < -0.001 ? 'var(--red)' : d.varCusto > 0.001 ? 'var(--amber)' : 'var(--teal)';
-        const valCls = d.varCusto < -0.001 ? 'v-neg' : d.varCusto > 0.001 ? 'v-pos' : 'v-zero';
-        return `<div class="cbar-row">
-          <div class="cbar-meta">
-            <span class="cbar-label">${escapeHtml(lbl)}</span>
-            <span class="cbar-value ${valCls}">${d.varCusto !== 0 ? varSymbol(d.varCusto) + ' ' + money(Math.abs(d.varCusto)) : '—'}</span>
-          </div>
-          <div class="cbar-track">
-            <div class="cbar-fill" style="width:${pct}%;background:${barColor};opacity:.85"></div>
-          </div>
-          <div class="cbar-sub">
-            <span>${d.mats.size} materiais</span>
-            <span class="${d.varEst < -0.001 ? 'v-neg' : d.varEst > 0.001 ? 'v-pos' : 'v-zero'}">Est. ${varSymbol(d.varEst)} ${fmtKg(Math.abs(d.varEst))}</span>
-          </div>
-        </div>`;
-      }).join('');
-    })();
-
-    // ─── RANKINGS DE CRITICIDADE — 3 colunas ─────────────────────────────
-    (function renderCriticalityRankings() {
-      // Build a flat list: one entry per (central × material), enriched with level + regional + trend
-      const rankItems = [];
-      const midDate = new Date((dtIni.getTime() + dtFim.getTime()) / 2); // mid-point of selected period
-
-      enriched.forEach(r => {
-        const lancsByMat = new Map();
-        const sapByMat   = new Map();
-        r.lancsNoPeriodo.forEach(l => { const m=l.material||'—'; if(!lancsByMat.has(m))lancsByMat.set(m,[]); lancsByMat.get(m).push(l); });
-        r.sapNoPeriodo.forEach(s => { const m=s.material||'—'; if(!sapByMat.has(m))sapByMat.set(m,[]); sapByMat.get(m).push(s); });
-
-        // resolve regional using the same normalised lookup the rest of the system uses
-        const _fIdx    = getFilialLookupIndex();
-        const _fRec    = _fIdx.exact.get(normalizeText(r.central));
-        const regional = (_fRec?.regional || '').trim() || '—';
-
-        (r.allMats||[]).forEach(mat => {
-          const lancArr = lancsByMat.get(mat)||[];
-          const sapArr  = sapByMat.get(mat)||[];
-          const prev    = getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni });
-          const snap    = buildSnapshot({ lancs: lancArr, sap: sapArr, initialStockOverride: prev?.value, initialDateLabelOverride: prev?.dtLabel });
-          const custMed = (r.custoMedioPorMat||{})[mat] || 0;
-          const custoVar= custMed > 0 ? snap.diff * custMed : 0;
-          const catKey  = detectCatKey(lancArr[0]?.categoria||'') || detectCatFromMat(mat);
-          const lvl     = classifyVariation(Math.abs(snap.diff), catKey, thresholds);
-          if (lvl === 'bom') return;
-
-          // ── Tendência: compara 1ª metade vs 2ª metade do período ──
-          // Divide lançamentos pelo ponto médio e compara |diff| de cada metade
-          const lancFirst  = lancArr.filter(l => { const d = parseDate(l.dtLanc); return d && d <= midDate; });
-          const lancSecond = lancArr.filter(l => { const d = parseDate(l.dtLanc); return d && d > midDate; });
-          const sapFirst   = sapArr.filter(s => { const d = parseDate(s.dtLanc); return d && d <= midDate; });
-          const sapSecond  = sapArr.filter(s => { const d = parseDate(s.dtLanc); return d && d > midDate; });
-
-          let trend = 'stable'; // 'improving' | 'worsening' | 'stable'
-          if (lancFirst.length >= 2 && lancSecond.length >= 2) {
-            const snapA = buildSnapshot({ lancs: lancFirst, sap: sapFirst });
-            const snapB = buildSnapshot({ lancs: lancSecond, sap: sapSecond });
-            const absA  = Math.abs(snapA.diff);
-            const absB  = Math.abs(snapB.diff);
-            // Threshold: at least 5% relative change to avoid noise
-            if (absA > 0.001 || absB > 0.001) {
-              const maxHalf = Math.max(absA, absB, 1);
-              const delta   = (absB - absA) / maxHalf;
-              if (delta > 0.08)       trend = 'worsening';
-              else if (delta < -0.08) trend = 'improving';
-            }
-          }
-
-          rankItems.push({ mat, central: r.central, regional, diff: snap.diff, custoVar, catKey, level: lvl, trend });
-        });
-      });
-
-      // Sort by |diff| descending within each level
-      const byLevel = { critico: [], urgente: [], atencao: [] };
-      rankItems.forEach(item => { if (byLevel[item.level]) byLevel[item.level].push(item); });
-      ['critico','urgente','atencao'].forEach(lvl => {
-        byLevel[lvl].sort((a,b) => a.diff - b.diff); // maior desfalque (mais negativo) → maior sobra
-      });
-
-      // Helper: classify financial impact label (relative to all items in this level)
-      function impactLabel(absVal, maxVal) {
-        if (maxVal <= 0) return { label: '—', cls: 'crank-impact-baixo', pct: 0 };
-        const pct = Math.round(absVal / maxVal * 100);
-        if (pct >= 70) return { label: 'ALTO', cls: 'crank-impact-alto', pct };
-        if (pct >= 35) return { label: 'MÉDIO', cls: 'crank-impact-medio', pct };
-        return { label: 'BAIXO', cls: 'crank-impact-baixo', pct };
-      }
-
-      // Trend icon + tooltip
-      const trendMeta = {
-        worsening: { icon: 'ti-trending-up',   cls: 'crank-trend-worse',    tip: 'Piorando no período' },
-        improving: { icon: 'ti-trending-down',  cls: 'crank-trend-better',   tip: 'Melhorando no período' },
-        stable:    { icon: 'ti-minus',          cls: 'crank-trend-stable',   tip: 'Estável no período' }
-      };
-
-      // Copy-to-clipboard helper: builds formatted text for a level list
-      function buildCopyText(levelLabel, items) {
-        if (!items.length) return `${levelLabel}\nNenhum material.\n`;
-        const lines = items.slice(0, 15).map((item, idx) => {
-          const trendStr = item.trend === 'worsening' ? '↑ Piorando' : item.trend === 'improving' ? '↓ Melhorando' : '→ Estável';
-          const varStr   = `${item.diff < 0 ? '-' : '+'}${fmtKg(Math.abs(item.diff))}`;
-          return `${idx+1}. ${item.mat} | ${item.regional} › ${item.central} | Var: ${varStr} | ${trendStr}`;
-        });
-        return `${levelLabel} (${items.length} material${items.length > 1 ? 'is' : ''})\n${lines.join('\n')}\n`;
-      }
-
-      // Expose copy function globally (called from onclick)
-      window._crankCopy = function(lvl) {
-        const labels = { critico: '🔴 CRÍTICO', urgente: '🟠 URGENTE', atencao: '🟡 ATENÇÃO' };
-        const text = buildCopyText(labels[lvl] || lvl, byLevel[lvl] || []);
-        navigator.clipboard.writeText(text).then(() => {
-          toast('Lista copiada para a área de transferência', 'success');
-        }).catch(() => {
-          // fallback for older browsers
-          const ta = document.createElement('textarea');
-          ta.value = text;
-          ta.style.position = 'fixed';
-          ta.style.opacity = '0';
-          document.body.appendChild(ta);
-          ta.select();
-          document.execCommand('copy');
-          document.body.removeChild(ta);
-          toast('Lista copiada para a área de transferência', 'success');
-        });
-      };
-
-      function renderRankList(containerId, countId, items) {
-        const body  = document.getElementById(containerId);
-        const badge = document.getElementById(countId);
-        if (!body) return;
-        if (badge) badge.textContent = items.length ? `${items.length} material${items.length > 1 ? 'is' : ''}` : '0';
-        if (!items.length) {
-          body.innerHTML = '<div class="crank-empty"><i class="ti ti-check"></i><span>Nenhum material</span></div>';
-          return;
-        }
-        const maxAbs = Math.max(...items.map(i => Math.abs(i.custoVar)), 1);
-        body.innerHTML = items.slice(0, 15).map((item, idx) => {
-          const varCls  = item.diff < 0 ? 'neg' : 'pos';
-          const imp     = impactLabel(Math.abs(item.custoVar), maxAbs);
-          const rank    = idx + 1;
-          const tm      = trendMeta[item.trend] || trendMeta.stable;
-          return `<div class="crank-row">
-            <div class="crank-row-left">
-              <div class="crank-row-mat" title="${escapeHtml(item.mat)}">
-                <span style="font-size:9.5px;font-family:var(--mono);color:var(--text3);margin-right:5px">${rank}.</span>${escapeHtml(item.mat)}
-                <span class="crank-trend ${tm.cls}" title="${tm.tip}"><i class="ti ${tm.icon}"></i></span>
-              </div>
-              <div class="crank-row-meta">
-                <span>${escapeHtml(item.regional)}</span>
-                <span class="sep">·</span>
-                <span>${escapeHtml(item.central)}</span>
-              </div>
-            </div>
-            <div class="crank-row-right">
-              <span class="crank-row-var ${varCls}">${varSymbol(item.diff)} ${fmtKg(Math.abs(item.diff))}</span>
-              ${item.custoVar !== 0 ? `
-              <div class="crank-impact-bar-wrap">
-                <div class="crank-impact-bar-fill" style="width:${imp.pct}%"></div>
-              </div>
-              <span class="crank-impact-label ${imp.cls}">↑${imp.label}</span>` : ''}
-            </div>
-          </div>`;
-        }).join('');
-      }
-
-      renderRankList('crank-critico-body', 'crank-critico-count', byLevel.critico);
-      renderRankList('crank-urgente-body', 'crank-urgente-count', byLevel.urgente);
-      renderRankList('crank-atencao-body', 'crank-atencao-count', byLevel.atencao);
-
-      // Expose data globally for the report generator
-      window._rankByLevel = {
-        critico: byLevel.critico.slice(),
-        urgente: byLevel.urgente.slice(),
-        atencao: byLevel.atencao.slice()
-      };
-
-      // Populate hidden export tbody (kept for potential CSV export)
-      const custMatsTb = document.getElementById('an-macro-custo-mats-body');
-      if (custMatsTb) {
-        const allSorted = [...byLevel.critico, ...byLevel.urgente, ...byLevel.atencao];
-        custMatsTb.innerHTML = allSorted.map(m => `<tr><td>${escapeHtml(m.level)}</td><td>${escapeHtml(m.regional)}</td><td>${escapeHtml(m.central)}</td><td>${escapeHtml(m.mat)}</td><td>${fmtKg(m.diff)}</td><td>${money(Math.abs(m.custoVar))}</td><td>${m.trend}</td></tr>`).join('');
-      }
-    })();
-
   }
 
   // ── Breakdown popover: portal pattern ──────────────────────
@@ -14816,198 +14688,6 @@ function debounce(fn, delay = 120) {
       healthScore:  card.dataset.healthScore || ''
     }));
 
-    // Ordered by worst criticality then central name
-    const _hOrdRes = { critico: 0, urgente: 1, atencao: 2, ok: 3, none: 4 };
-    const centralRowsSorted = [...window._anResumoCentraisData].sort((a, b) => {
-      const la = _hOrdRes[a.healthLevel] ?? 4;
-      const lb = _hOrdRes[b.healthLevel] ?? 4;
-      if (la !== lb) return la - lb;
-      return a.central.localeCompare(b.central, 'pt-BR');
-    });
-
-    window._renderResumoCentrais = function(data) {
-      const tbEl = document.getElementById('an-macro-body');
-      if (!tbEl) return;
-      const cf = colFilters['an-resumo-centrais'];
-      const metaCf = colFilterMeta['an-resumo-centrais'];
-      // Filter using display fields
-      const filtered = data.filter(rec => {
-        if (!cf) return true;
-        for (const [colIdx, activeSet] of Object.entries(cf)) {
-          if (!activeSet || !activeSet.size) continue;
-          const field = metaCf.fields[Number(colIdx)];
-          if (!field) continue;
-          const cellVal = normalizeText(String(rec[field] ?? '—'));
-          if (!activeSet.has(cellVal)) return false;
-        }
-        return true;
-      });
-
-      const filteredCentralSet = new Set(filtered.map(r => r.central));
-      const filteredRows = centralRowsSorted.filter(r => filteredCentralSet.has(r.central));
-
-      if (!filteredRows.length) {
-        tbEl.innerHTML = '<tr><td colspan="5"><div class="empty-state"><i class="ti ti-filter-off"></i><p>Nenhum resultado com os filtros ativos.</p></div></td></tr>';
-        return;
-      }
-
-      const hClsMap = { critico:'hb-critico', urgente:'hb-urgente', atencao:'hb-atencao', ok:'hb-ok', none:'hb-none' };
-      const hIconMap = { critico:'ti-flame', urgente:'ti-alert-circle', atencao:'ti-alert-triangle', ok:'ti-heartbeat', none:'ti-minus' };
-      const hLabelMap = { critico:'CRÍTICO', urgente:'URGENTE', atencao:'ATENÇÃO', ok:'SAUDÁVEL', none:'—' };
-
-      tbEl.innerHTML = filteredRows.map(r => {
-        const diff = parseFloat(r.variacaoKg || 0);
-        const custo = parseFloat(r.custoVar || 0);
-        const diffCls = diff < 0 ? 'var-cell-neg' : diff > 0 ? 'var-cell-pos' : 'var-cell-zero';
-        const custoCls = custo < 0 ? 'diff-neg' : custo > 0 ? 'diff-pos' : 'diff-zero';
-        const diffLabel = diff < 0 ? 'Desfalque' : diff > 0 ? 'Sobra' : 'Neutro';
-        const diffIcon = diff < 0 ? 'ti-trending-down' : diff > 0 ? 'ti-trending-up' : 'ti-minus';
-        const custo_html = custo !== 0
-          ? `<span class="${custoCls}" style="display:inline-flex;align-items:center;gap:4px"><i class="ti ${custo < 0 ? 'ti-trending-down' : 'ti-trending-up'}"></i>${money(Math.abs(custo))}</span>`
-          : '<span style="color:var(--text3)">—</span>';
-        const lvl = r.healthLevel || 'none';
-        const scoreStr = r.healthScore !== '' ? ` ${r.healthScore}%` : '';
-        const healthHtml = lvl !== 'none'
-          ? `<span class="health-badge-inline ${hClsMap[lvl]}"><i class="ti ${hIconMap[lvl]}"></i>${hLabelMap[lvl]}${scoreStr}</span>`
-          : '<span style="color:var(--text3);font-size:11px">—</span>';
-        return `<tr>
-          <td class="td-mono" style="font-weight:600">${escapeHtml(r.central)}</td>
-          <td class="td-muted">${escapeHtml(r.regional)}</td>
-          <td class="td-mono ${diffCls}" style="white-space:nowrap">
-            <span style="display:inline-flex;align-items:center;gap:4px"><i class="ti ${diffIcon}" style="font-size:11px"></i>${diffLabel}: ${fmtKg(Math.abs(diff))}</span>
-          </td>
-          <td class="td-mono" style="white-space:nowrap">${custo_html}</td>
-          <td style="text-align:center">${healthHtml}</td>
-        </tr>`;
-      }).join('');
-    };
-    window._renderResumoCentrais(window._anResumoCentraisData);
-    const _tblCentrais = document.getElementById('an-macro-table');
-    makeResizable(_tblCentrais);
-    injectColFilterButtons(_tblCentrais, 'an-resumo-centrais');
-
-    // ─── RESUMO POR REGIONAL (dados do card de regional) ─────────────────
-    const regionalSummaryRows = groupOrder.map(reg => {
-      const cards = groupMap.get(reg);
-      let totalDiffR = 0, totalCustoR = 0;
-      const aggR = { critico: 0, urgente: 0, atencao: 0, bom: 0 };
-      let scoreSum = 0, scoreCount = 0;
-      cards.forEach(c => {
-        totalDiffR  += parseFloat(c.dataset.centralDiff   || 0);
-        totalCustoR += parseFloat(c.dataset.custoVariacao || 0);
-        const lvl = c.dataset.healthLevel;
-        if      (lvl === 'critico') aggR.critico++;
-        else if (lvl === 'urgente') aggR.urgente++;
-        else if (lvl === 'atencao') aggR.atencao++;
-        else if (lvl === 'ok')      aggR.bom++;
-        const sc = parseFloat(c.dataset.healthScore);
-        if (!isNaN(sc)) { scoreSum += sc; scoreCount++; }
-      });
-      const avgScoreR = scoreCount > 0 ? Math.round(scoreSum / scoreCount) : null;
-      const domLvlR = aggR.critico ? 'critico' : aggR.urgente ? 'urgente' : aggR.atencao ? 'atencao' : aggR.bom ? 'ok' : 'none';
-      return { regional: reg || '—', nCentralis: cards.length, totalDiff: totalDiffR, totalCusto: totalCustoR, agg: aggR, avgScore: avgScoreR, domLevel: domLvlR };
-    });
-
-    // Sort by worst level then regional name
-    const regRowsSorted = [...regionalSummaryRows].sort((a, b) => {
-      const la = _hOrdRes[a.domLevel] ?? 4;
-      const lb = _hOrdRes[b.domLevel] ?? 4;
-      if (la !== lb) return la - lb;
-      if (!a.regional || a.regional === '—') return 1;
-      if (!b.regional || b.regional === '—') return -1;
-      return a.regional.localeCompare(b.regional, 'pt-BR');
-    });
-
-    window._anResumoRegionaisData = regRowsSorted.map(r => ({
-      regional:      r.regional,
-      nCentralis:    String(r.nCentralis),
-      variacaoKg:    String(r.totalDiff),
-      custoVar:      String(r.totalCusto),
-      critico:       String(r.agg.critico),
-      urgente:       String(r.agg.urgente),
-      atencao:       String(r.agg.atencao),
-      bom:           String(r.agg.bom),
-      saude:         r.avgScore !== null ? r.avgScore + '% · ' + r.domLevel.toUpperCase() : r.domLevel.toUpperCase(),
-      domLevel:      r.domLevel,
-      avgScore:      r.avgScore !== null ? String(r.avgScore) : ''
-    }));
-
-    window._renderResumoRegionais = function(data) {
-      const tbEl = document.getElementById('an-macro-body-regionais');
-      if (!tbEl) return;
-      const cf = colFilters['an-resumo-regionais'];
-      const metaCf = colFilterMeta['an-resumo-regionais'];
-      const filtered = data.filter(rec => {
-        if (!cf) return true;
-        for (const [colIdx, activeSet] of Object.entries(cf)) {
-          if (!activeSet || !activeSet.size) continue;
-          const field = metaCf.fields[Number(colIdx)];
-          if (!field) continue;
-          const cellVal = normalizeText(String(rec[field] ?? '—'));
-          if (!activeSet.has(cellVal)) return false;
-        }
-        return true;
-      });
-
-      const filteredRegSet = new Set(filtered.map(r => r.regional));
-      const filteredRows = regRowsSorted.filter(r => filteredRegSet.has(r.regional));
-
-      if (!filteredRows.length) {
-        tbEl.innerHTML = '<tr><td colspan="5"><div class="empty-state"><i class="ti ti-filter-off"></i><p>Nenhum resultado com os filtros ativos.</p></div></td></tr>';
-        return;
-      }
-
-      const hClsMap  = { critico:'hb-critico', urgente:'hb-urgente', atencao:'hb-atencao', ok:'hb-ok', none:'hb-none' };
-      const hIconMap = { critico:'ti-flame', urgente:'ti-alert-circle', atencao:'ti-alert-triangle', ok:'ti-heartbeat', none:'ti-minus' };
-      const hLabelMap = { critico:'CRÍTICO', urgente:'URGENTE', atencao:'ATENÇÃO', ok:'SAUDÁVEL', none:'—' };
-      const chipStyle = {
-        critico: 'background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)',
-        urgente: 'background:rgba(249,115,22,0.10);color:#f97316;border:1px solid rgba(249,115,22,0.22)',
-        atencao: 'background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border)',
-        bom:     'background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)'
-      };
-
-      tbEl.innerHTML = filteredRows.map(r => {
-        const diff = r.totalDiff;
-        const custo = r.totalCusto;
-        const diffCls = diff < 0 ? 'var-cell-neg' : diff > 0 ? 'var-cell-pos' : 'var-cell-zero';
-        const custoCls = custo < 0 ? 'diff-neg' : custo > 0 ? 'diff-pos' : 'diff-zero';
-        const diffLabel = diff < 0 ? 'Desfalque' : diff > 0 ? 'Sobra' : 'Neutro';
-        const diffIcon = diff < 0 ? 'ti-trending-down' : diff > 0 ? 'ti-trending-up' : 'ti-minus';
-        const custo_html = custo !== 0
-          ? `<span class="${custoCls}" style="display:inline-flex;align-items:center;gap:4px"><i class="ti ${custo < 0 ? 'ti-trending-down' : 'ti-trending-up'}"></i>${money(Math.abs(custo))}</span>`
-          : '<span style="color:var(--text3)">—</span>';
-
-        // Count chips
-        const chips = [
-          r.agg.critico ? `<span style="display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:700;${chipStyle.critico};border-radius:4px;padding:1px 6px"><i class="ti ti-flame" style="font-size:10px"></i>${r.agg.critico} crítico</span>` : '',
-          r.agg.urgente ? `<span style="display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:700;${chipStyle.urgente};border-radius:4px;padding:1px 6px"><i class="ti ti-alert-circle" style="font-size:10px"></i>${r.agg.urgente} urgente</span>` : '',
-          r.agg.atencao ? `<span style="display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:700;${chipStyle.atencao};border-radius:4px;padding:1px 6px"><i class="ti ti-alert-triangle" style="font-size:10px"></i>${r.agg.atencao} atenção</span>` : '',
-          r.agg.bom     ? `<span style="display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:700;${chipStyle.bom};border-radius:4px;padding:1px 6px"><i class="ti ti-circle-check" style="font-size:10px"></i>${r.agg.bom} bom</span>` : ''
-        ].filter(Boolean).join(' ');
-
-        const lvl = r.domLevel || 'none';
-        const scoreStr = r.avgScore !== null ? ` ${r.avgScore}%` : '';
-        const healthHtml = lvl !== 'none'
-          ? `<span class="health-badge-inline ${hClsMap[lvl]}"><i class="ti ${hIconMap[lvl]}"></i>Saúde:${scoreStr} · ${hLabelMap[lvl]}</span>`
-          : '<span style="color:var(--text3);font-size:11px">—</span>';
-
-        return `<tr>
-          <td class="td-mono" style="font-weight:700">${escapeHtml(r.regional)}</td>
-          <td class="td-mono" style="color:var(--accent);text-align:center">${r.nCentralis}</td>
-          <td class="td-mono ${diffCls}" style="white-space:nowrap">
-            <span style="display:inline-flex;align-items:center;gap:4px"><i class="ti ${diffIcon}" style="font-size:11px"></i>${diffLabel}: ${fmtKg(Math.abs(diff))}</span>
-          </td>
-          <td class="td-mono" style="white-space:nowrap">${custo_html}</td>
-          <td style="white-space:nowrap">${chips}</td>
-          <td style="text-align:center">${healthHtml}</td>
-        </tr>`;
-      }).join('');
-    };
-    window._renderResumoRegionais(window._anResumoRegionaisData);
-    const _tblRegionais = document.getElementById('an-macro-table-regionais');
-    makeResizable(_tblRegionais);
-    injectColFilterButtons(_tblRegionais, 'an-resumo-regionais');
 
     // Populate filter dropdowns with available centrais e materiais
     populateMicroFilterOptions(results);
@@ -15859,6 +15539,628 @@ function debounce(fn, delay = 120) {
   }
 
   document.addEventListener('DOMContentLoaded', init);
+
+  // Função auxiliar: retorna o índice de saídas por central (lazy-built)
+  function getSaidasIndex() {
+    ensureSaidasIndex();
+    return { byCentral: _saidasByCentral };
+  }
+
+  // Expõe helpers internos para módulos externos (ex: Inventário)
+  window._inv_helpers = {
+    getLancIndex,
+    getSapIndex,
+    getSaidasIndex,
+    getPrePeriodLaunchStock,
+    getFilialLookupIndex,
+    normalizeText,
+    parseDate,
+    localISODate,
+    dateCmp,
+    num,
+    state: () => state,
+
+    // Funções de formatação e UI partilhadas com o módulo Inventário
+    fmtKg,
+    varClass,
+    varSymbol,
+    money,
+    escapeHtml,
+    buildAnaliticoDetailBreakdown,
+
+    // Calcula custo médio ponderado por material para uma central/período,
+    // usando EXATAMENTE a mesma lógica do Analítico:
+    //   1ª fonte: Saídas (Σ valorTotal / Σ peso) no período
+    //   fallback: SAP no período
+    // Retorna um objeto { [material]: custoMedio }
+    getCustoMedioPorMat(central, dtIni, dtFim) {
+      ensureSaidasIndex();
+      if (!_sapIndexBuilt) _buildSapIndex();
+      const parseD = window._inv_helpers.parseDate;
+      const toNum  = window._inv_helpers.num;
+
+      // ── 1. Saídas ──────────────────────────────────────────
+      const saidasDaCentral = (_saidasByCentral.get(central) || [])
+        .filter(s => { const d = parseD(s.dtEmissao); return d && d >= dtIni && d <= dtFim; });
+
+      const _custoPorMat = {};
+      const _pesoPorMat  = {};
+      saidasDaCentral.forEach(s => {
+        const mat = s.material || '—';
+        _custoPorMat[mat] = (_custoPorMat[mat] || 0) + toNum(s.valorTotal);
+        _pesoPorMat[mat]  = (_pesoPorMat[mat]  || 0) + Math.abs(toNum(s.peso));
+      });
+
+      const custoMedioPorMat = {};
+      Object.keys(_custoPorMat).forEach(mat => {
+        custoMedioPorMat[mat] = _pesoPorMat[mat] > 0 ? _custoPorMat[mat] / _pesoPorMat[mat] : 0;
+      });
+
+      // ── 2. Fallback: SAP (materiais sem custo nas Saídas) ──
+      const sapDaCentral = (_sapByCentral.get(central) || [])
+        .filter(r => { const d = parseD(r.dtLanc); return d && d >= dtIni && d <= dtFim; });
+
+      sapDaCentral.forEach(s => {
+        const mat = s.material || '—';
+        if (custoMedioPorMat[mat]) return; // já coberto pelas Saídas
+        const p  = Math.abs(toNum(s.peso));
+        if (!p) return;
+        const vt = toNum(s.valorTotal);
+        const cu = toNum(s.custoUnit);
+        const valor = vt !== 0 ? Math.abs(vt) : (cu !== 0 ? Math.abs(cu) * p : 0);
+        if (!valor) return;
+        const key = '_sap_' + mat;
+        if (!_custoPorMat[key]) { _custoPorMat[key] = 0; _pesoPorMat[key] = 0; }
+        _custoPorMat[key] += valor;
+        _pesoPorMat[key]  += p;
+      });
+      Object.keys(_custoPorMat).forEach(key => {
+        if (!key.startsWith('_sap_')) return;
+        const mat = key.slice(5);
+        if (custoMedioPorMat[mat]) return;
+        custoMedioPorMat[mat] = _pesoPorMat[key] > 0 ? _custoPorMat[key] / _pesoPorMat[key] : 0;
+      });
+
+      return custoMedioPorMat;
+    }
+  };
+})();
+
+// ═══════════════════════════════════════════════════════════
+// MÓDULO: INVENTÁRIO
+// ═══════════════════════════════════════════════════════════
+(function() {
+  let invRows = [];
+  let invFiltered = [];
+  let invJustificativas = {};
+
+  function fmt(n, dec=0) {
+    if (n == null || isNaN(n)) return '—';
+    return n.toLocaleString('pt-BR', {minimumFractionDigits:dec, maximumFractionDigits:dec});
+  }
+  function fmtR(n) {
+    if (n == null || isNaN(n)) return '—';
+    return 'R$ ' + n.toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
+  }
+
+  // ── Sorting state ─────────────────────────────────────────
+  let invSortCol = 'custo', invSortDir = 'desc';
+
+  window.invSortBy = function(col) {
+    if (invSortCol === col) {
+      invSortDir = invSortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+      invSortCol = col;
+      invSortDir = 'desc';
+    }
+    document.querySelectorAll('.inv-data-table th').forEach(th => {
+      th.classList.remove('sort-asc','sort-desc');
+      if (th.dataset.col === col) th.classList.add(invSortDir === 'asc' ? 'sort-asc' : 'sort-desc');
+    });
+    invFiltered.sort((a,b) => {
+      const av = a[col] ?? '', bv = b[col] ?? '';
+      const cmp = typeof av === 'string' ? av.localeCompare(bv,'pt-BR') : (Number(av)||0)-(Number(bv)||0);
+      return invSortDir === 'asc' ? cmp : -cmp;
+    });
+    invRenderTabela();
+  };
+
+  window.invQuickSemana = function() {
+    const hoje = new Date();
+    const dow = hoje.getDay();
+    const diff = dow === 0 ? 6 : dow - 1;
+    const ini = new Date(hoje); ini.setDate(hoje.getDate() - diff);
+    const fim = new Date(ini); fim.setDate(ini.getDate() + 6);
+    const toISO = d => d.toISOString().substring(0,10);
+    // Update hidden inputs directly (cal-picker reads from them for display)
+    const iniEl = document.getElementById('inv-dt-ini');
+    const fimEl = document.getElementById('inv-dt-fim');
+    if (iniEl) iniEl.value = toISO(ini);
+    if (fimEl) fimEl.value = toISO(fim);
+    // Update label on trigger button
+    const label = document.getElementById('inv-cal-label');
+    if (label) {
+      const fmtD = d => d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});
+      label.textContent = fmtD(ini) + ' — ' + fmtD(fim);
+    }
+    const trigger = document.getElementById('inv-cal-trigger');
+    if (trigger) trigger.classList.add('has-value');
+    document.querySelectorAll('[onclick^="calQuick"][onclick*="\'inv\'"]').forEach(b=>b.classList.remove('active'));
+    document.getElementById('inv-chip-semana')?.classList.add('active');
+  };
+
+  window.invSetPeriodoType = function() {
+    const tipo = document.getElementById('inv-tipo-periodo')?.value;
+    if (tipo === 'mensal') { if(window.calQuickMesAtual) window.calQuickMesAtual('inv'); }
+    else { window.invQuickSemana(); }
+  };
+
+  window.invSetPeriodo = function() {
+    window.invSetPeriodoType?.();
+  };
+
+  window.invGerar = function() {
+    const iniVal = document.getElementById('inv-dt-ini')?.value;
+    const fimVal = document.getElementById('inv-dt-fim')?.value;
+    if (!iniVal || !fimVal) { toast('Defina o período antes de gerar.', 'error'); return; }
+
+    const h = window._inv_helpers;
+    if (!h) { toast('Sistema não iniciado. Aguarde e tente novamente.', 'error'); return; }
+
+    const { getLancIndex, getSapIndex, getCustoMedioPorMat, getPrePeriodLaunchStock, getFilialLookupIndex, normalizeText, parseDate, localISODate, dateCmp, num, state: getState } = h;
+    const state = getState();
+
+    const dtIni = new Date(iniVal + 'T00:00:00');
+    const dtFim = new Date(fimVal + 'T23:59:59');
+
+    const { byCentral: lancByCentral } = getLancIndex();
+    const { byCentral: sapByCentral }  = getSapIndex();
+    const fIdx = getFilialLookupIndex();
+
+    const allCentrals = new Set([...lancByCentral.keys(), ...sapByCentral.keys()]);
+
+    if (!allCentrals.size) {
+      toast('Nenhum dado encontrado. Importe Lançamentos e/ou SAP primeiro.', 'error');
+      return;
+    }
+
+    const rowMap = new Map();
+
+    allCentrals.forEach(central => {
+      const fRec    = fIdx.exact.get(normalizeText(central));
+      const regional = (fRec?.regional || '').trim() || '—';
+
+      const lancAll = lancByCentral.get(central) || [];
+      const byMat = new Map();
+      lancAll.forEach(r => {
+        const mat = r.material || '—';
+        if (!byMat.has(mat)) byMat.set(mat, []);
+        byMat.get(mat).push(r);
+      });
+
+      const sapAll = sapByCentral.get(central) || [];
+      const sapPer = sapAll.filter(r => {
+        const d = parseDate(r.dtLanc);
+        return d && d >= dtIni && d <= dtFim;
+      });
+      const sapByMat = new Map();
+      sapPer.forEach(r => {
+        const mat = r.material || '—';
+        if (!sapByMat.has(mat)) sapByMat.set(mat, []);
+        sapByMat.get(mat).push(r);
+      });
+
+      const mats = new Set([...byMat.keys(), ...sapByMat.keys()]);
+
+      // Custo médio por material usando EXATAMENTE a mesma lógica do Analítico:
+      // Saídas primeiro (Σ valorTotal / Σ peso), fallback SAP.
+      // Calculado uma única vez por central para eficiência.
+      const custoMedioPorMat = getCustoMedioPorMat(central, dtIni, dtFim);
+
+      mats.forEach(mat => {
+        const k = central + '|||' + mat;
+        const lancArr = (byMat.get(mat) || []).slice().sort((a,b) => {
+          const da = parseDate(a.dtLanc), db = parseDate(b.dtLanc);
+          return ((da||new Date(0)) - (db||new Date(0)));
+        });
+        const sapArr = sapByMat.get(mat) || [];
+
+        const preRes = getPrePeriodLaunchStock({ central, material: mat, dtIni });
+        // Se não há lançamento anterior ao período, usa o primeiro lançamento
+        // dentro do período como Est. Inicial (soma do primeiro dia), igual ao
+        // comportamento do Dashboard Analítico com initialStockOverride.
+        let estoqueIni;
+        if (preRes != null) {
+          estoqueIni = preRes.value;
+        } else {
+          // Pega lançamentos dentro do período e soma o primeiro dia
+          const lancNoPeriodo = lancArr.filter(r => { const d = parseDate(r.dtLanc); return d && d >= dtIni && d <= dtFim; });
+          if (lancNoPeriodo.length) {
+            const firstDKey = (() => { const d = parseDate(lancNoPeriodo[0].dtLanc); return d ? localISODate(d) : null; })();
+            estoqueIni = firstDKey
+              ? lancNoPeriodo.filter(r => { const d = parseDate(r.dtLanc); return d && localISODate(d) === firstDKey; }).reduce((s, r) => s + num(r.peso), 0)
+              : 0;
+          } else {
+            estoqueIni = 0;
+          }
+        }
+
+        const lancAteFim = lancArr.filter(r => { const d = parseDate(r.dtLanc); return d && d <= dtFim; });
+        let estoqueFimReal = estoqueIni;
+        if (lancAteFim.length) {
+          const lastD = parseDate(lancAteFim[lancAteFim.length-1].dtLanc);
+          if (lastD) {
+            const lastISO = lastD.toISOString().substring(0,10);
+            let tot = 0;
+            for (let i = lancAteFim.length-1; i >= 0; i--) {
+              const d = parseDate(lancAteFim[i].dtLanc);
+              if (d && d.toISOString().substring(0,10) === lastISO) tot += num(lancAteFim[i].peso);
+              else break;
+            }
+            estoqueFimReal = tot;
+          }
+        }
+
+        // Volumes de entradas/saídas ainda vêm do SAP (movimentos físicos).
+        let entradasKg = 0, saidasKg = 0;
+        const entEntries = [], saiEntries = [];
+        sapArr.forEach(r => {
+          const p = num(r.peso);
+          const cod = String(r.movimento || '—').trim();
+          const ref = String(r.ref || r.documento || '—').trim();
+          const usr = String(r.usuario || '—').trim();
+          if (p >= 0) {
+            entradasKg += p;
+            entEntries.push([cod, p, ref, usr]);
+          } else {
+            saidasKg += Math.abs(p);
+            saiEntries.push([cod, p, ref, usr]);
+          }
+        });
+
+        // Custo médio alinhado com o Analítico (Saídas → fallback SAP).
+        const custoMedio = custoMedioPorMat[mat] || 0;
+
+        const sample = lancArr[0] || sapArr[0] || {};
+        const categoria = sample.categoria || '—';
+
+        rowMap.set(k, { k, central, material: mat, categoria, regional, estoqueIni, entradasKg, saidasKg, estoqueFimReal, custoMedio, entEntries, saiEntries });
+      });
+    });
+
+    invRows = [];
+    rowMap.forEach(row => {
+      const estTeor   = row.estoqueIni + row.entradasKg - row.saidasKg;
+      const varKg     = row.estoqueFimReal - estTeor;
+      const varPct    = estTeor !== 0 ? (varKg / Math.abs(estTeor)) * 100 : 0;
+      const just      = invJustificativas[row.k] || {};
+      const saldoJust = parseFloat(just.saldo || 0) || 0;
+      const varAdj    = varKg - saldoJust;
+      const custo     = varAdj * row.custoMedio;
+      invRows.push({ ...row, estTeor, varKg, varPct, saldoJust, varAdj, custo });
+    });
+
+    invRows.sort((a,b) => Math.abs(b.custo) - Math.abs(a.custo));
+
+    const cats = [...new Set(invRows.map(r => r.categoria).filter(Boolean))].sort();
+    const regs = [...new Set(invRows.map(r => r.regional).filter(Boolean))].sort();
+    const mats = [...new Set(invRows.map(r => r.material).filter(Boolean))].sort();
+    const catSel = document.getElementById('inv-filtro-cat');
+    const regSel = document.getElementById('inv-filtro-regional');
+    const matSel = document.getElementById('inv-filtro-material');
+    if (catSel) catSel.innerHTML = '<option value="">Todas as categorias</option>' + cats.map(c=>`<option>${c}</option>`).join('');
+    if (regSel) regSel.innerHTML = '<option value="">Todas as regionais</option>' + regs.map(r=>`<option>${r}</option>`).join('');
+    if (matSel) matSel.innerHTML = '<option value="">Todos os materiais</option>' + mats.map(m=>`<option>${m}</option>`).join('');
+
+    document.getElementById('inv-empty-state').style.display = 'none';
+    document.getElementById('inv-content').style.display = '';
+
+    invFiltrar();
+    invAtualizarKpis();
+    invAtualizarAlertas();
+    toast('Inventário gerado: ' + invRows.length + ' itens.', 'success');
+  };
+
+  // ── Filtrar ──────────────────────────────────────────────
+  window.invFiltrar = function() {
+    const txt  = (document.getElementById('inv-filtro')?.value || '').toLowerCase();
+    const cat  = document.getElementById('inv-filtro-cat')?.value || '';
+    const reg  = document.getElementById('inv-filtro-regional')?.value || '';
+    const mat  = document.getElementById('inv-filtro-material')?.value || '';
+    const soV  = document.getElementById('inv-filtro-sovar')?.checked;
+    invFiltered = invRows.filter(r => {
+      if (soV && Math.abs(r.varKg) < 0.01) return false;
+      if (cat && r.categoria !== cat) return false;
+      if (reg && r.regional !== reg) return false;
+      if (mat && r.material !== mat) return false;
+      if (txt && !(r.central+r.material+r.regional+r.categoria).toLowerCase().includes(txt)) return false;
+      return true;
+    });
+    // apply current sort
+    if (invSortCol) {
+      invFiltered.sort((a,b) => {
+        const av = a[invSortCol] ?? '', bv = b[invSortCol] ?? '';
+        const cmp = typeof av === 'string' ? av.localeCompare(bv,'pt-BR') : (Number(av)||0)-(Number(bv)||0);
+        return invSortDir === 'asc' ? cmp : -cmp;
+      });
+    }
+    const lbl = document.getElementById('inv-count-label');
+    if (lbl) lbl.textContent = invFiltered.length + ' de ' + invRows.length + ' itens';
+    invRenderTabela();
+  };
+
+  // ── Renderiza tabela ─────────────────────────────────────
+  function invRenderTabela() {
+    const tbody = document.getElementById('inv-tbody');
+    const empty = document.getElementById('inv-empty');
+    if (!tbody) return;
+    if (!invFiltered.length) {
+      tbody.innerHTML = '';
+      if (empty) empty.style.display = '';
+      return;
+    }
+    if (empty) empty.style.display = 'none';
+    const just = invJustificativas;
+
+    // Reutiliza helpers do módulo principal via _inv_helpers
+    const h = window._inv_helpers;
+    const _fmtKg    = h ? h.fmtKg    : (v) => fmt(v) + ' kg';
+    const _varClass  = h ? h.varClass  : (v) => v < 0 ? 'diff-neg' : v > 0 ? 'diff-pos' : 'diff-zero';
+    const _varSymbol = h ? h.varSymbol : (v) => '';
+    const _money     = h ? h.money     : fmtR;
+    const _escape    = h ? h.escapeHtml: (s) => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const _bdm       = h ? h.buildAnaliticoDetailBreakdown : null;
+
+    tbody.innerHTML = invFiltered.map(r => {
+      const j = just[r.k] || {};
+      const hasJust = j.op || j.fiscal;
+      const alertBadge = (!hasJust && Math.abs(r.varKg) > 0.01)
+        ? '<span style="display:inline-block;width:6px;height:6px;background:var(--amber);border-radius:50%;margin-right:5px;vertical-align:middle;flex-shrink:0" title="Sem justificativa"></span>'
+        : '';
+
+      // ── Est. Inicial: teal igual ao analítico ──────────────
+      const iniCell = `<span class="td-mono" style="color:var(--teal)">${_fmtKg(r.estoqueIni)}</span>`;
+
+      // ── Entradas / Saídas: bdm-trigger igual ao analítico ──
+      const entCell = _bdm
+        ? _bdm(r.entEntries || [], r.entradasKg, 'var(--green)', 'Entradas')
+        : `<span class="td-mono" style="color:var(--green);font-weight:600">${_fmtKg(r.entradasKg)}</span>`;
+      const saiCell = _bdm
+        ? _bdm(r.saiEntries || [], r.saidasKg, 'var(--red)', 'Saídas')
+        : `<span class="td-mono" style="color:var(--red);font-weight:600">${_fmtKg(r.saidasKg)}</span>`;
+
+      // ── Est. Final: teal igual ao analítico ────────────────
+      const finCell = `<span class="td-mono" style="color:var(--teal)">${_fmtKg(r.estoqueFimReal)}</span>`;
+
+      // ── Est. Teórico: purple igual ao analítico ────────────
+      const teorCell = `<span class="td-mono" style="color:var(--purple)">${_fmtKg(r.estTeor)}</span>`;
+
+      // ── Variação (kg): diff-pos/neg/zero + varSymbol ───────
+      const dCls  = _varClass(r.varKg);
+      const varCell = Math.abs(r.varKg) < 0.005
+        ? `<span class="td-mono diff-zero">${_varSymbol(0)} ${_fmtKg(0)}</span>`
+        : `<span class="td-mono ${dCls}" style="white-space:nowrap">${_varSymbol(r.varKg)} ${_fmtKg(Math.abs(r.varKg))}</span>`;
+
+      // ── Var. Ajust. (kg): mesmo padrão ─────────────────────
+      const dClsAdj = _varClass(r.varAdj);
+      const varAdjCell = Math.abs(r.varAdj) < 0.005
+        ? `<span class="td-mono diff-zero">${_varSymbol(0)} ${_fmtKg(0)}</span>`
+        : `<span class="td-mono ${dClsAdj}" style="white-space:nowrap">${_varSymbol(r.varAdj)} ${_fmtKg(Math.abs(r.varAdj))}</span>`;
+
+      // ── Custo Médio (R$/kg): igual ao analítico ────────────
+      const custoMedCell = r.custoMedio > 0
+        ? `<span class="td-mono" style="color:var(--text2);font-size:11.5px">${_money(r.custoMedio)}<span style="font-size:9.5px;opacity:.6">/kg</span></span>`
+        : `<span style="color:var(--text3);font-size:11px">—</span>`;
+
+      // ── Custo Variação (R$): igual ao analítico ────────────
+      const _custoVarVal = r.custoMedio > 0 ? r.custo : null;
+      const _custoVarCls = _custoVarVal !== null ? _varClass(_custoVarVal) : '';
+      const custoVarCell = _custoVarVal !== null
+        ? `<span class="td-mono ${_custoVarCls}" style="font-size:11.5px;white-space:nowrap">${_varSymbol(_custoVarVal)} ${_money(Math.abs(_custoVarVal))}</span>`
+        : `<span style="color:var(--text3);font-size:11px">—</span>`;
+
+      // ── Saldo justificado ──────────────────────────────────
+      const saldoCell = j.saldo
+        ? `<span class="td-mono" style="color:var(--text2)">${_fmtKg(parseFloat(j.saldo))}</span>`
+        : '<span style="color:var(--text3);font-size:11px">—</span>';
+
+      return `<tr>
+        <td style="font-size:11px;color:var(--text2);white-space:nowrap">${r.regional}</td>
+        <td style="font-family:var(--mono);font-size:11px;font-weight:600;white-space:nowrap">${r.central}</td>
+        <td style="font-weight:600;max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${_escape(r.material)}">${alertBadge}${_escape(r.material)}</td>
+        <td><span style="font-size:10px;background:var(--bg4);border:1px solid var(--border2);border-radius:20px;padding:2px 8px;color:var(--text2);white-space:nowrap">${_escape(r.categoria)}</span></td>
+        <td style="text-align:right;white-space:nowrap">${iniCell}</td>
+        <td style="text-align:right;white-space:nowrap">${entCell}</td>
+        <td style="text-align:right;white-space:nowrap">${saiCell}</td>
+        <td style="text-align:right;white-space:nowrap">${finCell}</td>
+        <td style="text-align:right;white-space:nowrap">${teorCell}</td>
+        <td style="text-align:right;white-space:nowrap">${varCell}</td>
+        <td style="text-align:right;white-space:nowrap">${saldoCell}</td>
+        <td style="text-align:right;white-space:nowrap">${varAdjCell}</td>
+        <td style="text-align:right;white-space:nowrap">${custoMedCell}</td>
+        <td style="text-align:right;white-space:nowrap">${custoVarCell}</td>
+        <td style="text-align:center">
+          <button onclick="invAbrirJust('${r.k}')" style="background:${hasJust?'var(--green-bg)':'var(--bg4)'};border:1px solid ${hasJust?'var(--green-border)':'var(--border2)'};color:${hasJust?'var(--green)':'var(--text2)'};border-radius:6px;padding:4px 10px;font-size:10px;cursor:pointer;white-space:nowrap;font-family:var(--font);transition:all .13s">
+            <i class="ti ${hasJust?'ti-check':'ti-pencil'}" style="font-size:10px"></i> ${hasJust?'Ver/Editar':'Justificar'}
+          </button>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+
+  // ── KPIs ─────────────────────────────────────────────────
+  function invAtualizarKpis() {
+    const totalIni = invRows.reduce((s,r)=>s+r.estoqueIni,0);
+    const totalEnt = invRows.reduce((s,r)=>s+r.entradasKg,0);
+    const totalSai = invRows.reduce((s,r)=>s+r.saidasKg,0);
+    const totalFin = invRows.reduce((s,r)=>s+r.estoqueFimReal,0);
+
+    // Variação BRUTA: varKg sem desconto de justificativas
+    const totalVarBruto = invRows.reduce((s,r)=>s+r.varKg,0);
+    // Variação AJUSTADA: varAdj após descontar saldo justificado
+    const totalVarAdj   = invRows.reduce((s,r)=>s+r.varAdj,0);
+
+    // Custo BRUTO: varKg × custoMedio (independente de justificativas)
+    const totalCstBruto = invRows.reduce((s,r)=>s+(r.varKg * r.custoMedio),0);
+    // Custo AJUSTADO: varAdj × custoMedio
+    const totalCstAdj   = invRows.reduce((s,r)=>s+r.custo,0);
+
+    const set = (id, val) => { const el = document.getElementById(id); if(el) el.textContent = val; };
+    set('inv-kpi-ini-v', fmt(totalIni));
+    set('inv-kpi-ent-v', fmt(totalEnt));
+    set('inv-kpi-sai-v', fmt(totalSai));
+    set('inv-kpi-fin-v', fmt(totalFin));
+
+    // Variação: principal = bruto, secundário = ajustado (só se diferente)
+    set('inv-kpi-var-v', fmt(totalVarBruto));
+    const varEl = document.getElementById('inv-kpi-var');
+    if (varEl) varEl.style.borderTop = totalVarBruto < 0 ? '3px solid var(--red)' : totalVarBruto > 0 ? '3px solid var(--green)' : '';
+    const varAdjWrap = document.getElementById('inv-kpi-var-adj-wrap');
+    const varAdjVal  = document.getElementById('inv-kpi-var-adj-v');
+    const varTemAdj  = Math.abs(totalVarBruto - totalVarAdj) > 0.01;
+    if (varAdjWrap) varAdjWrap.style.display = varTemAdj ? '' : 'none';
+    if (varAdjVal && varTemAdj) varAdjVal.textContent = fmt(totalVarAdj) + ' kg';
+
+    // Custo Var.: principal = bruto, secundário = ajustado (só se diferente)
+    set('inv-kpi-cst-v', fmtR(totalCstBruto));
+    const cstEl = document.getElementById('inv-kpi-cst');
+    if (cstEl) cstEl.style.borderTop = totalCstBruto < 0 ? '3px solid var(--red)' : totalCstBruto > 0 ? '3px solid var(--green)' : '';
+    const cstAdjWrap = document.getElementById('inv-kpi-cst-adj-wrap');
+    const cstAdjVal  = document.getElementById('inv-kpi-cst-adj-v');
+    const cstTemAdj  = Math.abs(totalCstBruto - totalCstAdj) > 0.01;
+    if (cstAdjWrap) cstAdjWrap.style.display = cstTemAdj ? '' : 'none';
+    if (cstAdjVal && cstTemAdj) cstAdjVal.textContent = fmtR(totalCstAdj);
+  }
+
+  // ── Alertas pendentes ─────────────────────────────────────
+  function invAtualizarAlertas() {
+    const pendentes = invRows.filter(r => Math.abs(r.varKg) > 0.01 && !(invJustificativas[r.k]?.op || invJustificativas[r.k]?.fiscal));
+    const btn = document.getElementById('inv-alertas-count');
+    if (btn) btn.textContent = pendentes.length;
+    const btnWrap = document.getElementById('inv-btn-alertas');
+    if (btnWrap) btnWrap.style.color = pendentes.length ? 'var(--amber)' : '';
+    const list = document.getElementById('inv-alertas-list');
+    if (list) list.innerHTML = pendentes.slice(0,30).map(r=>`<div style="padding:2px 0;border-bottom:1px solid var(--border)">${r.central} · ${r.material} · var. <strong>${fmt(r.varKg)} kg</strong> · custo <strong>${fmtR(r.custo)}</strong></div>`).join('') + (pendentes.length>30?`<div style="padding:4px 0;font-style:italic">... e mais ${pendentes.length-30} itens</div>`:'');
+  }
+
+  window.invAbrirAlertasPendentes = function() {
+    const panel = document.getElementById('inv-alertas-panel');
+    if (panel) panel.style.display = panel.style.display === 'none' ? '' : 'none';
+  };
+
+  // ── Modal de justificativa ───────────────────────────────
+  window.invAbrirJust = function(k) {
+    const row = invRows.find(r => r.k === k);
+    if (!row) return;
+    const j = invJustificativas[k] || {};
+    // Remove modal anterior se existir
+    document.getElementById('inv-modal')?.remove();
+    const h = window._inv_helpers;
+    const _fmtKg    = h ? h.fmtKg    : (v) => fmt(v) + ' kg';
+    const _varClass  = h ? h.varClass  : (v) => v < 0 ? 'diff-neg' : v > 0 ? 'diff-pos' : 'diff-zero';
+    const _varSymbol = h ? h.varSymbol : () => '';
+    const _money     = h ? h.money     : fmtR;
+    const vkCls   = _varClass(row.varKg);
+    const cstCls  = _varClass(row.custo);
+    const modal = document.createElement('div');
+    modal.id = 'inv-modal';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.6);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:20px';
+    modal.innerHTML = `
+      <div style="background:var(--bg2);border:1px solid var(--border2);border-radius:14px;padding:0;width:100%;max-width:560px;box-shadow:0 24px 64px rgba(0,0,0,.5);overflow:hidden">
+        <div style="background:var(--bg3);padding:16px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)">
+          <div>
+            <div style="font-weight:700;font-size:14px">${row.central} · ${row.material}</div>
+            <div style="font-size:11px;color:var(--text2);margin-top:2px">${row.regional} · ${row.categoria}</div>
+          </div>
+          <button onclick="document.getElementById('inv-modal').remove()" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:18px"><i class="ti ti-x"></i></button>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:16px 20px;border-bottom:1px solid var(--border)">
+          <div style="text-align:center">
+            <div style="font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px">Variação (kg)</div>
+            <span class="td-mono ${vkCls}" style="font-size:17px;white-space:nowrap">${_varSymbol(row.varKg)} ${_fmtKg(Math.abs(row.varKg))}</span>
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px">Custo Var. (R$)</div>
+            <span class="td-mono ${cstCls}" style="font-size:17px;white-space:nowrap">${_varSymbol(row.custo)} ${_money(Math.abs(row.custo))}</span>
+          </div>
+        </div>
+        <div style="padding:16px 20px;display:flex;flex-direction:column;gap:12px">
+          <div>
+            <label style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:5px">Justificativa Operacional</label>
+            <textarea id="inv-j-op" rows="2" placeholder="Ex: falha no medidor da brita, perda por chuva..." style="width:100%;background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:8px;padding:8px 10px;font-size:12px;resize:vertical">${j.op||''}</textarea>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:5px">Justificativa Fiscal <span style="font-weight:400;font-size:10px;color:var(--text3)">(para inspeção)</span></label>
+            <div style="display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap">
+              ${['Falha operacional - erro de medição','Variação natural de umidade','Perda operacional no processo','Divergência de fornecedor'].map(t=>`<button onclick="document.getElementById('inv-j-fiscal').value='${t}'" style="background:var(--bg4);border:1px solid var(--border2);color:var(--text2);border-radius:20px;padding:3px 9px;font-size:10px;cursor:pointer;white-space:nowrap">${t}</button>`).join('')}
+            </div>
+            <textarea id="inv-j-fiscal" rows="2" placeholder="Motivo genérico para fins fiscais..." style="width:100%;background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:8px;padding:8px 10px;font-size:12px;resize:vertical">${j.fiscal||''}</textarea>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:5px">Saldo Justificado (kg) <span style="font-weight:400;font-size:10px;color:var(--text3)">parte ou total da variação com causa identificada</span></label>
+            <input id="inv-j-saldo" type="number" placeholder="0" value="${j.saldo||''}" style="width:180px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:8px;padding:7px 10px;font-size:12px">
+          </div>
+        </div>
+        <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px">
+          <button onclick="document.getElementById('inv-modal').remove()" class="btn">Cancelar</button>
+          <button onclick="invSalvarJust('${k}')" class="btn btn-primary"><i class="ti ti-device-floppy"></i> Salvar</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  };
+
+  window.invSalvarJust = function(k) {
+    const op     = document.getElementById('inv-j-op')?.value.trim();
+    const fiscal = document.getElementById('inv-j-fiscal')?.value.trim();
+    const saldo  = document.getElementById('inv-j-saldo')?.value;
+    invJustificativas[k] = { op, fiscal, saldo };
+    // Recalcula linha
+    const row = invRows.find(r => r.k === k);
+    if (row) {
+      const saldoJust = parseFloat(saldo||0)||0;
+      row.saldoJust = saldoJust;
+      row.varAdj = row.varKg - saldoJust;
+      row.custo  = row.varAdj * row.custoMedio;
+    }
+    document.getElementById('inv-modal')?.remove();
+    invFiltrar();
+    invAtualizarKpis();
+    invAtualizarAlertas();
+    toast('Justificativa salva.', 'success');
+  };
+
+  // ── Exportar CSV ─────────────────────────────────────────
+  window.invExportar = function() {
+    if (!invRows.length) { toast('Gere o inventário antes de exportar.', 'error'); return; }
+    const header = ['Regional','Filial','Cod','Material','Categoria','Est.Ini.(kg)','Entradas(kg)','Saídas(kg)','Est.Teórico(kg)','Est.Real(kg)','Var.(kg)','Var.(%)','Custo Médio','Custo Variação (R$)','Saldo Justificado','Var.Ajustada','Just.Operacional','Just.Fiscal'];
+    const rows = invRows.map(r => {
+      const j = invJustificativas[r.k]||{};
+      return [r.regional, r.central, r.material, r.categoria, r.estoqueIni, r.entradasKg, r.saidasKg, r.estTeor, r.estoqueFimReal, r.varKg, r.varPct.toFixed(2), r.custoMedio, r.custo.toFixed(2), j.saldo||'', r.varAdj, j.op||'', j.fiscal||''].map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(';');
+    });
+    const csv = [header.join(';'), ...rows].join('\n');
+    const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8'});
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = 'inventario_' + new Date().toISOString().substring(0,10) + '.csv';
+    a.click(); URL.revokeObjectURL(url);
+  };
+
+  // ── renderInventario (chamado pelo navigate) ─────────────
+  let invIniciado = false;
+  window.renderInventario = function() {
+    if (!invIniciado) {
+      const defaultTh = document.querySelector('.inv-data-table th[data-col="custo"]');
+      if (defaultTh) defaultTh.classList.add('sort-desc');
+      invIniciado = true;
+    }
+    // Se já tem dados, mantém o conteúdo visível
+    if (invRows.length) {
+      document.getElementById('inv-empty-state').style.display = 'none';
+      document.getElementById('inv-content').style.display = '';
+      invFiltrar(); invAtualizarKpis(); invAtualizarAlertas();
+    }
+  };
 })();
 
   // ═══════════════════════════════════════════════════════════
@@ -16623,7 +16925,7 @@ function debounce(fn, delay = 120) {
 
   // Prevent clicks INSIDE the dropdown from bubbling to document
   document.addEventListener('DOMContentLoaded', function() {
-    ['dg-cal-dropdown', 'an-cal-dropdown'].forEach(function(id) {
+    ['dg-cal-dropdown', 'an-cal-dropdown', 'inv-cal-dropdown'].forEach(function(id) {
       var el = document.getElementById(id);
       if (el) el.addEventListener('click', function(e) { e.stopPropagation(); });
     });
