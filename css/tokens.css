@@ -1,0 +1,168 @@
+/* ══════════════════════════════════════════
+   RESET & ROOT TOKENS
+══════════════════════════════════════════ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  /* ── Dark (default) ── */
+  --bg:       #080c14;
+  --bg2:      #0d1220;
+  --bg3:      #131929;
+  --bg4:      #1a2236;
+  --border:   rgba(255,255,255,0.06);
+  --border2:  rgba(255,255,255,0.11);
+  --border3:  rgba(255,255,255,0.18);
+  --text:     #dde3f0;
+  --text2:    #7b85a0;
+  --text3:    #404a60;
+  --text4:    #252e42;
+
+  /* Semantic accent palette — intentionally limited */
+  --accent:   #3b82f6;
+  --accent-dim: rgba(59,130,246,0.12);
+  --accent-glow: rgba(59,130,246,0.25);
+
+  --green:    #10b981;
+  --green-bg: rgba(16,185,129,0.10);
+  --green-border: rgba(16,185,129,0.20);
+
+  --red:      #f43f5e;
+  --red-bg:   rgba(244,63,94,0.10);
+  --red-border: rgba(244,63,94,0.20);
+
+  --amber:    #f59e0b;
+  --amber-bg: rgba(245,158,11,0.10);
+  --amber-border: rgba(245,158,11,0.20);
+
+  --purple:   #8b5cf6;
+  --purple-bg: rgba(139,92,246,0.10);
+  --purple-border: rgba(139,92,246,0.20);
+
+  --teal:     #06b6d4;
+  --teal-bg:  rgba(6,182,212,0.10);
+  --teal-border: rgba(6,182,212,0.20);
+
+  /* Geometry */
+  --radius:    8px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+
+  /* Typography */
+  --font:  'Outfit', sans-serif;
+  --mono:  'DM Mono', monospace;
+
+  /* Layout */
+  --sidebar-w: 228px;
+  --topbar-h: 56px;
+
+  --logo-filter: invert(1) hue-rotate(180deg) brightness(1.15);
+
+  color-scheme: dark;
+}
+
+/* ── Graphite ── */
+body[data-theme="graphite"] {
+  --bg:       #0a0f1a;
+  --bg2:      #0f1626;
+  --bg3:      #161e30;
+  --bg4:      #1d273d;
+  --border:   rgba(255,255,255,0.07);
+  --border2:  rgba(255,255,255,0.12);
+  --border3:  rgba(255,255,255,0.20);
+  --text:     #e2eaf8;
+  --text2:    #6c7a96;
+  --text3:    #38445c;
+  --accent:   #38bdf8;
+  --accent-dim: rgba(56,189,248,0.12);
+  --accent-glow: rgba(56,189,248,0.28);
+  --logo-filter: invert(1) hue-rotate(180deg) brightness(1.1);
+  color-scheme: dark;
+}
+
+/* ── Light ── */
+body[data-theme="light"] {
+  --bg:       #f0f4fa;
+  --bg2:      #ffffff;
+  --bg3:      #e8edf6;
+  --bg4:      #dde3ee;
+  --border:   rgba(15,23,60,0.08);
+  --border2:  rgba(15,23,60,0.14);
+  --border3:  rgba(15,23,60,0.22);
+  --text:     #0f172a;
+  --text2:    #3d4f6e;
+  --text3:    #7888a4;
+  --text4:    #b0bdd4;
+  --accent:   #2563eb;
+  --accent-dim: rgba(37,99,235,0.08);
+  --accent-glow: rgba(37,99,235,0.20);
+  --green:    #059669;
+  --green-bg: rgba(5,150,105,0.08);
+  --green-border: rgba(5,150,105,0.18);
+  --red:      #e11d48;
+  --red-bg:   rgba(225,29,72,0.08);
+  --red-border: rgba(225,29,72,0.18);
+  --amber:    #d97706;
+  --amber-bg: rgba(217,119,6,0.08);
+  --amber-border: rgba(217,119,6,0.18);
+  --purple:   #7c3aed;
+  --purple-bg: rgba(124,58,237,0.08);
+  --purple-border: rgba(124,58,237,0.18);
+  --teal:     #0891b2;
+  --teal-bg:  rgba(8,145,178,0.08);
+  --teal-border: rgba(8,145,178,0.18);
+  --logo-filter: none;
+  color-scheme: light;
+}
+
+/* ── Sand ── */
+body[data-theme="sand"] {
+  --bg:       #f5f0e8;
+  --bg2:      #fdf8f0;
+  --bg3:      #ede6d8;
+  --bg4:      #e2d8c8;
+  --border:   rgba(60,45,20,0.10);
+  --border2:  rgba(60,45,20,0.17);
+  --border3:  rgba(60,45,20,0.26);
+  --text:     #1c1208;
+  --text2:    #4a3e2e;
+  --text3:    #8a7a64;
+  --text4:    #bfae98;
+  --accent:   #0f766e;
+  --accent-dim: rgba(15,118,110,0.09);
+  --accent-glow: rgba(15,118,110,0.22);
+  --green:    #166534;
+  --green-bg: rgba(22,101,52,0.09);
+  --green-border: rgba(22,101,52,0.20);
+  --red:      #b91c1c;
+  --red-bg:   rgba(185,28,28,0.09);
+  --red-border: rgba(185,28,28,0.20);
+  --amber:    #92400e;
+  --amber-bg: rgba(146,64,14,0.09);
+  --amber-border: rgba(146,64,14,0.20);
+  --purple:   #5b21b6;
+  --purple-bg: rgba(91,33,182,0.09);
+  --purple-border: rgba(91,33,182,0.20);
+  --teal:     #0f766e;
+  --teal-bg:  rgba(15,118,110,0.09);
+  --teal-border: rgba(15,118,110,0.20);
+  --logo-filter: none;
+  color-scheme: light;
+}
+
+html, body { height: 100%; }
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ══════════════════════════════════════════
+   LAYOUT SHELL
+/* ══════════════════════════════════════════
+   BDM TRIGGER
+══════════════════════════════════════════ */

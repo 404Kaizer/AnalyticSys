@@ -1,0 +1,1987 @@
+function rodarAnalitico() {
+  const iniStr = document.getElementById('an-dt-ini')?.value;
+  const fimStr = document.getElementById('an-dt-fim')?.value;
+  if (!iniStr || !fimStr) return;
+
+  // Parse period bounds (YYYY-MM-DD from <input type=date>)
+  const dtIni = new Date(iniStr + 'T00:00:00');
+  const dtFim = new Date(fimStr + 'T23:59:59');
+  if (isNaN(dtIni) || isNaN(dtFim) || dtIni > dtFim) {
+    toast('Período inválido', 'error');
+    return;
+  }
+
+  // ── Build date-bound helpers ──────────────────────────────
+  function inPeriod(dateStr) {
+    const d = parseDate(dateStr);
+    if (!d) return false;
+    return d >= dtIni && d <= dtFim;
+  }
+
+  // ── Collect all central keys ──────────────────────────────
+  // Usa os índices pré-computados — O(1) para obter as chaves
+  const lancIdx = getLancIndex();
+  const sapIdx  = getSapIndex();
+  ensureSaidasIndex();
+  const allCentrals = new Set([
+    ...lancIdx.byCentral.keys(),
+    ...sapIdx.byCentral.keys()
+  ]);
+
+  if (!allCentrals.size) {
+    toast('Nenhum dado para o período selecionado', 'error');
+    return;
+  }
+
+  // ── Per-central analysis ──────────────────────────────────
+  const results = [];
+
+  allCentrals.forEach(central => {
+
+    // ── Lançamentos desta central dentro do período — via índice ──
+    const lancsNoPeriodo = getLancsByCentralInPeriod(central, dtIni, dtFim)
+      .slice() // não muta o array do índice
+      .sort((a, b) => {
+        const da = parseDate(a.dtLanc), db = parseDate(b.dtLanc);
+        return dateCmp(da ?? new Date(0), db ?? new Date(0));
+      });
+
+    // ── SAP desta central dentro do período — via índice ──
+    const sapNoPeriodo = getSapByCentralInPeriod(central, dtIni, dtFim);
+
+    // ── SAP: entradas = tudo positivo, saídas = tudo negativo ──
+    // Breakdown por código para cada tipo
+    const entradasPorCod = {};   // cod → soma positiva
+    const saidasPorCod   = {};   // cod → soma negativa
+
+    sapNoPeriodo.forEach(r => {
+      const cod = normMov(r.movimento);
+      const p   = num(r.peso);
+      if (p > 0) {
+        entradasPorCod[cod] = (entradasPorCod[cod] || 0) + p;
+      } else if (p < 0) {
+        saidasPorCod[cod] = (saidasPorCod[cod] || 0) + p;
+      }
+    });
+
+    const totalEntradas = Object.values(entradasPorCod).reduce((s, v) => s + v, 0);
+    const totalSaidas   = Object.values(saidasPorCod).reduce((s, v) => s + v, 0);
+
+    // ── Primeiro lançamento do período (mais antigo) ──
+    // Agrupado por material → pega a versão mais antiga de cada material
+    const materiaisLancPrimeiro = {};
+    lancsNoPeriodo.forEach(r => {
+      const mat = r.material || '—';
+      if (!materiaisLancPrimeiro[mat]) materiaisLancPrimeiro[mat] = r;
+    });
+
+    // Soma todos os lançamentos do primeiro dia por material (caso haja múltiplos)
+    const _macroIniDayKey = {};
+    lancsNoPeriodo.forEach(r => {
+      const mat = r.material || '—';
+      if (!_macroIniDayKey[mat]) {
+        const d = parseDate(r.dtLanc);
+        _macroIniDayKey[mat] = d ? `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}` : null;
+      }
+    });
+    const _macroPesoIniSoma = {};
+    lancsNoPeriodo.forEach(r => {
+      const mat = r.material || '—';
+      const d = parseDate(r.dtLanc);
+      const dk = d ? `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}` : null;
+      if (dk && dk === _macroIniDayKey[mat]) {
+        _macroPesoIniSoma[mat] = (_macroPesoIniSoma[mat] || 0) + num(r.peso);
+      }
+    });
+
+    // ── Último lançamento do período (mais recente) ──
+    const lancsDesc = [...lancsNoPeriodo].sort((a, b) => {
+      const da = parseDate(a.dtLanc), db = parseDate(b.dtLanc);
+      return dateCmp(db ?? new Date(0), da ?? new Date(0));
+    });
+    const materiaisLancUltimo = {};
+    lancsDesc.forEach(r => {
+      const mat = r.material || '—';
+      if (!materiaisLancUltimo[mat]) materiaisLancUltimo[mat] = r;
+    });
+
+    // ── All materials seen in this central ──
+    const allMats = new Set([
+      ...Object.keys(materiaisLancPrimeiro),
+      ...Object.keys(materiaisLancUltimo),
+      ...sapNoPeriodo.map(r => r.material || '—')
+    ]);
+
+    // ── Macro: sum across all materials ──
+    // Para o Est. Final de cada material, soma todos os lançamentos
+    // da data mais recente (consistente com buildSnapshot e modal diário)
+    const _macroUltDayKey = {};
+    lancsDesc.forEach(r => {
+      const mat = r.material || '—';
+      if (!_macroUltDayKey[mat]) {
+        const d = parseDate(r.dtLanc);
+        _macroUltDayKey[mat] = d ? `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}` : null;
+      }
+    });
+    const _macroPesoFimSoma = {};
+    lancsNoPeriodo.forEach(r => {
+      const mat = r.material || '—';
+      const d = parseDate(r.dtLanc);
+      const dk = d ? `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}` : null;
+      if (dk && dk === _macroUltDayKey[mat]) {
+        _macroPesoFimSoma[mat] = (_macroPesoFimSoma[mat] || 0) + num(r.peso);
+      }
+    });
+    const _prePeriodoStockByMat = {};
+    allMats.forEach(mat => {
+      const prev = getPrePeriodLaunchStock({ central, material: mat, dtIni });
+      if (prev) _prePeriodoStockByMat[mat] = prev.value;
+    });
+
+    let somaPrimeiro = 0;
+    let somaUltimo   = 0;
+    allMats.forEach(mat => {
+      somaPrimeiro += (_prePeriodoStockByMat[mat] ?? _macroPesoIniSoma[mat] ?? num(materiaisLancPrimeiro[mat]?.peso));
+      somaUltimo   += (_macroPesoFimSoma[mat] ?? num(materiaisLancUltimo[mat]?.peso));
+    });
+
+    // Teórico = 1º lançamento + entradas SAP + saídas SAP
+    const estoqueTeoricoMacro = somaPrimeiro + totalEntradas + totalSaidas;
+    const variacaoEstoque = somaUltimo - estoqueTeoricoMacro;
+
+    // ── SAP breakdown by movement code ──
+    const movBreakdown = {};
+    sapNoPeriodo.forEach(r => {
+      const cod = normMov(r.movimento);
+      if (!movBreakdown[cod]) movBreakdown[cod] = 0;
+      movBreakdown[cod] += num(r.peso);
+    });
+
+    // ── Produção do período (match por mês dentro do range) ──
+    // Filtra apenas os registros desta central (produção é pequena, sem índice dedicado)
+    const prodNoPeriodo = state.producao.filter(r => {
+      if (r.central !== central) return false;
+      const mesMatch = r.mes ? parseMes(r.mes) : null;
+      if (!mesMatch) return false;
+      const firstDay = new Date(mesMatch.y, mesMatch.m - 1, 1);
+      const lastDay  = new Date(mesMatch.y, mesMatch.m, 0);
+      return firstDay <= dtFim && lastDay >= dtIni;
+    });
+
+    // ── Saídas (módulo Saídas) desta central no período ──
+    // Custo médio ponderado por material: R$/kg → usado no badge de custo da variação
+    // Usa índice de saídas pré-computado se disponível, senão linear (saídas é menor)
+    const _saidasIdx = _saidasByCentral.size > 0 ? _saidasByCentral : null;
+    const saidasNoPeriodo = _saidasIdx
+      ? (_saidasIdx.get(central) || []).filter(s => {
+          const d = parseDate(s.dtEmissao);
+          return d && d >= dtIni && d <= dtFim;
+        })
+      : state.saidas.filter(s => s.central === central && inPeriod(s.dtEmissao));
+    const _custoPorMat = {};
+    const _pesoPorMat  = {};
+    saidasNoPeriodo.forEach(s => {
+      const mat = s.material || '—';
+      _custoPorMat[mat] = (_custoPorMat[mat] || 0) + num(s.valorTotal);
+      _pesoPorMat[mat]  = (_pesoPorMat[mat]  || 0) + Math.abs(num(s.peso));
+    });
+    const custoMedioPorMat = {};
+    Object.keys(_custoPorMat).forEach(mat => {
+      custoMedioPorMat[mat] = _pesoPorMat[mat] > 0 ? _custoPorMat[mat] / _pesoPorMat[mat] : 0;
+    });
+
+    // Fallback: materiais sem custo nas Saídas usam custoUnit/valorTotal do SAP.
+    // Isso cobre casos onde o material existe no SAP mas não tem registro no módulo Saídas,
+    // ou onde o nome do material difere após normalização.
+    sapNoPeriodo.forEach(s => {
+      const mat = s.material || '—';
+      if (custoMedioPorMat[mat]) return; // já tem custo pelas Saídas
+      const p  = Math.abs(num(s.peso));
+      if (!p) return;
+      const vt = num(s.valorTotal);
+      const cu = num(s.custoUnit);
+      const valor = vt !== 0 ? Math.abs(vt) : (cu !== 0 ? Math.abs(cu) * p : 0);
+      if (!valor) return;
+      if (!_custoPorMat['_sap_' + mat]) { _custoPorMat['_sap_' + mat] = 0; _pesoPorMat['_sap_' + mat] = 0; }
+      _custoPorMat['_sap_' + mat] += valor;
+      _pesoPorMat['_sap_' + mat]  += p;
+    });
+    Object.keys(_custoPorMat).forEach(key => {
+      if (!key.startsWith('_sap_')) return;
+      const mat = key.slice(5);
+      if (custoMedioPorMat[mat]) return;
+      custoMedioPorMat[mat] = _pesoPorMat[key] > 0 ? _custoPorMat[key] / _pesoPorMat[key] : 0;
+    });
+
+    results.push({
+      central,
+      totalEntradas,
+      totalSaidas,
+      entradasPorCod,
+      saidasPorCod,
+      estoqueTeoricoMacro,
+      somaPrimeiro,
+      somaUltimo,
+      variacaoEstoque,
+      movBreakdown,
+      allMats: [...allMats].sort(),
+      materiaisLancPrimeiro,
+      materiaisLancUltimo,
+      sapNoPeriodo,
+      lancsNoPeriodo,
+      prodNoPeriodo,
+      custoMedioPorMat
+    });
+  });
+
+  // Sort by central name
+  results.sort((a, b) => String(a.central).localeCompare(String(b.central), 'pt-BR'));
+
+  renderAnaliticoMicro(results, dtIni, dtFim);
+
+  document.getElementById('an-empty').style.display = 'none';
+  document.getElementById('an-content').style.display = '';
+  if (window.updatePeriodFab) updatePeriodFab();
+}
+
+function parseMes(str) {
+  // "Janeiro/2026" → {m:1, y:2026}
+  if (!str) return null;
+  const meses = {
+    janeiro:1, fevereiro:2, março:3, marco:3, abril:4, maio:5, junho:6,
+    julho:7, agosto:8, setembro:9, outubro:10, novembro:11, dezembro:12
+  };
+  const parts = str.toLowerCase().replace('ç','c').split(/[\s\/\-]+/);
+  let m = null, y = null;
+  parts.forEach(p => {
+    const n = Number(p);
+    if (!isNaN(n) && n > 1900) { y = n; }
+    else if (meses[p]) { m = meses[p]; }
+    // Handle "01/2026" style
+    else if (/^\d{1,2}$/.test(p) && !m) { m = Number(p); }
+  });
+  return m && y ? { m, y } : null;
+}
+
+// ── Breakdown popover: portal pattern ──────────────────────
+// A single floating popover node is reused for all breakdown triggers.
+// It lives directly on <body> so position:fixed is never offset by
+// any CSS transform / overflow:hidden ancestor inside the table.
+let _bdPortal = null;
+let _bdActiveTrigger = null;
+
+function _ensureBdPortal() {
+  if (_bdPortal) return _bdPortal;
+  _bdPortal = document.createElement('div');
+  _bdPortal.className = 'breakdown-popover';
+  _bdPortal.addEventListener('click', e => e.stopPropagation());
+  document.body.appendChild(_bdPortal);
+  return _bdPortal;
+}
+
+function _closeBdPortal() {
+  if (!_bdPortal) return;
+  _bdPortal.classList.remove('open');
+  if (_bdActiveTrigger) {
+    const c = _bdActiveTrigger.querySelector('.breakdown-chev');
+    if (c) c.style.transform = '';
+    _bdActiveTrigger = null;
+  }
+}
+
+function toggleBreakdown(trigger) {
+  const portal = _ensureBdPortal();
+  const inlinePopover = trigger.nextElementSibling;
+  if (!inlinePopover || !inlinePopover.classList.contains('breakdown-popover')) return;
+  const chev = trigger.querySelector('.breakdown-chev');
+
+  // Clicking the same trigger again → close
+  if (_bdActiveTrigger === trigger && portal.classList.contains('open')) {
+    _closeBdPortal();
+    return;
+  }
+
+  // Close previous popover (resets old chev) before populating the new one
+  _closeBdPortal();
+
+  // Copy content from the inline template into the portal
+  portal.innerHTML = inlinePopover.innerHTML;
+
+  // Position: measure BEFORE making visible so we get real viewport coords
+  const rect = trigger.getBoundingClientRect();
+  const popW = 220;
+  const spaceRight = window.innerWidth - rect.left;
+  const spaceBelow = window.innerHeight - rect.bottom;
+
+  portal.style.width   = popW + 'px';
+  portal.style.left    = (spaceRight >= popW ? rect.left : Math.max(4, rect.right - popW)) + 'px';
+  portal.style.top     = (spaceBelow >= 180 ? rect.bottom + 6 : rect.top - 6) + 'px';
+  portal.style.transform = spaceBelow >= 180 ? '' : 'translateY(-100%)';
+
+  _bdActiveTrigger = trigger;
+  portal.classList.add('open');
+  if (chev) chev.style.transform = 'rotate(180deg)';
+}
+
+// Close breakdown portal when clicking outside
+document.addEventListener('click', e => {
+  if (!_bdPortal) return;
+  if (!e.target.closest('.breakdown-trigger') && !e.target.closest('.breakdown-popover')) {
+    _closeBdPortal();
+  }
+}, true);
+
+
+
+function renderAnaliticoMicro(results, dtIni, dtFim) {
+  const container = document.getElementById('an-micro-container');
+  if (!container) return;
+  container.innerHTML = '';
+  window.__analiticoDetailCache = new Map();
+
+  const start = new Date(dtIni);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(dtFim);
+  end.setHours(0, 0, 0, 0);
+
+  const dateKey = (d) => {
+    const dt = d instanceof Date ? d : parseDate(d);
+    if (!dt) return '';
+    return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+  };
+
+  const buildDayList = () => {
+    const days = [];
+    const cursor = new Date(start);
+    while (cursor <= end) {
+      days.push(new Date(cursor));
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    return days;
+  };
+
+  const dayList = buildDayList();
+
+  // Ordena centrais: maior desfalque (variação mais negativa) → maior sobra (mais positiva)
+  const calcVariacaoCentral = (r) => {
+    const lancsByMat = new Map();
+    const sapByMat = new Map();
+    (r.lancsNoPeriodo || []).forEach(rec => {
+      const mat = rec.material || '—';
+      if (!lancsByMat.has(mat)) lancsByMat.set(mat, []);
+      lancsByMat.get(mat).push(rec);
+    });
+    (r.sapNoPeriodo || []).forEach(rec => {
+      const mat = rec.material || '—';
+      if (!sapByMat.has(mat)) sapByMat.set(mat, []);
+      sapByMat.get(mat).push(rec);
+    });
+    return [...(r.allMats || [])].reduce((acc, mat) => {
+      const prev = getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni });
+      return acc + buildSnapshot({
+        lancs: lancsByMat.get(mat) || [],
+        sap:   sapByMat.get(mat)   || [],
+        initialStockOverride: prev?.value ?? null,
+      }).diff;
+    }, 0);
+  };
+
+      const variacaoCentralCache = new Map();
+  const getVariacaoCentral = (item) => {
+    if (variacaoCentralCache.has(item)) return variacaoCentralCache.get(item);
+    const value = calcVariacaoCentral(item);
+    variacaoCentralCache.set(item, value);
+    return value;
+  };
+
+  results = [...results]
+    .map(item => ({ item, score: getVariacaoCentral(item) }))
+    .sort((a, b) => a.score - b.score)
+    .map(entry => entry.item);
+  window._microAnaliticoRows = results;
+
+  const _cardBuffer = []; // collects cards before grouping
+
+  results.forEach((r, idx) => {
+    const prodHtml = r.prodNoPeriodo.length
+      ? r.prodNoPeriodo.map(p => `
+          <span class="prod-badge">
+            <i class="ti ti-building-factory"></i>
+            ${p.mes} · ${fmtKg(p.producao, 2)} m³ ·
+            Preço Médio: ${money(p.precoMedio)} ·
+            Custo Médio: ${money(p.custoMedio)} ·
+            Faturamento: ${money(p.totalVendas)}
+          </span>`).join('')
+      : `<span class="prod-badge" style="color:var(--text3);background:var(--bg3)">
+           <i class="ti ti-info-circle"></i> Sem produção no período
+         </span>`;
+
+    const lancsByMat = new Map();
+    const sapByMat = new Map();
+
+    (r.lancsNoPeriodo || []).forEach(rec => {
+      const mat = rec.material || '—';
+      if (!lancsByMat.has(mat)) lancsByMat.set(mat, []);
+      lancsByMat.get(mat).push(rec);
+    });
+
+    (r.sapNoPeriodo || []).forEach(rec => {
+      const mat = rec.material || '—';
+      if (!sapByMat.has(mat)) sapByMat.set(mat, []);
+      sapByMat.get(mat).push(rec);
+    });
+
+    let matRowsHtml = '';
+    let variacaoCentralMicro = 0;
+    let custoVariacaoTotal = 0;  // R$ implicados pela variação de estoque
+
+    // Ordena materiais: maior desfalque (diff mais negativo) → maior sobra (diff mais positivo)
+    const allMatsSorted = [...r.allMats].sort((a, b) => {
+      const prevA = getPrePeriodLaunchStock({ central: r.central, material: a, dtIni });
+      const prevB = getPrePeriodLaunchStock({ central: r.central, material: b, dtIni });
+      const diffA = buildSnapshot({ lancs: lancsByMat.get(a) || [], sap: sapByMat.get(a) || [], initialStockOverride: prevA?.value ?? null }).diff;
+      const diffB = buildSnapshot({ lancs: lancsByMat.get(b) || [], sap: sapByMat.get(b) || [], initialStockOverride: prevB?.value ?? null }).diff;
+      return diffA - diffB;
+    });
+
+    allMatsSorted.forEach((mat, matIdx) => {
+      const lancsMat = lancsByMat.get(mat) || [];
+      const sapMat = sapByMat.get(mat) || [];
+      const prev = getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni });
+      const snapshot = buildSnapshot({
+        lancs: lancsMat,
+        sap: sapMat,
+        initialStockOverride: prev?.value,
+        initialDateLabelOverride: prev?.dtLabel
+      });
+      variacaoCentralMicro += snapshot.diff;
+      // acumula custo implicado: diff (kg) × custo médio do material (R$/kg)
+      const custoMedMat = (r.custoMedioPorMat || {})[mat] || 0;
+      if (custoMedMat > 0) custoVariacaoTotal += snapshot.diff * custoMedMat;
+
+      const dCls = varClass(snapshot.diff);
+              const toEntry = s => {
+        const ref = (s.ref && String(s.ref).trim()) ? String(s.ref).trim()
+                  : (s.documento && String(s.documento).trim()) ? String(s.documento).trim() : '';
+        return [normMov(s.movimento), num(s.peso), ref, String(s.usuario || '').trim()];
+      };
+      const entEntries = snapshot.entRecords.map(toEntry);
+      const saiEntries = snapshot.saiRecords.map(toEntry);
+
+      // ── Classificação de categoria do material ──────────────────────────
+      // Categorias de lançamento SEMANAL (toda terça-feira):
+      //   AGREGADO MIÚDO e AGREGADO GRAÚDO
+      // Todas as demais: lançamento DIÁRIO
+      const matCategoria = (lancsMat[0]?.categoria || sapMat[0]?.categoria || '').trim().toUpperCase();
+      const isSemanal = /AGREGADO[S]?\s*(MI[\u00DA\u0055]DO[S]?|GRA[\u00DA\u0055]DO[S]?)/i.test(matCategoria);
+
+      // ── Último lançamento ANTES do início do período ─────────────────
+      // Usado como Est. Inicial do primeiro dia (ou da primeira semana, para semanais).
+      // Busca em state.lancamentos sem restrição de período.
+      const lancsAnteriores = (state.lancamentos || [])
+        .filter(rec => {
+          if ((rec.material || '—') !== mat) return false;
+          if (rec.central !== r.central) return false;
+          const d = parseDate(rec.dtLanc);
+          return d && d < start;
+        })
+        .sort((a, b) => dateCmp(parseDate(b.dtLanc) ?? new Date(0), parseDate(a.dtLanc) ?? new Date(0)));
+      const ultimoLancAnterior = lancsAnteriores[0] ?? null;
+
+      // ── Carry entre períodos (diário ou semanal) ─────────────────────
+      // Para DIÁRIOS: carry avança a cada dia.
+      // Para SEMANAIS: carry avança a cada terça (semana a semana).
+      //   carry = { value, isEstimated }
+      //   isEstimated = true quando o saldo veio do Est. Teórico (sem lançamento)
+      let carry = ultimoLancAnterior
+        ? { value: num(ultimoLancAnterior.peso), isEstimated: false }
+        : null; // null = sem histórico anterior conhecido
+
+      // Para semanais: rastreia se a semana corrente já teve lançamento
+      let semanaComLanc = false;
+      let semanaAtualLunes = null; // segunda-feira da semana corrente
+
+      const getSegundaFeira = (d) => {
+        const dt = new Date(d);
+        const dow = dt.getDay(); // 0=Dom
+        const diff = (dow === 0) ? -6 : 1 - dow; // volta até segunda
+        dt.setDate(dt.getDate() + diff);
+        dt.setHours(0,0,0,0);
+        return localISODate(dt);
+      };
+
+      const firstDayKey = dateKey(dayList[0]);
+
+      const dailyRows = dayList.map(day => {
+        const key = dateKey(day);
+        const isFirstDay = key === firstDayKey;
+        const dayLancs = lancsMat.filter(rec => dateKey(parseDate(rec.dtLanc)) === key);
+        const daySap   = sapMat.filter(rec => dateKey(parseDate(rec.dtLanc)) === key);
+        const daySnap  = buildSnapshot({ lancs: dayLancs, sap: daySap });
+
+        const toDayEntry = s => {
+          const ref = (s.ref && String(s.ref).trim()) ? String(s.ref).trim()
+                    : (s.documento && String(s.documento).trim()) ? String(s.documento).trim() : '';
+          return [normMov(s.movimento), num(s.peso), ref, String(s.usuario || '').trim()];
+        };
+        const dayEntEntries = daySnap.entRecords.map(toDayEntry);
+        const daySaiEntries = daySnap.saiRecords.map(toDayEntry);
+
+        const hasLanc = dayLancs.length > 0;
+        const isTerca = day.getDay() === 2; // 2 = terça-feira
+
+        if (isSemanal) {
+          // ── LÓGICA SEMANAL ───────────────────────────────────────────
+          // Controle de semana: ao entrar numa nova semana, verifica se
+          // a semana anterior teve lançamento.
+          const semanaKey = getSegundaFeira(day);
+          if (semanaKey !== semanaAtualLunes) {
+            // Nova semana: se a semana anterior não teve lançamento,
+            // o carry passa a ser estimado (Est. Teórico da semana anterior)
+            if (semanaAtualLunes !== null && !semanaComLanc) {
+              // carry já foi propagado como estimado ao longo dos dias
+              // não precisa fazer nada aqui
+            }
+            semanaAtualLunes = semanaKey;
+            semanaComLanc = false;
+          }
+
+          if (hasLanc) semanaComLanc = true;
+
+          // Dias não-terça: exibir apenas SAP (entradas/saídas) e data.
+          // Sem Est. Inicial, Teórico, Real ou Variação — não é dia de conferência.
+          if (!isTerca && !hasLanc) {
+            // Apenas SAP do dia interessa; carry não muda
+            // (SAP acumula no Est. Teórico que será calculado na terça)
+            return {
+              dateLabel: fmtPtDate(day),
+              lancCount: 0,
+              initialStock: null,
+              initialIsEstimated: false,
+              entEntries: dayEntEntries,
+              saiEntries: daySaiEntries,
+              totalEnt: daySnap.totalEnt,
+              totalSai: daySnap.totalSai,
+              theoreticalStock: null,
+              finalStock: null,
+              finalIsEstimated: false,
+              hasLanc: false,
+              precisaLanc: false,
+              isSemanalNaoConferencia: true,
+              diff: null
+            };
+          }
+
+          // Terça OU dia com lançamento inesperado:
+          // Est. Inicial = carry atual (último lançamento real ou teórico anterior)
+          const initialStock = carry ? carry.value : 0;
+          const initialIsEstimated = carry ? carry.isEstimated : false;
+
+          // SAP acumulado da semana toda (seg a ter) para o Est. Teórico semanal
+          const semanaStart = new Date(day);
+          semanaStart.setDate(semanaStart.getDate() - (isTerca ? 6 : 0));
+          semanaStart.setHours(0,0,0,0);
+          const sapSemana = sapMat.filter(rec => {
+            const d = parseDate(rec.dtLanc);
+            return d && d >= semanaStart && d <= day;
+          });
+          const snapSemana = buildSnapshot({ lancs: [], sap: sapSemana });
+          const estTeorico = initialStock + snapSemana.totalEnt + snapSemana.totalSai;
+
+          const hasConflict = dayLancs.length > 1;
+          let finalStock, finalIsEstimated;
+          if (hasLanc) {
+            // Com conflito: soma todos os pesos (opção conservadora até o usuário resolver)
+            finalStock = hasConflict
+              ? dayLancs.reduce((acc, l) => acc + num(l.peso), 0)
+              : daySnap.pesoFim;
+            finalIsEstimated = false;
+            carry = { value: finalStock, isEstimated: false };
+          } else {
+            // Terça sem lançamento: Est. Final = Est. Teórico (estimado)
+            finalStock = estTeorico;
+            finalIsEstimated = true;
+            carry = { value: estTeorico, isEstimated: true };
+          }
+
+          const diff = hasLanc
+            ? (() => {
+                if (isFirstDay) {
+                  const rawDiff = finalStock - estTeorico;
+                  return (Math.abs(rawDiff) < 0.0001) ? 0 : null;
+                }
+                return finalStock - estTeorico;
+              })()
+            : null;
+
+          return {
+            dateLabel: fmtPtDate(day),
+            lancCount: dayLancs.length,
+            hasConflict,
+            lancamentos: dayLancs,
+            initialStock,
+            initialIsEstimated,
+            entEntries: dayEntEntries,
+            saiEntries: daySaiEntries,
+            totalEnt: daySnap.totalEnt,
+            totalSai: daySnap.totalSai,
+            theoreticalStock: estTeorico,
+            finalStock,
+            finalIsEstimated,
+            hasLanc,
+            precisaLanc: true,
+            isSemanalNaoConferencia: false,
+            diff
+          };
+
+        } else {
+          // ── LÓGICA DIÁRIA ────────────────────────────────────────────
+          // Est. Inicial = carry (último lançamento real ou teórico anterior)
+          const initialStock = carry ? carry.value : 0;
+          const initialIsEstimated = carry ? carry.isEstimated : false;
+
+          const estTeorico = initialStock + daySnap.totalEnt + daySnap.totalSai;
+
+          const hasConflict = dayLancs.length > 1;
+          let finalStock, finalIsEstimated;
+          if (hasLanc) {
+            finalStock = hasConflict
+              ? dayLancs.reduce((acc, l) => acc + num(l.peso), 0)
+              : daySnap.pesoFim;
+            finalIsEstimated = false;
+            carry = { value: finalStock, isEstimated: false };
+          } else {
+            finalStock = estTeorico;
+            finalIsEstimated = true;
+            carry = { value: estTeorico, isEstimated: true };
+          }
+
+          // No primeiro dia do período não há lançamento inicial confiável
+          // para calcular variação — suprimir diff (→ "—") exceto quando o
+          // lançamento final coincide com o inicial (diff seria 0 de qualquer modo).
+          let diff;
+          if (!hasLanc) {
+            diff = null;
+          } else if (isFirstDay) {
+            // Só exibe variação se o carry anterior for confiável E
+            // o finalStock igual ao carry (diff = 0); qualquer diferença
+            // seria espúria por falta de lançamento inicial no período.
+            const rawDiff = finalStock - estTeorico;
+            diff = (Math.abs(rawDiff) < 0.0001) ? 0 : null;
+          } else {
+            diff = finalStock - estTeorico;
+          }
+
+          return {
+            dateLabel: fmtPtDate(day),
+            lancCount: dayLancs.length,
+            hasConflict,
+            lancamentos: dayLancs,
+            initialStock,
+            initialIsEstimated,
+            entEntries: dayEntEntries,
+            saiEntries: daySaiEntries,
+            totalEnt: daySnap.totalEnt,
+            totalSai: daySnap.totalSai,
+            theoreticalStock: estTeorico,
+            finalStock,
+            finalIsEstimated,
+            hasLanc,
+            precisaLanc: true,
+            isSemanalNaoConferencia: false,
+            diff
+          };
+        }
+      });
+
+      const detailKey = `${idx}-${matIdx}-${String(mat).replace(/[^a-zA-Z0-9_-]+/g, '_')}`;
+      window.__analiticoDetailCache.set(detailKey, {
+        key: detailKey,
+        central: r.central,
+        material: mat,
+        periodLabel: `${fmtPtDate(dtIni)} a ${fmtPtDate(dtFim)}`,
+        summary: {
+          pesoIni: snapshot.pesoIni,
+          dtIniLabel: snapshot.dtIniLabel,
+          totalEnt: snapshot.totalEnt,
+          entLabel: (() => { const uCods = [...new Set(entEntries.map(([cod]) => cod))]; return uCods.length ? `${uCods.length} código${uCods.length !== 1 ? 's' : ''} · ${uCods.join(', ')}` : 'Sem entradas no período'; })(),
+          totalSai: snapshot.totalSai,
+          saiLabel: (() => { const uCods = [...new Set(saiEntries.map(([cod]) => cod))]; return uCods.length ? `${uCods.length} código${uCods.length !== 1 ? 's' : ''} · ${uCods.join(', ')}` : 'Sem saídas no período'; })(),
+          estTeorico: snapshot.estTeorico,
+          pesoFim: snapshot.pesoFim,
+          dtFimLabel: snapshot.dtFimLabel,
+          diff: snapshot.diff
+        },
+        days: dailyRows
+      });
+
+      const _rowCustoMed  = (r.custoMedioPorMat || {})[mat] || 0;
+      const _rowCustoVar  = _rowCustoMed > 0 ? snapshot.diff * _rowCustoMed : null;
+      const _rowVarCls    = _rowCustoVar === null ? '' : varClass(_rowCustoVar);
+      const _rowVarPfx    = _rowCustoVar !== null ? varSymbol(_rowCustoVar) : '';
+      const custoMedCell  = _rowCustoMed > 0
+        ? `<span class="td-mono" style="color:var(--text2);font-size:11.5px">${money(_rowCustoMed)}<span style="font-size:9.5px;opacity:.6">/kg</span></span>`
+        : `<span style="color:var(--text3);font-size:11px">—</span>`;
+      const custoVarCell  = _rowCustoVar !== null
+        ? `<span class="td-mono ${_rowVarCls}" style="font-size:11.5px;white-space:nowrap">${varSymbol(_rowCustoVar)} ${money(Math.abs(_rowCustoVar))}</span>`
+        : `<span style="color:var(--text3);font-size:11px">—</span>`;
+
+      matRowsHtml += `
+        <tr class="material-row" data-detail-key="${detailKey}" data-diff="${snapshot.diff}" data-peso-fim="${snapshot.pesoFim}" onclick="toggleMaterialDetail(this, event)">
+          <td class="td-mono" style="font-weight:600">
+            <span class="material-row-title">
+              <i class="ti ti-eye-search material-row-chev"></i>
+              ${escapeHtml(mat)}
+            </span>
+          </td>
+          <td class="td-mono" style="color:var(--text2);font-size:11px">${snapshot.dtIniLabel}</td>
+          <td class="td-mono" style="color:var(--text)">${fmtKg(snapshot.pesoIni)}</td>
+          <td>${buildAnaliticoDetailBreakdown(entEntries, snapshot.totalEnt, 'var(--green)', 'Entradas')}</td>
+          <td>${buildAnaliticoDetailBreakdown(saiEntries, snapshot.totalSai, 'var(--red)', 'Saídas')}</td>
+          <td class="td-mono" style="color:var(--text2);font-size:11px">${snapshot.dtFimLabel}</td>
+          <td class="td-mono" style="color:var(--text)">${fmtKg(snapshot.pesoFim)}</td>
+          <td class="td-mono" style="color:var(--purple)">${fmtKg(snapshot.estTeorico)}</td>
+          <td class="td-mono ${dCls}" style="white-space:nowrap">${varSymbol(snapshot.diff)} ${fmtKg(Math.abs(snapshot.diff))}</td>
+          <td style="text-align:right">${custoMedCell}</td>
+          <td style="text-align:right">${custoVarCell}</td>
+        </tr>`;
+    });
+
+          const varCentralMicro = variacaoCentralMicro;
+    const varCls = varClass(varCentralMicro);
+
+    // ── Produção badge removido ──────────────────────────────────────────
+    const prodBadge = '';
+
+    // ── Health panel (body, only when >= 5 materials) ────────────────────
+    let divPanelHtml = '';
+    let healthBadge  = '';
+    let healthCountsHtml = '';
+    const totalMats = allMatsSorted.length;
+
+    // Build categoria lookup for this central
+    const categoriaByMat = new Map();
+    allMatsSorted.forEach(mat => {
+      const lancs = lancsByMat.get(mat) || [];
+      const saps  = sapByMat.get(mat) || [];
+      const cat = (lancs[0]?.categoria || saps[0]?.categoria || '');
+      categoriaByMat.set(mat, cat);
+    });
+
+    // Health score + counts for the header badges
+    // USA initialStockOverride — mesma base do buildHealthPanel e do detalhamento
+    const thresholds = getHealthThresholds();
+    const matDiffs = allMatsSorted.map(mat => {
+      const prev = getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni });
+      const snap = buildSnapshot({
+        lancs: lancsByMat.get(mat) || [],
+        sap:   sapByMat.get(mat)   || [],
+        initialStockOverride:     prev?.value  ?? null,
+        initialDateLabelOverride: prev?.dtLabel ?? null,
+      });
+      const rawCat = categoriaByMat.get(mat) || '';
+      const catKey = detectCatKey(rawCat) || detectCatFromMat(mat);
+      return { mat, diff: snap.diff, catKey };
+    });
+    const healthResult = calcHealthScore(matDiffs, lancsByMat, sapByMat, thresholds);
+    const hLevel = healthResult.level;
+    const hScore = healthResult.score;
+    const hCounts = healthResult.counts || { bom: 0, atencao: 0, urgente: 0, critico: 0, neutro: 0 };
+    const hLabelMap  = { ok: 'SAUDÁVEL', atencao: 'ATENÇÃO', urgente: 'URGENTE', critico: 'CRÍTICO' };
+    const hIconMap   = { ok: 'ti-heartbeat', atencao: 'ti-alert-triangle', urgente: 'ti-alert-circle', critico: 'ti-flame' };
+    const hStyleMap  = {
+      ok:      'background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)',
+      atencao: 'background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border)',
+      urgente: 'background:rgba(249,115,22,0.10);color:#f97316;border:1px solid rgba(249,115,22,0.22)',
+      critico: 'background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)'
+    };
+    healthCountsHtml = `<div class="micro-health-counts">
+      <span class="micro-health-count-chip hcc-critico"><i class="ti ti-flame"></i> ${hCounts.critico} crítico</span>
+      <span class="micro-health-count-chip hcc-urgente"><i class="ti ti-alert-circle"></i> ${hCounts.urgente} urgente</span>
+      <span class="micro-health-count-chip hcc-atencao"><i class="ti ti-alert-triangle"></i> ${hCounts.atencao} atenção</span>
+      <span class="micro-health-count-chip hcc-bom"><i class="ti ti-circle-check"></i> ${hCounts.bom} bom</span>
+    </div>`;
+    healthBadge = `<span style="display:inline-flex;align-items:center;gap:5px;${hStyleMap[hLevel]};border-radius:6px;padding:2px 9px;font-family:var(--mono);font-size:10.5px;font-weight:700;white-space:nowrap">
+      <i class="ti ${hIconMap[hLevel]}" style="font-size:12px"></i>
+      Saúde: ${hScore}% · ${hLabelMap[hLevel]}
+    </span>`;
+
+    if (totalMats >= 5) {
+      divPanelHtml = buildHealthPanel(r.central, dtIni, allMatsSorted, lancsByMat, sapByMat, categoriaByMat);
+    }
+
+    const card = document.createElement('div');
+    card.className = 'micro-filial-card';
+    card.dataset.central = r.central || '';
+    card.dataset.centralDiff = varCentralMicro;
+    card.dataset.custoVariacao = custoVariacaoTotal;
+    card.dataset.healthLevel = healthBadge ? hLevel : 'none';
+    card.dataset.healthScore = healthBadge ? hScore : '';
+    // ── Badge de custo da variação ──────────────────────────────────────────
+    let custoBadge = '';
+    if (custoVariacaoTotal !== 0) {
+      const hasCustos = Object.keys(r.custoMedioPorMat || {}).length > 0;
+      if (hasCustos) {
+        const isNeg = custoVariacaoTotal < 0;
+        const isPos = custoVariacaoTotal > 0;
+        // Segue o padrão de cores de desfalque/sobra:
+        // desfalque (custo < 0) → vermelho | sobra (custo > 0) → âmbar
+        const custoStyle = isNeg
+          ? 'background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)'
+          : 'background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border)';
+        const custoIcon = isNeg ? 'ti-trending-down' : 'ti-trending-up';
+        custoBadge = `<span style="display:inline-flex;align-items:center;gap:5px;${custoStyle};border-radius:6px;padding:2px 9px;font-family:var(--mono);font-size:10.5px;font-weight:700;white-space:nowrap" title="Custo médio ponderado (Saídas) × variação de estoque por material">
+          <i class="ti ${custoIcon}" style="font-size:12px"></i>
+          Custo variação: ${money(Math.abs(custoVariacaoTotal))}
+        </span>`;
+      }
+    }
+
+    card.innerHTML = `
+      <div class="micro-filial-header" onclick="toggleMicro(this)">
+        <div class="micro-filial-name">
+          <i class="ti ti-building-warehouse"></i>
+          ${escapeHtml(r.central)}
+        </div>
+        <div class="micro-filial-summary">
+          <span class="${varCls}">
+            ${varIcon(varCentralMicro)} ${varLabel(varCentralMicro)}: ${fmtKg(Math.abs(varCentralMicro))}
+          </span>
+          ${custoBadge}
+          ${prodBadge}
+          ${healthCountsHtml}
+          ${healthBadge}
+        </div>
+        <i class="ti ti-chevron-down" style="color:var(--text3);font-size:16px;flex-shrink:0;transition:transform 0.2s" id="chev-${idx}"></i>
+      </div>
+
+      <div class="micro-filial-body" id="micro-body-${idx}">
+        ${divPanelHtml}
+
+        ${buildPendIntegSection({ central: r.central, dtIni, dtFim, sapNoPeriodo: r.sapNoPeriodo || [] })}
+
+        <div class="micro-body-section">
+          <div class="micro-section-title"><i class="ti ti-box"></i> Análise por Material</div>
+        </div>
+
+        <div class="micro-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Material</th>
+                <th>Dt. 1º Lançamento</th>
+                <th>Est. Inicial<br><span style="font-size:9px;font-weight:400;opacity:.7">(1º Lançamento)</span></th>
+                <th>Entradas<br><span style="font-size:9px;font-weight:400;opacity:.7">(por código)</span></th>
+                <th>Saídas<br><span style="font-size:9px;font-weight:400;opacity:.7">(por código)</span></th>
+                <th>Dt. Últ. Lançamento</th>
+                <th>Est. Final<br><span style="font-size:9px;font-weight:400;opacity:.7">(Últ. Lançamento)</span></th>
+                <th>Est. Teórico<br><span style="font-size:9px;font-weight:400;opacity:.7">(Ini+Ent+Sai)</span></th>
+                <th>Variação<br><span style="font-size:9px;font-weight:400;opacity:.7">(Real − Teórico)</span></th>
+                <th style="text-align:right">Custo Médio<br><span style="font-size:9px;font-weight:400;opacity:.7">(Saídas · R$/kg)</span></th>
+                <th style="text-align:right">Custo Variação<br><span style="font-size:9px;font-weight:400;opacity:.7">(Var. × C. Médio)</span></th>
+              </tr>
+            </thead>
+            <tbody>${matRowsHtml || '<tr><td colspan="11"><div class="empty-state" style="padding:24px"><i class="ti ti-box-off"></i><p>Nenhum material encontrado.</p></div></td></tr>'}</tbody>
+          </table>
+        </div>
+      </div>`;
+
+    // Lookup regional for this central
+    const filialIdx = getFilialLookupIndex();
+    const filialRec = filialIdx.exact.get(normalizeText(r.central));
+    card.dataset.regional = (filialRec?.regional || '').trim();
+
+    card.querySelectorAll('.micro-table-wrap table').forEach(makeResizable);
+
+    // Store card for grouping below
+    _cardBuffer.push(card);
+  });
+
+  // ── Group cards by regional ──────────────────────────────────────────────
+  // Preserve the sorted order within each group (by worst variação first)
+  const groupOrder = [];
+  const groupMap   = new Map(); // regional → { cards: [], hCounts: aggregate }
+
+  _cardBuffer.forEach(card => {
+    const reg = card.dataset.regional || '';
+    if (!groupMap.has(reg)) {
+      groupOrder.push(reg);
+      groupMap.set(reg, []);
+    }
+    groupMap.get(reg).push(card);
+  });
+
+  // Sort groups: maior desfalque (diff mais negativo) primeiro → maior sobra por último; sem regional sempre no fim
+  const groupDiff = new Map();
+  groupOrder.forEach(reg => {
+    const diff = groupMap.get(reg).reduce((s, c) => s + parseFloat(c.dataset.centralDiff || 0), 0);
+    groupDiff.set(reg, diff);
+  });
+  groupOrder.sort((a, b) => {
+    if (!a && b)  return 1;   // sem regional sempre no fim
+    if (a && !b)  return -1;
+    return groupDiff.get(a) - groupDiff.get(b); // mais negativo (desfalque) primeiro
+  });
+
+  groupOrder.forEach(regional => {
+    const cards = groupMap.get(regional);
+
+    // ── Aggregate data from all cards in the group ──────────────────────────
+    let totalDiff = 0;
+    let totalCusto = 0;
+    const agg = { critico: 0, urgente: 0, atencao: 0, bom: 0 };
+    const levelPriority = { critico: 4, urgente: 3, atencao: 2, ok: 1, none: 0 };
+    let scoreSum = 0, scoreCount = 0;
+
+    cards.forEach(c => {
+      totalDiff  += parseFloat(c.dataset.centralDiff  || 0);
+      totalCusto += parseFloat(c.dataset.custoVariacao || 0);
+      const lvl = c.dataset.healthLevel;
+      if      (lvl === 'critico') agg.critico++;
+      else if (lvl === 'urgente') agg.urgente++;
+      else if (lvl === 'atencao') agg.atencao++;
+      else if (lvl === 'ok')      agg.bom++;
+      const sc = parseFloat(c.dataset.healthScore);
+      if (!isNaN(sc)) { scoreSum += sc; scoreCount++; }
+    });
+
+    // Média de saúde das centrais do regional
+    const avgScore = scoreCount > 0 ? Math.round(scoreSum / scoreCount) : null;
+
+    // Dominant health level = worst present
+    const domLevel = agg.critico ? 'critico'
+                   : agg.urgente ? 'urgente'
+                   : agg.atencao ? 'atencao'
+                   : agg.bom     ? 'ok'
+                   : 'none';
+
+    // ── Variação badge (segue padrão diff-pos/diff-neg: sobra=âmbar, desfalque=vermelho) ──
+    const diffCls   = totalDiff < 0 ? 'diff-neg' : totalDiff > 0 ? 'diff-pos' : 'diff-zero';
+    const diffIcon  = totalDiff < 0
+      ? '<i class="ti ti-trending-down" style="font-size:11px;color:var(--red)"></i>'
+      : totalDiff > 0
+        ? '<i class="ti ti-trending-up" style="font-size:11px;color:var(--amber)"></i>'
+        : '<i class="ti ti-minus" style="font-size:11px;color:var(--text3)"></i>';
+    const diffLabel = totalDiff < 0 ? 'Desfalque' : totalDiff > 0 ? 'Sobra' : 'Neutro';
+    const diffBadge = `<span class="${diffCls}" style="display:inline-flex;align-items:center;gap:4px;font-family:var(--mono);font-size:10.5px;font-weight:700;white-space:nowrap">
+      ${diffIcon} ${diffLabel}: ${fmtKg(Math.abs(totalDiff))}
+    </span>`;
+
+    // ── Custo badge ──────────────────────────────────────────────────────────
+    let custoBadgeGrp = '';
+    if (totalCusto !== 0) {
+      const isNeg = totalCusto < 0;
+      // Segue o padrão de cores de desfalque/sobra:
+      // desfalque (custo < 0) → vermelho | sobra (custo > 0) → âmbar
+      const custoStyle = isNeg
+        ? 'background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)'
+        : 'background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border)';
+      const custoIcon = isNeg ? 'ti-trending-down' : 'ti-trending-up';
+      custoBadgeGrp = `<span style="display:inline-flex;align-items:center;gap:4px;${custoStyle};border-radius:6px;padding:2px 9px;font-family:var(--mono);font-size:10.5px;font-weight:700;white-space:nowrap">
+        <i class="ti ${custoIcon}" style="font-size:11px"></i> Custo variação: ${money(Math.abs(totalCusto))}
+      </span>`;
+    }
+
+    // ── Health count chips ───────────────────────────────────────────────────
+    const aggChips = [
+      agg.critico ? `<span class="micro-health-count-chip hcc-critico"><i class="ti ti-flame"></i> ${agg.critico} crítico</span>` : '',
+      agg.urgente ? `<span class="micro-health-count-chip hcc-urgente"><i class="ti ti-alert-circle"></i> ${agg.urgente} urgente</span>` : '',
+      agg.atencao ? `<span class="micro-health-count-chip hcc-atencao"><i class="ti ti-alert-triangle"></i> ${agg.atencao} atenção</span>` : '',
+      agg.bom     ? `<span class="micro-health-count-chip hcc-bom"><i class="ti ti-circle-check"></i> ${agg.bom} bom</span>` : '',
+    ].filter(Boolean).join('');
+
+    // ── Dominant health badge ────────────────────────────────────────────────
+    const hStyleMap = {
+      ok:      'background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)',
+      atencao: 'background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border)',
+      urgente: 'background:rgba(249,115,22,0.10);color:#f97316;border:1px solid rgba(249,115,22,0.22)',
+      critico: 'background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)',
+      none:    'background:var(--bg3);color:var(--text3);border:1px solid var(--border2)',
+    };
+    const hIconMap  = { ok: 'ti-heartbeat', atencao: 'ti-alert-triangle', urgente: 'ti-alert-circle', critico: 'ti-flame', none: 'ti-minus' };
+    const hLabelMap = { ok: 'SAUDÁVEL', atencao: 'ATENÇÃO', urgente: 'URGENTE', critico: 'CRÍTICO', none: 'SEM DADOS' };
+    const healthBadgeGrp = domLevel !== 'none'
+      ? `<span style="display:inline-flex;align-items:center;gap:5px;${hStyleMap[domLevel]};border-radius:6px;padding:2px 9px;font-family:var(--mono);font-size:10.5px;font-weight:700;white-space:nowrap" title="Média da saúde das centrais deste regional">
+          <i class="ti ${hIconMap[domLevel]}" style="font-size:12px"></i> Saúde: ${avgScore !== null ? avgScore + '%' : '—'} · ${hLabelMap[domLevel]}
+        </span>`
+      : '';
+
+    const isSemRegional = !regional;
+    const group = document.createElement('div');
+    group.className = 'regional-group' + (isSemRegional ? ' sem-regional' : '');
+    group.dataset.regional = regional;
+    group.innerHTML = `
+      <div class="regional-group-header" onclick="toggleRegional(this)">
+        <div class="regional-group-icon"><i class="ti ${isSemRegional ? 'ti-map-pin-off' : 'ti-users-group'}"></i></div>
+        <span class="regional-group-name">${isSemRegional ? 'Sem regional' : escapeHtml(regional)}</span>
+        <div class="regional-group-summary">
+          ${diffBadge}
+          ${custoBadgeGrp}
+          <span class="regional-group-chips">${aggChips}</span>
+          ${healthBadgeGrp}
+        </div>
+        <span class="regional-group-count">${cards.length} ${cards.length !== 1 ? 'centrais' : 'central'}</span>
+        <i class="ti ti-chevron-down regional-group-chev" id="rchev-${encodeURIComponent(regional || '_sem')}"></i>
+      </div>
+      <div class="regional-group-body open"></div>`;
+
+    const body = group.querySelector('.regional-group-body');
+    cards.forEach(c => body.appendChild(c));
+    container.appendChild(group);
+  });
+
+  // ─── RESUMO POR CENTRAL (dados do card) ─────────────────────────────
+  window._anResumoCentraisData = _cardBuffer.map(card => ({
+    central:      card.dataset.central     || '—',
+    regional:     card.dataset.regional    || '—',
+    variacaoKg:   card.dataset.centralDiff || '0',
+    custoVar:     card.dataset.custoVariacao || '0',
+    saude:        card.dataset.healthScore != null && card.dataset.healthScore !== ''
+                    ? card.dataset.healthScore + '% · ' + (card.dataset.healthLevel || '—').toUpperCase()
+                    : '—',
+    healthLevel:  card.dataset.healthLevel || 'none',
+    healthScore:  card.dataset.healthScore || ''
+  }));
+
+
+  // Populate filter dropdowns with available centrais e materiais
+  populateMicroFilterOptions(results);
+  // Reset applied filters whenever a new analysis runs
+  clearAllMicroFilters();
+
+  // Renderiza painéis Macro (crank + donut) — macro.js
+  if (typeof renderMacroPanels === 'function') {
+    const th = typeof getHealthThresholds === 'function' ? getHealthThresholds() : {};
+    renderMacroPanels(results, th, dtIni, dtFim);
+  }
+}
+
+
+
+
+function toggleMaterialDetail(row, event) {
+  if (event && (
+    event.target.closest('.breakdown-trigger') ||
+    event.target.closest('.breakdown-popover') ||
+    event.target.closest('button, a, input, select, label')
+  )) {
+    return;
+  }
+
+  const key = row?.dataset?.detailKey;
+  if (!key) return;
+  openAnaliticoDetailModal(key);
+}
+
+
+function toggleMicro(header) {
+  const body = header.nextElementSibling;
+  const chev = header.querySelector('[id^="chev-"]');
+  if (!body) return;
+  const open = body.classList.toggle('open');
+  if (chev) chev.style.transform = open ? 'rotate(180deg)' : '';
+}
+
+function toggleRegional(header) {
+  const group = header.closest('.regional-group');
+  const body  = group.querySelector('.regional-group-body');
+  const chev  = header.querySelector('.regional-group-chev');
+  if (!body) return;
+  const open = body.classList.toggle('open');
+  group.classList.toggle('collapsed', !open);
+  if (chev) chev.style.transform = open ? '' : 'rotate(-90deg)';
+}
+
+function limparAnalitico() {
+  document.getElementById('an-dt-ini').value = '';
+  document.getElementById('an-dt-fim').value = '';
+  document.getElementById('an-empty').style.display = '';
+  document.getElementById('an-content').style.display = 'none';
+  if (window.updatePeriodFab) updatePeriodFab();
+}
+
+// ═══════════════════════════════════════════════════════════
+// MICRO FILTER BAR
+// ═══════════════════════════════════════════════════════════
+const _microFilter = {
+  // Pending selections (while dropdown is open)
+  pending: { central: new Set(), material: new Set(), regional: new Set() },
+  // Applied selections
+  applied: { central: new Set(), material: new Set(), regional: new Set() },
+  // All available options extracted from last renderAnaliticoMicro call
+  options: { central: [], material: [], regional: [] },
+  // variação data keyed by "central|||material" for row-level filtering
+  variacaoData: new Map()
+};
+
+function _microFilterBar() { return document.getElementById('micro-filter-bar'); }
+
+/** Populate filter options from the rendered results data */
+function populateMicroFilterOptions(results) {
+  const centrais = [...new Set(results.map(r => r.central).filter(Boolean))].sort();
+  const mats = [...new Set(results.flatMap(r => r.allMats || []).filter(Boolean))].sort();
+  // Regionais: lookup each central in state.filiais by alias or origem
+  const idx = getFilialLookupIndex();
+  const regionais = [...new Set(results.map(r => {
+    const key = normalizeText(r.central);
+    const found = idx.exact.get(key);
+    return (found?.regional || '').trim();
+  }).filter(Boolean))].sort();
+  _microFilter.options.central  = centrais;
+  _microFilter.options.material = mats;
+  _microFilter.options.regional = regionais;
+  _buildOptionsList('regional');
+  _buildOptionsList('central');
+  _buildOptionsList('material');
+  _syncTriggerLabel('regional');
+  _syncTriggerLabel('central');
+  _syncTriggerLabel('material');
+  _syncTriggerLabel('variacao');
+  _syncClearBtn();
+  // Show bar only when there is data
+  const bar = _microFilterBar();
+  if (bar) bar.style.display = results.length ? 'flex' : 'none';
+}
+
+function _buildOptionsList(key, query = '') {
+  const container = document.getElementById(`mfo-${key}`);
+  if (!container) return;
+  const opts = _microFilter.options[key];
+  const q = query.toLowerCase().trim();
+  const filtered = q ? opts.filter(o => o.toLowerCase().includes(q)) : opts;
+  const applied = _microFilter.applied[key];
+  const pending = _microFilter.pending[key];
+
+  if (!filtered.length) {
+    container.innerHTML = `<div style="padding:12px 10px;color:var(--text3);font-size:12px;text-align:center">Nenhum resultado</div>`;
+    return;
+  }
+  container.innerHTML = filtered.map(opt => {
+    const checked = pending.size ? pending.has(opt) : applied.has(opt);
+    const id = `mfopt-${key}-${opt.replace(/[^a-z0-9]/gi,'_')}`;
+    return `<label class="micro-filter-option" for="${id}">
+      <input type="checkbox" id="${id}" value="${escapeHtml(opt)}" ${checked ? 'checked' : ''}
+        onchange="_microFilterCheckChange('${key}', this)">
+      <span class="micro-filter-option-label" title="${escapeHtml(opt)}">${escapeHtml(opt)}</span>
+    </label>`;
+  }).join('');
+}
+
+function _microFilterCheckChange(key, checkbox) {
+  const val = checkbox.value;
+  const pending = _microFilter.pending[key];
+  if (checkbox.checked) pending.add(val);
+  else pending.delete(val);
+}
+
+function toggleMicroFilter(key) {
+  const dd = document.getElementById(`mfd-${key}`);
+  const chev = document.getElementById(`mfc-${key}`);
+  const allKeys = ['regional', 'central', 'material', 'variacao'];
+  // Close all other dropdowns first
+  allKeys.filter(k => k !== key).forEach(otherKey => {
+    const otherDd = document.getElementById(`mfd-${otherKey}`);
+    const otherChev = document.getElementById(`mfc-${otherKey}`);
+    if (otherDd?.classList.contains('open')) {
+      otherDd.classList.remove('open');
+      otherChev?.classList.remove('open');
+      if (otherKey === 'variacao') {
+        _varFilter.pending.levels = new Set(_varFilter.applied.levels);
+      } else {
+        _microFilter.pending[otherKey] = new Set(_microFilter.applied[otherKey]);
+      }
+    }
+  });
+  const isOpen = dd.classList.toggle('open');
+  chev.classList.toggle('open', isOpen);
+  if (isOpen) {
+    // Sync pending with applied when opening
+    if (key === 'variacao') {
+      _varFilter.pending.levels = new Set(_varFilter.applied.levels);
+      _buildVariacaoOptions();
+    } else {
+      _microFilter.pending[key] = new Set(_microFilter.applied[key]);
+      // Reset search
+      const searchEl = document.getElementById(`mfs-${key}`);
+      if (searchEl) searchEl.value = '';
+      _buildOptionsList(key);
+      // Focus search
+      setTimeout(() => searchEl?.focus(), 50);
+    }
+  }
+}
+
+function filterMicroOptions(key, query) {
+  _buildOptionsList(key, query);
+}
+
+function applyMicroFilter(key) {
+  if (key === 'variacao') {
+    _readVarPending();
+    _varFilter.applied.levels = new Set(_varFilter.pending.levels);
+  } else {
+    _microFilter.applied[key] = new Set(_microFilter.pending[key]);
+  }
+  _closeMicroFilterDropdown(key);
+  _syncTriggerLabel(key);
+  _syncClearBtn();
+  _applyMicroVisibility();
+}
+
+function cancelMicroFilter(key) {
+  if (key === 'variacao') {
+    _varFilter.pending.levels = new Set(_varFilter.applied.levels);
+  } else {
+    _microFilter.pending[key] = new Set(_microFilter.applied[key]);
+  }
+  _closeMicroFilterDropdown(key);
+}
+
+function _closeMicroFilterDropdown(key) {
+  document.getElementById(`mfd-${key}`)?.classList.remove('open');
+  document.getElementById(`mfc-${key}`)?.classList.remove('open');
+}
+
+function _syncTriggerLabel(key) {
+  const btn = document.getElementById(`mft-${key}`);
+  const label = document.getElementById(`mft-${key}-label`);
+  if (!label || !btn) return;
+  const keyLabels = { regional: 'Regional', central: 'Central', material: 'Material', variacao: 'Saúde' };
+  const keyLabel = keyLabels[key] || key;
+
+  if (key === 'variacao') {
+    const st = _varFilter.applied;
+    if (!_varFilterIsActive(st)) {
+      label.innerHTML = keyLabel;
+      btn.classList.remove('active');
+    } else {
+      const labelMap = { ok: 'Saudável', atencao: 'Atenção', urgente: 'Urgente', critico: 'Crítico', none: 'Sem saúde' };
+      const summary = [...st.levels].map(l => labelMap[l] || l).join(', ');
+      label.innerHTML = st.levels.size === 1
+        ? `${keyLabel}: <strong>${summary}</strong>`
+        : `${keyLabel} <span class="micro-filter-badge">${st.levels.size}</span>`;
+      btn.classList.add('active');
+    }
+    return;
+  }
+
+  const applied = _microFilter.applied[key];
+  if (!applied.size) {
+    label.innerHTML = keyLabel;
+    btn.classList.remove('active');
+  } else if (applied.size === 1) {
+    const val = [...applied][0];
+    label.innerHTML = `${keyLabel}: <strong>${escapeHtml(val.length > 18 ? val.slice(0,18)+'…' : val)}</strong>`;
+    btn.classList.add('active');
+  } else {
+    label.innerHTML = `${keyLabel} <span class="micro-filter-badge">${applied.size}</span>`;
+    btn.classList.add('active');
+  }
+}
+
+function _syncClearBtn() {
+  const btn = document.getElementById('micro-filter-clear-btn');
+  if (!btn) return;
+  const hasAny = _microFilter.applied.regional.size || _microFilter.applied.central.size || _microFilter.applied.material.size || _varFilterIsActive(_varFilter.applied);
+  btn.style.display = hasAny ? '' : 'none';
+}
+
+function clearAllMicroFilters() {
+  _microFilter.applied.regional = new Set();
+  _microFilter.applied.central  = new Set();
+  _microFilter.applied.material = new Set();
+  _microFilter.pending.regional = new Set();
+  _microFilter.pending.central  = new Set();
+  _microFilter.pending.material = new Set();
+  _varFilter.applied  = { levels: new Set() };
+  _varFilter.pending  = { levels: new Set() };
+  _syncTriggerLabel('regional');
+  _syncTriggerLabel('central');
+  _syncTriggerLabel('material');
+  _syncTriggerLabel('variacao');
+  _syncClearBtn();
+  _applyMicroVisibility();
+}
+
+// ── Saúde filter state (replaces old variação % filter) ──
+const _varFilter = {
+  pending:  { levels: new Set() },
+  applied:  { levels: new Set() },
+};
+
+function _varFilterChange() {
+  // Sync chip visual state
+  document.querySelectorAll('#mfr-health-levels .mfr-chip').forEach(chip => {
+    const cb = chip.querySelector('input[type="checkbox"]');
+    chip.classList.toggle('checked', cb.checked);
+  });
+  _updateVarHint();
+}
+
+function _updateVarHint() {
+  const hint = document.getElementById('mfr-hint');
+  if (!hint) return;
+  const levels = [...document.querySelectorAll('#mfr-health-levels input:checked')].map(i => i.value);
+  if (!levels.length) {
+    hint.textContent = 'Nenhum filtro definido.';
+    hint.className = 'mfr-hint';
+    return;
+  }
+  const labelMap = { ok: 'Saudável', atencao: 'Atenção', urgente: 'Urgente', critico: 'Crítico', none: 'Sem saúde' };
+  hint.textContent = 'Exibindo: ' + levels.map(l => labelMap[l] || l).join(', ');
+  hint.className = 'mfr-hint active';
+}
+
+function _syncVarDropdownToState(state) {
+  document.querySelectorAll('#mfr-health-levels input[type="checkbox"]').forEach(cb => {
+    cb.checked = state.levels.has(cb.value);
+    cb.closest('.mfr-chip').classList.toggle('checked', cb.checked);
+  });
+  _updateVarHint();
+}
+
+function _readVarPending() {
+  const levels = new Set([...document.querySelectorAll('#mfr-health-levels input:checked')].map(i => i.value));
+  _varFilter.pending.levels = levels;
+}
+
+function _varFilterIsActive(state) {
+  return state.levels.size > 0;
+}
+
+function _buildVariacaoOptions() {
+  _syncVarDropdownToState(_varFilter.pending);
+}
+
+function _applyMicroVisibility() {
+  const appliedRegionals = _microFilter.applied.regional;
+  const appliedCentrals  = _microFilter.applied.central;
+  const appliedMaterials = _microFilter.applied.material;
+  const varState = _varFilter.applied;
+  const varActive = _varFilterIsActive(varState);
+
+  // Handle regional groups
+  document.querySelectorAll('#an-micro-container .regional-group').forEach(group => {
+    const groupRegional = group.dataset.regional || '';
+    // Regional filter applies at group level
+    if (appliedRegionals.size && !appliedRegionals.has(groupRegional)) {
+      group.style.display = 'none'; return;
+    }
+    group.style.display = '';
+
+    let anyCardVisible = false;
+    group.querySelectorAll('.micro-filial-card').forEach(card => {
+      const header = card.querySelector('.micro-filial-name');
+      const centralName = header ? header.textContent.trim() : '';
+
+      if (appliedCentrals.size && !appliedCentrals.has(centralName)) {
+        card.style.display = 'none'; return;
+      }
+      if (varActive) {
+        const cardLevel = card.dataset.healthLevel || 'none';
+        if (!varState.levels.has(cardLevel)) {
+          card.style.display = 'none'; return;
+        }
+      }
+      const rows = card.querySelectorAll('tbody tr.material-row');
+      if (appliedMaterials.size) {
+        let visibleRows = 0;
+        rows.forEach(row => {
+          const matCell = row.querySelector('td:first-child');
+          const matName = matCell ? matCell.textContent.trim() : '';
+          const show = appliedMaterials.has(matName);
+          row.style.display = show ? '' : 'none';
+          if (show) visibleRows++;
+        });
+        if (visibleRows === 0) { card.style.display = 'none'; return; }
+        card.style.display = '';
+      } else {
+        rows.forEach(r => r.style.display = '');
+        card.style.display = '';
+      }
+      anyCardVisible = true;
+    });
+
+    // Hide the whole group if no cards are visible after all filters
+    if (!anyCardVisible) group.style.display = 'none';
+  });
+}
+
+function expandAllMicro() {
+  // Expande regionais
+  document.querySelectorAll('#an-micro-container .regional-group').forEach(group => {
+    const body = group.querySelector('.regional-group-body');
+    const chev = group.querySelector('.regional-group-chev');
+    if (body) body.classList.add('open');
+    group.classList.remove('collapsed');
+    if (chev) chev.style.transform = '';
+  });
+  // Expande cards de central
+  document.querySelectorAll('#an-micro-container .micro-filial-card').forEach(card => {
+    const body = card.querySelector('.micro-filial-body');
+    const chev = card.querySelector('[id^="chev-"]');
+    if (body) body.classList.add('open');
+    if (chev) chev.style.transform = 'rotate(180deg)';
+  });
+}
+
+function collapseAllMicro() {
+  // Recolhe regionais
+  document.querySelectorAll('#an-micro-container .regional-group').forEach(group => {
+    const body = group.querySelector('.regional-group-body');
+    const chev = group.querySelector('.regional-group-chev');
+    if (body) body.classList.remove('open');
+    group.classList.add('collapsed');
+    if (chev) chev.style.transform = 'rotate(-90deg)';
+  });
+  // Recolhe cards de central
+  document.querySelectorAll('#an-micro-container .micro-filial-card').forEach(card => {
+    const body = card.querySelector('.micro-filial-body');
+    const chev = card.querySelector('[id^="chev-"]');
+    if (body) body.classList.remove('open');
+    if (chev) chev.style.transform = '';
+  });
+}
+
+// Close dropdowns when clicking outside
+document.addEventListener('click', e => {
+  ['regional','central','material','variacao'].forEach(key => {
+    const group = document.getElementById(`mfg-${key}`);
+    if (group && !group.contains(e.target)) {
+      const dd = document.getElementById(`mfd-${key}`);
+      if (dd?.classList.contains('open')) {
+        // Cancel pending on outside click
+        if (key === 'variacao') {
+          _varFilter.pending.levels = new Set(_varFilter.applied.levels);
+        } else {
+          _microFilter.pending[key] = new Set(_microFilter.applied[key]);
+        }
+        _closeMicroFilterDropdown(key);
+      }
+    }
+  });
+});
+
+Object.assign(window, { _microFilterCheckChange, toggleMicroFilter, filterMicroOptions,
+  applyMicroFilter, cancelMicroFilter, clearAllMicroFilters,
+  expandAllMicro, collapseAllMicro, populateMicroFilterOptions,
+  _buildVariacaoOptions, _varFilterChange });
+
+// ═══════════════════════════════════════════════════════════
+
+Object.assign(window, {
+  toggleSidebar,
+  closeSidebar,
+  navigate,
+  openModal,
+  closeModal,
+  setTab,
+  setModulo,
+  exportarDados,
+  toast,
+  handleImport,
+  handleFiliaisImport,
+  salvarEntrada,
+  salvarSaida,
+  salvarLancamento,
+  salvarSAP,
+  salvarProducao,
+  salvarConfig,
+  salvarFiliais,
+  salvarMateriais,
+  renderConfigs,
+  renderFiliais,
+  renderMateriais,
+  renderImports,
+  excluirImportacao,
+  excluirProducao,
+  removerConfig,
+  editConfig,
+  deleteConfig,
+  saveResponsavel,
+  updateParamGerais,
+  applyColFilter,
+  clearColFilter,
+  clearAllColFilters,
+  filtrarTabela,
+  filtrarProducao,
+  filtrarLista,
+  irParaPagina,
+  paginaAnterior,
+  proximaPagina,
+  irParaUltima,
+  primeiraPaginaProducao,
+  paginaAnteriorProducao,
+  proximaPaginaProducao,
+  ultimaPaginaProducao,
+  removerRegistro,
+  removerFilial,
+  removerMaterial,
+  limparFiliais,
+  limparMateriais,
+  focusFilialImport,
+  focusMaterialImport,
+  handleMateriaisImport,
+  rodarAnalitico,
+  limparAnalitico,
+  setTheme,
+  toggleThemeMenu,
+  applyTheme,
+  closeThemeMenu,
+  getSavedTheme,
+  openAnaliticoDetailModal,
+  closeAnaliticoDetailModal,
+  toggleAnaliticoDetailFullscreen,
+  toggleMicro,
+  toggleRegional,
+  toggleMaterialDetail,
+  toggleBreakdown,
+  expandAllMicro,
+  collapseAllMicro,
+  toggleMicroFilter,
+  filterMicroOptions,
+  applyMicroFilter,
+  cancelMicroFilter,
+  clearAllMicroFilters
+});
+
+// ═══════════════════════════════════════════════════════════
+// CLOCK
+// ═══════════════════════════════════════════════════════════
+function updateClock() {
+  const now = new Date();
+  const hh = String(now.getHours()).padStart(2, '0');
+  const mm = String(now.getMinutes()).padStart(2, '0');
+  const dd = String(now.getDate()).padStart(2, '0');
+  const mo = String(now.getMonth() + 1).padStart(2, '0');
+  const yy = now.getFullYear();
+  const timeEl = document.getElementById('clock-time');
+  const dateEl = document.getElementById('clock-date');
+  if (timeEl) timeEl.textContent = `${hh}:${mm}`;
+  if (dateEl) dateEl.textContent = `${dd}/${mo}/${yy}`;
+}
+
+// ═══════════════════════════════════════════════════════════
+// SIDEBAR COLLAPSE
+// ═══════════════════════════════════════════════════════════
+const SIDEBAR_COLLAPSED_KEY = 'analyticsys_sidebar_collapsed_v1';
+
+function toggleSidebarCollapse() {
+  const sidebar = document.getElementById('main-sidebar');
+  if (!sidebar) return;
+  const isCollapsed = sidebar.classList.toggle('collapsed');
+  try { localStorage.setItem(SIDEBAR_COLLAPSED_KEY, isCollapsed ? '1' : '0'); } catch(e) {}
+}
+
+function restoreSidebarState() {
+  try {
+    const val = localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
+    if (val === '1') {
+      const sidebar = document.getElementById('main-sidebar');
+      if (sidebar) sidebar.classList.add('collapsed');
+    }
+  } catch(e) {}
+}
+
+Object.assign(window, { toggleSidebarCollapse, toggleSidebar, closeSidebar });
+
+// ═══════════════════════════════════════════════════════════
+// QUICK PERIOD SHORTCUTS
+// ═══════════════════════════════════════════════════════════
+function toISODate(d) {
+  return localISODate(d);
+}
+
+function setQuickPeriod(days) {
+  const end = new Date();
+  const start = new Date();
+  start.setDate(end.getDate() - days + 1);
+  const ini = document.getElementById('an-dt-ini');
+  const fim = document.getElementById('an-dt-fim');
+  if (ini) ini.value = toISODate(start);
+  if (fim) fim.value = toISODate(end);
+  document.querySelectorAll('.qp-btn').forEach(b => b.classList.remove('active'));
+  event?.target?.classList.add('active');
+  rodarAnalitico();
+}
+
+function setQuickPeriodCurrentMonth() {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  const ini = document.getElementById('an-dt-ini');
+  const fim = document.getElementById('an-dt-fim');
+  if (ini) ini.value = toISODate(start);
+  if (fim) fim.value = toISODate(end);
+  document.querySelectorAll('.qp-btn').forEach(b => b.classList.remove('active'));
+  event?.target?.classList.add('active');
+  rodarAnalitico();
+}
+
+function setQuickPeriodCurrentYear() {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), 0, 1);
+  const end = new Date(now.getFullYear(), 11, 31);
+  const ini = document.getElementById('an-dt-ini');
+  const fim = document.getElementById('an-dt-fim');
+  if (ini) ini.value = toISODate(start);
+  if (fim) fim.value = toISODate(end);
+  document.querySelectorAll('.qp-btn').forEach(b => b.classList.remove('active'));
+  event?.target?.classList.add('active');
+  rodarAnalitico();
+}
+
+Object.assign(window, { setQuickPeriod, setQuickPeriodCurrentMonth, setQuickPeriodCurrentYear });
+
+// ═══════════════════════════════════════════════════════════
+// GLOBAL SEARCH
+// ═══════════════════════════════════════════════════════════
+const moduleColors = {
+  'Entrada':    { bg: 'var(--green-bg)',   color: 'var(--green)'  },
+  'Saída':      { bg: 'var(--red-bg)',     color: 'var(--red)'    },
+  'Lançamento': { bg: 'var(--amber-bg)',   color: 'var(--amber)'  },
+  'SAP':        { bg: 'var(--accent-dim)', color: 'var(--accent)' },
+  'Produção':   { bg: 'var(--purple-bg)',  color: 'var(--purple)' },
+};
+
+function handleGlobalSearch(query) {
+  const dropdown = document.getElementById('global-search-dropdown');
+  if (!dropdown) return;
+  const q = query.trim().toLowerCase();
+  if (!q || q.length < 2) { dropdown.classList.remove('open'); return; }
+
+  const results = [];
+  const push = (mod, navKey, label, sub) => {
+    if (results.length < 8) results.push({ mod, navKey, label, sub });
+  };
+
+  (state.entradas || []).forEach(r => {
+    const hay = [r.material, r.centralCompra, r.centralDestino, r.nf, r.fornecedor].join(' ').toLowerCase();
+    if (hay.includes(q)) push('Entrada', 'entradas', r.material || r.nf || '—', r.centralCompra || '');
+  });
+  (state.saidas || []).forEach(r => {
+    const hay = [r.material, r.central, r.os, r.fornecedor].join(' ').toLowerCase();
+    if (hay.includes(q)) push('Saída', 'saidas', r.material || r.os || '—', r.central || '');
+  });
+  (state.lancamentos || []).forEach(r => {
+    const hay = [r.material, r.central, r.fornecedor].join(' ').toLowerCase();
+    if (hay.includes(q)) push('Lançamento', 'lancamentos', r.material || '—', r.central || '');
+  });
+  (state.sap || []).forEach(r => {
+    const hay = [r.material, r.central, r.documento, r.movimento].join(' ').toLowerCase();
+    if (hay.includes(q)) push('SAP', 'sap', r.material || r.documento || '—', r.central || '');
+  });
+  (state.producao || []).forEach(r => {
+    const hay = [r.central, r.mes].join(' ').toLowerCase();
+    if (hay.includes(q)) push('Produção', 'producao', r.central || '—', r.mes || '');
+  });
+
+  if (!results.length) {
+    dropdown.innerHTML = `<div class="search-no-results"><i class="ti ti-search-off" style="margin-right:6px"></i>Nenhum resultado para "${escapeHtml(query)}"</div>`;
+  } else {
+    dropdown.innerHTML = results.map(r => {
+      const c = moduleColors[r.mod] || {};
+      return `<div class="search-result-item" onclick="navigate('${r.navKey}'); closeGlobalSearch()">
+        <span class="search-result-module" style="background:${c.bg||'var(--bg3)'};color:${c.color||'var(--text2)'};">${r.mod}</span>
+        <span class="search-result-text">${escapeHtml(r.label)}</span>
+        <span class="search-result-sub">${escapeHtml(r.sub)}</span>
+      </div>`;
+    }).join('');
+  }
+  dropdown.classList.add('open');
+}
+
+function openGlobalSearch() {
+  const input = document.getElementById('global-search-input');
+  if (input && input.value.trim().length >= 2) {
+    handleGlobalSearch(input.value);
+  }
+}
+
+function closeGlobalSearch() {
+  const dropdown = document.getElementById('global-search-dropdown');
+  if (dropdown) dropdown.classList.remove('open');
+  const input = document.getElementById('global-search-input');
+  if (input) input.value = '';
+}
+
+Object.assign(window, { handleGlobalSearch, openGlobalSearch, closeGlobalSearch });
+
+// ═══════════════════════════════════════════════════════════
+// KEYBOARD SHORTCUTS
+// ═══════════════════════════════════════════════════════════
+function setupKeyboardShortcuts() {
+  document.addEventListener('keydown', (e) => {
+    // Ctrl+K — focus global search
+    if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+      e.preventDefault();
+      const input = document.getElementById('global-search-input');
+      if (input) input.focus();
+      return;
+    }
+    // Escape — close search dropdown
+    if (e.key === 'Escape') {
+      closeGlobalSearch();
+      closeBreakdownModal();
+      closeAnaliticoDetailModal();
+    }
+    // Ctrl+1..9 — navigate pages
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey) {
+      const navMap = { '1':'dashboard','2':'analitico','3':'entradas','4':'saidas','5':'lancamentos','6':'sap','7':'producao','8':'importar','9':'configuracoes' };
+      if (navMap[e.key]) { e.preventDefault(); navigate(navMap[e.key]); }
+    }
+  });
+
+  // Close dropdown when clicking outside
+  document.addEventListener('click', (e) => {
+    const search = document.querySelector('.topbar-search');
+    if (search && !search.contains(e.target)) closeGlobalSearch();
+  });
+}
+
+function setupModalCloseOnBackdrop() {
+  qsa('.modal-overlay').forEach(m => {
+    m.addEventListener('click', e => {
+      if (e.target !== m) return;
+      if (m.id === 'analitico-detail-overlay') {
+        closeAnaliticoDetailModal();
+      } else if (m.id === 'startup-restore-overlay') {
+        decideStartupRestore(false);
+      } else {
+        m.classList.remove('open');
+      }
+    });
+  });
+}
+
+async function startupRestoreFlow() {
+  // O modal de restauração só faz sentido quando há dados de importação
+  // (entradas, saídas, SAP, etc.) salvos no storage. Se só existirem dados
+  // de cadastro (configs, filiais, materiais), eles são carregados
+  // silenciosamente sem interromper o usuário.
+  const hasImported = await storageHasImportedData();
+  const shouldRestore = hasImported ? await openStartupRestoreModal() : true;
+  if (shouldRestore) {
+    await restoreAndRender();
+    return;
+  }
+
+  // O usuário optou por NÃO restaurar os dados importados (entradas, saídas,
+  // SAP, lançamentos, etc.), mas as CONFIGURAÇÕES, PADRONIZAÇÃO DE CENTRAIS e
+  // PADRONIZAÇÃO DE MATERIAIS são independentes disso: pertencem ao sistema,
+  // não a uma importação, e jamais devem ser descartadas sem ação explícita
+  // do usuário na tela de Configurações.
+  //
+  // Por isso, mesmo no caminho "não carregar", lemos o storage para extrair
+  // configs, filiais e materiais salvos e os mantemos em memória. Os demais
+  // módulos permanecem com o estado vazio, respeitando a escolha do usuário.
+  try {
+    const db = await openDb();
+    let savedConfigs  = null;
+    let savedFiliais  = null;
+    let savedMateriais = null;
+
+    if (db) {
+      // Tenta primeiro as chaves individuais (mais eficiente)
+      savedConfigs   = await idbGet(db, 'configs').catch(() => null);
+      savedFiliais   = await idbGet(db, 'filiais').catch(() => null);
+      savedMateriais = await idbGet(db, 'materiais').catch(() => null);
+
+      // Fallback: lê o snapshot completo e extrai as chaves necessárias
+      if (!Array.isArray(savedConfigs) || !Array.isArray(savedFiliais) || !Array.isArray(savedMateriais)) {
+        const snapshot = await idbGet(db, IDB_STATE_KEY).catch(() => null);
+        if (snapshot && typeof snapshot === 'object') {
+          if (!Array.isArray(savedConfigs)   && Array.isArray(snapshot.configs))   savedConfigs   = snapshot.configs;
+          if (!Array.isArray(savedFiliais)   && Array.isArray(snapshot.filiais))   savedFiliais   = snapshot.filiais;
+          if (!Array.isArray(savedMateriais) && Array.isArray(snapshot.materiais)) savedMateriais = snapshot.materiais;
+        }
+      }
+    }
+
+    // Fallback final: localStorage legado
+    const needsLegacy = (!Array.isArray(savedConfigs)   || savedConfigs.length   === 0) ||
+                        (!Array.isArray(savedFiliais)   || savedFiliais.length   === 0) ||
+                        (!Array.isArray(savedMateriais) || savedMateriais.length === 0);
+    if (needsLegacy) {
+      try {
+        const raw = localStorage.getItem(legacyStateKey);
+        if (raw) {
+          const parsed = safeJSONParse(raw, {});
+          if ((!Array.isArray(savedConfigs)   || savedConfigs.length   === 0) && Array.isArray(parsed.configs)   && parsed.configs.length   > 0) savedConfigs   = parsed.configs;
+          if ((!Array.isArray(savedFiliais)   || savedFiliais.length   === 0) && Array.isArray(parsed.filiais)   && parsed.filiais.length   > 0) savedFiliais   = parsed.filiais;
+          if ((!Array.isArray(savedMateriais) || savedMateriais.length === 0) && Array.isArray(parsed.materiais) && parsed.materiais.length > 0) savedMateriais = parsed.materiais;
+        }
+      } catch (_) {}
+    }
+
+    if (Array.isArray(savedConfigs) && savedConfigs.length > 0) {
+      state.configs = mergePersistentConfigs(state.configs, savedConfigs);
+    }
+    if (Array.isArray(savedFiliais) && savedFiliais.length > 0) {
+      state.filiais = savedFiliais;
+      invalidateFilialLookup();
+    }
+    if (Array.isArray(savedMateriais) && savedMateriais.length > 0) {
+      state.materiais = savedMateriais.map(item => ({
+        id: item?.id || makeMaterialId(),
+        ...item
+      }));
+      invalidateMaterialLookup();
+      reaplicarPadronizacaoMateriais();
+    }
+  } catch (err) {
+    console.warn('[startupRestoreFlow] Não foi possível recuperar configs/filiais/materiais do storage:', err);
+  }
+
+  stateHydrated = true;
+  updateImportPrereqUI();
+
+  // Persiste imediatamente para garantir que os configs recuperados acima
+  // sejam regravados no storage junto ao estado limpo dos demais módulos,
+  // evitando que um persist() posterior sobrescreva com um snapshot vazio.
+  await persistStateNow();
+
+  const activePage = document.querySelector('.page.active')?.id?.replace('page-', '') || 'importar';
+  updateDashboard();
+  updateParamGerais();
+  renderFiliais();
+  renderMateriais();
+  renderPage(activePage);
+  initResizable();
+}
+
+async function init() {
+  applyTheme(getSavedTheme());
+  restoreSidebarState();
+  setupModalCloseOnBackdrop();
+  setupKeyboardShortcuts();
+  initDropZones();
+
+  const startupNoBtn = document.getElementById('startup-restore-no');
+  const startupYesBtn = document.getElementById('startup-restore-yes');
+  startupNoBtn?.addEventListener('click', () => decideStartupRestore(false));
+  startupYesBtn?.addEventListener('click', () => decideStartupRestore(true));
+
+  await startupRestoreFlow();
+  updateImportPrereqUI();
+  if (document.getElementById('page-dashboard')?.classList.contains('active')) updateDashboard();
+
+  // Start clock
+  updateClock();
+  setInterval(updateClock, 15000);
+
+  document.addEventListener('click', (event) => {
+    const switcher = document.querySelector('.theme-switcher');
+    if (!switcher) return;
+    if (!switcher.contains(event.target)) closeThemeMenu();
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      if (document.getElementById('pim-overlay')?.classList.contains('open')) {
+        closePendIntegModal();
+        return;
+      }
+      if (document.getElementById('lrc-overlay')?.classList.contains('open')) {
+        closeLancConflictModal();
+        return;
+      }
+      if (document.getElementById('breakdown-modal-overlay')?.classList.contains('open')) {
+        closeBreakdownModal();
+        return;
+      }
+      if (document.getElementById('startup-restore-overlay')?.classList.contains('open')) {
+        decideStartupRestore(false);
+        return;
+      }
+      closeAnaliticoDetailModal();
+    }
+  });
+}
+
+document.addEventListener('DOMContentLoaded', init);
+
+// Função auxiliar: retorna o índice de saídas por central (lazy-built)
+function getSaidasIndex() {
+  ensureSaidasIndex();
+  return { byCentral: _saidasByCentral };
+}
+
+// Expõe helpers internos para módulos externos (ex: Inventário)
+window._inv_helpers = {
+  getLancIndex,
+  getSapIndex,
+  getSaidasIndex,
+  getPrePeriodLaunchStock,
+  getFilialLookupIndex,
+  normalizeText,
+  parseDate,
+  localISODate,
+  dateCmp,
+  num,
+  state: () => state,
+
+  // Funções de formatação e UI partilhadas com o módulo Inventário
+  fmtKg,
+  varClass,
+  varSymbol,
+  money,
+  escapeHtml,
+  buildAnaliticoDetailBreakdown,
+
+  // Calcula custo médio ponderado por material para uma central/período,
+  // usando EXATAMENTE a mesma lógica do Analítico:
+  //   1ª fonte: Saídas (Σ valorTotal / Σ peso) no período
+  //   fallback: SAP no período
+  // Retorna um objeto { [material]: custoMedio }
+  getCustoMedioPorMat(central, dtIni, dtFim) {
+    ensureSaidasIndex();
+    if (!_sapIndexBuilt) _buildSapIndex();
+    const parseD = window._inv_helpers.parseDate;
+    const toNum  = window._inv_helpers.num;
+
+    // ── 1. Saídas ──────────────────────────────────────────
+    const saidasDaCentral = (_saidasByCentral.get(central) || [])
+      .filter(s => { const d = parseD(s.dtEmissao); return d && d >= dtIni && d <= dtFim; });
+
+    const _custoPorMat = {};
+    const _pesoPorMat  = {};
+    saidasDaCentral.forEach(s => {
+      const mat = s.material || '—';
+      _custoPorMat[mat] = (_custoPorMat[mat] || 0) + toNum(s.valorTotal);
+      _pesoPorMat[mat]  = (_pesoPorMat[mat]  || 0) + Math.abs(toNum(s.peso));
+    });
+
+    const custoMedioPorMat = {};
+    Object.keys(_custoPorMat).forEach(mat => {
+      custoMedioPorMat[mat] = _pesoPorMat[mat] > 0 ? _custoPorMat[mat] / _pesoPorMat[mat] : 0;
+    });
+
+    // ── 2. Fallback: SAP (materiais sem custo nas Saídas) ──
+    const sapDaCentral = (_sapByCentral.get(central) || [])
+      .filter(r => { const d = parseD(r.dtLanc); return d && d >= dtIni && d <= dtFim; });
+
+    sapDaCentral.forEach(s => {
+      const mat = s.material || '—';
+      if (custoMedioPorMat[mat]) return; // já coberto pelas Saídas
+      const p  = Math.abs(toNum(s.peso));
+      if (!p) return;
+      const vt = toNum(s.valorTotal);
+      const cu = toNum(s.custoUnit);
+      const valor = vt !== 0 ? Math.abs(vt) : (cu !== 0 ? Math.abs(cu) * p : 0);
+      if (!valor) return;
+      const key = '_sap_' + mat;
+      if (!_custoPorMat[key]) { _custoPorMat[key] = 0; _pesoPorMat[key] = 0; }
+      _custoPorMat[key] += valor;
+      _pesoPorMat[key]  += p;
+    });
+    Object.keys(_custoPorMat).forEach(key => {
+      if (!key.startsWith('_sap_')) return;
+      const mat = key.slice(5);
+      if (custoMedioPorMat[mat]) return;
+      custoMedioPorMat[mat] = _pesoPorMat[key] > 0 ? _custoPorMat[key] / _pesoPorMat[key] : 0;
+    });
+
+    return custoMedioPorMat;
+  }
+};
