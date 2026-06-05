@@ -185,32 +185,64 @@ function rodarAnalitico() {
       _custoPorMat[mat] = (_custoPorMat[mat] || 0) + num(s.valorTotal);
       _pesoPorMat[mat]  = (_pesoPorMat[mat]  || 0) + Math.abs(num(s.peso));
     });
-    const custoMedioPorMat = {};
+    const custoMedioPorMat      = {};
+    const custoMedioFontePorMat  = {};  // 'saidas' | 'lancamentos' | 'sap'
+
+    // ── 1ª prioridade: Módulo Saídas ──────────────────────────────────
     Object.keys(_custoPorMat).forEach(mat => {
-      custoMedioPorMat[mat] = _pesoPorMat[mat] > 0 ? _custoPorMat[mat] / _pesoPorMat[mat] : 0;
+      if (_pesoPorMat[mat] > 0 && _custoPorMat[mat] > 0) {
+        custoMedioPorMat[mat]      = _custoPorMat[mat] / _pesoPorMat[mat];
+        custoMedioFontePorMat[mat] = 'saidas';
+      }
     });
 
-    // Fallback: materiais sem custo nas Saídas usam custoUnit/valorTotal do SAP.
-    // Isso cobre casos onde o material existe no SAP mas não tem registro no módulo Saídas,
-    // ou onde o nome do material difere após normalização.
+    // ── 2ª prioridade: Módulo Lançamentos ─────────────────────────────
+    // Lançamentos da central no período com campo custo preenchido
+    const lancsNoPeriodoCusto = lancsNoPeriodo.filter(l => {
+      const c = num(l.custo); return c > 0;
+    });
+    const _lCusto = {}, _lPeso = {};
+    lancsNoPeriodoCusto.forEach(l => {
+      const mat = l.material || '—';
+      const p   = Math.abs(num(l.peso));
+      const vt  = num(l.valorTotal);
+      const c   = num(l.custo);
+      const valor = vt > 0 ? vt : c * p;
+      if (!valor || !p) return;
+      _lCusto[mat] = (_lCusto[mat] || 0) + valor;
+      _lPeso[mat]  = (_lPeso[mat]  || 0) + p;
+    });
+    Object.keys(_lCusto).forEach(mat => {
+      if (custoMedioPorMat[mat]) return;  // já tem pelas Saídas
+      if (_lPeso[mat] > 0 && _lCusto[mat] > 0) {
+        custoMedioPorMat[mat]      = _lCusto[mat] / _lPeso[mat];
+        custoMedioFontePorMat[mat] = 'lancamentos';
+      }
+    });
+
+    // ── 3ª prioridade: SAP ─────────────────────────────────────────────
     sapNoPeriodo.forEach(s => {
       const mat = s.material || '—';
-      if (custoMedioPorMat[mat]) return; // já tem custo pelas Saídas
+      if (custoMedioPorMat[mat]) return;  // já tem pelas Saídas ou Lançamentos
       const p  = Math.abs(num(s.peso));
       if (!p) return;
       const vt = num(s.valorTotal);
       const cu = num(s.custoUnit);
       const valor = vt !== 0 ? Math.abs(vt) : (cu !== 0 ? Math.abs(cu) * p : 0);
       if (!valor) return;
-      if (!_custoPorMat['_sap_' + mat]) { _custoPorMat['_sap_' + mat] = 0; _pesoPorMat['_sap_' + mat] = 0; }
-      _custoPorMat['_sap_' + mat] += valor;
-      _pesoPorMat['_sap_' + mat]  += p;
+      const key = '_sap_' + mat;
+      if (!_custoPorMat[key]) { _custoPorMat[key] = 0; _pesoPorMat[key] = 0; }
+      _custoPorMat[key] += valor;
+      _pesoPorMat[key]  += p;
     });
     Object.keys(_custoPorMat).forEach(key => {
       if (!key.startsWith('_sap_')) return;
       const mat = key.slice(5);
       if (custoMedioPorMat[mat]) return;
-      custoMedioPorMat[mat] = _pesoPorMat[key] > 0 ? _custoPorMat[key] / _pesoPorMat[key] : 0;
+      if (_pesoPorMat[key] > 0 && _custoPorMat[key] > 0) {
+        custoMedioPorMat[mat]      = _custoPorMat[key] / _pesoPorMat[key];
+        custoMedioFontePorMat[mat] = 'sap';
+      }
     });
 
     results.push({
@@ -230,7 +262,8 @@ function rodarAnalitico() {
       sapNoPeriodo,
       lancsNoPeriodo,
       prodNoPeriodo,
-      custoMedioPorMat
+      custoMedioPorMat,
+      custoMedioFontePorMat
     });
   });
 
@@ -469,11 +502,11 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
       const saiEntries = snapshot.saiRecords.map(toEntry);
 
       // ── Classificação de categoria do material ──────────────────────────
-      // Categorias de lançamento SEMANAL (toda terça-feira):
-      //   AGREGADO MIÚDO e AGREGADO GRAÚDO
-      // Todas as demais: lançamento DIÁRIO
+      // Categorias de lançamento SEMANAL: AGREGADO (toda terça-feira)
+      // Usa detectCatKey + detectCatFromMat — mesma lógica do resto do sistema
       const matCategoria = (lancsMat[0]?.categoria || sapMat[0]?.categoria || '').trim().toUpperCase();
-      const isSemanal = /AGREGADO[S]?\s*(MI[\u00DA\u0055]DO[S]?|GRA[\u00DA\u0055]DO[S]?)/i.test(matCategoria);
+      const matCatKey    = detectCatKey(matCategoria) || detectCatFromMat(mat);
+      const isSemanal    = matCatKey === 'agregado';
 
       // ── Último lançamento ANTES do início do período ─────────────────
       // Usado como Est. Inicial do primeiro dia (ou da primeira semana, para semanais).
@@ -631,6 +664,7 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
             hasLanc,
             precisaLanc: true,
             isSemanalNaoConferencia: false,
+            isTercaConferencia: isTerca,   // terça = dia de conferência obrigatória
             diff
           };
 
@@ -700,6 +734,8 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
         central: r.central,
         material: mat,
         periodLabel: `${fmtPtDate(dtIni)} a ${fmtPtDate(dtFim)}`,
+        isSemanal,
+        catKey: detectCatKey(matCategoria) || detectCatFromMat(mat),
         summary: {
           pesoIni: snapshot.pesoIni,
           dtIniLabel: snapshot.dtIniLabel,
@@ -715,15 +751,21 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
         days: dailyRows
       });
 
-      const _rowCustoMed  = (r.custoMedioPorMat || {})[mat] || 0;
-      const _rowCustoVar  = _rowCustoMed > 0 ? snapshot.diff * _rowCustoMed : null;
-      const _rowVarCls    = _rowCustoVar === null ? '' : varClass(_rowCustoVar);
-      const _rowVarPfx    = _rowCustoVar !== null ? varSymbol(_rowCustoVar) : '';
-      const custoMedCell  = _rowCustoMed > 0
-        ? `<span class="td-mono" style="color:var(--text2);font-size:11.5px">${money(_rowCustoMed)}<span style="font-size:9.5px;opacity:.6">/kg</span></span>`
-        : `<span style="color:var(--text3);font-size:11px">—</span>`;
-      const custoVarCell  = _rowCustoVar !== null
-        ? `<span class="td-mono ${_rowVarCls}" style="font-size:11.5px;white-space:nowrap">${varSymbol(_rowCustoVar)} ${money(Math.abs(_rowCustoVar))}</span>`
+      const _rowCustoMed   = (r.custoMedioPorMat      || {})[mat] || 0;
+      const _rowCustoFonte = (r.custoMedioFontePorMat || {})[mat] || null;
+      const _rowCustoVar   = _rowCustoMed > 0 ? snapshot.diff * _rowCustoMed : null;
+      const _rowVarCls     = _rowCustoVar === null ? '' : varClass(_rowCustoVar);
+      // Tooltip: custo médio + fonte
+      const _custoMedLabel  = _rowCustoMed > 0 ? escapeHtml(money(_rowCustoMed) + '/kg') : '—';
+      const _custoMedFonte  = _rowCustoFonte === 'saidas' ? 'Módulo Saídas' : _rowCustoFonte === 'lancamentos' ? 'Módulo Lançamentos' : _rowCustoFonte === 'sap' ? 'Fallback SAP' : '—';
+      const custoVarCell = _rowCustoVar !== null
+        ? `<span
+            class="td-mono ${_rowVarCls}"
+            style="font-size:11.5px;white-space:nowrap;cursor:default;border-bottom:1px dashed currentColor"
+            onmouseenter="showCustoMedTip(event,'${_custoMedLabel}','${escapeHtml(_custoMedFonte)}')"
+            onmousemove="moveCustoMedTip(event)"
+            onmouseleave="hideCustoMedTip()"
+          >${varSymbol(_rowCustoVar)} ${money(Math.abs(_rowCustoVar))}</span>`
         : `<span style="color:var(--text3);font-size:11px">—</span>`;
 
       matRowsHtml += `
@@ -742,7 +784,6 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
           <td class="td-mono" style="color:var(--text)">${fmtKg(snapshot.pesoFim)}</td>
           <td class="td-mono" style="color:var(--purple)">${fmtKg(snapshot.estTeorico)}</td>
           <td class="td-mono ${dCls}" style="white-space:nowrap">${varSymbol(snapshot.diff)} ${fmtKg(Math.abs(snapshot.diff))}</td>
-          <td style="text-align:right">${custoMedCell}</td>
           <td style="text-align:right">${custoVarCell}</td>
         </tr>`;
     });
@@ -830,7 +871,7 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
           ? 'background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)'
           : 'background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border)';
         const custoIcon = isNeg ? 'ti-trending-down' : 'ti-trending-up';
-        custoBadge = `<span style="display:inline-flex;align-items:center;gap:5px;${custoStyle};border-radius:6px;padding:2px 9px;font-family:var(--mono);font-size:10.5px;font-weight:700;white-space:nowrap" title="Custo médio ponderado (Saídas) × variação de estoque por material">
+        custoBadge = `<span style="display:inline-flex;align-items:center;gap:5px;${custoStyle};border-radius:6px;padding:2px 9px;font-family:var(--mono);font-size:10.5px;font-weight:700;white-space:nowrap">
           <i class="ti ${custoIcon}" style="font-size:12px"></i>
           Custo variação: ${money(Math.abs(custoVariacaoTotal))}
         </span>`;
@@ -877,11 +918,10 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
                 <th>Est. Final<br><span style="font-size:9px;font-weight:400;opacity:.7">(Últ. Lançamento)</span></th>
                 <th>Est. Teórico<br><span style="font-size:9px;font-weight:400;opacity:.7">(Ini+Ent+Sai)</span></th>
                 <th>Variação<br><span style="font-size:9px;font-weight:400;opacity:.7">(Real − Teórico)</span></th>
-                <th style="text-align:right">Custo Médio<br><span style="font-size:9px;font-weight:400;opacity:.7">(Saídas · R$/kg)</span></th>
                 <th style="text-align:right">Custo Variação<br><span style="font-size:9px;font-weight:400;opacity:.7">(Var. × C. Médio)</span></th>
               </tr>
             </thead>
-            <tbody>${matRowsHtml || '<tr><td colspan="11"><div class="empty-state" style="padding:24px"><i class="ti ti-box-off"></i><p>Nenhum material encontrado.</p></div></td></tr>'}</tbody>
+            <tbody>${matRowsHtml || '<tr><td colspan="10"><div class="empty-state" style="padding:24px"><i class="ti ti-box-off"></i><p>Nenhum material encontrado.</p></div></td></tr>'}</tbody>
           </table>
         </div>
       </div>`;
@@ -1048,6 +1088,8 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
   populateMicroFilterOptions(results);
   // Reset applied filters whenever a new analysis runs
   clearAllMicroFilters();
+  // Re-init help badges on dynamically-rendered content
+  if (typeof initHelpBadges === 'function') initHelpBadges();
 
   // Renderiza painéis Macro (crank + donut) — macro.js
   if (typeof renderMacroPanels === 'function') {

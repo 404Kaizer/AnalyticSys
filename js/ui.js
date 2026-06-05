@@ -1156,18 +1156,15 @@ function buildAnaliticoDetailHtml(payload) {
     return isEstimated ? estimatedSaldoCell(value, estTitle) : realSaldoCell(value, realTitle);
   };
 
-  // Pre-compute accumulated variation (running sum of day.diff where not null)
+  // Var. Acumulada: só aparece nos dias que têm diff (dias de conferência com lançamento)
+  // Dias sem diff (isSemanalNaoConferencia ou sem lançamento) ficam como —
   let _accum = 0;
-  const _dayAccum = payload.days.map(day => {
-    if (day.diff !== null) _accum += day.diff;
-    return { accum: _accum, hasAny: day.diff !== null };
-  });
-  // Reset: accum starts from first day that has a diff
-  _accum = 0;
-  let _accumStarted = false;
   const dayAccum = payload.days.map(day => {
-    if (day.diff !== null) { _accumStarted = true; _accum += day.diff; }
-    return _accumStarted ? _accum : null;
+    if (day.diff !== null) {
+      _accum += day.diff;
+      return _accum;
+    }
+    return null;
   });
 
   const rows = payload.days.map((day, _di) => {
@@ -1177,29 +1174,34 @@ function buildAnaliticoDetailHtml(payload) {
       ? `<span class="td-mono" style="color:var(--text3)">—</span>`
       : `<span class="td-mono ${accumCls}" style="white-space:nowrap">${varSymbol(accumVal)} ${fmtKg(Math.abs(accumVal))}</span>`;
 
-    // Linha de dia sem conferência (semanal, não-terça, sem lançamento)
+    // Dia sem conferência obrigatória (semanal, não-terça, sem lançamento agendado)
+    // SAP do dia visível, mas Variação e Var. Acumulada ficam como — (sem conferência = sem diff)
     if (day.isSemanalNaoConferencia) {
       const temSap = day.totalEnt !== 0 || day.totalSai !== 0;
       return `
-        <tr class="row-sem-conferencia">
+        <tr class="row-sem-conferencia" data-no-lanc="1">
           <td class="day-col" style="color:var(--text3)">${escapeHtml(day.dateLabel)}</td>
-          <td><span class="td-mono" style="color:var(--text3)">—</span></td>
-          <td><span class="td-mono" style="color:var(--text3)">—</span></td>
-          <td>${temSap ? buildAnaliticoDetailBreakdown(day.entEntries, day.totalEnt, 'var(--green)', 'Entradas') : emptyCell()}</td>
-          <td>${temSap ? buildAnaliticoDetailBreakdown(day.saiEntries, day.totalSai, 'var(--red)', 'Saídas') : emptyCell()}</td>
-          <td><span class="td-mono" style="color:var(--text3)">—</span></td>
-          <td><span class="td-mono" style="color:var(--text3)">—</span></td>
-          <td><span class="td-mono" style="color:var(--text3)">—</span></td>
-          <td>${accumCell}</td>
+          <td>${emptyCell()}</td>
+          <td>${emptyCell()}</td>
+          <td data-col="ent">${temSap ? buildAnaliticoDetailBreakdown(day.entEntries, day.totalEnt, 'var(--green)', 'Entradas') : emptyCell()}</td>
+          <td data-col="sai">${temSap ? buildAnaliticoDetailBreakdown(day.saiEntries, day.totalSai, 'var(--red)', 'Saídas') : emptyCell()}</td>
+          <td>${emptyCell()}</td>
+          <td>${emptyCell()}</td>
+          <td>${emptyCell()}</td>
+          <td>${emptyCell()}</td>
         </tr>`;
     }
 
     const dCls = varClass(day.diff);
 
     // Linha sem lançamento quando era esperado → fundo âmbar suave
-    const rowStyle = (!day.hasLanc && day.precisaLanc)
-      ? ' class="row-no-lanc"'
-      : '';
+    // Terça de agregado → fundo sutil indicando dia de conferência
+    const rowClasses = [];
+    if (!day.hasLanc && day.precisaLanc) rowClasses.push('row-no-lanc');
+    if (day.isTercaConferencia) rowClasses.push('row-terca-conferencia');
+    const rowStyle = rowClasses.length ? ` class="${rowClasses.join(' ')}"` : '';
+    // data-no-lanc marks rows that have no launch (hidden when filter is active)
+    const noLancAttr = (!day.hasLanc) ? ' data-no-lanc="1"' : '';
 
     const iniCell = saldoCell(
       day.initialStock,
@@ -1240,12 +1242,12 @@ function buildAnaliticoDetailHtml(payload) {
       : `<span class="td-mono" style="color:var(--purple)">${fmtKg(day.theoreticalStock)}</span>`;
 
     return `
-      <tr${rowStyle}>
+      <tr${rowStyle}${noLancAttr}>
         <td class="day-col">${escapeHtml(day.dateLabel)}</td>
         <td>${lancCell}</td>
         <td>${iniCell}</td>
-        <td>${buildAnaliticoDetailBreakdown(day.entEntries, day.totalEnt, 'var(--green)', 'Entradas')}</td>
-        <td>${buildAnaliticoDetailBreakdown(day.saiEntries, day.totalSai, 'var(--red)', 'Saídas')}</td>
+        <td data-col="ent">${buildAnaliticoDetailBreakdown(day.entEntries, day.totalEnt, 'var(--green)', 'Entradas')}</td>
+        <td data-col="sai">${buildAnaliticoDetailBreakdown(day.saiEntries, day.totalSai, 'var(--red)', 'Saídas')}</td>
         <td>${realCell}</td>
         <td>${teoCell}</td>
         <td>${varCell}</td>
@@ -1291,14 +1293,21 @@ function buildAnaliticoDetailHtml(payload) {
       <div class="analitico-detail-card">
         <div class="analitico-detail-card-label">Variação</div>
         <div class="analitico-detail-card-value ${varClass(s.diff)}">${varSymbol(s.diff)} ${fmtKg(Math.abs(s.diff))}</div>
-        <div class="analitico-detail-card-sub">Real − Teórico</div>
+        <div class="analitico-detail-card-sub">Últ. lançamento − Teórico total</div>
       </div>
     </div>
 
     ${legendaHtml}
 
+    <div class="analitico-detail-table-toolbar">
+      <button class="btn btn-sm detail-filter-btn" id="detail-filter-btn-${payload.key}" onclick="toggleDetailFilter(this)" data-active="0">
+        <i class="ti ti-eye-off"></i>
+        <span>Ocultar dias sem dados</span>
+      </button>
+    </div>
+
     <div class="analitico-detail-table-shell">
-      <table class="analitico-detail-table">
+      <table class="analitico-detail-table" id="detail-table-${payload.key}">
         <thead>
           <tr>
             <th>Data</th>
@@ -1309,7 +1318,7 @@ function buildAnaliticoDetailHtml(payload) {
             <th>Est. Final<br><span style="font-size:9px;font-weight:400;opacity:.7">(Últ. Lançamento)</span></th>
             <th>Est. Teórico<br><span style="font-size:9px;font-weight:400;opacity:.7">(Ini+Ent+Sai)</span></th>
             <th>Variação<br><span style="font-size:9px;font-weight:400;opacity:.7">(Real − Teórico)</span></th>
-            <th>Var. Acumulada<br><span style="font-size:9px;font-weight:400;opacity:.7">(Σ variações do período)</span></th>
+            <th>Var. Acumulada<br><span style="font-size:9px;font-weight:400;opacity:.7">(Σ diffs diários)</span></th>
           </tr>
         </thead>
         <tbody>
@@ -1318,6 +1327,133 @@ function buildAnaliticoDetailHtml(payload) {
       </table>
     </div>`;
 }
+
+function toggleDetailFilter(btn) {
+  const active = btn.dataset.active === '1';
+  const newActive = !active;
+  btn.dataset.active = newActive ? '1' : '0';
+
+  const body = btn.closest('.analitico-detail-body') || document.getElementById('analitico-detail-body');
+  if (!body) return;
+
+  const allRows = Array.from(body.querySelectorAll('tbody tr'));
+
+  if (newActive) {
+    // ── OCULTAR: acumula entradas/saídas dos dias ocultos no próximo visível ──
+    let pendingEntEnt = [];   // entries de entrada acumuladas
+    let pendingEntSai = [];   // entries de saída acumuladas
+    let pendingTotalEnt = 0;
+    let pendingTotalSai = 0;
+
+    allRows.forEach(tr => {
+      const isHidden = tr.dataset.noLanc === '1';
+
+      if (isHidden) {
+        // Coleta entradas/saídas usando data-col para seleção robusta
+        const entTd = tr.querySelector('td[data-col="ent"]');
+        const saiTd = tr.querySelector('td[data-col="sai"]');
+        const entBtn = entTd?.querySelector('.bdm-trigger');
+        const saiBtn = saiTd?.querySelector('.bdm-trigger');
+        if (entBtn) {
+          try {
+            const e = JSON.parse(decodeURIComponent(entBtn.dataset.entries || '[]'));
+            pendingEntEnt.push(...e);
+            pendingTotalEnt += e.reduce((s, [,v]) => s + v, 0);
+          } catch(_) {}
+        }
+        if (saiBtn) {
+          try {
+            const e = JSON.parse(decodeURIComponent(saiBtn.dataset.entries || '[]'));
+            pendingEntSai.push(...e);
+            pendingTotalSai += e.reduce((s, [,v]) => s + v, 0);
+          } catch(_) {}
+        }
+        tr.style.display = 'none';
+
+      } else if (pendingEntEnt.length || pendingEntSai.length || pendingTotalEnt || pendingTotalSai) {
+        // Primeiro dia visível após dias ocultos: mescla os pendentes
+
+        const _mergeTd = (col, pendingEntries, pendingTotal, color, title) => {
+          if (!pendingEntries.length && !pendingTotal) return;
+          const td = tr.querySelector(`td[data-col="${col}"]`);
+          if (!td) return;
+          const existing = td.querySelector('.bdm-trigger');
+          if (existing) {
+            // Mescla nos dados existentes
+            existing.dataset.origEntries = existing.dataset.entries;
+            existing.dataset.origTotal   = existing.querySelector('.bdm-total')?.textContent || '';
+            existing.dataset.origTitle   = existing.dataset.title || '';
+            let existingEntries = [];
+            try { existingEntries = JSON.parse(decodeURIComponent(existing.dataset.entries || '[]')); } catch(_) {}
+            const merged      = [...pendingEntries, ...existingEntries];
+            const mergedTotal = pendingTotal + existingEntries.reduce((s, [,v]) => s + v, 0);
+            existing.dataset.entries = encodeURIComponent(JSON.stringify(merged));
+            existing.dataset.title   = title;   // atualiza título para refletir consolidação
+            existing.dataset.merged  = '1';
+            existing.classList.add('merged-from-hidden');  // borda tracejada
+            const totalEl = existing.querySelector('.bdm-total');
+            if (totalEl) totalEl.textContent = fmtKg(mergedTotal);
+          } else {
+            // Cria botão novo onde havia —
+            const enc = encodeURIComponent(JSON.stringify(pendingEntries));
+            td.dataset.origHtml = td.innerHTML;
+            td.innerHTML = `<button class="bdm-trigger merged-from-hidden" style="color:${color}"
+              onclick="event.stopPropagation();openBreakdownModal(event.currentTarget)"
+              data-entries="${enc}" data-title="${title}"
+              data-color="${color}" data-merged="1"
+              title="Acumulado dos dias anteriores ocultos">
+              <span class="bdm-total">${fmtKg(pendingTotal)}</span>
+              <i class="ti ti-table-options bdm-icon"></i>
+              <i class="ti ti-layers" style="font-size:9px;opacity:.65;margin-left:3px"></i>
+            </button>`;
+          }
+        };
+
+        _mergeTd('ent', pendingEntEnt, pendingTotalEnt, 'var(--green)', 'Entradas (+ dias anteriores)');
+        _mergeTd('sai', pendingEntSai, pendingTotalSai, 'var(--red)',   'Saídas (+ dias anteriores)');
+
+        // Reset pending
+        pendingEntEnt = []; pendingEntSai = [];
+        pendingTotalEnt = 0; pendingTotalSai = 0;
+      }
+    });
+
+    btn.innerHTML = '<i class="ti ti-eye"></i><span>Mostrar todos os dias</span>';
+    btn.classList.add('btn-active');
+
+  } else {
+    // ── MOSTRAR: restaura tudo ao estado original ────────────────────
+    allRows.forEach(tr => {
+      tr.style.display = '';
+      // Restaura botões mesclados
+      tr.querySelectorAll('.bdm-trigger[data-merged="1"]').forEach(b => {
+        if (b.dataset.origEntries !== undefined) {
+          b.dataset.entries = b.dataset.origEntries;
+          if (b.dataset.origTotal && b.querySelector('.bdm-total')) {
+            b.querySelector('.bdm-total').textContent = b.dataset.origTotal;
+          }
+          b.classList.remove('merged-from-hidden');
+          if (b.dataset.origTitle !== undefined) b.dataset.title = b.dataset.origTitle;
+          delete b.dataset.merged;
+          delete b.dataset.origEntries;
+          delete b.dataset.origTotal;
+          delete b.dataset.origTitle;
+        }
+      });
+      // Restaura células que tiveram HTML substituído
+      [tr.cells[3], tr.cells[4]].forEach(td => {
+        if (td?.dataset.origHtml !== undefined) {
+          td.innerHTML = td.dataset.origHtml;
+          delete td.dataset.origHtml;
+        }
+      });
+    });
+
+    btn.innerHTML = '<i class="ti ti-eye-off"></i><span>Ocultar dias sem dados</span>';
+    btn.classList.remove('btn-active');
+  }
+}
+window.toggleDetailFilter = toggleDetailFilter;
 
 function openAnaliticoDetailModal(detailKey) {
   const payload = window.__analiticoDetailCache?.get(String(detailKey));
@@ -1339,6 +1475,7 @@ function openAnaliticoDetailModal(detailKey) {
   title.textContent = `${payload.material}`;
   sub.textContent = `${payload.central} · ${payload.periodLabel}`;
   body.innerHTML = buildAnaliticoDetailHtml(payload);
+  if (typeof initHelpBadges === 'function') initHelpBadges();
   overlay.classList.add('open');
   overlay.setAttribute('aria-hidden', 'false');
   document.body.classList.add('analitico-modal-open');

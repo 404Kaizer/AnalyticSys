@@ -7,6 +7,7 @@
 const _levelColor = { critico: '#f43f5e', urgente: '#f97316', atencao: '#f59e0b', bom: '#10b981' };
 const _levelLabel = { critico: 'CRÍTICO', urgente: 'URGENTE', atencao: 'ATENÇÃO', bom: 'BOM' };
 const _levelSev   = { critico: 3, urgente: 2, atencao: 1, bom: 0 };
+const _levelFromScore = (s) => s >= 80 ? 'bom' : s >= 55 ? 'atencao' : s >= 30 ? 'urgente' : 'critico';
 
 // Estado global para re-renderização ao filtrar
 let _macroState = null;
@@ -118,6 +119,7 @@ function renderMacroPanels(results, thresholds, dtIni, dtFim) {
   _renderCrankPanel('critico', byLevel.critico);
   _renderCrankPanel('urgente', byLevel.urgente);
   _renderCrankPanel('atencao', byLevel.atencao);
+  if (typeof initHelpBadges === 'function') initHelpBadges();
 
   // Guarda estado para re-render ao filtrar
   _macroState = { centralMap, matItems };
@@ -242,51 +244,92 @@ function macroApplyFilter() {
       diff: v.totalDiff, custo: v.custo || 0, trend: v.trend || 'stable'
     }));
 
-  _renderDonut('centrais', centralCounts, top5centrais, centralLevelMeta);
-  _renderDonut('mats',     matCounts,     top5mats,     matLevelMeta);
+  // ── Score de saúde agregado ──────────────────────────────────────────
+  // Usa HEALTH_PENALTIES para ponderar: mesmo cálculo do calcHealthScore
+  // mas aplicado aos counts por nível já calculados acima
+  const _scoreFromCounts = (counts) => {
+    const total = Object.values(counts).reduce((s, n) => s + n, 0);
+    if (!total) return 100;
+    // Score geral da empresa: quanto do total está saudável,
+    // penalizando proporcionalmente pela gravidade de cada nível.
+    // Pesos por item sobre o total (não sobre os não-bons):
+    //   bom      → penalidade 0    (contribui 100% para a saúde)
+    //   atencao  → penalidade 0.2  (leve)
+    //   urgente  → penalidade 0.5  (moderado)
+    //   critico  → penalidade 1.0  (total)
+    const penalty =
+      (counts.atencao||0) * 0.2 +
+      (counts.urgente||0) * 0.5 +
+      (counts.critico||0) * 1.0;
+    return Math.max(0, Math.round((1 - penalty / total) * 100));
+  };
+
+  const centralScore = _scoreFromCounts(centralCounts);
+  const matScore     = _scoreFromCounts(matCounts);
+  const nCentrals    = Object.values(centralCounts).reduce((s, n) => s + n, 0);
+  const nMats        = Object.values(matCounts).reduce((s, n) => s + n, 0);
+
+  _renderDonut('centrais', centralCounts, top5centrais, centralLevelMeta, centralScore, nCentrals);
+  _renderDonut('mats',     matCounts,     top5mats,     matLevelMeta,     matScore,     nMats);
 }
 window.macroApplyFilter = macroApplyFilter;
 
 // ── Tooltip singleton ─────────────────────────────────────────────────
+// Tooltip singleton — shared with help-badges.js via same element id
 let _macroTip = null;
 function _getTip() {
   if (_macroTip) return _macroTip;
-  _macroTip = document.createElement('div');
-  _macroTip.id = 'macro-donut-tip';
-  _macroTip.style.cssText = [
-    'position:fixed','z-index:9999','pointer-events:none','display:none',
-    'background:var(--bg2)','border:1px solid var(--border3)',
-    'border-radius:10px','padding:12px 15px','min-width:200px','max-width:240px',
-    'box-shadow:0 8px 32px rgba(0,0,0,.5)',
-    'font-family:var(--font)','font-size:12px','transition:opacity .1s',
-  ].join(';');
-  document.body.appendChild(_macroTip);
+  _macroTip = document.getElementById('macro-donut-tip');
+  if (!_macroTip) {
+    _macroTip = document.createElement('div');
+    _macroTip.id = 'macro-donut-tip';
+    _macroTip.style.cssText = [
+      'position:fixed','z-index:9999','pointer-events:none','display:none',
+      'background:var(--bg2)','border:1px solid var(--border3)',
+      'border-radius:10px','padding:12px 15px','min-width:200px','max-width:260px',
+      'box-shadow:0 8px 32px rgba(0,0,0,.5)',
+      'font-family:var(--font)','font-size:12px',
+    ].join(';');
+    document.body.appendChild(_macroTip);
+  }
   return _macroTip;
 }
-function _hideTip() {
-  const t = _getTip(); t.style.display = 'none';
-}
-function _showTip(e, html, col) {
-  const t = _getTip();
-  t.innerHTML = html;
-  t.style.display = 'block';
-  t.style.borderColor = col + '55';
-  _moveTip(e);
-}
-function _moveTip(e) {
-  const t = _getTip(); if (t.style.display === 'none') return;
+
+function _posTip(t, cx, cy) {
+  const PAD = 10;
   const W = window.innerWidth, H = window.innerHeight;
-  const tw = t.offsetWidth + 16, th = t.offsetHeight + 16;
-  let lx = e.clientX + 14, ly = e.clientY - 10;
-  if (lx + tw > W) lx = e.clientX - tw;
-  if (ly + th > H) ly = e.clientY - th;
+  const rect = t.getBoundingClientRect();
+  const tw = rect.width  || t.offsetWidth  || 260;
+  const th = rect.height || t.offsetHeight || 160;
+  let lx = cx + 14, ly = cy + 14;
+  if (lx + tw + PAD > W) lx = cx - tw - 10;
+  if (ly + th + PAD > H) ly = cy - th - 10;
+  lx = Math.max(PAD, Math.min(lx, W - tw - PAD));
+  ly = Math.max(PAD, Math.min(ly, H - th - PAD));
   t.style.left = lx + 'px';
   t.style.top  = ly + 'px';
 }
 
+function _hideTip() {
+  const t = _getTip();
+  t.style.display = 'none';
+}
+function _moveTip(e) {
+  const t = _getTip();
+  if (t.style.display === 'none') return;
+  _posTip(t, e.clientX, e.clientY);
+}
+function _showTip(e, html, col) {
+  const t = _getTip();
+  t.innerHTML = html;
+  t.style.borderColor = col + '55';
+  t.style.display = 'block';
+  _posTip(t, e.clientX, e.clientY);
+}
+
 // ── Donut SVG ─────────────────────────────────────────────────────────
 // sliceData: array of { lvl, n, pct, col, items[] } — built from counts + top5
-function _renderDonut(type, counts, top5, levelMeta) {
+function _renderDonut(type, counts, top5, levelMeta, healthScore, totalCount) {
   const svgEl  = document.getElementById(`chart-${type}-donut`);
   const summEl = document.getElementById(`chart-${type}-summary`);
   const impEl  = document.getElementById(`chart-${type}-impact`);
@@ -428,14 +471,31 @@ function _renderDonut(type, counts, top5, levelMeta) {
     </g>`;
   });
 
-  // ── Centro ───────────────────────────────────────────────────────────
-  const nonBom  = total - (counts.bom || 0);
-  const pctRisk = Math.round(nonBom / total * 100);
-  svg += `<text x="${CX}" y="${CY - 14}" text-anchor="middle" font-size="32" font-weight="700" font-family="var(--mono)" fill="var(--text)" style="pointer-events:none">${total}</text>`;
-  svg += `<text x="${CX}" y="${CY + 10}" text-anchor="middle" font-size="9" font-family="var(--mono)" fill="var(--text3)" letter-spacing=".07em" style="pointer-events:none">${isCentrals ? 'CENTRAIS' : 'MAT × CENTRAL'}</text>`;
-  if (nonBom > 0) {
-    svg += `<text x="${CX}" y="${CY + 26}" text-anchor="middle" font-size="9" font-family="var(--mono)" fill="var(--text3)" style="pointer-events:none">${pctRisk}% em risco</text>`;
-  }
+  // ── Centro: score de saúde agregado ─────────────────────────────────
+  const score      = healthScore ?? 0;
+  const scoreLevel = _levelFromScore(score);
+  const scoreCol   = _levelColor[scoreLevel] || '#10b981';
+  const scoreLabel = { bom:'SAUDÁVEL', atencao:'ATENÇÃO', urgente:'URGENTE', critico:'CRÍTICO' }[scoreLevel] || '';
+  const nLabel     = totalCount ?? total;
+  const unitLabel  = isCentrals ? 'centrais' : 'mat × central';
+
+  // Anel de fundo cinza + anel colorido de score
+  const SR = ri - 8;  // raio do anel de score (dentro do buraco do donut)
+  const sCirc = 2 * Math.PI * SR;
+  const sDash = (score / 100) * sCirc;
+
+  svg += `<circle cx="${CX}" cy="${CY}" r="${SR}" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="5" style="pointer-events:none"/>`;
+  svg += `<circle cx="${CX}" cy="${CY}" r="${SR}" fill="none" stroke="${scoreCol}" stroke-width="5"
+    stroke-dasharray="${sDash.toFixed(1)} ${sCirc.toFixed(1)}"
+    stroke-dashoffset="${(sCirc / 4).toFixed(1)}"
+    stroke-linecap="round" opacity="0.55" style="pointer-events:none"/>`;
+
+  // Score principal — grande, colorido
+  svg += `<text x="${CX}" y="${CY - 8}" text-anchor="middle" font-size="34" font-weight="700" font-family="var(--mono)" fill="${scoreCol}" style="pointer-events:none">${score}%</text>`;
+  // Label de nível
+  svg += `<text x="${CX}" y="${CY + 13}" text-anchor="middle" font-size="9" font-weight="700" font-family="var(--mono)" fill="${scoreCol}" letter-spacing=".08em" opacity="0.85" style="pointer-events:none">${scoreLabel}</text>`;
+  // Total de itens — discreto, abaixo
+  svg += `<text x="${CX}" y="${CY + 32}" text-anchor="middle" font-size="8.5" font-family="var(--mono)" fill="var(--text3)" style="pointer-events:none">${nLabel} ${unitLabel}</text>`;
 
   svgEl.innerHTML = svg;
 
@@ -569,5 +629,6 @@ function _crankCopy(levelKey) {
     .then(() => toast('Lista copiada!', 'success'))
     .catch(() => toast('Não foi possível copiar', 'error'));
 }
+
 
 Object.assign(window, { renderMacroPanels, macroApplyFilter, _crankCopy });

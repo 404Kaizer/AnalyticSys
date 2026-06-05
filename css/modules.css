@@ -720,6 +720,31 @@ td.pending-cell  { color: var(--text3) !important; font-style: italic; font-size
   margin-top: 2px;
 }
 
+/* Help badge */
+.macro-help-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--bg4);
+  border: 1px solid var(--border2);
+  color: var(--text3);
+  font-size: 9.5px;
+  font-weight: 700;
+  font-family: var(--mono);
+  cursor: default;
+  flex-shrink: 0;
+  transition: border-color .15s, color .15s, background .15s;
+  user-select: none;
+}
+.macro-help-badge:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-dim);
+}
+
 /* Filter select */
 .macro-card-filter {
   display: flex;
@@ -2569,8 +2594,17 @@ body.analitico-modal-open { overflow: hidden; }
   min-width: 92px;
   line-height: 1.25;
 }
-.analitico-detail-table tbody td { white-space: nowrap; }
-.analitico-detail-empty { color: var(--text3); font-size: 12px; font-family: var(--mono); padding: 18px; text-align: center; }
+.analitico-detail-table tbody td {
+  white-space: nowrap;
+  vertical-align: middle;
+  padding-top: 9px;
+  padding-bottom: 9px;
+}
+.analitico-detail-empty {
+  color: var(--text3);
+  font-size: 12px;
+  font-family: var(--mono);
+}
 
 /* ── Saldo estimado (sem lançamento real) ── */
 .estimated-stock-cell {
@@ -2612,7 +2646,48 @@ body.analitico-modal-open { overflow: hidden; }
   background: rgba(245, 158, 11, 0.09);
 }
 /* Linha de dia sem conferência (semanal, não é terça) — esmaecida */
-.analitico-detail-table tbody tr.row-sem-conferencia {
+.analitico-detail-table tbody tr.analitico-detail-table-toolbar {
+  display: flex;
+  align-items: center;
+  padding: 10px 16px 4px;
+  gap: 8px;
+}
+.merged-from-hidden {
+  outline: 1px dashed currentColor;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.detail-filter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  padding: 4px 12px;
+  border-radius: 6px;
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  color: var(--text2);
+  cursor: pointer;
+  transition: background .15s, border-color .15s, color .15s;
+}
+.detail-filter-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.detail-filter-btn.btn-active {
+  background: var(--accent-dim, rgba(99,179,237,.12));
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.row-terca-conferencia td {
+  border-top: 1px solid rgba(99,179,237,.15) !important;
+  border-bottom: 1px solid rgba(99,179,237,.15) !important;
+  background: rgba(99,179,237,.03);
+}
+
+.row-sem-conferencia {
   opacity: 0.45;
 }
 .analitico-detail-table tbody tr.row-sem-conferencia:hover {

@@ -367,9 +367,12 @@
               <div class="macro-card-header">
                 <div class="macro-card-header-left">
                   <i class="ti ti-building-warehouse macro-card-icon"></i>
-                  <div>
-                    <div class="macro-card-title">Centrais mais críticas</div>
-                    <div class="macro-card-sub">saúde por criticidade + impacto</div>
+                  <div style="display:flex;align-items:center;gap:8px">
+                    <div>
+                      <div class="macro-card-title">Centrais mais críticas</div>
+                      <div class="macro-card-sub">saúde por criticidade + impacto</div>
+                    </div>
+                    <span class="macro-help-badge" data-help="centrais">?</span>
                   </div>
                 </div>
                 <div class="macro-card-filter">
@@ -396,9 +399,12 @@
               <div class="macro-card-header">
                 <div class="macro-card-header-left">
                   <i class="ti ti-stack-2 macro-card-icon"></i>
-                  <div>
-                    <div class="macro-card-title">Materiais mais críticos</div>
-                    <div class="macro-card-sub">saúde por criticidade + impacto</div>
+                  <div style="display:flex;align-items:center;gap:8px">
+                    <div>
+                      <div class="macro-card-title">Materiais mais críticos</div>
+                      <div class="macro-card-sub">saúde por criticidade + impacto</div>
+                    </div>
+                    <span class="macro-help-badge" data-help="materiais">?</span>
                   </div>
                 </div>
                 <div class="macro-card-filter">
@@ -414,7 +420,7 @@
                 </div>
                 <div class="macro-summary-row" id="chart-mats-summary"></div>
                 <div class="macro-ranking-header">
-                  <span class="macro-mini-title">Piores materiais por criticidade</span>
+                  <span class="macro-mini-title">Piores materiais por criticidade <span class="macro-help-badge" data-help="tendencia">?</span></span>
                 </div>
                 <div id="chart-mats-impact" class="macro-bars-list"></div>
               </div>
@@ -435,7 +441,7 @@
             <!-- CRÍTICO -->
             <div class="table-card crank-card crank-critico">
               <div class="table-header crank-header">
-                <span class="table-title"><i class="ti ti-flame"></i> Crítico</span>
+                <span class="table-title"><i class="ti ti-flame"></i> Crítico</span><span class="macro-help-badge" data-help="crank">?</span>
                 <span class="crank-badge-count" id="crank-critico-count">—</span>
                 <button class="btn-icon crank-copy-btn" onclick="_crankCopy('critico')" title="Copiar lista para área de transferência"><i class="ti ti-copy"></i></button>
               </div>
@@ -547,7 +553,7 @@
             <div class="micro-filter-group" id="mfg-variacao">
               <button class="micro-filter-trigger" id="mft-variacao" onclick="toggleMicroFilter('variacao')">
                 <i class="ti ti-heartbeat"></i>
-                <span id="mft-variacao-label">Saúde</span>
+                <span id="mft-variacao-label">Saúde <span class="macro-help-badge" data-help="health-score">?</span></span>
                 <i class="ti ti-chevron-down micro-filter-chev" id="mfc-variacao"></i>
               </button>
               <div class="micro-filter-dropdown micro-filter-dropdown--range" id="mfd-variacao">
@@ -1780,7 +1786,7 @@
   <div class="analitico-detail-modal" role="dialog" aria-modal="true" aria-labelledby="analitico-detail-title">
     <div class="analitico-detail-header">
       <div class="analitico-detail-heading">
-        <div class="analitico-detail-kicker">Detalhamento do material</div>
+        <div class="analitico-detail-kicker">Detalhamento do material <span class="macro-help-badge" data-help="variacao">?</span></div>
         <div class="analitico-detail-title" id="analitico-detail-title">Material</div>
         <div class="analitico-detail-sub" id="analitico-detail-sub">Período</div>
       </div>
@@ -1936,6 +1942,7 @@
 <script src="js/dashboard.js"></script>
 <script src="js/analitico.js"></script>
 <script src="js/macro.js"></script>
+<script src="js/help-badges.js"></script>
 <script src="js/inventario.js"></script>
 <script src="js/calendar.js"></script>
 <script src="js/relatorio.js"></script>
