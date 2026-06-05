@@ -842,6 +842,7 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
       <span class="micro-health-count-chip hcc-atencao"><i class="ti ti-alert-triangle"></i> ${hCounts.atencao} atenção</span>
       <span class="micro-health-count-chip hcc-bom"><i class="ti ti-circle-check"></i> ${hCounts.bom} bom</span>
     </div>`;
+
     healthBadge = `<span style="display:inline-flex;align-items:center;gap:5px;${hStyleMap[hLevel]};border-radius:6px;padding:2px 9px;font-family:var(--mono);font-size:10.5px;font-weight:700;white-space:nowrap">
       <i class="ti ${hIconMap[hLevel]}" style="font-size:12px"></i>
       Saúde: ${hScore}% · ${hLabelMap[hLevel]}

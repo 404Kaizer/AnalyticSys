@@ -165,18 +165,18 @@ function macroApplyFilter() {
   const centralCounts = { bom: 0, atencao: 0, urgente: 0, critico: 0 };
   filteredCentrals.forEach(([, v]) => centralCounts[v.level]++);
 
-  // Agrega diff/custo/trend de TODOS os itens de cada nível (não só top5)
-  // Para centrais: diff = worstDiff acumulado por nível, custo = soma de custoTotal
+  // Agrega diff/custo/trend por nível da CENTRAL.
+  // Usa apenas materiais não-bom para que o total bata com o gráfico de materiais
+  // (materiais bons numa central urgente não representam custo problemático).
   const centralAgg = { critico:{diff:0,custo:0,trends:[]}, urgente:{diff:0,custo:0,trends:[]}, atencao:{diff:0,custo:0,trends:[]}, bom:{diff:0,custo:0,trends:[]} };
-  // Soma de matItems filtrados por regional, agrupando por nível da central
   const matItemsForRegion = matItems.filter(i => !selReg || i.regional === selReg);
   matItemsForRegion.forEach(i => {
-    // Usa o nível da central do item (via centralMap)
-    const cLevel = centralMap[i.central]?.level || 'bom';
-    if (!centralAgg[cLevel]) return;
-    centralAgg[cLevel].diff  += i.totalDiff;
-    centralAgg[cLevel].custo += i.custo || 0;
-    if (i.trend && i.trend !== 'stable') centralAgg[cLevel].trends.push(i.trend);
+    // Agrupa pelo nível do MATERIAL (não da central) — assim ambos os totais são comparáveis
+    const lvl = i.level || 'bom';
+    if (!centralAgg[lvl]) return;
+    centralAgg[lvl].diff  += i.totalDiff;
+    centralAgg[lvl].custo += i.custo || 0;
+    if (i.trend && i.trend !== 'stable') centralAgg[lvl].trends.push(i.trend);
   });
   const _cTrend = (lvl) => {
     const t = centralAgg[lvl]?.trends || [];
@@ -410,9 +410,17 @@ function _renderDonut(type, counts, top5, levelMeta, healthScore, totalCount) {
       </div>`,
       `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;font-family:var(--mono);font-size:10.5px">`,
       `<div style="color:var(--text3)">Variação total</div>
-       <div style="color:${diff < 0 ? '#f43f5e' : '#10b981'};font-weight:600">${diff < 0 ? '−' : '+'} ${fmtKgShort(Math.abs(diff))}</div>`,
-      custo > 0 ? `<div style="color:var(--text3)">Custo estimado</div>
-       <div style="color:var(--text);font-weight:600">${money(custo)}</div>` : '',
+       <div class="${varClass(diff)}" style="font-weight:600">${varSymbol(diff)} ${fmtKgShort(Math.abs(diff))}</div>`,
+      custo > 0 ? (() => {
+        // diff < 0 = desfalque (perda), diff > 0 = sobra
+        const custoColor = diff < 0 ? '#f43f5e' : '#10b981';
+        const custoLabel = diff < 0 ? 'Custo estimado (perda)' : 'Custo estimado (sobra)';
+        const custoIcon  = diff < 0
+          ? '<i class="ti ti-circle-arrow-down" style="font-size:11px;margin-right:3px;vertical-align:middle"></i>'
+          : '<i class="ti ti-circle-arrow-up"   style="font-size:11px;margin-right:3px;vertical-align:middle"></i>';
+        return `<div style="color:var(--text3)">${custoLabel}</div>
+          <div style="color:${custoColor};font-weight:600">${custoIcon}${money(custo)}</div>`;
+      })() : '',
       `<div style="color:var(--text3)">% do total</div>
        <div style="color:var(--text)">${pctStr}%</div>`,
       trend ? `<div style="color:var(--text3)">Tendência</div>

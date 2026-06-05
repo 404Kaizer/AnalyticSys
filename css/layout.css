@@ -50,9 +50,8 @@
 
 .logo-analyticsys {
   width: 28px;
-  height: 28px;
+  height: 31px;
   flex-shrink: 0;
-  object-fit: contain;
 }
 
 .logo-concrelagos {
@@ -64,25 +63,49 @@
   transition: filter 0.2s ease;
 }
 
-.sidebar-brand-title {
-  font-size: 17px;
-  font-weight: 600;
-  color: var(--text);
-  letter-spacing: -0.01em;
+.sidebar-brand-name {
+  display: flex;
+  align-items: baseline;
+  gap: 0;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1;
 }
-
-.logo-mark {
+.brand-analytic {
   font-family: var(--mono);
-  font-size: 9.5px;
-  letter-spacing: 0.10em;
+  font-size: 17px;
+  font-weight: 400;
+  letter-spacing: .03em;
+  color: var(--text);
+}
+.brand-sys {
+  font-family: var(--mono);
+  font-size: 17px;
+  font-weight: 400;
+  letter-spacing: .03em;
+  color: #ff6b35;
+}
+.sidebar-brand-tagline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 5px;
+}
+.brand-divider {
+  display: block;
+  width: 1px;
+  height: 14px;
+  background: #ff6b35;
+  opacity: .4;
+  flex-shrink: 0;
+}
+.brand-tag-inline {
+  font-family: var(--mono);
+  font-size: 8.5px;
+  letter-spacing: .12em;
   color: var(--text3);
   text-transform: uppercase;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1;
 }
 
 .sidebar-footer-brand {

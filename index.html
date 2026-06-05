@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AnalyticSys · Gestão Centralizada</title>
-<link rel="icon" href="icon.png" type="image/png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2040%2044%22%3E%0A%3Cpolygon%20points%3D%2220%2C4%2032%2C10%2032%2C18%2020%2C12%22%20fill%3D%22%23ff6b35%22%20opacity%3D%22.95%22%2F%3E%0A%3Cpolygon%20points%3D%2220%2C4%208%2C10%208%2C18%2020%2C12%22%20fill%3D%22%23ffb380%22%20opacity%3D%22.95%22%2F%3E%0A%3Cpolygon%20points%3D%2220%2C16%2034%2C22%2034%2C31%2020%2C25%22%20fill%3D%22%23ff6b35%22%20opacity%3D%22.65%22%2F%3E%0A%3Cpolygon%20points%3D%2220%2C16%206%2C22%206%2C31%2020%2C25%22%20fill%3D%22%23ffb380%22%20opacity%3D%22.65%22%2F%3E%0A%3Cpolygon%20points%3D%2220%2C29%2036%2C36%2036%2C44%2020%2C37%22%20fill%3D%22%23ff6b35%22%20opacity%3D%22.35%22%2F%3E%0A%3Cpolygon%20points%3D%2220%2C29%204%2C36%204%2C44%2020%2C37%22%20fill%3D%22%23ffb380%22%20opacity%3D%22.35%22%2F%3E%0A%3C%2Fsvg%3E" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,400&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
@@ -24,10 +24,26 @@
     <!-- HEADER: AnalyticSys logo + collapse toggle (visible when expanded) -->
     <div class="sidebar-header">
       <div class="sidebar-header-brand">
-        <img class="logo-analyticsys" src="icon.png" alt="AnalyticSys" loading="lazy">
+        <svg class="logo-analyticsys" viewBox="0 0 40 44" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="ícone AnalyticSys">
+          <!-- cubo topo -->
+          <polygon points="20,4 32,10 32,18 20,12" fill="#ff6b35" opacity=".95"/>
+          <polygon points="20,4 8,10 8,18 20,12" fill="#ffb380" opacity=".95"/>
+          <polygon points="20,12 32,18 8,18" fill="#ff6b35" opacity=".1"/>
+          <!-- cubo meio -->
+          <polygon points="20,16 34,22 34,31 20,25" fill="#ff6b35" opacity=".65"/>
+          <polygon points="20,16 6,22 6,31 20,25" fill="#ffb380" opacity=".65"/>
+          <!-- cubo base -->
+          <polygon points="20,29 36,36 36,44 20,37" fill="#ff6b35" opacity=".35"/>
+          <polygon points="20,29 4,36 4,44 20,37" fill="#ffb380" opacity=".35"/>
+        </svg>
         <div class="sidebar-header-text">
-          <h1 class="sidebar-brand-title">AnalyticSys</h1>
-          <div class="logo-mark">Estoque · Insumos</div>
+          <div class="sidebar-brand-name">
+            <span class="brand-analytic">ANALYTIC</span><span class="brand-sys">SYS</span>
+          </div>
+          <div class="sidebar-brand-tagline">
+            <span class="brand-divider"></span>
+            <span class="brand-tag-inline">ESTOQUE · INSUMOS</span>
+          </div>
         </div>
       </div>
       <button class="sidebar-collapse-btn sidebar-collapse-btn--expanded" id="sidebar-collapse-btn" onclick="toggleSidebarCollapse()" title="Recolher sidebar">
