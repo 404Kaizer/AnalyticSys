@@ -269,8 +269,24 @@ function macroApplyFilter() {
   const nCentrals    = Object.values(centralCounts).reduce((s, n) => s + n, 0);
   const nMats        = Object.values(matCounts).reduce((s, n) => s + n, 0);
 
-  _renderDonut('centrais', centralCounts, top5centrais, centralLevelMeta, centralScore, nCentrals);
-  _renderDonut('mats',     matCounts,     top5mats,     matLevelMeta,     matScore,     nMats);
+  // Build per-level item lists (only when a filter is active — for tooltip display)
+  const centralItemsByLevel = {};
+  if (selReg) {
+    filteredCentrals.forEach(([name, v]) => {
+      if (!centralItemsByLevel[v.level]) centralItemsByLevel[v.level] = [];
+      centralItemsByLevel[v.level].push(name);
+    });
+  }
+  const matItemsByLevel = {};
+  if (selCat || selReg) {
+    filteredMats.forEach(({ mat, central, level }) => {
+      if (!matItemsByLevel[level]) matItemsByLevel[level] = [];
+      matItemsByLevel[level].push(`${mat} (${central})`);
+    });
+  }
+
+  _renderDonut('centrais', centralCounts, top5centrais, centralLevelMeta, centralScore, nCentrals, centralItemsByLevel);
+  _renderDonut('mats',     matCounts,     top5mats,     matLevelMeta,     matScore,     nMats,     matItemsByLevel);
 }
 window.macroApplyFilter = macroApplyFilter;
 
@@ -329,7 +345,7 @@ function _showTip(e, html, col) {
 
 // ── Donut SVG ─────────────────────────────────────────────────────────
 // sliceData: array of { lvl, n, pct, col, items[] } — built from counts + top5
-function _renderDonut(type, counts, top5, levelMeta, healthScore, totalCount) {
+function _renderDonut(type, counts, top5, levelMeta, healthScore, totalCount, itemsByLevel = {}) {
   const svgEl  = document.getElementById(`chart-${type}-donut`);
   const summEl = document.getElementById(`chart-${type}-summary`);
   const impEl  = document.getElementById(`chart-${type}-impact`);
@@ -428,6 +444,20 @@ function _renderDonut(type, counts, top5, levelMeta, healthScore, totalCount) {
          ${trend==='worsening'?'▲ Piorando':trend==='improving'?'▼ Melhorando':'→ Estável'}
        </div>` : '',
       `</div>`,
+      (() => {
+        const items = itemsByLevel[lvl];
+        if (!items || !items.length) return '';
+        const MAX = 8;
+        const shown = items.slice(0, MAX);
+        const more  = items.length - MAX;
+        return `<div style="margin-top:8px;border-top:1px solid rgba(255,255,255,0.08);padding-top:8px">
+          <div style="font-family:var(--mono);font-size:9.5px;color:var(--text3);margin-bottom:5px;letter-spacing:.06em">ITENS (${items.length})</div>
+          <div style="display:flex;flex-direction:column;gap:3px">
+            ${shown.map(it => `<div style="font-family:var(--mono);font-size:10px;color:${col};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px">${escapeHtml(it)}</div>`).join('')}
+            ${more > 0 ? `<div style="font-family:var(--mono);font-size:9.5px;color:var(--text3)">+ ${more} mais…</div>` : ''}
+          </div>
+        </div>`;
+      })(),
     ].filter(Boolean).join('');
 
     svg += `<path class="mslice-${type}" data-lvl="${lvl}" data-tip="${encodeURIComponent(tipLines)}" data-col="${col}"

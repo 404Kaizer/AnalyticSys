@@ -55,7 +55,7 @@
   --sidebar-w: 228px;
   --topbar-h: 56px;
 
-  --logo-filter: invert(1) hue-rotate(180deg) brightness(1.15);
+  --logo-filter: invert(1) hue-rotate(178deg);
 
   color-scheme: dark;
 }
@@ -75,7 +75,7 @@ body[data-theme="graphite"] {
   --accent:   #38bdf8;
   --accent-dim: rgba(56,189,248,0.12);
   --accent-glow: rgba(56,189,248,0.28);
-  --logo-filter: invert(1) hue-rotate(180deg) brightness(1.1);
+  --logo-filter: invert(1) hue-rotate(178deg);
   color-scheme: dark;
 }
 

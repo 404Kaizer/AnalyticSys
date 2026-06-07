@@ -519,3 +519,460 @@ window.gerarRelatorioGerencial = function() {
   w.document.close();
   w.focus();
 };
+
+// ═══════════════════════════════════════════════════════════════════
+// RELATÓRIO DE AUSÊNCIAS DE LANÇAMENTO
+// ═══════════════════════════════════════════════════════════════════
+
+function _buildAusenciasRelHTML({ titulo, periodo, geradoEm, centraisData, totalDias, totalMats, totalCentrals }) {
+  function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function fmtDate(d) {
+    return String(d.getDate()).padStart(2,'0') + '/' +
+           String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
+  }
+
+  const centralSections = centraisData.map(({ central, mats }, idx) => {
+    const totalAus = mats.length;
+    const matRows = mats.map(({ mat, tipo, dias }, ri) => {
+      const isSemanal = tipo === 'Semanal';
+      const chips = dias.map(d =>
+        `<span class="date-chip">${fmtDate(d)}</span>`
+      ).join('');
+      return `
+        <tr class="${ri % 2 === 0 ? 'row-even' : 'row-odd'}">
+          <td class="td-mat">${esc(mat)}</td>
+          <td class="td-tipo">
+            <span class="badge-tipo ${isSemanal ? 'badge-semanal' : 'badge-diario'}">${tipo}</span>
+          </td>
+          <td class="td-count">${dias.length}</td>
+          <td class="td-dates">${chips}</td>
+        </tr>`;
+    }).join('');
+
+    return `
+      <div class="central-block" style="animation-delay:${idx * 0.04}s">
+        <div class="central-header">
+          <div class="central-header-left">
+            <span class="central-icon">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 21h18M3 7l9-4 9 4M4 7v14M20 7v14M9 21v-4a3 3 0 0 1 6 0v4"/>
+              </svg>
+            </span>
+            <span class="central-name">${esc(central)}</span>
+          </div>
+
+        </div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="width:30%">Material</th>
+              <th style="width:100px">Frequência</th>
+              <th style="width:90px;text-align:center">Ausências</th>
+              <th>Datas sem lançamento</th>
+            </tr>
+          </thead>
+          <tbody>${matRows}</tbody>
+        </table>
+      </div>`;
+  }).join('');
+
+  return `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${esc(titulo)}</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', 'Inter', system-ui, -apple-system, sans-serif;
+      background: #f0f4f8;
+      color: #1a2332;
+      line-height: 1.5;
+    }
+
+    /* ── Header ── */
+    .report-header {
+      background: #ffffff;
+      border-bottom: 3px solid #e8790a;
+      padding: 0;
+    }
+    .header-top {
+      background: #1a2332;
+      padding: 20px 48px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+    }
+    .logos-wrap {
+      display: flex;
+      align-items: center;
+      gap: 28px;
+    }
+    .logo-concrelagos {
+      height: 44px;
+      width: auto;
+      object-fit: contain;
+      filter: invert(1) hue-rotate(178deg);
+      opacity: .95;
+    }
+    .logo-sep {
+      width: 1px;
+      height: 40px;
+      background: #334155;
+    }
+    .logo-analyticsys {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      opacity: .7;
+    }
+    .logo-analyticsys-text {
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: .06em;
+      font-family: monospace;
+      line-height: 1;
+      color: #cbd5e1;
+    }
+    .logo-analyticsys-text span { color: #f97316; }
+    .logo-analyticsys-sub {
+      font-size: 8px;
+      color: #64748b;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      margin-top: 2px;
+    }
+    .header-meta {
+      text-align: right;
+      font-size: 11px;
+      color: #64748b;
+    }
+    .header-meta strong { color: #94a3b8; }
+
+    .header-body {
+      padding: 28px 48px 24px;
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 24px;
+      flex-wrap: wrap;
+    }
+    .report-title {
+      font-size: 24px;
+      font-weight: 700;
+      color: #1a2332;
+      line-height: 1.2;
+      letter-spacing: -.01em;
+    }
+    .report-period {
+      font-size: 13px;
+      color: #64748b;
+      margin-top: 6px;
+    }
+    .report-period strong { color: #1a2332; }
+
+
+
+    /* ── Alert ── */
+    .alert-banner {
+      background: #fffbeb;
+      border-top: 1px solid #fde68a;
+      border-bottom: 1px solid #fde68a;
+      padding: 14px 48px;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      font-size: 13px;
+      color: #78350f;
+      line-height: 1.6;
+    }
+
+    /* ── Content ── */
+    .content {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 36px 48px;
+    }
+
+    /* ── Central block ── */
+    .central-block {
+      background: #ffffff;
+      border-radius: 10px;
+      border: 1px solid #e2e8f0;
+      overflow: hidden;
+      margin-bottom: 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
+      page-break-inside: avoid;
+    }
+    .central-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 13px 18px;
+      background: #f8fafc;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    .central-header-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .central-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      background: #e8790a;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .central-name {
+      font-size: 14px;
+      font-weight: 700;
+      color: #1a2332;
+      letter-spacing: .02em;
+    }
+    .central-badge {
+      font-size: 11px;
+      font-weight: 700;
+      font-family: monospace;
+      letter-spacing: .04em;
+      color: #b91c1c;
+      background: #fff1f2;
+      border: 1px solid #fecdd3;
+      border-radius: 5px;
+      padding: 3px 10px;
+    }
+
+    /* ── Table ── */
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .data-table thead tr {
+      background: #f1f5f9;
+    }
+    .data-table th {
+      padding: 9px 16px;
+      font-size: 10.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .07em;
+      color: #64748b;
+      text-align: left;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    .row-even { background: #ffffff; }
+    .row-odd  { background: #f8fafc; }
+    .td-mat, .td-tipo, .td-count, .td-dates {
+      padding: 9px 16px;
+      border-bottom: 1px solid #f1f5f9;
+      vertical-align: middle;
+    }
+    .td-mat {
+      font-weight: 600;
+      font-size: 13px;
+      color: #1e293b;
+    }
+    .td-count {
+      text-align: center;
+      font-family: monospace;
+      font-size: 14px;
+      font-weight: 800;
+      color: #dc2626;
+    }
+    .td-dates { line-height: 1.8; }
+
+    /* ── Badges ── */
+    .badge-tipo {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 700;
+      font-family: monospace;
+      letter-spacing: .04em;
+    }
+    .badge-diario  { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+    .badge-semanal { background: #f5f3ff; color: #6d28d9; border: 1px solid #ddd6fe; }
+
+    .date-chip {
+      display: inline-block;
+      background: #fff7ed;
+      border: 1px solid #fed7aa;
+      color: #9a3412;
+      border-radius: 4px;
+      padding: 2px 7px;
+      font-size: 11px;
+      font-family: monospace;
+      white-space: nowrap;
+      margin: 2px 3px 2px 0;
+    }
+
+    /* ── Footer ── */
+    .report-footer {
+      background: #1a2332;
+      color: #64748b;
+      padding: 18px 48px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      margin-top: 0;
+    }
+    .report-footer strong { color: #94a3b8; }
+
+    @media print {
+      body { background: #fff; }
+      .central-block { box-shadow: none; border: 1px solid #e2e8f0; }
+      .header-top { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .report-footer { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="report-header">
+  <div class="header-top">
+    <div class="logos-wrap">
+      <!-- Concrelagos em destaque -->
+      <img class="logo-concrelagos"
+        src="https://concrelagos.com.br/wp-content/uploads/2021/10/Ativo-3.svg"
+        alt="Concrelagos Concreto">
+      <div class="logo-sep"></div>
+      <!-- AnalyticSys menor -->
+      <div class="logo-analyticsys">
+        <svg width="22" height="24" viewBox="0 0 40 44" fill="none">
+          <polygon points="20,4 32,10 32,18 20,12" fill="#ff6b35" opacity=".95"/>
+          <polygon points="20,4 8,10 8,18 20,12" fill="#ffb380" opacity=".95"/>
+          <polygon points="20,12 32,18 8,18" fill="#ff6b35" opacity=".1"/>
+          <polygon points="20,16 34,22 34,31 20,25" fill="#ff6b35" opacity=".65"/>
+          <polygon points="20,16 6,22 6,31 20,25" fill="#ffb380" opacity=".65"/>
+          <polygon points="20,29 36,36 36,44 20,37" fill="#ff6b35" opacity=".35"/>
+          <polygon points="20,29 4,36 4,44 20,37" fill="#ffb380" opacity=".35"/>
+        </svg>
+        <div>
+          <div class="logo-analyticsys-text">ANALYTIC<span>SYS</span></div>
+          <div class="logo-analyticsys-sub">Estoque · Insumos</div>
+        </div>
+      </div>
+    </div>
+    <div class="header-meta">
+      Gerado em <strong>${esc(geradoEm)}</strong>
+    </div>
+  </div>
+
+  <div class="header-body">
+    <div>
+      <div class="report-title">${esc(titulo)}</div>
+      <div class="report-period">Período de análise: <strong>${esc(periodo)}</strong></div>
+    </div>
+  </div>
+</div>
+
+<div class="alert-banner">
+  <svg style="flex-shrink:0" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+  </svg>
+  <span><strong>ATENÇÃO:</strong> Os lançamentos abaixo estão <strong>ausentes</strong> no sistema e comprometem diretamente a integridade dos estoques, a confiabilidade das análises e a rastreabilidade operacional. A ausência de lançamento distorce variações e invalida o inventário do período. <strong style="color:#b45309;font-size:13.5px;display:inline-block;margin-top:4px">⚠ Regularização imediata é obrigatória.</strong></span>
+</div>
+
+<div class="content">
+  ${centralSections}
+</div>
+
+<div class="report-footer">
+  <span>Concrelagos Concreto &nbsp;·&nbsp; <strong>AnalyticSys</strong> &nbsp;·&nbsp; Gestão Centralizada de Estoque e Insumos</span>
+  <span>Período: <strong>${esc(periodo)}</strong></span>
+</div>
+
+</body>
+</html>`;
+}
+
+
+// Converte o array ausencias (do renderAusencias) para o formato centraisData
+function _ausenciasParaCentraisData(ausencias) {
+  const byCentral = new Map();
+  ausencias.forEach(a => {
+    if (!byCentral.has(a.central)) byCentral.set(a.central, []);
+    byCentral.get(a.central).push({
+      mat:  a.mat,
+      tipo: a.isSemanal ? 'Semanal' : 'Diário',
+      dias: a.diasAusentes
+    });
+  });
+  return [...byCentral.entries()]
+    .sort((a,b) => a[0].localeCompare(b[0]))
+    .map(([central, mats]) => ({
+      central,
+      mats: mats.sort((a,b) => a.mat.localeCompare(b.mat))
+    }));
+}
+
+function _ausGetPeriodo() {
+  const ini = document.getElementById('aus-dt-ini')?.value || '';
+  const fim = document.getElementById('aus-dt-fim')?.value || '';
+  const fmt = v => { if (!v) return ''; const [y,m,d] = v.split('-'); return `${d}/${m}/${y}`; };
+  if (!ini && !fim) return 'Período não especificado';
+  return ini === fim ? fmt(ini) : `${fmt(ini)} a ${fmt(fim)}`;
+}
+
+// Relatório por central específica
+window.gerarRelatorioAusenciasCentral = function(central) {
+  if (!window._ausenciasData?.length) return;
+  const ausencias = window._ausenciasData.filter(a => a.central === central);
+  if (!ausencias.length) { alert('Nenhuma ausência para esta central.'); return; }
+
+  const centraisData = _ausenciasParaCentraisData(ausencias);
+  const diasUnicos   = new Set(ausencias.flatMap(a => a.diasAusentes.map(d => d.toISOString().slice(0,10)))).size;
+  const matsUnicos   = new Set(ausencias.map(a => a.mat)).size;
+  const periodo      = _ausGetPeriodo();
+  const html = _buildAusenciasRelHTML({
+    titulo:       `Ausências de Lançamento — ${central}`,
+    periodo,
+    geradoEm:     new Date().toLocaleString('pt-BR'),
+    centraisData,
+    totalDias:    diasUnicos,
+    totalMats:    matsUnicos,
+    totalCentrals: 1
+  });
+
+  const w = window.open('', '_blank', 'width=1200,height=900,scrollbars=yes,resizable=yes');
+  if (!w) { alert('Popups bloqueados! Permita pop-ups para gerar o relatório.'); return; }
+  w.document.write(html);
+  w.document.close();
+  w.focus();
+};
+
+// Relatório geral (todas as centrais filtradas)
+window.gerarRelatorioAusenciasGeral = function() {
+  if (!window._ausenciasData?.length) { alert('Nenhuma ausência no período selecionado.'); return; }
+
+  const ausencias   = window._ausenciasData;
+  const centraisData = _ausenciasParaCentraisData(ausencias);
+  const diasUnicos  = new Set(ausencias.flatMap(a => a.diasAusentes.map(d => d.toISOString().slice(0,10)))).size;
+  const matsUnicos  = new Set(ausencias.map(a => a.mat)).size;
+  const centralsCnt = new Set(ausencias.map(a => a.central)).size;
+  const periodo     = _ausGetPeriodo();
+  const html = _buildAusenciasRelHTML({
+    titulo:       'Relatório Geral de Ausências de Lançamento',
+    periodo,
+    geradoEm:     new Date().toLocaleString('pt-BR'),
+    centraisData,
+    totalDias:    diasUnicos,
+    totalMats:    matsUnicos,
+    totalCentrals: centralsCnt
+  });
+
+  const w = window.open('', '_blank', 'width=1200,height=900,scrollbars=yes,resizable=yes');
+  if (!w) { alert('Popups bloqueados! Permita pop-ups para gerar o relatório.'); return; }
+  w.document.write(html);
+  w.document.close();
+  w.focus();
+};

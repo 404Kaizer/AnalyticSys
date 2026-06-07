@@ -3,7 +3,7 @@ const IDB_DB_NAME = 'central_analise_db_v1';
 const IDB_STORE = 'kv';
 const IDB_STATE_KEY = 'appState';
 const legacyStateKey = STORAGE_KEY;
-const saveSnapshotKeys = ['configs', 'filiais', 'materiais', 'entradas', 'saidas', 'lancamentos', 'sap', 'producao', 'imports'];
+const saveSnapshotKeys = ['configs', 'filiais', 'materiais', 'entradas', 'saidas', 'lancamentos', 'sap', 'producao', 'imports', 'ocorrencias'];
 
 let idbOpenPromise = null;
 let persistTimer = null;
@@ -81,7 +81,8 @@ function buildStateSnapshot() {
     lancamentos: state.lancamentos,
     sap: compactSapRecords(state.sap),
     producao: state.producao,
-    imports: state.imports
+    imports: state.imports,
+    ocorrencias: state.ocorrencias || []
   };
 }
 
@@ -101,6 +102,26 @@ function applySavedState(saved) {
     id: item?.id || makeMaterialId(),
     ...item
   }));
+
+  // Migra IDs de ocorrências do formato OC-timestamp para OC-N sequencial
+  if (Array.isArray(state.ocorrencias)) {
+    let counter = 1;
+    const idMap = {};
+    // Ordena por criadoEm para manter ordem cronológica
+    const sorted = [...state.ocorrencias].sort((a, b) => (a.criadoEm || 0) - (b.criadoEm || 0));
+    sorted.forEach(o => {
+      const isLegacy = /^OC-\d{10,}$/.test(String(o.id));
+      if (isLegacy) {
+        idMap[o.id] = 'OC-' + counter++;
+      }
+    });
+    if (Object.keys(idMap).length > 0) {
+      state.ocorrencias = state.ocorrencias.map(o => ({
+        ...o,
+        id: idMap[o.id] || o.id,
+      }));
+    }
+  }
 
   invalidateMaterialLookup();
   invalidateFilialLookup();
@@ -123,7 +144,7 @@ async function persistStateNow() {
                   state.lancamentos.length || state.sap.length       ||
                   state.producao.length  || state.imports.length     ||
                   state.configs.length   || state.filiais.length     ||
-                  state.materiais.length;
+                  state.materiais.length || (state.ocorrencias || []).length;
   if (!stateHydrated && !hasData) {
     return;
   }
@@ -155,24 +176,33 @@ function flushPersistQueue() {
     return;
   }
 
-  persistInFlight = true;
-  Promise.resolve()
-    .then(() => persistStateNow())
-    .catch(err => console.warn('Falha na persistência assíncrona.', err))
-    .finally(() => {
-      persistInFlight = false;
-      if (persistQueued) {
-        persistQueued = false;
-        flushPersistQueue();
-      }
-    });
+  const run = () => {
+    persistInFlight = true;
+    Promise.resolve()
+      .then(() => persistStateNow())
+      .catch(err => console.warn('Falha na persistência assíncrona.', err))
+      .finally(() => {
+        persistInFlight = false;
+        if (persistQueued) {
+          persistQueued = false;
+          flushPersistQueue();
+        }
+      });
+  };
+
+  // Usa requestIdleCallback quando disponível — roda só quando o browser está ocioso
+  if (typeof requestIdleCallback === 'function') {
+    requestIdleCallback(run, { timeout: 3000 });
+  } else {
+    run();
+  }
 }
 
 function persist() {
   clearTimeout(persistTimer);
   persistTimer = setTimeout(() => {
     flushPersistQueue();
-  }, 500);
+  }, 1500); // aumentado de 500ms para 1500ms para dar mais espaço à UI
 }
 
 async function loadState() {
@@ -214,7 +244,9 @@ async function loadState() {
   }
 
   if (loaded) {
-    persist();
+    // Não re-persistir imediatamente após restaurar — os dados acabam de ser lidos
+    // do storage e não mudaram. Agendar com delay longo para não travar a UI.
+    setTimeout(() => flushPersistQueue(), 5000);
   } else {
     stateHydrated = true;
   }

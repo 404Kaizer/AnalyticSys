@@ -79,7 +79,7 @@
     const h = window._inv_helpers;
     if (!h) { toast('Sistema não iniciado. Aguarde e tente novamente.', 'error'); return; }
 
-    const { getLancIndex, getSapIndex, getCustoMedioPorMat, getPrePeriodLaunchStock, getFilialLookupIndex, normalizeText, parseDate, localISODate, dateCmp, num, state: getState } = h;
+    const { getLancIndex, getSapIndex, getCustoMedioPorMat, getPrePeriodLaunchStock, getLastPeriodLaunchStock, getFilialLookupIndex, normalizeText, parseDate, localISODate, dateCmp, num, state: getState } = h;
     const state = getState();
 
     const dtIni = new Date(iniVal + 'T00:00:00');
@@ -137,41 +137,15 @@
         });
         const sapArr = sapByMat.get(mat) || [];
 
+        // EST. INICIAL: dia anterior ao período (pula domingo). Sem fallback.
         const preRes = getPrePeriodLaunchStock({ central, material: mat, dtIni });
-        // Se não há lançamento anterior ao período, usa o primeiro lançamento
-        // dentro do período como Est. Inicial (soma do primeiro dia), igual ao
-        // comportamento do Dashboard Analítico com initialStockOverride.
-        let estoqueIni;
-        if (preRes != null) {
-          estoqueIni = preRes.value;
-        } else {
-          // Pega lançamentos dentro do período e soma o primeiro dia
-          const lancNoPeriodo = lancArr.filter(r => { const d = parseDate(r.dtLanc); return d && d >= dtIni && d <= dtFim; });
-          if (lancNoPeriodo.length) {
-            const firstDKey = (() => { const d = parseDate(lancNoPeriodo[0].dtLanc); return d ? localISODate(d) : null; })();
-            estoqueIni = firstDKey
-              ? lancNoPeriodo.filter(r => { const d = parseDate(r.dtLanc); return d && localISODate(d) === firstDKey; }).reduce((s, r) => s + num(r.peso), 0)
-              : 0;
-          } else {
-            estoqueIni = 0;
-          }
-        }
+        const estoqueIni = preRes != null ? preRes.value : 0;
+        const estoqueIniMissing = preRes == null;
 
-        const lancAteFim = lancArr.filter(r => { const d = parseDate(r.dtLanc); return d && d <= dtFim; });
-        let estoqueFimReal = estoqueIni;
-        if (lancAteFim.length) {
-          const lastD = parseDate(lancAteFim[lancAteFim.length-1].dtLanc);
-          if (lastD) {
-            const lastISO = lastD.toISOString().substring(0,10);
-            let tot = 0;
-            for (let i = lancAteFim.length-1; i >= 0; i--) {
-              const d = parseDate(lancAteFim[i].dtLanc);
-              if (d && d.toISOString().substring(0,10) === lastISO) tot += num(lancAteFim[i].peso);
-              else break;
-            }
-            estoqueFimReal = tot;
-          }
-        }
+        // EST. FINAL: último dia não-domingo do período. missing=true se sem lançamento.
+        const fimRes = getLastPeriodLaunchStock({ central, material: mat, dtFim });
+        const estoqueFimReal = fimRes ? fimRes.value : 0;
+        const estoqueFimMissing = !fimRes || fimRes.missing;
 
         // Volumes de entradas/saídas ainda vêm do SAP (movimentos físicos).
         let entradasKg = 0, saidasKg = 0;
@@ -196,7 +170,7 @@
         const sample = lancArr[0] || sapArr[0] || {};
         const categoria = sample.categoria || '—';
 
-        rowMap.set(k, { k, central, material: mat, categoria, regional, estoqueIni, entradasKg, saidasKg, estoqueFimReal, custoMedio, entEntries, saiEntries });
+        rowMap.set(k, { k, central, material: mat, categoria, regional, estoqueIni, estoqueIniMissing, entradasKg, saidasKg, estoqueFimReal, estoqueFimMissing, custoMedio, entEntries, saiEntries });
       });
     });
 
@@ -291,7 +265,9 @@
         : '';
 
       // ── Est. Inicial: teal igual ao analítico ──────────────
-      const iniCell = `<span class="td-mono" style="color:var(--teal)">${_fmtKg(r.estoqueIni)}</span>`;
+      const iniCell = r.estoqueIniMissing
+        ? `<span class="td-mono" style="color:var(--text3);font-style:italic">—</span>`
+        : `<span class="td-mono" style="color:var(--teal)">${_fmtKg(r.estoqueIni)}</span>`;
 
       // ── Entradas / Saídas: bdm-trigger igual ao analítico ──
       const entCell = _bdm
@@ -302,7 +278,9 @@
         : `<span class="td-mono" style="color:var(--red);font-weight:600">${_fmtKg(r.saidasKg)}</span>`;
 
       // ── Est. Final: teal igual ao analítico ────────────────
-      const finCell = `<span class="td-mono" style="color:var(--teal)">${_fmtKg(r.estoqueFimReal)}</span>`;
+      const finCell = r.estoqueFimMissing
+        ? `<span class="td-mono" style="color:var(--text3);font-style:italic" title="Sem lançamento no último dia útil do período">—</span>`
+        : `<span class="td-mono" style="color:var(--teal)">${_fmtKg(r.estoqueFimReal)}</span>`;
 
       // ── Est. Teórico: purple igual ao analítico ────────────
       const teorCell = `<span class="td-mono" style="color:var(--purple)">${_fmtKg(r.estTeor)}</span>`;
@@ -382,6 +360,28 @@
     set('inv-kpi-ent-v', fmt(totalEnt));
     set('inv-kpi-sai-v', fmt(totalSai));
     set('inv-kpi-fin-v', fmt(totalFin));
+
+    // Badges de ausentes nos KPIs
+    const _invMissingBadge = (containerId, list, label) => {
+      const el = document.getElementById(containerId);
+      if (!el) return;
+      if (!list.length) { el.innerHTML = ''; return; }
+      const MAX = 5;
+      const shown = list.slice(0, MAX).map(s => `<div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;color:var(--text2);font-size:10px;font-family:var(--mono)">${s}</div>`).join('');
+      const more  = list.length > MAX ? `<div style="color:var(--text3);font-size:9.5px;font-family:var(--mono)">+ ${list.length - MAX} mais</div>` : '';
+      el.innerHTML = `<details style="margin-top:5px">
+        <summary style="cursor:pointer;list-style:none;display:inline-flex;align-items:center;gap:4px;font-family:var(--mono);font-size:9px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--amber);padding:2px 7px;background:var(--amber-bg);border:1px solid var(--amber-border);border-radius:4px;user-select:none">
+          <i class="ti ti-alert-triangle" style="font-size:10px"></i> ${list.length} sem ${label}
+        </summary>
+        <div style="margin-top:5px;padding:7px 9px;background:var(--bg4);border:1px solid var(--border2);border-radius:5px;display:flex;flex-direction:column;gap:2px">
+          ${shown}${more}
+        </div>
+      </details>`;
+    };
+    const missingIniRows = invRows.filter(r => r.estoqueIniMissing).map(r => `${r.central} · ${r.material}`);
+    const missingFimRows = invRows.filter(r => r.estoqueFimMissing).map(r => `${r.central} · ${r.material}`);
+    _invMissingBadge('inv-kpi-ini-missing', missingIniRows, 'Est. Ini.');
+    _invMissingBadge('inv-kpi-fin-missing', missingFimRows, 'Est. Fim');
 
     // Variação: principal = bruto, secundário = ajustado (só se diferente)
     set('inv-kpi-var-v', fmt(totalVarBruto));

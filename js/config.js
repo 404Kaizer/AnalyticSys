@@ -159,18 +159,6 @@ function upsertMateriais(items) {
   invalidateMaterialLookup();
 }
 
-function registrarImportacaoCadastro(modulo, arquivo, registros, importId) {
-  state.imports.unshift({
-    id: importId,
-    arquivo,
-    modulo,
-    registros,
-    dataHora: new Date().toLocaleString('pt-BR'),
-    status: 'Importado',
-    createdAt: Date.now()
-  });
-}
-
 function parseMateriaisRows(rows) {
   const cleaned = (rows || []).filter(row => Array.isArray(row) && row.some(c => c !== '' && c !== null && c !== undefined));
   if (!cleaned.length) return [];

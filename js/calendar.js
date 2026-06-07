@@ -381,6 +381,11 @@
     syncInputs(pfx);
     updateTriggerLabel(pfx);
     renderCal(pfx);
+
+    // Callback: disparar renderAusencias quando range estiver completo
+    if (pfx === 'aus' && p.startDate && p.endDate && typeof renderAusencias === 'function') {
+      renderAusencias();
+    }
   };
 
   window.calDayHover = function(btn) {
@@ -432,6 +437,14 @@
   }
 
   // Outside chips
+  // Expose setRange publicly for external use
+  window.calSetRange = function(pfx, iniISO, fimISO) {
+    const start = new Date(iniISO + 'T00:00:00');
+    const end   = new Date(fimISO + 'T23:59:59');
+    if (isNaN(start) || isNaN(end)) return;
+    setRange(pfx, start, end);
+  };
+
   window.calQuickHoje = function(pfx) {
     const d = new Date();
     const today = stripTime(d);
@@ -452,9 +465,6 @@
   };
 
   // Footer chips inside calendar
-  window.calFooterHoje = function(pfx) { window.calQuickHoje(pfx); };
-  window.calFooterMesAtual = function(pfx) { window.calQuickMesAtual(pfx); };
-  window.calFooterMesAnterior = function(pfx) { window.calQuickMesAnterior(pfx); };
 
   function markOutsideChip(pfx, idx) {
     const chips = document.querySelectorAll(`[onclick^="calQuick"][onclick*="'${pfx}'"]`);
@@ -487,13 +497,27 @@
 
   // Prevent clicks INSIDE the dropdown from bubbling to document
   document.addEventListener('DOMContentLoaded', function() {
-    ['dg-cal-dropdown', 'an-cal-dropdown', 'inv-cal-dropdown'].forEach(function(id) {
+    ['dg-cal-dropdown', 'an-cal-dropdown', 'inv-cal-dropdown', 'aus-cal-dropdown'].forEach(function(id) {
       var el = document.getElementById(id);
       if (el) el.addEventListener('click', function(e) { e.stopPropagation(); });
     });
   });
 
-  // Close when clicking outside
+  // Close aus filter dropdowns when clicking outside
+  document.addEventListener('click', function(e) {
+    ['aus-fd-central', 'aus-fd-mat'].forEach(function(id) {
+      const dd = document.getElementById(id);
+      const key = id.replace('aus-fd-', '');
+      const trigger = document.getElementById('aus-ft-' + key);
+      if (dd && dd.classList.contains('open') && !dd.contains(e.target) && !trigger?.contains(e.target)) {
+        dd.classList.remove('open');
+        document.getElementById('aus-fc-' + key)?.classList.remove('open');
+        if (window._ausFilter) _ausFilter.pending[key] = new Set(_ausFilter.applied[key]);
+      }
+    });
+  });
+
+  // Close when clicking outside (original)
   document.addEventListener('click', function(e) {
     document.querySelectorAll('.cal-picker-dropdown.open').forEach(function(el) {
       var wrap = el.closest('.cal-picker-wrap');

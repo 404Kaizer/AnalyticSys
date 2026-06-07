@@ -6,14 +6,13 @@ function closeSidebar() {
 // Cache de referências DOM para o navigate (populado no primeiro uso)
 let _navCache = null;
 function _buildNavCache() {
-  const navItems = qsa('.nav-item');
+  const navItems = qsa('.tab-item');
   const pages = qsa('.page');
-  // Mapeia page-key → nav-item element
+  // Mapeia page-key → tab-item element
   const navByPage = {};
   navItems.forEach(n => {
-    const onclick = n.getAttribute('onclick') || '';
-    const m = onclick.match(/navigate\('([^']+)'\)/);
-    if (m) navByPage[m[1]] = n;
+    const key = n.getAttribute('data-page');
+    if (key) navByPage[key] = n;
   });
   // Mapeia page-key → page element
   const pageById = {};
@@ -24,6 +23,9 @@ function _buildNavCache() {
   return { navItems, pages, navByPage, pageById };
 }
 
+// Salva posição de scroll por página
+const _pageScrollPos = {};
+
 function navigate(page) {
   // FAB will update itself via setTimeout after DOM settles
   if (!_navCache) _navCache = _buildNavCache();
@@ -31,6 +33,11 @@ function navigate(page) {
 
   const currentPage = document.querySelector('.page.active')?.id?.replace('page-', '');
   const alreadyActive = currentPage === page;
+
+  // Salva scroll da página atual antes de sair
+  if (currentPage && !alreadyActive) {
+    _pageScrollPos[currentPage] = window.scrollY;
+  }
 
   // Remover active da página atual (sem varrer todas)
   if (currentPage && pageById[currentPage]) pageById[currentPage].classList.remove('active');
@@ -40,7 +47,7 @@ function navigate(page) {
   const newPage = pageById[page] || document.getElementById('page-' + page);
   if (newPage) newPage.classList.add('active');
 
-  // Remover active do nav-item atual e ativar o novo
+  // Remover active do tab-item atual e ativar o novo
   if (currentPage && navByPage[currentPage]) navByPage[currentPage].classList.remove('active');
   else navItems.forEach(n => n.classList.remove('active'));
   if (navByPage[page]) navByPage[page].classList.add('active');
@@ -53,7 +60,12 @@ function navigate(page) {
 
   if (!alreadyActive) renderPage(page);
   closeSidebar();
-  setTimeout(function(){ if(window.updatePeriodFab) updatePeriodFab(); }, 30);
+
+  // Restaura scroll da página destino (após render)
+  setTimeout(function(){
+    window.scrollTo({ top: _pageScrollPos[page] ?? 0, behavior: 'instant' });
+    if(window.updatePeriodFab) updatePeriodFab();
+  }, 30);
 }
 
 function setTab(tabId, btn) {
@@ -80,24 +92,93 @@ function setModulo(mod) {
 }
 
 function exportarDados() {
-  const data = JSON.stringify({
-    entradas: state.entradas,
-    saidas: state.saidas,
+  const now    = new Date();
+  const stamp  = localISODate(now) + '_' + String(now.getHours()).padStart(2,'0') + String(now.getMinutes()).padStart(2,'0');
+  const backup = {
+    _version:    'analyticsys_backup_v1',
+    _exportedAt: now.toLocaleString('pt-BR'),
+    entradas:    state.entradas,
+    saidas:      state.saidas,
     lancamentos: state.lancamentos,
-    sap: state.sap,
-    producao: state.producao,
-    imports: state.imports,
-    configs: state.configs,
-    filiais: state.filiais,
-    materiais: state.materiais
-  }, null, 2);
-  const blob = new Blob([data], { type: 'application/json' });
+    sap:         state.sap,
+    producao:    state.producao,
+    imports:     state.imports,
+    configs:     state.configs,
+    filiais:     state.filiais,
+    materiais:   state.materiais,
+    ocorrencias: state.ocorrencias || []
+  };
+  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'central_analise_' + localISODate(new Date()) + '.json';
+  a.download = 'analyticsys_backup_' + stamp + '.json';
   a.click();
   URL.revokeObjectURL(a.href);
-  toast('Dados exportados com sucesso');
+  toast('Backup exportado com sucesso');
+}
+
+function restaurarBackup(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async function(e) {
+    try {
+      const parsed = JSON.parse(e.target.result);
+
+      // Validação mínima
+      if (typeof parsed !== 'object' || Array.isArray(parsed)) {
+        toast('Arquivo inválido — não é um backup AnalyticSys', 'error');
+        return;
+      }
+
+      const temDados = ['entradas','saidas','lancamentos','sap','filiais','materiais']
+        .some(k => Array.isArray(parsed[k]) && parsed[k].length > 0);
+      if (!temDados) {
+        toast('Arquivo não contém dados reconhecíveis', 'error');
+        return;
+      }
+
+      const totalAtual = (state.entradas?.length||0) + (state.lancamentos?.length||0) + (state.sap?.length||0);
+      const msg = totalAtual > 0
+        ? `Restaurar este backup substituirá TODOS os dados atuais (${totalAtual.toLocaleString('pt-BR')} registros). Esta ação não pode ser desfeita. Confirmar?`
+        : 'Restaurar backup? Os dados serão carregados no sistema.';
+
+      if (!confirm(msg)) return;
+
+      showLoadingOverlay('Restaurando backup', 'Carregando dados do arquivo...');
+      await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+
+      // Restaura cada campo, com fallback para array vazio
+      const fields = ['entradas','saidas','lancamentos','sap','producao','imports','configs','filiais','materiais','ocorrencias'];
+      fields.forEach(f => {
+        state[f] = Array.isArray(parsed[f]) ? parsed[f] : (state[f] || []);
+      });
+
+      // Reprocessa índices e normalizações
+      invalidateMaterialLookup();
+      invalidateFilialLookup();
+      invalidateLancIndex();
+      invalidateSapIndex();
+      invalidateSaidasIndex();
+      if (typeof invalidateAllSearchIndexes === 'function') invalidateAllSearchIndexes();
+      if (typeof reaplicarPadronizacaoMateriais === 'function') reaplicarPadronizacaoMateriais();
+
+      await persistStateNow();
+      hideLoadingOverlay('Backup restaurado');
+
+      if (typeof renderAll === 'function') renderAll();
+      if (typeof updateImportPrereqUI === 'function') updateImportPrereqUI();
+
+      const info = parsed._exportedAt ? ` (exportado em ${parsed._exportedAt})` : '';
+      toast('Backup restaurado com sucesso' + info);
+
+    } catch (err) {
+      console.error(err);
+      hideLoadingOverlay('Erro');
+      toast('Falha ao restaurar: arquivo corrompido ou inválido', 'error');
+    }
+  };
+  reader.onerror = () => toast('Não foi possível ler o arquivo', 'error');
+  reader.readAsText(file, 'utf-8');
 }
 
 function updatePageInfo(module) {
@@ -931,29 +1012,49 @@ Object.assign(window, { openBreakdownModal, closeBreakdownModal, openPendIntegMo
 
 // ── Conflict Resolution Modal ───────────────────────────────
 let _lrcDetailKey = null;
-let _lrcSelectedIdx = null;
+let _lrcChecked   = new Set();
 
-function openLancConflictModal(trigger) {
+function _lrcFingerprint(l) {
+  return [l.central, l.dtLanc, l.material, String(num(l.peso)), l.fornecedor, l.um].join('|');
+}
+
+function _lrcRefreshDetailModal(key) {
+  if (!key) return;
+  const overlay = document.getElementById('analitico-detail-overlay');
+  if (!overlay || !overlay.classList.contains('open')) return;
+  // rodarAnalitico é síncrono — cache já está atualizado aqui
+  const payload = window.__analiticoDetailCache?.get(String(key));
+  if (!payload) return;
+  const body = document.getElementById('analitico-detail-body');
+  if (body) {
+    body.innerHTML = buildAnaliticoDetailHtml(payload);
+    if (typeof initHelpBadges === 'function') initHelpBadges();
+  }
+}
+
+function _lrcRenderCards() {
   const overlay = document.getElementById('lrc-overlay');
   if (!overlay) return;
+  const lancs = overlay._lancs || [];
 
-  let lancs = [];
-  try { lancs = JSON.parse(decodeURIComponent(trigger.dataset.lancs || '[]')); } catch(e) {}
-  const date      = trigger.dataset.date      || '';
-  _lrcDetailKey   = trigger.dataset.detailKey || null;
-  _lrcSelectedIdx = 0;
+  const checkedTotal = lancs.reduce((sum, l, i) =>
+    _lrcChecked.has(i) ? sum + num(l.peso) : sum, 0);
 
-  document.getElementById('lrc-date').textContent  = date;
-  document.getElementById('lrc-count').textContent = lancs.length + ' lançamentos';
+  const estEl = document.getElementById('lrc-est-inicial');
+  if (estEl) estEl.textContent = fmtKg(checkedTotal);
 
   const body = document.getElementById('lrc-body');
-  body.innerHTML = lancs.map((l, i) => `
-    <div class="lrc-card${i === 0 ? ' selected' : ''}" onclick="lrcSelect(this, ${i})">
+  body.innerHTML = lancs.map((l, i) => {
+    const checked = _lrcChecked.has(i);
+    return `
+    <div class="lrc-card${checked ? ' selected' : ''}" onclick="lrcToggle(${i})">
       <div class="lrc-card-top">
-        <div class="lrc-radio"><div class="lrc-radio-dot"></div></div>
+        <div class="lrc-checkbox${checked ? ' checked' : ''}">
+          <i class="ti ti-check" style="font-size:11px;color:#fff;opacity:${checked ? 1 : 0}"></i>
+        </div>
         <span class="lrc-peso">${fmtKg(num(l.peso))}</span>
         <button class="lrc-delete-btn" onclick="event.stopPropagation(); lrcDelete(${i})"
-          title="Excluir este lançamento do módulo Lançamentos">
+          title="Excluir permanentemente do módulo Lançamentos">
           <i class="ti ti-trash"></i> Excluir
         </button>
       </div>
@@ -975,12 +1076,26 @@ function openLancConflictModal(trigger) {
           <span class="lrc-meta-val">${money(l.custo)}</span>
         </div>
       </div>
-    </div>`).join('') +
-    `<p class="lrc-hint">Selecione o lançamento correto para usar como Est. Final. Os demais serão excluídos.</p>`;
+    </div>`;
+  }).join('') +
+  `<p class="lrc-hint">Marque os lançamentos a incluir no Est. Inicial. Use a lixeira para excluir permanentemente.</p>`;
+}
 
-  // Store lancs list for confirm/delete actions
+function openLancConflictModal(trigger) {
+  const overlay = document.getElementById('lrc-overlay');
+  if (!overlay) return;
+
+  let lancs = [];
+  try { lancs = JSON.parse(decodeURIComponent(trigger.dataset.lancs || '[]')); } catch(e) {}
+  const date    = trigger.dataset.date      || '';
+  _lrcDetailKey = trigger.dataset.detailKey || null;
+  _lrcChecked   = new Set(lancs.map((_, i) => i));
+
+  document.getElementById('lrc-date').textContent  = date;
+  document.getElementById('lrc-count').textContent = lancs.length + ' lançamento' + (lancs.length !== 1 ? 's' : '');
+
   overlay._lancs = lancs;
-
+  _lrcRenderCards();
   overlay.classList.add('open');
   overlay.setAttribute('aria-hidden', 'false');
 }
@@ -990,37 +1105,44 @@ function closeLancConflictModal() {
   if (!overlay) return;
   overlay.classList.remove('open');
   overlay.setAttribute('aria-hidden', 'true');
-  _lrcDetailKey   = null;
-  _lrcSelectedIdx = null;
+  _lrcDetailKey = null;
+  _lrcChecked   = new Set();
 }
 
-function lrcSelect(card, idx) {
-  document.querySelectorAll('#lrc-body .lrc-card').forEach(c => c.classList.remove('selected'));
-  card.classList.add('selected');
-  _lrcSelectedIdx = idx;
+function lrcToggle(idx) {
+  if (_lrcChecked.has(idx)) _lrcChecked.delete(idx);
+  else _lrcChecked.add(idx);
+  _lrcRenderCards();
 }
+
+function lrcSelect(card, idx) { lrcToggle(idx); }
 
 async function lrcConfirm() {
+  // Desmarcar = excluir os desmarcados do state
   const overlay = document.getElementById('lrc-overlay');
-  if (!overlay || _lrcSelectedIdx === null) return;
+  if (!overlay) return;
   const lancs = overlay._lancs || [];
   if (!lancs.length) return;
 
-  const keep = lancs[_lrcSelectedIdx];
-  const remove = lancs.filter((_, i) => i !== _lrcSelectedIdx);
+  const toRemove = lancs.filter((_, i) => !_lrcChecked.has(i));
+  if (toRemove.length) {
+    if (typeof showLoadingOverlay === 'function') showLoadingOverlay('Resolvendo conflito', 'Excluindo lançamentos selecionados...');
+    await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+    toRemove.forEach(l => {
+      const fp = _lrcFingerprint(l);
+      state.lancamentos = state.lancamentos.filter(r => _lrcFingerprint(r) !== fp);
+    });
+    invalidateLancIndex();
+    await persistStateNow();
+  }
 
-  // Remove the others from state.lancamentos
-  remove.forEach(l => {
-    state.lancamentos = state.lancamentos.filter(r => r !== l);
-  });
-  invalidateLancIndex();
-
-  await persistStateNow();
+  const key = _lrcDetailKey;
   closeLancConflictModal();
-  toast('Conflito resolvido — ' + remove.length + ' lançamento(s) excluído(s)');
 
-  // Re-run the analítico to refresh the detail modal
   rodarAnalitico();
+  _lrcRefreshDetailModal(key);
+
+  if (toRemove.length) toast(toRemove.length + ' lançamento(s) excluído(s) — conflito resolvido');
 }
 
 async function lrcDelete(idx) {
@@ -1032,107 +1154,78 @@ async function lrcDelete(idx) {
 
   const confirmed = await new Promise(resolve => {
     document.getElementById('lrc-confirm-inline')?.remove();
-
     const mini = document.createElement('div');
     mini.id = 'lrc-confirm-inline';
     mini.style.cssText = 'position:absolute;inset:0;background:rgba(0,0,0,0.55);backdrop-filter:blur(2px);border-radius:var(--radius-xl);display:flex;align-items:center;justify-content:center;z-index:10;padding:24px';
     mini.innerHTML = `
       <div style="background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius-lg);padding:20px 24px;max-width:320px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,0.45)">
         <div style="font-size:13.5px;font-weight:600;color:var(--text);margin-bottom:6px;display:flex;align-items:center;gap:8px">
-          <i class="ti ti-trash" style="color:var(--red);font-size:16px"></i>
-          Excluir lançamento?
+          <i class="ti ti-trash" style="color:var(--red);font-size:16px"></i> Excluir lançamento?
         </div>
+        <p style="font-size:12px;color:var(--text2);margin:0 0 6px;line-height:1.5">
+          <strong style="color:var(--text);font-family:var(--mono)">${fmtKg(num(target.peso))}</strong>
+          — ${escapeHtml(target.fornecedor || '—')} · ${escapeHtml(target.dtLanc || '—')}
+        </p>
         <p style="font-size:12px;color:var(--text2);margin:0 0 18px;line-height:1.5">
-          Este lançamento será removido do módulo Lançamentos. A ação não pode ser desfeita.
+          Removido permanentemente da aba <strong>Lançamentos</strong>. Não pode ser desfeito.
         </p>
         <div style="display:flex;gap:8px;justify-content:flex-end">
           <button id="lrc-confirm-cancel" class="btn" style="font-size:12px">Cancelar</button>
           <button id="lrc-confirm-ok" class="btn" style="font-size:12px;background:var(--red);border-color:var(--red);color:#fff;font-weight:600">
-            <i class="ti ti-trash"></i> Excluir
+            <i class="ti ti-trash"></i> Excluir permanentemente
           </button>
         </div>
-      </div>
-    `;
-
+      </div>`;
     const dialog = overlay.querySelector('.lrc-dialog') ?? overlay.firstElementChild;
-    if (dialog) {
-      dialog.style.position = 'relative';
-      dialog.appendChild(mini);
-    } else {
-      overlay.appendChild(mini);
-    }
-
-    document.getElementById('lrc-confirm-ok')
-      ?.addEventListener('click', () => { mini.remove(); resolve(true); });
-    document.getElementById('lrc-confirm-cancel')
-      ?.addEventListener('click', () => { mini.remove(); resolve(false); });
-
-    const onKey = e => {
-      if (e.key === 'Escape') {
-        mini.remove();
-        resolve(false);
-        document.removeEventListener('keydown', onKey);
-      }
-    };
+    if (dialog) { dialog.style.position = 'relative'; dialog.appendChild(mini); }
+    else overlay.appendChild(mini);
+    document.getElementById('lrc-confirm-ok')?.addEventListener('click', () => { mini.remove(); resolve(true); });
+    document.getElementById('lrc-confirm-cancel')?.addEventListener('click', () => { mini.remove(); resolve(false); });
+    const onKey = e => { if (e.key === 'Escape') { mini.remove(); resolve(false); document.removeEventListener('keydown', onKey); } };
     document.addEventListener('keydown', onKey);
   });
 
   if (!confirmed) return;
 
-  state.lancamentos = state.lancamentos.filter(r => r !== target);
+  // Salvar key ANTES de qualquer close
+  const key = _lrcDetailKey;
+
+  if (typeof showLoadingOverlay === 'function') showLoadingOverlay('Excluindo lançamento', 'Removendo da base de dados...');
+  await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+  const fp = _lrcFingerprint(target);
+  const before = state.lancamentos.length;
+  state.lancamentos = state.lancamentos.filter(r => _lrcFingerprint(r) !== fp);
+  const removed = before - state.lancamentos.length;
+
   invalidateLancIndex();
   await persistStateNow();
 
-  // Remove from local list and re-render cards
-  overlay._lancs = lancs.filter((_, i) => i !== idx);
+  const newLancs = lancs.filter((_, i) => i !== idx);
+  overlay._lancs = newLancs;
 
-  if (overlay._lancs.length <= 1) {
-    // Conflict resolved automatically
+  const newChecked = new Set();
+  _lrcChecked.forEach(ci => {
+    if (ci < idx) newChecked.add(ci);
+    else if (ci > idx) newChecked.add(ci - 1);
+  });
+  _lrcChecked = newChecked;
+
+  toast(removed + ' lançamento(s) excluído(s) permanentemente');
+
+  // Sempre recalcular e atualizar o modal do material
+  rodarAnalitico();
+  _lrcRefreshDetailModal(key);
+
+  if (newLancs.length <= 1) {
     closeLancConflictModal();
-    toast('Lançamento excluído — conflito resolvido');
-    rodarAnalitico();
     return;
   }
 
-  // Re-render remaining cards
-  _lrcSelectedIdx = 0;
-  const body = document.getElementById('lrc-body');
-  body.innerHTML = overlay._lancs.map((l, i) => `
-    <div class="lrc-card${i === 0 ? ' selected' : ''}" onclick="lrcSelect(this, ${i})">
-      <div class="lrc-card-top">
-        <div class="lrc-radio"><div class="lrc-radio-dot"></div></div>
-        <span class="lrc-peso">${fmtKg(num(l.peso))}</span>
-        <button class="lrc-delete-btn" onclick="event.stopPropagation(); lrcDelete(${i})"
-          title="Excluir este lançamento do módulo Lançamentos">
-          <i class="ti ti-trash"></i> Excluir
-        </button>
-      </div>
-      <div class="lrc-card-meta">
-        <div class="lrc-meta-item">
-          <span class="lrc-meta-label">Fornecedor</span>
-          <span class="lrc-meta-val">${escapeHtml(l.fornecedor || '—')}</span>
-        </div>
-        <div class="lrc-meta-item">
-          <span class="lrc-meta-label">Categoria</span>
-          <span class="lrc-meta-val">${escapeHtml(l.categoria || '—')}</span>
-        </div>
-        <div class="lrc-meta-item">
-          <span class="lrc-meta-label">Un. Medida</span>
-          <span class="lrc-meta-val">${escapeHtml(l.um || '—')}</span>
-        </div>
-        <div class="lrc-meta-item">
-          <span class="lrc-meta-label">Custo Unit.</span>
-          <span class="lrc-meta-val">${money(l.custo)}</span>
-        </div>
-      </div>
-    </div>`).join('') +
-    `<p class="lrc-hint">Selecione o lançamento correto para usar como Est. Final. Os demais serão excluídos.</p>`;
-
-  toast('Lançamento excluído');
-  rodarAnalitico();
+  document.getElementById('lrc-count').textContent = newLancs.length + ' lançamento' + (newLancs.length !== 1 ? 's' : '');
+  _lrcRenderCards();
 }
 
-Object.assign(window, { openLancConflictModal, closeLancConflictModal, lrcSelect, lrcConfirm, lrcDelete });
+Object.assign(window, { openLancConflictModal, closeLancConflictModal, lrcSelect, lrcToggle, lrcConfirm, lrcDelete });
 
 function buildAnaliticoDetailHtml(payload) {
   const s = payload.summary;
@@ -1265,9 +1358,9 @@ function buildAnaliticoDetailHtml(payload) {
 
   return `
     <div class="analitico-detail-summary">
-      <div class="analitico-detail-card">
-        <div class="analitico-detail-card-label">Est. Inicial</div>
-        <div class="analitico-detail-card-value c-teal">${fmtKg(s.pesoIni)}</div>
+      <div class="analitico-detail-card${s.pesoIniAusente ? ' detail-card-absent' : ''}">
+        <div class="analitico-detail-card-label">Est. Inicial${s.pesoIniAusente ? ' <span class="absent-badge" title="Sem lançamento no dia anterior ao período">ausente</span>' : ''}</div>
+        <div class="analitico-detail-card-value ${s.pesoIniAusente ? 'c-absent' : 'c-teal'}">${s.pesoIniAusente ? '—' : fmtKg(s.pesoIni)}</div>
         <div class="analitico-detail-card-sub">${escapeHtml(s.dtIniLabel)}</div>
       </div>
       <div class="analitico-detail-card">
@@ -1280,9 +1373,9 @@ function buildAnaliticoDetailHtml(payload) {
         <div class="analitico-detail-card-value c-red">${fmtKg(s.totalSai)}</div>
         <div class="analitico-detail-card-sub">${escapeHtml(s.saiLabel)}</div>
       </div>
-      <div class="analitico-detail-card">
-        <div class="analitico-detail-card-label">Est. Final</div>
-        <div class="analitico-detail-card-value c-teal">${fmtKg(s.pesoFim)}</div>
+      <div class="analitico-detail-card${s.pesoFimAusente ? ' detail-card-absent' : ''}">
+        <div class="analitico-detail-card-label">Est. Final${s.pesoFimAusente ? ' <span class="absent-badge" title="Sem lançamento no último dia do período">ausente</span>' : ''}</div>
+        <div class="analitico-detail-card-value ${s.pesoFimAusente ? 'c-absent' : 'c-teal'}">${s.pesoFimAusente ? '—' : fmtKg(s.pesoFim)}</div>
         <div class="analitico-detail-card-sub">${escapeHtml(s.dtFimLabel)}</div>
       </div>
       <div class="analitico-detail-card">
@@ -1675,39 +1768,8 @@ function getSapIndex() {
   return { byCentralMat: _sapByCentralMat, byCentral: _sapByCentral };
 }
 
-// Retorna todos os lançamentos de uma central+material dentro de um período.
-// Usa o índice para evitar scan linear.
-function getLancsByCentralMatInPeriod(central, material, dtIni, dtFim) {
-  const { byCentralMat } = getLancIndex();
-  const matMap = byCentralMat.get(central);
-  if (!matMap) return [];
-  const arr = matMap.get(material || '—') || [];
-  if (!dtIni && !dtFim) return arr;
-  // Filtra por período — o array já está ordenado por data
-  return arr.filter(r => {
-    const d = parseDate(r.dtLanc);
-    if (!d) return false;
-    if (dtIni && d < dtIni) return false;
-    if (dtFim && d > dtFim) return false;
-    return true;
-  });
-}
 
-// Retorna todos os SAP de uma central+material dentro de um período.
-function getSapByCentralMatInPeriod(central, material, dtIni, dtFim) {
-  const { byCentralMat } = getSapIndex();
-  const matMap = byCentralMat.get(central);
-  if (!matMap) return [];
-  const arr = matMap.get(material || '—') || [];
-  if (!dtIni && !dtFim) return arr;
-  return arr.filter(r => {
-    const d = parseDate(r.dtLanc);
-    if (!d) return false;
-    if (dtIni && d < dtIni) return false;
-    if (dtFim && d > dtFim) return false;
-    return true;
-  });
-}
+
 
 // Retorna todos os lançamentos de uma central dentro de um período.
 function getLancsByCentralInPeriod(central, dtIni, dtFim) {
@@ -1822,48 +1884,88 @@ function calcHealthScore(matDiffs, lancsByMat, sapByMat, thresholds) {
 }
 
 
+// ── EST. INICIAL: soma todos os lançamentos do dia anterior ao período.
+//    Se esse dia for domingo, usa o sábado.
+//    Sem outros fallbacks — retorna null se não houver lançamento.
 function getPrePeriodLaunchStock({ central, material, dtIni }) {
-  const cutoff = dtIni instanceof Date ? dtIni : new Date(dtIni);
-  if (!(cutoff instanceof Date) || Number.isNaN(cutoff.getTime())) return null;
+  const dtIniDate = dtIni instanceof Date ? dtIni : new Date(dtIni);
+  if (!(dtIniDate instanceof Date) || Number.isNaN(dtIniDate.getTime())) return null;
+
+  // Calcula o dia-alvo: dia anterior ao período, pulando domingo
+  const targetDate = new Date(dtIniDate);
+  targetDate.setDate(targetDate.getDate() - 1); // dia anterior
+  if (targetDate.getDay() === 0) {              // se domingo, vai para sábado
+    targetDate.setDate(targetDate.getDate() - 1);
+  }
+  const targetISO = localISODate(targetDate);
 
   const materialKey = material || '—';
-
-  // Usa o índice por central+material para evitar scan linear de state.lancamentos
   const { byCentralMat } = getLancIndex();
   const matMap = byCentralMat.get(central);
   if (!matMap) return null;
   const arr = matMap.get(materialKey) || [];
   if (!arr.length) return null;
 
-  // O array já está ordenado ASC — encontramos o último registro antes do cutoff
-  // com busca binária para máxima eficiência
-  let lo = 0, hi = arr.length - 1, lastBeforeIdx = -1;
-  while (lo <= hi) {
-    const mid = (lo + hi) >>> 1;
-    const d = parseDate(arr[mid].dtLanc);
-    if (d && d < cutoff) { lastBeforeIdx = mid; lo = mid + 1; }
-    else hi = mid - 1;
-  }
-  if (lastBeforeIdx < 0) return null;
-
-  const targetKey = localISODate(parseDate(arr[lastBeforeIdx].dtLanc));
-  // Soma todos os registros do mesmo dia (pode haver múltiplos)
+  // Soma todos os lançamentos exatamente do dia-alvo
   let total = 0;
-  for (let i = lastBeforeIdx; i >= 0; i--) {
-    const d = parseDate(arr[i].dtLanc);
-    if (!d || localISODate(d) !== targetKey) break;
-    total += num(arr[i].peso);
+  let found = false;
+  for (const rec of arr) {
+    const d = parseDate(rec.dtLanc);
+    if (!d) continue;
+    if (localISODate(d) === targetISO) {
+      total += num(rec.peso);
+      found = true;
+    }
   }
+
+  if (!found) return null; // sem lançamento no dia-alvo → sem fallback
 
   return {
     value: total,
-    dtLabel: fmtPtDate(parseDate(arr[lastBeforeIdx].dtLanc))
+    dtLabel: fmtPtDate(targetDate)
   };
+}
+
+// ── EST. FINAL: soma todos os lançamentos do último dia não-domingo do período.
+//    Retorna { value, dtLabel, missing } onde missing=true indica dado ausente.
+function getLastPeriodLaunchStock({ central, material, dtFim }) {
+  const dtFimDate = dtFim instanceof Date ? dtFim : new Date(dtFim);
+  if (!(dtFimDate instanceof Date) || Number.isNaN(dtFimDate.getTime())) return null;
+
+  // Último dia não-domingo do período
+  const targetDate = new Date(dtFimDate);
+  // Volta até achar um não-domingo (máx 1 dia — só pula domingo)
+  while (targetDate.getDay() === 0) {
+    targetDate.setDate(targetDate.getDate() - 1);
+  }
+  const targetISO = localISODate(targetDate);
+
+  const materialKey = material || '—';
+  const { byCentralMat } = getLancIndex();
+  const matMap = byCentralMat.get(central);
+  if (!matMap) return { value: 0, dtLabel: fmtPtDate(targetDate), missing: true };
+  const arr = matMap.get(materialKey) || [];
+  if (!arr.length) return { value: 0, dtLabel: fmtPtDate(targetDate), missing: true };
+
+  let total = 0;
+  let found = false;
+  for (const rec of arr) {
+    const d = parseDate(rec.dtLanc);
+    if (!d) continue;
+    if (localISODate(d) === targetISO) {
+      total += num(rec.peso);
+      found = true;
+    }
+  }
+
+  if (!found) return { value: 0, dtLabel: fmtPtDate(targetDate), missing: true };
+
+  return { value: total, dtLabel: fmtPtDate(targetDate), missing: false };
 }
 
 // ── buildSnapshot: moved to module scope so buildHealthPanel and
 //    renderAnaliticoMicro can both use it ────────────────────────────────
-function buildSnapshot({ lancs, sap, initialStockOverride = null, initialDateLabelOverride = null }) {
+function buildSnapshot({ lancs, sap, initialStockOverride = null, initialDateLabelOverride = null, finalStockOverride = undefined, finalDateLabelOverride = null }) {
     const lancsOrdenados = [...lancs].sort((a, b) => {
       const da = parseDate(a.dtLanc), db = parseDate(b.dtLanc);
       return dateCmp(da ?? new Date(0), db ?? new Date(0));
@@ -1880,23 +1982,42 @@ function buildSnapshot({ lancs, sap, initialStockOverride = null, initialDateLab
     const _dtIniKey = lancIni ? _dtKey(lancIni) : null;
     const _dtFimKey = lancFim ? _dtKey(lancFim) : null;
 
-    // Est. Inicial: usa o saldo do dia anterior quando disponível.
-    // Caso contrário, mantém a heurística antiga com o primeiro lançamento do período.
-    const pesoIni = Number.isFinite(initialStockOverride)
-      ? num(initialStockOverride)
-      : (_dtIniKey
-          ? lancsOrdenados
-              .filter(l => _dtKey(l) === _dtIniKey)
-              .reduce((acc, l) => acc + num(l.peso), 0)
-          : num(lancIni?.peso));
+    // EST. INICIAL: usa o valor do dia anterior ao período (via getPrePeriodLaunchStock).
+    // Se não encontrado → 0 kg, sem fallback. Ausência será indicada na UI.
+    const pesoIni = Number.isFinite(initialStockOverride) ? num(initialStockOverride) : 0;
+    const pesoIniAusente = !Number.isFinite(initialStockOverride);
 
-    // pesoFim: soma de todos os lançamentos do último dia (caso haja múltiplos)
-    // Se primeiro e último dia forem o mesmo, pesoFim já inclui os mesmos registros
-    const pesoFim = _dtFimKey
-      ? lancsOrdenados
-          .filter(l => _dtKey(l) === _dtFimKey)
-          .reduce((acc, l) => acc + num(l.peso), 0)
-      : num(lancFim?.peso);
+    // EST. FINAL: usa finalStockOverride quando fornecido (via getLastPeriodLaunchStock).
+    // Se não fornecido, calcula a partir dos lancs (comportamento legado para snaps diários).
+    // Se finalStockOverride === null explicitamente → ausente (0 kg, sem data).
+    let pesoFim = 0;
+    let pesoFimAusente = false;
+    if (finalStockOverride !== undefined) {
+      // Caller forneceu valor explícito (pode ser null = ausente, ou número)
+      pesoFim = Number.isFinite(finalStockOverride) ? num(finalStockOverride) : 0;
+      pesoFimAusente = !Number.isFinite(finalStockOverride);
+    } else {
+      // Fallback legado: último dia não-domingo nos lancs passados
+      const seen = new Set();
+      let targetFimKey = null;
+      for (let i = lancsOrdenados.length - 1; i >= 0; i--) {
+        const d = parseDate(lancsOrdenados[i].dtLanc);
+        if (!d) continue;
+        const dk = _dtKey(lancsOrdenados[i]);
+        if (!seen.has(dk)) {
+          seen.add(dk);
+          if (d.getDay() !== 0) {
+            targetFimKey = dk;
+            break;
+          }
+        }
+      }
+      if (targetFimKey) {
+        pesoFim = lancsOrdenados
+          .filter(l => _dtKey(l) === targetFimKey)
+          .reduce((acc, l) => acc + num(l.peso), 0);
+      }
+    }
 
     const entCods = {};
     const saiCods = {};
@@ -1936,8 +2057,10 @@ function buildSnapshot({ lancs, sap, initialStockOverride = null, initialDateLab
       entCods, saiCods, entRefs, saiRefs,
       entRecords, saiRecords,
       totalEnt, totalSai, estTeorico, diff,
-      dtIniLabel: initialDateLabelOverride || (lancIni?.dtLanc ? fmtPtDate(parseDate(lancIni.dtLanc) || new Date(lancIni.dtLanc)) : '—'),
-      dtFimLabel: lancFim?.dtLanc ? fmtPtDate(parseDate(lancFim.dtLanc) || new Date(lancFim.dtLanc)) : '—'
+      dtIniLabel: pesoIniAusente ? '—' : (initialDateLabelOverride || (lancIni?.dtLanc ? fmtPtDate(parseDate(lancIni.dtLanc) || new Date(lancIni.dtLanc)) : '—')),
+      pesoIniAusente,
+      dtFimLabel: pesoFimAusente ? '—' : (finalDateLabelOverride || (lancFim?.dtLanc ? fmtPtDate(parseDate(lancFim.dtLanc) || new Date(lancFim.dtLanc)) : '—')),
+      pesoFimAusente
     };
 }
 
@@ -2135,3 +2258,22 @@ function renderImports() {
   injectColFilterButtons(tb.closest('table'), 'imports');
   updateImportPrereqUI();
 }
+
+// Sidebar expand/collapse via hover — controla classe .expanded
+(function() {
+  function initSidebarHover() {
+    const sidebar = document.getElementById('main-sidebar');
+    if (!sidebar) return;
+    sidebar.addEventListener('mouseenter', function() {
+      sidebar.classList.add('expanded');
+    });
+    sidebar.addEventListener('mouseleave', function() {
+      sidebar.classList.remove('expanded');
+    });
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initSidebarHover);
+  } else {
+    initSidebarHover();
+  }
+})();

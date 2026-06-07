@@ -1,55 +1,78 @@
 function excluirImportacao(importId) {
-  const snapshotEntradas    = [...state.entradas];
-  const snapshotSaidas      = [...state.saidas];
-  const snapshotLancamentos = [...state.lancamentos];
-  const snapshotSap         = [...state.sap];
-  const snapshotProducao    = [...state.producao];
-  const snapshotFiliais     = [...state.filiais];
-  const snapshotMateriais   = [...state.materiais];
-  const snapshotImports     = [...state.imports];
-
   const importRecord = state.imports.find(r => r.id === importId);
   const nomeArquivo  = importRecord?.arquivo ?? 'importação';
+  const modulo       = importRecord?.modulo  ?? '';
+  const registros    = importRecord?.registros ?? 0;
+  const dataHora     = importRecord?.dataHora  ?? '';
 
-  confirmarComUndo({
-    message: `"${nomeArquivo}" excluída`,
+  confirmarDestrutivo({
+    title:        'Excluir importação',
+    sub:          nomeArquivo,
+    body:         `
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="display:flex;gap:8px;align-items:center">
+          <span style="color:var(--text3);min-width:80px;font-size:12px">Módulo</span>
+          <strong>${escapeHtml(modulo)}</strong>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span style="color:var(--text3);min-width:80px;font-size:12px">Registros</span>
+          <strong style="color:var(--red)">${Number(registros).toLocaleString('pt-BR')} registros serão removidos</strong>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span style="color:var(--text3);min-width:80px;font-size:12px">Importado em</span>
+          <span>${escapeHtml(dataHora)}</span>
+        </div>
+        <div style="margin-top:8px;padding:10px 12px;background:var(--red-bg);border:1px solid var(--red-border);border-radius:6px;font-size:12px;color:var(--red)">
+          <i class="ti ti-alert-triangle"></i>
+          Esta ação removerá todos os registros desta importação. Use <strong>Desfazer</strong> logo após se precisar reverter.
+        </div>
+      </div>`,
+    confirmLabel: 'Excluir importação',
+    onConfirm: () => {
+      const snapshotEntradas    = [...state.entradas];
+      const snapshotSaidas      = [...state.saidas];
+      const snapshotLancamentos = [...state.lancamentos];
+      const snapshotSap         = [...state.sap];
+      const snapshotProducao    = [...state.producao];
+      const snapshotFiliais     = [...state.filiais];
+      const snapshotMateriais   = [...state.materiais];
+      const snapshotImports     = [...state.imports];
 
-    action: () => {
-      const removeByImport = arr => arr.filter(r => r.importId !== importId);
-      state.entradas    = removeByImport(state.entradas);
-      state.saidas      = removeByImport(state.saidas);
-      state.lancamentos = removeByImport(state.lancamentos);
-      state.sap         = removeByImport(state.sap);
-      state.producao    = removeByImport(state.producao);
-      state.filiais     = removeByImport(state.filiais);
-      state.materiais   = removeByImport(state.materiais);
-      state.imports     = state.imports.filter(r => r.id !== importId);
-      // state.configs é INTENCIONALMENTE omitido aqui:
-      // configurações não pertencem a nenhuma importação e jamais devem
-      // ser excluídas por esta função. Só o próprio usuário pode removê-las
-      // manualmente pela tela de Configurações.
+      confirmarComUndo({
+        message: `"${nomeArquivo}" excluída`,
+        action: () => {
+          const removeByImport = arr => arr.filter(r => r.importId !== importId);
+          state.entradas    = removeByImport(state.entradas);
+          state.saidas      = removeByImport(state.saidas);
+          state.lancamentos = removeByImport(state.lancamentos);
+          state.sap         = removeByImport(state.sap);
+          state.producao    = removeByImport(state.producao);
+          state.filiais     = removeByImport(state.filiais);
+          state.materiais   = removeByImport(state.materiais);
+          state.imports     = state.imports.filter(r => r.id !== importId);
 
-      invalidateMaterialLookup();
-      invalidateFilialLookup();
-      persist();
-      renderAll();
-    },
+          invalidateMaterialLookup();
+          invalidateFilialLookup();
+          persist();
+          renderAll();
+        },
+        undo: () => {
+          state.entradas    = snapshotEntradas;
+          state.saidas      = snapshotSaidas;
+          state.lancamentos = snapshotLancamentos;
+          state.sap         = snapshotSap;
+          state.producao    = snapshotProducao;
+          state.filiais     = snapshotFiliais;
+          state.materiais   = snapshotMateriais;
+          state.imports     = snapshotImports;
 
-    undo: () => {
-      state.entradas    = snapshotEntradas;
-      state.saidas      = snapshotSaidas;
-      state.lancamentos = snapshotLancamentos;
-      state.sap         = snapshotSap;
-      state.producao    = snapshotProducao;
-      state.filiais     = snapshotFiliais;
-      state.materiais   = snapshotMateriais;
-      state.imports     = snapshotImports;
-
-      invalidateMaterialLookup();
-      invalidateFilialLookup();
-      persist();
-      renderAll();
-    },
+          invalidateMaterialLookup();
+          invalidateFilialLookup();
+          persist();
+          renderAll();
+        },
+      });
+    }
   });
 }
 
@@ -109,31 +132,52 @@ function salvarProducao() {
 }
 
 
+// ── Helpers para cálculo automático de valor total ──────────
+function _modalAutoCalcTotal(pesoId, custoId, totalId) {
+  const peso  = num(val(pesoId));
+  const custo = num(val(custoId));
+  if (peso && custo) {
+    const el = document.getElementById(totalId);
+    if (el && !el.dataset.userEdited) el.value = (peso * custo).toFixed(2);
+  }
+}
+
+function _fmtDateInput(v) {
+  // Converte YYYY-MM-DD (input type=date) para dd/mm/aaaa
+  if (!v) return new Date().toLocaleDateString('pt-BR');
+  const [y,m,d] = v.split('-');
+  return d && m && y ? `${d}/${m}/${y}` : v;
+}
+
 function salvarEntrada() {
-  const qtd = num(val('e-qtd'));
-  const custo = num(val('e-valor'));
+  const peso  = num(val('e-peso'));
+  const custo = num(val('e-custo'));
+  const total = num(val('e-valor-total')) || (peso * custo);
+  const mat   = val('e-material');
+  const central = val('e-central-compra');
+
+  if (!central) { toast('Informe a Central Compra', 'error'); return; }
+  if (!mat)     { toast('Informe o Material', 'error'); return; }
+  if (!peso)    { toast('Informe o Peso', 'error'); return; }
+
   const rec = stamp({
-    centralCompra: normalizarCentral(val('e-central-compra')),
-    centralDestino: normalizarCentral(val('e-central-destino') || val('e-central-compra')),
-    nf: val('e-nf'),
-    dtEmissao: val('e-data') || new Date().toLocaleDateString('pt-BR'),
-    dtDescarga: val('e-data') || new Date().toLocaleDateString('pt-BR'),
-    fornecedor: '—',
-    categoria: '—',
-    materialOriginal: val('e-desc') || val('e-mat'),
-    material: normalizarMaterial(val('e-desc') || val('e-mat')),
-    peso: qtd,
-    um: 'KG',
+    centralCompra:  normalizarCentral(central),
+    centralDestino: normalizarCentral(val('e-central-destino') || central),
+    nf:             val('e-nf') || '—',
+    dtEmissao:      _fmtDateInput(val('e-dt-emissao')),
+    dtDescarga:     _fmtDateInput(val('e-dt-descarga') || val('e-dt-emissao')),
+    fornecedor:     val('e-fornecedor') || '—',
+    categoria:      val('e-categoria') || '—',
+    materialOriginal: mat,
+    material:       normalizarMaterial(mat),
+    peso,
+    um:             val('e-um') || 'KG',
     custo,
-    valorTotal: qtd * custo
+    valorTotal:     total
   });
 
-  if (!rec.nf && !rec.material) {
-    toast('Preencha a nota fiscal ou o material', 'error');
-    return;
-  }
-
   state.entradas.unshift(rec);
+  invalidateSearchIndex('entradas');
   persist();
   closeModal('modal-manual');
   renderEntradas();
@@ -142,29 +186,33 @@ function salvarEntrada() {
 }
 
 function salvarSaida() {
-  const qtd = num(val('s-qtd'));
-  const custo = num(val('s-valor'));
+  const peso  = num(val('s-peso'));
+  const custo = num(val('s-custo'));
+  const total = num(val('s-valor-total')) || (peso * custo);
+  const mat   = val('s-material');
+  const central = val('s-central');
+
+  if (!central) { toast('Informe a Central', 'error'); return; }
+  if (!mat)     { toast('Informe o Material', 'error'); return; }
+  if (!peso)    { toast('Informe o Peso', 'error'); return; }
+
   const rec = stamp({
-    central: normalizarCentral(val('s-central')),
-    dtEmissao: val('s-data') || new Date().toLocaleDateString('pt-BR'),
-    os: val('s-os'),
-    contrato: '—',
-    categoria: '—',
-    fornecedor: '—',
-    materialOriginal: val('s-desc') || val('s-mat'),
-    material: normalizarMaterial(val('s-desc') || val('s-mat')),
-    peso: qtd,
-    um: 'KG',
+    central:        normalizarCentral(central),
+    dtEmissao:      _fmtDateInput(val('s-dt-emissao')),
+    os:             val('s-os') || '—',
+    contrato:       '—',
+    categoria:      val('s-categoria') || '—',
+    fornecedor:     val('s-fornecedor') || '—',
+    materialOriginal: mat,
+    material:       normalizarMaterial(mat),
+    peso,
+    um:             val('s-um') || 'KG',
     custo,
-    valorTotal: qtd * custo
+    valorTotal:     total
   });
 
-  if (!rec.os && !rec.material) {
-    toast('Preencha a OS ou o material', 'error');
-    return;
-  }
-
   state.saidas.unshift(rec);
+  invalidateSearchIndex('saidas');
   persist();
   closeModal('modal-manual');
   renderSaidas();
@@ -173,27 +221,31 @@ function salvarSaida() {
 }
 
 function salvarLancamento() {
-  const saldoReal = num(val('l-saldo-real'));
-  const saldoSap = num(val('l-saldo-sap'));
+  const peso  = num(val('l-peso'));
+  const custo = num(val('l-custo'));
+  const total = num(val('l-valor-total')) || (peso * custo);
+  const mat   = val('l-material');
+  const central = val('l-central');
+
+  if (!central) { toast('Informe a Central', 'error'); return; }
+  if (!mat)     { toast('Informe o Material', 'error'); return; }
+  if (!peso)    { toast('Informe o Peso', 'error'); return; }
+
   const rec = stamp({
-    central: normalizarCentral(val('l-central')),
-    dtLanc: val('l-data') || new Date().toLocaleDateString('pt-BR'),
-    fornecedor: val('l-resp') || '—',
-    categoria: '—',
-    materialOriginal: val('l-desc') || val('l-mat'),
-    material: normalizarMaterial(val('l-desc') || val('l-mat')),
-    peso: saldoReal,
-    um: 'KG',
-    custo: saldoSap,
-    valorTotal: saldoReal * saldoSap
+    central:        normalizarCentral(central),
+    dtLanc:         _fmtDateInput(val('l-dt-lanc')),
+    fornecedor:     val('l-fornecedor') || '—',
+    categoria:      val('l-categoria') || '—',
+    materialOriginal: mat,
+    material:       normalizarMaterial(mat),
+    peso,
+    um:             val('l-um') || 'KG',
+    custo,
+    valorTotal:     total
   });
 
-  if (!rec.central || !rec.material) {
-    toast('Preencha central e material', 'error');
-    return;
-  }
-
   state.lancamentos.unshift(rec);
+  invalidateLancIndex();
   persist();
   closeModal('modal-manual');
   renderLancamentos();
@@ -202,32 +254,38 @@ function salvarLancamento() {
 }
 
 function salvarSAP() {
-  const peso = num(val('sap-qtd'));
-  const total = num(val('sap-valor'));
+  const peso  = num(val('sap-peso'));
+  const custoUnit = num(val('sap-custo-unit'));
+  const total = num(val('sap-valor-total')) || (Math.abs(peso) * custoUnit);
+  const mat   = val('sap-material');
+  const central = val('sap-central');
+  const movimento = val('sap-movimento');
+
+  if (!central)  { toast('Informe a Central', 'error'); return; }
+  if (!mat)      { toast('Informe o Material', 'error'); return; }
+  if (!movimento){ toast('Informe o Movimento', 'error'); return; }
+
+  const hoje = new Date().toLocaleDateString('pt-BR');
   const rec = stamp({
-    usuario: val('sap-mat') || '—',
-    movimento: val('sap-tipo') || '—',
-    ref: '—',
-    documento: val('sap-doc'),
-    central: normalizarCentral(val('sap-central')),
-    deposito: '—',
-    dtDoc: val('sap-data') || new Date().toLocaleDateString('pt-BR'),
-    dtLanc: val('sap-data') || new Date().toLocaleDateString('pt-BR'),
-    dtReg: val('sap-data') || new Date().toLocaleDateString('pt-BR'),
-    materialOriginal: val('sap-desc') || val('sap-mat'),
-    material: normalizarMaterial(val('sap-desc') || val('sap-mat')),
+    usuario:        val('sap-usuario') || '—',
+    movimento,
+    ref:            val('sap-ref') || '—',
+    documento:      val('sap-doc') || '—',
+    central:        normalizarCentral(central),
+    deposito:       val('sap-deposito') || '—',
+    dtDoc:          _fmtDateInput(val('sap-dt-doc') || val('sap-dt-lanc')),
+    dtLanc:         _fmtDateInput(val('sap-dt-lanc')) || hoje,
+    dtReg:          _fmtDateInput(val('sap-dt-reg') || val('sap-dt-lanc')),
+    materialOriginal: mat,
+    material:       normalizarMaterial(mat),
     peso,
-    um: 'KG',
-    custoUnit: peso !== 0 ? total / peso : 0,
-    valorTotal: total
+    um:             val('sap-um') || 'KG',
+    custoUnit,
+    valorTotal:     total
   });
 
-  if (!rec.documento && !rec.material) {
-    toast('Preencha documento ou material', 'error');
-    return;
-  }
-
   state.sap.unshift(rec);
+  invalidateSapIndex();
   persist();
   closeModal('modal-manual');
   renderSAP();

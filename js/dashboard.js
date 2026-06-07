@@ -102,13 +102,24 @@ function buildDashboardGerencialResults(dtIni, dtFim) {
       _macroPesoFimSoma[mat] = tot;
     });
 
-    // Correção 1: usa getPrePeriodLaunchStock como prioridade para Est. Inicial,
-    // igual ao Analítico — garante consistência quando há lançamentos antes do período.
+    // EST. INICIAL: dia anterior ao período (pula domingo). Sem fallback.
+    // EST. FINAL: último dia não-domingo do período. missing=true se sem lançamento.
     let somaPrimeiro = 0, somaUltimo = 0;
+    const missingIniMats = [], missingFimMats = [];
     allMats.forEach(mat => {
       const prev = dtIni ? getPrePeriodLaunchStock({ central, material: mat, dtIni }) : null;
-      somaPrimeiro += (prev != null ? prev.value : (_macroPesoIniSoma[mat] ?? num(materiaisLancPrimeiro[mat]?.peso)));
-      somaUltimo   += (_macroPesoFimSoma[mat] ?? num(materiaisLancUltimo[mat]?.peso));
+      if (prev != null) {
+        somaPrimeiro += prev.value;
+      } else {
+        missingIniMats.push(mat);
+      }
+
+      const fim = dtFim ? getLastPeriodLaunchStock({ central, material: mat, dtFim }) : null;
+      if (fim && !fim.missing) {
+        somaUltimo += fim.value;
+      } else {
+        missingFimMats.push(mat);
+      }
     });
 
     const estoqueTeoricoMacro = somaPrimeiro + totalEntradas + totalSaidas;
@@ -156,6 +167,7 @@ function buildDashboardGerencialResults(dtIni, dtFim) {
     results.push({
       central, totalEntradas, totalSaidas,
       estoqueTeoricoMacro, somaPrimeiro, somaUltimo, variacaoEstoque,
+      missingIniMats, missingFimMats,
       allMats: [...allMats].sort(),
       materiaisLancPrimeiro, materiaisLancUltimo,
       sapNoPeriodo, lancsNoPeriodo, custoMedioPorMat
@@ -178,13 +190,17 @@ function rodarDashboardGerencial() {
       return;
     }
   }
-  // Mostrar conteúdo, esconder empty state
-  const emptyEl   = document.getElementById('dg-empty-state');
-  const contentEl = document.getElementById('dg-content');
-  if (emptyEl)   emptyEl.style.display   = 'none';
-  if (contentEl) contentEl.style.display = '';
-  _renderDashboardConteudo(dtIni, dtFim);
-  if (window.updatePeriodFab) updatePeriodFab();
+  if (typeof showLoadingOverlay === 'function') showLoadingOverlay('Carregando dashboard', 'Calculando métricas consolidadas...');
+  // Cede um frame ao browser para pintar o overlay antes do trabalho pesado
+  requestAnimationFrame(() => setTimeout(() => {
+    const emptyEl   = document.getElementById('dg-empty-state');
+    const contentEl = document.getElementById('dg-content');
+    if (emptyEl)   emptyEl.style.display   = 'none';
+    if (contentEl) contentEl.style.display = '';
+    _renderDashboardConteudo(dtIni, dtFim);
+    if (window.updatePeriodFab) updatePeriodFab();
+    if (typeof hideLoadingOverlay === 'function') hideLoadingOverlay('Dashboard atualizado');
+  }, 0));
 }
 
 function limparDashboardGerencial() {
@@ -260,6 +276,28 @@ function renderDashboardGerencialKpis(dtIni, dtFim) {
   const totalEstFim   = results.reduce((s, r) => s + r.somaUltimo, 0);
   const totalVarEst   = results.reduce((s, r) => s + r.variacaoEstoque, 0);
 
+  // Coleta ausentes por campo (central + material)
+  const missingIniList = [];
+  const missingFimList = [];
+  results.forEach(r => {
+    (r.missingIniMats || []).forEach(m => missingIniList.push(`${r.central} · ${m}`));
+    (r.missingFimMats || []).forEach(m => missingFimList.push(`${r.central} · ${m}`));
+  });
+  const _missingBadge = (list, label) => {
+    if (!list.length) return '';
+    const MAX = 5;
+    const shown = list.slice(0, MAX).map(s => `<div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px;color:var(--text2);font-size:10.5px;font-family:var(--mono)">${escapeHtml(s)}</div>`).join('');
+    const more  = list.length > MAX ? `<div style="color:var(--text3);font-size:10px;font-family:var(--mono)">+ ${list.length - MAX} mais</div>` : '';
+    return `<details class="kpi-missing-details" style="margin-top:6px">
+      <summary style="cursor:pointer;list-style:none;display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:9.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--amber);padding:3px 8px;background:var(--amber-bg);border:1px solid var(--amber-border);border-radius:5px;user-select:none">
+        <i class="ti ti-alert-triangle" style="font-size:11px"></i> ${list.length} sem ${label}
+      </summary>
+      <div style="margin-top:6px;padding:8px 10px;background:var(--bg4);border:1px solid var(--border2);border-radius:6px;display:flex;flex-direction:column;gap:3px">
+        ${shown}${more}
+      </div>
+    </details>`;
+  };
+
   // Custo por período
   // Est. Inicial e Est. Final: usa os volumes já calculados corretamente em
   // buildDashboardGerencialResults (somaPrimeiro / somaUltimo por material),
@@ -276,36 +314,13 @@ function renderDashboardGerencialKpis(dtIni, dtFim) {
     });
     (r.allMats || []).forEach(mat => {
       const cm = cmp[mat] || 0; if (!cm) return;
-      // Est. Inicial por material: getPrePeriodLaunchStock (dia anterior ao período)
-      // com fallback para primeiro dia dentro do período — mesmo que buildDashboardGerencialResults
+      // Est. Inicial: dia anterior ao período (pula domingo), sem fallback
       const prevStock = dtIni ? getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni }) : null;
-      const lancsMat = lancsByMat.get(mat) || [];
-      let iniVol = 0;
-      if (prevStock != null) {
-        iniVol = prevStock.value;
-      } else if (lancsMat.length) {
-        // fallback: soma do primeiro dia dentro do período
-        const lancsAsc = [...lancsMat].sort((a, b) => {
-          const da = parseDate(a.dtLanc), db = parseDate(b.dtLanc);
-          return dateCmp(da ?? new Date(0), db ?? new Date(0));
-        });
-        const firstDKey = localISODate(parseDate(lancsAsc[0].dtLanc));
-        iniVol = lancsAsc
-          .filter(l => localISODate(parseDate(l.dtLanc)) === firstDKey)
-          .reduce((s, l) => s + num(l.peso), 0);
-      }
-      // Est. Final por material: soma do último dia dentro do período
-      let fimVol = 0;
-      if (lancsMat.length) {
-        const lancsDesc = [...lancsMat].sort((a, b) => {
-          const da = parseDate(a.dtLanc), db = parseDate(b.dtLanc);
-          return dateCmp(db ?? new Date(0), da ?? new Date(0));
-        });
-        const lastDKey = localISODate(parseDate(lancsDesc[0].dtLanc));
-        fimVol = lancsDesc
-          .filter(l => localISODate(parseDate(l.dtLanc)) === lastDKey)
-          .reduce((s, l) => s + num(l.peso), 0);
-      }
+      const iniVol = prevStock != null ? prevStock.value : 0;
+
+      // Est. Final: último dia não-domingo do período, sem fallback
+      const fimStock = dtFim ? getLastPeriodLaunchStock({ central: r.central, material: mat, dtFim }) : null;
+      const fimVol = fimStock ? fimStock.value : 0;
       custoEstIni += iniVol * cm;
       custoEstFim += fimVol * cm;
     });
@@ -320,9 +335,9 @@ function renderDashboardGerencialKpis(dtIni, dtFim) {
     });
   });
 
-  // Custo variação: para cada material, variação (diff) × custo médio.
-  // Usa initialStockOverride (getPrePeriodLaunchStock) para garantir que o
-  // diff seja idêntico ao calculado no Dashboard Analítico para o mesmo período.
+  // Custo variação: (EST. FINAL - EST. TEÓRICO) × custo médio por material.
+  // Usa os mesmos valores de getPrePeriodLaunchStock e getLastPeriodLaunchStock
+  // que o Inventário usa, garantindo consistência entre os dois módulos.
   let totalCustoVar = 0;
   results.forEach(r => {
     const cmp        = r.custoMedioPorMat || {};
@@ -331,15 +346,29 @@ function renderDashboardGerencialKpis(dtIni, dtFim) {
     r.lancsNoPeriodo.forEach(l => { const m = l.material||'—'; if(!lancsByMat.has(m)) lancsByMat.set(m,[]); lancsByMat.get(m).push(l); });
     r.sapNoPeriodo.forEach(s => { const m = s.material||'—'; if(!sapByMat.has(m)) sapByMat.set(m,[]); sapByMat.get(m).push(s); });
     (r.allMats||[]).forEach(mat => {
-      const prev    = dtIni ? getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni }) : null;
-      const snap    = buildSnapshot({
-        lancs: lancsByMat.get(mat)||[],
-        sap:   sapByMat.get(mat)||[],
-        initialStockOverride: prev?.value ?? null,
-        initialDateLabelOverride: prev?.dtLabel ?? null
-      });
       const custMed = cmp[mat] || 0;
-      if (custMed > 0) totalCustoVar += snap.diff * custMed;
+      if (!custMed) return;
+
+      // EST. INICIAL: mesmo que inventário
+      const prev   = dtIni ? getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni }) : null;
+      const estIni = prev != null ? prev.value : 0;
+
+      // EST. FINAL: mesmo que inventário
+      const fim    = dtFim ? getLastPeriodLaunchStock({ central: r.central, material: mat, dtFim }) : null;
+      const estFim = (fim && !fim.missing) ? fim.value : 0;
+
+      // Entradas/Saídas SAP: mesmo que inventário
+      const sapMat = sapByMat.get(mat) || [];
+      let entKg = 0, saiKg = 0;
+      sapMat.forEach(s => {
+        const p = num(s.peso);
+        if (p > 0) entKg += p;
+        else saiKg += Math.abs(p);
+      });
+
+      const estTeor = estIni + entKg - saiKg;
+      const varKg   = estFim - estTeor;
+      totalCustoVar += varKg * custMed;
     });
   });
 
@@ -364,6 +393,7 @@ function renderDashboardGerencialKpis(dtIni, dtFim) {
         <span class="macro-kpi-saldo-label">Volume</span>
         <span class="macro-kpi-saldo-val">${fmtKg(totalEstIni)}</span>
       </div>
+      ${_missingBadge(missingIniList, 'Est. Ini.')}
     </div>
     <div class="macro-kpi-card kc-green">
       <div class="macro-kpi-label"><i class="ti ti-arrow-bar-to-down"></i> Entradas SAP</div>
@@ -391,6 +421,7 @@ function renderDashboardGerencialKpis(dtIni, dtFim) {
         <span class="macro-kpi-saldo-label">Volume</span>
         <span class="macro-kpi-saldo-val">${fmtKg(totalEstFim)}</span>
       </div>
+      ${_missingBadge(missingFimList, 'Est. Fim')}
     </div>
     <div class="macro-kpi-card ${cvCls}">
       <div class="macro-kpi-label"><i class="ti ti-arrows-diff"></i> Var. Custo &amp; Estoque</div>
@@ -556,16 +587,17 @@ function renderDgRiscos(results, thresholds) {
     return;
   }
 
+  // ── Helpers ──────────────────────────────────────────────
+  const SEV = { critico: 0, urgente: 1, atencao: 2, info: 3 };
+  const SEV_LABEL  = { critico: 'CRÍTICO', urgente: 'URGENTE', atencao: 'ATENÇÃO', info: 'INFO' };
+  const SEV_COLOR  = { critico: 'var(--red)', urgente: '#f97316', atencao: 'var(--amber)', info: 'var(--accent)' };
+  const SEV_BG     = { critico: 'var(--red-bg)', urgente: 'rgba(249,115,22,.10)', atencao: 'var(--amber-bg)', info: 'var(--accent-dim)' };
+  const SEV_BORDER = { critico: 'var(--red-border)', urgente: 'rgba(249,115,22,.25)', atencao: 'var(--amber-border)', info: 'var(--accent-glow)' };
+
   const risks = [];
 
-  const badgeHtml = (lvl, txt) => {
-    const styles = {
-      critico: 'background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)',
-      urgente: 'background:rgba(249,115,22,0.10);color:#f97316;border:1px solid rgba(249,115,22,0.22)',
-      atencao: 'background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border)',
-      info:    'background:var(--accent-dim);color:var(--accent);border:1px solid var(--accent-glow)',
-    };
-    return `<span class="dg-risco-badge" style="${styles[lvl]||styles.info}">${txt}</span>`;
+  const push = (sev, headline, body, pills=[]) => {
+    risks.push({ sev, headline, body, pills });
   };
 
   results.forEach(r => {
@@ -575,64 +607,95 @@ function renderDgRiscos(results, thresholds) {
     r.sapNoPeriodo.forEach(s => { const m=s.material||'—'; if(!sapByMat.has(m)) sapByMat.set(m,[]); sapByMat.get(m).push(s); });
 
     const matDiffs = r.allMats.map(mat => {
-      const snap = buildSnapshot({ lancs: lancsByMat.get(mat)||[], sap: sapByMat.get(mat)||[] });
+      const prev = typeof getPrePeriodLaunchStock === 'function'
+        ? getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni: r._dtIni })
+        : null;
+      const snap = buildSnapshot({ lancs: lancsByMat.get(mat)||[], sap: sapByMat.get(mat)||[], initialStockOverride: prev?.value ?? null });
       const rawCat = (lancsByMat.get(mat)||[])[0]?.categoria || '';
       const catKey = detectCatKey(rawCat) || detectCatFromMat(mat);
       return { mat, diff: snap.diff, catKey, snap };
     });
 
     const { level, counts } = calcHealthScore(matDiffs, lancsByMat, sapByMat, thresholds);
+    const totalDiff = matDiffs.reduce((s,m)=>s+m.diff, 0);
+    const custoMeds = Object.entries(r.custoMedioPorMat).filter(([,v])=>v>0);
+    const maxCustoEntry = custoMeds.sort((a,b)=>b[1]-a[1])[0];
 
-    // Risk 1: Central crítica
+    // ── Manchete 1: Central em estado crítico ──
     if (level === 'critico') {
-      risks.push({ severity: 'critico', icon: 'ti-flame', desc: `Central <strong>${escapeHtml(r.central)}</strong> em estado CRÍTICO`, meta: `${counts.critico} mat. crítico(s) · ${counts.urgente} urgente(s)`, badge: badgeHtml('critico','CRÍTICO') });
+      const topMats = matDiffs
+        .filter(m => classifyVariation(Math.abs(m.diff), m.catKey, thresholds) === 'critico')
+        .sort((a,b) => Math.abs(b.diff)-Math.abs(a.diff))
+        .slice(0,2);
+      const custoImpacto = topMats.reduce((s,m) => s + Math.abs(m.diff) * (r.custoMedioPorMat[m.mat]||0), 0);
+      push('critico',
+        `🔴 ${escapeHtml(r.central)} — ${counts.critico} material${counts.critico!==1?'is':''} em nível CRÍTICO`,
+        `Variação acumulada de <strong>${fmtKg(Math.abs(totalDiff))}</strong> no período${custoImpacto>0?' · impacto financeiro estimado de <strong>'+money(custoImpacto)+'</strong>':''}.${topMats.length?' Piores: '+topMats.map(m=>`<strong>${escapeHtml(m.mat)}</strong> (${varSymbol(m.diff)}${fmtKg(Math.abs(m.diff))})`).join(', ')+'.':''}`,
+        [{ label: `${counts.urgente} urgente${counts.urgente!==1?'s':''}`, sev: 'urgente' }, { label: `${counts.atencao} atenção`, sev: 'atencao' }].filter(p=>p.label[0]!=='0')
+      );
     }
 
-    // Risk 2: Central urgente
-    if (level === 'urgente') {
-      risks.push({ severity: 'urgente', icon: 'ti-alert-circle', desc: `Central <strong>${escapeHtml(r.central)}</strong> em estado URGENTE`, meta: `${counts.urgente} mat. urgente(s) · ${counts.atencao} em atenção`, badge: badgeHtml('urgente','URGENTE') });
+    // ── Manchete 2: Central em estado urgente ──
+    else if (level === 'urgente') {
+      const topUrg = matDiffs
+        .filter(m => classifyVariation(Math.abs(m.diff), m.catKey, thresholds) === 'urgente')
+        .sort((a,b) => Math.abs(b.diff)-Math.abs(a.diff))
+        .slice(0,2);
+      push('urgente',
+        `🟠 ${escapeHtml(r.central)} — ${counts.urgente} material${counts.urgente!==1?'is':''} em nível URGENTE`,
+        `Déficit de <strong>${fmtKg(Math.abs(totalDiff))}</strong> no período. ${counts.atencao>0?counts.atencao+' material(is) adicionais em atenção — risco de escalada se não corrigido.':''}${topUrg.length?' Materiais: '+topUrg.map(m=>`<strong>${escapeHtml(m.mat)}</strong>`).join(', ')+'.':''}`,
+        []
+      );
     }
 
-    // Risk 3: Material migrando para pior estado (high diff materials)
+    // ── Manchete 3: Material crítico específico ──
     const criticos = matDiffs.filter(m => classifyVariation(Math.abs(m.diff), m.catKey, thresholds) === 'critico');
     if (criticos.length) {
       const worst = criticos.sort((a,b) => Math.abs(b.diff)-Math.abs(a.diff))[0];
-      risks.push({ severity: 'critico', icon: 'ti-trending-up', desc: `Material <strong>${escapeHtml(worst.mat)}</strong> com variação crítica em <strong>${escapeHtml(r.central)}</strong>`, meta: `Variação: ${varSymbol(worst.diff)} ${fmtKg(Math.abs(worst.diff))}`, badge: badgeHtml('critico','CRÍTICO') });
+      const custoMat = r.custoMedioPorMat[worst.mat] || 0;
+      const impacto  = Math.abs(worst.diff) * custoMat;
+      const direcao  = worst.diff < 0 ? 'Desfalque' : 'Sobra';
+      push('critico',
+        `🔴 ${escapeHtml(worst.mat)} em ${escapeHtml(r.central)} — ${direcao} crítico`,
+        `Variação de <strong>${varSymbol(worst.diff)}${fmtKg(Math.abs(worst.diff))}</strong>${custoMat>0?' · custo implicado de <strong>'+money(impacto)+'</strong>':''}.${worst.diff<0?' Estoque real abaixo do teórico — requer conferência imediata.':' Estoque real acima do esperado — verificar entradas não registradas.'}`,
+        [{ label: direcao.toUpperCase(), sev: 'critico' }]
+      );
     }
 
-    // Risk 4: Crescimento acelerado do desfalque
-    const totalDiff = matDiffs.reduce((s,m)=>s+m.diff,0);
-    if (totalDiff < -500) {
-      risks.push({ severity: 'urgente', icon: 'ti-trending-down', desc: `Crescimento acelerado do desfalque em <strong>${escapeHtml(r.central)}</strong>`, meta: `Déficit acumulado: ${fmtKg(Math.abs(totalDiff))}`, badge: badgeHtml('urgente','DESFALQUE') });
+    // ── Manchete 4: Desfalque acumulado expressivo ──
+    if (totalDiff < -1000 && level !== 'critico') {
+      const custoTotal = Math.abs(totalDiff) * ((custoMeds[0]?.[1]) || 0);
+      push('urgente',
+        `🟠 ${escapeHtml(r.central)} — Desfalque acumulado de ${fmtKg(Math.abs(totalDiff))}`,
+        `O estoque real da central está <strong>${fmtKg(Math.abs(totalDiff))}</strong> abaixo do esperado${custoTotal>0?' — impacto financeiro de <strong>'+money(custoTotal)+'</strong>':''}.${counts.atencao>0?' '+counts.atencao+' material(is) em atenção contribuindo para o déficit.':''}`,
+        [{ label: 'DESFALQUE', sev: 'urgente' }]
+      );
     }
 
-    // Risk 5: Custo médio elevado
-    const custos = Object.values(r.custoMedioPorMat).filter(v=>v>0);
-    if (custos.length) {
-      const maxCusto = Math.max(...custos);
-      if (maxCusto > 1000) {
-        const matMaxCusto = Object.keys(r.custoMedioPorMat).find(k=>r.custoMedioPorMat[k]===maxCusto);
-        risks.push({ severity: 'atencao', icon: 'ti-currency-dollar', desc: `Alto custo médio unitário: <strong>${escapeHtml(matMaxCusto||'—')}</strong> em <strong>${escapeHtml(r.central)}</strong>`, meta: `Custo médio: ${money(maxCusto)}/KG`, badge: badgeHtml('atencao','CUSTO ALTO') });
-      }
-    }
-
-    // Risk 6: Material em atenção com tendência (diff negativo)
+    // ── Manchete 5: Escalada de atenção ──
     const emAtencao = matDiffs.filter(m => classifyVariation(Math.abs(m.diff), m.catKey, thresholds) === 'atencao' && m.diff < 0);
     if (emAtencao.length >= 2) {
-      risks.push({ severity: 'atencao', icon: 'ti-alert-triangle', desc: `${emAtencao.length} materiais em ATENÇÃO com tendência negativa em <strong>${escapeHtml(r.central)}</strong>`, meta: `Monitorar: ${emAtencao.slice(0,3).map(m=>m.mat).join(', ')}`, badge: badgeHtml('atencao','ATENÇÃO') });
+      const impTotal = emAtencao.reduce((s,m)=>s+Math.abs(m.diff)*(r.custoMedioPorMat[m.mat]||0),0);
+      push('atencao',
+        `⚠️ ${escapeHtml(r.central)} — ${emAtencao.length} materiais em atenção com variação negativa`,
+        `Risco de escalada para URGENTE se a tendência continuar. Materiais afetados: <strong>${emAtencao.slice(0,3).map(m=>escapeHtml(m.mat)).join(', ')}</strong>${emAtencao.length>3?' e mais '+(emAtencao.length-3)+'':''}.${impTotal>0?' Custo implicado combinado: <strong>'+money(impTotal)+'</strong>.':''}`,
+        [{ label: emAtencao.length + ' em atenção', sev: 'atencao' }]
+      );
     }
   });
 
-  // Risk: Sem lançamentos
+  // ── Manchete global: Sem lançamentos ──
   const semLanc = results.filter(r => !r.lancsNoPeriodo.length);
   if (semLanc.length) {
-    risks.push({ severity: 'atencao', icon: 'ti-clipboard-off', desc: `${semLanc.length} central(is) sem lançamentos no período`, meta: semLanc.slice(0,3).map(r=>r.central).join(', '), badge: badgeHtml('atencao','SEM DADOS') });
+    push('atencao',
+      `⚠️ ${semLanc.length} central${semLanc.length!==1?'is':''} sem lançamentos no período`,
+      `Sem lançamentos: <strong>${semLanc.slice(0,4).map(r=>escapeHtml(r.central)).join(', ')}${semLanc.length>4?' e mais '+(semLanc.length-4):''}</strong>. Os cálculos de variação destas centrais podem estar incompletos.`,
+      [{ label: 'SEM DADOS', sev: 'atencao' }]
+    );
   }
 
   // Sort: critico > urgente > atencao
-  const order = { critico:0, urgente:1, atencao:2, info:3 };
-  risks.sort((a,b) => (order[a.severity]||3) - (order[b.severity]||3));
-
+  risks.sort((a,b) => (SEV[a.sev]||3) - (SEV[b.sev]||3));
   const top10 = risks.slice(0,10);
 
   if (!top10.length) {
@@ -640,15 +703,22 @@ function renderDgRiscos(results, thresholds) {
     return;
   }
 
-  el.innerHTML = top10.map(r => `
-    <div class="dg-risco-item">
-      <div class="dg-risco-icon ${r.severity}"><i class="ti ${r.icon}"></i></div>
-      <div class="dg-risco-content">
-        <div class="dg-risco-desc">${r.desc}</div>
-        <div class="dg-risco-meta">${r.meta}</div>
-      </div>
-      ${r.badge}
-    </div>`).join('');
+  el.innerHTML = top10.map((r, idx) => {
+    const pillsHtml = r.pills.map(p =>
+      `<span class="dg-risco-pill" style="background:${SEV_BG[p.sev]};color:${SEV_COLOR[p.sev]};border:1px solid ${SEV_BORDER[p.sev]}">${p.label}</span>`
+    ).join('');
+
+    return `
+      <div class="dg-risco-item dg-risco-item--news dg-risco-item--${r.sev}">
+        <div class="dg-risco-news-bar" style="background:${SEV_COLOR[r.sev]}"></div>
+        <div class="dg-risco-news-body">
+          <div class="dg-risco-news-headline">${r.headline}</div>
+          <div class="dg-risco-news-text">${r.body}</div>
+          ${pillsHtml ? `<div class="dg-risco-news-pills">${pillsHtml}</div>` : ''}
+        </div>
+        <div class="dg-risco-news-num">${String(idx+1).padStart(2,'0')}</div>
+      </div>`;
+  }).join('');
 }
 
 // ────────────────────────────────────────────
@@ -1102,6 +1172,8 @@ function renderSaidas() {
 function renderLancamentos() {
   const tb = document.getElementById('tb-lancamentos');
   if (!tb) return;
+  // Inicializa painel de ausências na primeira abertura
+  if (typeof initAusencias === 'function') initAusencias();
   const data = pageSlice('lancamentos');
   updatePageInfo('lancamentos');
 
@@ -1110,6 +1182,9 @@ function renderLancamentos() {
     return;
   }
 
+  // Mapa de índice de página → objeto real no state (para edição inline)
+  window._lancPageData = data;
+
   tb.innerHTML = data.map((r, i) => `
     <tr>
       <td class="td-mono">${r.central || '—'}</td>
@@ -1117,16 +1192,452 @@ function renderLancamentos() {
       <td>${r.fornecedor || '—'}</td>
       <td class="td-muted">${r.categoria || '—'}</td>
       <td class="td-mono">${r.material || r.materialOriginal || '—'}</td>
-      <td class="td-mono" style="color:var(--teal)">${num(r.peso) || 0}</td>
+      <td class="td-mono td-editable" style="color:var(--teal)"
+        contenteditable="true" spellcheck="false"
+        data-lanc-idx="${i}" data-lanc-field="peso"
+        onkeydown="lancEditKeydown(event)"
+        onblur="lancEditSave(this)">${num(r.peso) || 0}</td>
       <td>${r.um || '—'}</td>
       <td class="td-mono">${money(r.custo)}</td>
-      <td class="td-mono">${money(r.valorTotal)}</td>
+      <td class="td-mono td-editable"
+        contenteditable="true" spellcheck="false"
+        data-lanc-idx="${i}" data-lanc-field="valorTotal"
+        onkeydown="lancEditKeydown(event)"
+        onblur="lancEditSave(this)">${money(r.valorTotal)}</td>
       <td><button class="btn-icon danger" onclick="removerRegistro('lancamentos', ${i})"><i class="ti ti-trash"></i></button></td>
     </tr>
   `).join('');
   makeResizable(tb.closest('table'));
   injectColFilterButtons(tb.closest('table'), 'lancamentos');
 }
+
+
+// ── Edição inline de Peso e Valor Total nos lançamentos ──────
+function lancEditKeydown(e) {
+  // Enter confirma (blur), Escape cancela e restaura valor original
+  if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); }
+  if (e.key === 'Escape') {
+    const cell = e.target;
+    const idx   = parseInt(cell.dataset.lancIdx);
+    const field = cell.dataset.lancField;
+    const r = window._lancPageData?.[idx];
+    if (!r) return;
+    cell.textContent = field === 'peso' ? (num(r.peso) || 0) : money(r.valorTotal);
+    cell.blur();
+  }
+}
+
+function lancEditSave(cell) {
+  const idx   = parseInt(cell.dataset.lancIdx);
+  const field = cell.dataset.lancField;
+  const r = window._lancPageData?.[idx];
+  if (!r) return;
+
+  // Parse: aceita vírgula como decimal e ignora R$, espaços, pontos de milhar
+  const raw = cell.textContent.replace(/R\$\s*/g,'').replace(/\./g,'').replace(',','.').trim();
+  const val = parseFloat(raw);
+
+  if (isNaN(val)) {
+    // Valor inválido: restaura original
+    cell.textContent = field === 'peso' ? (num(r.peso) || 0) : money(r.valorTotal);
+    toast('Valor inválido — alteração descartada', 'error');
+    return;
+  }
+
+  const oldVal = field === 'peso' ? num(r.peso) : num(r.valorTotal);
+  if (Math.abs(val - oldVal) < 0.001) return; // sem mudança
+
+  r[field] = val;
+
+  // Se peso foi alterado e há custo unitário, atualizar valorTotal automaticamente
+  if (field === 'peso' && num(r.custo) > 0) {
+    r.valorTotal = val * num(r.custo);
+  }
+
+  invalidateLancIndex();
+  persistStateNow().catch(e => console.warn('Falha ao salvar lançamento:', e));
+  toast('Lançamento atualizado');
+
+  // Atualiza célula com formato correto
+  cell.textContent = field === 'peso' ? val : money(r.valorTotal);
+
+  // Atualiza célula de valorTotal se peso foi editado
+  if (field === 'peso') {
+    const row = cell.closest('tr');
+    const vtCell = row?.querySelector('[data-lanc-field="valorTotal"]');
+    if (vtCell) vtCell.textContent = money(r.valorTotal);
+  }
+}
+
+Object.assign(window, { lancEditKeydown, lancEditSave });
+
+// ═══════════════════════════════════════════════════════════
+// AUSÊNCIAS DE LANÇAMENTO
+// ═══════════════════════════════════════════════════════════
+
+function toggleAusencias() {
+  const body    = document.getElementById('ausencias-body');
+  const chevron = document.getElementById('ausencias-chevron');
+  if (!body) return;
+  const isOpen = body.style.display !== 'none';
+  body.style.display = isOpen ? 'none' : '';
+  chevron?.classList.toggle('open', !isOpen);
+}
+
+function _ausDateStr(d) {
+  // dd/mm/yyyy
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  return `${dd}/${mm}/${d.getFullYear()}`;
+}
+
+// Calcula quais dias de um intervalo esperavam lançamento para
+// um material de tipo isSemanal (terça) ou diário (seg-sáb)
+function _diasEsperados(dtIni, dtFim, isSemanal) {
+  const dias = [];
+  const cur  = new Date(dtIni);
+  cur.setHours(0, 0, 0, 0);
+  const fim  = new Date(dtFim);
+  fim.setHours(23, 59, 59, 999);
+
+  while (cur <= fim) {
+    const dow = cur.getDay(); // 0=dom, 2=ter, 6=sab
+    if (isSemanal) {
+      if (dow === 2) dias.push(new Date(cur)); // só terça
+    } else {
+      if (dow !== 0) dias.push(new Date(cur)); // seg-sab
+    }
+    cur.setDate(cur.getDate() + 1);
+  }
+  return dias;
+}
+
+function renderAusencias() {
+  const iniEl = document.getElementById('aus-dt-ini');
+  const fimEl = document.getElementById('aus-dt-fim');
+  const content = document.getElementById('ausencias-content');
+  const subtitle = document.getElementById('ausencias-subtitle');
+  const card = document.getElementById('ausencias-card');
+  if (!content) return;
+
+  const iniStr = iniEl?.value || '';
+  const fimStr = fimEl?.value || '';
+  if (!iniStr || !fimStr) {
+    subtitle.textContent = 'Selecione um período para analisar';
+    content.innerHTML = `
+      <div class="ausencias-empty" style="color:var(--text3)">
+        <i class="ti ti-calendar-search" style="font-size:20px"></i>
+        Selecione um período acima para identificar ausências de lançamento.
+      </div>`;
+    return;
+  }
+
+  const dtIni = new Date(iniStr + 'T00:00:00');
+  const dtFim = new Date(fimStr + 'T23:59:59');
+  if (isNaN(dtIni) || isNaN(dtFim) || dtIni > dtFim) {
+    subtitle.textContent = 'Período inválido';
+    return;
+  }
+
+  // ── Monta índice: central → material → Set de dias lançados ──
+  const lancIndex = new Map(); // 'central|mat' → Set<ISO>
+  (state.lancamentos || []).forEach(r => {
+    const d = parseDate(r.dtLanc);
+    if (!d || d < dtIni || d > dtFim) return;
+    const key = `${r.central}|${r.material || '—'}`;
+    if (!lancIndex.has(key)) lancIndex.set(key, new Set());
+    lancIndex.get(key).add(localISODate(d));
+  });
+
+  // ── Determina pares central×material que deveriam ter lançamento ──
+  // Usa os materiais já conhecidos no período (lançamentos + SAP)
+  const pares = new Map(); // 'central|mat' → { central, mat, isSemanal, categoria }
+  const addPar = (central, mat, categoria) => {
+    const key = `${central}|${mat}`;
+    if (pares.has(key)) return;
+    const catKey = detectCatKey(String(categoria || '').trim().toUpperCase()) || detectCatFromMat(mat);
+    pares.set(key, { central, mat, isSemanal: catKey === 'agregado', categoria: categoria || '—' });
+  };
+  (state.lancamentos || []).forEach(r => {
+    const d = parseDate(r.dtLanc);
+    if (!d || d < dtIni || d > dtFim) return;
+    addPar(r.central, r.material || '—', r.categoria);
+  });
+  (state.sap || []).forEach(r => {
+    const d = parseDate(r.dtLanc);
+    if (!d || d < dtIni || d > dtFim) return;
+    addPar(r.central, r.material || '—', r.categoria);
+  });
+
+  // ── Calcula ausências ──
+  const ausencias = []; // { central, mat, isSemanal, diasAusentes: [] }
+  pares.forEach(({ central, mat, isSemanal, categoria }, key) => {
+    const lancados = lancIndex.get(key) || new Set();
+    const esperados = _diasEsperados(dtIni, dtFim, isSemanal);
+    const ausentes = esperados.filter(d => !lancados.has(localISODate(d)));
+    if (ausentes.length) {
+      ausencias.push({ central, mat, isSemanal, categoria, diasAusentes: ausentes });
+    }
+  });
+
+  // ── Ordena: central asc, depois por nº de ausências desc ──
+  ausencias.sort((a, b) =>
+    a.central.localeCompare(b.central) ||
+    b.diasAusentes.length - a.diasAusentes.length
+  );
+
+  // ── Popula opções dos filtros ──
+  const allCentrals = [...new Set(ausencias.map(a => a.central))].sort();
+  const allMats     = [...new Set(ausencias.map(a => a.mat))].sort();
+  _ausFilter.options.central = allCentrals;
+  _ausFilter.options.mat     = allMats;
+  _ausFilterBuildOptions('central');
+  _ausFilterBuildOptions('mat');
+  _ausFilterSyncLabel('central');
+  _ausFilterSyncLabel('mat');
+  _ausFilterSyncClear();
+
+  // ── Aplica filtros ──
+  const filtered = ausencias.filter(a =>
+    (!_ausFilter.applied.central.size || _ausFilter.applied.central.has(a.central)) &&
+    (!_ausFilter.applied.mat.size     || _ausFilter.applied.mat.has(a.mat))
+  );
+
+  // ── Atualiza header summary (sobre os dados filtrados) ──
+  const lancAusentes = filtered.length;
+  const matsUnicos   = new Set(filtered.map(a => a.mat)).size;
+  const centrais     = new Set(filtered.map(a => a.central)).size;
+
+  card?.classList.toggle('has-ausencias', ausencias.length > 0);
+  // Expõe para gerarRelatorioAusencias*
+  window._ausenciasData = filtered;
+
+  if (!filtered.length) {
+    const msg = ausencias.length > 0
+      ? 'Nenhuma ausência para os filtros selecionados.'
+      : 'Nenhuma ausência no período — todos os lançamentos presentes.';
+    content.innerHTML = `
+      <div class="ausencias-empty">
+        <i class="ti ti-circle-check"></i>
+        ${msg}
+      </div>`;
+    return;
+  }
+
+  subtitle.innerHTML = `
+    <span class="aus-summary-chips">
+      <span class="aus-chip red">${lancAusentes} lanç. ausente${lancAusentes !== 1 ? 's' : ''}</span>
+      <span class="aus-chip amber">${matsUnicos} ${matsUnicos !== 1 ? 'materiais' : 'material'}</span>
+      <span class="aus-chip teal">${centrais} ${centrais !== 1 ? 'centrais' : 'central'}</span>
+      <button onclick="event.stopPropagation();gerarRelatorioAusenciasGeral()"
+        style="margin-left:6px;display:inline-flex;align-items:center;gap:5px;background:transparent;
+          border:1px solid var(--border2);border-radius:5px;padding:2px 10px;font-size:10.5px;
+          font-family:var(--mono);font-weight:600;color:var(--text2);cursor:pointer;
+          transition:border-color .15s,color .15s" title="Gerar relatório geral de ausências"
+        onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
+        onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--text2)'">
+        <i class="ti ti-file-report" style="font-size:12px"></i> Relatório Geral
+      </button>
+    </span>`;
+
+  // ── Render agrupado por central ──
+  const byCentral = new Map();
+  filtered.forEach(a => {
+    if (!byCentral.has(a.central)) byCentral.set(a.central, []);
+    byCentral.get(a.central).push(a);
+  });
+
+  content.innerHTML = [...byCentral.entries()].map(([central, rows]) => {
+    const totalAus = rows.length; // nº de materiais sem lançamento
+    const matRows = rows.map(r => {
+      const chips = r.diasAusentes
+        .map(d => `<span class="aus-dia-chip">${_ausDateStr(d)}</span>`)
+        .join('');
+      const typeLabel = r.isSemanal ? 'Semanal' : 'Diário';
+      return `
+        <div class="aus-mat-row">
+          <span class="aus-mat-name">${escapeHtml(r.mat)}</span>
+          <span class="aus-mat-type">${typeLabel}</span>
+          <div class="aus-dias-wrap">${chips}</div>
+        </div>`;
+    }).join('');
+
+    return `
+      <div class="aus-central-group">
+        <div class="aus-central-label">
+          <i class="ti ti-building-factory-2"></i>
+          ${escapeHtml(central)}
+          <span class="aus-central-badge">${totalAus} lanç. ausente${totalAus !== 1 ? "s" : ""}</span>
+          <button onclick="event.stopPropagation();gerarRelatorioAusenciasCentral('${escapeHtml(central).replace(/'/g,"\'")}')"
+            style="margin-left:auto;display:inline-flex;align-items:center;gap:4px;background:transparent;
+              border:1px solid var(--border2);border-radius:4px;padding:1px 8px;font-size:9.5px;
+              font-family:var(--mono);font-weight:600;color:var(--text3);cursor:pointer;
+              transition:border-color .15s,color .15s" title="Gerar relatório desta central"
+            onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
+            onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--text3)'">
+            <i class="ti ti-file-report" style="font-size:10px"></i> Relatório
+          </button>
+        </div>
+        ${matRows}
+      </div>`;
+  }).join('');
+}
+
+// Inicializa o painel de ausências — usa o mesmo período do analítico se disponível
+let _ausInited = false;
+function initAusencias() {
+  // Só inicializa uma vez por sessão; re-render é feito via callbacks do cal-picker
+  const iniEl = document.getElementById('aus-dt-ini');
+  const fimEl = document.getElementById('aus-dt-fim');
+  if (!iniEl) return;
+
+  // Já tem período definido — só re-renderiza
+  if (iniEl.value && fimEl?.value) {
+    renderAusencias();
+    return;
+  }
+
+  // Sem período ainda — mostrar empty state sem processar dados
+  const subtitle = document.getElementById('ausencias-subtitle');
+  const content  = document.getElementById('ausencias-content');
+  if (subtitle) subtitle.textContent = 'Selecione um período para analisar';
+  if (content)  content.innerHTML = `
+    <div class="ausencias-empty" style="color:var(--text3)">
+      <i class="ti ti-calendar-search" style="font-size:20px"></i>
+      Selecione um período acima para identificar ausências de lançamento.
+    </div>`;
+}
+
+// ── Aus filter state (pending/applied pattern) ──────────────
+const _ausFilter = {
+  options: { central: [], mat: [] },
+  applied: { central: new Set(), mat: new Set() },
+  pending: { central: new Set(), mat: new Set() }
+};
+
+function _ausFilterBuildOptions(key, query = '') {
+  const container = document.getElementById(`aus-fo-${key}`);
+  if (!container) return;
+  const opts = _ausFilter.options[key];
+  const q = query.toLowerCase().trim();
+  const filtered = q ? opts.filter(o => o.toLowerCase().includes(q)) : opts;
+  const pending  = _ausFilter.pending[key];
+  const applied  = _ausFilter.applied[key];
+  if (!filtered.length) {
+    container.innerHTML = `<div style="padding:12px 10px;color:var(--text3);font-size:12px;text-align:center">Nenhum resultado</div>`;
+    return;
+  }
+  container.innerHTML = filtered.map(opt => {
+    const checked = pending.size ? pending.has(opt) : applied.has(opt);
+    const id = `aus-fopt-${key}-${opt.replace(/[^a-z0-9]/gi,'_')}`;
+    return `<label class="micro-filter-option" for="${id}">
+      <input type="checkbox" id="${id}" value="${escapeHtml(opt)}" ${checked ? 'checked' : ''}
+        onchange="_ausFilterCheck('${key}', this)">
+      <span class="micro-filter-option-label" title="${escapeHtml(opt)}">${escapeHtml(opt)}</span>
+    </label>`;
+  }).join('');
+}
+
+function _ausFilterCheck(key, checkbox) {
+  const pending = _ausFilter.pending[key];
+  if (checkbox.checked) pending.add(checkbox.value);
+  else pending.delete(checkbox.value);
+}
+
+function _ausFilterSyncLabel(key) {
+  const btn   = document.getElementById(`aus-ft-${key}`);
+  const label = document.getElementById(`aus-ft-${key}-label`);
+  if (!label || !btn) return;
+  const keyLabel = key === 'central' ? 'Central' : 'Material';
+  const applied  = _ausFilter.applied[key];
+  if (!applied.size) {
+    label.innerHTML = keyLabel;
+    btn.classList.remove('active');
+  } else if (applied.size === 1) {
+    const val = [...applied][0];
+    label.innerHTML = `${keyLabel}: <strong>${escapeHtml(val.length > 18 ? val.slice(0,18)+'…' : val)}</strong>`;
+    btn.classList.add('active');
+  } else {
+    label.innerHTML = `${keyLabel} <span class="micro-filter-badge">${applied.size}</span>`;
+    btn.classList.add('active');
+  }
+}
+
+function _ausFilterSyncClear() {
+  const btn = document.getElementById('aus-filter-clear-btn');
+  if (btn) btn.style.display = (_ausFilter.applied.central.size || _ausFilter.applied.mat.size) ? '' : 'none';
+}
+
+function toggleAusFilter(key) {
+  const dd   = document.getElementById(`aus-fd-${key}`);
+  const chev = document.getElementById(`aus-fc-${key}`);
+  const keys = ['central', 'mat'];
+  // Close others
+  keys.filter(k => k !== key).forEach(k => {
+    document.getElementById(`aus-fd-${k}`)?.classList.remove('open');
+    document.getElementById(`aus-fc-${k}`)?.classList.remove('open');
+    _ausFilter.pending[k] = new Set(_ausFilter.applied[k]);
+  });
+  const isOpen = dd.classList.toggle('open');
+  chev.classList.toggle('open', isOpen);
+  if (isOpen) {
+    _ausFilter.pending[key] = new Set(_ausFilter.applied[key]);
+    const searchEl = document.getElementById(`aus-fs-${key}`);
+    if (searchEl) searchEl.value = '';
+    _ausFilterBuildOptions(key);
+    setTimeout(() => searchEl?.focus(), 50);
+  }
+}
+
+function filterAusOptions(key, query) { _ausFilterBuildOptions(key, query); }
+
+function applyAusFilter(key) {
+  _ausFilter.applied[key] = new Set(_ausFilter.pending[key]);
+  document.getElementById(`aus-fd-${key}`)?.classList.remove('open');
+  document.getElementById(`aus-fc-${key}`)?.classList.remove('open');
+  _ausFilterSyncLabel(key);
+  _ausFilterSyncClear();
+  renderAusencias();
+}
+
+function cancelAusFilter(key) {
+  _ausFilter.pending[key] = new Set(_ausFilter.applied[key]);
+  document.getElementById(`aus-fd-${key}`)?.classList.remove('open');
+  document.getElementById(`aus-fc-${key}`)?.classList.remove('open');
+}
+
+function clearAusFilters() {
+  _ausFilter.applied.central = new Set();
+  _ausFilter.applied.mat     = new Set();
+  _ausFilter.pending.central = new Set();
+  _ausFilter.pending.mat     = new Set();
+  renderAusencias();
+}
+
+function ausQuickOntem() {
+  const d = new Date();
+  d.setHours(12, 0, 0, 0); // meio-dia para evitar problemas de fuso/DST
+  d.setDate(d.getDate() - 1);
+  if (typeof calSetRange === 'function') calSetRange('aus', localISODate(d), localISODate(d));
+}
+
+function ausQuickTercaAnterior() {
+  const today = new Date();
+  today.setHours(12, 0, 0, 0); // meio-dia para evitar problemas de DST
+  const dow = today.getDay(); // 0=dom, 2=ter
+  // Voltar até a última terça — se hoje já é terça, pega a terça da semana passada
+  const daysBack = dow === 2 ? 7 : (dow > 2 ? dow - 2 : dow + 5);
+  const terca = new Date(today);
+  terca.setDate(today.getDate() - daysBack);
+  if (typeof calSetRange === 'function') calSetRange('aus', localISODate(terca), localISODate(terca));
+}
+
+Object.assign(window, {
+  toggleAusencias, renderAusencias, initAusencias,
+  ausQuickOntem, ausQuickTercaAnterior,
+  toggleAusFilter, filterAusOptions, applyAusFilter, cancelAusFilter,
+  clearAusFilters, _ausFilterCheck
+});
 
 function renderSAP() {
   const tb = document.getElementById('tb-sap');
@@ -1362,16 +1873,6 @@ function removerRegistro(module, index) {
   toast('Registro excluído com sucesso');
 }
 
-function removerImportById(importId) {
-  const removeFrom = key => { state[key] = state[key].filter(r => r.importId !== importId); };
-  ['entradas','saidas','lancamentos','sap','producao','filiais','materiais'].forEach(removeFrom);
-  state.imports = state.imports.filter(r => r.id !== importId);
-  // Invalida todos os índices ao remover uma importação inteira
-  invalidateLancIndex();
-  invalidateSapIndex();
-  invalidateSaidasIndex();
-  invalidateAllSearchIndexes();
-}
 
 async function processImportedRows(modulo, rows, fileName, extra = {}) {
   // Ativa modo batch: desabilita fuzzy matching em normalizarMaterial
@@ -1874,7 +2375,8 @@ const pageRenderers = {
   importar: () => renderImports(),
   configuracoes: () => { renderConfigs(); loadHealthConfigInputs(); updateParamGerais(); },
   filiais: () => renderFiliais(),
-  materiais: () => renderMateriais()
+  materiais: () => renderMateriais(),
+  ocorrencias: () => renderOcorrenciasPage()
 };
 
 // Páginas que são estáticas após o primeiro render (sem dados que mudam externamente)
@@ -1915,10 +2417,12 @@ function initDropZones() {
 
 async function restoreAndRender() {
   showLoadingOverlay('Carregando informações salvas', 'Restaurando os dados persistidos no navegador...');
+  // Duplo yield: rAF garante próximo frame, setTimeout(0) garante que o browser pintou
+  await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
   try {
     await loadState();
     if (isLoadingOverlayVisible()) updateLoadingOverlay('Montando a interface...', 'Carregando informações salvas', 'Ajustando métricas e listas...');
-    await nextFrame();
+    await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
     updateDashboard();
     updateParamGerais();
     renderFiliais();
@@ -1926,7 +2430,7 @@ async function restoreAndRender() {
     const activePage = document.querySelector('.page.active')?.id?.replace('page-', '') || 'importar';
     renderPage(activePage);
     if (isLoadingOverlayVisible()) updateLoadingOverlay('Finalizando o carregamento...', 'Carregando informações salvas', 'Quase pronto...');
-    await nextFrame();
+    await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
     initResizable();
   } finally {
     hideLoadingOverlay('Dados carregados');

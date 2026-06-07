@@ -23,7 +23,8 @@ const defaultState = () => ({
   imports: [],
   configs: [],
   filiais: [],
-  materiais: []
+  materiais: [],
+  ocorrencias: []
 });
 
 
@@ -155,7 +156,8 @@ const pageTitleMap = {
   analitico: { title: 'Dashboard Analítico', sub: 'análise de estoque por período e filial' },
   inventario: { title: 'Inventário', sub: 'fechamento semanal e mensal de estoque por usina' },
   importar: { title: 'Importar Dados', sub: 'importe arquivos .xlsx ou .csv para cada módulo' },
-  configuracoes: { title: 'Configurações', sub: 'parâmetros e informações de referência do sistema' }
+  configuracoes: { title: 'Configurações', sub: 'parâmetros e informações de referência do sistema' },
+  ocorrencias: { title: 'Ocorrências', sub: 'solicitações abertas e gestão de ocorrências por central' }
 };
 
 

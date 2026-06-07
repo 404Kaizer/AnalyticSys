@@ -136,15 +136,6 @@
     document.querySelectorAll('#fab-qp-btns .qp-btn').forEach(b => b.classList.remove('active'));
     event?.target?.classList.add('active');
   };
-  window.fabQuickPeriodAno = function() {
-    const y = new Date().getFullYear();
-    const ini = document.getElementById('fab-dt-ini');
-    const fim = document.getElementById('fab-dt-fim');
-    if (ini) ini.value = toISO(new Date(y, 0, 1));
-    if (fim) fim.value = toISO(new Date(y, 11, 31));
-    document.querySelectorAll('#fab-qp-btns .qp-btn').forEach(b => b.classList.remove('active'));
-    event?.target?.classList.add('active');
-  };
 
   // Close popover when clicking outside
   document.addEventListener('click', function(e) {

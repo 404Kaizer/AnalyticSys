@@ -523,10 +523,6 @@
   max-height: 58vh;
   -webkit-overflow-scrolling: touch;
 }
-.table-scroll::-webkit-scrollbar { width: 6px; height: 8px; }
-.table-scroll::-webkit-scrollbar-track { background: var(--bg3); border-radius: 8px; }
-.table-scroll::-webkit-scrollbar-thumb { background: var(--border3); border-radius: 8px; }
-.table-scroll::-webkit-scrollbar-thumb:hover { background: var(--text3); }
 
 table {
   width: max-content;

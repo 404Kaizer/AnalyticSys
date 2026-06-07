@@ -18,21 +18,18 @@
 
 <div class="mobile-nav-overlay" id="nav-overlay" onclick="closeSidebar()"></div>
 
-  <!-- Sidebar -->
+  <!-- Sidebar — Brave-style vertical tabs -->
   <aside class="sidebar" id="main-sidebar">
 
-    <!-- HEADER: AnalyticSys logo + collapse toggle (visible when expanded) -->
+    <!-- Header: logo + nome do sistema -->
     <div class="sidebar-header">
       <div class="sidebar-header-brand">
         <svg class="logo-analyticsys" viewBox="0 0 40 44" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="ícone AnalyticSys">
-          <!-- cubo topo -->
           <polygon points="20,4 32,10 32,18 20,12" fill="#ff6b35" opacity=".95"/>
           <polygon points="20,4 8,10 8,18 20,12" fill="#ffb380" opacity=".95"/>
           <polygon points="20,12 32,18 8,18" fill="#ff6b35" opacity=".1"/>
-          <!-- cubo meio -->
           <polygon points="20,16 34,22 34,31 20,25" fill="#ff6b35" opacity=".65"/>
           <polygon points="20,16 6,22 6,31 20,25" fill="#ffb380" opacity=".65"/>
-          <!-- cubo base -->
           <polygon points="20,29 36,36 36,44 20,37" fill="#ff6b35" opacity=".35"/>
           <polygon points="20,29 4,36 4,44 20,37" fill="#ffb380" opacity=".35"/>
         </svg>
@@ -46,61 +43,103 @@
           </div>
         </div>
       </div>
-      <button class="sidebar-collapse-btn sidebar-collapse-btn--expanded" id="sidebar-collapse-btn" onclick="toggleSidebarCollapse()" title="Recolher sidebar">
-        <i class="ti ti-layout-sidebar-left-collapse"></i>
-      </button>
     </div>
 
-    <!-- Collapse toggle shown ONLY when collapsed (centered inside sidebar) -->
-    <button class="sidebar-collapse-btn sidebar-collapse-btn--collapsed-only" onclick="toggleSidebarCollapse()" title="Expandir sidebar">
-      <i class="ti ti-layout-sidebar-left-expand"></i>
-    </button>
+    <!-- Tab list -->
+    <nav class="tab-list" id="tab-list">
 
-    <nav class="sidebar-nav">
-      <div class="nav-section-label">Visão Geral</div>
-      <button class="nav-item" onclick="navigate('dashboard')" data-label="Dashboard Gerencial">
-        <i class="ti ti-layout-dashboard"></i> <span class="nav-item-label">Dashboard Gerencial</span>
-      </button>
-      <button class="nav-item" onclick="navigate('analitico')" data-label="Analítico">
-        <i class="ti ti-chart-area"></i> <span class="nav-item-label">Dashboard Analítico</span>
+      <button class="tab-item" onclick="navigate('dashboard')" data-page="dashboard" data-label="Dashboard Gerencial">
+        <span class="tab-icon" style="--tab-color: var(--accent)"><i class="ti ti-layout-dashboard"></i></span>
+        <span class="tab-text">
+          <span class="tab-title">Dashboard Gerencial</span>
+          <span class="tab-sub">visão executiva consolidada</span>
+        </span>
       </button>
 
-      <div class="nav-section-label">Módulos</div>
-      <button class="nav-item" onclick="navigate('entradas')" data-label="Entradas">
-        <i class="ti ti-package-import"></i> <span class="nav-item-label">Entradas (NF)</span>
-      </button>
-      <button class="nav-item" onclick="navigate('saidas')" data-label="Saídas">
-        <i class="ti ti-package-export"></i> <span class="nav-item-label">Saídas (OS)</span>
-      </button>
-      <button class="nav-item" onclick="navigate('lancamentos')" data-label="Lançamentos">
-        <i class="ti ti-clipboard-list"></i> <span class="nav-item-label">Lançamentos</span>
-      </button>
-      <button class="nav-item" onclick="navigate('sap')" data-label="SAP">
-        <i class="ti ti-database"></i> <span class="nav-item-label">SAP</span>
-      </button>
-      <button class="nav-item" onclick="navigate('producao')" data-label="Produção">
-        <i class="ti ti-chart-bar"></i> <span class="nav-item-label">Produção</span>
+      <button class="tab-item" onclick="navigate('analitico')" data-page="analitico" data-label="Dashboard Analítico">
+        <span class="tab-icon" style="--tab-color: var(--teal)"><i class="ti ti-chart-area"></i></span>
+        <span class="tab-text">
+          <span class="tab-title">Dashboard Analítico</span>
+          <span class="tab-sub">análise por período e filial</span>
+        </span>
       </button>
 
-      <div class="nav-section-label">Auditoria</div>
-      <button class="nav-item" onclick="navigate('inventario')" data-label="Inventário">
-        <i class="ti ti-clipboard-check"></i> <span class="nav-item-label">Inventário</span>
+      <button class="tab-item" onclick="navigate('entradas')" data-page="entradas" data-label="Entradas (NF)">
+        <span class="tab-icon" style="--tab-color: var(--green)"><i class="ti ti-package-import"></i></span>
+        <span class="tab-text">
+          <span class="tab-title">Entradas (NF)</span>
+          <span class="tab-sub">notas fiscais de estoque</span>
+        </span>
       </button>
 
-      <div class="nav-section-label">Gestão</div>
-      <button class="nav-item active" onclick="navigate('importar')" data-label="Importar">
-        <i class="ti ti-file-upload"></i> <span class="nav-item-label">Importar Dados</span>
+      <button class="tab-item" onclick="navigate('saidas')" data-page="saidas" data-label="Saídas (OS)">
+        <span class="tab-icon" style="--tab-color: var(--red)"><i class="ti ti-package-export"></i></span>
+        <span class="tab-text">
+          <span class="tab-title">Saídas (OS)</span>
+          <span class="tab-sub">ordens de serviço</span>
+        </span>
       </button>
-      <button class="nav-item" onclick="navigate('configuracoes')" data-label="Config.">
-        <i class="ti ti-settings"></i> <span class="nav-item-label">Configurações</span>
+
+      <button class="tab-item" onclick="navigate('lancamentos')" data-page="lancamentos" data-label="Lançamentos">
+        <span class="tab-icon" style="--tab-color: var(--amber)"><i class="ti ti-clipboard-list"></i></span>
+        <span class="tab-text">
+          <span class="tab-title">Lançamentos</span>
+          <span class="tab-sub">saldo real por material</span>
+        </span>
       </button>
+
+      <button class="tab-item" onclick="navigate('sap')" data-page="sap" data-label="SAP">
+        <span class="tab-icon" style="--tab-color: var(--accent)"><i class="ti ti-database"></i></span>
+        <span class="tab-text">
+          <span class="tab-title">SAP</span>
+          <span class="tab-sub">movimentações SAP</span>
+        </span>
+      </button>
+
+      <button class="tab-item" onclick="navigate('producao')" data-page="producao" data-label="Produção">
+        <span class="tab-icon" style="--tab-color: var(--purple)"><i class="ti ti-chart-bar"></i></span>
+        <span class="tab-text">
+          <span class="tab-title">Produção</span>
+          <span class="tab-sub">produção por central</span>
+        </span>
+      </button>
+
+      <button class="tab-item" onclick="navigate('inventario')" data-page="inventario" data-label="Inventário">
+        <span class="tab-icon" style="--tab-color: var(--green)"><i class="ti ti-clipboard-check"></i></span>
+        <span class="tab-text">
+          <span class="tab-title">Inventário</span>
+          <span class="tab-sub">fechamento semanal e mensal</span>
+        </span>
+      </button>
+
+      <button class="tab-item" onclick="navigate('ocorrencias')" data-page="ocorrencias" data-label="Ocorrências">
+        <span class="tab-icon" style="--tab-color: var(--amber)"><i class="ti ti-clipboard-text"></i></span>
+        <span class="tab-text">
+          <span class="tab-title">Ocorrências</span>
+          <span class="tab-sub">gestão por central</span>
+        </span>
+      </button>
+
+      <button class="tab-item" onclick="navigate('importar')" data-page="importar" data-label="Importar Dados">
+        <span class="tab-icon" style="--tab-color: var(--teal)"><i class="ti ti-file-upload"></i></span>
+        <span class="tab-text">
+          <span class="tab-title">Importar Dados</span>
+          <span class="tab-sub">arquivos .xlsx ou .csv</span>
+        </span>
+      </button>
+
+      <button class="tab-item" onclick="navigate('configuracoes')" data-page="configuracoes" data-label="Configurações">
+        <span class="tab-icon" style="--tab-color: var(--text2)"><i class="ti ti-settings"></i></span>
+        <span class="tab-text">
+          <span class="tab-title">Configurações</span>
+          <span class="tab-sub">parâmetros do sistema</span>
+        </span>
+      </button>
+
     </nav>
 
-    <!-- FOOTER: Concrelagos logo + system status -->
+    <!-- Footer -->
     <div class="sidebar-footer">
-      <div class="sidebar-footer-brand">
-        <img class="logo-concrelagos" src="https://concrelagos.com.br/wp-content/uploads/2021/10/Ativo-3.svg" alt="Logo Concrelagos" loading="lazy">
-      </div>
       <div class="sidebar-footer-status">
         <span class="sidebar-status-dot"></span>
         <span class="sidebar-footer-text">© 2026 AnalyticSys.</span>
@@ -109,12 +148,15 @@
     </div>
 
   </aside>
+  <div class="sidebar-spacer"></div>
 
   <!-- Main -->
   <div class="main">
     <div class="topbar">
       <div class="topbar-left">
         <button class="menu-toggle" onclick="toggleSidebar()" aria-label="Menu"><i class="ti ti-menu-2"></i></button>
+        <img class="logo-concrelagos topbar-logo-concrelagos" src="https://concrelagos.com.br/wp-content/uploads/2021/10/Ativo-3.svg" alt="Logo Concrelagos" loading="lazy">
+        <div class="topbar-divider"></div>
         <div>
           <div class="topbar-title" id="page-title">Dashboard Gerencial</div>
           <div class="topbar-sub" id="page-sub">visão consolidada de todos os módulos</div>
@@ -131,7 +173,7 @@
             onInput="handleGlobalSearch(this.value)"
             onFocus="openGlobalSearch()"
           >
-          <span class="topbar-search-kbd">Ctrl K</span>
+          <span class="topbar-search-kbd">Ctrl Q</span>
           <div class="search-results-dropdown" id="global-search-dropdown"></div>
         </div>
       </div>
@@ -168,7 +210,131 @@
             </button>
           </div>
         </div>
-        <button class="btn" onclick="exportarDados()"><i class="ti ti-download"></i> <span>Exportar</span></button>
+        <!-- Calculadora flutuante -->
+        <div class="calc-wrap" id="calc-wrap">
+          <button class="btn calc-trigger-btn" id="calc-trigger-btn" onclick="toggleCalc()" title="Calculadora analítica">
+            <i class="ti ti-calculator"></i> <span>Calc.</span>
+          </button>
+          <div class="calc-popover" id="calc-popover" style="display:none">
+            <div class="calc-header">
+              <span class="calc-header-title"><i class="ti ti-calculator"></i> Calculadora</span>
+              <button class="calc-close-btn" onclick="toggleCalc()" title="Fechar"><i class="ti ti-x"></i></button>
+            </div>
+
+            <!-- Abas -->
+            <div class="calc-tabs">
+              <button class="calc-tab active" id="calct-basica" onclick="setCalcTab('basica')">Básica</button>
+              <button class="calc-tab" id="calct-analitica" onclick="setCalcTab('analitica')">Analítica</button>
+            </div>
+
+            <!-- Tab: Calculadora básica -->
+            <div id="calc-tab-basica">
+              <div class="calc-display-wrap">
+                <div class="calc-history" id="calc-history"></div>
+                <div class="calc-display" id="calc-display">0</div>
+              </div>
+              <div class="calc-grid">
+                <button class="calc-btn calc-btn-fn" onclick="calcAction('clear')">C</button>
+                <button class="calc-btn calc-btn-fn" onclick="calcAction('sign')">+/−</button>
+                <button class="calc-btn calc-btn-fn" onclick="calcAction('pct')">%</button>
+                <button class="calc-btn calc-btn-op" onclick="calcAction('op','/')">÷</button>
+
+                <button class="calc-btn" onclick="calcAction('num','7')">7</button>
+                <button class="calc-btn" onclick="calcAction('num','8')">8</button>
+                <button class="calc-btn" onclick="calcAction('num','9')">9</button>
+                <button class="calc-btn calc-btn-op" onclick="calcAction('op','*')">×</button>
+
+                <button class="calc-btn" onclick="calcAction('num','4')">4</button>
+                <button class="calc-btn" onclick="calcAction('num','5')">5</button>
+                <button class="calc-btn" onclick="calcAction('num','6')">6</button>
+                <button class="calc-btn calc-btn-op" onclick="calcAction('op','-')">−</button>
+
+                <button class="calc-btn" onclick="calcAction('num','1')">1</button>
+                <button class="calc-btn" onclick="calcAction('num','2')">2</button>
+                <button class="calc-btn" onclick="calcAction('num','3')">3</button>
+                <button class="calc-btn calc-btn-op calc-btn-op-tall" onclick="calcAction('op','+')">+</button>
+
+                <button class="calc-btn calc-btn-zero" onclick="calcAction('num','0')">0</button>
+                <button class="calc-btn" onclick="calcAction('dot')">.</button>
+                <button class="calc-btn calc-btn-eq" onclick="calcAction('eq')">=</button>
+              </div>
+            </div>
+
+            <!-- Tab: Atalhos analíticos -->
+            <div id="calc-tab-analitica" style="display:none">
+              <div class="calc-analytic">
+
+                <!-- Variação -->
+                <div class="calc-card">
+                  <div class="calc-card-title"><i class="ti ti-trending-up"></i> Variação de Estoque</div>
+                  <div class="calc-card-row">
+                    <label>Real (kg)</label>
+                    <input type="number" class="calc-input" id="ca-real" placeholder="0" oninput="calcAnalitica()">
+                  </div>
+                  <div class="calc-card-row">
+                    <label>Teórico (kg)</label>
+                    <input type="number" class="calc-input" id="ca-teorico" placeholder="0" oninput="calcAnalitica()">
+                  </div>
+                  <div class="calc-card-result" id="ca-var-result">
+                    <span class="calc-result-label">Variação</span>
+                    <span class="calc-result-val" id="ca-var-val">—</span>
+                    <button class="calc-copy-btn" onclick="calcCopy('ca-var-val')" title="Copiar"><i class="ti ti-copy"></i></button>
+                  </div>
+                  <div class="calc-card-result" id="ca-varpct-result">
+                    <span class="calc-result-label">Variação %</span>
+                    <span class="calc-result-val" id="ca-varpct-val">—</span>
+                    <button class="calc-copy-btn" onclick="calcCopy('ca-varpct-val')" title="Copiar"><i class="ti ti-copy"></i></button>
+                  </div>
+                </div>
+
+                <!-- Custo Implicado -->
+                <div class="calc-card">
+                  <div class="calc-card-title"><i class="ti ti-currency-dollar"></i> Custo Implicado</div>
+                  <div class="calc-card-row">
+                    <label>Variação (kg)</label>
+                    <input type="number" class="calc-input" id="ca-varkg" placeholder="0" oninput="calcAnalitica()">
+                  </div>
+                  <div class="calc-card-row">
+                    <label>Custo médio (R$/kg)</label>
+                    <input type="number" class="calc-input" id="ca-custo" placeholder="0,00" oninput="calcAnalitica()">
+                  </div>
+                  <div class="calc-card-result">
+                    <span class="calc-result-label">Custo</span>
+                    <span class="calc-result-val" id="ca-custo-val">—</span>
+                    <button class="calc-copy-btn" onclick="calcCopy('ca-custo-val')" title="Copiar"><i class="ti ti-copy"></i></button>
+                  </div>
+                </div>
+
+                <!-- Estoque Teórico -->
+                <div class="calc-card">
+                  <div class="calc-card-title"><i class="ti ti-box"></i> Estoque Teórico</div>
+                  <div class="calc-card-row">
+                    <label>Est. Inicial (kg)</label>
+                    <input type="number" class="calc-input" id="ca-ini" placeholder="0" oninput="calcAnalitica()">
+                  </div>
+                  <div class="calc-card-row">
+                    <label>Entradas (kg)</label>
+                    <input type="number" class="calc-input" id="ca-ent" placeholder="0" oninput="calcAnalitica()">
+                  </div>
+                  <div class="calc-card-row">
+                    <label>Saídas (kg)</label>
+                    <input type="number" class="calc-input" id="ca-sai" placeholder="0" oninput="calcAnalitica()">
+                  </div>
+                  <div class="calc-card-result">
+                    <span class="calc-result-label">Teórico</span>
+                    <span class="calc-result-val" id="ca-teorico-val">—</span>
+                    <button class="calc-copy-btn" onclick="calcCopy('ca-teorico-val')" title="Copiar"><i class="ti ti-copy"></i></button>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <input type="file" id="restore-file-input" accept=".json" style="display:none" onchange="restaurarBackup(this.files[0]);this.value=''">
+        <button class="btn" onclick="document.getElementById('restore-file-input').click()" title="Restaurar backup (.json)"><i class="ti ti-upload"></i> <span>Restaurar</span></button>
+        <button class="btn" onclick="exportarDados()" title="Exportar backup completo do sistema"><i class="ti ti-download"></i> <span>Backup</span></button>
         <button class="btn btn-primary" onclick="openModal('modal-manual')"><i class="ti ti-plus"></i> <span>Novo Registro</span></button>
       </div>
     </div>
@@ -705,6 +871,88 @@
 
       <!-- LANÇAMENTOS -->
       <div class="page" id="page-lancamentos">
+
+        <!-- Painel de Ausências -->
+        <div class="ausencias-card" id="ausencias-card">
+          <div class="ausencias-header" onclick="toggleAusencias()">
+            <div class="ausencias-header-left">
+              <i class="ti ti-calendar-off ausencias-icon"></i>
+              <div>
+                <div class="ausencias-title">Ausências de Lançamento</div>
+                <div class="ausencias-subtitle" id="ausencias-subtitle">Calculando...</div>
+              </div>
+            </div>
+            <div class="ausencias-header-right">
+              <div class="cal-picker-wrap" id="aus-cal-wrap" onclick="event.stopPropagation()">
+                <button class="cal-picker-trigger" id="aus-cal-trigger" onclick="toggleCalPicker('aus')" type="button">
+                  <i class="ti ti-calendar-event"></i>
+                  <span id="aus-cal-label">Selecionar período</span>
+                  <i class="ti ti-chevron-down cal-chev" id="aus-cal-chev"></i>
+                </button>
+                <input type="hidden" id="aus-dt-ini">
+                <input type="hidden" id="aus-dt-fim">
+                <div class="cal-picker-dropdown" id="aus-cal-dropdown">
+                  <div class="cal-picker-inner" id="aus-cal-inner" data-pfx="aus"></div>
+                </div>
+              </div>
+              <div class="cal-quick-chips" onclick="event.stopPropagation()">
+                <button class="cal-chip" onclick="ausQuickOntem();renderAusencias()" type="button">Ontem</button>
+                <button class="cal-chip" onclick="ausQuickTercaAnterior();renderAusencias()" type="button">Terça anterior</button>
+              </div>
+              <i class="ti ti-chevron-down ausencias-chevron" id="ausencias-chevron"></i>
+            </div>
+          </div>
+          <div class="ausencias-body" id="ausencias-body" style="display:none">
+            <!-- Filtros estilo micro-filter -->
+            <div class="micro-filter-bar aus-filter-bar" id="aus-filter-bar">
+
+              <div class="micro-filter-group">
+                <button class="micro-filter-trigger" id="aus-ft-central" onclick="toggleAusFilter('central')">
+                  <i class="ti ti-building-warehouse"></i>
+                  <span id="aus-ft-central-label">Central</span>
+                  <i class="ti ti-chevron-down micro-filter-chev" id="aus-fc-central"></i>
+                </button>
+                <div class="micro-filter-dropdown" id="aus-fd-central">
+                  <div class="micro-filter-search-wrap">
+                    <i class="ti ti-search"></i>
+                    <input class="micro-filter-search" id="aus-fs-central" type="text" placeholder="Buscar central…" oninput="filterAusOptions('central', this.value)">
+                  </div>
+                  <div class="micro-filter-options" id="aus-fo-central"></div>
+                  <div class="micro-filter-footer">
+                    <button class="btn" onclick="cancelAusFilter('central')"><i class="ti ti-x"></i> Cancelar</button>
+                    <button class="btn btn-primary" onclick="applyAusFilter('central')"><i class="ti ti-check"></i> Aplicar</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="micro-filter-group">
+                <button class="micro-filter-trigger" id="aus-ft-mat" onclick="toggleAusFilter('mat')">
+                  <i class="ti ti-box"></i>
+                  <span id="aus-ft-mat-label">Material</span>
+                  <i class="ti ti-chevron-down micro-filter-chev" id="aus-fc-mat"></i>
+                </button>
+                <div class="micro-filter-dropdown" id="aus-fd-mat">
+                  <div class="micro-filter-search-wrap">
+                    <i class="ti ti-search"></i>
+                    <input class="micro-filter-search" id="aus-fs-mat" type="text" placeholder="Buscar material…" oninput="filterAusOptions('mat', this.value)">
+                  </div>
+                  <div class="micro-filter-options" id="aus-fo-mat"></div>
+                  <div class="micro-filter-footer">
+                    <button class="btn" onclick="cancelAusFilter('mat')"><i class="ti ti-x"></i> Cancelar</button>
+                    <button class="btn btn-primary" onclick="applyAusFilter('mat')"><i class="ti ti-check"></i> Aplicar</button>
+                  </div>
+                </div>
+              </div>
+
+              <button class="btn micro-filter-clear" id="aus-filter-clear-btn" onclick="clearAusFilters()" style="display:none">
+                <i class="ti ti-filter-off"></i> Limpar Filtros
+              </button>
+
+            </div>
+            <div id="ausencias-content"></div>
+          </div>
+        </div>
+
         <div class="table-card">
           <div class="table-header">
             <span class="table-title"><i class="ti ti-clipboard-list"></i> Lançamentos — Saldo Real</span>
@@ -1096,6 +1344,7 @@
               <div class="inv-kpi-label">Est. Inicial</div>
               <div class="inv-kpi-value" id="inv-kpi-ini-v">—</div>
               <div class="inv-kpi-unit">kg</div>
+              <div id="inv-kpi-ini-missing"></div>
             </div>
           </div>
           <div class="inv-kpi-card" id="inv-kpi-ent">
@@ -1120,6 +1369,7 @@
               <div class="inv-kpi-label">Est. Final</div>
               <div class="inv-kpi-value" id="inv-kpi-fin-v">—</div>
               <div class="inv-kpi-unit">kg</div>
+              <div id="inv-kpi-fin-missing"></div>
             </div>
           </div>
           <div class="inv-kpi-card" id="inv-kpi-var">
@@ -1213,6 +1463,51 @@
       </div><!-- /page-inventario -->
 
       <!-- CONFIGURAÇÕES -->
+      <!-- ════════════════════════════════════════════
+           OCORRÊNCIAS
+      ════════════════════════════════════════════ -->
+      <div class="page" id="page-ocorrencias">
+
+        <!-- Alertas de prazo -->
+        <div id="oc-alerts"></div>
+
+        <!-- KPIs + Gráficos -->
+        <div id="oc-kpis"></div>
+
+        <!-- Toolbar -->
+        <div class="oc-toolbar">
+          <div class="oc-filters">
+            <div class="oc-search-wrap">
+              <i class="ti ti-search oc-search-icon"></i>
+              <input id="oc-filter-busca" class="oc-search-input" type="text" placeholder="Buscar ocorrência…" oninput="renderOcorrencias()">
+            </div>
+            <select id="oc-filter-status" class="macro-select" onchange="renderOcorrencias()">
+              <option value="">Todos os status</option>
+              <option value="aberta">Em aberto</option>
+              <option value="vencida">Vencidas</option>
+              <option value="urgente">Urgentes</option>
+              <option value="concluida">Concluídas</option>
+            </select>
+            <select id="oc-filter-central" class="macro-select" onchange="renderOcorrencias()">
+              <option value="">Todas as centrais</option>
+            </select>
+            <select id="oc-filter-material" class="macro-select" onchange="renderOcorrencias()">
+              <option value="">Todos os materiais</option>
+            </select>
+            <select id="oc-filter-operador" class="macro-select" onchange="renderOcorrencias()">
+              <option value="">Todos os operadores</option>
+            </select>
+          </div>
+          <button class="btn btn-primary" onclick="openOcorrenciaModal()">
+            <i class="ti ti-plus"></i> Nova Ocorrência
+          </button>
+        </div>
+
+        <!-- Lista -->
+        <div id="oc-lista"></div>
+
+      </div>
+
       <div class="page" id="page-configuracoes">
         <div class="section-title">Saúde das Centrais — Limites de Variação</div>
         <div class="table-card" style="margin-bottom:24px">
@@ -1414,7 +1709,7 @@
 
 <!-- MODAL: Novo Registro Manual -->
 <div class="modal-overlay" id="modal-manual">
-  <div class="modal">
+  <div class="modal" style="max-width:640px">
     <div class="modal-title"><i class="ti ti-edit"></i> Novo Registro Manual</div>
     <div class="modal-sub">preencha os campos e salve para adicionar ao módulo selecionado</div>
 
@@ -1426,35 +1721,56 @@
     </div>
 
     <!-- Tab Entrada -->
+    <!-- Colunas: Central Compra, Central Destino, NF, Dt. Emissão, Dt. Descarga, Fornecedor, Categoria, Material, Peso, UM, Custo Unit., Valor Total -->
     <div id="tab-entrada">
       <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">Central Compra <span class="form-required">*</span></label>
+          <input type="text" class="form-input" id="e-central-compra" placeholder="Ex: SLZ1">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Central Destino</label>
+          <input type="text" class="form-input" id="e-central-destino" placeholder="Igual à compra se vazio">
+        </div>
         <div class="form-group">
           <label class="form-label">Nº Nota Fiscal</label>
           <input type="text" class="form-input" id="e-nf" placeholder="Ex: 000123">
         </div>
         <div class="form-group">
-          <label class="form-label">Código Material</label>
-          <input type="text" class="form-input" id="e-mat" placeholder="Ex: 10000456">
-        </div>
-        <div class="form-group" style="grid-column: span 2">
-          <label class="form-label">Descrição</label>
-          <input type="text" class="form-input" id="e-desc" placeholder="Descrição do material">
+          <label class="form-label">Fornecedor</label>
+          <input type="text" class="form-input" id="e-fornecedor" placeholder="Ex: CIMENTO TUPI SA">
         </div>
         <div class="form-group">
-          <label class="form-label">Central</label>
-          <input type="text" class="form-input" id="e-central" placeholder="Ex: 1001">
+          <label class="form-label">Categoria</label>
+          <input type="text" class="form-input" id="e-categoria" placeholder="Ex: AGLOMERANTE">
         </div>
         <div class="form-group">
-          <label class="form-label">Qtd Entrada</label>
-          <input type="number" class="form-input" id="e-qtd" placeholder="0">
+          <label class="form-label">Material <span class="form-required">*</span></label>
+          <input type="text" class="form-input" id="e-material" placeholder="Ex: CIMENTO CP II">
         </div>
         <div class="form-group">
-          <label class="form-label">Valor Unitário (R$)</label>
-          <input type="number" class="form-input" id="e-valor" placeholder="0,00">
+          <label class="form-label">Peso (kg) <span class="form-required">*</span></label>
+          <input type="number" class="form-input" id="e-peso" oninput="_modalAutoCalcTotal('e-peso','e-custo','e-valor-total')" placeholder="0" min="0">
         </div>
         <div class="form-group">
-          <label class="form-label">Data</label>
-          <input type="date" class="form-input" id="e-data">
+          <label class="form-label">UM</label>
+          <input type="text" class="form-input" id="e-um" placeholder="KG" value="KG">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Custo Unit. (R$/kg)</label>
+          <input type="number" class="form-input" id="e-custo" oninput="_modalAutoCalcTotal('e-custo','e-peso','e-valor-total')" placeholder="0,00" min="0" step="0.01">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Valor Total (R$)</label>
+          <input type="number" class="form-input" id="e-valor-total" oninput="this.dataset.userEdited='1'" onfocus="this.dataset.userEdited=''" placeholder="calculado automaticamente" min="0" step="0.01">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Dt. Emissão <span class="form-required">*</span></label>
+          <input type="date" class="form-input" id="e-dt-emissao">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Dt. Descarga</label>
+          <input type="date" class="form-input" id="e-dt-descarga">
         </div>
       </div>
       <div class="form-actions">
@@ -1464,35 +1780,48 @@
     </div>
 
     <!-- Tab Saída -->
+    <!-- Colunas: Central, Dt. Emissão, OS, Categoria, Fornecedor, Material, Peso, UM, Custo Unit., Valor Total -->
     <div id="tab-saida" style="display:none">
       <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">Central <span class="form-required">*</span></label>
+          <input type="text" class="form-input" id="s-central" placeholder="Ex: SLZ1">
+        </div>
         <div class="form-group">
           <label class="form-label">Nº Ordem de Serviço</label>
           <input type="text" class="form-input" id="s-os" placeholder="Ex: OS-0045">
         </div>
         <div class="form-group">
-          <label class="form-label">Código Material</label>
-          <input type="text" class="form-input" id="s-mat" placeholder="Ex: 10000456">
-        </div>
-        <div class="form-group" style="grid-column: span 2">
-          <label class="form-label">Descrição</label>
-          <input type="text" class="form-input" id="s-desc" placeholder="Descrição do material">
+          <label class="form-label">Categoria</label>
+          <input type="text" class="form-input" id="s-categoria" placeholder="Ex: AGREGADO">
         </div>
         <div class="form-group">
-          <label class="form-label">Central</label>
-          <input type="text" class="form-input" id="s-central" placeholder="Ex: 1001">
+          <label class="form-label">Fornecedor</label>
+          <input type="text" class="form-input" id="s-fornecedor" placeholder="Ex: MINERAÇÃO X">
         </div>
         <div class="form-group">
-          <label class="form-label">Qtd Saída</label>
-          <input type="number" class="form-input" id="s-qtd" placeholder="0">
+          <label class="form-label">Material <span class="form-required">*</span></label>
+          <input type="text" class="form-input" id="s-material" placeholder="Ex: AREIA NATURAL">
         </div>
         <div class="form-group">
-          <label class="form-label">Valor Unitário (R$)</label>
-          <input type="number" class="form-input" id="s-valor" placeholder="0,00">
+          <label class="form-label">Peso (kg) <span class="form-required">*</span></label>
+          <input type="number" class="form-input" id="s-peso" oninput="_modalAutoCalcTotal('s-peso','s-custo','s-valor-total')" placeholder="0" min="0">
         </div>
         <div class="form-group">
-          <label class="form-label">Data</label>
-          <input type="date" class="form-input" id="s-data">
+          <label class="form-label">UM</label>
+          <input type="text" class="form-input" id="s-um" placeholder="KG" value="KG">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Custo Unit. (R$/kg)</label>
+          <input type="number" class="form-input" id="s-custo" oninput="_modalAutoCalcTotal('s-custo','s-peso','s-valor-total')" placeholder="0,00" min="0" step="0.01">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Valor Total (R$)</label>
+          <input type="number" class="form-input" id="s-valor-total" oninput="this.dataset.userEdited='1'" onfocus="this.dataset.userEdited=''" placeholder="calculado automaticamente" min="0" step="0.01">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Dt. Emissão <span class="form-required">*</span></label>
+          <input type="date" class="form-input" id="s-dt-emissao">
         </div>
       </div>
       <div class="form-actions">
@@ -1502,35 +1831,44 @@
     </div>
 
     <!-- Tab Lançamento -->
+    <!-- Colunas: Central, Dt. Lançamento, Fornecedor, Categoria, Material, Peso, UM, Custo Unit., Valor Total -->
     <div id="tab-lancamento" style="display:none">
       <div class="form-grid">
         <div class="form-group">
-          <label class="form-label">Código Material</label>
-          <input type="text" class="form-input" id="l-mat" placeholder="Ex: 10000456">
+          <label class="form-label">Central <span class="form-required">*</span></label>
+          <input type="text" class="form-input" id="l-central" placeholder="Ex: SLZ1">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Dt. Lançamento <span class="form-required">*</span></label>
+          <input type="date" class="form-input" id="l-dt-lanc">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Fornecedor</label>
+          <input type="text" class="form-input" id="l-fornecedor" placeholder="Ex: ADITIBRAS">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Categoria</label>
+          <input type="text" class="form-input" id="l-categoria" placeholder="Ex: ADITIVO">
         </div>
         <div class="form-group" style="grid-column: span 2">
-          <label class="form-label">Descrição</label>
-          <input type="text" class="form-input" id="l-desc" placeholder="Descrição do material">
+          <label class="form-label">Material <span class="form-required">*</span></label>
+          <input type="text" class="form-input" id="l-material" placeholder="Ex: PLASTIFICANTE RA1">
         </div>
         <div class="form-group">
-          <label class="form-label">Central</label>
-          <input type="text" class="form-input" id="l-central" placeholder="Ex: 1001">
+          <label class="form-label">Peso (kg) <span class="form-required">*</span></label>
+          <input type="number" class="form-input" id="l-peso" oninput="_modalAutoCalcTotal('l-peso','l-custo','l-valor-total')" placeholder="0" min="0">
         </div>
         <div class="form-group">
-          <label class="form-label">Saldo Real</label>
-          <input type="number" class="form-input" id="l-saldo-real" placeholder="0">
+          <label class="form-label">UM</label>
+          <input type="text" class="form-input" id="l-um" placeholder="KG" value="KG">
         </div>
         <div class="form-group">
-          <label class="form-label">Saldo SAP</label>
-          <input type="number" class="form-input" id="l-saldo-sap" placeholder="0">
+          <label class="form-label">Custo Unit. (R$/kg)</label>
+          <input type="number" class="form-input" id="l-custo" oninput="_modalAutoCalcTotal('l-custo','l-peso','l-valor-total')" placeholder="0,00" min="0" step="0.01">
         </div>
         <div class="form-group">
-          <label class="form-label">Data Contagem</label>
-          <input type="date" class="form-input" id="l-data">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Responsável</label>
-          <input type="text" class="form-input" id="l-resp" placeholder="Nome">
+          <label class="form-label">Valor Total (R$)</label>
+          <input type="number" class="form-input" id="l-valor-total" oninput="this.dataset.userEdited='1'" onfocus="this.dataset.userEdited=''" placeholder="calculado automaticamente" min="0" step="0.01">
         </div>
       </div>
       <div class="form-actions">
@@ -1540,39 +1878,64 @@
     </div>
 
     <!-- Tab SAP -->
+    <!-- Colunas: Usuário, Movimento, Ref., Documento, Central, Depósito, Dt. Doc., Dt. Lançamento, Dt. Registro, Material, Peso, UM, Custo Unit., Valor Total -->
     <div id="tab-sap" style="display:none">
       <div class="form-grid">
         <div class="form-group">
-          <label class="form-label">Código Material</label>
-          <input type="text" class="form-input" id="sap-mat" placeholder="Ex: 10000456">
-        </div>
-        <div class="form-group" style="grid-column: span 2">
-          <label class="form-label">Descrição</label>
-          <input type="text" class="form-input" id="sap-desc" placeholder="Descrição do material">
+          <label class="form-label">Usuário</label>
+          <input type="text" class="form-input" id="sap-usuario" placeholder="Ex: USR001">
         </div>
         <div class="form-group">
-          <label class="form-label">Central</label>
-          <input type="text" class="form-input" id="sap-central" placeholder="Ex: 1001">
+          <label class="form-label">Movimento <span class="form-required">*</span></label>
+          <input type="text" class="form-input" id="sap-movimento" placeholder="Ex: 101, 201, 801">
         </div>
         <div class="form-group">
-          <label class="form-label">Tipo Movimentação</label>
-          <input type="text" class="form-input" id="sap-tipo" placeholder="Ex: 101, 201, 501">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Quantidade</label>
-          <input type="number" class="form-input" id="sap-qtd" placeholder="0">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Valor (R$)</label>
-          <input type="number" class="form-input" id="sap-valor" placeholder="0,00">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Data Movimentação</label>
-          <input type="date" class="form-input" id="sap-data">
+          <label class="form-label">Referência</label>
+          <input type="text" class="form-input" id="sap-ref" placeholder="Ex: REF-0001">
         </div>
         <div class="form-group">
           <label class="form-label">Documento SAP</label>
           <input type="text" class="form-input" id="sap-doc" placeholder="Ex: 4900012345">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Central <span class="form-required">*</span></label>
+          <input type="text" class="form-input" id="sap-central" placeholder="Ex: SLZ1">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Depósito</label>
+          <input type="text" class="form-input" id="sap-deposito" placeholder="Ex: 0001">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Material <span class="form-required">*</span></label>
+          <input type="text" class="form-input" id="sap-material" placeholder="Ex: CIMENTO CP II">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Peso (kg) <span class="form-required">*</span></label>
+          <input type="number" class="form-input" id="sap-peso" oninput="_modalAutoCalcTotal('sap-peso','sap-custo-unit','sap-valor-total')" placeholder="0" step="0.01">
+        </div>
+        <div class="form-group">
+          <label class="form-label">UM</label>
+          <input type="text" class="form-input" id="sap-um" placeholder="KG" value="KG">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Custo Unit. (R$/kg)</label>
+          <input type="number" class="form-input" id="sap-custo-unit" oninput="_modalAutoCalcTotal('sap-custo-unit','sap-peso','sap-valor-total')" placeholder="0,00" min="0" step="0.01">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Valor Total (R$)</label>
+          <input type="number" class="form-input" id="sap-valor-total" oninput="this.dataset.userEdited='1'" onfocus="this.dataset.userEdited=''" placeholder="calculado automaticamente" min="0" step="0.01">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Dt. Documento</label>
+          <input type="date" class="form-input" id="sap-dt-doc">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Dt. Lançamento <span class="form-required">*</span></label>
+          <input type="date" class="form-input" id="sap-dt-lanc">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Dt. Registro</label>
+          <input type="date" class="form-input" id="sap-dt-reg">
         </div>
       </div>
       <div class="form-actions">
@@ -1581,6 +1944,56 @@
       </div>
     </div>
 
+  </div>
+</div>
+
+<!-- MODAL: Busca Global (Ctrl+Q) -->
+<div class="modal-overlay" id="modal-search-global" style="display:none;align-items:flex-start;padding-top:80px" onclick="if(event.target===this)closeSearchModal()">
+  <div class="search-modal-wrap">
+    <div class="search-modal-input-row">
+      <i class="ti ti-search search-modal-icon"></i>
+      <input type="text" id="search-modal-input" class="search-modal-input"
+        placeholder="Buscar materiais, centrais, documentos..."
+        autocomplete="off" oninput="handleSearchModal(this.value)">
+      <kbd class="search-modal-esc" onclick="closeSearchModal()">Esc</kbd>
+    </div>
+    <div id="search-modal-results"></div>
+    <div class="search-modal-footer">
+      <span><kbd>↑↓</kbd> navegar</span>
+      <span><kbd>Enter</kbd> abrir</span>
+      <span><kbd>Esc</kbd> fechar</span>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Detalhe de resultado da busca -->
+<div class="modal-overlay" id="modal-search-detail">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-title" id="msd-title"><i class="ti ti-search"></i> Registro encontrado</div>
+    <div class="modal-sub" id="msd-sub"></div>
+    <div id="msd-body" style="margin:16px 0"></div>
+    <div class="form-actions">
+      <button class="btn" onclick="closeModal('modal-search-detail')">Fechar</button>
+      <button class="btn btn-primary" id="msd-nav-btn" style="display:none">
+        <i class="ti ti-arrow-right"></i> Ir para a aba
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Confirmação destrutiva -->
+<div class="modal-overlay" id="modal-confirm-destrutivo">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-title" style="color:var(--red)"><i class="ti ti-alert-triangle"></i> <span id="mcd-title">Confirmar exclusão</span></div>
+    <div class="modal-sub" id="mcd-sub"></div>
+    <div id="mcd-body" style="margin:16px 0;font-size:13px;color:var(--text2);line-height:1.6"></div>
+    <div class="form-actions">
+      <button class="btn" onclick="closeModal('modal-confirm-destrutivo')" id="mcd-cancel-btn">Cancelar</button>
+      <button class="btn" id="mcd-confirm-btn"
+        style="background:var(--red-bg);border-color:var(--red-border);color:var(--red);font-weight:600">
+        <i class="ti ti-trash"></i> <span id="mcd-confirm-label">Excluir</span>
+      </button>
+    </div>
   </div>
 </div>
 
@@ -1903,10 +2316,16 @@
     </div>
     <div class="lrc-body" id="lrc-body"></div>
     <div class="lrc-footer">
-      <button class="btn" type="button" onclick="closeLancConflictModal()">Cancelar</button>
-      <button class="btn btn-primary" type="button" onclick="lrcConfirm()">
-        <i class="ti ti-check"></i> Confirmar seleção
-      </button>
+      <div class="lrc-footer-est">
+        <span class="lrc-footer-est-label"><i class="ti ti-package"></i> Est. Inicial resultante</span>
+        <span class="lrc-footer-est-val" id="lrc-est-inicial">0,00 kg</span>
+      </div>
+      <div class="lrc-footer-actions">
+        <button class="btn" type="button" onclick="closeLancConflictModal()">Fechar</button>
+        <button class="btn btn-primary" type="button" onclick="lrcConfirm()">
+          <i class="ti ti-check"></i> Concluir
+        </button>
+      </div>
     </div>
   </div>
 </div>
@@ -1959,10 +2378,105 @@
 <script src="js/analitico.js"></script>
 <script src="js/macro.js"></script>
 <script src="js/help-badges.js"></script>
+<script src="js/ocorrencias.js"></script>
 <script src="js/inventario.js"></script>
 <script src="js/calendar.js"></script>
 <script src="js/relatorio.js"></script>
 <script src="js/period-fab.js"></script>
+
+<!-- ═══ MODAL: Nova/Editar Ocorrência ═══ -->
+<div class="modal-overlay" id="oc-modal" onclick="if(event.target===this)closeOcorrenciaModal()" role="dialog" aria-modal="true">
+  <div class="modal-card" style="max-width:560px;width:100%">
+    <div class="modal-header">
+      <span class="modal-title" id="oc-modal-title">Nova Ocorrência</span>
+      <button class="modal-close" onclick="closeOcorrenciaModal()"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:14px">
+      <input type="hidden" id="oc-form-id">
+      <div class="oc-form-row">
+        <div class="oc-form-group">
+          <label class="oc-label">Data de abertura</label>
+          <input type="date" id="oc-form-abertura" class="oc-input">
+        </div>
+        <div class="oc-form-group">
+          <label class="oc-label">Prazo limite</label>
+          <input type="date" id="oc-form-limite" class="oc-input">
+        </div>
+      </div>
+      <div class="oc-form-row">
+        <div class="oc-form-group">
+          <label class="oc-label">Central <span class="oc-required">*</span></label>
+          <select id="oc-form-central" class="oc-input"></select>
+        </div>
+        <div class="oc-form-group">
+          <label class="oc-label">Material</label>
+          <select id="oc-form-material" class="oc-input"></select>
+        </div>
+      </div>
+      <div class="oc-form-row">
+        <div class="oc-form-group">
+          <label class="oc-label">Operador / Regional</label>
+          <input type="text" id="oc-form-operador" class="oc-input" placeholder="Nome do operador ou regional">
+        </div>
+        <div class="oc-form-group">
+          <label class="oc-label">WhatsApp <span class="oc-hint">(com DDD)</span></label>
+          <input type="tel" id="oc-form-contato" class="oc-input" placeholder="(XX) 9 XXXX-XXXX">
+        </div>
+      </div>
+      <div class="oc-form-group" style="grid-column:1/-1">
+        <label class="oc-label">Descrição da solicitação <span class="oc-required">*</span></label>
+        <textarea id="oc-form-descricao" class="oc-input oc-textarea" rows="4" placeholder="Descreva o problema identificado e o que deve ser verificado…"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeOcorrenciaModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="submitOcorrenciaForm()"><i class="ti ti-check"></i> Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL: Concluir Ocorrência ═══ -->
+<div class="modal-overlay" id="oc-concluir-modal" onclick="if(event.target===this)closeConcluirModal()" role="dialog" aria-modal="true">
+  <div class="modal-card" style="max-width:460px;width:100%">
+    <div class="modal-header">
+      <span class="modal-title">Concluir Ocorrência</span>
+      <button class="modal-close" onclick="closeConcluirModal()"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:14px">
+      <input type="hidden" id="oc-concluir-id">
+      <div class="oc-form-group">
+        <label class="oc-label">Data de conclusão</label>
+        <input type="date" id="oc-concluir-data" class="oc-input">
+      </div>
+      <div class="oc-form-group">
+        <label class="oc-label">O que levou à conclusão? <span class="oc-required">*</span></label>
+        <textarea id="oc-concluir-desc" class="oc-input oc-textarea" rows="4" placeholder="Descreva o que foi verificado e como o problema foi resolvido…"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeConcluirModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="submitConcluir()"><i class="ti ti-circle-check"></i> Marcar como concluída</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal de detalhe de ocorrência -->
+<div class="modal-overlay" id="oc-detail-modal" onclick="if(event.target===this)closeOcDetailModal()" role="dialog" aria-modal="true">
+  <div class="modal-card" style="max-width:600px;width:100%">
+    <div class="modal-header">
+      <span class="modal-title">Detalhe da Ocorrência</span>
+      <button class="modal-close" onclick="closeOcDetailModal()"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:0">
+      <div class="oc-detail-header"></div>
+      <div class="oc-detail-dates"></div>
+      <div class="oc-detail-section oc-detail-desc"></div>
+      <div class="oc-detail-section oc-detail-conclusao"></div>
+      <div class="oc-detail-meta"></div>
+      <div class="oc-detail-actions"></div>
+    </div>
+  </div>
+</div>
 
 </body>
 </html>

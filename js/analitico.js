@@ -3,13 +3,19 @@ function rodarAnalitico() {
   const fimStr = document.getElementById('an-dt-fim')?.value;
   if (!iniStr || !fimStr) return;
 
-  // Parse period bounds (YYYY-MM-DD from <input type=date>)
   const dtIni = new Date(iniStr + 'T00:00:00');
   const dtFim = new Date(fimStr + 'T23:59:59');
   if (isNaN(dtIni) || isNaN(dtFim) || dtIni > dtFim) {
     toast('Período inválido', 'error');
     return;
   }
+
+  // Mostra o overlay ANTES do trabalho pesado, depois cede um frame ao browser para pintar
+  if (typeof showLoadingOverlay === 'function') showLoadingOverlay('Analisando período', 'Processando lançamentos e variações...');
+  requestAnimationFrame(() => setTimeout(() => _rodarAnaliticoCore(dtIni, dtFim), 0));
+}
+
+function _rodarAnaliticoCore(dtIni, dtFim) {
 
   // ── Build date-bound helpers ──────────────────────────────
   function inPeriod(dateStr) {
@@ -431,7 +437,6 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
     .map(item => ({ item, score: getVariacaoCentral(item) }))
     .sort((a, b) => a.score - b.score)
     .map(entry => entry.item);
-  window._microAnaliticoRows = results;
 
   const _cardBuffer = []; // collects cards before grouping
 
@@ -481,11 +486,14 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
       const lancsMat = lancsByMat.get(mat) || [];
       const sapMat = sapByMat.get(mat) || [];
       const prev = getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni });
+      const fim  = getLastPeriodLaunchStock({ central: r.central, material: mat, dtFim });
       const snapshot = buildSnapshot({
         lancs: lancsMat,
         sap: sapMat,
-        initialStockOverride: prev?.value,
-        initialDateLabelOverride: prev?.dtLabel
+        initialStockOverride:     prev?.value  ?? null,
+        initialDateLabelOverride: prev?.dtLabel ?? null,
+        finalStockOverride:       fim  ? (fim.missing ? null : fim.value) : null,
+        finalDateLabelOverride:   fim && !fim.missing ? fim.dtLabel : null
       });
       variacaoCentralMicro += snapshot.diff;
       // acumula custo implicado: diff (kg) × custo médio do material (R$/kg)
@@ -624,9 +632,9 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
           const hasConflict = dayLancs.length > 1;
           let finalStock, finalIsEstimated;
           if (hasLanc) {
-            // Com conflito: soma todos os pesos (opção conservadora até o usuário resolver)
+            // Com conflito: usa o maior peso como estimativa conservadora até o usuário resolver
             finalStock = hasConflict
-              ? dayLancs.reduce((acc, l) => acc + num(l.peso), 0)
+              ? Math.max(...dayLancs.map(l => num(l.peso)))
               : daySnap.pesoFim;
             finalIsEstimated = false;
             carry = { value: finalStock, isEstimated: false };
@@ -776,12 +784,12 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
               ${escapeHtml(mat)}
             </span>
           </td>
-          <td class="td-mono" style="color:var(--text2);font-size:11px">${snapshot.dtIniLabel}</td>
-          <td class="td-mono" style="color:var(--text)">${fmtKg(snapshot.pesoIni)}</td>
+          <td class="td-mono" style="color:var(--text2);font-size:11px">${snapshot.pesoIniAusente ? '<span class="absent-badge" title="Sem lançamento no dia anterior ao período">ausente</span>' : snapshot.dtIniLabel}</td>
+          <td class="td-mono" style="color:${snapshot.pesoIniAusente ? 'var(--text3)' : 'var(--text)'}">${snapshot.pesoIniAusente ? '—' : fmtKg(snapshot.pesoIni)}</td>
           <td>${buildAnaliticoDetailBreakdown(entEntries, snapshot.totalEnt, 'var(--green)', 'Entradas')}</td>
           <td>${buildAnaliticoDetailBreakdown(saiEntries, snapshot.totalSai, 'var(--red)', 'Saídas')}</td>
-          <td class="td-mono" style="color:var(--text2);font-size:11px">${snapshot.dtFimLabel}</td>
-          <td class="td-mono" style="color:var(--text)">${fmtKg(snapshot.pesoFim)}</td>
+          <td class="td-mono" style="color:var(--text2);font-size:11px">${snapshot.pesoFimAusente ? '<span class="absent-badge" title="Sem lançamento no último dia do período">ausente</span>' : snapshot.dtFimLabel}</td>
+          <td class="td-mono" style="color:${snapshot.pesoFimAusente ? 'var(--text3)' : 'var(--text)'}">${snapshot.pesoFimAusente ? '—' : fmtKg(snapshot.pesoFim)}</td>
           <td class="td-mono" style="color:var(--purple)">${fmtKg(snapshot.estTeorico)}</td>
           <td class="td-mono ${dCls}" style="white-space:nowrap">${varSymbol(snapshot.diff)} ${fmtKg(Math.abs(snapshot.diff))}</td>
           <td style="text-align:right">${custoVarCell}</td>
@@ -814,38 +822,46 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
     const thresholds = getHealthThresholds();
     const matDiffs = allMatsSorted.map(mat => {
       const prev = getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni });
+      const fim  = getLastPeriodLaunchStock({ central: r.central, material: mat, dtFim });
       const snap = buildSnapshot({
         lancs: lancsByMat.get(mat) || [],
         sap:   sapByMat.get(mat)   || [],
         initialStockOverride:     prev?.value  ?? null,
         initialDateLabelOverride: prev?.dtLabel ?? null,
+        finalStockOverride:       fim  ? (fim.missing ? null : fim.value) : null,
+        finalDateLabelOverride:   fim && !fim.missing ? fim.dtLabel : null
       });
       const rawCat = categoriaByMat.get(mat) || '';
       const catKey = detectCatKey(rawCat) || detectCatFromMat(mat);
       return { mat, diff: snap.diff, catKey };
     });
     const healthResult = calcHealthScore(matDiffs, lancsByMat, sapByMat, thresholds);
-    const hLevel = healthResult.level;
-    const hScore = healthResult.score;
+    const allNeutral = totalMats > 0 && matDiffs.every(m => Math.abs(m.diff) <= 0.0001);
+    const hLevel = (totalMats === 0 || allNeutral) ? 'sem_saude' : healthResult.level;
+    const hScore = (totalMats === 0 || allNeutral) ? null        : healthResult.score;
     const hCounts = healthResult.counts || { bom: 0, atencao: 0, urgente: 0, critico: 0, neutro: 0 };
-    const hLabelMap  = { ok: 'SAUDÁVEL', atencao: 'ATENÇÃO', urgente: 'URGENTE', critico: 'CRÍTICO' };
-    const hIconMap   = { ok: 'ti-heartbeat', atencao: 'ti-alert-triangle', urgente: 'ti-alert-circle', critico: 'ti-flame' };
+    const hLabelMap  = { ok: 'SAUDÁVEL', atencao: 'ATENÇÃO', urgente: 'URGENTE', critico: 'CRÍTICO', sem_saude: 'SEM SAÚDE' };
+    const hIconMap   = { ok: 'ti-heartbeat', atencao: 'ti-alert-triangle', urgente: 'ti-alert-circle', critico: 'ti-flame', sem_saude: 'ti-heart-off' };
     const hStyleMap  = {
-      ok:      'background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)',
-      atencao: 'background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border)',
-      urgente: 'background:rgba(249,115,22,0.10);color:#f97316;border:1px solid rgba(249,115,22,0.22)',
-      critico: 'background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)'
+      ok:        'background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)',
+      atencao:   'background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border)',
+      urgente:   'background:rgba(249,115,22,0.10);color:#f97316;border:1px solid rgba(249,115,22,0.22)',
+      critico:   'background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)',
+      sem_saude: 'background:var(--bg3);color:var(--text3);border:1px solid var(--border2)'
     };
-    healthCountsHtml = `<div class="micro-health-counts">
-      <span class="micro-health-count-chip hcc-critico"><i class="ti ti-flame"></i> ${hCounts.critico} crítico</span>
-      <span class="micro-health-count-chip hcc-urgente"><i class="ti ti-alert-circle"></i> ${hCounts.urgente} urgente</span>
-      <span class="micro-health-count-chip hcc-atencao"><i class="ti ti-alert-triangle"></i> ${hCounts.atencao} atenção</span>
-      <span class="micro-health-count-chip hcc-bom"><i class="ti ti-circle-check"></i> ${hCounts.bom} bom</span>
-    </div>`;
+
+    if (totalMats > 0) {
+      healthCountsHtml = `<div class="micro-health-counts">
+        <span class="micro-health-count-chip hcc-critico"><i class="ti ti-flame"></i> ${hCounts.critico} crítico</span>
+        <span class="micro-health-count-chip hcc-urgente"><i class="ti ti-alert-circle"></i> ${hCounts.urgente} urgente</span>
+        <span class="micro-health-count-chip hcc-atencao"><i class="ti ti-alert-triangle"></i> ${hCounts.atencao} atenção</span>
+        <span class="micro-health-count-chip hcc-bom"><i class="ti ti-circle-check"></i> ${hCounts.bom} bom</span>
+      </div>`;
+    }
 
     healthBadge = `<span style="display:inline-flex;align-items:center;gap:5px;${hStyleMap[hLevel]};border-radius:6px;padding:2px 9px;font-family:var(--mono);font-size:10.5px;font-weight:700;white-space:nowrap">
       <i class="ti ${hIconMap[hLevel]}" style="font-size:12px"></i>
-      Saúde: ${hScore}% · ${hLabelMap[hLevel]}
+      ${hLevel === 'sem_saude' ? 'SEM SAÚDE' : `Saúde: ${hScore}% · ${hLabelMap[hLevel]}`}
     </span>`;
 
     if (totalMats >= 5) {
@@ -857,8 +873,8 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
     card.dataset.central = r.central || '';
     card.dataset.centralDiff = varCentralMicro;
     card.dataset.custoVariacao = custoVariacaoTotal;
-    card.dataset.healthLevel = healthBadge ? hLevel : 'none';
-    card.dataset.healthScore = healthBadge ? hScore : '';
+    card.dataset.healthLevel = healthBadge ? (hLevel === 'sem_saude' ? 'none' : hLevel) : 'none';
+    card.dataset.healthScore = healthBadge && hScore !== null ? hScore : '';
     // ── Badge de custo da variação ──────────────────────────────────────────
     let custoBadge = '';
     if (custoVariacaoTotal !== 0) {
@@ -1097,7 +1113,8 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
     const th = typeof getHealthThresholds === 'function' ? getHealthThresholds() : {};
     renderMacroPanels(results, th, dtIni, dtFim);
   }
-}
+  if (typeof hideLoadingOverlay === 'function') hideLoadingOverlay('Análise concluída');
+}  // end _rodarAnaliticoCore
 
 
 
@@ -1521,6 +1538,7 @@ Object.assign(window, {
   setTab,
   setModulo,
   exportarDados,
+  restaurarBackup,
   toast,
   handleImport,
   handleFiliaisImport,
@@ -1607,24 +1625,10 @@ function updateClock() {
 // ═══════════════════════════════════════════════════════════
 // SIDEBAR COLLAPSE
 // ═══════════════════════════════════════════════════════════
-const SIDEBAR_COLLAPSED_KEY = 'analyticsys_sidebar_collapsed_v1';
+// Sidebar sempre recolhida; expande via CSS :hover — sem estado salvo.
 
-function toggleSidebarCollapse() {
-  const sidebar = document.getElementById('main-sidebar');
-  if (!sidebar) return;
-  const isCollapsed = sidebar.classList.toggle('collapsed');
-  try { localStorage.setItem(SIDEBAR_COLLAPSED_KEY, isCollapsed ? '1' : '0'); } catch(e) {}
-}
-
-function restoreSidebarState() {
-  try {
-    const val = localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
-    if (val === '1') {
-      const sidebar = document.getElementById('main-sidebar');
-      if (sidebar) sidebar.classList.add('collapsed');
-    }
-  } catch(e) {}
-}
+function toggleSidebarCollapse() { /* no-op: comportamento via CSS :hover */ }
+function restoreSidebarState()   { /* no-op: sidebar sempre recolhida por padrão */ }
 
 Object.assign(window, { toggleSidebarCollapse, toggleSidebar, closeSidebar });
 
@@ -1680,98 +1684,272 @@ Object.assign(window, { setQuickPeriod, setQuickPeriodCurrentMonth, setQuickPeri
 // GLOBAL SEARCH
 // ═══════════════════════════════════════════════════════════
 const moduleColors = {
-  'Entrada':    { bg: 'var(--green-bg)',   color: 'var(--green)'  },
-  'Saída':      { bg: 'var(--red-bg)',     color: 'var(--red)'    },
-  'Lançamento': { bg: 'var(--amber-bg)',   color: 'var(--amber)'  },
-  'SAP':        { bg: 'var(--accent-dim)', color: 'var(--accent)' },
-  'Produção':   { bg: 'var(--purple-bg)',  color: 'var(--purple)' },
+  'Entrada':    { bg: 'var(--green-bg)',   color: 'var(--green)',  icon: 'ti-package-import', nav: 'entradas'   },
+  'Saída':      { bg: 'var(--red-bg)',     color: 'var(--red)',    icon: 'ti-package-export', nav: 'saidas'     },
+  'Lançamento': { bg: 'var(--amber-bg)',   color: 'var(--amber)',  icon: 'ti-clipboard-list', nav: 'lancamentos'},
+  'SAP':        { bg: 'var(--accent-dim)', color: 'var(--accent)', icon: 'ti-database',       nav: 'sap'        },
+  'Produção':   { bg: 'var(--purple-bg)',  color: 'var(--purple)', icon: 'ti-chart-bar',      nav: 'producao'   },
+  'Central':    { bg: 'var(--teal-bg)',    color: 'var(--teal)',   icon: 'ti-building-warehouse', nav: 'filiais'},
+  'Material':   { bg: 'var(--bg3)',        color: 'var(--text2)',  icon: 'ti-box',            nav: 'materiais'  },
 };
 
+// Debounce para não buscar a cada tecla
+let _gsTimer = null;
+
 function handleGlobalSearch(query) {
+  clearTimeout(_gsTimer);
   const dropdown = document.getElementById('global-search-dropdown');
   if (!dropdown) return;
-  const q = query.trim().toLowerCase();
+  const q = query.trim();
   if (!q || q.length < 2) { dropdown.classList.remove('open'); return; }
 
-  const results = [];
-  const push = (mod, navKey, label, sub) => {
-    if (results.length < 8) results.push({ mod, navKey, label, sub });
+  // Mostrar spinner imediatamente
+  dropdown.innerHTML = `<div class="search-no-results"><i class="ti ti-loader" style="margin-right:6px"></i>Buscando...</div>`;
+  dropdown.classList.add('open');
+
+  _gsTimer = setTimeout(() => _runGlobalSearch(q, dropdown), 120);
+}
+
+function _runGlobalSearch(q, dropdown) {
+  const ql = q.toLowerCase();
+  const tokens = ql.split(/\s+/).filter(Boolean);
+
+  // Agrupa resultados por módulo: { label, sub, secondary, navKey, modKey }
+  const groups = {};
+  const addGroup = (modKey, label, sub, record=null) => {
+    if (!groups[modKey]) groups[modKey] = { items: [], modKey };
+    if (groups[modKey].items.length < 5) {
+      const idx = groups[modKey].items.length;
+      if (!window._gsRecords) window._gsRecords = {};
+      const key = modKey + '_' + Object.keys(groups).length + '_' + idx;
+      window._gsRecords[key] = record;
+      groups[modKey].items.push({ label, sub, recordKey: key });
+    }
   };
 
-  (state.entradas || []).forEach(r => {
-    const hay = [r.material, r.centralCompra, r.centralDestino, r.nf, r.fornecedor].join(' ').toLowerCase();
-    if (hay.includes(q)) push('Entrada', 'entradas', r.material || r.nf || '—', r.centralCompra || '');
+  // ── Usa índice invertido para módulos com muitos registros ──────────
+  const searchMod = (scope, modKey, getLabel, getSub) => {
+    const records = state[scope] || [];
+    if (!records.length) return;
+    const fields  = getSearchableFields(scope);
+    const index   = _getOrBuildIndex(scope, records, fields);
+    for (let i = 0; i < index.length; i++) {
+      const s = index[i];
+      if (tokens.every(t => s.includes(t))) {
+        addGroup(modKey, getLabel(records[i]), getSub(records[i]), records[i]);
+        if ((groups[modKey]?.items.length || 0) >= 5) break;
+      }
+    }
+  };
+
+  searchMod('entradas',    'Entrada',    r => r.material || r.nf || '—',       r => [r.centralCompra, r.dtEmissao].filter(Boolean).join(' · '));
+  searchMod('saidas',      'Saída',      r => r.material || r.os || '—',       r => [r.central, r.dtEmissao].filter(Boolean).join(' · '));
+  searchMod('lancamentos', 'Lançamento', r => r.material || '—',               r => [r.central, r.dtLanc].filter(Boolean).join(' · '));
+  searchMod('sap',         'SAP',        r => r.material || r.documento || '—',r => [r.central, r.movimento, r.dtLanc].filter(Boolean).join(' · '));
+  searchMod('producao',    'Produção',   r => r.central || '—',                r => r.mes || '');
+
+  // ── Filiais e Materiais (cadastros — sem índice necessário, são pequenos) ──
+  (state.filiais || []).forEach(r => {
+    const s = [r.origem, r.alias, r.regional, r.cnpj].join(' ').toLowerCase();
+    if (tokens.every(t => s.includes(t))) addGroup('Central', r.alias || r.origem || '—', r.regional || '', r);
   });
-  (state.saidas || []).forEach(r => {
-    const hay = [r.material, r.central, r.os, r.fornecedor].join(' ').toLowerCase();
-    if (hay.includes(q)) push('Saída', 'saidas', r.material || r.os || '—', r.central || '');
-  });
-  (state.lancamentos || []).forEach(r => {
-    const hay = [r.material, r.central, r.fornecedor].join(' ').toLowerCase();
-    if (hay.includes(q)) push('Lançamento', 'lancamentos', r.material || '—', r.central || '');
-  });
-  (state.sap || []).forEach(r => {
-    const hay = [r.material, r.central, r.documento, r.movimento].join(' ').toLowerCase();
-    if (hay.includes(q)) push('SAP', 'sap', r.material || r.documento || '—', r.central || '');
-  });
-  (state.producao || []).forEach(r => {
-    const hay = [r.central, r.mes].join(' ').toLowerCase();
-    if (hay.includes(q)) push('Produção', 'producao', r.central || '—', r.mes || '');
+  (state.materiais || []).forEach(r => {
+    const s = [r.origem, r.alias, r.desc].join(' ').toLowerCase();
+    if (tokens.every(t => s.includes(t))) addGroup('Material', r.alias || r.origem || '—', r.desc || '', r);
   });
 
-  if (!results.length) {
-    dropdown.innerHTML = `<div class="search-no-results"><i class="ti ti-search-off" style="margin-right:6px"></i>Nenhum resultado para "${escapeHtml(query)}"</div>`;
-  } else {
-    dropdown.innerHTML = results.map(r => {
-      const c = moduleColors[r.mod] || {};
-      return `<div class="search-result-item" onclick="navigate('${r.navKey}'); closeGlobalSearch()">
-        <span class="search-result-module" style="background:${c.bg||'var(--bg3)'};color:${c.color||'var(--text2)'};">${r.mod}</span>
-        <span class="search-result-text">${escapeHtml(r.label)}</span>
-        <span class="search-result-sub">${escapeHtml(r.sub)}</span>
+  // ── Render ──────────────────────────────────────────────────────────
+  const totalGroups = Object.keys(groups).length;
+  const totalItems  = Object.values(groups).reduce((s, g) => s + g.items.length, 0);
+
+  if (!totalItems) {
+    dropdown.innerHTML = `
+      <div class="search-no-results">
+        <i class="ti ti-search-off"></i>
+        Nenhum resultado para <strong>"${escapeHtml(q)}"</strong>
       </div>`;
-    }).join('');
+    return;
   }
-  dropdown.classList.add('open');
+
+  const html = Object.entries(groups).map(([modKey, group]) => {
+    const cfg = moduleColors[modKey] || {};
+    const rows = group.items.map(item => `
+      <div class="search-result-item" onclick="closeGlobalSearch();_gsShowDetail('${modKey}', window._gsRecords && window._gsRecords['${item.recordKey}'])">
+        <div class="search-result-main">${_gsHighlight(escapeHtml(item.label), tokens)}</div>
+        <div class="search-result-sub">${escapeHtml(item.sub)}</div>
+      </div>`).join('');
+
+    const count = group.items.length;
+    return `
+      <div class="search-group">
+        <div class="search-group-header" style="color:${cfg.color||'var(--text3)'}">
+          <i class="ti ${cfg.icon||'ti-circle'}" style="font-size:11px"></i>
+          ${modKey}
+          <span class="search-group-count">${count}${count >= 5 ? '+' : ''}</span>
+        </div>
+        ${rows}
+      </div>`;
+  }).join('');
+
+  dropdown.innerHTML = `
+    ${html}
+    <div class="search-footer">
+      <span>${totalItems}${totalItems >= Object.keys(groups).length * 5 ? '+' : ''} resultado${totalItems !== 1 ? 's' : ''}</span>
+      <span>Clique para ver detalhes completos</span>
+    </div>`;
+}
+
+function _gsHighlight(text, tokens) {
+  let result = text;
+  tokens.forEach(t => {
+    const re = new RegExp('(' + t.replace(/[.*+?^${}()|\[\]\\]/g, '\\$&') + ')', 'gi');
+    result = result.replace(re, '<mark class="search-highlight">$1</mark>');
+  });
+  return result;
+}
+
+function _gsShowDetail(modKey, record) {
+  if (!record) return;
+
+  const cfg    = moduleColors[modKey] || {};
+  const titleEl = document.getElementById('msd-title');
+  const subEl   = document.getElementById('msd-sub');
+  const bodyEl  = document.getElementById('msd-body');
+  const navBtn  = document.getElementById('msd-nav-btn');
+  if (!bodyEl) return;
+
+  // Título com badge do módulo
+  if (titleEl) titleEl.innerHTML = `
+    <span style="display:inline-flex;align-items:center;gap:8px">
+      <span style="background:${cfg.bg||'var(--bg3)'};color:${cfg.color||'var(--text2)'};
+        border-radius:5px;padding:2px 10px;font-size:11px;font-weight:700;font-family:var(--mono)">
+        <i class="ti ${cfg.icon||'ti-circle'}" style="font-size:10px"></i> ${modKey}
+      </span>
+      Registro encontrado
+    </span>`;
+
+  // Subtítulo
+  const label = record.material || record.nf || record.documento || record.arquivo || record.alias || record.origem || '—';
+  if (subEl) subEl.textContent = label;
+
+  // Campos a exibir por módulo
+  const fieldMap = {
+    'Entrada':    [['Central Compra','centralCompra'],['Central Destino','centralDestino'],['NF','nf'],['Fornecedor','fornecedor'],['Categoria','categoria'],['Material','material'],['Peso','peso'],['UM','um'],['Custo Unit.','custo'],['Valor Total','valorTotal'],['Dt. Emissão','dtEmissao'],['Dt. Descarga','dtDescarga']],
+    'Saída':      [['Central','central'],['OS','os'],['Categoria','categoria'],['Fornecedor','fornecedor'],['Material','material'],['Peso','peso'],['UM','um'],['Custo Unit.','custo'],['Valor Total','valorTotal'],['Dt. Emissão','dtEmissao']],
+    'Lançamento': [['Central','central'],['Dt. Lançamento','dtLanc'],['Fornecedor','fornecedor'],['Categoria','categoria'],['Material','material'],['Peso','peso'],['UM','um'],['Custo Unit.','custo'],['Valor Total','valorTotal']],
+    'SAP':        [['Usuário','usuario'],['Movimento','movimento'],['Ref.','ref'],['Documento','documento'],['Central','central'],['Depósito','deposito'],['Material','material'],['Peso','peso'],['UM','um'],['Custo Unit.','custoUnit'],['Valor Total','valorTotal'],['Dt. Doc.','dtDoc'],['Dt. Lançamento','dtLanc'],['Dt. Registro','dtReg']],
+    'Produção':   [['Central','central'],['Mês','mes'],['Produção','producao'],['UM','um'],['Preço Médio','precoMedio'],['Custo Médio','custoMedio'],['Margem','margem'],['Total Vendas','totalVendas']],
+    'Central':    [['Sigla','alias'],['Nome Original','origem'],['CNPJ','cnpj'],['Regional','regional'],['Cadastrado em','created']],
+    'Material':   [['Grupo SAP','alias'],['Material Original','origem'],['Descrição','desc'],['Cadastrado em','created']],
+  };
+
+  const fields = fieldMap[modKey] || Object.keys(record).filter(k => !k.startsWith('_') && k !== 'importId').map(k => [k, k]);
+
+  const _moneyFields = new Set(['custo','custoUnit','valorTotal','precoMedio','custoMedio','totalVendas','margem','valor']);
+  const _kgFields    = new Set(['peso','producao']);
+
+  const _fmtVal = (key, val) => {
+    const n = typeof val === 'number' ? val : parseFloat(String(val).replace(',','.'));
+    if (_moneyFields.has(key) && Number.isFinite(n)) {
+      return 'R$ ' + n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    if (_kgFields.has(key) && Number.isFinite(n)) {
+      return n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' kg';
+    }
+    return String(val);
+  };
+
+  const rows = fields.map(([label, key]) => {
+    const val = record[key];
+    if (val == null || val === '' || val === '—') return '';
+    const isNum = typeof val === 'number' || (typeof val === 'string' && /^[\d.,]+$/.test(val.replace(/\s/g,'')));
+    const formatted = _fmtVal(key, val);
+    return `
+      <div style="display:flex;align-items:baseline;gap:0;padding:6px 0;border-bottom:1px solid var(--border)">
+        <span style="font-size:11px;color:var(--text3);min-width:130px;flex-shrink:0">${escapeHtml(label)}</span>
+        <span style="font-size:12.5px;color:var(--text);font-family:${isNum ? 'var(--mono)' : 'inherit'};word-break:break-word">${escapeHtml(formatted)}</span>
+      </div>`;
+  }).filter(Boolean).join('');
+
+  bodyEl.innerHTML = `<div style="display:flex;flex-direction:column">${rows || '<div style="color:var(--text3);font-size:12px">Sem campos para exibir.</div>'}</div>`;
+
+  // Botão de navegação
+  if (navBtn && cfg.nav) {
+    navBtn.style.display = '';
+    const newBtn = navBtn.cloneNode(true);
+    navBtn.parentNode.replaceChild(newBtn, navBtn);
+    newBtn.addEventListener('click', () => {
+      closeModal('modal-search-detail');
+      if (typeof navigate === 'function') navigate(cfg.nav);
+    });
+  }
+
+  openModal('modal-search-detail');
 }
 
 function openGlobalSearch() {
   const input = document.getElementById('global-search-input');
-  if (input && input.value.trim().length >= 2) {
-    handleGlobalSearch(input.value);
-  }
+  if (input && input.value.trim().length >= 2) handleGlobalSearch(input.value);
 }
 
 function closeGlobalSearch() {
   const dropdown = document.getElementById('global-search-dropdown');
   if (dropdown) dropdown.classList.remove('open');
-  const input = document.getElementById('global-search-input');
-  if (input) input.value = '';
+  clearTimeout(_gsTimer);
 }
 
-Object.assign(window, { handleGlobalSearch, openGlobalSearch, closeGlobalSearch });
+// Fechar ao clicar fora
+document.addEventListener('click', e => {
+  const wrap = document.querySelector('.topbar-search');
+  if (wrap && !wrap.contains(e.target)) closeGlobalSearch();
+});
+
+// Enter para confirmar o primeiro resultado
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeGlobalSearch();
+  if (e.key === 'Enter') {
+    const first = document.querySelector('#global-search-dropdown .search-result-item');
+    if (first) first.click();
+  }
+});
+
+Object.assign(window, { handleGlobalSearch, openGlobalSearch, closeGlobalSearch, _gsShowDetail });
 
 // ═══════════════════════════════════════════════════════════
 // KEYBOARD SHORTCUTS
 // ═══════════════════════════════════════════════════════════
 function setupKeyboardShortcuts() {
   document.addEventListener('keydown', (e) => {
-    // Ctrl+K — focus global search
-    if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+    // Ctrl+Q — open search modal, pre-fill with selected text if any
+    if ((e.ctrlKey || e.metaKey) && e.key === 'q') {
       e.preventDefault();
-      const input = document.getElementById('global-search-input');
-      if (input) input.focus();
+      const selected = window.getSelection()?.toString().trim() || '';
+      openSearchModal(selected);
       return;
     }
-    // Escape — close search dropdown
+    // Escape — close search modal or dropdown
     if (e.key === 'Escape') {
+      if (document.getElementById('modal-search-global')?.classList.contains('open')) {
+        closeSearchModal();
+        return;
+      }
       closeGlobalSearch();
       closeBreakdownModal();
       closeAnaliticoDetailModal();
     }
-    // Ctrl+1..9 — navigate pages
-    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey) {
-      const navMap = { '1':'dashboard','2':'analitico','3':'entradas','4':'saidas','5':'lancamentos','6':'sap','7':'producao','8':'importar','9':'configuracoes' };
-      if (navMap[e.key]) { e.preventDefault(); navigate(navMap[e.key]); }
+    // Ctrl+ArrowUp / Ctrl+ArrowDown — navega entre abas na ordem da sidebar
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey &&
+        (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      // Não interceptar se um modal de busca estiver aberto
+      if (document.getElementById('modal-search-global')?.classList.contains('open')) return;
+      e.preventDefault();
+      const pages = ['dashboard','analitico','entradas','saidas','lancamentos','sap','producao','inventario','ocorrencias','importar','configuracoes'];
+      const current = document.querySelector('.page.active')?.id?.replace('page-','') || pages[0];
+      const idx     = pages.indexOf(current);
+      const next    = e.key === 'ArrowDown'
+        ? pages[Math.min(idx + 1, pages.length - 1)]
+        : pages[Math.max(idx - 1, 0)];
+      if (next !== current) navigate(next);
     }
   });
 
@@ -1907,11 +2085,11 @@ async function init() {
 
   await startupRestoreFlow();
   updateImportPrereqUI();
-  if (document.getElementById('page-dashboard')?.classList.contains('active')) updateDashboard();
+  // updateDashboard já foi chamado dentro de restoreAndRender/startupRestoreFlow — não chamar novamente
 
   // Start clock
   updateClock();
-  setInterval(updateClock, 15000);
+  setInterval(updateClock, 60000);
 
   document.addEventListener('click', (event) => {
     const switcher = document.querySelector('.theme-switcher');
@@ -1956,6 +2134,7 @@ window._inv_helpers = {
   getSapIndex,
   getSaidasIndex,
   getPrePeriodLaunchStock,
+  getLastPeriodLaunchStock,
   getFilialLookupIndex,
   normalizeText,
   parseDate,
