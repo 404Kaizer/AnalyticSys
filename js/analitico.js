@@ -1586,9 +1586,7 @@ Object.assign(window, {
   rodarAnalitico,
   limparAnalitico,
   setTheme,
-  toggleThemeMenu,
   applyTheme,
-  closeThemeMenu,
   getSavedTheme,
   openAnaliticoDetailModal,
   closeAnaliticoDetailModal,
@@ -1920,36 +1918,56 @@ Object.assign(window, { handleGlobalSearch, openGlobalSearch, closeGlobalSearch,
 // ═══════════════════════════════════════════════════════════
 function setupKeyboardShortcuts() {
   document.addEventListener('keydown', (e) => {
-    // Ctrl+Q — open search modal, pre-fill with selected text if any
-    if ((e.ctrlKey || e.metaKey) && e.key === 'q') {
-      e.preventDefault();
-      const selected = window.getSelection()?.toString().trim() || '';
-      openSearchModal(selected);
-      return;
-    }
-    // Escape — close search modal or dropdown
+    // Dynamic shortcuts from registry
     if (e.key === 'Escape') {
       if (document.getElementById('modal-search-global')?.classList.contains('open')) {
-        closeSearchModal();
-        return;
+        closeSearchModal(); return;
       }
       closeGlobalSearch();
       closeBreakdownModal();
       closeAnaliticoDetailModal();
     }
-    // Ctrl+ArrowUp / Ctrl+ArrowDown — navega entre abas na ordem da sidebar
-    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey &&
-        (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
-      // Não interceptar se um modal de busca estiver aberto
+
+    // Search modal
+    const scSearch = getShortcut('search');
+    if (scSearch && _shortcutMatch(e, scSearch)) {
+      e.preventDefault();
+      const selected = window.getSelection()?.toString().trim() || '';
+      openSearchModal(selected);
+      return;
+    }
+
+    // Nav up/down
+    const scNavUp   = getShortcut('nav_up');
+    const scNavDown = getShortcut('nav_down');
+    const isNavUp   = scNavUp   && _shortcutMatch(e, scNavUp);
+    const isNavDown = scNavDown && _shortcutMatch(e, scNavDown);
+    if (isNavUp || isNavDown) {
       if (document.getElementById('modal-search-global')?.classList.contains('open')) return;
       e.preventDefault();
-      const pages = ['dashboard','analitico','entradas','saidas','lancamentos','sap','producao','inventario','ocorrencias','importar','configuracoes'];
+      const pages  = ['dashboard','analitico','entradas','saidas','lancamentos','sap','producao','inventario','ocorrencias','importar','configuracoes'];
       const current = document.querySelector('.page.active')?.id?.replace('page-','') || pages[0];
       const idx     = pages.indexOf(current);
-      const next    = e.key === 'ArrowDown'
+      const next    = isNavDown
         ? pages[Math.min(idx + 1, pages.length - 1)]
         : pages[Math.max(idx - 1, 0)];
       if (next !== current) navigate(next);
+      return;
+    }
+
+    // Calculator
+    const scCalc = getShortcut('calc');
+    if (scCalc && _shortcutMatch(e, scCalc)) {
+      e.preventDefault(); toggleCalc(); return;
+    }
+
+    // Notes
+    const scNotes = getShortcut('notes');
+    if (scNotes && _shortcutMatch(e, scNotes)) {
+      e.preventDefault();
+      if (_openTools.has('notes')) closeTool('notes');
+      else openTool('notes');
+      return;
     }
   });
 
@@ -2073,6 +2091,7 @@ async function startupRestoreFlow() {
 
 async function init() {
   applyTheme(getSavedTheme());
+  setTimeout(updateToolsTheme, 0); // sync theme buttons in dropdown
   restoreSidebarState();
   setupModalCloseOnBackdrop();
   setupKeyboardShortcuts();
@@ -2091,11 +2110,7 @@ async function init() {
   updateClock();
   setInterval(updateClock, 60000);
 
-  document.addEventListener('click', (event) => {
-    const switcher = document.querySelector('.theme-switcher');
-    if (!switcher) return;
-    if (!switcher.contains(event.target)) closeThemeMenu();
-  });
+  // Theme switcher moved into Ferramentas dropdown (no separate close handler needed)
 
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') {

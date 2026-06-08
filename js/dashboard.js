@@ -1728,6 +1728,7 @@ function renderProducao() {
 }
 
 function renderConfigs() {
+  if (typeof shortcutsRender === 'function') shortcutsRender();
   const tb = document.getElementById('tb-configs');
   if (!tb) return;
   const { data, pageData } = getListPageData('configs');

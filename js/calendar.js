@@ -386,6 +386,8 @@
     if (pfx === 'aus' && p.startDate && p.endDate && typeof renderAusencias === 'function') {
       renderAusencias();
     }
+
+
   };
 
   window.calDayHover = function(btn) {

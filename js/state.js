@@ -178,18 +178,14 @@ function getSavedTheme() {
 }
 
 function updateThemeUI(theme) {
-  const menu = document.getElementById('theme-menu');
-  const label = document.getElementById('theme-label');
-  if (label) label.textContent = themeLabels[theme] || 'Tema';
+  // Update tools dropdown theme buttons
+  document.querySelectorAll('.tools-theme-opt').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.theme === theme);
+  });
+}
 
-  if (menu) {
-    qsa('.theme-option', menu).forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.theme === theme);
-    });
-  }
-
-  const toggle = document.querySelector('.theme-switcher .btn');
-  if (toggle) toggle.setAttribute('aria-expanded', menu?.classList.contains('open') ? 'true' : 'false');
+function updateToolsTheme() {
+  updateThemeUI(document.body.dataset.theme || 'dark');
 }
 
 function applyTheme(theme) {
@@ -199,35 +195,13 @@ function applyTheme(theme) {
   updateThemeUI(selected);
 }
 
-function openThemeMenu() {
-  const menu = document.getElementById('theme-menu');
-  if (!menu) return;
-  menu.classList.add('open');
+// Called once at boot and after theme change to sync dropdown state
+function updateToolsTheme() {
   updateThemeUI(document.body.dataset.theme || 'dark');
-}
-
-function closeThemeMenu() {
-  const menu = document.getElementById('theme-menu');
-  if (!menu) return;
-  menu.classList.remove('open');
-  updateThemeUI(document.body.dataset.theme || 'dark');
-}
-
-function toggleThemeMenu(ev) {
-  if (ev) {
-    ev.preventDefault();
-    ev.stopPropagation();
-  }
-  const menu = document.getElementById('theme-menu');
-  if (!menu) return;
-  const isOpen = menu.classList.contains('open');
-  if (isOpen) closeThemeMenu();
-  else openThemeMenu();
 }
 
 function setTheme(theme) {
   applyTheme(theme);
-  closeThemeMenu();
 }
 
 function qs(sel, root = document) { return root.querySelector(sel); }
