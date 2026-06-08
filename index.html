@@ -1945,6 +1945,69 @@
   </div>
 </div>
 
+<!-- MODAL: Gráfico de tendência -->
+<div class="modal-overlay" id="modal-trend" style="z-index:2100">
+  <div class="modal trend-modal">
+    <div class="modal-title" id="trend-modal-title">
+      <i class="ti ti-chart-line"></i> Tendência de Variação
+    </div>
+    <div class="modal-sub" id="trend-modal-sub"></div>
+
+    <!-- Controles -->
+    <div class="trend-controls">
+      <!-- Período via cal-picker -->
+      <div class="trend-ctrl-group">
+        <span class="trend-ctrl-label">Período <span style="color:var(--text3);font-weight:400;letter-spacing:0">(ajustado para ter→ter)</span></span>
+        <div class="cal-picker-wrap" id="trend-cal-wrap">
+          <button class="cal-picker-trigger" id="trend-cal-trigger" onclick="toggleCalPicker('trend')" type="button">
+            <i class="ti ti-calendar-event"></i>
+            <span id="trend-cal-label">Selecionar período</span>
+            <i class="ti ti-chevron-down cal-chev" id="trend-cal-chev"></i>
+          </button>
+          <input type="hidden" id="trend-dt-ini">
+          <input type="hidden" id="trend-dt-fim">
+          <div class="cal-picker-dropdown" id="trend-cal-dropdown" style="z-index:2300">
+            <div class="cal-picker-inner" id="trend-cal-inner" data-pfx="trend"></div>
+          </div>
+        </div>
+      </div>
+      <!-- Materiais dropdown -->
+      <div class="trend-ctrl-group">
+        <span class="trend-ctrl-label">Materiais <span id="trend-mat-count" style="color:var(--text3)"></span></span>
+        <div class="micro-filter-group" id="trend-mat-wrap" style="position:relative">
+          <button class="micro-filter-trigger" id="trend-mat-trigger" onclick="trendToggleMatDropdown()">
+            <i class="ti ti-box"></i>
+            <span id="trend-mat-trigger-label">Todos</span>
+            <i class="ti ti-chevron-down micro-filter-chev" id="trend-mat-chev"></i>
+          </button>
+          <div class="micro-filter-dropdown" id="trend-mat-dropdown" style="min-width:260px;z-index:2200">
+            <div class="micro-filter-search-wrap">
+              <i class="ti ti-search"></i>
+              <input class="micro-filter-search" id="trend-mat-search" type="text"
+                placeholder="Buscar material…" oninput="trendFilterMatSearch(this.value)">
+            </div>
+            <div class="micro-filter-options" id="trend-mat-options"></div>
+            <div class="micro-filter-footer">
+              <button class="btn" onclick="trendClearMatFilter()"><i class="ti ti-x"></i> Limpar</button>
+              <button class="btn btn-primary" onclick="trendCloseMatDropdown()"><i class="ti ti-check"></i> Aplicar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Gráfico -->
+    <div id="trend-chart-wrap">
+      <canvas id="trend-canvas"></canvas>
+    </div>
+    <div class="trend-legend" id="trend-legend"></div>
+
+    <div class="form-actions">
+      <button class="btn" onclick="closeModal('modal-trend')">Fechar</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: Remap de atalho -->
 <div class="modal-overlay" id="modal-shortcut-remap">
   <div class="modal" style="max-width:400px">
@@ -2643,6 +2706,7 @@
 <script src="js/relatorio.js"></script>
 <script src="js/period-fab.js"></script>
 <script src="js/agregados.js"></script>
+<script src="js/trend.js"></script>
 
 <!-- ═══ MODAL: Nova/Editar Ocorrência ═══ -->
 <div class="modal-overlay" id="oc-modal" onclick="if(event.target===this)closeOcorrenciaModal()" role="dialog" aria-modal="true">

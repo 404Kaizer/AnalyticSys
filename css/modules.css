@@ -6763,3 +6763,91 @@ mark.search-highlight {
 #agr-filter-bar .micro-filter-dropdown {
   z-index: 360; /* above table content */
 }
+
+/* ══════════════════════════════════════════
+   GRÁFICO DE TENDÊNCIA
+══════════════════════════════════════════ */
+.trend-btn {
+  background: none;
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  color: var(--text3);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 4px 7px;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  transition: all .15s;
+  margin-left: 4px;
+}
+.trend-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+/* Modal */
+.trend-modal {
+  max-width: 860px;
+  width: 95vw;
+  overflow: visible;
+}
+
+/* Controls bar */
+.trend-controls {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  padding: 12px 0 8px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.trend-ctrl-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.trend-ctrl-label {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--text3);
+  font-family: var(--mono);
+}
+
+/* Trend cal-picker: needs to escape modal overflow */
+#trend-cal-dropdown { z-index: 2300 !important; }
+
+/* trend mat chips: replaced by micro-filter dropdown */
+
+/* Chart */
+#trend-chart-wrap {
+  width: 100%;
+  height: 300px;
+  position: relative;
+  margin-bottom: 8px;
+}
+#trend-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Legend */
+.trend-legend {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding: 0 4px 4px;
+  font-size: 11.5px;
+  color: var(--text3);
+}
+.trend-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}

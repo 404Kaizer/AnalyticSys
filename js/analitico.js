@@ -910,6 +910,9 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
           ${healthCountsHtml}
           ${healthBadge}
         </div>
+        <button class="trend-btn" onclick="event.stopPropagation();openTrendModal('central','${escapeHtml(r.central)}')" title="Ver tendência de variação">
+          <i class="ti ti-chart-line"></i>
+        </button>
         <i class="ti ti-chevron-down" style="color:var(--text3);font-size:16px;flex-shrink:0;transition:transform 0.2s" id="chev-${idx}"></i>
       </div>
 
@@ -1078,6 +1081,9 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
           ${healthBadgeGrp}
         </div>
         <span class="regional-group-count">${cards.length} ${cards.length !== 1 ? 'centrais' : 'central'}</span>
+        <button class="trend-btn" onclick="event.stopPropagation();openTrendModal('regional','${escapeHtml(regional || '')}')" title="Ver tendência de variação">
+          <i class="ti ti-chart-line"></i>
+        </button>
         <i class="ti ti-chevron-down regional-group-chev" id="rchev-${encodeURIComponent(regional || '_sem')}"></i>
       </div>
       <div class="regional-group-body open"></div>`;
