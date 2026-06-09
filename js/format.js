@@ -1424,3 +1424,844 @@ setTimeout(_shortcutsUpdateUI, 0);
 Object.assign(window, {
   shortcutsRender, shortcutStartRemap, shortcutRemapSave, shortcutsReset, getShortcut, _shortcutMatch
 });
+
+// ═══════════════════════════════════════════════════════════
+// MODAL DE FECHAMENTO
+// ═══════════════════════════════════════════════════════════
+let _fechTipo = 'semanal';
+
+// ── Date helpers ─────────────────────────────────────────
+function _fechLastWeekday(date) {
+  const d = new Date(date);
+  while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() - 1);
+  return d;
+}
+
+function _fechLastWorkdayOfMonth(year, month) {
+  const last = new Date(year, month + 1, 0);
+  return _fechLastWeekday(last);
+}
+
+function _fechFmtDate(d) {
+  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+function _fechNomeMes(d) {
+  return d.toLocaleDateString('pt-BR', { month: 'long' }).toUpperCase();
+}
+
+function _fechNomeMesTitulo(d) {
+  const m = d.toLocaleDateString('pt-BR', { month: 'long' });
+  return m.charAt(0).toUpperCase() + m.slice(1);
+}
+
+// ── Texto padrão por tipo ─────────────────────────────────
+function _fechTextoDefault(tipo) {
+  const now    = new Date();
+  const today  = _fechFmtDate(now);
+  const mes    = _fechNomeMes(now);
+  const mesTit = _fechNomeMesTitulo(now);
+  const lastDay = _fechLastWorkdayOfMonth(now.getFullYear(), now.getMonth());
+  const lastDayFmt = _fechFmtDate(lastDay);
+
+  if (tipo === 'semanal') {
+    return `⚠️ BOA TARDE, SENHORES!
+
+Hoje, ${today}, é dia de lançar o estoque semanal APÓS A PRODUÇÃO!
+
+👉 Não deixem de conferir visualmente TUDO:
+• Agregados (areia, brita, etc...)
+• Aditivos
+• Adições
+• Aglomerantes
+
+❗ Não lance o que não viu ou o que não é a verdade. Tenha certeza!
+
+👉 Caso não tenha o material, lance ZERADO (0).
+Faça o lançamento de TODOS OS MATERIAIS que aparecem na PUZL!
+
+Deixe um "🤝" e confirme que entendeu!`;
+  }
+
+  if (tipo === 'mensal') {
+    return `BOM DIA, SENHORES! ☀️
+
+⚠️ HOJE, ${today}, AO FIM DA PRODUÇÃO, AFERIR TODOS OS MATERIAIS E LANÇAR AS QUANTIDADES NA PUZL PARA O FECHAMENTO DO INVENTÁRIO MENSAL DE ${mes}!
+
+✅ O que deve ser feito:
+• Conferir visualmente TODOS os materiais da usina;
+• Lançar os estoques na PUZL na data de hoje (${today});
+• Materiais parados ou aguardando coleta também devem ser lançados.
+
+QUALQUER PROBLEMA QUANTO AO FECHAMENTO, AVISEM COM ANTECEDÊNCIA!
+
+🛑 O INVENTÁRIO MENSAL É OBRIGATÓRIO E INDISPENSÁVEL! 🛑
+
+CONTAMOS COM A COLABORAÇÃO DE TODOS! 🥇`;
+  }
+
+  if (tipo === 'metas') {
+    return `⚠️ Atenção às metas do fechamento de ${mesTit}:
+
+📦 01. ESTOQUES DE AGREGADOS
+Manter os estoques de agregados (areia, brita, etc...) no mínimo, respeitando o limite de segurança.
+
+📋 02. NOTAS FISCAIS
+Até o fechamento, validar 100% das notas fiscais de insumos e corrigir qualquer pendência.
+
+📅 03. CONFERÊNCIA — ${lastDayFmt}
+No dia ${lastDayFmt}, no final da produção, conferir todos os materiais da usina.
+
+🖥️ 04. LANÇAMENTO NO PUZL — ${lastDayFmt}
+Lançar os estoques na PUZL na data de ${lastDayFmt}.
+
+❌ Não deixar conferência ou lançamento pendente!
+
+ESTOQUE / INSUMOS`;
+  }
+
+  return '';
+}
+
+// ── Config por tipo ───────────────────────────────────────
+const _fechConfig = {
+  semanal: {
+    title:    'Fechamento Semanal',
+    badge:    '📅 MEDIÇÃO SEMANAL',
+    badgeColor: '#3b82f6',
+    icon:     'ti-calendar-week',
+    iconBg:   'var(--accent-dim)',
+    iconColor:'var(--accent)',
+  },
+  mensal: {
+    title:    'Fechamento Mensal',
+    badge:    '📦 INVENTÁRIO MENSAL',
+    badgeColor: '#ef4444',
+    icon:     'ti-calendar-month',
+    iconBg:   'var(--red-bg)',
+    iconColor:'var(--red)',
+  },
+  metas: {
+    title:    'Metas do Fechamento',
+    badge:    '🎯 METAS DO MÊS',
+    badgeColor: '#f59e0b',
+    icon:     'ti-target-arrow',
+    iconBg:   'var(--amber-bg)',
+    iconColor:'var(--amber)',
+  },
+};
+
+// ── Switch tipo ───────────────────────────────────────────
+function fechamentoSwitchTipo(tipo) {
+  _fechTipo = tipo;
+
+  // Update tabs
+  document.querySelectorAll('.fech-tab').forEach(t =>
+    t.classList.toggle('active', t.dataset.tipo === tipo)
+  );
+
+  const cfg = _fechConfig[tipo];
+  const now = new Date();
+
+  // Header
+  const iconEl = document.getElementById('fech-header-icon');
+  const titleEl = document.getElementById('fech-header-title');
+  const dateEl  = document.getElementById('fech-header-date');
+  if (iconEl)  { iconEl.style.background = cfg.iconBg; iconEl.style.color = cfg.iconColor; iconEl.innerHTML = `<i class="ti ${cfg.icon}"></i>`; }
+  if (titleEl) titleEl.textContent = cfg.title;
+  if (dateEl)  {
+    if (tipo === 'semanal') dateEl.textContent = `Hoje: ${_fechFmtDate(now)}`;
+    else if (tipo === 'mensal') {
+      const ld = _fechLastWorkdayOfMonth(now.getFullYear(), now.getMonth());
+      dateEl.textContent = `Fechamento: ${_fechFmtDate(ld)}`;
+    } else {
+      const ld = _fechLastWorkdayOfMonth(now.getFullYear(), now.getMonth());
+      dateEl.textContent = `Mês: ${_fechNomeMesTitulo(now)} · Corte: ${_fechFmtDate(ld)}`;
+    }
+  }
+
+  // Editor — load saved content or default
+  const editor = document.getElementById('fech-editor');
+  if (editor) {
+    const saved = _fechLoadContent(tipo);
+    editor.innerHTML = saved || _fechTextToHtml(_fechTextoDefault(tipo));
+    fechUpdateToolbarState();
+  }
+}
+
+// ── Open modal ────────────────────────────────────────────
+function abrirFechamento(tipo) {
+  closeToolsMenu();
+  requestAnimationFrame(() => {
+    openModal('modal-fechamento');
+    fechamentoSwitchTipo(tipo || 'semanal');
+  });
+}
+
+// ── Restaurar texto padrão ────────────────────────────────
+function fechamentoResetarTexto() {
+  if (!confirm('Restaurar o texto padrão? As alterações salvas deste tipo serão perdidas.')) return;
+  const editor = document.getElementById('fech-editor');
+  if (editor) {
+    editor.innerHTML = _fechTextToHtml(_fechTextoDefault(_fechTipo));
+    fechUpdateToolbarState();
+    // Clear saved content for this tipo
+    try {
+      const saved = JSON.parse(localStorage.getItem(_FECH_KEY) || '{}');
+      delete saved[_fechTipo];
+      localStorage.setItem(_FECH_KEY, JSON.stringify(saved));
+    } catch(e) {}
+    toast('Texto restaurado para o padrão.');
+  }
+}
+
+// Convert plain text to HTML for initial load
+function _fechTextToHtml(text) {
+  return text.split('\n').map(line => {
+    if (!line.trim()) return '<p><br></p>';
+    return '<p>' + line
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      + '</p>';
+  }).join('');
+}
+
+// Get normalized HTML from editor — converts <font color> to <span style>
+function _fechGetRichHtml() {
+  const editor = document.getElementById('fech-editor');
+  if (!editor) return '';
+  // Clone and normalize font tags
+  const clone = editor.cloneNode(true);
+  clone.querySelectorAll('font[color]').forEach(font => {
+    const span = document.createElement('span');
+    span.style.color = font.getAttribute('color');
+    // Copy other attributes (size → font-size)
+    const size = font.getAttribute('size');
+    if (size) {
+      const sizeMap = {'1':'8px','2':'10px','3':'12px','4':'14px','5':'18px','6':'24px','7':'36px'};
+      span.style.fontSize = sizeMap[size] || size + 'px';
+    }
+    while (font.firstChild) span.appendChild(font.firstChild);
+    font.parentNode.replaceChild(span, font);
+  });
+  return clone.innerHTML;
+}
+
+// Get plain text from editor (for WhatsApp copy)
+function _fechGetPlainText() {
+  const editor = document.getElementById('fech-editor');
+  if (!editor) return '';
+  // Walk nodes to extract text preserving newlines
+  let text = '';
+  const walk = (node) => {
+    if (node.nodeType === 3) { text += node.textContent; return; }
+    const tag = node.tagName?.toLowerCase();
+    if (tag === 'br') { text += '\n'; return; }
+    if (['p','div','li'].includes(tag) && text && !text.endsWith('\n')) text += '\n';
+    if (tag === 'li') text += '• ';
+    node.childNodes.forEach(walk);
+    if (['p','div'].includes(tag) && !text.endsWith('\n')) text += '\n';
+  };
+  walk(editor);
+  return text.replace(/\n{3,}/g, '\n\n').trim();
+}
+
+// execCommand wrapper
+function fechExec(cmd, val) {
+  document.getElementById('fech-editor')?.focus();
+  document.execCommand(cmd, false, val || null);
+  fechUpdateToolbarState();
+}
+
+function fechSetFontSize(val) {
+  if (!val) return;
+  document.getElementById('fech-editor')?.focus();
+  document.execCommand('fontSize', false, val);
+  fechUpdateToolbarState();
+}
+
+function fechEditorUpdate() {
+  _fechSaveContent(_fechTipo);
+}
+
+// ── Persistence ───────────────────────────────────────────
+const _FECH_KEY = 'analyticsys_fech_v1';
+
+let _fechSaveTimer = null;
+function _fechSaveContent(tipo) {
+  clearTimeout(_fechSaveTimer);
+  _fechSaveTimer = setTimeout(() => {
+    const editor = document.getElementById('fech-editor');
+    if (!editor) return;
+    try {
+      const saved = JSON.parse(localStorage.getItem(_FECH_KEY) || '{}');
+      saved[tipo] = editor.innerHTML;
+      localStorage.setItem(_FECH_KEY, JSON.stringify(saved));
+      // Show saved indicator
+      const ind = document.getElementById('fech-saved-indicator');
+      if (ind) { ind.style.opacity = '1'; setTimeout(() => ind.style.opacity = '0', 1500); }
+    } catch(e) {}
+  }, 500);
+}
+
+function _fechLoadContent(tipo) {
+  try {
+    const saved = JSON.parse(localStorage.getItem(_FECH_KEY) || '{}');
+    return saved[tipo] || null;
+  } catch(e) { return null; }
+}
+
+function fechUpdateToolbarState() {
+  const cmds = ['bold','italic','underline','strikeThrough'];
+  const ids  = ['fech-tb-bold','fech-tb-italic','fech-tb-under','fech-tb-strike'];
+  cmds.forEach((cmd, i) => {
+    const btn = document.getElementById(ids[i]);
+    if (btn) btn.classList.toggle('active', document.queryCommandState(cmd));
+  });
+  // Update color swatch underline
+  const color = document.queryCommandValue('foreColor');
+  const ci = document.getElementById('fech-color-input');
+  if (ci && color) {
+    // convert rgb to hex if needed
+    const hex = _fechRgbToHex(color);
+    if (hex) ci.value = hex;
+  }
+}
+
+function _fechRgbToHex(color) {
+  if (!color || color === 'false') return null;
+  if (color.startsWith('#')) return color;
+  const m = color.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+  if (!m) return null;
+  return '#' + [m[1],m[2],m[3]].map(n => (+n).toString(16).padStart(2,'0')).join('');
+}
+
+// ── Copiar para WhatsApp ──────────────────────────────────
+function fechamentoCopiarWhatsapp() {
+  const text = _fechGetPlainText();
+  if (!text) return;
+  navigator.clipboard?.writeText(text).then(() => {
+    toast('Texto copiado! Cole direto no WhatsApp.');
+  }).catch(() => {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    toast('Texto copiado!');
+  });
+}
+
+// ── Gerar imagem PNG ──────────────────────────────────────
+function fechamentoGerarImagem() {
+  const editor = document.getElementById('fech-editor');
+  if (!editor || !editor.innerText.trim()) { toast('Nenhum texto para gerar imagem', 'error'); return; }
+  const cfg = _fechConfig[_fechTipo];
+  _fechGerarImagemCanvas(_fechGetPlainText(), cfg);
+}
+
+// Canvas-based corporate image generation
+function _fechGerarImagemCanvas(text, cfg) {
+  const S = 2; // retina scale
+  const W = 540;
+  const PADX = 40;
+  const bodyFont = 14;
+  const bodyLineH = 22;
+
+  // ── Wrap text ────────────────────────────────────────────
+  const tmp = document.createElement('canvas').getContext('2d');
+  const wrapText = (txt, maxW, font) => {
+    tmp.font = font;
+    const lines = [];
+    txt.split('\n').forEach(raw => {
+      if (!raw.trim()) { lines.push({ text: '', empty: true }); return; }
+      // detect bullet / emoji prefix
+      const isPt = raw.startsWith('*') || raw.startsWith('•') || raw.startsWith('👉') || raw.startsWith('✅') || raw.startsWith('🛑') || raw.startsWith('❗') || raw.startsWith('❌') || raw.startsWith('📦') || raw.startsWith('📋') || raw.startsWith('📅') || raw.startsWith('🖥️');
+      const words = raw.split(' ');
+      let cur = '';
+      let first = true;
+      words.forEach(w => {
+        const test = cur ? cur + ' ' + w : w;
+        if (tmp.measureText(test).width <= maxW) { cur = test; }
+        else {
+          if (cur) lines.push({ text: cur, indent: !first && isPt });
+          cur = w; first = false;
+        }
+      });
+      if (cur) lines.push({ text: cur, indent: !first && isPt });
+    });
+    return lines;
+  };
+
+  // ── Theme per tipo ───────────────────────────────────────
+  const themes = {
+    semanal: {
+      bg1: '#0b1929', bg2: '#112240',
+      accent: '#2563eb', accentLight: '#3b82f6',
+      accentGlow: 'rgba(59,130,246,0.18)',
+      stripe: '#1e3a5f',
+      badgeText: 'MEDIÇÃO SEMANAL',
+      badgeBg: '#1d4ed8', badgeFg: '#ffffff',
+      bodyFg: '#cbd5e1',
+      footerFg: '#64748b',
+      titleFg: '#ffffff',
+    },
+    mensal: {
+      bg1: '#1a0a0a', bg2: '#2d1515',
+      accent: '#dc2626', accentLight: '#ef4444',
+      accentGlow: 'rgba(239,68,68,0.18)',
+      stripe: '#4a1515',
+      badgeText: 'INVENTÁRIO MENSAL',
+      badgeBg: '#b91c1c', badgeFg: '#ffffff',
+      bodyFg: '#fecaca',
+      footerFg: '#7f1d1d',
+      titleFg: '#ffffff',
+    },
+    metas: {
+      bg1: '#1a1200', bg2: '#2d2000',
+      accent: '#d97706', accentLight: '#f59e0b',
+      accentGlow: 'rgba(245,158,11,0.18)',
+      stripe: '#4a3500',
+      badgeText: 'METAS DO FECHAMENTO',
+      badgeBg: '#b45309', badgeFg: '#ffffff',
+      bodyFg: '#fde68a',
+      footerFg: '#78350f',
+      titleFg: '#ffffff',
+    },
+  };
+  const T = themes[_fechTipo] || themes.semanal;
+
+  // ── Measure body ─────────────────────────────────────────
+  const bodyMaxW = W - PADX * 2;
+  const bodyLines = wrapText(text, bodyMaxW, `${bodyFont}px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`);
+  const bodyH = bodyLines.reduce((s, l) => s + (l.empty ? bodyLineH * 0.6 : bodyLineH), 0);
+
+  const HEADER_H = 148; // logo area
+  const BADGE_H  = 52;
+  const SEP_H    = 24;
+  const FOOTER_H = 52;
+  const H = HEADER_H + BADGE_H + SEP_H + bodyH + SEP_H + FOOTER_H + 20;
+
+  const cv = document.createElement('canvas');
+  cv.width = W * S; cv.height = H * S;
+  const ctx = cv.getContext('2d');
+  ctx.scale(S, S);
+
+  // ── Background ───────────────────────────────────────────
+  // Solid dark bg
+  ctx.fillStyle = T.bg1;
+  ctx.fillRect(0, 0, W, H);
+
+  // Subtle top panel for logo area
+  ctx.fillStyle = T.bg2;
+  ctx.fillRect(0, 0, W, HEADER_H);
+
+  // Decorative geometric stripe left side
+  ctx.fillStyle = T.accent;
+  ctx.fillRect(0, 0, 5, H);
+
+  // Diagonal accent corner (top-right)
+  ctx.fillStyle = T.accentGlow;
+  ctx.beginPath();
+  ctx.moveTo(W - 120, 0);
+  ctx.lineTo(W, 0);
+  ctx.lineTo(W, 120);
+  ctx.closePath();
+  ctx.fill();
+
+  // ── Logo image (async, draw rest first, stamp logo after) ──
+  const drawRest = (logoImg) => {
+    // Logo area
+    let y = 26;
+    if (logoImg) {
+      // Render logo at fixed height, preserve aspect ratio
+      const lH = 56;
+      const aspect = logoImg.naturalWidth / logoImg.naturalHeight || 3;
+      const lW = Math.round(lH * aspect);
+      const lX = (W - lW) / 2;
+      // White rectangle behind logo so SVG dark parts are visible on dark bg
+      ctx.fillStyle = 'rgba(255,255,255,0.92)';
+      _fechRoundRect(ctx, lX - 16, y - 6, lW + 32, lH + 12, 10);
+      ctx.fill();
+      // Draw logo at full opacity
+      ctx.drawImage(logoImg, lX, y, lW, lH);
+      y += lH + 22;
+    } else {
+      // Logo not available — leave space for branding area only
+      y += 20;
+    }
+
+    // Horizontal rule under logo
+    ctx.strokeStyle = T.accentLight;
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(PADX, y); ctx.lineTo(W - PADX, y); ctx.stroke();
+    y += 16;
+
+    // ── Badge / title block ──────────────────────────────────
+    const badgePadX = 20, badgePadY = 9;
+    const badgeFont = `700 15px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`;
+    ctx.font = badgeFont;
+    const badgeW = ctx.measureText(T.badgeText).width + badgePadX * 2;
+    const badgeH2 = 34;
+    const badgeX = (W - badgeW) / 2;
+    // Badge pill
+    ctx.fillStyle = T.badgeBg;
+    _fechRoundRect(ctx, badgeX, y, badgeW, badgeH2, badgeH2 / 2);
+    ctx.fill();
+    ctx.fillStyle = T.badgeFg;
+    ctx.textAlign = 'center';
+    ctx.fillText(T.badgeText, W / 2, y + badgeH2 / 2 + 5);
+    y += badgeH2 + SEP_H;
+
+    // Separator
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 6]);
+    ctx.beginPath(); ctx.moveTo(PADX, y); ctx.lineTo(W - PADX, y); ctx.stroke();
+    ctx.setLineDash([]);
+    y += 18;
+
+    // ── Body text ────────────────────────────────────────────
+    ctx.textAlign = 'left';
+    bodyLines.forEach(line => {
+      if (line.empty) { y += bodyLineH * 0.6; return; }
+      // First char emphasis (emoji / bullet)
+      const txt = line.text;
+      const firstChar = txt.charAt(0);
+      const isEmoji = firstChar > 'ÿ';
+      if (isEmoji) {
+        ctx.font = `${bodyFont + 1}px -apple-system, sans-serif`;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(firstChar, PADX + (line.indent ? 14 : 0), y);
+        const emojiW = ctx.measureText(firstChar).width + 6;
+        ctx.font = `400 ${bodyFont}px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`;
+        ctx.fillStyle = T.bodyFg;
+        ctx.fillText(txt.slice(firstChar.length), PADX + emojiW + (line.indent ? 14 : 0), y);
+      } else if (txt.startsWith('*') || txt.startsWith('•')) {
+        // Bullet
+        ctx.fillStyle = T.accentLight;
+        ctx.fillRect(PADX + (line.indent ? 14 : 0), y - 5, 4, 4);
+        ctx.font = `400 ${bodyFont}px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`;
+        ctx.fillStyle = T.bodyFg;
+        ctx.fillText(txt.replace(/^[•*]\s*/, ''), PADX + 12 + (line.indent ? 14 : 0), y);
+      } else {
+        // Check for bold-ish ALL CAPS lines (≥4 words all caps = heading)
+        const words = txt.split(' ');
+        const allCaps = words.length >= 3 && words.every(w => w === w.toUpperCase() && /[A-Z]/.test(w));
+        if (allCaps) {
+          ctx.font = `700 ${bodyFont}px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`;
+          ctx.fillStyle = '#ffffff';
+        } else {
+          ctx.font = `400 ${bodyFont}px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`;
+          ctx.fillStyle = T.bodyFg;
+        }
+        ctx.fillText(txt, PADX + (line.indent ? 14 : 0), y);
+      }
+      y += bodyLineH;
+    });
+
+    // ── Footer ───────────────────────────────────────────────
+    y += 14;
+    // Thick accent bar
+    ctx.fillStyle = T.accent;
+    ctx.fillRect(PADX, y, W - PADX * 2, 3);
+    y += 12;
+
+    ctx.fillStyle = T.footerFg;
+    ctx.font = `500 11px -apple-system, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.fillText('ESTOQUE  /  INSUMOS  —  CONCRELAGOS CONCRETO', W / 2, y + 14);
+
+    // Watermark date
+    const now = new Date();
+    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+    ctx.font = `400 10px monospace`;
+    ctx.textAlign = 'right';
+    ctx.fillText(_fechFmtDate(now), W - PADX, y + 14);
+
+    // ── Download ─────────────────────────────────────────────
+    const link = document.createElement('a');
+    link.download = `fechamento-${_fechTipo}-${new Date().toISOString().slice(0,10)}.png`;
+    link.href = cv.toDataURL('image/png');
+    link.click();
+    if (!logoImg) toast('Imagem gerada! (sem logo — verifique conexão)');
+    else toast('Imagem corporativa gerada!');
+  };
+
+  // Draw immediately without logo, then overlay logo async if possible
+  drawRest(null);
+
+  // Try to load logo and re-draw on top
+  const logoUrl = 'https://concrelagos.com.br/wp-content/uploads/2021/10/Ativo-3.svg';
+  const logoImg2 = new Image();
+  logoImg2.crossOrigin = 'anonymous';
+  logoImg2.onload = () => {
+    if (logoImg2.naturalWidth > 0) {
+      // Redraw with logo
+      drawRest(logoImg2);
+    }
+  };
+  logoImg2.src = logoUrl + '?t=' + Date.now(); // bust cache
+}
+
+// Helper: rounded rect path
+function _fechRoundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+// ── Abrir janela de print ────────────────────────────────
+function fechamentoAbrirPrint() {
+  const text = _fechGetPlainText();
+  if (!text.trim()) return;
+  const cfg  = _fechConfig[_fechTipo];
+
+  const themes = {
+    semanal: { bg: '#0b1929', accent: '#2563eb', accentLight: '#3b82f6', badge: 'MEDIÇÃO SEMANAL', bodyFg: '#cbd5e1' },
+    mensal:  { bg: '#1a0a0a', accent: '#dc2626', accentLight: '#ef4444', badge: 'INVENTÁRIO MENSAL', bodyFg: '#fecaca' },
+    metas:   { bg: '#1a1200', accent: '#d97706', accentLight: '#f59e0b', badge: 'METAS DO FECHAMENTO', bodyFg: '#fde68a' },
+  };
+  const T = themes[_fechTipo] || themes.semanal;
+
+  // Use innerHTML from editor for rich formatting, with fallback to plain text
+  const richHtml = _fechGetRichHtml();
+  // Format plain text into HTML — detect emojis, bullets, ALL CAPS lines (fallback)
+  const fmtLines = text.split('\n').map(line => {
+    if (!line.trim()) return '<div class="fech-print-spacer"></div>';
+    const allCaps = line.length > 5 && line === line.toUpperCase() && /[A-Z]/.test(line);
+    const isBullet = /^[•*]\s/.test(line);
+    const isStop = /^🛑|^⚠️|^❗|^❌/.test(line);
+    if (allCaps)  return `<div class="fech-print-caps">${line}</div>`;
+    if (isBullet) return `<div class="fech-print-bullet"><span class="fech-bullet-dot" style="background:${T.accentLight}"></span>${line.replace(/^[•*]\s*/,'')}</div>`;
+    if (isStop)   return `<div class="fech-print-alert">${line}</div>`;
+    return `<div class="fech-print-line">${line}</div>`;
+  }).join('');
+
+  const logoUrl = 'https://concrelagos.com.br/wp-content/uploads/2021/10/Ativo-3.svg';
+
+  const html = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fechamento — ${cfg.title}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0d0d0d; display: flex; align-items: center; justify-content: center; min-height: 100vh; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: ${T.bodyFg}; }
+
+  .card {
+    background: ${T.bg};
+    width: 480px;
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 32px 80px rgba(0,0,0,0.7);
+    position: relative;
+  }
+
+  /* Accent left bar */
+  .card::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 5px;
+    background: ${T.accent};
+  }
+
+  /* Corner glow */
+  .card::after {
+    content: '';
+    position: absolute;
+    top: 0; right: 0;
+    width: 140px; height: 140px;
+    background: radial-gradient(ellipse at top right, ${T.accent}30, transparent 70%);
+    pointer-events: none;
+  }
+
+  .card-header {
+    background: linear-gradient(135deg, ${T.bg} 0%, ${T.accent}22 100%);
+    border-bottom: 1px solid ${T.accent}40;
+    padding: 28px 32px 22px 36px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    position: relative;
+  }
+
+  .logo-wrap {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 0;
+  }
+  .logo-wrap img {
+    height: 80px;
+    width: auto;
+    display: block;
+    filter: invert(1) hue-rotate(178deg);
+  }
+
+  .badge {
+    display: inline-block;
+    background: ${T.accent};
+    color: #fff;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    padding: 7px 20px;
+    border-radius: 50px;
+  }
+
+  .card-body {
+    padding: 22px 32px 26px 36px;
+  }
+  .card-body p  { margin: 0 0 3px; }
+  .card-body ul, .card-body ol { padding-left: 20px; margin: 4px 0 6px; }
+  .card-body li { margin-bottom: 2px; }
+  .card-body u  { text-decoration-color: rgba(255,255,255,0.4); }
+  /* font[color] tags injected by execCommand foreColor — browser handles automatically */
+
+  .fech-print-line {
+    color: ${T.bodyFg};
+    font-size: 13.5px;
+    line-height: 1.75;
+    margin-bottom: 2px;
+  }
+  .fech-print-caps {
+    color: #ffffff;
+    font-size: 13.5px;
+    font-weight: 700;
+    line-height: 1.7;
+    margin-bottom: 2px;
+  }
+  .fech-print-alert {
+    color: #ffffff;
+    font-size: 13.5px;
+    font-weight: 700;
+    line-height: 1.7;
+    margin-bottom: 2px;
+  }
+  .fech-print-bullet {
+    color: ${T.bodyFg};
+    font-size: 13.5px;
+    line-height: 1.75;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 2px;
+    padding-left: 4px;
+  }
+  /* Rich editor content: default color from theme, explicit colors preserved */
+  .card-body { color: ${T.bodyFg}; }
+  .fech-bullet-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-top: 7px;
+  }
+  .fech-print-spacer { height: 10px; }
+
+  .card-footer {
+    border-top: 1px solid ${T.accent}40;
+    padding: 14px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .footer-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: ${T.accent}99;
+  }
+  .footer-date {
+    font-size: 10px;
+    font-family: monospace;
+    color: ${T.accent}60;
+  }
+
+  /* Print styles */
+  @media print {
+    body { background: white; }
+    .card {
+      box-shadow: none;
+      border-radius: 0;
+      width: 100%;
+    }
+    .no-print { display: none !important; }
+  }
+
+  /* Action bar — fixed top-right, small, unobtrusive */
+  .action-bar {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    display: flex;
+    gap: 8px;
+    z-index: 100;
+  }
+  .action-btn {
+    background: rgba(20,20,20,0.82);
+    border: 1px solid rgba(255,255,255,0.18);
+    border-radius: 8px;
+    color: #fff;
+    font-size: 12px;
+    font-family: inherit;
+    padding: 7px 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all .15s;
+    backdrop-filter: blur(8px);
+    white-space: nowrap;
+  }
+  .action-btn:hover { background: rgba(40,40,40,0.95); }
+  .action-btn.primary { background: ${T.accent}cc; border-color: ${T.accent}; }
+  .action-btn.primary:hover { background: ${T.accent}; }
+  @media print { .action-bar { display: none !important; } }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="card-header">
+    <div class="logo-wrap">
+      <img src="${logoUrl}" alt="Concrelagos" onerror="this.style.display='none'">
+    </div>
+    <span class="badge">${T.badge}</span>
+  </div>
+  <div class="card-body">${richHtml || fmtLines}</div>
+  <div class="card-footer">
+    <span class="footer-label">Estoque / Insumos</span>
+    <span class="footer-date">${new Date().toLocaleDateString('pt-BR', {day:'2-digit',month:'2-digit',year:'numeric'})}</span>
+  </div>
+</div>
+
+<!-- Action bar -->
+<div class="action-bar no-print">
+  <button class="action-btn primary" onclick="window.print()">🖨️ Imprimir / Salvar PDF</button>
+</div>
+
+</body>
+</html>`;
+
+  const win = window.open('', '_blank', 'width=600,height=780,scrollbars=yes,resizable=yes');
+  if (!win) { toast('Popup bloqueado — permita popups para este site.', 'error'); return; }
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+}
+
+Object.assign(window, { abrirFechamento, fechamentoSwitchTipo, fechamentoCopiarWhatsapp, fechamentoGerarImagem, fechamentoResetarTexto, fechamentoAbrirPrint, fechExec, fechSetFontSize, fechEditorUpdate, fechUpdateToolbarState });

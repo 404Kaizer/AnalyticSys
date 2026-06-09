@@ -92,29 +92,67 @@ function setModulo(mod) {
 }
 
 function exportarDados() {
-  const now    = new Date();
-  const stamp  = localISODate(now) + '_' + String(now.getHours()).padStart(2,'0') + String(now.getMinutes()).padStart(2,'0');
-  const backup = {
-    _version:    'analyticsys_backup_v1',
-    _exportedAt: now.toLocaleString('pt-BR'),
-    entradas:    state.entradas,
-    saidas:      state.saidas,
-    lancamentos: state.lancamentos,
-    sap:         state.sap,
-    producao:    state.producao,
-    imports:     state.imports,
-    configs:     state.configs,
-    filiais:     state.filiais,
-    materiais:   state.materiais,
-    ocorrencias: state.ocorrencias || []
-  };
-  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'analyticsys_backup_' + stamp + '.json';
-  a.click();
-  URL.revokeObjectURL(a.href);
-  toast('Backup exportado com sucesso');
+  try {
+    const now   = new Date();
+    const stamp = localISODate(now) + '_'
+      + String(now.getHours()).padStart(2,'0')
+      + String(now.getMinutes()).padStart(2,'0');
+
+    const lsGet = key => { try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch(e) { return null; } };
+
+    // Build backup object — use Blob streaming to avoid 512MB string limit
+    const header = JSON.stringify({
+      _version:    'analyticsys_backup_v2',
+      _exportedAt: now.toLocaleString('pt-BR'),
+      _notas:      lsGet('analyticsys_notes_v2'),
+      _atalhos:    lsGet('analyticsys_shortcuts_v1'),
+      _fechamento: lsGet('analyticsys_fech_v1'),
+    });
+
+    // Serialize each large array as a Blob chunk to avoid single-string limits
+    const fields = ['entradas','saidas','lancamentos','sap','producao','imports','configs','filiais','materiais','ocorrencias'];
+
+    // Build JSON manually in parts
+    const parts = [];
+    // Open object, add header fields (without closing brace)
+    parts.push(header.slice(0, -1)); // remove trailing }
+
+    for (const field of fields) {
+      const arr = state[field] || [];
+      parts.push(',"' + field + '":');
+      // Serialize in 10k-item chunks to avoid huge strings
+      if (arr.length === 0) {
+        parts.push('[]');
+      } else {
+        parts.push('[');
+        const CHUNK = 5000;
+        for (let i = 0; i < arr.length; i += CHUNK) {
+          const slice = arr.slice(i, i + CHUNK);
+          if (i > 0) parts.push(',');
+          // JSON.stringify an array slice is safe — each slice is small
+          const sliceJson = JSON.stringify(slice);
+          parts.push(sliceJson.slice(1, -1)); // strip [ and ]
+        }
+        parts.push(']');
+      }
+    }
+
+    parts.push('}'); // close object
+
+    const blob = new Blob(parts, { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = 'analyticsys_backup_' + stamp + '.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    toast('Backup exportado com sucesso');
+  } catch(err) {
+    console.error('Erro ao exportar backup:', err);
+    toast('Erro ao gerar backup: ' + err.message, 'error');
+  }
 }
 
 function restaurarBackup(file) {
@@ -161,6 +199,12 @@ function restaurarBackup(file) {
       invalidateSaidasIndex();
       if (typeof invalidateAllSearchIndexes === 'function') invalidateAllSearchIndexes();
       if (typeof reaplicarPadronizacaoMateriais === 'function') reaplicarPadronizacaoMateriais();
+
+      // Restaura dados do localStorage (notas, atalhos, fechamento)
+      const lsSet = (key, val) => { try { if (val !== null && val !== undefined) localStorage.setItem(key, JSON.stringify(val)); } catch(e) {} };
+      lsSet('analyticsys_notes_v2',    parsed._notas);
+      lsSet('analyticsys_shortcuts_v1', parsed._atalhos);
+      lsSet('analyticsys_fech_v1',     parsed._fechamento);
 
       await persistStateNow();
       hideLoadingOverlay('Backup restaurado');

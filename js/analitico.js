@@ -872,6 +872,7 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
     card.className = 'micro-filial-card';
     card.dataset.central = r.central || '';
     card.dataset.centralDiff = varCentralMicro;
+    card.dataset.diff = varCentralMicro;   // for tipo-var filter
     card.dataset.custoVariacao = custoVariacaoTotal;
     card.dataset.healthLevel = healthBadge ? (hLevel === 'sem_saude' ? 'none' : hLevel) : 'none';
     card.dataset.healthScore = healthBadge && hScore !== null ? hScore : '';
@@ -1243,7 +1244,7 @@ function _microFilterCheckChange(key, checkbox) {
 function toggleMicroFilter(key) {
   const dd = document.getElementById(`mfd-${key}`);
   const chev = document.getElementById(`mfc-${key}`);
-  const allKeys = ['regional', 'central', 'material', 'variacao'];
+  const allKeys = ['regional', 'central', 'material', 'variacao', 'tipo-var'];
   // Close all other dropdowns first
   allKeys.filter(k => k !== key).forEach(otherKey => {
     const otherDd = document.getElementById(`mfd-${otherKey}`);
@@ -1253,6 +1254,8 @@ function toggleMicroFilter(key) {
       otherChev?.classList.remove('open');
       if (otherKey === 'variacao') {
         _varFilter.pending.levels = new Set(_varFilter.applied.levels);
+      } else if (otherKey === 'tipo-var') {
+        _tipoVarFilter.pending = new Set(_tipoVarFilter.applied);
       } else {
         _microFilter.pending[otherKey] = new Set(_microFilter.applied[otherKey]);
       }
@@ -1282,6 +1285,17 @@ function filterMicroOptions(key, query) {
 }
 
 function applyMicroFilter(key) {
+  if (key === 'tipo-var') {
+    _tipoVarReadPending();
+    _tipoVarFilter.applied       = new Set(_tipoVarFilter.pending);
+    _tipoVarFilter.nivelApplied  = new Set(_tipoVarFilter.nivelPending);
+    _tipoVarUpdateTrigger();
+    _applyMicroVisibility();
+    document.getElementById('mfd-tipo-var')?.classList.remove('open');
+    document.getElementById('mfc-tipo-var')?.classList.remove('open');
+    _updateMicroFilterClearBtn();
+    return;
+  }
   if (key === 'variacao') {
     _readVarPending();
     _varFilter.applied.levels = new Set(_varFilter.pending.levels);
@@ -1295,6 +1309,15 @@ function applyMicroFilter(key) {
 }
 
 function cancelMicroFilter(key) {
+  if (key === 'tipo-var') {
+    _tipoVarFilter.pending       = new Set(_tipoVarFilter.applied);
+    _tipoVarFilter.nivelPending  = new Set(_tipoVarFilter.nivelApplied);
+    _tipoVarSyncToState(_tipoVarFilter.pending);
+    _tipoVarSyncNivelToState(_tipoVarFilter.nivelPending);
+    document.getElementById('mfd-tipo-var')?.classList.remove('open');
+    document.getElementById('mfc-tipo-var')?.classList.remove('open');
+    return;
+  }
   if (key === 'variacao') {
     _varFilter.pending.levels = new Set(_varFilter.applied.levels);
   } else {
@@ -1348,7 +1371,7 @@ function _syncTriggerLabel(key) {
 function _syncClearBtn() {
   const btn = document.getElementById('micro-filter-clear-btn');
   if (!btn) return;
-  const hasAny = _microFilter.applied.regional.size || _microFilter.applied.central.size || _microFilter.applied.material.size || _varFilterIsActive(_varFilter.applied);
+  const hasAny = _microFilter.applied.regional.size || _microFilter.applied.central.size || _microFilter.applied.material.size || _varFilterIsActive(_varFilter.applied) || _tipoVarIsActive();
   btn.style.display = hasAny ? '' : 'none';
 }
 
@@ -1366,6 +1389,13 @@ function clearAllMicroFilters() {
   _syncTriggerLabel('material');
   _syncTriggerLabel('variacao');
   _syncClearBtn();
+  _tipoVarFilter.applied      = new Set();
+  _tipoVarFilter.pending      = new Set();
+  _tipoVarFilter.nivelApplied = new Set(['regional','central','material']);
+  _tipoVarFilter.nivelPending = new Set(['regional','central','material']);
+  _tipoVarSyncToState(new Set());
+  _tipoVarSyncNivelToState(new Set(['regional','central','material']));
+  _tipoVarUpdateTrigger();
   _applyMicroVisibility();
 }
 
@@ -1374,6 +1404,74 @@ const _varFilter = {
   pending:  { levels: new Set() },
   applied:  { levels: new Set() },
 };
+
+// ── Filtro de tipo de variação (desfalque/sobra) ─────────
+const _tipoVarFilter = {
+  applied:      new Set(),       // 'desfalque', 'sobra'
+  pending:      new Set(),
+  nivelApplied: new Set(['regional','central','material']), // default: all levels
+  nivelPending: new Set(['regional','central','material']),
+};
+
+function _tipoVarChange() {
+  document.querySelectorAll('#mfo-tipo-var .micro-filter-option').forEach(opt => {
+    const cb = opt.querySelector('input[type=checkbox]');
+    opt.classList.toggle('checked', cb?.checked);
+  });
+}
+
+function _tipoVarIsActive() { return _tipoVarFilter.applied.size > 0; }
+
+function _tipoVarSyncToState(state) {
+  document.querySelectorAll('#mfo-tipo-var input[type=checkbox]').forEach(cb => {
+    cb.checked = state.has(cb.value);
+    cb.closest('.micro-filter-option').classList.toggle('checked', cb.checked);
+  });
+  // Also sync nivel to current applied state
+  _tipoVarSyncNivelToState(_tipoVarFilter.nivelPending);
+}
+
+function _tipoVarReadPending() {
+  _tipoVarFilter.pending = new Set(
+    [...document.querySelectorAll('#mfo-tipo-var input:checked')].map(i => i.value)
+  );
+  _tipoVarFilter.nivelPending = new Set(
+    [...document.querySelectorAll('#mfo-tipo-var-nivel input:checked')].map(i => i.value)
+  );
+}
+
+function _tipoVarSyncNivelToState(state) {
+  document.querySelectorAll('#mfo-tipo-var-nivel input[type=checkbox]').forEach(cb => {
+    cb.checked = state.has(cb.value);
+    cb.closest('.micro-filter-option').classList.toggle('checked', cb.checked);
+  });
+}
+
+function _tipoVarUpdateTrigger() {
+  const lbl  = document.getElementById('mft-tipo-var-label');
+  const btn  = document.getElementById('mft-tipo-var');
+  const sel  = _tipoVarFilter.applied;
+  const nivel = _tipoVarFilter.nivelApplied;
+  if (!lbl) return;
+  if (sel.size === 0) {
+    lbl.textContent = 'Variação';
+    btn?.classList.remove('active');
+    return;
+  }
+  const typeParts = [];
+  if (sel.has('desfalque')) typeParts.push('Desfalque');
+  if (sel.has('sobra'))     typeParts.push('Sobra');
+  // Nivel hint: show only if not all selected
+  const allNivel = nivel.has('regional') && nivel.has('central') && nivel.has('material');
+  const nivelParts = [];
+  if (!allNivel) {
+    if (nivel.has('regional')) nivelParts.push('Reg.');
+    if (nivel.has('central'))  nivelParts.push('Cen.');
+    if (nivel.has('material')) nivelParts.push('Mat.');
+  }
+  lbl.textContent = typeParts.join('+') + (nivelParts.length ? ` · ${nivelParts.join('+')}` : '');
+  btn?.classList.add('active');
+}
 
 function _varFilterChange() {
   // Sync chip visual state
@@ -1423,16 +1521,38 @@ function _applyMicroVisibility() {
   const appliedRegionals = _microFilter.applied.regional;
   const appliedCentrals  = _microFilter.applied.central;
   const appliedMaterials = _microFilter.applied.material;
-  const varState = _varFilter.applied;
-  const varActive = _varFilterIsActive(varState);
+  const varState    = _varFilter.applied;
+  const varActive   = _varFilterIsActive(varState);
+  const tipoActive  = _tipoVarIsActive();
+  const tipoFilter  = _tipoVarFilter.applied; // Set: 'desfalque', 'sobra'
+
+  const tipoNivel = _tipoVarFilter.nivelApplied;
+
+  // Helper: check if a diff passes tipo-var filter at a given level
+  const passesTipo = (diff, level) => {
+    if (!tipoActive) return true;
+    if (!tipoNivel.has(level)) return true;  // level not being filtered
+    const isDesfalque = diff < 0;
+    const isSobra     = diff > 0;
+    if (tipoFilter.has('desfalque') && tipoFilter.has('sobra')) return true;
+    if (tipoFilter.has('desfalque')) return isDesfalque;
+    if (tipoFilter.has('sobra'))     return isSobra;
+    return true;
+  };
 
   // Handle regional groups
   document.querySelectorAll('#an-micro-container .regional-group').forEach(group => {
     const groupRegional = group.dataset.regional || '';
-    // Regional filter applies at group level
     if (appliedRegionals.size && !appliedRegionals.has(groupRegional)) {
       group.style.display = 'none'; return;
     }
+
+    // Regional tipo-var: check sum of all cards in group
+    if (tipoActive) {
+      const groupDiff = parseFloat(group.dataset.diff || '0');
+      if (!passesTipo(groupDiff, 'regional')) { group.style.display = 'none'; return; }
+    }
+
     group.style.display = '';
 
     let anyCardVisible = false;
@@ -1449,13 +1569,22 @@ function _applyMicroVisibility() {
           card.style.display = 'none'; return;
         }
       }
+      // Central tipo-var: check card's diff
+      if (tipoActive) {
+        const cardDiff = parseFloat(card.dataset.diff || '0');
+        if (!passesTipo(cardDiff, 'central')) { card.style.display = 'none'; return; }
+      }
+
       const rows = card.querySelectorAll('tbody tr.material-row');
-      if (appliedMaterials.size) {
+      if (appliedMaterials.size || tipoActive) {
         let visibleRows = 0;
         rows.forEach(row => {
           const matCell = row.querySelector('td:first-child');
           const matName = matCell ? matCell.textContent.trim() : '';
-          const show = appliedMaterials.has(matName);
+          const matDiff = parseFloat(row.dataset.diff || '0');
+          const showMat = !appliedMaterials.size || appliedMaterials.has(matName);
+          const showTipo = passesTipo(matDiff, 'material');
+          const show = showMat && showTipo;
           row.style.display = show ? '' : 'none';
           if (show) visibleRows++;
         });
@@ -1468,7 +1597,6 @@ function _applyMicroVisibility() {
       anyCardVisible = true;
     });
 
-    // Hide the whole group if no cards are visible after all filters
     if (!anyCardVisible) group.style.display = 'none';
   });
 }
@@ -1531,7 +1659,7 @@ document.addEventListener('click', e => {
 Object.assign(window, { _microFilterCheckChange, toggleMicroFilter, filterMicroOptions,
   applyMicroFilter, cancelMicroFilter, clearAllMicroFilters,
   expandAllMicro, collapseAllMicro, populateMicroFilterOptions,
-  _buildVariacaoOptions, _varFilterChange });
+  _buildVariacaoOptions, _varFilterChange, _tipoVarChange, _tipoVarSyncToState, _tipoVarIsActive });
 
 // ═══════════════════════════════════════════════════════════
 
@@ -1984,10 +2112,16 @@ function setupKeyboardShortcuts() {
   });
 }
 
+// IDs of modals that should NOT close on backdrop click
+const _MODAL_NO_BACKDROP_CLOSE = new Set([
+  'modal-fechamento',  // fechamento editor — only closes via Fechar button
+]);
+
 function setupModalCloseOnBackdrop() {
   qsa('.modal-overlay').forEach(m => {
     m.addEventListener('click', e => {
       if (e.target !== m) return;
+      if (_MODAL_NO_BACKDROP_CLOSE.has(m.id)) return; // blocked
       if (m.id === 'analitico-detail-overlay') {
         closeAnaliticoDetailModal();
       } else if (m.id === 'startup-restore-overlay') {

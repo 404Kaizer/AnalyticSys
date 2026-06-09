@@ -209,6 +209,32 @@
               <i class="ti ti-chevron-right tools-item-arrow"></i>
             </button>
 
+            <div class="tools-dropdown-section-label">Fechamento</div>
+            <button class="tools-item" onclick="abrirFechamento('semanal')">
+              <div class="tools-item-icon" style="background:var(--accent-dim);color:var(--accent)"><i class="ti ti-calendar-week"></i></div>
+              <div class="tools-item-body">
+                <div class="tools-item-label">Semanal</div>
+                <div class="tools-item-sub">Cobrança de lançamento semanal</div>
+              </div>
+              <i class="ti ti-chevron-right tools-item-arrow"></i>
+            </button>
+            <button class="tools-item" onclick="abrirFechamento('mensal')">
+              <div class="tools-item-icon" style="background:var(--red-bg);color:var(--red)"><i class="ti ti-calendar-month"></i></div>
+              <div class="tools-item-body">
+                <div class="tools-item-label">Mensal</div>
+                <div class="tools-item-sub">Fechamento do inventário mensal</div>
+              </div>
+              <i class="ti ti-chevron-right tools-item-arrow"></i>
+            </button>
+            <button class="tools-item" onclick="abrirFechamento('metas')">
+              <div class="tools-item-icon" style="background:var(--amber-bg);color:var(--amber)"><i class="ti ti-target-arrow"></i></div>
+              <div class="tools-item-body">
+                <div class="tools-item-label">Metas</div>
+                <div class="tools-item-sub">Metas e obrigações do fechamento</div>
+              </div>
+              <i class="ti ti-chevron-right tools-item-arrow"></i>
+            </button>
+
             <div class="tools-dropdown-section-label">Dados</div>
             <button class="tools-item" onclick="exportarDados(); closeToolsMenu()">
               <div class="tools-item-icon" style="background:var(--green-bg);color:var(--green)"><i class="ti ti-download"></i></div>
@@ -791,6 +817,55 @@
                 <div class="micro-filter-footer">
                   <button class="btn" onclick="cancelMicroFilter('variacao')"><i class="ti ti-x"></i> Cancelar</button>
                   <button class="btn btn-primary" onclick="applyMicroFilter('variacao')"><i class="ti ti-check"></i> Aplicar</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="micro-filter-divider"></div>
+
+            <!-- Variação: desfalque/sobra -->
+            <div class="micro-filter-group" id="mfg-tipo-var">
+              <button class="micro-filter-trigger" id="mft-tipo-var" onclick="toggleMicroFilter('tipo-var')">
+                <i class="ti ti-trending-down"></i>
+                <span id="mft-tipo-var-label">Variação</span>
+                <i class="ti ti-chevron-down micro-filter-chev" id="mfc-tipo-var"></i>
+              </button>
+              <div class="micro-filter-dropdown mfd-tipo-var-panel" id="mfd-tipo-var" style="min-width:260px">
+                <!-- Tipo -->
+                <div class="mfd-tv-section">
+                  <div class="mfd-tv-label">Tipo de variação</div>
+                  <div class="micro-filter-options" id="mfo-tipo-var">
+                    <label class="micro-filter-option">
+                      <input type="checkbox" value="desfalque" onchange="_tipoVarChange()">
+                      <span class="micro-filter-option-label"><i class="ti ti-trending-down" style="color:var(--red)"></i> Desfalque</span>
+                    </label>
+                    <label class="micro-filter-option">
+                      <input type="checkbox" value="sobra" onchange="_tipoVarChange()">
+                      <span class="micro-filter-option-label"><i class="ti ti-trending-up" style="color:var(--green)"></i> Sobra</span>
+                    </label>
+                  </div>
+                </div>
+                <!-- Nível -->
+                <div class="mfd-tv-section mfd-tv-sep">
+                  <div class="mfd-tv-label">Aplicar em</div>
+                  <div class="micro-filter-options" id="mfo-tipo-var-nivel">
+                    <label class="micro-filter-option">
+                      <input type="checkbox" value="regional" onchange="_tipoVarChange()" checked>
+                      <span class="micro-filter-option-label"><i class="ti ti-users-group" style="color:var(--accent)"></i> Regionais</span>
+                    </label>
+                    <label class="micro-filter-option">
+                      <input type="checkbox" value="central" onchange="_tipoVarChange()" checked>
+                      <span class="micro-filter-option-label"><i class="ti ti-building-warehouse" style="color:var(--accent)"></i> Centrais</span>
+                    </label>
+                    <label class="micro-filter-option">
+                      <input type="checkbox" value="material" onchange="_tipoVarChange()" checked>
+                      <span class="micro-filter-option-label"><i class="ti ti-box" style="color:var(--accent)"></i> Materiais</span>
+                    </label>
+                  </div>
+                </div>
+                <div class="micro-filter-footer">
+                  <button class="btn" onclick="cancelMicroFilter('tipo-var')"><i class="ti ti-x"></i> Cancelar</button>
+                  <button class="btn btn-primary" onclick="applyMicroFilter('tipo-var')"><i class="ti ti-check"></i> Aplicar</button>
                 </div>
               </div>
             </div>
@@ -1945,19 +2020,137 @@
   </div>
 </div>
 
+<!-- MODAL: Fechamento -->
+<div class="modal-overlay" id="modal-fechamento">
+  <div class="modal" style="max-width:680px;width:95vw">
+
+    <!-- Tabs -->
+    <div class="fech-tabs" id="fech-tabs">
+      <button class="fech-tab" data-tipo="semanal" onclick="fechamentoSwitchTipo('semanal')">
+        <i class="ti ti-calendar-week"></i> Semanal
+      </button>
+      <button class="fech-tab" data-tipo="mensal" onclick="fechamentoSwitchTipo('mensal')">
+        <i class="ti ti-calendar-month"></i> Mensal
+      </button>
+      <button class="fech-tab" data-tipo="metas" onclick="fechamentoSwitchTipo('metas')">
+        <i class="ti ti-target-arrow"></i> Metas
+      </button>
+    </div>
+
+    <!-- Header com data dinâmica -->
+    <div class="fech-header" id="fech-header">
+      <div class="fech-header-icon" id="fech-header-icon"></div>
+      <div>
+        <div class="fech-header-title" id="fech-header-title"></div>
+        <div class="fech-header-date" id="fech-header-date"></div>
+      </div>
+    </div>
+
+    <!-- Editor rico -->
+    <div class="fech-editor-wrap">
+      <!-- Toolbar -->
+      <div class="fech-toolbar" id="fech-toolbar">
+        <!-- Histórico -->
+        <button class="fech-tbtn" onclick="document.execCommand('undo')" title="Desfazer (Ctrl+Z)"><i class="ti ti-arrow-back-up"></i></button>
+        <button class="fech-tbtn" onclick="document.execCommand('redo')" title="Refazer (Ctrl+Y)"><i class="ti ti-arrow-forward-up"></i></button>
+        <div class="fech-tb-sep"></div>
+        <!-- Formatação -->
+        <button class="fech-tbtn" id="fech-tb-bold"   onclick="fechExec('bold')"          title="Negrito (Ctrl+B)"><b>B</b></button>
+        <button class="fech-tbtn" id="fech-tb-italic" onclick="fechExec('italic')"        title="Itálico (Ctrl+I)"><i>I</i></button>
+        <button class="fech-tbtn" id="fech-tb-under"  onclick="fechExec('underline')"     title="Sublinhado (Ctrl+U)"><u>U</u></button>
+        <button class="fech-tbtn" id="fech-tb-strike" onclick="fechExec('strikeThrough')" title="Tachado"><s>S</s></button>
+        <div class="fech-tb-sep"></div>
+        <!-- Tamanho da fonte -->
+        <select class="fech-tb-select" id="fech-font-size" onchange="fechSetFontSize(this.value)" title="Tamanho">
+          <option value="">Tam.</option>
+          <option value="1">8px</option>
+          <option value="2">10px</option>
+          <option value="3">12px</option>
+          <option value="4">14px</option>
+          <option value="5">18px</option>
+          <option value="6">24px</option>
+          <option value="7">36px</option>
+        </select>
+        <!-- Cor do texto -->
+        <div class="fech-tb-color-wrap" title="Cor do texto">
+          <span class="fech-tb-color-icon"><i class="ti ti-letter-a"></i></span>
+          <input type="color" id="fech-color-input" value="#ffffff" oninput="fechExec('foreColor', this.value)" title="Cor do texto">
+        </div>
+        <div class="fech-tb-sep"></div>
+        <!-- Alinhamento -->
+        <button class="fech-tbtn" onclick="fechExec('justifyLeft')"   title="Alinhar à esquerda"><i class="ti ti-align-left"></i></button>
+        <button class="fech-tbtn" onclick="fechExec('justifyCenter')" title="Centralizar"><i class="ti ti-align-center"></i></button>
+        <button class="fech-tbtn" onclick="fechExec('justifyRight')"  title="Alinhar à direita"><i class="ti ti-align-right"></i></button>
+        <div class="fech-tb-sep"></div>
+        <!-- Listas -->
+        <button class="fech-tbtn" onclick="fechExec('insertUnorderedList')" title="Lista com marcadores"><i class="ti ti-list"></i></button>
+        <button class="fech-tbtn" onclick="fechExec('insertOrderedList')"   title="Lista numerada"><i class="ti ti-list-numbers"></i></button>
+        <button class="fech-tbtn" onclick="fechExec('outdent')" title="Diminuir recuo"><i class="ti ti-indent-decrease"></i></button>
+        <button class="fech-tbtn" onclick="fechExec('indent')"  title="Aumentar recuo"><i class="ti ti-indent-increase"></i></button>
+        <div class="fech-tb-sep"></div>
+        <!-- Limpar formatação -->
+        <button class="fech-tbtn" onclick="fechExec('removeFormat')" title="Limpar formatação"><i class="ti ti-clear-formatting"></i></button>
+        <button class="fech-tbtn" onclick="fechamentoResetarTexto()" title="Restaurar padrão"><i class="ti ti-refresh"></i></button>
+      </div>
+      <!-- Área editável -->
+      <div class="fech-editor" id="fech-editor" contenteditable="true" spellcheck="false"
+        oninput="fechEditorUpdate()" onkeyup="fechUpdateToolbarState()"></div>
+      <div style="display:flex;justify-content:flex-end;padding:4px 2px 0">
+        <span id="fech-saved-indicator" style="font-size:10px;font-family:var(--mono);color:var(--green);opacity:0;transition:opacity .3s">
+          <i class="ti ti-device-floppy"></i> salvo
+        </span>
+      </div>
+    </div>
+
+    <!-- Preview card (hidden, used for image export) -->
+    <div id="fech-preview-card" class="fech-preview-card" style="display:none">
+      <div class="fech-card-logo">
+        <span class="fech-logo-text">CONCRELAGOS</span>
+        <span class="fech-logo-sub">CONCRETO</span>
+      </div>
+      <div class="fech-card-badge" id="fech-card-badge"></div>
+      <div class="fech-card-body" id="fech-card-body"></div>
+      <div class="fech-card-footer">ESTOQUE / INSUMOS</div>
+    </div>
+
+    <div class="form-actions" style="justify-content:space-between;flex-wrap:wrap;gap:8px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn" onclick="fechamentoCopiarWhatsapp()">
+          <i class="ti ti-brand-whatsapp"></i> Copiar WhatsApp
+        </button>
+        <button class="btn" onclick="fechamentoAbrirPrint()">
+          <i class="ti ti-printer"></i> Visualizar / Imprimir
+        </button>
+        <button class="btn" onclick="fechamentoResetarTexto()">
+          <i class="ti ti-refresh"></i> Restaurar padrão
+        </button>
+      </div>
+      <button class="btn" onclick="closeModal('modal-fechamento')">Fechar</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: Gráfico de tendência -->
 <div class="modal-overlay" id="modal-trend" style="z-index:2100">
   <div class="modal trend-modal">
-    <div class="modal-title" id="trend-modal-title">
-      <i class="ti ti-chart-line"></i> Tendência de Variação
-    </div>
-    <div class="modal-sub" id="trend-modal-sub"></div>
 
-    <!-- Controles -->
-    <div class="trend-controls">
-      <!-- Período via cal-picker -->
+    <!-- Header -->
+    <div class="trend-header">
+      <div>
+        <div class="modal-title" id="trend-modal-title" style="margin-bottom:2px">
+          <i class="ti ti-chart-line"></i> Tendência de Variação
+        </div>
+        <div class="modal-sub" id="trend-modal-sub"></div>
+      </div>
+      <button class="modal-close-btn" onclick="closeModal('modal-trend')"><i class="ti ti-x"></i></button>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="trend-toolbar">
+
+      <!-- Período -->
       <div class="trend-ctrl-group">
-        <span class="trend-ctrl-label">Período <span style="color:var(--text3);font-weight:400;letter-spacing:0">(ajustado para ter→ter)</span></span>
+        <span class="trend-ctrl-label">Período <span class="trend-ctrl-hint">(ajustado ter→ter)</span></span>
         <div class="cal-picker-wrap" id="trend-cal-wrap">
           <button class="cal-picker-trigger" id="trend-cal-trigger" onclick="toggleCalPicker('trend')" type="button">
             <i class="ti ti-calendar-event"></i>
@@ -1971,9 +2164,12 @@
           </div>
         </div>
       </div>
-      <!-- Materiais dropdown -->
+
+      <div class="trend-toolbar-sep"></div>
+
+      <!-- Materiais -->
       <div class="trend-ctrl-group">
-        <span class="trend-ctrl-label">Materiais <span id="trend-mat-count" style="color:var(--text3)"></span></span>
+        <span class="trend-ctrl-label">Materiais <span id="trend-mat-count" class="trend-ctrl-hint"></span></span>
         <div class="micro-filter-group" id="trend-mat-wrap" style="position:relative">
           <button class="micro-filter-trigger" id="trend-mat-trigger" onclick="trendToggleMatDropdown()">
             <i class="ti ti-box"></i>
@@ -1994,17 +2190,89 @@
           </div>
         </div>
       </div>
+
+      <div class="trend-toolbar-sep"></div>
+
+      <!-- Comparador -->
+      <div class="trend-ctrl-group">
+        <span class="trend-ctrl-label">Comparar com</span>
+        <div class="micro-filter-group" id="trend-cmp-wrap" style="position:relative">
+          <button class="micro-filter-trigger" id="trend-cmp-trigger" onclick="trendToggleCmpDropdown()">
+            <i class="ti ti-git-compare"></i>
+            <span id="trend-cmp-label">Nenhum</span>
+            <i class="ti ti-chevron-down micro-filter-chev" id="trend-cmp-chev"></i>
+          </button>
+          <div class="micro-filter-dropdown trend-cmp-dropdown" id="trend-cmp-dropdown" style="min-width:300px;z-index:2200">
+            <!-- Tabs: Central/Regional vs Período -->
+            <div class="trend-cmp-tabs" id="trend-cmp-tabs">
+              <button class="trend-cmp-tab active" data-tab="entity" onclick="trendCmpSwitchTab('entity')">
+                <i class="ti ti-building-warehouse"></i> Central/Regional
+              </button>
+              <button class="trend-cmp-tab" data-tab="period" onclick="trendCmpSwitchTab('period')">
+                <i class="ti ti-calendar-stats"></i> Período anterior
+              </button>
+            </div>
+            <!-- Entity picker -->
+            <div id="trend-cmp-entity-panel">
+              <div class="micro-filter-search-wrap">
+                <i class="ti ti-search"></i>
+                <input class="micro-filter-search" id="trend-cmp-search" type="text"
+                  placeholder="Buscar central ou regional…" oninput="trendCmpFilterSearch(this.value)">
+              </div>
+              <div class="micro-filter-options" id="trend-cmp-options" style="max-height:180px"></div>
+            </div>
+            <!-- Period picker -->
+            <div id="trend-cmp-period-panel" style="display:none">
+              <div style="padding:10px 12px 4px;font-size:11px;color:var(--text3)">Selecione um período anterior para comparar com o atual.</div>
+              <div class="cal-picker-wrap" id="trend-cmp-cal-wrap" style="padding:4px 12px 10px">
+                <button class="cal-picker-trigger" id="trend-cmp-cal-trigger" onclick="toggleCalPicker('trend-cmp')" type="button">
+                  <i class="ti ti-calendar-event"></i>
+                  <span id="trend-cmp-cal-label">Selecionar período</span>
+                  <i class="ti ti-chevron-down cal-chev" id="trend-cmp-cal-chev"></i>
+                </button>
+                <input type="hidden" id="trend-cmp-dt-ini">
+                <input type="hidden" id="trend-cmp-dt-fim">
+                <div class="cal-picker-dropdown" id="trend-cmp-cal-dropdown" style="z-index:2400">
+                  <div class="cal-picker-inner" id="trend-cmp-cal-inner" data-pfx="trend-cmp"></div>
+                </div>
+              </div>
+            </div>
+            <div class="micro-filter-footer">
+              <button class="btn" onclick="trendCmpClear()"><i class="ti ti-x"></i> Remover</button>
+              <button class="btn btn-primary" onclick="trendCmpApply()"><i class="ti ti-check"></i> Aplicar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="flex:1"></div>
+
+      <!-- Hint seleção -->
+      <div class="trend-select-hint" id="trend-select-hint">
+        <i class="ti ti-hand-click"></i> Clique e arraste para selecionar um intervalo
+      </div>
+
+    </div>
+
+    <!-- Valor selecionado (aparece ao arrastar) -->
+    <div class="trend-selection-bar" id="trend-selection-bar" style="display:none">
+      <span id="trend-sel-range"></span>
+      <span class="trend-sel-kpi"><i class="ti ti-trending-down"></i> Variação: <strong id="trend-sel-var"></strong></span>
+      <span class="trend-sel-kpi"><i class="ti ti-currency-dollar"></i> Custo: <strong id="trend-sel-cost"></strong></span>
+      <button onclick="trendClearSelection()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px"><i class="ti ti-x"></i></button>
     </div>
 
     <!-- Gráfico -->
     <div id="trend-chart-wrap">
       <canvas id="trend-canvas"></canvas>
     </div>
-    <div class="trend-legend" id="trend-legend"></div>
 
-    <div class="form-actions">
-      <button class="btn" onclick="closeModal('modal-trend')">Fechar</button>
+    <!-- Legend + stats -->
+    <div class="trend-footer">
+      <div class="trend-legend" id="trend-legend"></div>
+      <div class="trend-stats" id="trend-stats"></div>
     </div>
+
   </div>
 </div>
 
