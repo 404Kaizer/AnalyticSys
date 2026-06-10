@@ -83,7 +83,8 @@ function setModulo(mod) {
   const map = {
     'Entrada': 'tab-entrada',
     'Saída': 'tab-saida',
-    'Lançamento': 'tab-lancamento'
+    'Lançamento': 'tab-lancamento',
+    'SAP': 'tab-sap'
   };
   const tabId = map[mod];
   if (!tabId) return;

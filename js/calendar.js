@@ -499,7 +499,7 @@
 
   // Prevent clicks INSIDE the dropdown from bubbling to document
   document.addEventListener('DOMContentLoaded', function() {
-    ['dg-cal-dropdown', 'an-cal-dropdown', 'inv-cal-dropdown', 'aus-cal-dropdown', 'trend-cal-dropdown', 'trend-cmp-cal-dropdown'].forEach(function(id) {
+    ['dg-cal-dropdown', 'an-cal-dropdown', 'inv-cal-dropdown', 'aus-cal-dropdown', 'trend-cal-dropdown'].forEach(function(id) {
       var el = document.getElementById(id);
       if (el) el.addEventListener('click', function(e) { e.stopPropagation(); });
     });

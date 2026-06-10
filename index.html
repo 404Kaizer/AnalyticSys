@@ -178,9 +178,39 @@
         </div>
       </div>
       <div class="topbar-actions">
-        <div class="topbar-clock" id="topbar-clock">
-          <span class="clock-time" id="clock-time">--:--</span>
-          <span class="clock-date" id="clock-date">--/--/----</span>
+        <div class="topbar-status-bar">
+
+          <!-- 1. Próximo lançamento -->
+          <div class="topbar-stat" id="topbar-next-lanc" title="Próxima terça de conferência">
+            <i class="ti ti-calendar-event topbar-stat-icon"></i>
+            <div class="topbar-stat-body">
+              <span class="topbar-stat-label">Próx. lançamento</span>
+              <span class="topbar-stat-val" id="next-lanc-val">—</span>
+            </div>
+          </div>
+
+          <div class="topbar-stat-sep"></div>
+
+          <!-- 2. Saúde geral -->
+          <div class="topbar-stat" id="topbar-saude" title="Score médio de saúde das centrais (último cálculo do Dashboard Analítico)">
+            <i class="ti ti-heartbeat topbar-stat-icon" id="saude-icon"></i>
+            <div class="topbar-stat-body">
+              <span class="topbar-stat-label">Saúde geral</span>
+              <span class="topbar-stat-val" id="saude-val">—</span>
+            </div>
+          </div>
+
+          <div class="topbar-stat-sep"></div>
+
+          <!-- 3. Alertas ativos -->
+          <div class="topbar-stat" id="topbar-alertas" title="Ocorrências abertas e vencidas">
+            <i class="ti ti-bell topbar-stat-icon" id="alertas-icon"></i>
+            <div class="topbar-stat-body">
+              <span class="topbar-stat-label">Alertas ativos</span>
+              <span class="topbar-stat-val" id="alertas-val">—</span>
+            </div>
+          </div>
+
         </div>
         <!-- ── Ferramentas ── -->
         <div class="tools-wrap" id="tools-wrap">
@@ -190,6 +220,7 @@
 
           <!-- Dropdown menu -->
           <div class="tools-dropdown" id="tools-dropdown">
+            <div class="tools-dropdown-scroll">
 
             <div class="tools-dropdown-section-label">Ferramentas</div>
             <button class="tools-item" onclick="openTool('calc'); closeToolsMenu()">
@@ -259,6 +290,7 @@
               <button class="tools-theme-opt" data-theme="sand"    onclick="setTheme('sand');    updateToolsTheme()"><span class="theme-swatch sand"></span>Areia</button>
             </div>
 
+            </div><!-- /.tools-dropdown-scroll -->
           </div>
         </div>
 
@@ -420,7 +452,7 @@
         </div>
 
         <input type="file" id="restore-file-input" accept=".json" style="display:none" onchange="restaurarBackup(this.files[0]);this.value=''">
-        <button class="btn btn-primary" onclick="openModal('modal-manual')"><i class="ti ti-plus"></i> <span>Novo Registro</span></button>
+
       </div>
     </div>
 
@@ -872,12 +904,18 @@
 
             <div class="micro-filter-divider"></div>
 
-            <!-- Expand / Collapse -->
-            <button class="btn" onclick="expandAllMicro()" title="Expandir todos os cards">
-              <i class="ti ti-layout-list"></i> Expandir Todos
+            <!-- Toggle Regionais -->
+            <button class="btn" id="btn-toggle-regionais" onclick="toggleAllRegionais()" title="Expandir/Recolher regionais">
+              <i class="ti ti-map-pin" id="icon-toggle-regionais"></i>
+              <span id="label-toggle-regionais">Recolher Regionais</span>
+              <i class="ti ti-chevron-down" id="chev-toggle-regionais" style="font-size:11px;transition:transform .2s"></i>
             </button>
-            <button class="btn" onclick="collapseAllMicro()" title="Recolher todos os cards">
-              <i class="ti ti-layout-rows"></i> Recolher Todos
+
+            <!-- Toggle Centrais -->
+            <button class="btn" id="btn-toggle-centrais" onclick="toggleAllCentralis()" title="Expandir/Recolher centrais">
+              <i class="ti ti-building-factory-2" id="icon-toggle-centrais"></i>
+              <span id="label-toggle-centrais">Expandir Centrais</span>
+              <i class="ti ti-chevron-down" id="chev-toggle-centrais" style="font-size:11px;transition:transform .2s"></i>
             </button>
 
             <!-- Limpar filtros (aparece só quando há algo ativo) -->
@@ -897,7 +935,7 @@
           <div class="table-header">
             <span class="table-title"><i class="ti ti-package-import"></i> Notas Fiscais de Entrada</span>
             <div class="table-toolbar">
-              <button class="btn" onclick="openModal('modal-manual'); setModulo('Entrada')"><i class="ti ti-plus"></i> Adicionar</button>
+              <button class="btn btn-primary" onclick="openModal('modal-manual'); setModulo('Entrada')"><i class="ti ti-plus"></i> Adicionar</button>
             </div>
           </div>
           <div class="table-scroll">
@@ -1129,7 +1167,7 @@
           <div class="table-header">
             <span class="table-title"><i class="ti ti-package-export"></i> Ordens de Serviço — Saídas</span>
             <div class="table-toolbar">
-              <button class="btn" onclick="openModal('modal-manual'); setModulo('Saída')"><i class="ti ti-plus"></i> Adicionar</button>
+              <button class="btn btn-primary" onclick="openModal('modal-manual'); setModulo('Saída')"><i class="ti ti-plus"></i> Adicionar</button>
             </div>
           </div>
           <div class="table-scroll">
@@ -1255,7 +1293,7 @@
           <div class="table-header">
             <span class="table-title"><i class="ti ti-clipboard-list"></i> Lançamentos — Saldo Real</span>
             <div class="table-toolbar">
-              <button class="btn" onclick="openModal('modal-manual'); setModulo('Lançamento')"><i class="ti ti-plus"></i> Adicionar</button>
+              <button class="btn btn-primary" onclick="openModal('modal-manual'); setModulo('Lançamento')"><i class="ti ti-plus"></i> Adicionar</button>
             </div>
           </div>
           <div class="table-scroll">
@@ -1297,7 +1335,7 @@
           <div class="table-header">
             <span class="table-title"><i class="ti ti-database"></i> Movimentações SAP</span>
             <div class="table-toolbar">
-              <button class="btn" onclick="navigate('importar')"><i class="ti ti-file-upload"></i> Importar</button>
+              <button class="btn btn-primary" onclick="openModal('modal-manual'); setModulo('SAP')"><i class="ti ti-plus"></i> Adicionar</button>
             </div>
           </div>
           <div class="table-scroll">
@@ -2132,40 +2170,86 @@
 
 <!-- MODAL: Gráfico de tendência -->
 <div class="modal-overlay" id="modal-trend" style="z-index:2100">
-  <div class="modal trend-modal">
+  <div class="modal tr2-modal">
 
-    <!-- Header -->
-    <div class="trend-header">
-      <div>
+    <!-- ── Header ── -->
+    <div class="tr2-header">
+      <div class="tr2-header-left">
         <div class="modal-title" id="trend-modal-title" style="margin-bottom:2px">
-          <i class="ti ti-chart-line"></i> Tendência de Variação
+          <i class="ti ti-chart-area-line"></i> Tendência de Variação
         </div>
         <div class="modal-sub" id="trend-modal-sub"></div>
       </div>
       <button class="modal-close-btn" onclick="closeModal('modal-trend')"><i class="ti ti-x"></i></button>
     </div>
 
-    <!-- Toolbar -->
-    <div class="trend-toolbar">
+    <!-- ── Toolbar ── -->
+    <div class="tr2-toolbar">
 
       <!-- Período -->
       <div class="trend-ctrl-group">
-        <span class="trend-ctrl-label">Período <span class="trend-ctrl-hint">(ajustado ter→ter)</span></span>
-        <div class="cal-picker-wrap" id="trend-cal-wrap">
-          <button class="cal-picker-trigger" id="trend-cal-trigger" onclick="toggleCalPicker('trend')" type="button">
-            <i class="ti ti-calendar-event"></i>
-            <span id="trend-cal-label">Selecionar período</span>
-            <i class="ti ti-chevron-down cal-chev" id="trend-cal-chev"></i>
-          </button>
-          <input type="hidden" id="trend-dt-ini">
-          <input type="hidden" id="trend-dt-fim">
-          <div class="cal-picker-dropdown" id="trend-cal-dropdown" style="z-index:2300">
-            <div class="cal-picker-inner" id="trend-cal-inner" data-pfx="trend"></div>
+        <span class="trend-ctrl-label">Período <span class="trend-ctrl-hint">(ter→ter)</span></span>
+        <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
+          <!-- Cal-picker customizado -->
+          <div class="cal-picker-wrap" id="trend-cal-wrap">
+            <button class="cal-picker-trigger" id="trend-cal-trigger" onclick="toggleCalPicker('trend')" type="button">
+              <i class="ti ti-calendar-event"></i>
+              <span id="trend-cal-label">Selecionar período</span>
+              <i class="ti ti-chevron-down cal-chev" id="trend-cal-chev"></i>
+            </button>
+            <input type="hidden" id="trend-dt-ini">
+            <input type="hidden" id="trend-dt-fim">
+            <div class="cal-picker-dropdown" id="trend-cal-dropdown" style="z-index:2300">
+              <div class="cal-picker-inner" id="trend-cal-inner" data-pfx="trend"></div>
+              <div class="micro-filter-footer" style="border-top:1px solid var(--border);padding:8px 12px">
+                <button class="btn btn-primary" style="width:100%" onclick="(function(){
+                  const ini=document.getElementById('trend-dt-ini').value;
+                  const fim=document.getElementById('trend-dt-fim').value;
+                  if(!ini||!fim)return;
+                  document.getElementById('trend-cal-dropdown').classList.remove('open');
+                  document.getElementById('trend-cal-trigger').classList.remove('open');
+                  trendOnPeriodSet(new Date(ini+'T00:00:00'), new Date(fim+'T23:59:59'));
+                })()"><i class='ti ti-check'></i> Aplicar período</button>
+              </div>
+            </div>
+          </div>
+          <!-- Atalhos de período predefinidos -->
+          <div id="trend-period-presets" style="display:flex;gap:3px;flex-wrap:wrap">
+            <button class="trend-preset-btn" id="trend-preset-mes"      onclick="trendSetPreset('mes')"       title="Mês atual">Mês</button>
+            <button class="trend-preset-btn" id="trend-preset-bimestre" onclick="trendSetPreset('bimestre')"  title="Bimestre atual">2M</button>
+            <button class="trend-preset-btn" id="trend-preset-trimestre" onclick="trendSetPreset('trimestre')" title="Trimestre atual">3M</button>
+            <button class="trend-preset-btn" id="trend-preset-ano"      onclick="trendSetPreset('ano')"       title="Ano atual">Ano</button>
           </div>
         </div>
       </div>
 
       <div class="trend-toolbar-sep"></div>
+
+      <!-- Centrais (só para regionais) -->
+      <div class="trend-ctrl-group" id="trend-cen-group" style="display:none">
+        <span class="trend-ctrl-label">Centrais <span id="trend-cen-count" class="trend-ctrl-hint"></span></span>
+        <div class="micro-filter-group" id="trend-cen-wrap" style="position:relative">
+          <button class="micro-filter-trigger" id="trend-cen-trigger" onclick="trendToggleCenDropdown()">
+            <i class="ti ti-building-factory-2"></i>
+            <span id="trend-cen-trigger-label">Todas</span>
+            <i class="ti ti-chevron-down micro-filter-chev" id="trend-cen-chev"></i>
+          </button>
+          <div class="micro-filter-dropdown" id="trend-cen-dropdown" style="min-width:240px;z-index:2200">
+            <div class="micro-filter-search-wrap">
+              <i class="ti ti-search"></i>
+              <input class="micro-filter-search" id="trend-cen-search" type="text"
+                placeholder="Buscar central…" oninput="trendFilterCenSearch(this.value)">
+            </div>
+            <div class="micro-filter-options" id="trend-cen-options"></div>
+            <div class="micro-filter-footer">
+              <button class="btn" onclick="trendClearCenFilter()"><i class="ti ti-x"></i> Limpar</button>
+              <button class="btn btn-primary" onclick="trendCloseCenDropdown()"><i class="ti ti-check"></i> Aplicar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="trend-toolbar-sep" id="trend-cen-sep" style="display:none"></div>
 
       <!-- Materiais -->
       <div class="trend-ctrl-group">
@@ -2191,86 +2275,157 @@
         </div>
       </div>
 
-      <div class="trend-toolbar-sep"></div>
+      <div style="flex:1"></div>
 
-      <!-- Comparador -->
-      <div class="trend-ctrl-group">
-        <span class="trend-ctrl-label">Comparar com</span>
-        <div class="micro-filter-group" id="trend-cmp-wrap" style="position:relative">
-          <button class="micro-filter-trigger" id="trend-cmp-trigger" onclick="trendToggleCmpDropdown()">
-            <i class="ti ti-git-compare"></i>
-            <span id="trend-cmp-label">Nenhum</span>
-            <i class="ti ti-chevron-down micro-filter-chev" id="trend-cmp-chev"></i>
-          </button>
-          <div class="micro-filter-dropdown trend-cmp-dropdown" id="trend-cmp-dropdown" style="min-width:300px;z-index:2200">
-            <!-- Tabs: Central/Regional vs Período -->
-            <div class="trend-cmp-tabs" id="trend-cmp-tabs">
-              <button class="trend-cmp-tab active" data-tab="entity" onclick="trendCmpSwitchTab('entity')">
-                <i class="ti ti-building-warehouse"></i> Central/Regional
-              </button>
-              <button class="trend-cmp-tab" data-tab="period" onclick="trendCmpSwitchTab('period')">
-                <i class="ti ti-calendar-stats"></i> Período anterior
-              </button>
-            </div>
-            <!-- Entity picker -->
-            <div id="trend-cmp-entity-panel">
+      <!-- Toggle Separado / Consolidado -->
+      <div class="trend-ctrl-group" id="trend-split-group">
+        <span class="trend-ctrl-label" style="opacity:0;pointer-events:none">​</span>
+        <button class="btn trend-split-toggle-btn" id="trend-split-btn" onclick="trendToggleSplitMode()" title="Alternar entre linha consolidada e linhas por entidade">
+          <i class="ti ti-chart-dots-3" id="trend-split-icon"></i>
+          <span id="trend-split-label">Separado</span>
+        </button>
+      </div>
+
+      <!-- Hint seleção (só aparece na aba overview) -->
+      <div class="trend-select-hint" id="trend-select-hint">
+        <i class="ti ti-hand-click"></i> Arraste para selecionar intervalo
+      </div>
+    </div>
+
+    <!-- ── Tabs ── -->
+    <div class="tr2-tabs">
+      <button class="tr2-tab-btn active" data-tab="overview"    onclick="trendSwitchTab('overview')">
+        <i class="ti ti-chart-line"></i> Visão Geral
+      </button>
+      <button class="tr2-tab-btn" data-tab="dist"          onclick="trendSwitchTab('dist')">
+        <i class="ti ti-chart-bar-off"></i> Distribuição <span id="trend-dist-subtitle" class="tr2-tab-sub"></span>
+      </button>
+      <button class="tr2-tab-btn" data-tab="heat"          onclick="trendSwitchTab('heat')">
+        <i class="ti ti-layout-grid"></i> Heatmap <span id="trend-heat-subtitle" class="tr2-tab-sub"></span>
+      </button>
+      <button class="tr2-tab-btn" data-tab="comparison"    onclick="trendSwitchTab('comparison')">
+        <i class="ti ti-git-compare"></i> Comparação
+      </button>
+    </div>
+
+    <!-- ══════════════════════════════════════
+         PAINEL: VISÃO GERAL
+    ═══════════════════════════════════════ -->
+    <div id="trend-overview-panel" class="tr2-panel">
+
+      <!-- Selection bar -->
+      <div class="trend-selection-bar" id="trend-selection-bar" style="display:none">
+        <span id="trend-sel-range"></span>
+        <span class="trend-sel-kpi"><i class="ti ti-trending-down"></i> Variação: <strong id="trend-sel-var"></strong></span>
+        <span class="trend-sel-kpi"><i class="ti ti-currency-dollar"></i> Custo: <strong id="trend-sel-cost"></strong></span>
+        <span id="trend-sel-split"></span>
+        <button onclick="trendClearSelection()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px"><i class="ti ti-x"></i></button>
+      </div>
+
+      <!-- Chart + KPIs -->
+      <div class="tr2-overview-body">
+        <div id="trend-chart-wrap" class="tr2-chart-main">
+          <canvas id="trend-canvas"></canvas>
+        </div>
+        <div id="trend-kpis" class="tr2-kpis-panel"></div>
+      </div>
+
+      <!-- Legend -->
+      <div class="trend-footer">
+        <div class="trend-legend" id="trend-legend"></div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════
+         PAINEL: DISTRIBUIÇÃO
+    ═══════════════════════════════════════ -->
+    <div id="trend-dist-panel" class="tr2-panel" style="display:none">
+      <div class="tr2-panel-toolbar">
+        <span class="tr2-panel-title"><i class="ti ti-chart-bar-off"></i> Variação acumulada por entidade</span>
+        <div class="tr2-sort-btns">
+          <span style="font-size:11px;color:var(--text3)">Ordenar:</span>
+          <button class="btn" onclick="trendDistSort('variation')"><i class="ti ti-sort-descending-numbers"></i> Variação</button>
+          <button class="btn" onclick="trendDistSort('name')"><i class="ti ti-sort-ascending-letters"></i> Nome</button>
+        </div>
+      </div>
+      <div id="trend-dist-wrap" class="tr2-canvas-wrap tr2-dist-wrap">
+        <canvas id="trend-dist-canvas"></canvas>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════
+         PAINEL: HEATMAP
+    ═══════════════════════════════════════ -->
+    <div id="trend-heat-panel" class="tr2-panel" style="display:none">
+      <div class="tr2-panel-toolbar">
+        <span class="tr2-panel-title"><i class="ti ti-layout-grid"></i> Mapa de calor de variação semanal</span>
+        <span style="font-size:11px;color:var(--text3)">Cada célula = variação da semana · verde = positivo · vermelho = negativo · intensidade relativa à entidade</span>
+      </div>
+      <div id="trend-heat-wrap" class="tr2-canvas-wrap" style="overflow-x:auto">
+        <canvas id="trend-heat-canvas"></canvas>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════
+         PAINEL: COMPARAÇÃO
+    ═══════════════════════════════════════ -->
+    <div id="trend-cmp2-panel" class="tr2-panel" style="display:none">
+
+      <!-- Seletor de séries + controles -->
+      <div class="tr2-cmp-controls">
+        <!-- Seletor dropdown -->
+        <div class="trend-ctrl-group">
+          <span class="trend-ctrl-label">Séries <span class="trend-ctrl-hint">(máx. 6)</span></span>
+          <div class="micro-filter-group" id="trend-cmp2-sel-wrap" style="position:relative">
+            <button class="micro-filter-trigger" id="trend-cmp2-sel-trigger"
+              onclick="(function(btn){
+                const dd=document.getElementById('trend-cmp2-sel-dropdown');
+                const open=dd.classList.contains('open');
+                dd.classList.toggle('open',!open);
+                btn.classList.toggle('open',!open);
+                document.getElementById('trend-cmp2-sel-chev').style.transform=open?'':'rotate(180deg)';
+              })(this)">
+              <i class="ti ti-git-compare"></i>
+              <span>Selecionar entidades</span>
+              <i class="ti ti-chevron-down micro-filter-chev" id="trend-cmp2-sel-chev"></i>
+            </button>
+            <div class="micro-filter-dropdown" id="trend-cmp2-sel-dropdown" style="min-width:300px;max-height:320px;overflow-y:auto;z-index:2200">
               <div class="micro-filter-search-wrap">
                 <i class="ti ti-search"></i>
-                <input class="micro-filter-search" id="trend-cmp-search" type="text"
-                  placeholder="Buscar central ou regional…" oninput="trendCmpFilterSearch(this.value)">
+                <input class="micro-filter-search" type="text" placeholder="Buscar central ou regional…"
+                  oninput="document.querySelectorAll('#trend-cmp2-selector .micro-filter-option').forEach(o=>{o.style.display=o.textContent.toLowerCase().includes(this.value.toLowerCase())?'':'none'})">
               </div>
-              <div class="micro-filter-options" id="trend-cmp-options" style="max-height:180px"></div>
-            </div>
-            <!-- Period picker -->
-            <div id="trend-cmp-period-panel" style="display:none">
-              <div style="padding:10px 12px 4px;font-size:11px;color:var(--text3)">Selecione um período anterior para comparar com o atual.</div>
-              <div class="cal-picker-wrap" id="trend-cmp-cal-wrap" style="padding:4px 12px 10px">
-                <button class="cal-picker-trigger" id="trend-cmp-cal-trigger" onclick="toggleCalPicker('trend-cmp')" type="button">
-                  <i class="ti ti-calendar-event"></i>
-                  <span id="trend-cmp-cal-label">Selecionar período</span>
-                  <i class="ti ti-chevron-down cal-chev" id="trend-cmp-cal-chev"></i>
-                </button>
-                <input type="hidden" id="trend-cmp-dt-ini">
-                <input type="hidden" id="trend-cmp-dt-fim">
-                <div class="cal-picker-dropdown" id="trend-cmp-cal-dropdown" style="z-index:2400">
-                  <div class="cal-picker-inner" id="trend-cmp-cal-inner" data-pfx="trend-cmp"></div>
-                </div>
+              <div id="trend-cmp2-selector" class="micro-filter-options"></div>
+              <div class="micro-filter-footer">
+                <button class="btn" onclick="trendCmpClearAll()"><i class="ti ti-x"></i> Limpar tudo</button>
               </div>
-            </div>
-            <div class="micro-filter-footer">
-              <button class="btn" onclick="trendCmpClear()"><i class="ti ti-x"></i> Remover</button>
-              <button class="btn btn-primary" onclick="trendCmpApply()"><i class="ti ti-check"></i> Aplicar</button>
             </div>
           </div>
         </div>
+
+        <div class="trend-toolbar-sep"></div>
+
+        <!-- Normalizar -->
+        <div class="trend-ctrl-group">
+          <span class="trend-ctrl-label">Normalizar</span>
+          <label class="tr2-toggle-wrap">
+            <input type="checkbox" id="trend-cmp2-norm" onchange="trendCmpNormalize(this.checked)">
+            <span class="tr2-toggle-track"></span>
+            <span class="tr2-toggle-label">Delta acumulado</span>
+          </label>
+        </div>
+
       </div>
 
-      <div style="flex:1"></div>
-
-      <!-- Hint seleção -->
-      <div class="trend-select-hint" id="trend-select-hint">
-        <i class="ti ti-hand-click"></i> Clique e arraste para selecionar um intervalo
+      <!-- Gráfico multi-série -->
+      <div id="trend-cmp2-wrap" class="tr2-canvas-wrap tr2-cmp2-wrap">
+        <canvas id="trend-cmp2-canvas"></canvas>
       </div>
 
-    </div>
-
-    <!-- Valor selecionado (aparece ao arrastar) -->
-    <div class="trend-selection-bar" id="trend-selection-bar" style="display:none">
-      <span id="trend-sel-range"></span>
-      <span class="trend-sel-kpi"><i class="ti ti-trending-down"></i> Variação: <strong id="trend-sel-var"></strong></span>
-      <span class="trend-sel-kpi"><i class="ti ti-currency-dollar"></i> Custo: <strong id="trend-sel-cost"></strong></span>
-      <button onclick="trendClearSelection()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px"><i class="ti ti-x"></i></button>
-    </div>
-
-    <!-- Gráfico -->
-    <div id="trend-chart-wrap">
-      <canvas id="trend-canvas"></canvas>
-    </div>
-
-    <!-- Legend + stats -->
-    <div class="trend-footer">
-      <div class="trend-legend" id="trend-legend"></div>
-      <div class="trend-stats" id="trend-stats"></div>
+      <!-- Legenda dinâmica -->
+      <div class="trend-footer">
+        <div class="trend-legend" id="trend-cmp2-legend"></div>
+      </div>
     </div>
 
   </div>

@@ -1121,6 +1121,30 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
     renderMacroPanels(results, th, dtIni, dtFim);
   }
   if (typeof hideLoadingOverlay === 'function') hideLoadingOverlay('Análise concluída');
+  updateClock(); // atualiza saúde geral com dados recém-calculados
+
+  // Sincroniza estado dos botões toggle com os cards recém-criados
+  // (após re-renderização, novos cards herdam o estado atual dos toggles)
+  if (!_regionaisExpanded) {
+    document.querySelectorAll('#an-micro-container .regional-group').forEach(group => {
+      const body = group.querySelector('.regional-group-body');
+      const chev = group.querySelector('.regional-group-chev');
+      if (body) body.classList.remove('open');
+      group.classList.add('collapsed');
+      if (chev) chev.style.transform = 'rotate(-90deg)';
+    });
+  }
+  if (_centraisExpanded) {
+    document.querySelectorAll('#an-micro-container .micro-filial-card').forEach(card => {
+      const body = card.querySelector('.micro-filial-body');
+      const chev = card.querySelector('[id^="chev-"]');
+      if (body) body.classList.add('open');
+      if (chev) chev.style.transform = 'rotate(180deg)';
+    });
+  }
+  // Atualiza visual dos botões
+  _updateToggleRegionaisBtn();
+  _updateToggleCentralisBtn();
 }  // end _rodarAnaliticoCore
 
 
@@ -1601,41 +1625,67 @@ function _applyMicroVisibility() {
   });
 }
 
-function expandAllMicro() {
-  // Expande regionais
+// ── Toggle Regionais ─────────────────────────────────────────────────────
+let _regionaisExpanded = true;   // estado atual dos grupos regionais
+
+function toggleAllRegionais() {
+  _regionaisExpanded = !_regionaisExpanded;
   document.querySelectorAll('#an-micro-container .regional-group').forEach(group => {
     const body = group.querySelector('.regional-group-body');
     const chev = group.querySelector('.regional-group-chev');
-    if (body) body.classList.add('open');
-    group.classList.remove('collapsed');
-    if (chev) chev.style.transform = '';
+    if (_regionaisExpanded) {
+      if (body) body.classList.add('open');
+      group.classList.remove('collapsed');
+      if (chev) chev.style.transform = '';
+    } else {
+      if (body) body.classList.remove('open');
+      group.classList.add('collapsed');
+      if (chev) chev.style.transform = 'rotate(-90deg)';
+    }
   });
-  // Expande cards de central
-  document.querySelectorAll('#an-micro-container .micro-filial-card').forEach(card => {
-    const body = card.querySelector('.micro-filial-body');
-    const chev = card.querySelector('[id^="chev-"]');
-    if (body) body.classList.add('open');
-    if (chev) chev.style.transform = 'rotate(180deg)';
-  });
+  _updateToggleRegionaisBtn();
 }
 
-function collapseAllMicro() {
-  // Recolhe regionais
-  document.querySelectorAll('#an-micro-container .regional-group').forEach(group => {
-    const body = group.querySelector('.regional-group-body');
-    const chev = group.querySelector('.regional-group-chev');
-    if (body) body.classList.remove('open');
-    group.classList.add('collapsed');
-    if (chev) chev.style.transform = 'rotate(-90deg)';
-  });
-  // Recolhe cards de central
+function _updateToggleRegionaisBtn() {
+  const chev = document.getElementById('chev-toggle-regionais');
+  const btn  = document.getElementById('btn-toggle-regionais');
+  const lbl  = document.getElementById('label-toggle-regionais');
+  if (chev) chev.style.transform = _regionaisExpanded ? '' : 'rotate(-90deg)';
+  if (btn)  btn.classList.toggle('active', !_regionaisExpanded);
+  if (lbl)  lbl.textContent = _regionaisExpanded ? 'Recolher Regionais' : 'Expandir Regionais';
+}
+
+// ── Toggle Centrais ───────────────────────────────────────────────────────
+let _centraisExpanded = true;    // estado atual dos cards de central
+
+function toggleAllCentralis() {
+  _centraisExpanded = !_centraisExpanded;
   document.querySelectorAll('#an-micro-container .micro-filial-card').forEach(card => {
     const body = card.querySelector('.micro-filial-body');
     const chev = card.querySelector('[id^="chev-"]');
-    if (body) body.classList.remove('open');
-    if (chev) chev.style.transform = '';
+    if (_centraisExpanded) {
+      if (body) body.classList.add('open');
+      if (chev) chev.style.transform = 'rotate(180deg)';
+    } else {
+      if (body) body.classList.remove('open');
+      if (chev) chev.style.transform = '';
+    }
   });
+  _updateToggleCentralisBtn();
 }
+
+function _updateToggleCentralisBtn() {
+  const chev = document.getElementById('chev-toggle-centrais');
+  const btn  = document.getElementById('btn-toggle-centrais');
+  const lbl  = document.getElementById('label-toggle-centrais');
+  if (chev) chev.style.transform = _centraisExpanded ? '' : 'rotate(-90deg)';
+  if (btn)  btn.classList.toggle('active', !_centraisExpanded);
+  if (lbl)  lbl.textContent = _centraisExpanded ? 'Recolher Centrais' : 'Expandir Centrais';
+}
+
+// Mantém compatibilidade com chamadas legadas
+function expandAllMicro()   { if (!_regionaisExpanded) toggleAllRegionais(); if (!_centraisExpanded) toggleAllCentralis(); }
+function collapseAllMicro() { if (_regionaisExpanded)  toggleAllRegionais(); if (_centraisExpanded)  toggleAllCentralis(); }
 
 // Close dropdowns when clicking outside
 document.addEventListener('click', e => {
@@ -1658,7 +1708,7 @@ document.addEventListener('click', e => {
 
 Object.assign(window, { _microFilterCheckChange, toggleMicroFilter, filterMicroOptions,
   applyMicroFilter, cancelMicroFilter, clearAllMicroFilters,
-  expandAllMicro, collapseAllMicro, populateMicroFilterOptions,
+  expandAllMicro, collapseAllMicro, toggleAllRegionais, toggleAllCentralis, populateMicroFilterOptions,
   _buildVariacaoOptions, _varFilterChange, _tipoVarChange, _tipoVarSyncToState, _tipoVarIsActive });
 
 // ═══════════════════════════════════════════════════════════
@@ -1731,6 +1781,8 @@ Object.assign(window, {
   toggleBreakdown,
   expandAllMicro,
   collapseAllMicro,
+  toggleAllRegionais,
+  toggleAllCentralis,
   toggleMicroFilter,
   filterMicroOptions,
   applyMicroFilter,
@@ -1741,17 +1793,100 @@ Object.assign(window, {
 // ═══════════════════════════════════════════════════════════
 // CLOCK
 // ═══════════════════════════════════════════════════════════
-function updateClock() {
+// ── Próxima terça de conferência ─────────────────────────────────────────
+function _nextTuesday() {
   const now = new Date();
-  const hh = String(now.getHours()).padStart(2, '0');
-  const mm = String(now.getMinutes()).padStart(2, '0');
-  const dd = String(now.getDate()).padStart(2, '0');
-  const mo = String(now.getMonth() + 1).padStart(2, '0');
-  const yy = now.getFullYear();
-  const timeEl = document.getElementById('clock-time');
-  const dateEl = document.getElementById('clock-date');
-  if (timeEl) timeEl.textContent = `${hh}:${mm}`;
-  if (dateEl) dateEl.textContent = `${dd}/${mo}/${yy}`;
+  const dow = now.getDay(); // 0=dom ... 2=ter ... 6=sab
+  const daysUntil = dow === 2 ? 7 : (2 - dow + 7) % 7;
+  const next = new Date(now);
+  next.setDate(now.getDate() + daysUntil);
+  next.setHours(0, 0, 0, 0);
+  return next;
+}
+
+function _nextLancLabel() {
+  const next  = _nextTuesday();
+  const now   = new Date(); now.setHours(0,0,0,0);
+  const diff  = Math.round((next - now) / 86400000);
+  const dd    = String(next.getDate()).padStart(2,'0');
+  const mo    = String(next.getMonth()+1).padStart(2,'0');
+  const days  = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'][next.getDay()];
+  if (diff === 0) return { text: 'Hoje · ' + days, cls: 'danger' };
+  if (diff === 1) return { text: 'Amanhã · ' + days, cls: 'warn' };
+  return { text: `${dd}/${mo} · ${days} · ${diff}d`, cls: diff <= 3 ? 'warn' : '' };
+}
+
+// ── Score médio de saúde (usa _anResumoCentraisData se disponível) ────────
+function _saudeGeralLabel() {
+  const data = window._anResumoCentraisData;
+  if (!data || !data.length) return { text: 'Sem dados', cls: 'muted', icon: 'ti-heartbeat' };
+  const scores = data
+    .map(c => parseFloat(c.healthScore))
+    .filter(s => Number.isFinite(s));
+  if (!scores.length) return { text: 'Sem dados', cls: 'muted', icon: 'ti-heartbeat' };
+  const avg   = Math.round(scores.reduce((a,b)=>a+b,0) / scores.length);
+  const criticos = data.filter(c => c.healthLevel === 'critico').length;
+  const urgentes = data.filter(c => c.healthLevel === 'urgente').length;
+  let cls  = avg >= 80 ? 'ok' : avg >= 55 ? 'warn' : 'danger';
+  let icon = avg >= 80 ? 'ti-heartbeat' : avg >= 55 ? 'ti-alert-triangle' : 'ti-flame';
+  let extra = criticos > 0 ? ` · ${criticos} crít.` : urgentes > 0 ? ` · ${urgentes} urg.` : '';
+  return { text: `${avg}%${extra}`, cls, icon };
+}
+
+// ── Alertas ativos (ocorrências abertas + vencidas) ───────────────────────
+function _alertasLabel() {
+  const ocs = (typeof state !== 'undefined' && state.ocorrencias) ? state.ocorrencias : [];
+  if (!ocs.length) return { text: 'Nenhum', cls: 'muted', icon: 'ti-bell' };
+  const hoje   = new Date(); hoje.setHours(0,0,0,0);
+  const abertas = ocs.filter(o => !o.concluida);
+  const vencidas = abertas.filter(o => {
+    if (!o.dataLimite) return false;
+    return new Date(o.dataLimite + 'T00:00:00') < hoje;
+  });
+  const urgentes = abertas.filter(o => {
+    if (!o.dataLimite) return false;
+    const lim = new Date(o.dataLimite + 'T00:00:00');
+    const d = Math.round((lim - hoje) / 86400000);
+    return d >= 0 && d <= 2;
+  });
+  if (!abertas.length) return { text: 'Nenhum', cls: 'ok', icon: 'ti-bell' };
+  const cls  = vencidas.length > 0 ? 'danger' : urgentes.length > 0 ? 'warn' : 'muted';
+  const icon = vencidas.length > 0 ? 'ti-bell-ringing' : 'ti-bell';
+  let text = `${abertas.length} aberta${abertas.length !== 1 ? 's' : ''}`;
+  if (vencidas.length) text += ` · ${vencidas.length} venc.`;
+  else if (urgentes.length) text += ` · ${urgentes.length} urg.`;
+  return { text, cls, icon };
+}
+
+// ── Atualiza os 3 widgets do topbar ──────────────────────────────────────
+function updateClock() {
+  // Próx. lançamento
+  const lanc = _nextLancLabel();
+  const lancEl = document.getElementById('next-lanc-val');
+  if (lancEl) {
+    lancEl.textContent = lanc.text;
+    lancEl.className   = 'topbar-stat-val' + (lanc.cls ? ' ' + lanc.cls : '');
+  }
+
+  // Saúde geral
+  const saude = _saudeGeralLabel();
+  const saudeEl   = document.getElementById('saude-val');
+  const saudeIcon = document.getElementById('saude-icon');
+  if (saudeEl) {
+    saudeEl.textContent = saude.text;
+    saudeEl.className   = 'topbar-stat-val' + (saude.cls ? ' ' + saude.cls : '');
+  }
+  if (saudeIcon) saudeIcon.className = `ti ${saude.icon} topbar-stat-icon`;
+
+  // Alertas
+  const alertas = _alertasLabel();
+  const alertasEl   = document.getElementById('alertas-val');
+  const alertasIcon = document.getElementById('alertas-icon');
+  if (alertasEl) {
+    alertasEl.textContent = alertas.text;
+    alertasEl.className   = 'topbar-stat-val' + (alertas.cls ? ' ' + alertas.cls : '');
+  }
+  if (alertasIcon) alertasIcon.className = `ti ${alertas.icon} topbar-stat-icon`;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -2103,6 +2238,22 @@ function setupKeyboardShortcuts() {
       else openTool('notes');
       return;
     }
+
+    // Novo Registro Manual
+    const scNovoReg = getShortcut('novo_reg');
+    if (scNovoReg && _shortcutMatch(e, scNovoReg)) {
+      e.preventDefault();
+      if (typeof openModal === 'function') openModal('modal-manual');
+      return;
+    }
+
+    // Nova Ocorrência
+    const scNovaOc = getShortcut('nova_oc');
+    if (scNovaOc && _shortcutMatch(e, scNovaOc)) {
+      e.preventDefault();
+      if (typeof openOcorrenciaModal === 'function') openOcorrenciaModal();
+      return;
+    }
   });
 
   // Close dropdown when clicking outside
@@ -2248,7 +2399,7 @@ async function init() {
 
   // Start clock
   updateClock();
-  setInterval(updateClock, 60000);
+  setInterval(updateClock, 30000); // 30s para alertas mais responsivos
 
   // Theme switcher moved into Ferramentas dropdown (no separate close handler needed)
 

@@ -623,6 +623,20 @@ document.addEventListener('keydown', function(e) {
   const tab = document.getElementById('calc-tab-basica');
   if (!tab || tab.style.display === 'none') return;
 
+  // Teclado numérico (numpad)
+  const numpadMap = {
+    'Numpad0':'0','Numpad1':'1','Numpad2':'2','Numpad3':'3','Numpad4':'4',
+    'Numpad5':'5','Numpad6':'6','Numpad7':'7','Numpad8':'8','Numpad9':'9',
+  };
+  if (numpadMap[e.code]) { calcAction('num', numpadMap[e.code]); e.preventDefault(); return; }
+  if (e.code === 'NumpadDecimal')   { calcAction('dot');      e.preventDefault(); return; }
+  if (e.code === 'NumpadAdd')       { calcAction('op', '+');  e.preventDefault(); return; }
+  if (e.code === 'NumpadSubtract')  { calcAction('op', '-');  e.preventDefault(); return; }
+  if (e.code === 'NumpadMultiply')  { calcAction('op', '*');  e.preventDefault(); return; }
+  if (e.code === 'NumpadDivide')    { calcAction('op', '/');  e.preventDefault(); return; }
+  if (e.code === 'NumpadEnter')     { calcAction('eq');       e.preventDefault(); return; }
+
+  // Teclado alfanumérico
   if (e.key >= '0' && e.key <= '9') { calcAction('num', e.key); e.preventDefault(); }
   else if (e.key === '.') { calcAction('dot'); e.preventDefault(); }
   else if (e.key === '+') { calcAction('op', '+'); e.preventDefault(); }
@@ -1196,6 +1210,8 @@ const _SHORTCUT_DEFAULTS = [
   // Ferramentas
   { id: 'calc',       group: 'Ferramentas', desc: 'Abrir calculadora',     sub: 'Abre/fecha o popover da calculadora',     mods: ['Ctrl'], key: '1'         },
   { id: 'notes',      group: 'Ferramentas', desc: 'Abrir bloco de notas',  sub: 'Abre/fecha o popover de notas',           mods: ['Ctrl'], key: '2'         },
+  { id: 'novo_reg',   group: 'Ferramentas', desc: 'Novo Registro Manual',  sub: 'Abre o modal de novo registro manual',    mods: ['Ctrl'], key: '4'         },
+  { id: 'nova_oc',    group: 'Ferramentas', desc: 'Nova Ocorrência',        sub: 'Abre o modal de nova ocorrência',         mods: ['Ctrl'], key: '5'         },
 ];
 
 // Runtime registry — merged defaults + user overrides
