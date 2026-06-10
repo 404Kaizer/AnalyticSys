@@ -524,55 +524,79 @@ window.gerarRelatorioGerencial = function() {
 // RELATÓRIO DE AUSÊNCIAS DE LANÇAMENTO
 // ═══════════════════════════════════════════════════════════════════
 
-function _buildAusenciasRelHTML({ titulo, periodo, geradoEm, centraisData, totalDias, totalMats, totalCentrals }) {
+function _buildAusenciasRelHTML({ titulo, periodo, geradoEm, regionaisData, totalDias, totalMats, totalCentrals, totalRegionais }) {
   function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
   function fmtDate(d) {
     return String(d.getDate()).padStart(2,'0') + '/' +
            String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
   }
 
-  const centralSections = centraisData.map(({ central, mats }, idx) => {
-    const totalAus = mats.length;
-    const matRows = mats.map(({ mat, tipo, dias }, ri) => {
-      const isSemanal = tipo === 'Semanal';
-      const chips = dias.map(d =>
-        `<span class="date-chip">${fmtDate(d)}</span>`
-      ).join('');
+  // Monta HTML regional → central → materiais
+  let blockIdx = 0;
+  const regionalSections = (regionaisData || []).map(({ regional, centrais }) => {
+    const totalRegAus = centrais.reduce((s, c) => s + c.mats.length, 0);
+    const nCentrals   = centrais.length;
+
+    const centraisHtml = centrais.map(({ central, mats }) => {
+      const totalAus = mats.length;
+      const matRows = mats.map(({ mat, tipo, dias, estoqueZerado }, ri) => {
+        const isSemanal = tipo === 'Semanal';
+        const chips = dias.map(d =>
+          `<span class="date-chip${estoqueZerado ? ' date-chip--zerado' : ''}">${fmtDate(d)}</span>`
+        ).join('');
+        const zeroBadge = estoqueZerado
+          ? `<span class="badge-zerado" title="Último lançamento registrado: 0 kg">&#9888; ESTOQUE ZERADO</span>`
+          : '';
+        return `
+          <tr class="${ri % 2 === 0 ? 'row-even' : 'row-odd'}${estoqueZerado ? ' row-zerado' : ''}">
+            <td class="td-mat${estoqueZerado ? ' td-mat--zerado' : ''}">${esc(mat)}${zeroBadge}</td>
+            <td class="td-tipo">
+              <span class="badge-tipo ${isSemanal ? 'badge-semanal' : 'badge-diario'}">${tipo}</span>
+            </td>
+            <td class="td-count${estoqueZerado ? ' td-count--zerado' : ''}">${dias.length}</td>
+            <td class="td-dates">${chips}</td>
+          </tr>`;
+      }).join('');
+
       return `
-        <tr class="${ri % 2 === 0 ? 'row-even' : 'row-odd'}">
-          <td class="td-mat">${esc(mat)}</td>
-          <td class="td-tipo">
-            <span class="badge-tipo ${isSemanal ? 'badge-semanal' : 'badge-diario'}">${tipo}</span>
-          </td>
-          <td class="td-count">${dias.length}</td>
-          <td class="td-dates">${chips}</td>
-        </tr>`;
+        <div class="central-block" style="animation-delay:${(blockIdx++) * 0.04}s">
+          <div class="central-header">
+            <div class="central-header-left">
+              <span class="central-icon">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M3 21h18M3 7l9-4 9 4M4 7v14M20 7v14M9 21v-4a3 3 0 0 1 6 0v4"/>
+                </svg>
+              </span>
+              <span class="central-name">${esc(central)}</span>
+              <span class="central-badge">${totalAus} ausência${totalAus !== 1 ? 's' : ''}</span>
+            </div>
+          </div>
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th style="width:30%">Material</th>
+                <th style="width:100px">Frequência</th>
+                <th style="width:90px;text-align:center">Ausências</th>
+                <th>Datas sem lançamento</th>
+              </tr>
+            </thead>
+            <tbody>${matRows}</tbody>
+          </table>
+        </div>`;
     }).join('');
 
     return `
-      <div class="central-block" style="animation-delay:${idx * 0.04}s">
-        <div class="central-header">
-          <div class="central-header-left">
-            <span class="central-icon">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M3 21h18M3 7l9-4 9 4M4 7v14M20 7v14M9 21v-4a3 3 0 0 1 6 0v4"/>
-              </svg>
-            </span>
-            <span class="central-name">${esc(central)}</span>
-          </div>
-
+      <div class="regional-block">
+        <div class="regional-header">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+          </svg>
+          <span class="regional-name">${esc(regional)}</span>
+          <span class="regional-badge">${totalRegAus} ausência${totalRegAus !== 1 ? 's' : ''}</span>
+          <span class="regional-sub">${nCentrals} ${nCentrals !== 1 ? 'centrais' : 'central'}</span>
         </div>
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th style="width:30%">Material</th>
-              <th style="width:100px">Frequência</th>
-              <th style="width:90px;text-align:center">Ausências</th>
-              <th>Datas sem lançamento</th>
-            </tr>
-          </thead>
-          <tbody>${matRows}</tbody>
-        </table>
+        <div class="regional-centrais">${centraisHtml}</div>
       </div>`;
   }).join('');
 
@@ -697,6 +721,81 @@ function _buildAusenciasRelHTML({ titulo, periodo, geradoEm, centraisData, total
       padding: 36px 48px;
     }
 
+    /* ── Summary chips ── */
+    .summary-chips {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .s-chip {
+      display: inline-block;
+      border-radius: 5px;
+      padding: 4px 12px;
+      font-size: 11px;
+      font-weight: 700;
+      font-family: monospace;
+      letter-spacing: .04em;
+      border: 1px solid;
+    }
+    .s-chip-red    { background: #fff1f2; color: #b91c1c; border-color: #fecdd3; }
+    .s-chip-amber  { background: #fffbeb; color: #92400e; border-color: #fde68a; }
+    .s-chip-blue   { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
+    .s-chip-purple { background: #f5f3ff; color: #6d28d9; border-color: #ddd6fe; }
+
+    /* ── Regional block ── */
+    .regional-block {
+      margin-bottom: 32px;
+      page-break-inside: avoid;
+    }
+    .regional-block:last-child { margin-bottom: 0; }
+    .regional-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 18px;
+      background: #1a2332;
+      color: #e2e8f0;
+      border-radius: 8px 8px 0 0;
+      margin-bottom: 0;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .regional-header svg { color: #60a5fa; flex-shrink: 0; }
+    .regional-name {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: #f1f5f9;
+    }
+    .regional-badge {
+      background: rgba(220,38,38,.25);
+      color: #fca5a5;
+      border: 1px solid rgba(220,38,38,.4);
+      border-radius: 4px;
+      padding: 2px 8px;
+      font-size: 10px;
+      font-weight: 700;
+      font-family: monospace;
+    }
+    .regional-sub {
+      font-size: 10px;
+      color: #64748b;
+      font-family: monospace;
+    }
+    .regional-centrais {
+      padding: 12px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-top: none;
+      border-radius: 0 0 8px 8px;
+    }
+    .regional-centrais .central-block {
+      margin-bottom: 12px;
+    }
+    .regional-centrais .central-block:last-child { margin-bottom: 0; }
+
     /* ── Central block ── */
     .central-block {
       background: #ffffff;
@@ -799,6 +898,26 @@ function _buildAusenciasRelHTML({ titulo, periodo, geradoEm, centraisData, total
       letter-spacing: .04em;
     }
     .badge-diario  { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+
+    /* Linha zerada */
+    .row-zerado { background: #fff1f2 !important; }
+    .td-mat--zerado { color: #b91c1c !important; font-weight: 700; }
+    .td-count--zerado { color: #b91c1c !important; }
+    .date-chip--zerado { opacity: .45; }
+    .badge-zerado {
+      display: inline-block;
+      margin-left: 8px;
+      padding: 1px 6px;
+      border-radius: 3px;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: .05em;
+      background: #fff1f2;
+      color: #b91c1c;
+      border: 1px solid #fecdd3;
+      vertical-align: middle;
+      white-space: nowrap;
+    }
     .badge-semanal { background: #f5f3ff; color: #6d28d9; border: 1px solid #ddd6fe; }
 
     .date-chip {
@@ -872,6 +991,12 @@ function _buildAusenciasRelHTML({ titulo, periodo, geradoEm, centraisData, total
       <div class="report-title">${esc(titulo)}</div>
       <div class="report-period">Período de análise: <strong>${esc(periodo)}</strong></div>
     </div>
+    <div class="summary-chips">
+      <span class="s-chip s-chip-red">${totalDias} lançamento${totalDias !== 1 ? 's' : ''} ausente${totalDias !== 1 ? 's' : ''}</span>
+      <span class="s-chip s-chip-amber">${totalMats} ${totalMats !== 1 ? 'materiais' : 'material'}</span>
+      <span class="s-chip s-chip-blue">${totalCentrals} ${totalCentrals !== 1 ? 'centrais' : 'central'}</span>
+      ${totalRegionais >= 1 ? `<span class="s-chip s-chip-purple">${totalRegionais} ${totalRegionais !== 1 ? 'regionais' : 'regional'}</span>` : ''}
+    </div>
   </div>
 </div>
 
@@ -883,7 +1008,7 @@ function _buildAusenciasRelHTML({ titulo, periodo, geradoEm, centraisData, total
 </div>
 
 <div class="content">
-  ${centralSections}
+  ${regionalSections}
 </div>
 
 <div class="report-footer">
@@ -896,22 +1021,48 @@ function _buildAusenciasRelHTML({ titulo, periodo, geradoEm, centraisData, total
 }
 
 
-// Converte o array ausencias (do renderAusencias) para o formato centraisData
-function _ausenciasParaCentraisData(ausencias) {
-  const byCentral = new Map();
+// Converte ausencias para estrutura regional → centrais → mats
+function _ausenciasParaRegionaisData(ausencias) {
+  const byRegional = new Map();
   ausencias.forEach(a => {
+    const regional = a.regional || 'Sem regional';
+    if (!byRegional.has(regional)) byRegional.set(regional, new Map());
+    const byCentral = byRegional.get(regional);
     if (!byCentral.has(a.central)) byCentral.set(a.central, []);
     byCentral.get(a.central).push({
-      mat:  a.mat,
-      tipo: a.isSemanal ? 'Semanal' : 'Diário',
-      dias: a.diasAusentes
+      mat:           a.mat,
+      tipo:          a.isSemanal ? 'Semanal' : 'Diário',
+      dias:          a.diasAusentes,
+      estoqueZerado: a.estoqueZerado || false,
+      ultimoPeso:    a.ultimoPeso ?? null
     });
   });
-  return [...byCentral.entries()]
-    .sort((a,b) => a[0].localeCompare(b[0]))
-    .map(([central, mats]) => ({
-      central,
-      mats: mats.sort((a,b) => a.mat.localeCompare(b.mat))
+
+  // Total de ausências por regional e central para ordenação maior → menor
+  const totRegional = new Map();
+  const totCentral  = new Map();
+  ausencias.forEach(a => {
+    const reg = a.regional || 'Sem regional';
+    totRegional.set(reg,    (totRegional.get(reg)    || 0) + a.diasAusentes.length);
+    totCentral.set(a.central, (totCentral.get(a.central) || 0) + a.diasAusentes.length);
+  });
+
+  return [...byRegional.entries()]
+    .sort((a, b) =>
+      (totRegional.get(b[0]) - totRegional.get(a[0])) ||
+      a[0].localeCompare(b[0])
+    )
+    .map(([regional, byCentral]) => ({
+      regional,
+      centrais: [...byCentral.entries()]
+        .sort((a, b) =>
+          (totCentral.get(b[0]) - totCentral.get(a[0])) ||
+          a[0].localeCompare(b[0])
+        )
+        .map(([central, mats]) => ({
+          central,
+          mats: mats.sort((a, b) => a.mat.localeCompare(b.mat))
+        }))
     }));
 }
 
@@ -929,18 +1080,48 @@ window.gerarRelatorioAusenciasCentral = function(central) {
   const ausencias = window._ausenciasData.filter(a => a.central === central);
   if (!ausencias.length) { alert('Nenhuma ausência para esta central.'); return; }
 
-  const centraisData = _ausenciasParaCentraisData(ausencias);
-  const diasUnicos   = new Set(ausencias.flatMap(a => a.diasAusentes.map(d => d.toISOString().slice(0,10)))).size;
-  const matsUnicos   = new Set(ausencias.map(a => a.mat)).size;
-  const periodo      = _ausGetPeriodo();
+  const regionaisData = _ausenciasParaRegionaisData(ausencias);
+  const diasUnicos    = new Set(ausencias.flatMap(a => a.diasAusentes.map(d => d.toISOString().slice(0,10)))).size;
+  const matsUnicos    = new Set(ausencias.map(a => a.mat)).size;
+  const periodo       = _ausGetPeriodo();
   const html = _buildAusenciasRelHTML({
-    titulo:       `Ausências de Lançamento — ${central}`,
+    titulo:         `Ausências de Lançamento — ${central}`,
     periodo,
-    geradoEm:     new Date().toLocaleString('pt-BR'),
-    centraisData,
-    totalDias:    diasUnicos,
-    totalMats:    matsUnicos,
-    totalCentrals: 1
+    geradoEm:       new Date().toLocaleString('pt-BR'),
+    regionaisData,
+    totalDias:      diasUnicos,
+    totalMats:      matsUnicos,
+    totalCentrals:  1,
+    totalRegionais: 1
+  });
+
+  const w = window.open('', '_blank', 'width=1200,height=900,scrollbars=yes,resizable=yes');
+  if (!w) { alert('Popups bloqueados! Permita pop-ups para gerar o relatório.'); return; }
+  w.document.write(html);
+  w.document.close();
+  w.focus();
+};
+
+// Relatório por regional específica
+window.gerarRelatorioAusenciasRegional = function(regional) {
+  if (!window._ausenciasData?.length) return;
+  const ausencias = window._ausenciasData.filter(a => (a.regional || 'Sem regional') === regional);
+  if (!ausencias.length) { alert('Nenhuma ausência para esta regional.'); return; }
+
+  const regionaisData = _ausenciasParaRegionaisData(ausencias);
+  const diasUnicos    = new Set(ausencias.flatMap(a => a.diasAusentes.map(d => d.toISOString().slice(0,10)))).size;
+  const matsUnicos    = new Set(ausencias.map(a => a.mat)).size;
+  const centralsCnt   = new Set(ausencias.map(a => a.central)).size;
+  const periodo       = _ausGetPeriodo();
+  const html = _buildAusenciasRelHTML({
+    titulo:         `Ausências de Lançamento — ${regional}`,
+    periodo,
+    geradoEm:       new Date().toLocaleString('pt-BR'),
+    regionaisData,
+    totalDias:      diasUnicos,
+    totalMats:      matsUnicos,
+    totalCentrals:  centralsCnt,
+    totalRegionais: 1
   });
 
   const w = window.open('', '_blank', 'width=1200,height=900,scrollbars=yes,resizable=yes');
@@ -954,20 +1135,22 @@ window.gerarRelatorioAusenciasCentral = function(central) {
 window.gerarRelatorioAusenciasGeral = function() {
   if (!window._ausenciasData?.length) { alert('Nenhuma ausência no período selecionado.'); return; }
 
-  const ausencias   = window._ausenciasData;
-  const centraisData = _ausenciasParaCentraisData(ausencias);
-  const diasUnicos  = new Set(ausencias.flatMap(a => a.diasAusentes.map(d => d.toISOString().slice(0,10)))).size;
-  const matsUnicos  = new Set(ausencias.map(a => a.mat)).size;
-  const centralsCnt = new Set(ausencias.map(a => a.central)).size;
-  const periodo     = _ausGetPeriodo();
+  const ausencias     = window._ausenciasData;
+  const regionaisData = _ausenciasParaRegionaisData(ausencias);
+  const diasUnicos    = new Set(ausencias.flatMap(a => a.diasAusentes.map(d => d.toISOString().slice(0,10)))).size;
+  const matsUnicos    = new Set(ausencias.map(a => a.mat)).size;
+  const centralsCnt   = new Set(ausencias.map(a => a.central)).size;
+  const regionaisCnt  = new Set(ausencias.map(a => a.regional || 'Sem regional')).size;
+  const periodo       = _ausGetPeriodo();
   const html = _buildAusenciasRelHTML({
-    titulo:       'Relatório Geral de Ausências de Lançamento',
+    titulo:         'Relatório Geral de Ausências de Lançamento',
     periodo,
-    geradoEm:     new Date().toLocaleString('pt-BR'),
-    centraisData,
-    totalDias:    diasUnicos,
-    totalMats:    matsUnicos,
-    totalCentrals: centralsCnt
+    geradoEm:       new Date().toLocaleString('pt-BR'),
+    regionaisData,
+    totalDias:      diasUnicos,
+    totalMats:      matsUnicos,
+    totalCentrals:  centralsCnt,
+    totalRegionais: regionaisCnt
   });
 
   const w = window.open('', '_blank', 'width=1200,height=900,scrollbars=yes,resizable=yes');

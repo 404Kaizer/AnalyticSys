@@ -3250,6 +3250,27 @@ img { max-width: 100%; }
 }
 
 
+.micro-filter-clear {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--text3);
+  border-color: var(--border2);
+  transition: color .15s, border-color .15s, opacity .15s;
+  opacity: .45;
+  cursor: default;
+}
+.micro-filter-clear:not(:disabled) {
+  color: var(--red);
+  border-color: var(--red-border);
+  opacity: 1;
+  cursor: pointer;
+}
+.micro-filter-clear:not(:disabled):hover {
+  background: var(--red-bg);
+}
+
 .aus-filter-bar {
   padding: 0 0 14px;
   border-bottom: 1px solid var(--border);
@@ -3257,6 +3278,65 @@ img { max-width: 100%; }
 }
 
 /* Grouping by central */
+/* Regional group — nível pai do central */
+.aus-regional-group {
+  margin-bottom: 16px;
+}
+.aus-regional-group:last-child { margin-bottom: 0; }
+.aus-regional-label {
+  font-size: 11px;
+  font-family: var(--mono);
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--text);
+  padding: 6px 10px;
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  user-select: none;
+}
+.aus-regional-label:hover { background: var(--bg4); border-color: var(--accent); }
+.aus-regional-label .aus-regional-chev { color: var(--text3); flex-shrink: 0; }
+.aus-regional-label .ti-users-group { color: var(--accent); font-size: 13px; }
+.aus-regional-badge {
+  background: var(--red-bg);
+  color: var(--red);
+  border: 1px solid var(--red-border);
+  border-radius: 4px;
+  padding: 1px 7px;
+  font-size: 9.5px;
+  font-weight: 600;
+}
+.aus-regional-sub {
+  font-size: 9.5px;
+  color: var(--text3);
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+/* Corpo da regional — esconde ao colapsar */
+.aus-regional-body { }
+.aus-regional-group.collapsed .aus-regional-body { display: none; }
+.aus-regional-group.collapsed .aus-regional-label { margin-bottom: 0; border-radius: var(--radius); }
+
+/* Central group — indentado dentro da regional */
+.aus-regional-group .aus-central-group {
+  margin-left: 12px;
+  padding-left: 12px;
+  border-left: 2px solid var(--border2);
+}
+/* Corpo da central — esconde ao colapsar */
+.aus-central-body { }
+.aus-central-group.collapsed .aus-central-body { display: none; }
+.aus-central-label { user-select: none; }
+.aus-central-label:hover { background: var(--bg3); border-radius: 4px; }
+.aus-central-label .aus-central-chev { color: var(--text3); flex-shrink: 0; }
+
 .aus-central-group {
   margin-bottom: 14px;
 }
@@ -3285,11 +3365,12 @@ img { max-width: 100%; }
   font-weight: 600;
 }
 
-/* Material rows */
+/* Material rows — grid de 3 colunas fixas para alinhamento consistente */
 .aus-mat-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
+  display: grid;
+  grid-template-columns: 220px 72px 1fr;
+  align-items: start;
+  gap: 0 10px;
   padding: 6px 0;
   border-bottom: 1px solid var(--border);
 }
@@ -3298,9 +3379,10 @@ img { max-width: 100%; }
   font-size: 12px;
   font-weight: 500;
   color: var(--text2);
-  min-width: 160px;
-  flex-shrink: 0;
   padding-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .aus-mat-type {
   font-size: 9.5px;
@@ -3310,14 +3392,14 @@ img { max-width: 100%; }
   border: 1px solid var(--border2);
   border-radius: 3px;
   padding: 1px 6px;
-  flex-shrink: 0;
   margin-top: 3px;
+  justify-self: start;
+  white-space: nowrap;
 }
 .aus-dias-wrap {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  flex: 1;
 }
 .aus-dia-chip {
   font-family: var(--mono);
@@ -7340,4 +7422,36 @@ mark.search-highlight {
   font-family: var(--mono);
   text-align: center;
   line-height: 1.6;
+}
+
+/* ── Ausências — linha com estoque zerado ── */
+.aus-mat-row--zerado .aus-mat-name {
+  color: var(--red);
+}
+.aus-mat-row--zerado .aus-dia-chip {
+  opacity: .45;
+}
+.aus-zero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  font-family: var(--mono);
+  letter-spacing: .07em;
+  padding: 2px 7px;
+  border-radius: 4px;
+  border: 1px solid var(--red-border);
+  background: var(--red-bg);
+  color: var(--red);
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.aus-zero-badge i { font-size: 10px; }
+
+/* ── Botão ocultar zerados ── */
+#aus-ft-ocultar-zerados.active {
+  color: var(--red);
+  border-color: var(--red-border);
+  background: var(--red-bg);
 }

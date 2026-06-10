@@ -1243,6 +1243,25 @@
             <div class="micro-filter-bar aus-filter-bar" id="aus-filter-bar">
 
               <div class="micro-filter-group">
+                <button class="micro-filter-trigger" id="aus-ft-regional" onclick="toggleAusFilter('regional')">
+                  <i class="ti ti-users-group"></i>
+                  <span id="aus-ft-regional-label">Regional</span>
+                  <i class="ti ti-chevron-down micro-filter-chev" id="aus-fc-regional"></i>
+                </button>
+                <div class="micro-filter-dropdown" id="aus-fd-regional">
+                  <div class="micro-filter-search-wrap">
+                    <i class="ti ti-search"></i>
+                    <input class="micro-filter-search" id="aus-fs-regional" type="text" placeholder="Buscar regional…" oninput="filterAusOptions('regional', this.value)">
+                  </div>
+                  <div class="micro-filter-options" id="aus-fo-regional"></div>
+                  <div class="micro-filter-footer">
+                    <button class="btn" onclick="cancelAusFilter('regional')"><i class="ti ti-x"></i> Cancelar</button>
+                    <button class="btn btn-primary" onclick="applyAusFilter('regional')"><i class="ti ti-check"></i> Aplicar</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="micro-filter-group">
                 <button class="micro-filter-trigger" id="aus-ft-central" onclick="toggleAusFilter('central')">
                   <i class="ti ti-building-warehouse"></i>
                   <span id="aus-ft-central-label">Central</span>
@@ -1280,8 +1299,30 @@
                 </div>
               </div>
 
-              <button class="btn micro-filter-clear" id="aus-filter-clear-btn" onclick="clearAusFilters()" style="display:none">
-                <i class="ti ti-filter-off"></i> Limpar Filtros
+              <!-- Filtro: ocultar estoques zerados -->
+              <button class="btn" id="aus-ft-ocultar-zerados" onclick="ausToggleOcultarZerados()"
+                title="Ocultar materiais cujo último lançamento é 0 kg">
+                <i class="ti ti-circle-x"></i> Ocultar zerados
+              </button>
+
+              <button class="btn micro-filter-clear" id="aus-filter-clear-btn" onclick="clearAusFilters()">
+                <i class="ti ti-filter-off"></i> Limpar filtros
+              </button>
+
+              <div class="micro-filter-divider"></div>
+
+              <!-- Toggle Regionais -->
+              <button class="btn" id="aus-btn-toggle-regionais" onclick="ausToggleAllRegionais()" title="Expandir/Recolher regionais">
+                <i class="ti ti-users-group"></i>
+                <span id="aus-label-toggle-regionais">Recolher Regionais</span>
+                <i class="ti ti-chevron-down" id="aus-chev-toggle-regionais" style="font-size:11px;transition:transform .2s"></i>
+              </button>
+
+              <!-- Toggle Centrais -->
+              <button class="btn" id="aus-btn-toggle-centrais" onclick="ausToggleAllCentralis()" title="Expandir/Recolher centrais">
+                <i class="ti ti-building-factory-2"></i>
+                <span id="aus-label-toggle-centrais">Recolher Centrais</span>
+                <i class="ti ti-chevron-down" id="aus-chev-toggle-centrais" style="font-size:11px;transition:transform .2s"></i>
               </button>
 
             </div>

@@ -1385,31 +1385,57 @@ function renderAusencias() {
     const esperados = _diasEsperados(dtIni, dtFim, isSemanal);
     const ausentes = esperados.filter(d => !lancados.has(localISODate(d)));
     if (ausentes.length) {
-      ausencias.push({ central, mat, isSemanal, categoria, diasAusentes: ausentes });
+      const ultimo = _ausUltimoLanc(central, mat);
+      const estoqueZerado = ultimo !== null && ultimo.peso === 0;
+      ausencias.push({ central, mat, isSemanal, categoria, diasAusentes: ausentes, estoqueZerado, ultimoPeso: ultimo?.peso ?? null });
     }
   });
 
-  // ── Ordena: central asc, depois por nº de ausências desc ──
+  // ── Enriquece com regional via lookup ──
+  const _filIdx = getFilialLookupIndex();
+  const _getRegional = central => {
+    const found = _filIdx.exact.get(normalizeText(central));
+    return (found?.regional || '').trim() || 'Sem regional';
+  };
+  ausencias.forEach(a => { a.regional = _getRegional(a.central); });
+
+  // ── Pré-computa totais por regional e central para ordenação ──
+  const _totRegional = new Map();
+  const _totCentral  = new Map();
+  ausencias.forEach(a => {
+    _totRegional.set(a.regional, (_totRegional.get(a.regional) || 0) + a.diasAusentes.length);
+    _totCentral.set(a.central,   (_totCentral.get(a.central)   || 0) + a.diasAusentes.length);
+  });
+
+  // ── Ordena: regional maior→menor, central maior→menor, material asc ──
   ausencias.sort((a, b) =>
-    a.central.localeCompare(b.central) ||
-    b.diasAusentes.length - a.diasAusentes.length
+    (_totRegional.get(b.regional) - _totRegional.get(a.regional)) ||
+    a.regional.localeCompare(b.regional) ||
+    (_totCentral.get(b.central) - _totCentral.get(a.central)) ||
+    a.central.localeCompare(b.central)
   );
 
   // ── Popula opções dos filtros ──
-  const allCentrals = [...new Set(ausencias.map(a => a.central))].sort();
-  const allMats     = [...new Set(ausencias.map(a => a.mat))].sort();
-  _ausFilter.options.central = allCentrals;
-  _ausFilter.options.mat     = allMats;
+  const allRegionais = [...new Set(ausencias.map(a => a.regional))].sort();
+  const allCentrals  = [...new Set(ausencias.map(a => a.central))].sort();
+  const allMats      = [...new Set(ausencias.map(a => a.mat))].sort();
+  _ausFilter.options.regional = allRegionais;
+  _ausFilter.options.central  = allCentrals;
+  _ausFilter.options.mat      = allMats;
+  _ausFilterBuildOptions('regional');
   _ausFilterBuildOptions('central');
   _ausFilterBuildOptions('mat');
+  _ausFilterSyncLabel('regional');
   _ausFilterSyncLabel('central');
   _ausFilterSyncLabel('mat');
   _ausFilterSyncClear();
 
   // ── Aplica filtros ──
   const filtered = ausencias.filter(a =>
-    (!_ausFilter.applied.central.size || _ausFilter.applied.central.has(a.central)) &&
-    (!_ausFilter.applied.mat.size     || _ausFilter.applied.mat.has(a.mat))
+    (!_ausFilter.applied.regional.size || _ausFilter.applied.regional.has(a.regional)) &&
+    (!_ausFilter.applied.central.size  || _ausFilter.applied.central.has(a.central))   &&
+    (!_ausFilter.applied.mat.size      || _ausFilter.applied.mat.has(a.mat))            &&
+    (!_ausFilter.ocultarZerados        || !a.estoqueZerado)
   );
 
   // ── Atualiza header summary (sobre os dados filtrados) ──
@@ -1433,11 +1459,13 @@ function renderAusencias() {
     return;
   }
 
+  const regionaisCount = new Set(filtered.map(a => a.regional)).size;
   subtitle.innerHTML = `
     <span class="aus-summary-chips">
-      <span class="aus-chip red">${lancAusentes} lanç. ausente${lancAusentes !== 1 ? 's' : ''}</span>
+      <span class="aus-chip red">${lancAusentes} ausência${lancAusentes !== 1 ? 's' : ''}</span>
       <span class="aus-chip amber">${matsUnicos} ${matsUnicos !== 1 ? 'materiais' : 'material'}</span>
       <span class="aus-chip teal">${centrais} ${centrais !== 1 ? 'centrais' : 'central'}</span>
+      <span class="aus-chip purple">${regionaisCount} ${regionaisCount !== 1 ? 'regionais' : 'regional'}</span>
       <button onclick="event.stopPropagation();gerarRelatorioAusenciasGeral()"
         style="margin-left:6px;display:inline-flex;align-items:center;gap:5px;background:transparent;
           border:1px solid var(--border2);border-radius:5px;padding:2px 10px;font-size:10.5px;
@@ -1449,51 +1477,99 @@ function renderAusencias() {
       </button>
     </span>`;
 
-  // ── Render agrupado por central ──
-  const byCentral = new Map();
+    // ── Render agrupado por regional → central ──
+  const byRegional = new Map();
   filtered.forEach(a => {
+    if (!byRegional.has(a.regional)) byRegional.set(a.regional, new Map());
+    const byCentral = byRegional.get(a.regional);
     if (!byCentral.has(a.central)) byCentral.set(a.central, []);
     byCentral.get(a.central).push(a);
   });
 
-  content.innerHTML = [...byCentral.entries()].map(([central, rows]) => {
-    const totalAus = rows.length; // nº de materiais sem lançamento
-    const matRows = rows.map(r => {
-      const chips = r.diasAusentes
-        .map(d => `<span class="aus-dia-chip">${_ausDateStr(d)}</span>`)
-        .join('');
-      const typeLabel = r.isSemanal ? 'Semanal' : 'Diário';
+  // Reset estado dos toggles a cada render (DOM reconstruído)
+  _ausRegionaisExpanded = true;
+  _ausCentralisExpanded = true;
+
+  content.innerHTML = [...byRegional.entries()].map(([regional, byCentral]) => {
+    const totalRegional = [...byCentral.values()].reduce((s, rows) => s + rows.length, 0);
+    const nCentrals = byCentral.size;
+
+    const centraisHtml = [...byCentral.entries()].map(([central, rows]) => {
+      const totalAus = rows.length;
+      const matRows = rows.map(r => {
+        const chips = r.diasAusentes
+          .map(d => `<span class="aus-dia-chip">${_ausDateStr(d)}</span>`)
+          .join('');
+        const typeLabel = r.isSemanal ? 'Semanal' : 'Diário';
+        const zeroClass = r.estoqueZerado ? ' aus-mat-row--zerado' : '';
+        const zeroBadge = r.estoqueZerado
+          ? `<span class="aus-zero-badge" title="Último lançamento registrado: 0 kg — estoque zerado, lançamento pode não ser necessário">
+               <i class="ti ti-circle-x"></i> ESTOQUE ZERADO
+             </span>`
+          : '';
+        return `
+          <div class="aus-mat-row${zeroClass}">
+            <span class="aus-mat-name">${escapeHtml(r.mat)}</span>
+            <span class="aus-mat-type">${typeLabel}</span>
+            <div class="aus-dias-wrap">${chips}${zeroBadge}</div>
+          </div>`;
+      }).join('');
+
+      const centId = (regional + '_' + central).replace(/[^\w]/g, '_');
+      const centCollapsed = _ausCollapsed.central.has(centId);
       return `
-        <div class="aus-mat-row">
-          <span class="aus-mat-name">${escapeHtml(r.mat)}</span>
-          <span class="aus-mat-type">${typeLabel}</span>
-          <div class="aus-dias-wrap">${chips}</div>
+        <div class="aus-central-group${centCollapsed ? ' collapsed' : ''}" data-id="${escapeHtml(centId)}">
+          <div class="aus-central-label" onclick="event.stopPropagation();ausToggleCentral('${escapeHtml(centId)}')" style="cursor:pointer">
+            <i class="ti ti-chevron-down aus-central-chev" style="font-size:12px;transition:transform .18s${centCollapsed ? ';transform:rotate(-90deg)' : ''}"></i>
+            <i class="ti ti-building-factory-2"></i>
+            ${escapeHtml(central)}
+            <span class="aus-central-badge">${totalAus} ausência${totalAus !== 1 ? "s" : ""}</span>
+            <button onclick="event.stopPropagation();gerarRelatorioAusenciasCentral('${escapeHtml(central).replace(/'/g, "\x27")}')"
+              style="margin-left:auto;display:inline-flex;align-items:center;gap:4px;background:transparent;
+                border:1px solid var(--border2);border-radius:4px;padding:1px 8px;font-size:9.5px;
+                font-family:var(--mono);font-weight:600;color:var(--text3);cursor:pointer;
+                transition:border-color .15s,color .15s" title="Gerar relatório desta central"
+              onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
+              onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--text3)'">
+              <i class="ti ti-file-report" style="font-size:10px"></i> Relatório
+            </button>
+          </div>
+          <div class="aus-central-body">
+            ${matRows}
+          </div>
         </div>`;
     }).join('');
 
+    const regId = regional.replace(/[^\w]/g, '_');
+    const regCollapsed = _ausCollapsed.regional.has(regId);
     return `
-      <div class="aus-central-group">
-        <div class="aus-central-label">
-          <i class="ti ti-building-factory-2"></i>
-          ${escapeHtml(central)}
-          <span class="aus-central-badge">${totalAus} lanç. ausente${totalAus !== 1 ? "s" : ""}</span>
-          <button onclick="event.stopPropagation();gerarRelatorioAusenciasCentral('${escapeHtml(central).replace(/'/g,"\'")}')"
+      <div class="aus-regional-group${regCollapsed ? ' collapsed' : ''}" data-id="${escapeHtml(regId)}">
+        <div class="aus-regional-label" onclick="ausToggleRegional('${escapeHtml(regId)}')" style="cursor:pointer">
+          <i class="ti ti-chevron-down aus-regional-chev" style="font-size:13px;transition:transform .18s${regCollapsed ? ';transform:rotate(-90deg)' : ''}"></i>
+          <i class="ti ti-users-group"></i>
+          ${escapeHtml(regional)}
+          <span class="aus-regional-badge">${totalRegional} ausência${totalRegional !== 1 ? "s" : ""}</span>
+          <span class="aus-regional-sub">${nCentrals} ${nCentrals !== 1 ? "centrais" : "central"}</span>
+          <button onclick="event.stopPropagation();gerarRelatorioAusenciasRegional('${escapeHtml(regional).replace(/'/g, "\x27")}')"
             style="margin-left:auto;display:inline-flex;align-items:center;gap:4px;background:transparent;
               border:1px solid var(--border2);border-radius:4px;padding:1px 8px;font-size:9.5px;
               font-family:var(--mono);font-weight:600;color:var(--text3);cursor:pointer;
-              transition:border-color .15s,color .15s" title="Gerar relatório desta central"
+              transition:border-color .15s,color .15s" title="Gerar relatório desta regional"
             onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
             onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--text3)'">
             <i class="ti ti-file-report" style="font-size:10px"></i> Relatório
           </button>
         </div>
-        ${matRows}
+        <div class="aus-regional-body">
+          ${centraisHtml}
+        </div>
       </div>`;
   }).join('');
-}
 
-// Inicializa o painel de ausências — usa o mesmo período do analítico se disponível
-let _ausInited = false;
+  // Sincronizar labels dos botões após render
+  _ausUpdateToggleRegionaisBtn();
+  _ausUpdateToggleCentralisBtn();
+}
 function initAusencias() {
   // Só inicializa uma vez por sessão; re-render é feito via callbacks do cal-picker
   const iniEl = document.getElementById('aus-dt-ini');
@@ -1519,10 +1595,131 @@ function initAusencias() {
 
 // ── Aus filter state (pending/applied pattern) ──────────────
 const _ausFilter = {
-  options: { central: [], mat: [] },
-  applied: { central: new Set(), mat: new Set() },
-  pending: { central: new Set(), mat: new Set() }
+  options: { regional: [], central: [], mat: [] },
+  applied: { regional: new Set(), central: new Set(), mat: new Set() },
+  pending: { regional: new Set(), central: new Set(), mat: new Set() },
+  ocultarZerados: false
 };
+
+function ausToggleOcultarZerados() {
+  _ausFilter.ocultarZerados = !_ausFilter.ocultarZerados;
+  const btn = document.getElementById('aus-ft-ocultar-zerados');
+  if (btn) btn.classList.toggle('active', _ausFilter.ocultarZerados);
+  _ausFilterSyncClear();
+  renderAusencias();
+}
+
+// ── Último lançamento de estoque para central × material ─────────────────
+// Retorna { peso, dtLanc } do registro mais recente, ou null se não houver.
+function _ausUltimoLanc(central, mat) {
+  const { byCentralMat } = getLancIndex();
+  const arr = byCentralMat.get(central)?.get(mat) || [];
+  if (!arr.length) return null;
+  // Ordena desc por data e pega o primeiro
+  const sorted = arr
+    .map(r => ({ peso: num(r.peso), d: parseDate(r.dtLanc) }))
+    .filter(r => r.d)
+    .sort((a, b) => b.d - a.d);
+  return sorted.length ? sorted[0] : null;
+}
+
+// ── Estado de collapse (regional e central) ──────────────────────────────
+// Set de IDs colapsados — persiste entre renders via referência (não localStorage,
+// pois o render reconstrói o DOM a cada vez)
+const _ausCollapsed = {
+  regional: new Set(), // armazena normalizeText(regional)
+  central:  new Set(), // armazena normalizeText(central)
+};
+
+// ── Estado dos toggles globais ───────────────────────────────────────────
+let _ausRegionaisExpanded = true;
+let _ausCentralisExpanded = true;
+
+function ausToggleRegional(id) {
+  if (_ausCollapsed.regional.has(id)) _ausCollapsed.regional.delete(id);
+  else _ausCollapsed.regional.add(id);
+  const group = document.querySelector(`.aus-regional-group[data-id="${CSS.escape(id)}"]`);
+  if (!group) return;
+  const collapsed = _ausCollapsed.regional.has(id);
+  group.classList.toggle('collapsed', collapsed);
+  const chev = group.querySelector('.aus-regional-chev');
+  if (chev) chev.style.transform = collapsed ? 'rotate(-90deg)' : '';
+  // Recalcula estado global baseado no que está na tela
+  const total     = document.querySelectorAll('.aus-regional-group').length;
+  const colapsed  = document.querySelectorAll('.aus-regional-group.collapsed').length;
+  _ausRegionaisExpanded = colapsed < total;
+  _ausUpdateToggleRegionaisBtn();
+}
+
+function ausToggleCentral(id) {
+  if (_ausCollapsed.central.has(id)) _ausCollapsed.central.delete(id);
+  else _ausCollapsed.central.add(id);
+  const group = document.querySelector(`.aus-central-group[data-id="${CSS.escape(id)}"]`);
+  if (!group) return;
+  const collapsed = _ausCollapsed.central.has(id);
+  group.classList.toggle('collapsed', collapsed);
+  const chev = group.querySelector('.aus-central-chev');
+  if (chev) chev.style.transform = collapsed ? 'rotate(-90deg)' : '';
+  const total    = document.querySelectorAll('.aus-central-group').length;
+  const colapsed = document.querySelectorAll('.aus-central-group.collapsed').length;
+  _ausCentralisExpanded = colapsed < total;
+  _ausUpdateToggleCentralisBtn();
+}
+
+function ausToggleAllRegionais() {
+  _ausRegionaisExpanded = !_ausRegionaisExpanded;
+  document.querySelectorAll('.aus-regional-group').forEach(el => {
+    const id = el.dataset.id;
+    if (!id) return;
+    el.classList.toggle('collapsed', !_ausRegionaisExpanded);
+    if (_ausRegionaisExpanded) _ausCollapsed.regional.delete(id);
+    else _ausCollapsed.regional.add(id);
+    const chev = el.querySelector('.aus-regional-chev');
+    if (chev) chev.style.transform = _ausRegionaisExpanded ? '' : 'rotate(-90deg)';
+  });
+  _ausUpdateToggleRegionaisBtn();
+}
+
+function ausToggleAllCentralis() {
+  _ausCentralisExpanded = !_ausCentralisExpanded;
+  document.querySelectorAll('.aus-central-group').forEach(el => {
+    const id = el.dataset.id;
+    if (!id) return;
+    el.classList.toggle('collapsed', !_ausCentralisExpanded);
+    if (_ausCentralisExpanded) _ausCollapsed.central.delete(id);
+    else _ausCollapsed.central.add(id);
+    const chev = el.querySelector('.aus-central-chev');
+    if (chev) chev.style.transform = _ausCentralisExpanded ? '' : 'rotate(-90deg)';
+  });
+  _ausUpdateToggleCentralisBtn();
+}
+
+function _ausUpdateToggleRegionaisBtn() {
+  const btn  = document.getElementById('aus-btn-toggle-regionais');
+  const lbl  = document.getElementById('aus-label-toggle-regionais');
+  const chev = document.getElementById('aus-chev-toggle-regionais');
+  if (lbl)  lbl.textContent = _ausRegionaisExpanded ? 'Recolher Regionais' : 'Expandir Regionais';
+  if (chev) chev.style.transform = _ausRegionaisExpanded ? '' : 'rotate(-90deg)';
+  if (btn)  btn.classList.toggle('active', !_ausRegionaisExpanded);
+}
+
+function _ausUpdateToggleCentralisBtn() {
+  const btn  = document.getElementById('aus-btn-toggle-centrais');
+  const lbl  = document.getElementById('aus-label-toggle-centrais');
+  const chev = document.getElementById('aus-chev-toggle-centrais');
+  if (lbl)  lbl.textContent = _ausCentralisExpanded ? 'Recolher Centrais' : 'Expandir Centrais';
+  if (chev) chev.style.transform = _ausCentralisExpanded ? '' : 'rotate(-90deg)';
+  if (btn)  btn.classList.toggle('active', !_ausCentralisExpanded);
+}
+
+function ausExpandAll()   {
+  if (!_ausRegionaisExpanded) ausToggleAllRegionais();
+  if (!_ausCentralisExpanded) ausToggleAllCentralis();
+}
+function ausCollapseAll() {
+  if (_ausRegionaisExpanded)  ausToggleAllRegionais();
+  if (_ausCentralisExpanded)  ausToggleAllCentralis();
+}
 
 function _ausFilterBuildOptions(key, query = '') {
   const container = document.getElementById(`aus-fo-${key}`);
@@ -1557,7 +1754,7 @@ function _ausFilterSyncLabel(key) {
   const btn   = document.getElementById(`aus-ft-${key}`);
   const label = document.getElementById(`aus-ft-${key}-label`);
   if (!label || !btn) return;
-  const keyLabel = key === 'central' ? 'Central' : 'Material';
+  const keyLabel = key === 'regional' ? 'Regional' : key === 'central' ? 'Central' : 'Material';
   const applied  = _ausFilter.applied[key];
   if (!applied.size) {
     label.innerHTML = keyLabel;
@@ -1574,13 +1771,16 @@ function _ausFilterSyncLabel(key) {
 
 function _ausFilterSyncClear() {
   const btn = document.getElementById('aus-filter-clear-btn');
-  if (btn) btn.style.display = (_ausFilter.applied.central.size || _ausFilter.applied.mat.size) ? '' : 'none';
+  if (!btn) return;
+  const hasFilter = _ausFilter.applied.regional.size || _ausFilter.applied.central.size || _ausFilter.applied.mat.size || _ausFilter.ocultarZerados;
+  btn.disabled = !hasFilter;
+  btn.classList.toggle('active', !!hasFilter);
 }
 
 function toggleAusFilter(key) {
   const dd   = document.getElementById(`aus-fd-${key}`);
   const chev = document.getElementById(`aus-fc-${key}`);
-  const keys = ['central', 'mat'];
+  const keys = ['regional', 'central', 'mat'];
   // Close others
   keys.filter(k => k !== key).forEach(k => {
     document.getElementById(`aus-fd-${k}`)?.classList.remove('open');
@@ -1616,10 +1816,17 @@ function cancelAusFilter(key) {
 }
 
 function clearAusFilters() {
-  _ausFilter.applied.central = new Set();
-  _ausFilter.applied.mat     = new Set();
-  _ausFilter.pending.central = new Set();
-  _ausFilter.pending.mat     = new Set();
+  _ausFilter.applied.regional = new Set();
+  _ausFilter.applied.central  = new Set();
+  _ausFilter.applied.mat      = new Set();
+  _ausFilter.pending.regional = new Set();
+  _ausFilter.pending.central  = new Set();
+  _ausFilter.pending.mat      = new Set();
+  _ausFilter.ocultarZerados   = false;
+  const btnZ = document.getElementById('aus-ft-ocultar-zerados');
+  if (btnZ) btnZ.classList.remove('active');
+  ['regional','central','mat'].forEach(k => _ausFilterSyncLabel(k));
+  _ausFilterSyncClear();
   renderAusencias();
 }
 
@@ -2537,3 +2744,14 @@ function normMov(v) {
 
 const CODIGOS_ENTRADA = new Set(['101', '801']);
 const CODIGOS_SAIDA   = new Set(['201']);
+
+// Expor funções de collapse para o HTML
+if (typeof window !== 'undefined') {
+  window.ausToggleRegional      = ausToggleRegional;
+  window.ausToggleCentral       = ausToggleCentral;
+  window.ausToggleAllRegionais  = ausToggleAllRegionais;
+  window.ausToggleAllCentralis  = ausToggleAllCentralis;
+  window.ausExpandAll           = ausExpandAll;
+  window.ausCollapseAll         = ausCollapseAll;
+  window.ausToggleOcultarZerados = ausToggleOcultarZerados;
+}
