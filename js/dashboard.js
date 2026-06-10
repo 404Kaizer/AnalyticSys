@@ -1350,22 +1350,31 @@ function renderAusencias() {
   });
 
   // ── Determina pares central×material que deveriam ter lançamento ──
-  // Usa os materiais já conhecidos no período (lançamentos + SAP)
+  // CORREÇÃO: usa janela histórica ampla (180 dias antes do fim do período)
+  // para não depender de lançamentos no próprio período selecionado.
+  // O bug anterior só capturava pares que JÁ tinham lançado no período —
+  // ou seja, ignorava completamente ausências totais (0 lançamentos no período).
   const pares = new Map(); // 'central|mat' → { central, mat, isSemanal, categoria }
   const addPar = (central, mat, categoria) => {
+    if (!central || !mat || mat === '—') return;
     const key = `${central}|${mat}`;
     if (pares.has(key)) return;
     const catKey = detectCatKey(String(categoria || '').trim().toUpperCase()) || detectCatFromMat(mat);
     pares.set(key, { central, mat, isSemanal: catKey === 'agregado', categoria: categoria || '—' });
   };
+
+  // Janela de referência: 180 dias antes do fim do período
+  const refIni = new Date(dtFim);
+  refIni.setDate(refIni.getDate() - 180);
+
   (state.lancamentos || []).forEach(r => {
     const d = parseDate(r.dtLanc);
-    if (!d || d < dtIni || d > dtFim) return;
+    if (!d || d < refIni || d > dtFim) return;
     addPar(r.central, r.material || '—', r.categoria);
   });
   (state.sap || []).forEach(r => {
     const d = parseDate(r.dtLanc);
-    if (!d || d < dtIni || d > dtFim) return;
+    if (!d || d < refIni || d > dtFim) return;
     addPar(r.central, r.material || '—', r.categoria);
   });
 
