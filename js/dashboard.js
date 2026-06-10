@@ -1387,7 +1387,8 @@ function renderAusencias() {
     if (ausentes.length) {
       const ultimo = _ausUltimoLanc(central, mat);
       const estoqueZerado = ultimo !== null && ultimo.peso === 0;
-      ausencias.push({ central, mat, isSemanal, categoria, diasAusentes: ausentes, estoqueZerado, ultimoPeso: ultimo?.peso ?? null });
+      const ultimaData    = ultimo?.d ?? null;
+      ausencias.push({ central, mat, isSemanal, categoria, diasAusentes: ausentes, estoqueZerado, ultimoPeso: ultimo?.peso ?? null, ultimaData });
     }
   });
 
@@ -1502,8 +1503,11 @@ function renderAusencias() {
           .join('');
         const typeLabel = r.isSemanal ? 'Semanal' : 'Diário';
         const zeroClass = r.estoqueZerado ? ' aus-mat-row--zerado' : '';
+        const zeroDataStr = r.ultimaData
+          ? r.ultimaData.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+          : 'data desconhecida';
         const zeroBadge = r.estoqueZerado
-          ? `<span class="aus-zero-badge" title="Último lançamento registrado: 0 kg — estoque zerado, lançamento pode não ser necessário">
+          ? `<span class="aus-zero-badge" title="Último lançamento: ${zeroDataStr} — 0 kg. Estoque zerado, lançamento pode não ser necessário.">
                <i class="ti ti-circle-x"></i> ESTOQUE ZERADO
              </span>`
           : '';
