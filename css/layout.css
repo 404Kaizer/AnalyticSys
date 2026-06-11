@@ -189,7 +189,8 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
-  overflow: hidden;
+  /* overflow removido: o scroll fica em .page-content; sem clip aqui o dropdown
+     da topbar transborda corretamente sem ser cortado pelo container pai */
 }
 
 /* ══════════════════════════════════════════
@@ -209,7 +210,8 @@
   flex-shrink: 0;
   position: sticky;
   top: 0;
-  z-index: 40;
+  z-index: 200;  /* acima do conteúdo da página para dropdowns aparecerem corretamente */
+  overflow: visible; /* permite que dropdowns transbordem para baixo */
 }
 
 .topbar-left { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1; }

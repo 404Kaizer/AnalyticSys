@@ -132,7 +132,7 @@
   inset: 0;
   background: rgba(0,0,0,0.72);
   backdrop-filter: blur(6px);
-  z-index: 100;
+  z-index: 300;
   align-items: center;
   justify-content: center;
   padding: 16px;
@@ -5794,20 +5794,18 @@ mark.search-highlight {
 
 /* Dropdown menu */
 .tools-dropdown {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
+  position: fixed;
+  /* top e right calculados via JS em toggleToolsMenu() */
   width: 240px;
   background: var(--bg2);
   border: 1px solid var(--border2);
   border-radius: var(--radius-lg);
   box-shadow: 0 16px 48px rgba(0,0,0,.4);
-  z-index: 500;
+  z-index: 9999;
   overflow: hidden;
   display: none;
   animation: popIn .15s ease;
   max-height: min(72vh, 560px);
-  display: none;
   flex-direction: column;
 }
 .tools-dropdown.open {
@@ -5816,8 +5814,7 @@ mark.search-highlight {
 .tools-dropdown-scroll {
   overflow-y: auto;
   overflow-x: hidden;
-  flex: 1 1 0;
-  min-height: 0;
+  max-height: min(72vh, 560px);
   /* scrollbar padrão do sistema */
   scrollbar-width: thin;
   scrollbar-color: var(--border2) transparent;
@@ -5924,7 +5921,7 @@ mark.search-highlight {
   border: 1px solid var(--border2);
   border-radius: var(--radius-lg);
   box-shadow: 0 20px 60px rgba(0,0,0,.45);
-  z-index: 490;
+  z-index: 10000;
   overflow: hidden;
   animation: popIn .15s ease;
   display: flex;
@@ -7459,4 +7456,73 @@ mark.search-highlight {
 /* ── Badge ausência com tooltip estilizado ── */
 .aus-zero-badge--tip {
   cursor: help;
+}
+
+/* ── Modal de conflitos de importação ── */
+.conflict-row {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+.conflict-row-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px;
+  background: var(--bg3);
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+.conflict-idx {
+  font-family: var(--mono); font-size: 10px;
+  color: var(--text3); flex-shrink: 0;
+}
+.conflict-entity {
+  font-weight: 600; color: var(--text);
+}
+.conflict-cols {
+  display: grid; grid-template-columns: 1fr 1fr 1fr;
+  gap: 0;
+}
+.conflict-option {
+  cursor: pointer; display: block;
+  border-right: 1px solid var(--border);
+}
+.conflict-option:last-child { border-right: none; }
+.conflict-option input { display: none; }
+.conflict-option-body {
+  padding: 10px 12px;
+  transition: background .12s;
+}
+.conflict-option:hover .conflict-option-body { background: var(--bg3); }
+.conflict-option.selected .conflict-manual   { background: var(--amber-bg); }
+.conflict-option.selected .conflict-importado { background: var(--accent-dim); }
+.conflict-option.selected .conflict-ambos    { background: var(--green-bg, rgba(34,197,94,.1)); }
+.conflict-option-label {
+  font-size: 10px; font-weight: 700; letter-spacing: .07em;
+  text-transform: uppercase; font-family: var(--mono);
+  color: var(--text3); margin-bottom: 4px;
+  display: flex; align-items: center; gap: 5px;
+}
+.conflict-manual .conflict-option-label   { color: var(--amber); }
+.conflict-importado .conflict-option-label { color: var(--accent); }
+.conflict-ambos .conflict-option-label    { color: var(--green); }
+.conflict-option-val {
+  font-size: 12px; color: var(--text2); font-family: var(--mono);
+}
+
+/* ── Badge de registro manual ── */
+.badge-manual {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px; height: 16px;
+  border-radius: 3px;
+  background: var(--amber-bg);
+  border: 1px solid var(--amber-border);
+  color: var(--amber);
+  font-size: 9px;
+  vertical-align: middle;
+  margin-right: 5px;
+  flex-shrink: 0;
+  cursor: default;
 }

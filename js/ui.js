@@ -2171,7 +2171,7 @@ function buildSnapshot({ lancs, sap, initialStockOverride = null, initialDateLab
     };
 }
 
-function buildHealthPanel(central, dtIni, allMatsSorted, lancsByMat, sapByMat, categoriaByMat) {
+function buildHealthPanel(central, dtIni, allMatsSorted, lancsByMat, sapByMat, categoriaByMat, dtFim) {
   const thresholds = getHealthThresholds();
 
   const prePeriodStockCache = new Map();
@@ -2184,11 +2184,16 @@ function buildHealthPanel(central, dtIni, allMatsSorted, lancsByMat, sapByMat, c
 
   const matDiffs = allMatsSorted.map(mat => {
     const prev = getPrePeriodStock(mat);
+    const fim  = dtFim
+      ? getLastPeriodLaunchStockWithFallback({ central, material: mat, dtIni, dtFim })
+      : null;
     const snap = buildSnapshot({
       lancs: lancsByMat.get(mat) || [],
       sap: sapByMat.get(mat) || [],
-      initialStockOverride: prev?.value,
-      initialDateLabelOverride: prev?.dtLabel
+      initialStockOverride:     prev?.value   ?? null,
+      initialDateLabelOverride: prev?.dtLabel ?? null,
+      finalStockOverride:       fim && !fim.missing ? fim.value   : null,
+      finalDateLabelOverride:   fim && !fim.missing ? fim.dtLabel : null
     });
     const rawCat = categoriaByMat.get(mat) || '';
     const catKey = detectCatKey(rawCat) || detectCatFromMat(mat);
@@ -2350,7 +2355,12 @@ function renderImports() {
       <tr>
         <td>${r.arquivo || '—'}</td>
         <td><span class="badge badge-purple">${r.modulo || '—'}</span></td>
-        <td class="td-mono">${r.registros ?? 0}</td>
+        <td class="td-mono">
+          ${r.registros ?? 0}
+          ${r.totalArquivo && r.totalArquivo > r.registros
+            ? `<span style="font-size:10px;color:var(--text3);font-family:var(--mono);margin-left:4px" title="Arquivo continha ${(r.totalArquivo).toLocaleString('pt-BR')} registros no total">(de ${(r.totalArquivo).toLocaleString('pt-BR')})</span>`
+            : ''}
+        </td>
         <td class="td-muted">${r.dataHora || '—'}</td>
         <td><span class="badge badge-green">${r.status || 'Importado'}</span></td>
         <td style="width:56px">

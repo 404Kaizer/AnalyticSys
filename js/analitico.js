@@ -825,17 +825,18 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
     });
 
     // Health score + counts for the header badges
-    // USA initialStockOverride — mesma base do buildHealthPanel e do detalhamento
+    // Usa getLastPeriodLaunchStockWithFallback — mesma lógica do painel interno
+    // e da tabela de materiais, para garantir consistência
     const thresholds = getHealthThresholds();
     const matDiffs = allMatsSorted.map(mat => {
       const prev = getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni });
-      const fim  = getLastPeriodLaunchStock({ central: r.central, material: mat, dtFim });
+      const fim  = getLastPeriodLaunchStockWithFallback({ central: r.central, material: mat, dtIni, dtFim });
       const snap = buildSnapshot({
         lancs: lancsByMat.get(mat) || [],
         sap:   sapByMat.get(mat)   || [],
         initialStockOverride:     prev?.value  ?? null,
         initialDateLabelOverride: prev?.dtLabel ?? null,
-        finalStockOverride:       fim  ? (fim.missing ? null : fim.value) : null,
+        finalStockOverride:       fim && !fim.missing ? fim.value : null,
         finalDateLabelOverride:   fim && !fim.missing ? fim.dtLabel : null
       });
       const rawCat = categoriaByMat.get(mat) || '';
@@ -872,7 +873,7 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
     </span>`;
 
     if (totalMats >= 5) {
-      divPanelHtml = buildHealthPanel(r.central, dtIni, allMatsSorted, lancsByMat, sapByMat, categoriaByMat);
+      divPanelHtml = buildHealthPanel(r.central, dtIni, allMatsSorted, lancsByMat, sapByMat, categoriaByMat, dtFim);
     }
 
     const card = document.createElement('div');

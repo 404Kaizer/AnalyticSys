@@ -60,7 +60,8 @@
   flex: 1;
   padding: 24px 28px;
   overflow-y: auto;
-  overflow-x: hidden;
+  overflow-x: clip; /* clip em vez de hidden: não cria stacking context,
+                       então o dropdown da topbar não fica enterrado atrás */
   min-width: 0;
 }
 

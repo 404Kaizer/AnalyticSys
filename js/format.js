@@ -400,6 +400,12 @@ function toggleToolsMenu() {
   const btn = document.getElementById('tools-trigger-btn');
   if (!dd) return;
   const open = dd.classList.contains('open');
+  if (!open) {
+    // Posiciona via fixed usando coordenadas reais do botão
+    const rect = btn.getBoundingClientRect();
+    dd.style.top   = (rect.bottom + 8) + 'px';
+    dd.style.right = (window.innerWidth - rect.right) + 'px';
+  }
   dd.classList.toggle('open', !open);
   btn?.classList.toggle('active', !open);
 }

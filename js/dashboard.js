@@ -1119,7 +1119,7 @@ function renderDgGiro(results) {
 
   tb.innerHTML = data.map((r, i) => `
     <tr>
-      <td class="td-mono">${r.centralCompra || '—'}</td>
+      <td class="td-mono">${r.fonte === 'manual' ? '<span class="badge-manual" title="Registro inserido manualmente"><i class="ti ti-pencil"></i></span>' : ''}${r.centralCompra || '—'}</td>
       <td class="td-mono">${r.centralDestino || '—'}</td>
       <td class="td-mono">${r.nf || '—'}</td>
       <td class="td-muted">${r.dtEmissao || '—'}</td>
@@ -1151,7 +1151,7 @@ function renderSaidas() {
 
   tb.innerHTML = data.map((r, i) => `
     <tr>
-      <td class="td-mono">${r.central || '—'}</td>
+      <td class="td-mono">${r.fonte === 'manual' ? '<span class="badge-manual" title="Registro inserido manualmente"><i class="ti ti-pencil"></i></span>' : ''}${r.central || '—'}</td>
       <td class="td-muted">${r.dtEmissao || '—'}</td>
       <td class="td-mono">${r.os || '—'}</td>
       <td class="td-muted">${r.contrato || '—'}</td>
@@ -1187,7 +1187,7 @@ function renderLancamentos() {
 
   tb.innerHTML = data.map((r, i) => `
     <tr>
-      <td class="td-mono">${r.central || '—'}</td>
+      <td class="td-mono">${r.fonte === 'manual' ? '<span class="badge-manual" title="Registro inserido manualmente"><i class="ti ti-pencil"></i></span>' : ''}${r.central || '—'}</td>
       <td class="td-muted">${r.dtLanc || '—'}</td>
       <td>${r.fornecedor || '—'}</td>
       <td class="td-muted">${r.categoria || '—'}</td>
@@ -2154,7 +2154,7 @@ function renderSAP() {
     const text = 'inherit';
     return `
     <tr>
-      <td class="td-mono">${r.usuario || '—'}</td>
+      <td class="td-mono">${r.fonte === 'manual' ? '<span class="badge-manual" title="Registro inserido manualmente"><i class="ti ti-pencil"></i></span>' : ''}${r.usuario || '—'}</td>
       <td class="td-mono" style="color:${neg ? red : green}">${r.movimento || '—'}</td>
       <td class="td-muted">${r.ref || '—'}</td>
       <td class="td-mono">${r.documento || '—'}</td>
@@ -2209,7 +2209,7 @@ function renderProducao() {
 
   tb.innerHTML = pageData.map((r, i) => `
     <tr>
-      <td class="td-mono">${r.mes || '—'}</td>
+      <td class="td-mono">${r.fonte === 'manual' ? '<span class="badge-manual" title="Registro inserido manualmente"><i class="ti ti-pencil"></i></span>' : ''}${r.mes || '—'}</td>
       <td class="td-mono">${r.central || '—'}</td>
       <td class="td-mono" style="color:var(--teal)">${num(r.producao).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
       <td>${r.um || 'm³'}</td>
@@ -2372,11 +2372,290 @@ function removerRegistro(module, index) {
 }
 
 
+// ── Detecção de conflitos entre registros manuais e importação ──────────────
+// Um conflito ocorre quando um registro importado tem a mesma "identidade base"
+// que um registro manual, mas com dados diferentes (ex: peso diferente).
+// A "identidade base" exclui o peso do fingerprint para detectar registros
+// do mesmo evento com valores distintos.
+
+function _fpBaseEntrada(r) {
+  return [normalizeText(r.centralDestino || r.centralCompra || ''), normalizeText(r.material || ''), r.nf || '', r.dtEmissao || ''].join('|');
+}
+function _fpBaseSaida(r) {
+  return [normalizeText(r.central || ''), normalizeText(r.material || ''), r.os || '', r.dtEmissao || ''].join('|');
+}
+function _fpBaseLancamento(r) {
+  return [normalizeText(r.central || ''), normalizeText(r.material || ''), r.dtLanc || ''].join('|');
+}
+function _fpBaseSap(r) {
+  return [normalizeText(r.central || ''), normalizeText(r.material || ''), r.documento || '', r.movimento || '', r.dtLanc || ''].join('|');
+}
+function _fpBaseProducao(r) {
+  return [normalizeText(r.central || ''), r.mes || ''].join('|');
+}
+
+const _fpBaseFns = {
+  'Entrada': _fpBaseEntrada, 'Saída': _fpBaseSaida,
+  'Lançamento': _fpBaseLancamento, 'SAP': _fpBaseSap, 'Produção': _fpBaseProducao
+};
+const _fpFns = {
+  'Entrada': _fpEntrada, 'Saída': _fpSaida,
+  'Lançamento': _fpLancamento, 'SAP': _fpSap, 'Produção': _fpProducao
+};
+const _stateArrays = () => ({
+  'Entrada': state.entradas, 'Saída': state.saidas,
+  'Lançamento': state.lancamentos, 'SAP': state.sap, 'Produção': state.producao
+});
+
+function _detectConflicts(modulo, incoming) {
+  const fpBase = _fpBaseFns[modulo];
+  const fp     = _fpFns[modulo];
+  if (!fpBase || !fp) return [];
+
+  const existing = _stateArrays()[modulo] || [];
+  const manuais  = existing.filter(r => r.fonte === 'manual');
+  if (!manuais.length) return [];
+
+  // Índice dos manuais por base-fingerprint
+  const manualByBase = new Map();
+  manuais.forEach(r => {
+    const b = fpBase(r);
+    if (!manualByBase.has(b)) manualByBase.set(b, []);
+    manualByBase.get(b).push(r);
+  });
+
+  const conflicts = [];
+  incoming.forEach(rec => {
+    const b  = fpBase(rec);
+    const f  = fp(rec);
+    const ms = manualByBase.get(b);
+    if (!ms) return;
+    ms.forEach(manual => {
+      // Mesmo evento base mas fingerprint completo diferente = dados divergem
+      if (fp(manual) !== f) {
+        conflicts.push({ manual, importado: rec });
+      }
+    });
+  });
+
+  // Deduplicar conflitos (mesmo par pode aparecer várias vezes)
+  const seen = new Set();
+  return conflicts.filter(c => {
+    const k = fp(c.manual) + '|||' + fp(c.importado);
+    if (seen.has(k)) return false;
+    seen.add(k); return true;
+  });
+}
+
+// Resolução dos conflitos — chamada pelo modal
+// decisions: Map<idx, 'manual'|'importado'|'ambos'>
+let _pendingMerge = null;
+function _resolveConflicts(decisions) {
+  if (!_pendingMerge) return;
+  const { modulo, incoming, conflicts, resolve } = _pendingMerge;
+  _pendingMerge = null;
+
+  const fp       = _fpFns[modulo];
+  const toRemove = new Set(); // fps de manuais a remover
+  const toSkip   = new Set(); // fps de importados a não inserir
+
+  conflicts.forEach((c, idx) => {
+    const dec = decisions.get(idx) || 'importado';
+    if (dec === 'manual') {
+      // Mantém manual — ignora importado com mesmo base
+      toSkip.add(fp(c.importado));
+    } else if (dec === 'importado') {
+      // Usa importado — remove manual
+      toRemove.add(fp(c.manual));
+    }
+    // 'ambos': não faz nada — mantém os dois
+  });
+
+  // Aplica remoções de manuais
+  const arr = _stateArrays();
+  if (toRemove.size) {
+    const stateKey = { 'Entrada': 'entradas', 'Saída': 'saidas', 'Lançamento': 'lancamentos', 'SAP': 'sap', 'Produção': 'producao' }[modulo];
+    if (stateKey) state[stateKey] = state[stateKey].filter(r => !toRemove.has(fp(r)));
+  }
+
+  // Filtra importados conforme decisão
+  const filteredIncoming = incoming.filter(r => !toSkip.has(fp(r)));
+  resolve(filteredIncoming);
+}
+window._resolveConflicts = _resolveConflicts;
+
+function _showConflictModal(modulo, conflicts) {
+  const sub  = document.getElementById('conflict-modal-sub');
+  const list = document.getElementById('conflict-list');
+  if (!sub || !list) return;
+
+  sub.textContent = `${conflicts.length} conflito${conflicts.length !== 1 ? 's' : ''} encontrado${conflicts.length !== 1 ? 's' : ''} em ${modulo}`;
+
+  const fmtVal = (r, modulo) => {
+    if (modulo === 'Lançamento' || modulo === 'SAP') return `${num(r.peso).toLocaleString('pt-BR')} kg · ${r.dtLanc || '—'}`;
+    if (modulo === 'Entrada')  return `${num(r.peso).toLocaleString('pt-BR')} kg · NF ${r.nf || '—'} · ${r.dtEmissao || '—'}`;
+    if (modulo === 'Saída')    return `${num(r.peso).toLocaleString('pt-BR')} kg · OS ${r.os || '—'} · ${r.dtEmissao || '—'}`;
+    if (modulo === 'Produção') return `${num(r.producao).toLocaleString('pt-BR')} m³ · ${r.mes || '—'}`;
+    return JSON.stringify(r).slice(0, 80);
+  };
+
+  list.innerHTML = conflicts.map((c, idx) => `
+    <div class="conflict-row" id="conflict-row-${idx}">
+      <div class="conflict-row-header">
+        <span class="conflict-idx">#${idx + 1}</span>
+        <span class="conflict-entity">${escapeHtml(c.manual.central || c.manual.centralDestino || '—')} · ${escapeHtml(c.manual.material || '—')}</span>
+      </div>
+      <div class="conflict-cols">
+        <label class="conflict-option" id="conflict-opt-${idx}-manual">
+          <input type="radio" name="conflict-${idx}" value="manual" onchange="conflictMark(${idx},'manual')">
+          <div class="conflict-option-body conflict-manual">
+            <div class="conflict-option-label"><i class="ti ti-hand-stop"></i> Manual</div>
+            <div class="conflict-option-val">${escapeHtml(fmtVal(c.manual, modulo))}</div>
+          </div>
+        </label>
+        <label class="conflict-option" id="conflict-opt-${idx}-importado">
+          <input type="radio" name="conflict-${idx}" value="importado" checked onchange="conflictMark(${idx},'importado')">
+          <div class="conflict-option-body conflict-importado">
+            <div class="conflict-option-label"><i class="ti ti-file-import"></i> Arquivo</div>
+            <div class="conflict-option-val">${escapeHtml(fmtVal(c.importado, modulo))}</div>
+          </div>
+        </label>
+        <label class="conflict-option" id="conflict-opt-${idx}-ambos">
+          <input type="radio" name="conflict-${idx}" value="ambos" onchange="conflictMark(${idx},'ambos')">
+          <div class="conflict-option-body conflict-ambos">
+            <div class="conflict-option-label"><i class="ti ti-copy-plus"></i> Manter ambos</div>
+            <div class="conflict-option-val" style="color:var(--text3)">Insere os dois registros</div>
+          </div>
+        </label>
+      </div>
+    </div>`).join('');
+
+  openModal('modal-import-conflicts');
+}
+
+function conflictMark(idx, val) {
+  ['manual','importado','ambos'].forEach(v => {
+    const opt = document.getElementById(`conflict-opt-${idx}-${v}`);
+    if (opt) opt.classList.toggle('selected', v === val);
+  });
+}
+
+function conflictSelectAll(val) {
+  const rows = document.querySelectorAll('#conflict-list .conflict-row');
+  rows.forEach((row, idx) => {
+    const radio = row.querySelector(`input[value="${val}"]`);
+    if (radio) { radio.checked = true; conflictMark(idx, val); }
+  });
+}
+
+function conflictConfirm() {
+  const rows = document.querySelectorAll('#conflict-list .conflict-row');
+  const decisions = new Map();
+  rows.forEach((_, idx) => {
+    const checked = document.querySelector(`input[name="conflict-${idx}"]:checked`);
+    decisions.set(idx, checked ? checked.value : 'importado');
+  });
+  closeModal('modal-import-conflicts');
+  _resolveConflicts(decisions);
+}
+
+Object.assign(window, { conflictMark, conflictSelectAll, conflictConfirm });
+
+// ── Merge com verificação de conflitos ───────────────────────────────────────
+// _importAddedCount acumula os registros realmente adicionados na importação atual
+let _importAddedCount = 0;
+
+async function _mergeWithConflictCheck(modulo, incoming) {
+  const fp = _fpFns[modulo];
+  if (!fp || !incoming.length) return _stateArrays()[modulo] || [];
+
+  const conflicts = _detectConflicts(modulo, incoming);
+
+  let resolvedIncoming = incoming;
+  if (conflicts.length) {
+    resolvedIncoming = await new Promise(resolve => {
+      _pendingMerge = { modulo, incoming, conflicts, resolve };
+      _showConflictModal(modulo, conflicts);
+    });
+  }
+
+  const stateKey = { 'Entrada': 'entradas', 'Saída': 'saidas', 'Lançamento': 'lancamentos', 'SAP': 'sap', 'Produção': 'producao' }[modulo];
+  const { result, added } = _mergeDedup(state[stateKey] || [], resolvedIncoming, fp);
+  _importAddedCount += added;
+  return result;
+}
+
+// ── Fingerprints de deduplicação por módulo ──────────────────────────────
+// Garante que reimportar o mesmo arquivo não duplica registros.
+// Chave escolhida para ser estável entre importações do mesmo dado.
+
+function _fpEntrada(r) {
+  return [
+    normalizeText(r.centralDestino || r.centralCompra || ''),
+    normalizeText(r.material || ''),
+    r.nf || '',
+    r.dtEmissao || '',
+    String(num(r.peso))
+  ].join('|');
+}
+
+function _fpSaida(r) {
+  return [
+    normalizeText(r.central || ''),
+    normalizeText(r.material || ''),
+    r.os || '',
+    r.dtEmissao || '',
+    String(num(r.peso))
+  ].join('|');
+}
+
+function _fpLancamento(r) {
+  return [
+    normalizeText(r.central || ''),
+    normalizeText(r.material || ''),
+    r.dtLanc || '',
+    String(num(r.peso))
+  ].join('|');
+}
+
+function _fpSap(r) {
+  return [
+    normalizeText(r.central || ''),
+    normalizeText(r.material || ''),
+    r.documento || '',
+    r.movimento || '',
+    r.dtLanc || '',
+    String(num(r.peso))
+  ].join('|');
+}
+
+function _fpProducao(r) {
+  return [
+    normalizeText(r.central || ''),
+    r.mes || ''
+  ].join('|');
+}
+
+// Merge deduplicado: mantém registros existentes que não conflitem com os novos,
+// depois adiciona os novos. Novos têm prioridade (substituem o existente se mesma chave).
+// Retorna { result, added } onde added = quantos registros foram de fato inseridos.
+function _mergeDedup(existing, incoming, fpFn) {
+  if (!incoming.length) return { result: existing, added: 0 };
+  const incomingFps = new Set(incoming.map(fpFn));
+  const existingFps = new Set(existing.map(fpFn));
+  // Novos registros que não existem no state atual
+  const trulyNew = incoming.filter(r => !existingFps.has(fpFn(r)));
+  // Registros que existem e serão substituídos (update)
+  const kept = existing.filter(r => !incomingFps.has(fpFn(r)));
+  return { result: [...incoming, ...kept], added: trulyNew.length };
+}
+
 async function processImportedRows(modulo, rows, fileName, extra = {}) {
   // Ativa modo batch: desabilita fuzzy matching em normalizarMaterial
   // para evitar Maximum call stack size exceeded com arquivos grandes.
   _batchImportMode = true;
   try {
+  _importAddedCount = 0; // reseta contagem para esta importação
   const importId = `imp_${modulo}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
   const parsed = [];
   const total = rows.length || 0;
@@ -2425,7 +2704,7 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
         }, ['centralCompra','centralDestino']));
       });
     }
-    state.entradas = [...parsed.filter(r => r.material || r.nf), ...state.entradas];
+    state.entradas = await _mergeWithConflictCheck('Entrada', parsed.filter(r => r.material || r.nf));
   } else if (modulo === 'Saída') {
     const cm = extra.colMap || {};
     const ci = (field, fallback) => cm[field] !== undefined ? cm[field] : fallback;
@@ -2453,7 +2732,7 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
         }, ['central']));
       });
     }
-    state.saidas = [...parsed.filter(r => r.material || r.os), ...state.saidas];
+    state.saidas = await _mergeWithConflictCheck('Saída', parsed.filter(r => r.material || r.os));
   } else if (modulo === 'Lançamento') {
     const cm = extra.colMap || {};
     const ci = (field, fallback) => cm[field] !== undefined ? cm[field] : fallback;
@@ -2487,7 +2766,7 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
         }, ['central']));
       });
     }
-    state.lancamentos = [...parsed.filter(r => r.material), ...state.lancamentos];
+    state.lancamentos = await _mergeWithConflictCheck('Lançamento', parsed.filter(r => r.material));
   } else if (modulo === 'SAP') {
     // Usa mapeamento dinâmico de colunas (passado via extra.sapColMap) quando disponível.
     // Fallback para índices fixos do layout padrão MB51 caso o mapa não seja fornecido.
@@ -2545,7 +2824,7 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
         }, ['central']));
       });
     }
-    state.sap = [...parsed.filter(r => r.material || r.documento), ...state.sap];
+    state.sap = await _mergeWithConflictCheck('SAP', parsed.filter(r => r.material || r.documento));
   } else if (modulo === 'Produção') {
     const mes = extra.mes || prompt('Informe o mês da produção importada:');
     if (!mes || !String(mes).trim()) {
@@ -2567,7 +2846,7 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
         totalVendas: num(r[8])
       }, ['central'])));
     }
-    state.producao = [...parsed.filter(r => r.central || r.producao), ...state.producao];
+    state.producao = await _mergeWithConflictCheck('Produção', parsed.filter(r => r.central || r.producao));
   }
 
   if (!parsed.length) {
@@ -2575,7 +2854,36 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
     return;
   }
 
+  // Calcula quantos registros foram de fato adicionados (não duplicados)
+  const fpFnByModulo = {
+    'Entrada':    _fpEntrada,
+    'Saída':      _fpSaida,
+    'Lançamento': _fpLancamento,
+    'SAP':        _fpSap,
+    'Produção':   _fpProducao,
+  };
+  const fpFn = fpFnByModulo[modulo];
+  const stateArrayByModulo = {
+    'Entrada':    state.entradas,
+    'Saída':      state.saidas,
+    'Lançamento': state.lancamentos,
+    'SAP':        state.sap,
+    'Produção':   state.producao,
+  };
+  // parsed contém os registros novos — contar quantos já existiam no state anterior
+  // (state já foi atualizado, então comparamos com os parsed)
+  const totalNovos   = parsed.length;
+  const _incomingFps = fpFn ? new Set(parsed.map(fpFn)) : new Set();
+  const _stateArr    = stateArrayByModulo[modulo] || [];
+  // Registros novos = os que estão no state E cujo fp está nos incoming
+  // (todos os incoming que passaram pelo filter)
+  // Simplificado: mostrar total importado e deixar o sistema de dedup cuidar do resto
+  extra._totalImportado = totalNovos;
+
   updateStep('Salvando e atualizando os painéis...');
+  const _novosStr = extra._totalImportado !== undefined
+    ? `${extra._totalImportado.toLocaleString('pt-BR')} registros processados`
+    : 'Importação concluída';
 
   // Invalida os índices dos módulos que foram alterados para forçar reconstrução
   if (modulo === 'Entrada')     invalidateSearchIndex('entradas');
@@ -2583,15 +2891,24 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
   if (modulo === 'Lançamento')  invalidateLancIndex();
   if (modulo === 'SAP')         invalidateSapIndex();
 
-  state.imports.unshift({
-    id: importId,
-    arquivo: fileName,
-    modulo,
-    registros: parsed.length,
-    dataHora: new Date().toLocaleString('pt-BR'),
-    status: 'Importado',
-    createdAt: Date.now()
-  });
+  const novosAdicionados = _importAddedCount;
+
+  if (novosAdicionados > 0) {
+    // Só grava no histórico se houve registros novos
+    state.imports.unshift({
+      id: importId,
+      arquivo: fileName,
+      modulo,
+      registros: novosAdicionados,
+      totalArquivo: parsed.length,
+      dataHora: new Date().toLocaleString('pt-BR'),
+      status: 'Importado',
+      createdAt: Date.now()
+    });
+    toast(`${novosAdicionados.toLocaleString('pt-BR')} novo${novosAdicionados !== 1 ? 's' : ''} registro${novosAdicionados !== 1 ? 's' : ''} importado${novosAdicionados !== 1 ? 's' : ''} de "${fileName}"`);
+  } else {
+    toast(`Nenhum registro novo encontrado em "${fileName}" — todos já estavam no sistema`, 'info');
+  }
 
   persist();
   renderImports();
@@ -2599,7 +2916,6 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
   updateDashboard();
   await nextFrame();
   initResizable();
-  toast(`${parsed.length} registros importados de "${fileName}"`);
   } finally {
     // Desativa modo batch — fuzzy matching volta a funcionar normalmente
     _batchImportMode = false;

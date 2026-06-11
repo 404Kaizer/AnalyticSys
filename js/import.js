@@ -108,6 +108,7 @@ function excluirProducao(absIndex) {
 
 function salvarProducao() {
   const rec = stamp({
+    fonte: 'manual',
     mes: val('p-mes'),
     central: normalizarCentral(val('p-central')),
     producao: num(val('p-producao')),
@@ -161,6 +162,7 @@ function salvarEntrada() {
   if (!peso)    { toast('Informe o Peso', 'error'); return; }
 
   const rec = stamp({
+    fonte: 'manual',
     centralCompra:  normalizarCentral(central),
     centralDestino: normalizarCentral(val('e-central-destino') || central),
     nf:             val('e-nf') || '—',
@@ -197,6 +199,7 @@ function salvarSaida() {
   if (!peso)    { toast('Informe o Peso', 'error'); return; }
 
   const rec = stamp({
+    fonte: 'manual',
     central:        normalizarCentral(central),
     dtEmissao:      _fmtDateInput(val('s-dt-emissao')),
     os:             val('s-os') || '—',
@@ -232,6 +235,7 @@ function salvarLancamento() {
   if (!peso)    { toast('Informe o Peso', 'error'); return; }
 
   const rec = stamp({
+    fonte: 'manual',
     central:        normalizarCentral(central),
     dtLanc:         _fmtDateInput(val('l-dt-lanc')),
     fornecedor:     val('l-fornecedor') || '—',
@@ -267,6 +271,7 @@ function salvarSAP() {
 
   const hoje = new Date().toLocaleDateString('pt-BR');
   const rec = stamp({
+    fonte: 'manual',
     usuario:        val('sap-usuario') || '—',
     movimento,
     ref:            val('sap-ref') || '—',
