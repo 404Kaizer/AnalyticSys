@@ -539,13 +539,26 @@ function _buildAusenciasRelHTML({ titulo, periodo, geradoEm, regionaisData, tota
 
     const centraisHtml = centrais.map(({ central, mats }) => {
       const totalAus = mats.length;
-      const matRows = mats.map(({ mat, tipo, dias, estoqueZerado }, ri) => {
+      const matRows = mats.map(({ mat, tipo, dias, estoqueZerado, motivoZerado, ultimaData, ultimaPeso, ultimaEntrada, ultimaSaida, ultimoSap, totalLancs }, ri) => {
         const isSemanal = tipo === 'Semanal';
         const chips = dias.map(d =>
           `<span class="date-chip${estoqueZerado ? ' date-chip--zerado' : ''}">${fmtDate(d)}</span>`
         ).join('');
+        const fmtD = d => d ? new Date(d).toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric' }) : '—';
+        const _buildZeroTitleRel = () => {
+          const lines = [];
+          if (motivoZerado === 'peso_zero')    lines.push('Motivo: último lançamento registrou 0 kg');
+          else if (motivoZerado === 'inatividade') lines.push('Motivo: sem lançamento há mais de 30 dias');
+          lines.push(`Últ. estoque lançado: ${fmtD(ultimaData)}${ultimaPeso != null ? ' (' + Number(ultimaPeso).toLocaleString('pt-BR') + ' kg)' : ''}`);
+          if (ultimaEntrada) lines.push(`Últ. entrada (NF): ${fmtD(ultimaEntrada)}`);
+          if (ultimaSaida)   lines.push(`Últ. saída (OS): ${fmtD(ultimaSaida)}`);
+          if (ultimoSap)     lines.push(`Últ. mov. SAP: ${fmtD(ultimoSap)}`);
+          if (totalLancs != null) lines.push(`Total de lançamentos históricos: ${totalLancs}`);
+          return lines.join('&#10;');
+        };
+        const zeroBadgeLabel = motivoZerado === 'inatividade' ? '&#9888; SEM MOVIMENTAÇÃO' : '&#9888; ESTOQUE ZERADO';
         const zeroBadge = estoqueZerado
-          ? `<span class="badge-zerado" title="Último lançamento registrado: 0 kg">&#9888; ESTOQUE ZERADO</span>`
+          ? `<span class="badge-zerado" title="${_buildZeroTitleRel()}">${zeroBadgeLabel}</span>`
           : '';
         return `
           <tr class="${ri % 2 === 0 ? 'row-even' : 'row-odd'}${estoqueZerado ? ' row-zerado' : ''}">
@@ -1033,8 +1046,14 @@ function _ausenciasParaRegionaisData(ausencias) {
       mat:           a.mat,
       tipo:          a.isSemanal ? 'Semanal' : 'Diário',
       dias:          a.diasAusentes,
-      estoqueZerado: a.estoqueZerado || false,
-      ultimoPeso:    a.ultimoPeso ?? null
+      estoqueZerado: a.estoqueZerado  || false,
+      motivoZerado:  a.motivoZerado   || null,
+      ultimaData:    a.ultimaData     || null,
+      ultimaPeso:    a.ultimoPeso     ?? null,
+      ultimaEntrada: a.ultimaEntrada  || null,
+      ultimaSaida:   a.ultimaSaida    || null,
+      ultimoSap:     a.ultimoSap      || null,
+      totalLancs:    a.totalLancs     ?? null,
     });
   });
 

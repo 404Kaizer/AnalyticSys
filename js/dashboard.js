@@ -1312,12 +1312,239 @@ function _diasEsperados(dtIni, dtFim, isSemanal) {
   return dias;
 }
 
+// ── Cache de ausências computadas (período atual) ────────────────────────
+let _ausCache = null;  // Array completo de ausências do período atual
+let _ausCachePeriod = '';  // 'dtIni|dtFim' para invalidar se período mudar
+
+function _ausInvalidateCache() {
+  _ausCache = null;
+  _ausCachePeriod = '';
+  _ausInvalidateEntSaiIdx();
+}
+
+// Chamada quando período muda — recalcula tudo e guarda no cache
+function _ausComputar(dtIni, dtFim) {
+  _ausInvalidateEntSaiIdx(); // garante índices frescos
+
+  // ── Monta índice de dias lançados no período ──
+  // parseDate necessário pois dtLanc é dd/mm/yyyy, não ISO
+  const lancIndex = new Map();
+  (state.lancamentos || []).forEach(r => {
+    const d = parseDate(r.dtLanc);
+    if (!d || d < dtIni || d > dtFim) return;
+    const dk = localISODate(d);
+    const key = normalizeText(r.central) + '|' + normalizeText(r.material || '—');
+    if (!lancIndex.has(key)) lancIndex.set(key, new Set());
+    lancIndex.get(key).add(dk);
+  });
+
+  // ── Pares candidatos: união de SAP histórico + Lançamentos históricos ──
+  // Varre os índices completos para encontrar todos os pares conhecidos.
+  // A elegibilidade real (ativo/inativo) é decidida pelo estoque teórico
+  // calculado dia a dia — não por heurísticas de código de movimento.
+  const { byCentralMat: lancIdxAll } = getLancIndex();
+  const { byCentralMat: sapIdxAll  } = getSapIndex();
+
+  const paresInfo = new Map(); // normKey → { central, mat, categoria }
+  sapIdxAll.forEach((matMap, central) => {
+    matMap.forEach((arr, mat) => {
+      if (!arr.length || !central || !mat || mat === '—') return;
+      const key = normalizeText(central) + '|' + normalizeText(mat);
+      if (!paresInfo.has(key))
+        paresInfo.set(key, { central, mat, categoria: arr[0]?.categoria || '' });
+    });
+  });
+  lancIdxAll.forEach((matMap, central) => {
+    matMap.forEach((arr, mat) => {
+      if (!arr.length || !central || !mat || mat === '—') return;
+      const key = normalizeText(central) + '|' + normalizeText(mat);
+      const existing = paresInfo.get(key);
+      // Lançamentos têm prioridade de categoria
+      paresInfo.set(key, { central, mat,
+        categoria: arr[0]?.categoria || existing?.categoria || '' });
+    });
+  });
+
+  // ── Dias do período (ISO strings) ─────────────────────────────────────
+  const diasPeriodoISO = [];
+  { const cur = new Date(dtIni); cur.setHours(0,0,0,0);
+    const fim = new Date(dtFim); fim.setHours(0,0,0,0);
+    while (cur <= fim) { diasPeriodoISO.push(localISODate(cur)); cur.setDate(cur.getDate()+1); }
+  }
+
+  // ── SAP acumulado por dia: Map<normKey, Map<ISO, deltaSAP>> ───────────
+  // delta = soma de todos os pesos SAP até e incluindo aquele dia
+  // Construído uma única vez para todo o período
+  // sapDeltaByPar: só SAP do período selecionado, dia a dia
+  // pesoIni (lançamento anterior ao período) já resume o histórico completo
+  const sapDeltaByPar = new Map(); // normKey → Map<isoDay, somaDoDia>
+  const dkIni = diasPeriodoISO[0];
+  const dkFim = diasPeriodoISO[diasPeriodoISO.length - 1];
+  sapIdxAll.forEach((matMap, central) => {
+    matMap.forEach((sapArr, mat) => {
+      if (!central || !mat || mat === '—') return;
+      const key = normalizeText(central) + '|' + normalizeText(mat);
+      const deltaByDay = new Map();
+      sapArr.forEach(r => {
+        const d = parseDate(r.dtLanc);
+        if (!d) return;
+        const dk = localISODate(d);
+        if (dk >= dkIni && dk <= dkFim)
+          deltaByDay.set(dk, (deltaByDay.get(dk) || 0) + num(r.peso));
+      });
+      if (deltaByDay.size) sapDeltaByPar.set(key, deltaByDay);
+    });
+  });
+
+  // ── Pré-computa dia-da-semana de cada ISO uma única vez ──────────────────
+  const dowByISO = new Map(); // isoDay → 0..6
+  diasPeriodoISO.forEach(dk => {
+    const [y,m,d] = dk.split('-').map(Number);
+    dowByISO.set(dk, new Date(y, m-1, d).getDay());
+  });
+  const esperadosDiario  = diasPeriodoISO.filter(dk => dowByISO.get(dk) !== 0);
+  const esperadosSemanal = diasPeriodoISO.filter(dk => dowByISO.get(dk) === 2);
+
+  // ── Calcula ausências ─────────────────────────────────────────────────
+  const limiteInatividade = new Date(dtIni);
+  limiteInatividade.setDate(limiteInatividade.getDate() - 30);
+
+  const filIdx = getFilialLookupIndex();
+  const getRegional = c => {
+    const f = filIdx.exact.get(normalizeText(c));
+    return (f?.regional || '').trim() || 'Sem regional';
+  };
+
+  const ausencias = [];
+  paresInfo.forEach(({ central, mat, categoria }, key) => {
+    const catKey    = detectCatKey(String(categoria).trim().toUpperCase()) || detectCatFromMat(mat);
+    const isSemanal = catKey === 'agregado';
+    const esperadosISO = isSemanal ? esperadosSemanal : esperadosDiario;
+    if (!esperadosISO.length) return;
+
+    const lancados = lancIndex.get(key) || new Set();
+
+    // ── Estoque teórico acumulado dia a dia ──────────────────────────────
+    const deltaByDay = sapDeltaByPar.get(key) || new Map();
+
+    // lancValByDay: lançamentos do período para este par (isoDay → peso total)
+    // Usa o bucket do lancIdxAll com a chave normalizada para evitar mismatch
+    const lancValByDay = new Map();
+    let   lastLancBeforePeriod = null; // para derivar pesoIni sem chamada extra
+
+    // Iterar o bucket de lançamentos históricos uma única vez:
+    // – antes do período: guarda o mais recente (pesoIni)
+    // – durante o período: acumula por dia
+    const lancBucket = lancIndex.get(key); // lancIndex já usa chaves normalizadas
+    // lancIndex só tem lançamentos DO período; precisamos dos anteriores via lancIdxAll
+    // Busca o bucket pelo par original (central/mat vêm de paresInfo, valores originais)
+    const lancBucketAll = lancIdxAll.get(central)?.get(mat) || [];
+    lancBucketAll.forEach(r => {
+      const d = parseDate(r.dtLanc);
+      if (!d) return;
+      const dk = localISODate(d);
+      if (dk < dkIni) {
+        // Antes do período: guarda o mais recente como pesoIni
+        if (!lastLancBeforePeriod || d > lastLancBeforePeriod.d)
+          lastLancBeforePeriod = { d, peso: num(r.peso) };
+      } else if (dk <= dkFim) {
+        lancValByDay.set(dk, (lancValByDay.get(dk) || 0) + num(r.peso));
+      }
+    });
+
+    // Se não encontrou lançamento anterior via lancIdxAll, tenta normalizado
+    // (fallback para cobrir variações de capitalização entre fontes)
+    if (!lastLancBeforePeriod) {
+      const prev = getPrePeriodLaunchStock({ central, material: mat, dtIni });
+      lastLancBeforePeriod = prev?.missing === false ? { d: dtIni, peso: prev.value } : null;
+    }
+
+    // Limiar de "zerado": valores <= 0.01 kg são considerados estoque zero
+    const LIMIAR_ZERO = 0.01;
+
+    let baseEstoque      = lastLancBeforePeriod?.peso ?? null; // null = nunca houve lançamento
+    let baseZerada       = lastLancBeforePeriod !== null && (lastLancBeforePeriod.peso <= LIMIAR_ZERO);
+    let sapAcumDesdeBase = 0;
+
+    const diasAusentesISO = [];
+    for (const dk of diasPeriodoISO) {
+      // 1. Acumula SAP do dia
+      sapAcumDesdeBase += deltaByDay.get(dk) || 0;
+
+      // 2. Se houve lançamento nesse dia → atualiza base e reseta SAP acumulado
+      if (lancValByDay.has(dk)) {
+        const pesoLanc   = lancValByDay.get(dk);
+        baseEstoque      = pesoLanc;
+        baseZerada       = pesoLanc <= LIMIAR_ZERO;
+        sapAcumDesdeBase = 0;
+        continue; // dia com lançamento nunca é ausência
+      }
+
+      // 3. Dia sem lançamento: verifica se é dia esperado (usa dow pré-computado)
+      const dow = dowByISO.get(dk);
+      const ehEsperado = isSemanal ? dow === 2 : dow !== 0;
+      if (!ehEsperado) continue;
+
+      // 4. Teórico = base (último lançamento) + SAP acumulado desde então
+      const teorAcum = (baseEstoque ?? 0) + sapAcumDesdeBase;
+
+      // 5. Decide se cobra ausência:
+      //    a) Nunca houve lançamento (baseEstoque === null) E teórico <= limiar → inativo
+      if (baseEstoque === null && teorAcum <= LIMIAR_ZERO) continue;
+      //    b) Lançamento zerado (baseZerada) → cobra como ausência zerada
+      //    c) Teórico > limiar → material ativo → cobra ausência normalmente
+      if (!baseZerada && teorAcum <= LIMIAR_ZERO) continue;
+
+      // 6. Ausência confirmada
+      diasAusentesISO.push(dk);
+    }
+    if (!diasAusentesISO.length) return;
+
+    const diasAusentes = diasAusentesISO.map(dk => new Date(dk + 'T12:00:00'));
+
+    const ctx = _ausContextoMaterial(central, mat);
+    const ultimaData = ctx.ultimoLanc?.d ?? null;
+    const zeradoPorPeso        = ctx.ultimoLanc !== null && ctx.ultimoLanc.peso <= 0.01;
+    const zeradoPorInatividade = ultimaData !== null && ultimaData < limiteInatividade;
+    const estoqueZerado = zeradoPorPeso || zeradoPorInatividade;
+    const motivoZerado  = zeradoPorPeso ? 'peso_zero' : zeradoPorInatividade ? 'inatividade' : null;
+
+    ausencias.push({
+      central, mat, isSemanal, categoria: categoria || '—', diasAusentes,
+      estoqueZerado, motivoZerado,
+      ultimoPeso:    ctx.ultimoLanc?.peso    ?? null,
+      ultimaData,
+      ultimaEntrada: ctx.ultimaEntrada?.d    ?? null,
+      ultimaSaida:   ctx.ultimaSaida?.d      ?? null,
+      ultimoSap:     ctx.ultimoSap?.d        ?? null,
+      totalLancs:    ctx.totalLancs,
+      regional:      getRegional(central),
+    });
+  });
+
+  // ── Sort: regional maior→menor, central maior→menor ──
+  const totReg = new Map(), totCen = new Map();
+  ausencias.forEach(a => {
+    totReg.set(a.regional, (totReg.get(a.regional) || 0) + a.diasAusentes.length);
+    totCen.set(a.central,  (totCen.get(a.central)  || 0) + a.diasAusentes.length);
+  });
+  ausencias.sort((a, b) =>
+    (totReg.get(b.regional) - totReg.get(a.regional)) ||
+    a.regional.localeCompare(b.regional) ||
+    (totCen.get(b.central) - totCen.get(a.central)) ||
+    a.central.localeCompare(b.central)
+  );
+
+  return ausencias;
+}
+
+// Chamada em toda interação de filtro — usa o cache, só re-renderiza
 function renderAusencias() {
-  const iniEl = document.getElementById('aus-dt-ini');
-  const fimEl = document.getElementById('aus-dt-fim');
-  const content = document.getElementById('ausencias-content');
+  const iniEl   = document.getElementById('aus-dt-ini');
+  const fimEl   = document.getElementById('aus-dt-fim');
+  const content  = document.getElementById('ausencias-content');
   const subtitle = document.getElementById('ausencias-subtitle');
-  const card = document.getElementById('ausencias-card');
+  const card     = document.getElementById('ausencias-card');
   if (!content) return;
 
   const iniStr = iniEl?.value || '';
@@ -1339,84 +1566,16 @@ function renderAusencias() {
     return;
   }
 
-  // ── Monta índice: central → material → Set de dias lançados ──
-  const lancIndex = new Map(); // 'central|mat' → Set<ISO>
-  (state.lancamentos || []).forEach(r => {
-    const d = parseDate(r.dtLanc);
-    if (!d || d < dtIni || d > dtFim) return;
-    const key = `${r.central}|${r.material || '—'}`;
-    if (!lancIndex.has(key)) lancIndex.set(key, new Set());
-    lancIndex.get(key).add(localISODate(d));
-  });
+  // Recomputa apenas se o período mudou
+  const periodKey = iniStr + '|' + fimStr;
+  if (_ausCache === null || _ausCachePeriod !== periodKey) {
+    _ausCachePeriod = periodKey;
+    _ausCache = _ausComputar(dtIni, dtFim);
+  }
 
-  // ── Determina pares central×material que deveriam ter lançamento ──
-  // CORREÇÃO: usa janela histórica ampla (180 dias antes do fim do período)
-  // para não depender de lançamentos no próprio período selecionado.
-  // O bug anterior só capturava pares que JÁ tinham lançado no período —
-  // ou seja, ignorava completamente ausências totais (0 lançamentos no período).
-  const pares = new Map(); // 'central|mat' → { central, mat, isSemanal, categoria }
-  const addPar = (central, mat, categoria) => {
-    if (!central || !mat || mat === '—') return;
-    const key = `${central}|${mat}`;
-    if (pares.has(key)) return;
-    const catKey = detectCatKey(String(categoria || '').trim().toUpperCase()) || detectCatFromMat(mat);
-    pares.set(key, { central, mat, isSemanal: catKey === 'agregado', categoria: categoria || '—' });
-  };
+  // ── Usa cache — popula opções dos filtros ──
+  const ausencias = _ausCache;
 
-  // Janela de referência: 180 dias antes do fim do período
-  const refIni = new Date(dtFim);
-  refIni.setDate(refIni.getDate() - 180);
-
-  (state.lancamentos || []).forEach(r => {
-    const d = parseDate(r.dtLanc);
-    if (!d || d < refIni || d > dtFim) return;
-    addPar(r.central, r.material || '—', r.categoria);
-  });
-  (state.sap || []).forEach(r => {
-    const d = parseDate(r.dtLanc);
-    if (!d || d < refIni || d > dtFim) return;
-    addPar(r.central, r.material || '—', r.categoria);
-  });
-
-  // ── Calcula ausências ──
-  const ausencias = []; // { central, mat, isSemanal, diasAusentes: [] }
-  pares.forEach(({ central, mat, isSemanal, categoria }, key) => {
-    const lancados = lancIndex.get(key) || new Set();
-    const esperados = _diasEsperados(dtIni, dtFim, isSemanal);
-    const ausentes = esperados.filter(d => !lancados.has(localISODate(d)));
-    if (ausentes.length) {
-      const ultimo = _ausUltimoLanc(central, mat);
-      const estoqueZerado = ultimo !== null && ultimo.peso === 0;
-      const ultimaData    = ultimo?.d ?? null;
-      ausencias.push({ central, mat, isSemanal, categoria, diasAusentes: ausentes, estoqueZerado, ultimoPeso: ultimo?.peso ?? null, ultimaData });
-    }
-  });
-
-  // ── Enriquece com regional via lookup ──
-  const _filIdx = getFilialLookupIndex();
-  const _getRegional = central => {
-    const found = _filIdx.exact.get(normalizeText(central));
-    return (found?.regional || '').trim() || 'Sem regional';
-  };
-  ausencias.forEach(a => { a.regional = _getRegional(a.central); });
-
-  // ── Pré-computa totais por regional e central para ordenação ──
-  const _totRegional = new Map();
-  const _totCentral  = new Map();
-  ausencias.forEach(a => {
-    _totRegional.set(a.regional, (_totRegional.get(a.regional) || 0) + a.diasAusentes.length);
-    _totCentral.set(a.central,   (_totCentral.get(a.central)   || 0) + a.diasAusentes.length);
-  });
-
-  // ── Ordena: regional maior→menor, central maior→menor, material asc ──
-  ausencias.sort((a, b) =>
-    (_totRegional.get(b.regional) - _totRegional.get(a.regional)) ||
-    a.regional.localeCompare(b.regional) ||
-    (_totCentral.get(b.central) - _totCentral.get(a.central)) ||
-    a.central.localeCompare(b.central)
-  );
-
-  // ── Popula opções dos filtros ──
   const allRegionais = [...new Set(ausencias.map(a => a.regional))].sort();
   const allCentrals  = [...new Set(ausencias.map(a => a.central))].sort();
   const allMats      = [...new Set(ausencias.map(a => a.mat))].sort();
@@ -1503,12 +1662,42 @@ function renderAusencias() {
           .join('');
         const typeLabel = r.isSemanal ? 'Semanal' : 'Diário';
         const zeroClass = r.estoqueZerado ? ' aus-mat-row--zerado' : '';
-        const zeroDataStr = r.ultimaData
-          ? r.ultimaData.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
-          : 'data desconhecida';
+        const _fmtD = d => d ? d.toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric' }) : '—';
+        const _buildZeroTipHtml = () => {
+          const isInativ = r.motivoZerado === 'inatividade';
+          const col = isInativ ? 'var(--amber)' : 'var(--red)';
+          const icon = isInativ ? 'ti-clock-stop' : 'ti-circle-x';
+          const titulo = isInativ ? 'Sem Movimentação' : 'Estoque Zerado';
+          const motivo = isInativ
+            ? 'Sem lançamento há mais de 30 dias antes do período'
+            : 'Último lançamento registrou <strong>0 kg</strong>';
+          const row = (label, val, color) => val
+            ? `<div style="display:flex;justify-content:space-between;gap:16px;padding:3px 0;border-bottom:1px solid var(--border)">
+                 <span style="color:var(--text3);font-size:11px">${label}</span>
+                 <span style="color:${color||'var(--text)'};font-size:11px;font-family:var(--mono);font-weight:600">${val}</span>
+               </div>`
+            : '';
+          return `
+            <div style="min-width:230px">
+              <div style="display:flex;align-items:center;gap:7px;margin-bottom:9px;padding-bottom:8px;border-bottom:1px solid var(--border2)">
+                <i class="ti ${icon}" style="color:${col};font-size:14px"></i>
+                <span style="font-weight:700;font-size:13px;color:${col}">${titulo}</span>
+              </div>
+              <div style="font-size:11px;color:var(--text2);margin-bottom:9px">${motivo}</div>
+              <div style="display:flex;flex-direction:column;gap:0">
+                ${row('Últ. estoque lançado', _fmtD(r.ultimaData) + (r.ultimoPeso != null ? ' · ' + num(r.ultimoPeso).toLocaleString('pt-BR') + ' kg' : ''), r.motivoZerado === 'peso_zero' ? 'var(--red)' : 'var(--text)')}
+                ${row('Últ. entrada (NF)', r.ultimaEntrada ? _fmtD(r.ultimaEntrada) : null, 'var(--green)')}
+                ${row('Últ. saída (OS)', r.ultimaSaida ? _fmtD(r.ultimaSaida) : null, 'var(--red)')}
+                ${row('Últ. mov. SAP', r.ultimoSap ? _fmtD(r.ultimoSap) : null, 'var(--accent)')}
+                ${row('Total lançamentos', r.totalLancs != null ? r.totalLancs + ' registros' : null, 'var(--text2)')}
+              </div>
+            </div>`;
+        };
         const zeroBadge = r.estoqueZerado
-          ? `<span class="aus-zero-badge" title="Último lançamento: ${zeroDataStr} — 0 kg. Estoque zerado, lançamento pode não ser necessário.">
-               <i class="ti ti-circle-x"></i> ESTOQUE ZERADO
+          ? `<span class="aus-zero-badge aus-zero-badge--tip"
+               data-tip-col="${r.motivoZerado === 'inatividade' ? '#f59e0b' : '#e8666a'}"
+               data-tip-html="${encodeURIComponent(_buildZeroTipHtml())}">
+               <i class="ti ti-circle-x"></i> ${r.motivoZerado === 'inatividade' ? 'SEM MOVIMENTAÇÃO' : 'ESTOQUE ZERADO'}
              </span>`
           : '';
         return `
@@ -1573,7 +1762,35 @@ function renderAusencias() {
   // Sincronizar labels dos botões após render
   _ausUpdateToggleRegionaisBtn();
   _ausUpdateToggleCentralisBtn();
+  // Ativa delegação de tooltips (safe to call multiple times)
+  _initAusTooltipDelegation();
 }
+// ── Event delegation para tooltips dos badges de ausência ─────────────────
+function _initAusTooltipDelegation() {
+  const container = document.getElementById('ausencias-content');
+  if (!container || container._ausTipBound) return;
+  container._ausTipBound = true;
+
+  container.addEventListener('mouseenter', e => {
+    const badge = e.target.closest('.aus-zero-badge--tip');
+    if (!badge) return;
+    if (!window._showTip) return;
+    const html = decodeURIComponent(badge.dataset.tipHtml || '');
+    const col  = badge.dataset.tipCol || 'var(--red)';
+    _showTip(e, html, col);
+  }, true);
+
+  container.addEventListener('mousemove', e => {
+    if (!e.target.closest('.aus-zero-badge--tip')) return;
+    if (window._moveTip) _moveTip(e);
+  }, true);
+
+  container.addEventListener('mouseleave', e => {
+    if (!e.target.closest('.aus-zero-badge--tip')) return;
+    if (window._hideTip) _hideTip();
+  }, true);
+}
+
 function initAusencias() {
   // Só inicializa uma vez por sessão; re-render é feito via callbacks do cal-picker
   const iniEl = document.getElementById('aus-dt-ini');
@@ -1613,18 +1830,78 @@ function ausToggleOcultarZerados() {
   renderAusencias();
 }
 
-// ── Último lançamento de estoque para central × material ─────────────────
-// Retorna { peso, dtLanc } do registro mais recente, ou null se não houver.
+// ── Índices de entradas/saídas por 'CENTRAL_NORM|MAT_NORM' ──────────────
+// Construídos uma única vez, reutilizados em todos os _ausContextoMaterial.
+let _ausEntIdx = null;  // Map<key, { d, peso }>  — última entrada
+let _ausSaiIdx = null;  // Map<key, { d, peso }>  — última saída
+
+function _ausEnsureEntSaiIdx() {
+  if (_ausEntIdx) return;
+  _ausEntIdx = new Map();
+  _ausSaiIdx = new Map();
+
+  (state.entradas || []).forEach(r => {
+    const central_ = r.centralDestino || r.centralCompra || '';
+    if (!central_ || !r.material) return;
+    const key = normalizeText(central_) + '|' + normalizeText(r.material);
+    const d = parseDate(r.dtEmissao || r.dtDescarga);
+    if (!d) return;
+    const cur = _ausEntIdx.get(key);
+    if (!cur || d > cur.d) _ausEntIdx.set(key, { d, peso: num(r.peso) });
+  });
+
+  (state.saidas || []).forEach(r => {
+    if (!r.central || !r.material) return;
+    const key = normalizeText(r.central) + '|' + normalizeText(r.material);
+    const d = parseDate(r.dtEmissao);
+    if (!d) return;
+    const cur = _ausSaiIdx.get(key);
+    if (!cur || d > cur.d) _ausSaiIdx.set(key, { d, peso: num(r.peso) });
+  });
+}
+
+function _ausInvalidateEntSaiIdx() {
+  _ausEntIdx = null;
+  _ausSaiIdx = null;
+}
+
+// ── Contexto completo de um par central × material ────────────────────────
+// O(1) após índices construídos — sem scan linear de entradas/saídas.
+function _ausContextoMaterial(central, mat) {
+  _ausEnsureEntSaiIdx();
+
+  // Lançamentos: bucket já ordenado ASC — pegar o último (index -1)
+  const { byCentralMat: lancIdx } = getLancIndex();
+  const lancsArr = lancIdx.get(central)?.get(mat) || [];
+  let ultimoLanc = null;
+  if (lancsArr.length) {
+    // Bucket ordenado ASC — iterar do fim até achar com data válida
+    for (let i = lancsArr.length - 1; i >= 0; i--) {
+      const d = parseDate(lancsArr[i].dtLanc);
+      if (d) { ultimoLanc = { peso: num(lancsArr[i].peso), d }; break; }
+    }
+  }
+
+  // Entradas/saídas: O(1) via índice pré-computado
+  const eKey = normalizeText(central) + '|' + normalizeText(mat);
+  const ultimaEntrada = _ausEntIdx.get(eKey) || null;
+  const ultimaSaida   = _ausSaiIdx.get(eKey) || null;
+
+  // SAP: bucket do índice global — sem re-sort (pegar mais recente)
+  const { byCentralMat: sapIdx } = getSapIndex();
+  const sapArr = sapIdx.get(central)?.get(mat) || [];
+  let ultimoSap = null;
+  for (let i = sapArr.length - 1; i >= 0; i--) {
+    const d = parseDate(sapArr[i].dtLanc);
+    if (d) { ultimoSap = { d, peso: num(sapArr[i].peso) }; break; }
+  }
+
+  return { ultimoLanc, ultimaEntrada, ultimaSaida, ultimoSap, totalLancs: lancsArr.length };
+}
+
+// Compat
 function _ausUltimoLanc(central, mat) {
-  const { byCentralMat } = getLancIndex();
-  const arr = byCentralMat.get(central)?.get(mat) || [];
-  if (!arr.length) return null;
-  // Ordena desc por data e pega o primeiro
-  const sorted = arr
-    .map(r => ({ peso: num(r.peso), d: parseDate(r.dtLanc) }))
-    .filter(r => r.d)
-    .sort((a, b) => b.d - a.d);
-  return sorted.length ? sorted[0] : null;
+  return _ausContextoMaterial(central, mat).ultimoLanc;
 }
 
 // ── Estado de collapse (regional e central) ──────────────────────────────
@@ -2123,79 +2400,90 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
   };
 
   if (modulo === 'Entrada') {
+    const cm = extra.colMap || {};
+    const ci = (field, fallback) => cm[field] !== undefined ? cm[field] : fallback;
     for (let i = 0; i < total; i += batchSize) {
       updateStep('Lendo entradas e normalizando materiais...');
       await processSlice(i, Math.min(i + batchSize, total), (r) => {
-        const materialOriginal = String(r[10] || '').trim();
+        const materialOriginal = String(r[ci('material', 10)] || '').trim();
+        if (!materialOriginal) return null;
         return stamp(normalizarCentraisRecord({
           importId,
-          centralCompra: String(r[0] || ''),
-          centralDestino: String(r[1] || ''),
-          nf: String(r[11] || ''),
-          dtEmissao: fmtDate(r[13]),
-          dtDescarga: fmtDate(r[3]),
-          fornecedor: String(r[4] || ''),
-          categoria: String(r[9] || ''),
+          centralCompra:    String(r[ci('centralCompra',  0)] || ''),
+          centralDestino:   String(r[ci('centralDestino', 1)] || ''),
+          nf:               String(r[ci('nf',             11)] || ''),
+          dtEmissao:        fmtDate(r[ci('dtEmissao',     13)]),
+          dtDescarga:       fmtDate(r[ci('dtDescarga',     3)]),
+          fornecedor:       String(r[ci('fornecedor',      4)] || ''),
+          categoria:        String(r[ci('categoria',       9)] || ''),
           materialOriginal,
-          material: normalizarMaterial(materialOriginal),
-          peso: num(r[18]),
-          um: String(r[17] || ''),
-          custo: num(r[19]),
-          valorTotal: num(r[20])
+          material:         normalizarMaterial(materialOriginal),
+          peso:             num(r[ci('peso',              18)]),
+          um:               String(r[ci('um',             17)] || 'KG'),
+          custo:            num(r[ci('custo',             19)]),
+          valorTotal:       num(r[ci('valorTotal',        20)])
         }, ['centralCompra','centralDestino']));
       });
     }
     state.entradas = [...parsed.filter(r => r.material || r.nf), ...state.entradas];
   } else if (modulo === 'Saída') {
+    const cm = extra.colMap || {};
+    const ci = (field, fallback) => cm[field] !== undefined ? cm[field] : fallback;
     for (let i = 0; i < total; i += batchSize) {
       updateStep('Lendo saídas e conferindo saldos...');
       await processSlice(i, Math.min(i + batchSize, total), (r) => {
-        const materialOriginal = String(r[6] || '').trim();
+        const materialOriginal = String(r[ci('material', 6)] || '').trim();
+        if (!materialOriginal) return null;
+        const peso = num(r[ci('peso', 9)]);
+        const custo = num(r[ci('custo', 10)]);
         return stamp(normalizarCentraisRecord({
           importId,
-          central: String(r[0] || ''),
-          dtEmissao: fmtDate(r[1]),
-          os: String(r[2] || ''),
-          contrato: String(r[3] || ''),
-          categoria: String(r[4] || ''),
-          fornecedor: String(r[5] || ''),
+          central:          String(r[ci('central',    0)] || ''),
+          dtEmissao:        fmtDate(r[ci('dtEmissao', 1)]),
+          os:               String(r[ci('os',         2)] || ''),
+          contrato:         String(r[ci('contrato',   3)] || ''),
+          categoria:        String(r[ci('categoria',  4)] || ''),
+          fornecedor:       String(r[ci('fornecedor', 5)] || ''),
           materialOriginal,
-          material: normalizarMaterial(materialOriginal),
-          peso: num(r[9]),
-          um: 'KG',
-          custo: num(r[10]),
-          valorTotal: num(r[9]) * num(r[10])
+          material:         normalizarMaterial(materialOriginal),
+          peso,
+          um:               String(r[ci('um', -1)] || 'KG'),
+          custo,
+          valorTotal:       num(r[ci('valorTotal', -1)]) || (peso * custo)
         }, ['central']));
       });
     }
     state.saidas = [...parsed.filter(r => r.material || r.os), ...state.saidas];
   } else if (modulo === 'Lançamento') {
+    const cm = extra.colMap || {};
+    const ci = (field, fallback) => cm[field] !== undefined ? cm[field] : fallback;
     for (let i = 0; i < total; i += batchSize) {
       updateStep('Consolidando lançamentos...');
       await processSlice(i, Math.min(i + batchSize, total), (r) => {
-        const partes = String(r[2] || '')
-          .split(/\s*\|\s*/)
-          .map(v => v.trim())
-          .filter(Boolean);
-
+        // O campo material pode vir combinado "Material | Fornecedor | Municipio"
+        // ou em coluna separada dependendo do layout
+        const matRaw = String(r[ci('material', 2)] || '').trim();
+        const partes = matRaw.split(/\s*\|\s*/).map(v => v.trim()).filter(Boolean);
         const materialOriginal = partes[0] || '';
-        const fornecedor = partes[1] || '';
-        const municipio = partes[2] || '';
-        const material = normalizarMaterial(materialOriginal);
+        const fornecedor = partes.length > 1 ? partes[1] : String(r[ci('fornecedor', -1)] || '');
+        const municipio  = partes.length > 2 ? partes[2] : '';
+        if (!materialOriginal) return null;
 
+        const peso = num(r[ci('peso', 4)]);
+        const custo = num(r[ci('custo', 5)]);
         return stamp(normalizarCentraisRecord({
           importId,
-          dtLanc: fmtDate(r[0]),
-          central: String(r[1] || ''),
+          dtLanc:          fmtDate(r[ci('dtLanc',   0)]),
+          central:         String(r[ci('central',    1)] || ''),
           fornecedor,
           municipio,
-          categoria: String(r[3] || ''),
+          categoria:       String(r[ci('categoria',  3)] || ''),
           materialOriginal,
-          material,
-          peso: num(r[4]),
-          um: 'KG',
-          custo: num(r[5]),
-          valorTotal: num(r[4]) * num(r[5])
+          material:        normalizarMaterial(materialOriginal),
+          peso,
+          um:              'KG',
+          custo,
+          valorTotal:      num(r[ci('valorTotal', -1)]) || (peso * custo)
         }, ['central']));
       });
     }
@@ -2213,22 +2501,28 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
         if (!r || !Array.isArray(r)) return null;
 
         // ── Detectar e descartar linhas de SUBTOTAL do MB51 ──────────────
-        // O MB51 insere 1 linha de total por material ao final de cada grupo.
-        // Essas linhas têm: usuário='', tipo_movimento='', documento='', datas=''
-        // mas TÊM material e quantidade preenchidos (totais agregados).
-        // Se entrassem como dados, corromperiam todos os cálculos de estoque.
-        const usuarioRaw  = String(r[ci('usuario',   0)] ?? '').trim();
+        // Subtotais têm movimento vazio E data vazia — nunca têm dtLanc preenchido.
+        // Critério anterior (!usuario && !mov && !doc) era muito agressivo:
+        // arquivos com colunas em ordem diferente do esperado resultavam em
+        // todos os campos em branco → tudo descartado como "subtotal".
         const movRaw      = String(r[ci('movimento', 1)] ?? '').trim();
+        const dtLancRaw   = String(r[ci('dtLanc',    8)] ?? '').trim();
         const docRaw      = String(r[ci('documento', 4)] ?? '').trim();
-        const isSubtotal  = !usuarioRaw && !movRaw && !docRaw;
+        const usuarioRaw  = String(r[ci('usuario',   0)] ?? '').trim();
+
+        // É subtotal se: sem movimento E sem data de lançamento
+        // (mesmo que tenha material e quantidade — que são os totais agregados)
+        const isSubtotal = !movRaw && !dtLancRaw;
         if (isSubtotal) return null;
 
-        const peso = num(r[ci('peso', 11)]);
-        const valorTotal = num(r[ci('valorTotal', 13)]);
+        // CSV exportado pelo SAP usa formato pt-BR ("1.234,56") — usar numCsv
+        const _num = extra.isCsv ? numCsv : num;
+        const peso = _num(r[ci('peso', 11)]);
+        const valorTotal = _num(r[ci('valorTotal', 13)]);
         const materialOriginal = String(r[ci('material', 10)] || '').trim();
 
-        // Descarta linhas completamente vazias
-        if (!materialOriginal && !docRaw) return null;
+        // Descarta linhas realmente vazias (sem material e sem documento)
+        if (!materialOriginal && !docRaw && !movRaw) return null;
 
         return stamp(normalizarCentraisRecord({
           importId,
@@ -2319,13 +2613,16 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
 function detectSapHeaderRow(rows) {
   // Palavras-chave que tipicamente aparecem no cabeçalho real do MB51
   const SAP_HEADER_KEYWORDS = [
-    'usuario', 'usuário', 'user', 'nome do usuario',
-    'tp.mv', 'tp. mv', 'tipo', 'movimento', 'tpmv', 't.mv',
-    'material', 'cod.', 'código',
-    'quantidade', 'qtde', 'qtd.', 'amount',
-    'valor', 'value',
-    'centro', 'depot', 'deposito', 'depósito',
-    'data', 'date', 'dt.'
+    // Nomes exatos mais comuns no MB51
+    'nome do usuario', 'nome do usuário', 'usuario', 'usuário', 'user',
+    'tipo de movimento', 'tp.mv', 'tp. mv', 'tipo', 'movimento',
+    'texto breve material', 'texto breve', 'material',
+    'quantidade', 'qtde', 'qtd.',
+    'montante em mi', 'montante', 'valor',
+    'centro', 'deposito', 'depósito',
+    'data do documento', 'data de lancamento', 'data de lançamento', 'data de entrada',
+    'data', 'date', 'dt.',
+    'doc.material', 'referencia', 'referência'
   ];
 
   const normalize = s => String(s ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
@@ -2366,21 +2663,27 @@ function buildSapColumnMap(headerRow) {
   // a descrição do material.
   const COL_DEFS = {
     usuario:   {
-      exact:  ['usuario', 'nome do usuario', 'user', 'nome usuario', 'nome do usuário', 'usuário'],
-      starts: ['nome do usu']
+      exact:  ['nome do usuario', 'nome do usuário', 'usuario', 'usuário', 'user', 'nome usuario'],
+      starts: ['nome do usu', 'nome usu']
     },
     movimento: {
-      exact:  ['tp.mv', 'tp. mv', 'tpmv', 't.mv', 'tipo de movimento', 'movimento', 'mov', 'mvt', 'tipo mov', 'tipo mvt'],
-      starts: ['tp.mv', 'tp. mv', 'tipo de mov', 'tipo mov']
+      exact:  ['tipo de movimento', 'tp.mv', 'tp. mv', 'tpmv', 't.mv', 'movimento', 'mov', 'mvt',
+               'tipo mov', 'tipo mvt'],
+      starts: ['tipo de mov', 'tipo mov', 'tp.mv', 'tp. mv']
+    },
+    txtMov:    {
+      exact:  ['txt.tipo movimento', 'txt. tipo movimento', 'texto tipo movimento', 'descricao movimento',
+               'descrição movimento', 'texto movimento', 'txt movimento'],
+      starts: ['txt.tipo mov', 'txt. tipo mov', 'texto tipo mov', 'texto mov']
     },
     ref:       {
-      exact:  ['ref.doc.', 'ref. doc.', 'ref doc', 'referencia', 'referência', 'nro.ref.', 'nro. ref.', 'ref'],
-      starts: ['ref.doc', 'ref. doc', 'nro.ref', 'nro. ref']
+      exact:  ['referencia', 'referência', 'ref.doc.', 'ref. doc.', 'ref doc', 'nro.ref.', 'nro. ref.', 'ref'],
+      starts: ['referenc', 'ref.doc', 'ref. doc', 'nro.ref', 'nro. ref']
     },
     documento: {
-      // "doc.material" é o número do documento SAP — NÃO é a descrição do material.
-      exact:  ['doc.material', 'doc. material', 'documento', 'doc.mat.', 'doc. mat.', 'num.doc.mat.', 'num doc mat', 'doc material'],
-      starts: ['doc.mat', 'num.doc.mat', 'doc.material', 'doc. material']
+      exact:  ['doc.material', 'doc. material', 'documento', 'doc.mat.', 'doc. mat.',
+               'num.doc.mat.', 'num doc mat', 'doc material'],
+      starts: ['doc.mat', 'doc. mat', 'num.doc.mat', 'doc material']
     },
     central:   {
       exact:  ['centro', 'central', 'plant', 'filial', 'unidade'],
@@ -2392,41 +2695,40 @@ function buildSapColumnMap(headerRow) {
     },
     dtDoc:     {
       exact:  ['data do documento', 'dt.doc.', 'dt. doc.', 'data doc', 'data documento', 'posting date'],
-      starts: ['dt.doc', 'dt. doc', 'data doc', 'data do doc']
+      starts: ['data do doc', 'dt.doc', 'dt. doc', 'data doc']
     },
     dtLanc:    {
-      exact:  ['dt.lancamento', 'dt. lancamento', 'data lancamento', 'data lançamento', 'dt.lanc.', 'dt. lanç.', 'entry date', 'data entrada'],
-      starts: ['dt.lanc', 'dt. lanc', 'data lanc', 'data lança', 'entry date']
+      exact:  ['data de lancamento', 'data de lançamento', 'dt.lancamento', 'dt. lancamento',
+               'data lancamento', 'data lançamento', 'dt.lanc.', 'dt. lanç.', 'entry date'],
+      starts: ['data de lanc', 'data de lança', 'dt.lanc', 'dt. lanc', 'data lanc', 'data lança']
     },
     dtReg:     {
-      exact:  ['dt.registro', 'dt. registro', 'data registro', 'dt.reg.', 'dt. reg.', 'creation date'],
-      starts: ['dt.reg', 'dt. reg', 'data reg', 'creation date']
+      exact:  ['data de entrada', 'dt.registro', 'dt. registro', 'data registro',
+               'dt.reg.', 'dt. reg.', 'creation date'],
+      starts: ['data de entrada', 'dt.reg', 'dt. reg', 'data reg', 'creation date']
     },
     material:  {
-      // SOMENTE aliases que identificam inequivocamente a descrição do material.
-      // "material" sozinho foi REMOVIDO: "doc.material" contém essa string e seria
-      // capturado erroneamente. O campo correto no MB51 é "Texto breve material".
-      exact:  ['texto breve material', 'texto breve do material', 'texto breve', 'descricao material',
-               'descrição material', 'texto breve de material', 'short text', 'material description', 'material text'],
-      starts: ['texto breve', 'descricao material', 'descrição material', 'short text', 'material desc', 'material text']
+      exact:  ['texto breve material', 'texto breve do material', 'texto breve',
+               'descricao material', 'descrição material', 'short text',
+               'material description', 'material text'],
+      starts: ['texto breve', 'descricao material', 'descrição material', 'short text',
+               'material desc', 'material text']
     },
     peso:      {
-      exact:  ['quantidade', 'qtde', 'qtd.', 'qtd', 'qty', 'amount', 'quantidade em um.', 'quant.', 'quantidade em um'],
+      exact:  ['quantidade', 'qtde', 'qtd.', 'qtd', 'qty', 'quantidade em um.',
+               'quant.', 'quantidade em um'],
       starts: ['quantidade', 'qtde', 'qtd', 'qty', 'quant']
     },
     um:        {
-      exact:  ['umb', 'um', 'u.m.', 'unid.', 'unidade', 'unit', 'u.m.b.', 'um base'],
-      starts: ['u.m.', 'u.m.b', 'unid']
+      exact:  ['umb', 'u.m.b.', 'um base', 'um', 'u.m.', 'unid.', 'unidade', 'unit'],
+      starts: ['u.m.b', 'u.m.', 'unid']
     },
     valorTotal:{
-      exact:  ['montante em mi', 'montante em moeda interna', 'montante', 'val.em mo.co.', 'val. em mo.co.',
-               'valor', 'valor total', 'amount in lc', 'val.mo.co.', 'valor mo local', 'total'],
-      starts: ['montante', 'val.em mo', 'val. em mo', 'valor total', 'amount in lc', 'val.mo.co']
-    },
-    txtMov:    {
-      exact:  ['txt.tipo movimento', 'txt. tipo movimento', 'texto tipo movimento', 'descricao movimento',
-               'descrição movimento', 'texto movimento', 'txt movimento'],
-      starts: ['txt.tipo mov', 'txt. tipo mov', 'texto tipo mov', 'texto mov']
+      exact:  ['montante em mi', 'montante em moeda interna', 'montante em moeda local',
+               'montante', 'val.em mo.co.', 'val. em mo.co.',
+               'valor total', 'valor', 'amount in lc', 'val.mo.co.', 'total'],
+      starts: ['montante em mi', 'montante em mo', 'montante', 'val.em mo', 'val. em mo',
+               'valor total', 'amount in lc', 'val.mo.co']
     }
   };
 
@@ -2455,6 +2757,144 @@ function buildSapColumnMap(headerRow) {
   return map;
 }
 
+// ─── Mapeamento de colunas para Entradas ────────────────────────────────────
+function buildEntradaColumnMap(headerRow) {
+  const n = s => String(s ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+  const map = {};
+  const defs = {
+    centralCompra:    { exact: ['central compra','central de compra','c. compra','compra','centro compra'] },
+    centralDestino:   { exact: ['central destino','central de destino','c. destino','destino','centro destino'] },
+    nf:               { exact: ['nf','nota fiscal','n.f.','numero nf','nro. nf','nro nf','num. nf','num nf','documento'] },
+    dtEmissao:        { exact: ['dt emissao','dt. emissao','data emissao','data de emissão','dt emissão','data emissão','emissao','emissão'] },
+    dtDescarga:       { exact: ['dt descarga','dt. descarga','data descarga','data de descarga','descarga','dt.descarga'] },
+    fornecedor:       { exact: ['fornecedor','supplier','forn.','forn'] },
+    categoria:        { exact: ['categoria','category','cat.','cat'] },
+    material:         { exact: ['material','descricao material','descrição material','produto','item','mat.'] },
+    peso:             { exact: ['peso','quantidade','qtde','qtd','weight','qty','peso (kg)','quant.'] },
+    um:               { exact: ['um','u.m.','unidade','unit','und'] },
+    custo:            { exact: ['custo','custo unit','custo unitario','custo unitário','preco','preço','unit price','valor unit'] },
+    valorTotal:       { exact: ['valor total','total','valor','amount','montante','vl total','vl. total'] },
+  };
+  headerRow.forEach((cell, idx) => {
+    const norm = n(cell);
+    for (const [field, { exact }] of Object.entries(defs)) {
+      if (map[field] !== undefined) continue;
+      if (exact.some(a => norm === a || norm.startsWith(a))) map[field] = idx;
+    }
+  });
+  return map;
+}
+
+function buildSaidaColumnMap(headerRow) {
+  const n = s => String(s ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+  const map = {};
+  const defs = {
+    central:    { exact: ['central','centro','filial','unidade','plant'] },
+    dtEmissao:  { exact: ['dt emissao','dt. emissao','data emissao','data emissão','dt emissão','emissao','emissão','data','dt.','dt'] },
+    os:         { exact: ['os','ordem de servico','ordem de serviço','ordem serv','o.s.','num os','nro os','nr os'] },
+    contrato:   { exact: ['contrato','contract','num contrato','nro contrato'] },
+    categoria:  { exact: ['categoria','category','cat'] },
+    fornecedor: { exact: ['fornecedor','cliente','supplier','customer'] },
+    material:   { exact: ['material','produto','item','descricao','descrição','mat.'] },
+    peso:       { exact: ['peso','quantidade','qtde','qtd','weight','qty','quant.'] },
+    um:         { exact: ['um','u.m.','unidade','unit'] },
+    custo:      { exact: ['custo','custo unit','custo unitario','custo unitário','preco','preço','valor unit'] },
+    valorTotal: { exact: ['valor total','total','valor','amount','montante'] },
+  };
+  headerRow.forEach((cell, idx) => {
+    const norm = n(cell);
+    for (const [field, { exact }] of Object.entries(defs)) {
+      if (map[field] !== undefined) continue;
+      if (exact.some(a => norm === a || norm.startsWith(a))) map[field] = idx;
+    }
+  });
+  return map;
+}
+
+function buildLancamentoColumnMap(headerRow) {
+  const n = s => String(s ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+  const map = {};
+  const defs = {
+    dtLanc:     { exact: ['data','data lancamento','data lançamento','dt lancamento','dt lançamento','dt.','dt lanc','dt. lanc','data lanc'] },
+    central:    { exact: ['central','centro','filial','unidade','plant'] },
+    material:   { exact: ['material','produto','item','descricao','descrição','mat.','material | fornecedor'] },
+    categoria:  { exact: ['categoria','category','cat'] },
+    peso:       { exact: ['peso','estoque','saldo','quantidade','qtde','weight','qty'] },
+    custo:      { exact: ['custo','custo unit','custo unitario','preco','preço','valor unit'] },
+    valorTotal: { exact: ['valor total','total','valor','amount','montante'] },
+  };
+  headerRow.forEach((cell, idx) => {
+    const norm = n(cell);
+    for (const [field, { exact }] of Object.entries(defs)) {
+      if (map[field] !== undefined) continue;
+      if (exact.some(a => norm === a || norm.startsWith(a))) map[field] = idx;
+    }
+  });
+  return map;
+}
+
+// Helper: detecta linha de cabeçalho nas primeiras 10 linhas
+function detectModuleHeaderRow(rows, requiredFields, minHits = 2) {
+  const n = s => String(s ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+  for (let i = 0; i < Math.min(rows.length, 10); i++) {
+    const cells = (rows[i] || []).map(n).filter(Boolean);
+    let hits = 0;
+    for (const cell of cells) {
+      if (requiredFields.some(f => cell.includes(f))) hits++;
+    }
+    if (hits >= minHits) return i;
+  }
+  return 0;
+}
+
+// ── Parser CSV nativo — sem XLSX, suporta milhões de linhas ─────────────
+// Suporta delimitadores , e ; e campos com aspas duplas.
+// Retorna array de arrays (mesmo formato do sheet_to_json header:1).
+function _parseCsvToRows(text) {
+  const lines = text.split(/\r?\n/);
+  if (!lines.length) return [];
+
+  // Detecta delimitador: conta ocorrências de , e ; na primeira linha
+  const first = lines[0] || '';
+  const delim = (first.split(';').length > first.split(',').length) ? ';' : ',';
+
+  const rows = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (!line.trim()) continue;
+    rows.push(_parseCsvLine(line, delim));
+  }
+  return rows;
+}
+
+function _parseCsvLine(line, delim) {
+  const cells = [];
+  let cur = '';
+  let inQuote = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQuote && line[i+1] === '"') { cur += '"'; i++; }
+      else inQuote = !inQuote;
+    } else if (ch === delim && !inQuote) {
+      cells.push(_csvCellValue(cur));
+      cur = '';
+    } else {
+      cur += ch;
+    }
+  }
+  cells.push(_csvCellValue(cur));
+  return cells;
+}
+
+function _csvCellValue(s) {
+  const t = s.trim();
+  if (t === '') return '';
+  // Retorna como string — num() no processamento já trata a conversão
+  // Tentar converter aqui causa erros com datas e códigos numéricos
+  return t;
+}
+
 async function handleImport(event, modulo) {
   const file = event.target.files?.[0];
   if (!file) return;
@@ -2475,41 +2915,53 @@ async function handleImport(event, modulo) {
     try {
       updateLoadingOverlay('Lendo planilha e extraindo linhas...', `Importando ${modulo}`, 'Interpretando a estrutura do arquivo...');
 
-      // ── Leitura do workbook ──────────────────────────────────────────────
-      let wb;
-      try {
-        // Para arquivos SAP/MB51 potencialmente grandes, usa sheetRows limitado
-        // na leitura inicial para evitar stack overflow no parser XLSX
-        const xlsxOpts = { type: 'array', cellDates: false, dense: false };
-        wb = XLSX.read(e.target.result, xlsxOpts);
-        console.info('[Import] Workbook lido. Abas:', wb.SheetNames);
-      } catch (readErr) {
-        console.error('[Import] Erro na leitura do arquivo:', readErr);
-        throw new Error('Não foi possível ler o arquivo Excel: ' + (readErr.message || String(readErr)));
+      const isCsv = file.name.toLowerCase().endsWith('.csv');
+      let rows;
+
+      if (isCsv) {
+        // ── CSV: lido como texto diretamente (readAsText já decodificou o encoding) ──
+        updateLoadingOverlay('Lendo CSV...', `Importando ${modulo}`, 'Processando linhas...');
+        const text = typeof e.target.result === 'string'
+          ? e.target.result
+          : new TextDecoder('windows-1252').decode(e.target.result);
+        rows = _parseCsvToRows(text);
+        console.info('[Import] CSV lido. Linhas:', rows.length, '| Amostra linha 0:', rows[0]);
+      } else {
+        // ── XLSX: leitura completa ──────────────────────────────────────────
+        let wb;
+        try {
+          wb = XLSX.read(e.target.result, { type: 'array', cellDates: false, dense: false });
+          console.info('[Import] Workbook lido. Abas:', wb.SheetNames);
+        } catch (readErr) {
+          console.error('[Import] Erro na leitura do arquivo:', readErr);
+          throw new Error('Não foi possível ler o arquivo Excel: ' + (readErr.message || String(readErr)));
+        }
+
+        if (!wb || !wb.SheetNames || wb.SheetNames.length === 0) {
+          toast('Arquivo inválido ou corrompido: nenhuma planilha encontrada.', 'error');
+          hideLoadingOverlay('Falha na importação');
+          event.target.value = '';
+          return;
+        }
+
+        // ── Seleção da aba ──────────────────────────────────────────────────
+        let sheetName = wb.SheetNames[0];
+        if (modulo === 'SAP' && wb.SheetNames.length > 1) {
+          const sapSheetHints = ['mb51', 'sap', 'movimentacao', 'movimentações', 'dados', 'data', 'sheet1', 'planilha1'];
+          const norm = s => String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+          const found = wb.SheetNames.find(n => sapSheetHints.some(h => norm(n).includes(h)));
+          if (found) sheetName = found;
+        }
+
+        // Usar chave real de wb.Sheets (encoding pode divergir de SheetNames)
+        const realKey = Object.keys(wb.Sheets).find(k => !k.startsWith('!') && k.trim() === sheetName.trim())
+                     || Object.keys(wb.Sheets).find(k => !k.startsWith('!'))
+                     || sheetName;
+        console.info('[Import] Aba:', realKey);
+
+        const ws = sanitizeWorksheet(wb.Sheets[realKey]);
+        rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' });
       }
-
-      if (!wb || !wb.SheetNames || wb.SheetNames.length === 0) {
-        toast('Arquivo inválido ou corrompido: nenhuma planilha encontrada.', 'error');
-        hideLoadingOverlay('Falha na importação');
-        event.target.value = '';
-        return;
-      }
-
-      updateLoadingOverlay('Separando os registros válidos...', `Importando ${modulo}`, 'Convertendo valores e limpando vazios...');
-
-      // ── Seleção da aba ───────────────────────────────────────────────────
-      // Para o SAP, tenta encontrar a aba mais relevante (pode se chamar "MB51",
-      // "Sheet1", "Planilha1", etc.) — usa a primeira aba disponível como fallback
-      let sheetName = wb.SheetNames[0];
-      if (modulo === 'SAP' && wb.SheetNames.length > 1) {
-        const sapSheetHints = ['mb51', 'sap', 'movimentacao', 'movimentações', 'dados', 'data', 'sheet1', 'planilha1'];
-        const norm = s => String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
-        const found = wb.SheetNames.find(n => sapSheetHints.some(h => norm(n).includes(h)));
-        if (found) sheetName = found;
-      }
-
-      const ws = sanitizeWorksheet(wb.Sheets[sheetName]);
-      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' });
 
       if (!rows || rows.length < 2) {
         toast('O arquivo parece estar vazio ou não contém linhas de dados.', 'error');
@@ -2528,10 +2980,10 @@ async function handleImport(event, modulo) {
         const colMap = buildSapColumnMap(headerRow);
         // Dados começam na linha seguinte ao cabeçalho
         data = rows.slice(headerIdx + 1).filter(r => r.some(c => c !== '' && c !== null && c !== undefined));
-        extra = { sapColMap: colMap, sapHeaderFound: headerIdx };
+        extra = { sapColMap: colMap, sapHeaderFound: headerIdx, isCsv };
 
         // Log diagnóstico no console — abra o DevTools (F12) para ver detalhes
-        console.info('[SAP Import] ✓ Aba usada:', sheetName);
+        console.info('[SAP Import] ✓ Fonte:', isCsv ? 'CSV' : sheetName);
         console.info('[SAP Import] ✓ Cabeçalho detectado na linha:', headerIdx, '| Conteúdo:', rows[headerIdx]);
         console.info('[SAP Import] ✓ Mapeamento de colunas:', colMap);
         console.info('[SAP Import] ✓ Total de linhas de dados (após cabeçalho):', data.length);
@@ -2564,7 +3016,15 @@ async function handleImport(event, modulo) {
     toast('Não foi possível ler o arquivo selecionado', 'error');
     hideLoadingOverlay('Falha na importação');
   };
-  reader.readAsArrayBuffer(file);
+
+  // CSV: tenta latin-1 primeiro (encoding padrão de exports SAP em PT-BR)
+  // XLSX: ArrayBuffer
+  if (file.name.toLowerCase().endsWith('.csv')) {
+    // Lê duas vezes se necessário: latin-1 para SAP BR, fallback UTF-8
+    reader.readAsText(file, 'windows-1252');
+  } else {
+    reader.readAsArrayBuffer(file);
+  }
 }
 
 
@@ -2751,11 +3211,12 @@ const CODIGOS_SAIDA   = new Set(['201']);
 
 // Expor funções de collapse para o HTML
 if (typeof window !== 'undefined') {
-  window.ausToggleRegional      = ausToggleRegional;
-  window.ausToggleCentral       = ausToggleCentral;
-  window.ausToggleAllRegionais  = ausToggleAllRegionais;
-  window.ausToggleAllCentralis  = ausToggleAllCentralis;
-  window.ausExpandAll           = ausExpandAll;
-  window.ausCollapseAll         = ausCollapseAll;
+  window.ausToggleRegional       = ausToggleRegional;
+  window.ausToggleCentral        = ausToggleCentral;
+  window.ausToggleAllRegionais   = ausToggleAllRegionais;
+  window.ausToggleAllCentralis   = ausToggleAllCentralis;
+  window.ausExpandAll            = ausExpandAll;
+  window.ausCollapseAll          = ausCollapseAll;
   window.ausToggleOcultarZerados = ausToggleOcultarZerados;
+  window.ausInvalidateCache      = _ausInvalidateCache;
 }

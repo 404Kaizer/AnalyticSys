@@ -486,13 +486,13 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
       const lancsMat = lancsByMat.get(mat) || [];
       const sapMat = sapByMat.get(mat) || [];
       const prev = getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni });
-      const fim  = getLastPeriodLaunchStock({ central: r.central, material: mat, dtFim });
+      const fim  = getLastPeriodLaunchStockWithFallback({ central: r.central, material: mat, dtIni, dtFim });
       const snapshot = buildSnapshot({
         lancs: lancsMat,
         sap: sapMat,
         initialStockOverride:     prev?.value  ?? null,
         initialDateLabelOverride: prev?.dtLabel ?? null,
-        finalStockOverride:       fim  ? (fim.missing ? null : fim.value) : null,
+        finalStockOverride:       fim && !fim.missing ? fim.value : null,
         finalDateLabelOverride:   fim && !fim.missing ? fim.dtLabel : null
       });
       variacaoCentralMicro += snapshot.diff;
@@ -754,6 +754,7 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
           estTeorico: snapshot.estTeorico,
           pesoFim: snapshot.pesoFim,
           dtFimLabel: snapshot.dtFimLabel,
+          fimFallback: fim?.fallback ?? false,
           diff: snapshot.diff
         },
         days: dailyRows
@@ -788,7 +789,13 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
           <td class="td-mono" style="color:${snapshot.pesoIniAusente ? 'var(--text3)' : 'var(--text)'}">${snapshot.pesoIniAusente ? '—' : fmtKg(snapshot.pesoIni)}</td>
           <td>${buildAnaliticoDetailBreakdown(entEntries, snapshot.totalEnt, 'var(--green)', 'Entradas')}</td>
           <td>${buildAnaliticoDetailBreakdown(saiEntries, snapshot.totalSai, 'var(--red)', 'Saídas')}</td>
-          <td class="td-mono" style="color:var(--text2);font-size:11px">${snapshot.pesoFimAusente ? '<span class="absent-badge" title="Sem lançamento no último dia do período">ausente</span>' : snapshot.dtFimLabel}</td>
+          <td class="td-mono" style="color:var(--text2);font-size:11px">${
+            snapshot.pesoFimAusente
+              ? '<span class="absent-badge" title="Sem lançamento no período">ausente</span>'
+              : (fim?.fallback
+                  ? `<span style="color:var(--amber)" title="Lançamento mais recente encontrado no período (não é o último dia)">${snapshot.dtFimLabel} <i class='ti ti-clock-hour-4' style='font-size:9px'></i></span>`
+                  : snapshot.dtFimLabel)
+          }</td>
           <td class="td-mono" style="color:${snapshot.pesoFimAusente ? 'var(--text3)' : 'var(--text)'}">${snapshot.pesoFimAusente ? '—' : fmtKg(snapshot.pesoFim)}</td>
           <td class="td-mono" style="color:var(--purple)">${fmtKg(snapshot.estTeorico)}</td>
           <td class="td-mono ${dCls}" style="white-space:nowrap">${varSymbol(snapshot.diff)} ${fmtKg(Math.abs(snapshot.diff))}</td>

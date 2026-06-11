@@ -1419,7 +1419,11 @@ function buildAnaliticoDetailHtml(payload) {
         <div class="analitico-detail-card-sub">${escapeHtml(s.saiLabel)}</div>
       </div>
       <div class="analitico-detail-card${s.pesoFimAusente ? ' detail-card-absent' : ''}">
-        <div class="analitico-detail-card-label">Est. Final${s.pesoFimAusente ? ' <span class="absent-badge" title="Sem lançamento no último dia do período">ausente</span>' : ''}</div>
+        <div class="analitico-detail-card-label">Est. Final${
+          s.pesoFimAusente
+            ? ' <span class="absent-badge" title="Sem lançamento no período">ausente</span>'
+            : (s.fimFallback ? ' <span class="absent-badge" style="background:var(--amber-bg);color:var(--amber);border-color:var(--amber-border)" title="Lançamento mais recente encontrado no período — não é o último dia">retroativo</span>' : '')
+        }</div>
         <div class="analitico-detail-card-value ${s.pesoFimAusente ? 'c-absent' : 'c-teal'}">${s.pesoFimAusente ? '—' : fmtKg(s.pesoFim)}</div>
         <div class="analitico-detail-card-sub">${escapeHtml(s.dtFimLabel)}</div>
       </div>
@@ -1768,6 +1772,7 @@ function invalidateLancIndex() {
   _lancByCentralMat.clear();
   _lancByCentral.clear();
   invalidateSearchIndex('lancamentos');
+  if (typeof _ausInvalidateCache === 'function') _ausInvalidateCache();
 }
 
 function invalidateSapIndex() {
@@ -1775,6 +1780,7 @@ function invalidateSapIndex() {
   _sapByCentralMat.clear();
   _sapByCentral.clear();
   invalidateSearchIndex('sap');
+  if (typeof _ausInvalidateCache === 'function') _ausInvalidateCache();
 }
 
 // Índice simples de saídas por central (não precisa de material nem data pré-ordenada)
@@ -1973,6 +1979,62 @@ function getPrePeriodLaunchStock({ central, material, dtIni }) {
 
 // ── EST. FINAL: soma todos os lançamentos do último dia não-domingo do período.
 //    Retorna { value, dtLabel, missing } onde missing=true indica dado ausente.
+// Variante com fallback retroativo: se o último dia não-domingo não tiver
+// lançamento, recua dia a dia dentro do período até encontrar um.
+// Retorna missing:false com o valor e a data real encontrada.
+// Usado na visão micro do Analítico (EST. FINAL).
+function getLastPeriodLaunchStockWithFallback({ central, material, dtIni, dtFim }) {
+  const dtFimDate = dtFim instanceof Date ? dtFim : new Date(dtFim);
+  const dtIniDate = dtIni instanceof Date ? dtIni : new Date(dtIni);
+  if (isNaN(dtFimDate) || isNaN(dtIniDate)) return null;
+
+  const materialKey = material || '—';
+  const { byCentralMat } = getLancIndex();
+  const arr = byCentralMat.get(central)?.get(materialKey) || [];
+  if (!arr.length) return { value: null, dtLabel: '—', missing: true };
+
+  // Monta lookup de data→peso para O(1) por dia
+  const byDay = new Map();
+  arr.forEach(rec => {
+    const d = parseDate(rec.dtLanc);
+    if (!d) return;
+    const k = localISODate(d);
+    byDay.set(k, (byDay.get(k) || 0) + num(rec.peso));
+  });
+
+  // Último dia útil esperado: último não-domingo do período
+  // (mesmo critério de getLastPeriodLaunchStock)
+  const expectedDate = new Date(dtFimDate);
+  expectedDate.setHours(0, 0, 0, 0);
+  while (expectedDate.getDay() === 0) {
+    expectedDate.setDate(expectedDate.getDate() - 1);
+  }
+  const expectedISO = localISODate(expectedDate);
+
+  // Retroage do dia esperado até o início, pulando domingos
+  const cursor = new Date(expectedDate);
+  const floor  = new Date(dtIniDate);
+  floor.setHours(0, 0, 0, 0);
+
+  while (cursor >= floor) {
+    if (cursor.getDay() !== 0) { // ignora domingo
+      const k = localISODate(cursor);
+      if (byDay.has(k)) {
+        return {
+          value:    byDay.get(k),
+          dtLabel:  fmtPtDate(cursor),
+          missing:  false,
+          fallback: k !== expectedISO  // âmbar só se anterior ao dia útil esperado
+        };
+      }
+    }
+    cursor.setDate(cursor.getDate() - 1);
+  }
+
+  // Nenhum lançamento no período inteiro
+  return { value: null, dtLabel: '—', missing: true };
+}
+
 function getLastPeriodLaunchStock({ central, material, dtFim }) {
   const dtFimDate = dtFim instanceof Date ? dtFim : new Date(dtFim);
   if (!(dtFimDate instanceof Date) || Number.isNaN(dtFimDate.getTime())) return null;

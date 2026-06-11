@@ -7455,3 +7455,8 @@ mark.search-highlight {
   border-color: var(--red-border);
   background: var(--red-bg);
 }
+
+/* ── Badge ausência com tooltip estilizado ── */
+.aus-zero-badge--tip {
+  cursor: help;
+}

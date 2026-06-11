@@ -2,21 +2,71 @@ function fmtDate(v) {
   if (v === '' || v === null || v === undefined) return '—';
   if (typeof v === 'object') return '—'; // objeto de erro XLSX {t:'e', v:n}
   const s = String(v).trim();
-  if (/^#/.test(s)) return '—'; // strings de erro Excel (#VALUE!, #N/A, etc.)
-  if (typeof v === 'number' && window.XLSX?.SSF) {
-    const d = XLSX.SSF.parse_date_code(v);
-    if (d) return `${String(d.d).padStart(2, '0')}/${String(d.m).padStart(2, '0')}/${d.y}`;
+  if (/^#/.test(s)) return '—'; // strings de erro Excel
+
+  // ── Número serial XLSX (ex: 46012) ────────────────────────────────────
+  if (typeof v === 'number' && v > 0) {
+    // Tenta via XLSX.SSF primeiro
+    if (window.XLSX?.SSF) {
+      const d = XLSX.SSF.parse_date_code(v);
+      if (d && d.y > 1900 && d.m >= 1 && d.m <= 12 && d.d >= 1 && d.d <= 31)
+        return `${String(d.d).padStart(2,'0')}/${String(d.m).padStart(2,'0')}/${d.y}`;
+    }
+    // Fallback manual: serial do Excel (dias desde 30/12/1899)
+    const epoch = new Date(Date.UTC(1899, 11, 30));
+    epoch.setUTCDate(epoch.getUTCDate() + Math.floor(v));
+    const dd = String(epoch.getUTCDate()).padStart(2,'0');
+    const mm = String(epoch.getUTCMonth()+1).padStart(2,'0');
+    const yy = epoch.getUTCFullYear();
+    if (yy > 1900) return `${dd}/${mm}/${yy}`;
   }
+
+  // ── ISO: yyyy-mm-dd ────────────────────────────────────────────────────
+  const isoMatch = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) return `${isoMatch[3]}/${isoMatch[2]}/${isoMatch[1]}`;
+
+  // ── Já está em dd/mm/yyyy ──────────────────────────────────────────────
+  if (/^\d{2}\/\d{2}\/\d{4}/.test(s)) return s.slice(0, 10);
+
+  // ── Formato americano mm/dd/yyyy (menos comum, mas ocorre em exports) ──
+  const usMatch = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (usMatch) {
+    // Heurística: se o primeiro número > 12, é dia (dd/mm); senão retorna bruto
+    // para não converter incorretamente
+    if (Number(usMatch[1]) > 12)
+      return `${String(usMatch[1]).padStart(2,'0')}/${String(usMatch[2]).padStart(2,'0')}/${usMatch[3]}`;
+  }
+
   return s || '—';
 }
 
 function num(v) {
   if (v === null || v === undefined) return 0;
+  if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
   if (typeof v === 'object') return 0; // cobre objetos de erro XLSX {t:'e', v:n}
   const s = String(v).trim();
-  if (/^#/.test(s)) return 0; // strings de erro Excel: #VALUE!, #N/A, etc.
+  if (!s || /^#/.test(s)) return 0;
   const n = parseFloat(s.replace(',', '.'));
   return Number.isFinite(n) ? n : 0;
+}
+
+// Versão pt-BR para parsing de CSV — trata "1.234,56" corretamente
+function numCsv(v) {
+  if (v === null || v === undefined) return 0;
+  if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
+  if (typeof v === 'object') return 0;
+  const s = String(v).trim();
+  if (!s || /^#/.test(s)) return 0;
+  const hasDot = s.includes('.'), hasComma = s.includes(',');
+  let n = s;
+  if (hasComma && hasDot) {
+    // "1.234,56" → pt-BR
+    n = s.replace(/\./g, '').replace(',', '.');
+  } else if (hasComma) {
+    n = s.replace(',', '.');
+  }
+  const r = parseFloat(n);
+  return Number.isFinite(r) ? r : 0;
 }
 
 /**
