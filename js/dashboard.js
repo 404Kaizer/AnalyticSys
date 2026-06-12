@@ -3282,6 +3282,7 @@ async function handleImport(event, modulo) {
 
       const isCsv = file.name.toLowerCase().endsWith('.csv');
       let rows;
+      let sheetUsed = isCsv ? 'CSV' : '—'; // disponível para logs fora do bloco else
 
       if (isCsv) {
         // ── CSV: lido como texto diretamente (readAsText já decodificou o encoding) ──
@@ -3322,6 +3323,7 @@ async function handleImport(event, modulo) {
         const realKey = Object.keys(wb.Sheets).find(k => !k.startsWith('!') && k.trim() === sheetName.trim())
                      || Object.keys(wb.Sheets).find(k => !k.startsWith('!'))
                      || sheetName;
+        sheetUsed = realKey;
         console.info('[Import] Aba:', realKey);
 
         const ws = sanitizeWorksheet(wb.Sheets[realKey]);
@@ -3348,7 +3350,7 @@ async function handleImport(event, modulo) {
         extra = { sapColMap: colMap, sapHeaderFound: headerIdx, isCsv };
 
         // Log diagnóstico no console — abra o DevTools (F12) para ver detalhes
-        console.info('[SAP Import] ✓ Fonte:', isCsv ? 'CSV' : sheetName);
+        console.info('[SAP Import] ✓ Fonte:', sheetUsed);
         console.info('[SAP Import] ✓ Cabeçalho detectado na linha:', headerIdx, '| Conteúdo:', rows[headerIdx]);
         console.info('[SAP Import] ✓ Mapeamento de colunas:', colMap);
         console.info('[SAP Import] ✓ Total de linhas de dados (após cabeçalho):', data.length);

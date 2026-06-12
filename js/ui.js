@@ -788,7 +788,7 @@ function openBreakdownModal(trigger) {
   titleEl.textContent = title + ' — Movimentações';
 
   let grandTotal = 0;
-  tbody.innerHTML = entries.map(([cod, value, ref, usuario]) => {
+  tbody.innerHTML = entries.map(([cod, value, ref, usuario, dtLanc]) => {
     grandTotal += value;
     const signIcon = value >= 0
       ? '<i class="ti ti-circle-arrow-up" title="Sobra" style="font-size:11px;vertical-align:middle;margin-right:2px"></i>'
@@ -796,6 +796,7 @@ function openBreakdownModal(trigger) {
     return `<tr>
       <td class="td-mono" style="color:var(--text2)">${escapeHtml(cod)}</td>
       <td class="td-muted">${escapeHtml(ref || '—')}</td>
+      <td class="td-muted">${escapeHtml(dtLanc || '—')}</td>
       <td class="td-muted">${escapeHtml(usuario || '—')}</td>
       <td class="td-mono" style="color:${colorVar};text-align:right;font-weight:600">${signIcon}${fmtKg(Math.abs(value))}</td>
     </tr>`;

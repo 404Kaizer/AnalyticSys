@@ -504,7 +504,7 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
               const toEntry = s => {
         const ref = (s.ref && String(s.ref).trim()) ? String(s.ref).trim()
                   : (s.documento && String(s.documento).trim()) ? String(s.documento).trim() : '';
-        return [normMov(s.movimento), num(s.peso), ref, String(s.usuario || '').trim()];
+        return [normMov(s.movimento), num(s.peso), ref, String(s.usuario || '').trim(), String(s.dtLanc || s.dtDoc || '').trim()];
       };
       const entEntries = snapshot.entRecords.map(toEntry);
       const saiEntries = snapshot.saiRecords.map(toEntry);
