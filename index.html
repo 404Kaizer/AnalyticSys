@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AnalyticSys · Gestão Centralizada</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2040%2044%22%3E%0A%3Cpolygon%20points%3D%2220%2C4%2032%2C10%2032%2C18%2020%2C12%22%20fill%3D%22%23ff6b35%22%20opacity%3D%22.95%22%2F%3E%0A%3Cpolygon%20points%3D%2220%2C4%208%2C10%208%2C18%2020%2C12%22%20fill%3D%22%23ffb380%22%20opacity%3D%22.95%22%2F%3E%0A%3Cpolygon%20points%3D%2220%2C16%2034%2C22%2034%2C31%2020%2C25%22%20fill%3D%22%23ff6b35%22%20opacity%3D%22.65%22%2F%3E%0A%3Cpolygon%20points%3D%2220%2C16%206%2C22%206%2C31%2020%2C25%22%20fill%3D%22%23ffb380%22%20opacity%3D%22.65%22%2F%3E%0A%3Cpolygon%20points%3D%2220%2C29%2036%2C36%2036%2C44%2020%2C37%22%20fill%3D%22%23ff6b35%22%20opacity%3D%22.35%22%2F%3E%0A%3Cpolygon%20points%3D%2220%2C29%204%2C36%204%2C44%2020%2C37%22%20fill%3D%22%23ffb380%22%20opacity%3D%22.35%22%2F%3E%0A%3C%2Fsvg%3E" type="image/svg+xml">
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2036%2036%22%3E%0A%3Cpolygon%20points%3D%2218%2C2%2030%2C9%2018%2C16%206%2C9%22%20fill%3D%22%23ff6b35%22%2F%3E%0A%3Cpolygon%20points%3D%2218%2C16%2030%2C9%2030%2C23%2018%2C30%22%20fill%3D%22%23c44e1f%22%2F%3E%0A%3Cpolygon%20points%3D%2218%2C16%206%2C9%206%2C23%2018%2C30%22%20fill%3D%22%23ff9060%22%2F%3E%0A%3Cpolyline%20points%3D%2221%2C26%2024%2C21%2027%2C23%2030%2C18%22%20fill%3D%22none%22%20stroke%3D%22rgba%28255%2C255%2C255%2C0.55%29%22%20stroke-width%3D%221.4%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%2F%3E%0A%3Ccircle%20cx%3D%2230%22%20cy%3D%2218%22%20r%3D%221.5%22%20fill%3D%22white%22%20opacity%3D%220.8%22%2F%3E%0A%3C%2Fsvg%3E" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,400&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
@@ -24,14 +24,17 @@
     <!-- Header: logo + nome do sistema -->
     <div class="sidebar-header">
       <div class="sidebar-header-brand">
-        <svg class="logo-analyticsys" viewBox="0 0 40 44" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="ícone AnalyticSys">
-          <polygon points="20,4 32,10 32,18 20,12" fill="#ff6b35" opacity=".95"/>
-          <polygon points="20,4 8,10 8,18 20,12" fill="#ffb380" opacity=".95"/>
-          <polygon points="20,12 32,18 8,18" fill="#ff6b35" opacity=".1"/>
-          <polygon points="20,16 34,22 34,31 20,25" fill="#ff6b35" opacity=".65"/>
-          <polygon points="20,16 6,22 6,31 20,25" fill="#ffb380" opacity=".65"/>
-          <polygon points="20,29 36,36 36,44 20,37" fill="#ff6b35" opacity=".35"/>
-          <polygon points="20,29 4,36 4,44 20,37" fill="#ffb380" opacity=".35"/>
+        <svg class="logo-analyticsys" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="ícone AnalyticSys">
+          <!-- Cubo isométrico: topo -->
+          <polygon points="18,2 30,9 18,16 6,9" fill="#ff6b35"/>
+          <!-- Cubo isométrico: face direita -->
+          <polygon points="18,16 30,9 30,23 18,30" fill="#c44e1f"/>
+          <!-- Cubo isométrico: face esquerda -->
+          <polygon points="18,16 6,9 6,23 18,30" fill="#ff9060"/>
+          <!-- Linha de tendência ascendente sobreposta na face direita -->
+          <polyline points="21,26 24,21 27,23 30,18" fill="none" stroke="rgba(255,255,255,0.55)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+          <!-- Ponto de destaque no final da linha -->
+          <circle cx="30" cy="18" r="1.5" fill="white" opacity="0.8"/>
         </svg>
         <div class="sidebar-header-text">
           <div class="sidebar-brand-name">
@@ -1131,7 +1134,9 @@
             </div>
             <!-- Quick period chips -->
             <div class="cal-quick-chips">
-              <button class="cal-chip" onclick="calQuickHoje('an')" type="button">Hoje</button>
+              <button class="cal-chip" onclick="calQuickHoje('an')" type="button">Até hoje</button>
+              <button class="cal-chip" onclick="calQuickOntem('an')" type="button">Até ontem</button>
+              <button class="cal-chip" onclick="calQuickUltimaTerca('an')" type="button">Última terça</button>
               <button class="cal-chip" onclick="calQuickMesAtual('an')" type="button">Mês atual</button>
               <button class="cal-chip" onclick="calQuickMesAnterior('an')" type="button">Mês anterior</button>
             </div>
@@ -1456,6 +1461,7 @@
           <div class="table-header">
             <span class="table-title"><i class="ti ti-package-import"></i> Notas Fiscais de Entrada</span>
             <div class="table-toolbar">
+              <button id="btn-manuais-entradas" class="btn btn-manuais-filter" onclick="toggleSomenteManuais('entradas')" title="Filtrar somente registros manuais"><i class="ti ti-pencil"></i> Manuais</button>
               <button class="btn btn-primary" onclick="openModal('modal-manual'); setModulo('Entrada')"><i class="ti ti-plus"></i> Adicionar</button>
             </div>
           </div>
@@ -1504,6 +1510,7 @@
           <div class="table-header">
             <span class="table-title"><i class="ti ti-package-export"></i> Ordens de Serviço — Saídas</span>
             <div class="table-toolbar">
+              <button id="btn-manuais-saidas" class="btn btn-manuais-filter" onclick="toggleSomenteManuais('saidas')" title="Filtrar somente registros manuais"><i class="ti ti-pencil"></i> Manuais</button>
               <button class="btn btn-primary" onclick="openModal('modal-manual'); setModulo('Saída')"><i class="ti ti-plus"></i> Adicionar</button>
             </div>
           </div>
@@ -1671,6 +1678,7 @@
           <div class="table-header">
             <span class="table-title"><i class="ti ti-clipboard-list"></i> Lançamentos — Saldo Real</span>
             <div class="table-toolbar">
+              <button id="btn-manuais-lancamentos" class="btn btn-manuais-filter" onclick="toggleSomenteManuais('lancamentos')" title="Filtrar somente registros manuais"><i class="ti ti-pencil"></i> Manuais</button>
               <button class="btn btn-primary" onclick="openModal('modal-manual'); setModulo('Lançamento')"><i class="ti ti-plus"></i> Adicionar</button>
             </div>
           </div>
@@ -1713,6 +1721,7 @@
           <div class="table-header">
             <span class="table-title"><i class="ti ti-database"></i> Movimentações SAP</span>
             <div class="table-toolbar">
+              <button id="btn-manuais-sap" class="btn btn-manuais-filter" onclick="toggleSomenteManuais('sap')" title="Filtrar somente registros manuais"><i class="ti ti-pencil"></i> Manuais</button>
               <button class="btn btn-primary" onclick="openModal('modal-manual'); setModulo('SAP')"><i class="ti ti-plus"></i> Adicionar</button>
             </div>
           </div>
@@ -2013,8 +2022,12 @@
         <!-- Alertas de prazo -->
         <div id="oc-alerts"></div>
 
+        <div class="section-title" style="margin:20px 0 14px"><i class="ti ti-building-factory-2" style="font-size:13px;margin-right:6px"></i>Visão Geral de Ocorrências Registradas</div>
+
         <!-- KPIs + Gráficos -->
         <div id="oc-kpis"></div>
+
+        <div class="section-title" style="margin:20px 0 14px"><i class="ti ti-building-factory-2" style="font-size:13px;margin-right:6px"></i>Registro de Ocorrências</div>
 
         <!-- Toolbar -->
         <div class="oc-toolbar">
@@ -3119,7 +3132,7 @@
         <i class="ti ti-eraser"></i>
         <div>
           <strong>Começar vazio</strong>
-          <span>Ignora o que está salvo no navegador nesta abertura e inicia a interface sem restaurar nada do estado anterior.</span>
+          <span>Ignora os dados importados desta sessão. Configurações, cadastros, <strong>registros manuais, ocorrências e bloco de notas</strong> são sempre preservados.</span>
         </div>
       </div>
     </div>
@@ -3155,6 +3168,11 @@
       <div class="loading-badge"><i class="ti ti-clock"></i><span id="loading-badge">Processando</span></div>
     </div>
     <div class="loading-bar"><span id="loading-bar-fill"></span></div>
+    <div class="loading-abort-row" id="loading-abort-row" style="display:none">
+      <button class="loading-abort-btn" id="loading-abort-btn" onclick="abortImport()" type="button">
+        <i class="ti ti-x"></i> Abortar importação
+      </button>
+    </div>
   </div>
 </div>
 
@@ -3330,6 +3348,7 @@
 <script src="js/analitico.js"></script>
 <script src="js/macro.js"></script>
 <script src="js/help-badges.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="js/ocorrencias.js"></script>
 <script src="js/inventario.js"></script>
 <script src="js/calendar.js"></script>
@@ -3376,6 +3395,18 @@
           <label class="oc-label">WhatsApp <span class="oc-hint">(com DDD)</span></label>
           <input type="tel" id="oc-form-contato" class="oc-input" placeholder="(XX) 9 XXXX-XXXX">
         </div>
+      </div>
+      <div class="oc-form-group" style="grid-column:1/-1">
+        <label class="oc-label">Motivo <span class="oc-hint">(categoria da solicitação)</span></label>
+        <select id="oc-form-motivo" class="oc-input">
+          <option value="">Selecione um</option>
+          <option>Teste de canto</option>
+          <option>Verificação de notas fiscais</option>
+          <option>Vídeo de batida de silo</option>
+          <option>Cubagem de carretas</option>
+          <option>Aferição de material</option>
+          <option>Outro</option>
+        </select>
       </div>
       <div class="oc-form-group" style="grid-column:1/-1">
         <label class="oc-label">Descrição da solicitação <span class="oc-required">*</span></label>

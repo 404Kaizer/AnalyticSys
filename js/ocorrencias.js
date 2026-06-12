@@ -74,169 +74,416 @@ function buildWhatsAppLink(numero, ocorrencia) {
 
 // ── KPIs ──────────────────────────────────────────────────
 function buildOcKPIs(lista) {
-  const total     = lista.length;
+  const total      = lista.length;
   const concluidas = lista.filter(o => o.concluida).length;
   const abertas    = total - concluidas;
   const vencidas   = lista.filter(o => !o.concluida && ocDateStatus(o.dataLimite) === 'vencida').length;
   const urgentes   = lista.filter(o => !o.concluida && ocDateStatus(o.dataLimite) === 'urgente').length;
   const pctConc    = total > 0 ? Math.round(concluidas / total * 100) : 0;
 
-  // Contagem por central
+  // Contagem por central (top 12)
   const porCentral = {};
-  lista.forEach(o => {
-    const c = o.central || '—';
-    porCentral[c] = (porCentral[c] || 0) + 1;
-  });
-  const topCentrals = Object.entries(porCentral)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5);
+  lista.forEach(o => { const c = o.central || '—'; porCentral[c] = (porCentral[c] || 0) + 1; });
+  const topCentrals = Object.entries(porCentral).sort((a, b) => b[1] - a[1]).slice(0, 12);
 
-  return { total, concluidas, abertas, vencidas, urgentes, pctConc, topCentrals, porCentral };
+  // Contagem por motivo
+  const porMotivo = {};
+  lista.forEach(o => {
+    const m = (o.motivo || '').trim() || 'Sem motivo';
+    porMotivo[m] = (porMotivo[m] || 0) + 1;
+  });
+  const topMotivos = Object.entries(porMotivo).sort((a, b) => b[1] - a[1]);
+
+  // Diferença entre data de conclusão e data prazo (prazo → conclusão) em dias
+  // Negativo = concluída antes do prazo; positivo = concluída após o prazo
+  const temposBuckets = { '1d':0, '2-3d':0, '4-7d':0, '8-15d':0, '16-30d':0, '>30d':0 };
+  let tempoTotal = 0, tempoCount = 0;
+  lista.forEach(o => {
+    if (!o.concluida || !o.dataLimite || !o.dataConclusao) return;
+    const ini = new Date(o.dataLimite + 'T00:00:00'), fim = new Date(o.dataConclusao + 'T00:00:00');
+    if (isNaN(ini) || isNaN(fim)) return;
+    const days = (fim - ini) / 86400000;
+    tempoTotal += days; tempoCount++;
+    const absDays = Math.abs(days);
+    if      (absDays <= 1)  temposBuckets['1d']++;
+    else if (absDays <= 3)  temposBuckets['2-3d']++;
+    else if (absDays <= 7)  temposBuckets['4-7d']++;
+    else if (absDays <= 15) temposBuckets['8-15d']++;
+    else if (absDays <= 30) temposBuckets['16-30d']++;
+    else                    temposBuckets['>30d']++;
+  });
+  const tempoMedioMin = tempoCount > 0 ? tempoTotal / tempoCount : null; // agora em dias
+
+  return { total, concluidas, abertas, vencidas, urgentes, pctConc,
+           topCentrals, porCentral, topMotivos, porMotivo,
+           temposBuckets, tempoMedioMin, tempoCount, _lista: lista };
 }
 
 // ── Render KPIs ───────────────────────────────────────────
+let _ocChartHorario  = null;
+let _ocChartCentral  = null;
+let _ocChartMotivo   = null;
+let _ocChartTempo    = null;
+
+function _destroyOcCharts() {
+  [_ocChartHorario, _ocChartCentral, _ocChartMotivo, _ocChartTempo].forEach(c => { try { c?.destroy(); } catch(e){} });
+  _ocChartHorario = _ocChartCentral = _ocChartMotivo = _ocChartTempo = null;
+}
+
+// ── Donut "Status das ocorrências" ─────────────────────────
+const OC_DONUT_META = {
+  vencida:   { col: '#ef4444', label: 'Vencida'   },
+  urgente:   { col: '#f59e0b', label: 'Urgente'   },
+  normal:    { col: '#3b82f6', label: 'Em aberto' },
+  concluida: { col: '#10b981', label: 'Concluída' }
+};
+
+function _buildOcDonut(kpis) {
+  const total = kpis.total;
+  if (!total) {
+    return `<div style="display:flex;align-items:center;justify-content:center;height:160px;color:var(--text3);font-size:12px;font-family:var(--mono)">Sem ocorrências</div>`;
+  }
+
+  const normais = Math.max(0, kpis.abertas - kpis.vencidas - kpis.urgentes);
+  const segs = [
+    { key: 'vencida',   n: kpis.vencidas   },
+    { key: 'urgente',   n: kpis.urgentes   },
+    { key: 'normal',    n: normais         },
+    { key: 'concluida', n: kpis.concluidas },
+  ].filter(s => s.n > 0);
+
+  const CX = 90, CY = 90, R = 72, ring = 26;
+  const C = 2 * Math.PI * R;
+  let offset = 0;
+  let paths = '';
+  segs.forEach(s => {
+    const frac = s.n / total;
+    const len  = frac * C;
+    const meta = OC_DONUT_META[s.key];
+    const pct  = Math.round(frac * 100);
+    paths += `<circle class="oc-donut-slice" data-label="${meta.label}" data-count="${s.n}" data-pct="${pct}"
+      cx="${CX}" cy="${CY}" r="${R}" fill="none" stroke="${meta.col}" stroke-width="${ring}"
+      stroke-dasharray="${len} ${C - len}" stroke-dashoffset="${-offset}"
+      transform="rotate(-90 ${CX} ${CY})" style="cursor:pointer;transition:opacity .15s"></circle>`;
+    offset += len;
+  });
+
+  const legend = segs.map(s => {
+    const meta = OC_DONUT_META[s.key];
+    const pct  = Math.round(s.n / total * 100);
+    return `<div class="oc-donut-legend-row" data-label="${meta.label}" style="display:flex;align-items:center;gap:7px;font-size:11px;transition:opacity .15s">
+      <span style="width:9px;height:9px;border-radius:2px;background:${meta.col};flex-shrink:0"></span>
+      <span style="color:var(--text2);flex:1">${meta.label}</span>
+      <span style="font-family:var(--mono);color:var(--text);font-weight:600">${s.n}</span>
+      <span style="font-family:var(--mono);color:var(--text3);font-size:9.5px;min-width:32px;text-align:right">${pct}%</span>
+    </div>`;
+  }).join('');
+
+  return `
+    <div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;justify-content:center">
+      <div style="position:relative;width:180px;height:180px;flex-shrink:0">
+        <svg viewBox="0 0 180 180" width="180" height="180">${paths}</svg>
+        <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none">
+          <span style="font-size:24px;font-weight:700;font-family:var(--mono);color:var(--text)">${total}</span>
+          <span style="font-size:9px;color:var(--text3);font-family:var(--mono);letter-spacing:.08em;text-transform:uppercase">ocorrências</span>
+          <span style="font-size:11px;color:var(--green);font-family:var(--mono);margin-top:2px">${kpis.pctConc}% concl.</span>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;min-width:130px">${legend}</div>
+    </div>`;
+}
+
+function _bindOcDonutHover() {
+  const wrap = document.getElementById('oc-donut-wrap');
+  if (!wrap) return;
+  const slices = [...wrap.querySelectorAll('.oc-donut-slice')];
+  const rows   = [...wrap.querySelectorAll('.oc-donut-legend-row')];
+
+  const setHighlight = (label) => {
+    slices.forEach(s => { s.style.opacity = (!label || s.dataset.label === label) ? '1' : '0.25'; });
+    rows.forEach(r => { r.style.opacity = (!label || r.dataset.label === label) ? '1' : '0.4'; });
+  };
+
+  slices.forEach(s => {
+    s.addEventListener('mouseenter', () => setHighlight(s.dataset.label));
+    s.addEventListener('mouseleave', () => setHighlight(null));
+  });
+  rows.forEach(r => {
+    r.addEventListener('mouseenter', () => setHighlight(r.dataset.label));
+    r.addEventListener('mouseleave', () => setHighlight(null));
+  });
+}
+
 function renderOcKPIs(lista) {
   const kpis = buildOcKPIs(lista);
   const el = document.getElementById('oc-kpis');
   if (!el) return;
+  _destroyOcCharts();
+
+  const isDark = !document.body.dataset.theme || document.body.dataset.theme !== 'light';
+  const textCol  = isDark ? 'rgba(123,133,160,0.9)' : 'rgba(61,79,110,0.9)';
+  const gridCol  = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.06)';
+  const tickFont = { family: "'DM Mono', monospace", size: 10 };
 
   el.innerHTML = `
-    <div class="oc-charts-row">
-      ${_buildOcDonut(kpis)}
-      ${_buildOcCentralChart(kpis)}
+    <!-- Linha 1: Donut + volume por horário -->
+    <div class="oc-charts-row" style="align-items:stretch">
+      <div class="oc-chart-card oc-chart-donut-card" style="flex:0 0 320px">
+        <div class="oc-chart-title">Status das ocorrências</div>
+        <div class="oc-donut-wrap" id="oc-donut-wrap">${_buildOcDonut(kpis)}</div>
+      </div>
+      <div class="oc-chart-card" style="flex:1;min-width:0">
+        <div class="oc-chart-title" style="display:flex;justify-content:space-between;align-items:center">
+          <span><i class="ti ti-clock" style="font-size:12px;margin-right:5px"></i>Volume de Solicitações por Horário do Dia</span>
+          <span id="oc-horario-pico" style="font-size:10px;font-family:var(--mono);color:var(--teal);background:var(--teal-bg);padding:2px 8px;border-radius:4px;border:1px solid var(--teal-border)"></span>
+        </div>
+        <div style="position:relative;width:100%;height:160px">
+          <canvas id="oc-chart-horario" role="img" aria-label="Volume de ocorrências por horário do dia"></canvas>
+        </div>
+      </div>
+    </div>
+    <!-- Linha 2: Ranking centrais + Ocorrências por motivo -->
+    <div class="oc-charts-row" style="margin-top:16px;align-items:stretch">
+      <div class="oc-chart-card" style="flex:1;min-width:0">
+        <div class="oc-chart-title" style="display:flex;justify-content:space-between;align-items:center">
+          <span><i class="ti ti-building-factory-2" style="font-size:12px;margin-right:5px"></i>Ranking de Centrais</span>
+          <span style="font-size:10px;font-family:var(--mono);color:var(--text3);background:var(--accent-dim);padding:2px 7px;border-radius:4px;border:1px solid var(--accent-glow)">top 12</span>
+        </div>
+        <div style="position:relative;width:100%;height:${Math.max(kpis.topCentrals.length * 28 + 20, 120)}px">
+          <canvas id="oc-chart-central" role="img" aria-label="Ranking de centrais por ocorrências"></canvas>
+        </div>
+      </div>
+      <div class="oc-chart-card" style="flex:1;min-width:0">
+        <div class="oc-chart-title">
+          <i class="ti ti-tag" style="font-size:12px;margin-right:5px"></i>Ocorrências por Motivo
+        </div>
+        <div style="position:relative;width:100%;height:${Math.max(kpis.topMotivos.length * 28 + 20, 120)}px">
+          <canvas id="oc-chart-motivo" role="img" aria-label="Ocorrências por motivo"></canvas>
+        </div>
+      </div>
+    </div>
+    <!-- Linha 3: Tempo de atendimento -->
+    <div class="oc-charts-row" style="margin-top:16px">
+      <div class="oc-chart-card" style="flex:1">
+        <div class="oc-chart-title" style="display:flex;justify-content:space-between;align-items:center">
+          <span><i class="ti ti-clock-hour-4" style="font-size:12px;margin-right:5px"></i>Tempo Médio de Conclusão</span>
+          <span style="font-size:10px;font-family:var(--mono);color:var(--text3)">prazo → conclusão · ${kpis.tempoCount} concluída${kpis.tempoCount!==1?'s':''}</span>
+        </div>
+        ${kpis.tempoMedioMin !== null ? `
+        <div style="display:flex;align-items:center;gap:20px;margin:10px 0 14px;padding:12px 16px;background:var(--green-bg);border:1px solid var(--green-border);border-radius:8px;flex-wrap:wrap">
+          <div style="display:flex;flex-direction:column;gap:3px;min-width:110px">
+            <span style="font-size:9px;font-family:var(--mono);color:var(--text3);text-transform:uppercase;letter-spacing:.07em">Tempo Médio de Conclusão</span>
+            <span style="font-size:26px;font-family:var(--mono);font-weight:700;color:var(--green);line-height:1.1">${kpis.tempoMedioMin < 1 ? (kpis.tempoMedioMin * 24).toFixed(1)+'<span style="font-size:14px;font-weight:400;margin-left:3px">h</span>' : kpis.tempoMedioMin.toFixed(1)+'<span style="font-size:14px;font-weight:400;margin-left:3px">d</span>'}</span>
+            <span style="font-size:9px;font-family:var(--mono);color:var(--text3)">${kpis.tempoCount} ocorrência${kpis.tempoCount!==1?'s':''} analisada${kpis.tempoCount!==1?'s':''}</span>
+          </div>
+          <div style="width:1px;height:44px;background:var(--green-border);flex-shrink:0"></div>
+          <div style="flex:1;min-width:180px;display:flex;flex-direction:column;gap:5px">
+            <span style="font-size:9px;font-family:var(--mono);color:var(--text3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:2px">Distribuição por faixa</span>
+            ${(()=>{
+              const bk = kpis.temposBuckets;
+              const entries = [
+                {k:'1d',     l:'≤ 1 dia',  c:'#10b981'},
+                {k:'2-3d',   l:'2–3 dias', c:'#22c55e'},
+                {k:'4-7d',   l:'4–7 dias', c:'#f59e0b'},
+                {k:'8-15d',  l:'8–15 dias',c:'#f97316'},
+                {k:'16-30d', l:'16–30d',   c:'#f43f5e'},
+                {k:'>30d',   l:'> 30 dias',c:'#dc2626'},
+              ];
+              const total = kpis.tempoCount || 1;
+              return entries.map(({k,l,c})=>{
+                const v = bk[k]||0; if(!v) return '';
+                const pct = Math.round(v/total*100);
+                return `<div style="display:flex;align-items:center;gap:7px">
+                  <span style="font-size:9px;font-family:var(--mono);color:${c};min-width:46px;flex-shrink:0">${l}</span>
+                  <div style="flex:1;height:5px;background:var(--bg3);border-radius:3px;overflow:hidden">
+                    <div style="width:${pct}%;height:100%;background:${c};border-radius:3px;transition:width .4s"></div>
+                  </div>
+                  <span style="font-size:9px;font-family:var(--mono);color:var(--text3);min-width:30px;text-align:right">${v} (${pct}%)</span>
+                </div>`;
+              }).join('');
+            })()}
+          </div>
+        </div>` : `<div style="padding:10px 0 12px;font-size:11px;font-family:var(--mono);color:var(--text3)">Nenhuma ocorrência concluída com datas registradas.</div>`}
+        <div style="position:relative;width:100%;height:180px">
+          <canvas id="oc-chart-tempo" role="img" aria-label="Distribuição do tempo de atendimento"></canvas>
+        </div>
+      </div>
     </div>`;
 
-  // bind hover events on donut slices
   _bindOcDonutHover();
+  requestAnimationFrame(() => _buildOcCharts(kpis, textCol, gridCol, tickFont));
 }
 
-function _buildOcDonut(kpis) {
-  const total = kpis.total;
-  if (!total) return `<div class="oc-chart-card oc-chart-donut-card"><div class="oc-chart-title">Status das ocorrências</div><div style="padding:32px;text-align:center;color:var(--text3);font-size:12px;font-family:var(--mono)">Sem ocorrências</div></div>`;
-
-  const CX = 160, CY = 160, R = 90, ri = 56;
-  const slices = [
-    { label: 'Concluídas', val: kpis.concluidas, col: '#10b981' },
-    { label: 'Em aberto',  val: kpis.abertas - kpis.vencidas - kpis.urgentes, col: '#3b82f6' },
-    { label: 'Urgentes',   val: kpis.urgentes,   col: '#f97316' },
-    { label: 'Vencidas',   val: kpis.vencidas,   col: '#f43f5e' },
-  ].filter(s => s.val > 0);
-
-  let svg = `<svg viewBox="0 0 320 320" width="100%" height="100%" style="overflow:visible;display:block">
-    <defs>
-      <filter id="oc-glow" x="-40%" y="-40%" width="180%" height="180%">
-        <feGaussianBlur stdDeviation="3" result="blur"/>
-        <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-      </filter>
-    </defs>`;
-
-  let angle = -Math.PI / 2;
-  const gap = 0.022;
-
-  slices.forEach(s => {
-    const pct   = s.val / total;
-    const sweep = Math.max(pct * 2 * Math.PI - gap, 0.01);
-    const a0 = angle + gap / 2;
-    const ae = a0 + sweep;
-    const x1 = CX + R * Math.cos(a0),   y1 = CY + R * Math.sin(a0);
-    const x2 = CX + R * Math.cos(ae),   y2 = CY + R * Math.sin(ae);
-    const x3 = CX + ri * Math.cos(ae),  y3 = CY + ri * Math.sin(ae);
-    const x4 = CX + ri * Math.cos(a0),  y4 = CY + ri * Math.sin(a0);
-    const large = sweep > Math.PI ? 1 : 0;
-    const midA  = a0 + sweep / 2;
-    // callout
-    const ex = CX + (R + 18) * Math.cos(midA);
-    const ey = CY + (R + 18) * Math.sin(midA);
-    const onRight = Math.cos(midA) >= 0;
-    const tx = ex + (onRight ? 16 : -16);
-    const pctStr = Math.round(pct * 100);
-    const tipData = encodeURIComponent(JSON.stringify({ label: s.label, val: s.val, pct: pctStr, col: s.col }));
-
-    svg += `<path class="oc-donut-slice" data-tip="${tipData}" data-col="${s.col}"
-      d="M${x1.toFixed(1)},${y1.toFixed(1)} A${R},${R} 0 ${large},1 ${x2.toFixed(1)},${y2.toFixed(1)} L${x3.toFixed(1)},${y3.toFixed(1)} A${ri},${ri} 0 ${large},0 ${x4.toFixed(1)},${y4.toFixed(1)} Z"
-      fill="${s.col}" opacity="0.88" style="cursor:pointer;transition:opacity .15s"/>`;
-
-    if (pct > 0.05) {
-      const sx = CX + (R + 6) * Math.cos(midA);
-      const sy = CY + (R + 6) * Math.sin(midA);
-      const TICK = 22;
-      const lx = CX + (R + 28) * Math.cos(midA);
-      const ly = CY + (R + 28) * Math.sin(midA);
-      const finalX = lx + (onRight ? TICK : -TICK);
-      const anchor = onRight ? 'start' : 'end';
-      const labelX = finalX + (onRight ? 3 : -3);
-
-      svg += `<polyline points="${sx.toFixed(1)},${sy.toFixed(1)} ${lx.toFixed(1)},${ly.toFixed(1)} ${finalX.toFixed(1)},${ly.toFixed(1)}"
-        fill="none" stroke="${s.col}" stroke-width="1.2" stroke-opacity=".7" style="pointer-events:none"/>`;
-      svg += `<text x="${labelX.toFixed(1)}" y="${(ly - 2).toFixed(1)}" text-anchor="${anchor}"
-        font-size="11" font-weight="700" font-family="var(--mono)" fill="${s.col}" style="pointer-events:none">${pctStr}%</text>`;
-      svg += `<text x="${labelX.toFixed(1)}" y="${(ly + 12).toFixed(1)}" text-anchor="${anchor}"
-        font-size="9.5" font-family="var(--mono)" fill="${s.col}" opacity=".75" style="pointer-events:none">${s.label}</text>`;
-    }
-    angle += sweep + gap;
+function _buildOcCharts(kpis, textCol, gridCol, tickFont) {
+  // ── Gráfico horário ────────────────────────────────────────────────────────
+  const horarioData = new Array(24).fill(0);
+  (kpis._lista || []).forEach(o => {
+    if (!o.criadoEm) return;
+    const h = new Date(o.criadoEm).getHours();
+    horarioData[h]++;
   });
+  const picoH = horarioData.indexOf(Math.max(...horarioData));
+  const picoEl = document.getElementById('oc-horario-pico');
+  if (picoEl && Math.max(...horarioData) > 0) picoEl.textContent = `pico: ${String(picoH).padStart(2,'0')}h`;
 
-  // Score central
-  svg += `<text x="${CX}" y="${CY - 8}" text-anchor="middle" font-size="34" font-weight="700" font-family="var(--mono)" fill="var(--text)" style="pointer-events:none">${kpis.pctConc}%</text>`;
-  svg += `<text x="${CX}" y="${CY + 15}" text-anchor="middle" font-size="10" font-family="var(--mono)" fill="var(--text3)" letter-spacing=".07em" style="pointer-events:none">CONCLUÍDAS</text>`;
-  svg += `<text x="${CX}" y="${CY + 31}" text-anchor="middle" font-size="9.5" font-family="var(--mono)" fill="var(--text3)" style="pointer-events:none">${total} ocorrência${total !== 1 ? 's' : ''}</text>`;
-  svg += `</svg>`;
-
-  return `<div class="oc-chart-card oc-chart-donut-card">
-    <div class="oc-chart-title">Status das ocorrências</div>
-    <div class="oc-donut-wrap">${svg}</div>
-  </div>`;
-}
-
-function _buildOcCentralChart(kpis) {
-  if (!kpis.topCentrals.length) return `<div class="oc-chart-card"><div class="oc-chart-title">Centrais com mais ocorrências</div><div style="padding:32px;text-align:center;color:var(--text3);font-size:12px;font-family:var(--mono)">Sem dados</div></div>`;
-  const max = kpis.topCentrals[0][1];
-  const total = kpis.total;
-  const rankColors = ['#3b82f6','#6366f1','#8b5cf6','#a78bfa','#c4b5fd'];
-  const bars = kpis.topCentrals.map(([central, n], i) => {
-    const pct = Math.round(n / max * 100);
-    const pctOfTotal = total > 0 ? Math.round(n / total * 100) : 0;
-    const col = rankColors[i] || rankColors[rankColors.length - 1];
-    return `<div class="oc-bar-row">
-      <div class="oc-bar-rank" style="color:${col}">${i + 1}</div>
-      <div class="oc-bar-label" title="${escapeHtml(central)}">${escapeHtml(central)}</div>
-      <div class="oc-bar-track">
-        <div class="oc-bar-fill" style="width:${pct}%;background:${col}"></div>
-      </div>
-      <div class="oc-bar-meta">
-        <span class="oc-bar-val" style="color:${col}">${n}</span>
-        <span class="oc-bar-pct">${pctOfTotal}%</span>
-      </div>
-    </div>`;
-  }).join('');
-
-  return `<div class="oc-chart-card">
-    <div class="oc-chart-title">Centrais com mais ocorrências</div>
-    <div class="oc-bars-list">${bars}</div>
-  </div>`;
-}
-
-function _bindOcDonutHover() {
-  const slices = document.querySelectorAll('.oc-donut-slice');
-  slices.forEach(slice => {
-    const col = slice.dataset.col;
-    let tip;
-    try { tip = JSON.parse(decodeURIComponent(slice.dataset.tip)); } catch(e) { return; }
-    const html = `
-      <div style="font-weight:700;font-size:13px;color:var(--text);margin-bottom:6px;display:flex;align-items:center;gap:7px">
-        <span style="width:10px;height:10px;border-radius:3px;background:${col};display:inline-block"></span>${tip.label}
-      </div>
-      <div style="font-family:var(--mono);font-size:11px;color:var(--text2)">${tip.val} ocorrência${tip.val !== 1 ? 's' : ''} · ${tip.pct}%</div>`;
-    slice.addEventListener('mouseenter', e => {
-      slices.forEach(s => s.style.opacity = s === slice ? '1' : '0.3');
-      if (typeof _showHelpTip === 'function') _showHelpTip(e, html);
+  const ctxH = document.getElementById('oc-chart-horario');
+  if (ctxH) {
+    _ocChartHorario = new Chart(ctxH, {
+      type: 'bar',
+      data: {
+        labels: Array.from({length:24}, (_,i) => String(i).padStart(2,'0')+'h'),
+        datasets: [{
+          data: horarioData,
+          backgroundColor: horarioData.map((v,i) => i === picoH && v > 0 ? 'rgba(99,102,241,0.9)' : 'rgba(99,102,241,0.35)'),
+          borderRadius: 3, borderSkipped: false
+        }]
+      },
+      options: {
+        responsive:true, maintainAspectRatio:false,
+        plugins:{legend:{display:false}, tooltip:{callbacks:{label:ctx=>`${ctx.raw} ocorrência${ctx.raw!==1?'s':''}`}}},
+        scales:{
+          x:{grid:{color:gridCol},ticks:{color:textCol,font:tickFont,maxRotation:0}},
+          y:{grid:{color:gridCol},ticks:{color:textCol,font:tickFont,precision:0},beginAtZero:true}
+        }
+      }
     });
-    slice.addEventListener('mousemove', e => { if (typeof _moveHelpTip === 'function') _moveHelpTip(e); });
-    slice.addEventListener('mouseleave', () => {
-      slices.forEach(s => s.style.opacity = '');
-      if (typeof _hideHelpTip === 'function') _hideHelpTip();
+  }
+
+  // ── Ranking centrais ───────────────────────────────────────────────────────
+  const ctxC = document.getElementById('oc-chart-central');
+  if (ctxC && kpis.topCentrals.length) {
+    const labels = kpis.topCentrals.map(([c]) => c);
+    const vals   = kpis.topCentrals.map(([,n]) => n);
+    _ocChartCentral = new Chart(ctxC, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets:[{
+          data: vals,
+          backgroundColor: labels.map((_,i) => `rgba(59,130,246,${Math.max(0.3, 1 - i*0.06)})`),
+          borderRadius: 3, borderSkipped: false
+        }]
+      },
+      options: {
+        indexAxis:'y', responsive:true, maintainAspectRatio:false,
+        plugins:{legend:{display:false}, tooltip:{callbacks:{label:ctx=>`${ctx.raw} chamado${ctx.raw!==1?'s':''}`}}},
+        scales:{
+          x:{grid:{color:gridCol},ticks:{color:textCol,font:tickFont,precision:0},beginAtZero:true},
+          y:{grid:{display:false},ticks:{color:textCol,font:tickFont}}
+        }
+      }
     });
-  });
+  }
+
+  // ── Ocorrências por motivo ─────────────────────────────────────────────────
+  const ctxM = document.getElementById('oc-chart-motivo');
+  if (ctxM && kpis.topMotivos.length) {
+    const mLabels = kpis.topMotivos.map(([m]) => m.toUpperCase());
+    const mVals   = kpis.topMotivos.map(([,n]) => n);
+    _ocChartMotivo = new Chart(ctxM, {
+      type: 'bar',
+      data: {
+        labels: mLabels,
+        datasets:[{
+          data: mVals,
+          backgroundColor: 'rgba(245,158,11,0.75)',
+          borderRadius: 3, borderSkipped: false
+        }]
+      },
+      options: {
+        indexAxis:'y', responsive:true, maintainAspectRatio:false,
+        plugins:{legend:{display:false}, tooltip:{callbacks:{label:ctx=>`${ctx.raw} ocorrência${ctx.raw!==1?'s':''}`}}},
+        scales:{
+          x:{grid:{color:gridCol},ticks:{color:textCol,font:tickFont,precision:0},beginAtZero:true},
+          y:{grid:{display:false},ticks:{color:textCol,font:{...tickFont,size:9},maxTicksLimit:20}}
+        }
+      }
+    });
+  }
+
+  // ── Tempo de atendimento ───────────────────────────────────────────────────
+  const ctxT = document.getElementById('oc-chart-tempo');
+  if (ctxT) {
+    const buckets = kpis.temposBuckets;
+    const tLabels = ['≤ 1 dia','2–3 dias','4–7 dias','8–15 dias','16–30 dias','> 30 dias'];
+    const tKeys   = ['1d','2-3d','4-7d','8-15d','16-30d','>30d'];
+    const tVals   = tKeys.map(k => buckets[k] || 0);
+    const tTotal  = tVals.reduce((a,b) => a+b, 0);
+
+    // Determina o bucket onde está a média (em dias), para destacá-lo
+    const avgMin = kpis.tempoMedioMin; // agora representa dias
+    const _avgBucketIdx = avgMin === null ? -1 :
+      avgMin <= 1  ? 0 :
+      avgMin <= 3  ? 1 :
+      avgMin <= 7  ? 2 :
+      avgMin <= 15 ? 3 :
+      avgMin <= 30 ? 4 : 5;
+
+    const tColorsBase   = ['rgba(16,185,129,0.85)','rgba(34,197,94,0.75)','rgba(245,158,11,0.75)','rgba(249,115,22,0.75)','rgba(244,63,94,0.75)','rgba(220,38,38,0.75)'];
+    const tColorsDimmed = tColorsBase.map((c,i) => i === _avgBucketIdx ? c : c.replace(/[\d.]+\)$/, m => '0.35)'));
+    const tBorderColors = tColorsBase.map((c,i) => i === _avgBucketIdx ? c.replace(/[\d.]+\)$/, '1)') : 'transparent');
+    const tBorderWidths = tColorsBase.map((c,i) => i === _avgBucketIdx ? 2 : 0);
+
+    // Plugin customizado para desenhar label "ø média" no bucket destacado
+    const avgLabelPlugin = {
+      id: 'avgLabel',
+      afterDatasetsDraw(chart) {
+        if (_avgBucketIdx < 0) return;
+        const { ctx, chartArea } = chart;
+        const meta = chart.getDatasetMeta(0);
+        const bar  = meta.data[_avgBucketIdx];
+        if (!bar) return;
+        const avgLabel = avgMin < 1 ? `ø ${(avgMin * 24).toFixed(1)} h` : `ø ${avgMin.toFixed(1)} d`;
+        ctx.save();
+        ctx.font = `bold 10px 'DM Mono', monospace`;
+        ctx.fillStyle = tColorsBase[_avgBucketIdx].replace(/[\d.]+\)$/, '1)');
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        const x = bar.x;
+        const y = Math.max(bar.y - 4, chartArea.top + 12);
+        ctx.fillText(avgLabel, x, y);
+        ctx.restore();
+      }
+    };
+
+    _ocChartTempo = new Chart(ctxT, {
+      type: 'bar',
+      data: {
+        labels: tLabels,
+        datasets:[{
+          data: tVals,
+          backgroundColor: _avgBucketIdx >= 0 ? tColorsDimmed : tColorsBase,
+          borderColor: tBorderColors,
+          borderWidth: tBorderWidths,
+          borderRadius: 4, borderSkipped: false
+        }]
+      },
+      options: {
+        responsive:true, maintainAspectRatio:false,
+        plugins:{
+          legend:{display:false},
+          tooltip:{callbacks:{
+            label: ctx => {
+              const pct = tTotal > 0 ? ` (${Math.round(ctx.raw/tTotal*100)}%)` : '';
+              return `${ctx.raw} ocorrência${ctx.raw!==1?'s':''}${pct}`;
+            },
+            afterLabel: ctx => {
+              if (ctx.dataIndex === _avgBucketIdx && avgMin !== null) {
+                const avg = avgMin < 1 ? `${(avgMin * 24).toFixed(1)} h` : `${avgMin.toFixed(1)} d`;
+                return `← bucket da média (${avg})`;
+              }
+              return null;
+            }
+          }}
+        },
+        scales:{
+          x:{grid:{color:gridCol},ticks:{color:textCol,font:tickFont}},
+          y:{grid:{color:gridCol},ticks:{color:textCol,font:tickFont,precision:0},beginAtZero:true}
+        }
+      },
+      plugins: [avgLabelPlugin]
+    });
+  }
 }
 
 // ── Render lista ──────────────────────────────────────────
@@ -491,6 +738,8 @@ function openOcorrenciaModal(id) {
   document.getElementById('oc-form-operador').value    = o?.operador      || '';
   document.getElementById('oc-form-contato').value     = o?.contato       || '';
   document.getElementById('oc-form-descricao').value   = o?.descricao     || '';
+  const motivoEl = document.getElementById('oc-form-motivo');
+  if (motivoEl) motivoEl.value = o?.motivo || '';
   document.getElementById('oc-modal').classList.add('open');
 }
 
@@ -507,6 +756,7 @@ function submitOcorrenciaForm() {
   const operador   = document.getElementById('oc-form-operador').value.trim();
   const contato    = document.getElementById('oc-form-contato').value.trim();
   const descricao  = document.getElementById('oc-form-descricao').value.trim();
+  const motivo     = document.getElementById('oc-form-motivo')?.value.trim() || '';
 
   if (!central)   { toast('Informe a central.', 'error'); return; }
   if (!descricao) { toast('Informe a descrição da solicitação.', 'error'); return; }
@@ -515,6 +765,7 @@ function submitOcorrenciaForm() {
   const ocorrencia = {
     id:           id || _nextOcId(),
     dataAbertura: abertura,
+    motivo:       motivo,
     dataLimite:   limite || null,
     central,
     material:     material || null,

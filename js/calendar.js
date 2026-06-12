@@ -448,33 +448,40 @@
   };
 
   window.calQuickHoje = function(pfx) {
-    const d = new Date();
-    const today = stripTime(d);
-    setRange(pfx, today, today);
+    const now = new Date();
+    const ini = new Date(now.getFullYear(), now.getMonth(), 1);
+    const fim = stripTime(now);
+    setRange(pfx, ini, fim);
+    markOutsideChip(pfx, 0);
+  };
+  window.calQuickOntem = function(pfx) {
+    const now = new Date();
+    const ini = new Date(now.getFullYear(), now.getMonth(), 1);
+    const fim = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+    setRange(pfx, ini, fim);
     markOutsideChip(pfx, 1);
   };
   window.calQuickMesAtual = function(pfx) {
     const now = new Date();
     setRange(pfx, new Date(now.getFullYear(), now.getMonth(), 1), new Date(now.getFullYear(), now.getMonth() + 1, 0));
-    markOutsideChip(pfx, 2);
+    markOutsideChip(pfx, 3);
   };
   window.calQuickUltimaTerca = function(pfx) {
     const now = new Date();
-    // Retroage até encontrar a última terça-feira anterior a hoje
     const terca = new Date(now);
     terca.setHours(0, 0, 0, 0);
-    terca.setDate(terca.getDate() - 1); // começa em ontem
+    terca.setDate(terca.getDate() - 1);
     while (terca.getDay() !== 2) terca.setDate(terca.getDate() - 1);
     const ini = new Date(now.getFullYear(), now.getMonth(), 1);
     setRange(pfx, ini, terca);
-    markOutsideChip(pfx, 0);
+    markOutsideChip(pfx, 2);
   };
   window.calQuickMesAnterior = function(pfx) {
     const now = new Date();
     const prevMonth = now.getMonth() === 0 ? 11 : now.getMonth() - 1;
     const prevYear = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
     setRange(pfx, new Date(prevYear, prevMonth, 1), new Date(prevYear, prevMonth + 1, 0));
-    markOutsideChip(pfx, 3);
+    markOutsideChip(pfx, 4);
   };
 
   // Footer chips inside calendar

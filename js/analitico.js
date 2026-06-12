@@ -2316,23 +2316,53 @@ async function startupRestoreFlow() {
   // módulos permanecem com o estado vazio, respeitando a escolha do usuário.
   try {
     const db = await openDb();
-    let savedConfigs  = null;
-    let savedFiliais  = null;
-    let savedMateriais = null;
+    let savedConfigs    = null;
+    let savedFiliais    = null;
+    let savedMateriais  = null;
+    let savedOcorrencias= null;
+    const savedManuais  = {}; // { modulo: [registros manuais] }
 
     if (db) {
       // Tenta primeiro as chaves individuais (mais eficiente)
-      savedConfigs   = await idbGet(db, 'configs').catch(() => null);
-      savedFiliais   = await idbGet(db, 'filiais').catch(() => null);
-      savedMateriais = await idbGet(db, 'materiais').catch(() => null);
+      savedConfigs    = await idbGet(db, 'configs').catch(() => null);
+      savedFiliais    = await idbGet(db, 'filiais').catch(() => null);
+      savedMateriais  = await idbGet(db, 'materiais').catch(() => null);
+      savedOcorrencias= await idbGet(db, 'ocorrencias').catch(() => null);
+
+      // Para registros manuais: lê todos os módulos e filtra só os manuais
+      const modulosComManuais = ['entradas','saidas','lancamentos','producao'];
+      for (const mod of modulosComManuais) {
+        const arr = await idbGet(db, mod).catch(() => null);
+        if (Array.isArray(arr)) {
+          const manuais = arr.filter(r => r.fonte === 'manual');
+          if (manuais.length) savedManuais[mod] = manuais;
+        }
+      }
+      // SAP usa chunks — carregar via loadSapChunks e filtrar manuais
+      try {
+        const sapAll = await loadSapChunks(db);
+        const sapManuais = sapAll.filter(r => r.fonte === 'manual');
+        if (sapManuais.length) savedManuais['sap'] = sapManuais;
+      } catch(e) {
+        console.warn('[Startup] Erro ao carregar manuais SAP dos chunks:', e);
+      }
 
       // Fallback: lê o snapshot completo e extrai as chaves necessárias
-      if (!Array.isArray(savedConfigs) || !Array.isArray(savedFiliais) || !Array.isArray(savedMateriais)) {
+      const needsSnapshot = !Array.isArray(savedConfigs) || !Array.isArray(savedFiliais) || !Array.isArray(savedMateriais);
+      if (needsSnapshot) {
         const snapshot = await idbGet(db, IDB_STATE_KEY).catch(() => null);
         if (snapshot && typeof snapshot === 'object') {
-          if (!Array.isArray(savedConfigs)   && Array.isArray(snapshot.configs))   savedConfigs   = snapshot.configs;
-          if (!Array.isArray(savedFiliais)   && Array.isArray(snapshot.filiais))   savedFiliais   = snapshot.filiais;
-          if (!Array.isArray(savedMateriais) && Array.isArray(snapshot.materiais)) savedMateriais = snapshot.materiais;
+          if (!Array.isArray(savedConfigs)    && Array.isArray(snapshot.configs))    savedConfigs    = snapshot.configs;
+          if (!Array.isArray(savedFiliais)    && Array.isArray(snapshot.filiais))    savedFiliais    = snapshot.filiais;
+          if (!Array.isArray(savedMateriais)  && Array.isArray(snapshot.materiais))  savedMateriais  = snapshot.materiais;
+          if (!Array.isArray(savedOcorrencias)&& Array.isArray(snapshot.ocorrencias))savedOcorrencias= snapshot.ocorrencias;
+          // Manuais do snapshot (exceto SAP — está em chunks, já tratado acima)
+          for (const mod of modulosComManuais) {
+            if (!savedManuais[mod] && Array.isArray(snapshot[mod])) {
+              const manuais = snapshot[mod].filter(r => r.fonte === 'manual');
+              if (manuais.length) savedManuais[mod] = manuais;
+            }
+          }
         }
       }
     }
@@ -2346,9 +2376,10 @@ async function startupRestoreFlow() {
         const raw = localStorage.getItem(legacyStateKey);
         if (raw) {
           const parsed = safeJSONParse(raw, {});
-          if ((!Array.isArray(savedConfigs)   || savedConfigs.length   === 0) && Array.isArray(parsed.configs)   && parsed.configs.length   > 0) savedConfigs   = parsed.configs;
-          if ((!Array.isArray(savedFiliais)   || savedFiliais.length   === 0) && Array.isArray(parsed.filiais)   && parsed.filiais.length   > 0) savedFiliais   = parsed.filiais;
-          if ((!Array.isArray(savedMateriais) || savedMateriais.length === 0) && Array.isArray(parsed.materiais) && parsed.materiais.length > 0) savedMateriais = parsed.materiais;
+          if ((!Array.isArray(savedConfigs)   || !savedConfigs.length)   && Array.isArray(parsed.configs))   savedConfigs   = parsed.configs;
+          if ((!Array.isArray(savedFiliais)   || !savedFiliais.length)   && Array.isArray(parsed.filiais))   savedFiliais   = parsed.filiais;
+          if ((!Array.isArray(savedMateriais) || !savedMateriais.length) && Array.isArray(parsed.materiais)) savedMateriais = parsed.materiais;
+          if ((!Array.isArray(savedOcorrencias)|| !savedOcorrencias.length) && Array.isArray(parsed.ocorrencias)) savedOcorrencias = parsed.ocorrencias;
         }
       } catch (_) {}
     }
@@ -2367,6 +2398,22 @@ async function startupRestoreFlow() {
       }));
       invalidateMaterialLookup();
       reaplicarPadronizacaoMateriais();
+    }
+    if (Array.isArray(savedOcorrencias) && savedOcorrencias.length > 0) {
+      state.ocorrencias = savedOcorrencias;
+    }
+    // Restaura registros manuais nos módulos correspondentes
+    const modStateMap = { entradas:'entradas', saidas:'saidas', lancamentos:'lancamentos', sap:'sap', producao:'producao' };
+    for (const [mod, stateKey] of Object.entries(modStateMap)) {
+      if (savedManuais[mod] && savedManuais[mod].length > 0) {
+        state[stateKey] = savedManuais[mod];
+        console.info(`[Startup] ${savedManuais[mod].length} registro(s) manual(is) restaurado(s) em ${mod}`);
+      }
+    }
+    if (Object.keys(savedManuais).length > 0) {
+      invalidateLancIndex();
+      invalidateSapIndex();
+      invalidateSaidasIndex();
     }
   } catch (err) {
     console.warn('[startupRestoreFlow] Não foi possível recuperar configs/filiais/materiais do storage:', err);

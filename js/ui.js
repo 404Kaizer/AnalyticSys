@@ -247,8 +247,29 @@ function updatePageInfo(module) {
   }
 }
 
+// ── Filtro "Somente manuais" por módulo ──────────────────────────────────────
+const _somenteManuais = { entradas: false, saidas: false, lancamentos: false, sap: false };
+
+function toggleSomenteManuais(module) {
+  _somenteManuais[module] = !_somenteManuais[module];
+  // Atualiza visual do botão
+  const btn = document.getElementById(`btn-manuais-${module}`);
+  if (btn) {
+    btn.classList.toggle('active', _somenteManuais[module]);
+    btn.title = _somenteManuais[module] ? 'Exibindo somente registros manuais — clique para voltar' : 'Filtrar somente registros manuais';
+  }
+  // Re-renderiza
+  if (module === 'entradas')    renderEntradas?.() || renderModule?.('entradas');
+  if (module === 'saidas')      renderSaidas?.()   || renderModule?.('saidas');
+  if (module === 'lancamentos') renderLancamentos?.() || renderModule?.('lancamentos');
+  if (module === 'sap')         renderSAP?.()      || renderModule?.('sap');
+}
+window.toggleSomenteManuais = toggleSomenteManuais;
+
 function getFilteredData(module) {
-  const data = state[module] || [];
+  let data = state[module] || [];
+  // Aplica filtro de manuais antes dos demais
+  if (_somenteManuais[module]) data = data.filter(r => r.fonte === 'manual');
   const f = module === 'producao' ? filtroProducao : filters[module];
   // Passa o scope para que filterRecords use o índice invertido quando possível
   const textFiltered = filterRecords(data, f, getSearchableFields(module), module);
@@ -2346,6 +2367,25 @@ function initResizable() {
   qsa('.micro-table-wrap table').forEach(makeResizable);
 }
 
+function _importStatusBadge(r) {
+  const s = r.status || 'Importado';
+  const tip = r.statusTip ? ` title="${escapeHtml(r.statusTip)}"` : '';
+  const cfg = {
+    'Salvo':            { cls:'badge-green',  icon:'ti-circle-check',    label:'Salvo'           },
+    'Importado':        { cls:'badge-green',  icon:'ti-circle-check',    label:'Importado'       },
+    'Sem persistência': { cls:'badge-amber',  icon:'ti-alert-triangle',  label:'Sem persistência'},
+    'Parcial':          { cls:'badge-teal',   icon:'ti-adjustments',     label:'Parcial'         },
+    'Já existia':       { cls:'badge-teal',   icon:'ti-minus',           label:'Já existia'      },
+    'Erro':             { cls:'badge-red',    icon:'ti-circle-x',        label:'Erro'            },
+    'Processando':      { cls:'badge-purple', icon:'ti-loader',          label:'Processando'     },
+    'Abortado':         { cls:'badge-red',    icon:'ti-player-stop',     label:'Abortado'        },
+  };
+  const c = cfg[s] || { cls:'badge-green', icon:'ti-circle-check', label: s };
+  return `<span class="badge ${c.cls}"${tip} style="display:inline-flex;align-items:center;gap:4px;cursor:${r.statusTip?'help':'default'}">
+    <i class="ti ${c.icon}" style="font-size:11px"></i>${c.label}
+  </span>`;
+}
+
 function renderImports() {
   const tb = document.getElementById('tb-imports');
   if (!tb) return;
@@ -2369,7 +2409,7 @@ function renderImports() {
             : ''}
         </td>
         <td class="td-muted">${r.dataHora || '—'}</td>
-        <td><span class="badge badge-green">${r.status || 'Importado'}</span></td>
+        <td>${_importStatusBadge(r)}</td>
         <td style="width:56px">
           <button class="btn-icon danger" title="Excluir importação"
             onclick="excluirImportacao('${r.id}')">

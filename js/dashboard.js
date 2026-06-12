@@ -2699,15 +2699,34 @@ function _mergeDedup(existing, incoming, fpFn) {
   return { result: [...incoming, ...kept], added: trulyNew.length };
 }
 
+// ── Controle de abort de importação ─────────────────────────────────────────
+let _importAborted = false;
+
+function abortImport() {
+  _importAborted = true;
+  const btn = document.getElementById('loading-abort-btn');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ti ti-loader"></i> Abortando...';
+  }
+  updateLoadingOverlay('Abortando importação...', 'Importação', 'Aguarde a operação atual terminar o lote...');
+}
+window.abortImport = abortImport;
+
 async function processImportedRows(modulo, rows, fileName, extra = {}) {
   // Ativa modo batch: desabilita fuzzy matching em normalizarMaterial
   // para evitar Maximum call stack size exceeded com arquivos grandes.
   _batchImportMode = true;
-  try {
-  _importAddedCount = 0; // reseta contagem para esta importação
+  // Declarados fora do try para ficarem acessíveis no catch (abort e erros)
+  _importAddedCount = 0;
+  _importAborted = false;
   const importId = `imp_${modulo}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
   const parsed = [];
   const total = rows.length || 0;
+  try {
+  // Mostra botão abortar no loading overlay
+  const _abortRow = document.getElementById('loading-abort-row');
+  if (_abortRow) _abortRow.style.display = 'flex';
   const batchSize = Math.max(200, Math.min(700, Math.floor(total / 8) || 300));
 
   const updateStep = (message) => {
@@ -2717,6 +2736,7 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
   };
 
   const processSlice = async (start, end, handler) => {
+    if (_importAborted) return; // pula o slice se abortado
     for (let i = start; i < end; i++) {
       const item = handler(rows[i]);
       if (item) parsed.push(item);
@@ -2725,6 +2745,7 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
       updateLoadingOverlay(`Lidos ${Math.min(end, total)} de ${total} registros`, `Importando ${modulo}`, 'Convertendo lotes para o armazenamento local...');
     }
     await nextFrame();
+    if (_importAborted) throw new Error('__IMPORT_ABORTED__'); // sinaliza abort ao loop pai
   };
 
   if (modulo === 'Entrada') {
@@ -2942,32 +2963,84 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
 
   const novosAdicionados = _importAddedCount;
 
+  // Monta o registro de histórico — status começa como 'Processando'
+  const importRecord = {
+    id: importId,
+    arquivo: fileName,
+    modulo,
+    registros: novosAdicionados,
+    totalArquivo: parsed.length,
+    dataHora: new Date().toLocaleString('pt-BR'),
+    status: 'Processando',
+    statusTip: 'Salvando no banco local...',
+    createdAt: Date.now()
+  };
+  state.imports.unshift(importRecord);
+  renderImports(); // exibe 'Processando' imediatamente
+  renderModule(pageFromModulo(modulo));
+  updateDashboard();
+  await nextFrame();
+  initResizable();
+
+  // Fecha o overlay ANTES de persistir — a gravação ocorre em background
+  hideLoadingOverlay('Importação concluída');
+
   if (novosAdicionados > 0) {
-    // Só grava no histórico se houve registros novos
-    state.imports.unshift({
-      id: importId,
-      arquivo: fileName,
-      modulo,
-      registros: novosAdicionados,
-      totalArquivo: parsed.length,
-      dataHora: new Date().toLocaleString('pt-BR'),
-      status: 'Importado',
-      createdAt: Date.now()
-    });
     toast(`${novosAdicionados.toLocaleString('pt-BR')} novo${novosAdicionados !== 1 ? 's' : ''} registro${novosAdicionados !== 1 ? 's' : ''} importado${novosAdicionados !== 1 ? 's' : ''} de "${fileName}"`);
   } else {
     toast(`Nenhum registro novo encontrado em "${fileName}" — todos já estavam no sistema`, 'info');
   }
 
-  persist();
-  renderImports();
-  renderModule(pageFromModulo(modulo));
-  updateDashboard();
-  await nextFrame();
-  initResizable();
+  // Persiste em background e atualiza status sem bloquear a UI
+  persistStateNow().then(ok => {
+    const rec = state.imports.find(r => r.id === importId);
+    if (!rec) return;
+    if (novosAdicionados === 0) {
+      rec.status = 'Já existia';
+      rec.statusTip = 'Todos os registros já estavam no sistema';
+    } else if (ok !== false) {
+      rec.status = 'Salvo';
+      rec.statusTip = `${novosAdicionados.toLocaleString('pt-BR')} registros salvos com sucesso`;
+    } else {
+      rec.status = 'Sem persistência';
+      rec.statusTip = 'Não foi possível salvar no banco local. Os dados existem nesta sessão mas serão perdidos ao recarregar.';
+    }
+    renderImports();
+  }).catch(() => {
+    const rec = state.imports.find(r => r.id === importId);
+    if (rec) {
+      rec.status = 'Sem persistência';
+      rec.statusTip = 'Falha ao salvar no banco local.';
+      renderImports();
+    }
+  });
+  } catch(outerErr) {
+    if (outerErr?.message === '__IMPORT_ABORTED__') {
+      hideLoadingOverlay('Importação abortada');
+      toast(`Importação de "${fileName}" abortada pelo usuário.`, 'info');
+      state.imports.unshift({
+        id: importId,
+        arquivo: fileName,
+        modulo,
+        registros: 0,
+        totalArquivo: rows.length,
+        dataHora: new Date().toLocaleString('pt-BR'),
+        status: 'Abortado',
+        statusTip: `Abortado — nenhum dado foi importado (arquivo continha ${rows.length.toLocaleString('pt-BR')} registros)`,
+        createdAt: Date.now()
+      });
+      persist();
+      renderImports();
+    } else {
+      throw outerErr;
+    }
   } finally {
-    // Desativa modo batch — fuzzy matching volta a funcionar normalmente
     _batchImportMode = false;
+    _importAborted = false;
+    const _abortRowEnd = document.getElementById('loading-abort-row');
+    if (_abortRowEnd) _abortRowEnd.style.display = 'none';
+    const _abortBtn = document.getElementById('loading-abort-btn');
+    if (_abortBtn) { _abortBtn.disabled = false; _abortBtn.innerHTML = '<i class="ti ti-x"></i> Abortar importação'; }
   }
 }
 
@@ -3370,11 +3443,15 @@ async function handleImport(event, modulo) {
       await processImportedRows(modulo, data, file.name, extra);
       event.target.value = '';
     } catch (err) {
-      console.error('[Import Error]', modulo, err);
-      // Mostra a mensagem real do erro para facilitar o diagnóstico
-      const msg = (err && err.message) ? err.message : String(err);
-      const shortMsg = msg.length > 100 ? msg.slice(0, 100) + '…' : msg;
-      toast('Erro ao processar: ' + shortMsg, 'error');
+      if (err?.message === '__IMPORT_ABORTED__') {
+        // Abort tratado silenciosamente — mensagem e histórico já foram gravados
+        // em processImportedRows. Apenas fecha o overlay.
+      } else {
+        console.error('[Import Error]', modulo, err);
+        const msg = (err && err.message) ? err.message : String(err);
+        const shortMsg = msg.length > 100 ? msg.slice(0, 100) + '…' : msg;
+        toast('Erro ao processar: ' + shortMsg, 'error');
+      }
     } finally {
       hideLoadingOverlay('Importação concluída');
     }

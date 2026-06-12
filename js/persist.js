@@ -3,7 +3,11 @@ const IDB_DB_NAME = 'central_analise_db_v1';
 const IDB_STORE = 'kv';
 const IDB_STATE_KEY = 'appState';
 const legacyStateKey = STORAGE_KEY;
+// 'sap' é excluído do snapshot unificado — salvo em chunks separados
 const saveSnapshotKeys = ['configs', 'filiais', 'materiais', 'entradas', 'saidas', 'lancamentos', 'sap', 'producao', 'imports', 'ocorrencias'];
+const SAP_CHUNK_SIZE  = 10000;  // registros por chunk
+const SAP_CHUNK_KEY   = 'sap_chunk_'; // prefixo das chaves: sap_chunk_0, sap_chunk_1...
+const SAP_META_KEY    = 'sap_meta';   // { totalChunks, totalRecords, savedAt }
 
 let idbOpenPromise = null;
 let persistTimer = null;
@@ -61,12 +65,87 @@ function idbPut(db, key, value) {
   });
 }
 
-// Mantém os registros SAP completos na persistência.
-// O módulo exibe e utiliza campos como ref, depósito e dt. registro.
-// Se eles forem descartados no snapshot, reaparecem vazios após o reload.
+// ── Persistência SAP em chunks ────────────────────────────────────────────────
+// O SAP pode ter milhões de registros — gravar tudo num único objeto IndexedDB
+// causa falha silenciosa. Salvamos em chunks de SAP_CHUNK_SIZE registros cada.
+
+async function saveSapChunks(db, records) {
+  if (!db || !Array.isArray(records)) return;
+  const compacted = compactSapRecords(records);
+  const totalChunks = Math.ceil(compacted.length / SAP_CHUNK_SIZE) || 1;
+
+  // Apaga chunks antigos que possam ter sobrado de uma importação menor
+  const oldMeta = await idbGet(db, SAP_META_KEY).catch(() => null);
+  const oldChunks = oldMeta?.totalChunks || 0;
+  if (oldChunks > totalChunks) {
+    const tx = db.transaction(IDB_STORE, 'readwrite');
+    const store = tx.objectStore(IDB_STORE);
+    for (let i = totalChunks; i < oldChunks; i++) {
+      store.delete(SAP_CHUNK_KEY + i);
+    }
+    await new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = rej; });
+  }
+
+  // Grava chunks novos em paralelo (batches de 10 para não travar a thread)
+  const BATCH = 10;
+  for (let b = 0; b < totalChunks; b += BATCH) {
+    const writes = [];
+    for (let i = b; i < Math.min(b + BATCH, totalChunks); i++) {
+      const chunk = compacted.slice(i * SAP_CHUNK_SIZE, (i + 1) * SAP_CHUNK_SIZE);
+      writes.push(idbPut(db, SAP_CHUNK_KEY + i, chunk));
+    }
+    await Promise.all(writes);
+  }
+
+  // Grava metadata
+  await idbPut(db, SAP_META_KEY, {
+    totalChunks,
+    totalRecords: compacted.length,
+    savedAt: Date.now(),
+    version: STATE_VERSION
+  });
+
+  console.info(`[Persist] SAP: ${compacted.length} registros salvos em ${totalChunks} chunk${totalChunks!==1?'s':''}`);
+}
+
+async function loadSapChunks(db) {
+  if (!db) return [];
+  try {
+    const meta = await idbGet(db, SAP_META_KEY);
+    if (!meta || !meta.totalChunks) return [];
+
+    const chunks = await Promise.all(
+      Array.from({ length: meta.totalChunks }, (_, i) => idbGet(db, SAP_CHUNK_KEY + i))
+    );
+    const records = chunks.filter(Array.isArray).flat();
+    console.info(`[Persist] SAP carregado: ${records.length} registros de ${meta.totalChunks} chunk${meta.totalChunks!==1?'s':''}`);
+    return records;
+  } catch (err) {
+    console.warn('[Persist] Erro ao carregar chunks SAP:', err);
+    return [];
+  }
+}
+
+// Compacta os registros SAP para persistência — mantém apenas os campos
+// usados em cálculos e na UI, descartando campos redundantes ou vazios.
+// Com 600k+ registros, cada campo extra pode custar 10-30MB de espaço.
+const SAP_PERSIST_FIELDS = [
+  'movimento','peso','material','central','dtLanc','dtDoc','ref',
+  'documento','usuario','deposito','dtReg','valorTotal','custoUnit',
+  'categoria','um','importId','fonte'
+];
 function compactSapRecords(records) {
   if (!Array.isArray(records) || records.length === 0) return records;
-  return records.map(r => ({ ...r }));
+  return records.map(r => {
+    const out = {};
+    for (const f of SAP_PERSIST_FIELDS) {
+      // Só inclui o campo se tiver valor (null/undefined/''/0 são omitidos para peso exceto peso)
+      const v = r[f];
+      if (f === 'peso') { out[f] = v ?? 0; continue; }
+      if (v !== undefined && v !== null && v !== '') out[f] = v;
+    }
+    return out;
+  });
 }
 
 function buildStateSnapshot() {
@@ -154,19 +233,40 @@ async function persistStateNow() {
   try {
     const db = await openDb();
     if (db) {
-      await idbPut(db, IDB_STATE_KEY, snapshot);
-      await Promise.all(saveSnapshotKeys.map(key => idbPut(db, key, snapshot[key])));
+      // SAP é salvo em chunks separados — pode ter milhões de registros
+      await saveSapChunks(db, snapshot.sap || []);
+
+      // Snapshot sem SAP — muito menor, cabe facilmente
+      const snapshotSemSap = { ...snapshot, sap: [] };
+      await idbPut(db, IDB_STATE_KEY, snapshotSemSap);
+
+      // Chaves individuais para recuperação parcial (sem SAP — já está nos chunks)
+      const keysParaSalvar = saveSnapshotKeys.filter(k => k !== 'sap');
+      await Promise.all(keysParaSalvar.map(key => idbPut(db, key, snapshot[key])));
       await idbPut(db, 'meta', { version: STATE_VERSION, savedAt: snapshot.savedAt });
-      return;
+
+      const sapCount = (snapshot.sap || []).length;
+      console.info(`[Persist] ✓ Salvo no IndexedDB | SAP: ${sapCount.toLocaleString('pt-BR')} reg.`);
+      return true;
     }
   } catch (err) {
-    console.warn('Falha ao salvar no IndexedDB, tentando fallback.', err);
+    console.warn('[Persist] Falha ao salvar no IndexedDB:', err);
   }
 
+  // Fallback localStorage — sem SAP (muito grande)
   try {
-    localStorage.setItem(legacyStateKey, JSON.stringify(snapshot));
+    const snapshotSemSap = { ...snapshot, sap: [] };
+    localStorage.setItem(legacyStateKey, JSON.stringify(snapshotSemSap));
+    console.warn('[Persist] Salvo no localStorage SEM dados SAP (IndexedDB indisponível).');
+    return true; // localStorage funcionou
+    // Notifica a importação que a persistência foi parcial
+    if ((snapshot.sap || []).length > 0) {
+      toast('⚠ Dados SAP não puderam ser salvos permanentemente. Use um navegador que suporte IndexedDB.', 'error');
+    }
   } catch (err) {
-    console.warn('Não foi possível salvar o estado localmente.', err);
+    console.error('[Persist] ✗ FALHA TOTAL:', err);
+    toast('⚠ Não foi possível salvar os dados.', 'error');
+    return false;
   }
 }
 
@@ -222,6 +322,16 @@ async function loadState() {
           const value = await idbGet(db, key);
           if (Array.isArray(value)) saved[key] = value;
         }
+      }
+
+      // Carrega chunks SAP separadamente e injeta no saved antes de aplicar
+      const sapFromChunks = await loadSapChunks(db);
+      if (sapFromChunks.length > 0) {
+        saved.sap = sapFromChunks;
+      } else if (!Array.isArray(saved.sap) || saved.sap.length === 0) {
+        // Fallback: tenta a chave legada 'sap' individual
+        const sapLegacy = await idbGet(db, 'sap').catch(() => null);
+        if (Array.isArray(sapLegacy) && sapLegacy.length > 0) saved.sap = sapLegacy;
       }
 
       if (isLoadingOverlayVisible()) updateLoadingOverlay('Aplicando o estado salvo na interface...', 'Carregando informações');
