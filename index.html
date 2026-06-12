@@ -104,14 +104,6 @@
         </span>
       </button>
 
-      <button class="tab-item" onclick="navigate('inventario')" data-page="inventario" data-label="Inventário">
-        <span class="tab-icon" style="--tab-color: var(--green)"><i class="ti ti-clipboard-check"></i></span>
-        <span class="tab-text">
-          <span class="tab-title">Inventário</span>
-          <span class="tab-sub">fechamento semanal e mensal</span>
-        </span>
-      </button>
-
       <button class="tab-item" onclick="navigate('ocorrencias')" data-page="ocorrencias" data-label="Ocorrências">
         <span class="tab-icon" style="--tab-color: var(--amber)"><i class="ti ti-clipboard-text"></i></span>
         <span class="tab-text">
@@ -294,6 +286,162 @@
           </div>
         </div>
 
+        <!-- Calculadora (popover) -->
+        <div class="tool-popover" id="tool-calc" style="display:none">
+          <div class="tool-popover-header">
+            <span class="tool-popover-title"><i class="ti ti-calculator"></i> Calculadora</span>
+            <button class="tool-popover-close" onclick="closeTool('calc')"><i class="ti ti-x"></i></button>
+          </div>
+          <div class="calc-tabs">
+            <button class="calc-tab active" id="calct-basica" onclick="setCalcTab('basica')">Básica</button>
+            <button class="calc-tab" id="calct-analitica" onclick="setCalcTab('analitica')">Analítica</button>
+          </div>
+          <div id="calc-tab-basica">
+            <div class="calc-display-wrap">
+              <div class="calc-history" id="calc-history"></div>
+              <div class="calc-display" id="calc-display">0</div>
+            </div>
+            <div class="calc-grid">
+              <button class="calc-btn calc-btn-fn" onclick="calcAction('clear')">C</button>
+              <button class="calc-btn calc-btn-fn" onclick="calcAction('sign')">+/−</button>
+              <button class="calc-btn calc-btn-fn" onclick="calcAction('pct')">%</button>
+              <button class="calc-btn calc-btn-op" onclick="calcAction('op','/')">÷</button>
+              <button class="calc-btn" onclick="calcAction('num','7')">7</button>
+              <button class="calc-btn" onclick="calcAction('num','8')">8</button>
+              <button class="calc-btn" onclick="calcAction('num','9')">9</button>
+              <button class="calc-btn calc-btn-op" onclick="calcAction('op','*')">×</button>
+              <button class="calc-btn" onclick="calcAction('num','4')">4</button>
+              <button class="calc-btn" onclick="calcAction('num','5')">5</button>
+              <button class="calc-btn" onclick="calcAction('num','6')">6</button>
+              <button class="calc-btn calc-btn-op" onclick="calcAction('op','-')">−</button>
+              <button class="calc-btn" onclick="calcAction('num','1')">1</button>
+              <button class="calc-btn" onclick="calcAction('num','2')">2</button>
+              <button class="calc-btn" onclick="calcAction('num','3')">3</button>
+              <button class="calc-btn calc-btn-op calc-btn-op-tall" onclick="calcAction('op','+')">+</button>
+              <button class="calc-btn calc-btn-zero" onclick="calcAction('num','0')">0</button>
+              <button class="calc-btn" onclick="calcAction('dot')">.</button>
+              <button class="calc-btn calc-btn-eq" onclick="calcAction('eq')">=</button>
+            </div>
+          </div>
+          <div id="calc-tab-analitica" style="display:none">
+            <div class="calc-analytic">
+              <div class="calc-card">
+                <div class="calc-card-title"><i class="ti ti-trending-up"></i> Variação de Estoque</div>
+                <div class="calc-card-row"><label>Real (kg)</label><input type="number" class="calc-input" id="ca-real" placeholder="0" oninput="calcAnalitica()"></div>
+                <div class="calc-card-row"><label>Teórico (kg)</label><input type="number" class="calc-input" id="ca-teorico" placeholder="0" oninput="calcAnalitica()"></div>
+                <div class="calc-card-result"><span class="calc-result-label">Variação</span><span class="calc-result-val" id="ca-var-val">—</span><button class="calc-copy-btn" onclick="calcCopy('ca-var-val')"><i class="ti ti-copy"></i></button></div>
+                <div class="calc-card-result"><span class="calc-result-label">Variação %</span><span class="calc-result-val" id="ca-varpct-val">—</span><button class="calc-copy-btn" onclick="calcCopy('ca-varpct-val')"><i class="ti ti-copy"></i></button></div>
+              </div>
+              <div class="calc-card">
+                <div class="calc-card-title"><i class="ti ti-currency-dollar"></i> Custo Implicado</div>
+                <div class="calc-card-row"><label>Variação (kg)</label><input type="number" class="calc-input" id="ca-varkg" placeholder="0" oninput="calcAnalitica()"></div>
+                <div class="calc-card-row"><label>Custo médio (R$/kg)</label><input type="number" class="calc-input" id="ca-custo" placeholder="0,00" oninput="calcAnalitica()"></div>
+                <div class="calc-card-result"><span class="calc-result-label">Custo</span><span class="calc-result-val" id="ca-custo-val">—</span><button class="calc-copy-btn" onclick="calcCopy('ca-custo-val')"><i class="ti ti-copy"></i></button></div>
+              </div>
+              <div class="calc-card">
+                <div class="calc-card-title"><i class="ti ti-box"></i> Estoque Teórico</div>
+                <div class="calc-card-row"><label>Est. Inicial (kg)</label><input type="number" class="calc-input" id="ca-ini" placeholder="0" oninput="calcAnalitica()"></div>
+                <div class="calc-card-row"><label>Entradas (kg)</label><input type="number" class="calc-input" id="ca-ent" placeholder="0" oninput="calcAnalitica()"></div>
+                <div class="calc-card-row"><label>Saídas (kg)</label><input type="number" class="calc-input" id="ca-sai" placeholder="0" oninput="calcAnalitica()"></div>
+                <div class="calc-card-result"><span class="calc-result-label">Teórico</span><span class="calc-result-val" id="ca-teorico-val">—</span><button class="calc-copy-btn" onclick="calcCopy('ca-teorico-val')"><i class="ti ti-copy"></i></button></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bloco de Notas (popover) -->
+        <!-- Bloco de Notas (popover) -->
+        <div class="tool-popover notes-popover" id="tool-notes" style="display:none">
+          <div class="tool-popover-header">
+            <span class="tool-popover-title"><i class="ti ti-notebook"></i> Bloco de Notas</span>
+            <div style="display:flex;gap:6px;align-items:center">
+              <span class="notes-saved-indicator" id="notes-saved-indicator"></span>
+              <button class="tool-popover-close" onclick="closeTool('notes')"><i class="ti ti-x"></i></button>
+            </div>
+          </div>
+          <div class="notes-layout" id="notes-layout">
+
+            <!-- Lista de cards -->
+            <div class="notes-list-pane" id="notes-list-pane">
+              <div class="notes-list-toolbar">
+                <button class="btn btn-primary" style="font-size:11px;padding:5px 10px" onclick="notesNewCard()">
+                  <i class="ti ti-plus"></i> Nova nota
+                </button>
+                <select class="notes-sort-select" id="notes-sort-select" onchange="notesRender()">
+                  <option value="modified">Recentes</option>
+                  <option value="priority">Prioridade</option>
+                  <option value="title">Título</option>
+                </select>
+              </div>
+              <div class="notes-cards-list" id="notes-cards-list">
+                <div class="notes-empty-state">
+                  <i class="ti ti-notebook" style="font-size:28px;opacity:.3"></i>
+                  <span>Nenhuma nota ainda.<br>Crie sua primeira nota.</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Editor (oculto até selecionar card) -->
+            <div class="notes-editor-pane" id="notes-editor-pane" style="display:none">
+              <div class="notes-editor-header">
+                <button class="notes-back-btn" onclick="notesCloseEditor()"><i class="ti ti-arrow-left"></i></button>
+                <input class="notes-title-input" id="notes-title-input" placeholder="Título da nota..."
+                  oninput="notesAutoSave()">
+                <div class="notes-editor-actions">
+                  <!-- Prioridade -->
+                  <select class="notes-priority-select" id="notes-priority-select" onchange="notesAutoSave()" title="Prioridade">
+                    <option value="none">— Sem prioridade</option>
+                    <option value="low">↓ Baixa</option>
+                    <option value="medium">→ Média</option>
+                    <option value="high">↑ Alta</option>
+                  </select>
+                  <!-- Cor -->
+                  <div class="notes-color-picker" id="notes-color-picker">
+                    <button class="notes-color-btn" id="notes-color-btn" onclick="notesToggleColors()" title="Cor da nota">
+                      <span class="notes-color-dot" id="notes-color-dot"></span>
+                    </button>
+                    <div class="notes-color-menu" id="notes-color-menu">
+                      <button onclick="notesSetColor('none')"   class="nc-swatch nc-none"  title="Padrão"></button>
+                      <button onclick="notesSetColor('blue')"   class="nc-swatch nc-blue"  title="Azul"></button>
+                      <button onclick="notesSetColor('green')"  class="nc-swatch nc-green" title="Verde"></button>
+                      <button onclick="notesSetColor('amber')"  class="nc-swatch nc-amber" title="Âmbar"></button>
+                      <button onclick="notesSetColor('red')"    class="nc-swatch nc-red"   title="Vermelho"></button>
+                      <button onclick="notesSetColor('purple')" class="nc-swatch nc-purple"title="Roxo"></button>
+                      <button onclick="notesSetColor('teal')"   class="nc-swatch nc-teal"  title="Teal"></button>
+                    </div>
+                  </div>
+                  <button class="notes-toolbar-btn" onclick="notesDeleteCurrent()" title="Excluir nota" style="color:var(--red)">
+                    <i class="ti ti-trash"></i>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Barra markdown -->
+              <div class="notes-md-bar">
+                <button class="notes-md-btn" onclick="notesMdWrap('**','**')" title="Negrito"><b>B</b></button>
+                <button class="notes-md-btn" onclick="notesMdWrap('*','*')"   title="Itálico"><i>I</i></button>
+                <button class="notes-md-btn" onclick="notesMdWrap('~~','~~')" title="Tachado"><s>S</s></button>
+                <div class="notes-md-sep"></div>
+                <button class="notes-md-btn" onclick="notesMdLine('- ')"   title="Lista"><i class="ti ti-list"></i></button>
+                <button class="notes-md-btn" onclick="notesMdLine('- [ ] ')" title="Checklist"><i class="ti ti-checkbox"></i></button>
+                <button class="notes-md-btn" onclick="notesMdLine('# ')"   title="Título"><i class="ti ti-heading"></i></button>
+                <div class="notes-md-sep"></div>
+                <button class="notes-md-btn notes-md-toggle" id="notes-preview-btn" onclick="notesTogglePreview()" title="Pré-visualizar">
+                  <i class="ti ti-eye"></i>
+                </button>
+              </div>
+
+              <!-- Editor / Preview -->
+              <div class="notes-editor-body">
+                <textarea class="notes-textarea-md" id="notes-textarea-md"
+                  placeholder="Escreva aqui... (suporta **negrito**, *itálico*, - listas)"
+                  oninput="notesAutoSave(); notesUpdatePreview()"></textarea>
+                <div class="notes-preview-md" id="notes-preview-md" style="display:none"></div>
+              </div>
+            </div>
+
+          </div>
+        </div>
 
         <input type="file" id="restore-file-input" accept=".json" style="display:none" onchange="restaurarBackup(this.files[0]);this.value=''">
 
@@ -352,6 +500,31 @@
         <!-- ── Conteúdo gerado após Analisar ── -->
         <div id="dg-content" style="display:none">
 
+        <!-- Abas do Dashboard Gerencial -->
+        <div class="dg-tab-bar">
+          <button class="dg-tab-btn active" id="dg-tab-btn-visao" onclick="dgSwitchTab('visao')">
+            <i class="ti ti-layout-dashboard"></i> Visão Geral
+          </button>
+          <button class="dg-tab-btn" id="dg-tab-btn-giro" onclick="dgSwitchTab('giro')">
+            <i class="ti ti-arrows-exchange"></i> Giro & Cobertura
+          </button>
+          <button class="dg-tab-btn" id="dg-tab-btn-custos" onclick="dgSwitchTab('custos')">
+            <i class="ti ti-coin"></i> Custos
+          </button>
+          <button class="dg-tab-btn" id="dg-tab-btn-inventario" onclick="dgSwitchTab('inventario')">
+            <i class="ti ti-clipboard-check"></i> Inventário
+          </button>
+          <button class="dg-tab-btn" id="dg-tab-btn-corte" onclick="dgSwitchTab('corte')">
+            <i class="ti ti-truck"></i> Controle de Corte
+          </button>
+          <button class="dg-tab-btn" id="dg-tab-btn-comp" onclick="dgSwitchTab('comp')">
+            <i class="ti ti-chart-bar"></i> Comparativo
+          </button>
+        </div>
+
+        <!-- ABA: Visão Geral -->
+        <div class="dg-tab-pane active" id="dg-pane-visao">
+
         <!-- 1. KPIs Executivos -->
         <div id="dg-macro-kpis" class="macro-kpi-strip" style="margin-bottom:20px"></div>
 
@@ -386,44 +559,548 @@
           </div>
         </div>
 
-        <!-- 5. Giro de Estoque Geral -->
-        <div class="section-title" style="margin-bottom:14px"><i class="ti ti-refresh" style="font-size:13px;margin-right:6px"></i>Giro de Estoque</div>
-        <div class="dg-giro-kpi-card" id="dg-giro-kpi-card">
-          <div class="dg-giro-kpi-inner" id="dg-giro-kpi-inner">
-            <div class="dg-empty-riscos" style="padding:12px 0"><i class="ti ti-loader"></i><span>Aguardando análise...</span></div>
+        </div><!-- /dg-pane-visao -->
+
+        <!-- ABA: Giro & Cobertura -->
+        <div class="dg-tab-pane" id="dg-pane-giro">
+
+          <!-- KPIs de giro geral -->
+          <div class="dg-giro-kpi-card" id="dg-giro-kpi-card">
+            <div class="dg-giro-kpi-inner" id="dg-giro-kpi-inner">
+              <div class="dg-empty-riscos" style="padding:12px 0"><i class="ti ti-loader"></i><span>Aguardando análise...</span></div>
+            </div>
+          </div>
+
+          <!-- Giro por central -->
+          <div class="section-title" style="margin:20px 0 14px"><i class="ti ti-building-factory-2" style="font-size:13px;margin-right:6px"></i>Giro & Cobertura por Central</div>
+          <div id="dg-giro-central-body">
+            <div class="dg-empty-riscos"><i class="ti ti-loader"></i><span>Aguardando análise...</span></div>
+          </div>
+
+          <!-- Giro por material Top 10 -->
+          <div class="section-title" style="margin:20px 0 14px"><i class="ti ti-box" style="font-size:13px;margin-right:6px"></i>Giro por Material</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px" class="dg-giro-dual-grid">
+
+            <div class="dg-giro-mat-card" style="margin-bottom:0">
+              <div class="dg-giro-mat-header">
+                <span class="dg-top5-title" style="color:var(--green)">
+                  <i class="ti ti-trending-up" style="color:var(--green)"></i> Top 10 — Maior Giro
+                </span>
+                <span style="font-size:10px;font-family:var(--mono);color:var(--text3)" title="Risco de ruptura de estoque">⚠ risco de ruptura</span>
+              </div>
+              <div class="dg-giro-mat-body" id="dg-giro-mat-alto-body">
+                <div class="dg-empty-riscos"><i class="ti ti-loader"></i><span>Aguardando análise...</span></div>
+              </div>
+            </div>
+
+            <div class="dg-giro-mat-card" style="margin-bottom:0">
+              <div class="dg-giro-mat-header">
+                <span class="dg-top5-title" style="color:var(--red)">
+                  <i class="ti ti-trending-down" style="color:var(--red)"></i> Top 10 — Menor Giro
+                </span>
+                <span style="font-size:10px;font-family:var(--mono);color:var(--text3)" title="Capital imobilizado / material parado">💤 capital parado</span>
+              </div>
+              <div class="dg-giro-mat-body" id="dg-giro-mat-baixo-body">
+                <div class="dg-empty-riscos"><i class="ti ti-loader"></i><span>Aguardando análise...</span></div>
+              </div>
+            </div>
+
+          </div>
+
+        </div><!-- /dg-pane-giro -->
+
+        <!-- ABA: Custos -->
+        <div class="dg-tab-pane" id="dg-pane-custos">
+
+          <!-- Empty state -->
+          <div id="custos-empty" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 20px;gap:12px;color:var(--text3)">
+            <i class="ti ti-coin" style="font-size:48px;opacity:0.3"></i>
+            <p style="font-size:13px;text-align:center">Selecione um período no seletor do Dashboard Gerencial<br>e clique em <strong style="color:var(--text2)">Analisar</strong> para gerar os custos.</p>
+          </div>
+
+          <!-- Conteúdo -->
+          <div id="custos-content" style="display:none">
+
+            <!-- KPIs topo -->
+            <div id="custos-kpi-strip" class="macro-kpi-strip" style="margin-bottom:20px"></div>
+
+            <!-- Custo médio por categoria -->
+            <div class="section-title" style="margin-bottom:14px">
+              <i class="ti ti-tags" style="font-size:13px;margin-right:6px"></i>Custo Médio por Categoria
+            </div>
+            <div id="custos-categoria" style="margin-bottom:20px"></div>
+
+            <!-- Custo médio por material -->
+            <div class="section-title" style="margin-bottom:14px">
+              <i class="ti ti-box" style="font-size:13px;margin-right:6px"></i>Custo Médio por Material
+            </div>
+            <div id="custos-material" style="margin-bottom:20px"></div>
+
+            <!-- Custo por regional e central -->
+            <div class="section-title" style="margin-bottom:14px">
+              <i class="ti ti-building-factory-2" style="font-size:13px;margin-right:6px"></i>Custo por Regional e Central
+            </div>
+            <div id="custos-central" style="margin-bottom:20px"></div>
+
+          </div>
+
+        </div><!-- /dg-pane-custos -->
+
+        <!-- ABA: Inventário -->
+        <div class="dg-tab-pane" id="dg-pane-inventario">
+<!-- ══ TOOLBAR igual ao dashboard analítico ══ -->
+        <div class="analitico-toolbar" id="inv-toolbar" style="margin-bottom:18px">
+          <div class="analitico-period" style="align-items:center;gap:10px;flex-wrap:wrap">
+            <!-- Cal picker igual ao dashboard -->
+            <div class="cal-picker-wrap" id="inv-cal-wrap">
+              <button class="cal-picker-trigger" id="inv-cal-trigger" onclick="toggleCalPicker('inv')" type="button">
+                <i class="ti ti-calendar-event"></i>
+                <span id="inv-cal-label">Selecionar período</span>
+                <i class="ti ti-chevron-down cal-chev" id="inv-cal-chev"></i>
+              </button>
+              <input type="hidden" id="inv-dt-ini">
+              <input type="hidden" id="inv-dt-fim">
+              <div class="cal-picker-dropdown" id="inv-cal-dropdown">
+                <div class="cal-picker-inner" id="inv-cal-inner" data-pfx="inv"></div>
+              </div>
+            </div>
+            <!-- Quick chips -->
+            <div class="cal-quick-chips">
+              <button class="cal-chip" onclick="calQuickHoje('inv')" type="button">Hoje</button>
+              <button class="cal-chip" onclick="calQuickMesAtual('inv')" type="button">Mês atual</button>
+              <button class="cal-chip" onclick="calQuickMesAnterior('inv')" type="button">Mês anterior</button>
+            </div>
+          </div>
+          <div class="analitico-actions">
+            <button class="btn btn-primary" onclick="invGerar()">
+              <i class="ti ti-calculator"></i> <span>Gerar Inventário</span>
+            </button>
+            <button class="btn" onclick="invExportar()" title="Exportar CSV">
+              <i class="ti ti-file-spreadsheet"></i>
+            </button>
+            <button class="btn" onclick="invAbrirAlertasPendentes()" id="inv-btn-alertas" title="Itens sem justificativa" style="position:relative">
+              <i class="ti ti-alert-triangle"></i>
+              <span id="inv-alertas-count" style="background:var(--amber);color:#000;border-radius:20px;padding:0 6px;font-size:10px;font-weight:700;min-width:18px;text-align:center">0</span>
+              Pendentes
+            </button>
           </div>
         </div>
 
-        <!-- 6. Giro de Estoque por Material — Top 10 Maior / Menor -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px" class="dg-giro-dual-grid">
-
-          <!-- Maior Giro -->
-          <div class="dg-giro-mat-card" style="margin-bottom:0">
-            <div class="dg-giro-mat-header">
-              <span class="dg-top5-title" style="color:var(--green)">
-                <i class="ti ti-trending-up" style="color:var(--green)"></i> Top 10 — Maior Giro
-              </span>
-              <span style="font-size:10px;font-family:var(--mono);color:var(--text3)" title="Risco de ruptura de estoque">⚠ risco de ruptura</span>
-            </div>
-            <div class="dg-giro-mat-body" id="dg-giro-mat-alto-body">
-              <div class="dg-empty-riscos"><i class="ti ti-loader"></i><span>Aguardando análise...</span></div>
-            </div>
-          </div>
-
-          <!-- Menor Giro -->
-          <div class="dg-giro-mat-card" style="margin-bottom:0">
-            <div class="dg-giro-mat-header">
-              <span class="dg-top5-title" style="color:var(--red)">
-                <i class="ti ti-trending-down" style="color:var(--red)"></i> Top 10 — Menor Giro
-              </span>
-              <span style="font-size:10px;font-family:var(--mono);color:var(--text3)" title="Capital imobilizado / material parado">💤 capital parado</span>
-            </div>
-            <div class="dg-giro-mat-body" id="dg-giro-mat-baixo-body">
-              <div class="dg-empty-riscos"><i class="ti ti-loader"></i><span>Aguardando análise...</span></div>
-            </div>
-          </div>
-
+        <!-- ══ EMPTY STATE ══ -->
+        <div id="inv-empty-state" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 20px;gap:12px;color:var(--text3)">
+          <i class="ti ti-clipboard-check" style="font-size:48px;opacity:0.35"></i>
+          <p style="font-size:13px;text-align:center">Selecione um período e clique em <strong style="color:var(--text2)">Gerar Inventário</strong> para<br>calcular o fechamento de estoque.</p>
         </div>
+
+        <!-- ══ CONTEÚDO (visível após Gerar) ══ -->
+        <div id="inv-content" style="display:none">
+        <div class="inv-kpi-grid" id="inv-kpis">
+          <div class="inv-kpi-card" id="inv-kpi-ini">
+            <div class="inv-kpi-icon" style="background:var(--accent-dim);color:var(--accent)"><i class="ti ti-archive"></i></div>
+            <div class="inv-kpi-body">
+              <div class="inv-kpi-label">Est. Inicial</div>
+              <div class="inv-kpi-value" id="inv-kpi-ini-v">—</div>
+              <div class="inv-kpi-unit">kg</div>
+              <div id="inv-kpi-ini-missing"></div>
+            </div>
+          </div>
+          <div class="inv-kpi-card" id="inv-kpi-ent">
+            <div class="inv-kpi-icon" style="background:var(--green-bg);color:var(--green)"><i class="ti ti-arrow-bar-to-down"></i></div>
+            <div class="inv-kpi-body">
+              <div class="inv-kpi-label">Entradas</div>
+              <div class="inv-kpi-value" id="inv-kpi-ent-v">—</div>
+              <div class="inv-kpi-unit">kg</div>
+            </div>
+          </div>
+          <div class="inv-kpi-card" id="inv-kpi-sai">
+            <div class="inv-kpi-icon" style="background:var(--red-bg);color:var(--red)"><i class="ti ti-arrow-bar-up"></i></div>
+            <div class="inv-kpi-body">
+              <div class="inv-kpi-label">Saídas</div>
+              <div class="inv-kpi-value" id="inv-kpi-sai-v">—</div>
+              <div class="inv-kpi-unit">kg</div>
+            </div>
+          </div>
+          <div class="inv-kpi-card" id="inv-kpi-fin">
+            <div class="inv-kpi-icon" style="background:var(--purple-bg);color:var(--purple)"><i class="ti ti-box"></i></div>
+            <div class="inv-kpi-body">
+              <div class="inv-kpi-label">Est. Final</div>
+              <div class="inv-kpi-value" id="inv-kpi-fin-v">—</div>
+              <div class="inv-kpi-unit">kg</div>
+              <div id="inv-kpi-fin-missing"></div>
+            </div>
+          </div>
+          <div class="inv-kpi-card" id="inv-kpi-var">
+            <div class="inv-kpi-icon" style="background:var(--teal-bg);color:var(--teal)"><i class="ti ti-trending-up"></i></div>
+            <div class="inv-kpi-body">
+              <div class="inv-kpi-label">Variação</div>
+              <div class="inv-kpi-value" id="inv-kpi-var-v">—</div>
+              <div class="inv-kpi-unit">kg bruto</div>
+              <div class="inv-kpi-adj" id="inv-kpi-var-adj-wrap" style="display:none">
+                <span class="inv-kpi-adj-label">Ajustado (c/ justif.)</span>
+                <span class="inv-kpi-adj-value" id="inv-kpi-var-adj-v">—</span>
+              </div>
+            </div>
+          </div>
+          <div class="inv-kpi-card" id="inv-kpi-cst">
+            <div class="inv-kpi-icon" style="background:var(--amber-bg);color:var(--amber)"><i class="ti ti-coin"></i></div>
+            <div class="inv-kpi-body">
+              <div class="inv-kpi-label">Custo Var.</div>
+              <div class="inv-kpi-value" id="inv-kpi-cst-v">—</div>
+              <div class="inv-kpi-unit">R$ bruto</div>
+              <div class="inv-kpi-adj" id="inv-kpi-cst-adj-wrap" style="display:none">
+                <span class="inv-kpi-adj-label">Ajustado (c/ justif.)</span>
+                <span class="inv-kpi-adj-value" id="inv-kpi-cst-adj-v">—</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Alertas pendentes -->
+        <div id="inv-alertas-panel" style="display:none;background:var(--amber-bg);border:1px solid var(--amber-border);border-radius:var(--radius);padding:12px 16px;margin-bottom:14px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <span style="font-size:12px;font-weight:700;color:var(--amber)"><i class="ti ti-alert-triangle"></i> Itens com variação sem justificativa</span>
+            <button onclick="invAbrirAlertasPendentes()" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:13px"><i class="ti ti-x"></i></button>
+          </div>
+          <div id="inv-alertas-list" style="font-size:11px;color:var(--text2);max-height:120px;overflow-y:auto"></div>
+        </div>
+
+        <!-- ══ FILTROS DA TABELA — aprimorados ══ -->
+        <div class="inv-filter-bar">
+          <div class="inv-filter-search">
+            <i class="ti ti-search" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:14px;pointer-events:none"></i>
+            <input type="text" id="inv-filtro" placeholder="Buscar regional, filial, material..." oninput="invFiltrar()" class="inv-search-input">
+          </div>
+          <select id="inv-filtro-cat" onchange="invFiltrar()" class="inv-filter-select">
+            <option value="">Todas as categorias</option>
+          </select>
+          <select id="inv-filtro-regional" onchange="invFiltrar()" class="inv-filter-select">
+            <option value="">Todas as regionais</option>
+          </select>
+          <select id="inv-filtro-material" onchange="invFiltrar()" class="inv-filter-select">
+            <option value="">Todos os materiais</option>
+          </select>
+          <label class="inv-filter-toggle">
+            <input type="checkbox" id="inv-filtro-sovar" onchange="invFiltrar()">
+            <span>Só com variação</span>
+          </label>
+          <div style="margin-left:auto;font-size:11px;color:var(--text3)" id="inv-count-label"></div>
+        </div>
+
+        <!-- ══ TABELA — redesenhada com sort ══ -->
+        <div class="table-card inv-table-wrap">
+          <table class="inv-data-table" id="inv-table">
+            <thead>
+              <tr>
+                <th data-col="regional" data-align="left" onclick="invSortBy('regional')">Regional <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="central" data-align="left" onclick="invSortBy('central')">Filial <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="material" data-align="left" onclick="invSortBy('material')">Material <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="categoria" data-align="left" onclick="invSortBy('categoria')">Cat. <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="estoqueIni" data-align="right" onclick="invSortBy('estoqueIni')" title="Est. Inicial (1º lançamento)">Est. Inicial<br><span style="font-size:9px;font-weight:400;opacity:.6;text-transform:none;letter-spacing:0">(1º lanç.)</span> <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="entradasKg" data-align="right" onclick="invSortBy('entradasKg')" title="Entradas (por código SAP)">Entradas<br><span style="font-size:9px;font-weight:400;opacity:.6;text-transform:none;letter-spacing:0">(por código)</span> <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="saidasKg" data-align="right" onclick="invSortBy('saidasKg')" title="Saídas (por código SAP)">Saídas<br><span style="font-size:9px;font-weight:400;opacity:.6;text-transform:none;letter-spacing:0">(por código)</span> <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="estoqueFimReal" data-align="right" onclick="invSortBy('estoqueFimReal')" title="Est. Final (últ. lançamento)">Est. Final<br><span style="font-size:9px;font-weight:400;opacity:.6;text-transform:none;letter-spacing:0">(últ. lanç.)</span> <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="estTeor" data-align="right" onclick="invSortBy('estTeor')" title="Est. Teórico = Ini + Ent − Saí">Est. Teórico<br><span style="font-size:9px;font-weight:400;opacity:.6;text-transform:none;letter-spacing:0">(ini+ent−saí)</span> <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="varKg" data-align="right" onclick="invSortBy('varKg')" title="Variação = Real − Teórico">Variação<br><span style="font-size:9px;font-weight:400;opacity:.6;text-transform:none;letter-spacing:0">(real − teór.)</span> <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="saldoJust" data-align="right" onclick="invSortBy('saldoJust')">Saldo Just. <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="varAdj" data-align="right" onclick="invSortBy('varAdj')">Var.Ajust. <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="custoMedio" data-align="right" onclick="invSortBy('custoMedio')" title="Custo médio (Saídas → fallback SAP)">Custo Médio<br><span style="font-size:9px;font-weight:400;opacity:.6;text-transform:none;letter-spacing:0">(saídas · R$/kg)</span> <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="custo" data-align="right" onclick="invSortBy('custo')" title="Custo da variação ajustada">Custo Var.<br><span style="font-size:9px;font-weight:400;opacity:.6;text-transform:none;letter-spacing:0">(var. · R$/kg)</span> <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-align="center" style="cursor:default">Justificativa</th>
+              </tr>
+            </thead>
+            <tbody id="inv-tbody"></tbody>
+          </table>
+          <div id="inv-empty" style="display:none;padding:60px;text-align:center;color:var(--text3)">
+            <i class="ti ti-clipboard-off" style="font-size:40px;display:block;margin-bottom:10px;opacity:0.4"></i>
+            <div style="font-size:13px;font-weight:600;margin-bottom:4px">Nenhum dado encontrado</div>
+            <div style="font-size:12px">Ajuste o período e clique em <strong style="color:var(--text2)">Gerar Inventário</strong>.</div>
+          </div>
+        </div>
+        </div><!-- /inv-content -->
+        </div><!-- /dg-pane-inventario -->
+
+        <!-- ABA: Controle de Corte -->
+        <div class="dg-tab-pane" id="dg-pane-corte">
+        <!-- ── Controle de Corte de Agregados ── -->
+        <div class="table-card" id="agregados-card">
+          <div class="table-header">
+            <span class="table-title"><i class="ti ti-truck"></i> Controle de Corte — Agregados Miúdo e Graúdo</span>
+            <div class="table-toolbar" style="gap:8px;flex-wrap:wrap">
+              <!-- Seletor de mês customizado -->
+              <div class="agr-month-wrap" id="agr-month-wrap">
+                <button class="cal-picker-trigger" id="agr-month-trigger" onclick="agrToggleMonthPicker()" type="button">
+                  <i class="ti ti-calendar-month"></i>
+                  <span id="agr-month-label">Selecionar mês</span>
+                  <i class="ti ti-chevron-down cal-chev" id="agr-month-chev"></i>
+                </button>
+                <div class="agr-month-picker" id="agr-month-picker">
+                  <div class="agr-month-nav">
+                    <button class="agr-month-nav-btn" onclick="agrMonthNavYear(-1)"><i class="ti ti-chevron-left"></i></button>
+                    <span class="agr-month-nav-year" id="agr-nav-year">2026</span>
+                    <button class="agr-month-nav-btn" onclick="agrMonthNavYear(1)"><i class="ti ti-chevron-right"></i></button>
+                  </div>
+                  <div class="agr-month-grid" id="agr-month-grid"></div>
+                </div>
+              </div>
+              <!-- Quick chips -->
+              <div class="cal-quick-chips">
+                <button class="cal-chip" id="agr-chip-atual" onclick="agrQuickMesAtual()" type="button">Mês atual</button>
+                <button class="cal-chip" id="agr-chip-anterior" onclick="agrQuickMesAnterior()" type="button">Mês anterior</button>
+              </div>
+              <button class="btn btn-primary" id="agr-run-btn" onclick="rodarControleAgregados()" disabled>
+                <i class="ti ti-refresh"></i> <span>Atualizar</span>
+              </button>
+              <button class="btn" onclick="agrToggleLegend()" title="Como funciona o score de criticidade?">
+                <i class="ti ti-info-circle"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Info bar -->
+          <div class="agr-info-bar" id="agr-info-bar" style="display:none">
+            <div class="agr-info-item">
+              <span class="agr-info-label">Período pré-limite</span>
+              <span class="agr-info-val" id="agr-pre-range">—</span>
+            </div>
+            <div class="agr-info-sep"></div>
+            <div class="agr-info-item">
+              <span class="agr-info-label">Período pós-limite</span>
+              <span class="agr-info-val" id="agr-pos-range">—</span>
+            </div>
+            <div class="agr-info-sep"></div>
+            <div class="agr-info-item">
+              <span class="agr-info-label">Data limite</span>
+              <span class="agr-info-val agr-limit-date" id="agr-limit-date">—</span>
+            </div>
+            <div class="agr-info-sep"></div>
+            <div class="agr-info-item">
+              <span class="agr-info-label">Centrais com pedido pós-limite</span>
+              <span class="agr-info-val" id="agr-total-violacoes" style="color:var(--red)">—</span>
+            </div>
+          </div>
+
+          <!-- Filtros -->
+          <div class="micro-filter-bar" id="agr-filter-bar" style="display:none">
+
+            <!-- Status -->
+            <div class="micro-filter-group" id="agr-mfg-status">
+              <button class="micro-filter-trigger" id="agr-mft-status" onclick="agrToggleDropdown('status')">
+                <i class="ti ti-flag"></i>
+                <span id="agr-mft-status-label">Status</span>
+                <i class="ti ti-chevron-down micro-filter-chev" id="agr-mfc-status"></i>
+              </button>
+              <div class="micro-filter-dropdown" id="agr-mfd-status">
+                <div class="micro-filter-options" id="agr-mfo-status">
+                  <label class="micro-filter-option"><input type="checkbox" value="critico" > <span class="micro-filter-option-label"><span class="agr-status-badge agr-status-critico" style="font-size:9px">CRÍTICO</span></span></label>
+                  <label class="micro-filter-option"><input type="checkbox" value="atencao" > <span class="micro-filter-option-label"><span class="agr-status-badge agr-status-alerta" style="font-size:9px">ATENÇÃO</span></span></label>
+                  <label class="micro-filter-option"><input type="checkbox" value="ok"      > <span class="micro-filter-option-label"><span class="agr-status-badge agr-status-ok" style="font-size:9px">OK</span></span></label>
+                </div>
+                <div class="micro-filter-footer">
+                  <button class="btn" onclick="agrClearDropdown('status')"><i class="ti ti-x"></i> Limpar</button>
+                  <button class="btn btn-primary" onclick="agrCloseDropdown('status')"><i class="ti ti-check"></i> Aplicar</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Justificativa -->
+            <div class="micro-filter-group" id="agr-mfg-justif">
+              <button class="micro-filter-trigger" id="agr-mft-justif" onclick="agrToggleDropdown('justif')">
+                <i class="ti ti-scale"></i>
+                <span id="agr-mft-justif-label">Justificativa</span>
+                <i class="ti ti-chevron-down micro-filter-chev" id="agr-mfc-justif"></i>
+              </button>
+              <div class="micro-filter-dropdown" id="agr-mfd-justif">
+                <div class="micro-filter-options" id="agr-mfo-justif">
+                  <label class="micro-filter-option"><input type="checkbox" value="injustificado" > <span class="micro-filter-option-label">Injustificado</span></label>
+                  <label class="micro-filter-option"><input type="checkbox" value="parcial"       > <span class="micro-filter-option-label">Parcial</span></label>
+                  <label class="micro-filter-option"><input type="checkbox" value="justificado"   > <span class="micro-filter-option-label">Justificado</span></label>
+                </div>
+                <div class="micro-filter-footer">
+                  <button class="btn" onclick="agrClearDropdown('justif')"><i class="ti ti-x"></i> Limpar</button>
+                  <button class="btn btn-primary" onclick="agrCloseDropdown('justif')"><i class="ti ti-check"></i> Aplicar</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Central -->
+            <div class="micro-filter-group" id="agr-mfg-central">
+              <button class="micro-filter-trigger" id="agr-mft-central" onclick="agrToggleDropdown('central')">
+                <i class="ti ti-building-warehouse"></i>
+                <span id="agr-mft-central-label">Central</span>
+                <i class="ti ti-chevron-down micro-filter-chev" id="agr-mfc-central"></i>
+              </button>
+              <div class="micro-filter-dropdown" id="agr-mfd-central">
+                <div class="micro-filter-search-wrap">
+                  <i class="ti ti-search"></i>
+                  <input class="micro-filter-search" id="agr-mfs-central" type="text" placeholder="Buscar central…" oninput="agrFilterDropdownSearch('central', this.value)">
+                </div>
+                <div class="micro-filter-options" id="agr-mfo-central"></div>
+                <div class="micro-filter-footer">
+                  <button class="btn" onclick="agrClearDropdown('central')"><i class="ti ti-x"></i> Limpar</button>
+                  <button class="btn btn-primary" onclick="agrCloseDropdown('central')"><i class="ti ti-check"></i> Aplicar</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Material -->
+            <div class="micro-filter-group" id="agr-mfg-material">
+              <button class="micro-filter-trigger" id="agr-mft-material" onclick="agrToggleDropdown('material')">
+                <i class="ti ti-box"></i>
+                <span id="agr-mft-material-label">Material</span>
+                <i class="ti ti-chevron-down micro-filter-chev" id="agr-mfc-material"></i>
+              </button>
+              <div class="micro-filter-dropdown" id="agr-mfd-material">
+                <div class="micro-filter-search-wrap">
+                  <i class="ti ti-search"></i>
+                  <input class="micro-filter-search" id="agr-mfs-material" type="text" placeholder="Buscar material…" oninput="agrFilterDropdownSearch('material', this.value)">
+                </div>
+                <div class="micro-filter-options" id="agr-mfo-material"></div>
+                <div class="micro-filter-footer">
+                  <button class="btn" onclick="agrClearDropdown('material')"><i class="ti ti-x"></i> Limpar</button>
+                  <button class="btn btn-primary" onclick="agrCloseDropdown('material')"><i class="ti ti-check"></i> Aplicar</button>
+                </div>
+              </div>
+            </div>
+
+            <button class="btn micro-filter-clear" id="agr-filter-clear" onclick="agrClearFilters()" style="display:none">
+              <i class="ti ti-filter-off"></i> Limpar Filtros
+            </button>
+
+          </div>
+
+          <!-- Results -->
+          <!-- Legenda do score -->
+          <div class="agr-legend-panel" id="agr-legend-panel" style="display:none">
+            <div class="agr-legend-title"><i class="ti ti-calculator"></i> Como o Score de Criticidade é calculado</div>
+            <div class="agr-legend-body">
+              <div class="agr-legend-row">
+                <span class="agr-legend-pts agr-legend-pts-3">+3 pts</span>
+                <div class="agr-legend-desc"><strong>Injustificado</strong> — material solicitado pós-limite sem nenhum consumo registrado. Estoque parado, gasto desnecessário.</div>
+              </div>
+              <div class="agr-legend-row">
+                <span class="agr-legend-pts agr-legend-pts-2">+2 pts</span>
+                <div class="agr-legend-desc"><strong>Parcial ruim</strong> — consumiu menos de 50% do material solicitado pós-limite. Alto desperdício.</div>
+              </div>
+              <div class="agr-legend-row">
+                <span class="agr-legend-pts agr-legend-pts-1">+1 pt</span>
+                <div class="agr-legend-desc"><strong>Parcial aceitável</strong> — consumiu entre 50% e 94% do material. Houve aproveitamento, mas com sobra relevante.</div>
+              </div>
+              <div class="agr-legend-row">
+                <span class="agr-legend-pts agr-legend-pts-0">0 pts</span>
+                <div class="agr-legend-desc"><strong>Justificado</strong> — consumiu ≥ 95% do material solicitado. Pedido necessário.</div>
+              </div>
+              <div class="agr-legend-sep"></div>
+              <div class="agr-legend-faixas">
+                <span class="agr-status-badge agr-status-critico">CRÍTICO</span> Score ≥ 6 &nbsp;·&nbsp;
+                <span class="agr-status-badge agr-status-alerta">ATENÇÃO</span> Score 1–5 &nbsp;·&nbsp;
+                <span class="agr-status-badge agr-status-ok">OK</span> Score 0
+              </div>
+            </div>
+          </div>
+
+          <div id="agr-results">
+            <div class="agr-empty">
+              <i class="ti ti-truck-off"></i>
+              <span>Selecione um mês e clique em Calcular</span>
+            </div>
+          </div>
+        </div>
+        </div><!-- /dg-pane-corte -->
+
+        <!-- ABA: Comparativo -->
+        <div class="dg-tab-pane" id="dg-pane-comp">
+
+          <!-- Seletores de período -->
+          <div class="comp-period-bar">
+            <div class="comp-period-col">
+              <div class="comp-period-label"><i class="ti ti-calendar-event" style="color:var(--accent)"></i> Período A</div>
+              <div class="cal-picker-wrap" id="comp-a-cal-wrap">
+                <button class="cal-picker-trigger" id="comp-a-cal-trigger" onclick="toggleCalPicker('comp-a')" type="button">
+                  <i class="ti ti-calendar"></i>
+                  <span id="comp-a-cal-label">Selecionar período A</span>
+                  <i class="ti ti-chevron-down cal-chev" id="comp-a-cal-chev"></i>
+                </button>
+                <input type="hidden" id="comp-a-dt-ini">
+                <input type="hidden" id="comp-a-dt-fim">
+                <div class="cal-picker-dropdown" id="comp-a-cal-dropdown">
+                  <div class="cal-picker-inner" id="comp-a-cal-inner" data-pfx="comp-a"></div>
+                </div>
+              </div>
+              <div class="cal-quick-chips">
+                <button class="cal-chip" onclick="calQuickMesAnterior('comp-a')" type="button">Mês anterior</button>
+                <button class="cal-chip" onclick="calQuickMesAtual('comp-a')" type="button">Mês atual</button>
+                <button class="cal-chip" onclick="calQuickUltimaTerca('comp-a')" type="button">Última terça</button>
+              </div>
+            </div>
+
+            <div class="comp-period-vs"><i class="ti ti-arrows-exchange"></i> VS</div>
+
+            <div class="comp-period-col">
+              <div class="comp-period-label"><i class="ti ti-calendar-event" style="color:var(--amber)"></i> Período B</div>
+              <div class="cal-picker-wrap" id="comp-b-cal-wrap">
+                <button class="cal-picker-trigger" id="comp-b-cal-trigger" onclick="toggleCalPicker('comp-b')" type="button">
+                  <i class="ti ti-calendar"></i>
+                  <span id="comp-b-cal-label">Selecionar período B</span>
+                  <i class="ti ti-chevron-down cal-chev" id="comp-b-cal-chev"></i>
+                </button>
+                <input type="hidden" id="comp-b-dt-ini">
+                <input type="hidden" id="comp-b-dt-fim">
+                <div class="cal-picker-dropdown" id="comp-b-cal-dropdown">
+                  <div class="cal-picker-inner" id="comp-b-cal-inner" data-pfx="comp-b"></div>
+                </div>
+              </div>
+              <div class="cal-quick-chips">
+                <button class="cal-chip" onclick="calQuickMesAnterior('comp-b')" type="button">Mês anterior</button>
+                <button class="cal-chip" onclick="calQuickMesAtual('comp-b')" type="button">Mês atual</button>
+                <button class="cal-chip" onclick="calQuickUltimaTerca('comp-b')" type="button">Última terça</button>
+              </div>
+            </div>
+
+            <button class="btn btn-primary comp-analisar-btn" onclick="rodarComparativo()">
+              <i class="ti ti-chart-bar"></i> Comparar
+            </button>
+          </div>
+
+          <!-- Empty state -->
+          <div id="comp-empty" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 20px;gap:12px;color:var(--text3)">
+            <i class="ti ti-chart-bar" style="font-size:48px;opacity:0.3"></i>
+            <p style="font-size:13px;text-align:center">Selecione dois períodos e clique em <strong style="color:var(--text2)">Comparar</strong>.</p>
+          </div>
+
+          <!-- Resultado -->
+          <div id="comp-content" style="display:none">
+
+            <!-- KPIs lado a lado -->
+            <div class="comp-kpi-header">
+              <div class="comp-kpi-col-label" id="comp-label-a" style="color:var(--accent)">Período A</div>
+              <div class="comp-kpi-col-label comp-kpi-col-delta">Δ</div>
+              <div class="comp-kpi-col-label" id="comp-label-b" style="color:var(--amber)">Período B</div>
+            </div>
+            <div id="comp-kpis-body"></div>
+
+            <!-- Giro & Cobertura lado a lado -->
+            <div class="section-title" style="margin:20px 0 14px"><i class="ti ti-arrows-exchange" style="font-size:13px;margin-right:6px"></i>Giro & Cobertura</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+              <div>
+                <div class="comp-col-header comp-col-a"><i class="ti ti-calendar-event"></i> <span id="comp-giro-label-a">Período A</span></div>
+                <div id="comp-giro-a"></div>
+              </div>
+              <div>
+                <div class="comp-col-header comp-col-b"><i class="ti ti-calendar-event"></i> <span id="comp-giro-label-b">Período B</span></div>
+                <div id="comp-giro-b"></div>
+              </div>
+            </div>
+
+            <!-- Saúde das centrais lado a lado -->
+            <div class="section-title" style="margin:20px 0 14px"><i class="ti ti-heart-rate-monitor" style="font-size:13px;margin-right:6px"></i>Saúde das Centrais</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+              <div id="comp-saude-a"></div>
+              <div id="comp-saude-b"></div>
+            </div>
+
+          </div>
+
+        </div><!-- /dg-pane-comp -->
 
         </div><!-- /dg-content -->
 
@@ -454,7 +1131,6 @@
             </div>
             <!-- Quick period chips -->
             <div class="cal-quick-chips">
-              <button class="cal-chip" onclick="calQuickUltimaTerca('an')" type="button">Última terça</button>
               <button class="cal-chip" onclick="calQuickHoje('an')" type="button">Hoje</button>
               <button class="cal-chip" onclick="calQuickMesAtual('an')" type="button">Mês atual</button>
               <button class="cal-chip" onclick="calQuickMesAnterior('an')" type="button">Mês anterior</button>
@@ -818,193 +1494,9 @@
           </div>
         </div>
 
-        <!-- ── Controle de Corte de Agregados ── -->
-        <div class="section-title" style="margin-top:24px">Controle de Corte de Agregados</div>
-        <div class="table-card" id="agregados-card">
-          <div class="table-header">
-            <span class="table-title"><i class="ti ti-truck"></i> Controle de Corte — Agregados Miúdo e Graúdo</span>
-            <div class="table-toolbar" style="gap:8px;flex-wrap:wrap">
-              <!-- Seletor de mês customizado -->
-              <div class="agr-month-wrap" id="agr-month-wrap">
-                <button class="cal-picker-trigger" id="agr-month-trigger" onclick="agrToggleMonthPicker()" type="button">
-                  <i class="ti ti-calendar-month"></i>
-                  <span id="agr-month-label">Selecionar mês</span>
-                  <i class="ti ti-chevron-down cal-chev" id="agr-month-chev"></i>
-                </button>
-                <div class="agr-month-picker" id="agr-month-picker">
-                  <div class="agr-month-nav">
-                    <button class="agr-month-nav-btn" onclick="agrMonthNavYear(-1)"><i class="ti ti-chevron-left"></i></button>
-                    <span class="agr-month-nav-year" id="agr-nav-year">2026</span>
-                    <button class="agr-month-nav-btn" onclick="agrMonthNavYear(1)"><i class="ti ti-chevron-right"></i></button>
-                  </div>
-                  <div class="agr-month-grid" id="agr-month-grid"></div>
-                </div>
-              </div>
-              <!-- Quick chips -->
-              <div class="cal-quick-chips">
-                <button class="cal-chip" id="agr-chip-atual" onclick="agrQuickMesAtual()" type="button">Mês atual</button>
-                <button class="cal-chip" id="agr-chip-anterior" onclick="agrQuickMesAnterior()" type="button">Mês anterior</button>
-              </div>
-              <button class="btn btn-primary" id="agr-run-btn" onclick="rodarControleAgregados()" disabled>
-                <i class="ti ti-refresh"></i> <span>Atualizar</span>
-              </button>
-              <button class="btn" onclick="agrToggleLegend()" title="Como funciona o score de criticidade?">
-                <i class="ti ti-info-circle"></i>
-              </button>
-            </div>
-          </div>
-
-          <!-- Info bar -->
-          <div class="agr-info-bar" id="agr-info-bar" style="display:none">
-            <div class="agr-info-item">
-              <span class="agr-info-label">Período pré-limite</span>
-              <span class="agr-info-val" id="agr-pre-range">—</span>
-            </div>
-            <div class="agr-info-sep"></div>
-            <div class="agr-info-item">
-              <span class="agr-info-label">Período pós-limite</span>
-              <span class="agr-info-val" id="agr-pos-range">—</span>
-            </div>
-            <div class="agr-info-sep"></div>
-            <div class="agr-info-item">
-              <span class="agr-info-label">Data limite</span>
-              <span class="agr-info-val agr-limit-date" id="agr-limit-date">—</span>
-            </div>
-            <div class="agr-info-sep"></div>
-            <div class="agr-info-item">
-              <span class="agr-info-label">Centrais com pedido pós-limite</span>
-              <span class="agr-info-val" id="agr-total-violacoes" style="color:var(--red)">—</span>
-            </div>
-          </div>
-
-          <!-- Filtros -->
-          <div class="micro-filter-bar" id="agr-filter-bar" style="display:none">
-
-            <!-- Status -->
-            <div class="micro-filter-group" id="agr-mfg-status">
-              <button class="micro-filter-trigger" id="agr-mft-status" onclick="agrToggleDropdown('status')">
-                <i class="ti ti-flag"></i>
-                <span id="agr-mft-status-label">Status</span>
-                <i class="ti ti-chevron-down micro-filter-chev" id="agr-mfc-status"></i>
-              </button>
-              <div class="micro-filter-dropdown" id="agr-mfd-status">
-                <div class="micro-filter-options" id="agr-mfo-status">
-                  <label class="micro-filter-option"><input type="checkbox" value="critico" > <span class="micro-filter-option-label"><span class="agr-status-badge agr-status-critico" style="font-size:9px">CRÍTICO</span></span></label>
-                  <label class="micro-filter-option"><input type="checkbox" value="atencao" > <span class="micro-filter-option-label"><span class="agr-status-badge agr-status-alerta" style="font-size:9px">ATENÇÃO</span></span></label>
-                  <label class="micro-filter-option"><input type="checkbox" value="ok"      > <span class="micro-filter-option-label"><span class="agr-status-badge agr-status-ok" style="font-size:9px">OK</span></span></label>
-                </div>
-                <div class="micro-filter-footer">
-                  <button class="btn" onclick="agrClearDropdown('status')"><i class="ti ti-x"></i> Limpar</button>
-                  <button class="btn btn-primary" onclick="agrCloseDropdown('status')"><i class="ti ti-check"></i> Aplicar</button>
-                </div>
-              </div>
-            </div>
-
-            <!-- Justificativa -->
-            <div class="micro-filter-group" id="agr-mfg-justif">
-              <button class="micro-filter-trigger" id="agr-mft-justif" onclick="agrToggleDropdown('justif')">
-                <i class="ti ti-scale"></i>
-                <span id="agr-mft-justif-label">Justificativa</span>
-                <i class="ti ti-chevron-down micro-filter-chev" id="agr-mfc-justif"></i>
-              </button>
-              <div class="micro-filter-dropdown" id="agr-mfd-justif">
-                <div class="micro-filter-options" id="agr-mfo-justif">
-                  <label class="micro-filter-option"><input type="checkbox" value="injustificado" > <span class="micro-filter-option-label">Injustificado</span></label>
-                  <label class="micro-filter-option"><input type="checkbox" value="parcial"       > <span class="micro-filter-option-label">Parcial</span></label>
-                  <label class="micro-filter-option"><input type="checkbox" value="justificado"   > <span class="micro-filter-option-label">Justificado</span></label>
-                </div>
-                <div class="micro-filter-footer">
-                  <button class="btn" onclick="agrClearDropdown('justif')"><i class="ti ti-x"></i> Limpar</button>
-                  <button class="btn btn-primary" onclick="agrCloseDropdown('justif')"><i class="ti ti-check"></i> Aplicar</button>
-                </div>
-              </div>
-            </div>
-
-            <!-- Central -->
-            <div class="micro-filter-group" id="agr-mfg-central">
-              <button class="micro-filter-trigger" id="agr-mft-central" onclick="agrToggleDropdown('central')">
-                <i class="ti ti-building-warehouse"></i>
-                <span id="agr-mft-central-label">Central</span>
-                <i class="ti ti-chevron-down micro-filter-chev" id="agr-mfc-central"></i>
-              </button>
-              <div class="micro-filter-dropdown" id="agr-mfd-central">
-                <div class="micro-filter-search-wrap">
-                  <i class="ti ti-search"></i>
-                  <input class="micro-filter-search" id="agr-mfs-central" type="text" placeholder="Buscar central…" oninput="agrFilterDropdownSearch('central', this.value)">
-                </div>
-                <div class="micro-filter-options" id="agr-mfo-central"></div>
-                <div class="micro-filter-footer">
-                  <button class="btn" onclick="agrClearDropdown('central')"><i class="ti ti-x"></i> Limpar</button>
-                  <button class="btn btn-primary" onclick="agrCloseDropdown('central')"><i class="ti ti-check"></i> Aplicar</button>
-                </div>
-              </div>
-            </div>
-
-            <!-- Material -->
-            <div class="micro-filter-group" id="agr-mfg-material">
-              <button class="micro-filter-trigger" id="agr-mft-material" onclick="agrToggleDropdown('material')">
-                <i class="ti ti-box"></i>
-                <span id="agr-mft-material-label">Material</span>
-                <i class="ti ti-chevron-down micro-filter-chev" id="agr-mfc-material"></i>
-              </button>
-              <div class="micro-filter-dropdown" id="agr-mfd-material">
-                <div class="micro-filter-search-wrap">
-                  <i class="ti ti-search"></i>
-                  <input class="micro-filter-search" id="agr-mfs-material" type="text" placeholder="Buscar material…" oninput="agrFilterDropdownSearch('material', this.value)">
-                </div>
-                <div class="micro-filter-options" id="agr-mfo-material"></div>
-                <div class="micro-filter-footer">
-                  <button class="btn" onclick="agrClearDropdown('material')"><i class="ti ti-x"></i> Limpar</button>
-                  <button class="btn btn-primary" onclick="agrCloseDropdown('material')"><i class="ti ti-check"></i> Aplicar</button>
-                </div>
-              </div>
-            </div>
-
-            <button class="btn micro-filter-clear" id="agr-filter-clear" onclick="agrClearFilters()" style="display:none">
-              <i class="ti ti-filter-off"></i> Limpar Filtros
-            </button>
-
-          </div>
-
-          <!-- Results -->
-          <!-- Legenda do score -->
-          <div class="agr-legend-panel" id="agr-legend-panel" style="display:none">
-            <div class="agr-legend-title"><i class="ti ti-calculator"></i> Como o Score de Criticidade é calculado</div>
-            <div class="agr-legend-body">
-              <div class="agr-legend-row">
-                <span class="agr-legend-pts agr-legend-pts-3">+3 pts</span>
-                <div class="agr-legend-desc"><strong>Injustificado</strong> — material solicitado pós-limite sem nenhum consumo registrado. Estoque parado, gasto desnecessário.</div>
-              </div>
-              <div class="agr-legend-row">
-                <span class="agr-legend-pts agr-legend-pts-2">+2 pts</span>
-                <div class="agr-legend-desc"><strong>Parcial ruim</strong> — consumiu menos de 50% do material solicitado pós-limite. Alto desperdício.</div>
-              </div>
-              <div class="agr-legend-row">
-                <span class="agr-legend-pts agr-legend-pts-1">+1 pt</span>
-                <div class="agr-legend-desc"><strong>Parcial aceitável</strong> — consumiu entre 50% e 94% do material. Houve aproveitamento, mas com sobra relevante.</div>
-              </div>
-              <div class="agr-legend-row">
-                <span class="agr-legend-pts agr-legend-pts-0">0 pts</span>
-                <div class="agr-legend-desc"><strong>Justificado</strong> — consumiu ≥ 95% do material solicitado. Pedido necessário.</div>
-              </div>
-              <div class="agr-legend-sep"></div>
-              <div class="agr-legend-faixas">
-                <span class="agr-status-badge agr-status-critico">CRÍTICO</span> Score ≥ 6 &nbsp;·&nbsp;
-                <span class="agr-status-badge agr-status-alerta">ATENÇÃO</span> Score 1–5 &nbsp;·&nbsp;
-                <span class="agr-status-badge agr-status-ok">OK</span> Score 0
-              </div>
-            </div>
-          </div>
-
-          <div id="agr-results">
-            <div class="agr-empty">
-              <i class="ti ti-truck-off"></i>
-              <span>Selecione um mês e clique em Calcular</span>
-            </div>
-          </div>
-        </div>
-
       </div>
+
+
 
       <!-- SAÍDAS -->
       <div class="page" id="page-saidas">
@@ -1511,178 +2003,6 @@
       </div>
 
       <!-- INVENTÁRIO -->
-      <div class="page" id="page-inventario">
-
-        <!-- ══ TOOLBAR igual ao dashboard analítico ══ -->
-        <div class="analitico-toolbar" id="inv-toolbar" style="margin-bottom:18px">
-          <div class="analitico-period" style="align-items:center;gap:10px;flex-wrap:wrap">
-            <!-- Cal picker igual ao dashboard -->
-            <div class="cal-picker-wrap" id="inv-cal-wrap">
-              <button class="cal-picker-trigger" id="inv-cal-trigger" onclick="toggleCalPicker('inv')" type="button">
-                <i class="ti ti-calendar-event"></i>
-                <span id="inv-cal-label">Selecionar período</span>
-                <i class="ti ti-chevron-down cal-chev" id="inv-cal-chev"></i>
-              </button>
-              <input type="hidden" id="inv-dt-ini">
-              <input type="hidden" id="inv-dt-fim">
-              <div class="cal-picker-dropdown" id="inv-cal-dropdown">
-                <div class="cal-picker-inner" id="inv-cal-inner" data-pfx="inv"></div>
-              </div>
-            </div>
-            <!-- Quick chips -->
-            <div class="cal-quick-chips">
-              <button class="cal-chip" onclick="calQuickHoje('inv')" type="button">Hoje</button>
-              <button class="cal-chip" onclick="calQuickMesAtual('inv')" type="button">Mês atual</button>
-              <button class="cal-chip" onclick="calQuickMesAnterior('inv')" type="button">Mês anterior</button>
-            </div>
-          </div>
-          <div class="analitico-actions">
-            <button class="btn btn-primary" onclick="invGerar()">
-              <i class="ti ti-calculator"></i> <span>Gerar Inventário</span>
-            </button>
-            <button class="btn" onclick="invExportar()" title="Exportar CSV">
-              <i class="ti ti-file-spreadsheet"></i>
-            </button>
-            <button class="btn" onclick="invAbrirAlertasPendentes()" id="inv-btn-alertas" title="Itens sem justificativa" style="position:relative">
-              <i class="ti ti-alert-triangle"></i>
-              <span id="inv-alertas-count" style="background:var(--amber);color:#000;border-radius:20px;padding:0 6px;font-size:10px;font-weight:700;min-width:18px;text-align:center">0</span>
-              Pendentes
-            </button>
-          </div>
-        </div>
-
-        <!-- ══ EMPTY STATE ══ -->
-        <div id="inv-empty-state" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 20px;gap:12px;color:var(--text3)">
-          <i class="ti ti-clipboard-check" style="font-size:48px;opacity:0.35"></i>
-          <p style="font-size:13px;text-align:center">Selecione um período e clique em <strong style="color:var(--text2)">Gerar Inventário</strong> para<br>calcular o fechamento de estoque.</p>
-        </div>
-
-        <!-- ══ CONTEÚDO (visível após Gerar) ══ -->
-        <div id="inv-content" style="display:none">
-        <div class="inv-kpi-grid" id="inv-kpis">
-          <div class="inv-kpi-card" id="inv-kpi-ini">
-            <div class="inv-kpi-icon" style="background:var(--accent-dim);color:var(--accent)"><i class="ti ti-archive"></i></div>
-            <div class="inv-kpi-body">
-              <div class="inv-kpi-label">Est. Inicial</div>
-              <div class="inv-kpi-value" id="inv-kpi-ini-v">—</div>
-              <div class="inv-kpi-unit">kg</div>
-              <div id="inv-kpi-ini-missing"></div>
-            </div>
-          </div>
-          <div class="inv-kpi-card" id="inv-kpi-ent">
-            <div class="inv-kpi-icon" style="background:var(--green-bg);color:var(--green)"><i class="ti ti-arrow-bar-to-down"></i></div>
-            <div class="inv-kpi-body">
-              <div class="inv-kpi-label">Entradas</div>
-              <div class="inv-kpi-value" id="inv-kpi-ent-v">—</div>
-              <div class="inv-kpi-unit">kg</div>
-            </div>
-          </div>
-          <div class="inv-kpi-card" id="inv-kpi-sai">
-            <div class="inv-kpi-icon" style="background:var(--red-bg);color:var(--red)"><i class="ti ti-arrow-bar-up"></i></div>
-            <div class="inv-kpi-body">
-              <div class="inv-kpi-label">Saídas</div>
-              <div class="inv-kpi-value" id="inv-kpi-sai-v">—</div>
-              <div class="inv-kpi-unit">kg</div>
-            </div>
-          </div>
-          <div class="inv-kpi-card" id="inv-kpi-fin">
-            <div class="inv-kpi-icon" style="background:var(--purple-bg);color:var(--purple)"><i class="ti ti-box"></i></div>
-            <div class="inv-kpi-body">
-              <div class="inv-kpi-label">Est. Final</div>
-              <div class="inv-kpi-value" id="inv-kpi-fin-v">—</div>
-              <div class="inv-kpi-unit">kg</div>
-              <div id="inv-kpi-fin-missing"></div>
-            </div>
-          </div>
-          <div class="inv-kpi-card" id="inv-kpi-var">
-            <div class="inv-kpi-icon" style="background:var(--teal-bg);color:var(--teal)"><i class="ti ti-trending-up"></i></div>
-            <div class="inv-kpi-body">
-              <div class="inv-kpi-label">Variação</div>
-              <div class="inv-kpi-value" id="inv-kpi-var-v">—</div>
-              <div class="inv-kpi-unit">kg bruto</div>
-              <div class="inv-kpi-adj" id="inv-kpi-var-adj-wrap" style="display:none">
-                <span class="inv-kpi-adj-label">Ajustado (c/ justif.)</span>
-                <span class="inv-kpi-adj-value" id="inv-kpi-var-adj-v">—</span>
-              </div>
-            </div>
-          </div>
-          <div class="inv-kpi-card" id="inv-kpi-cst">
-            <div class="inv-kpi-icon" style="background:var(--amber-bg);color:var(--amber)"><i class="ti ti-coin"></i></div>
-            <div class="inv-kpi-body">
-              <div class="inv-kpi-label">Custo Var.</div>
-              <div class="inv-kpi-value" id="inv-kpi-cst-v">—</div>
-              <div class="inv-kpi-unit">R$ bruto</div>
-              <div class="inv-kpi-adj" id="inv-kpi-cst-adj-wrap" style="display:none">
-                <span class="inv-kpi-adj-label">Ajustado (c/ justif.)</span>
-                <span class="inv-kpi-adj-value" id="inv-kpi-cst-adj-v">—</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Alertas pendentes -->
-        <div id="inv-alertas-panel" style="display:none;background:var(--amber-bg);border:1px solid var(--amber-border);border-radius:var(--radius);padding:12px 16px;margin-bottom:14px">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-            <span style="font-size:12px;font-weight:700;color:var(--amber)"><i class="ti ti-alert-triangle"></i> Itens com variação sem justificativa</span>
-            <button onclick="invAbrirAlertasPendentes()" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:13px"><i class="ti ti-x"></i></button>
-          </div>
-          <div id="inv-alertas-list" style="font-size:11px;color:var(--text2);max-height:120px;overflow-y:auto"></div>
-        </div>
-
-        <!-- ══ FILTROS DA TABELA — aprimorados ══ -->
-        <div class="inv-filter-bar">
-          <div class="inv-filter-search">
-            <i class="ti ti-search" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:14px;pointer-events:none"></i>
-            <input type="text" id="inv-filtro" placeholder="Buscar regional, filial, material..." oninput="invFiltrar()" class="inv-search-input">
-          </div>
-          <select id="inv-filtro-cat" onchange="invFiltrar()" class="inv-filter-select">
-            <option value="">Todas as categorias</option>
-          </select>
-          <select id="inv-filtro-regional" onchange="invFiltrar()" class="inv-filter-select">
-            <option value="">Todas as regionais</option>
-          </select>
-          <select id="inv-filtro-material" onchange="invFiltrar()" class="inv-filter-select">
-            <option value="">Todos os materiais</option>
-          </select>
-          <label class="inv-filter-toggle">
-            <input type="checkbox" id="inv-filtro-sovar" onchange="invFiltrar()">
-            <span>Só com variação</span>
-          </label>
-          <div style="margin-left:auto;font-size:11px;color:var(--text3)" id="inv-count-label"></div>
-        </div>
-
-        <!-- ══ TABELA — redesenhada com sort ══ -->
-        <div class="table-card inv-table-wrap">
-          <table class="inv-data-table" id="inv-table">
-            <thead>
-              <tr>
-                <th data-col="regional" data-align="left" onclick="invSortBy('regional')">Regional <i class="ti ti-selector inv-sort-icon"></i></th>
-                <th data-col="central" data-align="left" onclick="invSortBy('central')">Filial <i class="ti ti-selector inv-sort-icon"></i></th>
-                <th data-col="material" data-align="left" onclick="invSortBy('material')">Material <i class="ti ti-selector inv-sort-icon"></i></th>
-                <th data-col="categoria" data-align="left" onclick="invSortBy('categoria')">Cat. <i class="ti ti-selector inv-sort-icon"></i></th>
-                <th data-col="estoqueIni" data-align="right" onclick="invSortBy('estoqueIni')" title="Est. Inicial (1º lançamento)">Est. Inicial<br><span style="font-size:9px;font-weight:400;opacity:.6;text-transform:none;letter-spacing:0">(1º lanç.)</span> <i class="ti ti-selector inv-sort-icon"></i></th>
-                <th data-col="entradasKg" data-align="right" onclick="invSortBy('entradasKg')" title="Entradas (por código SAP)">Entradas<br><span style="font-size:9px;font-weight:400;opacity:.6;text-transform:none;letter-spacing:0">(por código)</span> <i class="ti ti-selector inv-sort-icon"></i></th>
-                <th data-col="saidasKg" data-align="right" onclick="invSortBy('saidasKg')" title="Saídas (por código SAP)">Saídas<br><span style="font-size:9px;font-weight:400;opacity:.6;text-transform:none;letter-spacing:0">(por código)</span> <i class="ti ti-selector inv-sort-icon"></i></th>
-                <th data-col="estoqueFimReal" data-align="right" onclick="invSortBy('estoqueFimReal')" title="Est. Final (últ. lançamento)">Est. Final<br><span style="font-size:9px;font-weight:400;opacity:.6;text-transform:none;letter-spacing:0">(últ. lanç.)</span> <i class="ti ti-selector inv-sort-icon"></i></th>
-                <th data-col="estTeor" data-align="right" onclick="invSortBy('estTeor')" title="Est. Teórico = Ini + Ent − Saí">Est. Teórico<br><span style="font-size:9px;font-weight:400;opacity:.6;text-transform:none;letter-spacing:0">(ini+ent−saí)</span> <i class="ti ti-selector inv-sort-icon"></i></th>
-                <th data-col="varKg" data-align="right" onclick="invSortBy('varKg')" title="Variação = Real − Teórico">Variação<br><span style="font-size:9px;font-weight:400;opacity:.6;text-transform:none;letter-spacing:0">(real − teór.)</span> <i class="ti ti-selector inv-sort-icon"></i></th>
-                <th data-col="saldoJust" data-align="right" onclick="invSortBy('saldoJust')">Saldo Just. <i class="ti ti-selector inv-sort-icon"></i></th>
-                <th data-col="varAdj" data-align="right" onclick="invSortBy('varAdj')">Var.Ajust. <i class="ti ti-selector inv-sort-icon"></i></th>
-                <th data-col="custoMedio" data-align="right" onclick="invSortBy('custoMedio')" title="Custo médio (Saídas → fallback SAP)">Custo Médio<br><span style="font-size:9px;font-weight:400;opacity:.6;text-transform:none;letter-spacing:0">(saídas · R$/kg)</span> <i class="ti ti-selector inv-sort-icon"></i></th>
-                <th data-col="custo" data-align="right" onclick="invSortBy('custo')" title="Custo da variação ajustada">Custo Var.<br><span style="font-size:9px;font-weight:400;opacity:.6;text-transform:none;letter-spacing:0">(var. · R$/kg)</span> <i class="ti ti-selector inv-sort-icon"></i></th>
-                <th data-align="center" style="cursor:default">Justificativa</th>
-              </tr>
-            </thead>
-            <tbody id="inv-tbody"></tbody>
-          </table>
-          <div id="inv-empty" style="display:none;padding:60px;text-align:center;color:var(--text3)">
-            <i class="ti ti-clipboard-off" style="font-size:40px;display:block;margin-bottom:10px;opacity:0.4"></i>
-            <div style="font-size:13px;font-weight:600;margin-bottom:4px">Nenhum dado encontrado</div>
-            <div style="font-size:12px">Ajuste o período e clique em <strong style="color:var(--text2)">Gerar Inventário</strong>.</div>
-          </div>
-        </div>
-        </div><!-- /inv-content -->
-      </div><!-- /page-inventario -->
 
       <!-- CONFIGURAÇÕES -->
       <!-- ════════════════════════════════════════════
@@ -3133,166 +3453,6 @@
     </div>
   </div>
 </div>
-
-
-
-  <!-- Popovers de ferramentas — filhos diretos do body para evitar stacking context -->
-<!-- Calculadora (popover) -->
-  <div class="tool-popover" id="tool-calc" style="display:none">
-    <div class="tool-popover-header">
-      <span class="tool-popover-title"><i class="ti ti-calculator"></i> Calculadora</span>
-      <button class="tool-popover-close" onclick="closeTool('calc')"><i class="ti ti-x"></i></button>
-    </div>
-    <div class="calc-tabs">
-      <button class="calc-tab active" id="calct-basica" onclick="setCalcTab('basica')">Básica</button>
-      <button class="calc-tab" id="calct-analitica" onclick="setCalcTab('analitica')">Analítica</button>
-    </div>
-    <div id="calc-tab-basica">
-      <div class="calc-display-wrap">
-        <div class="calc-history" id="calc-history"></div>
-        <div class="calc-display" id="calc-display">0</div>
-      </div>
-      <div class="calc-grid">
-        <button class="calc-btn calc-btn-fn" onclick="calcAction('clear')">C</button>
-        <button class="calc-btn calc-btn-fn" onclick="calcAction('sign')">+/−</button>
-        <button class="calc-btn calc-btn-fn" onclick="calcAction('pct')">%</button>
-        <button class="calc-btn calc-btn-op" onclick="calcAction('op','/')">÷</button>
-        <button class="calc-btn" onclick="calcAction('num','7')">7</button>
-        <button class="calc-btn" onclick="calcAction('num','8')">8</button>
-        <button class="calc-btn" onclick="calcAction('num','9')">9</button>
-        <button class="calc-btn calc-btn-op" onclick="calcAction('op','*')">×</button>
-        <button class="calc-btn" onclick="calcAction('num','4')">4</button>
-        <button class="calc-btn" onclick="calcAction('num','5')">5</button>
-        <button class="calc-btn" onclick="calcAction('num','6')">6</button>
-        <button class="calc-btn calc-btn-op" onclick="calcAction('op','-')">−</button>
-        <button class="calc-btn" onclick="calcAction('num','1')">1</button>
-        <button class="calc-btn" onclick="calcAction('num','2')">2</button>
-        <button class="calc-btn" onclick="calcAction('num','3')">3</button>
-        <button class="calc-btn calc-btn-op calc-btn-op-tall" onclick="calcAction('op','+')">+</button>
-        <button class="calc-btn calc-btn-zero" onclick="calcAction('num','0')">0</button>
-        <button class="calc-btn" onclick="calcAction('dot')">.</button>
-        <button class="calc-btn calc-btn-eq" onclick="calcAction('eq')">=</button>
-      </div>
-    </div>
-    <div id="calc-tab-analitica" style="display:none">
-      <div class="calc-analytic">
-        <div class="calc-card">
-          <div class="calc-card-title"><i class="ti ti-trending-up"></i> Variação de Estoque</div>
-          <div class="calc-card-row"><label>Real (kg)</label><input type="number" class="calc-input" id="ca-real" placeholder="0" oninput="calcAnalitica()"></div>
-          <div class="calc-card-row"><label>Teórico (kg)</label><input type="number" class="calc-input" id="ca-teorico" placeholder="0" oninput="calcAnalitica()"></div>
-          <div class="calc-card-result"><span class="calc-result-label">Variação</span><span class="calc-result-val" id="ca-var-val">—</span><button class="calc-copy-btn" onclick="calcCopy('ca-var-val')"><i class="ti ti-copy"></i></button></div>
-          <div class="calc-card-result"><span class="calc-result-label">Variação %</span><span class="calc-result-val" id="ca-varpct-val">—</span><button class="calc-copy-btn" onclick="calcCopy('ca-varpct-val')"><i class="ti ti-copy"></i></button></div>
-        </div>
-        <div class="calc-card">
-          <div class="calc-card-title"><i class="ti ti-currency-dollar"></i> Custo Implicado</div>
-          <div class="calc-card-row"><label>Variação (kg)</label><input type="number" class="calc-input" id="ca-varkg" placeholder="0" oninput="calcAnalitica()"></div>
-          <div class="calc-card-row"><label>Custo médio (R$/kg)</label><input type="number" class="calc-input" id="ca-custo" placeholder="0,00" oninput="calcAnalitica()"></div>
-          <div class="calc-card-result"><span class="calc-result-label">Custo</span><span class="calc-result-val" id="ca-custo-val">—</span><button class="calc-copy-btn" onclick="calcCopy('ca-custo-val')"><i class="ti ti-copy"></i></button></div>
-        </div>
-        <div class="calc-card">
-          <div class="calc-card-title"><i class="ti ti-box"></i> Estoque Teórico</div>
-          <div class="calc-card-row"><label>Est. Inicial (kg)</label><input type="number" class="calc-input" id="ca-ini" placeholder="0" oninput="calcAnalitica()"></div>
-          <div class="calc-card-row"><label>Entradas (kg)</label><input type="number" class="calc-input" id="ca-ent" placeholder="0" oninput="calcAnalitica()"></div>
-          <div class="calc-card-row"><label>Saídas (kg)</label><input type="number" class="calc-input" id="ca-sai" placeholder="0" oninput="calcAnalitica()"></div>
-          <div class="calc-card-result"><span class="calc-result-label">Teórico</span><span class="calc-result-val" id="ca-teorico-val">—</span><button class="calc-copy-btn" onclick="calcCopy('ca-teorico-val')"><i class="ti ti-copy"></i></button></div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-<!-- Bloco de Notas (popover) -->
-  <!-- Bloco de Notas (popover) -->
-  <div class="tool-popover notes-popover" id="tool-notes" style="display:none">
-    <div class="tool-popover-header">
-      <span class="tool-popover-title"><i class="ti ti-notebook"></i> Bloco de Notas</span>
-      <div style="display:flex;gap:6px;align-items:center">
-        <span class="notes-saved-indicator" id="notes-saved-indicator"></span>
-        <button class="tool-popover-close" onclick="closeTool('notes')"><i class="ti ti-x"></i></button>
-      </div>
-    </div>
-    <div class="notes-layout" id="notes-layout">
-
-      <!-- Lista de cards -->
-      <div class="notes-list-pane" id="notes-list-pane">
-        <div class="notes-list-toolbar">
-          <button class="btn btn-primary" style="font-size:11px;padding:5px 10px" onclick="notesNewCard()">
-            <i class="ti ti-plus"></i> Nova nota
-          </button>
-          <select class="notes-sort-select" id="notes-sort-select" onchange="notesRender()">
-            <option value="modified">Recentes</option>
-            <option value="priority">Prioridade</option>
-            <option value="title">Título</option>
-          </select>
-        </div>
-        <div class="notes-cards-list" id="notes-cards-list">
-          <div class="notes-empty-state">
-            <i class="ti ti-notebook" style="font-size:28px;opacity:.3"></i>
-            <span>Nenhuma nota ainda.<br>Crie sua primeira nota.</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Editor (oculto até selecionar card) -->
-      <div class="notes-editor-pane" id="notes-editor-pane" style="display:none">
-        <div class="notes-editor-header">
-          <button class="notes-back-btn" onclick="notesCloseEditor()"><i class="ti ti-arrow-left"></i></button>
-          <input class="notes-title-input" id="notes-title-input" placeholder="Título da nota..."
-            oninput="notesAutoSave()">
-          <div class="notes-editor-actions">
-            <!-- Prioridade -->
-            <select class="notes-priority-select" id="notes-priority-select" onchange="notesAutoSave()" title="Prioridade">
-              <option value="none">— Sem prioridade</option>
-              <option value="low">↓ Baixa</option>
-              <option value="medium">→ Média</option>
-              <option value="high">↑ Alta</option>
-            </select>
-            <!-- Cor -->
-            <div class="notes-color-picker" id="notes-color-picker">
-              <button class="notes-color-btn" id="notes-color-btn" onclick="notesToggleColors()" title="Cor da nota">
-                <span class="notes-color-dot" id="notes-color-dot"></span>
-              </button>
-              <div class="notes-color-menu" id="notes-color-menu">
-                <button onclick="notesSetColor('none')"   class="nc-swatch nc-none"  title="Padrão"></button>
-                <button onclick="notesSetColor('blue')"   class="nc-swatch nc-blue"  title="Azul"></button>
-                <button onclick="notesSetColor('green')"  class="nc-swatch nc-green" title="Verde"></button>
-                <button onclick="notesSetColor('amber')"  class="nc-swatch nc-amber" title="Âmbar"></button>
-                <button onclick="notesSetColor('red')"    class="nc-swatch nc-red"   title="Vermelho"></button>
-                <button onclick="notesSetColor('purple')" class="nc-swatch nc-purple"title="Roxo"></button>
-                <button onclick="notesSetColor('teal')"   class="nc-swatch nc-teal"  title="Teal"></button>
-              </div>
-            </div>
-            <button class="notes-toolbar-btn" onclick="notesDeleteCurrent()" title="Excluir nota" style="color:var(--red)">
-              <i class="ti ti-trash"></i>
-            </button>
-          </div>
-        </div>
-
-        <!-- Barra markdown -->
-        <div class="notes-md-bar">
-          <button class="notes-md-btn" onclick="notesMdWrap('**','**')" title="Negrito"><b>B</b></button>
-          <button class="notes-md-btn" onclick="notesMdWrap('*','*')"   title="Itálico"><i>I</i></button>
-          <button class="notes-md-btn" onclick="notesMdWrap('~~','~~')" title="Tachado"><s>S</s></button>
-          <div class="notes-md-sep"></div>
-          <button class="notes-md-btn" onclick="notesMdLine('- ')"   title="Lista"><i class="ti ti-list"></i></button>
-          <button class="notes-md-btn" onclick="notesMdLine('- [ ] ')" title="Checklist"><i class="ti ti-checkbox"></i></button>
-          <button class="notes-md-btn" onclick="notesMdLine('# ')"   title="Título"><i class="ti ti-heading"></i></button>
-          <div class="notes-md-sep"></div>
-          <button class="notes-md-btn notes-md-toggle" id="notes-preview-btn" onclick="notesTogglePreview()" title="Pré-visualizar">
-            <i class="ti ti-eye"></i>
-          </button>
-        </div>
-
-        <!-- Editor / Preview -->
-        <div class="notes-editor-body">
-          <textarea class="notes-textarea-md" id="notes-textarea-md"
-            placeholder="Escreva aqui... (suporta **negrito**, *itálico*, - listas)"
-            oninput="notesAutoSave(); notesUpdatePreview()"></textarea>
-          <div class="notes-preview-md" id="notes-preview-md" style="display:none"></div>
-        </div>
-      </div>
-
-    </div>
-  </div>
 
 </body>
 </html>

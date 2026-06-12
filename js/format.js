@@ -672,10 +672,11 @@ function _calcCompute(a, b, op) {
 
 // Keyboard support
 document.addEventListener('keydown', function(e) {
-  const pop = document.getElementById('calc-popover');
+  // Suporta tanto o ID legado 'calc-popover' quanto o atual 'tool-calc'
+  const pop = document.getElementById('tool-calc') || document.getElementById('calc-popover');
   if (!pop || pop.style.display === 'none') return;
   // Don't capture if user is typing in an input inside the calc
-  if (e.target.tagName === 'INPUT') return;
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
   const tab = document.getElementById('calc-tab-basica');
   if (!tab || tab.style.display === 'none') return;
 

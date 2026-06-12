@@ -1131,25 +1131,26 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
   if (typeof hideLoadingOverlay === 'function') hideLoadingOverlay('Análise concluída');
   updateClock(); // atualiza saúde geral com dados recém-calculados
 
-  // Sincroniza estado dos botões toggle com os cards recém-criados
-  // (após re-renderização, novos cards herdam o estado atual dos toggles)
-  if (!_regionaisExpanded) {
-    document.querySelectorAll('#an-micro-container .regional-group').forEach(group => {
-      const body = group.querySelector('.regional-group-body');
-      const chev = group.querySelector('.regional-group-chev');
-      if (body) body.classList.remove('open');
-      group.classList.add('collapsed');
-      if (chev) chev.style.transform = 'rotate(-90deg)';
-    });
-  }
-  if (_centraisExpanded) {
-    document.querySelectorAll('#an-micro-container .micro-filial-card').forEach(card => {
-      const body = card.querySelector('.micro-filial-body');
-      const chev = card.querySelector('[id^="chev-"]');
-      if (body) body.classList.add('open');
-      if (chev) chev.style.transform = 'rotate(180deg)';
-    });
-  }
+  // Ao analisar: recolhe regionais e centrais por padrão
+  _regionaisExpanded = false;
+  _centraisExpanded  = false;
+
+  document.querySelectorAll('#an-micro-container .regional-group').forEach(group => {
+    const body = group.querySelector('.regional-group-body');
+    const chev = group.querySelector('.regional-group-chev');
+    if (body) body.classList.remove('open');
+    group.classList.add('collapsed');
+    if (chev) chev.style.transform = 'rotate(-90deg)';
+  });
+
+  // Centrais já renderizam sem a classe 'open' por padrão — garante que estão fechadas
+  document.querySelectorAll('#an-micro-container .micro-filial-card').forEach(card => {
+    const body = card.querySelector('.micro-filial-body');
+    const chev = card.querySelector('[id^="chev-"]');
+    if (body) body.classList.remove('open');
+    if (chev) chev.style.transform = '';
+  });
+
   // Atualiza visual dos botões
   _updateToggleRegionaisBtn();
   _updateToggleCentralisBtn();

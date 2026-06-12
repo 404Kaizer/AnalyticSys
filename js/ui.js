@@ -27,6 +27,12 @@ function _buildNavCache() {
 const _pageScrollPos = {};
 
 function navigate(page) {
+  // Inventário foi movido para aba do Dashboard Gerencial
+  if (page === 'inventario') {
+    navigate('dashboard');
+    setTimeout(() => { if (typeof dgSwitchTab === 'function') dgSwitchTab('inventario'); }, 50);
+    return;
+  }
   // FAB will update itself via setTimeout after DOM settles
   if (!_navCache) _navCache = _buildNavCache();
   const { navItems, pages, navByPage, pageById } = _navCache;
