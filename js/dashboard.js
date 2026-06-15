@@ -2196,13 +2196,16 @@ function renderSAP() {
     return;
   }
 
+  const _sapDupKeys = getSapDuplicateKeys();
+
   tb.innerHTML = data.map((r, i) => {
     const neg = num(r.peso) < 0;
     const red = '#ef4444';
     const green = '#22c55e';
     const text = 'inherit';
+    const isDup = _sapDupKeys.has(getSapRecordKey(r));
     return `
-    <tr>
+    <tr${isDup ? ' class="sap-duplicata" title="Integração duplicada"' : ''}>
       <td class="td-mono">${r.fonte === 'manual' ? '<span class="badge-manual" title="Registro inserido manualmente"><i class="ti ti-pencil"></i></span>' : ''}${r.usuario || '—'}</td>
       <td class="td-mono" style="color:${neg ? red : green}">${r.movimento || '—'}</td>
       <td class="td-muted">${r.ref || '—'}</td>

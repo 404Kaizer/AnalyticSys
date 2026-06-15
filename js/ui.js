@@ -249,6 +249,48 @@ function updatePageInfo(module) {
 
 // ── Filtro "Somente manuais" por módulo ──────────────────────────────────────
 const _somenteManuais = { entradas: false, saidas: false, lancamentos: false, sap: false };
+let _somenteDuplicatas = false;
+
+function toggleSomenteDuplicatas() {
+  _somenteDuplicatas = !_somenteDuplicatas;
+  const btn = document.getElementById('btn-duplicatas-sap');
+  if (btn) {
+    btn.classList.toggle('active', _somenteDuplicatas);
+    btn.title = _somenteDuplicatas ? 'Exibindo somente duplicatas — clique para voltar' : 'Filtrar somente integrações duplicadas';
+  }
+  renderSAP?.() || renderModule?.('sap');
+}
+window.toggleSomenteDuplicatas = toggleSomenteDuplicatas;
+
+function getSapDuplicateKeys() {
+  const counts = {};
+  (state.sap || []).forEach(r => {
+    const key = [
+      (r.movimento || '').trim(),
+      (r.ref       || '').trim(),
+      (r.central   || '').trim(),
+      (r.deposito  || '').trim(),
+      (r.dtLanc    || '').trim(),
+      (r.material  || r.materialOriginal || '').trim(),
+      String(num(r.peso))
+    ].join('||');
+    counts[key] = (counts[key] || 0) + 1;
+  });
+  return new Set(Object.keys(counts).filter(k => counts[k] > 1));
+}
+window.getSapDuplicateKeys = getSapDuplicateKeys;
+
+function getSapRecordKey(r) {
+  return [
+    (r.movimento || '').trim(),
+    (r.ref       || '').trim(),
+    (r.central   || '').trim(),
+    (r.deposito  || '').trim(),
+    (r.dtLanc    || '').trim(),
+    (r.material  || r.materialOriginal || '').trim(),
+    String(num(r.peso))
+  ].join('||');
+}
 
 function toggleSomenteManuais(module) {
   _somenteManuais[module] = !_somenteManuais[module];
@@ -270,6 +312,11 @@ function getFilteredData(module) {
   let data = state[module] || [];
   // Aplica filtro de manuais antes dos demais
   if (_somenteManuais[module]) data = data.filter(r => r.fonte === 'manual');
+  // Aplica filtro de duplicatas (somente SAP)
+  if (module === 'sap' && _somenteDuplicatas) {
+    const dupKeys = getSapDuplicateKeys();
+    data = data.filter(r => dupKeys.has(getSapRecordKey(r)));
+  }
   const f = module === 'producao' ? filtroProducao : filters[module];
   // Passa o scope para que filterRecords use o índice invertido quando possível
   const textFiltered = filterRecords(data, f, getSearchableFields(module), module);

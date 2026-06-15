@@ -7762,6 +7762,48 @@ mark.search-highlight {
   opacity: .7;
 }
 
+/* ── Botão e linhas de duplicatas SAP ── */
+.btn-duplicatas-filter {
+  font-size: 11px;
+  font-family: var(--mono);
+  font-weight: 500;
+  padding: 4px 10px;
+  border-radius: var(--radius);
+  border: 1px solid rgba(239,68,68,.45);
+  background: transparent;
+  color: #ef4444;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: background .15s, border-color .15s;
+  margin-left: 8px;
+}
+.btn-duplicatas-filter:hover {
+  background: rgba(239,68,68,.08);
+}
+.btn-duplicatas-filter.active {
+  background: rgba(239,68,68,.12);
+  border-color: #ef4444;
+  font-weight: 700;
+}
+.btn-duplicatas-filter.active::after {
+  content: ' ×';
+  opacity: .7;
+}
+
+@keyframes sap-dup-pulse {
+  0%,100% { background-color: rgba(239,68,68,.07); }
+  50%      { background-color: rgba(239,68,68,.18); }
+}
+tr.sap-duplicata {
+  animation: sap-dup-pulse 1.8s ease-in-out infinite;
+}
+tr.sap-duplicata td {
+  border-top-color: rgba(239,68,68,.25) !important;
+  border-bottom-color: rgba(239,68,68,.25) !important;
+}
+
 /* ── Novos gráficos de ocorrências ── */
 .oc-motivo-list { display: flex; flex-direction: column; gap: 7px; padding: 4px 0; }
 .oc-motivo-row {
