@@ -1331,6 +1331,26 @@
               </div>
             </div>
 
+            <!-- Filtro Categoria -->
+            <div class="micro-filter-group" id="mfg-categoria">
+              <button class="micro-filter-trigger" id="mft-categoria" onclick="toggleMicroFilter('categoria')">
+                <i class="ti ti-tag"></i>
+                <span id="mft-categoria-label">Categoria</span>
+                <i class="ti ti-chevron-down micro-filter-chev" id="mfc-categoria"></i>
+              </button>
+              <div class="micro-filter-dropdown" id="mfd-categoria">
+                <div class="micro-filter-search-wrap">
+                  <i class="ti ti-search"></i>
+                  <input class="micro-filter-search" id="mfs-categoria" type="text" placeholder="Buscar categoria…" oninput="filterMicroOptions('categoria',this.value)">
+                </div>
+                <div class="micro-filter-options" id="mfo-categoria"></div>
+                <div class="micro-filter-footer">
+                  <button class="btn" onclick="cancelMicroFilter('categoria')"><i class="ti ti-x"></i> Cancelar</button>
+                  <button class="btn btn-primary" onclick="applyMicroFilter('categoria')"><i class="ti ti-check"></i> Aplicar</button>
+                </div>
+              </div>
+            </div>
+
             <!-- Filtro Material -->
             <div class="micro-filter-group" id="mfg-material">
               <button class="micro-filter-trigger" id="mft-material" onclick="toggleMicroFilter('material')">

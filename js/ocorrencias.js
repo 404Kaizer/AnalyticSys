@@ -94,8 +94,10 @@ function buildOcKPIs(lista) {
   });
   const topMotivos = Object.entries(porMotivo).sort((a, b) => b[1] - a[1]);
 
-  // Diferença entre data de conclusão e data prazo (prazo → conclusão) em dias
-  // Negativo = concluída antes do prazo; positivo = concluída após o prazo
+  // Diferença entre data de conclusão e data prazo (prazo → conclusão), em dias
+  // Usamos o desvio absoluto para a média e para as faixas, já que valores
+  // negativos (concluída antes do prazo) e positivos (após o prazo) se
+  // cancelariam numa média simples, distorcendo o indicador.
   const temposBuckets = { '1d':0, '2-3d':0, '4-7d':0, '8-15d':0, '16-30d':0, '>30d':0 };
   let tempoTotal = 0, tempoCount = 0;
   lista.forEach(o => {
@@ -103,8 +105,8 @@ function buildOcKPIs(lista) {
     const ini = new Date(o.dataLimite + 'T00:00:00'), fim = new Date(o.dataConclusao + 'T00:00:00');
     if (isNaN(ini) || isNaN(fim)) return;
     const days = (fim - ini) / 86400000;
-    tempoTotal += days; tempoCount++;
     const absDays = Math.abs(days);
+    tempoTotal += absDays; tempoCount++;
     if      (absDays <= 1)  temposBuckets['1d']++;
     else if (absDays <= 3)  temposBuckets['2-3d']++;
     else if (absDays <= 7)  temposBuckets['4-7d']++;
@@ -112,22 +114,49 @@ function buildOcKPIs(lista) {
     else if (absDays <= 30) temposBuckets['16-30d']++;
     else                    temposBuckets['>30d']++;
   });
-  const tempoMedioMin = tempoCount > 0 ? tempoTotal / tempoCount : null; // agora em dias
+  const tempoMedioMin = tempoCount > 0 ? tempoTotal / tempoCount : null;
+
+  // Tempo médio de conclusão por regional
+  // Mapeia central → regional via state.filiais
+  const _centralToRegional = {};
+  (state.filiais || []).forEach(f => {
+    const key = (f.alias || f.origem || '').trim().toLowerCase();
+    if (key) _centralToRegional[key] = (f.regional || '').trim() || 'Sem Regional';
+  });
+
+  const regionalTempos = {}; // regional → { total: dias, count: n }
+  lista.forEach(o => {
+    if (!o.concluida || !o.dataAbertura || !o.dataConclusao) return;
+    const ini = new Date(o.dataAbertura + 'T00:00:00'), fim = new Date(o.dataConclusao + 'T00:00:00');
+    if (isNaN(ini) || isNaN(fim)) return;
+    const days = Math.abs((fim - ini) / 86400000);
+    const centralKey = (o.central || '').trim().toLowerCase();
+    const regional = _centralToRegional[centralKey] || 'Sem Regional';
+    if (!regionalTempos[regional]) regionalTempos[regional] = { total: 0, count: 0 };
+    regionalTempos[regional].total += days;
+    regionalTempos[regional].count++;
+  });
+
+  const tempoMedioRegional = Object.entries(regionalTempos)
+    .map(([reg, { total, count }]) => [reg, count > 0 ? total / count : 0, count])
+    .sort((a, b) => b[1] - a[1]); // ordena do maior tempo para o menor
 
   return { total, concluidas, abertas, vencidas, urgentes, pctConc,
            topCentrals, porCentral, topMotivos, porMotivo,
-           temposBuckets, tempoMedioMin, tempoCount, _lista: lista };
+           temposBuckets, tempoMedioMin, tempoCount,
+           tempoMedioRegional,
+           _lista: lista };
 }
 
 // ── Render KPIs ───────────────────────────────────────────
-let _ocChartHorario  = null;
+let _ocChartRegional = null;
 let _ocChartCentral  = null;
 let _ocChartMotivo   = null;
 let _ocChartTempo    = null;
 
 function _destroyOcCharts() {
-  [_ocChartHorario, _ocChartCentral, _ocChartMotivo, _ocChartTempo].forEach(c => { try { c?.destroy(); } catch(e){} });
-  _ocChartHorario = _ocChartCentral = _ocChartMotivo = _ocChartTempo = null;
+  [_ocChartRegional, _ocChartCentral, _ocChartMotivo, _ocChartTempo].forEach(c => { try { c?.destroy(); } catch(e){} });
+  _ocChartRegional = _ocChartCentral = _ocChartMotivo = _ocChartTempo = null;
 }
 
 // ── Donut "Status das ocorrências" ─────────────────────────
@@ -234,11 +263,11 @@ function renderOcKPIs(lista) {
       </div>
       <div class="oc-chart-card" style="flex:1;min-width:0">
         <div class="oc-chart-title" style="display:flex;justify-content:space-between;align-items:center">
-          <span><i class="ti ti-clock" style="font-size:12px;margin-right:5px"></i>Volume de Solicitações por Horário do Dia</span>
-          <span id="oc-horario-pico" style="font-size:10px;font-family:var(--mono);color:var(--teal);background:var(--teal-bg);padding:2px 8px;border-radius:4px;border:1px solid var(--teal-border)"></span>
+          <span><i class="ti ti-map-pin" style="font-size:12px;margin-right:5px"></i>Tempo Médio de Conclusão por Regional</span>
+          <span id="oc-regional-badge" style="font-size:10px;font-family:var(--mono);color:var(--teal);background:var(--teal-bg);padding:2px 8px;border-radius:4px;border:1px solid var(--teal-border)"></span>
         </div>
-        <div style="position:relative;width:100%;height:160px">
-          <canvas id="oc-chart-horario" role="img" aria-label="Volume de ocorrências por horário do dia"></canvas>
+        <div style="position:relative;width:100%;height:${Math.max((kpis.tempoMedioRegional.length || 1) * 32 + 20, 120)}px">
+          <canvas id="oc-chart-regional" role="img" aria-label="Tempo médio de conclusão por regional"></canvas>
         </div>
       </div>
     </div>
@@ -273,7 +302,7 @@ function renderOcKPIs(lista) {
         <div style="display:flex;align-items:center;gap:20px;margin:10px 0 14px;padding:12px 16px;background:var(--green-bg);border:1px solid var(--green-border);border-radius:8px;flex-wrap:wrap">
           <div style="display:flex;flex-direction:column;gap:3px;min-width:110px">
             <span style="font-size:9px;font-family:var(--mono);color:var(--text3);text-transform:uppercase;letter-spacing:.07em">Tempo Médio de Conclusão</span>
-            <span style="font-size:26px;font-family:var(--mono);font-weight:700;color:var(--green);line-height:1.1">${kpis.tempoMedioMin < 1 ? (kpis.tempoMedioMin * 24).toFixed(1)+'<span style="font-size:14px;font-weight:400;margin-left:3px">h</span>' : kpis.tempoMedioMin.toFixed(1)+'<span style="font-size:14px;font-weight:400;margin-left:3px">d</span>'}</span>
+            <span style="font-size:26px;font-family:var(--mono);font-weight:700;color:var(--green);line-height:1.1">${kpis.tempoMedioMin.toFixed(1)}<span style="font-size:14px;font-weight:400;margin-left:3px">d</span></span>
             <span style="font-size:9px;font-family:var(--mono);color:var(--text3)">${kpis.tempoCount} ocorrência${kpis.tempoCount!==1?'s':''} analisada${kpis.tempoCount!==1?'s':''}</span>
           </div>
           <div style="width:1px;height:44px;background:var(--green-border);flex-shrink:0"></div>
@@ -315,38 +344,82 @@ function renderOcKPIs(lista) {
 }
 
 function _buildOcCharts(kpis, textCol, gridCol, tickFont) {
-  // ── Gráfico horário ────────────────────────────────────────────────────────
-  const horarioData = new Array(24).fill(0);
-  (kpis._lista || []).forEach(o => {
-    if (!o.criadoEm) return;
-    const h = new Date(o.criadoEm).getHours();
-    horarioData[h]++;
-  });
-  const picoH = horarioData.indexOf(Math.max(...horarioData));
-  const picoEl = document.getElementById('oc-horario-pico');
-  if (picoEl && Math.max(...horarioData) > 0) picoEl.textContent = `pico: ${String(picoH).padStart(2,'0')}h`;
+  // ── Gráfico tempo médio por regional ──────────────────────────────────────
+  const regionalData = kpis.tempoMedioRegional; // [[regional, avgDias, count], ...]
+  const badgeEl = document.getElementById('oc-regional-badge');
+  if (badgeEl) {
+    if (regionalData.length > 0) {
+      const pior = regionalData[0];
+      badgeEl.textContent = `pior: ${pior[0]} · ${pior[1].toFixed(1)}d`;
+    } else {
+      badgeEl.textContent = '';
+    }
+  }
 
-  const ctxH = document.getElementById('oc-chart-horario');
-  if (ctxH) {
-    _ocChartHorario = new Chart(ctxH, {
-      type: 'bar',
-      data: {
-        labels: Array.from({length:24}, (_,i) => String(i).padStart(2,'0')+'h'),
-        datasets: [{
-          data: horarioData,
-          backgroundColor: horarioData.map((v,i) => i === picoH && v > 0 ? 'rgba(99,102,241,0.9)' : 'rgba(99,102,241,0.35)'),
-          borderRadius: 3, borderSkipped: false
-        }]
-      },
-      options: {
-        responsive:true, maintainAspectRatio:false,
-        plugins:{legend:{display:false}, tooltip:{callbacks:{label:ctx=>`${ctx.raw} ocorrência${ctx.raw!==1?'s':''}`}}},
-        scales:{
-          x:{grid:{color:gridCol},ticks:{color:textCol,font:tickFont,maxRotation:0}},
-          y:{grid:{color:gridCol},ticks:{color:textCol,font:tickFont,precision:0},beginAtZero:true}
+  const ctxR = document.getElementById('oc-chart-regional');
+  if (ctxR) {
+    if (!regionalData.length) {
+      const noDataCtx = ctxR.getContext('2d');
+      ctxR.height = 80;
+      noDataCtx.fillStyle = textCol;
+      noDataCtx.font = `11px 'DM Mono', monospace`;
+      noDataCtx.textAlign = 'center';
+      noDataCtx.fillText('Nenhuma ocorrência concluída com datas registradas.', ctxR.width / 2, 40);
+    } else {
+      const rLabels = regionalData.map(([r]) => r);
+      const rVals   = regionalData.map(([,v]) => parseFloat(v.toFixed(2)));
+      const rCounts = regionalData.map(([,,c]) => c);
+      // Gradiente de cor: maior tempo → vermelho, menor → verde
+      const rColors = rVals.map((v, i) => {
+        const ratio = rVals.length > 1 ? i / (rVals.length - 1) : 0;
+        // 0 = pior (top) → vermelho, 1 = melhor (bottom) → verde
+        const r = Math.round(220 * ratio + 239 * (1 - ratio));
+        const g = Math.round(197 * ratio + 68  * (1 - ratio));
+        const b = Math.round(94  * ratio + 68  * (1 - ratio));
+        return `rgba(${r},${g},${b},0.8)`;
+      });
+
+      _ocChartRegional = new Chart(ctxR, {
+        type: 'bar',
+        data: {
+          labels: rLabels,
+          datasets: [{
+            data: rVals,
+            backgroundColor: rColors,
+            borderRadius: 3,
+            borderSkipped: false
+          }]
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: ctx => {
+                  const dias = ctx.raw;
+                  const count = rCounts[ctx.dataIndex];
+                  return `${dias.toFixed(1)} dias em média · ${count} ocorrência${count !== 1 ? 's' : ''}`;
+                }
+              }
+            }
+          },
+          scales: {
+            x: {
+              grid: { color: gridCol },
+              ticks: { color: textCol, font: tickFont, callback: v => `${v}d` },
+              beginAtZero: true
+            },
+            y: {
+              grid: { display: false },
+              ticks: { color: textCol, font: tickFont }
+            }
+          }
         }
-      }
-    });
+      });
+    }
   }
 
   // ── Ranking centrais ───────────────────────────────────────────────────────
@@ -366,7 +439,7 @@ function _buildOcCharts(kpis, textCol, gridCol, tickFont) {
       },
       options: {
         indexAxis:'y', responsive:true, maintainAspectRatio:false,
-        plugins:{legend:{display:false}, tooltip:{callbacks:{label:ctx=>`${ctx.raw} chamado${ctx.raw!==1?'s':''}`}}},
+        plugins:{legend:{display:false}, tooltip:{callbacks:{label:ctx=>`${ctx.raw} ocorrência${ctx.raw!==1?'s':''}`}}},
         scales:{
           x:{grid:{color:gridCol},ticks:{color:textCol,font:tickFont,precision:0},beginAtZero:true},
           y:{grid:{display:false},ticks:{color:textCol,font:tickFont}}
@@ -433,7 +506,7 @@ function _buildOcCharts(kpis, textCol, gridCol, tickFont) {
         const meta = chart.getDatasetMeta(0);
         const bar  = meta.data[_avgBucketIdx];
         if (!bar) return;
-        const avgLabel = avgMin < 1 ? `ø ${(avgMin * 24).toFixed(1)} h` : `ø ${avgMin.toFixed(1)} d`;
+        const avgLabel = `ø ${avgMin.toFixed(1)} d`;
         ctx.save();
         ctx.font = `bold 10px 'DM Mono', monospace`;
         ctx.fillStyle = tColorsBase[_avgBucketIdx].replace(/[\d.]+\)$/, '1)');
@@ -676,6 +749,14 @@ function closeOcDetailModal() {
   document.getElementById('oc-detail-modal')?.classList.remove('open');
 }
 
+// Formata um material cadastrado em Configurações como "GRUPO SAP: ORIGINAL"
+function formatMaterialCadastro(m) {
+  const origem = String(m?.origem || '').trim();
+  const alias  = String(m?.alias  || '').trim();
+  if (alias && origem) return `${alias}: ${origem}`;
+  return alias || origem;
+}
+
 // ── Populares opções de filtro ────────────────────────────
 function populateOcFiltros() {
   const centrais  = [...new Set((state.ocorrencias || []).map(o => o.central).filter(Boolean))].sort();
@@ -691,7 +772,7 @@ function populateOcFiltros() {
     ...centrais
   ])].filter(Boolean).sort();
   const allMateriais = [...new Set([
-    ...(state.materiais || []).map(m => (m.material || '').trim()),
+    ...(state.materiais || []).map(formatMaterialCadastro),
     ...materiais
   ])].filter(Boolean).sort();
 
@@ -704,9 +785,9 @@ function populateOcFiltros() {
     .map(f => (f.alias || f.origem || '').trim())
     .filter(Boolean)
     .sort();
-  // Materiais do cadastro: campo "material"
+  // Materiais do cadastro: "GRUPO SAP: ORIGINAL"
   const stMateriais = (state.materiais || [])
-    .map(m => (m.material || '').trim())
+    .map(formatMaterialCadastro)
     .filter(Boolean)
     .sort();
 

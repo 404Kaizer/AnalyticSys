@@ -778,7 +778,7 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
         : `<span style="color:var(--text3);font-size:11px">—</span>`;
 
       matRowsHtml += `
-        <tr class="material-row" data-detail-key="${detailKey}" data-diff="${snapshot.diff}" data-peso-fim="${snapshot.pesoFim}" onclick="toggleMaterialDetail(this, event)">
+        <tr class="material-row" data-detail-key="${detailKey}" data-diff="${snapshot.diff}" data-peso-fim="${snapshot.pesoFim}" data-categoria="${escapeHtml(matCategoria)}" onclick="toggleMaterialDetail(this, event)">
           <td class="td-mono" style="font-weight:600">
             <span class="material-row-title">
               <i class="ti ti-eye-search material-row-chev"></i>
@@ -1205,11 +1205,11 @@ function limparAnalitico() {
 // ═══════════════════════════════════════════════════════════
 const _microFilter = {
   // Pending selections (while dropdown is open)
-  pending: { central: new Set(), material: new Set(), regional: new Set() },
+  pending: { central: new Set(), material: new Set(), regional: new Set(), categoria: new Set() },
   // Applied selections
-  applied: { central: new Set(), material: new Set(), regional: new Set() },
+  applied: { central: new Set(), material: new Set(), regional: new Set(), categoria: new Set() },
   // All available options extracted from last renderAnaliticoMicro call
-  options: { central: [], material: [], regional: [] },
+  options: { central: [], material: [], regional: [], categoria: [] },
   // variação data keyed by "central|||material" for row-level filtering
   variacaoData: new Map()
 };
@@ -1227,14 +1227,22 @@ function populateMicroFilterOptions(results) {
     const found = idx.exact.get(key);
     return (found?.regional || '').trim();
   }).filter(Boolean))].sort();
-  _microFilter.options.central  = centrais;
-  _microFilter.options.material = mats;
-  _microFilter.options.regional = regionais;
+  // Categorias: extract from lancamentos and sap records
+  const categorias = [...new Set(results.flatMap(r => [
+    ...(r.lancsNoPeriodo || []).map(l => (l.categoria || '').trim().toUpperCase()),
+    ...(r.sapNoPeriodo   || []).map(s => (s.categoria || '').trim().toUpperCase()),
+  ]).filter(Boolean))].sort();
+  _microFilter.options.central   = centrais;
+  _microFilter.options.material  = mats;
+  _microFilter.options.regional  = regionais;
+  _microFilter.options.categoria = categorias;
   _buildOptionsList('regional');
   _buildOptionsList('central');
+  _buildOptionsList('categoria');
   _buildOptionsList('material');
   _syncTriggerLabel('regional');
   _syncTriggerLabel('central');
+  _syncTriggerLabel('categoria');
   _syncTriggerLabel('material');
   _syncTriggerLabel('variacao');
   _syncClearBtn();
@@ -1277,7 +1285,7 @@ function _microFilterCheckChange(key, checkbox) {
 function toggleMicroFilter(key) {
   const dd = document.getElementById(`mfd-${key}`);
   const chev = document.getElementById(`mfc-${key}`);
-  const allKeys = ['regional', 'central', 'material', 'variacao', 'tipo-var'];
+  const allKeys = ['regional', 'central', 'categoria', 'material', 'variacao', 'tipo-var'];
   // Close all other dropdowns first
   allKeys.filter(k => k !== key).forEach(otherKey => {
     const otherDd = document.getElementById(`mfd-${otherKey}`);
@@ -1368,7 +1376,7 @@ function _syncTriggerLabel(key) {
   const btn = document.getElementById(`mft-${key}`);
   const label = document.getElementById(`mft-${key}-label`);
   if (!label || !btn) return;
-  const keyLabels = { regional: 'Regional', central: 'Central', material: 'Material', variacao: 'Saúde' };
+  const keyLabels = { regional: 'Regional', central: 'Central', categoria: 'Categoria', material: 'Material', variacao: 'Saúde' };
   const keyLabel = keyLabels[key] || key;
 
   if (key === 'variacao') {
@@ -1404,21 +1412,24 @@ function _syncTriggerLabel(key) {
 function _syncClearBtn() {
   const btn = document.getElementById('micro-filter-clear-btn');
   if (!btn) return;
-  const hasAny = _microFilter.applied.regional.size || _microFilter.applied.central.size || _microFilter.applied.material.size || _varFilterIsActive(_varFilter.applied) || _tipoVarIsActive();
+  const hasAny = _microFilter.applied.regional.size || _microFilter.applied.central.size || _microFilter.applied.categoria.size || _microFilter.applied.material.size || _varFilterIsActive(_varFilter.applied) || _tipoVarIsActive();
   btn.style.display = hasAny ? '' : 'none';
 }
 
 function clearAllMicroFilters() {
-  _microFilter.applied.regional = new Set();
-  _microFilter.applied.central  = new Set();
-  _microFilter.applied.material = new Set();
-  _microFilter.pending.regional = new Set();
-  _microFilter.pending.central  = new Set();
-  _microFilter.pending.material = new Set();
+  _microFilter.applied.regional  = new Set();
+  _microFilter.applied.central   = new Set();
+  _microFilter.applied.categoria = new Set();
+  _microFilter.applied.material  = new Set();
+  _microFilter.pending.regional  = new Set();
+  _microFilter.pending.central   = new Set();
+  _microFilter.pending.categoria = new Set();
+  _microFilter.pending.material  = new Set();
   _varFilter.applied  = { levels: new Set() };
   _varFilter.pending  = { levels: new Set() };
   _syncTriggerLabel('regional');
   _syncTriggerLabel('central');
+  _syncTriggerLabel('categoria');
   _syncTriggerLabel('material');
   _syncTriggerLabel('variacao');
   _syncClearBtn();
@@ -1551,9 +1562,10 @@ function _buildVariacaoOptions() {
 }
 
 function _applyMicroVisibility() {
-  const appliedRegionals = _microFilter.applied.regional;
-  const appliedCentrals  = _microFilter.applied.central;
-  const appliedMaterials = _microFilter.applied.material;
+  const appliedRegionals  = _microFilter.applied.regional;
+  const appliedCentrals   = _microFilter.applied.central;
+  const appliedCategorias = _microFilter.applied.categoria;
+  const appliedMaterials  = _microFilter.applied.material;
   const varState    = _varFilter.applied;
   const varActive   = _varFilterIsActive(varState);
   const tipoActive  = _tipoVarIsActive();
@@ -1609,15 +1621,17 @@ function _applyMicroVisibility() {
       }
 
       const rows = card.querySelectorAll('tbody tr.material-row');
-      if (appliedMaterials.size || tipoActive) {
+      if (appliedMaterials.size || appliedCategorias.size || tipoActive) {
         let visibleRows = 0;
         rows.forEach(row => {
           const matCell = row.querySelector('td:first-child');
           const matName = matCell ? matCell.textContent.trim() : '';
           const matDiff = parseFloat(row.dataset.diff || '0');
-          const showMat = !appliedMaterials.size || appliedMaterials.has(matName);
+          const matCat  = (row.dataset.categoria || '').trim().toUpperCase();
+          const showMat  = !appliedMaterials.size  || appliedMaterials.has(matName);
+          const showCat  = !appliedCategorias.size || appliedCategorias.has(matCat);
           const showTipo = passesTipo(matDiff, 'material');
-          const show = showMat && showTipo;
+          const show = showMat && showCat && showTipo;
           row.style.display = show ? '' : 'none';
           if (show) visibleRows++;
         });
@@ -1698,7 +1712,7 @@ function collapseAllMicro() { if (_regionaisExpanded)  toggleAllRegionais(); if 
 
 // Close dropdowns when clicking outside
 document.addEventListener('click', e => {
-  ['regional','central','material','variacao'].forEach(key => {
+  ['regional','central','categoria','material','variacao'].forEach(key => {
     const group = document.getElementById(`mfg-${key}`);
     if (group && !group.contains(e.target)) {
       const dd = document.getElementById(`mfd-${key}`);
