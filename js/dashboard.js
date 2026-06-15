@@ -2203,9 +2203,13 @@ function renderSAP() {
     const red = '#ef4444';
     const green = '#22c55e';
     const text = 'inherit';
-    const isDup = _sapDupKeys.has(getSapRecordKey(r));
+    const rKey = getSapRecordKey(r);
+    const isDupReal      = _sapDupKeys.real.has(rKey);
+    const isDupCancelled = !isDupReal && _sapDupKeys.cancelled.has(rKey);
+    const trClass = isDupReal ? ' class="sap-duplicata"' : isDupCancelled ? ' class="sap-duplicata-anulada"' : '';
+    const trTitle = isDupReal ? ' title="Integração duplicada sem estorno correspondente"' : isDupCancelled ? ' title="Duplicata anulada por estorno"' : '';
     return `
-    <tr${isDup ? ' class="sap-duplicata" title="Integração duplicada"' : ''}>
+    <tr${trClass}${trTitle}>
       <td class="td-mono">${r.fonte === 'manual' ? '<span class="badge-manual" title="Registro inserido manualmente"><i class="ti ti-pencil"></i></span>' : ''}${r.usuario || '—'}</td>
       <td class="td-mono" style="color:${neg ? red : green}">${r.movimento || '—'}</td>
       <td class="td-muted">${r.ref || '—'}</td>

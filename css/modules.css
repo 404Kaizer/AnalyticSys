@@ -7804,6 +7804,18 @@ tr.sap-duplicata td {
   border-bottom-color: rgba(239,68,68,.25) !important;
 }
 
+@keyframes sap-dup-anulada-pulse {
+  0%,100% { background-color: rgba(234,179,8,.07); }
+  50%      { background-color: rgba(234,179,8,.18); }
+}
+tr.sap-duplicata-anulada {
+  animation: sap-dup-anulada-pulse 1.8s ease-in-out infinite;
+}
+tr.sap-duplicata-anulada td {
+  border-top-color: rgba(234,179,8,.3) !important;
+  border-bottom-color: rgba(234,179,8,.3) !important;
+}
+
 /* ── Novos gráficos de ocorrências ── */
 .oc-motivo-list { display: flex; flex-direction: column; gap: 7px; padding: 4px 0; }
 .oc-motivo-row {

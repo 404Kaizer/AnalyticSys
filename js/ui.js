@@ -262,21 +262,98 @@ function toggleSomenteDuplicatas() {
 }
 window.toggleSomenteDuplicatas = toggleSomenteDuplicatas;
 
+const _SAP_REVERSE_MOVS = new Set(['102','864','863','552','802']);
+
 function getSapDuplicateKeys() {
-  const counts = {};
+  const normMov = m => String(m || '').trim().toUpperCase();
+
+  const cancelledKeys = new Set(); // pares anulados por estorno → amarelo
+  const realDupKeys   = new Set(); // duplicatas reais            → vermelho
+
+  // ── PASSO 1: duplicatas reais ────────────────────────────────────────────
+  // Mesmo movimento + ref + central + depósito + material + peso + dtLanc
+  // aparecendo mais de uma vez = integração enviada em duplicidade.
+  // Documento é excluído pois o estorno gera documento próprio.
+  const exactCounts = {};
   (state.sap || []).forEach(r => {
     const key = [
-      (r.movimento || '').trim(),
-      (r.ref       || '').trim(),
-      (r.central   || '').trim(),
-      (r.deposito  || '').trim(),
-      (r.dtLanc    || '').trim(),
-      (r.material  || r.materialOriginal || '').trim(),
-      String(num(r.peso))
+      normMov(r.movimento),
+      (r.ref      || '').trim(),
+      (r.central  || '').trim(),
+      (r.deposito || '').trim(),
+      (r.material || r.materialOriginal || '').trim(),
+      String(num(r.peso)),
+      (r.dtLanc   || '').trim()
     ].join('||');
-    counts[key] = (counts[key] || 0) + 1;
+    exactCounts[key] = (exactCounts[key] || 0) + 1;
   });
-  return new Set(Object.keys(counts).filter(k => counts[k] > 1));
+  (state.sap || []).forEach(r => {
+    const key = [
+      normMov(r.movimento),
+      (r.ref      || '').trim(),
+      (r.central  || '').trim(),
+      (r.deposito || '').trim(),
+      (r.material || r.materialOriginal || '').trim(),
+      String(num(r.peso)),
+      (r.dtLanc   || '').trim()
+    ].join('||');
+    if (exactCounts[key] > 1) realDupKeys.add(getSapRecordKey(r));
+  });
+
+  // ── PASSO 2: pares que se anulam ────────────────────────────────────────
+  // Agrupa por ref + central + depósito + material + |peso| (sem movimento,
+  // sem documento, sem data) para casar originais com seus estornos.
+  const groups = {};
+  (state.sap || []).forEach(r => {
+    const mv      = normMov(r.movimento);
+    const pesoVal = num(r.peso);
+    const baseKey = [
+      (r.ref      || '').trim(),
+      (r.central  || '').trim(),
+      (r.deposito || '').trim(),
+      (r.material || r.materialOriginal || '').trim(),
+      Math.abs(pesoVal)
+    ].join('||');
+    if (!groups[baseKey]) groups[baseKey] = [];
+    groups[baseKey].push({ r, mv, pesoVal, used: false });
+  });
+
+  const consumePair = (entries, negTest, posTest) => {
+    const negEntry = entries.find(e => !e.used && negTest(e));
+    if (!negEntry) return false;
+    const posEntry = entries.find(e => !e.used && e !== negEntry && posTest(e));
+    if (!posEntry) return false;
+    negEntry.used = true;
+    posEntry.used = true;
+    [negEntry.r, posEntry.r].forEach(r => {
+      // Só marca como anulado se não é já uma duplicata real
+      if (!realDupKeys.has(getSapRecordKey(r)))
+        cancelledKeys.add(getSapRecordKey(r));
+    });
+    return true;
+  };
+
+  Object.values(groups).forEach(entries => {
+    if (entries.length < 2) return;
+
+    // Consome pares estorno (102/864/863/552/802 negativo) + original positivo
+    let found = true;
+    while (found) found = consumePair(
+      entries,
+      e => _SAP_REVERSE_MOVS.has(e.mv) && e.pesoVal < 0,
+      e => !_SAP_REVERSE_MOVS.has(e.mv) && e.pesoVal > 0
+    );
+
+    // Consome pares Y11 (negativo) + Y12 (positivo)
+    found = true;
+    while (found) found = consumePair(
+      entries,
+      e => e.mv === 'Y11' && e.pesoVal < 0,
+      e => e.mv === 'Y12' && e.pesoVal > 0
+    );
+  });
+
+  return { cancelled: cancelledKeys, real: realDupKeys };
 }
 window.getSapDuplicateKeys = getSapDuplicateKeys;
 
@@ -314,8 +391,8 @@ function getFilteredData(module) {
   if (_somenteManuais[module]) data = data.filter(r => r.fonte === 'manual');
   // Aplica filtro de duplicatas (somente SAP)
   if (module === 'sap' && _somenteDuplicatas) {
-    const dupKeys = getSapDuplicateKeys();
-    data = data.filter(r => dupKeys.has(getSapRecordKey(r)));
+    const { cancelled, real } = getSapDuplicateKeys();
+    data = data.filter(r => { const k = getSapRecordKey(r); return cancelled.has(k) || real.has(k); });
   }
   const f = module === 'producao' ? filtroProducao : filters[module];
   // Passa o scope para que filterRecords use o índice invertido quando possível
