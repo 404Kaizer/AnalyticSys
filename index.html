@@ -1489,18 +1489,18 @@
           <table>
             <thead>
               <tr>
-                <th>Central Compra</th>
-                <th>Central Destino</th>
-                <th>Nº NF</th>
-                <th>Dt. Emissão</th>
-                <th>Dt. Descarga</th>
-                <th>Fornecedor</th>
-                <th>Categoria</th>
-                <th>Material</th>
-                <th>Peso</th>
+                <th data-sort-col="centralCompra"  onclick="moduleSortBy('entradas','centralCompra')">Central Compra <i class="ti ti-selector mod-sort-icon"></i></th>
+                <th data-sort-col="centralDestino" onclick="moduleSortBy('entradas','centralDestino')">Central Destino <i class="ti ti-selector mod-sort-icon"></i></th>
+                <th data-sort-col="nf"             onclick="moduleSortBy('entradas','nf')">Nº NF <i class="ti ti-selector mod-sort-icon"></i></th>
+                <th data-sort-col="dtEmissao"      onclick="moduleSortBy('entradas','dtEmissao')">Dt. Emissão <i class="ti ti-selector mod-sort-icon"></i></th>
+                <th data-sort-col="dtDescarga"     onclick="moduleSortBy('entradas','dtDescarga')">Dt. Descarga <i class="ti ti-selector mod-sort-icon"></i></th>
+                <th data-sort-col="fornecedor"     onclick="moduleSortBy('entradas','fornecedor')">Fornecedor <i class="ti ti-selector mod-sort-icon"></i></th>
+                <th data-sort-col="categoria"      onclick="moduleSortBy('entradas','categoria')">Categoria <i class="ti ti-selector mod-sort-icon"></i></th>
+                <th data-sort-col="material"       onclick="moduleSortBy('entradas','material')">Material <i class="ti ti-selector mod-sort-icon"></i></th>
+                <th data-sort-col="peso"           onclick="moduleSortBy('entradas','peso')">Peso <i class="ti ti-selector mod-sort-icon"></i></th>
                 <th>UM</th>
-                <th>Custo Unit.</th>
-                <th>Valor Total</th>
+                <th data-sort-col="custoUnit"      onclick="moduleSortBy('entradas','custoUnit')">Custo Unit. <i class="ti ti-selector mod-sort-icon"></i></th>
+                <th data-sort-col="valorTotal"     onclick="moduleSortBy('entradas','valorTotal')">Valor Total <i class="ti ti-selector mod-sort-icon"></i></th>
                 <th></th>
               </tr>
             </thead>
@@ -1538,17 +1538,17 @@
           <table>
             <thead>
               <tr>
-                <th>Central Saída</th>
-                <th>Dt. Emissão</th>
-                <th>Nº OS</th>
-                <th>Contrato</th>
-                <th>Categoria</th>
-                <th>Fornecedor</th>
-                <th>Material</th>
-                <th>Peso</th>
+                <th data-sort-col="central"    onclick="moduleSortBy('saidas','central')">Central Saída <i class="ti ti-selector mod-sort-icon"></i></th>
+                <th data-sort-col="dtEmissao"  onclick="moduleSortBy('saidas','dtEmissao')">Dt. Emissão <i class="ti ti-selector mod-sort-icon"></i></th>
+                <th data-sort-col="os"         onclick="moduleSortBy('saidas','os')">Nº OS <i class="ti ti-selector mod-sort-icon"></i></th>
+                <th data-sort-col="contrato"   onclick="moduleSortBy('saidas','contrato')">Contrato <i class="ti ti-selector mod-sort-icon"></i></th>
+                <th data-sort-col="categoria"  onclick="moduleSortBy('saidas','categoria')">Categoria <i class="ti ti-selector mod-sort-icon"></i></th>
+                <th data-sort-col="fornecedor" onclick="moduleSortBy('saidas','fornecedor')">Fornecedor <i class="ti ti-selector mod-sort-icon"></i></th>
+                <th data-sort-col="material"   onclick="moduleSortBy('saidas','material')">Material <i class="ti ti-selector mod-sort-icon"></i></th>
+                <th data-sort-col="peso"       onclick="moduleSortBy('saidas','peso')">Peso <i class="ti ti-selector mod-sort-icon"></i></th>
                 <th>UM</th>
-                <th>Custo Unit.</th>
-                <th>Valor Total</th>
+                <th data-sort-col="custoUnit"  onclick="moduleSortBy('saidas','custoUnit')">Custo Unit. <i class="ti ti-selector mod-sort-icon"></i></th>
+                <th data-sort-col="valorTotal" onclick="moduleSortBy('saidas','valorTotal')">Valor Total <i class="ti ti-selector mod-sort-icon"></i></th>
                 <th></th>
               </tr>
             </thead>
@@ -1706,15 +1706,15 @@
           <table>
             <thead>
               <tr>
-                <th>Central Estoque</th>
-                <th>Dt. Lançamento</th>
-                <th>Fornecedor</th>
-                <th>Categoria</th>
-                <th>Material</th>
-                <th>Peso</th>
+                <th data-sort-col="central"    onclick="moduleSortBy('lancamentos','central')">Central Estoque <i class="ti ti-selector mod-sort-icon"></i></th>
+                <th data-sort-col="dtLanc"     onclick="moduleSortBy('lancamentos','dtLanc')">Dt. Lançamento <i class="ti ti-selector mod-sort-icon"></i></th>
+                <th data-sort-col="fornecedor" onclick="moduleSortBy('lancamentos','fornecedor')">Fornecedor <i class="ti ti-selector mod-sort-icon"></i></th>
+                <th data-sort-col="categoria"  onclick="moduleSortBy('lancamentos','categoria')">Categoria <i class="ti ti-selector mod-sort-icon"></i></th>
+                <th data-sort-col="material"   onclick="moduleSortBy('lancamentos','material')">Material <i class="ti ti-selector mod-sort-icon"></i></th>
+                <th data-sort-col="peso"       onclick="moduleSortBy('lancamentos','peso')">Peso <i class="ti ti-selector mod-sort-icon"></i></th>
                 <th>UM</th>
-                <th>Custo Unit.</th>
-                <th>Valor Total</th>
+                <th data-sort-col="custoUnit"  onclick="moduleSortBy('lancamentos','custoUnit')">Custo Unit. <i class="ti ti-selector mod-sort-icon"></i></th>
+                <th data-sort-col="valorTotal" onclick="moduleSortBy('lancamentos','valorTotal')">Valor Total <i class="ti ti-selector mod-sort-icon"></i></th>
                 <th></th>
               </tr>
             </thead>
@@ -1750,20 +1750,20 @@
           <table>
             <thead>
               <tr>
-                <th>Usuário</th>
-                <th>Movimento</th>
-                <th>Ref.</th>
-                <th>Documento</th>
-                <th>Central</th>
-                <th>Depósito</th>
-                <th>Dt. Doc.</th>
-                <th>Dt. Lançamento</th>
-                <th>Dt. Registro</th>
-                <th>Material</th>
-                <th>Peso</th>
+                <th data-sort-col="usuario"   onclick="moduleSortBy('sap','usuario')">Usuário <i class="ti ti-selector mod-sort-icon"></i></th>
+                <th data-sort-col="movimento" onclick="moduleSortBy('sap','movimento')">Movimento <i class="ti ti-selector mod-sort-icon"></i></th>
+                <th data-sort-col="ref"       onclick="moduleSortBy('sap','ref')">Ref. <i class="ti ti-selector mod-sort-icon"></i></th>
+                <th data-sort-col="documento" onclick="moduleSortBy('sap','documento')">Documento <i class="ti ti-selector mod-sort-icon"></i></th>
+                <th data-sort-col="central"   onclick="moduleSortBy('sap','central')">Central <i class="ti ti-selector mod-sort-icon"></i></th>
+                <th data-sort-col="deposito"  onclick="moduleSortBy('sap','deposito')">Depósito <i class="ti ti-selector mod-sort-icon"></i></th>
+                <th data-sort-col="dtDoc"     onclick="moduleSortBy('sap','dtDoc')">Dt. Doc. <i class="ti ti-selector mod-sort-icon"></i></th>
+                <th data-sort-col="dtLanc"    onclick="moduleSortBy('sap','dtLanc')">Dt. Lançamento <i class="ti ti-selector mod-sort-icon"></i></th>
+                <th data-sort-col="dtReg"     onclick="moduleSortBy('sap','dtReg')">Dt. Registro <i class="ti ti-selector mod-sort-icon"></i></th>
+                <th data-sort-col="material"  onclick="moduleSortBy('sap','material')">Material <i class="ti ti-selector mod-sort-icon"></i></th>
+                <th data-sort-col="peso"      onclick="moduleSortBy('sap','peso')">Peso <i class="ti ti-selector mod-sort-icon"></i></th>
                 <th>UM</th>
-                <th>Custo Unit.</th>
-                <th>Custo Total</th>
+                <th data-sort-col="custoUnit"  onclick="moduleSortBy('sap','custoUnit')">Custo Unit. <i class="ti ti-selector mod-sort-icon"></i></th>
+                <th data-sort-col="valorTotal" onclick="moduleSortBy('sap','valorTotal')">Custo Total <i class="ti ti-selector mod-sort-icon"></i></th>
                 <th></th>
               </tr>
             </thead>

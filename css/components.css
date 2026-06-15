@@ -420,6 +420,32 @@
 .inv-data-table th.sort-asc .inv-sort-icon,
 .inv-data-table th.sort-desc .inv-sort-icon { opacity: 1; }
 
+/* ── Ordenação colunas módulos (Entradas / Saídas / Lançamentos / SAP) ── */
+table thead th[data-sort-col] {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  transition: color 0.13s, background 0.13s;
+}
+table thead th[data-sort-col]:hover { color: var(--text); background: var(--bg4); }
+table thead th[data-sort-col].sort-asc,
+table thead th[data-sort-col].sort-desc { color: var(--accent); }
+table thead th[data-sort-col].sort-asc  .mod-sort-icon::before { content: '\ea30'; } /* ti-sort-ascending  */
+table thead th[data-sort-col].sort-desc .mod-sort-icon::before { content: '\ea31'; } /* ti-sort-descending */
+
+.mod-sort-icon {
+  font-family: 'tabler-icons';
+  font-style: normal;
+  font-size: 11px;
+  opacity: 0.35;
+  margin-left: 3px;
+  vertical-align: middle;
+  transition: opacity 0.13s;
+}
+table thead th[data-sort-col]:hover .mod-sort-icon,
+table thead th[data-sort-col].sort-asc  .mod-sort-icon,
+table thead th[data-sort-col].sort-desc .mod-sort-icon { opacity: 1; }
+
 .inv-data-table tbody tr {
   border-bottom: 1px solid var(--border);
   transition: background 0.1s;

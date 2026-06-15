@@ -385,6 +385,55 @@ function toggleSomenteManuais(module) {
 }
 window.toggleSomenteManuais = toggleSomenteManuais;
 
+// ── Ordenação das tabelas de módulo ──────────────────────────────────────────
+const _moduleSortState = {
+  entradas:    { col: null, dir: 'asc' },
+  saidas:      { col: null, dir: 'asc' },
+  lancamentos: { col: null, dir: 'asc' },
+  sap:         { col: null, dir: 'asc' },
+};
+
+function moduleSortBy(module, col) {
+  const s = _moduleSortState[module];
+  if (!s) return;
+  if (s.col === col) {
+    s.dir = s.dir === 'asc' ? 'desc' : 'asc';
+  } else {
+    s.col = col;
+    s.dir = 'asc';
+  }
+  // Atualiza visual dos headers
+  const table = document.getElementById(`tb-${module}`)?.closest('table');
+  if (table) {
+    table.querySelectorAll('thead th[data-sort-col]').forEach(th => {
+      th.classList.remove('sort-asc', 'sort-desc');
+      if (th.dataset.sortCol === col)
+        th.classList.add(s.dir === 'asc' ? 'sort-asc' : 'sort-desc');
+    });
+  }
+  pages[module] = 0;
+  renderModule?.(module);
+}
+window.moduleSortBy = moduleSortBy;
+
+function _applyModuleSort(module, data) {
+  const s = _moduleSortState[module];
+  if (!s || !s.col) return data;
+  const col = s.col;
+  const dir = s.dir === 'asc' ? 1 : -1;
+  return [...data].sort((a, b) => {
+    let av = a[col] ?? '';
+    let bv = b[col] ?? '';
+    // Comparação numérica para peso/custo/valor
+    const an = parseFloat(String(av).replace(/\./g,'').replace(',','.').replace(/[^\d.-]/g,''));
+    const bn = parseFloat(String(bv).replace(/\./g,'').replace(',','.').replace(/[^\d.-]/g,''));
+    if (!isNaN(an) && !isNaN(bn)) return (an - bn) * dir;
+    // Datas dd/mm/aaaa → aaaa/mm/dd para comparação lexicográfica correta
+    const toISO = v => { const p = String(v).split('/'); return p.length === 3 ? `${p[2]}${p[1]}${p[0]}` : String(v); };
+    return toISO(av).localeCompare(toISO(bv), 'pt-BR', { numeric: true }) * dir;
+  });
+}
+
 function getFilteredData(module) {
   let data = state[module] || [];
   // Aplica filtro de manuais antes dos demais
@@ -398,8 +447,11 @@ function getFilteredData(module) {
   // Passa o scope para que filterRecords use o índice invertido quando possível
   const textFiltered = filterRecords(data, f, getSearchableFields(module), module);
   // Apply column filters on top of text search
-  if (!moduleHasColFilter(module)) return textFiltered;
-  return textFiltered.filter(r => recordPassesColFilters(module, r));
+  let result = moduleHasColFilter(module)
+    ? textFiltered.filter(r => recordPassesColFilters(module, r))
+    : textFiltered;
+  // Aplica ordenação por coluna se ativa
+  return _applyModuleSort(module, result);
 }
 
 function pageSlice(module) {
