@@ -922,6 +922,9 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
         <button class="trend-btn" onclick="event.stopPropagation();openTrendModal('central','${escapeHtml(r.central)}')" title="Ver tendência de variação">
           <i class="ti ti-chart-line"></i>
         </button>
+        <button class="trend-btn" onclick="event.stopPropagation();gerarRelatorioCentral('${escapeHtml(r.central)}')" title="Gerar relatório desta central" style="background:linear-gradient(135deg,rgba(29,78,216,0.18),rgba(37,99,235,0.12));border:1px solid rgba(37,99,235,0.3);color:#60a5fa">
+          <i class="ti ti-file-analytics"></i>
+        </button>
         <i class="ti ti-chevron-down" style="color:var(--text3);font-size:16px;flex-shrink:0;transition:transform 0.2s" id="chev-${idx}"></i>
       </div>
 
@@ -1093,6 +1096,9 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
         <button class="trend-btn" onclick="event.stopPropagation();openTrendModal('regional','${escapeHtml(regional || '')}')" title="Ver tendência de variação">
           <i class="ti ti-chart-line"></i>
         </button>
+        ${!isSemRegional ? `<button class="trend-btn" onclick="event.stopPropagation();gerarRelatorioRegional('${escapeHtml(regional || '')}')" title="Gerar relatório deste regional" style="background:linear-gradient(135deg,rgba(29,78,216,0.18),rgba(37,99,235,0.12));border:1px solid rgba(37,99,235,0.3);color:#60a5fa">
+          <i class="ti ti-file-analytics"></i>
+        </button>` : ''}
         <i class="ti ti-chevron-down regional-group-chev" id="rchev-${encodeURIComponent(regional || '_sem')}"></i>
       </div>
       <div class="regional-group-body open"></div>`;

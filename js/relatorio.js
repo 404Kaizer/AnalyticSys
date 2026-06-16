@@ -130,35 +130,39 @@ window.gerarRelatorioGerencial = function() {
       items: data.urgente, count: data.urgente.length
     });
 
-    const levelTablesHtml = levelSections.map(ls => `
-      <div class="level-section" style="border-left:4px solid ${ls.color};margin-bottom:20px;page-break-inside:avoid">
-        <div class="level-header" style="background:${ls.bg};border-bottom:1px solid ${ls.border}">
-          <div style="display:flex;align-items:center;gap:10px">
-            <span style="font-size:20px">${ls.icon}</span>
-            <div>
-              <div class="level-title" style="color:${ls.color}">${ls.label}</div>
-              <div class="level-subtitle">${ls.sublabel}</div>
-            </div>
-          </div>
-          <span class="level-count" style="background:${ls.color};color:#fff">${ls.count} material${ls.count>1?'is':''}</span>
-        </div>
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th style="width:36px">#</th>
-              <th>Material</th>
-              <th>Central</th>
-              <th>Variação</th>
-              <th>Tendência</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${buildLevelRows(ls.items, ls.color)}
-          </tbody>
-        </table>
-        ${ls.items.length > 20 ? `<div class="overflow-note">+ ${ls.items.length - 20} materiais adicionais não exibidos</div>` : ''}
-      </div>
-    `).join('');
+    const _gerGrad = {
+      '#ef4444': 'linear-gradient(135deg,#7f1d1d 0%,#991b1b 60%,#b91c1c 100%)',
+      '#f97316': 'linear-gradient(135deg,#7c2d12 0%,#9a3412 60%,#c2410c 100%)',
+    };
+    const _gerGlow = {
+      '#ef4444': 'rgba(239,68,68,0.30)',
+      '#f97316': 'rgba(249,115,22,0.28)',
+    };
+    const levelTablesHtml = levelSections.map(ls => {
+      const grad = _gerGrad[ls.color] || ('linear-gradient(135deg,' + ls.color + ' 0%,' + ls.color + 'cc 100%)');
+      const glow = _gerGlow[ls.color] || (ls.color + '44');
+      return '<div class="level-section" style="margin-bottom:24px;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px ' + glow + ';page-break-inside:avoid">' +
+        '<div style="background:' + grad + ';padding:20px 26px;display:flex;align-items:center;justify-content:space-between;position:relative;overflow:hidden">' +
+          '<div style="position:absolute;right:-20px;top:-20px;width:100px;height:100px;border-radius:50%;background:rgba(255,255,255,0.06);pointer-events:none"></div>' +
+          '<div style="position:absolute;right:52px;bottom:-28px;width:60px;height:60px;border-radius:50%;background:rgba(255,255,255,0.04);pointer-events:none"></div>' +
+          '<div style="display:flex;align-items:center;gap:16px;position:relative">' +
+            '<div style="width:52px;height:52px;border-radius:13px;background:rgba(255,255,255,0.13);border:1.5px solid rgba(255,255,255,0.22);display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0">' + ls.icon + '</div>' +
+            '<div>' +
+              '<div style="font-size:20px;font-weight:900;color:#fff;letter-spacing:.07em;line-height:1;text-transform:uppercase">' + ls.label + '</div>' +
+              '<div style="font-size:12px;color:rgba(255,255,255,0.62);margin-top:5px;font-weight:500">' + ls.sublabel + '</div>' +
+            '</div>' +
+          '</div>' +
+          '<span style="background:rgba(255,255,255,0.15);border:1.5px solid rgba(255,255,255,0.25);color:#fff;padding:6px 16px;border-radius:24px;font-size:13px;font-weight:800;letter-spacing:.03em;position:relative">' + ls.count + ' ' + (ls.count>1?'materiais':'material') + '</span>' +
+        '</div>' +
+        '<div style="background:#fff;border:1px solid #e2e8f0;border-top:none">' +
+          '<table class="data-table">' +
+            '<thead><tr><th style="width:36px">#</th><th>Material</th><th>Central</th><th>Variação</th><th>Tendência</th></tr></thead>' +
+            '<tbody>' + buildLevelRows(ls.items, ls.color) + '</tbody>' +
+          '</table>' +
+          (ls.items.length > 20 ? '<div class="overflow-note">+ ' + (ls.items.length - 20) + ' materiais adicionais não exibidos</div>' : '') +
+        '</div>' +
+      '</div>';
+    }).join('');
 
     const bgColor = regIdx % 2 === 0 ? '#f8fafc' : '#ffffff';
 
@@ -1177,4 +1181,429 @@ window.gerarRelatorioAusenciasGeral = function() {
   w.document.write(html);
   w.document.close();
   w.focus();
+};
+
+
+// ═══════════════════════════════════════════════════════════════════
+// RELATÓRIO POR REGIONAL (Crítico + Urgente de todas as centrais)
+// ═══════════════════════════════════════════════════════════════════
+
+window.gerarRelatorioRegional = function(regionalName) {
+  const byLevel = window._rankByLevel;
+  if (!byLevel) { alert('Nenhum dado de criticidade disponível. Execute a análise primeiro.'); return; }
+
+  // Filtra itens do regional
+  const filter = item => (item.regional || '—') === regionalName;
+  const criticos = (byLevel.critico || []).filter(filter);
+  const urgentes = (byLevel.urgente || []).filter(filter);
+  const atencoes = (byLevel.atencao || []).filter(filter);
+
+  if (!criticos.length && !urgentes.length) {
+    alert('Nenhum material crítico ou urgente para este regional.');
+    return;
+  }
+
+  const periodo = _getAnPeriodo();
+  const now = new Date().toLocaleString('pt-BR');
+
+  // Helpers compartilhados
+  function fmtKgR(v) { const n = Math.abs(Number(v)||0); return n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})+' kg'; }
+  function varDir(v) { return v < -0.001 ? 'Desfalque' : v > 0.001 ? 'Sobra' : 'Equil.'; }
+  function varDirColor(v) { return v < -0.001 ? '#ef4444' : v > 0.001 ? '#10b981' : '#6b7280'; }
+  function trendLabel(t) { return t==='worsening'?'▲ Piorando':t==='improving'?'▼ Melhorando':'→ Estável'; }
+  function trendColor(t) { return t==='worsening'?'#ef4444':t==='improving'?'#10b981':'#6b7280'; }
+  function escR(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  // Agrupa por central
+  function groupByCentral(items) {
+    const m = {};
+    items.forEach(i => { if (!m[i.central]) m[i.central]=[]; m[i.central].push(i); });
+    return Object.entries(m).sort((a,b) => b[1].length - a[1].length);
+  }
+
+  function buildMatRows(items) {
+    return items.map((item,idx) => {
+      const dc = varDirColor(item.diff); const tc = trendColor(item.trend);
+      return `<tr class="data-row">
+        <td class="rank-cell">${idx+1}</td>
+        <td class="mat-cell"><span class="mat-name">${escR(item.mat)}</span></td>
+        <td class="var-cell" style="color:${dc}"><strong>${varDir(item.diff)}</strong><br><span style="font-size:11px">${fmtKgR(item.diff)}</span></td>
+        <td class="trend-cell" style="color:${tc}">${trendLabel(item.trend)}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  function buildCentralBlock(centralName, items, levelColor, levelBg, levelBorder, levelIcon, levelLabel) {
+    return `
+    <div class="central-section" style="margin-bottom:16px;border:1px solid ${levelBorder};border-left:4px solid ${levelColor};border-radius:8px;overflow:hidden;page-break-inside:avoid">
+      <div style="background:${levelBg};padding:12px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid ${levelBorder}">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:16px">${levelIcon}</span>
+          <div>
+            <div style="font-size:13px;font-weight:700;color:${levelColor}">${escR(centralName)}</div>
+            <div style="font-size:11px;color:#64748b;margin-top:2px">${levelLabel}</div>
+          </div>
+        </div>
+        <span style="background:${levelColor};color:#fff;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700">${items.length} ${items.length>1?'materiais':'material'}</span>
+      </div>
+      <table class="data-table">
+        <thead><tr><th style="width:36px">#</th><th>Material</th><th>Variação</th><th>Tendência</th></tr></thead>
+        <tbody>${buildMatRows(items)}</tbody>
+      </table>
+    </div>`;
+  }
+
+  // Monta seções por nível
+  const levels = [
+    { key:'critico', items:criticos, color:'#ef4444', bg:'#fef2f2', border:'#fca5a5', icon:'🔴', label:'CRÍTICO — Ação imediata · Escalar à gerência', sectionTitle:'🔴 Crítico', sublabel:'Ação imediata — escalar à gerência' },
+    { key:'urgente', items:urgentes, color:'#f97316', bg:'#fff7ed', border:'#fdba74', icon:'🟠', label:'URGENTE — Atenção redobrada · Repassar aos operadores', sectionTitle:'🟠 Urgente', sublabel:'Atenção redobrada — repassar aos operadores' },
+  ].filter(l => l.items.length > 0);
+
+  const levelBgGradient = { critico: 'linear-gradient(135deg,#7f1d1d 0%,#991b1b 60%,#b91c1c 100%)', urgente: 'linear-gradient(135deg,#7c2d12 0%,#9a3412 60%,#c2410c 100%)' };
+  const levelGlow      = { critico: 'rgba(239,68,68,0.35)', urgente: 'rgba(249,115,22,0.35)' };
+
+  const sectionsHtml = levels.map(l => {
+    const byCentral = groupByCentral(l.items);
+    const centraisHtml = byCentral.map(([cn, items]) =>
+      buildCentralBlock(cn, items, l.color, l.bg, l.border, l.icon, l.sublabel)
+    ).join('');
+    const grad = levelBgGradient[l.key] || ('linear-gradient(135deg,' + l.color + ' 0%,' + l.color + 'cc 100%)');
+    const glow = levelGlow[l.key] || (l.color + '55');
+    const levelNameMap = { critico: 'CRÍTICO', urgente: 'URGENTE' };
+    const levelName = levelNameMap[l.key] || l.key.toUpperCase();
+    return '<div class="level-group" style="margin-bottom:36px">' +
+      '<div style="background:' + grad + ';border-radius:12px 12px 0 0;padding:22px 28px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 4px 24px ' + glow + ';position:relative;overflow:hidden">' +
+        '<div style="position:absolute;right:-24px;top:-24px;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,0.06);pointer-events:none"></div>' +
+        '<div style="position:absolute;right:60px;bottom:-40px;width:80px;height:80px;border-radius:50%;background:rgba(255,255,255,0.04);pointer-events:none"></div>' +
+        '<div style="display:flex;align-items:center;gap:18px;position:relative">' +
+          '<div style="width:56px;height:56px;border-radius:14px;background:rgba(255,255,255,0.12);border:1.5px solid rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0">' + l.icon + '</div>' +
+          '<div>' +
+            '<div style="font-size:22px;font-weight:900;color:#fff;letter-spacing:.06em;line-height:1;text-transform:uppercase">' + levelName + '</div>' +
+            '<div style="font-size:12px;color:rgba(255,255,255,0.65);margin-top:5px;font-weight:500;letter-spacing:.02em">' + l.sublabel + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;position:relative">' +
+          '<span style="background:rgba(255,255,255,0.15);border:1.5px solid rgba(255,255,255,0.25);color:#fff;padding:6px 18px;border-radius:24px;font-size:13px;font-weight:800;letter-spacing:.03em">' + l.items.length + ' ' + (l.items.length>1?'materiais':'material') + '</span>' +
+          '<span style="font-size:11px;color:rgba(255,255,255,0.5);font-weight:600">' + byCentral.length + ' ' + (byCentral.length>1?'centrais':'central') + ' afetada' + (byCentral.length>1?'s':'') + '</span>' +
+        '</div>' +
+      '</div>' +
+      '<div style="background:#fff;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 12px 12px;padding:18px">' +
+        centraisHtml +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  // Sumário
+  const totalGeral = criticos.length + urgentes.length;
+  const centraisAfetadas = new Set([...criticos,...urgentes].map(i=>i.central)).size;
+
+  const html = _buildRelRegionalHTML({
+    titulo: `Relatório Regional — ${regionalName}`,
+    subtitulo: 'Materiais Críticos e Urgentes',
+    periodo, now,
+    totalCritico: criticos.length, totalUrgente: urgentes.length, totalGeral,
+    centraisAfetadas, sectionsHtml,
+    escR, regionalName,
+  });
+
+  _openRelWindow(html);
+};
+
+function _getAnPeriodo() {
+  const ini = document.getElementById('an-dt-ini')?.value || '';
+  const fim = document.getElementById('an-dt-fim')?.value || '';
+  if (!ini && !fim) return 'Período não especificado';
+  const fmt = v => { if (!v) return ''; const [y,m,d] = v.split('-'); return `${d}/${m}/${y}`; };
+  return ini === fim ? fmt(ini) : `${fmt(ini)} a ${fmt(fim)}`;
+}
+
+function _openRelWindow(html) {
+  const w = window.open('', '_blank', 'width=1200,height=900,scrollbars=yes,resizable=yes');
+  if (!w) { alert('Popups bloqueados! Permita pop-ups para gerar o relatório.'); return; }
+  w.document.write(html);
+  w.document.close();
+  w.focus();
+}
+
+function _buildRelRegionalHTML({ titulo, subtitulo, periodo, now, totalCritico, totalUrgente, totalGeral, centraisAfetadas, sectionsHtml, escR, regionalName }) {
+  return `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>${titulo}</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:'Inter',system-ui,sans-serif; background:#f1f5f9; color:#0f172a; font-size:13px; line-height:1.5; -webkit-font-smoothing:antialiased; }
+  .page-wrap { max-width:1100px; margin:0 auto; padding:20px; }
+  .action-bar { position:sticky;top:0;z-index:100;background:#1e293b;display:flex;align-items:center;justify-content:space-between;padding:12px 24px;box-shadow:0 2px 12px rgba(0,0,0,0.2); }
+  .action-bar-title { color:#e2e8f0;font-size:13px;font-weight:500; }
+  .action-bar-title span { color:#64748b;font-size:12px;margin-left:10px; }
+  .action-bar-btns { display:flex;gap:10px; }
+  .btn-print { background:#2563eb;color:#fff;border:none;border-radius:7px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:7px; }
+  .btn-print:hover { background:#1d4ed8; }
+  .btn-close { background:#334155;color:#cbd5e1;border:none;border-radius:7px;padding:8px 14px;font-size:13px;font-weight:500;cursor:pointer; }
+  .btn-close:hover { background:#475569; }
+  .report-header { background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);color:#fff;border-radius:14px;padding:32px 36px;margin-bottom:24px;position:relative;overflow:hidden; }
+  .report-header::before { content:'';position:absolute;top:-40px;right:-40px;width:200px;height:200px;border-radius:50%;background:rgba(239,68,68,0.08);border:2px solid rgba(239,68,68,0.12); }
+  .report-header-top { display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px; }
+  .report-logo-area { display:flex;align-items:center;gap:12px; }
+  .report-logo-icon { width:48px;height:48px;border-radius:12px;background:rgba(239,68,68,0.18);border:1px solid rgba(239,68,68,0.3);display:flex;align-items:center;justify-content:center;font-size:22px; }
+  .report-logo-text h1 { font-size:18px;font-weight:800;color:#f8fafc;letter-spacing:-0.01em; }
+  .report-logo-text p { font-size:12px;color:#94a3b8;font-weight:400;margin-top:2px; }
+  .report-meta { text-align:right; }
+  .report-meta .meta-label { font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.06em; }
+  .report-meta .meta-value { font-size:13px;color:#cbd5e1;font-weight:500;margin-top:2px; }
+  .report-stats { display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:20px; }
+  .stat-card { background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:16px 18px;text-align:center; }
+  .stat-card-num { font-size:28px;font-weight:800;line-height:1;margin-bottom:6px;font-family:'JetBrains Mono',monospace; }
+  .stat-card-label { font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;font-weight:500; }
+  .confidential-strip { background:linear-gradient(90deg,#7f1d1d,#991b1b);color:#fecaca;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:7px 18px;border-radius:8px;text-align:center;margin-bottom:16px; }
+  .section-title { font-size:13px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.08em;margin:28px 0 14px;display:flex;align-items:center;gap:10px; }
+  .section-title::after { content:'';flex:1;height:1px;background:#e2e8f0; }
+  .data-table { width:100%;border-collapse:collapse;font-size:12px; }
+  .data-table th { background:#f8fafc;padding:9px 12px;text-align:left;font-weight:700;color:#475569;font-size:11px;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid #e2e8f0; }
+  .data-table td { padding:9px 12px;border-bottom:1px solid #f1f5f9;vertical-align:top; }
+  .data-row:hover { background:#f8fafc; }
+  .rank-cell { color:#94a3b8;font-weight:700;font-family:'JetBrains Mono',monospace;font-size:11px; }
+  .mat-name { font-weight:600;color:#0f172a; }
+  .report-footer { margin-top:40px;padding:20px 24px;background:#f8fafc;border-radius:12px;border:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;font-size:12px;color:#64748b; }
+  @media print {
+    .action-bar { display:none; }
+    body { background:#fff !important; }
+    .page-wrap { padding:0 !important;max-width:100% !important; }
+    .report-header { background:#0f172a !important;-webkit-print-color-adjust:exact;color-adjust:exact; }
+    .central-section { page-break-inside:avoid; }
+  }
+</style>
+</head>
+<body>
+<div class="action-bar">
+  <div class="action-bar-title">${escR(titulo)} <span>Período: ${escR(periodo)} · Gerado em ${now}</span></div>
+  <div class="action-bar-btns">
+    <button class="btn-print" onclick="window.print()">🖨️ Imprimir / Salvar PDF</button>
+    <button class="btn-close" onclick="window.close()">✕ Fechar</button>
+  </div>
+</div>
+<div class="page-wrap">
+  <div class="confidential-strip" style="margin-top:18px">⚠ Documento Confidencial — Uso interno · Regional e Gerência</div>
+  <div class="report-header">
+    <div class="report-header-top">
+      <div class="report-logo-area">
+        <div class="report-logo-icon">📋</div>
+        <div class="report-logo-text">
+          <h1>${escR(titulo)}</h1>
+          <p>${escR(subtitulo)} · AnalyticSys</p>
+        </div>
+      </div>
+      <div class="report-meta">
+        <div class="meta-label">Período analisado</div>
+        <div class="meta-value">${escR(periodo)}</div>
+        <div class="meta-label" style="margin-top:8px">Gerado em</div>
+        <div class="meta-value">${now}</div>
+      </div>
+    </div>
+    <div class="report-stats">
+      <div class="stat-card"><div class="stat-card-num" style="color:#f87171">${totalCritico}</div><div class="stat-card-label">🔴 Críticos</div></div>
+      <div class="stat-card"><div class="stat-card-num" style="color:#fb923c">${totalUrgente}</div><div class="stat-card-label">🟠 Urgentes</div></div>
+      <div class="stat-card"><div class="stat-card-num" style="color:#e2e8f0">${totalGeral}</div><div class="stat-card-label">📊 Total · ${centraisAfetadas} ${centraisAfetadas!==1?'centrais':'central'}</div></div>
+    </div>
+  </div>
+  ${sectionsHtml}
+  <div class="report-footer">
+    <span>Concrelagos Concreto · <strong>AnalyticSys</strong> · Gestão Centralizada de Estoque e Insumos</span>
+    <span>Período: <strong>${escR(periodo)}</strong></span>
+  </div>
+</div>
+</body>
+</html>`;
+}
+
+
+// ═══════════════════════════════════════════════════════════════════
+// RELATÓRIO POR CENTRAL (Atenção + Urgente + Crítico)
+// ═══════════════════════════════════════════════════════════════════
+
+window.gerarRelatorioCentral = function(centralName) {
+  const byLevel = window._rankByLevel;
+  if (!byLevel) { alert('Nenhum dado de criticidade disponível. Execute a análise primeiro.'); return; }
+
+  const filter = item => item.central === centralName;
+  const criticos = (byLevel.critico || []).filter(filter);
+  const urgentes = (byLevel.urgente || []).filter(filter);
+  const atencoes = (byLevel.atencao || []).filter(filter);
+
+  if (!criticos.length && !urgentes.length && !atencoes.length) {
+    alert('Nenhum material crítico, urgente ou em atenção para esta central.');
+    return;
+  }
+
+  const periodo = _getAnPeriodo();
+  const now = new Date().toLocaleString('pt-BR');
+
+  function fmtKgC(v) { const n=Math.abs(Number(v)||0); return n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})+' kg'; }
+  function varDir(v) { return v<-0.001?'Desfalque':v>0.001?'Sobra':'Equil.'; }
+  function varDirColor(v) { return v<-0.001?'#ef4444':v>0.001?'#10b981':'#6b7280'; }
+  function trendLabel(t) { return t==='worsening'?'▲ Piorando':t==='improving'?'▼ Melhorando':'→ Estável'; }
+  function trendColor(t) { return t==='worsening'?'#ef4444':t==='improving'?'#10b981':'#6b7280'; }
+  function escC(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  function buildRows(items) {
+    return items.map((item,idx) => {
+      const dc=varDirColor(item.diff); const tc=trendColor(item.trend);
+      return `<tr class="data-row">
+        <td class="rank-cell">${idx+1}</td>
+        <td class="mat-cell"><span class="mat-name">${escC(item.mat)}</span></td>
+        <td class="var-cell" style="color:${dc}"><strong>${varDir(item.diff)}</strong><br><span style="font-size:11px">${fmtKgC(item.diff)}</span></td>
+        <td class="trend-cell" style="color:${tc}">${trendLabel(item.trend)}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  const _lvlGrad = {
+    '#ef4444': 'linear-gradient(135deg,#7f1d1d 0%,#991b1b 60%,#b91c1c 100%)',
+    '#f97316': 'linear-gradient(135deg,#7c2d12 0%,#9a3412 60%,#c2410c 100%)',
+    '#f59e0b': 'linear-gradient(135deg,#78350f 0%,#92400e 60%,#b45309 100%)',
+  };
+  const _lvlGlow = {
+    '#ef4444': 'rgba(239,68,68,0.35)',
+    '#f97316': 'rgba(249,115,22,0.35)',
+    '#f59e0b': 'rgba(245,158,11,0.30)',
+  };
+
+  function buildLevelSection(items, color, bg, border, icon, label, sublabel) {
+    const grad = _lvlGrad[color] || ('linear-gradient(135deg,' + color + ' 0%,' + color + 'cc 100%)');
+    const glow = _lvlGlow[color] || (color + '55');
+    return (
+      '<div style="margin-bottom:28px;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px ' + glow + ';page-break-inside:avoid">' +
+        '<div style="background:' + grad + ';padding:20px 26px;display:flex;align-items:center;justify-content:space-between;position:relative;overflow:hidden">' +
+          '<div style="position:absolute;right:-20px;top:-20px;width:100px;height:100px;border-radius:50%;background:rgba(255,255,255,0.06);pointer-events:none"></div>' +
+          '<div style="position:absolute;right:50px;bottom:-32px;width:64px;height:64px;border-radius:50%;background:rgba(255,255,255,0.04);pointer-events:none"></div>' +
+          '<div style="display:flex;align-items:center;gap:16px;position:relative">' +
+            '<div style="width:52px;height:52px;border-radius:13px;background:rgba(255,255,255,0.13);border:1.5px solid rgba(255,255,255,0.22);display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0">' + icon + '</div>' +
+            '<div>' +
+              '<div style="font-size:20px;font-weight:900;color:#fff;letter-spacing:.07em;line-height:1;text-transform:uppercase">' + label + '</div>' +
+              '<div style="font-size:12px;color:rgba(255,255,255,0.62);margin-top:5px;font-weight:500">' + sublabel + '</div>' +
+            '</div>' +
+          '</div>' +
+          '<span style="background:rgba(255,255,255,0.15);border:1.5px solid rgba(255,255,255,0.25);color:#fff;padding:6px 16px;border-radius:24px;font-size:13px;font-weight:800;letter-spacing:.03em;position:relative">' + items.length + ' ' + (items.length>1?'materiais':'material') + '</span>' +
+        '</div>' +
+        '<div style="background:#fff;border:1px solid #e2e8f0;border-top:none">' +
+          '<table class="data-table"><thead><tr><th style="width:36px">#</th><th>Material</th><th>Variação</th><th>Tendência</th></tr></thead><tbody>' + buildRows(items) + '</tbody></table>' +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  const sectionsHtml = [
+    criticos.length && buildLevelSection(criticos,'#ef4444','#fef2f2','#fca5a5','🔴','CRÍTICO','Ação imediata — escalar à gerência'),
+    urgentes.length && buildLevelSection(urgentes,'#f97316','#fff7ed','#fdba74','🟠','URGENTE','Atenção redobrada — repassar aos regionais'),
+    atencoes.length && buildLevelSection(atencoes,'#f59e0b','#fffbeb','#fcd34d','⚠️','ATENÇÃO','Monitorar — contatar operador'),
+  ].filter(Boolean).join('');
+
+  const totalGeral = criticos.length + urgentes.length + atencoes.length;
+  const regional = [...criticos,...urgentes,...atencoes][0]?.regional || '—';
+
+  const html = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Relatório Central — ${escC(centralName)}</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+  * { box-sizing:border-box;margin:0;padding:0; }
+  body { font-family:'Inter',system-ui,sans-serif;background:#f1f5f9;color:#0f172a;font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased; }
+  .page-wrap { max-width:1100px;margin:0 auto;padding:20px; }
+  .action-bar { position:sticky;top:0;z-index:100;background:#1e293b;display:flex;align-items:center;justify-content:space-between;padding:12px 24px;box-shadow:0 2px 12px rgba(0,0,0,0.2); }
+  .action-bar-title { color:#e2e8f0;font-size:13px;font-weight:500; }
+  .action-bar-title span { color:#64748b;font-size:12px;margin-left:10px; }
+  .action-bar-btns { display:flex;gap:10px; }
+  .btn-print { background:#2563eb;color:#fff;border:none;border-radius:7px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:7px; }
+  .btn-print:hover { background:#1d4ed8; }
+  .btn-close { background:#334155;color:#cbd5e1;border:none;border-radius:7px;padding:8px 14px;font-size:13px;font-weight:500;cursor:pointer; }
+  .btn-close:hover { background:#475569; }
+  .report-header { background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);color:#fff;border-radius:14px;padding:32px 36px;margin-bottom:24px;position:relative;overflow:hidden; }
+  .report-header::before { content:'';position:absolute;top:-40px;right:-40px;width:200px;height:200px;border-radius:50%;background:rgba(239,68,68,0.08);border:2px solid rgba(239,68,68,0.12); }
+  .report-header-top { display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px; }
+  .report-logo-area { display:flex;align-items:center;gap:12px; }
+  .report-logo-icon { width:48px;height:48px;border-radius:12px;background:rgba(239,68,68,0.18);border:1px solid rgba(239,68,68,0.3);display:flex;align-items:center;justify-content:center;font-size:22px; }
+  .report-logo-text h1 { font-size:18px;font-weight:800;color:#f8fafc;letter-spacing:-0.01em; }
+  .report-logo-text p { font-size:12px;color:#94a3b8;font-weight:400;margin-top:2px; }
+  .report-meta { text-align:right; }
+  .report-meta .meta-label { font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.06em; }
+  .report-meta .meta-value { font-size:13px;color:#cbd5e1;font-weight:500;margin-top:2px; }
+  .central-info-bar { display:flex;align-items:center;gap:16px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.10);border-radius:10px;padding:14px 18px;margin-bottom:20px;flex-wrap:wrap; }
+  .central-info-item { display:flex;flex-direction:column;gap:2px; }
+  .central-info-label { font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.06em; }
+  .central-info-value { font-size:13px;color:#e2e8f0;font-weight:600; }
+  .report-stats { display:grid;grid-template-columns:repeat(4,1fr);gap:14px; }
+  .stat-card { background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:14px 16px;text-align:center; }
+  .stat-card-num { font-size:26px;font-weight:800;line-height:1;margin-bottom:5px;font-family:'JetBrains Mono',monospace; }
+  .stat-card-label { font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;font-weight:500; }
+  .confidential-strip { background:linear-gradient(90deg,#7f1d1d,#991b1b);color:#fecaca;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:7px 18px;border-radius:8px;text-align:center;margin-bottom:16px; }
+  .data-table { width:100%;border-collapse:collapse;font-size:12px; }
+  .data-table th { background:#f8fafc;padding:9px 12px;text-align:left;font-weight:700;color:#475569;font-size:11px;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid #e2e8f0; }
+  .data-table td { padding:9px 12px;border-bottom:1px solid #f1f5f9;vertical-align:top; }
+  .data-row:hover { background:#f8fafc; }
+  .rank-cell { color:#94a3b8;font-weight:700;font-family:'JetBrains Mono',monospace;font-size:11px; }
+  .mat-name { font-weight:600;color:#0f172a; }
+  .report-footer { margin-top:40px;padding:20px 24px;background:#f8fafc;border-radius:12px;border:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;font-size:12px;color:#64748b; }
+  @media print {
+    .action-bar { display:none; }
+    body { background:#fff !important; }
+    .page-wrap { padding:0 !important;max-width:100% !important; }
+    .report-header { background:#0f172a !important;-webkit-print-color-adjust:exact;color-adjust:exact; }
+  }
+</style>
+</head>
+<body>
+<div class="action-bar">
+  <div class="action-bar-title">Relatório Central — ${escC(centralName)} <span>Período: ${escC(periodo)} · Gerado em ${now}</span></div>
+  <div class="action-bar-btns">
+    <button class="btn-print" onclick="window.print()">🖨️ Imprimir / Salvar PDF</button>
+    <button class="btn-close" onclick="window.close()">✕ Fechar</button>
+  </div>
+</div>
+<div class="page-wrap">
+  <div class="confidential-strip" style="margin-top:18px">⚠ Documento Confidencial — Uso interno · Operadores e Gerência</div>
+  <div class="report-header">
+    <div class="report-header-top">
+      <div class="report-logo-area">
+        <div class="report-logo-icon">🏭</div>
+        <div class="report-logo-text">
+          <h1>Relatório de Central</h1>
+          <p>${escC(centralName)} · AnalyticSys · Gestão Centralizada de Materiais</p>
+        </div>
+      </div>
+      <div class="report-meta">
+        <div class="meta-label">Período analisado</div>
+        <div class="meta-value">${escC(periodo)}</div>
+        <div class="meta-label" style="margin-top:8px">Gerado em</div>
+        <div class="meta-value">${now}</div>
+      </div>
+    </div>
+    <div class="central-info-bar">
+      <div class="central-info-item"><span class="central-info-label">Central</span><span class="central-info-value">${escC(centralName)}</span></div>
+      <div style="width:1px;height:32px;background:rgba(255,255,255,0.1)"></div>
+      <div class="central-info-item"><span class="central-info-label">Regional</span><span class="central-info-value">${escC(regional)}</span></div>
+      <div style="width:1px;height:32px;background:rgba(255,255,255,0.1)"></div>
+      <div class="central-info-item"><span class="central-info-label">Total de materiais</span><span class="central-info-value">${totalGeral} ${totalGeral!==1?'materiais':'material'}</span></div>
+    </div>
+    <div class="report-stats">
+      <div class="stat-card"><div class="stat-card-num" style="color:#f87171">${criticos.length}</div><div class="stat-card-label">🔴 Críticos</div></div>
+      <div class="stat-card"><div class="stat-card-num" style="color:#fb923c">${urgentes.length}</div><div class="stat-card-label">🟠 Urgentes</div></div>
+      <div class="stat-card"><div class="stat-card-num" style="color:#fbbf24">${atencoes.length}</div><div class="stat-card-label">⚠️ Atenção</div></div>
+      <div class="stat-card"><div class="stat-card-num" style="color:#e2e8f0">${totalGeral}</div><div class="stat-card-label">📊 Total Geral</div></div>
+    </div>
+  </div>
+  ${sectionsHtml}
+  <div class="report-footer">
+    <span>Concrelagos Concreto · <strong>AnalyticSys</strong> · Gestão Centralizada de Estoque e Insumos</span>
+    <span>Período: <strong>${escC(periodo)}</strong></span>
+  </div>
+</div>
+</body>
+</html>`;
+
+  _openRelWindow(html);
 };
