@@ -2646,8 +2646,44 @@ async function _mergeWithConflictCheck(modulo, incoming) {
   }
 
   const stateKey = { 'Entrada': 'entradas', 'Saída': 'saidas', 'Lançamento': 'lancamentos', 'SAP': 'sap', 'Produção': 'producao' }[modulo];
-  const { result, added } = _mergeDedup(state[stateKey] || [], resolvedIncoming, fp);
+  const existingCount = (state[stateKey] || []).length;
+  const incomingCount = resolvedIncoming.length;
+
+  // Feedback visual: informa que o merge está em andamento.
+  // Em arquivos grandes (centenas de milhares de registros) esse passo pode
+  // levar vários segundos — sem esse aviso a barra de progresso ficaria parada
+  // em 100% dando impressão de travamento.
+  if (isLoadingOverlayVisible()) {
+    updateLoadingOverlay(
+      `Consolidando ${incomingCount.toLocaleString('pt-BR')} registros novos com ${existingCount.toLocaleString('pt-BR')} existentes…`,
+      `Importando ${modulo}`,
+      'Removendo duplicatas e mesclando os dados. Isso pode levar alguns instantes em arquivos grandes…'
+    );
+    await nextFrame(); // garante que o browser pinta a mensagem antes de bloquear no merge
+  }
+
+  // Melhoria 2: para o módulo SAP, usa uma cópia compactada do existing no _mergeDedup.
+  // A compactação (que remove campos extras não persistidos como createdAt) reduz o
+  // volume de dados percorridos pelo merge em memória, tornando-o mais rápido em
+  // arquivos grandes. O state.sap em memória NÃO é alterado aqui — a cópia compactada
+  // é usada apenas como entrada do merge; o resultado retornado ainda contém os campos
+  // completos dos registros do incoming (que chegam com createdAt do stamp()).
+  const existingForMerge = (modulo === 'SAP')
+    ? compactSapRecords(state[stateKey] || [])
+    : (state[stateKey] || []);
+
+  const { result, added } = _mergeDedup(existingForMerge, resolvedIncoming, fp);
   _importAddedCount += added;
+
+  // Feedback pós-merge
+  if (isLoadingOverlayVisible()) {
+    updateLoadingOverlay(
+      `Mesclagem concluída — ${added.toLocaleString('pt-BR')} registro${added !== 1 ? 's' : ''} novo${added !== 1 ? 's' : ''} adicionado${added !== 1 ? 's' : ''}`,
+      `Importando ${modulo}`,
+      'Salvando e atualizando os painéis…'
+    );
+  }
+
   return result;
 }
 
@@ -2837,6 +2873,11 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
   } else if (modulo === 'Lançamento') {
     const cm = extra.colMap || {};
     const ci = (field, fallback) => cm[field] !== undefined ? cm[field] : fallback;
+    // isCsv determina a função de conversão numérica:
+    // - XLSX pt-BR: numXls() trata ponto de milhar e formato contábil (ex: "55.000", "R$ 0,37")
+    // - CSV: numCsv() trata vírgula decimal (ex: "55000,00")
+    // - fallback: num() para casos já numéricos
+    const toNum = extra.isCsv ? numCsv : numXls;
     for (let i = 0; i < total; i += batchSize) {
       updateStep('Consolidando lançamentos...');
       await processSlice(i, Math.min(i + batchSize, total), (r) => {
@@ -2849,8 +2890,8 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
         const municipio  = partes.length > 2 ? partes[2] : '';
         if (!materialOriginal) return null;
 
-        const peso = num(r[ci('peso', 4)]);
-        const custo = num(r[ci('custo', 5)]);
+        const peso  = toNum(r[ci('peso',  4)]);
+        const custo = toNum(r[ci('custo', 5)]);
         return stamp(normalizarCentraisRecord({
           importId,
           dtLanc:          fmtDate(r[ci('dtLanc',   0)]),
@@ -2863,7 +2904,7 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
           peso,
           um:              'KG',
           custo,
-          valorTotal:      num(r[ci('valorTotal', -1)]) || (peso * custo)
+          valorTotal:      toNum(r[ci('valorTotal', -1)]) || (peso * custo)
         }, ['central']));
       });
     }
@@ -3299,28 +3340,34 @@ function buildLancamentoColumnMap(headerRow) {
   const n = s => String(s ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
   const map = {};
   const defs = {
-    dtLanc:     { exact: ['data','data lancamento','data lançamento','dt lancamento','dt lançamento','dt.','dt lanc','dt. lanc','data lanc'] },
+    dtLanc:     { exact: ['data','data lancamento','data lançamento','dt lancamento','dt lançamento','dt.','dt lanc','dt. lanc','data lanc'],
+                  starts: ['data'] },
     central:    { exact: ['central','centro','filial','unidade','plant'] },
-    material:   { exact: ['material','produto','item','descricao','descrição','mat.','material | fornecedor'] },
+    material:   { exact: ['material','produto','item','descricao','descrição','mat.','material | fornecedor',
+                          'mcc','cod material','codigo material','código material','cod. material'] },
     categoria:  { exact: ['categoria','category','cat'] },
-    peso:       { exact: ['peso','estoque','saldo','quantidade','qtde','weight','qty'] },
-    custo:      { exact: ['custo','custo unit','custo unitario','preco','preço','valor unit'] },
+    peso:       { exact: ['peso','estoque','saldo','quantidade','qtde','weight','qty'],
+                  starts: ['estoque','peso','saldo','quant'] },
+    custo:      { exact: ['custo','custo unit','custo unitario','preco','preço','valor unit',
+                          'preco medio','preço medio','preco medio (kg)','preço médio (kg)',
+                          'custo medio','custo médio'],
+                  starts: ['custo','preco','preço'] },
     valorTotal: { exact: ['valor total','total','valor','amount','montante'] },
   };
   headerRow.forEach((cell, idx) => {
     const norm = n(cell);
-    for (const [field, { exact }] of Object.entries(defs)) {
+    for (const [field, { exact, starts = [] }] of Object.entries(defs)) {
       if (map[field] !== undefined) continue;
-      if (exact.some(a => norm === a || norm.startsWith(a))) map[field] = idx;
+      if (exact.some(a => norm === a) || starts.some(a => norm.startsWith(a))) map[field] = idx;
     }
   });
   return map;
 }
 
-// Helper: detecta linha de cabeçalho nas primeiras 10 linhas
+// Helper: detecta linha de cabeçalho nas primeiras 15 linhas
 function detectModuleHeaderRow(rows, requiredFields, minHits = 2) {
   const n = s => String(s ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
-  for (let i = 0; i < Math.min(rows.length, 10); i++) {
+  for (let i = 0; i < Math.min(rows.length, 15); i++) {
     const cells = (rows[i] || []).map(n).filter(Boolean);
     let hits = 0;
     for (const cell of cells) {
@@ -3477,6 +3524,31 @@ async function handleImport(event, modulo) {
 
         if (data.length === 0) {
           toast('Nenhuma linha de dados encontrada. Verifique se o arquivo é o MB51 correto.', 'error');
+          hideLoadingOverlay('Falha na importação');
+          event.target.value = '';
+          return;
+        }
+      } else if (modulo === 'Lançamento') {
+        // ── Etapa 1: detecção automática do cabeçalho ──────────────────────
+        // O arquivo de Lançamentos pode vir com N linhas de metadados antes do
+        // cabeçalho real (ex: período, responsável, central…). Reutilizamos
+        // detectModuleHeaderRow — a mesma lógica já usada no SAP — para varrer
+        // as primeiras 15 linhas e encontrar onde começa o cabeçalho real.
+        const lancHeaderFields = ['data', 'central', 'material', 'mcc', 'categoria', 'estoque', 'preco', 'preço'];
+        const headerIdx = detectModuleHeaderRow(rows, lancHeaderFields, 2);
+        const headerRow = rows[headerIdx] || [];
+        const colMap    = buildLancamentoColumnMap(headerRow);
+
+        data  = rows.slice(headerIdx + 1).filter(r => r.some(c => c !== '' && c !== null && c !== undefined));
+        extra = { colMap, lancHeaderFound: headerIdx, isCsv };
+
+        console.info('[Lançamento Import] ✓ Cabeçalho detectado na linha:', headerIdx, '| Conteúdo:', headerRow);
+        console.info('[Lançamento Import] ✓ Mapeamento de colunas:', colMap);
+        console.info('[Lançamento Import] ✓ Total de linhas de dados:', data.length);
+        console.info('[Lançamento Import] ✓ Amostra da 1ª linha:', data[0]);
+
+        if (data.length === 0) {
+          toast('Nenhuma linha de dados encontrada no arquivo de Lançamentos.', 'error');
           hideLoadingOverlay('Falha na importação');
           event.target.value = '';
           return;

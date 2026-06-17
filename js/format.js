@@ -69,6 +69,40 @@ function numCsv(v) {
   return Number.isFinite(r) ? r : 0;
 }
 
+// Conversão de valores numéricos de planilhas Excel exportadas em pt-BR.
+// Trata: números puros (já como number), strings com ponto de milhar "1.234",
+// formato contábil "1.234,56", prefixo monetário "R$ 1.234,56", e negativos
+// com sinal convencional "-1.234,56" — padrão de células de MOEDA do Excel BR.
+// NÃO altera num() nem numCsv() para não impactar outros módulos.
+function numXls(v) {
+  if (v === null || v === undefined) return 0;
+  if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
+  if (typeof v === 'object') return 0;
+  let s = String(v).trim();
+  if (!s || /^#/.test(s)) return 0;
+  // Preserva sinal negativo convencional antes de qualquer tratamento
+  const neg = s.startsWith('-');
+  if (neg) s = s.slice(1).trim();
+  // Remove prefixo monetário e espaços (ex: "R$ ", "R$", "-R$ ")
+  s = s.replace(/^R\$\s*/i, '').trim();
+  // Formato pt-BR: ponto como separador de milhar, vírgula como decimal
+  // Detecta pelo padrão: tem vírgula → vírgula é decimal, pontos são milhar
+  if (s.includes(',')) {
+    s = s.replace(/\./g, '').replace(',', '.');
+  } else {
+    // Sem vírgula: se o último grupo após ponto tem exatamente 3 dígitos
+    // → todos os pontos são milhar ("55.000" → "55000", "1.234.567" → "1234567")
+    // Caso contrário mantém o ponto como decimal ("0.37" → 0.37)
+    const partes = s.split('.');
+    if (partes.length > 1 && partes[partes.length - 1].length === 3) {
+      s = s.replace(/\./g, '');
+    }
+  }
+  const r = parseFloat(s);
+  if (!Number.isFinite(r)) return 0;
+  return neg ? -r : r;
+}
+
 /**
  * Sanitiza um worksheet XLSX antes do sheet_to_json.
  * Células com erro (type 'e') são substituídas por células vazias,
