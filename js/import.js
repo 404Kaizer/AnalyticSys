@@ -41,7 +41,10 @@ function excluirImportacao(importId) {
       confirmarComUndo({
         message: `"${nomeArquivo}" excluída`,
         action: () => {
-          const removeByImport = arr => arr.filter(r => r.importId !== importId);
+          // Registros manuais (fonte='manual') não têm importId e nunca devem
+          // ser removidos por esta operação — a guarda explícita protege contra
+          // casos futuros onde importId possa ser undefined por outro motivo.
+          const removeByImport = arr => arr.filter(r => r.fonte === 'manual' || r.importId !== importId);
           state.entradas    = removeByImport(state.entradas);
           state.saidas      = removeByImport(state.saidas);
           state.lancamentos = removeByImport(state.lancamentos);
@@ -53,6 +56,12 @@ function excluirImportacao(importId) {
 
           invalidateMaterialLookup();
           invalidateFilialLookup();
+          // Invalida todos os índices de busca para que o dashboard e as
+          // listagens reflitam imediatamente os registros removidos.
+          invalidateLancIndex();
+          invalidateSapIndex();
+          invalidateSaidasIndex();
+          invalidateAllSearchIndexes();
           persist();
           renderAll();
         },
@@ -68,6 +77,11 @@ function excluirImportacao(importId) {
 
           invalidateMaterialLookup();
           invalidateFilialLookup();
+          // Invalida índices também no undo para reconstruir com os dados restaurados.
+          invalidateLancIndex();
+          invalidateSapIndex();
+          invalidateSaidasIndex();
+          invalidateAllSearchIndexes();
           persist();
           renderAll();
         },

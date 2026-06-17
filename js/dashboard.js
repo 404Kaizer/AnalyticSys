@@ -2545,6 +2545,12 @@ function _showConflictModal(modulo, conflicts) {
   const list = document.getElementById('conflict-list');
   if (!sub || !list) return;
 
+  // Esconde o loading overlay temporariamente para que o modal de conflito
+  // fique visível sem sobreposição. O overlay é restaurado em conflictConfirm()
+  // logo antes de o processamento retomar.
+  const overlay = document.getElementById('loading-overlay');
+  if (overlay) overlay.classList.remove('open');
+
   sub.textContent = `${conflicts.length} conflito${conflicts.length !== 1 ? 's' : ''} encontrado${conflicts.length !== 1 ? 's' : ''} em ${modulo}`;
 
   const fmtVal = (r, modulo) => {
@@ -2612,6 +2618,10 @@ function conflictConfirm() {
     decisions.set(idx, checked ? checked.value : 'importado');
   });
   closeModal('modal-import-conflicts');
+  // Restaura o loading overlay antes de retomar o processamento da importação,
+  // que ainda pode ter batches restantes para executar após a resolução do conflito.
+  const overlay = document.getElementById('loading-overlay');
+  if (overlay && loadingOverlayState.visible) overlay.classList.add('open');
   _resolveConflicts(decisions);
 }
 
@@ -2698,12 +2708,22 @@ function _fpProducao(r) {
 function _mergeDedup(existing, incoming, fpFn) {
   if (!incoming.length) return { result: existing, added: 0 };
   const incomingFps = new Set(incoming.map(fpFn));
-  const existingFps = new Set(existing.map(fpFn));
-  // Novos registros que não existem no state atual
-  const trulyNew = incoming.filter(r => !existingFps.has(fpFn(r)));
-  // Registros que existem e serão substituídos (update)
+  // Monta mapa de fingerprint → registro existente para recuperar o importId original
+  const existingByFp = new Map(existing.map(r => [fpFn(r), r]));
+  // Novos registros que não existem no state atual — entram com o importId da importação atual
+  const trulyNew = incoming.filter(r => !existingByFp.has(fpFn(r)));
+  // Registros que já existiam — são atualizados com os dados novos MAS preservam
+  // o importId original, evitando que uma reimportação parcial "sequestre" registros
+  // de importações anteriores e os remova junto ao excluir a importação nova.
+  const updatedExisting = incoming
+    .filter(r => existingByFp.has(fpFn(r)))
+    .map(r => {
+      const original = existingByFp.get(fpFn(r));
+      return { ...r, importId: original.importId };
+    });
+  // Registros que existem e não colidiram com nenhum incoming — mantidos intactos
   const kept = existing.filter(r => !incomingFps.has(fpFn(r)));
-  return { result: [...incoming, ...kept], added: trulyNew.length };
+  return { result: [...updatedExisting, ...trulyNew, ...kept], added: trulyNew.length };
 }
 
 // ── Controle de abort de importação ─────────────────────────────────────────
@@ -2730,6 +2750,10 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
   const importId = `imp_${modulo}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
   const parsed = [];
   const total = rows.length || 0;
+  // _mergedResult acumula o resultado do merge ANTES de ser atribuído ao state.
+  // Só é aplicado ao state após todos os batches concluírem sem abort,
+  // evitando que um abort tardio deixe o state com dados parciais.
+  let _mergedResult = null;
   try {
   // Mostra botão abortar no loading overlay
   const _abortRow = document.getElementById('loading-abort-row');
@@ -2781,7 +2805,7 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
         }, ['centralCompra','centralDestino']));
       });
     }
-    state.entradas = await _mergeWithConflictCheck('Entrada', parsed.filter(r => r.material || r.nf));
+    _mergedResult = await _mergeWithConflictCheck('Entrada', parsed.filter(r => r.material || r.nf));
   } else if (modulo === 'Saída') {
     const cm = extra.colMap || {};
     const ci = (field, fallback) => cm[field] !== undefined ? cm[field] : fallback;
@@ -2809,7 +2833,7 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
         }, ['central']));
       });
     }
-    state.saidas = await _mergeWithConflictCheck('Saída', parsed.filter(r => r.material || r.os));
+    _mergedResult = await _mergeWithConflictCheck('Saída', parsed.filter(r => r.material || r.os));
   } else if (modulo === 'Lançamento') {
     const cm = extra.colMap || {};
     const ci = (field, fallback) => cm[field] !== undefined ? cm[field] : fallback;
@@ -2843,7 +2867,7 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
         }, ['central']));
       });
     }
-    state.lancamentos = await _mergeWithConflictCheck('Lançamento', parsed.filter(r => r.material));
+    _mergedResult = await _mergeWithConflictCheck('Lançamento', parsed.filter(r => r.material));
   } else if (modulo === 'SAP') {
     // Usa mapeamento dinâmico de colunas (passado via extra.sapColMap) quando disponível.
     // Fallback para índices fixos do layout padrão MB51 caso o mapa não seja fornecido.
@@ -2901,7 +2925,7 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
         }, ['central']));
       });
     }
-    state.sap = await _mergeWithConflictCheck('SAP', parsed.filter(r => r.material || r.documento));
+    _mergedResult = await _mergeWithConflictCheck('SAP', parsed.filter(r => r.material || r.documento));
   } else if (modulo === 'Produção') {
     const mes = extra.mes || prompt('Informe o mês da produção importada:');
     if (!mes || !String(mes).trim()) {
@@ -2923,7 +2947,22 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
         totalVendas: num(r[8])
       }, ['central'])));
     }
-    state.producao = await _mergeWithConflictCheck('Produção', parsed.filter(r => r.central || r.producao));
+    _mergedResult = await _mergeWithConflictCheck('Produção', parsed.filter(r => r.central || r.producao));
+  }
+
+  // Aplica o resultado do merge ao state somente aqui, após todos os batches
+  // concluírem sem abort. Desta forma, se o usuário abortar durante o processamento,
+  // o state permanece intacto com os dados anteriores à importação.
+  if (_mergedResult !== null) {
+    const stateKeyMap = {
+      'Entrada':    'entradas',
+      'Saída':      'saidas',
+      'Lançamento': 'lancamentos',
+      'SAP':        'sap',
+      'Produção':   'producao',
+    };
+    const stateKey = stateKeyMap[modulo];
+    if (stateKey) state[stateKey] = _mergedResult;
   }
 
   if (!parsed.length) {

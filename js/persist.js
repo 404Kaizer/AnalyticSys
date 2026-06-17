@@ -117,6 +117,12 @@ async function loadSapChunks(db) {
     const chunks = await Promise.all(
       Array.from({ length: meta.totalChunks }, (_, i) => idbGet(db, SAP_CHUNK_KEY + i))
     );
+    // Detecta chunks ausentes ou corrompidos (null = falha na leitura ou chave inexistente)
+    const missingCount = chunks.filter(c => !Array.isArray(c)).length;
+    if (missingCount > 0) {
+      console.warn(`[Persist] SAP: ${missingCount} de ${meta.totalChunks} chunk(s) ausentes ou corrompidos. Dados SAP podem estar incompletos.`);
+      toast(`⚠ ${missingCount} bloco(s) de dados SAP não puderam ser lidos. Os dados exibidos podem estar incompletos.`, 'error');
+    }
     const records = chunks.filter(Array.isArray).flat();
     console.info(`[Persist] SAP carregado: ${records.length} registros de ${meta.totalChunks} chunk${meta.totalChunks!==1?'s':''}`);
     return records;
@@ -173,6 +179,9 @@ function applySavedState(saved) {
 
   for (const key of saveSnapshotKeys) {
     if (key === 'configs') continue;
+    // _skipSap: sinaliza que o SAP já foi carregado via chunks IDB e não deve
+    // ser sobrescrito pelo snapshot legado do localStorage (que contém sap:[]).
+    if (key === 'sap' && saved._skipSap) continue;
     if (!Array.isArray(saved[key])) continue;
     state[key] = saved[key];
   }
@@ -233,6 +242,10 @@ async function persistStateNow() {
   try {
     const db = await openDb();
     if (db) {
+      // Sinaliza início de escrita — se o browser fechar no meio, loadState
+      // detecta pendingWrite=true e emite aviso de possível inconsistência.
+      await idbPut(db, 'meta', { version: STATE_VERSION, savedAt: snapshot.savedAt, pendingWrite: true }).catch(() => {});
+
       // SAP é salvo em chunks separados — pode ter milhões de registros
       await saveSapChunks(db, snapshot.sap || []);
 
@@ -243,7 +256,9 @@ async function persistStateNow() {
       // Chaves individuais para recuperação parcial (sem SAP — já está nos chunks)
       const keysParaSalvar = saveSnapshotKeys.filter(k => k !== 'sap');
       await Promise.all(keysParaSalvar.map(key => idbPut(db, key, snapshot[key])));
-      await idbPut(db, 'meta', { version: STATE_VERSION, savedAt: snapshot.savedAt });
+
+      // Limpa o flag — escrita concluída com sucesso
+      await idbPut(db, 'meta', { version: STATE_VERSION, savedAt: snapshot.savedAt, pendingWrite: false });
 
       const sapCount = (snapshot.sap || []).length;
       console.info(`[Persist] ✓ Salvo no IndexedDB | SAP: ${sapCount.toLocaleString('pt-BR')} reg.`);
@@ -258,11 +273,11 @@ async function persistStateNow() {
     const snapshotSemSap = { ...snapshot, sap: [] };
     localStorage.setItem(legacyStateKey, JSON.stringify(snapshotSemSap));
     console.warn('[Persist] Salvo no localStorage SEM dados SAP (IndexedDB indisponível).');
-    return true; // localStorage funcionou
-    // Notifica a importação que a persistência foi parcial
+    // Notifica o usuário que os dados SAP não foram salvos permanentemente
     if ((snapshot.sap || []).length > 0) {
       toast('⚠ Dados SAP não puderam ser salvos permanentemente. Use um navegador que suporte IndexedDB.', 'error');
     }
+    return true; // localStorage funcionou
   } catch (err) {
     console.error('[Persist] ✗ FALHA TOTAL:', err);
     toast('⚠ Não foi possível salvar os dados.', 'error');
@@ -314,6 +329,15 @@ async function loadState() {
     const db = await openDb();
     if (db) {
       if (isLoadingOverlayVisible()) updateLoadingOverlay('Lendo o banco local do navegador...', 'Carregando informações');
+
+      // Verifica se a última gravação foi interrompida antes de concluir
+      const meta = await idbGet(db, 'meta').catch(() => null);
+      if (meta?.pendingWrite === true) {
+        console.warn('[Persist] Detectada gravação incompleta na sessão anterior. Os dados podem estar parcialmente desatualizados.');
+        // Avisa o usuário de forma não-bloqueante (toast aparece após a UI estar pronta)
+        setTimeout(() => toast('⚠ A sessão anterior foi encerrada durante uma gravação. Verifique se os dados estão completos.', 'error'), 3000);
+      }
+
       let saved = await idbGet(db, IDB_STATE_KEY);
 
       if (!saved || typeof saved !== 'object') {
@@ -346,7 +370,14 @@ async function loadState() {
       if (isLoadingOverlayVisible()) updateLoadingOverlay('Restaurando o armazenamento antigo...', 'Carregando informações');
       const raw = localStorage.getItem(legacyStateKey);
       if (raw) {
-        loaded = applySavedState(safeJSONParse(raw, {}));
+        const parsed = safeJSONParse(raw, {});
+        // Se o SAP já foi carregado via chunks IDB, não deixa o snapshot legado
+        // (que tem sap:[]) sobrescrever os dados corretos já em memória.
+        // Marca o campo para que applySavedState o ignore na iteração de keys.
+        if (Array.isArray(state.sap) && state.sap.length > 0) {
+          parsed._skipSap = true;
+        }
+        loaded = applySavedState(parsed);
       }
     } catch (err) {
       console.warn('Não foi possível restaurar o estado local.', err);
