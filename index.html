@@ -2043,7 +2043,20 @@
         <!-- Alertas de prazo -->
         <div id="oc-alerts"></div>
 
-        <div class="section-title" style="margin:20px 0 14px"><i class="ti ti-building-factory-2" style="font-size:13px;margin-right:6px"></i>Visão Geral de Ocorrências Registradas</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin:20px 0 14px;flex-wrap:wrap;gap:10px">
+          <div class="section-title" style="margin:0"><i class="ti ti-building-factory-2" style="font-size:13px;margin-right:6px"></i>Visão Geral de Ocorrências Registradas</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn" onclick="gerarRelatorioGeralOcorrencias()" title="Gerar relatório gerencial de ocorrências para diretoria" style="gap:7px;font-size:12px;padding:7px 14px;background:linear-gradient(135deg,#0f766e,#0d9488);border:none;border-radius:8px;cursor:pointer;display:flex;align-items:center;color:#fff;font-weight:600;white-space:nowrap">
+              <i class="ti ti-file-analytics" style="font-size:14px"></i> Relatório Gerencial
+            </button>
+            <button class="btn" onclick="abrirSeletorRegionalOcorrencias()" title="Gerar relatório de cobrança por regional" style="gap:7px;font-size:12px;padding:7px 14px;background:linear-gradient(135deg,#7c2d12,#c2410c);border:none;border-radius:8px;cursor:pointer;display:flex;align-items:center;color:#fff;font-weight:600;white-space:nowrap">
+              <i class="ti ti-map-pin" style="font-size:14px"></i> Cobrança Regional
+            </button>
+            <button class="btn" onclick="abrirSeletorCentralOcorrencias()" title="Gerar relatório de cobrança por central" style="gap:7px;font-size:12px;padding:7px 14px;background:linear-gradient(135deg,#3730a3,#4f46e5);border:none;border-radius:8px;cursor:pointer;display:flex;align-items:center;color:#fff;font-weight:600;white-space:nowrap">
+              <i class="ti ti-building-factory-2" style="font-size:14px"></i> Cobrança por Central
+            </button>
+          </div>
+        </div>
 
         <!-- KPIs + Gráficos -->
         <div id="oc-kpis"></div>
