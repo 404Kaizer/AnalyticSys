@@ -528,5 +528,99 @@ async function limparFiliais() {
 }
 
 // ═══════════════════════════════════════════════════════════
+// AÇÕES DE RELATÓRIO — regras para o Relatório com Ações
+// ═══════════════════════════════════════════════════════════
+
+function makeAcaoId() {
+  return 'AR-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
+}
+
+function abrirModalAcaoRelatorio(id) {
+  const item = id ? (state.acoesRelatorio || []).find(a => a.id === id) : null;
+
+  // Popula select de materiais com os cadastrados + os que já aparecem nas regras
+  const matCadastrados = (state.materiais || []).map(m => (m.alias || m.origem || '').trim()).filter(Boolean);
+  const matNasRegras   = (state.acoesRelatorio || []).map(a => a.material).filter(Boolean);
+  const todosMats      = [...new Set([...matCadastrados, ...matNasRegras])].sort();
+
+  let modal = document.getElementById('modal-acoes-relatorio');
+  if (!modal) return;
+
+  // Preenche select de materiais
+  const sel = document.getElementById('ar-material');
+  if (sel) {
+    sel.innerHTML = '<option value="">Selecione o material</option>'
+      + todosMats.map(m => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join('');
+  }
+
+  // Preenche campos se for edição
+  document.getElementById('ar-id').value          = item?.id || '';
+  document.getElementById('ar-material').value    = item?.material || '';
+  document.getElementById('ar-operador').value    = item?.operador || 'lt';
+  document.getElementById('ar-valor').value       = item?.valor ?? '';
+  document.getElementById('ar-acoes').value       = item?.acoes || '';
+
+  document.getElementById('ar-modal-title').textContent = item ? 'Editar Ação' : 'Nova Ação de Relatório';
+
+  openModal('modal-acoes-relatorio');
+}
+
+function salvarAcaoRelatorio() {
+  const id       = val('ar-id');
+  const material = val('ar-material');
+  const operador = val('ar-operador');
+  const valorStr = val('ar-valor');
+  const acoes    = val('ar-acoes').trim();
+
+  if (!material) { toast('Selecione o material', 'error'); return; }
+  if (!operador) { toast('Selecione o operador', 'error'); return; }
+  if (valorStr === '' || isNaN(Number(valorStr))) { toast('Informe um valor numérico válido', 'error'); return; }
+  if (!acoes)    { toast('Informe as ações propostas', 'error'); return; }
+
+  const rec = {
+    id:        id || makeAcaoId(),
+    material,
+    operador,
+    valor:     Number(valorStr),
+    acoes,
+    created: new Date().toLocaleDateString('pt-BR')
+  };
+
+  if (!Array.isArray(state.acoesRelatorio)) state.acoesRelatorio = [];
+  const idx = state.acoesRelatorio.findIndex(a => a.id === rec.id);
+  if (idx >= 0) state.acoesRelatorio[idx] = rec;
+  else state.acoesRelatorio.unshift(rec);
+
+  persist();
+  renderAcoesRelatorio();
+  toast(idx >= 0 ? 'Ação atualizada' : 'Ação cadastrada');
+  closeModal('modal-acoes-relatorio');
+}
+
+function editarAcaoRelatorio(id) {
+  abrirModalAcaoRelatorio(id);
+}
+
+function removerAcaoRelatorio(id) {
+  if (!confirm('Excluir esta ação de relatório?')) return;
+  if (!Array.isArray(state.acoesRelatorio)) return;
+  const idx = state.acoesRelatorio.findIndex(a => a.id === id);
+  if (idx < 0) return;
+  state.acoesRelatorio.splice(idx, 1);
+  persist();
+  renderAcoesRelatorio();
+  toast('Ação removida', 'error');
+}
+
+function limparAcoesRelatorio() {
+  if (!(state.acoesRelatorio || []).length) return toast('Nenhuma ação cadastrada', 'error');
+  if (!confirm('Excluir todas as ações de relatório?')) return;
+  state.acoesRelatorio = [];
+  persist();
+  renderAcoesRelatorio();
+  toast('Todas as ações foram excluídas', 'error');
+}
+
+// ═══════════════════════════════════════════════════════════
 // DASHBOARD GERENCIAL — strip KPI analítico (sem filtro de período)
 // ═══════════════════════════════════════════════════════════

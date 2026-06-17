@@ -922,7 +922,7 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
         <button class="trend-btn" onclick="event.stopPropagation();openTrendModal('central','${escapeHtml(r.central)}')" title="Ver tendência de variação">
           <i class="ti ti-chart-line"></i>
         </button>
-        <button class="trend-btn" onclick="event.stopPropagation();gerarRelatorioCentral('${escapeHtml(r.central)}')" title="Gerar relatório desta central" style="background:linear-gradient(135deg,rgba(29,78,216,0.18),rgba(37,99,235,0.12));border:1px solid rgba(37,99,235,0.3);color:#60a5fa">
+        <button class="trend-btn" onclick="event.stopPropagation();abrirModalRelatorioCentral('${escapeHtml(r.central)}')" title="Gerar relatório desta central" style="background:linear-gradient(135deg,rgba(29,78,216,0.18),rgba(37,99,235,0.12));border:1px solid rgba(37,99,235,0.3);color:#60a5fa">
           <i class="ti ti-file-analytics"></i>
         </button>
         <i class="ti ti-chevron-down" style="color:var(--text3);font-size:16px;flex-shrink:0;transition:transform 0.2s" id="chev-${idx}"></i>
@@ -2340,6 +2340,7 @@ async function startupRestoreFlow() {
     let savedFiliais    = null;
     let savedMateriais  = null;
     let savedOcorrencias= null;
+    let savedAcoesRelatorio = null;
     const savedManuais  = {}; // { modulo: [registros manuais] }
 
     if (db) {
@@ -2348,6 +2349,7 @@ async function startupRestoreFlow() {
       savedFiliais    = await idbGet(db, 'filiais').catch(() => null);
       savedMateriais  = await idbGet(db, 'materiais').catch(() => null);
       savedOcorrencias= await idbGet(db, 'ocorrencias').catch(() => null);
+      savedAcoesRelatorio = await idbGet(db, 'acoesRelatorio').catch(() => null);
 
       // Para registros manuais: lê todos os módulos e filtra só os manuais
       const modulosComManuais = ['entradas','saidas','lancamentos','producao'];
@@ -2376,6 +2378,7 @@ async function startupRestoreFlow() {
           if (!Array.isArray(savedFiliais)    && Array.isArray(snapshot.filiais))    savedFiliais    = snapshot.filiais;
           if (!Array.isArray(savedMateriais)  && Array.isArray(snapshot.materiais))  savedMateriais  = snapshot.materiais;
           if (!Array.isArray(savedOcorrencias)&& Array.isArray(snapshot.ocorrencias))savedOcorrencias= snapshot.ocorrencias;
+          if (!Array.isArray(savedAcoesRelatorio) && Array.isArray(snapshot.acoesRelatorio)) savedAcoesRelatorio = snapshot.acoesRelatorio;
           // Manuais do snapshot (exceto SAP — está em chunks, já tratado acima)
           for (const mod of modulosComManuais) {
             if (!savedManuais[mod] && Array.isArray(snapshot[mod])) {
@@ -2400,6 +2403,7 @@ async function startupRestoreFlow() {
           if ((!Array.isArray(savedFiliais)   || !savedFiliais.length)   && Array.isArray(parsed.filiais))   savedFiliais   = parsed.filiais;
           if ((!Array.isArray(savedMateriais) || !savedMateriais.length) && Array.isArray(parsed.materiais)) savedMateriais = parsed.materiais;
           if ((!Array.isArray(savedOcorrencias)|| !savedOcorrencias.length) && Array.isArray(parsed.ocorrencias)) savedOcorrencias = parsed.ocorrencias;
+          if ((!Array.isArray(savedAcoesRelatorio) || !savedAcoesRelatorio.length) && Array.isArray(parsed.acoesRelatorio)) savedAcoesRelatorio = parsed.acoesRelatorio;
         }
       } catch (_) {}
     }
@@ -2421,6 +2425,9 @@ async function startupRestoreFlow() {
     }
     if (Array.isArray(savedOcorrencias) && savedOcorrencias.length > 0) {
       state.ocorrencias = savedOcorrencias;
+    }
+    if (Array.isArray(savedAcoesRelatorio) && savedAcoesRelatorio.length > 0) {
+      state.acoesRelatorio = savedAcoesRelatorio;
     }
     // Restaura registros manuais nos módulos correspondentes
     const modStateMap = { entradas:'entradas', saidas:'saidas', lancamentos:'lancamentos', sap:'sap', producao:'producao' };
@@ -2452,6 +2459,7 @@ async function startupRestoreFlow() {
   updateParamGerais();
   renderFiliais();
   renderMateriais();
+  renderAcoesRelatorio();
   renderPage(activePage);
   initResizable();
 }

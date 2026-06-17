@@ -523,6 +523,7 @@ function renderScope(scope) {
   if (scope === 'configs') return renderConfigs();
   if (scope === 'filiais') return renderFiliais();
   if (scope === 'materiais') return renderMateriais();
+  if (scope === 'acoesRelatorio') return renderAcoesRelatorio();
 }
 
 function irParaPagina(module, page) {

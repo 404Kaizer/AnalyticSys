@@ -2291,6 +2291,50 @@
 
         </div>
 
+        <!-- ── Ações de Relatório ── -->
+        <div class="section-title">Ações de Relatório</div>
+        <div class="table-card" style="margin-bottom:24px">
+          <div class="table-header">
+            <div style="display:flex;flex-direction:column;gap:2px">
+              <span class="table-title"><i class="ti ti-list-check"></i> Regras de Ação por Variação de Material</span>
+              <span style="font-size:11px;color:var(--text3)">regras aplicadas no <strong style="color:var(--text2)">Relatório com Ações</strong> das centrais · Dashboard Analítico</span>
+            </div>
+            <div class="table-toolbar">
+              <button class="btn btn-primary" onclick="abrirModalAcaoRelatorio()">
+                <i class="ti ti-plus"></i> Nova Ação
+              </button>
+              <button class="btn" onclick="limparAcoesRelatorio()">
+                <i class="ti ti-trash"></i> Excluir todas
+              </button>
+            </div>
+          </div>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Material</th>
+                  <th>Condição de Variação</th>
+                  <th>Ações Propostas</th>
+                  <th>Criado em</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="tb-acoes-relatorio">
+                <tr><td colspan="5"><div class="empty-state"><i class="ti ti-list-check"></i><p>Nenhuma ação cadastrada.</p></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="pagination">
+            <span class="page-info" id="pi-acoesRelatorio">0 registros</span>
+            <div class="page-btns">
+              <button class="btn" title="Primeiro" onclick="irParaPagina('acoesRelatorio',0)"><i class="ti ti-chevrons-left"></i></button>
+              <button class="btn" title="Anterior" onclick="paginaAnterior('acoesRelatorio')"><i class="ti ti-chevron-left"></i></button>
+              <button class="btn" title="Próxima" onclick="proximaPagina('acoesRelatorio')"><i class="ti ti-chevron-right"></i></button>
+              <button class="btn" title="Último" onclick="irParaUltima('acoesRelatorio')"><i class="ti ti-chevrons-right"></i></button>
+            </div>
+          </div>
+        </div>
+
         <!-- ── Atalhos de Teclado ── -->
         <div class="section-title">Atalhos de Teclado</div>
         <div class="table-card" id="shortcuts-card">
@@ -3017,6 +3061,52 @@
     <div class="form-actions">
       <button class="btn" onclick="closeModal('modal-config')">Cancelar</button>
       <button class="btn btn-primary" onclick="salvarConfig()"><i class="ti ti-check"></i> Salvar</button>
+    </div>
+  </div>
+</div>
+
+
+
+<!-- MODAL: Nova / Editar Ação de Relatório -->
+<div class="modal-overlay" id="modal-acoes-relatorio">
+  <div class="modal" style="max-width:480px;width:94vw">
+    <div class="modal-title"><i class="ti ti-list-check"></i> <span id="ar-modal-title">Nova Ação de Relatório</span></div>
+    <div class="modal-sub">define ações propostas para um material quando a variação atender a condição</div>
+    <input type="hidden" id="ar-id">
+    <div class="form-grid" style="grid-template-columns:1fr">
+      <div class="form-group">
+        <label class="form-label">Material <span style="color:var(--red)">*</span></label>
+        <select class="form-input" id="ar-material">
+          <option value="">Selecione o material</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Condição de variação <span style="color:var(--red)">*</span></label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <select class="form-input" id="ar-operador">
+            <option value="lt">&lt; Menor que</option>
+            <option value="lte">≤ Menor ou igual a</option>
+            <option value="eq">= Igual a</option>
+            <option value="gte">≥ Maior ou igual a</option>
+            <option value="gt">&gt; Maior que</option>
+          </select>
+          <div style="display:flex;align-items:center;gap:6px">
+            <input type="number" class="form-input" id="ar-valor" placeholder="Ex: -500" step="any">
+            <span style="font-size:12px;color:var(--text3);white-space:nowrap">kg</span>
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:6px;line-height:1.5">
+          <i class="ti ti-info-circle"></i> Use valores negativos para desfalque (ex: <code>-500</code>) e positivos para sobra. A regra mais próxima do valor real será aplicada.
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Ações propostas <span style="color:var(--red)">*</span></label>
+        <textarea class="form-input" id="ar-acoes" rows="4" placeholder="Ex: Verificar balança; acionar responsável de pátio; abrir ocorrência no sistema…" style="resize:vertical"></textarea>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn" onclick="closeModal('modal-acoes-relatorio')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarAcaoRelatorio()"><i class="ti ti-check"></i> Salvar</button>
     </div>
   </div>
 </div>

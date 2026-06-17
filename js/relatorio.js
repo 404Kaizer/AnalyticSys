@@ -1421,6 +1421,104 @@ function _buildRelRegionalHTML({ titulo, subtitulo, periodo, now, totalCritico, 
 
 
 // ═══════════════════════════════════════════════════════════════════
+// MODAL DE SELEÇÃO — Tipo de Relatório da Central (Analítico)
+// ═══════════════════════════════════════════════════════════════════
+
+window.abrirModalRelatorioCentral = function(centralName) {
+  let modal = document.getElementById('an-rel-central-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'an-rel-central-modal';
+    modal.className = 'modal-overlay';
+    modal.style.cssText = 'z-index:3200';
+    document.body.appendChild(modal);
+  }
+
+  const safe = centralName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+
+  modal.innerHTML = `
+    <div class="modal" style="max-width:460px;width:94vw">
+      <div class="modal-title" style="display:flex;align-items:center;gap:10px">
+        <i class="ti ti-file-analytics" style="color:var(--accent)"></i>
+        Relatório de Central
+      </div>
+      <div class="modal-sub">${centralName} · selecione o tipo de relatório</div>
+      <div style="display:flex;flex-direction:column;gap:10px;margin:20px 0">
+
+        <button onclick="document.getElementById('an-rel-central-modal').classList.remove('open');gerarRelatorioCentral('${safe}');"
+          style="display:flex;align-items:flex-start;gap:14px;width:100%;padding:16px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;cursor:pointer;font-family:inherit;color:var(--text);text-align:left;transition:border-color .15s,background .15s"
+          onmouseover="this.style.borderColor='var(--accent)';this.style.background='var(--bg3)'"
+          onmouseout="this.style.borderColor='var(--border)';this.style.background='var(--bg2)'">
+          <div style="width:38px;height:38px;border-radius:9px;background:linear-gradient(135deg,rgba(29,78,216,0.18),rgba(37,99,235,0.12));border:1px solid rgba(37,99,235,0.3);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <i class="ti ti-chart-bar" style="color:#60a5fa;font-size:17px"></i>
+          </div>
+          <div>
+            <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:3px">Relatório Padrão</div>
+            <div style="font-size:12px;color:var(--text2);line-height:1.5">Criticidade de materiais por nível — crítico, urgente e atenção. Variação e tendência por material.</div>
+          </div>
+        </button>
+
+        <button onclick="document.getElementById('an-rel-central-modal').classList.remove('open');gerarRelatorioComAcoes('${safe}');"
+          style="display:flex;align-items:flex-start;gap:14px;width:100%;padding:16px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;cursor:pointer;font-family:inherit;color:var(--text);text-align:left;transition:border-color .15s,background .15s"
+          onmouseover="this.style.borderColor='var(--accent)';this.style.background='var(--bg3)'"
+          onmouseout="this.style.borderColor='var(--border)';this.style.background='var(--bg2)'">
+          <div style="width:38px;height:38px;border-radius:9px;background:linear-gradient(135deg,rgba(16,185,129,0.18),rgba(5,150,105,0.12));border:1px solid rgba(16,185,129,0.3);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <i class="ti ti-checklist" style="color:#34d399;font-size:17px"></i>
+          </div>
+          <div>
+            <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:3px">Relatório com Ações</div>
+            <div style="font-size:12px;color:var(--text2);line-height:1.5">Inclui ações propostas por material com base nas regras cadastradas em Configurações → Ações de Relatório.</div>
+          </div>
+        </button>
+
+      </div>
+      <div class="form-actions">
+        <button class="btn" onclick="document.getElementById('an-rel-central-modal').classList.remove('open')">Cancelar</button>
+      </div>
+    </div>`;
+
+  modal.classList.add('open');
+  modal.onclick = (e) => { if (e.target === modal) modal.classList.remove('open'); };
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// HELPER — resolve ações para um material/variação
+// Retorna a string de ações da regra mais próxima do valor, ou null
+// ═══════════════════════════════════════════════════════════════════
+
+function _resolverAcoesParaMaterial(materialNome, variacao) {
+  const regras = (state.acoesRelatorio || []).filter(a => {
+    if (!a.material) return false;
+    // Match normalizado (sem acento, minúsculo) para não depender de grafia exata
+    const normA = String(a.material).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const normM = String(materialNome).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    return normA === normM;
+  });
+
+  if (!regras.length) return null;
+
+  // Verifica quais regras satisfazem a condição
+  const avaliarRegra = (r) => {
+    const v = Number(r.valor);
+    switch (r.operador) {
+      case 'lt':  return variacao <  v;
+      case 'lte': return variacao <= v;
+      case 'eq':  return Math.abs(variacao - v) < 0.001;
+      case 'gte': return variacao >= v;
+      case 'gt':  return variacao >  v;
+      default:    return false;
+    }
+  };
+
+  const candidatas = regras.filter(avaliarRegra);
+  if (!candidatas.length) return null;
+
+  // Dentre as que satisfazem, pega a mais próxima do valor real
+  candidatas.sort((a, b) => Math.abs(Number(a.valor) - variacao) - Math.abs(Number(b.valor) - variacao));
+  return candidatas[0].acoes;
+}
+
+// ═══════════════════════════════════════════════════════════════════
 // RELATÓRIO POR CENTRAL (Atenção + Urgente + Crítico)
 // ═══════════════════════════════════════════════════════════════════
 
@@ -1601,6 +1699,274 @@ window.gerarRelatorioCentral = function(centralName) {
     <span>Concrelagos Concreto · <strong>AnalyticSys</strong> · Gestão Centralizada de Estoque e Insumos</span>
     <span>Período: <strong>${escC(periodo)}</strong></span>
   </div>
+</div>
+</body>
+</html>`;
+
+  _openRelWindow(html);
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// RELATÓRIO COM AÇÕES — igual ao Padrão + coluna de ações por material
+// ═══════════════════════════════════════════════════════════════════
+
+window.gerarRelatorioComAcoes = function(centralName) {
+  const byLevel = window._rankByLevel;
+  if (!byLevel) { alert('Nenhum dado de criticidade disponível. Execute a análise primeiro.'); return; }
+
+  const filter = item => item.central === centralName;
+  const criticos = (byLevel.critico || []).filter(filter);
+  const urgentes = (byLevel.urgente || []).filter(filter);
+  const atencoes = (byLevel.atencao || []).filter(filter);
+
+  if (!criticos.length && !urgentes.length && !atencoes.length) {
+    alert('Nenhum material crítico, urgente ou em atenção para esta central.');
+    return;
+  }
+
+  const totalRegras = (state.acoesRelatorio || []).length;
+  if (!totalRegras) {
+    if (!confirm('Nenhuma regra cadastrada em Configurações → Ações de Relatório.\nO relatório será gerado sem ações associadas. Continuar?')) return;
+  }
+
+  const periodo = _getAnPeriodo();
+  const now = new Date().toLocaleString('pt-BR');
+
+  function fmtKgC(v) { const n=Math.abs(Number(v)||0); return n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})+' kg'; }
+  function varDir(v)  { return v < -0.001 ? 'Desfalque' : v > 0.001 ? 'Sobra' : 'Equilibrado'; }
+  function varColor(v){ return v < -0.001 ? '#ef4444'   : v > 0.001 ? '#f59e0b' : '#6b7280'; }
+  function trendLabel(t){ return t==='worsening' ? '▲ Piorando' : t==='improving' ? '▼ Melhorando' : '→ Estável'; }
+  function trendColor(t){ return t==='worsening' ? '#ef4444' : t==='improving' ? '#10b981' : '#64748b'; }
+  function escC(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  // Monta cards de material — layout vertical, sem tabela
+  function buildCards(items, levelColor, levelBg) {
+    return items.map((item, idx) => {
+      const acoes  = _resolverAcoesParaMaterial(item.mat, item.diff);
+      const vc     = varColor(item.diff);
+      const tc     = trendColor(item.trend);
+      const hasAcao = acoes !== null;
+
+      // Cada ação separada por ponto-e-vírgula vira um bullet
+      const acoesItems = hasAcao
+        ? acoes.split(/[;|\n]/).map(a => a.trim()).filter(Boolean)
+        : [];
+
+      const acoesBullets = acoesItems.map(a =>
+        '<li style="margin-bottom:5px;padding-left:4px;word-break:break-word;overflow-wrap:break-word">' + escC(a) + '</li>'
+      ).join('');
+
+      const acoesBlock = hasAcao
+        ? '<div style="margin-top:14px;padding-top:14px;border-top:1px solid #e2e8f0">' +
+            '<div style="display:flex;align-items:center;gap:7px;margin-bottom:10px">' +
+              '<span style="width:20px;height:20px;border-radius:50%;background:#dcfce7;border:1.5px solid #86efac;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px">✓</span>' +
+              '<span style="font-size:11px;font-weight:700;color:#15803d;text-transform:uppercase;letter-spacing:.06em">Ações propostas</span>' +
+            '</div>' +
+            '<ul style="margin:0;padding-left:18px;font-size:13px;color:#1e293b;line-height:1.7;word-break:break-word;overflow-wrap:break-word">' + acoesBullets + '</ul>' +
+          '</div>'
+        : '<div style="margin-top:14px;padding-top:14px;border-top:1px solid #f1f5f9;display:flex;align-items:center;gap:7px">' +
+            '<span style="width:20px;height:20px;border-radius:50%;background:#f8fafc;border:1.5px solid #e2e8f0;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px;color:#94a3b8">—</span>' +
+            '<span style="font-size:12px;color:#94a3b8;font-style:italic">Sem regra cadastrada para esta variação</span>' +
+          '</div>';
+
+      return '<div style="background:#fff;border:1px solid #e2e8f0;border-left:4px solid ' + levelColor + ';border-radius:10px;padding:18px 20px;margin-bottom:12px;page-break-inside:avoid;overflow:hidden;word-break:break-word">' +
+
+        // Linha topo: número + nome do material
+        '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px">' +
+          '<div style="display:flex;align-items:center;gap:10px">' +
+            '<span style="width:26px;height:26px;border-radius:7px;background:' + levelBg + ';color:' + levelColor + ';font-size:11px;font-weight:800;font-family:\'JetBrains Mono\',monospace;display:flex;align-items:center;justify-content:center;flex-shrink:0">' + (idx+1) + '</span>' +
+            '<span style="font-size:15px;font-weight:700;color:#0f172a">' + escC(item.mat) + '</span>' +
+          '</div>' +
+          (hasAcao
+            ? '<span style="padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;background:#dcfce7;color:#15803d;border:1px solid #86efac;white-space:nowrap;flex-shrink:0">✓ Com ação</span>'
+            : '<span style="padding:3px 10px;border-radius:20px;font-size:10px;font-weight:600;background:#f8fafc;color:#94a3b8;border:1px solid #e2e8f0;white-space:nowrap;flex-shrink:0">Sem ação</span>'
+          ) +
+        '</div>' +
+
+        // Linha de métricas: variação + tendência
+        '<div style="display:flex;gap:10px;flex-wrap:wrap">' +
+          '<div style="display:flex;align-items:center;gap:7px;padding:7px 12px;border-radius:8px;background:#f8fafc;border:1px solid #e2e8f0;min-width:160px">' +
+            '<div>' +
+              '<div style="font-size:10px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px">Variação</div>' +
+              '<div style="font-size:14px;font-weight:800;color:' + vc + ';font-family:\'JetBrains Mono\',monospace">' + varDir(item.diff) + '</div>' +
+              '<div style="font-size:12px;font-weight:500;color:' + vc + ';font-family:\'JetBrains Mono\',monospace">' + fmtKgC(item.diff) + '</div>' +
+            '</div>' +
+          '</div>' +
+          '<div style="display:flex;align-items:center;gap:7px;padding:7px 12px;border-radius:8px;background:#f8fafc;border:1px solid #e2e8f0;min-width:140px">' +
+            '<div>' +
+              '<div style="font-size:10px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px">Tendência</div>' +
+              '<div style="font-size:13px;font-weight:700;color:' + tc + '">' + trendLabel(item.trend) + '</div>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+
+        acoesBlock +
+      '</div>';
+    }).join('');
+  }
+
+  const lvlCfg = {
+    critico: { color:'#ef4444', bg:'#fef2f2', grad:'linear-gradient(135deg,#7f1d1d 0%,#991b1b 60%,#b91c1c 100%)', glow:'rgba(239,68,68,0.30)', icon:'🔴', label:'CRÍTICO', sub:'Ação imediata — escalar à gerência' },
+    urgente: { color:'#f97316', bg:'#fff7ed', grad:'linear-gradient(135deg,#7c2d12 0%,#9a3412 60%,#c2410c 100%)', glow:'rgba(249,115,22,0.28)', icon:'🟠', label:'URGENTE', sub:'Atenção redobrada — repassar aos regionais' },
+    atencao: { color:'#f59e0b', bg:'#fffbeb', grad:'linear-gradient(135deg,#78350f 0%,#92400e 60%,#b45309 100%)', glow:'rgba(245,158,11,0.25)', icon:'⚠️', label:'ATENÇÃO', sub:'Monitorar — contatar operador' },
+  };
+
+  function buildLevelSection(items, cfg) {
+    if (!items.length) return '';
+    const cards = buildCards(items, cfg.color, cfg.bg);
+    return '<div style="margin-bottom:32px;border-radius:14px;overflow:hidden;box-shadow:0 4px 24px ' + cfg.glow + ';page-break-inside:avoid">' +
+      // Header colorido
+      '<div style="background:' + cfg.grad + ';padding:20px 28px;display:flex;align-items:center;justify-content:space-between;position:relative;overflow:hidden">' +
+        '<div style="position:absolute;right:-20px;top:-20px;width:110px;height:110px;border-radius:50%;background:rgba(255,255,255,0.06);pointer-events:none"></div>' +
+        '<div style="display:flex;align-items:center;gap:16px;position:relative">' +
+          '<div style="width:52px;height:52px;border-radius:13px;background:rgba(255,255,255,0.13);border:1.5px solid rgba(255,255,255,0.22);display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0">' + cfg.icon + '</div>' +
+          '<div>' +
+            '<div style="font-size:20px;font-weight:900;color:#fff;letter-spacing:.06em;line-height:1;text-transform:uppercase">' + cfg.label + '</div>' +
+            '<div style="font-size:12px;color:rgba(255,255,255,0.65);margin-top:5px;font-weight:500">' + cfg.sub + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<span style="background:rgba(255,255,255,0.15);border:1.5px solid rgba(255,255,255,0.25);color:#fff;padding:7px 18px;border-radius:24px;font-size:13px;font-weight:800;position:relative">' + items.length + ' ' + (items.length > 1 ? 'materiais' : 'material') + '</span>' +
+      '</div>' +
+      // Cards de material
+      '<div style="background:#f8fafc;padding:16px 20px;border:1px solid #e2e8f0;border-top:none">' +
+        cards +
+      '</div>' +
+    '</div>';
+  }
+
+  const allItems = [...criticos, ...urgentes, ...atencoes];
+  const totalGeral = allItems.length;
+  const regional   = allItems[0]?.regional || '—';
+  const comAcoes   = allItems.filter(i => _resolverAcoesParaMaterial(i.mat, i.diff) !== null).length;
+  const semAcoes   = totalGeral - comAcoes;
+
+  const sectionsHtml =
+    buildLevelSection(criticos, lvlCfg.critico) +
+    buildLevelSection(urgentes, lvlCfg.urgente) +
+    buildLevelSection(atencoes, lvlCfg.atencao);
+
+  const html = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Relatório com Ações — ${escC(centralName)}</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap');
+  *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:'Inter',system-ui,sans-serif; background:#f1f5f9; color:#0f172a; font-size:13px; line-height:1.6; -webkit-font-smoothing:antialiased; }
+  .page-wrap { max-width:860px; margin:0 auto; padding:24px 20px 48px; }
+
+  .action-bar { position:sticky; top:0; z-index:100; background:#1e293b; display:flex; align-items:center; justify-content:space-between; padding:12px 24px; box-shadow:0 2px 12px rgba(0,0,0,0.25); flex-wrap:wrap; gap:10px; }
+  .action-bar-title { color:#e2e8f0; font-size:13px; font-weight:500; }
+  .action-bar-title span { color:#64748b; font-size:11px; margin-left:10px; }
+  .action-bar-btns { display:flex; gap:10px; }
+  .btn-print { background:#2563eb; color:#fff; border:none; border-radius:7px; padding:8px 18px; font-size:13px; font-weight:600; cursor:pointer; }
+  .btn-print:hover { background:#1d4ed8; }
+  .btn-close { background:#334155; color:#cbd5e1; border:none; border-radius:7px; padding:8px 14px; font-size:13px; cursor:pointer; }
+
+  .report-header { background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%); color:#fff; border-radius:16px; padding:32px 36px; margin-bottom:28px; position:relative; overflow:hidden; }
+  .report-header::before { content:''; position:absolute; top:-50px; right:-50px; width:220px; height:220px; border-radius:50%; background:rgba(16,185,129,0.07); border:2px solid rgba(16,185,129,0.12); pointer-events:none; }
+  .rh-top { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:22px; flex-wrap:wrap; gap:16px; }
+  .rh-logo { display:flex; align-items:center; gap:14px; }
+  .rh-icon { width:52px; height:52px; border-radius:13px; background:rgba(16,185,129,0.18); border:1px solid rgba(16,185,129,0.3); display:flex; align-items:center; justify-content:center; font-size:24px; flex-shrink:0; }
+  .rh-title { font-size:20px; font-weight:800; color:#f8fafc; letter-spacing:-0.02em; line-height:1.2; }
+  .rh-sub { font-size:12px; color:#94a3b8; margin-top:3px; }
+  .rh-meta { text-align:right; }
+  .rh-meta-label { font-size:10px; color:#64748b; text-transform:uppercase; letter-spacing:.06em; }
+  .rh-meta-value { font-size:13px; color:#cbd5e1; font-weight:500; margin-top:2px; }
+
+  .info-bar { display:flex; align-items:center; gap:20px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.10); border-radius:10px; padding:14px 18px; margin-bottom:20px; flex-wrap:wrap; gap:16px; }
+  .info-item { display:flex; flex-direction:column; gap:2px; }
+  .info-label { font-size:10px; color:#64748b; text-transform:uppercase; letter-spacing:.06em; }
+  .info-value { font-size:13px; color:#e2e8f0; font-weight:600; }
+  .info-sep { width:1px; height:32px; background:rgba(255,255,255,0.10); flex-shrink:0; }
+
+  .stats-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:12px; }
+  .stat { background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:14px 12px; text-align:center; }
+  .stat-n { font-size:28px; font-weight:800; line-height:1; margin-bottom:4px; font-family:'JetBrains Mono',monospace; }
+  .stat-l { font-size:10px; color:#94a3b8; text-transform:uppercase; letter-spacing:.05em; font-weight:500; }
+
+  .confidential { background:linear-gradient(90deg,#064e3b,#065f46); color:#6ee7b7; font-size:11px; font-weight:700; letter-spacing:.10em; text-transform:uppercase; padding:7px 20px; border-radius:8px; text-align:center; margin-bottom:20px; }
+
+  .report-footer { margin-top:40px; padding:18px 24px; background:#1e293b; border-radius:12px; color:#64748b; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; font-size:11px; }
+  .report-footer strong { color:#94a3b8; }
+
+  @media print {
+    body { background:#fff !important; }
+    .action-bar { display:none !important; }
+    .page-wrap { padding:0 !important; max-width:100% !important; }
+    .report-header { background:#0f172a !important; -webkit-print-color-adjust:exact; color-adjust:exact; }
+    div[style*="page-break-inside:avoid"] { page-break-inside:avoid; }
+    ul li { -webkit-print-color-adjust:exact; color-adjust:exact; }
+  }
+  @media (max-width:600px) {
+    .stats-grid { grid-template-columns:repeat(3,1fr); }
+    .rh-top { flex-direction:column; }
+    .rh-meta { text-align:left; }
+  }
+</style>
+</head>
+<body>
+
+<div class="action-bar">
+  <div class="action-bar-title">
+    Relatório com Ações — ${escC(centralName)}
+    <span>Período: ${escC(periodo)} · Gerado em ${now}</span>
+  </div>
+  <div class="action-bar-btns">
+    <button class="btn-print" onclick="window.print()">🖨️ Imprimir / Salvar PDF</button>
+    <button class="btn-close" onclick="window.close()">✕ Fechar</button>
+  </div>
+</div>
+
+<div class="page-wrap">
+
+  <div class="confidential" style="margin-top:4px">⚠ Documento Confidencial — Uso interno · Operadores e Gerência</div>
+
+  <div class="report-header">
+    <div class="rh-top">
+      <div class="rh-logo">
+        <div class="rh-icon">✅</div>
+        <div>
+          <div class="rh-title">Relatório com Ações</div>
+          <div class="rh-sub">${escC(centralName)} · AnalyticSys · Gestão Centralizada de Materiais</div>
+        </div>
+      </div>
+      <div class="rh-meta">
+        <div class="rh-meta-label">Período analisado</div>
+        <div class="rh-meta-value">${escC(periodo)}</div>
+        <div class="rh-meta-label" style="margin-top:8px">Gerado em</div>
+        <div class="rh-meta-value">${now}</div>
+      </div>
+    </div>
+
+    <div class="info-bar">
+      <div class="info-item"><span class="info-label">Central</span><span class="info-value">${escC(centralName)}</span></div>
+      <div class="info-sep"></div>
+      <div class="info-item"><span class="info-label">Regional</span><span class="info-value">${escC(regional)}</span></div>
+      <div class="info-sep"></div>
+      <div class="info-item"><span class="info-label">Total de materiais</span><span class="info-value">${totalGeral}</span></div>
+      <div class="info-sep"></div>
+      <div class="info-item"><span class="info-label">Regras cadastradas</span><span class="info-value">${totalRegras}</span></div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat"><div class="stat-n" style="color:#f87171">${criticos.length}</div><div class="stat-l">🔴 Críticos</div></div>
+      <div class="stat"><div class="stat-n" style="color:#fb923c">${urgentes.length}</div><div class="stat-l">🟠 Urgentes</div></div>
+      <div class="stat"><div class="stat-n" style="color:#fbbf24">${atencoes.length}</div><div class="stat-l">⚠️ Atenção</div></div>
+      <div class="stat"><div class="stat-n" style="color:#34d399">${comAcoes}</div><div class="stat-l">✅ Com ação</div></div>
+      <div class="stat"><div class="stat-n" style="color:#94a3b8">${semAcoes}</div><div class="stat-l">— Sem ação</div></div>
+    </div>
+  </div>
+
+  ${sectionsHtml}
+
+  <div class="report-footer">
+    <span>Concrelagos Concreto · <strong>AnalyticSys</strong> · Gestão Centralizada de Estoque e Insumos</span>
+    <span>Período: <strong>${escC(periodo)}</strong> · ${totalGeral} ${totalGeral !== 1 ? 'materiais' : 'material'} · ${comAcoes} com ação</span>
+  </div>
+
 </div>
 </body>
 </html>`;

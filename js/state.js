@@ -24,7 +24,8 @@ const defaultState = () => ({
   configs: [],
   filiais: [],
   materiais: [],
-  ocorrencias: []
+  ocorrencias: [],
+  acoesRelatorio: []
 });
 
 
@@ -116,7 +117,8 @@ const listFilters = {
   imports: '',
   configs: '',
   filiais: '',
-  materiais: ''
+  materiais: '',
+  acoesRelatorio: ''
 };
 
 const listPages = {
@@ -124,7 +126,8 @@ const listPages = {
   imports: 0,
   configs: 0,
   filiais: 0,
-  materiais: 0
+  materiais: 0,
+  acoesRelatorio: 0
 };
 
 let currentPageProducao = 0;

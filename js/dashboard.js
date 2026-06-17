@@ -2380,6 +2380,35 @@ function renderMateriais() {
   updateImportPrereqUI();
 }
 
+function renderAcoesRelatorio() {
+  const tb = document.getElementById('tb-acoes-relatorio');
+  if (!tb) return;
+  const { data, pageData } = getListPageData('acoesRelatorio');
+  updateListPageInfo('acoesRelatorio');
+  if (!data.length) {
+    tb.innerHTML = '<tr><td colspan="5"><div class="empty-state"><i class="ti ti-list-check"></i><p>Nenhuma ação cadastrada.</p></div></td></tr>';
+    return;
+  }
+  const operadorLabel = { 'lt': '< Menor que', 'lte': '≤ Menor ou igual a', 'eq': '= Igual a', 'gte': '≥ Maior ou igual a', 'gt': '> Maior que' };
+  tb.innerHTML = pageData.map((a, i) => `
+    <tr>
+      <td class="td-mono" style="font-weight:600">${escapeHtml(a.material)}</td>
+      <td class="td-mono" style="white-space:nowrap">${operadorLabel[a.operador] || a.operador} <strong>${Number(a.valor).toLocaleString('pt-BR', {minimumFractionDigits:0,maximumFractionDigits:2})} kg</strong></td>
+      <td style="max-width:340px;line-height:1.5">${escapeHtml(a.acoes)}</td>
+      <td class="td-muted">${a.created || '—'}</td>
+      <td>
+        <div style="display:flex;gap:6px">
+          <button class="btn-icon" onclick="editarAcaoRelatorio('${escapeHtml(a.id)}')" title="Editar"><i class="ti ti-pencil"></i></button>
+          <button class="btn-icon danger" onclick="removerAcaoRelatorio('${escapeHtml(a.id)}')" title="Excluir"><i class="ti ti-trash"></i></button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+  const _tbl = document.getElementById('tb-acoes-relatorio')?.closest('table');
+  if (_tbl) injectColFilterButtons(_tbl, 'acoesRelatorio');
+}
+
+
 function pageFromModulo(modulo) {
   const map = {
     'Entrada': 'entradas',
@@ -2400,7 +2429,7 @@ function renderModule(module) {
     case 'sap': return renderSAP();
     case 'producao': return renderProducao();
     case 'importar': return renderImports();
-    case 'configuracoes': renderConfigs(); loadHealthConfigInputs(); updateParamGerais(); return;
+    case 'configuracoes': renderConfigs(); renderAcoesRelatorio(); loadHealthConfigInputs(); updateParamGerais(); return;
     case 'filiais': return renderFiliais();
     case 'materiais': return renderMateriais();
     default: return;
@@ -4011,6 +4040,7 @@ function renderAll() {
   renderProducao();
   renderImports();
   renderConfigs();
+  renderAcoesRelatorio();
   renderFiliais();
   renderMateriais();
   updateImportPrereqUI();
@@ -4028,14 +4058,14 @@ const pageRenderers = {
   producao: () => renderProducao(),
   inventario: () => renderInventario(),
   importar: () => renderImports(),
-  configuracoes: () => { renderConfigs(); loadHealthConfigInputs(); updateParamGerais(); },
+  configuracoes: () => { renderConfigs(); renderAcoesRelatorio(); loadHealthConfigInputs(); updateParamGerais(); },
   filiais: () => renderFiliais(),
   materiais: () => renderMateriais(),
   ocorrencias: () => renderOcorrenciasPage()
 };
 
 // Páginas que são estáticas após o primeiro render (sem dados que mudam externamente)
-const _staticPages = new Set(['configuracoes', 'filiais', 'materiais']);
+const _staticPages = new Set(['filiais', 'materiais']);
 const _renderedPages = new Set();
 
 function renderPage(page) {
