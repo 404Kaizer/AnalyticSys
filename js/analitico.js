@@ -1160,6 +1160,14 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
   // Atualiza visual dos botões
   _updateToggleRegionaisBtn();
   _updateToggleCentralisBtn();
+
+  // ── Fixa a altura mínima do container no estado sem filtro ──────────────
+  // Garante que ao filtrar por regional/central o container não encolha,
+  // evitando o "salto" de layout. Captura após um frame para garantir paint.
+  container.style.minHeight = '';
+  requestAnimationFrame(() => {
+    container.style.minHeight = container.offsetHeight + 'px';
+  });
 }  // end _rodarAnaliticoCore
 
 
@@ -1447,6 +1455,9 @@ function clearAllMicroFilters() {
   _tipoVarSyncNivelToState(new Set(['regional','central','material']));
   _tipoVarUpdateTrigger();
   _applyMicroVisibility();
+  // Ao limpar filtros, remove min-height para o container voltar à altura natural
+  const container = document.getElementById('an-micro-container');
+  if (container) container.style.minHeight = '';
 }
 
 // ── Saúde filter state (replaces old variação % filter) ──
