@@ -464,6 +464,8 @@ function updateDashboard() {
   if (document.getElementById('page-configuracoes')?.classList.contains('active')) {
     updateParamGerais();
   }
+  // Atualiza badges dos botões Pendentes nas páginas Entradas e Saídas
+  if (typeof updatePendGlobalBadges === 'function') updatePendGlobalBadges();
 }
 
 function _renderDashboardConteudo(dtIni, dtFim) {

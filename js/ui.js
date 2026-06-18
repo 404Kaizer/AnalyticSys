@@ -1258,7 +1258,243 @@ function closePendIntegModal() {
   overlay.setAttribute('aria-hidden', 'true');
 }
 
-Object.assign(window, { openBreakdownModal, closeBreakdownModal, openPendIntegModal, closePendIntegModal });
+/**
+ * Abre o modal de pendentes globais (todas as centrais), agrupando por central.
+ * tipo: 'NF' (para a página Entradas) ou 'OS' (para a página Saídas).
+ * Não usa período — considera todos os registros sem correspondência no SAP.
+ */
+function openPendIntegGlobalModal(tipo) {
+  const overlay = document.getElementById('pim-overlay');
+  if (!overlay) return;
+
+  const _num = v => { const n = parseFloat(String(v ?? 0).replace(',','.')); return Number.isFinite(n) ? n : 0; };
+  const _fmt = n => isNaN(n) ? '—' : Math.abs(n).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
+
+  // Normalização — replicada da calcPendentesIntegracao
+  const normNF = raw => {
+    const s = String(raw || '').trim().toUpperCase();
+    const di = s.lastIndexOf('-');
+    const base = di > 0 ? s.slice(0, di) : s;
+    return base.replace(/^0+/, '') || '0';
+  };
+  const normSapRefOS = raw => {
+    const s = String(raw || '').trim().toUpperCase();
+    const di = s.lastIndexOf('-');
+    return (di >= 0 ? s.slice(di + 1) : s).replace(/^0+/, '') || '0';
+  };
+  const normOS = raw => String(raw || '').trim().toUpperCase().replace(/^0+/, '') || '0';
+  const _normMov = m => String(m || '').trim().toUpperCase();
+
+  // Coleta todas as centrais presentes nos dados
+  const allCentralsSet = new Set();
+  if (tipo === 'NF') {
+    (state.entradas || []).forEach(r => {
+      const c = (r.centralDestino || r.centralCompra || '').trim();
+      if (c) allCentralsSet.add(c);
+    });
+  } else {
+    (state.saidas || []).forEach(r => {
+      const c = (r.central || '').trim();
+      if (c) allCentralsSet.add(c);
+    });
+  }
+
+  // Para cada central, calcula pendentes sem restrição de período
+  const grupos = []; // [{ central, items[] }]
+
+  allCentralsSet.forEach(central => {
+    // SAP desta central (sem filtro de período)
+    const { byCentral } = getSapIndex();
+    const sapAll = byCentral.get(central) || [];
+
+    const sapNFRefs = new Set();
+    const sapOSRefs = new Set();
+    sapAll.forEach(s => {
+      const cod = _normMov(s.movimento);
+      const ref = String(s.ref       || '').trim().toUpperCase();
+      const doc = String(s.documento || '').trim().toUpperCase();
+      if (CODIGOS_ENTRADA.has(cod)) {
+        if (ref) sapNFRefs.add(normNF(ref));
+        if (doc) sapNFRefs.add(normNF(doc));
+      } else if (cod === '201') {
+        if (ref) sapOSRefs.add(normSapRefOS(ref));
+        if (doc) sapOSRefs.add(normSapRefOS(doc));
+      }
+    });
+
+    let items = [];
+    if (tipo === 'NF') {
+      items = (state.entradas || []).filter(r => {
+        const c = (r.centralDestino || r.centralCompra || '').trim();
+        if (c !== central) return false;
+        if (!r.nf) return false;
+        return !sapNFRefs.has(normNF(r.nf));
+      }).map(r => ({
+        nf: r.nf, material: r.material || '—', peso: r.peso || 0,
+        um: r.um || 'kg', dtEmissao: r.dtEmissao || '—', fornecedor: r.fornecedor || '—'
+      }));
+    } else {
+      items = (state.saidas || []).filter(r => {
+        if ((r.central || '').trim() !== central) return false;
+        if (!r.os) return false;
+        return !sapOSRefs.has(normOS(r.os));
+      }).map(r => ({
+        os: r.os, material: r.material || '—', peso: r.peso || 0,
+        um: r.um || 'kg', dtEmissao: r.dtEmissao || '—', fornecedor: r.fornecedor || '—'
+      }));
+    }
+
+    if (items.length > 0) grupos.push({ central, items });
+  });
+
+  // Ordena centrais alfabeticamente
+  grupos.sort((a, b) => a.central.localeCompare(b.central, 'pt-BR'));
+  const totalCount = grupos.reduce((s, g) => s + g.items.length, 0);
+
+  // Título e subtítulo
+  document.getElementById('pim-title').textContent =
+    tipo === 'NF' ? 'NFs sem integração SAP — Todas as centrais' : 'OS sem integração SAP — Todas as centrais';
+  document.getElementById('pim-sub').textContent =
+    `${grupos.length} central${grupos.length !== 1 ? 'is' : ''} · ${totalCount} registro${totalCount !== 1 ? 's' : ''} pendente${totalCount !== 1 ? 's' : ''}`;
+
+  const colorVar = tipo === 'NF' ? 'var(--green)' : 'var(--red)';
+  const thead = document.getElementById('pim-thead');
+  const tbody = document.getElementById('pim-tbody');
+
+  if (tipo === 'NF') {
+    thead.innerHTML = `<tr>
+      <th>Central</th><th>NF</th><th>Material</th><th>Fornecedor</th>
+      <th>Dt. Emissão</th><th style="text-align:right">Quantidade</th>
+    </tr>`;
+  } else {
+    thead.innerHTML = `<tr>
+      <th>Central</th><th>OS</th><th>Material</th><th>Fornecedor</th>
+      <th>Dt. Emissão</th><th style="text-align:right">Quantidade</th>
+    </tr>`;
+  }
+
+  if (grupos.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text3);font-style:italic">
+      Nenhum pendente encontrado
+    </td></tr>`;
+  } else {
+    tbody.innerHTML = grupos.map(({ central, items }) => {
+      const sepRow = `<tr>
+        <td colspan="6" style="padding:8px 14px 4px;background:var(--bg3);border-top:1px solid var(--border)">
+          <span style="font-size:10px;font-family:var(--mono);font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text3)">
+            <i class="ti ti-building-factory-2" style="font-size:11px;margin-right:5px;color:${colorVar}"></i>${escapeHtml(central)}
+          </span>
+          <span style="font-size:10px;font-family:var(--mono);color:var(--text3);margin-left:8px">${items.length} registro${items.length !== 1 ? 's' : ''}</span>
+        </td>
+      </tr>`;
+      const dataRows = items.map(it => {
+        if (tipo === 'NF') {
+          return `<tr>
+            <td class="td-muted" style="font-size:11px"></td>
+            <td class="td-mono" style="font-weight:600;color:${colorVar}">${escapeHtml(String(it.nf || '—'))}</td>
+            <td>${escapeHtml(String(it.material || '—'))}</td>
+            <td class="td-muted">${escapeHtml(String(it.fornecedor || '—'))}</td>
+            <td class="td-muted">${escapeHtml(String(it.dtEmissao || '—'))}</td>
+            <td class="td-mono" style="text-align:right;color:${colorVar}">${_fmt(_num(it.peso))} ${escapeHtml(String(it.um || 'kg'))}</td>
+          </tr>`;
+        } else {
+          return `<tr>
+            <td class="td-muted" style="font-size:11px"></td>
+            <td class="td-mono" style="font-weight:600;color:${colorVar}">${escapeHtml(String(it.os || '—'))}</td>
+            <td>${escapeHtml(String(it.material || '—'))}</td>
+            <td class="td-muted">${escapeHtml(String(it.fornecedor || '—'))}</td>
+            <td class="td-muted">${escapeHtml(String(it.dtEmissao || '—'))}</td>
+            <td class="td-mono" style="text-align:right;color:${colorVar}">${_fmt(_num(it.peso))} ${escapeHtml(String(it.um || 'kg'))}</td>
+          </tr>`;
+        }
+      }).join('');
+      return sepRow + dataRows;
+    }).join('');
+  }
+
+  document.getElementById('pim-count').textContent =
+    `${totalCount} registro${totalCount !== 1 ? 's' : ''} pendente${totalCount !== 1 ? 's' : ''}`;
+
+  overlay.classList.add('open');
+  overlay.setAttribute('aria-hidden', 'false');
+}
+
+/**
+ * Atualiza os badges de contagem nos botões globais de pendentes (Entradas/Saídas).
+ * Chamado sempre que os dados mudam (após importação, adição ou remoção).
+ */
+function updatePendGlobalBadges() {
+  const _normMov = m => String(m || '').trim().toUpperCase();
+  const normNF = raw => {
+    const s = String(raw || '').trim().toUpperCase();
+    const di = s.lastIndexOf('-');
+    const base = di > 0 ? s.slice(0, di) : s;
+    return base.replace(/^0+/, '') || '0';
+  };
+  const normSapRefOS = raw => {
+    const s = String(raw || '').trim().toUpperCase();
+    const di = s.lastIndexOf('-');
+    return (di >= 0 ? s.slice(di + 1) : s).replace(/^0+/, '') || '0';
+  };
+  const normOS = raw => String(raw || '').trim().toUpperCase().replace(/^0+/, '') || '0';
+
+  const { byCentral } = getSapIndex();
+
+  // ── Badge NF (Entradas) ──
+  const nfBadge = document.getElementById('pend-global-nf-count');
+  const nfBtn   = document.getElementById('btn-pend-global-nf');
+  if (nfBadge) {
+    const centralsSeen = new Set((state.entradas || []).map(r => (r.centralDestino || r.centralCompra || '').trim()).filter(Boolean));
+    let totalNF = 0;
+    centralsSeen.forEach(central => {
+      const sapAll = byCentral.get(central) || [];
+      const sapNFRefs = new Set();
+      sapAll.forEach(s => {
+        const cod = _normMov(s.movimento);
+        const ref = String(s.ref || '').trim().toUpperCase();
+        const doc = String(s.documento || '').trim().toUpperCase();
+        if (CODIGOS_ENTRADA.has(cod)) {
+          if (ref) sapNFRefs.add(normNF(ref));
+          if (doc) sapNFRefs.add(normNF(doc));
+        }
+      });
+      totalNF += (state.entradas || []).filter(r => {
+        const c = (r.centralDestino || r.centralCompra || '').trim();
+        return c === central && r.nf && !sapNFRefs.has(normNF(r.nf));
+      }).length;
+    });
+    nfBadge.textContent = totalNF;
+    if (nfBtn) nfBtn.style.display = totalNF === 0 ? 'none' : '';
+  }
+
+  // ── Badge OS (Saídas) ──
+  const osBadge = document.getElementById('pend-global-os-count');
+  const osBtn   = document.getElementById('btn-pend-global-os');
+  if (osBadge) {
+    const centralsSeen = new Set((state.saidas || []).map(r => (r.central || '').trim()).filter(Boolean));
+    let totalOS = 0;
+    centralsSeen.forEach(central => {
+      const sapAll = byCentral.get(central) || [];
+      const sapOSRefs = new Set();
+      sapAll.forEach(s => {
+        const cod = _normMov(s.movimento);
+        const ref = String(s.ref || '').trim().toUpperCase();
+        const doc = String(s.documento || '').trim().toUpperCase();
+        if (cod === '201') {
+          if (ref) sapOSRefs.add(normSapRefOS(ref));
+          if (doc) sapOSRefs.add(normSapRefOS(doc));
+        }
+      });
+      totalOS += (state.saidas || []).filter(r => {
+        return (r.central || '').trim() === central && r.os && !sapOSRefs.has(normOS(r.os));
+      }).length;
+    });
+    osBadge.textContent = totalOS;
+    if (osBtn) osBtn.style.display = totalOS === 0 ? 'none' : '';
+  }
+}
+
+Object.assign(window, { openBreakdownModal, closeBreakdownModal, openPendIntegModal, closePendIntegModal, openPendIntegGlobalModal, updatePendGlobalBadges });
 
 // ── Conflict Resolution Modal ───────────────────────────────
 let _lrcDetailKey = null;

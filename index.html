@@ -1482,6 +1482,11 @@
             <span class="table-title"><i class="ti ti-package-import"></i> Notas Fiscais de Entrada</span>
             <div class="table-toolbar">
               <button id="btn-manuais-entradas" class="btn btn-manuais-filter" onclick="toggleSomenteManuais('entradas')" title="Filtrar somente registros manuais"><i class="ti ti-pencil"></i> Manuais</button>
+              <button id="btn-pend-global-nf" class="btn pend-integ-chip pend-integ-chip-nf" onclick="openPendIntegGlobalModal('NF')" title="Ver NFs sem integração SAP em todas as centrais" style="border-radius:7px;font-size:12px;padding:6px 13px">
+                <i class="ti ti-file-invoice" style="font-size:13px"></i>
+                Pendentes
+                <span class="pend-count-badge" id="pend-global-nf-count">—</span>
+              </button>
               <button class="btn btn-primary" onclick="openModal('modal-manual'); setModulo('Entrada')"><i class="ti ti-plus"></i> Adicionar</button>
             </div>
           </div>
@@ -1531,6 +1536,11 @@
             <span class="table-title"><i class="ti ti-package-export"></i> Ordens de Serviço — Saídas</span>
             <div class="table-toolbar">
               <button id="btn-manuais-saidas" class="btn btn-manuais-filter" onclick="toggleSomenteManuais('saidas')" title="Filtrar somente registros manuais"><i class="ti ti-pencil"></i> Manuais</button>
+              <button id="btn-pend-global-os" class="btn pend-integ-chip pend-integ-chip-os" onclick="openPendIntegGlobalModal('OS')" title="Ver OS sem integração SAP em todas as centrais" style="border-radius:7px;font-size:12px;padding:6px 13px">
+                <i class="ti ti-clipboard-list" style="font-size:13px"></i>
+                Pendentes
+                <span class="pend-count-badge" id="pend-global-os-count">—</span>
+              </button>
               <button class="btn btn-primary" onclick="openModal('modal-manual'); setModulo('Saída')"><i class="ti ti-plus"></i> Adicionar</button>
             </div>
           </div>
