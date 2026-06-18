@@ -1258,6 +1258,117 @@ function closePendIntegModal() {
   overlay.setAttribute('aria-hidden', 'true');
 }
 
+// ── Estado de paginação do modal global de pendentes ──────────────────────
+const _pimState = {
+  grupos: [],       // [{ central, items[] }]
+  tipo: 'NF',
+  colorVar: 'var(--green)',
+  page: 0,
+  totalPages: 1,
+  PAGE_SIZE: 50
+};
+
+/**
+ * Renderiza a página atual da tabela do modal global, respeitando agrupamentos.
+ * A paginação é por linhas de dados (separadores de central não contam no limite).
+ */
+function _pimRenderPage() {
+  const { grupos, tipo, colorVar, page, PAGE_SIZE } = _pimState;
+  const _num = v => { const n = parseFloat(String(v ?? 0).replace(',','.')); return Number.isFinite(n) ? n : 0; };
+  const _fmt = n => isNaN(n) ? '—' : Math.abs(n).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
+
+  const tbody = document.getElementById('pim-tbody');
+  if (!tbody) return;
+
+  const start = page * PAGE_SIZE;
+  const end   = start + PAGE_SIZE;
+
+  // Acumula índice global de linhas de dados para fatiar
+  let globalIdx = 0;
+  let html = '';
+
+  for (const { central, items } of grupos) {
+    // Verifica se algum item deste grupo cai na página
+    const groupStart = globalIdx;
+    const groupEnd   = globalIdx + items.length;
+
+    if (groupEnd <= start || groupStart >= end) {
+      globalIdx += items.length;
+      continue;
+    }
+
+    // Cabeçalho do grupo
+    html += `<tr>
+      <td colspan="6" style="padding:8px 14px 4px;background:var(--bg3);border-top:1px solid var(--border)">
+        <span style="font-size:10px;font-family:var(--mono);font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text3)">
+          <i class="ti ti-building-factory-2" style="font-size:11px;margin-right:5px;color:${colorVar}"></i>${escapeHtml(central)}
+        </span>
+        <span style="font-size:10px;font-family:var(--mono);color:var(--text3);margin-left:8px">${items.length} registro${items.length !== 1 ? 's' : ''}</span>
+      </td>
+    </tr>`;
+
+    // Linhas de dados deste grupo que ficam nesta página
+    for (let i = 0; i < items.length; i++) {
+      const gi = globalIdx + i;
+      if (gi < start || gi >= end) continue;
+      const it = items[i];
+      if (tipo === 'NF') {
+        html += `<tr>
+          <td class="td-muted" style="font-size:11px"></td>
+          <td class="td-mono" style="font-weight:600;color:${colorVar}">${escapeHtml(String(it.nf || '—'))}</td>
+          <td>${escapeHtml(String(it.material || '—'))}</td>
+          <td class="td-muted">${escapeHtml(String(it.fornecedor || '—'))}</td>
+          <td class="td-muted">${escapeHtml(String(it.dtEmissao || '—'))}</td>
+          <td class="td-mono" style="text-align:right;color:${colorVar}">${_fmt(_num(it.peso))} ${escapeHtml(String(it.um || 'kg'))}</td>
+        </tr>`;
+      } else {
+        html += `<tr>
+          <td class="td-muted" style="font-size:11px"></td>
+          <td class="td-mono" style="font-weight:600;color:${colorVar}">${escapeHtml(String(it.os || '—'))}</td>
+          <td>${escapeHtml(String(it.material || '—'))}</td>
+          <td class="td-muted">${escapeHtml(String(it.fornecedor || '—'))}</td>
+          <td class="td-muted">${escapeHtml(String(it.dtEmissao || '—'))}</td>
+          <td class="td-mono" style="text-align:right;color:${colorVar}">${_fmt(_num(it.peso))} ${escapeHtml(String(it.um || 'kg'))}</td>
+        </tr>`;
+      }
+    }
+
+    globalIdx += items.length;
+  }
+
+  tbody.innerHTML = html || `<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text3);font-style:italic">Nenhum pendente encontrado</td></tr>`;
+
+  // Atualiza controles de paginação
+  const pgInfo  = document.getElementById('pim-pg-info');
+  const pgPanel = document.getElementById('pim-pagination');
+  const totalCount = grupos.reduce((s, g) => s + g.items.length, 0);
+  const totalPages = _pimState.totalPages;
+
+  if (pgInfo)  pgInfo.textContent = `Pág. ${page + 1} / ${totalPages}`;
+  if (pgPanel) pgPanel.style.display = totalPages > 1 ? 'flex' : 'none';
+
+  // Habilita/desabilita botões
+  const btnFirst = document.getElementById('pim-pg-first');
+  const btnPrev  = document.getElementById('pim-pg-prev');
+  const btnNext  = document.getElementById('pim-pg-next');
+  const btnLast  = document.getElementById('pim-pg-last');
+  if (btnFirst) btnFirst.disabled = page === 0;
+  if (btnPrev)  btnPrev.disabled  = page === 0;
+  if (btnNext)  btnNext.disabled  = page >= totalPages - 1;
+  if (btnLast)  btnLast.disabled  = page >= totalPages - 1;
+
+  // Volta o scroll do body do modal ao topo
+  const pimBody = document.querySelector('.pim-body');
+  if (pimBody) pimBody.scrollTop = 0;
+}
+
+/** Navega para uma página específica do modal global de pendentes. */
+function pimGoToPage(p) {
+  const clamped = Math.max(0, Math.min(p, _pimState.totalPages - 1));
+  _pimState.page = clamped;
+  _pimRenderPage();
+}
+
 /**
  * Abre o modal de pendentes globais (todas as centrais), agrupando por central.
  * tipo: 'NF' (para a página Entradas) ou 'OS' (para a página Saídas).
@@ -1266,9 +1377,6 @@ function closePendIntegModal() {
 function openPendIntegGlobalModal(tipo) {
   const overlay = document.getElementById('pim-overlay');
   if (!overlay) return;
-
-  const _num = v => { const n = parseFloat(String(v ?? 0).replace(',','.')); return Number.isFinite(n) ? n : 0; };
-  const _fmt = n => isNaN(n) ? '—' : Math.abs(n).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
 
   // Normalização — replicada da calcPendentesIntegracao
   const normNF = raw => {
@@ -1300,10 +1408,9 @@ function openPendIntegGlobalModal(tipo) {
   }
 
   // Para cada central, calcula pendentes sem restrição de período
-  const grupos = []; // [{ central, items[] }]
+  const grupos = [];
 
   allCentralsSet.forEach(central => {
-    // SAP desta central (sem filtro de período)
     const { byCentral } = getSapIndex();
     const sapAll = byCentral.get(central) || [];
 
@@ -1350,6 +1457,11 @@ function openPendIntegGlobalModal(tipo) {
   // Ordena centrais alfabeticamente
   grupos.sort((a, b) => a.central.localeCompare(b.central, 'pt-BR'));
   const totalCount = grupos.reduce((s, g) => s + g.items.length, 0);
+  const colorVar   = tipo === 'NF' ? 'var(--green)' : 'var(--red)';
+  const totalPages = Math.max(1, Math.ceil(totalCount / _pimState.PAGE_SIZE));
+
+  // Atualiza estado global de paginação
+  Object.assign(_pimState, { grupos, tipo, colorVar, page: 0, totalPages });
 
   // Título e subtítulo
   document.getElementById('pim-title').textContent =
@@ -1357,63 +1469,16 @@ function openPendIntegGlobalModal(tipo) {
   document.getElementById('pim-sub').textContent =
     `${grupos.length} central${grupos.length !== 1 ? 'is' : ''} · ${totalCount} registro${totalCount !== 1 ? 's' : ''} pendente${totalCount !== 1 ? 's' : ''}`;
 
-  const colorVar = tipo === 'NF' ? 'var(--green)' : 'var(--red)';
+  // Cabeçalho da tabela
   const thead = document.getElementById('pim-thead');
-  const tbody = document.getElementById('pim-tbody');
-
-  if (tipo === 'NF') {
-    thead.innerHTML = `<tr>
-      <th>Central</th><th>NF</th><th>Material</th><th>Fornecedor</th>
-      <th>Dt. Emissão</th><th style="text-align:right">Quantidade</th>
-    </tr>`;
-  } else {
-    thead.innerHTML = `<tr>
-      <th>Central</th><th>OS</th><th>Material</th><th>Fornecedor</th>
-      <th>Dt. Emissão</th><th style="text-align:right">Quantidade</th>
-    </tr>`;
-  }
-
-  if (grupos.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text3);font-style:italic">
-      Nenhum pendente encontrado
-    </td></tr>`;
-  } else {
-    tbody.innerHTML = grupos.map(({ central, items }) => {
-      const sepRow = `<tr>
-        <td colspan="6" style="padding:8px 14px 4px;background:var(--bg3);border-top:1px solid var(--border)">
-          <span style="font-size:10px;font-family:var(--mono);font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text3)">
-            <i class="ti ti-building-factory-2" style="font-size:11px;margin-right:5px;color:${colorVar}"></i>${escapeHtml(central)}
-          </span>
-          <span style="font-size:10px;font-family:var(--mono);color:var(--text3);margin-left:8px">${items.length} registro${items.length !== 1 ? 's' : ''}</span>
-        </td>
-      </tr>`;
-      const dataRows = items.map(it => {
-        if (tipo === 'NF') {
-          return `<tr>
-            <td class="td-muted" style="font-size:11px"></td>
-            <td class="td-mono" style="font-weight:600;color:${colorVar}">${escapeHtml(String(it.nf || '—'))}</td>
-            <td>${escapeHtml(String(it.material || '—'))}</td>
-            <td class="td-muted">${escapeHtml(String(it.fornecedor || '—'))}</td>
-            <td class="td-muted">${escapeHtml(String(it.dtEmissao || '—'))}</td>
-            <td class="td-mono" style="text-align:right;color:${colorVar}">${_fmt(_num(it.peso))} ${escapeHtml(String(it.um || 'kg'))}</td>
-          </tr>`;
-        } else {
-          return `<tr>
-            <td class="td-muted" style="font-size:11px"></td>
-            <td class="td-mono" style="font-weight:600;color:${colorVar}">${escapeHtml(String(it.os || '—'))}</td>
-            <td>${escapeHtml(String(it.material || '—'))}</td>
-            <td class="td-muted">${escapeHtml(String(it.fornecedor || '—'))}</td>
-            <td class="td-muted">${escapeHtml(String(it.dtEmissao || '—'))}</td>
-            <td class="td-mono" style="text-align:right;color:${colorVar}">${_fmt(_num(it.peso))} ${escapeHtml(String(it.um || 'kg'))}</td>
-          </tr>`;
-        }
-      }).join('');
-      return sepRow + dataRows;
-    }).join('');
-  }
+  const colRef = tipo === 'NF' ? '<th>NF</th>' : '<th>OS</th>';
+  thead.innerHTML = `<tr><th>Central</th>${colRef}<th>Material</th><th>Fornecedor</th><th>Dt. Emissão</th><th style="text-align:right">Quantidade</th></tr>`;
 
   document.getElementById('pim-count').textContent =
     `${totalCount} registro${totalCount !== 1 ? 's' : ''} pendente${totalCount !== 1 ? 's' : ''}`;
+
+  // Renderiza primeira página
+  _pimRenderPage();
 
   overlay.classList.add('open');
   overlay.setAttribute('aria-hidden', 'false');
@@ -1494,7 +1559,7 @@ function updatePendGlobalBadges() {
   }
 }
 
-Object.assign(window, { openBreakdownModal, closeBreakdownModal, openPendIntegModal, closePendIntegModal, openPendIntegGlobalModal, updatePendGlobalBadges });
+Object.assign(window, { openBreakdownModal, closeBreakdownModal, openPendIntegModal, closePendIntegModal, openPendIntegGlobalModal, updatePendGlobalBadges, pimGoToPage, _pimState });
 
 // ── Conflict Resolution Modal ───────────────────────────────
 let _lrcDetailKey = null;

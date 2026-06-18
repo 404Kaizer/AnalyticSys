@@ -2085,6 +2085,7 @@
               <option value="aberta">Em aberto</option>
               <option value="vencida">Vencidas</option>
               <option value="urgente">Urgentes</option>
+              <option value="inconclusiva">Inconclusivas</option>
               <option value="concluida">Concluídas</option>
             </select>
             <select id="oc-filter-central" class="macro-select" onchange="renderOcorrencias()">
@@ -3365,6 +3366,13 @@
     <div class="pim-footer">
       <span class="pim-footer-count" id="pim-count">—</span>
       <span style="font-size:11px;color:var(--text3)">Registros PUZL sem correspondência no SAP (ref/documento)</span>
+      <div class="pim-pagination" id="pim-pagination" style="display:none">
+        <button class="btn" id="pim-pg-first" onclick="pimGoToPage(0)" title="Primeira"><i class="ti ti-chevrons-left"></i></button>
+        <button class="btn" id="pim-pg-prev"  onclick="pimGoToPage(_pimState.page - 1)" title="Anterior"><i class="ti ti-chevron-left"></i></button>
+        <span class="pim-pg-info" id="pim-pg-info">—</span>
+        <button class="btn" id="pim-pg-next"  onclick="pimGoToPage(_pimState.page + 1)" title="Próxima"><i class="ti ti-chevron-right"></i></button>
+        <button class="btn" id="pim-pg-last"  onclick="pimGoToPage(_pimState.totalPages - 1)" title="Última"><i class="ti ti-chevrons-right"></i></button>
+      </div>
     </div>
   </div>
 </div>
@@ -3575,6 +3583,34 @@
     <div class="modal-footer">
       <button class="btn" onclick="closeConcluirModal()">Cancelar</button>
       <button class="btn btn-primary" onclick="submitConcluir()"><i class="ti ti-circle-check"></i> Marcar como concluída</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL: Marcar como Inconclusiva ═══ -->
+<div class="modal-overlay" id="oc-inconclusiva-modal" onclick="if(event.target===this)closeInconclusivaModal()" role="dialog" aria-modal="true">
+  <div class="modal-card" style="max-width:460px;width:100%">
+    <div class="modal-header">
+      <span class="modal-title"><i class="ti ti-alert-triangle" style="color:var(--purple);margin-right:6px"></i>Marcar como Inconclusiva</span>
+      <button class="modal-close" onclick="closeInconclusivaModal()"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:14px">
+      <input type="hidden" id="oc-inconclusiva-id">
+      <div style="padding:10px 14px;background:rgba(139,92,246,.08);border:1px solid rgba(139,92,246,.2);border-radius:8px;font-size:12px;color:var(--text2);line-height:1.6">
+        Use este status quando a ocorrência não pôde ser resolvida ou não recebeu resposta. Ela permanecerá registrada e poderá ser reaberta a qualquer momento.
+      </div>
+      <div class="oc-form-group">
+        <label class="oc-label">Data</label>
+        <input type="date" id="oc-inconclusiva-data" class="oc-input">
+      </div>
+      <div class="oc-form-group">
+        <label class="oc-label">Motivo da inconclusividade <span class="oc-required">*</span></label>
+        <textarea id="oc-inconclusiva-motivo" class="oc-input oc-textarea" rows="4" placeholder="Descreva o que aconteceu: sem resposta, solução não encontrada, prazo encerrado sem retorno…"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeInconclusivaModal()">Cancelar</button>
+      <button class="btn oc-btn-inconclusiva" style="padding:8px 18px" onclick="submitInconclusiva()"><i class="ti ti-alert-triangle"></i> Marcar como inconclusiva</button>
     </div>
   </div>
 </div>

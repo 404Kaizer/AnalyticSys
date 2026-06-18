@@ -46,7 +46,8 @@ function ocDateStatus(dataLimite) {
 }
 
 function ocStatusLabel(o) {
-  if (o.concluida) return 'concluída';
+  if (o.concluida)     return 'concluída';
+  if (o.inconclusiva)  return 'inconclusiva';
   return ocDateStatus(o.dataLimite);
 }
 
@@ -74,12 +75,13 @@ function buildWhatsAppLink(numero, ocorrencia) {
 
 // ── KPIs ──────────────────────────────────────────────────
 function buildOcKPIs(lista) {
-  const total      = lista.length;
-  const concluidas = lista.filter(o => o.concluida).length;
-  const abertas    = total - concluidas;
-  const vencidas   = lista.filter(o => !o.concluida && ocDateStatus(o.dataLimite) === 'vencida').length;
-  const urgentes   = lista.filter(o => !o.concluida && ocDateStatus(o.dataLimite) === 'urgente').length;
-  const pctConc    = total > 0 ? Math.round(concluidas / total * 100) : 0;
+  const total          = lista.length;
+  const concluidas     = lista.filter(o => o.concluida).length;
+  const inconclusivas  = lista.filter(o => !o.concluida && o.inconclusiva).length;
+  const abertas        = total - concluidas - inconclusivas;
+  const vencidas       = lista.filter(o => !o.concluida && !o.inconclusiva && ocDateStatus(o.dataLimite) === 'vencida').length;
+  const urgentes       = lista.filter(o => !o.concluida && !o.inconclusiva && ocDateStatus(o.dataLimite) === 'urgente').length;
+  const pctConc        = total > 0 ? Math.round(concluidas / total * 100) : 0;
 
   // Contagem por central (top 12)
   const porCentral = {};
@@ -141,7 +143,7 @@ function buildOcKPIs(lista) {
     .map(([reg, { total, count }]) => [reg, count > 0 ? total / count : 0, count])
     .sort((a, b) => b[1] - a[1]); // ordena do maior tempo para o menor
 
-  return { total, concluidas, abertas, vencidas, urgentes, pctConc,
+  return { total, concluidas, inconclusivas, abertas, vencidas, urgentes, pctConc,
            topCentrals, porCentral, topMotivos, porMotivo,
            temposBuckets, tempoMedioMin, tempoCount,
            tempoMedioRegional,
@@ -161,10 +163,11 @@ function _destroyOcCharts() {
 
 // ── Donut "Status das ocorrências" ─────────────────────────
 const OC_DONUT_META = {
-  vencida:   { col: '#ef4444', label: 'Vencida'   },
-  urgente:   { col: '#f59e0b', label: 'Urgente'   },
-  normal:    { col: '#3b82f6', label: 'Em aberto' },
-  concluida: { col: '#10b981', label: 'Concluída' }
+  vencida:      { col: '#ef4444', label: 'Vencida'       },
+  urgente:      { col: '#f59e0b', label: 'Urgente'       },
+  normal:       { col: '#3b82f6', label: 'Em aberto'     },
+  inconclusiva: { col: '#8b5cf6', label: 'Inconclusiva'  },
+  concluida:    { col: '#10b981', label: 'Concluída'     }
 };
 
 function _buildOcDonut(kpis) {
@@ -175,10 +178,11 @@ function _buildOcDonut(kpis) {
 
   const normais = Math.max(0, kpis.abertas - kpis.vencidas - kpis.urgentes);
   const segs = [
-    { key: 'vencida',   n: kpis.vencidas   },
-    { key: 'urgente',   n: kpis.urgentes   },
-    { key: 'normal',    n: normais         },
-    { key: 'concluida', n: kpis.concluidas },
+    { key: 'vencida',      n: kpis.vencidas      },
+    { key: 'urgente',      n: kpis.urgentes      },
+    { key: 'normal',       n: normais            },
+    { key: 'inconclusiva', n: kpis.inconclusivas },
+    { key: 'concluida',    n: kpis.concluidas    },
   ].filter(s => s.n > 0);
 
   const CX = 90, CY = 90, R = 72, ring = 26;
@@ -576,10 +580,11 @@ function getOcorrenciasFiltradas() {
   const fBusca   = (document.getElementById('oc-filter-busca')?.value || '').toLowerCase();
 
   return (state.ocorrencias || []).filter(o => {
-    if (fStatus === 'concluida' && !o.concluida) return false;
-    if (fStatus === 'aberta'    &&  o.concluida) return false;
-    if (fStatus === 'vencida'   && (o.concluida || ocDateStatus(o.dataLimite) !== 'vencida')) return false;
-    if (fStatus === 'urgente'   && (o.concluida || ocDateStatus(o.dataLimite) !== 'urgente')) return false;
+    if (fStatus === 'concluida'    && !o.concluida) return false;
+    if (fStatus === 'aberta'       && (o.concluida || o.inconclusiva)) return false;
+    if (fStatus === 'vencida'      && (o.concluida || o.inconclusiva || ocDateStatus(o.dataLimite) !== 'vencida')) return false;
+    if (fStatus === 'urgente'      && (o.concluida || o.inconclusiva || ocDateStatus(o.dataLimite) !== 'urgente')) return false;
+    if (fStatus === 'inconclusiva' && (!o.inconclusiva || o.concluida)) return false;
     if (fCentral  && !(o.central  || '').toLowerCase().includes(fCentral)) return false;
     if (fMaterial && !(o.material || '').toLowerCase().includes(fMaterial)) return false;
     if (fOperador && !(o.operador || '').toLowerCase().includes(fOperador)) return false;
@@ -589,9 +594,8 @@ function getOcorrenciasFiltradas() {
     }
     return true;
   }).sort((a, b) => {
-    // Vencidas e urgentes primeiro, depois por data limite
     const sa = ocStatusLabel(a), sb = ocStatusLabel(b);
-    const order = { vencida: 0, urgente: 1, normal: 2, 'concluída': 3 };
+    const order = { vencida: 0, urgente: 1, normal: 2, inconclusiva: 3, 'concluída': 4 };
     if (order[sa] !== order[sb]) return order[sa] - order[sb];
     return (a.dataLimite || '').localeCompare(b.dataLimite || '');
   });
@@ -631,12 +635,12 @@ function _renderOcLista(lista) {
   }
 
   el.innerHTML = lista.map(o => {
-    const status = o.concluida ? 'concluida' : ocDateStatus(o.dataLimite);
-    const statusLabel = { concluida: 'Concluída', vencida: 'Vencida', urgente: 'Urgente', normal: 'Em aberto' };
-    const statusCls   = { concluida: 'oc-badge-green', vencida: 'oc-badge-red', urgente: 'oc-badge-amber', normal: 'oc-badge-blue' };
+    const status = o.concluida ? 'concluida' : (o.inconclusiva ? 'inconclusiva' : ocDateStatus(o.dataLimite));
+    const statusLabel = { concluida: 'Concluída', vencida: 'Vencida', urgente: 'Urgente', normal: 'Em aberto', inconclusiva: 'Inconclusiva' };
+    const statusCls   = { concluida: 'oc-badge-green', vencida: 'oc-badge-red', urgente: 'oc-badge-amber', normal: 'oc-badge-blue', inconclusiva: 'oc-badge-purple' };
     const waLink = o.contato ? buildWhatsAppLink(o.contato, o) : null;
 
-    return `<div class="oc-card ${o.concluida ? 'oc-card-done' : ''} oc-card-${status}" onclick="openOcDetailModal('${o.id}')">
+    return `<div class="oc-card ${o.concluida ? 'oc-card-done' : ''} ${o.inconclusiva ? 'oc-card-inconclusiva' : ''} oc-card-${status}" onclick="openOcDetailModal('${o.id}')">
       <div class="oc-card-header">
         <div class="oc-card-header-left">
           <span class="oc-badge ${statusCls[status]}">${statusLabel[status]}</span>
@@ -659,12 +663,18 @@ function _renderOcLista(lista) {
             <span class="oc-card-date-label">Conclusão</span>
             <span class="oc-card-date-val">${fmtDateBR(o.dataConclusao)}</span>
           </span>` : ''}
+          ${o.inconclusiva && !o.concluida && o.dataInconclusiva ? `<span class="oc-card-date-sep">—</span>
+          <span class="oc-card-date-group" style="color:var(--purple)">
+            <span class="oc-card-date-label">Inconclusiva em</span>
+            <span class="oc-card-date-val">${fmtDateBR(o.dataInconclusiva)}</span>
+          </span>` : ''}
         </div>
       </div>
 
       <div class="oc-card-body">
         <div class="oc-card-desc">${escapeHtml(o.descricao || '')}</div>
         ${o.concluida && o.descConclusao ? `<div class="oc-card-conclusao"><i class="ti ti-circle-check"></i> ${escapeHtml(o.descConclusao)}</div>` : ''}
+        ${o.inconclusiva && !o.concluida && o.motivoInconclusiva ? `<div class="oc-card-inconclusiva-obs"><i class="ti ti-alert-triangle"></i> ${escapeHtml(o.motivoInconclusiva)}</div>` : ''}
       </div>
 
       <div class="oc-card-footer">
@@ -676,6 +686,12 @@ function _renderOcLista(lista) {
           </a>` : ''}
         </div>
         <div class="oc-card-footer-right">
+          ${!o.concluida && !o.inconclusiva ? `<button class="btn btn-sm oc-btn-inconclusiva" onclick="event.stopPropagation();openInconclusivaModal('${o.id}')" title="Marcar como inconclusiva">
+            <i class="ti ti-alert-triangle"></i>
+          </button>` : ''}
+          ${o.inconclusiva && !o.concluida ? `<button class="btn btn-sm oc-btn-reabrir" onclick="event.stopPropagation();reabrirOcorrencia('${o.id}')" title="Reabrir ocorrência">
+            <i class="ti ti-rotate"></i>
+          </button>` : ''}
           ${!o.concluida ? `<button class="btn btn-sm oc-btn-concluir" onclick="event.stopPropagation();openConcluirModal('${o.id}')" title="Concluir">
             <i class="ti ti-circle-check"></i>
           </button>` : ''}
@@ -695,9 +711,9 @@ function _renderOcLista(lista) {
 function openOcDetailModal(id) {
   const o = (state.ocorrencias || []).find(oc => oc.id === id);
   if (!o) return;
-  const status = o.concluida ? 'concluida' : ocDateStatus(o.dataLimite);
-  const statusLabel = { concluida: 'Concluída', vencida: 'Vencida', urgente: 'Urgente', normal: 'Em aberto' };
-  const statusCls   = { concluida: 'oc-badge-green', vencida: 'oc-badge-red', urgente: 'oc-badge-amber', normal: 'oc-badge-blue' };
+  const status = o.concluida ? 'concluida' : (o.inconclusiva ? 'inconclusiva' : ocDateStatus(o.dataLimite));
+  const statusLabel = { concluida: 'Concluída', vencida: 'Vencida', urgente: 'Urgente', normal: 'Em aberto', inconclusiva: 'Inconclusiva' };
+  const statusCls   = { concluida: 'oc-badge-green', vencida: 'oc-badge-red', urgente: 'oc-badge-amber', normal: 'oc-badge-blue', inconclusiva: 'oc-badge-purple' };
   const waLink = o.contato ? buildWhatsAppLink(o.contato, o) : null;
 
   const el = document.getElementById('oc-detail-modal');
@@ -723,21 +739,33 @@ function openOcDetailModal(id) {
     <span class="oc-card-date-group oc-date-green" style="align-items:flex-start">
       <span class="oc-card-date-label">Conclusão</span>
       <span class="oc-card-date-val">${fmtDateBR(o.dataConclusao)}</span>
+    </span>` : ''}
+    ${o.inconclusiva && !o.concluida && o.dataInconclusiva ? `<span class="oc-card-date-sep">—</span>
+    <span class="oc-card-date-group" style="color:var(--purple);align-items:flex-start">
+      <span class="oc-card-date-label">Inconclusiva em</span>
+      <span class="oc-card-date-val">${fmtDateBR(o.dataInconclusiva)}</span>
     </span>` : ''}`;
 
   el.querySelector('.oc-detail-desc').innerHTML = `
     <div class="oc-detail-section-label">Descrição</div>
     <div class="oc-detail-section-val">${escapeHtml(o.descricao || '—')}</div>`;
 
-  el.querySelector('.oc-detail-conclusao').innerHTML = o.concluida && o.descConclusao ? `
-    <div class="oc-detail-section-label">Conclusão</div>
-    <div class="oc-detail-section-val" style="color:var(--green)">${escapeHtml(o.descConclusao)}</div>` : '';
+  el.querySelector('.oc-detail-conclusao').innerHTML = [
+    o.concluida && o.descConclusao ? `
+      <div class="oc-detail-section-label">Conclusão</div>
+      <div class="oc-detail-section-val" style="color:var(--green)">${escapeHtml(o.descConclusao)}</div>` : '',
+    o.inconclusiva && !o.concluida && o.motivoInconclusiva ? `
+      <div class="oc-detail-section-label" style="color:var(--purple)">Motivo da inconclusividade</div>
+      <div class="oc-detail-section-val" style="color:var(--purple)">${escapeHtml(o.motivoInconclusiva)}</div>` : '',
+  ].join('');
 
   el.querySelector('.oc-detail-meta').innerHTML = `
     <span><i class="ti ti-user" style="margin-right:4px"></i>${escapeHtml(o.operador || '—')}</span>
     ${waLink ? `<a href="${waLink}" target="_blank" rel="noopener" class="oc-wa-btn"><i class="ti ti-brand-whatsapp"></i> ${escapeHtml(o.contato)}</a>` : ''}`;
 
   el.querySelector('.oc-detail-actions').innerHTML = `
+    ${!o.concluida && !o.inconclusiva ? `<button class="btn btn-sm oc-btn-inconclusiva" onclick="closeOcDetailModal();openInconclusivaModal('${o.id}')"><i class="ti ti-alert-triangle"></i> Inconclusiva</button>` : ''}
+    ${o.inconclusiva && !o.concluida ? `<button class="btn btn-sm oc-btn-reabrir" onclick="closeOcDetailModal();reabrirOcorrencia('${o.id}')"><i class="ti ti-rotate"></i> Reabrir</button>` : ''}
     ${!o.concluida ? `<button class="btn btn-sm oc-btn-concluir" onclick="closeOcDetailModal();openConcluirModal('${o.id}')"><i class="ti ti-circle-check"></i> Concluir</button>` : ''}
     <button class="btn btn-sm" onclick="closeOcDetailModal();openOcorrenciaModal('${o.id}')"><i class="ti ti-edit"></i> Editar</button>
     <button class="btn btn-sm btn-danger-ghost" onclick="closeOcDetailModal();confirmarExcluirOcorrencia('${o.id}')"><i class="ti ti-trash"></i></button>`;
@@ -893,7 +921,46 @@ function submitConcluir() {
   toast('Ocorrência concluída!', 'success');
 }
 
-// ── Excluir ───────────────────────────────────────────────
+// ── Modal inconclusiva ────────────────────────────────────
+function openInconclusivaModal(id) {
+  document.getElementById('oc-inconclusiva-id').value   = id;
+  document.getElementById('oc-inconclusiva-data').value = new Date().toISOString().split('T')[0];
+  document.getElementById('oc-inconclusiva-motivo').value = '';
+  document.getElementById('oc-inconclusiva-modal').classList.add('open');
+}
+
+function closeInconclusivaModal() {
+  document.getElementById('oc-inconclusiva-modal').classList.remove('open');
+}
+
+function submitInconclusiva() {
+  const id     = document.getElementById('oc-inconclusiva-id').value;
+  const data   = document.getElementById('oc-inconclusiva-data').value;
+  const motivo = document.getElementById('oc-inconclusiva-motivo').value.trim();
+  if (!motivo) { toast('Informe o motivo da inconclusividade.', 'error'); return; }
+  const o = (state.ocorrencias || []).find(oc => oc.id === id);
+  if (!o) return;
+  o.inconclusiva       = true;
+  o.dataInconclusiva   = data;
+  o.motivoInconclusiva = motivo;
+  persist();
+  renderOcorrencias();
+  closeInconclusivaModal();
+  toast('Ocorrência marcada como inconclusiva.', 'info');
+}
+
+function reabrirOcorrencia(id) {
+  const o = (state.ocorrencias || []).find(oc => oc.id === id);
+  if (!o) return;
+  o.inconclusiva       = false;
+  o.dataInconclusiva   = null;
+  o.motivoInconclusiva = null;
+  persist();
+  renderOcorrencias();
+  toast('Ocorrência reaberta.', 'success');
+}
+
+
 function confirmarExcluirOcorrencia(id) {
   const o = (state.ocorrencias || []).find(oc => oc.id === id);
   if (!o) return;
@@ -924,6 +991,10 @@ Object.assign(window, {
   openConcluirModal,
   closeConcluirModal,
   submitConcluir,
+  openInconclusivaModal,
+  closeInconclusivaModal,
+  submitInconclusiva,
+  reabrirOcorrencia,
   confirmarExcluirOcorrencia,
   getOcorrenciasFiltradas,
   openOcDetailModal,
