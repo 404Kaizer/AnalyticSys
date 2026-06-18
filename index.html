@@ -3466,38 +3466,6 @@
   </div>
 </div>
 
-<!-- PERIOD FAB -->
-<div id="period-fab">
-  <div id="period-fab-popover">
-    <div class="fab-popover-dates">
-      <div class="period-field">
-        <label class="form-label">Data Início</label>
-        <input type="date" class="form-input" id="fab-dt-ini">
-      </div>
-      <div class="period-field">
-        <label class="form-label">Data Fim</label>
-        <input type="date" class="form-input" id="fab-dt-fim">
-      </div>
-    </div>
-    <div class="fab-popover-qp" id="fab-qp-btns">
-      <button class="qp-btn" onclick="fabQuickPeriodHoje()">Hoje</button>
-      <button class="qp-btn" onclick="fabQuickPeriodMes()">Mês atual</button>
-      <button class="qp-btn" onclick="fabQuickPeriodMesAnterior()">Mês anterior</button>
-    </div>
-    <div class="fab-popover-actions">
-      <button class="btn" onclick="closePeriodFab()"><i class="ti ti-x"></i></button>
-      <button class="btn btn-primary" onclick="fabAnalisar()">
-        <i class="ti ti-player-play"></i> Analisar
-      </button>
-    </div>
-  </div>
-  <button id="period-fab-trigger" onclick="togglePeriodFab()">
-    <span class="fab-trigger-icon"><i class="ti ti-calendar-event"></i></span>
-    <span class="fab-period-label" id="fab-period-label">Período</span>
-    <i class="ti ti-chevron-up" id="fab-chev" style="font-size:12px;color:var(--text3)"></i>
-  </button>
-</div>
-
 <!-- Biblioteca externa -->
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
@@ -3519,7 +3487,6 @@
 <script src="js/inventario.js"></script>
 <script src="js/calendar.js"></script>
 <script src="js/relatorio.js"></script>
-<script src="js/period-fab.js"></script>
 <script src="js/agregados.js"></script>
 <script src="js/trend.js"></script>
 
