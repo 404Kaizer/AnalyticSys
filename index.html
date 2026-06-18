@@ -419,27 +419,51 @@
                 </div>
               </div>
 
-              <!-- Barra markdown -->
+              <!-- Barra de formatação inline -->
               <div class="notes-md-bar">
-                <button class="notes-md-btn" onclick="notesMdWrap('**','**')" title="Negrito"><b>B</b></button>
-                <button class="notes-md-btn" onclick="notesMdWrap('*','*')"   title="Itálico"><i>I</i></button>
-                <button class="notes-md-btn" onclick="notesMdWrap('~~','~~')" title="Tachado"><s>S</s></button>
+                <!-- Histórico -->
+                <button class="notes-md-btn" onclick="document.execCommand('undo')" title="Desfazer (Ctrl+Z)"><i class="ti ti-arrow-back-up"></i></button>
+                <button class="notes-md-btn" onclick="document.execCommand('redo')" title="Refazer (Ctrl+Y)"><i class="ti ti-arrow-forward-up"></i></button>
                 <div class="notes-md-sep"></div>
-                <button class="notes-md-btn" onclick="notesMdLine('- ')"   title="Lista"><i class="ti ti-list"></i></button>
-                <button class="notes-md-btn" onclick="notesMdLine('- [ ] ')" title="Checklist"><i class="ti ti-checkbox"></i></button>
-                <button class="notes-md-btn" onclick="notesMdLine('# ')"   title="Título"><i class="ti ti-heading"></i></button>
+                <!-- Formatação -->
+                <button class="notes-md-btn" id="notes-tb-bold"   onclick="notesExec('bold')"          title="Negrito (Ctrl+B)"><b>B</b></button>
+                <button class="notes-md-btn" id="notes-tb-italic" onclick="notesExec('italic')"        title="Itálico (Ctrl+I)"><i>I</i></button>
+                <button class="notes-md-btn" id="notes-tb-under"  onclick="notesExec('underline')"     title="Sublinhado (Ctrl+U)"><u>U</u></button>
+                <button class="notes-md-btn" id="notes-tb-strike" onclick="notesExec('strikeThrough')" title="Tachado"><s>S</s></button>
                 <div class="notes-md-sep"></div>
-                <button class="notes-md-btn notes-md-toggle" id="notes-preview-btn" onclick="notesTogglePreview()" title="Pré-visualizar">
-                  <i class="ti ti-eye"></i>
-                </button>
+                <!-- Tamanho da fonte -->
+                <select class="notes-tb-select" id="notes-font-size" onchange="notesSetFontSize(this.value)" title="Tamanho da fonte">
+                  <option value="">Tam.</option>
+                  <option value="1">8px</option>
+                  <option value="2">10px</option>
+                  <option value="3">12px</option>
+                  <option value="4">14px</option>
+                  <option value="5">18px</option>
+                  <option value="6">24px</option>
+                  <option value="7">36px</option>
+                </select>
+                <!-- Cor do texto -->
+                <div class="notes-tb-color-wrap" title="Cor do texto">
+                  <span class="notes-tb-color-icon"><i class="ti ti-letter-a"></i></span>
+                  <input type="color" id="notes-color-input" value="#ffffff" oninput="notesExec('foreColor', this.value)" title="Cor do texto">
+                </div>
+                <div class="notes-md-sep"></div>
+                <!-- Listas e checklist -->
+                <button class="notes-md-btn" onclick="notesExec('insertUnorderedList')" title="Lista com marcadores"><i class="ti ti-list"></i></button>
+                <button class="notes-md-btn" onclick="notesInsertChecklist()"           title="Inserir checklist"><i class="ti ti-checkbox"></i></button>
+                <div class="notes-md-sep"></div>
+                <!-- Limpar formatação -->
+                <button class="notes-md-btn" onclick="notesExec('removeFormat')" title="Limpar formatação"><i class="ti ti-clear-formatting"></i></button>
               </div>
 
-              <!-- Editor / Preview -->
+              <!-- Área editável inline -->
               <div class="notes-editor-body">
-                <textarea class="notes-textarea-md" id="notes-textarea-md"
-                  placeholder="Escreva aqui... (suporta **negrito**, *itálico*, - listas)"
-                  oninput="notesAutoSave(); notesUpdatePreview()"></textarea>
-                <div class="notes-preview-md" id="notes-preview-md" style="display:none"></div>
+                <div class="notes-inline-editor" id="notes-inline-editor"
+                  contenteditable="true" spellcheck="false"
+                  data-placeholder="Escreva aqui..."
+                  oninput="notesEditorUpdate()"
+                  onkeyup="notesUpdateToolbarState()"
+                  onmouseup="notesUpdateToolbarState()"></div>
               </div>
             </div>
 

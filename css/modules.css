@@ -6347,46 +6347,73 @@ mark.search-highlight {
 
 /* Editor body */
 .notes-editor-body { flex: 1; display: flex; min-height: 0; overflow: hidden; height: 100%; }
-.notes-textarea-md {
+.notes-textarea-md { display: none; } /* mantido para não quebrar nada, mas não usado */
+.notes-preview-md  { display: none; }
+
+/* Editor inline contenteditable */
+.notes-inline-editor {
   flex: 1;
   width: 100%;
   height: 100%;
   background: var(--bg2);
   border: none;
   color: var(--text);
-  font-family: var(--mono);
-  font-size: 12.5px;
+  font-family: var(--font);
+  font-size: 13px;
   line-height: 1.7;
   padding: 12px 14px;
-  resize: none;
   outline: none;
-  min-height: 0;
-}
-.notes-textarea-md::placeholder { color: var(--text3); }
-.notes-preview-md {
-  flex: 1;
   overflow-y: auto;
-  padding: 12px 14px;
-  font-size: 12.5px;
-  line-height: 1.7;
-  color: var(--text);
-  background: var(--bg2);
-  height: 100%;
+  min-height: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
-/* Markdown preview styles */
-.notes-preview-md h1,.notes-preview-md h2,.notes-preview-md h3 { font-weight: 700; margin-bottom: 6px; color: var(--text); }
-.notes-preview-md h1 { font-size: 16px; }
-.notes-preview-md h2 { font-size: 14px; }
-.notes-preview-md h3 { font-size: 13px; }
-.notes-preview-md p { margin-bottom: 8px; }
-.notes-preview-md ul,.notes-preview-md ol { padding-left: 18px; margin-bottom: 8px; }
-.notes-preview-md li { margin-bottom: 3px; }
-.notes-preview-md strong { font-weight: 700; color: var(--text); }
-.notes-preview-md em { font-style: italic; color: var(--text2); }
-.notes-preview-md del { color: var(--text3); }
-.notes-preview-md code { font-family: var(--mono); background: var(--bg3); border-radius: 3px; padding: 1px 5px; font-size: 11px; }
-.notes-preview-md input[type=checkbox] { accent-color: var(--accent); margin-right: 5px; }
-.notes-preview-md hr { border: none; border-top: 1px solid var(--border2); margin: 10px 0; }
+.notes-inline-editor:empty:before {
+  content: attr(data-placeholder);
+  color: var(--text3);
+  pointer-events: none;
+}
+.notes-inline-editor ul, .notes-inline-editor ol { padding-left: 18px; margin: 4px 0; }
+.notes-inline-editor li { margin-bottom: 2px; }
+
+/* Seletor de tamanho de fonte na toolbar */
+.notes-tb-select {
+  background: var(--bg4);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  color: var(--text2);
+  font-size: 11px;
+  font-family: var(--font);
+  padding: 3px 6px;
+  cursor: pointer;
+  outline: none;
+  height: 26px;
+}
+.notes-tb-select:hover { border-color: var(--border3); }
+
+/* Color picker wrapper */
+.notes-tb-color-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+.notes-tb-color-icon {
+  font-size: 13px;
+  color: var(--text2);
+  padding: 3px 5px;
+  pointer-events: none;
+}
+.notes-tb-color-wrap input[type=color] {
+  position: absolute;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+  border: none;
+  padding: 0;
+}
+.notes-tb-color-wrap:hover .notes-tb-color-icon { color: var(--text); }
 
 /* ══════════════════════════════════════════
    ATALHOS DE TECLADO
