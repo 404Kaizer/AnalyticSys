@@ -1099,7 +1099,7 @@ const _COLOR_MAP = {
 function notesRender() {
   const list  = document.getElementById('notes-cards-list');
   if (!list) return;
-  const sort  = document.getElementById('notes-sort-select')?.value || 'modified';
+  const sort  = document.getElementById('notes-sort-select')?.value || 'priority';
   const cards = [..._notesCards].sort((a, b) => {
     if (sort === 'priority') return (_PRIORITY_ORDER[a.priority] ?? 3) - (_PRIORITY_ORDER[b.priority] ?? 3) || b.modified - a.modified;
     if (sort === 'title')    return (a.title||'').localeCompare(b.title||'');
