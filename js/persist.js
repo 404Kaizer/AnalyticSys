@@ -220,6 +220,19 @@ function applySavedState(saved) {
   invalidateSapIndex();
   invalidateSaidasIndex();
   invalidateAllSearchIndexes();
+
+  // Importações gravadas com status 'Processando' ficaram assim porque o persist
+  // ocorre antes do .then() que atualiza o status. Ao recarregar, qualquer import
+  // nesse estado já está persistido — portanto seu status correto é 'Salvo'.
+  if (Array.isArray(state.imports)) {
+    state.imports.forEach(rec => {
+      if (rec.status === 'Processando') {
+        rec.status    = 'Salvo';
+        rec.statusTip = 'Registros salvos com sucesso';
+      }
+    });
+  }
+
   stateHydrated = true;
   return true;
 }
