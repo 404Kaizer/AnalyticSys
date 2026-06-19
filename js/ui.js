@@ -1258,7 +1258,141 @@ function closePendIntegModal() {
   overlay.setAttribute('aria-hidden', 'true');
 }
 
-Object.assign(window, { openBreakdownModal, closeBreakdownModal, openPendIntegModal, closePendIntegModal });
+// ── Estado de paginação do modal global de pendentes ──────────────────────
+const _pimState = {
+  grupos: [], tipo: 'NF', colorVar: 'var(--green)',
+  page: 0, totalPages: 1, PAGE_SIZE: 50
+};
+
+function _pimRenderPage() {
+  const { grupos, tipo, colorVar, page, PAGE_SIZE } = _pimState;
+  const _num = v => { const n = parseFloat(String(v??0).replace(',','.')); return Number.isFinite(n)?n:0; };
+  const _fmt = n => isNaN(n)?'—':Math.abs(n).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const tbody = document.getElementById('pim-tbody');
+  if (!tbody) return;
+  const start = page * PAGE_SIZE, end = start + PAGE_SIZE;
+  let globalIdx = 0, html = '';
+  for (const { central, items } of grupos) {
+    const groupStart = globalIdx, groupEnd = globalIdx + items.length;
+    if (groupEnd <= start || groupStart >= end) { globalIdx += items.length; continue; }
+    html += `<tr><td colspan="6" style="padding:8px 14px 4px;background:var(--bg3);border-top:1px solid var(--border)">
+      <span style="font-size:10px;font-family:var(--mono);font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text3)">
+        <i class="ti ti-building-factory-2" style="font-size:11px;margin-right:5px;color:${colorVar}"></i>${escapeHtml(central)}</span>
+      <span style="font-size:10px;font-family:var(--mono);color:var(--text3);margin-left:8px">${items.length} registro${items.length!==1?'s':''}</span>
+    </td></tr>`;
+    for (let i = 0; i < items.length; i++) {
+      const gi = globalIdx + i;
+      if (gi < start || gi >= end) continue;
+      const it = items[i];
+      const ref = tipo==='NF' ? escapeHtml(String(it.nf||'—')) : escapeHtml(String(it.os||'—'));
+      html += `<tr>
+        <td class="td-muted" style="font-size:11px"></td>
+        <td class="td-mono" style="font-weight:600;color:${colorVar}">${ref}</td>
+        <td>${escapeHtml(String(it.material||'—'))}</td>
+        <td class="td-muted">${escapeHtml(String(it.fornecedor||'—'))}</td>
+        <td class="td-muted">${escapeHtml(String(it.dtEmissao||'—'))}</td>
+        <td class="td-mono" style="text-align:right;color:${colorVar}">${_fmt(_num(it.peso))} ${escapeHtml(String(it.um||'kg'))}</td>
+      </tr>`;
+    }
+    globalIdx += items.length;
+  }
+  tbody.innerHTML = html || `<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text3);font-style:italic">Nenhum pendente encontrado</td></tr>`;
+  const pgInfo = document.getElementById('pim-pg-info');
+  const pgPanel = document.getElementById('pim-pagination');
+  if (pgInfo) pgInfo.textContent = `Pág. ${page+1} / ${_pimState.totalPages}`;
+  if (pgPanel) pgPanel.style.display = _pimState.totalPages > 1 ? 'flex' : 'none';
+  ['pim-pg-first','pim-pg-prev'].forEach(id => { const b=document.getElementById(id); if(b) b.disabled = page===0; });
+  ['pim-pg-next','pim-pg-last'].forEach(id => { const b=document.getElementById(id); if(b) b.disabled = page>=_pimState.totalPages-1; });
+  const pimBody = document.querySelector('.pim-body');
+  if (pimBody) pimBody.scrollTop = 0;
+}
+
+function pimGoToPage(p) {
+  const clamped = Math.max(0, Math.min(p, _pimState.totalPages-1));
+  _pimState.page = clamped;
+  _pimRenderPage();
+}
+
+function openPendIntegGlobalModal(tipo) {
+  const overlay = document.getElementById('pim-overlay');
+  if (!overlay) return;
+  const normNF = raw => { const s=String(raw||'').trim().toUpperCase(); const di=s.lastIndexOf('-'); const base=di>0?s.slice(0,di):s; return base.replace(/^0+/,'')||'0'; };
+  const normSapRefOS = raw => { const s=String(raw||'').trim().toUpperCase(); const di=s.lastIndexOf('-'); return (di>=0?s.slice(di+1):s).replace(/^0+/,'')||'0'; };
+  const normOS = raw => String(raw||'').trim().toUpperCase().replace(/^0+/,'')||'0';
+  const _normMov = m => String(m||'').trim().toUpperCase();
+  const allCentralsSet = new Set();
+  if (tipo==='NF') (state.entradas||[]).forEach(r=>{ const c=(r.centralDestino||r.centralCompra||'').trim(); if(c) allCentralsSet.add(c); });
+  else (state.saidas||[]).forEach(r=>{ const c=(r.central||'').trim(); if(c) allCentralsSet.add(c); });
+  const grupos = [];
+  allCentralsSet.forEach(central => {
+    const { byCentral } = getSapIndex();
+    const sapAll = byCentral.get(central)||[];
+    const sapNFRefs=new Set(), sapOSRefs=new Set();
+    sapAll.forEach(s => {
+      const cod=_normMov(s.movimento), ref=String(s.ref||'').trim().toUpperCase(), doc=String(s.documento||'').trim().toUpperCase();
+      if (CODIGOS_ENTRADA.has(cod)) { if(ref) sapNFRefs.add(normNF(ref)); if(doc) sapNFRefs.add(normNF(doc)); }
+      else if (cod==='201') { if(ref) sapOSRefs.add(normSapRefOS(ref)); if(doc) sapOSRefs.add(normSapRefOS(doc)); }
+    });
+    let items = [];
+    if (tipo==='NF') {
+      items = (state.entradas||[]).filter(r=>(r.centralDestino||r.centralCompra||'').trim()===central&&r.nf&&!sapNFRefs.has(normNF(r.nf)))
+        .map(r=>({nf:r.nf,material:r.material||'—',peso:r.peso||0,um:r.um||'kg',dtEmissao:r.dtEmissao||'—',fornecedor:r.fornecedor||'—'}));
+    } else {
+      items = (state.saidas||[]).filter(r=>(r.central||'').trim()===central&&r.os&&!sapOSRefs.has(normOS(r.os)))
+        .map(r=>({os:r.os,material:r.material||'—',peso:r.peso||0,um:r.um||'kg',dtEmissao:r.dtEmissao||'—',fornecedor:r.fornecedor||'—'}));
+    }
+    if (items.length>0) grupos.push({central,items});
+  });
+  grupos.sort((a,b)=>a.central.localeCompare(b.central,'pt-BR'));
+  const totalCount = grupos.reduce((s,g)=>s+g.items.length,0);
+  const colorVar = tipo==='NF'?'var(--green)':'var(--red)';
+  const totalPages = Math.max(1,Math.ceil(totalCount/_pimState.PAGE_SIZE));
+  Object.assign(_pimState,{grupos,tipo,colorVar,page:0,totalPages});
+  document.getElementById('pim-title').textContent = tipo==='NF'?'NFs sem integração SAP — Todas as centrais':'OS sem integração SAP — Todas as centrais';
+  document.getElementById('pim-sub').textContent = `${grupos.length} central${grupos.length!==1?'is':''} · ${totalCount} registro${totalCount!==1?'s':''} pendente${totalCount!==1?'s':''}`;
+  const colRef = tipo==='NF'?'<th>NF</th>':'<th>OS</th>';
+  document.getElementById('pim-thead').innerHTML = `<tr><th>Central</th>${colRef}<th>Material</th><th>Fornecedor</th><th>Dt. Emissão</th><th style="text-align:right">Quantidade</th></tr>`;
+  document.getElementById('pim-count').textContent = `${totalCount} registro${totalCount!==1?'s':''} pendente${totalCount!==1?'s':''}`;
+  _pimRenderPage();
+  overlay.classList.add('open');
+  overlay.setAttribute('aria-hidden','false');
+}
+
+function updatePendGlobalBadges() {
+  const _normMov = m => String(m||'').trim().toUpperCase();
+  const normNF = raw => { const s=String(raw||'').trim().toUpperCase(); const di=s.lastIndexOf('-'); return (di>0?s.slice(0,di):s).replace(/^0+/,'')||'0'; };
+  const normSapRefOS = raw => { const s=String(raw||'').trim().toUpperCase(); const di=s.lastIndexOf('-'); return (di>=0?s.slice(di+1):s).replace(/^0+/,'')||'0'; };
+  const normOS = raw => String(raw||'').trim().toUpperCase().replace(/^0+/,'')||'0';
+  const { byCentral } = getSapIndex();
+  // NF badge
+  const nfBadge=document.getElementById('pend-global-nf-count'), nfBtn=document.getElementById('btn-pend-global-nf');
+  if (nfBadge) {
+    const cs=new Set((state.entradas||[]).map(r=>(r.centralDestino||r.centralCompra||'').trim()).filter(Boolean));
+    let total=0;
+    cs.forEach(c => {
+      const refs=new Set();
+      (byCentral.get(c)||[]).forEach(s=>{ const cod=_normMov(s.movimento); if(CODIGOS_ENTRADA.has(cod)){ const r=String(s.ref||'').trim().toUpperCase(),d=String(s.documento||'').trim().toUpperCase(); if(r) refs.add(normNF(r)); if(d) refs.add(normNF(d)); } });
+      total+=(state.entradas||[]).filter(r=>(r.centralDestino||r.centralCompra||'').trim()===c&&r.nf&&!refs.has(normNF(r.nf))).length;
+    });
+    nfBadge.textContent=total;
+    if (nfBtn) nfBtn.style.display=total===0?'none':'';
+  }
+  // OS badge
+  const osBadge=document.getElementById('pend-global-os-count'), osBtn=document.getElementById('btn-pend-global-os');
+  if (osBadge) {
+    const cs=new Set((state.saidas||[]).map(r=>(r.central||'').trim()).filter(Boolean));
+    let total=0;
+    cs.forEach(c => {
+      const refs=new Set();
+      (byCentral.get(c)||[]).forEach(s=>{ const cod=_normMov(s.movimento); if(cod==='201'){ const r=String(s.ref||'').trim().toUpperCase(),d=String(s.documento||'').trim().toUpperCase(); if(r) refs.add(normSapRefOS(r)); if(d) refs.add(normSapRefOS(d)); } });
+      total+=(state.saidas||[]).filter(r=>(r.central||'').trim()===c&&r.os&&!refs.has(normOS(r.os))).length;
+    });
+    osBadge.textContent=total;
+    if (osBtn) osBtn.style.display=total===0?'none':'';
+  }
+}
+
+Object.assign(window, { openBreakdownModal, closeBreakdownModal, openPendIntegModal, closePendIntegModal, openPendIntegGlobalModal, updatePendGlobalBadges, pimGoToPage, _pimState });
 
 // ── Conflict Resolution Modal ───────────────────────────────
 let _lrcDetailKey = null;

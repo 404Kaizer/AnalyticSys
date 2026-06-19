@@ -122,7 +122,7 @@ function renderMacroPanels(results, thresholds, dtIni, dtFim) {
   if (typeof initHelpBadges === 'function') initHelpBadges();
 
   // Guarda estado para re-render ao filtrar
-  _macroState = { centralMap, matItems };
+  _macroState = { centralMap, matItems, _dtIni: dtIni, _dtFim: dtFim };
 
   // Popula opções dos filtros
   _populateFilters(centralMap, matItems);
@@ -324,6 +324,12 @@ function macroApplyFilter() {
 
   _renderDonut('centrais', centralCounts, top5centrais, centralLevelMeta, centralScore, nCentrals, centralItemsByLevel);
   _renderDonut('mats',     matCounts,     top5mats,     matLevelMeta,     matScore,     nMats,     matItemsByLevel);
+
+  // Expõe os scores para o sistema de notificações
+  window._macroHealthScores = { centralScore, matScore };
+  if (typeof notifUpdateFromAnalytico === 'function') {
+    notifUpdateFromAnalytico(centralScore, matScore, _macroState._dtIni, _macroState._dtFim);
+  }
 }
 window.macroApplyFilter = macroApplyFilter;
 

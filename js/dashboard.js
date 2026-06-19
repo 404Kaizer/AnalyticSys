@@ -470,6 +470,8 @@ function updateDashboard() {
   if (document.getElementById('page-configuracoes')?.classList.contains('active')) {
     updateParamGerais();
   }
+  // Atualiza badges dos botões Pendentes nas páginas Entradas e Saídas
+  if (typeof updatePendGlobalBadges === 'function') updatePendGlobalBadges();
 }
 
 function _renderDashboardConteudo(dtIni, dtFim) {
@@ -4133,6 +4135,8 @@ async function restoreAndRender() {
     if (isLoadingOverlayVisible()) updateLoadingOverlay('Finalizando o carregamento...', 'Carregando informações salvas', 'Quase pronto...');
     await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
     initResizable();
+    // Inicia sistema de notificações após tudo estar pronto
+    if (typeof notifBoot === 'function') notifBoot();
   } finally {
     hideLoadingOverlay('Dados carregados');
   }

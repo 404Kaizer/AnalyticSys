@@ -645,9 +645,15 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
             carry = { value: estTeorico, isEstimated: true };
           }
 
-          // Variação = Est. Final − Est. Teórico, sempre.
-          // Sem lançamento: finalStock = estTeorico → diff = 0.
-          const diff = finalStock - estTeorico;
+          const diff = hasLanc
+            ? (() => {
+                if (isFirstDay) {
+                  const rawDiff = finalStock - estTeorico;
+                  return (Math.abs(rawDiff) < 0.0001) ? 0 : null;
+                }
+                return finalStock - estTeorico;
+              })()
+            : null;
 
           return {
             dateLabel: fmtPtDate(day),
@@ -692,10 +698,21 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
             carry = { value: estTeorico, isEstimated: true };
           }
 
-          // Variação = Est. Final − Est. Teórico, sempre.
-          // Sem lançamento: finalStock já foi igualado ao estTeorico → diff = 0.
-          // 1º dia: calcula normalmente; o Est. Inicial vem do carry anterior.
-          const diff = finalStock - estTeorico;
+          // No primeiro dia do período não há lançamento inicial confiável
+          // para calcular variação — suprimir diff (→ "—") exceto quando o
+          // lançamento final coincide com o inicial (diff seria 0 de qualquer modo).
+          let diff;
+          if (!hasLanc) {
+            diff = null;
+          } else if (isFirstDay) {
+            // Só exibe variação se o carry anterior for confiável E
+            // o finalStock igual ao carry (diff = 0); qualquer diferença
+            // seria espúria por falta de lançamento inicial no período.
+            const rawDiff = finalStock - estTeorico;
+            diff = (Math.abs(rawDiff) < 0.0001) ? 0 : null;
+          } else {
+            diff = finalStock - estTeorico;
+          }
 
           return {
             dateLabel: fmtPtDate(day),
@@ -1143,6 +1160,12 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
   // Atualiza visual dos botões
   _updateToggleRegionaisBtn();
   _updateToggleCentralisBtn();
+
+  // Fixa a altura mínima do container no estado sem filtro
+  container.style.minHeight = '';
+  requestAnimationFrame(() => {
+    container.style.minHeight = container.offsetHeight + 'px';
+  });
 }  // end _rodarAnaliticoCore
 
 
@@ -1430,6 +1453,9 @@ function clearAllMicroFilters() {
   _tipoVarSyncNivelToState(new Set(['regional','central','material']));
   _tipoVarUpdateTrigger();
   _applyMicroVisibility();
+  // Ao limpar filtros, remove min-height para o container voltar à altura natural
+  const container = document.getElementById('an-micro-container');
+  if (container) container.style.minHeight = '';
 }
 
 // ── Saúde filter state (replaces old variação % filter) ──

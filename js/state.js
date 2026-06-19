@@ -25,7 +25,8 @@ const defaultState = () => ({
   filiais: [],
   materiais: [],
   ocorrencias: [],
-  acoesRelatorio: []
+  acoesRelatorio: [],
+  notifications: []   // { id, type, level, title, body, source, createdAt, read }
 });
 
 

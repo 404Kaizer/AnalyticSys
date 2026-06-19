@@ -4656,6 +4656,192 @@ mark.search-highlight {
    PERIOD FAB (Floating Period Picker)
 ══════════════════════════════════════════ */
 /* ══════════════════════════════════════════
+   SISTEMA DE NOTIFICAÇÕES
+══════════════════════════════════════════ */
+.notif-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+/* Botão sino */
+.notif-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text2);
+  cursor: pointer;
+  transition: background .15s, border-color .15s, color .15s;
+}
+.notif-btn:hover,
+.notif-btn.open { background: var(--bg3); border-color: var(--border2); color: var(--text); }
+.notif-btn.notif-btn-active { color: var(--text); }
+.notif-bell-icon { font-size: 17px; }
+
+/* Badge de contagem */
+.notif-badge {
+  position: absolute;
+  top: 3px; right: 3px;
+  min-width: 16px; height: 16px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 700;
+  font-family: var(--mono);
+  display: flex; align-items: center; justify-content: center;
+  padding: 0 4px;
+  border: 1.5px solid var(--bg);
+  pointer-events: none;
+}
+.notif-badge-critico { background: var(--red);   color: #fff; }
+.notif-badge-atencao { background: var(--amber); color: #000; }
+.notif-badge-info    { background: #3b82f6;       color: #fff; }
+
+/* Dropdown */
+.notif-dropdown {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: 360px;
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 8px 32px rgba(0,0,0,.35);
+  display: none;
+  flex-direction: column;
+  z-index: 500;
+  overflow: hidden;
+}
+.notif-dropdown.open { display: flex; }
+
+.notif-dropdown-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px 10px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.notif-dropdown-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  font-family: var(--mono);
+}
+.notif-mark-all-btn {
+  font-size: 11px;
+  color: var(--accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 6px;
+  border-radius: 5px;
+}
+.notif-mark-all-btn:hover { background: var(--accent-dim); }
+
+/* Lista */
+.notif-list {
+  overflow-y: auto;
+  max-height: 420px;
+  display: flex;
+  flex-direction: column;
+}
+
+.notif-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 36px 20px;
+  color: var(--text3);
+  font-size: 12px;
+  font-family: var(--mono);
+}
+.notif-empty i { font-size: 28px; opacity: .3; }
+
+/* Item */
+.notif-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--border);
+  transition: background .12s;
+  cursor: default;
+}
+.notif-item:last-child { border-bottom: none; }
+.notif-item:hover { background: var(--bg3); }
+.notif-item-read { opacity: .55; }
+
+.notif-item-icon {
+  width: 32px; height: 32px;
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.notif-item-body { flex: 1; min-width: 0; }
+.notif-item-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 3px;
+  line-height: 1.4;
+}
+.notif-item-desc {
+  font-size: 11px;
+  color: var(--text2);
+  line-height: 1.5;
+  margin-bottom: 5px;
+}
+.notif-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.notif-level-chip {
+  font-size: 10px;
+  font-weight: 600;
+  font-family: var(--mono);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+.notif-time {
+  font-size: 10px;
+  color: var(--text3);
+  font-family: var(--mono);
+}
+.notif-mark-btn {
+  width: 24px; height: 24px;
+  border-radius: 6px;
+  border: 1px solid var(--border2);
+  background: var(--bg3);
+  color: var(--text3);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px;
+  flex-shrink: 0;
+  transition: background .12s, color .12s;
+  margin-top: 2px;
+}
+.notif-item-clickable { cursor: pointer; }
+.notif-item-clickable:hover .notif-item-title { color: var(--accent); }
+.notif-go-hint { color: var(--text3); margin-left: auto; }
+.notif-mark-btn:hover { background: var(--green-bg); color: var(--green); border-color: var(--green-border); }
+
+/* ══════════════════════════════════════════
    CUSTOM CALENDAR DATE PICKER
 ══════════════════════════════════════════ */
 .cal-picker-wrap {

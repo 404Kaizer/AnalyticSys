@@ -197,12 +197,21 @@
 
           <div class="topbar-stat-sep"></div>
 
-          <!-- 3. Alertas ativos -->
-          <div class="topbar-stat" id="topbar-alertas" title="Ocorrências abertas e vencidas">
-            <i class="ti ti-bell topbar-stat-icon" id="alertas-icon"></i>
-            <div class="topbar-stat-body">
-              <span class="topbar-stat-label">Alertas ativos</span>
-              <span class="topbar-stat-val" id="alertas-val">—</span>
+          <!-- 3. Notificações -->
+          <div class="notif-wrap" id="notif-wrap">
+            <button class="notif-btn" id="notif-btn" onclick="notifToggle()" title="Notificações">
+              <i class="ti ti-bell notif-bell-icon"></i>
+              <span class="notif-badge" id="notif-badge" style="display:none">0</span>
+            </button>
+            <!-- Dropdown -->
+            <div class="notif-dropdown" id="notif-dropdown">
+              <div class="notif-dropdown-header">
+                <span class="notif-dropdown-title"><i class="ti ti-bell" style="margin-right:6px"></i>Notificações</span>
+                <button class="notif-mark-all-btn" onclick="notifMarkAllRead()" title="Marcar todas como lidas">
+                  <i class="ti ti-checks"></i> Marcar todas
+                </button>
+              </div>
+              <div class="notif-list" id="notif-list"></div>
             </div>
           </div>
 
@@ -3648,5 +3657,6 @@
   </div>
 </div>
 
+<script src="js/notifications.js"></script>
 </body>
 </html>
