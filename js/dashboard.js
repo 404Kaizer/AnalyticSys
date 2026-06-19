@@ -198,6 +198,12 @@ function rodarDashboardGerencial() {
     if (emptyEl)   emptyEl.style.display   = 'none';
     if (contentEl) contentEl.style.display = '';
     _renderDashboardConteudo(dtIni, dtFim);
+    // Se a aba de Controle de Corte já estiver ativa, atualiza também
+    if (document.getElementById('dg-tab-btn-corte')?.classList.contains('active')) {
+      if (typeof rodarControleAgregadosPorPeriodo === 'function' && dtIni && dtFim) {
+        rodarControleAgregadosPorPeriodo(dtIni, dtFim);
+      }
+    }
     if (window.updatePeriodFab) updatePeriodFab();
     if (typeof hideLoadingOverlay === 'function') hideLoadingOverlay('Dashboard atualizado');
   }, 0));
@@ -464,8 +470,6 @@ function updateDashboard() {
   if (document.getElementById('page-configuracoes')?.classList.contains('active')) {
     updateParamGerais();
   }
-  // Atualiza badges dos botões Pendentes nas páginas Entradas e Saídas
-  if (typeof updatePendGlobalBadges === 'function') updatePendGlobalBadges();
 }
 
 function _renderDashboardConteudo(dtIni, dtFim) {
@@ -4024,13 +4028,23 @@ function rodarComparativo() {
 window.rodarComparativo = rodarComparativo;
 
 function dgSwitchTab(tab) {
-
   document.querySelectorAll('.dg-tab-btn').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.dg-tab-pane').forEach(p => p.classList.remove('active'));
   const btn  = document.getElementById('dg-tab-btn-' + tab);
   const pane = document.getElementById('dg-pane-' + tab);
   if (btn)  btn.classList.add('active');
   if (pane) pane.classList.add('active');
+
+  // Controle de Corte usa o período do cabeçalho unificado do DG
+  if (tab === 'corte') {
+    const iniStr = document.getElementById('dg-dt-ini')?.value;
+    const fimStr = document.getElementById('dg-dt-fim')?.value;
+    if (iniStr && fimStr && typeof rodarControleAgregadosPorPeriodo === 'function') {
+      const dtIni = new Date(iniStr + 'T00:00:00');
+      const dtFim = new Date(fimStr + 'T23:59:59');
+      if (!isNaN(dtIni) && !isNaN(dtFim)) rodarControleAgregadosPorPeriodo(dtIni, dtFim);
+    }
+  }
 }
 window.dgSwitchTab = dgSwitchTab;
 

@@ -316,45 +316,116 @@ function rodarControleAgregados() {
   requestAnimationFrame(() => setTimeout(() => {
   const dtIni = new Date(_agrSelectedYear, _agrSelectedMonth, 1);
   const dtFim = new Date(_agrSelectedYear, _agrSelectedMonth + 1, 0);
+  _agrRunForMonth(dtIni, dtFim);
+  }, 0));
+}
+
+/**
+ * Chamado pelo Dashboard Gerencial com o período selecionado no cabeçalho unificado.
+ * Deriva todos os meses cobertos pelo período e roda o Controle de Corte para cada um,
+ * exibindo-os em sequência na mesma view.
+ */
+function rodarControleAgregadosPorPeriodo(dtIni, dtFim) {
+  if (!dtIni || !dtFim) return;
+
+  const el = document.getElementById('agr-results');
+  if (el) el.innerHTML = '<div class="agr-empty"><i class="ti ti-loader" style="animation:spin 1s linear infinite"></i><span>Calculando...</span></div>';
+  document.getElementById('agr-info-bar').style.display = 'none';
+
+  // Deriva todos os meses cobertos pelo período
+  const meses = [];
+  const cur = new Date(dtIni.getFullYear(), dtIni.getMonth(), 1);
+  const fimMes = new Date(dtFim.getFullYear(), dtFim.getMonth(), 1);
+  while (cur <= fimMes) {
+    meses.push({ year: cur.getFullYear(), month: cur.getMonth() });
+    cur.setMonth(cur.getMonth() + 1);
+  }
+
+  requestAnimationFrame(() => setTimeout(() => {
+    if (meses.length === 1) {
+      // Um único mês: comportamento normal
+      const m = meses[0];
+      const ini = new Date(m.year, m.month, 1);
+      const fim = new Date(m.year, m.month + 1, 0);
+      _agrRunForMonth(ini, fim);
+    } else {
+      // Múltiplos meses: renderiza cada um em sequência
+      const _mNome = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+                      'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+      if (el) el.innerHTML = '';
+      meses.forEach(m => {
+        const ini = new Date(m.year, m.month, 1);
+        const fim = new Date(m.year, m.month + 1, 0);
+        const wrapper = document.createElement('div');
+        wrapper.style.cssText = 'margin-bottom:28px';
+        const header = document.createElement('div');
+        header.style.cssText = 'font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text3);font-family:var(--mono);padding:0 2px 8px;border-bottom:1px solid var(--border);margin-bottom:12px';
+        header.textContent = `${_mNome[m.month]} ${m.year}`;
+        const results = document.createElement('div');
+        wrapper.appendChild(header);
+        wrapper.appendChild(results);
+        if (el) el.appendChild(wrapper);
+        _agrRunForMonth(ini, fim, results);
+      });
+    }
+  }, 0));
+}
+
+// ── Lógica interna: executa o cálculo e renderiza para um mês específico ──
+// containerEl: elemento DOM onde renderizar (default: #agr-results)
+function _agrRunForMonth(dtIni, dtFim, containerEl) {
+  const el = containerEl || document.getElementById('agr-results');
 
   const { centrais, cutoff, firstDay, lastDay } = _agrCompute(dtIni, dtFim);
 
-  // Update info bar
-  document.getElementById('agr-info-bar').style.display = 'flex';
-  document.getElementById('agr-pre-range').textContent  = `${_agrFmtDate(firstDay)} → ${_agrFmtDate(cutoff)}`;
-  document.getElementById('agr-pos-range').textContent  = `${_agrFmtDate(new Date(cutoff.getTime() + 86400000))} → ${_agrFmtDate(lastDay)}`;
-  document.getElementById('agr-limit-date').textContent = _agrFmtDate(cutoff);
-  const criticas  = centrais.filter(c => c.criticidade === 'critico').length;
-  const atencao   = centrais.filter(c => c.criticidade === 'atencao').length;
-  const injustTotal = centrais.reduce((s, c) => s + c.injustificados, 0);
-  const violEl = document.getElementById('agr-total-violacoes');
-  if (violEl) {
-    violEl.textContent = criticas > 0
-      ? `${criticas} crítica(s) · ${injustTotal} mat. injustificado(s)`
-      : atencao > 0 ? `${atencao} em atenção` : 'Nenhuma';
-    violEl.style.color = criticas > 0 ? 'var(--red)' : atencao > 0 ? 'var(--amber)' : 'var(--green)';
+  // Info bar — só atualiza quando não está em modo multi-mês (containerEl é null)
+  if (!containerEl) {
+    document.getElementById('agr-info-bar').style.display = 'flex';
+    document.getElementById('agr-pre-range').textContent  = `${_agrFmtDate(firstDay)} → ${_agrFmtDate(cutoff)}`;
+    document.getElementById('agr-pos-range').textContent  = `${_agrFmtDate(new Date(cutoff.getTime() + 86400000))} → ${_agrFmtDate(lastDay)}`;
+    document.getElementById('agr-limit-date').textContent = _agrFmtDate(cutoff);
+    const criticas    = centrais.filter(c => c.criticidade === 'critico').length;
+    const atencao     = centrais.filter(c => c.criticidade === 'atencao').length;
+    const injustTotal = centrais.reduce((s, c) => s + c.injustificados, 0);
+    const violEl = document.getElementById('agr-total-violacoes');
+    if (violEl) {
+      violEl.textContent = criticas > 0
+        ? `${criticas} crítica(s) · ${injustTotal} mat. injustificado(s)`
+        : atencao > 0 ? `${atencao} em atenção` : 'Nenhuma';
+      violEl.style.color = criticas > 0 ? 'var(--red)' : atencao > 0 ? 'var(--amber)' : 'var(--green)';
+    }
   }
 
-  const el = document.getElementById('agr-results');
   if (!centrais.length) {
-    el.innerHTML = `<div class="agr-empty"><i class="ti ti-package"></i><span>Nenhuma entrada de agregado encontrada no período.</span></div>`;
+    if (el) el.innerHTML = `<div class="agr-empty"><i class="ti ti-package"></i><span>Nenhuma entrada de agregado encontrada no período.</span></div>`;
     return;
   }
 
   // Store for filtering then render via agrApplyFilters
-  window._agrCentraisData = centrais;
-
-  // Show filter bar, populate options, reset active filters
-  const fb = document.getElementById('agr-filter-bar');
-  if (fb) fb.style.display = '';
-  agrClearFilters(true);
-  _agrPopulateOptions('central');
-  _agrPopulateOptions('material');
-
-  // Use agrApplyFilters as single source of truth for rendering
-  agrApplyFilters();
-
-  }, 0)); // end defer
+  // Em modo multi-mês, renderiza diretamente sem usar o estado global de filtros
+  if (!containerEl) {
+    window._agrCentraisData = centrais;
+    const fb = document.getElementById('agr-filter-bar');
+    if (fb) fb.style.display = '';
+    agrClearFilters(true);
+    _agrPopulateOptions('central');
+    _agrPopulateOptions('material');
+    agrApplyFilters();
+  } else {
+    // Multi-mês: renderiza no containerEl substituindo temporariamente #agr-results
+    window._agrCentraisData = centrais;
+    const realEl = document.getElementById('agr-results');
+    if (realEl && el !== realEl) {
+      realEl.id = '__agr-results-tmp';
+      el.id = 'agr-results';
+      agrApplyFilters();
+      el.id = '__agr-results-bkp';
+      realEl.id = 'agr-results';
+    } else {
+      if (el) el.innerHTML = '';
+      agrApplyFilters();
+    }
+  }
 }
 
 // ── dummy placeholder to preserve reference (real render is via agrApplyFilters) ──
@@ -787,4 +858,4 @@ function _agrRenderMatsTable(mats) {
   }).join('');
 }
 
-Object.assign(window, { rodarControleAgregados, _agrToggle, agrToggleMonthPicker, agrMonthNavYear, _agrSelectMonth, agrQuickMesAtual, agrQuickMesAnterior, agrToggleLegend, agrApplyFilters, agrClearFilters, agrToggleDropdown, agrCloseDropdown, agrClearDropdown, agrFilterDropdownSearch });
+Object.assign(window, { rodarControleAgregados, rodarControleAgregadosPorPeriodo, _agrToggle, agrToggleMonthPicker, agrMonthNavYear, _agrSelectMonth, agrQuickMesAtual, agrQuickMesAnterior, agrToggleLegend, agrApplyFilters, agrClearFilters, agrToggleDropdown, agrCloseDropdown, agrClearDropdown, agrFilterDropdownSearch });

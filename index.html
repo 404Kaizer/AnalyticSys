@@ -853,8 +853,8 @@
           <div class="table-header">
             <span class="table-title"><i class="ti ti-truck"></i> Controle de Corte — Agregados Miúdo e Graúdo</span>
             <div class="table-toolbar" style="gap:8px;flex-wrap:wrap">
-              <!-- Seletor de mês customizado -->
-              <div class="agr-month-wrap" id="agr-month-wrap">
+              <!-- Seletor de mês interno ocultado — período vem do cabeçalho unificado do DG -->
+              <div class="agr-month-wrap" id="agr-month-wrap" style="display:none">
                 <button class="cal-picker-trigger" id="agr-month-trigger" onclick="agrToggleMonthPicker()" type="button">
                   <i class="ti ti-calendar-month"></i>
                   <span id="agr-month-label">Selecionar mês</span>
@@ -869,12 +869,13 @@
                   <div class="agr-month-grid" id="agr-month-grid"></div>
                 </div>
               </div>
-              <!-- Quick chips -->
-              <div class="cal-quick-chips">
+              <!-- Quick chips — ocultados -->
+              <div class="cal-quick-chips" style="display:none">
                 <button class="cal-chip" id="agr-chip-atual" onclick="agrQuickMesAtual()" type="button">Mês atual</button>
                 <button class="cal-chip" id="agr-chip-anterior" onclick="agrQuickMesAnterior()" type="button">Mês anterior</button>
               </div>
-              <button class="btn btn-primary" id="agr-run-btn" onclick="rodarControleAgregados()" disabled>
+              <!-- Botão Atualizar — oculto; a atualização é disparada automaticamente pelo cabeçalho do DG -->
+              <button class="btn btn-primary" id="agr-run-btn" onclick="rodarControleAgregados()" disabled style="display:none">
                 <i class="ti ti-refresh"></i> <span>Atualizar</span>
               </button>
               <button class="btn" onclick="agrToggleLegend()" title="Como funciona o score de criticidade?">
