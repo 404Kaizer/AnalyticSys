@@ -140,7 +140,7 @@ function _rodarAnaliticoCore(dtIni, dtFim) {
     });
     const _prePeriodoStockByMat = {};
     allMats.forEach(mat => {
-      const prev = getPrePeriodLaunchStock({ central, material: mat, dtIni });
+      const prev = getPrePeriodLaunchStock({ central, material: mat, dtIni, dtFim });
       if (prev) _prePeriodoStockByMat[mat] = prev.value;
     });
 
@@ -416,7 +416,7 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
       sapByMat.get(mat).push(rec);
     });
     return [...(r.allMats || [])].reduce((acc, mat) => {
-      const prev = getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni });
+      const prev = getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni, dtFim });
       return acc + buildSnapshot({
         lancs: lancsByMat.get(mat) || [],
         sap:   sapByMat.get(mat)   || [],
@@ -475,8 +475,8 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
 
     // Ordena materiais: maior desfalque (diff mais negativo) → maior sobra (diff mais positivo)
     const allMatsSorted = [...r.allMats].sort((a, b) => {
-      const prevA = getPrePeriodLaunchStock({ central: r.central, material: a, dtIni });
-      const prevB = getPrePeriodLaunchStock({ central: r.central, material: b, dtIni });
+      const prevA = getPrePeriodLaunchStock({ central: r.central, material: a, dtIni, dtFim });
+      const prevB = getPrePeriodLaunchStock({ central: r.central, material: b, dtIni, dtFim });
       const diffA = buildSnapshot({ lancs: lancsByMat.get(a) || [], sap: sapByMat.get(a) || [], initialStockOverride: prevA?.value ?? null }).diff;
       const diffB = buildSnapshot({ lancs: lancsByMat.get(b) || [], sap: sapByMat.get(b) || [], initialStockOverride: prevB?.value ?? null }).diff;
       return diffA - diffB;
@@ -485,7 +485,7 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
     allMatsSorted.forEach((mat, matIdx) => {
       const lancsMat = lancsByMat.get(mat) || [];
       const sapMat = sapByMat.get(mat) || [];
-      const prev = getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni });
+      const prev = getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni, dtFim });
       const fim  = getLastPeriodLaunchStockWithFallback({ central: r.central, material: mat, dtIni, dtFim });
       const snapshot = buildSnapshot({
         lancs: lancsMat,
@@ -645,15 +645,9 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
             carry = { value: estTeorico, isEstimated: true };
           }
 
-          const diff = hasLanc
-            ? (() => {
-                if (isFirstDay) {
-                  const rawDiff = finalStock - estTeorico;
-                  return (Math.abs(rawDiff) < 0.0001) ? 0 : null;
-                }
-                return finalStock - estTeorico;
-              })()
-            : null;
+          // Variação = Est. Final − Est. Teórico, sempre.
+          // Sem lançamento: finalStock = estTeorico → diff = 0.
+          const diff = finalStock - estTeorico;
 
           return {
             dateLabel: fmtPtDate(day),
@@ -698,21 +692,10 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
             carry = { value: estTeorico, isEstimated: true };
           }
 
-          // No primeiro dia do período não há lançamento inicial confiável
-          // para calcular variação — suprimir diff (→ "—") exceto quando o
-          // lançamento final coincide com o inicial (diff seria 0 de qualquer modo).
-          let diff;
-          if (!hasLanc) {
-            diff = null;
-          } else if (isFirstDay) {
-            // Só exibe variação se o carry anterior for confiável E
-            // o finalStock igual ao carry (diff = 0); qualquer diferença
-            // seria espúria por falta de lançamento inicial no período.
-            const rawDiff = finalStock - estTeorico;
-            diff = (Math.abs(rawDiff) < 0.0001) ? 0 : null;
-          } else {
-            diff = finalStock - estTeorico;
-          }
+          // Variação = Est. Final − Est. Teórico, sempre.
+          // Sem lançamento: finalStock já foi igualado ao estTeorico → diff = 0.
+          // 1º dia: calcula normalmente; o Est. Inicial vem do carry anterior.
+          const diff = finalStock - estTeorico;
 
           return {
             dateLabel: fmtPtDate(day),
@@ -829,7 +812,7 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
     // e da tabela de materiais, para garantir consistência
     const thresholds = getHealthThresholds();
     const matDiffs = allMatsSorted.map(mat => {
-      const prev = getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni });
+      const prev = getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni, dtFim });
       const fim  = getLastPeriodLaunchStockWithFallback({ central: r.central, material: mat, dtIni, dtFim });
       const snap = buildSnapshot({
         lancs: lancsByMat.get(mat) || [],
@@ -1160,14 +1143,6 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
   // Atualiza visual dos botões
   _updateToggleRegionaisBtn();
   _updateToggleCentralisBtn();
-
-  // ── Fixa a altura mínima do container no estado sem filtro ──────────────
-  // Garante que ao filtrar por regional/central o container não encolha,
-  // evitando o "salto" de layout. Captura após um frame para garantir paint.
-  container.style.minHeight = '';
-  requestAnimationFrame(() => {
-    container.style.minHeight = container.offsetHeight + 'px';
-  });
 }  // end _rodarAnaliticoCore
 
 
@@ -1455,9 +1430,6 @@ function clearAllMicroFilters() {
   _tipoVarSyncNivelToState(new Set(['regional','central','material']));
   _tipoVarUpdateTrigger();
   _applyMicroVisibility();
-  // Ao limpar filtros, remove min-height para o container voltar à altura natural
-  const container = document.getElementById('an-micro-container');
-  if (container) container.style.minHeight = '';
 }
 
 // ── Saúde filter state (replaces old variação % filter) ──
