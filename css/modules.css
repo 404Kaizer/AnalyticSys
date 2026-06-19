@@ -900,8 +900,8 @@ td.pending-cell  { color: var(--text3) !important; font-style: italic; font-size
 }
 .macro-bar-row:hover { background: var(--bg3); }
 .macro-bar-label {
-  min-width: 130px;
-  max-width: 160px;
+  width: 155px;
+  flex-shrink: 0;
   font-size: 12px;
   font-weight: 500;
   color: var(--text);

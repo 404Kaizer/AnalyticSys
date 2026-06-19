@@ -74,7 +74,7 @@ function renderMacroPanels(results, thresholds, dtIni, dtFim) {
     const getPreStock = (mat) => {
       if (preCache.has(mat)) return preCache.get(mat);
       const s = (typeof getPrePeriodLaunchStock === 'function')
-        ? getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni }) : null;
+        ? getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni, dtFim }) : null;
       preCache.set(mat, s); return s;
     };
 
@@ -232,17 +232,54 @@ function macroApplyFilter() {
     };
   });
 
-  const top5mats = [...filteredMats]
-    .filter(v => v.level !== 'bom')
+  // ── Top 5 materiais: agrega por nome do material (TODAS as centrais, todos os níveis) ──
+  // Inclui pares 'bom' na soma para que totalDiff e contagem de centrais sejam corretos.
+  // O filtro de "pior nível !== bom" é aplicado DEPOIS da agregação completa.
+  const matByName = new Map();
+  filteredMats.forEach(v => {
+    if (!matByName.has(v.mat)) {
+      matByName.set(v.mat, {
+        mat: v.mat, totalDiff: 0, custo: 0,
+        centrais: new Set(), levels: [], trends: []
+      });
+    }
+    const agg = matByName.get(v.mat);
+    agg.totalDiff += (v.totalDiff || 0);
+    agg.custo     += (v.custo    || 0);
+    agg.centrais.add(v.central);
+    agg.levels.push(v.level);
+    agg.trends.push(v.trend || 'stable');
+  });
+
+  const _worstLevel = levels => {
+    const ord = { critico: 3, urgente: 2, atencao: 1, bom: 0 };
+    return levels.reduce((w, l) => (ord[l] ?? 0) > (ord[w] ?? 0) ? l : w, 'bom');
+  };
+  const _aggTrend = trends => {
+    const w = trends.filter(t => t === 'worsening').length;
+    const i = trends.filter(t => t === 'improving').length;
+    return w > i ? 'worsening' : i > w ? 'improving' : 'stable';
+  };
+
+  const top5mats = [...matByName.values()]
+    .filter(v => _worstLevel(v.levels) !== 'bom') // só exibe materiais com pelo menos 1 central não-bom
     .sort((a, b) => {
-      const sd = _levelSev[b.level] - _levelSev[a.level];
+      const la = _worstLevel(a.levels), lb = _worstLevel(b.levels);
+      const sd = _levelSev[lb] - _levelSev[la];
       return sd !== 0 ? sd : Math.abs(b.totalDiff) - Math.abs(a.totalDiff);
     })
     .slice(0, 5)
-    .map(v => ({
-      name: v.mat, sub: v.central, level: v.level,
-      diff: v.totalDiff, custo: v.custo || 0, trend: v.trend || 'stable'
-    }));
+    .map(v => {
+      const nCentrais = v.centrais.size;
+      return {
+        name:  v.mat,
+        sub:   nCentrais === 1 ? [...v.centrais][0] : `${nCentrais} centrais`,
+        level: _worstLevel(v.levels),
+        diff:  v.totalDiff,
+        custo: v.custo,
+        trend: _aggTrend(v.trends)
+      };
+    });
 
   // ── Score de saúde agregado ──────────────────────────────────────────
   // Usa HEALTH_PENALTIES para ponderar: mesmo cálculo do calcHealthScore
