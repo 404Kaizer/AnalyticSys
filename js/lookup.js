@@ -99,7 +99,7 @@ function filterRecords(records, query, fields, scope) {
 // ═══════════════════════════════════════════════════════════
 // Mapa de timers por módulo para debounce individual.
 const _filterDebounceTimers = {};
-const FILTER_DEBOUNCE_MS = 180; // ms de espera após o último keystroke
+const FILTER_DEBOUNCE_MS = 280; // ms de espera após o último keystroke
 
 function debouncedFilter(module, value, renderFn) {
   clearTimeout(_filterDebounceTimers[module]);
