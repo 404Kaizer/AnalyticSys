@@ -41,6 +41,14 @@ function buildDashboardGerencialResults(dtIni, dtFim) {
     const totalEntradas = Object.values(entradasPorCod).reduce((s, v) => s + v, 0);
     const totalSaidas   = Object.values(saidasPorCod).reduce((s, v) => s + v, 0);
 
+    // Pré-agrupa lançamentos por material — elimina O(n×m) filter por material
+    const lancsByMat = new Map();
+    lancsNoPeriodo.forEach(r => {
+      const mat = r.material || '—';
+      if (!lancsByMat.has(mat)) lancsByMat.set(mat, []);
+      lancsByMat.get(mat).push(r);
+    });
+
     const materiaisLancPrimeiro = {};
     lancsNoPeriodo.forEach(r => {
       const mat = r.material || '—';
@@ -81,33 +89,27 @@ function buildDashboardGerencialResults(dtIni, dtFim) {
       ...sapNoPeriodo.map(r => r.material || '—')
     ]);
 
-    // Correção 2: Est. Final — itera de trás para frente acumulando o último dia,
-    // igual ao Inventário, garantindo ordem correta independente da posição nos dados.
+    // Agrupa por material usando o índice pré-construído — O(1) por material
     const _macroPesoFimSoma = {};
     allMats.forEach(mat => {
-      const lancAteFimMat = lancsNoPeriodo.filter(r => {
-        const d = parseDate(r.dtLanc);
-        return (r.material || '—') === mat && d && d <= (dtFim || new Date(8640000000000000));
-      });
-      if (!lancAteFimMat.length) return;
-      const lastD = parseDate(lancAteFimMat[lancAteFimMat.length - 1].dtLanc);
+      const lancsMat = lancsByMat.get(mat) || [];
+      if (!lancsMat.length) return;
+      const lastD = parseDate(lancsMat[lancsMat.length - 1].dtLanc);
       if (!lastD) return;
       const lastISO = lastD.toISOString().substring(0, 10);
       let tot = 0;
-      for (let i = lancAteFimMat.length - 1; i >= 0; i--) {
-        const d = parseDate(lancAteFimMat[i].dtLanc);
-        if (d && d.toISOString().substring(0, 10) === lastISO) tot += num(lancAteFimMat[i].peso);
+      for (let i = lancsMat.length - 1; i >= 0; i--) {
+        const d = parseDate(lancsMat[i].dtLanc);
+        if (d && d.toISOString().substring(0, 10) === lastISO) tot += num(lancsMat[i].peso);
         else break;
       }
       _macroPesoFimSoma[mat] = tot;
     });
 
-    // EST. INICIAL: dia anterior ao período (pula domingo). Sem fallback.
-    // EST. FINAL: último dia não-domingo do período. missing=true se sem lançamento.
     let somaPrimeiro = 0, somaUltimo = 0;
     const missingIniMats = [], missingFimMats = [];
     allMats.forEach(mat => {
-      const prev = dtIni ? getPrePeriodLaunchStock({ central, material: mat, dtIni }) : null;
+      const prev = dtIni ? getPrePeriodLaunchStock({ central, material: mat, dtIni, dtFim }) : null;
       if (prev != null) {
         somaPrimeiro += prev.value;
       } else {
@@ -170,7 +172,7 @@ function buildDashboardGerencialResults(dtIni, dtFim) {
       missingIniMats, missingFimMats,
       allMats: [...allMats].sort(),
       materiaisLancPrimeiro, materiaisLancUltimo,
-      sapNoPeriodo, lancsNoPeriodo, custoMedioPorMat
+      sapNoPeriodo, lancsNoPeriodo, lancsByMat, custoMedioPorMat
     });
   });
 
@@ -4126,27 +4128,152 @@ function initDropZones() {
   });
 }
 
+// ── Helpers de loading steps ─────────────────────────────────────────────
+function _lstepSet(id, state) {
+  const el = document.getElementById('lstep-' + id);
+  if (!el) return;
+  const stateEl = el.querySelector('.lstep-state');
+  if (!stateEl) return;
+  if (state === 'running') {
+    stateEl.className = 'lstep-state lstep-running';
+    stateEl.innerHTML = '<i class="ti ti-loader-2" style="animation:spin .7s linear infinite"></i>';
+  } else if (state === 'done') {
+    stateEl.className = 'lstep-state lstep-done';
+    stateEl.innerHTML = '<i class="ti ti-circle-check"></i>';
+  } else if (state === 'skip') {
+    stateEl.className = 'lstep-state lstep-skip';
+    stateEl.innerHTML = '<i class="ti ti-minus"></i>';
+  }
+}
+
+function _lbarSet(pct) {
+  const fill = document.getElementById('loading-bar-fill');
+  if (!fill) return;
+  fill.style.animation = 'none';
+  fill.style.width = pct + '%';
+  fill.style.transform = 'none';
+  fill.style.opacity = '1';
+}
+
 async function restoreAndRender() {
-  showLoadingOverlay('Carregando informações salvas', 'Restaurando os dados persistidos no navegador...');
-  // Duplo yield: rAF garante próximo frame, setTimeout(0) garante que o browser pintou
+  showLoadingOverlay('Inicializando o sistema', 'Preparando para carregar os dados...');
+
+  // Mostra os steps
+  const stepsEl = document.getElementById('loading-steps');
+  if (stepsEl) stepsEl.style.display = '';
+
+  _lbarSet(0);
   await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+
   try {
-    await loadState();
-    if (isLoadingOverlayVisible()) updateLoadingOverlay('Montando a interface...', 'Carregando informações salvas', 'Ajustando métricas e listas...');
+    // ── STEP 1: Ler banco de dados ────────────────────────────────────────
+    _lstepSet('idb', 'running');
+    updateLoadingOverlay('Lendo o banco de dados local...', 'Inicializando o sistema');
     await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+    await loadState();
+    _lstepSet('idb', 'done');
+    _lbarSet(15);
+    await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+
+    // ── STEP 2: Estado já foi aplicado em loadState (applySavedState) ────
+    _lstepSet('state', 'running');
+    updateLoadingOverlay('Restaurando estado da sessão anterior...', 'Inicializando o sistema');
+    await new Promise(r => setTimeout(r, 0));
+    // Corrige status de importações pendentes (já feito em applySavedState, confirma)
+    if (Array.isArray(state.imports)) {
+      state.imports.forEach(rec => {
+        if (rec.status === 'Processando') { rec.status = 'Salvo'; rec.statusTip = 'Registros salvos com sucesso'; }
+      });
+    }
+    _lstepSet('state', 'done');
+    _lbarSet(30);
+    await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+
+    // ── STEP 3: Padronizar materiais ─────────────────────────────────────
+    const totalRecs = (state.entradas?.length || 0) + (state.saidas?.length || 0) +
+                      (state.lancamentos?.length || 0) + (state.sap?.length || 0);
+    if (totalRecs > 0) {
+      _lstepSet('norm', 'running');
+      updateLoadingOverlay(`Padronizando materiais — ${totalRecs.toLocaleString('pt-BR')} registros...`, 'Inicializando o sistema');
+      await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+      if (typeof reaplicarPadronizacaoMateriais === 'function') {
+        reaplicarPadronizacaoMateriais();
+      }
+      _lstepSet('norm', 'done');
+    } else {
+      _lstepSet('norm', 'skip');
+    }
+    _lbarSet(50);
+    await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+
+    // ── STEP 4: Construir índices de busca ───────────────────────────────
+    _lstepSet('index', 'running');
+    updateLoadingOverlay('Construindo índices de busca e navegação...', 'Inicializando o sistema');
+    await new Promise(r => setTimeout(r, 0));
+    invalidateLancIndex();
+    invalidateSapIndex();
+    invalidateSaidasIndex();
+    invalidateAllSearchIndexes();
+    // Pré-aquece os índices mais pesados para que a primeira interação seja rápida
+    if (typeof getLancIndex === 'function') getLancIndex();
+    if (typeof getSapIndex === 'function') getSapIndex();
+    _lstepSet('index', 'done');
+    _lbarSet(65);
+    await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+
+    // ── STEP 5: Alertas e ocorrências ────────────────────────────────────
+    _lstepSet('notif', 'running');
+    updateLoadingOverlay('Verificando alertas e ocorrências...', 'Inicializando o sistema');
+    await new Promise(r => setTimeout(r, 0));
+    if (typeof notifSync === 'function') notifSync(null);
+    _lstepSet('notif', 'done');
+    _lbarSet(60);
+    await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+
+    // ── STEP 6: Saúde do estoque ──────────────────────────────────────────
+    _lstepSet('health', 'running');
+    updateLoadingOverlay('Calculando saúde do estoque...', 'Inicializando o sistema');
+    await new Promise(r => setTimeout(r, 0));
+    if (typeof notifSilentHealthCheck === 'function') {
+      await notifSilentHealthCheck();
+    }
+    _lstepSet('health', 'done');
+    _lbarSet(75);
+    await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+
+    // ── STEP 7: Montar interface ──────────────────────────────────────────
+    _lstepSet('ui', 'running');
+    updateLoadingOverlay('Montando a interface...', 'Inicializando o sistema');
+    await new Promise(r => setTimeout(r, 0));
     updateDashboard();
     updateParamGerais();
+    await new Promise(r => setTimeout(r, 0));
     renderFiliais();
     renderMateriais();
+    await new Promise(r => setTimeout(r, 0));
     const activePage = document.querySelector('.page.active')?.id?.replace('page-', '') || 'importar';
     renderPage(activePage);
-    if (isLoadingOverlayVisible()) updateLoadingOverlay('Finalizando o carregamento...', 'Carregando informações salvas', 'Quase pronto...');
-    await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+    await new Promise(r => setTimeout(r, 0));
     initResizable();
-    // Inicia sistema de notificações após tudo estar pronto
-    if (typeof notifBoot === 'function') notifBoot();
+    if (!Array.isArray(state.notifications)) state.notifications = [];
+    if (typeof _notifRenderBadge === 'function') _notifRenderBadge();
+    _lstepSet('ui', 'done');
+    _lbarSet(88);
+    await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+
+    // ── STEP 8: Salvar estado ─────────────────────────────────────────────
+    _lstepSet('save', 'running');
+    updateLoadingOverlay('Salvando estado no banco local...', 'Inicializando o sistema');
+    await new Promise(r => setTimeout(r, 0));
+    if (typeof persistStateNow === 'function') {
+      try { await persistStateNow(); } catch(e) { console.warn('[Boot] persist:', e); }
+    }
+    _lstepSet('save', 'done');
+    _lbarSet(100);
+    await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+
   } finally {
-    hideLoadingOverlay('Dados carregados');
+    hideLoadingOverlay('Sistema pronto');
   }
 }
 

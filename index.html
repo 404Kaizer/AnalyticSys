@@ -3341,6 +3341,49 @@
         <div class="loading-hint" id="loading-hint">Preparando o ambiente local...</div>
       </div>
     </div>
+    <!-- Steps de progresso -->
+    <div class="loading-steps" id="loading-steps" style="display:none">
+      <div class="loading-step" id="lstep-idb">
+        <i class="ti ti-database lstep-icon"></i>
+        <span class="lstep-label">Lendo banco de dados local</span>
+        <span class="lstep-state lstep-wait"><i class="ti ti-clock"></i></span>
+      </div>
+      <div class="loading-step" id="lstep-state">
+        <i class="ti ti-refresh lstep-icon"></i>
+        <span class="lstep-label">Restaurando sessão anterior</span>
+        <span class="lstep-state lstep-wait"><i class="ti ti-clock"></i></span>
+      </div>
+      <div class="loading-step" id="lstep-norm">
+        <i class="ti ti-adjustments lstep-icon"></i>
+        <span class="lstep-label">Padronizando materiais e centrais</span>
+        <span class="lstep-state lstep-wait"><i class="ti ti-clock"></i></span>
+      </div>
+      <div class="loading-step" id="lstep-index">
+        <i class="ti ti-list-search lstep-icon"></i>
+        <span class="lstep-label">Construindo índices de busca</span>
+        <span class="lstep-state lstep-wait"><i class="ti ti-clock"></i></span>
+      </div>
+      <div class="loading-step" id="lstep-notif">
+        <i class="ti ti-bell lstep-icon"></i>
+        <span class="lstep-label">Verificando alertas e ocorrências</span>
+        <span class="lstep-state lstep-wait"><i class="ti ti-clock"></i></span>
+      </div>
+      <div class="loading-step" id="lstep-health">
+        <i class="ti ti-heartbeat lstep-icon"></i>
+        <span class="lstep-label">Calculando saúde do estoque</span>
+        <span class="lstep-state lstep-wait"><i class="ti ti-clock"></i></span>
+      </div>
+      <div class="loading-step" id="lstep-ui">
+        <i class="ti ti-layout lstep-icon"></i>
+        <span class="lstep-label">Montando a interface</span>
+        <span class="lstep-state lstep-wait"><i class="ti ti-clock"></i></span>
+      </div>
+      <div class="loading-step" id="lstep-save">
+        <i class="ti ti-device-floppy lstep-icon"></i>
+        <span class="lstep-label">Salvando estado no banco local</span>
+        <span class="lstep-state lstep-wait"><i class="ti ti-clock"></i></span>
+      </div>
+    </div>
     <div class="loading-meta">
       <div class="loading-time" id="loading-time">0s</div>
       <div class="loading-badge"><i class="ti ti-clock"></i><span id="loading-badge">Processando</span></div>

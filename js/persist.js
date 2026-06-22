@@ -214,16 +214,16 @@ function applySavedState(saved) {
 
   invalidateMaterialLookup();
   invalidateFilialLookup();
-  reaplicarPadronizacaoMateriais();
-  // Invalida todos os índices de busca e de lançamentos/SAP ao restaurar estado
-  invalidateLancIndex();
-  invalidateSapIndex();
-  invalidateSaidasIndex();
-  invalidateAllSearchIndexes();
+  // Nota: reaplicarPadronizacaoMateriais é executada no restoreAndRender
+  // durante o loading (step 3), com feedback visual ao usuário.
 
-  // Importações gravadas com status 'Processando' ficaram assim porque o persist
-  // ocorre antes do .then() que atualiza o status. Ao recarregar, qualquer import
-  // nesse estado já está persistido — portanto seu status correto é 'Salvo'.
+  // Invalida todos os índices — serão reconstruídos no step 4 do loading
+  if (typeof invalidateLancIndex === 'function') invalidateLancIndex();
+  if (typeof invalidateSapIndex === 'function') invalidateSapIndex();
+  if (typeof invalidateSaidasIndex === 'function') invalidateSaidasIndex();
+  if (typeof invalidateAllSearchIndexes === 'function') invalidateAllSearchIndexes();
+
+  // Importações gravadas com status 'Processando': corrige para 'Salvo'
   if (Array.isArray(state.imports)) {
     state.imports.forEach(rec => {
       if (rec.status === 'Processando') {
@@ -238,40 +238,40 @@ function applySavedState(saved) {
 }
 
 async function persistStateNow() {
-  // Bail-out de segurança: só pula a gravação se o estado NÃO tiver sido hidratado
-  // E todas as coleções estiverem vazias — incluindo configs.
-  // configs é verificada separadamente para garantir que configurações salvas pelo
-  // usuário nunca sejam descartadas mesmo quando os demais módulos estão vazios.
   const hasData = state.entradas.length  || state.saidas.length     ||
                   state.lancamentos.length || state.sap.length       ||
                   state.producao.length  || state.imports.length     ||
                   state.configs.length   || state.filiais.length     ||
                   state.materiais.length || (state.ocorrencias || []).length;
-  if (!stateHydrated && !hasData) {
-    return;
-  }
+  if (!stateHydrated && !hasData) return;
 
+  // buildStateSnapshot inclui compactSapRecords — pode ser O(600k).
+  // Executa em microtask para ceder ao browser antes de serializar.
+  await new Promise(r => setTimeout(r, 0));
   const snapshot = buildStateSnapshot();
+  await new Promise(r => setTimeout(r, 0));
 
   try {
     const db = await openDb();
     if (db) {
-      // Sinaliza início de escrita — se o browser fechar no meio, loadState
-      // detecta pendingWrite=true e emite aviso de possível inconsistência.
       await idbPut(db, 'meta', { version: STATE_VERSION, savedAt: snapshot.savedAt, pendingWrite: true }).catch(() => {});
 
-      // SAP é salvo em chunks separados — pode ter milhões de registros
+      // SAP em chunks — já é assíncrono internamente
       await saveSapChunks(db, snapshot.sap || []);
+      await new Promise(r => setTimeout(r, 0));
 
-      // Snapshot sem SAP — muito menor, cabe facilmente
       const snapshotSemSap = { ...snapshot, sap: [] };
       await idbPut(db, IDB_STATE_KEY, snapshotSemSap);
 
-      // Chaves individuais para recuperação parcial (sem SAP — já está nos chunks)
       const keysParaSalvar = saveSnapshotKeys.filter(k => k !== 'sap');
-      await Promise.all(keysParaSalvar.map(key => idbPut(db, key, snapshot[key])));
+      // Grava chaves individuais em batches para não travar
+      const BATCH = 4;
+      for (let i = 0; i < keysParaSalvar.length; i += BATCH) {
+        const batch = keysParaSalvar.slice(i, i + BATCH);
+        await Promise.all(batch.map(key => idbPut(db, key, snapshot[key])));
+        await new Promise(r => setTimeout(r, 0));
+      }
 
-      // Limpa o flag — escrita concluída com sucesso
       await idbPut(db, 'meta', { version: STATE_VERSION, savedAt: snapshot.savedAt, pendingWrite: false });
 
       const sapCount = (snapshot.sap || []).length;
@@ -287,11 +287,10 @@ async function persistStateNow() {
     const snapshotSemSap = { ...snapshot, sap: [] };
     localStorage.setItem(legacyStateKey, JSON.stringify(snapshotSemSap));
     console.warn('[Persist] Salvo no localStorage SEM dados SAP (IndexedDB indisponível).');
-    // Notifica o usuário que os dados SAP não foram salvos permanentemente
     if ((snapshot.sap || []).length > 0) {
       toast('⚠ Dados SAP não puderam ser salvos permanentemente. Use um navegador que suporte IndexedDB.', 'error');
     }
-    return true; // localStorage funcionou
+    return true;
   } catch (err) {
     console.error('[Persist] ✗ FALHA TOTAL:', err);
     toast('⚠ Não foi possível salvar os dados.', 'error');
@@ -319,12 +318,9 @@ function flushPersistQueue() {
       });
   };
 
-  // Usa requestIdleCallback quando disponível — roda só quando o browser está ocioso
-  if (typeof requestIdleCallback === 'function') {
-    requestIdleCallback(run, { timeout: 3000 });
-  } else {
-    run();
-  }
+  // setTimeout simples — não usa requestIdleCallback para evitar execução forçada
+  // pelo timeout mesmo quando o browser está ocupado.
+  setTimeout(run, 0);
 }
 
 function persist() {
@@ -399,9 +395,9 @@ async function loadState() {
   }
 
   if (loaded) {
-    // Não re-persistir imediatamente após restaurar — os dados acabam de ser lidos
-    // do storage e não mudaram. Agendar com delay longo para não travar a UI.
-    setTimeout(() => flushPersistQueue(), 5000);
+    // Persistência pós-boot é feita pelo restoreAndRender (step 7 do loading).
+    // Não agendar nada aqui para evitar travamentos pós-loading.
+    stateHydrated = true;
   } else {
     stateHydrated = true;
   }

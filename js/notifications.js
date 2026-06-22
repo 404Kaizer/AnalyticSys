@@ -165,56 +165,53 @@ function notifSync(healthScores) {
 }
 
 // ── Cálculo silencioso de saúde ao carregar ───────────────
-function notifSilentHealthCheck() {
+async function notifSilentHealthCheck() {
   if (!Array.isArray(state.lancamentos)||!state.lancamentos.length) {
     notifSync(null); return;
   }
+  try {
+    const today = new Date(); today.setHours(0,0,0,0);
+    const yesterday = new Date(today); yesterday.setDate(yesterday.getDate()-1);
+    const dtIni = new Date(today.getFullYear(),today.getMonth(),1);
+    const dtFim = yesterday;
+    if (dtFim<dtIni) { notifSync(null); return; }
 
-  const run = () => {
-    try {
-      const today = new Date(); today.setHours(0,0,0,0);
-      const yesterday = new Date(today); yesterday.setDate(yesterday.getDate()-1);
-      const dtIni = new Date(today.getFullYear(),today.getMonth(),1);
-      const dtFim = yesterday;
-      if (dtFim<dtIni) { notifSync(null); return; }
+    if (typeof buildDashboardGerencialResults!=='function'||
+        typeof calcHealthScore!=='function'||
+        typeof getHealthThresholds!=='function'||
+        typeof buildSnapshot!=='function'||
+        typeof classifyVariation!=='function'||
+        typeof detectCatKey!=='function') {
+      notifSync(null); return;
+    }
 
-      if (typeof buildDashboardGerencialResults!=='function'||
-          typeof calcHealthScore!=='function'||
-          typeof getHealthThresholds!=='function'||
-          typeof buildSnapshot!=='function'||
-          typeof classifyVariation!=='function'||
-          typeof detectCatKey!=='function') {
-        notifSync(null); return;
-      }
+    await new Promise(r => setTimeout(r, 0));
+    const results = buildDashboardGerencialResults(dtIni, dtFim);
+    if (!results?.length) { notifSync(null); return; }
+    await new Promise(r => setTimeout(r, 0));
 
-      const results    = buildDashboardGerencialResults(dtIni, dtFim);
-      if (!results?.length) { notifSync(null); return; }
-      const thresholds = getHealthThresholds();
+    const thresholds = getHealthThresholds();
+    const _scoreFromCounts = counts => {
+      const total = Object.values(counts).reduce((s,n)=>s+n,0);
+      if (!total) return 100;
+      const penalty = (counts.atencao||0)*0.2 + (counts.urgente||0)*0.5 + (counts.critico||0)*1.0;
+      return Math.max(0, Math.round((1 - penalty/total)*100));
+    };
 
-      // _scoreFromCounts: mesma fórmula do macro.js
-      const _scoreFromCounts = counts => {
-        const total = Object.values(counts).reduce((s,n)=>s+n,0);
-        if (!total) return 100;
-        const penalty = (counts.atencao||0)*0.2 + (counts.urgente||0)*0.5 + (counts.critico||0)*1.0;
-        return Math.max(0, Math.round((1 - penalty/total)*100));
-      };
+    const centralCounts = {bom:0, atencao:0, urgente:0, critico:0};
+    const matCounts     = {bom:0, atencao:0, urgente:0, critico:0};
 
-      // Para cada central: calcula nível via calcHealthScore (igual ao card do analítico)
-      const centralCounts = {bom:0, atencao:0, urgente:0, critico:0};
-      const matCounts     = {bom:0, atencao:0, urgente:0, critico:0};
-
-      results.forEach(r => {
-        const lancsByMat = new Map();
+    // Processa centrais em batches de 5 com yield para não bloquear o thread
+    const BATCH = 5;
+    for (let i = 0; i < results.length; i += BATCH) {
+      results.slice(i, i + BATCH).forEach(r => {
+        // Usa lancsByMat já computado pelo buildDashboardGerencialResults
+        const lancsByMat = r.lancsByMat || new Map();
         const sapByMat   = new Map();
-        (r.lancsNoPeriodo||[]).forEach(l => {
-          if (!lancsByMat.has(l.material)) lancsByMat.set(l.material,[]);
-          lancsByMat.get(l.material).push(l);
-        });
         (r.sapNoPeriodo||[]).forEach(s => {
           if (!sapByMat.has(s.material)) sapByMat.set(s.material,[]);
           sapByMat.get(s.material).push(s);
         });
-
         const matDiffs = (r.allMats||[]).map(mat => {
           const lancs = lancsByMat.get(mat)||[];
           const sap   = sapByMat.get(mat)||[];
@@ -227,27 +224,17 @@ function notifSilentHealthCheck() {
           matCounts[level]++;
           return {diff:snap.diff, catKey};
         });
-
-        // Nível da central = nível calculado por calcHealthScore (igual ao card)
         const {level: centralLevel} = calcHealthScore(matDiffs, null, null, thresholds);
-        const mappedLevel = (!centralLevel||centralLevel==='ok') ? 'bom' : centralLevel;
-        centralCounts[mappedLevel]++;
+        centralCounts[(!centralLevel||centralLevel==='ok') ? 'bom' : centralLevel]++;
       });
-
-      // Aplica _scoreFromCounts igual ao donut
-      const centralScore = _scoreFromCounts(centralCounts);
-      const matScore     = _scoreFromCounts(matCounts);
-
-      notifSync({centralScore, matScore});
-    } catch(err) {
-      console.warn('[Notif] Erro no check silencioso:',err);
-      notifSync(null);
+      await new Promise(r => setTimeout(r, 0)); // yield entre batches
     }
-  };
 
-  typeof requestIdleCallback==='function'
-    ? requestIdleCallback(run,{timeout:8000})
-    : setTimeout(run,2000);
+    notifSync({ centralScore: _scoreFromCounts(centralCounts), matScore: _scoreFromCounts(matCounts) });
+  } catch(err) {
+    console.warn('[Notif] Erro no check silencioso:',err);
+    notifSync(null);
+  }
 }
 
 // ── Badge ─────────────────────────────────────────────────
@@ -390,7 +377,13 @@ function notifUpdateFromAnalytico(centralScore, matScore, dtIni, dtFim) {
 function notifBoot() {
   if (!Array.isArray(state.notifications)) state.notifications=[];
   _notifRenderBadge();
-  setTimeout(()=>notifSilentHealthCheck(),1500);
+  // Delay generoso — o cálculo silencioso de saúde é pesado (percorre todos os dados).
+  // Só executa quando o browser está ocioso para não travar a UI logo após o boot.
+  if (typeof requestIdleCallback === 'function') {
+    requestIdleCallback(() => notifSilentHealthCheck(), { timeout: 10000 });
+  } else {
+    setTimeout(() => notifSilentHealthCheck(), 5000);
+  }
 }
 
 Object.assign(window,{
