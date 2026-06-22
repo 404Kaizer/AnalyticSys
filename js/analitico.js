@@ -1379,6 +1379,34 @@ function cancelMicroFilter(key) {
   _closeMicroFilterDropdown(key);
 }
 
+function clearMicroFilter(key) {
+  if (key === 'tipo-var') {
+    _tipoVarFilter.pending      = new Set();
+    _tipoVarFilter.nivelPending = new Set(['regional','central','material']);
+    _tipoVarFilter.applied      = new Set();
+    _tipoVarFilter.nivelApplied = new Set(['regional','central','material']);
+    _tipoVarSyncToState(new Set());
+    _tipoVarSyncNivelToState(new Set(['regional','central','material']));
+    _tipoVarUpdateTrigger();
+    _applyMicroVisibility();
+    document.getElementById('mfd-tipo-var')?.classList.remove('open');
+    document.getElementById('mfc-tipo-var')?.classList.remove('open');
+    _updateMicroFilterClearBtn();
+    return;
+  }
+  if (key === 'variacao') {
+    _varFilter.pending.levels = new Set();
+    _varFilter.applied.levels = new Set();
+  } else {
+    _microFilter.pending[key] = new Set();
+    _microFilter.applied[key] = new Set();
+  }
+  _closeMicroFilterDropdown(key);
+  _syncTriggerLabel(key);
+  _syncClearBtn();
+  _applyMicroVisibility();
+}
+
 function _closeMicroFilterDropdown(key) {
   document.getElementById(`mfd-${key}`)?.classList.remove('open');
   document.getElementById(`mfc-${key}`)?.classList.remove('open');
@@ -1745,7 +1773,7 @@ document.addEventListener('click', e => {
 });
 
 Object.assign(window, { _microFilterCheckChange, toggleMicroFilter, filterMicroOptions,
-  applyMicroFilter, cancelMicroFilter, clearAllMicroFilters,
+  applyMicroFilter, cancelMicroFilter, clearMicroFilter, clearAllMicroFilters,
   expandAllMicro, collapseAllMicro, toggleAllRegionais, toggleAllCentralis, populateMicroFilterOptions,
   _buildVariacaoOptions, _varFilterChange, _tipoVarChange, _tipoVarSyncToState, _tipoVarIsActive });
 

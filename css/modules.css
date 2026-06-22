@@ -1875,8 +1875,19 @@ td.var-cell-zero .ti-circle-check     { color: var(--text3); }
   padding: 8px 10px;
   border-top: 1px solid var(--border);
   justify-content: flex-end;
+  align-items: center;
 }
 .micro-filter-footer .btn { padding: 6px 11px; font-size: 12px; }
+
+/* Botão Limpar individual dentro do dropdown — alinhado à esquerda */
+.micro-filter-footer .btn-filter-clear {
+  margin-right: auto;
+  color: var(--red);
+  border-color: var(--red-border);
+  background: transparent;
+  font-size: 12px;
+}
+.micro-filter-footer .btn-filter-clear:hover { background: var(--red-bg); }
 
 .micro-filter-badge {
   display: inline-flex;

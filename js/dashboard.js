@@ -470,8 +470,6 @@ function updateDashboard() {
   if (document.getElementById('page-configuracoes')?.classList.contains('active')) {
     updateParamGerais();
   }
-  // Atualiza badges dos botões Pendentes nas páginas Entradas e Saídas
-  if (typeof updatePendGlobalBadges === 'function') updatePendGlobalBadges();
 }
 
 function _renderDashboardConteudo(dtIni, dtFim) {
@@ -2153,6 +2151,16 @@ function cancelAusFilter(key) {
   document.getElementById(`aus-fc-${key}`)?.classList.remove('open');
 }
 
+function clearAusFilterSingle(key) {
+  _ausFilter.pending[key] = new Set();
+  _ausFilter.applied[key] = new Set();
+  document.getElementById(`aus-fd-${key}`)?.classList.remove('open');
+  document.getElementById(`aus-fc-${key}`)?.classList.remove('open');
+  _ausFilterSyncLabel(key);
+  _ausFilterSyncClear();
+  renderAusencias();
+}
+
 function clearAusFilters() {
   _ausFilter.applied.regional = new Set();
   _ausFilter.applied.central  = new Set();
@@ -2189,7 +2197,7 @@ function ausQuickTercaAnterior() {
 Object.assign(window, {
   toggleAusencias, renderAusencias, initAusencias,
   ausQuickOntem, ausQuickTercaAnterior,
-  toggleAusFilter, filterAusOptions, applyAusFilter, cancelAusFilter,
+  toggleAusFilter, filterAusOptions, applyAusFilter, cancelAusFilter, clearAusFilterSingle,
   clearAusFilters, _ausFilterCheck
 });
 
