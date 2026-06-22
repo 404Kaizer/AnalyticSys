@@ -210,12 +210,19 @@ async function handleMateriaisImport(event) {
   }
 
   showLoadingOverlay('Importando materiais', 'Lendo o arquivo de materiais...');
+  if (typeof loadingShowSteps === 'function') loadingShowSteps([
+    { id: 'mat-read',  icon: 'ti-file-spreadsheet', label: 'Lendo o arquivo' },
+    { id: 'mat-parse', icon: 'ti-transform',         label: 'Processando cadastros' },
+    { id: 'mat-norm',  icon: 'ti-adjustments',       label: 'Padronizando materiais' },
+    { id: 'mat-save',  icon: 'ti-device-floppy',     label: 'Salvando no banco local' },
+  ]);
 
   const fileName = file.name.toLowerCase();
   const reader = new FileReader();
 
   reader.onload = async function(e) {
     try {
+      _lstepSet('mat-read', 'running'); _lbarSet(10);
       updateLoadingOverlay('Separando os registros de materiais...', 'Importando materiais');
       let rows = [];
 
@@ -229,32 +236,36 @@ async function handleMateriaisImport(event) {
         rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' });
       }
 
+      _lstepSet('mat-read', 'done'); _lstepSet('mat-parse', 'running'); _lbarSet(35);
       const items = parseMateriaisRows(rows);
 
       if (!items.length) {
         toast('Arquivo sem cadastros válidos', 'error');
+        hideLoadingOverlay('Falha');
+        if (typeof loadingHideSteps === 'function') loadingHideSteps();
         return;
       }
 
       const importId = `cad_materiais_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
 
+      _lstepSet('mat-parse', 'done'); _lstepSet('mat-norm', 'running'); _lbarSet(60);
       updateLoadingOverlay('Atualizando cadastros salvos...', 'Importando materiais');
       upsertMateriais(items.map(item => normalizeImportedMaterial(item, importId)));
       state.imports.unshift({
-        id: importId,
-        arquivo: file.name,
-        modulo: 'Materiais',
-        registros: items.length,
-        dataHora: new Date().toLocaleString('pt-BR'),
-        status: 'Importado',
-        createdAt: Date.now()
+        id: importId, arquivo: file.name, modulo: 'Materiais',
+        registros: items.length, dataHora: new Date().toLocaleString('pt-BR'),
+        status: 'Importado', createdAt: Date.now()
       });
       listPages.materiais = 0;
       reaplicarPadronizacaoMateriais();
+      _lstepSet('mat-norm', 'done'); _lstepSet('mat-save', 'running'); _lbarSet(85);
       await persistStateNow();
+      _lstepSet('mat-save', 'done'); _lbarSet(100);
       renderAll();
       updateImportPrereqUI();
       closeModal('modal-materiais');
+      hideLoadingOverlay('Materiais importados');
+      if (typeof loadingHideSteps === 'function') loadingHideSteps();
       toast(`${items.length} material(is) importado(s)`);
       event.target.value = '';
     } catch (err) {
@@ -437,12 +448,18 @@ async function handleFiliaisImport(event) {
   }
 
   showLoadingOverlay('Importando centrais', 'Lendo o arquivo de filiais...');
+  if (typeof loadingShowSteps === 'function') loadingShowSteps([
+    { id: 'fil-read',  icon: 'ti-file-spreadsheet', label: 'Lendo o arquivo' },
+    { id: 'fil-parse', icon: 'ti-transform',         label: 'Processando cadastros' },
+    { id: 'fil-save',  icon: 'ti-device-floppy',     label: 'Salvando no banco local' },
+  ]);
 
   const fileName = file.name.toLowerCase();
   const reader = new FileReader();
 
   reader.onload = async function(e) {
     try {
+      _lstepSet('fil-read', 'running'); _lbarSet(15);
       updateLoadingOverlay('Separando os registros de centrais...', 'Importando centrais');
       let rows = [];
 
@@ -456,35 +473,39 @@ async function handleFiliaisImport(event) {
         rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' });
       }
 
+      _lstepSet('fil-read', 'done'); _lstepSet('fil-parse', 'running'); _lbarSet(45);
       const items = parseFiliaisRows(rows);
 
       if (!items.length) {
         toast('Arquivo sem cadastros válidos', 'error');
+        hideLoadingOverlay('Falha');
+        if (typeof loadingHideSteps === 'function') loadingHideSteps();
         return;
       }
 
       const importId = `cad_centrais_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
 
+      _lstepSet('fil-parse', 'done'); _lstepSet('fil-save', 'running'); _lbarSet(75);
       updateLoadingOverlay('Atualizando cadastros salvos...', 'Importando centrais');
       upsertFiliais(items.map(item => normalizeImportedFilial(item, importId)));
       state.imports.unshift({
-        id: importId,
-        arquivo: file.name,
-        modulo: 'Centrais',
-        registros: items.length,
-        dataHora: new Date().toLocaleString('pt-BR'),
-        status: 'Importado',
-        createdAt: Date.now()
+        id: importId, arquivo: file.name, modulo: 'Centrais',
+        registros: items.length, dataHora: new Date().toLocaleString('pt-BR'),
+        status: 'Importado', createdAt: Date.now()
       });
       await persistStateNow();
+      _lstepSet('fil-save', 'done'); _lbarSet(100);
       renderFiliais();
       closeModal('modal-filiais');
+      hideLoadingOverlay('Centrais importadas');
+      if (typeof loadingHideSteps === 'function') loadingHideSteps();
       toast(`${items.length} filial(is) importada(s)`);
       event.target.value = '';
     } catch (err) {
       console.error(err);
       toast('Falha ao importar filiais', 'error');
     } finally {
+      if (typeof loadingHideSteps === 'function') loadingHideSteps();
       hideLoadingOverlay('Importação concluída');
     }
   };

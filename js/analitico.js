@@ -10,8 +10,13 @@ function rodarAnalitico() {
     return;
   }
 
-  // Mostra o overlay ANTES do trabalho pesado, depois cede um frame ao browser para pintar
   if (typeof showLoadingOverlay === 'function') showLoadingOverlay('Analisando período', 'Processando lançamentos e variações...');
+  if (typeof loadingShowSteps === 'function') loadingShowSteps([
+    { id: 'an-centrais', icon: 'ti-building-warehouse', label: 'Coletando centrais e materiais' },
+    { id: 'an-calc',     icon: 'ti-calculator',         label: 'Calculando variações por central' },
+    { id: 'an-saude',    icon: 'ti-heartbeat',           label: 'Calculando saúde e criticidade' },
+    { id: 'an-render',   icon: 'ti-layout',              label: 'Renderizando resultados' },
+  ]);
   requestAnimationFrame(() => setTimeout(() => _rodarAnaliticoCore(dtIni, dtFim), 0));
 }
 
@@ -24,8 +29,9 @@ function _rodarAnaliticoCore(dtIni, dtFim) {
     return d >= dtIni && d <= dtFim;
   }
 
+  if (typeof _lstepSet === 'function') { _lstepSet('an-centrais', 'running'); _lbarSet(10); }
+
   // ── Collect all central keys ──────────────────────────────
-  // Usa os índices pré-computados — O(1) para obter as chaves
   const lancIdx = getLancIndex();
   const sapIdx  = getSapIndex();
   ensureSaidasIndex();
@@ -36,8 +42,12 @@ function _rodarAnaliticoCore(dtIni, dtFim) {
 
   if (!allCentrals.size) {
     toast('Nenhum dado para o período selecionado', 'error');
+    if (typeof hideLoadingOverlay === 'function') hideLoadingOverlay('Sem dados');
+    if (typeof loadingHideSteps === 'function') loadingHideSteps();
     return;
   }
+
+  if (typeof _lstepSet === 'function') { _lstepSet('an-centrais', 'done'); _lstepSet('an-calc', 'running'); _lbarSet(30); }
 
   // ── Per-central analysis ──────────────────────────────────
   const results = [];
@@ -1125,8 +1135,9 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
   // Populate filter dropdowns with available centrais e materiais
   populateMicroFilterOptions(results);
   // Reset applied filters whenever a new analysis runs
+  if (typeof _lstepSet === 'function') { _lstepSet('an-calc', 'done'); _lstepSet('an-saude', 'running'); _lbarSet(65); }
+
   clearAllMicroFilters();
-  // Re-init help badges on dynamically-rendered content
   if (typeof initHelpBadges === 'function') initHelpBadges();
 
   // Renderiza painéis Macro (crank + donut) — macro.js
@@ -1134,8 +1145,12 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
     const th = typeof getHealthThresholds === 'function' ? getHealthThresholds() : {};
     renderMacroPanels(results, th, dtIni, dtFim);
   }
+
+  if (typeof _lstepSet === 'function') { _lstepSet('an-saude', 'done'); _lstepSet('an-render', 'running'); _lbarSet(85); }
+
   if (typeof hideLoadingOverlay === 'function') hideLoadingOverlay('Análise concluída');
-  updateClock(); // atualiza saúde geral com dados recém-calculados
+  if (typeof loadingHideSteps === 'function') loadingHideSteps();
+  updateClock();
 
   // Ao analisar: recolhe regionais e centrais por padrão
   _regionaisExpanded = false;

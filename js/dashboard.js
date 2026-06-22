@@ -193,21 +193,28 @@ function rodarDashboardGerencial() {
     }
   }
   if (typeof showLoadingOverlay === 'function') showLoadingOverlay('Carregando dashboard', 'Calculando métricas consolidadas...');
-  // Cede um frame ao browser para pintar o overlay antes do trabalho pesado
+  if (typeof loadingShowSteps === 'function') loadingShowSteps([
+    { id: 'dg-calc',   icon: 'ti-calculator', label: 'Calculando variações e estoques' },
+    { id: 'dg-render', icon: 'ti-layout',      label: 'Renderizando abas e gráficos' },
+  ]);
+  if (typeof _lbarSet === 'function') _lbarSet(10);
   requestAnimationFrame(() => setTimeout(() => {
+    if (typeof _lstepSet === 'function') { _lstepSet('dg-calc', 'running'); _lbarSet(20); }
     const emptyEl   = document.getElementById('dg-empty-state');
     const contentEl = document.getElementById('dg-content');
     if (emptyEl)   emptyEl.style.display   = 'none';
     if (contentEl) contentEl.style.display = '';
     _renderDashboardConteudo(dtIni, dtFim);
-    // Se a aba de Controle de Corte já estiver ativa, atualiza também
+    if (typeof _lstepSet === 'function') { _lstepSet('dg-calc', 'done'); _lstepSet('dg-render', 'running'); _lbarSet(75); }
     if (document.getElementById('dg-tab-btn-corte')?.classList.contains('active')) {
       if (typeof rodarControleAgregadosPorPeriodo === 'function' && dtIni && dtFim) {
         rodarControleAgregadosPorPeriodo(dtIni, dtFim);
       }
     }
     if (window.updatePeriodFab) updatePeriodFab();
+    if (typeof _lstepSet === 'function') { _lstepSet('dg-render', 'done'); _lbarSet(100); }
     if (typeof hideLoadingOverlay === 'function') hideLoadingOverlay('Dashboard atualizado');
+    if (typeof loadingHideSteps === 'function') loadingHideSteps();
   }, 0));
 }
 
@@ -3085,11 +3092,13 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
   extra._totalImportado = totalNovos;
 
   updateStep('Salvando e atualizando os painéis...');
+  _lstepSet('imp-convert', 'done'); _lstepSet('imp-validate', 'done'); _lstepSet('imp-save', 'running'); _lbarSet(75);
+
   const _novosStr = extra._totalImportado !== undefined
     ? `${extra._totalImportado.toLocaleString('pt-BR')} registros processados`
     : 'Importação concluída';
 
-  // Invalida os índices dos módulos que foram alterados para forçar reconstrução
+  // Invalida os índices dos módulos que foram alterados
   if (modulo === 'Entrada')     invalidateSearchIndex('entradas');
   if (modulo === 'Saída')       { invalidateSaidasIndex(); }
   if (modulo === 'Lançamento')  invalidateLancIndex();
@@ -3097,27 +3106,24 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
 
   const novosAdicionados = _importAddedCount;
 
-  // Monta o registro de histórico — status começa como 'Processando'
   const importRecord = {
-    id: importId,
-    arquivo: fileName,
-    modulo,
-    registros: novosAdicionados,
-    totalArquivo: parsed.length,
+    id: importId, arquivo: fileName, modulo,
+    registros: novosAdicionados, totalArquivo: parsed.length,
     dataHora: new Date().toLocaleString('pt-BR'),
-    status: 'Processando',
-    statusTip: 'Salvando no banco local...',
-    createdAt: Date.now()
+    status: 'Processando', statusTip: 'Salvando no banco local...', createdAt: Date.now()
   };
   state.imports.unshift(importRecord);
-  renderImports(); // exibe 'Processando' imediatamente
+
+  _lstepSet('imp-index', 'running'); _lbarSet(88);
+  renderImports();
   renderModule(pageFromModulo(modulo));
   updateDashboard();
   await nextFrame();
   initResizable();
+  _lstepSet('imp-save', 'done'); _lstepSet('imp-index', 'done'); _lbarSet(100);
 
-  // Fecha o overlay ANTES de persistir — a gravação ocorre em background
   hideLoadingOverlay('Importação concluída');
+  if (typeof loadingHideSteps === 'function') loadingHideSteps();
 
   if (novosAdicionados > 0) {
     toast(`${novosAdicionados.toLocaleString('pt-BR')} novo${novosAdicionados !== 1 ? 's' : ''} registro${novosAdicionados !== 1 ? 's' : ''} importado${novosAdicionados !== 1 ? 's' : ''} de "${fileName}"`);
@@ -3487,10 +3493,19 @@ async function handleImport(event, modulo) {
   }
 
   showLoadingOverlay(`Importando ${modulo}`, 'Lendo o arquivo selecionado...');
+  if (typeof loadingShowSteps === 'function') loadingShowSteps([
+    { id: 'imp-read',    icon: 'ti-file-spreadsheet', label: 'Lendo o arquivo' },
+    { id: 'imp-header',  icon: 'ti-table',            label: 'Detectando cabeçalho' },
+    { id: 'imp-convert', icon: 'ti-transform',        label: 'Convertendo registros' },
+    { id: 'imp-validate',icon: 'ti-shield-check',     label: 'Validando dados' },
+    { id: 'imp-save',    icon: 'ti-device-floppy',    label: 'Salvando no banco local' },
+    { id: 'imp-index',   icon: 'ti-list-search',      label: 'Atualizando índices' },
+  ]);
 
   const reader = new FileReader();
   reader.onload = async function(e) {
     try {
+      _lstepSet('imp-read', 'running'); _lbarSet(5);
       updateLoadingOverlay('Lendo planilha e extraindo linhas...', `Importando ${modulo}`, 'Interpretando a estrutura do arquivo...');
 
       const isCsv = file.name.toLowerCase().endsWith('.csv');
@@ -3546,9 +3561,12 @@ async function handleImport(event, modulo) {
       if (!rows || rows.length < 2) {
         toast('O arquivo parece estar vazio ou não contém linhas de dados.', 'error');
         hideLoadingOverlay('Falha na importação');
+        if (typeof loadingHideSteps === 'function') loadingHideSteps();
         event.target.value = '';
         return;
       }
+
+      _lstepSet('imp-read', 'done'); _lstepSet('imp-header', 'running'); _lbarSet(20);
 
       let data;
       let extra = {};
@@ -3604,13 +3622,13 @@ async function handleImport(event, modulo) {
         data = rows.slice(1).filter(r => r.some(c => c !== '' && c !== null && c !== undefined));
       }
 
+      _lstepSet('imp-header', 'done'); _lstepSet('imp-convert', 'running'); _lbarSet(35);
       updateLoadingOverlay('Aplicando a importação no sistema...', `Importando ${modulo}`, 'Gravando dados no armazenamento local...');
       await processImportedRows(modulo, data, file.name, extra);
       event.target.value = '';
     } catch (err) {
       if (err?.message === '__IMPORT_ABORTED__') {
-        // Abort tratado silenciosamente — mensagem e histórico já foram gravados
-        // em processImportedRows. Apenas fecha o overlay.
+        // Abort tratado silenciosamente
       } else {
         console.error('[Import Error]', modulo, err);
         const msg = (err && err.message) ? err.message : String(err);
@@ -3619,6 +3637,7 @@ async function handleImport(event, modulo) {
       }
     } finally {
       hideLoadingOverlay('Importação concluída');
+      if (typeof loadingHideSteps === 'function') loadingHideSteps();
     }
   };
   reader.onerror = () => {

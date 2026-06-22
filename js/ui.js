@@ -190,15 +190,27 @@ function restaurarBackup(file) {
       if (!confirm(msg)) return;
 
       showLoadingOverlay('Restaurando backup', 'Carregando dados do arquivo...');
+      if (typeof loadingShowSteps === 'function') loadingShowSteps([
+        { id: 'bkp-parse',   icon: 'ti-file-import',     label: 'Lendo arquivo de backup' },
+        { id: 'bkp-restore', icon: 'ti-database-import',  label: 'Restaurando dados no sistema' },
+        { id: 'bkp-index',   icon: 'ti-list-search',      label: 'Reconstruindo índices' },
+        { id: 'bkp-save',    icon: 'ti-device-floppy',    label: 'Salvando estado' },
+        { id: 'bkp-render',  icon: 'ti-layout',           label: 'Atualizando interface' },
+      ]);
       await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
 
+      _lstepSet('bkp-parse', 'done'); _lbarSet(20);
+
       // Restaura cada campo, com fallback para array vazio
+      _lstepSet('bkp-restore', 'running'); _lbarSet(35);
       const fields = ['entradas','saidas','lancamentos','sap','producao','imports','configs','filiais','materiais','ocorrencias'];
       fields.forEach(f => {
         state[f] = Array.isArray(parsed[f]) ? parsed[f] : (state[f] || []);
       });
+      _lstepSet('bkp-restore', 'done'); _lbarSet(50);
 
       // Reprocessa índices e normalizações
+      _lstepSet('bkp-index', 'running');
       invalidateMaterialLookup();
       invalidateFilialLookup();
       invalidateLancIndex();
@@ -206,6 +218,7 @@ function restaurarBackup(file) {
       invalidateSaidasIndex();
       if (typeof invalidateAllSearchIndexes === 'function') invalidateAllSearchIndexes();
       if (typeof reaplicarPadronizacaoMateriais === 'function') reaplicarPadronizacaoMateriais();
+      _lstepSet('bkp-index', 'done'); _lbarSet(70);
 
       // Restaura dados do localStorage (notas, atalhos, fechamento)
       const lsSet = (key, val) => { try { if (val !== null && val !== undefined) localStorage.setItem(key, JSON.stringify(val)); } catch(e) {} };
@@ -213,11 +226,17 @@ function restaurarBackup(file) {
       lsSet('analyticsys_shortcuts_v1', parsed._atalhos);
       lsSet('analyticsys_fech_v1',     parsed._fechamento);
 
+      _lstepSet('bkp-save', 'running'); _lbarSet(85);
       await persistStateNow();
-      hideLoadingOverlay('Backup restaurado');
+      _lstepSet('bkp-save', 'done');
 
+      _lstepSet('bkp-render', 'running'); _lbarSet(95);
       if (typeof renderAll === 'function') renderAll();
       if (typeof updateImportPrereqUI === 'function') updateImportPrereqUI();
+      _lstepSet('bkp-render', 'done'); _lbarSet(100);
+
+      hideLoadingOverlay('Backup restaurado');
+      if (typeof loadingHideSteps === 'function') loadingHideSteps();
 
       const info = parsed._exportedAt ? ` (exportado em ${parsed._exportedAt})` : '';
       toast('Backup restaurado com sucesso' + info);
@@ -264,7 +283,23 @@ window.toggleSomenteDuplicatas = toggleSomenteDuplicatas;
 
 const _SAP_REVERSE_MOVS = new Set(['102','864','863','552','802']);
 
+// ── Cache de duplicatas SAP ───────────────────────────────────────────────
+// getSapDuplicateKeys faz 3 varreduras sobre state.sap (600k+ registros).
+// Cacheia o resultado — só recalcula quando state.sap muda.
+let _sapDupCache = null;
+let _sapDupCacheVersion = -1; // compara com state.sap.length para invalidar
+
+function _invalidateSapDupCache() {
+  _sapDupCache = null;
+  _sapDupCacheVersion = -1;
+}
+
 function getSapDuplicateKeys() {
+  const currentVersion = (state.sap || []).length;
+  if (_sapDupCache && _sapDupCacheVersion === currentVersion) {
+    return _sapDupCache;
+  }
+
   const normMov = m => String(m || '').trim().toUpperCase();
 
   const cancelledKeys = new Set(); // pares anulados por estorno → amarelo
@@ -353,7 +388,10 @@ function getSapDuplicateKeys() {
     );
   });
 
-  return { cancelled: cancelledKeys, real: realDupKeys };
+  const result = { cancelled: cancelledKeys, real: realDupKeys };
+  _sapDupCache = result;
+  _sapDupCacheVersion = currentVersion;
+  return result;
 }
 window.getSapDuplicateKeys = getSapDuplicateKeys;
 
@@ -1462,13 +1500,22 @@ async function lrcConfirm() {
   const toRemove = lancs.filter((_, i) => !_lrcChecked.has(i));
   if (toRemove.length) {
     if (typeof showLoadingOverlay === 'function') showLoadingOverlay('Resolvendo conflito', 'Excluindo lançamentos selecionados...');
+    if (typeof loadingShowSteps === 'function') loadingShowSteps([
+      { id: 'lrc-remove', icon: 'ti-trash',          label: 'Excluindo lançamentos' },
+      { id: 'lrc-save',   icon: 'ti-device-floppy',  label: 'Salvando alterações' },
+    ]);
     await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+    _lstepSet('lrc-remove', 'running'); _lbarSet(30);
     toRemove.forEach(l => {
       const fp = _lrcFingerprint(l);
       state.lancamentos = state.lancamentos.filter(r => _lrcFingerprint(r) !== fp);
     });
     invalidateLancIndex();
+    _lstepSet('lrc-remove', 'done'); _lstepSet('lrc-save', 'running'); _lbarSet(70);
     await persistStateNow();
+    _lstepSet('lrc-save', 'done'); _lbarSet(100);
+    hideLoadingOverlay('Conflito resolvido');
+    if (typeof loadingHideSteps === 'function') loadingHideSteps();
   }
 
   const key = _lrcDetailKey;
@@ -1526,14 +1573,22 @@ async function lrcDelete(idx) {
   const key = _lrcDetailKey;
 
   if (typeof showLoadingOverlay === 'function') showLoadingOverlay('Excluindo lançamento', 'Removendo da base de dados...');
+  if (typeof loadingShowSteps === 'function') loadingShowSteps([
+    { id: 'del-remove', icon: 'ti-trash',         label: 'Removendo lançamento' },
+    { id: 'del-save',   icon: 'ti-device-floppy', label: 'Salvando alterações' },
+  ]);
   await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+  _lstepSet('del-remove', 'running'); _lbarSet(30);
   const fp = _lrcFingerprint(target);
   const before = state.lancamentos.length;
   state.lancamentos = state.lancamentos.filter(r => _lrcFingerprint(r) !== fp);
   const removed = before - state.lancamentos.length;
-
   invalidateLancIndex();
+  _lstepSet('del-remove', 'done'); _lstepSet('del-save', 'running'); _lbarSet(70);
   await persistStateNow();
+  _lstepSet('del-save', 'done'); _lbarSet(100);
+  hideLoadingOverlay('Lançamento excluído');
+  if (typeof loadingHideSteps === 'function') loadingHideSteps();
 
   const newLancs = lancs.filter((_, i) => i !== idx);
   overlay._lancs = newLancs;
@@ -2067,6 +2122,7 @@ function invalidateSapIndex() {
   _sapIndexBuilt = false;
   _sapByCentralMat.clear();
   _sapByCentral.clear();
+  _invalidateSapDupCache();        // invalida cache de duplicatas
   invalidateSearchIndex('sap');
   if (typeof _ausInvalidateCache === 'function') _ausInvalidateCache();
 }

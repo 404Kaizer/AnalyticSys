@@ -490,6 +490,8 @@
 .lstep-running { color: var(--accent); }
 .lstep-done  { color: var(--green); }
 .lstep-skip  { color: var(--text3); opacity: .4; }
+.lstep-error { color: var(--red); }
+.lstep-active .lstep-label { color: var(--text); }
 
 body.loading-active { overflow: hidden; }
 
@@ -3807,6 +3809,9 @@ thead th {
   font-size: 9.5px;
   letter-spacing: 0.12em;
   background: var(--bg3);
+  position: sticky;
+  top: 0;
+  z-index: 2;
 }
 
 tbody tr {

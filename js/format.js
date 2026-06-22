@@ -319,6 +319,78 @@ function updateLoadingOverlay(status, title, hint) {
   syncLoadingElapsed();
 }
 
+// ── Loading steps: barra de progresso determinística e lista de etapas ──────
+// Usadas por todos os contextos que chamam showLoadingOverlay.
+
+function _lstepSet(id, stepState) {
+  const el = document.getElementById('lstep-' + id);
+  if (!el) return;
+  const stEl = el.querySelector('.lstep-state');
+  if (!stEl) return;
+  if (stepState === 'running') {
+    stEl.className = 'lstep-state lstep-running';
+    stEl.innerHTML = '<i class="ti ti-loader-2" style="animation:spin .7s linear infinite"></i>';
+    el.classList.add('lstep-active');
+  } else if (stepState === 'done') {
+    stEl.className = 'lstep-state lstep-done';
+    stEl.innerHTML = '<i class="ti ti-circle-check"></i>';
+    el.classList.remove('lstep-active');
+  } else if (stepState === 'skip') {
+    stEl.className = 'lstep-state lstep-skip';
+    stEl.innerHTML = '<i class="ti ti-minus"></i>';
+    el.classList.remove('lstep-active');
+  } else if (stepState === 'error') {
+    stEl.className = 'lstep-state lstep-error';
+    stEl.innerHTML = '<i class="ti ti-alert-circle"></i>';
+    el.classList.remove('lstep-active');
+  }
+}
+
+function _lbarSet(pct) {
+  const fill = document.getElementById('loading-bar-fill');
+  if (!fill) return;
+  fill.style.animation = 'none';
+  fill.style.width = pct + '%';
+  fill.style.transform = 'none';
+  fill.style.opacity = '1';
+  fill.style.transition = 'width .35s ease';
+}
+
+/**
+ * Exibe ou substitui os steps dinâmicos no loading overlay.
+ * steps: [{ id, icon, label }]
+ * Reseta todos para estado 'wait'.
+ */
+function loadingShowSteps(steps) {
+  const container = document.getElementById('loading-steps');
+  if (!container) return;
+
+  container.innerHTML = steps.map(s => `
+    <div class="loading-step" id="lstep-${s.id}">
+      <i class="ti ${s.icon} lstep-icon"></i>
+      <span class="lstep-label">${s.label}</span>
+      <span class="lstep-state lstep-wait"><i class="ti ti-clock"></i></span>
+    </div>`).join('');
+
+  container.style.display = '';
+  _lbarSet(0);
+}
+
+/** Esconde os steps (para loadings simples sem etapas). */
+function loadingHideSteps() {
+  const container = document.getElementById('loading-steps');
+  if (container) { container.style.display = 'none'; container.innerHTML = ''; }
+  // Restaura a animação padrão da barra
+  const fill = document.getElementById('loading-bar-fill');
+  if (fill) {
+    fill.style.animation = '';
+    fill.style.width = '40%';
+    fill.style.transition = '';
+  }
+}
+
+Object.assign(window, { _lstepSet, _lbarSet, loadingShowSteps, loadingHideSteps });
+
 function hideLoadingOverlay(status = 'Concluído', delay = 220) {
   const overlay = document.getElementById('loading-overlay');
   const statusEl = document.getElementById('loading-status');
@@ -1035,8 +1107,7 @@ const _NOTES_KEY  = 'analyticsys_notes_v2';
 let _notesCards   = [];   // array of note objects
 let _notesActive  = null; // id of currently edited card
 let _notesSaveTimer = null;
-
-
+let _notesPreviewOn = false;
 
 // ── Persistence ─────────────────────────────────────────
 function _notesLoad() {
@@ -1099,7 +1170,7 @@ const _COLOR_MAP = {
 function notesRender() {
   const list  = document.getElementById('notes-cards-list');
   if (!list) return;
-  const sort  = document.getElementById('notes-sort-select')?.value || 'priority';
+  const sort  = document.getElementById('notes-sort-select')?.value || 'modified';
   const cards = [..._notesCards].sort((a, b) => {
     if (sort === 'priority') return (_PRIORITY_ORDER[a.priority] ?? 3) - (_PRIORITY_ORDER[b.priority] ?? 3) || b.modified - a.modified;
     if (sort === 'title')    return (a.title||'').localeCompare(b.title||'');
@@ -1113,10 +1184,7 @@ function notesRender() {
 
   list.innerHTML = cards.map(card => {
     const colorBar = _COLOR_MAP[card.color] ? `background:${_COLOR_MAP[card.color]}` : 'background:var(--border)';
-    // Extrai texto plano do HTML do body para o preview do card
-    const _tmp = document.createElement('div');
-    _tmp.innerHTML = card.body || '';
-    const preview  = (_tmp.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 80) || '\u2014';
+    const preview  = (card.body || '').replace(/[#*_~`[\]]/g, '').replace(/\n/g, ' ').slice(0, 80) || '\u2014';
     const dateStr  = new Date(card.modified).toLocaleDateString('pt-BR', {day:'2-digit',month:'2-digit'});
     const priHtml  = card.priority !== 'none'
       ? `<span class="note-priority-badge ${card.priority}">${_PRIORITY_LABELS[card.priority]}</span>` : '';
@@ -1141,25 +1209,29 @@ function notesRender() {
   }).join('');
 }
 
-// ── Editor inline (contenteditable) ─────────────────────
+// ── Editor ───────────────────────────────────────────────
 function notesOpenEditor(id) {
   const card = _notesCards.find(c => c.id === id);
   if (!card) return;
   _notesActive = id;
 
-  document.getElementById('notes-title-input').value     = card.title;
+  document.getElementById('notes-title-input').value    = card.title;
+  document.getElementById('notes-textarea-md').value    = card.body;
   document.getElementById('notes-priority-select').value = card.priority;
   _notesSetColorDot(card.color);
 
-  const editor = document.getElementById('notes-inline-editor');
-  if (editor) {
-    editor.innerHTML = card.body || '';
-    setTimeout(() => { editor.focus(); notesUpdateToolbarState(); }, 0);
-  }
+  const listPane   = document.getElementById('notes-list-pane');
+  const editorPane = document.getElementById('notes-editor-pane');
+  if (listPane)   listPane.style.display   = 'none';
+  if (editorPane) editorPane.style.display = 'flex';
 
-  document.getElementById('notes-list-pane').style.display   = 'none';
-  document.getElementById('notes-editor-pane').style.display = 'flex';
+  // Hide preview, show editor
+  _notesPreviewOn = false;
+  document.getElementById('notes-preview-btn')?.classList.remove('active');
+  document.getElementById('notes-textarea-md').style.display = '';
+  document.getElementById('notes-preview-md').style.display  = 'none';
 
+  document.getElementById('notes-textarea-md').focus();
   notesRender(); // update active state in list
 }
 
@@ -1175,18 +1247,7 @@ function notesAutoSave() {
   const card = _notesCards.find(c => c.id === _notesActive);
   if (!card) return;
   card.title    = document.getElementById('notes-title-input').value;
-
-  const editor = document.getElementById('notes-inline-editor');
-  if (editor) {
-    editor.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-      if (cb.checked) cb.setAttribute('checked', '');
-      else            cb.removeAttribute('checked');
-    });
-    card.body = editor.innerHTML;
-  } else {
-    card.body = '';
-  }
-
+  card.body     = document.getElementById('notes-textarea-md').value;
   card.priority = document.getElementById('notes-priority-select').value;
   card.modified = Date.now();
   clearTimeout(_notesSaveTimer);
@@ -1222,121 +1283,71 @@ document.addEventListener('click', e => {
   }
 });
 
-// ── Toolbar inline ───────────────────────────────────────
-function notesExec(cmd, val) {
-  document.getElementById('notes-inline-editor')?.focus();
-  document.execCommand(cmd, false, val || null);
-  notesUpdateToolbarState();
-  notesEditorUpdate();
+// ── Markdown toolbar ─────────────────────────────────────
+function notesMdWrap(before, after) {
+  const ta  = document.getElementById('notes-textarea-md');
+  if (!ta) return;
+  const s   = ta.selectionStart, e = ta.selectionEnd;
+  const sel = ta.value.slice(s, e);
+  ta.value  = ta.value.slice(0, s) + before + sel + after + ta.value.slice(e);
+  ta.selectionStart = s + before.length;
+  ta.selectionEnd   = s + before.length + sel.length;
+  ta.focus();
+  notesAutoSave();
+}
+function notesMdLine(prefix) {
+  const ta  = document.getElementById('notes-textarea-md');
+  if (!ta) return;
+  const s   = ta.selectionStart;
+  const lineStart = ta.value.lastIndexOf('\n', s - 1) + 1;
+  ta.value  = ta.value.slice(0, lineStart) + prefix + ta.value.slice(lineStart);
+  ta.selectionStart = ta.selectionEnd = s + prefix.length;
+  ta.focus();
+  notesAutoSave();
 }
 
-function notesSetFontSize(val) {
-  if (!val) return;
-  document.getElementById('notes-inline-editor')?.focus();
-  document.execCommand('fontSize', false, val);
-  notesUpdateToolbarState();
-  notesEditorUpdate();
+// ── Preview ──────────────────────────────────────────────
+function notesTogglePreview() {
+  _notesPreviewOn = !_notesPreviewOn;
+  document.getElementById('notes-preview-btn')?.classList.toggle('active', _notesPreviewOn);
+  document.getElementById('notes-textarea-md').style.display = _notesPreviewOn ? 'none' : '';
+  const prev = document.getElementById('notes-preview-md');
+  prev.style.display = _notesPreviewOn ? '' : 'none';
+  if (_notesPreviewOn) notesUpdatePreview();
 }
 
-function notesEditorUpdate() {
-  if (!_notesActive) return;
-  const card = _notesCards.find(c => c.id === _notesActive);
-  if (!card) return;
-  card.title    = document.getElementById('notes-title-input').value;
-
-  // Sincroniza o atributo checked com a propriedade DOM antes de serializar,
-  // pois innerHTML captura atributos estáticos — não o estado dinâmico do checkbox.
-  const editor = document.getElementById('notes-inline-editor');
-  if (editor) {
-    editor.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-      if (cb.checked) cb.setAttribute('checked', '');
-      else            cb.removeAttribute('checked');
-    });
-    card.body = editor.innerHTML;
-  } else {
-    card.body = '';
-  }
-
-  card.priority = document.getElementById('notes-priority-select').value;
-  card.modified = Date.now();
-  clearTimeout(_notesSaveTimer);
-  _notesSaveTimer = setTimeout(() => {
-    _notesPersist();
-    notesRender();
-    const ind = document.getElementById('notes-saved-indicator');
-    if (ind) { ind.classList.add('show'); setTimeout(() => ind.classList.remove('show'), 1500); }
-  }, 700);
+function notesUpdatePreview() {
+  if (!_notesPreviewOn) return;
+  const text = document.getElementById('notes-textarea-md').value;
+  document.getElementById('notes-preview-md').innerHTML = _notesMarkdownToHtml(text);
 }
 
-function notesUpdateToolbarState() {
-  const cmds = ['bold', 'italic', 'underline', 'strikeThrough'];
-  const ids  = ['notes-tb-bold', 'notes-tb-italic', 'notes-tb-under', 'notes-tb-strike'];
-  cmds.forEach((cmd, i) => {
-    const btn = document.getElementById(ids[i]);
-    if (btn) btn.classList.toggle('active', document.queryCommandState(cmd));
-  });
-  // Atualiza o swatch de cor
-  const color = document.queryCommandValue('foreColor');
-  const ci = document.getElementById('notes-color-input');
-  if (ci && color && color !== 'false') {
-    const hex = _notesRgbToHex(color);
-    if (hex) ci.value = hex;
-  }
-}
-
-function _notesRgbToHex(color) {
-  if (!color || color === 'false') return null;
-  if (color.startsWith('#')) return color;
-  const m = color.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
-  if (!m) return null;
-  return '#' + [m[1], m[2], m[3]].map(n => (+n).toString(16).padStart(2, '0')).join('');
-}
-
-// Insere um item de checklist clicável na posição do cursor
-function notesInsertChecklist() {
-  const editor = document.getElementById('notes-inline-editor');
-  if (!editor) return;
-  editor.focus();
-  // Cria uma nova linha com checkbox
-  const cb = document.createElement('input');
-  cb.type = 'checkbox';
-  cb.style.accentColor = 'var(--accent)';
-  cb.style.marginRight = '6px';
-  cb.style.cursor = 'pointer';
-  cb.addEventListener('change', () => {
-    if (cb.checked) cb.setAttribute('checked', '');
-    else            cb.removeAttribute('checked');
-    notesEditorUpdate();
-  });
-
-  const span = document.createElement('span');
-  span.textContent = '\u00A0';
-  span.contentEditable = 'true';
-
-  const li = document.createElement('li');
-  li.style.listStyle = 'none';
-  li.style.display = 'flex';
-  li.style.alignItems = 'baseline';
-  li.style.gap = '2px';
-  li.appendChild(cb);
-  li.appendChild(span);
-
-  // Insere no cursor ou no final
-  const sel = window.getSelection();
-  if (sel && sel.rangeCount) {
-    const range = sel.getRangeAt(0);
-    range.collapse(false);
-    range.insertNode(li);
-    // Move cursor para o span
-    const newRange = document.createRange();
-    newRange.setStart(span, 0);
-    newRange.collapse(true);
-    sel.removeAllRanges();
-    sel.addRange(newRange);
-  } else {
-    editor.appendChild(li);
-  }
-  notesEditorUpdate();
+function _notesMarkdownToHtml(md) {
+  return md
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    // Headings
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm,  '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm,   '<h1>$1</h1>')
+    // Bold / italic / strikethrough
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g,     '<em>$1</em>')
+    .replace(/~~(.+?)~~/g,     '<del>$1</del>')
+    // Inline code
+    .replace(/`(.+?)`/g, '<code>$1</code>')
+    // Checklist
+    .replace(/^- \[x\] (.+)$/gm, '<li><input type="checkbox" checked disabled> $1</li>')
+    .replace(/^- \[ \] (.+)$/gm, '<li><input type="checkbox" disabled> $1</li>')
+    // Unordered list
+    .replace(/^- (.+)$/gm, '<li>$1</li>')
+    // Wrap consecutive <li> in <ul>
+    .replace(/(<li>.*<\/li>\n?)+/g, s => `<ul>${s}</ul>`)
+    // HR
+    .replace(/^---$/gm, '<hr>')
+    // Paragraphs
+    .replace(/\n{2,}/g, '</p><p>')
+    .replace(/^(?!<[a-z])(.+)$/gm, '$1')
+    .replace(/^(.+)$/, '<p>$1</p>');
 }
 
 Object.assign(window, {
@@ -1344,8 +1355,7 @@ Object.assign(window, {
   notesNewCard, notesDeleteCurrent, notesDeleteCard, notesRender,
   notesOpenEditor, notesCloseEditor, notesAutoSave,
   notesToggleColors, notesSetColor,
-  notesExec, notesSetFontSize, notesEditorUpdate, notesUpdateToolbarState,
-  notesInsertChecklist,
+  notesMdWrap, notesMdLine, notesTogglePreview, notesUpdatePreview,
 });
 
 // ═══════════════════════════════════════════════════════════
