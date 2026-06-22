@@ -604,23 +604,38 @@ function getOcorrenciasFiltradas() {
 function _renderOcAlerts(lista) {
   const el = document.getElementById('oc-alerts');
   if (!el) return;
-  const vencidas = lista.filter(o => !o.concluida && ocDateStatus(o.dataLimite) === 'vencida');
-  const urgentes = lista.filter(o => !o.concluida && ocDateStatus(o.dataLimite) === 'urgente');
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  const vencidas = lista.filter(o => !o.concluida && !o.inconclusiva && ocDateStatus(o.dataLimite) === 'vencida');
+  const urgentes = lista.filter(o => !o.concluida && !o.inconclusiva && ocDateStatus(o.dataLimite) === 'urgente');
   if (!vencidas.length && !urgentes.length) { el.innerHTML = ''; return; }
+
+  const _dias = o => {
+    const lim = new Date(o.dataLimite + 'T00:00:00');
+    return Math.round(Math.abs(lim - hoje) / 86400000);
+  };
 
   let html = '';
   if (vencidas.length) {
+    const itens = vencidas.map(o => {
+      const d = _dias(o);
+      return `<span class="oc-alert-item">${escapeHtml(o.id)} <span class="oc-alert-time">(${d}d atraso)</span></span>`;
+    }).join('');
     html += `<div class="oc-alert oc-alert-red">
       <i class="ti ti-alert-circle"></i>
       <strong>${vencidas.length} ocorrência${vencidas.length>1?'s':''} vencida${vencidas.length>1?'s':''}</strong>
-      — prazo ultrapassado: ${vencidas.map(o => escapeHtml(o.central) + (o.material ? ' / ' + escapeHtml(o.material) : '')).join(', ')}
+      — ${itens}
     </div>`;
   }
   if (urgentes.length) {
+    const itens = urgentes.map(o => {
+      const d = _dias(o);
+      const label = d === 0 ? 'hoje' : d === 1 ? '1d restante' : `${d}d restantes`;
+      return `<span class="oc-alert-item">${escapeHtml(o.id)} <span class="oc-alert-time">(${label})</span></span>`;
+    }).join('');
     html += `<div class="oc-alert oc-alert-amber">
       <i class="ti ti-clock-exclamation"></i>
       <strong>${urgentes.length} ocorrência${urgentes.length>1?'s':''} vence${urgentes.length>1?'m':''} em breve</strong>
-      — menos de 2 dias: ${urgentes.map(o => escapeHtml(o.central) + (o.material ? ' / ' + escapeHtml(o.material) : '')).join(', ')}
+      — ${itens}
     </div>`;
   }
   el.innerHTML = html;
@@ -690,6 +705,9 @@ function _renderOcLista(lista) {
             <i class="ti ti-alert-triangle"></i>
           </button>` : ''}
           ${o.inconclusiva && !o.concluida ? `<button class="btn btn-sm oc-btn-reabrir" onclick="event.stopPropagation();reabrirOcorrencia('${o.id}')" title="Reabrir ocorrência">
+            <i class="ti ti-rotate"></i>
+          </button>` : ''}
+          ${o.concluida ? `<button class="btn btn-sm oc-btn-reabrir-concluida" onclick="event.stopPropagation();reabrirOcorrenciaConcluida('${o.id}')" title="Reabrir ocorrência concluída">
             <i class="ti ti-rotate"></i>
           </button>` : ''}
           ${!o.concluida ? `<button class="btn btn-sm oc-btn-concluir" onclick="event.stopPropagation();openConcluirModal('${o.id}')" title="Concluir">
@@ -766,6 +784,7 @@ function openOcDetailModal(id) {
   el.querySelector('.oc-detail-actions').innerHTML = `
     ${!o.concluida && !o.inconclusiva ? `<button class="btn btn-sm oc-btn-inconclusiva" onclick="closeOcDetailModal();openInconclusivaModal('${o.id}')"><i class="ti ti-alert-triangle"></i> Inconclusiva</button>` : ''}
     ${o.inconclusiva && !o.concluida ? `<button class="btn btn-sm oc-btn-reabrir" onclick="closeOcDetailModal();reabrirOcorrencia('${o.id}')"><i class="ti ti-rotate"></i> Reabrir</button>` : ''}
+    ${o.concluida ? `<button class="btn btn-sm oc-btn-reabrir-concluida" onclick="closeOcDetailModal();reabrirOcorrenciaConcluida('${o.id}')"><i class="ti ti-rotate"></i> Reabrir</button>` : ''}
     ${!o.concluida ? `<button class="btn btn-sm oc-btn-concluir" onclick="closeOcDetailModal();openConcluirModal('${o.id}')"><i class="ti ti-circle-check"></i> Concluir</button>` : ''}
     <button class="btn btn-sm" onclick="closeOcDetailModal();openOcorrenciaModal('${o.id}')"><i class="ti ti-edit"></i> Editar</button>
     <button class="btn btn-sm btn-danger-ghost" onclick="closeOcDetailModal();confirmarExcluirOcorrencia('${o.id}')"><i class="ti ti-trash"></i></button>`;
@@ -960,6 +979,17 @@ function reabrirOcorrencia(id) {
   toast('Ocorrência reaberta.', 'success');
 }
 
+function reabrirOcorrenciaConcluida(id) {
+  const o = (state.ocorrencias || []).find(oc => oc.id === id);
+  if (!o) return;
+  o.concluida      = false;
+  o.dataConclusao  = null;
+  o.descConclusao  = null;
+  persist();
+  renderOcorrencias();
+  toast('Ocorrência reaberta.', 'success');
+}
+
 
 function confirmarExcluirOcorrencia(id) {
   const o = (state.ocorrencias || []).find(oc => oc.id === id);
@@ -995,6 +1025,7 @@ Object.assign(window, {
   closeInconclusivaModal,
   submitInconclusiva,
   reabrirOcorrencia,
+  reabrirOcorrenciaConcluida,
   confirmarExcluirOcorrencia,
   getOcorrenciasFiltradas,
   openOcDetailModal,
