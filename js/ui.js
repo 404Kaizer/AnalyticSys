@@ -1639,11 +1639,9 @@ function buildAnaliticoDetailHtml(payload) {
     return isEstimated ? estimatedSaldoCell(value, estTitle) : realSaldoCell(value, realTitle);
   };
 
-  // Var. Acumulada: soma contínua do diff de todos os dias.
-  // diff agora nunca é null (dias sem lançamento têm diff = 0).
+  // Var. Acumulada: soma contínua do diff de todos os dias (incluindo semanais não-terça).
   let _accum = 0;
   const dayAccum = payload.days.map(day => {
-    if (day.isSemanalNaoConferencia) return null; // dias não-conferência semanais: sem diff
     _accum += (day.diff ?? 0);
     return _accum;
   });
@@ -1655,23 +1653,6 @@ function buildAnaliticoDetailHtml(payload) {
       ? `<span class="td-mono" style="color:var(--text3)">—</span>`
       : `<span class="td-mono ${accumCls}" style="white-space:nowrap">${varSymbol(accumVal)} ${fmtKg(Math.abs(accumVal))}</span>`;
 
-    // Dia sem conferência obrigatória (semanal, não-terça, sem lançamento agendado)
-    // SAP do dia visível, mas Variação e Var. Acumulada ficam como — (sem conferência = sem diff)
-    if (day.isSemanalNaoConferencia) {
-      const temSap = day.totalEnt !== 0 || day.totalSai !== 0;
-      return `
-        <tr class="row-sem-conferencia" data-no-lanc="1">
-          <td class="day-col" style="color:var(--text3)">${escapeHtml(day.dateLabel)}</td>
-          <td>${emptyCell()}</td>
-          <td>${emptyCell()}</td>
-          <td data-col="ent">${temSap ? buildAnaliticoDetailBreakdown(day.entEntries, day.totalEnt, 'var(--green)', 'Entradas') : emptyCell()}</td>
-          <td data-col="sai">${temSap ? buildAnaliticoDetailBreakdown(day.saiEntries, day.totalSai, 'var(--red)', 'Saídas') : emptyCell()}</td>
-          <td>${emptyCell()}</td>
-          <td>${emptyCell()}</td>
-          <td>${emptyCell()}</td>
-          <td>${emptyCell()}</td>
-        </tr>`;
-    }
 
     const dCls = varClass(day.diff);
 
@@ -2315,13 +2296,13 @@ function getPrePeriodLaunchStock({ central, material, dtIni, dtFim }) {
   const arr = matMap.get(materialKey) || [];
   if (!arr.length) return null;
 
-  // ── Dia-alvo: último dia do mês anterior; se domingo, recua para sábado ──
+  // ── 1. Dia-alvo: último dia do mês anterior, pulando domingo ──
   const targetDate = new Date(dtIniDate.getFullYear(), dtIniDate.getMonth(), 0); // último dia mês anterior
   targetDate.setHours(0, 0, 0, 0);
   if (targetDate.getDay() === 0) targetDate.setDate(targetDate.getDate() - 1); // domingo → sábado
   const targetISO = localISODate(targetDate);
 
-  // ── Busca exata no dia-alvo ──
+  // ── 2. Busca exata no dia-alvo ──
   let total = 0, found = false;
   for (const rec of arr) {
     const d = parseDate(rec.dtLanc);
@@ -2330,7 +2311,28 @@ function getPrePeriodLaunchStock({ central, material, dtIni, dtFim }) {
   }
   if (found) return { value: total, dtLabel: fmtPtDate(targetDate) };
 
-  // Sem lançamento no dia-alvo: retorna ausente (sem fallback para dentro do período).
+  // ── 3. Fallback: lançamento mais ANTIGO dentro do período ──
+  if (!dtFim) return null;
+  const dtFimDate = dtFim instanceof Date ? dtFim : new Date(dtFim);
+  const dtIniISO  = localISODate(dtIniDate);
+  const dtFimISO  = localISODate(dtFimDate);
+
+  let bestDate = null;
+  const byDay = new Map();
+  for (const rec of arr) {
+    const d = parseDate(rec.dtLanc);
+    if (!d) continue;
+    const iso = localISODate(d);
+    if (iso < dtIniISO || iso > dtFimISO) continue;
+    byDay.set(iso, (byDay.get(iso) || 0) + num(rec.peso));
+    if (!bestDate || iso < bestDate) bestDate = iso; // menor data = mais antigo
+  }
+  if (bestDate) {
+    const [y, m, day] = bestDate.split('-').map(Number);
+    const bd = new Date(y, m - 1, day);
+    return { value: byDay.get(bestDate), dtLabel: fmtPtDate(bd) };
+  }
+
   return null;
 }
 

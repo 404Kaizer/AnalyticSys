@@ -528,16 +528,16 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
 
       // ── Est. Inicial do primeiro dia: usa getPrePeriodLaunchStock ────
       // Mesma lógica do card de resumo: prioriza o último dia do mês anterior,
-      // com fallback para o lançamento mais antigo dentro do período.
+      // sem fallback para dentro do período.
       const preCarry = getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni, dtFim });
 
       // ── Carry entre períodos (diário ou semanal) ─────────────────────
-      // Para DIÁRIOS: carry avança a cada dia.
-      // Para SEMANAIS: carry avança a cada terça (semana a semana).
-      //   carry = { value, isEstimated }
+      // carry.date = data do último lançamento real, usada para delimitar o SAP
+      // acumulado desde aquele dia até o próximo lançamento (em vez de janela fixa de 6 dias).
+      //   carry = { value, isEstimated, date }
       //   isEstimated = true quando o saldo veio do Est. Teórico (sem lançamento)
       let carry = preCarry
-        ? { value: preCarry.value, isEstimated: false }
+        ? { value: preCarry.value, isEstimated: false, date: new Date(dtIni.getFullYear(), dtIni.getMonth(), 0) }
         : null; // null = sem histórico anterior conhecido
 
       // Para semanais: rastreia se a semana corrente já teve lançamento
@@ -565,7 +565,7 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
         const toDayEntry = s => {
           const ref = (s.ref && String(s.ref).trim()) ? String(s.ref).trim()
                     : (s.documento && String(s.documento).trim()) ? String(s.documento).trim() : '';
-          return [normMov(s.movimento), num(s.peso), ref, String(s.usuario || '').trim()];
+          return [normMov(s.movimento), num(s.peso), ref, String(s.usuario || '').trim(), String(s.dtLanc || s.dtDoc || '').trim()];
         };
         const dayEntEntries = daySnap.entRecords.map(toDayEntry);
         const daySaiEntries = daySnap.saiRecords.map(toDayEntry);
@@ -591,42 +591,46 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
 
           if (hasLanc) semanaComLanc = true;
 
-          // Dias não-terça: exibir apenas SAP (entradas/saídas) e data.
-          // Sem Est. Inicial, Teórico, Real ou Variação — não é dia de conferência.
+          // Dias não-terça sem lançamento: carry.value e carry.date não mudam.
+          // O SAP deste dia será absorvido pelo próximo lançamento (sapFrom = carry.date + 1).
           if (!isTerca && !hasLanc) {
-            // Apenas SAP do dia interessa; carry não muda
-            // (SAP acumula no Est. Teórico que será calculado na terça)
+            const initialStock = carry ? carry.value : 0;
+            const initialIsEstimated = carry ? carry.isEstimated : false;
+            const estTeorico = initialStock + daySnap.totalEnt + daySnap.totalSai;
+            // carry permanece inalterado intencionalmente
             return {
               dateLabel: fmtPtDate(day),
               lancCount: 0,
-              initialStock: null,
-              initialIsEstimated: false,
+              initialStock,
+              initialIsEstimated,
               entEntries: dayEntEntries,
               saiEntries: daySaiEntries,
               totalEnt: daySnap.totalEnt,
               totalSai: daySnap.totalSai,
-              theoreticalStock: null,
-              finalStock: null,
-              finalIsEstimated: false,
+              theoreticalStock: estTeorico,
+              finalStock: estTeorico,
+              finalIsEstimated: true,
               hasLanc: false,
               precisaLanc: false,
               isSemanalNaoConferencia: true,
-              diff: null
+              diff: 0
             };
           }
 
-          // Terça OU dia com lançamento inesperado:
+          // Terça OU dia com lançamento:
           // Est. Inicial = carry atual (último lançamento real ou teórico anterior)
           const initialStock = carry ? carry.value : 0;
           const initialIsEstimated = carry ? carry.isEstimated : false;
 
-          // SAP acumulado da semana toda (seg a ter) para o Est. Teórico semanal
-          const semanaStart = new Date(day);
-          semanaStart.setDate(semanaStart.getDate() - (isTerca ? 6 : 0));
-          semanaStart.setHours(0,0,0,0);
+          // SAP acumulado desde o dia seguinte ao último lançamento (carry.date) até hoje.
+          // Isso garante que todo SAP entre dois lançamentos consecutivos seja absorvido,
+          // independente de quantos dias se passaram ou se o lançamento é numa terça ou não.
+          const sapFrom = carry && carry.date
+            ? (() => { const d = new Date(carry.date); d.setDate(d.getDate() + 1); d.setHours(0,0,0,0); return d; })()
+            : new Date(0);
           const sapSemana = sapMat.filter(rec => {
             const d = parseDate(rec.dtLanc);
-            return d && d >= semanaStart && d <= day;
+            return d && d >= sapFrom && d <= day;
           });
           const snapSemana = buildSnapshot({ lancs: [], sap: sapSemana });
           const estTeorico = initialStock + snapSemana.totalEnt + snapSemana.totalSai;
@@ -639,12 +643,12 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
               ? Math.max(...dayLancs.map(l => num(l.peso)))
               : daySnap.pesoFim;
             finalIsEstimated = false;
-            carry = { value: finalStock, isEstimated: false };
+            carry = { value: finalStock, isEstimated: false, date: day };
           } else {
             // Terça sem lançamento: Est. Final = Est. Teórico (estimado)
             finalStock = estTeorico;
             finalIsEstimated = true;
-            carry = { value: estTeorico, isEstimated: true };
+            carry = { value: estTeorico, isEstimated: true, date: day };
           }
 
           // Variação sempre calculada: EST FINAL − EST TEÓRICO.
