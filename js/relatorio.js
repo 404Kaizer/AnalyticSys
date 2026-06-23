@@ -1486,18 +1486,62 @@ window.abrirModalRelatorioCentral = function(centralName) {
 // Retorna a string de ações da regra mais próxima do valor, ou null
 // ═══════════════════════════════════════════════════════════════════
 
-function _resolverAcoesParaMaterial(materialNome, variacao) {
-  const regras = (state.acoesRelatorio || []).filter(a => {
-    if (!a.material) return false;
-    // Match normalizado (sem acento, minúsculo) para não depender de grafia exata
-    const normA = String(a.material).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    const normM = String(materialNome).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+function _resolverAcoesParaMaterial(materialNome, variacao, categoriaItem, nivelItem, catKeyItem, catSubKeyItem) {
+  const regras = (state.acoesRelatorio || []);
+  if (!regras.length) return null;
+
+  // Helper: normaliza string para comparação
+  const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+
+  // Mapeamento: valor do checkbox → catKey(s) ou catSubKey(s) usados pelo sistema
+  // Prioridade: catSubKey (distingue miúdo/graúdo) > catKey (agregado genérico)
+  const CHECKBOX_TO_KEYS = {
+    'agregados miudos':   { subKeys: ['agregado_miudo'],  fallbackKey: null },
+    'agregados graudos':  { subKeys: ['agregado_graudo'], fallbackKey: null },
+    'aglomerantes':       { subKeys: [],                  fallbackKey: 'aglomerante' },
+    'aditivos e adicoes': { subKeys: [],                  fallbackKey: ['aditivo', 'adicao'] },
+  };
+
+  // Tenta match por categoria + nível (novo formato)
+  const nivelNorm  = norm(nivelItem || '');
+  const catKeyNorm    = norm(catKeyItem || '');
+  const catSubKeyNorm = norm(catSubKeyItem || '');
+
+  const porCategoriaNivel = regras.filter(r => {
+    if (!Array.isArray(r.categorias) || !r.nivel) return false;
+    const matchNivel = norm(r.nivel) === nivelNorm;
+    if (!matchNivel) return false;
+
+    const matchCat = r.categorias.some(c => {
+      const map = CHECKBOX_TO_KEYS[norm(c)];
+      if (!map) return false;
+      // Match por subKey (miúdo/graúdo) se disponível
+      if (map.subKeys.length && catSubKeyNorm) {
+        return map.subKeys.includes(catSubKeyNorm);
+      }
+      // Match por catKey genérico (aglomerante, aditivo, adicao)
+      const fk = map.fallbackKey;
+      if (!fk) return false;
+      if (Array.isArray(fk)) return fk.includes(catKeyNorm);
+      return fk === catKeyNorm;
+    });
+    return matchCat;
+  });
+
+  if (porCategoriaNivel.length) {
+    return porCategoriaNivel[0].acoes;
+  }
+
+  // Compatibilidade retroativa: tenta match pelo nome do material + operador/valor (formato antigo)
+  const legado = regras.filter(r => {
+    if (!r.material || !r.operador) return false;
+    const normA = norm(r.material);
+    const normM = norm(materialNome);
     return normA === normM;
   });
 
-  if (!regras.length) return null;
+  if (!legado.length) return null;
 
-  // Verifica quais regras satisfazem a condição
   const avaliarRegra = (r) => {
     const v = Number(r.valor);
     switch (r.operador) {
@@ -1510,10 +1554,9 @@ function _resolverAcoesParaMaterial(materialNome, variacao) {
     }
   };
 
-  const candidatas = regras.filter(avaliarRegra);
+  const candidatas = legado.filter(avaliarRegra);
   if (!candidatas.length) return null;
 
-  // Dentre as que satisfazem, pega a mais próxima do valor real
   candidatas.sort((a, b) => Math.abs(Number(a.valor) - variacao) - Math.abs(Number(b.valor) - variacao));
   return candidatas[0].acoes;
 }
@@ -1740,9 +1783,9 @@ window.gerarRelatorioComAcoes = function(centralName) {
   function escC(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
   // Monta cards de material — layout vertical, sem tabela
-  function buildCards(items, levelColor, levelBg) {
+  function buildCards(items, levelColor, levelBg, levelKey) {
     return items.map((item, idx) => {
-      const acoes  = _resolverAcoesParaMaterial(item.mat, item.diff);
+      const acoes  = _resolverAcoesParaMaterial(item.mat, item.diff, item.categoria, levelKey || item.level, item.catKey, item.catSubKey);
       const vc     = varColor(item.diff);
       const tc     = trendColor(item.trend);
       const hasAcao = acoes !== null;
@@ -1811,9 +1854,9 @@ window.gerarRelatorioComAcoes = function(centralName) {
     atencao: { color:'#f59e0b', bg:'#fffbeb', grad:'linear-gradient(135deg,#78350f 0%,#92400e 60%,#b45309 100%)', glow:'rgba(245,158,11,0.25)', icon:'⚠️', label:'ATENÇÃO', sub:'Monitorar — contatar operador' },
   };
 
-  function buildLevelSection(items, cfg) {
+  function buildLevelSection(items, cfg, levelKey) {
     if (!items.length) return '';
-    const cards = buildCards(items, cfg.color, cfg.bg);
+    const cards = buildCards(items, cfg.color, cfg.bg, levelKey);
     return '<div style="margin-bottom:32px;border-radius:14px;overflow:hidden;box-shadow:0 4px 24px ' + cfg.glow + ';page-break-inside:avoid">' +
       // Header colorido
       '<div style="background:' + cfg.grad + ';padding:20px 28px;display:flex;align-items:center;justify-content:space-between;position:relative;overflow:hidden">' +
@@ -1837,13 +1880,13 @@ window.gerarRelatorioComAcoes = function(centralName) {
   const allItems = [...criticos, ...urgentes, ...atencoes];
   const totalGeral = allItems.length;
   const regional   = allItems[0]?.regional || '—';
-  const comAcoes   = allItems.filter(i => _resolverAcoesParaMaterial(i.mat, i.diff) !== null).length;
+  const comAcoes   = allItems.filter(i => _resolverAcoesParaMaterial(i.mat, i.diff, i.categoria, i.level, i.catKey, i.catSubKey) !== null).length;
   const semAcoes   = totalGeral - comAcoes;
 
   const sectionsHtml =
-    buildLevelSection(criticos, lvlCfg.critico) +
-    buildLevelSection(urgentes, lvlCfg.urgente) +
-    buildLevelSection(atencoes, lvlCfg.atencao);
+    buildLevelSection(criticos, lvlCfg.critico, 'critico') +
+    buildLevelSection(urgentes, lvlCfg.urgente, 'urgente') +
+    buildLevelSection(atencoes, lvlCfg.atencao, 'atencao');
 
   const html = `<!DOCTYPE html>
 <html lang="pt-BR">

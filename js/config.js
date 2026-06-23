@@ -559,27 +559,24 @@ function makeAcaoId() {
 function abrirModalAcaoRelatorio(id) {
   const item = id ? (state.acoesRelatorio || []).find(a => a.id === id) : null;
 
-  // Popula select de materiais com os cadastrados + os que já aparecem nas regras
-  const matCadastrados = (state.materiais || []).map(m => (m.alias || m.origem || '').trim()).filter(Boolean);
-  const matNasRegras   = (state.acoesRelatorio || []).map(a => a.material).filter(Boolean);
-  const todosMats      = [...new Set([...matCadastrados, ...matNasRegras])].sort();
-
   let modal = document.getElementById('modal-acoes-relatorio');
   if (!modal) return;
 
-  // Preenche select de materiais
-  const sel = document.getElementById('ar-material');
-  if (sel) {
-    sel.innerHTML = '<option value="">Selecione o material</option>'
-      + todosMats.map(m => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join('');
-  }
+  // Reseta checkboxes
+  modal.querySelectorAll('.ar-cat-cb').forEach(cb => { cb.checked = false; });
 
   // Preenche campos se for edição
-  document.getElementById('ar-id').value          = item?.id || '';
-  document.getElementById('ar-material').value    = item?.material || '';
-  document.getElementById('ar-operador').value    = item?.operador || 'lt';
-  document.getElementById('ar-valor').value       = item?.valor ?? '';
-  document.getElementById('ar-acoes').value       = item?.acoes || '';
+  document.getElementById('ar-id').value    = item?.id || '';
+  document.getElementById('ar-nivel').value = item?.nivel || '';
+  document.getElementById('ar-acoes').value = item?.acoes || '';
+
+  // Marca categorias salvas
+  if (item?.categorias && Array.isArray(item.categorias)) {
+    item.categorias.forEach(cat => {
+      const cb = modal.querySelector(`.ar-cat-cb[value="${cat}"]`);
+      if (cb) cb.checked = true;
+    });
+  }
 
   document.getElementById('ar-modal-title').textContent = item ? 'Editar Ação' : 'Nova Ação de Relatório';
 
@@ -587,22 +584,21 @@ function abrirModalAcaoRelatorio(id) {
 }
 
 function salvarAcaoRelatorio() {
-  const id       = val('ar-id');
-  const material = val('ar-material');
-  const operador = val('ar-operador');
-  const valorStr = val('ar-valor');
-  const acoes    = val('ar-acoes').trim();
+  const id    = val('ar-id');
+  const nivel = val('ar-nivel');
+  const acoes = val('ar-acoes').trim();
 
-  if (!material) { toast('Selecione o material', 'error'); return; }
-  if (!operador) { toast('Selecione o operador', 'error'); return; }
-  if (valorStr === '' || isNaN(Number(valorStr))) { toast('Informe um valor numérico válido', 'error'); return; }
-  if (!acoes)    { toast('Informe as ações propostas', 'error'); return; }
+  // Lê categorias marcadas
+  const categorias = [...document.querySelectorAll('.ar-cat-cb:checked')].map(cb => cb.value);
+
+  if (!categorias.length) { toast('Selecione ao menos uma categoria', 'error'); return; }
+  if (!nivel)             { toast('Selecione o nível de criticidade', 'error'); return; }
+  if (!acoes)             { toast('Informe as ações propostas', 'error'); return; }
 
   const rec = {
-    id:        id || makeAcaoId(),
-    material,
-    operador,
-    valor:     Number(valorStr),
+    id:         id || makeAcaoId(),
+    categorias,
+    nivel,
     acoes,
     created: new Date().toLocaleDateString('pt-BR')
   };

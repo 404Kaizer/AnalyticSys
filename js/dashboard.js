@@ -2414,11 +2414,26 @@ function renderAcoesRelatorio() {
     tb.innerHTML = '<tr><td colspan="5"><div class="empty-state"><i class="ti ti-list-check"></i><p>Nenhuma ação cadastrada.</p></div></td></tr>';
     return;
   }
-  const operadorLabel = { 'lt': '< Menor que', 'lte': '≤ Menor ou igual a', 'eq': '= Igual a', 'gte': '≥ Maior ou igual a', 'gt': '> Maior que' };
-  tb.innerHTML = pageData.map((a, i) => `
+  const nivelLabel = {
+    'bom':     '<span style="color:#22c55e;font-weight:700">🟢 BOM</span>',
+    'atencao': '<span style="color:#f59e0b;font-weight:700">⚠️ ATENÇÃO</span>',
+    'urgente': '<span style="color:#f97316;font-weight:700">🟠 URGENTE</span>',
+    'critico': '<span style="color:#ef4444;font-weight:700">🔴 CRÍTICO</span>',
+  };
+  const catLabel = {
+    'AGREGADOS MIUDOS':   'Agr. Miúdos',
+    'AGREGADOS GRAUDOS':  'Agr. Graúdos',
+    'AGLOMERANTES':       'Aglomerantes',
+    'ADITIVOS E ADICOES': 'Aditivos e Adições',
+  };
+  tb.innerHTML = pageData.map((a, i) => {
+    const cats = (Array.isArray(a.categorias) ? a.categorias : (a.material ? [a.material] : []));
+    const catsHtml = cats.map(c => `<span style="display:inline-block;padding:1px 7px;border-radius:10px;font-size:10px;background:var(--bg3);border:1px solid var(--border);color:var(--text2);margin:1px 2px 1px 0">${escapeHtml(catLabel[c] || c)}</span>`).join('');
+    const nivel = a.nivel || (a.operador ? 'legado' : '');
+    return `
     <tr>
-      <td class="td-mono" style="font-weight:600">${escapeHtml(a.material)}</td>
-      <td class="td-mono" style="white-space:nowrap">${operadorLabel[a.operador] || a.operador} <strong>${Number(a.valor).toLocaleString('pt-BR', {minimumFractionDigits:0,maximumFractionDigits:2})} kg</strong></td>
+      <td style="min-width:160px">${catsHtml}</td>
+      <td class="td-mono" style="white-space:nowrap">${nivelLabel[nivel] || escapeHtml(nivel)}</td>
       <td style="max-width:340px;line-height:1.5">${escapeHtml(a.acoes)}</td>
       <td class="td-muted">${a.created || '—'}</td>
       <td>
@@ -2428,7 +2443,7 @@ function renderAcoesRelatorio() {
         </div>
       </td>
     </tr>
-  `).join('');
+  `}).join('');
   const _tbl = document.getElementById('tb-acoes-relatorio')?.closest('table');
   if (_tbl) injectColFilterButtons(_tbl, 'acoesRelatorio');
 }

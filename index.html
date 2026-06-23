@@ -2366,8 +2366,8 @@
             <table>
               <thead>
                 <tr>
-                  <th>Material</th>
-                  <th>Condição de Variação</th>
+                  <th>Categorias</th>
+                  <th>Criticidade</th>
                   <th>Ações Propostas</th>
                   <th>Criado em</th>
                   <th></th>
@@ -3123,35 +3123,42 @@
 
 <!-- MODAL: Nova / Editar Ação de Relatório -->
 <div class="modal-overlay" id="modal-acoes-relatorio">
-  <div class="modal" style="max-width:480px;width:94vw">
+  <div class="modal" style="max-width:500px;width:94vw">
     <div class="modal-title"><i class="ti ti-list-check"></i> <span id="ar-modal-title">Nova Ação de Relatório</span></div>
-    <div class="modal-sub">define ações propostas para um material quando a variação atender a condição</div>
+    <div class="modal-sub">define ações propostas para categorias de material quando atingirem um nível de criticidade</div>
     <input type="hidden" id="ar-id">
     <div class="form-grid" style="grid-template-columns:1fr">
       <div class="form-group">
-        <label class="form-label">Material <span style="color:var(--red)">*</span></label>
-        <select class="form-input" id="ar-material">
-          <option value="">Selecione o material</option>
-        </select>
+        <label class="form-label">Categorias <span style="color:var(--red)">*</span></label>
+        <div id="ar-categorias-wrap" style="display:flex;flex-direction:column;gap:7px;padding:10px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius)">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
+            <input type="checkbox" class="ar-cat-cb" value="AGREGADOS MIUDOS" style="accent-color:var(--accent)">
+            Agregados Miúdos
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
+            <input type="checkbox" class="ar-cat-cb" value="AGREGADOS GRAUDOS" style="accent-color:var(--accent)">
+            Agregados Graúdos
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
+            <input type="checkbox" class="ar-cat-cb" value="AGLOMERANTES" style="accent-color:var(--accent)">
+            Aglomerantes
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
+            <input type="checkbox" class="ar-cat-cb" value="ADITIVOS E ADICOES" style="accent-color:var(--accent)">
+            Aditivos e Adições
+          </label>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:5px"><i class="ti ti-info-circle"></i> Selecione uma ou mais categorias para aplicar a regra.</div>
       </div>
       <div class="form-group">
-        <label class="form-label">Condição de variação <span style="color:var(--red)">*</span></label>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-          <select class="form-input" id="ar-operador">
-            <option value="lt">&lt; Menor que</option>
-            <option value="lte">≤ Menor ou igual a</option>
-            <option value="eq">= Igual a</option>
-            <option value="gte">≥ Maior ou igual a</option>
-            <option value="gt">&gt; Maior que</option>
-          </select>
-          <div style="display:flex;align-items:center;gap:6px">
-            <input type="number" class="form-input" id="ar-valor" placeholder="Ex: -500" step="any">
-            <span style="font-size:12px;color:var(--text3);white-space:nowrap">kg</span>
-          </div>
-        </div>
-        <div style="font-size:11px;color:var(--text3);margin-top:6px;line-height:1.5">
-          <i class="ti ti-info-circle"></i> Use valores negativos para desfalque (ex: <code>-500</code>) e positivos para sobra. A regra mais próxima do valor real será aplicada.
-        </div>
+        <label class="form-label">Nível de criticidade <span style="color:var(--red)">*</span></label>
+        <select class="form-input" id="ar-nivel">
+          <option value="">Selecione o nível</option>
+          <option value="atencao">⚠️ ATENÇÃO</option>
+          <option value="urgente">🟠 URGENTE</option>
+          <option value="critico">🔴 CRÍTICO</option>
+        </select>
+        <div style="font-size:11px;color:var(--text3);margin-top:5px"><i class="ti ti-info-circle"></i> A ação será aplicada a materiais dessas categorias que estiverem no nível selecionado.</div>
       </div>
       <div class="form-group">
         <label class="form-label">Ações propostas <span style="color:var(--red)">*</span></label>

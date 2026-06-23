@@ -103,7 +103,7 @@ function renderMacroPanels(results, thresholds, dtIni, dtFim) {
       matItems.push({ central: r.central, mat, level, totalDiff: diff, catKey, regional, custo, trend });
 
       if (level === 'bom') return;
-      const item     = { central: r.central, regional, mat, diff, custo, level, trend };
+      const item     = { central: r.central, regional, mat, diff, custo, level, trend, categoria: rawCat, catKey, catSubKey: detectCatSubKey(rawCat, mat) };
       if (level === 'critico')      byLevel.critico.push(item);
       else if (level === 'urgente') byLevel.urgente.push(item);
       else                          byLevel.atencao.push(item);

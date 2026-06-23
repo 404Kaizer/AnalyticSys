@@ -2225,6 +2225,22 @@ function detectCatFromMat(matName) {
   return 'aglomerante'; // safe fallback
 }
 
+// Retorna subcategoria de agregado para distinguir miúdo de graúdo.
+// Usa o campo rawCat dos dados (ex: "AGREGADO MIUDO", "AGREGADO GRAUDO")
+// e como fallback o nome do material (BRITA/BICA = graúdo, AREIA = miúdo).
+function detectCatSubKey(rawCat, matName) {
+  const c = String(rawCat || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().trim();
+  const m = String(matName || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().trim();
+  // Só aplica distinção se for agregado
+  if (!/AGREGA/.test(c) && !/BRITA|BICA|AREIA|PEDRISCO|PEDRA/.test(m)) return null;
+  // Graúdo: rawCat contém GRAUD ou material é BRITA/BICA/PEDRISCO/PEDRA
+  if (/GRAUD/.test(c) || /BRITA|BICA|PEDRISCO|PEDRA(?!ISCA)/.test(m)) return 'agregado_graudo';
+  // Miúdo: rawCat contém MIUD ou material é AREIA
+  if (/MIUD/.test(c) || /AREIA/.test(m)) return 'agregado_miudo';
+  // Agregado sem distinção clara — retorna null (não participa do match fino)
+  return null;
+}
+
 function getHealthThresholds() {
   const t = JSON.parse(JSON.stringify(HEALTH_DEFAULTS));
   const cfgKey = key => (state.configs.find(c => normalizeText(c.key) === normalizeText(key)) || {}).value;
