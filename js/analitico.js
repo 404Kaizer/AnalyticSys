@@ -655,15 +655,9 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
             carry = { value: estTeorico, isEstimated: true };
           }
 
-          const diff = hasLanc
-            ? (() => {
-                if (isFirstDay) {
-                  const rawDiff = finalStock - estTeorico;
-                  return (Math.abs(rawDiff) < 0.0001) ? 0 : null;
-                }
-                return finalStock - estTeorico;
-              })()
-            : null;
+          // Variação sempre calculada: EST FINAL − EST TEÓRICO.
+          // Dias sem lançamento: finalStock = estTeorico → diff = 0 por definição.
+          const diff = finalStock - estTeorico;
 
           return {
             dateLabel: fmtPtDate(day),
@@ -708,21 +702,9 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
             carry = { value: estTeorico, isEstimated: true };
           }
 
-          // No primeiro dia do período não há lançamento inicial confiável
-          // para calcular variação — suprimir diff (→ "—") exceto quando o
-          // lançamento final coincide com o inicial (diff seria 0 de qualquer modo).
-          let diff;
-          if (!hasLanc) {
-            diff = null;
-          } else if (isFirstDay) {
-            // Só exibe variação se o carry anterior for confiável E
-            // o finalStock igual ao carry (diff = 0); qualquer diferença
-            // seria espúria por falta de lançamento inicial no período.
-            const rawDiff = finalStock - estTeorico;
-            diff = (Math.abs(rawDiff) < 0.0001) ? 0 : null;
-          } else {
-            diff = finalStock - estTeorico;
-          }
+          // Variação sempre calculada: EST FINAL − EST TEÓRICO.
+          // Dias sem lançamento: finalStock = estTeorico → diff = 0 por definição.
+          const diff = finalStock - estTeorico;
 
           return {
             dateLabel: fmtPtDate(day),
