@@ -1653,6 +1653,25 @@ function buildAnaliticoDetailHtml(payload) {
       ? `<span class="td-mono" style="color:var(--text3)">—</span>`
       : `<span class="td-mono ${accumCls}" style="white-space:nowrap">${varSymbol(accumVal)} ${fmtKg(Math.abs(accumVal))}</span>`;
 
+    // Dias não-terça de agregados: fundo apagado (opacity reduzida) para focar o analista
+    // nas terças que são os dias de conferência real. Exibe SAP + variação/acumulada normalmente.
+    if (day.isSemanalNaoConferencia) {
+      const temSap = day.totalEnt !== 0 || day.totalSai !== 0;
+      const dClsSem = varClass(day.diff);
+      const varCellSem = `<span class="td-mono ${dClsSem}" style="white-space:nowrap">${varSymbol(day.diff)} ${fmtKg(Math.abs(day.diff))}</span>`;
+      return `
+        <tr class="row-sem-conferencia" data-no-lanc="1">
+          <td class="day-col" style="color:var(--text3)">${escapeHtml(day.dateLabel)}</td>
+          <td>${emptyCell()}</td>
+          <td>${saldoCell(day.initialStock, day.initialIsEstimated, 'Est. Inicial', 'Est. Inicial estimado')}</td>
+          <td data-col="ent">${temSap ? buildAnaliticoDetailBreakdown(day.entEntries, day.totalEnt, 'var(--green)', 'Entradas') : emptyCell()}</td>
+          <td data-col="sai">${temSap ? buildAnaliticoDetailBreakdown(day.saiEntries, day.totalSai, 'var(--red)', 'Saídas') : emptyCell()}</td>
+          <td>${saldoCell(day.finalStock, day.finalIsEstimated, 'Est. Final', 'Est. Final estimado')}</td>
+          <td><span class="td-mono" style="color:var(--purple)">${fmtKg(day.theoreticalStock ?? 0)}</span></td>
+          <td>${varCellSem}</td>
+          <td>${accumCell}</td>
+        </tr>`;
+    }
 
     const dCls = varClass(day.diff);
 
