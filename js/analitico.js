@@ -526,26 +526,18 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
       const matCatKey    = detectCatKey(matCategoria) || detectCatFromMat(mat);
       const isSemanal    = matCatKey === 'agregado';
 
-      // ── Último lançamento ANTES do início do período ─────────────────
-      // Usado como Est. Inicial do primeiro dia (ou da primeira semana, para semanais).
-      // Busca em state.lancamentos sem restrição de período.
-      const lancsAnteriores = (state.lancamentos || [])
-        .filter(rec => {
-          if ((rec.material || '—') !== mat) return false;
-          if (rec.central !== r.central) return false;
-          const d = parseDate(rec.dtLanc);
-          return d && d < start;
-        })
-        .sort((a, b) => dateCmp(parseDate(b.dtLanc) ?? new Date(0), parseDate(a.dtLanc) ?? new Date(0)));
-      const ultimoLancAnterior = lancsAnteriores[0] ?? null;
+      // ── Est. Inicial do primeiro dia: usa getPrePeriodLaunchStock ────
+      // Mesma lógica do card de resumo: prioriza o último dia do mês anterior,
+      // com fallback para o lançamento mais antigo dentro do período.
+      const preCarry = getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni, dtFim });
 
       // ── Carry entre períodos (diário ou semanal) ─────────────────────
       // Para DIÁRIOS: carry avança a cada dia.
       // Para SEMANAIS: carry avança a cada terça (semana a semana).
       //   carry = { value, isEstimated }
       //   isEstimated = true quando o saldo veio do Est. Teórico (sem lançamento)
-      let carry = ultimoLancAnterior
-        ? { value: num(ultimoLancAnterior.peso), isEstimated: false }
+      let carry = preCarry
+        ? { value: preCarry.value, isEstimated: false }
         : null; // null = sem histórico anterior conhecido
 
       // Para semanais: rastreia se a semana corrente já teve lançamento
