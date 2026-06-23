@@ -763,6 +763,7 @@ function _buildOcHierarquiaBar(o) {
   if (nivelAtual === 0 && !(o.hierarquia && o.hierarquia.length)) return '';
   const hist = o.hierarquia || [];
   const info = ocNivelInfo(nivelAtual);
+  const podeDesc = ocPodeDescalonar(o) && !o.concluida && !o.inconclusiva;
 
   // Item do nível atual (sempre visível)
   const atvInfo = OC_HIERARQUIA[nivelAtual];
@@ -770,7 +771,10 @@ function _buildOcHierarquiaBar(o) {
     ? { data: o.dataAbertura, responsavel: o.operador }
     : hist.find(hh => hh.nivel === nivelAtual);
 
-  const itemAtual = `<div class="oc-card-hier-item oc-card-hier-ativo">
+  const clicavelAtual = nivelAtual > 0 && atvEntrada;
+  const itemAtual = `<div class="oc-card-hier-item oc-card-hier-ativo${clicavelAtual ? ' oc-card-hier-item-link' : ''}"
+    style="${clicavelAtual ? `--hier-color:${atvInfo.color};--hier-color-bg:${atvInfo.colorBg}` : ''}"
+    ${clicavelAtual ? `onclick="openEditarEscalonamentoModal('${o.id}',${nivelAtual})" title="Ver escalonamento para ${atvInfo.label}"` : ''}>
     <div class="oc-card-hier-dot" style="background:${atvInfo.color};border-color:${atvInfo.color}">
       <i class="ti ${atvInfo.icon}"></i>
     </div>
@@ -779,6 +783,8 @@ function _buildOcHierarquiaBar(o) {
       ${atvEntrada ? `<span class="oc-card-hier-meta">${fmtDateBR(atvEntrada.data)}${atvEntrada.responsavel ? ` · ${escapeHtml(atvEntrada.responsavel)}` : ''}</span>` : ''}
     </div>
     <span class="oc-card-hier-badge" style="background:${atvInfo.colorBg};color:${atvInfo.color};border-color:${atvInfo.colorBorder}">atual</span>
+    ${podeDesc ? `<button class="btn btn-xs oc-btn-descalonar oc-hier-desc-btn" onclick="event.stopPropagation();descalonar('${o.id}')" title="Voltar ao nível anterior"><i class="ti ti-arrow-down-circle"></i></button>` : ''}
+    ${clicavelAtual ? `<i class="ti ti-chevron-right oc-hier-item-arrow"></i>` : ''}
   </div>`;
 
   // Itens dos níveis anteriores (ocultos por padrão)
@@ -786,7 +792,10 @@ function _buildOcHierarquiaBar(o) {
     const entrada = i === 0
       ? { data: o.dataAbertura, responsavel: o.operador }
       : hist.find(hh => hh.nivel === i);
-    return `<div class="oc-card-hier-item oc-card-hier-passado">
+    const clicavel = i > 0 && entrada;
+    return `<div class="oc-card-hier-item oc-card-hier-passado${clicavel ? ' oc-card-hier-item-link' : ''}"
+      style="${clicavel ? `--hier-color:${h.color};--hier-color-bg:${h.colorBg}` : ''}"
+      ${clicavel ? `onclick="openEditarEscalonamentoModal('${o.id}',${i})" title="Ver escalonamento para ${h.label}"` : ''}>
       <div class="oc-card-hier-dot" style="background:${h.color};border-color:${h.color}">
         <i class="ti ${h.icon}"></i>
       </div>
@@ -794,21 +803,20 @@ function _buildOcHierarquiaBar(o) {
         <span class="oc-card-hier-label" style="color:var(--text3)">${h.label}</span>
         ${entrada ? `<span class="oc-card-hier-meta">${fmtDateBR(entrada.data)}${entrada.responsavel ? ` · ${escapeHtml(entrada.responsavel)}` : ''}</span>` : ''}
       </div>
+      ${clicavel ? `<i class="ti ti-chevron-right oc-hier-item-arrow"></i>` : ''}
     </div>`;
   }).join('');
 
   const temHistorico = nivelAtual > 0;
 
-  return `<div class="oc-card-hierarquia" style="border-color:${info.colorBorder}">
-    <div class="oc-card-hier-label-top" ${temHistorico ? `
-      role="button"
-      tabindex="0"
-      class="oc-card-hier-label-top oc-card-hier-toggle"
-      onclick="event.stopPropagation();(function(btn){var wrap=btn.closest('.oc-card-hierarquia');wrap.classList.toggle('oc-hier-expanded');var ico=btn.querySelector('.oc-hier-toggle-ico');ico.style.transform=wrap.classList.contains('oc-hier-expanded')?'rotate(180deg)':'rotate(0deg)'})(this)"
+  return `<div class="oc-card-hierarquia" style="border-color:${info.colorBorder}" onclick="event.stopPropagation()">
+    <div class="${temHistorico ? 'oc-card-hier-label-top oc-card-hier-toggle' : 'oc-card-hier-label-top'}"
+      ${temHistorico ? `role="button" tabindex="0"
+      onclick="(function(btn){var wrap=btn.closest('.oc-card-hierarquia');wrap.classList.toggle('oc-hier-expanded');var ico=btn.querySelector('.oc-hier-toggle-ico');ico.style.transform=wrap.classList.contains('oc-hier-expanded')?'rotate(180deg)':'rotate(0deg)'})(this)"
       onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"` : ''}>
       <i class="ti ti-sitemap" style="font-size:9px"></i> Hierarquia
       ${temHistorico ? `<span class="oc-hier-hist-badge">${nivelAtual} escalonamento${nivelAtual > 1 ? 's' : ''}</span>
-      <i class="ti ti-chevron-down oc-hier-toggle-ico" style="margin-left:auto;font-size:9px;transition:transform .2s ease"></i>` : ''}
+      <i class="ti ti-chevron-down oc-hier-toggle-ico"></i>` : ''}
     </div>
     ${temHistorico ? `<div class="oc-card-hier-historico">${itensAnteriores}</div>` : ''}
     ${itemAtual}
@@ -1019,9 +1027,6 @@ function _renderOcLista(lista) {
           ${ocPodeEscalonar(o) ? `<button class="btn btn-sm oc-btn-escalonar" onclick="event.stopPropagation();openEscalonarModal('${o.id}')" title="Escalonar para próximo nível">
             <i class="ti ti-arrow-up-circle"></i>
           </button>` : ''}
-          ${ocPodeDescalonar(o) ? `<button class="btn btn-sm oc-btn-descalonar" onclick="event.stopPropagation();descalonar('${o.id}')" title="Descalonar (voltar ao nível anterior)">
-            <i class="ti ti-arrow-down-circle"></i>
-          </button>` : ''}
           ${!o.concluida ? `<button class="btn btn-sm oc-btn-concluir" onclick="event.stopPropagation();openConcluirModal('${o.id}')" title="Concluir">
             <i class="ti ti-circle-check"></i>
           </button>` : ''}
@@ -1185,9 +1190,50 @@ function openOcorrenciaModal(id) {
   document.getElementById('oc-form-descricao').value   = o?.descricao     || '';
   const motivoEl = document.getElementById('oc-form-motivo');
   if (motivoEl) motivoEl.value = o?.motivo || '';
+
+  // Seção de escalonamento inicial — só em nova ocorrência
+  const isNova = !o;
+  const escToggle = document.getElementById('oc-form-esc-toggle');
+  const escWrap   = document.getElementById('oc-form-esc-wrap');
+  if (escToggle) escToggle.style.display = isNova ? '' : 'none';
+  if (escWrap)   { escWrap.style.display = 'none'; escWrap.dataset.active = '0'; }
+  if (isNova) _ocFormEscBuildNiveis();
+  document.getElementById('oc-form-esc-motivo').value      = '';
+  document.getElementById('oc-form-esc-responsavel').value = '';
+  document.getElementById('oc-form-esc-data').value        = new Date().toISOString().split('T')[0];
+
   document.getElementById('oc-modal').classList.add('open');
   initPhoneMasks();
 }
+
+function _ocFormEscBuildNiveis() {
+  const container = document.getElementById('oc-form-esc-nivel-opcoes');
+  if (!container) return;
+  // Níveis 1+ (Central é o padrão, não precisa escalonar pra ele)
+  container.innerHTML = OC_HIERARQUIA.slice(1).map((h, i) => `
+    <button type="button" class="oc-escalonar-nivel-btn ${i === 0 ? 'oc-escalonar-nivel-ativo' : ''}"
+      data-nivel="${h.nivel}"
+      style="--nivel-color:${h.color};--nivel-bg:${h.colorBg};--nivel-border:${h.colorBorder}"
+      onclick="ocFormEscSelecionarNivel(${h.nivel})">
+      <i class="ti ${h.icon}"></i>
+      <span>${h.label}</span>
+    </button>`).join('');
+}
+
+window.ocFormToggleEsc = function() {
+  const wrap   = document.getElementById('oc-form-esc-wrap');
+  const btn    = document.getElementById('oc-form-esc-toggle');
+  const active = wrap.dataset.active === '1';
+  wrap.dataset.active = active ? '0' : '1';
+  wrap.style.display  = active ? 'none' : 'flex';
+  btn.classList.toggle('oc-escalonar-nivel-ativo', !active);
+};
+
+window.ocFormEscSelecionarNivel = function(nivel) {
+  document.querySelectorAll('#oc-form-esc-nivel-opcoes .oc-escalonar-nivel-btn').forEach(b => {
+    b.classList.toggle('oc-escalonar-nivel-ativo', parseInt(b.dataset.nivel) === nivel);
+  });
+};
 
 function closeOcorrenciaModal() {
   document.getElementById('oc-modal').classList.remove('open');
@@ -1208,6 +1254,20 @@ function submitOcorrenciaForm() {
   if (!central)   { toast('Informe a central.', 'error'); return; }
   if (!descricao) { toast('Informe a descrição da solicitação.', 'error'); return; }
 
+  // Escalonamento inicial
+  const escWrap  = document.getElementById('oc-form-esc-wrap');
+  const escAtivo = !id && escWrap?.dataset.active === '1';
+  let hierarquiaInicial = [];
+  if (escAtivo) {
+    const escNivelBtn = document.querySelector('#oc-form-esc-nivel-opcoes .oc-escalonar-nivel-ativo');
+    const escNivel    = escNivelBtn ? parseInt(escNivelBtn.dataset.nivel) : 1;
+    const escMotivo   = document.getElementById('oc-form-esc-motivo').value.trim();
+    const escResp     = document.getElementById('oc-form-esc-responsavel').value.trim();
+    const escData     = document.getElementById('oc-form-esc-data').value;
+    if (!escMotivo) { toast('Informe o motivo do escalonamento inicial.', 'error'); return; }
+    hierarquiaInicial = [{ nivel: escNivel, motivo: escMotivo, responsavel: escResp || null, data: escData, criadoEm: Date.now() }];
+  }
+
   const existing = id ? (state.ocorrencias || []).find(o => o.id === id) : null;
   const ocorrencia = {
     id:           id || _nextOcId(),
@@ -1222,7 +1282,7 @@ function submitOcorrenciaForm() {
     concluida:    existing?.concluida     || false,
     dataConclusao: existing?.dataConclusao || null,
     descConclusao: existing?.descConclusao || null,
-    hierarquia:   existing?.hierarquia    || [],
+    hierarquia:   existing?.hierarquia    || hierarquiaInicial,
     criadoEm:     existing?.criadoEm      || Date.now(),
   };
 
@@ -1338,6 +1398,8 @@ Object.assign(window, {
   openOcorrenciaModal,
   closeOcorrenciaModal,
   submitOcorrenciaForm,
+  ocFormToggleEsc,
+  ocFormEscSelecionarNivel,
   openConcluirModal,
   closeConcluirModal,
   submitConcluir,
