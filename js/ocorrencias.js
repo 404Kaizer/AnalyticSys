@@ -73,6 +73,200 @@ function buildWhatsAppLink(numero, ocorrencia) {
   return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
 }
 
+// ── Máscara de telefone ───────────────────────────────────
+function fmtPhoneDisplay(raw) {
+  if (!raw) return '';
+  let v = raw.replace(/\D/g, '').slice(0, 11);
+  if (v.length <= 2)        return `(${v}`;
+  if (v.length <= 6)        return `(${v.slice(0,2)}) ${v.slice(2)}`;
+  if (v.length <= 10)       return `(${v.slice(0,2)}) ${v.slice(2,6)}-${v.slice(6)}`;
+  return `(${v.slice(0,2)}) ${v.slice(2,7)}-${v.slice(7)}`;
+}
+
+function applyPhoneMask(input) {
+  input.addEventListener('input', function() {
+    let v = this.value.replace(/\D/g, '').slice(0, 11);
+    if (v.length === 0) { this.value = ''; return; }
+    if (v.length <= 2)        this.value = `(${v}`;
+    else if (v.length <= 6)   this.value = `(${v.slice(0,2)}) ${v.slice(2)}`;
+    else if (v.length <= 10)  this.value = `(${v.slice(0,2)}) ${v.slice(2,6)}-${v.slice(6)}`;
+    else                      this.value = `(${v.slice(0,2)}) ${v.slice(2,7)}-${v.slice(7)}`;
+  });
+}
+
+function initPhoneMasks() {
+  const ids = ['oc-form-contato', 'oc-escalonar-contato', 'oc-edit-esc-contato'];
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if (el && !el.dataset.maskApplied) {
+      applyPhoneMask(el);
+      el.dataset.maskApplied = '1';
+    }
+  });
+}
+
+// ── Hierarquia de Escalonamento ───────────────────────────
+const OC_HIERARQUIA = [
+  { nivel: 0, key: 'central',    label: 'Central',              icon: 'ti-building-warehouse', color: 'var(--accent)',  colorBg: 'var(--accent-dim)',  colorBorder: 'var(--accent-glow)' },
+  { nivel: 1, key: 'regional',   label: 'Regional',             icon: 'ti-map-pin',            color: 'var(--amber)',   colorBg: 'var(--amber-bg)',    colorBorder: 'var(--amber-border)' },
+  { nivel: 2, key: 'supervisor', label: 'Supervisor do Setor',  icon: 'ti-user-shield',        color: 'var(--purple)',  colorBg: 'var(--purple-bg)',   colorBorder: 'var(--purple-border)' },
+  { nivel: 3, key: 'gerencia',   label: 'Gerência',             icon: 'ti-crown',              color: 'var(--red)',     colorBg: 'var(--red-bg)',      colorBorder: 'var(--red-border)' },
+];
+
+function ocNivelAtual(o) {
+  const hist = o.hierarquia || [];
+  return hist.length > 0 ? hist[hist.length - 1].nivel : 0;
+}
+
+function ocNivelInfo(nivel) {
+  return OC_HIERARQUIA[Math.min(nivel, OC_HIERARQUIA.length - 1)];
+}
+
+function ocPodeEscalonar(o) {
+  if (o.concluida || o.inconclusiva) return false;
+  return ocNivelAtual(o) < OC_HIERARQUIA.length - 1;
+}
+
+// Modal de escalonamento
+window.openEscalonarModal = function(id) {
+  const o = (state.ocorrencias || []).find(oc => oc.id === id);
+  if (!o || !ocPodeEscalonar(o)) return;
+  const nivelAtual = ocNivelAtual(o);
+  const el = document.getElementById('oc-escalonar-modal');
+  if (!el) return;
+
+  el.querySelector('#oc-escalonar-id').value = id;
+  el.querySelector('#oc-escalonar-nivel').value = nivelAtual + 1; // default: próximo nível
+  el.querySelector('#oc-escalonar-motivo').value = '';
+  el.querySelector('#oc-escalonar-responsavel').value = '';
+  el.querySelector('#oc-escalonar-data').value = new Date().toISOString().split('T')[0];
+  el.querySelector('#oc-escalonar-contato').value = o.contato ? fmtPhoneDisplay(o.contato) : '';
+
+  // Monta os botões de seleção de nível
+  const opcoes = OC_HIERARQUIA.filter(h => h.nivel > nivelAtual);
+  const container = el.querySelector('#oc-escalonar-nivel-opcoes');
+  if (container) {
+    container.innerHTML = opcoes.map((h, i) => `
+      <button type="button" class="oc-escalonar-nivel-btn ${i === 0 ? 'oc-escalonar-nivel-ativo' : ''}"
+        data-nivel="${h.nivel}"
+        style="--nivel-color:${h.color};--nivel-bg:${h.colorBg};--nivel-border:${h.colorBorder}"
+        onclick="ocSelecionarNivel(${h.nivel})">
+        <i class="ti ${h.icon}"></i>
+        <span>${h.label}</span>
+      </button>`).join('');
+  }
+
+  el.classList.add('open');
+  initPhoneMasks();
+};
+
+window.ocSelecionarNivel = function(nivel) {
+  document.getElementById('oc-escalonar-nivel').value = nivel;
+  document.querySelectorAll('.oc-escalonar-nivel-btn').forEach(btn => {
+    btn.classList.toggle('oc-escalonar-nivel-ativo', parseInt(btn.dataset.nivel) === nivel);
+  });
+};
+
+window.closeEscalonarModal = function() {
+  document.getElementById('oc-escalonar-modal')?.classList.remove('open');
+};
+
+// ── Descalonamento ────────────────────────────────────────
+function ocPodeDescalonar(o) {
+  if (o.concluida || o.inconclusiva) return false;
+  return (o.hierarquia || []).length > 0;
+}
+
+window.descalonar = function(id) {
+  const o = (state.ocorrencias || []).find(oc => oc.id === id);
+  if (!o || !ocPodeDescalonar(o)) return;
+  const snapshot = JSON.parse(JSON.stringify(o.hierarquia));
+  const removido = o.hierarquia.pop();
+  const info = ocNivelInfo(removido.nivel);
+  persist();
+  renderOcorrencias();
+  toast(`Descalonado de ${info.label}.`, 'info', 6000, () => {
+    o.hierarquia = snapshot;
+    persist();
+    renderOcorrencias();
+  });
+};
+
+window.submitEscalonar = function() {
+  const id         = document.getElementById('oc-escalonar-id').value;
+  const nivel      = parseInt(document.getElementById('oc-escalonar-nivel').value, 10);
+  const motivo     = document.getElementById('oc-escalonar-motivo').value.trim();
+  const responsavel= document.getElementById('oc-escalonar-responsavel').value.trim();
+  const data       = document.getElementById('oc-escalonar-data').value;
+  const contatoRaw = document.getElementById('oc-escalonar-contato').value.trim();
+  const contato    = contatoRaw.replace(/\D/g, '') || null;
+  if (!motivo) { toast('Informe o motivo do escalonamento.', 'error'); return; }
+  const o = (state.ocorrencias || []).find(oc => oc.id === id);
+  if (!o) return;
+  if (!Array.isArray(o.hierarquia)) o.hierarquia = [];
+  if (contato !== null) o.contato = contato;
+  o.hierarquia.push({ nivel, motivo, responsavel: responsavel || null, data, criadoEm: Date.now() });
+  persist();
+  renderOcorrencias();
+  closeEscalonarModal();
+  const info = ocNivelInfo(nivel);
+  toast(`Escalonado para ${info.label}.`, 'info');
+};
+
+// ── Edição de escalonamento ───────────────────────────────
+window.openEditarEscalonamentoModal = function(ocId, nivelEscalonado) {
+  const o = (state.ocorrencias || []).find(oc => oc.id === ocId);
+  if (!o) return;
+  const entrada = (o.hierarquia || []).find(h => h.nivel === nivelEscalonado);
+  if (!entrada) return;
+
+  const el = document.getElementById('oc-editar-escalonamento-modal');
+  if (!el) return;
+
+  el.querySelector('#oc-edit-esc-oc-id').value    = ocId;
+  el.querySelector('#oc-edit-esc-nivel').value     = nivelEscalonado;
+  el.querySelector('#oc-edit-esc-motivo').value    = entrada.motivo || '';
+  el.querySelector('#oc-edit-esc-responsavel').value = entrada.responsavel || '';
+  el.querySelector('#oc-edit-esc-data').value      = entrada.data || '';
+  el.querySelector('#oc-edit-esc-contato').value   = o.contato ? fmtPhoneDisplay(o.contato) : '';
+
+  const info = ocNivelInfo(nivelEscalonado);
+  el.querySelector('#oc-edit-esc-titulo').textContent = `Editar escalonamento — ${info.label}`;
+  el.querySelector('#oc-edit-esc-icone').className  = `ti ${info.icon}`;
+  el.querySelector('#oc-edit-esc-icone').style.color = info.color;
+
+  el.classList.add('open');
+  initPhoneMasks();
+};
+
+window.closeEditarEscalonamentoModal = function() {
+  document.getElementById('oc-editar-escalonamento-modal')?.classList.remove('open');
+};
+
+window.submitEditarEscalonamento = function() {
+  const ocId   = document.getElementById('oc-edit-esc-oc-id').value;
+  const nivel  = parseInt(document.getElementById('oc-edit-esc-nivel').value, 10);
+  const motivo = document.getElementById('oc-edit-esc-motivo').value.trim();
+  const resp   = document.getElementById('oc-edit-esc-responsavel').value.trim();
+  const data   = document.getElementById('oc-edit-esc-data').value;
+  const contatoRaw = document.getElementById('oc-edit-esc-contato').value.trim();
+  const contato    = contatoRaw.replace(/\D/g, '') || null;
+  if (!motivo) { toast('Informe o motivo do escalonamento.', 'error'); return; }
+  const o = (state.ocorrencias || []).find(oc => oc.id === ocId);
+  if (!o || !Array.isArray(o.hierarquia)) return;
+  const entrada = o.hierarquia.find(h => h.nivel === nivel);
+  if (!entrada) return;
+  entrada.motivo      = motivo;
+  entrada.responsavel = resp || null;
+  entrada.data        = data;
+  if (contato !== null) o.contato = contato;
+  persist();
+  renderOcorrencias();
+  closeEditarEscalonamentoModal();
+  openOcDetailModal(ocId);
+  toast('Escalonamento atualizado.', 'success');
+};
+
 // ── KPIs ──────────────────────────────────────────────────
 function buildOcKPIs(lista) {
   const total          = lista.length;
@@ -563,6 +757,117 @@ function _buildOcCharts(kpis, textCol, gridCol, tickFont) {
   }
 }
 
+// ── Helpers de renderização de hierarquia ─────────────────
+function _buildOcHierarquiaBar(o) {
+  const nivelAtual = ocNivelAtual(o);
+  if (nivelAtual === 0 && !(o.hierarquia && o.hierarquia.length)) return '';
+  const hist = o.hierarquia || [];
+  const info = ocNivelInfo(nivelAtual);
+
+  // Item do nível atual (sempre visível)
+  const atvInfo = OC_HIERARQUIA[nivelAtual];
+  const atvEntrada = nivelAtual === 0
+    ? { data: o.dataAbertura, responsavel: o.operador }
+    : hist.find(hh => hh.nivel === nivelAtual);
+
+  const itemAtual = `<div class="oc-card-hier-item oc-card-hier-ativo">
+    <div class="oc-card-hier-dot" style="background:${atvInfo.color};border-color:${atvInfo.color}">
+      <i class="ti ${atvInfo.icon}"></i>
+    </div>
+    <div class="oc-card-hier-body">
+      <span class="oc-card-hier-label" style="color:${atvInfo.color}">${atvInfo.label}</span>
+      ${atvEntrada ? `<span class="oc-card-hier-meta">${fmtDateBR(atvEntrada.data)}${atvEntrada.responsavel ? ` · ${escapeHtml(atvEntrada.responsavel)}` : ''}</span>` : ''}
+    </div>
+    <span class="oc-card-hier-badge" style="background:${atvInfo.colorBg};color:${atvInfo.color};border-color:${atvInfo.colorBorder}">atual</span>
+  </div>`;
+
+  // Itens dos níveis anteriores (ocultos por padrão)
+  const itensAnteriores = OC_HIERARQUIA.slice(0, nivelAtual).map((h, i) => {
+    const entrada = i === 0
+      ? { data: o.dataAbertura, responsavel: o.operador }
+      : hist.find(hh => hh.nivel === i);
+    return `<div class="oc-card-hier-item oc-card-hier-passado">
+      <div class="oc-card-hier-dot" style="background:${h.color};border-color:${h.color}">
+        <i class="ti ${h.icon}"></i>
+      </div>
+      <div class="oc-card-hier-body">
+        <span class="oc-card-hier-label" style="color:var(--text3)">${h.label}</span>
+        ${entrada ? `<span class="oc-card-hier-meta">${fmtDateBR(entrada.data)}${entrada.responsavel ? ` · ${escapeHtml(entrada.responsavel)}` : ''}</span>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+
+  const temHistorico = nivelAtual > 0;
+
+  return `<div class="oc-card-hierarquia" style="border-color:${info.colorBorder}">
+    <div class="oc-card-hier-label-top" ${temHistorico ? `
+      role="button"
+      tabindex="0"
+      class="oc-card-hier-label-top oc-card-hier-toggle"
+      onclick="event.stopPropagation();(function(btn){var wrap=btn.closest('.oc-card-hierarquia');wrap.classList.toggle('oc-hier-expanded');var ico=btn.querySelector('.oc-hier-toggle-ico');ico.style.transform=wrap.classList.contains('oc-hier-expanded')?'rotate(180deg)':'rotate(0deg)'})(this)"
+      onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"` : ''}>
+      <i class="ti ti-sitemap" style="font-size:9px"></i> Hierarquia
+      ${temHistorico ? `<span class="oc-hier-hist-badge">${nivelAtual} escalonamento${nivelAtual > 1 ? 's' : ''}</span>
+      <i class="ti ti-chevron-down oc-hier-toggle-ico" style="margin-left:auto;font-size:9px;transition:transform .2s ease"></i>` : ''}
+    </div>
+    ${temHistorico ? `<div class="oc-card-hier-historico">${itensAnteriores}</div>` : ''}
+    ${itemAtual}
+  </div>`;
+}
+
+window.ocToggleHierarquia = function(btn) {
+  const wrap = btn.closest('.oc-card-hierarquia');
+  wrap.classList.toggle('oc-hier-expanded');
+  const ico = btn.querySelector('.oc-hier-toggle-ico');
+  if (ico) ico.style.transform = wrap.classList.contains('oc-hier-expanded') ? 'rotate(180deg)' : 'rotate(0deg)';
+};
+
+function _buildOcHierarquiaDetail(o) {
+  const hist = o.hierarquia || [];
+  if (!hist.length) {
+    return `<div class="oc-detail-section-label">Hierarquia</div>
+      <div class="oc-hier-timeline oc-hier-timeline-empty">
+        ${OC_HIERARQUIA.map((h, i) => `
+          <div class="oc-hier-tl-item ${i === 0 ? 'oc-hier-tl-ativo' : 'oc-hier-tl-pendente'}">
+            <div class="oc-hier-tl-dot" style="${i === 0 ? `background:${h.color};border-color:${h.color}` : ''}">
+              <i class="ti ${h.icon}"></i>
+            </div>
+            <div class="oc-hier-tl-body">
+              <span class="oc-hier-tl-label" style="${i === 0 ? `color:${h.color}` : ''}">${h.label}</span>
+              ${i === 0 ? `<span class="oc-hier-tl-meta">Nível atual — aguardando resolução</span>` : `<span class="oc-hier-tl-meta">Não escalonado</span>`}
+            </div>
+          </div>`).join('')}
+      </div>`;
+  }
+
+  const nivelAtual = ocNivelAtual(o);
+  return `<div class="oc-detail-section-label">Hierarquia de Escalonamento</div>
+    <div class="oc-hier-timeline">
+      ${OC_HIERARQUIA.map((h, i) => {
+        const entrada = i === 0 ? { data: o.dataAbertura, motivo: 'Abertura da ocorrência', responsavel: o.operador } : hist.find(hh => hh.nivel === i);
+        const ativo   = i === nivelAtual;
+        const passado = i < nivelAtual;
+        const pendente= i > nivelAtual;
+        return `<div class="oc-hier-tl-item ${ativo ? 'oc-hier-tl-ativo' : ''} ${passado ? 'oc-hier-tl-passado' : ''} ${pendente ? 'oc-hier-tl-pendente' : ''}">
+          <div class="oc-hier-tl-dot" style="${(ativo || passado) && entrada ? `background:${h.color};border-color:${h.color}` : ''}">
+            <i class="ti ${h.icon}"></i>
+          </div>
+          <div class="oc-hier-tl-body">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+              <span class="oc-hier-tl-label" style="${(ativo || passado) && entrada ? `color:${h.color}` : ''}">${h.label}</span>
+              ${i > 0 && entrada ? `<button class="btn btn-sm oc-hier-tl-edit-btn" onclick="closeOcDetailModal();openEditarEscalonamentoModal('${o.id}',${i})" title="Editar escalonamento"><i class="ti ti-pencil"></i></button>` : ''}
+            </div>
+            ${entrada ? `
+              <span class="oc-hier-tl-meta">${fmtDateBR(entrada.data)}${entrada.responsavel ? ` · ${escapeHtml(entrada.responsavel)}` : ''}</span>
+              ${i > 0 ? `<span class="oc-hier-tl-motivo">${escapeHtml(entrada.motivo)}</span>` : ''}
+            ` : `<span class="oc-hier-tl-meta">Não escalonado</span>`}
+            ${ativo && !o.concluida && !o.inconclusiva ? `<span class="oc-hier-tl-badge">Nível atual</span>` : ''}
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
+}
+
 // ── Render lista ──────────────────────────────────────────
 function renderOcorrencias() {
   if (!Array.isArray(state.ocorrencias)) state.ocorrencias = [];
@@ -690,6 +995,7 @@ function _renderOcLista(lista) {
         <div class="oc-card-desc">${escapeHtml(o.descricao || '')}</div>
         ${o.concluida && o.descConclusao ? `<div class="oc-card-conclusao"><i class="ti ti-circle-check"></i> ${escapeHtml(o.descConclusao)}</div>` : ''}
         ${o.inconclusiva && !o.concluida && o.motivoInconclusiva ? `<div class="oc-card-inconclusiva-obs"><i class="ti ti-alert-triangle"></i> ${escapeHtml(o.motivoInconclusiva)}</div>` : ''}
+        ${_buildOcHierarquiaBar(o)}
       </div>
 
       <div class="oc-card-footer">
@@ -709,6 +1015,12 @@ function _renderOcLista(lista) {
           </button>` : ''}
           ${o.concluida ? `<button class="btn btn-sm oc-btn-reabrir-concluida" onclick="event.stopPropagation();reabrirOcorrenciaConcluida('${o.id}')" title="Reabrir ocorrência concluída">
             <i class="ti ti-rotate"></i>
+          </button>` : ''}
+          ${ocPodeEscalonar(o) ? `<button class="btn btn-sm oc-btn-escalonar" onclick="event.stopPropagation();openEscalonarModal('${o.id}')" title="Escalonar para próximo nível">
+            <i class="ti ti-arrow-up-circle"></i>
+          </button>` : ''}
+          ${ocPodeDescalonar(o) ? `<button class="btn btn-sm oc-btn-descalonar" onclick="event.stopPropagation();descalonar('${o.id}')" title="Descalonar (voltar ao nível anterior)">
+            <i class="ti ti-arrow-down-circle"></i>
           </button>` : ''}
           ${!o.concluida ? `<button class="btn btn-sm oc-btn-concluir" onclick="event.stopPropagation();openConcluirModal('${o.id}')" title="Concluir">
             <i class="ti ti-circle-check"></i>
@@ -785,9 +1097,14 @@ function openOcDetailModal(id) {
     ${!o.concluida && !o.inconclusiva ? `<button class="btn btn-sm oc-btn-inconclusiva" onclick="closeOcDetailModal();openInconclusivaModal('${o.id}')"><i class="ti ti-alert-triangle"></i> Inconclusiva</button>` : ''}
     ${o.inconclusiva && !o.concluida ? `<button class="btn btn-sm oc-btn-reabrir" onclick="closeOcDetailModal();reabrirOcorrencia('${o.id}')"><i class="ti ti-rotate"></i> Reabrir</button>` : ''}
     ${o.concluida ? `<button class="btn btn-sm oc-btn-reabrir-concluida" onclick="closeOcDetailModal();reabrirOcorrenciaConcluida('${o.id}')"><i class="ti ti-rotate"></i> Reabrir</button>` : ''}
+    ${ocPodeEscalonar(o) ? `<button class="btn btn-sm oc-btn-escalonar" onclick="closeOcDetailModal();openEscalonarModal('${o.id}')"><i class="ti ti-arrow-up-circle"></i> Escalonar</button>` : ''}
     ${!o.concluida ? `<button class="btn btn-sm oc-btn-concluir" onclick="closeOcDetailModal();openConcluirModal('${o.id}')"><i class="ti ti-circle-check"></i> Concluir</button>` : ''}
     <button class="btn btn-sm" onclick="closeOcDetailModal();openOcorrenciaModal('${o.id}')"><i class="ti ti-edit"></i> Editar</button>
     <button class="btn btn-sm btn-danger-ghost" onclick="closeOcDetailModal();confirmarExcluirOcorrencia('${o.id}')"><i class="ti ti-trash"></i></button>`;
+
+  // Seção de hierarquia no modal de detalhe
+  const hierEl = el.querySelector('.oc-detail-hierarquia');
+  if (hierEl) hierEl.innerHTML = _buildOcHierarquiaDetail(o);
 
   el.classList.add('open');
 }
@@ -864,11 +1181,12 @@ function openOcorrenciaModal(id) {
   document.getElementById('oc-form-central').value     = o?.central       || '';
   document.getElementById('oc-form-material').value    = o?.material      || '';
   document.getElementById('oc-form-operador').value    = o?.operador      || '';
-  document.getElementById('oc-form-contato').value     = o?.contato       || '';
+  document.getElementById('oc-form-contato').value     = o?.contato ? fmtPhoneDisplay(o.contato) : '';
   document.getElementById('oc-form-descricao').value   = o?.descricao     || '';
   const motivoEl = document.getElementById('oc-form-motivo');
   if (motivoEl) motivoEl.value = o?.motivo || '';
   document.getElementById('oc-modal').classList.add('open');
+  initPhoneMasks();
 }
 
 function closeOcorrenciaModal() {
@@ -882,7 +1200,8 @@ function submitOcorrenciaForm() {
   const central    = document.getElementById('oc-form-central').value.trim();
   const material   = document.getElementById('oc-form-material').value.trim();
   const operador   = document.getElementById('oc-form-operador').value.trim();
-  const contato    = document.getElementById('oc-form-contato').value.trim();
+  const contatoRaw = document.getElementById('oc-form-contato').value.trim();
+  const contato    = contatoRaw.replace(/\D/g, '') || null;
   const descricao  = document.getElementById('oc-form-descricao').value.trim();
   const motivo     = document.getElementById('oc-form-motivo')?.value.trim() || '';
 
@@ -898,11 +1217,12 @@ function submitOcorrenciaForm() {
     central,
     material:     material || null,
     operador:     operador || null,
-    contato:      contato  || null,
+    contato:      contato,
     descricao,
     concluida:    existing?.concluida     || false,
     dataConclusao: existing?.dataConclusao || null,
     descConclusao: existing?.descConclusao || null,
+    hierarquia:   existing?.hierarquia    || [],
     criadoEm:     existing?.criadoEm      || Date.now(),
   };
 
@@ -1030,4 +1350,12 @@ Object.assign(window, {
   getOcorrenciasFiltradas,
   openOcDetailModal,
   closeOcDetailModal,
+  openEscalonarModal,
+  closeEscalonarModal,
+  submitEscalonar,
+  ocSelecionarNivel,
+  openEditarEscalonamentoModal,
+  closeEditarEscalonamentoModal,
+  submitEditarEscalonamento,
+  descalonar,
 });

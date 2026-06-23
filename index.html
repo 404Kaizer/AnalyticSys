@@ -3687,11 +3687,92 @@
       <div class="oc-detail-dates"></div>
       <div class="oc-detail-section oc-detail-desc"></div>
       <div class="oc-detail-section oc-detail-conclusao"></div>
+      <div class="oc-detail-section oc-detail-hierarquia"></div>
       <div class="oc-detail-meta"></div>
       <div class="oc-detail-actions"></div>
     </div>
   </div>
 </div>
+
+<!-- Modal de Escalonamento -->
+<div class="modal-overlay" id="oc-escalonar-modal" onclick="if(event.target===this)closeEscalonarModal()" role="dialog" aria-modal="true">
+  <div class="modal-card" style="max-width:460px;width:100%">
+    <div class="modal-header">
+      <span class="modal-title"><i class="ti ti-arrow-up-circle" style="color:var(--amber);margin-right:6px"></i>Escalonar Ocorrência</span>
+      <button class="modal-close" onclick="closeEscalonarModal()"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:14px">
+      <input type="hidden" id="oc-escalonar-id">
+      <input type="hidden" id="oc-escalonar-nivel">
+      <div style="padding:10px 14px;background:var(--amber-bg);border:1px solid var(--amber-border);border-radius:8px;font-size:12px;color:var(--text2);line-height:1.6">
+        Use o escalonamento quando o nível atual não conseguiu resolver a ocorrência. O histórico completo de escalonamentos ficará registrado no card.
+      </div>
+      <div class="oc-form-group">
+        <label class="oc-label">Escalonar para <span class="oc-required">*</span></label>
+        <div id="oc-escalonar-nivel-opcoes" class="oc-escalonar-nivel-grid"></div>
+      </div>
+      <div class="oc-form-group">
+        <label class="oc-label" id="oc-escalonar-desc-label">Motivo do escalonamento <span class="oc-required">*</span></label>
+        <textarea id="oc-escalonar-motivo" class="oc-input oc-textarea" rows="4" placeholder="Descreva por que a ocorrência não foi resolvida no nível atual…"></textarea>
+      </div>
+      <div class="oc-form-group">
+        <label class="oc-label">Responsável pelo escalonamento <span style="opacity:.6">(opcional)</span></label>
+        <input type="text" id="oc-escalonar-responsavel" class="oc-input" placeholder="Nome de quem está escalonando">
+      </div>
+      <div class="oc-form-row">
+        <div class="oc-form-group">
+          <label class="oc-label">Data do escalonamento</label>
+          <input type="date" id="oc-escalonar-data" class="oc-input">
+        </div>
+        <div class="oc-form-group">
+          <label class="oc-label">WhatsApp <span class="oc-hint">(com DDD)</span></label>
+          <input type="tel" id="oc-escalonar-contato" class="oc-input" placeholder="(XX) 9 XXXX-XXXX">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeEscalonarModal()">Cancelar</button>
+      <button class="btn oc-btn-escalonar" style="padding:8px 18px" onclick="submitEscalonar()"><i class="ti ti-arrow-up-circle"></i> Confirmar escalonamento</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal de Edição de Escalonamento -->
+<div class="modal-overlay" id="oc-editar-escalonamento-modal" onclick="if(event.target===this)closeEditarEscalonamentoModal()" role="dialog" aria-modal="true">
+  <div class="modal-card" style="max-width:460px;width:100%">
+    <div class="modal-header">
+      <span class="modal-title"><i id="oc-edit-esc-icone" class="ti ti-arrow-up-circle" style="margin-right:6px"></i><span id="oc-edit-esc-titulo">Editar escalonamento</span></span>
+      <button class="modal-close" onclick="closeEditarEscalonamentoModal()"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:14px">
+      <input type="hidden" id="oc-edit-esc-oc-id">
+      <input type="hidden" id="oc-edit-esc-nivel">
+      <div class="oc-form-group">
+        <label class="oc-label">Motivo do escalonamento <span class="oc-required">*</span></label>
+        <textarea id="oc-edit-esc-motivo" class="oc-input oc-textarea" rows="4" placeholder="Descreva por que a ocorrência foi escalonada…"></textarea>
+      </div>
+      <div class="oc-form-group">
+        <label class="oc-label">Responsável pelo escalonamento <span style="opacity:.6">(opcional)</span></label>
+        <input type="text" id="oc-edit-esc-responsavel" class="oc-input" placeholder="Nome de quem escalonou">
+      </div>
+      <div class="oc-form-row">
+        <div class="oc-form-group">
+          <label class="oc-label">Data do escalonamento</label>
+          <input type="date" id="oc-edit-esc-data" class="oc-input">
+        </div>
+        <div class="oc-form-group">
+          <label class="oc-label">WhatsApp <span class="oc-hint">(com DDD)</span></label>
+          <input type="tel" id="oc-edit-esc-contato" class="oc-input" placeholder="(XX) 9 XXXX-XXXX">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeEditarEscalonamentoModal()">Cancelar</button>
+      <button class="btn btn-primary" style="padding:8px 18px" onclick="submitEditarEscalonamento()"><i class="ti ti-device-floppy"></i> Salvar alterações</button>
+    </div>
+  </div>
+</div>
+
 
 
 <!-- Modal de Conflitos de Importação -->
