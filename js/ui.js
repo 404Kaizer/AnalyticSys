@@ -2315,13 +2315,13 @@ function getPrePeriodLaunchStock({ central, material, dtIni, dtFim }) {
   const arr = matMap.get(materialKey) || [];
   if (!arr.length) return null;
 
-  // ── 1. Dia-alvo: último dia do mês anterior, pulando domingo ──
+  // ── Dia-alvo: último dia do mês anterior; se domingo, recua para sábado ──
   const targetDate = new Date(dtIniDate.getFullYear(), dtIniDate.getMonth(), 0); // último dia mês anterior
   targetDate.setHours(0, 0, 0, 0);
   if (targetDate.getDay() === 0) targetDate.setDate(targetDate.getDate() - 1); // domingo → sábado
   const targetISO = localISODate(targetDate);
 
-  // ── 2. Busca exata no dia-alvo ──
+  // ── Busca exata no dia-alvo ──
   let total = 0, found = false;
   for (const rec of arr) {
     const d = parseDate(rec.dtLanc);
@@ -2330,28 +2330,7 @@ function getPrePeriodLaunchStock({ central, material, dtIni, dtFim }) {
   }
   if (found) return { value: total, dtLabel: fmtPtDate(targetDate) };
 
-  // ── 3. Fallback: lançamento mais ANTIGO dentro do período ──
-  if (!dtFim) return null;
-  const dtFimDate = dtFim instanceof Date ? dtFim : new Date(dtFim);
-  const dtIniISO  = localISODate(dtIniDate);
-  const dtFimISO  = localISODate(dtFimDate);
-
-  let bestDate = null;
-  const byDay = new Map();
-  for (const rec of arr) {
-    const d = parseDate(rec.dtLanc);
-    if (!d) continue;
-    const iso = localISODate(d);
-    if (iso < dtIniISO || iso > dtFimISO) continue;
-    byDay.set(iso, (byDay.get(iso) || 0) + num(rec.peso));
-    if (!bestDate || iso < bestDate) bestDate = iso; // menor data = mais antigo
-  }
-  if (bestDate) {
-    const [y, m, day] = bestDate.split('-').map(Number);
-    const bd = new Date(y, m - 1, day);
-    return { value: byDay.get(bestDate), dtLabel: fmtPtDate(bd) };
-  }
-
+  // Sem lançamento no dia-alvo: retorna ausente (sem fallback para dentro do período).
   return null;
 }
 
