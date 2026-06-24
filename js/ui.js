@@ -2330,28 +2330,7 @@ function getPrePeriodLaunchStock({ central, material, dtIni, dtFim }) {
   }
   if (found) return { value: total, dtLabel: fmtPtDate(targetDate) };
 
-  // ── 3. Fallback: lançamento mais ANTIGO dentro do período ──
-  if (!dtFim) return null;
-  const dtFimDate = dtFim instanceof Date ? dtFim : new Date(dtFim);
-  const dtIniISO  = localISODate(dtIniDate);
-  const dtFimISO  = localISODate(dtFimDate);
-
-  let bestDate = null;
-  const byDay = new Map();
-  for (const rec of arr) {
-    const d = parseDate(rec.dtLanc);
-    if (!d) continue;
-    const iso = localISODate(d);
-    if (iso < dtIniISO || iso > dtFimISO) continue;
-    byDay.set(iso, (byDay.get(iso) || 0) + num(rec.peso));
-    if (!bestDate || iso < bestDate) bestDate = iso; // menor data = mais antigo
-  }
-  if (bestDate) {
-    const [y, m, day] = bestDate.split('-').map(Number);
-    const bd = new Date(y, m - 1, day);
-    return { value: byDay.get(bestDate), dtLabel: fmtPtDate(bd) };
-  }
-
+  // Sem lançamento no dia-alvo: retorna null (sem fallback para dentro do período).
   return null;
 }
 
