@@ -1634,6 +1634,18 @@ function buildAnaliticoDetailHtml(payload) {
   // Helper: célula vazia (não aplicável)
   const emptyCell = () => `<span class="td-mono" style="color:var(--text3)">—</span>`;
 
+  // Helper: célula AUSENTE com tooltip mostrando lançamentos mais próximos
+  const absentSaldoCell = (nearest) => {
+    const beforeTxt = nearest?.before
+      ? `Último antes do período: ${nearest.before.dtLabel} — ${fmtKg(nearest.before.value)}`
+      : `Último antes do período: não encontrado`;
+    const afterTxt = nearest?.after
+      ? `Primeiro no período: ${nearest.after.dtLabel} — ${fmtKg(nearest.after.value)}`
+      : `Primeiro no período: não encontrado`;
+    const tooltip = `${beforeTxt}|${afterTxt}`;
+    return `<span class='absent-badge' data-absent-tooltip='${tooltip}' style='cursor:help'>AUSENTE</span>`;
+  };
+
   const saldoCell = (value, isEstimated, realTitle, estTitle) => {
     if (value === null || value === undefined) return emptyCell();
     return isEstimated ? estimatedSaldoCell(value, estTitle) : realSaldoCell(value, realTitle);
@@ -1684,12 +1696,15 @@ function buildAnaliticoDetailHtml(payload) {
     // data-no-lanc marks rows that have no launch (hidden when filter is active)
     const noLancAttr = (!day.hasLanc) ? ' data-no-lanc="1"' : '';
 
-    const iniCell = saldoCell(
-      day.initialStock,
-      day.initialIsEstimated,
-      'Est. Inicial — saldo real do último lançamento anterior',
-      'Est. Inicial estimado — herdado do Est. Teórico anterior (sem lançamento real)'
-    );
+    // iniCell: AUSENTE (com tooltip) apenas no primeiro dia sem carry; estimado nos demais
+    const iniCell = (day.initialStock === null || day.initialStock === undefined)
+      ? absentSaldoCell(payload.summary.absentNearest)
+      : saldoCell(
+          day.initialStock,
+          day.initialIsEstimated,
+          'Est. Inicial — saldo real do último lançamento anterior',
+          'Est. Inicial estimado — herdado do Est. Teórico anterior (sem lançamento real)'
+        );
 
     const realCell = saldoCell(
       day.finalStock,
@@ -1747,7 +1762,7 @@ function buildAnaliticoDetailHtml(payload) {
   return `
     <div class="analitico-detail-summary">
       <div class="analitico-detail-card${s.pesoIniAusente ? ' detail-card-absent' : ''}">
-        <div class="analitico-detail-card-label">Est. Inicial${s.pesoIniAusente ? ' <span class="absent-badge" title="Sem lançamento no dia anterior ao período">ausente</span>' : ''}</div>
+        <div class="analitico-detail-card-label">Est. Inicial${s.pesoIniAusente ? ` ${absentSaldoCell(s.absentNearest)}` : ''}</div>
         <div class="analitico-detail-card-value ${s.pesoIniAusente ? 'c-absent' : 'c-teal'}">${s.pesoIniAusente ? '—' : fmtKg(s.pesoIni)}</div>
         <div class="analitico-detail-card-sub">${escapeHtml(s.dtIniLabel)}</div>
       </div>
@@ -1940,6 +1955,54 @@ function toggleDetailFilter(btn) {
 }
 window.toggleDetailFilter = toggleDetailFilter;
 
+// Tooltip flutuante para badges AUSENTE
+function initAbsentTooltips(container) {
+  let tip = document.getElementById('absent-tip');
+  if (!tip) {
+    tip = document.createElement('div');
+    tip.id = 'absent-tip';
+    tip.style.cssText = [
+      'position:fixed',
+      'z-index:99999',
+      'background:var(--bg2,#1e2130)',
+      'border:1px solid var(--border,#2e3347)',
+      'border-radius:6px',
+      'padding:8px 12px',
+      'font-size:12px',
+      'color:var(--text,#e2e8f0)',
+      'line-height:1.6',
+      'pointer-events:none',
+      'white-space:pre',
+      'box-shadow:0 4px 16px rgba(0,0,0,.4)',
+      'display:none',
+      'max-width:320px',
+    ].join(';');
+    document.body.appendChild(tip);
+  }
+
+  container.querySelectorAll('[data-absent-tooltip]').forEach(el => {
+    el.addEventListener('mouseenter', e => {
+      tip.textContent = el.dataset.absentTooltip.split('|').join('\n');
+      tip.style.display = 'block';
+      positionAbsentTip(tip, e);
+    });
+    el.addEventListener('mousemove', e => positionAbsentTip(tip, e));
+    el.addEventListener('mouseleave', () => { tip.style.display = 'none'; });
+  });
+}
+
+function positionAbsentTip(tip, e) {
+  const margin = 12;
+  let x = e.clientX + margin;
+  let y = e.clientY + margin;
+  const tw = tip.offsetWidth  || 260;
+  const th = tip.offsetHeight || 48;
+  if (x + tw > window.innerWidth  - 8) x = e.clientX - tw - margin;
+  if (y + th > window.innerHeight - 8) y = e.clientY - th - margin;
+  tip.style.left = x + 'px';
+  tip.style.top  = y + 'px';
+}
+
 function openAnaliticoDetailModal(detailKey) {
   const payload = window.__analiticoDetailCache?.get(String(detailKey));
   if (!payload) {
@@ -1961,6 +2024,7 @@ function openAnaliticoDetailModal(detailKey) {
   sub.textContent = `${payload.central} · ${payload.periodLabel}`;
   body.innerHTML = buildAnaliticoDetailHtml(payload);
   if (typeof initHelpBadges === 'function') initHelpBadges();
+  initAbsentTooltips(body);
   overlay.classList.add('open');
   overlay.setAttribute('aria-hidden', 'false');
   document.body.classList.add('analitico-modal-open');
@@ -2304,34 +2368,173 @@ function calcHealthScore(matDiffs, lancsByMat, sapByMat, thresholds) {
 //   3. Se não houver → busca dentro do período (dtIni a dtFim) o lançamento
 //      mais ANTIGO (menor data = primeiro registro real disponível).
 //   4. Se não encontrar em nenhum dos dois → retorna null.
+// Retorna os dois lançamentos mais próximos do início do período quando o Est. Inicial é AUSENTE:
+// - before: lançamento mais recente ANTES do dtIni (mês anterior)
+// - after:  lançamento mais antigo DENTRO do período (mês atual)
+// Usado para exibir tooltip informativo no badge AUSENTE.
+function getNearestLancsForAbsent({ central, material, dtIni, dtFim }) {
+  const materialKey = material || '—';
+  const { byCentralMat } = getLancIndex();
+  const arr = byCentralMat.get(central)?.get(materialKey) || [];
+  const dtIniDate = dtIni instanceof Date ? dtIni : new Date(dtIni);
+  const dtFimDate = dtFim instanceof Date ? dtFim : new Date(dtFim);
+  const dtIniISO = localISODate(dtIniDate);
+  const dtFimISO = localISODate(dtFimDate);
+
+  let before = null;
+  let after  = null;
+
+  const byDay = new Map();
+  for (const rec of arr) {
+    const d = parseDate(rec.dtLanc);
+    if (!d) continue;
+    const iso = localISODate(d);
+    if (!byDay.has(iso)) byDay.set(iso, { total: 0, date: d });
+    byDay.get(iso).total += num(rec.peso);
+  }
+
+  let bestBeforeISO = null;
+  let bestAfterISO  = null;
+  for (const [iso] of byDay) {
+    if (iso < dtIniISO) {
+      if (!bestBeforeISO || iso > bestBeforeISO) bestBeforeISO = iso;
+    } else if (iso >= dtIniISO && iso <= dtFimISO) {
+      if (!bestAfterISO || iso < bestAfterISO) bestAfterISO = iso;
+    }
+  }
+
+  if (bestBeforeISO) {
+    const e = byDay.get(bestBeforeISO);
+    before = { value: e.total, dtLabel: fmtPtDate(e.date) };
+  }
+  if (bestAfterISO) {
+    const e = byDay.get(bestAfterISO);
+    after = { value: e.total, dtLabel: fmtPtDate(e.date) };
+  }
+
+  return { before, after };
+}
+
+// Busca o lançamento para o carry inicial da TABELA DE DIAS.
+// Regra:
+//   - 1º do mês → lançamento no último dia do mês anterior (recuando domingo → sábado)
+//   - Outro dia  → lançamento mais recente estritamente ANTES de dtIni
+// Retorna null se não encontrado.
+function getPrevDayLaunchStock({ central, material, dtIni, catKey }) {
+  const dtIniDate = dtIni instanceof Date ? new Date(dtIni) : new Date(dtIni);
+  if (isNaN(dtIniDate)) return null;
+
+  const materialKey = material || '—';
+  const { byCentralMat } = getLancIndex();
+  const arr = byCentralMat.get(central)?.get(materialKey) || [];
+  if (!arr.length) return null;
+
+  const isAgregado = catKey === 'agregado' || catKey === 'agregado_graudo' || catKey === 'agregado_miudo';
+  const isPrimeiroDiaMes = dtIniDate.getDate() === 1;
+  const dtIniISO = localISODate(dtIniDate);
+
+  // Helper: busca total de lançamentos em uma data ISO exata
+  const findByISO = (iso) => {
+    let total = 0, found = false;
+    for (const rec of arr) {
+      const d = parseDate(rec.dtLanc);
+      if (!d) continue;
+      if (localISODate(d) === iso) { total += num(rec.peso); found = true; }
+    }
+    return found ? total : null;
+  };
+
+  if (isAgregado) {
+    // Agregados: lançamentos ocorrem nas terças-feiras.
+    // 1. Encontra a última terça-feira antes de dtIni
+    // 2. Se houver lançamento em dia posterior à terça e anterior a dtIni, usa esse
+    // 3. Senão usa o da terça; se não houver → AUSENTE
+    const lastTerca = new Date(dtIniDate);
+    lastTerca.setHours(0, 0, 0, 0);
+    // Recua até encontrar uma terça (getDay() === 2)
+    do { lastTerca.setDate(lastTerca.getDate() - 1); } while (lastTerca.getDay() !== 2);
+    const lastTercaISO = localISODate(lastTerca);
+
+    // Busca lançamento mais recente entre lastTerca+1 e dtIni-1
+    let bestPost = null, bestPostISO = null;
+    for (const rec of arr) {
+      const d = parseDate(rec.dtLanc);
+      if (!d) continue;
+      const iso = localISODate(d);
+      if (iso > lastTercaISO && iso < dtIniISO) {
+        if (!bestPostISO || iso > bestPostISO) { bestPostISO = iso; bestPost = d; }
+      }
+    }
+    if (bestPostISO) {
+      const total = findByISO(bestPostISO);
+      if (total !== null) return { value: total, dtLabel: fmtPtDate(bestPost), date: bestPost };
+    }
+
+    // Usa lançamento da última terça
+    const tercaTotal = findByISO(lastTercaISO);
+    if (tercaTotal !== null) return { value: tercaTotal, dtLabel: fmtPtDate(lastTerca), date: lastTerca };
+    return null;
+
+  } else if (isPrimeiroDiaMes) {
+    // 1º do mês: busca exata no último dia do mês anterior (recuando domingo → sábado)
+    const targetDate = new Date(dtIniDate.getFullYear(), dtIniDate.getMonth(), 0);
+    targetDate.setHours(0, 0, 0, 0);
+    if (targetDate.getDay() === 0) targetDate.setDate(targetDate.getDate() - 1);
+    const total = findByISO(localISODate(targetDate));
+    if (total !== null) return { value: total, dtLabel: fmtPtDate(targetDate), date: targetDate };
+    return null;
+
+  } else {
+    // Outro dia: dia anterior; se domingo → sábado
+    const targetDate = new Date(dtIniDate);
+    targetDate.setDate(targetDate.getDate() - 1);
+    targetDate.setHours(0, 0, 0, 0);
+    if (targetDate.getDay() === 0) targetDate.setDate(targetDate.getDate() - 1);
+    const total = findByISO(localISODate(targetDate));
+    if (total !== null) return { value: total, dtLabel: fmtPtDate(targetDate), date: targetDate };
+    return null;
+  }
+}
+
+// getPrePeriodLaunchStock: busca o lançamento MAIS RECENTE estritamente antes de
+// dtIni, sem restrição de dia-da-semana ou categoria.
+// Usado pelo card de resumo do modal de detalhamento (Est. Inicial) e pelo
+// buildSnapshot da visão micro, para exibir o saldo anterior ao período
+// independente de quando o último lançamento ocorreu.
+// Diferente de getPrevDayLaunchStock (que exige o dia exato anterior conforme
+// categoria), aqui percorremos todo o histórico e retornamos o mais recente
+// antes de dtIni.
 function getPrePeriodLaunchStock({ central, material, dtIni, dtFim }) {
   const dtIniDate = dtIni instanceof Date ? new Date(dtIni) : new Date(dtIni);
   if (isNaN(dtIniDate)) return null;
 
   const materialKey = material || '—';
   const { byCentralMat } = getLancIndex();
-  const matMap = byCentralMat.get(central);
-  if (!matMap) return null;
-  const arr = matMap.get(materialKey) || [];
+  const arr = byCentralMat.get(central)?.get(materialKey) || [];
   if (!arr.length) return null;
 
-  // ── 1. Dia-alvo: último dia do mês anterior, pulando domingo ──
-  const targetDate = new Date(dtIniDate.getFullYear(), dtIniDate.getMonth(), 0); // último dia mês anterior
-  targetDate.setHours(0, 0, 0, 0);
-  if (targetDate.getDay() === 0) targetDate.setDate(targetDate.getDate() - 1); // domingo → sábado
-  const targetISO = localISODate(targetDate);
-
-  // ── 2. Busca exata no dia-alvo ──
-  let total = 0, found = false;
+  // Agrupa lançamentos por data ISO → total de peso por dia
+  const byDay = new Map();
   for (const rec of arr) {
     const d = parseDate(rec.dtLanc);
     if (!d) continue;
-    if (localISODate(d) === targetISO) { total += num(rec.peso); found = true; }
+    const iso = localISODate(d);
+    if (!byDay.has(iso)) byDay.set(iso, { total: 0, date: d });
+    byDay.get(iso).total += num(rec.peso);
   }
-  if (found) return { value: total, dtLabel: fmtPtDate(targetDate) };
 
-  // Sem lançamento no dia-alvo: retorna null (sem fallback para dentro do período).
-  return null;
+  // Encontra a data mais recente estritamente antes de dtIni
+  const dtIniISO = localISODate(dtIniDate);
+  let bestISO = null;
+  for (const iso of byDay.keys()) {
+    if (iso < dtIniISO) {
+      if (!bestISO || iso > bestISO) bestISO = iso;
+    }
+  }
+
+  if (!bestISO) return null;
+  const entry = byDay.get(bestISO);
+  return { value: entry.total, dtLabel: fmtPtDate(entry.date), date: entry.date };
 }
 
 // ── EST. FINAL: soma todos os lançamentos do último dia não-domingo do período.

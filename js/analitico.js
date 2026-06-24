@@ -495,7 +495,24 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
     allMatsSorted.forEach((mat, matIdx) => {
       const lancsMat = lancsByMat.get(mat) || [];
       const sapMat = sapByMat.get(mat) || [];
+
+      // ── Classificação de categoria do material ──────────────────────────
+      // Calculado antes do buildSnapshot para poder usar matCatKey no preCarry
+      const matCategoria = (lancsMat[0]?.categoria || sapMat[0]?.categoria || '').trim().toUpperCase();
+      const matCatKey    = detectCatKey(matCategoria) || detectCatFromMat(mat);
+      const isSemanal    = matCatKey === 'agregado';
+
+      // ── Est. Inicial do card de resumo ──────────────────────────────────
+      // getPrePeriodLaunchStock: busca o lançamento mais recente antes de dtIni
+      // usando a regra neutra (sem considerar categoria/dia-da-semana).
+      // Garante que o card de resumo mostre o saldo anterior independente de ser
+      // um material de lançamento semanal ou diário.
       const prev = getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni, dtFim });
+
+      // ── Est. Inicial do carry da tabela de dias ──────────────────────────
+      // getPrevDayLaunchStock: busca usando regras por categoria
+      // (agregado → última terça, 1º do mês → último dia do mês anterior, demais → dia anterior).
+      const preCarry = getPrevDayLaunchStock({ central: r.central, material: mat, dtIni, catKey: matCatKey });
       const fim  = getLastPeriodLaunchStockWithFallback({ central: r.central, material: mat, dtIni, dtFim });
       const snapshot = buildSnapshot({
         lancs: lancsMat,
@@ -519,25 +536,18 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
       const entEntries = snapshot.entRecords.map(toEntry);
       const saiEntries = snapshot.saiRecords.map(toEntry);
 
-      // ── Classificação de categoria do material ──────────────────────────
-      // Categorias de lançamento SEMANAL: AGREGADO (toda terça-feira)
-      // Usa detectCatKey + detectCatFromMat — mesma lógica do resto do sistema
-      const matCategoria = (lancsMat[0]?.categoria || sapMat[0]?.categoria || '').trim().toUpperCase();
-      const matCatKey    = detectCatKey(matCategoria) || detectCatFromMat(mat);
-      const isSemanal    = matCatKey === 'agregado';
-
-      // ── Est. Inicial do primeiro dia: usa getPrePeriodLaunchStock ────
-      // Mesma lógica do card de resumo: prioriza o último dia do mês anterior,
-      // sem fallback para dentro do período.
-      const preCarry = getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni, dtFim });
+      // Quando AUSENTE: busca os dois lançamentos mais próximos para tooltip informativo
+      const absentNearest = preCarry ? null
+        : getNearestLancsForAbsent({ central: r.central, material: mat, dtIni, dtFim });
 
       // ── Carry entre períodos (diário ou semanal) ─────────────────────
       // carry.date = data do último lançamento real, usada para delimitar o SAP
       // acumulado desde aquele dia até o próximo lançamento (em vez de janela fixa de 6 dias).
       //   carry = { value, isEstimated, date }
       //   isEstimated = true quando o saldo veio do Est. Teórico (sem lançamento)
+      // carry.date = data real do lançamento encontrado (usada para sapFrom no próximo lançamento)
       let carry = preCarry
-        ? { value: preCarry.value, isEstimated: false, date: new Date(dtIni.getFullYear(), dtIni.getMonth(), 0) }
+        ? { value: preCarry.value, isEstimated: false, date: preCarry.date }
         : null; // null = sem histórico anterior conhecido
 
       // Para semanais: rastreia se a semana corrente já teve lançamento
@@ -743,7 +753,8 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
           pesoFim: snapshot.pesoFim,
           dtFimLabel: snapshot.dtFimLabel,
           fimFallback: fim?.fallback ?? false,
-          diff: snapshot.diff
+          diff: snapshot.diff,
+          absentNearest
         },
         days: dailyRows
       });
@@ -773,13 +784,13 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
               ${escapeHtml(mat)}
             </span>
           </td>
-          <td class="td-mono" style="color:var(--text2);font-size:11px">${snapshot.pesoIniAusente ? '<span class="absent-badge" title="Sem lançamento no dia anterior ao período">ausente</span>' : snapshot.dtIniLabel}</td>
+          <td class="td-mono" style="color:var(--text2);font-size:11px">${snapshot.pesoIniAusente ? `<span class='absent-badge' data-absent-tooltip='${buildAbsentTooltip(absentNearest)}' style='cursor:help'>AUSENTE</span>` : snapshot.dtIniLabel}</td>
           <td class="td-mono" style="color:${snapshot.pesoIniAusente ? 'var(--text3)' : 'var(--text)'}">${snapshot.pesoIniAusente ? '—' : fmtKg(snapshot.pesoIni)}</td>
           <td>${buildAnaliticoDetailBreakdown(entEntries, snapshot.totalEnt, 'var(--green)', 'Entradas')}</td>
           <td>${buildAnaliticoDetailBreakdown(saiEntries, snapshot.totalSai, 'var(--red)', 'Saídas')}</td>
           <td class="td-mono" style="color:var(--text2);font-size:11px">${
             snapshot.pesoFimAusente
-              ? '<span class="absent-badge" title="Sem lançamento no período">ausente</span>'
+              ? `<span class='absent-badge' data-absent-tooltip='${buildAbsentTooltip(absentNearest)}' style='cursor:help'>AUSENTE</span>`
               : (fim?.fallback
                   ? `<span style="color:var(--amber)" title="Lançamento mais recente encontrado no período (não é o último dia)">${snapshot.dtFimLabel} <i class='ti ti-clock-hour-4' style='font-size:9px'></i></span>`
                   : snapshot.dtFimLabel)
@@ -930,11 +941,11 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
             <thead>
               <tr>
                 <th>Material</th>
-                <th>Dt. 1º Lançamento</th>
-                <th>Est. Inicial<br><span style="font-size:9px;font-weight:400;opacity:.7">(1º Lançamento)</span></th>
+                <th>Dt. Est. Inicial</th>
+                <th>Est. Inicial<br><span style="font-size:9px;font-weight:400;opacity:.7">(Saldo Anterior)</span></th>
                 <th>Entradas<br><span style="font-size:9px;font-weight:400;opacity:.7">(por código)</span></th>
                 <th>Saídas<br><span style="font-size:9px;font-weight:400;opacity:.7">(por código)</span></th>
-                <th>Dt. Últ. Lançamento</th>
+                <th>Dt. Est. Final</th>
                 <th>Est. Final<br><span style="font-size:9px;font-weight:400;opacity:.7">(Últ. Lançamento)</span></th>
                 <th>Est. Teórico<br><span style="font-size:9px;font-weight:400;opacity:.7">(Ini+Ent+Sai)</span></th>
                 <th>Variação<br><span style="font-size:9px;font-weight:400;opacity:.7">(Real − Teórico)</span></th>
@@ -952,6 +963,7 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
     card.dataset.regional = (filialRec?.regional || '').trim();
 
     card.querySelectorAll('.micro-table-wrap table').forEach(makeResizable);
+    if (typeof initAbsentTooltips === 'function') initAbsentTooltips(card);
 
     // Store card for grouping below
     _cardBuffer.push(card);
@@ -2626,4 +2638,15 @@ window._inv_helpers = {
 
     return custoMedioPorMat;
   }
-};
+};// Monta o texto do tooltip para badges AUSENTE na tabela de materiais
+function buildAbsentTooltip(nearest) {
+  const before = nearest?.before
+    ? `Último antes do período: ${nearest.before.dtLabel} — ${fmtKg(nearest.before.value)}`
+    : `Último antes do período: não encontrado`;
+  const after = nearest?.after
+    ? `Primeiro no período: ${nearest.after.dtLabel} — ${fmtKg(nearest.after.value)}`
+    : `Primeiro no período: não encontrado`;
+  return `${before}|${after}`;
+}
+
+
