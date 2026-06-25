@@ -1423,25 +1423,42 @@ function togglePendConsiderados(central, tipo) {
   window._pendConsiderados[central][tipo] = !window._pendConsiderados[central][tipo];
 
   if (window.__analiticoResults && window.__analiticoDtIni && window.__analiticoDtFim) {
-    // Salva quais cards estão abertos antes do re-render
-    const abertos = new Set();
+    // Salva estado aberto/fechado dos regionais (chave: id do chevron rchev-*)
+    const regionaisAbertos = new Set();
+    document.querySelectorAll('#an-micro-container .regional-group').forEach(group => {
+      const body = group.querySelector('.regional-group-body');
+      const chev = group.querySelector('[id^="rchev-"]');
+      if (body && body.classList.contains('open') && chev) regionaisAbertos.add(chev.id);
+    });
+
+    // Salva estado aberto/fechado dos cards de central (chave: data-central)
+    const cardsAbertos = new Set();
     document.querySelectorAll('#an-micro-container .micro-filial-card').forEach(card => {
       const body = card.querySelector('.micro-filial-body');
-      if (body && body.classList.contains('open')) abertos.add(card.dataset.central);
+      if (body && body.classList.contains('open')) cardsAbertos.add(card.dataset.central);
     });
 
     renderAnaliticoMicro(window.__analiticoResults, window.__analiticoDtIni, window.__analiticoDtFim);
 
-    // Restaura estado aberto/fechado após re-render
-    if (abertos.size > 0) {
-      document.querySelectorAll('#an-micro-container .micro-filial-card').forEach(card => {
-        if (!abertos.has(card.dataset.central)) return;
-        const body = card.querySelector('.micro-filial-body');
-        const chev = card.querySelector('[id^="chev-"]');
+    // Restaura regionais
+    document.querySelectorAll('#an-micro-container .regional-group').forEach(group => {
+      const body = group.querySelector('.regional-group-body');
+      const chev = group.querySelector('[id^="rchev-"]');
+      if (chev && regionaisAbertos.has(chev.id)) {
         if (body) body.classList.add('open');
-        if (chev) chev.style.transform = 'rotate(180deg)';
-      });
-    }
+        group.classList.remove('collapsed');
+        chev.style.transform = '';
+      }
+    });
+
+    // Restaura cards de central
+    document.querySelectorAll('#an-micro-container .micro-filial-card').forEach(card => {
+      if (!cardsAbertos.has(card.dataset.central)) return;
+      const body = card.querySelector('.micro-filial-body');
+      const chev = card.querySelector('[id^="chev-"]');
+      if (body) body.classList.add('open');
+      if (chev) chev.style.transform = 'rotate(180deg)';
+    });
   }
 }
 
