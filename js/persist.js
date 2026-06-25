@@ -256,12 +256,16 @@ async function persistStateNow() {
     if (db) {
       await idbPut(db, 'meta', { version: STATE_VERSION, savedAt: snapshot.savedAt, pendingWrite: true }).catch(() => {});
 
-      // SAP em chunks — já é assíncrono internamente
-      await saveSapChunks(db, snapshot.sap || []);
-      await new Promise(r => setTimeout(r, 0));
-
+      // Grava o snapshot principal ANTES dos chunks SAP — garante que
+      // IDB_STATE_KEY já contém o estado atual mesmo que o browser feche
+      // durante saveSapChunks (que pode ser lento com 600k+ registros).
       const snapshotSemSap = { ...snapshot, sap: [] };
       await idbPut(db, IDB_STATE_KEY, snapshotSemSap);
+      await new Promise(r => setTimeout(r, 0));
+
+      // SAP em chunks — mais lento, mas snapshot principal já está seguro
+      await saveSapChunks(db, snapshot.sap || []);
+      await new Promise(r => setTimeout(r, 0));
 
       const keysParaSalvar = saveSnapshotKeys.filter(k => k !== 'sap');
       // Grava chaves individuais em batches para não travar
@@ -349,8 +353,11 @@ async function loadState() {
       }
 
       let saved = await idbGet(db, IDB_STATE_KEY);
+      // Rastreia se o snapshot unificado existe — necessário para a comparação
+      // com o emergency save (só é significativa quando temos um savedAt confiável).
+      const idbSnapshotFound = saved !== null && typeof saved === 'object';
 
-      if (!saved || typeof saved !== 'object') {
+      if (!idbSnapshotFound) {
         saved = {};
         for (const key of saveSnapshotKeys) {
           const value = await idbGet(db, key);
@@ -366,6 +373,29 @@ async function loadState() {
         // Fallback: tenta a chave legada 'sap' individual
         const sapLegacy = await idbGet(db, 'sap').catch(() => null);
         if (Array.isArray(sapLegacy) && sapLegacy.length > 0) saved.sap = sapLegacy;
+      }
+
+      // ── Verifica emergency save no localStorage ────────────────────────
+      // O pagehide/beforeunload grava um snapshot síncrono (sem SAP) que pode
+      // ser mais recente que o último persist assíncrono completo no IDB —
+      // ex: mudanças feitas durante o debounce de 1500ms ou enquanto os chunks
+      // SAP ainda estavam sendo gravados.
+      // Só compara quando IDB_STATE_KEY existe: garante que saved.savedAt é
+      // o timestamp confiável do último persist completo.
+      if (idbSnapshotFound) {
+        try {
+          const lsRaw = localStorage.getItem(legacyStateKey);
+          if (lsRaw) {
+            const lsParsed = safeJSONParse(lsRaw, null);
+            if (lsParsed && typeof lsParsed === 'object' &&
+                (lsParsed.savedAt || 0) > (saved.savedAt || 0)) {
+              console.info('[Persist] Emergency save mais recente que IDB — aplicando campos não-SAP do localStorage.');
+              // SAP permanece dos chunks IDB — fonte mais completa
+              // (emergency save sempre tem sap: [])
+              saved = { ...lsParsed, sap: saved.sap };
+            }
+          }
+        } catch (_) {}
       }
 
       if (isLoadingOverlayVisible()) updateLoadingOverlay('Aplicando o estado salvo na interface...', 'Carregando informações');
@@ -402,3 +432,38 @@ async function loadState() {
     stateHydrated = true;
   }
 }
+
+// ── Emergency save (pagehide / beforeunload) ──────────────────────────────
+// Captura mudanças que ainda estão no debounce (1500ms) no momento em que o
+// usuário recarrega ou fecha a aba. Usa localStorage síncrono — única opção
+// disponível nesses eventos. SAP excluído: os chunks IDB são a fonte
+// autoritativa e não cabem no localStorage.
+// No próximo boot, loadState() compara o savedAt deste snapshot com o do
+// IDB_STATE_KEY e usa o mais recente para os campos não-SAP.
+function _emergencySave() {
+  clearTimeout(persistTimer); // cancela debounce pendente
+  if (!stateHydrated) return;
+  try {
+    const snapshot = {
+      version:        STATE_VERSION,
+      savedAt:        Date.now(),
+      configs:        state.configs,
+      filiais:        state.filiais,
+      materiais:      state.materiais,
+      entradas:       state.entradas,
+      saidas:         state.saidas,
+      lancamentos:    state.lancamentos,
+      sap:            [],  // excluído — chunks IDB são a fonte autoritativa
+      producao:       state.producao,
+      imports:        state.imports,
+      ocorrencias:    state.ocorrencias   || [],
+      acoesRelatorio: state.acoesRelatorio || []
+    };
+    localStorage.setItem(legacyStateKey, JSON.stringify(snapshot));
+    console.info('[Persist] Emergency save executado.');
+  } catch (e) {
+    console.warn('[Persist] Emergency save falhou:', e);
+  }
+}
+window.addEventListener('pagehide',     _emergencySave);
+window.addEventListener('beforeunload', _emergencySave);

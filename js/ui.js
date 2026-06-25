@@ -1157,6 +1157,13 @@ function closeBreakdownModal() {
  *       the last "-" and compare against the OS number (also stripped of
  *       leading zeros), so "I004-6047" → "6047" matches os "6047".
  */
+// ── Estado global: pendentes considerados no analítico ──────────────────
+// _pendConsiderados: { [central]: { nf: bool, os: bool } }
+// _pendCache:        { [central]: { pendNF: [...], pendOS: [...] } }
+// Populados por buildPendIntegSection; consumidos por renderAnaliticoMicro.
+window._pendConsiderados = window._pendConsiderados || {};
+window._pendCache        = window._pendCache        || {};
+
 function calcPendentesIntegracao({ central, dtIni, dtFim, sapNoPeriodo }) {
 
   /**
@@ -1234,10 +1241,12 @@ function calcPendentesIntegracao({ central, dtIni, dtFim, sapNoPeriodo }) {
 
   // NFs pendentes: entradas desta central no período cujo NF não aparece no SAP
   // Only check mov 101 and 801 (CODIGOS_ENTRADA).
+  // Usa dtDescarga para o filtro de período (data relevante para o período de análise);
+  // fallback para dtEmissao caso dtDescarga não esteja preenchida.
   const pendNF = (state.entradas || []).filter(r => {
     const cent = (r.centralDestino || r.centralCompra || '');
     if (cent !== central) return false;
-    if (!inPeriodLocal(r.dtEmissao)) return false;
+    if (!inPeriodLocal(r.dtDescarga || r.dtEmissao)) return false;
     if (!r.nf) return false; // sem NF cadastrada — ignorar
     const nfNorm = normNF(r.nf);
     return !sapNFRefs.has(nfNorm);
@@ -1265,6 +1274,10 @@ function buildPendIntegSection({ central, dtIni, dtFim, sapNoPeriodo }) {
   const nfCount = pendNF.length;
   const osCount = pendOS.length;
 
+  // Salva no cache global — consumido por renderAnaliticoMicro ao injetar sintéticos
+  window._pendCache[central] = { pendNF, pendOS };
+  const pendState = window._pendConsiderados[central] || {};
+
   let chipsHtml = '';
 
   if (nfCount === 0 && osCount === 0) {
@@ -1276,8 +1289,9 @@ function buildPendIntegSection({ central, dtIni, dtFim, sapNoPeriodo }) {
     if (nfCount > 0) {
       const encoded = encodeURIComponent(JSON.stringify(pendNF.map(r => ({
         nf: r.nf, material: r.material || '—', peso: r.peso || 0,
-        um: r.um || 'kg', dtEmissao: r.dtEmissao || '—', fornecedor: r.fornecedor || '—'
+        um: r.um || 'kg', dtEmissao: r.dtEmissao || '—', dtDescarga: r.dtDescarga || '—', fornecedor: r.fornecedor || '—'
       }))));
+      const nfAtivo = !!pendState.nf;
       chipsHtml += `<button class="pend-integ-chip pend-integ-chip-nf"
         onclick="event.stopPropagation(); openPendIntegModal(event.currentTarget)"
         data-tipo="NF" data-central="${escapeHtml(central)}" data-items="${encoded}"
@@ -1285,6 +1299,12 @@ function buildPendIntegSection({ central, dtIni, dtFim, sapNoPeriodo }) {
         <i class="ti ti-file-invoice" style="font-size:13px"></i>
         NFs pendentes SAP
         <span class="pend-count-badge">${nfCount}</span>
+      </button>
+      <button class="pend-integ-chip pend-integ-chip-nf pend-considerar-btn${nfAtivo ? ' pend-considerar-ativo' : ''}"
+        onclick="event.stopPropagation(); togglePendConsiderados('${escapeHtml(central)}','nf')"
+        title="${nfAtivo ? 'Clique para desconsiderar as NFs pendentes do cálculo' : 'Clique para incluir as NFs pendentes no cálculo'}">
+        <i class="ti ${nfAtivo ? 'ti-eye-off' : 'ti-eye-plus'}" style="font-size:13px"></i>
+        ${nfAtivo ? 'Desconsiderar NFs' : 'Considerar NFs'}
       </button>`;
     }
     if (osCount > 0) {
@@ -1292,6 +1312,7 @@ function buildPendIntegSection({ central, dtIni, dtFim, sapNoPeriodo }) {
         os: r.os, material: r.material || '—', peso: r.peso || 0,
         um: r.um || 'kg', dtEmissao: r.dtEmissao || '—', fornecedor: r.fornecedor || '—'
       }))));
+      const osAtivo = !!pendState.os;
       chipsHtml += `<button class="pend-integ-chip pend-integ-chip-os"
         onclick="event.stopPropagation(); openPendIntegModal(event.currentTarget)"
         data-tipo="OS" data-central="${escapeHtml(central)}" data-items="${encoded}"
@@ -1299,6 +1320,12 @@ function buildPendIntegSection({ central, dtIni, dtFim, sapNoPeriodo }) {
         <i class="ti ti-clipboard-list" style="font-size:13px"></i>
         OS pendentes SAP
         <span class="pend-count-badge">${osCount}</span>
+      </button>
+      <button class="pend-integ-chip pend-integ-chip-os pend-considerar-btn${osAtivo ? ' pend-considerar-ativo' : ''}"
+        onclick="event.stopPropagation(); togglePendConsiderados('${escapeHtml(central)}','os')"
+        title="${osAtivo ? 'Clique para desconsiderar as OS pendentes do cálculo' : 'Clique para incluir as OS pendentes no cálculo'}">
+        <i class="ti ${osAtivo ? 'ti-eye-off' : 'ti-eye-plus'}" style="font-size:13px"></i>
+        ${osAtivo ? 'Desconsiderar OS' : 'Considerar OS'}
       </button>`;
     }
   }
@@ -1341,6 +1368,7 @@ function openPendIntegModal(trigger) {
       <th>Material</th>
       <th>Fornecedor</th>
       <th>Dt. Emissão</th>
+      <th>Dt. Descarga</th>
       <th style="text-align:right">Quantidade</th>
     </tr>`;
     tbody.innerHTML = items.map(it => `<tr>
@@ -1348,6 +1376,7 @@ function openPendIntegModal(trigger) {
       <td>${escapeHtml(String(it.material || '—'))}</td>
       <td class="td-muted">${escapeHtml(String(it.fornecedor || '—'))}</td>
       <td class="td-muted">${escapeHtml(String(it.dtEmissao || '—'))}</td>
+      <td class="td-muted">${escapeHtml(String(it.dtDescarga || '—'))}</td>
       <td class="td-mono" style="text-align:right;color:var(--green)">${_fmt(_num(it.peso))} ${escapeHtml(String(it.um || 'kg'))}</td>
     </tr>`).join('');
   } else {
@@ -1381,7 +1410,42 @@ function closePendIntegModal() {
   overlay.setAttribute('aria-hidden', 'true');
 }
 
-Object.assign(window, { openBreakdownModal, closeBreakdownModal, openPendIntegModal, closePendIntegModal });
+/**
+ * Ativa/desativa a consideração de pendentes (NF ou OS) no cálculo do analítico.
+ * Chamado pelos botões "Considerar NFs / OS" nos cards de integração SAP.
+ * @param {string} central - Nome da central
+ * @param {'nf'|'os'} tipo - Tipo de pendente a alternar
+ */
+function togglePendConsiderados(central, tipo) {
+  if (!window._pendConsiderados[central]) {
+    window._pendConsiderados[central] = { nf: false, os: false };
+  }
+  window._pendConsiderados[central][tipo] = !window._pendConsiderados[central][tipo];
+
+  if (window.__analiticoResults && window.__analiticoDtIni && window.__analiticoDtFim) {
+    // Salva quais cards estão abertos antes do re-render
+    const abertos = new Set();
+    document.querySelectorAll('#an-micro-container .micro-filial-card').forEach(card => {
+      const body = card.querySelector('.micro-filial-body');
+      if (body && body.classList.contains('open')) abertos.add(card.dataset.central);
+    });
+
+    renderAnaliticoMicro(window.__analiticoResults, window.__analiticoDtIni, window.__analiticoDtFim);
+
+    // Restaura estado aberto/fechado após re-render
+    if (abertos.size > 0) {
+      document.querySelectorAll('#an-micro-container .micro-filial-card').forEach(card => {
+        if (!abertos.has(card.dataset.central)) return;
+        const body = card.querySelector('.micro-filial-body');
+        const chev = card.querySelector('[id^="chev-"]');
+        if (body) body.classList.add('open');
+        if (chev) chev.style.transform = 'rotate(180deg)';
+      });
+    }
+  }
+}
+
+Object.assign(window, { openBreakdownModal, closeBreakdownModal, openPendIntegModal, closePendIntegModal, togglePendConsiderados });
 
 // ── Conflict Resolution Modal ───────────────────────────────
 let _lrcDetailKey = null;
@@ -2496,45 +2560,10 @@ function getPrevDayLaunchStock({ central, material, dtIni, catKey }) {
   }
 }
 
-// getPrePeriodLaunchStock: busca o lançamento MAIS RECENTE estritamente antes de
-// dtIni, sem restrição de dia-da-semana ou categoria.
-// Usado pelo card de resumo do modal de detalhamento (Est. Inicial) e pelo
-// buildSnapshot da visão micro, para exibir o saldo anterior ao período
-// independente de quando o último lançamento ocorreu.
-// Diferente de getPrevDayLaunchStock (que exige o dia exato anterior conforme
-// categoria), aqui percorremos todo o histórico e retornamos o mais recente
-// antes de dtIni.
+// getPrePeriodLaunchStock: mesma lógica de getPrevDayLaunchStock
+// Ambos usam a mesma regra — mantido por compatibilidade com chamadas existentes.
 function getPrePeriodLaunchStock({ central, material, dtIni, dtFim }) {
-  const dtIniDate = dtIni instanceof Date ? new Date(dtIni) : new Date(dtIni);
-  if (isNaN(dtIniDate)) return null;
-
-  const materialKey = material || '—';
-  const { byCentralMat } = getLancIndex();
-  const arr = byCentralMat.get(central)?.get(materialKey) || [];
-  if (!arr.length) return null;
-
-  // Agrupa lançamentos por data ISO → total de peso por dia
-  const byDay = new Map();
-  for (const rec of arr) {
-    const d = parseDate(rec.dtLanc);
-    if (!d) continue;
-    const iso = localISODate(d);
-    if (!byDay.has(iso)) byDay.set(iso, { total: 0, date: d });
-    byDay.get(iso).total += num(rec.peso);
-  }
-
-  // Encontra a data mais recente estritamente antes de dtIni
-  const dtIniISO = localISODate(dtIniDate);
-  let bestISO = null;
-  for (const iso of byDay.keys()) {
-    if (iso < dtIniISO) {
-      if (!bestISO || iso > bestISO) bestISO = iso;
-    }
-  }
-
-  if (!bestISO) return null;
-  const entry = byDay.get(bestISO);
-  return { value: entry.total, dtLabel: fmtPtDate(entry.date), date: entry.date };
+  return getPrevDayLaunchStock({ central, material, dtIni });
 }
 
 // ── EST. FINAL: soma todos os lançamentos do último dia não-domingo do período.
@@ -2857,6 +2886,400 @@ function loadHealthConfigInputs() {
 }
 
 Object.assign(window, { salvarHealthConfig, loadHealthConfigInputs });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// BACKUP / RESTAURAR POR MÓDULOS
+// ══════════════════════════════════════════════════════════════════════════════
+
+const _BKP_MODULES = [
+  { key: 'entradas',    label: 'Entradas (NF)',        icon: 'ti-package-import',  color: 'var(--green)'  },
+  { key: 'saidas',      label: 'Saídas (OS)',           icon: 'ti-package-export',  color: 'var(--red)'    },
+  { key: 'lancamentos', label: 'Lançamentos',           icon: 'ti-clipboard-list',  color: 'var(--teal)'   },
+  { key: 'sap',         label: 'SAP',                   icon: 'ti-database',        color: 'var(--purple)' },
+  { key: 'producao',    label: 'Produção',              icon: 'ti-building-factory',color: 'var(--amber)'  },
+  { key: 'filiais',     label: 'Filiais / Centrais',   icon: 'ti-building',        color: 'var(--accent)' },
+  { key: 'materiais',   label: 'Materiais',             icon: 'ti-box',             color: 'var(--blue)'   },
+  { key: 'configs',     label: 'Configurações',         icon: 'ti-settings',        color: 'var(--text2)'  },
+  { key: 'ocorrencias', label: 'Ocorrências',           icon: 'ti-alert-circle',    color: 'var(--red)'    },
+  { key: 'imports',     label: 'Histórico de Importações', icon: 'ti-history',     color: 'var(--text3)'  },
+];
+
+// Módulos selecionados para exportar (persiste durante a sessão do modal)
+let _bkpSelected = new Set(_BKP_MODULES.map(m => m.key));
+let _bkpMode = 'exportar'; // 'exportar' | 'restaurar'
+let _bkpParsedFile = null; // arquivo carregado para restaurar
+
+function abrirModalBackup(modo) {
+  _bkpMode = modo || 'exportar';
+  _bkpParsedFile = null;
+  _renderBkpModuleList();
+  bkpSwitchTab(_bkpMode);
+  document.getElementById('bkp-preview').style.display = 'none';
+  openModal('modal-backup');
+}
+
+function bkpSwitchTab(modo) {
+  _bkpMode = modo;
+  const isExportar = modo === 'exportar';
+
+  document.getElementById('bkp-panel-exportar').style.display = isExportar ? '' : 'none';
+  document.getElementById('bkp-panel-restaurar').style.display = isExportar ? 'none' : '';
+
+  const btnExp = document.getElementById('bkp-tab-exportar');
+  const btnRes = document.getElementById('bkp-tab-restaurar');
+  if (btnExp) btnExp.classList.toggle('btn-primary', isExportar);
+  if (btnRes) btnRes.classList.toggle('btn-primary', !isExportar);
+
+  const iconEl  = document.getElementById('bkp-btn-icon');
+  const labelEl = document.getElementById('bkp-btn-label');
+  if (iconEl)  iconEl.className = 'ti ' + (isExportar ? 'ti-download' : 'ti-database-import');
+  if (labelEl) labelEl.textContent = isExportar ? 'Exportar selecionados' : 'Restaurar selecionados';
+
+  const subEl = document.getElementById('bkp-modal-sub');
+  if (subEl) subEl.textContent = isExportar
+    ? 'Selecione os módulos para exportar'
+    : 'Carregue um arquivo e escolha o que restaurar';
+}
+
+function _renderBkpModuleList() {
+  const container = document.getElementById('bkp-module-list');
+  if (!container) return;
+
+  container.innerHTML = _BKP_MODULES.map(m => {
+    const count = (state[m.key] || []).length;
+    const checked = _bkpSelected.has(m.key);
+    return `
+      <label style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--surface2);
+        border-radius:8px;cursor:pointer;border:1.5px solid ${checked ? 'var(--accent)' : 'transparent'};
+        transition:border-color .15s" id="bkp-row-${m.key}">
+        <input type="checkbox" ${checked ? 'checked' : ''} style="display:none"
+          id="bkp-chk-${m.key}" onchange="bkpToggleModule('${m.key}')">
+        <span style="width:30px;height:30px;border-radius:7px;display:flex;align-items:center;justify-content:center;
+          background:color-mix(in srgb, ${m.color} 15%, transparent);color:${m.color};font-size:15px;flex-shrink:0">
+          <i class="ti ${m.icon}"></i>
+        </span>
+        <span style="flex:1;font-size:13px;font-weight:500;color:var(--text1)">${m.label}</span>
+        <span style="font-size:11px;font-family:var(--mono);color:var(--text3);background:var(--surface3);
+          padding:2px 7px;border-radius:5px">${count.toLocaleString('pt-BR')} reg.</span>
+        <i class="ti ${checked ? 'ti-square-check-filled' : 'ti-square'}" style="color:${checked ? 'var(--accent)' : 'var(--text3)'}"></i>
+      </label>`;
+  }).join('');
+}
+
+function bkpToggleModule(key) {
+  if (_bkpSelected.has(key)) {
+    _bkpSelected.delete(key);
+  } else {
+    _bkpSelected.add(key);
+  }
+  // Re-render somente a linha alterada para melhor performance
+  const row = document.getElementById('bkp-row-' + key);
+  const mod = _BKP_MODULES.find(m => m.key === key);
+  if (row && mod) {
+    const checked = _bkpSelected.has(key);
+    row.style.borderColor = checked ? 'var(--accent)' : 'transparent';
+    const icon = row.querySelector('.ti-square-check-filled, .ti-square');
+    if (icon) { icon.className = 'ti ' + (checked ? 'ti-square-check-filled' : 'ti-square'); icon.style.color = checked ? 'var(--accent)' : 'var(--text3)'; }
+  }
+}
+
+function bkpSelectAll(select) {
+  _BKP_MODULES.forEach(m => {
+    const chk = document.getElementById('bkp-chk-' + m.key);
+    if (chk) chk.checked = select;
+    if (select) _bkpSelected.add(m.key); else _bkpSelected.delete(m.key);
+  });
+  _renderBkpModuleList();
+}
+
+function bkpConfirmar() {
+  if (_bkpMode === 'exportar') {
+    _exportarModulos();
+  } else {
+    _restaurarModulosConfirmar();
+  }
+}
+
+// ── EXPORTAR ─────────────────────────────────────────────────────────────────
+
+function _exportarModulos() {
+  if (_bkpSelected.size === 0) {
+    toast('Selecione ao menos um módulo para exportar', 'error');
+    return;
+  }
+
+  try {
+    const now   = new Date();
+    const stamp = localISODate(now) + '_'
+      + String(now.getHours()).padStart(2,'0')
+      + String(now.getMinutes()).padStart(2,'0');
+
+    const lsGet = key => { try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch(e) { return null; } };
+
+    // Metadados do arquivo
+    const selectedKeys = [..._bkpSelected];
+    const header = {
+      _version:    'analyticsys_backup_v3',
+      _exportedAt: now.toLocaleString('pt-BR'),
+      _modules:    selectedKeys,
+      _counts:     {},
+    };
+    selectedKeys.forEach(k => { header._counts[k] = (state[k] || []).length; });
+
+    // Inclui dados auxiliares sempre
+    header._notas      = lsGet('analyticsys_notes_v2');
+    header._atalhos    = lsGet('analyticsys_shortcuts_v1');
+    header._fechamento = lsGet('analyticsys_fech_v1');
+
+    // Constrói JSON em partes (evita limite de string)
+    const parts = [];
+    parts.push(JSON.stringify(header).slice(0, -1)); // remove }
+
+    for (const key of selectedKeys) {
+      const arr = state[key] || [];
+      parts.push(',"' + key + '":');
+      if (arr.length === 0) {
+        parts.push('[]');
+      } else {
+        parts.push('[');
+        const CHUNK = 5000;
+        for (let i = 0; i < arr.length; i += CHUNK) {
+          const slice = arr.slice(i, i + CHUNK);
+          if (i > 0) parts.push(',');
+          parts.push(JSON.stringify(slice).slice(1, -1));
+        }
+        parts.push(']');
+      }
+    }
+
+    parts.push('}');
+
+    const blob = new Blob(parts, { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    // Se exportação parcial, inclui nomes dos módulos no nome do arquivo
+    const suffix = selectedKeys.length === _BKP_MODULES.length
+      ? 'completo'
+      : selectedKeys.join('-');
+    a.download = `analyticsys_backup_${suffix}_${stamp}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+
+    closeModal('modal-backup');
+    const total = selectedKeys.reduce((s, k) => s + (state[k] || []).length, 0);
+    toast(`Backup exportado — ${selectedKeys.length} módulo(s), ${total.toLocaleString('pt-BR')} registros`);
+  } catch(err) {
+    console.error('Erro ao exportar backup:', err);
+    toast('Erro ao gerar backup: ' + err.message, 'error');
+  }
+}
+
+// ── RESTAURAR ────────────────────────────────────────────────────────────────
+
+function bkpHandleDrop(event) {
+  const file = event.dataTransfer?.files?.[0];
+  if (file) _bkpCarregarArquivo(file);
+}
+
+function restaurarBackupModular(file) {
+  if (!file) return;
+  const modal = document.getElementById('modal-backup');
+  if (!modal || !modal.classList.contains('open')) {
+    abrirModalBackup('restaurar');
+    setTimeout(() => _bkpCarregarArquivo(file), 100);
+  } else {
+    _bkpCarregarArquivo(file);
+  }
+}
+
+function _bkpCarregarArquivo(file) {
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const parsed = JSON.parse(e.target.result);
+
+      if (typeof parsed !== 'object' || Array.isArray(parsed)) {
+        toast('Arquivo inválido — não é um backup AnalyticSys', 'error');
+        return;
+      }
+
+      // Detecta módulos disponíveis no arquivo
+      const available = _BKP_MODULES.filter(m => Array.isArray(parsed[m.key]));
+      if (available.length === 0) {
+        toast('Arquivo não contém dados reconhecíveis', 'error');
+        return;
+      }
+
+      _bkpParsedFile = parsed;
+
+      // Garante que o modal está no modo restaurar
+      if (_bkpMode !== 'restaurar') bkpSwitchTab('restaurar');
+
+      // Renderiza preview com checkboxes dos módulos disponíveis
+      const previewEl = document.getElementById('bkp-preview');
+      const listEl    = document.getElementById('bkp-preview-list');
+      if (!previewEl || !listEl) return;
+
+      const expAt = parsed._exportedAt ? `Exportado em: ${parsed._exportedAt}` : '';
+      const version = parsed._version || 'v1';
+
+      listEl.innerHTML = `
+        <div style="padding:8px 12px;background:var(--surface3);border-radius:8px;font-size:11px;
+          color:var(--text3);display:flex;gap:16px;flex-wrap:wrap;margin-bottom:4px">
+          <span><i class="ti ti-tag" style="margin-right:3px"></i>${version}</span>
+          ${expAt ? `<span><i class="ti ti-clock" style="margin-right:3px"></i>${expAt}</span>` : ''}
+          <span><i class="ti ti-database" style="margin-right:3px"></i>${available.length} módulo(s) no arquivo</span>
+        </div>
+        ${available.map(m => {
+          const count = parsed[m.key].length;
+          const atualCount = (state[m.key] || []).length;
+          return `
+          <label style="display:flex;align-items:center;gap:10px;padding:7px 12px;background:var(--surface2);
+            border-radius:8px;cursor:pointer;border:1.5px solid var(--accent);transition:border-color .15s"
+            id="bkp-rst-row-${m.key}">
+            <input type="checkbox" checked style="display:none"
+              id="bkp-rst-chk-${m.key}" onchange="bkpToggleRestoreModule('${m.key}')">
+            <span style="width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;
+              background:color-mix(in srgb, ${m.color} 15%, transparent);color:${m.color};font-size:14px;flex-shrink:0">
+              <i class="ti ${m.icon}"></i>
+            </span>
+            <span style="flex:1">
+              <span style="font-size:13px;font-weight:500;color:var(--text1);display:block">${m.label}</span>
+              <span style="font-size:10px;color:var(--text3);font-family:var(--mono)">
+                ${count.toLocaleString('pt-BR')} no backup
+                ${atualCount > 0 ? ` · ${atualCount.toLocaleString('pt-BR')} atuais serão substituídos` : '· (módulo vazio)'}
+              </span>
+            </span>
+            <i class="ti ti-square-check-filled" style="color:var(--accent)" id="bkp-rst-icon-${m.key}"></i>
+          </label>`;
+        }).join('')}
+      `;
+
+      previewEl.style.display = '';
+
+    } catch(err) {
+      console.error(err);
+      toast('Falha ao ler o arquivo: JSON inválido ou corrompido', 'error');
+    }
+  };
+  reader.onerror = () => toast('Não foi possível ler o arquivo', 'error');
+  reader.readAsText(file, 'utf-8');
+}
+
+function bkpToggleRestoreModule(key) {
+  const chk  = document.getElementById('bkp-rst-chk-' + key);
+  const row  = document.getElementById('bkp-rst-row-' + key);
+  const icon = document.getElementById('bkp-rst-icon-' + key);
+  if (!chk) return;
+  const checked = chk.checked;
+  if (row)  row.style.borderColor  = checked ? 'var(--accent)' : 'transparent';
+  if (icon) { icon.className = 'ti ' + (checked ? 'ti-square-check-filled' : 'ti-square'); icon.style.color = checked ? 'var(--accent)' : 'var(--text3)'; }
+}
+
+async function _restaurarModulosConfirmar() {
+  if (!_bkpParsedFile) {
+    toast('Nenhum arquivo carregado. Selecione um backup primeiro.', 'error');
+    return;
+  }
+
+  const parsed = _bkpParsedFile;
+
+  // Coleta módulos marcados para restaurar
+  const toRestore = _BKP_MODULES.filter(m => {
+    const chk = document.getElementById('bkp-rst-chk-' + m.key);
+    return chk && chk.checked && Array.isArray(parsed[m.key]);
+  });
+
+  if (toRestore.length === 0) {
+    toast('Selecione ao menos um módulo para restaurar', 'error');
+    return;
+  }
+
+  const totalNovo   = toRestore.reduce((s, m) => s + parsed[m.key].length, 0);
+  const totalAtual  = toRestore.reduce((s, m) => s + (state[m.key] || []).length, 0);
+  const moduloNomes = toRestore.map(m => m.label).join(', ');
+
+  const msg = totalAtual > 0
+    ? `Restaurar ${toRestore.length} módulo(s): ${moduloNomes}?\n\nIsso substituirá ${totalAtual.toLocaleString('pt-BR')} registros atuais por ${totalNovo.toLocaleString('pt-BR')} do backup. Esta ação não pode ser desfeita.`
+    : `Restaurar ${toRestore.length} módulo(s): ${moduloNomes}?\n\n${totalNovo.toLocaleString('pt-BR')} registros serão carregados.`;
+
+  if (!confirm(msg)) return;
+
+  closeModal('modal-backup');
+
+  showLoadingOverlay('Restaurando backup', 'Carregando dados do arquivo...');
+  if (typeof loadingShowSteps === 'function') loadingShowSteps([
+    { id: 'bkp-parse',   icon: 'ti-file-import',    label: 'Lendo arquivo de backup' },
+    { id: 'bkp-restore', icon: 'ti-database-import', label: `Restaurando ${toRestore.length} módulo(s)` },
+    { id: 'bkp-index',   icon: 'ti-list-search',     label: 'Reconstruindo índices' },
+    { id: 'bkp-save',    icon: 'ti-device-floppy',   label: 'Salvando estado' },
+    { id: 'bkp-render',  icon: 'ti-layout',          label: 'Atualizando interface' },
+  ]);
+  await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+
+  try {
+    _lstepSet('bkp-parse', 'done'); _lbarSet(20);
+
+    // Restaura apenas os módulos selecionados
+    _lstepSet('bkp-restore', 'running'); _lbarSet(35);
+    toRestore.forEach(m => {
+      state[m.key] = parsed[m.key];
+    });
+
+    // Restaura acoesRelatorio se presente no arquivo
+    if (Array.isArray(parsed.acoesRelatorio)) {
+      state.acoesRelatorio = parsed.acoesRelatorio;
+    }
+    _lstepSet('bkp-restore', 'done'); _lbarSet(50);
+
+    // Reprocessa índices
+    _lstepSet('bkp-index', 'running');
+    invalidateMaterialLookup();
+    invalidateFilialLookup();
+    invalidateLancIndex();
+    invalidateSapIndex();
+    invalidateSaidasIndex();
+    if (typeof invalidateAllSearchIndexes === 'function') invalidateAllSearchIndexes();
+    if (typeof reaplicarPadronizacaoMateriais === 'function') reaplicarPadronizacaoMateriais();
+    _lstepSet('bkp-index', 'done'); _lbarSet(70);
+
+    // Restaura dados auxiliares do localStorage
+    const lsSet = (key, val) => { try { if (val !== null && val !== undefined) localStorage.setItem(key, JSON.stringify(val)); } catch(e) {} };
+    lsSet('analyticsys_notes_v2',     parsed._notas);
+    lsSet('analyticsys_shortcuts_v1', parsed._atalhos);
+    lsSet('analyticsys_fech_v1',      parsed._fechamento);
+
+    _lstepSet('bkp-save', 'running'); _lbarSet(85);
+    await persistStateNow();
+    _lstepSet('bkp-save', 'done');
+
+    _lstepSet('bkp-render', 'running'); _lbarSet(95);
+    if (typeof renderAll === 'function') renderAll();
+    if (typeof updateImportPrereqUI === 'function') updateImportPrereqUI();
+    _lstepSet('bkp-render', 'done'); _lbarSet(100);
+
+    const info = parsed._exportedAt ? ` (exportado em ${parsed._exportedAt})` : '';
+    setTimeout(() => toast(`${toRestore.length} módulo(s) restaurado(s)${info} — ${totalNovo.toLocaleString('pt-BR')} registros`), 300);
+    _bkpParsedFile = null;
+
+  } catch (err) {
+    console.error('[Backup] Erro durante a restauração:', err);
+    setTimeout(() => toast('Erro durante a restauração. Os dados podem não ter sido salvos corretamente.', 'error'), 300);
+
+  } finally {
+    hideLoadingOverlay('Backup restaurado');
+    if (typeof loadingHideSteps === 'function') loadingHideSteps();
+  }
+}
+
+Object.assign(window, {
+  abrirModalBackup, bkpSwitchTab, bkpToggleModule, bkpSelectAll, bkpConfirmar,
+  bkpHandleDrop, restaurarBackupModular, bkpToggleRestoreModule,
+  exportarDados: _exportarModulos // mantém compatibilidade com chamadas externas
+});
 
   function makeResizable(table) {
   if (!table) return;

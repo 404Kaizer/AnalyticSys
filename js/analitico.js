@@ -22,6 +22,10 @@ function rodarAnalitico() {
 
 function _rodarAnaliticoCore(dtIni, dtFim) {
 
+  // Limpa estado de pendentes considerados — cada nova análise começa do zero
+  if (window._pendConsiderados) window._pendConsiderados = {};
+  if (window._pendCache)        window._pendCache        = {};
+
   // ── Build date-bound helpers ──────────────────────────────
   function inPeriod(dateStr) {
     const d = parseDate(dateStr);
@@ -288,6 +292,11 @@ function _rodarAnaliticoCore(dtIni, dtFim) {
 
   renderAnaliticoMicro(results, dtIni, dtFim);
 
+  // Armazena para permitir re-render parcial via togglePendConsiderados
+  window.__analiticoResults = results;
+  window.__analiticoDtIni   = dtIni;
+  window.__analiticoDtFim   = dtFim;
+
   document.getElementById('an-empty').style.display = 'none';
   document.getElementById('an-content').style.display = '';
   if (window.updatePeriodFab) updatePeriodFab();
@@ -478,6 +487,47 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
       if (!sapByMat.has(mat)) sapByMat.set(mat, []);
       sapByMat.get(mat).push(rec);
     });
+
+    // ── Injeção de pendentes considerados ────────────────────────────────
+    // Quando o analista ativa "Considerar NFs/OS pendentes", registros SAP
+    // sintéticos são injetados em sapByMat para refletir o impacto no cálculo.
+    // Os dados vêm de _pendCache, populado por buildPendIntegSection no render anterior.
+    const _pendStateCentral = (window._pendConsiderados || {})[r.central] || {};
+    const _pendCacheCentral = (window._pendCache        || {})[r.central] || {};
+    const _matsComPendNF    = new Set();
+    const _matsComPendOS    = new Set();
+    if (_pendStateCentral.nf && _pendCacheCentral.pendNF) {
+      (_pendCacheCentral.pendNF || []).forEach(e => {
+        const mat = e.material || '—';
+        if (!sapByMat.has(mat)) sapByMat.set(mat, []);
+        sapByMat.get(mat).push({
+          movimento: '101',
+          peso:      Math.abs(num(e.peso)),
+          ref:       String(e.nf || ''),
+          documento: '',
+          material:  mat,
+          dtLanc:    e.dtDescarga || e.dtEmissao || '',
+          _sintetico: true
+        });
+        _matsComPendNF.add(mat);
+      });
+    }
+    if (_pendStateCentral.os && _pendCacheCentral.pendOS) {
+      (_pendCacheCentral.pendOS || []).forEach(e => {
+        const mat = e.material || '—';
+        if (!sapByMat.has(mat)) sapByMat.set(mat, []);
+        sapByMat.get(mat).push({
+          movimento: '201',
+          peso:      -Math.abs(num(e.peso)),
+          ref:       String(e.os || ''),
+          documento: '',
+          material:  mat,
+          dtLanc:    e.dtEmissao || '',
+          _sintetico: true
+        });
+        _matsComPendOS.add(mat);
+      });
+    }
 
     let matRowsHtml = '';
     let variacaoCentralMicro = 0;
@@ -777,7 +827,12 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
         : `<span style="color:var(--text3);font-size:11px">—</span>`;
 
       matRowsHtml += `
-        <tr class="material-row" data-detail-key="${detailKey}" data-diff="${snapshot.diff}" data-peso-fim="${snapshot.pesoFim}" data-categoria="${escapeHtml(matCategoria)}" onclick="toggleMaterialDetail(this, event)">
+        <tr class="material-row${
+          (_matsComPendNF.has(mat) && _matsComPendOS.has(mat)) ? ' pend-injetado-ambos'
+          : _matsComPendNF.has(mat) ? ' pend-injetado-nf'
+          : _matsComPendOS.has(mat) ? ' pend-injetado-os'
+          : ''
+        }" data-detail-key="${detailKey}" data-diff="${snapshot.diff}" data-peso-fim="${snapshot.pesoFim}" data-categoria="${escapeHtml(matCategoria)}" onclick="toggleMaterialDetail(this, event)">
           <td class="td-mono" style="font-weight:600">
             <span class="material-row-title">
               <i class="ti ti-eye-search material-row-chev"></i>
@@ -876,7 +931,11 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
     }
 
     const card = document.createElement('div');
-    card.className = 'micro-filial-card';
+    const _pendCardClass = (_pendStateCentral.nf && _pendStateCentral.os) ? ' pend-considerado-ambos'
+                         : _pendStateCentral.nf ? ' pend-considerado-nf'
+                         : _pendStateCentral.os ? ' pend-considerado-os'
+                         : '';
+    card.className = 'micro-filial-card' + _pendCardClass;
     card.dataset.central = r.central || '';
     card.dataset.centralDiff = varCentralMicro;
     card.dataset.diff = varCentralMicro;   // for tipo-var filter
@@ -2346,164 +2405,11 @@ function setupModalCloseOnBackdrop() {
       if (_MODAL_NO_BACKDROP_CLOSE.has(m.id)) return; // blocked
       if (m.id === 'analitico-detail-overlay') {
         closeAnaliticoDetailModal();
-      } else if (m.id === 'startup-restore-overlay') {
-        decideStartupRestore(false);
       } else {
         m.classList.remove('open');
       }
     });
   });
-}
-
-async function startupRestoreFlow() {
-  // O modal de restauração só faz sentido quando há dados de importação
-  // (entradas, saídas, SAP, etc.) salvos no storage. Se só existirem dados
-  // de cadastro (configs, filiais, materiais), eles são carregados
-  // silenciosamente sem interromper o usuário.
-  const hasImported = await storageHasImportedData();
-  const shouldRestore = hasImported ? await openStartupRestoreModal() : true;
-  if (shouldRestore) {
-    await restoreAndRender();
-    return;
-  }
-
-  // O usuário optou por NÃO restaurar os dados importados (entradas, saídas,
-  // SAP, lançamentos, etc.), mas as CONFIGURAÇÕES, PADRONIZAÇÃO DE CENTRAIS e
-  // PADRONIZAÇÃO DE MATERIAIS são independentes disso: pertencem ao sistema,
-  // não a uma importação, e jamais devem ser descartadas sem ação explícita
-  // do usuário na tela de Configurações.
-  //
-  // Por isso, mesmo no caminho "não carregar", lemos o storage para extrair
-  // configs, filiais e materiais salvos e os mantemos em memória. Os demais
-  // módulos permanecem com o estado vazio, respeitando a escolha do usuário.
-  try {
-    const db = await openDb();
-    let savedConfigs    = null;
-    let savedFiliais    = null;
-    let savedMateriais  = null;
-    let savedOcorrencias= null;
-    let savedAcoesRelatorio = null;
-    const savedManuais  = {}; // { modulo: [registros manuais] }
-
-    if (db) {
-      // Tenta primeiro as chaves individuais (mais eficiente)
-      savedConfigs    = await idbGet(db, 'configs').catch(() => null);
-      savedFiliais    = await idbGet(db, 'filiais').catch(() => null);
-      savedMateriais  = await idbGet(db, 'materiais').catch(() => null);
-      savedOcorrencias= await idbGet(db, 'ocorrencias').catch(() => null);
-      savedAcoesRelatorio = await idbGet(db, 'acoesRelatorio').catch(() => null);
-
-      // Para registros manuais: lê todos os módulos e filtra só os manuais
-      const modulosComManuais = ['entradas','saidas','lancamentos','producao'];
-      for (const mod of modulosComManuais) {
-        const arr = await idbGet(db, mod).catch(() => null);
-        if (Array.isArray(arr)) {
-          const manuais = arr.filter(r => r.fonte === 'manual');
-          if (manuais.length) savedManuais[mod] = manuais;
-        }
-      }
-      // SAP usa chunks — carregar via loadSapChunks e filtrar manuais
-      try {
-        const sapAll = await loadSapChunks(db);
-        const sapManuais = sapAll.filter(r => r.fonte === 'manual');
-        if (sapManuais.length) savedManuais['sap'] = sapManuais;
-      } catch(e) {
-        console.warn('[Startup] Erro ao carregar manuais SAP dos chunks:', e);
-      }
-
-      // Fallback: lê o snapshot completo e extrai as chaves necessárias
-      const needsSnapshot = !Array.isArray(savedConfigs) || !Array.isArray(savedFiliais) || !Array.isArray(savedMateriais);
-      if (needsSnapshot) {
-        const snapshot = await idbGet(db, IDB_STATE_KEY).catch(() => null);
-        if (snapshot && typeof snapshot === 'object') {
-          if (!Array.isArray(savedConfigs)    && Array.isArray(snapshot.configs))    savedConfigs    = snapshot.configs;
-          if (!Array.isArray(savedFiliais)    && Array.isArray(snapshot.filiais))    savedFiliais    = snapshot.filiais;
-          if (!Array.isArray(savedMateriais)  && Array.isArray(snapshot.materiais))  savedMateriais  = snapshot.materiais;
-          if (!Array.isArray(savedOcorrencias)&& Array.isArray(snapshot.ocorrencias))savedOcorrencias= snapshot.ocorrencias;
-          if (!Array.isArray(savedAcoesRelatorio) && Array.isArray(snapshot.acoesRelatorio)) savedAcoesRelatorio = snapshot.acoesRelatorio;
-          // Manuais do snapshot (exceto SAP — está em chunks, já tratado acima)
-          for (const mod of modulosComManuais) {
-            if (!savedManuais[mod] && Array.isArray(snapshot[mod])) {
-              const manuais = snapshot[mod].filter(r => r.fonte === 'manual');
-              if (manuais.length) savedManuais[mod] = manuais;
-            }
-          }
-        }
-      }
-    }
-
-    // Fallback final: localStorage legado
-    const needsLegacy = (!Array.isArray(savedConfigs)   || savedConfigs.length   === 0) ||
-                        (!Array.isArray(savedFiliais)   || savedFiliais.length   === 0) ||
-                        (!Array.isArray(savedMateriais) || savedMateriais.length === 0);
-    if (needsLegacy) {
-      try {
-        const raw = localStorage.getItem(legacyStateKey);
-        if (raw) {
-          const parsed = safeJSONParse(raw, {});
-          if ((!Array.isArray(savedConfigs)   || !savedConfigs.length)   && Array.isArray(parsed.configs))   savedConfigs   = parsed.configs;
-          if ((!Array.isArray(savedFiliais)   || !savedFiliais.length)   && Array.isArray(parsed.filiais))   savedFiliais   = parsed.filiais;
-          if ((!Array.isArray(savedMateriais) || !savedMateriais.length) && Array.isArray(parsed.materiais)) savedMateriais = parsed.materiais;
-          if ((!Array.isArray(savedOcorrencias)|| !savedOcorrencias.length) && Array.isArray(parsed.ocorrencias)) savedOcorrencias = parsed.ocorrencias;
-          if ((!Array.isArray(savedAcoesRelatorio) || !savedAcoesRelatorio.length) && Array.isArray(parsed.acoesRelatorio)) savedAcoesRelatorio = parsed.acoesRelatorio;
-        }
-      } catch (_) {}
-    }
-
-    if (Array.isArray(savedConfigs) && savedConfigs.length > 0) {
-      state.configs = mergePersistentConfigs(state.configs, savedConfigs);
-    }
-    if (Array.isArray(savedFiliais) && savedFiliais.length > 0) {
-      state.filiais = savedFiliais;
-      invalidateFilialLookup();
-    }
-    if (Array.isArray(savedMateriais) && savedMateriais.length > 0) {
-      state.materiais = savedMateriais.map(item => ({
-        id: item?.id || makeMaterialId(),
-        ...item
-      }));
-      invalidateMaterialLookup();
-      reaplicarPadronizacaoMateriais();
-    }
-    if (Array.isArray(savedOcorrencias) && savedOcorrencias.length > 0) {
-      state.ocorrencias = savedOcorrencias;
-    }
-    if (Array.isArray(savedAcoesRelatorio) && savedAcoesRelatorio.length > 0) {
-      state.acoesRelatorio = savedAcoesRelatorio;
-    }
-    // Restaura registros manuais nos módulos correspondentes
-    const modStateMap = { entradas:'entradas', saidas:'saidas', lancamentos:'lancamentos', sap:'sap', producao:'producao' };
-    for (const [mod, stateKey] of Object.entries(modStateMap)) {
-      if (savedManuais[mod] && savedManuais[mod].length > 0) {
-        state[stateKey] = savedManuais[mod];
-        console.info(`[Startup] ${savedManuais[mod].length} registro(s) manual(is) restaurado(s) em ${mod}`);
-      }
-    }
-    if (Object.keys(savedManuais).length > 0) {
-      invalidateLancIndex();
-      invalidateSapIndex();
-      invalidateSaidasIndex();
-    }
-  } catch (err) {
-    console.warn('[startupRestoreFlow] Não foi possível recuperar configs/filiais/materiais do storage:', err);
-  }
-
-  stateHydrated = true;
-  updateImportPrereqUI();
-
-  // Persiste imediatamente para garantir que os configs recuperados acima
-  // sejam regravados no storage junto ao estado limpo dos demais módulos,
-  // evitando que um persist() posterior sobrescreva com um snapshot vazio.
-  await persistStateNow();
-
-  const activePage = document.querySelector('.page.active')?.id?.replace('page-', '') || 'importar';
-  updateDashboard();
-  updateParamGerais();
-  renderFiliais();
-  renderMateriais();
-  renderAcoesRelatorio();
-  renderPage(activePage);
-  initResizable();
 }
 
 async function init() {
@@ -2514,14 +2420,9 @@ async function init() {
   setupKeyboardShortcuts();
   initDropZones();
 
-  const startupNoBtn = document.getElementById('startup-restore-no');
-  const startupYesBtn = document.getElementById('startup-restore-yes');
-  startupNoBtn?.addEventListener('click', () => decideStartupRestore(false));
-  startupYesBtn?.addEventListener('click', () => decideStartupRestore(true));
-
-  await startupRestoreFlow();
+  await restoreAndRender();
   updateImportPrereqUI();
-  // updateDashboard já foi chamado dentro de restoreAndRender/startupRestoreFlow — não chamar novamente
+  // updateDashboard já foi chamado dentro de restoreAndRender — não chamar novamente
 
   // Start clock
   updateClock();
@@ -2541,10 +2442,6 @@ async function init() {
       }
       if (document.getElementById('breakdown-modal-overlay')?.classList.contains('open')) {
         closeBreakdownModal();
-        return;
-      }
-      if (document.getElementById('startup-restore-overlay')?.classList.contains('open')) {
-        decideStartupRestore(false);
         return;
       }
       closeAnaliticoDetailModal();

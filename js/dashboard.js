@@ -4261,7 +4261,7 @@ async function restoreAndRender() {
     await new Promise(r => setTimeout(r, 0));
     if (typeof notifSync === 'function') notifSync(null);
     _lstepSet('notif', 'done');
-    _lbarSet(60);
+    _lbarSet(70);
     await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
 
     // ── STEP 6: Saúde do estoque ──────────────────────────────────────────
@@ -4306,6 +4306,16 @@ async function restoreAndRender() {
     _lbarSet(100);
     await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
 
+  } catch (err) {
+    // Captura exceções inesperadas que escaparam dos try/catch individuais de cada step.
+    // O finally abaixo garante que o overlay será fechado independentemente.
+    // O toast é atrasado para aparecer após o overlay terminar de fechar.
+    console.error('[Boot] Erro inesperado durante o carregamento:', err);
+    setTimeout(() => {
+      if (typeof toast === 'function') {
+        toast('⚠ Ocorreu um erro durante o carregamento. Alguns dados podem não ter sido processados corretamente.', 'error');
+      }
+    }, 400);
   } finally {
     hideLoadingOverlay('Sistema pronto');
   }

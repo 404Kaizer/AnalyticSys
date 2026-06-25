@@ -271,14 +271,14 @@
             </button>
 
             <div class="tools-dropdown-section-label">Dados</div>
-            <button class="tools-item" onclick="exportarDados(); closeToolsMenu()">
+            <button class="tools-item" onclick="abrirModalBackup('exportar'); closeToolsMenu()">
               <div class="tools-item-icon" style="background:var(--green-bg);color:var(--green)"><i class="ti ti-download"></i></div>
               <div class="tools-item-body">
                 <div class="tools-item-label">Backup</div>
-                <div class="tools-item-sub">Exportar todos os dados em JSON</div>
+                <div class="tools-item-sub">Exportar dados por módulo em JSON</div>
               </div>
             </button>
-            <button class="tools-item" onclick="document.getElementById('restore-file-input').click(); closeToolsMenu()">
+            <button class="tools-item" onclick="abrirModalBackup('restaurar'); closeToolsMenu()">
               <div class="tools-item-icon" style="background:var(--purple-bg);color:var(--purple)"><i class="ti ti-upload"></i></div>
               <div class="tools-item-body">
                 <div class="tools-item-label">Restaurar</div>
@@ -479,7 +479,7 @@
           </div>
         </div>
 
-        <input type="file" id="restore-file-input" accept=".json" style="display:none" onchange="restaurarBackup(this.files[0]);this.value=''">
+        <input type="file" id="restore-file-input" accept=".json" style="display:none" onchange="restaurarBackupModular(this.files[0]);this.value=''">
 
       </div>
     </div>
@@ -3300,43 +3300,6 @@
 
 
 <!-- Modal: Restaurar dados salvos? -->
-<div class="modal-overlay" id="startup-restore-overlay" aria-hidden="true">
-  <div class="modal startup-restore-modal" role="dialog" aria-modal="true" aria-labelledby="startup-restore-title">
-    <div class="modal-title" id="startup-restore-title"><i class="ti ti-database"></i> Carregar dados salvos?</div>
-    <div class="modal-sub">decisão inicial antes de restaurar o estado local do navegador</div>
-
-    <div class="startup-restore-summary">
-      <div class="startup-restore-item">
-        <i class="ti ti-device-desktop-search"></i>
-        <div>
-          <strong>Carregar o último estado</strong>
-          <span>Reabre entradas, saídas, lançamentos, SAP, produção, cadastros e filtros exatamente como estavam no último salvamento.</span>
-        </div>
-      </div>
-      <div class="startup-restore-item">
-        <i class="ti ti-eraser"></i>
-        <div>
-          <strong>Começar vazio</strong>
-          <span>Ignora os dados importados desta sessão. Configurações, cadastros, <strong>registros manuais, ocorrências e bloco de notas</strong> são sempre preservados.</span>
-        </div>
-      </div>
-    </div>
-
-    <div class="startup-restore-actions">
-      <button class="btn" id="startup-restore-no" type="button">
-        <i class="ti ti-x"></i> Não carregar
-      </button>
-      <button class="btn btn-primary" id="startup-restore-yes" type="button">
-        <i class="ti ti-refresh"></i> Carregar informações
-      </button>
-    </div>
-
-    <div class="startup-restore-note">
-      esta escolha vale só para esta abertura. o salvamento automático continua funcionando normalmente depois.
-    </div>
-  </div>
-</div>
-
 <!-- Loading Overlay -->
 <div class="loading-overlay" id="loading-overlay" aria-live="polite" aria-busy="true" aria-hidden="true">
   <div class="loading-card" role="status" aria-label="Processando dados">
@@ -3825,5 +3788,92 @@
 </div>
 
 <script src="js/notifications.js"></script>
+
+<!-- ══════════════════════════════════════════════════════════
+     MODAL BACKUP / RESTAURAR POR MÓDULOS
+══════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-backup">
+  <div class="modal" style="max-width:560px;width:95vw">
+
+    <!-- Header com tabs Exportar / Restaurar -->
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:20px 24px 0">
+      <div>
+        <div class="modal-title" id="bkp-modal-title"><i class="ti ti-package-export"></i> Backup por Módulos</div>
+        <div class="modal-sub" id="bkp-modal-sub">Selecione os módulos para exportar</div>
+      </div>
+      <button class="modal-close-btn" onclick="closeModal('modal-backup')"><i class="ti ti-x"></i></button>
+    </div>
+
+    <!-- Tabs -->
+    <div style="display:flex;gap:8px;padding:16px 24px 0">
+      <button class="btn" id="bkp-tab-exportar" onclick="bkpSwitchTab('exportar')"
+        style="flex:1;justify-content:center;gap:6px">
+        <i class="ti ti-download"></i> Exportar
+      </button>
+      <button class="btn" id="bkp-tab-restaurar" onclick="bkpSwitchTab('restaurar')"
+        style="flex:1;justify-content:center;gap:6px">
+        <i class="ti ti-upload"></i> Restaurar
+      </button>
+    </div>
+
+    <!-- PAINEL EXPORTAR -->
+    <div id="bkp-panel-exportar" style="padding:20px 24px">
+
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <span style="font-size:12px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.04em">Módulos de dados</span>
+        <div style="display:flex;gap:6px">
+          <button class="btn" style="font-size:11px;padding:3px 10px" onclick="bkpSelectAll(true)">Todos</button>
+          <button class="btn" style="font-size:11px;padding:3px 10px" onclick="bkpSelectAll(false)">Nenhum</button>
+        </div>
+      </div>
+
+      <div id="bkp-module-list" style="display:flex;flex-direction:column;gap:6px"></div>
+
+      <div style="margin-top:14px;padding:10px 12px;background:var(--surface2);border-radius:8px;font-size:11px;color:var(--text3);line-height:1.5">
+        <i class="ti ti-info-circle" style="margin-right:4px;color:var(--accent)"></i>
+        O arquivo exportado inclui <strong style="color:var(--text2)">metadados de identificação</strong> em cada registro 
+        (fonte, data de importação, ID). Backups parciais podem ser restaurados sem apagar dados de outros módulos.
+      </div>
+    </div>
+
+    <!-- PAINEL RESTAURAR -->
+    <div id="bkp-panel-restaurar" style="padding:20px 24px;display:none">
+
+      <!-- Zona de drop / seleção de arquivo -->
+      <div id="bkp-dropzone"
+        style="border:2px dashed var(--border);border-radius:10px;padding:28px 20px;text-align:center;cursor:pointer;transition:border-color .15s,background .15s"
+        onclick="document.getElementById('restore-file-input').click()"
+        ondragover="event.preventDefault();this.style.borderColor='var(--accent)';this.style.background='var(--accent-dim)'"
+        ondragleave="this.style.borderColor='';this.style.background=''"
+        ondrop="event.preventDefault();this.style.borderColor='';this.style.background='';bkpHandleDrop(event)">
+        <i class="ti ti-file-upload" style="font-size:28px;color:var(--text3);display:block;margin-bottom:8px"></i>
+        <div style="font-size:13px;font-weight:600;color:var(--text2)">Clique ou arraste o arquivo .json</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:4px">Compatível com backup completo ou por módulos</div>
+      </div>
+
+      <!-- Preview do arquivo selecionado -->
+      <div id="bkp-preview" style="display:none;margin-top:14px">
+        <div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">Conteúdo do arquivo</div>
+        <div id="bkp-preview-list" style="display:flex;flex-direction:column;gap:6px"></div>
+
+        <div style="margin-top:12px;padding:10px 12px;background:var(--amber-bg);border-radius:8px;font-size:11px;color:var(--amber);line-height:1.5" id="bkp-restore-warn">
+          <i class="ti ti-alert-triangle" style="margin-right:4px"></i>
+          Os módulos selecionados serão <strong>substituídos</strong>. Dados não selecionados permanecem intactos.
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-backup')">Cancelar</button>
+      <button class="btn btn-primary" id="bkp-btn-confirmar" onclick="bkpConfirmar()" style="gap:6px">
+        <i class="ti ti-download" id="bkp-btn-icon"></i>
+        <span id="bkp-btn-label">Exportar selecionados</span>
+      </button>
+    </div>
+
+  </div>
+</div>
+
 </body>
 </html>

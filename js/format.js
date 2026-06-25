@@ -431,58 +431,6 @@ function closeModal(id) {
   document.getElementById(id)?.classList.remove('open');
 }
 
-let startupRestoreResolver = null;
-
-// Verifica se há dados de importação no storage (entradas, saídas, SAP,
-// lançamentos, produção ou imports). configs/filiais/materiais são dados
-// de cadastro do sistema e nunca disparam o modal.
-async function storageHasImportedData() {
-  const importKeys = ['entradas', 'saidas', 'lancamentos', 'sap', 'producao', 'imports'];
-  try {
-    const db = await openDb();
-    if (db) {
-      for (const key of importKeys) {
-        const val = await idbGet(db, key).catch(() => null);
-        if (Array.isArray(val) && val.length > 0) return true;
-      }
-      const snapshot = await idbGet(db, IDB_STATE_KEY).catch(() => null);
-      if (snapshot && typeof snapshot === 'object') {
-        for (const key of importKeys) {
-          if (Array.isArray(snapshot[key]) && snapshot[key].length > 0) return true;
-        }
-      }
-    }
-  } catch (_) {}
-  try {
-    const raw = localStorage.getItem(legacyStateKey);
-    if (raw) {
-      const parsed = safeJSONParse(raw, {});
-      if (parsed && typeof parsed === 'object') {
-        for (const key of importKeys) {
-          if (Array.isArray(parsed[key]) && parsed[key].length > 0) return true;
-        }
-      }
-    }
-  } catch (_) {}
-  return false;
-}
-
-function openStartupRestoreModal() {
-  return new Promise(resolve => {
-    startupRestoreResolver = resolve;
-    openModal('startup-restore-overlay');
-  });
-}
-
-function decideStartupRestore(shouldRestore) {
-  if (startupRestoreResolver) {
-    const resolve = startupRestoreResolver;
-    startupRestoreResolver = null;
-    resolve(shouldRestore);
-  }
-  closeModal('startup-restore-overlay');
-}
-
 function toggleSidebar() {
   document.querySelector('.sidebar')?.classList.toggle('open');
   document.getElementById('nav-overlay')?.classList.toggle('open');
