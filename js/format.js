@@ -535,7 +535,7 @@ function closeTool(name) {
   _openTools.delete(name);
 }
 
-let _toolZBase = 490;
+let _toolZBase = 5000;
 function _nextToolZ() { return ++_toolZBase; }
 
 // Legacy: keep toggleCalc working (mapped to tool system)

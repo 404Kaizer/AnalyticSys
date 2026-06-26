@@ -2266,7 +2266,7 @@ td.var-cell-zero .ti-circle-check     { color: var(--text3); }
   letter-spacing: -0.02em;
 }
 body.analitico-modal-open { overflow: hidden; }
-.analitico-detail-overlay { z-index: 260; }
+.analitico-detail-overlay { z-index: 260; backdrop-filter: none; -webkit-backdrop-filter: none; }
 
 .analitico-detail-modal {
   width: min(1200px, calc(100vw - 24px));
