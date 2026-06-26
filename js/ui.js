@@ -518,7 +518,7 @@ function _getColFilterPassSet(module, data) {
 function getFilteredData(module) {
   let data = state[module] || [];
   // Aplica filtro de manuais antes dos demais
-  if (_somenteManuais[module]) data = data.filter(r => r.fonte === 'manual');
+  if (_somenteManuais[module]) data = data.filter(r => r.fonte === 'manual' || r.editado);
   // Aplica filtro de duplicatas (somente SAP)
   if (module === 'sap' && _somenteDuplicatas) {
     const { cancelled, real } = getSapDuplicateKeys();

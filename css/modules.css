@@ -8081,6 +8081,44 @@ mark.search-highlight {
   cursor: default;
 }
 
+/* ── Badge de registro editado inline ── */
+.badge-editado {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px; height: 16px;
+  border-radius: 3px;
+  background: var(--accent-dim);
+  border: 1px solid var(--accent-glow);
+  color: var(--accent);
+  font-size: 9px;
+  vertical-align: middle;
+  margin-right: 5px;
+  flex-shrink: 0;
+  cursor: default;
+}
+
+/* ── Coluna Central: span editável preenche o td, estados no td pai ── */
+.lanc-central-edit {
+  flex: 1;
+  min-width: 0;
+  cursor: text;
+  outline: none;
+  border-radius: 4px;
+}
+td:has(.lanc-central-edit):hover {
+  background: var(--bg3);
+  outline: 1px solid var(--border2);
+  border-radius: 4px;
+  cursor: text;
+}
+td:has(.lanc-central-edit:focus) {
+  background: var(--bg4);
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+  border-radius: 4px;
+}
+
 /* ── Dashboard Gerencial — sistema de abas ── */
 .dg-tab-bar {
   display: flex;

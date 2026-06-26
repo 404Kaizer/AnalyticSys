@@ -1251,18 +1251,49 @@ function renderLancamentos() {
 
   tb.innerHTML = data.map((r, i) => `
     <tr>
-      <td class="td-mono">${r.fonte === 'manual' ? '<span class="badge-manual" title="Registro inserido manualmente"><i class="ti ti-pencil"></i></span>' : ''}${r.central || '—'}</td>
-      <td class="td-muted">${r.dtLanc || '—'}</td>
-      <td>${r.fornecedor || '—'}</td>
-      <td class="td-muted">${r.categoria || '—'}</td>
-      <td class="td-mono">${r.material || r.materialOriginal || '—'}</td>
+      <td class="td-mono" style="display:flex;align-items:center;">
+        ${r.fonte === 'manual' ? '<span class="badge-manual" title="Registro inserido manualmente"><i class="ti ti-pencil"></i></span>' : ''}
+        ${r.editado ? '<span class="badge-editado" title="Registro editado manualmente"><i class="ti ti-pencil"></i></span>' : ''}
+        <span class="lanc-central-edit" contenteditable="true" spellcheck="false"
+          data-lanc-idx="${i}" data-lanc-field="central"
+          onkeydown="lancEditKeydown(event)"
+          onblur="lancEditSave(this)">${escapeHtml(r.central || '—')}</span>
+      </td>
+      <td class="td-muted td-editable"
+        contenteditable="true" spellcheck="false"
+        data-lanc-idx="${i}" data-lanc-field="dtLanc"
+        onkeydown="lancEditKeydown(event)"
+        onblur="lancEditSave(this)">${r.dtLanc || '—'}</td>
+      <td class="td-editable"
+        contenteditable="true" spellcheck="false"
+        data-lanc-idx="${i}" data-lanc-field="fornecedor"
+        onkeydown="lancEditKeydown(event)"
+        onblur="lancEditSave(this)">${escapeHtml(r.fornecedor || '—')}</td>
+      <td class="td-muted td-editable"
+        contenteditable="true" spellcheck="false"
+        data-lanc-idx="${i}" data-lanc-field="categoria"
+        onkeydown="lancEditKeydown(event)"
+        onblur="lancEditSave(this)">${escapeHtml(r.categoria || '—')}</td>
+      <td class="td-mono td-editable"
+        contenteditable="true" spellcheck="false"
+        data-lanc-idx="${i}" data-lanc-field="material"
+        onkeydown="lancEditKeydown(event)"
+        onblur="lancEditSave(this)">${escapeHtml(r.material || r.materialOriginal || '—')}</td>
       <td class="td-mono td-editable" style="color:var(--teal)"
         contenteditable="true" spellcheck="false"
         data-lanc-idx="${i}" data-lanc-field="peso"
         onkeydown="lancEditKeydown(event)"
         onblur="lancEditSave(this)">${num(r.peso) || 0}</td>
-      <td>${r.um || '—'}</td>
-      <td class="td-mono">${money(r.custo)}</td>
+      <td class="td-editable"
+        contenteditable="true" spellcheck="false"
+        data-lanc-idx="${i}" data-lanc-field="um"
+        onkeydown="lancEditKeydown(event)"
+        onblur="lancEditSave(this)">${escapeHtml(r.um || '—')}</td>
+      <td class="td-mono td-editable"
+        contenteditable="true" spellcheck="false"
+        data-lanc-idx="${i}" data-lanc-field="custo"
+        onkeydown="lancEditKeydown(event)"
+        onblur="lancEditSave(this)">${money(r.custo)}</td>
       <td class="td-mono td-editable"
         contenteditable="true" spellcheck="false"
         data-lanc-idx="${i}" data-lanc-field="valorTotal"
@@ -1276,17 +1307,34 @@ function renderLancamentos() {
 }
 
 
-// ── Edição inline de Peso e Valor Total nos lançamentos ──────
+// ── Edição inline — todos os campos dos lançamentos ─────────
+
+// Retorna o valor de exibição correto para cada campo (usado no Escape e pós-save)
+function _lancFieldDisplay(r, field) {
+  switch (field) {
+    case 'peso':       return num(r.peso) || 0;
+    case 'custo':      return money(r.custo);
+    case 'valorTotal': return money(r.valorTotal);
+    case 'central':    return r.central || '—';
+    case 'dtLanc':     return r.dtLanc || '—';
+    case 'fornecedor': return r.fornecedor || '—';
+    case 'categoria':  return r.categoria || '—';
+    case 'material':   return r.material || r.materialOriginal || '—';
+    case 'um':         return r.um || '—';
+    default:           return r[field] ?? '—';
+  }
+}
+
 function lancEditKeydown(e) {
   // Enter confirma (blur), Escape cancela e restaura valor original
   if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); }
   if (e.key === 'Escape') {
-    const cell = e.target;
+    const cell  = e.target;
     const idx   = parseInt(cell.dataset.lancIdx);
     const field = cell.dataset.lancField;
     const r = window._lancPageData?.[idx];
     if (!r) return;
-    cell.textContent = field === 'peso' ? (num(r.peso) || 0) : money(r.valorTotal);
+    cell.textContent = _lancFieldDisplay(r, field);
     cell.blur();
   }
 }
@@ -1297,25 +1345,52 @@ function lancEditSave(cell) {
   const r = window._lancPageData?.[idx];
   if (!r) return;
 
-  // Parse: aceita vírgula como decimal e ignora R$, espaços, pontos de milhar
-  const raw = cell.textContent.replace(/R\$\s*/g,'').replace(/\./g,'').replace(',','.').trim();
-  const val = parseFloat(raw);
+  const numericFields = ['peso', 'custo', 'valorTotal'];
 
-  if (isNaN(val)) {
-    // Valor inválido: restaura original
-    cell.textContent = field === 'peso' ? (num(r.peso) || 0) : money(r.valorTotal);
-    toast('Valor inválido — alteração descartada', 'error');
-    return;
+  if (numericFields.includes(field)) {
+    // Parse: aceita vírgula como decimal e ignora R$, pontos de milhar
+    const raw = cell.textContent.replace(/R\$\s*/g, '').replace(/\./g, '').replace(',', '.').trim();
+    const val = parseFloat(raw);
+    if (isNaN(val)) {
+      cell.textContent = _lancFieldDisplay(r, field);
+      toast('Valor inválido — alteração descartada', 'error');
+      return;
+    }
+    const oldVal = num(r[field]);
+    if (Math.abs(val - oldVal) < 0.001) return; // sem mudança
+    r[field] = val;
+    // Recalcular valorTotal quando peso ou custo mudam
+    if (field === 'peso' && num(r.custo) > 0) r.valorTotal = val * num(r.custo);
+    if (field === 'custo' && num(r.peso) > 0) r.valorTotal = num(r.peso) * val;
+  } else {
+    const newVal = cell.textContent.trim();
+    // Guard primário: texto visível idêntico ao renderizado → sem mudança
+    if (newVal === String(_lancFieldDisplay(r, field))) return;
+    if (field === 'central') {
+      r.central = normalizarCentral(newVal) || newVal;
+    } else if (field === 'material') {
+      r.materialOriginal = newVal;
+      r.material = normalizarMaterial(newVal) || newVal;
+    } else {
+      r[field] = newVal || '—';
+    }
   }
 
-  const oldVal = field === 'peso' ? num(r.peso) : num(r.valorTotal);
-  if (Math.abs(val - oldVal) < 0.001) return; // sem mudança
-
-  r[field] = val;
-
-  // Se peso foi alterado e há custo unitário, atualizar valorTotal automaticamente
-  if (field === 'peso' && num(r.custo) > 0) {
-    r.valorTotal = val * num(r.custo);
+  // Marca como editado e injeta badge azul se ainda não existir
+  if (!r.editado) {
+    r.editado = true;
+    const row     = cell.closest('tr');
+    const firstTd = row?.querySelector('td:first-child');
+    if (firstTd && !firstTd.querySelector('.badge-editado')) {
+      const badge = document.createElement('span');
+      badge.className = 'badge-editado';
+      badge.title     = 'Registro editado manualmente';
+      badge.innerHTML = '<i class="ti ti-pencil"></i>';
+      // Insere após badge-manual (se houver), senão no início da célula
+      const manualBadge = firstTd.querySelector('.badge-manual');
+      if (manualBadge) manualBadge.after(badge);
+      else firstTd.prepend(badge);
+    }
   }
 
   invalidateLancIndex();
@@ -1323,17 +1398,17 @@ function lancEditSave(cell) {
   toast('Lançamento atualizado');
 
   // Atualiza célula com formato correto
-  cell.textContent = field === 'peso' ? val : money(r.valorTotal);
+  cell.textContent = _lancFieldDisplay(r, field);
 
-  // Atualiza célula de valorTotal se peso foi editado
-  if (field === 'peso') {
-    const row = cell.closest('tr');
+  // Se peso ou custo mudaram, atualizar célula valorTotal
+  if (field === 'peso' || field === 'custo') {
+    const row    = cell.closest('tr');
     const vtCell = row?.querySelector('[data-lanc-field="valorTotal"]');
     if (vtCell) vtCell.textContent = money(r.valorTotal);
   }
 }
 
-Object.assign(window, { lancEditKeydown, lancEditSave });
+Object.assign(window, { _lancFieldDisplay, lancEditKeydown, lancEditSave });
 
 // ═══════════════════════════════════════════════════════════
 // AUSÊNCIAS DE LANÇAMENTO
