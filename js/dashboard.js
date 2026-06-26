@@ -4272,22 +4272,22 @@ async function restoreAndRender() {
   if (stepsEl) stepsEl.style.display = '';
 
   _lbarSet(0);
-  await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+  await nextFrame();
 
   try {
     // ── STEP 1: Ler banco de dados ────────────────────────────────────────
     _lstepSet('idb', 'running');
     updateLoadingOverlay('Lendo o banco de dados local...', 'Inicializando o sistema');
-    await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+    await nextFrame();
     await loadState();
     _lstepSet('idb', 'done');
     _lbarSet(15);
-    await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+    await nextFrame();
 
     // ── STEP 2: Estado já foi aplicado em loadState (applySavedState) ────
     _lstepSet('state', 'running');
     updateLoadingOverlay('Restaurando estado da sessão anterior...', 'Inicializando o sistema');
-    await new Promise(r => setTimeout(r, 0));
+    await yieldToUI();
     // Corrige status de importações pendentes (já feito em applySavedState, confirma)
     if (Array.isArray(state.imports)) {
       state.imports.forEach(rec => {
@@ -4296,7 +4296,7 @@ async function restoreAndRender() {
     }
     _lstepSet('state', 'done');
     _lbarSet(30);
-    await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+    await nextFrame();
 
     // ── STEP 3: Padronizar materiais ─────────────────────────────────────
     const totalRecs = (state.entradas?.length || 0) + (state.saidas?.length || 0) +
@@ -4304,7 +4304,7 @@ async function restoreAndRender() {
     if (totalRecs > 0) {
       _lstepSet('norm', 'running');
       updateLoadingOverlay(`Padronizando materiais — ${totalRecs.toLocaleString('pt-BR')} registros...`, 'Inicializando o sistema');
-      await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+      await nextFrame();
       if (typeof reaplicarPadronizacaoMateriais === 'function') {
         reaplicarPadronizacaoMateriais();
       }
@@ -4313,12 +4313,12 @@ async function restoreAndRender() {
       _lstepSet('norm', 'skip');
     }
     _lbarSet(50);
-    await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+    await nextFrame();
 
     // ── STEP 4: Construir índices de busca ───────────────────────────────
     _lstepSet('index', 'running');
     updateLoadingOverlay('Construindo índices de busca e navegação...', 'Inicializando o sistema');
-    await new Promise(r => setTimeout(r, 0));
+    await yieldToUI();
     invalidateLancIndex();
     invalidateSapIndex();
     invalidateSaidasIndex();
@@ -4328,58 +4328,58 @@ async function restoreAndRender() {
     if (typeof getSapIndex === 'function') getSapIndex();
     _lstepSet('index', 'done');
     _lbarSet(65);
-    await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+    await nextFrame();
 
     // ── STEP 5: Alertas e ocorrências ────────────────────────────────────
     _lstepSet('notif', 'running');
     updateLoadingOverlay('Verificando alertas e ocorrências...', 'Inicializando o sistema');
-    await new Promise(r => setTimeout(r, 0));
+    await yieldToUI();
     if (typeof notifSync === 'function') notifSync(null);
     _lstepSet('notif', 'done');
     _lbarSet(70);
-    await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+    await nextFrame();
 
     // ── STEP 6: Saúde do estoque ──────────────────────────────────────────
     _lstepSet('health', 'running');
     updateLoadingOverlay('Calculando saúde do estoque...', 'Inicializando o sistema');
-    await new Promise(r => setTimeout(r, 0));
+    await yieldToUI();
     if (typeof notifSilentHealthCheck === 'function') {
       await notifSilentHealthCheck();
     }
     _lstepSet('health', 'done');
     _lbarSet(75);
-    await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+    await nextFrame();
 
     // ── STEP 7: Montar interface ──────────────────────────────────────────
     _lstepSet('ui', 'running');
     updateLoadingOverlay('Montando a interface...', 'Inicializando o sistema');
-    await new Promise(r => setTimeout(r, 0));
+    await yieldToUI();
     updateDashboard();
     updateParamGerais();
-    await new Promise(r => setTimeout(r, 0));
+    await yieldToUI();
     renderFiliais();
     renderMateriais();
-    await new Promise(r => setTimeout(r, 0));
+    await yieldToUI();
     const activePage = document.querySelector('.page.active')?.id?.replace('page-', '') || 'importar';
     renderPage(activePage);
-    await new Promise(r => setTimeout(r, 0));
+    await yieldToUI();
     initResizable();
     if (!Array.isArray(state.notifications)) state.notifications = [];
     if (typeof _notifRenderBadge === 'function') _notifRenderBadge();
     _lstepSet('ui', 'done');
     _lbarSet(88);
-    await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+    await nextFrame();
 
     // ── STEP 8: Salvar estado ─────────────────────────────────────────────
     _lstepSet('save', 'running');
     updateLoadingOverlay('Salvando estado no banco local...', 'Inicializando o sistema');
-    await new Promise(r => setTimeout(r, 0));
+    await yieldToUI();
     if (typeof persistStateNow === 'function') {
       try { await persistStateNow(); } catch(e) { console.warn('[Boot] persist:', e); }
     }
     _lstepSet('save', 'done');
     _lbarSet(100);
-    await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+    await nextFrame();
 
   } catch (err) {
     // Captura exceções inesperadas que escaparam dos try/catch individuais de cada step.

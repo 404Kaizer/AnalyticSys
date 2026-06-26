@@ -185,10 +185,10 @@ async function notifSilentHealthCheck() {
       notifSync(null); return;
     }
 
-    await new Promise(r => setTimeout(r, 0));
+    await yieldToUI();
     const results = buildDashboardGerencialResults(dtIni, dtFim);
     if (!results?.length) { notifSync(null); return; }
-    await new Promise(r => setTimeout(r, 0));
+    await yieldToUI();
 
     const thresholds = getHealthThresholds();
     const _scoreFromCounts = counts => {
@@ -227,7 +227,7 @@ async function notifSilentHealthCheck() {
         const {level: centralLevel} = calcHealthScore(matDiffs, null, null, thresholds);
         centralCounts[(!centralLevel||centralLevel==='ok') ? 'bom' : centralLevel]++;
       });
-      await new Promise(r => setTimeout(r, 0)); // yield entre batches
+      await yieldToUI(); // yield entre batches
     }
 
     notifSync({ centralScore: _scoreFromCounts(centralCounts), matScore: _scoreFromCounts(matCounts) });

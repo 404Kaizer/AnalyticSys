@@ -197,7 +197,7 @@ function restaurarBackup(file) {
         { id: 'bkp-save',    icon: 'ti-device-floppy',    label: 'Salvando estado' },
         { id: 'bkp-render',  icon: 'ti-layout',           label: 'Atualizando interface' },
       ]);
-      await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+      await nextFrame();
 
       _lstepSet('bkp-parse', 'done'); _lbarSet(20);
 
@@ -1585,7 +1585,7 @@ async function lrcConfirm() {
       { id: 'lrc-remove', icon: 'ti-trash',          label: 'Excluindo lançamentos' },
       { id: 'lrc-save',   icon: 'ti-device-floppy',  label: 'Salvando alterações' },
     ]);
-    await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+    await nextFrame();
     _lstepSet('lrc-remove', 'running'); _lbarSet(30);
     toRemove.forEach(l => {
       const fp = _lrcFingerprint(l);
@@ -1658,7 +1658,7 @@ async function lrcDelete(idx) {
     { id: 'del-remove', icon: 'ti-trash',         label: 'Removendo lançamento' },
     { id: 'del-save',   icon: 'ti-device-floppy', label: 'Salvando alterações' },
   ]);
-  await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+  await nextFrame();
   _lstepSet('del-remove', 'running'); _lbarSet(30);
   const fp = _lrcFingerprint(target);
   const before = state.lancamentos.length;
@@ -3235,7 +3235,7 @@ async function _restaurarModulosConfirmar() {
     { id: 'bkp-save',    icon: 'ti-device-floppy',   label: 'Salvando estado' },
     { id: 'bkp-render',  icon: 'ti-layout',          label: 'Atualizando interface' },
   ]);
-  await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
+  await nextFrame();
 
   try {
     _lstepSet('bkp-parse', 'done'); _lbarSet(20);

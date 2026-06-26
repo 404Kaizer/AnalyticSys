@@ -419,8 +419,30 @@ function hideLoadingOverlay(status = 'Concluído', delay = 220) {
 
 
 function nextFrame() {
-  // Double-defer: rAF agenda o próximo frame, setTimeout(0) garante que o browser pintou
-  return new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
+  // Double-defer: rAF agenda o próximo frame, setTimeout(0) garante que o browser pintou.
+  // Em abas ocultas: resolve imediatamente — sem rAF (suspenso pelo browser) e sem
+  // setTimeout (throttled a 1-60s em background). O yield existe apenas para pintar
+  // a tela; se a tela nao esta visivel, nao ha motivo para esperar.
+  return new Promise(resolve => {
+    if (document.visibilityState === 'hidden') {
+      resolve();
+    } else {
+      requestAnimationFrame(() => setTimeout(resolve, 0));
+    }
+  });
+}
+
+function yieldToUI() {
+  // Yield simples para ceder tempo ao browser pintar entre steps pesados.
+  // Em abas ocultas resolve imediatamente — setTimeout em background sofre
+  // throttling de 1-60s pelo browser, tornando o loading artificialmente lento.
+  return new Promise(resolve => {
+    if (document.visibilityState === 'hidden') {
+      resolve();
+    } else {
+      setTimeout(resolve, 0);
+    }
+  });
 }
 
 function openModal(id) {
