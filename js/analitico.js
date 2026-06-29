@@ -914,10 +914,17 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
 
     if (totalMats > 0) {
       healthCountsHtml = `<div class="micro-health-counts">
-        <span class="micro-health-count-chip hcc-critico"><i class="ti ti-flame"></i> ${hCounts.critico} crítico</span>
-        <span class="micro-health-count-chip hcc-urgente"><i class="ti ti-alert-circle"></i> ${hCounts.urgente} urgente</span>
-        <span class="micro-health-count-chip hcc-atencao"><i class="ti ti-alert-triangle"></i> ${hCounts.atencao} atenção</span>
-        <span class="micro-health-count-chip hcc-bom"><i class="ti ti-circle-check"></i> ${hCounts.bom} bom</span>
+        <span class="micro-health-count-chip hcc-critico${hCounts.critico === 0 ? ' hcc-zero' : ''}"><i class="ti ti-flame"></i> ${hCounts.critico} crítico</span>
+        <span class="micro-health-count-chip hcc-urgente${hCounts.urgente === 0 ? ' hcc-zero' : ''}"><i class="ti ti-alert-circle"></i> ${hCounts.urgente} urgente</span>
+        <span class="micro-health-count-chip hcc-atencao${hCounts.atencao === 0 ? ' hcc-zero' : ''}"><i class="ti ti-alert-triangle"></i> ${hCounts.atencao} atenção</span>
+        <span class="micro-health-count-chip hcc-bom${hCounts.bom === 0 ? ' hcc-zero' : ''}"><i class="ti ti-circle-check"></i> ${hCounts.bom} bom</span>
+      </div>`;
+    } else {
+      healthCountsHtml = `<div class="micro-health-counts">
+        <span class="micro-health-count-chip hcc-critico hcc-zero"><i class="ti ti-flame"></i> 0 crítico</span>
+        <span class="micro-health-count-chip hcc-urgente hcc-zero"><i class="ti ti-alert-circle"></i> 0 urgente</span>
+        <span class="micro-health-count-chip hcc-atencao hcc-zero"><i class="ti ti-alert-triangle"></i> 0 atenção</span>
+        <span class="micro-health-count-chip hcc-bom hcc-zero"><i class="ti ti-circle-check"></i> 0 bom</span>
       </div>`;
     }
 
@@ -926,8 +933,68 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
       ${hLevel === 'sem_saude' ? 'SEM SAÚDE' : `Saúde: ${hScore}% · ${hLabelMap[hLevel]}`}
     </span>`;
 
-    if (totalMats >= 5) {
-      divPanelHtml = buildHealthPanel(r.central, dtIni, allMatsSorted, lancsByMat, sapByMat, categoriaByMat, dtFim);
+    // ── Painel compacto: sparkline + KPIs + top materiais ──────────────────
+    {
+      const _sparkId = `spark-${idx}`;
+
+      // Top 3 materiais por pior variação (excluindo neutros)
+      const top3 = matDiffs
+        .filter(m => Math.abs(m.diff) > 0.0001)
+        .sort((a, b) => a.diff - b.diff)
+        .slice(0, 3);
+
+      const _maxAbs = top3.length ? Math.max(...top3.map(m => Math.abs(m.diff))) : 1;
+
+      const _fmtK = v => {
+        const a = Math.abs(v);
+        if (a >= 1e6) return (v/1e6).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+'M';
+        if (a >= 1e3) return (v/1e3).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+'K';
+        return v.toLocaleString('pt-BR',{maximumFractionDigits:0});
+      };
+
+      const topRows = top3.map(m => {
+        const pct = Math.round(Math.abs(m.diff) / _maxAbs * 100);
+        const col = m.diff < 0 ? 'var(--red)' : 'var(--amber)';
+        const bg  = m.diff < 0 ? 'var(--red-bg)' : 'var(--amber-bg)';
+        return `<div class="cpanel-mat-row">
+          <span class="cpanel-mat-name">${escapeHtml(m.mat)}</span>
+          <div class="cpanel-mat-bar-wrap">
+            <div class="cpanel-mat-bar" style="width:${pct}%;background:${col};opacity:0.7"></div>
+          </div>
+          <span class="cpanel-mat-val" style="color:${col}">${_fmtK(m.diff)} kg</span>
+        </div>`;
+      }).join('');
+
+      divPanelHtml = `
+        <div class="cpanel" data-central="${escapeHtml(r.central)}" data-idx="${idx}">
+          <div class="cpanel-left">
+            <div class="cpanel-spark-wrap">
+              <canvas class="cpanel-spark" id="${_sparkId}" width="180" height="52"></canvas>
+            </div>
+          </div>
+          <div class="cpanel-kpis">
+            <div class="cpanel-kpi" id="cpanel-kpi-acum-${idx}">
+              <span class="cpanel-kpi-label">ACUMULADO</span>
+              <span class="cpanel-kpi-val">—</span>
+            </div>
+            <div class="cpanel-kpi" id="cpanel-kpi-tend-${idx}">
+              <span class="cpanel-kpi-label">TENDÊNCIA</span>
+              <span class="cpanel-kpi-val">—</span>
+            </div>
+            <div class="cpanel-kpi" id="cpanel-kpi-prev-${idx}">
+              <span class="cpanel-kpi-label">PREVISÃO</span>
+              <span class="cpanel-kpi-val">—</span>
+            </div>
+          </div>
+          <div class="cpanel-mats">
+            <div class="cpanel-mats-title"><i class="ti ti-arrow-narrow-down"></i> MAIORES VARIAÇÕES</div>
+            ${topRows || '<span class="cpanel-mats-empty">Sem variações no período</span>'}
+          </div>
+        </div>`;
+
+      // Registra para renderização assíncrona do sparkline + KPIs
+      if (!window._pendingSparklines) window._pendingSparklines = [];
+      window._pendingSparklines.push({ central: r.central, dtIni, dtFim, idx, sparkId: _sparkId, varTotal: varCentralMicro });
     }
 
     const card = document.createElement('div');
@@ -963,27 +1030,33 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
     }
 
     card.innerHTML = `
-      <div class="micro-filial-header" onclick="toggleMicro(this)">
-        <div class="micro-filial-name">
-          <i class="ti ti-building-warehouse"></i>
-          ${escapeHtml(r.central)}
+      <div class="micro-filial-header-wrap">
+        <div class="micro-filial-header" onclick="toggleMicro(this.closest('.micro-filial-header-wrap'))">
+          <div class="micro-filial-name">
+            <i class="ti ti-building-warehouse"></i>
+            ${escapeHtml(r.central)}
+          </div>
+          <div class="micro-filial-summary">
+            <span style="display:inline-flex;align-items:center;gap:5px;${varCentralMicro < 0 ? 'background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)' : varCentralMicro > 0 ? 'background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border)' : 'background:var(--bg3);color:var(--text3);border:1px solid var(--border)'};border-radius:6px;padding:2px 9px;font-family:var(--mono);font-size:10.5px;font-weight:700;white-space:nowrap">
+              ${varIcon(varCentralMicro)} ${varLabel(varCentralMicro)}: ${fmtKg(Math.abs(varCentralMicro))}
+            </span>
+            ${custoBadge}
+            ${prodBadge}
+            <span class="summary-sep"></span>
+            ${healthCountsHtml}
+            ${healthBadge}
+            <span id="pend-header-badge-${idx}"></span>
+          </div>
         </div>
-        <div class="micro-filial-summary">
-          <span class="${varCls}">
-            ${varIcon(varCentralMicro)} ${varLabel(varCentralMicro)}: ${fmtKg(Math.abs(varCentralMicro))}
-          </span>
-          ${custoBadge}
-          ${prodBadge}
-          ${healthCountsHtml}
-          ${healthBadge}
+        <div class="micro-filial-actions">
+          <button class="trend-btn" onclick="event.stopPropagation();openTrendModal('central','${escapeHtml(r.central)}')" title="Ver tendência de variação">
+            <i class="ti ti-chart-line"></i>
+          </button>
+          <button class="trend-btn" onclick="event.stopPropagation();abrirModalRelatorioCentral('${escapeHtml(r.central)}')" title="Gerar relatório desta central" style="background:linear-gradient(135deg,rgba(29,78,216,0.18),rgba(37,99,235,0.12));border:1px solid rgba(37,99,235,0.3);color:#60a5fa">
+            <i class="ti ti-file-analytics"></i>
+          </button>
+          <i class="ti ti-chevron-down micro-filial-chev" style="color:var(--text3);font-size:16px;flex-shrink:0;transition:transform 0.2s;cursor:pointer" id="chev-${idx}" onclick="event.stopPropagation();toggleMicro(this.closest('.micro-filial-header-wrap'))"></i>
         </div>
-        <button class="trend-btn" onclick="event.stopPropagation();openTrendModal('central','${escapeHtml(r.central)}')" title="Ver tendência de variação">
-          <i class="ti ti-chart-line"></i>
-        </button>
-        <button class="trend-btn" onclick="event.stopPropagation();abrirModalRelatorioCentral('${escapeHtml(r.central)}')" title="Gerar relatório desta central" style="background:linear-gradient(135deg,rgba(29,78,216,0.18),rgba(37,99,235,0.12));border:1px solid rgba(37,99,235,0.3);color:#60a5fa">
-          <i class="ti ti-file-analytics"></i>
-        </button>
-        <i class="ti ti-chevron-down" style="color:var(--text3);font-size:16px;flex-shrink:0;transition:transform 0.2s" id="chev-${idx}"></i>
       </div>
 
       <div class="micro-filial-body" id="micro-body-${idx}">
@@ -1015,6 +1088,23 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
           </table>
         </div>
       </div>`;
+
+    // ── Badge de pendentes SAP no header (preenchido após buildPendIntegSection popular _pendCache) ──
+    const _phBadge = card.querySelector(`#pend-header-badge-${idx}`);
+    if (_phBadge) {
+      const _pc = window._pendCache[r.central] || {};
+      const _nfC = (_pc.pendNF || []).length;
+      const _osC = (_pc.pendOS || []).length;
+      let _badgeHtml = '';
+      _badgeHtml = `<span class="summary-sep"></span>` +
+        `<span class="pend-header-pill pend-header-pill-nf${_nfC === 0 ? ' pend-header-pill-zero' : ''}" title="${_nfC === 0 ? 'Nenhuma NF pendente' : `${_nfC} NF${_nfC > 1 ? 's' : ''} pendente${_nfC > 1 ? 's' : ''} de integração SAP`}">
+          <i class="ti ti-file-invoice"></i> NF <span class="pend-header-pill-count">${_nfC}</span>
+        </span>` +
+        `<span class="pend-header-pill pend-header-pill-os${_osC === 0 ? ' pend-header-pill-zero' : ''}" title="${_osC === 0 ? 'Nenhuma OS pendente' : `${_osC} OS pendente${_osC > 1 ? 's' : ''} de integração SAP`}">
+          <i class="ti ti-clipboard-list"></i> OS <span class="pend-header-pill-count">${_osC}</span>
+        </span>`;
+      _phBadge.innerHTML = _badgeHtml;
+    }
 
     // Lookup regional for this central
     const filialIdx = getFilialLookupIndex();
@@ -1064,6 +1154,7 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
     const levelPriority = { critico: 4, urgente: 3, atencao: 2, ok: 1, none: 0 };
     let scoreSum = 0, scoreCount = 0;
 
+    let totalPendNF = 0, totalPendOS = 0;
     cards.forEach(c => {
       totalDiff  += parseFloat(c.dataset.centralDiff  || 0);
       totalCusto += parseFloat(c.dataset.custoVariacao || 0);
@@ -1074,6 +1165,9 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
       else if (lvl === 'ok')      agg.bom++;
       const sc = parseFloat(c.dataset.healthScore);
       if (!isNaN(sc)) { scoreSum += sc; scoreCount++; }
+      const pc = window._pendCache[c.dataset.central] || {};
+      totalPendNF += (pc.pendNF || []).length;
+      totalPendOS += (pc.pendOS || []).length;
     });
 
     // Média de saúde das centrais do regional
@@ -1094,7 +1188,12 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
         ? '<i class="ti ti-trending-up" style="font-size:11px;color:var(--amber)"></i>'
         : '<i class="ti ti-minus" style="font-size:11px;color:var(--text3)"></i>';
     const diffLabel = totalDiff < 0 ? 'Desfalque' : totalDiff > 0 ? 'Sobra' : 'Neutro';
-    const diffBadge = `<span class="${diffCls}" style="display:inline-flex;align-items:center;gap:4px;font-family:var(--mono);font-size:10.5px;font-weight:700;white-space:nowrap">
+    const diffStyle = totalDiff < 0
+      ? 'background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)'
+      : totalDiff > 0
+        ? 'background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border)'
+        : 'background:var(--bg3);color:var(--text3);border:1px solid var(--border)';
+    const diffBadge = `<span style="display:inline-flex;align-items:center;gap:5px;${diffStyle};border-radius:6px;padding:2px 9px;font-family:var(--mono);font-size:10.5px;font-weight:700;white-space:nowrap">
       ${diffIcon} ${diffLabel}: ${fmtKg(Math.abs(totalDiff))}
     </span>`;
 
@@ -1115,11 +1214,11 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
 
     // ── Health count chips ───────────────────────────────────────────────────
     const aggChips = [
-      agg.critico ? `<span class="micro-health-count-chip hcc-critico"><i class="ti ti-flame"></i> ${agg.critico} crítico</span>` : '',
-      agg.urgente ? `<span class="micro-health-count-chip hcc-urgente"><i class="ti ti-alert-circle"></i> ${agg.urgente} urgente</span>` : '',
-      agg.atencao ? `<span class="micro-health-count-chip hcc-atencao"><i class="ti ti-alert-triangle"></i> ${agg.atencao} atenção</span>` : '',
-      agg.bom     ? `<span class="micro-health-count-chip hcc-bom"><i class="ti ti-circle-check"></i> ${agg.bom} bom</span>` : '',
-    ].filter(Boolean).join('');
+      `<span class="micro-health-count-chip hcc-critico${agg.critico === 0 ? ' hcc-zero' : ''}"><i class="ti ti-flame"></i> ${agg.critico} crítico</span>`,
+      `<span class="micro-health-count-chip hcc-urgente${agg.urgente === 0 ? ' hcc-zero' : ''}"><i class="ti ti-alert-circle"></i> ${agg.urgente} urgente</span>`,
+      `<span class="micro-health-count-chip hcc-atencao${agg.atencao === 0 ? ' hcc-zero' : ''}"><i class="ti ti-alert-triangle"></i> ${agg.atencao} atenção</span>`,
+      `<span class="micro-health-count-chip hcc-bom${agg.bom === 0 ? ' hcc-zero' : ''}"><i class="ti ti-circle-check"></i> ${agg.bom} bom</span>`,
+    ].join('');
 
     // ── Dominant health badge ────────────────────────────────────────────────
     const hStyleMap = {
@@ -1142,23 +1241,33 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
     group.className = 'regional-group' + (isSemRegional ? ' sem-regional' : '');
     group.dataset.regional = regional;
     group.innerHTML = `
-      <div class="regional-group-header" onclick="toggleRegional(this)">
-        <div class="regional-group-icon"><i class="ti ${isSemRegional ? 'ti-map-pin-off' : 'ti-users-group'}"></i></div>
-        <span class="regional-group-name">${isSemRegional ? 'Sem regional' : escapeHtml(regional)}</span>
-        <div class="regional-group-summary">
-          ${diffBadge}
-          ${custoBadgeGrp}
-          <span class="regional-group-chips">${aggChips}</span>
-          ${healthBadgeGrp}
+      <div class="regional-group-header-wrap">
+        <div class="regional-group-header" onclick="toggleRegional(this.closest('.regional-group'))">
+          <div class="regional-group-icon">
+            ${!isSemRegional ? `<span class="regional-group-icon-count">${cards.length}</span>` : ''}
+            <i class="ti ${isSemRegional ? 'ti-map-pin-off' : 'ti-users-group'}"></i>
+          </div>
+          <span class="regional-group-name">${isSemRegional ? 'Sem regional' : escapeHtml(regional)}</span>
+          <div class="regional-group-summary">
+            ${diffBadge}
+            ${custoBadgeGrp}
+            <span class="summary-sep"></span>
+            <span class="regional-group-chips">${aggChips}</span>
+            ${healthBadgeGrp}
+            <span class="summary-sep"></span>
+            <span class="pend-header-pill pend-header-pill-nf${totalPendNF === 0 ? ' pend-header-pill-zero' : ''}" title="${totalPendNF === 0 ? 'Nenhuma NF pendente neste regional' : `${totalPendNF} NF${totalPendNF > 1 ? 's' : ''} pendente${totalPendNF > 1 ? 's' : ''} de integração SAP neste regional`}"><i class="ti ti-file-invoice"></i> NF <span class="pend-header-pill-count">${totalPendNF}</span></span>
+            <span class="pend-header-pill pend-header-pill-os${totalPendOS === 0 ? ' pend-header-pill-zero' : ''}" title="${totalPendOS === 0 ? 'Nenhuma OS pendente neste regional' : `${totalPendOS} OS pendente${totalPendOS > 1 ? 's' : ''} de integração SAP neste regional`}"><i class="ti ti-clipboard-list"></i> OS <span class="pend-header-pill-count">${totalPendOS}</span></span>
+          </div>
         </div>
-        <span class="regional-group-count">${cards.length} ${cards.length !== 1 ? 'centrais' : 'central'}</span>
-        <button class="trend-btn" onclick="event.stopPropagation();openTrendModal('regional','${escapeHtml(regional || '')}')" title="Ver tendência de variação">
-          <i class="ti ti-chart-line"></i>
-        </button>
-        ${!isSemRegional ? `<button class="trend-btn" onclick="event.stopPropagation();gerarRelatorioRegional('${escapeHtml(regional || '')}')" title="Gerar relatório deste regional" style="background:linear-gradient(135deg,rgba(29,78,216,0.18),rgba(37,99,235,0.12));border:1px solid rgba(37,99,235,0.3);color:#60a5fa">
-          <i class="ti ti-file-analytics"></i>
-        </button>` : ''}
-        <i class="ti ti-chevron-down regional-group-chev" id="rchev-${encodeURIComponent(regional || '_sem')}"></i>
+        <div class="regional-group-actions">
+          <button class="trend-btn" onclick="event.stopPropagation();openTrendModal('regional','${escapeHtml(regional || '')}')" title="Ver tendência de variação">
+            <i class="ti ti-chart-line"></i>
+          </button>
+          ${!isSemRegional ? `<button class="trend-btn" onclick="event.stopPropagation();gerarRelatorioRegional('${escapeHtml(regional || '')}')" title="Gerar relatório deste regional" style="background:linear-gradient(135deg,rgba(29,78,216,0.18),rgba(37,99,235,0.12));border:1px solid rgba(37,99,235,0.3);color:#60a5fa">
+            <i class="ti ti-file-analytics"></i>
+          </button>` : ''}
+          <i class="ti ti-chevron-down regional-group-chev" id="rchev-${encodeURIComponent(regional || '_sem')}" onclick="event.stopPropagation();toggleRegional(this.closest('.regional-group'))" style="cursor:pointer"></i>
+        </div>
       </div>
       <div class="regional-group-body open"></div>`;
 
@@ -1166,6 +1275,103 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
     cards.forEach(c => body.appendChild(c));
     container.appendChild(group);
   });
+
+  // ─── Renderização assíncrona dos sparklines + KPIs ─────────────────────
+  if (window._pendingSparklines && window._pendingSparklines.length) {
+    const _sparks = window._pendingSparklines.splice(0);
+    requestAnimationFrame(() => {
+      _sparks.forEach(({ central, dtIni, dtFim, idx, sparkId }) => {
+        try {
+          const weekData = _tCompute('central', central, dtIni, dtFim, null, null);
+          if (!weekData || !weekData.length) return;
+
+          const total    = weekData.reduce((s, w) => s + w.variation, 0);
+          const n        = weekData.length;
+          const trendDir = n >= 2 ? weekData[n-1].variation - weekData[n-2].variation : 0;
+          const fcast    = _tForecast(weekData);
+
+          const _fmtK = v => {
+            const a = Math.abs(v);
+            if (a >= 1e6) return (v >= 0 ? '+' : '') + (v/1e6).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+'M';
+            if (a >= 1e3) return (v >= 0 ? '+' : '') + (v/1e3).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+'K';
+            return (v >= 0 ? '+' : '') + v.toLocaleString('pt-BR',{maximumFractionDigits:0});
+          };
+
+          // KPIs
+          const elAcum = document.getElementById(`cpanel-kpi-acum-${idx}`);
+          const elTend = document.getElementById(`cpanel-kpi-tend-${idx}`);
+          const elPrev = document.getElementById(`cpanel-kpi-prev-${idx}`);
+          if (elAcum) elAcum.innerHTML = `
+            <span class="cpanel-kpi-label">ACUMULADO</span>
+            <span class="cpanel-kpi-val" style="color:${total < 0 ? 'var(--red)' : total > 0 ? 'var(--amber)' : 'var(--text3)'}">${_fmtK(total)} kg</span>`;
+          if (elTend) elTend.innerHTML = `
+            <span class="cpanel-kpi-label">TENDÊNCIA</span>
+            <span class="cpanel-kpi-val" style="color:${trendDir <= 0 ? 'var(--red)' : 'var(--amber)'}">
+              <i class="ti ti-trending-${trendDir <= 0 ? 'down' : 'up'}" style="font-size:13px"></i>
+              ${trendDir <= 0 ? 'Piorando' : 'Melhorando'}
+            </span>`;
+          if (elPrev) elPrev.innerHTML = `
+            <span class="cpanel-kpi-label">PREVISÃO</span>
+            <span class="cpanel-kpi-val" style="color:${fcast == null ? 'var(--text3)' : fcast < 0 ? 'var(--red)' : 'var(--amber)'}">
+              ${fcast != null ? _fmtK(fcast) + ' kg' : '—'}
+            </span>`;
+
+          // Sparkline canvas
+          const canvas = document.getElementById(sparkId);
+          if (!canvas) return;
+          const ctx  = canvas.getContext('2d');
+          const W    = canvas.width, H = canvas.height;
+          const vals = weekData.map(w => w.variation);
+          const minV = Math.min(...vals, 0);
+          const maxV = Math.max(...vals, 0);
+          const rangeV = maxV - minV || 1;
+          const toY  = v => H - Math.round(((v - minV) / rangeV) * (H - 8)) - 4;
+          const toX  = (i) => Math.round((i / (vals.length - 1 || 1)) * (W - 4)) + 2;
+
+          ctx.clearRect(0, 0, W, H);
+
+          // Linha zero
+          const zeroY = toY(0);
+          ctx.beginPath();
+          ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+          ctx.lineWidth = 1;
+          ctx.setLineDash([3, 3]);
+          ctx.moveTo(0, zeroY);
+          ctx.lineTo(W, zeroY);
+          ctx.stroke();
+          ctx.setLineDash([]);
+
+          // Área preenchida
+          const lineColor = total < -0.0001 ? '#f87171' : total > 0.0001 ? '#fbbf24' : '#94a3b8';
+          const fillColor = total < -0.0001 ? 'rgba(248,113,113,0.15)' : total > 0.0001 ? 'rgba(251,191,36,0.15)' : 'rgba(148,163,184,0.1)';
+
+          ctx.beginPath();
+          ctx.moveTo(toX(0), zeroY);
+          vals.forEach((v, i) => ctx.lineTo(toX(i), toY(v)));
+          ctx.lineTo(toX(vals.length - 1), zeroY);
+          ctx.closePath();
+          ctx.fillStyle = fillColor;
+          ctx.fill();
+
+          // Linha principal
+          ctx.beginPath();
+          ctx.strokeStyle = lineColor;
+          ctx.lineWidth = 1.5;
+          ctx.lineJoin = 'round';
+          vals.forEach((v, i) => i === 0 ? ctx.moveTo(toX(i), toY(v)) : ctx.lineTo(toX(i), toY(v)));
+          ctx.stroke();
+
+          // Ponto final
+          const lx = toX(vals.length - 1), ly = toY(vals[vals.length - 1]);
+          ctx.beginPath();
+          ctx.arc(lx, ly, 3, 0, Math.PI * 2);
+          ctx.fillStyle = lineColor;
+          ctx.fill();
+
+        } catch(e) { /* silencioso */ }
+      });
+    });
+  }
 
   // ─── RESUMO POR CENTRAL (dados do card) ─────────────────────────────
   window._anResumoCentraisData = _cardBuffer.map(card => ({
@@ -1250,18 +1456,19 @@ function toggleMaterialDetail(row, event) {
 }
 
 
-function toggleMicro(header) {
-  const body = header.nextElementSibling;
-  const chev = header.querySelector('[id^="chev-"]');
+function toggleMicro(wrap) {
+  // wrap = .micro-filial-header-wrap
+  const body = wrap.nextElementSibling;
+  const chev = wrap.querySelector('[id^="chev-"]');
   if (!body) return;
   const open = body.classList.toggle('open');
+  wrap.classList.toggle('open', open);
   if (chev) chev.style.transform = open ? 'rotate(180deg)' : '';
 }
 
-function toggleRegional(header) {
-  const group = header.closest('.regional-group');
+function toggleRegional(group) {
   const body  = group.querySelector('.regional-group-body');
-  const chev  = header.querySelector('.regional-group-chev');
+  const chev  = group.querySelector('.regional-group-chev');
   if (!body) return;
   const open = body.classList.toggle('open');
   group.classList.toggle('collapsed', !open);
@@ -2535,7 +2742,8 @@ window._inv_helpers = {
 
     return custoMedioPorMat;
   }
-};// Monta o texto do tooltip para badges AUSENTE na tabela de materiais
+};
+// Monta o texto do tooltip para badges AUSENTE na tabela de materiais
 function buildAbsentTooltip(nearest) {
   const before = nearest?.before
     ? `Último antes do período: ${nearest.before.dtLabel} — ${fmtKg(nearest.before.value)}`

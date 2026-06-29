@@ -1139,10 +1139,24 @@ td.pending-cell  { color: var(--text3) !important; font-style: italic; font-size
 }
 .micro-filial-card:hover { border-color: var(--border2); }
 
-.micro-filial-header {
-  background: var(--bg3);
+/* ── Header wrapper: header informativo + painel de ações colados ── */
+.micro-filial-header-wrap {
+  display: flex;
+  align-items: stretch;
   border-bottom: 1px solid var(--border);
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  overflow: hidden;
+}
+.micro-filial-header-wrap.open {
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+.micro-filial-header-wrap:not(.open) {
+  border-radius: var(--radius-lg);
+  border-bottom: none;
+}
+
+.micro-filial-header {
+  background: var(--bg3);
   padding: 13px 18px;
   display: flex;
   align-items: center;
@@ -1151,8 +1165,24 @@ td.pending-cell  { color: var(--text3) !important; font-style: italic; font-size
   cursor: pointer;
   user-select: none;
   transition: background 0.13s;
+  flex: 1;
+  min-width: 0;
 }
 .micro-filial-header:hover { background: color-mix(in srgb, var(--bg3) 80%, var(--accent) 20%); }
+
+/* ── Painel de ações à direita do header ── */
+.micro-filial-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 12px;
+  background: var(--bg3);
+  border-left: 1px solid var(--border2);
+  flex-shrink: 0;
+}
+.micro-filial-actions .trend-btn {
+  margin-left: 0;
+}
 
 .micro-filial-name {
   font-size: 12.5px;
@@ -1183,6 +1213,129 @@ td.pending-cell  { color: var(--text3) !important; font-style: italic; font-size
 .micro-filial-body { display: none; }
 .micro-filial-body.open { display: block; }
 .micro-body-section { padding: 16px 18px 12px; }
+
+/* ── Painel compacto: sparkline + KPIs + top materiais ─── */
+.cpanel {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg2) 70%, var(--bg) 30%);
+  min-height: 88px;
+}
+.cpanel-left {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  padding-right: 16px;
+  border-right: 1px solid var(--border);
+}
+.cpanel-spark-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cpanel-spark {
+  display: block;
+  border-radius: 4px;
+}
+.cpanel-kpis {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 4px;
+  padding: 0 16px;
+  border-right: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.cpanel-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.cpanel-kpi-label {
+  font-size: 8.5px;
+  font-family: var(--mono);
+  font-weight: 700;
+  letter-spacing: .08em;
+  color: var(--text3);
+  text-transform: uppercase;
+}
+.cpanel-kpi-val {
+  font-size: 12px;
+  font-family: var(--mono);
+  font-weight: 700;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.cpanel-mats {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  padding-left: 16px;
+  min-width: 0;
+}
+.cpanel-mats-title {
+  font-size: 8.5px;
+  font-family: var(--mono);
+  font-weight: 700;
+  letter-spacing: .08em;
+  color: var(--text3);
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 2px;
+}
+.cpanel-mats-empty {
+  font-size: 11px;
+  color: var(--text3);
+  font-family: var(--mono);
+}
+.cpanel-mat-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cpanel-mat-name {
+  font-size: 10.5px;
+  font-family: var(--mono);
+  color: var(--text2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 80px;
+  max-width: 160px;
+  flex-shrink: 0;
+}
+.cpanel-mat-bar-wrap {
+  flex: 1;
+  height: 4px;
+  background: var(--bg4);
+  border-radius: 2px;
+  overflow: hidden;
+  min-width: 40px;
+}
+.cpanel-mat-bar {
+  height: 100%;
+  border-radius: 2px;
+  transition: width .3s ease;
+}
+.cpanel-mat-val {
+  font-size: 10.5px;
+  font-family: var(--mono);
+  font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0;
+  min-width: 70px;
+  text-align: right;
+}
 
 /* ── Pendentes de Integração SAP ───────────────────────── */
 .pend-integ-section {
@@ -1234,6 +1387,58 @@ td.pending-cell  { color: var(--text3) !important; font-style: italic; font-size
   font-weight: 700;
   min-width: 18px;
   text-align: center;
+}
+
+/* ── Separador semântico entre grupos da summary ── */
+.summary-sep {
+  width: 1px;
+  height: 14px;
+  background: var(--border2);
+  border-radius: 1px;
+  flex-shrink: 0;
+  opacity: 0.55;
+  align-self: center;
+}
+
+/* ── Pendentes SAP — pills no header do card recolhido ── */
+.pend-header-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 5px;
+  font-size: 10.5px;
+  font-family: var(--mono);
+  font-weight: 700;
+  white-space: nowrap;
+  pointer-events: none;
+  letter-spacing: .01em;
+}
+.pend-header-pill i { font-size: 11px; }
+.pend-header-pill-nf {
+  background: var(--green-bg);
+  color: var(--green);
+  border: 1px solid var(--green-border);
+}
+.pend-header-pill-os {
+  background: var(--red-bg);
+  color: var(--red);
+  border: 1px solid var(--red-border);
+}
+.pend-header-pill-count {
+  background: rgba(0,0,0,.13);
+  border-radius: 8px;
+  padding: 0 5px;
+  font-size: 9.5px;
+  font-weight: 700;
+  min-width: 16px;
+  text-align: center;
+}
+.pend-header-pill-zero {
+  background: var(--bg3);
+  border-color: var(--border);
+  color: var(--text3);
+  opacity: 0.45;
 }
 
 /* ── Botão "Considerar pendentes" — estado inativo (mesma cor do chip, opacidade reduzida) */
@@ -1597,8 +1802,8 @@ tr.pend-injetado-ambos {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 3px 8px;
-  border-radius: 999px;
+  padding: 2px 9px;
+  border-radius: 6px;
   border: 1px solid var(--border2);
   background: var(--bg3);
   font-size: 10px;
@@ -1613,6 +1818,7 @@ tr.pend-injetado-ambos {
 .micro-health-count-chip.hcc-atencao { border-color: var(--amber-border); background: var(--amber-bg); color: var(--amber); }
 .micro-health-count-chip.hcc-urgente { border-color: rgba(249,115,22,0.22); background: rgba(249,115,22,0.10); color: #f97316; }
 .micro-health-count-chip.hcc-critico { border-color: var(--red-border); background: var(--red-bg); color: var(--red); }
+.micro-health-count-chip.hcc-zero { background: var(--bg3); border-color: var(--border); color: var(--text3); opacity: 0.45; }
 
 /* Config section for health thresholds */
 .health-cfg-grid {
@@ -2003,26 +2209,55 @@ td.var-cell-zero .ti-circle-check     { color: var(--text3); }
 .regional-group.collapsed {
   margin-bottom: 6px;
 }
-.regional-group-header {
+.regional-group-header-wrap {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 16px 10px 14px;
+  align-items: stretch;
   background: var(--bg2);
   border: 1px solid var(--border2);
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   border-bottom: none;
+  overflow: hidden;
+  transition: border-color 0.15s;
+}
+.regional-group.collapsed .regional-group-header-wrap {
+  border-radius: var(--radius-lg);
+  border-bottom: 1px solid var(--border2);
+}
+
+.regional-group-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  flex: 1;
+  min-width: 0;
   position: relative;
   cursor: pointer;
   user-select: none;
   transition: background 0.15s;
 }
 .regional-group-header:hover { background: var(--bg3); }
-.regional-group.collapsed .regional-group-header {
-  border-radius: var(--radius-lg);
-  border-bottom: 1px solid var(--border2);
+.regional-group-header::after {
+  content: '';
+  position: absolute;
+  left: 14px; right: 14px; bottom: 0;
+  height: 1px;
+  background: var(--border);
 }
 .regional-group.collapsed .regional-group-header::after { display: none; }
+
+/* ── Painel de ações à direita do header regional ── */
+.regional-group-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 12px;
+  border-left: 1px solid var(--border2);
+  flex-shrink: 0;
+}
+.regional-group-actions .trend-btn {
+  margin-left: 0;
+}
 .regional-group-chev {
   font-size: 14px;
   color: var(--text3);
@@ -2037,14 +2272,24 @@ td.var-cell-zero .ti-circle-check     { color: var(--text3); }
   background: var(--border);
 }
 .regional-group-icon {
-  width: 26px; height: 26px;
+  height: 26px;
+  min-width: 26px;
+  padding: 0 8px;
   border-radius: 7px;
   background: var(--accent-dim);
   border: 1px solid var(--accent-glow);
-  display: flex; align-items: center; justify-content: center;
+  display: inline-flex; align-items: center; justify-content: center;
+  gap: 5px;
   flex-shrink: 0;
 }
 .regional-group-icon i { font-size: 13px; color: var(--accent); }
+.regional-group-icon-count {
+  font-size: 11px;
+  font-family: var(--mono);
+  font-weight: 700;
+  color: var(--accent);
+  line-height: 1;
+}
 .regional-group-name {
   font-size: 12.5px;
   font-weight: 700;
