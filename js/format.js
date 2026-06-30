@@ -1648,141 +1648,123 @@ function _fechNomeMesTitulo(d) {
   return m.charAt(0).toUpperCase() + m.slice(1);
 }
 
-// ── Texto padrão por tipo ─────────────────────────────────
-function _fechTextoDefault(tipo) {
-  const now    = new Date();
-  const today  = _fechFmtDate(now);
-  const mes    = _fechNomeMes(now);
-  const mesTit = _fechNomeMesTitulo(now);
-  const lastDay = _fechLastWorkdayOfMonth(now.getFullYear(), now.getMonth());
+// ── Ícones próprios (SVG inline) por categoria de fechamento ──
+const _FECH_ICON_CALENDAR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 17h.01M12 17h.01"/></svg>';
+const _FECH_ICON_BOX = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="m3.27 6.96 8.73 5.04 8.73-5.04M12 22.08V12"/></svg>';
+const _FECH_ICON_TARGET = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5.5"/><circle cx="12" cy="12" r="2" fill="currentColor"/></svg>';
+const _FECH_ICON_ALERT = '<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>';
+
+// ── Config visual fixa por tipo (não editável pelo analista) ──
+const _fechConfig = {
+  semanal: { badgeIcon: _FECH_ICON_CALENDAR, priority: 'Rotina obrigatória' },
+  mensal:  { badgeIcon: _FECH_ICON_BOX,      priority: 'Prioridade máxima' },
+  metas:   { badgeIcon: _FECH_ICON_TARGET,   priority: 'Acompanhamento mensal' },
+};
+
+// ── Campos padrão por tipo — recalculados com a data atual a cada chamada ──
+function _fechDefaultFields(tipo) {
+  const now       = new Date();
+  const today     = _fechFmtDate(now);
+  const mes       = _fechNomeMes(now);
+  const mesTit    = _fechNomeMesTitulo(now);
+  const ano       = now.getFullYear();
+  const lastDay   = _fechLastWorkdayOfMonth(now.getFullYear(), now.getMonth());
   const lastDayFmt = _fechFmtDate(lastDay);
 
   if (tipo === 'semanal') {
-    return `⚠️ BOA TARDE, SENHORES!
-
-Hoje, ${today}, é dia de lançar o estoque semanal APÓS A PRODUÇÃO!
-
-👉 Não deixem de conferir visualmente TUDO:
-• Agregados (areia, brita, etc...)
-• Aditivos
-• Adições
-• Aglomerantes
-
-❗ Não lance o que não viu ou o que não é a verdade. Tenha certeza!
-
-👉 Caso não tenha o material, lance ZERADO (0).
-Faça o lançamento de TODOS OS MATERIAIS que aparecem na PUZL!
-
-Deixe um "🤝" e confirme que entendeu!`;
+    return {
+      badge: 'Medição Semanal',
+      title: 'Lançamento de Estoque',
+      meta: `Hoje · ${today} · Após o fim da produção`,
+      intro: `Hoje, ${today}, é dia de lançar o estoque semanal após a produção!`,
+      listlabel: 'VERIFIQUEM TODOS OS MATERIAIS:',
+      items: ['Agregados (areia, brita, etc...)', 'Aditivos', 'Adições', 'Aglomerantes'],
+      alerts: [
+        'Não lance o que não viu. Tenha certeza!',
+        'Caso não tenha o material, lance ZERADO (0).'
+      ],
+    };
   }
 
   if (tipo === 'mensal') {
-    return `BOM DIA, SENHORES! ☀️
-
-⚠️ HOJE, ${today}, AO FIM DA PRODUÇÃO, AFERIR TODOS OS MATERIAIS E LANÇAR AS QUANTIDADES NA PUZL PARA O FECHAMENTO DO INVENTÁRIO MENSAL DE ${mes}!
-
-✅ O que deve ser feito:
-• Conferir visualmente TODOS os materiais da usina;
-• Lançar os estoques na PUZL na data de hoje (${today});
-• Materiais parados ou aguardando coleta também devem ser lançados.
-
-QUALQUER PROBLEMA QUANTO AO FECHAMENTO, AVISEM COM ANTECEDÊNCIA!
-
-🛑 O INVENTÁRIO MENSAL É OBRIGATÓRIO E INDISPENSÁVEL! 🛑
-
-CONTAMOS COM A COLABORAÇÃO DE TODOS! 🥇`;
+    return {
+      badge: 'Inventário Mensal',
+      title: 'Fechamento Obrigatório',
+      meta: `${mesTit}/${ano} · Corte ${lastDayFmt} · Fim da produção`,
+      intro: `Hoje, ${today}, ao fim da produção, aferir todos os materiais e lançar as quantidades na PUZL para o fechamento do inventário mensal de ${mes}!`,
+      listlabel: 'O QUE DEVE SER FEITO:',
+      items: [
+        'Conferir visualmente TODOS os materiais da usina',
+        'Lançar os estoques na PUZL na data de hoje',
+        'Materiais parados ou aguardando coleta também devem ser lançados'
+      ],
+      alerts: [
+        'O inventário mensal é obrigatório e indispensável!',
+        'Qualquer problema, avisem com antecedência.'
+      ],
+    };
   }
 
   if (tipo === 'metas') {
-    return `⚠️ Atenção às metas do fechamento de ${mesTit}:
-
-📦 01. ESTOQUES DE AGREGADOS
-Manter os estoques de agregados (areia, brita, etc...) no mínimo, respeitando o limite de segurança.
-
-📋 02. NOTAS FISCAIS
-Até o fechamento, validar 100% das notas fiscais de insumos e corrigir qualquer pendência.
-
-📅 03. CONFERÊNCIA — ${lastDayFmt}
-No dia ${lastDayFmt}, no final da produção, conferir todos os materiais da usina.
-
-🖥️ 04. LANÇAMENTO NO PUZL — ${lastDayFmt}
-Lançar os estoques na PUZL na data de ${lastDayFmt}.
-
-❌ Não deixar conferência ou lançamento pendente!
-
-ESTOQUE / INSUMOS`;
+    return {
+      badge: 'Metas do Mês',
+      title: 'Obrigações de Fechamento',
+      meta: `${mesTit}/${ano} · Corte ${lastDayFmt}`,
+      intro: `Atenção às metas de fechamento de ${mesTit}/${ano} — todas devem estar cumpridas até a data de corte.`,
+      listlabel: 'METAS DO PERÍODO:',
+      items: [
+        'Estoques de agregados no mínimo, respeitando o limite de segurança.',
+        'Notas fiscais — validar 100% e corrigir pendências.',
+        `Conferência — ${lastDayFmt}, no final da produção.`
+      ],
+      alerts: ['Não deixar conferência ou lançamento pendente!'],
+    };
   }
 
-  return '';
+  return null;
 }
 
-// ── Config por tipo ───────────────────────────────────────
-const _fechConfig = {
-  semanal: {
-    title:    'Fechamento Semanal',
-    badge:    '📅 MEDIÇÃO SEMANAL',
-    badgeColor: '#3b82f6',
-    icon:     'ti-calendar-week',
-    iconBg:   'var(--accent-dim)',
-    iconColor:'var(--accent)',
-  },
-  mensal: {
-    title:    'Fechamento Mensal',
-    badge:    '📦 INVENTÁRIO MENSAL',
-    badgeColor: '#ef4444',
-    icon:     'ti-calendar-month',
-    iconBg:   'var(--red-bg)',
-    iconColor:'var(--red)',
-  },
-  metas: {
-    title:    'Metas do Fechamento',
-    badge:    '🎯 METAS DO MÊS',
-    badgeColor: '#f59e0b',
-    icon:     'ti-target-arrow',
-    iconBg:   'var(--amber-bg)',
-    iconColor:'var(--amber)',
-  },
-};
+// ── Estado em memória (um objeto de campos por tipo) ──────────
+let _fechState = { semanal: null, mensal: null, metas: null };
 
-// ── Switch tipo ───────────────────────────────────────────
-function fechamentoSwitchTipo(tipo) {
-  _fechTipo = tipo;
+// ── Persistência (localStorage — mesmo padrão já usado no projeto) ──
+const _FECH_KEY = 'analyticsys_fech_v2';
+let _fechSaveTimer = null;
 
-  // Update tabs
-  document.querySelectorAll('.fech-tab').forEach(t =>
-    t.classList.toggle('active', t.dataset.tipo === tipo)
-  );
-
-  const cfg = _fechConfig[tipo];
-  const now = new Date();
-
-  // Header
-  const iconEl = document.getElementById('fech-header-icon');
-  const titleEl = document.getElementById('fech-header-title');
-  const dateEl  = document.getElementById('fech-header-date');
-  if (iconEl)  { iconEl.style.background = cfg.iconBg; iconEl.style.color = cfg.iconColor; iconEl.innerHTML = `<i class="ti ${cfg.icon}"></i>`; }
-  if (titleEl) titleEl.textContent = cfg.title;
-  if (dateEl)  {
-    if (tipo === 'semanal') dateEl.textContent = `Hoje: ${_fechFmtDate(now)}`;
-    else if (tipo === 'mensal') {
-      const ld = _fechLastWorkdayOfMonth(now.getFullYear(), now.getMonth());
-      dateEl.textContent = `Fechamento: ${_fechFmtDate(ld)}`;
-    } else {
-      const ld = _fechLastWorkdayOfMonth(now.getFullYear(), now.getMonth());
-      dateEl.textContent = `Mês: ${_fechNomeMesTitulo(now)} · Corte: ${_fechFmtDate(ld)}`;
-    }
-  }
-
-  // Editor — load saved content or default
-  const editor = document.getElementById('fech-editor');
-  if (editor) {
-    const saved = _fechLoadContent(tipo);
-    editor.innerHTML = saved || _fechTextToHtml(_fechTextoDefault(tipo));
-    fechUpdateToolbarState();
-  }
+function _fechLoadAllSaved() {
+  try { return JSON.parse(localStorage.getItem(_FECH_KEY) || '{}'); }
+  catch (e) { return {}; }
 }
 
-// ── Open modal ────────────────────────────────────────────
+function _fechSaveCurrent() {
+  clearTimeout(_fechSaveTimer);
+  _fechSaveTimer = setTimeout(() => {
+    try {
+      const saved = _fechLoadAllSaved();
+      saved[_fechTipo] = _fechState[_fechTipo];
+      localStorage.setItem(_FECH_KEY, JSON.stringify(saved));
+      const ind = document.getElementById('fech-saved-indicator');
+      if (ind) { ind.style.opacity = '1'; setTimeout(() => ind.style.opacity = '0', 1500); }
+    } catch (e) {}
+  }, 500);
+}
+
+// Retorna os campos do tipo, hidratando do localStorage na primeira vez.
+// Campos salvos sobrescrevem os defaults campo a campo — se o analista nunca
+// editou um tipo, ele recebe os defaults computados com a data atual.
+function _fechGetFields(tipo) {
+  if (_fechState[tipo]) return _fechState[tipo];
+  const saved      = _fechLoadAllSaved();
+  const persisted   = saved[tipo];
+  const defaults    = _fechDefaultFields(tipo);
+  const fields = persisted && typeof persisted === 'object'
+    ? { ...defaults, ...persisted, items: Array.isArray(persisted.items) ? persisted.items : defaults.items, alerts: Array.isArray(persisted.alerts) ? persisted.alerts : defaults.alerts }
+    : defaults;
+  _fechState[tipo] = fields;
+  return fields;
+}
+
+// ── Abrir modal ─────────────────────────────────────────────
 function abrirFechamento(tipo) {
   closeToolsMenu();
   requestAnimationFrame(() => {
@@ -1791,141 +1773,192 @@ function abrirFechamento(tipo) {
   });
 }
 
-// ── Restaurar texto padrão ────────────────────────────────
+// ── Trocar de aba ───────────────────────────────────────────
+function fechamentoSwitchTipo(tipo) {
+  _fechTipo = tipo;
+
+  document.querySelectorAll('.fech-tab').forEach(t =>
+    t.classList.toggle('active', t.dataset.tipo === tipo)
+  );
+
+  const card = document.getElementById('fech-card');
+  if (card) card.className = 'fech-card fech-theme-' + tipo;
+
+  _fechLoadFormFromState();
+  fechRenderFromForm(true); // true = não reagenda salvamento ao só trocar de aba
+}
+
+// ── Popula os inputs do formulário a partir do estado ────────
+function _fechLoadFormFromState() {
+  const f = _fechGetFields(_fechTipo);
+  const elTitle = document.getElementById('fech-f-title');
+  const elMeta  = document.getElementById('fech-f-meta');
+  const elIntro = document.getElementById('fech-f-intro');
+  const elList  = document.getElementById('fech-f-listlabel');
+  if (elTitle) elTitle.value = f.title;
+  if (elMeta)  elMeta.value  = f.meta;
+  if (elIntro) elIntro.value = f.intro;
+  if (elList)  elList.value  = f.listlabel;
+  _fechRenderItemInputs();
+  _fechRenderAlertInputs();
+}
+
+function _fechRenderItemInputs() {
+  const wrap = document.getElementById('fech-f-items');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  const items = _fechState[_fechTipo].items;
+  items.forEach((item, i) => {
+    const row = document.createElement('div');
+    row.className = 'fech-list-row';
+    row.innerHTML = `
+      <input type="text" value="${escapeHtml(item)}" oninput="fechUpdateItem(${i}, this.value)">
+      <button class="fech-icon-btn" onclick="fechRemoveItem(${i})" title="Remover item"><i class="ti ti-trash"></i></button>`;
+    wrap.appendChild(row);
+  });
+}
+
+function _fechRenderAlertInputs() {
+  const wrap = document.getElementById('fech-f-alerts');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  const alerts = _fechState[_fechTipo].alerts;
+  alerts.forEach((al, i) => {
+    const row = document.createElement('div');
+    row.className = 'fech-list-row is-textarea';
+    row.innerHTML = `
+      <textarea oninput="fechUpdateAlert(${i}, this.value)">${escapeHtml(al)}</textarea>
+      <button class="fech-icon-btn" onclick="fechRemoveAlert(${i})" title="Remover alerta"><i class="ti ti-trash"></i></button>`;
+    wrap.appendChild(row);
+  });
+}
+
+// ── Itens: editar / remover / adicionar ───────────────────────
+function fechUpdateItem(i, val) {
+  _fechState[_fechTipo].items[i] = val;
+  fechRenderFromForm();
+}
+function fechRemoveItem(i) {
+  _fechState[_fechTipo].items.splice(i, 1);
+  _fechRenderItemInputs();
+  fechRenderFromForm();
+}
+function fechAddItem() {
+  _fechState[_fechTipo].items.push('Novo item');
+  _fechRenderItemInputs();
+  fechRenderFromForm();
+}
+
+// ── Alertas: editar / remover / adicionar ─────────────────────
+function fechUpdateAlert(i, val) {
+  _fechState[_fechTipo].alerts[i] = val;
+  fechRenderFromForm();
+}
+function fechRemoveAlert(i) {
+  _fechState[_fechTipo].alerts.splice(i, 1);
+  _fechRenderAlertInputs();
+  fechRenderFromForm();
+}
+function fechAddAlert() {
+  _fechState[_fechTipo].alerts.push('Novo alerta importante.');
+  _fechRenderAlertInputs();
+  fechRenderFromForm();
+}
+
+// ── Restaurar texto padrão ─────────────────────────────────────
 function fechamentoResetarTexto() {
   if (!confirm('Restaurar o texto padrão? As alterações salvas deste tipo serão perdidas.')) return;
-  const editor = document.getElementById('fech-editor');
-  if (editor) {
-    editor.innerHTML = _fechTextToHtml(_fechTextoDefault(_fechTipo));
-    fechUpdateToolbarState();
-    // Clear saved content for this tipo
-    try {
-      const saved = JSON.parse(localStorage.getItem(_FECH_KEY) || '{}');
-      delete saved[_fechTipo];
-      localStorage.setItem(_FECH_KEY, JSON.stringify(saved));
-    } catch(e) {}
-    toast('Texto restaurado para o padrão.');
-  }
-}
-
-// Convert plain text to HTML for initial load
-function _fechTextToHtml(text) {
-  return text.split('\n').map(line => {
-    if (!line.trim()) return '<p><br></p>';
-    return '<p>' + line
-      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-      + '</p>';
-  }).join('');
-}
-
-// Get normalized HTML from editor — converts <font color> to <span style>
-function _fechGetRichHtml() {
-  const editor = document.getElementById('fech-editor');
-  if (!editor) return '';
-  // Clone and normalize font tags
-  const clone = editor.cloneNode(true);
-  clone.querySelectorAll('font[color]').forEach(font => {
-    const span = document.createElement('span');
-    span.style.color = font.getAttribute('color');
-    // Copy other attributes (size → font-size)
-    const size = font.getAttribute('size');
-    if (size) {
-      const sizeMap = {'1':'8px','2':'10px','3':'12px','4':'14px','5':'18px','6':'24px','7':'36px'};
-      span.style.fontSize = sizeMap[size] || size + 'px';
-    }
-    while (font.firstChild) span.appendChild(font.firstChild);
-    font.parentNode.replaceChild(span, font);
-  });
-  return clone.innerHTML;
-}
-
-// Get plain text from editor (for WhatsApp copy)
-function _fechGetPlainText() {
-  const editor = document.getElementById('fech-editor');
-  if (!editor) return '';
-  // Walk nodes to extract text preserving newlines
-  let text = '';
-  const walk = (node) => {
-    if (node.nodeType === 3) { text += node.textContent; return; }
-    const tag = node.tagName?.toLowerCase();
-    if (tag === 'br') { text += '\n'; return; }
-    if (['p','div','li'].includes(tag) && text && !text.endsWith('\n')) text += '\n';
-    if (tag === 'li') text += '• ';
-    node.childNodes.forEach(walk);
-    if (['p','div'].includes(tag) && !text.endsWith('\n')) text += '\n';
-  };
-  walk(editor);
-  return text.replace(/\n{3,}/g, '\n\n').trim();
-}
-
-// execCommand wrapper
-function fechExec(cmd, val) {
-  document.getElementById('fech-editor')?.focus();
-  document.execCommand(cmd, false, val || null);
-  fechUpdateToolbarState();
-}
-
-function fechSetFontSize(val) {
-  if (!val) return;
-  document.getElementById('fech-editor')?.focus();
-  document.execCommand('fontSize', false, val);
-  fechUpdateToolbarState();
-}
-
-function fechEditorUpdate() {
-  _fechSaveContent(_fechTipo);
-}
-
-// ── Persistence ───────────────────────────────────────────
-const _FECH_KEY = 'analyticsys_fech_v1';
-
-let _fechSaveTimer = null;
-function _fechSaveContent(tipo) {
-  clearTimeout(_fechSaveTimer);
-  _fechSaveTimer = setTimeout(() => {
-    const editor = document.getElementById('fech-editor');
-    if (!editor) return;
-    try {
-      const saved = JSON.parse(localStorage.getItem(_FECH_KEY) || '{}');
-      saved[tipo] = editor.innerHTML;
-      localStorage.setItem(_FECH_KEY, JSON.stringify(saved));
-      // Show saved indicator
-      const ind = document.getElementById('fech-saved-indicator');
-      if (ind) { ind.style.opacity = '1'; setTimeout(() => ind.style.opacity = '0', 1500); }
-    } catch(e) {}
-  }, 500);
-}
-
-function _fechLoadContent(tipo) {
+  _fechState[_fechTipo] = _fechDefaultFields(_fechTipo);
   try {
-    const saved = JSON.parse(localStorage.getItem(_FECH_KEY) || '{}');
-    return saved[tipo] || null;
-  } catch(e) { return null; }
+    const saved = _fechLoadAllSaved();
+    delete saved[_fechTipo];
+    localStorage.setItem(_FECH_KEY, JSON.stringify(saved));
+  } catch (e) {}
+  _fechLoadFormFromState();
+  fechRenderFromForm(true);
+  toast('Texto restaurado para o padrão.');
 }
 
-function fechUpdateToolbarState() {
-  const cmds = ['bold','italic','underline','strikeThrough'];
-  const ids  = ['fech-tb-bold','fech-tb-italic','fech-tb-under','fech-tb-strike'];
-  cmds.forEach((cmd, i) => {
-    const btn = document.getElementById(ids[i]);
-    if (btn) btn.classList.toggle('active', document.queryCommandState(cmd));
-  });
-  // Update color swatch underline
-  const color = document.queryCommandValue('foreColor');
-  const ci = document.getElementById('fech-color-input');
-  if (ci && color) {
-    // convert rgb to hex if needed
-    const hex = _fechRgbToHex(color);
-    if (hex) ci.value = hex;
+// ── Lê os inputs simples, atualiza estado, repinta o card e agenda salvamento ──
+function fechRenderFromForm(skipSave) {
+  const f = _fechState[_fechTipo];
+  const elTitle = document.getElementById('fech-f-title');
+  const elMeta  = document.getElementById('fech-f-meta');
+  const elIntro = document.getElementById('fech-f-intro');
+  const elList  = document.getElementById('fech-f-listlabel');
+  if (elTitle) f.title     = elTitle.value;
+  if (elMeta)  f.meta      = elMeta.value;
+  if (elIntro) f.intro     = elIntro.value;
+  if (elList)  f.listlabel = elList.value;
+
+  _fechRenderCard();
+  if (!skipSave) _fechSaveCurrent();
+}
+
+// ── Repinta o card de preview ao vivo com os campos atuais ────
+function _fechRenderCard() {
+  const tipo = _fechTipo;
+  const f    = _fechState[tipo];
+  const cfg  = _fechConfig[tipo];
+  const now  = new Date();
+
+  const elBadge = document.getElementById('fech-c-badge');
+  if (elBadge) elBadge.innerHTML = `<span class="fech-card-badge-icon">${cfg.badgeIcon}</span><span>${escapeHtml(f.badge)}</span>`;
+
+  const elTitle = document.getElementById('fech-c-title');
+  if (elTitle) elTitle.textContent = f.title;
+
+  const elMeta = document.getElementById('fech-c-meta');
+  if (elMeta) elMeta.textContent = f.meta;
+
+  const elIntro = document.getElementById('fech-c-intro');
+  if (elIntro) {
+    elIntro.textContent = f.intro;
+    elIntro.style.display = f.intro.trim() ? 'block' : 'none';
+  }
+
+  const elList = document.getElementById('fech-c-listlabel');
+  if (elList) elList.textContent = f.listlabel;
+
+  const elPriority = document.getElementById('fech-c-priority-text');
+  if (elPriority) elPriority.textContent = cfg.priority;
+
+  const elDate = document.getElementById('fech-c-date');
+  if (elDate) elDate.textContent = _fechFmtDate(now);
+
+  const elItems = document.getElementById('fech-c-items');
+  if (elItems) {
+    const itemsHtml = f.items.filter(i => i.trim()).map((item, i) =>
+      `<div class="bullet"><span class="dot">${String(i + 1).padStart(2, '0')}</span><span>${escapeHtml(item)}</span></div>`
+    ).join('');
+    elItems.innerHTML = `<div class="fech-items-list">${itemsHtml}</div>`;
+  }
+
+  const elAlerts = document.getElementById('fech-c-alerts');
+  if (elAlerts) {
+    const alertsHtml = f.alerts.filter(a => a.trim()).map(al => `
+      <div class="stop-box">
+        ${_FECH_ICON_ALERT}
+        <span>${escapeHtml(al)}</span>
+      </div>`).join('');
+    elAlerts.innerHTML = `<div class="fech-alerts-list">${alertsHtml}</div>`;
   }
 }
 
-function _fechRgbToHex(color) {
-  if (!color || color === 'false') return null;
-  if (color.startsWith('#')) return color;
-  const m = color.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
-  if (!m) return null;
-  return '#' + [m[1],m[2],m[3]].map(n => (+n).toString(16).padStart(2,'0')).join('');
+// ── Reconstrói texto plano a partir dos campos (WhatsApp / imagem) ──
+function _fechGetPlainText() {
+  const f = _fechState[_fechTipo];
+  if (!f) return '';
+  const parts = [];
+  if (f.intro.trim()) parts.push(f.intro.trim());
+  const items = f.items.filter(i => i.trim());
+  if (items.length) {
+    parts.push((f.listlabel || '').trim());
+    items.forEach(i => parts.push('• ' + i.trim()));
+  }
+  const alerts = f.alerts.filter(a => a.trim());
+  alerts.forEach(a => parts.push('⚠️ ' + a.trim()));
+  return parts.join('\n\n');
 }
 
 // ── Copiar para WhatsApp ──────────────────────────────────
@@ -1947,10 +1980,10 @@ function fechamentoCopiarWhatsapp() {
 
 // ── Gerar imagem PNG ──────────────────────────────────────
 function fechamentoGerarImagem() {
-  const editor = document.getElementById('fech-editor');
-  if (!editor || !editor.innerText.trim()) { toast('Nenhum texto para gerar imagem', 'error'); return; }
+  const text = _fechGetPlainText();
+  if (!text.trim()) { toast('Nenhum texto para gerar imagem', 'error'); return; }
   const cfg = _fechConfig[_fechTipo];
-  _fechGerarImagemCanvas(_fechGetPlainText(), cfg);
+  _fechGerarImagemCanvas(text, cfg);
 }
 
 // Canvas-based corporate image generation
@@ -2011,14 +2044,14 @@ function _fechGerarImagemCanvas(text, cfg) {
       titleFg: '#ffffff',
     },
     metas: {
-      bg1: '#1a1200', bg2: '#2d2000',
-      accent: '#d97706', accentLight: '#f59e0b',
-      accentGlow: 'rgba(245,158,11,0.18)',
-      stripe: '#4a3500',
+      bg1: '#170f1e', bg2: '#241733',
+      accent: '#7c3aed', accentLight: '#8b5cf6',
+      accentGlow: 'rgba(139,92,246,0.18)',
+      stripe: '#3a2a52',
       badgeText: 'METAS DO FECHAMENTO',
-      badgeBg: '#b45309', badgeFg: '#ffffff',
-      bodyFg: '#fde68a',
-      footerFg: '#78350f',
+      badgeBg: '#6d28d9', badgeFg: '#ffffff',
+      bodyFg: '#d9d2e8',
+      footerFg: '#4c2f73',
       titleFg: '#ffffff',
     },
   };
@@ -2214,235 +2247,209 @@ function _fechRoundRect(ctx, x, y, w, h, r) {
 
 // ── Abrir janela de print ────────────────────────────────
 function fechamentoAbrirPrint() {
-  const text = _fechGetPlainText();
-  if (!text.trim()) return;
-  const cfg  = _fechConfig[_fechTipo];
+  const f = _fechState[_fechTipo];
+  if (!f) return;
+  const cfg = _fechConfig[_fechTipo];
 
   const themes = {
-    semanal: { bg: '#0b1929', accent: '#2563eb', accentLight: '#3b82f6', badge: 'MEDIÇÃO SEMANAL', bodyFg: '#cbd5e1' },
-    mensal:  { bg: '#1a0a0a', accent: '#dc2626', accentLight: '#ef4444', badge: 'INVENTÁRIO MENSAL', bodyFg: '#fecaca' },
-    metas:   { bg: '#1a1200', accent: '#d97706', accentLight: '#f59e0b', badge: 'METAS DO FECHAMENTO', bodyFg: '#fde68a' },
+    semanal: {
+      bg: '#0d141f', headGrad: 'linear-gradient(180deg, #16223a 0%, #0d141f 100%)',
+      stripe: '#2563eb', badgeGrad: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
+      metaFg: '#93c5fd', metaBg: 'rgba(37,99,235,0.16)', metaBorder: 'rgba(37,99,235,0.3)',
+      dividerBg: 'rgba(37,99,235,0.2)', bodyFg: '#cbd5e1',
+      lnBg: 'rgba(37,99,235,0.08)', lnFg: '#d6e4f7', lnBorder: '#3b82f6',
+      capsFg: '#60a5fa', capsBorder: 'rgba(96,165,250,0.4)',
+      dotBg: 'rgba(37,99,235,0.18)', dotFg: '#60a5fa', dotBorder: 'rgba(37,99,235,0.35)',
+      footLabel: '#2563eb', footPriority: '#60a5fa',
+    },
+    mensal: {
+      bg: '#1a0f0f', headGrad: 'linear-gradient(180deg, #2a1414 0%, #1a0f0f 100%)',
+      stripe: 'repeating-linear-gradient(135deg, #dc2626 0px, #dc2626 10px, #b91c1c 10px, #b91c1c 20px)',
+      badgeGrad: 'linear-gradient(135deg, #ef4444 0%, #b91c1c 100%)',
+      metaFg: '#fca5a5', metaBg: 'rgba(220,38,38,0.16)', metaBorder: 'rgba(220,38,38,0.3)',
+      dividerBg: 'rgba(220,38,38,0.2)', bodyFg: '#e7d5d5',
+      lnBg: 'rgba(220,38,38,0.08)', lnFg: '#f3d6d6', lnBorder: '#ef4444',
+      capsFg: '#f87171', capsBorder: 'rgba(248,113,113,0.4)',
+      dotBg: 'rgba(220,38,38,0.18)', dotFg: '#f87171', dotBorder: 'rgba(220,38,38,0.35)',
+      footLabel: '#dc2626', footPriority: '#f87171',
+    },
+    metas: {
+      bg: '#170f1e', headGrad: 'linear-gradient(180deg, #241733 0%, #170f1e 100%)',
+      stripe: '#7c3aed', badgeGrad: 'linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)',
+      metaFg: '#c4b5fd', metaBg: 'rgba(124,58,237,0.16)', metaBorder: 'rgba(124,58,237,0.3)',
+      dividerBg: 'rgba(124,58,237,0.2)', bodyFg: '#d9d2e8',
+      lnBg: 'rgba(124,58,237,0.09)', lnFg: '#e3dcf2', lnBorder: '#8b5cf6',
+      capsFg: '#a78bfa', capsBorder: 'rgba(167,139,250,0.4)',
+      dotBg: 'rgba(124,58,237,0.2)', dotFg: '#a78bfa', dotBorder: 'rgba(124,58,237,0.4)',
+      footLabel: '#7c3aed', footPriority: '#a78bfa',
+    },
   };
   const T = themes[_fechTipo] || themes.semanal;
-
-  // Use innerHTML from editor for rich formatting, with fallback to plain text
-  const richHtml = _fechGetRichHtml();
-  // Format plain text into HTML — detect emojis, bullets, ALL CAPS lines (fallback)
-  const fmtLines = text.split('\n').map(line => {
-    if (!line.trim()) return '<div class="fech-print-spacer"></div>';
-    const allCaps = line.length > 5 && line === line.toUpperCase() && /[A-Z]/.test(line);
-    const isBullet = /^[•*]\s/.test(line);
-    const isStop = /^🛑|^⚠️|^❗|^❌/.test(line);
-    if (allCaps)  return `<div class="fech-print-caps">${line}</div>`;
-    if (isBullet) return `<div class="fech-print-bullet"><span class="fech-bullet-dot" style="background:${T.accentLight}"></span>${line.replace(/^[•*]\s*/,'')}</div>`;
-    if (isStop)   return `<div class="fech-print-alert">${line}</div>`;
-    return `<div class="fech-print-line">${line}</div>`;
-  }).join('');
-
   const logoUrl = 'https://concrelagos.com.br/wp-content/uploads/2021/10/Ativo-3.svg';
+
+  const itemsHtml = f.items.filter(i => i.trim()).map((item, i) => `
+    <div class="bullet">
+      <span class="dot">${String(i + 1).padStart(2, '0')}</span>
+      <span>${escapeHtml(item)}</span>
+    </div>`).join('');
+
+  const alertsHtml = f.alerts.filter(a => a.trim()).map(al => `
+    <div class="stop-box">
+      ${_FECH_ICON_ALERT}
+      <span>${escapeHtml(al)}</span>
+    </div>`).join('');
 
   const html = `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Fechamento — ${cfg.title}</title>
+<title>Fechamento — ${escapeHtml(f.title)}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Archivo:wght@500;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: #0d0d0d; display: flex; align-items: center; justify-content: center; min-height: 100vh; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: ${T.bodyFg}; }
-
+  body {
+    background: #0d0d0d; display: flex; align-items: center; justify-content: center;
+    min-height: 100vh; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    padding: 24px;
+  }
   .card {
-    background: ${T.bg};
-    width: 480px;
-    border-radius: 20px;
-    overflow: hidden;
+    background: ${T.bg}; width: 440px; max-width: 100%;
+    border-radius: 14px; overflow: hidden;
     box-shadow: 0 32px 80px rgba(0,0,0,0.7);
     position: relative;
   }
-
-  /* Accent left bar */
-  .card::before {
-    content: '';
-    position: absolute;
-    left: 0; top: 0; bottom: 0;
-    width: 5px;
-    background: ${T.accent};
+  .card-stripe { height: 6px; width: 100%; background: ${T.stripe}; }
+  .logo-strip {
+    display: flex; align-items: center; justify-content: center;
+    padding: 18px 32px; border-bottom: 1px solid rgba(255,255,255,0.06);
   }
-
-  /* Corner glow */
-  .card::after {
-    content: '';
-    position: absolute;
-    top: 0; right: 0;
-    width: 140px; height: 140px;
-    background: radial-gradient(ellipse at top right, ${T.accent}30, transparent 70%);
-    pointer-events: none;
+  .logo-strip img { height: 56px; width: auto; display: block; filter: invert(1) hue-rotate(178deg); opacity: .96; }
+  .logo-fallback {
+    display: none; align-items: center; justify-content: center; gap: 8px;
+    font-family: 'Archivo', sans-serif; font-weight: 800; font-size: 17px;
+    letter-spacing: .04em; color: #f3f4f6;
   }
-
-  .card-header {
-    background: linear-gradient(135deg, ${T.bg} 0%, ${T.accent}22 100%);
-    border-bottom: 1px solid ${T.accent}40;
-    padding: 28px 32px 22px 36px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 14px;
+  .logo-fallback span { font-weight: 600; font-size: 10px; letter-spacing: .14em; color: #9ca3af; }
+  .card-head { padding: 26px 32px 22px; text-align: center; background: ${T.headGrad}; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 11px 24px 11px 18px; border-radius: 8px;
+    font-family: 'Archivo', sans-serif; font-size: 13px; font-weight: 800;
+    letter-spacing: .1em; text-transform: uppercase; margin-bottom: 18px;
+    background: ${T.badgeGrad}; color: #fff;
+    box-shadow: 0 6px 16px -4px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.18);
     position: relative;
   }
+  .badge::before {
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
+    border-radius: 8px 0 0 8px; background: rgba(255,255,255,0.35);
+  }
+  .badge-icon { width: 24px; height: 24px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+  .badge-icon svg { width: 24px; height: 24px; }
+  .card-title {
+    font-family: 'Archivo Black', 'Archivo', sans-serif; font-size: 22px; font-weight: 400;
+    letter-spacing: -.01em; color: #fff; line-height: 1.25; text-transform: uppercase; word-wrap: break-word;
+  }
+  .card-meta {
+    font-family: 'Archivo', sans-serif; font-size: 11px; font-weight: 700;
+    letter-spacing: .05em; text-transform: uppercase; text-align: center;
+    padding: 9px 32px; width: 100%;
+    color: ${T.metaFg}; background: ${T.metaBg};
+    border-top: 1px solid ${T.metaBorder}; border-bottom: 1px solid ${T.metaBorder};
+  }
+  .card-divider { height: 1px; margin: 0 32px; background: ${T.dividerBg}; }
+  .card-body { padding: 26px 32px 28px; color: ${T.bodyFg}; }
+  .ln {
+    font-size: 13.5px; line-height: 1.7; white-space: pre-wrap; word-wrap: break-word;
+    padding: 12px 16px; border-radius: 0 6px 6px 0; font-weight: 500;
+    background: ${T.lnBg}; color: ${T.lnFg}; border-left: 3px solid ${T.lnBorder};
+  }
+  .caps {
+    font-family: 'Archivo', sans-serif; font-weight: 800; line-height: 1.4;
+    letter-spacing: .07em; font-size: 11.5px; text-transform: uppercase;
+    padding-bottom: 8px; border-bottom: 2px solid ${T.capsBorder}; display: inline-block;
+    color: ${T.capsFg};
+  }
+  .spacer { height: 18px; }
+  .items-list, .alerts-list { display: flex; flex-direction: column; gap: 7px; }
+  .bullet {
+    display: flex; align-items: flex-start; gap: 12px;
+    font-size: 13.5px; line-height: 1.6; word-wrap: break-word;
+    padding: 10px 14px; border-radius: 8px; background: rgba(255,255,255,0.025);
+  }
+  .dot {
+    width: 22px; height: 22px; border-radius: 6px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 800; font-family: 'Courier New', monospace;
+    background: ${T.dotBg}; color: ${T.dotFg}; border: 1px solid ${T.dotBorder};
+  }
+  .stop-box {
+    display: flex; align-items: flex-start; gap: 11px;
+    font-size: 13px; font-weight: 800; line-height: 1.6;
+    padding: 13px 15px; border-radius: 8px; word-wrap: break-word;
+    background: rgba(0,0,0,0.45); border: 1.5px solid rgba(251,191,36,0.55);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.04); color: #fcd34d;
+  }
+  .stop-box svg { width: 17px; height: 17px; flex-shrink: 0; margin-top: 1px; stroke: #fbbf24; }
+  .card-foot {
+    padding: 16px 32px; display: flex; align-items: center; justify-content: space-between;
+    border-top: 1px solid rgba(255,255,255,0.06); flex-wrap: wrap; gap: 6px;
+  }
+  .foot-label { font-family: 'Archivo', sans-serif; font-size: 9.5px; font-weight: 800; letter-spacing: .15em; text-transform: uppercase; color: ${T.footLabel}; }
+  .foot-priority { font-family: 'Archivo', sans-serif; display: flex; align-items: center; gap: 6px; font-size: 9.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: ${T.footPriority}; }
+  .foot-priority svg { width: 11px; height: 11px; stroke: ${T.footPriority}; fill: none; }
+  .foot-date { font-size: 10px; font-family: 'Courier New', monospace; opacity: .55; color: ${T.bodyFg}; }
 
-  .logo-wrap {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 4px 0;
-  }
-  .logo-wrap img {
-    height: 80px;
-    width: auto;
-    display: block;
-    filter: invert(1) hue-rotate(178deg);
-  }
-
-  .badge {
-    display: inline-block;
-    background: ${T.accent};
-    color: #fff;
-    font-size: 12px;
-    font-weight: 800;
-    letter-spacing: .12em;
-    text-transform: uppercase;
-    padding: 7px 20px;
-    border-radius: 50px;
-  }
-
-  .card-body {
-    padding: 22px 32px 26px 36px;
-  }
-  .card-body p  { margin: 0 0 3px; }
-  .card-body ul, .card-body ol { padding-left: 20px; margin: 4px 0 6px; }
-  .card-body li { margin-bottom: 2px; }
-  .card-body u  { text-decoration-color: rgba(255,255,255,0.4); }
-  /* font[color] tags injected by execCommand foreColor — browser handles automatically */
-
-  .fech-print-line {
-    color: ${T.bodyFg};
-    font-size: 13.5px;
-    line-height: 1.75;
-    margin-bottom: 2px;
-  }
-  .fech-print-caps {
-    color: #ffffff;
-    font-size: 13.5px;
-    font-weight: 700;
-    line-height: 1.7;
-    margin-bottom: 2px;
-  }
-  .fech-print-alert {
-    color: #ffffff;
-    font-size: 13.5px;
-    font-weight: 700;
-    line-height: 1.7;
-    margin-bottom: 2px;
-  }
-  .fech-print-bullet {
-    color: ${T.bodyFg};
-    font-size: 13.5px;
-    line-height: 1.75;
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-    margin-bottom: 2px;
-    padding-left: 4px;
-  }
-  /* Rich editor content: default color from theme, explicit colors preserved */
-  .card-body { color: ${T.bodyFg}; }
-  .fech-bullet-dot {
-    width: 6px; height: 6px;
-    border-radius: 50%;
-    flex-shrink: 0;
-    margin-top: 7px;
-  }
-  .fech-print-spacer { height: 10px; }
-
-  .card-footer {
-    border-top: 1px solid ${T.accent}40;
-    padding: 14px 32px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-  .footer-label {
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: .14em;
-    text-transform: uppercase;
-    color: ${T.accent}99;
-  }
-  .footer-date {
-    font-size: 10px;
-    font-family: monospace;
-    color: ${T.accent}60;
-  }
-
-  /* Print styles */
   @media print {
-    body { background: white; }
-    .card {
-      box-shadow: none;
-      border-radius: 0;
-      width: 100%;
-    }
+    body { background: white; padding: 0; }
+    .card { box-shadow: none; border-radius: 0; width: 100%; }
     .no-print { display: none !important; }
   }
-
-  /* Action bar — fixed top-right, small, unobtrusive */
-  .action-bar {
-    position: fixed;
-    top: 16px;
-    right: 16px;
-    display: flex;
-    gap: 8px;
-    z-index: 100;
-  }
+  .action-bar { position: fixed; top: 16px; right: 16px; display: flex; gap: 8px; z-index: 100; }
   .action-btn {
-    background: rgba(20,20,20,0.82);
-    border: 1px solid rgba(255,255,255,0.18);
-    border-radius: 8px;
-    color: #fff;
-    font-size: 12px;
-    font-family: inherit;
-    padding: 7px 14px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    transition: all .15s;
-    backdrop-filter: blur(8px);
-    white-space: nowrap;
+    background: rgba(20,20,20,0.82); border: 1px solid rgba(255,255,255,0.18); border-radius: 8px;
+    color: #fff; font-size: 12px; font-family: inherit; padding: 7px 14px; cursor: pointer;
+    display: flex; align-items: center; gap: 6px; transition: all .15s;
+    backdrop-filter: blur(8px); white-space: nowrap;
   }
   .action-btn:hover { background: rgba(40,40,40,0.95); }
-  .action-btn.primary { background: ${T.accent}cc; border-color: ${T.accent}; }
-  .action-btn.primary:hover { background: ${T.accent}; }
+  .action-btn.primary { background: ${T.stripe.startsWith('repeating') ? '#dc2626' : T.stripe}cc; }
+  .action-btn.primary:hover { background: ${T.stripe.startsWith('repeating') ? '#dc2626' : T.stripe}; }
   @media print { .action-bar { display: none !important; } }
 </style>
 </head>
 <body>
 
 <div class="card">
-  <div class="card-header">
-    <div class="logo-wrap">
-      <img src="${logoUrl}" alt="Concrelagos" onerror="this.style.display='none'">
-    </div>
-    <span class="badge">${T.badge}</span>
+  <div class="card-stripe"></div>
+  <div class="logo-strip">
+    <img src="${logoUrl}" alt="Concrelagos Concreto" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+    <div class="logo-fallback">CONCRELAGOS <span>CONCRETO</span></div>
   </div>
-  <div class="card-body">${richHtml || fmtLines}</div>
-  <div class="card-footer">
-    <span class="footer-label">Estoque / Insumos</span>
-    <span class="footer-date">${new Date().toLocaleDateString('pt-BR', {day:'2-digit',month:'2-digit',year:'numeric'})}</span>
+  <div class="card-head">
+    <div class="badge"><span class="badge-icon">${cfg.badgeIcon}</span><span>${escapeHtml(f.badge)}</span></div>
+    <div class="card-title">${escapeHtml(f.title)}</div>
+  </div>
+  <div class="card-meta">${escapeHtml(f.meta)}</div>
+  <div class="card-divider"></div>
+  <div class="card-body">
+    ${f.intro.trim() ? `<div class="ln">${escapeHtml(f.intro)}</div><div class="spacer"></div>` : ''}
+    ${itemsHtml ? `<div class="caps">${escapeHtml(f.listlabel)}</div><div class="items-list">${itemsHtml}</div><div class="spacer"></div>` : ''}
+    ${alertsHtml ? `<div class="alerts-list">${alertsHtml}</div>` : ''}
+  </div>
+  <div class="card-foot">
+    <span class="foot-label">Estoque / Insumos</span>
+    <span class="foot-priority">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M2 12h20"/></svg>
+      ${escapeHtml(cfg.priority)}
+    </span>
+    <span class="foot-date">${_fechFmtDate(new Date())}</span>
   </div>
 </div>
 
-<!-- Action bar -->
 <div class="action-bar no-print">
   <button class="action-btn primary" onclick="window.print()">🖨️ Imprimir / Salvar PDF</button>
 </div>
@@ -2457,4 +2464,9 @@ function fechamentoAbrirPrint() {
   win.document.close();
 }
 
-Object.assign(window, { abrirFechamento, fechamentoSwitchTipo, fechamentoCopiarWhatsapp, fechamentoGerarImagem, fechamentoResetarTexto, fechamentoAbrirPrint, fechExec, fechSetFontSize, fechEditorUpdate, fechUpdateToolbarState });
+Object.assign(window, {
+  abrirFechamento, fechamentoSwitchTipo, fechamentoResetarTexto,
+  fechUpdateItem, fechRemoveItem, fechAddItem,
+  fechUpdateAlert, fechRemoveAlert, fechAddAlert,
+  fechRenderFromForm, fechamentoCopiarWhatsapp, fechamentoGerarImagem, fechamentoAbrirPrint
+});

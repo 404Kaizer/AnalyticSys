@@ -2411,9 +2411,9 @@
 
 <!-- MODAL: Fechamento -->
 <div class="modal-overlay" id="modal-fechamento">
-  <div class="modal" style="max-width:680px;width:95vw">
+  <div class="modal fech-modal-shell" style="max-width:920px;width:96vw">
 
-    <!-- Tabs -->
+    <!-- Tabs (fixo) -->
     <div class="fech-tabs" id="fech-tabs">
       <button class="fech-tab" data-tipo="semanal" onclick="fechamentoSwitchTipo('semanal')">
         <i class="ti ti-calendar-week"></i> Semanal
@@ -2426,83 +2426,95 @@
       </button>
     </div>
 
-    <!-- Header com data dinâmica -->
-    <div class="fech-header" id="fech-header">
-      <div class="fech-header-icon" id="fech-header-icon"></div>
-      <div>
-        <div class="fech-header-title" id="fech-header-title"></div>
-        <div class="fech-header-date" id="fech-header-date"></div>
-      </div>
-    </div>
+    <!-- Corpo com scroll (única área rolável do modal) -->
+    <div class="fech-scroll-body">
 
-    <!-- Editor rico -->
-    <div class="fech-editor-wrap">
-      <!-- Toolbar -->
-      <div class="fech-toolbar" id="fech-toolbar">
-        <!-- Histórico -->
-        <button class="fech-tbtn" onclick="document.execCommand('undo')" title="Desfazer (Ctrl+Z)"><i class="ti ti-arrow-back-up"></i></button>
-        <button class="fech-tbtn" onclick="document.execCommand('redo')" title="Refazer (Ctrl+Y)"><i class="ti ti-arrow-forward-up"></i></button>
-        <div class="fech-tb-sep"></div>
-        <!-- Formatação -->
-        <button class="fech-tbtn" id="fech-tb-bold"   onclick="fechExec('bold')"          title="Negrito (Ctrl+B)"><b>B</b></button>
-        <button class="fech-tbtn" id="fech-tb-italic" onclick="fechExec('italic')"        title="Itálico (Ctrl+I)"><i>I</i></button>
-        <button class="fech-tbtn" id="fech-tb-under"  onclick="fechExec('underline')"     title="Sublinhado (Ctrl+U)"><u>U</u></button>
-        <button class="fech-tbtn" id="fech-tb-strike" onclick="fechExec('strikeThrough')" title="Tachado"><s>S</s></button>
-        <div class="fech-tb-sep"></div>
-        <!-- Tamanho da fonte -->
-        <select class="fech-tb-select" id="fech-font-size" onchange="fechSetFontSize(this.value)" title="Tamanho">
-          <option value="">Tam.</option>
-          <option value="1">8px</option>
-          <option value="2">10px</option>
-          <option value="3">12px</option>
-          <option value="4">14px</option>
-          <option value="5">18px</option>
-          <option value="6">24px</option>
-          <option value="7">36px</option>
-        </select>
-        <!-- Cor do texto -->
-        <div class="fech-tb-color-wrap" title="Cor do texto">
-          <span class="fech-tb-color-icon"><i class="ti ti-letter-a"></i></span>
-          <input type="color" id="fech-color-input" value="#ffffff" oninput="fechExec('foreColor', this.value)" title="Cor do texto">
+      <!-- Builder: formulário + preview ao vivo -->
+      <div class="fech-builder">
+
+      <!-- Painel de formulário -->
+      <div class="fech-form-panel">
+        <div class="fech-field">
+          <label>Título do cartão</label>
+          <input type="text" id="fech-f-title" oninput="fechRenderFromForm()">
         </div>
-        <div class="fech-tb-sep"></div>
-        <!-- Alinhamento -->
-        <button class="fech-tbtn" onclick="fechExec('justifyLeft')"   title="Alinhar à esquerda"><i class="ti ti-align-left"></i></button>
-        <button class="fech-tbtn" onclick="fechExec('justifyCenter')" title="Centralizar"><i class="ti ti-align-center"></i></button>
-        <button class="fech-tbtn" onclick="fechExec('justifyRight')"  title="Alinhar à direita"><i class="ti ti-align-right"></i></button>
-        <div class="fech-tb-sep"></div>
-        <!-- Listas -->
-        <button class="fech-tbtn" onclick="fechExec('insertUnorderedList')" title="Lista com marcadores"><i class="ti ti-list"></i></button>
-        <button class="fech-tbtn" onclick="fechExec('insertOrderedList')"   title="Lista numerada"><i class="ti ti-list-numbers"></i></button>
-        <button class="fech-tbtn" onclick="fechExec('outdent')" title="Diminuir recuo"><i class="ti ti-indent-decrease"></i></button>
-        <button class="fech-tbtn" onclick="fechExec('indent')"  title="Aumentar recuo"><i class="ti ti-indent-increase"></i></button>
-        <div class="fech-tb-sep"></div>
-        <!-- Limpar formatação -->
-        <button class="fech-tbtn" onclick="fechExec('removeFormat')" title="Limpar formatação"><i class="ti ti-clear-formatting"></i></button>
-        <button class="fech-tbtn" onclick="fechamentoResetarTexto()" title="Restaurar padrão"><i class="ti ti-refresh"></i></button>
-      </div>
-      <!-- Área editável -->
-      <div class="fech-editor" id="fech-editor" contenteditable="true" spellcheck="false"
-        oninput="fechEditorUpdate()" onkeyup="fechUpdateToolbarState()"></div>
-      <div style="display:flex;justify-content:flex-end;padding:4px 2px 0">
-        <span id="fech-saved-indicator" style="font-size:10px;font-family:var(--mono);color:var(--green);opacity:0;transition:opacity .3s">
-          <i class="ti ti-device-floppy"></i> salvo
-        </span>
-      </div>
-    </div>
+        <div class="fech-field">
+          <label>Linha de contexto (data/período)</label>
+          <input type="text" id="fech-f-meta" oninput="fechRenderFromForm()">
+        </div>
+        <div class="fech-field">
+          <label>Mensagem de abertura</label>
+          <textarea id="fech-f-intro" oninput="fechRenderFromForm()"></textarea>
+        </div>
+        <div class="fech-field">
+          <label>Rótulo da lista</label>
+          <input type="text" id="fech-f-listlabel" oninput="fechRenderFromForm()">
+        </div>
+        <div class="fech-field">
+          <label>Itens</label>
+          <div class="fech-list-items" id="fech-f-items"></div>
+          <button class="fech-add-btn" onclick="fechAddItem()">
+            <i class="ti ti-plus"></i> Adicionar item
+          </button>
+        </div>
+        <div class="fech-field">
+          <label>Alertas (caixas de destaque)</label>
+          <div class="fech-list-items" id="fech-f-alerts"></div>
+          <button class="fech-add-btn" onclick="fechAddAlert()">
+            <i class="ti ti-plus"></i> Adicionar alerta
+          </button>
+          <div class="fech-field-hint">Cada alerta aparece em caixa própria, sempre na mesma cor de atenção.</div>
+        </div>
 
-    <!-- Preview card (hidden, used for image export) -->
-    <div id="fech-preview-card" class="fech-preview-card" style="display:none">
-      <div class="fech-card-logo">
-        <span class="fech-logo-text">CONCRELAGOS</span>
-        <span class="fech-logo-sub">CONCRETO</span>
-      </div>
-      <div class="fech-card-badge" id="fech-card-badge"></div>
-      <div class="fech-card-body" id="fech-card-body"></div>
-      <div class="fech-card-footer">ESTOQUE / INSUMOS</div>
-    </div>
+        <div class="fech-field-divider"></div>
 
-    <div class="form-actions" style="justify-content:space-between;flex-wrap:wrap;gap:8px">
+        <button class="fech-reset-btn" onclick="fechamentoResetarTexto()">
+          <i class="ti ti-refresh"></i> Restaurar texto padrão
+        </button>
+        <div class="fech-saved-row">
+          <span id="fech-saved-indicator"><i class="ti ti-device-floppy"></i> salvo</span>
+        </div>
+      </div>
+
+      <!-- Preview ao vivo -->
+      <div class="fech-preview-side">
+        <div class="fech-card" id="fech-card">
+          <div class="fech-card-stripe"></div>
+          <div class="fech-card-logo-strip">
+            <img src="https://concrelagos.com.br/wp-content/uploads/2021/10/Ativo-3.svg" alt="Concrelagos Concreto" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+            <div class="fech-card-logo-fallback">CONCRELAGOS <span>CONCRETO</span></div>
+          </div>
+          <div class="fech-card-head">
+            <div class="fech-card-badge" id="fech-c-badge"></div>
+            <div class="fech-card-title" id="fech-c-title"></div>
+          </div>
+          <div class="fech-card-meta" id="fech-c-meta"></div>
+          <div class="fech-card-divider"></div>
+          <div class="fech-card-body">
+            <div class="ln" id="fech-c-intro"></div>
+            <div class="spacer"></div>
+            <div class="caps" id="fech-c-listlabel"></div>
+            <div id="fech-c-items"></div>
+            <div class="spacer"></div>
+            <div id="fech-c-alerts"></div>
+          </div>
+          <div class="fech-card-foot">
+            <span class="fech-foot-label">Estoque / Insumos</span>
+            <span class="fech-foot-priority" id="fech-c-priority">
+              <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M2 12h20"/></svg>
+              <span id="fech-c-priority-text"></span>
+            </span>
+            <span class="fech-foot-date" id="fech-c-date"></span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+    <!-- fim fech-builder -->
+    </div>
+    <!-- fim fech-scroll-body -->
+
+    <div class="form-actions fech-footer-actions" style="justify-content:space-between;flex-wrap:wrap;gap:8px">
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn" onclick="fechamentoCopiarWhatsapp()">
           <i class="ti ti-brand-whatsapp"></i> Copiar WhatsApp
@@ -2510,8 +2522,8 @@
         <button class="btn" onclick="fechamentoAbrirPrint()">
           <i class="ti ti-printer"></i> Visualizar / Imprimir
         </button>
-        <button class="btn" onclick="fechamentoResetarTexto()">
-          <i class="ti ti-refresh"></i> Restaurar padrão
+        <button class="btn" onclick="fechamentoGerarImagem()">
+          <i class="ti ti-photo"></i> Gerar Imagem
         </button>
       </div>
       <button class="btn" onclick="closeModal('modal-fechamento')">Fechar</button>
