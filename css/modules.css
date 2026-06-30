@@ -1222,9 +1222,9 @@ td.pending-cell  { color: var(--text3) !important; font-style: italic; font-size
   padding: 14px 18px;
   border-bottom: 1px solid var(--border);
   background: color-mix(in srgb, var(--bg2) 70%, var(--bg) 30%);
-  min-height: 88px;
+  min-height: 116px;
 }
-.cpanel-left {
+.cpanel-health {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -1234,63 +1234,44 @@ td.pending-cell  { color: var(--text3) !important; font-style: italic; font-size
   padding-right: 16px;
   border-right: 1px solid var(--border);
 }
-.cpanel-period {
-  font-size: 8.5px;
-  font-family: var(--mono);
-  font-weight: 600;
-  letter-spacing: .02em;
-  color: var(--text3);
-  white-space: nowrap;
-  cursor: help;
-}
-.cpanel-spark-wrap {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.cpanel-spark {
+.cpanel-donut {
   display: block;
-  border-radius: 4px;
 }
-.cpanel-kpis {
+.cpanel-health-counts {
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   gap: 4px;
   padding: 0 16px;
   border-right: 1px solid var(--border);
-  flex-shrink: 0;
 }
-.cpanel-kpi {
+.cpanel-health-count {
   display: flex;
   flex-direction: column;
   gap: 1px;
 }
-.cpanel-kpi-label {
+.cpanel-health-count-label {
   font-size: 8.5px;
   font-family: var(--mono);
   font-weight: 700;
   letter-spacing: .08em;
-  color: var(--text3);
-  text-transform: uppercase;
+  opacity: 0.85;
 }
-.cpanel-kpi-val {
+.cpanel-health-count-val {
   font-size: 12px;
   font-family: var(--mono);
   font-weight: 700;
-  color: var(--text);
-  display: flex;
-  align-items: center;
-  gap: 4px;
   white-space: nowrap;
 }
 .cpanel-mats {
   flex: 1;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 5px;
   padding-left: 16px;
+  padding-top: 2px;
   min-width: 0;
 }
 .cpanel-mats-title {

@@ -904,19 +904,17 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
       ${hLevel === 'sem_saude' ? 'SEM SAÚDE' : `Saúde: ${hScore}% · ${hLabelMap[hLevel]}`}
     </span>`;
 
-    // ── Painel compacto: sparkline + KPIs + top materiais ──────────────────
+    // ── Painel compacto: donut de saúde + top materiais ────────────────────
     {
-      const _sparkId = `spark-${idx}`;
-
-      // Top 3 materiais por pior variação (excluindo neutros)
+      // Top 5 materiais por pior variação (excluindo neutros)
       // Ordena por MAGNITUDE (módulo), não por sinal — sobra grande é tão
       // ruim quanto desfalque grande do mesmo tamanho.
-      const top3 = matDiffs
+      const topMats = matDiffs
         .filter(m => Math.abs(m.diff) > 0.0001)
         .sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff))
-        .slice(0, 3);
+        .slice(0, 5);
 
-      const _maxAbs = top3.length ? Math.max(...top3.map(m => Math.abs(m.diff))) : 1;
+      const _maxAbs = topMats.length ? Math.max(...topMats.map(m => Math.abs(m.diff))) : 1;
 
       const _fmtK = v => {
         const a = Math.abs(v);
@@ -925,7 +923,7 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
         return v.toLocaleString('pt-BR',{maximumFractionDigits:0});
       };
 
-      const topRows = top3.map(m => {
+      const topRows = topMats.map(m => {
         const pct = Math.round(Math.abs(m.diff) / _maxAbs * 100);
         const col = m.diff < 0 ? 'var(--red)' : 'var(--amber)';
         const bg  = m.diff < 0 ? 'var(--red-bg)' : 'var(--amber-bg)';
@@ -938,26 +936,81 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
         </div>`;
       }).join('');
 
+      // ── Donut de saúde (mesmo estilo visual do donut "Centrais mais
+      //    críticas" em macro.js — fatias em path com gap entre elas,
+      //    mais o aro fino de score dentro do buraco — adaptado em escala
+      //    menor para caber no card. Dados: hCounts/hScore já calculados
+      //    acima, sem cálculo novo.) ──
+      const _donutColors = { critico: '#f43f5e', urgente: '#f97316', atencao: '#f59e0b', bom: '#10b981' };
+      const _donutOrder   = ['critico', 'urgente', 'atencao', 'bom'];
+      const _ringTotal    = _donutOrder.reduce((s, k) => s + (hCounts[k] || 0), 0);
+
+      const _R = 40, _RI = 25;       // raio externo / raio interno (limite do buraco) do anel principal
+      const _GAP = 0.06;             // espaço (radianos) entre fatias
+      let _donutAngle = -Math.PI / 2; // começa no topo, igual ao original
+
+      const donutSlices = _ringTotal === 0 ? '' : _donutOrder.map(lvl => {
+        const n = hCounts[lvl] || 0;
+        if (!n) return '';
+        const pct   = n / _ringTotal;
+        const sweep = Math.max(pct * 2 * Math.PI - _GAP, 0.01);
+        const col   = _donutColors[lvl];
+
+        const a0 = _donutAngle + _GAP / 2;
+        const ae = a0 + sweep;
+        const x1 = 46 + _R  * Math.cos(a0), y1 = 46 + _R  * Math.sin(a0);
+        const x2 = 46 + _R  * Math.cos(ae), y2 = 46 + _R  * Math.sin(ae);
+        const x3 = 46 + _RI * Math.cos(ae), y3 = 46 + _RI * Math.sin(ae);
+        const x4 = 46 + _RI * Math.cos(a0), y4 = 46 + _RI * Math.sin(a0);
+        const large = sweep > Math.PI ? 1 : 0;
+
+        _donutAngle += pct * 2 * Math.PI;
+
+        return `<path d="M ${x1.toFixed(2)} ${y1.toFixed(2)} A ${_R} ${_R} 0 ${large} 1 ${x2.toFixed(2)} ${y2.toFixed(2)} L ${x3.toFixed(2)} ${y3.toFixed(2)} A ${_RI} ${_RI} 0 ${large} 0 ${x4.toFixed(2)} ${y4.toFixed(2)} Z" fill="${col}"/>`;
+      }).join('');
+
+      const donutScoreLabel = hLevel === 'sem_saude' ? '—' : `${hScore}%`;
+      const donutScoreColor = hLevel === 'sem_saude' ? 'var(--text3)' : hStyleMap[hLevel].match(/color:([^;]+)/)[1];
+      const donutLevelLabel = hLevel === 'sem_saude' ? 'SEM SAÚDE' : hLabelMap[hLevel];
+      const donutCountLabel = `${totalMats} ${totalMats === 1 ? 'material' : 'materiais'}`;
+
+      // Aro fino de score dentro do buraco (fundo cinza + progresso colorido)
+      const _SR = _RI - 6, _SCIRC = 2 * Math.PI * _SR;
+      const _scorePct  = hLevel === 'sem_saude' ? 0 : (hScore || 0) / 100;
+      const _scoreDash = _scorePct * _SCIRC;
+
       divPanelHtml = `
         <div class="cpanel" data-central="${escapeHtml(r.central)}" data-idx="${idx}">
-          <div class="cpanel-left">
-            <div class="cpanel-spark-wrap">
-              <canvas class="cpanel-spark" id="${_sparkId}" width="180" height="52"></canvas>
-            </div>
-            <div class="cpanel-period" id="cpanel-period-${idx}">—</div>
+          <div class="cpanel-health">
+            <svg width="128" height="128" viewBox="0 0 92 92" class="cpanel-donut" role="img" aria-label="Saúde da central: ${escapeHtml(donutScoreLabel)}, ${escapeHtml(donutLevelLabel)}">
+              <circle cx="46" cy="46" r="${(_R + _RI) / 2}" fill="none" stroke="var(--border)" stroke-width="${_R - _RI}" opacity="0.4"/>
+              ${donutSlices}
+              <circle cx="46" cy="46" r="${_SR}" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="3"/>
+              <circle cx="46" cy="46" r="${_SR}" fill="none" stroke="${donutScoreColor}" stroke-width="3"
+                stroke-dasharray="${_scoreDash.toFixed(1)} ${_SCIRC.toFixed(1)}"
+                stroke-dashoffset="${(_SCIRC / 4).toFixed(1)}"
+                stroke-linecap="round" opacity="0.6"/>
+              <text x="46" y="42" text-anchor="middle" font-size="15" font-weight="700" fill="${donutScoreColor}" font-family="var(--mono)">${escapeHtml(donutScoreLabel)}</text>
+              <text x="46" y="52" text-anchor="middle" font-size="6.5" font-weight="700" fill="${donutScoreColor}" font-family="var(--mono)" letter-spacing="0.06em" opacity="0.85">${escapeHtml(donutLevelLabel)}</text>
+              <text x="46" y="61" text-anchor="middle" font-size="5.5" fill="var(--text3)" font-family="var(--mono)">${escapeHtml(donutCountLabel)}</text>
+            </svg>
           </div>
-          <div class="cpanel-kpis">
-            <div class="cpanel-kpi" id="cpanel-kpi-acum-${idx}">
-              <span class="cpanel-kpi-label">ACUMULADO</span>
-              <span class="cpanel-kpi-val">—</span>
+          <div class="cpanel-health-counts">
+            <div class="cpanel-health-count">
+              <span class="cpanel-health-count-label" style="color:${_donutColors.critico}">CRÍTICO</span>
+              <span class="cpanel-health-count-val" style="color:${_donutColors.critico}">${hCounts.critico || 0} mat.</span>
             </div>
-            <div class="cpanel-kpi" id="cpanel-kpi-tend-${idx}">
-              <span class="cpanel-kpi-label">TENDÊNCIA</span>
-              <span class="cpanel-kpi-val">—</span>
+            <div class="cpanel-health-count">
+              <span class="cpanel-health-count-label" style="color:${_donutColors.urgente}">URGENTE</span>
+              <span class="cpanel-health-count-val" style="color:${_donutColors.urgente}">${hCounts.urgente || 0} mat.</span>
             </div>
-            <div class="cpanel-kpi" id="cpanel-kpi-prev-${idx}">
-              <span class="cpanel-kpi-label">PREVISÃO</span>
-              <span class="cpanel-kpi-val">—</span>
+            <div class="cpanel-health-count">
+              <span class="cpanel-health-count-label" style="color:${_donutColors.atencao}">ATENÇÃO</span>
+              <span class="cpanel-health-count-val" style="color:${_donutColors.atencao}">${hCounts.atencao || 0} mat.</span>
+            </div>
+            <div class="cpanel-health-count">
+              <span class="cpanel-health-count-label" style="color:${_donutColors.bom}">BOM</span>
+              <span class="cpanel-health-count-val" style="color:${_donutColors.bom}">${hCounts.bom || 0} mat.</span>
             </div>
           </div>
           <div class="cpanel-mats">
@@ -965,15 +1018,6 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
             ${topRows || '<span class="cpanel-mats-empty">Sem variações no período</span>'}
           </div>
         </div>`;
-
-      // Registra para renderização assíncrona do sparkline + KPIs
-      // (pulado em refresh cirúrgico de uma única central — o sparkline não
-      //  depende do estado de "Considerar" NF/OS, então reaproveitamos o já
-      //  desenhado em vez de recalcular a tendência semanal à toa)
-      if (!opts.skipSparklineQueue) {
-        if (!window._pendingSparklines) window._pendingSparklines = [];
-        window._pendingSparklines.push({ central: r.central, dtIni, dtFim, idx, sparkId: _sparkId, varTotal: varCentralMicro });
-      }
     }
 
     const card = document.createElement('div');
@@ -1127,31 +1171,12 @@ function refreshCentralCard(central) {
   const idx = oldCpanel ? parseInt(oldCpanel.dataset.idx, 10) : NaN;
   if (isNaN(idx)) return false;
 
-  // O sparkline e os KPIs Acumulado/Tendência/Previsão são calculados a
-  // partir do histórico de movimentações (_tCompute) e NÃO dependem do
-  // estado "Considerar" NF/OS — por isso são transplantados do card antigo
-  // em vez de recalculados, evitando trabalho assíncrono desnecessário.
-  const wasOpen   = oldCard.querySelector('.micro-filial-body')?.classList.contains('open') || false;
-  const oldCanvas = oldCard.querySelector('.cpanel-spark');
-  const oldKpiAcum = oldCard.querySelector(`#cpanel-kpi-acum-${idx}`);
-  const oldKpiTend = oldCard.querySelector(`#cpanel-kpi-tend-${idx}`);
-  const oldKpiPrev = oldCard.querySelector(`#cpanel-kpi-prev-${idx}`);
+  // O donut de saúde é calculado de forma síncrona, direto de hCounts/hScore
+  // (mesmos dados já usados no badge/chips do cabeçalho) — não depende de
+  // nenhum cálculo assíncrono, então basta reconstruir o card normalmente.
+  const wasOpen = oldCard.querySelector('.micro-filial-body')?.classList.contains('open') || false;
 
-  const newCard = buildCentralCard(r, idx, window.__analiticoDtIni, window.__analiticoDtFim, { skipSparklineQueue: true });
-
-  // Transplanta o sparkline (copia o bitmap já desenhado, sem reprocessar)
-  const newCanvas = newCard.querySelector('.cpanel-spark');
-  if (oldCanvas && newCanvas) {
-    try { newCanvas.getContext('2d').drawImage(oldCanvas, 0, 0); }
-    catch (e) { /* não crítico — pior caso, sparkline fica em branco até a próxima análise completa */ }
-  }
-  // Transplanta o texto já calculado dos KPIs
-  const newKpiAcum = newCard.querySelector(`#cpanel-kpi-acum-${idx}`);
-  const newKpiTend = newCard.querySelector(`#cpanel-kpi-tend-${idx}`);
-  const newKpiPrev = newCard.querySelector(`#cpanel-kpi-prev-${idx}`);
-  if (oldKpiAcum && newKpiAcum) newKpiAcum.innerHTML = oldKpiAcum.innerHTML;
-  if (oldKpiTend && newKpiTend) newKpiTend.innerHTML = oldKpiTend.innerHTML;
-  if (oldKpiPrev && newKpiPrev) newKpiPrev.innerHTML = oldKpiPrev.innerHTML;
+  const newCard = buildCentralCard(r, idx, window.__analiticoDtIni, window.__analiticoDtFim);
 
   // Restaura o estado aberto/fechado do card (na prática, sempre aberto —
   // o botão de toggle só é alcançável com o card expandido — mas tratamos
@@ -1295,12 +1320,6 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
   if (!container) return;
   container.innerHTML = '';
   window.__analiticoDetailCache = new Map();
-  // Reset defensivo: se um render completo anterior ainda tinha sparklines
-  // pendentes de desenhar (rAF não disparou a tempo de um segundo render
-  // ser chamado em seguida), descarta-os — os ids de canvas/KPI serão
-  // todos recriados por este render, então processar o lote antigo só
-  // duplicaria trabalho sem nenhum ganho.
-  window._pendingSparklines = [];
 
 
   // Ordena centrais: maior desfalque (variação mais negativa) → maior sobra (mais positiva)
@@ -1405,131 +1424,6 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
     cards.forEach(c => body.appendChild(c));
     container.appendChild(group);
   });
-
-  // ─── Renderização assíncrona dos sparklines + KPIs ─────────────────────
-  if (window._pendingSparklines && window._pendingSparklines.length) {
-    const _sparks = window._pendingSparklines.splice(0);
-    requestAnimationFrame(() => {
-      _sparks.forEach(({ central, dtIni, dtFim, idx, sparkId }) => {
-        try {
-          const weekData = _tCompute('central', central, dtIni, dtFim, null, null);
-          if (!weekData || !weekData.length) return;
-
-          const total    = weekData.reduce((s, w) => s + w.variation, 0);
-          const n        = weekData.length;
-          const trendDir = n >= 2 ? weekData[n-1].variation - weekData[n-2].variation : 0;
-          const fcast    = _tForecast(weekData);
-
-          const _fmtDateFull = d => d.toLocaleDateString('pt-BR');
-
-          // ── Período real usado neste cálculo (semanas terça-a-terça) ──────
-          // Pode diferir do período selecionado na tela: o modelo de tendência
-          // trabalha em janelas terça→terça, então as pontas são ajustadas.
-          // Mostrar isso explicitamente evita que o analista precise confiar
-          // "às cegas" no Acumulado/Tendência/Previsão.
-          const periodoIni = weekData[0].startDate;
-          const periodoFim = weekData[weekData.length - 1].endDate;
-          const elPeriodo  = document.getElementById(`cpanel-period-${idx}`);
-          if (elPeriodo) {
-            elPeriodo.textContent = `${_fmtDateFull(periodoIni)} – ${_fmtDateFull(periodoFim)} · ${n} sem.`;
-            elPeriodo.title = `Acumulado, Tendência e Previsão são calculados sobre este período ` +
-              `(janelas terça-a-terça), que pode diferir do período selecionado na tela.`;
-          }
-
-          // Semanas exatas comparadas na Tendência (últimas 2)
-          const tendTitle = n >= 2
-            ? `Compara a semana de ${weekData[n-1].label} com a de ${weekData[n-2].label}`
-            : 'Sem semanas suficientes para comparar';
-
-          // Semanas exatas usadas na Previsão (até as últimas 4, só as com movimento)
-          const fcastWeeks = weekData.slice(-4).filter(w => w.realKg > 0);
-          const prevTitle = fcastWeeks.length >= 2
-            ? `Projeção linear com base em ${fcastWeeks.length} semana${fcastWeeks.length > 1 ? 's' : ''} ` +
-              `(${_fmtDateFull(fcastWeeks[0].startDate)} – ${_fmtDateFull(fcastWeeks[fcastWeeks.length - 1].endDate)})`
-            : 'Sem semanas suficientes com movimento para projetar';
-
-          const _fmtK = v => {
-            const a = Math.abs(v);
-            if (a >= 1e6) return (v/1e6).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+'M';
-            if (a >= 1e3) return (v/1e3).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+'K';
-            return v.toLocaleString('pt-BR',{maximumFractionDigits:0});
-          };
-
-          // KPIs
-          const elAcum = document.getElementById(`cpanel-kpi-acum-${idx}`);
-          const elTend = document.getElementById(`cpanel-kpi-tend-${idx}`);
-          const elPrev = document.getElementById(`cpanel-kpi-prev-${idx}`);
-          if (elAcum) elAcum.innerHTML = `
-            <span class="cpanel-kpi-label">ACUMULADO</span>
-            <span class="cpanel-kpi-val" style="color:${total < 0 ? 'var(--red)' : total > 0 ? 'var(--amber)' : 'var(--text3)'}" title="Soma da variação de todas as ${n} semanas do período exibido abaixo do gráfico">${varSymbol(total)} ${_fmtK(Math.abs(total))} kg</span>`;
-          if (elTend) elTend.innerHTML = `
-            <span class="cpanel-kpi-label">TENDÊNCIA</span>
-            <span class="cpanel-kpi-val" style="color:${trendDir <= 0 ? 'var(--red)' : 'var(--amber)'}" title="${escapeHtml(tendTitle)}">
-              <i class="ti ti-trending-${trendDir <= 0 ? 'down' : 'up'}" style="font-size:13px"></i>
-              ${trendDir <= 0 ? 'Piorando' : 'Melhorando'}
-            </span>`;
-          if (elPrev) elPrev.innerHTML = `
-            <span class="cpanel-kpi-label">PREVISÃO</span>
-            <span class="cpanel-kpi-val" style="color:${fcast == null ? 'var(--text3)' : fcast < 0 ? 'var(--red)' : 'var(--amber)'}" title="${escapeHtml(prevTitle)}">
-              ${fcast != null ? varSymbol(fcast) + ' ' + _fmtK(Math.abs(fcast)) + ' kg' : '—'}
-            </span>`;
-
-          // Sparkline canvas
-          const canvas = document.getElementById(sparkId);
-          if (!canvas) return;
-          const ctx  = canvas.getContext('2d');
-          const W    = canvas.width, H = canvas.height;
-          const vals = weekData.map(w => w.variation);
-          const minV = Math.min(...vals, 0);
-          const maxV = Math.max(...vals, 0);
-          const rangeV = maxV - minV || 1;
-          const toY  = v => H - Math.round(((v - minV) / rangeV) * (H - 8)) - 4;
-          const toX  = (i) => Math.round((i / (vals.length - 1 || 1)) * (W - 4)) + 2;
-
-          ctx.clearRect(0, 0, W, H);
-
-          // Linha zero
-          const zeroY = toY(0);
-          ctx.beginPath();
-          ctx.strokeStyle = 'rgba(255,255,255,0.12)';
-          ctx.lineWidth = 1;
-          ctx.setLineDash([3, 3]);
-          ctx.moveTo(0, zeroY);
-          ctx.lineTo(W, zeroY);
-          ctx.stroke();
-          ctx.setLineDash([]);
-
-          // Área preenchida
-          const lineColor = total < -0.0001 ? '#f87171' : total > 0.0001 ? '#fbbf24' : '#94a3b8';
-          const fillColor = total < -0.0001 ? 'rgba(248,113,113,0.15)' : total > 0.0001 ? 'rgba(251,191,36,0.15)' : 'rgba(148,163,184,0.1)';
-
-          ctx.beginPath();
-          ctx.moveTo(toX(0), zeroY);
-          vals.forEach((v, i) => ctx.lineTo(toX(i), toY(v)));
-          ctx.lineTo(toX(vals.length - 1), zeroY);
-          ctx.closePath();
-          ctx.fillStyle = fillColor;
-          ctx.fill();
-
-          // Linha principal
-          ctx.beginPath();
-          ctx.strokeStyle = lineColor;
-          ctx.lineWidth = 1.5;
-          ctx.lineJoin = 'round';
-          vals.forEach((v, i) => i === 0 ? ctx.moveTo(toX(i), toY(v)) : ctx.lineTo(toX(i), toY(v)));
-          ctx.stroke();
-
-          // Ponto final
-          const lx = toX(vals.length - 1), ly = toY(vals[vals.length - 1]);
-          ctx.beginPath();
-          ctx.arc(lx, ly, 3, 0, Math.PI * 2);
-          ctx.fillStyle = lineColor;
-          ctx.fill();
-
-        } catch(e) { /* silencioso */ }
-      });
-    });
-  }
 
   // ─── RESUMO POR CENTRAL (dados do card) ─────────────────────────────
   window._anResumoCentraisData = _cardBuffer.map(card => ({
