@@ -1467,6 +1467,31 @@ td.pending-cell  { color: var(--text3) !important; font-style: italic; font-size
   box-shadow: 0 0 0 1px var(--accent-glow);
 }
 
+/* ── Highlight do regional quando alguma central nele tem pendentes
+   considerados — mesma semântica de cor do card individual, aplicada nos
+   dois elementos com borda visível do grupo (header e body) ── */
+.regional-group.pend-considerado-nf .regional-group-header-wrap,
+.regional-group.pend-considerado-nf .regional-group-body {
+  border-color: var(--green);
+}
+.regional-group.pend-considerado-nf .regional-group-header-wrap {
+  box-shadow: 0 0 0 1px var(--green-border);
+}
+.regional-group.pend-considerado-os .regional-group-header-wrap,
+.regional-group.pend-considerado-os .regional-group-body {
+  border-color: var(--red);
+}
+.regional-group.pend-considerado-os .regional-group-header-wrap {
+  box-shadow: 0 0 0 1px var(--red-border);
+}
+.regional-group.pend-considerado-ambos .regional-group-header-wrap,
+.regional-group.pend-considerado-ambos .regional-group-body {
+  border-color: var(--accent);
+}
+.regional-group.pend-considerado-ambos .regional-group-header-wrap {
+  box-shadow: 0 0 0 1px var(--accent-glow);
+}
+
 /* ── Highlight das linhas de material com pendentes injetados */
 tr.pend-injetado-nf {
   background: var(--green-bg) !important;
@@ -4156,6 +4181,21 @@ tbody tr:nth-child(even):hover {
 .micro-filial-card:hover {
   border-color: var(--border2);
   box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+}
+/* Especificidade maior (3 classes) que ".micro-filial-card:hover" acima —
+   garante que o highlight de pendentes considerados não suma no hover,
+   independente de onde essa regra apareça no arquivo. */
+.micro-filial-card.pend-considerado-nf:hover {
+  border-color: var(--green);
+  box-shadow: 0 0 0 1px var(--green-border), 0 4px 20px rgba(0,0,0,0.12);
+}
+.micro-filial-card.pend-considerado-os:hover {
+  border-color: var(--red);
+  box-shadow: 0 0 0 1px var(--red-border), 0 4px 20px rgba(0,0,0,0.12);
+}
+.micro-filial-card.pend-considerado-ambos:hover {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-glow), 0 4px 20px rgba(0,0,0,0.12);
 }
 .micro-filial-header {
   padding: 14px 18px;

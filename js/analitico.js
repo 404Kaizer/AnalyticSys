@@ -1210,9 +1210,65 @@ function refreshCentralCard(central) {
     const summaryEl = group.querySelector('.regional-group-summary');
     const groupCards = Array.from(group.querySelectorAll('.micro-filial-card'));
     if (summaryEl) summaryEl.innerHTML = buildRegionalSummaryHtml(groupCards);
+
+    // Atualiza o highlight de borda do regional (verde/vermelho/azul)
+    _applyGroupPendHighlight(group, groupCards);
+  }
+
+  // Recalcula window._rankByLevel (e demais dados consumidos pelos relatórios)
+  // com o estado atualizado de pendentes considerados — sem isso, os
+  // relatórios continuariam exibindo os valores anteriores ao toggle.
+  if (typeof renderMacroPanels === 'function') {
+    const th = typeof getHealthThresholds === 'function' ? getHealthThresholds() : {};
+    renderMacroPanels(window.__analiticoResults, th, window.__analiticoDtIni, window.__analiticoDtFim);
   }
 
   return true;
+}
+
+/**
+ * Aplica o highlight de borda do grupo regional a partir do estado de
+ * pendentes considerados das centrais que o compõem — mesma semântica do
+ * highlight individual do card (verde=NF, vermelho=OS, azul=ambos), mas
+ * agregada: se QUALQUER central do regional tem NF ativo, conta como NF; se
+ * QUALQUER uma tem OS ativo, conta como OS; se há as duas condições no
+ * regional (mesma central ou centrais diferentes), conta como ambos.
+ *
+ * Aplica tanto a classe (semântica/consistência) quanto a cor diretamente via
+ * style inline em .regional-group-header-wrap/.regional-group-body — o
+ * inline garante a exibição independente de qualquer regra externa que possa
+ * ter prioridade igual ou conflitante na cascata.
+ *
+ * @param {HTMLElement} group - elemento .regional-group
+ * @param {HTMLElement[]} cards - cards .micro-filial-card deste regional
+ */
+function _applyGroupPendHighlight(group, cards) {
+  const pend = window._pendConsiderados || {};
+  let hasNF = false, hasOS = false;
+  cards.forEach(c => {
+    const st = pend[c.dataset.central] || {};
+    if (st.nf) hasNF = true;
+    if (st.os) hasOS = true;
+  });
+
+  group.classList.remove('pend-considerado-nf', 'pend-considerado-os', 'pend-considerado-ambos');
+
+  let borderColor = '', boxShadow = '';
+  if (hasNF && hasOS) {
+    group.classList.add('pend-considerado-ambos');
+    borderColor = 'var(--accent)'; boxShadow = '0 0 0 1px var(--accent-glow)';
+  } else if (hasNF) {
+    group.classList.add('pend-considerado-nf');
+    borderColor = 'var(--green)'; boxShadow = '0 0 0 1px var(--green-border)';
+  } else if (hasOS) {
+    group.classList.add('pend-considerado-os');
+    borderColor = 'var(--red)'; boxShadow = '0 0 0 1px var(--red-border)';
+  }
+
+  const headerWrap = group.querySelector('.regional-group-header-wrap');
+  const bodyEl      = group.querySelector('.regional-group-body');
+  if (headerWrap) { headerWrap.style.borderColor = borderColor; headerWrap.style.boxShadow = boxShadow; }
+  if (bodyEl)      { bodyEl.style.borderColor = borderColor; }
 }
 
 /**
@@ -1432,6 +1488,10 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
         </div>
       </div>
       <div class="regional-group-body open"></div>`;
+
+    // Highlight de pendentes considerados — depois do innerHTML, pois depende
+    // de querySelector encontrar .regional-group-header-wrap/.regional-group-body
+    _applyGroupPendHighlight(group, cards);
 
     const body = group.querySelector('.regional-group-body');
     cards.forEach(c => body.appendChild(c));
