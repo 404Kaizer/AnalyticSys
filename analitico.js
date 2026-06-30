@@ -459,6 +459,14 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
       sapByMat.get(mat).push(rec);
     });
 
+    // ── Cópia limpa do SAP (sem pendentes injetados) ─────────────────────
+    // Usada pelo breakdown diário (Est. Inicial por dia) e pela classificação
+    // de saúde (badge/donut/"Maiores Variações") — ambos devem permanecer
+    // imunes ao toggle "Considerar NFs/OS pendentes", que deve afetar SOMENTE
+    // Entradas/Saídas/Variação/Custo do resumo da linha de material.
+    const sapByMatClean = new Map();
+    sapByMat.forEach((arr, mat) => sapByMatClean.set(mat, [...arr]));
+
     // ── Injeção de pendentes considerados ────────────────────────────────
     // Quando o analista ativa "Considerar NFs/OS pendentes", registros SAP
     // sintéticos são injetados em sapByMat para refletir o impacto no cálculo.
@@ -516,6 +524,9 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
     allMatsSorted.forEach((mat, matIdx) => {
       const lancsMat = lancsByMat.get(mat) || [];
       const sapMat = sapByMat.get(mat) || [];
+      // Versão sem sintéticos — usada no breakdown diário (carry de Est. Inicial),
+      // que não deve ser afetado pelos pendentes considerados (ver nota acima).
+      const sapMatClean = sapByMatClean.get(mat) || [];
 
       // ── Classificação de categoria do material ──────────────────────────
       // Calculado antes do buildSnapshot para poder usar matCatKey no preCarry
@@ -590,7 +601,7 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
         const key = dateKey(day);
         const isFirstDay = key === firstDayKey;
         const dayLancs = lancsMat.filter(rec => dateKey(parseDate(rec.dtLanc)) === key);
-        const daySap   = sapMat.filter(rec => dateKey(parseDate(rec.dtLanc)) === key);
+        const daySap   = sapMatClean.filter(rec => dateKey(parseDate(rec.dtLanc)) === key);
         const daySnap  = buildSnapshot({ lancs: dayLancs, sap: daySap });
 
         const toDayEntry = s => {
@@ -659,7 +670,7 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
           const sapFrom = carry && carry.date
             ? (() => { const d = new Date(carry.date); d.setDate(d.getDate() + 1); d.setHours(0,0,0,0); return d; })()
             : new Date(0);
-          const sapSemana = sapMat.filter(rec => {
+          const sapSemana = sapMatClean.filter(rec => {
             const d = parseDate(rec.dtLanc);
             return d && d >= sapFrom && d <= day;
           });
@@ -852,13 +863,17 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
     // Health score + counts for the header badges
     // Usa getLastPeriodLaunchStockWithFallback — mesma lógica do painel interno
     // e da tabela de materiais, para garantir consistência
+    // Usa sapByMat (com pendentes injetados quando ativo) — badge/donut/chips/
+    // "Maiores Variações" DEVEM refletir o toggle "Considerar NFs/OS pendentes"
+    // (decisão confirmada: somente o breakdown diário — Est. Inicial por dia —
+    // deve permanecer imune, não a saúde/donut/ranking).
     const thresholds = getHealthThresholds();
     const matDiffs = allMatsSorted.map(mat => {
       const prev = getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni, dtFim });
       const fim  = getLastPeriodLaunchStockWithFallback({ central: r.central, material: mat, dtIni, dtFim });
       const snap = buildSnapshot({
         lancs: lancsByMat.get(mat) || [],
-        sap:   sapByMat.get(mat)   || [],
+        sap:   sapByMat.get(mat) || [],
         initialStockOverride:     prev?.value  ?? null,
         initialDateLabelOverride: prev?.dtLabel ?? null,
         finalStockOverride:       fim && !fim.missing ? fim.value : null,
@@ -1195,14 +1210,6 @@ function refreshCentralCard(central) {
     const summaryEl = group.querySelector('.regional-group-summary');
     const groupCards = Array.from(group.querySelectorAll('.micro-filial-card'));
     if (summaryEl) summaryEl.innerHTML = buildRegionalSummaryHtml(groupCards);
-  }
-
-  // Recalcula window._rankByLevel (e demais dados consumidos pelos relatórios)
-  // com o estado atualizado de pendentes considerados — sem isso, os
-  // relatórios continuariam exibindo os valores anteriores ao toggle.
-  if (typeof renderMacroPanels === 'function') {
-    const th = typeof getHealthThresholds === 'function' ? getHealthThresholds() : {};
-    renderMacroPanels(window.__analiticoResults, th, window.__analiticoDtIni, window.__analiticoDtFim);
   }
 
   return true;

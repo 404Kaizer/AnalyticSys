@@ -59,6 +59,44 @@ function renderMacroPanels(results, thresholds, dtIni, dtFim) {
       sapByMat.get(m).push(s);
     });
 
+    // ── Injeção de pendentes considerados ────────────────────────────────
+    // Replica a mesma lógica de buildCentralCard (analitico.js) para que os
+    // relatórios e rankings (window._rankByLevel) reflitam o estado de
+    // "Considerar NFs/OS pendentes" do analista, e não fiquem presos aos
+    // dados originais do SAP.
+    const _pendStateCentral = (window._pendConsiderados || {})[r.central] || {};
+    const _pendCacheCentral = (window._pendCache        || {})[r.central] || {};
+    if (_pendStateCentral.nf && _pendCacheCentral.pendNF) {
+      (_pendCacheCentral.pendNF || []).forEach(e => {
+        const m = e.material || '—';
+        if (!sapByMat.has(m)) sapByMat.set(m, []);
+        sapByMat.get(m).push({
+          movimento: '101',
+          peso:      Math.abs(num(e.peso)),
+          ref:       String(e.nf || ''),
+          documento: '',
+          material:  m,
+          dtLanc:    e.dtDescarga || e.dtEmissao || '',
+          _sintetico: true
+        });
+      });
+    }
+    if (_pendStateCentral.os && _pendCacheCentral.pendOS) {
+      (_pendCacheCentral.pendOS || []).forEach(e => {
+        const m = e.material || '—';
+        if (!sapByMat.has(m)) sapByMat.set(m, []);
+        sapByMat.get(m).push({
+          movimento: '201',
+          peso:      -Math.abs(num(e.peso)),
+          ref:       String(e.os || ''),
+          documento: '',
+          material:  m,
+          dtLanc:    e.dtEmissao || '',
+          _sintetico: true
+        });
+      });
+    }
+
     const card     = document.querySelector(`.micro-filial-card[data-central="${CSS.escape(r.central)}"]`);
     const regional = card?.dataset.regional || '—';
     const _mapCardLevel = l => (!l || l === 'none' || l === 'ok') ? 'bom' : l;
