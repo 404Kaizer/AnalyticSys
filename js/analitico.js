@@ -945,7 +945,7 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
       const _donutOrder   = ['critico', 'urgente', 'atencao', 'bom'];
       const _ringTotal    = _donutOrder.reduce((s, k) => s + (hCounts[k] || 0), 0);
 
-      const _R = 40, _RI = 25;       // raio externo / raio interno (limite do buraco) do anel principal
+      const _R = 44, _RI = 29;       // raio externo / raio interno (limite do buraco) do anel principal
       const _GAP = 0.06;             // espaço (radianos) entre fatias
       let _donutAngle = -Math.PI / 2; // começa no topo, igual ao original
 
@@ -972,7 +972,6 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
       const donutScoreLabel = hLevel === 'sem_saude' ? '—' : `${hScore}%`;
       const donutScoreColor = hLevel === 'sem_saude' ? 'var(--text3)' : hStyleMap[hLevel].match(/color:([^;]+)/)[1];
       const donutLevelLabel = hLevel === 'sem_saude' ? 'SEM SAÚDE' : hLabelMap[hLevel];
-      const donutCountLabel = `${totalMats} ${totalMats === 1 ? 'material' : 'materiais'}`;
 
       // Aro fino de score dentro do buraco (fundo cinza + progresso colorido)
       const _SR = _RI - 6, _SCIRC = 2 * Math.PI * _SR;
@@ -990,27 +989,26 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
                 stroke-dasharray="${_scoreDash.toFixed(1)} ${_SCIRC.toFixed(1)}"
                 stroke-dashoffset="${(_SCIRC / 4).toFixed(1)}"
                 stroke-linecap="round" opacity="0.6"/>
-              <text x="46" y="42" text-anchor="middle" font-size="15" font-weight="700" fill="${donutScoreColor}" font-family="var(--mono)">${escapeHtml(donutScoreLabel)}</text>
-              <text x="46" y="52" text-anchor="middle" font-size="6.5" font-weight="700" fill="${donutScoreColor}" font-family="var(--mono)" letter-spacing="0.06em" opacity="0.85">${escapeHtml(donutLevelLabel)}</text>
-              <text x="46" y="61" text-anchor="middle" font-size="5.5" fill="var(--text3)" font-family="var(--mono)">${escapeHtml(donutCountLabel)}</text>
+              <text x="46" y="42" text-anchor="middle" font-size="17" font-weight="700" fill="${donutScoreColor}" font-family="var(--mono)">${escapeHtml(donutScoreLabel)}</text>
+              <text x="46" y="52" text-anchor="middle" font-size="7" font-weight="700" fill="${donutScoreColor}" font-family="var(--mono)" letter-spacing="0.06em" opacity="0.85">${escapeHtml(donutLevelLabel)}</text>
             </svg>
           </div>
           <div class="cpanel-health-counts">
             <div class="cpanel-health-count">
               <span class="cpanel-health-count-label" style="color:${_donutColors.critico}">CRÍTICO</span>
-              <span class="cpanel-health-count-val" style="color:${_donutColors.critico}">${hCounts.critico || 0} mat.</span>
+              <span class="cpanel-health-count-val" style="color:${_donutColors.critico}"><span class="cpanel-health-count-num">${hCounts.critico || 0}</span> ${(hCounts.critico || 0) === 1 ? 'material' : 'materiais'}</span>
             </div>
             <div class="cpanel-health-count">
               <span class="cpanel-health-count-label" style="color:${_donutColors.urgente}">URGENTE</span>
-              <span class="cpanel-health-count-val" style="color:${_donutColors.urgente}">${hCounts.urgente || 0} mat.</span>
+              <span class="cpanel-health-count-val" style="color:${_donutColors.urgente}"><span class="cpanel-health-count-num">${hCounts.urgente || 0}</span> ${(hCounts.urgente || 0) === 1 ? 'material' : 'materiais'}</span>
             </div>
             <div class="cpanel-health-count">
               <span class="cpanel-health-count-label" style="color:${_donutColors.atencao}">ATENÇÃO</span>
-              <span class="cpanel-health-count-val" style="color:${_donutColors.atencao}">${hCounts.atencao || 0} mat.</span>
+              <span class="cpanel-health-count-val" style="color:${_donutColors.atencao}"><span class="cpanel-health-count-num">${hCounts.atencao || 0}</span> ${(hCounts.atencao || 0) === 1 ? 'material' : 'materiais'}</span>
             </div>
             <div class="cpanel-health-count">
               <span class="cpanel-health-count-label" style="color:${_donutColors.bom}">BOM</span>
-              <span class="cpanel-health-count-val" style="color:${_donutColors.bom}">${hCounts.bom || 0} mat.</span>
+              <span class="cpanel-health-count-val" style="color:${_donutColors.bom}"><span class="cpanel-health-count-num">${hCounts.bom || 0}</span> ${(hCounts.bom || 0) === 1 ? 'material' : 'materiais'}</span>
             </div>
           </div>
           <div class="cpanel-mats">
