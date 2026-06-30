@@ -1422,6 +1422,19 @@ function togglePendConsiderados(central, tipo) {
   }
   window._pendConsiderados[central][tipo] = !window._pendConsiderados[central][tipo];
 
+  // Refresh cirúrgico: atualiza só o card desta central + o cabeçalho do
+  // regional ao qual ela pertence, sem tocar nas demais centrais nem
+  // reordenar nada (decisão deliberada — ver refreshCentralCard em
+  // analitico.js). Se der certo, encerra aqui.
+  if (typeof refreshCentralCard === 'function' && refreshCentralCard(central)) {
+    return;
+  }
+
+  // ── Fallback de segurança ────────────────────────────────────────────
+  // Só chega aqui se o refresh cirúrgico não foi possível (ex: estado
+  // global ausente, card não encontrado em tela). Mantém o comportamento
+  // antigo — render completo com restauração manual do que estava aberto —
+  // para o toggle nunca ficar "travado" sem efeito visível.
   if (window.__analiticoResults && window.__analiticoDtIni && window.__analiticoDtFim) {
     // Salva estado aberto/fechado dos regionais (chave: id do chevron rchev-*)
     const regionaisAbertos = new Set();

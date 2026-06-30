@@ -391,12 +391,23 @@ document.addEventListener('click', e => {
 
 
 
-function renderAnaliticoMicro(results, dtIni, dtFim) {
-  const container = document.getElementById('an-micro-container');
-  if (!container) return;
-  container.innerHTML = '';
-  window.__analiticoDetailCache = new Map();
-
+/**
+ * Monta o card de uma unica central (header + cpanel + tabela de materiais).
+ * Extraida de renderAnaliticoMicro para ser reaproveitavel tanto no render
+ * completo quanto no refresh cirurgico de uma central isolada (ver
+ * refreshCentralCard, chamada por togglePendConsiderados em ui.js).
+ *
+ * @param {object} r       - item de window.__analiticoResults para esta central
+ * @param {number} idx     - indice estavel usado nos ids de DOM (spark-N, cpanel-kpi-*-N etc.)
+ * @param {Date}   dtIni
+ * @param {Date}   dtFim
+ * @param {object} [opts]
+ * @param {boolean} [opts.skipSparklineQueue] - se true, nao registra o sparkline
+ *        para recalculo assincrono (usado no refresh cirurgico, onde o sparkline
+ *        e transplantado do card antigo em vez de recalculado).
+ * @returns {HTMLElement} o elemento .micro-filial-card pronto para inserir no DOM
+ */
+function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
   const start = new Date(dtIni);
   start.setHours(0, 0, 0, 0);
   const end = new Date(dtFim);
@@ -420,46 +431,6 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
 
   const dayList = buildDayList();
 
-  // Ordena centrais: maior desfalque (variação mais negativa) → maior sobra (mais positiva)
-  const calcVariacaoCentral = (r) => {
-    const lancsByMat = new Map();
-    const sapByMat = new Map();
-    (r.lancsNoPeriodo || []).forEach(rec => {
-      const mat = rec.material || '—';
-      if (!lancsByMat.has(mat)) lancsByMat.set(mat, []);
-      lancsByMat.get(mat).push(rec);
-    });
-    (r.sapNoPeriodo || []).forEach(rec => {
-      const mat = rec.material || '—';
-      if (!sapByMat.has(mat)) sapByMat.set(mat, []);
-      sapByMat.get(mat).push(rec);
-    });
-    return [...(r.allMats || [])].reduce((acc, mat) => {
-      const prev = getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni, dtFim });
-      return acc + buildSnapshot({
-        lancs: lancsByMat.get(mat) || [],
-        sap:   sapByMat.get(mat)   || [],
-        initialStockOverride: prev?.value ?? null,
-      }).diff;
-    }, 0);
-  };
-
-      const variacaoCentralCache = new Map();
-  const getVariacaoCentral = (item) => {
-    if (variacaoCentralCache.has(item)) return variacaoCentralCache.get(item);
-    const value = calcVariacaoCentral(item);
-    variacaoCentralCache.set(item, value);
-    return value;
-  };
-
-  results = [...results]
-    .map(item => ({ item, score: getVariacaoCentral(item) }))
-    .sort((a, b) => a.score - b.score)
-    .map(entry => entry.item);
-
-  const _cardBuffer = []; // collects cards before grouping
-
-  results.forEach((r, idx) => {
     const prodHtml = r.prodNoPeriodo.length
       ? r.prodNoPeriodo.map(p => `
           <span class="prod-badge">
@@ -938,9 +909,11 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
       const _sparkId = `spark-${idx}`;
 
       // Top 3 materiais por pior variação (excluindo neutros)
+      // Ordena por MAGNITUDE (módulo), não por sinal — sobra grande é tão
+      // ruim quanto desfalque grande do mesmo tamanho.
       const top3 = matDiffs
         .filter(m => Math.abs(m.diff) > 0.0001)
-        .sort((a, b) => a.diff - b.diff)
+        .sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff))
         .slice(0, 3);
 
       const _maxAbs = top3.length ? Math.max(...top3.map(m => Math.abs(m.diff))) : 1;
@@ -961,7 +934,7 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
           <div class="cpanel-mat-bar-wrap">
             <div class="cpanel-mat-bar" style="width:${pct}%;background:${col};opacity:0.7"></div>
           </div>
-          <span class="cpanel-mat-val" style="color:${col}">${_fmtK(m.diff)} kg</span>
+          <span class="cpanel-mat-val" style="color:${col}">${varSymbol(m.diff)} ${_fmtK(Math.abs(m.diff))} kg</span>
         </div>`;
       }).join('');
 
@@ -971,6 +944,7 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
             <div class="cpanel-spark-wrap">
               <canvas class="cpanel-spark" id="${_sparkId}" width="180" height="52"></canvas>
             </div>
+            <div class="cpanel-period" id="cpanel-period-${idx}">—</div>
           </div>
           <div class="cpanel-kpis">
             <div class="cpanel-kpi" id="cpanel-kpi-acum-${idx}">
@@ -993,8 +967,13 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
         </div>`;
 
       // Registra para renderização assíncrona do sparkline + KPIs
-      if (!window._pendingSparklines) window._pendingSparklines = [];
-      window._pendingSparklines.push({ central: r.central, dtIni, dtFim, idx, sparkId: _sparkId, varTotal: varCentralMicro });
+      // (pulado em refresh cirúrgico de uma única central — o sparkline não
+      //  depende do estado de "Considerar" NF/OS, então reaproveitamos o já
+      //  desenhado em vez de recalcular a tendência semanal à toa)
+      if (!opts.skipSparklineQueue) {
+        if (!window._pendingSparklines) window._pendingSparklines = [];
+        window._pendingSparklines.push({ central: r.central, dtIni, dtFim, idx, sparkId: _sparkId, varTotal: varCentralMicro });
+      }
     }
 
     const card = document.createElement('div');
@@ -1114,39 +1093,102 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
     card.querySelectorAll('.micro-table-wrap table').forEach(makeResizable);
     if (typeof initAbsentTooltips === 'function') initAbsentTooltips(card);
 
-    // Store card for grouping below
-    _cardBuffer.push(card);
-  });
+  return card;
+}
 
-  // ── Group cards by regional ──────────────────────────────────────────────
-  // Preserve the sorted order within each group (by worst variação first)
-  const groupOrder = [];
-  const groupMap   = new Map(); // regional → { cards: [], hCounts: aggregate }
+/**
+ * Atualiza cirurgicamente o card de UMA central após o toggle de
+ * "Considerar/Desconsiderar" NF/OS pendente, sem reconstruir o dashboard
+ * inteiro. Atualiza também o cabeçalho agregado do regional ao qual essa
+ * central pertence. Não reordena cards nem grupos regionais — decisão
+ * deliberada: o toggle é paliativo para a análise, não uma mudança de dado
+ * concreta, então a ordem permanece estável até a próxima execução
+ * completa de "Rodar Análise" (que recalcula tudo do zero normalmente).
+ *
+ * Pré-requisito: window.__analiticoResults / __analiticoDtIni / __analiticoDtFim
+ * precisam estar populados (preenchidos ao fim de _rodarAnaliticoCore).
+ *
+ * @param {string} central - nome da central a atualizar
+ * @returns {boolean} true se conseguiu atualizar cirurgicamente; false se
+ *          algum pré-requisito não foi encontrado (o chamador deve então
+ *          cair para o render completo como fallback de segurança).
+ */
+function refreshCentralCard(central) {
+  if (!window.__analiticoResults || !window.__analiticoDtIni || !window.__analiticoDtFim) return false;
 
-  _cardBuffer.forEach(card => {
-    const reg = card.dataset.regional || '';
-    if (!groupMap.has(reg)) {
-      groupOrder.push(reg);
-      groupMap.set(reg, []);
-    }
-    groupMap.get(reg).push(card);
-  });
+  const r = window.__analiticoResults.find(item => item.central === central);
+  if (!r) return false;
 
-  // Sort groups: maior desfalque (diff mais negativo) primeiro → maior sobra por último; sem regional sempre no fim
-  const groupDiff = new Map();
-  groupOrder.forEach(reg => {
-    const diff = groupMap.get(reg).reduce((s, c) => s + parseFloat(c.dataset.centralDiff || 0), 0);
-    groupDiff.set(reg, diff);
-  });
-  groupOrder.sort((a, b) => {
-    if (!a && b)  return 1;   // sem regional sempre no fim
-    if (a && !b)  return -1;
-    return groupDiff.get(a) - groupDiff.get(b); // mais negativo (desfalque) primeiro
-  });
+  const oldCard = Array.from(document.querySelectorAll('#an-micro-container .micro-filial-card'))
+    .find(c => c.dataset.central === central);
+  if (!oldCard) return false;
 
-  groupOrder.forEach(regional => {
-    const cards = groupMap.get(regional);
+  const oldCpanel = oldCard.querySelector('.cpanel');
+  const idx = oldCpanel ? parseInt(oldCpanel.dataset.idx, 10) : NaN;
+  if (isNaN(idx)) return false;
 
+  // O sparkline e os KPIs Acumulado/Tendência/Previsão são calculados a
+  // partir do histórico de movimentações (_tCompute) e NÃO dependem do
+  // estado "Considerar" NF/OS — por isso são transplantados do card antigo
+  // em vez de recalculados, evitando trabalho assíncrono desnecessário.
+  const wasOpen   = oldCard.querySelector('.micro-filial-body')?.classList.contains('open') || false;
+  const oldCanvas = oldCard.querySelector('.cpanel-spark');
+  const oldKpiAcum = oldCard.querySelector(`#cpanel-kpi-acum-${idx}`);
+  const oldKpiTend = oldCard.querySelector(`#cpanel-kpi-tend-${idx}`);
+  const oldKpiPrev = oldCard.querySelector(`#cpanel-kpi-prev-${idx}`);
+
+  const newCard = buildCentralCard(r, idx, window.__analiticoDtIni, window.__analiticoDtFim, { skipSparklineQueue: true });
+
+  // Transplanta o sparkline (copia o bitmap já desenhado, sem reprocessar)
+  const newCanvas = newCard.querySelector('.cpanel-spark');
+  if (oldCanvas && newCanvas) {
+    try { newCanvas.getContext('2d').drawImage(oldCanvas, 0, 0); }
+    catch (e) { /* não crítico — pior caso, sparkline fica em branco até a próxima análise completa */ }
+  }
+  // Transplanta o texto já calculado dos KPIs
+  const newKpiAcum = newCard.querySelector(`#cpanel-kpi-acum-${idx}`);
+  const newKpiTend = newCard.querySelector(`#cpanel-kpi-tend-${idx}`);
+  const newKpiPrev = newCard.querySelector(`#cpanel-kpi-prev-${idx}`);
+  if (oldKpiAcum && newKpiAcum) newKpiAcum.innerHTML = oldKpiAcum.innerHTML;
+  if (oldKpiTend && newKpiTend) newKpiTend.innerHTML = oldKpiTend.innerHTML;
+  if (oldKpiPrev && newKpiPrev) newKpiPrev.innerHTML = oldKpiPrev.innerHTML;
+
+  // Restaura o estado aberto/fechado do card (na prática, sempre aberto —
+  // o botão de toggle só é alcançável com o card expandido — mas tratamos
+  // o caso fechado por robustez)
+  if (wasOpen) {
+    const newBody = newCard.querySelector('.micro-filial-body');
+    const newChev = newCard.querySelector(`#chev-${idx}`);
+    if (newBody) newBody.classList.add('open');
+    if (newChev) newChev.style.transform = 'rotate(180deg)';
+  }
+
+  // Substitui o card antigo pelo novo na MESMA posição do DOM (sem reordenar)
+  oldCard.replaceWith(newCard);
+
+  // Atualiza só o cabeçalho agregado do regional ao qual essa central pertence
+  const group = newCard.closest('.regional-group');
+  if (group) {
+    const summaryEl = group.querySelector('.regional-group-summary');
+    const groupCards = Array.from(group.querySelectorAll('.micro-filial-card'));
+    if (summaryEl) summaryEl.innerHTML = buildRegionalSummaryHtml(groupCards);
+  }
+
+  return true;
+}
+
+/**
+ * Calcula e monta o HTML do resumo agregado (badges de variacao, custo,
+ * saude e pendentes NF/OS) exibido no cabecalho de um grupo regional.
+ * Extraida de renderAnaliticoMicro para poder ser chamada tambem em um
+ * refresh cirurgico (atualizar so o cabecalho de UM regional, sem
+ * reconstruir os cards filhos) -- ver refreshCentralCard em ui.js.
+ *
+ * @param {HTMLElement[]} cards - cards .micro-filial-card deste regional
+ *        (le os valores ja calculados via dataset de cada card)
+ * @returns {string} HTML a inserir dentro de .regional-group-summary
+ */
+function buildRegionalSummaryHtml(cards) {
     // ── Aggregate data from all cards in the group ──────────────────────────
     let totalDiff = 0;
     let totalCusto = 0;
@@ -1236,6 +1278,103 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
         </span>`
       : '';
 
+  return `
+    ${diffBadge}
+    ${custoBadgeGrp}
+    <span class="summary-sep"></span>
+    <span class="regional-group-chips">${aggChips}</span>
+    ${healthBadgeGrp}
+    <span class="summary-sep"></span>
+    <span class="pend-header-pill pend-header-pill-nf${totalPendNF === 0 ? ' pend-header-pill-zero' : ''}" title="${totalPendNF === 0 ? 'Nenhuma NF pendente neste regional' : `${totalPendNF} NF${totalPendNF > 1 ? 's' : ''} pendente${totalPendNF > 1 ? 's' : ''} de integração SAP neste regional`}"><i class="ti ti-file-invoice"></i> NF <span class="pend-header-pill-count">${totalPendNF}</span></span>
+    <span class="pend-header-pill pend-header-pill-os${totalPendOS === 0 ? ' pend-header-pill-zero' : ''}" title="${totalPendOS === 0 ? 'Nenhuma OS pendente neste regional' : `${totalPendOS} OS pendente${totalPendOS > 1 ? 's' : ''} de integração SAP neste regional`}"><i class="ti ti-clipboard-list"></i> OS <span class="pend-header-pill-count">${totalPendOS}</span></span>
+  `;
+}
+
+function renderAnaliticoMicro(results, dtIni, dtFim) {
+  const container = document.getElementById('an-micro-container');
+  if (!container) return;
+  container.innerHTML = '';
+  window.__analiticoDetailCache = new Map();
+  // Reset defensivo: se um render completo anterior ainda tinha sparklines
+  // pendentes de desenhar (rAF não disparou a tempo de um segundo render
+  // ser chamado em seguida), descarta-os — os ids de canvas/KPI serão
+  // todos recriados por este render, então processar o lote antigo só
+  // duplicaria trabalho sem nenhum ganho.
+  window._pendingSparklines = [];
+
+
+  // Ordena centrais: maior desfalque (variação mais negativa) → maior sobra (mais positiva)
+  const calcVariacaoCentral = (r) => {
+    const lancsByMat = new Map();
+    const sapByMat = new Map();
+    (r.lancsNoPeriodo || []).forEach(rec => {
+      const mat = rec.material || '—';
+      if (!lancsByMat.has(mat)) lancsByMat.set(mat, []);
+      lancsByMat.get(mat).push(rec);
+    });
+    (r.sapNoPeriodo || []).forEach(rec => {
+      const mat = rec.material || '—';
+      if (!sapByMat.has(mat)) sapByMat.set(mat, []);
+      sapByMat.get(mat).push(rec);
+    });
+    return [...(r.allMats || [])].reduce((acc, mat) => {
+      const prev = getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni, dtFim });
+      return acc + buildSnapshot({
+        lancs: lancsByMat.get(mat) || [],
+        sap:   sapByMat.get(mat)   || [],
+        initialStockOverride: prev?.value ?? null,
+      }).diff;
+    }, 0);
+  };
+
+      const variacaoCentralCache = new Map();
+  const getVariacaoCentral = (item) => {
+    if (variacaoCentralCache.has(item)) return variacaoCentralCache.get(item);
+    const value = calcVariacaoCentral(item);
+    variacaoCentralCache.set(item, value);
+    return value;
+  };
+
+  results = [...results]
+    .map(item => ({ item, score: getVariacaoCentral(item) }))
+    .sort((a, b) => a.score - b.score)
+    .map(entry => entry.item);
+
+  const _cardBuffer = []; // collects cards before grouping
+
+  results.forEach((r, idx) => {
+    _cardBuffer.push(buildCentralCard(r, idx, dtIni, dtFim));
+  });
+
+  // ── Group cards by regional ──────────────────────────────────────────────
+  // Preserve the sorted order within each group (by worst variação first)
+  const groupOrder = [];
+  const groupMap   = new Map(); // regional → { cards: [], hCounts: aggregate }
+
+  _cardBuffer.forEach(card => {
+    const reg = card.dataset.regional || '';
+    if (!groupMap.has(reg)) {
+      groupOrder.push(reg);
+      groupMap.set(reg, []);
+    }
+    groupMap.get(reg).push(card);
+  });
+
+  // Sort groups: maior desfalque (diff mais negativo) primeiro → maior sobra por último; sem regional sempre no fim
+  const groupDiff = new Map();
+  groupOrder.forEach(reg => {
+    const diff = groupMap.get(reg).reduce((s, c) => s + parseFloat(c.dataset.centralDiff || 0), 0);
+    groupDiff.set(reg, diff);
+  });
+  groupOrder.sort((a, b) => {
+    if (!a && b)  return 1;   // sem regional sempre no fim
+    if (a && !b)  return -1;
+    return groupDiff.get(a) - groupDiff.get(b); // mais negativo (desfalque) primeiro
+  });
+  groupOrder.forEach(regional => {
+    const cards = groupMap.get(regional);
+
+
     const isSemRegional = !regional;
     const group = document.createElement('div');
     group.className = 'regional-group' + (isSemRegional ? ' sem-regional' : '');
@@ -1248,16 +1387,7 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
             <i class="ti ${isSemRegional ? 'ti-map-pin-off' : 'ti-users-group'}"></i>
           </div>
           <span class="regional-group-name">${isSemRegional ? 'Sem regional' : escapeHtml(regional)}</span>
-          <div class="regional-group-summary">
-            ${diffBadge}
-            ${custoBadgeGrp}
-            <span class="summary-sep"></span>
-            <span class="regional-group-chips">${aggChips}</span>
-            ${healthBadgeGrp}
-            <span class="summary-sep"></span>
-            <span class="pend-header-pill pend-header-pill-nf${totalPendNF === 0 ? ' pend-header-pill-zero' : ''}" title="${totalPendNF === 0 ? 'Nenhuma NF pendente neste regional' : `${totalPendNF} NF${totalPendNF > 1 ? 's' : ''} pendente${totalPendNF > 1 ? 's' : ''} de integração SAP neste regional`}"><i class="ti ti-file-invoice"></i> NF <span class="pend-header-pill-count">${totalPendNF}</span></span>
-            <span class="pend-header-pill pend-header-pill-os${totalPendOS === 0 ? ' pend-header-pill-zero' : ''}" title="${totalPendOS === 0 ? 'Nenhuma OS pendente neste regional' : `${totalPendOS} OS pendente${totalPendOS > 1 ? 's' : ''} de integração SAP neste regional`}"><i class="ti ti-clipboard-list"></i> OS <span class="pend-header-pill-count">${totalPendOS}</span></span>
-          </div>
+          <div class="regional-group-summary">${buildRegionalSummaryHtml(cards)}</div>
         </div>
         <div class="regional-group-actions">
           <button class="trend-btn" onclick="event.stopPropagation();openTrendModal('regional','${escapeHtml(regional || '')}')" title="Ver tendência de variação">
@@ -1290,11 +1420,39 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
           const trendDir = n >= 2 ? weekData[n-1].variation - weekData[n-2].variation : 0;
           const fcast    = _tForecast(weekData);
 
+          const _fmtDateFull = d => d.toLocaleDateString('pt-BR');
+
+          // ── Período real usado neste cálculo (semanas terça-a-terça) ──────
+          // Pode diferir do período selecionado na tela: o modelo de tendência
+          // trabalha em janelas terça→terça, então as pontas são ajustadas.
+          // Mostrar isso explicitamente evita que o analista precise confiar
+          // "às cegas" no Acumulado/Tendência/Previsão.
+          const periodoIni = weekData[0].startDate;
+          const periodoFim = weekData[weekData.length - 1].endDate;
+          const elPeriodo  = document.getElementById(`cpanel-period-${idx}`);
+          if (elPeriodo) {
+            elPeriodo.textContent = `${_fmtDateFull(periodoIni)} – ${_fmtDateFull(periodoFim)} · ${n} sem.`;
+            elPeriodo.title = `Acumulado, Tendência e Previsão são calculados sobre este período ` +
+              `(janelas terça-a-terça), que pode diferir do período selecionado na tela.`;
+          }
+
+          // Semanas exatas comparadas na Tendência (últimas 2)
+          const tendTitle = n >= 2
+            ? `Compara a semana de ${weekData[n-1].label} com a de ${weekData[n-2].label}`
+            : 'Sem semanas suficientes para comparar';
+
+          // Semanas exatas usadas na Previsão (até as últimas 4, só as com movimento)
+          const fcastWeeks = weekData.slice(-4).filter(w => w.realKg > 0);
+          const prevTitle = fcastWeeks.length >= 2
+            ? `Projeção linear com base em ${fcastWeeks.length} semana${fcastWeeks.length > 1 ? 's' : ''} ` +
+              `(${_fmtDateFull(fcastWeeks[0].startDate)} – ${_fmtDateFull(fcastWeeks[fcastWeeks.length - 1].endDate)})`
+            : 'Sem semanas suficientes com movimento para projetar';
+
           const _fmtK = v => {
             const a = Math.abs(v);
-            if (a >= 1e6) return (v >= 0 ? '+' : '') + (v/1e6).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+'M';
-            if (a >= 1e3) return (v >= 0 ? '+' : '') + (v/1e3).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+'K';
-            return (v >= 0 ? '+' : '') + v.toLocaleString('pt-BR',{maximumFractionDigits:0});
+            if (a >= 1e6) return (v/1e6).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+'M';
+            if (a >= 1e3) return (v/1e3).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+'K';
+            return v.toLocaleString('pt-BR',{maximumFractionDigits:0});
           };
 
           // KPIs
@@ -1303,17 +1461,17 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
           const elPrev = document.getElementById(`cpanel-kpi-prev-${idx}`);
           if (elAcum) elAcum.innerHTML = `
             <span class="cpanel-kpi-label">ACUMULADO</span>
-            <span class="cpanel-kpi-val" style="color:${total < 0 ? 'var(--red)' : total > 0 ? 'var(--amber)' : 'var(--text3)'}">${_fmtK(total)} kg</span>`;
+            <span class="cpanel-kpi-val" style="color:${total < 0 ? 'var(--red)' : total > 0 ? 'var(--amber)' : 'var(--text3)'}" title="Soma da variação de todas as ${n} semanas do período exibido abaixo do gráfico">${varSymbol(total)} ${_fmtK(Math.abs(total))} kg</span>`;
           if (elTend) elTend.innerHTML = `
             <span class="cpanel-kpi-label">TENDÊNCIA</span>
-            <span class="cpanel-kpi-val" style="color:${trendDir <= 0 ? 'var(--red)' : 'var(--amber)'}">
+            <span class="cpanel-kpi-val" style="color:${trendDir <= 0 ? 'var(--red)' : 'var(--amber)'}" title="${escapeHtml(tendTitle)}">
               <i class="ti ti-trending-${trendDir <= 0 ? 'down' : 'up'}" style="font-size:13px"></i>
               ${trendDir <= 0 ? 'Piorando' : 'Melhorando'}
             </span>`;
           if (elPrev) elPrev.innerHTML = `
             <span class="cpanel-kpi-label">PREVISÃO</span>
-            <span class="cpanel-kpi-val" style="color:${fcast == null ? 'var(--text3)' : fcast < 0 ? 'var(--red)' : 'var(--amber)'}">
-              ${fcast != null ? _fmtK(fcast) + ' kg' : '—'}
+            <span class="cpanel-kpi-val" style="color:${fcast == null ? 'var(--text3)' : fcast < 0 ? 'var(--red)' : 'var(--amber)'}" title="${escapeHtml(prevTitle)}">
+              ${fcast != null ? varSymbol(fcast) + ' ' + _fmtK(Math.abs(fcast)) + ' kg' : '—'}
             </span>`;
 
           // Sparkline canvas

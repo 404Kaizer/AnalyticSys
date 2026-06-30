@@ -1227,9 +1227,21 @@ td.pending-cell  { color: var(--text3) !important; font-style: italic; font-size
 .cpanel-left {
   flex-shrink: 0;
   display: flex;
+  flex-direction: column;
   align-items: center;
+  justify-content: center;
+  gap: 4px;
   padding-right: 16px;
   border-right: 1px solid var(--border);
+}
+.cpanel-period {
+  font-size: 8.5px;
+  font-family: var(--mono);
+  font-weight: 600;
+  letter-spacing: .02em;
+  color: var(--text3);
+  white-space: nowrap;
+  cursor: help;
 }
 .cpanel-spark-wrap {
   display: flex;
