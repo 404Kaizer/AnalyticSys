@@ -1134,8 +1134,14 @@ td.pending-cell  { color: var(--text3) !important; font-style: italic; font-size
   border-radius: var(--radius-lg);
   margin-bottom: 6px;
   overflow: visible;
-  transition: border-color 0.15s;
+  transition: border-color 0.15s, opacity 0.2s ease;
   contain: layout paint;
+}
+.micro-filial-card.central-dimmed {
+  opacity: 0.35;
+}
+.micro-filial-card.central-dimmed:hover {
+  opacity: 0.7;
 }
 .micro-filial-card:hover { border-color: var(--border2); }
 
@@ -2227,9 +2233,16 @@ td.var-cell-zero .ti-circle-check     { color: var(--text3); }
 ══════════════════════════════════════════ */
 .regional-group {
   margin-bottom: 16px;
+  transition: opacity 0.2s ease;
 }
 .regional-group.collapsed {
   margin-bottom: 6px;
+}
+.regional-group.regional-dimmed {
+  opacity: 0.35;
+}
+.regional-group.regional-dimmed:hover {
+  opacity: 0.7;
 }
 .regional-group-header-wrap {
   display: flex;
@@ -2428,7 +2441,7 @@ td.var-cell-zero .ti-circle-check     { color: var(--text3); }
   border-radius: var(--radius-xl);
   box-shadow: 0 24px 64px rgba(0,0,0,0.55), 0 0 0 1px var(--border);
   width: 100%;
-  max-width: min(760px, 94vw);
+  max-width: 520px;
   max-height: 80vh;
   display: flex;
   flex-direction: column;
@@ -2532,17 +2545,6 @@ td.var-cell-zero .ti-circle-check     { color: var(--text3); }
   font-weight: 700;
   letter-spacing: -0.02em;
 }
-
-/* Telas estreitas: reduz padding das células para caber mais colunas antes
-   de precisar de scroll horizontal (o .bdm-body já tem overflow-x:auto como
-   fallback para quando mesmo assim não couber). */
-@media (max-width: 640px) {
-  .bdm-dialog { max-width: 96vw; }
-  .bdm-table { font-size: 11.5px; }
-  .bdm-table thead th,
-  .bdm-table tbody td { padding: 8px 10px; }
-}
-
 body.analitico-modal-open { overflow: hidden; }
 .analitico-detail-overlay { z-index: 260; backdrop-filter: none; -webkit-backdrop-filter: none; }
 
