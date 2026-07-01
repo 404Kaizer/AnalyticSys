@@ -1411,6 +1411,186 @@ function closePendIntegModal() {
 }
 
 /**
+ * Exibe TODAS as NFs ou OS pendentes de integração SAP, sem filtro de
+ * período ou central. Chamado pelos botões globais nas páginas Entradas/Saídas.
+ *
+ * Lógica:
+ *  • NFs: varre state.entradas inteiro; considera pendente qualquer registro
+ *    com campo `nf` que não tenha correspondência no SAP (mov 101/801) da
+ *    central de destino/compra daquela entrada, usando toda a história SAP
+ *    (sem filtro de período).
+ *  • OS: varre state.saidas inteiro; considera pendente qualquer registro com
+ *    campo `os` que não tenha correspondência no SAP (mov 201) da central,
+ *    usando toda a história SAP.
+ *
+ * @param {'NF'|'OS'} tipo
+ */
+function openPendIntegGlobalModal(tipo) {
+  const overlay = document.getElementById('pim-overlay');
+  if (!overlay) return;
+
+  const _num = v => { const n = parseFloat(String(v ?? 0).replace(',','.')); return Number.isFinite(n) ? n : 0; };
+  const _fmt = n => isNaN(n) ? '—' : Math.abs(n).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
+
+  // Reutiliza as mesmas funções de normalização de calcPendentesIntegracao
+  const normNF = raw => {
+    const s = String(raw || '').trim().toUpperCase();
+    const dash = s.lastIndexOf('-');
+    return (dash > 0 ? s.slice(0, dash) : s).replace(/^0+/, '') || '0';
+  };
+  const normOS = raw => String(raw || '').trim().toUpperCase().replace(/^0+/, '') || '0';
+  const normSapRefOS = raw => {
+    const s = String(raw || '').trim().toUpperCase();
+    const dash = s.lastIndexOf('-');
+    return (dash >= 0 ? s.slice(dash + 1) : s).replace(/^0+/, '') || '0';
+  };
+  const normMov = m => String(m || '').trim().toUpperCase();
+
+  // Índice SAP completo (toda a história, sem filtro de período)
+  const { byCentral: sapByCentral } = getSapIndex();
+
+  // Constrói Sets de NF/OS já integradas por central — feito uma vez, lazy
+  const _nfRefsByCentral = new Map();
+  const _osRefsByCentral = new Map();
+  const _getSapRefs = central => {
+    if (!_nfRefsByCentral.has(central)) {
+      const nfSet = new Set(), osSet = new Set();
+      (sapByCentral.get(central) || []).forEach(s => {
+        const cod = normMov(s.movimento);
+        const ref = String(s.ref       || '').trim().toUpperCase();
+        const doc = String(s.documento || '').trim().toUpperCase();
+        if (cod === '101' || cod === '801') {
+          if (ref) nfSet.add(normNF(ref));
+          if (doc) nfSet.add(normNF(doc));
+        } else if (cod === '201') {
+          if (ref) osSet.add(normSapRefOS(ref));
+          if (doc) osSet.add(normSapRefOS(doc));
+        }
+      });
+      _nfRefsByCentral.set(central, nfSet);
+      _osRefsByCentral.set(central, osSet);
+    }
+    return { nfRefs: _nfRefsByCentral.get(central), osRefs: _osRefsByCentral.get(central) };
+  };
+
+  let items = [];
+
+  if (tipo === 'NF') {
+    (state.entradas || []).forEach(r => {
+      if (!r.nf) return;
+      const central = r.centralDestino || r.centralCompra || '';
+      if (!central) return;
+      const { nfRefs } = _getSapRefs(central);
+      if (!nfRefs.has(normNF(r.nf))) {
+        items.push({
+          central,
+          nf:        r.nf,
+          material:  r.material  || '—',
+          fornecedor:r.fornecedor|| '—',
+          dtEmissao: r.dtEmissao || '—',
+          dtDescarga:r.dtDescarga|| '—',
+          peso:      r.peso      || 0,
+          um:        r.um        || 'kg'
+        });
+      }
+    });
+    // Ordena por central → dtDescarga → nf
+    items.sort((a, b) =>
+      a.central.localeCompare(b.central, 'pt-BR') ||
+      (a.dtDescarga || a.dtEmissao).localeCompare(b.dtDescarga || b.dtEmissao) ||
+      String(a.nf).localeCompare(String(b.nf), 'pt-BR')
+    );
+  } else {
+    (state.saidas || []).forEach(r => {
+      if (!r.os) return;
+      const central = r.central || '';
+      if (!central) return;
+      const { osRefs } = _getSapRefs(central);
+      if (!osRefs.has(normOS(r.os))) {
+        items.push({
+          central,
+          os:        r.os,
+          material:  r.material  || '—',
+          fornecedor:r.fornecedor|| '—',
+          dtEmissao: r.dtEmissao || '—',
+          peso:      r.peso      || 0,
+          um:        r.um        || 'kg'
+        });
+      }
+    });
+    items.sort((a, b) =>
+      a.central.localeCompare(b.central, 'pt-BR') ||
+      (a.dtEmissao).localeCompare(b.dtEmissao) ||
+      String(a.os).localeCompare(String(b.os), 'pt-BR')
+    );
+  }
+
+  // Atualiza contadores nos botões globais
+  const nfCountEl = document.getElementById('pend-global-nf-count');
+  const osCountEl = document.getElementById('pend-global-os-count');
+  if (tipo === 'NF' && nfCountEl) nfCountEl.textContent = items.length;
+  if (tipo === 'OS' && osCountEl) osCountEl.textContent = items.length;
+
+  // Preenche o modal reutilizando #pim-overlay
+  document.getElementById('pim-title').textContent =
+    tipo === 'NF' ? 'NFs sem integração SAP — Todas as Centrais'
+                  : 'OS sem integração SAP — Todas as Centrais';
+  document.getElementById('pim-sub').textContent =
+    `${items.length} registro${items.length !== 1 ? 's' : ''} pendente${items.length !== 1 ? 's' : ''} em todas as centrais`;
+
+  const tbody = document.getElementById('pim-tbody');
+  const thead = document.getElementById('pim-thead');
+
+  if (tipo === 'NF') {
+    thead.innerHTML = `<tr>
+      <th>Central</th>
+      <th>NF</th>
+      <th>Material</th>
+      <th>Fornecedor</th>
+      <th>Dt. Emissão</th>
+      <th>Dt. Descarga</th>
+      <th style="text-align:right">Quantidade</th>
+    </tr>`;
+    tbody.innerHTML = items.length
+      ? items.map(it => `<tr>
+          <td class="td-muted">${escapeHtml(it.central)}</td>
+          <td class="td-mono" style="font-weight:600;color:var(--green)">${escapeHtml(String(it.nf || '—'))}</td>
+          <td>${escapeHtml(String(it.material || '—'))}</td>
+          <td class="td-muted">${escapeHtml(String(it.fornecedor || '—'))}</td>
+          <td class="td-muted">${escapeHtml(String(it.dtEmissao  || '—'))}</td>
+          <td class="td-muted">${escapeHtml(String(it.dtDescarga || '—'))}</td>
+          <td class="td-mono" style="text-align:right;color:var(--green)">${_fmt(_num(it.peso))} ${escapeHtml(String(it.um || 'kg'))}</td>
+        </tr>`).join('')
+      : `<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:24px">Nenhuma NF pendente encontrada</td></tr>`;
+  } else {
+    thead.innerHTML = `<tr>
+      <th>Central</th>
+      <th>OS</th>
+      <th>Material</th>
+      <th>Fornecedor</th>
+      <th>Dt. Emissão</th>
+      <th style="text-align:right">Quantidade</th>
+    </tr>`;
+    tbody.innerHTML = items.length
+      ? items.map(it => `<tr>
+          <td class="td-muted">${escapeHtml(it.central)}</td>
+          <td class="td-mono" style="font-weight:600;color:var(--red)">${escapeHtml(String(it.os || '—'))}</td>
+          <td>${escapeHtml(String(it.material || '—'))}</td>
+          <td class="td-muted">${escapeHtml(String(it.fornecedor || '—'))}</td>
+          <td class="td-muted">${escapeHtml(String(it.dtEmissao  || '—'))}</td>
+          <td class="td-mono" style="text-align:right;color:var(--red)">${_fmt(_num(it.peso))} ${escapeHtml(String(it.um || 'kg'))}</td>
+        </tr>`).join('')
+      : `<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:24px">Nenhuma OS pendente encontrada</td></tr>`;
+  }
+
+  document.getElementById('pim-count').textContent =
+    `${items.length} registro${items.length !== 1 ? 's' : ''} pendente${items.length !== 1 ? 's' : ''}`;
+
+  overlay.classList.add('open');
+  overlay.setAttribute('aria-hidden', 'false');
+}
+
+/**
  * Ativa/desativa a consideração de pendentes (NF ou OS) no cálculo do analítico.
  * Chamado pelos botões "Considerar NFs / OS" nos cards de integração SAP.
  * @param {string} central - Nome da central
@@ -1475,7 +1655,7 @@ function togglePendConsiderados(central, tipo) {
   }
 }
 
-Object.assign(window, { openBreakdownModal, closeBreakdownModal, openPendIntegModal, closePendIntegModal, togglePendConsiderados });
+Object.assign(window, { openBreakdownModal, closeBreakdownModal, openPendIntegModal, closePendIntegModal, openPendIntegGlobalModal, togglePendConsiderados });
 
 // ── Conflict Resolution Modal ───────────────────────────────
 let _lrcDetailKey = null;
