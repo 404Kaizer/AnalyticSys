@@ -481,7 +481,7 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
         if (!sapByMat.has(mat)) sapByMat.set(mat, []);
         sapByMat.get(mat).push({
           movimento: '101',
-          peso:      Math.abs(num(e.peso)),
+          peso:      _convertNfPesoToKg(e.peso, e.um, e.material),
           ref:       String(e.nf || ''),
           documento: '',
           material:  mat,

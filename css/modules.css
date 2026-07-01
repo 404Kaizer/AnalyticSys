@@ -1531,8 +1531,7 @@ tr.pend-injetado-ambos {
   background: var(--bg2);
   border: 1px solid var(--border);
   border-radius: 14px;
-  width: 100%;
-  max-width: 700px;
+  width: min(1120px, 95vw);
   max-height: 88vh;
   display: flex;
   flex-direction: column;
@@ -1567,14 +1566,48 @@ tr.pend-injetado-ambos {
   color: var(--text3);
   margin-top: 2px;
 }
+/* ── Filtro de mês do modal de pendentes ─────────────────────────────── */
+.pim-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg2);
+  flex-shrink: 0;
+}
+.pim-month-pill {
+  font-size: 11px;
+  font-weight: 500;
+  font-family: inherit;
+  padding: 3px 10px;
+  border-radius: 20px;
+  border: 1px solid var(--border2);
+  background: var(--bg3);
+  color: var(--text2);
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+  white-space: nowrap;
+}
+.pim-month-pill:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.pim-month-pill.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
 .pim-body {
   overflow-y: auto;
+  overflow-x: auto;
   flex: 1;
   padding: 0;
 }
 
 .pim-table {
   width: 100%;
+  min-width: max-content;
   border-collapse: collapse;
   font-size: 12.5px;
 }
@@ -1596,7 +1629,19 @@ tr.pend-injetado-ambos {
 .pim-table tbody tr { border-bottom: 1px solid var(--border); }
 .pim-table tbody tr:last-child { border-bottom: none; }
 .pim-table tbody tr:hover { background: var(--bg3); }
-.pim-table tbody td { padding: 8px 14px; color: var(--text); vertical-align: middle; }
+/* Linha de NF sem fator de conversão volumétrico cadastrado */
+.pim-table tbody tr.pim-row-no-conv {
+  background: color-mix(in srgb, var(--amber) 6%, transparent);
+}
+.pim-table tbody tr.pim-row-no-conv:hover {
+  background: color-mix(in srgb, var(--amber) 12%, var(--bg3));
+}
+.pim-table tbody td {
+  padding: 8px 14px;
+  color: var(--text);
+  vertical-align: middle;
+  white-space: nowrap;
+}
 .pim-footer {
   padding: 12px 22px;
   border-top: 1px solid var(--border);
