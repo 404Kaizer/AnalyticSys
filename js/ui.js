@@ -1259,6 +1259,7 @@ function calcPendentesIntegracao({ central, dtIni, dtFim, sapNoPeriodo }) {
     if (r.central !== central) return false;
     if (!inPeriodLocal(r.dtEmissao)) return false;
     if (!r.os) return false; // sem OS cadastrada — ignorar
+    if (!num(r.peso)) return false; // peso 0 — ignorar
     const osNorm = normOS(r.os);
     return !sapOSRefs.has(osNorm);
   });
@@ -1660,6 +1661,7 @@ function openPendIntegGlobalModal(tipo) {
     } else {
       (state.saidas || []).forEach(r => {
         if (!r.os) return;
+        if (!num(r.peso)) return; // peso 0 — ignorar
         const central = r.central || '';
         if (!central) return;
         const centralOSRefs = osRefs.get(central) || new Set();
