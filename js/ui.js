@@ -1340,65 +1340,244 @@ function buildPendIntegSection({ central, dtIni, dtFim, sapNoPeriodo }) {
     </div>`;
 }
 
+// ── Estado compartilhado do modal de pendentes ───────────────────────────
+// Permite que o filtro de mês funcione tanto no modal por central quanto
+// no modal global, sem duplicar a lógica de renderização da tabela.
+// ── Cache SAP global para o modal de pendentes ───────────────────────────
+// Construído uma única vez por sessão (ou até que os dados SAP mudem via
+// importação). Evita rebuildar os Sets de referências a cada abertura do modal.
+let _pimGlobalSapCache = null;
+
+/** Funções de normalização — espelham as de calcPendentesIntegracao. */
+const _pimNormNF = raw => {
+  const s = String(raw || '').trim().toUpperCase();
+  const dash = s.lastIndexOf('-');
+  return (dash > 0 ? s.slice(0, dash) : s).replace(/^0+/, '') || '0';
+};
+const _pimNormOS       = raw => String(raw || '').trim().toUpperCase().replace(/^0+/, '') || '0';
+const _pimNormSapRefOS = raw => {
+  const s = String(raw || '').trim().toUpperCase();
+  const dash = s.lastIndexOf('-');
+  return (dash >= 0 ? s.slice(dash + 1) : s).replace(/^0+/, '') || '0';
+};
+
+/**
+ * Constrói (ou retorna em cache) os Sets de NF/OS já integradas por central,
+ * varrendo todo o histórico SAP sem filtro de período.
+ * @returns {{ nfRefs: Map<string, Set>, osRefs: Map<string, Set> }}
+ */
+function _pimGetSapCache() {
+  if (_pimGlobalSapCache) return _pimGlobalSapCache;
+  const { byCentral } = getSapIndex();
+  const nfRefs = new Map();
+  const osRefs = new Map();
+  byCentral.forEach((records, central) => {
+    const nfSet = new Set(), osSet = new Set();
+    records.forEach(s => {
+      const cod = String(s.movimento || '').trim().toUpperCase();
+      const ref = String(s.ref       || '').trim().toUpperCase();
+      const doc = String(s.documento || '').trim().toUpperCase();
+      if (cod === '101' || cod === '801') {
+        if (ref) nfSet.add(_pimNormNF(ref));
+        if (doc) nfSet.add(_pimNormNF(doc));
+      } else if (cod === '201') {
+        if (ref) osSet.add(_pimNormSapRefOS(ref));
+        if (doc) osSet.add(_pimNormSapRefOS(doc));
+      }
+    });
+    nfRefs.set(central, nfSet);
+    osRefs.set(central, osSet);
+  });
+  _pimGlobalSapCache = { nfRefs, osRefs };
+  return _pimGlobalSapCache;
+}
+
+/** Invalida o cache (chamar após importação de dados SAP). */
+function _pimClearSapCache() { _pimGlobalSapCache = null; }
+
+const _pimState = {
+  allItems:    [],     // todos os itens sem filtro de mês
+  filtered:    [],     // itens após filtro de mês
+  tipo:        'NF',   // 'NF' | 'OS'
+  isGlobal:    false,  // true = exibe coluna Central
+  activeMonth: 'all',  // 'all' | 'YYYY-MM'
+  centralLabel:'',     // texto exibido no sub-título (modal por central)
+  page:        0,      // página atual (0-indexed)
+  totalPages:  1,      // calculado em _pimRender
+  PAGE_SIZE:   100,    // linhas por página
+};
+
+const _PIM_MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+
+/** Extrai 'YYYY-MM' de uma string de data (DD/MM/AAAA ou YYYY-MM-DD). */
+function _pimMonthKey(dateStr) {
+  if (!dateStr || dateStr === '—') return null;
+  const s = String(dateStr);
+  const m1 = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (m1) return `${m1[3]}-${m1[2]}`;
+  const m2 = s.match(/^(\d{4})-(\d{2})/);
+  if (m2) return `${m2[1]}-${m2[2]}`;
+  return null;
+}
+
+/** Retorna a data relevante de um item para fins de filtro de mês. */
+function _pimItemDate(it, tipo) {
+  return tipo === 'NF' ? (it.dtDescarga || it.dtEmissao) : it.dtEmissao;
+}
+
+/** Renderiza thead + tbody + count + pills + paginação com o estado atual. */
+function _pimRender() {
+  const { filtered, tipo, isGlobal, allItems, activeMonth, PAGE_SIZE } = _pimState;
+  const _num = v => { const n = parseFloat(String(v ?? 0).replace(',','.')); return Number.isFinite(n) ? n : 0; };
+  const _fmt = n => isNaN(n) ? '—' : Math.abs(n).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
+
+  // ── Paginação ────────────────────────────────────────────────────────────
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  _pimState.totalPages = totalPages;
+  const page = Math.min(_pimState.page, totalPages - 1);
+  _pimState.page = page;
+  const pageItems = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+
+  // ── Sub-título ───────────────────────────────────────────────────────────
+  const subTotal = filtered.length;
+  const subSuffix = `${subTotal} registro${subTotal !== 1 ? 's' : ''} pendente${subTotal !== 1 ? 's' : ''}`;
+  const subEl = document.getElementById('pim-sub');
+  if (subEl) {
+    subEl.textContent = isGlobal
+      ? `${subSuffix} em todas as centrais`
+      : `Central: ${_pimState.centralLabel} · ${subSuffix}`;
+  }
+
+  // ── Filter bar (pills de mês) ─────────────────────────────────────────────
+  const filterBar = document.getElementById('pim-filter-bar');
+  if (filterBar) {
+    const monthKeys = [...new Set(
+      allItems.map(it => _pimMonthKey(_pimItemDate(it, tipo))).filter(Boolean)
+    )].sort();
+    if (monthKeys.length > 1) {
+      filterBar.innerHTML = [
+        `<button class="pim-month-pill${activeMonth === 'all' ? ' active' : ''}" onclick="pimSetMonth('all')">Todos</button>`,
+        ...monthKeys.map(key => {
+          const [yyyy, mm] = key.split('-');
+          const label = `${_PIM_MESES[parseInt(mm,10)-1]}/${yyyy}`;
+          return `<button class="pim-month-pill${activeMonth === key ? ' active' : ''}" onclick="pimSetMonth('${key}')">${label}</button>`;
+        })
+      ].join('');
+      filterBar.style.display = '';
+    } else {
+      filterBar.innerHTML = '';
+      filterBar.style.display = 'none';
+    }
+  }
+
+  // ── Thead ─────────────────────────────────────────────────────────────────
+  const thead = document.getElementById('pim-thead');
+  if (thead) {
+    thead.innerHTML = tipo === 'NF'
+      ? `<tr>${isGlobal ? '<th>Central</th>' : ''}<th>NF</th><th>Material</th><th>Fornecedor</th><th>Dt. Emissão</th><th>Dt. Descarga</th><th style="text-align:right">Quantidade</th></tr>`
+      : `<tr>${isGlobal ? '<th>Central</th>' : ''}<th>OS</th><th>Material</th><th>Fornecedor</th><th>Dt. Emissão</th><th style="text-align:right">Quantidade</th></tr>`;
+  }
+
+  // ── Tbody (apenas a página atual) ─────────────────────────────────────────
+  const tbody = document.getElementById('pim-tbody');
+  if (tbody) {
+    const colSpan = tipo === 'NF' ? (isGlobal ? 7 : 6) : (isGlobal ? 6 : 5);
+    if (!pageItems.length) {
+      tbody.innerHTML = `<tr><td colspan="${colSpan}" style="text-align:center;color:var(--text3);padding:24px">Nenhum registro pendente encontrado</td></tr>`;
+    } else if (tipo === 'NF') {
+      tbody.innerHTML = pageItems.map(it => `<tr>
+        ${isGlobal ? `<td class="td-muted">${escapeHtml(it.central||'—')}</td>` : ''}
+        <td class="td-mono" style="font-weight:600;color:var(--green)">${escapeHtml(String(it.nf||'—'))}</td>
+        <td>${escapeHtml(String(it.material||'—'))}</td>
+        <td class="td-muted">${escapeHtml(String(it.fornecedor||'—'))}</td>
+        <td class="td-muted">${escapeHtml(String(it.dtEmissao||'—'))}</td>
+        <td class="td-muted">${escapeHtml(String(it.dtDescarga||'—'))}</td>
+        <td class="td-mono" style="text-align:right;color:var(--green)">${_fmt(_num(it.peso))} ${escapeHtml(String(it.um||'kg'))}</td>
+      </tr>`).join('');
+    } else {
+      tbody.innerHTML = pageItems.map(it => `<tr>
+        ${isGlobal ? `<td class="td-muted">${escapeHtml(it.central||'—')}</td>` : ''}
+        <td class="td-mono" style="font-weight:600;color:var(--red)">${escapeHtml(String(it.os||'—'))}</td>
+        <td>${escapeHtml(String(it.material||'—'))}</td>
+        <td class="td-muted">${escapeHtml(String(it.fornecedor||'—'))}</td>
+        <td class="td-muted">${escapeHtml(String(it.dtEmissao||'—'))}</td>
+        <td class="td-mono" style="text-align:right;color:var(--red)">${_fmt(_num(it.peso))} ${escapeHtml(String(it.um||'kg'))}</td>
+      </tr>`).join('');
+    }
+  }
+
+  // ── Rodapé: contagem + paginação ──────────────────────────────────────────
+  const countEl = document.getElementById('pim-count');
+  if (countEl) {
+    if (totalPages > 1) {
+      const start = page * PAGE_SIZE + 1;
+      const end   = Math.min((page + 1) * PAGE_SIZE, filtered.length);
+      countEl.textContent = `${start}–${end} de ${subTotal} registro${subTotal !== 1 ? 's' : ''}`;
+    } else {
+      countEl.textContent = `${subTotal} registro${subTotal !== 1 ? 's' : ''} pendente${subTotal !== 1 ? 's' : ''}`;
+    }
+  }
+
+  const pgEl = document.getElementById('pim-pagination');
+  if (pgEl) {
+    if (totalPages > 1) {
+      pgEl.style.display = '';
+      const pgInfo = document.getElementById('pim-pg-info');
+      if (pgInfo) pgInfo.textContent = `${page + 1} / ${totalPages}`;
+      const first = document.getElementById('pim-pg-first');
+      const prev  = document.getElementById('pim-pg-prev');
+      const next  = document.getElementById('pim-pg-next');
+      const last  = document.getElementById('pim-pg-last');
+      if (first) first.disabled = page === 0;
+      if (prev)  prev.disabled  = page === 0;
+      if (next)  next.disabled  = page >= totalPages - 1;
+      if (last)  last.disabled  = page >= totalPages - 1;
+    } else {
+      pgEl.style.display = 'none';
+    }
+  }
+}
+
+/** Aplica filtro de mês, reseta para primeira página e re-renderiza. */
+function pimSetMonth(monthKey) {
+  _pimState.activeMonth = monthKey;
+  _pimState.page = 0;
+  _pimState.filtered = monthKey === 'all'
+    ? _pimState.allItems
+    : _pimState.allItems.filter(it =>
+        _pimMonthKey(_pimItemDate(it, _pimState.tipo)) === monthKey
+      );
+  _pimRender();
+}
+
+/** Navega para uma página específica da tabela. */
+function pimGoToPage(n) {
+  const total = _pimState.totalPages || 1;
+  _pimState.page = Math.max(0, Math.min(n, total - 1));
+  _pimRender();
+}
+
 function openPendIntegModal(trigger) {
   const overlay = document.getElementById('pim-overlay');
   if (!overlay) return;
-
-  // helpers locais independentes de escopo externo
-  const _num = v => { const n = parseFloat(String(v ?? 0).replace(',','.')); return Number.isFinite(n) ? n : 0; };
-  const _fmt = n => isNaN(n) ? '—' : Math.abs(n).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
 
   const tipo    = trigger.dataset.tipo || '?';
   const central = trigger.dataset.central || '—';
   let items = [];
   try { items = JSON.parse(decodeURIComponent(trigger.dataset.items || '[]')); } catch(e) {}
 
-  // Title/sub
   document.getElementById('pim-title').textContent =
     tipo === 'NF' ? 'NFs sem integração SAP' : 'OS sem integração SAP';
-  document.getElementById('pim-sub').textContent =
-    `Central: ${central} · ${items.length} registro${items.length !== 1 ? 's' : ''} pendente${items.length !== 1 ? 's' : ''}`;
 
-  const tbody = document.getElementById('pim-tbody');
-  const thead = document.getElementById('pim-thead');
+  // Inicializa estado compartilhado
+  _pimState.allItems    = items;
+  _pimState.filtered    = items;
+  _pimState.tipo        = tipo;
+  _pimState.isGlobal    = false;
+  _pimState.activeMonth = 'all';
+  _pimState.centralLabel = central;
 
-  if (tipo === 'NF') {
-    thead.innerHTML = `<tr>
-      <th>NF</th>
-      <th>Material</th>
-      <th>Fornecedor</th>
-      <th>Dt. Emissão</th>
-      <th>Dt. Descarga</th>
-      <th style="text-align:right">Quantidade</th>
-    </tr>`;
-    tbody.innerHTML = items.map(it => `<tr>
-      <td class="td-mono" style="font-weight:600;color:var(--green)">${escapeHtml(String(it.nf || '—'))}</td>
-      <td>${escapeHtml(String(it.material || '—'))}</td>
-      <td class="td-muted">${escapeHtml(String(it.fornecedor || '—'))}</td>
-      <td class="td-muted">${escapeHtml(String(it.dtEmissao || '—'))}</td>
-      <td class="td-muted">${escapeHtml(String(it.dtDescarga || '—'))}</td>
-      <td class="td-mono" style="text-align:right;color:var(--green)">${_fmt(_num(it.peso))} ${escapeHtml(String(it.um || 'kg'))}</td>
-    </tr>`).join('');
-  } else {
-    thead.innerHTML = `<tr>
-      <th>OS</th>
-      <th>Material</th>
-      <th>Fornecedor</th>
-      <th>Dt. Emissão</th>
-      <th style="text-align:right">Quantidade</th>
-    </tr>`;
-    tbody.innerHTML = items.map(it => `<tr>
-      <td class="td-mono" style="font-weight:600;color:var(--red)">${escapeHtml(String(it.os || '—'))}</td>
-      <td>${escapeHtml(String(it.material || '—'))}</td>
-      <td class="td-muted">${escapeHtml(String(it.fornecedor || '—'))}</td>
-      <td class="td-muted">${escapeHtml(String(it.dtEmissao || '—'))}</td>
-      <td class="td-mono" style="text-align:right;color:var(--red)">${_fmt(_num(it.peso))} ${escapeHtml(String(it.um || 'kg'))}</td>
-    </tr>`).join('');
-  }
-
-  document.getElementById('pim-count').textContent =
-    `${items.length} registro${items.length !== 1 ? 's' : ''} pendente${items.length !== 1 ? 's' : ''}`;
-
+  _pimRender();
   overlay.classList.add('open');
   overlay.setAttribute('aria-hidden', 'false');
 }
@@ -1429,165 +1608,95 @@ function openPendIntegGlobalModal(tipo) {
   const overlay = document.getElementById('pim-overlay');
   if (!overlay) return;
 
-  const _num = v => { const n = parseFloat(String(v ?? 0).replace(',','.')); return Number.isFinite(n) ? n : 0; };
-  const _fmt = n => isNaN(n) ? '—' : Math.abs(n).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
-
-  // Reutiliza as mesmas funções de normalização de calcPendentesIntegracao
-  const normNF = raw => {
-    const s = String(raw || '').trim().toUpperCase();
-    const dash = s.lastIndexOf('-');
-    return (dash > 0 ? s.slice(0, dash) : s).replace(/^0+/, '') || '0';
-  };
-  const normOS = raw => String(raw || '').trim().toUpperCase().replace(/^0+/, '') || '0';
-  const normSapRefOS = raw => {
-    const s = String(raw || '').trim().toUpperCase();
-    const dash = s.lastIndexOf('-');
-    return (dash >= 0 ? s.slice(dash + 1) : s).replace(/^0+/, '') || '0';
-  };
-  const normMov = m => String(m || '').trim().toUpperCase();
-
-  // Índice SAP completo (toda a história, sem filtro de período)
-  const { byCentral: sapByCentral } = getSapIndex();
-
-  // Constrói Sets de NF/OS já integradas por central — feito uma vez, lazy
-  const _nfRefsByCentral = new Map();
-  const _osRefsByCentral = new Map();
-  const _getSapRefs = central => {
-    if (!_nfRefsByCentral.has(central)) {
-      const nfSet = new Set(), osSet = new Set();
-      (sapByCentral.get(central) || []).forEach(s => {
-        const cod = normMov(s.movimento);
-        const ref = String(s.ref       || '').trim().toUpperCase();
-        const doc = String(s.documento || '').trim().toUpperCase();
-        if (cod === '101' || cod === '801') {
-          if (ref) nfSet.add(normNF(ref));
-          if (doc) nfSet.add(normNF(doc));
-        } else if (cod === '201') {
-          if (ref) osSet.add(normSapRefOS(ref));
-          if (doc) osSet.add(normSapRefOS(doc));
-        }
-      });
-      _nfRefsByCentral.set(central, nfSet);
-      _osRefsByCentral.set(central, osSet);
-    }
-    return { nfRefs: _nfRefsByCentral.get(central), osRefs: _osRefsByCentral.get(central) };
-  };
-
-  let items = [];
-
-  if (tipo === 'NF') {
-    (state.entradas || []).forEach(r => {
-      if (!r.nf) return;
-      const central = r.centralDestino || r.centralCompra || '';
-      if (!central) return;
-      const { nfRefs } = _getSapRefs(central);
-      if (!nfRefs.has(normNF(r.nf))) {
-        items.push({
-          central,
-          nf:        r.nf,
-          material:  r.material  || '—',
-          fornecedor:r.fornecedor|| '—',
-          dtEmissao: r.dtEmissao || '—',
-          dtDescarga:r.dtDescarga|| '—',
-          peso:      r.peso      || 0,
-          um:        r.um        || 'kg'
-        });
-      }
-    });
-    // Ordena por central → dtDescarga → nf
-    items.sort((a, b) =>
-      a.central.localeCompare(b.central, 'pt-BR') ||
-      (a.dtDescarga || a.dtEmissao).localeCompare(b.dtDescarga || b.dtEmissao) ||
-      String(a.nf).localeCompare(String(b.nf), 'pt-BR')
-    );
-  } else {
-    (state.saidas || []).forEach(r => {
-      if (!r.os) return;
-      const central = r.central || '';
-      if (!central) return;
-      const { osRefs } = _getSapRefs(central);
-      if (!osRefs.has(normOS(r.os))) {
-        items.push({
-          central,
-          os:        r.os,
-          material:  r.material  || '—',
-          fornecedor:r.fornecedor|| '—',
-          dtEmissao: r.dtEmissao || '—',
-          peso:      r.peso      || 0,
-          um:        r.um        || 'kg'
-        });
-      }
-    });
-    items.sort((a, b) =>
-      a.central.localeCompare(b.central, 'pt-BR') ||
-      (a.dtEmissao).localeCompare(b.dtEmissao) ||
-      String(a.os).localeCompare(String(b.os), 'pt-BR')
-    );
-  }
-
-  // Atualiza contadores nos botões globais
-  const nfCountEl = document.getElementById('pend-global-nf-count');
-  const osCountEl = document.getElementById('pend-global-os-count');
-  if (tipo === 'NF' && nfCountEl) nfCountEl.textContent = items.length;
-  if (tipo === 'OS' && osCountEl) osCountEl.textContent = items.length;
-
-  // Preenche o modal reutilizando #pim-overlay
+  // ── Abre o modal imediatamente com spinner ───────────────────────────────
+  // O cálculo pesado acontece após o browser pintar o estado de carregamento,
+  // eliminando a sensação de "travamento" ao clicar no botão.
   document.getElementById('pim-title').textContent =
     tipo === 'NF' ? 'NFs sem integração SAP — Todas as Centrais'
                   : 'OS sem integração SAP — Todas as Centrais';
-  document.getElementById('pim-sub').textContent =
-    `${items.length} registro${items.length !== 1 ? 's' : ''} pendente${items.length !== 1 ? 's' : ''} em todas as centrais`;
-
-  const tbody = document.getElementById('pim-tbody');
-  const thead = document.getElementById('pim-thead');
-
-  if (tipo === 'NF') {
-    thead.innerHTML = `<tr>
-      <th>Central</th>
-      <th>NF</th>
-      <th>Material</th>
-      <th>Fornecedor</th>
-      <th>Dt. Emissão</th>
-      <th>Dt. Descarga</th>
-      <th style="text-align:right">Quantidade</th>
-    </tr>`;
-    tbody.innerHTML = items.length
-      ? items.map(it => `<tr>
-          <td class="td-muted">${escapeHtml(it.central)}</td>
-          <td class="td-mono" style="font-weight:600;color:var(--green)">${escapeHtml(String(it.nf || '—'))}</td>
-          <td>${escapeHtml(String(it.material || '—'))}</td>
-          <td class="td-muted">${escapeHtml(String(it.fornecedor || '—'))}</td>
-          <td class="td-muted">${escapeHtml(String(it.dtEmissao  || '—'))}</td>
-          <td class="td-muted">${escapeHtml(String(it.dtDescarga || '—'))}</td>
-          <td class="td-mono" style="text-align:right;color:var(--green)">${_fmt(_num(it.peso))} ${escapeHtml(String(it.um || 'kg'))}</td>
-        </tr>`).join('')
-      : `<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:24px">Nenhuma NF pendente encontrada</td></tr>`;
-  } else {
-    thead.innerHTML = `<tr>
-      <th>Central</th>
-      <th>OS</th>
-      <th>Material</th>
-      <th>Fornecedor</th>
-      <th>Dt. Emissão</th>
-      <th style="text-align:right">Quantidade</th>
-    </tr>`;
-    tbody.innerHTML = items.length
-      ? items.map(it => `<tr>
-          <td class="td-muted">${escapeHtml(it.central)}</td>
-          <td class="td-mono" style="font-weight:600;color:var(--red)">${escapeHtml(String(it.os || '—'))}</td>
-          <td>${escapeHtml(String(it.material || '—'))}</td>
-          <td class="td-muted">${escapeHtml(String(it.fornecedor || '—'))}</td>
-          <td class="td-muted">${escapeHtml(String(it.dtEmissao  || '—'))}</td>
-          <td class="td-mono" style="text-align:right;color:var(--red)">${_fmt(_num(it.peso))} ${escapeHtml(String(it.um || 'kg'))}</td>
-        </tr>`).join('')
-      : `<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:24px">Nenhuma OS pendente encontrada</td></tr>`;
-  }
-
-  document.getElementById('pim-count').textContent =
-    `${items.length} registro${items.length !== 1 ? 's' : ''} pendente${items.length !== 1 ? 's' : ''}`;
-
+  document.getElementById('pim-sub').textContent = 'Calculando...';
+  const filterBarEl = document.getElementById('pim-filter-bar');
+  if (filterBarEl) { filterBarEl.innerHTML = ''; filterBarEl.style.display = 'none'; }
+  const theadEl = document.getElementById('pim-thead');
+  const tbodyEl = document.getElementById('pim-tbody');
+  const colSpan = tipo === 'NF' ? 7 : 6;
+  if (theadEl) theadEl.innerHTML = '';
+  if (tbodyEl) tbodyEl.innerHTML = `<tr><td colspan="${colSpan}" style="text-align:center;padding:36px;color:var(--text3)">
+    <i class="ti ti-loader-2" style="font-size:22px;display:block;margin:0 auto 10px;animation:spin 1s linear infinite"></i>
+    Calculando pendentes de todas as centrais...
+  </td></tr>`;
+  const pgEl = document.getElementById('pim-pagination');
+  if (pgEl) pgEl.style.display = 'none';
   overlay.classList.add('open');
   overlay.setAttribute('aria-hidden', 'false');
+
+  // ── Computa após o browser pintar o spinner ──────────────────────────────
+  setTimeout(() => {
+    const { nfRefs, osRefs } = _pimGetSapCache(); // cache SAP — O(1) após primeira chamada
+    let items = [];
+
+    if (tipo === 'NF') {
+      (state.entradas || []).forEach(r => {
+        if (!r.nf) return;
+        const central = r.centralDestino || r.centralCompra || '';
+        if (!central) return;
+        const centralNFRefs = nfRefs.get(central) || new Set();
+        if (!centralNFRefs.has(_pimNormNF(r.nf))) {
+          items.push({
+            central, nf: r.nf,
+            material:  r.material   || '—',
+            fornecedor:r.fornecedor  || '—',
+            dtEmissao: r.dtEmissao  || '—',
+            dtDescarga:r.dtDescarga || '—',
+            peso: r.peso || 0, um: r.um || 'kg'
+          });
+        }
+      });
+      items.sort((a, b) =>
+        a.central.localeCompare(b.central, 'pt-BR') ||
+        (a.dtDescarga || a.dtEmissao).localeCompare(b.dtDescarga || b.dtEmissao) ||
+        String(a.nf).localeCompare(String(b.nf), 'pt-BR')
+      );
+    } else {
+      (state.saidas || []).forEach(r => {
+        if (!r.os) return;
+        const central = r.central || '';
+        if (!central) return;
+        const centralOSRefs = osRefs.get(central) || new Set();
+        if (!centralOSRefs.has(_pimNormOS(r.os))) {
+          items.push({
+            central, os: r.os,
+            material:  r.material   || '—',
+            fornecedor:r.fornecedor  || '—',
+            dtEmissao: r.dtEmissao  || '—',
+            peso: r.peso || 0, um: r.um || 'kg'
+          });
+        }
+      });
+      items.sort((a, b) =>
+        a.central.localeCompare(b.central, 'pt-BR') ||
+        a.dtEmissao.localeCompare(b.dtEmissao) ||
+        String(a.os).localeCompare(String(b.os), 'pt-BR')
+      );
+    }
+
+    // Atualiza contadores nos botões globais
+    const nfCountEl = document.getElementById('pend-global-nf-count');
+    const osCountEl = document.getElementById('pend-global-os-count');
+    if (tipo === 'NF' && nfCountEl) nfCountEl.textContent = items.length;
+    if (tipo === 'OS' && osCountEl) osCountEl.textContent = items.length;
+
+    // Popula _pimState e renderiza (somente a primeira página)
+    _pimState.allItems    = items;
+    _pimState.filtered    = items;
+    _pimState.tipo        = tipo;
+    _pimState.isGlobal    = true;
+    _pimState.activeMonth = 'all';
+    _pimState.centralLabel = '';
+    _pimState.page        = 0;
+
+    _pimRender();
+  }, 0);
 }
 
 /**
@@ -1655,7 +1764,7 @@ function togglePendConsiderados(central, tipo) {
   }
 }
 
-Object.assign(window, { openBreakdownModal, closeBreakdownModal, openPendIntegModal, closePendIntegModal, openPendIntegGlobalModal, togglePendConsiderados });
+Object.assign(window, { openBreakdownModal, closeBreakdownModal, openPendIntegModal, closePendIntegModal, openPendIntegGlobalModal, pimSetMonth, pimGoToPage, _pimClearSapCache, togglePendConsiderados });
 
 // ── Conflict Resolution Modal ───────────────────────────────
 let _lrcDetailKey = null;
