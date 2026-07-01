@@ -2961,7 +2961,16 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
 
   if (modulo === 'Entrada') {
     const cm = extra.colMap || {};
-    const ci = (field, fallback) => cm[field] !== undefined ? cm[field] : fallback;
+    const usedIdx = cm.__usedIdx || new Set();
+    // O fallback posicional só é usado se o índice não pertencer a outro campo já
+    // reconhecido pelo cabeçalho — evita que um campo não reconhecido "roube" por
+    // coincidência de posição a coluna correta de outro campo (ex.: CNPJ vazando
+    // para Central Destino quando o cabeçalho de destino não é reconhecido).
+    const ci = (field, fallback) => {
+      if (cm[field] !== undefined) return cm[field];
+      if (usedIdx.has(fallback)) return -1;
+      return fallback;
+    };
     for (let i = 0; i < total; i += batchSize) {
       updateStep('Lendo entradas e normalizando materiais...');
       await processSlice(i, Math.min(i + batchSize, total), (r) => {
@@ -3426,32 +3435,61 @@ function buildSapColumnMap(headerRow) {
 }
 
 // ─── Mapeamento de colunas para Entradas ────────────────────────────────────
+// Cada campo pode ter várias "camadas" (tiers) de sinônimos. A camada 0 de TODOS os campos
+// é testada, em todas as colunas do arquivo, antes de qualquer campo avançar para a camada 1.
+// Isso garante prioridade real (ex.: CNPJ Comprador sempre vence Central Compradora) independente
+// da ordem física das colunas no arquivo — e não apenas "primeira coluna que aparecer".
 function buildEntradaColumnMap(headerRow) {
   const n = s => String(s ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+  const norms = headerRow.map(n);
   const map = {};
+  const usedIdx = new Set();
+
   const defs = {
-    centralCompra:    { exact: ['central compra','central de compra','c. compra','compra','centro compra'] },
-    centralDestino:   { exact: ['central destino','central de destino','c. destino','destino','centro destino'] },
-    nf:               { exact: ['nf','nota fiscal','n.f.','numero nf','nro. nf','nro nf','num. nf','num nf','documento'] },
-    dtEmissao:        { exact: ['dt emissao','dt. emissao','data emissao','data de emissão','dt emissão','data emissão','emissao','emissão'] },
-    dtDescarga:       { exact: ['dt descarga','dt. descarga','data descarga','data de descarga','descarga','dt.descarga'] },
-    fornecedor:       { exact: ['fornecedor','supplier','forn.','forn'] },
-    categoria:        { exact: ['categoria','category','cat.','cat'] },
-    material:         { exact: ['material','descricao material','descrição material','produto','item','mat.'] },
-    peso:             { exact: ['peso','quantidade','qtde','qtd','weight','qty','peso (kg)','quant.'] },
-    um:               { exact: ['um','u.m.','unidade','unit','und'] },
-    custo:            { exact: ['custo','custo unit','custo unitario','custo unitário','preco','preço','unit price','valor unit'] },
-    valorTotal:       { exact: ['valor total','total','valor','amount','montante','vl total','vl. total'] },
+    centralCompra:  [
+      ['cnpj comprador','cnpj do comprador','cnpj compra','cnpj da compra','cnpj central compra','cnpj filial compra'],
+      ['central compra','central de compra','central compradora','c. compra','compra','centro compra'],
+    ],
+    centralDestino: [
+      ['central destino','central de destino','central descarga','central de descarga','central entrada','c. destino','c. descarga','destino','centro destino'],
+    ],
+    nf:             [['nf','nota fiscal','n.f.','numero nf','nro. nf','nro nf','num. nf','num nf','documento']],
+    dtEmissao:      [['dt emissao','dt. emissao','data emissao','data de emissão','dt emissão','data emissão','emissao','emissão']],
+    dtDescarga:     [['dt descarga','dt. descarga','data descarga','data de descarga','descarga','dt.descarga']],
+    fornecedor:     [['fornecedor','supplier','forn.','forn']],
+    categoria:      [['categoria','category','cat.','cat']],
+    material:       [['material','descricao material','descrição material','produto','item','mat.']],
+    peso:           [['peso','quantidade','qtde','qtd','weight','qty','peso (kg)','quant.']],
+    um:             [['um','u.m.','unidade','unit','und']],
+    custo:          [['custo','custo unit','custo unitario','custo unitário','preco','preço','unit price','valor unit']],
+    valorTotal:     [['valor total','total','valor','amount','montante','vl total','vl. total']],
   };
-  headerRow.forEach((cell, idx) => {
-    const norm = n(cell);
-    for (const [field, { exact }] of Object.entries(defs)) {
+
+  const maxTiers = Math.max(...Object.values(defs).map(t => t.length));
+
+  for (let tier = 0; tier < maxTiers; tier++) {
+    for (const [field, tiers] of Object.entries(defs)) {
       if (map[field] !== undefined) continue;
-      if (exact.some(a => norm === a || norm.startsWith(a))) map[field] = idx;
+      const synonyms = tiers[tier];
+      if (!synonyms) continue;
+      for (let idx = 0; idx < norms.length; idx++) {
+        if (usedIdx.has(idx)) continue;
+        const norm = norms[idx];
+        if (synonyms.some(a => norm === a || norm.startsWith(a))) {
+          map[field] = idx;
+          usedIdx.add(idx);
+          break;
+        }
+      }
     }
-  });
+  }
+
+  // Índices já reconhecidos ficam disponíveis para o import.js/dashboard.js evitar
+  // que um fallback fixo (posicional) roube uma coluna que já pertence a outro campo.
+  map.__usedIdx = usedIdx;
   return map;
 }
+
 
 function buildSaidaColumnMap(headerRow) {
   const n = s => String(s ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
@@ -3708,6 +3746,18 @@ async function handleImport(event, modulo) {
           event.target.value = '';
           return;
         }
+      } else if (modulo === 'Entrada') {
+        // O cabeçalho de Entradas é sempre a primeira linha (sem metadados antes).
+        const headerRow = rows[0] || [];
+        const colMap    = buildEntradaColumnMap(headerRow);
+
+        data  = rows.slice(1).filter(r => r.some(c => c !== '' && c !== null && c !== undefined));
+        extra = { colMap, isCsv };
+
+        console.info('[Entrada Import] ✓ Cabeçalho:', headerRow);
+        console.info('[Entrada Import] ✓ Mapeamento de colunas:', colMap);
+        console.info('[Entrada Import] ✓ Total de linhas de dados:', data.length);
+        console.info('[Entrada Import] ✓ Amostra da 1ª linha:', data[0]);
       } else {
         data = rows.slice(1).filter(r => r.some(c => c !== '' && c !== null && c !== undefined));
       }
