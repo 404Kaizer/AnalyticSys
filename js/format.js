@@ -2316,10 +2316,12 @@ function fechamentoAbrirPrint() {
     padding: 24px;
   }
   .card {
-    background: ${T.bg}; width: 440px; max-width: 100%;
+    background: ${T.bg};
+    width: 500px; height: 720px;
     border-radius: 14px; overflow: hidden;
     box-shadow: 0 32px 80px rgba(0,0,0,0.7);
     position: relative;
+    display: flex; flex-direction: column;
   }
   .card-stripe { height: 6px; width: 100%; background: ${T.stripe}; }
   .logo-strip {
@@ -2361,7 +2363,7 @@ function fechamentoAbrirPrint() {
     border-top: 1px solid ${T.metaBorder}; border-bottom: 1px solid ${T.metaBorder};
   }
   .card-divider { height: 1px; margin: 0 32px; background: ${T.dividerBg}; }
-  .card-body { padding: 26px 32px 28px; color: ${T.bodyFg}; }
+  .card-body { padding: 26px 32px 28px; color: ${T.bodyFg}; flex: 1; overflow-y: auto; }
   .ln {
     font-size: 13.5px; line-height: 1.7; white-space: pre-wrap; word-wrap: break-word;
     padding: 12px 16px; border-radius: 0 6px 6px 0; font-weight: 500;
@@ -2457,7 +2459,7 @@ function fechamentoAbrirPrint() {
 </body>
 </html>`;
 
-  const win = window.open('', '_blank', 'width=600,height=780,scrollbars=yes,resizable=yes');
+  const win = window.open('', '_blank', 'width=560,height=800,scrollbars=no,resizable=no');
   if (!win) { toast('Popup bloqueado — permita popups para este site.', 'error'); return; }
   win.document.open();
   win.document.write(html);

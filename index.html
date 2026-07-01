@@ -800,27 +800,120 @@
           <div id="inv-alertas-list" style="font-size:11px;color:var(--text2);max-height:120px;overflow-y:auto"></div>
         </div>
 
-        <!-- ══ FILTROS DA TABELA — aprimorados ══ -->
-        <div class="inv-filter-bar">
-          <div class="inv-filter-search">
-            <i class="ti ti-search" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:14px;pointer-events:none"></i>
-            <input type="text" id="inv-filtro" placeholder="Buscar regional, filial, material..." oninput="invFiltrar()" class="inv-search-input">
+        <!-- ══ FILTROS — mesmo padrão da Visão Micro do Dashboard Analítico ══ -->
+        <div class="micro-filter-bar" id="inv-filter-bar">
+          <!-- Filtro Regional -->
+          <div class="micro-filter-group" id="imfg-regional">
+            <button class="micro-filter-trigger" id="imft-regional" onclick="invToggleMicroFilter('regional')">
+              <i class="ti ti-users-group"></i>
+              <span id="imft-regional-label">Regional</span>
+              <i class="ti ti-chevron-down micro-filter-chev" id="imfc-regional"></i>
+            </button>
+            <div class="micro-filter-dropdown" id="imfd-regional">
+              <div class="micro-filter-search-wrap">
+                <i class="ti ti-search"></i>
+                <input class="micro-filter-search" id="imfs-regional" type="text" placeholder="Buscar regional…" oninput="invFilterMicroOptions('regional',this.value)">
+              </div>
+              <div class="micro-filter-options" id="imfo-regional"></div>
+              <div class="micro-filter-footer">
+                <button class="btn btn-filter-clear" onclick="invClearMicroFilter('regional')"><i class="ti ti-filter-off"></i> Limpar</button>
+                <button class="btn" onclick="invCancelMicroFilter('regional')"><i class="ti ti-x"></i> Cancelar</button>
+                <button class="btn btn-primary" onclick="invApplyMicroFilter('regional')"><i class="ti ti-check"></i> Aplicar</button>
+              </div>
+            </div>
           </div>
-          <select id="inv-filtro-cat" onchange="invFiltrar()" class="inv-filter-select">
-            <option value="">Todas as categorias</option>
-          </select>
-          <select id="inv-filtro-regional" onchange="invFiltrar()" class="inv-filter-select">
-            <option value="">Todas as regionais</option>
-          </select>
-          <select id="inv-filtro-material" onchange="invFiltrar()" class="inv-filter-select">
-            <option value="">Todos os materiais</option>
-          </select>
-          <label class="inv-filter-toggle">
-            <input type="checkbox" id="inv-filtro-sovar" onchange="invFiltrar()">
-            <span>Só com variação</span>
-          </label>
+
+          <!-- Filtro Central -->
+          <div class="micro-filter-group" id="imfg-central">
+            <button class="micro-filter-trigger" id="imft-central" onclick="invToggleMicroFilter('central')">
+              <i class="ti ti-building-warehouse"></i>
+              <span id="imft-central-label">Central</span>
+              <i class="ti ti-chevron-down micro-filter-chev" id="imfc-central"></i>
+            </button>
+            <div class="micro-filter-dropdown" id="imfd-central">
+              <div class="micro-filter-search-wrap">
+                <i class="ti ti-search"></i>
+                <input class="micro-filter-search" id="imfs-central" type="text" placeholder="Buscar central…" oninput="invFilterMicroOptions('central',this.value)">
+              </div>
+              <div class="micro-filter-options" id="imfo-central"></div>
+              <div class="micro-filter-footer">
+                <button class="btn btn-filter-clear" onclick="invClearMicroFilter('central')"><i class="ti ti-filter-off"></i> Limpar</button>
+                <button class="btn" onclick="invCancelMicroFilter('central')"><i class="ti ti-x"></i> Cancelar</button>
+                <button class="btn btn-primary" onclick="invApplyMicroFilter('central')"><i class="ti ti-check"></i> Aplicar</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Filtro Categoria -->
+          <div class="micro-filter-group" id="imfg-categoria">
+            <button class="micro-filter-trigger" id="imft-categoria" onclick="invToggleMicroFilter('categoria')">
+              <i class="ti ti-tag"></i>
+              <span id="imft-categoria-label">Categoria</span>
+              <i class="ti ti-chevron-down micro-filter-chev" id="imfc-categoria"></i>
+            </button>
+            <div class="micro-filter-dropdown" id="imfd-categoria">
+              <div class="micro-filter-search-wrap">
+                <i class="ti ti-search"></i>
+                <input class="micro-filter-search" id="imfs-categoria" type="text" placeholder="Buscar categoria…" oninput="invFilterMicroOptions('categoria',this.value)">
+              </div>
+              <div class="micro-filter-options" id="imfo-categoria"></div>
+              <div class="micro-filter-footer">
+                <button class="btn btn-filter-clear" onclick="invClearMicroFilter('categoria')"><i class="ti ti-filter-off"></i> Limpar</button>
+                <button class="btn" onclick="invCancelMicroFilter('categoria')"><i class="ti ti-x"></i> Cancelar</button>
+                <button class="btn btn-primary" onclick="invApplyMicroFilter('categoria')"><i class="ti ti-check"></i> Aplicar</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Filtro Material -->
+          <div class="micro-filter-group" id="imfg-material">
+            <button class="micro-filter-trigger" id="imft-material" onclick="invToggleMicroFilter('material')">
+              <i class="ti ti-box"></i>
+              <span id="imft-material-label">Material</span>
+              <i class="ti ti-chevron-down micro-filter-chev" id="imfc-material"></i>
+            </button>
+            <div class="micro-filter-dropdown" id="imfd-material">
+              <div class="micro-filter-search-wrap">
+                <i class="ti ti-search"></i>
+                <input class="micro-filter-search" id="imfs-material" type="text" placeholder="Buscar material…" oninput="invFilterMicroOptions('material',this.value)">
+              </div>
+              <div class="micro-filter-options" id="imfo-material"></div>
+              <div class="micro-filter-footer">
+                <button class="btn btn-filter-clear" onclick="invClearMicroFilter('material')"><i class="ti ti-filter-off"></i> Limpar</button>
+                <button class="btn" onclick="invCancelMicroFilter('material')"><i class="ti ti-x"></i> Cancelar</button>
+                <button class="btn btn-primary" onclick="invApplyMicroFilter('material')"><i class="ti ti-check"></i> Aplicar</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="micro-filter-divider"></div>
+
+          <!-- Toggle: ocultar variação 0,00 -->
+          <button class="micro-filter-trigger" id="imft-varzero" onclick="invToggleHideVarZero()" title="Oculta linhas com Variação igual a 0,00 kg">
+            <i class="ti ti-eye-off"></i>
+            <span id="imft-varzero-label">Ocultar Variação 0</span>
+          </button>
+
+          <!-- Toggle: só Est. Inicial ausente -->
+          <button class="micro-filter-trigger" id="imft-iniausente" onclick="invToggleOnlyIniAusente()" title="Mostra só linhas com Est. Inicial AUSENTE">
+            <i class="ti ti-alert-triangle"></i>
+            <span id="imft-iniausente-label">Só Est. Inicial Ausente</span>
+          </button>
+
+          <!-- Toggle: só Est. Final ausente -->
+          <button class="micro-filter-trigger" id="imft-fimausente" onclick="invToggleOnlyFimAusente()" title="Mostra só linhas com Est. Final AUSENTE">
+            <i class="ti ti-alert-triangle"></i>
+            <span id="imft-fimausente-label">Só Est. Final Ausente</span>
+          </button>
+
+          <!-- Limpar filtros (aparece só quando há algo ativo) -->
+          <button class="btn micro-filter-clear" id="inv-filter-clear-btn" onclick="invClearAllMicroFilters()" style="display:none">
+            <i class="ti ti-filter-off"></i> Limpar Filtros
+          </button>
+
           <div style="margin-left:auto;font-size:11px;color:var(--text3)" id="inv-count-label"></div>
         </div>
+
 
         <!-- ══ TABELA — redesenhada com sort ══ -->
         <div class="table-card inv-table-wrap">

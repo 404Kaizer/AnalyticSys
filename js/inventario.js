@@ -18,6 +18,222 @@
   // ── Sorting state ─────────────────────────────────────────
   let invSortCol = 'custo', invSortDir = 'desc';
 
+  // ── Filtros — mesmo padrão visual/comportamental da Visão Micro
+  //    do Dashboard Analítico (chips com dropdown multi-seleção,
+  //    busca interna, Aplicar/Cancelar/Limpar). Estado próprio do
+  //    módulo (não usa window._microFilter do analitico.js).
+  const _invFilter = {
+    pending: { regional: new Set(), central: new Set(), categoria: new Set(), material: new Set() },
+    applied: { regional: new Set(), central: new Set(), categoria: new Set(), material: new Set() },
+    options: { regional: [], central: [], categoria: [], material: [] },
+    // Toggle simples (não é dropdown multi-seleção como os demais): oculta
+    // linhas cuja Variação (kg) é 0,00 — mesma tolerância usada na célula
+    // da tabela para decidir o que conta como "zero" (diff-zero).
+    hideVarZero: false,
+    // Toggles simples: mostram só as linhas com Est. Inicial / Est. Final
+    // AUSENTE (mesmo flag usado nas células da tabela e nos badges dos cards).
+    // Combinam em AND com os demais filtros — se ambos ligados, mostra só
+    // linhas ausentes nos dois.
+    onlyIniAusente: false,
+    onlyFimAusente: false
+  };
+
+
+  const _invFilterKeyLabels = { regional: 'Regional', central: 'Central', categoria: 'Categoria', material: 'Material' };
+
+  // Popula as opções de cada filtro a partir das linhas geradas (invRows)
+  function invPopulateMicroFilterOptions() {
+    _invFilter.options.regional  = [...new Set(invRows.map(r => r.regional).filter(Boolean))].sort();
+    _invFilter.options.central   = [...new Set(invRows.map(r => r.central).filter(Boolean))].sort();
+    _invFilter.options.categoria = [...new Set(invRows.map(r => r.categoria).filter(Boolean))].sort();
+    _invFilter.options.material  = [...new Set(invRows.map(r => r.material).filter(Boolean))].sort();
+    ['regional','central','categoria','material'].forEach(key => {
+      _invBuildOptionsList(key);
+      _invSyncTriggerLabel(key);
+    });
+    _invSyncClearBtn();
+  }
+
+  function _invEscape(s) {
+    const h = window._inv_helpers;
+    return h ? h.escapeHtml(s) : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function _invBuildOptionsList(key, query = '') {
+    const container = document.getElementById(`imfo-${key}`);
+    if (!container) return;
+    const opts = _invFilter.options[key];
+    const q = query.toLowerCase().trim();
+    const filtered = q ? opts.filter(o => o.toLowerCase().includes(q)) : opts;
+    const applied = _invFilter.applied[key];
+    const pending = _invFilter.pending[key];
+
+    if (!filtered.length) {
+      container.innerHTML = `<div style="padding:12px 10px;color:var(--text3);font-size:12px;text-align:center">Nenhum resultado</div>`;
+      return;
+    }
+    container.innerHTML = filtered.map(opt => {
+      const checked = pending.size ? pending.has(opt) : applied.has(opt);
+      const id = `imfopt-${key}-${opt.replace(/[^a-z0-9]/gi,'_')}`;
+      return `<label class="micro-filter-option" for="${id}">
+        <input type="checkbox" id="${id}" value="${_invEscape(opt)}" ${checked ? 'checked' : ''}
+          onchange="_invFilterCheckChange('${key}', this)">
+        <span class="micro-filter-option-label" title="${_invEscape(opt)}">${_invEscape(opt)}</span>
+      </label>`;
+    }).join('');
+  }
+
+  window._invFilterCheckChange = function(key, checkbox) {
+    const val = checkbox.value;
+    const pending = _invFilter.pending[key];
+    if (checkbox.checked) pending.add(val);
+    else pending.delete(val);
+  };
+
+  window.invToggleMicroFilter = function(key) {
+    const dd = document.getElementById(`imfd-${key}`);
+    const chev = document.getElementById(`imfc-${key}`);
+    if (!dd || !chev) return;
+    const allKeys = ['regional', 'central', 'categoria', 'material'];
+    // Fecha os outros dropdowns primeiro, revertendo pending não aplicado
+    allKeys.filter(k => k !== key).forEach(otherKey => {
+      const otherDd = document.getElementById(`imfd-${otherKey}`);
+      const otherChev = document.getElementById(`imfc-${otherKey}`);
+      if (otherDd?.classList.contains('open')) {
+        otherDd.classList.remove('open');
+        otherChev?.classList.remove('open');
+        _invFilter.pending[otherKey] = new Set(_invFilter.applied[otherKey]);
+      }
+    });
+    const isOpen = dd.classList.toggle('open');
+    chev.classList.toggle('open', isOpen);
+    if (isOpen) {
+      _invFilter.pending[key] = new Set(_invFilter.applied[key]);
+      const searchEl = document.getElementById(`imfs-${key}`);
+      if (searchEl) searchEl.value = '';
+      _invBuildOptionsList(key);
+      setTimeout(() => searchEl?.focus(), 50);
+    }
+  };
+
+  window.invFilterMicroOptions = function(key, query) {
+    _invBuildOptionsList(key, query);
+  };
+
+  function _invCloseDropdown(key) {
+    document.getElementById(`imfd-${key}`)?.classList.remove('open');
+    document.getElementById(`imfc-${key}`)?.classList.remove('open');
+  }
+
+  window.invApplyMicroFilter = function(key) {
+    _invFilter.applied[key] = new Set(_invFilter.pending[key]);
+    _invCloseDropdown(key);
+    _invSyncTriggerLabel(key);
+    _invSyncClearBtn();
+    invFiltrar();
+    invAtualizarKpis();
+    invAtualizarAlertas();
+  };
+
+  window.invCancelMicroFilter = function(key) {
+    _invFilter.pending[key] = new Set(_invFilter.applied[key]);
+    _invCloseDropdown(key);
+  };
+
+  window.invClearMicroFilter = function(key) {
+    _invFilter.pending[key] = new Set();
+    _invFilter.applied[key] = new Set();
+    _invCloseDropdown(key);
+    _invSyncTriggerLabel(key);
+    _invSyncClearBtn();
+    invFiltrar();
+    invAtualizarKpis();
+    invAtualizarAlertas();
+  };
+
+  window.invClearAllMicroFilters = function() {
+    ['regional','central','categoria','material'].forEach(key => {
+      _invFilter.pending[key] = new Set();
+      _invFilter.applied[key] = new Set();
+      _invSyncTriggerLabel(key);
+    });
+    _invFilter.hideVarZero = false;
+    _invFilter.onlyIniAusente = false;
+    _invFilter.onlyFimAusente = false;
+    _invSyncVarZeroBtn();
+    _invSyncAusenteBtns();
+    _invSyncClearBtn();
+    invFiltrar();
+    invAtualizarKpis();
+    invAtualizarAlertas();
+  };
+
+  window.invToggleHideVarZero = function() {
+    _invFilter.hideVarZero = !_invFilter.hideVarZero;
+    _invSyncVarZeroBtn();
+    _invSyncClearBtn();
+    invFiltrar();
+    invAtualizarKpis();
+    invAtualizarAlertas();
+  };
+
+  window.invToggleOnlyIniAusente = function() {
+    _invFilter.onlyIniAusente = !_invFilter.onlyIniAusente;
+    _invSyncAusenteBtns();
+    _invSyncClearBtn();
+    invFiltrar();
+    invAtualizarKpis();
+    invAtualizarAlertas();
+  };
+
+  window.invToggleOnlyFimAusente = function() {
+    _invFilter.onlyFimAusente = !_invFilter.onlyFimAusente;
+    _invSyncAusenteBtns();
+    _invSyncClearBtn();
+    invFiltrar();
+    invAtualizarKpis();
+    invAtualizarAlertas();
+  };
+
+  function _invSyncVarZeroBtn() {
+    const btn = document.getElementById('imft-varzero');
+    if (!btn) return;
+    btn.classList.toggle('active', _invFilter.hideVarZero);
+  }
+
+  function _invSyncAusenteBtns() {
+    const iniBtn = document.getElementById('imft-iniausente');
+    if (iniBtn) iniBtn.classList.toggle('active', _invFilter.onlyIniAusente);
+    const fimBtn = document.getElementById('imft-fimausente');
+    if (fimBtn) fimBtn.classList.toggle('active', _invFilter.onlyFimAusente);
+  }
+
+  function _invSyncTriggerLabel(key) {
+    const btn = document.getElementById(`imft-${key}`);
+    const label = document.getElementById(`imft-${key}-label`);
+    if (!label || !btn) return;
+    const keyLabel = _invFilterKeyLabels[key] || key;
+    const applied = _invFilter.applied[key];
+    if (!applied.size) {
+      label.innerHTML = keyLabel;
+      btn.classList.remove('active');
+    } else if (applied.size === 1) {
+      const val = [...applied][0];
+      label.innerHTML = `${keyLabel}: <strong>${_invEscape(val.length > 18 ? val.slice(0,18)+'…' : val)}</strong>`;
+      btn.classList.add('active');
+    } else {
+      label.innerHTML = `${keyLabel} <span class="micro-filter-badge">${applied.size}</span>`;
+      btn.classList.add('active');
+    }
+  }
+
+  function _invSyncClearBtn() {
+    const btn = document.getElementById('inv-filter-clear-btn');
+    if (!btn) return;
+    const hasAny = _invFilter.applied.regional.size || _invFilter.applied.central.size || _invFilter.applied.categoria.size || _invFilter.applied.material.size || _invFilter.hideVarZero || _invFilter.onlyIniAusente || _invFilter.onlyFimAusente;
+    btn.style.display = hasAny ? '' : 'none';
+  }
+
   window.invSortBy = function(col) {
     if (invSortCol === col) {
       invSortDir = invSortDir === 'asc' ? 'desc' : 'asc';
@@ -71,6 +287,71 @@
     window.invSetPeriodoType?.();
   };
 
+  // ── Regra própria do Inventário para Est. Inicial / Est. Final ─────────
+  // Mais restrita que o Dashboard Analítico: NÃO usa fallback retroativo
+  // no valor, NÃO diferencia categoria de material (mesma regra para todos,
+  // inclusive agregados semanais).
+  //
+  //   EST. INICIAL = lançamento do dia anterior a dtIni.
+  //                   Se esse dia anterior for domingo, usa o dia anterior ao domingo (sábado).
+  //   EST. FINAL   = lançamento exatamente no último dia do período (dtFim).
+  //                   Se dtFim for domingo, usa o dia anterior ao domingo (sábado).
+  //
+  // Se não houver lançamento na data exata exigida → AUSENTE (valor 0 no
+  // cálculo). O tooltip, à parte, busca retroativamente sem limite (ignorando
+  // domingos) apenas para informar ao analista qual foi a última data com
+  // lançamento encontrada — esse valor NUNCA entra no cálculo da linha.
+
+  // Resolve a data-alvo aplicando a regra do domingo (recua 1 dia se cair num domingo)
+  function invResolveTargetDate(baseDate) {
+    const d = new Date(baseDate);
+    d.setHours(0, 0, 0, 0);
+    if (d.getDay() === 0) d.setDate(d.getDate() - 1); // domingo → sábado anterior
+    return d;
+  }
+
+  // Busca exata: soma todos os lançamentos da central+material na data ISO informada.
+  // Retorna { value, dtLabel, missing:false } se achar, ou null se não achar.
+  function invFindExactDay(arr, targetISO, targetDate, parseDate, localISODate, num) {
+    let total = 0, found = false;
+    for (const rec of arr) {
+      const d = parseDate(rec.dtLanc);
+      if (!d) continue;
+      if (localISODate(d) === targetISO) { total += num(rec.peso); found = true; }
+    }
+    if (!found) return null;
+    return { value: total, dtLabel: targetDate.toLocaleDateString('pt-BR'), missing: false };
+  }
+
+  // Busca retroativa sem limite (ignorando domingos), só para preencher o
+  // tooltip com a última data conhecida com lançamento — não usada no cálculo.
+  function invFindLastKnownDate(arr, beforeDate, parseDate, localISODate, num) {
+    // Monta lookup de dia → total, uma vez
+    const byDay = new Map();
+    let minDate = null;
+    arr.forEach(rec => {
+      const d = parseDate(rec.dtLanc);
+      if (!d) return;
+      const k = localISODate(d);
+      byDay.set(k, (byDay.get(k) || 0) + num(rec.peso));
+      if (!minDate || d < minDate) minDate = d;
+    });
+    if (!byDay.size) return null;
+
+    const cursor = new Date(beforeDate);
+    cursor.setHours(0, 0, 0, 0);
+    while (cursor >= minDate) {
+      if (cursor.getDay() !== 0) { // ignora domingo
+        const k = localISODate(cursor);
+        if (byDay.has(k)) {
+          return { value: byDay.get(k), dtLabel: cursor.toLocaleDateString('pt-BR') };
+        }
+      }
+      cursor.setDate(cursor.getDate() - 1);
+    }
+    return null;
+  }
+
   window.invGerar = function() {
     const iniVal = document.getElementById('inv-dt-ini')?.value;
     const fimVal = document.getElementById('inv-dt-fim')?.value;
@@ -79,7 +360,7 @@
     const h = window._inv_helpers;
     if (!h) { toast('Sistema não iniciado. Aguarde e tente novamente.', 'error'); return; }
 
-    const { getLancIndex, getSapIndex, getCustoMedioPorMat, getPrePeriodLaunchStock, getLastPeriodLaunchStock, getFilialLookupIndex, normalizeText, parseDate, localISODate, dateCmp, num, state: getState } = h;
+    const { getLancIndex, getSapIndex, getCustoMedioPorMat, getFilialLookupIndex, normalizeText, parseDate, localISODate, dateCmp, num, state: getState } = h;
     const state = getState();
 
     const dtIni = new Date(iniVal + 'T00:00:00');
@@ -137,17 +418,34 @@
         });
         const sapArr = sapByMat.get(mat) || [];
 
-        // EST. INICIAL: dia anterior ao período (pula domingo). Sem fallback.
-        const preRes = getPrePeriodLaunchStock({ central, material: mat, dtIni });
-        const estoqueIni = preRes != null ? preRes.value : 0;
-        const estoqueIniMissing = preRes == null;
+        // EST. INICIAL: lançamento exatamente no dia anterior a dtIni.
+        // Se esse dia anterior for domingo, usa o dia anterior ao domingo (sábado).
+        // Sem fallback no valor — se não achar na data exata, fica AUSENTE (0).
+        const iniAlvo = new Date(dtIni); iniAlvo.setDate(iniAlvo.getDate() - 1);
+        const iniTargetDate = invResolveTargetDate(iniAlvo);
+        const iniTargetISO  = localISODate(iniTargetDate);
+        const iniRes = invFindExactDay(lancArr, iniTargetISO, iniTargetDate, parseDate, localISODate, num);
+        const estoqueIni = iniRes ? iniRes.value : 0;
+        const estoqueIniMissing = !iniRes;
+        // Tooltip: só quando ausente, busca retroativa sem limite (não usada no cálculo)
+        const estoqueIniLastKnown = estoqueIniMissing
+          ? invFindLastKnownDate(lancArr, iniTargetDate, parseDate, localISODate, num)
+          : null;
 
-        // EST. FINAL: último dia não-domingo do período. missing=true se sem lançamento.
-        const fimRes = getLastPeriodLaunchStock({ central, material: mat, dtFim });
+        // EST. FINAL: lançamento exatamente no último dia do período (dtFim).
+        // Se dtFim for domingo, usa o dia anterior ao domingo (sábado).
+        // Sem fallback no valor — se não achar na data exata, fica AUSENTE (0).
+        const fimTargetDate = invResolveTargetDate(dtFim);
+        const fimTargetISO  = localISODate(fimTargetDate);
+        const fimRes = invFindExactDay(lancArr, fimTargetISO, fimTargetDate, parseDate, localISODate, num);
         const estoqueFimReal = fimRes ? fimRes.value : 0;
-        const estoqueFimMissing = !fimRes || fimRes.missing;
+        const estoqueFimMissing = !fimRes;
+        // Tooltip: só quando ausente, busca retroativa sem limite (não usada no cálculo)
+        const estoqueFimLastKnown = estoqueFimMissing
+          ? invFindLastKnownDate(lancArr, fimTargetDate, parseDate, localISODate, num)
+          : null;
 
-        // Volumes de entradas/saídas ainda vêm do SAP (movimentos físicos).
+        // Volumes de entradas/saídas vêm do SAP (movimentos físicos).
         let entradasKg = 0, saidasKg = 0;
         const entEntries = [], saiEntries = [];
         sapArr.forEach(r => {
@@ -155,12 +453,16 @@
           const cod = String(r.movimento || '—').trim();
           const ref = String(r.ref || r.documento || '—').trim();
           const usr = String(r.usuario || '—').trim();
+          // openBreakdownModal (ui.js) espera [cod, value, ref, usuario, dtLanc] —
+          // 5 posições. Extração idêntica à usada pelo Analítico (toEntry, analitico.js):
+          // string bruta de dtLanc, com fallback para dtDoc, sem reformatar.
+          const dtLancFmt = String(r.dtLanc || r.dtDoc || '').trim();
           if (p >= 0) {
             entradasKg += p;
-            entEntries.push([cod, p, ref, usr]);
+            entEntries.push([cod, p, ref, usr, dtLancFmt]);
           } else {
             saidasKg += Math.abs(p);
-            saiEntries.push([cod, p, ref, usr]);
+            saiEntries.push([cod, p, ref, usr, dtLancFmt]);
           }
         });
 
@@ -170,7 +472,7 @@
         const sample = lancArr[0] || sapArr[0] || {};
         const categoria = sample.categoria || '—';
 
-        rowMap.set(k, { k, central, material: mat, categoria, regional, estoqueIni, estoqueIniMissing, entradasKg, saidasKg, estoqueFimReal, estoqueFimMissing, custoMedio, entEntries, saiEntries });
+        rowMap.set(k, { k, central, material: mat, categoria, regional, estoqueIni, estoqueIniMissing, estoqueIniLastKnown, entradasKg, saidasKg, estoqueFimReal, estoqueFimMissing, estoqueFimLastKnown, custoMedio, entEntries, saiEntries });
       });
     });
 
@@ -188,15 +490,7 @@
 
     invRows.sort((a,b) => Math.abs(b.custo) - Math.abs(a.custo));
 
-    const cats = [...new Set(invRows.map(r => r.categoria).filter(Boolean))].sort();
-    const regs = [...new Set(invRows.map(r => r.regional).filter(Boolean))].sort();
-    const mats = [...new Set(invRows.map(r => r.material).filter(Boolean))].sort();
-    const catSel = document.getElementById('inv-filtro-cat');
-    const regSel = document.getElementById('inv-filtro-regional');
-    const matSel = document.getElementById('inv-filtro-material');
-    if (catSel) catSel.innerHTML = '<option value="">Todas as categorias</option>' + cats.map(c=>`<option>${c}</option>`).join('');
-    if (regSel) regSel.innerHTML = '<option value="">Todas as regionais</option>' + regs.map(r=>`<option>${r}</option>`).join('');
-    if (matSel) matSel.innerHTML = '<option value="">Todos os materiais</option>' + mats.map(m=>`<option>${m}</option>`).join('');
+    invPopulateMicroFilterOptions();
 
     document.getElementById('inv-empty-state').style.display = 'none';
     document.getElementById('inv-content').style.display = '';
@@ -209,17 +503,22 @@
 
   // ── Filtrar ──────────────────────────────────────────────
   window.invFiltrar = function() {
-    const txt  = (document.getElementById('inv-filtro')?.value || '').toLowerCase();
-    const cat  = document.getElementById('inv-filtro-cat')?.value || '';
-    const reg  = document.getElementById('inv-filtro-regional')?.value || '';
-    const mat  = document.getElementById('inv-filtro-material')?.value || '';
-    const soV  = document.getElementById('inv-filtro-sovar')?.checked;
+    const regSet = _invFilter.applied.regional;
+    const cenSet = _invFilter.applied.central;
+    const catSet = _invFilter.applied.categoria;
+    const matSet = _invFilter.applied.material;
+    const hideZero = _invFilter.hideVarZero;
+    const onlyIniAusente = _invFilter.onlyIniAusente;
+    const onlyFimAusente = _invFilter.onlyFimAusente;
     invFiltered = invRows.filter(r => {
-      if (soV && Math.abs(r.varKg) < 0.01) return false;
-      if (cat && r.categoria !== cat) return false;
-      if (reg && r.regional !== reg) return false;
-      if (mat && r.material !== mat) return false;
-      if (txt && !(r.central+r.material+r.regional+r.categoria).toLowerCase().includes(txt)) return false;
+      if (regSet.size && !regSet.has(r.regional)) return false;
+      if (cenSet.size && !cenSet.has(r.central))  return false;
+      if (catSet.size && !catSet.has(r.categoria)) return false;
+      if (matSet.size && !matSet.has(r.material))  return false;
+      // Mesma tolerância usada na célula da tabela pra considerar "zero" (diff-zero)
+      if (hideZero && Math.abs(r.varKg) < 0.005) return false;
+      if (onlyIniAusente && !r.estoqueIniMissing) return false;
+      if (onlyFimAusente && !r.estoqueFimMissing) return false;
       return true;
     });
     // apply current sort
@@ -264,9 +563,14 @@
         ? '<span style="display:inline-block;width:6px;height:6px;background:var(--amber);border-radius:50%;margin-right:5px;vertical-align:middle;flex-shrink:0" title="Sem justificativa"></span>'
         : '';
 
-      // ── Est. Inicial: teal igual ao analítico ──────────────
+      // ── Est. Inicial: teal igual ao analítico; tooltip com última data conhecida ──
+      const iniTooltip = r.estoqueIniMissing
+        ? (r.estoqueIniLastKnown
+            ? `AUSENTE — último lançamento encontrado em ${r.estoqueIniLastKnown.dtLabel} (${_fmtKg(r.estoqueIniLastKnown.value)})`
+            : 'AUSENTE — nenhum lançamento anterior encontrado')
+        : '';
       const iniCell = r.estoqueIniMissing
-        ? `<span class="td-mono" style="color:var(--text3);font-style:italic">—</span>`
+        ? `<span class="td-mono" style="color:var(--text3);font-style:italic" title="${_escape(iniTooltip)}">—</span>`
         : `<span class="td-mono" style="color:var(--teal)">${_fmtKg(r.estoqueIni)}</span>`;
 
       // ── Entradas / Saídas: bdm-trigger igual ao analítico ──
@@ -277,9 +581,14 @@
         ? _bdm(r.saiEntries || [], r.saidasKg, 'var(--red)', 'Saídas')
         : `<span class="td-mono" style="color:var(--red);font-weight:600">${_fmtKg(r.saidasKg)}</span>`;
 
-      // ── Est. Final: teal igual ao analítico ────────────────
+      // ── Est. Final: teal igual ao analítico; tooltip com última data conhecida ──
+      const finTooltip = r.estoqueFimMissing
+        ? (r.estoqueFimLastKnown
+            ? `AUSENTE — último lançamento encontrado em ${r.estoqueFimLastKnown.dtLabel} (${_fmtKg(r.estoqueFimLastKnown.value)})`
+            : 'AUSENTE — nenhum lançamento encontrado no período ou anterior')
+        : '';
       const finCell = r.estoqueFimMissing
-        ? `<span class="td-mono" style="color:var(--text3);font-style:italic" title="Sem lançamento no último dia útil do período">—</span>`
+        ? `<span class="td-mono" style="color:var(--text3);font-style:italic" title="${_escape(finTooltip)}">—</span>`
         : `<span class="td-mono" style="color:var(--teal)">${_fmtKg(r.estoqueFimReal)}</span>`;
 
       // ── Est. Teórico: purple igual ao analítico ────────────
@@ -340,6 +649,9 @@
 
   // ── KPIs ─────────────────────────────────────────────────
   function invAtualizarKpis() {
+    // Usa invRows (total geral do inventário gerado) — os cards NÃO reagem
+    // aos filtros de Regional/Central/Categoria/Material/Ocultar Variação 0.
+    // Só a tabela (invFiltered) e os Alertas Pendentes seguem o filtro.
     const totalIni = invRows.reduce((s,r)=>s+r.estoqueIni,0);
     const totalEnt = invRows.reduce((s,r)=>s+r.entradasKg,0);
     const totalSai = invRows.reduce((s,r)=>s+r.saidasKg,0);
@@ -406,7 +718,9 @@
 
   // ── Alertas pendentes ─────────────────────────────────────
   function invAtualizarAlertas() {
-    const pendentes = invRows.filter(r => Math.abs(r.varKg) > 0.01 && !(invJustificativas[r.k]?.op || invJustificativas[r.k]?.fiscal));
+    // Usa invFiltered (mesmo recorte exibido na tabela) — consistente com o
+    // botão "Justificar" que só existe nas linhas visíveis.
+    const pendentes = invFiltered.filter(r => Math.abs(r.varKg) > 0.01 && !(invJustificativas[r.k]?.op || invJustificativas[r.k]?.fiscal));
     const btn = document.getElementById('inv-alertas-count');
     if (btn) btn.textContent = pendentes.length;
     const btnWrap = document.getElementById('inv-btn-alertas');
@@ -533,4 +847,18 @@
       invFiltrar(); invAtualizarKpis(); invAtualizarAlertas();
     }
   };
+
+  // Fecha dropdowns dos filtros ao clicar fora (mesmo padrão da Visão Micro)
+  document.addEventListener('click', e => {
+    ['regional','central','categoria','material'].forEach(key => {
+      const group = document.getElementById(`imfg-${key}`);
+      if (group && !group.contains(e.target)) {
+        const dd = document.getElementById(`imfd-${key}`);
+        if (dd?.classList.contains('open')) {
+          _invFilter.pending[key] = new Set(_invFilter.applied[key]);
+          _invCloseDropdown(key);
+        }
+      }
+    });
+  });
 })();
