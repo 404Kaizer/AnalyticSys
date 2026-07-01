@@ -481,7 +481,7 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
         if (!sapByMat.has(mat)) sapByMat.set(mat, []);
         sapByMat.get(mat).push({
           movimento: '101',
-          peso:      Math.abs(num(e.peso)),
+          peso:      _convertNfPesoToKg(e.peso, e.um, e.material),
           ref:       String(e.nf || ''),
           documento: '',
           material:  mat,
@@ -1589,7 +1589,6 @@ function toggleMicro(wrap) {
   const open = body.classList.toggle('open');
   wrap.classList.toggle('open', open);
   if (chev) chev.style.transform = open ? 'rotate(180deg)' : '';
-  _updateCentralFocus(wrap.closest('.regional-group'));
 }
 
 function toggleRegional(group) {
@@ -1599,37 +1598,6 @@ function toggleRegional(group) {
   const open = body.classList.toggle('open');
   group.classList.toggle('collapsed', !open);
   if (chev) chev.style.transform = open ? '' : 'rotate(-90deg)';
-  _updateRegionalFocus();
-}
-
-/**
- * Focus mode — regionais: quando 1+ regional está expandido, os demais
- * regionais recolhidos recebem opacidade reduzida (dimmed), dando foco
- * visual aos expandidos. Cumulativo: múltiplos expandidos ficam todos em
- * destaque. O dimming só é removido quando nenhum regional está expandido.
- */
-function _updateRegionalFocus() {
-  const groups = document.querySelectorAll('#an-micro-container .regional-group');
-  const anyOpen = Array.from(groups).some(g => g.querySelector('.regional-group-body')?.classList.contains('open'));
-  groups.forEach(g => {
-    const isOpen = g.querySelector('.regional-group-body')?.classList.contains('open');
-    g.classList.toggle('regional-dimmed', anyOpen && !isOpen);
-  });
-}
-
-/**
- * Focus mode — centrais: dentro de um regional, quando 1+ card de central
- * está expandido, os demais cards de central irmãos (mesmo regional)
- * recebem opacidade reduzida. Escopo limitado ao regional em questão.
- */
-function _updateCentralFocus(group) {
-  if (!group) return;
-  const cards = group.querySelectorAll('.micro-filial-card');
-  const anyOpen = Array.from(cards).some(c => c.querySelector('.micro-filial-body')?.classList.contains('open'));
-  cards.forEach(c => {
-    const isOpen = c.querySelector('.micro-filial-body')?.classList.contains('open');
-    c.classList.toggle('central-dimmed', anyOpen && !isOpen);
-  });
 }
 
 function limparAnalitico() {
@@ -2138,7 +2106,6 @@ function toggleAllRegionais() {
     }
   });
   _updateToggleRegionaisBtn();
-  _updateRegionalFocus();
 }
 
 function _updateToggleRegionaisBtn() {
@@ -2167,7 +2134,6 @@ function toggleAllCentralis() {
     }
   });
   _updateToggleCentralisBtn();
-  document.querySelectorAll('#an-micro-container .regional-group').forEach(_updateCentralFocus);
 }
 
 function _updateToggleCentralisBtn() {

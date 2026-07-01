@@ -1622,6 +1622,13 @@ tr.pend-injetado-ambos {
 .pim-table tbody tr { border-bottom: 1px solid var(--border); }
 .pim-table tbody tr:last-child { border-bottom: none; }
 .pim-table tbody tr:hover { background: var(--bg3); }
+/* Linha de NF sem fator de conversão volumétrico cadastrado */
+.pim-table tbody tr.pim-row-no-conv {
+  background: color-mix(in srgb, var(--amber) 6%, transparent);
+}
+.pim-table tbody tr.pim-row-no-conv:hover {
+  background: color-mix(in srgb, var(--amber) 12%, var(--bg3));
+}
 .pim-table tbody td { padding: 8px 14px; color: var(--text); vertical-align: middle; }
 .pim-footer {
   padding: 12px 22px;

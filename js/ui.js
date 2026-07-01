@@ -1164,6 +1164,82 @@ function closeBreakdownModal() {
 window._pendConsiderados = window._pendConsiderados || {};
 window._pendCache        = window._pendCache        || {};
 
+/**
+ * Converte o peso de uma NF para KG, aplicando o fator de conversão
+ * correto conforme a unidade de medida e o material.
+ *
+ * Regras:
+ *  TO / T        → × 1000
+ *  M3 / M³ / M   → fator por material:
+ *    AREIA NATURAL FINA   → × 1400
+ *    AREIA NATURAL        → × 1300
+ *    BRITA 0 / BRITA 1    → × 1400
+ *    AREIA ARTIFICIAL*    → × 1500
+ *    (outros)             → sem conversão (retorna peso bruto)
+ *  KG / outros   → sem conversão
+ *
+ * @param {number|string} peso
+ * @param {string} um - unidade de medida do registro
+ * @param {string} material - nome do material
+ * @returns {number} peso em KG
+ */
+function _convertNfPesoToKg(peso, um, material) {
+  const p = Math.abs(num(peso));
+  const u = String(um       || '').trim().toUpperCase();
+  const m = String(material || '').trim().toUpperCase();
+
+  // ── Toneladas: T, TO, TON, TL, TN ────────────────────────────────────
+  if (/^(T|TO|TON|TL|TN)$/.test(u)) return p * 1000;
+
+  // ── Volumétrico: M, M3, MT, M³, METRO, CBM ───────────────────────────
+  if (/^(M|M3|MT|M3|CBM|METRO)$/.test(u) || u === 'M\u00B3') {
+    if (m.includes('AREIA NATURAL FINA'))  return p * 1400;
+    if (m.includes('AREIA NATURAL'))       return p * 1300;
+    if (m.includes('BRITA'))               return p * 1400;
+    if (m.includes('AREIA ARTIFICIAL'))    return p * 1500;
+    return p; // unidade volumétrica sem fator conhecido — retorna bruto
+  }
+
+  return p; // KG ou unidade não reconhecida
+}
+
+/**
+ * Retorna true se uma NF precisa de fator de conversão volumétrico mas
+ * nenhum está cadastrado para o material informado — sinaliza que o peso
+ * injetado no cálculo está bruto e pode estar errado.
+ *
+ * Exceções: adições e aditivos são excluídos do aviso (tipicamente
+ * comercializados em unidades pequenas, sem fator volumétrico).
+ *
+ * @param {string} um       - unidade de medida
+ * @param {string} material - nome do material
+ * @returns {boolean}
+ */
+function _nfNeedsConversionWarning(um, material) {
+  const u = String(um       || '').trim().toUpperCase();
+  const m = String(material || '').trim().toUpperCase()
+              .normalize('NFD').replace(/[\u0300-\u036f]/g, ''); // strip acentos
+
+  // Só unidades volumétricas disparam o aviso
+  if (!/^(M|M3|MT|CBM|METRO)$/.test(u) && u !== 'M\u00B3') return false;
+
+  // Materiais com fator conhecido → sem aviso
+  if (m.includes('AREIA NATURAL FINA')) return false;
+  if (m.includes('AREIA NATURAL'))      return false;
+  if (m.includes('BRITA'))              return false;
+  if (m.includes('AREIA ARTIFICIAL'))   return false;
+
+  // Adições e aditivos → excluídos do aviso (pedido explícito)
+  if (/ADITIV/.test(m))          return false;
+  if (/ADIC[AO]O?/.test(m))      return false;
+  if (m.includes('CINZA'))       return false;
+  if (m.includes('SILICA'))      return false;
+  if (m.includes('METACAOLIN'))  return false;
+
+  // Unidade volumétrica sem fator → aviso
+  return true;
+}
+
 function calcPendentesIntegracao({ central, dtIni, dtFim, sapNoPeriodo }) {
 
   /**
@@ -1486,15 +1562,24 @@ function _pimRender() {
     if (!pageItems.length) {
       tbody.innerHTML = `<tr><td colspan="${colSpan}" style="text-align:center;color:var(--text3);padding:24px">Nenhum registro pendente encontrado</td></tr>`;
     } else if (tipo === 'NF') {
-      tbody.innerHTML = pageItems.map(it => `<tr>
-        ${isGlobal ? `<td class="td-muted">${escapeHtml(it.central||'—')}</td>` : ''}
-        <td class="td-mono" style="font-weight:600;color:var(--green)">${escapeHtml(String(it.nf||'—'))}</td>
-        <td>${escapeHtml(String(it.material||'—'))}</td>
-        <td class="td-muted">${escapeHtml(String(it.fornecedor||'—'))}</td>
-        <td class="td-muted">${escapeHtml(String(it.dtEmissao||'—'))}</td>
-        <td class="td-muted">${escapeHtml(String(it.dtDescarga||'—'))}</td>
-        <td class="td-mono" style="text-align:right;color:var(--green)">${_fmt(_num(it.peso))} ${escapeHtml(String(it.um||'kg'))}</td>
-      </tr>`).join('');
+      tbody.innerHTML = pageItems.map(it => {
+        const noConv = _nfNeedsConversionWarning(it.um, it.material);
+        const convertedPeso = _convertNfPesoToKg(it.peso, it.um, it.material);
+        const qtdCell = noConv
+          ? `<td class="td-mono" style="text-align:right;color:var(--amber)" title="Sem fator de conversão cadastrado para ${escapeHtml(String(it.um||''))} — valor exibido sem conversão">
+               <i class="ti ti-alert-triangle" style="font-size:11px;margin-right:3px;vertical-align:middle"></i>${_fmt(convertedPeso)} ${escapeHtml(String(it.um||'kg'))}
+             </td>`
+          : `<td class="td-mono" style="text-align:right;color:var(--green)">${_fmt(convertedPeso)} KG</td>`;
+        return `<tr${noConv ? ' class="pim-row-no-conv"' : ''}>
+          ${isGlobal ? `<td class="td-muted">${escapeHtml(it.central||'—')}</td>` : ''}
+          <td class="td-mono" style="font-weight:600;color:var(--green)">${escapeHtml(String(it.nf||'—'))}</td>
+          <td>${escapeHtml(String(it.material||'—'))}</td>
+          <td class="td-muted">${escapeHtml(String(it.fornecedor||'—'))}</td>
+          <td class="td-muted">${escapeHtml(String(it.dtEmissao||'—'))}</td>
+          <td class="td-muted">${escapeHtml(String(it.dtDescarga||'—'))}</td>
+          ${qtdCell}
+        </tr>`;
+      }).join('');
     } else {
       tbody.innerHTML = pageItems.map(it => `<tr>
         ${isGlobal ? `<td class="td-muted">${escapeHtml(it.central||'—')}</td>` : ''}
