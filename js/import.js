@@ -121,10 +121,12 @@ function excluirProducao(absIndex) {
 }
 
 function salvarProducao() {
+  const centralRaw = val('p-central');
   const rec = stamp({
     fonte: 'manual',
     mes: val('p-mes'),
-    central: normalizarCentral(val('p-central')),
+    centralOriginal: centralRaw,
+    central: normalizarCentral(centralRaw),
     producao: num(val('p-producao')),
     um: 'm³',
     precoMedio: num(val('p-preco')),
@@ -177,8 +179,10 @@ function salvarEntrada() {
 
   const rec = stamp({
     fonte: 'manual',
-    centralCompra:  normalizarCentral(central),
-    centralDestino: normalizarCentral(val('e-central-destino') || central),
+    centralCompraOriginal:  central,
+    centralCompra:          normalizarCentral(central),
+    centralDestinoOriginal: val('e-central-destino') || central,
+    centralDestino:         normalizarCentral(val('e-central-destino') || central),
     nf:             val('e-nf') || '—',
     dtEmissao:      _fmtDateInput(val('e-dt-emissao')),
     dtDescarga:     _fmtDateInput(val('e-dt-descarga') || val('e-dt-emissao')),
@@ -214,6 +218,7 @@ function salvarSaida() {
 
   const rec = stamp({
     fonte: 'manual',
+    centralOriginal: central,
     central:        normalizarCentral(central),
     dtEmissao:      _fmtDateInput(val('s-dt-emissao')),
     os:             val('s-os') || '—',
@@ -250,6 +255,7 @@ function salvarLancamento() {
 
   const rec = stamp({
     fonte: 'manual',
+    centralOriginal: central,
     central:        normalizarCentral(central),
     dtLanc:         _fmtDateInput(val('l-dt-lanc')),
     fornecedor:     val('l-fornecedor') || '—',
@@ -290,6 +296,7 @@ function salvarSAP() {
     movimento,
     ref:            val('sap-ref') || '—',
     documento:      val('sap-doc') || '—',
+    centralOriginal: central,
     central:        normalizarCentral(central),
     deposito:       val('sap-deposito') || '—',
     dtDoc:          _fmtDateInput(val('sap-dt-doc') || val('sap-dt-lanc')),

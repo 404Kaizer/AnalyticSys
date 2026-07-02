@@ -1367,6 +1367,7 @@ function lancEditSave(cell) {
     // Guard primário: texto visível idêntico ao renderizado → sem mudança
     if (newVal === String(_lancFieldDisplay(r, field))) return;
     if (field === 'central') {
+      r.centralOriginal = newVal;
       r.central = normalizarCentral(newVal) || newVal;
     } else if (field === 'material') {
       r.materialOriginal = newVal;

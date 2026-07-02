@@ -30,7 +30,11 @@ function normalizarCentral(valor) {
 function normalizarCentraisRecord(rec, keys) {
   const out = { ...rec };
   keys.forEach(k => {
-    if (out[k] !== undefined) out[k] = normalizarCentral(out[k]);
+    if (out[k] !== undefined) {
+      const raw = String(out[k] ?? '').trim();
+      out[`${k}Original`] = out[`${k}Original`] ?? raw;
+      out[k] = normalizarCentral(raw);
+    }
   });
   return out;
 }
@@ -47,11 +51,27 @@ const CENTRAL_FIELDS_BY_MODULO = {
 };
 
 function reaplicarPadronizacaoCentrais(modulos = Object.keys(CENTRAL_FIELDS_BY_MODULO)) {
+  const aplicar = (rec, keys) => {
+    const out = { ...rec };
+    keys.forEach(k => {
+      if (out[k] === undefined) return;
+      // Usa o valor original salvo (${k}Original) como fonte da reconversão.
+      // Registros antigos (gravados antes desta função existir) não têm esse
+      // campo — nesses casos, cai no valor atual como fallback (comportamento
+      // anterior, sem reversão possível para eles).
+      const raw = String(out[`${k}Original`] ?? out[k] ?? '').trim();
+      if (!raw) return;
+      out[`${k}Original`] = out[`${k}Original`] ?? raw;
+      out[k] = normalizarCentral(raw);
+    });
+    return out;
+  };
+
   for (const modulo of modulos) {
     if (!Array.isArray(state[modulo])) continue;
     const keys = CENTRAL_FIELDS_BY_MODULO[modulo];
     if (!keys) continue;
-    state[modulo] = state[modulo].map(rec => normalizarCentraisRecord(rec, keys));
+    state[modulo] = state[modulo].map(rec => aplicar(rec, keys));
   }
 }
 
