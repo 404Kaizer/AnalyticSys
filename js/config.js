@@ -327,6 +327,7 @@ async function salvarFiliais() {
 
   upsertFiliais(imported);
   setVal('filiais-text', '');
+  closeModal('modal-filiais');
   await persistStateNow();
   renderFiliais();
   updateImportPrereqUI();
