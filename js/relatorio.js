@@ -1,7 +1,21 @@
-function _buildCriticidadeData() {
-  const byLevel = window._rankByLevel;
-  if (!byLevel || (!byLevel.critico.length && !byLevel.urgente.length)) {
+function _buildCriticidadeData(categoriasFiltro) {
+  const byLevelRaw = window._rankByLevel;
+  if (!byLevelRaw || (!byLevelRaw.critico.length && !byLevelRaw.urgente.length)) {
     alert('Nenhum dado de criticidade disponível. Execute a análise primeiro.');
+    return null;
+  }
+
+  // Se um filtro de categorias foi informado, restringe os dados de origem —
+  // todo o restante da função (KPIs, narrativa, blocos, tabelas) já reflete só o selecionado.
+  const byLevel = (Array.isArray(categoriasFiltro) && categoriasFiltro.length)
+    ? {
+        critico: byLevelRaw.critico.filter(i => categoriasFiltro.includes(i.catKey || 'aglomerante')),
+        urgente: byLevelRaw.urgente.filter(i => categoriasFiltro.includes(i.catKey || 'aglomerante')),
+      }
+    : byLevelRaw;
+
+  if (!byLevel.critico.length && !byLevel.urgente.length) {
+    alert('Nenhum item encontrado para as categorias selecionadas.');
     return null;
   }
 
@@ -714,8 +728,8 @@ function _openCriticidadeWindow(html) {
 }
 
 // ── Botão "Visão Diretoria" — Resumo Executivo isolado (narrativa + gráficos) ──
-window.gerarVisaoDiretoria = function() {
-  const d = _buildCriticidadeData();
+window.gerarVisaoDiretoria = function(categoriasFiltro) {
+  const d = _buildCriticidadeData(categoriasFiltro);
   if (!d) return;
   const html = _buildCriticidadeShell(d, {
     pageTitle: `Visão Diretoria — ${d.periodo}`,
@@ -727,8 +741,8 @@ window.gerarVisaoDiretoria = function() {
 };
 
 // ── Botão "Relatório Detalhado" — Ranking completo Crítico/Urgente por regional, central e material ──
-window.gerarRelatorioDetalhado = function() {
-  const d = _buildCriticidadeData();
+window.gerarRelatorioDetalhado = function(categoriasFiltro) {
+  const d = _buildCriticidadeData(categoriasFiltro);
   if (!d) return;
   const html = _buildCriticidadeShell(d, {
     pageTitle: `Relatório Detalhado de Criticidade — ${d.periodo}`,
@@ -737,6 +751,111 @@ window.gerarRelatorioDetalhado = function() {
     bodyHtml: d.auditSectionsHtml,
   });
   _openCriticidadeWindow(html);
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// MODAL DE SELEÇÃO DE CATEGORIAS — usado pelos botões "Visão Diretoria"
+// e "Relatório Detalhado". Multisseleção via checkboxes + atalho "Selecionar todas".
+// ═══════════════════════════════════════════════════════════════════
+window.abrirModalCategoriasRelatorio = function(tipo) {
+  const byLevel = window._rankByLevel;
+  if (!byLevel || (!byLevel.critico.length && !byLevel.urgente.length)) {
+    alert('Nenhum dado de criticidade disponível. Execute a análise primeiro.');
+    return;
+  }
+
+  const CAT_ORDER_M  = ['aglomerante', 'agregado', 'aditivo', 'adicao'];
+  const CAT_LABELS_M = { aglomerante: 'Aglomerantes', agregado: 'Agregados', aditivo: 'Aditivos', adicao: 'Adições' };
+
+  const todosItens = [...byLevel.critico, ...byLevel.urgente];
+  const counts = {};
+  CAT_ORDER_M.forEach(k => counts[k] = 0);
+  todosItens.forEach(i => {
+    const k = i.catKey || 'aglomerante';
+    counts[k] = (counts[k] || 0) + 1;
+  });
+
+  const categoriasComDados = CAT_ORDER_M.filter(k => counts[k] > 0);
+  if (!categoriasComDados.length) {
+    alert('Nenhuma categoria com dados disponível.');
+    return;
+  }
+
+  let modal = document.getElementById('rel-categorias-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'rel-categorias-modal';
+    modal.className = 'modal-overlay';
+    modal.style.cssText = 'z-index:3200';
+    document.body.appendChild(modal);
+  }
+
+  const tituloRel = tipo === 'diretoria' ? 'Visão Diretoria' : 'Relatório Detalhado';
+
+  const opcoesHtml = categoriasComDados.map(catKey => {
+    const label = CAT_LABELS_M[catKey];
+    const count = counts[catKey];
+    return `<label class="rel-cat-option" style="display:flex;align-items:center;justify-content:space-between;width:100%;padding:12px 16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;cursor:pointer;font-size:13px;font-family:inherit;color:#0f172a;font-weight:600;gap:10px">
+      <span style="display:flex;align-items:center;gap:10px">
+        <input type="checkbox" class="rel-cat-checkbox" value="${catKey}" checked onchange="_atualizaSelecaoTodasCategorias()" style="width:16px;height:16px;cursor:pointer;accent-color:#2563eb">
+        <span>${label}</span>
+      </span>
+      <span style="font-size:11px;color:#94a3b8;font-family:'DM Mono',monospace">${count} ${count === 1 ? 'item' : 'itens'}</span>
+    </label>`;
+  }).join('');
+
+  modal.innerHTML = `
+    <div class="modal" style="max-width:480px;width:94vw">
+      <div class="modal-title" style="display:flex;align-items:center;gap:10px">
+        <i class="ti ti-filter" style="color:var(--accent)"></i>
+        Categorias — ${tituloRel}
+      </div>
+      <div class="modal-sub">Selecione as categorias que devem aparecer no relatório</div>
+      <label style="display:flex;align-items:center;justify-content:space-between;width:100%;padding:12px 16px;background:linear-gradient(135deg,#1e3a5f,#1e40af);border:none;border-radius:8px;cursor:pointer;font-size:13px;font-family:inherit;color:#fff;font-weight:700;gap:10px;margin-bottom:12px">
+        <span style="display:flex;align-items:center;gap:10px">
+          <input type="checkbox" id="rel-cat-todas" checked onchange="_toggleTodasCategorias(this)" style="width:16px;height:16px;cursor:pointer">
+          <span>Selecionar todas</span>
+        </span>
+        <span style="font-size:11px;opacity:.75">${todosItens.length} itens no total</span>
+      </label>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:8px">
+        ${opcoesHtml}
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px">
+        <button class="btn" onclick="document.getElementById('rel-categorias-modal').classList.remove('open')">Cancelar</button>
+        <button class="btn btn-primary" onclick="_gerarRelatorioComCategorias('${tipo}')">Gerar</button>
+      </div>
+    </div>`;
+
+  modal.classList.add('open');
+};
+
+// Marca/desmarca todas as categorias quando o checkbox "Selecionar todas" é alterado
+window._toggleTodasCategorias = function(checkbox) {
+  document.querySelectorAll('.rel-cat-checkbox').forEach(cb => { cb.checked = checkbox.checked; });
+};
+
+// Reflete no checkbox "Selecionar todas" se todas as categorias individuais estão marcadas
+window._atualizaSelecaoTodasCategorias = function() {
+  const all = document.querySelectorAll('.rel-cat-checkbox');
+  const checked = document.querySelectorAll('.rel-cat-checkbox:checked');
+  const todasCb = document.getElementById('rel-cat-todas');
+  if (todasCb) todasCb.checked = all.length === checked.length;
+};
+
+// Lê as categorias marcadas, fecha o modal e dispara o relatório correspondente
+window._gerarRelatorioComCategorias = function(tipo) {
+  const checked = Array.from(document.querySelectorAll('.rel-cat-checkbox:checked')).map(cb => cb.value);
+  if (!checked.length) {
+    alert('Selecione ao menos uma categoria.');
+    return;
+  }
+  document.getElementById('rel-categorias-modal')?.classList.remove('open');
+  if (tipo === 'diretoria') {
+    window.gerarVisaoDiretoria(checked);
+  } else {
+    window.gerarRelatorioDetalhado(checked);
+  }
 };
 // ═══════════════════════════════════════════════════════════════════
 // RELATÓRIO DE AUSÊNCIAS DE LANÇAMENTO
