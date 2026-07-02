@@ -323,17 +323,18 @@ function _buildCriticidadeData() {
 
       ${headlineHtml}
 
-      <div class="exec-summary-body">
-        <div class="exec-narrative">${narrativaHtml}</div>
-        <div class="exec-charts">
-          <div class="exec-chart-card exec-chart-card--donut">
-            <div class="exec-chart-title"><span class="exec-chart-title-icon">🗂️</span> Distribuição por Categoria</div>
-            ${buildCategoriaDonut(categoriaTotais)}
-          </div>
-          <div class="exec-chart-card exec-chart-card--bars">
-            <div class="exec-chart-title"><span class="exec-chart-title-icon">📍</span> Concentração por Regional</div>
-            ${buildRegionalBarChart(regionalTotais)}
-          </div>
+      <div class="exec-blocks">
+        <div class="exec-block exec-block--narrative">
+          <div class="exec-block-title"><span class="exec-block-title-icon">🔎</span> Principais Achados</div>
+          <div class="exec-narrative">${narrativaHtml}</div>
+        </div>
+        <div class="exec-block exec-block--donut">
+          <div class="exec-block-title"><span class="exec-block-title-icon">🗂️</span> Distribuição por Categoria</div>
+          ${buildCategoriaDonut(categoriaTotais)}
+        </div>
+        <div class="exec-block exec-block--bars">
+          <div class="exec-block-title"><span class="exec-block-title-icon">📍</span> Concentração por Regional</div>
+          ${buildRegionalBarChart(regionalTotais)}
         </div>
       </div>
     </div>`;
@@ -507,27 +508,29 @@ function _buildCriticidadeShell(d, opts) {
   .exec-headline-meta-item span { display:block; font-size:9.5px; color:rgba(255,255,255,0.65); text-transform:uppercase; letter-spacing:.06em; margin-top:4px; }
   .exec-headline-meta-sep { width:1px; height:34px; background:rgba(255,255,255,0.2); }
 
-  .exec-summary-body { display:grid; grid-template-columns: 1fr 1.4fr; gap: 26px; align-items:start; }
-  .exec-narrative p { font-size:13px; color:#334155; line-height:1.75; margin-bottom:12px; }
+  .exec-blocks { display:flex; flex-direction:column; gap: 18px; }
+  .exec-block {
+    background:#fff; border:1px solid #e9edf3; border-radius:12px; padding:22px 28px;
+    box-shadow: 0 4px 16px rgba(15,23,42,0.07);
+    border-top: 4px solid #cbd5e1;
+  }
+  .exec-block--narrative { border-top-color: #3b82f6; }
+  .exec-block--donut { border-top-color: #8b5cf6; }
+  .exec-block--bars  { border-top-color: #dc2626; }
+  .exec-block-title {
+    font-size:11.5px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:#475569;
+    margin-bottom:18px; display:flex; align-items:center; gap:8px;
+  }
+  .exec-block-title-icon { font-size:14px; }
+
+  .exec-narrative { max-width: 880px; }
+  .exec-narrative p { font-size:13.5px; color:#334155; line-height:1.8; margin-bottom:12px; }
   .exec-narrative p:last-child { margin-bottom:0; }
   .exec-narrative strong { color:#0f172a; }
-  .exec-charts { display:grid; grid-template-columns:1fr 1fr; gap:18px; align-items:start; }
-  .exec-chart-card {
-    background:#fff; border:1px solid #e9edf3; border-radius:12px; padding:18px 18px 16px;
-    box-shadow: 0 4px 16px rgba(15,23,42,0.07);
-    border-top: 3px solid #cbd5e1;
-  }
-  .exec-chart-card--donut { border-top-color: #8b5cf6; }
-  .exec-chart-card--bars  { border-top-color: #dc2626; }
-  .exec-chart-title {
-    font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:#475569;
-    margin-bottom:16px; display:flex; align-items:center; gap:7px;
-  }
-  .exec-chart-title-icon { font-size:13px; }
 
   .donut-empty { font-size:12px; color:#94a3b8; font-style:italic; padding:30px 0; text-align:center; }
-  .donut-wrap { display:flex; flex-direction:column; align-items:center; gap:16px; }
-  .donut-svg-wrap { position:relative; width:150px; height:150px; filter: drop-shadow(0 6px 12px rgba(15,23,42,0.13)); }
+  .donut-wrap { display:flex; flex-direction:row; align-items:center; gap:40px; }
+  .donut-svg-wrap { position:relative; width:150px; height:150px; flex-shrink:0; filter: drop-shadow(0 6px 12px rgba(15,23,42,0.13)); }
   .donut-svg .donut-slice { transition: opacity .15s; }
   .donut-center {
     position:absolute; inset:31px; border-radius:50%; background:#fff;
@@ -536,8 +539,8 @@ function _buildCriticidadeShell(d, opts) {
   }
   .donut-center-num { font-size:24px; font-weight:900; font-family:'JetBrains Mono',monospace; color:#0f172a; line-height:1; }
   .donut-center-label { font-size:9px; color:#94a3b8; text-transform:uppercase; letter-spacing:.06em; margin-top:3px; }
-  .donut-legend { width:100%; display:flex; flex-direction:column; gap:7px; }
-  .donut-legend-row { display:flex; align-items:center; gap:9px; font-size:11px; }
+  .donut-legend { flex:1; display:grid; grid-template-columns: 1fr 1fr; gap:12px 24px; }
+  .donut-legend-row { display:flex; align-items:center; gap:10px; font-size:12px; }
   .donut-legend-icon {
     width:22px; height:22px; border-radius:7px; border:1px solid; flex-shrink:0;
     display:flex; align-items:center; justify-content:center; font-size:11px;
@@ -546,9 +549,8 @@ function _buildCriticidadeShell(d, opts) {
   .donut-legend-num { font-family:'JetBrains Mono',monospace; color:#0f172a; font-weight:700; }
   .donut-legend-pct { font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:700; min-width:34px; text-align:center; border-radius:4px; padding:2px 5px; }
 
-  .reg-bar-chart { display:flex; flex-direction:column; gap:14px; }
-  .reg-bar-row { display:flex; flex-direction:column; gap:5px; padding-bottom:10px; border-bottom:1px solid #f1f5f9; }
-  .reg-bar-row:last-child { border-bottom:none; padding-bottom:0; }
+  .reg-bar-chart { display:grid; grid-template-columns: 1fr 1fr; gap: 16px 32px; }
+  .reg-bar-row { display:flex; flex-direction:column; gap:5px; padding-bottom:12px; border-bottom:1px solid #f1f5f9; }
   .reg-bar-row-top { display:flex; align-items:center; gap:8px; }
   .reg-bar-rank {
     width:16px; height:16px; border-radius:5px; background:#f1f5f9; color:#64748b;
@@ -656,7 +658,7 @@ function _buildCriticidadeShell(d, opts) {
     .cat-header-cell { -webkit-print-color-adjust: exact; color-adjust: exact; }
     .exec-summary { page-break-inside: avoid; box-shadow:none !important; }
     .exec-headline { -webkit-print-color-adjust: exact; color-adjust: exact; box-shadow:none !important; }
-    .exec-chart-card { box-shadow:none !important; }
+    .exec-block { box-shadow:none !important; }
     .donut-svg-wrap { filter:none !important; }
     .reg-bar-seg--critico, .reg-bar-seg--urgente, .donut-legend-dot, .reg-bar-dot {
       -webkit-print-color-adjust: exact; color-adjust: exact;
