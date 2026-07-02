@@ -152,9 +152,27 @@ function _rodarAnaliticoCore(dtIni, dtFim) {
         _macroPesoFimSoma[mat] = (_macroPesoFimSoma[mat] || 0) + num(r.peso);
       }
     });
+    // ── Lookup de categoria por material (O(n), sem find() por material) ──
+    // Necessário para que getPrePeriodLaunchStock aplique a regra de Agregado
+    // (recuar até a última terça) também no total somaPrimeiro da central.
+    const _matCategoriaFirst = {};
+    lancsNoPeriodo.forEach(r => {
+      const mat = r.material || '—';
+      if (!_matCategoriaFirst[mat] && r.categoria) _matCategoriaFirst[mat] = r.categoria;
+    });
+    sapNoPeriodo.forEach(r => {
+      const mat = r.material || '—';
+      if (!_matCategoriaFirst[mat] && r.categoria) _matCategoriaFirst[mat] = r.categoria;
+    });
+    const _matCatKeyLookup = {};
+    allMats.forEach(mat => {
+      const categoria = (_matCategoriaFirst[mat] || '').trim().toUpperCase();
+      _matCatKeyLookup[mat] = detectCatKey(categoria) || detectCatFromMat(mat);
+    });
+
     const _prePeriodoStockByMat = {};
     allMats.forEach(mat => {
-      const prev = getPrePeriodLaunchStock({ central, material: mat, dtIni, dtFim });
+      const prev = getPrePeriodLaunchStock({ central, material: mat, dtIni, dtFim, catKey: _matCatKeyLookup[mat] });
       if (prev) _prePeriodoStockByMat[mat] = prev.value;
     });
 
@@ -512,10 +530,20 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
     let variacaoCentralMicro = 0;
     let custoVariacaoTotal = 0;  // R$ implicados pela variação de estoque
 
+    // Lookup de catKey por material — computado uma vez (não a cada comparação do sort)
+    // para que o diff usado na ordenação também aplique a regra de Agregado.
+    const _sortCatKeyLookup = new Map();
+    r.allMats.forEach(mat => {
+      const lm = lancsByMat.get(mat) || [];
+      const sm = sapByMat.get(mat) || [];
+      const categoria = (lm[0]?.categoria || sm[0]?.categoria || '').trim().toUpperCase();
+      _sortCatKeyLookup.set(mat, detectCatKey(categoria) || detectCatFromMat(mat));
+    });
+
     // Ordena materiais: maior desfalque (diff mais negativo) → maior sobra (diff mais positivo)
     const allMatsSorted = [...r.allMats].sort((a, b) => {
-      const prevA = getPrePeriodLaunchStock({ central: r.central, material: a, dtIni, dtFim });
-      const prevB = getPrePeriodLaunchStock({ central: r.central, material: b, dtIni, dtFim });
+      const prevA = getPrePeriodLaunchStock({ central: r.central, material: a, dtIni, dtFim, catKey: _sortCatKeyLookup.get(a) });
+      const prevB = getPrePeriodLaunchStock({ central: r.central, material: b, dtIni, dtFim, catKey: _sortCatKeyLookup.get(b) });
       const diffA = buildSnapshot({ lancs: lancsByMat.get(a) || [], sap: sapByMat.get(a) || [], initialStockOverride: prevA?.value ?? null }).diff;
       const diffB = buildSnapshot({ lancs: lancsByMat.get(b) || [], sap: sapByMat.get(b) || [], initialStockOverride: prevB?.value ?? null }).diff;
       return diffA - diffB;
@@ -535,11 +563,13 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
       const isSemanal    = matCatKey === 'agregado';
 
       // ── Est. Inicial do card de resumo ──────────────────────────────────
-      // getPrePeriodLaunchStock: busca o lançamento mais recente antes de dtIni
-      // usando a regra neutra (sem considerar categoria/dia-da-semana).
-      // Garante que o card de resumo mostre o saldo anterior independente de ser
-      // um material de lançamento semanal ou diário.
-      const prev = getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni, dtFim });
+      // getPrePeriodLaunchStock: busca o lançamento mais recente antes de dtIni.
+      // Passa matCatKey para que Agregados (lançamento semanal) recuem até a
+      // última terça com lançamento — mesma regra já usada no preCarry abaixo.
+      // (Correção: antes chamava sem catKey, o que fazia a busca considerar
+      // apenas o dia imediatamente anterior a dtIni, quase nunca uma terça,
+      // resultando em AUSENTE indevido para Agregados no card.)
+      const prev = getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni, dtFim, catKey: matCatKey });
 
       // ── Est. Inicial do carry da tabela de dias ──────────────────────────
       // getPrevDayLaunchStock: busca usando regras por categoria
@@ -869,7 +899,8 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
     // deve permanecer imune, não a saúde/donut/ranking).
     const thresholds = getHealthThresholds();
     const matDiffs = allMatsSorted.map(mat => {
-      const prev = getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni, dtFim });
+      const _hpCatKey = detectCatKey((categoriaByMat.get(mat) || '').trim().toUpperCase()) || detectCatFromMat(mat);
+      const prev = getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni, dtFim, catKey: _hpCatKey });
       const fim  = getLastPeriodLaunchStockWithFallback({ central: r.central, material: mat, dtIni, dtFim });
       const snap = buildSnapshot({
         lancs: lancsByMat.get(mat) || [],
@@ -1406,10 +1437,14 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
       sapByMat.get(mat).push(rec);
     });
     return [...(r.allMats || [])].reduce((acc, mat) => {
-      const prev = getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni, dtFim });
+      const lm = lancsByMat.get(mat) || [];
+      const sm = sapByMat.get(mat)   || [];
+      const categoria = (lm[0]?.categoria || sm[0]?.categoria || '').trim().toUpperCase();
+      const catKey = detectCatKey(categoria) || detectCatFromMat(mat);
+      const prev = getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni, dtFim, catKey });
       return acc + buildSnapshot({
-        lancs: lancsByMat.get(mat) || [],
-        sap:   sapByMat.get(mat)   || [],
+        lancs: lm,
+        sap:   sm,
         initialStockOverride: prev?.value ?? null,
       }).diff;
     }, 0);

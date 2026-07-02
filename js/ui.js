@@ -2968,8 +2968,11 @@ function getPrevDayLaunchStock({ central, material, dtIni, catKey }) {
 
 // getPrePeriodLaunchStock: mesma lógica de getPrevDayLaunchStock
 // Ambos usam a mesma regra — mantido por compatibilidade com chamadas existentes.
-function getPrePeriodLaunchStock({ central, material, dtIni, dtFim }) {
-  return getPrevDayLaunchStock({ central, material, dtIni });
+// catKey é OPCIONAL: quando omitido, mantém o comportamento legado (regra "diária",
+// sem considerar Agregado/lançamento semanal) — não altera call sites existentes
+// que não passarem catKey explicitamente.
+function getPrePeriodLaunchStock({ central, material, dtIni, dtFim, catKey }) {
+  return getPrevDayLaunchStock({ central, material, dtIni, catKey });
 }
 
 // ── EST. FINAL: soma todos os lançamentos do último dia não-domingo do período.
