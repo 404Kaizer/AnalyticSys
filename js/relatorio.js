@@ -29,8 +29,13 @@ function _buildCriticidadeData() {
     const abs = Math.abs(n);
     return abs.toLocaleString('pt-BR', {minimumFractionDigits:2,maximumFractionDigits:2}) + ' kg';
   }
+  // Padrão do sistema (dashboard.js): desfalque = ti-trending-down + var(--red); sobra = ti-trending-up + var(--amber)
   function varDir(v) { return v < -0.001 ? 'Desfalque' : v > 0.001 ? 'Sobra' : 'Equil.'; }
-  function varDirColor(v) { return v < -0.001 ? '#dc2626' : v > 0.001 ? '#059669' : '#6b7280'; }
+  function varDirColor(v) { return v < -0.001 ? '#f43f5e' : v > 0.001 ? '#f59e0b' : '#6b7280'; }
+  function varDirIcon(v) { return v < -0.001 ? 'ti-trending-down' : v > 0.001 ? 'ti-trending-up' : 'ti-minus'; }
+  function varDirHtml(v) {
+    return `<i class="ti ${varDirIcon(v)}"></i> ${varDir(v)}`;
+  }
   function escRel(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
   // ── Agrupamento por categoria de material (Aglomerantes, Agregados, Aditivos, Adições) ──
@@ -55,19 +60,17 @@ function _buildCriticidadeData() {
     const bodyHtml = grupos.map(([catKey, catItems]) => {
       const catLabel = CAT_LABELS[catKey] || catKey;
       const netDiff  = catItems.reduce((s, i) => s + (Number(i.diff) || 0), 0);
-      const netDir   = varDir(netDiff);
       const netColor = varDirColor(netDiff);
       // Ordem: maior desfalque (diff mais negativo) primeiro → maior sobra (diff mais positivo) por último
       const catItemsOrdenados = [...catItems].sort((a, b) => (Number(a.diff) || 0) - (Number(b.diff) || 0));
       const catRows = catItemsOrdenados.map((item, idx) => {
-        const dir = varDir(item.diff);
         const dc  = varDirColor(item.diff);
         return `<tr class="data-row${idx % 2 === 1 ? ' data-row--alt' : ''}">
           <td class="rank-cell">${idx + 1}</td>
           <td class="reg-cell">${escRel(item.regional || '—')}</td>
           <td class="central-cell">${escRel(item.central)}</td>
           <td class="mat-cell"><span class="mat-name">${escRel(item.mat)}</span></td>
-          <td class="var-cell" style="color:${dc}"><strong>${dir}</strong> <span class="var-kg">${fmtKgRel(item.diff)}</span></td>
+          <td class="var-cell" style="color:${dc}"><strong>${varDirHtml(item.diff)}</strong> <span class="var-kg">${fmtKgRel(item.diff)}</span></td>
         </tr>`;
       }).join('');
 
@@ -77,7 +80,7 @@ function _buildCriticidadeData() {
             <div class="cat-header-inner">
               <span class="cat-header-label" style="color:${cfg.catText}">${escRel(catLabel)}</span>
               <div class="cat-header-right">
-                <span class="cat-header-net" style="color:${netColor}">${netDir} acumulado <strong>${fmtKgRel(netDiff)}</strong></span>
+                <span class="cat-header-net" style="color:${netColor}">${varDirHtml(netDiff)} acumulado <strong>${fmtKgRel(netDiff)}</strong></span>
                 <span class="cat-header-count" style="color:${cfg.catText}">${catItems.length} ${catItems.length === 1 ? 'material' : 'materiais'}</span>
               </div>
             </div>
@@ -117,7 +120,7 @@ function _buildCriticidadeData() {
 
   const criticoBlock = buildLevelBlock(byLevel.critico, {
     key: 'critico',
-    icon: '🔴',
+    icon: '<i class="ti ti-flame"></i>',
     label: 'CRÍTICO',
     sublabel: 'Ação imediata — escalar à gerência',
     titleSize: '24px',
@@ -131,7 +134,7 @@ function _buildCriticidadeData() {
 
   const urgenteBlock = buildLevelBlock(byLevel.urgente, {
     key: 'urgente',
-    icon: '🟠',
+    icon: '<i class="ti ti-alert-circle"></i>',
     label: 'URGENTE',
     sublabel: 'Atenção redobrada — repassar aos regionais',
     titleSize: '19px',
@@ -249,38 +252,78 @@ function _buildCriticidadeData() {
       </div>`;
   }
 
-  // ── Barras horizontais: concentração por regional (top 10, com % e acumulado) ──
-  function buildRegionalBarChart(totais) {
-    const top = totais.slice(0, 10);
-    if (!top.length) return `<div class="donut-empty">Sem dados suficientes.</div>`;
-    const maxTotal = Math.max(...top.map(r => r.total));
-    const rows = top.map((r, idx) => {
+  // ── Totais por regional, segmentados por categoria de material (para os blocos dinâmicos) ──
+  function buildRegionalPorCategoria() {
+    const map = new Map(); // catKey -> Map(regional -> {critico,urgente,net})
+    const bump = (catKey, reg, field, diff) => {
+      const ck = catKey || 'aglomerante';
+      if (!map.has(ck)) map.set(ck, new Map());
+      const regMap = map.get(ck);
+      const key = reg || '—';
+      if (!regMap.has(key)) regMap.set(key, { critico: 0, urgente: 0, net: 0 });
+      const e = regMap.get(key);
+      e[field]++;
+      e.net += (Number(diff) || 0);
+    };
+    byLevel.critico.forEach(i => bump(i.catKey, i.regional, 'critico', i.diff));
+    byLevel.urgente.forEach(i => bump(i.catKey, i.regional, 'urgente', i.diff));
+
+    return CAT_ORDER.filter(k => map.has(k)).map(catKey => {
+      const regMap = map.get(catKey);
+      const totalCat = Array.from(regMap.values()).reduce((s, e) => s + e.critico + e.urgente, 0);
+      const regionais = Array.from(regMap.entries())
+        .map(([regional, e]) => ({ regional, critico: e.critico, urgente: e.urgente, total: e.critico + e.urgente, net: e.net }))
+        .sort((a, b) => b.total - a.total);
+      return { catKey, label: CAT_LABELS[catKey], regionais, totalCat };
+    });
+  }
+
+  // ── Blocos horizontais: concentração por regional, um bloco por categoria (dinâmico), com todos os regionais ──
+  function buildRegionalBlock(catKey, label, regionais, totalCat) {
+    if (!regionais.length) return '';
+    const maxTotal = Math.max(...regionais.map(r => r.total));
+    const accent = CAT_CHART_COLORS[catKey] || '#64748b';
+    const rows = regionais.map((r, idx) => {
       const widthPct = maxTotal ? (r.total / maxTotal * 100) : 0;
-      const critPct  = r.total ? (r.critico / r.total * 100) : 0;
-      const urgPct   = r.total ? (r.urgente / r.total * 100) : 0;
-      const pctRepr  = totalGeral ? Math.round(r.total / totalGeral * 100) : 0;
-      const netDir   = varDir(r.net);
+      const pctRepr  = totalCat ? Math.round(r.total / totalCat * 100) : 0;
       const netColor = varDirColor(r.net);
       return `<div class="reg-bar-row">
         <div class="reg-bar-row-top">
           <span class="reg-bar-rank">${idx + 1}</span>
           <span class="reg-bar-label" title="${escRel(r.regional)}">${escRel(r.regional)}</span>
-          <span class="reg-bar-pct">${pctRepr}%</span>
           <span class="reg-bar-total">${r.total}</span>
+          <span class="reg-bar-pct">${pctRepr}%</span>
         </div>
-        <div class="reg-bar-track">
-          <div class="reg-bar-fill" style="width:${widthPct}%">
-            <span class="reg-bar-seg reg-bar-seg--critico" style="width:${critPct}%"></span>
-            <span class="reg-bar-seg reg-bar-seg--urgente" style="width:${urgPct}%"></span>
+        <div class="reg-bar-mid">
+          <div class="reg-bar-track">
+            <div class="reg-bar-fill" style="width:${widthPct}%"></div>
+          </div>
+          <div class="reg-bar-breakdown">
+            ${r.critico ? `<span class="reg-bar-badge reg-bar-badge--critico"><i class="ti ti-flame"></i>${r.critico}</span>` : ''}
+            ${r.urgente ? `<span class="reg-bar-badge reg-bar-badge--urgente"><i class="ti ti-alert-circle"></i>${r.urgente}</span>` : ''}
           </div>
         </div>
-        <div class="reg-bar-net" style="color:${netColor}">${netDir} acumulado <strong>${fmtKgRel(r.net)}</strong></div>
+        <div class="reg-bar-net" style="color:${netColor}">${varDirHtml(r.net)} acumulado <strong>${fmtKgRel(r.net)}</strong></div>
       </div>`;
     }).join('');
-    return `<div class="reg-bar-chart">${rows}</div>
+    return `<div class="reg-cat-block" style="border-top-color:${accent}">
+      <div class="reg-cat-block-title">
+        <span class="reg-cat-dot" style="background:${accent}"></span>
+        <span style="color:${accent}">${escRel(label)}</span>
+        <span class="reg-cat-block-count">${regionais.length} regionai${regionais.length === 1 ? '' : 's'}</span>
+      </div>
+      <div class="reg-bar-chart">${rows}</div>
+    </div>`;
+  }
+
+  function buildRegionalBarChart() {
+    const grupos = buildRegionalPorCategoria();
+    if (!grupos.length) return `<div class="donut-empty">Sem dados suficientes.</div>`;
+    const blocks = grupos.map(g => buildRegionalBlock(g.catKey, g.label, g.regionais, g.totalCat)).join('');
+    return `<div class="reg-cat-blocks-grid">${blocks}</div>
       <div class="reg-bar-legend">
-        <span><span class="reg-bar-dot reg-bar-dot--critico"></span> Crítico</span>
-        <span><span class="reg-bar-dot reg-bar-dot--urgente"></span> Urgente</span>
+        <span><i class="ti ti-flame" style="color:#dc2626"></i> Crítico</span>
+        <span><i class="ti ti-alert-circle" style="color:#ea580c"></i> Urgente</span>
       </div>`;
   }
 
@@ -290,9 +333,9 @@ function _buildCriticidadeData() {
   const headlineGrad = netIsBad
     ? 'linear-gradient(135deg,#7f1d1d 0%,#991b1b 45%,#b91c1c 100%)'
     : netIsGood
-      ? 'linear-gradient(135deg,#065f46 0%,#047857 45%,#059669 100%)'
+      ? 'linear-gradient(135deg,#78350f 0%,#92400e 45%,#b45309 100%)'
       : 'linear-gradient(135deg,#334155 0%,#475569 100%)';
-  const headlineIcon = netIsBad ? '⚠️' : netIsGood ? '📦' : '➖';
+  const headlineIcon = `<i class="ti ${varDirIcon(netGeral)}"></i>`;
   const headlineHtml = `
     <div class="exec-headline" style="background:${headlineGrad}">
       <div class="exec-headline-glow"></div>
@@ -334,7 +377,7 @@ function _buildCriticidadeData() {
         </div>
         <div class="exec-block exec-block--bars">
           <div class="exec-block-title"><span class="exec-block-title-icon">📍</span> Concentração por Regional</div>
-          ${buildRegionalBarChart(regionalTotais)}
+          ${buildRegionalBarChart()}
         </div>
       </div>
     </div>`;
@@ -354,6 +397,7 @@ function _buildCriticidadeShell(d, opts) {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>${opts.pageTitle}</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
 
@@ -549,8 +593,20 @@ function _buildCriticidadeShell(d, opts) {
   .donut-legend-num { font-family:'JetBrains Mono',monospace; color:#0f172a; font-weight:700; }
   .donut-legend-pct { font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:700; min-width:34px; text-align:center; border-radius:4px; padding:2px 5px; }
 
-  .reg-bar-chart { display:grid; grid-template-columns: 1fr 1fr; gap: 16px 32px; }
-  .reg-bar-row { display:flex; flex-direction:column; gap:5px; padding-bottom:12px; border-bottom:1px solid #f1f5f9; }
+  .reg-cat-blocks-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 20px; align-items:start; }
+  .reg-cat-block {
+    min-width: 0; background:#fbfcfd; border:1px solid #e9edf3; border-top:3px solid #cbd5e1;
+    border-radius:10px; padding:16px 18px 18px;
+  }
+  .reg-cat-block-title {
+    font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:#475569;
+    margin-bottom:14px; display:flex; align-items:center; gap:8px; padding-bottom:10px; border-bottom:1px solid #e9edf3;
+  }
+  .reg-cat-dot { width:9px; height:9px; border-radius:3px; flex-shrink:0; }
+  .reg-cat-block-count { margin-left:auto; font-family:'JetBrains Mono',monospace; font-weight:700; color:#94a3b8; font-size:10px; text-transform:none; letter-spacing:0; }
+  .reg-bar-chart { display:flex; flex-direction:column; gap:14px; }
+  .reg-bar-row { display:flex; flex-direction:column; gap:6px; padding-bottom:12px; border-bottom:1px solid #f1f5f9; }
+  .reg-bar-row:last-child { border-bottom:none; padding-bottom:0; }
   .reg-bar-row-top { display:flex; align-items:center; gap:8px; }
   .reg-bar-rank {
     width:16px; height:16px; border-radius:5px; background:#f1f5f9; color:#64748b;
@@ -558,22 +614,27 @@ function _buildCriticidadeShell(d, opts) {
     display:flex; align-items:center; justify-content:center; flex-shrink:0;
   }
   .reg-bar-label { font-size:10.5px; font-weight:700; color:#334155; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1; }
+  .reg-bar-total { font-family:'JetBrains Mono',monospace; font-size:11.5px; font-weight:800; color:#0f172a; text-align:right; min-width:16px; flex-shrink:0; }
   .reg-bar-pct {
     font-family:'JetBrains Mono',monospace; font-size:9.5px; font-weight:700; color:#64748b;
     background:#f1f5f9; border-radius:4px; padding:1px 6px; flex-shrink:0;
   }
-  .reg-bar-total { font-family:'JetBrains Mono',monospace; font-size:11.5px; font-weight:800; color:#0f172a; text-align:right; min-width:20px; flex-shrink:0; }
-  .reg-bar-track { background:#eef1f5; border-radius:6px; height:14px; overflow:hidden; box-shadow: inset 0 1px 3px rgba(15,23,42,0.08); }
-  .reg-bar-fill { height:100%; display:flex; border-radius:6px; overflow:hidden; transition:width .3s; box-shadow: 0 1px 2px rgba(0,0,0,.15); }
-  .reg-bar-seg--critico { background: linear-gradient(90deg,#b91c1c,#ef4444); height:100%; }
-  .reg-bar-seg--urgente { background: linear-gradient(90deg,#c2410c,#fb923c); height:100%; }
+  .reg-bar-mid { display:flex; align-items:center; gap:10px; }
+  .reg-bar-track { flex:1; background:#eef1f5; border-radius:6px; height:10px; overflow:hidden; box-shadow: inset 0 1px 3px rgba(15,23,42,0.08); }
+  .reg-bar-fill { height:100%; border-radius:6px; background: linear-gradient(90deg,#94a3b8,#64748b); transition:width .3s; }
+  .reg-bar-breakdown { display:flex; align-items:center; gap:5px; flex-shrink:0; }
+  .reg-bar-badge {
+    display:flex; align-items:center; gap:3px; font-family:'JetBrains Mono',monospace;
+    font-size:9.5px; font-weight:800; padding:2px 6px; border-radius:5px; line-height:1.3;
+  }
+  .reg-bar-badge i { font-size:9px; }
+  .reg-bar-badge--critico { background:#fef2f2; color:#dc2626; }
+  .reg-bar-badge--urgente { background:#fff7ed; color:#ea580c; }
   .reg-bar-net { font-size:9.5px; font-family:'JetBrains Mono',monospace; font-weight:600; }
   .reg-bar-net strong { font-weight:800; }
-  .reg-bar-legend { display:flex; gap:16px; margin-top:4px; font-size:10.5px; color:#64748b; }
+  .reg-bar-legend { display:flex; gap:18px; margin-top:6px; font-size:10.5px; color:#64748b; }
   .reg-bar-legend span { display:flex; align-items:center; gap:6px; }
-  .reg-bar-dot { width:8px; height:8px; border-radius:2px; display:inline-block; }
-  .reg-bar-dot--critico { background: linear-gradient(90deg,#b91c1c,#ef4444); }
-  .reg-bar-dot--urgente { background: linear-gradient(90deg,#c2410c,#fb923c); }
+  .reg-bar-legend i { font-size:12px; }
 
   /* ── Blocos globais Crítico / Urgente ── */
   .level-block { border-radius: 12px; overflow: hidden; margin-bottom: 26px; border: 1px solid #e2e8f0; }
@@ -591,7 +652,7 @@ function _buildCriticidadeShell(d, opts) {
   .level-block-header-left { display:flex; align-items:center; gap:16px; position:relative; }
   .level-block-icon {
     width:52px; height:52px; border-radius:13px; border:1.5px solid;
-    display:flex; align-items:center; justify-content:center; font-size:24px; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center; font-size:24px; flex-shrink:0; color:#fff;
   }
   .level-block--critico .level-block-icon { width:60px; height:60px; font-size:28px; }
   .level-block-title { font-weight:900; color:#fff; letter-spacing:.07em; line-height:1; text-transform:uppercase; }
@@ -630,6 +691,7 @@ function _buildCriticidadeShell(d, opts) {
   .central-cell { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #475569; font-weight: 500; }
   .mat-name { font-weight: 700; font-size: 13px; color: #1e293b; }
   .var-cell { font-size: 12px; white-space:nowrap; }
+  .var-cell i, .cat-header-net i, .reg-bar-net i, .exec-headline-value i { font-size: 0.9em; margin-right: 3px; vertical-align: -1px; }
   .var-kg { font-size:11px; font-weight:500; }
   .empty-cell { text-align:center; padding:18px; color:#94a3b8; font-style:italic; font-size:12px; }
 
@@ -660,7 +722,7 @@ function _buildCriticidadeShell(d, opts) {
     .exec-headline { -webkit-print-color-adjust: exact; color-adjust: exact; box-shadow:none !important; }
     .exec-block { box-shadow:none !important; }
     .donut-svg-wrap { filter:none !important; }
-    .reg-bar-seg--critico, .reg-bar-seg--urgente, .donut-legend-dot, .reg-bar-dot {
+    .reg-bar-badge--critico, .reg-bar-badge--urgente, .donut-legend-dot, .reg-cat-dot, .reg-cat-block {
       -webkit-print-color-adjust: exact; color-adjust: exact;
     }
   }
