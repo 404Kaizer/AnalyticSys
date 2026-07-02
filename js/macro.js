@@ -111,8 +111,12 @@ function renderMacroPanels(results, thresholds, dtIni, dtFim) {
     const preCache = new Map();
     const getPreStock = (mat) => {
       if (preCache.has(mat)) return preCache.get(mat);
+      const lm = lancsByMat.get(mat) || [];
+      const sm = sapByMat.get(mat)   || [];
+      const rawCat = (lm[0]?.categoria || sm[0]?.categoria || '').trim().toUpperCase();
+      const catKey = detectCatKey(rawCat) || detectCatFromMat(mat);
       const s = (typeof getPrePeriodLaunchStock === 'function')
-        ? getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni, dtFim }) : null;
+        ? getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni, dtFim, catKey }) : null;
       preCache.set(mat, s); return s;
     };
 

@@ -215,11 +215,11 @@ async function notifSilentHealthCheck() {
         const matDiffs = (r.allMats||[]).map(mat => {
           const lancs = lancsByMat.get(mat)||[];
           const sap   = sapByMat.get(mat)||[];
-          const prev  = typeof getPrePeriodLaunchStock==='function'
-            ? getPrePeriodLaunchStock({central:r.central,material:mat,dtIni,dtFim}) : null;
-          const snap  = buildSnapshot({lancs,sap,initialStockOverride:prev?.value??null});
           const rawCat = ((lancs[0]||sap[0])?.categoria||'').trim().toUpperCase();
           const catKey = detectCatKey(rawCat)||(typeof detectCatFromMat==='function'?detectCatFromMat(mat):null);
+          const prev  = typeof getPrePeriodLaunchStock==='function'
+            ? getPrePeriodLaunchStock({central:r.central,material:mat,dtIni,dtFim,catKey}) : null;
+          const snap  = buildSnapshot({lancs,sap,initialStockOverride:prev?.value??null});
           const level  = classifyVariation(Math.abs(snap.diff), catKey, thresholds);
           matCounts[level]++;
           return {diff:snap.diff, catKey};
