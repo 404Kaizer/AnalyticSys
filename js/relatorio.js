@@ -57,7 +57,9 @@ window.gerarRelatorioGerencial = function() {
       const netDiff  = catItems.reduce((s, i) => s + (Number(i.diff) || 0), 0);
       const netDir   = varDir(netDiff);
       const netColor = varDirColor(netDiff);
-      const catRows = catItems.map((item, idx) => {
+      // Ordem: maior desfalque (diff mais negativo) primeiro → maior sobra (diff mais positivo) por último
+      const catItemsOrdenados = [...catItems].sort((a, b) => (Number(a.diff) || 0) - (Number(b.diff) || 0));
+      const catRows = catItemsOrdenados.map((item, idx) => {
         const dir = varDir(item.diff);
         const dc  = varDirColor(item.diff);
         return `<tr class="data-row${idx % 2 === 1 ? ' data-row--alt' : ''}">
