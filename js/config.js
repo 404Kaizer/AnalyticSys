@@ -328,8 +328,9 @@ async function salvarFiliais() {
   upsertFiliais(imported);
   setVal('filiais-text', '');
   closeModal('modal-filiais');
+  reaplicarPadronizacaoCentrais();
   await persistStateNow();
-  renderFiliais();
+  renderAll();
   updateImportPrereqUI();
   toast(`${imported.length} filial(is) cadastrada(s)`);
 }
@@ -493,9 +494,10 @@ async function handleFiliaisImport(event) {
         registros: items.length, dataHora: new Date().toLocaleString('pt-BR'),
         status: 'Importado', createdAt: Date.now()
       });
+      reaplicarPadronizacaoCentrais();
       await persistStateNow();
       _lstepSet('fil-save', 'done'); _lbarSet(100);
-      renderFiliais();
+      renderAll();
       closeModal('modal-filiais');
       hideLoadingOverlay('Centrais importadas');
       if (typeof loadingHideSteps === 'function') loadingHideSteps();
@@ -541,8 +543,9 @@ async function removerFilial(pagedIndex) {
       const curIdx = state.filiais.indexOf(rec);
       if (curIdx >= 0) state.filiais.splice(curIdx, 1);
       invalidateFilialLookup();
+      reaplicarPadronizacaoCentrais();
       persist();
-      renderFiliais();
+      renderAll();
       updateImportPrereqUI();
     },
     undo: () => {
@@ -551,8 +554,9 @@ async function removerFilial(pagedIndex) {
         : 0;
       state.filiais.splice(insertAt, 0, snapshot);
       invalidateFilialLookup();
+      reaplicarPadronizacaoCentrais();
       persist();
-      renderFiliais();
+      renderAll();
       updateImportPrereqUI();
     },
   });
@@ -563,8 +567,9 @@ async function limparFiliais() {
   if (!confirm('Excluir todas as filiais cadastradas?')) return;
   state.filiais = [];
   invalidateFilialLookup();
+  reaplicarPadronizacaoCentrais();
   await persistStateNow();
-  renderFiliais();
+  renderAll();
   updateImportPrereqUI();
   toast('Todas as filiais foram excluídas', 'error');
 }

@@ -35,6 +35,26 @@ function normalizarCentraisRecord(rec, keys) {
   return out;
 }
 
+// Campos de central por módulo — usado para reaplicar a padronização de
+// centrais (Filiais) sobre os registros já importados, do mesmo jeito que
+// reaplicarPadronizacaoMateriais() já faz para materiais.
+const CENTRAL_FIELDS_BY_MODULO = {
+  entradas: ['centralCompra', 'centralDestino'],
+  saidas: ['central'],
+  lancamentos: ['central'],
+  sap: ['central'],
+  producao: ['central']
+};
+
+function reaplicarPadronizacaoCentrais(modulos = Object.keys(CENTRAL_FIELDS_BY_MODULO)) {
+  for (const modulo of modulos) {
+    if (!Array.isArray(state[modulo])) continue;
+    const keys = CENTRAL_FIELDS_BY_MODULO[modulo];
+    if (!keys) continue;
+    state[modulo] = state[modulo].map(rec => normalizarCentraisRecord(rec, keys));
+  }
+}
+
 function normalizeLooseText(v) {
   return String(v ?? '')
     .normalize('NFD')
