@@ -1,8 +1,8 @@
-window.gerarRelatorioGerencial = function() {
+function _buildCriticidadeData() {
   const byLevel = window._rankByLevel;
   if (!byLevel || (!byLevel.critico.length && !byLevel.urgente.length)) {
     alert('Nenhum dado de criticidade disponível. Execute a análise primeiro.');
-    return;
+    return null;
   }
 
   const dtIniEl = document.getElementById('an-dt-ini');
@@ -338,13 +338,21 @@ window.gerarRelatorioGerencial = function() {
       </div>
     </div>`;
 
-  // ── Generate full HTML ──
-  const html = `<!DOCTYPE html>
+  return {
+    periodo, now, totalCritico, totalUrgente, totalGeral, totalRegionais,
+    criticoBlock, urgenteBlock, execSummaryHtml,
+  };
+}
+
+// ── Shell HTML compartilhado (cabeçalho com logo, KPIs, footer) — o conteúdo do corpo varia por relatório ──
+function _buildCriticidadeShell(d, opts) {
+  const { periodo, now, totalCritico, totalUrgente, totalRegionais, totalGeral } = d;
+  return `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Relatório Gerencial de Criticidade — ${periodo}</title>
+<title>${opts.pageTitle}</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
 
@@ -400,28 +408,28 @@ window.gerarRelatorioGerencial = function() {
     background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
     color: #fff;
     border-radius: 14px;
-    padding: 28px 36px;
-    margin-bottom: 24px;
+    padding: 22px 32px;
+    margin-bottom: 22px;
     position: relative;
     overflow: hidden;
   }
   .report-header::before {
     content: '';
-    position: absolute; top:-40px; right:-40px;
-    width:200px; height:200px;
+    position: absolute; top:-50px; right:-40px;
+    width:160px; height:160px;
     border-radius:50%;
-    background: rgba(239,68,68,0.08);
-    border: 2px solid rgba(239,68,68,0.12);
+    background: rgba(239,68,68,0.07);
+    border: 2px solid rgba(239,68,68,0.10);
   }
   .report-header::after {
     content: '';
-    position: absolute; bottom:-60px; right:80px;
-    width:150px; height:150px;
+    position: absolute; bottom:-70px; right:100px;
+    width:120px; height:120px;
     border-radius:50%;
-    background: rgba(245,158,11,0.06);
-    border: 2px solid rgba(245,158,11,0.10);
+    background: rgba(245,158,11,0.05);
+    border: 2px solid rgba(245,158,11,0.08);
   }
-  .report-header-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:22px; flex-wrap:wrap; gap:16px; position:relative; }
+  .report-header-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; flex-wrap:wrap; gap:16px; position:relative; }
 
   /* Logo real da empresa — mesmo padrão dos demais relatórios do sistema */
   .logos-wrap { display:flex; align-items:center; gap:22px; }
@@ -438,33 +446,20 @@ window.gerarRelatorioGerencial = function() {
   .report-meta .meta-label { font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:.06em; }
   .report-meta .meta-value { font-size:13px; color:#cbd5e1; font-weight:500; margin-top:2px; }
 
-  .report-urgency-banner {
-    background: rgba(239,68,68,0.12);
-    border: 1px solid rgba(239,68,68,0.25);
-    border-radius: 10px;
-    padding: 14px 20px;
-    display: flex; align-items: center; gap: 14px;
-    margin-bottom: 20px;
-    position: relative;
+  .report-header-bottom {
+    display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px;
+    padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.08); position: relative;
   }
-  .urgency-icon { font-size: 24px; }
-  .urgency-title { font-size: 14px; font-weight: 700; color: #fca5a5; letter-spacing:.01em; }
-  .urgency-desc { font-size: 12px; color: #94a3b8; margin-top:2px; }
+  .report-alert-inline { display: flex; align-items: center; gap: 10px; }
+  .alert-inline-icon { font-size: 16px; }
+  .alert-inline-text { font-size: 12px; color: #cbd5e1; }
+  .alert-inline-text strong { color: #fca5a5; font-weight: 700; }
 
-  .report-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; position:relative; }
-  .stat-card {
-    background: rgba(255,255,255,0.04);
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 10px;
-    padding: 16px 18px;
-    text-align: center;
-  }
-  .stat-card-num { font-size: 30px; font-weight: 800; line-height: 1; margin-bottom: 6px; font-family: 'JetBrains Mono', monospace; }
-  .stat-card-label { font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: .05em; font-weight: 500; }
-  .stat-card.s-critico .stat-card-num { color: #f87171; }
-  .stat-card.s-urgente .stat-card-num { color: #fb923c; }
-  .stat-card.s-regionais .stat-card-num { color: #60a5fa; }
-  .stat-card.s-total .stat-card-num { color: #e2e8f0; }
+  .report-stats-inline { display: flex; align-items: center; gap: 16px; }
+  .stat-inline { display: flex; align-items: baseline; gap: 6px; }
+  .stat-inline strong { font-size: 18px; font-weight: 800; font-family: 'JetBrains Mono', monospace; line-height: 1; }
+  .stat-inline span { font-size: 10px; color: #94a3b8; text-transform: uppercase; letter-spacing: .04em; }
+  .stat-inline-sep { width: 1px; height: 16px; background: rgba(255,255,255,0.12); }
 
   /* ── Resumo Executivo ── */
   .exec-summary {
@@ -627,7 +622,7 @@ window.gerarRelatorioGerencial = function() {
   .cat-header-net { font-size: 11.5px; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
   .cat-header-net strong { font-weight: 800; }
   .cat-header-count { font-size: 11px; font-weight: 700; font-family: 'JetBrains Mono', monospace; opacity: .8; }
-  .data-table td { padding: 9px 16px; vertical-align: middle; }
+
   .rank-cell { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #94a3b8; font-weight: 600; }
   .reg-cell { font-size: 12px; color:#334155; font-weight:600; }
   .central-cell { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #475569; font-weight: 500; }
@@ -655,7 +650,7 @@ window.gerarRelatorioGerencial = function() {
     .level-block-header { page-break-after: avoid; }
     .cat-header-row { page-break-after: avoid; }
     .report-header { background: #0f172a !important; -webkit-print-color-adjust: exact; color-adjust: exact; }
-    .stat-card { -webkit-print-color-adjust: exact; color-adjust: exact; }
+    .report-header-bottom { -webkit-print-color-adjust: exact; color-adjust: exact; }
     .level-block-header { -webkit-print-color-adjust: exact; color-adjust: exact; }
     .data-table thead tr { -webkit-print-color-adjust: exact; color-adjust: exact; }
     .cat-header-cell { -webkit-print-color-adjust: exact; color-adjust: exact; }
@@ -674,7 +669,7 @@ window.gerarRelatorioGerencial = function() {
 <!-- Action bar (hidden on print) -->
 <div class="action-bar">
   <div class="action-bar-title">
-    Relatório Gerencial de Criticidade
+    ${opts.title}
     <span>Período: ${periodo} · Gerado em ${now}</span>
   </div>
   <div class="action-bar-btns">
@@ -724,43 +719,29 @@ window.gerarRelatorioGerencial = function() {
       </div>
     </div>
 
-    <div class="report-title-block" style="margin-bottom:20px">
-      <h1>Relatório Gerencial de Criticidade</h1>
-      <p>AnalyticSys · Gestão Centralizada de Materiais · Concrelagos Concreto</p>
+    <div class="report-title-block" style="margin-bottom:16px">
+      <h1>${opts.title}</h1>
+      <p>${opts.subtitle}</p>
     </div>
 
-    <div class="report-urgency-banner">
-      <span class="urgency-icon">🚨</span>
-      <div>
-        <div class="urgency-title">ALERTA DE CRITICIDADE — AÇÃO REQUERIDA</div>
-        <div class="urgency-desc">Este relatório identifica materiais com variações críticas de estoque por regional e central. Cada item listado representa um risco operacional que requer atenção imediata ou monitoramento reforçado.</div>
+    <div class="report-header-bottom">
+      <div class="report-alert-inline">
+        <span class="alert-inline-icon">🚨</span>
+        <span class="alert-inline-text"><strong>Alerta de criticidade</strong> — ação imediata ou monitoramento reforçado necessário</span>
       </div>
-    </div>
-
-    <div class="report-stats">
-      <div class="stat-card s-critico">
-        <div class="stat-card-num">${totalCritico}</div>
-        <div class="stat-card-label">🔴 Críticos</div>
-      </div>
-      <div class="stat-card s-urgente">
-        <div class="stat-card-num">${totalUrgente}</div>
-        <div class="stat-card-label">🟠 Urgentes</div>
-      </div>
-      <div class="stat-card s-regionais">
-        <div class="stat-card-num">${totalRegionais}</div>
-        <div class="stat-card-label">📍 Regionais Afetados</div>
-      </div>
-      <div class="stat-card s-total">
-        <div class="stat-card-num">${totalGeral}</div>
-        <div class="stat-card-label">⚪ Total no Relatório</div>
+      <div class="report-stats-inline">
+        <div class="stat-inline"><strong style="color:#f87171">${totalCritico}</strong><span>críticos</span></div>
+        <div class="stat-inline-sep"></div>
+        <div class="stat-inline"><strong style="color:#fb923c">${totalUrgente}</strong><span>urgentes</span></div>
+        <div class="stat-inline-sep"></div>
+        <div class="stat-inline"><strong style="color:#60a5fa">${totalRegionais}</strong><span>regionais</span></div>
+        <div class="stat-inline-sep"></div>
+        <div class="stat-inline"><strong style="color:#e2e8f0">${totalGeral}</strong><span>total</span></div>
       </div>
     </div>
   </div>
 
-  ${execSummaryHtml}
-
-  ${criticoBlock}
-  ${urgenteBlock}
+  ${opts.bodyHtml}
 
   <!-- Footer -->
   <div class="report-footer">
@@ -777,15 +758,42 @@ window.gerarRelatorioGerencial = function() {
 
 </body>
 </html>`;
+}
 
-  // ── Open in new window ──
+// ── Abre o relatório em nova janela ──
+function _openCriticidadeWindow(html) {
   const w = window.open('', '_blank', 'width=1400,height=900,scrollbars=yes,resizable=yes');
   if (!w) { alert('Popups bloqueados! Permita pop-ups para este site para gerar o relatório.'); return; }
   w.document.write(html);
   w.document.close();
   w.focus();
+}
+
+// ── Botão "Visão Diretoria" — Resumo Executivo isolado (narrativa + gráficos) ──
+window.gerarVisaoDiretoria = function() {
+  const d = _buildCriticidadeData();
+  if (!d) return;
+  const html = _buildCriticidadeShell(d, {
+    pageTitle: `Visão Diretoria — ${d.periodo}`,
+    title: 'Visão Diretoria',
+    subtitle: 'Resumo executivo de criticidade · AnalyticSys · Concrelagos Concreto',
+    bodyHtml: d.execSummaryHtml,
+  });
+  _openCriticidadeWindow(html);
 };
 
+// ── Botão "Relatório Detalhado" — Ranking completo Crítico/Urgente por regional, central e material ──
+window.gerarRelatorioDetalhado = function() {
+  const d = _buildCriticidadeData();
+  if (!d) return;
+  const html = _buildCriticidadeShell(d, {
+    pageTitle: `Relatório Detalhado de Criticidade — ${d.periodo}`,
+    title: 'Relatório Detalhado de Criticidade',
+    subtitle: 'Ranking completo por regional, central e material · AnalyticSys · Concrelagos Concreto',
+    bodyHtml: `${d.criticoBlock}\n  ${d.urgenteBlock}`,
+  });
+  _openCriticidadeWindow(html);
+};
 // ═══════════════════════════════════════════════════════════════════
 // RELATÓRIO DE AUSÊNCIAS DE LANÇAMENTO
 // ═══════════════════════════════════════════════════════════════════
