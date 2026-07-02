@@ -141,6 +141,161 @@ window.gerarRelatorioGerencial = function() {
     catText: '#9a3412',
   });
 
+  // ═══════════════════════════════════════════════════════════════════
+  // RESUMO EXECUTIVO — narrativa automática + gráficos
+  // ═══════════════════════════════════════════════════════════════════
+  const allItemsFlat = [...byLevel.critico, ...byLevel.urgente];
+
+  const CAT_CHART_COLORS = { aglomerante: '#3b82f6', agregado: '#8b5cf6', aditivo: '#f59e0b', adicao: '#10b981' };
+
+  // ── Totais por categoria (contagem + variação líquida) ──
+  function buildCategoriaTotais(itemsAll) {
+    const map = new Map();
+    itemsAll.forEach(i => {
+      const key = i.catKey || 'aglomerante';
+      if (!map.has(key)) map.set(key, { count: 0, net: 0 });
+      const e = map.get(key);
+      e.count++; e.net += (Number(i.diff) || 0);
+    });
+    return CAT_ORDER.filter(k => map.has(k)).map(k => ({ key: k, label: CAT_LABELS[k], ...map.get(k) }));
+  }
+
+  // ── Totais por regional (crítico / urgente / total) ──
+  function buildRegionalTotaisRobusto() {
+    const map = new Map();
+    const bump = (reg, field) => {
+      const key = reg || '—';
+      if (!map.has(key)) map.set(key, { critico: 0, urgente: 0 });
+      map.get(key)[field]++;
+    };
+    byLevel.critico.forEach(i => bump(i.regional, 'critico'));
+    byLevel.urgente.forEach(i => bump(i.regional, 'urgente'));
+    return Array.from(map.entries()).map(([regional, c]) => ({
+      regional, critico: c.critico, urgente: c.urgente, total: c.critico + c.urgente
+    })).sort((a, b) => b.total - a.total);
+  }
+
+  const categoriaTotais = buildCategoriaTotais(allItemsFlat);
+  const regionalTotais  = buildRegionalTotaisRobusto();
+
+  const netGeral    = allItemsFlat.reduce((s, i) => s + (Number(i.diff) || 0), 0);
+  const netGeralDir = varDir(netGeral);
+  const netGeralCor = varDirColor(netGeral);
+
+  const topCategoria = [...categoriaTotais].sort((a, b) => b.count - a.count)[0];
+  const topCategoriaPct = topCategoria ? Math.round(topCategoria.count / totalGeral * 100) : 0;
+
+  const top3Regionais = regionalTotais.slice(0, 3);
+  const top3Pct = totalGeral ? Math.round(top3Regionais.reduce((s, r) => s + r.total, 0) / totalGeral * 100) : 0;
+  const topRegionalNome = regionalTotais[0]?.regional || '—';
+
+  // ── Narrativa automática ──
+  const narrativaHtml = `
+    <p>
+      As <strong>${top3Regionais.length} regionais</strong> com maior concentração de problemas
+      (encabeçadas por <strong>${escRel(topRegionalNome)}</strong>) respondem por
+      <strong>${top3Pct}%</strong> dos ${totalGeral} itens críticos e urgentes identificados neste período.
+    </p>
+    <p>
+      A categoria <strong>${topCategoria ? escRel(topCategoria.label) : '—'}</strong> é a mais representativa,
+      com ${topCategoria ? topCategoria.count : 0} materiais (${topCategoriaPct}% do total)
+      e variação líquida de <strong style="color:${topCategoria ? varDirColor(topCategoria.net) : '#64748b'}">${topCategoria ? varDir(topCategoria.net) : '—'} ${topCategoria ? fmtKgRel(topCategoria.net) : ''}</strong>.
+    </p>
+    <p>
+      No consolidado geral, o desequilíbrio líquido de estoque é de
+      <strong style="color:${netGeralCor}">${netGeralDir} ${fmtKgRel(netGeral)}</strong>.
+    </p>`;
+
+  // ── Donut: distribuição por categoria ──
+  function buildCategoriaDonut(totais) {
+    const total = totais.reduce((s, c) => s + c.count, 0);
+    if (!total) return `<div class="donut-empty">Sem dados suficientes.</div>`;
+    const CX = 80, CY = 80, R = 62, ring = 24;
+    const C = 2 * Math.PI * R;
+    let offset = 0, paths = '';
+    totais.forEach(c => {
+      const frac = c.count / total;
+      const len  = frac * C;
+      const col  = CAT_CHART_COLORS[c.key] || '#64748b';
+      paths += `<circle cx="${CX}" cy="${CY}" r="${R}" fill="none" stroke="${col}" stroke-width="${ring}"
+        stroke-dasharray="${len} ${C - len}" stroke-dashoffset="${-offset}"
+        transform="rotate(-90 ${CX} ${CY})"></circle>`;
+      offset += len;
+    });
+    const legend = totais.map(c => {
+      const pct = Math.round(c.count / total * 100);
+      const col = CAT_CHART_COLORS[c.key] || '#64748b';
+      return `<div class="donut-legend-row">
+        <span class="donut-legend-dot" style="background:${col}"></span>
+        <span class="donut-legend-label">${escRel(c.label)}</span>
+        <span class="donut-legend-num">${c.count}</span>
+        <span class="donut-legend-pct">${pct}%</span>
+      </div>`;
+    }).join('');
+    return `
+      <div class="donut-wrap">
+        <div class="donut-svg-wrap">
+          <svg viewBox="0 0 160 160" width="150" height="150">${paths}</svg>
+          <div class="donut-center">
+            <span class="donut-center-num">${total}</span>
+            <span class="donut-center-label">materiais</span>
+          </div>
+        </div>
+        <div class="donut-legend">${legend}</div>
+      </div>`;
+  }
+
+  // ── Barras horizontais: concentração por regional ──
+  function buildRegionalBarChart(totais) {
+    const top = totais.slice(0, 6);
+    if (!top.length) return `<div class="donut-empty">Sem dados suficientes.</div>`;
+    const maxTotal = Math.max(...top.map(r => r.total));
+    const rows = top.map(r => {
+      const widthPct = maxTotal ? (r.total / maxTotal * 100) : 0;
+      const critPct  = r.total ? (r.critico / r.total * 100) : 0;
+      const urgPct   = r.total ? (r.urgente / r.total * 100) : 0;
+      return `<div class="reg-bar-row">
+        <div class="reg-bar-label" title="${escRel(r.regional)}">${escRel(r.regional)}</div>
+        <div class="reg-bar-track">
+          <div class="reg-bar-fill" style="width:${widthPct}%">
+            <span class="reg-bar-seg reg-bar-seg--critico" style="width:${critPct}%"></span>
+            <span class="reg-bar-seg reg-bar-seg--urgente" style="width:${urgPct}%"></span>
+          </div>
+        </div>
+        <div class="reg-bar-total">${r.total}</div>
+      </div>`;
+    }).join('');
+    return `<div class="reg-bar-chart">${rows}</div>
+      <div class="reg-bar-legend">
+        <span><span class="reg-bar-dot reg-bar-dot--critico"></span> Crítico</span>
+        <span><span class="reg-bar-dot reg-bar-dot--urgente"></span> Urgente</span>
+      </div>`;
+  }
+
+  const execSummaryHtml = `
+    <div class="exec-summary">
+      <div class="exec-summary-title">
+        <span class="exec-summary-icon">📌</span>
+        <div>
+          <div class="exec-title-main">Resumo Executivo</div>
+          <div class="exec-title-sub">Leitura rápida gerada automaticamente a partir dos dados deste relatório</div>
+        </div>
+      </div>
+      <div class="exec-summary-body">
+        <div class="exec-narrative">${narrativaHtml}</div>
+        <div class="exec-charts">
+          <div class="exec-chart-card">
+            <div class="exec-chart-title">Distribuição por Categoria</div>
+            ${buildCategoriaDonut(categoriaTotais)}
+          </div>
+          <div class="exec-chart-card">
+            <div class="exec-chart-title">Concentração por Regional</div>
+            ${buildRegionalBarChart(regionalTotais)}
+          </div>
+        </div>
+      </div>
+    </div>`;
+
   // ── Generate full HTML ──
   const html = `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -269,6 +424,54 @@ window.gerarRelatorioGerencial = function() {
   .stat-card.s-regionais .stat-card-num { color: #60a5fa; }
   .stat-card.s-total .stat-card-num { color: #e2e8f0; }
 
+  /* ── Resumo Executivo ── */
+  .exec-summary {
+    background: #fff; border: 1px solid #e2e8f0; border-radius: 14px;
+    padding: 24px 28px; margin-bottom: 28px;
+    box-shadow: 0 2px 14px rgba(15,23,42,0.06);
+  }
+  .exec-summary-title { display:flex; align-items:center; gap:14px; margin-bottom:18px; padding-bottom:16px; border-bottom:1px solid #f1f5f9; }
+  .exec-summary-icon {
+    width:40px; height:40px; border-radius:10px; background:#eff6ff; border:1px solid #bfdbfe;
+    display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0;
+  }
+  .exec-title-main { font-size:16px; font-weight:800; color:#0f172a; letter-spacing:-0.01em; }
+  .exec-title-sub { font-size:11.5px; color:#94a3b8; margin-top:2px; }
+  .exec-summary-body { display:grid; grid-template-columns: 1.05fr 1.35fr; gap: 30px; align-items:start; }
+  .exec-narrative p { font-size:13px; color:#334155; line-height:1.75; margin-bottom:12px; }
+  .exec-narrative p:last-child { margin-bottom:0; }
+  .exec-narrative strong { color:#0f172a; }
+  .exec-charts { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+  .exec-chart-card { background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:16px 18px; }
+  .exec-chart-title { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#64748b; margin-bottom:14px; }
+
+  .donut-empty { font-size:12px; color:#94a3b8; font-style:italic; padding:30px 0; text-align:center; }
+  .donut-wrap { display:flex; flex-direction:column; align-items:center; gap:14px; }
+  .donut-svg-wrap { position:relative; width:150px; height:150px; }
+  .donut-center { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+  .donut-center-num { font-size:22px; font-weight:800; font-family:'JetBrains Mono',monospace; color:#0f172a; line-height:1; }
+  .donut-center-label { font-size:9px; color:#94a3b8; text-transform:uppercase; letter-spacing:.06em; margin-top:3px; }
+  .donut-legend { width:100%; display:flex; flex-direction:column; gap:6px; }
+  .donut-legend-row { display:flex; align-items:center; gap:7px; font-size:11px; }
+  .donut-legend-dot { width:9px; height:9px; border-radius:2px; flex-shrink:0; }
+  .donut-legend-label { color:#475569; flex:1; }
+  .donut-legend-num { font-family:'JetBrains Mono',monospace; color:#0f172a; font-weight:700; }
+  .donut-legend-pct { font-family:'JetBrains Mono',monospace; color:#94a3b8; font-size:10px; min-width:32px; text-align:right; }
+
+  .reg-bar-chart { display:flex; flex-direction:column; gap:10px; }
+  .reg-bar-row { display:grid; grid-template-columns: 92px 1fr 26px; align-items:center; gap:10px; }
+  .reg-bar-label { font-size:10.5px; font-weight:700; color:#334155; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .reg-bar-track { background:#e2e8f0; border-radius:5px; height:14px; overflow:hidden; }
+  .reg-bar-fill { height:100%; display:flex; border-radius:5px; overflow:hidden; transition:width .3s; }
+  .reg-bar-seg--critico { background:#dc2626; height:100%; }
+  .reg-bar-seg--urgente { background:#f97316; height:100%; }
+  .reg-bar-total { font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:800; color:#0f172a; text-align:right; }
+  .reg-bar-legend { display:flex; gap:16px; margin-top:14px; font-size:10.5px; color:#64748b; }
+  .reg-bar-legend span { display:flex; align-items:center; gap:6px; }
+  .reg-bar-dot { width:8px; height:8px; border-radius:2px; display:inline-block; }
+  .reg-bar-dot--critico { background:#dc2626; }
+  .reg-bar-dot--urgente { background:#f97316; }
+
   /* ── Blocos globais Crítico / Urgente ── */
   .level-block { border-radius: 12px; overflow: hidden; margin-bottom: 26px; border: 1px solid #e2e8f0; }
   .level-block--critico { box-shadow: 0 8px 28px rgba(220,38,38,0.22); border: 2px solid #fca5a5; }
@@ -350,6 +553,10 @@ window.gerarRelatorioGerencial = function() {
     .level-block-header { -webkit-print-color-adjust: exact; color-adjust: exact; }
     .data-table thead tr { -webkit-print-color-adjust: exact; color-adjust: exact; }
     .cat-header-cell { -webkit-print-color-adjust: exact; color-adjust: exact; }
+    .exec-summary { page-break-inside: avoid; box-shadow:none !important; }
+    .reg-bar-seg--critico, .reg-bar-seg--urgente, .donut-legend-dot, .reg-bar-dot {
+      -webkit-print-color-adjust: exact; color-adjust: exact;
+    }
   }
 </style>
 </head>
@@ -440,6 +647,8 @@ window.gerarRelatorioGerencial = function() {
       </div>
     </div>
   </div>
+
+  ${execSummaryHtml}
 
   ${criticoBlock}
   ${urgenteBlock}
