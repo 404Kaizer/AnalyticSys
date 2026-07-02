@@ -226,14 +226,24 @@ function macroApplyFilter() {
     return w > im ? 'worsening' : im > w ? 'improving' : t.length ? 'stable' : null;
   };
 
+  // Variação líquida por central = soma assinada do diff de todos os materiais
+  // (preserva o sinal para que o ranking mostre corretamente desfalque vs. sobra)
+  const centralNetDiff = {};
+  matItemsForRegion.forEach(i => {
+    centralNetDiff[i.central] = (centralNetDiff[i.central] || 0) + i.totalDiff;
+  });
+
   const top5centrais = filteredCentrals
     .filter(([, v]) => v.level !== 'bom')
     .sort((a, b) => {
-      const sc = v => v.counts.critico*1000 + v.counts.urgente*100 + v.counts.atencao*10 + v.worstDiff/1e6;
-      return sc(b[1]) - sc(a[1]);
+      const cA = a[1].counts, cB = b[1].counts;
+      if (cB.critico !== cA.critico) return cB.critico - cA.critico;
+      if (cB.urgente !== cA.urgente) return cB.urgente - cA.urgente;
+      if (cB.atencao !== cA.atencao) return cB.atencao - cA.atencao;
+      return Math.abs(centralNetDiff[b[0]] || 0) - Math.abs(centralNetDiff[a[0]] || 0);
     })
     .slice(0, 5)
-    .map(([name, v]) => ({ name, level: v.level, counts: v.counts, worstDiff: v.worstDiff }));
+    .map(([name, v]) => ({ name, level: v.level, counts: v.counts, diff: centralNetDiff[name] || 0 }));
 
   // Monta levelMeta para o tooltip das fatias de centrais
   const centralLevelMeta = {};
