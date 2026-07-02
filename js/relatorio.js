@@ -162,18 +162,20 @@ window.gerarRelatorioGerencial = function() {
     return CAT_ORDER.filter(k => map.has(k)).map(k => ({ key: k, label: CAT_LABELS[k], ...map.get(k) }));
   }
 
-  // ── Totais por regional (crítico / urgente / total) ──
+  // ── Totais por regional (crítico / urgente / total / net acumulado) ──
   function buildRegionalTotaisRobusto() {
     const map = new Map();
-    const bump = (reg, field) => {
+    const bump = (reg, field, diff) => {
       const key = reg || '—';
-      if (!map.has(key)) map.set(key, { critico: 0, urgente: 0 });
-      map.get(key)[field]++;
+      if (!map.has(key)) map.set(key, { critico: 0, urgente: 0, net: 0 });
+      const e = map.get(key);
+      e[field]++;
+      e.net += (Number(diff) || 0);
     };
-    byLevel.critico.forEach(i => bump(i.regional, 'critico'));
-    byLevel.urgente.forEach(i => bump(i.regional, 'urgente'));
+    byLevel.critico.forEach(i => bump(i.regional, 'critico', i.diff));
+    byLevel.urgente.forEach(i => bump(i.regional, 'urgente', i.diff));
     return Array.from(map.entries()).map(([regional, c]) => ({
-      regional, critico: c.critico, urgente: c.urgente, total: c.critico + c.urgente
+      regional, critico: c.critico, urgente: c.urgente, total: c.critico + c.urgente, net: c.net
     })).sort((a, b) => b.total - a.total);
   }
 
@@ -247,25 +249,32 @@ window.gerarRelatorioGerencial = function() {
       </div>`;
   }
 
-  // ── Barras horizontais: concentração por regional ──
+  // ── Barras horizontais: concentração por regional (top 10, com % e acumulado) ──
   function buildRegionalBarChart(totais) {
-    const top = totais.slice(0, 6);
+    const top = totais.slice(0, 10);
     if (!top.length) return `<div class="donut-empty">Sem dados suficientes.</div>`;
     const maxTotal = Math.max(...top.map(r => r.total));
     const rows = top.map((r, idx) => {
       const widthPct = maxTotal ? (r.total / maxTotal * 100) : 0;
       const critPct  = r.total ? (r.critico / r.total * 100) : 0;
       const urgPct   = r.total ? (r.urgente / r.total * 100) : 0;
+      const pctRepr  = totalGeral ? Math.round(r.total / totalGeral * 100) : 0;
+      const netDir   = varDir(r.net);
+      const netColor = varDirColor(r.net);
       return `<div class="reg-bar-row">
-        <div class="reg-bar-rank">${idx + 1}</div>
-        <div class="reg-bar-label" title="${escRel(r.regional)}">${escRel(r.regional)}</div>
+        <div class="reg-bar-row-top">
+          <span class="reg-bar-rank">${idx + 1}</span>
+          <span class="reg-bar-label" title="${escRel(r.regional)}">${escRel(r.regional)}</span>
+          <span class="reg-bar-pct">${pctRepr}%</span>
+          <span class="reg-bar-total">${r.total}</span>
+        </div>
         <div class="reg-bar-track">
           <div class="reg-bar-fill" style="width:${widthPct}%">
             <span class="reg-bar-seg reg-bar-seg--critico" style="width:${critPct}%"></span>
             <span class="reg-bar-seg reg-bar-seg--urgente" style="width:${urgPct}%"></span>
           </div>
         </div>
-        <div class="reg-bar-total">${r.total}</div>
+        <div class="reg-bar-net" style="color:${netColor}">${netDir} acumulado <strong>${fmtKgRel(r.net)}</strong></div>
       </div>`;
     }).join('');
     return `<div class="reg-bar-chart">${rows}</div>
@@ -507,7 +516,7 @@ window.gerarRelatorioGerencial = function() {
   .exec-narrative p { font-size:13px; color:#334155; line-height:1.75; margin-bottom:12px; }
   .exec-narrative p:last-child { margin-bottom:0; }
   .exec-narrative strong { color:#0f172a; }
-  .exec-charts { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+  .exec-charts { display:grid; grid-template-columns:1fr 1fr; gap:18px; align-items:start; }
   .exec-chart-card {
     background:#fff; border:1px solid #e9edf3; border-radius:12px; padding:18px 18px 16px;
     box-shadow: 0 4px 16px rgba(15,23,42,0.07);
@@ -542,20 +551,28 @@ window.gerarRelatorioGerencial = function() {
   .donut-legend-num { font-family:'JetBrains Mono',monospace; color:#0f172a; font-weight:700; }
   .donut-legend-pct { font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:700; min-width:34px; text-align:center; border-radius:4px; padding:2px 5px; }
 
-  .reg-bar-chart { display:flex; flex-direction:column; gap:11px; }
-  .reg-bar-row { display:grid; grid-template-columns: 16px 90px 1fr 24px; align-items:center; gap:9px; }
+  .reg-bar-chart { display:flex; flex-direction:column; gap:14px; }
+  .reg-bar-row { display:flex; flex-direction:column; gap:5px; padding-bottom:10px; border-bottom:1px solid #f1f5f9; }
+  .reg-bar-row:last-child { border-bottom:none; padding-bottom:0; }
+  .reg-bar-row-top { display:flex; align-items:center; gap:8px; }
   .reg-bar-rank {
     width:16px; height:16px; border-radius:5px; background:#f1f5f9; color:#64748b;
     font-size:9px; font-weight:800; font-family:'JetBrains Mono',monospace;
-    display:flex; align-items:center; justify-content:center;
+    display:flex; align-items:center; justify-content:center; flex-shrink:0;
   }
-  .reg-bar-label { font-size:10.5px; font-weight:700; color:#334155; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .reg-bar-track { background:#eef1f5; border-radius:6px; height:16px; overflow:hidden; box-shadow: inset 0 1px 3px rgba(15,23,42,0.08); }
+  .reg-bar-label { font-size:10.5px; font-weight:700; color:#334155; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1; }
+  .reg-bar-pct {
+    font-family:'JetBrains Mono',monospace; font-size:9.5px; font-weight:700; color:#64748b;
+    background:#f1f5f9; border-radius:4px; padding:1px 6px; flex-shrink:0;
+  }
+  .reg-bar-total { font-family:'JetBrains Mono',monospace; font-size:11.5px; font-weight:800; color:#0f172a; text-align:right; min-width:20px; flex-shrink:0; }
+  .reg-bar-track { background:#eef1f5; border-radius:6px; height:14px; overflow:hidden; box-shadow: inset 0 1px 3px rgba(15,23,42,0.08); }
   .reg-bar-fill { height:100%; display:flex; border-radius:6px; overflow:hidden; transition:width .3s; box-shadow: 0 1px 2px rgba(0,0,0,.15); }
   .reg-bar-seg--critico { background: linear-gradient(90deg,#b91c1c,#ef4444); height:100%; }
   .reg-bar-seg--urgente { background: linear-gradient(90deg,#c2410c,#fb923c); height:100%; }
-  .reg-bar-total { font-family:'JetBrains Mono',monospace; font-size:11.5px; font-weight:800; color:#0f172a; text-align:right; }
-  .reg-bar-legend { display:flex; gap:16px; margin-top:16px; font-size:10.5px; color:#64748b; }
+  .reg-bar-net { font-size:9.5px; font-family:'JetBrains Mono',monospace; font-weight:600; }
+  .reg-bar-net strong { font-weight:800; }
+  .reg-bar-legend { display:flex; gap:16px; margin-top:4px; font-size:10.5px; color:#64748b; }
   .reg-bar-legend span { display:flex; align-items:center; gap:6px; }
   .reg-bar-dot { width:8px; height:8px; border-radius:2px; display:inline-block; }
   .reg-bar-dot--critico { background: linear-gradient(90deg,#b91c1c,#ef4444); }
