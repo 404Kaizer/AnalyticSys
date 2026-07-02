@@ -348,10 +348,9 @@ function parseFiliaisLines(lines) {
     // Primary format: [num |] ORIGINAL = SIGLA = CNPJ = REGIONAL
     const eqParts = line.split('=').map(s => s.trim());
     if (eqParts.length >= 2) {
-      // Left side may be "82 | Sete Lagoas" — take last pipe-token as origem
+      // Left side may be "82 | Sete Lagoas" or "98 | POM | Pompéu" — keep as digitado
       const leftRaw = eqParts[0];
-      const pipeParts = leftRaw.split('|').map(s => s.trim()).filter(Boolean);
-      origem   = pipeParts.at(-1) || leftRaw.trim();
+      origem   = leftRaw.trim();
       alias    = eqParts[1] || '';
       cnpj     = eqParts[2] || '';
       regional = eqParts[3] || '';
