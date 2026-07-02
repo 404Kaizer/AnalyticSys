@@ -41,110 +41,77 @@ function _buildCriticidadeData() {
   // ── Agrupamento por categoria de material (Aglomerantes, Agregados, Aditivos, Adições) ──
   const CAT_ORDER  = ['aglomerante', 'agregado', 'aditivo', 'adicao'];
   const CAT_LABELS = { aglomerante: 'Aglomerantes', agregado: 'Agregados', aditivo: 'Aditivos', adicao: 'Adições' };
-  function groupByCategoria(items) {
-    const map = new Map();
-    items.forEach(i => {
-      const key = i.catKey || 'aglomerante';
-      if (!map.has(key)) map.set(key, []);
-      map.get(key).push(i);
-    });
-    const ordered = CAT_ORDER.filter(k => map.has(k)).map(k => [k, map.get(k)]);
-    map.forEach((v, k) => { if (!CAT_ORDER.includes(k)) ordered.push([k, v]); });
-    return ordered;
+
+  // ── Tabela estilo "auditoria" — colunas: Nível, Filial, Regional, Material, Variação ──
+  // Uma tabela por nível (Crítico/Urgente); duas tabelas ficam lado a lado por categoria.
+  function buildAuditTable(items, levelCfg) {
+    if (!items.length) {
+      return `<div class="audit-table-wrap">
+        <div class="audit-table-header" style="background:${levelCfg.headerColor}">
+          <i class="ti ${levelCfg.icon}"></i> ${levelCfg.label}
+        </div>
+        <div class="audit-table-empty">Nenhum item nesta categoria.</div>
+      </div>`;
+    }
+    // Ordem: maior desfalque (diff mais negativo) primeiro → maior sobra (diff mais positivo) por último
+    const sorted = [...items].sort((a, b) => (Number(a.diff) || 0) - (Number(b.diff) || 0));
+    const rows = sorted.map(item => {
+      const cellColor = varDirColor(item.diff);
+      return `<tr>
+        <td class="audit-td audit-td-nivel"><i class="ti ${levelCfg.icon}" style="color:${levelCfg.headerColor}"></i></td>
+        <td class="audit-td audit-td-filial">${escRel(item.central)}</td>
+        <td class="audit-td audit-td-regional" title="${escRel(item.regional || '—')}">${escRel(item.regional || '—')}</td>
+        <td class="audit-td audit-td-mat" title="${escRel(item.mat)}">${escRel(item.mat)}</td>
+        <td class="audit-td audit-td-var" style="background:${cellColor}">${fmtKgSigned(item.diff)}</td>
+      </tr>`;
+    }).join('');
+    return `<div class="audit-table-wrap">
+      <div class="audit-table-header" style="background:${levelCfg.headerColor}">
+        <i class="ti ${levelCfg.icon}"></i> ${levelCfg.label}
+        <span class="audit-table-count">${items.length}</span>
+      </div>
+      <table class="audit-table">
+        <thead><tr>
+          <th class="audit-th-nivel">Nível</th>
+          <th>Filial</th>
+          <th>Regional</th>
+          <th>Material</th>
+          <th class="audit-th-var">Variação</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
   }
 
-  // ── Build a global level block (Crítico ou Urgente) — colunas: Regional, Central, Material, Variação — separado por categoria ──
-  function buildLevelBlock(items, cfg) {
-    const grupos = groupByCategoria(items);
-
-    const bodyHtml = grupos.map(([catKey, catItems]) => {
-      const catLabel = CAT_LABELS[catKey] || catKey;
-      const netDiff  = catItems.reduce((s, i) => s + (Number(i.diff) || 0), 0);
-      const netColor = varDirColor(netDiff);
-      // Ordem: maior desfalque (diff mais negativo) primeiro → maior sobra (diff mais positivo) por último
-      const catItemsOrdenados = [...catItems].sort((a, b) => (Number(a.diff) || 0) - (Number(b.diff) || 0));
-      const catRows = catItemsOrdenados.map((item, idx) => {
-        const dc  = varDirColor(item.diff);
-        return `<tr class="data-row${idx % 2 === 1 ? ' data-row--alt' : ''}">
-          <td class="rank-cell">${idx + 1}</td>
-          <td class="reg-cell">${escRel(item.regional || '—')}</td>
-          <td class="central-cell">${escRel(item.central)}</td>
-          <td class="mat-cell"><span class="mat-name">${escRel(item.mat)}</span></td>
-          <td class="var-cell" style="color:${dc}"><strong>${varDirHtml(item.diff)}</strong> <span class="var-kg">${fmtKgRel(item.diff)}</span></td>
-        </tr>`;
-      }).join('');
-
-      return `<tbody class="cat-group">
-        <tr class="cat-header-row">
-          <td colspan="5" class="cat-header-cell" style="background:${cfg.catBg};border-left:6px solid ${cfg.catAccent}">
-            <div class="cat-header-inner">
-              <span class="cat-header-label" style="color:${cfg.catText}">${escRel(catLabel)}</span>
-              <div class="cat-header-right">
-                <span class="cat-header-net" style="color:${netColor}">${varDirHtml(netDiff)} acumulado <strong>${fmtKgRel(netDiff)}</strong></span>
-                <span class="cat-header-count" style="color:${cfg.catText}">${catItems.length} ${catItems.length === 1 ? 'material' : 'materiais'}</span>
-              </div>
-            </div>
-          </td>
-        </tr>
-        ${catRows}
-      </tbody>`;
-    }).join('');
-
-    return `
-    <section class="level-block level-block--${cfg.key}" style="page-break-inside:auto">
-      <div class="level-block-header" style="background:${cfg.headerGrad}">
-        <div class="level-block-header-glow"></div>
-        <div class="level-block-header-left">
-          <div class="level-block-icon" style="background:${cfg.iconBg};border-color:${cfg.iconBorder}">${cfg.icon}</div>
-          <div>
-            <div class="level-block-title" style="font-size:${cfg.titleSize}">${cfg.label}</div>
-            <div class="level-block-sub">${cfg.sublabel}</div>
-          </div>
-        </div>
-        <div class="level-block-count">${items.length} ${items.length === 1 ? 'material' : 'materiais'}</div>
+  // ── Seção de uma categoria: título + as duas tabelas (Crítico | Urgente) lado a lado ──
+  function buildCategoriaAuditSection(catKey, label, criticoItems, urgenteItems) {
+    if (!criticoItems.length && !urgenteItems.length) return '';
+    const critTable = buildAuditTable(criticoItems, { key: 'critico', label: 'CRÍTICO', headerColor: '#dc2626', icon: 'ti-flame' });
+    const urgTable  = buildAuditTable(urgenteItems,  { key: 'urgente', label: 'URGENTE', headerColor: '#f97316', icon: 'ti-alert-circle' });
+    return `<section class="audit-section">
+      <div class="audit-section-title">${escRel(label)}</div>
+      <div class="audit-section-grid">
+        ${critTable}
+        ${urgTable}
       </div>
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th style="width:44px">#</th>
-            <th>Regional</th>
-            <th>Central</th>
-            <th>Material</th>
-            <th style="width:210px">Variação</th>
-          </tr>
-        </thead>
-        ${bodyHtml || `<tbody><tr><td colspan="5" class="empty-cell">Nenhum item nesta categoria.</td></tr></tbody>`}
-      </table>
     </section>`;
   }
 
-  const criticoBlock = buildLevelBlock(byLevel.critico, {
-    key: 'critico',
-    icon: '<i class="ti ti-flame"></i>',
-    label: 'CRÍTICO',
-    sublabel: 'Ação imediata — escalar à gerência',
-    titleSize: '24px',
-    headerGrad: 'linear-gradient(135deg,#7f1d1d 0%,#991b1b 55%,#b91c1c 100%)',
-    iconBg: 'rgba(255,255,255,0.16)',
-    iconBorder: 'rgba(255,255,255,0.3)',
-    catAccent: '#dc2626',
-    catBg: '#fef2f2',
-    catText: '#991b1b',
-  });
+  // ── Monta todas as seções (uma por categoria presente nos dados) ──
+  function buildAuditSections() {
+    return CAT_ORDER
+      .filter(k =>
+        byLevel.critico.some(i => (i.catKey || 'aglomerante') === k) ||
+        byLevel.urgente.some(i => (i.catKey || 'aglomerante') === k)
+      )
+      .map(catKey => {
+        const crit = byLevel.critico.filter(i => (i.catKey || 'aglomerante') === catKey);
+        const urg  = byLevel.urgente.filter(i => (i.catKey || 'aglomerante') === catKey);
+        return buildCategoriaAuditSection(catKey, CAT_LABELS[catKey], crit, urg);
+      }).join('');
+  }
 
-  const urgenteBlock = buildLevelBlock(byLevel.urgente, {
-    key: 'urgente',
-    icon: '<i class="ti ti-alert-circle"></i>',
-    label: 'URGENTE',
-    sublabel: 'Atenção redobrada — repassar aos regionais',
-    titleSize: '19px',
-    headerGrad: 'linear-gradient(135deg,#7c2d12 0%,#9a3412 55%,#c2410c 100%)',
-    iconBg: 'rgba(255,255,255,0.14)',
-    iconBorder: 'rgba(255,255,255,0.26)',
-    catAccent: '#ea580c',
-    catBg: '#fff7ed',
-    catText: '#9a3412',
-  });
+  const auditSectionsHtml = buildAuditSections();
 
   // ═══════════════════════════════════════════════════════════════════
   // RESUMO EXECUTIVO — narrativa automática + gráficos
@@ -342,7 +309,7 @@ function _buildCriticidadeData() {
 
   return {
     periodo, now, totalCritico, totalUrgente, totalGeral, totalRegionais,
-    criticoBlock, urgenteBlock, execSummaryHtml,
+    auditSectionsHtml, execSummaryHtml,
   };
 }
 
@@ -575,64 +542,41 @@ function _buildCriticidadeShell(d, opts) {
   .reg-item-level-badge--critico { background:#fef2f2; color:#dc2626; }
   .reg-item-level-badge--urgente { background:#fff7ed; color:#ea580c; }
 
-  /* ── Blocos globais Crítico / Urgente ── */
-  .level-block { border-radius: 12px; overflow: hidden; margin-bottom: 26px; border: 1px solid #e2e8f0; }
-  .level-block--critico { box-shadow: 0 8px 28px rgba(220,38,38,0.22); border: 2px solid #fca5a5; }
-  .level-block--urgente { box-shadow: 0 4px 18px rgba(249,115,22,0.16); }
-  .level-block-header {
-    padding: 20px 26px; display:flex; align-items:center; justify-content:space-between;
-    position:relative; overflow:hidden;
+  /* ── Estilo "Auditoria" — tabelas Crítico/Urgente lado a lado por categoria ── */
+  .audit-section { margin-bottom: 30px; }
+  .audit-section-title {
+    font-size: 15px; font-weight: 900; text-transform: uppercase; letter-spacing: .05em;
+    color: #0f172a; margin-bottom: 10px; padding-left: 2px;
   }
-  .level-block--critico .level-block-header { padding: 26px 30px; }
-  .level-block-header-glow {
-    position:absolute; right:-30px; top:-30px; width:140px; height:140px; border-radius:50%;
-    background:rgba(255,255,255,0.07); pointer-events:none;
+  .audit-section-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
+  .audit-table-wrap { border: 2px solid #0f172a; border-radius: 6px; overflow: hidden; }
+  .audit-table-header {
+    padding: 10px 16px; color: #fff; font-weight: 900; font-size: 14px; letter-spacing: .04em;
+    display: flex; align-items: center; gap: 8px; text-transform: uppercase;
   }
-  .level-block-header-left { display:flex; align-items:center; gap:16px; position:relative; }
-  .level-block-icon {
-    width:52px; height:52px; border-radius:13px; border:1.5px solid;
-    display:flex; align-items:center; justify-content:center; font-size:24px; flex-shrink:0; color:#fff;
+  .audit-table-header i { font-size: 15px; }
+  .audit-table-count {
+    margin-left: auto; background: rgba(255,255,255,.22); border-radius: 12px; padding: 2px 10px;
+    font-size: 12px; font-family: 'JetBrains Mono', monospace;
   }
-  .level-block--critico .level-block-icon { width:60px; height:60px; font-size:28px; }
-  .level-block-title { font-weight:900; color:#fff; letter-spacing:.07em; line-height:1; text-transform:uppercase; }
-  .level-block-sub { font-size:12.5px; color:rgba(255,255,255,0.65); margin-top:6px; font-weight:500; }
-  .level-block-count {
-    background: rgba(255,255,255,0.15); border:1.5px solid rgba(255,255,255,0.25); color:#fff;
-    padding:7px 18px; border-radius:24px; font-size:13.5px; font-weight:800; letter-spacing:.03em; position:relative;
-    flex-shrink: 0;
+  .audit-table-empty { padding: 16px; text-align: center; color: #94a3b8; font-style: italic; font-size: 12px; background:#fff; }
+  .audit-table { width: 100%; border-collapse: collapse; background: #fff; table-layout: fixed; }
+  .audit-table thead tr { background: #0f172a; }
+  .audit-table th {
+    padding: 7px 8px; font-size: 9.5px; font-weight: 800; text-transform: uppercase;
+    letter-spacing: .05em; color: #cbd5e1; text-align: left; border: 1px solid #1e293b;
   }
+  .audit-th-nivel { width: 38px; text-align: center; }
+  .audit-th-var { width: 110px; text-align: right; }
+  .audit-td { padding: 6px 8px; font-size: 11px; border: 1px solid #d5dbe3; color: #0f172a; }
+  .audit-td-nivel { text-align: center; font-size: 13px; }
+  .audit-td-filial { font-family: 'JetBrains Mono', monospace; font-weight: 700; color: #334155; white-space: nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .audit-td-regional { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .audit-td-mat { color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .audit-td-var { font-family: 'JetBrains Mono', monospace; font-weight: 900; color: #fff; text-align: right; font-size: 11.5px; white-space: nowrap; }
+  .audit-table tbody tr:nth-child(even) td:not(.audit-td-var) { background: #f8fafc; }
 
-  /* Data table */
-  .data-table { width: 100%; border-collapse: collapse; background:#fff; }
-  .data-table thead tr { background: #f8fafc; }
-  .data-table th {
-    padding: 10px 16px;
-    font-size: 10px; font-weight: 700; text-transform: uppercase;
-    letter-spacing: .07em; color: #64748b;
-    text-align: left; border-bottom: 1px solid #e2e8f0;
-  }
-  .data-table tbody tr.data-row { border-bottom: 1px solid #f1f5f9; }
-  .data-table tbody tr.data-row--alt { background:#fafbfc; }
-  .data-table tbody.cat-group:last-child tr.data-row:last-child { border-bottom: none; }
-
-  /* Cabeçalho de categoria dentro do bloco */
-  .cat-header-row { }
-  .cat-header-cell { padding: 11px 18px 11px 14px !important; }
-  .cat-header-inner { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
-  .cat-header-label { font-size: 13.5px; font-weight: 900; text-transform: uppercase; letter-spacing: .09em; }
-  .cat-header-right { display: flex; align-items: baseline; gap: 18px; }
-  .cat-header-net { font-size: 11.5px; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
-  .cat-header-net strong { font-weight: 800; }
-  .cat-header-count { font-size: 11px; font-weight: 700; font-family: 'JetBrains Mono', monospace; opacity: .8; }
-
-  .rank-cell { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #94a3b8; font-weight: 600; }
-  .reg-cell { font-size: 12px; color:#334155; font-weight:600; }
-  .central-cell { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #475569; font-weight: 500; }
-  .mat-name { font-weight: 700; font-size: 13px; color: #1e293b; }
-  .var-cell { font-size: 12px; white-space:nowrap; }
   .var-cell i, .cat-header-net i, .reg-item-net-line i, .exec-headline-value i { font-size: 0.9em; margin-right: 3px; vertical-align: -1px; }
-  .var-kg { font-size:11px; font-weight:500; }
-  .empty-cell { text-align:center; padding:18px; color:#94a3b8; font-style:italic; font-size:12px; }
 
   /* Footer */
   .report-footer {
@@ -648,15 +592,13 @@ function _buildCriticidadeShell(d, opts) {
     body { background: #fff !important; }
     .action-bar { display: none !important; }
     .page-wrap { padding: 0 !important; max-width: 100% !important; }
-    .level-block { page-break-inside: auto; }
-    .data-table tr { page-break-inside: avoid; }
-    .level-block-header { page-break-after: avoid; }
-    .cat-header-row { page-break-after: avoid; }
+    .audit-section { page-break-inside: avoid; }
+    .audit-table tr { page-break-inside: avoid; }
     .report-header { background: #0f172a !important; -webkit-print-color-adjust: exact; color-adjust: exact; }
     .report-header-bottom { -webkit-print-color-adjust: exact; color-adjust: exact; }
-    .level-block-header { -webkit-print-color-adjust: exact; color-adjust: exact; }
-    .data-table thead tr { -webkit-print-color-adjust: exact; color-adjust: exact; }
-    .cat-header-cell { -webkit-print-color-adjust: exact; color-adjust: exact; }
+    .audit-table-header { -webkit-print-color-adjust: exact; color-adjust: exact; }
+    .audit-table thead tr { -webkit-print-color-adjust: exact; color-adjust: exact; }
+    .audit-td-var { -webkit-print-color-adjust: exact; color-adjust: exact; }
     .exec-summary { page-break-inside: avoid; box-shadow:none !important; }
     .exec-headline { -webkit-print-color-adjust: exact; color-adjust: exact; box-shadow:none !important; }
     .exec-block { box-shadow:none !important; }
@@ -792,7 +734,7 @@ window.gerarRelatorioDetalhado = function() {
     pageTitle: `Relatório Detalhado de Criticidade — ${d.periodo}`,
     title: 'Relatório Detalhado de Criticidade',
     subtitle: 'Ranking completo por regional, central e material · AnalyticSys · Concrelagos Concreto',
-    bodyHtml: `${d.criticoBlock}\n  ${d.urgenteBlock}`,
+    bodyHtml: d.auditSectionsHtml,
   });
   _openCriticidadeWindow(html);
 };
