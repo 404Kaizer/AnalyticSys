@@ -209,49 +209,6 @@ function _buildCriticidadeData() {
       e variação líquida de <strong style="color:${topCategoria ? varDirColor(topCategoria.net) : '#64748b'}">${topCategoria ? varDir(topCategoria.net) : '—'} ${topCategoria ? fmtKgRel(topCategoria.net) : ''}</strong>.
     </p>`;
 
-  // ── Donut: distribuição por categoria ──
-  const CAT_ICONS = { aglomerante: '🧱', agregado: '⛰️', aditivo: '🧪', adicao: '🌫️' };
-  function buildCategoriaDonut(totais) {
-    const total = totais.reduce((s, c) => s + c.count, 0);
-    if (!total) return `<div class="donut-empty">Sem dados suficientes.</div>`;
-    const CX = 80, CY = 80, R = 60, ring = 26;
-    const C = 2 * Math.PI * R;
-    let offset = 0, paths = '';
-    totais.forEach(c => {
-      const frac = c.count / total;
-      const len  = frac * C;
-      const col  = CAT_CHART_COLORS[c.key] || '#64748b';
-      paths += `<circle class="donut-slice" cx="${CX}" cy="${CY}" r="${R}" fill="none" stroke="${col}" stroke-width="${ring}"
-        stroke-dasharray="${Math.max(len - 3, 0)} ${C - len + 3}" stroke-dashoffset="${-offset}" stroke-linecap="round"
-        transform="rotate(-90 ${CX} ${CY})"></circle>`;
-      offset += len;
-    });
-    const legend = totais.map(c => {
-      const pct = Math.round(c.count / total * 100);
-      const col = CAT_CHART_COLORS[c.key] || '#64748b';
-      return `<div class="donut-legend-row">
-        <span class="donut-legend-icon" style="background:${col}22;border-color:${col}55">${CAT_ICONS[c.key] || '●'}</span>
-        <span class="donut-legend-label">${escRel(c.label)}</span>
-        <span class="donut-legend-num">${c.count}</span>
-        <span class="donut-legend-pct" style="background:${col}18;color:${col}">${pct}%</span>
-      </div>`;
-    }).join('');
-    return `
-      <div class="donut-wrap">
-        <div class="donut-svg-wrap">
-          <svg viewBox="0 0 160 160" width="150" height="150" class="donut-svg">
-            <circle cx="${CX}" cy="${CY}" r="${R}" fill="none" stroke="#eef2f7" stroke-width="${ring}"></circle>
-            ${paths}
-          </svg>
-          <div class="donut-center">
-            <span class="donut-center-num">${total}</span>
-            <span class="donut-center-label">materiais</span>
-          </div>
-        </div>
-        <div class="donut-legend">${legend}</div>
-      </div>`;
-  }
-
   // ── Totais por regional, segmentados por categoria de material (para os blocos dinâmicos) ──
   function buildRegionalPorCategoria() {
     const map = new Map(); // catKey -> Map(regional -> {critico,urgente,net})
@@ -279,31 +236,36 @@ function _buildCriticidadeData() {
   }
 
   // ── Blocos horizontais: concentração por regional, um bloco por categoria (dinâmico), com todos os regionais ──
+  function fmtKgSigned(v) {
+    const n = Number(v) || 0;
+    const sign = n < -0.001 ? '−' : n > 0.001 ? '+' : '';
+    return sign + fmtKgRel(n);
+  }
+
   function buildRegionalBlock(catKey, label, regionais, totalCat) {
     if (!regionais.length) return '';
-    const maxTotal = Math.max(...regionais.map(r => r.total));
     const accent = CAT_CHART_COLORS[catKey] || '#64748b';
+    const TOP_BG = ['1c', '12', '0a']; // opacidade hex decrescente pros 3 primeiros (1º mais forte)
     const rows = regionais.map((r, idx) => {
-      const widthPct = maxTotal ? (r.total / maxTotal * 100) : 0;
       const pctRepr  = totalCat ? Math.round(r.total / totalCat * 100) : 0;
       const netColor = varDirColor(r.net);
-      return `<div class="reg-bar-row">
-        <div class="reg-bar-row-top">
-          <span class="reg-bar-rank">${idx + 1}</span>
-          <span class="reg-bar-label" title="${escRel(r.regional)}">${escRel(r.regional)}</span>
-          <span class="reg-bar-total">${r.total}</span>
-          <span class="reg-bar-pct">${pctRepr}%</span>
+      const isTop3 = idx < 3;
+      const rowStyle = isTop3 ? `background:${accent}${TOP_BG[idx]};border-radius:9px;padding:12px 13px;` : 'padding:11px 2px;';
+      return `<div class="reg-item-row${isTop3 ? ' reg-item-row--top' : ''}" style="${rowStyle}">
+        <div class="reg-item-name-line">
+          <span class="reg-item-rank"${isTop3 ? ` style="background:${accent};color:#fff"` : ''}>${idx + 1}</span>
+          <span class="reg-item-label" title="${escRel(r.regional)}">${escRel(r.regional)}</span>
         </div>
-        <div class="reg-bar-mid">
-          <div class="reg-bar-track">
-            <div class="reg-bar-fill" style="width:${widthPct}%"></div>
-          </div>
-          <div class="reg-bar-breakdown">
-            ${r.critico ? `<span class="reg-bar-badge reg-bar-badge--critico"><i class="ti ti-flame"></i>${r.critico}</span>` : ''}
-            ${r.urgente ? `<span class="reg-bar-badge reg-bar-badge--urgente"><i class="ti ti-alert-circle"></i>${r.urgente}</span>` : ''}
-          </div>
+        <div class="reg-item-stats-line">
+          <span class="reg-item-count">${r.total} ${r.total === 1 ? 'material' : 'materiais'}</span>
+          <span class="reg-item-sep">·</span>
+          <span class="reg-item-pct-full">Representa ${pctRepr}%</span>
         </div>
-        <div class="reg-bar-net" style="color:${netColor}">${varDirHtml(r.net)} acumulado <strong>${fmtKgRel(r.net)}</strong></div>
+        <div class="reg-item-net-line" style="color:${netColor}"><i class="ti ${varDirIcon(r.net)}"></i> ${fmtKgSigned(r.net)}</div>
+        <div class="reg-item-level-line">
+          ${r.critico ? `<span class="reg-item-level-badge reg-item-level-badge--critico"><i class="ti ti-flame"></i> ${r.critico} Crítico${r.critico === 1 ? '' : 's'}</span>` : ''}
+          ${r.urgente ? `<span class="reg-item-level-badge reg-item-level-badge--urgente"><i class="ti ti-alert-circle"></i> ${r.urgente} Urgente${r.urgente === 1 ? '' : 's'}</span>` : ''}
+        </div>
       </div>`;
     }).join('');
     return `<div class="reg-cat-block" style="border-top-color:${accent}">
@@ -312,7 +274,7 @@ function _buildCriticidadeData() {
         <span style="color:${accent}">${escRel(label)}</span>
         <span class="reg-cat-block-count">${regionais.length} regionai${regionais.length === 1 ? '' : 's'}</span>
       </div>
-      <div class="reg-bar-chart">${rows}</div>
+      <div class="reg-item-list">${rows}</div>
     </div>`;
   }
 
@@ -320,11 +282,11 @@ function _buildCriticidadeData() {
     const grupos = buildRegionalPorCategoria();
     if (!grupos.length) return `<div class="donut-empty">Sem dados suficientes.</div>`;
     const blocks = grupos.map(g => buildRegionalBlock(g.catKey, g.label, g.regionais, g.totalCat)).join('');
-    return `<div class="reg-cat-blocks-grid">${blocks}</div>
-      <div class="reg-bar-legend">
+    return `<div class="reg-bar-legend">
         <span><i class="ti ti-flame" style="color:#dc2626"></i> Crítico</span>
         <span><i class="ti ti-alert-circle" style="color:#ea580c"></i> Urgente</span>
-      </div>`;
+      </div>
+      <div class="reg-cat-blocks-grid">${blocks}</div>`;
   }
 
   // ── Card de destaque: o número que resume o relatório em um olhar ──
@@ -370,10 +332,6 @@ function _buildCriticidadeData() {
         <div class="exec-block exec-block--narrative">
           <div class="exec-block-title"><span class="exec-block-title-icon">🔎</span> Principais Achados</div>
           <div class="exec-narrative">${narrativaHtml}</div>
-        </div>
-        <div class="exec-block exec-block--donut">
-          <div class="exec-block-title"><span class="exec-block-title-icon">🗂️</span> Distribuição por Categoria</div>
-          ${buildCategoriaDonut(categoriaTotais)}
         </div>
         <div class="exec-block exec-block--bars">
           <div class="exec-block-title"><span class="exec-block-title-icon">📍</span> Concentração por Regional</div>
@@ -559,7 +517,6 @@ function _buildCriticidadeShell(d, opts) {
     border-top: 4px solid #cbd5e1;
   }
   .exec-block--narrative { border-top-color: #3b82f6; }
-  .exec-block--donut { border-top-color: #8b5cf6; }
   .exec-block--bars  { border-top-color: #dc2626; }
   .exec-block-title {
     font-size:11.5px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:#475569;
@@ -573,27 +530,14 @@ function _buildCriticidadeShell(d, opts) {
   .exec-narrative strong { color:#0f172a; }
 
   .donut-empty { font-size:12px; color:#94a3b8; font-style:italic; padding:30px 0; text-align:center; }
-  .donut-wrap { display:flex; flex-direction:row; align-items:center; gap:40px; }
-  .donut-svg-wrap { position:relative; width:150px; height:150px; flex-shrink:0; filter: drop-shadow(0 6px 12px rgba(15,23,42,0.13)); }
-  .donut-svg .donut-slice { transition: opacity .15s; }
-  .donut-center {
-    position:absolute; inset:31px; border-radius:50%; background:#fff;
-    box-shadow: inset 0 2px 6px rgba(15,23,42,0.06);
-    display:flex; flex-direction:column; align-items:center; justify-content:center;
-  }
-  .donut-center-num { font-size:24px; font-weight:900; font-family:'JetBrains Mono',monospace; color:#0f172a; line-height:1; }
-  .donut-center-label { font-size:9px; color:#94a3b8; text-transform:uppercase; letter-spacing:.06em; margin-top:3px; }
-  .donut-legend { flex:1; display:grid; grid-template-columns: 1fr 1fr; gap:12px 24px; }
-  .donut-legend-row { display:flex; align-items:center; gap:10px; font-size:12px; }
-  .donut-legend-icon {
-    width:22px; height:22px; border-radius:7px; border:1px solid; flex-shrink:0;
-    display:flex; align-items:center; justify-content:center; font-size:11px;
-  }
-  .donut-legend-label { color:#334155; font-weight:600; flex:1; }
-  .donut-legend-num { font-family:'JetBrains Mono',monospace; color:#0f172a; font-weight:700; }
-  .donut-legend-pct { font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:700; min-width:34px; text-align:center; border-radius:4px; padding:2px 5px; }
 
-  .reg-cat-blocks-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 20px; align-items:start; }
+  .reg-bar-legend {
+    display:flex; gap:20px; margin-bottom:16px; padding:10px 14px;
+    background:#f8fafc; border:1px solid #e9edf3; border-radius:8px; font-size:11px; color:#475569; font-weight:600;
+  }
+  .reg-bar-legend span { display:flex; align-items:center; gap:6px; }
+  .reg-bar-legend i { font-size:13px; }
+  .reg-cat-blocks-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(255px, 1fr)); gap: 16px; align-items:start; }
   .reg-cat-block {
     min-width: 0; background:#fbfcfd; border:1px solid #e9edf3; border-top:3px solid #cbd5e1;
     border-radius:10px; padding:16px 18px 18px;
@@ -604,37 +548,32 @@ function _buildCriticidadeShell(d, opts) {
   }
   .reg-cat-dot { width:9px; height:9px; border-radius:3px; flex-shrink:0; }
   .reg-cat-block-count { margin-left:auto; font-family:'JetBrains Mono',monospace; font-weight:700; color:#94a3b8; font-size:10px; text-transform:none; letter-spacing:0; }
-  .reg-bar-chart { display:flex; flex-direction:column; gap:14px; }
-  .reg-bar-row { display:flex; flex-direction:column; gap:6px; padding-bottom:12px; border-bottom:1px solid #f1f5f9; }
-  .reg-bar-row:last-child { border-bottom:none; padding-bottom:0; }
-  .reg-bar-row-top { display:flex; align-items:center; gap:8px; }
-  .reg-bar-rank {
-    width:16px; height:16px; border-radius:5px; background:#f1f5f9; color:#64748b;
-    font-size:9px; font-weight:800; font-family:'JetBrains Mono',monospace;
+  .reg-item-list { display:flex; flex-direction:column; gap:4px; }
+  .reg-item-row { display:flex; flex-direction:column; gap:7px; }
+  .reg-item-row:not(.reg-item-row--top) { padding-bottom:12px; border-bottom:1px solid #f1f5f9; }
+  .reg-item-row:not(.reg-item-row--top):last-child { border-bottom:none; padding-bottom:0; }
+  .reg-item-name-line { display:flex; align-items:center; gap:9px; }
+  .reg-item-rank {
+    width:20px; height:20px; border-radius:6px; background:#f1f5f9; color:#64748b;
+    font-size:11px; font-weight:800; font-family:'JetBrains Mono',monospace;
     display:flex; align-items:center; justify-content:center; flex-shrink:0;
   }
-  .reg-bar-label { font-size:10.5px; font-weight:700; color:#334155; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1; }
-  .reg-bar-total { font-family:'JetBrains Mono',monospace; font-size:11.5px; font-weight:800; color:#0f172a; text-align:right; min-width:16px; flex-shrink:0; }
-  .reg-bar-pct {
-    font-family:'JetBrains Mono',monospace; font-size:9.5px; font-weight:700; color:#64748b;
-    background:#f1f5f9; border-radius:4px; padding:1px 6px; flex-shrink:0;
+  .reg-item-label { font-size:14px; font-weight:800; color:#1e293b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1; }
+  .reg-item-stats-line { display:flex; align-items:center; gap:7px; padding-left:29px; font-size:11.5px; color:#64748b; font-weight:600; }
+  .reg-item-sep { color:#cbd5e1; }
+  .reg-item-pct-full { color:#475569; }
+  .reg-item-net-line {
+    font-size:13px; font-weight:800; font-family:'JetBrains Mono',monospace;
+    padding-left:29px;
   }
-  .reg-bar-mid { display:flex; align-items:center; gap:10px; }
-  .reg-bar-track { flex:1; background:#eef1f5; border-radius:6px; height:10px; overflow:hidden; box-shadow: inset 0 1px 3px rgba(15,23,42,0.08); }
-  .reg-bar-fill { height:100%; border-radius:6px; background: linear-gradient(90deg,#94a3b8,#64748b); transition:width .3s; }
-  .reg-bar-breakdown { display:flex; align-items:center; gap:5px; flex-shrink:0; }
-  .reg-bar-badge {
-    display:flex; align-items:center; gap:3px; font-family:'JetBrains Mono',monospace;
-    font-size:9.5px; font-weight:800; padding:2px 6px; border-radius:5px; line-height:1.3;
+  .reg-item-level-line { display:flex; align-items:center; gap:6px; padding-left:29px; flex-wrap:wrap; }
+  .reg-item-level-badge {
+    display:flex; align-items:center; gap:5px; font-size:11px; font-weight:800;
+    padding:4px 10px; border-radius:7px; line-height:1.3;
   }
-  .reg-bar-badge i { font-size:9px; }
-  .reg-bar-badge--critico { background:#fef2f2; color:#dc2626; }
-  .reg-bar-badge--urgente { background:#fff7ed; color:#ea580c; }
-  .reg-bar-net { font-size:9.5px; font-family:'JetBrains Mono',monospace; font-weight:600; }
-  .reg-bar-net strong { font-weight:800; }
-  .reg-bar-legend { display:flex; gap:18px; margin-top:6px; font-size:10.5px; color:#64748b; }
-  .reg-bar-legend span { display:flex; align-items:center; gap:6px; }
-  .reg-bar-legend i { font-size:12px; }
+  .reg-item-level-badge i { font-size:12px; }
+  .reg-item-level-badge--critico { background:#fef2f2; color:#dc2626; }
+  .reg-item-level-badge--urgente { background:#fff7ed; color:#ea580c; }
 
   /* ── Blocos globais Crítico / Urgente ── */
   .level-block { border-radius: 12px; overflow: hidden; margin-bottom: 26px; border: 1px solid #e2e8f0; }
@@ -691,7 +630,7 @@ function _buildCriticidadeShell(d, opts) {
   .central-cell { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #475569; font-weight: 500; }
   .mat-name { font-weight: 700; font-size: 13px; color: #1e293b; }
   .var-cell { font-size: 12px; white-space:nowrap; }
-  .var-cell i, .cat-header-net i, .reg-bar-net i, .exec-headline-value i { font-size: 0.9em; margin-right: 3px; vertical-align: -1px; }
+  .var-cell i, .cat-header-net i, .reg-item-net-line i, .exec-headline-value i { font-size: 0.9em; margin-right: 3px; vertical-align: -1px; }
   .var-kg { font-size:11px; font-weight:500; }
   .empty-cell { text-align:center; padding:18px; color:#94a3b8; font-style:italic; font-size:12px; }
 
@@ -721,8 +660,7 @@ function _buildCriticidadeShell(d, opts) {
     .exec-summary { page-break-inside: avoid; box-shadow:none !important; }
     .exec-headline { -webkit-print-color-adjust: exact; color-adjust: exact; box-shadow:none !important; }
     .exec-block { box-shadow:none !important; }
-    .donut-svg-wrap { filter:none !important; }
-    .reg-bar-badge--critico, .reg-bar-badge--urgente, .donut-legend-dot, .reg-cat-dot, .reg-cat-block {
+    .reg-item-level-badge--critico, .reg-item-level-badge--urgente, .reg-cat-dot, .reg-cat-block {
       -webkit-print-color-adjust: exact; color-adjust: exact;
     }
   }
