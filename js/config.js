@@ -528,12 +528,33 @@ async function removerFilial(pagedIndex) {
   if (!rec) return;
   const idx = state.filiais.indexOf(rec);
   if (idx < 0) return;
-  state.filiais.splice(idx, 1);
-  invalidateFilialLookup();
-  await persistStateNow();
-  renderFiliais();
-  updateImportPrereqUI();
-  toast('Filial removida', 'error');
+
+  if (!confirm(`Excluir a central "${rec.origem}"?`)) return;
+
+  const snapshot = { ...rec };
+  const originalIndex = idx;
+
+  confirmarComUndo({
+    message: `Central "${rec.origem}" excluída`,
+    action: () => {
+      const curIdx = state.filiais.indexOf(rec);
+      if (curIdx >= 0) state.filiais.splice(curIdx, 1);
+      invalidateFilialLookup();
+      persist();
+      renderFiliais();
+      updateImportPrereqUI();
+    },
+    undo: () => {
+      const insertAt = originalIndex >= 0 && originalIndex <= state.filiais.length
+        ? originalIndex
+        : 0;
+      state.filiais.splice(insertAt, 0, snapshot);
+      invalidateFilialLookup();
+      persist();
+      renderFiliais();
+      updateImportPrereqUI();
+    },
+  });
 }
 
 async function limparFiliais() {
