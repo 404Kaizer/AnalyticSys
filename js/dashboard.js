@@ -4244,7 +4244,6 @@ const pageRenderers = {
   lancamentos: () => renderLancamentos(),
   sap: () => renderSAP(),
   producao: () => renderProducao(),
-  inventario: () => renderInventario(),
   importar: () => renderImports(),
   configuracoes: () => { renderConfigs(); renderAcoesRelatorio(); loadHealthConfigInputs(); updateParamGerais(); },
   filiais: () => renderFiliais(),

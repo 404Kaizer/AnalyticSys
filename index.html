@@ -547,9 +547,6 @@
           <button class="dg-tab-btn" id="dg-tab-btn-custos" onclick="dgSwitchTab('custos')">
             <i class="ti ti-coin"></i> Custos
           </button>
-          <button class="dg-tab-btn" id="dg-tab-btn-inventario" onclick="dgSwitchTab('inventario')">
-            <i class="ti ti-clipboard-check"></i> Inventário
-          </button>
           <button class="dg-tab-btn" id="dg-tab-btn-corte" onclick="dgSwitchTab('corte')">
             <i class="ti ti-truck"></i> Controle de Corte
           </button>
@@ -681,272 +678,6 @@
           </div>
 
         </div><!-- /dg-pane-custos -->
-
-        <!-- ABA: Inventário -->
-        <div class="dg-tab-pane" id="dg-pane-inventario">
-<!-- ══ TOOLBAR igual ao dashboard analítico ══ -->
-        <div class="analitico-toolbar" id="inv-toolbar" style="margin-bottom:18px">
-          <div class="analitico-period" style="align-items:center;gap:10px;flex-wrap:wrap">
-            <!-- Cal picker igual ao dashboard -->
-            <div class="cal-picker-wrap" id="inv-cal-wrap">
-              <button class="cal-picker-trigger" id="inv-cal-trigger" onclick="toggleCalPicker('inv')" type="button">
-                <i class="ti ti-calendar-event"></i>
-                <span id="inv-cal-label">Selecionar período</span>
-                <i class="ti ti-chevron-down cal-chev" id="inv-cal-chev"></i>
-              </button>
-              <input type="hidden" id="inv-dt-ini">
-              <input type="hidden" id="inv-dt-fim">
-              <div class="cal-picker-dropdown" id="inv-cal-dropdown">
-                <div class="cal-picker-inner" id="inv-cal-inner" data-pfx="inv"></div>
-              </div>
-            </div>
-            <!-- Quick chips -->
-            <div class="cal-quick-chips">
-              <button class="cal-chip" onclick="calQuickHoje('inv')" type="button">Hoje</button>
-              <button class="cal-chip" onclick="calQuickMesAtual('inv')" type="button">Mês atual</button>
-              <button class="cal-chip" onclick="calQuickMesAnterior('inv')" type="button">Mês anterior</button>
-            </div>
-          </div>
-          <div class="analitico-actions">
-            <button class="btn btn-primary" onclick="invGerar()">
-              <i class="ti ti-calculator"></i> <span>Gerar Inventário</span>
-            </button>
-            <button class="btn" onclick="invExportar()" title="Exportar CSV">
-              <i class="ti ti-file-spreadsheet"></i>
-            </button>
-            <button class="btn" onclick="invAbrirAlertasPendentes()" id="inv-btn-alertas" title="Itens sem justificativa" style="position:relative">
-              <i class="ti ti-alert-triangle"></i>
-              <span id="inv-alertas-count" style="background:var(--amber);color:#000;border-radius:20px;padding:0 6px;font-size:10px;font-weight:700;min-width:18px;text-align:center">0</span>
-              Pendentes
-            </button>
-          </div>
-        </div>
-
-        <!-- ══ EMPTY STATE ══ -->
-        <div id="inv-empty-state" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 20px;gap:12px;color:var(--text3)">
-          <i class="ti ti-clipboard-check" style="font-size:48px;opacity:0.35"></i>
-          <p style="font-size:13px;text-align:center">Selecione um período e clique em <strong style="color:var(--text2)">Gerar Inventário</strong> para<br>calcular o fechamento de estoque.</p>
-        </div>
-
-        <!-- ══ CONTEÚDO (visível após Gerar) ══ -->
-        <div id="inv-content" style="display:none">
-        <div class="inv-kpi-grid" id="inv-kpis">
-          <div class="inv-kpi-card" id="inv-kpi-ini">
-            <div class="inv-kpi-icon" style="background:var(--accent-dim);color:var(--accent)"><i class="ti ti-archive"></i></div>
-            <div class="inv-kpi-body">
-              <div class="inv-kpi-label">Est. Inicial</div>
-              <div class="inv-kpi-value" id="inv-kpi-ini-v">—</div>
-              <div class="inv-kpi-unit">kg</div>
-              <div id="inv-kpi-ini-missing"></div>
-            </div>
-          </div>
-          <div class="inv-kpi-card" id="inv-kpi-ent">
-            <div class="inv-kpi-icon" style="background:var(--green-bg);color:var(--green)"><i class="ti ti-arrow-bar-to-down"></i></div>
-            <div class="inv-kpi-body">
-              <div class="inv-kpi-label">Entradas</div>
-              <div class="inv-kpi-value" id="inv-kpi-ent-v">—</div>
-              <div class="inv-kpi-unit">kg</div>
-            </div>
-          </div>
-          <div class="inv-kpi-card" id="inv-kpi-sai">
-            <div class="inv-kpi-icon" style="background:var(--red-bg);color:var(--red)"><i class="ti ti-arrow-bar-up"></i></div>
-            <div class="inv-kpi-body">
-              <div class="inv-kpi-label">Saídas</div>
-              <div class="inv-kpi-value" id="inv-kpi-sai-v">—</div>
-              <div class="inv-kpi-unit">kg</div>
-            </div>
-          </div>
-          <div class="inv-kpi-card" id="inv-kpi-fin">
-            <div class="inv-kpi-icon" style="background:var(--purple-bg);color:var(--purple)"><i class="ti ti-box"></i></div>
-            <div class="inv-kpi-body">
-              <div class="inv-kpi-label">Est. Final</div>
-              <div class="inv-kpi-value" id="inv-kpi-fin-v">—</div>
-              <div class="inv-kpi-unit">kg</div>
-              <div id="inv-kpi-fin-missing"></div>
-            </div>
-          </div>
-          <div class="inv-kpi-card" id="inv-kpi-var">
-            <div class="inv-kpi-icon" style="background:var(--teal-bg);color:var(--teal)"><i class="ti ti-trending-up"></i></div>
-            <div class="inv-kpi-body">
-              <div class="inv-kpi-label">Variação</div>
-              <div class="inv-kpi-value" id="inv-kpi-var-v">—</div>
-              <div class="inv-kpi-unit">kg bruto</div>
-              <div class="inv-kpi-adj" id="inv-kpi-var-adj-wrap" style="display:none">
-                <span class="inv-kpi-adj-label">Ajustado (c/ justif.)</span>
-                <span class="inv-kpi-adj-value" id="inv-kpi-var-adj-v">—</span>
-              </div>
-            </div>
-          </div>
-          <div class="inv-kpi-card" id="inv-kpi-cst">
-            <div class="inv-kpi-icon" style="background:var(--amber-bg);color:var(--amber)"><i class="ti ti-coin"></i></div>
-            <div class="inv-kpi-body">
-              <div class="inv-kpi-label">Custo Var.</div>
-              <div class="inv-kpi-value" id="inv-kpi-cst-v">—</div>
-              <div class="inv-kpi-unit">R$ bruto</div>
-              <div class="inv-kpi-adj" id="inv-kpi-cst-adj-wrap" style="display:none">
-                <span class="inv-kpi-adj-label">Ajustado (c/ justif.)</span>
-                <span class="inv-kpi-adj-value" id="inv-kpi-cst-adj-v">—</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Alertas pendentes -->
-        <div id="inv-alertas-panel" style="display:none;background:var(--amber-bg);border:1px solid var(--amber-border);border-radius:var(--radius);padding:12px 16px;margin-bottom:14px">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-            <span style="font-size:12px;font-weight:700;color:var(--amber)"><i class="ti ti-alert-triangle"></i> Itens com variação sem justificativa</span>
-            <button onclick="invAbrirAlertasPendentes()" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:13px"><i class="ti ti-x"></i></button>
-          </div>
-          <div id="inv-alertas-list" style="font-size:11px;color:var(--text2);max-height:120px;overflow-y:auto"></div>
-        </div>
-
-        <!-- ══ FILTROS — mesmo padrão da Visão Micro do Dashboard Analítico ══ -->
-        <div class="micro-filter-bar" id="inv-filter-bar">
-          <!-- Filtro Regional -->
-          <div class="micro-filter-group" id="imfg-regional">
-            <button class="micro-filter-trigger" id="imft-regional" onclick="invToggleMicroFilter('regional')">
-              <i class="ti ti-users-group"></i>
-              <span id="imft-regional-label">Regional</span>
-              <i class="ti ti-chevron-down micro-filter-chev" id="imfc-regional"></i>
-            </button>
-            <div class="micro-filter-dropdown" id="imfd-regional">
-              <div class="micro-filter-search-wrap">
-                <i class="ti ti-search"></i>
-                <input class="micro-filter-search" id="imfs-regional" type="text" placeholder="Buscar regional…" oninput="invFilterMicroOptions('regional',this.value)">
-              </div>
-              <div class="micro-filter-options" id="imfo-regional"></div>
-              <div class="micro-filter-footer">
-                <button class="btn btn-filter-clear" onclick="invClearMicroFilter('regional')"><i class="ti ti-filter-off"></i> Limpar</button>
-                <button class="btn" onclick="invCancelMicroFilter('regional')"><i class="ti ti-x"></i> Cancelar</button>
-                <button class="btn btn-primary" onclick="invApplyMicroFilter('regional')"><i class="ti ti-check"></i> Aplicar</button>
-              </div>
-            </div>
-          </div>
-
-          <!-- Filtro Central -->
-          <div class="micro-filter-group" id="imfg-central">
-            <button class="micro-filter-trigger" id="imft-central" onclick="invToggleMicroFilter('central')">
-              <i class="ti ti-building-warehouse"></i>
-              <span id="imft-central-label">Central</span>
-              <i class="ti ti-chevron-down micro-filter-chev" id="imfc-central"></i>
-            </button>
-            <div class="micro-filter-dropdown" id="imfd-central">
-              <div class="micro-filter-search-wrap">
-                <i class="ti ti-search"></i>
-                <input class="micro-filter-search" id="imfs-central" type="text" placeholder="Buscar central…" oninput="invFilterMicroOptions('central',this.value)">
-              </div>
-              <div class="micro-filter-options" id="imfo-central"></div>
-              <div class="micro-filter-footer">
-                <button class="btn btn-filter-clear" onclick="invClearMicroFilter('central')"><i class="ti ti-filter-off"></i> Limpar</button>
-                <button class="btn" onclick="invCancelMicroFilter('central')"><i class="ti ti-x"></i> Cancelar</button>
-                <button class="btn btn-primary" onclick="invApplyMicroFilter('central')"><i class="ti ti-check"></i> Aplicar</button>
-              </div>
-            </div>
-          </div>
-
-          <!-- Filtro Categoria -->
-          <div class="micro-filter-group" id="imfg-categoria">
-            <button class="micro-filter-trigger" id="imft-categoria" onclick="invToggleMicroFilter('categoria')">
-              <i class="ti ti-tag"></i>
-              <span id="imft-categoria-label">Categoria</span>
-              <i class="ti ti-chevron-down micro-filter-chev" id="imfc-categoria"></i>
-            </button>
-            <div class="micro-filter-dropdown" id="imfd-categoria">
-              <div class="micro-filter-search-wrap">
-                <i class="ti ti-search"></i>
-                <input class="micro-filter-search" id="imfs-categoria" type="text" placeholder="Buscar categoria…" oninput="invFilterMicroOptions('categoria',this.value)">
-              </div>
-              <div class="micro-filter-options" id="imfo-categoria"></div>
-              <div class="micro-filter-footer">
-                <button class="btn btn-filter-clear" onclick="invClearMicroFilter('categoria')"><i class="ti ti-filter-off"></i> Limpar</button>
-                <button class="btn" onclick="invCancelMicroFilter('categoria')"><i class="ti ti-x"></i> Cancelar</button>
-                <button class="btn btn-primary" onclick="invApplyMicroFilter('categoria')"><i class="ti ti-check"></i> Aplicar</button>
-              </div>
-            </div>
-          </div>
-
-          <!-- Filtro Material -->
-          <div class="micro-filter-group" id="imfg-material">
-            <button class="micro-filter-trigger" id="imft-material" onclick="invToggleMicroFilter('material')">
-              <i class="ti ti-box"></i>
-              <span id="imft-material-label">Material</span>
-              <i class="ti ti-chevron-down micro-filter-chev" id="imfc-material"></i>
-            </button>
-            <div class="micro-filter-dropdown" id="imfd-material">
-              <div class="micro-filter-search-wrap">
-                <i class="ti ti-search"></i>
-                <input class="micro-filter-search" id="imfs-material" type="text" placeholder="Buscar material…" oninput="invFilterMicroOptions('material',this.value)">
-              </div>
-              <div class="micro-filter-options" id="imfo-material"></div>
-              <div class="micro-filter-footer">
-                <button class="btn btn-filter-clear" onclick="invClearMicroFilter('material')"><i class="ti ti-filter-off"></i> Limpar</button>
-                <button class="btn" onclick="invCancelMicroFilter('material')"><i class="ti ti-x"></i> Cancelar</button>
-                <button class="btn btn-primary" onclick="invApplyMicroFilter('material')"><i class="ti ti-check"></i> Aplicar</button>
-              </div>
-            </div>
-          </div>
-
-          <div class="micro-filter-divider"></div>
-
-          <!-- Toggle: ocultar variação 0,00 -->
-          <button class="micro-filter-trigger" id="imft-varzero" onclick="invToggleHideVarZero()" title="Oculta linhas com Variação igual a 0,00 kg">
-            <i class="ti ti-eye-off"></i>
-            <span id="imft-varzero-label">Ocultar Variação 0</span>
-          </button>
-
-          <!-- Toggle: só Est. Inicial ausente -->
-          <button class="micro-filter-trigger" id="imft-iniausente" onclick="invToggleOnlyIniAusente()" title="Mostra só linhas com Est. Inicial AUSENTE">
-            <i class="ti ti-alert-triangle"></i>
-            <span id="imft-iniausente-label">Só Est. Inicial Ausente</span>
-          </button>
-
-          <!-- Toggle: só Est. Final ausente -->
-          <button class="micro-filter-trigger" id="imft-fimausente" onclick="invToggleOnlyFimAusente()" title="Mostra só linhas com Est. Final AUSENTE">
-            <i class="ti ti-alert-triangle"></i>
-            <span id="imft-fimausente-label">Só Est. Final Ausente</span>
-          </button>
-
-          <!-- Limpar filtros (aparece só quando há algo ativo) -->
-          <button class="btn micro-filter-clear" id="inv-filter-clear-btn" onclick="invClearAllMicroFilters()" style="display:none">
-            <i class="ti ti-filter-off"></i> Limpar Filtros
-          </button>
-
-          <div style="margin-left:auto;font-size:11px;color:var(--text3)" id="inv-count-label"></div>
-        </div>
-
-
-        <!-- ══ TABELA — redesenhada com sort ══ -->
-        <div class="table-card inv-table-wrap">
-          <table class="inv-data-table" id="inv-table">
-            <thead>
-              <tr>
-                <th data-col="regional" data-align="left" onclick="invSortBy('regional')">Regional <i class="ti ti-selector inv-sort-icon"></i></th>
-                <th data-col="central" data-align="left" onclick="invSortBy('central')">Filial <i class="ti ti-selector inv-sort-icon"></i></th>
-                <th data-col="material" data-align="left" onclick="invSortBy('material')">Material <i class="ti ti-selector inv-sort-icon"></i></th>
-                <th data-col="categoria" data-align="left" onclick="invSortBy('categoria')">Cat. <i class="ti ti-selector inv-sort-icon"></i></th>
-                <th data-col="estoqueIni" data-align="right" onclick="invSortBy('estoqueIni')" title="Est. Inicial (1º lançamento)">Est. Inicial<br><span style="font-size:9px;font-weight:400;opacity:.6;text-transform:none;letter-spacing:0">(1º lanç.)</span> <i class="ti ti-selector inv-sort-icon"></i></th>
-                <th data-col="entradasKg" data-align="right" onclick="invSortBy('entradasKg')" title="Entradas (por código SAP)">Entradas<br><span style="font-size:9px;font-weight:400;opacity:.6;text-transform:none;letter-spacing:0">(por código)</span> <i class="ti ti-selector inv-sort-icon"></i></th>
-                <th data-col="saidasKg" data-align="right" onclick="invSortBy('saidasKg')" title="Saídas (por código SAP)">Saídas<br><span style="font-size:9px;font-weight:400;opacity:.6;text-transform:none;letter-spacing:0">(por código)</span> <i class="ti ti-selector inv-sort-icon"></i></th>
-                <th data-col="estoqueFimReal" data-align="right" onclick="invSortBy('estoqueFimReal')" title="Est. Final (últ. lançamento)">Est. Final<br><span style="font-size:9px;font-weight:400;opacity:.6;text-transform:none;letter-spacing:0">(últ. lanç.)</span> <i class="ti ti-selector inv-sort-icon"></i></th>
-                <th data-col="estTeor" data-align="right" onclick="invSortBy('estTeor')" title="Est. Teórico = Ini + Ent − Saí">Est. Teórico<br><span style="font-size:9px;font-weight:400;opacity:.6;text-transform:none;letter-spacing:0">(ini+ent−saí)</span> <i class="ti ti-selector inv-sort-icon"></i></th>
-                <th data-col="varKg" data-align="right" onclick="invSortBy('varKg')" title="Variação = Real − Teórico">Variação<br><span style="font-size:9px;font-weight:400;opacity:.6;text-transform:none;letter-spacing:0">(real − teór.)</span> <i class="ti ti-selector inv-sort-icon"></i></th>
-                <th data-col="saldoJust" data-align="right" onclick="invSortBy('saldoJust')">Saldo Just. <i class="ti ti-selector inv-sort-icon"></i></th>
-                <th data-col="varAdj" data-align="right" onclick="invSortBy('varAdj')">Var.Ajust. <i class="ti ti-selector inv-sort-icon"></i></th>
-                <th data-col="custoMedio" data-align="right" onclick="invSortBy('custoMedio')" title="Custo médio (Saídas → fallback SAP)">Custo Médio<br><span style="font-size:9px;font-weight:400;opacity:.6;text-transform:none;letter-spacing:0">(saídas · R$/kg)</span> <i class="ti ti-selector inv-sort-icon"></i></th>
-                <th data-col="custo" data-align="right" onclick="invSortBy('custo')" title="Custo da variação ajustada">Custo Var.<br><span style="font-size:9px;font-weight:400;opacity:.6;text-transform:none;letter-spacing:0">(var. · R$/kg)</span> <i class="ti ti-selector inv-sort-icon"></i></th>
-                <th data-align="center" style="cursor:default">Justificativa</th>
-              </tr>
-            </thead>
-            <tbody id="inv-tbody"></tbody>
-          </table>
-          <div id="inv-empty" style="display:none;padding:60px;text-align:center;color:var(--text3)">
-            <i class="ti ti-clipboard-off" style="font-size:40px;display:block;margin-bottom:10px;opacity:0.4"></i>
-            <div style="font-size:13px;font-weight:600;margin-bottom:4px">Nenhum dado encontrado</div>
-            <div style="font-size:12px">Ajuste o período e clique em <strong style="color:var(--text2)">Gerar Inventário</strong>.</div>
-          </div>
-        </div>
-        </div><!-- /inv-content -->
-        </div><!-- /dg-pane-inventario -->
 
         <!-- ABA: Controle de Corte -->
         <div class="dg-tab-pane" id="dg-pane-corte">
@@ -1287,7 +1018,15 @@
 
           
           <!-- ═══ MACRO ═══ -->
-          <div class="section-title">Visão Macro — Centrais e Materiais em risco</div>
+          <div class="section-title">
+            <span>Visão Macro — Centrais e Materiais em risco</span>
+            <button class="an-macro-toggle-btn" id="an-macro-toggle-btn" onclick="anToggleMacro()" title="Recolher/expandir a Visão Macro">
+              <i class="ti ti-chevron-up" id="an-macro-toggle-icon"></i>
+              <span id="an-macro-toggle-label">Recolher</span>
+            </button>
+          </div>
+
+          <div id="an-macro-body">
 
           <div class="macro-focus-grid" style="margin-bottom:16px">
 
@@ -1420,8 +1159,21 @@
             </div>
           </div>
 
+          </div><!-- /an-macro-body -->
+
+          <!-- ═══ ALTERNÂNCIA DE VISÃO ═══ -->
+          <div class="an-view-switch">
+            <button class="an-view-btn active" id="an-view-btn-micro" onclick="anSwitchView('micro')">
+              <i class="ti ti-chart-dots-2"></i> Visão Micro
+            </button>
+            <button class="an-view-btn" id="an-view-btn-inventario" onclick="anSwitchView('inventario')">
+              <i class="ti ti-clipboard-check"></i> Visão Inventário
+            </button>
+            <span class="an-view-caption" id="an-view-caption">Saúde e criticidade por filial e material</span>
+          </div>
+
           <!-- ═══ MICRO ═══ -->
-          <div class="section-title">Visão Micro — Por Filial e Material</div>
+          <div class="an-view-pane active" id="an-view-pane-micro">
 
           <!-- Barra de filtros da Visão Micro -->
           <div class="micro-filter-bar" id="micro-filter-bar" style="display:none">
@@ -1610,6 +1362,243 @@
           </div>
 
           <div id="an-micro-container"></div>
+
+          </div><!-- /an-view-pane-micro -->
+
+          <!-- ═══ VISÃO INVENTÁRIO ═══ -->
+          <div class="an-view-pane" id="an-view-pane-inventario" style="display:none">
+
+        <!-- ══ EMPTY STATE ══ -->
+        <div id="inv-empty-state" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 20px;gap:12px;color:var(--text3)">
+          <i class="ti ti-clipboard-check" style="font-size:48px;opacity:0.35"></i>
+          <p style="font-size:13px;text-align:center">Selecione um período e clique em <strong style="color:var(--text2)">Gerar Inventário</strong> para<br>calcular o fechamento de estoque.</p>
+        </div>
+
+        <!-- ══ CONTEÚDO (visível após Gerar) ══ -->
+        <div id="inv-content" style="display:none">
+        <div class="inv-kpi-grid" id="inv-kpis">
+          <div class="inv-kpi-card" id="inv-kpi-ini">
+            <div class="inv-kpi-icon" style="background:var(--accent-dim);color:var(--accent)"><i class="ti ti-archive"></i></div>
+            <div class="inv-kpi-body">
+              <div class="inv-kpi-label">Est. Inicial</div>
+              <div class="inv-kpi-value" id="inv-kpi-ini-v">—</div>
+              <div class="inv-kpi-unit">kg</div>
+              <div id="inv-kpi-ini-missing"></div>
+            </div>
+          </div>
+          <div class="inv-kpi-card" id="inv-kpi-ent">
+            <div class="inv-kpi-icon" style="background:var(--green-bg);color:var(--green)"><i class="ti ti-arrow-bar-to-down"></i></div>
+            <div class="inv-kpi-body">
+              <div class="inv-kpi-label">Entradas</div>
+              <div class="inv-kpi-value" id="inv-kpi-ent-v">—</div>
+              <div class="inv-kpi-unit">kg</div>
+            </div>
+          </div>
+          <div class="inv-kpi-card" id="inv-kpi-sai">
+            <div class="inv-kpi-icon" style="background:var(--red-bg);color:var(--red)"><i class="ti ti-arrow-bar-up"></i></div>
+            <div class="inv-kpi-body">
+              <div class="inv-kpi-label">Saídas</div>
+              <div class="inv-kpi-value" id="inv-kpi-sai-v">—</div>
+              <div class="inv-kpi-unit">kg</div>
+            </div>
+          </div>
+          <div class="inv-kpi-card" id="inv-kpi-fin">
+            <div class="inv-kpi-icon" style="background:var(--purple-bg);color:var(--purple)"><i class="ti ti-box"></i></div>
+            <div class="inv-kpi-body">
+              <div class="inv-kpi-label">Est. Final</div>
+              <div class="inv-kpi-value" id="inv-kpi-fin-v">—</div>
+              <div class="inv-kpi-unit">kg</div>
+              <div id="inv-kpi-fin-missing"></div>
+            </div>
+          </div>
+          <div class="inv-kpi-card" id="inv-kpi-var">
+            <div class="inv-kpi-icon" style="background:var(--teal-bg);color:var(--teal)"><i class="ti ti-trending-up"></i></div>
+            <div class="inv-kpi-body">
+              <div class="inv-kpi-label">Variação</div>
+              <div class="inv-kpi-value" id="inv-kpi-var-v">—</div>
+              <div class="inv-kpi-unit">kg bruto</div>
+              <div class="inv-kpi-adj" id="inv-kpi-var-adj-wrap" style="display:none">
+                <span class="inv-kpi-adj-label">Ajustado (c/ justif.)</span>
+                <span class="inv-kpi-adj-value" id="inv-kpi-var-adj-v">—</span>
+              </div>
+            </div>
+          </div>
+          <div class="inv-kpi-card" id="inv-kpi-cst">
+            <div class="inv-kpi-icon" style="background:var(--amber-bg);color:var(--amber)"><i class="ti ti-coin"></i></div>
+            <div class="inv-kpi-body">
+              <div class="inv-kpi-label">Custo Var.</div>
+              <div class="inv-kpi-value" id="inv-kpi-cst-v">—</div>
+              <div class="inv-kpi-unit">R$ bruto</div>
+              <div class="inv-kpi-adj" id="inv-kpi-cst-adj-wrap" style="display:none">
+                <span class="inv-kpi-adj-label">Ajustado (c/ justif.)</span>
+                <span class="inv-kpi-adj-value" id="inv-kpi-cst-adj-v">—</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ══ FILTROS — mesmo padrão da Visão Micro do Dashboard Analítico ══ -->
+        <div class="micro-filter-bar" id="inv-filter-bar">
+          <!-- Filtro Regional -->
+          <div class="micro-filter-group" id="imfg-regional">
+            <button class="micro-filter-trigger" id="imft-regional" onclick="invToggleMicroFilter('regional')">
+              <i class="ti ti-users-group"></i>
+              <span id="imft-regional-label">Regional</span>
+              <i class="ti ti-chevron-down micro-filter-chev" id="imfc-regional"></i>
+            </button>
+            <div class="micro-filter-dropdown" id="imfd-regional">
+              <div class="micro-filter-search-wrap">
+                <i class="ti ti-search"></i>
+                <input class="micro-filter-search" id="imfs-regional" type="text" placeholder="Buscar regional…" oninput="invFilterMicroOptions('regional',this.value)">
+              </div>
+              <div class="micro-filter-options" id="imfo-regional"></div>
+              <div class="micro-filter-footer">
+                <button class="btn btn-filter-clear" onclick="invClearMicroFilter('regional')"><i class="ti ti-filter-off"></i> Limpar</button>
+                <button class="btn" onclick="invCancelMicroFilter('regional')"><i class="ti ti-x"></i> Cancelar</button>
+                <button class="btn btn-primary" onclick="invApplyMicroFilter('regional')"><i class="ti ti-check"></i> Aplicar</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Filtro Central -->
+          <div class="micro-filter-group" id="imfg-central">
+            <button class="micro-filter-trigger" id="imft-central" onclick="invToggleMicroFilter('central')">
+              <i class="ti ti-building-warehouse"></i>
+              <span id="imft-central-label">Central</span>
+              <i class="ti ti-chevron-down micro-filter-chev" id="imfc-central"></i>
+            </button>
+            <div class="micro-filter-dropdown" id="imfd-central">
+              <div class="micro-filter-search-wrap">
+                <i class="ti ti-search"></i>
+                <input class="micro-filter-search" id="imfs-central" type="text" placeholder="Buscar central…" oninput="invFilterMicroOptions('central',this.value)">
+              </div>
+              <div class="micro-filter-options" id="imfo-central"></div>
+              <div class="micro-filter-footer">
+                <button class="btn btn-filter-clear" onclick="invClearMicroFilter('central')"><i class="ti ti-filter-off"></i> Limpar</button>
+                <button class="btn" onclick="invCancelMicroFilter('central')"><i class="ti ti-x"></i> Cancelar</button>
+                <button class="btn btn-primary" onclick="invApplyMicroFilter('central')"><i class="ti ti-check"></i> Aplicar</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Filtro Categoria -->
+          <div class="micro-filter-group" id="imfg-categoria">
+            <button class="micro-filter-trigger" id="imft-categoria" onclick="invToggleMicroFilter('categoria')">
+              <i class="ti ti-tag"></i>
+              <span id="imft-categoria-label">Categoria</span>
+              <i class="ti ti-chevron-down micro-filter-chev" id="imfc-categoria"></i>
+            </button>
+            <div class="micro-filter-dropdown" id="imfd-categoria">
+              <div class="micro-filter-search-wrap">
+                <i class="ti ti-search"></i>
+                <input class="micro-filter-search" id="imfs-categoria" type="text" placeholder="Buscar categoria…" oninput="invFilterMicroOptions('categoria',this.value)">
+              </div>
+              <div class="micro-filter-options" id="imfo-categoria"></div>
+              <div class="micro-filter-footer">
+                <button class="btn btn-filter-clear" onclick="invClearMicroFilter('categoria')"><i class="ti ti-filter-off"></i> Limpar</button>
+                <button class="btn" onclick="invCancelMicroFilter('categoria')"><i class="ti ti-x"></i> Cancelar</button>
+                <button class="btn btn-primary" onclick="invApplyMicroFilter('categoria')"><i class="ti ti-check"></i> Aplicar</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Filtro Material -->
+          <div class="micro-filter-group" id="imfg-material">
+            <button class="micro-filter-trigger" id="imft-material" onclick="invToggleMicroFilter('material')">
+              <i class="ti ti-box"></i>
+              <span id="imft-material-label">Material</span>
+              <i class="ti ti-chevron-down micro-filter-chev" id="imfc-material"></i>
+            </button>
+            <div class="micro-filter-dropdown" id="imfd-material">
+              <div class="micro-filter-search-wrap">
+                <i class="ti ti-search"></i>
+                <input class="micro-filter-search" id="imfs-material" type="text" placeholder="Buscar material…" oninput="invFilterMicroOptions('material',this.value)">
+              </div>
+              <div class="micro-filter-options" id="imfo-material"></div>
+              <div class="micro-filter-footer">
+                <button class="btn btn-filter-clear" onclick="invClearMicroFilter('material')"><i class="ti ti-filter-off"></i> Limpar</button>
+                <button class="btn" onclick="invCancelMicroFilter('material')"><i class="ti ti-x"></i> Cancelar</button>
+                <button class="btn btn-primary" onclick="invApplyMicroFilter('material')"><i class="ti ti-check"></i> Aplicar</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="micro-filter-divider"></div>
+
+          <!-- Toggle: ocultar variação 0,00 -->
+          <button class="micro-filter-trigger" id="imft-varzero" onclick="invToggleHideVarZero()" title="Oculta linhas com Variação igual a 0,00 kg">
+            <i class="ti ti-eye-off"></i>
+            <span id="imft-varzero-label">Ocultar Variação 0</span>
+          </button>
+
+          <!-- Toggle: só Est. Inicial ausente -->
+          <button class="micro-filter-trigger" id="imft-iniausente" onclick="invToggleOnlyIniAusente()" title="Mostra só linhas com Est. Inicial AUSENTE">
+            <i class="ti ti-alert-triangle"></i>
+            <span id="imft-iniausente-label">Só Est. Inicial Ausente</span>
+          </button>
+
+          <!-- Toggle: só Est. Final ausente -->
+          <button class="micro-filter-trigger" id="imft-fimausente" onclick="invToggleOnlyFimAusente()" title="Mostra só linhas com Est. Final AUSENTE">
+            <i class="ti ti-alert-triangle"></i>
+            <span id="imft-fimausente-label">Só Est. Final Ausente</span>
+          </button>
+
+          <!-- Toggle: só itens com variação sem justificativa (era o botão "Pendentes") -->
+          <button class="micro-filter-trigger" id="imft-pendentes" onclick="invToggleOnlyPendentes()" title="Mostra só itens com variação e sem justificativa">
+            <i class="ti ti-alert-triangle" style="color:var(--amber)"></i>
+            <span id="imft-pendentes-label">Só Pendentes</span>
+            <span id="inv-alertas-count" style="background:var(--amber);color:#000;border-radius:20px;padding:0 6px;font-size:10px;font-weight:700;min-width:18px;text-align:center;margin-left:2px">0</span>
+          </button>
+
+          <!-- Limpar filtros (aparece só quando há algo ativo) -->
+          <button class="btn micro-filter-clear" id="inv-filter-clear-btn" onclick="invClearAllMicroFilters()" style="display:none">
+            <i class="ti ti-filter-off"></i> Limpar Filtros
+          </button>
+
+          <div style="margin-left:auto;font-size:11px;color:var(--text3)" id="inv-count-label"></div>
+        </div>
+
+
+        <!-- ══ TABELA — redesenhada com sort ══ -->
+        <div class="table-card inv-table-wrap">
+          <div class="table-header">
+            <span class="table-title"><i class="ti ti-list-details"></i> Fechamento por Central e Material</span>
+            <div class="table-toolbar">
+              <button class="btn" onclick="invExportar()">
+                <i class="ti ti-file-spreadsheet"></i> Exportar CSV
+              </button>
+            </div>
+          </div>
+          <table class="inv-data-table" id="inv-table">
+            <thead>
+              <tr>
+                <th data-col="regional" data-align="left" onclick="invSortBy('regional')">Regional <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="central" data-align="left" onclick="invSortBy('central')">Filial <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="material" data-align="left" onclick="invSortBy('material')">Material <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="categoria" data-align="left" onclick="invSortBy('categoria')">Cat. <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="estoqueIni" data-align="right" onclick="invSortBy('estoqueIni')" title="Est. Inicial (1º lançamento)">Est. Inicial<br><span style="font-size:9px;font-weight:400;opacity:.6;text-transform:none;letter-spacing:0">(1º lanç.)</span> <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="entradasKg" data-align="right" onclick="invSortBy('entradasKg')" title="Entradas (por código SAP)">Entradas<br><span style="font-size:9px;font-weight:400;opacity:.6;text-transform:none;letter-spacing:0">(por código)</span> <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="saidasKg" data-align="right" onclick="invSortBy('saidasKg')" title="Saídas (por código SAP)">Saídas<br><span style="font-size:9px;font-weight:400;opacity:.6;text-transform:none;letter-spacing:0">(por código)</span> <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="estoqueFimReal" data-align="right" onclick="invSortBy('estoqueFimReal')" title="Est. Final (últ. lançamento)">Est. Final<br><span style="font-size:9px;font-weight:400;opacity:.6;text-transform:none;letter-spacing:0">(últ. lanç.)</span> <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="estTeor" data-align="right" onclick="invSortBy('estTeor')" title="Est. Teórico = Ini + Ent − Saí">Est. Teórico<br><span style="font-size:9px;font-weight:400;opacity:.6;text-transform:none;letter-spacing:0">(ini+ent−saí)</span> <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="varKg" data-align="right" onclick="invSortBy('varKg')" title="Variação = Real − Teórico">Variação<br><span style="font-size:9px;font-weight:400;opacity:.6;text-transform:none;letter-spacing:0">(real − teór.)</span> <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="saldoJust" data-align="right" onclick="invSortBy('saldoJust')">Saldo Just. <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="varAdj" data-align="right" onclick="invSortBy('varAdj')">Var.Ajust. <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="custoMedio" data-align="right" onclick="invSortBy('custoMedio')" title="Custo médio (Saídas → fallback SAP)">Custo Médio<br><span style="font-size:9px;font-weight:400;opacity:.6;text-transform:none;letter-spacing:0">(saídas · R$/kg)</span> <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="custo" data-align="right" onclick="invSortBy('custo')" title="Custo da variação ajustada">Custo Var.<br><span style="font-size:9px;font-weight:400;opacity:.6;text-transform:none;letter-spacing:0">(var. · R$/kg)</span> <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-align="center" style="cursor:default">Justificativa</th>
+              </tr>
+            </thead>
+            <tbody id="inv-tbody"></tbody>
+          </table>
+          <div id="inv-empty" style="display:none;padding:60px;text-align:center;color:var(--text3)">
+            <i class="ti ti-clipboard-off" style="font-size:40px;display:block;margin-bottom:10px;opacity:0.4"></i>
+            <div style="font-size:13px;font-weight:600;margin-bottom:4px">Nenhum dado encontrado</div>
+            <div style="font-size:12px">Ajuste o período e clique em <strong style="color:var(--text2)">Gerar Inventário</strong>.</div>
+          </div>
+        </div>
+        </div><!-- /inv-content -->
+        </div><!-- /an-view-pane-inventario -->
 
         </div>
       </div>

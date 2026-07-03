@@ -27,10 +27,11 @@ function _buildNavCache() {
 const _pageScrollPos = {};
 
 function navigate(page) {
-  // Inventário foi movido para aba do Dashboard Gerencial
+  // Inventário foi movido para uma "Visão" dentro do Dashboard Analítico
+  // (alterna com a Visão Micro, compartilhando o mesmo período/toolbar).
   if (page === 'inventario') {
-    navigate('dashboard');
-    setTimeout(() => { if (typeof dgSwitchTab === 'function') dgSwitchTab('inventario'); }, 50);
+    navigate('analitico');
+    setTimeout(() => { if (typeof anSwitchView === 'function') anSwitchView('inventario'); }, 50);
     return;
   }
   // FAB will update itself via setTimeout after DOM settles

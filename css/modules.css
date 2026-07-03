@@ -8579,6 +8579,71 @@ td:has(.lanc-central-edit:focus) {
 .dg-tab-pane { display: none; }
 .dg-tab-pane.active { display: block; }
 
+/* ── Dashboard Analítico — alternância Visão Micro / Visão Inventário ── */
+.an-view-switch {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-bottom: 1px solid var(--border2);
+  margin: 4px 0 18px;
+}
+.an-view-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-family: var(--mono);
+  font-weight: 500;
+  padding: 8px 16px;
+  border-radius: var(--radius) var(--radius) 0 0;
+  border: none;
+  background: transparent;
+  color: var(--text3);
+  cursor: pointer;
+  transition: all .15s;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.an-view-btn:hover { color: var(--text2); background: var(--bg3); }
+.an-view-btn.active { color: var(--accent); border-bottom-color: var(--accent); background: var(--accent-dim); }
+.an-view-btn i { font-size: 13px; }
+.an-view-pane { display: block; }
+.an-view-caption {
+  font-size: 11px;
+  font-family: var(--mono);
+  letter-spacing: 0.04em;
+  color: var(--text3);
+  margin-left: 14px;
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Botão de recolher/expandir a Visão Macro do Analítico */
+.an-macro-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  font-family: var(--mono);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 5px 10px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border2);
+  background: var(--bg3);
+  color: var(--text2);
+  cursor: pointer;
+  transition: all .15s;
+  flex-shrink: 0;
+}
+.an-macro-toggle-btn:hover { color: var(--text); background: var(--bg4); }
+.an-macro-toggle-btn i { font-size: 12px; transition: transform .2s; }
+.an-macro-toggle-btn.collapsed i { transform: rotate(180deg); }
+
 /* ── Giro & Cobertura por Central ── */
 .dg-giro-central-grid {
   background: var(--bg2);

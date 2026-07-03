@@ -35,7 +35,12 @@
     // Combinam em AND com os demais filtros — se ambos ligados, mostra só
     // linhas ausentes nos dois.
     onlyIniAusente: false,
-    onlyFimAusente: false
+    onlyFimAusente: false,
+    // Toggle simples: mostra só itens com variação (>0,01 kg) que ainda não
+    // têm justificativa operacional nem fiscal. Substitui o antigo botão
+    // "Pendentes" (que abria um painel separado) — agora filtra a própria
+    // tabela, igual aos demais toggles.
+    onlyPendentes: false
   };
 
 
@@ -160,8 +165,10 @@
     _invFilter.hideVarZero = false;
     _invFilter.onlyIniAusente = false;
     _invFilter.onlyFimAusente = false;
+    _invFilter.onlyPendentes = false;
     _invSyncVarZeroBtn();
     _invSyncAusenteBtns();
+    _invSyncPendentesBtn();
     _invSyncClearBtn();
     invFiltrar();
     invAtualizarKpis();
@@ -195,6 +202,18 @@
     invAtualizarAlertas();
   };
 
+  // Toggle "Só Pendentes" — mostra só itens com variação sem justificativa.
+  // Antes era um botão que abria um painel à parte; agora é mais um filtro
+  // da tabela, no mesmo padrão dos demais toggles simples.
+  window.invToggleOnlyPendentes = function() {
+    _invFilter.onlyPendentes = !_invFilter.onlyPendentes;
+    _invSyncPendentesBtn();
+    _invSyncClearBtn();
+    invFiltrar();
+    invAtualizarKpis();
+    invAtualizarAlertas();
+  };
+
   function _invSyncVarZeroBtn() {
     const btn = document.getElementById('imft-varzero');
     if (!btn) return;
@@ -206,6 +225,11 @@
     if (iniBtn) iniBtn.classList.toggle('active', _invFilter.onlyIniAusente);
     const fimBtn = document.getElementById('imft-fimausente');
     if (fimBtn) fimBtn.classList.toggle('active', _invFilter.onlyFimAusente);
+  }
+
+  function _invSyncPendentesBtn() {
+    const btn = document.getElementById('imft-pendentes');
+    if (btn) btn.classList.toggle('active', _invFilter.onlyPendentes);
   }
 
   function _invSyncTriggerLabel(key) {
@@ -230,7 +254,7 @@
   function _invSyncClearBtn() {
     const btn = document.getElementById('inv-filter-clear-btn');
     if (!btn) return;
-    const hasAny = _invFilter.applied.regional.size || _invFilter.applied.central.size || _invFilter.applied.categoria.size || _invFilter.applied.material.size || _invFilter.hideVarZero || _invFilter.onlyIniAusente || _invFilter.onlyFimAusente;
+    const hasAny = _invFilter.applied.regional.size || _invFilter.applied.central.size || _invFilter.applied.categoria.size || _invFilter.applied.material.size || _invFilter.hideVarZero || _invFilter.onlyIniAusente || _invFilter.onlyFimAusente || _invFilter.onlyPendentes;
     btn.style.display = hasAny ? '' : 'none';
   }
 
@@ -253,6 +277,8 @@
     invRenderTabela();
   };
 
+  // Nota: o Inventário agora compartilha o calendário único do Dashboard
+  // Analítico (prefixo 'an'), então estes atalhos operam sobre ele.
   window.invQuickSemana = function() {
     const hoje = new Date();
     const dow = hoje.getDay();
@@ -261,25 +287,25 @@
     const fim = new Date(ini); fim.setDate(ini.getDate() + 6);
     const toISO = d => d.toISOString().substring(0,10);
     // Update hidden inputs directly (cal-picker reads from them for display)
-    const iniEl = document.getElementById('inv-dt-ini');
-    const fimEl = document.getElementById('inv-dt-fim');
+    const iniEl = document.getElementById('an-dt-ini');
+    const fimEl = document.getElementById('an-dt-fim');
     if (iniEl) iniEl.value = toISO(ini);
     if (fimEl) fimEl.value = toISO(fim);
     // Update label on trigger button
-    const label = document.getElementById('inv-cal-label');
+    const label = document.getElementById('an-cal-label');
     if (label) {
       const fmtD = d => d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});
       label.textContent = fmtD(ini) + ' — ' + fmtD(fim);
     }
-    const trigger = document.getElementById('inv-cal-trigger');
+    const trigger = document.getElementById('an-cal-trigger');
     if (trigger) trigger.classList.add('has-value');
-    document.querySelectorAll('[onclick^="calQuick"][onclick*="\'inv\'"]').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('[onclick^="calQuick"][onclick*="\'an\'"]').forEach(b=>b.classList.remove('active'));
     document.getElementById('inv-chip-semana')?.classList.add('active');
   };
 
   window.invSetPeriodoType = function() {
     const tipo = document.getElementById('inv-tipo-periodo')?.value;
-    if (tipo === 'mensal') { if(window.calQuickMesAtual) window.calQuickMesAtual('inv'); }
+    if (tipo === 'mensal') { if(window.calQuickMesAtual) window.calQuickMesAtual('an'); }
     else { window.invQuickSemana(); }
   };
 
@@ -353,9 +379,11 @@
   }
 
   window.invGerar = function() {
-    const iniVal = document.getElementById('inv-dt-ini')?.value;
-    const fimVal = document.getElementById('inv-dt-fim')?.value;
-    if (!iniVal || !fimVal) { toast('Defina o período antes de gerar.', 'error'); return; }
+    // Período compartilhado com a Visão Micro do Dashboard Analítico
+    // (seletor único no topo da página — ver anSwitchView em analitico.js).
+    const iniVal = document.getElementById('an-dt-ini')?.value;
+    const fimVal = document.getElementById('an-dt-fim')?.value;
+    if (!iniVal || !fimVal) { toast('Selecione um período no topo da página antes de gerar.', 'error'); return; }
 
     const h = window._inv_helpers;
     if (!h) { toast('Sistema não iniciado. Aguarde e tente novamente.', 'error'); return; }
@@ -501,24 +529,36 @@
     toast('Inventário gerado: ' + invRows.length + ' itens.', 'success');
   };
 
-  // ── Filtrar ──────────────────────────────────────────────
-  window.invFiltrar = function() {
+  // Testa os filtros "base" (Regional/Central/Categoria/Material + toggles
+  // de zero/ausência), SEM considerar "Só Pendentes" — usado tanto para
+  // montar a tabela quanto para contar o badge de pendentes de forma
+  // consistente (o badge não deve "zerar" a própria contagem quando o
+  // toggle de pendentes está ligado).
+  function _invMatchesBaseFilters(r) {
     const regSet = _invFilter.applied.regional;
     const cenSet = _invFilter.applied.central;
     const catSet = _invFilter.applied.categoria;
     const matSet = _invFilter.applied.material;
-    const hideZero = _invFilter.hideVarZero;
-    const onlyIniAusente = _invFilter.onlyIniAusente;
-    const onlyFimAusente = _invFilter.onlyFimAusente;
+    if (regSet.size && !regSet.has(r.regional)) return false;
+    if (cenSet.size && !cenSet.has(r.central))  return false;
+    if (catSet.size && !catSet.has(r.categoria)) return false;
+    if (matSet.size && !matSet.has(r.material))  return false;
+    if (_invFilter.hideVarZero && Math.abs(r.varKg) < 0.005) return false;
+    if (_invFilter.onlyIniAusente && !r.estoqueIniMissing) return false;
+    if (_invFilter.onlyFimAusente && !r.estoqueFimMissing) return false;
+    return true;
+  }
+
+  function _invIsPendente(r) {
+    const j = invJustificativas[r.k] || {};
+    return Math.abs(r.varKg) > 0.01 && !(j.op || j.fiscal);
+  }
+
+  // ── Filtrar ──────────────────────────────────────────────
+  window.invFiltrar = function() {
     invFiltered = invRows.filter(r => {
-      if (regSet.size && !regSet.has(r.regional)) return false;
-      if (cenSet.size && !cenSet.has(r.central))  return false;
-      if (catSet.size && !catSet.has(r.categoria)) return false;
-      if (matSet.size && !matSet.has(r.material))  return false;
-      // Mesma tolerância usada na célula da tabela pra considerar "zero" (diff-zero)
-      if (hideZero && Math.abs(r.varKg) < 0.005) return false;
-      if (onlyIniAusente && !r.estoqueIniMissing) return false;
-      if (onlyFimAusente && !r.estoqueFimMissing) return false;
+      if (!_invMatchesBaseFilters(r)) return false;
+      if (_invFilter.onlyPendentes && !_invIsPendente(r)) return false;
       return true;
     });
     // apply current sort
@@ -716,23 +756,17 @@
     if (cstAdjVal && cstTemAdj) cstAdjVal.textContent = fmtR(totalCstAdj);
   }
 
-  // ── Alertas pendentes ─────────────────────────────────────
+  // ── Alertas pendentes (badge do filtro "Só Pendentes") ────
   function invAtualizarAlertas() {
-    // Usa invFiltered (mesmo recorte exibido na tabela) — consistente com o
-    // botão "Justificar" que só existe nas linhas visíveis.
-    const pendentes = invFiltered.filter(r => Math.abs(r.varKg) > 0.01 && !(invJustificativas[r.k]?.op || invJustificativas[r.k]?.fiscal));
-    const btn = document.getElementById('inv-alertas-count');
-    if (btn) btn.textContent = pendentes.length;
-    const btnWrap = document.getElementById('inv-btn-alertas');
-    if (btnWrap) btnWrap.style.color = pendentes.length ? 'var(--amber)' : '';
-    const list = document.getElementById('inv-alertas-list');
-    if (list) list.innerHTML = pendentes.slice(0,30).map(r=>`<div style="padding:2px 0;border-bottom:1px solid var(--border)">${r.central} · ${r.material} · var. <strong>${fmt(r.varKg)} kg</strong> · custo <strong>${fmtR(r.custo)}</strong></div>`).join('') + (pendentes.length>30?`<div style="padding:4px 0;font-style:italic">... e mais ${pendentes.length-30} itens</div>`:'');
+    // Conta sob os filtros "base" (Regional/Central/Categoria/Material +
+    // toggles de zero/ausência), mas SEM aplicar o próprio "Só Pendentes"
+    // — assim o número no badge não vira sempre igual ao da tabela quando
+    // o filtro está ligado; ele mostra quantos itens pendentes existem
+    // dentro do recorte atual, ligado ou não.
+    const pendentes = invRows.filter(r => _invMatchesBaseFilters(r) && _invIsPendente(r));
+    const badge = document.getElementById('inv-alertas-count');
+    if (badge) badge.textContent = pendentes.length;
   }
-
-  window.invAbrirAlertasPendentes = function() {
-    const panel = document.getElementById('inv-alertas-panel');
-    if (panel) panel.style.display = panel.style.display === 'none' ? '' : 'none';
-  };
 
   // ── Modal de justificativa ───────────────────────────────
   window.invAbrirJust = function(k) {
@@ -817,22 +851,59 @@
   };
 
   // ── Exportar CSV ─────────────────────────────────────────
+  // Revisão: o header antigo tinha uma coluna "Cod" sem dado correspondente
+  // no array de valores, desalinhando TODAS as colunas seguintes (Material
+  // saía embaixo de "Cod", Categoria embaixo de "Material", etc.). Também
+  // exportava números com ponto decimal e cauda de ponto-flutuante (ex.:
+  // 1234.5600000000004), incoerente com o delimitador ';' de CSV pt-BR, e
+  // exportava Est. Inicial/Final AUSENTE como "0", indistinguível de um
+  // estoque realmente zerado.
   window.invExportar = function() {
     if (!invRows.length) { toast('Gere o inventário antes de exportar.', 'error'); return; }
-    const header = ['Regional','Filial','Cod','Material','Categoria','Est.Ini.(kg)','Entradas(kg)','Saídas(kg)','Est.Teórico(kg)','Est.Real(kg)','Var.(kg)','Var.(%)','Custo Médio','Custo Variação (R$)','Saldo Justificado','Var.Ajustada','Just.Operacional','Just.Fiscal'];
+
+    // Formata número no padrão pt-BR (vírgula decimal, 2 casas fixas) —
+    // consistente com o resto do app (fmtKg/money) e com o delimitador ';'.
+    const _n = (v, dec = 2) => (Number(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+
+    const header = ['Regional','Filial','Material','Categoria','Est.Ini.(kg)','Est.Ini. Ausente?','Entradas(kg)','Saídas(kg)','Est.Teórico(kg)','Est.Real(kg)','Est.Final Ausente?','Var.(kg)','Var.(%)','Custo Médio (R$/kg)','Custo Variação (R$)','Saldo Justificado (kg)','Var.Ajustada (kg)','Just.Operacional','Just.Fiscal'];
     const rows = invRows.map(r => {
-      const j = invJustificativas[r.k]||{};
-      return [r.regional, r.central, r.material, r.categoria, r.estoqueIni, r.entradasKg, r.saidasKg, r.estTeor, r.estoqueFimReal, r.varKg, r.varPct.toFixed(2), r.custoMedio, r.custo.toFixed(2), j.saldo||'', r.varAdj, j.op||'', j.fiscal||''].map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(';');
+      const j = invJustificativas[r.k] || {};
+      return [
+        r.regional,
+        r.central,
+        r.material,
+        r.categoria,
+        r.estoqueIniMissing ? '' : _n(r.estoqueIni),
+        r.estoqueIniMissing ? 'SIM' : 'NÃO',
+        _n(r.entradasKg),
+        _n(r.saidasKg),
+        _n(r.estTeor),
+        r.estoqueFimMissing ? '' : _n(r.estoqueFimReal),
+        r.estoqueFimMissing ? 'SIM' : 'NÃO',
+        _n(r.varKg),
+        _n(r.varPct),
+        _n(r.custoMedio),
+        _n(r.custo),
+        j.saldo ? _n(parseFloat(j.saldo)) : '',
+        _n(r.varAdj),
+        j.op || '',
+        j.fiscal || ''
+      ].map(v => '"' + String(v).replace(/"/g, '""') + '"').join(';');
     });
     const csv = [header.join(';'), ...rows].join('\n');
     const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8'});
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
-    a.href = url; a.download = 'inventario_' + new Date().toISOString().substring(0,10) + '.csv';
+    // Nome do arquivo reflete o PERÍODO ANALISADO (não a data do export) —
+    // essencial pra rastreabilidade quando o inventário é de um mês passado.
+    const iniVal = document.getElementById('an-dt-ini')?.value;
+    const fimVal = document.getElementById('an-dt-fim')?.value;
+    const sufixoPeriodo = (iniVal && fimVal) ? (iniVal + '_a_' + fimVal) : new Date().toISOString().substring(0,10);
+    a.href = url; a.download = 'inventario_' + sufixoPeriodo + '.csv';
     a.click(); URL.revokeObjectURL(url);
   };
 
-  // ── renderInventario (chamado pelo navigate) ─────────────
+  // ── renderInventario (chamado por anSwitchView ao entrar na Visão Inventário) ──
   let invIniciado = false;
   window.renderInventario = function() {
     if (!invIniciado) {

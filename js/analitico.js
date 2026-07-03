@@ -1,3 +1,61 @@
+// ═══════════════════════════════════════════════════════════
+// ALTERNÂNCIA DE VISÃO — Visão Micro ↔ Visão Inventário
+// (o Inventário passou a viver como uma segunda "lente" dentro do
+// Dashboard Analítico, reaproveitando o mesmo período/toolbar)
+// ═══════════════════════════════════════════════════════════
+function anSwitchView(view) {
+  const btnMicro  = document.getElementById('an-view-btn-micro');
+  const btnInv    = document.getElementById('an-view-btn-inventario');
+  const paneMicro = document.getElementById('an-view-pane-micro');
+  const paneInv   = document.getElementById('an-view-pane-inventario');
+  const caption   = document.getElementById('an-view-caption');
+  if (!btnMicro || !btnInv || !paneMicro || !paneInv) return;
+
+  const isInv = view === 'inventario';
+  btnMicro.classList.toggle('active', !isInv);
+  btnInv.classList.toggle('active', isInv);
+  paneMicro.style.display = isInv ? 'none' : '';
+  paneInv.style.display   = isInv ? '' : 'none';
+
+  // Legenda ao lado das abas substitui o título repetido que existia em
+  // cada visão (ex.: "Visão Micro — Por Filial e Material"), já que a
+  // própria aba selecionada acima já indica isso.
+  if (caption) {
+    caption.textContent = isInv
+      ? 'Fechamento de estoque por central e material'
+      : 'Saúde e criticidade por filial e material';
+  }
+
+  // Ao entrar na Visão Inventário, gera automaticamente se já houver um
+  // período selecionado (mesmo seletor do topo da página) e ainda não
+  // houver inventário calculado para ele.
+  if (isInv) {
+    if (typeof renderInventario === 'function') renderInventario();
+    const iniVal = document.getElementById('an-dt-ini')?.value;
+    const fimVal = document.getElementById('an-dt-fim')?.value;
+    const emptyState = document.getElementById('inv-empty-state');
+    const stillEmpty = emptyState && emptyState.style.display !== 'none';
+    if (iniVal && fimVal && stillEmpty && typeof invGerar === 'function') {
+      invGerar();
+    }
+  }
+}
+window.anSwitchView = anSwitchView;
+
+// Recolhe/expande a Visão Macro (donuts + rankings de criticidade) — útil
+// para reduzir a densidade da tela quando o foco é a Visão Inventário.
+function anToggleMacro() {
+  const body  = document.getElementById('an-macro-body');
+  const btn   = document.getElementById('an-macro-toggle-btn');
+  const label = document.getElementById('an-macro-toggle-label');
+  if (!body) return;
+  const collapsing = body.style.display !== 'none';
+  body.style.display = collapsing ? 'none' : '';
+  btn?.classList.toggle('collapsed', collapsing);
+  if (label) label.textContent = collapsing ? 'Expandir' : 'Recolher';
+}
+window.anToggleMacro = anToggleMacro;
+
 function rodarAnalitico() {
   const iniStr = document.getElementById('an-dt-ini')?.value;
   const fimStr = document.getElementById('an-dt-fim')?.value;
@@ -16,6 +74,7 @@ function rodarAnalitico() {
     { id: 'an-calc',     icon: 'ti-calculator',         label: 'Calculando variações por central' },
     { id: 'an-saude',    icon: 'ti-heartbeat',           label: 'Calculando saúde e criticidade' },
     { id: 'an-render',   icon: 'ti-layout',              label: 'Renderizando resultados' },
+    { id: 'an-inv',      icon: 'ti-clipboard-check',     label: 'Recalculando fechamento de inventário' },
   ]);
   requestAnimationFrame(() => setTimeout(() => _rodarAnaliticoCore(dtIni, dtFim), 0));
 }
@@ -1563,6 +1622,15 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
 
   if (typeof _lstepSet === 'function') { _lstepSet('an-saude', 'done'); _lstepSet('an-render', 'running'); _lbarSet(85); }
 
+  // Atualizar sempre recalcula as duas visões (Micro e Inventário), já que
+  // compartilham o mesmo período — feito ANTES de esconder o overlay de
+  // loading, para que ele cubra as duas etapas.
+  if (typeof _lstepSet === 'function') { _lstepSet('an-render', 'done'); _lstepSet('an-inv', 'running'); _lbarSet(95); }
+  if (typeof invGerar === 'function') {
+    invGerar();
+  }
+  if (typeof _lstepSet === 'function') { _lstepSet('an-inv', 'done'); }
+
   if (typeof hideLoadingOverlay === 'function') hideLoadingOverlay('Análise concluída');
   if (typeof loadingHideSteps === 'function') loadingHideSteps();
   updateClock();
@@ -2745,7 +2813,7 @@ function setupKeyboardShortcuts() {
     if (isNavUp || isNavDown) {
       if (document.getElementById('modal-search-global')?.classList.contains('open')) return;
       e.preventDefault();
-      const pages  = ['dashboard','analitico','entradas','saidas','lancamentos','sap','producao','inventario','ocorrencias','importar','configuracoes'];
+      const pages  = ['dashboard','analitico','entradas','saidas','lancamentos','sap','producao','ocorrencias','importar','configuracoes'];
       const current = document.querySelector('.page.active')?.id?.replace('page-','') || pages[0];
       const idx     = pages.indexOf(current);
       const next    = isNavDown

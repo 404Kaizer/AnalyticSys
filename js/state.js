@@ -157,8 +157,7 @@ const pageTitleMap = {
   lancamentos: { title: 'Lançamentos', sub: 'saldo real por material e central' },
   sap: { title: 'Movimentações SAP', sub: 'extrato consolidado de todas as movimentações' },
   producao: { title: 'Produção', sub: 'produção consolidada por central' },
-  analitico: { title: 'Dashboard Analítico', sub: 'análise de estoque por período e filial' },
-  inventario: { title: 'Inventário', sub: 'fechamento semanal e mensal de estoque por usina' },
+  analitico: { title: 'Dashboard Analítico', sub: 'análise de estoque por período, filial e fechamento de inventário' },
   importar: { title: 'Importar Dados', sub: 'importe arquivos .xlsx ou .csv para cada módulo' },
   configuracoes: { title: 'Configurações', sub: 'parâmetros e informações de referência do sistema' },
   ocorrencias: { title: 'Ocorrências', sub: 'solicitações abertas e gestão de ocorrências por central' }
