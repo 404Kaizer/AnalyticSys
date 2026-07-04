@@ -1569,6 +1569,7 @@
               </button>
             </div>
           </div>
+          <div class="inv-table-scroll">
           <table class="inv-data-table" id="inv-table">
             <thead>
               <tr>
@@ -1576,16 +1577,16 @@
                 <th data-col="central" data-align="left" onclick="invSortBy('central')">Filial <i class="ti ti-selector inv-sort-icon"></i></th>
                 <th data-col="material" data-align="left" onclick="invSortBy('material')">Material <i class="ti ti-selector inv-sort-icon"></i></th>
                 <th data-col="categoria" data-align="left" onclick="invSortBy('categoria')">Cat. <i class="ti ti-selector inv-sort-icon"></i></th>
-                <th data-col="estoqueIni" data-align="right" onclick="invSortBy('estoqueIni')" title="Est. Inicial (1º lançamento)">Est. Inicial<br><span style="font-size:9px;font-weight:400;opacity:.6;text-transform:none;letter-spacing:0">(1º lanç.)</span> <i class="ti ti-selector inv-sort-icon"></i></th>
-                <th data-col="entradasKg" data-align="right" onclick="invSortBy('entradasKg')" title="Entradas (por código SAP)">Entradas<br><span style="font-size:9px;font-weight:400;opacity:.6;text-transform:none;letter-spacing:0">(por código)</span> <i class="ti ti-selector inv-sort-icon"></i></th>
-                <th data-col="saidasKg" data-align="right" onclick="invSortBy('saidasKg')" title="Saídas (por código SAP)">Saídas<br><span style="font-size:9px;font-weight:400;opacity:.6;text-transform:none;letter-spacing:0">(por código)</span> <i class="ti ti-selector inv-sort-icon"></i></th>
-                <th data-col="estoqueFimReal" data-align="right" onclick="invSortBy('estoqueFimReal')" title="Est. Final (últ. lançamento)">Est. Final<br><span style="font-size:9px;font-weight:400;opacity:.6;text-transform:none;letter-spacing:0">(últ. lanç.)</span> <i class="ti ti-selector inv-sort-icon"></i></th>
-                <th data-col="estTeor" data-align="right" onclick="invSortBy('estTeor')" title="Est. Teórico = Ini + Ent − Saí">Est. Teórico<br><span style="font-size:9px;font-weight:400;opacity:.6;text-transform:none;letter-spacing:0">(ini+ent−saí)</span> <i class="ti ti-selector inv-sort-icon"></i></th>
-                <th data-col="varKg" data-align="right" onclick="invSortBy('varKg')" title="Variação = Real − Teórico">Variação<br><span style="font-size:9px;font-weight:400;opacity:.6;text-transform:none;letter-spacing:0">(real − teór.)</span> <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="estoqueIni" data-align="right" onclick="invSortBy('estoqueIni')" title="Est. Inicial (1º lançamento)">Est. Inicial <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="entradasKg" data-align="right" onclick="invSortBy('entradasKg')" title="Entradas (por código SAP)">Entradas <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="saidasKg" data-align="right" onclick="invSortBy('saidasKg')" title="Saídas (por código SAP)">Saídas <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="estoqueFimReal" data-align="right" onclick="invSortBy('estoqueFimReal')" title="Est. Final (últ. lançamento)">Est. Final <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="estTeor" data-align="right" onclick="invSortBy('estTeor')" title="Est. Teórico = Ini + Ent − Saí">Est. Teórico <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="varKg" data-align="right" onclick="invSortBy('varKg')" title="Variação = Real − Teórico">Variação <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="custo" data-align="right" onclick="invSortBy('custo')" title="Custo da variação ajustada">Custo Var. <i class="ti ti-selector inv-sort-icon"></i></th>
                 <th data-col="saldoJust" data-align="right" onclick="invSortBy('saldoJust')">Saldo Just. <i class="ti ti-selector inv-sort-icon"></i></th>
                 <th data-col="varAdj" data-align="right" onclick="invSortBy('varAdj')">Var.Ajust. <i class="ti ti-selector inv-sort-icon"></i></th>
-                <th data-col="custoMedio" data-align="right" onclick="invSortBy('custoMedio')" title="Custo médio (Saídas → fallback SAP)">Custo Médio<br><span style="font-size:9px;font-weight:400;opacity:.6;text-transform:none;letter-spacing:0">(saídas · R$/kg)</span> <i class="ti ti-selector inv-sort-icon"></i></th>
-                <th data-col="custo" data-align="right" onclick="invSortBy('custo')" title="Custo da variação ajustada">Custo Var.<br><span style="font-size:9px;font-weight:400;opacity:.6;text-transform:none;letter-spacing:0">(var. · R$/kg)</span> <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="custoMedio" data-align="right" onclick="invSortBy('custoMedio')" title="Custo médio (Saídas → fallback SAP)">Custo Médio <i class="ti ti-selector inv-sort-icon"></i></th>
                 <th data-align="center" style="cursor:default">Justificativa</th>
               </tr>
             </thead>
@@ -1596,6 +1597,7 @@
             <div style="font-size:13px;font-weight:600;margin-bottom:4px">Nenhum dado encontrado</div>
             <div style="font-size:12px">Ajuste o período e clique em <strong style="color:var(--text2)">Gerar Inventário</strong>.</div>
           </div>
+          </div><!-- /inv-table-scroll -->
         </div>
         </div><!-- /inv-content -->
         </div><!-- /an-view-pane-inventario -->

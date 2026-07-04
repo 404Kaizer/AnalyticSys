@@ -357,13 +357,23 @@
 .inv-filter-toggle input[type=checkbox] { accent-color: var(--accent); width: 13px; height: 13px; cursor: pointer; }
 
 /* ══ TABLE ══ */
+/* .inv-table-wrap é o table-card inteiro (título + toolbar + tabela).
+   Vira um flex-column: o header do card (título/Exportar) fica com altura
+   natural e fixa fora do scroll; só o miolo (.inv-table-scroll) rola. */
 .inv-table-wrap {
-  overflow: hidden !important;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
-.inv-table-wrap {
-  overflow-x: auto !important;
-  overflow-y: visible;
+/* Contêiner que efetivamente rola — vertical E horizontal — e é o
+   "scrolling ancestor" que o thead sticky (abaixo) usa como referência.
+   Sem isso, position:sticky não tem uma caixa com altura limitada pra
+   grudar, e o cabeçalho "solta" junto com o scroll da página inteira. */
+.inv-table-scroll {
+  overflow: auto;
+  max-height: calc(100vh - 400px);
+  min-height: 340px;
 }
 
 .inv-data-table {
