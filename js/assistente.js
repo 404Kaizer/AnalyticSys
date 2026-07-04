@@ -491,82 +491,180 @@ function _asstIntentConfigPendente() {
 }
 
 // ── Intenções: tabelas brutas (Entradas/Saídas/Lançamentos/SAP/Produção) ─
-// Leem state.* diretamente — nunca dependem de análise rodada, e o
-// filtro de central/material é opcional (mesma resolução com memória
-// de contexto usada no resto do assistente).
-function _asstFiltroBruto(query, records) {
-  const centralRes = _asstResolveCentralCtx(query);
-  const matRes     = _asstResolveMaterialCtx(query);
-  let filtrados = records;
-  if (centralRes.value) filtrados = filtrados.filter(r => r.central === centralRes.value);
-  if (matRes.value)     filtrados = filtrados.filter(r => r.material === matRes.value);
-
-  let nota = '';
-  if (centralRes.fromContext) nota += _asstContextNote('central', centralRes.value);
-  if (matRes.fromContext)     nota += _asstContextNote('material', matRes.value);
-
-  const partes = [];
-  if (centralRes.value) partes.push(`central <b>${escapeHtml(centralRes.value)}</b>`);
-  if (matRes.value)     partes.push(`material <b>${escapeHtml(matRes.value)}</b>`);
-
-  return { filtrados, nota, escopo: partes.join(', ') };
-}
-
-function _asstResumoBruto(records, pesoField, valorField) {
-  return {
-    total: records.length,
-    peso:  records.reduce((s, r) => s + (Number(r[pesoField]) || 0), 0),
-    valor: records.reduce((s, r) => s + (Number(r[valorField]) || 0), 0),
-  };
-}
+// Leem state.* diretamente — nunca dependem de análise rodada. Além do
+// total simples com filtro opcional de central/material, suporta
+// ranking por fornecedor, central ou material (ex.: "fornecedor que
+// mais entrega", "central com mais saídas", "material que mais
+// entra"), inclusive combinando ranking numa dimensão com filtro nas
+// outras (ex.: "fornecedores de CIMENTO CP-II" = ranking por
+// fornecedor + filtro por material). Também lista os últimos registros
+// individuais, não só o agregado — números soltos sem exemplo concreto
+// não ajudam o analista.
+//
+// Entradas é a única tabela sem campo "central" direto (usa
+// centralCompra/centralDestino) — por isso cada tabela declara como
+// acessar central/fornecedor em vez de assumir nomes de campo fixos.
+const _ASST_BRUTO = {
+  entradas: {
+    get: () => state.entradas || [],
+    central: r => r.centralDestino || r.centralCompra || '—',
+    fornecedor: r => r.fornecedor,
+    peso: 'peso', valor: 'valorTotal',
+    singular: 'entrada', plural: 'entradas',
+  },
+  saidas: {
+    get: () => state.saidas || [],
+    central: r => r.central,
+    fornecedor: r => r.fornecedor,
+    peso: 'peso', valor: 'valorTotal',
+    singular: 'saída', plural: 'saídas',
+  },
+  lancamentos: {
+    get: () => state.lancamentos || [],
+    central: r => r.central,
+    fornecedor: r => r.fornecedor,
+    peso: 'peso', valor: 'valorTotal',
+    singular: 'lançamento', plural: 'lançamentos',
+  },
+  sap: {
+    get: () => state.sap || [],
+    central: r => r.central,
+    fornecedor: null, // SAP não tem fornecedor no cadastro
+    peso: 'peso', valor: 'valorTotal',
+    singular: 'movimentação SAP', plural: 'movimentações SAP',
+  },
+};
 
 function _asstFmtMoeda(v) {
   return (v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
-function _asstIntentEntradasConsulta(query) {
-  const { filtrados, nota, escopo } = _asstFiltroBruto(query, state.entradas || []);
-  if (!filtrados.length) return nota + `Nenhuma entrada encontrada${escopo ? ' — ' + escopo : ''}.`;
-  const r = _asstResumoBruto(filtrados, 'peso', 'valorTotal');
-  let html = `<b>${r.total}</b> entrada(s)${escopo ? ' — ' + escopo : ''}.`;
-  html += `<div class="asst-item">Peso total: ${fmtKg(r.peso)}</div>`;
-  html += `<div class="asst-item">Valor total: ${_asstFmtMoeda(r.valor)}</div>`;
-  return nota + html;
+// Detecta se a pergunta pede um ranking (e por qual dimensão) em vez do
+// total simples. "fornecedor" sempre indica ranking por fornecedor (não
+// existe outro uso pra essa palavra aqui); central/material só viram
+// ranking quando combinados com linguagem de "mais/maior/top".
+function _asstBrutoDetectDim(qNorm, temFornecedor) {
+  if (temFornecedor && /FORNECEDOR/.test(qNorm)) return 'fornecedor';
+  const querMais = /\b(MAIS|MAIOR|MAIORES|TOP|RANKING)\b/.test(qNorm);
+  if (querMais && /CENTRAL/.test(qNorm)) return 'central';
+  if (querMais && /MATERIAL/.test(qNorm)) return 'material';
+  return null;
 }
 
-function _asstIntentSaidasConsulta(query) {
-  const { filtrados, nota, escopo } = _asstFiltroBruto(query, state.saidas || []);
-  if (!filtrados.length) return nota + `Nenhuma saída encontrada${escopo ? ' — ' + escopo : ''}.`;
-  const r = _asstResumoBruto(filtrados, 'peso', 'valorTotal');
-  let html = `<b>${r.total}</b> saída(s)${escopo ? ' — ' + escopo : ''}.`;
-  html += `<div class="asst-item">Peso total: ${fmtKg(r.peso)}</div>`;
-  html += `<div class="asst-item">Valor total: ${_asstFmtMoeda(r.valor)}</div>`;
-  return nota + html;
+function _asstBrutoRanking(records, getKey, pesoField, valorField, limite = 8) {
+  const grupos = new Map();
+  records.forEach(r => {
+    const chave = String(getKey(r) || '').trim() || '—';
+    if (!grupos.has(chave)) grupos.set(chave, { total: 0, peso: 0, valor: 0 });
+    const g = grupos.get(chave);
+    g.total += 1;
+    g.peso  += Number(r[pesoField]) || 0;
+    g.valor += Number(r[valorField]) || 0;
+  });
+  return [...grupos.entries()].sort((a, b) => b[1].peso - a[1].peso).slice(0, limite);
 }
 
-function _asstIntentLancamentosConsulta(query) {
-  const { filtrados, nota, escopo } = _asstFiltroBruto(query, state.lancamentos || []);
-  if (!filtrados.length) return nota + `Nenhum lançamento encontrado${escopo ? ' — ' + escopo : ''}.`;
-  const r = _asstResumoBruto(filtrados, 'peso', 'valorTotal');
-  let html = `<b>${r.total}</b> lançamento(s)${escopo ? ' — ' + escopo : ''}.`;
-  html += `<div class="asst-item">Peso total: ${fmtKg(r.peso)}</div>`;
-  html += `<div class="asst-item">Valor total: ${_asstFmtMoeda(r.valor)}</div>`;
-  return nota + html;
+function _asstBrutoRenderRanking(titulo, ranking, unidade) {
+  if (!ranking.length) return `<b>${escapeHtml(titulo)}</b><div class="asst-item">Sem dados.</div>`;
+  let html = `<b>${escapeHtml(titulo)}</b>`;
+  html += ranking.map(([nome, g], idx) =>
+    `<div class="asst-item">${idx + 1}. <b>${escapeHtml(nome)}</b> — ${g.peso.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} ${unidade} · ${g.total} registro(s) · ${_asstFmtMoeda(g.valor)}</div>`
+  ).join('');
+  return html;
 }
 
-function _asstIntentSapConsulta(query) {
-  const { filtrados, nota, escopo } = _asstFiltroBruto(query, state.sap || []);
-  if (!filtrados.length) return nota + `Nenhuma movimentação SAP encontrada${escopo ? ' — ' + escopo : ''}.`;
-  const r = _asstResumoBruto(filtrados, 'peso', 'valorTotal');
-  let html = `<b>${r.total}</b> movimentação(ões) SAP${escopo ? ' — ' + escopo : ''}.`;
-  html += `<div class="asst-item">Peso total: ${fmtKg(r.peso)}</div>`;
-  html += `<div class="asst-item">Valor total: ${_asstFmtMoeda(r.valor)}</div>`;
-  return nota + html;
+function _asstBrutoItemLinha(cfg, r) {
+  const data = r.dtEmissao || r.dtLanc || '—';
+  const doc  = r.nf || r.os || r.documento || '';
+  const forn = cfg.fornecedor ? cfg.fornecedor(r) : null;
+  let linha = `${escapeHtml(data)} · <b>${escapeHtml(cfg.central(r))}</b> · ${escapeHtml(r.material || '—')} — ${fmtKg(r.peso)}`;
+  if (doc)  linha += ` · ${escapeHtml(doc)}`;
+  if (forn && forn !== '—') linha += ` · ${escapeHtml(forn)}`;
+  return `<div class="asst-item">${linha}</div>`;
 }
 
-function _asstIntentProducaoConsulta(query) {
+function _asstIntentBruto(tabela, query) {
+  const cfg = _ASST_BRUTO[tabela];
+  const qNorm = normalizeText(query);
+  const dim = _asstBrutoDetectDim(qNorm, !!cfg.fornecedor);
+  const todos = cfg.get();
+
+  if (dim === 'fornecedor' || dim === 'central') {
+    const matRes = _asstResolveMaterialCtx(query);
+    let regs = todos;
+    if (matRes.value) regs = regs.filter(r => r.material === matRes.value);
+    if (!regs.length) return `Nenhum(a) ${cfg.singular} encontrado(a).`;
+    const nota   = matRes.fromContext ? _asstContextNote('material', matRes.value) : '';
+    const escopo = matRes.value ? ` — material <b>${escapeHtml(matRes.value)}</b>` : '';
+    const getKey = dim === 'fornecedor' ? cfg.fornecedor : cfg.central;
+    const titulo = dim === 'fornecedor' ? `Fornecedores — ${cfg.plural}${escopo}` : `Centrais com mais ${cfg.plural}${escopo}`;
+    return nota + _asstBrutoRenderRanking(titulo, _asstBrutoRanking(regs, getKey, cfg.peso, cfg.valor), 'kg');
+  }
+
+  if (dim === 'material') {
+    const centralRes = _asstResolveCentralCtx(query);
+    let regs = todos;
+    if (centralRes.value) regs = regs.filter(r => cfg.central(r) === centralRes.value);
+    if (!regs.length) return `Nenhum(a) ${cfg.singular} encontrado(a).`;
+    const nota   = centralRes.fromContext ? _asstContextNote('central', centralRes.value) : '';
+    const escopo = centralRes.value ? ` — central <b>${escapeHtml(centralRes.value)}</b>` : '';
+    return nota + _asstBrutoRenderRanking(`Materiais com mais ${cfg.plural}${escopo}`, _asstBrutoRanking(regs, r => r.material, cfg.peso, cfg.valor), 'kg');
+  }
+
+  // Total simples com filtro opcional de central/material + lista dos
+  // últimos registros (sem isso, é só um número solto e genérico).
   const centralRes = _asstResolveCentralCtx(query);
-  let filtrados = state.producao || [];
+  const matRes     = _asstResolveMaterialCtx(query);
+  let regs = todos;
+  if (centralRes.value) regs = regs.filter(r => cfg.central(r) === centralRes.value);
+  if (matRes.value)     regs = regs.filter(r => r.material === matRes.value);
+
+  let nota = '';
+  if (centralRes.fromContext) nota += _asstContextNote('central', centralRes.value);
+  if (matRes.fromContext)     nota += _asstContextNote('material', matRes.value);
+  const partes = [];
+  if (centralRes.value) partes.push(`central <b>${escapeHtml(centralRes.value)}</b>`);
+  if (matRes.value)     partes.push(`material <b>${escapeHtml(matRes.value)}</b>`);
+  const escopo = partes.join(', ');
+
+  if (!regs.length) return nota + `Nenhum(a) ${cfg.singular} encontrado(a)${escopo ? ' — ' + escopo : ''}.`;
+
+  const total = regs.length;
+  const peso  = regs.reduce((s, r) => s + (Number(r[cfg.peso]) || 0), 0);
+  const valor = regs.reduce((s, r) => s + (Number(r[cfg.valor]) || 0), 0);
+
+  let html = `<b>${total}</b> ${total === 1 ? cfg.singular : cfg.plural}${escopo ? ' — ' + escopo : ''}.`;
+  html += `<div class="asst-item">Peso total: ${fmtKg(peso)}</div>`;
+  html += `<div class="asst-item">Valor total: ${_asstFmtMoeda(valor)}</div>`;
+
+  const ordenados = regs.slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  html += `<div class="asst-section-title"><i class="ti ti-list-details"></i> Últimos registros</div>`;
+  html += ordenados.slice(0, 8).map(r => _asstBrutoItemLinha(cfg, r)).join('');
+  if (ordenados.length > 8) html += `<div class="asst-more">+ ${ordenados.length - 8} outro(s)</div>`;
+
+  return nota + html;
+}
+
+function _asstIntentEntradasConsulta(query)    { return _asstIntentBruto('entradas', query); }
+function _asstIntentSaidasConsulta(query)      { return _asstIntentBruto('saidas', query); }
+function _asstIntentLancamentosConsulta(query) { return _asstIntentBruto('lancamentos', query); }
+function _asstIntentSapConsulta(query)         { return _asstIntentBruto('sap', query); }
+
+// Produção tem formato diferente (sem material, sem fornecedor; usa
+// producao/totalVendas em vez de peso/valorTotal) — fica de fora do
+// motor genérico, mas reaproveita o mesmo _asstBrutoRanking.
+function _asstIntentProducaoConsulta(query) {
+  const qNorm = normalizeText(query);
+  const querMais = /\b(MAIS|MAIOR|MAIORES|TOP|RANKING)\b/.test(qNorm);
+  const todos = state.producao || [];
+
+  if (querMais && /CENTRAL/.test(qNorm)) {
+    if (!todos.length) return 'Nenhum registro de produção encontrado.';
+    return _asstBrutoRenderRanking('Centrais com mais produção', _asstBrutoRanking(todos, r => r.central, 'producao', 'totalVendas'), 'm³');
+  }
+
+  const centralRes = _asstResolveCentralCtx(query);
+  let filtrados = todos;
   if (centralRes.value) filtrados = filtrados.filter(r => r.central === centralRes.value);
 
   const nota   = centralRes.fromContext ? _asstContextNote('central', centralRes.value) : '';
@@ -580,6 +678,14 @@ function _asstIntentProducaoConsulta(query) {
   let html = `<b>${filtrados.length}</b> registro(s) de produção${escopo ? ' — ' + escopo : ''}.`;
   html += `<div class="asst-item">Produção total: ${producaoTotal.toLocaleString('pt-BR')} m³</div>`;
   html += `<div class="asst-item">Total de vendas: ${_asstFmtMoeda(vendasTotal)}</div>`;
+
+  const ordenados = filtrados.slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  html += `<div class="asst-section-title"><i class="ti ti-list-details"></i> Últimos registros</div>`;
+  html += ordenados.slice(0, 8).map(r =>
+    `<div class="asst-item">${escapeHtml(r.mes || '—')} · <b>${escapeHtml(r.central)}</b> — ${Number(r.producao || 0).toLocaleString('pt-BR')} m³ · ${_asstFmtMoeda(r.totalVendas)}</div>`
+  ).join('');
+  if (ordenados.length > 8) html += `<div class="asst-more">+ ${ordenados.length - 8} outro(s)</div>`;
+
   return nota + html;
 }
 
