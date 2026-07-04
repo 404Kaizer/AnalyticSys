@@ -243,6 +243,14 @@
               </div>
               <i class="ti ti-chevron-right tools-item-arrow"></i>
             </button>
+            <button class="tools-item" onclick="openTool('assistente'); closeToolsMenu()">
+              <div class="tools-item-icon" style="background:var(--purple-bg);color:var(--purple)"><i class="ti ti-message-chatbot"></i></div>
+              <div class="tools-item-body">
+                <div class="tools-item-label">Assistente</div>
+                <div class="tools-item-sub">Perguntas rápidas sobre a análise atual</div>
+              </div>
+              <i class="ti ti-chevron-right tools-item-arrow"></i>
+            </button>
 
             <div class="tools-dropdown-section-label">Fechamento</div>
             <button class="tools-item" onclick="abrirFechamento('semanal')">
@@ -476,6 +484,33 @@
               </div>
             </div>
 
+          </div>
+        </div>
+
+        <!-- Assistente (popover) -->
+        <div class="tool-popover assistente-popover" id="tool-assistente" style="display:none">
+          <div class="tool-popover-header">
+            <span class="tool-popover-title"><i class="ti ti-message-chatbot"></i> Assistente</span>
+            <div style="display:flex;gap:6px;align-items:center">
+              <button class="tool-popover-close" onclick="asstClearChat()" title="Limpar conversa"><i class="ti ti-trash"></i></button>
+              <button class="tool-popover-close" onclick="closeTool('assistente')"><i class="ti ti-x"></i></button>
+            </div>
+          </div>
+          <div class="asst-chat-body" id="asst-chat-body">
+            <div class="asst-msg asst-msg-bot">
+              Oi! Eu respondo perguntas sobre a última análise rodada no Dashboard Analítico. Experimente:
+              <div class="asst-suggestions">
+                <button class="asst-chip" onclick="asstAskSuggestion(this)">Quais materiais estão críticos?</button>
+                <button class="asst-chip" onclick="asstAskSuggestion(this)">Qual central está pior no período?</button>
+                <button class="asst-chip" onclick="asstAskSuggestion(this)">Quantas ocorrências abertas existem?</button>
+                <button class="asst-chip" onclick="asstAskSuggestion(this)">Resumo geral do período</button>
+                <button class="asst-chip" onclick="asstAskSuggestion(this)">Quais centrais estão sem lançar?</button>
+              </div>
+            </div>
+          </div>
+          <div class="asst-input-row">
+            <input type="text" class="asst-input" id="asst-input" placeholder="Pergunte algo..." onkeydown="if(event.key==='Enter'){asstSend();}">
+            <button class="asst-send-btn" onclick="asstSend()" title="Enviar"><i class="ti ti-send"></i></button>
           </div>
         </div>
 
@@ -1368,10 +1403,27 @@
           <!-- ═══ VISÃO INVENTÁRIO ═══ -->
           <div class="an-view-pane" id="an-view-pane-inventario" style="display:none">
 
+        <!-- ══ SELETOR DE MÊS DO INVENTÁRIO (independente do período da Visão Micro) ══ -->
+        <div class="inv-month-toolbar">
+          <div class="cal-picker-wrap" id="inv-month-wrap">
+            <button class="cal-picker-trigger has-value" id="inv-month-trigger" onclick="invToggleMonthPicker()" type="button">
+              <i class="ti ti-calendar-event"></i>
+              <span id="inv-month-label">Selecionar mês</span>
+              <i class="ti ti-chevron-down cal-chev"></i>
+            </button>
+            <div class="cal-picker-dropdown" id="inv-month-dropdown">
+              <div class="cal-picker-inner" id="inv-month-inner"></div>
+            </div>
+          </div>
+          <button class="btn" onclick="invGerar()" title="Recalcular o inventário do mês selecionado">
+            <i class="ti ti-refresh"></i> Atualizar
+          </button>
+        </div>
+
         <!-- ══ EMPTY STATE ══ -->
         <div id="inv-empty-state" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 20px;gap:12px;color:var(--text3)">
           <i class="ti ti-clipboard-check" style="font-size:48px;opacity:0.35"></i>
-          <p style="font-size:13px;text-align:center">Selecione um período e clique em <strong style="color:var(--text2)">Gerar Inventário</strong> para<br>calcular o fechamento de estoque.</p>
+          <p style="font-size:13px;text-align:center">Selecione o mês do inventário acima para<br>calcular o fechamento de estoque.</p>
         </div>
 
         <!-- ══ CONTEÚDO (visível após Gerar) ══ -->
@@ -3891,6 +3943,7 @@
 </div>
 
 <script src="js/notifications.js"></script>
+<script src="js/assistente.js"></script>
 
 <!-- ══════════════════════════════════════════════════════════
      MODAL BACKUP / RESTAURAR POR MÓDULOS

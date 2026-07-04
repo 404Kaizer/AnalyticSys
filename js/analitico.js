@@ -1,7 +1,8 @@
 // ═══════════════════════════════════════════════════════════
 // ALTERNÂNCIA DE VISÃO — Visão Micro ↔ Visão Inventário
-// (o Inventário passou a viver como uma segunda "lente" dentro do
-// Dashboard Analítico, reaproveitando o mesmo período/toolbar)
+// (o Inventário vive como uma segunda "lente" dentro do Dashboard
+// Analítico, mas com seletor de MÊS próprio — independente do período
+// livre da Visão Micro, que usa o calendário 'an' de calendar.js)
 // ═══════════════════════════════════════════════════════════
 function anSwitchView(view) {
   const btnMicro  = document.getElementById('an-view-btn-micro');
@@ -26,16 +27,14 @@ function anSwitchView(view) {
       : 'Saúde e criticidade por filial e material';
   }
 
-  // Ao entrar na Visão Inventário, gera automaticamente se já houver um
-  // período selecionado (mesmo seletor do topo da página) e ainda não
-  // houver inventário calculado para ele.
+  // Ao entrar na Visão Inventário pela primeira vez na sessão, gera
+  // automaticamente o inventário do mês já selecionado por padrão no
+  // seletor de mês do próprio módulo (mês atual, ver inventario.js).
   if (isInv) {
     if (typeof renderInventario === 'function') renderInventario();
-    const iniVal = document.getElementById('an-dt-ini')?.value;
-    const fimVal = document.getElementById('an-dt-fim')?.value;
     const emptyState = document.getElementById('inv-empty-state');
     const stillEmpty = emptyState && emptyState.style.display !== 'none';
-    if (iniVal && fimVal && stillEmpty && typeof invGerar === 'function') {
+    if (stillEmpty && typeof invGerar === 'function') {
       invGerar();
     }
   }

@@ -526,6 +526,7 @@ function openTool(name) {
   _openTools.add(name);
   _makeDraggable(el);
   if (name === 'notes') _notesLoad();
+  if (name === 'assistente' && typeof _asstLoadHistory === 'function') _asstLoadHistory();
 }
 
 function closeTool(name) {

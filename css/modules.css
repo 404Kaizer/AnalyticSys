@@ -6871,6 +6871,130 @@ mark.search-highlight {
 }
 .notes-toolbar-btn:hover { color: var(--text); background: var(--bg4); }
 
+/* ── Assistente ── */
+/* height fixo (não min-height): sem isso, o popover crescia a cada
+   mensagem porque o flex:1 do .asst-chat-body só contém o crescimento
+   quando o container pai tem altura determinada. */
+.assistente-popover { width: 360px; height: 480px; }
+
+.asst-chat-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.asst-msg {
+  max-width: 92%;
+  padding: 9px 12px;
+  border-radius: 10px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--text);
+}
+.asst-msg-bot {
+  align-self: flex-start;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-bottom-left-radius: 2px;
+  position: relative;
+  padding-right: 26px;
+}
+.asst-copy-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: none;
+  border: none;
+  color: var(--text3);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 3px;
+  border-radius: 4px;
+  transition: color .15s, background .15s;
+}
+.asst-copy-btn:hover { color: var(--accent); background: var(--bg4); }
+.asst-msg-user {
+  align-self: flex-end;
+  background: var(--accent-dim);
+  border: 1px solid var(--accent-glow);
+  color: var(--text);
+  border-bottom-right-radius: 2px;
+}
+.asst-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.asst-chip {
+  background: var(--bg4);
+  border: 1px solid var(--border2);
+  color: var(--text2);
+  font-size: 11px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color .15s, border-color .15s, background .15s;
+}
+.asst-chip:hover { color: var(--text); border-color: var(--accent); background: var(--accent-dim); }
+
+.asst-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 8px 0 4px;
+}
+.asst-item {
+  padding: 4px 0;
+  border-bottom: 1px dashed var(--border);
+  font-size: 12px;
+}
+.asst-item:last-child { border-bottom: none; }
+.asst-more { font-size: 11px; color: var(--text3); padding-top: 4px; }
+
+.asst-input-row {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--bg3);
+  flex-shrink: 0;
+}
+.asst-input {
+  flex: 1;
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 12.5px;
+  padding: 8px 10px;
+  outline: none;
+  font-family: var(--font);
+}
+.asst-input:focus { border-color: var(--accent); }
+.asst-send-btn {
+  background: var(--accent);
+  border: none;
+  color: #fff;
+  width: 34px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  transition: filter .15s;
+  flex-shrink: 0;
+}
+.asst-send-btn:hover { filter: brightness(1.1); }
+
 /* Layout */
 .notes-popover { width: 560px; min-height: 480px; }
 .notes-layout { display: flex; flex: 1; min-height: 0; overflow: hidden; }

@@ -277,41 +277,114 @@
     invRenderTabela();
   };
 
-  // Nota: o Inventário agora compartilha o calendário único do Dashboard
-  // Analítico (prefixo 'an'), então estes atalhos operam sobre ele.
-  window.invQuickSemana = function() {
-    const hoje = new Date();
-    const dow = hoje.getDay();
-    const diff = dow === 0 ? 6 : dow - 1;
-    const ini = new Date(hoje); ini.setDate(hoje.getDate() - diff);
-    const fim = new Date(ini); fim.setDate(ini.getDate() + 6);
-    const toISO = d => d.toISOString().substring(0,10);
-    // Update hidden inputs directly (cal-picker reads from them for display)
-    const iniEl = document.getElementById('an-dt-ini');
-    const fimEl = document.getElementById('an-dt-fim');
-    if (iniEl) iniEl.value = toISO(ini);
-    if (fimEl) fimEl.value = toISO(fim);
-    // Update label on trigger button
-    const label = document.getElementById('an-cal-label');
-    if (label) {
-      const fmtD = d => d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'});
-      label.textContent = fmtD(ini) + ' — ' + fmtD(fim);
+  // ═══════════════════════════════════════════════════════════
+  // SELETOR DE MÊS DO INVENTÁRIO
+  // ═══════════════════════════════════════════════════════════
+  // O Inventário é fechado mensalmente e é independente do período livre
+  // usado pela Visão Micro (calendário 'an' em calendar.js, que trabalha
+  // com range de dias). Aqui é sempre EXATAMENTE um mês calendário.
+  //
+  // Reaproveita as classes visuais do calendário do sistema (cal-picker-*,
+  // cal-header, cal-nav-btn, cal-month-grid, cal-grid-item) para manter a
+  // identidade visual, mas com um estado e uma lógica de navegação próprios
+  // e mais simples (só grid de meses, nunca cai pra visão de dias) — o
+  // componente genérico de calendar.js foi feito pra seleção de range de
+  // dias e sempre despenca pra visão de dias após escolher o mês, o que
+  // não serve aqui.
+  const MESES_ABREV = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  const MESES_NOME  = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+  const _invMonthState = {
+    viewYear:     new Date().getFullYear(),  // ano exibido no grid (navegação)
+    selectedYear: new Date().getFullYear(),  // ano efetivamente selecionado
+    selectedMonth: new Date().getMonth()     // mês efetivamente selecionado (0-based)
+  };
+
+  function invMesKey(year, month) {
+    return year + '-' + String(month + 1).padStart(2, '0');
+  }
+
+  // Expostos pro restante do módulo (invGerar, invExportar, etc.)
+  function invGetSelectedYear()  { return _invMonthState.selectedYear; }
+  function invGetSelectedMonth() { return _invMonthState.selectedMonth; }
+  function invGetMesKey()        { return invMesKey(_invMonthState.selectedYear, _invMonthState.selectedMonth); }
+
+  function _invUpdateMonthTriggerLabel() {
+    const label = document.getElementById('inv-month-label');
+    if (label) label.textContent = MESES_NOME[_invMonthState.selectedMonth] + ' de ' + _invMonthState.selectedYear;
+  }
+
+  function _invRenderMonthGrid() {
+    const container = document.getElementById('inv-month-inner');
+    if (!container) return;
+    const y = _invMonthState.viewYear;
+    const items = MESES_ABREV.map((name, i) => {
+      const active = (i === _invMonthState.selectedMonth && y === _invMonthState.selectedYear) ? ' active' : '';
+      return `<button class="cal-grid-item${active}" onclick="invSelectMonth(${i})" type="button">${name}</button>`;
+    }).join('');
+    container.innerHTML = `
+      <div class="cal-header">
+        <button class="cal-nav-btn" onclick="invNavMonthYear(-1)" type="button"><i class="ti ti-chevron-left"></i></button>
+        <span class="cal-header-center" style="cursor:default">${y}</span>
+        <button class="cal-nav-btn" onclick="invNavMonthYear(1)" type="button"><i class="ti ti-chevron-right"></i></button>
+      </div>
+      <div class="cal-month-grid">${items}</div>`;
+  }
+
+  window.invNavMonthYear = function(dir) {
+    _invMonthState.viewYear += dir;
+    _invRenderMonthGrid();
+  };
+
+  window.invSelectMonth = function(month) {
+    _invMonthState.selectedYear  = _invMonthState.viewYear;
+    _invMonthState.selectedMonth = month;
+    _invUpdateMonthTriggerLabel();
+    _invCloseMonthPicker();
+    // Troca de mês: gera (ou regenera) o inventário desse mês imediatamente.
+    window.invGerar();
+  };
+
+  function _invCloseMonthPicker() {
+    document.getElementById('inv-month-dropdown')?.classList.remove('open');
+    document.getElementById('inv-month-trigger')?.classList.remove('open');
+  }
+
+  window.invToggleMonthPicker = function() {
+    const dropdown = document.getElementById('inv-month-dropdown');
+    const trigger  = document.getElementById('inv-month-trigger');
+    if (!dropdown) return;
+    const isOpen = dropdown.classList.contains('open');
+    // Fecha outros pickers de calendário abertos na página (mesmo padrão do calendar.js)
+    document.querySelectorAll('.cal-picker-dropdown.open').forEach(el => {
+      if (el !== dropdown) {
+        el.classList.remove('open');
+        document.getElementById(el.id.replace('-dropdown', '-trigger'))?.classList.remove('open');
+      }
+    });
+    if (isOpen) {
+      _invCloseMonthPicker();
+    } else {
+      _invMonthState.viewYear = _invMonthState.selectedYear; // sempre abre focado no ano selecionado
+      dropdown.classList.add('open');
+      trigger?.classList.add('open');
+      _invRenderMonthGrid();
     }
-    const trigger = document.getElementById('an-cal-trigger');
-    if (trigger) trigger.classList.add('has-value');
-    document.querySelectorAll('[onclick^="calQuick"][onclick*="\'an\'"]').forEach(b=>b.classList.remove('active'));
-    document.getElementById('inv-chip-semana')?.classList.add('active');
   };
 
-  window.invSetPeriodoType = function() {
-    const tipo = document.getElementById('inv-tipo-periodo')?.value;
-    if (tipo === 'mensal') { if(window.calQuickMesAtual) window.calQuickMesAtual('an'); }
-    else { window.invQuickSemana(); }
-  };
-
-  window.invSetPeriodo = function() {
-    window.invSetPeriodoType?.();
-  };
+  // Fecha ao clicar fora (mesmo padrão usado pelos outros dropdowns do módulo)
+  document.addEventListener('click', e => {
+    const wrap = document.getElementById('inv-month-wrap');
+    const dropdown = document.getElementById('inv-month-dropdown');
+    if (wrap && dropdown?.classList.contains('open') && !wrap.contains(e.target)) {
+      _invCloseMonthPicker();
+    }
+  });
+  // Evita que cliques dentro do dropdown fechem ele mesmo (bubbling)
+  document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('inv-month-dropdown')?.addEventListener('click', e => e.stopPropagation());
+    _invUpdateMonthTriggerLabel();
+  });
 
   // ── Regra própria do Inventário para Est. Inicial / Est. Final ─────────
   // Mais restrita que o Dashboard Analítico: NÃO usa fallback retroativo
@@ -379,11 +452,12 @@
   }
 
   window.invGerar = function() {
-    // Período compartilhado com a Visão Micro do Dashboard Analítico
-    // (seletor único no topo da página — ver anSwitchView em analitico.js).
-    const iniVal = document.getElementById('an-dt-ini')?.value;
-    const fimVal = document.getElementById('an-dt-fim')?.value;
-    if (!iniVal || !fimVal) { toast('Selecione um período no topo da página antes de gerar.', 'error'); return; }
+    // Período próprio do Inventário: sempre um mês calendário completo,
+    // selecionado no seletor de mês do módulo (independente do período
+    // livre da Visão Micro, que usa o calendário 'an' de calendar.js).
+    const selYear  = invGetSelectedYear();
+    const selMonth = invGetSelectedMonth(); // 0-based
+    const mesKey   = invGetMesKey();
 
     const h = window._inv_helpers;
     if (!h) { toast('Sistema não iniciado. Aguarde e tente novamente.', 'error'); return; }
@@ -391,8 +465,8 @@
     const { getLancIndex, getSapIndex, getCustoMedioPorMat, getFilialLookupIndex, normalizeText, parseDate, localISODate, dateCmp, num, state: getState } = h;
     const state = getState();
 
-    const dtIni = new Date(iniVal + 'T00:00:00');
-    const dtFim = new Date(fimVal + 'T23:59:59');
+    const dtIni = new Date(selYear, selMonth, 1, 0, 0, 0);
+    const dtFim = new Date(selYear, selMonth + 1, 0, 23, 59, 59);
 
     const { byCentral: lancByCentral } = getLancIndex();
     const { byCentral: sapByCentral }  = getSapIndex();
@@ -439,7 +513,7 @@
       const custoMedioPorMat = getCustoMedioPorMat(central, dtIni, dtFim);
 
       mats.forEach(mat => {
-        const k = central + '|||' + mat;
+        const k = mesKey + '|||' + central + '|||' + mat;
         const lancArr = (byMat.get(mat) || []).slice().sort((a,b) => {
           const da = parseDate(a.dtLanc), db = parseDate(b.dtLanc);
           return ((da||new Date(0)) - (db||new Date(0)));
@@ -500,7 +574,7 @@
         const sample = lancArr[0] || sapArr[0] || {};
         const categoria = sample.categoria || '—';
 
-        rowMap.set(k, { k, central, material: mat, categoria, regional, estoqueIni, estoqueIniMissing, estoqueIniLastKnown, entradasKg, saidasKg, estoqueFimReal, estoqueFimMissing, estoqueFimLastKnown, custoMedio, entEntries, saiEntries });
+        rowMap.set(k, { k, mesKey, central, material: mat, categoria, regional, estoqueIni, estoqueIniMissing, estoqueIniLastKnown, entradasKg, saidasKg, estoqueFimReal, estoqueFimMissing, estoqueFimLastKnown, custoMedio, entEntries, saiEntries });
       });
     });
 
@@ -526,7 +600,7 @@
     invFiltrar();
     invAtualizarKpis();
     invAtualizarAlertas();
-    toast('Inventário gerado: ' + invRows.length + ' itens.', 'success');
+    toast('Inventário de ' + MESES_NOME[selMonth] + '/' + selYear + ' gerado: ' + invRows.length + ' itens.', 'success');
   };
 
   // Testa os filtros "base" (Regional/Central/Categoria/Material + toggles
@@ -894,12 +968,9 @@
     const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8'});
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
-    // Nome do arquivo reflete o PERÍODO ANALISADO (não a data do export) —
+    // Nome do arquivo reflete o MÊS DO INVENTÁRIO (não a data do export) —
     // essencial pra rastreabilidade quando o inventário é de um mês passado.
-    const iniVal = document.getElementById('an-dt-ini')?.value;
-    const fimVal = document.getElementById('an-dt-fim')?.value;
-    const sufixoPeriodo = (iniVal && fimVal) ? (iniVal + '_a_' + fimVal) : new Date().toISOString().substring(0,10);
-    a.href = url; a.download = 'inventario_' + sufixoPeriodo + '.csv';
+    a.href = url; a.download = 'inventario_' + invGetMesKey() + '.csv';
     a.click(); URL.revokeObjectURL(url);
   };
 

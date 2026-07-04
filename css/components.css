@@ -202,6 +202,16 @@
 }
 
 /* ══════════════════════════════════════════
+   INVENTÁRIO — SELETOR DE MÊS (independente do período da Visão Micro)
+══════════════════════════════════════════ */
+.inv-month-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+/* ══════════════════════════════════════════
    INVENTÁRIO — KPI CARDS REDESENHADOS
 ══════════════════════════════════════════ */
 .inv-kpi-grid {
