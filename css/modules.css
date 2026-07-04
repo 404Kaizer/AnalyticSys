@@ -7064,6 +7064,46 @@ mark.search-highlight {
 .asst-pp-btn:disabled { opacity: .6; cursor: default; }
 .asst-pp-err { color: var(--red); font-size: 10.5px; margin-top: 6px; }
 
+/* ── Formulário de registro manual (Tabelas brutas) ── */
+.asst-mf { display: flex; flex-direction: column; }
+.asst-mf-label { font-size: 10.5px; color: var(--text2); margin-top: 6px; }
+.asst-mf-input {
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 12px;
+  padding: 6px 8px;
+  margin-top: 2px;
+  font-family: var(--font);
+}
+.asst-mf-btn {
+  margin-top: 10px;
+  width: 100%;
+  background: var(--accent);
+  border: none;
+  color: #fff;
+  border-radius: 8px;
+  padding: 7px 0;
+  font-size: 12px;
+  cursor: pointer;
+}
+.asst-mf-btn:disabled { opacity: .6; cursor: default; }
+.asst-mf-err { color: var(--red); font-size: 10.5px; margin-top: 6px; }
+
+.asst-mc-actions { display: flex; gap: 8px; margin-top: 8px; }
+.asst-mc-confirm, .asst-mc-cancel {
+  flex: 1;
+  border-radius: 8px;
+  padding: 7px 0;
+  font-size: 12px;
+  cursor: pointer;
+  border: 1px solid var(--border2);
+}
+.asst-mc-confirm { background: var(--accent); border-color: var(--accent); color: #fff; }
+.asst-mc-cancel  { background: var(--bg2); color: var(--text2); }
+.asst-mc-confirm:disabled, .asst-mc-cancel:disabled { opacity: .6; cursor: default; }
+
 .asst-input-row {
   position: relative;
   display: flex;

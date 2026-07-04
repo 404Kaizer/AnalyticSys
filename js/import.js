@@ -120,28 +120,39 @@ function excluirProducao(absIndex) {
   });
 }
 
-function salvarProducao() {
-  const centralRaw = val('p-central');
+function _criarRegistroProducao(dados) {
+  const central = dados.central;
   const rec = stamp({
     fonte: 'manual',
-    mes: val('p-mes'),
-    centralOriginal: centralRaw,
-    central: normalizarCentral(centralRaw),
-    producao: num(val('p-producao')),
+    mes: dados.mes,
+    centralOriginal: central,
+    central: normalizarCentral(central),
+    producao: num(dados.producao),
     um: 'm³',
-    precoMedio: num(val('p-preco')),
-    custoMedio: num(val('p-custo')),
-    margem: val('p-margem'),
-    totalVendas: num(val('p-vendas'))
+    precoMedio: num(dados.preco),
+    custoMedio: num(dados.custo),
+    margem: dados.margem,
+    totalVendas: num(dados.vendas)
   });
 
-  if (!rec.mes || !rec.central) {
-    toast('Preencha mês e central', 'error');
-    return;
-  }
+  if (!rec.mes || !rec.central) return { ok: false, erro: 'Preencha mês e central' };
 
   state.producao.unshift(rec);
   persist();
+  return { ok: true, rec };
+}
+
+function salvarProducao() {
+  const resultado = _criarRegistroProducao({
+    central:  val('p-central'),
+    mes:      val('p-mes'),
+    producao: val('p-producao'),
+    preco:    val('p-preco'),
+    custo:    val('p-custo'),
+    margem:   val('p-margem'),
+    vendas:   val('p-vendas'),
+  });
+  if (!resultado.ok) { toast(resultado.erro, 'error'); return; }
   closeModal('modal-producao');
   renderProducao();
   updateDashboard();
@@ -166,32 +177,36 @@ function _fmtDateInput(v) {
   return d && m && y ? `${d}/${m}/${y}` : v;
 }
 
-function salvarEntrada() {
-  const peso  = num(val('e-peso'));
-  const custo = num(val('e-custo'));
-  const total = num(val('e-valor-total')) || (peso * custo);
-  const mat   = val('e-material');
-  const central = val('e-central-compra');
+// Lógica pura: recebe um objeto de dados (não depende de inputs do DOM),
+// valida, normaliza e grava. Retorna { ok, rec } ou { ok:false, erro }.
+// Usada tanto pelo modal (salvarEntrada) quanto pelo Assistente (chat).
+function _criarRegistroEntrada(dados) {
+  const central        = dados.central;
+  const centralDestino = dados.centralDestino || central;
+  const mat            = dados.mat;
+  const peso           = num(dados.peso);
+  const custo          = num(dados.custo);
+  const total          = num(dados.total) || (peso * custo);
 
-  if (!central) { toast('Informe a Central Compra', 'error'); return; }
-  if (!mat)     { toast('Informe o Material', 'error'); return; }
-  if (!peso)    { toast('Informe o Peso', 'error'); return; }
+  if (!central) return { ok: false, erro: 'Informe a Central Compra' };
+  if (!mat)     return { ok: false, erro: 'Informe o Material' };
+  if (!peso)    return { ok: false, erro: 'Informe o Peso' };
 
   const rec = stamp({
     fonte: 'manual',
     centralCompraOriginal:  central,
     centralCompra:          normalizarCentral(central),
-    centralDestinoOriginal: val('e-central-destino') || central,
-    centralDestino:         normalizarCentral(val('e-central-destino') || central),
-    nf:             val('e-nf') || '—',
-    dtEmissao:      _fmtDateInput(val('e-dt-emissao')),
-    dtDescarga:     _fmtDateInput(val('e-dt-descarga') || val('e-dt-emissao')),
-    fornecedor:     val('e-fornecedor') || '—',
-    categoria:      val('e-categoria') || '—',
+    centralDestinoOriginal: centralDestino,
+    centralDestino:         normalizarCentral(centralDestino),
+    nf:             dados.nf || '—',
+    dtEmissao:      _fmtDateInput(dados.dtEmissao),
+    dtDescarga:     _fmtDateInput(dados.dtDescarga || dados.dtEmissao),
+    fornecedor:     dados.fornecedor || '—',
+    categoria:      dados.categoria || '—',
     materialOriginal: mat,
     material:       normalizarMaterial(mat),
     peso,
-    um:             val('e-um') || 'KG',
+    um:             dados.um || 'KG',
     custo,
     valorTotal:     total
   });
@@ -199,36 +214,56 @@ function salvarEntrada() {
   state.entradas.unshift(rec);
   invalidateSearchIndex('entradas');
   persist();
+  return { ok: true, rec };
+}
+
+function salvarEntrada() {
+  const resultado = _criarRegistroEntrada({
+    central:        val('e-central-compra'),
+    centralDestino: val('e-central-destino'),
+    mat:            val('e-material'),
+    peso:           val('e-peso'),
+    custo:          val('e-custo'),
+    total:          val('e-valor-total'),
+    nf:             val('e-nf'),
+    dtEmissao:      val('e-dt-emissao'),
+    dtDescarga:     val('e-dt-descarga'),
+    fornecedor:     val('e-fornecedor'),
+    categoria:      val('e-categoria'),
+    um:             val('e-um'),
+  });
+  if (!resultado.ok) { toast(resultado.erro, 'error'); return; }
   closeModal('modal-manual');
   renderEntradas();
   updateDashboard();
   toast('Entrada salva com sucesso');
 }
 
-function salvarSaida() {
-  const peso  = num(val('s-peso'));
-  const custo = num(val('s-custo'));
-  const total = num(val('s-valor-total')) || (peso * custo);
-  const mat   = val('s-material');
-  const central = val('s-central');
 
-  if (!central) { toast('Informe a Central', 'error'); return; }
-  if (!mat)     { toast('Informe o Material', 'error'); return; }
-  if (!peso)    { toast('Informe o Peso', 'error'); return; }
+function _criarRegistroSaida(dados) {
+  const central = dados.central;
+  const mat     = dados.mat;
+  const peso    = num(dados.peso);
+  const custo   = num(dados.custo);
+  const total   = num(dados.total) || (peso * custo);
+
+  if (!central) return { ok: false, erro: 'Informe a Central' };
+  if (!mat)     return { ok: false, erro: 'Informe o Material' };
+  if (!peso)    return { ok: false, erro: 'Informe o Peso' };
 
   const rec = stamp({
     fonte: 'manual',
     centralOriginal: central,
     central:        normalizarCentral(central),
-    dtEmissao:      _fmtDateInput(val('s-dt-emissao')),
-    os:             val('s-os') || '—',
+    dtEmissao:      _fmtDateInput(dados.dtEmissao),
+    os:             dados.os || '—',
     contrato:       '—',
-    categoria:      val('s-categoria') || '—',
-    fornecedor:     val('s-fornecedor') || '—',
+    categoria:      dados.categoria || '—',
+    fornecedor:     dados.fornecedor || '—',
     materialOriginal: mat,
     material:       normalizarMaterial(mat),
     peso,
-    um:             val('s-um') || 'KG',
+    um:             dados.um || 'KG',
     custo,
     valorTotal:     total
   });
@@ -236,34 +271,52 @@ function salvarSaida() {
   state.saidas.unshift(rec);
   invalidateSearchIndex('saidas');
   persist();
+  return { ok: true, rec };
+}
+
+function salvarSaida() {
+  const resultado = _criarRegistroSaida({
+    central:    val('s-central'),
+    mat:        val('s-material'),
+    peso:       val('s-peso'),
+    custo:      val('s-custo'),
+    total:      val('s-valor-total'),
+    os:         val('s-os'),
+    categoria:  val('s-categoria'),
+    fornecedor: val('s-fornecedor'),
+    dtEmissao:  val('s-dt-emissao'),
+    um:         val('s-um'),
+  });
+  if (!resultado.ok) { toast(resultado.erro, 'error'); return; }
   closeModal('modal-manual');
   renderSaidas();
   updateDashboard();
   toast('Saída salva com sucesso');
 }
 
-function salvarLancamento() {
-  const peso  = num(val('l-peso'));
-  const custo = num(val('l-custo'));
-  const total = num(val('l-valor-total')) || (peso * custo);
-  const mat   = val('l-material');
-  const central = val('l-central');
 
-  if (!central) { toast('Informe a Central', 'error'); return; }
-  if (!mat)     { toast('Informe o Material', 'error'); return; }
-  if (!peso)    { toast('Informe o Peso', 'error'); return; }
+function _criarRegistroLancamento(dados) {
+  const central = dados.central;
+  const mat     = dados.mat;
+  const peso    = num(dados.peso);
+  const custo   = num(dados.custo);
+  const total   = num(dados.total) || (peso * custo);
+
+  if (!central) return { ok: false, erro: 'Informe a Central' };
+  if (!mat)     return { ok: false, erro: 'Informe o Material' };
+  if (!peso)    return { ok: false, erro: 'Informe o Peso' };
 
   const rec = stamp({
     fonte: 'manual',
     centralOriginal: central,
     central:        normalizarCentral(central),
-    dtLanc:         _fmtDateInput(val('l-dt-lanc')),
-    fornecedor:     val('l-fornecedor') || '—',
-    categoria:      val('l-categoria') || '—',
+    dtLanc:         _fmtDateInput(dados.dtLanc),
+    fornecedor:     dados.fornecedor || '—',
+    categoria:      dados.categoria || '—',
     materialOriginal: mat,
     material:       normalizarMaterial(mat),
     peso,
-    um:             val('l-um') || 'KG',
+    um:             dados.um || 'KG',
     custo,
     valorTotal:     total
   });
@@ -271,41 +324,58 @@ function salvarLancamento() {
   state.lancamentos.unshift(rec);
   invalidateLancIndex();
   persist();
+  return { ok: true, rec };
+}
+
+function salvarLancamento() {
+  const resultado = _criarRegistroLancamento({
+    central:    val('l-central'),
+    mat:        val('l-material'),
+    peso:       val('l-peso'),
+    custo:      val('l-custo'),
+    total:      val('l-valor-total'),
+    fornecedor: val('l-fornecedor'),
+    categoria:  val('l-categoria'),
+    dtLanc:     val('l-dt-lanc'),
+    um:         val('l-um'),
+  });
+  if (!resultado.ok) { toast(resultado.erro, 'error'); return; }
   closeModal('modal-manual');
   renderLancamentos();
   updateDashboard();
   toast('Lançamento salvo com sucesso');
 }
 
-function salvarSAP() {
-  const peso  = num(val('sap-peso'));
-  const custoUnit = num(val('sap-custo-unit'));
-  const total = num(val('sap-valor-total')) || (Math.abs(peso) * custoUnit);
-  const mat   = val('sap-material');
-  const central = val('sap-central');
-  const movimento = val('sap-movimento');
 
-  if (!central)  { toast('Informe a Central', 'error'); return; }
-  if (!mat)      { toast('Informe o Material', 'error'); return; }
-  if (!movimento){ toast('Informe o Movimento', 'error'); return; }
+function _criarRegistroSAP(dados) {
+  const central   = dados.central;
+  const mat       = dados.mat;
+  const movimento = dados.movimento;
+  const peso      = num(dados.peso);
+  const custoUnit = num(dados.custoUnit);
+  const total     = num(dados.total) || (Math.abs(peso) * custoUnit);
+
+  if (!central)   return { ok: false, erro: 'Informe a Central' };
+  if (!mat)       return { ok: false, erro: 'Informe o Material' };
+  if (!movimento) return { ok: false, erro: 'Informe o Movimento' };
 
   const hoje = new Date().toLocaleDateString('pt-BR');
   const rec = stamp({
     fonte: 'manual',
-    usuario:        val('sap-usuario') || '—',
+    usuario:        dados.usuario || '—',
     movimento,
-    ref:            val('sap-ref') || '—',
-    documento:      val('sap-doc') || '—',
+    ref:            dados.ref || '—',
+    documento:      dados.documento || '—',
     centralOriginal: central,
     central:        normalizarCentral(central),
-    deposito:       val('sap-deposito') || '—',
-    dtDoc:          _fmtDateInput(val('sap-dt-doc') || val('sap-dt-lanc')),
-    dtLanc:         _fmtDateInput(val('sap-dt-lanc')) || hoje,
-    dtReg:          _fmtDateInput(val('sap-dt-reg') || val('sap-dt-lanc')),
+    deposito:       dados.deposito || '—',
+    dtDoc:          _fmtDateInput(dados.dtDoc || dados.dtLanc),
+    dtLanc:         _fmtDateInput(dados.dtLanc) || hoje,
+    dtReg:          _fmtDateInput(dados.dtReg || dados.dtLanc),
     materialOriginal: mat,
     material:       normalizarMaterial(mat),
     peso,
-    um:             val('sap-um') || 'KG',
+    um:             dados.um || 'KG',
     custoUnit,
     valorTotal:     total
   });
@@ -313,6 +383,27 @@ function salvarSAP() {
   state.sap.unshift(rec);
   invalidateSapIndex();
   persist();
+  return { ok: true, rec };
+}
+
+function salvarSAP() {
+  const resultado = _criarRegistroSAP({
+    central:    val('sap-central'),
+    mat:        val('sap-material'),
+    movimento:  val('sap-movimento'),
+    peso:       val('sap-peso'),
+    custoUnit:  val('sap-custo-unit'),
+    total:      val('sap-valor-total'),
+    usuario:    val('sap-usuario'),
+    ref:        val('sap-ref'),
+    documento:  val('sap-doc'),
+    deposito:   val('sap-deposito'),
+    dtDoc:      val('sap-dt-doc'),
+    dtLanc:     val('sap-dt-lanc'),
+    dtReg:      val('sap-dt-reg'),
+    um:         val('sap-um'),
+  });
+  if (!resultado.ok) { toast(resultado.erro, 'error'); return; }
   closeModal('modal-manual');
   renderSAP();
   updateDashboard();

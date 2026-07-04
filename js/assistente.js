@@ -490,6 +490,99 @@ function _asstIntentConfigPendente() {
   return html;
 }
 
+// ── Intenções: tabelas brutas (Entradas/Saídas/Lançamentos/SAP/Produção) ─
+// Leem state.* diretamente — nunca dependem de análise rodada, e o
+// filtro de central/material é opcional (mesma resolução com memória
+// de contexto usada no resto do assistente).
+function _asstFiltroBruto(query, records) {
+  const centralRes = _asstResolveCentralCtx(query);
+  const matRes     = _asstResolveMaterialCtx(query);
+  let filtrados = records;
+  if (centralRes.value) filtrados = filtrados.filter(r => r.central === centralRes.value);
+  if (matRes.value)     filtrados = filtrados.filter(r => r.material === matRes.value);
+
+  let nota = '';
+  if (centralRes.fromContext) nota += _asstContextNote('central', centralRes.value);
+  if (matRes.fromContext)     nota += _asstContextNote('material', matRes.value);
+
+  const partes = [];
+  if (centralRes.value) partes.push(`central <b>${escapeHtml(centralRes.value)}</b>`);
+  if (matRes.value)     partes.push(`material <b>${escapeHtml(matRes.value)}</b>`);
+
+  return { filtrados, nota, escopo: partes.join(', ') };
+}
+
+function _asstResumoBruto(records, pesoField, valorField) {
+  return {
+    total: records.length,
+    peso:  records.reduce((s, r) => s + (Number(r[pesoField]) || 0), 0),
+    valor: records.reduce((s, r) => s + (Number(r[valorField]) || 0), 0),
+  };
+}
+
+function _asstFmtMoeda(v) {
+  return (v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+function _asstIntentEntradasConsulta(query) {
+  const { filtrados, nota, escopo } = _asstFiltroBruto(query, state.entradas || []);
+  if (!filtrados.length) return nota + `Nenhuma entrada encontrada${escopo ? ' — ' + escopo : ''}.`;
+  const r = _asstResumoBruto(filtrados, 'peso', 'valorTotal');
+  let html = `<b>${r.total}</b> entrada(s)${escopo ? ' — ' + escopo : ''}.`;
+  html += `<div class="asst-item">Peso total: ${fmtKg(r.peso)}</div>`;
+  html += `<div class="asst-item">Valor total: ${_asstFmtMoeda(r.valor)}</div>`;
+  return nota + html;
+}
+
+function _asstIntentSaidasConsulta(query) {
+  const { filtrados, nota, escopo } = _asstFiltroBruto(query, state.saidas || []);
+  if (!filtrados.length) return nota + `Nenhuma saída encontrada${escopo ? ' — ' + escopo : ''}.`;
+  const r = _asstResumoBruto(filtrados, 'peso', 'valorTotal');
+  let html = `<b>${r.total}</b> saída(s)${escopo ? ' — ' + escopo : ''}.`;
+  html += `<div class="asst-item">Peso total: ${fmtKg(r.peso)}</div>`;
+  html += `<div class="asst-item">Valor total: ${_asstFmtMoeda(r.valor)}</div>`;
+  return nota + html;
+}
+
+function _asstIntentLancamentosConsulta(query) {
+  const { filtrados, nota, escopo } = _asstFiltroBruto(query, state.lancamentos || []);
+  if (!filtrados.length) return nota + `Nenhum lançamento encontrado${escopo ? ' — ' + escopo : ''}.`;
+  const r = _asstResumoBruto(filtrados, 'peso', 'valorTotal');
+  let html = `<b>${r.total}</b> lançamento(s)${escopo ? ' — ' + escopo : ''}.`;
+  html += `<div class="asst-item">Peso total: ${fmtKg(r.peso)}</div>`;
+  html += `<div class="asst-item">Valor total: ${_asstFmtMoeda(r.valor)}</div>`;
+  return nota + html;
+}
+
+function _asstIntentSapConsulta(query) {
+  const { filtrados, nota, escopo } = _asstFiltroBruto(query, state.sap || []);
+  if (!filtrados.length) return nota + `Nenhuma movimentação SAP encontrada${escopo ? ' — ' + escopo : ''}.`;
+  const r = _asstResumoBruto(filtrados, 'peso', 'valorTotal');
+  let html = `<b>${r.total}</b> movimentação(ões) SAP${escopo ? ' — ' + escopo : ''}.`;
+  html += `<div class="asst-item">Peso total: ${fmtKg(r.peso)}</div>`;
+  html += `<div class="asst-item">Valor total: ${_asstFmtMoeda(r.valor)}</div>`;
+  return nota + html;
+}
+
+function _asstIntentProducaoConsulta(query) {
+  const centralRes = _asstResolveCentralCtx(query);
+  let filtrados = state.producao || [];
+  if (centralRes.value) filtrados = filtrados.filter(r => r.central === centralRes.value);
+
+  const nota   = centralRes.fromContext ? _asstContextNote('central', centralRes.value) : '';
+  const escopo = centralRes.value ? `central <b>${escapeHtml(centralRes.value)}</b>` : '';
+
+  if (!filtrados.length) return nota + `Nenhum registro de produção encontrado${escopo ? ' — ' + escopo : ''}.`;
+
+  const producaoTotal = filtrados.reduce((s, r) => s + (Number(r.producao) || 0), 0);
+  const vendasTotal   = filtrados.reduce((s, r) => s + (Number(r.totalVendas) || 0), 0);
+
+  let html = `<b>${filtrados.length}</b> registro(s) de produção${escopo ? ' — ' + escopo : ''}.`;
+  html += `<div class="asst-item">Produção total: ${producaoTotal.toLocaleString('pt-BR')} m³</div>`;
+  html += `<div class="asst-item">Total de vendas: ${_asstFmtMoeda(vendasTotal)}</div>`;
+  return nota + html;
+}
+
 // ── Registro de intenções ────────────────────────────────────────────
 // Cada item vira uma entrada do menu "/" (label amigável, agrupada por
 // group). requiresAnalise indica se a intenção depende de uma análise
@@ -515,6 +608,22 @@ const _ASST_INTENTS = [
   { id: 'criticidade',     label: 'Materiais críticos/urgentes',    group: 'Geral',       icon: 'ti-flame',            needs: [],                      requiresAnalise: true,  handler: raw => _asstIntentCriticidade(raw) },
   { id: 'saude',           label: 'Resumo do período',              group: 'Geral',       icon: 'ti-report',           needs: [],                      requiresAnalise: true,  handler: () => _asstIntentSaudeGlobal() },
   { id: 'acoes',           label: 'Ações para um material crítico', group: 'Geral',       icon: 'ti-clipboard-check',  needs: ['material', 'central'], requiresAnalise: true,  handler: raw => _asstIntentAcoes(raw) },
+
+  // ── Tabelas brutas: consulta (somente leitura, independe de análise) ─
+  { id: 'entradas-consulta',     label: 'Entradas (NF) registradas',   group: 'Consultar dados', icon: 'ti-package-import', needs: [], requiresAnalise: false, handler: raw => _asstIntentEntradasConsulta(raw) },
+  { id: 'saidas-consulta',       label: 'Saídas (OS) registradas',     group: 'Consultar dados', icon: 'ti-package-export', needs: [], requiresAnalise: false, handler: raw => _asstIntentSaidasConsulta(raw) },
+  { id: 'lancamentos-consulta',  label: 'Lançamentos registrados',     group: 'Consultar dados', icon: 'ti-clipboard-list', needs: [], requiresAnalise: false, handler: raw => _asstIntentLancamentosConsulta(raw) },
+  { id: 'sap-consulta',          label: 'Movimentações SAP',           group: 'Consultar dados', icon: 'ti-database',       needs: [], requiresAnalise: false, handler: raw => _asstIntentSapConsulta(raw) },
+  { id: 'producao-consulta',     label: 'Produção registrada',         group: 'Consultar dados', icon: 'ti-chart-bar',      needs: [], requiresAnalise: false, handler: raw => _asstIntentProducaoConsulta(raw) },
+
+  // ── Tabelas brutas: registro manual (única ação que o assistente
+  // dispara — sempre formulário → confirmação explícita antes de gravar,
+  // reaproveitando as mesmas funções puras que os modais das telas usam) ─
+  { id: 'entrada-registrar',    label: 'Registrar entrada (NF)',        group: 'Registrar dado', icon: 'ti-circle-plus', needs: [], requiresAnalise: false, formKind: 'entrada',    handler: () => _asstManualNoOpMsg() },
+  { id: 'saida-registrar',      label: 'Registrar saída (OS)',          group: 'Registrar dado', icon: 'ti-circle-plus', needs: [], requiresAnalise: false, formKind: 'saida',      handler: () => _asstManualNoOpMsg() },
+  { id: 'lancamento-registrar', label: 'Registrar lançamento',          group: 'Registrar dado', icon: 'ti-circle-plus', needs: [], requiresAnalise: false, formKind: 'lancamento', handler: () => _asstManualNoOpMsg() },
+  { id: 'sap-registrar',        label: 'Registrar movimentação SAP',    group: 'Registrar dado', icon: 'ti-circle-plus', needs: [], requiresAnalise: false, formKind: 'sap',        handler: () => _asstManualNoOpMsg() },
+  { id: 'producao-registrar',   label: 'Registrar produção',            group: 'Registrar dado', icon: 'ti-circle-plus', needs: [], requiresAnalise: false, formKind: 'producao',   handler: () => _asstManualNoOpMsg() },
 ];
 
 function _asstIntentById(id) {
@@ -522,6 +631,7 @@ function _asstIntentById(id) {
 }
 
 const _ASST_SLOT_LABEL = { material: 'o material', central: 'a central' };
+
 
 // ── Contexto travado via "/" ──────────────────────────────────────────
 let _asstLockedIntent = null;
@@ -692,6 +802,7 @@ function _asstSelectIntent(id) {
   const it = _asstIntentById(id);
   if (!it) return;
   _asstLockedIntent = it;
+  _asstPendingManual = null;
   _asstCloseDropdown();
   const input = document.getElementById('asst-input');
   if (input) { input.value = ''; input.focus(); }
@@ -702,7 +813,173 @@ function _asstSelectIntent(id) {
     _asstAppendMsg('bot', _asstPeriodPickerHtml());
     return;
   }
+  if (it.formKind) {
+    _asstAppendMsg('bot', `Preencha os dados para registrar ${escapeHtml(_ASST_MANUAL_FORMS[it.formKind]?.label || '')}:`);
+    _asstAppendMsg('bot', _asstManualFormHtml(it.formKind));
+    return;
+  }
   _asstAppendMsg('bot', _asstContextLockedMsg(it));
+}
+
+// ── Registro manual de dados brutos — única ação que o assistente pode
+// disparar. Sempre em dois passos: formulário → confirmação explícita
+// antes de gravar. create() chama as mesmas funções puras de import.js
+// usadas pelos modais das telas, sem duplicar validação/normalização.
+let _asstPendingManual = null;
+
+const _ASST_MANUAL_FORMS = {
+  entrada: {
+    label: 'entrada (NF)', create: dados => _criarRegistroEntrada(dados),
+    fields: [
+      { key: 'central',    label: 'Central compra',  type: 'text',   required: true },
+      { key: 'mat',        label: 'Material',        type: 'text',   required: true },
+      { key: 'peso',       label: 'Peso (kg)',       type: 'number', required: true },
+      { key: 'custo',      label: 'Custo unitário',  type: 'number' },
+      { key: 'nf',         label: 'Nota fiscal',     type: 'text' },
+      { key: 'fornecedor', label: 'Fornecedor',      type: 'text' },
+      { key: 'dtEmissao',  label: 'Data de emissão', type: 'date' },
+    ],
+  },
+  saida: {
+    label: 'saída (OS)', create: dados => _criarRegistroSaida(dados),
+    fields: [
+      { key: 'central',    label: 'Central',          type: 'text',   required: true },
+      { key: 'mat',        label: 'Material',         type: 'text',   required: true },
+      { key: 'peso',       label: 'Peso (kg)',        type: 'number', required: true },
+      { key: 'custo',      label: 'Custo unitário',   type: 'number' },
+      { key: 'os',         label: 'Ordem de serviço', type: 'text' },
+      { key: 'fornecedor', label: 'Fornecedor',       type: 'text' },
+      { key: 'dtEmissao',  label: 'Data',             type: 'date' },
+    ],
+  },
+  lancamento: {
+    label: 'lançamento', create: dados => _criarRegistroLancamento(dados),
+    fields: [
+      { key: 'central',    label: 'Central',        type: 'text',   required: true },
+      { key: 'mat',        label: 'Material',       type: 'text',   required: true },
+      { key: 'peso',       label: 'Peso (kg)',      type: 'number', required: true },
+      { key: 'custo',      label: 'Custo unitário', type: 'number' },
+      { key: 'fornecedor', label: 'Fornecedor',     type: 'text' },
+      { key: 'dtLanc',     label: 'Data',           type: 'date' },
+    ],
+  },
+  sap: {
+    label: 'movimentação SAP', create: dados => _criarRegistroSAP(dados),
+    fields: [
+      { key: 'central',   label: 'Central',            type: 'text',   required: true },
+      { key: 'mat',       label: 'Material',           type: 'text',   required: true },
+      { key: 'movimento', label: 'Movimento',          type: 'text',   required: true },
+      { key: 'peso',      label: 'Peso (kg)',          type: 'number' },
+      { key: 'custoUnit', label: 'Custo unitário',     type: 'number' },
+      { key: 'documento', label: 'Documento',          type: 'text' },
+      { key: 'dtLanc',    label: 'Data de lançamento', type: 'date' },
+    ],
+  },
+  producao: {
+    label: 'produção', create: dados => _criarRegistroProducao(dados),
+    fields: [
+      { key: 'central',  label: 'Central',       type: 'text',   required: true },
+      { key: 'mes',      label: 'Mês (AAAA-MM)', type: 'text',   required: true },
+      { key: 'producao', label: 'Produção (m³)', type: 'number' },
+      { key: 'preco',    label: 'Preço médio',   type: 'number' },
+      { key: 'custo',    label: 'Custo médio',   type: 'number' },
+      { key: 'vendas',   label: 'Total vendas',  type: 'number' },
+    ],
+  },
+};
+
+const _ASST_MANUAL_REFRESH = {
+  entrada:    () => { if (typeof renderEntradas    === 'function') renderEntradas(); },
+  saida:      () => { if (typeof renderSaidas      === 'function') renderSaidas(); },
+  lancamento: () => { if (typeof renderLancamentos === 'function') renderLancamentos(); },
+  sap:        () => { if (typeof renderSAP         === 'function') renderSAP(); },
+  producao:   () => { if (typeof renderProducao    === 'function') renderProducao(); },
+};
+
+function _asstManualNoOpMsg() {
+  return 'Preencha o formulário acima pra registrar. Se quiser trocar de contexto, digite /.';
+}
+
+function _asstManualFormHtml(kind) {
+  const spec = _ASST_MANUAL_FORMS[kind];
+  if (!spec) return '';
+  const campos = spec.fields.map(f =>
+    `<label class="asst-mf-label">${escapeHtml(f.label)}${f.required ? ' *' : ''}</label>
+     <input type="${f.type}" class="asst-mf-input" data-key="${f.key}">`
+  ).join('');
+  return `<div class="asst-mf" data-kind="${kind}">
+    ${campos}
+    <button class="asst-mf-btn" onclick="_asstManualFormContinue(this)">Continuar</button>
+    <div class="asst-mf-err" style="display:none">Preencha os campos obrigatórios (*).</div>
+  </div>`;
+}
+
+function _asstManualFormContinue(btn) {
+  const wrap = btn.closest('.asst-mf');
+  if (!wrap) return;
+  const kind = wrap.dataset.kind;
+  const spec = _ASST_MANUAL_FORMS[kind];
+  if (!spec) return;
+
+  const dados = {};
+  wrap.querySelectorAll('.asst-mf-input').forEach(inp => { dados[inp.dataset.key] = inp.value.trim(); });
+
+  const faltando = spec.fields.some(f => f.required && !dados[f.key]);
+  const err = wrap.querySelector('.asst-mf-err');
+  if (faltando) { if (err) err.style.display = ''; return; }
+  if (err) err.style.display = 'none';
+
+  wrap.querySelectorAll('input, button').forEach(el => { el.disabled = true; });
+  _asstPendingManual = { kind, dados };
+  _asstAppendMsg('bot', _asstManualConfirmHtml(kind, dados));
+}
+
+function _asstManualConfirmHtml(kind, dados) {
+  const spec = _ASST_MANUAL_FORMS[kind];
+  const linhas = spec.fields
+    .filter(f => dados[f.key])
+    .map(f => `<div class="asst-item">${escapeHtml(f.label)}: <b>${escapeHtml(dados[f.key])}</b></div>`)
+    .join('');
+  return `<div class="asst-mc">
+    Confira antes de salvar — isso grava um registro novo de <b>${escapeHtml(spec.label)}</b>:
+    ${linhas}
+    <div class="asst-mc-actions">
+      <button class="asst-mc-cancel" onclick="_asstManualCancel(this)">Cancelar</button>
+      <button class="asst-mc-confirm" onclick="_asstManualConfirmSave(this)">Confirmar e salvar</button>
+    </div>
+  </div>`;
+}
+
+function _asstManualConfirmSave(btn) {
+  if (!_asstPendingManual) return;
+  const { kind, dados } = _asstPendingManual;
+  const spec = _ASST_MANUAL_FORMS[kind];
+  const wrap = btn.closest('.asst-mc');
+  if (wrap) wrap.querySelectorAll('button').forEach(b => { b.disabled = true; });
+
+  let resultado;
+  try {
+    resultado = spec.create(dados);
+  } catch (err) {
+    console.error('Assistente: erro ao salvar registro manual', err);
+    resultado = { ok: false, erro: 'Ocorreu um erro ao salvar. Tente novamente.' };
+  }
+  _asstPendingManual = null;
+
+  if (!resultado || !resultado.ok) {
+    _asstAppendMsg('bot', resultado?.erro || 'Não consegui salvar — confira os dados e tente de novo.');
+    return;
+  }
+  const refresh = _ASST_MANUAL_REFRESH[kind];
+  if (refresh) refresh();
+  _asstAppendMsg('bot', `Pronto — registro de <b>${escapeHtml(spec.label)}</b> salvo com sucesso.`);
+}
+
+function _asstManualCancel(btn) {
+  _asstPendingManual = null;
+  const wrap = btn.closest('.asst-mc');
+  if (wrap) wrap.querySelectorAll('button').forEach(b => { b.disabled = true; });
+  _asstAppendMsg('bot', 'Registro não foi salvo.');
 }
 
 // ── UI do painel de chat ─────────────────────────────────────────────
@@ -798,6 +1075,7 @@ function asstClearChat() {
   _asstRenderMsg('bot', _ASST_WELCOME_HTML);
   _asstContext = { central: null, material: null, regional: null };
   _asstLockedIntent = null;
+  _asstPendingManual = null;
   _asstCloseDropdown();
   const pill = document.getElementById('asst-context-pill');
   if (pill) pill.style.display = 'none';
