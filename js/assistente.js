@@ -1,19 +1,27 @@
 'use strict';
 
 // ═══════════════════════════════════════════════════════════
-// ASSISTENTE — Iteração 2
-// Ainda por regras (sem LLM). Novidades:
-//  - Reconhecimento mais tolerante de central/material (tokens, não só
-//    substring exato — resiste a reordenação e a hífen/espaço/acento).
-//  - Novas intenções: tendência/projeção (trend.js), ausências de
-//    lançamento (dashboard.js) e ações de relatório cadastradas
-//    (relatorio.js).
-//  - Copiar resposta e histórico persistido em localStorage.
+// ASSISTENTE — Iteração 3
+// Base estrutural nova:
+//  - Intenções viram um REGISTRO (_ASST_INTENTS), não uma cadeia de if/else
+//    — adicionar/reordenar intenção é só editar a lista.
+//  - Contexto de conversa: lembra a última central/material/regional
+//    resolvidos, para perguntas de seguimento ("e a central Y?") sem
+//    precisar repetir o nome. Sempre que o contexto é usado, a resposta
+//    avisa isso explicitamente (nunca fica "escondido").
+// Novo módulo coberto: pendências de cadastro (Configurações → Padronização).
 //
-// Continua somente leitura — nunca cria, edita ou remove nada do state.
+// Continua por regras (sem LLM) e somente leitura — nunca cria, edita
+// ou remove nada do state, e nunca chama reaplicarPadronizacao* (essas
+// mutam o state; usamos apenas findMaterialMatch/normalizarCentral, que
+// são consultas puras).
 // ═══════════════════════════════════════════════════════════
 
 const ASST_HISTORY_KEY = 'analyticsys_asst_history_v1';
+
+// Contexto de conversa — não persiste entre recarregamentos de página
+// (é memória de curto prazo da sessão atual, não histórico salvo).
+let _asstContext = { central: null, material: null, regional: null };
 
 // Mantém sincronizado com a mensagem inicial estática em index.html
 // (#asst-chat-body), já que "limpar" e "sem histórico salvo" devem
@@ -26,6 +34,7 @@ const _ASST_WELCOME_HTML = `
     <button class="asst-chip" onclick="asstAskSuggestion(this)">Quantas ocorrências abertas existem?</button>
     <button class="asst-chip" onclick="asstAskSuggestion(this)">Resumo geral do período</button>
     <button class="asst-chip" onclick="asstAskSuggestion(this)">Quais centrais estão sem lançar?</button>
+    <button class="asst-chip" onclick="asstAskSuggestion(this)">Há materiais pendentes de padronização?</button>
   </div>`;
 
 // ── Utilitários de estado/período ───────────────────────────────────
@@ -43,13 +52,17 @@ function _asstPeriodoLabel() {
   return `${fmtPtDate(toDate(window.__analiticoDtIni))} a ${fmtPtDate(toDate(window.__analiticoDtFim))}`;
 }
 
+function _asstContextNote(tipo, valor) {
+  return `<div class="asst-context-note"><i class="ti ti-history"></i> usando ${tipo} <b>${escapeHtml(valor)}</b> da pergunta anterior</div>`;
+}
+
 // ── Resolução de entidades citadas em texto livre (tolerante) ───────
 // Duas passadas: (1) substring exato do nome inteiro — mais confiável
 // quando o nome aparece por completo; (2) todos os "tokens" do nome
 // aparecem em qualquer ordem na pergunta — tolera hífen/espaço/acento
 // (normalizeLooseText já trata isso) e pequenas reordenações.
 // Limitação conhecida: nomes concatenados sem separador (“CPII” em vez
-// de “CP-II”) ainda não casam — ficaria para uma iteração futura.
+// de “CP-II”) ainda não casam.
 function _asstFuzzyResolve(text, names) {
   const qLoose  = normalizeLooseText(text);
   const qTokens = qLoose.split(' ').filter(Boolean);
@@ -76,9 +89,6 @@ function _asstFuzzyResolve(text, names) {
 }
 
 function _asstResolveCentral(text) {
-  // Prioriza as centrais da última análise (mais completo e já é o
-  // universo que os relatórios usam); cai para as citadas em ocorrências
-  // quando não há análise rodada, para não travar essa intenção específica.
   if (typeof _macroState !== 'undefined' && _macroState?.centralMap) {
     const fromMacro = _asstFuzzyResolve(text, Object.keys(_macroState.centralMap));
     if (fromMacro) return fromMacro;
@@ -107,28 +117,56 @@ function _asstResolveMaterial(text) {
   return matched ? nameToAlias.get(matched) : null;
 }
 
+// ── Versões "com contexto": tentam resolver da pergunta; se não achar,
+// caem no que foi mencionado por último na conversa. Sempre reportam
+// se o valor usado veio do contexto (fromContext), para a resposta
+// poder avisar isso ao analista.
+function _asstResolveCentralCtx(text) {
+  const found = _asstResolveCentral(text);
+  if (found) { _asstContext.central = found; return { value: found, fromContext: false }; }
+  if (_asstContext.central) return { value: _asstContext.central, fromContext: true };
+  return { value: null, fromContext: false };
+}
+
+function _asstResolveMaterialCtx(text) {
+  const found = _asstResolveMaterial(text);
+  if (found) { _asstContext.material = found; return { value: found, fromContext: false }; }
+  if (_asstContext.material) return { value: _asstContext.material, fromContext: true };
+  return { value: null, fromContext: false };
+}
+
+function _asstResolveRegionalCtx(text) {
+  const found = _asstResolveRegional(text);
+  if (found) { _asstContext.regional = found; return { value: found, fromContext: false }; }
+  if (_asstContext.regional) return { value: _asstContext.regional, fromContext: true };
+  return { value: null, fromContext: false };
+}
+
 // ── Intenção: materiais críticos/urgentes ───────────────────────────
 function _asstIntentCriticidade(query) {
   if (!_asstHasAnalise() || !window._rankByLevel) return _asstNoAnaliseMsg();
 
-  const central  = _asstResolveCentral(query);
-  const regional = !central ? _asstResolveRegional(query) : null;
+  const centralRes  = _asstResolveCentralCtx(query);
+  const regionalRes = !centralRes.value ? _asstResolveRegionalCtx(query) : { value: null, fromContext: false };
 
   let critico = window._rankByLevel.critico || [];
   let urgente = window._rankByLevel.urgente || [];
-  if (central) {
-    critico = critico.filter(i => i.central === central);
-    urgente = urgente.filter(i => i.central === central);
-  } else if (regional) {
-    critico = critico.filter(i => i.regional === regional);
-    urgente = urgente.filter(i => i.regional === regional);
+  let escopo = '', nota = '';
+
+  if (centralRes.value) {
+    critico = critico.filter(i => i.central === centralRes.value);
+    urgente = urgente.filter(i => i.central === centralRes.value);
+    escopo = ` em <b>${escapeHtml(centralRes.value)}</b>`;
+    if (centralRes.fromContext) nota = _asstContextNote('central', centralRes.value);
+  } else if (regionalRes.value) {
+    critico = critico.filter(i => i.regional === regionalRes.value);
+    urgente = urgente.filter(i => i.regional === regionalRes.value);
+    escopo = ` na regional de <b>${escapeHtml(regionalRes.value)}</b>`;
+    if (regionalRes.fromContext) nota = _asstContextNote('regional', regionalRes.value);
   }
 
-  const escopo = central ? ` em <b>${escapeHtml(central)}</b>`
-               : regional ? ` na regional de <b>${escapeHtml(regional)}</b>` : '';
-
   if (!critico.length && !urgente.length) {
-    return `Nenhum material crítico ou urgente${escopo} no período ${_asstPeriodoLabel()}. 👍`;
+    return nota + `Nenhum material crítico ou urgente${escopo} no período ${_asstPeriodoLabel()}. 👍`;
   }
 
   const item = i => `${escapeHtml(i.mat)} — ${escapeHtml(i.central)} (${signedKg(i.diff)})`;
@@ -144,7 +182,7 @@ function _asstIntentCriticidade(query) {
     html += urgente.slice(0, 8).map(i => `<div class="asst-item">${item(i)}</div>`).join('');
     if (urgente.length > 8) html += `<div class="asst-more">+ ${urgente.length - 8} outro(s)</div>`;
   }
-  return html;
+  return nota + html;
 }
 
 // ── Intenção: ranking de centrais (pior/melhor) ─────────────────────
@@ -154,9 +192,6 @@ function _asstIntentRankingCentral(query, wantWorst) {
   const entries = Object.entries(_macroState.centralMap);
   if (!entries.length) return `Não há dados de centrais disponíveis para o período ${_asstPeriodoLabel()}.`;
 
-  // Mesmo critério de desempate do ranking "Piores Centrais" já usado no
-  // sistema: contagem bruta (críticos → urgentes → atenção) descendente,
-  // com a maior variação absoluta como critério final de desempate.
   const sorted = entries.sort((a, b) => {
     const A = a[1].counts, B = b[1].counts;
     if (B.critico !== A.critico) return B.critico - A.critico;
@@ -178,12 +213,14 @@ function _asstIntentRankingCentral(query, wantWorst) {
 
 // ── Intenção: ocorrências abertas ───────────────────────────────────
 function _asstIntentOcorrencias(query) {
-  const central  = _asstResolveCentral(query);
+  const centralRes = _asstResolveCentralCtx(query);
   const abertas  = (state.ocorrencias || []).filter(o => !o.concluida && !o.inconclusiva);
-  const filtradas = central ? abertas.filter(o => normalizeText(o.central) === normalizeText(central)) : abertas;
+  const filtradas = centralRes.value ? abertas.filter(o => normalizeText(o.central) === normalizeText(centralRes.value)) : abertas;
 
-  const escopo = central ? ` em <b>${escapeHtml(central)}</b>` : '';
-  if (!filtradas.length) return `Nenhuma ocorrência aberta${escopo}. 👍`;
+  const escopo = centralRes.value ? ` em <b>${escapeHtml(centralRes.value)}</b>` : '';
+  const nota = centralRes.fromContext ? _asstContextNote('central', centralRes.value) : '';
+
+  if (!filtradas.length) return nota + `Nenhuma ocorrência aberta${escopo}. 👍`;
 
   const vencidas = filtradas.filter(o => ocDateStatus(o.dataLimite) === 'vencida');
   const urgentes = filtradas.filter(o => ocDateStatus(o.dataLimite) === 'urgente');
@@ -200,7 +237,7 @@ function _asstIntentOcorrencias(query) {
     return `<div class="asst-item">${badge} <b>${escapeHtml(o.central || '—')}</b>${o.material ? ' · ' + escapeHtml(o.material) : ''} — prazo ${o.dataLimite ? fmtDateBR(o.dataLimite) : '—'}${assuntoCurto ? '<br><span style="color:var(--text2)">' + escapeHtml(assuntoCurto) + '</span>' : ''}</div>`;
   }).join('');
   if (filtradas.length > 8) html += `<div class="asst-more">+ ${filtradas.length - 8} outra(s)</div>`;
-  return html;
+  return nota + html;
 }
 
 // ── Intenção: saúde global / resumo do período ──────────────────────
@@ -231,12 +268,17 @@ function _asstIntentSaudeGlobal() {
 function _asstIntentSaldoMaterial(query) {
   if (!_asstHasAnalise()) return _asstNoAnaliseMsg();
 
-  const central  = _asstResolveCentral(query);
-  const matAlias = _asstResolveMaterial(query);
+  const centralRes = _asstResolveCentralCtx(query);
+  const matRes     = _asstResolveMaterialCtx(query);
+  const central = centralRes.value, matAlias = matRes.value;
 
   if (!central && !matAlias) return 'Não identifiquei a central nem o material na pergunta. Tente algo como: "saldo de CIMENTO CP-II na central Volta Redonda".';
   if (!central)  return `Identifiquei o material <b>${escapeHtml(matAlias)}</b>, mas não a central. Qual central você quer consultar?`;
   if (!matAlias) return `Identifiquei a central <b>${escapeHtml(central)}</b>, mas não o material. Qual material você quer consultar?`;
+
+  let nota = '';
+  if (centralRes.fromContext) nota += _asstContextNote('central', central);
+  if (matRes.fromContext)     nota += _asstContextNote('material', matAlias);
 
   const dtIni = window.__analiticoDtIni, dtFim = window.__analiticoDtFim;
   const lancsAll = getLancsByCentralInPeriod(central, dtIni, dtFim).filter(l => l.material === matAlias);
@@ -252,7 +294,7 @@ function _asstIntentSaldoMaterial(query) {
   });
 
   if (!lancsAll.length && !sapAll.length && snap.pesoIniAusente) {
-    return `Não encontrei movimentações de <b>${escapeHtml(matAlias)}</b> em <b>${escapeHtml(central)}</b> no período ${_asstPeriodoLabel()}.`;
+    return nota + `Não encontrei movimentações de <b>${escapeHtml(matAlias)}</b> em <b>${escapeHtml(central)}</b> no período ${_asstPeriodoLabel()}.`;
   }
 
   const thresholds = getHealthThresholds();
@@ -265,15 +307,16 @@ function _asstIntentSaldoMaterial(query) {
   html += `<div class="asst-item">Est. Teórico: ${fmtKg(snap.estTeorico)}</div>`;
   html += `<div class="asst-item">Est. Final (real): ${snap.pesoFimAusente ? '—' : fmtKg(snap.pesoFim)} (${snap.dtFimLabel})</div>`;
   html += `<div class="asst-item"><b>Variação: ${signedKg(snap.diff)}</b> — ${levelLabel}</div>`;
-  return html;
+  return nota + html;
 }
 
 // ── Intenção: tendência/projeção (regressão linear sobre ~8 semanas) ─
 function _asstIntentTendencia(query) {
   if (!_asstHasAnalise()) return _asstNoAnaliseMsg();
 
-  const central  = _asstResolveCentral(query);
-  const matAlias = _asstResolveMaterial(query);
+  const centralRes = _asstResolveCentralCtx(query);
+  const matRes     = _asstResolveMaterialCtx(query);
+  const central = centralRes.value, matAlias = matRes.value;
 
   if (!central && !matAlias) return 'Para projetar uma tendência preciso da central e do material. Ex.: "tendência de CIMENTO CP-II na central Volta Redonda".';
   if (!central)  return `Identifiquei o material <b>${escapeHtml(matAlias)}</b>, mas não a central. Qual central?`;
@@ -283,26 +326,30 @@ function _asstIntentTendencia(query) {
     return 'O módulo de tendência não está disponível nesta tela.';
   }
 
+  let nota = '';
+  if (centralRes.fromContext) nota += _asstContextNote('central', central);
+  if (matRes.fromContext)     nota += _asstContextNote('material', matAlias);
+
   const dtFim = window.__analiticoDtFim instanceof Date ? window.__analiticoDtFim : new Date(window.__analiticoDtFim);
   const dtIniHist = new Date(dtFim);
-  dtIniHist.setDate(dtIniHist.getDate() - 56); // ~8 semanas de histórico para a regressão
+  dtIniHist.setDate(dtIniHist.getDate() - 56);
 
   let weekData;
   try {
     weekData = _tCompute('central', central, dtIniHist, dtFim, new Set([matAlias]));
   } catch (err) {
     console.error('Assistente: erro ao computar tendência', err);
-    return 'Não consegui calcular a tendência agora.';
+    return nota + 'Não consegui calcular a tendência agora.';
   }
 
   const comHistorico = (weekData || []).filter(w => w.realKg > 0);
   if (comHistorico.length < 2) {
-    return `Não há histórico semanal suficiente de <b>${escapeHtml(matAlias)}</b> em <b>${escapeHtml(central)}</b> para projetar uma tendência.`;
+    return nota + `Não há histórico semanal suficiente de <b>${escapeHtml(matAlias)}</b> em <b>${escapeHtml(central)}</b> para projetar uma tendência.`;
   }
 
   const forecast = _tForecast(weekData);
   if (forecast === null || !Number.isFinite(forecast)) {
-    return `Não foi possível calcular uma projeção confiável para <b>${escapeHtml(matAlias)}</b> em <b>${escapeHtml(central)}</b>.`;
+    return nota + `Não foi possível calcular uma projeção confiável para <b>${escapeHtml(matAlias)}</b> em <b>${escapeHtml(central)}</b>.`;
   }
 
   const ultimas = comHistorico.slice(-4);
@@ -310,7 +357,7 @@ function _asstIntentTendencia(query) {
   html += `<div class="asst-item">Últimas semanas: ${ultimas.map(w => `${w.shortLabel}: ${signedKg(w.variation)}`).join(' · ')}</div>`;
   html += `<div class="asst-item"><b>Projeção para a próxima semana: ${signedKg(forecast)}</b></div>`;
   html += `<div class="asst-more">Regressão linear simples sobre as últimas ${ultimas.length} semanas — use como indicativo, não substitui a análise do período.</div>`;
-  return html;
+  return nota + html;
 }
 
 // ── Intenção: centrais/materiais sem lançar (ausências) ─────────────
@@ -318,7 +365,7 @@ function _asstIntentAusencias(query) {
   if (!_asstHasAnalise()) return _asstNoAnaliseMsg();
   if (typeof _ausComputar !== 'function') return 'O módulo de ausências não está disponível nesta tela.';
 
-  const central = _asstResolveCentral(query);
+  const centralRes = _asstResolveCentralCtx(query);
 
   let ausencias;
   try {
@@ -328,9 +375,11 @@ function _asstIntentAusencias(query) {
     return 'Não consegui calcular as ausências de lançamento agora.';
   }
 
-  const filtradas = central ? ausencias.filter(a => a.central === central) : ausencias;
-  const escopo = central ? ` em <b>${escapeHtml(central)}</b>` : '';
-  if (!filtradas.length) return `Nenhuma ausência de lançamento${escopo} no período ${_asstPeriodoLabel()}. 👍`;
+  const filtradas = centralRes.value ? ausencias.filter(a => a.central === centralRes.value) : ausencias;
+  const escopo = centralRes.value ? ` em <b>${escapeHtml(centralRes.value)}</b>` : '';
+  const nota = centralRes.fromContext ? _asstContextNote('central', centralRes.value) : '';
+
+  if (!filtradas.length) return nota + `Nenhuma ausência de lançamento${escopo} no período ${_asstPeriodoLabel()}. 👍`;
 
   const porCentral = new Map();
   filtradas.forEach(a => {
@@ -346,7 +395,7 @@ function _asstIntentAusencias(query) {
     `<div class="asst-item"><b>${escapeHtml(c)}</b> — ${g.materiais.size} material(is), ${g.dias} dia(s) ausente(s) no total</div>`
   ).join('');
   if (ranking.length > 8) html += `<div class="asst-more">+ ${ranking.length - 8} outra(s) central(is)</div>`;
-  return html;
+  return nota + html;
 }
 
 // ── Intenção: ações de relatório cadastradas para um material crítico ─
@@ -354,12 +403,17 @@ function _asstIntentAcoes(query) {
   if (!_asstHasAnalise() || !window._rankByLevel) return _asstNoAnaliseMsg();
   if (typeof _resolverAcoesParaMaterial !== 'function') return 'O módulo de ações de relatório não está disponível nesta tela.';
 
-  const central  = _asstResolveCentral(query);
-  const matAlias = _asstResolveMaterial(query);
+  const centralRes = _asstResolveCentralCtx(query);
+  const matRes     = _asstResolveMaterialCtx(query);
+  const central = centralRes.value, matAlias = matRes.value;
 
   if (!central && !matAlias) return 'Para consultar as ações definidas, preciso da central e do material. Ex.: "ações para CIMENTO CP-II na central Volta Redonda".';
   if (!central)  return `Identifiquei o material <b>${escapeHtml(matAlias)}</b>, mas não a central. Qual central?`;
   if (!matAlias) return `Identifiquei a central <b>${escapeHtml(central)}</b>, mas não o material. Qual material?`;
+
+  let nota = '';
+  if (centralRes.fromContext) nota += _asstContextNote('central', central);
+  if (matRes.fromContext)     nota += _asstContextNote('material', matAlias);
 
   const todos = [
     ...(window._rankByLevel.critico || []),
@@ -367,7 +421,7 @@ function _asstIntentAcoes(query) {
     ...(window._rankByLevel.atencao || []),
   ];
   const item = todos.find(i => i.central === central && i.mat === matAlias);
-  if (!item) return `<b>${escapeHtml(matAlias)}</b> em <b>${escapeHtml(central)}</b> não está em atenção, urgente ou crítico no período ${_asstPeriodoLabel()}.`;
+  if (!item) return nota + `<b>${escapeHtml(matAlias)}</b> em <b>${escapeHtml(central)}</b> não está em atenção, urgente ou crítico no período ${_asstPeriodoLabel()}.`;
 
   const acoes = _resolverAcoesParaMaterial(item.mat, item.diff, item.categoria, item.level, item.catKey, item.catSubKey);
   const lvlLabel = (typeof _levelLabel !== 'undefined' && _levelLabel[item.level]) || String(item.level).toUpperCase();
@@ -377,6 +431,61 @@ function _asstIntentAcoes(query) {
     html += `<div class="asst-section-title"><i class="ti ti-clipboard-check"></i> Ação definida</div><div class="asst-item">${escapeHtml(acoes)}</div>`;
   } else {
     html += `<div class="asst-item" style="color:var(--text2)">Nenhuma ação cadastrada para esse cenário em Configurações.</div>`;
+  }
+  return nota + html;
+}
+
+// ── Intenção: pendências de cadastro (Configurações → Padronização) ──
+// Um registro fica "pendente" quando findMaterialMatch/normalizarCentral
+// não encontram nenhum item cadastrado — ambas são consultas puras,
+// nunca mutam o state (ao contrário de reaplicarPadronizacaoMateriais/
+// Centrais, que por isso nunca são chamadas aqui).
+function _asstIntentConfigPendente() {
+  if (typeof CENTRAL_FIELDS_BY_MODULO === 'undefined' || typeof findMaterialMatch !== 'function') {
+    return 'Não consegui verificar pendências de cadastro agora.';
+  }
+
+  const materiaisPendentes = new Map();
+  const centraisPendentes  = new Map();
+
+  ['entradas', 'saidas', 'lancamentos', 'sap'].forEach(mod => {
+    (state[mod] || []).forEach(r => {
+      const rawMat = String(r.materialOriginal ?? '').trim();
+      if (rawMat && !findMaterialMatch(rawMat)) {
+        materiaisPendentes.set(rawMat, (materiaisPendentes.get(rawMat) || 0) + 1);
+      }
+    });
+  });
+
+  const filIdx = getFilialLookupIndex();
+  Object.entries(CENTRAL_FIELDS_BY_MODULO).forEach(([mod, fields]) => {
+    (state[mod] || []).forEach(r => {
+      fields.forEach(f => {
+        const rawCentral = String(r[`${f}Original`] ?? '').trim();
+        if (!rawCentral) return;
+        const found = filIdx.exact.get(normalizeText(rawCentral));
+        if (!found) centraisPendentes.set(rawCentral, (centraisPendentes.get(rawCentral) || 0) + 1);
+      });
+    });
+  });
+
+  if (!materiaisPendentes.size && !centraisPendentes.size) {
+    return 'Nenhum material ou central pendente de padronização. 👍';
+  }
+
+  let html = `<b>Pendências de cadastro</b> (Configurações → Padronização)`;
+
+  if (materiaisPendentes.size) {
+    const list = [...materiaisPendentes.entries()].sort((a, b) => b[1] - a[1]);
+    html += `<div class="asst-section-title" style="color:var(--amber)"><i class="ti ti-alert-triangle"></i> Materiais não padronizados (${list.length})</div>`;
+    html += list.slice(0, 8).map(([raw, count]) => `<div class="asst-item">${escapeHtml(raw)} — ${count} registro(s)</div>`).join('');
+    if (list.length > 8) html += `<div class="asst-more">+ ${list.length - 8} outro(s)</div>`;
+  }
+  if (centraisPendentes.size) {
+    const list = [...centraisPendentes.entries()].sort((a, b) => b[1] - a[1]);
+    html += `<div class="asst-section-title" style="color:var(--amber)"><i class="ti ti-alert-triangle"></i> Centrais não padronizadas (${list.length})</div>`;
+    html += list.slice(0, 8).map(([raw, count]) => `<div class="asst-item">${escapeHtml(raw)} — ${count} registro(s)</div>`).join('');
+    if (list.length > 8) html += `<div class="asst-more">+ ${list.length - 8} outro(s)</div>`;
   }
   return html;
 }
@@ -391,24 +500,32 @@ function _asstFallbackHelp() {
     '<div class="asst-item">• Saldo de um material numa central — ex.: "saldo de CIMENTO CP-II na central X"</div>' +
     '<div class="asst-item">• Tendência/projeção — ex.: "tendência de CIMENTO CP-II na central X"</div>' +
     '<div class="asst-item">• Centrais sem lançar — ex.: "quais centrais estão sem lançar?"</div>' +
-    '<div class="asst-item">• Ações definidas para um material crítico — ex.: "ações para CIMENTO CP-II na central X"</div>';
+    '<div class="asst-item">• Ações definidas para um material crítico — ex.: "ações para CIMENTO CP-II na central X"</div>' +
+    '<div class="asst-item">• Pendências de cadastro — ex.: "há materiais pendentes de padronização?"</div>';
 }
 
-// ── Roteador de intenção (regras por palavra-chave, sem LLM) ────────
+// ── Registro de intenções (ordem importa: primeira que casar vence) ─
+const _ASST_INTENTS = [
+  { name: 'ocorrencias',      test: q => /OCORRENCIA/.test(q),                    handler: raw => _asstIntentOcorrencias(raw) },
+  { name: 'ausencias',        test: q => /AUSENCIA|SEM LANCAR|NAO LANCOU/.test(q), handler: raw => _asstIntentAusencias(raw) },
+  { name: 'acoes',            test: q => /\b(ACAO|ACOES)\b/.test(q),              handler: raw => _asstIntentAcoes(raw) },
+  { name: 'config-pendente',  test: q => /PADRONIZ|PENDENC.*CADASTR|CADASTR.*PENDENC/.test(q), handler: () => _asstIntentConfigPendente() },
+  { name: 'pior',             test: q => /\bPIOR(ES)?\b/.test(q),                 handler: raw => _asstIntentRankingCentral(raw, true) },
+  { name: 'melhor',           test: q => /\bMELHOR(ES)?\b/.test(q),               handler: raw => _asstIntentRankingCentral(raw, false) },
+  { name: 'tendencia',        test: q => /TENDENCIA|PREVISAO|PROJECAO/.test(q),   handler: raw => _asstIntentTendencia(raw) },
+  { name: 'saldo',            test: q => /\bSALDO\b|ESTOQUE DE|QUANTO TEM/.test(q), handler: raw => _asstIntentSaldoMaterial(raw) },
+  { name: 'criticidade',      test: q => /CRITIC|URGENTE/.test(q),                handler: raw => _asstIntentCriticidade(raw) },
+  { name: 'saude',            test: q => /SAUDE|RESUMO|VISAO GERAL|SITUACAO/.test(q), handler: () => _asstIntentSaudeGlobal() },
+];
+
+// ── Roteador de intenção ─────────────────────────────────────────────
 function _asstProcessQuery(raw) {
   const q = normalizeText(raw);
   if (!q) return 'Digite uma pergunta — por exemplo: "quais materiais estão críticos?"';
 
-  if (/OCORRENCIA/.test(q))                          return _asstIntentOcorrencias(raw);
-  if (/AUSENCIA|SEM LANCAR|NAO LANCOU/.test(q))       return _asstIntentAusencias(raw);
-  if (/\b(ACAO|ACOES)\b/.test(q))                     return _asstIntentAcoes(raw);
-  if (/\bPIOR(ES)?\b/.test(q))                        return _asstIntentRankingCentral(raw, true);
-  if (/\bMELHOR(ES)?\b/.test(q))                      return _asstIntentRankingCentral(raw, false);
-  if (/TENDENCIA|PREVISAO|PROJECAO/.test(q))          return _asstIntentTendencia(raw);
-  if (/\bSALDO\b|ESTOQUE DE|QUANTO TEM/.test(q))      return _asstIntentSaldoMaterial(raw);
-  if (/CRITIC|URGENTE/.test(q))                       return _asstIntentCriticidade(raw);
-  if (/SAUDE|RESUMO|VISAO GERAL|SITUACAO/.test(q))    return _asstIntentSaudeGlobal();
-
+  for (const intent of _ASST_INTENTS) {
+    if (intent.test(q)) return intent.handler(raw);
+  }
   return _asstFallbackHelp();
 }
 
@@ -447,7 +564,7 @@ function _asstPersistHistory() {
 function _asstLoadHistory() {
   let saved = null;
   try { saved = JSON.parse(localStorage.getItem(ASST_HISTORY_KEY) || 'null'); } catch (err) { saved = null; }
-  if (!Array.isArray(saved) || !saved.length) return; // mantém a mensagem de boas-vindas estática do HTML
+  if (!Array.isArray(saved) || !saved.length) return;
 
   const body = document.getElementById('asst-chat-body');
   if (!body) return;
@@ -491,5 +608,6 @@ function asstClearChat() {
   if (!body) return;
   body.innerHTML = '';
   _asstRenderMsg('bot', _ASST_WELCOME_HTML);
+  _asstContext = { central: null, material: null, regional: null };
   try { localStorage.removeItem(ASST_HISTORY_KEY); } catch (err) {}
 }

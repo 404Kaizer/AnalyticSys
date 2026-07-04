@@ -6958,6 +6958,17 @@ mark.search-highlight {
 }
 .asst-item:last-child { border-bottom: none; }
 .asst-more { font-size: 11px; color: var(--text3); padding-top: 4px; }
+.asst-context-note {
+  font-size: 10.5px;
+  color: var(--text3);
+  font-style: italic;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px dashed var(--border);
+}
 
 .asst-input-row {
   display: flex;
