@@ -55,15 +55,30 @@ function anToggleMacro() {
 }
 window.anToggleMacro = anToggleMacro;
 
-function rodarAnalitico() {
-  const iniStr = document.getElementById('an-dt-ini')?.value;
-  const fimStr = document.getElementById('an-dt-fim')?.value;
-  if (!iniStr || !fimStr) return;
+// iniOverride/fimOverride ('YYYY-MM-DD') e onDone são opcionais — usados
+// pelo Assistente (chat) para rodar a análise com um período escolhido
+// pelo próprio usuário ali dentro, sem depender de ele navegar até aqui.
+// Chamada sem argumentos (clique no botão) mantém o comportamento original.
+function rodarAnalitico(iniOverride, fimOverride, onDone) {
+  const iniEl = document.getElementById('an-dt-ini');
+  const fimEl = document.getElementById('an-dt-fim');
+
+  // Se veio de fora (chat), sincroniza os campos da tela também, para que
+  // o Dashboard Analítico mostre o mesmo período que foi de fato analisado.
+  if (iniOverride && fimOverride) {
+    if (iniEl) iniEl.value = iniOverride;
+    if (fimEl) fimEl.value = fimOverride;
+  }
+
+  const iniStr = iniOverride || iniEl?.value;
+  const fimStr = fimOverride || fimEl?.value;
+  if (!iniStr || !fimStr) { if (typeof onDone === 'function') onDone({ ok: false, reason: 'periodo-ausente' }); return; }
 
   const dtIni = new Date(iniStr + 'T00:00:00');
   const dtFim = new Date(fimStr + 'T23:59:59');
   if (isNaN(dtIni) || isNaN(dtFim) || dtIni > dtFim) {
     toast('Período inválido', 'error');
+    if (typeof onDone === 'function') onDone({ ok: false, reason: 'periodo-invalido' });
     return;
   }
 
@@ -75,10 +90,10 @@ function rodarAnalitico() {
     { id: 'an-render',   icon: 'ti-layout',              label: 'Renderizando resultados' },
     { id: 'an-inv',      icon: 'ti-clipboard-check',     label: 'Recalculando fechamento de inventário' },
   ]);
-  requestAnimationFrame(() => setTimeout(() => _rodarAnaliticoCore(dtIni, dtFim), 0));
+  requestAnimationFrame(() => setTimeout(() => _rodarAnaliticoCore(dtIni, dtFim, onDone), 0));
 }
 
-function _rodarAnaliticoCore(dtIni, dtFim) {
+function _rodarAnaliticoCore(dtIni, dtFim, onDone) {
 
   // Limpa estado de pendentes considerados — cada nova análise começa do zero
   if (window._pendConsiderados) window._pendConsiderados = {};
@@ -106,6 +121,7 @@ function _rodarAnaliticoCore(dtIni, dtFim) {
     toast('Nenhum dado para o período selecionado', 'error');
     if (typeof hideLoadingOverlay === 'function') hideLoadingOverlay('Sem dados');
     if (typeof loadingHideSteps === 'function') loadingHideSteps();
+    if (typeof onDone === 'function') onDone({ ok: false, reason: 'sem-dados' });
     return;
   }
 
@@ -376,6 +392,7 @@ function _rodarAnaliticoCore(dtIni, dtFim) {
   document.getElementById('an-empty').style.display = 'none';
   document.getElementById('an-content').style.display = '';
   if (window.updatePeriodFab) updatePeriodFab();
+  if (typeof onDone === 'function') onDone({ ok: true, dtIni, dtFim });
 }
 
 function parseMes(str) {

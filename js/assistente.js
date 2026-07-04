@@ -27,14 +27,14 @@ let _asstContext = { central: null, material: null, regional: null };
 // (#asst-chat-body), já que "limpar" e "sem histórico salvo" devem
 // devolver o mesmo estado de boas-vindas.
 const _ASST_WELCOME_HTML = `
-  Oi! Eu respondo perguntas sobre a última análise rodada no Dashboard Analítico. Experimente:
+  Oi! Sou seu analista auxiliar de estoque. Respondo sobre a última análise rodada no Dashboard, e ajudo com ocorrências e pendências de cadastro a qualquer momento.
+  <br><br>
+  Digite <code>/</code> e escolha um contexto para eu saber onde buscar a resposta — ele fica travado até você trocar ou remover. Se a pergunta escolhida precisar de um período analisado, eu peço as datas aqui mesmo, sem escolher por conta própria.
   <div class="asst-suggestions">
-    <button class="asst-chip" onclick="asstAskSuggestion(this)">Quais materiais estão críticos?</button>
-    <button class="asst-chip" onclick="asstAskSuggestion(this)">Qual central está pior no período?</button>
-    <button class="asst-chip" onclick="asstAskSuggestion(this)">Quantas ocorrências abertas existem?</button>
-    <button class="asst-chip" onclick="asstAskSuggestion(this)">Resumo geral do período</button>
-    <button class="asst-chip" onclick="asstAskSuggestion(this)">Quais centrais estão sem lançar?</button>
-    <button class="asst-chip" onclick="asstAskSuggestion(this)">Há materiais pendentes de padronização?</button>
+    <button class="asst-chip" onclick="asstQuickStart('ocorrencias')">Ocorrências abertas</button>
+    <button class="asst-chip" onclick="asstQuickStart('saude')">Resumo do período</button>
+    <button class="asst-chip" onclick="asstQuickStart('saldo')">Saldo de um material</button>
+    <button class="asst-chip" onclick="asstQuickStart('pior')">Piores centrais</button>
   </div>`;
 
 // ── Utilitários de estado/período ───────────────────────────────────
@@ -490,43 +490,219 @@ function _asstIntentConfigPendente() {
   return html;
 }
 
-// ── Ajuda / fallback ─────────────────────────────────────────────────
-function _asstFallbackHelp() {
-  return 'Não entendi a pergunta. Posso responder sobre:' +
-    '<div class="asst-item">• Materiais críticos/urgentes — ex.: "quais materiais estão críticos?"</div>' +
-    '<div class="asst-item">• Central pior/melhor no período — ex.: "qual central está pior?"</div>' +
-    '<div class="asst-item">• Ocorrências abertas — ex.: "quantas ocorrências abertas na central X?"</div>' +
-    '<div class="asst-item">• Resumo/saúde geral do período — ex.: "resumo geral"</div>' +
-    '<div class="asst-item">• Saldo de um material numa central — ex.: "saldo de CIMENTO CP-II na central X"</div>' +
-    '<div class="asst-item">• Tendência/projeção — ex.: "tendência de CIMENTO CP-II na central X"</div>' +
-    '<div class="asst-item">• Centrais sem lançar — ex.: "quais centrais estão sem lançar?"</div>' +
-    '<div class="asst-item">• Ações definidas para um material crítico — ex.: "ações para CIMENTO CP-II na central X"</div>' +
-    '<div class="asst-item">• Pendências de cadastro — ex.: "há materiais pendentes de padronização?"</div>';
-}
-
-// ── Registro de intenções (ordem importa: primeira que casar vence) ─
+// ── Registro de intenções ────────────────────────────────────────────
+// Cada item vira uma entrada do menu "/" (label amigável, agrupada por
+// group). requiresAnalise indica se a intenção depende de uma análise
+// já ter sido rodada no Dashboard Analítico (window.__analiticoDtIni/Fim,
+// _macroState, window._rankByLevel) — ocorrências e pendências de
+// cadastro leem dado bruto e por isso nunca dependem disso. needs é só
+// informativo (usado na mensagem de trava, para avisar o que citar);
+// quem resolve central/material de fato continua sendo o próprio
+// handler via _asstResolve*Ctx, que já lembra o que foi dito antes
+// através de _asstContext — é essa memória (não uma máquina de estado
+// nova) que resolve o problema de o assistente perguntar algo e não
+// reconhecer a resposta na mensagem seguinte, já que agora essa
+// mensagem seguinte é enviada direto pro mesmo handler, sem passar de
+// novo por detecção de intenção.
 const _ASST_INTENTS = [
-  { name: 'ocorrencias',      test: q => /OCORRENCIA/.test(q),                    handler: raw => _asstIntentOcorrencias(raw) },
-  { name: 'ausencias',        test: q => /AUSENCIA|SEM LANCAR|NAO LANCOU/.test(q), handler: raw => _asstIntentAusencias(raw) },
-  { name: 'acoes',            test: q => /\b(ACAO|ACOES)\b/.test(q),              handler: raw => _asstIntentAcoes(raw) },
-  { name: 'config-pendente',  test: q => /PADRONIZ|PENDENC.*CADASTR|CADASTR.*PENDENC/.test(q), handler: () => _asstIntentConfigPendente() },
-  { name: 'pior',             test: q => /\bPIOR(ES)?\b/.test(q),                 handler: raw => _asstIntentRankingCentral(raw, true) },
-  { name: 'melhor',           test: q => /\bMELHOR(ES)?\b/.test(q),               handler: raw => _asstIntentRankingCentral(raw, false) },
-  { name: 'tendencia',        test: q => /TENDENCIA|PREVISAO|PROJECAO/.test(q),   handler: raw => _asstIntentTendencia(raw) },
-  { name: 'saldo',            test: q => /\bSALDO\b|ESTOQUE DE|QUANTO TEM/.test(q), handler: raw => _asstIntentSaldoMaterial(raw) },
-  { name: 'criticidade',      test: q => /CRITIC|URGENTE/.test(q),                handler: raw => _asstIntentCriticidade(raw) },
-  { name: 'saude',            test: q => /SAUDE|RESUMO|VISAO GERAL|SITUACAO/.test(q), handler: () => _asstIntentSaudeGlobal() },
+  { id: 'saldo',           label: 'Saldo de um material',           group: 'Estoque',     icon: 'ti-scale',            needs: ['material', 'central'], requiresAnalise: true,  handler: raw => _asstIntentSaldoMaterial(raw) },
+  { id: 'tendencia',       label: 'Tendência de um material',       group: 'Estoque',     icon: 'ti-trending-up',      needs: ['material', 'central'], requiresAnalise: true,  handler: raw => _asstIntentTendencia(raw) },
+  { id: 'pior',            label: 'Piores centrais no período',     group: 'Centrais',    icon: 'ti-arrow-down-right', needs: [],                      requiresAnalise: true,  handler: raw => _asstIntentRankingCentral(raw, true) },
+  { id: 'melhor',          label: 'Melhores centrais no período',   group: 'Centrais',    icon: 'ti-arrow-up-right',   needs: [],                      requiresAnalise: true,  handler: raw => _asstIntentRankingCentral(raw, false) },
+  { id: 'ausencias',       label: 'Centrais sem lançar',            group: 'Centrais',    icon: 'ti-calendar-off',     needs: [],                      requiresAnalise: true,  handler: raw => _asstIntentAusencias(raw) },
+  { id: 'ocorrencias',     label: 'Ocorrências abertas',            group: 'Ocorrências', icon: 'ti-list-details',     needs: [],                      requiresAnalise: false, handler: raw => _asstIntentOcorrencias(raw) },
+  { id: 'config-pendente', label: 'Pendências de padronização',     group: 'Cadastro',    icon: 'ti-alert-triangle',   needs: [],                      requiresAnalise: false, handler: () => _asstIntentConfigPendente() },
+  { id: 'criticidade',     label: 'Materiais críticos/urgentes',    group: 'Geral',       icon: 'ti-flame',            needs: [],                      requiresAnalise: true,  handler: raw => _asstIntentCriticidade(raw) },
+  { id: 'saude',           label: 'Resumo do período',              group: 'Geral',       icon: 'ti-report',           needs: [],                      requiresAnalise: true,  handler: () => _asstIntentSaudeGlobal() },
+  { id: 'acoes',           label: 'Ações para um material crítico', group: 'Geral',       icon: 'ti-clipboard-check',  needs: ['material', 'central'], requiresAnalise: true,  handler: raw => _asstIntentAcoes(raw) },
 ];
 
-// ── Roteador de intenção ─────────────────────────────────────────────
-function _asstProcessQuery(raw) {
-  const q = normalizeText(raw);
-  if (!q) return 'Digite uma pergunta — por exemplo: "quais materiais estão críticos?"';
+function _asstIntentById(id) {
+  return _ASST_INTENTS.find(it => it.id === id) || null;
+}
 
-  for (const intent of _ASST_INTENTS) {
-    if (intent.test(q)) return intent.handler(raw);
+const _ASST_SLOT_LABEL = { material: 'o material', central: 'a central' };
+
+// ── Contexto travado via "/" ──────────────────────────────────────────
+let _asstLockedIntent = null;
+const _asstDD = { open: false, items: [], active: 0 };
+
+function _asstGroupedForFilter(filterRaw) {
+  const f = normalizeLooseText(filterRaw || '');
+  return _ASST_INTENTS.filter(it => !f
+    || normalizeLooseText(it.label).includes(f)
+    || normalizeLooseText(it.group).includes(f));
+}
+
+function _asstOpenDropdown(filterRaw) {
+  _asstDD.items = _asstGroupedForFilter(filterRaw);
+  if (_asstDD.active >= _asstDD.items.length) _asstDD.active = Math.max(0, _asstDD.items.length - 1);
+  _asstDD.open = true;
+  _asstRenderDropdown();
+}
+
+function _asstCloseDropdown() {
+  _asstDD.open = false;
+  _asstRenderDropdown();
+}
+
+function _asstRenderDropdown() {
+  const el = document.getElementById('asst-dropdown');
+  if (!el) return;
+  if (!_asstDD.open) { el.style.display = 'none'; el.innerHTML = ''; return; }
+
+  if (!_asstDD.items.length) {
+    el.innerHTML = '<div class="asst-dd-empty">Nenhum contexto encontrado.</div>';
+    el.style.display = '';
+    return;
   }
-  return _asstFallbackHelp();
+
+  let html = '', lastGroup = null;
+  _asstDD.items.forEach((it, idx) => {
+    if (it.group !== lastGroup) { html += `<div class="asst-dd-group">${escapeHtml(it.group)}</div>`; lastGroup = it.group; }
+    const flag = (it.requiresAnalise && !_asstHasAnalise())
+      ? '<i class="ti ti-calendar asst-dd-flag" title="pede um período analisado"></i>' : '';
+    html += `<div class="asst-dd-item${idx === _asstDD.active ? ' active' : ''}" onclick="_asstSelectIntent('${it.id}')"><i class="ti ${it.icon} asst-dd-icon"></i><span>${escapeHtml(it.label)}</span>${flag}</div>`;
+  });
+  el.innerHTML = html;
+  el.style.display = '';
+}
+
+function _asstInputChanged(el) {
+  const v = el.value;
+  if (v.charAt(0) === '/') {
+    _asstDD.active = 0;
+    _asstOpenDropdown(v.slice(1));
+  } else if (_asstDD.open) {
+    _asstCloseDropdown();
+  }
+}
+
+function _asstInputKeydown(ev) {
+  if (_asstDD.open) {
+    if (ev.key === 'ArrowDown') { ev.preventDefault(); _asstDD.active = Math.min(_asstDD.active + 1, _asstDD.items.length - 1); _asstRenderDropdown(); }
+    else if (ev.key === 'ArrowUp') { ev.preventDefault(); _asstDD.active = Math.max(_asstDD.active - 1, 0); _asstRenderDropdown(); }
+    else if (ev.key === 'Enter') { ev.preventDefault(); const it = _asstDD.items[_asstDD.active]; if (it) _asstSelectIntent(it.id); }
+    else if (ev.key === 'Escape') { _asstCloseDropdown(); const input = document.getElementById('asst-input'); if (input) input.value = ''; }
+    return;
+  }
+  if (ev.key === 'Enter') asstSend();
+}
+
+// ── Etiquetas de contexto/período acima do campo de digitação ───────
+function _asstRenderContextPill(it) {
+  const pill  = document.getElementById('asst-context-pill');
+  const icon  = document.getElementById('asst-context-pill-icon');
+  const label = document.getElementById('asst-context-pill-label');
+  if (!pill || !label) return;
+  if (icon) icon.className = 'ti ' + it.icon;
+  label.textContent = it.label;
+  pill.style.display = '';
+  _asstRenderPeriodPill();
+}
+
+function _asstRenderPeriodPill() {
+  const row     = document.getElementById('asst-pill-row');
+  const pill    = document.getElementById('asst-period-pill');
+  const label   = document.getElementById('asst-period-pill-label');
+  const ctxPill = document.getElementById('asst-context-pill');
+  if (!row || !pill || !label) return;
+  if (_asstHasAnalise()) {
+    label.textContent = _asstPeriodoLabel();
+    pill.style.display = '';
+  } else {
+    pill.style.display = 'none';
+  }
+  const anyVisible = (ctxPill && ctxPill.style.display !== 'none') || pill.style.display !== 'none';
+  row.style.display = anyVisible ? 'flex' : 'none';
+}
+
+function _asstClearIntent() {
+  _asstLockedIntent = null;
+  const pill = document.getElementById('asst-context-pill');
+  if (pill) pill.style.display = 'none';
+  _asstRenderPeriodPill();
+  _asstAppendMsg('bot', 'Contexto removido. Digite / para escolher outro.');
+}
+
+// ── Seletor de período dentro do chat ────────────────────────────────
+// O usuário sempre escolhe as datas — o assistente nunca sugere nem
+// assume um período por conta própria.
+function _asstPeriodPickerHtml() {
+  return `<div class="asst-pp">
+    <div class="asst-pp-row">
+      <input type="date" class="asst-pp-ini">
+      <input type="date" class="asst-pp-fim">
+    </div>
+    <button class="asst-pp-btn" onclick="_asstRunAnaliseFromChat(this)">Rodar análise</button>
+    <div class="asst-pp-err" style="display:none">Escolha as duas datas.</div>
+  </div>`;
+}
+
+function _asstRunAnaliseFromChat(btn) {
+  const wrap = btn.closest('.asst-pp');
+  const iniEl = wrap?.querySelector('.asst-pp-ini');
+  const fimEl = wrap?.querySelector('.asst-pp-fim');
+  const errEl = wrap?.querySelector('.asst-pp-err');
+  if (!iniEl || !fimEl || !errEl) return;
+
+  const iniStr = iniEl.value, fimStr = fimEl.value;
+  if (!iniStr || !fimStr) { errEl.style.display = ''; return; }
+  errEl.style.display = 'none';
+  btn.disabled = true; iniEl.disabled = true; fimEl.disabled = true;
+  btn.textContent = 'Analisando...';
+
+  if (typeof rodarAnalitico !== 'function') {
+    _asstAppendMsg('bot', 'Não consegui rodar a análise agora — o módulo do Dashboard Analítico não está disponível nesta tela.');
+    return;
+  }
+
+  rodarAnalitico(iniStr, fimStr, result => {
+    if (!result || !result.ok) {
+      btn.disabled = false; iniEl.disabled = false; fimEl.disabled = false;
+      btn.textContent = 'Rodar análise';
+      const motivo = result?.reason === 'sem-dados'
+        ? 'Não encontrei dados para esse período — tente outras datas.'
+        : 'Não consegui concluir a análise — confira as datas e tente de novo.';
+      _asstAppendMsg('bot', motivo);
+      return;
+    }
+    _asstRenderPeriodPill();
+    const msg = `Análise concluída para o período <b>${_asstPeriodoLabel()}</b>.`
+      + (_asstLockedIntent ? ' ' + _asstContextLockedMsg(_asstLockedIntent) : '');
+    _asstAppendMsg('bot', msg);
+  });
+}
+
+function _asstEditPeriod() {
+  _asstAppendMsg('bot', 'Trocar o período da análise:');
+  _asstAppendMsg('bot', _asstPeriodPickerHtml());
+}
+
+function _asstContextLockedMsg(it) {
+  let msg = `Contexto travado em <b>${escapeHtml(it.label)}</b>. Pergunte livremente`;
+  msg += (it.needs && it.needs.length)
+    ? ` — cite ${it.needs.map(n => _ASST_SLOT_LABEL[n]).join(' e ')}; se faltar algo, eu pergunto.`
+    : ' dentro desse tema.';
+  if (it.requiresAnalise) msg += ` Usando o período já analisado: <b>${_asstPeriodoLabel()}</b>.`;
+  return msg;
+}
+
+function _asstSelectIntent(id) {
+  const it = _asstIntentById(id);
+  if (!it) return;
+  _asstLockedIntent = it;
+  _asstCloseDropdown();
+  const input = document.getElementById('asst-input');
+  if (input) { input.value = ''; input.focus(); }
+  _asstRenderContextPill(it);
+
+  if (it.requiresAnalise && !_asstHasAnalise()) {
+    _asstAppendMsg('bot', `Para responder sobre <b>${escapeHtml(it.label)}</b> preciso de um período analisado antes. Escolha as datas:`);
+    _asstAppendMsg('bot', _asstPeriodPickerHtml());
+    return;
+  }
+  _asstAppendMsg('bot', _asstContextLockedMsg(it));
 }
 
 // ── UI do painel de chat ─────────────────────────────────────────────
@@ -579,17 +755,31 @@ function asstCopyMsg(btn) {
   navigator.clipboard?.writeText(text).then(() => toast('Resposta copiada!'));
 }
 
+// Dado o contexto travado via "/", chama o handler direto — sem passar
+// de novo por detecção de intenção. Isso é o que corrige o bug de
+// "pergunto algo e não reconheço a resposta seguinte": o handler usa
+// _asstResolve*Ctx, que já lembra o que foi resolvido na chamada
+// anterior através de _asstContext.
+function _asstProcessLocked(text) {
+  if (!_asstLockedIntent) return 'Escolha um contexto antes de perguntar — digite / para ver as opções.';
+  const it = _asstLockedIntent;
+  if (it.requiresAnalise && !_asstHasAnalise()) {
+    return 'Ainda falta rodar a análise do período — preencha as datas acima antes de perguntar.';
+  }
+  return it.handler(text);
+}
+
 function asstSend() {
   const input = document.getElementById('asst-input');
   const text = (input?.value || '').trim();
-  if (!text) return;
+  if (!text || text.charAt(0) === '/') return;
 
   _asstAppendMsg('user', escapeHtml(text));
   input.value = '';
 
   let resposta;
   try {
-    resposta = _asstProcessQuery(text);
+    resposta = _asstProcessLocked(text);
   } catch (err) {
     console.error('Assistente: erro ao processar pergunta', err);
     resposta = 'Ocorreu um erro ao processar essa pergunta. Tente reformular.';
@@ -597,10 +787,8 @@ function asstSend() {
   _asstAppendMsg('bot', resposta);
 }
 
-function asstAskSuggestion(btn) {
-  const input = document.getElementById('asst-input');
-  if (input) input.value = btn.textContent.trim();
-  asstSend();
+function asstQuickStart(id) {
+  _asstSelectIntent(id);
 }
 
 function asstClearChat() {
@@ -609,5 +797,10 @@ function asstClearChat() {
   body.innerHTML = '';
   _asstRenderMsg('bot', _ASST_WELCOME_HTML);
   _asstContext = { central: null, material: null, regional: null };
+  _asstLockedIntent = null;
+  _asstCloseDropdown();
+  const pill = document.getElementById('asst-context-pill');
+  if (pill) pill.style.display = 'none';
+  _asstRenderPeriodPill();
   try { localStorage.removeItem(ASST_HISTORY_KEY); } catch (err) {}
 }

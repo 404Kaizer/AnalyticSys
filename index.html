@@ -498,19 +498,32 @@
           </div>
           <div class="asst-chat-body" id="asst-chat-body">
             <div class="asst-msg asst-msg-bot">
-              Oi! Eu respondo perguntas sobre a última análise rodada no Dashboard Analítico. Experimente:
+              Oi! Sou seu analista auxiliar de estoque. Respondo sobre a última análise rodada no Dashboard, e ajudo com ocorrências e pendências de cadastro a qualquer momento.
+              <br><br>
+              Digite <code>/</code> e escolha um contexto para eu saber onde buscar a resposta — ele fica travado até você trocar ou remover. Se a pergunta escolhida precisar de um período analisado, eu peço as datas aqui mesmo, sem escolher por conta própria.
               <div class="asst-suggestions">
-                <button class="asst-chip" onclick="asstAskSuggestion(this)">Quais materiais estão críticos?</button>
-                <button class="asst-chip" onclick="asstAskSuggestion(this)">Qual central está pior no período?</button>
-                <button class="asst-chip" onclick="asstAskSuggestion(this)">Quantas ocorrências abertas existem?</button>
-                <button class="asst-chip" onclick="asstAskSuggestion(this)">Resumo geral do período</button>
-                <button class="asst-chip" onclick="asstAskSuggestion(this)">Quais centrais estão sem lançar?</button>
-                <button class="asst-chip" onclick="asstAskSuggestion(this)">Há materiais pendentes de padronização?</button>
+                <button class="asst-chip" onclick="asstQuickStart('ocorrencias')">Ocorrências abertas</button>
+                <button class="asst-chip" onclick="asstQuickStart('saude')">Resumo do período</button>
+                <button class="asst-chip" onclick="asstQuickStart('saldo')">Saldo de um material</button>
+                <button class="asst-chip" onclick="asstQuickStart('pior')">Piores centrais</button>
               </div>
             </div>
           </div>
+          <div class="asst-pill-row" id="asst-pill-row" style="display:none">
+            <span class="asst-pill asst-pill-context" id="asst-context-pill" style="display:none">
+              <i class="ti ti-folder" id="asst-context-pill-icon"></i>
+              <span id="asst-context-pill-label">Contexto</span>
+              <button onclick="_asstClearIntent()" title="Remover contexto"><i class="ti ti-x"></i></button>
+            </span>
+            <span class="asst-pill asst-pill-period" id="asst-period-pill" style="display:none">
+              <i class="ti ti-calendar"></i>
+              <span id="asst-period-pill-label">período</span>
+              <button onclick="_asstEditPeriod()" title="Trocar período"><i class="ti ti-pencil"></i></button>
+            </span>
+          </div>
           <div class="asst-input-row">
-            <input type="text" class="asst-input" id="asst-input" placeholder="Pergunte algo..." onkeydown="if(event.key==='Enter'){asstSend();}">
+            <div class="asst-dropdown" id="asst-dropdown" style="display:none"></div>
+            <input type="text" class="asst-input" id="asst-input" placeholder="Digite / para escolher um contexto" autocomplete="off" oninput="_asstInputChanged(this)" onkeydown="_asstInputKeydown(event)">
             <button class="asst-send-btn" onclick="asstSend()" title="Enviar"><i class="ti ti-send"></i></button>
           </div>
         </div>
