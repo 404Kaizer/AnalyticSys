@@ -83,20 +83,45 @@ let _asstContext = { central: null, material: null, regional: null };
 // (#asst-chat-body), já que "limpar" e "sem histórico salvo" devem
 // devolver o mesmo estado de boas-vindas.
 const _ASST_WELCOME_HTML = `
-  Oi! Sou seu analista auxiliar de estoque.
-  <br><br>
-  Digite <code>/</code> e escolha um contexto — ele fica travado até você trocar ou remover. Dentro de um contexto de tabela, monte a pergunta combinando o que você precisa:
-  <div class="asst-item">• <b>o que agrupar</b> — central, material, fornecedor, movimento...</div>
-  <div class="asst-item">• <b>como ordenar</b> — peso, custo/valor, quantidade...</div>
-  <div class="asst-item">• <b>quantos</b> — "top 3", "os 5 piores"...</div>
-  <div class="asst-item">• <b>período</b> — "maio a julho", "de 01/06/2026 a 23/06/2026"</div>
-  Não precisa usar todas de uma vez — combine só as que fizerem sentido pra sua pergunta. Exemplos: <i>"top 3 fornecedores por custo"</i>, <i>"central com mais entradas em junho"</i>, <i>"movimento com maior incidência de 01/06/2026 a 23/06/2026"</i>. Se a pergunta escolhida precisar de um período analisado (Dashboard), eu peço as datas aqui mesmo, sem escolher por conta própria.
+  Oi! Sou seu analista auxiliar de estoque. Digite <code>/</code> e escolha um contexto pra começar.
   <div class="asst-suggestions">
     <button class="asst-chip" onclick="asstQuickStart('ocorrencias')">Ocorrências abertas</button>
-    <button class="asst-chip" onclick="asstQuickStart('saude')">Resumo do período</button>
-    <button class="asst-chip" onclick="asstQuickStart('saldo')">Saldo de um material</button>
-    <button class="asst-chip" onclick="asstQuickStart('pior')">Piores centrais</button>
+    <button class="asst-chip" onclick="asstQuickStart('dashboard-analitico')">Dashboard Analítico</button>
+    <button class="asst-chip" onclick="asstQuickStart('entradas-consulta')">Entradas</button>
+    <button class="asst-chip" onclick="_asstMostrarAjuda()"><i class="ti ti-help-circle"></i> Ajuda</button>
   </div>`;
+
+// Conteúdo completo (o que a mensagem de boas-vindas tinha antes de ser
+// encurtada), agora só sob demanda via botão — junto com o que
+// realmente não funciona, pra não dar a entender que tudo funciona.
+function _asstAjudaHtml() {
+  return `
+    <div class="asst-section-title"><i class="ti ti-route"></i> Como funciona</div>
+    <div class="asst-item">Digite <code>/</code> e escolha um contexto — ele representa uma parte do sistema (Dashboard Analítico, Entradas, Ocorrências...) e fica travado até você trocar (digite <code>/</code> de novo) ou remover (✕ na etiqueta acima do campo).</div>
+    <div class="asst-item">Dentro do contexto, pergunte com suas próprias palavras — não precisa escolher entre perguntas prontas.</div>
+    <div class="asst-item">Singular pede 1 resultado ("pior fornecedor"), plural pede vários ("piores fornecedores"). "Top 3" ou "os 5 piores" sempre define a quantidade exata, não importa singular/plural.</div>
+
+    <div class="asst-section-title"><i class="ti ti-list-details"></i> Contextos disponíveis</div>
+    <div class="asst-item"><b>Dashboard Analítico</b> — crítico/urgente, ranking de central ou material, saldo e tendência de um material, ausências, resumo geral. Precisa de análise rodada (peço o período aqui mesmo se faltar).</div>
+    <div class="asst-item"><b>Entradas, Saídas, Lançamentos, SAP, Produção</b> — contagem, total e ranking (por central, material, fornecedor ou movimento) de cada tabela.</div>
+    <div class="asst-item"><b>Fluxo</b> — combina as tabelas que você citar na pergunta (ex.: "considerando SAP"); sem citar nenhuma, usa entradas + saídas.</div>
+    <div class="asst-item"><b>Ocorrências</b> — abertas por padrão, ou análise por regional/motivo/central/tempo de retorno.</div>
+    <div class="asst-item"><b>Configurações</b> — pendências de padronização, ou ações propostas pra um material crítico.</div>
+    <div class="asst-item"><b>Registrar entrada/saída/lançamento/SAP/produção</b> — a única ação que de fato executo: formulário → confirmação explícita → gravação.</div>
+
+    <div class="asst-section-title"><i class="ti ti-calendar"></i> Período aceito</div>
+    <div class="asst-item">Datas explícitas ("01/06/2026 a 23/06/2026"), nomes de mês ("maio a julho"), e relativos: hoje, ontem, amanhã, semana passada/que vem, mês passado/que vem, "N dias/semanas/meses/anos atrás".</div>
+
+    <div class="asst-section-title" style="color:var(--red)"><i class="ti ti-alert-triangle"></i> O que ainda não funciona</div>
+    <div class="asst-item">Frequência ou hábito — "sempre", "nunca", "às vezes" não são período; exigiriam analisar consistência no histórico inteiro, e isso não existe ainda.</div>
+    <div class="asst-item">Pergunta aberta, comparativa ou causal — "por que a central X piorou", "resuma os riscos do trimestre". O assistente segue regras, não interpreta linguagem livre desse jeito.</div>
+    <div class="asst-item">Nenhuma ação além de registrar dado — não importa arquivo, não faz backup, não altera configuração.</div>
+  `;
+}
+
+function _asstMostrarAjuda() {
+  _asstAppendMsg('bot', _asstAjudaHtml());
+}
 
 // ── Utilitários de estado/período ───────────────────────────────────
 function _asstHasAnalise() {
@@ -232,16 +257,17 @@ function _asstIntentCriticidade(query) {
 
   const item = i => `${escapeHtml(i.mat)} — ${escapeHtml(i.central)} (${signedKg(i.diff)})`;
   let html = `<b>${critico.length}</b> crítico(s) e <b>${urgente.length}</b> urgente(s)${escopo} — período ${_asstPeriodoLabel()}.`;
+  const limite = _asstDetectarLimite(normalizeText(query), _ASST_SING_MATERIAL, 8);
 
   if (critico.length) {
     html += `<div class="asst-section-title" style="color:var(--red)"><i class="ti ti-flame"></i> Críticos</div>`;
-    html += critico.slice(0, 8).map(i => `<div class="asst-item">${item(i)}</div>`).join('');
-    if (critico.length > 8) html += `<div class="asst-more">+ ${critico.length - 8} outro(s)</div>`;
+    html += critico.slice(0, limite).map(i => `<div class="asst-item">${item(i)}</div>`).join('');
+    if (critico.length > limite) html += `<div class="asst-more">+ ${critico.length - limite} outro(s)</div>`;
   }
   if (urgente.length) {
     html += `<div class="asst-section-title" style="color:var(--amber)"><i class="ti ti-alert-circle"></i> Urgentes</div>`;
-    html += urgente.slice(0, 8).map(i => `<div class="asst-item">${item(i)}</div>`).join('');
-    if (urgente.length > 8) html += `<div class="asst-more">+ ${urgente.length - 8} outro(s)</div>`;
+    html += urgente.slice(0, limite).map(i => `<div class="asst-item">${item(i)}</div>`).join('');
+    if (urgente.length > limite) html += `<div class="asst-more">+ ${urgente.length - limite} outro(s)</div>`;
   }
   return nota + html;
 }
@@ -261,8 +287,9 @@ function _asstIntentRankingCentral(query, wantWorst) {
     return Math.abs(b[1].worstDiff) - Math.abs(a[1].worstDiff);
   });
 
-  const list  = wantWorst ? sorted.slice(0, 5) : sorted.slice().reverse().slice(0, 5);
-  const title = wantWorst ? 'Piores centrais' : 'Melhores centrais';
+  const limite = _asstDetectarLimite(normalizeText(query), _ASST_SING_CENTRAL, 5);
+  const list  = wantWorst ? sorted.slice(0, limite) : sorted.slice().reverse().slice(0, limite);
+  const title = wantWorst ? (limite === 1 ? 'Pior central' : 'Piores centrais') : (limite === 1 ? 'Melhor central' : 'Melhores centrais');
 
   let html = `<b>${title} — período ${_asstPeriodoLabel()}</b>`;
   html += list.map(([central, v], idx) => {
@@ -297,8 +324,9 @@ function _asstIntentRankingMaterial(query, wantWorst) {
     return ord !== 0 ? ord : (b.custo || 0) - (a.custo || 0);
   });
 
-  const list  = wantWorst ? sorted.slice(0, 5) : sorted.slice().reverse().slice(0, 5);
-  const title = wantWorst ? 'Piores materiais' : 'Melhores materiais';
+  const limite = _asstDetectarLimite(normalizeText(query), _ASST_SING_MATERIAL, 5);
+  const list  = wantWorst ? sorted.slice(0, limite) : sorted.slice().reverse().slice(0, limite);
+  const title = wantWorst ? (limite === 1 ? 'Pior material' : 'Piores materiais') : (limite === 1 ? 'Melhor material' : 'Melhores materiais');
 
   let html = `<b>${title}${escopo} — período ${_asstPeriodoLabel()}</b>`;
   html += list.map((i, idx) => {
@@ -326,14 +354,24 @@ function _asstIntentOcorrencias(query) {
   if (vencidas.length) html += ` — <span style="color:var(--red)">${vencidas.length} vencida(s)</span>`;
   if (urgentes.length) html += ` — <span style="color:var(--amber)">${urgentes.length} vencendo em breve</span>`;
 
-  html += filtradas.slice(0, 8).map(o => {
+  const ordemStatus = { vencida: 0, urgente: 1 };
+  const ordenadas = filtradas.slice().sort((a, b) => {
+    const oa = ordemStatus[ocDateStatus(a.dataLimite)] ?? 2;
+    const ob = ordemStatus[ocDateStatus(b.dataLimite)] ?? 2;
+    if (oa !== ob) return oa - ob;
+    const da = parseDate(a.dataLimite), db = parseDate(b.dataLimite);
+    return (da && db) ? da - db : 0;
+  });
+  const limite = _asstDetectarLimite(normalizeText(query), _ASST_SING_OCORRENCIA, 8);
+
+  html += ordenadas.slice(0, limite).map(o => {
     const st = ocDateStatus(o.dataLimite);
     const badge = st === 'vencida' ? '🔴' : st === 'urgente' ? '🟠' : '⚪';
     const assunto = (o.descricao || o.motivo || '').trim();
     const assuntoCurto = assunto.length > 60 ? assunto.slice(0, 60) + '…' : assunto;
     return `<div class="asst-item">${badge} <b>${escapeHtml(o.central || '—')}</b>${o.material ? ' · ' + escapeHtml(o.material) : ''} — prazo ${o.dataLimite ? fmtDateBR(o.dataLimite) : '—'}${assuntoCurto ? '<br><span style="color:var(--text2)">' + escapeHtml(assuntoCurto) + '</span>' : ''}</div>`;
   }).join('');
-  if (filtradas.length > 8) html += `<div class="asst-more">+ ${filtradas.length - 8} outra(s)</div>`;
+  if (ordenadas.length > limite) html += `<div class="asst-more">+ ${ordenadas.length - limite} outra(s)</div>`;
   return nota + html;
 }
 
@@ -488,10 +526,11 @@ function _asstIntentAusencias(query) {
   const ranking = [...porCentral.entries()].sort((a, b) => b[1].dias - a[1].dias);
 
   let html = `<b>${filtradas.length}</b> ausência(s) de lançamento${escopo} — período ${_asstPeriodoLabel()}.`;
-  html += ranking.slice(0, 8).map(([c, g]) =>
+  const limite = _asstDetectarLimite(normalizeText(query), _ASST_SING_CENTRAL, 8);
+  html += ranking.slice(0, limite).map(([c, g]) =>
     `<div class="asst-item"><b>${escapeHtml(c)}</b> — ${g.materiais.size} material(is), ${g.dias} dia(s) ausente(s) no total</div>`
   ).join('');
-  if (ranking.length > 8) html += `<div class="asst-more">+ ${ranking.length - 8} outra(s) central(is)</div>`;
+  if (ranking.length > limite) html += `<div class="asst-more">+ ${ranking.length - limite} outra(s) central(is)</div>`;
   return nota + html;
 }
 
@@ -537,7 +576,7 @@ function _asstIntentAcoes(query) {
 // não encontram nenhum item cadastrado — ambas são consultas puras,
 // nunca mutam o state (ao contrário de reaplicarPadronizacaoMateriais/
 // Centrais, que por isso nunca são chamadas aqui).
-function _asstIntentConfigPendente() {
+function _asstIntentConfigPendente(query) {
   if (typeof CENTRAL_FIELDS_BY_MODULO === 'undefined' || typeof findMaterialMatch !== 'function') {
     return 'Não consegui verificar pendências de cadastro agora.';
   }
@@ -571,18 +610,21 @@ function _asstIntentConfigPendente() {
   }
 
   let html = `<b>Pendências de cadastro</b> (Configurações → Padronização)`;
+  const qNorm = normalizeText(query || '');
 
   if (materiaisPendentes.size) {
     const list = [...materiaisPendentes.entries()].sort((a, b) => b[1] - a[1]);
+    const limite = _asstDetectarLimite(qNorm, _ASST_SING_MATERIAL, 8);
     html += `<div class="asst-section-title" style="color:var(--amber)"><i class="ti ti-alert-triangle"></i> Materiais não padronizados (${list.length})</div>`;
-    html += list.slice(0, 8).map(([raw, count]) => `<div class="asst-item">${escapeHtml(raw)} — ${count} registro(s)</div>`).join('');
-    if (list.length > 8) html += `<div class="asst-more">+ ${list.length - 8} outro(s)</div>`;
+    html += list.slice(0, limite).map(([raw, count]) => `<div class="asst-item">${escapeHtml(raw)} — ${count} registro(s)</div>`).join('');
+    if (list.length > limite) html += `<div class="asst-more">+ ${list.length - limite} outro(s)</div>`;
   }
   if (centraisPendentes.size) {
     const list = [...centraisPendentes.entries()].sort((a, b) => b[1] - a[1]);
+    const limite = _asstDetectarLimite(qNorm, _ASST_SING_CENTRAL, 8);
     html += `<div class="asst-section-title" style="color:var(--amber)"><i class="ti ti-alert-triangle"></i> Centrais não padronizadas (${list.length})</div>`;
-    html += list.slice(0, 8).map(([raw, count]) => `<div class="asst-item">${escapeHtml(raw)} — ${count} registro(s)</div>`).join('');
-    if (list.length > 8) html += `<div class="asst-more">+ ${list.length - 8} outro(s)</div>`;
+    html += list.slice(0, limite).map(([raw, count]) => `<div class="asst-item">${escapeHtml(raw)} — ${count} registro(s)</div>`).join('');
+    if (list.length > limite) html += `<div class="asst-more">+ ${list.length - limite} outro(s)</div>`;
   }
   return html;
 }
@@ -606,6 +648,101 @@ function _asstUltimoDiaMes(ano, mesIdx) {
 // corrente — mas isso é sempre reportado na resposta (assumiuAno),
 // nunca fica silencioso. Sem nada reconhecível, retorna null (quem
 // chama decide se avisa que não entendeu o período).
+function _asstHoje() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function _asstFimDoDia(d) {
+  const f = new Date(d);
+  f.setHours(23, 59, 59, 999);
+  return f;
+}
+
+function _asstSegundaDaSemana(data) {
+  const d = new Date(data);
+  const diaSemana = d.getDay(); // 0 = domingo
+  d.setDate(d.getDate() + (diaSemana === 0 ? -6 : 1 - diaSemana));
+  return d;
+}
+
+function _asstRangeSemana(segunda) {
+  const dom = new Date(segunda);
+  dom.setDate(dom.getDate() + 6);
+  return { dtIni: segunda, dtFim: _asstFimDoDia(dom) };
+}
+
+function _asstRangeMes(ano, mesIdx) {
+  return { dtIni: new Date(ano, mesIdx, 1), dtFim: new Date(ano, mesIdx + 1, 0, 23, 59, 59) };
+}
+
+// Datas relativas a hoje ("ontem", "semana passada", "3 meses atrás"...).
+// Tudo calculado a partir da data real do navegador em tempo de
+// execução — nunca uma data fixa. Retorna null se nada bater, pra
+// quem chama tentar o parser de nomes de mês em seguida.
+function _asstParsePeriodoRelativo(qLoose) {
+  const hoje = _asstHoje();
+
+  const mAtras = qLoose.match(/\b(\d{1,3})\s*(DIAS?|SEMANAS?|MESES?|ANOS?)\s*ATRAS\b/);
+  if (mAtras) {
+    const n = Number(mAtras[1]);
+    const unidade = mAtras[2];
+    if (unidade.startsWith('DIA')) {
+      const d = new Date(hoje); d.setDate(d.getDate() - n);
+      return { dtIni: d, dtFim: _asstFimDoDia(d), assumiuAno: false };
+    }
+    if (unidade.startsWith('SEMANA')) {
+      const seg = _asstSegundaDaSemana(hoje); seg.setDate(seg.getDate() - n * 7);
+      return { ..._asstRangeSemana(seg), assumiuAno: false };
+    }
+    if (unidade.startsWith('MES')) {
+      const base = new Date(hoje.getFullYear(), hoje.getMonth() - n, 1);
+      return { ..._asstRangeMes(base.getFullYear(), base.getMonth()), assumiuAno: false };
+    }
+    if (unidade.startsWith('ANO')) {
+      const ano = hoje.getFullYear() - n;
+      return { dtIni: new Date(ano, 0, 1), dtFim: new Date(ano, 11, 31, 23, 59, 59), assumiuAno: false };
+    }
+  }
+
+  if (/\bHOJE\b/.test(qLoose)) return { dtIni: hoje, dtFim: _asstFimDoDia(hoje), assumiuAno: false };
+  if (/\bONTEM\b/.test(qLoose)) {
+    const d = new Date(hoje); d.setDate(d.getDate() - 1);
+    return { dtIni: d, dtFim: _asstFimDoDia(d), assumiuAno: false };
+  }
+  if (/\bAMANHA\b/.test(qLoose)) {
+    const d = new Date(hoje); d.setDate(d.getDate() + 1);
+    return { dtIni: d, dtFim: _asstFimDoDia(d), assumiuAno: false };
+  }
+
+  if (/SEMANA PASSADA|SEMANA ANTERIOR/.test(qLoose)) {
+    const seg = _asstSegundaDaSemana(hoje); seg.setDate(seg.getDate() - 7);
+    return { ..._asstRangeSemana(seg), assumiuAno: false };
+  }
+  if (/SEMANA QUE VEM|PROXIMA SEMANA|PROX SEMANA/.test(qLoose)) {
+    const seg = _asstSegundaDaSemana(hoje); seg.setDate(seg.getDate() + 7);
+    return { ..._asstRangeSemana(seg), assumiuAno: false };
+  }
+  if (/\b(ESSA|ESTA)\s+SEMANA\b/.test(qLoose)) {
+    return { ..._asstRangeSemana(_asstSegundaDaSemana(hoje)), assumiuAno: false };
+  }
+
+  if (/MES PASSADO|MES ANTERIOR/.test(qLoose)) {
+    const base = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
+    return { ..._asstRangeMes(base.getFullYear(), base.getMonth()), assumiuAno: false };
+  }
+  if (/MES QUE VEM|PROXIMO MES|PROX MES/.test(qLoose)) {
+    const base = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 1);
+    return { ..._asstRangeMes(base.getFullYear(), base.getMonth()), assumiuAno: false };
+  }
+  if (/\b(ESSE|ESTE)\s+MES\b/.test(qLoose)) {
+    return { ..._asstRangeMes(hoje.getFullYear(), hoje.getMonth()), assumiuAno: false };
+  }
+
+  return null;
+}
+
 function _asstParsePeriodo(query) {
   const datas = query.match(/\d{2}\/\d{2}\/\d{4}/g);
   if (datas && datas.length) {
@@ -618,6 +755,10 @@ function _asstParsePeriodo(query) {
   }
 
   const qLoose = normalizeLooseText(query);
+
+  const relativo = _asstParsePeriodoRelativo(qLoose);
+  if (relativo) return relativo;
+
   const anoMatch = qLoose.match(/\b(20\d{2})\b/);
   const ano = anoMatch ? Number(anoMatch[1]) : new Date().getFullYear();
 
@@ -656,9 +797,14 @@ function _asstDetectarMetrica(qNorm, metricas) {
   return Object.keys(metricas).find(k => metricas[k].default) || Object.keys(metricas)[0];
 }
 
-function _asstDetectarLimite(qNorm, padrao = 8) {
+// Número explícito ("top 3", "os 5 piores") sempre vence. Sem número
+// explícito, o singular da dimensão ("fornecedor", "central") indica
+// que o analista quer só 1 resultado — plural ("fornecedores",
+// "centrais") mantém o padrão de vários.
+function _asstDetectarLimite(qNorm, singularPad, padrao = 8) {
   const m = qNorm.match(/\bTOP\s*(\d{1,2})\b/) || qNorm.match(/\b(\d{1,2})\s*(MAIORES|MELHORES|PIORES|PRIMEIROS)\b/);
   if (m) { const n = Number(m[1]); if (n > 0 && n <= 50) return n; }
+  if (singularPad && singularPad.test(qNorm)) return 1;
   return padrao;
 }
 
@@ -697,14 +843,27 @@ const _ASST_PAD_MATERIAL   = /\bMATERIA(L|IS)\b/;
 const _ASST_PAD_FORNECEDOR = /\bFORNECEDOR(ES)?\b/;
 const _ASST_PAD_MOVIMENTO  = /\bMOVIMENTO(S)?\b/;
 
+// Versões só-singular (\bCENTRAL\b nunca casa "CENTRAIS", confirmado
+// por teste) — usadas pra saber se o analista pediu UM resultado
+// ("pior fornecedor") ou VÁRIOS ("piores fornecedores"), já que hoje
+// o motor sempre devolvia uma lista, ignorando o singular da pergunta.
+const _ASST_SING_CENTRAL    = /\bCENTRAL\b/;
+const _ASST_SING_MATERIAL   = /\bMATERIAL\b/;
+const _ASST_SING_FORNECEDOR = /\bFORNECEDOR\b/;
+const _ASST_SING_MOVIMENTO  = /\bMOVIMENTO\b/;
+const _ASST_SING_REGIONAL   = /\bREGIONAL\b/;
+const _ASST_SING_MOTIVO     = /\bMOTIVO\b/;
+const _ASST_SING_OCORRENCIA = /\bOCORRENCIA\b/;
+const _ASST_SING_REGISTRO   = /\bREGISTRO\b/;
+
 const _ASST_MODULOS = {
   entradas: {
     registros: () => state.entradas || [],
     data: r => parseDate(r.dtEmissao),
     dimensoes: {
-      central:    { get: r => r.centralDestino || r.centralCompra || '—', ambiguo: true,  padrao: _ASST_PAD_CENTRAL },
-      material:   { get: r => r.material || '—', ambiguo: true,  padrao: _ASST_PAD_MATERIAL },
-      fornecedor: { get: r => r.fornecedor || '—', ambiguo: false, padrao: _ASST_PAD_FORNECEDOR },
+      central:    { get: r => r.centralDestino || r.centralCompra || '—', ambiguo: true,  padrao: _ASST_PAD_CENTRAL, singular: _ASST_SING_CENTRAL },
+      material:   { get: r => r.material || '—', ambiguo: true,  padrao: _ASST_PAD_MATERIAL, singular: _ASST_SING_MATERIAL },
+      fornecedor: { get: r => r.fornecedor || '—', ambiguo: false, padrao: _ASST_PAD_FORNECEDOR, singular: _ASST_SING_FORNECEDOR },
     },
     metricas: {
       peso:  { agg: 'soma',  get: r => Number(r.peso) || 0,       fmt: v => fmtKg(v),        gatilho: /\bPESO\b|\bKG\b/, default: true },
@@ -717,9 +876,9 @@ const _ASST_MODULOS = {
     registros: () => state.saidas || [],
     data: r => parseDate(r.dtEmissao),
     dimensoes: {
-      central:    { get: r => r.central || '—', ambiguo: true,  padrao: _ASST_PAD_CENTRAL },
-      material:   { get: r => r.material || '—', ambiguo: true,  padrao: _ASST_PAD_MATERIAL },
-      fornecedor: { get: r => r.fornecedor || '—', ambiguo: false, padrao: _ASST_PAD_FORNECEDOR },
+      central:    { get: r => r.central || '—', ambiguo: true,  padrao: _ASST_PAD_CENTRAL, singular: _ASST_SING_CENTRAL },
+      material:   { get: r => r.material || '—', ambiguo: true,  padrao: _ASST_PAD_MATERIAL, singular: _ASST_SING_MATERIAL },
+      fornecedor: { get: r => r.fornecedor || '—', ambiguo: false, padrao: _ASST_PAD_FORNECEDOR, singular: _ASST_SING_FORNECEDOR },
     },
     metricas: {
       peso:  { agg: 'soma',  get: r => Number(r.peso) || 0,       fmt: v => fmtKg(v),        gatilho: /\bPESO\b|\bKG\b/, default: true },
@@ -732,9 +891,9 @@ const _ASST_MODULOS = {
     registros: () => state.lancamentos || [],
     data: r => parseDate(r.dtLanc),
     dimensoes: {
-      central:    { get: r => r.central || '—', ambiguo: true,  padrao: _ASST_PAD_CENTRAL },
-      material:   { get: r => r.material || '—', ambiguo: true,  padrao: _ASST_PAD_MATERIAL },
-      fornecedor: { get: r => r.fornecedor || '—', ambiguo: false, padrao: _ASST_PAD_FORNECEDOR },
+      central:    { get: r => r.central || '—', ambiguo: true,  padrao: _ASST_PAD_CENTRAL, singular: _ASST_SING_CENTRAL },
+      material:   { get: r => r.material || '—', ambiguo: true,  padrao: _ASST_PAD_MATERIAL, singular: _ASST_SING_MATERIAL },
+      fornecedor: { get: r => r.fornecedor || '—', ambiguo: false, padrao: _ASST_PAD_FORNECEDOR, singular: _ASST_SING_FORNECEDOR },
     },
     metricas: {
       peso:  { agg: 'soma',  get: r => Number(r.peso) || 0,       fmt: v => fmtKg(v),        gatilho: /\bPESO\b|\bKG\b/, default: true },
@@ -747,9 +906,9 @@ const _ASST_MODULOS = {
     registros: () => state.sap || [],
     data: r => parseDate(r.dtLanc),
     dimensoes: {
-      central:   { get: r => r.central || '—', ambiguo: true,  padrao: _ASST_PAD_CENTRAL },
-      material:  { get: r => r.material || '—', ambiguo: true,  padrao: _ASST_PAD_MATERIAL },
-      movimento: { get: r => r.movimento || '—', ambiguo: false, padrao: _ASST_PAD_MOVIMENTO },
+      central:   { get: r => r.central || '—', ambiguo: true,  padrao: _ASST_PAD_CENTRAL, singular: _ASST_SING_CENTRAL },
+      material:  { get: r => r.material || '—', ambiguo: true,  padrao: _ASST_PAD_MATERIAL, singular: _ASST_SING_MATERIAL },
+      movimento: { get: r => r.movimento || '—', ambiguo: false, padrao: _ASST_PAD_MOVIMENTO, singular: _ASST_SING_MOVIMENTO },
     },
     metricas: {
       peso:  { agg: 'soma',  get: r => Number(r.peso) || 0,       fmt: v => fmtKg(v),        gatilho: /\bPESO\b|\bKG\b/, default: true },
@@ -762,7 +921,7 @@ const _ASST_MODULOS = {
     registros: () => state.producao || [],
     data: r => { const [y, m] = String(r.mes || '').split('-').map(Number); return y && m ? new Date(y, m - 1, 1) : null; },
     dimensoes: {
-      central: { get: r => r.central || '—', ambiguo: true, padrao: _ASST_PAD_CENTRAL },
+      central: { get: r => r.central || '—', ambiguo: true, padrao: _ASST_PAD_CENTRAL, singular: _ASST_SING_CENTRAL },
     },
     metricas: {
       producao: { agg: 'soma',  get: r => Number(r.producao) || 0,    fmt: v => v.toLocaleString('pt-BR') + ' m³', gatilho: /PRODUCAO|\bM3\b/, default: true },
@@ -778,8 +937,8 @@ const _ASST_MODULOS = {
     notaFontes: query => _asstFluxoDescricao(query),
     data: r => parseDate(r.dtEmissao),
     dimensoes: {
-      central:  { get: r => r.central || '—', ambiguo: true, padrao: _ASST_PAD_CENTRAL },
-      material: { get: r => r.material || '—', ambiguo: true, padrao: _ASST_PAD_MATERIAL },
+      central:  { get: r => r.central || '—', ambiguo: true, padrao: _ASST_PAD_CENTRAL, singular: _ASST_SING_CENTRAL },
+      material: { get: r => r.material || '—', ambiguo: true, padrao: _ASST_PAD_MATERIAL, singular: _ASST_SING_MATERIAL },
     },
     metricas: {
       peso:  { agg: 'soma',  get: r => Number(r.peso) || 0,       fmt: v => fmtKg(v),        gatilho: /\bPESO\b|\bKG\b|FLUXO/, default: true },
@@ -791,6 +950,7 @@ const _ASST_MODULOS = {
 };
 
 const _ASST_DIM_LABEL     = { central: 'Centrais', material: 'Materiais', fornecedor: 'Fornecedores', movimento: 'Movimentos' };
+const _ASST_DIM_LABEL_SING = { central: 'Central', material: 'Material', fornecedor: 'Fornecedor', movimento: 'Movimento' };
 const _ASST_METRICA_LABEL = { peso: 'peso', valor: 'valor', qtd: 'quantidade', producao: 'produção', vendas: 'vendas' };
 
 // Motor único: qualquer módulo do catálogo passa por aqui. Extrai
@@ -803,7 +963,7 @@ function _asstExecutarConsulta(modKey, query) {
 
   const dim     = _asstDetectarDimensao(qNorm, mod.dimensoes);
   const metrica = _asstDetectarMetrica(qNorm, mod.metricas);
-  const limite  = _asstDetectarLimite(qNorm);
+  const limite  = _asstDetectarLimite(qNorm, dim ? mod.dimensoes[dim].singular : null);
   const periodo = _asstParsePeriodo(query);
 
   let regs = mod.registros(query);
@@ -836,7 +996,8 @@ function _asstExecutarConsulta(modKey, query) {
     if (!regs.length) return nota + `Nenhum(a) ${mod.singular} encontrado(a).`;
     const ranking = _asstAgregarGrupo(regs, mod.dimensoes[dim].get, metricaCfg).slice(0, limite);
     const tituloMetrica = metrica === 'qtd' ? 'mais frequentes' : `por ${_ASST_METRICA_LABEL[metrica] || metrica}`;
-    let html = `<b>${_ASST_DIM_LABEL[dim] || dim} ${tituloMetrica} — ${escapeHtml(mod.plural)}</b>`;
+    const rotuloDim = limite === 1 ? (_ASST_DIM_LABEL_SING[dim] || dim) : (_ASST_DIM_LABEL[dim] || dim);
+    let html = `<b>${rotuloDim} ${limite === 1 ? (metrica === 'qtd' ? 'mais frequente' : tituloMetrica) : tituloMetrica} — ${escapeHtml(mod.plural)}</b>`;
     html += ranking.map(([nome, valor, conta], idx) =>
       `<div class="asst-item">${idx + 1}. <b>${escapeHtml(nome)}</b> — ${metricaCfg.fmt(valor)}${metricaCfg.agg !== 'conta' ? ' · ' + conta + ' registro(s)' : ''}</div>`
     ).join('');
@@ -856,8 +1017,9 @@ function _asstExecutarConsulta(modKey, query) {
   });
 
   const ordenados = regs.slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  const limiteRegistros = _asstDetectarLimite(qNorm, _ASST_SING_REGISTRO, 8);
   html += `<div class="asst-section-title"><i class="ti ti-list-details"></i> Últimos registros</div>`;
-  html += ordenados.slice(0, 8).map(r => {
+  html += ordenados.slice(0, limiteRegistros).map(r => {
     const dataStr    = r.dtEmissao || r.dtLanc || r.mes || '—';
     const centralStr = mod.dimensoes.central ? mod.dimensoes.central.get(r) : '—';
     const materialStr = mod.dimensoes.material ? mod.dimensoes.material.get(r) : null;
@@ -868,7 +1030,7 @@ function _asstExecutarConsulta(modKey, query) {
     if (doc) linha += ` · ${escapeHtml(doc)}`;
     return `<div class="asst-item">${linha}</div>`;
   }).join('');
-  if (ordenados.length > 8) html += `<div class="asst-more">+ ${ordenados.length - 8} outro(s)</div>`;
+  if (ordenados.length > limiteRegistros) html += `<div class="asst-more">+ ${ordenados.length - limiteRegistros} outro(s)</div>`;
 
   return nota + html;
 }
@@ -889,8 +1051,9 @@ function _asstIntentOcorrenciasAnalise(query) {
 
   if (querRegional && querTempo) {
     if (!kpis.tempoMedioRegional.length) return 'Ainda não há ocorrências concluídas suficientes pra calcular tempo de retorno por regional.';
-    let html = '<b>Regionais por tempo médio de retorno (pior → melhor)</b>';
-    html += kpis.tempoMedioRegional.slice(0, 8).map(([regional, dias, qtd], idx) =>
+    const limite = _asstDetectarLimite(qNorm, _ASST_SING_REGIONAL, 8);
+    let html = `<b>${limite === 1 ? 'Regional' : 'Regionais'} por tempo médio de retorno (pior → melhor)</b>`;
+    html += kpis.tempoMedioRegional.slice(0, limite).map(([regional, dias, qtd], idx) =>
       `<div class="asst-item">${idx + 1}. <b>${escapeHtml(regional)}</b> — ${dias.toFixed(1)} dia(s) em média · ${qtd} ocorrência(s) concluída(s)</div>`
     ).join('');
     return html;
@@ -898,15 +1061,17 @@ function _asstIntentOcorrenciasAnalise(query) {
 
   if (querMotivo) {
     if (!kpis.topMotivos.length) return 'Nenhuma ocorrência registrada ainda.';
-    let html = '<b>Ocorrências por motivo</b>';
-    html += kpis.topMotivos.slice(0, 8).map(([motivo, qtd], idx) => `<div class="asst-item">${idx + 1}. <b>${escapeHtml(motivo)}</b> — ${qtd} ocorrência(s)</div>`).join('');
+    const limite = _asstDetectarLimite(qNorm, _ASST_SING_MOTIVO, 8);
+    let html = `<b>Ocorrências por motivo${limite === 1 ? ' mais comum' : ''}</b>`;
+    html += kpis.topMotivos.slice(0, limite).map(([motivo, qtd], idx) => `<div class="asst-item">${idx + 1}. <b>${escapeHtml(motivo)}</b> — ${qtd} ocorrência(s)</div>`).join('');
     return html;
   }
 
   if (querCentral) {
     if (!kpis.topCentrals.length) return 'Nenhuma ocorrência registrada ainda.';
-    let html = '<b>Centrais com mais ocorrências</b>';
-    html += kpis.topCentrals.slice(0, 8).map(([central, qtd], idx) => `<div class="asst-item">${idx + 1}. <b>${escapeHtml(central)}</b> — ${qtd} ocorrência(s)</div>`).join('');
+    const limite = _asstDetectarLimite(qNorm, _ASST_SING_CENTRAL, 8);
+    let html = `<b>${limite === 1 ? 'Central' : 'Centrais'} com mais ocorrências</b>`;
+    html += kpis.topCentrals.slice(0, limite).map(([central, qtd], idx) => `<div class="asst-item">${idx + 1}. <b>${escapeHtml(central)}</b> — ${qtd} ocorrência(s)</div>`).join('');
     return html;
   }
 
@@ -968,7 +1133,7 @@ function _asstRoteiaOcorrencias(query) {
 function _asstRoteiaConfiguracoes(query) {
   const qNorm = normalizeText(query);
   if (/\b(ACAO|ACOES)\b/.test(qNorm)) return _asstIntentAcoes(query);
-  return _asstIntentConfigPendente();
+  return _asstIntentConfigPendente(query);
 }
 
 // ── Fluxo: fontes dinâmicas ──────────────────────────────────────────
