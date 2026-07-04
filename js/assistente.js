@@ -18,6 +18,62 @@
 // ═══════════════════════════════════════════════════════════
 
 const ASST_HISTORY_KEY = 'analyticsys_asst_history_v1';
+const ASST_LOG_KEY     = 'analyticsys_asst_log_nao_reconhecidas_v1';
+
+// Registro local (por navegador) de perguntas que caíram no "não
+// reconheci" de algum roteador — não centraliza entre analistas
+// diferentes (o sistema não tem backend), mas dá pra exportar e juntar
+// manualmente. Guarda só as últimas 200 pra não crescer sem limite.
+function _asstRegistrarNaoReconhecida(contexto, query) {
+  try {
+    const bruto = localStorage.getItem(ASST_LOG_KEY);
+    const lista = bruto ? JSON.parse(bruto) : [];
+    lista.push({ contexto, pergunta: query, data: new Date().toISOString() });
+    localStorage.setItem(ASST_LOG_KEY, JSON.stringify(lista.slice(-200)));
+  } catch (err) {
+    console.error('Assistente: erro ao registrar pergunta não reconhecida', err);
+  }
+}
+
+function _asstExportarLogNaoReconhecidas() {
+  try {
+    const bruto = localStorage.getItem(ASST_LOG_KEY);
+    const lista = bruto ? JSON.parse(bruto) : [];
+    const blob = new Blob([JSON.stringify(lista, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'assistente-perguntas-nao-reconhecidas.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+  } catch (err) {
+    console.error('Assistente: erro ao exportar log', err);
+  }
+}
+
+function _asstIntentLogNaoReconhecidas() {
+  let lista = [];
+  try {
+    const bruto = localStorage.getItem(ASST_LOG_KEY);
+    lista = bruto ? JSON.parse(bruto) : [];
+  } catch (err) { /* ignora, trata como vazio */ }
+
+  if (!lista.length) return 'Nenhuma pergunta não reconhecida registrada neste navegador ainda — bom sinal, ou ninguém esbarrou num limite ainda.';
+
+  const recentes = lista.slice(-10).reverse();
+  let html = `<b>${lista.length}</b> pergunta(s) não reconhecida(s) registrada(s) neste navegador (10 mais recentes abaixo):`;
+  html += recentes.map(item => {
+    const it = _asstIntentById(item.contexto);
+    const nomeContexto = it ? it.label : item.contexto;
+    const data = new Date(item.data);
+    return `<div class="asst-item">${data.toLocaleDateString('pt-BR')} · <b>${escapeHtml(nomeContexto)}</b> — "${escapeHtml(item.pergunta)}"</div>`;
+  }).join('');
+  html += `<button class="asst-mf-btn" onclick="_asstExportarLogNaoReconhecidas()">Baixar log completo (.json)</button>`;
+  html += `<div class="asst-item" style="margin-top:6px;color:var(--text3);font-size:11px;">Esse registro fica só neste navegador. Pra juntar com o que os outros analistas perguntaram, exporte e junte os arquivos manualmente.</div>`;
+  return html;
+}
 
 // Contexto de conversa — não persiste entre recarregamentos de página
 // (é memória de curto prazo da sessão atual, não histórico salvo).
@@ -27,9 +83,14 @@ let _asstContext = { central: null, material: null, regional: null };
 // (#asst-chat-body), já que "limpar" e "sem histórico salvo" devem
 // devolver o mesmo estado de boas-vindas.
 const _ASST_WELCOME_HTML = `
-  Oi! Sou seu analista auxiliar de estoque. Respondo sobre a última análise rodada no Dashboard, e ajudo com ocorrências e pendências de cadastro a qualquer momento.
+  Oi! Sou seu analista auxiliar de estoque.
   <br><br>
-  Digite <code>/</code> e escolha um contexto para eu saber onde buscar a resposta — ele fica travado até você trocar ou remover. Se a pergunta escolhida precisar de um período analisado, eu peço as datas aqui mesmo, sem escolher por conta própria.
+  Digite <code>/</code> e escolha um contexto — ele fica travado até você trocar ou remover. Dentro de um contexto de tabela, monte a pergunta combinando o que você precisa:
+  <div class="asst-item">• <b>o que agrupar</b> — central, material, fornecedor, movimento...</div>
+  <div class="asst-item">• <b>como ordenar</b> — peso, custo/valor, quantidade...</div>
+  <div class="asst-item">• <b>quantos</b> — "top 3", "os 5 piores"...</div>
+  <div class="asst-item">• <b>período</b> — "maio a julho", "de 01/06/2026 a 23/06/2026"</div>
+  Não precisa usar todas de uma vez — combine só as que fizerem sentido pra sua pergunta. Exemplos: <i>"top 3 fornecedores por custo"</i>, <i>"central com mais entradas em junho"</i>, <i>"movimento com maior incidência de 01/06/2026 a 23/06/2026"</i>. Se a pergunta escolhida precisar de um período analisado (Dashboard), eu peço as datas aqui mesmo, sem escolher por conta própria.
   <div class="asst-suggestions">
     <button class="asst-chip" onclick="asstQuickStart('ocorrencias')">Ocorrências abertas</button>
     <button class="asst-chip" onclick="asstQuickStart('saude')">Resumo do período</button>
@@ -211,7 +272,43 @@ function _asstIntentRankingCentral(query, wantWorst) {
   return html;
 }
 
-// ── Intenção: ocorrências abertas ───────────────────────────────────
+// ── Intenção: ranking de materiais (pior/melhor) ─────────────────────
+// Faltava por completo — o roteador do Dashboard Analítico mandava
+// "pior"/"melhor" sempre pro ranking de central, mesmo quando a
+// pergunta pedia material. Usa _macroState.matItems (já calculado por
+// central+material, com custo de impacto), sem recalcular nada.
+function _asstIntentRankingMaterial(query, wantWorst) {
+  if (!_asstHasAnalise() || typeof _macroState === 'undefined' || !_macroState?.matItems) return _asstNoAnaliseMsg();
+
+  const centralRes = _asstResolveCentralCtx(query);
+  let items = _macroState.matItems;
+  let escopo = '', nota = '';
+  if (centralRes.value) {
+    items = items.filter(i => i.central === centralRes.value);
+    escopo = ` em <b>${escapeHtml(centralRes.value)}</b>`;
+    if (centralRes.fromContext) nota = _asstContextNote('central', centralRes.value);
+  }
+
+  if (!items.length) return nota + `Não há dados de materiais disponíveis${escopo} para o período ${_asstPeriodoLabel()}.`;
+
+  const ordemLevel = { critico: 3, urgente: 2, atencao: 1, bom: 0 };
+  const sorted = items.slice().sort((a, b) => {
+    const ord = (ordemLevel[b.level] ?? 0) - (ordemLevel[a.level] ?? 0);
+    return ord !== 0 ? ord : (b.custo || 0) - (a.custo || 0);
+  });
+
+  const list  = wantWorst ? sorted.slice(0, 5) : sorted.slice().reverse().slice(0, 5);
+  const title = wantWorst ? 'Piores materiais' : 'Melhores materiais';
+
+  let html = `<b>${title}${escopo} — período ${_asstPeriodoLabel()}</b>`;
+  html += list.map((i, idx) => {
+    const lvlLabel = (typeof _levelLabel !== 'undefined' && _levelLabel[i.level]) || String(i.level || '—').toUpperCase();
+    return `<div class="asst-item">${idx + 1}. <b>${escapeHtml(i.mat)}</b> — ${escapeHtml(i.central)} (${signedKg(i.totalDiff)}) · saúde ${lvlLabel}</div>`;
+  }).join('');
+  return nota + html;
+}
+
+
 function _asstIntentOcorrencias(query) {
   const centralRes = _asstResolveCentralCtx(query);
   const abertas  = (state.ocorrencias || []).filter(o => !o.concluida && !o.inconclusiva);
@@ -490,203 +587,424 @@ function _asstIntentConfigPendente() {
   return html;
 }
 
-// ── Intenções: tabelas brutas (Entradas/Saídas/Lançamentos/SAP/Produção) ─
-// Leem state.* diretamente — nunca dependem de análise rodada. Além do
-// total simples com filtro opcional de central/material, suporta
-// ranking por fornecedor, central ou material (ex.: "fornecedor que
-// mais entrega", "central com mais saídas", "material que mais
-// entra"), inclusive combinando ranking numa dimensão com filtro nas
-// outras (ex.: "fornecedores de CIMENTO CP-II" = ranking por
-// fornecedor + filtro por material). Também lista os últimos registros
-// individuais, não só o agregado — números soltos sem exemplo concreto
-// não ajudam o analista.
-//
-// Entradas é a única tabela sem campo "central" direto (usa
-// centralCompra/centralDestino) — por isso cada tabela declara como
-// acessar central/fornecedor em vez de assumir nomes de campo fixos.
-const _ASST_BRUTO = {
-  entradas: {
-    get: () => state.entradas || [],
-    central: r => r.centralDestino || r.centralCompra || '—',
-    fornecedor: r => r.fornecedor,
-    peso: 'peso', valor: 'valorTotal',
-    singular: 'entrada', plural: 'entradas',
-  },
-  saidas: {
-    get: () => state.saidas || [],
-    central: r => r.central,
-    fornecedor: r => r.fornecedor,
-    peso: 'peso', valor: 'valorTotal',
-    singular: 'saída', plural: 'saídas',
-  },
-  lancamentos: {
-    get: () => state.lancamentos || [],
-    central: r => r.central,
-    fornecedor: r => r.fornecedor,
-    peso: 'peso', valor: 'valorTotal',
-    singular: 'lançamento', plural: 'lançamentos',
-  },
-  sap: {
-    get: () => state.sap || [],
-    central: r => r.central,
-    fornecedor: null, // SAP não tem fornecedor no cadastro
-    peso: 'peso', valor: 'valorTotal',
-    singular: 'movimentação SAP', plural: 'movimentações SAP',
-  },
-};
+// ═══════════════════════════════════════════════════════════
+// MOTOR GENÉRICO DE CONSULTA — catálogo de módulos + parser de
+// pergunta composta (agrupar por X, ordenar por Y, top N, no período
+// W) em vez de uma função hardcoded por pergunta/tabela. Um módulo
+// novo só declara onde estão os dados; não escreve lógica de consulta
+// nova. Continua sendo regras (não LLM) — previsível e auditável.
+// ═══════════════════════════════════════════════════════════
+
+const _ASST_MESES = ['JANEIRO','FEVEREIRO','MARCO','ABRIL','MAIO','JUNHO','JULHO','AGOSTO','SETEMBRO','OUTUBRO','NOVEMBRO','DEZEMBRO'];
+
+function _asstUltimoDiaMes(ano, mesIdx) {
+  return new Date(ano, mesIdx + 1, 0).getDate();
+}
+
+// Reconhece datas explícitas ("de 01/06/2026 até 23/06/2026") e nomes
+// de mês ("maio a julho", "em junho"). Sem ano citado, assume o ano
+// corrente — mas isso é sempre reportado na resposta (assumiuAno),
+// nunca fica silencioso. Sem nada reconhecível, retorna null (quem
+// chama decide se avisa que não entendeu o período).
+function _asstParsePeriodo(query) {
+  const datas = query.match(/\d{2}\/\d{2}\/\d{4}/g);
+  if (datas && datas.length) {
+    const dtIni = parseDate(datas[0]);
+    const dtFimBase = parseDate(datas[datas.length > 1 ? 1 : 0]);
+    if (dtIni && dtFimBase) {
+      const dtFim = new Date(dtFimBase.getFullYear(), dtFimBase.getMonth(), dtFimBase.getDate(), 23, 59, 59);
+      return { dtIni, dtFim, assumiuAno: false };
+    }
+  }
+
+  const qLoose = normalizeLooseText(query);
+  const anoMatch = qLoose.match(/\b(20\d{2})\b/);
+  const ano = anoMatch ? Number(anoMatch[1]) : new Date().getFullYear();
+
+  const mesesEncontrados = [];
+  _ASST_MESES.forEach((nome, idx) => {
+    if (new RegExp('\\b' + nome + '\\b').test(qLoose)) mesesEncontrados.push(idx);
+  });
+  if (!mesesEncontrados.length) return null;
+
+  const mIni = mesesEncontrados[0];
+  const mFim = mesesEncontrados[mesesEncontrados.length - 1];
+  return {
+    dtIni: new Date(ano, mIni, 1),
+    dtFim: new Date(ano, mFim, _asstUltimoDiaMes(ano, mFim), 23, 59, 59),
+    assumiuAno: !anoMatch,
+  };
+}
+
+// "fornecedor"/"movimento" sozinhos já pedem ranking (não há outro uso
+// pra essas palavras aqui); "central"/"material" só viram ranking
+// combinados com linguagem de "mais/maior/top" — porque também servem
+// de filtro solto ("entradas da central X").
+function _asstDetectarDimensao(qNorm, dimensoes) {
+  const querRanking = /\b(MAIS|MAIOR|MAIORES|MENOS|MENOR|MENORES|TOP|RANKING|MELHOR|MELHORES|PIOR|PIORES)\b/.test(qNorm);
+  for (const nome of Object.keys(dimensoes)) {
+    const cfg = dimensoes[nome];
+    if (cfg.padrao.test(qNorm) && (!cfg.ambiguo || querRanking)) return nome;
+  }
+  return null;
+}
+
+function _asstDetectarMetrica(qNorm, metricas) {
+  for (const [nome, cfg] of Object.entries(metricas)) {
+    if (cfg.gatilho && cfg.gatilho.test(qNorm)) return nome;
+  }
+  return Object.keys(metricas).find(k => metricas[k].default) || Object.keys(metricas)[0];
+}
+
+function _asstDetectarLimite(qNorm, padrao = 8) {
+  const m = qNorm.match(/\bTOP\s*(\d{1,2})\b/) || qNorm.match(/\b(\d{1,2})\s*(MAIORES|MELHORES|PIORES|PRIMEIROS)\b/);
+  if (m) { const n = Number(m[1]); if (n > 0 && n <= 50) return n; }
+  return padrao;
+}
+
+function _asstAgregarGrupo(registros, getDim, metricaCfg) {
+  const grupos = new Map();
+  registros.forEach(r => {
+    const chave = String(getDim(r) || '').trim() || '—';
+    if (!grupos.has(chave)) grupos.set(chave, { soma: 0, conta: 0 });
+    const g = grupos.get(chave);
+    const v = Number(metricaCfg.get(r));
+    if (!Number.isNaN(v)) { g.soma += v; g.conta += 1; }
+  });
+  return [...grupos.entries()]
+    .map(([chave, g]) => {
+      const valor = metricaCfg.agg === 'conta' ? g.conta : (metricaCfg.agg === 'media' ? (g.conta ? g.soma / g.conta : 0) : g.soma);
+      return [chave, valor, g.conta];
+    })
+    .sort((a, b) => b[1] - a[1]);
+}
 
 function _asstFmtMoeda(v) {
   return (v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
-// Detecta se a pergunta pede um ranking (e por qual dimensão) em vez do
-// total simples. "fornecedor" sempre indica ranking por fornecedor (não
-// existe outro uso pra essa palavra aqui); central/material só viram
-// ranking quando combinados com linguagem de "mais/maior/top".
-function _asstBrutoDetectDim(qNorm, temFornecedor) {
-  if (temFornecedor && /FORNECEDOR/.test(qNorm)) return 'fornecedor';
-  const querMais = /\b(MAIS|MAIOR|MAIORES|TOP|RANKING)\b/.test(qNorm);
-  if (querMais && /CENTRAL/.test(qNorm)) return 'central';
-  if (querMais && /MATERIAL/.test(qNorm)) return 'material';
-  return null;
-}
+// ── Catálogo de módulos ──────────────────────────────────────────────
+// Entradas é a única tabela sem campo "central" direto (usa
+// centralCompra/centralDestino) — por isso central é sempre um
+// acessor (get), nunca um nome de campo fixo assumido.
+//
+// Padrões de dimensão tratam singular e plural explicitamente — usar
+// só a palavra no singular (ex.: fornecedor\b) falha pra "fornecedorES"
+// e sobretudo pra plurais irregulares em -al→-ais (central→centrais,
+// material→materiais), que é como analista costuma perguntar de verdade.
+const _ASST_PAD_CENTRAL    = /\bCENTRA(L|IS)\b/;
+const _ASST_PAD_MATERIAL   = /\bMATERIA(L|IS)\b/;
+const _ASST_PAD_FORNECEDOR = /\bFORNECEDOR(ES)?\b/;
+const _ASST_PAD_MOVIMENTO  = /\bMOVIMENTO(S)?\b/;
 
-function _asstBrutoRanking(records, getKey, pesoField, valorField, limite = 8) {
-  const grupos = new Map();
-  records.forEach(r => {
-    const chave = String(getKey(r) || '').trim() || '—';
-    if (!grupos.has(chave)) grupos.set(chave, { total: 0, peso: 0, valor: 0 });
-    const g = grupos.get(chave);
-    g.total += 1;
-    g.peso  += Number(r[pesoField]) || 0;
-    g.valor += Number(r[valorField]) || 0;
-  });
-  return [...grupos.entries()].sort((a, b) => b[1].peso - a[1].peso).slice(0, limite);
-}
+const _ASST_MODULOS = {
+  entradas: {
+    registros: () => state.entradas || [],
+    data: r => parseDate(r.dtEmissao),
+    dimensoes: {
+      central:    { get: r => r.centralDestino || r.centralCompra || '—', ambiguo: true,  padrao: _ASST_PAD_CENTRAL },
+      material:   { get: r => r.material || '—', ambiguo: true,  padrao: _ASST_PAD_MATERIAL },
+      fornecedor: { get: r => r.fornecedor || '—', ambiguo: false, padrao: _ASST_PAD_FORNECEDOR },
+    },
+    metricas: {
+      peso:  { agg: 'soma',  get: r => Number(r.peso) || 0,       fmt: v => fmtKg(v),        gatilho: /\bPESO\b|\bKG\b/, default: true },
+      valor: { agg: 'soma',  get: r => Number(r.valorTotal) || 0, fmt: v => _asstFmtMoeda(v), gatilho: /CUSTO|VALOR/ },
+      qtd:   { agg: 'conta', get: () => 1,                        fmt: v => v.toLocaleString('pt-BR'), gatilho: /QUANTIDADE|INCIDENCIA|\bREGISTROS?\b/ },
+    },
+    singular: 'entrada', plural: 'entradas',
+  },
+  saidas: {
+    registros: () => state.saidas || [],
+    data: r => parseDate(r.dtEmissao),
+    dimensoes: {
+      central:    { get: r => r.central || '—', ambiguo: true,  padrao: _ASST_PAD_CENTRAL },
+      material:   { get: r => r.material || '—', ambiguo: true,  padrao: _ASST_PAD_MATERIAL },
+      fornecedor: { get: r => r.fornecedor || '—', ambiguo: false, padrao: _ASST_PAD_FORNECEDOR },
+    },
+    metricas: {
+      peso:  { agg: 'soma',  get: r => Number(r.peso) || 0,       fmt: v => fmtKg(v),        gatilho: /\bPESO\b|\bKG\b/, default: true },
+      valor: { agg: 'soma',  get: r => Number(r.valorTotal) || 0, fmt: v => _asstFmtMoeda(v), gatilho: /CUSTO|VALOR/ },
+      qtd:   { agg: 'conta', get: () => 1,                        fmt: v => v.toLocaleString('pt-BR'), gatilho: /QUANTIDADE|INCIDENCIA|\bREGISTROS?\b/ },
+    },
+    singular: 'saída', plural: 'saídas',
+  },
+  lancamentos: {
+    registros: () => state.lancamentos || [],
+    data: r => parseDate(r.dtLanc),
+    dimensoes: {
+      central:    { get: r => r.central || '—', ambiguo: true,  padrao: _ASST_PAD_CENTRAL },
+      material:   { get: r => r.material || '—', ambiguo: true,  padrao: _ASST_PAD_MATERIAL },
+      fornecedor: { get: r => r.fornecedor || '—', ambiguo: false, padrao: _ASST_PAD_FORNECEDOR },
+    },
+    metricas: {
+      peso:  { agg: 'soma',  get: r => Number(r.peso) || 0,       fmt: v => fmtKg(v),        gatilho: /\bPESO\b|\bKG\b/, default: true },
+      valor: { agg: 'soma',  get: r => Number(r.valorTotal) || 0, fmt: v => _asstFmtMoeda(v), gatilho: /CUSTO|VALOR/ },
+      qtd:   { agg: 'conta', get: () => 1,                        fmt: v => v.toLocaleString('pt-BR'), gatilho: /QUANTIDADE|INCIDENCIA|\bREGISTROS?\b/ },
+    },
+    singular: 'lançamento', plural: 'lançamentos',
+  },
+  sap: {
+    registros: () => state.sap || [],
+    data: r => parseDate(r.dtLanc),
+    dimensoes: {
+      central:   { get: r => r.central || '—', ambiguo: true,  padrao: _ASST_PAD_CENTRAL },
+      material:  { get: r => r.material || '—', ambiguo: true,  padrao: _ASST_PAD_MATERIAL },
+      movimento: { get: r => r.movimento || '—', ambiguo: false, padrao: _ASST_PAD_MOVIMENTO },
+    },
+    metricas: {
+      peso:  { agg: 'soma',  get: r => Number(r.peso) || 0,       fmt: v => fmtKg(v),        gatilho: /\bPESO\b|\bKG\b/, default: true },
+      valor: { agg: 'soma',  get: r => Number(r.valorTotal) || 0, fmt: v => _asstFmtMoeda(v), gatilho: /CUSTO|VALOR/ },
+      qtd:   { agg: 'conta', get: () => 1,                        fmt: v => v.toLocaleString('pt-BR'), gatilho: /QUANTIDADE|INCIDENCIA|\bREGISTROS?\b/ },
+    },
+    singular: 'movimentação SAP', plural: 'movimentações SAP',
+  },
+  producao: {
+    registros: () => state.producao || [],
+    data: r => { const [y, m] = String(r.mes || '').split('-').map(Number); return y && m ? new Date(y, m - 1, 1) : null; },
+    dimensoes: {
+      central: { get: r => r.central || '—', ambiguo: true, padrao: _ASST_PAD_CENTRAL },
+    },
+    metricas: {
+      producao: { agg: 'soma',  get: r => Number(r.producao) || 0,    fmt: v => v.toLocaleString('pt-BR') + ' m³', gatilho: /PRODUCAO|\bM3\b/, default: true },
+      vendas:   { agg: 'soma',  get: r => Number(r.totalVendas) || 0, fmt: v => _asstFmtMoeda(v), gatilho: /VENDA|CUSTO|VALOR/ },
+      qtd:      { agg: 'conta', get: () => 1,                         fmt: v => v.toLocaleString('pt-BR'), gatilho: /QUANTIDADE|\bREGISTROS?\b/ },
+    },
+    singular: 'registro de produção', plural: 'registros de produção',
+  },
+  // Composto: une Entradas + Saídas numa única visão de "fluxo" por
+  // central/material — pergunta que nenhuma tabela isolada responde.
+  fluxo: {
+    registros: query => _asstFluxoRegistros(query),
+    notaFontes: query => _asstFluxoDescricao(query),
+    data: r => parseDate(r.dtEmissao),
+    dimensoes: {
+      central:  { get: r => r.central || '—', ambiguo: true, padrao: _ASST_PAD_CENTRAL },
+      material: { get: r => r.material || '—', ambiguo: true, padrao: _ASST_PAD_MATERIAL },
+    },
+    metricas: {
+      peso:  { agg: 'soma',  get: r => Number(r.peso) || 0,       fmt: v => fmtKg(v),        gatilho: /\bPESO\b|\bKG\b|FLUXO/, default: true },
+      valor: { agg: 'soma',  get: r => Number(r.valorTotal) || 0, fmt: v => _asstFmtMoeda(v), gatilho: /CUSTO|VALOR/ },
+      qtd:   { agg: 'conta', get: () => 1,                        fmt: v => v.toLocaleString('pt-BR'), gatilho: /QUANTIDADE|INCIDENCIA|\bREGISTROS?\b/ },
+    },
+    singular: 'movimentação de fluxo', plural: 'movimentações de fluxo',
+  },
+};
 
-function _asstBrutoRenderRanking(titulo, ranking, unidade) {
-  if (!ranking.length) return `<b>${escapeHtml(titulo)}</b><div class="asst-item">Sem dados.</div>`;
-  let html = `<b>${escapeHtml(titulo)}</b>`;
-  html += ranking.map(([nome, g], idx) =>
-    `<div class="asst-item">${idx + 1}. <b>${escapeHtml(nome)}</b> — ${g.peso.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} ${unidade} · ${g.total} registro(s) · ${_asstFmtMoeda(g.valor)}</div>`
-  ).join('');
-  return html;
-}
+const _ASST_DIM_LABEL     = { central: 'Centrais', material: 'Materiais', fornecedor: 'Fornecedores', movimento: 'Movimentos' };
+const _ASST_METRICA_LABEL = { peso: 'peso', valor: 'valor', qtd: 'quantidade', producao: 'produção', vendas: 'vendas' };
 
-function _asstBrutoItemLinha(cfg, r) {
-  const data = r.dtEmissao || r.dtLanc || '—';
-  const doc  = r.nf || r.os || r.documento || '';
-  const forn = cfg.fornecedor ? cfg.fornecedor(r) : null;
-  let linha = `${escapeHtml(data)} · <b>${escapeHtml(cfg.central(r))}</b> · ${escapeHtml(r.material || '—')} — ${fmtKg(r.peso)}`;
-  if (doc)  linha += ` · ${escapeHtml(doc)}`;
-  if (forn && forn !== '—') linha += ` · ${escapeHtml(forn)}`;
-  return `<div class="asst-item">${linha}</div>`;
-}
-
-function _asstIntentBruto(tabela, query) {
-  const cfg = _ASST_BRUTO[tabela];
+// Motor único: qualquer módulo do catálogo passa por aqui. Extrai
+// dimensão (agrupar por), métrica (ordenar por), limite (top N) e
+// período do texto livre, de forma independente uma da outra — dá pra
+// combinar todas ao mesmo tempo, ou usar só as que a pergunta citou.
+function _asstExecutarConsulta(modKey, query) {
+  const mod = _ASST_MODULOS[modKey];
   const qNorm = normalizeText(query);
-  const dim = _asstBrutoDetectDim(qNorm, !!cfg.fornecedor);
-  const todos = cfg.get();
 
-  if (dim === 'fornecedor' || dim === 'central') {
-    const matRes = _asstResolveMaterialCtx(query);
-    let regs = todos;
-    if (matRes.value) regs = regs.filter(r => r.material === matRes.value);
-    if (!regs.length) return `Nenhum(a) ${cfg.singular} encontrado(a).`;
-    const nota   = matRes.fromContext ? _asstContextNote('material', matRes.value) : '';
-    const escopo = matRes.value ? ` — material <b>${escapeHtml(matRes.value)}</b>` : '';
-    const getKey = dim === 'fornecedor' ? cfg.fornecedor : cfg.central;
-    const titulo = dim === 'fornecedor' ? `Fornecedores — ${cfg.plural}${escopo}` : `Centrais com mais ${cfg.plural}${escopo}`;
-    return nota + _asstBrutoRenderRanking(titulo, _asstBrutoRanking(regs, getKey, cfg.peso, cfg.valor), 'kg');
+  const dim     = _asstDetectarDimensao(qNorm, mod.dimensoes);
+  const metrica = _asstDetectarMetrica(qNorm, mod.metricas);
+  const limite  = _asstDetectarLimite(qNorm);
+  const periodo = _asstParsePeriodo(query);
+
+  let regs = mod.registros(query);
+  let nota = mod.notaFontes ? mod.notaFontes(query) : '';
+
+  if (periodo) {
+    regs = regs.filter(r => { const d = mod.data(r); return d && d >= periodo.dtIni && d <= periodo.dtFim; });
+    nota += `<div class="asst-context-note"><i class="ti ti-calendar"></i> período ${fmtPtDate(periodo.dtIni)} a ${fmtPtDate(periodo.dtFim)}${periodo.assumiuAno ? ' — assumindo ' + periodo.dtIni.getFullYear() : ''}</div>`;
+  } else if (/\b(PERIODO|MES|DATA|SEMANA|TRIMESTRE|ANO)\b/.test(qNorm)) {
+    nota += `<div class="asst-context-note"><i class="ti ti-alert-triangle"></i> não identifiquei o período da pergunta — mostrando todos os dados</div>`;
   }
 
-  if (dim === 'material') {
-    const centralRes = _asstResolveCentralCtx(query);
-    let regs = todos;
-    if (centralRes.value) regs = regs.filter(r => cfg.central(r) === centralRes.value);
-    if (!regs.length) return `Nenhum(a) ${cfg.singular} encontrado(a).`;
-    const nota   = centralRes.fromContext ? _asstContextNote('central', centralRes.value) : '';
-    const escopo = centralRes.value ? ` — central <b>${escapeHtml(centralRes.value)}</b>` : '';
-    return nota + _asstBrutoRenderRanking(`Materiais com mais ${cfg.plural}${escopo}`, _asstBrutoRanking(regs, r => r.material, cfg.peso, cfg.valor), 'kg');
+  // Filtra pelas dimensões citadas que NÃO são a que está sendo
+  // ranqueada (ex.: ranking de fornecedor ainda respeita um material
+  // citado; ranking de central ignora central citada, não faria sentido).
+  Object.entries(mod.dimensoes).forEach(([nome, cfg]) => {
+    if (nome === dim) return;
+    if (nome === 'central') {
+      const r = _asstResolveCentralCtx(query);
+      if (r.value) { regs = regs.filter(x => cfg.get(x) === r.value); if (r.fromContext) nota += _asstContextNote('central', r.value); }
+    } else if (nome === 'material') {
+      const r = _asstResolveMaterialCtx(query);
+      if (r.value) { regs = regs.filter(x => cfg.get(x) === r.value); if (r.fromContext) nota += _asstContextNote('material', r.value); }
+    }
+  });
+
+  const metricaCfg = mod.metricas[metrica];
+
+  if (dim) {
+    if (!regs.length) return nota + `Nenhum(a) ${mod.singular} encontrado(a).`;
+    const ranking = _asstAgregarGrupo(regs, mod.dimensoes[dim].get, metricaCfg).slice(0, limite);
+    const tituloMetrica = metrica === 'qtd' ? 'mais frequentes' : `por ${_ASST_METRICA_LABEL[metrica] || metrica}`;
+    let html = `<b>${_ASST_DIM_LABEL[dim] || dim} ${tituloMetrica} — ${escapeHtml(mod.plural)}</b>`;
+    html += ranking.map(([nome, valor, conta], idx) =>
+      `<div class="asst-item">${idx + 1}. <b>${escapeHtml(nome)}</b> — ${metricaCfg.fmt(valor)}${metricaCfg.agg !== 'conta' ? ' · ' + conta + ' registro(s)' : ''}</div>`
+    ).join('');
+    return nota + html;
   }
 
-  // Total simples com filtro opcional de central/material + lista dos
-  // últimos registros (sem isso, é só um número solto e genérico).
-  const centralRes = _asstResolveCentralCtx(query);
-  const matRes     = _asstResolveMaterialCtx(query);
-  let regs = todos;
-  if (centralRes.value) regs = regs.filter(r => cfg.central(r) === centralRes.value);
-  if (matRes.value)     regs = regs.filter(r => r.material === matRes.value);
-
-  let nota = '';
-  if (centralRes.fromContext) nota += _asstContextNote('central', centralRes.value);
-  if (matRes.fromContext)     nota += _asstContextNote('material', matRes.value);
-  const partes = [];
-  if (centralRes.value) partes.push(`central <b>${escapeHtml(centralRes.value)}</b>`);
-  if (matRes.value)     partes.push(`material <b>${escapeHtml(matRes.value)}</b>`);
-  const escopo = partes.join(', ');
-
-  if (!regs.length) return nota + `Nenhum(a) ${cfg.singular} encontrado(a)${escopo ? ' — ' + escopo : ''}.`;
+  // Sem dimensão pedida: total simples (todas as métricas do módulo)
+  // + lista dos últimos registros — número solto sem exemplo não ajuda.
+  if (!regs.length) return nota + `Nenhum(a) ${mod.singular} encontrado(a).`;
 
   const total = regs.length;
-  const peso  = regs.reduce((s, r) => s + (Number(r[cfg.peso]) || 0), 0);
-  const valor = regs.reduce((s, r) => s + (Number(r[cfg.valor]) || 0), 0);
-
-  let html = `<b>${total}</b> ${total === 1 ? cfg.singular : cfg.plural}${escopo ? ' — ' + escopo : ''}.`;
-  html += `<div class="asst-item">Peso total: ${fmtKg(peso)}</div>`;
-  html += `<div class="asst-item">Valor total: ${_asstFmtMoeda(valor)}</div>`;
+  let html = `<b>${total}</b> ${total === 1 ? mod.singular : mod.plural}.`;
+  Object.entries(mod.metricas).forEach(([nome, cfg]) => {
+    if (cfg.agg === 'conta') return;
+    const soma = regs.reduce((s, r) => s + (Number(cfg.get(r)) || 0), 0);
+    html += `<div class="asst-item">${_ASST_METRICA_LABEL[nome] || nome} total: ${cfg.fmt(soma)}</div>`;
+  });
 
   const ordenados = regs.slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   html += `<div class="asst-section-title"><i class="ti ti-list-details"></i> Últimos registros</div>`;
-  html += ordenados.slice(0, 8).map(r => _asstBrutoItemLinha(cfg, r)).join('');
+  html += ordenados.slice(0, 8).map(r => {
+    const dataStr    = r.dtEmissao || r.dtLanc || r.mes || '—';
+    const centralStr = mod.dimensoes.central ? mod.dimensoes.central.get(r) : '—';
+    const materialStr = mod.dimensoes.material ? mod.dimensoes.material.get(r) : null;
+    const doc = r.nf || r.os || r.documento || '';
+    let linha = `${escapeHtml(dataStr)} · <b>${escapeHtml(centralStr)}</b>`;
+    if (r.tipo) linha += ` · ${escapeHtml(r.tipo)}`;
+    if (materialStr) linha += ` · ${escapeHtml(materialStr)}`;
+    if (doc) linha += ` · ${escapeHtml(doc)}`;
+    return `<div class="asst-item">${linha}</div>`;
+  }).join('');
   if (ordenados.length > 8) html += `<div class="asst-more">+ ${ordenados.length - 8} outro(s)</div>`;
 
   return nota + html;
 }
 
-function _asstIntentEntradasConsulta(query)    { return _asstIntentBruto('entradas', query); }
-function _asstIntentSaidasConsulta(query)      { return _asstIntentBruto('saidas', query); }
-function _asstIntentLancamentosConsulta(query) { return _asstIntentBruto('lancamentos', query); }
-function _asstIntentSapConsulta(query)         { return _asstIntentBruto('sap', query); }
-
-// Produção tem formato diferente (sem material, sem fornecedor; usa
-// producao/totalVendas em vez de peso/valorTotal) — fica de fora do
-// motor genérico, mas reaproveita o mesmo _asstBrutoRanking.
-function _asstIntentProducaoConsulta(query) {
+// ── Ocorrências: análise por regional/motivo/central ────────────────
+// Reaproveita buildOcKPIs() (já existe em ocorrencias.js pra alimentar
+// os gráficos da tela — inclusive tempoMedioRegional, exatamente
+// "tempo de retorno por regional") em vez de recalcular do zero.
+function _asstIntentOcorrenciasAnalise(query) {
+  if (typeof buildOcKPIs !== 'function') return 'O módulo de análise de ocorrências não está disponível nesta tela.';
   const qNorm = normalizeText(query);
-  const querMais = /\b(MAIS|MAIOR|MAIORES|TOP|RANKING)\b/.test(qNorm);
-  const todos = state.producao || [];
+  const kpis = buildOcKPIs(state.ocorrencias || []);
 
-  if (querMais && /CENTRAL/.test(qNorm)) {
-    if (!todos.length) return 'Nenhum registro de produção encontrado.';
-    return _asstBrutoRenderRanking('Centrais com mais produção', _asstBrutoRanking(todos, r => r.central, 'producao', 'totalVendas'), 'm³');
+  const querTempo    = /TEMPO|RETORNO|DEMORA|PRAZO/.test(qNorm);
+  const querRegional = /\bREGIONA(L|IS)\b/.test(qNorm);
+  const querMotivo   = /\bMOTIVOS?\b/.test(qNorm);
+  const querCentral  = _ASST_PAD_CENTRAL.test(qNorm) && /\b(MAIS|MAIOR|MAIORES|MENOS|MENOR|PIOR|PIORES|MELHOR|MELHORES|TOP)\b/.test(qNorm);
+
+  if (querRegional && querTempo) {
+    if (!kpis.tempoMedioRegional.length) return 'Ainda não há ocorrências concluídas suficientes pra calcular tempo de retorno por regional.';
+    let html = '<b>Regionais por tempo médio de retorno (pior → melhor)</b>';
+    html += kpis.tempoMedioRegional.slice(0, 8).map(([regional, dias, qtd], idx) =>
+      `<div class="asst-item">${idx + 1}. <b>${escapeHtml(regional)}</b> — ${dias.toFixed(1)} dia(s) em média · ${qtd} ocorrência(s) concluída(s)</div>`
+    ).join('');
+    return html;
   }
 
-  const centralRes = _asstResolveCentralCtx(query);
-  let filtrados = todos;
-  if (centralRes.value) filtrados = filtrados.filter(r => r.central === centralRes.value);
+  if (querMotivo) {
+    if (!kpis.topMotivos.length) return 'Nenhuma ocorrência registrada ainda.';
+    let html = '<b>Ocorrências por motivo</b>';
+    html += kpis.topMotivos.slice(0, 8).map(([motivo, qtd], idx) => `<div class="asst-item">${idx + 1}. <b>${escapeHtml(motivo)}</b> — ${qtd} ocorrência(s)</div>`).join('');
+    return html;
+  }
 
-  const nota   = centralRes.fromContext ? _asstContextNote('central', centralRes.value) : '';
-  const escopo = centralRes.value ? `central <b>${escapeHtml(centralRes.value)}</b>` : '';
+  if (querCentral) {
+    if (!kpis.topCentrals.length) return 'Nenhuma ocorrência registrada ainda.';
+    let html = '<b>Centrais com mais ocorrências</b>';
+    html += kpis.topCentrals.slice(0, 8).map(([central, qtd], idx) => `<div class="asst-item">${idx + 1}. <b>${escapeHtml(central)}</b> — ${qtd} ocorrência(s)</div>`).join('');
+    return html;
+  }
 
-  if (!filtrados.length) return nota + `Nenhum registro de produção encontrado${escopo ? ' — ' + escopo : ''}.`;
+  let html = '<b>Visão geral de ocorrências</b>';
+  html += `<div class="asst-item">${kpis.total} no total — ${kpis.abertas} aberta(s), ${kpis.concluidas} concluída(s) (${kpis.pctConc}%), ${kpis.inconclusivas} inconclusiva(s)</div>`;
+  html += `<div class="asst-item">${kpis.vencidas} vencida(s), ${kpis.urgentes} vencendo em breve</div>`;
+  if (kpis.tempoMedioMin != null) html += `<div class="asst-item">Tempo médio de conclusão: ${kpis.tempoMedioMin.toFixed(1)} dia(s) (${kpis.tempoCount} concluída(s) consideradas)</div>`;
+  if (kpis.tempoMedioRegional.length) {
+    const pior = kpis.tempoMedioRegional[0];
+    html += `<div class="asst-item">Regional com pior tempo de retorno: <b>${escapeHtml(pior[0])}</b> — ${pior[1].toFixed(1)} dia(s)</div>`;
+  }
+  return html;
+}
 
-  const producaoTotal = filtrados.reduce((s, r) => s + (Number(r.producao) || 0), 0);
-  const vendasTotal   = filtrados.reduce((s, r) => s + (Number(r.totalVendas) || 0), 0);
+// ── Roteadores internos por módulo ───────────────────────────────────
+// O menu "/" agora trava uma ÁREA do sistema (não uma pergunta
+// específica). Dentro da área, esses roteadores decidem — por 2-3
+// palavras-chave, igual o resto do assistente — qual das funções que
+// já existem chamar. Isso não é exposto no menu; é só o "atendente
+// interno" de cada contexto amplo.
 
-  let html = `<b>${filtrados.length}</b> registro(s) de produção${escopo ? ' — ' + escopo : ''}.`;
-  html += `<div class="asst-item">Produção total: ${producaoTotal.toLocaleString('pt-BR')} m³</div>`;
-  html += `<div class="asst-item">Total de vendas: ${_asstFmtMoeda(vendasTotal)}</div>`;
+// Dashboard Analítico: criticidade, ranking, saldo, tendência,
+// ausências e resumo — todas já exigiam análise rodada, então o
+// contexto inteiro pode travar essa exigência de uma vez só.
+function _asstRoteiaDashboardAnalitico(query) {
+  const qNorm = normalizeText(query);
+  if (/\bSALDO\b|ESTOQUE DE|QUANTO TEM/.test(qNorm)) return _asstIntentSaldoMaterial(query);
+  if (/TENDENCIA|PREVISAO|PROJECAO/.test(qNorm)) return _asstIntentTendencia(query);
+  if (/AUSENCIA|SEM LANCAR|NAO LANCOU/.test(qNorm)) return _asstIntentAusencias(query);
+  if (/CRITIC|URGENTE/.test(qNorm)) return _asstIntentCriticidade(query);
+  if (/\bPIOR(ES)?\b/.test(qNorm)) return _ASST_PAD_MATERIAL.test(qNorm) ? _asstIntentRankingMaterial(query, true) : _asstIntentRankingCentral(query, true);
+  if (/\bMELHOR(ES)?\b/.test(qNorm)) return _ASST_PAD_MATERIAL.test(qNorm) ? _asstIntentRankingMaterial(query, false) : _asstIntentRankingCentral(query, false);
+  if (/SAUDE|RESUMO|VISAO GERAL|SITUACAO/.test(qNorm)) return _asstIntentSaudeGlobal();
 
-  const ordenados = filtrados.slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-  html += `<div class="asst-section-title"><i class="ti ti-list-details"></i> Últimos registros</div>`;
-  html += ordenados.slice(0, 8).map(r =>
-    `<div class="asst-item">${escapeHtml(r.mes || '—')} · <b>${escapeHtml(r.central)}</b> — ${Number(r.producao || 0).toLocaleString('pt-BR')} m³ · ${_asstFmtMoeda(r.totalVendas)}</div>`
-  ).join('');
-  if (ordenados.length > 8) html += `<div class="asst-more">+ ${ordenados.length - 8} outro(s)</div>`;
+  // Nada bateu — isso é diferente de "pediu resumo geral" de propósito.
+  // Avisa (em vez de devolver o resumo como se fosse resposta certa) e
+  // registra, porque com 6 sub-perguntas bem diferentes aqui dentro,
+  // "não reconheci nada" é um sinal real de pergunta fora do catálogo.
+  _asstRegistrarNaoReconhecida('dashboard-analitico', query);
+  const aviso = `<div class="asst-context-note"><i class="ti ti-alert-triangle"></i> não reconheci uma pergunta específica aqui — mostrando o resumo geral. Posso responder sobre: crítico/urgente, pior/melhor central, saldo, tendência, ausências, ou "resumo geral".</div>`;
+  return aviso + _asstIntentSaudeGlobal();
+}
 
-  return nota + html;
+// Ocorrências: lista de abertas (padrão) ou análise por
+// regional/motivo/central/tempo quando a pergunta pedir isso.
+function _asstRoteiaOcorrencias(query) {
+  const qNorm = normalizeText(query);
+  const pedeAnalise = /\bREGIONA(L|IS)\b|MOTIVOS?|TEMPO|RETORNO|DEMORA|PRAZO/.test(qNorm)
+    || (_ASST_PAD_CENTRAL.test(qNorm) && /\b(MAIS|MAIOR|MAIORES|MENOS|MENOR|PIOR|PIORES|MELHOR|MELHORES|TOP)\b/.test(qNorm));
+  return pedeAnalise ? _asstIntentOcorrenciasAnalise(query) : _asstIntentOcorrencias(query);
+}
+
+// Configurações: pendências de padronização (padrão) ou ações
+// propostas pra um material crítico. Único módulo com exigência mista
+// de análise (ações precisa, padronização não) — quando cai em ações
+// sem análise rodada, a própria função avisa (_asstNoAnaliseMsg), só
+// não abre o seletor de período embutido como os outros módulos abrem
+// no travamento do contexto; é uma limitação conhecida, não um bug.
+function _asstRoteiaConfiguracoes(query) {
+  const qNorm = normalizeText(query);
+  if (/\b(ACAO|ACOES)\b/.test(qNorm)) return _asstIntentAcoes(query);
+  return _asstIntentConfigPendente();
+}
+
+// ── Fluxo: fontes dinâmicas ──────────────────────────────────────────
+// Em vez de fixar Entradas+Saídas, reconhece quais tabelas a própria
+// pergunta cita ("fluxo de entrada e SAP") e combina exatamente essas.
+// Sem nenhuma citada, cai no padrão mais natural: Entradas+Saídas.
+function _asstFluxoFontes(query) {
+  const qLoose = normalizeLooseText(query || '');
+  const incluir = {
+    entrada:    /ENTRADA/.test(qLoose),
+    saida:      /SAIDA/.test(qLoose),
+    lancamento: /LANCAMENTO/.test(qLoose),
+    sap:        /\bSAP\b/.test(qLoose),
+  };
+  const nenhumaCitada = !incluir.entrada && !incluir.saida && !incluir.lancamento && !incluir.sap;
+  return nenhumaCitada ? { entrada: true, saida: true } : incluir;
+}
+
+function _asstFluxoRegistros(query) {
+  const usar = _asstFluxoFontes(query);
+  let regs = [];
+  if (usar.entrada)    regs = regs.concat((state.entradas    || []).map(r => ({ central: r.centralDestino || r.centralCompra || '—', material: r.material, peso: r.peso, valorTotal: r.valorTotal, dtEmissao: r.dtEmissao, nf: r.nf, tipo: 'entrada', createdAt: r.createdAt })));
+  if (usar.saida)      regs = regs.concat((state.saidas      || []).map(r => ({ central: r.central || '—', material: r.material, peso: r.peso, valorTotal: r.valorTotal, dtEmissao: r.dtEmissao, os: r.os, tipo: 'saída', createdAt: r.createdAt })));
+  if (usar.lancamento) regs = regs.concat((state.lancamentos || []).map(r => ({ central: r.central || '—', material: r.material, peso: r.peso, valorTotal: r.valorTotal, dtEmissao: r.dtLanc, tipo: 'lançamento', createdAt: r.createdAt })));
+  if (usar.sap)        regs = regs.concat((state.sap         || []).map(r => ({ central: r.central || '—', material: r.material, peso: r.peso, valorTotal: r.valorTotal, dtEmissao: r.dtLanc, documento: r.documento, tipo: 'SAP', createdAt: r.createdAt })));
+  return regs;
+}
+
+function _asstFluxoDescricao(query) {
+  const usar = _asstFluxoFontes(query);
+  const nomes = [];
+  if (usar.entrada) nomes.push('entradas');
+  if (usar.saida) nomes.push('saídas');
+  if (usar.lancamento) nomes.push('lançamentos');
+  if (usar.sap) nomes.push('SAP');
+  return `<div class="asst-context-note"><i class="ti ti-arrows-exchange"></i> considerando: ${nomes.join(', ')}</div>`;
 }
 
 // ── Registro de intenções ────────────────────────────────────────────
@@ -704,23 +1022,44 @@ function _asstIntentProducaoConsulta(query) {
 // mensagem seguinte é enviada direto pro mesmo handler, sem passar de
 // novo por detecção de intenção.
 const _ASST_INTENTS = [
-  { id: 'saldo',           label: 'Saldo de um material',           group: 'Estoque',     icon: 'ti-scale',            needs: ['material', 'central'], requiresAnalise: true,  handler: raw => _asstIntentSaldoMaterial(raw) },
-  { id: 'tendencia',       label: 'Tendência de um material',       group: 'Estoque',     icon: 'ti-trending-up',      needs: ['material', 'central'], requiresAnalise: true,  handler: raw => _asstIntentTendencia(raw) },
-  { id: 'pior',            label: 'Piores centrais no período',     group: 'Centrais',    icon: 'ti-arrow-down-right', needs: [],                      requiresAnalise: true,  handler: raw => _asstIntentRankingCentral(raw, true) },
-  { id: 'melhor',          label: 'Melhores centrais no período',   group: 'Centrais',    icon: 'ti-arrow-up-right',   needs: [],                      requiresAnalise: true,  handler: raw => _asstIntentRankingCentral(raw, false) },
-  { id: 'ausencias',       label: 'Centrais sem lançar',            group: 'Centrais',    icon: 'ti-calendar-off',     needs: [],                      requiresAnalise: true,  handler: raw => _asstIntentAusencias(raw) },
-  { id: 'ocorrencias',     label: 'Ocorrências abertas',            group: 'Ocorrências', icon: 'ti-list-details',     needs: [],                      requiresAnalise: false, handler: raw => _asstIntentOcorrencias(raw) },
-  { id: 'config-pendente', label: 'Pendências de padronização',     group: 'Cadastro',    icon: 'ti-alert-triangle',   needs: [],                      requiresAnalise: false, handler: () => _asstIntentConfigPendente() },
-  { id: 'criticidade',     label: 'Materiais críticos/urgentes',    group: 'Geral',       icon: 'ti-flame',            needs: [],                      requiresAnalise: true,  handler: raw => _asstIntentCriticidade(raw) },
-  { id: 'saude',           label: 'Resumo do período',              group: 'Geral',       icon: 'ti-report',           needs: [],                      requiresAnalise: true,  handler: () => _asstIntentSaudeGlobal() },
-  { id: 'acoes',           label: 'Ações para um material crítico', group: 'Geral',       icon: 'ti-clipboard-check',  needs: ['material', 'central'], requiresAnalise: true,  handler: raw => _asstIntentAcoes(raw) },
+  // ── Dashboard Analítico: um contexto só, cobrindo criticidade,
+  // ranking de centrais, saldo, tendência, ausências e resumo — o
+  // roteador interno decide qual chamar pelas palavras da pergunta.
+  {
+    id: 'dashboard-analitico', label: 'Dashboard Analítico', group: 'Dashboard Analítico', icon: 'ti-chart-bar',
+    needs: [], requiresAnalise: true, handler: raw => _asstRoteiaDashboardAnalitico(raw),
+    intro: () => `Contexto travado em <b>Dashboard Analítico</b>. Pergunte sobre materiais críticos/urgentes, ranking de centrais (pior/melhor), saldo ou tendência de um material, centrais sem lançar, ou peça um resumo geral. Usando o período já analisado: <b>${_asstPeriodoLabel()}</b>.`,
+  },
 
-  // ── Tabelas brutas: consulta (somente leitura, independe de análise) ─
-  { id: 'entradas-consulta',     label: 'Entradas (NF) registradas',   group: 'Consultar dados', icon: 'ti-package-import', needs: [], requiresAnalise: false, handler: raw => _asstIntentEntradasConsulta(raw) },
-  { id: 'saidas-consulta',       label: 'Saídas (OS) registradas',     group: 'Consultar dados', icon: 'ti-package-export', needs: [], requiresAnalise: false, handler: raw => _asstIntentSaidasConsulta(raw) },
-  { id: 'lancamentos-consulta',  label: 'Lançamentos registrados',     group: 'Consultar dados', icon: 'ti-clipboard-list', needs: [], requiresAnalise: false, handler: raw => _asstIntentLancamentosConsulta(raw) },
-  { id: 'sap-consulta',          label: 'Movimentações SAP',           group: 'Consultar dados', icon: 'ti-database',       needs: [], requiresAnalise: false, handler: raw => _asstIntentSapConsulta(raw) },
-  { id: 'producao-consulta',     label: 'Produção registrada',         group: 'Consultar dados', icon: 'ti-chart-bar',      needs: [], requiresAnalise: false, handler: raw => _asstIntentProducaoConsulta(raw) },
+  // ── Consultar dados: um contexto por tabela real do sistema. O
+  // motor genérico (_asstExecutarConsulta) entende agrupar/ordenar/
+  // limitar/período dentro de cada uma.
+  { id: 'entradas-consulta',    label: 'Entradas (NF)',            group: 'Consultar dados', icon: 'ti-package-import',   needs: [], requiresAnalise: false, handler: raw => _asstExecutarConsulta('entradas', raw) },
+  { id: 'saidas-consulta',      label: 'Saídas (OS)',              group: 'Consultar dados', icon: 'ti-package-export',   needs: [], requiresAnalise: false, handler: raw => _asstExecutarConsulta('saidas', raw) },
+  { id: 'lancamentos-consulta', label: 'Lançamentos',              group: 'Consultar dados', icon: 'ti-clipboard-list',   needs: [], requiresAnalise: false, handler: raw => _asstExecutarConsulta('lancamentos', raw) },
+  { id: 'sap-consulta',         label: 'SAP',                      group: 'Consultar dados', icon: 'ti-database',         needs: [], requiresAnalise: false, handler: raw => _asstExecutarConsulta('sap', raw) },
+  { id: 'producao-consulta',    label: 'Produção',                 group: 'Consultar dados', icon: 'ti-chart-bar',        needs: [], requiresAnalise: false, handler: raw => _asstExecutarConsulta('producao', raw) },
+  {
+    id: 'fluxo-consulta', label: 'Fluxo (entre tabelas)', group: 'Consultar dados', icon: 'ti-arrows-exchange',
+    needs: [], requiresAnalise: false, handler: raw => _asstExecutarConsulta('fluxo', raw),
+    intro: () => 'Contexto travado em <b>Fluxo</b>. Combino as tabelas que você citar na pergunta (entrada, saída, lançamento, SAP) — sem citar nenhuma, uso entradas + saídas por padrão.',
+  },
+
+  // ── Ocorrências: um contexto só — lista de abertas (padrão) ou
+  // análise por regional/motivo/central/tempo quando a pergunta pedir.
+  {
+    id: 'ocorrencias', label: 'Ocorrências', group: 'Ocorrências', icon: 'ti-list-details',
+    needs: [], requiresAnalise: false, handler: raw => _asstRoteiaOcorrencias(raw),
+    intro: () => 'Contexto travado em <b>Ocorrências</b>. Pergunte pelas abertas, ou peça uma análise por regional, motivo, central ou tempo de retorno.',
+  },
+
+  // ── Configurações: um contexto só — pendências de padronização
+  // (padrão) ou ações propostas pra um material crítico.
+  {
+    id: 'configuracoes', label: 'Configurações', group: 'Configurações', icon: 'ti-settings',
+    needs: [], requiresAnalise: false, handler: raw => _asstRoteiaConfiguracoes(raw),
+    intro: () => 'Contexto travado em <b>Configurações</b>. Pergunte sobre pendências de padronização, ou ações propostas pra um material crítico (isso último pede análise rodada).',
+  },
 
   // ── Tabelas brutas: registro manual (única ação que o assistente
   // dispara — sempre formulário → confirmação explícita antes de gravar,
@@ -730,6 +1069,9 @@ const _ASST_INTENTS = [
   { id: 'lancamento-registrar', label: 'Registrar lançamento',          group: 'Registrar dado', icon: 'ti-circle-plus', needs: [], requiresAnalise: false, formKind: 'lancamento', handler: () => _asstManualNoOpMsg() },
   { id: 'sap-registrar',        label: 'Registrar movimentação SAP',    group: 'Registrar dado', icon: 'ti-circle-plus', needs: [], requiresAnalise: false, formKind: 'sap',        handler: () => _asstManualNoOpMsg() },
   { id: 'producao-registrar',   label: 'Registrar produção',            group: 'Registrar dado', icon: 'ti-circle-plus', needs: [], requiresAnalise: false, formKind: 'producao',   handler: () => _asstManualNoOpMsg() },
+
+  // ── Sistema: diagnóstico do próprio assistente, não é dado do negócio ─
+  { id: 'log-nao-reconhecidas', label: 'Perguntas não reconhecidas', group: 'Sistema', icon: 'ti-help-circle', needs: [], requiresAnalise: false, handler: () => _asstIntentLogNaoReconhecidas() },
 ];
 
 function _asstIntentById(id) {
@@ -924,7 +1266,7 @@ function _asstSelectIntent(id) {
     _asstAppendMsg('bot', _asstManualFormHtml(it.formKind));
     return;
   }
-  _asstAppendMsg('bot', _asstContextLockedMsg(it));
+  _asstAppendMsg('bot', it.intro ? it.intro() : _asstContextLockedMsg(it));
 }
 
 // ── Registro manual de dados brutos — única ação que o assistente pode

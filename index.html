@@ -498,9 +498,14 @@
           </div>
           <div class="asst-chat-body" id="asst-chat-body">
             <div class="asst-msg asst-msg-bot">
-              Oi! Sou seu analista auxiliar de estoque. Respondo sobre a última análise rodada no Dashboard, e ajudo com ocorrências e pendências de cadastro a qualquer momento.
+              Oi! Sou seu analista auxiliar de estoque.
               <br><br>
-              Digite <code>/</code> e escolha um contexto para eu saber onde buscar a resposta — ele fica travado até você trocar ou remover. Se a pergunta escolhida precisar de um período analisado, eu peço as datas aqui mesmo, sem escolher por conta própria.
+              Digite <code>/</code> e escolha um contexto — ele fica travado até você trocar ou remover. Dentro de um contexto de tabela, monte a pergunta combinando o que você precisa:
+              <div class="asst-item">• <b>o que agrupar</b> — central, material, fornecedor, movimento...</div>
+              <div class="asst-item">• <b>como ordenar</b> — peso, custo/valor, quantidade...</div>
+              <div class="asst-item">• <b>quantos</b> — "top 3", "os 5 piores"...</div>
+              <div class="asst-item">• <b>período</b> — "maio a julho", "de 01/06/2026 a 23/06/2026"</div>
+              Não precisa usar todas de uma vez — combine só as que fizerem sentido pra sua pergunta. Exemplos: <i>"top 3 fornecedores por custo"</i>, <i>"central com mais entradas em junho"</i>, <i>"movimento com maior incidência de 01/06/2026 a 23/06/2026"</i>. Se a pergunta escolhida precisar de um período analisado (Dashboard), eu peço as datas aqui mesmo, sem escolher por conta própria.
               <div class="asst-suggestions">
                 <button class="asst-chip" onclick="asstQuickStart('ocorrencias')">Ocorrências abertas</button>
                 <button class="asst-chip" onclick="asstQuickStart('saude')">Resumo do período</button>
