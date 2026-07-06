@@ -1249,8 +1249,14 @@ function renderLancamentos() {
   // Mapa de índice de página → objeto real no state (para edição inline)
   window._lancPageData = data;
 
-  tb.innerHTML = data.map((r, i) => `
-    <tr>
+  const _lancDupKeys = getLancamentoDuplicateKeys();
+
+  tb.innerHTML = data.map((r, i) => {
+  const isDup = _lancDupKeys.has(getLancamentoRecordKey(r));
+  const trClass = isDup ? ' class="lanc-duplicata"' : '';
+  const trTitle = isDup ? ' title="Lançamento duplicado: mesma central, data e material"' : '';
+  return `
+    <tr${trClass}${trTitle}>
       <td class="td-mono" style="display:flex;align-items:center;">
         ${r.fonte === 'manual' ? '<span class="badge-manual" title="Registro inserido manualmente"><i class="ti ti-pencil"></i></span>' : ''}
         ${r.editado ? '<span class="badge-editado" title="Registro editado manualmente"><i class="ti ti-pencil"></i></span>' : ''}
@@ -1301,7 +1307,8 @@ function renderLancamentos() {
         onblur="lancEditSave(this)">${money(r.valorTotal)}</td>
       <td><button class="btn-icon danger" onclick="removerRegistro('lancamentos', ${i})"><i class="ti ti-trash"></i></button></td>
     </tr>
-  `).join('');
+  `;
+  }).join('');
   makeResizable(tb.closest('table'));
   injectColFilterButtons(tb.closest('table'), 'lancamentos');
 }

@@ -408,6 +408,66 @@ function getSapRecordKey(r) {
   ].join('||');
 }
 
+// ── Cache de duplicatas — Lançamentos ─────────────────────────────────────
+// Critério pedido: mesma central + mesma data (dtLanc) + mesmo material.
+// Mais simples que o do SAP — lançamentos de saldo real são inserções
+// diretas (não movimentações), então não existe conceito de estorno/anulação
+// aqui: qualquer repetição da tripla é considerada duplicata.
+let _lancDupCache = null;
+let _lancDupCacheVersion = -1; // compara com state.lancamentos.length para invalidar
+
+function _invalidateLancDupCache() {
+  _lancDupCache = null;
+  _lancDupCacheVersion = -1;
+}
+
+function getLancamentoRecordKey(r) {
+  return [
+    (r.central  || '').trim(),
+    (r.dtLanc   || '').trim(),
+    (r.material || r.materialOriginal || '').trim()
+  ].join('||');
+}
+window.getLancamentoRecordKey = getLancamentoRecordKey;
+
+function getLancamentoDuplicateKeys() {
+  const currentVersion = (state.lancamentos || []).length;
+  if (_lancDupCache && _lancDupCacheVersion === currentVersion) {
+    return _lancDupCache;
+  }
+
+  const counts = {};
+  (state.lancamentos || []).forEach(r => {
+    counts[getLancamentoRecordKey(r)] = (counts[getLancamentoRecordKey(r)] || 0) + 1;
+  });
+
+  const dupKeys = new Set();
+  Object.keys(counts).forEach(key => {
+    if (counts[key] > 1) dupKeys.add(key);
+  });
+
+  _lancDupCache = dupKeys;
+  _lancDupCacheVersion = currentVersion;
+  return dupKeys;
+}
+window.getLancamentoDuplicateKeys = getLancamentoDuplicateKeys;
+
+// ── Filtro "Somente duplicatas" — Lançamentos ─────────────────────────────
+let _somenteDuplicatasLanc = false;
+
+function toggleSomenteDuplicatasLanc() {
+  _somenteDuplicatasLanc = !_somenteDuplicatasLanc;
+  const btn = document.getElementById('btn-duplicatas-lancamentos');
+  if (btn) {
+    btn.classList.toggle('active', _somenteDuplicatasLanc);
+    btn.title = _somenteDuplicatasLanc
+      ? 'Exibindo somente duplicatas — clique para voltar'
+      : 'Filtrar somente lançamentos duplicados (mesma central, data e material)';
+  }
+  renderLancamentos?.() || renderModule?.('lancamentos');
+}
+window.toggleSomenteDuplicatasLanc = toggleSomenteDuplicatasLanc;
+
 function toggleSomenteManuais(module) {
   _somenteManuais[module] = !_somenteManuais[module];
   // Atualiza visual do botão
@@ -524,6 +584,11 @@ function getFilteredData(module) {
   if (module === 'sap' && _somenteDuplicatas) {
     const { cancelled, real } = getSapDuplicateKeys();
     data = data.filter(r => { const k = getSapRecordKey(r); return cancelled.has(k) || real.has(k); });
+  }
+  // Aplica filtro de duplicatas (somente Lançamentos) — mesma central, data e material
+  if (module === 'lancamentos' && _somenteDuplicatasLanc) {
+    const dupKeys = getLancamentoDuplicateKeys();
+    data = data.filter(r => dupKeys.has(getLancamentoRecordKey(r)));
   }
   const f = module === 'producao' ? filtroProducao : filters[module];
   // Passa o scope para que filterRecords use o índice invertido quando possível
@@ -2649,6 +2714,7 @@ function invalidateLancIndex() {
   _lancIndexBuilt = false;
   _lancByCentralMat.clear();
   _lancByCentral.clear();
+  _invalidateLancDupCache();        // invalida cache de duplicatas
   invalidateSearchIndex('lancamentos');
   if (typeof _ausInvalidateCache === 'function') _ausInvalidateCache();
 }
