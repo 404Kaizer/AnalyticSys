@@ -1440,62 +1440,73 @@
 
         <!-- ══ CONTEÚDO (visível após Gerar) ══ -->
         <div id="inv-content" style="display:none">
-        <div class="inv-kpi-grid" id="inv-kpis">
-          <div class="inv-kpi-card" id="inv-kpi-ini">
-            <div class="inv-kpi-icon" style="background:var(--accent-dim);color:var(--accent)"><i class="ti ti-archive"></i></div>
-            <div class="inv-kpi-body">
-              <div class="inv-kpi-label">Est. Inicial</div>
-              <div class="inv-kpi-value" id="inv-kpi-ini-v">—</div>
-              <div class="inv-kpi-unit">kg</div>
-              <div id="inv-kpi-ini-missing"></div>
-            </div>
-          </div>
-          <div class="inv-kpi-card" id="inv-kpi-ent">
-            <div class="inv-kpi-icon" style="background:var(--green-bg);color:var(--green)"><i class="ti ti-arrow-bar-to-down"></i></div>
-            <div class="inv-kpi-body">
-              <div class="inv-kpi-label">Entradas</div>
-              <div class="inv-kpi-value" id="inv-kpi-ent-v">—</div>
-              <div class="inv-kpi-unit">kg</div>
-            </div>
-          </div>
-          <div class="inv-kpi-card" id="inv-kpi-sai">
-            <div class="inv-kpi-icon" style="background:var(--red-bg);color:var(--red)"><i class="ti ti-arrow-bar-up"></i></div>
-            <div class="inv-kpi-body">
-              <div class="inv-kpi-label">Saídas</div>
-              <div class="inv-kpi-value" id="inv-kpi-sai-v">—</div>
-              <div class="inv-kpi-unit">kg</div>
-            </div>
-          </div>
-          <div class="inv-kpi-card" id="inv-kpi-fin">
-            <div class="inv-kpi-icon" style="background:var(--purple-bg);color:var(--purple)"><i class="ti ti-box"></i></div>
-            <div class="inv-kpi-body">
-              <div class="inv-kpi-label">Est. Final</div>
-              <div class="inv-kpi-value" id="inv-kpi-fin-v">—</div>
-              <div class="inv-kpi-unit">kg</div>
-              <div id="inv-kpi-fin-missing"></div>
-            </div>
-          </div>
-          <div class="inv-kpi-card" id="inv-kpi-var">
-            <div class="inv-kpi-icon" style="background:var(--teal-bg);color:var(--teal)"><i class="ti ti-trending-up"></i></div>
-            <div class="inv-kpi-body">
-              <div class="inv-kpi-label">Variação</div>
-              <div class="inv-kpi-value" id="inv-kpi-var-v">—</div>
-              <div class="inv-kpi-unit">kg bruto</div>
-              <div class="inv-kpi-adj" id="inv-kpi-var-adj-wrap" style="display:none">
-                <span class="inv-kpi-adj-label">Ajustado (c/ justif.)</span>
-                <span class="inv-kpi-adj-value" id="inv-kpi-var-adj-v">—</span>
+        <div class="inv-kpi-groups" id="inv-kpis">
+          <!-- ══ BLOCO DE DESTAQUE — Variação e Custo Var. (dados mais
+               importantes do resumo, separados e em maior evidência) ══ -->
+          <div class="inv-kpi-featured">
+            <div class="inv-kpi-featured-label"><i class="ti ti-alert-triangle"></i> Destaque do fechamento</div>
+            <div class="inv-kpi-featured-row">
+              <div class="inv-kpi-card inv-kpi-card-featured" id="inv-kpi-var">
+                <div class="inv-kpi-icon" style="background:var(--teal-bg);color:var(--teal)"><i class="ti ti-trending-up"></i></div>
+                <div class="inv-kpi-body">
+                  <div class="inv-kpi-label">Variação</div>
+                  <div class="inv-kpi-value" id="inv-kpi-var-v">—</div>
+                  <div class="inv-kpi-unit">kg bruto</div>
+                  <div class="inv-kpi-adj" id="inv-kpi-var-adj-wrap" style="display:none">
+                    <span class="inv-kpi-adj-label">Ajustado (c/ justif.)</span>
+                    <span class="inv-kpi-adj-value" id="inv-kpi-var-adj-v">—</span>
+                  </div>
+                </div>
+              </div>
+              <div class="inv-kpi-card inv-kpi-card-featured" id="inv-kpi-cst">
+                <div class="inv-kpi-icon" style="background:var(--amber-bg);color:var(--amber)"><i class="ti ti-coin"></i></div>
+                <div class="inv-kpi-body">
+                  <div class="inv-kpi-label">Custo Var.</div>
+                  <div class="inv-kpi-value" id="inv-kpi-cst-v">—</div>
+                  <div class="inv-kpi-unit">R$ bruto</div>
+                  <div class="inv-kpi-adj" id="inv-kpi-cst-adj-wrap" style="display:none">
+                    <span class="inv-kpi-adj-label">Ajustado (c/ justif.)</span>
+                    <span class="inv-kpi-adj-value" id="inv-kpi-cst-adj-v">—</span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
-          <div class="inv-kpi-card" id="inv-kpi-cst">
-            <div class="inv-kpi-icon" style="background:var(--amber-bg);color:var(--amber)"><i class="ti ti-coin"></i></div>
-            <div class="inv-kpi-body">
-              <div class="inv-kpi-label">Custo Var.</div>
-              <div class="inv-kpi-value" id="inv-kpi-cst-v">—</div>
-              <div class="inv-kpi-unit">R$ bruto</div>
-              <div class="inv-kpi-adj" id="inv-kpi-cst-adj-wrap" style="display:none">
-                <span class="inv-kpi-adj-label">Ajustado (c/ justif.)</span>
-                <span class="inv-kpi-adj-value" id="inv-kpi-cst-adj-v">—</span>
+
+          <!-- ══ BLOCO SECUNDÁRIO — Est. Inicial, Entradas, Saídas, Est. Final ══ -->
+          <div class="inv-kpi-secondary">
+            <div class="inv-kpi-card" id="inv-kpi-ini">
+              <div class="inv-kpi-icon" style="background:var(--accent-dim);color:var(--accent)"><i class="ti ti-archive"></i></div>
+              <div class="inv-kpi-body">
+                <div class="inv-kpi-label">Est. Inicial</div>
+                <div class="inv-kpi-value" id="inv-kpi-ini-v">—</div>
+                <div class="inv-kpi-unit">kg</div>
+                <div id="inv-kpi-ini-missing"></div>
+              </div>
+            </div>
+            <div class="inv-kpi-card" id="inv-kpi-ent">
+              <div class="inv-kpi-icon" style="background:var(--green-bg);color:var(--green)"><i class="ti ti-arrow-bar-to-down"></i></div>
+              <div class="inv-kpi-body">
+                <div class="inv-kpi-label">Entradas</div>
+                <div class="inv-kpi-value" id="inv-kpi-ent-v">—</div>
+                <div class="inv-kpi-unit">kg</div>
+              </div>
+            </div>
+            <div class="inv-kpi-card" id="inv-kpi-sai">
+              <div class="inv-kpi-icon" style="background:var(--red-bg);color:var(--red)"><i class="ti ti-arrow-bar-up"></i></div>
+              <div class="inv-kpi-body">
+                <div class="inv-kpi-label">Saídas</div>
+                <div class="inv-kpi-value" id="inv-kpi-sai-v">—</div>
+                <div class="inv-kpi-unit">kg</div>
+              </div>
+            </div>
+            <div class="inv-kpi-card" id="inv-kpi-fin">
+              <div class="inv-kpi-icon" style="background:var(--purple-bg);color:var(--purple)"><i class="ti ti-box"></i></div>
+              <div class="inv-kpi-body">
+                <div class="inv-kpi-label">Est. Final</div>
+                <div class="inv-kpi-value" id="inv-kpi-fin-v">—</div>
+                <div class="inv-kpi-unit">kg</div>
+                <div id="inv-kpi-fin-missing"></div>
               </div>
             </div>
           </div>
