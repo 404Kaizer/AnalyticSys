@@ -2318,7 +2318,7 @@ function fechamentoAbrirPrint() {
   }
   .card {
     background: ${T.bg};
-    width: 500px; height: 720px;
+    width: 500px; height: auto;
     border-radius: 14px; overflow: hidden;
     box-shadow: 0 32px 80px rgba(0,0,0,0.7);
     position: relative;
@@ -2460,7 +2460,7 @@ function fechamentoAbrirPrint() {
 </body>
 </html>`;
 
-  const win = window.open('', '_blank', 'width=560,height=800,scrollbars=no,resizable=no');
+  const win = window.open('', '_blank', 'width=560,height=800,scrollbars=yes,resizable=yes');
   if (!win) { toast('Popup bloqueado — permita popups para este site.', 'error'); return; }
   win.document.open();
   win.document.write(html);
