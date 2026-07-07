@@ -854,9 +854,9 @@
     if (badge) badge.textContent = pendentes.length;
   }
 
-  // ── Faixa de alerta: materiais sem cadastro/categoria ──────
+  // ── Botão de alerta: materiais sem cadastro/categoria ──────
   // Mesmo espírito do badge "sem Est. Ini./Est. Fim" já existente nos KPIs,
-  // mas em vermelho (mais crítico: não é dado de estoque ausente, é
+  // mas em âmbar e via modal sob demanda (não é dado de estoque ausente, é
   // cadastro de padronização ausente — a causa raiz é sempre corrigível em
   // Configurações). Conta sobre invRows (total geral), não invFiltered —
   // mesmo critério dos demais KPIs, que não reagem aos filtros da tabela.
@@ -867,29 +867,28 @@
       invRows.filter(r => r.semCadastro).map(r => r.material)
     )].sort();
 
-    if (!materiaisSemCadastro.length) { el.innerHTML = ''; return; }
+    _invSemCadastroLista = materiaisSemCadastro; // cache p/ o modal
 
-    const MAX = 5;
-    const shown = materiaisSemCadastro.slice(0, MAX)
-      .map(m => `<div class="dup-cad-row" style="padding:4px 0">
-        <span class="dup-cad-alias" title="${_invEscape(m)}">${_invEscape(m)}</span>
-        <button class="btn-icon" type="button" title="Cadastrar agora" onclick="_invCadastrarMaterial('${_invEscape(m)}')">
-          <i class="ti ti-plus"></i>
-        </button>
-      </div>`).join('');
-    const more = materiaisSemCadastro.length > MAX
-      ? `<div style="color:var(--text3);font-size:10.5px;margin-top:4px">+ ${materiaisSemCadastro.length - MAX} mais</div>` : '';
+    if (!materiaisSemCadastro.length) {
+      el.innerHTML = `
+        <button type="button" class="alert-pulse-btn is-ok" disabled style="margin-bottom:14px">
+          <span class="alert-pulse-dot"></span>
+          Materiais do período OK
+        </button>`;
+      return;
+    }
 
     el.innerHTML = `
-      <div class="dup-cad-box" style="margin-bottom:14px">
-        <div class="dup-cad-header">
-          <i class="ti ti-alert-octagon"></i>
-          <b>${materiaisSemCadastro.length}</b> material${materiaisSemCadastro.length === 1 ? '' : 'is'} sem cadastro
-          <span class="dup-cad-sub">— não é possível classificar categoria nem aplicar corretamente as regras de análise até completar o cadastro em Configurações</span>
-        </div>
-        <div class="dup-cad-list">${shown}${more}</div>
-      </div>`;
+      <button type="button" class="alert-pulse-btn is-amber" onclick="_invSemCadastroAbrirModal()" style="margin-bottom:14px">
+        <span class="alert-pulse-dot"></span>
+        Há materiais não cadastrados
+        <span class="alert-pulse-count"><span>${materiaisSemCadastro.length}</span></span>
+      </button>`;
   }
+
+  // Cache da última lista calculada — usado pelo modal, para não precisar
+  // recalcular nem depender de invRows estar acessível fora deste escopo.
+  let _invSemCadastroLista = [];
 
   // Auxiliar mínimo de escape — usa o helper compartilhado se disponível,
   // senão cai no fallback local (mesmo padrão já usado em invRenderTabela).
@@ -898,11 +897,45 @@
     return h ? h.escapeHtml(s) : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
 
+  // Abre o modal com a lista completa de materiais sem cadastro (scroll
+  // interno — sem paginação "ver mais").
+  window._invSemCadastroAbrirModal = function() {
+    document.getElementById('alert-modal-inv-sem-cad')?.remove();
+    const lista = _invSemCadastroLista;
+    if (!lista.length) return;
+
+    const rows = lista.map(m => `
+      <div class="dup-cad-row">
+        <span class="dup-cad-alias" title="${_invEscape(m)}">${_invEscape(m)}</span>
+        <button class="btn-icon" type="button" title="Cadastrar agora" onclick="_invCadastrarMaterial('${_invEscape(m)}')">
+          <i class="ti ti-plus"></i>
+        </button>
+      </div>`).join('');
+
+    const overlay = document.createElement('div');
+    overlay.id = 'alert-modal-inv-sem-cad';
+    overlay.className = 'alert-modal-overlay';
+    overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+    overlay.innerHTML = `
+      <div class="alert-modal-card">
+        <div class="alert-modal-header">
+          <div>
+            <div class="alert-modal-title is-amber"><i class="ti ti-alert-octagon"></i> Há materiais não cadastrados</div>
+            <div class="alert-modal-sub">${lista.length} ${lista.length === 1 ? 'material' : 'materiais'} sem cadastro/categoria — não é possível classificar nem aplicar corretamente as regras de análise até completar o cadastro em Configurações</div>
+          </div>
+          <button class="alert-modal-close" onclick="document.getElementById('alert-modal-inv-sem-cad').remove()"><i class="ti ti-x"></i></button>
+        </div>
+        <div class="alert-modal-body"><div class="dup-cad-group">${rows}</div></div>
+      </div>`;
+    document.body.appendChild(overlay);
+  };
+
   // Abre o modal de cadastro de Materiais já pré-preenchido com o nome,
   // pronto para o analista completar "= ALIAS = CATEGORIA". Mesmo padrão
   // de _pendPadronizacaoAbrirCadastro (dashboard.js) para material não
   // cadastrado.
   window._invCadastrarMaterial = function(nome) {
+    document.getElementById('alert-modal-inv-sem-cad')?.remove();
     openModal('modal-materiais');
     setVal('materiais-text', nome + ' = ');
     setTimeout(() => {

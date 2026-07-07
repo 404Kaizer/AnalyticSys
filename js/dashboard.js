@@ -2773,12 +2773,10 @@ function renderPendenciasPadronizacao() {
 // ═══════════════════════════════════════════════════════════
 // INDICADOR DE CADASTROS DUPLICADOS/CONFLITANTES — Configurações → Materiais
 // ═══════════════════════════════════════════════════════════
-// Preenche #dup-materiais-box (logo acima do indicador de pendências) com
-// o resultado de getDuplicatasCadastroMateriais() (normalize.js). Mesmo
-// padrão de renderPendenciasPadronizacao: chamado ao final de
+// Botão pulsante (#dup-materiais-box) que abre um modal sob demanda com o
+// resultado de getDuplicatasCadastroMateriais() (normalize.js). Mesmo
+// padrão de chamada de renderPendenciasPadronizacao: acionado ao final de
 // renderMateriais(), se atualiza sozinho a cada redesenho da tabela.
-const DUP_CAD_PREVIEW = 5;
-
 function _dupCadGroupHtml(grupo) {
   const rows = grupo.registros.map(r => `
     <div class="dup-cad-row">
@@ -2803,47 +2801,62 @@ function _dupCadGroupHtml(grupo) {
 function _dupCadEditar(id) {
   const item = (state.materiais || []).find(m => m.id === id);
   if (!item) return;
+  document.getElementById('alert-modal-dup-cad')?.remove();
   openModal('modal-materiais');
   setVal('materiais-text', `${item.origem} = ${item.alias}${item.categoria ? ' = ' + item.categoria : ''}`);
   _pendPadronizacaoFocarFinal('materiais-text');
 }
 window._dupCadEditar = _dupCadEditar;
 
-function _dupCadToggle(boxId, btn) {
-  const box = document.getElementById(boxId);
-  if (!box) return;
-  const expandido = box.style.display !== 'none';
-  box.style.display = expandido ? 'none' : '';
-  if (!btn.dataset.moreLabel) btn.dataset.moreLabel = btn.textContent;
-  btn.textContent = expandido ? btn.dataset.moreLabel : 'Ver menos';
+// Abre o modal com a lista completa de conflitos (scroll interno — sem
+// paginação "ver mais", já que o modal comporta a lista inteira).
+function _dupCadAbrirModal() {
+  document.getElementById('alert-modal-dup-cad')?.remove();
+  if (typeof getDuplicatasCadastroMateriais !== 'function') return;
+  const conflitos = getDuplicatasCadastroMateriais();
+  if (!conflitos.length) return;
+
+  const overlay = document.createElement('div');
+  overlay.id = 'alert-modal-dup-cad';
+  overlay.className = 'alert-modal-overlay';
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  overlay.innerHTML = `
+    <div class="alert-modal-card">
+      <div class="alert-modal-header">
+        <div>
+          <div class="alert-modal-title is-red"><i class="ti ti-alert-octagon"></i> Há cadastro de materiais conflitantes</div>
+          <div class="alert-modal-sub">${conflitos.length} origem${conflitos.length === 1 ? '' : 's'} com o mesmo nome apontando para Grupos SAP diferentes — apenas um cadastro é aplicado, o(s) outro(s) fica(m) ignorado(s) silenciosamente</div>
+        </div>
+        <button class="alert-modal-close" onclick="document.getElementById('alert-modal-dup-cad').remove()"><i class="ti ti-x"></i></button>
+      </div>
+      <div class="alert-modal-body">${conflitos.map(_dupCadGroupHtml).join('')}</div>
+    </div>`;
+  document.body.appendChild(overlay);
 }
-window._dupCadToggle = _dupCadToggle;
+window._dupCadAbrirModal = _dupCadAbrirModal;
 
 function renderDuplicatasCadastroMateriais() {
   const el = document.getElementById('dup-materiais-box');
   if (!el || typeof getDuplicatasCadastroMateriais !== 'function') return;
 
   const conflitos = getDuplicatasCadastroMateriais();
-  if (!conflitos.length) { el.innerHTML = ''; return; }
+  const total = conflitos.length;
 
-  const total   = conflitos.length;
-  const preview = conflitos.slice(0, DUP_CAD_PREVIEW);
-  const resto   = conflitos.slice(DUP_CAD_PREVIEW);
-  const boxId   = 'dup-cad-rest-materiais';
+  if (!total) {
+    el.innerHTML = `
+      <button type="button" class="alert-pulse-btn is-ok" disabled>
+        <span class="alert-pulse-dot"></span>
+        Cadastros de materiais OK
+      </button>`;
+    return;
+  }
 
   el.innerHTML = `
-    <div class="dup-cad-box">
-      <div class="dup-cad-header">
-        <i class="ti ti-alert-octagon"></i>
-        <b>${total}</b> origem${total === 1 ? '' : 's'} com cadastro${total === 1 ? '' : 's'} conflitante${total === 1 ? '' : 's'}
-        <span class="dup-cad-sub">— mesmo nome de origem apontando para Grupos SAP diferentes; apenas um cadastro é aplicado, o(s) outro(s) fica(m) ignorado(s) silenciosamente</span>
-      </div>
-      <div class="dup-cad-list">${preview.map(_dupCadGroupHtml).join('')}</div>
-      ${resto.length ? `
-        <div class="dup-cad-rest" id="${boxId}" style="display:none">${resto.map(_dupCadGroupHtml).join('')}</div>
-        <button class="dup-cad-toggle" type="button" onclick="_dupCadToggle('${boxId}', this)">Ver mais ${resto.length}</button>
-      ` : ''}
-    </div>`;
+    <button type="button" class="alert-pulse-btn is-red" onclick="_dupCadAbrirModal()">
+      <span class="alert-pulse-dot"></span>
+      Há cadastro de materiais conflitantes
+      <span class="alert-pulse-count"><span>${total}</span></span>
+    </button>`;
 }
 
 function renderFiliais() {
@@ -4463,7 +4476,7 @@ function renderDgCustos(results, dtIni, dtFim) {
       <div class="custos-regional-block">
         <div class="custos-regional-header">
           <span class="custos-regional-name"><i class="ti ti-map-pin" style="font-size:11px"></i> ${escapeHtml(reg)}</span>
-          <span style="font-size:10px;font-family:var(--mono);color:var(--text3)">${centrais.length} central${centrais.length>1?'is':''}</span>
+          <span style="font-size:10px;font-family:var(--mono);color:var(--text3)">${centrais.length} ${centrais.length > 1 ? 'centrais' : 'central'}</span>
           <span class="custos-regional-kpi">R$/kg médio: <strong>${money(cmRegMedia)}</strong></span>
           <span class="custos-regional-kpi">Est. Final: <strong>${moneyShort(custoRegTotal)}</strong></span>
         </div>

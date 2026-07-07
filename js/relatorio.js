@@ -709,7 +709,7 @@ function _buildCriticidadeShell(d, opts) {
     </div>
     <div style="text-align:right">
       Período: <strong style="color:#94a3b8">${periodo}</strong><br>
-      ${totalGeral} ocorrência${totalGeral !== 1 ? 's' : ''} (crítico + urgente) em ${totalRegionais} regional${totalRegionais !== 1 ? 'is' : ''}
+      ${totalGeral} ocorrência${totalGeral !== 1 ? 's' : ''} (crítico + urgente) em ${totalRegionais} ${totalRegionais !== 1 ? 'regionais' : 'regional'}
     </div>
   </div>
 </div>
@@ -2744,7 +2744,7 @@ window.gerarRelatorioGeralOcorrencias = function() {
   <div class="card">
     <div class="card-header">
       🗺 Ranking de Regionais — ordenado por criticidade
-      <span class="card-badge" style="background:#fef2f2;color:#ef4444;border:1px solid #fca5a5">${regionaisOrdenados.length} regional${regionaisOrdenados.length!==1?'is':''}</span>
+      <span class="card-badge" style="background:#fef2f2;color:#ef4444;border:1px solid #fca5a5">${regionaisOrdenados.length} ${regionaisOrdenados.length!==1?'regionais':'regional'}</span>
     </div>
     <table class="data-table">
       <thead>
@@ -3081,7 +3081,7 @@ window.gerarRelatorioCobrancaRegional = function(regionalFiltro) {
           <div style="width:40px;height:40px;border-radius:10px;background:rgba(255,255,255,0.15);border:1.5px solid rgba(255,255,255,0.25);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">🗺</div>
           <div>
             <div style="font-size:18px;font-weight:900;color:#fff;letter-spacing:-0.01em">${escR(regNome)}</div>
-            <div style="font-size:11px;color:rgba(255,255,255,0.6);margin-top:2px">${centraisOrdenadas.length} central${centraisOrdenadas.length!==1?'is':''} · ${regTotal} ocorrência${regTotal!==1?'s':''}</div>
+            <div style="font-size:11px;color:rgba(255,255,255,0.6);margin-top:2px">${centraisOrdenadas.length} ${centraisOrdenadas.length!==1?'centrais':'central'} · ${regTotal} ocorrência${regTotal!==1?'s':''}</div>
           </div>
         </div>
         <div style="display:flex;align-items:center;gap:0;position:relative">
