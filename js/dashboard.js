@@ -2635,6 +2635,141 @@ function saveResponsavel(value) {
   updateImportPrereqUI();
 }
 
+// ═══════════════════════════════════════════════════════════
+// INDICADOR DE PENDÊNCIAS DE PADRONIZAÇÃO — Configurações
+// ═══════════════════════════════════════════════════════════
+// Preenche #pend-centrais-box e #pend-materiais-box (logo acima de cada
+// tabela de cadastro) com o resultado de getPendenciasPadronizacao()
+// (normalize.js). Chamado ao final de renderFiliais()/renderMateriais(),
+// então se atualiza sozinho sempre que essas tabelas são redesenhadas —
+// cadastro novo, exclusão, importação em lote, "Atualizar Cadastros" etc.
+// — sem precisar espalhar chamadas extras pelo código.
+const PEND_PADRONIZACAO_PREVIEW = 5;
+
+function _pendPadrItemMaterialHtml(item) {
+  const semCategoria = item.motivo === 'sem_categoria';
+  const motivoLabel  = semCategoria ? 'sem categoria' : 'não cadastrado';
+  const info = semCategoria
+    ? `<span class="pend-padr-info">→ já padronizado como "${escapeHtml(item.aliasPadronizado)}"</span>`
+    : '';
+  return `
+    <div class="pend-padr-item">
+      <div class="pend-padr-main">
+        <span class="pend-padr-nome" title="${escapeHtml(item.nome)}">${escapeHtml(item.nome)}</span>
+        <span class="pend-padr-motivo pend-padr-motivo-${item.motivo}">${motivoLabel}</span>
+        ${info}
+      </div>
+      <span class="pend-padr-count">${item.count} registro(s)</span>
+      <button class="btn-icon pend-padr-add" type="button" title="${semCategoria ? 'Completar categoria no cadastro' : 'Cadastrar agora'}"
+        data-tipo="material" data-motivo="${item.motivo}"
+        data-nome="${escapeHtml(item.nome)}"
+        data-origem="${escapeHtml(item.origemCadastro || item.nome)}"
+        data-alias="${escapeHtml(item.aliasPadronizado || '')}">
+        <i class="ti ${semCategoria ? 'ti-edit' : 'ti-plus'}"></i>
+      </button>
+    </div>`;
+}
+
+function _pendPadrItemCentralHtml(item) {
+  return `
+    <div class="pend-padr-item">
+      <div class="pend-padr-main">
+        <span class="pend-padr-nome" title="${escapeHtml(item.nome)}">${escapeHtml(item.nome)}</span>
+        <span class="pend-padr-motivo pend-padr-motivo-nao_cadastrado">não cadastrada</span>
+      </div>
+      <span class="pend-padr-count">${item.count} registro(s)</span>
+      <button class="btn-icon pend-padr-add" type="button" title="Cadastrar agora"
+        data-tipo="central" data-motivo="nao_cadastrado" data-nome="${escapeHtml(item.nome)}">
+        <i class="ti ti-plus"></i>
+      </button>
+    </div>`;
+}
+
+function _pendPadronizacaoBoxHtml(tipo, lista) {
+  const isMaterial = tipo === 'material';
+  const singular = isMaterial ? 'material' : 'central';
+  const plural   = isMaterial ? 'materiais' : 'centrais';
+
+  if (!lista.length) {
+    return `<div class="pend-padr-ok"><i class="ti ti-circle-check"></i> Nenhum${isMaterial ? '' : 'a'} ${singular} pendente de padronização.</div>`;
+  }
+
+  const total    = lista.length;
+  const preview  = lista.slice(0, PEND_PADRONIZACAO_PREVIEW);
+  const resto    = lista.slice(PEND_PADRONIZACAO_PREVIEW);
+  const itemFn   = isMaterial ? _pendPadrItemMaterialHtml : _pendPadrItemCentralHtml;
+  const boxId    = `pend-padr-rest-${tipo}`;
+  const fontes   = isMaterial ? 'Entradas/Saídas/Lançamentos/SAP' : 'Entradas/Saídas/Lançamentos/SAP/Produção';
+  const criterio = isMaterial ? 'sem cadastro ou cadastrado sem categoria' : 'sem cadastro';
+
+  return `
+    <div class="pend-padr-box">
+      <div class="pend-padr-header">
+        <i class="ti ti-alert-triangle"></i>
+        <b>${total}</b> ${total === 1 ? singular : plural} pendente${total === 1 ? '' : 's'} de padronização
+        <span class="pend-padr-sub">— vist${total === 1 ? 'o' : 'os'} em ${fontes}, ${criterio}</span>
+      </div>
+      <div class="pend-padr-list">${preview.map(itemFn).join('')}</div>
+      ${resto.length ? `
+        <div class="pend-padr-rest" id="${boxId}" style="display:none">${resto.map(itemFn).join('')}</div>
+        <button class="pend-padr-toggle" type="button" onclick="_pendPadronizacaoToggle('${boxId}', this)">Ver mais ${resto.length}</button>
+      ` : ''}
+    </div>`;
+}
+
+function _pendPadronizacaoToggle(boxId, btn) {
+  const box = document.getElementById(boxId);
+  if (!box) return;
+  const expandido = box.style.display !== 'none';
+  box.style.display = expandido ? 'none' : '';
+  if (!btn.dataset.moreLabel) btn.dataset.moreLabel = btn.textContent;
+  btn.textContent = expandido ? btn.dataset.moreLabel : 'Ver menos';
+}
+
+// Foca o textarea de cadastro em lote com o cursor no final do texto
+// pré-preenchido, pra o analista só completar o que falta.
+function _pendPadronizacaoFocarFinal(id) {
+  setTimeout(() => {
+    const el = document.getElementById(id);
+    if (el) { el.focus(); el.selectionStart = el.selectionEnd = el.value.length; }
+  }, 50);
+}
+
+// Ação do botão "cadastrar/completar" de cada item pendente:
+//   - central / material não cadastrado → abre o modal já com "NOME = "
+//     pronto pro analista completar o alias (e a categoria, se material).
+//   - material sem categoria → usa origem/alias EXATOS do cadastro já
+//     existente ("ORIGEM = ALIAS = "), pra reimportar como UPDATE
+//     (upsertMateriais casa por origem+alias) em vez de criar duplicata.
+function _pendPadronizacaoAbrirCadastro(btn) {
+  const { tipo, motivo, nome, origem, alias } = btn.dataset;
+  if (tipo === 'central') {
+    openModal('modal-filiais');
+    setVal('filiais-text', nome + ' = ');
+    _pendPadronizacaoFocarFinal('filiais-text');
+    return;
+  }
+  const texto = motivo === 'sem_categoria' ? `${origem} = ${alias} = ` : `${nome} = `;
+  openModal('modal-materiais');
+  setVal('materiais-text', texto);
+  _pendPadronizacaoFocarFinal('materiais-text');
+}
+
+document.addEventListener('click', e => {
+  const btn = e.target.closest('.pend-padr-add');
+  if (btn) _pendPadronizacaoAbrirCadastro(btn);
+});
+
+function renderPendenciasPadronizacao() {
+  const elMat = document.getElementById('pend-materiais-box');
+  const elCen = document.getElementById('pend-centrais-box');
+  if ((!elMat && !elCen) || typeof getPendenciasPadronizacao !== 'function') return;
+
+  const { materiais, centrais } = getPendenciasPadronizacao();
+  if (elMat) elMat.innerHTML = _pendPadronizacaoBoxHtml('material', materiais);
+  if (elCen) elCen.innerHTML = _pendPadronizacaoBoxHtml('central', centrais);
+}
+
 function renderFiliais() {
   const tb = document.getElementById('tb-filiais');
   if (!tb) return;
@@ -2642,6 +2777,7 @@ function renderFiliais() {
   updateListPageInfo('filiais');
   if (!data.length) {
     tb.innerHTML = '<tr><td colspan="5"><div class="empty-state"><i class="ti ti-map-pin"></i><p>Nenhuma filial cadastrada.</p></div></td></tr>';
+    renderPendenciasPadronizacao();
     return;
   }
   tb.innerHTML = pageData.map((f, i) => `
@@ -2657,6 +2793,7 @@ function renderFiliais() {
   const _tbl_filiais = document.getElementById('tb-filiais')?.closest('table');
   if (_tbl_filiais) injectColFilterButtons(_tbl_filiais, 'filiais');
   updateImportPrereqUI();
+  renderPendenciasPadronizacao();
 }
 
 function renderMateriais() {
@@ -2669,6 +2806,7 @@ function renderMateriais() {
   updateListPageInfo('materiais');
   if (!data.length) {
     tb.innerHTML = '<tr><td colspan="5"><div class="empty-state"><i class="ti ti-stack-2"></i><p>Nenhum material cadastrado.</p></div></td></tr>';
+    renderPendenciasPadronizacao();
     return;
   }
   tb.innerHTML = pageData.map((m, i) => `
@@ -2683,6 +2821,7 @@ function renderMateriais() {
   const _tbl_materiais = document.getElementById('tb-materiais')?.closest('table');
   if (_tbl_materiais) injectColFilterButtons(_tbl_materiais, 'materiais');
   updateImportPrereqUI();
+  renderPendenciasPadronizacao();
 }
 
 function renderAcoesRelatorio() {
@@ -3181,6 +3320,7 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
       await processSlice(i, Math.min(i + batchSize, total), (r) => {
         const materialOriginal = String(r[ci('material', 10)] || '').trim();
         if (!materialOriginal) return null;
+        registrarNomeOriginalMaterial('entradas', materialOriginal);
         const categoriaOriginal = String(r[ci('categoria', 9)] || '').trim();
         return stamp(normalizarCentraisRecord({
           importId,
@@ -3210,6 +3350,7 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
       await processSlice(i, Math.min(i + batchSize, total), (r) => {
         const materialOriginal = String(r[ci('material', 6)] || '').trim();
         if (!materialOriginal) return null;
+        registrarNomeOriginalMaterial('saidas', materialOriginal);
         const peso = num(r[ci('peso', 9)]);
         const custo = num(r[ci('custo', 10)]);
         const categoriaOriginal = String(r[ci('categoria', 4)] || '').trim();
@@ -3251,6 +3392,7 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
         const fornecedor = partes.length > 1 ? partes[1] : String(r[ci('fornecedor', -1)] || '');
         const municipio  = partes.length > 2 ? partes[2] : '';
         if (!materialOriginal) return null;
+        registrarNomeOriginalMaterial('lancamentos', materialOriginal);
 
         const peso  = toNum(r[ci('peso',  4)]);
         const custo = toNum(r[ci('custo', 5)]);

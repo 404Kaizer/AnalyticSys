@@ -572,59 +572,40 @@ function _asstIntentAcoes(query) {
 }
 
 // ── Intenção: pendências de cadastro (Configurações → Padronização) ──
-// Um registro fica "pendente" quando findMaterialMatch/normalizarCentral
-// não encontram nenhum item cadastrado — ambas são consultas puras,
-// nunca mutam o state (ao contrário de reaplicarPadronizacaoMateriais/
-// Centrais, que por isso nunca são chamadas aqui).
+// Reaproveita getPendenciasPadronizacao() (normalize.js) — mesma fonte
+// usada pelo indicador visual em Configurações — para não ter duas lógicas
+// de "o que conta como pendente" divergindo com o tempo. Consulta pura,
+// nunca muta o state.
 function _asstIntentConfigPendente(query) {
-  if (typeof CENTRAL_FIELDS_BY_MODULO === 'undefined' || typeof findMaterialMatch !== 'function') {
+  if (typeof getPendenciasPadronizacao !== 'function') {
     return 'Não consegui verificar pendências de cadastro agora.';
   }
 
-  const materiaisPendentes = new Map();
-  const centraisPendentes  = new Map();
+  const { materiais, centrais } = getPendenciasPadronizacao();
 
-  ['entradas', 'saidas', 'lancamentos', 'sap'].forEach(mod => {
-    (state[mod] || []).forEach(r => {
-      const rawMat = String(r.materialOriginal ?? '').trim();
-      if (rawMat && !findMaterialMatch(rawMat)) {
-        materiaisPendentes.set(rawMat, (materiaisPendentes.get(rawMat) || 0) + 1);
-      }
-    });
-  });
-
-  const filIdx = getFilialLookupIndex();
-  Object.entries(CENTRAL_FIELDS_BY_MODULO).forEach(([mod, fields]) => {
-    (state[mod] || []).forEach(r => {
-      fields.forEach(f => {
-        const rawCentral = String(r[`${f}Original`] ?? '').trim();
-        if (!rawCentral) return;
-        const found = filIdx.exact.get(normalizeText(rawCentral));
-        if (!found) centraisPendentes.set(rawCentral, (centraisPendentes.get(rawCentral) || 0) + 1);
-      });
-    });
-  });
-
-  if (!materiaisPendentes.size && !centraisPendentes.size) {
+  if (!materiais.length && !centrais.length) {
     return 'Nenhum material ou central pendente de padronização. 👍';
   }
 
   let html = `<b>Pendências de cadastro</b> (Configurações → Padronização)`;
   const qNorm = normalizeText(query || '');
 
-  if (materiaisPendentes.size) {
-    const list = [...materiaisPendentes.entries()].sort((a, b) => b[1] - a[1]);
+  if (materiais.length) {
     const limite = _asstDetectarLimite(qNorm, _ASST_SING_MATERIAL, 8);
-    html += `<div class="asst-section-title" style="color:var(--amber)"><i class="ti ti-alert-triangle"></i> Materiais não padronizados (${list.length})</div>`;
-    html += list.slice(0, limite).map(([raw, count]) => `<div class="asst-item">${escapeHtml(raw)} — ${count} registro(s)</div>`).join('');
-    if (list.length > limite) html += `<div class="asst-more">+ ${list.length - limite} outro(s)</div>`;
+    html += `<div class="asst-section-title" style="color:var(--amber)"><i class="ti ti-alert-triangle"></i> Materiais pendentes (${materiais.length})</div>`;
+    html += materiais.slice(0, limite).map(item => {
+      const motivoTxt = item.motivo === 'sem_categoria'
+        ? `sem categoria (já padronizado como "${escapeHtml(item.aliasPadronizado)}")`
+        : 'não cadastrado';
+      return `<div class="asst-item">${escapeHtml(item.nome)} — ${motivoTxt} — ${item.count} registro(s)</div>`;
+    }).join('');
+    if (materiais.length > limite) html += `<div class="asst-more">+ ${materiais.length - limite} outro(s)</div>`;
   }
-  if (centraisPendentes.size) {
-    const list = [...centraisPendentes.entries()].sort((a, b) => b[1] - a[1]);
+  if (centrais.length) {
     const limite = _asstDetectarLimite(qNorm, _ASST_SING_CENTRAL, 8);
-    html += `<div class="asst-section-title" style="color:var(--amber)"><i class="ti ti-alert-triangle"></i> Centrais não padronizadas (${list.length})</div>`;
-    html += list.slice(0, limite).map(([raw, count]) => `<div class="asst-item">${escapeHtml(raw)} — ${count} registro(s)</div>`).join('');
-    if (list.length > limite) html += `<div class="asst-more">+ ${list.length - limite} outro(s)</div>`;
+    html += `<div class="asst-section-title" style="color:var(--amber)"><i class="ti ti-alert-triangle"></i> Centrais não padronizadas (${centrais.length})</div>`;
+    html += centrais.slice(0, limite).map(item => `<div class="asst-item">${escapeHtml(item.nome)} — ${item.count} registro(s)</div>`).join('');
+    if (centrais.length > limite) html += `<div class="asst-more">+ ${centrais.length - limite} outro(s)</div>`;
   }
   return html;
 }

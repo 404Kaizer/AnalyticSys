@@ -2464,6 +2464,7 @@
 
 
         <div class="section-title">Filiais / Aliases</div>
+        <div id="pend-centrais-box"></div>
         <div class="table-card" style="margin-bottom:24px">
           <div class="table-header">
             <span class="table-title"><i class="ti ti-map-pin"></i> Padronização de Centrais</span>
@@ -2473,6 +2474,9 @@
               </button>
               <button class="btn" onclick="openModal('modal-filiais'); focusFilialImport()">
                 <i class="ti ti-file-upload"></i> Importar em lote
+              </button>
+              <button class="btn js-atualizar-cadastros" onclick="atualizarCadastros()" title="Reaplica o cadastro atual de Centrais e Materiais sobre Entradas, Saídas, Lançamentos e SAP já importados, e atualiza todas as telas que dependem desses cadastros">
+                <i class="ti ti-refresh"></i> Atualizar Cadastros
               </button>
               <button class="btn" onclick="limparFiliais()">
                 <i class="ti ti-trash"></i> Excluir todas
@@ -2508,6 +2512,7 @@
         </div>
 
         <div class="section-title">Materiais / Grupo SAP</div>
+        <div id="pend-materiais-box"></div>
         <div class="table-card" style="margin-bottom:24px">
           <div class="table-header">
             <span class="table-title"><i class="ti ti-stack-2"></i> Padronização de Materiais</span>
@@ -2517,6 +2522,9 @@
               </button>
               <button class="btn" onclick="openModal('modal-materiais'); focusMaterialImport()">
                 <i class="ti ti-file-upload"></i> Importar em lote
+              </button>
+              <button class="btn js-atualizar-cadastros" onclick="atualizarCadastros()" title="Reaplica o cadastro atual de Centrais e Materiais sobre Entradas, Saídas, Lançamentos e SAP já importados, e atualiza todas as telas que dependem desses cadastros">
+                <i class="ti ti-refresh"></i> Atualizar Cadastros
               </button>
               <button class="btn" onclick="limparMateriais()">
                 <i class="ti ti-trash"></i> Excluir todas

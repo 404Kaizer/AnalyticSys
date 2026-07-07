@@ -46,6 +46,87 @@ function deleteConfig(key) {
 }
 
 
+// ═══════════════════════════════════════════════════════════
+// ATUALIZAR CADASTROS — botão em Padronização de Centrais/Materiais
+// ═══════════════════════════════════════════════════════════
+// Reaplica o cadastro ATUAL de Centrais e Materiais sobre os registros já
+// importados/lançados (Entradas, Saídas, Lançamentos, SAP), sem precisar
+// reimportar nada. Útil quando o cadastro é editado/completado DEPOIS que
+// os dados já entraram no sistema — ex.: categoria adicionada a um material
+// que antes estava sem, ou um alias corrigido que agora bate com nomes que
+// antes ficavam sem padronização.
+//
+// Isso é exatamente o que já acontece automaticamente ao salvar/importar um
+// novo cadastro (ver salvarMateriais/handleMateriaisImport/salvarFiliais/
+// handleFiliaisImport, que chamam reaplicarPadronizacaoMateriais/Centrais
+// + renderAll). Este botão expõe a mesma reaplicação sob demanda, para os
+// casos em que o cadastro foi editado de outra forma e as telas antigas
+// ficaram desatualizadas.
+//
+// Depois de reaplicar, atualiza TODAS as telas que dependem desses
+// cadastros: as tabelas de Entradas/Saídas/Lançamentos/SAP/Produção e o
+// Dashboard Gerencial (via renderAll), o Dashboard Analítico — Visão Micro/
+// Regional (via rodarAnalitico, que já se auto-protege se não houver
+// período selecionado) e o Inventário, se já tiver sido gerado na sessão.
+async function atualizarCadastros() {
+  const btns = document.querySelectorAll('.js-atualizar-cadastros');
+  btns.forEach(b => {
+    b.disabled = true;
+    b.dataset.origHtml = b.dataset.origHtml || b.innerHTML;
+    b.innerHTML = '<i class="ti ti-loader-2" style="animation:spin .7s linear infinite"></i> Atualizando...';
+  });
+
+  try {
+    // 1) Reaplica a padronização usando o cadastro atual de Centrais/Materiais
+    //    sobre entradas/saidas/lancamentos/sap (materialOriginal/centralOriginal
+    //    já salvos em cada registro são a fonte — nada é perdido nem reimportado).
+    if (typeof reaplicarPadronizacaoCentrais === 'function')  reaplicarPadronizacaoCentrais();
+    if (typeof reaplicarPadronizacaoMateriais === 'function') reaplicarPadronizacaoMateriais();
+
+    // 2) Invalida todos os índices derivados — sem isso, telas com cache
+    //    (Lançamentos/SAP/Saídas/busca global) continuam mostrando os
+    //    valores antigos mesmo com o state já atualizado.
+    if (typeof invalidateMaterialLookup === 'function')   invalidateMaterialLookup();
+    if (typeof invalidateFilialLookup === 'function')     invalidateFilialLookup();
+    if (typeof invalidateLancIndex === 'function')        invalidateLancIndex();
+    if (typeof invalidateSapIndex === 'function')         invalidateSapIndex();
+    if (typeof invalidateSaidasIndex === 'function')      invalidateSaidasIndex();
+    if (typeof invalidateAllSearchIndexes === 'function') invalidateAllSearchIndexes();
+
+    // 3) Salva o resultado.
+    if (typeof persistStateNow === 'function') await persistStateNow();
+    else persist();
+
+    // 4) Tabelas/telas "de base": Entradas/Saídas/Lançamentos/SAP/Produção/
+    //    Imports/Configs/Ações/Filiais/Materiais + Dashboard Gerencial —
+    //    o mesmo conjunto já usado após importar um cadastro novo.
+    renderAll();
+
+    // 5) Dashboard Analítico (Visão Micro/Regional): rodarAnalitico() sem
+    //    argumentos usa o período já selecionado na tela; se nenhum período
+    //    foi selecionado ainda, ela mesma não faz nada (mesmo comportamento
+    //    usado em ui.js após excluir/editar lançamentos).
+    if (typeof rodarAnalitico === 'function') rodarAnalitico();
+
+    // 6) Inventário: só regenera se a tela já tiver conteúdo gerado nesta
+    //    sessão — evita disparar "Nenhum dado encontrado" para quem nunca
+    //    abriu o Inventário. O critério espelha o usado internamente por
+    //    invGerar/renderInventario (inv-content visível = já gerado).
+    const invJaGerado = document.getElementById('inv-content')?.style.display === '';
+    if (invJaGerado && typeof window.invGerar === 'function') window.invGerar();
+
+    toast('Cadastros reaplicados — Entradas, Saídas, Lançamentos, SAP e demais telas foram atualizados.');
+  } catch (err) {
+    console.error('[AtualizarCadastros] Falha ao reaplicar cadastros:', err);
+    toast('Falha ao atualizar cadastros. Veja o console para detalhes.', 'error');
+  } finally {
+    btns.forEach(b => {
+      b.disabled = false;
+      if (b.dataset.origHtml) { b.innerHTML = b.dataset.origHtml; delete b.dataset.origHtml; }
+    });
+  }
+}
+
 async function salvarMateriais() {
   const text = val('materiais-text');
   const lines = text.split(/\r?\n/).map(s => s.trim()).filter(Boolean);

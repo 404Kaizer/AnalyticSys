@@ -192,6 +192,7 @@ function _criarRegistroEntrada(dados) {
   if (!mat)     return { ok: false, erro: 'Informe o Material' };
   if (!peso)    return { ok: false, erro: 'Informe o Peso' };
 
+  registrarNomeOriginalMaterial('entradas', mat);
   const categoriaOriginal = String(dados.categoria || '').trim();
   const rec = stamp({
     fonte: 'manual',
@@ -253,6 +254,7 @@ function _criarRegistroSaida(dados) {
   if (!mat)     return { ok: false, erro: 'Informe o Material' };
   if (!peso)    return { ok: false, erro: 'Informe o Peso' };
 
+  registrarNomeOriginalMaterial('saidas', mat);
   const categoriaOriginalSaida = String(dados.categoria || '').trim();
   const rec = stamp({
     fonte: 'manual',
@@ -310,6 +312,7 @@ function _criarRegistroLancamento(dados) {
   if (!mat)     return { ok: false, erro: 'Informe o Material' };
   if (!peso)    return { ok: false, erro: 'Informe o Peso' };
 
+  registrarNomeOriginalMaterial('lancamentos', mat);
   const categoriaOriginalLanc = String(dados.categoria || '').trim();
   const rec = stamp({
     fonte: 'manual',

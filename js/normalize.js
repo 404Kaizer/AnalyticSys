@@ -2,6 +2,143 @@ function stamp(obj) {
   return { ...obj, createdAt: Date.now() };
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+// REGISTRO DE NOMES ORIGINAIS DE MATERIAIS (diagnóstico de padronização)
+// ═══════════════════════════════════════════════════════════════════════
+// Objetivo: capturar TODO nome original de material visto em Entradas,
+// Saídas e Lançamentos — os 3 módulos com campo "categoria" próprio
+// (CATEGORIA_MODULOS) — ANTES/no momento da conversão via
+// normalizarMaterial()/getCategoriaPorGrupo(), para permitir investigar
+// depois quais nomes estão passando despercebidos sem categoria, mesmo
+// já havendo cadastro em Configurações → Materiais.
+//
+// Puramente informativo: nunca influencia a padronização em si, nunca
+// bloqueia nem atrasa o fluxo principal (falhas de leitura/escrita no
+// localStorage são silenciosamente ignoradas).
+//
+// Guardado em localStorage (não IndexedDB) porque é um índice pequeno
+// (1 entrada por NOME DISTINTO de material, não por lançamento/registro),
+// então não esbarra no limite de tamanho do localStorage mesmo em bases
+// com milhares de notas — e leitura/escrita síncrona é mais simples de
+// encaixar nos 3 pontos de captura sem reestruturar o fluxo de persist().
+//
+// Pontos de captura (ver registrarNomeOriginalMaterial):
+//   1. Importação em lote (dashboard.js, processImportBatch)
+//   2. Cadastro manual pelos modais (import.js, _criarRegistroEntrada/Saida/Lancamento)
+//   3. Reprocessamento ao editar o cadastro de Materiais (reaplicarPadronizacaoMateriais)
+const NOMES_ORIGINAIS_KEY = 'central_analise_nomes_originais_v1';
+// Proteção contra crescimento descontrolado em bases muito grandes/sujas —
+// número de NOMES DISTINTOS guardados, não de ocorrências.
+const NOMES_ORIGINAIS_LIMITE = 5000;
+
+let _nomesOriginaisCache = null;
+let _nomesOriginaisDirty = false;
+
+function _carregarNomesOriginais() {
+  if (_nomesOriginaisCache) return _nomesOriginaisCache;
+  try {
+    const raw = localStorage.getItem(NOMES_ORIGINAIS_KEY);
+    _nomesOriginaisCache = raw ? JSON.parse(raw) : {};
+  } catch (err) {
+    console.warn('[NomesOriginais] Falha ao carregar registro salvo, reiniciando:', err);
+    _nomesOriginaisCache = {};
+  }
+  return _nomesOriginaisCache;
+}
+
+function _persistirNomesOriginais() {
+  if (!_nomesOriginaisDirty || !_nomesOriginaisCache) return;
+  try {
+    localStorage.setItem(NOMES_ORIGINAIS_KEY, JSON.stringify(_nomesOriginaisCache));
+    _nomesOriginaisDirty = false;
+  } catch (err) {
+    // Provável quota do localStorage excedida — não deve interromper
+    // importação/cadastro por causa de um índice de diagnóstico.
+    console.warn('[NomesOriginais] Falha ao salvar registro (quota do localStorage?):', err);
+  }
+}
+
+// Flush com debounce — evita serializar o objeto inteiro a cada linha
+// durante importações em lote de milhares de registros. `debounce` vem
+// de state.js (carregado antes deste arquivo).
+const _persistirNomesOriginaisDebounced = (typeof debounce === 'function')
+  ? debounce(_persistirNomesOriginais, 400)
+  : _persistirNomesOriginais;
+
+// Registra a ocorrência de um nome original de material visto em um dos
+// módulos com categoria (entradas/saidas/lancamentos), ANTES/no momento
+// da conversão. Agregado por nome distinto (normalizado) — cada chamada
+// soma 1 ocorrência e atualiza o resultado mais recente da padronização,
+// em vez de gravar uma linha por lançamento.
+//   modulo: 'entradas' | 'saidas' | 'lancamentos'
+//   nomeOriginal: valor bruto (materialOriginal) como veio do arquivo/formulário
+function registrarNomeOriginalMaterial(modulo, nomeOriginal) {
+  const raw = String(nomeOriginal ?? '').trim();
+  if (!raw) return;
+
+  try {
+    const registro = _carregarNomesOriginais();
+    const key = normalizeLooseText(raw);
+
+    let entry = registro[key];
+    if (!entry) {
+      if (Object.keys(registro).length >= NOMES_ORIGINAIS_LIMITE) {
+        // Índice cheio — ainda assim tenta persistir o que já foi coletado.
+        _persistirNomesOriginaisDebounced();
+        return;
+      }
+      entry = registro[key] = {
+        nomeOriginal: raw,
+        modulos: {},
+        ocorrencias: 0,
+        materialCadastrado: false,
+        categoriaCadastrada: false,
+        categoriaResolvida: '',
+        materialPadronizado: '',
+        primeiraOcorrencia: '',
+        ultimaOcorrencia: ''
+      };
+    }
+
+    const found = (typeof findMaterialMatch === 'function') ? findMaterialMatch(raw) : null;
+    const agora = new Date().toISOString();
+
+    entry.modulos[modulo] = (entry.modulos[modulo] || 0) + 1;
+    entry.ocorrencias += 1;
+    entry.materialCadastrado = !!found;
+    entry.categoriaCadastrada = !!(found && found.categoria);
+    entry.categoriaResolvida = (found && found.categoria) || '';
+    entry.materialPadronizado = found ? found.alias : raw;
+    entry.primeiraOcorrencia = entry.primeiraOcorrencia || agora;
+    entry.ultimaOcorrencia = agora;
+
+    _nomesOriginaisDirty = true;
+    _persistirNomesOriginaisDebounced();
+  } catch (err) {
+    // Nunca deixa o registro de diagnóstico quebrar o fluxo principal.
+    console.warn('[NomesOriginais] Falha ao registrar nome original:', err);
+  }
+}
+
+// Helpers de leitura — usados pelo indicador de pendências de padronização
+// em Configurações (a implementar em etapa posterior). Já disponíveis aqui
+// para não precisar duplicar a leitura da chave depois.
+function listarNomesOriginaisMateriais() {
+  return Object.values(_carregarNomesOriginais());
+}
+
+// "Sem categoria" = material não cadastrado OU cadastrado sem categoria
+// preenchida — os dois jeitos de um material passar despercebido.
+function listarNomesOriginaisSemCategoria() {
+  return listarNomesOriginaisMateriais().filter(e => !e.categoriaCadastrada);
+}
+
+function limparNomesOriginaisMateriais() {
+  _nomesOriginaisCache = {};
+  _nomesOriginaisDirty = true;
+  _persistirNomesOriginais();
+}
+
 function normalizarCentral(valor) {
   const raw = String(valor ?? '').trim();
   if (!raw) return '';
@@ -348,13 +485,19 @@ function normalizarMateriaisRecord(rec, keys) {
 function reaplicarPadronizacaoMateriais(modulos = ['entradas', 'saidas', 'lancamentos', 'sap']) {
   const categoriaModulos = new Set(CATEGORIA_MODULOS);
 
-  const aplicar = (rec, comCategoria) => {
+  const aplicar = (rec, comCategoria, modulo) => {
     const raw = String(rec.materialOriginal ?? rec.material ?? '').trim();
     const out = raw
       ? { ...rec, materialOriginal: rec.materialOriginal ?? raw, material: normalizarMaterial(raw) }
       : { ...rec, materialOriginal: rec.materialOriginal ?? '', material: rec.material ?? '' };
 
     if (comCategoria) {
+      // Captura diagnóstica (ponto 3): reprocessamento é o momento em que
+      // uma edição no cadastro de Materiais deveria "resolver" a categoria
+      // de registros já importados — se continuar sem categoria aqui, é
+      // sinal de que o nome ainda não bate com nenhum cadastro.
+      if (raw) registrarNomeOriginalMaterial(modulo, raw);
+
       // categoriaOriginal preserva o valor digitado/importado originalmente,
       // do mesmo jeito que materialOriginal preserva o nome bruto do material.
       const catOriginal = String(
@@ -371,6 +514,91 @@ function reaplicarPadronizacaoMateriais(modulos = ['entradas', 'saidas', 'lancam
   for (const modulo of modulos) {
     if (!Array.isArray(state[modulo])) continue;
     const comCategoria = categoriaModulos.has(modulo);
-    state[modulo] = state[modulo].map(rec => aplicar(rec, comCategoria));
+    state[modulo] = state[modulo].map(rec => aplicar(rec, comCategoria, modulo));
   }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// PENDÊNCIAS DE PADRONIZAÇÃO (Configurações → indicador acima das tabelas)
+// ═══════════════════════════════════════════════════════════════════════
+// Varre Entradas/Saídas/Lançamentos/SAP/Produção em busca de nomes ORIGINAIS
+// de material/central que precisam de atenção no cadastro. Consulta pura
+// (nunca muta o state) — mesma regra que o Assistente já usava em
+// _asstIntentConfigPendente, centralizada aqui para ter UMA fonte de
+// verdade usada tanto pelo indicador visual (dashboard.js) quanto pelo
+// Assistente (chat).
+//
+// Um MATERIAL entra na lista por 2 motivos distintos:
+//   'nao_cadastrado' — o nome não bate com nenhum item do cadastro
+//                       (findMaterialMatch não encontra nada)
+//   'sem_categoria'  — o nome BATE com um item do cadastro (já teria um
+//                       alias padronizado), mas esse item está sem a
+//                       categoria preenchida — é o caso "cadastrado mas
+//                       passando despercebido" que motivou o registro de
+//                       nomes originais.
+// Uma CENTRAL só tem o motivo 'nao_cadastrado' — Filiais não têm campo de
+// categoria.
+function getPendenciasPadronizacao() {
+  const materiaisPendentes = new Map();
+  const centraisPendentes  = new Map();
+
+  if (typeof findMaterialMatch === 'function') {
+    ['entradas', 'saidas', 'lancamentos', 'sap'].forEach(mod => {
+      (state[mod] || []).forEach(r => {
+        const rawMat = String(r.materialOriginal ?? '').trim();
+        if (!rawMat) return;
+
+        const found = findMaterialMatch(rawMat);
+        let motivo = null;
+        if (!found) motivo = 'nao_cadastrado';
+        else if (!found.categoria) motivo = 'sem_categoria';
+        if (!motivo) return; // cadastrado e com categoria — nada pendente
+
+        let entry = materiaisPendentes.get(rawMat);
+        if (!entry) {
+          entry = {
+            nome: rawMat,
+            count: 0,
+            motivo,
+            // Só relevante para 'sem_categoria': aponta para o registro do
+            // cadastro que precisa ser completado (origem+alias exatos,
+            // usados depois para editar em vez de duplicar o cadastro).
+            origemCadastro: found ? found.origem : '',
+            aliasPadronizado: found ? found.alias : ''
+          };
+          materiaisPendentes.set(rawMat, entry);
+        }
+        entry.count += 1;
+      });
+    });
+  }
+
+  if (typeof getFilialLookupIndex === 'function' && typeof CENTRAL_FIELDS_BY_MODULO !== 'undefined') {
+    const filIdx = getFilialLookupIndex();
+    Object.entries(CENTRAL_FIELDS_BY_MODULO).forEach(([mod, fields]) => {
+      (state[mod] || []).forEach(r => {
+        fields.forEach(f => {
+          const rawCentral = String(r[`${f}Original`] ?? '').trim();
+          if (!rawCentral) return;
+          const found = filIdx.exact.get(normalizeText(rawCentral));
+          if (found) return; // central já cadastrada — nada pendente
+
+          let entry = centraisPendentes.get(rawCentral);
+          if (!entry) {
+            entry = { nome: rawCentral, count: 0, motivo: 'nao_cadastrado' };
+            centraisPendentes.set(rawCentral, entry);
+          }
+          entry.count += 1;
+        });
+      });
+    });
+  }
+
+  const toSortedList = map => [...map.values()]
+    .sort((a, b) => b.count - a.count || a.nome.localeCompare(b.nome, 'pt-BR'));
+
+  return {
+    materiais: toSortedList(materiaisPendentes),
+    centrais:  toSortedList(centraisPendentes)
+  };
 }
