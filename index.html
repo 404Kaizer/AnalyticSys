@@ -602,39 +602,113 @@
           </button>
         </div>
 
-        <!-- ABA: Visão Geral -->
+        <!-- ABA: Visão Geral (reformulada — KPIs executivos + gráficos consolidados) -->
         <div class="dg-tab-pane active" id="dg-pane-visao">
 
-        <!-- 1. KPIs Executivos -->
-        <div id="dg-macro-kpis" class="macro-kpi-strip" style="margin-bottom:20px"></div>
+        <!-- 1. Hero: Variação Total + Custo Total — os KPIs mais importantes, em evidência -->
+        <div id="dg-vg-kpis-hero" class="dg-vg-hero-grid" style="margin-bottom:14px"></div>
 
-        <!-- 3. Riscos Operacionais Emergentes -->
-        <div class="dg-riscos-card">
-          <div class="dg-riscos-header">
-            <span class="dg-riscos-title" style="color:var(--red)"><i class="ti ti-alert-triangle" style="color:var(--red)"></i> Riscos Operacionais Emergentes</span>
-            <span style="font-size:10px;font-family:var(--mono);color:var(--text3)">top 10 — calculados automaticamente</span>
+        <!-- 2. Stat boxes: Recorrentes + Críticos + Urgentes + Atenção (separados do donut) -->
+        <div class="oc-chart-card" style="margin-bottom:14px">
+          <div class="oc-chart-title"><i class="ti ti-list-check" style="margin-right:5px"></i>Indicadores de Saúde do Período</div>
+          <div id="dg-vg-health-boxes" class="dg-vg-health-boxes"></div>
+        </div>
+
+        <!-- 2b. Os dois donuts de Saúde Geral (Materiais e Centrais), grandes e em evidência -->
+        <div class="dg-giro-dual-grid" style="margin-bottom:14px">
+          <div class="oc-chart-card">
+            <div class="oc-chart-title"><i class="ti ti-heartbeat" style="margin-right:5px"></i>Saúde Geral — Materiais</div>
+            <div style="display:flex;justify-content:center">
+              <div style="width:420px;max-width:96%">
+                <svg id="dg-vg-gauge-chart-svg" viewBox="0 0 300 220" style="width:100%;height:auto;display:block"></svg>
+              </div>
+            </div>
           </div>
-          <div class="dg-riscos-body" id="dg-riscos-body">
-            <div class="dg-empty-riscos"><i class="ti ti-shield-check"></i><span>Nenhum risco identificado ainda.</span></div>
+          <div class="oc-chart-card">
+            <div class="oc-chart-title"><i class="ti ti-building-factory-2" style="margin-right:5px"></i>Saúde Geral — Centrais</div>
+            <div style="display:flex;justify-content:center">
+              <div style="width:420px;max-width:96%">
+                <svg id="dg-vg-gauge-central-svg" viewBox="0 0 300 220" style="width:100%;height:auto;display:block"></svg>
+              </div>
+            </div>
           </div>
         </div>
 
-        <!-- 4. Top 5 Centrais por Custo Médio -->
-        <div class="dg-top5-card">
-          <div class="dg-top5-header">
-            <span class="dg-top5-title"><i class="ti ti-trophy"></i> Top 5 Centrais por Custo Médio</span>
-            <span style="font-size:10px;font-family:var(--mono);color:var(--text3)">Custo Médio = Impacto ÷ Qtd. Materiais</span>
+        <!-- 3. Variação Física por Categoria de Material -->
+        <div class="oc-chart-card" style="margin-bottom:14px">
+          <div class="oc-chart-title"><i class="ti ti-chart-bar" style="margin-right:5px"></i>Variação Física por Categoria de Material</div>
+          <div style="position:relative;height:180px">
+            <canvas id="dg-vg-chart-categoria"></canvas>
           </div>
-          <div class="dg-top5-body">
-            <div class="dg-top5-head-row">
-              <span>Central</span>
-              <span>Custo Médio</span>
-              <span style="text-align:right">R$/uni</span>
-              <span style="text-align:center">Saúde</span>
-              <span style="text-align:right">Críticos</span>
+        </div>
+
+        <!-- 4. Regional/Central — maior desfalque e maior sobra -->
+        <div id="dg-vg-extremos" class="dg-vg-extremos-grid" style="margin-bottom:14px"></div>
+
+        <!-- 5 & 6. Variação de Custo por Regional / por Central -->
+        <div class="dg-giro-dual-grid">
+          <div class="oc-chart-card">
+            <div class="oc-chart-title"><i class="ti ti-users" style="margin-right:5px"></i>Variação de Custo por Regional</div>
+            <div class="dg-vg-bar-wrap" style="height:260px">
+              <div class="dg-vg-bar-inner">
+                <canvas id="dg-vg-chart-regional"></canvas>
+              </div>
             </div>
-            <div id="dg-top5-body">
-              <div class="dg-empty-riscos"><i class="ti ti-loader"></i><span>Aguardando análise...</span></div>
+          </div>
+          <div class="oc-chart-card">
+            <div class="oc-chart-title"><i class="ti ti-building-factory-2" style="margin-right:5px"></i>Variação de Custo por Central</div>
+            <div class="dg-vg-bar-wrap" style="height:260px">
+              <div class="dg-vg-bar-inner">
+                <canvas id="dg-vg-chart-usina"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 7. Custo da Variação por Grupo de Material (combinado) — SVG, mesmo design do Dashboard Analítico -->
+        <div class="oc-chart-card" style="margin:14px 0">
+          <div class="oc-chart-title"><i class="ti ti-chart-donut" style="margin-right:5px"></i>Custo Absoluto por Grupo de Material</div>
+          <div style="display:flex;justify-content:center">
+            <div style="width:640px;max-width:96%">
+              <svg id="dg-vg-chart-grupo" viewBox="0 0 300 220" style="width:100%;height:auto;display:block"></svg>
+            </div>
+          </div>
+        </div>
+
+        <!-- 8. Custo Absoluto por categoria — 4 donuts (SVG, mesmo design do Dashboard Analítico) -->
+        <div class="dg-giro-dual-grid">
+          <div class="oc-chart-card">
+            <div class="oc-chart-title">Custo Absoluto por Agregado</div>
+            <div style="display:flex;justify-content:center">
+              <div style="width:460px;max-width:96%">
+                <svg id="dg-vg-donut-agregado" viewBox="0 0 300 220" style="width:100%;height:auto;display:block"></svg>
+              </div>
+            </div>
+          </div>
+          <div class="oc-chart-card">
+            <div class="oc-chart-title">Custo Absoluto por Aglomerante</div>
+            <div style="display:flex;justify-content:center">
+              <div style="width:460px;max-width:96%">
+                <svg id="dg-vg-donut-aglomerante" viewBox="0 0 300 220" style="width:100%;height:auto;display:block"></svg>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="dg-giro-dual-grid" style="margin-top:16px">
+          <div class="oc-chart-card">
+            <div class="oc-chart-title">Custo Absoluto por Aditivo</div>
+            <div style="display:flex;justify-content:center">
+              <div style="width:460px;max-width:96%">
+                <svg id="dg-vg-donut-aditivo" viewBox="0 0 300 220" style="width:100%;height:auto;display:block"></svg>
+              </div>
+            </div>
+          </div>
+          <div class="oc-chart-card">
+            <div class="oc-chart-title">Custo Absoluto por Adição</div>
+            <div style="display:flex;justify-content:center">
+              <div style="width:460px;max-width:96%">
+                <svg id="dg-vg-donut-adicao" viewBox="0 0 300 220" style="width:100%;height:auto;display:block"></svg>
+              </div>
             </div>
           </div>
         </div>

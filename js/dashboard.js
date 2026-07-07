@@ -273,204 +273,6 @@ function setDgQuickPeriodAno() {
 
 Object.assign(window, { rodarDashboardGerencial, limparDashboardGerencial, setDgQuickPeriod, setDgQuickPeriodMes, setDgQuickPeriodAno });
 
-function renderDashboardGerencialKpis(dtIni, dtFim) {
-  const kpis = document.getElementById('dg-macro-kpis');
-  if (!kpis) return;
-
-  if (!state.lancamentos.length && !state.sap.length) {
-    kpis.innerHTML = '';
-    return;
-  }
-
-  const results = buildDashboardGerencialResults(dtIni, dtFim);
-  if (!results.length) { kpis.innerHTML = ''; return; }
-
-  const totalEstIni   = results.reduce((s, r) => s + r.somaPrimeiro, 0);
-  const totalEntradas = results.reduce((s, r) => s + r.totalEntradas, 0);
-  const totalSaidas   = results.reduce((s, r) => s + r.totalSaidas, 0);
-  const totalEstFim   = results.reduce((s, r) => s + r.somaUltimo, 0);
-  const totalVarEst   = results.reduce((s, r) => s + r.variacaoEstoque, 0);
-
-  // Coleta ausentes por campo (central + material)
-  const missingIniList = [];
-  const missingFimList = [];
-  results.forEach(r => {
-    (r.missingIniMats || []).forEach(m => missingIniList.push(`${r.central} · ${m}`));
-    (r.missingFimMats || []).forEach(m => missingFimList.push(`${r.central} · ${m}`));
-  });
-  const _missingBadge = (list, label) => {
-    if (!list.length) return '';
-    const MAX = 5;
-    const shown = list.slice(0, MAX).map(s => `<div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px;color:var(--text2);font-size:10.5px;font-family:var(--mono)">${escapeHtml(s)}</div>`).join('');
-    const more  = list.length > MAX ? `<div style="color:var(--text3);font-size:10px;font-family:var(--mono)">+ ${list.length - MAX} mais</div>` : '';
-    return `<details class="kpi-missing-details" style="margin-top:6px">
-      <summary style="cursor:pointer;list-style:none;display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:9.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--amber);padding:3px 8px;background:var(--amber-bg);border:1px solid var(--amber-border);border-radius:5px;user-select:none">
-        <i class="ti ti-alert-triangle" style="font-size:11px"></i> ${list.length} sem ${label}
-      </summary>
-      <div style="margin-top:6px;padding:8px 10px;background:var(--bg4);border:1px solid var(--border2);border-radius:6px;display:flex;flex-direction:column;gap:3px">
-        ${shown}${more}
-      </div>
-    </details>`;
-  };
-
-  // Custo por período
-  // Est. Inicial e Est. Final: usa os volumes já calculados corretamente em
-  // buildDashboardGerencialResults (somaPrimeiro / somaUltimo por material),
-  // que respeitam getPrePeriodLaunchStock e a soma do último dia do período.
-  let custoEstIni = 0, custoEntradas = 0, custoSaidas = 0, custoEstFim = 0;
-  results.forEach(r => {
-    const cmp = r.custoMedioPorMat || {};
-    // Para Est. Ini e Est. Fim, recalcula por material usando os mesmos volumes
-    // que buildDashboardGerencialResults usa para somaPrimeiro/somaUltimo,
-    // garantindo consistência com os valores exibidos nas colunas de volume.
-    const lancsByMat = new Map();
-    r.lancsNoPeriodo.forEach(l => {
-      const m = l.material || '—'; if (!lancsByMat.has(m)) lancsByMat.set(m, []); lancsByMat.get(m).push(l);
-    });
-    (r.allMats || []).forEach(mat => {
-      const cm = cmp[mat] || 0; if (!cm) return;
-      // Est. Inicial: dia anterior ao período (pula domingo), sem fallback
-      const prevStock = dtIni ? getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni }) : null;
-      const iniVol = prevStock != null ? prevStock.value : 0;
-
-      // Est. Final: último dia não-domingo do período, sem fallback
-      const fimStock = dtFim ? getLastPeriodLaunchStock({ central: r.central, material: mat, dtFim }) : null;
-      const fimVol = fimStock ? fimStock.value : 0;
-      custoEstIni += iniVol * cm;
-      custoEstFim += fimVol * cm;
-    });
-    // Entradas e Saídas SAP: custo por movimento × custo médio do material
-    r.sapNoPeriodo.forEach(s => {
-      const mat = s.material || '—';
-      const cm  = cmp[mat] || 0;
-      if (!cm) return;
-      const p = num(s.peso);
-      if (p > 0) custoEntradas += p * cm;
-      else if (p < 0) custoSaidas += Math.abs(p) * cm;
-    });
-  });
-
-  // Custo variação: (EST. FINAL - EST. TEÓRICO) × custo médio por material.
-  // Usa os mesmos valores de getPrePeriodLaunchStock e getLastPeriodLaunchStock
-  // que o Inventário usa, garantindo consistência entre os dois módulos.
-  let totalCustoVar = 0;
-  results.forEach(r => {
-    const cmp        = r.custoMedioPorMat || {};
-    const lancsByMat = new Map();
-    const sapByMat   = new Map();
-    r.lancsNoPeriodo.forEach(l => { const m = l.material||'—'; if(!lancsByMat.has(m)) lancsByMat.set(m,[]); lancsByMat.get(m).push(l); });
-    r.sapNoPeriodo.forEach(s => { const m = s.material||'—'; if(!sapByMat.has(m)) sapByMat.set(m,[]); sapByMat.get(m).push(s); });
-    (r.allMats||[]).forEach(mat => {
-      const custMed = cmp[mat] || 0;
-      if (!custMed) return;
-
-      // EST. INICIAL: mesmo que inventário
-      const prev   = dtIni ? getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni }) : null;
-      const estIni = prev != null ? prev.value : 0;
-
-      // EST. FINAL: mesmo que inventário
-      const fim    = dtFim ? getLastPeriodLaunchStock({ central: r.central, material: mat, dtFim }) : null;
-      const estFim = (fim && !fim.missing) ? fim.value : 0;
-
-      // Entradas/Saídas SAP: mesmo que inventário
-      const sapMat = sapByMat.get(mat) || [];
-      let entKg = 0, saiKg = 0;
-      sapMat.forEach(s => {
-        const p = num(s.peso);
-        if (p > 0) entKg += p;
-        else saiKg += Math.abs(p);
-      });
-
-      const estTeor = estIni + entKg - saiKg;
-      const varKg   = estFim - estTeor;
-      totalCustoVar += varKg * custMed;
-    });
-  });
-
-  const cvCls = totalCustoVar > 0.001 ? 'kc-amber' : totalCustoVar < -0.001 ? 'kc-red' : 'kc-teal';
-
-  const pctVarCusto    = custoEstFim > 0 ? Math.abs(totalCustoVar) / custoEstFim * 100 : 0;
-  const pctVarEst      = totalEstFim  > 0 ? Math.abs(totalVarEst)  / totalEstFim  * 100 : 0;
-  const pctVarCustoStr = pctVarCusto.toLocaleString('pt-BR', {minimumFractionDigits:1,maximumFractionDigits:1}) + '%';
-  const pctVarEstStr   = pctVarEst.toLocaleString('pt-BR',  {minimumFractionDigits:1,maximumFractionDigits:1}) + '%';
-  const reprCustoCls   = totalCustoVar > 0 ? 'v-pos' : totalCustoVar < 0 ? 'v-neg' : 'v-zero';
-  const reprEstCls     = totalVarEst   > 0 ? 'v-pos' : totalVarEst   < 0 ? 'v-neg' : 'v-zero';
-  const reprCustoBarBg = totalCustoVar > 0 ? 'var(--amber)' : totalCustoVar < 0 ? 'var(--red)' : 'var(--teal)';
-  const reprEstBarBg   = totalVarEst   > 0 ? 'var(--amber)' : totalVarEst   < 0 ? 'var(--red)' : 'var(--teal)';
-  const veValCls       = totalVarEst   > 0.001 ? 'v-pos' : totalVarEst   < -0.001 ? 'v-neg' : 'v-zero';
-
-  kpis.innerHTML = `
-    <div class="macro-kpi-card kc-teal">
-      <div class="macro-kpi-label"><i class="ti ti-package-import"></i> Est. Inicial</div>
-      <div class="macro-kpi-cost" title="${custoEstIni > 0 ? money(custoEstIni) : '—'}">${custoEstIni > 0 ? moneyShort(custoEstIni) : '—'}</div>
-      <div class="macro-kpi-sub">Custo total — 1º lançamento</div>
-      <div class="macro-kpi-saldo-row">
-        <span class="macro-kpi-saldo-label">Volume</span>
-        <span class="macro-kpi-saldo-val">${fmtKg(totalEstIni)}</span>
-      </div>
-      ${_missingBadge(missingIniList, 'Est. Ini.')}
-    </div>
-    <div class="macro-kpi-card kc-green">
-      <div class="macro-kpi-label"><i class="ti ti-arrow-bar-to-down"></i> Entradas SAP</div>
-      <div class="macro-kpi-cost" title="${custoEntradas > 0 ? money(custoEntradas) : '—'}">${custoEntradas > 0 ? moneyShort(custoEntradas) : '—'}</div>
-      <div class="macro-kpi-sub">Custo total — cód. 101 + 801</div>
-      <div class="macro-kpi-saldo-row">
-        <span class="macro-kpi-saldo-label">Volume</span>
-        <span class="macro-kpi-saldo-val">${fmtKg(totalEntradas)}</span>
-      </div>
-    </div>
-    <div class="macro-kpi-card kc-red">
-      <div class="macro-kpi-label"><i class="ti ti-arrow-bar-up"></i> Saídas SAP</div>
-      <div class="macro-kpi-cost" title="${custoSaidas > 0 ? money(custoSaidas) : '—'}">${custoSaidas > 0 ? moneyShort(custoSaidas) : '—'}</div>
-      <div class="macro-kpi-sub">Custo total — cód. 201</div>
-      <div class="macro-kpi-saldo-row">
-        <span class="macro-kpi-saldo-label">Volume</span>
-        <span class="macro-kpi-saldo-val">${fmtKg(Math.abs(totalSaidas))}</span>
-      </div>
-    </div>
-    <div class="macro-kpi-card kc-blue">
-      <div class="macro-kpi-label"><i class="ti ti-package-export"></i> Est. Final</div>
-      <div class="macro-kpi-cost" title="${custoEstFim > 0 ? money(custoEstFim) : '—'}">${custoEstFim > 0 ? moneyShort(custoEstFim) : '—'}</div>
-      <div class="macro-kpi-sub">Custo total — últ. lançamento</div>
-      <div class="macro-kpi-saldo-row">
-        <span class="macro-kpi-saldo-label">Volume</span>
-        <span class="macro-kpi-saldo-val">${fmtKg(totalEstFim)}</span>
-      </div>
-      ${_missingBadge(missingFimList, 'Est. Fim')}
-    </div>
-    <div class="macro-kpi-card ${cvCls}">
-      <div class="macro-kpi-label"><i class="ti ti-arrows-diff"></i> Var. Custo &amp; Estoque</div>
-      <div class="macro-kpi-cost" title="${money(Math.abs(totalCustoVar))}">${varSymbol(totalCustoVar)} ${moneyShort(Math.abs(totalCustoVar))}</div>
-      <div class="macro-kpi-sub">${varLabel(totalCustoVar)} — custo implicado</div>
-      <div class="macro-kpi-var-group">
-        <div class="macro-kpi-var-row">
-          <span class="macro-kpi-var-tag">Vol.</span>
-          <span class="macro-kpi-var-val ${veValCls}">${varSymbol(totalVarEst)} ${fmtKg(Math.abs(totalVarEst))}</span>
-        </div>
-      </div>
-    </div>
-    <div class="macro-kpi-card kc-amber">
-      <div class="macro-kpi-label"><i class="ti ti-percent"></i> Representatividade</div>
-      <div class="macro-kpi-cost" style="font-size:clamp(13px,1.5vw,16px);color:var(--amber)">Var. vs Est. Final</div>
-      <div class="macro-kpi-repr-row">
-        <div class="macro-kpi-repr-item">
-          <div class="macro-kpi-repr-head">
-            <span class="macro-kpi-repr-lbl">Var. Custo / Custo Final</span>
-            <span class="macro-kpi-repr-pct ${reprCustoCls}">${pctVarCustoStr}</span>
-          </div>
-          <div class="macro-kpi-repr-bar"><div class="macro-kpi-repr-fill" style="width:${Math.min(pctVarCusto,100)}%;background:${reprCustoBarBg}"></div></div>
-        </div>
-        <div class="macro-kpi-repr-item">
-          <div class="macro-kpi-repr-head">
-            <span class="macro-kpi-repr-lbl">Var. Estoque / Est. Final</span>
-            <span class="macro-kpi-repr-pct ${reprEstCls}">${pctVarEstStr}</span>
-          </div>
-          <div class="macro-kpi-repr-bar"><div class="macro-kpi-repr-fill" style="width:${Math.min(pctVarEst,100)}%;background:${reprEstBarBg}"></div></div>
-        </div>
-      </div>
-    </div>`;
-}
-
 function updateDashboard() {
   // O Dashboard Gerencial só é gerado quando o usuário clica em "Analisar".
   // Esta função é mantida para compatibilidade com chamadas legadas (importação,
@@ -482,334 +284,726 @@ function updateDashboard() {
 }
 
 function _renderDashboardConteudo(dtIni, dtFim) {
-  // ── 1. KPI Gerencial strip ──
-  renderDashboardGerencialKpis(dtIni, dtFim);
-
   // ── Build base results (reuse) ──
   const results = buildDashboardGerencialResults(dtIni, dtFim);
   const thresholds = getHealthThresholds();
 
-  // ── 2. Saúde Global ──
-  renderDgSaudeGlobal(results, thresholds);
+  // ── 1. Visão Geral — KPIs executivos + gráficos consolidados (reformulada) ──
+  renderDgVisaoGeralPdf(results, thresholds, dtIni, dtFim);
 
-  // ── 3. Riscos Operacionais ──
-  renderDgRiscos(results, thresholds);
-
-  // ── 4. Top 5 Centrais por Custo Médio ──
-  renderDgTop5CustoMedio(results, thresholds);
-
-  // ── 5 & 6. Giro de Estoque ──
+  // ── 2. Giro de Estoque ──
   renderDgGiro(results);
 
-  // ── 7. Custos ──
+  // ── 3. Custos ──
   renderDgCustos(results, dtIni, dtFim);
 }
 
-// ────────────────────────────────────────────
-// 2. SAÚDE GLOBAL DA OPERAÇÃO
-// ────────────────────────────────────────────
-function renderDgSaudeGlobal(results, thresholds) {
-  const matEl     = document.getElementById('dg-saude-mat-body');
-  const centralEl = document.getElementById('dg-saude-central-body');
-  const matTotEl  = document.getElementById('dg-saude-mat-total');
-  const cenTotEl  = document.getElementById('dg-saude-central-total');
-  if (!matEl || !centralEl) return;
+// ═══════════════════════════════════════════════════════════
+// VISÃO GERAL — reformulada (KPIs executivos + gráficos consolidados)
+//
+// Layout baseado em referência fornecida pelo analista (export de
+// Google Planilhas usado pela diretoria). Substitui integralmente os
+// KPIs de Est.Inicial/Final, "Riscos Operacionais" e "Top 5 Centrais"
+// que existiam antes nesta aba por:
+//   1. KPIs de topo: Variação Total / Custo Total / Recorrentes
+//   2. Saúde geral: contagem de materiais Crítico/Urgente/Atenção + gauge
+//   3. Variação Física por Categoria de Material (Agregado/Aglomerante/
+//      Aditivo/Adição)
+//   4. Regional/Central com maior desfalque e maior sobra
+//   5-6. Variação de Custo por Regional e por Central
+//   7. Custo Absoluto por Grupo de Material (combinado)
+//   8. Custo Absoluto por categoria (4 donuts: Agregado, Aglomerante,
+//      Aditivo, Adição)
+//
+// Notas de metodologia (decisões tomadas para reformular esta aba):
+//  • "Regional" = campo cadastrado em Configurações → Filiais (neste
+//    cliente, guarda o nome do gestor responsável, não uma região
+//    geográfica).
+//  • Crítico/Urgente/Atenção e o score do gauge usam a MESMA
+//    metodologia de Est. Inicial/Final (com fallback retroativo) e a
+//    mesma fórmula de pontuação (calcHealthScore/HEALTH_PENALTIES) já
+//    usadas nos cards de saúde do Dashboard Analítico — os números
+//    batem com o "Saúde Geral" do topbar.
+//  • "Recorrentes" = pares Central×Material críticos/urgentes que já
+//    estavam críticos/urgentes no período equivalente imediatamente
+//    anterior (mesma duração, encostado antes de dtIni).
+//  • "Custo Absoluto" (donuts) = gasto real registrado nas Saídas
+//    (valorTotal) no período, com fallback ao SAP — é um valor
+//    diferente de "Custo Total implicado" (que reflete o impacto
+//    financeiro da variação/desfalque-sobra).
+// ═══════════════════════════════════════════════════════════
 
-  if (!results.length) {
-    matEl.innerHTML = centralEl.innerHTML = '<div class="dg-empty-riscos"><i class="ti ti-database-off"></i><span>Sem dados no período.</span></div>';
-    return;
+const DG_VG_CAT_LABELS = { agregado: 'Agregado', aglomerante: 'Aglomerante', aditivo: 'Aditivo', adicao: 'Adição' };
+const DG_VG_CAT_COLORS = { agregado: '#8b5cf6', aglomerante: '#3b82f6', aditivo: '#f59e0b', adicao: '#10b981' };
+const DG_VG_CAT_ORDER  = ['agregado', 'aglomerante', 'aditivo', 'adicao'];
+
+let _dgVgCharts = {};
+function _dgVgDestroyChart(key) {
+  if (_dgVgCharts[key]) {
+    try { _dgVgCharts[key].destroy(); } catch (e) { /* noop */ }
+    _dgVgCharts[key] = null;
   }
-
-  // Aggregate material health across all centrals
-  const matCounts   = { critico:0, urgente:0, atencao:0, bom:0 };
-  const cenCounts   = { critico:0, urgente:0, atencao:0, bom:0 };
-
-  results.forEach(r => {
-    // Build matDiffs for this central
-    const lancsByMat = new Map();
-    const sapByMat   = new Map();
-    r.lancsNoPeriodo.forEach(l => {
-      const m = l.material||'—';
-      if (!lancsByMat.has(m)) lancsByMat.set(m, []);
-      lancsByMat.get(m).push(l);
-    });
-    r.sapNoPeriodo.forEach(s => {
-      const m = s.material||'—';
-      if (!sapByMat.has(m)) sapByMat.set(m, []);
-      sapByMat.get(m).push(s);
-    });
-
-    const matDiffs = r.allMats.map(mat => {
-      const snap = buildSnapshot({ lancs: lancsByMat.get(mat)||[], sap: sapByMat.get(mat)||[] });
-      const rawCat = (lancsByMat.get(mat)||[])[0]?.categoria || '';
-      const catKey = detectCatKey(rawCat) || detectCatFromMat(mat);
-      return { mat, diff: snap.diff, catKey };
-    });
-
-    const nonNeutral = matDiffs.filter(m => Math.abs(m.diff) > 0.0001);
-    nonNeutral.forEach(m => {
-      const lvl = classifyVariation(Math.abs(m.diff), m.catKey, thresholds);
-      matCounts[lvl]++;
-    });
-
-    // Central-level health
-    const { level } = calcHealthScore(matDiffs, lancsByMat, sapByMat, thresholds);
-    const cenLvl = level === 'ok' ? 'bom' : level;
-    if (cenCounts[cenLvl] !== undefined) cenCounts[cenLvl]++;
-  });
-
-  const totalMats = Object.values(matCounts).reduce((a,b)=>a+b,0);
-  const totalCens = results.length;
-
-  if (matTotEl) matTotEl.textContent = `${totalMats} materiais`;
-  if (cenTotEl) cenTotEl.textContent = `${totalCens} centrais`;
-
-  function buildBars(counts, total) {
-    const items = [
-      { key:'critico', label:'Crítico',  color:'var(--red)',    icon:'ti-flame' },
-      { key:'urgente', label:'Urgente',  color:'#f97316',       icon:'ti-alert-circle' },
-      { key:'atencao', label:'Atenção',  color:'var(--amber)',  icon:'ti-alert-triangle' },
-      { key:'bom',     label:'Bom',      color:'var(--green)',  icon:'ti-circle-check' },
-    ];
-    if (!total) return '<div class="dg-empty-riscos" style="padding:12px 0"><i class="ti ti-database-off"></i><span>Sem dados.</span></div>';
-    return items.map(({ key, label, color, icon }) => {
-      const cnt = counts[key] || 0;
-      const pct = total > 0 ? (cnt / total * 100) : 0;
-      return `<div class="dg-saude-bar-row">
-        <span class="dg-saude-bar-label">
-          <span class="dg-saude-dot" style="background:${color}"></span>
-          <span style="color:${color}">${label}</span>
-        </span>
-        <div class="dg-saude-bar-track">
-          <div class="dg-saude-bar-fill" style="width:${pct}%;background:${color}"></div>
-        </div>
-        <span class="dg-saude-bar-count">${cnt}</span>
-        <span class="dg-saude-bar-pct">${pct.toFixed(1)}%</span>
-      </div>`;
-    }).join('');
-  }
-
-  matEl.innerHTML    = buildBars(matCounts, totalMats);
-  centralEl.innerHTML = buildBars(cenCounts, totalCens);
+}
+function _dgVgTheme() {
+  const isDark = !document.body.dataset.theme || document.body.dataset.theme !== 'light';
+  return {
+    textCol:  isDark ? 'rgba(123,133,160,0.9)' : 'rgba(61,79,110,0.9)',
+    gridCol:  isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.06)',
+    tickFont: { family: "'DM Mono', monospace", size: 10 }
+  };
 }
 
-// ────────────────────────────────────────────
-// 3. RISCOS OPERACIONAIS EMERGENTES
-// ────────────────────────────────────────────
-function renderDgRiscos(results, thresholds) {
-  const el = document.getElementById('dg-riscos-body');
-  if (!el) return;
-
-  if (!results.length) {
-    el.innerHTML = '<div class="dg-empty-riscos"><i class="ti ti-shield-check"></i><span>Nenhum dado para analisar.</span></div>';
-    return;
-  }
-
-  // ── Helpers ──────────────────────────────────────────────
-  const SEV = { critico: 0, urgente: 1, atencao: 2, info: 3 };
-  const SEV_LABEL  = { critico: 'CRÍTICO', urgente: 'URGENTE', atencao: 'ATENÇÃO', info: 'INFO' };
-  const SEV_COLOR  = { critico: 'var(--red)', urgente: '#f97316', atencao: 'var(--amber)', info: 'var(--accent)' };
-  const SEV_BG     = { critico: 'var(--red-bg)', urgente: 'rgba(249,115,22,.10)', atencao: 'var(--amber-bg)', info: 'var(--accent-dim)' };
-  const SEV_BORDER = { critico: 'var(--red-border)', urgente: 'rgba(249,115,22,.25)', atencao: 'var(--amber-border)', info: 'var(--accent-glow)' };
-
-  const risks = [];
-
-  const push = (sev, headline, body, pills=[]) => {
-    risks.push({ sev, headline, body, pills });
-  };
+// ── Constrói os pares Central×Material com diff (variação), categoria,
+//    nível de saúde e custo implicado. Usa a MESMA metodologia de
+//    Est. Inicial/Final (com fallback retroativo) já usada nos cards de
+//    saúde do Dashboard Analítico, garantindo que os números batam com
+//    o "Saúde Geral" exibido no restante do sistema.
+function _dgVgBuildPares(results, thresholds, dtIni, dtFim) {
+  const pares = [];
+  const filIdx = getFilialLookupIndex();
 
   results.forEach(r => {
     const lancsByMat = new Map();
     const sapByMat   = new Map();
-    r.lancsNoPeriodo.forEach(l => { const m=l.material||'—'; if(!lancsByMat.has(m)) lancsByMat.set(m,[]); lancsByMat.get(m).push(l); });
-    r.sapNoPeriodo.forEach(s => { const m=s.material||'—'; if(!sapByMat.has(m)) sapByMat.set(m,[]); sapByMat.get(m).push(s); });
+    r.lancsNoPeriodo.forEach(l => { const m = l.material || '—'; if (!lancsByMat.has(m)) lancsByMat.set(m, []); lancsByMat.get(m).push(l); });
+    r.sapNoPeriodo.forEach(s   => { const m = s.material  || '—'; if (!sapByMat.has(m))   sapByMat.set(m, []);   sapByMat.get(m).push(s); });
 
-    const matDiffs = r.allMats.map(mat => {
-      const prev = typeof getPrePeriodLaunchStock === 'function'
-        ? getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni: r._dtIni })
-        : null;
-      const snap = buildSnapshot({ lancs: lancsByMat.get(mat)||[], sap: sapByMat.get(mat)||[], initialStockOverride: prev?.value ?? null });
-      const rawCat = (lancsByMat.get(mat)||[])[0]?.categoria || '';
+    const filRec   = filIdx.exact.get(normalizeText(r.central));
+    const regional = (filRec?.regional || '').trim() || '—';
+
+    r.allMats.forEach(mat => {
+      const lancs  = lancsByMat.get(mat) || [];
+      const sap    = sapByMat.get(mat)   || [];
+      const rawCat = (lancs[0]?.categoria || sap[0]?.categoria || '').trim().toUpperCase();
       const catKey = detectCatKey(rawCat) || detectCatFromMat(mat);
-      return { mat, diff: snap.diff, catKey, snap };
+
+      let diff;
+      if (dtIni && dtFim) {
+        const prev = getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni, dtFim, catKey });
+        const fim  = getLastPeriodLaunchStockWithFallback({ central: r.central, material: mat, dtIni, dtFim });
+        diff = buildSnapshot({
+          lancs, sap,
+          initialStockOverride: prev?.value ?? null,
+          finalStockOverride:   (fim && !fim.missing) ? fim.value : null
+        }).diff;
+      } else {
+        diff = buildSnapshot({ lancs, sap }).diff;
+      }
+
+      const neutro   = Math.abs(diff) <= 0.0001;
+      const level    = neutro ? 'bom' : classifyVariation(Math.abs(diff), catKey, thresholds);
+      const custoMed = (r.custoMedioPorMat || {})[mat] || 0;
+
+      pares.push({ central: r.central, regional, mat, catKey, diff, level, neutro, custoImplicado: diff * custoMed });
     });
-
-    const { level, counts } = calcHealthScore(matDiffs, lancsByMat, sapByMat, thresholds);
-    const totalDiff = matDiffs.reduce((s,m)=>s+m.diff, 0);
-    const custoMeds = Object.entries(r.custoMedioPorMat).filter(([,v])=>v>0);
-    const maxCustoEntry = custoMeds.sort((a,b)=>b[1]-a[1])[0];
-
-    // ── Manchete 1: Central em estado crítico ──
-    if (level === 'critico') {
-      const topMats = matDiffs
-        .filter(m => classifyVariation(Math.abs(m.diff), m.catKey, thresholds) === 'critico')
-        .sort((a,b) => Math.abs(b.diff)-Math.abs(a.diff))
-        .slice(0,2);
-      const custoImpacto = topMats.reduce((s,m) => s + Math.abs(m.diff) * (r.custoMedioPorMat[m.mat]||0), 0);
-      push('critico',
-        `🔴 ${escapeHtml(r.central)} — ${counts.critico} material${counts.critico!==1?'is':''} em nível CRÍTICO`,
-        `Variação acumulada de <strong>${fmtKg(Math.abs(totalDiff))}</strong> no período${custoImpacto>0?' · impacto financeiro estimado de <strong>'+money(custoImpacto)+'</strong>':''}.${topMats.length?' Piores: '+topMats.map(m=>`<strong>${escapeHtml(m.mat)}</strong> (${varSymbol(m.diff)}${fmtKg(Math.abs(m.diff))})`).join(', ')+'.':''}`,
-        [{ label: `${counts.urgente} urgente${counts.urgente!==1?'s':''}`, sev: 'urgente' }, { label: `${counts.atencao} atenção`, sev: 'atencao' }].filter(p=>p.label[0]!=='0')
-      );
-    }
-
-    // ── Manchete 2: Central em estado urgente ──
-    else if (level === 'urgente') {
-      const topUrg = matDiffs
-        .filter(m => classifyVariation(Math.abs(m.diff), m.catKey, thresholds) === 'urgente')
-        .sort((a,b) => Math.abs(b.diff)-Math.abs(a.diff))
-        .slice(0,2);
-      push('urgente',
-        `🟠 ${escapeHtml(r.central)} — ${counts.urgente} material${counts.urgente!==1?'is':''} em nível URGENTE`,
-        `Déficit de <strong>${fmtKg(Math.abs(totalDiff))}</strong> no período. ${counts.atencao>0?counts.atencao+' material(is) adicionais em atenção — risco de escalada se não corrigido.':''}${topUrg.length?' Materiais: '+topUrg.map(m=>`<strong>${escapeHtml(m.mat)}</strong>`).join(', ')+'.':''}`,
-        []
-      );
-    }
-
-    // ── Manchete 3: Material crítico específico ──
-    const criticos = matDiffs.filter(m => classifyVariation(Math.abs(m.diff), m.catKey, thresholds) === 'critico');
-    if (criticos.length) {
-      const worst = criticos.sort((a,b) => Math.abs(b.diff)-Math.abs(a.diff))[0];
-      const custoMat = r.custoMedioPorMat[worst.mat] || 0;
-      const impacto  = Math.abs(worst.diff) * custoMat;
-      const direcao  = worst.diff < 0 ? 'Desfalque' : 'Sobra';
-      push('critico',
-        `🔴 ${escapeHtml(worst.mat)} em ${escapeHtml(r.central)} — ${direcao} crítico`,
-        `Variação de <strong>${varSymbol(worst.diff)}${fmtKg(Math.abs(worst.diff))}</strong>${custoMat>0?' · custo implicado de <strong>'+money(impacto)+'</strong>':''}.${worst.diff<0?' Estoque real abaixo do teórico — requer conferência imediata.':' Estoque real acima do esperado — verificar entradas não registradas.'}`,
-        [{ label: direcao.toUpperCase(), sev: 'critico' }]
-      );
-    }
-
-    // ── Manchete 4: Desfalque acumulado expressivo ──
-    if (totalDiff < -1000 && level !== 'critico') {
-      const custoTotal = Math.abs(totalDiff) * ((custoMeds[0]?.[1]) || 0);
-      push('urgente',
-        `🟠 ${escapeHtml(r.central)} — Desfalque acumulado de ${fmtKg(Math.abs(totalDiff))}`,
-        `O estoque real da central está <strong>${fmtKg(Math.abs(totalDiff))}</strong> abaixo do esperado${custoTotal>0?' — impacto financeiro de <strong>'+money(custoTotal)+'</strong>':''}.${counts.atencao>0?' '+counts.atencao+' material(is) em atenção contribuindo para o déficit.':''}`,
-        [{ label: 'DESFALQUE', sev: 'urgente' }]
-      );
-    }
-
-    // ── Manchete 5: Escalada de atenção ──
-    const emAtencao = matDiffs.filter(m => classifyVariation(Math.abs(m.diff), m.catKey, thresholds) === 'atencao' && m.diff < 0);
-    if (emAtencao.length >= 2) {
-      const impTotal = emAtencao.reduce((s,m)=>s+Math.abs(m.diff)*(r.custoMedioPorMat[m.mat]||0),0);
-      push('atencao',
-        `⚠️ ${escapeHtml(r.central)} — ${emAtencao.length} materiais em atenção com variação negativa`,
-        `Risco de escalada para URGENTE se a tendência continuar. Materiais afetados: <strong>${emAtencao.slice(0,3).map(m=>escapeHtml(m.mat)).join(', ')}</strong>${emAtencao.length>3?' e mais '+(emAtencao.length-3)+'':''}.${impTotal>0?' Custo implicado combinado: <strong>'+money(impTotal)+'</strong>.':''}`,
-        [{ label: emAtencao.length + ' em atenção', sev: 'atencao' }]
-      );
-    }
   });
 
-  // ── Manchete global: Sem lançamentos ──
-  const semLanc = results.filter(r => !r.lancsNoPeriodo.length);
-  if (semLanc.length) {
-    push('atencao',
-      `⚠️ ${semLanc.length} central${semLanc.length!==1?'is':''} sem lançamentos no período`,
-      `Sem lançamentos: <strong>${semLanc.slice(0,4).map(r=>escapeHtml(r.central)).join(', ')}${semLanc.length>4?' e mais '+(semLanc.length-4):''}</strong>. Os cálculos de variação destas centrais podem estar incompletos.`,
-      [{ label: 'SEM DADOS', sev: 'atencao' }]
-    );
-  }
-
-  // Sort: critico > urgente > atencao
-  risks.sort((a,b) => (SEV[a.sev]||3) - (SEV[b.sev]||3));
-  const top10 = risks.slice(0,10);
-
-  if (!top10.length) {
-    el.innerHTML = '<div class="dg-empty-riscos"><i class="ti ti-shield-check" style="color:var(--green)"></i><span style="color:var(--green)">Nenhum risco emergente identificado. Operação dentro dos parâmetros.</span></div>';
-    return;
-  }
-
-  el.innerHTML = top10.map((r, idx) => {
-    const pillsHtml = r.pills.map(p =>
-      `<span class="dg-risco-pill" style="background:${SEV_BG[p.sev]};color:${SEV_COLOR[p.sev]};border:1px solid ${SEV_BORDER[p.sev]}">${p.label}</span>`
-    ).join('');
-
-    return `
-      <div class="dg-risco-item dg-risco-item--news dg-risco-item--${r.sev}">
-        <div class="dg-risco-news-bar" style="background:${SEV_COLOR[r.sev]}"></div>
-        <div class="dg-risco-news-body">
-          <div class="dg-risco-news-headline">${r.headline}</div>
-          <div class="dg-risco-news-text">${r.body}</div>
-          ${pillsHtml ? `<div class="dg-risco-news-pills">${pillsHtml}</div>` : ''}
-        </div>
-        <div class="dg-risco-news-num">${String(idx+1).padStart(2,'0')}</div>
-      </div>`;
-  }).join('');
+  return pares;
 }
 
-// ────────────────────────────────────────────
-// 4. TOP 5 CENTRAIS POR CUSTO MÉDIO
-// ────────────────────────────────────────────
-function renderDgTop5CustoMedio(results, thresholds) {
-  const el = document.getElementById('dg-top5-body');
-  if (!el) return;
+// Tally de pares Central×Material por nível — MESMO critério usado em
+// macro.js (matItems/matCounts): todos os materiais entram, inclusive os
+// com variação zero (classificados 'bom'), sem exclusão de "neutros".
+function _dgVgCounts(pares) {
+  const counts = { critico: 0, urgente: 0, atencao: 0, bom: 0 };
+  pares.forEach(p => { counts[p.level]++; });
+  return counts;
+}
 
-  if (!results.length) {
-    el.innerHTML = '<div class="dg-empty-riscos"><i class="ti ti-database-off"></i><span>Sem dados no período.</span></div>';
-    return;
-  }
+// Score agregado exibido nos donuts — MESMA fórmula usada pelo Dashboard
+// Analítico (macro.js: _scoreFromCounts, dentro de macroApplyFilter):
+// penalidade = atenção×0,2 + urgente×0,5 + crítico×1,0, sobre o total de
+// itens (não é a mesma fórmula do calcHealthScore individual de central).
+function _dgVgScoreFromCounts(counts) {
+  const total = (counts.critico || 0) + (counts.urgente || 0) + (counts.atencao || 0) + (counts.bom || 0);
+  if (!total) return { score: 100, level: 'bom' };
+  const penalty = (counts.atencao || 0) * 0.2 + (counts.urgente || 0) * 0.5 + (counts.critico || 0) * 1.0;
+  const score = Math.max(0, Math.round((1 - penalty / total) * 100));
+  const level = score >= 80 ? 'bom' : score >= 55 ? 'atencao' : score >= 30 ? 'urgente' : 'critico';
+  return { score, level };
+}
 
-  const centraisData = results.map(r => {
-    const lancsByMat = new Map();
-    const sapByMat   = new Map();
-    r.lancsNoPeriodo.forEach(l => { const m=l.material||'—'; if(!lancsByMat.has(m)) lancsByMat.set(m,[]); lancsByMat.get(m).push(l); });
-    r.sapNoPeriodo.forEach(s => { const m=s.material||'—'; if(!sapByMat.has(m)) sapByMat.set(m,[]); sapByMat.get(m).push(s); });
+// Saúde geral por CENTRAL — classifica cada central individualmente com
+// calcHealthScore (a MESMA função usada nos cards de saúde do Dashboard
+// Analítico, buildCentralCard), agregando os materiais daquela central.
+// O resultado (nível por central) alimenta o segundo donut, réplica do
+// donut "Centrais" do painel macro.
+function _dgVgBuildCentralHealthData(pares, thresholds) {
+  const byCentral = new Map(); // central -> { matDiffs:[], custo:0, diff:0 }
+  pares.forEach(p => {
+    if (!byCentral.has(p.central)) byCentral.set(p.central, { matDiffs: [], custo: 0, diff: 0 });
+    const rec = byCentral.get(p.central);
+    rec.matDiffs.push({ mat: p.mat, diff: p.diff, catKey: p.catKey });
+    rec.custo += Math.abs(p.custoImplicado);
+    rec.diff  += p.diff;
+  });
 
-    const matDiffs = r.allMats.map(mat => {
-      const snap = buildSnapshot({ lancs: lancsByMat.get(mat)||[], sap: sapByMat.get(mat)||[] });
-      const rawCat = (lancsByMat.get(mat)||[])[0]?.categoria || '';
-      const catKey = detectCatKey(rawCat) || detectCatFromMat(mat);
-      return { mat, diff: snap.diff, catKey };
-    });
+  const counts      = { critico: 0, urgente: 0, atencao: 0, bom: 0 };
+  const levelMeta    = { critico: { diff: 0, custo: 0 }, urgente: { diff: 0, custo: 0 }, atencao: { diff: 0, custo: 0 }, bom: { diff: 0, custo: 0 } };
 
-    const { level, counts } = calcHealthScore(matDiffs, lancsByMat, sapByMat, thresholds);
+  byCentral.forEach(rec => {
+    const { level: rawLevel } = calcHealthScore(rec.matDiffs, null, null, thresholds);
+    const level = (!rawLevel || rawLevel === 'none' || rawLevel === 'ok') ? 'bom' : rawLevel;
+    counts[level]++;
+    levelMeta[level].diff  += rec.diff;
+    levelMeta[level].custo += rec.custo;
+  });
 
-    // Custo médio = soma dos custos médios por mat / qtd mats
-    const custos = Object.values(r.custoMedioPorMat).filter(v=>v>0);
-    const custoMedio = custos.length ? custos.reduce((a,b)=>a+b,0)/custos.length : 0;
+  return { counts, levelMeta, total: byCentral.size };
+}
 
-    return {
-      central: r.central,
-      custoMedio,
-      level,
-      criticos: counts.critico || 0,
-      nMats: r.allMats.length
-    };
-  }).filter(r => r.custoMedio > 0).sort((a,b)=>b.custoMedio-a.custoMedio).slice(0,5);
+// ── Recorrentes: pares Central×Material críticos/urgentes que também
+//    estavam críticos/urgentes no período equivalente imediatamente
+//    anterior (mesma duração, encostado antes de dtIni).
+function _dgVgCountRecorrentes(paresAtual, thresholds, dtIni, dtFim) {
+  if (!dtIni || !dtFim) return null;
+  const durMs   = dtFim.getTime() - dtIni.getTime();
+  const prevFim = new Date(dtIni.getTime() - 1);
+  const prevIni = new Date(prevFim.getTime() - durMs);
 
-  if (!centraisData.length) {
-    el.innerHTML = '<div class="dg-empty-riscos"><i class="ti ti-database-off"></i><span>Sem dados de custo no período.</span></div>';
-    return;
-  }
+  const resultsPrev = buildDashboardGerencialResults(prevIni, prevFim);
+  const paresPrev    = _dgVgBuildPares(resultsPrev, thresholds, prevIni, prevFim);
 
-  const maxCusto = centraisData[0].custoMedio;
-  const levelStyle = {
-    ok:      'background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)',
-    atencao: 'background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border)',
-    urgente: 'background:rgba(249,115,22,0.10);color:#f97316;border:1px solid rgba(249,115,22,0.22)',
-    critico: 'background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)',
+  const badPrev = new Set();
+  paresPrev.forEach(p => {
+    if (!p.neutro && (p.level === 'critico' || p.level === 'urgente')) badPrev.add(p.central + '|||' + p.mat);
+  });
+
+  let count = 0;
+  paresAtual.forEach(p => {
+    if (!p.neutro && (p.level === 'critico' || p.level === 'urgente') && badPrev.has(p.central + '|||' + p.mat)) count++;
+  });
+  return count;
+}
+
+function _dgVgAggPorChave(pares, keyFn) {
+  const map = new Map();
+  pares.forEach(p => {
+    const k = keyFn(p);
+    if (!k || k === '—') return;
+    map.set(k, (map.get(k) || 0) + p.custoImplicado);
+  });
+  return map;
+}
+
+function _dgVgExtremos(map) {
+  let min = null, max = null;
+  map.forEach((v, k) => {
+    if (!min || v < min.v) min = { k, v };
+    if (!max || v > max.v) max = { k, v };
+  });
+  return { min, max };
+}
+
+function _dgVgVariacaoFisicaPorCategoria(pares) {
+  const out = { agregado: 0, aglomerante: 0, aditivo: 0, adicao: 0 };
+  pares.forEach(p => { out[p.catKey] = (out[p.catKey] || 0) + p.diff; });
+  return out;
+}
+
+// ── Custo da variação (não o gasto efetivo) por material — soma do valor
+//    absoluto do custo implicado (diff × custo médio) de cada par
+//    Central×Material, agregado por material. Reflete o impacto
+//    financeiro do desfalque/sobra, não o quanto foi de fato gasto/
+//    consumido no período.
+function _dgVgCustoVariacaoPorMaterial(pares) {
+  const map = new Map(); // mat -> { catKey, total }
+  pares.forEach(p => {
+    const v = Math.abs(p.custoImplicado);
+    if (!v) return;
+    if (!map.has(p.mat)) map.set(p.mat, { catKey: p.catKey, total: 0 });
+    map.get(p.mat).total += v;
+  });
+  return map;
+}
+
+function _dgVgAgruparCustoVariacaoPorCategoria(map) {
+  const cats = { agregado: [], aglomerante: [], aditivo: [], adicao: [] };
+  map.forEach(({ catKey, total }, mat) => {
+    if (!(total > 0)) return;
+    if (!cats[catKey]) cats[catKey] = [];
+    cats[catKey].push({ mat, total });
+  });
+  Object.values(cats).forEach(arr => arr.sort((a, b) => b.total - a.total));
+  return cats;
+}
+
+// Clareia (factor>0) ou escurece (factor<0) uma cor hex — usado para dar
+// tons diferentes a materiais dentro da mesma categoria nos donuts.
+function _dgVgShade(hex, factor) {
+  const c = hex.replace('#', '');
+  const r = parseInt(c.substring(0, 2), 16), g = parseInt(c.substring(2, 4), 16), b = parseInt(c.substring(4, 6), 16);
+  const adj = ch => {
+    const v = factor >= 0 ? ch + (255 - ch) * factor : ch + ch * factor;
+    return Math.max(0, Math.min(255, Math.round(v)));
   };
-  const levelLabel = { ok:'BOM', atencao:'ATENÇÃO', urgente:'URGENTE', critico:'CRÍTICO' };
+  return `rgb(${adj(r)},${adj(g)},${adj(b)})`;
+}
 
-  el.innerHTML = centraisData.map((c, i) => {
-    const pct = maxCusto > 0 ? (c.custoMedio / maxCusto * 100) : 0;
-    return `<div class="dg-top5-row">
-      <div class="dg-top5-rank">
-        <span class="dg-top5-rank-num">#${i+1}</span>
-        <span class="dg-top5-central" title="${escapeHtml(c.central)}">${escapeHtml(c.central)}</span>
-      </div>
-      <div class="dg-top5-bar-wrap">
-        <div class="dg-top5-bar-track"><div class="dg-top5-bar-fill" style="width:${pct}%"></div></div>
-      </div>
-      <span class="dg-top5-cost">${money(c.custoMedio)}</span>
-      <div class="dg-top5-health">
-        <span style="font-size:9.5px;font-family:var(--mono);font-weight:700;padding:2px 7px;border-radius:4px;${levelStyle[c.level]||levelStyle.ok}">${levelLabel[c.level]||'—'}</span>
-      </div>
-      <span class="dg-top5-criticos">${c.criticos > 0 ? `<i class="ti ti-flame" style="font-size:11px;margin-right:3px"></i>${c.criticos}` : '<span style="color:var(--text3)">—</span>'}</span>
+// ═══════════════════════════════════════════════════════════
+// DONUTS SVG — mesmo design visual do gráfico donut do Dashboard
+// Analítico (macro.js: _renderDonut): arcos com pequeno gap entre
+// fatias, glow ao passar o mouse, linhas de chamada (callout) para as
+// maiores fatias, tooltip rico reaproveitando o sistema de tooltip
+// já existente (_showTip/_moveTip/_hideTip) e anel de destaque + texto
+// central. Usado tanto no gauge de Saúde Geral quanto nos donuts de
+// Custo Absoluto.
+// ═══════════════════════════════════════════════════════════
+
+let _dgVgDonutUid = 0;
+
+// slices: [{ value, color, tipHtml, label(já escapado, opcional) }]
+// centerSvgFn(CX, CY, ri): retorna string SVG extra desenhada no centro
+// (anel + textos) — cada chamador desenha seu próprio conteúdo central.
+function _dgVgDrawDonutSvg(svgEl, slices, centerSvgFn) {
+  if (!svgEl) return;
+  const total = slices.reduce((s, x) => s + x.value, 0);
+  svgEl.setAttribute('viewBox', '0 0 300 220');
+
+  if (!slices.length || total <= 0) {
+    svgEl.innerHTML = `<text x="150" y="110" text-anchor="middle" font-size="12" fill="var(--text3)" font-family="var(--mono)">Sem dados</text>`;
+    return;
+  }
+
+  const uid = 'dgvg' + (_dgVgDonutUid++);
+  const CX = 150, CY = 108, R = 74, ri = 44;
+  const CALLOUT_R = R + 14, ELBOW_R = R + 28, TICK_LEN = 15;
+  const gap = slices.length > 1 ? 0.022 : 0;
+  let angle = -Math.PI / 2;
+
+  let svg = `<defs>
+    <filter id="mglow-${uid}" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="3.5" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <style>
+      .dvslice-${uid} { cursor:pointer; transition:opacity .15s; transform-origin:${CX}px ${CY}px; }
+      .dvslice-${uid}:hover { opacity:1 !important; filter:url(#mglow-${uid}); }
+      .dvslice-${uid}.m-dimmed { opacity:0.32; }
+      .dvcallout-${uid} { pointer-events:none; transition:opacity .15s; }
+      .dvcallout-${uid}.m-dimmed { opacity:0.18; }
+    </style>
+  </defs>`;
+
+  const built = [];
+  slices.forEach((sl, i) => {
+    const pct   = sl.value / total;
+    const sweep = Math.max(pct * 2 * Math.PI - gap, 0.01);
+    const a0 = angle + gap / 2, ae = a0 + sweep, midA = a0 + sweep / 2;
+
+    const x1 = CX + R * Math.cos(a0),  y1 = CY + R * Math.sin(a0);
+    const x2 = CX + R * Math.cos(ae),  y2 = CY + R * Math.sin(ae);
+    const x3 = CX + ri * Math.cos(ae), y3 = CY + ri * Math.sin(ae);
+    const x4 = CX + ri * Math.cos(a0), y4 = CY + ri * Math.sin(a0);
+    const large = sweep > Math.PI ? 1 : 0;
+    const pctStr = Math.round(pct * 100);
+
+    svg += `<path class="dvslice-${uid}" data-idx="${i}" data-tip="${encodeURIComponent(sl.tipHtml)}" data-col="${sl.color}"
+      d="M${x1.toFixed(1)},${y1.toFixed(1)} A${R},${R} 0 ${large},1 ${x2.toFixed(1)},${y2.toFixed(1)} L${x3.toFixed(1)},${y3.toFixed(1)} A${ri},${ri} 0 ${large},0 ${x4.toFixed(1)},${y4.toFixed(1)} Z"
+      fill="${sl.color}" opacity="0.88"/>`;
+
+    built.push({ idx: i, midA, pct, pctStr, col: sl.color, label: sl.label });
+    angle += sweep + gap;
+  });
+
+  // Callouts apenas para as fatias mais relevantes (evita poluição visual
+  // quando há muitos materiais — diferente do caso original de 4 níveis).
+  built.filter(b => b.pct >= 0.05).sort((a, b) => b.pct - a.pct).slice(0, 6).forEach(({ idx, midA, pctStr, col, label }) => {
+    const ex = CX + ELBOW_R * Math.cos(midA), ey = CY + ELBOW_R * Math.sin(midA);
+    const sx = CX + CALLOUT_R * Math.cos(midA), sy = CY + CALLOUT_R * Math.sin(midA);
+    const onRight = Math.cos(midA) >= 0;
+    const tx = ex + (onRight ? TICK_LEN : -TICK_LEN), ty = ey;
+    const labelX = tx + (onRight ? 4 : -4);
+    const labelAnchor = onRight ? 'start' : 'end';
+
+    svg += `<g class="dvcallout-${uid}" data-callout-idx="${idx}">
+      <polyline points="${sx.toFixed(1)},${sy.toFixed(1)} ${ex.toFixed(1)},${ey.toFixed(1)} ${tx.toFixed(1)},${ty.toFixed(1)}"
+        fill="none" stroke="${col}" stroke-width="1.1" stroke-opacity="0.7" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="${sx.toFixed(1)}" cy="${sy.toFixed(1)}" r="1.8" fill="${col}" opacity="0.7"/>
+      <text x="${labelX.toFixed(1)}" y="${(ty - 3).toFixed(1)}" text-anchor="${labelAnchor}"
+        font-size="10" font-weight="700" font-family="var(--mono)" fill="${col}">${pctStr}%</text>
+      ${label ? `<text x="${labelX.toFixed(1)}" y="${(ty + 9).toFixed(1)}" text-anchor="${labelAnchor}"
+        font-size="8" font-family="var(--mono)" fill="${col}" opacity="0.7">${label}</text>` : ''}
+    </g>`;
+  });
+
+  if (typeof centerSvgFn === 'function') svg += centerSvgFn(CX, CY, ri);
+
+  svgEl.innerHTML = svg;
+
+  svgEl.querySelectorAll(`.dvslice-${uid}`).forEach(path => {
+    const col = path.dataset.col;
+    const tip = decodeURIComponent(path.dataset.tip);
+    const idx = path.dataset.idx;
+    const allSlices   = svgEl.querySelectorAll(`.dvslice-${uid}`);
+    const allCallouts = svgEl.querySelectorAll(`.dvcallout-${uid}`);
+    path.addEventListener('mouseenter', e => {
+      allSlices.forEach(s => s.classList.toggle('m-dimmed', s !== path));
+      allCallouts.forEach(c => c.classList.toggle('m-dimmed', c.dataset.calloutIdx !== idx));
+      _showTip(e, tip, col);
+    });
+    path.addEventListener('mousemove', _moveTip);
+    path.addEventListener('mouseleave', () => {
+      allSlices.forEach(s => s.classList.remove('m-dimmed'));
+      allCallouts.forEach(c => c.classList.remove('m-dimmed'));
+      _hideTip();
+    });
+  });
+}
+
+// ── Tooltip do gauge de Saúde (por nível: crítico/urgente/atenção/bom) ──
+function _dgVgHealthTipHtml(lvl, n, total, meta) {
+  const col   = { critico: '#f43f5e', urgente: '#f97316', atencao: '#f59e0b', bom: '#10b981' }[lvl];
+  const label = { critico: 'CRÍTICO', urgente: 'URGENTE', atencao: 'ATENÇÃO', bom: 'BOM' }[lvl];
+  const pct   = total > 0 ? Math.round(n / total * 100) : 0;
+  const diff  = meta?.diff  || 0;
+  const custo = meta?.custo || 0;
+  const custoColor = diff < 0 ? '#f43f5e' : '#10b981';
+  const custoLabel = diff < 0 ? 'Custo estimado (perda)' : 'Custo estimado (sobra)';
+  return `<div style="display:flex;align-items:center;gap:7px;margin-bottom:8px">
+      <span style="width:10px;height:10px;border-radius:3px;background:${col};display:inline-block;flex-shrink:0"></span>
+      <span style="font-weight:700;font-size:13px;color:var(--text)">${label}</span>
+      <span style="margin-left:auto;font-family:var(--mono);font-size:11px;color:${col};font-weight:700">${n} (${pct}%)</span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;font-family:var(--mono);font-size:10.5px">
+      <div style="color:var(--text3)">Variação total</div>
+      <div style="font-weight:600">${varSymbol(diff)} ${fmtKgShort(Math.abs(diff))}</div>
+      ${custo > 0 ? `<div style="color:var(--text3)">${custoLabel}</div><div style="color:${custoColor};font-weight:600">${money(custo)}</div>` : ''}
+      <div style="color:var(--text3)">% do total</div>
+      <div style="color:var(--text)">${pct}%</div>
     </div>`;
-  }).join('');
+}
+
+// ── Tooltip dos donuts de Custo Absoluto (por material) ──
+function _dgVgMaterialTipHtml(label, value, pct, color) {
+  return `<div style="display:flex;align-items:center;gap:7px;margin-bottom:6px">
+      <span style="width:10px;height:10px;border-radius:3px;background:${color};display:inline-block;flex-shrink:0"></span>
+      <span style="font-weight:700;font-size:12.5px;color:var(--text)">${escapeHtml(label)}</span>
+    </div>
+    <div style="font-family:var(--mono);font-size:11px;color:var(--text2)">
+      ${money(value)} <span style="color:var(--text3)">(${pct}%)</span>
+    </div>`;
+}
+
+// Agrupa pares (não-neutros) por nível para alimentar o tooltip do gauge:
+// itemsByLevel (lista "mat — central") e levelMeta (diff/custo agregados).
+function _dgVgBuildHealthDonutData(pares) {
+  const levelMeta = { critico: { diff: 0, custo: 0 }, urgente: { diff: 0, custo: 0 }, atencao: { diff: 0, custo: 0 }, bom: { diff: 0, custo: 0 } };
+  pares.forEach(p => {
+    levelMeta[p.level].diff  += p.diff;
+    levelMeta[p.level].custo += Math.abs(p.custoImplicado);
+  });
+  return { levelMeta };
+}
+
+// svgId: id do <svg>. unitLabel: texto exibido sob o score (ex: "pares Central × Material", "centrais analisadas").
+function _dgVgRenderHealthDonutSvg(svgId, counts, scoreInfo, levelMeta, unitLabel) {
+  const svgEl = document.getElementById(svgId);
+  if (!svgEl) return;
+
+  const total = counts.critico + counts.urgente + counts.atencao + counts.bom;
+  const colorMap = { critico: '#f43f5e', urgente: '#f97316', atencao: '#f59e0b', bom: '#10b981' };
+  const labelMap = { critico: 'CRÍTICO', urgente: 'URGENTE', atencao: 'ATENÇÃO', bom: 'BOM' };
+
+  const slices = ['critico', 'urgente', 'atencao', 'bom'].filter(l => counts[l] > 0).map(l => ({
+    value: counts[l], color: colorMap[l], label: labelMap[l],
+    tipHtml: _dgVgHealthTipHtml(l, counts[l], total, levelMeta[l])
+  }));
+
+  const scoreColor = { bom: '#10b981', atencao: '#f59e0b', urgente: '#f97316', critico: '#f43f5e' }[scoreInfo.level] || '#10b981';
+  const scoreLabelTxt = { bom: 'SAUDÁVEL', atencao: 'ATENÇÃO', urgente: 'URGENTE', critico: 'CRÍTICO' }[scoreInfo.level] || '';
+
+  _dgVgDrawDonutSvg(svgEl, slices, (CX, CY, ri) => {
+    const SR = ri - 7, sCirc = 2 * Math.PI * SR, sDash = (scoreInfo.score / 100) * sCirc;
+    return `<circle cx="${CX}" cy="${CY}" r="${SR}" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="4.5" style="pointer-events:none"/>
+      <circle cx="${CX}" cy="${CY}" r="${SR}" fill="none" stroke="${scoreColor}" stroke-width="4.5"
+        stroke-dasharray="${sDash.toFixed(1)} ${sCirc.toFixed(1)}" stroke-dashoffset="${(sCirc / 4).toFixed(1)}"
+        stroke-linecap="round" opacity="0.55" style="pointer-events:none"/>
+      <text x="${CX}" y="${CY - 6}" text-anchor="middle" font-size="24" font-weight="700" font-family="var(--mono)" fill="${scoreColor}" style="pointer-events:none">${scoreInfo.score}%</text>
+      <text x="${CX}" y="${CY + 9}" text-anchor="middle" font-size="7.5" font-weight="700" font-family="var(--mono)" fill="${scoreColor}" letter-spacing=".07em" opacity="0.85" style="pointer-events:none">${scoreLabelTxt}</text>
+      <text x="${CX}" y="${CY + 21}" text-anchor="middle" font-size="7" font-family="var(--mono)" fill="var(--text3)" style="pointer-events:none">${total} ${escapeHtml(unitLabel || '')}</text>`;
+  });
+}
+
+// ── Donut de Custo Absoluto (por material) — usado nas 4 categorias e no
+//    combinado "Grupo de Material". items: [{ mat, total, color }]
+function _dgVgRenderCustoDonutSvg(svgId, items, centerTop, centerBottom) {
+  const svgEl = document.getElementById(svgId);
+  if (!svgEl) return;
+
+  const total = items.reduce((s, i) => s + i.total, 0);
+  if (!items.length || total <= 0) { _dgVgDrawDonutSvg(svgEl, [], null); return; }
+
+  const slices = items.map(it => ({
+    value: it.total, color: it.color,
+    label: escapeHtml(it.mat.length > 14 ? it.mat.slice(0, 12) + '…' : it.mat),
+    tipHtml: _dgVgMaterialTipHtml(it.mat, it.total, Math.round(it.total / total * 100), it.color)
+  }));
+
+  _dgVgDrawDonutSvg(svgEl, slices, (CX, CY, ri) => {
+    const top = [...slices].sort((a, b) => b.value - a.value)[0];
+    const SR = ri - 7, sCirc = 2 * Math.PI * SR, sDash = (top.value / total) * sCirc;
+    return `<circle cx="${CX}" cy="${CY}" r="${SR}" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="4.5" style="pointer-events:none"/>
+      <circle cx="${CX}" cy="${CY}" r="${SR}" fill="none" stroke="${top.color}" stroke-width="4.5"
+        stroke-dasharray="${sDash.toFixed(1)} ${sCirc.toFixed(1)}" stroke-dashoffset="${(sCirc / 4).toFixed(1)}"
+        stroke-linecap="round" opacity="0.55" style="pointer-events:none"/>
+      <text x="${CX}" y="${CY - 6}" text-anchor="middle" font-size="15" font-weight="700" font-family="var(--mono)" fill="var(--text)" style="pointer-events:none">${moneyShort(total)}</text>
+      <text x="${CX}" y="${CY + 8}" text-anchor="middle" font-size="7" font-weight="700" font-family="var(--mono)" fill="var(--text3)" letter-spacing=".06em" opacity="0.85" style="pointer-events:none">${escapeHtml(centerTop || '')}</text>
+      <text x="${CX}" y="${CY + 19}" text-anchor="middle" font-size="6.5" font-family="var(--mono)" fill="var(--text3)" style="pointer-events:none">${escapeHtml(centerBottom || '')}</text>`;
+  });
+}
+
+// ────────────────────────────────────────────
+// ENTRADA — orquestra o render completo da Visão Geral
+// ────────────────────────────────────────────
+function renderDgVisaoGeralPdf(results, thresholds, dtIni, dtFim) {
+  const topoEl = document.getElementById('dg-vg-kpis-hero');
+  if (!topoEl) return; // HTML não presente (defensivo)
+
+  if (!results.length) {
+    const msg = '<div class="dg-empty-riscos"><i class="ti ti-database-off"></i><span>Sem dados no período.</span></div>';
+    ['dg-vg-kpis-hero', 'dg-vg-health-boxes', 'dg-vg-extremos'].forEach(id => {
+      const e = document.getElementById(id); if (e) e.innerHTML = msg;
+    });
+    ['categoria', 'chartRegional', 'chartUsina'].forEach(k => _dgVgDestroyChart(k));
+    ['dg-vg-gauge-chart-svg', 'dg-vg-gauge-central-svg', 'dg-vg-chart-grupo', 'dg-vg-donut-agregado', 'dg-vg-donut-aglomerante', 'dg-vg-donut-aditivo', 'dg-vg-donut-adicao']
+      .forEach(id => { const svgEl = document.getElementById(id); if (svgEl) svgEl.innerHTML = ''; });
+    return;
+  }
+
+  const pares       = _dgVgBuildPares(results, thresholds, dtIni, dtFim);
+  const counts      = _dgVgCounts(pares);
+  const scoreInfo   = _dgVgScoreFromCounts(counts);
+  const recorrentes = _dgVgCountRecorrentes(pares, thresholds, dtIni, dtFim);
+
+  const catFisica      = _dgVgVariacaoFisicaPorCategoria(pares);
+  const varTotalFisica = Object.values(catFisica).reduce((a, b) => a + b, 0);
+  const custoTotal     = pares.reduce((s, p) => s + p.custoImplicado, 0);
+
+  const porRegional = _dgVgAggPorChave(pares, p => p.regional);
+  const porCentral  = _dgVgAggPorChave(pares, p => p.central);
+  const extRegional = _dgVgExtremos(porRegional);
+  const extCentral  = _dgVgExtremos(porCentral);
+
+  const custoVarMap    = _dgVgCustoVariacaoPorMaterial(pares);
+  const custoAbsPorCat = _dgVgAgruparCustoVariacaoPorCategoria(custoVarMap);
+
+  _dgVgRenderKpisHero(varTotalFisica, custoTotal);
+  _dgVgRenderStatBoxes(counts, recorrentes);
+  _dgVgRenderHealthDonuts(pares, counts, scoreInfo, thresholds);
+  _dgVgRenderChartCategoriaFisica(catFisica);
+  _dgVgRenderExtremos(extRegional, extCentral);
+  const entriesRegional = [...porRegional.entries()].sort((a, b) => b[1] - a[1]);
+  const entriesCentral  = _dgVgTop8SobraDesfalque(porCentral);
+
+  _dgVgRenderChartCustoPorChave('dg-vg-chart-regional', entriesRegional, 'chartRegional');
+  _dgVgRenderChartCustoPorChave('dg-vg-chart-usina',    entriesCentral,  'chartUsina');
+  _dgVgRenderChartGrupoMaterial(custoAbsPorCat);
+  DG_VG_CAT_ORDER.forEach(catKey => {
+    _dgVgRenderDonutCategoria(`dg-vg-donut-${catKey}`, custoAbsPorCat[catKey] || [], catKey);
+  });
+}
+
+// ── 1. Hero: Variação Total + Custo Total — os 2 KPIs mais importantes,
+//    isolados num destaque maior para bater o olho na situação do estoque.
+function _dgVgRenderKpisHero(varTotalFisica, custoTotal) {
+  const el = document.getElementById('dg-vg-kpis-hero');
+  if (!el) return;
+  const varCls   = varTotalFisica < -0.0001 ? 'hero-red' : varTotalFisica > 0.0001 ? 'hero-amber' : 'hero-teal';
+  const custoCls = custoTotal    < -0.0001 ? 'hero-red' : custoTotal    > 0.0001 ? 'hero-amber' : 'hero-teal';
+
+  el.innerHTML = `
+    <div class="dg-vg-hero-card ${varCls}">
+      <div class="dg-vg-hero-label"><i class="ti ti-scale"></i> Variação Total</div>
+      <div class="dg-vg-hero-value">${varSymbol(varTotalFisica)} ${fmtKgShort(Math.abs(varTotalFisica))}</div>
+      <div class="dg-vg-hero-sub">Soma da variação física — todas as categorias</div>
+    </div>
+    <div class="dg-vg-hero-card ${custoCls}">
+      <div class="dg-vg-hero-label"><i class="ti ti-currency-dollar"></i> Custo Total</div>
+      <div class="dg-vg-hero-value" title="${money(Math.abs(custoTotal))}">${varSymbol(custoTotal)} ${moneyShort(Math.abs(custoTotal))}</div>
+      <div class="dg-vg-hero-sub">Impacto financeiro implicado pela variação</div>
+    </div>`;
+}
+
+// ── 2. Stat boxes: Recorrentes + Críticos + Urgentes + Atenção — separados
+//    do(s) donut(s) de saúde.
+function _dgVgRenderStatBoxes(counts, recorrentes) {
+  const boxesEl = document.getElementById('dg-vg-health-boxes');
+  if (!boxesEl) return;
+  const recTxt = recorrentes === null ? '—' : String(recorrentes);
+
+  boxesEl.innerHTML = `
+    <div class="dg-vg-stat-box dg-vg-stat-recorrentes">
+      <span class="dg-vg-stat-label"><i class="ti ti-repeat"></i> Recorrentes</span>
+      <span class="dg-vg-stat-value">${recTxt}</span>
+    </div>
+    <div class="dg-vg-stat-box dg-vg-stat-critico">
+      <span class="dg-vg-stat-label"><i class="ti ti-flame"></i> Materiais Críticos</span>
+      <span class="dg-vg-stat-value">${counts.critico}</span>
+    </div>
+    <div class="dg-vg-stat-box dg-vg-stat-urgente">
+      <span class="dg-vg-stat-label"><i class="ti ti-alert-circle"></i> Materiais Urgentes</span>
+      <span class="dg-vg-stat-value">${counts.urgente}</span>
+    </div>
+    <div class="dg-vg-stat-box dg-vg-stat-atencao">
+      <span class="dg-vg-stat-label"><i class="ti ti-alert-triangle"></i> Materiais em Atenção</span>
+      <span class="dg-vg-stat-value">${counts.atencao}</span>
+    </div>`;
+}
+
+// ── 3. Os dois donuts de saúde — réplica dos donuts "Materiais" e
+//    "Centrais" do Dashboard Analítico, com o mesmo cálculo de percentual.
+function _dgVgRenderHealthDonuts(pares, countsMat, scoreMat, thresholds) {
+  const { levelMeta: levelMetaMat } = _dgVgBuildHealthDonutData(pares);
+  _dgVgRenderHealthDonutSvg('dg-vg-gauge-chart-svg', countsMat, scoreMat, levelMetaMat, 'pares Central × Material');
+
+  const { counts: countsCen, levelMeta: levelMetaCen, total: totalCen } = _dgVgBuildCentralHealthData(pares, thresholds);
+  const scoreCen = _dgVgScoreFromCounts(countsCen);
+  _dgVgRenderHealthDonutSvg('dg-vg-gauge-central-svg', countsCen, scoreCen, levelMetaCen, totalCen === 1 ? 'central analisada' : 'centrais analisadas');
+}
+
+function _dgVgRenderExtremos(extRegional, extCentral) {
+  const el = document.getElementById('dg-vg-extremos');
+  if (!el) return;
+
+  const box = (label, ext) => {
+    if (!ext) return `<div class="dg-vg-extremo-box dg-vg-extremo-empty">
+      <span class="dg-vg-extremo-label">${label}</span>
+      <span class="dg-vg-extremo-value">—</span>
+      <span class="dg-vg-extremo-name">Sem dados no período</span>
+    </div>`;
+    const cls = ext.v < 0 ? 'dg-vg-extremo-neg' : 'dg-vg-extremo-pos';
+    return `<div class="dg-vg-extremo-box ${cls}">
+      <span class="dg-vg-extremo-label">${label}</span>
+      <span class="dg-vg-extremo-value">${varSymbol(ext.v)} ${money(Math.abs(ext.v))}</span>
+      <span class="dg-vg-extremo-name" title="${escapeHtml(ext.k)}">${escapeHtml(ext.k)}</span>
+    </div>`;
+  };
+
+  el.innerHTML =
+    box('Regional · Maior Desfalque', extRegional.min && extRegional.min.v < 0 ? extRegional.min : null) +
+    box('Regional · Maior Sobra',     extRegional.max && extRegional.max.v > 0 ? extRegional.max : null) +
+    box('Central · Maior Desfalque',  extCentral.min  && extCentral.min.v  < 0 ? extCentral.min  : null) +
+    box('Central · Maior Sobra',      extCentral.max  && extCentral.max.v  > 0 ? extCentral.max  : null);
+}
+
+function _dgVgRenderChartCategoriaFisica(catFisica) {
+  const ctx = document.getElementById('dg-vg-chart-categoria');
+  if (!ctx) return;
+  _dgVgDestroyChart('categoria');
+  const { textCol, gridCol, tickFont } = _dgVgTheme();
+
+  const labels = DG_VG_CAT_ORDER.map(k => DG_VG_CAT_LABELS[k]);
+  const data   = DG_VG_CAT_ORDER.map(k => catFisica[k] || 0);
+  const colors = data.map(v => v < -0.0001 ? '#f43f5e' : v > 0.0001 ? '#f59e0b' : '#6b7280');
+
+  _dgVgCharts.categoria = new Chart(ctx, {
+    type: 'bar',
+    data: { labels, datasets: [{ data, backgroundColor: colors, borderRadius: 3, borderSkipped: false }] },
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: c => `${varLabel(c.raw)} · ${fmtKgShort(Math.abs(c.raw))}` } }
+      },
+      scales: {
+        x: { grid: { color: gridCol }, ticks: { color: textCol, font: tickFont, callback: v => fmtKgShort(v) } },
+        y: { grid: { display: false }, ticks: { color: textCol, font: { ...tickFont, size: 11.5 } } }
+      }
+    }
+  });
+}
+
+// Seleciona no máximo 4 maiores sobras + 4 maiores desfalques (top 8 total),
+// ordenados de forma decrescente para exibição (maior sobra → maior desfalque),
+// igual ao padrão do PDF de referência.
+function _dgVgTop8SobraDesfalque(map) {
+  const entries = [...map.entries()].sort((a, b) => b[1] - a[1]);
+  if (entries.length <= 8) return entries;
+  const top4Sobra     = entries.slice(0, 4);
+  const top4Desfalque = entries.slice(-4);
+  const dedup = new Map([...top4Sobra, ...top4Desfalque]); // evita duplicar se houver sobreposição
+  return [...dedup.entries()].sort((a, b) => b[1] - a[1]);
+}
+
+// entries: array [ [label, valor], ... ] já ordenado como deve aparecer no eixo X.
+function _dgVgRenderChartCustoPorChave(canvasId, entries, chartKey) {
+  const ctx = document.getElementById(canvasId);
+  if (!ctx) return;
+  _dgVgDestroyChart(chartKey);
+  const { textCol, gridCol, tickFont } = _dgVgTheme();
+
+  const wrap  = ctx.closest('.dg-vg-bar-wrap');
+  const inner = ctx.parentElement; // .dg-vg-bar-inner — largura ajustada p/ permitir scroll horizontal
+
+  if (!entries.length) {
+    if (inner) inner.style.width = '100%';
+    const c2d = ctx.getContext('2d');
+    c2d.clearRect(0, 0, ctx.width, ctx.height);
+    c2d.fillStyle = textCol;
+    c2d.font = "11px 'DM Mono', monospace";
+    c2d.textAlign = 'center';
+    c2d.fillText('Sem dados no período.', ctx.width / 2, 40);
+    return;
+  }
+
+  if (inner && wrap) {
+    inner.style.width = Math.max(entries.length * 56, wrap.clientWidth) + 'px';
+  }
+
+  const labels = entries.map(([k]) => k);
+  const data   = entries.map(([, v]) => v);
+  const colors = data.map(v => v < -0.0001 ? '#f43f5e' : v > 0.0001 ? '#f59e0b' : '#6b7280');
+
+  _dgVgCharts[chartKey] = new Chart(ctx, {
+    type: 'bar',
+    data: { labels, datasets: [{ data, backgroundColor: colors, borderRadius: 3, borderSkipped: false }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: c => `${varLabel(c.raw)} · ${money(Math.abs(c.raw))}` } }
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: textCol, font: { ...tickFont, size: 9.5 }, maxRotation: 55, minRotation: 35, autoSkip: false } },
+        y: { grid: { color: gridCol }, ticks: { color: textCol, font: tickFont, callback: v => moneyShort(v) } }
+      }
+    }
+  });
+}
+
+function _dgVgRenderChartGrupoMaterial(custoAbsPorCat) {
+  const flat = [];
+  DG_VG_CAT_ORDER.forEach(catKey => {
+    const arr = custoAbsPorCat[catKey] || [];
+    arr.forEach((item, i) => {
+      const factor = arr.length > 1 ? (i / (arr.length - 1)) * 0.6 - 0.2 : 0;
+      flat.push({ mat: item.mat, total: item.total, catKey, color: _dgVgShade(DG_VG_CAT_COLORS[catKey], factor) });
+    });
+  });
+  flat.sort((a, b) => b.total - a.total);
+
+  if (!flat.length) {
+    _dgVgRenderCustoDonutSvg('dg-vg-chart-grupo', [], null, null);
+    return;
+  }
+
+  _dgVgRenderCustoDonutSvg('dg-vg-chart-grupo', flat, 'CUSTO VARIAÇÃO', `${flat.length} materiais`);
+}
+
+function _dgVgRenderDonutCategoria(svgId, items, catKey) {
+  if (!items.length) {
+    _dgVgRenderCustoDonutSvg(svgId, [], null, null);
+    return;
+  }
+
+  const baseColor = DG_VG_CAT_COLORS[catKey] || '#64748b';
+  const flat = items.map((it, i) => ({
+    mat: it.mat, total: it.total,
+    color: _dgVgShade(baseColor, items.length > 1 ? (i / (items.length - 1)) * 0.6 - 0.2 : 0)
+  }));
+
+  _dgVgRenderCustoDonutSvg(svgId, flat, (DG_VG_CAT_LABELS[catKey] || '').toUpperCase(), `${items.length} materiais`);
 }
 
 // ────────────────────────────────────────────

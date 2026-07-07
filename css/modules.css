@@ -8953,6 +8953,144 @@ td:has(.lanc-central-edit:focus) {
   color: var(--text);
 }
 
+/* ── Visão Geral (reformulada) — KPIs executivos e gráficos agregados ── */
+
+/* Hero: Variação Total + Custo Total — os 2 KPIs mais importantes */
+.dg-vg-hero-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+@media (max-width: 720px) { .dg-vg-hero-grid { grid-template-columns: 1fr; } }
+.dg-vg-hero-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 22px 26px;
+  position: relative;
+  overflow: hidden;
+}
+.dg-vg-hero-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+}
+.dg-vg-hero-card.hero-red::before   { background: var(--red); }
+.dg-vg-hero-card.hero-amber::before { background: var(--amber); }
+.dg-vg-hero-card.hero-teal::before  { background: var(--teal); }
+.dg-vg-hero-label {
+  font-size: 11.5px;
+  font-family: var(--mono);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--text3);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.dg-vg-hero-value {
+  font-size: 40px;
+  font-weight: 700;
+  font-family: var(--mono);
+  letter-spacing: -0.03em;
+  line-height: 1;
+  margin-bottom: 8px;
+}
+.dg-vg-hero-card.hero-red   .dg-vg-hero-value { color: var(--red); }
+.dg-vg-hero-card.hero-amber .dg-vg-hero-value { color: var(--amber); }
+.dg-vg-hero-card.hero-teal  .dg-vg-hero-value { color: var(--teal); }
+.dg-vg-hero-sub {
+  font-size: 11.5px;
+  color: var(--text3);
+}
+
+.dg-vg-health-boxes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+.dg-vg-stat-box {
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid transparent;
+}
+.dg-vg-stat-label {
+  font-size: 9.5px;
+  font-family: var(--mono);
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  opacity: .9;
+}
+.dg-vg-stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  font-family: var(--mono);
+  line-height: 1;
+}
+.dg-vg-stat-recorrentes { background: var(--purple-bg); border-color: var(--purple-border); color: var(--purple); }
+.dg-vg-stat-critico { background: var(--red-bg);   border-color: var(--red-border);   color: var(--red); }
+.dg-vg-stat-urgente { background: rgba(249,115,22,0.10); border-color: rgba(249,115,22,0.22); color: #f97316; }
+.dg-vg-stat-atencao { background: var(--amber-bg); border-color: var(--amber-border); color: var(--amber); }
+
+.dg-vg-extremos-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px;
+}
+.dg-vg-extremo-box {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.dg-vg-extremo-label {
+  font-size: 9px;
+  font-family: var(--mono);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--text3);
+}
+.dg-vg-extremo-value {
+  font-size: 15px;
+  font-weight: 700;
+  font-family: var(--mono);
+  white-space: nowrap;
+}
+.dg-vg-extremo-name {
+  font-size: 11px;
+  color: var(--text2);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dg-vg-extremo-neg .dg-vg-extremo-value { color: var(--red); }
+.dg-vg-extremo-pos .dg-vg-extremo-value { color: var(--amber); }
+.dg-vg-extremo-empty .dg-vg-extremo-value { color: var(--text3); }
+
+.dg-vg-bar-wrap {
+  position: relative;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.dg-vg-bar-inner {
+  position: relative;
+  height: 100%;
+  min-width: 100%;
+}
+
 /* ── Aba Comparativo ── */
 .comp-period-bar {
   display: flex;
