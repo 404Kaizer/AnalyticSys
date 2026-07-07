@@ -367,12 +367,22 @@ function invalidateFilialLookup() {
 
 function buildMaterialLookupIndex() {
   const list = Array.isArray(state.materiais) ? state.materiais : [];
+  // `ordered` continua do MAIOR pro menor — usado pelo scan fuzzy
+  // (scoreMaterialMatch), que já favorece naturalmente o texto mais longo
+  // em caso de empate de pontuação (ver scoreMaterialMatch).
   const ordered = list
     .map((item, index) => ({ ...makeMaterialIndexItem(item), index }))
     .sort((a, b) => b.size - a.size || a.index - b.index);
 
+  // O mapa de match EXATO é construído numa ordem PRÓPRIA, separada de
+  // `ordered`: do MENOR pro maior texto. Como é um Map.set() (quem entra
+  // por último sobrescreve), isso garante que o cadastro com o texto MAIOR
+  // vence em caso de dois registros mapeando a mesma chave normalizada —
+  // o mesmo critério de desempate do match aproximado (scoreMaterialMatch),
+  // eliminando a inconsistência entre os dois caminhos.
+  const bySizeAsc = [...ordered].sort((a, b) => a.size - b.size || b.index - a.index);
   const exact = new Map();
-  for (const entry of ordered) {
+  for (const entry of bySizeAsc) {
     if (entry.origemNorm) exact.set(entry.origemNorm, entry.item);
     if (entry.aliasNorm) exact.set(entry.aliasNorm, entry.item);
   }
@@ -601,4 +611,70 @@ function getPendenciasPadronizacao() {
     materiais: toSortedList(materiaisPendentes),
     centrais:  toSortedList(centraisPendentes)
   };
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// CADASTROS DUPLICADOS/CONFLITANTES (Configurações → Padronização de Materiais)
+// ═══════════════════════════════════════════════════════════════════════
+// Detecta registros do cadastro de Materiais com a mesma ORIGEM normalizada
+// apontando para ALIASES diferentes — ex.: dois registros com origem="XYPEX",
+// um com alias="CRISTALIZANTE/IMPERMIABILIZANTE" e outro com alias
+// "CRISTALIZANTE/IMPERMIABILIZANTE - XYPEX". Nenhum dos dois é tecnicamente
+// inválido (materialMatchKey usa origem+alias combinados, então os dois são
+// salvos como registros distintos), mas na prática apenas um deles "vence"
+// no índice de busca (buildMaterialLookupIndex) — o outro fica morto,
+// nunca aplicado a nenhum lançamento/entrada/saída/SAP, sem nenhum aviso.
+//
+// Escopo deliberadamente restrito: só o caso "mesma origem, aliases
+// diferentes". O caso inverso (mesmo alias final vindo de origens
+// diferentes) é comum e intencional — vários nomes brutos convergindo para
+// um único material padronizado é o comportamento normal do sistema, não
+// um conflito.
+//
+// Consulta pura (nunca muta o state), no mesmo espírito de
+// getPendenciasPadronizacao().
+function getDuplicatasCadastroMateriais() {
+  const porOrigem = new Map(); // origemNorm -> [{ item, aliasNorm }]
+
+  (state.materiais || []).forEach(item => {
+    const origem = String(item?.origem ?? '').trim();
+    const alias  = String(item?.alias ?? '').trim();
+    if (!origem || !alias) return;
+
+    const origemNorm = normalizeLooseText(origem);
+    if (!origemNorm) return;
+
+    if (!porOrigem.has(origemNorm)) porOrigem.set(origemNorm, []);
+    porOrigem.get(origemNorm).push({ item, alias, aliasNorm: normalizeLooseText(alias) });
+  });
+
+  const conflitos = [];
+  for (const [origemNorm, registros] of porOrigem.entries()) {
+    // Só é conflito se houver ALIASES distintos para a mesma origem —
+    // registros idênticos (mesma origem, mesmo alias, ids diferentes por
+    // algum motivo) não entram aqui.
+    const aliasesDistintos = new Set(registros.map(r => r.aliasNorm));
+    if (aliasesDistintos.size < 2) continue;
+
+    // Reaproveita o mesmo índice/critério de desempate usado em produção
+    // (buildMaterialLookupIndex) para apontar qual registro está "vencendo"
+    // hoje e qual está órfão — informação central para o usuário decidir
+    // o que fazer, sem precisar reproduzir a lógica manualmente.
+    const vencedorAtual = (typeof findMaterialMatch === 'function')
+      ? findMaterialMatch(registros[0].item.origem)
+      : null;
+
+    conflitos.push({
+      origem: registros[0].item.origem, // texto de exibição (não normalizado)
+      registros: registros.map(r => ({
+        id: r.item.id,
+        origem: r.item.origem,
+        alias: r.alias,
+        categoria: r.item.categoria || '',
+        vencendo: !!(vencedorAtual && vencedorAtual.id === r.item.id)
+      }))
+    });
+  }
+
+  return conflitos.sort((a, b) => a.origem.localeCompare(b.origem, 'pt-BR'));
 }

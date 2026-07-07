@@ -2770,6 +2770,82 @@ function renderPendenciasPadronizacao() {
   if (elCen) elCen.innerHTML = _pendPadronizacaoBoxHtml('central', centrais);
 }
 
+// ═══════════════════════════════════════════════════════════
+// INDICADOR DE CADASTROS DUPLICADOS/CONFLITANTES — Configurações → Materiais
+// ═══════════════════════════════════════════════════════════
+// Preenche #dup-materiais-box (logo acima do indicador de pendências) com
+// o resultado de getDuplicatasCadastroMateriais() (normalize.js). Mesmo
+// padrão de renderPendenciasPadronizacao: chamado ao final de
+// renderMateriais(), se atualiza sozinho a cada redesenho da tabela.
+const DUP_CAD_PREVIEW = 5;
+
+function _dupCadGroupHtml(grupo) {
+  const rows = grupo.registros.map(r => `
+    <div class="dup-cad-row">
+      <span class="dup-cad-alias" title="${escapeHtml(r.alias)}">${escapeHtml(r.alias)}</span>
+      ${r.categoria ? `<span style="font-size:10px;color:var(--text3)">${escapeHtml(r.categoria)}</span>` : ''}
+      <span class="dup-cad-badge ${r.vencendo ? 'dup-cad-badge-venc' : 'dup-cad-badge-morto'}">
+        ${r.vencendo ? 'aplicado hoje' : 'ignorado'}
+      </span>
+      <button class="btn-icon" type="button" title="Editar este cadastro"
+        onclick="_dupCadEditar('${escapeHtml(r.id)}')">
+        <i class="ti ti-edit"></i>
+      </button>
+    </div>`).join('');
+
+  return `
+    <div class="dup-cad-group">
+      <div class="dup-cad-origem"><i class="ti ti-git-branch"></i> Origem: <b title="${escapeHtml(grupo.origem)}">${escapeHtml(grupo.origem)}</b></div>
+      ${rows}
+    </div>`;
+}
+
+function _dupCadEditar(id) {
+  const item = (state.materiais || []).find(m => m.id === id);
+  if (!item) return;
+  openModal('modal-materiais');
+  setVal('materiais-text', `${item.origem} = ${item.alias}${item.categoria ? ' = ' + item.categoria : ''}`);
+  _pendPadronizacaoFocarFinal('materiais-text');
+}
+window._dupCadEditar = _dupCadEditar;
+
+function _dupCadToggle(boxId, btn) {
+  const box = document.getElementById(boxId);
+  if (!box) return;
+  const expandido = box.style.display !== 'none';
+  box.style.display = expandido ? 'none' : '';
+  if (!btn.dataset.moreLabel) btn.dataset.moreLabel = btn.textContent;
+  btn.textContent = expandido ? btn.dataset.moreLabel : 'Ver menos';
+}
+window._dupCadToggle = _dupCadToggle;
+
+function renderDuplicatasCadastroMateriais() {
+  const el = document.getElementById('dup-materiais-box');
+  if (!el || typeof getDuplicatasCadastroMateriais !== 'function') return;
+
+  const conflitos = getDuplicatasCadastroMateriais();
+  if (!conflitos.length) { el.innerHTML = ''; return; }
+
+  const total   = conflitos.length;
+  const preview = conflitos.slice(0, DUP_CAD_PREVIEW);
+  const resto   = conflitos.slice(DUP_CAD_PREVIEW);
+  const boxId   = 'dup-cad-rest-materiais';
+
+  el.innerHTML = `
+    <div class="dup-cad-box">
+      <div class="dup-cad-header">
+        <i class="ti ti-alert-octagon"></i>
+        <b>${total}</b> origem${total === 1 ? '' : 's'} com cadastro${total === 1 ? '' : 's'} conflitante${total === 1 ? '' : 's'}
+        <span class="dup-cad-sub">— mesmo nome de origem apontando para Grupos SAP diferentes; apenas um cadastro é aplicado, o(s) outro(s) fica(m) ignorado(s) silenciosamente</span>
+      </div>
+      <div class="dup-cad-list">${preview.map(_dupCadGroupHtml).join('')}</div>
+      ${resto.length ? `
+        <div class="dup-cad-rest" id="${boxId}" style="display:none">${resto.map(_dupCadGroupHtml).join('')}</div>
+        <button class="dup-cad-toggle" type="button" onclick="_dupCadToggle('${boxId}', this)">Ver mais ${resto.length}</button>
+      ` : ''}
+    </div>`;
+}
+
 function renderFiliais() {
   const tb = document.getElementById('tb-filiais');
   if (!tb) return;
@@ -2806,6 +2882,7 @@ function renderMateriais() {
   updateListPageInfo('materiais');
   if (!data.length) {
     tb.innerHTML = '<tr><td colspan="5"><div class="empty-state"><i class="ti ti-stack-2"></i><p>Nenhum material cadastrado.</p></div></td></tr>';
+    renderDuplicatasCadastroMateriais();
     renderPendenciasPadronizacao();
     return;
   }
@@ -2821,6 +2898,7 @@ function renderMateriais() {
   const _tbl_materiais = document.getElementById('tb-materiais')?.closest('table');
   if (_tbl_materiais) injectColFilterButtons(_tbl_materiais, 'materiais');
   updateImportPrereqUI();
+  renderDuplicatasCadastroMateriais();
   renderPendenciasPadronizacao();
 }
 
@@ -3627,7 +3705,26 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
       throw outerErr;
     }
   } finally {
+    // Durante o batch, o fuzzy match ficava desligado (_batchImportMode) —
+    // textos brutos que não bateram exato com o cadastro de Materiais
+    // ficaram gravados sem padronização. Agora que o batch terminou,
+    // reaplica a padronização completa (fuzzy incluso) sobre os módulos
+    // recém-importados, para não depender da próxima edição manual do
+    // cadastro de Materiais para corrigir isso. Roda ANTES de zerar
+    // _batchImportMode ser observável por outros fluxos concorrentes, mas
+    // findMaterialMatch já checa _batchImportMode a cada chamada, então
+    // precisamos desligar a flag primeiro para o fuzzy scan funcionar.
     _batchImportMode = false;
+    if (typeof reaplicarPadronizacaoMateriais === 'function') {
+      try {
+        const _stateModulo = pageFromModulo(modulo); // 'Entrada' -> 'entradas', etc.
+        if (['entradas', 'saidas', 'lancamentos', 'sap'].includes(_stateModulo)) {
+          reaplicarPadronizacaoMateriais([_stateModulo]);
+        }
+      } catch (err) {
+        console.warn('[Importação] Falha ao reaplicar padronização de materiais pós-batch:', err);
+      }
+    }
     _importAborted = false;
     const _abortRowEnd = document.getElementById('loading-abort-row');
     if (_abortRowEnd) _abortRowEnd.style.display = 'none';

@@ -881,3 +881,98 @@ tbody td {
   padding: 0;
 }
 .pend-padr-toggle:hover { text-decoration: underline; }
+
+/* ══════════════════════════════════════════
+   CADASTROS DUPLICADOS/CONFLITANTES (Configurações → Materiais)
+   Mesma origem apontando para aliases diferentes — um dos cadastros
+   "vence" silenciosamente e o outro nunca é aplicado. Reaproveita a
+   estrutura visual de .pend-padr-*, em vermelho (mais crítico: não é
+   falta de cadastro, é um cadastro sendo ignorado sem aviso).
+══════════════════════════════════════════ */
+.dup-cad-box {
+  margin-bottom: 10px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: var(--red-bg);
+  border: 1px solid var(--red-border);
+}
+.dup-cad-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--red);
+}
+.dup-cad-header b { color: var(--text); }
+.dup-cad-sub {
+  color: var(--text3);
+  font-weight: 400;
+  font-size: 11.5px;
+}
+.dup-cad-list, .dup-cad-rest {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.dup-cad-group {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--bg2);
+  border: 1px dashed var(--red-border);
+}
+.dup-cad-origem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--text3);
+  margin-bottom: 6px;
+}
+.dup-cad-origem b {
+  color: var(--text);
+  font-family: var(--mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 320px;
+}
+.dup-cad-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 12px;
+}
+.dup-cad-alias {
+  flex: 1;
+  min-width: 0;
+  color: var(--text);
+  font-family: var(--mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dup-cad-badge {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  padding: 1px 7px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+.dup-cad-badge-venc  { background: var(--green-bg); color: var(--green); border: 1px solid var(--green-border); }
+.dup-cad-badge-morto { background: var(--red-bg); color: var(--red); border: 1px solid var(--red-border); }
+.dup-cad-toggle {
+  margin-top: 8px;
+  background: none;
+  border: none;
+  color: var(--red);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+.dup-cad-toggle:hover { text-decoration: underline; }
