@@ -2647,8 +2647,8 @@ function _runGlobalSearch(q, dropdown) {
     if (tokens.every(t => s.includes(t))) addGroup('Central', r.alias || r.origem || '—', r.regional || '', r);
   });
   (state.materiais || []).forEach(r => {
-    const s = [r.origem, r.alias, r.desc].join(' ').toLowerCase();
-    if (tokens.every(t => s.includes(t))) addGroup('Material', r.alias || r.origem || '—', r.desc || '', r);
+    const s = [r.origem, r.alias, r.categoria].join(' ').toLowerCase();
+    if (tokens.every(t => s.includes(t))) addGroup('Material', r.alias || r.origem || '—', r.categoria || '', r);
   });
 
   // ── Render ──────────────────────────────────────────────────────────

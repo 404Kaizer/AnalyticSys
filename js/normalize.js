@@ -75,6 +75,65 @@ function reaplicarPadronizacaoCentrais(modulos = Object.keys(CENTRAL_FIELDS_BY_M
   }
 }
 
+// ── Categoria de Material — lista fixa usada em todo o sistema ──────────
+// Mantida em sincronia com os padrões já reconhecidos por detectCatKey/
+// detectCatSubKey (ui.js): AGLOMERANTE, AGREGADO (Graúdo/Miúdo), ADITIVO,
+// ADIÇÃO. É a lista oficial exibida/aceita no cadastro de Materiais.
+const CATEGORIAS_MATERIAL = ['Aglomerante', 'Agregado Graúdo', 'Agregado Miúdo', 'Aditivo', 'Adição'];
+
+// Reconhece variações de digitação/acentuação/caixa e mapeia para o rótulo
+// canônico da lista fixa acima. Retorna '' quando não reconhece — a
+// categoria não é inventada, fica em branco para cadastro manual posterior.
+function normalizeCategoriaMaterial(valor) {
+  const raw = String(valor ?? '').trim();
+  if (!raw) return '';
+  const c = raw.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim();
+  if (/AGREGA/.test(c)) {
+    if (/GRAUD/.test(c)) return 'Agregado Graúdo';
+    if (/MIUD/.test(c))  return 'Agregado Miúdo';
+    return ''; // "Agregado" sem indicação de Graúdo/Miúdo não é aceito
+  }
+  if (/AGLOMERANTE/.test(c)) return 'Aglomerante';
+  if (/ADITIV/.test(c)) return 'Aditivo';
+  if (/ADIC[AÃ]O|ADICAO|ADIC/.test(c)) return 'Adição';
+  return '';
+}
+
+// Retorna a categoria cadastrada para o material (Padronização de Materiais),
+// usando o mesmo índice de match de normalizarMaterial. Só devolve algo se o
+// material estiver cadastrado E tiver categoria preenchida — sem heurística.
+function getCategoriaPorGrupo(valor) {
+  const raw = String(valor ?? '').trim();
+  if (!raw) return '';
+  const found = findMaterialMatch(raw);
+  return (found && found.categoria) ? found.categoria : '';
+}
+
+// Módulos cujos registros têm campo "categoria" próprio (digitado ou
+// importado) e que devem ser padronizados a partir do cadastro de Materiais.
+// SAP não entra aqui: nem o lançamento manual nem a importação em lote do
+// SAP possuem esse campo hoje.
+const CATEGORIA_MODULOS = ['entradas', 'saidas', 'lancamentos'];
+
+// Migração única: o campo "Descrição" do cadastro de Materiais foi removido
+// (era usado informalmente para anotar a categoria, ex.: "ADITIVO",
+// "AGLOMERANTE"). Aqui, qualquer material sem categoria cujo desc antigo
+// bata com a lista fixa tem a categoria recuperada automaticamente; o campo
+// desc é então descartado. Idempotente — roda sem custo se não houver nada
+// para migrar.
+function migrarCategoriaLegadaMateriais() {
+  let mudou = false;
+  (state.materiais || []).forEach(m => {
+    if (!m.categoria && m.desc) {
+      const migrada = normalizeCategoriaMaterial(m.desc);
+      if (migrada) { m.categoria = migrada; mudou = true; }
+    }
+    if (m.desc !== undefined) { delete m.desc; mudou = true; }
+  });
+  if (mudou) invalidateMaterialLookup();
+  return mudou;
+}
+
 function normalizeLooseText(v) {
   return String(v ?? '')
     .normalize('NFD')
@@ -287,19 +346,31 @@ function normalizarMateriaisRecord(rec, keys) {
 }
 
 function reaplicarPadronizacaoMateriais(modulos = ['entradas', 'saidas', 'lancamentos', 'sap']) {
-  const aplicar = rec => {
+  const categoriaModulos = new Set(CATEGORIA_MODULOS);
+
+  const aplicar = (rec, comCategoria) => {
     const raw = String(rec.materialOriginal ?? rec.material ?? '').trim();
-    if (!raw) return { ...rec, materialOriginal: rec.materialOriginal ?? '', material: rec.material ?? '' };
-    const material = normalizarMaterial(raw);
-    return {
-      ...rec,
-      materialOriginal: rec.materialOriginal ?? raw,
-      material
-    };
+    const out = raw
+      ? { ...rec, materialOriginal: rec.materialOriginal ?? raw, material: normalizarMaterial(raw) }
+      : { ...rec, materialOriginal: rec.materialOriginal ?? '', material: rec.material ?? '' };
+
+    if (comCategoria) {
+      // categoriaOriginal preserva o valor digitado/importado originalmente,
+      // do mesmo jeito que materialOriginal preserva o nome bruto do material.
+      const catOriginal = String(
+        rec.categoriaOriginal ?? (rec.categoria && rec.categoria !== '—' ? rec.categoria : '')
+      ).trim();
+      const catPadrao = getCategoriaPorGrupo(raw || out.material);
+      out.categoriaOriginal = catOriginal;
+      out.categoria = catPadrao || catOriginal || '—';
+    }
+
+    return out;
   };
 
   for (const modulo of modulos) {
     if (!Array.isArray(state[modulo])) continue;
-    state[modulo] = state[modulo].map(aplicar);
+    const comCategoria = categoriaModulos.has(modulo);
+    state[modulo] = state[modulo].map(rec => aplicar(rec, comCategoria));
   }
 }

@@ -192,6 +192,7 @@ function _criarRegistroEntrada(dados) {
   if (!mat)     return { ok: false, erro: 'Informe o Material' };
   if (!peso)    return { ok: false, erro: 'Informe o Peso' };
 
+  const categoriaOriginal = String(dados.categoria || '').trim();
   const rec = stamp({
     fonte: 'manual',
     centralCompraOriginal:  central,
@@ -202,7 +203,8 @@ function _criarRegistroEntrada(dados) {
     dtEmissao:      _fmtDateInput(dados.dtEmissao),
     dtDescarga:     _fmtDateInput(dados.dtDescarga || dados.dtEmissao),
     fornecedor:     dados.fornecedor || '—',
-    categoria:      dados.categoria || '—',
+    categoriaOriginal,
+    categoria:      getCategoriaPorGrupo(mat) || categoriaOriginal || '—',
     materialOriginal: mat,
     material:       normalizarMaterial(mat),
     peso,
@@ -251,6 +253,7 @@ function _criarRegistroSaida(dados) {
   if (!mat)     return { ok: false, erro: 'Informe o Material' };
   if (!peso)    return { ok: false, erro: 'Informe o Peso' };
 
+  const categoriaOriginalSaida = String(dados.categoria || '').trim();
   const rec = stamp({
     fonte: 'manual',
     centralOriginal: central,
@@ -258,7 +261,8 @@ function _criarRegistroSaida(dados) {
     dtEmissao:      _fmtDateInput(dados.dtEmissao),
     os:             dados.os || '—',
     contrato:       '—',
-    categoria:      dados.categoria || '—',
+    categoriaOriginal: categoriaOriginalSaida,
+    categoria:      getCategoriaPorGrupo(mat) || categoriaOriginalSaida || '—',
     fornecedor:     dados.fornecedor || '—',
     materialOriginal: mat,
     material:       normalizarMaterial(mat),
@@ -306,13 +310,15 @@ function _criarRegistroLancamento(dados) {
   if (!mat)     return { ok: false, erro: 'Informe o Material' };
   if (!peso)    return { ok: false, erro: 'Informe o Peso' };
 
+  const categoriaOriginalLanc = String(dados.categoria || '').trim();
   const rec = stamp({
     fonte: 'manual',
     centralOriginal: central,
     central:        normalizarCentral(central),
     dtLanc:         _fmtDateInput(dados.dtLanc),
     fornecedor:     dados.fornecedor || '—',
-    categoria:      dados.categoria || '—',
+    categoriaOriginal: categoriaOriginalLanc,
+    categoria:      getCategoriaPorGrupo(mat) || categoriaOriginalLanc || '—',
     materialOriginal: mat,
     material:       normalizarMaterial(mat),
     peso,

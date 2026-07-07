@@ -771,7 +771,7 @@ const colFilterMeta = {
   imports:     { tbodyId: 'tb-imports',     fields: ['arquivo','modulo','registros','dataHora','status',null] },
   configs:     { tbodyId: 'tb-configs',     fields: ['key','value','desc','created',null] },
   filiais:     { tbodyId: 'tb-filiais',     fields: ['origem','alias','cnpj','regional','created',null] },
-  materiais:   { tbodyId: 'tb-materiais',   fields: ['origem','alias','desc','created',null] },
+  materiais:   { tbodyId: 'tb-materiais',   fields: ['origem','alias','categoria','created',null] },
 };
 
 // Returns true if a record passes all active column filters for a module

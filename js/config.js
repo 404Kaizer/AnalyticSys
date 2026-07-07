@@ -74,21 +74,27 @@ function parseMateriaisLines(lines) {
 
     let origem = '';
     let alias = '';
-    let desc = '';
+    let categoriaRaw = '';
 
     const direct = line.match(/^(.*?)(?:\s*(?:=>|=|;|\t)\s*)(.+)$/);
     if (direct) {
       origem = direct[1].trim();
       const right = direct[2].trim();
-      const parts = right.split('|').map(s => s.trim()).filter(Boolean);
-      alias = parts[0] || '';
-      desc = parts.slice(1).join(' | ');
+      // Aceita tanto "grupo = categoria" quanto "grupo | categoria" para o
+      // segmento opcional de categoria.
+      const sepMatch = right.match(/^(.*?)(?:\s*[=|]\s*)(.+)$/);
+      if (sepMatch) {
+        alias = sepMatch[1].trim();
+        categoriaRaw = sepMatch[2].trim();
+      } else {
+        alias = right;
+      }
     } else {
       const parts = line.split('|').map(s => s.trim()).filter(Boolean);
       if (parts.length >= 2) {
         origem = parts[0];
         alias = parts[1];
-        desc = parts.slice(2).join(' | ');
+        categoriaRaw = parts[2] || '';
       }
     }
 
@@ -97,7 +103,7 @@ function parseMateriaisLines(lines) {
     items.push({
       origem,
       alias,
-      desc,
+      categoria: normalizeCategoriaMaterial(categoriaRaw),
       created: new Date().toLocaleDateString('pt-BR')
     });
   }
@@ -108,8 +114,7 @@ function parseMateriaisLines(lines) {
 function materialMatchKey(item) {
   return [
     normalizeText(item?.origem),
-    normalizeText(item?.alias),
-    normalizeText(item?.desc)
+    normalizeText(item?.alias)
   ].join('||');
 }
 
@@ -124,7 +129,7 @@ function normalizeImportedMaterial(item, importId) {
     id: src.id || makeMaterialId(),
     origem: String(src.origem || '').trim(),
     alias: String(src.alias || '').trim(),
-    desc: String(src.desc || '').trim(),
+    categoria: normalizeCategoriaMaterial(src.categoria),
     created: src.created || new Date().toLocaleDateString('pt-BR'),
     importId
   };
@@ -175,28 +180,34 @@ function parseMateriaisRows(rows) {
   };
 
   const headerLooksLikeMeta = header.some(h => [
-    'ORIGEM', 'ORIGINAL', 'MATERIAL', 'MATERIAL ORIGINAL', 'GRUPO', 'GRUPO SAP', 'SAP', 'DESCRICAO', 'DESCRIÇÃO'
+    'ORIGEM', 'ORIGINAL', 'MATERIAL', 'MATERIAL ORIGINAL', 'GRUPO', 'GRUPO SAP', 'SAP', 'CATEGORIA', 'DESCRICAO', 'DESCRIÇÃO'
   ].includes(h));
 
   let startRow = 0;
   let origemIdx = 0;
   let aliasIdx = 1;
-  let descIdx = 2;
+  let categoriaIdx = -1;
 
   if (headerLooksLikeMeta) {
     startRow = 1;
     origemIdx = findIdx('origem', 'original', 'material', 'material original', 'nome');
     aliasIdx = findIdx('grupo', 'grupo sap', 'sap', 'padronizada', 'padronizado', 'padronizacao', 'padronização');
-    descIdx = findIdx('descricao', 'descrição', 'descricao do material', 'observacao', 'observação');
+    // "Descrição"/"Observação" entram como aliases de Categoria: essa era a
+    // convenção usada para anotar a categoria antes de existir uma coluna
+    // dedicada, e o cadastro de Materiais não tem mais um campo de descrição.
+    categoriaIdx = findIdx('categoria', 'categoria material', 'category', 'cat', 'cat.', 'descricao', 'descrição', 'descricao do material', 'observacao', 'observação');
     if (origemIdx < 0) origemIdx = 0;
     if (aliasIdx < 0) aliasIdx = 1;
-    if (descIdx < 0) descIdx = 2;
   }
+  // Sem cabeçalho reconhecido, não há como adivinhar com segurança em qual
+  // coluna posicional estaria a categoria — fica de fora nesse caso (o
+  // analista pode completar depois pelo cadastro manual ou reimportar com
+  // um cabeçalho "CATEGORIA" explícito).
 
   return cleaned.slice(startRow).map(row => ({
     origem: String(row[origemIdx] || '').trim(),
     alias: String(row[aliasIdx] || '').trim(),
-    desc: String(row[descIdx] || '').trim(),
+    categoria: categoriaIdx >= 0 ? normalizeCategoriaMaterial(row[categoriaIdx]) : '',
     created: new Date().toLocaleDateString('pt-BR')
   })).filter(r => r.origem && r.alias);
 }

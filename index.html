@@ -2529,7 +2529,7 @@
                 <tr>
                   <th>Original</th>
                   <th>Grupo SAP</th>
-                  <th>Descrição</th>
+                  <th>Categoria</th>
                   <th>Criado em</th>
                   <th></th>
                 </tr>
@@ -3521,12 +3521,12 @@
 <div class="modal-overlay" id="modal-materiais">
   <div class="modal" style="max-width:760px">
     <div class="modal-title"><i class="ti ti-stack-2"></i> Cadastro de Materiais / Grupo SAP</div>
-    <div class="modal-sub">Use uma linha por cadastro. Formatos aceitos: <span class="td-mono">origem = grupo</span>, <span class="td-mono">origem;grupo</span> ou importação por arquivo. O grupo será o nome exibido em Lançamentos.</div>
+    <div class="modal-sub">Use uma linha por cadastro. Formatos aceitos: <span class="td-mono">origem = grupo</span>, <span class="td-mono">origem = grupo = categoria</span>, <span class="td-mono">origem;grupo</span> ou importação por arquivo. O grupo será o nome exibido em Lançamentos. Categoria é opcional e deve ser uma das 5 fixas: Aglomerante, Agregado Graúdo, Agregado Miúdo, Aditivo ou Adição — valores fora dessa lista são ignorados.</div>
 
     <div class="form-grid" style="grid-template-columns:1fr">
       <div class="form-group">
         <label class="form-label">Cadastro em lote</label>
-        <textarea id="materiais-text" class="form-input" style="min-height:220px; resize:vertical" placeholder="AREIA LAVADA = AREIA&#10;BRITA 01 = BRITA&#10;PÓ DE PEDRA = PÓ DE PEDRA"></textarea>
+        <textarea id="materiais-text" class="form-input" style="min-height:220px; resize:vertical" placeholder="AREIA LAVADA = AREIA = Agregado Miúdo&#10;BRITA 01 = BRITA = Agregado Graúdo&#10;PÓ DE PEDRA = PÓ DE PEDRA"></textarea>
       </div>
     </div>
 

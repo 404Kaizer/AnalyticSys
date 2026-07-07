@@ -2662,6 +2662,9 @@ function renderFiliais() {
 function renderMateriais() {
   const tb = document.getElementById('tb-materiais');
   if (!tb) return;
+  if (typeof migrarCategoriaLegadaMateriais === 'function' && migrarCategoriaLegadaMateriais()) {
+    persistStateNow().catch(e => console.warn('Falha ao salvar migração de categoria de materiais:', e));
+  }
   const { data, pageData } = getListPageData('materiais');
   updateListPageInfo('materiais');
   if (!data.length) {
@@ -2672,7 +2675,7 @@ function renderMateriais() {
     <tr>
       <td class="td-mono">${m.origem}</td>
       <td class="td-mono">${m.alias}</td>
-      <td class="td-muted">${m.desc || '—'}</td>
+      <td class="td-muted">${m.categoria ? `<span style="font-size:10px;background:var(--bg4);border:1px solid var(--border2);border-radius:20px;padding:2px 8px;color:var(--text2);white-space:nowrap">${escapeHtml(m.categoria)}</span>` : '—'}</td>
       <td class="td-muted">${m.created || '—'}</td>
       <td><button class="btn-icon danger" onclick="removerMaterial('${m.id}')"><i class="ti ti-trash"></i></button></td>
     </tr>
@@ -3178,6 +3181,7 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
       await processSlice(i, Math.min(i + batchSize, total), (r) => {
         const materialOriginal = String(r[ci('material', 10)] || '').trim();
         if (!materialOriginal) return null;
+        const categoriaOriginal = String(r[ci('categoria', 9)] || '').trim();
         return stamp(normalizarCentraisRecord({
           importId,
           centralCompra:    String(r[ci('centralCompra',  0)] || ''),
@@ -3186,7 +3190,8 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
           dtEmissao:        fmtDate(r[ci('dtEmissao',     13)]),
           dtDescarga:       fmtDate(r[ci('dtDescarga',     3)]),
           fornecedor:       String(r[ci('fornecedor',      4)] || ''),
-          categoria:        String(r[ci('categoria',       9)] || ''),
+          categoriaOriginal,
+          categoria:        getCategoriaPorGrupo(materialOriginal) || categoriaOriginal,
           materialOriginal,
           material:         normalizarMaterial(materialOriginal),
           peso:             num(r[ci('peso',              18)]),
@@ -3207,13 +3212,15 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
         if (!materialOriginal) return null;
         const peso = num(r[ci('peso', 9)]);
         const custo = num(r[ci('custo', 10)]);
+        const categoriaOriginal = String(r[ci('categoria', 4)] || '').trim();
         return stamp(normalizarCentraisRecord({
           importId,
           central:          String(r[ci('central',    0)] || ''),
           dtEmissao:        fmtDate(r[ci('dtEmissao', 1)]),
           os:               String(r[ci('os',         2)] || ''),
           contrato:         String(r[ci('contrato',   3)] || ''),
-          categoria:        String(r[ci('categoria',  4)] || ''),
+          categoriaOriginal,
+          categoria:        getCategoriaPorGrupo(materialOriginal) || categoriaOriginal,
           fornecedor:       String(r[ci('fornecedor', 5)] || ''),
           materialOriginal,
           material:         normalizarMaterial(materialOriginal),
@@ -3247,13 +3254,15 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
 
         const peso  = toNum(r[ci('peso',  4)]);
         const custo = toNum(r[ci('custo', 5)]);
+        const categoriaOriginal = String(r[ci('categoria', 3)] || '').trim();
         return stamp(normalizarCentraisRecord({
           importId,
           dtLanc:          fmtDate(r[ci('dtLanc',   0)]),
           central:         String(r[ci('central',    1)] || ''),
           fornecedor,
           municipio,
-          categoria:       String(r[ci('categoria',  3)] || ''),
+          categoriaOriginal,
+          categoria:       getCategoriaPorGrupo(materialOriginal) || categoriaOriginal,
           materialOriginal,
           material:        normalizarMaterial(materialOriginal),
           peso,
@@ -4552,6 +4561,7 @@ async function restoreAndRender() {
     // ── STEP 3: Padronizar materiais ─────────────────────────────────────
     const totalRecs = (state.entradas?.length || 0) + (state.saidas?.length || 0) +
                       (state.lancamentos?.length || 0) + (state.sap?.length || 0);
+    if (typeof migrarCategoriaLegadaMateriais === 'function') migrarCategoriaLegadaMateriais();
     if (totalRecs > 0) {
       _lstepSet('norm', 'running');
       updateLoadingOverlay(`Padronizando materiais — ${totalRecs.toLocaleString('pt-BR')} registros...`, 'Inicializando o sistema');
