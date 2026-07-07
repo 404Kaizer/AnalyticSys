@@ -1977,7 +1977,7 @@ tr.pend-injetado-ambos {
 .material-row:hover { background: var(--accent-dim); }
 .material-row.open  { background: color-mix(in srgb, var(--accent-dim) 70%, transparent); }
 .material-row-title { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
-.material-row-chev  { color: var(--accent); font-size: 13px; flex-shrink: 0; transition: transform 0.18s; }
+.material-row-crit-icon { font-size: 13px; flex-shrink: 0; }
 
 .material-detail-row td { padding: 0; background: var(--bg2); border-top: none; }
 .material-detail-row.open .material-detail-wrap { display: block; }

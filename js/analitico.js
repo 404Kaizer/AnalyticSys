@@ -605,6 +605,15 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
     let variacaoCentralMicro = 0;
     let custoVariacaoTotal = 0;  // R$ implicados pela variação de estoque
 
+    // ── Criticidade por material (badge ao lado do nome) ─────────────────
+    // Reaproveita os mesmos thresholds/classificação usados no painel de
+    // saúde (donut/chips) para garantir consistência entre a linha da
+    // tabela e os contadores agregados do card.
+    const thresholds = getHealthThresholds();
+    const MAT_LEVEL_ICON  = { bom: 'ti-circle-check', atencao: 'ti-alert-triangle', urgente: 'ti-alert-circle', critico: 'ti-flame' };
+    const MAT_LEVEL_LABEL = { bom: 'Bom', atencao: 'Atenção', urgente: 'Urgente', critico: 'Crítico' };
+    const MAT_LEVEL_COLOR = { bom: 'var(--green)', atencao: 'var(--amber)', urgente: '#f97316', critico: 'var(--red)' };
+
     // Lookup de catKey por material — computado uma vez (não a cada comparação do sort)
     // para que o diff usado na ordenação também aplique a regra de Agregado.
     const _sortCatKeyLookup = new Map();
@@ -663,6 +672,9 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
       // acumula custo implicado: diff (kg) × custo médio do material (R$/kg)
       const custoMedMat = (r.custoMedioPorMat || {})[mat] || 0;
       if (custoMedMat > 0) custoVariacaoTotal += snapshot.diff * custoMedMat;
+
+      // Nível de criticidade do material (mesma regra do painel de saúde)
+      const matLevel = classifyVariation(Math.abs(snapshot.diff), matCatKey, thresholds);
 
       const dCls = varClass(snapshot.diff);
               const toEntry = s => {
@@ -922,7 +934,7 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
         }" data-detail-key="${detailKey}" data-diff="${snapshot.diff}" data-peso-fim="${snapshot.pesoFim}" data-categoria="${escapeHtml(matCategoria)}" onclick="toggleMaterialDetail(this, event)">
           <td class="td-mono" style="font-weight:600">
             <span class="material-row-title">
-              <i class="ti ti-eye-search material-row-chev"></i>
+              <i class="ti ${MAT_LEVEL_ICON[matLevel]} material-row-crit-icon" style="color:${MAT_LEVEL_COLOR[matLevel]}" title="Criticidade: ${MAT_LEVEL_LABEL[matLevel]}"></i>
               ${escapeHtml(mat)}
             </span>
           </td>
@@ -972,7 +984,6 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
     // "Maiores Variações" DEVEM refletir o toggle "Considerar NFs/OS pendentes"
     // (decisão confirmada: somente o breakdown diário — Est. Inicial por dia —
     // deve permanecer imune, não a saúde/donut/ranking).
-    const thresholds = getHealthThresholds();
     const matDiffs = allMatsSorted.map(mat => {
       const _hpCatKey = detectCatKey((categoriaByMat.get(mat) || '').trim().toUpperCase()) || detectCatFromMat(mat);
       const prev = getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni, dtFim, catKey: _hpCatKey });
