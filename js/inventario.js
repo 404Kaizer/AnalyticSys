@@ -462,7 +462,7 @@
     const h = window._inv_helpers;
     if (!h) { toast('Sistema não iniciado. Aguarde e tente novamente.', 'error'); return; }
 
-    const { getLancIndex, getSapIndex, getCustoMedioPorMat, getFilialLookupIndex, normalizeText, parseDate, localISODate, dateCmp, num, state: getState } = h;
+    const { getLancIndex, getSapIndex, getCustoMedioPorMat, getFilialLookupIndex, normalizeText, parseDate, localISODate, dateCmp, num, state: getState, getCategoriaPorGrupo, getCatKeyDoCadastro } = h;
     const state = getState();
 
     const dtIni = new Date(selYear, selMonth, 1, 0, 0, 0);
@@ -571,10 +571,17 @@
         // Custo médio alinhado com o Analítico (Saídas → fallback SAP).
         const custoMedio = custoMedioPorMat[mat] || 0;
 
-        const sample = lancArr[0] || sapArr[0] || {};
-        const categoria = sample.categoria || '—';
+        // Categoria SEMPRE a partir do cadastro atual de Materiais — nunca
+        // do primeiro registro bruto do período (sample.categoria). Registros
+        // de SAP nunca têm campo categoria; registros de Lançamento podem
+        // estar desatualizados se importados antes do cadastro existir.
+        // getCategoriaPorGrupo consulta o índice de match vigente, então
+        // reflete sempre o estado atual do cadastro — sem depender de qual
+        // registro "chegou primeiro" no período.
+        const categoria = getCategoriaPorGrupo(mat) || '';
+        const semCadastro = !categoria;
 
-        rowMap.set(k, { k, mesKey, central, material: mat, categoria, regional, estoqueIni, estoqueIniMissing, estoqueIniLastKnown, entradasKg, saidasKg, estoqueFimReal, estoqueFimMissing, estoqueFimLastKnown, custoMedio, entEntries, saiEntries });
+        rowMap.set(k, { k, mesKey, central, material: mat, categoria: categoria || 'Sem cadastro', semCadastro, regional, estoqueIni, estoqueIniMissing, estoqueIniLastKnown, entradasKg, saidasKg, estoqueFimReal, estoqueFimMissing, estoqueFimLastKnown, custoMedio, entEntries, saiEntries });
       });
     });
 
@@ -741,7 +748,10 @@
         <td style="font-size:11px;color:var(--text2);white-space:nowrap">${r.regional}</td>
         <td style="font-family:var(--mono);font-size:11px;font-weight:600;white-space:nowrap">${r.central}</td>
         <td style="font-weight:600;max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${_escape(r.material)}">${alertBadge}${_escape(r.material)}</td>
-        <td><span style="font-size:10px;background:var(--bg4);border:1px solid var(--border2);border-radius:20px;padding:2px 8px;color:var(--text2);white-space:nowrap">${_escape(r.categoria)}</span></td>
+        <td>${r.semCadastro
+            ? `<span class="dup-cad-badge dup-cad-badge-morto" style="cursor:pointer" title="Material sem cadastro ou sem categoria preenchida — clique para cadastrar" onclick="_invCadastrarMaterial('${_escape(r.material)}')"><i class="ti ti-alert-triangle" style="font-size:9px"></i> Sem cadastro</span>`
+            : `<span style="font-size:10px;background:var(--bg4);border:1px solid var(--border2);border-radius:20px;padding:2px 8px;color:var(--text2);white-space:nowrap">${_escape(r.categoria)}</span>`
+          }</td>
         <td style="text-align:right;white-space:nowrap">${iniCell}</td>
         <td style="text-align:right;white-space:nowrap">${entCell}</td>
         <td style="text-align:right;white-space:nowrap">${saiCell}</td>
@@ -763,6 +773,8 @@
 
   // ── KPIs ─────────────────────────────────────────────────
   function invAtualizarKpis() {
+    invAtualizarSemCadastro();
+
     // Usa invRows (total geral do inventário gerado) — os cards NÃO reagem
     // aos filtros de Regional/Central/Categoria/Material/Ocultar Variação 0.
     // Só a tabela (invFiltered) e os Alertas Pendentes seguem o filtro.
@@ -841,6 +853,63 @@
     const badge = document.getElementById('inv-alertas-count');
     if (badge) badge.textContent = pendentes.length;
   }
+
+  // ── Faixa de alerta: materiais sem cadastro/categoria ──────
+  // Mesmo espírito do badge "sem Est. Ini./Est. Fim" já existente nos KPIs,
+  // mas em vermelho (mais crítico: não é dado de estoque ausente, é
+  // cadastro de padronização ausente — a causa raiz é sempre corrigível em
+  // Configurações). Conta sobre invRows (total geral), não invFiltered —
+  // mesmo critério dos demais KPIs, que não reagem aos filtros da tabela.
+  function invAtualizarSemCadastro() {
+    const el = document.getElementById('inv-sem-cadastro-box');
+    if (!el) return;
+    const materiaisSemCadastro = [...new Set(
+      invRows.filter(r => r.semCadastro).map(r => r.material)
+    )].sort();
+
+    if (!materiaisSemCadastro.length) { el.innerHTML = ''; return; }
+
+    const MAX = 5;
+    const shown = materiaisSemCadastro.slice(0, MAX)
+      .map(m => `<div class="dup-cad-row" style="padding:4px 0">
+        <span class="dup-cad-alias" title="${_invEscape(m)}">${_invEscape(m)}</span>
+        <button class="btn-icon" type="button" title="Cadastrar agora" onclick="_invCadastrarMaterial('${_invEscape(m)}')">
+          <i class="ti ti-plus"></i>
+        </button>
+      </div>`).join('');
+    const more = materiaisSemCadastro.length > MAX
+      ? `<div style="color:var(--text3);font-size:10.5px;margin-top:4px">+ ${materiaisSemCadastro.length - MAX} mais</div>` : '';
+
+    el.innerHTML = `
+      <div class="dup-cad-box" style="margin-bottom:14px">
+        <div class="dup-cad-header">
+          <i class="ti ti-alert-octagon"></i>
+          <b>${materiaisSemCadastro.length}</b> material${materiaisSemCadastro.length === 1 ? '' : 'is'} sem cadastro
+          <span class="dup-cad-sub">— não é possível classificar categoria nem aplicar corretamente as regras de análise até completar o cadastro em Configurações</span>
+        </div>
+        <div class="dup-cad-list">${shown}${more}</div>
+      </div>`;
+  }
+
+  // Auxiliar mínimo de escape — usa o helper compartilhado se disponível,
+  // senão cai no fallback local (mesmo padrão já usado em invRenderTabela).
+  function _invEscape(s) {
+    const h = window._inv_helpers;
+    return h ? h.escapeHtml(s) : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  // Abre o modal de cadastro de Materiais já pré-preenchido com o nome,
+  // pronto para o analista completar "= ALIAS = CATEGORIA". Mesmo padrão
+  // de _pendPadronizacaoAbrirCadastro (dashboard.js) para material não
+  // cadastrado.
+  window._invCadastrarMaterial = function(nome) {
+    openModal('modal-materiais');
+    setVal('materiais-text', nome + ' = ');
+    setTimeout(() => {
+      const el = document.getElementById('materiais-text');
+      if (el) { el.focus(); el.selectionStart = el.selectionEnd = el.value.length; }
+    }, 50);
+  };
 
   // ── Modal de justificativa ───────────────────────────────
   window.invAbrirJust = function(k) {

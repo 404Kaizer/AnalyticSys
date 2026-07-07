@@ -246,6 +246,46 @@ function getCategoriaPorGrupo(valor) {
   return (found && found.categoria) ? found.categoria : '';
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+// CLASSIFICAÇÃO POR CADASTRO — fonte única de verdade para catKey
+// ═══════════════════════════════════════════════════════════════════════
+// Substitui o padrão anteriormente espalhado por 6 arquivos:
+//   detectCatKey(categoria) || detectCatFromMat(mat)
+// que usava (1) a categoria de um registro BRUTO do período (não do
+// cadastro atual) e (2) um heurístico de adivinhação pelo nome do material
+// como fallback quando a categoria vinha vazia (ex.: SAP nunca tem campo
+// categoria, então sempre caía no heurístico).
+//
+// Princípio (decisão explícita do Hugo): cadastro é a ÚNICA fonte de
+// verdade para nome, grupo e categoria de materiais — é para isso que ele
+// existe (padronização). Nenhuma adivinhação por nome deve decidir
+// classificação ou cálculo de estoque.
+//
+// getCatKeyDoCadastro(mat) busca SEMPRE no cadastro atual (via
+// getCategoriaPorGrupo, que já usa o índice de match vigente) e interpreta
+// o texto da categoria cadastrada com detectCatKey (ui.js — só reconhece
+// os 4 rótulos fixos, não adivinha nada). Se o material não estiver
+// cadastrado, ou estiver cadastrado sem categoria preenchida, retorna null
+// — SEM cair em detectCatFromMat. null é o sinal explícito de "sem
+// cadastro", que os call sites devem tratar visivelmente (selo "sem
+// cadastro"), nunca silenciosamente como uma categoria padrão.
+function getCatKeyDoCadastro(mat) {
+  const categoria = getCategoriaPorGrupo(mat);
+  if (!categoria) return null;
+  return (typeof detectCatKey === 'function') ? detectCatKey(categoria) : null;
+}
+
+// Idem, mas também resolve a subcategoria de Agregado (Graúdo/Miúdo) —
+// substitui detectCatSubKey(rawCat, mat) quando rawCat vinha de registro
+// bruto. A categoria cadastrada já distingue "Agregado Graúdo" de
+// "Agregado Miúdo" explicitamente (ver CATEGORIAS_MATERIAL) — não há
+// necessidade de nenhuma heurística por nome do material aqui.
+function getCatSubKeyDoCadastro(mat) {
+  const categoria = getCategoriaPorGrupo(mat);
+  if (!categoria) return null;
+  return (typeof detectCatSubKey === 'function') ? detectCatSubKey(categoria, '') : null;
+}
+
 // Módulos cujos registros têm campo "categoria" próprio (digitado ou
 // importado) e que devem ser padronizados a partir do cadastro de Materiais.
 // SAP não entra aqui: nem o lançamento manual nem a importação em lote do

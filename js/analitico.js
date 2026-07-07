@@ -2976,6 +2976,15 @@ window._inv_helpers = {
   escapeHtml,
   buildAnaliticoDetailBreakdown,
 
+  // Fonte única de verdade para categoria/classificação de material —
+  // busca sempre no cadastro atual de Materiais (normalize.js), nunca em
+  // registro bruto nem por heurística de nome. getCatKeyDoCadastro retorna
+  // null quando o material não está cadastrado (ou cadastrado sem
+  // categoria) — call sites devem tratar isso como "sem cadastro" visível,
+  // nunca como uma categoria padrão silenciosa.
+  getCategoriaPorGrupo,
+  getCatKeyDoCadastro,
+
   // Calcula custo médio ponderado por material para uma central/período,
   // usando EXATAMENTE a mesma lógica do Analítico:
   //   1ª fonte: Saídas (Σ valorTotal / Σ peso) no período
