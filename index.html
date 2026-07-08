@@ -1733,10 +1733,12 @@
                 <th data-col="estoqueFimReal" data-align="right" onclick="invSortBy('estoqueFimReal')" title="Est. Final (últ. lançamento)">Est. Final <i class="ti ti-selector inv-sort-icon"></i></th>
                 <th data-col="estTeor" data-align="right" onclick="invSortBy('estTeor')" title="Est. Teórico = Ini + Ent − Saí">Est. Teórico <i class="ti ti-selector inv-sort-icon"></i></th>
                 <th data-col="varKg" data-align="right" onclick="invSortBy('varKg')" title="Variação = Real − Teórico">Variação <i class="ti ti-selector inv-sort-icon"></i></th>
-                <th data-col="custo" data-align="right" onclick="invSortBy('custo')" title="Custo da variação ajustada">Custo Var. <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="custoVarBruto" data-align="right" onclick="invSortBy('custoVarBruto')" title="Custo da variação BRUTA, com o custo médio automático (Saídas → fallback SAP)">Custo Var. <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="custoSap" data-align="right" onclick="invSortBy('custoSap')" title="Custo da variação BRUTA, usando o Custo Médio SAP informado manualmente no modal de justificativa">Custo SAP <i class="ti ti-selector inv-sort-icon"></i></th>
                 <th data-col="saldoJust" data-align="right" onclick="invSortBy('saldoJust')">Saldo Just. <i class="ti ti-selector inv-sort-icon"></i></th>
                 <th data-col="varAdj" data-align="right" onclick="invSortBy('varAdj')">Var.Ajust. <i class="ti ti-selector inv-sort-icon"></i></th>
-                <th data-col="custoMedio" data-align="right" onclick="invSortBy('custoMedio')" title="Custo médio (Saídas → fallback SAP)">Custo Médio <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="custo" data-align="right" onclick="invSortBy('custo')" title="Custo da variação AJUSTADA (pós-justificativa), com o custo médio automático">Custo Just. <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="custoMedioSap" data-align="right" onclick="invSortBy('custoMedioSap')" title="Custo médio informado manualmente pelo usuário, buscado no SAP">Custo Médio <i class="ti ti-selector inv-sort-icon"></i></th>
                 <th data-align="center" style="cursor:default">Justificativa</th>
               </tr>
             </thead>

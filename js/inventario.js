@@ -16,7 +16,7 @@
   }
 
   // ── Sorting state ─────────────────────────────────────────
-  let invSortCol = 'custo', invSortDir = 'desc';
+  let invSortCol = 'custoVarBruto', invSortDir = 'desc';
 
   // ── Filtros — mesmo padrão visual/comportamental da Visão Micro
   //    do Dashboard Analítico (chips com dropdown multi-seleção,
@@ -645,11 +645,14 @@
       const just      = invJustificativas[row.k] || {};
       const saldoJust = parseFloat(just.saldo || 0) || 0;
       const varAdj    = varKg - saldoJust;
-      const custo     = varAdj * row.custoMedio;
-      invRows.push({ ...row, estTeor, varKg, varPct, saldoJust, varAdj, custo });
+      const custo          = varAdj * row.custoMedio;   // Custo Just. (mantido: mesmo cálculo de sempre, agora com esse nome/coluna)
+      const custoVarBruto  = varKg * row.custoMedio;     // Custo Var. (NOVO: reflete a variação BRUTA, não mais a ajustada)
+      const custoMedioSap  = parseFloat(just.custoMedioSap || 0) || 0;
+      const custoSap       = varKg * custoMedioSap;      // Custo SAP (NOVO: variação bruta × custo médio informado manualmente)
+      invRows.push({ ...row, estTeor, varKg, varPct, saldoJust, varAdj, custo, custoVarBruto, custoMedioSap, custoSap });
     });
 
-    invRows.sort((a,b) => Math.abs(b.custo) - Math.abs(a.custo));
+    invRows.sort((a,b) => Math.abs(b.custoVarBruto) - Math.abs(a.custoVarBruto));
 
     invPopulateMicroFilterOptions();
 
@@ -779,16 +782,30 @@
         ? `<span class="td-mono diff-zero">${_varSymbol(0)} ${_fmtKg(0)}</span>`
         : `<span class="td-mono ${dClsAdj}" style="white-space:nowrap">${_varSymbol(r.varAdj)} ${_fmtKg(Math.abs(r.varAdj))}</span>`;
 
-      // ── Custo Médio (R$/kg): igual ao analítico ────────────
-      const custoMedCell = r.custoMedio > 0
-        ? `<span class="td-mono" style="color:var(--text2);font-size:11.5px">${_money(r.custoMedio)}<span style="font-size:9.5px;opacity:.6">/kg</span></span>`
-        : `<span style="color:var(--text3);font-size:11px">—</span>`;
-
-      // ── Custo Variação (R$): igual ao analítico ────────────
-      const _custoVarVal = r.custoMedio > 0 ? r.custo : null;
+      // ── Custo Var. (R$): variação BRUTA × custo médio automático ──────
+      const _custoVarVal = r.custoMedio > 0 ? r.custoVarBruto : null;
       const _custoVarCls = _custoVarVal !== null ? _varClass(_custoVarVal) : '';
       const custoVarCell = _custoVarVal !== null
         ? `<span class="td-mono ${_custoVarCls}" style="font-size:11.5px;white-space:nowrap">${_varSymbol(_custoVarVal)} ${_money(Math.abs(_custoVarVal))}</span>`
+        : `<span style="color:var(--text3);font-size:11px">—</span>`;
+
+      // ── Custo SAP (R$): variação BRUTA × custo médio SAP (informado no modal) ──
+      const _custoSapVal = r.custoMedioSap > 0 ? r.custoSap : null;
+      const _custoSapCls = _custoSapVal !== null ? _varClass(_custoSapVal) : '';
+      const custoSapCell = _custoSapVal !== null
+        ? `<span class="td-mono ${_custoSapCls}" style="font-size:11.5px;white-space:nowrap">${_varSymbol(_custoSapVal)} ${_money(Math.abs(_custoSapVal))}</span>`
+        : `<span style="color:var(--text3);font-size:11px">—</span>`;
+
+      // ── Custo Just. (R$): variação AJUSTADA × custo médio automático (era "Custo Var." antes desta mudança) ──
+      const _custoJustVal = r.custoMedio > 0 ? r.custo : null;
+      const _custoJustCls = _custoJustVal !== null ? _varClass(_custoJustVal) : '';
+      const custoJustCell = _custoJustVal !== null
+        ? `<span class="td-mono ${_custoJustCls}" style="font-size:11.5px;white-space:nowrap">${_varSymbol(_custoJustVal)} ${_money(Math.abs(_custoJustVal))}</span>`
+        : `<span style="color:var(--text3);font-size:11px">—</span>`;
+
+      // ── Custo Médio (R$/kg): agora é o valor MANUAL informado no modal (Custo Médio SAP) — não usa mais o cálculo automático do sistema ──
+      const custoMedCell = r.custoMedioSap > 0
+        ? `<span class="td-mono" style="color:var(--text2);font-size:11.5px">${_money(r.custoMedioSap)}<span style="font-size:9.5px;opacity:.6">/kg</span></span>`
         : `<span style="color:var(--text3);font-size:11px">—</span>`;
 
       // ── Saldo justificado ──────────────────────────────────
@@ -811,8 +828,10 @@
         <td style="text-align:right;white-space:nowrap">${teorCell}</td>
         <td style="text-align:right;white-space:nowrap">${varCell}</td>
         <td style="text-align:right;white-space:nowrap">${custoVarCell}</td>
+        <td style="text-align:right;white-space:nowrap">${custoSapCell}</td>
         <td style="text-align:right;white-space:nowrap">${saldoCell}</td>
         <td style="text-align:right;white-space:nowrap">${varAdjCell}</td>
+        <td style="text-align:right;white-space:nowrap">${custoJustCell}</td>
         <td style="text-align:right;white-space:nowrap">${custoMedCell}</td>
         <td style="text-align:center">
           <button onclick="invAbrirJust('${r.k}')" style="background:${hasJust?'var(--green-bg)':'var(--bg4)'};border:1px solid ${hasJust?'var(--green-border)':'var(--border2)'};color:${hasJust?'var(--green)':'var(--text2)'};border-radius:6px;padding:4px 10px;font-size:10px;cursor:pointer;white-space:nowrap;font-family:var(--font);transition:all .13s">
@@ -1026,28 +1045,52 @@
 
   // Exige os 3 campos preenchidos (operacional, fiscal e saldo) — sem
   // justificativa parcial. Retorna null se válido, ou mensagem de erro.
+  // Recalcula o card "Custo Total SAP" ao vivo, sempre que o usuário digita
+  // no campo Custo Médio SAP — sem precisar salvar. varKg vem embutido no
+  // próprio onclick/oninput (fixo por modal, não muda durante a edição).
+  window._invAtualizarCustoSapCard = function(varKg) {
+    const el = document.getElementById('inv-j-custo-sap-card');
+    if (!el) return;
+    const h = window._inv_helpers;
+    const _money = h ? h.money : fmtR;
+    const custoMedioSap = parseFloat(document.getElementById('inv-j-custo-sap')?.value || 0) || 0;
+    const total = custoMedioSap * varKg;
+    const cls = total < -0.0001 ? 'diff-neg' : total > 0.0001 ? 'diff-pos' : 'diff-zero';
+    const icon = !custoMedioSap ? '' :
+      total > 0.0001  ? '<i class="ti ti-trending-up" style="color:var(--amber)"></i>' :
+      total < -0.0001 ? '<i class="ti ti-trending-down" style="color:var(--red)"></i>' :
+      '<i class="ti ti-minus" style="color:var(--green)"></i>';
+    el.className = 'td-mono ' + cls;
+    el.innerHTML = `${icon} ${_money(Math.abs(total))}`;
+  };
+
   function _invValidarJustForm() {
-    const op     = document.getElementById('inv-j-op')?.value.trim();
-    const fiscal = document.getElementById('inv-j-fiscal')?.value.trim();
-    const saldo  = document.getElementById('inv-j-saldo')?.value;
-    if (!op || !fiscal || saldo === '' || saldo == null) {
-      return 'Preencha justificativa operacional, justificativa fiscal e saldo justificado antes de salvar.';
+    const op         = document.getElementById('inv-j-op')?.value.trim();
+    const fiscal     = document.getElementById('inv-j-fiscal')?.value.trim();
+    const saldo      = document.getElementById('inv-j-saldo')?.value;
+    const custoSap   = document.getElementById('inv-j-custo-sap')?.value;
+    if (!op || !fiscal || saldo === '' || saldo == null || custoSap === '' || custoSap == null) {
+      return 'Preencha justificativa operacional, justificativa fiscal, saldo justificado e custo médio SAP antes de salvar.';
     }
     return null;
   }
 
   // Salva os dados do formulário atual no registro k (sem fechar/navegar).
   function _invSalvarJustCore(k) {
-    const op     = document.getElementById('inv-j-op')?.value.trim();
-    const fiscal = document.getElementById('inv-j-fiscal')?.value.trim();
-    const saldo  = document.getElementById('inv-j-saldo')?.value;
-    invJustificativas[k] = { op, fiscal, saldo };
+    const op         = document.getElementById('inv-j-op')?.value.trim();
+    const fiscal     = document.getElementById('inv-j-fiscal')?.value.trim();
+    const saldo      = document.getElementById('inv-j-saldo')?.value;
+    const custoSap   = document.getElementById('inv-j-custo-sap')?.value;
+    invJustificativas[k] = { op, fiscal, saldo, custoMedioSap: custoSap };
     const row = invRows.find(r => r.k === k);
     if (row) {
       const saldoJust = parseFloat(saldo||0)||0;
       row.saldoJust = saldoJust;
       row.varAdj = row.varKg - saldoJust;
-      row.custo  = row.varAdj * row.custoMedio;
+      row.custo  = row.varAdj * row.custoMedio;          // Custo Just. (varAdj × custo médio automático)
+      row.custoVarBruto  = row.varKg * row.custoMedio;    // Custo Var. (varKg bruto × custo médio automático)
+      row.custoMedioSap  = parseFloat(custoSap||0)||0;
+      row.custoSap       = row.varKg * row.custoMedioSap; // Custo SAP (varKg bruto × custo médio SAP manual)
     }
     invFiltrar();
     invAtualizarKpis();
@@ -1147,7 +1190,10 @@
     const _money     = h ? h.money      : fmtR;
     const _escape    = h ? h.escapeHtml : (s) => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     const vkCls  = _varClass(row.varKg);
-    const cstCls = _varClass(row.custo);
+    const cstCls = _varClass(row.custoVarBruto);
+    const custoMedioSapInicial = parseFloat(j.custoMedioSap || 0) || 0;
+    const custoSapInicial = custoMedioSapInicial * row.varKg;
+    const cstSapCls = _varClass(custoSapInicial);
 
     const temFila   = _invNavQueue.length > 1;
     const podeAnt   = _invNavIdx > 0;
@@ -1183,17 +1229,23 @@
           </div>
         </div>
         <div class="modal-body" style="display:flex;flex-direction:column;gap:14px">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-            <div style="background:var(--bg3);border:1px solid var(--border2);border-radius:10px;padding:12px 10px;text-align:center">
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+            <div style="background:var(--bg3);border:1px solid var(--border2);border-radius:10px;padding:12px 8px;text-align:center">
               <div class="oc-label" style="margin-bottom:7px">Variação (kg)</div>
-              <div class="td-mono ${vkCls}" style="font-size:18px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap">
+              <div class="td-mono ${vkCls}" style="font-size:16px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:5px;white-space:nowrap">
                 ${_heroIcon(row.varKg)} ${_fmtKg(Math.abs(row.varKg))}
               </div>
             </div>
-            <div style="background:var(--bg3);border:1px solid var(--border2);border-radius:10px;padding:12px 10px;text-align:center">
+            <div style="background:var(--bg3);border:1px solid var(--border2);border-radius:10px;padding:12px 8px;text-align:center">
               <div class="oc-label" style="margin-bottom:7px">Custo Var. (R$)</div>
-              <div class="td-mono ${cstCls}" style="font-size:18px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap">
-                ${_heroIcon(row.custo)} ${_money(Math.abs(row.custo))}
+              <div class="td-mono ${cstCls}" style="font-size:16px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:5px;white-space:nowrap">
+                ${_heroIcon(row.custoVarBruto)} ${_money(Math.abs(row.custoVarBruto))}
+              </div>
+            </div>
+            <div style="background:var(--bg3);border:1px solid var(--border2);border-radius:10px;padding:12px 8px;text-align:center">
+              <div class="oc-label" style="margin-bottom:7px">Custo Total SAP</div>
+              <div class="td-mono ${cstSapCls}" id="inv-j-custo-sap-card" style="font-size:16px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:5px;white-space:nowrap">
+                ${custoMedioSapInicial ? _heroIcon(custoSapInicial) : ''} ${_money(Math.abs(custoSapInicial))}
               </div>
             </div>
           </div>
@@ -1214,6 +1266,10 @@
               <input id="inv-j-saldo" type="number" class="oc-input" placeholder="0" value="${j.saldo||''}" style="flex:1">
               <button type="button" class="btn" style="white-space:nowrap;flex-shrink:0" onclick="document.getElementById('inv-j-saldo').value='${(Math.round(row.varKg*100)/100)}'" title="Preenche com a variação total, já com o sinal de ${row.varKg < 0 ? 'desfalque (negativo)' : 'sobra (positivo)'}">Variação total</button>
             </div>
+          </div>
+          <div class="oc-form-group">
+            <label class="oc-label">Custo Médio SAP (R$/kg) <span class="oc-required">*</span> <span class="oc-hint">buscado pelo usuário no SAP, alimenta a coluna Custo Médio e o card Custo Total SAP</span></label>
+            <input id="inv-j-custo-sap" type="number" step="0.01" class="oc-input" placeholder="0,00" value="${j.custoMedioSap||''}" oninput="_invAtualizarCustoSapCard(${row.varKg})">
           </div>
         </div>
         <div class="modal-footer" style="justify-content:space-between">
@@ -1256,7 +1312,7 @@
     // consistente com o resto do app (fmtKg/money) e com o delimitador ';'.
     const _n = (v, dec = 2) => (Number(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: dec, maximumFractionDigits: dec });
 
-    const header = ['Regional','Filial','Material','Categoria','Est.Ini.(kg)','Est.Ini. Ausente?','Entradas(kg)','Saídas(kg)','Est.Teórico(kg)','Est.Real(kg)','Est.Final Ausente?','Var.(kg)','Var.(%)','Custo Médio (R$/kg)','Custo Variação (R$)','Saldo Justificado (kg)','Var.Ajustada (kg)','Just.Operacional','Just.Fiscal'];
+    const header = ['Regional','Filial','Material','Categoria','Est.Ini.(kg)','Est.Ini. Ausente?','Entradas(kg)','Saídas(kg)','Est.Teórico(kg)','Est.Real(kg)','Est.Final Ausente?','Var.(kg)','Var.(%)','Custo Var. (R$)','Custo SAP (R$)','Saldo Justificado (kg)','Var.Ajustada (kg)','Custo Just. (R$)','Custo Médio (R$/kg)','Just.Operacional','Just.Fiscal'];
     const rows = invRows.map(r => {
       const j = invJustificativas[r.k] || {};
       return [
@@ -1273,10 +1329,12 @@
         r.estoqueFimMissing ? 'SIM' : 'NÃO',
         _n(r.varKg),
         _n(r.varPct),
-        _n(r.custoMedio),
-        _n(r.custo),
+        r.custoMedio > 0 ? _n(r.custoVarBruto) : '',
+        r.custoMedioSap > 0 ? _n(r.custoSap) : '',
         j.saldo ? _n(parseFloat(j.saldo)) : '',
         _n(r.varAdj),
+        r.custoMedio > 0 ? _n(r.custo) : '',
+        r.custoMedioSap > 0 ? _n(r.custoMedioSap) : '',
         j.op || '',
         j.fiscal || ''
       ].map(v => '"' + String(v).replace(/"/g, '""') + '"').join(';');
@@ -1295,7 +1353,7 @@
   let invIniciado = false;
   window.renderInventario = function() {
     if (!invIniciado) {
-      const defaultTh = document.querySelector('.inv-data-table th[data-col="custo"]');
+      const defaultTh = document.querySelector('.inv-data-table th[data-col="custoVarBruto"]');
       if (defaultTh) defaultTh.classList.add('sort-desc');
       invIniciado = true;
     }
