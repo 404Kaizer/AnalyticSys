@@ -1,8 +1,11 @@
 // ═══════════════════════════════════════════════════════════
 // ALTERNÂNCIA DE VISÃO — Visão Micro ↔ Visão Inventário
 // (o Inventário vive como uma segunda "lente" dentro do Dashboard
-// Analítico, mas com seletor de MÊS próprio — independente do período
-// livre da Visão Micro, que usa o calendário 'an' de calendar.js)
+// Analítico, com seletor de MÊS próprio — sincronizado automaticamente
+// com o mês da data inicial do período livre da Visão Micro toda vez que
+// "Analisar" roda, ver invSyncMonthFromPeriod em inventario.js. Fora
+// disso, o usuário pode trocar o mês do Inventário manualmente e essa
+// escolha prevalece até a próxima análise.)
 // ═══════════════════════════════════════════════════════════
 function anSwitchView(view) {
   const btnMicro  = document.getElementById('an-view-btn-micro');
@@ -1699,7 +1702,16 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
   // Atualizar sempre recalcula as duas visões (Micro e Inventário), já que
   // compartilham o mesmo período — feito ANTES de esconder o overlay de
   // loading, para que ele cubra as duas etapas.
+  // Antes de gerar, sincroniza o mês selecionado do Inventário com o mês
+  // da data INICIAL do período recém-analisado (mesmo se o usuário não
+  // estiver na aba Inventário agora — assim, ao entrar nela depois, já
+  // está no mês certo). Se o usuário trocar o mês manualmente no seletor
+  // do Inventário depois disso, essa escolha prevalece até o próximo
+  // "Analisar".
   if (typeof _lstepSet === 'function') { _lstepSet('an-render', 'done'); _lstepSet('an-inv', 'running'); _lbarSet(95); }
+  if (typeof window.invSyncMonthFromPeriod === 'function') {
+    window.invSyncMonthFromPeriod(dtIni);
+  }
   if (typeof invGerar === 'function') {
     invGerar();
   }

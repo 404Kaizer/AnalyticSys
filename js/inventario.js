@@ -309,6 +309,25 @@
   function invGetSelectedMonth() { return _invMonthState.selectedMonth; }
   function invGetMesKey()        { return invMesKey(_invMonthState.selectedYear, _invMonthState.selectedMonth); }
 
+  // Sincroniza o mês selecionado do Inventário com a data inicial do
+  // período livre analisado na Visão Micro (chamado por rodarAnalitico,
+  // em analitico.js, toda vez que o usuário clica em "Analisar" — mesmo
+  // se ele não estiver na aba Inventário no momento). Usa o mês da data
+  // INICIAL do período quando ele abrange mais de um mês. Só atualiza o
+  // estado/rótulo aqui; quem decide se regenera os dados é o chamador
+  // (evita recalcular o inventário sem necessidade quando o mês não mudou).
+  window.invSyncMonthFromPeriod = function(dtIni) {
+    if (!(dtIni instanceof Date) || isNaN(dtIni)) return;
+    const y = dtIni.getFullYear();
+    const m = dtIni.getMonth();
+    if (y === _invMonthState.selectedYear && m === _invMonthState.selectedMonth) return; // já está no mês certo
+    _invMonthState.selectedYear  = y;
+    _invMonthState.selectedMonth = m;
+    _invMonthState.viewYear      = y;
+    _invUpdateMonthTriggerLabel();
+    _invRenderMonthGrid();
+  };
+
   function _invUpdateMonthTriggerLabel() {
     const label = document.getElementById('inv-month-label');
     if (label) label.textContent = MESES_NOME[_invMonthState.selectedMonth] + ' de ' + _invMonthState.selectedYear;
@@ -1189,11 +1208,11 @@
               ${_invMontarOptionsFiscal(j.fiscal||'')}
             </select>
           </div>
-          <div class="oc-form-group">
+          <div class="oc-form-group" style="max-width:280px">
             <label class="oc-label">Saldo Justificado (kg) <span class="oc-required">*</span> <span class="oc-hint">parte/total da variação com causa identificada</span></label>
-            <div style="display:flex;gap:8px;align-items:stretch">
-              <input id="inv-j-saldo" type="number" class="oc-input" placeholder="0" value="${j.saldo||''}" style="flex:1">
-              <button type="button" class="btn" style="white-space:nowrap;flex-shrink:0" onclick="document.getElementById('inv-j-saldo').value='${(Math.round(row.varKg*100)/100)}'" title="Preenche com a variação total, já com o sinal de ${row.varKg < 0 ? 'desfalque (negativo)' : 'sobra (positivo)'}">Variação total</button>
+            <div style="display:flex;gap:6px;align-items:center">
+              <input id="inv-j-saldo" type="number" class="oc-input" placeholder="0" value="${j.saldo||''}" style="max-width:150px">
+              <button type="button" class="btn" style="font-size:10.5px;padding:7px 9px;white-space:nowrap" onclick="document.getElementById('inv-j-saldo').value='${(Math.round(Math.abs(row.varKg)*100)/100)}'" title="Preenche com a variação total (${_fmtKg(Math.abs(row.varKg))})">Variação total</button>
             </div>
           </div>
         </div>
