@@ -122,6 +122,80 @@
 .form-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px; flex-wrap: wrap; }
 
 /* ══════════════════════════════════════════
+   SPINNER DE BOTÃO — indicador leve de carregamento para ações rápidas
+   (salvar/excluir cadastro individual), em vez do overlay cheio de tela
+   (reservado para operações longas, tipo importação de arquivo grande).
+   Reaproveita a animação @keyframes spin já definida.
+══════════════════════════════════════════ */
+.btn-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  opacity: 0.75;
+  animation: spin 0.7s linear infinite;
+  vertical-align: -2px;
+  margin-right: 2px;
+}
+.btn.is-loading { pointer-events: none; opacity: 0.75; }
+
+/* ══════════════════════════════════════════
+   CADASTRO INDIVIDUAL — linhas dinâmicas (Materiais/Filiais)
+   Cada linha = um registro, com campos digitados de verdade (não texto
+   cru). Botão "+" adiciona mais linhas; ícone de "x" remove uma linha
+   específica (mantém sempre pelo menos 1 linha visível).
+══════════════════════════════════════════ */
+.reg-individual-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 380px;
+  overflow-y: auto;
+  padding-right: 4px;
+  margin-bottom: 10px;
+}
+.reg-individual-row {
+  display: grid;
+  gap: 8px;
+  align-items: end;
+}
+.reg-individual-row .form-group { margin: 0; }
+.reg-row-materiais { grid-template-columns: 1.2fr 1.2fr 170px 34px; }
+.reg-row-filiais   { grid-template-columns: 1.3fr 110px 190px 1fr 34px; }
+.reg-row-remove {
+  height: 36px;
+  width: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text3);
+  cursor: pointer;
+  border-radius: var(--radius);
+  transition: background .13s, color .13s;
+  flex-shrink: 0;
+}
+.reg-row-remove:hover { background: var(--red-bg); color: var(--red); }
+.reg-add-row-btn { align-self: flex-start; }
+.link-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--accent);
+  font-size: inherit;
+  font-family: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.link-btn:hover { color: var(--accent-hover, var(--accent)); }
+@media (max-width: 720px) {
+  .reg-row-materiais, .reg-row-filiais { grid-template-columns: 1fr; }
+  .reg-row-remove { justify-self: end; }
+}
+
+/* ══════════════════════════════════════════
    MODAL
 /* ══════════════════════════════════════════
    BDM TRIGGER

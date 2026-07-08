@@ -1,3 +1,22 @@
+// ── Indicador leve de carregamento (spinner de botão) ──────────────────
+// Usado em ações rápidas (salvar/excluir cadastro individual), em vez do
+// overlay cheio de tela (reservado para operações longas como importação
+// de arquivo grande). Guarda o HTML original no dataset para restaurar
+// depois, sem precisar duplicar o markup do botão em cada chamador.
+function _setBtnLoading(btn, loading, loadingLabel) {
+  if (!btn) return;
+  if (loading) {
+    if (btn.dataset.origHtml === undefined) btn.dataset.origHtml = btn.innerHTML;
+    btn.innerHTML = `<span class="btn-spinner"></span> ${escapeHtml(loadingLabel || 'Processando...')}`;
+    btn.disabled = true;
+    btn.classList.add('is-loading');
+  } else {
+    if (btn.dataset.origHtml !== undefined) { btn.innerHTML = btn.dataset.origHtml; delete btn.dataset.origHtml; }
+    btn.disabled = false;
+    btn.classList.remove('is-loading');
+  }
+}
+
 function salvarConfig() {
   const key = val('cfg-key');
   const value = val('cfg-val-input');
@@ -127,7 +146,7 @@ async function atualizarCadastros() {
   }
 }
 
-async function salvarMateriais() {
+async function salvarMateriais(btn) {
   const text = val('materiais-text');
   const lines = text.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
   if (!lines.length) { toast('Informe ao menos um cadastro', 'error'); return; }
@@ -135,15 +154,110 @@ async function salvarMateriais() {
   const imported = parseMateriaisLines(lines);
   if (!imported.length) { toast('Nenhum cadastro válido encontrado', 'error'); return; }
 
+  _setBtnLoading(btn, true, 'Salvando...');
   upsertMateriais(imported);
   listPages.materiais = 0;
   setVal('materiais-text', '');
+  // Fecha o modal imediatamente após a mutação local — não espera o
+  // persist assíncrono nem o re-render pesado de renderAll() (antes disso
+  // ficava visivelmente aberto por mais tempo do que deveria).
+  closeModal('modal-materiais');
+  _setBtnLoading(btn, false);
   reaplicarPadronizacaoMateriais();
   await persistStateNow();
   renderAll();
   updateImportPrereqUI();
   toast(`${imported.length} material(is) cadastrado(s)`);
-  closeModal('modal-materiais');
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// CADASTRO INDIVIDUAL DE MATERIAIS — campos digitados, múltiplas linhas
+// ═══════════════════════════════════════════════════════════════════════
+let _matIndivRowSeq = 0;
+
+function abrirCadastroMaterialIndividual() {
+  const container = document.getElementById('mat-indiv-rows');
+  if (!container) return;
+  container.innerHTML = '';
+  _matIndivRowSeq = 0;
+  _addMaterialIndivRow();
+  openModal('modal-materiais-individual');
+  setTimeout(() => container.querySelector('input')?.focus(), 50);
+}
+
+function _addMaterialIndivRow() {
+  const container = document.getElementById('mat-indiv-rows');
+  if (!container) return;
+  const id = _matIndivRowSeq++;
+  const catOptions = (typeof CATEGORIAS_MATERIAL !== 'undefined' ? CATEGORIAS_MATERIAL : [])
+    .map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+  const row = document.createElement('div');
+  row.className = 'reg-individual-row reg-row-materiais';
+  row.dataset.rowId = id;
+  row.innerHTML = `
+    <div class="form-group">
+      <label class="form-label">Original</label>
+      <input type="text" class="form-input" data-field="origem" placeholder="Nome bruto (como vem na importação)">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Grupo SAP</label>
+      <input type="text" class="form-input" data-field="alias" placeholder="Nome padronizado">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Categoria</label>
+      <select class="form-select" data-field="categoria">
+        <option value="">—</option>
+        ${catOptions}
+      </select>
+    </div>
+    <div class="reg-row-remove" title="Remover esta linha" onclick="_removeIndivRow(this)"><i class="ti ti-x"></i></div>
+  `;
+  container.appendChild(row);
+}
+
+// Compartilhado entre Materiais e Filiais — remove a linha clicada, mas
+// mantém sempre pelo menos 1 linha visível no formulário (limpa em vez de
+// remover, se for a última).
+function _removeIndivRow(el) {
+  const row = el.closest('.reg-individual-row');
+  if (!row) return;
+  const container = row.parentElement;
+  if (container.children.length <= 1) {
+    row.querySelectorAll('input, select').forEach(i => { i.value = ''; });
+    return;
+  }
+  row.remove();
+}
+
+async function salvarMateriaisIndividual(btn) {
+  const container = document.getElementById('mat-indiv-rows');
+  if (!container) return;
+  const rows = [...container.querySelectorAll('.reg-individual-row')];
+  const imported = [];
+  rows.forEach(row => {
+    const origem = row.querySelector('[data-field="origem"]')?.value.trim() || '';
+    const alias  = row.querySelector('[data-field="alias"]')?.value.trim()  || '';
+    const categoriaRaw = row.querySelector('[data-field="categoria"]')?.value.trim() || '';
+    if (!origem || !alias) return; // linha em branco ou incompleta — ignora silenciosamente
+    imported.push({
+      origem, alias,
+      categoria: normalizeCategoriaMaterial(categoriaRaw),
+      created: new Date().toLocaleDateString('pt-BR')
+    });
+  });
+
+  if (!imported.length) { toast('Preencha ao menos um cadastro completo (Original + Grupo SAP)', 'error'); return; }
+
+  _setBtnLoading(btn, true, 'Cadastrando...');
+  upsertMateriais(imported);
+  listPages.materiais = 0;
+  closeModal('modal-materiais-individual');
+  _setBtnLoading(btn, false);
+  reaplicarPadronizacaoMateriais();
+  await persistStateNow();
+  renderAll();
+  updateImportPrereqUI();
+  toast(`${imported.length} material(is) cadastrado(s)`);
 }
 
 function parseMateriaisLines(lines) {
@@ -381,19 +495,48 @@ function focusMaterialImport() {
   document.getElementById('file-materiais')?.click();
 }
 
-async function removerMaterial(id) {
+async function removerMaterial(id, btn) {
   const idx = state.materiais.findIndex(m => m.id === id);
   if (idx < 0) {
     toast('Material não encontrado', 'error');
     return;
   }
-  state.materiais.splice(idx, 1);
-  invalidateMaterialLookup();
-  reaplicarPadronizacaoMateriais();
-  await persistStateNow();
-  renderAll();
-  updateImportPrereqUI();
-  toast('Material removido');
+  const rec = state.materiais[idx];
+
+  confirmarDestrutivo({
+    title: 'Excluir cadastro de material',
+    sub: rec.origem,
+    body: `
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="display:flex;gap:8px;align-items:center">
+          <span style="color:var(--text3);min-width:80px;font-size:12px">Original</span>
+          <strong>${escapeHtml(rec.origem)}</strong>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span style="color:var(--text3);min-width:80px;font-size:12px">Grupo SAP</span>
+          <span>${escapeHtml(rec.alias)}</span>
+        </div>
+        <div style="margin-top:8px;padding:10px 12px;background:var(--red-bg);border:1px solid var(--red-border);border-radius:6px;font-size:12px;color:var(--red)">
+          <i class="ti ti-alert-triangle"></i>
+          Registros já importados que usam este nome original deixarão de ser padronizados e passarão a aparecer como "sem cadastro" até serem recadastrados.
+        </div>
+      </div>`,
+    confirmLabel: 'Excluir material',
+    onConfirm: async () => {
+      _setBtnLoading(btn, true);
+      const curIdx = state.materiais.findIndex(m => m.id === id);
+      if (curIdx < 0) { _setBtnLoading(btn, false); return; }
+      state.materiais.splice(curIdx, 1);
+      invalidateMaterialLookup();
+      reaplicarPadronizacaoMateriais();
+      await persistStateNow();
+      renderAll();
+      updateImportPrereqUI();
+      toast('Material removido');
+      // Não precisa _setBtnLoading(false) aqui — o botão em si some do DOM
+      // no próximo renderAll()/renderMateriais(), que redesenha a tabela.
+    }
+  });
 }
 
 async function limparMateriais() {
@@ -409,7 +552,7 @@ async function limparMateriais() {
 }
 
 
-async function salvarFiliais() {
+async function salvarFiliais(btn) {
   const text = val('filiais-text');
   const lines = text.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
   if (!lines.length) { toast('Informe ao menos um cadastro', 'error'); return; }
@@ -417,9 +560,82 @@ async function salvarFiliais() {
   const imported = parseFiliaisLines(lines);
   if (!imported.length) { toast('Nenhum cadastro válido encontrado', 'error'); return; }
 
+  _setBtnLoading(btn, true, 'Salvando...');
   upsertFiliais(imported);
   setVal('filiais-text', '');
   closeModal('modal-filiais');
+  _setBtnLoading(btn, false);
+  reaplicarPadronizacaoCentrais();
+  await persistStateNow();
+  renderAll();
+  updateImportPrereqUI();
+  toast(`${imported.length} filial(is) cadastrada(s)`);
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// CADASTRO INDIVIDUAL DE CENTRAIS — campos digitados, múltiplas linhas
+// ═══════════════════════════════════════════════════════════════════════
+let _filIndivRowSeq = 0;
+
+function abrirCadastroFilialIndividual() {
+  const container = document.getElementById('filial-indiv-rows');
+  if (!container) return;
+  container.innerHTML = '';
+  _filIndivRowSeq = 0;
+  _addFilialIndivRow();
+  openModal('modal-filiais-individual');
+  setTimeout(() => container.querySelector('input')?.focus(), 50);
+}
+
+function _addFilialIndivRow() {
+  const container = document.getElementById('filial-indiv-rows');
+  if (!container) return;
+  const id = _filIndivRowSeq++;
+  const row = document.createElement('div');
+  row.className = 'reg-individual-row reg-row-filiais';
+  row.dataset.rowId = id;
+  row.innerHTML = `
+    <div class="form-group">
+      <label class="form-label">Original</label>
+      <input type="text" class="form-input" data-field="origem" placeholder="Nome bruto (como vem na importação)">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Sigla</label>
+      <input type="text" class="form-input" data-field="alias" placeholder="SET1">
+    </div>
+    <div class="form-group">
+      <label class="form-label">CNPJ</label>
+      <input type="text" class="form-input" data-field="cnpj" placeholder="00.000.000/0000-00">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Regional</label>
+      <input type="text" class="form-input" data-field="regional" placeholder="Nome do responsável/regional">
+    </div>
+    <div class="reg-row-remove" title="Remover esta linha" onclick="_removeIndivRow(this)"><i class="ti ti-x"></i></div>
+  `;
+  container.appendChild(row);
+}
+
+async function salvarFiliaisIndividual(btn) {
+  const container = document.getElementById('filial-indiv-rows');
+  if (!container) return;
+  const rows = [...container.querySelectorAll('.reg-individual-row')];
+  const imported = [];
+  rows.forEach(row => {
+    const origem   = row.querySelector('[data-field="origem"]')?.value.trim()   || '';
+    const alias    = row.querySelector('[data-field="alias"]')?.value.trim()    || '';
+    const cnpj     = row.querySelector('[data-field="cnpj"]')?.value.trim()     || '';
+    const regional = row.querySelector('[data-field="regional"]')?.value.trim() || '';
+    if (!origem || !alias) return; // linha em branco ou incompleta — ignora silenciosamente
+    imported.push({ origem, alias, cnpj, regional, created: new Date().toLocaleDateString('pt-BR') });
+  });
+
+  if (!imported.length) { toast('Preencha ao menos um cadastro completo (Original + Sigla)', 'error'); return; }
+
+  _setBtnLoading(btn, true, 'Cadastrando...');
+  upsertFiliais(imported);
+  closeModal('modal-filiais-individual');
+  _setBtnLoading(btn, false);
   reaplicarPadronizacaoCentrais();
   await persistStateNow();
   renderAll();

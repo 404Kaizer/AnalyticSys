@@ -3112,7 +3112,7 @@ function renderMateriais() {
       <td class="td-mono">${m.alias}</td>
       <td class="td-muted">${m.categoria ? `<span style="font-size:10px;background:var(--bg4);border:1px solid var(--border2);border-radius:20px;padding:2px 8px;color:var(--text2);white-space:nowrap">${escapeHtml(m.categoria)}</span>` : '—'}</td>
       <td class="td-muted">${m.created || '—'}</td>
-      <td><button class="btn-icon danger" onclick="removerMaterial('${m.id}')"><i class="ti ti-trash"></i></button></td>
+      <td><button class="btn-icon danger" onclick="removerMaterial('${m.id}', this)"><i class="ti ti-trash"></i></button></td>
     </tr>
   `).join('');
   const _tbl_materiais = document.getElementById('tb-materiais')?.closest('table');

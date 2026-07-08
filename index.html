@@ -2474,10 +2474,10 @@
           <div class="table-header">
             <span class="table-title"><i class="ti ti-map-pin"></i> Padronização de Centrais</span>
             <div class="table-toolbar">
-              <button class="btn" onclick="openModal('modal-filiais')">
+              <button class="btn" onclick="abrirCadastroFilialIndividual()">
                 <i class="ti ti-plus"></i> Novo Cadastro
               </button>
-              <button class="btn" onclick="openModal('modal-filiais'); focusFilialImport()">
+              <button class="btn" onclick="openModal('modal-filiais')">
                 <i class="ti ti-file-upload"></i> Importar em lote
               </button>
               <button class="btn js-atualizar-cadastros" onclick="atualizarCadastros()" title="Reaplica o cadastro atual de Centrais e Materiais sobre Entradas, Saídas, Lançamentos e SAP já importados, e atualiza todas as telas que dependem desses cadastros">
@@ -2525,10 +2525,10 @@
           <div class="table-header">
             <span class="table-title"><i class="ti ti-stack-2"></i> Padronização de Materiais</span>
             <div class="table-toolbar">
-              <button class="btn" onclick="openModal('modal-materiais')">
+              <button class="btn" onclick="abrirCadastroMaterialIndividual()">
                 <i class="ti ti-plus"></i> Novo Cadastro
               </button>
-              <button class="btn" onclick="openModal('modal-materiais'); focusMaterialImport()">
+              <button class="btn" onclick="openModal('modal-materiais')">
                 <i class="ti ti-file-upload"></i> Importar em lote
               </button>
               <button class="btn js-atualizar-cadastros" onclick="atualizarCadastros()" title="Reaplica o cadastro atual de Centrais e Materiais sobre Entradas, Saídas, Lançamentos e SAP já importados, e atualiza todas as telas que dependem desses cadastros">
@@ -3506,11 +3506,11 @@
 
 
 
-<!-- MODAL: Filiais / Aliases -->
+<!-- MODAL: Filiais / Aliases — CADASTRO EM LOTE / IMPORTAÇÃO -->
 <div class="modal-overlay" id="modal-filiais">
   <div class="modal" style="max-width:760px">
-    <div class="modal-title"><i class="ti ti-map-pin"></i> Cadastro de Centrais</div>
-    <div class="modal-sub">Use uma linha por cadastro. Formato: <span class="td-mono">ORIGINAL = SIGLA = CNPJ = REGIONAL</span>. Prefixo numérico opcional: <span class="td-mono">82 | Sete Lagoas = SET1 = 00.000.000/0000-00 = João Pereira</span>.</div>
+    <div class="modal-title"><i class="ti ti-file-upload"></i> Cadastro de Centrais em Lote</div>
+    <div class="modal-sub">Use uma linha por cadastro. Formato: <span class="td-mono">ORIGINAL = SIGLA = CNPJ = REGIONAL</span>. Prefixo numérico opcional: <span class="td-mono">82 | Sete Lagoas = SET1 = 00.000.000/0000-00 = João Pereira</span>. Para cadastrar poucos registros com campos guiados, use <button type="button" class="link-btn" onclick="closeModal('modal-filiais');abrirCadastroFilialIndividual()">Cadastro Individual</button>.</div>
 
     <div class="form-grid" style="grid-template-columns:1fr">
       <div class="form-group">
@@ -3522,22 +3522,38 @@
     <div class="form-actions" style="justify-content:space-between">
       <div style="display:flex; gap:8px; flex-wrap:wrap">
         <input type="file" id="file-filiais" class="file-input" accept=".xlsx,.csv" onchange="handleFiliaisImport(event)">
-        <button class="btn" onclick="focusFilialImport()"><i class="ti ti-file-upload"></i> Importar arquivo</button>
         <button class="btn" onclick="document.getElementById('file-filiais').click()"><i class="ti ti-folder-open"></i> Selecionar arquivo</button>
       </div>
       <div style="display:flex; gap:8px; flex-wrap:wrap">
         <button class="btn" onclick="closeModal('modal-filiais')">Cancelar</button>
-        <button class="btn btn-primary" onclick="salvarFiliais()"><i class="ti ti-check"></i> Salvar cadastros</button>
+        <button class="btn btn-primary" id="btn-salvar-filiais" onclick="salvarFiliais(this)"><i class="ti ti-check"></i> Salvar cadastros</button>
       </div>
     </div>
   </div>
 </div>
 
-<!-- MODAL: Materiais / Grupo SAP -->
+<!-- MODAL: Filiais / Aliases — CADASTRO INDIVIDUAL (campos digitados) -->
+<div class="modal-overlay" id="modal-filiais-individual">
+  <div class="modal" style="max-width:900px">
+    <div class="modal-title"><i class="ti ti-map-pin"></i> Cadastro Individual de Centrais</div>
+    <div class="modal-sub">Preencha os campos abaixo. Clique em <b>+ Adicionar linha</b> para cadastrar mais de uma central de uma vez. Para colar uma lista grande ou importar arquivo, use <button type="button" class="link-btn" onclick="closeModal('modal-filiais-individual');openModal('modal-filiais')">Cadastro em Lote</button>.</div>
+
+    <div class="reg-individual-rows" id="filial-indiv-rows"></div>
+    <button type="button" class="btn reg-add-row-btn" onclick="_addFilialIndivRow()"><i class="ti ti-plus"></i> Adicionar linha</button>
+
+    <div class="form-actions">
+      <button class="btn" onclick="closeModal('modal-filiais-individual')">Cancelar</button>
+      <button class="btn btn-primary" id="btn-salvar-filial-indiv" onclick="salvarFiliaisIndividual(this)"><i class="ti ti-check"></i> Cadastrar</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- MODAL: Materiais / Grupo SAP — CADASTRO EM LOTE / IMPORTAÇÃO -->
 <div class="modal-overlay" id="modal-materiais">
   <div class="modal" style="max-width:760px">
-    <div class="modal-title"><i class="ti ti-stack-2"></i> Cadastro de Materiais / Grupo SAP</div>
-    <div class="modal-sub">Use uma linha por cadastro. Formatos aceitos: <span class="td-mono">origem = grupo</span>, <span class="td-mono">origem = grupo = categoria</span>, <span class="td-mono">origem;grupo</span> ou importação por arquivo. O grupo será o nome exibido em Lançamentos. Categoria é opcional e deve ser uma das 5 fixas: Aglomerante, Agregado Graúdo, Agregado Miúdo, Aditivo ou Adição — valores fora dessa lista são ignorados.</div>
+    <div class="modal-title"><i class="ti ti-file-upload"></i> Cadastro de Materiais em Lote</div>
+    <div class="modal-sub">Use uma linha por cadastro. Formatos aceitos: <span class="td-mono">origem = grupo</span>, <span class="td-mono">origem = grupo = categoria</span>, <span class="td-mono">origem;grupo</span> ou importação por arquivo. O grupo será o nome exibido em Lançamentos. Categoria é opcional e deve ser uma das 5 fixas: Aglomerante, Agregado Graúdo, Agregado Miúdo, Aditivo ou Adição — valores fora dessa lista são ignorados. Para cadastrar poucos registros com campos guiados, use <button type="button" class="link-btn" onclick="closeModal('modal-materiais');abrirCadastroMaterialIndividual()">Cadastro Individual</button>.</div>
 
     <div class="form-grid" style="grid-template-columns:1fr">
       <div class="form-group">
@@ -3549,16 +3565,32 @@
     <div class="form-actions" style="justify-content:space-between">
       <div style="display:flex; gap:8px; flex-wrap:wrap">
         <input type="file" id="file-materiais" class="file-input" accept=".xlsx,.csv" onchange="handleMateriaisImport(event)">
-        <button class="btn" onclick="focusMaterialImport()"><i class="ti ti-file-upload"></i> Importar arquivo</button>
         <button class="btn" onclick="document.getElementById('file-materiais').click()"><i class="ti ti-folder-open"></i> Selecionar arquivo</button>
       </div>
       <div style="display:flex; gap:8px; flex-wrap:wrap">
         <button class="btn" onclick="closeModal('modal-materiais')">Cancelar</button>
-        <button class="btn btn-primary" onclick="salvarMateriais()"><i class="ti ti-check"></i> Salvar cadastros</button>
+        <button class="btn btn-primary" id="btn-salvar-materiais" onclick="salvarMateriais(this)"><i class="ti ti-check"></i> Salvar cadastros</button>
       </div>
     </div>
   </div>
 </div>
+
+<!-- MODAL: Materiais / Grupo SAP — CADASTRO INDIVIDUAL (campos digitados) -->
+<div class="modal-overlay" id="modal-materiais-individual">
+  <div class="modal" style="max-width:900px">
+    <div class="modal-title"><i class="ti ti-stack-2"></i> Cadastro Individual de Materiais</div>
+    <div class="modal-sub">Preencha os campos abaixo. Clique em <b>+ Adicionar linha</b> para cadastrar mais de um material de uma vez. Para colar uma lista grande ou importar arquivo, use <button type="button" class="link-btn" onclick="closeModal('modal-materiais-individual');openModal('modal-materiais')">Cadastro em Lote</button>.</div>
+
+    <div class="reg-individual-rows" id="mat-indiv-rows"></div>
+    <button type="button" class="btn reg-add-row-btn" onclick="_addMaterialIndivRow()"><i class="ti ti-plus"></i> Adicionar linha</button>
+
+    <div class="form-actions">
+      <button class="btn" onclick="closeModal('modal-materiais-individual')">Cancelar</button>
+      <button class="btn btn-primary" id="btn-salvar-material-indiv" onclick="salvarMateriaisIndividual(this)"><i class="ti ti-check"></i> Cadastrar</button>
+    </div>
+  </div>
+</div>
+
 
 <!-- Toast -->
 <div class="toast" id="toast">
