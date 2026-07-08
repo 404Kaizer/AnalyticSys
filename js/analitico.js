@@ -226,22 +226,15 @@ function _rodarAnaliticoCore(dtIni, dtFim, onDone) {
         _macroPesoFimSoma[mat] = (_macroPesoFimSoma[mat] || 0) + num(r.peso);
       }
     });
-    // ── Lookup de categoria por material (O(n), sem find() por material) ──
+    // ── Lookup de catKey por material (O(n), sem find() por material) ──
     // Necessário para que getPrePeriodLaunchStock aplique a regra de Agregado
     // (recuar até a última terça) também no total somaPrimeiro da central.
-    const _matCategoriaFirst = {};
-    lancsNoPeriodo.forEach(r => {
-      const mat = r.material || '—';
-      if (!_matCategoriaFirst[mat] && r.categoria) _matCategoriaFirst[mat] = r.categoria;
-    });
-    sapNoPeriodo.forEach(r => {
-      const mat = r.material || '—';
-      if (!_matCategoriaFirst[mat] && r.categoria) _matCategoriaFirst[mat] = r.categoria;
-    });
+    // Busca SEMPRE no cadastro atual de Materiais (normalize.js) — nunca na
+    // categoria de um registro bruto do período nem por heurística de nome.
+    // null = material sem cadastro (ou cadastrado sem categoria).
     const _matCatKeyLookup = {};
     allMats.forEach(mat => {
-      const categoria = (_matCategoriaFirst[mat] || '').trim().toUpperCase();
-      _matCatKeyLookup[mat] = detectCatKey(categoria) || detectCatFromMat(mat);
+      _matCatKeyLookup[mat] = getCatKeyDoCadastro(mat);
     });
 
     const _prePeriodoStockByMat = {};
@@ -610,19 +603,23 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
     // saúde (donut/chips) para garantir consistência entre a linha da
     // tabela e os contadores agregados do card.
     const thresholds = getHealthThresholds();
-    const MAT_LEVEL_ICON  = { bom: 'ti-circle-check', atencao: 'ti-alert-triangle', urgente: 'ti-alert-circle', critico: 'ti-flame' };
-    const MAT_LEVEL_LABEL = { bom: 'Bom', atencao: 'Atenção', urgente: 'Urgente', critico: 'Crítico' };
-    const MAT_LEVEL_COLOR = { bom: 'var(--green)', atencao: 'var(--amber)', urgente: '#f97316', critico: 'var(--red)' };
+    const MAT_LEVEL_ICON  = { bom: 'ti-circle-check', atencao: 'ti-alert-triangle', urgente: 'ti-alert-circle', critico: 'ti-flame', sem_cadastro: 'ti-help-circle' };
+    const MAT_LEVEL_LABEL = { bom: 'Bom', atencao: 'Atenção', urgente: 'Urgente', critico: 'Crítico', sem_cadastro: 'Sem cadastro' };
+    const MAT_LEVEL_COLOR = { bom: 'var(--green)', atencao: 'var(--amber)', urgente: '#f97316', critico: 'var(--red)', sem_cadastro: 'var(--text3)' };
 
     // Lookup de catKey por material — computado uma vez (não a cada comparação do sort)
     // para que o diff usado na ordenação também aplique a regra de Agregado.
+    // Busca sempre no cadastro atual de Materiais — null = sem cadastro.
     const _sortCatKeyLookup = new Map();
     r.allMats.forEach(mat => {
-      const lm = lancsByMat.get(mat) || [];
-      const sm = sapByMat.get(mat) || [];
-      const categoria = (lm[0]?.categoria || sm[0]?.categoria || '').trim().toUpperCase();
-      _sortCatKeyLookup.set(mat, detectCatKey(categoria) || detectCatFromMat(mat));
+      _sortCatKeyLookup.set(mat, getCatKeyDoCadastro(mat));
     });
+
+    // Lista de materiais sem cadastro nesta central — alimenta o chip
+    // "sem cadastro" do painel de saúde (contador + modal de listagem).
+    const _matsSemCadastroCentral = r.allMats.filter(mat => !_sortCatKeyLookup.get(mat));
+    if (!window.__analiticoSemCadastroCache) window.__analiticoSemCadastroCache = new Map();
+    window.__analiticoSemCadastroCache.set(idx, { central: r.central, materiais: _matsSemCadastroCentral });
 
     // Ordena materiais: maior desfalque (diff mais negativo) → maior sobra (diff mais positivo)
     const allMatsSorted = [...r.allMats].sort((a, b) => {
@@ -641,10 +638,19 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
       const sapMatClean = sapByMatClean.get(mat) || [];
 
       // ── Classificação de categoria do material ──────────────────────────
-      // Calculado antes do buildSnapshot para poder usar matCatKey no preCarry
-      const matCategoria = (lancsMat[0]?.categoria || sapMat[0]?.categoria || '').trim().toUpperCase();
-      const matCatKey    = detectCatKey(matCategoria) || detectCatFromMat(mat);
-      const isSemanal    = matCatKey === 'agregado';
+      // Calculado antes do buildSnapshot para poder usar matCatKey no preCarry.
+      // Busca SEMPRE no cadastro atual de Materiais — nunca na categoria de
+      // um registro bruto do período nem por heurística de nome (removida).
+      // matSemCadastro=true sinaliza que o material não está cadastrado (ou
+      // cadastrado sem categoria) — usado para exibir selo visível na linha
+      // e excluir do painel de saúde, em vez de assumir uma classificação.
+      // matCategoria (texto) alimenta o filtro de Categoria da Visão Micro
+      // (data-categoria) — também do cadastro, para o filtro refletir sempre
+      // a padronização vigente.
+      const matCategoria    = getCategoriaPorGrupo(mat);
+      const matCatKey       = getCatKeyDoCadastro(mat);
+      const matSemCadastro  = !matCatKey;
+      const isSemanal       = matCatKey === 'agregado';
 
       // ── Est. Inicial do card de resumo ──────────────────────────────────
       // getPrePeriodLaunchStock: busca o lançamento mais recente antes de dtIni.
@@ -890,7 +896,8 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
         material: mat,
         periodLabel: `${fmtPtDate(dtIni)} a ${fmtPtDate(dtFim)}`,
         isSemanal,
-        catKey: detectCatKey(matCategoria) || detectCatFromMat(mat),
+        catKey: matCatKey,
+        semCadastro: matSemCadastro,
         summary: {
           pesoIni: snapshot.pesoIni,
           dtIniLabel: snapshot.dtIniLabel,
@@ -934,12 +941,18 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
         }" data-detail-key="${detailKey}" data-diff="${snapshot.diff}" data-peso-fim="${snapshot.pesoFim}" data-categoria="${escapeHtml(matCategoria)}" onclick="toggleMaterialDetail(this, event)">
           <td class="td-mono" style="font-weight:600">
             <span class="material-row-title">
-              <i class="ti ${MAT_LEVEL_ICON[matLevel]} material-row-crit-icon" style="color:${MAT_LEVEL_COLOR[matLevel]}" title="Criticidade: ${MAT_LEVEL_LABEL[matLevel]}"></i>
+              <i class="ti ${MAT_LEVEL_ICON[matLevel]} material-row-crit-icon" style="color:${MAT_LEVEL_COLOR[matLevel]}${matSemCadastro ? ';cursor:pointer' : ''}"
+                title="${matSemCadastro ? 'Material sem cadastro — clique para cadastrar' : `Criticidade: ${MAT_LEVEL_LABEL[matLevel]}`}"
+                ${matSemCadastro ? `onclick="analiticoCadastrarMaterial('${escapeHtml(mat)}', event)"` : ''}></i>
               ${escapeHtml(mat)}
             </span>
           </td>
-          <td class="td-mono" style="color:var(--text2);font-size:11px">${snapshot.pesoIniAusente ? `<span class='absent-badge' data-absent-tooltip='${buildAbsentTooltip(absentNearest)}' style='cursor:help'>AUSENTE</span>` : snapshot.dtIniLabel}</td>
-          <td class="td-mono" style="color:${snapshot.pesoIniAusente ? 'var(--text3)' : 'var(--text)'}">${snapshot.pesoIniAusente ? '—' : fmtKg(snapshot.pesoIni)}</td>
+          <td class="td-mono" style="color:var(--text2);font-size:11px">${
+            matSemCadastro
+              ? `<span class="absent-badge" style="background:var(--bg4);color:var(--text3);border-color:var(--border2)" title="Sem cadastro — não é possível determinar se segue a regra semanal de Agregados">SEM CADASTRO</span>`
+              : (snapshot.pesoIniAusente ? `<span class='absent-badge' data-absent-tooltip='${buildAbsentTooltip(absentNearest)}' style='cursor:help'>AUSENTE</span>` : snapshot.dtIniLabel)
+          }</td>
+          <td class="td-mono" style="color:${(matSemCadastro || snapshot.pesoIniAusente) ? 'var(--text3)' : 'var(--text)'}">${(matSemCadastro || snapshot.pesoIniAusente) ? '—' : fmtKg(snapshot.pesoIni)}</td>
           <td>${buildAnaliticoDetailBreakdown(entEntries, snapshot.totalEnt, 'var(--green)', 'Entradas')}</td>
           <td>${buildAnaliticoDetailBreakdown(saiEntries, snapshot.totalSai, 'var(--red)', 'Saídas')}</td>
           <td class="td-mono" style="color:var(--text2);font-size:11px">${
@@ -968,15 +981,6 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
     let healthCountsHtml = '';
     const totalMats = allMatsSorted.length;
 
-    // Build categoria lookup for this central
-    const categoriaByMat = new Map();
-    allMatsSorted.forEach(mat => {
-      const lancs = lancsByMat.get(mat) || [];
-      const saps  = sapByMat.get(mat) || [];
-      const cat = (lancs[0]?.categoria || saps[0]?.categoria || '');
-      categoriaByMat.set(mat, cat);
-    });
-
     // Health score + counts for the header badges
     // Usa getLastPeriodLaunchStockWithFallback — mesma lógica do painel interno
     // e da tabela de materiais, para garantir consistência
@@ -984,9 +988,12 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
     // "Maiores Variações" DEVEM refletir o toggle "Considerar NFs/OS pendentes"
     // (decisão confirmada: somente o breakdown diário — Est. Inicial por dia —
     // deve permanecer imune, não a saúde/donut/ranking).
+    // catKey busca SEMPRE no cadastro atual de Materiais — materiais sem
+    // cadastro (catKey null) são excluídos do cálculo de saúde por
+    // calcHealthScore (contados à parte em counts.sem_cadastro).
     const matDiffs = allMatsSorted.map(mat => {
-      const _hpCatKey = detectCatKey((categoriaByMat.get(mat) || '').trim().toUpperCase()) || detectCatFromMat(mat);
-      const prev = getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni, dtFim, catKey: _hpCatKey });
+      const catKey = getCatKeyDoCadastro(mat);
+      const prev = getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni, dtFim, catKey });
       const fim  = getLastPeriodLaunchStockWithFallback({ central: r.central, material: mat, dtIni, dtFim });
       const snap = buildSnapshot({
         lancs: lancsByMat.get(mat) || [],
@@ -996,15 +1003,16 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
         finalStockOverride:       fim && !fim.missing ? fim.value : null,
         finalDateLabelOverride:   fim && !fim.missing ? fim.dtLabel : null
       });
-      const rawCat = categoriaByMat.get(mat) || '';
-      const catKey = detectCatKey(rawCat) || detectCatFromMat(mat);
       return { mat, diff: snap.diff, catKey };
     });
     const healthResult = calcHealthScore(matDiffs, lancsByMat, sapByMat, thresholds);
-    const allNeutral = totalMats > 0 && matDiffs.every(m => Math.abs(m.diff) <= 0.0001);
+    // allNeutral considera só materiais COM cadastro — consistente com o
+    // escopo de calcHealthScore, que já exclui sem_cadastro do cálculo.
+    const _matDiffsComCadastro = matDiffs.filter(m => m.catKey);
+    const allNeutral = _matDiffsComCadastro.length > 0 && _matDiffsComCadastro.every(m => Math.abs(m.diff) <= 0.0001);
     const hLevel = (totalMats === 0 || allNeutral) ? 'sem_saude' : healthResult.level;
     const hScore = (totalMats === 0 || allNeutral) ? null        : healthResult.score;
-    const hCounts = healthResult.counts || { bom: 0, atencao: 0, urgente: 0, critico: 0, neutro: 0 };
+    const hCounts = healthResult.counts || { bom: 0, atencao: 0, urgente: 0, critico: 0, neutro: 0, sem_cadastro: 0 };
     const hLabelMap  = { ok: 'SAUDÁVEL', atencao: 'ATENÇÃO', urgente: 'URGENTE', critico: 'CRÍTICO', sem_saude: 'SEM SAÚDE' };
     const hIconMap   = { ok: 'ti-heartbeat', atencao: 'ti-alert-triangle', urgente: 'ti-alert-circle', critico: 'ti-flame', sem_saude: 'ti-heart-off' };
     const hStyleMap  = {
@@ -1021,6 +1029,7 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
         <span class="micro-health-count-chip hcc-urgente${hCounts.urgente === 0 ? ' hcc-zero' : ''}"><i class="ti ti-alert-circle"></i> ${hCounts.urgente} urgente</span>
         <span class="micro-health-count-chip hcc-atencao${hCounts.atencao === 0 ? ' hcc-zero' : ''}"><i class="ti ti-alert-triangle"></i> ${hCounts.atencao} atenção</span>
         <span class="micro-health-count-chip hcc-bom${hCounts.bom === 0 ? ' hcc-zero' : ''}"><i class="ti ti-circle-check"></i> ${hCounts.bom} bom</span>
+        ${hCounts.sem_cadastro > 0 ? `<span class="micro-health-count-chip hcc-sem-cadastro" title="Excluídos do cálculo de saúde — clique para ver e cadastrar" onclick="analiticoAbrirSemCadastroModal(${idx}, event)"><i class="ti ti-help-circle"></i> ${hCounts.sem_cadastro} sem cadastro</span>` : ''}
       </div>`;
     } else {
       healthCountsHtml = `<div class="micro-health-counts">
@@ -1506,6 +1515,9 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
   if (!container) return;
   container.innerHTML = '';
   window.__analiticoDetailCache = new Map();
+  // Cache de materiais sem cadastro por central (chave: idx da central),
+  // alimenta o modal aberto pelo chip "sem cadastro" do painel de saúde.
+  window.__analiticoSemCadastroCache = new Map();
 
 
   // Ordena centrais: maior desfalque (variação mais negativa) → maior sobra (mais positiva)
@@ -1525,8 +1537,7 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
     return [...(r.allMats || [])].reduce((acc, mat) => {
       const lm = lancsByMat.get(mat) || [];
       const sm = sapByMat.get(mat)   || [];
-      const categoria = (lm[0]?.categoria || sm[0]?.categoria || '').trim().toUpperCase();
-      const catKey = detectCatKey(categoria) || detectCatFromMat(mat);
+      const catKey = getCatKeyDoCadastro(mat);
       const prev = getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni, dtFim, catKey });
       return acc + buildSnapshot({
         lancs: lm,
@@ -1693,7 +1704,57 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
   });
 }  // end _rodarAnaliticoCore
 
+// Abre modal listando os materiais sem cadastro de uma central específica
+// (chip "sem cadastro" do painel de saúde). Reaproveita o padrão visual
+// alert-modal-* já usado em Conflitos/Inventário/Pendências de padronização.
+function analiticoAbrirSemCadastroModal(idx, event) {
+  if (event) event.stopPropagation();
+  document.getElementById('alert-modal-an-sem-cad')?.remove();
+  const entry = window.__analiticoSemCadastroCache?.get(idx);
+  if (!entry || !entry.materiais.length) return;
 
+  const rows = entry.materiais.map(m => `
+    <div class="dup-cad-row">
+      <span class="dup-cad-alias" title="${escapeHtml(m)}">${escapeHtml(m)}</span>
+      <button class="btn-icon" type="button" title="Cadastrar agora" onclick="analiticoCadastrarMaterial('${escapeHtml(m)}', event)">
+        <i class="ti ti-plus"></i>
+      </button>
+    </div>`).join('');
+
+  const overlay = document.createElement('div');
+  overlay.id = 'alert-modal-an-sem-cad';
+  overlay.className = 'alert-modal-overlay';
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  overlay.innerHTML = `
+    <div class="alert-modal-card">
+      <div class="alert-modal-header">
+        <div>
+          <div class="alert-modal-title is-amber"><i class="ti ti-help-circle"></i> Materiais sem cadastro — ${escapeHtml(entry.central)}</div>
+          <div class="alert-modal-sub">${entry.materiais.length} ${entry.materiais.length === 1 ? 'material' : 'materiais'} excluíd${entry.materiais.length === 1 ? 'o' : 'os'} do cálculo de saúde desta central até serem cadastrados</div>
+        </div>
+        <button class="alert-modal-close" onclick="document.getElementById('alert-modal-an-sem-cad').remove()"><i class="ti ti-x"></i></button>
+      </div>
+      <div class="alert-modal-body"><div class="dup-cad-group">${rows}</div></div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+window.analiticoAbrirSemCadastroModal = analiticoAbrirSemCadastroModal;
+
+// Abre o modal de cadastro de Materiais já pré-preenchido com o nome,
+// acionado pelo selo "sem cadastro" na linha do material (Visão Micro).
+// Mesmo padrão de _invCadastrarMaterial (inventario.js) / _pendPadronizacaoAbrirCadastro
+// (dashboard.js) para material não cadastrado.
+function analiticoCadastrarMaterial(nome, event) {
+  if (event) event.stopPropagation(); // não abre/fecha o detalhe da linha
+  document.getElementById('alert-modal-an-sem-cad')?.remove();
+  openModal('modal-materiais');
+  setVal('materiais-text', nome + ' = ');
+  setTimeout(() => {
+    const el = document.getElementById('materiais-text');
+    if (el) { el.focus(); el.selectionStart = el.selectionEnd = el.value.length; }
+  }, 50);
+}
+window.analiticoCadastrarMaterial = analiticoCadastrarMaterial;
 
 
 function toggleMaterialDetail(row, event) {

@@ -1892,6 +1892,8 @@ tr.pend-injetado-ambos {
 .micro-health-count-chip.hcc-urgente { border-color: rgba(249,115,22,0.22); background: rgba(249,115,22,0.10); color: #f97316; }
 .micro-health-count-chip.hcc-critico { border-color: var(--red-border); background: var(--red-bg); color: var(--red); }
 .micro-health-count-chip.hcc-zero { background: var(--bg3); border-color: var(--border); color: var(--text3); opacity: 0.45; }
+.micro-health-count-chip.hcc-sem-cadastro { border-color: var(--border3); background: var(--bg4); color: var(--text2); cursor: pointer; }
+.micro-health-count-chip.hcc-sem-cadastro:hover { filter: brightness(1.15); }
 
 /* Config section for health thresholds */
 .health-cfg-grid {
@@ -3781,6 +3783,13 @@ img { max-width: 100%; }
   justify-self: start;
   white-space: nowrap;
 }
+.aus-mat-type--sem-cadastro {
+  color: var(--amber);
+  background: var(--amber-bg);
+  border-color: var(--amber-border);
+  cursor: pointer;
+}
+.aus-mat-type--sem-cadastro:hover { filter: brightness(1.15); }
 .aus-dias-wrap {
   display: flex;
   flex-wrap: wrap;
@@ -9039,6 +9048,8 @@ td:has(.lanc-central-edit:focus) {
 .dg-vg-stat-critico { background: var(--red-bg);   border-color: var(--red-border);   color: var(--red); }
 .dg-vg-stat-urgente { background: rgba(249,115,22,0.10); border-color: rgba(249,115,22,0.22); color: #f97316; }
 .dg-vg-stat-atencao { background: var(--amber-bg); border-color: var(--amber-border); color: var(--amber); }
+.dg-vg-stat-sem-cadastro { background: var(--bg4); border-color: var(--border3); color: var(--text2); transition: filter .13s; }
+.dg-vg-stat-sem-cadastro:hover { filter: brightness(1.15); }
 
 .dg-vg-extremos-grid {
   display: grid;

@@ -374,8 +374,10 @@ function _dgVgBuildPares(results, thresholds, dtIni, dtFim) {
     r.allMats.forEach(mat => {
       const lancs  = lancsByMat.get(mat) || [];
       const sap    = sapByMat.get(mat)   || [];
-      const rawCat = (lancs[0]?.categoria || sap[0]?.categoria || '').trim().toUpperCase();
-      const catKey = detectCatKey(rawCat) || detectCatFromMat(mat);
+      // catKey busca SEMPRE no cadastro atual de Materiais — nunca na
+      // categoria de um registro bruto do período nem por heurística de
+      // nome (removida). null = material sem cadastro.
+      const catKey = getCatKeyDoCadastro(mat);
 
       let diff;
       if (dtIni && dtFim) {
@@ -390,8 +392,11 @@ function _dgVgBuildPares(results, thresholds, dtIni, dtFim) {
         diff = buildSnapshot({ lancs, sap }).diff;
       }
 
-      const neutro   = Math.abs(diff) <= 0.0001;
-      const level    = neutro ? 'bom' : classifyVariation(Math.abs(diff), catKey, thresholds);
+      const neutro = Math.abs(diff) <= 0.0001;
+      // Sem cadastro tem prioridade sobre "neutro" — mesmo com variação
+      // próxima de zero, não deve ser contado como 'bom' silenciosamente
+      // (decisão: excluído do cálculo de saúde até ser cadastrado).
+      const level    = !catKey ? 'sem_cadastro' : (neutro ? 'bom' : classifyVariation(Math.abs(diff), catKey, thresholds));
       const custoMed = (r.custoMedioPorMat || {})[mat] || 0;
 
       pares.push({ central: r.central, regional, mat, catKey, diff, level, neutro, custoImplicado: diff * custoMed });
@@ -405,8 +410,10 @@ function _dgVgBuildPares(results, thresholds, dtIni, dtFim) {
 // macro.js (matItems/matCounts): todos os materiais entram, inclusive os
 // com variação zero (classificados 'bom'), sem exclusão de "neutros".
 function _dgVgCounts(pares) {
-  const counts = { critico: 0, urgente: 0, atencao: 0, bom: 0 };
-  pares.forEach(p => { counts[p.level]++; });
+  // sem_cadastro rastreado à parte — nunca soma em critico/urgente/atencao/bom
+  // (excluído do cálculo de saúde, decisão já aplicada em calcHealthScore).
+  const counts = { critico: 0, urgente: 0, atencao: 0, bom: 0, sem_cadastro: 0 };
+  pares.forEach(p => { counts[p.level] = (counts[p.level] || 0) + 1; });
   return counts;
 }
 
@@ -497,7 +504,10 @@ function _dgVgExtremos(map) {
 
 function _dgVgVariacaoFisicaPorCategoria(pares) {
   const out = { agregado: 0, aglomerante: 0, aditivo: 0, adicao: 0 };
-  pares.forEach(p => { out[p.catKey] = (out[p.catKey] || 0) + p.diff; });
+  // Materiais sem cadastro (catKey null) ficam de fora — sem categoria
+  // conhecida, não há bucket correto para somar; evita criar uma chave
+  // fantasma "null" no objeto de saída.
+  pares.forEach(p => { if (!p.catKey) return; out[p.catKey] = (out[p.catKey] || 0) + p.diff; });
   return out;
 }
 
@@ -521,6 +531,9 @@ function _dgVgAgruparCustoVariacaoPorCategoria(map) {
   const cats = { agregado: [], aglomerante: [], aditivo: [], adicao: [] };
   map.forEach(({ catKey, total }, mat) => {
     if (!(total > 0)) return;
+    // Sem cadastro (catKey null): fora da agregação por categoria — não
+    // há categoria conhecida para colocar, evita bucket fantasma "null".
+    if (!catKey) return;
     if (!cats[catKey]) cats[catKey] = [];
     cats[catKey].push({ mat, total });
   });
@@ -690,6 +703,9 @@ function _dgVgMaterialTipHtml(label, value, pct, color) {
 function _dgVgBuildHealthDonutData(pares) {
   const levelMeta = { critico: { diff: 0, custo: 0 }, urgente: { diff: 0, custo: 0 }, atencao: { diff: 0, custo: 0 }, bom: { diff: 0, custo: 0 } };
   pares.forEach(p => {
+    // Sem cadastro é excluído do donut de saúde (mesma exclusão do score) —
+    // sem essa guarda, levelMeta['sem_cadastro'] é undefined e quebra aqui.
+    if (!levelMeta[p.level]) return;
     levelMeta[p.level].diff  += p.diff;
     levelMeta[p.level].custo += Math.abs(p.custoImplicado);
   });
@@ -789,7 +805,7 @@ function renderDgVisaoGeralPdf(results, thresholds, dtIni, dtFim) {
   const custoAbsPorCat = _dgVgAgruparCustoVariacaoPorCategoria(custoVarMap);
 
   _dgVgRenderKpisHero(varTotalFisica, custoTotal);
-  _dgVgRenderStatBoxes(counts, recorrentes);
+  _dgVgRenderStatBoxes(counts, recorrentes, pares);
   _dgVgRenderHealthDonuts(pares, counts, scoreInfo, thresholds);
   _dgVgRenderChartCategoriaFisica(catFisica);
   _dgVgRenderExtremos(extRegional, extCentral);
@@ -827,10 +843,15 @@ function _dgVgRenderKpisHero(varTotalFisica, custoTotal) {
 
 // ── 2. Stat boxes: Recorrentes + Críticos + Urgentes + Atenção — separados
 //    do(s) donut(s) de saúde.
-function _dgVgRenderStatBoxes(counts, recorrentes) {
+function _dgVgRenderStatBoxes(counts, recorrentes, pares) {
   const boxesEl = document.getElementById('dg-vg-health-boxes');
   if (!boxesEl) return;
   const recTxt = recorrentes === null ? '—' : String(recorrentes);
+
+  // Lista de materiais sem cadastro (nomes únicos) — alimenta o modal
+  // aberto pelo box "Sem cadastro", quando houver algum.
+  const semCadastroLista = [...new Set((pares || []).filter(p => !p.catKey).map(p => p.mat))].sort();
+  window.__dgVgSemCadastroLista = semCadastroLista;
 
   boxesEl.innerHTML = `
     <div class="dg-vg-stat-box dg-vg-stat-recorrentes">
@@ -848,8 +869,64 @@ function _dgVgRenderStatBoxes(counts, recorrentes) {
     <div class="dg-vg-stat-box dg-vg-stat-atencao">
       <span class="dg-vg-stat-label"><i class="ti ti-alert-triangle"></i> Materiais em Atenção</span>
       <span class="dg-vg-stat-value">${counts.atencao}</span>
-    </div>`;
+    </div>
+    ${semCadastroLista.length ? `
+    <div class="dg-vg-stat-box dg-vg-stat-sem-cadastro" style="cursor:pointer" onclick="dgVgAbrirSemCadastroModal()" title="Excluídos do cálculo de saúde — clique para ver e cadastrar">
+      <span class="dg-vg-stat-label"><i class="ti ti-help-circle"></i> Sem Cadastro</span>
+      <span class="dg-vg-stat-value">${semCadastroLista.length}</span>
+    </div>` : ''}`;
 }
+
+// Abre modal listando os materiais sem cadastro da Visão Geral (Dashboard
+// Gerencial) — mesmo padrão visual alert-modal-* já usado em
+// Conflitos/Inventário/Pendências/Analítico.
+// Modal genérico de materiais sem cadastro — reaproveitado por qualquer
+// painel do Dashboard Gerencial que precise listar materiais excluídos por
+// falta de cadastro, com atalho de cadastro rápido por item. Mesmo padrão
+// visual alert-modal-* já usado em Conflitos/Inventário/Pendências/Analítico.
+function dgAbrirSemCadastroModalGenerico(modalId, lista, subtitulo) {
+  document.getElementById(modalId)?.remove();
+  if (!lista || !lista.length) return;
+
+  const rows = lista.map(m => `
+    <div class="dup-cad-row">
+      <span class="dup-cad-alias" title="${escapeHtml(m)}">${escapeHtml(m)}</span>
+      <button class="btn-icon" type="button" title="Cadastrar agora" onclick="analiticoCadastrarMaterial('${escapeHtml(m)}', event)">
+        <i class="ti ti-plus"></i>
+      </button>
+    </div>`).join('');
+
+  const overlay = document.createElement('div');
+  overlay.id = modalId;
+  overlay.className = 'alert-modal-overlay';
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  overlay.innerHTML = `
+    <div class="alert-modal-card">
+      <div class="alert-modal-header">
+        <div>
+          <div class="alert-modal-title is-amber"><i class="ti ti-help-circle"></i> Materiais sem cadastro</div>
+          <div class="alert-modal-sub">${subtitulo}</div>
+        </div>
+        <button class="alert-modal-close" onclick="document.getElementById('${modalId}').remove()"><i class="ti ti-x"></i></button>
+      </div>
+      <div class="alert-modal-body"><div class="dup-cad-group">${rows}</div></div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
+function dgVgAbrirSemCadastroModal() {
+  const lista = window.__dgVgSemCadastroLista || [];
+  const sub = `${lista.length} ${lista.length === 1 ? 'material' : 'materiais'} excluíd${lista.length === 1 ? 'o' : 'os'} do cálculo de saúde da Visão Geral até serem cadastrados`;
+  dgAbrirSemCadastroModalGenerico('alert-modal-dgvg-sem-cad', lista, sub);
+}
+window.dgVgAbrirSemCadastroModal = dgVgAbrirSemCadastroModal;
+
+function dgCustosSemCadastroModal() {
+  const lista = window.__dgCustosSemCadastroLista || [];
+  const sub = `${lista.length} ${lista.length === 1 ? 'material' : 'materiais'} excluíd${lista.length === 1 ? 'o' : 'os'} do agrupamento por categoria até serem cadastrados`;
+  dgAbrirSemCadastroModalGenerico('alert-modal-dgcustos-sem-cad', lista, sub);
+}
+window.dgCustosSemCadastroModal = dgCustosSemCadastroModal;
 
 // ── 3. Os dois donuts de saúde — réplica dos donuts "Materiais" e
 //    "Centrais" do Dashboard Analítico, com o mesmo cálculo de percentual.
@@ -1757,9 +1834,15 @@ function _ausComputar(dtIni, dtFim) {
   };
 
   const ausencias = [];
-  paresInfo.forEach(({ central, mat, categoria }, key) => {
-    const catKey    = detectCatKey(String(categoria).trim().toUpperCase()) || detectCatFromMat(mat);
-    const isSemanal = catKey === 'agregado';
+  paresInfo.forEach(({ central, mat }, key) => {
+    // catKey busca SEMPRE no cadastro atual de Materiais — nunca na
+    // categoria de um registro bruto do período nem por heurística de
+    // nome (removida). Sem cadastro: mantém a regra diária (padrão
+    // seguro já existente), mas fica marcado como semCadastro=true para
+    // o resultado exibir isso visivelmente (decisão confirmada com Hugo).
+    const catKey      = getCatKeyDoCadastro(mat);
+    const semCadastro = !catKey;
+    const isSemanal    = catKey === 'agregado';
     const esperadosISO = isSemanal ? esperadosSemanal : esperadosDiario;
     if (!esperadosISO.length) return;
 
@@ -1851,7 +1934,7 @@ function _ausComputar(dtIni, dtFim) {
     const motivoZerado  = zeradoPorPeso ? 'peso_zero' : zeradoPorInatividade ? 'inatividade' : null;
 
     ausencias.push({
-      central, mat, isSemanal, categoria: categoria || '—', diasAusentes,
+      central, mat, isSemanal, semCadastro, categoria: getCategoriaPorGrupo(mat) || '—', diasAusentes,
       estoqueZerado, motivoZerado,
       ultimoPeso:    ctx.ultimoLanc?.peso    ?? null,
       ultimaData,
@@ -1961,12 +2044,14 @@ function renderAusencias() {
   }
 
   const regionaisCount = new Set(filtered.map(a => a.regional)).size;
+  const semCadastroCount = new Set(filtered.filter(a => a.semCadastro).map(a => a.mat)).size;
   subtitle.innerHTML = `
     <span class="aus-summary-chips">
       <span class="aus-chip red">${lancAusentes} ausência${lancAusentes !== 1 ? 's' : ''}</span>
       <span class="aus-chip amber">${matsUnicos} ${matsUnicos !== 1 ? 'materiais' : 'material'}</span>
       <span class="aus-chip teal">${centrais} ${centrais !== 1 ? 'centrais' : 'central'}</span>
       <span class="aus-chip purple">${regionaisCount} ${regionaisCount !== 1 ? 'regionais' : 'regional'}</span>
+      ${semCadastroCount > 0 ? `<span class="aus-chip amber" style="opacity:.85" title="Cadência assumida como diária por falta de cadastro"><i class="ti ti-help-circle" style="font-size:10px"></i> ${semCadastroCount} sem cadastro</span>` : ''}
       <button onclick="event.stopPropagation();gerarRelatorioAusenciasGeral()"
         style="margin-left:6px;display:inline-flex;align-items:center;gap:5px;background:transparent;
           border:1px solid var(--border2);border-radius:5px;padding:2px 10px;font-size:10.5px;
@@ -2001,7 +2086,7 @@ function renderAusencias() {
         const chips = r.diasAusentes
           .map(d => `<span class="aus-dia-chip">${_ausDateStr(d)}</span>`)
           .join('');
-        const typeLabel = r.isSemanal ? 'Semanal' : 'Diário';
+        const typeLabel = r.isSemanal ? 'Semanal' : (r.semCadastro ? 'Diário (sem cadastro)' : 'Diário');
         const zeroClass = r.estoqueZerado ? ' aus-mat-row--zerado' : '';
         const _fmtD = d => d ? d.toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric' }) : '—';
         const _buildZeroTipHtml = () => {
@@ -2044,7 +2129,9 @@ function renderAusencias() {
         return `
           <div class="aus-mat-row${zeroClass}">
             <span class="aus-mat-name">${escapeHtml(r.mat)}</span>
-            <span class="aus-mat-type">${typeLabel}</span>
+            <span class="aus-mat-type${r.semCadastro ? ' aus-mat-type--sem-cadastro' : ''}"
+              ${r.semCadastro ? `title="Cadência assumida como diária por falta de cadastro — clique para cadastrar" onclick="event.stopPropagation();analiticoCadastrarMaterial('${escapeHtml(r.mat)}', event)"` : ''}
+            >${typeLabel}</span>
             <div class="aus-dias-wrap">${chips}${zeroBadge}</div>
           </div>`;
       }).join('');
@@ -2639,13 +2726,12 @@ function saveResponsavel(value) {
 // INDICADOR DE PENDÊNCIAS DE PADRONIZAÇÃO — Configurações
 // ═══════════════════════════════════════════════════════════
 // Preenche #pend-centrais-box e #pend-materiais-box (logo acima de cada
-// tabela de cadastro) com o resultado de getPendenciasPadronizacao()
-// (normalize.js). Chamado ao final de renderFiliais()/renderMateriais(),
-// então se atualiza sozinho sempre que essas tabelas são redesenhadas —
-// cadastro novo, exclusão, importação em lote, "Atualizar Cadastros" etc.
-// — sem precisar espalhar chamadas extras pelo código.
-const PEND_PADRONIZACAO_PREVIEW = 5;
-
+// tabela de cadastro) com um botão pulsante que abre um modal sob demanda
+// com o resultado de getPendenciasPadronizacao() (normalize.js). Chamado
+// ao final de renderFiliais()/renderMateriais(), então se atualiza
+// sozinho sempre que essas tabelas são redesenhadas — cadastro novo,
+// exclusão, importação em lote, "Atualizar Cadastros" etc. — sem precisar
+// espalhar chamadas extras pelo código.
 function _pendPadrItemMaterialHtml(item) {
   const semCategoria = item.motivo === 'sem_categoria';
   const motivoLabel  = semCategoria ? 'sem categoria' : 'não cadastrado';
@@ -2685,47 +2771,6 @@ function _pendPadrItemCentralHtml(item) {
     </div>`;
 }
 
-function _pendPadronizacaoBoxHtml(tipo, lista) {
-  const isMaterial = tipo === 'material';
-  const singular = isMaterial ? 'material' : 'central';
-  const plural   = isMaterial ? 'materiais' : 'centrais';
-
-  if (!lista.length) {
-    return `<div class="pend-padr-ok"><i class="ti ti-circle-check"></i> Nenhum${isMaterial ? '' : 'a'} ${singular} pendente de padronização.</div>`;
-  }
-
-  const total    = lista.length;
-  const preview  = lista.slice(0, PEND_PADRONIZACAO_PREVIEW);
-  const resto    = lista.slice(PEND_PADRONIZACAO_PREVIEW);
-  const itemFn   = isMaterial ? _pendPadrItemMaterialHtml : _pendPadrItemCentralHtml;
-  const boxId    = `pend-padr-rest-${tipo}`;
-  const fontes   = isMaterial ? 'Entradas/Saídas/Lançamentos/SAP' : 'Entradas/Saídas/Lançamentos/SAP/Produção';
-  const criterio = isMaterial ? 'sem cadastro ou cadastrado sem categoria' : 'sem cadastro';
-
-  return `
-    <div class="pend-padr-box">
-      <div class="pend-padr-header">
-        <i class="ti ti-alert-triangle"></i>
-        <b>${total}</b> ${total === 1 ? singular : plural} pendente${total === 1 ? '' : 's'} de padronização
-        <span class="pend-padr-sub">— vist${total === 1 ? 'o' : 'os'} em ${fontes}, ${criterio}</span>
-      </div>
-      <div class="pend-padr-list">${preview.map(itemFn).join('')}</div>
-      ${resto.length ? `
-        <div class="pend-padr-rest" id="${boxId}" style="display:none">${resto.map(itemFn).join('')}</div>
-        <button class="pend-padr-toggle" type="button" onclick="_pendPadronizacaoToggle('${boxId}', this)">Ver mais ${resto.length}</button>
-      ` : ''}
-    </div>`;
-}
-
-function _pendPadronizacaoToggle(boxId, btn) {
-  const box = document.getElementById(boxId);
-  if (!box) return;
-  const expandido = box.style.display !== 'none';
-  box.style.display = expandido ? 'none' : '';
-  if (!btn.dataset.moreLabel) btn.dataset.moreLabel = btn.textContent;
-  btn.textContent = expandido ? btn.dataset.moreLabel : 'Ver menos';
-}
-
 // Foca o textarea de cadastro em lote com o cursor no final do texto
 // pré-preenchido, pra o analista só completar o que falta.
 function _pendPadronizacaoFocarFinal(id) {
@@ -2743,6 +2788,8 @@ function _pendPadronizacaoFocarFinal(id) {
 //     (upsertMateriais casa por origem+alias) em vez de criar duplicata.
 function _pendPadronizacaoAbrirCadastro(btn) {
   const { tipo, motivo, nome, origem, alias } = btn.dataset;
+  document.getElementById('alert-modal-pend-material')?.remove();
+  document.getElementById('alert-modal-pend-central')?.remove();
   if (tipo === 'central') {
     openModal('modal-filiais');
     setVal('filiais-text', nome + ' = ');
@@ -2760,14 +2807,72 @@ document.addEventListener('click', e => {
   if (btn) _pendPadronizacaoAbrirCadastro(btn);
 });
 
+// Abre o modal com a lista completa de pendências (material ou central) —
+// scroll interno, sem paginação "ver mais".
+function _pendPadronizacaoAbrirModal(tipo) {
+  const modalId = `alert-modal-pend-${tipo}`;
+  document.getElementById(modalId)?.remove();
+  if (typeof getPendenciasPadronizacao !== 'function') return;
+
+  const { materiais, centrais } = getPendenciasPadronizacao();
+  const isMaterial = tipo === 'material';
+  const lista   = isMaterial ? materiais : centrais;
+  const itemFn  = isMaterial ? _pendPadrItemMaterialHtml : _pendPadrItemCentralHtml;
+  const singular = isMaterial ? 'material' : 'central';
+  const plural   = isMaterial ? 'materiais' : 'centrais';
+  const fontes   = isMaterial ? 'Entradas/Saídas/Lançamentos/SAP' : 'Entradas/Saídas/Lançamentos/SAP/Produção';
+  const criterio = isMaterial ? 'sem cadastro ou cadastrado sem categoria' : 'sem cadastro';
+  if (!lista.length) return;
+
+  const total = lista.length;
+  const overlay = document.createElement('div');
+  overlay.id = modalId;
+  overlay.className = 'alert-modal-overlay';
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  overlay.innerHTML = `
+    <div class="alert-modal-card">
+      <div class="alert-modal-header">
+        <div>
+          <div class="alert-modal-title is-amber"><i class="ti ti-alert-triangle"></i> Há ${plural} pendentes de padronização</div>
+          <div class="alert-modal-sub">${total} ${total === 1 ? singular : plural} vist${isMaterial ? (total === 1 ? 'o' : 'os') : (total === 1 ? 'a' : 'as')} em ${fontes}, ${criterio}</div>
+        </div>
+        <button class="alert-modal-close" onclick="document.getElementById('${modalId}').remove()"><i class="ti ti-x"></i></button>
+      </div>
+      <div class="alert-modal-body"><div class="pend-padr-list">${lista.map(itemFn).join('')}</div></div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+window._pendPadronizacaoAbrirModal = _pendPadronizacaoAbrirModal;
+
+// Renderiza o botão pulsante para materiais OU centrais, conforme total.
+function _pendPadronizacaoBtnHtml(tipo, total) {
+  const isMaterial = tipo === 'material';
+  const singular = isMaterial ? 'material' : 'central';
+  const plural   = isMaterial ? 'materiais' : 'centrais';
+
+  if (!total) {
+    return `
+      <button type="button" class="alert-pulse-btn is-ok" disabled>
+        <i class="ti ti-circle-check"></i>
+        ${isMaterial ? 'Materiais' : 'Centrais'} padronizad${isMaterial ? 'os' : 'as'} OK
+      </button>`;
+  }
+
+  return `
+    <button type="button" class="alert-pulse-btn is-amber" onclick="_pendPadronizacaoAbrirModal('${tipo}')">
+      <i class="ti ti-alert-triangle"></i>
+      Há ${total} ${total === 1 ? singular : plural} pendente${total === 1 ? '' : 's'} de padronização
+    </button>`;
+}
+
 function renderPendenciasPadronizacao() {
   const elMat = document.getElementById('pend-materiais-box');
   const elCen = document.getElementById('pend-centrais-box');
   if ((!elMat && !elCen) || typeof getPendenciasPadronizacao !== 'function') return;
 
   const { materiais, centrais } = getPendenciasPadronizacao();
-  if (elMat) elMat.innerHTML = _pendPadronizacaoBoxHtml('material', materiais);
-  if (elCen) elCen.innerHTML = _pendPadronizacaoBoxHtml('central', centrais);
+  if (elMat) elMat.innerHTML = _pendPadronizacaoBtnHtml('material', materiais.length);
+  if (elCen) elCen.innerHTML = _pendPadronizacaoBtnHtml('central', centrais.length);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -2845,7 +2950,7 @@ function renderDuplicatasCadastroMateriais() {
   if (!total) {
     el.innerHTML = `
       <button type="button" class="alert-pulse-btn is-ok" disabled>
-        <span class="alert-pulse-dot"></span>
+        <i class="ti ti-circle-check"></i>
         Cadastros de materiais OK
       </button>`;
     return;
@@ -2853,9 +2958,8 @@ function renderDuplicatasCadastroMateriais() {
 
   el.innerHTML = `
     <button type="button" class="alert-pulse-btn is-red" onclick="_dupCadAbrirModal()">
-      <span class="alert-pulse-dot"></span>
-      Há cadastro de materiais conflitantes
-      <span class="alert-pulse-count"><span>${total}</span></span>
+      <i class="ti ti-alert-octagon"></i>
+      Há ${total} cadastro${total === 1 ? '' : 's'} de materiais conflitante${total === 1 ? '' : 's'}
     </button>`;
 }
 
@@ -4378,12 +4482,12 @@ function renderDgCustos(results, dtIni, dtFim) {
       const mc = matCusto.get(mat);
       mc.somaValor += cm * peso;
       mc.somaPeso  += peso;
-      // Categoria: pega do SAP
+      // Categoria: SEMPRE do cadastro atual de Materiais — nunca do
+      // registro bruto do SAP nem por heurística de nome. null = sem
+      // cadastro (tratado explicitamente mais abaixo, nunca como 'outros').
       if (!matCat.has(mat)) {
-        const sRec = r.sapNoPeriodo.find(s => (s.material||'—') === mat);
-        const cat  = sRec?.categoria || '';
-        const catKey = detectCatKey(cat) || detectCatFromMat(mat) || 'outros';
-        matCat.set(mat, { raw: cat, key: catKey });
+        const catKey = getCatKeyDoCadastro(mat);
+        matCat.set(mat, { raw: getCategoriaPorGrupo(mat) || '', key: catKey });
       }
     });
   });
@@ -4393,9 +4497,15 @@ function renderDgCustos(results, dtIni, dtFim) {
     .sort((a,b) => b.cm - a.cm);
 
   // ── Custo por categoria ──────────────────────────────────────────────────
+  // Materiais sem cadastro (catKey null) ficam de fora do agrupamento por
+  // categoria — não há categoria real para somar, e jogá-los em "outros"
+  // confundiria com materiais que genuinamente não se encaixam nas 4
+  // categorias. Contados à parte (matsSemCadastro) para indicador visível.
   const catMap = new Map();
+  const matsSemCadastro = [];
   matArr.forEach(d => {
-    const k = d.key || 'outros';
+    if (!d.key) { matsSemCadastro.push(d.mat); return; }
+    const k = d.key;
     if (!catMap.has(k)) catMap.set(k, { mats:[], somaValor:0, somaPeso:0 });
     const c = catMap.get(k);
     c.mats.push(d);
@@ -4427,7 +4537,14 @@ function renderDgCustos(results, dtIni, dtFim) {
           <span class="custos-val">${money(d.cm)}/kg</span>
         </div>`;
       }).join('')}
+      ${matsSemCadastro.length ? `<div class="custos-grid-row" style="cursor:pointer" onclick="dgCustosSemCadastroModal()" title="Excluídos do agrupamento por categoria — clique para ver e cadastrar">
+        <span class="custos-cat-name" style="color:var(--text2)"><i class="ti ti-help-circle" style="font-size:12px"></i> Sem cadastro</span>
+        <span style="font-size:11px;color:var(--text3);font-family:var(--mono)">${matsSemCadastro.length} mat.</span>
+        <div></div>
+        <span class="custos-val" style="color:var(--text3)">—</span>
+      </div>` : ''}
     </div>`;
+  window.__dgCustosSemCadastroLista = matsSemCadastro;
 
   // ── Custo por material ───────────────────────────────────────────────────
   const maxMatCm = matArr[0]?.cm || 1;
@@ -4437,11 +4554,15 @@ function renderDgCustos(results, dtIni, dtFim) {
         <span>Material</span><span>Categoria</span><span style="text-align:right">Barra relativa</span><span style="text-align:right">R$/kg</span>
       </div>
       ${matArr.slice(0, 30).map(d => {
-        const cor = catCor[d.key] || 'var(--text3)';
+        const semCad = !d.key;
+        const cor = semCad ? 'var(--amber)' : (catCor[d.key] || 'var(--text3)');
         const pct = (d.cm/maxMatCm*100).toFixed(1);
+        const labelHtml = semCad
+          ? `<span style="font-size:10px;color:${cor};font-family:var(--mono);cursor:pointer" title="Clique para cadastrar" onclick="event.stopPropagation();analiticoCadastrarMaterial('${escapeHtml(d.mat)}', event)">Sem cadastro</span>`
+          : `<span style="font-size:10px;color:${cor};font-family:var(--mono)">${catLabel[d.key]||d.key}</span>`;
         return `<div class="custos-grid-row">
           <span class="custos-mat-name">${escapeHtml(d.mat)}</span>
-          <span style="font-size:10px;color:${cor};font-family:var(--mono)">${catLabel[d.key]||d.key}</span>
+          ${labelHtml}
           <div style="display:flex;align-items:center;gap:8px;justify-content:flex-end">
             <div class="custos-bar-track"><div class="custos-bar-fill" style="width:${pct}%;background:${cor}"></div></div>
           </div>

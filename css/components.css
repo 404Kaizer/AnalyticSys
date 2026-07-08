@@ -978,92 +978,100 @@ tbody td {
 .dup-cad-toggle:hover { text-decoration: underline; }
 
 /* ══════════════════════════════════════════
-   BOTÃO DE ALERTA PULSANTE — substitui os blocos expandidos de
-   conflito de cadastro (Config. Materiais) e materiais sem cadastro
-   (Inventário) por um botão compacto que abre um modal sob demanda.
-   Variantes por cor: --alert-red (conflito), --alert-amber (pendência),
-   --alert-ok (sem pendências, não pulsa).
+   BOTÃO DE ALERTA — substitui os blocos expandidos de conflito de
+   cadastro (Config. Materiais), materiais sem cadastro (Inventário) e
+   pendências de padronização por um botão compacto que abre um modal sob
+   demanda. Segue o mesmo padrão visual de .btn (radius, tipografia, peso),
+   com cor semântica e ícone Tabler pulsante quando há pendência.
+   Variantes: .is-red (conflito), .is-amber (pendência), .is-ok (nada
+   pendente — mesmo tom neutro de sucesso, não pulsa).
 ══════════════════════════════════════════ */
+
+/* Agrupa múltiplos botões de alerta lado a lado (ex: Conflitos +
+   Pendências de padronização, ambos em Configurações → Materiais) em vez
+   de empilhados verticalmente. Cada filho é um container (#dup-materiais-box
+   / #pend-materiais-box) que fica vazio (colapsa a 0px) quando não há
+   pendência — wrap garante que não quebre layout em telas estreitas. */
+.alert-pulse-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.alert-pulse-row .alert-pulse-btn { margin-bottom: 0; }
+
 .alert-pulse-btn {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 9px 16px;
-  border-radius: 10px;
-  border: 1px solid;
-  background: none;
-  cursor: pointer;
+  gap: 7px;
+  padding: 7px 13px;
+  border-radius: var(--radius);
   font-family: var(--font);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-  text-transform: uppercase;
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  border: 1px solid var(--border2);
+  background: var(--bg3);
+  color: var(--text2);
+  cursor: pointer;
+  white-space: nowrap;
   margin-bottom: 14px;
-  transition: transform .13s, filter .13s;
-  position: relative;
+  transition: all 0.13s;
 }
-.alert-pulse-btn:hover { filter: brightness(1.12); transform: translateY(-1px); }
-.alert-pulse-btn:active { transform: translateY(0); }
+.alert-pulse-btn i { font-size: 14px; position: relative; }
+.alert-pulse-btn:hover { border-color: var(--border3); background: var(--bg4); }
 
 .alert-pulse-btn.is-red {
   background: var(--red-bg);
   border-color: var(--red-border);
   color: var(--red);
+  font-weight: 600;
 }
+.alert-pulse-btn.is-red:hover { background: color-mix(in srgb, var(--red-bg) 70%, var(--red) 8%); }
+
 .alert-pulse-btn.is-amber {
   background: var(--amber-bg);
   border-color: var(--amber-border);
   color: var(--amber);
+  font-weight: 600;
 }
+.alert-pulse-btn.is-amber:hover { background: color-mix(in srgb, var(--amber-bg) 70%, var(--amber) 8%); }
+
 .alert-pulse-btn.is-ok {
   background: var(--green-bg);
   border-color: var(--green-border);
   color: var(--green);
   cursor: default;
-  text-transform: none;
-  font-weight: 600;
 }
-.alert-pulse-btn.is-ok:hover { filter: none; transform: none; }
+.alert-pulse-btn.is-ok:hover { background: var(--green-bg); }
 
-/* Ponto pulsante — só nas variantes com pendência (red/amber) */
-.alert-pulse-dot {
+/* Halo pulsante atrás do ícone — só nas variantes com pendência real
+   (red/amber). O ícone em si (ti-alert-triangle/ti-alert-octagon) já
+   comunica o tipo de alerta; o halo só chama atenção pro botão existir. */
+.alert-pulse-btn.is-red i::before,
+.alert-pulse-btn.is-amber i::before {
   position: relative;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
+  z-index: 1;
 }
-.alert-pulse-btn.is-red   .alert-pulse-dot { background: var(--red); }
-.alert-pulse-btn.is-amber .alert-pulse-dot { background: var(--amber); }
-.alert-pulse-btn.is-ok    .alert-pulse-dot { background: var(--green); }
-
-.alert-pulse-btn.is-red .alert-pulse-dot::after,
-.alert-pulse-btn.is-amber .alert-pulse-dot::after {
+.alert-pulse-btn.is-red i,
+.alert-pulse-btn.is-amber i {
+  display: inline-flex;
+}
+.alert-pulse-btn.is-red i::after,
+.alert-pulse-btn.is-amber i::after {
   content: '';
   position: absolute;
-  inset: 0;
+  inset: -4px;
   border-radius: 50%;
-  background: inherit;
-  animation: alertPulseRing 1.6s ease-out infinite;
+  background: currentColor;
+  opacity: 0;
+  animation: alertPulseRing 1.8s ease-out infinite;
+  z-index: 0;
 }
 @keyframes alertPulseRing {
-  0%   { transform: scale(1);   opacity: 0.7; }
-  100% { transform: scale(2.8); opacity: 0; }
+  0%   { transform: scale(0.4); opacity: 0.45; }
+  100% { transform: scale(1.8); opacity: 0; }
 }
-
-.alert-pulse-count {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  border-radius: 20px;
-  font-size: 10.5px;
-  font-weight: 800;
-  background: currentColor;
-}
-.alert-pulse-count span { color: var(--bg1); }
 
 /* ── Modal de alerta (lista de conflitos / sem cadastro) ── */
 .alert-modal-overlay {

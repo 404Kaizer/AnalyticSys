@@ -2856,7 +2856,14 @@ function getHealthThresholds() {
   return t;
 }
 
+// Classifica a variação (bom/atenção/urgente/crítico) usando os limites da
+// categoria do material. Se catKey vier null/undefined — material sem
+// cadastro ou cadastrado sem categoria — NÃO cai mais silenciosamente nos
+// limites de Aglomerante (bug anterior). Retorna 'sem_cadastro', um nível
+// distinto que os chamadores devem tratar explicitamente (nunca combinar
+// com bom/atencao/urgente/critico como se fosse uma classificação real).
 function classifyVariation(absVal, catKey, thresholds) {
+  if (!catKey) return 'sem_cadastro';
   const t = thresholds[catKey] || thresholds.aglomerante;
   if (absVal <= t.bom)     return 'bom';
   if (absVal <= t.atencao) return 'atencao';
@@ -2868,12 +2875,25 @@ function classifyVariation(absVal, catKey, thresholds) {
 const HEALTH_PENALTIES = { bom: 0, atencao: 1, urgente: 3, critico: 6 };
 
 function calcHealthScore(matDiffs, lancsByMat, sapByMat, thresholds) {
-  // matDiffs: array of { mat, diff, categoria }
-  const nonNeutral = matDiffs.filter(m => Math.abs(m.diff) > 0.0001);
-  if (!nonNeutral.length) return { score: 100, level: 'ok', counts: { bom:0, atencao:0, urgente:0, critico:0, neutro: matDiffs.length } };
+  // matDiffs: array of { mat, diff, catKey }
+  // Materiais sem cadastro (catKey null) são excluídos do cálculo de saúde
+  // por completo — não contam pontos bons nem ruins, para não contaminar
+  // o score/donut com uma classificação que não existe. Ficam isolados em
+  // counts.sem_cadastro, contados à parte (decisão: cadastro pendente não
+  // deve influenciar a nota de saúde da central).
+  const semCadastro = matDiffs.filter(m => !m.catKey);
+  const comCadastro = matDiffs.filter(m => m.catKey);
+  const nonNeutral = comCadastro.filter(m => Math.abs(m.diff) > 0.0001);
+  if (!nonNeutral.length) {
+    return {
+      score: 100,
+      level: 'ok',
+      counts: { bom: 0, atencao: 0, urgente: 0, critico: 0, neutro: comCadastro.length, sem_cadastro: semCadastro.length }
+    };
+  }
 
   let totalPenalty = 0;
-  const counts = { bom:0, atencao:0, urgente:0, critico:0, neutro: matDiffs.length - nonNeutral.length };
+  const counts = { bom: 0, atencao: 0, urgente: 0, critico: 0, neutro: comCadastro.length - nonNeutral.length, sem_cadastro: semCadastro.length };
 
   nonNeutral.forEach(m => {
     const catKey = m.catKey;

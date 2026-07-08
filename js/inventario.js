@@ -872,7 +872,7 @@
     if (!materiaisSemCadastro.length) {
       el.innerHTML = `
         <button type="button" class="alert-pulse-btn is-ok" disabled style="margin-bottom:14px">
-          <span class="alert-pulse-dot"></span>
+          <i class="ti ti-circle-check"></i>
           Materiais do período OK
         </button>`;
       return;
@@ -880,9 +880,8 @@
 
     el.innerHTML = `
       <button type="button" class="alert-pulse-btn is-amber" onclick="_invSemCadastroAbrirModal()" style="margin-bottom:14px">
-        <span class="alert-pulse-dot"></span>
-        Há materiais não cadastrados
-        <span class="alert-pulse-count"><span>${materiaisSemCadastro.length}</span></span>
+        <i class="ti ti-alert-triangle"></i>
+        Há ${materiaisSemCadastro.length} ${materiaisSemCadastro.length === 1 ? 'material' : 'materiais'} não cadastrado${materiaisSemCadastro.length === 1 ? '' : 's'}
       </button>`;
   }
 
