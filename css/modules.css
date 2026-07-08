@@ -362,7 +362,11 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  z-index: 200;
+  /* Precisa ficar acima de QUALQUER modal/overlay do sistema (o mais alto
+     hoje é 99999, num tooltip). Valor bem acima de propósito, com folga
+     para futuros overlays — toast é a única coisa que nunca pode ficar
+     coberta, senão o usuário não vê a confirmação/erro da ação. */
+  z-index: 1000000;
   transform: translateY(80px);
   opacity: 0;
   transition: all 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);

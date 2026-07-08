@@ -1125,7 +1125,6 @@
     const h = window._inv_helpers;
     const _fmtKg     = h ? h.fmtKg      : (v) => fmt(v) + ' kg';
     const _varClass  = h ? h.varClass   : (v) => v < 0 ? 'diff-neg' : v > 0 ? 'diff-pos' : 'diff-zero';
-    const _varSymbol = h ? h.varSymbol  : () => '';
     const _money     = h ? h.money      : fmtR;
     const _escape    = h ? h.escapeHtml : (s) => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     const vkCls  = _varClass(row.varKg);
@@ -1134,9 +1133,19 @@
     const temFila   = _invNavQueue.length > 1;
     const podeAnt   = _invNavIdx > 0;
     const podeProx  = _invNavIdx >= 0 && _invNavIdx < _invNavQueue.length - 1;
-    const posicaoFila = _invNavIdx >= 0
-      ? `<span style="font-size:10.5px;color:var(--text3);font-family:var(--mono)">${_invNavIdx+1} de ${_invNavQueue.length} pendentes</span>`
+    const posicaoBadge = _invNavIdx >= 0
+      ? `<span style="font-size:10.5px;font-weight:700;font-family:var(--mono);color:var(--accent);background:var(--accent-dim);border-radius:20px;padding:3px 10px;white-space:nowrap;flex-shrink:0">${_invNavIdx+1} / ${_invNavQueue.length} pend.</span>`
       : '';
+
+    // Ícone maior e proporcional ao valor (varSymbol tem font-size fixo em
+    // 11px — ok em células de tabela, mas pequeno demais junto do número
+    // em destaque aqui). Mesma lógica de sinal/cor de varIcon (dashboard.js),
+    // só que sem tamanho fixo, herdando o font-size do contêiner pai.
+    const _heroIcon = (v) => {
+      if (v > 0.0001)  return '<i class="ti ti-trending-up" style="color:var(--amber)"></i>';
+      if (v < -0.0001) return '<i class="ti ti-trending-down" style="color:var(--red)"></i>';
+      return '<i class="ti ti-minus" style="color:var(--green)"></i>';
+    };
 
     const modal = document.createElement('div');
     modal.id = 'inv-modal';
@@ -1147,19 +1156,26 @@
         <div class="modal-header">
           <div>
             <span class="modal-title"><i class="ti ti-clipboard-text"></i> ${_escape(row.central)} · ${_escape(row.material)}</span>
-            <div style="font-size:11px;color:var(--text2);margin-top:3px">${_escape(row.regional)} · ${_escape(row.categoria)}${posicaoFila ? ' · ' : ''}${posicaoFila}</div>
+            <div style="font-size:11px;color:var(--text2);margin-top:3px">${_escape(row.regional)} · ${_escape(row.categoria)}</div>
           </div>
-          <button class="modal-close" onclick="document.getElementById('inv-modal').remove()"><i class="ti ti-x"></i></button>
+          <div style="display:flex;align-items:center;gap:10px">
+            ${posicaoBadge}
+            <button class="modal-close" onclick="document.getElementById('inv-modal').remove()"><i class="ti ti-x"></i></button>
+          </div>
         </div>
         <div class="modal-body" style="display:flex;flex-direction:column;gap:14px">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;padding-bottom:14px;border-bottom:1px solid var(--border)">
-            <div style="text-align:center">
-              <div class="oc-label" style="margin-bottom:8px">Variação (kg)</div>
-              <span class="td-mono ${vkCls}" style="font-size:17px;white-space:nowrap">${_varSymbol(row.varKg)} ${_fmtKg(Math.abs(row.varKg))}</span>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div style="background:var(--bg3);border:1px solid var(--border2);border-radius:10px;padding:12px 10px;text-align:center">
+              <div class="oc-label" style="margin-bottom:7px">Variação (kg)</div>
+              <div class="td-mono ${vkCls}" style="font-size:18px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap">
+                ${_heroIcon(row.varKg)} ${_fmtKg(Math.abs(row.varKg))}
+              </div>
             </div>
-            <div style="text-align:center">
-              <div class="oc-label" style="margin-bottom:8px">Custo Var. (R$)</div>
-              <span class="td-mono ${cstCls}" style="font-size:17px;white-space:nowrap">${_varSymbol(row.custo)} ${_money(Math.abs(row.custo))}</span>
+            <div style="background:var(--bg3);border:1px solid var(--border2);border-radius:10px;padding:12px 10px;text-align:center">
+              <div class="oc-label" style="margin-bottom:7px">Custo Var. (R$)</div>
+              <div class="td-mono ${cstCls}" style="font-size:18px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap">
+                ${_heroIcon(row.custo)} ${_money(Math.abs(row.custo))}
+              </div>
             </div>
           </div>
           <div class="oc-form-group">
@@ -1173,16 +1189,21 @@
               ${_invMontarOptionsFiscal(j.fiscal||'')}
             </select>
           </div>
-          <div class="oc-form-group" style="max-width:220px">
+          <div class="oc-form-group" style="max-width:280px">
             <label class="oc-label">Saldo Justificado (kg) <span class="oc-required">*</span> <span class="oc-hint">parte/total da variação com causa identificada</span></label>
-            <input id="inv-j-saldo" type="number" class="oc-input" placeholder="0" value="${j.saldo||''}">
+            <div style="display:flex;gap:6px;align-items:center">
+              <input id="inv-j-saldo" type="number" class="oc-input" placeholder="0" value="${j.saldo||''}" style="max-width:150px">
+              <button type="button" class="btn" style="font-size:10.5px;padding:7px 9px;white-space:nowrap" onclick="document.getElementById('inv-j-saldo').value='${(Math.round(Math.abs(row.varKg)*100)/100)}'" title="Preenche com a variação total (${_fmtKg(Math.abs(row.varKg))})">Variação total</button>
+            </div>
           </div>
         </div>
-        <div class="modal-footer">
+        <div class="modal-footer" style="justify-content:space-between">
           <button class="btn" onclick="document.getElementById('inv-modal').remove()">Cancelar</button>
-          ${temFila ? `<button class="btn" ${podeAnt?'':'disabled style="opacity:.35;cursor:default;pointer-events:none"'} onclick="_invNavJust(-1)" title="Salva e vai para o pendente anterior"><i class="ti ti-chevron-left"></i> Anterior</button>` : ''}
-          ${temFila ? `<button class="btn" ${podeProx?'':'disabled style="opacity:.35;cursor:default;pointer-events:none"'} onclick="_invNavJust(1)" title="Salva e vai para o próximo pendente">Próximo <i class="ti ti-chevron-right"></i></button>` : ''}
-          <button class="btn btn-primary" onclick="invSalvarJust('${k}')"><i class="ti ti-device-floppy"></i> Salvar</button>
+          <div style="display:flex;gap:8px">
+            ${temFila ? `<button class="btn" ${podeAnt?'':'disabled style="opacity:.35;cursor:default;pointer-events:none"'} onclick="_invNavJust(-1)" title="Salva e vai para o pendente anterior"><i class="ti ti-chevron-left"></i> Anterior</button>` : ''}
+            ${temFila ? `<button class="btn" ${podeProx?'':'disabled style="opacity:.35;cursor:default;pointer-events:none"'} onclick="_invNavJust(1)" title="Salva e vai para o próximo pendente">Próximo <i class="ti ti-chevron-right"></i></button>` : ''}
+            <button class="btn btn-primary" onclick="invSalvarJust('${k}')"><i class="ti ti-device-floppy"></i> Salvar</button>
+          </div>
         </div>
       </div>`;
     document.body.appendChild(modal);
