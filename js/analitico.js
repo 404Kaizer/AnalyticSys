@@ -133,7 +133,7 @@ function _rodarAnaliticoCore(dtIni, dtFim, onDone) {
   allCentrals.forEach(central => {
 
     // ── Lançamentos desta central dentro do período — via índice ──
-    const lancsNoPeriodo = getLancsByCentralInPeriod(central, dtIni, dtFim)
+    const lancsNoPeriodoRaw = getLancsByCentralInPeriod(central, dtIni, dtFim)
       .slice() // não muta o array do índice
       .sort((a, b) => {
         const da = parseDate(a.dtLanc), db = parseDate(b.dtLanc);
@@ -141,7 +141,36 @@ function _rodarAnaliticoCore(dtIni, dtFim, onDone) {
       });
 
     // ── SAP desta central dentro do período — via índice ──
-    const sapNoPeriodo = getSapByCentralInPeriod(central, dtIni, dtFim);
+    const sapNoPeriodoRaw = getSapByCentralInPeriod(central, dtIni, dtFim);
+
+    // ── Filtragem na origem: materiais sem cadastro (ou cadastrados sem
+    //    categoria) são separados AQUI, antes de qualquer agregação por
+    //    material. Busca SEMPRE via materialOriginal — nunca via .material
+    //    (nome já resolvido), que pode coincidir por acaso com o alias/
+    //    origem de outro cadastro não relacionado (ambiguidade do caso
+    //    XYPEX). Dessa forma, todo o código abaixo (somas, macro, health
+    //    score, custo médio) já opera só sobre dados cadastrados — decisão
+    //    confirmada: exclusão total até serem cadastrados, sem contar em
+    //    nenhuma soma/gráfico/indicador, mas visível no indicador próprio.
+    //    materialCatKeyMap: nome resolvido → catKey, construído SÓ a partir
+    //    de registros já confirmados cadastrados — seguro reutilizar esse
+    //    mapa nos cálculos abaixo em vez de re-derivar catKey pelo nome
+    //    resolvido (que teria o mesmo risco de ambiguidade).
+    const materialCatKeyMap = new Map();
+    const matsSemCadastroSet = new Set(); // materialOriginal (texto exato)
+
+    const lancsNoPeriodo = lancsNoPeriodoRaw.filter(r => {
+      const catKey = getCatKeyDoCadastro(r.materialOriginal);
+      if (!catKey) { matsSemCadastroSet.add(r.materialOriginal || '—'); return false; }
+      materialCatKeyMap.set(r.material || '—', catKey);
+      return true;
+    });
+    const sapNoPeriodo = sapNoPeriodoRaw.filter(r => {
+      const catKey = getCatKeyDoCadastro(r.materialOriginal);
+      if (!catKey) { matsSemCadastroSet.add(r.materialOriginal || '—'); return false; }
+      materialCatKeyMap.set(r.material || '—', catKey);
+      return true;
+    });
 
     // ── SAP: entradas = tudo positivo, saídas = tudo negativo ──
     // Breakdown por código para cada tipo
@@ -229,12 +258,13 @@ function _rodarAnaliticoCore(dtIni, dtFim, onDone) {
     // ── Lookup de catKey por material (O(n), sem find() por material) ──
     // Necessário para que getPrePeriodLaunchStock aplique a regra de Agregado
     // (recuar até a última terça) também no total somaPrimeiro da central.
-    // Busca SEMPRE no cadastro atual de Materiais (normalize.js) — nunca na
-    // categoria de um registro bruto do período nem por heurística de nome.
-    // null = material sem cadastro (ou cadastrado sem categoria).
+    // Reaproveita materialCatKeyMap (construído acima a partir de
+    // materialOriginal, na filtragem de lancsNoPeriodo/sapNoPeriodo) — mat
+    // aqui já é garantidamente cadastrado, então a busca é só um lookup
+    // seguro, sem risco de re-derivar por um nome resolvido ambíguo.
     const _matCatKeyLookup = {};
     allMats.forEach(mat => {
-      _matCatKeyLookup[mat] = getCatKeyDoCadastro(mat);
+      _matCatKeyLookup[mat] = materialCatKeyMap.get(mat) || null;
     });
 
     const _prePeriodoStockByMat = {};
@@ -277,12 +307,15 @@ function _rodarAnaliticoCore(dtIni, dtFim, onDone) {
     // Custo médio ponderado por material: R$/kg → usado no badge de custo da variação
     // Usa índice de saídas pré-computado se disponível, senão linear (saídas é menor)
     const _saidasIdx = _saidasByCentral.size > 0 ? _saidasByCentral : null;
-    const saidasNoPeriodo = _saidasIdx
+    const saidasNoPeriodoRaw = _saidasIdx
       ? (_saidasIdx.get(central) || []).filter(s => {
           const d = parseDate(s.dtEmissao);
           return d && d >= dtIni && d <= dtFim;
         })
       : state.saidas.filter(s => s.central === central && inPeriod(s.dtEmissao));
+    // Mesma filtragem por materialOriginal — custo médio não deve incluir
+    // materiais sem cadastro (também usados no custo implicado da variação).
+    const saidasNoPeriodo = saidasNoPeriodoRaw.filter(s => !!getCatKeyDoCadastro(s.materialOriginal));
     const _custoPorMat = {};
     const _pesoPorMat  = {};
     saidasNoPeriodo.forEach(s => {
@@ -368,7 +401,9 @@ function _rodarAnaliticoCore(dtIni, dtFim, onDone) {
       lancsNoPeriodo,
       prodNoPeriodo,
       custoMedioPorMat,
-      custoMedioFontePorMat
+      custoMedioFontePorMat,
+      matsSemCadastro: [...matsSemCadastroSet].sort(),
+      materialCatKeyMap
     });
   });
 
@@ -607,17 +642,17 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
     const MAT_LEVEL_LABEL = { bom: 'Bom', atencao: 'Atenção', urgente: 'Urgente', critico: 'Crítico', sem_cadastro: 'Sem cadastro' };
     const MAT_LEVEL_COLOR = { bom: 'var(--green)', atencao: 'var(--amber)', urgente: '#f97316', critico: 'var(--red)', sem_cadastro: 'var(--text3)' };
 
-    // Lookup de catKey por material — computado uma vez (não a cada comparação do sort)
-    // para que o diff usado na ordenação também aplique a regra de Agregado.
-    // Busca sempre no cadastro atual de Materiais — null = sem cadastro.
-    const _sortCatKeyLookup = new Map();
-    r.allMats.forEach(mat => {
-      _sortCatKeyLookup.set(mat, getCatKeyDoCadastro(mat));
-    });
+    // Lookup de catKey por material — reaproveita r.materialCatKeyMap
+    // (construído a partir de materialOriginal na filtragem de origem em
+    // _rodarAnaliticoCore). r.allMats já só contém materiais cadastrados
+    // — este é um lookup seguro, não uma re-derivação por nome resolvido.
+    const _sortCatKeyLookup = r.materialCatKeyMap || new Map();
 
-    // Lista de materiais sem cadastro nesta central — alimenta o chip
-    // "sem cadastro" do painel de saúde (contador + modal de listagem).
-    const _matsSemCadastroCentral = r.allMats.filter(mat => !_sortCatKeyLookup.get(mat));
+    // Lista de materiais sem cadastro nesta central — vem direto de
+    // r.matsSemCadastro (materialOriginal dos registros já excluídos na
+    // filtragem de origem), não de r.allMats (que não os contém mais).
+    // Alimenta o chip "sem cadastro" do painel de saúde.
+    const _matsSemCadastroCentral = r.matsSemCadastro || [];
     if (!window.__analiticoSemCadastroCache) window.__analiticoSemCadastroCache = new Map();
     window.__analiticoSemCadastroCache.set(idx, { central: r.central, materiais: _matsSemCadastroCentral });
 
@@ -639,16 +674,13 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
 
       // ── Classificação de categoria do material ──────────────────────────
       // Calculado antes do buildSnapshot para poder usar matCatKey no preCarry.
-      // Busca SEMPRE no cadastro atual de Materiais — nunca na categoria de
-      // um registro bruto do período nem por heurística de nome (removida).
-      // matSemCadastro=true sinaliza que o material não está cadastrado (ou
-      // cadastrado sem categoria) — usado para exibir selo visível na linha
-      // e excluir do painel de saúde, em vez de assumir uma classificação.
-      // matCategoria (texto) alimenta o filtro de Categoria da Visão Micro
-      // (data-categoria) — também do cadastro, para o filtro refletir sempre
-      // a padronização vigente.
+      // mat aqui já é garantidamente cadastrado — allMatsSorted vem de
+      // r.allMats, pré-filtrado na origem (_rodarAnaliticoCore) via
+      // materialOriginal. catKey vem do materialCatKeyMap já validado, sem
+      // re-derivação por nome resolvido. matSemCadastro fica só como
+      // segurança defensiva (não deve mais disparar na prática).
       const matCategoria    = getCategoriaPorGrupo(mat);
-      const matCatKey       = getCatKeyDoCadastro(mat);
+      const matCatKey       = _sortCatKeyLookup.get(mat) || null;
       const matSemCadastro  = !matCatKey;
       const isSemanal       = matCatKey === 'agregado';
 
@@ -991,8 +1023,11 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
     // catKey busca SEMPRE no cadastro atual de Materiais — materiais sem
     // cadastro (catKey null) são excluídos do cálculo de saúde por
     // calcHealthScore (contados à parte em counts.sem_cadastro).
+    // catKey vem de r.materialCatKeyMap (validado via materialOriginal na
+    // filtragem de origem) — allMatsSorted já só contém materiais
+    // cadastrados, então este é um lookup seguro, não uma re-derivação.
     const matDiffs = allMatsSorted.map(mat => {
-      const catKey = getCatKeyDoCadastro(mat);
+      const catKey = _sortCatKeyLookup.get(mat) || null;
       const prev = getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni, dtFim, catKey });
       const fim  = getLastPeriodLaunchStockWithFallback({ central: r.central, material: mat, dtIni, dtFim });
       const snap = buildSnapshot({
@@ -1029,7 +1064,7 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
         <span class="micro-health-count-chip hcc-urgente${hCounts.urgente === 0 ? ' hcc-zero' : ''}"><i class="ti ti-alert-circle"></i> ${hCounts.urgente} urgente</span>
         <span class="micro-health-count-chip hcc-atencao${hCounts.atencao === 0 ? ' hcc-zero' : ''}"><i class="ti ti-alert-triangle"></i> ${hCounts.atencao} atenção</span>
         <span class="micro-health-count-chip hcc-bom${hCounts.bom === 0 ? ' hcc-zero' : ''}"><i class="ti ti-circle-check"></i> ${hCounts.bom} bom</span>
-        ${hCounts.sem_cadastro > 0 ? `<span class="micro-health-count-chip hcc-sem-cadastro" title="Excluídos do cálculo de saúde — clique para ver e cadastrar" onclick="analiticoAbrirSemCadastroModal(${idx}, event)"><i class="ti ti-help-circle"></i> ${hCounts.sem_cadastro} sem cadastro</span>` : ''}
+        ${_matsSemCadastroCentral.length > 0 ? `<span class="micro-health-count-chip hcc-sem-cadastro" title="Excluídos da análise até serem cadastrados — clique para ver e cadastrar" onclick="analiticoAbrirSemCadastroModal(${idx}, event)"><i class="ti ti-help-circle"></i> ${_matsSemCadastroCentral.length} sem cadastro</span>` : ''}
       </div>`;
     } else {
       healthCountsHtml = `<div class="micro-health-counts">
@@ -1037,6 +1072,7 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
         <span class="micro-health-count-chip hcc-urgente hcc-zero"><i class="ti ti-alert-circle"></i> 0 urgente</span>
         <span class="micro-health-count-chip hcc-atencao hcc-zero"><i class="ti ti-alert-triangle"></i> 0 atenção</span>
         <span class="micro-health-count-chip hcc-bom hcc-zero"><i class="ti ti-circle-check"></i> 0 bom</span>
+        ${_matsSemCadastroCentral.length > 0 ? `<span class="micro-health-count-chip hcc-sem-cadastro" title="Excluídos da análise até serem cadastrados — clique para ver e cadastrar" onclick="analiticoAbrirSemCadastroModal(${idx}, event)"><i class="ti ti-help-circle"></i> ${_matsSemCadastroCentral.length} sem cadastro</span>` : ''}
       </div>`;
     }
 
@@ -1537,7 +1573,7 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
     return [...(r.allMats || [])].reduce((acc, mat) => {
       const lm = lancsByMat.get(mat) || [];
       const sm = sapByMat.get(mat)   || [];
-      const catKey = getCatKeyDoCadastro(mat);
+      const catKey = (r.materialCatKeyMap && r.materialCatKeyMap.get(mat)) || null;
       const prev = getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni, dtFim, catKey });
       return acc + buildSnapshot({
         lancs: lm,
@@ -1730,7 +1766,7 @@ function analiticoAbrirSemCadastroModal(idx, event) {
       <div class="alert-modal-header">
         <div>
           <div class="alert-modal-title is-amber"><i class="ti ti-help-circle"></i> Materiais sem cadastro — ${escapeHtml(entry.central)}</div>
-          <div class="alert-modal-sub">${entry.materiais.length} ${entry.materiais.length === 1 ? 'material' : 'materiais'} excluíd${entry.materiais.length === 1 ? 'o' : 'os'} do cálculo de saúde desta central até serem cadastrados</div>
+          <div class="alert-modal-sub">${entry.materiais.length} ${entry.materiais.length === 1 ? 'material' : 'materiais'} excluíd${entry.materiais.length === 1 ? 'o' : 'os'} da análise desta central (não contam em nenhuma soma/gráfico/indicador) até serem cadastrados</div>
         </div>
         <button class="alert-modal-close" onclick="document.getElementById('alert-modal-an-sem-cad').remove()"><i class="ti ti-x"></i></button>
       </div>

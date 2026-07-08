@@ -480,6 +480,21 @@ function getFilialLookupIndex() {
 // lookup exato (sem fuzzy scan), evitando Maximum call stack size exceeded.
 let _batchImportMode = false;
 
+// Busca EXATA (após normalização leve) contra origem/alias do cadastro —
+// sem fallback aproximado. "Está cadastrado?" exige certeza: um texto
+// original só é considerado cadastrado se bater exatamente com o que foi
+// registrado, nunca por semelhança. Isso vale tanto para a resolução na
+// importação (normalizarMaterial) quanto para qualquer checagem de
+// pendência/categoria/conflito — a mesma função, usada em todo lugar,
+// garante que os dois nunca divirjam entre si.
+//
+// Antes desta correção, quando não havia match exato, a função caía num
+// fallback de pontuação aproximada (scoreMaterialMatch) que aceitava
+// QUALQUER pontuação > 0 como válida — sem piso mínimo de confiança. Isso
+// permitia que um material, mesmo após seu cadastro correto ser apagado,
+// continuasse "encontrando" um cadastro não relacionado só por compartilhar
+// a primeira palavra (ex.: duas variantes de "SILI-BRAS..."), mascarando
+// a pendência real. Decisão confirmada: eliminar o fuzzy por completo.
 function findMaterialMatch(valor) {
   const raw = String(valor ?? '').trim();
   if (!raw) return null;
@@ -496,21 +511,7 @@ function findMaterialMatch(valor) {
     return exact;
   }
 
-  // Durante importação em batch, não fazer fuzzy scan para evitar stack overflow.
-  if (_batchImportMode) return null;
-
-  let bestItem = null;
-  let bestScore = 0;
-  for (const entry of index.ordered) {
-    const score = scoreMaterialMatch(raw, entry);
-    if (score > bestScore) {
-      bestScore = score;
-      bestItem = entry.item;
-    }
-  }
-
-  if (bestItem) index.cache.set(key, bestItem);
-  return bestItem;
+  return null;
 }
 
 function normalizarMaterial(valor) {

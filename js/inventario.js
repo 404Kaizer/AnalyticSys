@@ -486,8 +486,20 @@
       const regional = (fRec?.regional || '').trim() || '—';
 
       const lancAll = lancByCentral.get(central) || [];
-      const byMat = new Map();
+      const byMat = new Map();           // mat (resolvido) -> registros CADASTRADOS
+      const semCadLancByOriginal = new Map(); // materialOriginal (texto exato) -> registros SEM cadastro
       lancAll.forEach(r => {
+        // catKey/categoria SEMPRE via materialOriginal — nunca via r.material
+        // (nome já resolvido), que pode coincidir por acaso com o alias/
+        // origem de outro cadastro não relacionado (mesma ambiguidade do
+        // caso XYPEX). Revalida contra o cadastro atual a cada análise.
+        const catKey = getCatKeyDoCadastro(r.materialOriginal);
+        if (!catKey) {
+          const key = r.materialOriginal || '—';
+          if (!semCadLancByOriginal.has(key)) semCadLancByOriginal.set(key, []);
+          semCadLancByOriginal.get(key).push(r);
+          return;
+        }
         const mat = r.material || '—';
         if (!byMat.has(mat)) byMat.set(mat, []);
         byMat.get(mat).push(r);
@@ -499,13 +511,22 @@
         return d && d >= dtIni && d <= dtFim;
       });
       const sapByMat = new Map();
+      const semCadSapByOriginal = new Map();
       sapPer.forEach(r => {
+        const catKey = getCatKeyDoCadastro(r.materialOriginal);
+        if (!catKey) {
+          const key = r.materialOriginal || '—';
+          if (!semCadSapByOriginal.has(key)) semCadSapByOriginal.set(key, []);
+          semCadSapByOriginal.get(key).push(r);
+          return;
+        }
         const mat = r.material || '—';
         if (!sapByMat.has(mat)) sapByMat.set(mat, []);
         sapByMat.get(mat).push(r);
       });
 
       const mats = new Set([...byMat.keys(), ...sapByMat.keys()]);
+      const matsSemCadastro = new Set([...semCadLancByOriginal.keys(), ...semCadSapByOriginal.keys()]);
 
       // Custo médio por material usando EXATAMENTE a mesma lógica do Analítico:
       // Saídas primeiro (Σ valorTotal / Σ peso), fallback SAP.
@@ -571,17 +592,29 @@
         // Custo médio alinhado com o Analítico (Saídas → fallback SAP).
         const custoMedio = custoMedioPorMat[mat] || 0;
 
-        // Categoria SEMPRE a partir do cadastro atual de Materiais — nunca
-        // do primeiro registro bruto do período (sample.categoria). Registros
-        // de SAP nunca têm campo categoria; registros de Lançamento podem
-        // estar desatualizados se importados antes do cadastro existir.
-        // getCategoriaPorGrupo consulta o índice de match vigente, então
-        // reflete sempre o estado atual do cadastro — sem depender de qual
-        // registro "chegou primeiro" no período.
+        // Chegou até aqui só se getCatKeyDoCadastro(materialOriginal) já
+        // confirmou cadastro válido (ver construção de byMat/sapByMat acima)
+        // — categoria sempre existe, nunca 'Sem cadastro' neste ramo.
         const categoria = getCategoriaPorGrupo(mat) || '';
-        const semCadastro = !categoria;
 
-        rowMap.set(k, { k, mesKey, central, material: mat, categoria: categoria || 'Sem cadastro', semCadastro, regional, estoqueIni, estoqueIniMissing, estoqueIniLastKnown, entradasKg, saidasKg, estoqueFimReal, estoqueFimMissing, estoqueFimLastKnown, custoMedio, entEntries, saiEntries });
+        rowMap.set(k, { k, mesKey, central, material: mat, categoria, semCadastro: false, regional, estoqueIni, estoqueIniMissing, estoqueIniLastKnown, entradasKg, saidasKg, estoqueFimReal, estoqueFimMissing, estoqueFimLastKnown, custoMedio, entEntries, saiEntries });
+      });
+
+      // ── Materiais SEM cadastro (ou cadastrados sem categoria) ──────────
+      // Bloqueados da análise: não entram em nenhuma soma/KPI/gráfico —
+      // aparecem na tabela só como registro visível, com valores zerados/
+      // traçados e o selo "Sem cadastro" (decisão confirmada: exclusão
+      // total, até serem cadastrados). Agrupados por materialOriginal
+      // (texto exato), já que não há cadastro para padronizar o nome.
+      matsSemCadastro.forEach(matOriginal => {
+        const k = mesKey + '|||' + central + '|||__semcad__|||' + matOriginal;
+        rowMap.set(k, {
+          k, mesKey, central, material: matOriginal, categoria: 'Sem cadastro', semCadastro: true, regional,
+          estoqueIni: 0, estoqueIniMissing: true, estoqueIniLastKnown: null,
+          entradasKg: 0, saidasKg: 0,
+          estoqueFimReal: 0, estoqueFimMissing: true, estoqueFimLastKnown: null,
+          custoMedio: 0, entEntries: [], saiEntries: []
+        });
       });
     });
 
@@ -778,20 +811,24 @@
     // Usa invRows (total geral do inventário gerado) — os cards NÃO reagem
     // aos filtros de Regional/Central/Categoria/Material/Ocultar Variação 0.
     // Só a tabela (invFiltered) e os Alertas Pendentes seguem o filtro.
-    const totalIni = invRows.reduce((s,r)=>s+r.estoqueIni,0);
-    const totalEnt = invRows.reduce((s,r)=>s+r.entradasKg,0);
-    const totalSai = invRows.reduce((s,r)=>s+r.saidasKg,0);
-    const totalFin = invRows.reduce((s,r)=>s+r.estoqueFimReal,0);
+    // Materiais SEM cadastro são excluídos de TODAS as somas — decisão
+    // confirmada: bloqueados da análise até serem cadastrados, contados
+    // à parte só no indicador de pendência (invAtualizarSemCadastro).
+    const invRowsCadastrados = invRows.filter(r => !r.semCadastro);
+    const totalIni = invRowsCadastrados.reduce((s,r)=>s+r.estoqueIni,0);
+    const totalEnt = invRowsCadastrados.reduce((s,r)=>s+r.entradasKg,0);
+    const totalSai = invRowsCadastrados.reduce((s,r)=>s+r.saidasKg,0);
+    const totalFin = invRowsCadastrados.reduce((s,r)=>s+r.estoqueFimReal,0);
 
     // Variação BRUTA: varKg sem desconto de justificativas
-    const totalVarBruto = invRows.reduce((s,r)=>s+r.varKg,0);
+    const totalVarBruto = invRowsCadastrados.reduce((s,r)=>s+r.varKg,0);
     // Variação AJUSTADA: varAdj após descontar saldo justificado
-    const totalVarAdj   = invRows.reduce((s,r)=>s+r.varAdj,0);
+    const totalVarAdj   = invRowsCadastrados.reduce((s,r)=>s+r.varAdj,0);
 
     // Custo BRUTO: varKg × custoMedio (independente de justificativas)
-    const totalCstBruto = invRows.reduce((s,r)=>s+(r.varKg * r.custoMedio),0);
+    const totalCstBruto = invRowsCadastrados.reduce((s,r)=>s+(r.varKg * r.custoMedio),0);
     // Custo AJUSTADO: varAdj × custoMedio
-    const totalCstAdj   = invRows.reduce((s,r)=>s+r.custo,0);
+    const totalCstAdj   = invRowsCadastrados.reduce((s,r)=>s+r.custo,0);
 
     const set = (id, val) => { const el = document.getElementById(id); if(el) el.textContent = val; };
     set('inv-kpi-ini-v', fmt(totalIni));
@@ -816,8 +853,12 @@
         </div>
       </details>`;
     };
-    const missingIniRows = invRows.filter(r => r.estoqueIniMissing).map(r => `${r.central} · ${r.material}`);
-    const missingFimRows = invRows.filter(r => r.estoqueFimMissing).map(r => `${r.central} · ${r.material}`);
+    // Ausente aqui é "sem lançamento na data alvo" (material CADASTRADO,
+    // problema de dado) — distinto de "sem cadastro" (problema de
+    // padronização, já coberto pelo indicador próprio). Por isso usa
+    // invRowsCadastrados, não invRows.
+    const missingIniRows = invRowsCadastrados.filter(r => r.estoqueIniMissing).map(r => `${r.central} · ${r.material}`);
+    const missingFimRows = invRowsCadastrados.filter(r => r.estoqueFimMissing).map(r => `${r.central} · ${r.material}`);
     _invMissingBadge('inv-kpi-ini-missing', missingIniRows, 'Est. Ini.');
     _invMissingBadge('inv-kpi-fin-missing', missingFimRows, 'Est. Fim');
 

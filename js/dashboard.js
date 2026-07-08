@@ -18,16 +18,38 @@ function buildDashboardGerencialResults(dtIni, dtFim) {
   const results = [];
 
   allCentrals.forEach(central => {
-    const lancsNoPeriodo = (dtIni && dtFim)
+    const lancsNoPeriodoRaw = (dtIni && dtFim)
       ? getLancsByCentralInPeriod(central, dtIni, dtFim).slice().sort((a, b) => {
           const da = parseDate(a.dtLanc), db = parseDate(b.dtLanc);
           return dateCmp(da ?? new Date(0), db ?? new Date(0));
         })
       : (_dgLancIdx.byCentral.get(central) || []).slice();
 
-    const sapNoPeriodo = (dtIni && dtFim)
+    const sapNoPeriodoRaw = (dtIni && dtFim)
       ? getSapByCentralInPeriod(central, dtIni, dtFim)
       : (_dgSapIdx.byCentral.get(central) || []);
+
+    // ── Filtragem na origem: materiais sem cadastro (ou cadastrados sem
+    //    categoria) são separados AQUI, antes de qualquer agregação por
+    //    material. Busca SEMPRE via materialOriginal — nunca via .material
+    //    (nome já resolvido, que pode coincidir por acaso com o alias/
+    //    origem de outro cadastro não relacionado). Mesmo padrão de
+    //    analitico.js — decisão confirmada: exclusão total até serem
+    //    cadastrados, sem contar em nenhuma soma/gráfico/indicador.
+    const materialCatKeyMap = new Map();
+    const matsSemCadastroSet = new Set();
+    const lancsNoPeriodo = lancsNoPeriodoRaw.filter(r => {
+      const catKey = getCatKeyDoCadastro(r.materialOriginal);
+      if (!catKey) { matsSemCadastroSet.add(r.materialOriginal || '—'); return false; }
+      materialCatKeyMap.set(r.material || '—', catKey);
+      return true;
+    });
+    const sapNoPeriodo = sapNoPeriodoRaw.filter(r => {
+      const catKey = getCatKeyDoCadastro(r.materialOriginal);
+      if (!catKey) { matsSemCadastroSet.add(r.materialOriginal || '—'); return false; }
+      materialCatKeyMap.set(r.material || '—', catKey);
+      return true;
+    });
 
     const entradasPorCod = {};
     const saidasPorCod   = {};
@@ -127,13 +149,16 @@ function buildDashboardGerencialResults(dtIni, dtFim) {
     const estoqueTeoricoMacro = somaPrimeiro + totalEntradas + totalSaidas;
     const variacaoEstoque     = somaUltimo - estoqueTeoricoMacro;
 
-    const saidasCentral = _saidasByCentral.size > 0
+    const saidasCentralRaw = _saidasByCentral.size > 0
       ? (_saidasByCentral.get(central) || []).filter(s => {
           if (!dtIni || !dtFim) return true;
           const d = parseDate(s.dtEmissao);
           return d && d >= dtIni && d <= dtFim;
         })
       : state.saidas.filter(s => s.central === central && inPeriod(s.dtEmissao));
+    // Mesma filtragem por materialOriginal — custo médio não deve incluir
+    // materiais sem cadastro.
+    const saidasCentral = saidasCentralRaw.filter(s => !!getCatKeyDoCadastro(s.materialOriginal));
     const _custoPorMat  = {};
     const _pesoPorMat   = {};
     saidasCentral.forEach(s => {
@@ -172,7 +197,9 @@ function buildDashboardGerencialResults(dtIni, dtFim) {
       missingIniMats, missingFimMats,
       allMats: [...allMats].sort(),
       materiaisLancPrimeiro, materiaisLancUltimo,
-      sapNoPeriodo, lancsNoPeriodo, lancsByMat, custoMedioPorMat
+      sapNoPeriodo, lancsNoPeriodo, lancsByMat, custoMedioPorMat,
+      matsSemCadastro: [...matsSemCadastroSet].sort(),
+      materialCatKeyMap
     });
   });
 
@@ -374,10 +401,12 @@ function _dgVgBuildPares(results, thresholds, dtIni, dtFim) {
     r.allMats.forEach(mat => {
       const lancs  = lancsByMat.get(mat) || [];
       const sap    = sapByMat.get(mat)   || [];
-      // catKey busca SEMPRE no cadastro atual de Materiais — nunca na
-      // categoria de um registro bruto do período nem por heurística de
-      // nome (removida). null = material sem cadastro.
-      const catKey = getCatKeyDoCadastro(mat);
+      // catKey vem de r.materialCatKeyMap (validado via materialOriginal na
+      // filtragem de origem em buildDashboardGerencialResults) — r.allMats
+      // já só contém materiais cadastrados, então isto é um lookup seguro,
+      // não uma re-derivação por nome resolvido (que poderia colidir com
+      // outro cadastro não relacionado).
+      const catKey = (r.materialCatKeyMap && r.materialCatKeyMap.get(mat)) || null;
 
       let diff;
       if (dtIni && dtFim) {
@@ -805,7 +834,7 @@ function renderDgVisaoGeralPdf(results, thresholds, dtIni, dtFim) {
   const custoAbsPorCat = _dgVgAgruparCustoVariacaoPorCategoria(custoVarMap);
 
   _dgVgRenderKpisHero(varTotalFisica, custoTotal);
-  _dgVgRenderStatBoxes(counts, recorrentes, pares);
+  _dgVgRenderStatBoxes(counts, recorrentes, pares, results);
   _dgVgRenderHealthDonuts(pares, counts, scoreInfo, thresholds);
   _dgVgRenderChartCategoriaFisica(catFisica);
   _dgVgRenderExtremos(extRegional, extCentral);
@@ -843,14 +872,16 @@ function _dgVgRenderKpisHero(varTotalFisica, custoTotal) {
 
 // ── 2. Stat boxes: Recorrentes + Críticos + Urgentes + Atenção — separados
 //    do(s) donut(s) de saúde.
-function _dgVgRenderStatBoxes(counts, recorrentes, pares) {
+function _dgVgRenderStatBoxes(counts, recorrentes, pares, results) {
   const boxesEl = document.getElementById('dg-vg-health-boxes');
   if (!boxesEl) return;
   const recTxt = recorrentes === null ? '—' : String(recorrentes);
 
-  // Lista de materiais sem cadastro (nomes únicos) — alimenta o modal
-  // aberto pelo box "Sem cadastro", quando houver algum.
-  const semCadastroLista = [...new Set((pares || []).filter(p => !p.catKey).map(p => p.mat))].sort();
+  // Lista de materiais sem cadastro (nomes originais únicos) — agregada de
+  // r.matsSemCadastro de todas as centrais (pares já vem pré-filtrado na
+  // origem, então nunca mais teria p.catKey null). Alimenta o modal aberto
+  // pelo box "Sem cadastro", quando houver algum.
+  const semCadastroLista = [...new Set((results || []).flatMap(r => r.matsSemCadastro || []))].sort();
   window.__dgVgSemCadastroLista = semCadastroLista;
 
   boxesEl.innerHTML = `
@@ -871,7 +902,7 @@ function _dgVgRenderStatBoxes(counts, recorrentes, pares) {
       <span class="dg-vg-stat-value">${counts.atencao}</span>
     </div>
     ${semCadastroLista.length ? `
-    <div class="dg-vg-stat-box dg-vg-stat-sem-cadastro" style="cursor:pointer" onclick="dgVgAbrirSemCadastroModal()" title="Excluídos do cálculo de saúde — clique para ver e cadastrar">
+    <div class="dg-vg-stat-box dg-vg-stat-sem-cadastro" style="cursor:pointer" onclick="dgVgAbrirSemCadastroModal()" title="Excluídos da análise — clique para ver e cadastrar">
       <span class="dg-vg-stat-label"><i class="ti ti-help-circle"></i> Sem Cadastro</span>
       <span class="dg-vg-stat-value">${semCadastroLista.length}</span>
     </div>` : ''}`;
@@ -916,14 +947,14 @@ function dgAbrirSemCadastroModalGenerico(modalId, lista, subtitulo) {
 
 function dgVgAbrirSemCadastroModal() {
   const lista = window.__dgVgSemCadastroLista || [];
-  const sub = `${lista.length} ${lista.length === 1 ? 'material' : 'materiais'} excluíd${lista.length === 1 ? 'o' : 'os'} do cálculo de saúde da Visão Geral até serem cadastrados`;
+  const sub = `${lista.length} ${lista.length === 1 ? 'material' : 'materiais'} excluíd${lista.length === 1 ? 'o' : 'os'} da Visão Geral (não contam em nenhuma soma/gráfico/indicador) até serem cadastrados`;
   dgAbrirSemCadastroModalGenerico('alert-modal-dgvg-sem-cad', lista, sub);
 }
 window.dgVgAbrirSemCadastroModal = dgVgAbrirSemCadastroModal;
 
 function dgCustosSemCadastroModal() {
   const lista = window.__dgCustosSemCadastroLista || [];
-  const sub = `${lista.length} ${lista.length === 1 ? 'material' : 'materiais'} excluíd${lista.length === 1 ? 'o' : 'os'} do agrupamento por categoria até serem cadastrados`;
+  const sub = `${lista.length} ${lista.length === 1 ? 'material' : 'materiais'} excluíd${lista.length === 1 ? 'o' : 'os'} do custo por categoria/material (não contam em nenhuma soma) até serem cadastrados`;
   dgAbrirSemCadastroModalGenerico('alert-modal-dgcustos-sem-cad', lista, sub);
 }
 window.dgCustosSemCadastroModal = dgCustosSemCadastroModal;
@@ -1763,23 +1794,23 @@ function _ausComputar(dtIni, dtFim) {
   const { byCentralMat: lancIdxAll } = getLancIndex();
   const { byCentralMat: sapIdxAll  } = getSapIndex();
 
-  const paresInfo = new Map(); // normKey → { central, mat, categoria }
+  const paresInfo = new Map(); // normKey → { central, mat, materialOriginal }
   sapIdxAll.forEach((matMap, central) => {
     matMap.forEach((arr, mat) => {
       if (!arr.length || !central || !mat || mat === '—') return;
       const key = normalizeText(central) + '|' + normalizeText(mat);
       if (!paresInfo.has(key))
-        paresInfo.set(key, { central, mat, categoria: arr[0]?.categoria || '' });
+        paresInfo.set(key, { central, mat, materialOriginal: arr[0]?.materialOriginal || mat });
     });
   });
   lancIdxAll.forEach((matMap, central) => {
     matMap.forEach((arr, mat) => {
       if (!arr.length || !central || !mat || mat === '—') return;
       const key = normalizeText(central) + '|' + normalizeText(mat);
-      const existing = paresInfo.get(key);
-      // Lançamentos têm prioridade de categoria
-      paresInfo.set(key, { central, mat,
-        categoria: arr[0]?.categoria || existing?.categoria || '' });
+      // Lançamentos têm prioridade como fonte do materialOriginal
+      // representativo (mesmo critério de prioridade que já existia p/
+      // categoria).
+      paresInfo.set(key, { central, mat, materialOriginal: arr[0]?.materialOriginal || mat });
     });
   });
 
@@ -1834,13 +1865,13 @@ function _ausComputar(dtIni, dtFim) {
   };
 
   const ausencias = [];
-  paresInfo.forEach(({ central, mat }, key) => {
-    // catKey busca SEMPRE no cadastro atual de Materiais — nunca na
-    // categoria de um registro bruto do período nem por heurística de
-    // nome (removida). Sem cadastro: mantém a regra diária (padrão
-    // seguro já existente), mas fica marcado como semCadastro=true para
-    // o resultado exibir isso visivelmente (decisão confirmada com Hugo).
-    const catKey      = getCatKeyDoCadastro(mat);
+  paresInfo.forEach(({ central, mat, materialOriginal }, key) => {
+    // catKey busca SEMPRE via materialOriginal — nunca via mat (nome já
+    // resolvido, que pode coincidir por acaso com o alias/origem de outro
+    // cadastro não relacionado). Sem cadastro: mantém a regra diária
+    // (padrão seguro já existente), mas fica marcado como semCadastro=true
+    // para o resultado exibir isso visivelmente (decisão confirmada).
+    const catKey      = getCatKeyDoCadastro(materialOriginal);
     const semCadastro = !catKey;
     const isSemanal    = catKey === 'agregado';
     const esperadosISO = isSemanal ? esperadosSemanal : esperadosDiario;
@@ -4469,7 +4500,9 @@ function renderDgCustos(results, dtIni, dtFim) {
   // ── Acumular custo médio por material (média ponderada entre centrais) ───
   const matCusto = new Map(); // mat → { somaValor, somaPeso }
   const matCat   = new Map(); // mat → categoria
+  const matsSemCadastroSet = new Set(); // materialOriginal, agregado de todas as centrais
   results.forEach(r => {
+    (r.matsSemCadastro || []).forEach(m => matsSemCadastroSet.add(m));
     const cmp = r.custoMedioPorMat || {};
     r.allMats.forEach(mat => {
       const cm = cmp[mat]; if (!cm) return;
@@ -4482,11 +4515,13 @@ function renderDgCustos(results, dtIni, dtFim) {
       const mc = matCusto.get(mat);
       mc.somaValor += cm * peso;
       mc.somaPeso  += peso;
-      // Categoria: SEMPRE do cadastro atual de Materiais — nunca do
-      // registro bruto do SAP nem por heurística de nome. null = sem
-      // cadastro (tratado explicitamente mais abaixo, nunca como 'outros').
+      // Categoria: SEMPRE do cadastro atual de Materiais. mat aqui já é
+      // garantidamente cadastrado — r.allMats vem pré-filtrado na origem
+      // (buildDashboardGerencialResults) via materialOriginal. catKey vem
+      // de r.materialCatKeyMap (validado), sem re-derivar por nome
+      // resolvido.
       if (!matCat.has(mat)) {
-        const catKey = getCatKeyDoCadastro(mat);
+        const catKey = (r.materialCatKeyMap && r.materialCatKeyMap.get(mat)) || null;
         matCat.set(mat, { raw: getCategoriaPorGrupo(mat) || '', key: catKey });
       }
     });
@@ -4497,15 +4532,14 @@ function renderDgCustos(results, dtIni, dtFim) {
     .sort((a,b) => b.cm - a.cm);
 
   // ── Custo por categoria ──────────────────────────────────────────────────
-  // Materiais sem cadastro (catKey null) ficam de fora do agrupamento por
-  // categoria — não há categoria real para somar, e jogá-los em "outros"
-  // confundiria com materiais que genuinamente não se encaixam nas 4
-  // categorias. Contados à parte (matsSemCadastro) para indicador visível.
+  // matArr já só contém materiais cadastrados (r.allMats vem pré-filtrado
+  // na origem, via materialOriginal) — não há mais necessidade de checar
+  // d.key aqui. matsSemCadastro vem de matsSemCadastroSet, agregado de
+  // r.matsSemCadastro (materialOriginal) de todas as centrais.
   const catMap = new Map();
-  const matsSemCadastro = [];
+  const matsSemCadastro = [...matsSemCadastroSet].sort();
   matArr.forEach(d => {
-    if (!d.key) { matsSemCadastro.push(d.mat); return; }
-    const k = d.key;
+    const k = d.key || 'outros';
     if (!catMap.has(k)) catMap.set(k, { mats:[], somaValor:0, somaPeso:0 });
     const c = catMap.get(k);
     c.mats.push(d);
