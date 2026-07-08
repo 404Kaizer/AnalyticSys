@@ -1782,7 +1782,10 @@ window.analiticoAbrirSemCadastroModal = analiticoAbrirSemCadastroModal;
 // (dashboard.js) para material não cadastrado.
 function analiticoCadastrarMaterial(nome, event) {
   if (event) event.stopPropagation(); // não abre/fecha o detalhe da linha
-  document.getElementById('alert-modal-an-sem-cad')?.remove();
+  // Fecha qualquer modal de alerta "sem cadastro" aberto — esta função é
+  // reutilizada por vários painéis (Analítico, Dashboard Gerencial, Custos,
+  // Entradas/Saídas/Lançamentos/SAP), cada um com seu próprio id de modal.
+  document.querySelectorAll('.alert-modal-overlay').forEach(el => el.remove());
   openModal('modal-materiais');
   setVal('materiais-text', nome + ' = ');
   setTimeout(() => {

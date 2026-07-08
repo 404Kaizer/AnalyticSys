@@ -999,6 +999,7 @@ tbody td {
   gap: 10px;
 }
 .alert-pulse-row .alert-pulse-btn { margin-bottom: 0; }
+.table-toolbar .alert-pulse-btn { margin-bottom: 0; }
 
 .alert-pulse-btn {
   display: inline-flex;

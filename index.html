@@ -1767,6 +1767,7 @@
                 Pendentes
                 <span class="pend-count-badge" id="pend-global-nf-count">—</span>
               </button>
+              <div id="pend-cad-entradas-box"></div>
               <button class="btn btn-primary" onclick="openModal('modal-manual'); setModulo('Entrada')"><i class="ti ti-plus"></i> Adicionar</button>
             </div>
           </div>
@@ -1821,6 +1822,7 @@
                 Pendentes
                 <span class="pend-count-badge" id="pend-global-os-count">—</span>
               </button>
+              <div id="pend-cad-saidas-box"></div>
               <button class="btn btn-primary" onclick="openModal('modal-manual'); setModulo('Saída')"><i class="ti ti-plus"></i> Adicionar</button>
             </div>
           </div>
@@ -1993,6 +1995,7 @@
             <div class="table-toolbar">
               <button id="btn-manuais-lancamentos" class="btn btn-manuais-filter" onclick="toggleSomenteManuais('lancamentos')" title="Filtrar somente registros manuais"><i class="ti ti-pencil"></i> Manuais</button>
               <button id="btn-duplicatas-lancamentos" class="btn btn-duplicatas-filter" onclick="toggleSomenteDuplicatasLanc()" title="Filtrar somente lançamentos duplicados (mesma central, data e material)"><i class="ti ti-copy"></i> Duplicatas</button>
+              <div id="pend-cad-lancamentos-box"></div>
               <button class="btn btn-primary" onclick="openModal('modal-manual'); setModulo('Lançamento')"><i class="ti ti-plus"></i> Adicionar</button>
             </div>
           </div>
@@ -2037,6 +2040,7 @@
             <div class="table-toolbar">
               <button id="btn-manuais-sap" class="btn btn-manuais-filter" onclick="toggleSomenteManuais('sap')" title="Filtrar somente registros manuais"><i class="ti ti-pencil"></i> Manuais</button>
               <button id="btn-duplicatas-sap" class="btn btn-duplicatas-filter" onclick="toggleSomenteDuplicatas()" title="Filtrar somente integrações duplicadas"><i class="ti ti-copy"></i> Duplicatas</button>
+              <div id="pend-cad-sap-box"></div>
               <button class="btn btn-primary" onclick="openModal('modal-manual'); setModulo('SAP')"><i class="ti ti-plus"></i> Adicionar</button>
             </div>
           </div>

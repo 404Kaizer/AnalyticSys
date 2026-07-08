@@ -910,11 +910,74 @@ function _dgVgRenderStatBoxes(counts, recorrentes, pares, results) {
 
 // Abre modal listando os materiais sem cadastro da Visão Geral (Dashboard
 // Gerencial) — mesmo padrão visual alert-modal-* já usado em
-// Conflitos/Inventário/Pendências/Analítico.
+// ═══════════════════════════════════════════════════════════════════════
+// MATERIAIS SEM CADASTRO — Entradas / Saídas / Lançamentos / SAP
+// ═══════════════════════════════════════════════════════════════════════
+// Mesmo princípio já aplicado em Materiais/Inventário/Analítico/Dashboard
+// Gerencial: busca SEMPRE via materialOriginal (nunca material resolvido),
+// contra o cadastro atual. Aqui, adicionalmente: botão pulsante no topo de
+// cada tela de listagem bruta + selo "Sem cadastro" clicável na própria
+// linha, consistente com o padrão alert-pulse-btn/dup-cad-badge já usado
+// em todo o sistema.
+const SEM_CADASTRO_MODULO_LABEL = {
+  entradas: 'Entradas', saidas: 'Saídas', lancamentos: 'Lançamentos', sap: 'SAP'
+};
+
+// Lista de materiais sem cadastro (materialOriginal, texto exato, únicos)
+// dentro de um módulo — varre o dataset COMPLETO (não só a página/filtro
+// atual), mesmo critério de escopo já usado nos outros indicadores.
+function getMateriaisSemCadastroDoModulo(modulo) {
+  const set = new Set();
+  (state[modulo] || []).forEach(r => {
+    const raw = String(r.materialOriginal ?? '').trim();
+    if (!raw) return;
+    if (!getCatKeyDoCadastro(raw)) set.add(raw);
+  });
+  return [...set].sort();
+}
+
+// Renderiza o botão pulsante no container do módulo (chamado ao final de
+// cada renderXxx() da lista bruta). Cacheia a lista em window para o modal
+// reaproveitar sem recalcular.
+function renderSemCadastroModuloBox(modulo) {
+  const el = document.getElementById(`pend-cad-${modulo}-box`);
+  if (!el) return;
+  const lista = getMateriaisSemCadastroDoModulo(modulo);
+  window[`__semCadLista_${modulo}`] = lista;
+
+  if (!lista.length) {
+    el.innerHTML = `
+      <button type="button" class="alert-pulse-btn is-ok" disabled>
+        <i class="ti ti-circle-check"></i> Materiais OK
+      </button>`;
+    return;
+  }
+  el.innerHTML = `
+    <button type="button" class="alert-pulse-btn is-amber" onclick="abrirSemCadastroModuloModal('${modulo}')">
+      <i class="ti ti-alert-triangle"></i>
+      Há ${lista.length} ${lista.length === 1 ? 'material' : 'materiais'} sem cadastro
+    </button>`;
+}
+
+function abrirSemCadastroModuloModal(modulo) {
+  const lista = window[`__semCadLista_${modulo}`] || [];
+  const label = SEM_CADASTRO_MODULO_LABEL[modulo] || modulo;
+  const sub = `${lista.length} ${lista.length === 1 ? 'material' : 'materiais'} sem cadastro em ${label} — não contam em nenhuma análise/soma até serem cadastrados`;
+  dgAbrirSemCadastroModalGenerico(`alert-modal-semcad-${modulo}`, lista, sub);
+}
+window.abrirSemCadastroModuloModal = abrirSemCadastroModuloModal;
+
+// Selo "Sem cadastro" clicável, para uso inline na célula de Categoria
+// (Entradas/Saídas/Lançamentos) ou junto ao Material (SAP, que não tem
+// coluna Categoria). Mesmo visual do badge já usado em Inventário.
+function semCadastroBadgeHtml(materialOriginal) {
+  return `<span class="dup-cad-badge dup-cad-badge-morto" style="cursor:pointer" title="Material sem cadastro — clique para cadastrar" onclick="event.stopPropagation();analiticoCadastrarMaterial('${escapeHtml(materialOriginal)}', event)"><i class="ti ti-alert-triangle" style="font-size:9px"></i> Sem cadastro</span>`;
+}
+
 // Modal genérico de materiais sem cadastro — reaproveitado por qualquer
-// painel do Dashboard Gerencial que precise listar materiais excluídos por
-// falta de cadastro, com atalho de cadastro rápido por item. Mesmo padrão
-// visual alert-modal-* já usado em Conflitos/Inventário/Pendências/Analítico.
+// painel que precise listar materiais excluídos por falta de cadastro,
+// com atalho de cadastro rápido por item. Mesmo padrão visual
+// alert-modal-* já usado em Conflitos/Inventário/Pendências/Analítico.
 function dgAbrirSemCadastroModalGenerico(modalId, lista, subtitulo) {
   document.getElementById(modalId)?.remove();
   if (!lista || !lista.length) return;
@@ -1477,6 +1540,7 @@ function renderDgGiro(results) {
   if (!tb) return;
   const data = pageSlice('entradas');
   updatePageInfo('entradas');
+  renderSemCadastroModuloBox('entradas');
 
   if (!getFilteredData('entradas').length) {
     tb.innerHTML = '<tr><td colspan="13"><div class="empty-state"><i class="ti ti-package"></i><p>Nenhuma entrada cadastrada.</p></div></td></tr>';
@@ -1491,7 +1555,7 @@ function renderDgGiro(results) {
       <td class="td-muted">${r.dtEmissao || '—'}</td>
       <td class="td-muted">${r.dtDescarga || '—'}</td>
       <td>${r.fornecedor || '—'}</td>
-      <td class="td-muted">${r.categoria || '—'}</td>
+      <td class="td-muted">${getCatKeyDoCadastro(r.materialOriginal) ? (r.categoria || '—') : semCadastroBadgeHtml(r.materialOriginal)}</td>
       <td class="td-mono">${r.material || r.materialOriginal || '—'}</td>
       <td class="td-mono" style="color:var(--teal)">${num(r.peso) || 0}</td>
       <td>${r.um || '—'}</td>
@@ -1509,6 +1573,7 @@ function renderSaidas() {
   if (!tb) return;
   const data = pageSlice('saidas');
   updatePageInfo('saidas');
+  renderSemCadastroModuloBox('saidas');
 
   if (!getFilteredData('saidas').length) {
     tb.innerHTML = '<tr><td colspan="12"><div class="empty-state"><i class="ti ti-truck"></i><p>Nenhuma saída cadastrada.</p></div></td></tr>';
@@ -1521,7 +1586,7 @@ function renderSaidas() {
       <td class="td-muted">${r.dtEmissao || '—'}</td>
       <td class="td-mono">${r.os || '—'}</td>
       <td class="td-muted">${r.contrato || '—'}</td>
-      <td class="td-muted">${r.categoria || '—'}</td>
+      <td class="td-muted">${getCatKeyDoCadastro(r.materialOriginal) ? (r.categoria || '—') : semCadastroBadgeHtml(r.materialOriginal)}</td>
       <td>${r.fornecedor || '—'}</td>
       <td class="td-mono">${r.material || r.materialOriginal || '—'}</td>
       <td class="td-mono" style="color:var(--teal)">${num(r.peso) || 0}</td>
@@ -1542,6 +1607,7 @@ function renderLancamentos() {
   if (typeof initAusencias === 'function') initAusencias();
   const data = pageSlice('lancamentos');
   updatePageInfo('lancamentos');
+  renderSemCadastroModuloBox('lancamentos');
 
   if (!getFilteredData('lancamentos').length) {
     tb.innerHTML = '<tr><td colspan="10"><div class="empty-state"><i class="ti ti-clipboard"></i><p>Nenhum lançamento de saldo real.</p></div></td></tr>';
@@ -1557,6 +1623,14 @@ function renderLancamentos() {
   const isDup = _lancDupKeys.has(getLancamentoRecordKey(r));
   const trClass = isDup ? ' class="lanc-duplicata"' : '';
   const trTitle = isDup ? ' title="Lançamento duplicado: mesma central, data e material"' : '';
+  const _lancSemCad = !getCatKeyDoCadastro(r.materialOriginal);
+  const _lancCatCell = _lancSemCad
+    ? `<td class="td-muted">${semCadastroBadgeHtml(r.materialOriginal)}</td>`
+    : `<td class="td-muted td-editable"
+        contenteditable="true" spellcheck="false"
+        data-lanc-idx="${i}" data-lanc-field="categoria"
+        onkeydown="lancEditKeydown(event)"
+        onblur="lancEditSave(this)">${escapeHtml(r.categoria || '—')}</td>`;
   return `
     <tr${trClass}${trTitle}>
       <td class="td-mono" style="display:flex;align-items:center;">
@@ -1577,11 +1651,7 @@ function renderLancamentos() {
         data-lanc-idx="${i}" data-lanc-field="fornecedor"
         onkeydown="lancEditKeydown(event)"
         onblur="lancEditSave(this)">${escapeHtml(r.fornecedor || '—')}</td>
-      <td class="td-muted td-editable"
-        contenteditable="true" spellcheck="false"
-        data-lanc-idx="${i}" data-lanc-field="categoria"
-        onkeydown="lancEditKeydown(event)"
-        onblur="lancEditSave(this)">${escapeHtml(r.categoria || '—')}</td>
+      ${_lancCatCell}
       <td class="td-mono td-editable"
         contenteditable="true" spellcheck="false"
         data-lanc-idx="${i}" data-lanc-field="material"
@@ -2610,6 +2680,7 @@ function renderSAP() {
   if (!tb) return;
   const data = pageSlice('sap');
   updatePageInfo('sap');
+  renderSemCadastroModuloBox('sap');
 
   if (!getFilteredData('sap').length) {
     tb.innerHTML = '<tr><td colspan="15"><div class="empty-state"><i class="ti ti-database"></i><p>Nenhuma movimentação SAP importada.</p></div></td></tr>';
@@ -2628,6 +2699,7 @@ function renderSAP() {
     const isDupCancelled = !isDupReal && _sapDupKeys.cancelled.has(rKey);
     const trClass = isDupReal ? ' class="sap-duplicata"' : isDupCancelled ? ' class="sap-duplicata-anulada"' : '';
     const trTitle = isDupReal ? ' title="Integração duplicada sem estorno correspondente"' : isDupCancelled ? ' title="Duplicata anulada por estorno"' : '';
+    const _sapSemCad = !getCatKeyDoCadastro(r.materialOriginal);
     return `
     <tr${trClass}${trTitle}>
       <td class="td-mono">${r.fonte === 'manual' ? '<span class="badge-manual" title="Registro inserido manualmente"><i class="ti ti-pencil"></i></span>' : ''}${r.usuario || '—'}</td>
@@ -2639,7 +2711,7 @@ function renderSAP() {
       <td class="td-muted">${r.dtDoc || '—'}</td>
       <td class="td-muted">${r.dtLanc || '—'}</td>
       <td class="td-muted">${r.dtReg || '—'}</td>
-      <td class="td-mono">${r.material || r.materialOriginal || '—'}</td>
+      <td class="td-mono">${r.material || r.materialOriginal || '—'}${_sapSemCad ? ' ' + semCadastroBadgeHtml(r.materialOriginal) : ''}</td>
       <td class="td-mono" style="color:${neg ? red : green}">${num(r.peso).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
       <td>${r.um || '—'}</td>
       <td class="td-mono" style="color:${neg ? red : text}">${money(r.custoUnit, 4)}</td>
