@@ -665,7 +665,7 @@
 
   function _invIsPendente(r) {
     const j = invJustificativas[r.k] || {};
-    return Math.abs(r.varKg) > 0.01 && !(j.op || j.fiscal);
+    return Math.abs(r.varKg) > 0.01 && !(j.op && j.fiscal);
   }
 
   // ── Filtrar ──────────────────────────────────────────────
@@ -712,7 +712,7 @@
 
     tbody.innerHTML = invFiltered.map(r => {
       const j = just[r.k] || {};
-      const hasJust = j.op || j.fiscal;
+      const hasJust = j.op && j.fiscal;
       const alertBadge = (!hasJust && Math.abs(r.varKg) > 0.01)
         ? '<span style="display:inline-block;width:6px;height:6px;background:var(--amber);border-radius:50%;margin-right:5px;vertical-align:middle;flex-shrink:0" title="Sem justificativa"></span>'
         : '';
@@ -989,61 +989,200 @@
   };
 
   // ── Modal de justificativa ───────────────────────────────
+  // Navegação Anterior/Próximo: percorre uma "fila" de pendentes (variação
+  // >0,01kg e ainda sem justificativa completa) na ordem visual atual da
+  // tabela (invFiltered), fixada no momento em que o modal é aberto pela
+  // primeira vez — evita que a fila "pule" no meio da revisão por causa de
+  // reordenação/recalculo disparado pelo próprio salvamento. Se o registro
+  // aberto não for pendente (ex.: "Ver/Editar" de um já justificado), ele
+  // é incluído à parte na fila, na posição em que aparece na tabela, só
+  // para não quebrar a navegação nesse caso pontual.
+  let _invNavQueue = [];
+  let _invNavIdx   = -1;
+
+  function _invBuildNavQueue(k) {
+    _invNavQueue = invFiltered.filter(r => _invIsPendente(r) || r.k === k).map(r => r.k);
+    _invNavIdx = _invNavQueue.indexOf(k);
+  }
+
+  // Exige os 3 campos preenchidos (operacional, fiscal e saldo) — sem
+  // justificativa parcial. Retorna null se válido, ou mensagem de erro.
+  function _invValidarJustForm() {
+    const op     = document.getElementById('inv-j-op')?.value.trim();
+    const fiscal = document.getElementById('inv-j-fiscal')?.value.trim();
+    const saldo  = document.getElementById('inv-j-saldo')?.value;
+    if (!op || !fiscal || saldo === '' || saldo == null) {
+      return 'Preencha justificativa operacional, justificativa fiscal e saldo justificado antes de salvar.';
+    }
+    return null;
+  }
+
+  // Salva os dados do formulário atual no registro k (sem fechar/navegar).
+  function _invSalvarJustCore(k) {
+    const op     = document.getElementById('inv-j-op')?.value.trim();
+    const fiscal = document.getElementById('inv-j-fiscal')?.value.trim();
+    const saldo  = document.getElementById('inv-j-saldo')?.value;
+    invJustificativas[k] = { op, fiscal, saldo };
+    const row = invRows.find(r => r.k === k);
+    if (row) {
+      const saldoJust = parseFloat(saldo||0)||0;
+      row.saldoJust = saldoJust;
+      row.varAdj = row.varKg - saldoJust;
+      row.custo  = row.varAdj * row.custoMedio;
+    }
+    invFiltrar();
+    invAtualizarKpis();
+    invAtualizarAlertas();
+  }
+
   window.invAbrirJust = function(k) {
+    _invBuildNavQueue(k);
+    _invRenderJustModal(k);
+  };
+
+  // dir: -1 (Anterior) ou +1 (Próximo). Valida e salva o registro atual
+  // antes de avançar; se inválido, avisa e permanece no mesmo registro.
+  window._invNavJust = function(dir) {
+    const kAtual = _invNavQueue[_invNavIdx];
+    const erro = _invValidarJustForm();
+    if (erro) { toast(erro, 'error'); return; }
+    _invSalvarJustCore(kAtual);
+    const novoIdx = _invNavIdx + dir;
+    if (novoIdx < 0 || novoIdx >= _invNavQueue.length) return; // botão já deveria estar desabilitado
+    _invNavIdx = novoIdx;
+    _invRenderJustModal(_invNavQueue[_invNavIdx]);
+  };
+
+  // ── Opções de Justificativa Fiscal (dropdown) ─────────────
+  // Base: lista oficial fornecida pelo usuário (29 itens). Itens marcados
+  // com "// NOVO" foram criados para equilibrar as categorias que tinham
+  // poucas opções (mín. 6 por categoria, mesmo padrão de nomenclatura
+  // "CATEGORIA – Descrição específica").
+  const _INV_JUST_FISCAL_OPCOES = {
+    'CONTROLE OPERACIONAL': [
+      'CONTROLE OPERACIONAL – OSCILAÇÃO OPERACIONAL',
+      'CONTROLE OPERACIONAL – REGULARIZAÇÃO DE INVENTÁRIO ANTERIOR',
+      'CONTROLE OPERACIONAL – AJUSTE DE CONTAGEM FÍSICA', // NOVO
+      'CONTROLE OPERACIONAL – DIVERGÊNCIA DE SALDO INICIAL', // NOVO
+      'CONTROLE OPERACIONAL – CONSOLIDAÇÃO DE LANÇAMENTOS DO PERÍODO', // NOVO
+      'CONTROLE OPERACIONAL – REVISÃO DE PERÍODO ANTERIOR', // NOVO
+    ],
+    'EVENTO OPERACIONAL': [
+      'EVENTO OPERACIONAL – ALTERAÇÃO OPERACIONAL',
+      'EVENTO OPERACIONAL – MATERIAL DETERIORADO',
+      'EVENTO OPERACIONAL – MISTURA DE MATERIAIS',
+      'EVENTO OPERACIONAL – RECEBIMENTO ADICIONAL',
+      'EVENTO OPERACIONAL – TRANSFERÊNCIA SEM REGISTRO',
+      'EVENTO OPERACIONAL – TROCA DE MATERIAL',
+    ],
+    'FALHA OPERACIONAL': [
+      'FALHA OPERACIONAL – CONTROLE OPERACIONAL LOCAL',
+      'FALHA OPERACIONAL – DESFALQUE OPERACIONAL',
+      'FALHA OPERACIONAL – DIVERGÊNCIA EM EQUIPAMENTO DE PESAGEM',
+      'FALHA OPERACIONAL – INCONSISTÊNCIA EM CUBAGEM',
+      'FALHA OPERACIONAL – MANUSEIO DE MATERIAL',
+      'FALHA OPERACIONAL – MEDIÇÃO INCORRETA',
+      'FALHA OPERACIONAL – SOLICITAÇÕES NÃO REALIZADAS',
+    ],
+    'FALHA SISTÊMICA': [
+      'FALHA SISTÊMICA – AJUSTE INTERMENSAL',
+      'FALHA SISTÊMICA – DENSIDADE INCORRETA',
+      'FALHA SISTÊMICA – ERRO NO ESTOQUE FINAL',
+      'FALHA SISTÊMICA – ERRO NO ESTOQUE INICIAL',
+      'FALHA SISTÊMICA – DUPLICIDADE DE LANÇAMENTOS NO PERÍODO', // NOVO
+      'FALHA SISTÊMICA – INSTABILIDADE NO SISTEMA DE GESTÃO', // NOVO
+    ],
+    'LIMITAÇÃO OPERACIONAL': [
+      'LIMITAÇÃO OPERACIONAL – ARMAZENAMENTO IRREGULAR',
+      'LIMITAÇÃO OPERACIONAL – AUSÊNCIA DE GRADUAÇÃO EM SILO',
+      'LIMITAÇÃO OPERACIONAL – CONDIÇÃO DO EQUIPAMENTO',
+      'LIMITAÇÃO OPERACIONAL – DIFICULDADE DE CONFERÊNCIA',
+      'LIMITAÇÃO OPERACIONAL – MATERIAL EM MÚLTIPLOS SILOS',
+      'LIMITAÇÃO OPERACIONAL – PARALISAÇÃO OPERACIONAL',
+    ],
+    'VARIAÇÃO OPERACIONAL': [
+      'VARIAÇÃO OPERACIONAL – AJUSTE LOCAL',
+      'VARIAÇÃO OPERACIONAL – DENTRO DA MARGEM',
+      'VARIAÇÃO OPERACIONAL – MATERIAL SEM MOVIMENTAÇÃO',
+      'VARIAÇÃO OPERACIONAL – MATERIAL ZERADO',
+      'VARIAÇÃO OPERACIONAL – PERDA NATURAL DO PROCESSO', // NOVO
+      'VARIAÇÃO OPERACIONAL – CONSUMO ACIMA DO PADRÃO', // NOVO
+    ],
+  };
+
+  function _invMontarOptionsFiscal(selecionado) {
+    return Object.entries(_INV_JUST_FISCAL_OPCOES).map(([categoria, itens]) => `
+      <optgroup label="${categoria}">
+        ${itens.map(op => `<option value="${op}" ${op === selecionado ? 'selected' : ''}>${op}</option>`).join('')}
+      </optgroup>`).join('');
+  }
+
+  function _invRenderJustModal(k) {
     const row = invRows.find(r => r.k === k);
     if (!row) return;
     const j = invJustificativas[k] || {};
-    // Remove modal anterior se existir
     document.getElementById('inv-modal')?.remove();
     const h = window._inv_helpers;
-    const _fmtKg    = h ? h.fmtKg    : (v) => fmt(v) + ' kg';
-    const _varClass  = h ? h.varClass  : (v) => v < 0 ? 'diff-neg' : v > 0 ? 'diff-pos' : 'diff-zero';
-    const _varSymbol = h ? h.varSymbol : () => '';
-    const _money     = h ? h.money     : fmtR;
-    const vkCls   = _varClass(row.varKg);
-    const cstCls  = _varClass(row.custo);
+    const _fmtKg     = h ? h.fmtKg      : (v) => fmt(v) + ' kg';
+    const _varClass  = h ? h.varClass   : (v) => v < 0 ? 'diff-neg' : v > 0 ? 'diff-pos' : 'diff-zero';
+    const _varSymbol = h ? h.varSymbol  : () => '';
+    const _money     = h ? h.money      : fmtR;
+    const _escape    = h ? h.escapeHtml : (s) => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const vkCls  = _varClass(row.varKg);
+    const cstCls = _varClass(row.custo);
+
+    const temFila   = _invNavQueue.length > 1;
+    const podeAnt   = _invNavIdx > 0;
+    const podeProx  = _invNavIdx >= 0 && _invNavIdx < _invNavQueue.length - 1;
+    const posicaoFila = _invNavIdx >= 0
+      ? `<span style="font-size:10.5px;color:var(--text3);font-family:var(--mono)">${_invNavIdx+1} de ${_invNavQueue.length} pendentes</span>`
+      : '';
+
     const modal = document.createElement('div');
     modal.id = 'inv-modal';
-    modal.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.6);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:20px';
+    modal.className = 'modal-overlay open';
+    modal.style.cssText = 'position:fixed;z-index:9999';
     modal.innerHTML = `
-      <div style="background:var(--bg2);border:1px solid var(--border2);border-radius:14px;padding:0;width:100%;max-width:560px;box-shadow:0 24px 64px rgba(0,0,0,.5);overflow:hidden">
-        <div style="background:var(--bg3);padding:16px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)">
+      <div class="modal-card" style="max-width:560px;width:100%">
+        <div class="modal-header">
           <div>
-            <div style="font-weight:700;font-size:14px">${row.central} · ${row.material}</div>
-            <div style="font-size:11px;color:var(--text2);margin-top:2px">${row.regional} · ${row.categoria}</div>
+            <span class="modal-title"><i class="ti ti-clipboard-text"></i> ${_escape(row.central)} · ${_escape(row.material)}</span>
+            <div style="font-size:11px;color:var(--text2);margin-top:3px">${_escape(row.regional)} · ${_escape(row.categoria)}${posicaoFila ? ' · ' : ''}${posicaoFila}</div>
           </div>
-          <button onclick="document.getElementById('inv-modal').remove()" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:18px"><i class="ti ti-x"></i></button>
+          <button class="modal-close" onclick="document.getElementById('inv-modal').remove()"><i class="ti ti-x"></i></button>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:16px 20px;border-bottom:1px solid var(--border)">
-          <div style="text-align:center">
-            <div style="font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px">Variação (kg)</div>
-            <span class="td-mono ${vkCls}" style="font-size:17px;white-space:nowrap">${_varSymbol(row.varKg)} ${_fmtKg(Math.abs(row.varKg))}</span>
-          </div>
-          <div style="text-align:center">
-            <div style="font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px">Custo Var. (R$)</div>
-            <span class="td-mono ${cstCls}" style="font-size:17px;white-space:nowrap">${_varSymbol(row.custo)} ${_money(Math.abs(row.custo))}</span>
-          </div>
-        </div>
-        <div style="padding:16px 20px;display:flex;flex-direction:column;gap:12px">
-          <div>
-            <label style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:5px">Justificativa Operacional</label>
-            <textarea id="inv-j-op" rows="2" placeholder="Ex: falha no medidor da brita, perda por chuva..." style="width:100%;background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:8px;padding:8px 10px;font-size:12px;resize:vertical">${j.op||''}</textarea>
-          </div>
-          <div>
-            <label style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:5px">Justificativa Fiscal <span style="font-weight:400;font-size:10px;color:var(--text3)">(para inspeção)</span></label>
-            <div style="display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap">
-              ${['Falha operacional - erro de medição','Variação natural de umidade','Perda operacional no processo','Divergência de fornecedor'].map(t=>`<button onclick="document.getElementById('inv-j-fiscal').value='${t}'" style="background:var(--bg4);border:1px solid var(--border2);color:var(--text2);border-radius:20px;padding:3px 9px;font-size:10px;cursor:pointer;white-space:nowrap">${t}</button>`).join('')}
+        <div class="modal-body" style="display:flex;flex-direction:column;gap:14px">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;padding-bottom:14px;border-bottom:1px solid var(--border)">
+            <div style="text-align:center">
+              <div class="oc-label" style="margin-bottom:8px">Variação (kg)</div>
+              <span class="td-mono ${vkCls}" style="font-size:17px;white-space:nowrap">${_varSymbol(row.varKg)} ${_fmtKg(Math.abs(row.varKg))}</span>
             </div>
-            <textarea id="inv-j-fiscal" rows="2" placeholder="Motivo genérico para fins fiscais..." style="width:100%;background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:8px;padding:8px 10px;font-size:12px;resize:vertical">${j.fiscal||''}</textarea>
+            <div style="text-align:center">
+              <div class="oc-label" style="margin-bottom:8px">Custo Var. (R$)</div>
+              <span class="td-mono ${cstCls}" style="font-size:17px;white-space:nowrap">${_varSymbol(row.custo)} ${_money(Math.abs(row.custo))}</span>
+            </div>
           </div>
-          <div>
-            <label style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:5px">Saldo Justificado (kg) <span style="font-weight:400;font-size:10px;color:var(--text3)">parte ou total da variação com causa identificada</span></label>
-            <input id="inv-j-saldo" type="number" placeholder="0" value="${j.saldo||''}" style="width:180px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:8px;padding:7px 10px;font-size:12px">
+          <div class="oc-form-group">
+            <label class="oc-label">Justificativa Operacional <span class="oc-required">*</span></label>
+            <textarea id="inv-j-op" class="oc-input oc-textarea" rows="2" placeholder="Ex: falha no medidor da brita, perda por chuva...">${_escape(j.op||'')}</textarea>
+          </div>
+          <div class="oc-form-group">
+            <label class="oc-label">Justificativa Fiscal <span class="oc-required">*</span> <span class="oc-hint">(para inspeção)</span></label>
+            <select id="inv-j-fiscal" class="oc-input">
+              <option value="" ${!j.fiscal ? 'selected' : ''} disabled>Selecione uma justificativa fiscal...</option>
+              ${_invMontarOptionsFiscal(j.fiscal||'')}
+            </select>
+          </div>
+          <div class="oc-form-group" style="max-width:220px">
+            <label class="oc-label">Saldo Justificado (kg) <span class="oc-required">*</span> <span class="oc-hint">parte/total da variação com causa identificada</span></label>
+            <input id="inv-j-saldo" type="number" class="oc-input" placeholder="0" value="${j.saldo||''}">
           </div>
         </div>
-        <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px">
-          <button onclick="document.getElementById('inv-modal').remove()" class="btn">Cancelar</button>
-          <button onclick="invSalvarJust('${k}')" class="btn btn-primary"><i class="ti ti-device-floppy"></i> Salvar</button>
+        <div class="modal-footer">
+          <button class="btn" onclick="document.getElementById('inv-modal').remove()">Cancelar</button>
+          ${temFila ? `<button class="btn" ${podeAnt?'':'disabled style="opacity:.35;cursor:default;pointer-events:none"'} onclick="_invNavJust(-1)" title="Salva e vai para o pendente anterior"><i class="ti ti-chevron-left"></i> Anterior</button>` : ''}
+          ${temFila ? `<button class="btn" ${podeProx?'':'disabled style="opacity:.35;cursor:default;pointer-events:none"'} onclick="_invNavJust(1)" title="Salva e vai para o próximo pendente">Próximo <i class="ti ti-chevron-right"></i></button>` : ''}
+          <button class="btn btn-primary" onclick="invSalvarJust('${k}')"><i class="ti ti-device-floppy"></i> Salvar</button>
         </div>
       </div>`;
     document.body.appendChild(modal);
@@ -1052,25 +1191,13 @@
       if (e.key === 'Escape') { modal.remove(); document.removeEventListener('keydown', _escInvModal); }
     };
     document.addEventListener('keydown', _escInvModal);
-  };
+  }
 
   window.invSalvarJust = function(k) {
-    const op     = document.getElementById('inv-j-op')?.value.trim();
-    const fiscal = document.getElementById('inv-j-fiscal')?.value.trim();
-    const saldo  = document.getElementById('inv-j-saldo')?.value;
-    invJustificativas[k] = { op, fiscal, saldo };
-    // Recalcula linha
-    const row = invRows.find(r => r.k === k);
-    if (row) {
-      const saldoJust = parseFloat(saldo||0)||0;
-      row.saldoJust = saldoJust;
-      row.varAdj = row.varKg - saldoJust;
-      row.custo  = row.varAdj * row.custoMedio;
-    }
+    const erro = _invValidarJustForm();
+    if (erro) { toast(erro, 'error'); return; }
+    _invSalvarJustCore(k);
     document.getElementById('inv-modal')?.remove();
-    invFiltrar();
-    invAtualizarKpis();
-    invAtualizarAlertas();
     toast('Justificativa salva.', 'success');
   };
 
