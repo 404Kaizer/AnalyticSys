@@ -364,6 +364,51 @@
     window.invGerar();
   };
 
+  // ── Tela cheia da tabela ─────────────────────────────────
+  // 1ª tentativa usava position:fixed direto no .inv-table-wrap, ainda
+  // dentro de .page-content — não funcionou no ambiente real (topbar/
+  // sidebar continuavam por cima). Agora usa o mesmo padrão comprovado do
+  // analitico-detail-overlay (modal de detalhe da Visão Micro, em
+  // ui.js/index.html): um overlay de verdade, elemento de topo no HTML.
+  // Ao expandir, o PRÓPRIO .inv-table-wrap é MOVIDO (não clonado) pra
+  // dentro do #inv-fullscreen-slot — preserva 100% do JS já ligado aos
+  // ids da tabela (tbody, sort, filtros etc.), sem precisar duplicar ou
+  // sincronizar nada. Ao fechar, volta pro lugar original marcado por
+  // #inv-table-wrap-anchor.
+  window.toggleInvTableFullscreen = function() {
+    const wrap    = document.querySelector('.inv-table-wrap');
+    const overlay = document.getElementById('inv-fullscreen-overlay');
+    const slot    = document.getElementById('inv-fullscreen-slot');
+    const anchor  = document.getElementById('inv-table-wrap-anchor');
+    const btn     = document.getElementById('inv-table-fullscreen-btn');
+    if (!wrap || !overlay || !slot || !anchor || !btn) return;
+
+    const isOpen = overlay.classList.contains('open');
+    if (!isOpen) {
+      slot.appendChild(wrap);
+      wrap.classList.add('is-fullscreen');
+      overlay.classList.add('open');
+      overlay.setAttribute('aria-hidden', 'false');
+      document.body.classList.add('inv-fullscreen-open');
+      btn.innerHTML = '<i class="ti ti-minimize"></i> <span>Recolher</span>';
+    } else {
+      anchor.parentNode.insertBefore(wrap, anchor);
+      wrap.classList.remove('is-fullscreen');
+      overlay.classList.remove('open');
+      overlay.setAttribute('aria-hidden', 'true');
+      document.body.classList.remove('inv-fullscreen-open');
+      btn.innerHTML = '<i class="ti ti-maximize"></i> <span>Expandir</span>';
+    }
+  };
+
+  // ESC sai do modo tela cheia — mesmo padrão de fechamento usado nos
+  // modais do sistema (ex.: modal de justificativa, mais acima neste arquivo).
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && document.getElementById('inv-fullscreen-overlay')?.classList.contains('open')) {
+      window.toggleInvTableFullscreen();
+    }
+  });
+
   function _invCloseMonthPicker() {
     document.getElementById('inv-month-dropdown')?.classList.remove('open');
     document.getElementById('inv-month-trigger')?.classList.remove('open');

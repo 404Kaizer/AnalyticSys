@@ -1710,10 +1710,14 @@
 
 
         <!-- ══ TABELA — redesenhada com sort ══ -->
+        <div id="inv-table-wrap-anchor" style="display:none"></div>
         <div class="table-card inv-table-wrap">
           <div class="table-header">
             <span class="table-title"><i class="ti ti-list-details"></i> Fechamento por Central e Material</span>
             <div class="table-toolbar">
+              <button class="btn" type="button" id="inv-table-fullscreen-btn" onclick="toggleInvTableFullscreen()">
+                <i class="ti ti-maximize"></i> <span>Expandir</span>
+              </button>
               <button class="btn" onclick="invExportar()">
                 <i class="ti ti-file-spreadsheet"></i> Exportar CSV
               </button>
@@ -3698,6 +3702,19 @@
       </div>
     </div>
   </div>
+</div>
+
+<!-- Overlay dedicado ao modo tela cheia do Inventário — mesmo padrão
+     estrutural do analitico-detail-overlay acima (elemento de topo, fora
+     de .page-content, então nenhum ancestral da página pode "prender" o
+     position:fixed nem competir de stacking context — é o mesmo motivo
+     pelo qual aquele modal funciona). Ao expandir, o próprio
+     .inv-table-wrap é MOVIDO (não duplicado) pra dentro do #inv-fullscreen-slot
+     — preserva 100% do JS já ligado aos ids da tabela (tbody, sort, filtros
+     etc.). Ao fechar, volta pro lugar original logo antes de
+     #inv-table-wrap-anchor. -->
+<div class="modal-overlay inv-fullscreen-overlay" id="inv-fullscreen-overlay" aria-hidden="true">
+  <div class="inv-fullscreen-slot" id="inv-fullscreen-slot"></div>
 </div>
 
 <!-- MODAL: Breakdown de Movimentações (Micro) -->
