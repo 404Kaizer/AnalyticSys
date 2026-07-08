@@ -1208,11 +1208,11 @@
               ${_invMontarOptionsFiscal(j.fiscal||'')}
             </select>
           </div>
-          <div class="oc-form-group" style="max-width:280px">
+          <div class="oc-form-group">
             <label class="oc-label">Saldo Justificado (kg) <span class="oc-required">*</span> <span class="oc-hint">parte/total da variação com causa identificada</span></label>
-            <div style="display:flex;gap:6px;align-items:center">
-              <input id="inv-j-saldo" type="number" class="oc-input" placeholder="0" value="${j.saldo||''}" style="max-width:150px">
-              <button type="button" class="btn" style="font-size:10.5px;padding:7px 9px;white-space:nowrap" onclick="document.getElementById('inv-j-saldo').value='${(Math.round(Math.abs(row.varKg)*100)/100)}'" title="Preenche com a variação total (${_fmtKg(Math.abs(row.varKg))})">Variação total</button>
+            <div style="display:flex;gap:8px;align-items:stretch">
+              <input id="inv-j-saldo" type="number" class="oc-input" placeholder="0" value="${j.saldo||''}" style="flex:1">
+              <button type="button" class="btn" style="white-space:nowrap;flex-shrink:0" onclick="document.getElementById('inv-j-saldo').value='${(Math.round(row.varKg*100)/100)}'" title="Preenche com a variação total, já com o sinal de ${row.varKg < 0 ? 'desfalque (negativo)' : 'sobra (positivo)'}">Variação total</button>
             </div>
           </div>
         </div>
