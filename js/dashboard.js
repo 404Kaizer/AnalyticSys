@@ -993,7 +993,11 @@ function dgAbrirSemCadastroModalGenerico(modalId, lista, subtitulo) {
   const overlay = document.createElement('div');
   overlay.id = modalId;
   overlay.className = 'alert-modal-overlay';
-  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  const _escDgSemCad = (e) => {
+    if (!document.body.contains(overlay)) { document.removeEventListener('keydown', _escDgSemCad); return; }
+    if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', _escDgSemCad); }
+  };
+  document.addEventListener('keydown', _escDgSemCad);
   overlay.innerHTML = `
     <div class="alert-modal-card">
       <div class="alert-modal-header">
@@ -2931,7 +2935,11 @@ function _pendPadronizacaoAbrirModal(tipo) {
   const overlay = document.createElement('div');
   overlay.id = modalId;
   overlay.className = 'alert-modal-overlay';
-  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  const _escPendPadr = (e) => {
+    if (!document.body.contains(overlay)) { document.removeEventListener('keydown', _escPendPadr); return; }
+    if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', _escPendPadr); }
+  };
+  document.addEventListener('keydown', _escPendPadr);
   overlay.innerHTML = `
     <div class="alert-modal-card">
       <div class="alert-modal-header">
@@ -3027,7 +3035,11 @@ function _dupCadAbrirModal() {
   const overlay = document.createElement('div');
   overlay.id = 'alert-modal-dup-cad';
   overlay.className = 'alert-modal-overlay';
-  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  const _escDupCad = (e) => {
+    if (!document.body.contains(overlay)) { document.removeEventListener('keydown', _escDupCad); return; }
+    if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', _escDupCad); }
+  };
+  document.addEventListener('keydown', _escDupCad);
   overlay.innerHTML = `
     <div class="alert-modal-card">
       <div class="alert-modal-header">

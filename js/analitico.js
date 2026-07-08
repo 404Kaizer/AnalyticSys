@@ -1760,7 +1760,11 @@ function analiticoAbrirSemCadastroModal(idx, event) {
   const overlay = document.createElement('div');
   overlay.id = 'alert-modal-an-sem-cad';
   overlay.className = 'alert-modal-overlay';
-  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  const _escAnSemCad = (e) => {
+    if (!document.body.contains(overlay)) { document.removeEventListener('keydown', _escAnSemCad); return; }
+    if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', _escAnSemCad); }
+  };
+  document.addEventListener('keydown', _escAnSemCad);
   overlay.innerHTML = `
     <div class="alert-modal-card">
       <div class="alert-modal-header">

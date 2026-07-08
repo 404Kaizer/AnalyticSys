@@ -1811,7 +1811,9 @@ window.abrirModalRelatorioCentral = function(centralName) {
     </div>`;
 
   modal.classList.add('open');
-  modal.onclick = (e) => { if (e.target === modal) modal.classList.remove('open'); };
+  if (modal._escHandler) document.removeEventListener('keydown', modal._escHandler);
+  modal._escHandler = (e) => { if (e.key === 'Escape') { modal.classList.remove('open'); document.removeEventListener('keydown', modal._escHandler); } };
+  document.addEventListener('keydown', modal._escHandler);
 };
 
 // ═══════════════════════════════════════════════════════════════════

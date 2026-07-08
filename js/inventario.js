@@ -955,7 +955,11 @@
     const overlay = document.createElement('div');
     overlay.id = 'alert-modal-inv-sem-cad';
     overlay.className = 'alert-modal-overlay';
-    overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+    const _escInvSemCad = (e) => {
+      if (!document.body.contains(overlay)) { document.removeEventListener('keydown', _escInvSemCad); return; }
+      if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', _escInvSemCad); }
+    };
+    document.addEventListener('keydown', _escInvSemCad);
     overlay.innerHTML = `
       <div class="alert-modal-card">
         <div class="alert-modal-header">
@@ -1043,7 +1047,11 @@
         </div>
       </div>`;
     document.body.appendChild(modal);
-    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+    const _escInvModal = e => {
+      if (!document.body.contains(modal)) { document.removeEventListener('keydown', _escInvModal); return; }
+      if (e.key === 'Escape') { modal.remove(); document.removeEventListener('keydown', _escInvModal); }
+    };
+    document.addEventListener('keydown', _escInvModal);
   };
 
   window.invSalvarJust = function(k) {
