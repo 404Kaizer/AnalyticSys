@@ -461,7 +461,7 @@
    grudar, e o cabeçalho "solta" junto com o scroll da página inteira. */
 .inv-table-scroll {
   overflow: auto;
-  max-height: calc(100vh - 400px);
+  max-height: calc(100vh - 280px);
   min-height: 340px;
 }
 
