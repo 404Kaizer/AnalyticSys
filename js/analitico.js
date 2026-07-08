@@ -2993,22 +2993,30 @@ function setupKeyboardShortcuts() {
   });
 }
 
-// IDs of modals that should NOT close on backdrop click
-const _MODAL_NO_BACKDROP_CLOSE = new Set([
-  'modal-fechamento',  // fechamento editor — only closes via Fechar button
+// IDs de modais que já têm tratamento de ESC próprio e dedicado em
+// outro ponto do sistema (com limpeza de estado extra além de só
+// remover a classe 'open') — evitamos tratá-los de novo aqui para
+// não duplicar lógica.
+const _MODAL_ESC_JA_TRATADO = new Set([
+  'analitico-detail-overlay', // fechado via closeAnaliticoDetailModal() no listener de Escape logo abaixo
+  'modal-search-global',      // fechado via closeSearchModal() em setupKeyboardShortcuts()
 ]);
 
-function setupModalCloseOnBackdrop() {
-  qsa('.modal-overlay').forEach(m => {
-    m.addEventListener('click', e => {
-      if (e.target !== m) return;
-      if (_MODAL_NO_BACKDROP_CLOSE.has(m.id)) return; // blocked
-      if (m.id === 'analitico-detail-overlay') {
-        closeAnaliticoDetailModal();
-      } else {
-        m.classList.remove('open');
-      }
+// Fecha modais (.modal-overlay) apenas via ESC — clique fora foi
+// removido propositalmente em todo o sistema; cada modal só fecha
+// pelo seu próprio botão (×/Cancelar/Fechar) ou pressionando ESC.
+function setupModalCloseOnEscape() {
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    const abertos = qsa('.modal-overlay.open').filter(m => !_MODAL_ESC_JA_TRATADO.has(m.id));
+    if (!abertos.length) return;
+    // Se houver mais de um aberto (empilhado), fecha o de maior z-index (o "de cima")
+    let top = abertos[0], topZ = -Infinity;
+    abertos.forEach(m => {
+      const z = parseFloat(getComputedStyle(m).zIndex) || 0;
+      if (z >= topZ) { topZ = z; top = m; }
     });
+    top.classList.remove('open');
   });
 }
 
@@ -3016,7 +3024,7 @@ async function init() {
   applyTheme(getSavedTheme());
   setTimeout(updateToolsTheme, 0); // sync theme buttons in dropdown
   restoreSidebarState();
-  setupModalCloseOnBackdrop();
+  setupModalCloseOnEscape();
   setupKeyboardShortcuts();
   initDropZones();
 

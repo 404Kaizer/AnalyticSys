@@ -3312,7 +3312,7 @@
 </div>
 
 <!-- MODAL: Busca Global (Ctrl+Q) -->
-<div class="modal-overlay" id="modal-search-global" style="display:none;align-items:flex-start;padding-top:80px" onclick="if(event.target===this)closeSearchModal()">
+<div class="modal-overlay" id="modal-search-global" style="display:none;align-items:flex-start;padding-top:80px">
   <div class="search-modal-wrap">
     <div class="search-modal-input-row">
       <i class="ti ti-search search-modal-icon"></i>
@@ -3700,8 +3700,7 @@
 
 <!-- MODAL: Breakdown de Movimentações (Micro) -->
 <!-- MODAL: Pendentes de Integração SAP -->
-<div class="pim-overlay" id="pim-overlay" aria-hidden="true"
-     onclick="if(event.target===this) closePendIntegModal()">
+<div class="pim-overlay" id="pim-overlay" aria-hidden="true">
   <div class="pim-dialog" role="dialog" aria-modal="true" aria-labelledby="pim-title">
     <div class="pim-header">
       <div class="pim-header-text">
@@ -3734,8 +3733,7 @@
   </div>
 </div>
 
-<div class="bdm-overlay" id="breakdown-modal-overlay" aria-hidden="true"
-     onclick="if(event.target===this) closeBreakdownModal()">
+<div class="bdm-overlay" id="breakdown-modal-overlay" aria-hidden="true">
   <div class="bdm-dialog" role="dialog" aria-modal="true" aria-labelledby="bdm-title">
     <div class="bdm-header">
       <div class="bdm-header-text">
@@ -3768,8 +3766,7 @@
 </div>
 
 <!-- MODAL: Resolução de Conflito de Lançamentos -->
-<div class="lrc-overlay" id="lrc-overlay" aria-hidden="true"
-     onclick="if(event.target===this) closeLancConflictModal()">
+<div class="lrc-overlay" id="lrc-overlay" aria-hidden="true">
   <div class="lrc-dialog" role="dialog" aria-modal="true">
     <div class="lrc-header">
       <div class="lrc-header-text">
@@ -3824,7 +3821,7 @@
 <script src="js/trend.js"></script>
 
 <!-- ═══ MODAL: Nova/Editar Ocorrência ═══ -->
-<div class="modal-overlay" id="oc-modal" onclick="if(event.target===this)closeOcorrenciaModal()" role="dialog" aria-modal="true">
+<div class="modal-overlay" id="oc-modal" role="dialog" aria-modal="true">
   <div class="modal-card" style="max-width:560px;width:100%">
     <div class="modal-header">
       <span class="modal-title" id="oc-modal-title">Nova Ocorrência</span>
@@ -3914,7 +3911,7 @@
 </div>
 
 <!-- ═══ MODAL: Concluir Ocorrência ═══ -->
-<div class="modal-overlay" id="oc-concluir-modal" onclick="if(event.target===this)closeConcluirModal()" role="dialog" aria-modal="true">
+<div class="modal-overlay" id="oc-concluir-modal" role="dialog" aria-modal="true">
   <div class="modal-card" style="max-width:460px;width:100%">
     <div class="modal-header">
       <span class="modal-title">Concluir Ocorrência</span>
@@ -3939,7 +3936,7 @@
 </div>
 
 <!-- ═══ MODAL: Marcar como Inconclusiva ═══ -->
-<div class="modal-overlay" id="oc-inconclusiva-modal" onclick="if(event.target===this)closeInconclusivaModal()" role="dialog" aria-modal="true">
+<div class="modal-overlay" id="oc-inconclusiva-modal" role="dialog" aria-modal="true">
   <div class="modal-card" style="max-width:460px;width:100%">
     <div class="modal-header">
       <span class="modal-title"><i class="ti ti-alert-triangle" style="color:var(--purple);margin-right:6px"></i>Marcar como Inconclusiva</span>
@@ -3967,7 +3964,7 @@
 </div>
 
 <!-- Modal de detalhe de ocorrência -->
-<div class="modal-overlay" id="oc-detail-modal" onclick="if(event.target===this)closeOcDetailModal()" role="dialog" aria-modal="true">
+<div class="modal-overlay" id="oc-detail-modal" role="dialog" aria-modal="true">
   <div class="modal-card" style="max-width:600px;width:100%">
     <div class="modal-header">
       <span class="modal-title">Detalhe da Ocorrência</span>
@@ -3986,7 +3983,7 @@
 </div>
 
 <!-- Modal de Escalonamento -->
-<div class="modal-overlay" id="oc-escalonar-modal" onclick="if(event.target===this)closeEscalonarModal()" role="dialog" aria-modal="true">
+<div class="modal-overlay" id="oc-escalonar-modal" role="dialog" aria-modal="true">
   <div class="modal-card" style="max-width:460px;width:100%">
     <div class="modal-header">
       <span class="modal-title"><i class="ti ti-arrow-up-circle" style="color:var(--amber);margin-right:6px"></i>Escalonar Ocorrência</span>
@@ -4029,7 +4026,7 @@
 </div>
 
 <!-- Modal de Edição de Escalonamento -->
-<div class="modal-overlay" id="oc-editar-escalonamento-modal" onclick="if(event.target===this)closeEditarEscalonamentoModal()" role="dialog" aria-modal="true">
+<div class="modal-overlay" id="oc-editar-escalonamento-modal" role="dialog" aria-modal="true">
   <div class="modal-card" style="max-width:460px;width:100%">
     <div class="modal-header">
       <span class="modal-title"><i id="oc-edit-esc-icone" class="ti ti-arrow-up-circle" style="margin-right:6px"></i><span id="oc-edit-esc-titulo">Editar escalonamento</span></span>

@@ -1392,6 +1392,11 @@ function renderOcorrenciasPage() {
   renderOcorrencias();
 }
 
+// Fechamento por ESC dos modais de Ocorrências é tratado de forma
+// centralizada em analitico.js (setupModalCloseOnEscape), que cobre
+// todo elemento .modal-overlay do sistema — nenhum listener extra
+// é necessário aqui.
+
 Object.assign(window, {
   renderOcorrenciasPage,
   renderOcorrencias,
