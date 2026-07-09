@@ -1790,6 +1790,8 @@
 
   // Atualiza só o badge de status + o habilitado/desabilitado do botão
   // Registrar daquela linha — chamado depois de toda edição ou registro.
+  // Também atualiza o contador "X de Y registradas" no topo do modal, pra
+  // dar orientação de progresso sem precisar rolar a lista toda.
   function _invLoteAtualizarLinhaVisual(k) {
     const idx = _invLoteIdx(k);
     if (idx < 0) return;
@@ -1802,6 +1804,13 @@
     if (badge) badge.innerHTML = st.registrado
       ? '<span style="color:var(--green);font-size:11px;font-weight:700;white-space:nowrap"><i class="ti ti-circle-check-filled"></i> Registrada</span>'
       : '<span style="color:var(--text3);font-size:11px;white-space:nowrap">Não registrada</span>';
+
+    const progresso = document.getElementById('inv-lote-progress');
+    if (progresso) {
+      const total = _invLoteKeys.length;
+      const feitas = _invLoteKeys.filter(kk => _invLoteState[kk]?.registrado).length;
+      progresso.textContent = `${feitas} de ${total} registrada${total===1?'':'s'}`;
+    }
   }
 
   // Chamado a cada edição de qualquer campo (oninput/onchange). Se a linha
@@ -1879,7 +1888,16 @@
     const _varClass = h ? h.varClass   : (v) => v < 0 ? 'diff-neg' : v > 0 ? 'diff-pos' : 'diff-zero';
     const _escape   = h ? h.escapeHtml : _invEscape;
 
-    const linhasHtml = _invLoteKeys.map((k, idx) => {
+    // Campo com rótulo + ícone de replicar alinhados na mesma linha —
+    // padrão repetido pelos 5 campos, extraído aqui só pra não repetir a
+    // mesma estrutura de div 5 vezes no template abaixo.
+    const _campoLabel = (label, campo, idx) => `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <label class="oc-label" style="margin:0">${label}</label>
+        <button type="button" class="btn-icon" title="Copiar pras linhas selecionadas ainda vazias nesse campo" onclick="_invLoteReplicar('${campo}', ${idx})"><i class="ti ti-copy"></i></button>
+      </div>`;
+
+    const cardsHtml = _invLoteKeys.map((k, idx) => {
       const row = invRows.find(r => r.k === k);
       const j = invJustificativas[k] || {};
       // Linha já tinha justificativa completa salva (de antes de abrir o
@@ -1894,51 +1912,43 @@
       const vkCls = _varClass(row.varKg);
 
       return `
-        <tr>
-          <td style="font-size:11px;color:var(--text2);white-space:nowrap;vertical-align:top;padding-top:10px">
-            <div style="font-weight:600;color:var(--text)">${_escape(row.material)}</div>
-            <div>${_escape(row.central)}</div>
-            <div class="td-mono ${vkCls}" style="margin-top:4px">${_fmtKg(row.varKg)}</div>
-          </td>
-          <td style="vertical-align:top;padding-top:10px">
-            <div style="display:flex;gap:4px;align-items:flex-start">
-              <textarea id="lote-op-${idx}" class="oc-input oc-textarea" rows="2" style="min-width:180px" oninput="_invLoteOnInput('${k}')">${_escape(j.op||'')}</textarea>
-              <button type="button" class="btn-icon" title="Copiar esse texto pras linhas selecionadas ainda vazias" onclick="_invLoteReplicar('op', ${idx})"><i class="ti ti-copy"></i></button>
+        <div class="inv-lote-card" id="lote-row-${idx}">
+          <div class="inv-lote-card-header">
+            <div style="min-width:0">
+              <div style="font-weight:700;font-size:13px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escape(row.material)}</div>
+              <div style="font-size:11px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escape(row.central)} · ${_escape(row.regional)}</div>
             </div>
-          </td>
-          <td style="vertical-align:top;padding-top:10px">
-            <div style="display:flex;gap:4px;align-items:flex-start">
-              <select id="lote-fiscal-${idx}" class="oc-input" style="min-width:210px" onchange="_invLoteOnInput('${k}')">
+            <div class="td-mono ${vkCls}" style="font-size:14px;font-weight:700;white-space:nowrap;flex-shrink:0">${_fmtKg(row.varKg)}</div>
+            <div id="lote-status-${idx}" style="flex-shrink:0"></div>
+            <button type="button" class="btn btn-primary" id="lote-btn-${idx}" style="flex-shrink:0;white-space:nowrap" onclick="_invLoteRegistrar('${k}')"><i class="ti ti-device-floppy"></i> Registrar</button>
+          </div>
+          <div class="inv-lote-fields-grid">
+            <div style="grid-column:1 / -1">
+              ${_campoLabel('Justificativa Operacional', 'op', idx)}
+              <textarea id="lote-op-${idx}" class="oc-input oc-textarea" rows="2" style="width:100%" oninput="_invLoteOnInput('${k}')">${_escape(j.op||'')}</textarea>
+            </div>
+            <div>
+              ${_campoLabel('Justificativa Fiscal', 'fiscal', idx)}
+              <select id="lote-fiscal-${idx}" class="oc-input" style="width:100%" onchange="_invLoteOnInput('${k}')">
                 <option value="" ${!j.fiscal ? 'selected' : ''} disabled>Selecione...</option>
                 ${_invMontarOptionsFiscal(j.fiscal||'')}
               </select>
-              <button type="button" class="btn-icon" title="Copiar essa opção pras linhas selecionadas ainda vazias" onclick="_invLoteReplicar('fiscal', ${idx})"><i class="ti ti-copy"></i></button>
             </div>
-          </td>
-          <td style="vertical-align:top;padding-top:10px">
-            <div style="display:flex;gap:4px;align-items:center">
-              <input id="lote-saldo-${idx}" type="number" class="oc-input" style="width:95px" placeholder="0" value="${j.saldo??''}" oninput="_invLoteOnInput('${k}')">
-              <button type="button" class="btn-icon" title="Preencher com a variação total dessa linha" onclick="document.getElementById('lote-saldo-${idx}').value='${Math.round(row.varKg*100)/100}'; _invLoteOnInput('${k}')"><i class="ti ti-arrow-bar-to-down"></i></button>
-              <button type="button" class="btn-icon" title="Copiar esse valor pras linhas selecionadas ainda vazias" onclick="_invLoteReplicar('saldo', ${idx})"><i class="ti ti-copy"></i></button>
+            <div>
+              ${_campoLabel('Saldo Justificado (kg)', 'saldo', idx)}
+              <input id="lote-saldo-${idx}" type="number" class="oc-input" style="width:100%" placeholder="0" value="${j.saldo??''}" oninput="_invLoteOnInput('${k}')">
+              <button type="button" class="inv-lote-link-btn" onclick="document.getElementById('lote-saldo-${idx}').value='${Math.round(row.varKg*100)/100}'; _invLoteOnInput('${k}')">Usar variação total</button>
             </div>
-          </td>
-          <td style="vertical-align:top;padding-top:10px">
-            <div style="display:flex;gap:4px;align-items:center">
-              <input id="lote-custosap-${idx}" type="number" step="0.01" class="oc-input" style="width:85px" placeholder="0,00" value="${j.custoMedioSap??''}" oninput="_invLoteOnInput('${k}')">
-              <button type="button" class="btn-icon" title="Copiar esse valor pras linhas selecionadas ainda vazias" onclick="_invLoteReplicar('custosap', ${idx})"><i class="ti ti-copy"></i></button>
+            <div>
+              ${_campoLabel('Custo Médio SAP (R$/kg)', 'custosap', idx)}
+              <input id="lote-custosap-${idx}" type="number" step="0.01" class="oc-input" style="width:100%" placeholder="0,00" value="${j.custoMedioSap??''}" oninput="_invLoteOnInput('${k}')">
             </div>
-          </td>
-          <td style="vertical-align:top;padding-top:10px">
-            <div style="display:flex;gap:4px;align-items:center">
-              <input id="lote-docsap-${idx}" type="number" class="oc-input" style="width:115px" placeholder="Opcional" value="${j.documentoSap??''}" oninput="_invLoteOnInput('${k}')">
-              <button type="button" class="btn-icon" title="Copiar esse valor pras linhas selecionadas ainda vazias" onclick="_invLoteReplicar('docsap', ${idx})"><i class="ti ti-copy"></i></button>
+            <div>
+              ${_campoLabel('Documento SAP', 'docsap', idx)}
+              <input id="lote-docsap-${idx}" type="number" class="oc-input" style="width:100%" placeholder="Opcional" value="${j.documentoSap??''}" oninput="_invLoteOnInput('${k}')">
             </div>
-          </td>
-          <td style="vertical-align:top;padding-top:10px;text-align:center;white-space:nowrap">
-            <div id="lote-status-${idx}" style="margin-bottom:6px"></div>
-            <button type="button" class="btn btn-primary" id="lote-btn-${idx}" style="font-size:11px;padding:5px 10px" onclick="_invLoteRegistrar('${k}')"><i class="ti ti-device-floppy"></i> Registrar</button>
-          </td>
-        </tr>`;
+          </div>
+        </div>`;
     }).join('');
 
     const modal = document.createElement('div');
@@ -1946,29 +1956,16 @@
     modal.className = 'modal-overlay open';
     modal.style.cssText = 'position:fixed;z-index:9999';
     modal.innerHTML = `
-      <div class="modal-card" style="max-width:1180px;width:96vw">
+      <div class="modal-card" style="max-width:860px;width:92vw">
         <div class="modal-header">
           <div>
             <span class="modal-title"><i class="ti ti-stack-2"></i> Justificar em lote</span>
-            <div style="font-size:11px;color:var(--text2);margin-top:3px">${_invLoteKeys.length} linha${_invLoteKeys.length===1?'':'s'} selecionada${_invLoteKeys.length===1?'':'s'} — cada uma registra independente, clicando em "Registrar"</div>
+            <div style="font-size:11px;color:var(--text2);margin-top:3px" id="inv-lote-progress">${_invLoteKeys.length} linha${_invLoteKeys.length===1?'':'s'} selecionada${_invLoteKeys.length===1?'':'s'}</div>
           </div>
           <button class="modal-close" onclick="_invLoteTentarFechar()"><i class="ti ti-x"></i></button>
         </div>
-        <div class="modal-body" style="max-height:65vh;overflow:auto;padding:0">
-          <table class="inv-data-table" style="width:100%">
-            <thead>
-              <tr>
-                <th style="text-align:left">Central / Material</th>
-                <th style="text-align:left">Justificativa Operacional</th>
-                <th style="text-align:left">Justificativa Fiscal</th>
-                <th style="text-align:left">Saldo Just. (kg)</th>
-                <th style="text-align:left">Custo Médio SAP</th>
-                <th style="text-align:left">Documento SAP</th>
-                <th style="text-align:center">Status</th>
-              </tr>
-            </thead>
-            <tbody>${linhasHtml}</tbody>
-          </table>
+        <div class="modal-body" style="max-height:70vh;overflow-y:auto;overflow-x:hidden">
+          ${cardsHtml}
         </div>
         <div class="modal-footer" style="justify-content:flex-end">
           <button class="btn" onclick="_invLoteTentarFechar()">Fechar</button>

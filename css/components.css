@@ -726,6 +726,62 @@ table thead th[data-sort-col].sort-desc .mod-sort-icon { opacity: 1; }
 .inv-select-col { display: none; }
 #inv-table.inv-select-mode .inv-select-col { display: table-cell; width: 32px; text-align: center; }
 
+/* ── Modal "Justificar em lote" — cartões empilhados ──
+   Um cartão por linha selecionada, com grade de campos responsiva
+   (repete até caber, sempre 1fr mín. 190px) — nunca precisa de scroll
+   horizontal, diferente da 1ª versão em tabela larga. */
+.inv-lote-card {
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+}
+.inv-lote-card:last-child { margin-bottom: 0; }
+.inv-lote-card-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--border2);
+}
+.inv-lote-card-header > div:first-child { flex: 1; min-width: 0; }
+.inv-lote-fields-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px 14px;
+}
+/* Sem isso, um <select> com opção de texto longo (ex.: "CONTROLE
+   OPERACIONAL – CONSOLIDAÇÃO DE LANÇAMENTOS DO PERÍODO") força seu
+   min-content width acima do previsto pela grade — min-width:0 permite
+   a célula encolher e o texto cortar com ellipsis, em vez de estourar a
+   largura do modal inteiro (era exatamente o bug do print). */
+.inv-lote-fields-grid > div { min-width: 0; }
+.inv-lote-fields-grid select.oc-input,
+.inv-lote-fields-grid input.oc-input,
+.inv-lote-fields-grid textarea.oc-input {
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+.inv-lote-fields-grid select.oc-input {
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.inv-lote-link-btn {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 10.5px;
+  padding: 4px 0 0;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.inv-lote-link-btn:hover { color: var(--text); }
+
 .table-header {
   padding: 14px 18px;
   border-bottom: 1px solid var(--border);
