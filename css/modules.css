@@ -212,6 +212,14 @@
   padding: 16px;
 }
 .modal-overlay.open { display: flex; }
+
+/* confirmarDestrutivo() (format.js) é sempre a camada de confirmação MAIS
+   acima do sistema — precisa ficar visível mesmo quando aberto por cima
+   de um modal que já sobrescreveu seu próprio z-index inline (ex.:
+   inv-modal, inv-modal-lote usam z-index:9999). Sem isso, a confirmação
+   abre "atrás" do modal que a disparou. */
+#modal-confirm-destrutivo.modal-overlay { z-index: 10000; }
+
 .modal {
   background: var(--bg2);
   border: 1px solid var(--border2);

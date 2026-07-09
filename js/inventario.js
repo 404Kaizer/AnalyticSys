@@ -1927,7 +1927,7 @@
               ${_campoLabel('Justificativa Operacional', 'op', idx)}
               <textarea id="lote-op-${idx}" class="oc-input oc-textarea" rows="2" style="width:100%" oninput="_invLoteOnInput('${k}')">${_escape(j.op||'')}</textarea>
             </div>
-            <div>
+            <div style="grid-column:1 / -1">
               ${_campoLabel('Justificativa Fiscal', 'fiscal', idx)}
               <select id="lote-fiscal-${idx}" class="oc-input" style="width:100%" onchange="_invLoteOnInput('${k}')">
                 <option value="" ${!j.fiscal ? 'selected' : ''} disabled>Selecione...</option>
