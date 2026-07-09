@@ -691,6 +691,34 @@ table thead th[data-sort-col].sort-desc .mod-sort-icon { opacity: 1; }
   border-color: var(--amber-border);
 }
 
+/* ── Badge de Divergências (possíveis causas da variação) ──
+   Compacto, ao lado do nome do Material — ícone + contagem de categorias
+   com achados (manuais / duplicidade / pendência SAP / ocorrência aberta).
+   Cor neutra (accent), distinta do pontinho âmbar de "Sem justificativa"
+   e do badge "Sem cadastro" (dup-cad-badge-morto), pra não competir com
+   eles visualmente. Clicável — abre invAbrirDivergencias(k). */
+.inv-div-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: var(--accent-dim);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  vertical-align: middle;
+  margin-right: 5px;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: all .13s;
+}
+.inv-div-badge i { font-size: 10px; }
+.inv-div-badge:hover { background: var(--accent); color: #fff; }
+
 .table-header {
   padding: 14px 18px;
   border-bottom: 1px solid var(--border);

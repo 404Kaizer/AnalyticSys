@@ -515,16 +515,20 @@
   }
 
   // Busca exata: soma todos os lançamentos da central+material na data ISO informada.
-  // Retorna { value, dtLabel, missing:false } se achar, ou null se não achar.
+  // Retorna { value, dtLabel, missing:false, records:[...] } se achar, ou null se não achar.
+  // `records` = os registros brutos que casaram na data-alvo (pode ser mais de
+  // um se houver duplicidade) — usado pelos indicadores de Divergências para
+  // checar `fonte==='manual'` e cruzar contra getLancamentoDuplicateKeys().
   function invFindExactDay(arr, targetISO, targetDate, parseDate, localISODate, num) {
     let total = 0, found = false;
+    const records = [];
     for (const rec of arr) {
       const d = parseDate(rec.dtLanc);
       if (!d) continue;
-      if (localISODate(d) === targetISO) { total += num(rec.peso); found = true; }
+      if (localISODate(d) === targetISO) { total += num(rec.peso); found = true; records.push(rec); }
     }
     if (!found) return null;
-    return { value: total, dtLabel: targetDate.toLocaleDateString('pt-BR'), missing: false };
+    return { value: total, dtLabel: targetDate.toLocaleDateString('pt-BR'), missing: false, records };
   }
 
   // Busca retroativa sem limite (ignorando domingos), só para preencher o
@@ -556,6 +560,18 @@
     return null;
   }
 
+  // ── Divergências (Registros manuais, Duplicidade, Pendência SAP,
+  // Ocorrências) — chama funções globais já existentes no sistema (ui.js/
+  // normalize.js/ocorrencias.js, nenhuma delas dentro de IIFE, então ficam
+  // disponíveis em window mesmo sem passar por _inv_helpers). Chamada
+  // defensiva: se por algum motivo a função não estiver carregada ainda,
+  // devolve o fallback vazio em vez de quebrar a geração do inventário.
+  function _invSafeCall(fnName, fallback, ...args) {
+    const fn = window[fnName];
+    if (typeof fn !== 'function') return fallback;
+    try { return fn(...args); } catch (e) { return fallback; }
+  }
+
   window.invGerar = function() {
     // Período próprio do Inventário: sempre um mês calendário completo,
     // selecionado no seletor de mês do módulo (independente do período
@@ -570,6 +586,26 @@
 
     const { getLancIndex, getSapIndex, getCustoMedioPorMat, getFilialLookupIndex, normalizeText, parseDate, localISODate, dateCmp, num, state: getState, getCategoriaPorGrupo, getCatKeyDoCadastro } = h;
     const state = getState();
+
+    // ── Fontes de "Divergências" (ver invAbrirDivergencias mais abaixo) ──
+    // Duplicidade — mesmas funções/critério já usados nas páginas de
+    // Lançamentos e SAP (botão "Somente duplicatas"), garantindo que a
+    // definição de "duplicata" nunca diverge entre os módulos.
+    const lancDupKeys = _invSafeCall('getLancamentoDuplicateKeys', new Set());
+    const sapDupInfo  = _invSafeCall('getSapDuplicateKeys', { real: new Set(), cancelled: new Set() });
+    // Ocorrências operacionais ainda abertas (não concluídas/inconclusivas)
+    // e com Material preenchido — ocorrências sem material específico não
+    // entram aqui (decisão: evitar "poluir" todas as linhas de uma central
+    // com uma ocorrência genérica; ver resumo da entrega). Indexadas por
+    // central normalizada (mesmo normalizeText usado no resto do módulo)
+    // para busca O(1) por central dentro do loop principal.
+    const ocByCentralNorm = new Map();
+    (state.ocorrencias || []).forEach(o => {
+      if (o.concluida || o.inconclusiva || !o.material) return;
+      const key = normalizeText(o.central || '');
+      if (!ocByCentralNorm.has(key)) ocByCentralNorm.set(key, []);
+      ocByCentralNorm.get(key).push(o);
+    });
 
     const dtIni = new Date(selYear, selMonth, 1, 0, 0, 0);
     const dtFim = new Date(selYear, selMonth + 1, 0, 23, 59, 59);
@@ -639,6 +675,13 @@
       // Calculado uma única vez por central para eficiência.
       const custoMedioPorMat = getCustoMedioPorMat(central, dtIni, dtFim);
 
+      // NFs/OS pendentes de integração SAP nesta central+período — mesma
+      // função usada nos cards do Analítico (calcPendentesIntegracao, em
+      // ui.js). Calculado uma vez por central; filtrado por material dentro
+      // do loop de materiais logo abaixo.
+      const pendCentral = _invSafeCall('calcPendentesIntegracao', { pendNF: [], pendOS: [] }, { central, dtIni, dtFim, sapNoPeriodo: sapPer });
+      const ocsCentral  = ocByCentralNorm.get(normalizeText(central)) || [];
+
       mats.forEach(mat => {
         const k = mesKey + '|||' + central + '|||' + mat;
         const lancArr = (byMat.get(mat) || []).slice().sort((a,b) => {
@@ -703,7 +746,59 @@
         // — categoria sempre existe, nunca 'Sem cadastro' neste ramo.
         const categoria = getCategoriaPorGrupo(mat) || '';
 
-        rowMap.set(k, { k, mesKey, central, material: mat, categoria, semCadastro: false, regional, estoqueIni, estoqueIniMissing, estoqueIniLastKnown, entradasKg, saidasKg, estoqueFimReal, estoqueFimMissing, estoqueFimLastKnown, custoMedio, entEntries, saiEntries });
+        // ── Divergências: possíveis causas da variação, agrupadas em 4
+        // categorias (Registros manuais / Duplicidade / Pendência de
+        // integração SAP / Ocorrência operacional aberta). Ver botão ao
+        // lado do nome do Material em invRenderTabela e o modal em
+        // invAbrirDivergencias mais abaixo.
+        const iniRecs = iniRes ? iniRes.records : [];
+        const fimRecs = fimRes ? fimRes.records : [];
+        const entRecs = sapArr.filter(r => num(r.peso) >= 0);
+        const saiRecs = sapArr.filter(r => num(r.peso) < 0);
+
+        const manualIni = iniRecs.some(r => r.fonte === 'manual');
+        const manualFim = fimRecs.some(r => r.fonte === 'manual');
+        const manualEnt = entRecs.some(r => r.fonte === 'manual');
+        const manualSai = saiRecs.some(r => r.fonte === 'manual');
+
+        const dupIni = iniRecs.some(r => lancDupKeys.has(_invSafeCall('getLancamentoRecordKey', '', r)));
+        const dupFim = fimRecs.some(r => lancDupKeys.has(_invSafeCall('getLancamentoRecordKey', '', r)));
+        const sapDupRecs = sapArr.filter(r => sapDupInfo.real.has(_invSafeCall('getSapRecordKey', '', r)));
+
+        // Pendências já vêm filtradas por central+período (pendCentral);
+        // aqui filtra por material, sempre resolvendo materialOriginal pelo
+        // cadastro ATUAL (normalizarMaterial), nunca comparando contra o
+        // .material bruto do registro de Entrada/Saída — mesmo princípio já
+        // aplicado no resto do módulo (evita colisão por cadastro apagado/
+        // reaproveitado).
+        const nfPendMat = (pendCentral.pendNF || []).filter(r => _invSafeCall('normalizarMaterial', r.material || '', r.materialOriginal || r.material) === mat);
+        const osPendMat = (pendCentral.pendOS || []).filter(r => _invSafeCall('normalizarMaterial', r.material || '', r.materialOriginal || r.material) === mat);
+
+        // Ocorrências: campo Material é salvo como "ALIAS: ORIGEM" (ver
+        // formatMaterialCadastro em ocorrencias.js) — extrai só o ALIAS
+        // (texto antes do ":") pra comparar com `mat`, que já é o alias
+        // resolvido da linha. Ocorrências sem ":" (formato antigo/atípico)
+        // comparam a string inteira — na pior hipótese, só deixam de casar
+        // (falso negativo), nunca casam errado.
+        const ocsMat = ocsCentral.filter(o => {
+          const aliasOc = String(o.material || '').split(':')[0].trim();
+          return aliasOc === mat;
+        });
+
+        const divCatManual = manualIni || manualFim || manualEnt || manualSai;
+        const divCatDup     = dupIni || dupFim || sapDupRecs.length > 0;
+        const divCatPend    = nfPendMat.length > 0 || osPendMat.length > 0;
+        const divCatOc      = ocsMat.length > 0;
+        const divCount = [divCatManual, divCatDup, divCatPend, divCatOc].filter(Boolean).length;
+
+        const divergencias = {
+          manualIni, manualFim, manualEnt, manualSai,
+          dupIni, dupFim, sapDupRecs,
+          nfPendentes: nfPendMat, osPendentes: osPendMat,
+          ocorrencias: ocsMat,
+        };
+
+        rowMap.set(k, { k, mesKey, central, material: mat, categoria, semCadastro: false, regional, estoqueIni, estoqueIniMissing, estoqueIniLastKnown, entradasKg, saidasKg, estoqueFimReal, estoqueFimMissing, estoqueFimLastKnown, custoMedio, entEntries, saiEntries, divergencias, divCount });
       });
 
       // ── Materiais SEM cadastro (ou cadastrados sem categoria) ──────────
@@ -719,7 +814,7 @@
           estoqueIni: 0, estoqueIniMissing: true, estoqueIniLastKnown: null,
           entradasKg: 0, saidasKg: 0,
           estoqueFimReal: 0, estoqueFimMissing: true, estoqueFimLastKnown: null,
-          custoMedio: 0, entEntries: [], saiEntries: []
+          custoMedio: 0, entEntries: [], saiEntries: [], divergencias: null, divCount: 0
         });
       });
     });
@@ -845,6 +940,16 @@
         ? '<span style="display:inline-block;width:6px;height:6px;background:var(--amber);border-radius:50%;margin-right:5px;vertical-align:middle;flex-shrink:0" title="Sem justificativa"></span>'
         : '';
 
+      // ── Badge de Divergências: possíveis causas da variação (registros
+      // manuais, duplicidade, pendência de integração SAP, ocorrência
+      // operacional aberta). Só aparece quando há pelo menos 1 achado;
+      // clique abre invAbrirDivergencias com o detalhe categorizado. ──
+      const divBadge = r.divCount > 0
+        ? `<button type="button" class="inv-div-badge" onclick="event.stopPropagation(); invAbrirDivergencias('${r.k}')" title="${r.divCount} possível${r.divCount === 1 ? '' : 'is'} causa${r.divCount === 1 ? '' : 's'} da variação — clique para ver detalhes">
+             <i class="ti ti-list-search"></i>${r.divCount}
+           </button>`
+        : '';
+
       // ── Est. Inicial: teal igual ao analítico; tooltip com última data conhecida ──
       const iniTooltip = r.estoqueIniMissing
         ? (r.estoqueIniLastKnown
@@ -929,7 +1034,7 @@
       return `<tr class="${rowClass}">
         <td style="font-size:11px;color:var(--text2);white-space:nowrap">${r.regional}</td>
         <td style="font-family:var(--mono);font-size:11px;font-weight:600;white-space:nowrap">${r.central}</td>
-        <td style="font-weight:600;max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${_escape(r.material)}">${alertBadge}${_escape(r.material)}</td>
+        <td style="font-weight:600;max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${_escape(r.material)}">${alertBadge}${divBadge}${_escape(r.material)}</td>
         <td>${r.semCadastro
             ? `<span class="dup-cad-badge dup-cad-badge-morto" style="cursor:pointer" title="Material sem cadastro ou sem categoria preenchida — clique para cadastrar" onclick="_invCadastrarMaterial('${_escape(r.material)}')"><i class="ti ti-alert-triangle" style="font-size:9px"></i> Sem cadastro</span>`
             : `<span style="font-size:10px;background:var(--bg4);border:1px solid var(--border2);border-radius:20px;padding:2px 8px;color:var(--text2);white-space:nowrap">${_escape(r.categoria)}</span>`
@@ -1142,6 +1247,123 @@
       const el = document.getElementById('materiais-text');
       if (el) { el.focus(); el.selectionStart = el.selectionEnd = el.value.length; }
     }, 50);
+  };
+
+  // ── Modal de Divergências (possíveis causas da variação) ───────────
+  // Aberto pelo badge ao lado do nome do Material (invRenderTabela).
+  // Agrupa em 4 categorias — Registros manuais, Duplicidade, Pendência de
+  // integração SAP e Ocorrência operacional aberta — todas calculadas em
+  // invGerar (campo r.divergencias) a partir de funções já existentes no
+  // resto do sistema (nunca detecção nova): getLancamentoDuplicateKeys/
+  // getSapDuplicateKeys (ui.js, mesmo critério das páginas de Lançamentos/
+  // SAP), calcPendentesIntegracao (ui.js, mesma função dos cards do
+  // Analítico) e state.ocorrencias (ocorrencias.js). Modal só de leitura —
+  // não persiste nada, não interfere com invJustificativas.
+  function _invDivSectionHtml(icon, titulo, linhasHtml) {
+    if (!linhasHtml) return '';
+    return `
+      <div class="micro-section-title"><i class="ti ${icon}"></i> ${titulo}</div>
+      <div style="background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:9px 12px;margin-bottom:16px;display:flex;flex-direction:column;gap:2px">
+        ${linhasHtml}
+      </div>`;
+  }
+  function _invDivLinha(texto) {
+    return `<div style="font-size:12px;color:var(--text2);padding:3px 0;line-height:1.5;display:flex;gap:6px"><span style="color:var(--text3);flex-shrink:0">•</span><span>${texto}</span></div>`;
+  }
+
+  window._invAbrirOcorrencia = function(id) {
+    document.getElementById('alert-modal-inv-div')?.remove();
+    if (typeof openOcDetailModal === 'function') openOcDetailModal(id);
+    else toast('Módulo de Ocorrências não carregado.', 'error');
+  };
+
+  window.invAbrirDivergencias = function(k) {
+    const row = invRows.find(r => r.k === k);
+    if (!row || !row.divergencias) return;
+    const d = row.divergencias;
+    document.getElementById('alert-modal-inv-div')?.remove();
+
+    const h = window._inv_helpers;
+    const _fmtKg = h ? h.fmtKg : (v) => fmt(v) + ' kg';
+    const _num   = h ? h.num   : (v) => Number(v) || 0;
+
+    // ── Registros manuais ──
+    const manualLinhas = [];
+    if (d.manualIni) manualLinhas.push(_invDivLinha('Est. Inicial é um lançamento manual (não veio de importação).'));
+    if (d.manualFim) manualLinhas.push(_invDivLinha('Est. Final é um lançamento manual (não veio de importação).'));
+    if (d.manualEnt) manualLinhas.push(_invDivLinha('Parte das Entradas SAP do período foi lançada manualmente.'));
+    if (d.manualSai) manualLinhas.push(_invDivLinha('Parte das Saídas SAP do período foi lançada manualmente.'));
+
+    // ── Duplicidade ──
+    const dupLinhas = [];
+    if (d.dupIni) dupLinhas.push(_invDivLinha('Est. Inicial: mais de um lançamento na mesma central/data/material — o valor exibido é a SOMA de todos eles.'));
+    if (d.dupFim) dupLinhas.push(_invDivLinha('Est. Final: mais de um lançamento na mesma central/data/material — o valor exibido é a SOMA de todos eles.'));
+    d.sapDupRecs.forEach(r => {
+      dupLinhas.push(_invDivLinha(`Integração SAP duplicada — mov. ${_invEscape(r.movimento||'—')}, ref ${_invEscape(r.ref||r.documento||'—')}, ${_fmtKg(_num(r.peso))} em ${_invEscape(r.dtLanc||'—')}.`));
+    });
+
+    // ── Pendência de integração SAP ──
+    // Peso da NF (state.entradas) NÃO está necessariamente em kg — pode vir
+    // em TO/M³ etc., e o fator de conversão depende do MATERIAL (ex.: Areia
+    // Natural Fina, Brita). Usa as MESMAS funções já usadas no modal
+    // canônico "Pendentes de Integração SAP" (openPendIntegGlobalModal, em
+    // ui.js) — _convertNfPesoToKg faz a conversão; _nfNeedsConversionWarning
+    // sinaliza quando a unidade é volumétrica mas não há fator conhecido
+    // pro material (nesse caso o valor exibido é o BRUTO, na unidade
+    // original, com aviso — nunca convertido "no chute").
+    const pendLinhas = [];
+    d.nfPendentes.forEach(r => {
+      const semFator = _invSafeCall('_nfNeedsConversionWarning', false, r.um, r.material);
+      const pesoConv = _invSafeCall('_convertNfPesoToKg', Math.abs(_num(r.peso)), r.peso, r.um, r.material);
+      const pesoTxt = semFator
+        ? `${fmt(pesoConv, 2)} ${_invEscape(String(r.um || 'kg'))} <i class="ti ti-alert-triangle" style="color:var(--amber);font-size:10px" title="Sem fator de conversão cadastrado para ${_invEscape(String(r.um||''))} — valor exibido sem conversão"></i>`
+        : `${_fmtKg(pesoConv)}`;
+      pendLinhas.push(_invDivLinha(`NF ${_invEscape(String(r.nf||'—'))} — ${pesoTxt}, emitida em ${_invEscape(r.dtEmissao||'—')} (${_invEscape(r.fornecedor||'—')}) — ainda sem movimento SAP correspondente.`));
+    });
+    // OS (state.saidas) não passa pela mesma conversão — segue o mesmo
+    // tratamento do modal canônico (exibe peso bruto + unidade original,
+    // sem tentar converter).
+    d.osPendentes.forEach(r => {
+      pendLinhas.push(_invDivLinha(`OS ${_invEscape(String(r.os||'—'))} — ${fmt(Math.abs(_num(r.peso)), 2)} ${_invEscape(String(r.um || 'kg'))}, emitida em ${_invEscape(r.dtEmissao||'—')} — ainda sem movimento SAP correspondente.`));
+    });
+
+    // ── Ocorrências operacionais abertas ──
+    const ocLinhas = d.ocorrencias.map(o => `
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:3px 0">
+        <div style="font-size:12px;color:var(--text2);line-height:1.5;min-width:0">
+          <span style="color:var(--text3)">•</span> ${_invEscape(o.descricao || 'Sem descrição')}
+          <span style="color:var(--text3);font-size:10.5px"> — aberta em ${_invEscape(o.dataAbertura || '—')}</span>
+        </div>
+        <button class="btn-icon" type="button" title="Ver ocorrência" onclick="_invAbrirOcorrencia('${_invEscape(o.id)}')" style="flex-shrink:0"><i class="ti ti-external-link"></i></button>
+      </div>`);
+
+    const corpo = [
+      _invDivSectionHtml('ti-pencil', 'Registros manuais', manualLinhas.join('')),
+      _invDivSectionHtml('ti-copy', 'Duplicidade', dupLinhas.join('')),
+      _invDivSectionHtml('ti-cloud-off', 'Pendência de integração SAP', pendLinhas.join('')),
+      _invDivSectionHtml('ti-alert-circle', 'Ocorrência operacional aberta', ocLinhas.join('')),
+    ].join('');
+
+    const overlay = document.createElement('div');
+    overlay.id = 'alert-modal-inv-div';
+    overlay.className = 'alert-modal-overlay';
+    const _escInvDiv = (e) => {
+      if (!document.body.contains(overlay)) { document.removeEventListener('keydown', _escInvDiv); return; }
+      if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', _escInvDiv); }
+    };
+    document.addEventListener('keydown', _escInvDiv);
+    overlay.innerHTML = `
+      <div class="alert-modal-card">
+        <div class="alert-modal-header">
+          <div>
+            <div class="alert-modal-title"><i class="ti ti-list-search"></i> Possíveis causas da variação</div>
+            <div class="alert-modal-sub">${_invEscape(row.central)} · ${_invEscape(row.material)} — ${row.divCount} categoria${row.divCount === 1 ? '' : 's'} com achados</div>
+          </div>
+          <button class="alert-modal-close" onclick="document.getElementById('alert-modal-inv-div').remove()"><i class="ti ti-x"></i></button>
+        </div>
+        <div class="alert-modal-body">${corpo}</div>
+      </div>`;
+    document.body.appendChild(overlay);
   };
 
   // ── Modal de justificativa ───────────────────────────────
