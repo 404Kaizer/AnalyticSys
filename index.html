@@ -1718,6 +1718,10 @@
               <button class="btn" type="button" id="inv-table-fullscreen-btn" onclick="toggleInvTableFullscreen()">
                 <i class="ti ti-maximize"></i> <span>Expandir</span>
               </button>
+              <button class="btn" onclick="invAbrirImportCSV()">
+                <i class="ti ti-file-upload"></i> Importar CSV
+              </button>
+              <input type="file" id="inv-import-csv-input" accept=".csv" style="display:none" onchange="_invHandleImportFile(this)">
               <button class="btn" onclick="invExportar()">
                 <i class="ti ti-file-spreadsheet"></i> Exportar CSV
               </button>

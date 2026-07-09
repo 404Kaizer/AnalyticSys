@@ -1357,7 +1357,13 @@
     // consistente com o resto do app (fmtKg/money) e com o delimitador ';'.
     const _n = (v, dec = 2) => (Number(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: dec, maximumFractionDigits: dec });
 
-    const header = ['Regional','Filial','Material','Categoria','Est.Ini.(kg)','Est.Ini. Ausente?','Entradas(kg)','Saídas(kg)','Est.Teórico(kg)','Est.Real(kg)','Est.Final Ausente?','Var.(kg)','Var.(%)','Custo Var. (R$)','Custo Médio (R$/kg)','Custo SAP (R$)','Saldo Justificado (kg)','Var.Ajustada (kg)','Custo Just. (R$)','Just.Operacional','Just.Fiscal'];
+    // Colunas na MESMA ordem da tabela na tela (Regional→...→Custo Just.),
+    // + Just.Operacional/Just.Fiscal no fim (não são coluna visível na
+    // tabela — só o botão "Justificar" aparece — mas são mantidas por
+    // serem essenciais pro fechamento fiscal). Sem colunas extras que não
+    // existem na tabela (removido: "Ausente?" e "Var.(%)" — o "ausente"
+    // já é representado pela própria célula vazia, igual ao "—" da tela).
+    const header = ['Regional','Filial','Material','Categoria','Est.Inicial(kg)','Entradas(kg)','Saídas(kg)','Est.Final(kg)','Est.Teórico(kg)','Var.(kg)','Custo Var. (R$)','Custo Médio (R$/kg)','Custo SAP (R$)','Saldo Justificado (kg)','Var.Ajustada (kg)','Custo Just. (R$)','Just.Operacional','Just.Fiscal'];
     const rows = invRows.map(r => {
       const j = invJustificativas[r.k] || {};
       return [
@@ -1366,14 +1372,11 @@
         r.material,
         r.categoria,
         r.estoqueIniMissing ? '' : _n(r.estoqueIni),
-        r.estoqueIniMissing ? 'SIM' : 'NÃO',
         _n(r.entradasKg),
         _n(r.saidasKg),
-        _n(r.estTeor),
         r.estoqueFimMissing ? '' : _n(r.estoqueFimReal),
-        r.estoqueFimMissing ? 'SIM' : 'NÃO',
+        _n(r.estTeor),
         _n(r.varKg),
-        _n(r.varPct),
         r.custoMedio > 0 ? _n(r.custoVarBruto) : '',
         r.custoMedioSap > 0 ? _n(r.custoMedioSap) : '',
         r.custoMedioSap > 0 ? _n(r.custoSap) : '',
@@ -1392,6 +1395,188 @@
     // essencial pra rastreabilidade quando o inventário é de um mês passado.
     a.href = url; a.download = 'inventario_' + invGetMesKey() + '.csv';
     a.click(); URL.revokeObjectURL(url);
+  };
+
+  // ── Importar CSV — preenche em massa as justificativas ──────
+  // Lê exatamente o formato gerado por invExportar (';' + campos entre
+  // aspas). Casa cada linha com um registro do inventário do mês
+  // atualmente carregado por Filial+Material (mesma chave usada em
+  // invGerar: mesKey|||central|||material). Depois de ler o arquivo,
+  // abre um modal de seleção de categorias — mesmo padrão visual e
+  // comportamento do abrirModalCategoriasRelatorio (botão "Visão
+  // Diretoria"/"Relatório Detalhado", em relatorio.js): checkboxes por
+  // categoria + "Selecionar todas" + contagem de itens.
+
+  window.invAbrirImportCSV = function() {
+    if (!invRows.length) { toast('Gere o inventário antes de importar.', 'error'); return; }
+    document.getElementById('inv-import-csv-input')?.click();
+  };
+
+  // Parser simples de CSV no formato usado por invExportar: delimitador
+  // ';', campos sempre entre aspas, aspas internas escapadas como "".
+  function _invParseCSV(text) {
+    text = text.replace(/^\uFEFF/, ''); // remove BOM se tiver
+    const rows = [];
+    let row = [], field = '', inQuotes = false;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (inQuotes) {
+        if (c === '"') {
+          if (text[i + 1] === '"') { field += '"'; i++; }
+          else { inQuotes = false; }
+        } else {
+          field += c;
+        }
+      } else {
+        if (c === '"') { inQuotes = true; }
+        else if (c === ';') { row.push(field); field = ''; }
+        else if (c === '\r') { /* ignora — tratado no \n */ }
+        else if (c === '\n') { row.push(field); field = ''; rows.push(row); row = []; }
+        else { field += c; }
+      }
+    }
+    if (field.length || row.length) { row.push(field); rows.push(row); }
+    return rows.filter(r => !(r.length === 1 && r[0] === ''));
+  }
+
+  // Converte pt-BR ("1.234,56") de volta pra número. Vazio → null (não
+  // sobrescreve o que já existe, ver _invConfirmarImportCSV).
+  function _invParseNumBR(s) {
+    if (s == null || String(s).trim() === '') return null;
+    const n = parseFloat(String(s).trim().replace(/\./g, '').replace(',', '.'));
+    return isNaN(n) ? null : n;
+  }
+
+  let _invImportParsedRows = [];
+
+  window._invHandleImportFile = function(input) {
+    const file = input.files && input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      input.value = ''; // permite reimportar o mesmo arquivo depois
+      const linhas = _invParseCSV(String(reader.result || ''));
+      if (linhas.length < 2) { toast('Arquivo CSV vazio ou inválido.', 'error'); return; }
+      const header = linhas[0];
+      const idx = {};
+      header.forEach((h, i) => idx[h.trim()] = i);
+      const obrig = ['Filial', 'Material', 'Categoria'];
+      if (obrig.some(c => idx[c] === undefined)) {
+        toast('CSV inválido — não parece ser um export do Inventário (faltam colunas Filial/Material/Categoria).', 'error');
+        return;
+      }
+      _invImportParsedRows = linhas.slice(1).map(cols => ({
+        central:       (cols[idx['Filial']] || '').trim(),
+        material:      (cols[idx['Material']] || '').trim(),
+        categoria:     (cols[idx['Categoria']] || '').trim() || '—',
+        op:            idx['Just.Operacional'] !== undefined ? (cols[idx['Just.Operacional']] || '').trim() : '',
+        fiscal:        idx['Just.Fiscal'] !== undefined ? (cols[idx['Just.Fiscal']] || '').trim() : '',
+        saldo:         idx['Saldo Justificado (kg)'] !== undefined ? _invParseNumBR(cols[idx['Saldo Justificado (kg)']]) : null,
+        custoMedioSap: idx['Custo Médio (R$/kg)'] !== undefined ? _invParseNumBR(cols[idx['Custo Médio (R$/kg)']]) : null,
+      })).filter(r => r.central && r.material);
+      if (!_invImportParsedRows.length) { toast('Nenhuma linha válida encontrada no CSV.', 'error'); return; }
+      _invAbrirModalImportCategorias();
+    };
+    reader.onerror = () => toast('Não foi possível ler o arquivo.', 'error');
+    reader.readAsText(file, 'utf-8');
+  };
+
+  function _invAbrirModalImportCategorias() {
+    const counts = {};
+    _invImportParsedRows.forEach(r => { counts[r.categoria] = (counts[r.categoria] || 0) + 1; });
+    const categorias = Object.keys(counts).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+
+    let modal = document.getElementById('inv-import-categorias-modal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'inv-import-categorias-modal';
+      modal.className = 'modal-overlay';
+      modal.style.cssText = 'z-index:3200';
+      document.body.appendChild(modal);
+    }
+
+    const opcoesHtml = categorias.map(cat => {
+      const count = counts[cat];
+      return `<label class="inv-import-cat-option" style="display:flex;align-items:center;justify-content:space-between;width:100%;padding:12px 16px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;cursor:pointer;font-size:13px;font-family:inherit;color:var(--text);font-weight:600;gap:10px">
+        <span style="display:flex;align-items:center;gap:10px">
+          <input type="checkbox" class="inv-import-cat-checkbox" value="${cat.replace(/"/g,'&quot;')}" checked onchange="_invAtualizaSelecaoTodasCategoriasImport()" style="width:16px;height:16px;cursor:pointer;accent-color:var(--accent)">
+          <span>${cat}</span>
+        </span>
+        <span style="font-size:11px;color:var(--text3);font-family:var(--mono)">${count} ${count === 1 ? 'item' : 'itens'}</span>
+      </label>`;
+    }).join('');
+
+    modal.innerHTML = `
+      <div class="modal" style="max-width:480px;width:94vw">
+        <div class="modal-title" style="display:flex;align-items:center;gap:10px">
+          <i class="ti ti-filter" style="color:var(--accent)"></i>
+          Categorias — Importar CSV
+        </div>
+        <div class="modal-sub">Selecione as categorias que devem ter as justificativas importadas (linhas com célula em branco não sobrescrevem o que já foi salvo)</div>
+        <label style="display:flex;align-items:center;justify-content:space-between;width:100%;padding:12px 16px;background:linear-gradient(135deg,var(--accent-dim),var(--accent));border:none;border-radius:8px;cursor:pointer;font-size:13px;font-family:inherit;color:#fff;font-weight:700;gap:10px;margin-bottom:12px">
+          <span style="display:flex;align-items:center;gap:10px">
+            <input type="checkbox" id="inv-import-cat-todas" checked onchange="_invToggleTodasCategoriasImport(this)" style="width:16px;height:16px;cursor:pointer">
+            <span>Selecionar todas</span>
+          </span>
+          <span style="font-size:11px;opacity:.75">${_invImportParsedRows.length} itens no total</span>
+        </label>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:8px;max-height:40vh;overflow:auto">
+          ${opcoesHtml}
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px">
+          <button class="btn" onclick="document.getElementById('inv-import-categorias-modal').classList.remove('open')">Cancelar</button>
+          <button class="btn btn-primary" onclick="_invConfirmarImportCSV()"><i class="ti ti-file-upload"></i> Importar</button>
+        </div>
+      </div>`;
+    modal.classList.add('open');
+  }
+
+  window._invToggleTodasCategoriasImport = function(checkbox) {
+    document.querySelectorAll('.inv-import-cat-checkbox').forEach(cb => { cb.checked = checkbox.checked; });
+  };
+
+  window._invAtualizaSelecaoTodasCategoriasImport = function() {
+    const all = document.querySelectorAll('.inv-import-cat-checkbox');
+    const checked = document.querySelectorAll('.inv-import-cat-checkbox:checked');
+    const todasCb = document.getElementById('inv-import-cat-todas');
+    if (todasCb) todasCb.checked = all.length === checked.length;
+  };
+
+  window._invConfirmarImportCSV = function() {
+    const categoriasSelecionadas = new Set(
+      Array.from(document.querySelectorAll('.inv-import-cat-checkbox:checked')).map(cb => cb.value)
+    );
+    if (!categoriasSelecionadas.size) { toast('Selecione ao menos uma categoria.', 'error'); return; }
+
+    const mesKey = invGetMesKey();
+    const rowByK = new Map(invRows.map(r => [r.k, r]));
+
+    let atualizados = 0, naoEncontrados = 0, ignoradosCategoria = 0;
+    _invImportParsedRows.forEach(imp => {
+      if (!categoriasSelecionadas.has(imp.categoria)) { ignoradosCategoria++; return; }
+      const k = mesKey + '|||' + imp.central + '|||' + imp.material;
+      const row = rowByK.get(k);
+      if (!row) { naoEncontrados++; return; }
+
+      // Merge: só sobrescreve o campo se vier preenchido no CSV — célula
+      // em branco não apaga uma justificativa já salva.
+      const atual = invJustificativas[k] || {};
+      invJustificativas[k] = {
+        op:            imp.op || atual.op || '',
+        fiscal:        imp.fiscal || atual.fiscal || '',
+        saldo:         imp.saldo != null ? String(imp.saldo) : (atual.saldo ?? ''),
+        custoMedioSap: imp.custoMedioSap != null ? String(imp.custoMedioSap) : (atual.custoMedioSap ?? ''),
+      };
+      atualizados++;
+    });
+
+    document.getElementById('inv-import-categorias-modal')?.classList.remove('open');
+    window.invGerar(); // recalcula custoVarBruto/custoSap/custo/varAdj com as justificativas novas
+
+    const partes = [`${atualizados} atualizada${atualizados === 1 ? '' : 's'}`];
+    if (naoEncontrados)     partes.push(`${naoEncontrados} não encontrada${naoEncontrados === 1 ? '' : 's'} no inventário deste mês`);
+    if (ignoradosCategoria) partes.push(`${ignoradosCategoria} ignorada${ignoradosCategoria === 1 ? '' : 's'} (categoria não selecionada)`);
+    toast('Importação concluída: ' + partes.join(', ') + '.', naoEncontrados ? 'error' : 'success');
   };
 
   // ── renderInventario (chamado por anSwitchView ao entrar na Visão Inventário) ──
