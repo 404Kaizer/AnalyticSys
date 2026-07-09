@@ -1126,7 +1126,8 @@
     const fiscal     = document.getElementById('inv-j-fiscal')?.value.trim();
     const saldo      = document.getElementById('inv-j-saldo')?.value;
     const custoSap   = document.getElementById('inv-j-custo-sap')?.value;
-    invJustificativas[k] = { op, fiscal, saldo, custoMedioSap: custoSap };
+    const docSap     = document.getElementById('inv-j-doc-sap')?.value;
+    invJustificativas[k] = { op, fiscal, saldo, custoMedioSap: custoSap, documentoSap: docSap };
     const row = invRows.find(r => r.k === k);
     if (row) {
       const saldoJust = parseFloat(saldo||0)||0;
@@ -1136,6 +1137,9 @@
       row.custoVarBruto  = row.varKg * row.custoMedio;    // Custo Var. (varKg bruto × custo médio automático)
       row.custoMedioSap  = parseFloat(custoSap||0)||0;
       row.custoSap       = row.varKg * row.custoMedioSap; // Custo SAP (varKg bruto × custo médio SAP manual)
+      // documentoSap não entra em nenhum cálculo — é só um campo de
+      // referência (número do documento de ajuste no SAP), exportado/
+      // importado no CSV mas sem coluna própria na tabela.
     }
     invFiltrar();
     invAtualizarKpis();
@@ -1316,6 +1320,10 @@
             <label class="oc-label">Custo Médio SAP (R$/kg) <span class="oc-required">*</span> <span class="oc-hint">buscado pelo usuário no SAP, alimenta a coluna Custo Médio e o card Custo Total SAP</span></label>
             <input id="inv-j-custo-sap" type="number" step="0.01" class="oc-input" placeholder="0,00" value="${j.custoMedioSap||''}" oninput="_invAtualizarCustoSapCard(${row.varKg})">
           </div>
+          <div class="oc-form-group">
+            <label class="oc-label">Documento SAP <span class="oc-hint">nº do documento de ajuste no SAP (opcional, não aparece como coluna na tabela)</span></label>
+            <input id="inv-j-doc-sap" type="number" class="oc-input" placeholder="Ex: 4500123456" value="${j.documentoSap||''}">
+          </div>
         </div>
         <div class="modal-footer" style="justify-content:space-between">
           <button class="btn" onclick="document.getElementById('inv-modal').remove()">Cancelar</button>
@@ -1363,7 +1371,7 @@
     // serem essenciais pro fechamento fiscal). Sem colunas extras que não
     // existem na tabela (removido: "Ausente?" e "Var.(%)" — o "ausente"
     // já é representado pela própria célula vazia, igual ao "—" da tela).
-    const header = ['Regional','Filial','Material','Categoria','Est.Inicial(kg)','Entradas(kg)','Saídas(kg)','Est.Final(kg)','Est.Teórico(kg)','Var.(kg)','Custo Var. (R$)','Custo Médio (R$/kg)','Custo SAP (R$)','Saldo Justificado (kg)','Var.Ajustada (kg)','Custo Just. (R$)','Just.Operacional','Just.Fiscal'];
+    const header = ['Regional','Filial','Material','Categoria','Est.Inicial(kg)','Entradas(kg)','Saídas(kg)','Est.Final(kg)','Est.Teórico(kg)','Var.(kg)','Custo Var. (R$)','Custo Médio (R$/kg)','Custo SAP (R$)','Saldo Justificado (kg)','Var.Ajustada (kg)','Custo Just. (R$)','Just.Operacional','Just.Fiscal','Documento SAP'];
     const rows = invRows.map(r => {
       const j = invJustificativas[r.k] || {};
       return [
@@ -1384,7 +1392,8 @@
         _n(r.varAdj),
         r.custoMedio > 0 ? _n(r.custo) : '',
         j.op || '',
-        j.fiscal || ''
+        j.fiscal || '',
+        j.documentoSap || ''
       ].map(v => '"' + String(v).replace(/"/g, '""') + '"').join(';');
     });
     const csv = [header.join(';'), ...rows].join('\n');
@@ -1473,6 +1482,9 @@
         fiscal:        idx['Just.Fiscal'] !== undefined ? (cols[idx['Just.Fiscal']] || '').trim() : '',
         saldo:         idx['Saldo Justificado (kg)'] !== undefined ? _invParseNumBR(cols[idx['Saldo Justificado (kg)']]) : null,
         custoMedioSap: idx['Custo Médio (R$/kg)'] !== undefined ? _invParseNumBR(cols[idx['Custo Médio (R$/kg)']]) : null,
+        // Documento SAP é um número de documento (texto puro) — não usa o
+        // parser pt-BR de decimais, senão "4500123456" viraria besteira.
+        documentoSap:  idx['Documento SAP'] !== undefined ? (cols[idx['Documento SAP']] || '').trim() : '',
       })).filter(r => r.central && r.material);
       if (!_invImportParsedRows.length) { toast('Nenhuma linha válida encontrada no CSV.', 'error'); return; }
       _invAbrirModalImportCategorias();
@@ -1566,6 +1578,7 @@
         fiscal:        imp.fiscal || atual.fiscal || '',
         saldo:         imp.saldo != null ? String(imp.saldo) : (atual.saldo ?? ''),
         custoMedioSap: imp.custoMedioSap != null ? String(imp.custoMedioSap) : (atual.custoMedioSap ?? ''),
+        documentoSap:  imp.documentoSap || atual.documentoSap || '',
       };
       atualizados++;
     });
