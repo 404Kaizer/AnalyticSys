@@ -777,6 +777,15 @@
     return Math.abs(r.varKg) > 0.01 && !(j.op && j.fiscal);
   }
 
+  // Existe algo salvo pra excluir? Usa "qualquer campo preenchido" (não
+  // hasJust/estadoJust, que exige os 4 campos obrigatórios) — cobre também
+  // justificativas parciais deixadas por uma importação de CSV que só
+  // trouxe alguns campos preenchidos. Controla se o botão de excluir
+  // (ao lado do botão Justificar/Justificado/Ajustado) fica habilitado.
+  function _invTemJustSalva(j) {
+    return !!(j && (j.op || j.fiscal || j.saldo || j.custoMedioSap || j.documentoSap));
+  }
+
   // ── Filtrar ──────────────────────────────────────────────
   window.invFiltrar = function() {
     invFiltered = invRows.filter(r => {
@@ -828,6 +837,10 @@
       const hasDoc  = !!(j.documentoSap && String(j.documentoSap).trim() !== '');
       const estadoJust = !hasJust ? 'justificar' : (hasDoc ? 'ajustado' : 'justificado');
       const rowClass = estadoJust === 'ajustado' ? 'inv-row-ajustado' : estadoJust === 'justificado' ? 'inv-row-justificado' : '';
+      // Habilita o botão de excluir mesmo com justificativa PARCIAL (ex.:
+      // só op+fiscal preenchidos vindo de importação de CSV) — critério
+      // mais abrangente que hasJust, que só considera completa.
+      const temJustSalva = _invTemJustSalva(j);
       const alertBadge = (!hasJust && Math.abs(r.varKg) > 0.01)
         ? '<span style="display:inline-block;width:6px;height:6px;background:var(--amber);border-radius:50%;margin-right:5px;vertical-align:middle;flex-shrink:0" title="Sem justificativa"></span>'
         : '';
@@ -934,9 +947,14 @@
         <td class="inv-col-adjust" style="text-align:right;white-space:nowrap">${varAdjCell}</td>
         <td class="inv-col-adjust" style="text-align:right;white-space:nowrap">${custoJustCell}</td>
         <td class="inv-col-adjust" style="text-align:center">
-          <button onclick="invAbrirJust('${r.k}')" style="background:${_INV_ESTADO_STYLE[estadoJust].bg};border:1px solid ${_INV_ESTADO_STYLE[estadoJust].border};color:${_INV_ESTADO_STYLE[estadoJust].color};border-radius:6px;padding:4px 10px;font-size:10px;cursor:pointer;white-space:nowrap;font-family:var(--font);transition:all .13s">
-            <i class="ti ${_INV_ESTADO_STYLE[estadoJust].icon}" style="font-size:10px"></i> ${_INV_ESTADO_STYLE[estadoJust].label}
-          </button>
+          <div style="display:inline-flex;align-items:center;gap:6px">
+            <button onclick="invAbrirJust('${r.k}')" style="background:${_INV_ESTADO_STYLE[estadoJust].bg};border:1px solid ${_INV_ESTADO_STYLE[estadoJust].border};color:${_INV_ESTADO_STYLE[estadoJust].color};border-radius:6px;padding:4px 10px;font-size:10px;cursor:pointer;white-space:nowrap;font-family:var(--font);transition:all .13s">
+              <i class="ti ${_INV_ESTADO_STYLE[estadoJust].icon}" style="font-size:10px"></i> ${_INV_ESTADO_STYLE[estadoJust].label}
+            </button>
+            <button type="button" ${temJustSalva ? `onclick="invExcluirJust('${r.k}')"` : 'disabled'} title="${temJustSalva ? 'Excluir justificativa' : 'Nenhuma justificativa para excluir'}" style="background:${temJustSalva ? 'var(--red-bg)' : 'var(--bg4)'};border:1px solid ${temJustSalva ? 'var(--red-border)' : 'var(--border2)'};color:${temJustSalva ? 'var(--red)' : 'var(--text3)'};border-radius:6px;padding:4px 7px;font-size:10px;cursor:${temJustSalva ? 'pointer' : 'default'};opacity:${temJustSalva ? '1' : '.45'};display:inline-flex;align-items:center;justify-content:center;font-family:var(--font);transition:all .13s">
+              <i class="ti ti-trash" style="font-size:11px"></i>
+            </button>
+          </div>
         </td>
       </tr>`;
     }).join('');
@@ -1404,6 +1422,59 @@
     _invSalvarJustCore(k);
     document.getElementById('inv-modal')?.remove();
     toast('Justificativa salva.', 'success');
+  };
+
+  // ── Excluir justificativa (botão ao lado de Justificar/Justificado/
+  // Ajustado na tabela) — apaga o registro inteiro em invJustificativas[k]
+  // e devolve a linha ao estado "sem justificativa" (varAdj volta a ser
+  // igual a varKg, Custo Just./Custo SAP somem, o item volta a contar como
+  // pendente se a variação for relevante). Mesmo modal de confirmação
+  // destrutiva usado em removerMaterial (config.js) e na importação
+  // (import.js) — só muda title/sub/body/onConfirm.
+  window.invExcluirJust = function(k) {
+    const row = invRows.find(r => r.k === k);
+    if (!row) return;
+    const j = invJustificativas[k] || {};
+    if (!_invTemJustSalva(j)) return; // guarda extra — botão já vem desabilitado nesse caso
+
+    const campoRow = (label, val) => val
+      ? `<div style="display:flex;gap:8px;align-items:flex-start">
+           <span style="color:var(--text3);min-width:110px;font-size:12px;flex-shrink:0">${label}</span>
+           <span style="font-size:12px">${_invEscape(val)}</span>
+         </div>`
+      : '';
+
+    confirmarDestrutivo({
+      title: 'Excluir justificativa',
+      sub: `${row.central} · ${row.material}`,
+      body: `
+        <div style="display:flex;flex-direction:column;gap:8px">
+          ${campoRow('Operacional', j.op)}
+          ${campoRow('Fiscal', j.fiscal)}
+          ${campoRow('Saldo Just.', j.saldo ? fmt(parseFloat(j.saldo)) + ' kg' : '')}
+          <div style="margin-top:8px;padding:10px 12px;background:var(--red-bg);border:1px solid var(--red-border);border-radius:6px;font-size:12px;color:var(--red)">
+            <i class="ti ti-alert-triangle"></i>
+            A linha volta ao estado "Justificar": Var. Just., Custo Just. e Custo SAP deixam de aparecer, e o item volta a contar como pendente se a variação for relevante.
+          </div>
+        </div>`,
+      confirmLabel: 'Excluir justificativa',
+      onConfirm: () => {
+        delete invJustificativas[k];
+        // Reseta os campos derivados da linha pro mesmo estado "sem
+        // justificativa" calculado em invGerar (just = {} → saldoJust 0,
+        // varAdj = varKg, custo = varAdj × custoMedio, sem custo SAP).
+        row.saldoJust     = 0;
+        row.varAdj        = row.varKg;
+        row.custo         = row.varAdj * row.custoMedio;
+        row.custoMedioSap = 0;
+        row.custoSap      = 0;
+        invFiltrar();
+        invAtualizarKpis();
+        invAtualizarAlertas();
+        _invSyncJustificativasToState();
+        toast('Justificativa excluída.', 'success');
+      }
+    });
   };
 
   // ── Exportar CSV ─────────────────────────────────────────
