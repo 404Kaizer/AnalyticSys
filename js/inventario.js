@@ -873,12 +873,12 @@
         <td style="text-align:right;white-space:nowrap">${teorCell}</td>
         <td style="text-align:right;white-space:nowrap">${varCell}</td>
         <td style="text-align:right;white-space:nowrap">${custoVarCell}</td>
-        <td style="text-align:right;white-space:nowrap">${custoSapCell}</td>
-        <td style="text-align:right;white-space:nowrap">${saldoCell}</td>
-        <td style="text-align:right;white-space:nowrap">${varAdjCell}</td>
-        <td style="text-align:right;white-space:nowrap">${custoJustCell}</td>
-        <td style="text-align:right;white-space:nowrap">${custoMedCell}</td>
-        <td style="text-align:center">
+        <td class="inv-col-adjust inv-col-adjust-start" style="text-align:right;white-space:nowrap">${custoMedCell}</td>
+        <td class="inv-col-adjust" style="text-align:right;white-space:nowrap">${custoSapCell}</td>
+        <td class="inv-col-adjust" style="text-align:right;white-space:nowrap">${saldoCell}</td>
+        <td class="inv-col-adjust" style="text-align:right;white-space:nowrap">${varAdjCell}</td>
+        <td class="inv-col-adjust" style="text-align:right;white-space:nowrap">${custoJustCell}</td>
+        <td class="inv-col-adjust" style="text-align:center">
           <button onclick="invAbrirJust('${r.k}')" style="background:${hasJust?'var(--green-bg)':'var(--bg4)'};border:1px solid ${hasJust?'var(--green-border)':'var(--border2)'};color:${hasJust?'var(--green)':'var(--text2)'};border-radius:6px;padding:4px 10px;font-size:10px;cursor:pointer;white-space:nowrap;font-family:var(--font);transition:all .13s">
             <i class="ti ${hasJust?'ti-check':'ti-pencil'}" style="font-size:10px"></i> ${hasJust?'Ver/Editar':'Justificar'}
           </button>
@@ -1357,7 +1357,7 @@
     // consistente com o resto do app (fmtKg/money) e com o delimitador ';'.
     const _n = (v, dec = 2) => (Number(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: dec, maximumFractionDigits: dec });
 
-    const header = ['Regional','Filial','Material','Categoria','Est.Ini.(kg)','Est.Ini. Ausente?','Entradas(kg)','Saídas(kg)','Est.Teórico(kg)','Est.Real(kg)','Est.Final Ausente?','Var.(kg)','Var.(%)','Custo Var. (R$)','Custo SAP (R$)','Saldo Justificado (kg)','Var.Ajustada (kg)','Custo Just. (R$)','Custo Médio (R$/kg)','Just.Operacional','Just.Fiscal'];
+    const header = ['Regional','Filial','Material','Categoria','Est.Ini.(kg)','Est.Ini. Ausente?','Entradas(kg)','Saídas(kg)','Est.Teórico(kg)','Est.Real(kg)','Est.Final Ausente?','Var.(kg)','Var.(%)','Custo Var. (R$)','Custo Médio (R$/kg)','Custo SAP (R$)','Saldo Justificado (kg)','Var.Ajustada (kg)','Custo Just. (R$)','Just.Operacional','Just.Fiscal'];
     const rows = invRows.map(r => {
       const j = invJustificativas[r.k] || {};
       return [
@@ -1375,11 +1375,11 @@
         _n(r.varKg),
         _n(r.varPct),
         r.custoMedio > 0 ? _n(r.custoVarBruto) : '',
+        r.custoMedioSap > 0 ? _n(r.custoMedioSap) : '',
         r.custoMedioSap > 0 ? _n(r.custoSap) : '',
         j.saldo ? _n(parseFloat(j.saldo)) : '',
         _n(r.varAdj),
         r.custoMedio > 0 ? _n(r.custo) : '',
-        r.custoMedioSap > 0 ? _n(r.custoMedioSap) : '',
         j.op || '',
         j.fiscal || ''
       ].map(v => '"' + String(v).replace(/"/g, '""') + '"').join(';');

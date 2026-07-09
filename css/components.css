@@ -463,6 +463,14 @@
   overflow: auto;
   max-height: calc(100vh - 280px);
   min-height: 340px;
+  /* Como esse mesmo contêiner rola nos dois eixos, a barra vertical fica
+     sempre grudada na borda direita — sem isso, ao rolar até o fim
+     horizontalmente, ela sobrepõe/corta a última coluna (ex.: CUSTO SAP)
+     e o cabeçalho sticky junto. scrollbar-gutter reserva o espaço da
+     barra permanentemente, então o conteúdo nunca desenha por baixo dela
+     (Chrome/Edge/Firefox recentes; navegadores sem suporte simplesmente
+     ignoram a propriedade e mantêm o comportamento anterior). */
+  scrollbar-gutter: stable;
 }
 
 /* Modo tela cheia — acionado pelo botão "Expandir". Tentativas anteriores:
@@ -508,6 +516,24 @@ body.inv-fullscreen-open { overflow: hidden; }
 .inv-data-table th,
 .inv-data-table td {
   width: 1px; /* força cada coluna a ser exatamente do tamanho do conteúdo */
+}
+
+/* ── Separação visual: DADOS BRUTOS (sistema) vs. JUSTIFICATIVA/AJUSTE
+   (preenchido pelo usuário no modal, ou calculado a partir do que foi
+   preenchido) ── Custo Médio, Custo SAP, Saldo Just., Var.Ajust., Custo
+   Just. e a coluna de ação. Sem rótulo de seção (linha de cabeçalho
+   extra) — só a divisória + o fundo sutil já deixam o grupo claro sem
+   poluir a tabela. */
+.inv-data-table th.inv-col-adjust,
+.inv-data-table td.inv-col-adjust {
+  background: var(--bg3);
+}
+.inv-data-table thead tr th.inv-col-adjust {
+  background: color-mix(in srgb, var(--bg3) 70%, var(--bg4));
+}
+.inv-data-table th.inv-col-adjust-start,
+.inv-data-table td.inv-col-adjust-start {
+  border-left: 2px solid var(--border2);
 }
 
 .inv-data-table thead tr {
