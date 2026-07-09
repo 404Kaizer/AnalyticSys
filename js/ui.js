@@ -54,6 +54,16 @@ function navigate(page) {
   const newPage = pageById[page] || document.getElementById('page-' + page);
   if (newPage) newPage.classList.add('active');
 
+  // Os gráficos Chart.js do Dashboard Gerencial (Visão Geral) podem ter
+  // sido pré-calculados pela carga automática do boot enquanto a página
+  // ainda estava oculta (ver STEP 6.5 em restoreAndRender, dashboard.js).
+  // Um canvas criado com container display:none nasce com dimensão zero,
+  // então é preciso forçar um resize agora que a página está visível.
+  // Idempotente e barato — seguro chamar em toda navegação para cá.
+  if (page === 'dashboard' && typeof _dgResizeCharts === 'function') {
+    requestAnimationFrame(() => _dgResizeCharts());
+  }
+
   // Remover active do tab-item atual e ativar o novo
   if (currentPage && navByPage[currentPage]) navByPage[currentPage].classList.remove('active');
   else navItems.forEach(n => n.classList.remove('active'));

@@ -371,6 +371,24 @@ function _dgVgDestroyChart(key) {
     _dgVgCharts[key] = null;
   }
 }
+
+// Os 3 gráficos Chart.js da Visão Geral (categoria física, custo por
+// regional, custo por central) podem ter sido criados enquanto a página
+// #page-dashboard ainda estava oculta (display:none) — é o que acontece
+// na pré-carga automática do boot, ver STEP 6.5 em restoreAndRender.
+// Um <canvas> com container display:none reporta dimensão zero no
+// momento da criação, então o Chart.js nasce com o gráfico "quebrado"
+// visualmente. Chamada por navigate() (ui.js) sempre que o usuário entra
+// na página Dashboard Gerencial, para forçar o Chart.js a reler as
+// dimensões reais do canvas agora que ele está visível. Não faz nada se
+// os gráficos ainda não existirem (ex.: antes do primeiro "Atualizar").
+function _dgResizeCharts() {
+  Object.values(_dgVgCharts).forEach(c => {
+    if (!c) return;
+    try { c.resize(); } catch (e) { /* noop */ }
+  });
+}
+
 function _dgVgTheme() {
   const isDark = !document.body.dataset.theme || document.body.dataset.theme !== 'light';
   return {
@@ -5100,6 +5118,71 @@ async function restoreAndRender() {
     }
     _lstepSet('health', 'done');
     _lbarSet(75);
+    await nextFrame();
+
+    // ── STEP 6.5: Pré-carregar Dashboard Analítico e Dashboard Gerencial
+    //    com o filtro "Mês atual" ────────────────────────────────────────
+    // Roda a mesma lógica de cálculo usada pelo botão "Analisar" (Dashboard
+    // Analítico) e pelo botão "Atualizar" (Dashboard Gerencial), mas de
+    // forma síncrona e "silenciosa" (silent=true), sem abrir um novo
+    // overlay — o overlay de boot já está aberto e cobre esta etapa.
+    // Assim, ao navegar para qualquer um dos dois dashboards logo após a
+    // carga inicial, os dados do mês atual já estão prontos, sem precisar
+    // clicar em Analisar/Atualizar.
+    _lstepSet('dash', 'running');
+    updateLoadingOverlay('Pré-carregando dashboards do mês atual...', 'Inicializando o sistema');
+    await yieldToUI();
+    try {
+      // Define o período "Mês atual" nos dois seletores de calendário
+      // (mesma função usada pelo chip "Mês atual" da interface) — isso
+      // também deixa o chip já marcado como ativo quando o usuário abrir
+      // os dashboards.
+      if (typeof calQuickMesAtual === 'function') {
+        calQuickMesAtual('an');
+        calQuickMesAtual('dg');
+      }
+
+      // Dashboard Analítico — reaproveita o mesmo motor de cálculo do botão
+      // "Analisar" (_rodarAnaliticoCore), chamando direto (sem passar pelo
+      // wrapper rodarAnalitico, que abriria seu próprio overlay).
+      const anIniStr = document.getElementById('an-dt-ini')?.value;
+      const anFimStr = document.getElementById('an-dt-fim')?.value;
+      if (anIniStr && anFimStr && typeof _rodarAnaliticoCore === 'function') {
+        const anDtIni = new Date(anIniStr + 'T00:00:00');
+        const anDtFim = new Date(anFimStr + 'T23:59:59');
+        if (!isNaN(anDtIni) && !isNaN(anDtFim)) {
+          _rodarAnaliticoCore(anDtIni, anDtFim, null, /* silent */ true);
+        }
+      }
+
+      // Dashboard Gerencial — reaproveita o mesmo motor de cálculo do botão
+      // "Atualizar" (_renderDashboardConteudo), sem passar pelo wrapper
+      // rodarDashboardGerencial (que também abriria seu próprio overlay).
+      const dgIniStr = document.getElementById('dg-dt-ini')?.value;
+      const dgFimStr = document.getElementById('dg-dt-fim')?.value;
+      if (dgIniStr && dgFimStr && typeof _renderDashboardConteudo === 'function') {
+        const dgDtIni = new Date(dgIniStr + 'T00:00:00');
+        const dgDtFim = new Date(dgFimStr + 'T23:59:59');
+        if (!isNaN(dgDtIni) && !isNaN(dgDtFim)) {
+          const dgEmptyEl   = document.getElementById('dg-empty-state');
+          const dgContentEl = document.getElementById('dg-content');
+          if (dgEmptyEl)   dgEmptyEl.style.display   = 'none';
+          if (dgContentEl) dgContentEl.style.display = '';
+          _renderDashboardConteudo(dgDtIni, dgDtFim);
+          if (window.updatePeriodFab) updatePeriodFab();
+        }
+      }
+    } catch (e) {
+      // Falha na pré-carga não deve interromper o boot — os dashboards
+      // continuam disponíveis manualmente via Analisar/Atualizar.
+      console.warn('[Boot] Pré-carga de dashboards (mês atual):', e);
+    }
+    // Restaura o progresso do overlay de boot (a pré-carga acima mexe
+    // internamente na barra de progresso para os próprios steps dela,
+    // que não existem durante o boot — como tudo roda de forma síncrona,
+    // isso nunca chega a ser pintado na tela antes deste ajuste).
+    _lstepSet('dash', 'done');
+    _lbarSet(80);
     await nextFrame();
 
     // ── STEP 7: Montar interface ──────────────────────────────────────────

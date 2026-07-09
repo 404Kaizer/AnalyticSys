@@ -96,7 +96,13 @@ function rodarAnalitico(iniOverride, fimOverride, onDone) {
   requestAnimationFrame(() => setTimeout(() => _rodarAnaliticoCore(dtIni, dtFim, onDone), 0));
 }
 
-function _rodarAnaliticoCore(dtIni, dtFim, onDone) {
+// silent (opcional): quando true, suprime toast de "sem dados" e NÃO
+// mecha no overlay/steps de loading (nem abre nem fecha) — usado pela
+// pré-carga automática no boot (restoreAndRender, em dashboard.js), que
+// já controla seu próprio overlay único durante toda a inicialização.
+// Chamada normal (clique em "Analisar") não passa esse parâmetro e
+// mantém o comportamento original.
+function _rodarAnaliticoCore(dtIni, dtFim, onDone, silent) {
 
   // Limpa estado de pendentes considerados — cada nova análise começa do zero
   if (window._pendConsiderados) window._pendConsiderados = {};
@@ -121,9 +127,11 @@ function _rodarAnaliticoCore(dtIni, dtFim, onDone) {
   ]);
 
   if (!allCentrals.size) {
-    toast('Nenhum dado para o período selecionado', 'error');
-    if (typeof hideLoadingOverlay === 'function') hideLoadingOverlay('Sem dados');
-    if (typeof loadingHideSteps === 'function') loadingHideSteps();
+    if (!silent) {
+      toast('Nenhum dado para o período selecionado', 'error');
+      if (typeof hideLoadingOverlay === 'function') hideLoadingOverlay('Sem dados');
+      if (typeof loadingHideSteps === 'function') loadingHideSteps();
+    }
     if (typeof onDone === 'function') onDone({ ok: false, reason: 'sem-dados' });
     return;
   }
@@ -413,7 +421,7 @@ function _rodarAnaliticoCore(dtIni, dtFim, onDone) {
   // Sort by central name
   results.sort((a, b) => String(a.central).localeCompare(String(b.central), 'pt-BR'));
 
-  renderAnaliticoMicro(results, dtIni, dtFim);
+  renderAnaliticoMicro(results, dtIni, dtFim, silent);
 
   // Armazena para permitir re-render parcial via togglePendConsiderados
   window.__analiticoResults = results;
@@ -1549,7 +1557,11 @@ function buildRegionalSummaryHtml(cards) {
   `;
 }
 
-function renderAnaliticoMicro(results, dtIni, dtFim) {
+// silent (opcional): ver _rodarAnaliticoCore acima — quando true, não
+// fecha o overlay/steps de loading ao final (quem chamou está no controle).
+// Outros chamadores (ex.: re-render em ui.js) não passam esse parâmetro e
+// mantêm o comportamento original.
+function renderAnaliticoMicro(results, dtIni, dtFim, silent) {
   const container = document.getElementById('an-micro-container');
   if (!container) return;
   container.innerHTML = '';
@@ -1717,8 +1729,10 @@ function renderAnaliticoMicro(results, dtIni, dtFim) {
   }
   if (typeof _lstepSet === 'function') { _lstepSet('an-inv', 'done'); }
 
-  if (typeof hideLoadingOverlay === 'function') hideLoadingOverlay('Análise concluída');
-  if (typeof loadingHideSteps === 'function') loadingHideSteps();
+  if (!silent) {
+    if (typeof hideLoadingOverlay === 'function') hideLoadingOverlay('Análise concluída');
+    if (typeof loadingHideSteps === 'function') loadingHideSteps();
+  }
   updateClock();
 
   // Ao analisar: recolhe regionais e centrais por padrão
