@@ -1707,26 +1707,13 @@
             <span id="inv-divergencias-count" style="background:var(--accent);color:#fff;border-radius:20px;padding:0 6px;font-size:10px;font-weight:700;min-width:18px;text-align:center;margin-left:2px">0</span>
           </button>
 
-          <!-- Toggle: modo seleção (checkboxes) pra Justificar em lote -->
-          <button class="micro-filter-trigger" id="imft-selecionar" onclick="invToggleSelectMode()" title="Selecionar várias linhas pra justificar em lote">
-            <i class="ti ti-checkbox"></i>
-            <span id="imft-selecionar-label">Selecionar</span>
-          </button>
+          <!-- Toggle: modo seleção (checkboxes) pra Justificar em lote — movido pro
+               cabeçalho da tabela (table-toolbar), junto com Expandir/Importar/Exportar -->
 
           <!-- Limpar filtros (aparece só quando há algo ativo) -->
           <button class="btn micro-filter-clear" id="inv-filter-clear-btn" onclick="invClearAllMicroFilters()" style="display:none">
             <i class="ti ti-filter-off"></i> Limpar Filtros
           </button>
-
-          <!-- Barra de ação em lote (aparece só no modo seleção) -->
-          <div id="inv-batch-bar" style="display:none;align-items:center;gap:10px;margin-left:6px">
-            <span id="inv-batch-count" style="font-size:11px;color:var(--text2);white-space:nowrap">0 selecionadas</span>
-            <button class="btn btn-primary" id="inv-batch-btn" onclick="invAbrirJustLote()" disabled>
-              <i class="ti ti-stack-2"></i> Justificar em lote
-            </button>
-          </div>
-
-          <div style="margin-left:auto;font-size:11px;color:var(--text3)" id="inv-count-label"></div>
         </div>
 
 
@@ -1736,6 +1723,22 @@
           <div class="table-header">
             <span class="table-title"><i class="ti ti-list-details"></i> Fechamento por Central e Material</span>
             <div class="table-toolbar">
+              <span style="font-size:11px;color:var(--text3);white-space:nowrap" id="inv-count-label"></span>
+
+              <!-- Barra de ação em lote (aparece só no modo seleção) -->
+              <div id="inv-batch-bar" style="display:none;align-items:center;gap:10px">
+                <span id="inv-batch-count" style="font-size:11px;color:var(--text2);white-space:nowrap">0 selecionadas</span>
+                <button class="btn btn-primary" id="inv-batch-btn" onclick="invAbrirJustLote()" disabled>
+                  <i class="ti ti-stack-2"></i> Justificar em lote
+                </button>
+              </div>
+
+              <!-- Toggle: modo seleção (checkboxes) pra Justificar em lote -->
+              <button class="micro-filter-trigger" id="imft-selecionar" onclick="invToggleSelectMode()" title="Selecionar várias linhas pra justificar em lote">
+                <i class="ti ti-checkbox"></i>
+                <span id="imft-selecionar-label">Selecionar</span>
+              </button>
+
               <button class="btn" type="button" id="inv-table-fullscreen-btn" onclick="toggleInvTableFullscreen()">
                 <i class="ti ti-maximize"></i> <span>Expandir</span>
               </button>

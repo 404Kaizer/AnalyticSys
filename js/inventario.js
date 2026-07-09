@@ -950,15 +950,28 @@
     if (cenSet.size && !cenSet.has(r.central))  return false;
     if (catSet.size && !catSet.has(r.categoria)) return false;
     if (matSet.size && !matSet.has(r.material))  return false;
-    if (_invFilter.hideVarZero && Math.abs(r.varKg) < 0.005) return false;
+    if (_invFilter.hideVarZero && _invVarIrrelevante(r.varKg)) return false;
     if (_invFilter.onlyIniAusente && !r.estoqueIniMissing) return false;
     if (_invFilter.onlyFimAusente && !r.estoqueFimMissing) return false;
     return true;
   }
 
+  // "Sem variação relevante" — usado tanto por "Ocultar Variação 0" quanto
+  // por "Só Pendentes" (_invIsPendente). Arredonda pra 2 casas decimais
+  // (mesma precisão exibida na coluna Variação) antes de comparar, então
+  // qualquer linha cuja variação apareça na tela como 0,01 kg ou menos —
+  // sobra (positiva) ou desfalque (negativa) — conta como "sem variação",
+  // nos dois filtros igualmente. Sem o arredondamento, ruído de ponto
+  // flutuante (ex.: 0.009999999999998 vs 0.010000000000002) fazia valores
+  // que pareciam idênticos na tela se comportar de forma inconsistente
+  // entre os dois filtros.
+  function _invVarIrrelevante(varKg) {
+    return Math.round(Math.abs(varKg) * 100) / 100 <= 0.01;
+  }
+
   function _invIsPendente(r) {
     const j = invJustificativas[r.k] || {};
-    return Math.abs(r.varKg) > 0.01 && !(j.op && j.fiscal);
+    return !_invVarIrrelevante(r.varKg) && !(j.op && j.fiscal);
   }
 
   // Existe algo salvo pra excluir? Usa "qualquer campo preenchido" (não
@@ -1026,7 +1039,7 @@
       // só op+fiscal preenchidos vindo de importação de CSV) — critério
       // mais abrangente que hasJust, que só considera completa.
       const temJustSalva = _invTemJustSalva(j);
-      const alertBadge = (!hasJust && Math.abs(r.varKg) > 0.01)
+      const alertBadge = (!hasJust && !_invVarIrrelevante(r.varKg))
         ? '<span style="display:inline-block;width:6px;height:6px;background:var(--amber);border-radius:50%;margin-right:5px;vertical-align:middle;flex-shrink:0" title="Sem justificativa"></span>'
         : '';
 
