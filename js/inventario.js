@@ -821,11 +821,16 @@
         ? `<span class="td-mono diff-zero">${_varSymbol(0)} ${_fmtKg(0)}</span>`
         : `<span class="td-mono ${dCls}" style="white-space:nowrap">${_varSymbol(r.varKg)} ${_fmtKg(Math.abs(r.varKg))}</span>`;
 
-      // ── Var. Ajust. (kg): mesmo padrão ─────────────────────
+      // ── Var. Just. (kg): só mostra valor quando há justificativa
+      // completa (hasJust) — sem isso, varAdj é sempre igual a varKg (o
+      // saldo default é 0), o que faria a coluna repetir a Variação bruta
+      // e parecer que já foi justificado sem ter sido. ──────────
       const dClsAdj = _varClass(r.varAdj);
-      const varAdjCell = Math.abs(r.varAdj) < 0.005
-        ? `<span class="td-mono diff-zero">${_varSymbol(0)} ${_fmtKg(0)}</span>`
-        : `<span class="td-mono ${dClsAdj}" style="white-space:nowrap">${_varSymbol(r.varAdj)} ${_fmtKg(Math.abs(r.varAdj))}</span>`;
+      const varAdjCell = !hasJust
+        ? `<span style="color:var(--text3);font-size:11px">—</span>`
+        : Math.abs(r.varAdj) < 0.005
+          ? `<span class="td-mono diff-zero">${_varSymbol(0)} ${_fmtKg(0)}</span>`
+          : `<span class="td-mono ${dClsAdj}" style="white-space:nowrap">${_varSymbol(r.varAdj)} ${_fmtKg(Math.abs(r.varAdj))}</span>`;
 
       // ── Custo Var. (R$): variação BRUTA × custo médio automático ──────
       const _custoVarVal = r.custoMedio > 0 ? r.custoVarBruto : null;
@@ -841,8 +846,10 @@
         ? `<span class="td-mono ${_custoSapCls}" style="font-size:11.5px;white-space:nowrap">${_varSymbol(_custoSapVal)} ${_money(Math.abs(_custoSapVal))}</span>`
         : `<span style="color:var(--text3);font-size:11px">—</span>`;
 
-      // ── Custo Just. (R$): variação AJUSTADA × custo médio automático (era "Custo Var." antes desta mudança) ──
-      const _custoJustVal = r.custoMedio > 0 ? r.custo : null;
+      // ── Custo Just. (R$): variação AJUSTADA × custo médio automático —
+      // só mostra valor quando há justificativa completa (hasJust), mesmo
+      // motivo do Var. Just. acima. ──────────────────────────
+      const _custoJustVal = (hasJust && r.custoMedio > 0) ? r.custo : null;
       const _custoJustCls = _custoJustVal !== null ? _varClass(_custoJustVal) : '';
       const custoJustCell = _custoJustVal !== null
         ? `<span class="td-mono ${_custoJustCls}" style="font-size:11.5px;white-space:nowrap">${_varSymbol(_custoJustVal)} ${_money(Math.abs(_custoJustVal))}</span>`
@@ -1371,9 +1378,10 @@
     // serem essenciais pro fechamento fiscal). Sem colunas extras que não
     // existem na tabela (removido: "Ausente?" e "Var.(%)" — o "ausente"
     // já é representado pela própria célula vazia, igual ao "—" da tela).
-    const header = ['Regional','Filial','Material','Categoria','Est.Inicial(kg)','Entradas(kg)','Saídas(kg)','Est.Final(kg)','Est.Teórico(kg)','Var.(kg)','Custo Var. (R$)','Custo Médio (R$/kg)','Custo SAP (R$)','Saldo Justificado (kg)','Var.Ajustada (kg)','Custo Just. (R$)','Just.Operacional','Just.Fiscal','Documento SAP'];
+    const header = ['Regional','Filial','Material','Categoria','Est.Inicial(kg)','Entradas(kg)','Saídas(kg)','Est.Final(kg)','Est.Teórico(kg)','Var.(kg)','Custo Var. (R$)','Custo Médio (R$/kg)','Custo SAP (R$)','Saldo Justificado (kg)','Var.Justificada (kg)','Custo Just. (R$)','Just.Operacional','Just.Fiscal','Documento SAP'];
     const rows = invRows.map(r => {
       const j = invJustificativas[r.k] || {};
+      const hasJust = j.op && j.fiscal; // Var.Justificada/Custo Just. só preenchem com justificativa completa, mesma regra da tabela
       return [
         r.regional,
         r.central,
@@ -1389,8 +1397,8 @@
         r.custoMedioSap > 0 ? _n(r.custoMedioSap) : '',
         r.custoMedioSap > 0 ? _n(r.custoSap) : '',
         j.saldo ? _n(parseFloat(j.saldo)) : '',
-        _n(r.varAdj),
-        r.custoMedio > 0 ? _n(r.custo) : '',
+        hasJust ? _n(r.varAdj) : '',
+        (hasJust && r.custoMedio > 0) ? _n(r.custo) : '',
         j.op || '',
         j.fiscal || '',
         j.documentoSap || ''

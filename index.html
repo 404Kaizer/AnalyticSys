@@ -1528,7 +1528,7 @@
                   <div class="inv-kpi-value" id="inv-kpi-var-v">—</div>
                   <div class="inv-kpi-unit">kg bruto</div>
                   <div class="inv-kpi-adj" id="inv-kpi-var-adj-wrap" style="display:none">
-                    <span class="inv-kpi-adj-label">Ajustado (c/ justif.)</span>
+                    <span class="inv-kpi-adj-label">Justificado</span>
                     <span class="inv-kpi-adj-value" id="inv-kpi-var-adj-v">—</span>
                   </div>
                 </div>
@@ -1540,7 +1540,7 @@
                   <div class="inv-kpi-value" id="inv-kpi-cst-v">—</div>
                   <div class="inv-kpi-unit">R$ bruto</div>
                   <div class="inv-kpi-adj" id="inv-kpi-cst-adj-wrap" style="display:none">
-                    <span class="inv-kpi-adj-label">Ajustado (c/ justif.)</span>
+                    <span class="inv-kpi-adj-label">Justificado</span>
                     <span class="inv-kpi-adj-value" id="inv-kpi-cst-adj-v">—</span>
                   </div>
                 </div>
@@ -1745,8 +1745,8 @@
                 <th data-col="custoMedioSap" data-align="right" onclick="invSortBy('custoMedioSap')" title="Custo médio informado manualmente pelo usuário, buscado no SAP" class="inv-col-adjust inv-col-adjust-start">Custo Médio <i class="ti ti-selector inv-sort-icon"></i></th>
                 <th data-col="custoSap" data-align="right" onclick="invSortBy('custoSap')" title="Custo da variação BRUTA, usando o Custo Médio SAP informado manualmente no modal de justificativa" class="inv-col-adjust">Custo SAP <i class="ti ti-selector inv-sort-icon"></i></th>
                 <th data-col="saldoJust" data-align="right" onclick="invSortBy('saldoJust')" class="inv-col-adjust">Saldo Just. <i class="ti ti-selector inv-sort-icon"></i></th>
-                <th data-col="varAdj" data-align="right" onclick="invSortBy('varAdj')" class="inv-col-adjust">Var.Ajust. <i class="ti ti-selector inv-sort-icon"></i></th>
-                <th data-col="custo" data-align="right" onclick="invSortBy('custo')" title="Custo da variação AJUSTADA (pós-justificativa), com o custo médio automático" class="inv-col-adjust">Custo Just. <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="varAdj" data-align="right" onclick="invSortBy('varAdj')" class="inv-col-adjust" title="Só preenchido quando há justificativa completa">Var.Just. <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="custo" data-align="right" onclick="invSortBy('custo')" title="Custo da variação JUSTIFICADA (pós-justificativa), com o custo médio automático — só preenchido quando há justificativa completa" class="inv-col-adjust">Custo Just. <i class="ti ti-selector inv-sort-icon"></i></th>
                 <th data-align="center" style="cursor:default" class="inv-col-adjust">Justificativa</th>
               </tr>
             </thead>
