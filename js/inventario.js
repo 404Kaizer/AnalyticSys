@@ -7,6 +7,14 @@
   let invJustificativas = {};
   let _invHidratado = false; // evita reidratar do state em toda chamada de invGerar
 
+  // ── Seleção múltipla (Justificar em lote) ──────────────────
+  // _invSelected guarda as chaves (r.k) marcadas, independente do filtro
+  // atual estar escondendo a linha ou não (seleção "gruda" ao trocar
+  // filtro; só é limpa ao sair do modo seleção ou gerar um novo período —
+  // ver invToggleSelectMode/invGerar).
+  let _invSelectMode = false;
+  let _invSelected = new Set();
+
   // Reconstrói o objeto-mapa em memória (invJustificativas[k] = {...}) a
   // partir do array persistido em state.invJustificativas. Chamada uma
   // única vez, lazy, na primeira geração — porque na hora em que este
@@ -300,6 +308,49 @@
     const btn = document.getElementById('imft-divergencias');
     if (btn) btn.classList.toggle('active', _invFilter.onlyDivergencias);
   }
+
+  // ── Modo seleção (checkboxes) — pra "Justificar em lote" ────
+  window.invToggleSelectMode = function() {
+    _invSelectMode = !_invSelectMode;
+    document.getElementById('inv-table')?.classList.toggle('inv-select-mode', _invSelectMode);
+    if (!_invSelectMode) _invSelected.clear(); // saiu do modo -> descarta a seleção
+    _invSyncSelectModeBtn();
+    _invSyncBatchBar();
+    invRenderTabela(); // garante que os checkboxes reflitam _invSelected (limpo ou não)
+  };
+
+  function _invSyncSelectModeBtn() {
+    const btn = document.getElementById('imft-selecionar');
+    if (btn) btn.classList.toggle('active', _invSelectMode);
+    const cb = document.getElementById('inv-select-all-cb');
+    if (cb && !_invSelectMode) cb.checked = false;
+  }
+
+  function _invSyncBatchBar() {
+    const bar = document.getElementById('inv-batch-bar');
+    const countEl = document.getElementById('inv-batch-count');
+    const btn = document.getElementById('inv-batch-btn');
+    const n = _invSelected.size;
+    if (bar) bar.style.display = _invSelectMode ? 'flex' : 'none';
+    if (countEl) countEl.textContent = n === 1 ? '1 selecionada' : `${n} selecionadas`;
+    if (btn) btn.disabled = n < 1;
+  }
+
+  // "Selecionar todos" marca/desmarca só as linhas atualmente visíveis
+  // (invFiltered) — não mexe em seleções de linhas escondidas por filtro.
+  window.invToggleSelectAll = function(checked) {
+    invFiltered.forEach(r => {
+      if (r.semCadastro) return; // sem cadastro não tem fluxo de justificativa
+      if (checked) _invSelected.add(r.k); else _invSelected.delete(r.k);
+    });
+    invRenderTabela();
+    _invSyncBatchBar();
+  };
+
+  window.invToggleRowSelect = function(k, checked) {
+    if (checked) _invSelected.add(k); else _invSelected.delete(k);
+    _invSyncBatchBar();
+  };
 
   function _invSyncTriggerLabel(key) {
     const btn = document.getElementById(`imft-${key}`);
@@ -601,6 +652,16 @@
   }
 
   window.invGerar = function() {
+    // Novo período gerado → chaves de linha (mesKey|||central|||material)
+    // mudam de mês, então qualquer seleção anterior fica obsoleta. Sai do
+    // modo seleção e limpa tudo pra não arrastar estado de um mês pro
+    // outro sem perceber.
+    _invSelected.clear();
+    _invSelectMode = false;
+    document.getElementById('inv-table')?.classList.remove('inv-select-mode');
+    _invSyncSelectModeBtn();
+    _invSyncBatchBar();
+
     // Período próprio do Inventário: sempre um mês calendário completo,
     // selecionado no seletor de mês do módulo (independente do período
     // livre da Visão Micro, que usa o calendário 'an' de calendar.js).
@@ -1060,7 +1121,12 @@
         ? `<span class="td-mono" style="color:var(--text2)">${_fmtKg(parseFloat(j.saldo))}</span>`
         : '<span style="color:var(--text3);font-size:11px">—</span>';
 
+      const selCell = r.semCadastro
+        ? '<td class="inv-select-col"></td>'
+        : `<td class="inv-select-col"><input type="checkbox" onchange="invToggleRowSelect('${r.k}', this.checked)" ${_invSelected.has(r.k) ? 'checked' : ''}></td>`;
+
       return `<tr class="${rowClass}">
+        ${selCell}
         <td style="font-size:11px;color:var(--text2);white-space:nowrap">${r.regional}</td>
         <td style="font-family:var(--mono);font-size:11px;font-weight:600;white-space:nowrap">${r.central}</td>
         <td style="font-weight:600;max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${_escape(r.material)}">${alertBadge}${divBadge}${_escape(r.material)}</td>
@@ -1449,13 +1515,14 @@
     return null;
   }
 
-  // Salva os dados do formulário atual no registro k (sem fechar/navegar).
-  function _invSalvarJustCore(k) {
-    const op         = document.getElementById('inv-j-op')?.value.trim();
-    const fiscal     = document.getElementById('inv-j-fiscal')?.value.trim();
-    const saldo      = document.getElementById('inv-j-saldo')?.value;
-    const custoSap   = document.getElementById('inv-j-custo-sap')?.value;
-    const docSap     = document.getElementById('inv-j-doc-sap')?.value;
+  // Grava { op, fiscal, saldo, custoSap, docSap } no registro k, recalcula
+  // os campos derivados da linha (saldoJust/varAdj/custo/custoMedioSap/
+  // custoSap) e persiste. Extraído de _invSalvarJustCore pra ser reaproveitado
+  // pelo modal individual E pelo modal "Justificar em lote" (invAbrirJustLote)
+  // — a única diferença entre os dois é de ONDE os valores são lidos (um
+  // formulário fixo vs. uma linha da grade em lote); a gravação/recálculo é
+  // exatamente a mesma.
+  function _invApplyJustValues(k, { op, fiscal, saldo, custoSap, docSap }) {
     invJustificativas[k] = { op, fiscal, saldo, custoMedioSap: custoSap, documentoSap: docSap };
     const row = invRows.find(r => r.k === k);
     if (row) {
@@ -1474,6 +1541,16 @@
     invAtualizarKpis();
     invAtualizarAlertas();
     _invSyncJustificativasToState();
+  }
+
+  // Salva os dados do formulário atual (modal individual) no registro k.
+  function _invSalvarJustCore(k) {
+    const op         = document.getElementById('inv-j-op')?.value.trim();
+    const fiscal     = document.getElementById('inv-j-fiscal')?.value.trim();
+    const saldo      = document.getElementById('inv-j-saldo')?.value;
+    const custoSap   = document.getElementById('inv-j-custo-sap')?.value;
+    const docSap     = document.getElementById('inv-j-doc-sap')?.value;
+    _invApplyJustValues(k, { op, fiscal, saldo, custoSap, docSap });
   }
 
   window.invAbrirJust = function(k) {
@@ -1678,6 +1755,235 @@
     _invSalvarJustCore(k);
     document.getElementById('inv-modal')?.remove();
     toast('Justificativa salva.', 'success');
+  };
+
+  // ── Modal "Justificar em lote" ──────────────────────────────
+  // Grade tipo planilha: uma linha por item selecionado (checkboxes da
+  // tabela, modo seleção). Cada linha tem seu PRÓPRIO botão "Registrar" —
+  // grava só aquela linha, na hora, reaproveitando _invApplyJustValues (a
+  // mesma gravação do modal individual). Não existe "Salvar tudo": o
+  // modal é só uma tela de trabalho, dá pra fechar a qualquer momento sem
+  // perder o que já foi registrado. Cada campo preenchido tem um ícone de
+  // "replicar" que copia aquele valor específico pras outras linhas
+  // selecionadas que AINDA ESTÃO VAZIAS naquele campo — nunca sobrescreve
+  // o que o analista já digitou diferente ali (às vezes o motivo se
+  // repete entre linhas, às vezes não).
+  let _invLoteKeys = [];
+  let _invLoteState = {}; // k -> { registrado: bool, snapshot: {op,fiscal,saldo,custoSap,docSap}|null }
+
+  function _invLoteIdx(k) { return _invLoteKeys.indexOf(k); }
+
+  function _invLoteLerValores(k) {
+    const idx = _invLoteIdx(k);
+    return {
+      op:       (document.getElementById(`lote-op-${idx}`)?.value || '').trim(),
+      fiscal:   (document.getElementById(`lote-fiscal-${idx}`)?.value || '').trim(),
+      saldo:    document.getElementById(`lote-saldo-${idx}`)?.value ?? '',
+      custoSap: document.getElementById(`lote-custosap-${idx}`)?.value ?? '',
+      docSap:   document.getElementById(`lote-docsap-${idx}`)?.value ?? '',
+    };
+  }
+
+  function _invLoteObrigatoriosPreenchidos(v) {
+    return !!(v.op && v.fiscal && v.saldo !== '' && v.saldo != null && v.custoSap !== '' && v.custoSap != null);
+  }
+
+  // Atualiza só o badge de status + o habilitado/desabilitado do botão
+  // Registrar daquela linha — chamado depois de toda edição ou registro.
+  function _invLoteAtualizarLinhaVisual(k) {
+    const idx = _invLoteIdx(k);
+    if (idx < 0) return;
+    const st = _invLoteState[k] || { registrado: false };
+    const vals = _invLoteLerValores(k);
+    const podeRegistrar = _invLoteObrigatoriosPreenchidos(vals) && !st.registrado;
+    const btn = document.getElementById(`lote-btn-${idx}`);
+    const badge = document.getElementById(`lote-status-${idx}`);
+    if (btn) btn.disabled = !podeRegistrar;
+    if (badge) badge.innerHTML = st.registrado
+      ? '<span style="color:var(--green);font-size:11px;font-weight:700;white-space:nowrap"><i class="ti ti-circle-check-filled"></i> Registrada</span>'
+      : '<span style="color:var(--text3);font-size:11px;white-space:nowrap">Não registrada</span>';
+  }
+
+  // Chamado a cada edição de qualquer campo (oninput/onchange). Se a linha
+  // já estava "Registrada" e o valor mudou em relação ao snapshot salvo,
+  // volta pra "Não registrada" (reabilita o botão) — só sinaliza, nunca
+  // sobrescreve o que já está persistido em invJustificativas.
+  window._invLoteOnInput = function(k) {
+    const st = _invLoteState[k];
+    if (st && st.registrado) {
+      const atual = _invLoteLerValores(k);
+      if (JSON.stringify(atual) !== JSON.stringify(st.snapshot)) st.registrado = false;
+    }
+    _invLoteAtualizarLinhaVisual(k);
+  };
+
+  window._invLoteRegistrar = function(k) {
+    const vals = _invLoteLerValores(k);
+    if (!_invLoteObrigatoriosPreenchidos(vals)) {
+      toast('Preencha Operacional, Fiscal, Saldo e Custo Médio SAP antes de registrar essa linha.', 'error');
+      return;
+    }
+    _invApplyJustValues(k, vals);
+    _invLoteState[k] = { registrado: true, snapshot: vals };
+    _invLoteAtualizarLinhaVisual(k);
+    toast('Linha registrada.', 'success');
+  };
+
+  // Copia o valor do campo `campo` da linha idxOrigem pras demais linhas
+  // selecionadas — só nas que ainda estão vazias nesse campo.
+  window._invLoteReplicar = function(campo, idxOrigem) {
+    const elOrigem = document.getElementById(`lote-${campo}-${idxOrigem}`);
+    const valor = elOrigem ? elOrigem.value : '';
+    if (valor === '' || valor == null) { toast('Preencha esse campo antes de replicar.', 'error'); return; }
+    let aplicados = 0;
+    _invLoteKeys.forEach((k, idx) => {
+      if (idx === idxOrigem) return;
+      const el = document.getElementById(`lote-${campo}-${idx}`);
+      if (!el) return;
+      if (el.value === '' || el.value == null) { el.value = valor; window._invLoteOnInput(k); aplicados++; }
+    });
+    toast(aplicados > 0 ? `Valor copiado para ${aplicados} linha(s).` : 'Nenhuma linha vazia nesse campo — todas já tinham valor.', aplicados > 0 ? 'success' : 'error');
+  };
+
+  // Fecha direto se não houver nada digitado-e-não-registrado; senão pede
+  // confirmação (mesmo modal de confirmação destrutiva do resto do sistema).
+  window._invLoteTentarFechar = function() {
+    const pendentes = _invLoteKeys.filter(k => {
+      const st = _invLoteState[k] || {};
+      if (st.registrado) return false;
+      const v = _invLoteLerValores(k);
+      return !!(v.op || v.fiscal || v.saldo !== '' || v.custoSap !== '' || v.docSap !== '');
+    });
+    if (pendentes.length === 0) { document.getElementById('inv-modal-lote')?.remove(); return; }
+    confirmarDestrutivo({
+      title: 'Sair sem registrar?',
+      sub: `${pendentes.length} linha${pendentes.length===1?'':'s'} com alterações não registradas`,
+      body: '<div style="font-size:13px;color:var(--text2);line-height:1.6">Os campos preenchidos nessas linhas ainda não foram salvos. Se sair agora, esse preenchimento é perdido — as linhas continuam como estavam antes.</div>',
+      confirmLabel: 'Sair mesmo assim',
+      onConfirm: () => document.getElementById('inv-modal-lote')?.remove()
+    });
+  };
+
+  window.invAbrirJustLote = function() {
+    if (_invSelected.size === 0) return;
+    document.getElementById('inv-modal-lote')?.remove();
+
+    // Defensivo: só considera chaves que ainda existem em invRows e que
+    // têm cadastro válido (sem cadastro não tem fluxo de justificativa).
+    _invLoteKeys = invRows.filter(r => _invSelected.has(r.k) && !r.semCadastro).map(r => r.k);
+    if (_invLoteKeys.length === 0) { toast('Nenhuma linha válida selecionada.', 'error'); return; }
+    _invLoteState = {};
+
+    const h = window._inv_helpers;
+    const _fmtKg    = h ? h.fmtKg      : (v) => fmt(v) + ' kg';
+    const _varClass = h ? h.varClass   : (v) => v < 0 ? 'diff-neg' : v > 0 ? 'diff-pos' : 'diff-zero';
+    const _escape   = h ? h.escapeHtml : _invEscape;
+
+    const linhasHtml = _invLoteKeys.map((k, idx) => {
+      const row = invRows.find(r => r.k === k);
+      const j = invJustificativas[k] || {};
+      // Linha já tinha justificativa completa salva (de antes de abrir o
+      // lote, seja pelo modal individual ou por uma sessão de lote
+      // anterior) → começa marcada como "Registrada", com snapshot pra
+      // detectar edição a partir daqui.
+      const jaCompleta = !!(j.op && j.fiscal && j.saldo !== undefined && j.saldo !== '' && j.custoMedioSap !== undefined && j.custoMedioSap !== '');
+      _invLoteState[k] = jaCompleta
+        ? { registrado: true, snapshot: { op: j.op||'', fiscal: j.fiscal||'', saldo: String(j.saldo??''), custoSap: String(j.custoMedioSap??''), docSap: String(j.documentoSap??'') } }
+        : { registrado: false, snapshot: null };
+
+      const vkCls = _varClass(row.varKg);
+
+      return `
+        <tr>
+          <td style="font-size:11px;color:var(--text2);white-space:nowrap;vertical-align:top;padding-top:10px">
+            <div style="font-weight:600;color:var(--text)">${_escape(row.material)}</div>
+            <div>${_escape(row.central)}</div>
+            <div class="td-mono ${vkCls}" style="margin-top:4px">${_fmtKg(row.varKg)}</div>
+          </td>
+          <td style="vertical-align:top;padding-top:10px">
+            <div style="display:flex;gap:4px;align-items:flex-start">
+              <textarea id="lote-op-${idx}" class="oc-input oc-textarea" rows="2" style="min-width:180px" oninput="_invLoteOnInput('${k}')">${_escape(j.op||'')}</textarea>
+              <button type="button" class="btn-icon" title="Copiar esse texto pras linhas selecionadas ainda vazias" onclick="_invLoteReplicar('op', ${idx})"><i class="ti ti-copy"></i></button>
+            </div>
+          </td>
+          <td style="vertical-align:top;padding-top:10px">
+            <div style="display:flex;gap:4px;align-items:flex-start">
+              <select id="lote-fiscal-${idx}" class="oc-input" style="min-width:210px" onchange="_invLoteOnInput('${k}')">
+                <option value="" ${!j.fiscal ? 'selected' : ''} disabled>Selecione...</option>
+                ${_invMontarOptionsFiscal(j.fiscal||'')}
+              </select>
+              <button type="button" class="btn-icon" title="Copiar essa opção pras linhas selecionadas ainda vazias" onclick="_invLoteReplicar('fiscal', ${idx})"><i class="ti ti-copy"></i></button>
+            </div>
+          </td>
+          <td style="vertical-align:top;padding-top:10px">
+            <div style="display:flex;gap:4px;align-items:center">
+              <input id="lote-saldo-${idx}" type="number" class="oc-input" style="width:95px" placeholder="0" value="${j.saldo??''}" oninput="_invLoteOnInput('${k}')">
+              <button type="button" class="btn-icon" title="Preencher com a variação total dessa linha" onclick="document.getElementById('lote-saldo-${idx}').value='${Math.round(row.varKg*100)/100}'; _invLoteOnInput('${k}')"><i class="ti ti-arrow-bar-to-down"></i></button>
+              <button type="button" class="btn-icon" title="Copiar esse valor pras linhas selecionadas ainda vazias" onclick="_invLoteReplicar('saldo', ${idx})"><i class="ti ti-copy"></i></button>
+            </div>
+          </td>
+          <td style="vertical-align:top;padding-top:10px">
+            <div style="display:flex;gap:4px;align-items:center">
+              <input id="lote-custosap-${idx}" type="number" step="0.01" class="oc-input" style="width:85px" placeholder="0,00" value="${j.custoMedioSap??''}" oninput="_invLoteOnInput('${k}')">
+              <button type="button" class="btn-icon" title="Copiar esse valor pras linhas selecionadas ainda vazias" onclick="_invLoteReplicar('custosap', ${idx})"><i class="ti ti-copy"></i></button>
+            </div>
+          </td>
+          <td style="vertical-align:top;padding-top:10px">
+            <div style="display:flex;gap:4px;align-items:center">
+              <input id="lote-docsap-${idx}" type="number" class="oc-input" style="width:115px" placeholder="Opcional" value="${j.documentoSap??''}" oninput="_invLoteOnInput('${k}')">
+              <button type="button" class="btn-icon" title="Copiar esse valor pras linhas selecionadas ainda vazias" onclick="_invLoteReplicar('docsap', ${idx})"><i class="ti ti-copy"></i></button>
+            </div>
+          </td>
+          <td style="vertical-align:top;padding-top:10px;text-align:center;white-space:nowrap">
+            <div id="lote-status-${idx}" style="margin-bottom:6px"></div>
+            <button type="button" class="btn btn-primary" id="lote-btn-${idx}" style="font-size:11px;padding:5px 10px" onclick="_invLoteRegistrar('${k}')"><i class="ti ti-device-floppy"></i> Registrar</button>
+          </td>
+        </tr>`;
+    }).join('');
+
+    const modal = document.createElement('div');
+    modal.id = 'inv-modal-lote';
+    modal.className = 'modal-overlay open';
+    modal.style.cssText = 'position:fixed;z-index:9999';
+    modal.innerHTML = `
+      <div class="modal-card" style="max-width:1180px;width:96vw">
+        <div class="modal-header">
+          <div>
+            <span class="modal-title"><i class="ti ti-stack-2"></i> Justificar em lote</span>
+            <div style="font-size:11px;color:var(--text2);margin-top:3px">${_invLoteKeys.length} linha${_invLoteKeys.length===1?'':'s'} selecionada${_invLoteKeys.length===1?'':'s'} — cada uma registra independente, clicando em "Registrar"</div>
+          </div>
+          <button class="modal-close" onclick="_invLoteTentarFechar()"><i class="ti ti-x"></i></button>
+        </div>
+        <div class="modal-body" style="max-height:65vh;overflow:auto;padding:0">
+          <table class="inv-data-table" style="width:100%">
+            <thead>
+              <tr>
+                <th style="text-align:left">Central / Material</th>
+                <th style="text-align:left">Justificativa Operacional</th>
+                <th style="text-align:left">Justificativa Fiscal</th>
+                <th style="text-align:left">Saldo Just. (kg)</th>
+                <th style="text-align:left">Custo Médio SAP</th>
+                <th style="text-align:left">Documento SAP</th>
+                <th style="text-align:center">Status</th>
+              </tr>
+            </thead>
+            <tbody>${linhasHtml}</tbody>
+          </table>
+        </div>
+        <div class="modal-footer" style="justify-content:flex-end">
+          <button class="btn" onclick="_invLoteTentarFechar()">Fechar</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+
+    // Estado visual inicial dos badges/botões (precisa do innerHTML já no DOM).
+    _invLoteKeys.forEach(k => _invLoteAtualizarLinhaVisual(k));
+
+    const _escInvLote = e => {
+      if (!document.body.contains(modal)) { document.removeEventListener('keydown', _escInvLote); return; }
+      if (e.key === 'Escape') window._invLoteTentarFechar();
+    };
+    document.addEventListener('keydown', _escInvLote);
   };
 
   // ── Excluir justificativa (botão ao lado de Justificar/Justificado/

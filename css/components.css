@@ -719,6 +719,13 @@ table thead th[data-sort-col].sort-desc .mod-sort-icon { opacity: 1; }
 .inv-div-badge i { font-size: 10px; }
 .inv-div-badge:hover { background: var(--accent); color: #fff; }
 
+/* Coluna de checkbox (modo seleção / Justificar em lote) — só aparece
+   quando #inv-table tem a classe .inv-select-mode (ver invToggleSelectMode
+   em inventario.js). Escondida por padrão pra não ocupar espaço à toa
+   numa tabela que já tem 17 colunas. */
+.inv-select-col { display: none; }
+#inv-table.inv-select-mode .inv-select-col { display: table-cell; width: 32px; text-align: center; }
+
 .table-header {
   padding: 14px 18px;
   border-bottom: 1px solid var(--border);

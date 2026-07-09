@@ -1707,10 +1707,24 @@
             <span id="inv-divergencias-count" style="background:var(--accent);color:#fff;border-radius:20px;padding:0 6px;font-size:10px;font-weight:700;min-width:18px;text-align:center;margin-left:2px">0</span>
           </button>
 
+          <!-- Toggle: modo seleção (checkboxes) pra Justificar em lote -->
+          <button class="micro-filter-trigger" id="imft-selecionar" onclick="invToggleSelectMode()" title="Selecionar várias linhas pra justificar em lote">
+            <i class="ti ti-checkbox"></i>
+            <span id="imft-selecionar-label">Selecionar</span>
+          </button>
+
           <!-- Limpar filtros (aparece só quando há algo ativo) -->
           <button class="btn micro-filter-clear" id="inv-filter-clear-btn" onclick="invClearAllMicroFilters()" style="display:none">
             <i class="ti ti-filter-off"></i> Limpar Filtros
           </button>
+
+          <!-- Barra de ação em lote (aparece só no modo seleção) -->
+          <div id="inv-batch-bar" style="display:none;align-items:center;gap:10px;margin-left:6px">
+            <span id="inv-batch-count" style="font-size:11px;color:var(--text2);white-space:nowrap">0 selecionadas</span>
+            <button class="btn btn-primary" id="inv-batch-btn" onclick="invAbrirJustLote()" disabled>
+              <i class="ti ti-stack-2"></i> Justificar em lote
+            </button>
+          </div>
 
           <div style="margin-left:auto;font-size:11px;color:var(--text3)" id="inv-count-label"></div>
         </div>
@@ -1738,6 +1752,9 @@
           <table class="inv-data-table" id="inv-table">
             <thead>
               <tr>
+                <th class="inv-select-col" data-align="center" style="cursor:default">
+                  <input type="checkbox" id="inv-select-all-cb" onchange="invToggleSelectAll(this.checked)" title="Selecionar todas as linhas visíveis">
+                </th>
                 <th data-col="regional" data-align="left" onclick="invSortBy('regional')">Regional <i class="ti ti-selector inv-sort-icon"></i></th>
                 <th data-col="central" data-align="left" onclick="invSortBy('central')">Filial <i class="ti ti-selector inv-sort-icon"></i></th>
                 <th data-col="material" data-align="left" onclick="invSortBy('material')">Material <i class="ti ti-selector inv-sort-icon"></i></th>
