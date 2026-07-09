@@ -81,7 +81,16 @@
     // têm justificativa operacional nem fiscal. Substitui o antigo botão
     // "Pendentes" (que abria um painel separado) — agora filtra a própria
     // tabela, igual aos demais toggles.
-    onlyPendentes: false
+    onlyPendentes: false,
+    // Toggle simples: mostra só itens com pelo menos 1 categoria de
+    // Divergência identificada (registro manual, duplicidade, pendência de
+    // integração SAP, ocorrência operacional aberta — ver r.divergencias/
+    // r.divCount, calculados em invGerar). Mesmo padrão do onlyPendentes:
+    // fica de FORA de _invMatchesBaseFilters de propósito, pra o badge de
+    // contagem (inv-divergencias-count) mostrar quantas linhas TERIAM
+    // achados dentro do recorte atual, sem "zerar" a própria contagem
+    // quando o toggle já está ligado.
+    onlyDivergencias: false
   };
 
 
@@ -207,9 +216,11 @@
     _invFilter.onlyIniAusente = false;
     _invFilter.onlyFimAusente = false;
     _invFilter.onlyPendentes = false;
+    _invFilter.onlyDivergencias = false;
     _invSyncVarZeroBtn();
     _invSyncAusenteBtns();
     _invSyncPendentesBtn();
+    _invSyncDivergenciasBtn();
     _invSyncClearBtn();
     invFiltrar();
     invAtualizarKpis();
@@ -255,6 +266,18 @@
     invAtualizarAlertas();
   };
 
+  // Toggle "Só Divergências" — mostra só itens com pelo menos 1 categoria
+  // de Divergência identificada (r.divCount > 0). Mesmo padrão dos demais
+  // toggles simples do módulo.
+  window.invToggleOnlyDivergencias = function() {
+    _invFilter.onlyDivergencias = !_invFilter.onlyDivergencias;
+    _invSyncDivergenciasBtn();
+    _invSyncClearBtn();
+    invFiltrar();
+    invAtualizarKpis();
+    invAtualizarAlertas();
+  };
+
   function _invSyncVarZeroBtn() {
     const btn = document.getElementById('imft-varzero');
     if (!btn) return;
@@ -271,6 +294,11 @@
   function _invSyncPendentesBtn() {
     const btn = document.getElementById('imft-pendentes');
     if (btn) btn.classList.toggle('active', _invFilter.onlyPendentes);
+  }
+
+  function _invSyncDivergenciasBtn() {
+    const btn = document.getElementById('imft-divergencias');
+    if (btn) btn.classList.toggle('active', _invFilter.onlyDivergencias);
   }
 
   function _invSyncTriggerLabel(key) {
@@ -295,7 +323,7 @@
   function _invSyncClearBtn() {
     const btn = document.getElementById('inv-filter-clear-btn');
     if (!btn) return;
-    const hasAny = _invFilter.applied.regional.size || _invFilter.applied.central.size || _invFilter.applied.categoria.size || _invFilter.applied.material.size || _invFilter.hideVarZero || _invFilter.onlyIniAusente || _invFilter.onlyFimAusente || _invFilter.onlyPendentes;
+    const hasAny = _invFilter.applied.regional.size || _invFilter.applied.central.size || _invFilter.applied.categoria.size || _invFilter.applied.material.size || _invFilter.hideVarZero || _invFilter.onlyIniAusente || _invFilter.onlyFimAusente || _invFilter.onlyPendentes || _invFilter.onlyDivergencias;
     btn.style.display = hasAny ? '' : 'none';
   }
 
@@ -886,6 +914,7 @@
     invFiltered = invRows.filter(r => {
       if (!_invMatchesBaseFilters(r)) return false;
       if (_invFilter.onlyPendentes && !_invIsPendente(r)) return false;
+      if (_invFilter.onlyDivergencias && !(r.divCount > 0)) return false;
       return true;
     });
     // apply current sort
@@ -1150,10 +1179,15 @@
     // toggles de zero/ausência), mas SEM aplicar o próprio "Só Pendentes"
     // — assim o número no badge não vira sempre igual ao da tabela quando
     // o filtro está ligado; ele mostra quantos itens pendentes existem
-    // dentro do recorte atual, ligado ou não.
+    // dentro do recorte atual, ligado ou não. Mesmo raciocínio pro badge
+    // "Só Divergências" logo abaixo.
     const pendentes = invRows.filter(r => _invMatchesBaseFilters(r) && _invIsPendente(r));
     const badge = document.getElementById('inv-alertas-count');
     if (badge) badge.textContent = pendentes.length;
+
+    const comDivergencias = invRows.filter(r => _invMatchesBaseFilters(r) && r.divCount > 0);
+    const divBadge = document.getElementById('inv-divergencias-count');
+    if (divBadge) divBadge.textContent = comDivergencias.length;
   }
 
   // ── Botão de alerta: materiais sem cadastro/categoria ──────

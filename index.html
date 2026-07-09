@@ -1700,6 +1700,13 @@
             <span id="inv-alertas-count" style="background:var(--amber);color:#000;border-radius:20px;padding:0 6px;font-size:10px;font-weight:700;min-width:18px;text-align:center;margin-left:2px">0</span>
           </button>
 
+          <!-- Toggle: só itens com Divergências identificadas (manual/duplicidade/pendência SAP/ocorrência) -->
+          <button class="micro-filter-trigger" id="imft-divergencias" onclick="invToggleOnlyDivergencias()" title="Mostra só itens com possíveis causas da variação identificadas (registro manual, duplicidade, pendência de integração SAP ou ocorrência aberta)">
+            <i class="ti ti-list-search" style="color:var(--accent)"></i>
+            <span id="imft-divergencias-label">Só Divergências</span>
+            <span id="inv-divergencias-count" style="background:var(--accent);color:#fff;border-radius:20px;padding:0 6px;font-size:10px;font-weight:700;min-width:18px;text-align:center;margin-left:2px">0</span>
+          </button>
+
           <!-- Limpar filtros (aparece só quando há algo ativo) -->
           <button class="btn micro-filter-clear" id="inv-filter-clear-btn" onclick="invClearAllMicroFilters()" style="display:none">
             <i class="ti ti-filter-off"></i> Limpar Filtros
