@@ -536,6 +536,22 @@ body.inv-fullscreen-open { overflow: hidden; }
   border-left: 2px solid var(--border2);
 }
 
+/* ── Coloração de linha por estado da justificativa (cor suave, usa os
+   mesmos tokens --amber-bg/--green-bg de baixa opacidade já usados no
+   resto do app). Especificidade (tr.classe td.classe) proposital pra
+   vencer o fundo cinza do grupo .inv-col-adjust acima nessas linhas —
+   quando a linha já está justificada/ajustada, a cor de estado é o sinal
+   mais importante, então ela substitui o fundo neutro do grupo. Estado
+   "justificar" (nada preenchido) fica sem tint, no fundo padrão. */
+.inv-data-table tbody tr.inv-row-justificado td,
+.inv-data-table tbody tr.inv-row-justificado td.inv-col-adjust {
+  background: var(--amber-bg);
+}
+.inv-data-table tbody tr.inv-row-ajustado td,
+.inv-data-table tbody tr.inv-row-ajustado td.inv-col-adjust {
+  background: var(--green-bg);
+}
+
 .inv-data-table thead tr {
   background: var(--bg3);
   position: sticky;

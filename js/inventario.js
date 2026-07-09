@@ -37,6 +37,16 @@
     if (typeof window.persist === 'function') window.persist();
   }
 
+  // 3 estados do botão/linha de justificativa (ver invRenderTabela):
+  // "justificar" (cinza, nada preenchido) → "justificado" (amarelo, os 4
+  // campos obrigatórios preenchidos, falta só o Documento SAP opcional) →
+  // "ajustado" (verde, tudo preenchido, incluindo Documento SAP).
+  const _INV_ESTADO_STYLE = {
+    justificar:  { bg: 'var(--bg4)',       border: 'var(--border2)',      color: 'var(--text2)', icon: 'ti-pencil', label: 'Justificar'  },
+    justificado: { bg: 'var(--amber-bg)',  border: 'var(--amber-border)', color: 'var(--amber)',  icon: 'ti-check',  label: 'Justificado' },
+    ajustado:    { bg: 'var(--green-bg)',  border: 'var(--green-border)', color: 'var(--green)',  icon: 'ti-checks', label: 'Ajustado'    },
+  };
+
   function fmt(n, dec=0) {
     if (n == null || isNaN(n)) return '—';
     return n.toLocaleString('pt-BR', {minimumFractionDigits:dec, maximumFractionDigits:dec});
@@ -811,7 +821,13 @@
 
     tbody.innerHTML = invFiltered.map(r => {
       const j = just[r.k] || {};
-      const hasJust = j.op && j.fiscal;
+      // 3 estados: "justificar" (nada preenchido) → "justificado" (os 4
+      // campos obrigatórios preenchidos, Documento SAP ainda não) →
+      // "ajustado" (tudo preenchido, incluindo Documento SAP).
+      const hasJust = !!(j.op && j.fiscal && j.saldo && j.custoMedioSap);
+      const hasDoc  = !!(j.documentoSap && String(j.documentoSap).trim() !== '');
+      const estadoJust = !hasJust ? 'justificar' : (hasDoc ? 'ajustado' : 'justificado');
+      const rowClass = estadoJust === 'ajustado' ? 'inv-row-ajustado' : estadoJust === 'justificado' ? 'inv-row-justificado' : '';
       const alertBadge = (!hasJust && Math.abs(r.varKg) > 0.01)
         ? '<span style="display:inline-block;width:6px;height:6px;background:var(--amber);border-radius:50%;margin-right:5px;vertical-align:middle;flex-shrink:0" title="Sem justificativa"></span>'
         : '';
@@ -897,7 +913,7 @@
         ? `<span class="td-mono" style="color:var(--text2)">${_fmtKg(parseFloat(j.saldo))}</span>`
         : '<span style="color:var(--text3);font-size:11px">—</span>';
 
-      return `<tr>
+      return `<tr class="${rowClass}">
         <td style="font-size:11px;color:var(--text2);white-space:nowrap">${r.regional}</td>
         <td style="font-family:var(--mono);font-size:11px;font-weight:600;white-space:nowrap">${r.central}</td>
         <td style="font-weight:600;max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${_escape(r.material)}">${alertBadge}${_escape(r.material)}</td>
@@ -918,8 +934,8 @@
         <td class="inv-col-adjust" style="text-align:right;white-space:nowrap">${varAdjCell}</td>
         <td class="inv-col-adjust" style="text-align:right;white-space:nowrap">${custoJustCell}</td>
         <td class="inv-col-adjust" style="text-align:center">
-          <button onclick="invAbrirJust('${r.k}')" style="background:${hasJust?'var(--green-bg)':'var(--bg4)'};border:1px solid ${hasJust?'var(--green-border)':'var(--border2)'};color:${hasJust?'var(--green)':'var(--text2)'};border-radius:6px;padding:4px 10px;font-size:10px;cursor:pointer;white-space:nowrap;font-family:var(--font);transition:all .13s">
-            <i class="ti ${hasJust?'ti-check':'ti-pencil'}" style="font-size:10px"></i> ${hasJust?'Ver/Editar':'Justificar'}
+          <button onclick="invAbrirJust('${r.k}')" style="background:${_INV_ESTADO_STYLE[estadoJust].bg};border:1px solid ${_INV_ESTADO_STYLE[estadoJust].border};color:${_INV_ESTADO_STYLE[estadoJust].color};border-radius:6px;padding:4px 10px;font-size:10px;cursor:pointer;white-space:nowrap;font-family:var(--font);transition:all .13s">
+            <i class="ti ${_INV_ESTADO_STYLE[estadoJust].icon}" style="font-size:10px"></i> ${_INV_ESTADO_STYLE[estadoJust].label}
           </button>
         </td>
       </tr>`;
