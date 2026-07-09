@@ -983,6 +983,16 @@
     return !!(j && (j.op || j.fiscal || j.saldo || j.custoMedioSap || j.documentoSap));
   }
 
+  // 3 estados (compartilhado entre invRenderTabela e o resumo de progresso
+  // em invAtualizarKpis): "justificar" (nada preenchido) → "justificado"
+  // (os 4 campos obrigatórios preenchidos, Documento SAP ainda não) →
+  // "ajustado" (tudo preenchido, incluindo Documento SAP).
+  function _invEstadoDaLinha(j) {
+    const hasJust = !!(j && j.op && j.fiscal && j.saldo && j.custoMedioSap);
+    const hasDoc  = !!(j && j.documentoSap && String(j.documentoSap).trim() !== '');
+    return !hasJust ? 'justificar' : (hasDoc ? 'ajustado' : 'justificado');
+  }
+
   // ── Filtrar ──────────────────────────────────────────────
   window.invFiltrar = function() {
     invFiltered = invRows.filter(r => {
@@ -1031,9 +1041,8 @@
       // 3 estados: "justificar" (nada preenchido) → "justificado" (os 4
       // campos obrigatórios preenchidos, Documento SAP ainda não) →
       // "ajustado" (tudo preenchido, incluindo Documento SAP).
-      const hasJust = !!(j.op && j.fiscal && j.saldo && j.custoMedioSap);
-      const hasDoc  = !!(j.documentoSap && String(j.documentoSap).trim() !== '');
-      const estadoJust = !hasJust ? 'justificar' : (hasDoc ? 'ajustado' : 'justificado');
+      const estadoJust = _invEstadoDaLinha(j);
+      const hasJust = estadoJust !== 'justificar';
       const rowClass = estadoJust === 'ajustado' ? 'inv-row-ajustado' : estadoJust === 'justificado' ? 'inv-row-justificado' : '';
       // Habilita o botão de excluir mesmo com justificativa PARCIAL (ex.:
       // só op+fiscal preenchidos vindo de importação de CSV) — critério
@@ -1250,6 +1259,42 @@
     const cstTemAdj  = Math.abs(totalCstBruto - totalCstAdj) > 0.01;
     if (cstAdjWrap) cstAdjWrap.style.display = cstTemAdj ? '' : 'none';
     if (cstAdjVal && cstTemAdj) cstAdjVal.textContent = fmtR(totalCstAdj);
+
+    _invAtualizarProgresso();
+  }
+
+  // ── Resumo de progresso do fechamento (Ajustadas · Justificadas ·
+  // Pendentes) — mesmo recorte de "base filters" do badge de Alertas
+  // Pendentes logo abaixo (Regional/Central/Categoria/Material + toggles
+  // de zero/ausência, mas SEM o próprio "Só Pendentes"/"Só Divergências"),
+  // pra não variar dependendo desses toggles estarem ligados ou não. Só
+  // considera linhas com variação relevante — quem não tem nada a
+  // justificar não entra na conta (senão o "Pendentes" fica inflado com
+  // linha que não precisa de ação nenhuma). Materiais sem cadastro também
+  // ficam de fora, mesmo critério dos KPIs acima.
+  function _invAtualizarProgresso() {
+    const relevantes = invRows.filter(r => !r.semCadastro && _invMatchesBaseFilters(r) && !_invVarIrrelevante(r.varKg));
+    let nAjustado = 0, nJustificado = 0, nPendente = 0;
+    relevantes.forEach(r => {
+      const estado = _invEstadoDaLinha(invJustificativas[r.k] || {});
+      if (estado === 'ajustado') nAjustado++;
+      else if (estado === 'justificado') nJustificado++;
+      else nPendente++;
+    });
+    const total = relevantes.length;
+    const pct = total ? Math.round(((nAjustado + nJustificado) / total) * 100) : 0;
+
+    const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    set('inv-progresso-ajustado-v', nAjustado);
+    set('inv-progresso-justificado-v', nJustificado);
+    set('inv-progresso-pendente-v', nPendente);
+    set('inv-progresso-pct', total ? pct + '%' : '—');
+    set('inv-progresso-total', total ? `de ${total} com variação` : 'nenhuma linha com variação neste recorte');
+
+    const fillAdj  = document.getElementById('inv-progresso-fill-ajustado');
+    const fillJust = document.getElementById('inv-progresso-fill-justificado');
+    if (fillAdj)  fillAdj.style.width  = (total ? (nAjustado / total) * 100 : 0) + '%';
+    if (fillJust) fillJust.style.width = (total ? (nJustificado / total) * 100 : 0) + '%';
   }
 
   // ── Alertas pendentes (badge do filtro "Só Pendentes") ────
@@ -2024,9 +2069,11 @@
           ${campoRow('Operacional', j.op)}
           ${campoRow('Fiscal', j.fiscal)}
           ${campoRow('Saldo Just.', j.saldo ? fmt(parseFloat(j.saldo)) + ' kg' : '')}
+          ${campoRow('Custo Médio SAP', j.custoMedioSap ? fmtR(parseFloat(j.custoMedioSap)) + '/kg' : '')}
+          ${campoRow('Documento SAP', j.documentoSap)}
           <div style="margin-top:8px;padding:10px 12px;background:var(--red-bg);border:1px solid var(--red-border);border-radius:6px;font-size:12px;color:var(--red)">
             <i class="ti ti-alert-triangle"></i>
-            A linha volta ao estado "Justificar": Var. Just., Custo Just. e Custo SAP deixam de aparecer, e o item volta a contar como pendente se a variação for relevante.
+            A linha volta ao estado "Justificar": Var. Just., Custo Just., Custo SAP, Custo Médio e Documento SAP deixam de aparecer, e o item volta a contar como pendente se a variação for relevante.
           </div>
         </div>`,
       confirmLabel: 'Excluir justificativa',

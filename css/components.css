@@ -224,6 +224,73 @@
   margin-bottom: 18px;
 }
 
+/* ── Resumo de progresso do fechamento — Ajustadas · Justificadas ·
+   Pendentes. Barra segmentada: verde (ajustado) + âmbar (justificado)
+   preenchem da esquerda, o fundo vermelho claro (--red-bg) que sobra
+   representa visualmente o que ainda está pendente — sem precisar de um
+   3º segmento explícito. */
+.inv-progresso-bar {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 14px 18px;
+  margin-bottom: 18px;
+}
+.inv-progresso-stats {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+.inv-progresso-stat {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  color: var(--text2);
+}
+.inv-progresso-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.inv-progresso-stat.is-ajustado .inv-progresso-dot    { background: var(--green); }
+.inv-progresso-stat.is-justificado .inv-progresso-dot { background: var(--amber); }
+.inv-progresso-stat.is-pendente .inv-progresso-dot    { background: var(--red); }
+.inv-progresso-count {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--text);
+}
+.inv-progresso-label { color: var(--text3); }
+.inv-progresso-spacer { flex: 1; }
+.inv-progresso-pct {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--text);
+}
+.inv-progresso-total {
+  font-size: 11px;
+  color: var(--text3);
+}
+.inv-progresso-track {
+  height: 6px;
+  border-radius: 4px;
+  background: var(--red-bg);
+  overflow: hidden;
+  display: flex;
+}
+.inv-progresso-fill {
+  height: 100%;
+  transition: width 0.25s ease;
+}
+.inv-progresso-fill.is-ajustado    { background: var(--green); }
+.inv-progresso-fill.is-justificado { background: var(--amber); }
+
 /* ── Bloco de DESTAQUE — Variação e Custo Var. ─────────────
    São os dados mais importantes do resumo do inventário, por isso
    ganham um invólucro próprio (fundo/borda diferenciados) e cards
