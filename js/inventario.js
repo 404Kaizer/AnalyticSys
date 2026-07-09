@@ -5,6 +5,37 @@
   let invRows = [];
   let invFiltered = [];
   let invJustificativas = {};
+  let _invHidratado = false; // evita reidratar do state em toda chamada de invGerar
+
+  // Reconstrói o objeto-mapa em memória (invJustificativas[k] = {...}) a
+  // partir do array persistido em state.invJustificativas. Chamada uma
+  // única vez, lazy, na primeira geração — porque na hora em que este
+  // arquivo carrega, o state ainda pode não estar restaurado/hidratado.
+  function _invHydrateJustificativas() {
+    if (_invHidratado) return;
+    _invHidratado = true;
+    const h = window._inv_helpers;
+    const st = h && h.state && h.state();
+    const arr = (st && Array.isArray(st.invJustificativas)) ? st.invJustificativas : [];
+    invJustificativas = {};
+    arr.forEach(rec => {
+      if (!rec || !rec.k) return;
+      const { k, ...resto } = rec;
+      invJustificativas[k] = resto;
+    });
+  }
+
+  // Espelha o mapa em memória de volta pro state (formato array, mesmo
+  // padrão dos outros dados persistidos) e dispara o autosave debounced
+  // do sistema (persist(), em persist.js). Chamada depois de toda
+  // mutação em invJustificativas (salvar no modal, importar CSV).
+  function _invSyncJustificativasToState() {
+    const h = window._inv_helpers;
+    const st = h && h.state && h.state();
+    if (!st) return;
+    st.invJustificativas = Object.keys(invJustificativas).map(k => ({ k, ...invJustificativas[k] }));
+    if (typeof window.persist === 'function') window.persist();
+  }
 
   function fmt(n, dec=0) {
     if (n == null || isNaN(n)) return '—';
@@ -525,6 +556,7 @@
 
     const h = window._inv_helpers;
     if (!h) { toast('Sistema não iniciado. Aguarde e tente novamente.', 'error'); return; }
+    _invHydrateJustificativas();
 
     const { getLancIndex, getSapIndex, getCustoMedioPorMat, getFilialLookupIndex, normalizeText, parseDate, localISODate, dateCmp, num, state: getState, getCategoriaPorGrupo, getCatKeyDoCadastro } = h;
     const state = getState();
@@ -1151,6 +1183,7 @@
     invFiltrar();
     invAtualizarKpis();
     invAtualizarAlertas();
+    _invSyncJustificativasToState();
   }
 
   window.invAbrirJust = function(k) {
@@ -1373,16 +1406,20 @@
     const _n = (v, dec = 2) => (Number(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: dec, maximumFractionDigits: dec });
 
     // Colunas na MESMA ordem da tabela na tela (Regional→...→Custo Just.),
-    // + Just.Operacional/Just.Fiscal no fim (não são coluna visível na
-    // tabela — só o botão "Justificar" aparece — mas são mantidas por
-    // serem essenciais pro fechamento fiscal). Sem colunas extras que não
-    // existem na tabela (removido: "Ausente?" e "Var.(%)" — o "ausente"
-    // já é representado pela própria célula vazia, igual ao "—" da tela).
-    const header = ['Regional','Filial','Material','Categoria','Est.Inicial(kg)','Entradas(kg)','Saídas(kg)','Est.Final(kg)','Est.Teórico(kg)','Var.(kg)','Custo Var. (R$)','Custo Médio (R$/kg)','Custo SAP (R$)','Saldo Justificado (kg)','Var.Justificada (kg)','Custo Just. (R$)','Just.Operacional','Just.Fiscal','Documento SAP'];
+    // + Just.Operacional/Just.Fiscal/Documento SAP no fim (não são coluna
+    // visível na tabela — só o botão "Justificar" aparece — mas são
+    // mantidas por serem essenciais pro fechamento fiscal). Sem colunas
+    // extras que não existem na tabela (removido: "Ausente?" e "Var.(%)").
+    // "Mês" vai em TODA linha (não só no nome do arquivo) — é o que
+    // permite à importação verificar se o CSV pertence ao mês certo antes
+    // de aplicar qualquer coisa (ver _invHandleImportFile).
+    const mesKeyExport = invGetMesKey();
+    const header = ['Mês','Regional','Filial','Material','Categoria','Est.Inicial(kg)','Entradas(kg)','Saídas(kg)','Est.Final(kg)','Est.Teórico(kg)','Var.(kg)','Custo Var. (R$)','Custo Médio (R$/kg)','Custo SAP (R$)','Saldo Justificado (kg)','Var.Justificada (kg)','Custo Just. (R$)','Just.Operacional','Just.Fiscal','Documento SAP'];
     const rows = invRows.map(r => {
       const j = invJustificativas[r.k] || {};
       const hasJust = j.op && j.fiscal; // Var.Justificada/Custo Just. só preenchem com justificativa completa, mesma regra da tabela
       return [
+        mesKeyExport,
         r.regional,
         r.central,
         r.material,
@@ -1482,6 +1519,30 @@
         toast('CSV inválido — não parece ser um export do Inventário (faltam colunas Filial/Material/Categoria).', 'error');
         return;
       }
+
+      // ── Validação de MÊS — essencial pra não misturar justificativas de
+      // meses diferentes (ex.: importar um CSV de Junho em cima do
+      // inventário de Julho, que provavelmente tem as MESMAS
+      // Central+Material recorrentes todo mês). Bloqueia se:
+      // 1) o CSV não tiver a coluna "Mês" (arquivo de antes dessa checagem
+      //    existir — pede reexportação, não dá pra confirmar com segurança);
+      // 2) o mês do CSV for diferente do mês do inventário aberto agora.
+      const mesAtual = invGetMesKey();
+      if (idx['Mês'] === undefined) {
+        toast('Este CSV não tem a coluna "Mês" (deve ser de uma exportação antiga). Exporte de novo o CSV atual antes de importar, pra garantir que o mês bate certinho.', 'error');
+        return;
+      }
+      const mesesNoArquivo = new Set(linhas.slice(1).map(cols => (cols[idx['Mês']] || '').trim()).filter(Boolean));
+      if (mesesNoArquivo.size > 1) {
+        toast('Este CSV tem linhas de mais de um mês misturadas — não é possível importar com segurança.', 'error');
+        return;
+      }
+      const mesDoArquivo = [...mesesNoArquivo][0];
+      if (mesDoArquivo && mesDoArquivo !== mesAtual) {
+        toast(`Este CSV é do mês ${mesDoArquivo}, mas o inventário aberto agora é de ${mesAtual}. Troque para o mês correto antes de importar.`, 'error');
+        return;
+      }
+
       _invImportParsedRows = linhas.slice(1).map(cols => ({
         central:       (cols[idx['Filial']] || '').trim(),
         material:      (cols[idx['Material']] || '').trim(),
@@ -1592,6 +1653,7 @@
     });
 
     document.getElementById('inv-import-categorias-modal')?.classList.remove('open');
+    _invSyncJustificativasToState();
     window.invGerar(); // recalcula custoVarBruto/custoSap/custo/varAdj com as justificativas novas
 
     const partes = [`${atualizados} atualizada${atualizados === 1 ? '' : 's'}`];

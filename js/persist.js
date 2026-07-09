@@ -4,7 +4,7 @@ const IDB_STORE = 'kv';
 const IDB_STATE_KEY = 'appState';
 const legacyStateKey = STORAGE_KEY;
 // 'sap' é excluído do snapshot unificado — salvo em chunks separados
-const saveSnapshotKeys = ['configs', 'filiais', 'materiais', 'entradas', 'saidas', 'lancamentos', 'sap', 'producao', 'imports', 'ocorrencias', 'acoesRelatorio', 'notifications'];
+const saveSnapshotKeys = ['configs', 'filiais', 'materiais', 'entradas', 'saidas', 'lancamentos', 'sap', 'producao', 'imports', 'ocorrencias', 'acoesRelatorio', 'notifications', 'invJustificativas'];
 const SAP_CHUNK_SIZE  = 10000;  // registros por chunk
 const SAP_CHUNK_KEY   = 'sap_chunk_'; // prefixo das chaves: sap_chunk_0, sap_chunk_1...
 const SAP_META_KEY    = 'sap_meta';   // { totalChunks, totalRecords, savedAt }
@@ -168,7 +168,8 @@ function buildStateSnapshot() {
     producao: state.producao,
     imports: state.imports,
     ocorrencias: state.ocorrencias || [],
-    acoesRelatorio: state.acoesRelatorio || []
+    acoesRelatorio: state.acoesRelatorio || [],
+    invJustificativas: state.invJustificativas || []
   };
 }
 
@@ -242,7 +243,8 @@ async function persistStateNow() {
                   state.lancamentos.length || state.sap.length       ||
                   state.producao.length  || state.imports.length     ||
                   state.configs.length   || state.filiais.length     ||
-                  state.materiais.length || (state.ocorrencias || []).length;
+                  state.materiais.length || (state.ocorrencias || []).length ||
+                  (state.invJustificativas || []).length;
   if (!stateHydrated && !hasData) return;
 
   // buildStateSnapshot inclui compactSapRecords — pode ser O(600k).

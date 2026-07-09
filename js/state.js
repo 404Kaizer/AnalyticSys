@@ -26,7 +26,14 @@ const defaultState = () => ({
   materiais: [],
   ocorrencias: [],
   acoesRelatorio: [],
-  notifications: []   // { id, type, level, title, body, source, createdAt, read }
+  notifications: [],  // { id, type, level, title, body, source, createdAt, read }
+  // Justificativas do fechamento de Inventário — array de
+  // {k, op, fiscal, saldo, custoMedioSap, documentoSap}. "k" já embute o
+  // mês (mesKey|||central|||material), então o isolamento entre meses
+  // acontece naturalmente na própria chave — não precisa de bucket
+  // separado por mês. Ver inventario.js (_invHydrateJustificativas /
+  // _invSyncJustificativasToState).
+  invJustificativas: []
 });
 
 
