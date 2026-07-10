@@ -104,11 +104,12 @@
 
   const _invFilterKeyLabels = { regional: 'Regional', central: 'Central', categoria: 'Categoria', material: 'Material' };
 
-  // Linhas-base para calcular as opções de um filtro: considera os demais
-  // filtros JÁ APLICADOS (todos exceto o da própria chave) — assim, se
-  // Fornecedor/Central já está filtrado, o dropdown de Categoria/Material
-  // só mostra os valores que ainda existem dentro daquele recorte, e não
-  // todos os valores da tabela inteira.
+  // Linhas-base para calcular as opções de um filtro: considera TODOS os
+  // demais filtros JÁ APLICADOS (dropdowns Regional/Central/Categoria/
+  // Material, exceto o da própria chave, + os toggles Ocultar Var. 0,
+  // Início/Fim Ausente, Só Pendentes e Só Divergências) — se um registro
+  // não passa em algum filtro ativo, o valor dele não aparece como opção
+  // em nenhum dropdown, mesmo que "exista" na base bruta.
   function _invOptionsSourceRows(key) {
     const keys = ['regional', 'central', 'categoria', 'material'];
     return invRows.filter(r => {
@@ -117,6 +118,11 @@
         const set = _invFilter.applied[k];
         if (set && set.size && !set.has(r[k])) return false;
       }
+      if (_invFilter.hideVarZero && _invVarIrrelevante(r.varKg)) return false;
+      if (_invFilter.onlyIniAusente && !r.estoqueIniMissing) return false;
+      if (_invFilter.onlyFimAusente && !r.estoqueFimMissing) return false;
+      if (_invFilter.onlyPendentes && !_invIsPendente(r)) return false;
+      if (_invFilter.onlyDivergencias && !(r.divCount > 0)) return false;
       return true;
     });
   }

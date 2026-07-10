@@ -587,38 +587,11 @@ function _getColFilterPassSet(module, data) {
 }
 
 function getFilteredData(module) {
-  let data = state[module] || [];
-  // Aplica filtro de manuais antes dos demais
-  if (_somenteManuais[module]) data = data.filter(r => r.fonte === 'manual' || r.editado);
-  // Aplica filtro de duplicatas (somente SAP)
-  if (module === 'sap' && _somenteDuplicatas) {
-    const { cancelled, real } = getSapDuplicateKeys();
-    data = data.filter(r => { const k = getSapRecordKey(r); return cancelled.has(k) || real.has(k); });
-  }
-  // Aplica filtro de duplicatas (somente Lançamentos) — mesma central, data e material
-  if (module === 'lancamentos' && _somenteDuplicatasLanc) {
-    const dupKeys = getLancamentoDuplicateKeys();
-    data = data.filter(r => dupKeys.has(getLancamentoRecordKey(r)));
-  }
-  const f = module === 'producao' ? filtroProducao : filters[module];
-  // Passa o scope para que filterRecords use o índice invertido quando possível
-  const textFiltered = filterRecords(data, f, getSearchableFields(module), module);
-  // Apply column filters usando cache pre-computado
+  const textFiltered = _getModuleTextFilteredData(module);
+  // Apply column filters
   let result;
   if (moduleHasColFilter(module)) {
-    // Tenta usar o passSet pré-computado sobre o data original para mapear índices
-    const passSet = _getColFilterPassSet(module, state[module] || []);
-    if (passSet) {
-      // Re-filtra textFiltered mantendo só os que estão no passSet do data original
-      const originalData = state[module] || [];
-      // Cria mapa rápido de objeto → índice original (via índice de posição)
-      result = textFiltered.filter(r => {
-        // recordPassesColFilters é O(colunas), não O(n) — ok para 50 registros por página
-        return recordPassesColFilters(module, r);
-      });
-    } else {
-      result = textFiltered;
-    }
+    result = textFiltered.filter(r => recordPassesColFilters(module, r));
   } else {
     result = textFiltered;
   }
@@ -648,15 +621,8 @@ function getListFilteredData(scope) {
     ].sort((a, b) => (b.data || 0) - (a.data || 0));
     // Feed do dashboard é recriado a cada chamada — não tem scope fixo para indexar
     data = filterRecords(feed, listFilters.dashboard, getSearchableFields('dashboard'));
-  } else if (scope === 'imports') {
-    data = filterRecords(
-      state.imports.slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)),
-      listFilters.imports,
-      getSearchableFields('imports'),
-      'imports'
-    );
   } else {
-    data = filterRecords(state[scope] || [], listFilters[scope], getSearchableFields(scope), scope);
+    data = _getScopeTextFilteredData(scope);
   }
   // Apply column filters usando recordPassesColFilters (O(colunas) por registro — ok)
   // O cache _colFilterPassCache não é aplicado aqui pois o data já é pré-filtrado por texto,
@@ -784,13 +750,21 @@ const colFilterMeta = {
   materiais:   { tbodyId: 'tb-materiais',   fields: ['origem','alias','categoria','created',null] },
 };
 
-// Returns true if a record passes all active column filters for a module
+// Returns true if a record passes ALL active column filters for a module
 function recordPassesColFilters(module, record) {
+  return recordPassesColFiltersExcept(module, record, null);
+}
+
+// Returns true if a record passes all active column filters for a module,
+// exceto o da própria coluna informada em excludeColIdx (usado para montar
+// as opções do dropdown daquela coluna sem que ela filtre a si mesma)
+function recordPassesColFiltersExcept(module, record, excludeColIdx) {
   const cf = colFilters[module];
   if (!cf) return true;
   const meta = colFilterMeta[module];
   if (!meta) return true;
   for (const [colIdx, activeSet] of Object.entries(cf)) {
+    if (excludeColIdx !== null && Number(colIdx) === Number(excludeColIdx)) continue;
     if (!activeSet || !activeSet.size) continue;
     const field = meta.fields[Number(colIdx)];
     if (!field) continue;
@@ -800,68 +774,65 @@ function recordPassesColFilters(module, record) {
   return true;
 }
 
-// Global cache for summary table data (populated by renderAnaliticoMacro)
-
-// ── Cache de valores únicos por coluna de filtro ─────────────────────────
-// Evita recomputar getColUniqueValues a cada abertura do popover.
-// Invalidado quando o searchIndex do módulo é invalidado.
-const _colUniqueCache = {};
-
-function _invalidateColUniqueCache(module) {
-  delete _colUniqueCache[module];
+// Reaproveita a lógica de filtro de TEXTO/BUSCA (+ toggles "somente manuais"
+// / "somente duplicatas") de getFilteredData, sem aplicar os colFilters —
+// usado como base para montar as opções dos dropdowns de coluna, já que a
+// regra é: se o registro nem passa no filtro de texto ativo, o valor dele
+// não deve aparecer como opção em NENHUM dropdown.
+function _getModuleTextFilteredData(module) {
+  let data = state[module] || [];
+  if (_somenteManuais[module]) data = data.filter(r => r.fonte === 'manual' || r.editado);
+  if (module === 'sap' && _somenteDuplicatas) {
+    const { cancelled, real } = getSapDuplicateKeys();
+    data = data.filter(r => { const k = getSapRecordKey(r); return cancelled.has(k) || real.has(k); });
+  }
+  if (module === 'lancamentos' && _somenteDuplicatasLanc) {
+    const dupKeys = getLancamentoDuplicateKeys();
+    data = data.filter(r => dupKeys.has(getLancamentoRecordKey(r)));
+  }
+  const f = module === 'producao' ? filtroProducao : filters[module];
+  return filterRecords(data, f, getSearchableFields(module), module);
 }
-function _invalidateAllColUniqueCaches() {
-  for (const k of Object.keys(_colUniqueCache)) delete _colUniqueCache[k];
+
+// Mesma ideia de _getModuleTextFilteredData, mas para os "scopes" de lista
+// (imports, configs, filiais, materiais), que usam listFilters em vez de
+// filters/filtroProducao.
+function _getScopeTextFilteredData(scope) {
+  if (scope === 'imports') {
+    return filterRecords(
+      state.imports.slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)),
+      listFilters.imports,
+      getSearchableFields('imports'),
+      'imports'
+    );
+  }
+  return filterRecords(state[scope] || [], listFilters[scope], getSearchableFields(scope), scope);
 }
 
-// Collect unique display values for a column, considerando os demais filtros
-// de coluna JÁ ATIVOS no módulo (todos exceto o da própria coluna) — estilo
-// Excel/Google Sheets: se eu já filtrei FORNECEDOR, o dropdown de NF só
-// mostra as NFs daquele fornecedor, e não todas as NFs da tabela inteira.
+const _COLFILTER_LIST_SCOPES = ['imports', 'configs', 'filiais', 'materiais'];
+
+// Collect unique display values for a column, considerando QUALQUER outro
+// filtro já aplicado na tabela — texto/busca, "somente manuais", "somente
+// duplicatas" e os demais dropdowns de coluna (exceto o da própria coluna).
+// Regra: se um registro não passa em algum desses filtros, o valor dele não
+// deve aparecer como opção em nenhum dropdown, mesmo que "exista" na base.
 function getColUniqueValues(module, colIdx) {
   const meta = colFilterMeta[module];
   if (!meta) return [];
   const field = meta.fields[colIdx];
   if (!field) return [];
-  const baseData = module === 'producao' ? state.producao
-               : (module in state) ? state[module] : [];
 
-  // Filtros de coluna ativos em OUTRAS colunas (a própria coluna é ignorada
-  // aqui, senão marcar um valor faria os demais valores da mesma coluna
-  // sumirem do próprio dropdown)
-  const cf = colFilters[module] || {};
-  const otherEntries = Object.entries(cf).filter(
-    ([ci, s]) => Number(ci) !== Number(colIdx) && s && s.size > 0
-  );
+  const baseData = _COLFILTER_LIST_SCOPES.includes(module)
+    ? _getScopeTextFilteredData(module)
+    : _getModuleTextFilteredData(module);
 
-  // Cache: chave inclui a assinatura dos filtros ativos nas outras colunas,
-  // já que o resultado agora depende deles, não só do módulo+coluna
-  const filterSig = otherEntries
-    .map(([ci, s]) => ci + '=' + [...s].sort().join(','))
-    .sort().join('|');
-  const cacheKey = module + ':' + colIdx + ':' + filterSig;
-  const cached = _colUniqueCache[cacheKey];
-  if (cached && cached.version === baseData.length) return cached.values;
-
-  const data = otherEntries.length
-    ? baseData.filter(r => {
-        for (const [ci, activeSet] of otherEntries) {
-          const f = meta.fields[Number(ci)];
-          if (!f) continue;
-          const cellVal = normalizeText(String(r[f] ?? '—'));
-          if (!activeSet.has(cellVal)) return false;
-        }
-        return true;
-      })
-    : baseData;
+  const data = baseData.filter(r => recordPassesColFiltersExcept(module, r, colIdx));
 
   const seen = new Set();
   for (let i = 0; i < data.length; i++) {
     seen.add(normalizeText(String(data[i][field] ?? '—')));
   }
-  const values = [...seen].sort((a, b) => a.localeCompare(b, 'pt-BR'));
-  _colUniqueCache[cacheKey] = { version: baseData.length, values };
-  return values;
+  return [...seen].sort((a, b) => a.localeCompare(b, 'pt-BR'));
 }
 
 // Initialise colFilters for a module if needed
