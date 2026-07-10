@@ -1896,6 +1896,31 @@
     toast('Linha registrada.', 'success');
   };
 
+  // Registra de uma vez toda linha selecionada que já está com os 4 campos
+  // obrigatórios preenchidos e ainda não registrada. Pula silenciosamente
+  // (sem travar as demais) as que estão incompletas — conta pra avisar no
+  // resumo final, sem toast por linha, pra não empilhar dezenas de toasts.
+  window._invLoteRegistrarTodos = function() {
+    let registradas = 0, incompletas = 0;
+    _invLoteKeys.forEach(k => {
+      const st = _invLoteState[k] || {};
+      if (st.registrado) return;
+      const vals = _invLoteLerValores(k);
+      if (!_invLoteObrigatoriosPreenchidos(vals)) { incompletas++; return; }
+      _invApplyJustValues(k, vals);
+      _invLoteState[k] = { registrado: true, snapshot: vals };
+      registradas++;
+    });
+    _invLoteKeys.forEach(k => _invLoteAtualizarLinhaVisual(k));
+    if (registradas === 0 && incompletas === 0) {
+      toast('Todas as linhas já estavam registradas.', 'success');
+    } else {
+      const partes = [`${registradas} registrada${registradas===1?'':'s'}`];
+      if (incompletas) partes.push(`${incompletas} pulada${incompletas===1?'':'s'} (campos obrigatórios incompletos)`);
+      toast(partes.join(', ') + '.', incompletas && !registradas ? 'error' : 'success');
+    }
+  };
+
   // Copia o valor do campo `campo` da linha idxOrigem pras demais linhas
   // selecionadas — só nas que ainda estão vazias nesse campo.
   window._invLoteReplicar = function(campo, idxOrigem) {
@@ -2028,8 +2053,9 @@
         <div class="modal-body" style="max-height:70vh;overflow-y:auto;overflow-x:hidden">
           ${cardsHtml}
         </div>
-        <div class="modal-footer" style="justify-content:flex-end">
+        <div class="modal-footer" style="justify-content:space-between">
           <button class="btn" onclick="_invLoteTentarFechar()">Fechar</button>
+          <button class="btn btn-primary" onclick="_invLoteRegistrarTodos()"><i class="ti ti-stack-2"></i> Registrar Todos</button>
         </div>
       </div>`;
     document.body.appendChild(modal);
