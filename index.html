@@ -1806,6 +1806,9 @@
               <!-- Barra de ação em lote (aparece só no modo seleção) -->
               <div id="inv-batch-bar" style="display:none;align-items:center;gap:10px">
                 <span id="inv-batch-count" style="font-size:11px;color:var(--text2);white-space:nowrap">0 selecionadas</span>
+                <button class="btn" id="inv-batch-delete-btn" onclick="invExcluirJustLote()" disabled title="Exclui a justificativa das linhas selecionadas que tiverem alguma salva" style="color:var(--red);border-color:var(--red-border)">
+                  <i class="ti ti-trash"></i> Excluir Justificativas
+                </button>
                 <button class="btn btn-primary" id="inv-batch-btn" onclick="invAbrirJustLote()" disabled>
                   <i class="ti ti-stack-2"></i> Justificar em lote
                 </button>

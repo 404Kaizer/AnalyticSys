@@ -472,10 +472,12 @@
     const bar = document.getElementById('inv-batch-bar');
     const countEl = document.getElementById('inv-batch-count');
     const btn = document.getElementById('inv-batch-btn');
+    const delBtn = document.getElementById('inv-batch-delete-btn');
     const n = _invSelected.size;
     if (bar) bar.style.display = _invSelectMode ? 'flex' : 'none';
     if (countEl) countEl.textContent = n === 1 ? '1 selecionada' : `${n} selecionadas`;
     if (btn) btn.disabled = n < 1;
+    if (delBtn) delBtn.disabled = n < 1;
   }
 
   // "Selecionar todos" marca/desmarca só as linhas atualmente visíveis
@@ -2328,6 +2330,18 @@
   // pendente se a variação for relevante). Mesmo modal de confirmação
   // destrutiva usado em removerMaterial (config.js) e na importação
   // (import.js) — só muda title/sub/body/onConfirm.
+  // Reseta os campos derivados de uma linha pro estado "sem justificativa"
+  // (mesmo cálculo de quando invGerar roda com just={}) — usado tanto pela
+  // exclusão individual (invExcluirJust) quanto pela em massa
+  // (invExcluirJustLote).
+  function _invResetJustRow(row) {
+    row.saldoJust     = 0;
+    row.varAdj        = row.varKg;
+    row.custo         = row.varAdj * row.custoMedio;
+    row.custoMedioSap = 0;
+    row.custoSap      = 0;
+  }
+
   window.invExcluirJust = function(k) {
     const row = invRows.find(r => r.k === k);
     if (!row) return;
@@ -2359,19 +2373,51 @@
       confirmLabel: 'Excluir justificativa',
       onConfirm: () => {
         delete invJustificativas[k];
-        // Reseta os campos derivados da linha pro mesmo estado "sem
-        // justificativa" calculado em invGerar (just = {} → saldoJust 0,
-        // varAdj = varKg, custo = varAdj × custoMedio, sem custo SAP).
-        row.saldoJust     = 0;
-        row.varAdj        = row.varKg;
-        row.custo         = row.varAdj * row.custoMedio;
-        row.custoMedioSap = 0;
-        row.custoSap      = 0;
+        _invResetJustRow(row);
         invFiltrar();
         invAtualizarKpis();
         invAtualizarAlertas();
         _invSyncJustificativasToState();
         toast('Justificativa excluída.', 'success');
+      }
+    });
+  };
+
+  // Excluir em massa — reaproveita a MESMA seleção (checkboxes) do
+  // "Justificar em lote", na barra que aparece no modo seleção. Só
+  // considera, entre as selecionadas, as que TÊM algo salvo pra excluir
+  // (_invTemJustSalva) — selecionar 10 linhas em branco e clicar aqui não
+  // abre confirmação à toa, só avisa que não há nada a excluir.
+  window.invExcluirJustLote = function() {
+    if (_invSelected.size === 0) return;
+    const alvos = invRows.filter(r => _invSelected.has(r.k) && !r.semCadastro && _invTemJustSalva(invJustificativas[r.k] || {}));
+    if (alvos.length === 0) {
+      toast('Nenhuma das linhas selecionadas tem justificativa salva pra excluir.', 'error');
+      return;
+    }
+
+    confirmarDestrutivo({
+      title: 'Excluir justificativas em massa',
+      sub: `${alvos.length} linha${alvos.length === 1 ? '' : 's'} com justificativa salva`,
+      body: `
+        <div style="display:flex;flex-direction:column;gap:2px;max-height:220px;overflow:auto">
+          ${alvos.map(r => `<div style="font-size:12px;color:var(--text2);padding:4px 0;border-bottom:1px solid var(--border2)">${_invEscape(r.central)} · ${_invEscape(r.material)}</div>`).join('')}
+        </div>
+        <div style="margin-top:10px;padding:10px 12px;background:var(--red-bg);border:1px solid var(--red-border);border-radius:6px;font-size:12px;color:var(--red)">
+          <i class="ti ti-alert-triangle"></i>
+          Todas essas linhas voltam ao estado "Justificar" — Var. Just., Custo Just., Custo SAP, Custo Médio e Documento SAP deixam de aparecer nelas, e voltam a contar como pendentes se a variação for relevante.
+        </div>`,
+      confirmLabel: `Excluir ${alvos.length} justificativa${alvos.length === 1 ? '' : 's'}`,
+      onConfirm: () => {
+        alvos.forEach(row => {
+          delete invJustificativas[row.k];
+          _invResetJustRow(row);
+        });
+        invFiltrar();
+        invAtualizarKpis();
+        invAtualizarAlertas();
+        _invSyncJustificativasToState();
+        toast(`${alvos.length} justificativa${alvos.length === 1 ? '' : 's'} excluída${alvos.length === 1 ? '' : 's'}.`, 'success');
       }
     });
   };
