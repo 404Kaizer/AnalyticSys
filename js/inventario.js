@@ -1202,6 +1202,19 @@
     }
     const lbl = document.getElementById('inv-count-label');
     if (lbl) lbl.textContent = invFiltered.length + ' de ' + invRows.length + ' itens';
+
+    // Poda a seleção em lote: remove chaves que ficaram fora do filtro
+    // atual (ex.: usuário selecionou linhas, depois trocou o filtro de
+    // Regional/Central/Categoria) — sem isso, o contador "N selecionadas"
+    // e o "Justificar em lote" continuavam considerando linhas que não
+    // estão mais visíveis na tabela.
+    if (_invSelected.size) {
+      const visiveis = new Set(invFiltered.map(r => r.k));
+      let mudou = false;
+      _invSelected.forEach(k => { if (!visiveis.has(k)) { _invSelected.delete(k); mudou = true; } });
+      if (mudou) _invSyncBatchBar();
+    }
+
     invRenderTabela();
   };
 
@@ -2200,9 +2213,13 @@
     if (_invSelected.size === 0) return;
     document.getElementById('inv-modal-lote')?.remove();
 
-    // Defensivo: só considera chaves que ainda existem em invRows e que
-    // têm cadastro válido (sem cadastro não tem fluxo de justificativa).
-    _invLoteKeys = invRows.filter(r => _invSelected.has(r.k) && !r.semCadastro).map(r => r.k);
+    // Defensivo: só considera chaves que ainda existem no recorte
+    // FILTRADO atual (invFiltered, não invRows) e que têm cadastro válido
+    // (sem cadastro não tem fluxo de justificativa). invFiltrar() já poda
+    // _invSelected quando o filtro muda, mas manter essa checagem aqui
+    // também garante que o lote nunca inclui linha fora do filtro ativo,
+    // mesmo em algum caminho que não passe por invFiltrar() antes.
+    _invLoteKeys = invFiltered.filter(r => _invSelected.has(r.k) && !r.semCadastro).map(r => r.k);
     if (_invLoteKeys.length === 0) { toast('Nenhuma linha válida selecionada.', 'error'); return; }
     _invLoteState = {};
 
