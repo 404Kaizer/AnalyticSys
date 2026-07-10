@@ -15,6 +15,31 @@ let persistInFlight = false;
 let persistQueued = false;
 let stateHydrated = false;
 
+// ── Controle de aba única ativa (Web Locks API) ───────────────────────────
+// Problema: com duas abas abertas, cada uma mantém seu próprio `state` em
+// memória. Como persistStateNow() sempre grava o snapshot COMPLETO (não é
+// incremental), a última aba a gravar sobrescreve por completo o que a
+// outra salvou — mesmo que a outra tivesse dados mais novos. Sem nenhuma
+// coordenação entre abas, isso é inevitável.
+// Solução: apenas a aba que detém o "lock" pode gravar. As demais entram em
+// modo somente-leitura (bloqueio visual) até a aba ativa ser fechada, quando
+// então uma delas é promovida automaticamente — recarregando o estado mais
+// recente do IndexedDB antes de liberar a edição.
+const TAB_LOCK_NAME = 'central_analise_tab_lock_v1';
+let isActiveTab = false;      // true = esta aba pode gravar
+let tabWasPassive = false;    // true = esta aba já esteve em modo leitura (usado para saber se precisa recarregar ao ser promovida)
+
+// ── Verificação de conflito antes de gravar (rede de segurança) ──────────
+// Mesmo com o lock acima, mantemos esta checagem como segunda camada: cobre
+// navegadores sem suporte a Web Locks (fallback abaixo assume "ativo" para
+// não travar o uso) e qualquer cenário inesperado. Compara o savedAt que
+// esta aba sabe ser o mais recente com o que está de fato no IDB — se
+// alguém gravou depois, aborta em vez de sobrescrever silenciosamente.
+let lastKnownSavedAt = 0;
+function _updateLastKnownSavedAt(ts) {
+  if (typeof ts === 'number' && ts > lastKnownSavedAt) lastKnownSavedAt = ts;
+}
+
 function openDb() {
   if (!('indexedDB' in window)) return Promise.resolve(null);
   if (idbOpenPromise) return idbOpenPromise;
@@ -239,6 +264,14 @@ function applySavedState(saved) {
 }
 
 async function persistStateNow() {
+  // ── Opção A: só a aba ativa pode gravar ──────────────────────────────
+  // Evita que uma aba em segundo plano, com dados desatualizados em
+  // memória, sobrescreva o que a aba ativa já salvou.
+  if (!isActiveTab) {
+    console.warn('[Persist] Gravação bloqueada — esta aba não é a aba ativa (outra aba está aberta).');
+    return false;
+  }
+
   const hasData = state.entradas.length  || state.saidas.length     ||
                   state.lancamentos.length || state.sap.length       ||
                   state.producao.length  || state.imports.length     ||
@@ -256,6 +289,18 @@ async function persistStateNow() {
   try {
     const db = await openDb();
     if (db) {
+      // ── Opção C: checagem de conflito (rede de segurança) ───────────────
+      // Compara o savedAt mais recente que esta aba conhece com o que está
+      // de fato gravado agora no IDB. Se forem diferentes, outra aba/sessão
+      // gravou nesse meio-tempo (ex.: fallback sem suporte a Web Locks) —
+      // aborta em vez de sobrescrever silenciosamente.
+      const currentMeta = await idbGet(db, 'meta').catch(() => null);
+      if (currentMeta && typeof currentMeta.savedAt === 'number' && currentMeta.savedAt > lastKnownSavedAt) {
+        console.warn('[Persist] Conflito detectado — os dados foram alterados por outra aba/sessão desde o último carregamento desta aba.');
+        toast('⚠ Os dados foram alterados em outra aba. Recarregue a página para continuar sem risco de perder informações.', 'error');
+        return false;
+      }
+
       await idbPut(db, 'meta', { version: STATE_VERSION, savedAt: snapshot.savedAt, pendingWrite: true }).catch(() => {});
 
       // Grava o snapshot principal ANTES dos chunks SAP — garante que
@@ -279,6 +324,7 @@ async function persistStateNow() {
       }
 
       await idbPut(db, 'meta', { version: STATE_VERSION, savedAt: snapshot.savedAt, pendingWrite: false });
+      _updateLastKnownSavedAt(snapshot.savedAt);
 
       const sapCount = (snapshot.sap || []).length;
       console.info(`[Persist] ✓ Salvo no IndexedDB | SAP: ${sapCount.toLocaleString('pt-BR')} reg.`);
@@ -292,6 +338,7 @@ async function persistStateNow() {
   try {
     const snapshotSemSap = { ...snapshot, sap: [] };
     localStorage.setItem(legacyStateKey, JSON.stringify(snapshotSemSap));
+    _updateLastKnownSavedAt(snapshot.savedAt);
     console.warn('[Persist] Salvo no localStorage SEM dados SAP (IndexedDB indisponível).');
     if ((snapshot.sap || []).length > 0) {
       toast('⚠ Dados SAP não puderam ser salvos permanentemente. Use um navegador que suporte IndexedDB.', 'error');
@@ -305,6 +352,9 @@ async function persistStateNow() {
 }
 
 function flushPersistQueue() {
+  // Aba passiva: não há o que fazer aqui — evita agendar trabalho inútil.
+  if (!isActiveTab) { persistQueued = false; return; }
+
   if (persistInFlight) {
     persistQueued = true;
     return;
@@ -330,6 +380,9 @@ function flushPersistQueue() {
 }
 
 function persist() {
+  // Aba passiva: flushPersistQueue() já bloqueia a gravação, mas evitamos
+  // até agendar o timer aqui.
+  if (!isActiveTab) return;
   clearTimeout(persistTimer);
   persistTimer = setTimeout(() => {
     flushPersistQueue();
@@ -348,6 +401,7 @@ async function loadState() {
 
       // Verifica se a última gravação foi interrompida antes de concluir
       const meta = await idbGet(db, 'meta').catch(() => null);
+      _updateLastKnownSavedAt(meta?.savedAt || 0);
       if (meta?.pendingWrite === true) {
         console.warn('[Persist] Detectada gravação incompleta na sessão anterior. Os dados podem estar parcialmente desatualizados.');
         // Avisa o usuário de forma não-bloqueante (toast aparece após a UI estar pronta)
@@ -393,8 +447,13 @@ async function loadState() {
                 (lsParsed.savedAt || 0) > (saved.savedAt || 0)) {
               console.info('[Persist] Emergency save mais recente que IDB — aplicando campos não-SAP do localStorage.');
               // SAP permanece dos chunks IDB — fonte mais completa
-              // (emergency save sempre tem sap: [])
-              saved = { ...lsParsed, sap: saved.sap };
+              // (emergency save sempre tem sap: []).
+              // IMPORTANTE: mescla sobre 'saved' em vez de substituí-lo — o
+              // snapshot de emergência não contém TODAS as chaves de
+              // saveSnapshotKeys (ex.: notifications, invJustificativas), e
+              // um `saved = { ...lsParsed, sap: saved.sap }` descartaria essas
+              // chaves do IDB mesmo quando elas não mudaram desde o último save.
+              saved = { ...saved, ...lsParsed, sap: saved.sap };
             }
           }
         } catch (_) {}
@@ -402,6 +461,7 @@ async function loadState() {
 
       if (isLoadingOverlayVisible()) updateLoadingOverlay('Aplicando o estado salvo na interface...', 'Carregando informações');
       loaded = applySavedState(saved);
+      _updateLastKnownSavedAt(saved?.savedAt || 0);
     }
   } catch (err) {
     console.warn('Não foi possível restaurar o estado do IndexedDB.', err);
@@ -420,6 +480,7 @@ async function loadState() {
           parsed._skipSap = true;
         }
         loaded = applySavedState(parsed);
+        _updateLastKnownSavedAt(parsed?.savedAt || 0);
       }
     } catch (err) {
       console.warn('Não foi possível restaurar o estado local.', err);
@@ -435,6 +496,81 @@ async function loadState() {
   }
 }
 
+// ── Aba única ativa (Web Locks API) ───────────────────────────────────────
+// Chamada uma vez no boot (ver init() em analitico.js). Não bloqueia o
+// carregamento normal da página — apenas decide, em paralelo, se esta aba
+// pode gravar ou deve entrar em modo somente-leitura.
+function requestTabLock() {
+  if (!('locks' in navigator)) {
+    // Navegador sem suporte a Web Locks (raro em 2026, mas possível em
+    // versões muito antigas): assume "ativo" para não travar o uso — a
+    // checagem de conflito (Opção C) em persistStateNow() continua ativa
+    // como rede de segurança nesse caso.
+    console.warn('[TabLock] Navegador sem suporte a Web Locks API — modo ativo assumido, protegido apenas pela checagem de conflito.');
+    _onBecomeActiveTab();
+    return;
+  }
+
+  let settled = false;
+  // Se o lock não for concedido quase instantaneamente, é porque outra aba
+  // já o detém — mostra o aviso de somente-leitura enquanto aguardamos.
+  const waitTimer = setTimeout(() => {
+    if (!settled) _onPassiveTab();
+  }, 250);
+
+  navigator.locks.request(TAB_LOCK_NAME, { mode: 'exclusive' }, () => {
+    return new Promise((resolve) => {
+      settled = true;
+      clearTimeout(waitTimer);
+      _onBecomeActiveTab();
+      // Mantém o lock retido enquanto a aba estiver aberta. Ele é liberado
+      // automaticamente pelo navegador no fechamento/crash da aba, mesmo
+      // que este listener não chegue a rodar — não há risco de "lock preso".
+      window.addEventListener('pagehide', () => resolve(), { once: true });
+    });
+  }).catch(err => {
+    console.warn('[TabLock] Falha ao solicitar o lock — assumindo modo ativo.', err);
+    if (!settled) { settled = true; clearTimeout(waitTimer); _onBecomeActiveTab(); }
+  });
+}
+
+async function _onBecomeActiveTab() {
+  const wasPromoted = tabWasPassive;
+  isActiveTab = true;
+  _hideTabLockOverlay();
+  if (wasPromoted) {
+    // Esta aba estava em modo leitura e a aba ativa anterior foi fechada.
+    // O estado em memória aqui pode estar desatualizado — recarrega do
+    // IndexedDB antes de liberar a edição, para não repetir o mesmo
+    // problema por outra via.
+    console.info('[TabLock] Aba promovida a ativa — recarregando o estado mais recente antes de liberar a edição.');
+    try {
+      await loadState();
+      if (typeof renderAll === 'function') renderAll();
+      if (typeof updateDashboard === 'function') updateDashboard();
+      toast('Esta aba está ativa agora. Os dados foram atualizados.', 'success');
+    } catch (err) {
+      console.warn('[TabLock] Falha ao recarregar estado após promoção:', err);
+    }
+  }
+}
+
+function _onPassiveTab() {
+  isActiveTab = false;
+  tabWasPassive = true;
+  _showTabLockOverlay();
+}
+
+function _showTabLockOverlay() {
+  const el = document.getElementById('tab-lock-overlay');
+  if (el) el.classList.add('open');
+}
+
+function _hideTabLockOverlay() {
+  const el = document.getElementById('tab-lock-overlay');
+  if (el) el.classList.remove('open');
+}
+
 // ── Emergency save (pagehide / beforeunload) ──────────────────────────────
 // Captura mudanças que ainda estão no debounce (1500ms) no momento em que o
 // usuário recarrega ou fecha a aba. Usa localStorage síncrono — única opção
@@ -445,21 +581,29 @@ async function loadState() {
 function _emergencySave() {
   clearTimeout(persistTimer); // cancela debounce pendente
   if (!stateHydrated) return;
+  // Aba passiva: não grava — evitaria reintroduzir dados desatualizados
+  // no próximo boot através do próprio mecanismo de emergency save.
+  if (!isActiveTab) return;
   try {
     const snapshot = {
-      version:        STATE_VERSION,
-      savedAt:        Date.now(),
-      configs:        state.configs,
-      filiais:        state.filiais,
-      materiais:      state.materiais,
-      entradas:       state.entradas,
-      saidas:         state.saidas,
-      lancamentos:    state.lancamentos,
-      sap:            [],  // excluído — chunks IDB são a fonte autoritativa
-      producao:       state.producao,
-      imports:        state.imports,
-      ocorrencias:    state.ocorrencias   || [],
-      acoesRelatorio: state.acoesRelatorio || []
+      version:           STATE_VERSION,
+      savedAt:           Date.now(),
+      configs:           state.configs,
+      filiais:           state.filiais,
+      materiais:         state.materiais,
+      entradas:          state.entradas,
+      saidas:            state.saidas,
+      lancamentos:       state.lancamentos,
+      sap:               [],  // excluído — chunks IDB são a fonte autoritativa
+      producao:          state.producao,
+      imports:           state.imports,
+      ocorrencias:       state.ocorrencias      || [],
+      acoesRelatorio:    state.acoesRelatorio   || [],
+      // Corrigido: estes dois campos faziam parte de saveSnapshotKeys mas
+      // não eram capturados aqui — ficavam vulneráveis a perda quando este
+      // snapshot de emergência era aplicado por cima do save do IDB.
+      notifications:     state.notifications    || [],
+      invJustificativas: state.invJustificativas || []
     };
     localStorage.setItem(legacyStateKey, JSON.stringify(snapshot));
     console.info('[Persist] Emergency save executado.');

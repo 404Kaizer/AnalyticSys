@@ -3143,6 +3143,11 @@ function setupModalCloseOnEscape() {
 }
 
 async function init() {
+  // Dispara a checagem de aba única ativa (Web Locks API) em paralelo com o
+  // resto do boot — não é aguardada (await) porque não deve atrasar o
+  // carregamento normal da tela; ela só decide se esta aba pode gravar.
+  if (typeof requestTabLock === 'function') requestTabLock();
+
   applyTheme(getSavedTheme());
   setTimeout(updateToolsTheme, 0); // sync theme buttons in dropdown
   restoreSidebarState();

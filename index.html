@@ -3757,6 +3757,22 @@
   </div>
 </div>
 
+<!-- Overlay: aba passiva (somente leitura) — exibido quando o sistema já
+     está aberto em outra aba, para evitar que duas abas gravem ao mesmo
+     tempo e uma sobrescreva os dados da outra. Ver requestTabLock() em
+     persist.js. -->
+<div class="tab-lock-overlay" id="tab-lock-overlay" aria-live="polite" aria-hidden="true">
+  <div class="tab-lock-card" role="alert">
+    <div class="tab-lock-icon" aria-hidden="true"><i class="ti ti-device-desktop-exclamation"></i></div>
+    <div class="tab-lock-title">Sistema aberto em outra aba</div>
+    <div class="tab-lock-text">
+      Para evitar perda de dados, esta aba ficou em modo somente leitura enquanto
+      houver outra aba deste sistema aberta. Feche a outra aba para voltar a
+      editar aqui — esta tela será liberada automaticamente, sem precisar recarregar.
+    </div>
+  </div>
+</div>
+
 
 
 
