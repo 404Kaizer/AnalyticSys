@@ -1914,69 +1914,93 @@ const _microFilter = {
   variacaoData: new Map()
 };
 
-// Guarda o último "results" completo (sem filtro) renderado, para permitir
-// recalcular as opções de cada dropdown considerando os demais filtros já
-// aplicados (estilo Excel), sem precisar re-rodar o cálculo da Visão Micro.
+// Guarda o último "results" completo (sem filtro), usado apenas para saber
+// se há dados (mostrar/ocultar a barra de filtros).
 let _microFilterResults = [];
 
 function _microFilterBar() { return document.getElementById('micro-filter-bar'); }
 
-// Linhas de "results" que passam nos filtros aplicados de Regional/Central,
-// exceto o da própria chave — usado tanto para essas duas dimensões quanto
-// como base para extrair Categoria/Material do recorte já filtrado.
-function _microOptionsSourceRows(key) {
-  const idx = getFilialLookupIndex();
-  return _microFilterResults.filter(r => {
-    if (key !== 'regional' && _microFilter.applied.regional.size) {
-      const found = idx.exact.get(normalizeText(r.central));
-      const reg = (found?.regional || '').trim();
-      if (!_microFilter.applied.regional.has(reg)) return false;
-    }
-    if (key !== 'central' && _microFilter.applied.central.size && !_microFilter.applied.central.has(r.central)) {
-      return false;
-    }
-    return true;
-  });
-}
-
-// Recalcula as opções de UMA chave considerando os filtros já aplicados nas
-// DEMAIS chaves (Regional/Central filtram linhas; Categoria/Material se
-// filtram mutuamente dentro dos lançamentos/SAP de cada linha).
+// Recalcula as opções de UMA chave (regional/central/categoria/material)
+// direto do DOM já renderizado (#an-micro-container), aplicando a MESMA
+// combinação de filtros que _applyMicroVisibility usa para mostrar/ocultar
+// linhas — ou seja, considera TODOS os filtros já aplicados: os outros 3
+// dropdowns de dimensão E também Saúde (variação) e Tipo de Variação
+// (desfalque/sobra). A chave da própria coluna sendo aberta é ignorada
+// (senão marcar um valor faria os demais valores da mesma coluna sumirem
+// do próprio dropdown). Se um material/central/regional não sobra em pé
+// depois de aplicar todos os outros filtros, ele não aparece como opção.
 function _microRecomputeOptions(key) {
-  const idx = getFilialLookupIndex();
-  const rows = _microOptionsSourceRows(key);
+  const appliedRegionals  = key === 'regional'  ? new Set() : _microFilter.applied.regional;
+  const appliedCentrals   = key === 'central'   ? new Set() : _microFilter.applied.central;
+  const appliedCategorias = key === 'categoria' ? new Set() : _microFilter.applied.categoria;
+  const appliedMaterials  = key === 'material'  ? new Set() : _microFilter.applied.material;
+  const varState   = _varFilter.applied;
+  const varActive  = _varFilterIsActive(varState);
+  const tipoActive = _tipoVarIsActive();
+  const tipoFilter = _tipoVarFilter.applied;
+  const tipoNivel  = _tipoVarFilter.nivelApplied;
 
-  if (key === 'central') {
-    _microFilter.options.central = [...new Set(rows.map(r => r.central).filter(Boolean))].sort();
-    return;
-  }
-  if (key === 'regional') {
-    _microFilter.options.regional = [...new Set(rows.map(r => {
-      const found = idx.exact.get(normalizeText(r.central));
-      return (found?.regional || '').trim();
-    }).filter(Boolean))].sort();
-    return;
-  }
+  const passesTipo = (diff, level) => {
+    if (!tipoActive) return true;
+    if (!tipoNivel.has(level)) return true;
+    const isDesfalque = diff < 0;
+    const isSobra     = diff > 0;
+    if (tipoFilter.has('desfalque') && tipoFilter.has('sobra')) return true;
+    if (tipoFilter.has('desfalque')) return isDesfalque;
+    if (tipoFilter.has('sobra'))     return isSobra;
+    return true;
+  };
 
-  const appliedMaterial  = _microFilter.applied.material;
-  const appliedCategoria = _microFilter.applied.categoria;
-  const mats = new Set();
-  const cats = new Set();
-  rows.forEach(r => {
-    [...(r.lancsNoPeriodo || []), ...(r.sapNoPeriodo || [])].forEach(rec => {
-      const cat = (rec.categoria || '').trim().toUpperCase();
-      const mat = rec.material || '';
-      if (key === 'material') {
-        if (appliedCategoria.size && !appliedCategoria.has(cat)) return;
-        if (mat) mats.add(mat);
-      } else if (key === 'categoria') {
-        if (appliedMaterial.size && !appliedMaterial.has(mat)) return;
-        if (cat) cats.add(cat);
+  const regionais  = new Set();
+  const centrais   = new Set();
+  const categorias = new Set();
+  const materiais  = new Set();
+
+  document.querySelectorAll('#an-micro-container .regional-group').forEach(group => {
+    const groupRegional = group.dataset.regional || '';
+    if (appliedRegionals.size && !appliedRegionals.has(groupRegional)) return;
+    if (tipoActive) {
+      const groupDiff = parseFloat(group.dataset.diff || '0');
+      if (!passesTipo(groupDiff, 'regional')) return;
+    }
+
+    let anyCardMatches = false;
+    group.querySelectorAll('.micro-filial-card').forEach(card => {
+      const header = card.querySelector('.micro-filial-name');
+      const centralName = header ? header.textContent.trim() : '';
+      if (appliedCentrals.size && !appliedCentrals.has(centralName)) return;
+      if (varActive) {
+        const cardLevel = card.dataset.healthLevel || 'none';
+        if (!varState.levels.has(cardLevel)) return;
       }
+      if (tipoActive) {
+        const cardDiff = parseFloat(card.dataset.diff || '0');
+        if (!passesTipo(cardDiff, 'central')) return;
+      }
+
+      let anyRowMatches = false;
+      card.querySelectorAll('tbody tr.material-row').forEach(row => {
+        const matCell = row.querySelector('td:first-child');
+        const matName = matCell ? matCell.textContent.trim() : '';
+        const matDiff = parseFloat(row.dataset.diff || '0');
+        const matCat  = (row.dataset.categoria || '').trim().toUpperCase();
+        if (appliedMaterials.size  && !appliedMaterials.has(matName)) return;
+        if (appliedCategorias.size && !appliedCategorias.has(matCat)) return;
+        if (!passesTipo(matDiff, 'material')) return;
+        if (matName) materiais.add(matName);
+        if (matCat)  categorias.add(matCat);
+        anyRowMatches = true;
+      });
+      if (!anyRowMatches) return;
+      if (centralName) centrais.add(centralName);
+      anyCardMatches = true;
     });
+    if (!anyCardMatches) return;
+    if (groupRegional) regionais.add(groupRegional);
   });
-  if (key === 'material')  _microFilter.options.material  = [...mats].sort();
-  if (key === 'categoria') _microFilter.options.categoria = [...cats].sort();
+
+  const result = { regional: regionais, central: centrais, categoria: categorias, material: materiais }[key];
+  _microFilter.options[key] = [...result].sort();
 }
 
 /** Populate filter options from the rendered results data */
