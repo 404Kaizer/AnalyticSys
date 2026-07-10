@@ -163,7 +163,11 @@ async function loadSapChunks(db) {
 const SAP_PERSIST_FIELDS = [
   'movimento','peso','material','central','dtLanc','dtDoc','ref',
   'documento','usuario','deposito','dtReg','valorTotal','custoUnit',
-  'categoria','um','importId','fonte'
+  'categoria','um','importId','fonte',
+  // Adicionados: sem esses campos, todo reload perdia materialOriginal/
+  // centralOriginal (quebrando lookups de cadastro e reversão) e createdAt/
+  // txtMov dos registros SAP persistidos.
+  'materialOriginal','centralOriginal','createdAt','txtMov'
 ];
 function compactSapRecords(records) {
   if (!Array.isArray(records) || records.length === 0) return records;

@@ -3267,7 +3267,11 @@ function _fpBaseLancamento(r) {
   return [normalizeText(r.central || ''), normalizeText(r.material || ''), r.dtLanc || ''].join('|');
 }
 function _fpBaseSap(r) {
-  return [normalizeText(r.central || ''), normalizeText(r.material || ''), r.documento || '', r.movimento || '', r.dtLanc || ''].join('|');
+  // Correção (jul/2026): 'documento' removido — o próprio SAP gera um novo
+  // número de documento a cada reenvio da mesma movimentação (confirmado pela
+  // lógica já existente em getSapDuplicateKeys, ui.js). 'ref'+'deposito' são
+  // mais estáveis e já são usados ali como parte da identidade real do registro.
+  return [normalizeText(r.central || ''), normalizeText(r.material || ''), r.movimento || '', r.dtLanc || '', (r.ref || '').trim(), (r.deposito || '').trim()].join('|');
 }
 function _fpBaseProducao(r) {
   return [normalizeText(r.central || ''), r.mes || ''].join('|');
@@ -3485,15 +3489,16 @@ async function _mergeWithConflictCheck(modulo, incoming) {
     await nextFrame(); // garante que o browser pinta a mensagem antes de bloquear no merge
   }
 
-  // Melhoria 2: para o módulo SAP, usa uma cópia compactada do existing no _mergeDedup.
-  // A compactação (que remove campos extras não persistidos como createdAt) reduz o
-  // volume de dados percorridos pelo merge em memória, tornando-o mais rápido em
-  // arquivos grandes. O state.sap em memória NÃO é alterado aqui — a cópia compactada
-  // é usada apenas como entrada do merge; o resultado retornado ainda contém os campos
-  // completos dos registros do incoming (que chegam com createdAt do stamp()).
-  const existingForMerge = (modulo === 'SAP')
-    ? compactSapRecords(state[stateKey] || [])
-    : (state[stateKey] || []);
+  // Correção (jul/2026): usar SEMPRE o array completo de existing, sem compactar.
+  // A compactação já foi usada aqui para SAP e causava um bug sério: o resultado
+  // do merge inclui `kept` (registros existentes que não colidem com o incoming),
+  // e `kept` vem diretamente do array passado como `existing` — então toda vez
+  // que ele estava compactado, TODOS os registros SAP não tocados pela importação
+  // atual perdiam materialOriginal/centralOriginal/createdAt/txtMov permanentemente
+  // em memória (corrompendo o state a cada importação, não só a persistência).
+  // A compactação deve existir só para reduzir o volume gravado em disco
+  // (saveSapChunks/buildStateSnapshot), nunca para o merge em memória.
+  const existingForMerge = state[stateKey] || [];
 
   const { result, added } = _mergeDedup(existingForMerge, resolvedIncoming, fp);
   _importAddedCount += added;
@@ -3544,13 +3549,18 @@ function _fpLancamento(r) {
 }
 
 function _fpSap(r) {
+  // Correção (jul/2026): 'documento' removido da chave — ver nota em _fpBaseSap.
+  // Chave agora replica a mesma composição já usada e validada em produção por
+  // getSapDuplicateKeys (ui.js, detecção de "duplicatas reais"): central + material
+  // + movimento + dtLanc + peso + ref + deposito.
   return [
     normalizeText(r.central || ''),
     normalizeText(r.material || ''),
-    r.documento || '',
     r.movimento || '',
     r.dtLanc || '',
-    String(num(r.peso))
+    String(num(r.peso)),
+    (r.ref || '').trim(),
+    (r.deposito || '').trim()
   ].join('|');
 }
 
@@ -3566,15 +3576,21 @@ function _fpProducao(r) {
 // Retorna { result, added } onde added = quantos registros foram de fato inseridos.
 function _mergeDedup(existing, incoming, fpFn) {
   if (!incoming.length) return { result: existing, added: 0 };
-  const incomingFps = new Set(incoming.map(fpFn));
+  // Correção (jul/2026): dedup interno do próprio lote incoming. Sem isso, se o
+  // arquivo importado trouxer duas linhas com o mesmo fingerprint (arquivo com
+  // linha duplicada na origem), ambas entravam como "novas" — mesmo com a chave
+  // de fingerprint correta. Mantém a ÚLTIMA ocorrência de cada fingerprint no
+  // arquivo (mesmo critério de "novo substitui" já usado no restante da função).
+  const incomingDeduped = [...new Map(incoming.map(r => [fpFn(r), r])).values()];
+  const incomingFps = new Set(incomingDeduped.map(fpFn));
   // Monta mapa de fingerprint → registro existente para recuperar o importId original
   const existingByFp = new Map(existing.map(r => [fpFn(r), r]));
   // Novos registros que não existem no state atual — entram com o importId da importação atual
-  const trulyNew = incoming.filter(r => !existingByFp.has(fpFn(r)));
+  const trulyNew = incomingDeduped.filter(r => !existingByFp.has(fpFn(r)));
   // Registros que já existiam — são atualizados com os dados novos MAS preservam
   // o importId original, evitando que uma reimportação parcial "sequestre" registros
   // de importações anteriores e os remova junto ao excluir a importação nova.
-  const updatedExisting = incoming
+  const updatedExisting = incomingDeduped
     .filter(r => existingByFp.has(fpFn(r)))
     .map(r => {
       const original = existingByFp.get(fpFn(r));
