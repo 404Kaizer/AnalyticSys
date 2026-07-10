@@ -3406,6 +3406,7 @@ const _BKP_MODULES = [
   { key: 'configs',     label: 'Configurações',         icon: 'ti-settings',        color: 'var(--text2)'  },
   { key: 'ocorrencias', label: 'Ocorrências',           icon: 'ti-alert-circle',    color: 'var(--red)'    },
   { key: 'imports',     label: 'Histórico de Importações', icon: 'ti-history',     color: 'var(--text3)'  },
+  { key: 'invJustificativas', label: 'Inventário — Justificativas', icon: 'ti-clipboard-check', color: 'var(--amber)' },
 ];
 
 // Módulos selecionados para exportar (persiste durante a sessão do modal)
@@ -3749,6 +3750,15 @@ async function _restaurarModulosConfirmar() {
     if (typeof invalidateAllSearchIndexes === 'function') invalidateAllSearchIndexes();
     if (typeof reaplicarPadronizacaoMateriais === 'function') reaplicarPadronizacaoMateriais();
     _lstepSet('bkp-index', 'done'); _lbarSet(70);
+
+    // Se as justificativas do Inventário foram restauradas, força o módulo a
+    // re-hidratar seu mapa em memória a partir do novo state — senão o
+    // próximo salvamento (_invSyncJustificativasToState) sobrescreveria os
+    // dados recém-restaurados. Fica após o rebuild de índices para que a
+    // eventual regeneração da tabela use os índices já atualizados.
+    if (toRestore.some(m => m.key === 'invJustificativas') && typeof window._invReloadJustificativas === 'function') {
+      window._invReloadJustificativas();
+    }
 
     // Restaura dados auxiliares do localStorage
     const lsSet = (key, val) => { try { if (val !== null && val !== undefined) localStorage.setItem(key, JSON.stringify(val)); } catch(e) {} };

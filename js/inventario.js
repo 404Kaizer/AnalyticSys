@@ -45,6 +45,28 @@
     if (typeof window.persist === 'function') window.persist();
   }
 
+  // Força a re-hidratação do mapa em memória a partir do state. Necessária
+  // após um RESTAURAR de backup, que substitui state.invJustificativas por
+  // fora do módulo: sem isto, o mapa em memória continuaria com os dados
+  // antigos e a próxima _invSyncJustificativasToState() (ao salvar qualquer
+  // justificativa) sobrescreveria de volta o que foi restaurado, perdendo o
+  // backup silenciosamente. Também regenera a tabela se já houver um
+  // resultado do Inventário na tela, para refletir os estados restaurados.
+  window._invReloadJustificativas = function() {
+    _invHidratado = false;
+    _invHydrateJustificativas();
+    try {
+      // Só regenera se o usuário já tem uma tabela do Inventário aberta
+      // (id 'inv-table'); caso contrário, o mapa recém-hidratado já basta e
+      // a tabela será montada corretamente na próxima geração.
+      if (document.getElementById('inv-table') && typeof window.invGerar === 'function') {
+        window.invGerar();
+      }
+    } catch (err) {
+      console.warn('[Inventário] Falha ao regenerar tabela após restore de justificativas:', err);
+    }
+  };
+
   // 3 estados do botão/linha de justificativa (ver invRenderTabela):
   // "justificar" (cinza, nada preenchido) → "justificado" (amarelo, os 4
   // campos obrigatórios preenchidos, falta só o Documento SAP opcional) →
