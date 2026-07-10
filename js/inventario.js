@@ -1010,12 +1010,13 @@
 
   // 3 estados (compartilhado entre invRenderTabela e o resumo de progresso
   // em invAtualizarKpis): "justificar" (nada preenchido) → "justificado"
-  // (os 4 campos obrigatórios preenchidos, Documento SAP ainda não) →
-  // "ajustado" (tudo preenchido, incluindo Documento SAP).
+  // (Operacional+Fiscal+Saldo preenchidos — Custo Médio SAP e Documento
+  // SAP são opcionais, não bloqueiam esse estado) → "ajustado" (tudo
+  // preenchido, incluindo Custo Médio SAP e Documento SAP).
   function _invEstadoDaLinha(j) {
-    const hasJust = !!(j && j.op && j.fiscal && j.saldo && j.custoMedioSap);
-    const hasDoc  = !!(j && j.documentoSap && String(j.documentoSap).trim() !== '');
-    return !hasJust ? 'justificar' : (hasDoc ? 'ajustado' : 'justificado');
+    const hasJust = !!(j && j.op && j.fiscal && j.saldo);
+    const hasTudo = !!(hasJust && j.custoMedioSap && j.documentoSap && String(j.documentoSap).trim() !== '');
+    return !hasJust ? 'justificar' : (hasTudo ? 'ajustado' : 'justificado');
   }
 
   // ── Filtrar ──────────────────────────────────────────────
@@ -1591,9 +1592,8 @@
     const op         = document.getElementById('inv-j-op')?.value.trim();
     const fiscal     = document.getElementById('inv-j-fiscal')?.value.trim();
     const saldo      = document.getElementById('inv-j-saldo')?.value;
-    const custoSap   = document.getElementById('inv-j-custo-sap')?.value;
-    if (!op || !fiscal || saldo === '' || saldo == null || custoSap === '' || custoSap == null) {
-      return 'Preencha justificativa operacional, justificativa fiscal, saldo justificado e custo médio SAP antes de salvar.';
+    if (!op || !fiscal || saldo === '' || saldo == null) {
+      return 'Preencha justificativa operacional, justificativa fiscal e saldo justificado antes de salvar.';
     }
     return null;
   }
@@ -1807,7 +1807,7 @@
             </div>
           </div>
           <div class="oc-form-group">
-            <label class="oc-label">Custo Médio SAP (R$/kg) <span class="oc-required">*</span> <span class="oc-hint">buscado pelo usuário no SAP, alimenta a coluna Custo Médio e o card Custo Total SAP</span></label>
+            <label class="oc-label">Custo Médio SAP (R$/kg) <span class="oc-hint">opcional — buscado pelo usuário no SAP, alimenta a coluna Custo Médio e o card Custo Total SAP</span></label>
             <input id="inv-j-custo-sap" type="number" step="0.01" class="oc-input" placeholder="0,00" value="${j.custoMedioSap||''}" oninput="_invAtualizarCustoSapCard(${row.varKg})">
           </div>
           <div class="oc-form-group">
@@ -1868,7 +1868,7 @@
   }
 
   function _invLoteObrigatoriosPreenchidos(v) {
-    return !!(v.op && v.fiscal && v.saldo !== '' && v.saldo != null && v.custoSap !== '' && v.custoSap != null);
+    return !!(v.op && v.fiscal && v.saldo !== '' && v.saldo != null);
   }
 
   // Atualiza só o badge de status + o habilitado/desabilitado do botão
@@ -1912,13 +1912,38 @@
   window._invLoteRegistrar = function(k) {
     const vals = _invLoteLerValores(k);
     if (!_invLoteObrigatoriosPreenchidos(vals)) {
-      toast('Preencha Operacional, Fiscal, Saldo e Custo Médio SAP antes de registrar essa linha.', 'error');
+      toast('Preencha Operacional, Fiscal e Saldo antes de registrar essa linha.', 'error');
       return;
     }
     _invApplyJustValues(k, vals);
     _invLoteState[k] = { registrado: true, snapshot: vals };
     _invLoteAtualizarLinhaVisual(k);
     toast('Linha registrada.', 'success');
+  };
+
+  // Registra de uma vez toda linha selecionada que já está com os campos
+  // obrigatórios preenchidos e ainda não registrada. Pula silenciosamente
+  // (sem travar as demais) as que estão incompletas — conta pra avisar no
+  // resumo final, sem toast por linha, pra não empilhar dezenas de toasts.
+  window._invLoteRegistrarTodos = function() {
+    let registradas = 0, incompletas = 0;
+    _invLoteKeys.forEach(k => {
+      const st = _invLoteState[k] || {};
+      if (st.registrado) return;
+      const vals = _invLoteLerValores(k);
+      if (!_invLoteObrigatoriosPreenchidos(vals)) { incompletas++; return; }
+      _invApplyJustValues(k, vals);
+      _invLoteState[k] = { registrado: true, snapshot: vals };
+      registradas++;
+    });
+    _invLoteKeys.forEach(k => _invLoteAtualizarLinhaVisual(k));
+    if (registradas === 0 && incompletas === 0) {
+      toast('Todas as linhas já estavam registradas.', 'success');
+    } else {
+      const partes = [`${registradas} registrada${registradas===1?'':'s'}`];
+      if (incompletas) partes.push(`${incompletas} pulada${incompletas===1?'':'s'} (campos obrigatórios incompletos)`);
+      toast(partes.join(', ') + '.', incompletas && !registradas ? 'error' : 'success');
+    }
   };
 
   // Copia o valor do campo `campo` da linha idxOrigem pras demais linhas
@@ -2053,8 +2078,9 @@
         <div class="modal-body" style="max-height:70vh;overflow-y:auto;overflow-x:hidden">
           ${cardsHtml}
         </div>
-        <div class="modal-footer" style="justify-content:flex-end">
+        <div class="modal-footer" style="justify-content:space-between">
           <button class="btn" onclick="_invLoteTentarFechar()">Fechar</button>
+          <button class="btn btn-primary" onclick="_invLoteRegistrarTodos()"><i class="ti ti-stack-2"></i> Registrar Todos</button>
         </div>
       </div>`;
     document.body.appendChild(modal);
