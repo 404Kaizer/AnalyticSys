@@ -2004,6 +2004,26 @@
               </div>
 
               <div class="micro-filter-group">
+                <button class="micro-filter-trigger" id="aus-ft-categoria" onclick="toggleAusFilter('categoria')">
+                  <i class="ti ti-tag"></i>
+                  <span id="aus-ft-categoria-label">Categoria</span>
+                  <i class="ti ti-chevron-down micro-filter-chev" id="aus-fc-categoria"></i>
+                </button>
+                <div class="micro-filter-dropdown" id="aus-fd-categoria">
+                  <div class="micro-filter-search-wrap">
+                    <i class="ti ti-search"></i>
+                    <input class="micro-filter-search" id="aus-fs-categoria" type="text" placeholder="Buscar categoria…" oninput="filterAusOptions('categoria', this.value)">
+                  </div>
+                  <div class="micro-filter-options" id="aus-fo-categoria"></div>
+                  <div class="micro-filter-footer">
+                    <button class="btn btn-filter-clear" onclick="clearAusFilterSingle('categoria')"><i class="ti ti-filter-off"></i> Limpar</button>
+                    <button class="btn" onclick="cancelAusFilter('categoria')"><i class="ti ti-x"></i> Cancelar</button>
+                    <button class="btn btn-primary" onclick="applyAusFilter('categoria')"><i class="ti ti-check"></i> Aplicar</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="micro-filter-group">
                 <button class="micro-filter-trigger" id="aus-ft-mat" onclick="toggleAusFilter('mat')">
                   <i class="ti ti-box"></i>
                   <span id="aus-ft-mat-label">Material</span>

@@ -2125,15 +2125,19 @@ function renderAusencias() {
 
   const allRegionais = [...new Set(ausencias.map(a => a.regional))].sort();
   const allCentrals  = [...new Set(ausencias.map(a => a.central))].sort();
+  const allCategorias = [...new Set(ausencias.map(a => a.categoria))].sort();
   const allMats      = [...new Set(ausencias.map(a => a.mat))].sort();
   _ausFilter.options.regional = allRegionais;
   _ausFilter.options.central  = allCentrals;
+  _ausFilter.options.categoria = allCategorias;
   _ausFilter.options.mat      = allMats;
   _ausFilterBuildOptions('regional');
   _ausFilterBuildOptions('central');
+  _ausFilterBuildOptions('categoria');
   _ausFilterBuildOptions('mat');
   _ausFilterSyncLabel('regional');
   _ausFilterSyncLabel('central');
+  _ausFilterSyncLabel('categoria');
   _ausFilterSyncLabel('mat');
   _ausFilterSyncClear();
 
@@ -2141,6 +2145,7 @@ function renderAusencias() {
   const filtered = ausencias.filter(a =>
     (!_ausFilter.applied.regional.size || _ausFilter.applied.regional.has(a.regional)) &&
     (!_ausFilter.applied.central.size  || _ausFilter.applied.central.has(a.central))   &&
+    (!_ausFilter.applied.categoria.size || _ausFilter.applied.categoria.has(a.categoria)) &&
     (!_ausFilter.applied.mat.size      || _ausFilter.applied.mat.has(a.mat))            &&
     (!_ausFilter.ocultarZerados        || !a.estoqueZerado)
   );
@@ -2367,9 +2372,9 @@ function initAusencias() {
 
 // ── Aus filter state (pending/applied pattern) ──────────────
 const _ausFilter = {
-  options: { regional: [], central: [], mat: [] },
-  applied: { regional: new Set(), central: new Set(), mat: new Set() },
-  pending: { regional: new Set(), central: new Set(), mat: new Set() },
+  options: { regional: [], central: [], categoria: [], mat: [] },
+  applied: { regional: new Set(), central: new Set(), categoria: new Set(), mat: new Set() },
+  pending: { regional: new Set(), central: new Set(), categoria: new Set(), mat: new Set() },
   ocultarZerados: false
 };
 
@@ -2586,7 +2591,7 @@ function _ausFilterSyncLabel(key) {
   const btn   = document.getElementById(`aus-ft-${key}`);
   const label = document.getElementById(`aus-ft-${key}-label`);
   if (!label || !btn) return;
-  const keyLabel = key === 'regional' ? 'Regional' : key === 'central' ? 'Central' : 'Material';
+  const keyLabel = key === 'regional' ? 'Regional' : key === 'central' ? 'Central' : key === 'categoria' ? 'Categoria' : 'Material';
   const applied  = _ausFilter.applied[key];
   if (!applied.size) {
     label.innerHTML = keyLabel;
@@ -2604,7 +2609,7 @@ function _ausFilterSyncLabel(key) {
 function _ausFilterSyncClear() {
   const btn = document.getElementById('aus-filter-clear-btn');
   if (!btn) return;
-  const hasFilter = _ausFilter.applied.regional.size || _ausFilter.applied.central.size || _ausFilter.applied.mat.size || _ausFilter.ocultarZerados;
+  const hasFilter = _ausFilter.applied.regional.size || _ausFilter.applied.central.size || _ausFilter.applied.categoria.size || _ausFilter.applied.mat.size || _ausFilter.ocultarZerados;
   btn.disabled = !hasFilter;
   btn.classList.toggle('active', !!hasFilter);
 }
@@ -2612,7 +2617,7 @@ function _ausFilterSyncClear() {
 function toggleAusFilter(key) {
   const dd   = document.getElementById(`aus-fd-${key}`);
   const chev = document.getElementById(`aus-fc-${key}`);
-  const keys = ['regional', 'central', 'mat'];
+  const keys = ['regional', 'central', 'categoria', 'mat'];
   // Close others
   keys.filter(k => k !== key).forEach(k => {
     document.getElementById(`aus-fd-${k}`)?.classList.remove('open');
@@ -2660,14 +2665,16 @@ function clearAusFilterSingle(key) {
 function clearAusFilters() {
   _ausFilter.applied.regional = new Set();
   _ausFilter.applied.central  = new Set();
+  _ausFilter.applied.categoria = new Set();
   _ausFilter.applied.mat      = new Set();
   _ausFilter.pending.regional = new Set();
   _ausFilter.pending.central  = new Set();
+  _ausFilter.pending.categoria = new Set();
   _ausFilter.pending.mat      = new Set();
   _ausFilter.ocultarZerados   = false;
   const btnZ = document.getElementById('aus-ft-ocultar-zerados');
   if (btnZ) btnZ.classList.remove('active');
-  ['regional','central','mat'].forEach(k => _ausFilterSyncLabel(k));
+  ['regional','central','categoria','mat'].forEach(k => _ausFilterSyncLabel(k));
   _ausFilterSyncClear();
   renderAusencias();
 }
