@@ -41,6 +41,12 @@ function excluirImportacao(importId) {
       confirmarComUndo({
         message: `"${nomeArquivo}" excluída`,
         action: () => {
+          // Marca a exclusão de forma SÍNCRONA antes de qualquer outra coisa —
+          // sobrevive a um fechamento/crash da aba mesmo que aconteça antes do
+          // persist() (debounced) chegar a rodar. Ver reconcilePendingDeletes()
+          // em persist.js.
+          if (typeof markImportPendingDelete === 'function') markImportPendingDelete(importId);
+
           // Registros manuais (fonte='manual') não têm importId e nunca devem
           // ser removidos por esta operação — a guarda explícita protege contra
           // casos futuros onde importId possa ser undefined por outro motivo.
@@ -66,6 +72,10 @@ function excluirImportacao(importId) {
           renderAll();
         },
         undo: () => {
+          // A exclusão foi revertida — remove a marca para que um fechamento
+          // logo em seguida não reaplique a exclusão no próximo boot.
+          if (typeof unmarkImportPendingDelete === 'function') unmarkImportPendingDelete(importId);
+
           state.entradas    = snapshotEntradas;
           state.saidas      = snapshotSaidas;
           state.lancamentos = snapshotLancamentos;

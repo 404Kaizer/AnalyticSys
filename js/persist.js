@@ -15,6 +15,99 @@ let persistInFlight = false;
 let persistQueued = false;
 let stateHydrated = false;
 
+// ── Tombstone de exclusões pendentes ──────────────────────────────────────
+// Problema: excluirImportacao() atualiza o state em memória e agenda persist()
+// (debounce de 1500ms, seguido de uma gravação que pode levar segundos com
+// muitos registros SAP). Se a aba fechar/recarregar antes disso completar, a
+// exclusão nunca chega a ser gravada no IndexedDB — no próximo boot, os dados
+// "excluídos" reaparecem (chunks SAP antigos intactos, entre outros).
+// beforeunload/pagehide não resolvem: não disparam em fechamento abrupto
+// (crash, encerrar processo) e mesmo quando disparam, o emergency save
+// existente exclui o SAP de propósito (ver _emergencySave).
+// Solução: grava uma marca SÍNCRONA no localStorage no exato momento da
+// exclusão — sobrevive a fechamentos abruptos porque não depende de nenhum
+// evento de saída. No próximo boot, reconcilePendingDeletes() confere se os
+// dados marcados como excluídos ainda estão presentes no que foi carregado;
+// se estiverem, refaz a exclusão em memória e força uma gravação corretiva.
+const PENDING_DELETES_KEY = 'central_analise_pending_deletes_v1';
+
+function markImportPendingDelete(importId) {
+  if (!importId) return;
+  try {
+    const raw = localStorage.getItem(PENDING_DELETES_KEY);
+    const list = raw ? JSON.parse(raw) : [];
+    if (Array.isArray(list) && !list.includes(importId)) {
+      list.push(importId);
+      localStorage.setItem(PENDING_DELETES_KEY, JSON.stringify(list));
+    }
+  } catch (err) {
+    console.warn('[Persist] Falha ao gravar tombstone de exclusão:', err);
+  }
+}
+
+function unmarkImportPendingDelete(importId) {
+  if (!importId) return;
+  try {
+    const raw = localStorage.getItem(PENDING_DELETES_KEY);
+    if (!raw) return;
+    const list = JSON.parse(raw).filter(id => id !== importId);
+    if (list.length) localStorage.setItem(PENDING_DELETES_KEY, JSON.stringify(list));
+    else localStorage.removeItem(PENDING_DELETES_KEY);
+  } catch (err) {
+    console.warn('[Persist] Falha ao limpar tombstone de exclusão:', err);
+  }
+}
+
+// Chamado no boot, depois que o estado salvo foi aplicado. Se algum importId
+// marcado como "excluído" ainda aparece nos dados carregados, é sinal de que
+// a exclusão não chegou a ser persistida antes do fechamento anterior — refaz
+// o filtro em memória (mesma lógica de excluirImportacao) e grava de novo.
+async function reconcilePendingDeletes() {
+  let list;
+  try {
+    const raw = localStorage.getItem(PENDING_DELETES_KEY);
+    list = raw ? JSON.parse(raw) : [];
+  } catch (err) {
+    return;
+  }
+  if (!Array.isArray(list) || !list.length) return;
+
+  const removeByImport = arr => (arr || []).filter(r => r.fonte === 'manual' || !list.includes(r.importId));
+  let touched = false;
+  ['entradas', 'saidas', 'lancamentos', 'sap', 'producao', 'filiais', 'materiais'].forEach(key => {
+    const before = (state[key] || []).length;
+    state[key] = removeByImport(state[key]);
+    if (state[key].length !== before) touched = true;
+  });
+  if (Array.isArray(state.imports)) {
+    const beforeImports = state.imports.length;
+    state.imports = state.imports.filter(r => !list.includes(r.id));
+    if (state.imports.length !== beforeImports) touched = true;
+  }
+
+  if (!touched) {
+    // Nada para corrigir — a exclusão já tinha sido persistida corretamente.
+    try { localStorage.removeItem(PENDING_DELETES_KEY); } catch (_) {}
+    return;
+  }
+
+  console.warn('[Persist] Reconciliando exclusão(ões) que não haviam sido persistidas antes do fechamento anterior:', list);
+  if (typeof invalidateMaterialLookup === 'function') invalidateMaterialLookup();
+  if (typeof invalidateFilialLookup === 'function') invalidateFilialLookup();
+  if (typeof invalidateLancIndex === 'function') invalidateLancIndex();
+  if (typeof invalidateSapIndex === 'function') invalidateSapIndex();
+  if (typeof invalidateSaidasIndex === 'function') invalidateSaidasIndex();
+  if (typeof invalidateAllSearchIndexes === 'function') invalidateAllSearchIndexes();
+
+  const ok = await persistStateNow().catch(() => false);
+  if (ok) {
+    try { localStorage.removeItem(PENDING_DELETES_KEY); } catch (_) {}
+  }
+  // Se não conseguiu gravar agora (ex.: aba ainda não promovida a ativa), a
+  // marca permanece — o estado em memória desta sessão já está corrigido, e
+  // o próximo boot tenta reconciliar (e gravar) de novo.
+}
+
 // ── Controle de aba única ativa (Web Locks API) ───────────────────────────
 // Problema: com duas abas abertas, cada uma mantém seu próprio `state` em
 // memória. Como persistStateNow() sempre grava o snapshot COMPLETO (não é
@@ -99,17 +192,8 @@ async function saveSapChunks(db, records) {
   const compacted = compactSapRecords(records);
   const totalChunks = Math.ceil(compacted.length / SAP_CHUNK_SIZE) || 1;
 
-  // Apaga chunks antigos que possam ter sobrado de uma importação menor
   const oldMeta = await idbGet(db, SAP_META_KEY).catch(() => null);
   const oldChunks = oldMeta?.totalChunks || 0;
-  if (oldChunks > totalChunks) {
-    const tx = db.transaction(IDB_STORE, 'readwrite');
-    const store = tx.objectStore(IDB_STORE);
-    for (let i = totalChunks; i < oldChunks; i++) {
-      store.delete(SAP_CHUNK_KEY + i);
-    }
-    await new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = rej; });
-  }
 
   // Grava chunks novos em paralelo (batches de 10 para não travar a thread)
   const BATCH = 10;
@@ -122,13 +206,36 @@ async function saveSapChunks(db, records) {
     await Promise.all(writes);
   }
 
-  // Grava metadata
+  // Grava metadata — SÓ DEPOIS dos chunks novos estarem gravados.
   await idbPut(db, SAP_META_KEY, {
     totalChunks,
     totalRecords: compacted.length,
     savedAt: Date.now(),
     version: STATE_VERSION
   });
+
+  // Apaga chunks antigos que possam ter sobrado de uma importação/exclusão que
+  // reduziu o total de registros. Reordenado (jul/2026) para rodar por ÚLTIMO,
+  // como limpeza best-effort: antes, isso rodava ANTES da escrita dos chunks
+  // novos — uma interrupção nesse meio (fechamento da aba, crash) deixava o
+  // meta.totalChunks antigo apontando para chunks já apagados, corrompendo o
+  // próximo load ("chunks ausentes"). Agora, na pior hipótese de interrupção
+  // (durante esta limpeza), os chunks excedentes antigos ficam apenas órfãos
+  // — inofensivos, e limpos automaticamente na próxima gravação bem-sucedida —
+  // o dado nunca fica inconsistente.
+  if (oldChunks > totalChunks) {
+    try {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      const store = tx.objectStore(IDB_STORE);
+      for (let i = totalChunks; i < oldChunks; i++) {
+        store.delete(SAP_CHUNK_KEY + i);
+      }
+      await new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = rej; });
+    } catch (err) {
+      // Best-effort: se falhar, os chunks órfãos são limpos na próxima gravação.
+      console.warn('[Persist] Falha ao limpar chunks SAP excedentes (não crítico):', err);
+    }
+  }
 
   console.info(`[Persist] SAP: ${compacted.length} registros salvos em ${totalChunks} chunk${totalChunks!==1?'s':''}`);
 }
@@ -498,6 +605,11 @@ async function loadState() {
   } else {
     stateHydrated = true;
   }
+
+  // Reconcilia exclusões que ficaram pendentes de um fechamento/crash anterior
+  // (ver comentário em reconcilePendingDeletes). Roda sempre, mesmo sem estado
+  // carregado, para limpar uma tombstone órfã se for o caso.
+  await reconcilePendingDeletes();
 }
 
 // ── Aba única ativa (Web Locks API) ───────────────────────────────────────
