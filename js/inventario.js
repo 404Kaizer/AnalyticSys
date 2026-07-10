@@ -112,14 +112,15 @@
     // "Pendentes" (que abria um painel separado) — agora filtra a própria
     // tabela, igual aos demais toggles.
     onlyPendentes: false,
-    // Toggle simples: mostra só itens com pelo menos 1 categoria de
-    // Divergência identificada (registro manual, duplicidade, pendência de
-    // integração SAP, ocorrência operacional aberta — ver r.divergencias/
-    // r.divCount, calculados em invGerar). Mesmo padrão do onlyPendentes:
-    // fica de FORA de _invMatchesBaseFilters de propósito, pra o badge de
-    // contagem (inv-divergencias-count) mostrar quantas linhas TERIAM
-    // achados dentro do recorte atual, sem "zerar" a própria contagem
-    // quando o toggle já está ligado.
+    // Toggle de 3 estados: false (desligado) -> 'com' (só itens com pelo
+    // menos 1 categoria de Divergência identificada — registro manual,
+    // duplicidade, pendência de integração SAP, ocorrência operacional
+    // aberta — ver r.divergencias/r.divCount, calculados em invGerar) ->
+    // 'sem' (só itens SEM nenhuma divergência) -> volta pra false. Mesmo
+    // padrão do onlyPendentes: fica de FORA de _invMatchesBaseFilters de
+    // propósito, pra o badge de contagem (inv-divergencias-count) mostrar
+    // quantas linhas TERIAM achados dentro do recorte atual, sem "zerar" a
+    // própria contagem quando o toggle já está ligado.
     onlyDivergencias: false
   };
 
@@ -144,7 +145,8 @@
       if (_invFilter.onlyIniAusente && !r.estoqueIniMissing) return false;
       if (_invFilter.onlyFimAusente && !r.estoqueFimMissing) return false;
       if (_invFilter.onlyPendentes && !_invIsPendente(r)) return false;
-      if (_invFilter.onlyDivergencias && !(r.divCount > 0)) return false;
+      if (_invFilter.onlyDivergencias === 'com' && !(r.divCount > 0)) return false;
+      if (_invFilter.onlyDivergencias === 'sem' && !(r.divCount === 0)) return false;
       return true;
     });
   }
@@ -321,11 +323,12 @@
     invAtualizarAlertas();
   };
 
-  // Toggle "Só Divergências" — mostra só itens com pelo menos 1 categoria
-  // de Divergência identificada (r.divCount > 0). Mesmo padrão dos demais
-  // toggles simples do módulo.
+  // Toggle "Só Divergências" — cicla entre 3 estados: desligado -> só itens
+  // COM pelo menos 1 categoria de Divergência identificada (r.divCount > 0)
+  // -> só itens SEM nenhuma divergência (r.divCount === 0) -> desligado.
   window.invToggleOnlyDivergencias = function() {
-    _invFilter.onlyDivergencias = !_invFilter.onlyDivergencias;
+    _invFilter.onlyDivergencias = _invFilter.onlyDivergencias === false ? 'com'
+      : (_invFilter.onlyDivergencias === 'com' ? 'sem' : false);
     _invSyncDivergenciasBtn();
     _invSyncClearBtn();
     invFiltrar();
@@ -353,7 +356,20 @@
 
   function _invSyncDivergenciasBtn() {
     const btn = document.getElementById('imft-divergencias');
-    if (btn) btn.classList.toggle('active', _invFilter.onlyDivergencias);
+    if (!btn) return;
+    const state = _invFilter.onlyDivergencias;
+    btn.classList.toggle('active', state !== false);
+    btn.classList.toggle('inv-div-sem', state === 'sem');
+    const label = document.getElementById('imft-divergencias-label');
+    if (label) label.textContent = state === 'sem' ? 'Só Sem Divergências' : 'Só Divergências';
+    btn.title = state === 'sem'
+      ? 'Mostra só itens SEM nenhuma causa de variação identificada'
+      : 'Mostra só itens com possíveis causas da variação identificadas (registro manual, duplicidade, pendência de integração SAP ou ocorrência aberta)';
+    const color = state === 'sem' ? 'var(--green, #10b981)' : 'var(--accent)';
+    const icon = document.getElementById('imft-divergencias-icon');
+    if (icon) icon.style.color = color;
+    const badge = document.getElementById('inv-divergencias-count');
+    if (badge) badge.style.background = color;
   }
 
   // ── Modo seleção (checkboxes) — pra "Justificar em lote" ────
@@ -1046,7 +1062,8 @@
     invFiltered = invRows.filter(r => {
       if (!_invMatchesBaseFilters(r)) return false;
       if (_invFilter.onlyPendentes && !_invIsPendente(r)) return false;
-      if (_invFilter.onlyDivergencias && !(r.divCount > 0)) return false;
+      if (_invFilter.onlyDivergencias === 'com' && !(r.divCount > 0)) return false;
+      if (_invFilter.onlyDivergencias === 'sem' && !(r.divCount === 0)) return false;
       return true;
     });
     // apply current sort
@@ -1357,9 +1374,12 @@
     const badge = document.getElementById('inv-alertas-count');
     if (badge) badge.textContent = pendentes.length;
 
-    const comDivergencias = invRows.filter(r => _invMatchesBaseFilters(r) && r.divCount > 0);
     const divBadge = document.getElementById('inv-divergencias-count');
-    if (divBadge) divBadge.textContent = comDivergencias.length;
+    if (divBadge) {
+      const sem = _invFilter.onlyDivergencias === 'sem';
+      const count = invRows.filter(r => _invMatchesBaseFilters(r) && (sem ? r.divCount === 0 : r.divCount > 0)).length;
+      divBadge.textContent = count;
+    }
   }
 
   // ── Botão de alerta: materiais sem cadastro/categoria ──────

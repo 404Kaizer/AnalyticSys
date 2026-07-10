@@ -2208,6 +2208,14 @@ td.var-cell-zero .ti-circle-check     { color: var(--text3); }
   border-color: var(--accent-glow);
   color: var(--accent);
 }
+/* Estado "sem divergências" do toggle de 3 estados (Só Divergências ->
+   Só Sem Divergências) — mesma pílula ativa, cor esverdeada pra diferenciar
+   visualmente do estado "com divergências" (accent/azul). */
+.micro-filter-trigger.active.inv-div-sem {
+  background: color-mix(in srgb, var(--green, #22c55e) 16%, transparent);
+  border-color: var(--green, #22c55e);
+  color: var(--green, #22c55e);
+}
 
 .micro-filter-chev {
   transition: transform 0.18s;
