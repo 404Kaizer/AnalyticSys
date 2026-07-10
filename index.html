@@ -1581,7 +1581,10 @@
                 <div class="inv-kpi-label">Est. Final</div>
                 <div class="inv-kpi-value" id="inv-kpi-fin-v">—</div>
                 <div class="inv-kpi-unit">kg</div>
-                <div id="inv-kpi-fin-missing"></div>
+                <div style="display:flex;flex-wrap:wrap;gap:6px">
+                  <div id="inv-kpi-fin-missing"></div>
+                  <div id="inv-kpi-fin-fallback"></div>
+                </div>
               </div>
             </div>
           </div>
@@ -1743,6 +1746,17 @@
             <i class="ti ti-alert-triangle" style="color:var(--amber)"></i>
             <span id="imft-pendentes-label">Só Pendentes</span>
             <span id="inv-alertas-count" style="background:var(--amber);color:#000;border-radius:20px;padding:0 6px;font-size:10px;font-weight:700;min-width:18px;text-align:center;margin-left:2px">0</span>
+          </button>
+
+          <!-- Toggle: considerar NFs/OS pendentes de integração SAP em Entradas/Saídas —
+               mesma lógica da Visão Micro, mas global (todas as centrais de uma vez, já
+               que aqui não há cards por central). Muda o VALOR calculado (não é só filtro
+               de exibição), por isso o botão fica visualmente destacado (.active) quando
+               ligado — e cada linha afetada ganha um selo "pendente" nas células de
+               Entradas/Saídas (ver invRenderTabela). -->
+          <button class="micro-filter-trigger" id="imft-pend-considerar" onclick="invToggleConsiderarPendentes()" title="Ao ligar, soma volumes de NFs/OS pendentes de integração SAP em Entradas/Saídas de TODAS as centrais — afeta Variação e Custo. Linhas afetadas ganham um selo 'pendente'.">
+            <i class="ti ti-plug-connected" style="color:var(--accent)"></i>
+            <span>Considerar NFs/OS pendentes</span>
           </button>
 
           <!-- Filtro (dropdown, 3 opções): causas de variação identificadas -->

@@ -3199,6 +3199,11 @@ window._inv_helpers = {
   getSaidasIndex,
   getPrePeriodLaunchStock,
   getLastPeriodLaunchStock,
+  // Est. Final com fallback retroativo (recua dia a dia dentro do período
+  // até achar lançamento) — mesma função usada pela Visão Micro. Agora
+  // também usada pelo Inventário (ver window.invGerar em inventario.js).
+  getLastPeriodLaunchStockWithFallback,
+  getNearestLancsForAbsent,
   getFilialLookupIndex,
   normalizeText,
   parseDate,

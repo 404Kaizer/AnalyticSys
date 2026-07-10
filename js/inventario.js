@@ -15,6 +15,16 @@
   let _invSelectMode = false;
   let _invSelected = new Set();
 
+  // ── Toggle global "Considerar NFs/OS pendentes" ─────────────
+  // Equivalente ao botão por central da Visão Micro, mas aplicado de uma vez
+  // só a TODAS as centrais da tabela do Inventário (não há cards por central
+  // aqui). Quando ligado, injeta volumes sintéticos de NFs/OS pendentes de
+  // integração SAP em Entradas/Saídas — mesma lógica de buildCentralCard em
+  // analitico.js. Estado próprio do módulo (não compartilha com
+  // window._pendConsiderados, que é por central e usado só pela Visão
+  // Micro) — reseta ao trocar de mês (ver invGerar).
+  let _invConsiderarPendentes = false;
+
   // Reconstrói o objeto-mapa em memória (invJustificativas[k] = {...}) a
   // partir do array persistido em state.invJustificativas. Chamada uma
   // única vez, lazy, na primeira geração — porque na hora em que este
@@ -328,6 +338,24 @@
     invAtualizarKpis();
     invAtualizarAlertas();
   };
+
+  // Toggle "Considerar NFs/OS pendentes" — MESMA LÓGICA da Visão Micro
+  // (togglePendConsiderados em ui.js), mas global: afeta NF e OS de TODAS as
+  // centrais da tabela de uma vez (a Visão Micro liga/desliga por central,
+  // porque tem um card por central; o Inventário é uma tabela única). Ao
+  // contrário dos demais toggles acima (que só filtram a tabela já gerada),
+  // este muda o VALOR de Entradas/Saídas/Variação/Custo — por isso chama
+  // invGerar() inteiro, não só invFiltrar().
+  window.invToggleConsiderarPendentes = function() {
+    _invConsiderarPendentes = !_invConsiderarPendentes;
+    _invSyncConsiderarPendentesBtn();
+    if (invRows.length || document.getElementById('inv-table')) window.invGerar();
+  };
+
+  function _invSyncConsiderarPendentesBtn() {
+    const btn = document.getElementById('imft-pend-considerar');
+    if (btn) btn.classList.toggle('active', _invConsiderarPendentes);
+  }
 
   // Filtro "Divergências" — dropdown com 3 opções (Todos / Só Divergências
   // [itens COM pelo menos 1 categoria de Divergência identificada] / Só Sem
@@ -682,45 +710,15 @@
     _invUpdateMonthTriggerLabel();
   });
 
-  // ── Regra própria do Inventário para Est. Inicial / Est. Final ─────────
-  // Mais restrita que o Dashboard Analítico: NÃO usa fallback retroativo
-  // no valor, NÃO diferencia categoria de material (mesma regra para todos,
-  // inclusive agregados semanais).
+  // ── Est. Inicial / Est. Final do Inventário agora usam EXATAMENTE a mesma
+  // lógica da Visão Micro (h.getPrePeriodLaunchStock / h.getLastPeriodLaunchStockWithFallback,
+  // ambas em ui.js) — regra por categoria no Est. Inicial e fallback retroativo
+  // (dentro do próprio período) no Est. Final. Ver chamadas dentro de
+  // window.invGerar, mais abaixo.
   //
-  //   EST. INICIAL = lançamento do dia anterior a dtIni.
-  //                   Se esse dia anterior for domingo, usa o dia anterior ao domingo (sábado).
-  //   EST. FINAL   = lançamento exatamente no último dia do período (dtFim).
-  //                   Se dtFim for domingo, usa o dia anterior ao domingo (sábado).
-  //
-  // Se não houver lançamento na data exata exigida → AUSENTE (valor 0 no
-  // cálculo). O tooltip, à parte, busca retroativamente sem limite (ignorando
-  // domingos) apenas para informar ao analista qual foi a última data com
-  // lançamento encontrada — esse valor NUNCA entra no cálculo da linha.
-
-  // Resolve a data-alvo aplicando a regra do domingo (recua 1 dia se cair num domingo)
-  function invResolveTargetDate(baseDate) {
-    const d = new Date(baseDate);
-    d.setHours(0, 0, 0, 0);
-    if (d.getDay() === 0) d.setDate(d.getDate() - 1); // domingo → sábado anterior
-    return d;
-  }
-
-  // Busca exata: soma todos os lançamentos da central+material na data ISO informada.
-  // Retorna { value, dtLabel, missing:false, records:[...] } se achar, ou null se não achar.
-  // `records` = os registros brutos que casaram na data-alvo (pode ser mais de
-  // um se houver duplicidade) — usado pelos indicadores de Divergências para
-  // checar `fonte==='manual'` e cruzar contra getLancamentoDuplicateKeys().
-  function invFindExactDay(arr, targetISO, targetDate, parseDate, localISODate, num) {
-    let total = 0, found = false;
-    const records = [];
-    for (const rec of arr) {
-      const d = parseDate(rec.dtLanc);
-      if (!d) continue;
-      if (localISODate(d) === targetISO) { total += num(rec.peso); found = true; records.push(rec); }
-    }
-    if (!found) return null;
-    return { value: total, dtLabel: targetDate.toLocaleDateString('pt-BR'), missing: false, records };
-  }
+  // invFindLastKnownDate abaixo continua existindo só para alimentar o
+  // tooltip de "AUSENTE" (busca retroativa sem limite, ignorando domingos) —
+  // esse valor nunca entra no cálculo da linha, é só informativo.
 
   // Busca retroativa sem limite (ignorando domingos), só para preencher o
   // tooltip com a última data conhecida com lançamento — não usada no cálculo.
@@ -891,37 +889,117 @@
         });
         const sapArr = sapByMat.get(mat) || [];
 
-        // EST. INICIAL: lançamento exatamente no dia anterior a dtIni.
-        // Se esse dia anterior for domingo, usa o dia anterior ao domingo (sábado).
-        // Sem fallback no valor — se não achar na data exata, fica AUSENTE (0).
-        const iniAlvo = new Date(dtIni); iniAlvo.setDate(iniAlvo.getDate() - 1);
-        const iniTargetDate = invResolveTargetDate(iniAlvo);
-        const iniTargetISO  = localISODate(iniTargetDate);
-        const iniRes = invFindExactDay(lancArr, iniTargetISO, iniTargetDate, parseDate, localISODate, num);
+        // Categoria/catKey do material — precisa vir ANTES do Est. Inicial,
+        // pois a regra de busca depende da categoria (ver getPrevDayLaunchStock
+        // em ui.js): Agregado usa regra semanal (última terça), os demais usam
+        // regra diária (ou "1º do mês", que busca o último dia do mês anterior).
+        // Chegou até aqui só se getCatKeyDoCadastro(materialOriginal) já
+        // confirmou cadastro válido (ver construção de byMat/sapByMat acima)
+        // — categoria sempre existe, nunca 'Sem cadastro' neste ramo.
+        const categoria = getCategoriaPorGrupo(mat) || '';
+        const matCatKey = getCatKeyDoCadastro(mat) || null;
+
+        // EST. INICIAL — MESMA LÓGICA da Visão Micro (getPrevDayLaunchStock,
+        // via h.getPrePeriodLaunchStock): regra por categoria do material —
+        //   • Agregado (lançamento semanal): última terça-feira antes do
+        //     início do período (com fallback pro lançamento mais recente
+        //     entre essa terça e o início, se houver).
+        //   • Material do 1º dia do mês: último dia do mês anterior.
+        //   • Demais materiais: dia anterior ao início (dom→sáb).
+        // Sem fallback de VALOR em nenhum dos casos — se não achar na
+        // data-alvo da regra, fica AUSENTE (tratado como 0 no cálculo).
+        const iniRes = h.getPrePeriodLaunchStock({ central, material: mat, dtIni, dtFim, catKey: matCatKey });
         const estoqueIni = iniRes ? iniRes.value : 0;
         const estoqueIniMissing = !iniRes;
         // Tooltip: só quando ausente, busca retroativa sem limite (não usada no cálculo)
         const estoqueIniLastKnown = estoqueIniMissing
-          ? invFindLastKnownDate(lancArr, iniTargetDate, parseDate, localISODate, num)
+          ? invFindLastKnownDate(lancArr, dtIni, parseDate, localISODate, num)
           : null;
 
-        // EST. FINAL: lançamento exatamente no último dia do período (dtFim).
-        // Se dtFim for domingo, usa o dia anterior ao domingo (sábado).
-        // Sem fallback no valor — se não achar na data exata, fica AUSENTE (0).
-        const fimTargetDate = invResolveTargetDate(dtFim);
-        const fimTargetISO  = localISODate(fimTargetDate);
-        const fimRes = invFindExactDay(lancArr, fimTargetISO, fimTargetDate, parseDate, localISODate, num);
-        const estoqueFimReal = fimRes ? fimRes.value : 0;
-        const estoqueFimMissing = !fimRes;
+        // EST. FINAL — MESMA LÓGICA da Visão Micro
+        // (h.getLastPeriodLaunchStockWithFallback): tenta a data exata (último
+        // dia não-domingo do período); se não achar, RECUA dia a dia dentro do
+        // próprio período até encontrar um lançamento (fallback retroativo).
+        // Só fica AUSENTE se nenhum dia do período tiver lançamento.
+        // estoqueFimFallback=true sinaliza pro analista que o valor usado NÃO é
+        // do dia de fechamento esperado (estoqueFimEsperado) — ele precisa
+        // cobrar/corrigir o lançamento daquele dia (ver badge "retroativo" em
+        // invRenderTabela, deixado explícito de propósito pra não passar
+        // despercebido como se fosse um Est. Final normal).
+        const fimRes = h.getLastPeriodLaunchStockWithFallback({ central, material: mat, dtIni, dtFim });
+        const estoqueFimMissing  = !fimRes || fimRes.missing;
+        const estoqueFimReal     = estoqueFimMissing ? 0 : fimRes.value;
+        const estoqueFimFallback = !estoqueFimMissing && !!fimRes.fallback;
+        const estoqueFimEsperado = fimRes ? fimRes.expectedLabel : null;
+        // Data real usada (quando não ausente) — igual à esperada em caso
+        // normal, ou anterior em caso de fallback retroativo. Usada no
+        // badge/tooltip "retroativo" (invRenderTabela) e no KPI de resumo.
+        const estoqueFimUsadoLabel = !estoqueFimMissing ? fimRes.dtLabel : null;
         // Tooltip: só quando ausente, busca retroativa sem limite (não usada no cálculo)
         const estoqueFimLastKnown = estoqueFimMissing
-          ? invFindLastKnownDate(lancArr, fimTargetDate, parseDate, localISODate, num)
+          ? invFindLastKnownDate(lancArr, dtFim, parseDate, localISODate, num)
           : null;
 
-        // Volumes de entradas/saídas vêm do SAP (movimentos físicos).
+        // ── Pendências de integração SAP (NF/OS) desta central+material —
+        // usadas tanto pelo badge de Divergências quanto (se o toggle global
+        // "Considerar NFs/OS pendentes" estiver ligado) pra injetar volumes
+        // sintéticos em Entradas/Saídas — MESMA lógica da Visão Micro
+        // (buildCentralCard, analitico.js). Resolve sempre pelo cadastro
+        // ATUAL (normalizarMaterial), nunca pelo .material bruto do registro.
+        const nfPendMat = (pendCentral.pendNF || []).filter(r => _invSafeCall('normalizarMaterial', r.material || '', r.materialOriginal || r.material) === mat);
+        const osPendMat = (pendCentral.pendOS || []).filter(r => _invSafeCall('normalizarMaterial', r.material || '', r.materialOriginal || r.material) === mat);
+
+        // sapArr permanece "limpo" (sem sintéticos) pra Divergências — imune
+        // ao toggle, mesmo princípio do sapByMatClean na Visão Micro. Só a
+        // cópia usada no cálculo de Entradas/Saídas/Variação/Custo
+        // (sapArrCalc) recebe os registros sintéticos das pendências
+        // consideradas. pendEntAplicado/pendSaiAplicado marcam, por linha, se
+        // Entradas e/ou Saídas foram de fato alteradas pelo toggle — usado
+        // pelo selo ao lado das células (ver invRenderTabela) pra deixar
+        // explícito o que foi afetado.
+        let sapArrCalc = sapArr;
+        let pendEntAplicado = false, pendSaiAplicado = false;
+        if (_invConsiderarPendentes && (nfPendMat.length || osPendMat.length)) {
+          sapArrCalc = sapArr.slice();
+          if (nfPendMat.length) {
+            nfPendMat.forEach(e => {
+              sapArrCalc.push({
+                movimento: '101',
+                peso:      _invSafeCall('_convertNfPesoToKg', 0, e.peso, e.um, e.material),
+                ref:       String(e.nf || ''),
+                documento: '',
+                material:  mat,
+                dtLanc:    e.dtDescarga || e.dtEmissao || '',
+                usuario:   '',
+                _sintetico: true
+              });
+            });
+            pendEntAplicado = true;
+          }
+          if (osPendMat.length) {
+            osPendMat.forEach(e => {
+              sapArrCalc.push({
+                movimento: '201',
+                peso:      -Math.abs(num(e.peso)),
+                ref:       String(e.os || ''),
+                documento: '',
+                material:  mat,
+                dtLanc:    e.dtEmissao || '',
+                usuario:   '',
+                _sintetico: true
+              });
+            });
+            pendSaiAplicado = true;
+          }
+        }
+
+        // Volumes de entradas/saídas vêm do SAP (movimentos físicos) — MESMA
+        // separação por sinal da Visão Micro (buildSnapshot): peso > 0 entra
+        // em Entradas, peso < 0 entra em Saídas, peso === 0 não conta em
+        // nenhuma das duas (antes: peso >= 0 jogava o zero pra Entradas).
         let entradasKg = 0, saidasKg = 0;
         const entEntries = [], saiEntries = [];
-        sapArr.forEach(r => {
+        sapArrCalc.forEach(r => {
           const p = num(r.peso);
           const cod = String(r.movimento || '—').trim();
           const ref = String(r.ref || r.documento || '—').trim();
@@ -930,10 +1008,10 @@
           // 5 posições. Extração idêntica à usada pelo Analítico (toEntry, analitico.js):
           // string bruta de dtLanc, com fallback para dtDoc, sem reformatar.
           const dtLancFmt = String(r.dtLanc || r.dtDoc || '').trim();
-          if (p >= 0) {
+          if (p > 0) {
             entradasKg += p;
             entEntries.push([cod, p, ref, usr, dtLancFmt]);
-          } else {
+          } else if (p < 0) {
             saidasKg += Math.abs(p);
             saiEntries.push([cod, p, ref, usr, dtLancFmt]);
           }
@@ -942,19 +1020,15 @@
         // Custo médio alinhado com o Analítico (Saídas → fallback SAP).
         const custoMedio = custoMedioPorMat[mat] || 0;
 
-        // Chegou até aqui só se getCatKeyDoCadastro(materialOriginal) já
-        // confirmou cadastro válido (ver construção de byMat/sapByMat acima)
-        // — categoria sempre existe, nunca 'Sem cadastro' neste ramo.
-        const categoria = getCategoriaPorGrupo(mat) || '';
-
         // ── Divergências: possíveis causas da variação, agrupadas em 4
         // categorias (Registros manuais / Duplicidade / Pendência de
         // integração SAP / Ocorrência operacional aberta). Ver botão ao
         // lado do nome do Material em invRenderTabela e o modal em
-        // invAbrirDivergencias mais abaixo.
-        const iniRecs = iniRes ? iniRes.records : [];
-        const fimRecs = fimRes ? fimRes.records : [];
-        const entRecs = sapArr.filter(r => num(r.peso) >= 0);
+        // invAbrirDivergencias mais abaixo. Sempre a partir dos registros
+        // REAIS (iniRes/fimRes/sapArr) — nunca dos sintéticos de pendentes.
+        const iniRecs = iniRes ? (iniRes.records || []) : [];
+        const fimRecs = (fimRes && !fimRes.missing) ? (fimRes.records || []) : [];
+        const entRecs = sapArr.filter(r => num(r.peso) > 0);
         const saiRecs = sapArr.filter(r => num(r.peso) < 0);
 
         const manualIni = iniRecs.some(r => r.fonte === 'manual');
@@ -965,15 +1039,6 @@
         const dupIni = iniRecs.some(r => lancDupKeys.has(_invSafeCall('getLancamentoRecordKey', '', r)));
         const dupFim = fimRecs.some(r => lancDupKeys.has(_invSafeCall('getLancamentoRecordKey', '', r)));
         const sapDupRecs = sapArr.filter(r => sapDupInfo.real.has(_invSafeCall('getSapRecordKey', '', r)));
-
-        // Pendências já vêm filtradas por central+período (pendCentral);
-        // aqui filtra por material, sempre resolvendo materialOriginal pelo
-        // cadastro ATUAL (normalizarMaterial), nunca comparando contra o
-        // .material bruto do registro de Entrada/Saída — mesmo princípio já
-        // aplicado no resto do módulo (evita colisão por cadastro apagado/
-        // reaproveitado).
-        const nfPendMat = (pendCentral.pendNF || []).filter(r => _invSafeCall('normalizarMaterial', r.material || '', r.materialOriginal || r.material) === mat);
-        const osPendMat = (pendCentral.pendOS || []).filter(r => _invSafeCall('normalizarMaterial', r.material || '', r.materialOriginal || r.material) === mat);
 
         // Ocorrências: campo Material é salvo como "ALIAS: ORIGEM" (ver
         // formatMaterialCadastro em ocorrencias.js) — extrai só o ALIAS
@@ -999,7 +1064,15 @@
           ocorrencias: ocsMat,
         };
 
-        rowMap.set(k, { k, mesKey, central, material: mat, categoria, semCadastro: false, regional, estoqueIni, estoqueIniMissing, estoqueIniLastKnown, entradasKg, saidasKg, estoqueFimReal, estoqueFimMissing, estoqueFimLastKnown, custoMedio, entEntries, saiEntries, divergencias, divCount });
+        rowMap.set(k, {
+          k, mesKey, central, material: mat, categoria, semCadastro: false, regional,
+          estoqueIni, estoqueIniMissing, estoqueIniLastKnown,
+          entradasKg, saidasKg,
+          estoqueFimReal, estoqueFimMissing, estoqueFimLastKnown,
+          estoqueFimFallback, estoqueFimEsperado, estoqueFimUsadoLabel,
+          pendEntAplicado, pendSaiAplicado,
+          custoMedio, entEntries, saiEntries, divergencias, divCount
+        });
       });
 
       // ── Materiais SEM cadastro (ou cadastrados sem categoria) ──────────
@@ -1015,6 +1088,8 @@
           estoqueIni: 0, estoqueIniMissing: true, estoqueIniLastKnown: null,
           entradasKg: 0, saidasKg: 0,
           estoqueFimReal: 0, estoqueFimMissing: true, estoqueFimLastKnown: null,
+          estoqueFimFallback: false, estoqueFimEsperado: null, estoqueFimUsadoLabel: null,
+          pendEntAplicado: false, pendSaiAplicado: false,
           custoMedio: 0, entEntries: [], saiEntries: [], divergencias: null, divCount: 0
         });
       });
@@ -1045,6 +1120,7 @@
     invFiltrar();
     invAtualizarKpis();
     invAtualizarAlertas();
+    _invSyncConsiderarPendentesBtn();
     toast('Inventário de ' + MESES_NOME[selMonth] + '/' + selYear + ' gerado: ' + invRows.length + ' itens.', 'success');
   };
 
@@ -1187,23 +1263,39 @@
         ? `<span class="td-mono" style="color:var(--text3);font-style:italic" title="${_escape(iniTooltip)}">—</span>`
         : `<span class="td-mono" style="color:var(--teal)">${_fmtKg(r.estoqueIni)}</span>`;
 
-      // ── Entradas / Saídas: bdm-trigger igual ao analítico ──
-      const entCell = _bdm
+      // ── Entradas / Saídas: bdm-trigger igual ao analítico. Selo "pendente"
+      // aparece só quando o toggle "Considerar NFs/OS pendentes" está ligado
+      // E este material teve NF (Entradas) e/ou OS (Saídas) pendente
+      // efetivamente somada ao valor — deixa explícito o que foi afetado. ──
+      const pendBadge = (label) => `<span class="absent-badge" style="background:var(--accent-dim,rgba(99,102,241,.15));color:var(--accent);border-color:var(--accent);margin-left:5px" title="Inclui volume de ${label} pendente de integração SAP (toggle 'Considerar NFs/OS pendentes' ligado)">pendente</span>`;
+      const entCell = (_bdm
         ? _bdm(r.entEntries || [], r.entradasKg, 'var(--green)', 'Entradas')
-        : `<span class="td-mono" style="color:var(--green);font-weight:600">${_fmtKg(r.entradasKg)}</span>`;
-      const saiCell = _bdm
+        : `<span class="td-mono" style="color:var(--green);font-weight:600">${_fmtKg(r.entradasKg)}</span>`) + (r.pendEntAplicado ? pendBadge('NF') : '');
+      const saiCell = (_bdm
         ? _bdm(r.saiEntries || [], r.saidasKg, 'var(--red)', 'Saídas')
-        : `<span class="td-mono" style="color:var(--red);font-weight:600">${_fmtKg(r.saidasKg)}</span>`;
+        : `<span class="td-mono" style="color:var(--red);font-weight:600">${_fmtKg(r.saidasKg)}</span>`) + (r.pendSaiAplicado ? pendBadge('OS') : '');
 
-      // ── Est. Final: teal igual ao analítico; tooltip com última data conhecida ──
+      // ── Est. Final: teal igual ao analítico. 3 estados possíveis:
+      //   • normal — achou lançamento exatamente no dia de fechamento esperado.
+      //   • "retroativo" (âmbar) — não achou no dia esperado, mas achou em um
+      //     dia ANTERIOR dentro do próprio período (fallback da Visão Micro).
+      //     Fica bem explícito, de propósito, que o saldo NÃO é do dia de
+      //     fechamento — o analista precisa cobrar/corrigir o lançamento
+      //     daquele dia, não tratar isso como um Est. Final normal.
+      //   • AUSENTE — nenhum lançamento em nenhum dia do período. ──────────
       const finTooltip = r.estoqueFimMissing
         ? (r.estoqueFimLastKnown
             ? `AUSENTE — último lançamento encontrado em ${r.estoqueFimLastKnown.dtLabel} (${_fmtKg(r.estoqueFimLastKnown.value)})`
             : 'AUSENTE — nenhum lançamento encontrado no período ou anterior')
+        : (r.estoqueFimFallback
+            ? `RETROATIVO — dia de fechamento esperado (${r.estoqueFimEsperado || '—'}) não tem lançamento. Valor usado é de ${r.estoqueFimUsadoLabel || 'um dia anterior'} dentro do período. Cobre/corrija o lançamento de ${r.estoqueFimEsperado || 'fechamento'}.`
+            : '');
+      const finBadge = r.estoqueFimFallback
+        ? ` <span class="absent-badge" style="background:var(--amber-bg);color:var(--amber);border-color:var(--amber-border)" title="${_escape(finTooltip)}">retroativo</span>`
         : '';
       const finCell = r.estoqueFimMissing
         ? `<span class="td-mono" style="color:var(--text3);font-style:italic" title="${_escape(finTooltip)}">—</span>`
-        : `<span class="td-mono" style="color:var(--teal)">${_fmtKg(r.estoqueFimReal)}</span>`;
+        : `<span class="td-mono" style="color:${r.estoqueFimFallback ? 'var(--amber)' : 'var(--teal)'}" title="${_escape(finTooltip)}">${_fmtKg(r.estoqueFimReal)}</span>${finBadge}`;
 
       // ── Est. Teórico: purple igual ao analítico ────────────
       const teorCell = `<span class="td-mono" style="color:var(--purple)">${_fmtKg(r.estTeor)}</span>`;
@@ -1346,6 +1438,28 @@
         </div>
       </details>`;
     };
+
+    // Badge "retroativo" — mesma estrutura visual do badge de ausência, mas
+    // pra Est. Final que veio do fallback da Visão Micro (achou lançamento
+    // em dia ANTERIOR ao de fechamento esperado, dentro do período). Cada
+    // linha do detalhe já mostra a data usada vs a esperada, pra o analista
+    // saber exatamente o que cobrar/corrigir.
+    const _invFallbackBadge = (containerId, list) => {
+      const el = document.getElementById(containerId);
+      if (!el) return;
+      if (!list.length) { el.innerHTML = ''; return; }
+      const MAX = 5;
+      const shown = list.slice(0, MAX).map(s => `<div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px;color:var(--text2);font-size:10px;font-family:var(--mono)">${s}</div>`).join('');
+      const more  = list.length > MAX ? `<div style="color:var(--text3);font-size:9.5px;font-family:var(--mono)">+ ${list.length - MAX} mais</div>` : '';
+      el.innerHTML = `<details style="margin-top:5px">
+        <summary style="cursor:pointer;list-style:none;display:inline-flex;align-items:center;gap:4px;font-family:var(--mono);font-size:9px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--amber);padding:2px 7px;background:var(--amber-bg);border:1px solid var(--amber-border);border-radius:4px;user-select:none">
+          <i class="ti ti-history" style="font-size:10px"></i> ${list.length} retroativo${list.length === 1 ? '' : 's'}
+        </summary>
+        <div style="margin-top:5px;padding:7px 9px;background:var(--bg4);border:1px solid var(--border2);border-radius:5px;display:flex;flex-direction:column;gap:2px">
+          ${shown}${more}
+        </div>
+      </details>`;
+    };
     // Ausente aqui é "sem lançamento na data alvo" (material CADASTRADO,
     // problema de dado) — distinto de "sem cadastro" (problema de
     // padronização, já coberto pelo indicador próprio). Por isso usa
@@ -1354,6 +1468,16 @@
     const missingFimRows = invRowsCadastrados.filter(r => r.estoqueFimMissing).map(r => `${r.central} · ${r.material}`);
     _invMissingBadge('inv-kpi-ini-missing', missingIniRows, 'Est. Ini.');
     _invMissingBadge('inv-kpi-fin-missing', missingFimRows, 'Est. Fim');
+
+    // Badge "retroativo" — Est. Final que veio do fallback (recuou dentro do
+    // período porque não achou lançamento no dia de fechamento esperado).
+    // Deixado bem visível de propósito: são linhas que precisam de
+    // lançamento cobrado/corrigido, não é um Est. Final "normal". Some com
+    // o badge de ausência se ambos estiverem vazios (details HTML separado).
+    const fallbackFimRows = invRowsCadastrados
+      .filter(r => r.estoqueFimFallback)
+      .map(r => `${r.central} · ${r.material} (usado: ${r.estoqueFimUsadoLabel || '—'}, esperado: ${r.estoqueFimEsperado || '—'})`);
+    _invFallbackBadge('inv-kpi-fin-fallback', fallbackFimRows);
 
     // Variação: principal = bruto, secundário = ajustado (só se diferente)
     set('inv-kpi-var-v', fmt(totalVarBruto));
@@ -1643,19 +1767,18 @@
   };
 
   // ── Modal de justificativa ───────────────────────────────
-  // Navegação Anterior/Próximo: percorre uma "fila" de pendentes (variação
-  // >0,01kg e ainda sem justificativa completa) na ordem visual atual da
-  // tabela (invFiltered), fixada no momento em que o modal é aberto pela
-  // primeira vez — evita que a fila "pule" no meio da revisão por causa de
-  // reordenação/recalculo disparado pelo próprio salvamento. Se o registro
-  // aberto não for pendente (ex.: "Ver/Editar" de um já justificado), ele
-  // é incluído à parte na fila, na posição em que aparece na tabela, só
-  // para não quebrar a navegação nesse caso pontual.
+  // Navegação Anterior/Próximo: percorre TODA a lista filtrada/ordenada
+  // atual da tabela (invFiltered), fixada no momento em que o modal é
+  // aberto pela primeira vez — evita que a fila "pule" no meio da revisão
+  // por causa de reordenação/recalculo disparado pelo próprio salvamento.
+  // Não se restringe mais só a pendentes — os botões devem aparecer
+  // sempre, mesmo abrindo uma linha já justificada/ajustada via
+  // "Ver/Editar", pra dar pra navegar pela tabela inteira a partir daqui.
   let _invNavQueue = [];
   let _invNavIdx   = -1;
 
   function _invBuildNavQueue(k) {
-    _invNavQueue = invFiltered.filter(r => _invIsPendente(r) || r.k === k).map(r => r.k);
+    _invNavQueue = invFiltered.map(r => r.k);
     _invNavIdx = _invNavQueue.indexOf(k);
   }
 
@@ -1830,7 +1953,7 @@
     const podeAnt   = _invNavIdx > 0;
     const podeProx  = _invNavIdx >= 0 && _invNavIdx < _invNavQueue.length - 1;
     const posicaoBadge = _invNavIdx >= 0
-      ? `<span style="font-size:10.5px;font-weight:700;font-family:var(--mono);color:var(--accent);background:var(--accent-dim);border-radius:20px;padding:3px 10px;white-space:nowrap;flex-shrink:0">${_invNavIdx+1} / ${_invNavQueue.length} pend.</span>`
+      ? `<span style="font-size:10.5px;font-weight:700;font-family:var(--mono);color:var(--accent);background:var(--accent-dim);border-radius:20px;padding:3px 10px;white-space:nowrap;flex-shrink:0">${_invNavIdx+1} / ${_invNavQueue.length}</span>`
       : '';
 
     // Ícone maior e proporcional ao valor (varSymbol tem font-size fixo em
@@ -1910,8 +2033,8 @@
         <div class="modal-footer" style="justify-content:space-between">
           <button class="btn" onclick="document.getElementById('inv-modal').remove()">Cancelar</button>
           <div style="display:flex;gap:8px">
-            ${temFila ? `<button class="btn" ${podeAnt?'':'disabled style="opacity:.35;cursor:default;pointer-events:none"'} onclick="_invNavJust(-1)" title="Salva e vai para o pendente anterior"><i class="ti ti-chevron-left"></i> Anterior</button>` : ''}
-            ${temFila ? `<button class="btn" ${podeProx?'':'disabled style="opacity:.35;cursor:default;pointer-events:none"'} onclick="_invNavJust(1)" title="Salva e vai para o próximo pendente">Próximo <i class="ti ti-chevron-right"></i></button>` : ''}
+            ${temFila ? `<button class="btn" ${podeAnt?'':'disabled style="opacity:.35;cursor:default;pointer-events:none"'} onclick="_invNavJust(-1)" title="Salva e vai para o registro anterior"><i class="ti ti-chevron-left"></i> Anterior</button>` : ''}
+            ${temFila ? `<button class="btn" ${podeProx?'':'disabled style="opacity:.35;cursor:default;pointer-events:none"'} onclick="_invNavJust(1)" title="Salva e vai para o próximo registro">Próximo <i class="ti ti-chevron-right"></i></button>` : ''}
             <button class="btn btn-primary" onclick="invSalvarJust('${k}')"><i class="ti ti-device-floppy"></i> Salvar</button>
           </div>
         </div>

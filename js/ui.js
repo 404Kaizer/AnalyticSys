@@ -2998,15 +2998,20 @@ function getPrevDayLaunchStock({ central, material, dtIni, catKey }) {
   const isPrimeiroDiaMes = dtIniDate.getDate() === 1;
   const dtIniISO = localISODate(dtIniDate);
 
-  // Helper: busca total de lançamentos em uma data ISO exata
+  // Helper: busca total + registros de lançamentos em uma data ISO exata.
+  // `records` (aditivo) = registros brutos que casaram naquela data — usado
+  // pelo Inventário nos indicadores de Divergências (fonte==='manual',
+  // cruzamento com getLancamentoDuplicateKeys); demais consumidores desta
+  // função seguem usando só value/dtLabel/date, sem impacto.
   const findByISO = (iso) => {
     let total = 0, found = false;
+    const recs = [];
     for (const rec of arr) {
       const d = parseDate(rec.dtLanc);
       if (!d) continue;
-      if (localISODate(d) === iso) { total += num(rec.peso); found = true; }
+      if (localISODate(d) === iso) { total += num(rec.peso); found = true; recs.push(rec); }
     }
-    return found ? total : null;
+    return found ? { total, recs } : null;
   };
 
   if (isAgregado) {
@@ -3031,13 +3036,13 @@ function getPrevDayLaunchStock({ central, material, dtIni, catKey }) {
       }
     }
     if (bestPostISO) {
-      const total = findByISO(bestPostISO);
-      if (total !== null) return { value: total, dtLabel: fmtPtDate(bestPost), date: bestPost };
+      const res = findByISO(bestPostISO);
+      if (res) return { value: res.total, dtLabel: fmtPtDate(bestPost), date: bestPost, records: res.recs };
     }
 
     // Usa lançamento da última terça
-    const tercaTotal = findByISO(lastTercaISO);
-    if (tercaTotal !== null) return { value: tercaTotal, dtLabel: fmtPtDate(lastTerca), date: lastTerca };
+    const tercaRes = findByISO(lastTercaISO);
+    if (tercaRes) return { value: tercaRes.total, dtLabel: fmtPtDate(lastTerca), date: lastTerca, records: tercaRes.recs };
     return null;
 
   } else if (isPrimeiroDiaMes) {
@@ -3045,8 +3050,8 @@ function getPrevDayLaunchStock({ central, material, dtIni, catKey }) {
     const targetDate = new Date(dtIniDate.getFullYear(), dtIniDate.getMonth(), 0);
     targetDate.setHours(0, 0, 0, 0);
     if (targetDate.getDay() === 0) targetDate.setDate(targetDate.getDate() - 1);
-    const total = findByISO(localISODate(targetDate));
-    if (total !== null) return { value: total, dtLabel: fmtPtDate(targetDate), date: targetDate };
+    const res = findByISO(localISODate(targetDate));
+    if (res) return { value: res.total, dtLabel: fmtPtDate(targetDate), date: targetDate, records: res.recs };
     return null;
 
   } else {
@@ -3055,8 +3060,8 @@ function getPrevDayLaunchStock({ central, material, dtIni, catKey }) {
     targetDate.setDate(targetDate.getDate() - 1);
     targetDate.setHours(0, 0, 0, 0);
     if (targetDate.getDay() === 0) targetDate.setDate(targetDate.getDate() - 1);
-    const total = findByISO(localISODate(targetDate));
-    if (total !== null) return { value: total, dtLabel: fmtPtDate(targetDate), date: targetDate };
+    const res = findByISO(localISODate(targetDate));
+    if (res) return { value: res.total, dtLabel: fmtPtDate(targetDate), date: targetDate, records: res.recs };
     return null;
   }
 }
@@ -3084,25 +3089,35 @@ function getLastPeriodLaunchStockWithFallback({ central, material, dtIni, dtFim 
   const materialKey = material || '—';
   const { byCentralMat } = getLancIndex();
   const arr = byCentralMat.get(central)?.get(materialKey) || [];
-  if (!arr.length) return { value: null, dtLabel: '—', missing: true };
-
-  // Monta lookup de data→peso para O(1) por dia
-  const byDay = new Map();
-  arr.forEach(rec => {
-    const d = parseDate(rec.dtLanc);
-    if (!d) return;
-    const k = localISODate(d);
-    byDay.set(k, (byDay.get(k) || 0) + num(rec.peso));
-  });
 
   // Último dia útil esperado: último não-domingo do período
-  // (mesmo critério de getLastPeriodLaunchStock)
+  // (mesmo critério de getLastPeriodLaunchStock). Calculado ANTES do early-
+  // return de array vazio pra expectedLabel vir preenchido em todo caminho
+  // (aditivo — usado pelo Inventário na mensagem "cobrar lançamento de X").
   const expectedDate = new Date(dtFimDate);
   expectedDate.setHours(0, 0, 0, 0);
   while (expectedDate.getDay() === 0) {
     expectedDate.setDate(expectedDate.getDate() - 1);
   }
-  const expectedISO = localISODate(expectedDate);
+  const expectedISO   = localISODate(expectedDate);
+  const expectedLabel = fmtPtDate(expectedDate);
+
+  if (!arr.length) return { value: null, dtLabel: '—', missing: true, expectedLabel };
+
+  // Monta lookup de data→{total,recs} para O(1) por dia. `recs` (aditivo) =
+  // registros brutos daquele dia — usado pelo Inventário nos indicadores de
+  // Divergências, mesmo princípio de getPrevDayLaunchStock acima.
+  const byDay = new Map();
+  arr.forEach(rec => {
+    const d = parseDate(rec.dtLanc);
+    if (!d) return;
+    const k = localISODate(d);
+    if (!byDay.has(k)) byDay.set(k, { total: 0, recs: [] });
+    const entry = byDay.get(k);
+    entry.total += num(rec.peso);
+    entry.recs.push(rec);
+  });
+  if (!byDay.size) return { value: null, dtLabel: '—', missing: true, expectedLabel };
 
   // Retroage do dia esperado até o início, pulando domingos
   const cursor = new Date(expectedDate);
@@ -3113,11 +3128,14 @@ function getLastPeriodLaunchStockWithFallback({ central, material, dtIni, dtFim 
     if (cursor.getDay() !== 0) { // ignora domingo
       const k = localISODate(cursor);
       if (byDay.has(k)) {
+        const entry = byDay.get(k);
         return {
-          value:    byDay.get(k),
+          value:    entry.total,
           dtLabel:  fmtPtDate(cursor),
           missing:  false,
-          fallback: k !== expectedISO  // âmbar só se anterior ao dia útil esperado
+          fallback: k !== expectedISO,  // âmbar só se anterior ao dia útil esperado
+          records:  entry.recs,
+          expectedLabel
         };
       }
     }
@@ -3125,7 +3143,7 @@ function getLastPeriodLaunchStockWithFallback({ central, material, dtIni, dtFim 
   }
 
   // Nenhum lançamento no período inteiro
-  return { value: null, dtLabel: '—', missing: true };
+  return { value: null, dtLabel: '—', missing: true, expectedLabel };
 }
 
 function getLastPeriodLaunchStock({ central, material, dtFim }) {
