@@ -2304,6 +2304,28 @@ td.var-cell-zero .ti-circle-check     { color: var(--text3); }
   flex: 1;
 }
 
+/* Opções de seleção única (radio) — usadas nos dropdowns de Ausência e
+   Divergências: sem checkbox, mostra um "check" à direita da opção ativa. */
+.micro-filter-option--radio { justify-content: space-between; }
+.micro-filter-option-check {
+  font-size: 14px;
+  color: var(--accent);
+  opacity: 0;
+  flex-shrink: 0;
+}
+.micro-filter-option--radio.selected {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+.micro-filter-option--radio.selected .micro-filter-option-check { opacity: 1; }
+/* Variante "estado neutro/positivo" (Sem Ausência / Só Sem Divergências) —
+   mesmo destaque das pílulas ativas verdes na toolbar. */
+.micro-filter-option--radio.selected.inv-div-sem {
+  background: color-mix(in srgb, var(--green, #22c55e) 16%, transparent);
+  color: var(--green, #22c55e);
+}
+.micro-filter-option--radio.selected.inv-div-sem .micro-filter-option-check { color: var(--green, #22c55e); }
+
 .micro-filter-footer {
   display: flex;
   gap: 6px;

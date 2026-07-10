@@ -101,12 +101,13 @@
     // linhas cuja Variação (kg) é 0,00 — mesma tolerância usada na célula
     // da tabela para decidir o que conta como "zero" (diff-zero).
     hideVarZero: false,
-    // Toggles simples: mostram só as linhas com Est. Inicial / Est. Final
-    // AUSENTE (mesmo flag usado nas células da tabela e nos badges dos cards).
-    // Combinam em AND com os demais filtros — se ambos ligados, mostra só
-    // linhas ausentes nos dois.
-    onlyIniAusente: false,
-    onlyFimAusente: false,
+    // Toggle único de 3 estados (um só botão, não dois): false (desligado)
+    // -> 'ini' (só linhas com Est. Inicial AUSENTE) -> 'fim' (só linhas com
+    // Est. Final AUSENTE) -> 'sem' (só linhas SEM nenhuma ausência — Inicial
+    // e Final ambos preenchidos) -> volta pra false. Mesmo flag usado nas
+    // células da tabela e nos badges dos cards (estoqueIniMissing/
+    // estoqueFimMissing).
+    ausencia: false,
     // Toggle simples: mostra só itens com variação (>0,01 kg) que ainda não
     // têm justificativa operacional nem fiscal. Substitui o antigo botão
     // "Pendentes" (que abria um painel separado) — agora filtra a própria
@@ -142,8 +143,9 @@
         if (set && set.size && !set.has(r[k])) return false;
       }
       if (_invFilter.hideVarZero && _invVarIrrelevante(r.varKg)) return false;
-      if (_invFilter.onlyIniAusente && !r.estoqueIniMissing) return false;
-      if (_invFilter.onlyFimAusente && !r.estoqueFimMissing) return false;
+      if (_invFilter.ausencia === 'ini' && !r.estoqueIniMissing) return false;
+      if (_invFilter.ausencia === 'fim' && !r.estoqueFimMissing) return false;
+      if (_invFilter.ausencia === 'sem' && (r.estoqueIniMissing || r.estoqueFimMissing)) return false;
       if (_invFilter.onlyPendentes && !_invIsPendente(r)) return false;
       if (_invFilter.onlyDivergencias === 'com' && !(r.divCount > 0)) return false;
       if (_invFilter.onlyDivergencias === 'sem' && !(r.divCount === 0)) return false;
@@ -270,8 +272,7 @@
       _invSyncTriggerLabel(key);
     });
     _invFilter.hideVarZero = false;
-    _invFilter.onlyIniAusente = false;
-    _invFilter.onlyFimAusente = false;
+    _invFilter.ausencia = false;
     _invFilter.onlyPendentes = false;
     _invFilter.onlyDivergencias = false;
     _invSyncVarZeroBtn();
@@ -293,19 +294,24 @@
     invAtualizarAlertas();
   };
 
-  window.invToggleOnlyIniAusente = function() {
-    _invFilter.onlyIniAusente = !_invFilter.onlyIniAusente;
-    _invSyncAusenteBtns();
-    _invSyncClearBtn();
-    invFiltrar();
-    invAtualizarKpis();
-    invAtualizarAlertas();
+  // Filtro "Ausência de Estoque" — dropdown com 4 opções (Todos / Só Est.
+  // Inicial Ausente / Só Est. Final Ausente / Sem Ausência). Substituiu o
+  // antigo botão de toggle alternado (cicla às cegas) por um dropdown, no
+  // mesmo padrão dos filtros Regional/Central/Categoria/Material.
+  window.invToggleAusenciaDropdown = function() {
+    _invCloseOtherSimpleDropdowns('ausencia');
+    const dd = document.getElementById('imfd-ausencia');
+    const chev = document.getElementById('imfc-ausencia');
+    if (!dd) return;
+    const isOpen = dd.classList.toggle('open');
+    chev?.classList.toggle('open', isOpen);
   };
 
-  window.invToggleOnlyFimAusente = function() {
-    _invFilter.onlyFimAusente = !_invFilter.onlyFimAusente;
+  window.invSetAusencia = function(state) {
+    _invFilter.ausencia = state;
     _invSyncAusenteBtns();
     _invSyncClearBtn();
+    _invCloseDropdownSimple('ausencia');
     invFiltrar();
     invAtualizarKpis();
     invAtualizarAlertas();
@@ -323,18 +329,36 @@
     invAtualizarAlertas();
   };
 
-  // Toggle "Só Divergências" — cicla entre 3 estados: desligado -> só itens
-  // COM pelo menos 1 categoria de Divergência identificada (r.divCount > 0)
-  // -> só itens SEM nenhuma divergência (r.divCount === 0) -> desligado.
-  window.invToggleOnlyDivergencias = function() {
-    _invFilter.onlyDivergencias = _invFilter.onlyDivergencias === false ? 'com'
-      : (_invFilter.onlyDivergencias === 'com' ? 'sem' : false);
+  // Filtro "Divergências" — dropdown com 3 opções (Todos / Só Divergências
+  // [itens COM pelo menos 1 categoria de Divergência identificada] / Só Sem
+  // Divergências). Substituiu o antigo botão de toggle alternado.
+  window.invToggleDivergenciasDropdown = function() {
+    _invCloseOtherSimpleDropdowns('divergencias');
+    const dd = document.getElementById('imfd-divergencias');
+    const chev = document.getElementById('imfc-divergencias');
+    if (!dd) return;
+    const isOpen = dd.classList.toggle('open');
+    chev?.classList.toggle('open', isOpen);
+  };
+
+  window.invSetDivergencias = function(state) {
+    _invFilter.onlyDivergencias = state;
     _invSyncDivergenciasBtn();
     _invSyncClearBtn();
+    _invCloseDropdownSimple('divergencias');
     invFiltrar();
     invAtualizarKpis();
     invAtualizarAlertas();
   };
+
+  // ── Helpers dos dropdowns simples (seleção única, sem Aplicar/Cancelar) ──
+  function _invCloseDropdownSimple(key) {
+    document.getElementById(`imfd-${key}`)?.classList.remove('open');
+    document.getElementById(`imfc-${key}`)?.classList.remove('open');
+  }
+  function _invCloseOtherSimpleDropdowns(exceptKey) {
+    ['ausencia', 'divergencias'].filter(k => k !== exceptKey).forEach(_invCloseDropdownSimple);
+  }
 
   function _invSyncVarZeroBtn() {
     const btn = document.getElementById('imft-varzero');
@@ -343,10 +367,28 @@
   }
 
   function _invSyncAusenteBtns() {
-    const iniBtn = document.getElementById('imft-iniausente');
-    if (iniBtn) iniBtn.classList.toggle('active', _invFilter.onlyIniAusente);
-    const fimBtn = document.getElementById('imft-fimausente');
-    if (fimBtn) fimBtn.classList.toggle('active', _invFilter.onlyFimAusente);
+    const btn = document.getElementById('imft-ausencia');
+    if (!btn) return;
+    const st = _invFilter.ausencia;
+    btn.classList.toggle('active', st !== false);
+    btn.classList.toggle('inv-div-sem', st === 'sem');
+    const label = document.getElementById('imft-ausencia-label');
+    const shortLabels = { ini: 'Est. Inicial Ausente', fim: 'Est. Final Ausente', sem: 'Sem Ausência' };
+    if (label) label.textContent = st ? `Ausência: ${shortLabels[st]}` : 'Ausência de Estoque';
+    const titles = {
+      ini: 'Mostra só linhas com Est. Inicial AUSENTE',
+      fim: 'Mostra só linhas com Est. Final AUSENTE',
+      sem: 'Mostra só linhas SEM nenhuma ausência (Est. Inicial e Final preenchidos)'
+    };
+    btn.title = titles[st] || 'Filtra por ausência de Estoque Inicial/Final';
+    const icon = document.getElementById('imft-ausencia-icon');
+    if (icon) icon.style.color = st === 'sem' ? 'var(--green, #10b981)' : '';
+    // Marca a opção ativa dentro do dropdown
+    document.querySelectorAll('#imfd-ausencia .micro-filter-option--radio').forEach(opt => {
+      const val = opt.dataset.val === 'false' ? false : opt.dataset.val;
+      opt.classList.toggle('selected', val === st);
+      opt.classList.toggle('inv-div-sem', val === 'sem');
+    });
   }
 
   function _invSyncPendentesBtn() {
@@ -361,15 +403,22 @@
     btn.classList.toggle('active', state !== false);
     btn.classList.toggle('inv-div-sem', state === 'sem');
     const label = document.getElementById('imft-divergencias-label');
-    if (label) label.textContent = state === 'sem' ? 'Só Sem Divergências' : 'Só Divergências';
+    const shortLabels = { com: 'Só Divergências', sem: 'Só Sem Divergências' };
+    if (label) label.textContent = state ? shortLabels[state] : 'Divergências';
     btn.title = state === 'sem'
       ? 'Mostra só itens SEM nenhuma causa de variação identificada'
-      : 'Mostra só itens com possíveis causas da variação identificadas (registro manual, duplicidade, pendência de integração SAP ou ocorrência aberta)';
+      : 'Filtra por causas da variação identificadas (registro manual, duplicidade, pendência de integração SAP ou ocorrência aberta)';
     const color = state === 'sem' ? 'var(--green, #10b981)' : 'var(--accent)';
     const icon = document.getElementById('imft-divergencias-icon');
     if (icon) icon.style.color = color;
     const badge = document.getElementById('inv-divergencias-count');
     if (badge) badge.style.background = color;
+    // Marca a opção ativa dentro do dropdown
+    document.querySelectorAll('#imfd-divergencias .micro-filter-option--radio').forEach(opt => {
+      const val = opt.dataset.val === 'false' ? false : opt.dataset.val;
+      opt.classList.toggle('selected', val === state);
+      opt.classList.toggle('inv-div-sem', val === 'sem');
+    });
   }
 
   // ── Modo seleção (checkboxes) — pra "Justificar em lote" ────
@@ -437,7 +486,7 @@
   function _invSyncClearBtn() {
     const btn = document.getElementById('inv-filter-clear-btn');
     if (!btn) return;
-    const hasAny = _invFilter.applied.regional.size || _invFilter.applied.central.size || _invFilter.applied.categoria.size || _invFilter.applied.material.size || _invFilter.hideVarZero || _invFilter.onlyIniAusente || _invFilter.onlyFimAusente || _invFilter.onlyPendentes || _invFilter.onlyDivergencias;
+    const hasAny = _invFilter.applied.regional.size || _invFilter.applied.central.size || _invFilter.applied.categoria.size || _invFilter.applied.material.size || _invFilter.hideVarZero || _invFilter.ausencia || _invFilter.onlyPendentes || _invFilter.onlyDivergencias;
     btn.style.display = hasAny ? '' : 'none';
   }
 
@@ -1014,8 +1063,9 @@
     if (catSet.size && !catSet.has(r.categoria)) return false;
     if (matSet.size && !matSet.has(r.material))  return false;
     if (_invFilter.hideVarZero && _invVarIrrelevante(r.varKg)) return false;
-    if (_invFilter.onlyIniAusente && !r.estoqueIniMissing) return false;
-    if (_invFilter.onlyFimAusente && !r.estoqueFimMissing) return false;
+    if (_invFilter.ausencia === 'ini' && !r.estoqueIniMissing) return false;
+    if (_invFilter.ausencia === 'fim' && !r.estoqueFimMissing) return false;
+    if (_invFilter.ausencia === 'sem' && (r.estoqueIniMissing || r.estoqueFimMissing)) return false;
     return true;
   }
 
@@ -2491,6 +2541,11 @@
           _invCloseDropdown(key);
         }
       }
+    });
+    // Dropdowns simples (seleção única, sem Aplicar/Cancelar): Ausência e Divergências
+    ['ausencia','divergencias'].forEach(key => {
+      const group = document.getElementById(`imfg-${key}`);
+      if (group && !group.contains(e.target)) _invCloseDropdownSimple(key);
     });
   });
 })();

@@ -1709,17 +1709,34 @@
             <span id="imft-varzero-label">Ocultar Variação 0</span>
           </button>
 
-          <!-- Toggle: só Est. Inicial ausente -->
-          <button class="micro-filter-trigger" id="imft-iniausente" onclick="invToggleOnlyIniAusente()" title="Mostra só linhas com Est. Inicial AUSENTE">
-            <i class="ti ti-alert-triangle"></i>
-            <span id="imft-iniausente-label">Só Est. Inicial Ausente</span>
-          </button>
-
-          <!-- Toggle: só Est. Final ausente -->
-          <button class="micro-filter-trigger" id="imft-fimausente" onclick="invToggleOnlyFimAusente()" title="Mostra só linhas com Est. Final AUSENTE">
-            <i class="ti ti-alert-triangle"></i>
-            <span id="imft-fimausente-label">Só Est. Final Ausente</span>
-          </button>
+          <!-- Filtro (dropdown, 4 opções): ausência de Est. Inicial / Final -->
+          <div class="micro-filter-group" id="imfg-ausencia">
+            <button class="micro-filter-trigger" id="imft-ausencia" onclick="invToggleAusenciaDropdown()" title="Filtra por ausência de Estoque Inicial/Final">
+              <i class="ti ti-alert-triangle" id="imft-ausencia-icon"></i>
+              <span id="imft-ausencia-label">Ausência de Estoque</span>
+              <i class="ti ti-chevron-down micro-filter-chev" id="imfc-ausencia"></i>
+            </button>
+            <div class="micro-filter-dropdown" id="imfd-ausencia">
+              <div class="micro-filter-options">
+                <div class="micro-filter-option micro-filter-option--radio" data-val="false" onclick="invSetAusencia(false)">
+                  <span class="micro-filter-option-label">Todos</span>
+                  <i class="ti ti-check micro-filter-option-check"></i>
+                </div>
+                <div class="micro-filter-option micro-filter-option--radio" data-val="ini" onclick="invSetAusencia('ini')">
+                  <span class="micro-filter-option-label">Só Est. Inicial Ausente</span>
+                  <i class="ti ti-check micro-filter-option-check"></i>
+                </div>
+                <div class="micro-filter-option micro-filter-option--radio" data-val="fim" onclick="invSetAusencia('fim')">
+                  <span class="micro-filter-option-label">Só Est. Final Ausente</span>
+                  <i class="ti ti-check micro-filter-option-check"></i>
+                </div>
+                <div class="micro-filter-option micro-filter-option--radio" data-val="sem" onclick="invSetAusencia('sem')">
+                  <span class="micro-filter-option-label">Sem Ausência (ambos preenchidos)</span>
+                  <i class="ti ti-check micro-filter-option-check"></i>
+                </div>
+              </div>
+            </div>
+          </div>
 
           <!-- Toggle: só itens com variação sem justificativa (era o botão "Pendentes") -->
           <button class="micro-filter-trigger" id="imft-pendentes" onclick="invToggleOnlyPendentes()" title="Mostra só itens com variação e sem justificativa">
@@ -1728,12 +1745,31 @@
             <span id="inv-alertas-count" style="background:var(--amber);color:#000;border-radius:20px;padding:0 6px;font-size:10px;font-weight:700;min-width:18px;text-align:center;margin-left:2px">0</span>
           </button>
 
-          <!-- Toggle: só itens com Divergências identificadas (manual/duplicidade/pendência SAP/ocorrência) -->
-          <button class="micro-filter-trigger" id="imft-divergencias" onclick="invToggleOnlyDivergencias()" title="Mostra só itens com possíveis causas da variação identificadas (registro manual, duplicidade, pendência de integração SAP ou ocorrência aberta)">
-            <i class="ti ti-list-search" id="imft-divergencias-icon" style="color:var(--accent)"></i>
-            <span id="imft-divergencias-label">Só Divergências</span>
-            <span id="inv-divergencias-count" style="background:var(--accent);color:#fff;border-radius:20px;padding:0 6px;font-size:10px;font-weight:700;min-width:18px;text-align:center;margin-left:2px">0</span>
-          </button>
+          <!-- Filtro (dropdown, 3 opções): causas de variação identificadas -->
+          <div class="micro-filter-group" id="imfg-divergencias">
+            <button class="micro-filter-trigger" id="imft-divergencias" onclick="invToggleDivergenciasDropdown()" title="Filtra por causas da variação identificadas (registro manual, duplicidade, pendência de integração SAP ou ocorrência aberta)">
+              <i class="ti ti-list-search" id="imft-divergencias-icon" style="color:var(--accent)"></i>
+              <span id="imft-divergencias-label">Divergências</span>
+              <span id="inv-divergencias-count" style="background:var(--accent);color:#fff;border-radius:20px;padding:0 6px;font-size:10px;font-weight:700;min-width:18px;text-align:center;margin-left:2px">0</span>
+              <i class="ti ti-chevron-down micro-filter-chev" id="imfc-divergencias"></i>
+            </button>
+            <div class="micro-filter-dropdown" id="imfd-divergencias">
+              <div class="micro-filter-options">
+                <div class="micro-filter-option micro-filter-option--radio" data-val="false" onclick="invSetDivergencias(false)">
+                  <span class="micro-filter-option-label">Todos</span>
+                  <i class="ti ti-check micro-filter-option-check"></i>
+                </div>
+                <div class="micro-filter-option micro-filter-option--radio" data-val="com" onclick="invSetDivergencias('com')">
+                  <span class="micro-filter-option-label">Só Divergências</span>
+                  <i class="ti ti-check micro-filter-option-check"></i>
+                </div>
+                <div class="micro-filter-option micro-filter-option--radio" data-val="sem" onclick="invSetDivergencias('sem')">
+                  <span class="micro-filter-option-label">Só Sem Divergências</span>
+                  <i class="ti ti-check micro-filter-option-check"></i>
+                </div>
+              </div>
+            </div>
+          </div>
 
           <!-- Toggle: modo seleção (checkboxes) pra Justificar em lote — movido pro
                cabeçalho da tabela (table-toolbar), junto com Expandir/Importar/Exportar -->
