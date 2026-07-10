@@ -7,6 +7,24 @@
 // disso, o usuário pode trocar o mês do Inventário manualmente e essa
 // escolha prevalece até a próxima análise.)
 // ═══════════════════════════════════════════════════════════
+// Trava/atualiza a altura mínima do container da Visão Micro para que os
+// filtros (aplicar, limpar, etc.) nunca encolham o elemento — a altura só
+// pode crescer (ex.: ao expandir um card) ou ser redefinida numa análise
+// nova (reset=true). Se o container estiver oculto no momento da medição
+// (offsetHeight 0, ex.: aba "Visão Inventário" ativa), a leitura é
+// ignorada para não travar a altura em 0.
+function _updateMicroContainerHeightLock(reset) {
+  const container = document.getElementById('an-micro-container');
+  if (!container) return;
+  if (reset) container.style.minHeight = '';
+  requestAnimationFrame(() => {
+    const h = container.offsetHeight;
+    if (h <= 0) return;
+    const currentLock = parseFloat(container.style.minHeight) || 0;
+    if (reset || h > currentLock) container.style.minHeight = h + 'px';
+  });
+}
+
 function anSwitchView(view) {
   const btnMicro  = document.getElementById('an-view-btn-micro');
   const btnInv    = document.getElementById('an-view-btn-inventario');
@@ -20,6 +38,11 @@ function anSwitchView(view) {
   btnInv.classList.toggle('active', isInv);
   paneMicro.style.display = isInv ? 'none' : '';
   paneInv.style.display   = isInv ? '' : 'none';
+
+  // Ao voltar para a Visão Micro, garante que o piso de altura esteja
+  // correto — cobre o caso em que uma análise rodou enquanto esta aba
+  // estava oculta (offsetHeight 0 na hora da travinha original).
+  if (!isInv) _updateMicroContainerHeightLock(false);
 
   // Legenda ao lado das abas substitui o título repetido que existia em
   // cada visão (ex.: "Visão Micro — Por Filial e Material"), já que a
@@ -1759,11 +1782,9 @@ function renderAnaliticoMicro(results, dtIni, dtFim, silent) {
   _updateToggleRegionaisBtn();
   _updateToggleCentralisBtn();
 
-  // Fixa a altura mínima do container no estado sem filtro
-  container.style.minHeight = '';
-  requestAnimationFrame(() => {
-    container.style.minHeight = container.offsetHeight + 'px';
-  });
+  // Fixa a altura mínima do container no estado sem filtro (nova análise
+  // = reset legítimo, já que o conjunto de dados mudou por completo)
+  _updateMicroContainerHeightLock(true);
 }  // end _rodarAnaliticoCore
 
 // Abre modal listando os materiais sem cadastro de uma central específica
@@ -2241,9 +2262,12 @@ function clearAllMicroFilters() {
   _tipoVarSyncNivelToState(new Set(['regional','central','material']));
   _tipoVarUpdateTrigger();
   _applyMicroVisibility();
-  // Ao limpar filtros, remove min-height para o container voltar à altura natural
-  const container = document.getElementById('an-micro-container');
-  if (container) container.style.minHeight = '';
+  // Ao limpar filtros, NÃO removemos a trava de altura — isso é o que
+  // causava o container encolher/pular depois de "Limpar Filtros" (o
+  // piso ficava vazio e nunca era recalculado até a próxima análise).
+  // Aqui só atualizamos a trava para cima, se o conteúdo agora visível
+  // for maior que o piso atual — a altura nunca encolhe.
+  _updateMicroContainerHeightLock(false);
 }
 
 // ── Saúde filter state (replaces old variação % filter) ──
