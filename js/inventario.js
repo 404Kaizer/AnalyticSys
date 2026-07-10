@@ -77,14 +77,16 @@
     }
   };
 
-  // 3 estados do botão/linha de justificativa (ver invRenderTabela):
-  // "justificar" (cinza, nada preenchido) → "justificado" (amarelo, os 4
-  // campos obrigatórios preenchidos, falta só o Documento SAP opcional) →
-  // "ajustado" (verde, tudo preenchido, incluindo Documento SAP).
+  // 4 estados do botão/linha de justificativa (ver invRenderTabela):
+  // "justificar" (cinza, nada preenchido) → "pendente" (âmbar, algo
+  // preenchido mas SEM Operacional e Fiscal) → "justificado" (azul,
+  // Operacional+Fiscal preenchidos mas falta o restante) → "ajustado"
+  // (verde, tudo preenchido, incluindo Custo Médio SAP e Documento SAP).
   const _INV_ESTADO_STYLE = {
-    justificar:  { bg: 'var(--bg4)',       border: 'var(--border2)',      color: 'var(--text2)', icon: 'ti-pencil', label: 'Justificar'  },
-    justificado: { bg: 'var(--amber-bg)',  border: 'var(--amber-border)', color: 'var(--amber)',  icon: 'ti-check',  label: 'Justificado' },
-    ajustado:    { bg: 'var(--green-bg)',  border: 'var(--green-border)', color: 'var(--green)',  icon: 'ti-checks', label: 'Ajustado'    },
+    justificar:  { bg: 'var(--bg4)',       border: 'var(--border2)',      color: 'var(--text2)', icon: 'ti-pencil',         label: 'Justificar'  },
+    pendente:    { bg: 'var(--amber-bg)',  border: 'var(--amber-border)', color: 'var(--amber)',  icon: 'ti-alert-triangle', label: 'Pendente'    },
+    justificado: { bg: 'var(--accent-dim)',border: 'var(--accent)',       color: 'var(--accent)', icon: 'ti-check',          label: 'Justificado' },
+    ajustado:    { bg: 'var(--green-bg)',  border: 'var(--green-border)', color: 'var(--green)',  icon: 'ti-checks',         label: 'Ajustado'    },
   };
 
   function fmt(n, dec=0) {
@@ -1172,15 +1174,20 @@
     return !!(j && (j.op || j.fiscal || j.saldo || j.custoMedioSap || j.documentoSap));
   }
 
-  // 3 estados (compartilhado entre invRenderTabela e o resumo de progresso
-  // em invAtualizarKpis): "justificar" (nada preenchido) → "justificado"
-  // (Operacional+Fiscal+Saldo preenchidos — Custo Médio SAP e Documento
-  // SAP são opcionais, não bloqueiam esse estado) → "ajustado" (tudo
-  // preenchido, incluindo Custo Médio SAP e Documento SAP).
+  // 4 estados (compartilhado entre invRenderTabela e o resumo de progresso
+  // em invAtualizarKpis):
+  //   "justificar"  — nada preenchido (_invTemJustSalva falso)
+  //   "pendente"    — algo preenchido, mas SEM Operacional+Fiscal
+  //   "justificado" — Operacional+Fiscal preenchidos, falta o restante
+  //                   (Saldo, Custo Médio SAP e/ou Documento SAP)
+  //   "ajustado"    — tudo preenchido, incluindo Custo Médio SAP e
+  //                   Documento SAP
   function _invEstadoDaLinha(j) {
-    const hasJust = !!(j && j.op && j.fiscal && j.saldo);
-    const hasTudo = !!(hasJust && j.custoMedioSap && j.documentoSap && String(j.documentoSap).trim() !== '');
-    return !hasJust ? 'justificar' : (hasTudo ? 'ajustado' : 'justificado');
+    if (!_invTemJustSalva(j)) return 'justificar';
+    const temNarrativa = !!(j && j.op && j.fiscal);
+    if (!temNarrativa) return 'pendente';
+    const temTudo = !!(j.saldo && j.custoMedioSap && j.documentoSap && String(j.documentoSap).trim() !== '');
+    return temTudo ? 'ajustado' : 'justificado';
   }
 
   // ── Filtrar ──────────────────────────────────────────────
@@ -1246,8 +1253,16 @@
       // campos obrigatórios preenchidos, Documento SAP ainda não) →
       // "ajustado" (tudo preenchido, incluindo Documento SAP).
       const estadoJust = _invEstadoDaLinha(j);
-      const hasJust = estadoJust !== 'justificar';
-      const rowClass = estadoJust === 'ajustado' ? 'inv-row-ajustado' : estadoJust === 'justificado' ? 'inv-row-justificado' : '';
+      // hasJust agora significa "tem a narrativa completa" (Operacional+
+      // Fiscal preenchidos) — ou seja, estadoJust é 'justificado' ou
+      // 'ajustado'. Uma linha "pendente" (algo preenchido mas sem a
+      // narrativa) ainda conta como SEM justificativa pra esse efeito
+      // (badge de alerta, filtro Só Pendentes etc.).
+      const hasJust = estadoJust === 'justificado' || estadoJust === 'ajustado';
+      const rowClass = estadoJust === 'ajustado' ? 'inv-row-ajustado'
+        : estadoJust === 'justificado' ? 'inv-row-justificado'
+        : estadoJust === 'pendente' ? 'inv-row-pendente'
+        : '';
       // Habilita o botão de excluir mesmo com justificativa PARCIAL (ex.:
       // só op+fiscal preenchidos vindo de importação de CSV) — critério
       // mais abrangente que hasJust, que só considera completa.
@@ -2093,9 +2108,18 @@
     const btn = document.getElementById(`lote-btn-${idx}`);
     const badge = document.getElementById(`lote-status-${idx}`);
     if (btn) btn.disabled = !podeRegistrar;
-    if (badge) badge.innerHTML = st.registrado
-      ? '<span style="color:var(--green);font-size:11px;font-weight:700;white-space:nowrap"><i class="ti ti-circle-check-filled"></i> Registrada</span>'
-      : '<span style="color:var(--text3);font-size:11px;white-space:nowrap">Não registrada</span>';
+    // 3 estados: Não registrada (cinza) → Pendente (âmbar — já registrada,
+    // mas SEM Operacional e Fiscal, já que esses dois deixaram de ser
+    // obrigatórios pra registrar) → Registrada (verde — registrada e com
+    // as duas justificativas narrativas preenchidas).
+    const faltaOpEFiscal = st.registrado && !(st.snapshot?.op && st.snapshot?.fiscal);
+    if (badge) {
+      badge.innerHTML = !st.registrado
+        ? '<span style="color:var(--text3);font-size:11px;white-space:nowrap">Não registrada</span>'
+        : faltaOpEFiscal
+          ? '<span style="color:var(--amber);font-size:11px;font-weight:700;white-space:nowrap" title="Registrada, mas sem Justificativa Operacional e Fiscal"><i class="ti ti-alert-triangle"></i> Pendente</span>'
+          : '<span style="color:var(--green);font-size:11px;font-weight:700;white-space:nowrap"><i class="ti ti-circle-check-filled"></i> Registrada</span>';
+    }
 
     const progresso = document.getElementById('inv-lote-progress');
     const total = _invLoteKeys.length;
