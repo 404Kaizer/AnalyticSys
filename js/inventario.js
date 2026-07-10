@@ -104,13 +104,31 @@
 
   const _invFilterKeyLabels = { regional: 'Regional', central: 'Central', categoria: 'Categoria', material: 'Material' };
 
+  // Linhas-base para calcular as opções de um filtro: considera os demais
+  // filtros JÁ APLICADOS (todos exceto o da própria chave) — assim, se
+  // Fornecedor/Central já está filtrado, o dropdown de Categoria/Material
+  // só mostra os valores que ainda existem dentro daquele recorte, e não
+  // todos os valores da tabela inteira.
+  function _invOptionsSourceRows(key) {
+    const keys = ['regional', 'central', 'categoria', 'material'];
+    return invRows.filter(r => {
+      for (const k of keys) {
+        if (k === key) continue;
+        const set = _invFilter.applied[k];
+        if (set && set.size && !set.has(r[k])) return false;
+      }
+      return true;
+    });
+  }
+
+  function _invRecomputeOptions(key) {
+    _invFilter.options[key] = [...new Set(_invOptionsSourceRows(key).map(r => r[key]).filter(Boolean))].sort();
+  }
+
   // Popula as opções de cada filtro a partir das linhas geradas (invRows)
   function invPopulateMicroFilterOptions() {
-    _invFilter.options.regional  = [...new Set(invRows.map(r => r.regional).filter(Boolean))].sort();
-    _invFilter.options.central   = [...new Set(invRows.map(r => r.central).filter(Boolean))].sort();
-    _invFilter.options.categoria = [...new Set(invRows.map(r => r.categoria).filter(Boolean))].sort();
-    _invFilter.options.material  = [...new Set(invRows.map(r => r.material).filter(Boolean))].sort();
     ['regional','central','categoria','material'].forEach(key => {
+      _invRecomputeOptions(key);
       _invBuildOptionsList(key);
       _invSyncTriggerLabel(key);
     });
@@ -174,6 +192,7 @@
       _invFilter.pending[key] = new Set(_invFilter.applied[key]);
       const searchEl = document.getElementById(`imfs-${key}`);
       if (searchEl) searchEl.value = '';
+      _invRecomputeOptions(key);
       _invBuildOptionsList(key);
       setTimeout(() => searchEl?.focus(), 50);
     }
@@ -1896,31 +1915,6 @@
     toast('Linha registrada.', 'success');
   };
 
-  // Registra de uma vez toda linha selecionada que já está com os 4 campos
-  // obrigatórios preenchidos e ainda não registrada. Pula silenciosamente
-  // (sem travar as demais) as que estão incompletas — conta pra avisar no
-  // resumo final, sem toast por linha, pra não empilhar dezenas de toasts.
-  window._invLoteRegistrarTodos = function() {
-    let registradas = 0, incompletas = 0;
-    _invLoteKeys.forEach(k => {
-      const st = _invLoteState[k] || {};
-      if (st.registrado) return;
-      const vals = _invLoteLerValores(k);
-      if (!_invLoteObrigatoriosPreenchidos(vals)) { incompletas++; return; }
-      _invApplyJustValues(k, vals);
-      _invLoteState[k] = { registrado: true, snapshot: vals };
-      registradas++;
-    });
-    _invLoteKeys.forEach(k => _invLoteAtualizarLinhaVisual(k));
-    if (registradas === 0 && incompletas === 0) {
-      toast('Todas as linhas já estavam registradas.', 'success');
-    } else {
-      const partes = [`${registradas} registrada${registradas===1?'':'s'}`];
-      if (incompletas) partes.push(`${incompletas} pulada${incompletas===1?'':'s'} (campos obrigatórios incompletos)`);
-      toast(partes.join(', ') + '.', incompletas && !registradas ? 'error' : 'success');
-    }
-  };
-
   // Copia o valor do campo `campo` da linha idxOrigem pras demais linhas
   // selecionadas — só nas que ainda estão vazias nesse campo.
   window._invLoteReplicar = function(campo, idxOrigem) {
@@ -2053,9 +2047,8 @@
         <div class="modal-body" style="max-height:70vh;overflow-y:auto;overflow-x:hidden">
           ${cardsHtml}
         </div>
-        <div class="modal-footer" style="justify-content:space-between">
+        <div class="modal-footer" style="justify-content:flex-end">
           <button class="btn" onclick="_invLoteTentarFechar()">Fechar</button>
-          <button class="btn btn-primary" onclick="_invLoteRegistrarTodos()"><i class="ti ti-stack-2"></i> Registrar Todos</button>
         </div>
       </div>`;
     document.body.appendChild(modal);

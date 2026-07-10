@@ -1914,28 +1914,75 @@ const _microFilter = {
   variacaoData: new Map()
 };
 
+// Guarda o último "results" completo (sem filtro) renderado, para permitir
+// recalcular as opções de cada dropdown considerando os demais filtros já
+// aplicados (estilo Excel), sem precisar re-rodar o cálculo da Visão Micro.
+let _microFilterResults = [];
+
 function _microFilterBar() { return document.getElementById('micro-filter-bar'); }
+
+// Linhas de "results" que passam nos filtros aplicados de Regional/Central,
+// exceto o da própria chave — usado tanto para essas duas dimensões quanto
+// como base para extrair Categoria/Material do recorte já filtrado.
+function _microOptionsSourceRows(key) {
+  const idx = getFilialLookupIndex();
+  return _microFilterResults.filter(r => {
+    if (key !== 'regional' && _microFilter.applied.regional.size) {
+      const found = idx.exact.get(normalizeText(r.central));
+      const reg = (found?.regional || '').trim();
+      if (!_microFilter.applied.regional.has(reg)) return false;
+    }
+    if (key !== 'central' && _microFilter.applied.central.size && !_microFilter.applied.central.has(r.central)) {
+      return false;
+    }
+    return true;
+  });
+}
+
+// Recalcula as opções de UMA chave considerando os filtros já aplicados nas
+// DEMAIS chaves (Regional/Central filtram linhas; Categoria/Material se
+// filtram mutuamente dentro dos lançamentos/SAP de cada linha).
+function _microRecomputeOptions(key) {
+  const idx = getFilialLookupIndex();
+  const rows = _microOptionsSourceRows(key);
+
+  if (key === 'central') {
+    _microFilter.options.central = [...new Set(rows.map(r => r.central).filter(Boolean))].sort();
+    return;
+  }
+  if (key === 'regional') {
+    _microFilter.options.regional = [...new Set(rows.map(r => {
+      const found = idx.exact.get(normalizeText(r.central));
+      return (found?.regional || '').trim();
+    }).filter(Boolean))].sort();
+    return;
+  }
+
+  const appliedMaterial  = _microFilter.applied.material;
+  const appliedCategoria = _microFilter.applied.categoria;
+  const mats = new Set();
+  const cats = new Set();
+  rows.forEach(r => {
+    [...(r.lancsNoPeriodo || []), ...(r.sapNoPeriodo || [])].forEach(rec => {
+      const cat = (rec.categoria || '').trim().toUpperCase();
+      const mat = rec.material || '';
+      if (key === 'material') {
+        if (appliedCategoria.size && !appliedCategoria.has(cat)) return;
+        if (mat) mats.add(mat);
+      } else if (key === 'categoria') {
+        if (appliedMaterial.size && !appliedMaterial.has(mat)) return;
+        if (cat) cats.add(cat);
+      }
+    });
+  });
+  if (key === 'material')  _microFilter.options.material  = [...mats].sort();
+  if (key === 'categoria') _microFilter.options.categoria = [...cats].sort();
+}
 
 /** Populate filter options from the rendered results data */
 function populateMicroFilterOptions(results) {
-  const centrais = [...new Set(results.map(r => r.central).filter(Boolean))].sort();
-  const mats = [...new Set(results.flatMap(r => r.allMats || []).filter(Boolean))].sort();
-  // Regionais: lookup each central in state.filiais by alias or origem
-  const idx = getFilialLookupIndex();
-  const regionais = [...new Set(results.map(r => {
-    const key = normalizeText(r.central);
-    const found = idx.exact.get(key);
-    return (found?.regional || '').trim();
-  }).filter(Boolean))].sort();
-  // Categorias: extract from lancamentos and sap records
-  const categorias = [...new Set(results.flatMap(r => [
-    ...(r.lancsNoPeriodo || []).map(l => (l.categoria || '').trim().toUpperCase()),
-    ...(r.sapNoPeriodo   || []).map(s => (s.categoria || '').trim().toUpperCase()),
-  ]).filter(Boolean))].sort();
-  _microFilter.options.central   = centrais;
-  _microFilter.options.material  = mats;
-  _microFilter.options.regional  = regionais;
-  _microFilter.options.categoria = categorias;
+  _microFilterResults = results;
+  ['regional', 'central', 'categoria', 'material'].forEach(key => _microRecomputeOptions(key));
   _buildOptionsList('regional');
   _buildOptionsList('central');
   _buildOptionsList('categoria');
@@ -2014,6 +2061,7 @@ function toggleMicroFilter(key) {
       // Reset search
       const searchEl = document.getElementById(`mfs-${key}`);
       if (searchEl) searchEl.value = '';
+      _microRecomputeOptions(key);
       _buildOptionsList(key);
       // Focus search
       setTimeout(() => searchEl?.focus(), 50);

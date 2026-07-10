@@ -675,18 +675,43 @@ function _agrUpdateTriggerLabel(key, selectedVals) {
   }
 }
 
-// Populate dynamic options (central and material lists)
+// Populate dynamic options (central and material lists), considerando os
+// demais filtros JÁ APLICADOS (Status/Justificativa/Central/Material,
+// exceto o da própria chave) — estilo Excel: se já filtrei por Central,
+// o dropdown de Material só mostra materiais daquela(s) central(is).
 function _agrPopulateOptions(key) {
   const data = window._agrCentraisData || [];
   const opts = document.getElementById(`agr-mfo-${key}`);
   if (!opts) return;
   // Get current checked values to preserve selection
   const checked = new Set(_agrGetChecked(`agr-mfo-${key}`));
+
+  const selStatus   = key === 'status'   ? [] : _agrGetChecked('agr-mfo-status');
+  const selJustif   = key === 'justif'   ? [] : _agrGetChecked('agr-mfo-justif');
+  const selCentral  = key === 'central'  ? [] : _agrGetChecked('agr-mfo-central');
+  const selMaterial = key === 'material' ? [] : _agrGetChecked('agr-mfo-material');
+
+  const filteredData = data.filter(c => {
+    if (selStatus.length   && !selStatus.includes(c.criticidade)) return false;
+    if (selCentral.length  && !selCentral.includes(c.central))    return false;
+    if (selJustif.length) {
+      const hasMatch = c.mats.some(m => selJustif.includes(_agrMatJustifType(m)));
+      if (!hasMatch) return false;
+    }
+    if (selMaterial.length) {
+      const hasMatch = c.mats.some(m => selMaterial.includes(m.material));
+      if (!hasMatch) return false;
+    }
+    return true;
+  });
+
   let values = [];
   if (key === 'central') {
-    values = [...new Set(data.map(c => c.central))].sort();
+    values = [...new Set(filteredData.map(c => c.central))].sort();
   } else if (key === 'material') {
-    values = [...new Set(data.flatMap(c => c.mats.map(m => m.material)))].sort();
+    values = [...new Set(filteredData.flatMap(c => c.mats
+      .filter(m => !selJustif.length || selJustif.includes(_agrMatJustifType(m)))
+      .map(m => m.material)))].sort();
   }
   opts.innerHTML = values.map(v => {
     const escaped   = escapeHtml(v);

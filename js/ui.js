@@ -814,26 +814,53 @@ function _invalidateAllColUniqueCaches() {
   for (const k of Object.keys(_colUniqueCache)) delete _colUniqueCache[k];
 }
 
-// Collect unique display values for a column from the FULL (unfiltered) dataset
+// Collect unique display values for a column, considerando os demais filtros
+// de coluna JÁ ATIVOS no módulo (todos exceto o da própria coluna) — estilo
+// Excel/Google Sheets: se eu já filtrei FORNECEDOR, o dropdown de NF só
+// mostra as NFs daquele fornecedor, e não todas as NFs da tabela inteira.
 function getColUniqueValues(module, colIdx) {
   const meta = colFilterMeta[module];
   if (!meta) return [];
   const field = meta.fields[colIdx];
   if (!field) return [];
-  const data = module === 'producao' ? state.producao
+  const baseData = module === 'producao' ? state.producao
                : (module in state) ? state[module] : [];
 
-  // Usa cache: chave = module+colIdx, versão = tamanho do array
-  const cacheKey = module + ':' + colIdx;
+  // Filtros de coluna ativos em OUTRAS colunas (a própria coluna é ignorada
+  // aqui, senão marcar um valor faria os demais valores da mesma coluna
+  // sumirem do próprio dropdown)
+  const cf = colFilters[module] || {};
+  const otherEntries = Object.entries(cf).filter(
+    ([ci, s]) => Number(ci) !== Number(colIdx) && s && s.size > 0
+  );
+
+  // Cache: chave inclui a assinatura dos filtros ativos nas outras colunas,
+  // já que o resultado agora depende deles, não só do módulo+coluna
+  const filterSig = otherEntries
+    .map(([ci, s]) => ci + '=' + [...s].sort().join(','))
+    .sort().join('|');
+  const cacheKey = module + ':' + colIdx + ':' + filterSig;
   const cached = _colUniqueCache[cacheKey];
-  if (cached && cached.version === data.length) return cached.values;
+  if (cached && cached.version === baseData.length) return cached.values;
+
+  const data = otherEntries.length
+    ? baseData.filter(r => {
+        for (const [ci, activeSet] of otherEntries) {
+          const f = meta.fields[Number(ci)];
+          if (!f) continue;
+          const cellVal = normalizeText(String(r[f] ?? '—'));
+          if (!activeSet.has(cellVal)) return false;
+        }
+        return true;
+      })
+    : baseData;
 
   const seen = new Set();
   for (let i = 0; i < data.length; i++) {
     seen.add(normalizeText(String(data[i][field] ?? '—')));
   }
   const values = [...seen].sort((a, b) => a.localeCompare(b, 'pt-BR'));
-  _colUniqueCache[cacheKey] = { version: data.length, values };
+  _colUniqueCache[cacheKey] = { version: baseData.length, values };
   return values;
 }
 
