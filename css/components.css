@@ -291,6 +291,24 @@
 .inv-progresso-fill.is-ajustado    { background: var(--green); }
 .inv-progresso-fill.is-justificado { background: var(--amber); }
 
+/* ── Barra de progresso do modal "Justificar em lote" — mesmo padrão
+   visual do resumo de progresso da tabela, só que com um único segmento
+   (verde = registrada), e escopo só nos itens selecionados pro lote, não
+   no inventário inteiro. */
+.inv-lote-progress-track {
+  height: 5px;
+  border-radius: 3px;
+  background: var(--bg4);
+  overflow: hidden;
+  margin-top: 8px;
+  min-width: 160px;
+}
+.inv-lote-progress-fill {
+  height: 100%;
+  background: var(--green);
+  transition: width 0.25s ease;
+}
+
 /* ── Bloco de DESTAQUE — Variação e Custo Var. ─────────────
    São os dados mais importantes do resumo do inventário, por isso
    ganham um invólucro próprio (fundo/borda diferenciados) e cards

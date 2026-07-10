@@ -1864,11 +1864,11 @@
       : '<span style="color:var(--text3);font-size:11px;white-space:nowrap">Não registrada</span>';
 
     const progresso = document.getElementById('inv-lote-progress');
-    if (progresso) {
-      const total = _invLoteKeys.length;
-      const feitas = _invLoteKeys.filter(kk => _invLoteState[kk]?.registrado).length;
-      progresso.textContent = `${feitas} de ${total} registrada${total===1?'':'s'}`;
-    }
+    const total = _invLoteKeys.length;
+    const feitas = _invLoteKeys.filter(kk => _invLoteState[kk]?.registrado).length;
+    if (progresso) progresso.textContent = `${feitas} de ${total} registrada${total===1?'':'s'}`;
+    const fill = document.getElementById('inv-lote-progress-fill');
+    if (fill) fill.style.width = (total ? (feitas / total) * 100 : 0) + '%';
   }
 
   // Chamado a cada edição de qualquer campo (oninput/onchange). Se a linha
@@ -2019,6 +2019,9 @@
           <div>
             <span class="modal-title"><i class="ti ti-stack-2"></i> Justificar em lote</span>
             <div style="font-size:11px;color:var(--text2);margin-top:3px" id="inv-lote-progress">${_invLoteKeys.length} linha${_invLoteKeys.length===1?'':'s'} selecionada${_invLoteKeys.length===1?'':'s'}</div>
+            <div class="inv-lote-progress-track">
+              <div class="inv-lote-progress-fill" id="inv-lote-progress-fill" style="width:0%"></div>
+            </div>
           </div>
           <button class="modal-close" onclick="_invLoteTentarFechar()"><i class="ti ti-x"></i></button>
         </div>
