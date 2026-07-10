@@ -1816,16 +1816,6 @@
     el.innerHTML = `${icon} ${_money(Math.abs(total))}`;
   };
 
-  function _invValidarJustForm() {
-    const op         = document.getElementById('inv-j-op')?.value.trim();
-    const fiscal     = document.getElementById('inv-j-fiscal')?.value.trim();
-    const saldo      = document.getElementById('inv-j-saldo')?.value;
-    if (!op || !fiscal || saldo === '' || saldo == null) {
-      return 'Preencha justificativa operacional, justificativa fiscal e saldo justificado antes de salvar.';
-    }
-    return null;
-  }
-
   // Grava { op, fiscal, saldo, custoSap, docSap } no registro k, recalcula
   // os campos derivados da linha (saldoJust/varAdj/custo/custoMedioSap/
   // custoSap) e persiste. Extraído de _invSalvarJustCore pra ser reaproveitado
@@ -1869,12 +1859,10 @@
     _invRenderJustModal(k);
   };
 
-  // dir: -1 (Anterior) ou +1 (Próximo). Valida e salva o registro atual
-  // antes de avançar; se inválido, avisa e permanece no mesmo registro.
+  // dir: -1 (Anterior) ou +1 (Próximo). Salva o registro atual (com o que
+  // estiver preenchido, completo ou não) antes de avançar.
   window._invNavJust = function(dir) {
     const kAtual = _invNavQueue[_invNavIdx];
-    const erro = _invValidarJustForm();
-    if (erro) { toast(erro, 'error'); return; }
     _invSalvarJustCore(kAtual);
     const novoIdx = _invNavIdx + dir;
     if (novoIdx < 0 || novoIdx >= _invNavQueue.length) return; // botão já deveria estar desabilitado
@@ -2017,18 +2005,18 @@
             </div>
           </div>
           <div class="oc-form-group">
-            <label class="oc-label">Justificativa Operacional <span class="oc-required">*</span></label>
+            <label class="oc-label">Justificativa Operacional <span class="oc-hint">opcional</span></label>
             <textarea id="inv-j-op" class="oc-input oc-textarea" rows="2" placeholder="Ex: falha no medidor da brita, perda por chuva...">${_escape(j.op||'')}</textarea>
           </div>
           <div class="oc-form-group">
-            <label class="oc-label">Justificativa Fiscal <span class="oc-required">*</span> <span class="oc-hint">(para inspeção)</span></label>
+            <label class="oc-label">Justificativa Fiscal <span class="oc-hint">opcional — para inspeção</span></label>
             <select id="inv-j-fiscal" class="oc-input">
               <option value="" ${!j.fiscal ? 'selected' : ''} disabled>Selecione uma justificativa fiscal...</option>
               ${_invMontarOptionsFiscal(j.fiscal||'')}
             </select>
           </div>
           <div class="oc-form-group">
-            <label class="oc-label">Saldo Justificado (kg) <span class="oc-required">*</span> <span class="oc-hint">parte/total da variação com causa identificada</span></label>
+            <label class="oc-label">Saldo Justificado (kg) <span class="oc-hint">opcional — parte/total da variação com causa identificada</span></label>
             <div style="display:flex;gap:8px;align-items:stretch">
               <input id="inv-j-saldo" type="number" class="oc-input" placeholder="0" value="${j.saldo||''}" style="flex:1">
               <button type="button" class="btn" style="white-space:nowrap;flex-shrink:0" onclick="document.getElementById('inv-j-saldo').value='${(Math.round(row.varKg*100)/100)}'" title="Preenche com a variação total, já com o sinal de ${row.varKg < 0 ? 'desfalque (negativo)' : 'sobra (positivo)'}">Variação total</button>
@@ -2061,8 +2049,6 @@
   }
 
   window.invSalvarJust = function(k) {
-    const erro = _invValidarJustForm();
-    if (erro) { toast(erro, 'error'); return; }
     _invSalvarJustCore(k);
     document.getElementById('inv-modal')?.remove();
     toast('Justificativa salva.', 'success');
@@ -2095,10 +2081,6 @@
     };
   }
 
-  function _invLoteObrigatoriosPreenchidos(v) {
-    return !!(v.op && v.fiscal && v.saldo !== '' && v.saldo != null);
-  }
-
   // Atualiza só o badge de status + o habilitado/desabilitado do botão
   // Registrar daquela linha — chamado depois de toda edição ou registro.
   // Também atualiza o contador "X de Y registradas" no topo do modal, pra
@@ -2107,8 +2089,7 @@
     const idx = _invLoteIdx(k);
     if (idx < 0) return;
     const st = _invLoteState[k] || { registrado: false };
-    const vals = _invLoteLerValores(k);
-    const podeRegistrar = _invLoteObrigatoriosPreenchidos(vals) && !st.registrado;
+    const podeRegistrar = !st.registrado;
     const btn = document.getElementById(`lote-btn-${idx}`);
     const badge = document.getElementById(`lote-status-${idx}`);
     if (btn) btn.disabled = !podeRegistrar;
@@ -2139,39 +2120,28 @@
 
   window._invLoteRegistrar = function(k) {
     const vals = _invLoteLerValores(k);
-    if (!_invLoteObrigatoriosPreenchidos(vals)) {
-      toast('Preencha Operacional, Fiscal e Saldo antes de registrar essa linha.', 'error');
-      return;
-    }
     _invApplyJustValues(k, vals);
     _invLoteState[k] = { registrado: true, snapshot: vals };
     _invLoteAtualizarLinhaVisual(k);
     toast('Linha registrada.', 'success');
   };
 
-  // Registra de uma vez toda linha selecionada que já está com os campos
-  // obrigatórios preenchidos e ainda não registrada. Pula silenciosamente
-  // (sem travar as demais) as que estão incompletas — conta pra avisar no
-  // resumo final, sem toast por linha, pra não empilhar dezenas de toasts.
+  // Registra de uma vez toda linha selecionada que ainda não foi
+  // registrada, com o que estiver preenchido em cada uma (completo ou não).
   window._invLoteRegistrarTodos = function() {
-    let registradas = 0, incompletas = 0;
+    let registradas = 0;
     _invLoteKeys.forEach(k => {
       const st = _invLoteState[k] || {};
       if (st.registrado) return;
       const vals = _invLoteLerValores(k);
-      if (!_invLoteObrigatoriosPreenchidos(vals)) { incompletas++; return; }
       _invApplyJustValues(k, vals);
       _invLoteState[k] = { registrado: true, snapshot: vals };
       registradas++;
     });
     _invLoteKeys.forEach(k => _invLoteAtualizarLinhaVisual(k));
-    if (registradas === 0 && incompletas === 0) {
-      toast('Todas as linhas já estavam registradas.', 'success');
-    } else {
-      const partes = [`${registradas} registrada${registradas===1?'':'s'}`];
-      if (incompletas) partes.push(`${incompletas} pulada${incompletas===1?'':'s'} (campos obrigatórios incompletos)`);
-      toast(partes.join(', ') + '.', incompletas && !registradas ? 'error' : 'success');
-    }
+    toast(registradas === 0
+      ? 'Todas as linhas já estavam registradas.'
+      : `${registradas} linha${registradas===1?'':'s'} registrada${registradas===1?'':'s'}.`, 'success');
   };
 
   // Copia o valor do campo `campo` da linha idxOrigem pras demais linhas
