@@ -9254,9 +9254,9 @@ td:has(.lanc-central-edit:focus) {
    menores e complementando o principal. ── */
 .dg-vg-grupo-layout {
   display: grid;
-  grid-template-columns: 1.3fr 1fr;
+  grid-template-columns: 1fr 1.2fr;
   gap: 14px;
-  align-items: stretch;
+  align-items: start;
 }
 .dg-vg-grupo-sub-grid {
   display: grid;

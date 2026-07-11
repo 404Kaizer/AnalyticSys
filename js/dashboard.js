@@ -618,21 +618,21 @@ let _dgVgDonutUid = 0;
 function _dgVgDrawDonutSvg(svgEl, slices, centerSvgFn, maxCallouts = 6) {
   if (!svgEl) return;
   const total = slices.reduce((s, x) => s + x.value, 0);
-  svgEl.setAttribute('viewBox', '0 0 300 220');
+  svgEl.setAttribute('viewBox', '0 0 340 220');
 
   if (!slices.length || total <= 0) {
-    svgEl.innerHTML = `<text x="150" y="110" text-anchor="middle" font-size="12" fill="var(--text3)" font-family="var(--mono)">Sem dados</text>`;
+    svgEl.innerHTML = `<text x="170" y="110" text-anchor="middle" font-size="12" fill="var(--text3)" font-family="var(--mono)">Sem dados</text>`;
     return;
   }
 
   const uid = 'dgvg' + (_dgVgDonutUid++);
-  // Anel no tamanho original (R:74 / ri:44) — o corte de texto é resolvido
-  // encurtando só a distância do callout até o rótulo (CALLOUT_R/ELBOW_R/
-  // TICK_LEN menores), sem reduzir o donut. Isso abre margem horizontal
-  // suficiente pro texto não ultrapassar os limites do viewBox (0..300) e
-  // ser cortado pelo overflow:hidden do .oc-chart-card.
-  const CX = 150, CY = 108, R = 74, ri = 44;
-  const CALLOUT_R = R + 8, ELBOW_R = R + 16, TICK_LEN = 8;
+  // Anel no tamanho original (R:74 / ri:44). O corte de texto é resolvido
+  // alargando o viewBox (300→340, CX 150→170) em vez de aproximar o rótulo
+  // do anel — dá margem horizontal extra pro texto sem espremer o callout
+  // nem diminuir o donut. CALLOUT_R/ELBOW_R/TICK_LEN voltam à distância
+  // confortável original.
+  const CX = 170, CY = 108, R = 74, ri = 44;
+  const CALLOUT_R = R + 14, ELBOW_R = R + 28, TICK_LEN = 15;
   const gap = slices.length > 1 ? 0.022 : 0;
   let angle = -Math.PI / 2;
 
