@@ -2129,6 +2129,33 @@
     if (progresso) progresso.textContent = `${feitas} de ${total} registrada${total===1?'':'s'}`;
     const fill = document.getElementById('inv-lote-progress-fill');
     if (fill) fill.style.width = (total ? (feitas / total) * 100 : 0) + '%';
+
+    // Custo Total SAP — recalcula ao vivo (varKg bruto × Custo Médio SAP
+    // digitado nesse card), mesmo padrão do modal individual
+    // (_invAtualizarCustoSapCard), só que sem precisar de um 3º card
+    // separado — aqui vira um valor ao lado do próprio campo de input.
+    // Custo Total SAP — recalcula ao vivo (varKg bruto × Custo Médio SAP
+    // digitado nesse card), mesmo padrão do modal individual
+    // (_invAtualizarCustoSapCard) e mesmo estilo visual do indicador de
+    // variação (kg) que já fica no cabeçalho do card, ao lado dele.
+    const totalEl = document.getElementById(`lote-custosap-total-${idx}`);
+    if (totalEl) {
+      const row = invRows.find(r => r.k === k);
+      const custoMedioSap = parseFloat(document.getElementById(`lote-custosap-${idx}`)?.value || 0) || 0;
+      const totalSap = row ? custoMedioSap * row.varKg : 0;
+      const h = window._inv_helpers;
+      const _money = h ? h.money : fmtR;
+      if (!custoMedioSap) {
+        totalEl.className = 'td-mono';
+        totalEl.style.color = 'var(--text3)';
+        totalEl.textContent = '—';
+      } else {
+        const cls = totalSap < -0.0001 ? 'diff-neg' : totalSap > 0.0001 ? 'diff-pos' : 'diff-zero';
+        totalEl.className = 'td-mono ' + cls;
+        totalEl.style.color = '';
+        totalEl.textContent = (totalSap < 0 ? '-' : '') + _money(Math.abs(totalSap)).replace('R$ ', 'R$');
+      }
+    }
   }
 
   // Chamado a cada edição de qualquer campo (oninput/onchange). Se a linha
@@ -2255,6 +2282,7 @@
               <div style="font-size:11px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escape(row.central)} · ${_escape(row.regional)}</div>
             </div>
             <div class="td-mono ${vkCls}" style="font-size:14px;font-weight:700;white-space:nowrap;flex-shrink:0">${_fmtKg(row.varKg)}</div>
+            <div class="td-mono" id="lote-custosap-total-${idx}" style="font-size:14px;font-weight:700;white-space:nowrap;flex-shrink:0" title="Custo Total SAP (Custo Médio SAP × variação)">—</div>
             <div id="lote-status-${idx}" style="flex-shrink:0"></div>
             <button type="button" class="btn btn-primary" id="lote-btn-${idx}" style="flex-shrink:0;white-space:nowrap" onclick="_invLoteRegistrar('${k}')"><i class="ti ti-device-floppy"></i> Registrar</button>
           </div>
