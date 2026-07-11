@@ -626,8 +626,13 @@ function _dgVgDrawDonutSvg(svgEl, slices, centerSvgFn, maxCallouts = 6) {
   }
 
   const uid = 'dgvg' + (_dgVgDonutUid++);
+  // Anel no tamanho original (R:74 / ri:44) — o corte de texto é resolvido
+  // encurtando só a distância do callout até o rótulo (CALLOUT_R/ELBOW_R/
+  // TICK_LEN menores), sem reduzir o donut. Isso abre margem horizontal
+  // suficiente pro texto não ultrapassar os limites do viewBox (0..300) e
+  // ser cortado pelo overflow:hidden do .oc-chart-card.
   const CX = 150, CY = 108, R = 74, ri = 44;
-  const CALLOUT_R = R + 14, ELBOW_R = R + 28, TICK_LEN = 15;
+  const CALLOUT_R = R + 8, ELBOW_R = R + 16, TICK_LEN = 8;
   const gap = slices.length > 1 ? 0.022 : 0;
   let angle = -Math.PI / 2;
 
@@ -799,7 +804,7 @@ function _dgVgRenderCustoDonutSvg(svgId, items, centerTop, centerBottom, maxCall
 
   const slices = items.map(it => ({
     value: it.total, color: it.color,
-    label: escapeHtml(it.mat.length > 14 ? it.mat.slice(0, 12) + '…' : it.mat),
+    label: escapeHtml(it.mat.length > 11 ? it.mat.slice(0, 9) + '…' : it.mat),
     tipHtml: _dgVgMaterialTipHtml(it.mat, it.total, Math.round(it.total / total * 100), it.color)
   }));
 
@@ -1166,22 +1171,39 @@ function _dgVgRenderChartCustoPorChave(canvasId, entries, chartKey) {
 }
 
 function _dgVgRenderChartGrupoMaterial(custoAbsPorCat) {
-  const flat = [];
+  const flatRaw = [];
   DG_VG_CAT_ORDER.forEach(catKey => {
     const arr = custoAbsPorCat[catKey] || [];
     arr.forEach((item, i) => {
       const factor = arr.length > 1 ? (i / (arr.length - 1)) * 0.6 - 0.2 : 0;
-      flat.push({ mat: item.mat, total: item.total, catKey, color: _dgVgShade(DG_VG_CAT_COLORS[catKey], factor) });
+      flatRaw.push({ mat: item.mat, total: item.total, catKey, color: _dgVgShade(DG_VG_CAT_COLORS[catKey], factor) });
     });
   });
-  flat.sort((a, b) => b.total - a.total);
+  flatRaw.sort((a, b) => b.total - a.total);
 
-  if (!flat.length) {
+  if (!flatRaw.length) {
     _dgVgRenderCustoDonutSvg('dg-vg-chart-grupo', [], null, null);
     return;
   }
 
-  _dgVgRenderCustoDonutSvg('dg-vg-chart-grupo', flat, 'CUSTO VARIAÇÃO', `${flat.length} materiais`);
+  // Materiais com menos de 5% de participação no total viram uma única
+  // fatia "Outros" — evita poluir o anel com dezenas de fatias minúsculas.
+  // O total (centro do donut) e os % das fatias grandes continuam batendo
+  // exatamente com a soma real, já que "Outros" apenas absorve visualmente
+  // a soma dos pequenos, sem alterar o total geral nem recalcular base.
+  const totalGeral = flatRaw.reduce((s, it) => s + it.total, 0);
+  let flat = flatRaw;
+  if (totalGeral > 0) {
+    const grandes  = flatRaw.filter(it => it.total / totalGeral >= 0.05);
+    const pequenos = flatRaw.filter(it => it.total / totalGeral <  0.05);
+    if (pequenos.length) {
+      const somaPequenos = pequenos.reduce((s, it) => s + it.total, 0);
+      flat = [...grandes, { mat: 'Outros', total: somaPequenos, catKey: null, color: '#6b7280' }]
+        .sort((a, b) => b.total - a.total);
+    }
+  }
+
+  _dgVgRenderCustoDonutSvg('dg-vg-chart-grupo', flat, 'CUSTO VARIAÇÃO', `${flatRaw.length} materiais`);
 }
 
 function _dgVgRenderDonutCategoria(svgId, items, catKey) {
