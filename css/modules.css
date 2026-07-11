@@ -5778,6 +5778,22 @@ mark.search-highlight {
   color: var(--text3);
   margin-bottom: 14px;
 }
+.dg-vg-donut-title-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.dg-vg-donut-subtitle {
+  font-size: 10px;
+  font-family: var(--mono);
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--text3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .oc-donut-wrap {
   display: flex;
   justify-content: center;

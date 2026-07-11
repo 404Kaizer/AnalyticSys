@@ -765,7 +765,7 @@ function _dgVgBuildHealthDonutData(pares) {
 }
 
 // svgId: id do <svg>. unitLabel: texto exibido sob o score (ex: "pares Central × Material", "centrais analisadas").
-function _dgVgRenderHealthDonutSvg(svgId, counts, scoreInfo, levelMeta, unitLabel) {
+function _dgVgRenderHealthDonutSvg(svgId, counts, scoreInfo, levelMeta, unitLabel, subtitleId) {
   const svgEl = document.getElementById(svgId);
   if (!svgEl) return;
 
@@ -781,25 +781,38 @@ function _dgVgRenderHealthDonutSvg(svgId, counts, scoreInfo, levelMeta, unitLabe
   const scoreColor = { bom: '#10b981', atencao: '#f59e0b', urgente: '#f97316', critico: '#f43f5e' }[scoreInfo.level] || '#10b981';
   const scoreLabelTxt = { bom: 'SAUDÁVEL', atencao: 'ATENÇÃO', urgente: 'URGENTE', critico: 'CRÍTICO' }[scoreInfo.level] || '';
 
+  // Nível + contagem saem do centro do donut (poluíam o círculo) e viram
+  // um subtítulo no cabeçalho do card, à direita do título.
+  if (subtitleId) {
+    const subEl = document.getElementById(subtitleId);
+    if (subEl) subEl.textContent = [scoreLabelTxt, `${total} ${unitLabel || ''}`.trim()].filter(Boolean).join(' · ');
+  }
+
   _dgVgDrawDonutSvg(svgEl, slices, (CX, CY, ri) => {
     const SR = ri - 7, sCirc = 2 * Math.PI * SR, sDash = (scoreInfo.score / 100) * sCirc;
     return `<circle cx="${CX}" cy="${CY}" r="${SR}" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="4.5" style="pointer-events:none"/>
       <circle cx="${CX}" cy="${CY}" r="${SR}" fill="none" stroke="${scoreColor}" stroke-width="4.5"
         stroke-dasharray="${sDash.toFixed(1)} ${sCirc.toFixed(1)}" stroke-dashoffset="${(sCirc / 4).toFixed(1)}"
         stroke-linecap="round" opacity="0.55" style="pointer-events:none"/>
-      <text x="${CX}" y="${CY - 6}" text-anchor="middle" font-size="24" font-weight="700" font-family="var(--mono)" fill="${scoreColor}" style="pointer-events:none">${scoreInfo.score}%</text>
-      <text x="${CX}" y="${CY + 9}" text-anchor="middle" font-size="7.5" font-weight="700" font-family="var(--mono)" fill="${scoreColor}" letter-spacing=".07em" opacity="0.85" style="pointer-events:none">${scoreLabelTxt}</text>
-      <text x="${CX}" y="${CY + 21}" text-anchor="middle" font-size="7" font-family="var(--mono)" fill="var(--text3)" style="pointer-events:none">${total} ${escapeHtml(unitLabel || '')}</text>`;
+      <text x="${CX}" y="${CY + 8}" text-anchor="middle" font-size="26" font-weight="700" font-family="var(--mono)" fill="${scoreColor}" style="pointer-events:none">${scoreInfo.score}%</text>`;
   });
 }
 
 // ── Donut de Custo Absoluto (por material) — usado nas 4 categorias e no
 //    combinado "Grupo de Material". items: [{ mat, total, color }]
-function _dgVgRenderCustoDonutSvg(svgId, items, centerTop, centerBottom, maxCallouts = 6) {
+function _dgVgRenderCustoDonutSvg(svgId, items, centerTop, centerBottom, maxCallouts = 6, subtitleId) {
   const svgEl = document.getElementById(svgId);
   if (!svgEl) return;
 
   const total = items.reduce((s, i) => s + i.total, 0);
+
+  // Rótulo da categoria + contagem de materiais saem do centro do donut e
+  // viram um subtítulo no cabeçalho do card, à direita do título.
+  if (subtitleId) {
+    const subEl = document.getElementById(subtitleId);
+    if (subEl) subEl.textContent = (!items.length || total <= 0) ? '' : [centerTop, centerBottom].filter(Boolean).join(' · ');
+  }
+
   if (!items.length || total <= 0) { _dgVgDrawDonutSvg(svgEl, [], null); return; }
 
   const slices = items.map(it => ({
@@ -815,9 +828,7 @@ function _dgVgRenderCustoDonutSvg(svgId, items, centerTop, centerBottom, maxCall
       <circle cx="${CX}" cy="${CY}" r="${SR}" fill="none" stroke="${top.color}" stroke-width="4.5"
         stroke-dasharray="${sDash.toFixed(1)} ${sCirc.toFixed(1)}" stroke-dashoffset="${(sCirc / 4).toFixed(1)}"
         stroke-linecap="round" opacity="0.55" style="pointer-events:none"/>
-      <text x="${CX}" y="${CY - 6}" text-anchor="middle" font-size="15" font-weight="700" font-family="var(--mono)" fill="var(--text)" style="pointer-events:none">${moneyShort(total)}</text>
-      <text x="${CX}" y="${CY + 8}" text-anchor="middle" font-size="7" font-weight="700" font-family="var(--mono)" fill="var(--text3)" letter-spacing=".06em" opacity="0.85" style="pointer-events:none">${escapeHtml(centerTop || '')}</text>
-      <text x="${CX}" y="${CY + 19}" text-anchor="middle" font-size="6.5" font-family="var(--mono)" fill="var(--text3)" style="pointer-events:none">${escapeHtml(centerBottom || '')}</text>`;
+      <text x="${CX}" y="${CY + 6}" text-anchor="middle" font-size="18" font-weight="700" font-family="var(--mono)" fill="var(--text)" style="pointer-events:none">${moneyShort(total)}</text>`;
   }, maxCallouts);
 }
 
@@ -1053,11 +1064,11 @@ window.dgCustosSemCadastroModal = dgCustosSemCadastroModal;
 //    "Centrais" do Dashboard Analítico, com o mesmo cálculo de percentual.
 function _dgVgRenderHealthDonuts(pares, countsMat, scoreMat, thresholds) {
   const { levelMeta: levelMetaMat } = _dgVgBuildHealthDonutData(pares);
-  _dgVgRenderHealthDonutSvg('dg-vg-gauge-chart-svg', countsMat, scoreMat, levelMetaMat, 'pares Central × Material');
+  _dgVgRenderHealthDonutSvg('dg-vg-gauge-chart-svg', countsMat, scoreMat, levelMetaMat, 'pares Central × Material', 'dg-vg-health-materiais-subtitle');
 
   const { counts: countsCen, levelMeta: levelMetaCen, total: totalCen } = _dgVgBuildCentralHealthData(pares, thresholds);
   const scoreCen = _dgVgScoreFromCounts(countsCen);
-  _dgVgRenderHealthDonutSvg('dg-vg-gauge-central-svg', countsCen, scoreCen, levelMetaCen, totalCen === 1 ? 'central analisada' : 'centrais analisadas');
+  _dgVgRenderHealthDonutSvg('dg-vg-gauge-central-svg', countsCen, scoreCen, levelMetaCen, totalCen === 1 ? 'central analisada' : 'centrais analisadas', 'dg-vg-health-central-subtitle');
 }
 
 function _dgVgRenderExtremos(extRegional, extCentral) {
@@ -1199,19 +1210,20 @@ function _dgVgRenderChartGrupoMaterial(custoAbsPorCat) {
   flatRaw.sort((a, b) => b.total - a.total);
 
   if (!flatRaw.length) {
-    _dgVgRenderCustoDonutSvg('dg-vg-chart-grupo', [], null, null);
+    _dgVgRenderCustoDonutSvg('dg-vg-chart-grupo', [], null, null, 6, 'dg-vg-grupo-subtitle');
     return;
   }
 
   // Materiais com menos de 5% de participação no total viram uma única
   // fatia "Outros" — evita poluir o anel com dezenas de fatias minúsculas.
   const flat = _dgVgAgruparOutros(flatRaw);
-  _dgVgRenderCustoDonutSvg('dg-vg-chart-grupo', flat, 'CUSTO VARIAÇÃO', `${flatRaw.length} materiais`);
+  _dgVgRenderCustoDonutSvg('dg-vg-chart-grupo', flat, 'CUSTO VARIAÇÃO', `${flatRaw.length} materiais`, 6, 'dg-vg-grupo-subtitle');
 }
 
 function _dgVgRenderDonutCategoria(svgId, items, catKey) {
+  const subtitleId = `${svgId}-subtitle`;
   if (!items.length) {
-    _dgVgRenderCustoDonutSvg(svgId, [], null, null);
+    _dgVgRenderCustoDonutSvg(svgId, [], null, null, 3, subtitleId);
     return;
   }
 
@@ -1224,7 +1236,7 @@ function _dgVgRenderDonutCategoria(svgId, items, catKey) {
   // Mesmo agrupamento em "Outros" usado no donut combinado, para materiais
   // com menos de 5% de participação dentro da categoria.
   const flat = _dgVgAgruparOutros(flatRaw);
-  _dgVgRenderCustoDonutSvg(svgId, flat, (DG_VG_CAT_LABELS[catKey] || '').toUpperCase(), `${items.length} materiais`, 3);
+  _dgVgRenderCustoDonutSvg(svgId, flat, (DG_VG_CAT_LABELS[catKey] || '').toUpperCase(), `${items.length} materiais`, 3, subtitleId);
 }
 
 // ────────────────────────────────────────────
