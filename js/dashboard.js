@@ -696,6 +696,21 @@ function _dgVgDrawDonutSvg(svgEl, slices, centerSvgFn, maxCallouts = 6) {
 
   svgEl.innerHTML = svg;
 
+  // Auto-ajuste do texto central: mede a largura REAL renderizada (evita
+  // depender de estimativa por nº de caracteres, que varia por fonte/
+  // navegador) e encolhe a fonte proporcionalmente se ultrapassar o
+  // espaço seguro dentro do furo do donut.
+  svgEl.querySelectorAll('.dv-fit-text').forEach(t => {
+    const maxW = parseFloat(t.dataset.maxWidth || '58');
+    try {
+      const len = t.getComputedTextLength();
+      if (len > maxW) {
+        const curSize = parseFloat(t.getAttribute('font-size')) || 16;
+        t.setAttribute('font-size', Math.max(8, curSize * (maxW / len)).toFixed(1));
+      }
+    } catch (e) { /* getComputedTextLength pode falhar antes do layout — ignora */ }
+  });
+
   svgEl.querySelectorAll(`.dvslice-${uid}`).forEach(path => {
     const col = path.dataset.col;
     const tip = decodeURIComponent(path.dataset.tip);
@@ -794,7 +809,7 @@ function _dgVgRenderHealthDonutSvg(svgId, counts, scoreInfo, levelMeta, unitLabe
       <circle cx="${CX}" cy="${CY}" r="${SR}" fill="none" stroke="${scoreColor}" stroke-width="4.5"
         stroke-dasharray="${sDash.toFixed(1)} ${sCirc.toFixed(1)}" stroke-dashoffset="${(sCirc / 4).toFixed(1)}"
         stroke-linecap="round" opacity="0.55" style="pointer-events:none"/>
-      <text x="${CX}" y="${CY - 3}" text-anchor="middle" font-size="24" font-weight="700" font-family="var(--mono)" fill="${scoreColor}" style="pointer-events:none">${scoreInfo.score}%</text>
+      <text class="dv-fit-text" data-max-width="60" x="${CX}" y="${CY - 3}" text-anchor="middle" font-size="24" font-weight="700" font-family="var(--mono)" fill="${scoreColor}" style="pointer-events:none">${scoreInfo.score}%</text>
       <text x="${CX}" y="${CY + 13}" text-anchor="middle" font-size="8" font-weight="700" font-family="var(--mono)" fill="${scoreColor}" letter-spacing=".07em" opacity="0.9" style="pointer-events:none">${scoreLabelTxt}</text>`;
   });
 }
@@ -825,11 +840,12 @@ function _dgVgRenderCustoDonutSvg(svgId, items, centerTop, centerBottom, maxCall
   _dgVgDrawDonutSvg(svgEl, slices, (CX, CY, ri) => {
     const top = [...slices].sort((a, b) => b.value - a.value)[0];
     const SR = ri - 7, sCirc = 2 * Math.PI * SR, sDash = (top.value / total) * sCirc;
+    const valStr = moneyShort(total);
     return `<circle cx="${CX}" cy="${CY}" r="${SR}" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="4.5" style="pointer-events:none"/>
       <circle cx="${CX}" cy="${CY}" r="${SR}" fill="none" stroke="${top.color}" stroke-width="4.5"
         stroke-dasharray="${sDash.toFixed(1)} ${sCirc.toFixed(1)}" stroke-dashoffset="${(sCirc / 4).toFixed(1)}"
         stroke-linecap="round" opacity="0.55" style="pointer-events:none"/>
-      <text x="${CX}" y="${CY + 6}" text-anchor="middle" font-size="18" font-weight="700" font-family="var(--mono)" fill="var(--text)" style="pointer-events:none">${moneyShort(total)}</text>`;
+      <text class="dv-fit-text" data-max-width="${(2 * (SR - 8)).toFixed(0)}" x="${CX}" y="${CY + 6}" text-anchor="middle" font-size="17" font-weight="700" font-family="var(--mono)" fill="var(--text)" style="pointer-events:none">${valStr}</text>`;
   }, maxCallouts);
 }
 

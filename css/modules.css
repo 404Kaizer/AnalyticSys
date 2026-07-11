@@ -9272,7 +9272,7 @@ td:has(.lanc-central-edit:focus) {
   display: grid;
   grid-template-columns: 1fr 1.2fr;
   gap: 14px;
-  align-items: start;
+  align-items: stretch;
 }
 .dg-vg-grupo-sub-grid {
   display: grid;
