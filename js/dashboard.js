@@ -615,7 +615,7 @@ let _dgVgDonutUid = 0;
 // slices: [{ value, color, tipHtml, label(já escapado, opcional) }]
 // centerSvgFn(CX, CY, ri): retorna string SVG extra desenhada no centro
 // (anel + textos) — cada chamador desenha seu próprio conteúdo central.
-function _dgVgDrawDonutSvg(svgEl, slices, centerSvgFn) {
+function _dgVgDrawDonutSvg(svgEl, slices, centerSvgFn, maxCallouts = 6) {
   if (!svgEl) return;
   const total = slices.reduce((s, x) => s + x.value, 0);
   svgEl.setAttribute('viewBox', '0 0 300 220');
@@ -668,7 +668,7 @@ function _dgVgDrawDonutSvg(svgEl, slices, centerSvgFn) {
 
   // Callouts apenas para as fatias mais relevantes (evita poluição visual
   // quando há muitos materiais — diferente do caso original de 4 níveis).
-  built.filter(b => b.pct >= 0.05).sort((a, b) => b.pct - a.pct).slice(0, 6).forEach(({ idx, midA, pctStr, col, label }) => {
+  built.filter(b => b.pct >= 0.05).sort((a, b) => b.pct - a.pct).slice(0, maxCallouts).forEach(({ idx, midA, pctStr, col, label }) => {
     const ex = CX + ELBOW_R * Math.cos(midA), ey = CY + ELBOW_R * Math.sin(midA);
     const sx = CX + CALLOUT_R * Math.cos(midA), sy = CY + CALLOUT_R * Math.sin(midA);
     const onRight = Math.cos(midA) >= 0;
@@ -790,7 +790,7 @@ function _dgVgRenderHealthDonutSvg(svgId, counts, scoreInfo, levelMeta, unitLabe
 
 // ── Donut de Custo Absoluto (por material) — usado nas 4 categorias e no
 //    combinado "Grupo de Material". items: [{ mat, total, color }]
-function _dgVgRenderCustoDonutSvg(svgId, items, centerTop, centerBottom) {
+function _dgVgRenderCustoDonutSvg(svgId, items, centerTop, centerBottom, maxCallouts = 6) {
   const svgEl = document.getElementById(svgId);
   if (!svgEl) return;
 
@@ -813,7 +813,7 @@ function _dgVgRenderCustoDonutSvg(svgId, items, centerTop, centerBottom) {
       <text x="${CX}" y="${CY - 6}" text-anchor="middle" font-size="15" font-weight="700" font-family="var(--mono)" fill="var(--text)" style="pointer-events:none">${moneyShort(total)}</text>
       <text x="${CX}" y="${CY + 8}" text-anchor="middle" font-size="7" font-weight="700" font-family="var(--mono)" fill="var(--text3)" letter-spacing=".06em" opacity="0.85" style="pointer-events:none">${escapeHtml(centerTop || '')}</text>
       <text x="${CX}" y="${CY + 19}" text-anchor="middle" font-size="6.5" font-family="var(--mono)" fill="var(--text3)" style="pointer-events:none">${escapeHtml(centerBottom || '')}</text>`;
-  });
+  }, maxCallouts);
 }
 
 // ────────────────────────────────────────────
@@ -1196,7 +1196,7 @@ function _dgVgRenderDonutCategoria(svgId, items, catKey) {
     color: _dgVgShade(baseColor, items.length > 1 ? (i / (items.length - 1)) * 0.6 - 0.2 : 0)
   }));
 
-  _dgVgRenderCustoDonutSvg(svgId, flat, (DG_VG_CAT_LABELS[catKey] || '').toUpperCase(), `${items.length} materiais`);
+  _dgVgRenderCustoDonutSvg(svgId, flat, (DG_VG_CAT_LABELS[catKey] || '').toUpperCase(), `${items.length} materiais`, 3);
 }
 
 // ────────────────────────────────────────────

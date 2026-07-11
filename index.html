@@ -665,48 +665,38 @@
           </div>
         </div>
 
-        <!-- 7. Custo da Variação por Grupo de Material (combinado) — SVG, mesmo design do Dashboard Analítico -->
-        <div class="oc-chart-card" style="margin:14px 0">
-          <div class="oc-chart-title"><i class="ti ti-chart-donut" style="margin-right:5px"></i>Custo Absoluto por Grupo de Material</div>
-          <div style="display:flex;justify-content:center">
-            <div style="width:640px;max-width:96%">
-              <svg id="dg-vg-chart-grupo" viewBox="0 0 300 220" style="width:100%;height:auto;display:block"></svg>
+        <!-- 7 & 8. Custo Absoluto: Grupo de Material (combinado, em destaque à
+             esquerda) + 4 donuts de categoria (Agregado/Aglomerante/Aditivo/
+             Adição), menores, em grade 2×2 à direita, complementando o principal. -->
+        <div class="dg-vg-grupo-layout" style="margin:14px 0">
+          <div class="oc-chart-card">
+            <div class="oc-chart-title"><i class="ti ti-chart-donut" style="margin-right:5px"></i>Custo Absoluto por Grupo de Material</div>
+            <div style="display:flex;justify-content:center">
+              <svg id="dg-vg-chart-grupo" viewBox="0 0 300 220" style="width:100%;max-width:520px;height:auto;display:block"></svg>
             </div>
           </div>
-        </div>
-
-        <!-- 8. Custo Absoluto por categoria — 4 donuts (SVG, mesmo design do Dashboard Analítico) -->
-        <div class="dg-giro-dual-grid">
-          <div class="oc-chart-card">
-            <div class="oc-chart-title">Custo Absoluto por Agregado</div>
-            <div style="display:flex;justify-content:center">
-              <div style="width:460px;max-width:96%">
+          <div class="dg-vg-grupo-sub-grid">
+            <div class="oc-chart-card">
+              <div class="oc-chart-title">Custo Absoluto por Agregado</div>
+              <div style="display:flex;justify-content:center;flex:1">
                 <svg id="dg-vg-donut-agregado" viewBox="0 0 300 220" style="width:100%;height:auto;display:block"></svg>
               </div>
             </div>
-          </div>
-          <div class="oc-chart-card">
-            <div class="oc-chart-title">Custo Absoluto por Aglomerante</div>
-            <div style="display:flex;justify-content:center">
-              <div style="width:460px;max-width:96%">
+            <div class="oc-chart-card">
+              <div class="oc-chart-title">Custo Absoluto por Aglomerante</div>
+              <div style="display:flex;justify-content:center;flex:1">
                 <svg id="dg-vg-donut-aglomerante" viewBox="0 0 300 220" style="width:100%;height:auto;display:block"></svg>
               </div>
             </div>
-          </div>
-        </div>
-        <div class="dg-giro-dual-grid" style="margin-top:16px">
-          <div class="oc-chart-card">
-            <div class="oc-chart-title">Custo Absoluto por Aditivo</div>
-            <div style="display:flex;justify-content:center">
-              <div style="width:460px;max-width:96%">
+            <div class="oc-chart-card">
+              <div class="oc-chart-title">Custo Absoluto por Aditivo</div>
+              <div style="display:flex;justify-content:center;flex:1">
                 <svg id="dg-vg-donut-aditivo" viewBox="0 0 300 220" style="width:100%;height:auto;display:block"></svg>
               </div>
             </div>
-          </div>
-          <div class="oc-chart-card">
-            <div class="oc-chart-title">Custo Absoluto por Adição</div>
-            <div style="display:flex;justify-content:center">
-              <div style="width:460px;max-width:96%">
+            <div class="oc-chart-card">
+              <div class="oc-chart-title">Custo Absoluto por Adição</div>
+              <div style="display:flex;justify-content:center;flex:1">
                 <svg id="dg-vg-donut-adicao" viewBox="0 0 300 220" style="width:100%;height:auto;display:block"></svg>
               </div>
             </div>

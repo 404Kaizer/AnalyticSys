@@ -9249,6 +9249,29 @@ td:has(.lanc-central-edit:focus) {
 .dg-vg-extremo-pos .dg-vg-extremo-value { color: var(--amber); }
 .dg-vg-extremo-empty .dg-vg-extremo-value { color: var(--text3); }
 
+/* ── Visão Geral: donut "Grupo de Material" (grande, esquerda) + 4 donuts
+   de categoria (Agregado/Aglomerante/Aditivo/Adição) em grade 2×2 à direita,
+   menores e complementando o principal. ── */
+.dg-vg-grupo-layout {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr;
+  gap: 14px;
+  align-items: stretch;
+}
+.dg-vg-grupo-sub-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 14px;
+}
+.dg-vg-grupo-sub-grid .oc-chart-card { display: flex; flex-direction: column; }
+@media (max-width: 900px) {
+  .dg-vg-grupo-layout { grid-template-columns: 1fr; }
+}
+@media (max-width: 560px) {
+  .dg-vg-grupo-sub-grid { grid-template-columns: 1fr; }
+}
+
 .dg-vg-bar-wrap {
   position: relative;
   overflow-x: auto;
