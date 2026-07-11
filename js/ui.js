@@ -3430,11 +3430,245 @@ const _BKP_MODULES = [
 // Módulos selecionados para exportar (persiste durante a sessão do modal)
 let _bkpSelected = new Set(_BKP_MODULES.map(m => m.key));
 let _bkpMode = 'exportar'; // 'exportar' | 'restaurar'
-let _bkpParsedFile = null; // arquivo carregado para restaurar
+
+// ── Leitura em streaming do backup ──────────────────────────────────────────
+// Chaves que podem conter arrays muito grandes (um por registro). Para essas,
+// os elementos são lidos e processados um a um (em lotes pequenos), nunca
+// como uma string única. 'acoesRelatorio' é mantido por compatibilidade com
+// formatos de backup mais antigos que podiam incluir esse campo.
+const _BKP_BIG_KEYS = new Set([..._BKP_MODULES.map(m => m.key), 'acoesRelatorio']);
+
+/**
+ * Faz uma única passada pelo arquivo de backup usando file.stream(), sem
+ * nunca acumular o conteúdo inteiro numa string só — isso é o que evita o
+ * erro "JSON inválido ou corrompido" em arquivos grandes (o motor JS tem um
+ * limite de ~512 milhões de caracteres por string).
+ *
+ * Campos de cabeçalho (pequenos: _version, _exportedAt, _notas, etc.) são
+ * sempre lidos por completo. Para os campos "grandes" (listas de registros
+ * por módulo, ver _BKP_BIG_KEYS):
+ *   - se a chave estiver em `wantedBigKeys`, cada registro é convertido em
+ *     objeto JS (em lotes, para reduzir overhead) e empilhado no resultado;
+ *   - caso contrário, os registros são apenas contados, sem alocar objetos
+ *     (usado na pré-visualização, que só precisa mostrar quantidades).
+ *
+ * @param {File} file
+ * @param {{wantedBigKeys?: Set<string>, onProgress?: (frac:number)=>void}} opts
+ * @returns {Promise<{header: object, counts: Record<string, number>, data: Record<string, any[]>}>}
+ */
+async function _bkpParseStreaming(file, opts = {}) {
+  const wantedBigKeys = opts.wantedBigKeys || new Set();
+  const onProgress = opts.onProgress;
+
+  if (typeof file.stream !== 'function') {
+    throw new Error('Este navegador não suporta leitura em streaming de arquivos (file.stream indisponível).');
+  }
+
+  const reader = file.stream().getReader();
+  const decoder = new TextDecoder('utf-8');
+
+  let buffer = '';
+  let pos = 0;
+  let bytesRead = 0;
+  const totalBytes = file.size || 0;
+
+  const header = {};
+  const counts = {};
+  const data = {};
+
+  const BATCH_COUNT = 2000;      // nº de registros por lote antes de fazer JSON.parse
+  const BATCH_BYTES  = 500000;   // ~500 KB de texto acumulado antes de forçar o parse do lote
+  let pendingTexts = [];
+  let pendingLen = 0;
+  let currentArrBuf = null;
+  let currentWantsData = false;
+
+  function flushBatch() {
+    if (pendingTexts.length === 0) return;
+    const arrText = '[' + pendingTexts.join(',') + ']';
+    const parsedBatch = JSON.parse(arrText);
+    if (currentArrBuf) for (let i = 0; i < parsedBatch.length; i++) currentArrBuf.push(parsedBatch[i]);
+    pendingTexts = [];
+    pendingLen = 0;
+  }
+
+  const WS = new Set([' ', '\n', '\r', '\t']);
+  const DELIMS = new Set([',', '}', ']', ' ', '\n', '\r', '\t']);
+
+  function skipWs() { while (pos < buffer.length && WS.has(buffer[pos])) pos++; }
+
+  // Retorna o índice logo após o fim do valor JSON que começa em `start`
+  // (string, número/literal, objeto ou array). Retorna -1 se o buffer
+  // terminar antes do valor estar completo (é preciso esperar mais dados).
+  function findValueEnd(start) {
+    if (start >= buffer.length) return -1;
+    const c = buffer[start];
+
+    if (c === '"') {
+      let i = start + 1;
+      while (i < buffer.length) {
+        const ch = buffer[i];
+        if (ch === '\\') { i += 2; continue; }
+        if (ch === '"') return i + 1;
+        i++;
+      }
+      return -1;
+    }
+
+    if (c === '{' || c === '[') {
+      let depth = 0, i = start, inStr = false;
+      while (i < buffer.length) {
+        const ch = buffer[i];
+        if (inStr) {
+          if (ch === '\\') { i += 2; continue; }
+          if (ch === '"') inStr = false;
+          i++;
+          continue;
+        }
+        if (ch === '"') { inStr = true; i++; continue; }
+        if (ch === '{' || ch === '[') depth++;
+        else if (ch === '}' || ch === ']') { depth--; if (depth === 0) return i + 1; }
+        i++;
+      }
+      return -1;
+    }
+
+    // número, true, false ou null — vai até o primeiro delimitador
+    let i = start;
+    while (i < buffer.length && !DELIMS.has(buffer[i])) i++;
+    if (i >= buffer.length) return -1;
+    return i;
+  }
+
+  let topState = 'open'; // open | key-or-close | colon | value | in-array | comma-or-close | done
+  let currentKey = null;
+
+  // Tenta avançar o máximo possível dentro do buffer atual.
+  // Retorna true quando o objeto raiz é fechado.
+  function advance() {
+    while (true) {
+      skipWs();
+      if (pos >= buffer.length) return false;
+
+      if (topState === 'open') {
+        if (buffer[pos] !== '{') throw new Error('O arquivo não começa com um objeto JSON válido.');
+        pos++; topState = 'key-or-close'; continue;
+      }
+
+      if (topState === 'key-or-close') {
+        if (buffer[pos] === '}') { pos++; topState = 'done'; return true; }
+        const end = findValueEnd(pos);
+        if (end === -1) return false;
+        currentKey = JSON.parse(buffer.slice(pos, end));
+        pos = end; topState = 'colon'; continue;
+      }
+
+      if (topState === 'colon') {
+        if (buffer[pos] !== ':') throw new Error('JSON malformado (esperava ":" após uma chave).');
+        pos++; topState = 'value'; continue;
+      }
+
+      if (topState === 'value') {
+        if (_BKP_BIG_KEYS.has(currentKey)) {
+          if (buffer[pos] !== '[') throw new Error(`Campo "${currentKey}" deveria ser uma lista.`);
+          pos++;
+          counts[currentKey] = 0;
+          currentWantsData = wantedBigKeys.has(currentKey);
+          currentArrBuf = currentWantsData ? (data[currentKey] = []) : null;
+          pendingTexts = []; pendingLen = 0;
+          topState = 'array-elem';
+          continue;
+        }
+        const end = findValueEnd(pos);
+        if (end === -1) return false;
+        header[currentKey] = JSON.parse(buffer.slice(pos, end));
+        pos = end; topState = 'comma-or-close'; continue;
+      }
+
+      // 'array-elem': espera ']' (fim da lista) ou o início de um novo registro.
+      // 'array-sep': espera ',' (mais um registro) ou ']' (fim da lista) — estado
+      // separado do anterior para que, se faltar dado bem depois de já termos
+      // consumido um registro, a retomada saiba que o próximo caractere
+      // esperado é um separador, e não tente reinterpretar uma ',' como se
+      // fosse o início de um valor (isso causava registros vazios/corrompidos
+      // quando um chunk terminava exatamente entre um registro e a vírgula
+      // seguinte).
+      if (topState === 'array-elem') {
+        if (buffer[pos] === ']') { pos++; flushBatch(); topState = 'comma-or-close'; continue; }
+        const end = findValueEnd(pos);
+        if (end === -1) return false;
+        counts[currentKey]++;
+        if (currentWantsData) {
+          const text = buffer.slice(pos, end);
+          pendingTexts.push(text);
+          pendingLen += text.length;
+          if (pendingTexts.length >= BATCH_COUNT || pendingLen >= BATCH_BYTES) flushBatch();
+        }
+        pos = end;
+        topState = 'array-sep';
+        continue;
+      }
+
+      if (topState === 'array-sep') {
+        if (buffer[pos] === ',') { pos++; topState = 'array-elem'; continue; }
+        if (buffer[pos] === ']') { pos++; flushBatch(); topState = 'comma-or-close'; continue; }
+        throw new Error(`JSON malformado dentro da lista "${currentKey}".`);
+      }
+
+      if (topState === 'comma-or-close') {
+        if (buffer[pos] === ',') { pos++; topState = 'key-or-close'; continue; }
+        if (buffer[pos] === '}') { pos++; topState = 'done'; return true; }
+        throw new Error('JSON malformado (esperava "," ou "}").');
+      }
+
+      return true; // topState === 'done'
+    }
+  }
+
+  while (true) {
+    const { value: chunk, done } = await reader.read();
+    if (done) break;
+    bytesRead += chunk.byteLength;
+    buffer += decoder.decode(chunk, { stream: true });
+
+    let finished;
+    try { finished = advance(); }
+    catch (err) { try { reader.cancel(); } catch(e){} throw err; }
+
+    if (pos > 0) { buffer = buffer.slice(pos); pos = 0; }
+    if (onProgress) onProgress(totalBytes ? Math.min(1, bytesRead / totalBytes) : 0);
+    if (finished) { try { reader.cancel(); } catch(e){} break; }
+  }
+
+  if (topState !== 'done') {
+    buffer += decoder.decode(); // flush final do decodificador
+    let finished;
+    try { finished = advance(); }
+    catch (err) { throw err; }
+    if (pos > 0) buffer = buffer.slice(pos);
+    if (!finished) throw new Error('O arquivo terminou de forma inesperada (JSON incompleto).');
+  }
+
+  if (onProgress) onProgress(1);
+  return { header, counts, data };
+}
+
+// ── Estado do arquivo de restauração ────────────────────────────────────────
+// IMPORTANTE: o arquivo NUNCA é lido inteiro para uma string única (isso é o
+// que causava "JSON inválido ou corrompido" em backups grandes — o motor JS
+// tem um limite de ~512 milhões de caracteres por string, e um backup
+// "Completo" facilmente ultrapassa isso). Guardamos apenas a referência ao
+// File e metadados leves; a leitura real acontece em streaming (ver
+// _bkpParseStreaming), tanto na pré-visualização quanto na restauração.
+let _bkpPendingFile   = null; // File selecionado, ainda não processado
+let _bkpPendingHeader = null; // metadados (_version, _exportedAt, _notas, _atalhos, _fechamento...)
+let _bkpPendingCounts = null; // contagem de registros por módulo, obtida na pré-visualização
 
 function abrirModalBackup(modo) {
   _bkpMode = modo || 'exportar';
-  _bkpParsedFile = null;
+  _bkpPendingFile = null;
+  _bkpPendingHeader = null;
+  _bkpPendingCounts = null;
   _renderBkpModuleList();
   bkpSwitchTab(_bkpMode);
   document.getElementById('bkp-preview').style.display = 'none';
@@ -3618,78 +3852,107 @@ function restaurarBackupModular(file) {
   }
 }
 
-function _bkpCarregarArquivo(file) {
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    try {
-      const parsed = JSON.parse(e.target.result);
+async function _bkpCarregarArquivo(file) {
+  if (!file) return;
 
-      if (typeof parsed !== 'object' || Array.isArray(parsed)) {
-        toast('Arquivo inválido — não é um backup AnalyticSys', 'error');
-        return;
+  const previewEl = document.getElementById('bkp-preview');
+  if (previewEl) previewEl.style.display = 'none';
+
+  const sizeMB = file.size / (1024 * 1024);
+  const isBig = file.size > 20 * 1024 * 1024; // acima de ~20MB, mostra overlay com progresso
+
+  if (isBig) {
+    showLoadingOverlay('Lendo backup', 'Analisando o arquivo selecionado...');
+    if (typeof loadingShowSteps === 'function') loadingShowSteps([
+      { id: 'bkp-scan', icon: 'ti-file-search', label: 'Lendo cabeçalho e contando registros' },
+    ]);
+    await nextFrame();
+  }
+
+  try {
+    const result = await _bkpParseStreaming(file, {
+      wantedBigKeys: new Set(), // pré-visualização: só contar, sem materializar os registros
+      onProgress: (frac) => {
+        if (!isBig) return;
+        _lbarSet(Math.round(frac * 100));
+        updateLoadingOverlay(`Analisando... ${(frac * 100).toFixed(0)}% (${(sizeMB * frac).toFixed(0)} MB de ${sizeMB.toFixed(0)} MB)`);
       }
+    });
 
-      // Detecta módulos disponíveis no arquivo
-      const available = _BKP_MODULES.filter(m => Array.isArray(parsed[m.key]));
-      if (available.length === 0) {
-        toast('Arquivo não contém dados reconhecíveis', 'error');
-        return;
-      }
+    const { header, counts } = result;
 
-      _bkpParsedFile = parsed;
-
-      // Garante que o modal está no modo restaurar
-      if (_bkpMode !== 'restaurar') bkpSwitchTab('restaurar');
-
-      // Renderiza preview com checkboxes dos módulos disponíveis
-      const previewEl = document.getElementById('bkp-preview');
-      const listEl    = document.getElementById('bkp-preview-list');
-      if (!previewEl || !listEl) return;
-
-      const expAt = parsed._exportedAt ? `Exportado em: ${parsed._exportedAt}` : '';
-      const version = parsed._version || 'v1';
-
-      listEl.innerHTML = `
-        <div style="padding:8px 12px;background:var(--surface3);border-radius:8px;font-size:11px;
-          color:var(--text3);display:flex;gap:16px;flex-wrap:wrap;margin-bottom:4px">
-          <span><i class="ti ti-tag" style="margin-right:3px"></i>${version}</span>
-          ${expAt ? `<span><i class="ti ti-clock" style="margin-right:3px"></i>${expAt}</span>` : ''}
-          <span><i class="ti ti-database" style="margin-right:3px"></i>${available.length} módulo(s) no arquivo</span>
-        </div>
-        ${available.map(m => {
-          const count = parsed[m.key].length;
-          const atualCount = (state[m.key] || []).length;
-          return `
-          <label style="display:flex;align-items:center;gap:10px;padding:7px 12px;background:var(--surface2);
-            border-radius:8px;cursor:pointer;border:1.5px solid var(--accent);transition:border-color .15s"
-            id="bkp-rst-row-${m.key}">
-            <input type="checkbox" checked style="display:none"
-              id="bkp-rst-chk-${m.key}" onchange="bkpToggleRestoreModule('${m.key}')">
-            <span style="width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;
-              background:color-mix(in srgb, ${m.color} 15%, transparent);color:${m.color};font-size:14px;flex-shrink:0">
-              <i class="ti ${m.icon}"></i>
-            </span>
-            <span style="flex:1">
-              <span style="font-size:13px;font-weight:500;color:var(--text1);display:block">${m.label}</span>
-              <span style="font-size:10px;color:var(--text3);font-family:var(--mono)">
-                ${count.toLocaleString('pt-BR')} no backup
-                ${atualCount > 0 ? ` · ${atualCount.toLocaleString('pt-BR')} atuais serão substituídos` : '· (módulo vazio)'}
-              </span>
-            </span>
-            <i class="ti ti-square-check-filled" style="color:var(--accent)" id="bkp-rst-icon-${m.key}"></i>
-          </label>`;
-        }).join('')}
-      `;
-
-      previewEl.style.display = '';
-
-    } catch(err) {
-      console.error(err);
-      toast('Falha ao ler o arquivo: JSON inválido ou corrompido', 'error');
+    if (typeof header !== 'object' || header === null) {
+      toast('Arquivo inválido — não é um backup AnalyticSys', 'error');
+      return;
     }
-  };
-  reader.onerror = () => toast('Não foi possível ler o arquivo', 'error');
-  reader.readAsText(file, 'utf-8');
+
+    // Detecta módulos disponíveis no arquivo (com base no que foi de fato encontrado)
+    const available = _BKP_MODULES.filter(m => counts[m.key] !== undefined);
+    if (available.length === 0) {
+      toast('Arquivo não contém dados reconhecíveis', 'error');
+      return;
+    }
+
+    _bkpPendingFile   = file;
+    _bkpPendingHeader = header;
+    _bkpPendingCounts = counts;
+
+    if (isBig) { _lstepSet('bkp-scan', 'done'); _lbarSet(100); }
+
+    // Garante que o modal está no modo restaurar
+    if (_bkpMode !== 'restaurar') bkpSwitchTab('restaurar');
+
+    // Renderiza preview com checkboxes dos módulos disponíveis
+    const listEl = document.getElementById('bkp-preview-list');
+    if (!previewEl || !listEl) return;
+
+    const expAt = header._exportedAt ? `Exportado em: ${header._exportedAt}` : '';
+    const version = header._version || 'v1';
+
+    listEl.innerHTML = `
+      <div style="padding:8px 12px;background:var(--surface3);border-radius:8px;font-size:11px;
+        color:var(--text3);display:flex;gap:16px;flex-wrap:wrap;margin-bottom:4px">
+        <span><i class="ti ti-tag" style="margin-right:3px"></i>${version}</span>
+        ${expAt ? `<span><i class="ti ti-clock" style="margin-right:3px"></i>${expAt}</span>` : ''}
+        <span><i class="ti ti-database" style="margin-right:3px"></i>${available.length} módulo(s) no arquivo</span>
+        <span><i class="ti ti-file" style="margin-right:3px"></i>${sizeMB.toFixed(sizeMB < 10 ? 1 : 0)} MB</span>
+      </div>
+      ${available.map(m => {
+        const count = counts[m.key] || 0;
+        const atualCount = (state[m.key] || []).length;
+        return `
+        <label style="display:flex;align-items:center;gap:10px;padding:7px 12px;background:var(--surface2);
+          border-radius:8px;cursor:pointer;border:1.5px solid var(--accent);transition:border-color .15s"
+          id="bkp-rst-row-${m.key}">
+          <input type="checkbox" checked style="display:none"
+            id="bkp-rst-chk-${m.key}" onchange="bkpToggleRestoreModule('${m.key}')">
+          <span style="width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;
+            background:color-mix(in srgb, ${m.color} 15%, transparent);color:${m.color};font-size:14px;flex-shrink:0">
+            <i class="ti ${m.icon}"></i>
+          </span>
+          <span style="flex:1">
+            <span style="font-size:13px;font-weight:500;color:var(--text1);display:block">${m.label}</span>
+            <span style="font-size:10px;color:var(--text3);font-family:var(--mono)">
+              ${count.toLocaleString('pt-BR')} no backup
+              ${atualCount > 0 ? ` · ${atualCount.toLocaleString('pt-BR')} atuais serão substituídos` : '· (módulo vazio)'}
+            </span>
+          </span>
+          <i class="ti ti-square-check-filled" style="color:var(--accent)" id="bkp-rst-icon-${m.key}"></i>
+        </label>`;
+      }).join('')}
+    `;
+
+    previewEl.style.display = '';
+
+  } catch (err) {
+    console.error('[Backup] Erro ao ler arquivo para restauração:', err);
+    toast('Falha ao ler o arquivo: JSON inválido ou corrompido', 'error');
+  } finally {
+    if (isBig) {
+      hideLoadingOverlay('Leitura concluída');
+      if (typeof loadingHideSteps === 'function') loadingHideSteps();
+    }
+  }
 }
 
 function bkpToggleRestoreModule(key) {
@@ -3703,17 +3966,18 @@ function bkpToggleRestoreModule(key) {
 }
 
 async function _restaurarModulosConfirmar() {
-  if (!_bkpParsedFile) {
+  if (!_bkpPendingFile) {
     toast('Nenhum arquivo carregado. Selecione um backup primeiro.', 'error');
     return;
   }
 
-  const parsed = _bkpParsedFile;
+  const file   = _bkpPendingFile;
+  const counts = _bkpPendingCounts || {};
 
   // Coleta módulos marcados para restaurar
   const toRestore = _BKP_MODULES.filter(m => {
     const chk = document.getElementById('bkp-rst-chk-' + m.key);
-    return chk && chk.checked && Array.isArray(parsed[m.key]);
+    return chk && chk.checked && counts[m.key] !== undefined;
   });
 
   if (toRestore.length === 0) {
@@ -3721,7 +3985,7 @@ async function _restaurarModulosConfirmar() {
     return;
   }
 
-  const totalNovo   = toRestore.reduce((s, m) => s + parsed[m.key].length, 0);
+  const totalNovo   = toRestore.reduce((s, m) => s + (counts[m.key] || 0), 0);
   const totalAtual  = toRestore.reduce((s, m) => s + (state[m.key] || []).length, 0);
   const moduloNomes = toRestore.map(m => m.label).join(', ');
 
@@ -3733,10 +3997,11 @@ async function _restaurarModulosConfirmar() {
 
   closeModal('modal-backup');
 
-  showLoadingOverlay('Restaurando backup', 'Carregando dados do arquivo...');
+  const sizeMB = file.size / (1024 * 1024);
+
+  showLoadingOverlay('Restaurando backup', 'Lendo e processando o arquivo...');
   if (typeof loadingShowSteps === 'function') loadingShowSteps([
-    { id: 'bkp-parse',   icon: 'ti-file-import',    label: 'Lendo arquivo de backup' },
-    { id: 'bkp-restore', icon: 'ti-database-import', label: `Restaurando ${toRestore.length} módulo(s)` },
+    { id: 'bkp-restore', icon: 'ti-database-import', label: `Lendo e restaurando ${toRestore.length} módulo(s)` },
     { id: 'bkp-index',   icon: 'ti-list-search',     label: 'Reconstruindo índices' },
     { id: 'bkp-save',    icon: 'ti-device-floppy',   label: 'Salvando estado' },
     { id: 'bkp-render',  icon: 'ti-layout',          label: 'Atualizando interface' },
@@ -3744,19 +4009,32 @@ async function _restaurarModulosConfirmar() {
   await nextFrame();
 
   try {
-    _lstepSet('bkp-parse', 'done'); _lbarSet(20);
+    _lstepSet('bkp-restore', 'running'); _lbarSet(0);
 
-    // Restaura apenas os módulos selecionados
-    _lstepSet('bkp-restore', 'running'); _lbarSet(35);
-    toRestore.forEach(m => {
-      state[m.key] = parsed[m.key];
+    // Lê o arquivo em streaming, materializando apenas os módulos selecionados
+    // (mais 'acoesRelatorio', mantido por compatibilidade com backups antigos).
+    // Os módulos não selecionados são apenas percorridos/contados — nunca
+    // convertidos em objetos — o que também acelera restaurações parciais.
+    const wantedBigKeys = new Set([...toRestore.map(m => m.key), 'acoesRelatorio']);
+    const { header, data } = await _bkpParseStreaming(file, {
+      wantedBigKeys,
+      onProgress: (frac) => {
+        // Reserva os últimos ~30% da barra para índices/salvamento/render abaixo
+        _lbarSet(Math.round(frac * 65));
+        updateLoadingOverlay(`Lendo backup... ${(frac * 100).toFixed(0)}% (${(sizeMB * frac).toFixed(0)} MB de ${sizeMB.toFixed(0)} MB)`);
+      }
     });
 
-    // Restaura acoesRelatorio se presente no arquivo
-    if (Array.isArray(parsed.acoesRelatorio)) {
-      state.acoesRelatorio = parsed.acoesRelatorio;
+    // Aplica os módulos selecionados
+    toRestore.forEach(m => {
+      if (Array.isArray(data[m.key])) state[m.key] = data[m.key];
+    });
+
+    // Restaura acoesRelatorio se presente no arquivo (compatibilidade com backups antigos)
+    if (Array.isArray(data.acoesRelatorio)) {
+      state.acoesRelatorio = data.acoesRelatorio;
     }
-    _lstepSet('bkp-restore', 'done'); _lbarSet(50);
+    _lstepSet('bkp-restore', 'done'); _lbarSet(70);
 
     // Reprocessa índices
     _lstepSet('bkp-index', 'running');
@@ -3767,7 +4045,7 @@ async function _restaurarModulosConfirmar() {
     invalidateSaidasIndex();
     if (typeof invalidateAllSearchIndexes === 'function') invalidateAllSearchIndexes();
     if (typeof reaplicarPadronizacaoMateriais === 'function') reaplicarPadronizacaoMateriais();
-    _lstepSet('bkp-index', 'done'); _lbarSet(70);
+    _lstepSet('bkp-index', 'done'); _lbarSet(80);
 
     // Se as justificativas do Inventário foram restauradas, força o módulo a
     // re-hidratar seu mapa em memória a partir do novo state — senão o
@@ -3780,22 +4058,25 @@ async function _restaurarModulosConfirmar() {
 
     // Restaura dados auxiliares do localStorage
     const lsSet = (key, val) => { try { if (val !== null && val !== undefined) localStorage.setItem(key, JSON.stringify(val)); } catch(e) {} };
-    lsSet('analyticsys_notes_v2',     parsed._notas);
-    lsSet('analyticsys_shortcuts_v1', parsed._atalhos);
-    lsSet('analyticsys_fech_v1',      parsed._fechamento);
+    lsSet('analyticsys_notes_v2',     header._notas);
+    lsSet('analyticsys_shortcuts_v1', header._atalhos);
+    lsSet('analyticsys_fech_v1',      header._fechamento);
 
-    _lstepSet('bkp-save', 'running'); _lbarSet(85);
+    _lstepSet('bkp-save', 'running'); _lbarSet(90);
     await persistStateNow();
     _lstepSet('bkp-save', 'done');
 
-    _lstepSet('bkp-render', 'running'); _lbarSet(95);
+    _lstepSet('bkp-render', 'running'); _lbarSet(97);
     if (typeof renderAll === 'function') renderAll();
     if (typeof updateImportPrereqUI === 'function') updateImportPrereqUI();
     _lstepSet('bkp-render', 'done'); _lbarSet(100);
 
-    const info = parsed._exportedAt ? ` (exportado em ${parsed._exportedAt})` : '';
+    const info = header._exportedAt ? ` (exportado em ${header._exportedAt})` : '';
     setTimeout(() => toast(`${toRestore.length} módulo(s) restaurado(s)${info} — ${totalNovo.toLocaleString('pt-BR')} registros`), 300);
-    _bkpParsedFile = null;
+
+    _bkpPendingFile   = null;
+    _bkpPendingHeader = null;
+    _bkpPendingCounts = null;
 
   } catch (err) {
     console.error('[Backup] Erro durante a restauração:', err);
