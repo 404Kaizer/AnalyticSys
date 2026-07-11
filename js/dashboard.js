@@ -1170,6 +1170,23 @@ function _dgVgRenderChartCustoPorChave(canvasId, entries, chartKey) {
   });
 }
 
+// Agrupa itens com participação abaixo do limite (padrão 5%) numa única
+// fatia "Outros" — evita poluir o donut com fatias minúsculas demais para
+// ter um callout ou até mesmo um clique confiável. O total geral não muda:
+// "Outros" apenas absorve visualmente a soma dos pequenos.
+function _dgVgAgruparOutros(items, threshold = 0.05) {
+  const totalGeral = items.reduce((s, it) => s + it.total, 0);
+  if (totalGeral <= 0) return items;
+
+  const grandes  = items.filter(it => it.total / totalGeral >= threshold);
+  const pequenos = items.filter(it => it.total / totalGeral <  threshold);
+  if (!pequenos.length) return items;
+
+  const somaPequenos = pequenos.reduce((s, it) => s + it.total, 0);
+  return [...grandes, { mat: 'Outros', total: somaPequenos, catKey: null, color: '#6b7280' }]
+    .sort((a, b) => b.total - a.total);
+}
+
 function _dgVgRenderChartGrupoMaterial(custoAbsPorCat) {
   const flatRaw = [];
   DG_VG_CAT_ORDER.forEach(catKey => {
@@ -1188,21 +1205,7 @@ function _dgVgRenderChartGrupoMaterial(custoAbsPorCat) {
 
   // Materiais com menos de 5% de participação no total viram uma única
   // fatia "Outros" — evita poluir o anel com dezenas de fatias minúsculas.
-  // O total (centro do donut) e os % das fatias grandes continuam batendo
-  // exatamente com a soma real, já que "Outros" apenas absorve visualmente
-  // a soma dos pequenos, sem alterar o total geral nem recalcular base.
-  const totalGeral = flatRaw.reduce((s, it) => s + it.total, 0);
-  let flat = flatRaw;
-  if (totalGeral > 0) {
-    const grandes  = flatRaw.filter(it => it.total / totalGeral >= 0.05);
-    const pequenos = flatRaw.filter(it => it.total / totalGeral <  0.05);
-    if (pequenos.length) {
-      const somaPequenos = pequenos.reduce((s, it) => s + it.total, 0);
-      flat = [...grandes, { mat: 'Outros', total: somaPequenos, catKey: null, color: '#6b7280' }]
-        .sort((a, b) => b.total - a.total);
-    }
-  }
-
+  const flat = _dgVgAgruparOutros(flatRaw);
   _dgVgRenderCustoDonutSvg('dg-vg-chart-grupo', flat, 'CUSTO VARIAÇÃO', `${flatRaw.length} materiais`);
 }
 
@@ -1213,11 +1216,14 @@ function _dgVgRenderDonutCategoria(svgId, items, catKey) {
   }
 
   const baseColor = DG_VG_CAT_COLORS[catKey] || '#64748b';
-  const flat = items.map((it, i) => ({
+  const flatRaw = items.map((it, i) => ({
     mat: it.mat, total: it.total,
     color: _dgVgShade(baseColor, items.length > 1 ? (i / (items.length - 1)) * 0.6 - 0.2 : 0)
   }));
 
+  // Mesmo agrupamento em "Outros" usado no donut combinado, para materiais
+  // com menos de 5% de participação dentro da categoria.
+  const flat = _dgVgAgruparOutros(flatRaw);
   _dgVgRenderCustoDonutSvg(svgId, flat, (DG_VG_CAT_LABELS[catKey] || '').toUpperCase(), `${items.length} materiais`, 3);
 }
 
