@@ -781,11 +781,11 @@ function _dgVgRenderHealthDonutSvg(svgId, counts, scoreInfo, levelMeta, unitLabe
   const scoreColor = { bom: '#10b981', atencao: '#f59e0b', urgente: '#f97316', critico: '#f43f5e' }[scoreInfo.level] || '#10b981';
   const scoreLabelTxt = { bom: 'SAUDÁVEL', atencao: 'ATENÇÃO', urgente: 'URGENTE', critico: 'CRÍTICO' }[scoreInfo.level] || '';
 
-  // Nível + contagem saem do centro do donut (poluíam o círculo) e viram
-  // um subtítulo no cabeçalho do card, à direita do título.
+  // A contagem (não redundante com o título do card) vai pro cabeçalho;
+  // o nível de criticidade CONTINUA no centro do donut, junto da %.
   if (subtitleId) {
     const subEl = document.getElementById(subtitleId);
-    if (subEl) subEl.textContent = [scoreLabelTxt, `${total} ${unitLabel || ''}`.trim()].filter(Boolean).join(' · ');
+    if (subEl) subEl.textContent = `${total} ${unitLabel || ''}`.trim();
   }
 
   _dgVgDrawDonutSvg(svgEl, slices, (CX, CY, ri) => {
@@ -794,7 +794,8 @@ function _dgVgRenderHealthDonutSvg(svgId, counts, scoreInfo, levelMeta, unitLabe
       <circle cx="${CX}" cy="${CY}" r="${SR}" fill="none" stroke="${scoreColor}" stroke-width="4.5"
         stroke-dasharray="${sDash.toFixed(1)} ${sCirc.toFixed(1)}" stroke-dashoffset="${(sCirc / 4).toFixed(1)}"
         stroke-linecap="round" opacity="0.55" style="pointer-events:none"/>
-      <text x="${CX}" y="${CY + 8}" text-anchor="middle" font-size="26" font-weight="700" font-family="var(--mono)" fill="${scoreColor}" style="pointer-events:none">${scoreInfo.score}%</text>`;
+      <text x="${CX}" y="${CY - 3}" text-anchor="middle" font-size="24" font-weight="700" font-family="var(--mono)" fill="${scoreColor}" style="pointer-events:none">${scoreInfo.score}%</text>
+      <text x="${CX}" y="${CY + 13}" text-anchor="middle" font-size="8" font-weight="700" font-family="var(--mono)" fill="${scoreColor}" letter-spacing=".07em" opacity="0.9" style="pointer-events:none">${scoreLabelTxt}</text>`;
   });
 }
 
@@ -806,11 +807,11 @@ function _dgVgRenderCustoDonutSvg(svgId, items, centerTop, centerBottom, maxCall
 
   const total = items.reduce((s, i) => s + i.total, 0);
 
-  // Rótulo da categoria + contagem de materiais saem do centro do donut e
-  // viram um subtítulo no cabeçalho do card, à direita do título.
+  // Só a contagem de materiais vai pro subtítulo do cabeçalho — o rótulo
+  // de categoria (ex: "AGREGADO") já está no título do card, seria redundante.
   if (subtitleId) {
     const subEl = document.getElementById(subtitleId);
-    if (subEl) subEl.textContent = (!items.length || total <= 0) ? '' : [centerTop, centerBottom].filter(Boolean).join(' · ');
+    if (subEl) subEl.textContent = (!items.length || total <= 0) ? '' : (centerBottom || '');
   }
 
   if (!items.length || total <= 0) { _dgVgDrawDonutSvg(svgEl, [], null); return; }
