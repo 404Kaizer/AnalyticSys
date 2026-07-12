@@ -580,6 +580,50 @@ function _dgVgVariacaoFisicaPorCategoriaSplit(pares) {
   return out;
 }
 
+// Volume total movimentado (entradas + saídas SAP, em módulo) por
+// categoria no período — usado como base para normalizar o desfalque/
+// sobra em percentual. Decisão: comparar categorias direto em kg é
+// injusto (Agregado pesa milhões de kg, Aditivo pesa centenas) — usando
+// o volume movimentado da PRÓPRIA categoria como denominador, cada
+// categoria é julgada só contra ela mesma (ex: 3.000 kg de desfalque em
+// Aditivo pode ser 6% do que se movimenta dele, enquanto 30.000 kg em
+// Agregado pode ser 0,2% do que se movimenta dele — o gráfico passa a
+// refletir isso).
+function _dgVgVolumeMovimentadoPorCategoria(results) {
+  const out = { agregado: 0, aglomerante: 0, aditivo: 0, adicao: 0 };
+  results.forEach(r => {
+    const catMap = r.materialCatKeyMap;
+    if (!catMap) return;
+    (r.sapNoPeriodo || []).forEach(s => {
+      const catKey = catMap.get(s.material || '—');
+      if (!catKey || !(catKey in out)) return;
+      out[catKey] += Math.abs(num(s.peso));
+    });
+  });
+  return out;
+}
+
+// Junta o split de desfalque/sobra em kg com o volume movimentado por
+// categoria, retornando os dois lados já em percentual (pra tamanho da
+// barra) e mantendo o kg original (pra rótulo/tooltip). Categoria sem
+// nenhum volume movimentado no período fica com percentual 0 (evita
+// divisão por zero) — nesse caso não deveria haver diff de qualquer
+// forma, mas o fallback protege contra dado inconsistente.
+function _dgVgVariacaoFisicaPercentualPorCategoria(catFisicaSplit, volumePorCategoria) {
+  const out = {};
+  DG_VG_CAT_ORDER.forEach(k => {
+    const vol = volumePorCategoria[k] || 0;
+    const kg  = catFisicaSplit[k] || { desfalque: 0, sobra: 0 };
+    out[k] = {
+      desfalqueKg:  kg.desfalque,
+      sobraKg:      kg.sobra,
+      desfalquePct: vol > 0 ? (kg.desfalque / vol) * 100 : 0,
+      sobraPct:     vol > 0 ? (kg.sobra     / vol) * 100 : 0
+    };
+  });
+  return out;
+}
+
 // ── Custo da variação (não o gasto efetivo) por material — soma do valor
 //    absoluto do custo implicado (diff × custo médio) de cada par
 //    Central×Material, agregado por material. Reflete o impacto
@@ -896,6 +940,8 @@ function renderDgVisaoGeralPdf(results, thresholds, dtIni, dtFim) {
 
   const catFisica      = _dgVgVariacaoFisicaPorCategoria(pares);
   const catFisicaSplit = _dgVgVariacaoFisicaPorCategoriaSplit(pares);
+  const volumePorCategoria = _dgVgVolumeMovimentadoPorCategoria(results);
+  const catFisicaPct       = _dgVgVariacaoFisicaPercentualPorCategoria(catFisicaSplit, volumePorCategoria);
   const varTotalFisica = Object.values(catFisica).reduce((a, b) => a + b, 0);
   const custoTotal     = pares.reduce((s, p) => s + p.custoImplicado, 0);
 
@@ -910,7 +956,7 @@ function renderDgVisaoGeralPdf(results, thresholds, dtIni, dtFim) {
   _dgVgRenderKpisHero(varTotalFisica, custoTotal);
   _dgVgRenderStatBoxes(counts, recorrentes, pares, results);
   _dgVgRenderHealthDonuts(pares, counts, scoreInfo, thresholds);
-  _dgVgRenderChartCategoriaFisica(catFisicaSplit);
+  _dgVgRenderChartCategoriaFisica(catFisicaPct);
   _dgVgRenderExtremos(extRegional, extCentral);
   const entriesRegional = _dgVgTop8SobraDesfalque(porRegional);
   const entriesCentral  = _dgVgTop8SobraDesfalque(porCentral);
@@ -1138,11 +1184,10 @@ function _dgVgRenderExtremos(extRegional, extCentral) {
 
 // Plugin customizado (sem dependência externa — mantém o app 100%
 // client-side/offline) que escreve o valor de cada barra logo fora da
-// ponta dela. Resolve o problema de categorias com peso muito menor
-// (Aditivo/Adição) ficarem com barras pequenas demais pra serem lidas
-// visualmente: o número ao lado sempre aparece, não importa o tamanho
-// da barra. Desfalque escreve à esquerda da ponta (a barra cresce pra
-// esquerda), Sobra escreve à direita (a barra cresce pra direita).
+// ponta dela. O comprimento da barra reflete o percentual (dataset.data),
+// mas o rótulo mostra o kg real (dataset.kgValues, array paralelo) — é o
+// kg que importa pra ação, o percentual é só pra dar tamanho justo à
+// barra entre categorias de porte muito diferente.
 const _dgVgBarValueLabelsPlugin = {
   id: 'dgVgBarValueLabels',
   afterDatasetsDraw(chart) {
@@ -1151,31 +1196,35 @@ const _dgVgBarValueLabelsPlugin = {
       const meta = chart.getDatasetMeta(dsIndex);
       if (meta.hidden) return;
       meta.data.forEach((bar, i) => {
-        const value = dataset.data[i];
-        if (!value) return; // sem barra, sem rótulo
+        const pctValue = dataset.data[i];
+        const kgValue  = (dataset.kgValues && dataset.kgValues[i]) || 0;
+        if (!pctValue || !kgValue) return; // sem barra, sem rótulo
         const { x, y } = bar.getProps(['x', 'y'], true);
-        const negative = value < 0;
+        const negative = pctValue < 0;
         ctx.save();
         ctx.font = "600 10px 'DM Mono', monospace";
         ctx.fillStyle = negative ? '#f43f5e' : '#f59e0b';
         ctx.textBaseline = 'middle';
         ctx.textAlign = negative ? 'right' : 'left';
-        ctx.fillText(fmtKgShort(Math.abs(value)), x + (negative ? -6 : 6), y);
+        ctx.fillText(fmtKgShort(Math.abs(kgValue)), x + (negative ? -6 : 6), y);
         ctx.restore();
       });
     });
   }
 };
 
-function _dgVgRenderChartCategoriaFisica(catFisicaSplit) {
+function _dgVgRenderChartCategoriaFisica(catFisicaPct) {
   const ctx = document.getElementById('dg-vg-chart-categoria');
   if (!ctx) return;
   _dgVgDestroyChart('categoria');
   const { textCol, gridCol, tickFont } = _dgVgTheme();
 
-  const labels     = DG_VG_CAT_ORDER.map(k => DG_VG_CAT_LABELS[k]);
-  const desfalques = DG_VG_CAT_ORDER.map(k => catFisicaSplit[k]?.desfalque || 0);
-  const sobras     = DG_VG_CAT_ORDER.map(k => catFisicaSplit[k]?.sobra || 0);
+  const labels        = DG_VG_CAT_ORDER.map(k => DG_VG_CAT_LABELS[k]);
+  const desfalquesPct = DG_VG_CAT_ORDER.map(k => catFisicaPct[k]?.desfalquePct || 0);
+  const sobrasPct     = DG_VG_CAT_ORDER.map(k => catFisicaPct[k]?.sobraPct || 0);
+  const desfalquesKg  = DG_VG_CAT_ORDER.map(k => catFisicaPct[k]?.desfalqueKg || 0);
+  const sobrasKg      = DG_VG_CAT_ORDER.map(k => catFisicaPct[k]?.sobraKg || 0);
+  const fmtPct        = v => Math.abs(v).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%';
 
   _dgVgCharts.categoria = new Chart(ctx, {
     type: 'bar',
@@ -1183,8 +1232,8 @@ function _dgVgRenderChartCategoriaFisica(catFisicaSplit) {
     data: {
       labels,
       datasets: [
-        { label: 'Desfalque', data: desfalques, backgroundColor: '#f43f5e', borderRadius: 3, borderSkipped: false, stack: 'variacao' },
-        { label: 'Sobra',     data: sobras,     backgroundColor: '#f59e0b', borderRadius: 3, borderSkipped: false, stack: 'variacao' }
+        { label: 'Desfalque', data: desfalquesPct, kgValues: desfalquesKg, backgroundColor: '#f43f5e', borderRadius: 3, borderSkipped: false, stack: 'variacao' },
+        { label: 'Sobra',     data: sobrasPct,     kgValues: sobrasKg,     backgroundColor: '#f59e0b', borderRadius: 3, borderSkipped: false, stack: 'variacao' }
       ]
     },
     options: {
@@ -1195,10 +1244,17 @@ function _dgVgRenderChartCategoriaFisica(catFisicaSplit) {
           display: true, position: 'top', align: 'end',
           labels: { color: textCol, font: tickFont, boxWidth: 10, boxHeight: 10, usePointStyle: true, pointStyle: 'rect' }
         },
-        tooltip: { callbacks: { label: c => `${c.dataset.label} · ${fmtKgShort(Math.abs(c.raw))}` } }
+        tooltip: {
+          callbacks: {
+            label: c => {
+              const kgValue = (c.dataset.kgValues && c.dataset.kgValues[c.dataIndex]) || 0;
+              return `${c.dataset.label} · ${fmtPct(c.raw)} do volume movimentado · ${fmtKgShort(Math.abs(kgValue))}`;
+            }
+          }
+        }
       },
       scales: {
-        x: { stacked: true, grace: '15%', grid: { color: gridCol }, ticks: { color: textCol, font: tickFont, callback: v => fmtKgShort(v) } },
+        x: { stacked: true, grace: '15%', grid: { color: gridCol }, ticks: { color: textCol, font: tickFont, callback: v => fmtPct(v) } },
         y: { stacked: true, grid: { display: false }, ticks: { color: textCol, font: { ...tickFont, size: 11.5 } } }
       }
     }
