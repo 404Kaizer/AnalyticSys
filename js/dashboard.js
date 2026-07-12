@@ -1235,7 +1235,12 @@ function _dgVgRenderChartCategoriaFisica(catFisicaPct) {
   const sobrasPct     = catOrdenadaPorSeveridade.map(k => catFisicaPct[k]?.sobraPct || 0);
   const desfalquesKg  = catOrdenadaPorSeveridade.map(k => catFisicaPct[k]?.desfalqueKg || 0);
   const sobrasKg      = catOrdenadaPorSeveridade.map(k => catFisicaPct[k]?.sobraKg || 0);
+  // Total líquido por categoria (desfalque + sobra, em kg) — pedido do
+  // Hugo pra mostrar o resultado final de cada categoria, além dos dois
+  // lados já exibidos separadamente. Vira a 2ª linha do rótulo do eixo Y.
+  const totaisKg      = catOrdenadaPorSeveridade.map((_, i) => desfalquesKg[i] + sobrasKg[i]);
   const fmtPct        = v => Math.abs(v).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%';
+  const fmtTotalKg    = v => (v > 0.0001 ? '+' : '') + fmtKgShort(v);
 
   _dgVgCharts.categoria = new Chart(ctx, {
     type: 'bar',
@@ -1266,7 +1271,13 @@ function _dgVgRenderChartCategoriaFisica(catFisicaPct) {
       },
       scales: {
         x: { stacked: true, grace: '15%', grid: { color: gridCol }, ticks: { color: textCol, font: tickFont, callback: v => fmtPct(v) } },
-        y: { stacked: true, grid: { display: false }, ticks: { color: textCol, font: { ...tickFont, size: 11.5 } } }
+        y: {
+          stacked: true, grid: { display: false },
+          ticks: {
+            color: textCol, font: { ...tickFont, size: 11.5 },
+            callback: (value, index) => [labels[index], `total: ${fmtTotalKg(totaisKg[index])}`]
+          }
+        }
       }
     }
   });
