@@ -4997,6 +4997,7 @@ mark.search-highlight {
   display: grid;
   grid-template-columns: minmax(140px,1fr) 80px 48px 72px 72px 72px 64px;
   gap: 6px;
+  align-items: center;
   margin-bottom: 6px;
   padding-bottom: 6px;
   border-bottom: 1px solid var(--border);

@@ -206,6 +206,143 @@ const HELP_DEFS = {
     ],
   },
 
+  // ── KPIs do modal Giro & Cobertura (Dashboard Gerencial) ──────────────
+  'giro-cobertura-media': {
+    title: 'Cobertura Média',
+    sections: [
+      {
+        heading: 'Fórmula',
+        body: `<div style="font-family:var(--mono);font-size:11px;background:var(--bg3);border-radius:5px;padding:8px 12px;margin-top:4px;border:1px solid var(--border)">
+          Cobertura = (Est.Médio ÷ Saídas totais) × Dias do período
+        </div>`,
+      },
+      {
+        heading: 'Est.Médio',
+        body: 'Média entre estoque inicial e final de cada par central × material no período — (Est. Inicial + Est. Final) ÷ 2 — somada de todas as centrais e materiais.',
+      },
+      {
+        heading: 'Interpretação',
+        body: 'Quantos dias o estoque médio sustentaria o consumo, no ritmo observado no período. Quanto menor, mais perto do risco de ruptura.',
+      },
+    ],
+  },
+
+  'giro-geral': {
+    title: 'Giro Geral',
+    sections: [
+      {
+        heading: 'Fórmula',
+        body: `<div style="font-family:var(--mono);font-size:11px;background:var(--bg3);border-radius:5px;padding:8px 12px;margin-top:4px;border:1px solid var(--border)">
+          Giro = Saídas totais ÷ Est.Médio
+        </div>`,
+      },
+      {
+        heading: 'O que mede',
+        body: 'Quantas vezes o estoque médio "girou" (foi consumido e reposto) durante todo o período analisado — agregando todas as centrais e materiais.',
+      },
+      {
+        heading: 'Faixas de classificação',
+        body: `<div style="display:grid;grid-template-columns:auto auto;gap:4px 16px;font-family:var(--mono);font-size:10.5px;margin-top:4px">
+          <span style="color:#f43f5e;font-weight:700">&gt; 4,0×</span><span style="color:var(--text2)">Muito Alto — Risco Ruptura</span>
+          <span style="color:#10b981;font-weight:700">2,0 – 4,0×</span><span style="color:var(--text2)">Alto — Operação Enxuta</span>
+          <span style="color:#2dd4bf;font-weight:700">1,0 – 2,0×</span><span style="color:var(--text2)">Saudável</span>
+          <span style="color:#f59e0b;font-weight:700">0,5 – 1,0×</span><span style="color:var(--text2)">Baixo — Atenção Excesso</span>
+          <span style="color:#f97316;font-weight:700">0,2 – 0,5×</span><span style="color:var(--text2)">Muito Baixo — Estoque Elevado</span>
+          <span style="color:#f43f5e;font-weight:700">&lt; 0,2×</span><span style="color:var(--text2)">Parado — Capital Imobilizado</span>
+        </div>`,
+      },
+    ],
+  },
+
+  'giro-30dias': {
+    title: 'Giro 30 dias',
+    sections: [
+      {
+        heading: 'Fórmula',
+        body: `<div style="font-family:var(--mono);font-size:11px;background:var(--bg3);border-radius:5px;padding:8px 12px;margin-top:4px;border:1px solid var(--border)">
+          Giro 30d = Saídas dos últimos 30 dias ÷ Est.Médio do período
+        </div>`,
+      },
+      {
+        heading: 'Atenção: o denominador não muda',
+        body: 'O numerador usa só as saídas dos últimos 30 dias corridos (a partir de hoje). O Est.Médio no denominador continua sendo o do período TOTAL selecionado no filtro — não é recalculado só pra essa janela. Esse número mostra o ritmo recente de consumo relativo ao estoque médio do período inteiro, não um giro isolado dos últimos 30 dias.',
+      },
+    ],
+  },
+
+  'giro-periodo-saidas': {
+    title: 'Período · Saídas Totais',
+    sections: [
+      {
+        heading: 'Período (dias)',
+        body: 'Calculado a partir da menor e maior data de lançamento encontradas nos dados do período — pode ser menor que o intervalo escolhido no filtro, se não houver lançamentos em todos os dias.',
+      },
+      {
+        heading: 'Saídas Totais',
+        body: 'Soma de todo o consumo (saídas) em quilogramas, de todas as centrais e materiais, no período analisado. É o denominador usado no cálculo de Giro Geral e Cobertura Média.',
+      },
+    ],
+  },
+
+  // ── Colunas da tabela do modal Giro & Cobertura (por linha — Central/Material) ──
+  'giro-tabela-cobertura': {
+    title: 'Cobertura (por linha)',
+    sections: [
+      {
+        heading: 'Fórmula',
+        body: `<div style="font-family:var(--mono);font-size:11px;background:var(--bg3);border-radius:5px;padding:8px 12px;margin-top:4px;border:1px solid var(--border)">
+          Cobertura = (Est.Médio ÷ Saídas) × Dias do período
+        </div>`,
+      },
+      {
+        heading: 'Faixas de classificação',
+        body: `<div style="display:grid;grid-template-columns:auto auto;gap:4px 16px;font-family:var(--mono);font-size:10.5px;margin-top:4px">
+          <span style="color:#f43f5e;font-weight:700">&lt; 5 dias</span><span style="color:var(--text2)">Crítico</span>
+          <span style="color:#f97316;font-weight:700">5 – 10 dias</span><span style="color:var(--text2)">Urgente</span>
+          <span style="color:#10b981;font-weight:700">10 – 20 dias</span><span style="color:var(--text2)">Saudável</span>
+          <span style="color:#f59e0b;font-weight:700">20 – 40 dias</span><span style="color:var(--text2)">Atenção</span>
+          <span style="color:#a78bfa;font-weight:700">&gt; 40 dias</span><span style="color:var(--text2)">Excesso</span>
+        </div>`,
+      },
+    ],
+  },
+
+  'giro-tabela-giro': {
+    title: 'Giro× (por linha)',
+    sections: [
+      {
+        heading: 'Fórmula',
+        body: `<div style="font-family:var(--mono);font-size:11px;background:var(--bg3);border-radius:5px;padding:8px 12px;margin-top:4px;border:1px solid var(--border)">
+          Giro = Saídas ÷ Est.Médio
+        </div>`,
+      },
+      {
+        heading: 'O que mede',
+        body: 'Quantas vezes o estoque médio dessa central (ou material) girou no período. A cor segue as mesmas faixas do KPI "Giro Geral", no topo do modal.',
+      },
+    ],
+  },
+
+  'giro-tabela-abast': {
+    title: 'Abastecimento',
+    sections: [
+      {
+        heading: 'Fórmula',
+        body: `<div style="font-family:var(--mono);font-size:11px;background:var(--bg3);border-radius:5px;padding:8px 12px;margin-top:4px;border:1px solid var(--border)">
+          Abast. = (Entradas ÷ Saídas) × 100%
+        </div>`,
+      },
+      {
+        heading: 'Linhas de giro alto (≥ 1,0×)',
+        body: '<strong style="color:#10b981">≥ 100%</strong> — abastecimento cobre o consumo. <strong style="color:#f59e0b">80–99%</strong> — próximo do limite. <strong style="color:#f43f5e">&lt; 80%</strong> — risco de ruptura.',
+      },
+      {
+        heading: 'Linhas de giro baixo (&lt; 1,0×)',
+        body: '<strong style="color:#a78bfa">&gt; 150%</strong> — excesso, capital imobilizado. <strong style="color:#f59e0b">100–150%</strong> — acima do consumo. <strong style="color:#10b981">80–99%</strong> — equilibrado. <strong style="color:#f43f5e">&lt; 80%</strong> — consumo supera o abastecimento.',
+      },
+    ],
+  },
+
 };
 
 // ── Renderiza seções de um help def ──────────────────────────────────

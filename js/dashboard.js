@@ -1382,31 +1382,32 @@ function renderDgGiro(results, dtIni, dtFim) {
   }
   const { cls, label } = classificarGiro(giroGeral);
 
+  const giroValColor = { 'muito-alto':'c-red', 'alto':'c-green', 'normal':'c-teal', 'baixo':'c-amber', 'muito-baixo':'c-amber', 'parado':'c-red' }[cls] || '';
+
   // Cobertura: cor neutra informativa — sem semáforo consolidado
   // (thresholds fazem sentido por material, não por média de todos os materiais)
   kpiEl.innerHTML = `
-    <div class="dg-giro-main">
-      <div class="dg-giro-label"><i class="ti ti-calendar-time" style="font-size:13px"></i> Cobertura Média</div>
-      <div class="dg-giro-value" style="color:var(--teal)">${coberturaGeral !== null ? coberturaGeral.toFixed(1) + 'd' : '—'}</div>
-      <div class="dg-giro-sub-hint" style="margin-top:2px">Est.Médio ÷ consumo diário</div>
-    </div>
-    <div class="dg-giro-divider"></div>
-    <div class="dg-giro-sub-item">
-      <div class="dg-giro-sub-label">Giro Geral</div>
-      <div class="dg-giro-sub-value">${giroGeral.toFixed(2)}×</div>
-      <div class="dg-giro-sub-hint">${label}</div>
-    </div>
-    <div class="dg-giro-divider"></div>
-    <div class="dg-giro-sub-item">
-      <div class="dg-giro-sub-label">Giro 30 dias</div>
-      <div class="dg-giro-sub-value">${giro30.toFixed(2)}×</div>
-      <div class="dg-giro-sub-hint">Est. Médio: ${fmtKgShort(totalEstMedioKg)}</div>
-    </div>
-    <div class="dg-giro-divider"></div>
-    <div class="dg-giro-sub-item">
-      <div class="dg-giro-sub-label">Período · Saídas Totais</div>
-      <div class="dg-giro-sub-value">${periodoEstimado}d &nbsp;<span style="font-size:14px;color:var(--text2)">${fmtKgShort(totalSaidasKg)}</span></div>
-      <div class="dg-giro-sub-hint">dias analisados · consumo total</div>
+    <div class="analitico-detail-summary" style="margin-bottom:0;width:100%">
+      <div class="analitico-detail-card">
+        <div class="analitico-detail-card-label"><i class="ti ti-calendar-time" style="font-size:11px;margin-right:4px"></i>Cobertura Média <span class="macro-help-badge" data-help="giro-cobertura-media">?</span></div>
+        <div class="analitico-detail-card-value c-teal">${coberturaGeral !== null ? coberturaGeral.toFixed(1) + 'd' : '—'}</div>
+        <div class="analitico-detail-card-sub">Est.Médio ÷ consumo diário</div>
+      </div>
+      <div class="analitico-detail-card">
+        <div class="analitico-detail-card-label">Giro Geral <span class="macro-help-badge" data-help="giro-geral">?</span></div>
+        <div class="analitico-detail-card-value ${giroValColor}">${giroGeral.toFixed(2)}×</div>
+        <div class="analitico-detail-card-sub">${label}</div>
+      </div>
+      <div class="analitico-detail-card">
+        <div class="analitico-detail-card-label">Giro 30 dias <span class="macro-help-badge" data-help="giro-30dias">?</span></div>
+        <div class="analitico-detail-card-value">${giro30.toFixed(2)}×</div>
+        <div class="analitico-detail-card-sub">Est. Médio: ${fmtKgShort(totalEstMedioKg)}</div>
+      </div>
+      <div class="analitico-detail-card">
+        <div class="analitico-detail-card-label">Período · Saídas Totais <span class="macro-help-badge" data-help="giro-periodo-saidas">?</span></div>
+        <div class="analitico-detail-card-value" style="font-size:16px">${periodoEstimado}d <span style="font-size:12.5px;color:var(--text2);font-weight:600">${fmtKgShort(totalSaidasKg)}</span></div>
+        <div class="analitico-detail-card-sub">dias analisados · consumo total</div>
+      </div>
     </div>`;
 
   // ── Cálculo agregado por Central (Giro, Cobertura, Entradas, Saídas, Est.Médio) ──
@@ -1493,15 +1494,19 @@ function renderDgGiro(results, dtIni, dtFim) {
   }
 
   function buildGiroHead(nameLabel) {
+    const withBadge = (label, helpKey, align) => `
+      <span style="text-align:${align};display:inline-flex;align-items:center;gap:3px;${align === 'right' ? 'justify-content:flex-end' : align === 'center' ? 'justify-content:center' : ''}">
+        ${label}<span class="macro-help-badge" data-help="${helpKey}" style="width:12px;height:12px;font-size:8px">?</span>
+      </span>`;
     return `
     <div class="dg-giro-mat-head-row">
       <span>${nameLabel}</span>
-      <span style="text-align:center" title="Dias de cobertura = Est.Médio ÷ (Saídas ÷ Período)">Cobertura</span>
-      <span style="text-align:right" title="Índice de giro do período">Giro×</span>
+      ${withBadge('Cobertura', 'giro-tabela-cobertura', 'center')}
+      ${withBadge('Giro×', 'giro-tabela-giro', 'right')}
       <span style="text-align:right">Entradas</span>
       <span style="text-align:right">Saídas</span>
       <span style="text-align:right">Est.Médio</span>
-      <span style="text-align:center" title="Entradas ÷ Saídas — abastecimento vs consumo">Abast.</span>
+      ${withBadge('Abast.', 'giro-tabela-abast', 'center')}
     </div>`;
   }
 
@@ -1591,6 +1596,10 @@ function renderDgGiro(results, dtIni, dtFim) {
   }
   renderPanel('dg-vg-giro-central-alto-body',  top5CentralAlto,  'alto',  'Central', false);
   renderPanel('dg-vg-giro-central-baixo-body', top5CentralBaixo, 'baixo', 'Central', false);
+
+  // Ativa os badges "?" injetados dinamicamente acima (KPIs + cabeçalhos de
+  // tabela) — initHelpBadges() é idempotente, pula quem já foi ligado.
+  if (typeof initHelpBadges === 'function') initHelpBadges();
 }
 
 
@@ -4993,8 +5002,46 @@ function dgGiroModalSwitchTab(tab) {
   const btnMateriais = document.getElementById('dg-giro-modal-tab-materiais');
   if (btnCentrais)  btnCentrais.classList.toggle('btn-primary', isCentrais);
   if (btnMateriais) btnMateriais.classList.toggle('btn-primary', !isCentrais);
+
+  // Busca é por aba — limpa e ajusta o placeholder ao trocar, evita filtro
+  // "fantasma" aplicado num painel que o usuário nem está vendo mais.
+  const searchEl = document.getElementById('dg-giro-modal-search');
+  if (searchEl) {
+    searchEl.value = '';
+    searchEl.placeholder = isCentrais ? 'Buscar central...' : 'Buscar material...';
+  }
+  dgGiroModalFilter('');
 }
 window.dgGiroModalSwitchTab = dgGiroModalSwitchTab;
+
+function dgGiroModalFilter(value) {
+  const isCentrais = document.getElementById('dg-giro-modal-panel-centrais')?.style.display !== 'none';
+  const panel = document.getElementById(isCentrais ? 'dg-giro-central-body' : 'dg-giro-mat-todos-body');
+  if (!panel) return;
+
+  const q = normalizeText((value || '').trim());
+  let visibleCount = 0;
+  panel.querySelectorAll('.dg-giro-mat-row').forEach(row => {
+    const name = row.querySelector('.dg-giro-mat-name')?.textContent || '';
+    const match = !q || normalizeText(name).includes(q);
+    row.style.display = match ? '' : 'none';
+    if (match) visibleCount++;
+  });
+
+  let emptyMsg = panel.querySelector('.dg-giro-search-empty');
+  if (q && !visibleCount) {
+    if (!emptyMsg) {
+      emptyMsg = document.createElement('div');
+      emptyMsg.className = 'dg-giro-search-empty dg-empty-riscos';
+      emptyMsg.innerHTML = '<i class="ti ti-search-off"></i><span>Nenhum resultado para essa busca.</span>';
+      panel.appendChild(emptyMsg);
+    }
+    emptyMsg.style.display = '';
+  } else if (emptyMsg) {
+    emptyMsg.style.display = 'none';
+  }
+}
+window.dgGiroModalFilter = dgGiroModalFilter;
 
 function _escDgGiroModal(e) {
   if (e.key === 'Escape') dgFecharGiroDetalhe();

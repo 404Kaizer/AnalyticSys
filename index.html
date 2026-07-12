@@ -4306,7 +4306,7 @@
     <!-- Header (padrão reaproveitado do Detalhamento do Material — Analítico/Visão Micro) -->
     <div class="analitico-detail-header">
       <div class="analitico-detail-heading">
-        <div class="analitico-detail-kicker">Detalhamento de Giro & Cobertura</div>
+        <div class="analitico-detail-kicker">Detalhamento operacional</div>
         <div class="analitico-detail-title" id="dg-giro-modal-title">Giro & Cobertura</div>
         <div class="analitico-detail-sub" id="dg-giro-modal-sub">Período analisado</div>
       </div>
@@ -4321,7 +4321,7 @@
     <div class="analitico-detail-body" style="gap:16px">
 
       <!-- KPIs de giro geral (fixos no topo, contexto para as duas abas) -->
-      <div class="dg-giro-kpi-card" id="dg-giro-kpi-card" style="flex-shrink:0;margin-bottom:0">
+      <div id="dg-giro-kpi-card" style="flex-shrink:0">
         <div class="dg-giro-kpi-inner" id="dg-giro-kpi-inner">
           <div class="dg-empty-riscos" style="padding:12px 0"><i class="ti ti-loader"></i><span>Aguardando análise...</span></div>
         </div>
@@ -4337,6 +4337,13 @@
           style="flex:1;justify-content:center;gap:6px">
           <i class="ti ti-box"></i> Materiais
         </button>
+      </div>
+
+      <!-- Busca -->
+      <div style="position:relative;flex-shrink:0">
+        <i class="ti ti-search" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:13px;color:var(--text3);pointer-events:none"></i>
+        <input type="text" id="dg-giro-modal-search" class="micro-filter-search" style="padding-left:30px"
+          placeholder="Buscar central..." oninput="dgGiroModalFilter(this.value)">
       </div>
 
       <!-- Única região com scroll real (vertical E horizontal) — os dois painéis
