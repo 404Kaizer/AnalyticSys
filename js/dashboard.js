@@ -1213,6 +1213,33 @@ const _dgVgBarValueLabelsPlugin = {
   }
 };
 
+// Segundo plugin: desenha o total líquido (Δ = desfalque + sobra) de cada
+// categoria numa coluna fixa à direita do gráfico — sempre na mesma
+// posição X, alinhado pela linha (posição Y) de cada categoria via
+// chart.scales.y. Ficou numa coluna fixa em vez de embutido no nome da
+// categoria (eixo Y) porque nomes de tamanhos diferentes (Adição vs.
+// Aglomerante) desalinhavam visualmente as duas linhas empilhadas.
+const _dgVgCategoryTotalsPlugin = {
+  id: 'dgVgCategoryTotals',
+  afterDatasetsDraw(chart) {
+    const totals = chart.options.plugins?.dgVgCategoryTotals?.totals;
+    if (!totals || !totals.length) return;
+    const { ctx, chartArea, scales } = chart;
+    ctx.save();
+    ctx.font = "600 10px 'DM Mono', monospace";
+    ctx.fillStyle = '#7b85a0';
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'left';
+    totals.forEach((totalKg, i) => {
+      const y = scales.y.getPixelForTick(i);
+      if (y == null) return;
+      const sign = totalKg > 0.0001 ? '+' : '';
+      ctx.fillText(`Δ ${sign}${fmtKgShort(totalKg)}`, chartArea.right + 14, y);
+    });
+    ctx.restore();
+  }
+};
+
 function _dgVgRenderChartCategoriaFisica(catFisicaPct) {
   const ctx = document.getElementById('dg-vg-chart-categoria');
   if (!ctx) return;
@@ -1235,16 +1262,14 @@ function _dgVgRenderChartCategoriaFisica(catFisicaPct) {
   const sobrasPct     = catOrdenadaPorSeveridade.map(k => catFisicaPct[k]?.sobraPct || 0);
   const desfalquesKg  = catOrdenadaPorSeveridade.map(k => catFisicaPct[k]?.desfalqueKg || 0);
   const sobrasKg      = catOrdenadaPorSeveridade.map(k => catFisicaPct[k]?.sobraKg || 0);
-  // Total líquido por categoria (desfalque + sobra, em kg) — pedido do
-  // Hugo pra mostrar o resultado final de cada categoria, além dos dois
-  // lados já exibidos separadamente. Vira a 2ª linha do rótulo do eixo Y.
+  // Total líquido por categoria (desfalque + sobra, em kg) — vira a
+  // coluna fixa "Δ" à direita do gráfico (ver _dgVgCategoryTotalsPlugin).
   const totaisKg      = catOrdenadaPorSeveridade.map((_, i) => desfalquesKg[i] + sobrasKg[i]);
   const fmtPct        = v => Math.abs(v).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%';
-  const fmtTotalKg    = v => (v > 0.0001 ? '+' : '') + fmtKgShort(v);
 
   _dgVgCharts.categoria = new Chart(ctx, {
     type: 'bar',
-    plugins: [_dgVgBarValueLabelsPlugin],
+    plugins: [_dgVgBarValueLabelsPlugin, _dgVgCategoryTotalsPlugin],
     data: {
       labels,
       datasets: [
@@ -1254,7 +1279,7 @@ function _dgVgRenderChartCategoriaFisica(catFisicaPct) {
     },
     options: {
       indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-      layout: { padding: { left: 46, right: 46 } },
+      layout: { padding: { left: 46, right: 118 } },
       plugins: {
         legend: {
           display: true, position: 'top', align: 'end',
@@ -1267,16 +1292,14 @@ function _dgVgRenderChartCategoriaFisica(catFisicaPct) {
               return `${c.dataset.label} · ${fmtPct(c.raw)} do volume movimentado · ${fmtKgShort(Math.abs(kgValue))}`;
             }
           }
-        }
+        },
+        dgVgCategoryTotals: { totals: totaisKg }
       },
       scales: {
         x: { stacked: true, grace: '15%', grid: { color: gridCol }, ticks: { color: textCol, font: tickFont, callback: v => fmtPct(v) } },
         y: {
           stacked: true, grid: { display: false },
-          ticks: {
-            color: textCol, font: { ...tickFont, size: 11.5 },
-            callback: (value, index) => [labels[index], `total: ${fmtTotalKg(totaisKg[index])}`]
-          }
+          ticks: { color: textCol, font: { ...tickFont, size: 11.5 } }
         }
       }
     }
