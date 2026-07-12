@@ -506,30 +506,6 @@ function _dgVgBuildCentralHealthData(pares, thresholds) {
   return { counts, levelMeta, total: byCentral.size };
 }
 
-// ── Recorrentes: pares Central×Material críticos/urgentes que também
-//    estavam críticos/urgentes no período equivalente imediatamente
-//    anterior (mesma duração, encostado antes de dtIni).
-function _dgVgCountRecorrentes(paresAtual, thresholds, dtIni, dtFim) {
-  if (!dtIni || !dtFim) return null;
-  const durMs   = dtFim.getTime() - dtIni.getTime();
-  const prevFim = new Date(dtIni.getTime() - 1);
-  const prevIni = new Date(prevFim.getTime() - durMs);
-
-  const resultsPrev = buildDashboardGerencialResults(prevIni, prevFim);
-  const paresPrev    = _dgVgBuildPares(resultsPrev, thresholds, prevIni, prevFim);
-
-  const badPrev = new Set();
-  paresPrev.forEach(p => {
-    if (!p.neutro && (p.level === 'critico' || p.level === 'urgente')) badPrev.add(p.central + '|||' + p.mat);
-  });
-
-  let count = 0;
-  paresAtual.forEach(p => {
-    if (!p.neutro && (p.level === 'critico' || p.level === 'urgente') && badPrev.has(p.central + '|||' + p.mat)) count++;
-  });
-  return count;
-}
-
 function _dgVgAggPorChave(pares, keyFn) {
   const map = new Map();
   pares.forEach(p => {
@@ -924,7 +900,7 @@ function renderDgVisaoGeralPdf(results, thresholds, dtIni, dtFim) {
 
   if (!results.length) {
     const msg = '<div class="dg-empty-riscos"><i class="ti ti-database-off"></i><span>Sem dados no período.</span></div>';
-    ['dg-vg-kpis-hero', 'dg-vg-health-boxes', 'dg-vg-extremos'].forEach(id => {
+    ['dg-vg-kpis-hero', 'dg-vg-extremos'].forEach(id => {
       const e = document.getElementById(id); if (e) e.innerHTML = msg;
     });
     ['categoria', 'chartRegional', 'chartUsina'].forEach(k => _dgVgDestroyChart(k));
@@ -936,7 +912,6 @@ function renderDgVisaoGeralPdf(results, thresholds, dtIni, dtFim) {
   const pares       = _dgVgBuildPares(results, thresholds, dtIni, dtFim);
   const counts      = _dgVgCounts(pares);
   const scoreInfo   = _dgVgScoreFromCounts(counts);
-  const recorrentes = _dgVgCountRecorrentes(pares, thresholds, dtIni, dtFim);
 
   const catFisica      = _dgVgVariacaoFisicaPorCategoria(pares);
   const catFisicaSplit = _dgVgVariacaoFisicaPorCategoriaSplit(pares);
@@ -954,7 +929,6 @@ function renderDgVisaoGeralPdf(results, thresholds, dtIni, dtFim) {
   const custoAbsPorCat = _dgVgAgruparCustoVariacaoPorCategoria(custoVarMap);
 
   _dgVgRenderKpisHero(varTotalFisica, custoTotal);
-  _dgVgRenderStatBoxes(counts, recorrentes, pares, results);
   _dgVgRenderHealthDonuts(pares, counts, scoreInfo, thresholds);
   _dgVgRenderChartCategoriaFisica(catFisicaPct);
   _dgVgRenderExtremos(extRegional, extCentral);
@@ -988,44 +962,6 @@ function _dgVgRenderKpisHero(varTotalFisica, custoTotal) {
       <div class="dg-vg-hero-value" title="${money(Math.abs(custoTotal))}">${varSymbol(custoTotal)} ${moneyShort(Math.abs(custoTotal))}</div>
       <div class="dg-vg-hero-sub">Impacto financeiro implicado pela variação</div>
     </div>`;
-}
-
-// ── 2. Stat boxes: Recorrentes + Críticos + Urgentes + Atenção — separados
-//    do(s) donut(s) de saúde.
-function _dgVgRenderStatBoxes(counts, recorrentes, pares, results) {
-  const boxesEl = document.getElementById('dg-vg-health-boxes');
-  if (!boxesEl) return;
-  const recTxt = recorrentes === null ? '—' : String(recorrentes);
-
-  // Lista de materiais sem cadastro (nomes originais únicos) — agregada de
-  // r.matsSemCadastro de todas as centrais (pares já vem pré-filtrado na
-  // origem, então nunca mais teria p.catKey null). Alimenta o modal aberto
-  // pelo box "Sem cadastro", quando houver algum.
-  const semCadastroLista = [...new Set((results || []).flatMap(r => r.matsSemCadastro || []))].sort();
-  window.__dgVgSemCadastroLista = semCadastroLista;
-
-  boxesEl.innerHTML = `
-    <div class="dg-vg-stat-box dg-vg-stat-recorrentes">
-      <span class="dg-vg-stat-label"><i class="ti ti-repeat"></i> Recorrentes</span>
-      <span class="dg-vg-stat-value">${recTxt}</span>
-    </div>
-    <div class="dg-vg-stat-box dg-vg-stat-critico">
-      <span class="dg-vg-stat-label"><i class="ti ti-flame"></i> Materiais Críticos</span>
-      <span class="dg-vg-stat-value">${counts.critico}</span>
-    </div>
-    <div class="dg-vg-stat-box dg-vg-stat-urgente">
-      <span class="dg-vg-stat-label"><i class="ti ti-alert-circle"></i> Materiais Urgentes</span>
-      <span class="dg-vg-stat-value">${counts.urgente}</span>
-    </div>
-    <div class="dg-vg-stat-box dg-vg-stat-atencao">
-      <span class="dg-vg-stat-label"><i class="ti ti-alert-triangle"></i> Materiais em Atenção</span>
-      <span class="dg-vg-stat-value">${counts.atencao}</span>
-    </div>
-    ${semCadastroLista.length ? `
-    <div class="dg-vg-stat-box dg-vg-stat-sem-cadastro" style="cursor:pointer" onclick="dgVgAbrirSemCadastroModal()" title="Excluídos da análise — clique para ver e cadastrar">
-      <span class="dg-vg-stat-label"><i class="ti ti-help-circle"></i> Sem Cadastro</span>
-      <span class="dg-vg-stat-value">${semCadastroLista.length}</span>
-    </div>` : ''}`;
 }
 
 // Abre modal listando os materiais sem cadastro da Visão Geral (Dashboard
@@ -1131,13 +1067,6 @@ function dgAbrirSemCadastroModalGenerico(modalId, lista, subtitulo) {
     </div>`;
   document.body.appendChild(overlay);
 }
-
-function dgVgAbrirSemCadastroModal() {
-  const lista = window.__dgVgSemCadastroLista || [];
-  const sub = `${lista.length} ${lista.length === 1 ? 'material' : 'materiais'} excluíd${lista.length === 1 ? 'o' : 'os'} da Visão Geral (não contam em nenhuma soma/gráfico/indicador) até serem cadastrados`;
-  dgAbrirSemCadastroModalGenerico('alert-modal-dgvg-sem-cad', lista, sub);
-}
-window.dgVgAbrirSemCadastroModal = dgVgAbrirSemCadastroModal;
 
 function dgCustosSemCadastroModal() {
   const lista = window.__dgCustosSemCadastroLista || [];
