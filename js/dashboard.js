@@ -1219,11 +1219,22 @@ function _dgVgRenderChartCategoriaFisica(catFisicaPct) {
   _dgVgDestroyChart('categoria');
   const { textCol, gridCol, tickFont } = _dgVgTheme();
 
-  const labels        = DG_VG_CAT_ORDER.map(k => DG_VG_CAT_LABELS[k]);
-  const desfalquesPct = DG_VG_CAT_ORDER.map(k => catFisicaPct[k]?.desfalquePct || 0);
-  const sobrasPct     = DG_VG_CAT_ORDER.map(k => catFisicaPct[k]?.sobraPct || 0);
-  const desfalquesKg  = DG_VG_CAT_ORDER.map(k => catFisicaPct[k]?.desfalqueKg || 0);
-  const sobrasKg      = DG_VG_CAT_ORDER.map(k => catFisicaPct[k]?.sobraKg || 0);
+  // Reordena as categorias da pior pra melhor — "pior" = maior desvio
+  // percentual total (|desfalque%| + |sobra%|, somados) sobre o volume
+  // da própria categoria. A categoria com o problema proporcionalmente
+  // mais grave sempre aparece no topo do gráfico, não importa a ordem
+  // fixa de DG_VG_CAT_ORDER.
+  const catOrdenadaPorSeveridade = [...DG_VG_CAT_ORDER].sort((a, b) => {
+    const sevA = Math.abs(catFisicaPct[a]?.desfalquePct || 0) + Math.abs(catFisicaPct[a]?.sobraPct || 0);
+    const sevB = Math.abs(catFisicaPct[b]?.desfalquePct || 0) + Math.abs(catFisicaPct[b]?.sobraPct || 0);
+    return sevB - sevA;
+  });
+
+  const labels        = catOrdenadaPorSeveridade.map(k => DG_VG_CAT_LABELS[k]);
+  const desfalquesPct = catOrdenadaPorSeveridade.map(k => catFisicaPct[k]?.desfalquePct || 0);
+  const sobrasPct     = catOrdenadaPorSeveridade.map(k => catFisicaPct[k]?.sobraPct || 0);
+  const desfalquesKg  = catOrdenadaPorSeveridade.map(k => catFisicaPct[k]?.desfalqueKg || 0);
+  const sobrasKg      = catOrdenadaPorSeveridade.map(k => catFisicaPct[k]?.sobraKg || 0);
   const fmtPct        = v => Math.abs(v).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%';
 
   _dgVgCharts.categoria = new Chart(ctx, {
