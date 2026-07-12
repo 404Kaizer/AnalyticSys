@@ -588,9 +588,6 @@
           <button class="dg-tab-btn active" id="dg-tab-btn-visao" onclick="dgSwitchTab('visao')">
             <i class="ti ti-layout-dashboard"></i> Visão Geral
           </button>
-          <button class="dg-tab-btn" id="dg-tab-btn-giro" onclick="dgSwitchTab('giro')">
-            <i class="ti ti-arrows-exchange"></i> Giro & Cobertura
-          </button>
           <button class="dg-tab-btn" id="dg-tab-btn-custos" onclick="dgSwitchTab('custos')">
             <i class="ti ti-coin"></i> Custos
           </button>
@@ -606,6 +603,7 @@
         <div class="dg-tab-pane active" id="dg-pane-visao">
 
         <!-- 1. Hero: Variação Total + Custo Total — os KPIs mais importantes, em evidência -->
+        <div class="section-title" style="margin-bottom:14px"><i class="ti ti-report-money" style="font-size:13px;margin-right:6px"></i>Resumo do Período — Variação e Custo</div>
         <div id="dg-vg-kpis-hero" class="dg-vg-hero-grid" style="margin-bottom:14px"></div>
 
         <!-- 2. Stat boxes: Recorrentes + Críticos + Urgentes + Atenção (separados do donut) -->
@@ -649,6 +647,7 @@
         </div>
 
         <!-- 4. Regional/Central — maior desfalque e maior sobra -->
+        <div class="section-title" style="margin-bottom:14px"><i class="ti ti-scale" style="font-size:13px;margin-right:6px"></i>Regional/Central — Maior Desfalque e Maior Sobra</div>
         <div id="dg-vg-extremos" class="dg-vg-extremos-grid" style="margin-bottom:14px"></div>
 
         <!-- 5 & 6. Variação de Custo por Regional / por Central -->
@@ -681,7 +680,7 @@
               <span id="dg-vg-grupo-subtitle" class="dg-vg-donut-subtitle"></span>
             </div>
             <div style="display:flex;align-items:center;justify-content:center;flex:1;min-height:0">
-              <svg id="dg-vg-chart-grupo" viewBox="0 0 340 220" style="overflow:visible;width:100%;max-width:520px;height:100%;display:block"></svg>
+              <svg id="dg-vg-chart-grupo" viewBox="0 0 340 220" style="overflow:visible;width:100%;height:100%;display:block"></svg>
             </div>
           </div>
           <div class="dg-vg-grupo-sub-grid">
@@ -724,55 +723,67 @@
           </div>
         </div>
 
+        <!-- 9. Giro & Cobertura — Top 5 Centrais e Materiais (melhor/pior), com acesso à análise completa -->
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px">
+          <div class="section-title" style="margin:0;flex:1"><i class="ti ti-arrows-exchange" style="font-size:13px;margin-right:6px"></i>Giro & Cobertura</div>
+          <button class="btn" type="button" onclick="dgAbrirGiroDetalhe()">
+            <i class="ti ti-maximize"></i> <span>Ver Detalhado</span>
+          </button>
+        </div>
+
+        <div class="section-title" style="margin:0 0 14px"><i class="ti ti-building-factory-2" style="font-size:13px;margin-right:6px"></i>Giro & Cobertura por Central</div>
+        <div class="dg-giro-dual-grid">
+          <div class="dg-giro-mat-card" style="margin-bottom:0">
+            <div class="dg-giro-mat-header">
+              <span class="dg-top5-title" style="color:var(--green)">
+                <i class="ti ti-trending-up" style="color:var(--green)"></i> Top 5 — Melhor Giro
+              </span>
+              <span style="font-size:10px;font-family:var(--mono);color:var(--text3)" title="Risco de ruptura de estoque">⚠ risco de ruptura</span>
+            </div>
+            <div class="dg-giro-mat-body" id="dg-vg-giro-central-alto-body">
+              <div class="dg-empty-riscos"><i class="ti ti-loader"></i><span>Aguardando análise...</span></div>
+            </div>
+          </div>
+          <div class="dg-giro-mat-card" style="margin-bottom:0">
+            <div class="dg-giro-mat-header">
+              <span class="dg-top5-title" style="color:var(--red)">
+                <i class="ti ti-trending-down" style="color:var(--red)"></i> Top 5 — Pior Giro
+              </span>
+              <span style="font-size:10px;font-family:var(--mono);color:var(--text3)" title="Capital imobilizado / material parado">💤 capital parado</span>
+            </div>
+            <div class="dg-giro-mat-body" id="dg-vg-giro-central-baixo-body">
+              <div class="dg-empty-riscos"><i class="ti ti-loader"></i><span>Aguardando análise...</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="section-title" style="margin:20px 0 14px"><i class="ti ti-box" style="font-size:13px;margin-right:6px"></i>Giro por Material</div>
+        <div class="dg-giro-dual-grid">
+          <div class="dg-giro-mat-card" style="margin-bottom:0">
+            <div class="dg-giro-mat-header">
+              <span class="dg-top5-title" style="color:var(--green)">
+                <i class="ti ti-trending-up" style="color:var(--green)"></i> Top 5 — Maior Giro
+              </span>
+              <span style="font-size:10px;font-family:var(--mono);color:var(--text3)" title="Risco de ruptura de estoque">⚠ risco de ruptura</span>
+            </div>
+            <div class="dg-giro-mat-body" id="dg-vg-giro-mat-alto-body">
+              <div class="dg-empty-riscos"><i class="ti ti-loader"></i><span>Aguardando análise...</span></div>
+            </div>
+          </div>
+          <div class="dg-giro-mat-card" style="margin-bottom:0">
+            <div class="dg-giro-mat-header">
+              <span class="dg-top5-title" style="color:var(--red)">
+                <i class="ti ti-trending-down" style="color:var(--red)"></i> Top 5 — Menor Giro
+              </span>
+              <span style="font-size:10px;font-family:var(--mono);color:var(--text3)" title="Capital imobilizado / material parado">💤 capital parado</span>
+            </div>
+            <div class="dg-giro-mat-body" id="dg-vg-giro-mat-baixo-body">
+              <div class="dg-empty-riscos"><i class="ti ti-loader"></i><span>Aguardando análise...</span></div>
+            </div>
+          </div>
+        </div>
+
         </div><!-- /dg-pane-visao -->
-
-        <!-- ABA: Giro & Cobertura -->
-        <div class="dg-tab-pane" id="dg-pane-giro">
-
-          <!-- KPIs de giro geral -->
-          <div class="dg-giro-kpi-card" id="dg-giro-kpi-card">
-            <div class="dg-giro-kpi-inner" id="dg-giro-kpi-inner">
-              <div class="dg-empty-riscos" style="padding:12px 0"><i class="ti ti-loader"></i><span>Aguardando análise...</span></div>
-            </div>
-          </div>
-
-          <!-- Giro por central -->
-          <div class="section-title" style="margin:20px 0 14px"><i class="ti ti-building-factory-2" style="font-size:13px;margin-right:6px"></i>Giro & Cobertura por Central</div>
-          <div id="dg-giro-central-body">
-            <div class="dg-empty-riscos"><i class="ti ti-loader"></i><span>Aguardando análise...</span></div>
-          </div>
-
-          <!-- Giro por material Top 10 -->
-          <div class="section-title" style="margin:20px 0 14px"><i class="ti ti-box" style="font-size:13px;margin-right:6px"></i>Giro por Material</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px" class="dg-giro-dual-grid">
-
-            <div class="dg-giro-mat-card" style="margin-bottom:0">
-              <div class="dg-giro-mat-header">
-                <span class="dg-top5-title" style="color:var(--green)">
-                  <i class="ti ti-trending-up" style="color:var(--green)"></i> Top 10 — Maior Giro
-                </span>
-                <span style="font-size:10px;font-family:var(--mono);color:var(--text3)" title="Risco de ruptura de estoque">⚠ risco de ruptura</span>
-              </div>
-              <div class="dg-giro-mat-body" id="dg-giro-mat-alto-body">
-                <div class="dg-empty-riscos"><i class="ti ti-loader"></i><span>Aguardando análise...</span></div>
-              </div>
-            </div>
-
-            <div class="dg-giro-mat-card" style="margin-bottom:0">
-              <div class="dg-giro-mat-header">
-                <span class="dg-top5-title" style="color:var(--red)">
-                  <i class="ti ti-trending-down" style="color:var(--red)"></i> Top 10 — Menor Giro
-                </span>
-                <span style="font-size:10px;font-family:var(--mono);color:var(--text3)" title="Capital imobilizado / material parado">💤 capital parado</span>
-              </div>
-              <div class="dg-giro-mat-body" id="dg-giro-mat-baixo-body">
-                <div class="dg-empty-riscos"><i class="ti ti-loader"></i><span>Aguardando análise...</span></div>
-              </div>
-            </div>
-
-          </div>
-
-        </div><!-- /dg-pane-giro -->
 
         <!-- ABA: Custos -->
         <div class="dg-tab-pane" id="dg-pane-custos">
@@ -4283,6 +4294,66 @@
         <i class="ti ti-download" id="bkp-btn-icon"></i>
         <span id="bkp-btn-label">Exportar selecionados</span>
       </button>
+    </div>
+
+  </div>
+</div>
+
+<!-- Modal: Giro & Cobertura — Detalhado (Centrais / Materiais) -->
+<div class="modal-overlay" id="modal-giro-detalhe">
+  <div class="modal" style="max-width:1100px;width:96vw">
+
+    <!-- Header (padrão reaproveitado do Detalhamento do Material — Analítico/Visão Micro) -->
+    <div class="analitico-detail-header">
+      <div class="analitico-detail-heading">
+        <div class="analitico-detail-kicker">Detalhamento de Giro & Cobertura</div>
+        <div class="analitico-detail-title">Giro & Cobertura</div>
+        <div class="analitico-detail-sub" id="dg-giro-modal-sub">Período analisado</div>
+      </div>
+      <div class="analitico-detail-actions">
+        <button class="btn btn-primary" type="button" onclick="dgFecharGiroDetalhe()">
+          <i class="ti ti-x"></i> <span>Fechar</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- KPIs de giro geral (fixos no topo, contexto para as duas abas) -->
+    <div style="padding:16px 24px 0">
+      <div class="dg-giro-kpi-card" id="dg-giro-kpi-card">
+        <div class="dg-giro-kpi-inner" id="dg-giro-kpi-inner">
+          <div class="dg-empty-riscos" style="padding:12px 0"><i class="ti ti-loader"></i><span>Aguardando análise...</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div style="display:flex;gap:8px;padding:16px 24px 0">
+      <button class="btn btn-primary" id="dg-giro-modal-tab-centrais" onclick="dgGiroModalSwitchTab('centrais')"
+        style="flex:1;justify-content:center;gap:6px">
+        <i class="ti ti-building-factory-2"></i> Centrais
+      </button>
+      <button class="btn" id="dg-giro-modal-tab-materiais" onclick="dgGiroModalSwitchTab('materiais')"
+        style="flex:1;justify-content:center;gap:6px">
+        <i class="ti ti-box"></i> Materiais
+      </button>
+    </div>
+
+    <!-- PAINEL CENTRAIS -->
+    <div id="dg-giro-modal-panel-centrais" style="padding:20px 24px;max-height:60vh;overflow-y:auto">
+      <div class="dg-giro-mat-card" style="margin-bottom:0">
+        <div class="dg-giro-mat-body" id="dg-giro-central-body">
+          <div class="dg-empty-riscos"><i class="ti ti-loader"></i><span>Aguardando análise...</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PAINEL MATERIAIS -->
+    <div id="dg-giro-modal-panel-materiais" style="padding:20px 24px;max-height:60vh;overflow-y:auto;display:none">
+      <div class="dg-giro-mat-card" style="margin-bottom:0">
+        <div class="dg-giro-mat-body" id="dg-giro-mat-todos-body">
+          <div class="dg-empty-riscos"><i class="ti ti-loader"></i><span>Aguardando análise...</span></div>
+        </div>
+      </div>
     </div>
 
   </div>
