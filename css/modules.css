@@ -4995,7 +4995,7 @@ mark.search-highlight {
 .dg-giro-mat-body { padding: 10px 14px 14px; overflow-x: auto; }
 .dg-giro-mat-head-row {
   display: grid;
-  grid-template-columns: minmax(140px,1fr) 80px 48px 72px 72px 72px 64px;
+  grid-template-columns: minmax(0,1fr) 68px 80px 48px 72px 72px 72px 64px;
   gap: 6px;
   align-items: center;
   margin-bottom: 6px;
@@ -5006,15 +5006,24 @@ mark.search-highlight {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text3);
-  min-width: max-content;
 }
 .dg-giro-mat-row {
   display: grid;
-  grid-template-columns: minmax(140px,1fr) 80px 48px 72px 72px 72px 64px;
+  grid-template-columns: minmax(0,1fr) 68px 80px 48px 72px 72px 72px 64px;
   gap: 6px;
   align-items: center;
   padding: 5px 0;
   border-bottom: 1px solid var(--border);
+}
+/* Dentro do modal de detalhe, o nome ganha uma largura mínima real (em vez
+   de só encolher até sumir) — como há uma região de scroll horizontal
+   dedicada ali (.analitico-detail-table-shell), vale mostrar o nome
+   completo rolando a tabela. Nos cards de resumo da página (mais estreitos,
+   sem esse scroll shell), o nome trunca com reticências e o resto das
+   colunas permanece sempre visível e alinhado. */
+#modal-giro-detalhe .dg-giro-mat-head-row,
+#modal-giro-detalhe .dg-giro-mat-row {
+  grid-template-columns: minmax(140px,1fr) 68px 80px 48px 72px 72px 72px 64px;
   min-width: max-content;
 }
 

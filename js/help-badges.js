@@ -343,6 +343,33 @@ const HELP_DEFS = {
     ],
   },
 
+  'giro-tabela-nivel': {
+    title: 'Nível de Criticidade',
+    sections: [
+      {
+        heading: 'O que é',
+        body: 'Um único nível — <strong>BOM, ATENÇÃO, URGENTE ou CRÍTICO</strong> — que correlaciona os 3 indicadores da linha: Cobertura, Giro e Abastecimento. É a base usada para ordenar a lista (do pior nível pro melhor) e pros recortes "Top 5" da Visão Geral.',
+      },
+      {
+        heading: 'Como é calculado',
+        body: 'Cada um dos 3 indicadores recebe uma pontuação de risco de 0 (bom) a 3 (crítico), usando os mesmos limiares já mostrados nos badges de cada coluna. O nível final parte do <strong>pior dos 3 eixos</strong> — o elo mais fraco decide o risco geral — com um reforço de +1 se 2 ou mais eixos já estiverem ruins ao mesmo tempo (sinal de problema correlacionado, não isolado num único indicador).',
+      },
+      {
+        heading: 'Por que o pior eixo, e não uma média',
+        body: 'Uma central com cobertura e giro saudáveis mas abastecimento em risco de ruptura ainda é uma central em risco — uma média disfarçaria esse problema. Por isso o nível nunca fica melhor que o pior indicador individual.',
+      },
+      {
+        heading: 'Faixas',
+        body: `<div style="display:grid;grid-template-columns:auto auto;gap:4px 16px;font-family:var(--mono);font-size:10.5px;margin-top:4px">
+          <span style="color:#10b981;font-weight:700">0 pt</span><span style="color:var(--text2)">BOM</span>
+          <span style="color:#f59e0b;font-weight:700">1 pt</span><span style="color:var(--text2)">ATENÇÃO</span>
+          <span style="color:#f97316;font-weight:700">2 pt</span><span style="color:var(--text2)">URGENTE</span>
+          <span style="color:#f43f5e;font-weight:700">3 pt</span><span style="color:var(--text2)">CRÍTICO</span>
+        </div>`,
+      },
+    ],
+  },
+
 };
 
 // ── Renderiza seções de um help def ──────────────────────────────────

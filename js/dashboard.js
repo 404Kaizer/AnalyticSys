@@ -1440,6 +1440,59 @@ function renderDgGiro(results, dtIni, dtFim) {
     cobertura: d.saidas > 0 ? (d.estMedio / d.saidas) * periodoEstimado : null,
   })).filter(m => m.estMedio > 0); // só materiais com estoque real
 
+  // ── Nível de criticidade combinado — correlaciona Cobertura + Giro +
+  //    Abastecimento num único nível (bom/atenção/urgente/crítico). Usa o
+  //    PIOR dos 3 eixos como base (o elo mais fraco decide o risco geral),
+  //    com reforço de +1 quando 2 ou mais eixos já estão ruins ao mesmo
+  //    tempo (problema correlacionado, não isolado num único indicador).
+  function _giroNivelPontos(item) {
+    let pCob;
+    if (item.cobertura === null)   pCob = 3; // sem consumo — pode ser capital parado, tratado como sinal máximo
+    else if (item.cobertura < 5)   pCob = 3;
+    else if (item.cobertura < 10)  pCob = 2;
+    else if (item.cobertura < 20)  pCob = 0;
+    else if (item.cobertura <= 40) pCob = 1;
+    else                            pCob = 2; // excesso — capital parado
+
+    let pGiro;
+    if (item.giro > 4.0)       pGiro = 3;
+    else if (item.giro >= 2.0) pGiro = 1;
+    else if (item.giro >= 1.0) pGiro = 0;
+    else if (item.giro >= 0.5) pGiro = 1;
+    else if (item.giro >= 0.2) pGiro = 2;
+    else                        pGiro = 3;
+
+    let pAbast = null;
+    if (!(item.saidas < 0.001 && item.entradas < 0.001)) {
+      if (item.saidas < 0.001) {
+        pAbast = 2; // entradas sem consumo — acúmulo
+      } else {
+        const ratio = (item.entradas / item.saidas) * 100;
+        pAbast = item.giro >= 1
+          ? (ratio >= 100 ? 0 : ratio >= 80 ? 1 : 3)
+          : (ratio > 150 ? 2 : ratio >= 100 ? 1 : ratio >= 80 ? 0 : 2);
+      }
+    }
+
+    const eixos = [pCob, pGiro, pAbast].filter(p => p !== null);
+    const pior  = Math.max(...eixos);
+    const ruins = eixos.filter(p => p >= 2).length;
+    return Math.min(3, pior + (ruins >= 2 ? 1 : 0));
+  }
+
+  const _NIVEL_DEFS = [
+    { level: 'bom',     label: 'Bom',     style: 'background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)' },
+    { level: 'atencao', label: 'Atenção', style: 'background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border)' },
+    { level: 'urgente', label: 'Urgente', style: 'background:rgba(249,115,22,0.10);color:#f97316;border:1px solid rgba(249,115,22,0.22)' },
+    { level: 'critico', label: 'Crítico', style: 'background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)' },
+  ];
+  function _giroNivelInfo(item) {
+    const pontos = _giroNivelPontos(item);
+    return { pontos, ..._NIVEL_DEFS[pontos] };
+  }
+  centralArr.forEach(c => { c.nivel = _giroNivelInfo(c); });
+  matArr.forEach(m => { m.nivel = _giroNivelInfo(m); });
+
   // ── Helpers visuais compartilhados — Central e Material usam exatamente o mesmo padrão visual ──
   function giroColor(g) {
     if (g > 4.0)  return 'var(--red)';
@@ -1501,6 +1554,7 @@ function renderDgGiro(results, dtIni, dtFim) {
     return `
     <div class="dg-giro-mat-head-row">
       <span>${nameLabel}</span>
+      ${withBadge('Nível', 'giro-tabela-nivel', 'center')}
       ${withBadge('Cobertura', 'giro-tabela-cobertura', 'center')}
       ${withBadge('Giro×', 'giro-tabela-giro', 'right')}
       <span style="text-align:right">Entradas</span>
@@ -1513,15 +1567,10 @@ function renderDgGiro(results, dtIni, dtFim) {
   function buildGiroRow(item, panel) {
     const col = giroColor(item.giro);
     const tag = giroTag(item.giro);
-    const alertIcon = panel === 'baixo'
-      ? (item.giro < 0.1
-          ? `<i class="ti ti-lock" style="font-size:11px;color:var(--red);margin-right:4px" title="Capital imobilizado"></i>`
-          : item.giro < 1
-          ? `<i class="ti ti-alert-triangle" style="font-size:11px;color:var(--amber);margin-right:4px" title="Baixo giro"></i>`
-          : '')
-      : '';
-    return `<div class="dg-giro-mat-row" title="Cobertura: ${item.cobertura !== null ? item.cobertura.toFixed(1)+'d' : '—'}&#10;Giro: ${item.giro.toFixed(4)}× — ${tag.label}&#10;Entradas: ${fmtKg(item.entradas)}&#10;Saídas: ${fmtKg(item.saidas)}&#10;Est.Médio: ${fmtKg(item.estMedio)}">
-      <span class="dg-giro-mat-name" title="${escapeHtml(item.name)}">${alertIcon}${escapeHtml(item.name)}</span>
+    const nv  = item.nivel || _giroNivelInfo(item);
+    return `<div class="dg-giro-mat-row" title="Nível: ${nv.label} — correlaciona Cobertura, Giro e Abastecimento&#10;Cobertura: ${item.cobertura !== null ? item.cobertura.toFixed(1)+'d' : '—'}&#10;Giro: ${item.giro.toFixed(4)}× — ${tag.label}&#10;Entradas: ${fmtKg(item.entradas)}&#10;Saídas: ${fmtKg(item.saidas)}&#10;Est.Médio: ${fmtKg(item.estMedio)}">
+      <span class="dg-giro-mat-name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</span>
+      <span class="dg-giro-abast" style="${nv.style}">${nv.label}</span>
       ${buildCoberturaCell(item.cobertura)}
       <span class="dg-giro-mat-num" style="color:${col};text-align:right">${item.giro.toFixed(2)}×</span>
       <span class="dg-giro-mat-num" style="color:var(--green)" title="${fmtKg(item.entradas)}">${fmtKgShort(item.entradas)}</span>
@@ -1560,16 +1609,16 @@ function renderDgGiro(results, dtIni, dtFim) {
     el.innerHTML = buildGiroHead(nameLabel) + arr.map(item => buildGiroRow(item, panel)).join('') + footer;
   }
 
-  // ── Materiais: Top 5 melhor/pior giro na Visão Geral condensada (lista completa fica no modal) ──
-  const top10MatAlto  = [...matArr].sort((a,b) => b.giro - a.giro).slice(0, 10);
-  const top10MatBaixo = [...matArr].sort((a,b) => a.giro - b.giro).slice(0, 10);
+  // ── Materiais: Top 5 mais saudáveis / mais críticos na Visão Geral condensada
+  //    (lista completa fica no modal) — ordenado pelo Nível combinado, giro como desempate.
+  const matPorNivelAsc  = [...matArr].sort((a,b) => a.nivel.pontos - b.nivel.pontos || b.giro - a.giro); // bom primeiro
+  const matPorNivelDesc = [...matArr].sort((a,b) => b.nivel.pontos - a.nivel.pontos || a.giro - b.giro); // crítico primeiro
 
-  renderPanel('dg-vg-giro-mat-alto-body',  top10MatAlto.slice(0, 5),  'alto',  'Material', false);
-  renderPanel('dg-vg-giro-mat-baixo-body', top10MatBaixo.slice(0, 5), 'baixo', 'Material', true);
+  renderPanel('dg-vg-giro-mat-alto-body',  matPorNivelAsc.slice(0, 5),  'alto',  'Material', false);
+  renderPanel('dg-vg-giro-mat-baixo-body', matPorNivelDesc.slice(0, 5), 'baixo', 'Material', true);
 
-  // Modal: TODOS os materiais numa lista única ordenada por giro — mesmo padrão da aba Centrais,
-  // sem repetir o recorte Top 10/Top 5 que já aparece fora do modal.
-  const matPorGiro = [...matArr].sort((a,b) => b.giro - a.giro);
+  // Modal: TODOS os materiais, do pior nível pro melhor (giro como desempate dentro do mesmo nível).
+  const matPorGiro = [...matArr].sort((a,b) => b.nivel.pontos - a.nivel.pontos || a.giro - b.giro);
   const matModalEl = document.getElementById('dg-giro-mat-todos-body');
   if (matModalEl) {
     if (!matPorGiro.length) {
@@ -1579,10 +1628,11 @@ function renderDgGiro(results, dtIni, dtFim) {
     }
   }
 
-  // ── Centrais: lista completa por giro no modal de detalhe, Top 5 melhor/pior na Visão Geral ──
-  const centralPorGiro   = [...centralArr].sort((a,b) => b.giro - a.giro);
-  const top5CentralAlto  = [...centralArr].sort((a,b) => b.giro - a.giro).slice(0, 5);
-  const top5CentralBaixo = [...centralArr].sort((a,b) => a.giro - b.giro).slice(0, 5);
+  // ── Centrais: lista completa do pior nível pro melhor no modal de detalhe,
+  //    Top 5 mais saudáveis/críticas na Visão Geral, tudo pelo mesmo Nível combinado.
+  const centralPorGiro   = [...centralArr].sort((a,b) => b.nivel.pontos - a.nivel.pontos || a.giro - b.giro);
+  const top5CentralAlto  = [...centralArr].sort((a,b) => a.nivel.pontos - b.nivel.pontos || b.giro - a.giro).slice(0, 5);
+  const top5CentralBaixo = [...centralArr].sort((a,b) => b.nivel.pontos - a.nivel.pontos || a.giro - b.giro).slice(0, 5);
 
   const centralModalEl = document.getElementById('dg-giro-central-body');
   if (centralModalEl) {
