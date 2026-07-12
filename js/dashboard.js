@@ -822,7 +822,7 @@ function _dgVgBuildHealthDonutData(pares) {
 }
 
 // svgId: id do <svg>. unitLabel: texto exibido sob o score (ex: "pares Central × Material", "centrais analisadas").
-function _dgVgRenderHealthDonutSvg(svgId, counts, scoreInfo, levelMeta, unitLabel, subtitleId) {
+function _dgVgRenderHealthDonutSvg(svgId, counts, scoreInfo, levelMeta, unitLabel, subtitleId, summaryId) {
   const svgEl = document.getElementById(svgId);
   if (!svgEl) return;
 
@@ -843,6 +843,28 @@ function _dgVgRenderHealthDonutSvg(svgId, counts, scoreInfo, levelMeta, unitLabe
   if (subtitleId) {
     const subEl = document.getElementById(subtitleId);
     if (subEl) subEl.textContent = `${total} ${unitLabel || ''}`.trim();
+  }
+
+  // Badges com a contagem por nível (Crítico/Urgente/Atenção/Bom) — mesmo
+  // padrão visual do Dashboard Analítico (macro.js: _renderDonut, seção
+  // "Summary badges"), pra manter os dois dashboards consistentes.
+  if (summaryId) {
+    const summEl = document.getElementById(summaryId);
+    if (summEl) {
+      summEl.innerHTML = ['critico', 'urgente', 'atencao', 'bom'].filter(l => counts[l] > 0).map(l => {
+        const col = colorMap[l];
+        return `<span style="
+          display:inline-flex;align-items:center;gap:5px;
+          background:${col}18;color:${col};
+          border:1px solid ${col}35;
+          padding:3px 10px;border-radius:5px;
+          font-size:10px;font-weight:700;font-family:var(--mono);
+          letter-spacing:.04em;white-space:nowrap;cursor:default">
+          <span style="width:6px;height:6px;border-radius:50%;background:${col};display:inline-block;flex-shrink:0"></span>
+          ${counts[l]} ${labelMap[l]}
+        </span>`;
+      }).join('');
+    }
   }
 
   _dgVgDrawDonutSvg(svgEl, slices, (CX, CY, ri) => {
@@ -906,6 +928,8 @@ function renderDgVisaoGeralPdf(results, thresholds, dtIni, dtFim) {
     ['categoria', 'chartRegional', 'chartUsina'].forEach(k => _dgVgDestroyChart(k));
     ['dg-vg-gauge-chart-svg', 'dg-vg-gauge-central-svg', 'dg-vg-chart-grupo', 'dg-vg-donut-agregado', 'dg-vg-donut-aglomerante', 'dg-vg-donut-aditivo', 'dg-vg-donut-adicao']
       .forEach(id => { const svgEl = document.getElementById(id); if (svgEl) svgEl.innerHTML = ''; });
+    ['dg-vg-health-central-summary', 'dg-vg-health-materiais-summary']
+      .forEach(id => { const e = document.getElementById(id); if (e) e.innerHTML = ''; });
     return;
   }
 
@@ -1079,11 +1103,11 @@ window.dgCustosSemCadastroModal = dgCustosSemCadastroModal;
 //    "Centrais" do Dashboard Analítico, com o mesmo cálculo de percentual.
 function _dgVgRenderHealthDonuts(pares, countsMat, scoreMat, thresholds) {
   const { levelMeta: levelMetaMat } = _dgVgBuildHealthDonutData(pares);
-  _dgVgRenderHealthDonutSvg('dg-vg-gauge-chart-svg', countsMat, scoreMat, levelMetaMat, 'pares Central × Material', 'dg-vg-health-materiais-subtitle');
+  _dgVgRenderHealthDonutSvg('dg-vg-gauge-chart-svg', countsMat, scoreMat, levelMetaMat, 'pares Central × Material', 'dg-vg-health-materiais-subtitle', 'dg-vg-health-materiais-summary');
 
   const { counts: countsCen, levelMeta: levelMetaCen, total: totalCen } = _dgVgBuildCentralHealthData(pares, thresholds);
   const scoreCen = _dgVgScoreFromCounts(countsCen);
-  _dgVgRenderHealthDonutSvg('dg-vg-gauge-central-svg', countsCen, scoreCen, levelMetaCen, totalCen === 1 ? 'central analisada' : 'centrais analisadas', 'dg-vg-health-central-subtitle');
+  _dgVgRenderHealthDonutSvg('dg-vg-gauge-central-svg', countsCen, scoreCen, levelMetaCen, totalCen === 1 ? 'central analisada' : 'centrais analisadas', 'dg-vg-health-central-subtitle', 'dg-vg-health-central-summary');
 }
 
 function _dgVgRenderExtremos(extRegional, extCentral) {
