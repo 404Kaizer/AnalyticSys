@@ -558,6 +558,28 @@ function _dgVgVariacaoFisicaPorCategoria(pares) {
   return out;
 }
 
+// Mesma agregação por categoria acima, mas SEM nettar desfalque contra
+// sobra — retorna os dois totais separados por categoria. Decisão: a
+// versão líquida (_dgVgVariacaoFisicaPorCategoria) esconde o tamanho real
+// de cada lado quando um compensa o outro (ex: -5,0 M kg de desfalque e
+// +2,0 M kg de sobra dentro do Agregado apareceriam como -3,0 M kg só).
+// Usada pelo gráfico "Variação Física por Categoria de Material", que
+// precisa mostrar os dois lados para a diretoria.
+function _dgVgVariacaoFisicaPorCategoriaSplit(pares) {
+  const out = {
+    agregado:    { desfalque: 0, sobra: 0 },
+    aglomerante: { desfalque: 0, sobra: 0 },
+    aditivo:     { desfalque: 0, sobra: 0 },
+    adicao:      { desfalque: 0, sobra: 0 }
+  };
+  pares.forEach(p => {
+    if (!p.catKey || !out[p.catKey]) return;
+    if (p.diff < 0)      out[p.catKey].desfalque += p.diff;
+    else if (p.diff > 0) out[p.catKey].sobra += p.diff;
+  });
+  return out;
+}
+
 // ── Custo da variação (não o gasto efetivo) por material — soma do valor
 //    absoluto do custo implicado (diff × custo médio) de cada par
 //    Central×Material, agregado por material. Reflete o impacto
@@ -873,6 +895,7 @@ function renderDgVisaoGeralPdf(results, thresholds, dtIni, dtFim) {
   const recorrentes = _dgVgCountRecorrentes(pares, thresholds, dtIni, dtFim);
 
   const catFisica      = _dgVgVariacaoFisicaPorCategoria(pares);
+  const catFisicaSplit = _dgVgVariacaoFisicaPorCategoriaSplit(pares);
   const varTotalFisica = Object.values(catFisica).reduce((a, b) => a + b, 0);
   const custoTotal     = pares.reduce((s, p) => s + p.custoImplicado, 0);
 
@@ -887,7 +910,7 @@ function renderDgVisaoGeralPdf(results, thresholds, dtIni, dtFim) {
   _dgVgRenderKpisHero(varTotalFisica, custoTotal);
   _dgVgRenderStatBoxes(counts, recorrentes, pares, results);
   _dgVgRenderHealthDonuts(pares, counts, scoreInfo, thresholds);
-  _dgVgRenderChartCategoriaFisica(catFisica);
+  _dgVgRenderChartCategoriaFisica(catFisicaSplit);
   _dgVgRenderExtremos(extRegional, extCentral);
   const entriesRegional = _dgVgTop8SobraDesfalque(porRegional);
   const entriesCentral  = _dgVgTop8SobraDesfalque(porCentral);
@@ -1113,28 +1136,70 @@ function _dgVgRenderExtremos(extRegional, extCentral) {
     box('Central · Maior Sobra',      extCentral.max  && extCentral.max.v  > 0 ? extCentral.max  : null);
 }
 
-function _dgVgRenderChartCategoriaFisica(catFisica) {
+// Plugin customizado (sem dependência externa — mantém o app 100%
+// client-side/offline) que escreve o valor de cada barra logo fora da
+// ponta dela. Resolve o problema de categorias com peso muito menor
+// (Aditivo/Adição) ficarem com barras pequenas demais pra serem lidas
+// visualmente: o número ao lado sempre aparece, não importa o tamanho
+// da barra. Desfalque escreve à esquerda da ponta (a barra cresce pra
+// esquerda), Sobra escreve à direita (a barra cresce pra direita).
+const _dgVgBarValueLabelsPlugin = {
+  id: 'dgVgBarValueLabels',
+  afterDatasetsDraw(chart) {
+    const { ctx } = chart;
+    chart.data.datasets.forEach((dataset, dsIndex) => {
+      const meta = chart.getDatasetMeta(dsIndex);
+      if (meta.hidden) return;
+      meta.data.forEach((bar, i) => {
+        const value = dataset.data[i];
+        if (!value) return; // sem barra, sem rótulo
+        const { x, y } = bar.getProps(['x', 'y'], true);
+        const negative = value < 0;
+        ctx.save();
+        ctx.font = "600 10px 'DM Mono', monospace";
+        ctx.fillStyle = negative ? '#f43f5e' : '#f59e0b';
+        ctx.textBaseline = 'middle';
+        ctx.textAlign = negative ? 'right' : 'left';
+        ctx.fillText(fmtKgShort(Math.abs(value)), x + (negative ? -6 : 6), y);
+        ctx.restore();
+      });
+    });
+  }
+};
+
+function _dgVgRenderChartCategoriaFisica(catFisicaSplit) {
   const ctx = document.getElementById('dg-vg-chart-categoria');
   if (!ctx) return;
   _dgVgDestroyChart('categoria');
   const { textCol, gridCol, tickFont } = _dgVgTheme();
 
-  const labels = DG_VG_CAT_ORDER.map(k => DG_VG_CAT_LABELS[k]);
-  const data   = DG_VG_CAT_ORDER.map(k => catFisica[k] || 0);
-  const colors = data.map(v => v < -0.0001 ? '#f43f5e' : v > 0.0001 ? '#f59e0b' : '#6b7280');
+  const labels     = DG_VG_CAT_ORDER.map(k => DG_VG_CAT_LABELS[k]);
+  const desfalques = DG_VG_CAT_ORDER.map(k => catFisicaSplit[k]?.desfalque || 0);
+  const sobras     = DG_VG_CAT_ORDER.map(k => catFisicaSplit[k]?.sobra || 0);
 
   _dgVgCharts.categoria = new Chart(ctx, {
     type: 'bar',
-    data: { labels, datasets: [{ data, backgroundColor: colors, borderRadius: 3, borderSkipped: false }] },
+    plugins: [_dgVgBarValueLabelsPlugin],
+    data: {
+      labels,
+      datasets: [
+        { label: 'Desfalque', data: desfalques, backgroundColor: '#f43f5e', borderRadius: 3, borderSkipped: false, stack: 'variacao' },
+        { label: 'Sobra',     data: sobras,     backgroundColor: '#f59e0b', borderRadius: 3, borderSkipped: false, stack: 'variacao' }
+      ]
+    },
     options: {
       indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      layout: { padding: { left: 46, right: 46 } },
       plugins: {
-        legend: { display: false },
-        tooltip: { callbacks: { label: c => `${varLabel(c.raw)} · ${fmtKgShort(Math.abs(c.raw))}` } }
+        legend: {
+          display: true, position: 'top', align: 'end',
+          labels: { color: textCol, font: tickFont, boxWidth: 10, boxHeight: 10, usePointStyle: true, pointStyle: 'rect' }
+        },
+        tooltip: { callbacks: { label: c => `${c.dataset.label} · ${fmtKgShort(Math.abs(c.raw))}` } }
       },
       scales: {
-        x: { grid: { color: gridCol }, ticks: { color: textCol, font: tickFont, callback: v => fmtKgShort(v) } },
-        y: { grid: { display: false }, ticks: { color: textCol, font: { ...tickFont, size: 11.5 } } }
+        x: { stacked: true, grace: '15%', grid: { color: gridCol }, ticks: { color: textCol, font: tickFont, callback: v => fmtKgShort(v) } },
+        y: { stacked: true, grid: { display: false }, ticks: { color: textCol, font: { ...tickFont, size: 11.5 } } }
       }
     }
   });
