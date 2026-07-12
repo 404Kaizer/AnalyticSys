@@ -1159,8 +1159,7 @@ function _dgVgRenderChartCustoPorChave(canvasId, entries, chartKey) {
   _dgVgDestroyChart(chartKey);
   const { textCol, gridCol, tickFont } = _dgVgTheme();
 
-  const wrap  = ctx.closest('.dg-vg-bar-wrap');
-  const inner = ctx.parentElement; // .dg-vg-bar-inner — largura ajustada p/ permitir scroll horizontal
+  const inner = ctx.parentElement; // .dg-vg-bar-inner — sempre ocupa 100% do card, sem scroll horizontal
 
   if (!entries.length) {
     if (inner) inner.style.width = '100%';
@@ -1173,9 +1172,7 @@ function _dgVgRenderChartCustoPorChave(canvasId, entries, chartKey) {
     return;
   }
 
-  if (inner && wrap) {
-    inner.style.width = Math.max(entries.length * 56, wrap.clientWidth) + 'px';
-  }
+  if (inner) inner.style.width = '100%';
 
   const labels = entries.map(([k]) => k);
   const data   = entries.map(([, v]) => v);
