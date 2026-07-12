@@ -4300,14 +4300,14 @@
 </div>
 
 <!-- Modal: Giro & Cobertura — Detalhado (Centrais / Materiais) -->
-<div class="modal-overlay" id="modal-giro-detalhe">
-  <div class="modal" style="max-width:1100px;width:96vw">
+<div class="modal-overlay analitico-detail-overlay" id="modal-giro-detalhe">
+  <div class="analitico-detail-modal" role="dialog" aria-modal="true" aria-labelledby="dg-giro-modal-title">
 
     <!-- Header (padrão reaproveitado do Detalhamento do Material — Analítico/Visão Micro) -->
     <div class="analitico-detail-header">
       <div class="analitico-detail-heading">
         <div class="analitico-detail-kicker">Detalhamento de Giro & Cobertura</div>
-        <div class="analitico-detail-title">Giro & Cobertura</div>
+        <div class="analitico-detail-title" id="dg-giro-modal-title">Giro & Cobertura</div>
         <div class="analitico-detail-sub" id="dg-giro-modal-sub">Período analisado</div>
       </div>
       <div class="analitico-detail-actions">
@@ -4317,45 +4317,44 @@
       </div>
     </div>
 
-    <!-- KPIs de giro geral (fixos no topo, contexto para as duas abas) -->
-    <div style="padding:16px 24px 0">
-      <div class="dg-giro-kpi-card" id="dg-giro-kpi-card">
+    <!-- Corpo: única região de scroll (KPIs + tabs ficam fixos; só a tabela rola) -->
+    <div class="analitico-detail-body" style="gap:16px">
+
+      <!-- KPIs de giro geral (fixos no topo, contexto para as duas abas) -->
+      <div class="dg-giro-kpi-card" id="dg-giro-kpi-card" style="flex-shrink:0;margin-bottom:0">
         <div class="dg-giro-kpi-inner" id="dg-giro-kpi-inner">
           <div class="dg-empty-riscos" style="padding:12px 0"><i class="ti ti-loader"></i><span>Aguardando análise...</span></div>
         </div>
       </div>
-    </div>
 
-    <!-- Tabs -->
-    <div style="display:flex;gap:8px;padding:16px 24px 0">
-      <button class="btn btn-primary" id="dg-giro-modal-tab-centrais" onclick="dgGiroModalSwitchTab('centrais')"
-        style="flex:1;justify-content:center;gap:6px">
-        <i class="ti ti-building-factory-2"></i> Centrais
-      </button>
-      <button class="btn" id="dg-giro-modal-tab-materiais" onclick="dgGiroModalSwitchTab('materiais')"
-        style="flex:1;justify-content:center;gap:6px">
-        <i class="ti ti-box"></i> Materiais
-      </button>
-    </div>
+      <!-- Tabs -->
+      <div style="display:flex;gap:8px;flex-shrink:0">
+        <button class="btn btn-primary" id="dg-giro-modal-tab-centrais" onclick="dgGiroModalSwitchTab('centrais')"
+          style="flex:1;justify-content:center;gap:6px">
+          <i class="ti ti-building-factory-2"></i> Centrais
+        </button>
+        <button class="btn" id="dg-giro-modal-tab-materiais" onclick="dgGiroModalSwitchTab('materiais')"
+          style="flex:1;justify-content:center;gap:6px">
+          <i class="ti ti-box"></i> Materiais
+        </button>
+      </div>
 
-    <!-- PAINEL CENTRAIS -->
-    <div id="dg-giro-modal-panel-centrais" style="padding:20px 24px;max-height:60vh;overflow-y:auto">
-      <div class="dg-giro-mat-card" style="margin-bottom:0">
-        <div class="dg-giro-mat-body" id="dg-giro-central-body">
-          <div class="dg-empty-riscos"><i class="ti ti-loader"></i><span>Aguardando análise...</span></div>
+      <!-- Única região com scroll real (vertical E horizontal) — os dois painéis
+           compartilham o mesmo shell, só um fica visível por vez. -->
+      <div class="analitico-detail-table-shell">
+        <div id="dg-giro-modal-panel-centrais">
+          <div class="dg-giro-mat-body" id="dg-giro-central-body">
+            <div class="dg-empty-riscos"><i class="ti ti-loader"></i><span>Aguardando análise...</span></div>
+          </div>
+        </div>
+        <div id="dg-giro-modal-panel-materiais" style="display:none">
+          <div class="dg-giro-mat-body" id="dg-giro-mat-todos-body">
+            <div class="dg-empty-riscos"><i class="ti ti-loader"></i><span>Aguardando análise...</span></div>
+          </div>
         </div>
       </div>
-    </div>
 
-    <!-- PAINEL MATERIAIS -->
-    <div id="dg-giro-modal-panel-materiais" style="padding:20px 24px;max-height:60vh;overflow-y:auto;display:none">
-      <div class="dg-giro-mat-card" style="margin-bottom:0">
-        <div class="dg-giro-mat-body" id="dg-giro-mat-todos-body">
-          <div class="dg-empty-riscos"><i class="ti ti-loader"></i><span>Aguardando análise...</span></div>
-        </div>
-      </div>
     </div>
-
   </div>
 </div>
 
