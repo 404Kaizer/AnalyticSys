@@ -752,7 +752,16 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
               const toEntry = s => {
         const ref = (s.ref && String(s.ref).trim()) ? String(s.ref).trim()
                   : (s.documento && String(s.documento).trim()) ? String(s.documento).trim() : '';
-        return [normMov(s.movimento), num(s.peso), ref, String(s.usuario || '').trim(), String(s.dtLanc || s.dtDoc || '').trim()];
+        // extra: campos crus usados só pro pareamento de transferência entre
+        // materiais (309) — ver findMaterialTransferPair (ui.js). Não entram
+        // na exibição normal da linha, só no lookup quando cod === '309'.
+        const extra = {
+          deposito: String(s.deposito || '').trim(),
+          dtDoc:    String(s.dtDoc    || '').trim(),
+          dtLanc:   String(s.dtLanc   || '').trim(),
+          dtReg:    String(s.dtReg    || '').trim()
+        };
+        return [normMov(s.movimento), num(s.peso), ref, String(s.usuario || '').trim(), String(s.dtLanc || s.dtDoc || '').trim(), extra];
       };
       const entEntries = snapshot.entRecords.map(toEntry);
       const saiEntries = snapshot.saiRecords.map(toEntry);
@@ -1040,8 +1049,8 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
               : (snapshot.pesoIniAusente ? `<span class='absent-badge' data-absent-tooltip='${buildAbsentTooltip(absentNearest)}' style='cursor:help'>AUSENTE</span>` : snapshot.dtIniLabel)
           }</td>
           <td class="td-mono" style="color:${(matSemCadastro || snapshot.pesoIniAusente) ? 'var(--text3)' : 'var(--text)'}">${(matSemCadastro || snapshot.pesoIniAusente) ? '—' : fmtKg(snapshot.pesoIni)}</td>
-          <td>${buildAnaliticoDetailBreakdown(entEntries, snapshot.totalEnt, 'var(--green)', 'Entradas', localEntCount, mat)}</td>
-          <td>${buildAnaliticoDetailBreakdown(saiEntries, snapshot.totalSai, 'var(--red)', 'Saídas', localSaiCount, mat)}</td>
+          <td>${buildAnaliticoDetailBreakdown(entEntries, snapshot.totalEnt, 'var(--green)', 'Entradas', localEntCount, mat, r.central)}</td>
+          <td>${buildAnaliticoDetailBreakdown(saiEntries, snapshot.totalSai, 'var(--red)', 'Saídas', localSaiCount, mat, r.central)}</td>
           <td class="td-mono" style="color:var(--text2);font-size:11px">${
             snapshot.pesoFimAusente
               ? `<span class='absent-badge' data-absent-tooltip='${buildAbsentTooltip(absentNearest)}' style='cursor:help'>AUSENTE</span>`

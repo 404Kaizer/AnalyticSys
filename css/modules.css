@@ -2646,7 +2646,7 @@ td.var-cell-zero .ti-circle-check     { color: var(--text3); }
   border-radius: var(--radius-xl);
   box-shadow: 0 24px 64px rgba(0,0,0,0.55), 0 0 0 1px var(--border);
   width: 100%;
-  max-width: min(700px, 94vw);
+  max-width: min(860px, 95vw);
   max-height: 85vh;
   display: flex;
   flex-direction: column;
@@ -2773,7 +2773,7 @@ td.var-cell-zero .ti-circle-check     { color: var(--text3); }
   font-size: 11px;
   color: var(--text3);
 }
-.mv-pair-central {
+.mv-pair-value {
   color: var(--text3);
   font-family: var(--mono);
 }

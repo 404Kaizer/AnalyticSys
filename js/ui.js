@@ -1171,7 +1171,7 @@ const analiticoDetailState = {
 
 window.__analiticoDetailCache = new Map();
 
-function buildAnaliticoDetailBreakdown(entries, total, colorVar, title, localCount = 0, mat = '') {
+function buildAnaliticoDetailBreakdown(entries, total, colorVar, title, localCount = 0, mat = '', central = '') {
   if (!entries.length) {
     return `<span class="analitico-detail-empty">—</span>`;
   }
@@ -1187,6 +1187,7 @@ function buildAnaliticoDetailBreakdown(entries, total, colorVar, title, localCou
       data-color="${escapeHtml(colorVar)}"
       data-local-count="${localCount}"
       data-mat="${escapeHtml(mat)}"
+      data-central="${escapeHtml(central)}"
       title="Clique para ver detalhes">
       <span class="bdm-total">${fmtKg(total)}</span>
       <i class="ti ti-table-options bdm-icon"></i>
@@ -1250,6 +1251,76 @@ function findTransferPairCentral(cod, ref, mat) {
   return central ? { cod: targetCod, central } : null;
 }
 
+// ── Transferência entre materiais (309) ──────────────────────────────────
+// Diferente do 861/862, os DOIS lados usam o MESMO código (309) — só o
+// sinal do peso distingue quem é o material DE (saída, peso negativo) e
+// quem é o PARA (entrada, peso positivo). Não há referência compartilhada
+// pra usar como chave, então o par é localizado por: mesma central + mesmo
+// depósito + mesmo usuário + TODAS as datas (documento, lançamento,
+// registro) + mesmo |peso| — com sinal OPOSTO (o material, por definição,
+// é diferente entre os dois lados, então nunca entra na chave de busca).
+let _matTransferPairCache = null;
+let _matTransferPairCacheVersion = -1;
+
+function _invalidateMatTransferPairCache() {
+  _matTransferPairCache = null;
+  _matTransferPairCacheVersion = -1;
+}
+
+function _matTransferPairKey(central, deposito, usuario, dtDoc, dtLanc, dtReg, absPeso, sign) {
+  return [
+    String(central  || '').trim().toUpperCase(),
+    String(deposito || '').trim().toUpperCase(),
+    String(usuario  || '').trim().toUpperCase(),
+    String(dtDoc    || '').trim(),
+    String(dtLanc   || '').trim(),
+    String(dtReg    || '').trim(),
+    absPeso.toFixed(3),
+    sign
+  ].join('||');
+}
+
+function getMatTransferPairIndex() {
+  const currentVersion = (state.sap || []).length;
+  if (_matTransferPairCache && _matTransferPairCacheVersion === currentVersion) {
+    return _matTransferPairCache;
+  }
+  const idx = new Map();
+  (state.sap || []).forEach(s => {
+    if (normMov(s.movimento) !== '309') return;
+    const peso = num(s.peso);
+    if (!peso) return;
+    const key = _matTransferPairKey(
+      s.central, s.deposito, s.usuario, s.dtDoc, s.dtLanc, s.dtReg,
+      Math.abs(peso), peso > 0 ? '+' : '-'
+    );
+    // Em tese só existe 1 registro por chave (mesma central/depósito/
+    // usuário/datas/peso só deveria repetir numa transferência real).
+    // Mantém o primeiro em caso de dado inesperado.
+    if (!idx.has(key)) idx.set(key, s.material || '—');
+  });
+  _matTransferPairCache = idx;
+  _matTransferPairCacheVersion = currentVersion;
+  return _matTransferPairCache;
+}
+
+/**
+ * Dado um registro 309 (central + campos extra do toEntry + peso com
+ * sinal), retorna o material do lado complementar da transferência — ou
+ * null se não houver correspondência.
+ */
+function findMaterialTransferPair(central, usuario, extra, peso) {
+  if (!peso || !extra) return null;
+  const targetSign = peso > 0 ? '-' : '+'; // procura sempre o lado OPOSTO
+  const idx = getMatTransferPairIndex();
+  const key = _matTransferPairKey(
+    central, extra.deposito, usuario, extra.dtDoc, extra.dtLanc, extra.dtReg,
+    Math.abs(peso), targetSign
+  );
+  const material = idx.get(key);
+  return material ? { material } : null;
+}
+
 function openBreakdownModal(trigger) {
   const overlay   = document.getElementById('breakdown-modal-overlay');
   const titleEl   = document.getElementById('bdm-title');
@@ -1264,6 +1335,7 @@ function openBreakdownModal(trigger) {
   const colorVar   = trigger.dataset.color  || 'var(--text)';
   const localCount = Number(trigger.dataset.localCount || 0);
   const mat        = trigger.dataset.mat    || '';
+  const central    = trigger.dataset.central || '';
 
   titleEl.textContent = title + ' — Movimentações';
 
@@ -1303,7 +1375,7 @@ function openBreakdownModal(trigger) {
   }
 
   let grandTotal = 0;
-  tbody.innerHTML = entries.map(([cod, value, ref, usuario, dtLanc]) => {
+  tbody.innerHTML = entries.map(([cod, value, ref, usuario, dtLanc, extra]) => {
     grandTotal += value;
     const signIcon = value >= 0
       ? '<i class="ti ti-circle-arrow-up" title="Sobra" style="font-size:11px;vertical-align:middle;margin-right:2px"></i>'
@@ -1312,6 +1384,9 @@ function openBreakdownModal(trigger) {
     // Transferência entre centros (861/862): mostra na mesma linha qual é
     // o movimento relacionado (código complementar) e em qual central ele
     // está lançado — ver findTransferPairCentral.
+    // Transferência entre materiais (309): mostra na mesma linha qual é o
+    // material relacionado (mesmo código, sinal oposto) — ver
+    // findMaterialTransferPair.
     let pairHtml = '';
     if (cod === '861' || cod === '862') {
       const pair = findTransferPairCentral(cod, ref, mat);
@@ -1320,10 +1395,23 @@ function openBreakdownModal(trigger) {
         pairHtml = `<div class="mv-pair-note" title="Movimento relacionado desta transferência">
           <i class="ti ti-arrows-right-left"></i>
           ${movBadgeHtml(pair.cod, 'sm')}
-          <span class="mv-pair-central">${direcao} ${escapeHtml(pair.central)}</span>
+          <span class="mv-pair-value">${direcao} ${escapeHtml(pair.central)}</span>
         </div>`;
       } else {
         pairHtml = `<div class="mv-pair-note mv-pair-note-missing" title="Nenhum movimento complementar encontrado no SAP importado">
+          <i class="ti ti-help-circle"></i> sem par encontrado
+        </div>`;
+      }
+    } else if (cod === '309') {
+      const pair = findMaterialTransferPair(central, usuario, extra, value);
+      if (pair) {
+        const direcao = value >= 0 ? 'de' : 'para'; // entrada: veio "de"; saída: foi "para"
+        pairHtml = `<div class="mv-pair-note" title="Material relacionado desta transferência">
+          <i class="ti ti-replace"></i>
+          <span class="mv-pair-value">${direcao} ${escapeHtml(pair.material)}</span>
+        </div>`;
+      } else {
+        pairHtml = `<div class="mv-pair-note mv-pair-note-missing" title="Nenhum material complementar encontrado no SAP importado">
           <i class="ti ti-help-circle"></i> sem par encontrado
         </div>`;
       }
@@ -1332,7 +1420,9 @@ function openBreakdownModal(trigger) {
     return `<tr>
       <td>${movBadgeHtml(cod)}</td>
       <td class="td-muted">${escapeHtml(ref || '—')}${pairHtml}</td>
-      <td class="td-muted">${escapeHtml(dtLanc || '—')}</td>
+      <td class="td-muted">${escapeHtml((extra && extra.dtDoc) || '—')}</td>
+      <td class="td-muted">${escapeHtml((extra && extra.dtLanc) || dtLanc || '—')}</td>
+      <td class="td-muted">${escapeHtml((extra && extra.dtReg) || '—')}</td>
       <td class="td-muted">${escapeHtml(usuario || '—')}</td>
       <td class="td-mono" style="color:${colorVar};text-align:right;font-weight:600">${signIcon}${fmtKg(Math.abs(value))}</td>
     </tr>`;
@@ -2887,6 +2977,7 @@ function invalidateSapIndex() {
   _sapByCentral.clear();
   _invalidateSapDupCache();        // invalida cache de duplicatas
   _invalidateTransferPairCache();  // invalida cache de pares 861/862
+  _invalidateMatTransferPairCache(); // invalida cache de pares 309
   invalidateSearchIndex('sap');
   if (typeof _ausInvalidateCache === 'function') _ausInvalidateCache();
 }
