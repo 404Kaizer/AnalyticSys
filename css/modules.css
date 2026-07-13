@@ -2646,8 +2646,8 @@ td.var-cell-zero .ti-circle-check     { color: var(--text3); }
   border-radius: var(--radius-xl);
   box-shadow: 0 24px 64px rgba(0,0,0,0.55), 0 0 0 1px var(--border);
   width: 100%;
-  max-width: 520px;
-  max-height: 80vh;
+  max-width: min(700px, 94vw);
+  max-height: 85vh;
   display: flex;
   flex-direction: column;
   animation: popIn 0.16s ease;
