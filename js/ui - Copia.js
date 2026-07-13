@@ -1393,17 +1393,8 @@ function calcPendentesIntegracao({ central, dtIni, dtFim, sapNoPeriodo }) {
   // Only check mov 101 and 801 (CODIGOS_ENTRADA).
   // Usa dtDescarga para o filtro de período (data relevante para o período de análise);
   // fallback para dtEmissao caso dtDescarga não esteja preenchida.
-  //
-  // Prioridade de central: centralCompra, com fallback para centralDestino.
-  // Motivo: em NF de TRANSFERÊNCIA (centralCompra ≠ centralDestino), o SAP
-  // gera uma REF. própria para o movimento de transferência na central de
-  // destino — essa REF. não é a mesma da NF original, então a checagem pelo
-  // lado do destino nunca bate e a NF fica pendente "para sempre". Checando
-  // pelo lado da centralCompra (onde a REF. da NF original de fato aparece
-  // no SAP) evita esse falso-positivo. Fallback para centralDestino cobre
-  // os registros sem centralCompra preenchida (comportamento antigo).
   const pendNF = (state.entradas || []).filter(r => {
-    const cent = (r.centralCompra || r.centralDestino || '');
+    const cent = (r.centralDestino || r.centralCompra || '');
     if (cent !== central) return false;
     if (!inPeriodLocal(r.dtDescarga || r.dtEmissao)) return false;
     if (!r.nf) return false; // sem NF cadastrada — ignorar
@@ -1807,11 +1798,7 @@ function openPendIntegGlobalModal(tipo) {
     if (tipo === 'NF') {
       (state.entradas || []).forEach(r => {
         if (!r.nf) return;
-        // Mesma prioridade de calcPendentesIntegracao: centralCompra primeiro,
-        // fallback centralDestino — evita falso-positivo em NF de
-        // transferência (REF. gerada pelo SAP na central de destino não bate
-        // com a REF. da NF original).
-        const central = r.centralCompra || r.centralDestino || '';
+        const central = r.centralDestino || r.centralCompra || '';
         if (!central) return;
         const centralNFRefs = nfRefs.get(central) || new Set();
         if (!centralNFRefs.has(_pimNormNF(r.nf))) {
