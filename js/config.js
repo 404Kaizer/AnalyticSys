@@ -179,12 +179,99 @@ function abrirCadastroMaterialIndividual(prefill) {
   }, 50);
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+// CATÁLOGO DE GRUPOS SAP — usado no dropdown "Grupo SAP" do cadastro de
+// Materiais. Combina os grupos cadastrados manualmente (state.gruposMateriais,
+// persistente — ver defaultState em state.js) com os grupos já em uso em
+// state.materiais, para que a lista sempre reflita "todos os grupos já
+// cadastrados" mesmo antes desta funcionalidade existir.
+// ═══════════════════════════════════════════════════════════════════════
+
+// Garante que um nome de grupo esteja no catálogo persistente. Chamado
+// sempre que um material é salvo (upsertMateriais) e ao cadastrar um grupo
+// novo "avulso" pelo botão "+" — idempotente, não duplica (comparação
+// insensível a maiúsculas/acentos via normalizeText).
+function registrarGrupoMaterial(nome) {
+  const grupo = String(nome || '').trim();
+  if (!grupo) return;
+  if (!Array.isArray(state.gruposMateriais)) state.gruposMateriais = [];
+  const key = normalizeText(grupo);
+  const jaExiste = state.gruposMateriais.some(g => normalizeText(g) === key);
+  if (!jaExiste) state.gruposMateriais.push(grupo);
+}
+
+// Lista ordenada e sem duplicatas de todos os grupos disponíveis para o
+// dropdown: catálogo persistente + grupos em uso nos materiais cadastrados.
+function getGruposMateriaisDisponiveis() {
+  const vistos = new Map(); // normalizado -> primeira grafia encontrada
+  const add = nome => {
+    const grupo = String(nome || '').trim();
+    if (!grupo) return;
+    const key = normalizeText(grupo);
+    if (!vistos.has(key)) vistos.set(key, grupo);
+  };
+  (state.gruposMateriais || []).forEach(add);
+  (state.materiais || []).forEach(m => add(m?.alias));
+  return [...vistos.values()].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+}
+
+// Reconstrói as <option> de um <select> de Grupo SAP preservando o valor
+// selecionado (ou aplicando um novo valor, se informado).
+function _rebuildGrupoMateriaisOptions(selectEl, novoValor) {
+  if (!selectEl) return;
+  const valorAtual = novoValor !== undefined ? novoValor : selectEl.value;
+  const options = getGruposMateriaisDisponiveis()
+    .map(g => `<option value="${escapeHtml(g)}">${escapeHtml(g)}</option>`).join('');
+  selectEl.innerHTML = `<option value="">—</option>${options}`;
+  selectEl.value = valorAtual;
+}
+
+// Atualiza todos os dropdowns de Grupo SAP abertos no modal (pode haver
+// várias linhas simultâneas, via "+ Adicionar linha").
+function _refreshGrupoMateriaisSelects() {
+  document.querySelectorAll('#mat-indiv-rows [data-field="alias"]').forEach(sel => _rebuildGrupoMateriaisOptions(sel));
+}
+
+// ── Mini modal "Novo Grupo SAP" ─────────────────────────────────────────
+let _novoGrupoMaterialTarget = null; // <select> da linha que abriu o mini modal
+
+function abrirNovoGrupoMaterial(btn) {
+  const row = btn.closest('.reg-individual-row');
+  _novoGrupoMaterialTarget = row?.querySelector('[data-field="alias"]') || null;
+  setVal('novo-grupo-material-nome', '');
+  openModal('modal-novo-grupo-material');
+  setTimeout(() => document.getElementById('novo-grupo-material-nome')?.focus(), 50);
+}
+
+async function salvarNovoGrupoMaterial(btn) {
+  const nomeDigitado = val('novo-grupo-material-nome').trim();
+  if (!nomeDigitado) { toast('Informe o nome do grupo', 'error'); return; }
+
+  const key = normalizeText(nomeDigitado);
+  const existente = getGruposMateriaisDisponiveis().find(g => normalizeText(g) === key);
+  const nomeFinal = existente || nomeDigitado;
+
+  _setBtnLoading(btn, true, 'Salvando...');
+  if (!existente) {
+    registrarGrupoMaterial(nomeDigitado);
+    await persistStateNow();
+  }
+  _refreshGrupoMateriaisSelects();
+  if (_novoGrupoMaterialTarget) _novoGrupoMaterialTarget.value = nomeFinal;
+  _novoGrupoMaterialTarget = null;
+  _setBtnLoading(btn, false);
+  closeModal('modal-novo-grupo-material');
+  toast(existente ? `Grupo "${nomeFinal}" já existia — selecionado` : `Grupo "${nomeFinal}" cadastrado`);
+}
+
 function _addMaterialIndivRow() {
   const container = document.getElementById('mat-indiv-rows');
   if (!container) return;
   const id = _matIndivRowSeq++;
   const catOptions = (typeof CATEGORIAS_MATERIAL !== 'undefined' ? CATEGORIAS_MATERIAL : [])
     .map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+  const grupoOptions = getGruposMateriaisDisponiveis()
+    .map(g => `<option value="${escapeHtml(g)}">${escapeHtml(g)}</option>`).join('');
   const row = document.createElement('div');
   row.className = 'reg-individual-row reg-row-materiais';
   row.dataset.rowId = id;
@@ -195,7 +282,13 @@ function _addMaterialIndivRow() {
     </div>
     <div class="form-group">
       <label class="form-label">Grupo SAP</label>
-      <input type="text" class="form-input" data-field="alias" placeholder="Nome padronizado">
+      <div style="display:flex; gap:6px">
+        <select class="form-select" data-field="alias" style="flex:1; min-width:0">
+          <option value="">—</option>
+          ${grupoOptions}
+        </select>
+        <button type="button" class="btn" title="Cadastrar novo Grupo SAP" onclick="abrirNovoGrupoMaterial(this)" style="flex:0 0 auto; padding:0 12px"><i class="ti ti-plus"></i></button>
+      </div>
     </div>
     <div class="form-group">
       <label class="form-label">Categoria</label>
@@ -303,6 +396,10 @@ function upsertMateriais(items) {
     const idx = state.materiais.findIndex(f => materialMatchKey(f) === key);
     if (idx >= 0) state.materiais[idx] = { ...state.materiais[idx], ...rec };
     else state.materiais.unshift(rec);
+    // Mantém o catálogo de Grupos SAP em sincronia — cobre tanto o cadastro
+    // guiado quanto a importação por arquivo (handleMateriaisImport), já
+    // que ambos passam por aqui.
+    registrarGrupoMaterial(rec.alias);
   });
   invalidateMaterialLookup();
 }

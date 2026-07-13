@@ -24,6 +24,11 @@ const defaultState = () => ({
   configs: [],
   filiais: [],
   materiais: [],
+  // Catálogo de Grupos SAP cadastrados manualmente (via botão "+" no
+  // dropdown de Grupo SAP do cadastro de Materiais). Existe separado de
+  // "materiais" para que um grupo recém-criado sobreviva mesmo sem nenhum
+  // material vinculado a ele ainda — ver registrarGrupoMaterial (config.js).
+  gruposMateriais: [],
   ocorrencias: [],
   acoesRelatorio: [],
   notifications: [],  // { id, type, level, title, body, source, createdAt, read }

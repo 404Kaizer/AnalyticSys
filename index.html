@@ -3648,6 +3648,24 @@
   </div>
 </div>
 
+<!-- MINI MODAL: Novo Grupo SAP (cadastra um grupo sem precisar de um material) -->
+<div class="modal-overlay" id="modal-novo-grupo-material">
+  <div class="modal" style="width:420px">
+    <div class="modal-title"><i class="ti ti-stack-2"></i> Novo Grupo SAP</div>
+    <div class="modal-sub">Cadastra o grupo no catálogo para uso futuro, mesmo sem nenhum material vinculado ainda.</div>
+    <div class="form-grid" style="grid-template-columns:1fr">
+      <div class="form-group">
+        <label class="form-label">Nome do grupo</label>
+        <input type="text" class="form-input" id="novo-grupo-material-nome" placeholder="Ex: AREIA" onkeydown="if(event.key==='Enter'){event.preventDefault();salvarNovoGrupoMaterial(document.getElementById('btn-salvar-novo-grupo-material'));}">
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn" onclick="closeModal('modal-novo-grupo-material')">Cancelar</button>
+      <button class="btn btn-primary" id="btn-salvar-novo-grupo-material" onclick="salvarNovoGrupoMaterial(this)"><i class="ti ti-check"></i> Salvar</button>
+    </div>
+  </div>
+</div>
+
 
 <!-- Toast -->
 <div class="toast" id="toast">
