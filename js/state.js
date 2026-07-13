@@ -29,6 +29,10 @@ const defaultState = () => ({
   // "materiais" para que um grupo recém-criado sobreviva mesmo sem nenhum
   // material vinculado a ele ainda — ver registrarGrupoMaterial (config.js).
   gruposMateriais: [],
+  // Catálogo de Regionais cadastrados manualmente (via botão "+" no
+  // dropdown de Regional do cadastro de Centrais). Mesmo padrão de
+  // gruposMateriais — ver registrarRegionalCentral (config.js).
+  regionaisCentrais: [],
   ocorrencias: [],
   acoesRelatorio: [],
   notifications: [],  // { id, type, level, title, body, source, createdAt, read }

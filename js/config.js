@@ -653,10 +653,86 @@ function abrirCadastroFilialIndividual(prefill) {
   }, 50);
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+// CATÁLOGO DE REGIONAIS — usado no dropdown "Regional" do cadastro de
+// Centrais. Mesmo padrão do catálogo de Grupos SAP (ver acima): combina os
+// regionais cadastrados manualmente (state.regionaisCentrais, persistente)
+// com os regionais já em uso em state.filiais.
+// ═══════════════════════════════════════════════════════════════════════
+
+function registrarRegionalCentral(nome) {
+  const regional = String(nome || '').trim();
+  if (!regional) return;
+  if (!Array.isArray(state.regionaisCentrais)) state.regionaisCentrais = [];
+  const key = normalizeText(regional);
+  const jaExiste = state.regionaisCentrais.some(r => normalizeText(r) === key);
+  if (!jaExiste) state.regionaisCentrais.push(regional);
+}
+
+function getRegionaisCentraisDisponiveis() {
+  const vistos = new Map();
+  const add = nome => {
+    const regional = String(nome || '').trim();
+    if (!regional) return;
+    const key = normalizeText(regional);
+    if (!vistos.has(key)) vistos.set(key, regional);
+  };
+  (state.regionaisCentrais || []).forEach(add);
+  (state.filiais || []).forEach(f => add(f?.regional));
+  return [...vistos.values()].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+}
+
+function _rebuildRegionaisCentraisOptions(selectEl, novoValor) {
+  if (!selectEl) return;
+  const valorAtual = novoValor !== undefined ? novoValor : selectEl.value;
+  const options = getRegionaisCentraisDisponiveis()
+    .map(r => `<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`).join('');
+  selectEl.innerHTML = `<option value="">—</option>${options}`;
+  selectEl.value = valorAtual;
+}
+
+function _refreshRegionaisCentraisSelects() {
+  document.querySelectorAll('#filial-indiv-rows [data-field="regional"]').forEach(sel => _rebuildRegionaisCentraisOptions(sel));
+}
+
+// ── Mini modal "Novo Regional" ──────────────────────────────────────────
+let _novoRegionalCentralTarget = null; // <select> da linha que abriu o mini modal
+
+function abrirNovoRegionalCentral(btn) {
+  const row = btn.closest('.reg-individual-row');
+  _novoRegionalCentralTarget = row?.querySelector('[data-field="regional"]') || null;
+  setVal('novo-regional-central-nome', '');
+  openModal('modal-novo-regional-central');
+  setTimeout(() => document.getElementById('novo-regional-central-nome')?.focus(), 50);
+}
+
+async function salvarNovoRegionalCentral(btn) {
+  const nomeDigitado = val('novo-regional-central-nome').trim();
+  if (!nomeDigitado) { toast('Informe o nome do regional', 'error'); return; }
+
+  const key = normalizeText(nomeDigitado);
+  const existente = getRegionaisCentraisDisponiveis().find(r => normalizeText(r) === key);
+  const nomeFinal = existente || nomeDigitado;
+
+  _setBtnLoading(btn, true, 'Salvando...');
+  if (!existente) {
+    registrarRegionalCentral(nomeDigitado);
+    await persistStateNow();
+  }
+  _refreshRegionaisCentraisSelects();
+  if (_novoRegionalCentralTarget) _novoRegionalCentralTarget.value = nomeFinal;
+  _novoRegionalCentralTarget = null;
+  _setBtnLoading(btn, false);
+  closeModal('modal-novo-regional-central');
+  toast(existente ? `Regional "${nomeFinal}" já existia — selecionado` : `Regional "${nomeFinal}" cadastrado`);
+}
+
 function _addFilialIndivRow() {
   const container = document.getElementById('filial-indiv-rows');
   if (!container) return;
   const id = _filIndivRowSeq++;
+  const regionalOptions = getRegionaisCentraisDisponiveis()
+    .map(r => `<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`).join('');
   const row = document.createElement('div');
   row.className = 'reg-individual-row reg-row-filiais';
   row.dataset.rowId = id;
@@ -675,7 +751,13 @@ function _addFilialIndivRow() {
     </div>
     <div class="form-group">
       <label class="form-label">Regional</label>
-      <input type="text" class="form-input" data-field="regional" placeholder="Nome do responsável/regional">
+      <div style="display:flex; gap:6px">
+        <select class="form-select" data-field="regional" style="flex:1; min-width:0">
+          <option value="">—</option>
+          ${regionalOptions}
+        </select>
+        <button type="button" class="btn" title="Cadastrar novo Regional" onclick="abrirNovoRegionalCentral(this)" style="flex:0 0 auto; padding:0 12px"><i class="ti ti-plus"></i></button>
+      </div>
     </div>
     <div class="reg-row-remove" title="Remover esta linha" onclick="_removeIndivRow(this)"><i class="ti ti-x"></i></div>
   `;
@@ -720,6 +802,9 @@ function upsertFiliais(items) {
       created: src.created || new Date().toLocaleDateString('pt-BR')
     };
     if (idx >= 0) state.filiais[idx] = rec; else state.filiais.unshift(rec);
+    // Mantém o catálogo de Regionais em sincronia — cobre tanto o cadastro
+    // guiado quanto a importação por arquivo (handleFiliaisImport).
+    registrarRegionalCentral(rec.regional);
   });
   invalidateFilialLookup();
 }

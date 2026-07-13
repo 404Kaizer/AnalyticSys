@@ -3631,6 +3631,24 @@
   </div>
 </div>
 
+<!-- MINI MODAL: Novo Regional (cadastra um regional sem precisar de uma central) -->
+<div class="modal-overlay" id="modal-novo-regional-central">
+  <div class="modal" style="width:420px">
+    <div class="modal-title"><i class="ti ti-map-pin"></i> Novo Regional</div>
+    <div class="modal-sub">Cadastra o regional no catálogo para uso futuro, mesmo sem nenhuma central vinculada ainda.</div>
+    <div class="form-grid" style="grid-template-columns:1fr">
+      <div class="form-group">
+        <label class="form-label">Nome do regional</label>
+        <input type="text" class="form-input" id="novo-regional-central-nome" placeholder="Ex: João Pereira" onkeydown="if(event.key==='Enter'){event.preventDefault();salvarNovoRegionalCentral(document.getElementById('btn-salvar-novo-regional-central'));}">
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn" onclick="closeModal('modal-novo-regional-central')">Cancelar</button>
+      <button class="btn btn-primary" id="btn-salvar-novo-regional-central" onclick="salvarNovoRegionalCentral(this)"><i class="ti ti-check"></i> Salvar</button>
+    </div>
+  </div>
+</div>
+
 
 <!-- MODAL: Materiais / Grupo SAP — CADASTRO INDIVIDUAL (campos guiados) -->
 <div class="modal-overlay" id="modal-materiais-individual">
