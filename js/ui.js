@@ -1140,6 +1140,29 @@ function escapeHtml(str) {
   return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+// ── Badge colorido por código de MOVIMENTO ───────────────────────────────
+// Usado no modal "Movimentações SAP" (openBreakdownModal): cada código tem
+// sempre a mesma cor em qualquer lugar do sistema, pra o usuário bater o
+// olho e já reconhecer o código sem precisar ler o resumo toda vez.
+// 101/801 (entrada) e 201 (saída) têm cor semântica fixa; qualquer outro
+// código (estorno, ajuste, etc.) cai numa cor da paleta reserva, escolhida
+// por hash do próprio código — sempre a mesma cor pro mesmo código.
+const MOV_BADGE_CLASS = { '101': 'mv-badge-green', '801': 'mv-badge-teal', '201': 'mv-badge-red' };
+const MOV_BADGE_FALLBACK_CLASSES = ['mv-badge-purple', 'mv-badge-amber'];
+function movBadgeClass(cod) {
+  const c = String(cod || '').trim();
+  if (MOV_BADGE_CLASS[c]) return MOV_BADGE_CLASS[c];
+  let h = 0;
+  for (let i = 0; i < c.length; i++) h = (h * 31 + c.charCodeAt(i)) >>> 0;
+  return MOV_BADGE_FALLBACK_CLASSES[h % MOV_BADGE_FALLBACK_CLASSES.length];
+}
+function movBadgeHtml(cod) {
+  return `<span class="mv-badge ${movBadgeClass(cod)}">${escapeHtml(cod || '—')}</span>`;
+}
+function movSummaryChipHtml(cod, count) {
+  return `<span class="mv-badge mv-badge-chip ${movBadgeClass(cod)}">${escapeHtml(cod || '—')} <b>${count}</b></span>`;
+}
+
 const analiticoDetailState = {
   key: null,
   fullscreen: false
@@ -1147,7 +1170,7 @@ const analiticoDetailState = {
 
 window.__analiticoDetailCache = new Map();
 
-function buildAnaliticoDetailBreakdown(entries, total, colorVar, title) {
+function buildAnaliticoDetailBreakdown(entries, total, colorVar, title, localCount = 0) {
   if (!entries.length) {
     return `<span class="analitico-detail-empty">—</span>`;
   }
@@ -1161,6 +1184,7 @@ function buildAnaliticoDetailBreakdown(entries, total, colorVar, title) {
       data-entries="${encoded}"
       data-title="${escapeHtml(title)}"
       data-color="${escapeHtml(colorVar)}"
+      data-local-count="${localCount}"
       title="Clique para ver detalhes">
       <span class="bdm-total">${fmtKg(total)}</span>
       <i class="ti ti-table-options bdm-icon"></i>
@@ -1169,18 +1193,55 @@ function buildAnaliticoDetailBreakdown(entries, total, colorVar, title) {
 
 // ── Breakdown Modal ─────────────────────────────────────────
 function openBreakdownModal(trigger) {
-  const overlay = document.getElementById('breakdown-modal-overlay');
-  const titleEl = document.getElementById('bdm-title');
-  const tbody   = document.getElementById('bdm-tbody');
-  const totalEl = document.getElementById('bdm-total-val');
+  const overlay   = document.getElementById('breakdown-modal-overlay');
+  const titleEl   = document.getElementById('bdm-title');
+  const summaryEl = document.getElementById('bdm-summary');
+  const tbody     = document.getElementById('bdm-tbody');
+  const totalEl   = document.getElementById('bdm-total-val');
   if (!overlay || !titleEl || !tbody || !totalEl) return;
 
   let entries = [];
   try { entries = JSON.parse(decodeURIComponent(trigger.dataset.entries || '[]')); } catch(e) {}
-  const title    = trigger.dataset.title  || '';
-  const colorVar = trigger.dataset.color  || 'var(--text)';
+  const title      = trigger.dataset.title  || '';
+  const colorVar   = trigger.dataset.color  || 'var(--text)';
+  const localCount = Number(trigger.dataset.localCount || 0);
 
   titleEl.textContent = title + ' — Movimentações';
+
+  // ── Resumo fixo (sempre visível, abaixo do título) ───────────────────────
+  // 1) Quais códigos de MOVIMENTO compõem o total e quantos registros cada
+  //    um contribui — visão rápida do que está sendo contabilizado.
+  // 2) Comparação entre a quantidade de registros SAP mostrados aqui e a
+  //    quantidade de registros cadastrados na página local (Entradas/Saídas)
+  //    para o MESMO material + central + período — ajuda a identificar
+  //    divergência de cadastro sem precisar abrir a página separadamente.
+  if (summaryEl) {
+    const codCounts = new Map();
+    entries.forEach(([cod]) => codCounts.set(cod, (codCounts.get(cod) || 0) + 1));
+    const codeChips = [...codCounts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([cod, n]) => movSummaryChipHtml(cod, n))
+      .join('');
+
+    const sapCount     = entries.length;
+    const bateComLocal = sapCount === localCount;
+    const compareIcon  = bateComLocal
+      ? '<i class="ti ti-circle-check" style="color:var(--green)" title="Contagens batem"></i>'
+      : '<i class="ti ti-alert-triangle" style="color:var(--amber)" title="Contagens divergem"></i>';
+    const localLabel = title === 'Saídas' ? 'registro(s) na página Saídas' : 'registro(s) na página Entradas';
+
+    summaryEl.innerHTML = `
+      <div class="bdm-summary-row">
+        <span class="bdm-summary-label">Movimentos considerados</span>
+        <div class="bdm-summary-codes">${codeChips || '<span style="color:var(--text3);font-size:11.5px">—</span>'}</div>
+      </div>
+      <div class="bdm-summary-row">
+        <span class="bdm-summary-label">Registros</span>
+        <span class="bdm-summary-compare">
+          <b>${sapCount}</b> no SAP &nbsp;·&nbsp; <b>${localCount}</b> ${localLabel} ${compareIcon}
+        </span>
+      </div>`;
+  }
 
   let grandTotal = 0;
   tbody.innerHTML = entries.map(([cod, value, ref, usuario, dtLanc]) => {
@@ -1189,7 +1250,7 @@ function openBreakdownModal(trigger) {
       ? '<i class="ti ti-circle-arrow-up" title="Sobra" style="font-size:11px;vertical-align:middle;margin-right:2px"></i>'
       : '<i class="ti ti-circle-arrow-down" title="Desfalque" style="font-size:11px;vertical-align:middle;margin-right:2px"></i>';
     return `<tr>
-      <td class="td-mono" style="color:var(--text2)">${escapeHtml(cod)}</td>
+      <td>${movBadgeHtml(cod)}</td>
       <td class="td-muted">${escapeHtml(ref || '—')}</td>
       <td class="td-muted">${escapeHtml(dtLanc || '—')}</td>
       <td class="td-muted">${escapeHtml(usuario || '—')}</td>

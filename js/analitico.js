@@ -757,6 +757,27 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
       const entEntries = snapshot.entRecords.map(toEntry);
       const saiEntries = snapshot.saiRecords.map(toEntry);
 
+      // ── Contagem de registros locais (páginas Entradas/Saídas) ──────────
+      // Mesmo escopo do modal de Movimentações SAP (este material + esta
+      // central + este período) — permite comparar "quantos registros
+      // existem no SAP" vs "quantos existem cadastrados localmente".
+      // Prioridade de central igual à de calcPendentesIntegracao (ui.js):
+      // centralCompra primeiro, fallback centralDestino — evita que NF de
+      // transferência conte na central errada.
+      const localEntCount = (state.entradas || []).filter(e => {
+        const cent = e.centralCompra || e.centralDestino || '';
+        if (cent !== r.central) return false;
+        if (e.material !== mat) return false;
+        const d = parseDate(e.dtDescarga || e.dtEmissao);
+        return d && d >= start && d <= end;
+      }).length;
+      const localSaiCount = (state.saidas || []).filter(s => {
+        if (s.central !== r.central) return false;
+        if (s.material !== mat) return false;
+        const d = parseDate(s.dtEmissao);
+        return d && d >= start && d <= end;
+      }).length;
+
       // Quando AUSENTE: busca os dois lançamentos mais próximos para tooltip informativo
       const absentNearest = preCarry ? null
         : getNearestLancsForAbsent({ central: r.central, material: mat, dtIni, dtFim });
@@ -1019,8 +1040,8 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
               : (snapshot.pesoIniAusente ? `<span class='absent-badge' data-absent-tooltip='${buildAbsentTooltip(absentNearest)}' style='cursor:help'>AUSENTE</span>` : snapshot.dtIniLabel)
           }</td>
           <td class="td-mono" style="color:${(matSemCadastro || snapshot.pesoIniAusente) ? 'var(--text3)' : 'var(--text)'}">${(matSemCadastro || snapshot.pesoIniAusente) ? '—' : fmtKg(snapshot.pesoIni)}</td>
-          <td>${buildAnaliticoDetailBreakdown(entEntries, snapshot.totalEnt, 'var(--green)', 'Entradas')}</td>
-          <td>${buildAnaliticoDetailBreakdown(saiEntries, snapshot.totalSai, 'var(--red)', 'Saídas')}</td>
+          <td>${buildAnaliticoDetailBreakdown(entEntries, snapshot.totalEnt, 'var(--green)', 'Entradas', localEntCount)}</td>
+          <td>${buildAnaliticoDetailBreakdown(saiEntries, snapshot.totalSai, 'var(--red)', 'Saídas', localSaiCount)}</td>
           <td class="td-mono" style="color:var(--text2);font-size:11px">${
             snapshot.pesoFimAusente
               ? `<span class='absent-badge' data-absent-tooltip='${buildAbsentTooltip(absentNearest)}' style='cursor:help'>AUSENTE</span>`
