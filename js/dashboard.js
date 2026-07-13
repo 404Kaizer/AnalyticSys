@@ -3135,11 +3135,17 @@ function _pendPadronizacaoAbrirCadastro(btn) {
   document.getElementById('alert-modal-pend-material')?.remove();
   document.getElementById('alert-modal-pend-central')?.remove();
   if (tipo === 'central') {
-    abrirCadastroFilialColarTexto(nome + ' = ');
+    abrirCadastroFilialIndividual({ origem: nome, focus: 'alias' });
     return;
   }
-  const texto = motivo === 'sem_categoria' ? `${origem} = ${alias} = ` : `${nome} = `;
-  abrirCadastroMaterialColarTexto(texto);
+  if (motivo === 'sem_categoria') {
+    // Origem/alias exatos do cadastro já existente — o analista só precisa
+    // completar a categoria (upsertMateriais casa por origem+alias, então
+    // isso atualiza o registro em vez de criar duplicata).
+    abrirCadastroMaterialIndividual({ origem, alias, focus: 'categoria' });
+  } else {
+    abrirCadastroMaterialIndividual({ origem: nome, focus: 'alias' });
+  }
 }
 
 document.addEventListener('click', e => {
@@ -3251,7 +3257,7 @@ function _dupCadEditar(id) {
   const item = (state.materiais || []).find(m => m.id === id);
   if (!item) return;
   document.getElementById('alert-modal-dup-cad')?.remove();
-  abrirCadastroMaterialColarTexto(`${item.origem} = ${item.alias}${item.categoria ? ' = ' + item.categoria : ''}`);
+  abrirCadastroMaterialIndividual({ origem: item.origem, alias: item.alias, categoria: item.categoria, focus: 'alias' });
 }
 window._dupCadEditar = _dupCadEditar;
 

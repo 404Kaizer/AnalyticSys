@@ -1671,7 +1671,7 @@
   // cadastrado.
   window._invCadastrarMaterial = function(nome) {
     document.getElementById('alert-modal-inv-sem-cad')?.remove();
-    abrirCadastroMaterialColarTexto(nome + ' = ');
+    abrirCadastroMaterialIndividual({ origem: nome, focus: 'alias' });
   };
 
   // ── Modal de Divergências (possíveis causas da variação) ───────────

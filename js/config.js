@@ -146,65 +146,37 @@ async function atualizarCadastros() {
   }
 }
 
-async function salvarMateriais(btn) {
-  const text = val('materiais-text');
-  const lines = text.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
-  if (!lines.length) { toast('Informe ao menos um cadastro', 'error'); return; }
-
-  const imported = parseMateriaisLines(lines);
-  if (!imported.length) { toast('Nenhum cadastro válido encontrado', 'error'); return; }
-
-  _setBtnLoading(btn, true, 'Salvando...');
-  upsertMateriais(imported);
-  listPages.materiais = 0;
-  setVal('materiais-text', '');
-  // Fecha o modal imediatamente após a mutação local — não espera o
-  // persist assíncrono nem o re-render pesado de renderAll() (antes disso
-  // ficava visivelmente aberto por mais tempo do que deveria).
-  closeModal('modal-materiais-individual');
-  _setBtnLoading(btn, false);
-  reaplicarPadronizacaoMateriais();
-  await persistStateNow();
-  renderAll();
-  updateImportPrereqUI();
-  toast(`${imported.length} material(is) cadastrado(s)`);
-}
-
 // ═══════════════════════════════════════════════════════════════════════
 // CADASTRO INDIVIDUAL DE MATERIAIS — campos digitados, múltiplas linhas
 // ═══════════════════════════════════════════════════════════════════════
 let _matIndivRowSeq = 0;
 
-// Alterna entre as abas "Campos guiados" e "Colar texto" dentro do modal
-// de Cadastro Individual de Materiais (o antigo modal separado de Cadastro
-// em Lote foi incorporado aqui como uma segunda aba).
-function matIndivSwitchTab(tab) {
-  const isCampos = tab !== 'texto';
-  document.getElementById('mat-indiv-panel-campos').style.display = isCampos ? '' : 'none';
-  document.getElementById('mat-indiv-panel-texto').style.display = isCampos ? 'none' : '';
-  document.getElementById('mat-indiv-tab-campos')?.classList.toggle('btn-primary', isCampos);
-  document.getElementById('mat-indiv-tab-texto')?.classList.toggle('btn-primary', !isCampos);
-}
-
-function abrirCadastroMaterialIndividual() {
+// Abre o modal de Cadastro Individual de Materiais. Aceita um objeto de
+// pré-preenchimento opcional — { origem, alias, categoria, focus } — usado
+// pelos atalhos de "material sem cadastro/categoria" espalhados pelo
+// sistema (Dashboard, Analítico, Inventário, duplicidade de cadastro).
+function abrirCadastroMaterialIndividual(prefill) {
   const container = document.getElementById('mat-indiv-rows');
   if (!container) return;
   container.innerHTML = '';
   _matIndivRowSeq = 0;
   _addMaterialIndivRow();
-  matIndivSwitchTab('campos');
   openModal('modal-materiais-individual');
-  setTimeout(() => container.querySelector('input')?.focus(), 50);
-}
 
-// Abre o modal de Cadastro Individual de Materiais já na aba "Colar texto",
-// opcionalmente pré-preenchida (usado pelos atalhos de "material sem
-// cadastro" espalhados pelo sistema — Dashboard, Analítico, Inventário).
-function abrirCadastroMaterialColarTexto(prefill) {
-  matIndivSwitchTab('texto');
-  openModal('modal-materiais-individual');
-  setVal('materiais-text', prefill || '');
-  _pendPadronizacaoFocarFinal('materiais-text');
+  const row = container.querySelector('.reg-individual-row');
+  if (prefill && row) {
+    const origemInput = row.querySelector('[data-field="origem"]');
+    const aliasInput = row.querySelector('[data-field="alias"]');
+    const categoriaSelect = row.querySelector('[data-field="categoria"]');
+    if (origemInput) origemInput.value = prefill.origem || '';
+    if (aliasInput) aliasInput.value = prefill.alias || '';
+    if (categoriaSelect && prefill.categoria) categoriaSelect.value = prefill.categoria;
+  }
+
+  setTimeout(() => {
+    const focusField = prefill?.focus || 'origem';
+    (row?.querySelector(`[data-field="${focusField}"]`) || container.querySelector('input'))?.focus();
+  }, 50);
 }
 
 function _addMaterialIndivRow() {
@@ -280,52 +252,6 @@ async function salvarMateriaisIndividual(btn) {
   renderAll();
   updateImportPrereqUI();
   toast(`${imported.length} material(is) cadastrado(s)`);
-}
-
-function parseMateriaisLines(lines) {
-  const items = [];
-
-  for (const rawLine of lines) {
-    const line = String(rawLine || '').trim();
-    if (!line) continue;
-
-    let origem = '';
-    let alias = '';
-    let categoriaRaw = '';
-
-    const direct = line.match(/^(.*?)(?:\s*(?:=>|=|;|\t)\s*)(.+)$/);
-    if (direct) {
-      origem = direct[1].trim();
-      const right = direct[2].trim();
-      // Aceita tanto "grupo = categoria" quanto "grupo | categoria" para o
-      // segmento opcional de categoria.
-      const sepMatch = right.match(/^(.*?)(?:\s*[=|]\s*)(.+)$/);
-      if (sepMatch) {
-        alias = sepMatch[1].trim();
-        categoriaRaw = sepMatch[2].trim();
-      } else {
-        alias = right;
-      }
-    } else {
-      const parts = line.split('|').map(s => s.trim()).filter(Boolean);
-      if (parts.length >= 2) {
-        origem = parts[0];
-        alias = parts[1];
-        categoriaRaw = parts[2] || '';
-      }
-    }
-
-    if (!origem || !alias) continue;
-
-    items.push({
-      origem,
-      alias,
-      categoria: normalizeCategoriaMaterial(categoriaRaw),
-      created: new Date().toLocaleDateString('pt-BR')
-    });
-  }
-
-  return items;
 }
 
 function materialMatchKey(item) {
@@ -595,61 +521,39 @@ function exportarMateriaisExcel() {
 }
 
 
-async function salvarFiliais(btn) {
-  const text = val('filiais-text');
-  const lines = text.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
-  if (!lines.length) { toast('Informe ao menos um cadastro', 'error'); return; }
-
-  const imported = parseFiliaisLines(lines);
-  if (!imported.length) { toast('Nenhum cadastro válido encontrado', 'error'); return; }
-
-  _setBtnLoading(btn, true, 'Salvando...');
-  upsertFiliais(imported);
-  setVal('filiais-text', '');
-  closeModal('modal-filiais-individual');
-  _setBtnLoading(btn, false);
-  reaplicarPadronizacaoCentrais();
-  await persistStateNow();
-  renderAll();
-  updateImportPrereqUI();
-  toast(`${imported.length} filial(is) cadastrada(s)`);
-}
-
 // ═══════════════════════════════════════════════════════════════════════
 // CADASTRO INDIVIDUAL DE CENTRAIS — campos digitados, múltiplas linhas
 // ═══════════════════════════════════════════════════════════════════════
 let _filIndivRowSeq = 0;
 
-// Alterna entre as abas "Campos guiados" e "Colar texto" dentro do modal
-// de Cadastro Individual de Centrais (o antigo modal separado de Cadastro
-// em Lote foi incorporado aqui como uma segunda aba).
-function filIndivSwitchTab(tab) {
-  const isCampos = tab !== 'texto';
-  document.getElementById('fil-indiv-panel-campos').style.display = isCampos ? '' : 'none';
-  document.getElementById('fil-indiv-panel-texto').style.display = isCampos ? 'none' : '';
-  document.getElementById('fil-indiv-tab-campos')?.classList.toggle('btn-primary', isCampos);
-  document.getElementById('fil-indiv-tab-texto')?.classList.toggle('btn-primary', !isCampos);
-}
-
-function abrirCadastroFilialIndividual() {
+// Abre o modal de Cadastro Individual de Centrais. Aceita um objeto de
+// pré-preenchimento opcional — { origem, alias, cnpj, regional, focus } —
+// usado pelo atalho de "central sem cadastro" no painel de pendências de
+// padronização (Dashboard).
+function abrirCadastroFilialIndividual(prefill) {
   const container = document.getElementById('filial-indiv-rows');
   if (!container) return;
   container.innerHTML = '';
   _filIndivRowSeq = 0;
   _addFilialIndivRow();
-  filIndivSwitchTab('campos');
   openModal('modal-filiais-individual');
-  setTimeout(() => container.querySelector('input')?.focus(), 50);
-}
 
-// Abre o modal de Cadastro Individual de Centrais já na aba "Colar texto",
-// opcionalmente pré-preenchida (usado pelo atalho de "central sem
-// cadastro" no painel de pendências de padronização — Dashboard).
-function abrirCadastroFilialColarTexto(prefill) {
-  filIndivSwitchTab('texto');
-  openModal('modal-filiais-individual');
-  setVal('filiais-text', prefill || '');
-  _pendPadronizacaoFocarFinal('filiais-text');
+  const row = container.querySelector('.reg-individual-row');
+  if (prefill && row) {
+    const origemInput   = row.querySelector('[data-field="origem"]');
+    const aliasInput    = row.querySelector('[data-field="alias"]');
+    const cnpjInput     = row.querySelector('[data-field="cnpj"]');
+    const regionalInput = row.querySelector('[data-field="regional"]');
+    if (origemInput)   origemInput.value   = prefill.origem   || '';
+    if (aliasInput)    aliasInput.value    = prefill.alias    || '';
+    if (cnpjInput)     cnpjInput.value     = prefill.cnpj     || '';
+    if (regionalInput) regionalInput.value = prefill.regional || '';
+  }
+
+  setTimeout(() => {
+    const focusField = prefill?.focus || 'origem';
+    (row?.querySelector(`[data-field="${focusField}"]`) || container.querySelector('input'))?.focus();
+  }, 50);
 }
 
 function _addFilialIndivRow() {
@@ -706,50 +610,6 @@ async function salvarFiliaisIndividual(btn) {
   renderAll();
   updateImportPrereqUI();
   toast(`${imported.length} filial(is) cadastrada(s)`);
-}
-
-function parseFiliaisLines(lines) {
-  const items = [];
-
-  for (const rawLine of lines) {
-    const line = String(rawLine || '').trim();
-    if (!line) continue;
-
-    let origem = '';
-    let alias = '';
-    let cnpj = '';
-    let regional = '';
-
-    // Primary format: [num |] ORIGINAL = SIGLA = CNPJ = REGIONAL
-    const eqParts = line.split('=').map(s => s.trim());
-    if (eqParts.length >= 2) {
-      // Left side may be "82 | Sete Lagoas" or "98 | POM | Pompéu" — keep as digitado
-      const leftRaw = eqParts[0];
-      origem   = leftRaw.trim();
-      alias    = eqParts[1] || '';
-      cnpj     = eqParts[2] || '';
-      regional = eqParts[3] || '';
-    } else {
-      // Fallback: pipe-only format
-      const parts = line.split('|').map(s => s.trim()).filter(Boolean);
-      if (parts.length >= 2) {
-        origem = parts.slice(0, -1).join(' | ');
-        alias  = parts.at(-1);
-      }
-    }
-
-    if (!origem || !alias) continue;
-
-    items.push({
-      origem,
-      alias,
-      cnpj,
-      regional,
-      created: new Date().toLocaleDateString('pt-BR')
-    });
-  }
-
-  return items;
 }
 
 function upsertFiliais(items) {

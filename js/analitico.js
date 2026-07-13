@@ -1837,7 +1837,7 @@ function analiticoCadastrarMaterial(nome, event) {
   // reutilizada por vários painéis (Analítico, Dashboard Gerencial, Custos,
   // Entradas/Saídas/Lançamentos/SAP), cada um com seu próprio id de modal.
   document.querySelectorAll('.alert-modal-overlay').forEach(el => el.remove());
-  abrirCadastroMaterialColarTexto(nome + ' = ');
+  abrirCadastroMaterialIndividual({ origem: nome, focus: 'alias' });
 }
 window.analiticoCadastrarMaterial = analiticoCadastrarMaterial;
 
@@ -2579,8 +2579,6 @@ Object.assign(window, {
   salvarSAP,
   salvarProducao,
   salvarConfig,
-  salvarFiliais,
-  salvarMateriais,
   renderConfigs,
   renderFiliais,
   renderMateriais,

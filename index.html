@@ -3615,95 +3615,35 @@
 
 
 
-<!-- MODAL: Filiais / Aliases — CADASTRO INDIVIDUAL (campos guiados + colar texto) -->
+<!-- MODAL: Filiais / Aliases — CADASTRO INDIVIDUAL (campos guiados) -->
 <div class="modal-overlay" id="modal-filiais-individual">
   <div class="modal" style="max-width:900px">
     <div class="modal-title"><i class="ti ti-map-pin"></i> Cadastro Individual de Centrais</div>
+    <div class="modal-sub">Preencha os campos abaixo. Clique em <b>+ Adicionar linha</b> para cadastrar mais de uma central de uma vez. Prefere importar um arquivo pronto? <button type="button" class="link-btn" onclick="focusFilialImport()">Selecionar arquivo</button>.</div>
 
-    <div style="display:flex; gap:8px; margin-bottom:14px">
-      <button type="button" class="btn" id="fil-indiv-tab-campos" onclick="filIndivSwitchTab('campos')" style="flex:1; justify-content:center; gap:6px">
-        <i class="ti ti-forms"></i> Campos guiados
-      </button>
-      <button type="button" class="btn" id="fil-indiv-tab-texto" onclick="filIndivSwitchTab('texto')" style="flex:1; justify-content:center; gap:6px">
-        <i class="ti ti-clipboard-text"></i> Colar texto
-      </button>
-    </div>
+    <div class="reg-individual-rows" id="filial-indiv-rows"></div>
+    <button type="button" class="btn reg-add-row-btn" onclick="_addFilialIndivRow()"><i class="ti ti-plus"></i> Adicionar linha</button>
 
-    <!-- PAINEL: Campos guiados -->
-    <div id="fil-indiv-panel-campos">
-      <div class="modal-sub">Preencha os campos abaixo. Clique em <b>+ Adicionar linha</b> para cadastrar mais de uma central de uma vez. Prefere importar um arquivo pronto? <button type="button" class="link-btn" onclick="focusFilialImport()">Selecionar arquivo</button>.</div>
-
-      <div class="reg-individual-rows" id="filial-indiv-rows"></div>
-      <button type="button" class="btn reg-add-row-btn" onclick="_addFilialIndivRow()"><i class="ti ti-plus"></i> Adicionar linha</button>
-
-      <div class="form-actions">
-        <button class="btn" onclick="closeModal('modal-filiais-individual')">Cancelar</button>
-        <button class="btn btn-primary" id="btn-salvar-filial-indiv" onclick="salvarFiliaisIndividual(this)"><i class="ti ti-check"></i> Cadastrar</button>
-      </div>
-    </div>
-
-    <!-- PAINEL: Colar texto -->
-    <div id="fil-indiv-panel-texto" style="display:none">
-      <div class="modal-sub">Use uma linha por cadastro. Formato: <span class="td-mono">ORIGINAL = SIGLA = CNPJ = REGIONAL</span>. Prefixo numérico opcional: <span class="td-mono">82 | Sete Lagoas = SET1 = 00.000.000/0000-00 = João Pereira</span>.</div>
-
-      <div class="form-grid" style="grid-template-columns:1fr">
-        <div class="form-group">
-          <label class="form-label">Colar texto em lote</label>
-          <textarea id="filiais-text" class="form-input" style="min-height:220px; resize:vertical" placeholder="82 | Sete Lagoas = SET1 = 00.000.000/0000-00 = João Pereira&#10;91 | Juiz de Fora II = JFO2 = 00.000.000/0001-00 = Maria Silva&#10;Filial Exemplo = EXP1"></textarea>
-        </div>
-      </div>
-
-      <div class="form-actions">
-        <button class="btn" onclick="closeModal('modal-filiais-individual')">Cancelar</button>
-        <button class="btn btn-primary" id="btn-salvar-filiais" onclick="salvarFiliais(this)"><i class="ti ti-check"></i> Salvar cadastros</button>
-      </div>
+    <div class="form-actions">
+      <button class="btn" onclick="closeModal('modal-filiais-individual')">Cancelar</button>
+      <button class="btn btn-primary" id="btn-salvar-filial-indiv" onclick="salvarFiliaisIndividual(this)"><i class="ti ti-check"></i> Cadastrar</button>
     </div>
   </div>
 </div>
 
 
-<!-- MODAL: Materiais / Grupo SAP — CADASTRO INDIVIDUAL (campos guiados + colar texto) -->
+<!-- MODAL: Materiais / Grupo SAP — CADASTRO INDIVIDUAL (campos guiados) -->
 <div class="modal-overlay" id="modal-materiais-individual">
   <div class="modal" style="max-width:900px">
     <div class="modal-title"><i class="ti ti-stack-2"></i> Cadastro Individual de Materiais</div>
+    <div class="modal-sub">Preencha os campos abaixo. Clique em <b>+ Adicionar linha</b> para cadastrar mais de um material de uma vez. Prefere importar um arquivo pronto? <button type="button" class="link-btn" onclick="focusMaterialImport()">Selecionar arquivo</button>.</div>
 
-    <div style="display:flex; gap:8px; margin-bottom:14px">
-      <button type="button" class="btn" id="mat-indiv-tab-campos" onclick="matIndivSwitchTab('campos')" style="flex:1; justify-content:center; gap:6px">
-        <i class="ti ti-forms"></i> Campos guiados
-      </button>
-      <button type="button" class="btn" id="mat-indiv-tab-texto" onclick="matIndivSwitchTab('texto')" style="flex:1; justify-content:center; gap:6px">
-        <i class="ti ti-clipboard-text"></i> Colar texto
-      </button>
-    </div>
+    <div class="reg-individual-rows" id="mat-indiv-rows"></div>
+    <button type="button" class="btn reg-add-row-btn" onclick="_addMaterialIndivRow()"><i class="ti ti-plus"></i> Adicionar linha</button>
 
-    <!-- PAINEL: Campos guiados -->
-    <div id="mat-indiv-panel-campos">
-      <div class="modal-sub">Preencha os campos abaixo. Clique em <b>+ Adicionar linha</b> para cadastrar mais de um material de uma vez. Prefere importar um arquivo pronto? <button type="button" class="link-btn" onclick="focusMaterialImport()">Selecionar arquivo</button>.</div>
-
-      <div class="reg-individual-rows" id="mat-indiv-rows"></div>
-      <button type="button" class="btn reg-add-row-btn" onclick="_addMaterialIndivRow()"><i class="ti ti-plus"></i> Adicionar linha</button>
-
-      <div class="form-actions">
-        <button class="btn" onclick="closeModal('modal-materiais-individual')">Cancelar</button>
-        <button class="btn btn-primary" id="btn-salvar-material-indiv" onclick="salvarMateriaisIndividual(this)"><i class="ti ti-check"></i> Cadastrar</button>
-      </div>
-    </div>
-
-    <!-- PAINEL: Colar texto -->
-    <div id="mat-indiv-panel-texto" style="display:none">
-      <div class="modal-sub">Use uma linha por cadastro. Formatos aceitos: <span class="td-mono">origem = grupo</span>, <span class="td-mono">origem = grupo = categoria</span>, <span class="td-mono">origem;grupo</span>. O grupo será o nome exibido em Lançamentos. Categoria é opcional e deve ser uma das 5 fixas: Aglomerante, Agregado Graúdo, Agregado Miúdo, Aditivo ou Adição — valores fora dessa lista são ignorados.</div>
-
-      <div class="form-grid" style="grid-template-columns:1fr">
-        <div class="form-group">
-          <label class="form-label">Colar texto em lote</label>
-          <textarea id="materiais-text" class="form-input" style="min-height:220px; resize:vertical" placeholder="AREIA LAVADA = AREIA = Agregado Miúdo&#10;BRITA 01 = BRITA = Agregado Graúdo&#10;PÓ DE PEDRA = PÓ DE PEDRA"></textarea>
-        </div>
-      </div>
-
-      <div class="form-actions">
-        <button class="btn" onclick="closeModal('modal-materiais-individual')">Cancelar</button>
-        <button class="btn btn-primary" id="btn-salvar-materiais" onclick="salvarMateriais(this)"><i class="ti ti-check"></i> Salvar cadastros</button>
-      </div>
+    <div class="form-actions">
+      <button class="btn" onclick="closeModal('modal-materiais-individual')">Cancelar</button>
+      <button class="btn btn-primary" id="btn-salvar-material-indiv" onclick="salvarMateriaisIndividual(this)"><i class="ti ti-check"></i> Cadastrar</button>
     </div>
   </div>
 </div>
