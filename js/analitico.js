@@ -1837,12 +1837,7 @@ function analiticoCadastrarMaterial(nome, event) {
   // reutilizada por vários painéis (Analítico, Dashboard Gerencial, Custos,
   // Entradas/Saídas/Lançamentos/SAP), cada um com seu próprio id de modal.
   document.querySelectorAll('.alert-modal-overlay').forEach(el => el.remove());
-  openModal('modal-materiais');
-  setVal('materiais-text', nome + ' = ');
-  setTimeout(() => {
-    const el = document.getElementById('materiais-text');
-    if (el) { el.focus(); el.selectionStart = el.selectionEnd = el.value.length; }
-  }, 50);
+  abrirCadastroMaterialColarTexto(nome + ' = ');
 }
 window.analiticoCadastrarMaterial = analiticoCadastrarMaterial;
 

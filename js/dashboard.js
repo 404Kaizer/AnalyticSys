@@ -3135,15 +3135,11 @@ function _pendPadronizacaoAbrirCadastro(btn) {
   document.getElementById('alert-modal-pend-material')?.remove();
   document.getElementById('alert-modal-pend-central')?.remove();
   if (tipo === 'central') {
-    openModal('modal-filiais');
-    setVal('filiais-text', nome + ' = ');
-    _pendPadronizacaoFocarFinal('filiais-text');
+    abrirCadastroFilialColarTexto(nome + ' = ');
     return;
   }
   const texto = motivo === 'sem_categoria' ? `${origem} = ${alias} = ` : `${nome} = `;
-  openModal('modal-materiais');
-  setVal('materiais-text', texto);
-  _pendPadronizacaoFocarFinal('materiais-text');
+  abrirCadastroMaterialColarTexto(texto);
 }
 
 document.addEventListener('click', e => {
@@ -3255,9 +3251,7 @@ function _dupCadEditar(id) {
   const item = (state.materiais || []).find(m => m.id === id);
   if (!item) return;
   document.getElementById('alert-modal-dup-cad')?.remove();
-  openModal('modal-materiais');
-  setVal('materiais-text', `${item.origem} = ${item.alias}${item.categoria ? ' = ' + item.categoria : ''}`);
-  _pendPadronizacaoFocarFinal('materiais-text');
+  abrirCadastroMaterialColarTexto(`${item.origem} = ${item.alias}${item.categoria ? ' = ' + item.categoria : ''}`);
 }
 window._dupCadEditar = _dupCadEditar;
 

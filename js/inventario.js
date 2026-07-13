@@ -1671,12 +1671,7 @@
   // cadastrado.
   window._invCadastrarMaterial = function(nome) {
     document.getElementById('alert-modal-inv-sem-cad')?.remove();
-    openModal('modal-materiais');
-    setVal('materiais-text', nome + ' = ');
-    setTimeout(() => {
-      const el = document.getElementById('materiais-text');
-      if (el) { el.focus(); el.selectionStart = el.selectionEnd = el.value.length; }
-    }, 50);
+    abrirCadastroMaterialColarTexto(nome + ' = ');
   };
 
   // ── Modal de Divergências (possíveis causas da variação) ───────────

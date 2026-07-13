@@ -161,7 +161,7 @@ async function salvarMateriais(btn) {
   // Fecha o modal imediatamente após a mutação local — não espera o
   // persist assíncrono nem o re-render pesado de renderAll() (antes disso
   // ficava visivelmente aberto por mais tempo do que deveria).
-  closeModal('modal-materiais');
+  closeModal('modal-materiais-individual');
   _setBtnLoading(btn, false);
   reaplicarPadronizacaoMateriais();
   await persistStateNow();
@@ -175,14 +175,36 @@ async function salvarMateriais(btn) {
 // ═══════════════════════════════════════════════════════════════════════
 let _matIndivRowSeq = 0;
 
+// Alterna entre as abas "Campos guiados" e "Colar texto" dentro do modal
+// de Cadastro Individual de Materiais (o antigo modal separado de Cadastro
+// em Lote foi incorporado aqui como uma segunda aba).
+function matIndivSwitchTab(tab) {
+  const isCampos = tab !== 'texto';
+  document.getElementById('mat-indiv-panel-campos').style.display = isCampos ? '' : 'none';
+  document.getElementById('mat-indiv-panel-texto').style.display = isCampos ? 'none' : '';
+  document.getElementById('mat-indiv-tab-campos')?.classList.toggle('btn-primary', isCampos);
+  document.getElementById('mat-indiv-tab-texto')?.classList.toggle('btn-primary', !isCampos);
+}
+
 function abrirCadastroMaterialIndividual() {
   const container = document.getElementById('mat-indiv-rows');
   if (!container) return;
   container.innerHTML = '';
   _matIndivRowSeq = 0;
   _addMaterialIndivRow();
+  matIndivSwitchTab('campos');
   openModal('modal-materiais-individual');
   setTimeout(() => container.querySelector('input')?.focus(), 50);
+}
+
+// Abre o modal de Cadastro Individual de Materiais já na aba "Colar texto",
+// opcionalmente pré-preenchida (usado pelos atalhos de "material sem
+// cadastro" espalhados pelo sistema — Dashboard, Analítico, Inventário).
+function abrirCadastroMaterialColarTexto(prefill) {
+  matIndivSwitchTab('texto');
+  openModal('modal-materiais-individual');
+  setVal('materiais-text', prefill || '');
+  _pendPadronizacaoFocarFinal('materiais-text');
 }
 
 function _addMaterialIndivRow() {
@@ -469,7 +491,7 @@ async function handleMateriaisImport(event) {
       _lstepSet('mat-save', 'done'); _lbarSet(100);
       renderAll();
       updateImportPrereqUI();
-      closeModal('modal-materiais');
+      closeModal('modal-materiais-individual');
       hideLoadingOverlay('Materiais importados');
       if (typeof loadingHideSteps === 'function') loadingHideSteps();
       toast(`${items.length} material(is) importado(s)`);
@@ -551,6 +573,27 @@ async function limparMateriais() {
   toast('Todos os materiais foram excluídos', 'error');
 }
 
+// Exporta a Padronização de Materiais para uma planilha Excel (.xlsx),
+// somente com as colunas usadas na reimportação (ver parseMateriaisRows) —
+// "Criado em" e campos internos (id/importId) ficam de fora de propósito,
+// já que são regenerados automaticamente ao reimportar.
+function exportarMateriaisExcel() {
+  if (!state.materiais.length) { toast('Nenhum material cadastrado para exportar', 'error'); return; }
+  if (typeof XLSX === 'undefined') { toast('Biblioteca XLSX não carregada.', 'error'); return; }
+
+  const rows = state.materiais.map(m => ({
+    'Origem': m.origem || '',
+    'Grupo SAP': m.alias || '',
+    'Categoria': m.categoria || ''
+  }));
+
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Materiais');
+  XLSX.writeFile(wb, `padronizacao_materiais_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  toast(`${rows.length} material(is) exportado(s)`);
+}
+
 
 async function salvarFiliais(btn) {
   const text = val('filiais-text');
@@ -563,7 +606,7 @@ async function salvarFiliais(btn) {
   _setBtnLoading(btn, true, 'Salvando...');
   upsertFiliais(imported);
   setVal('filiais-text', '');
-  closeModal('modal-filiais');
+  closeModal('modal-filiais-individual');
   _setBtnLoading(btn, false);
   reaplicarPadronizacaoCentrais();
   await persistStateNow();
@@ -577,14 +620,36 @@ async function salvarFiliais(btn) {
 // ═══════════════════════════════════════════════════════════════════════
 let _filIndivRowSeq = 0;
 
+// Alterna entre as abas "Campos guiados" e "Colar texto" dentro do modal
+// de Cadastro Individual de Centrais (o antigo modal separado de Cadastro
+// em Lote foi incorporado aqui como uma segunda aba).
+function filIndivSwitchTab(tab) {
+  const isCampos = tab !== 'texto';
+  document.getElementById('fil-indiv-panel-campos').style.display = isCampos ? '' : 'none';
+  document.getElementById('fil-indiv-panel-texto').style.display = isCampos ? 'none' : '';
+  document.getElementById('fil-indiv-tab-campos')?.classList.toggle('btn-primary', isCampos);
+  document.getElementById('fil-indiv-tab-texto')?.classList.toggle('btn-primary', !isCampos);
+}
+
 function abrirCadastroFilialIndividual() {
   const container = document.getElementById('filial-indiv-rows');
   if (!container) return;
   container.innerHTML = '';
   _filIndivRowSeq = 0;
   _addFilialIndivRow();
+  filIndivSwitchTab('campos');
   openModal('modal-filiais-individual');
   setTimeout(() => container.querySelector('input')?.focus(), 50);
+}
+
+// Abre o modal de Cadastro Individual de Centrais já na aba "Colar texto",
+// opcionalmente pré-preenchida (usado pelo atalho de "central sem
+// cadastro" no painel de pendências de padronização — Dashboard).
+function abrirCadastroFilialColarTexto(prefill) {
+  filIndivSwitchTab('texto');
+  openModal('modal-filiais-individual');
+  setVal('filiais-text', prefill || '');
+  _pendPadronizacaoFocarFinal('filiais-text');
 }
 
 function _addFilialIndivRow() {
@@ -806,7 +871,7 @@ async function handleFiliaisImport(event) {
       await persistStateNow();
       _lstepSet('fil-save', 'done'); _lbarSet(100);
       renderAll();
-      closeModal('modal-filiais');
+      closeModal('modal-filiais-individual');
       hideLoadingOverlay('Centrais importadas');
       if (typeof loadingHideSteps === 'function') loadingHideSteps();
       toast(`${items.length} filial(is) importada(s)`);
@@ -880,6 +945,28 @@ async function limparFiliais() {
   renderAll();
   updateImportPrereqUI();
   toast('Todas as filiais foram excluídas', 'error');
+}
+
+// Exporta a Padronização de Centrais para uma planilha Excel (.xlsx),
+// somente com as colunas usadas na reimportação (ver parseFiliaisRows) —
+// "Criado em" e campos internos (importId) ficam de fora de propósito, já
+// que são regenerados automaticamente ao reimportar.
+function exportarFiliaisExcel() {
+  if (!state.filiais.length) { toast('Nenhuma central cadastrada para exportar', 'error'); return; }
+  if (typeof XLSX === 'undefined') { toast('Biblioteca XLSX não carregada.', 'error'); return; }
+
+  const rows = state.filiais.map(f => ({
+    'Origem': f.origem || '',
+    'Sigla': f.alias || '',
+    'CNPJ': f.cnpj || '',
+    'Regional': f.regional || ''
+  }));
+
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Centrais');
+  XLSX.writeFile(wb, `padronizacao_centrais_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  toast(`${rows.length} central(is) exportada(s)`);
 }
 
 // ═══════════════════════════════════════════════════════════
