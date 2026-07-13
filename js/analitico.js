@@ -1040,8 +1040,8 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
               : (snapshot.pesoIniAusente ? `<span class='absent-badge' data-absent-tooltip='${buildAbsentTooltip(absentNearest)}' style='cursor:help'>AUSENTE</span>` : snapshot.dtIniLabel)
           }</td>
           <td class="td-mono" style="color:${(matSemCadastro || snapshot.pesoIniAusente) ? 'var(--text3)' : 'var(--text)'}">${(matSemCadastro || snapshot.pesoIniAusente) ? '—' : fmtKg(snapshot.pesoIni)}</td>
-          <td>${buildAnaliticoDetailBreakdown(entEntries, snapshot.totalEnt, 'var(--green)', 'Entradas', localEntCount)}</td>
-          <td>${buildAnaliticoDetailBreakdown(saiEntries, snapshot.totalSai, 'var(--red)', 'Saídas', localSaiCount)}</td>
+          <td>${buildAnaliticoDetailBreakdown(entEntries, snapshot.totalEnt, 'var(--green)', 'Entradas', localEntCount, mat)}</td>
+          <td>${buildAnaliticoDetailBreakdown(saiEntries, snapshot.totalSai, 'var(--red)', 'Saídas', localSaiCount, mat)}</td>
           <td class="td-mono" style="color:var(--text2);font-size:11px">${
             snapshot.pesoFimAusente
               ? `<span class='absent-badge' data-absent-tooltip='${buildAbsentTooltip(absentNearest)}' style='cursor:help'>AUSENTE</span>`

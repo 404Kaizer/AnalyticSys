@@ -1156,8 +1156,9 @@ function movBadgeClass(cod) {
   for (let i = 0; i < c.length; i++) h = (h * 31 + c.charCodeAt(i)) >>> 0;
   return MOV_BADGE_FALLBACK_CLASSES[h % MOV_BADGE_FALLBACK_CLASSES.length];
 }
-function movBadgeHtml(cod) {
-  return `<span class="mv-badge ${movBadgeClass(cod)}">${escapeHtml(cod || '—')}</span>`;
+function movBadgeHtml(cod, size) {
+  const sizeClass = size === 'sm' ? ' mv-badge-sm' : '';
+  return `<span class="mv-badge ${movBadgeClass(cod)}${sizeClass}">${escapeHtml(cod || '—')}</span>`;
 }
 function movSummaryChipHtml(cod, count) {
   return `<span class="mv-badge mv-badge-chip ${movBadgeClass(cod)}">${escapeHtml(cod || '—')} <b>${count}</b></span>`;
@@ -1170,7 +1171,7 @@ const analiticoDetailState = {
 
 window.__analiticoDetailCache = new Map();
 
-function buildAnaliticoDetailBreakdown(entries, total, colorVar, title, localCount = 0) {
+function buildAnaliticoDetailBreakdown(entries, total, colorVar, title, localCount = 0, mat = '') {
   if (!entries.length) {
     return `<span class="analitico-detail-empty">—</span>`;
   }
@@ -1185,6 +1186,7 @@ function buildAnaliticoDetailBreakdown(entries, total, colorVar, title, localCou
       data-title="${escapeHtml(title)}"
       data-color="${escapeHtml(colorVar)}"
       data-local-count="${localCount}"
+      data-mat="${escapeHtml(mat)}"
       title="Clique para ver detalhes">
       <span class="bdm-total">${fmtKg(total)}</span>
       <i class="ti ti-table-options bdm-icon"></i>
@@ -1192,6 +1194,62 @@ function buildAnaliticoDetailBreakdown(entries, total, colorVar, title, localCou
 }
 
 // ── Breakdown Modal ─────────────────────────────────────────
+// ── Transferência entre centros (861/862): índice de pares ──────────────
+// 862 (saída no centro de compra) e 861 (entrada no centro destino) são
+// gerados juntos pelo SAP, com a MESMA referência (a NF de transferência
+// gerada pelo 862), mesmo usuário, mesma data de lançamento e mesmo peso —
+// só mudam a central e o sinal do peso. Dado um registro 861 ou 862,
+// localizamos o registro do código complementar com a mesma referência +
+// material, pra exibir "qual é o movimento relacionado" na mesma linha do
+// modal de Movimentações SAP.
+//
+// state.sap pode ter 600k+ registros (ver getSapDuplicateKeys) — nada de
+// .find() linear a cada linha do modal. Constrói uma vez um Map de
+// "código-alvo|material|referência" → central, com cache invalidado junto
+// com o resto do índice SAP (invalidateSapIndex, abaixo).
+let _transferPairCache = null;
+let _transferPairCacheVersion = -1;
+
+function _invalidateTransferPairCache() {
+  _transferPairCache = null;
+  _transferPairCacheVersion = -1;
+}
+
+function getTransferPairIndex() {
+  const currentVersion = (state.sap || []).length;
+  if (_transferPairCache && _transferPairCacheVersion === currentVersion) {
+    return _transferPairCache;
+  }
+  const idx = new Map();
+  (state.sap || []).forEach(s => {
+    const cod = normMov(s.movimento);
+    if (cod !== '861' && cod !== '862') return;
+    const ref = (s.ref && String(s.ref).trim()) ? String(s.ref).trim() : String(s.documento || '').trim();
+    if (!ref) return;
+    const key = `${cod}|${s.material || ''}|${ref.toUpperCase()}`;
+    // Referência de transferência é única — em tese só existe 1 registro
+    // por chave. Mantém o primeiro em caso de dado inesperado.
+    if (!idx.has(key)) idx.set(key, s.central || '—');
+  });
+  _transferPairCache = idx;
+  _transferPairCacheVersion = currentVersion;
+  return _transferPairCache;
+}
+
+/**
+ * Dado um registro 861 ou 862 (código + referência + material), retorna o
+ * código complementar e a central onde ele foi lançado — ou null se não
+ * houver correspondência (dado incompleto/fora do que foi importado).
+ */
+function findTransferPairCentral(cod, ref, mat) {
+  const targetCod = cod === '861' ? '862' : cod === '862' ? '861' : null;
+  if (!targetCod || !ref) return null;
+  const idx = getTransferPairIndex();
+  const key = `${targetCod}|${mat || ''}|${String(ref).trim().toUpperCase()}`;
+  const central = idx.get(key);
+  return central ? { cod: targetCod, central } : null;
+}
+
 function openBreakdownModal(trigger) {
   const overlay   = document.getElementById('breakdown-modal-overlay');
   const titleEl   = document.getElementById('bdm-title');
@@ -1205,6 +1263,7 @@ function openBreakdownModal(trigger) {
   const title      = trigger.dataset.title  || '';
   const colorVar   = trigger.dataset.color  || 'var(--text)';
   const localCount = Number(trigger.dataset.localCount || 0);
+  const mat        = trigger.dataset.mat    || '';
 
   titleEl.textContent = title + ' — Movimentações';
 
@@ -1249,9 +1308,30 @@ function openBreakdownModal(trigger) {
     const signIcon = value >= 0
       ? '<i class="ti ti-circle-arrow-up" title="Sobra" style="font-size:11px;vertical-align:middle;margin-right:2px"></i>'
       : '<i class="ti ti-circle-arrow-down" title="Desfalque" style="font-size:11px;vertical-align:middle;margin-right:2px"></i>';
+
+    // Transferência entre centros (861/862): mostra na mesma linha qual é
+    // o movimento relacionado (código complementar) e em qual central ele
+    // está lançado — ver findTransferPairCentral.
+    let pairHtml = '';
+    if (cod === '861' || cod === '862') {
+      const pair = findTransferPairCentral(cod, ref, mat);
+      if (pair) {
+        const direcao = cod === '861' ? 'de' : 'para';
+        pairHtml = `<div class="mv-pair-note" title="Movimento relacionado desta transferência">
+          <i class="ti ti-arrows-right-left"></i>
+          ${movBadgeHtml(pair.cod, 'sm')}
+          <span class="mv-pair-central">${direcao} ${escapeHtml(pair.central)}</span>
+        </div>`;
+      } else {
+        pairHtml = `<div class="mv-pair-note mv-pair-note-missing" title="Nenhum movimento complementar encontrado no SAP importado">
+          <i class="ti ti-help-circle"></i> sem par encontrado
+        </div>`;
+      }
+    }
+
     return `<tr>
       <td>${movBadgeHtml(cod)}</td>
-      <td class="td-muted">${escapeHtml(ref || '—')}</td>
+      <td class="td-muted">${escapeHtml(ref || '—')}${pairHtml}</td>
       <td class="td-muted">${escapeHtml(dtLanc || '—')}</td>
       <td class="td-muted">${escapeHtml(usuario || '—')}</td>
       <td class="td-mono" style="color:${colorVar};text-align:right;font-weight:600">${signIcon}${fmtKg(Math.abs(value))}</td>
@@ -2806,6 +2886,7 @@ function invalidateSapIndex() {
   _sapByCentralMat.clear();
   _sapByCentral.clear();
   _invalidateSapDupCache();        // invalida cache de duplicatas
+  _invalidateTransferPairCache();  // invalida cache de pares 861/862
   invalidateSearchIndex('sap');
   if (typeof _ausInvalidateCache === 'function') _ausInvalidateCache();
 }
