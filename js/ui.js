@@ -1171,7 +1171,7 @@ const analiticoDetailState = {
 
 window.__analiticoDetailCache = new Map();
 
-function buildAnaliticoDetailBreakdown(entries, total, colorVar, title, localCount = 0, mat = '', central = '') {
+function buildAnaliticoDetailBreakdown(entries, total, colorVar, title, localCount = null, mat = '', central = '') {
   if (!entries.length) {
     return `<span class="analitico-detail-empty">—</span>`;
   }
@@ -1185,7 +1185,7 @@ function buildAnaliticoDetailBreakdown(entries, total, colorVar, title, localCou
       data-entries="${encoded}"
       data-title="${escapeHtml(title)}"
       data-color="${escapeHtml(colorVar)}"
-      data-local-count="${localCount}"
+      data-local-count="${localCount === null ? '' : localCount}"
       data-mat="${escapeHtml(mat)}"
       data-central="${escapeHtml(central)}"
       title="Clique para ver detalhes">
@@ -1325,19 +1325,34 @@ function openBreakdownModal(trigger) {
   const overlay   = document.getElementById('breakdown-modal-overlay');
   const titleEl   = document.getElementById('bdm-title');
   const summaryEl = document.getElementById('bdm-summary');
+  const searchEl  = document.getElementById('bdm-search-input');
   const tbody     = document.getElementById('bdm-tbody');
   const totalEl   = document.getElementById('bdm-total-val');
+  const labelEl   = document.getElementById('bdm-footer-label');
   if (!overlay || !titleEl || !tbody || !totalEl) return;
 
   let entries = [];
   try { entries = JSON.parse(decodeURIComponent(trigger.dataset.entries || '[]')); } catch(e) {}
   const title      = trigger.dataset.title  || '';
   const colorVar   = trigger.dataset.color  || 'var(--text)';
-  const localCount = Number(trigger.dataset.localCount || 0);
+  const localCountRaw = trigger.dataset.localCount;
+  const localCount = localCountRaw === '' || localCountRaw == null ? null : Number(localCountRaw);
   const mat        = trigger.dataset.mat    || '';
   const central    = trigger.dataset.central || '';
 
   titleEl.textContent = title + ' — Movimentações';
+
+  // ── Ordena por Dt. Lançamento, mais recente primeiro ─────────────────────
+  // Registros sem data parseável (raro — dado incompleto) vão pro final,
+  // não interferem na ordenação dos que têm data.
+  entries.sort((a, b) => {
+    const dtA = parseDate((a[5] && a[5].dtLanc) || a[4] || '');
+    const dtB = parseDate((b[5] && b[5].dtLanc) || b[4] || '');
+    if (!dtA && !dtB) return 0;
+    if (!dtA) return 1;
+    if (!dtB) return -1;
+    return dtB - dtA;
+  });
 
   // ── Resumo fixo (sempre visível, abaixo do título) ───────────────────────
   // 1) Quais códigos de MOVIMENTO compõem o total e quantos registros cada
@@ -1346,6 +1361,10 @@ function openBreakdownModal(trigger) {
   //    quantidade de registros cadastrados na página local (Entradas/Saídas)
   //    para o MESMO material + central + período — ajuda a identificar
   //    divergência de cadastro sem precisar abrir a página separadamente.
+  //    Quando o chamador não tem esse dado (localCount === null — caso do
+  //    Inventário e do detalhamento por dia), a comparação é omitida em vez
+  //    de mostrar um "0 registros" enganoso. Sempre reflete o TOTAL real
+  //    (não muda com a busca abaixo).
   if (summaryEl) {
     const codCounts = new Map();
     entries.forEach(([cod]) => codCounts.set(cod, (codCounts.get(cod) || 0) + 1));
@@ -1354,12 +1373,17 @@ function openBreakdownModal(trigger) {
       .map(([cod, n]) => movSummaryChipHtml(cod, n))
       .join('');
 
-    const sapCount     = entries.length;
-    const bateComLocal = sapCount === localCount;
-    const compareIcon  = bateComLocal
-      ? '<i class="ti ti-circle-check" style="color:var(--green)" title="Contagens batem"></i>'
-      : '<i class="ti ti-alert-triangle" style="color:var(--amber)" title="Contagens divergem"></i>';
+    const sapCount = entries.length;
     const localLabel = title === 'Saídas' ? 'registro(s) na página Saídas' : 'registro(s) na página Entradas';
+    const registrosHtml = localCount === null
+      ? `<b>${sapCount}</b> no SAP`
+      : (() => {
+          const bateComLocal = sapCount === localCount;
+          const compareIcon  = bateComLocal
+            ? '<i class="ti ti-circle-check" style="color:var(--green)" title="Contagens batem"></i>'
+            : '<i class="ti ti-alert-triangle" style="color:var(--amber)" title="Contagens divergem"></i>';
+          return `<b>${sapCount}</b> no SAP &nbsp;·&nbsp; <b>${localCount}</b> ${localLabel} ${compareIcon}`;
+        })();
 
     summaryEl.innerHTML = `
       <div class="bdm-summary-row">
@@ -1368,18 +1392,18 @@ function openBreakdownModal(trigger) {
       </div>
       <div class="bdm-summary-row">
         <span class="bdm-summary-label">Registros</span>
-        <span class="bdm-summary-compare">
-          <b>${sapCount}</b> no SAP &nbsp;·&nbsp; <b>${localCount}</b> ${localLabel} ${compareIcon}
-        </span>
+        <span class="bdm-summary-compare">${registrosHtml}</span>
       </div>`;
   }
 
-  let grandTotal = 0;
-  tbody.innerHTML = entries.map(([cod, value, ref, usuario, dtLanc, extra]) => {
-    grandTotal += value;
-    const signIcon = value >= 0
-      ? '<i class="ti ti-circle-arrow-up" title="Sobra" style="font-size:11px;vertical-align:middle;margin-right:2px"></i>'
-      : '<i class="ti ti-circle-arrow-down" title="Desfalque" style="font-size:11px;vertical-align:middle;margin-right:2px"></i>';
+  // ── Pré-computa HTML + texto de busca de cada linha, uma vez ─────────────
+  // (inclui o par 861/862/309 relacionado no texto de busca, já que ele
+  // aparece visualmente na linha — buscar "AAA1" deve achar a linha cujo
+  // par de transferência está lançado lá, por exemplo)
+  const rows = entries.map(([cod, value, ref, usuario, dtLanc, extra]) => {
+    const dtDoc     = (extra && extra.dtDoc)  || '';
+    const dtLancRaw = (extra && extra.dtLanc) || dtLanc || '';
+    const dtReg     = (extra && extra.dtReg)  || '';
 
     // Transferência entre centros (861/862): mostra na mesma linha qual é
     // o movimento relacionado (código complementar) e em qual central ele
@@ -1388,6 +1412,7 @@ function openBreakdownModal(trigger) {
     // material relacionado (mesmo código, sinal oposto) — ver
     // findMaterialTransferPair.
     let pairHtml = '';
+    let pairSearchText = '';
     if (cod === '861' || cod === '862') {
       const pair = findTransferPairCentral(cod, ref, mat);
       if (pair) {
@@ -1397,6 +1422,7 @@ function openBreakdownModal(trigger) {
           ${movBadgeHtml(pair.cod, 'sm')}
           <span class="mv-pair-value">${direcao} ${escapeHtml(pair.central)}</span>
         </div>`;
+        pairSearchText = `${pair.cod} ${pair.central}`;
       } else {
         pairHtml = `<div class="mv-pair-note mv-pair-note-missing" title="Nenhum movimento complementar encontrado no SAP importado">
           <i class="ti ti-help-circle"></i> sem par encontrado
@@ -1410,6 +1436,7 @@ function openBreakdownModal(trigger) {
           <i class="ti ti-replace"></i>
           <span class="mv-pair-value">${direcao} ${escapeHtml(pair.material)}</span>
         </div>`;
+        pairSearchText = pair.material;
       } else {
         pairHtml = `<div class="mv-pair-note mv-pair-note-missing" title="Nenhum material complementar encontrado no SAP importado">
           <i class="ti ti-help-circle"></i> sem par encontrado
@@ -1417,22 +1444,61 @@ function openBreakdownModal(trigger) {
       }
     }
 
-    return `<tr>
+    const signIcon = value >= 0
+      ? '<i class="ti ti-circle-arrow-up" title="Sobra" style="font-size:11px;vertical-align:middle;margin-right:2px"></i>'
+      : '<i class="ti ti-circle-arrow-down" title="Desfalque" style="font-size:11px;vertical-align:middle;margin-right:2px"></i>';
+
+    const html = `<tr>
       <td>${movBadgeHtml(cod)}</td>
-      <td class="td-muted">${escapeHtml(ref || '—')}${pairHtml}</td>
-      <td class="td-muted">${escapeHtml((extra && extra.dtDoc) || '—')}</td>
-      <td class="td-muted">${escapeHtml((extra && extra.dtLanc) || dtLanc || '—')}</td>
-      <td class="td-muted">${escapeHtml((extra && extra.dtReg) || '—')}</td>
       <td class="td-muted">${escapeHtml(usuario || '—')}</td>
+      <td class="td-muted">${escapeHtml(ref || '—')}${pairHtml}</td>
+      <td class="td-muted">${escapeHtml(dtDoc || '—')}</td>
+      <td class="td-muted">${escapeHtml(dtLancRaw || '—')}</td>
+      <td class="td-muted">${escapeHtml(dtReg || '—')}</td>
       <td class="td-mono" style="color:${colorVar};text-align:right;font-weight:600">${signIcon}${fmtKg(Math.abs(value))}</td>
     </tr>`;
-  }).join('');
 
-  const totalIcon = grandTotal >= 0
-    ? '<i class="ti ti-circle-arrow-up" title="Sobra" style="font-size:12px;vertical-align:middle;margin-right:3px"></i>'
-    : '<i class="ti ti-circle-arrow-down" title="Desfalque" style="font-size:12px;vertical-align:middle;margin-right:3px"></i>';
-  totalEl.innerHTML = totalIcon + fmtKg(Math.abs(grandTotal));
-  totalEl.style.color = colorVar;
+    const searchText = [cod, ref, usuario, dtDoc, dtLancRaw, dtReg, pairSearchText]
+      .filter(Boolean).join(' ').toLowerCase();
+
+    return { value, html, searchText };
+  });
+
+  // ── Renderiza a tabela + total, filtrando pela busca (se houver) ─────────
+  function renderRows(term) {
+    const t = (term || '').trim().toLowerCase();
+    const filtered = t ? rows.filter(r => r.searchText.includes(t)) : rows;
+
+    tbody.innerHTML = filtered.length
+      ? filtered.map(r => r.html).join('')
+      : `<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:22px 16px">
+           Nenhum registro encontrado${t ? ` para "${escapeHtml(term.trim())}"` : ''}
+         </td></tr>`;
+
+    const subtotal = filtered.reduce((sum, r) => sum + r.value, 0);
+    const totalIcon = subtotal >= 0
+      ? '<i class="ti ti-circle-arrow-up" title="Sobra" style="font-size:12px;vertical-align:middle;margin-right:3px"></i>'
+      : '<i class="ti ti-circle-arrow-down" title="Desfalque" style="font-size:12px;vertical-align:middle;margin-right:3px"></i>';
+    totalEl.innerHTML = totalIcon + fmtKg(Math.abs(subtotal));
+    totalEl.style.color = colorVar;
+    if (labelEl) {
+      labelEl.textContent = t
+        ? `Total (${filtered.length} filtrado${filtered.length === 1 ? '' : 's'})`
+        : 'Total';
+    }
+  }
+
+  renderRows('');
+
+  // Reseta o campo e reatribui o listener (clona o nó pra descartar
+  // listeners de aberturas anteriores do modal, sem precisar guardar
+  // referência externa).
+  if (searchEl) {
+    searchEl.value = '';
+    const freshSearchEl = searchEl.cloneNode(true);
+    searchEl.parentNode.replaceChild(freshSearchEl, searchEl);
+    freshSearchEl.addEventListener('input', () => renderRows(freshSearchEl.value));
+  }
 
   overlay.classList.add('open');
   overlay.setAttribute('aria-hidden', 'false');
@@ -2464,8 +2530,8 @@ function buildAnaliticoDetailHtml(payload) {
           <td class="day-col" style="color:var(--text3)">${escapeHtml(day.dateLabel)}</td>
           <td>${emptyCell()}</td>
           <td>${saldoCell(day.initialStock, day.initialIsEstimated, 'Est. Inicial', 'Est. Inicial estimado')}</td>
-          <td data-col="ent">${temSap ? buildAnaliticoDetailBreakdown(day.entEntries, day.totalEnt, 'var(--green)', 'Entradas') : emptyCell()}</td>
-          <td data-col="sai">${temSap ? buildAnaliticoDetailBreakdown(day.saiEntries, day.totalSai, 'var(--red)', 'Saídas') : emptyCell()}</td>
+          <td data-col="ent">${temSap ? buildAnaliticoDetailBreakdown(day.entEntries, day.totalEnt, 'var(--green)', 'Entradas', null, payload.material, payload.central) : emptyCell()}</td>
+          <td data-col="sai">${temSap ? buildAnaliticoDetailBreakdown(day.saiEntries, day.totalSai, 'var(--red)', 'Saídas', null, payload.material, payload.central) : emptyCell()}</td>
           <td>${saldoCell(day.finalStock, day.finalIsEstimated, 'Est. Final', 'Est. Final estimado')}</td>
           <td><span class="td-mono" style="color:var(--purple)">${fmtKg(day.theoreticalStock ?? 0)}</span></td>
           <td>${varCellSem}</td>
@@ -2530,8 +2596,8 @@ function buildAnaliticoDetailHtml(payload) {
         <td class="day-col">${escapeHtml(day.dateLabel)}</td>
         <td>${lancCell}</td>
         <td>${iniCell}</td>
-        <td data-col="ent">${buildAnaliticoDetailBreakdown(day.entEntries, day.totalEnt, 'var(--green)', 'Entradas')}</td>
-        <td data-col="sai">${buildAnaliticoDetailBreakdown(day.saiEntries, day.totalSai, 'var(--red)', 'Saídas')}</td>
+        <td data-col="ent">${buildAnaliticoDetailBreakdown(day.entEntries, day.totalEnt, 'var(--green)', 'Entradas', null, payload.material, payload.central)}</td>
+        <td data-col="sai">${buildAnaliticoDetailBreakdown(day.saiEntries, day.totalSai, 'var(--red)', 'Saídas', null, payload.material, payload.central)}</td>
         <td>${realCell}</td>
         <td>${teoCell}</td>
         <td>${varCell}</td>
