@@ -2646,8 +2646,8 @@ td.var-cell-zero .ti-circle-check     { color: var(--text3); }
   border-radius: var(--radius-xl);
   box-shadow: 0 24px 64px rgba(0,0,0,0.55), 0 0 0 1px var(--border);
   width: 100%;
-  max-width: min(860px, 95vw);
-  max-height: 85vh;
+  max-width: 520px;
+  max-height: 80vh;
   display: flex;
   flex-direction: column;
   animation: popIn 0.16s ease;
@@ -2686,130 +2686,10 @@ td.var-cell-zero .ti-circle-check     { color: var(--text3); }
   text-overflow: ellipsis;
 }
 
-/* ── Campo de busca ── */
-.bdm-search {
-  padding: 10px 20px;
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-.bdm-search-wrap {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  background: var(--bg3);
-  border: 1px solid var(--border2);
-  border-radius: var(--radius);
-  padding: 6px 10px;
-}
-.bdm-search-wrap i {
-  font-size: 13px;
-  color: var(--text3);
-}
-.bdm-search-input {
-  background: none;
-  border: none;
-  outline: none;
-  font-size: 12.5px;
-  color: var(--text);
-  font-family: var(--font);
-  width: 100%;
-}
-.bdm-search-input::placeholder { color: var(--text3); }
-
 .bdm-body {
   flex: 1;
   overflow-y: auto;
   overflow-x: auto;
-}
-
-/* ── Resumo fixo (movimentos considerados + comparação SAP × local) ── */
-.bdm-summary {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 12px 20px;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg3);
-  flex-shrink: 0;
-}
-.bdm-summary-row {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-.bdm-summary-label {
-  font-size: 9.5px;
-  font-family: var(--mono);
-  letter-spacing: 0.10em;
-  text-transform: uppercase;
-  color: var(--text3);
-}
-.bdm-summary-codes {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.bdm-summary-compare {
-  font-size: 12px;
-  color: var(--text2);
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  flex-wrap: wrap;
-}
-.bdm-summary-compare b {
-  color: var(--text);
-  font-family: var(--mono);
-}
-
-/* ── Badge colorido por código de MOVIMENTO ── */
-.mv-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 2px 8px;
-  border-radius: 5px;
-  font-family: var(--mono);
-  font-size: 11px;
-  font-weight: 700;
-  border: 1px solid transparent;
-  white-space: nowrap;
-  line-height: 1.7;
-}
-.mv-badge-chip {
-  padding: 4px 10px;
-  font-size: 11.5px;
-}
-.mv-badge-sm {
-  padding: 1px 6px;
-  font-size: 9.5px;
-}
-.mv-badge-green  { background: var(--green-bg);  color: var(--green);  border-color: var(--green-border); }
-.mv-badge-teal   { background: var(--teal-bg);   color: var(--teal);   border-color: var(--teal-border); }
-.mv-badge-red    { background: var(--red-bg);    color: var(--red);    border-color: var(--red-border); }
-.mv-badge-purple { background: var(--purple-bg); color: var(--purple); border-color: var(--purple-border); }
-.mv-badge-amber  { background: var(--amber-bg);  color: var(--amber);  border-color: var(--amber-border); }
-
-/* ── Nota de movimento relacionado (transferência entre centros 861/862) ── */
-.mv-pair-note {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  margin-top: 4px;
-  font-size: 10.5px;
-  white-space: nowrap;
-}
-.mv-pair-note .ti {
-  font-size: 11px;
-  color: var(--text3);
-}
-.mv-pair-value {
-  color: var(--text3);
-  font-family: var(--mono);
-}
-.mv-pair-note-missing {
-  color: var(--text3);
-  font-style: italic;
 }
 
 
@@ -9230,57 +9110,10 @@ td:has(.lanc-central-edit:focus) {
 .an-macro-toggle-btn.collapsed i { transform: rotate(180deg); }
 
 /* ── Visão Geral (reformulada) — KPIs executivos e gráficos agregados ── */
-
-/* Hero: Variação Total + Custo Total — os 2 KPIs mais importantes */
-.dg-vg-hero-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-}
-@media (max-width: 720px) { .dg-vg-hero-grid { grid-template-columns: 1fr; } }
-.dg-vg-hero-card {
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: 22px 26px;
-  position: relative;
-  overflow: hidden;
-}
-.dg-vg-hero-card::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0;
-  height: 3px;
-}
-.dg-vg-hero-card.hero-red::before   { background: var(--red); }
-.dg-vg-hero-card.hero-amber::before { background: var(--amber); }
-.dg-vg-hero-card.hero-teal::before  { background: var(--teal); }
-.dg-vg-hero-label {
-  font-size: 11.5px;
-  font-family: var(--mono);
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  color: var(--text3);
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 8px;
-}
-.dg-vg-hero-value {
-  font-size: 40px;
-  font-weight: 700;
-  font-family: var(--mono);
-  letter-spacing: -0.03em;
-  line-height: 1;
-  margin-bottom: 8px;
-}
-.dg-vg-hero-card.hero-red   .dg-vg-hero-value { color: var(--red); }
-.dg-vg-hero-card.hero-amber .dg-vg-hero-value { color: var(--amber); }
-.dg-vg-hero-card.hero-teal  .dg-vg-hero-value { color: var(--teal); }
-.dg-vg-hero-sub {
-  font-size: 11.5px;
-  color: var(--text3);
-}
+/* Resumo do Período: usa direto as classes inv-kpi-featured-row (Variação/
+   Custo Total, maiores, em cima) e inv-kpi-secondary (Est.Inicial/
+   Entradas/Saídas/Est.Final, menores, embaixo) — mesmo padrão visual do
+   Inventário (ver components.css), sem o wrapper "Destaque do Período". */
 
 .dg-vg-extremos-grid {
   display: grid;

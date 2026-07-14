@@ -603,8 +603,8 @@
         <div class="dg-tab-pane active" id="dg-pane-visao">
 
         <!-- 1. Hero: Variação Total + Custo Total — os KPIs mais importantes, em evidência -->
-        <div class="section-title" style="margin:28px 0 14px"><i class="ti ti-report-money" style="font-size:13px;margin-right:6px"></i>Resumo do Período — Variação e Custo</div>
-        <div id="dg-vg-kpis-hero" class="dg-vg-hero-grid" style="margin-bottom:14px"></div>
+        <div class="section-title" style="margin:28px 0 14px"><i class="ti ti-report-money" style="font-size:13px;margin-right:6px"></i>Resumo do Período — Estoque, Movimentação e Variação</div>
+        <div id="dg-vg-kpis-hero" class="inv-kpi-groups" style="margin-bottom:14px"></div>
 
         <!-- 2b. Os dois donuts de Saúde Geral (Centrais e Materiais), grandes e em evidência -->
         <div class="dg-giro-dual-grid" style="margin-bottom:14px">
@@ -1597,10 +1597,7 @@
                 <div class="inv-kpi-label">Est. Final</div>
                 <div class="inv-kpi-value" id="inv-kpi-fin-v">—</div>
                 <div class="inv-kpi-unit">kg</div>
-                <div style="display:flex;flex-wrap:wrap;gap:6px">
-                  <div id="inv-kpi-fin-missing"></div>
-                  <div id="inv-kpi-fin-fallback"></div>
-                </div>
+                <div id="inv-kpi-fin-missing"></div>
               </div>
             </div>
           </div>
@@ -1728,36 +1725,17 @@
             <span id="imft-varzero-label">Ocultar Variação 0</span>
           </button>
 
-          <!-- Filtro "Ausência de Estoque" — dropdown de seleção única
-               (Todos / Só Est. Inicial Ausente / Só Est. Final Ausente /
-               Sem Ausência). Substitui os antigos dois botões separados. -->
-          <div class="micro-filter-group" id="imfg-ausencia">
-            <button class="micro-filter-trigger" id="imft-ausencia" onclick="invToggleAusenciaDropdown()" title="Filtra por ausência de Estoque Inicial/Final">
-              <i class="ti ti-alert-triangle" id="imft-ausencia-icon"></i>
-              <span id="imft-ausencia-label">Ausência de Estoque</span>
-              <i class="ti ti-chevron-down micro-filter-chev" id="imfc-ausencia"></i>
-            </button>
-            <div class="micro-filter-dropdown" id="imfd-ausencia">
-              <div class="micro-filter-options">
-                <div class="micro-filter-option micro-filter-option--radio" data-val="false" onclick="invSetAusencia(false)">
-                  <span class="micro-filter-option-label">Todos</span>
-                  <i class="ti ti-check micro-filter-option-check"></i>
-                </div>
-                <div class="micro-filter-option micro-filter-option--radio" data-val="ini" onclick="invSetAusencia('ini')">
-                  <span class="micro-filter-option-label">Só Est. Inicial Ausente</span>
-                  <i class="ti ti-check micro-filter-option-check"></i>
-                </div>
-                <div class="micro-filter-option micro-filter-option--radio" data-val="fim" onclick="invSetAusencia('fim')">
-                  <span class="micro-filter-option-label">Só Est. Final Ausente</span>
-                  <i class="ti ti-check micro-filter-option-check"></i>
-                </div>
-                <div class="micro-filter-option micro-filter-option--radio" data-val="sem" onclick="invSetAusencia('sem')">
-                  <span class="micro-filter-option-label">Sem Ausência</span>
-                  <i class="ti ti-check micro-filter-option-check"></i>
-                </div>
-              </div>
-            </div>
-          </div>
+          <!-- Toggle: só Est. Inicial ausente -->
+          <button class="micro-filter-trigger" id="imft-iniausente" onclick="invToggleOnlyIniAusente()" title="Mostra só linhas com Est. Inicial AUSENTE">
+            <i class="ti ti-alert-triangle"></i>
+            <span id="imft-iniausente-label">Só Est. Inicial Ausente</span>
+          </button>
+
+          <!-- Toggle: só Est. Final ausente -->
+          <button class="micro-filter-trigger" id="imft-fimausente" onclick="invToggleOnlyFimAusente()" title="Mostra só linhas com Est. Final AUSENTE">
+            <i class="ti ti-alert-triangle"></i>
+            <span id="imft-fimausente-label">Só Est. Final Ausente</span>
+          </button>
 
           <!-- Toggle: só itens com variação sem justificativa (era o botão "Pendentes") -->
           <button class="micro-filter-trigger" id="imft-pendentes" onclick="invToggleOnlyPendentes()" title="Mostra só itens com variação e sem justificativa">
@@ -1766,44 +1744,12 @@
             <span id="inv-alertas-count" style="background:var(--amber);color:#000;border-radius:20px;padding:0 6px;font-size:10px;font-weight:700;min-width:18px;text-align:center;margin-left:2px">0</span>
           </button>
 
-          <!-- Toggle: considerar NFs/OS pendentes de integração SAP em Entradas/Saídas —
-               mesma lógica da Visão Micro, mas global (todas as centrais de uma vez, já
-               que aqui não há cards por central). Muda o VALOR calculado (não é só filtro
-               de exibição), por isso o botão fica visualmente destacado (.active) quando
-               ligado — e cada linha afetada ganha um selo "pendente" nas células de
-               Entradas/Saídas (ver invRenderTabela). -->
-          <button class="micro-filter-trigger" id="imft-pend-considerar" onclick="invToggleConsiderarPendentes()" title="Ao ligar, soma volumes de NFs/OS pendentes de integração SAP em Entradas/Saídas de TODAS as centrais — afeta Variação e Custo. Linhas afetadas ganham um selo 'pendente'.">
-            <i class="ti ti-plug-connected" style="color:var(--accent)"></i>
-            <span>Considerar NFs/OS pendentes</span>
+          <!-- Toggle: só itens com Divergências identificadas (manual/duplicidade/pendência SAP/ocorrência) -->
+          <button class="micro-filter-trigger" id="imft-divergencias" onclick="invToggleOnlyDivergencias()" title="Mostra só itens com possíveis causas da variação identificadas (registro manual, duplicidade, pendência de integração SAP ou ocorrência aberta)">
+            <i class="ti ti-list-search" style="color:var(--accent)"></i>
+            <span id="imft-divergencias-label">Só Divergências</span>
+            <span id="inv-divergencias-count" style="background:var(--accent);color:#fff;border-radius:20px;padding:0 6px;font-size:10px;font-weight:700;min-width:18px;text-align:center;margin-left:2px">0</span>
           </button>
-
-          <!-- Filtro "Divergências" — dropdown de seleção única (Todos /
-               Só Divergências / Só Sem Divergências). Substitui o antigo
-               botão de toggle alternado. -->
-          <div class="micro-filter-group" id="imfg-divergencias">
-            <button class="micro-filter-trigger" id="imft-divergencias" onclick="invToggleDivergenciasDropdown()" title="Filtra por causas da variação identificadas (registro manual, duplicidade, pendência de integração SAP ou ocorrência aberta)">
-              <i class="ti ti-list-search" id="imft-divergencias-icon" style="color:var(--accent)"></i>
-              <span id="imft-divergencias-label">Divergências</span>
-              <span id="inv-divergencias-count" style="background:var(--accent);color:#fff;border-radius:20px;padding:0 6px;font-size:10px;font-weight:700;min-width:18px;text-align:center;margin-left:2px">0</span>
-              <i class="ti ti-chevron-down micro-filter-chev" id="imfc-divergencias"></i>
-            </button>
-            <div class="micro-filter-dropdown" id="imfd-divergencias">
-              <div class="micro-filter-options">
-                <div class="micro-filter-option micro-filter-option--radio" data-val="false" onclick="invSetDivergencias(false)">
-                  <span class="micro-filter-option-label">Todos</span>
-                  <i class="ti ti-check micro-filter-option-check"></i>
-                </div>
-                <div class="micro-filter-option micro-filter-option--radio" data-val="com" onclick="invSetDivergencias('com')">
-                  <span class="micro-filter-option-label">Só Divergências</span>
-                  <i class="ti ti-check micro-filter-option-check"></i>
-                </div>
-                <div class="micro-filter-option micro-filter-option--radio" data-val="sem" onclick="invSetDivergencias('sem')">
-                  <span class="micro-filter-option-label">Só Sem Divergências</span>
-                  <i class="ti ti-check micro-filter-option-check"></i>
-                </div>
-              </div>
-            </div>
-          </div>
 
           <!-- Toggle: modo seleção (checkboxes) pra Justificar em lote — movido pro
                cabeçalho da tabela (table-toolbar), junto com Expandir/Importar/Exportar -->
@@ -1826,9 +1772,6 @@
               <!-- Barra de ação em lote (aparece só no modo seleção) -->
               <div id="inv-batch-bar" style="display:none;align-items:center;gap:10px">
                 <span id="inv-batch-count" style="font-size:11px;color:var(--text2);white-space:nowrap">0 selecionadas</span>
-                <button class="btn" id="inv-batch-delete-btn" onclick="invExcluirJustLote()" disabled title="Exclui a justificativa das linhas selecionadas que tiverem alguma salva" style="color:var(--red);border-color:var(--red-border)">
-                  <i class="ti ti-trash"></i> Excluir Justificativas
-                </button>
                 <button class="btn btn-primary" id="inv-batch-btn" onclick="invAbrirJustLote()" disabled>
                   <i class="ti ti-stack-2"></i> Justificar em lote
                 </button>
@@ -2635,12 +2578,8 @@
               <button class="btn" onclick="abrirCadastroFilialIndividual()">
                 <i class="ti ti-plus"></i> Novo Cadastro
               </button>
-              <input type="file" id="file-filiais" class="file-input" accept=".xlsx,.csv" onchange="handleFiliaisImport(event)">
-              <button class="btn" onclick="focusFilialImport()">
+              <button class="btn" onclick="openModal('modal-filiais')">
                 <i class="ti ti-file-upload"></i> Importar em lote
-              </button>
-              <button class="btn" onclick="exportarFiliaisExcel()">
-                <i class="ti ti-file-spreadsheet"></i> Exportar Excel
               </button>
               <button class="btn js-atualizar-cadastros" onclick="atualizarCadastros()" title="Reaplica o cadastro atual de Centrais e Materiais sobre Entradas, Saídas, Lançamentos e SAP já importados, e atualiza todas as telas que dependem desses cadastros">
                 <i class="ti ti-refresh"></i> Atualizar Cadastros
@@ -2690,12 +2629,8 @@
               <button class="btn" onclick="abrirCadastroMaterialIndividual()">
                 <i class="ti ti-plus"></i> Novo Cadastro
               </button>
-              <input type="file" id="file-materiais" class="file-input" accept=".xlsx,.csv" onchange="handleMateriaisImport(event)">
-              <button class="btn" onclick="focusMaterialImport()">
+              <button class="btn" onclick="openModal('modal-materiais')">
                 <i class="ti ti-file-upload"></i> Importar em lote
-              </button>
-              <button class="btn" onclick="exportarMateriaisExcel()">
-                <i class="ti ti-file-spreadsheet"></i> Exportar Excel
               </button>
               <button class="btn js-atualizar-cadastros" onclick="atualizarCadastros()" title="Reaplica o cadastro atual de Centrais e Materiais sobre Entradas, Saídas, Lançamentos e SAP já importados, e atualiza todas as telas que dependem desses cadastros">
                 <i class="ti ti-refresh"></i> Atualizar Cadastros
@@ -3672,11 +3607,37 @@
 
 
 
-<!-- MODAL: Filiais / Aliases — CADASTRO INDIVIDUAL (campos guiados) -->
+<!-- MODAL: Filiais / Aliases — CADASTRO EM LOTE / IMPORTAÇÃO -->
+<div class="modal-overlay" id="modal-filiais">
+  <div class="modal" style="max-width:760px">
+    <div class="modal-title"><i class="ti ti-file-upload"></i> Cadastro de Centrais em Lote</div>
+    <div class="modal-sub">Use uma linha por cadastro. Formato: <span class="td-mono">ORIGINAL = SIGLA = CNPJ = REGIONAL</span>. Prefixo numérico opcional: <span class="td-mono">82 | Sete Lagoas = SET1 = 00.000.000/0000-00 = João Pereira</span>. Para cadastrar poucos registros com campos guiados, use <button type="button" class="link-btn" onclick="closeModal('modal-filiais');abrirCadastroFilialIndividual()">Cadastro Individual</button>.</div>
+
+    <div class="form-grid" style="grid-template-columns:1fr">
+      <div class="form-group">
+        <label class="form-label">Cadastro em lote</label>
+        <textarea id="filiais-text" class="form-input" style="min-height:220px; resize:vertical" placeholder="82 | Sete Lagoas = SET1 = 00.000.000/0000-00 = João Pereira&#10;91 | Juiz de Fora II = JFO2 = 00.000.000/0001-00 = Maria Silva&#10;Filial Exemplo = EXP1"></textarea>
+      </div>
+    </div>
+
+    <div class="form-actions" style="justify-content:space-between">
+      <div style="display:flex; gap:8px; flex-wrap:wrap">
+        <input type="file" id="file-filiais" class="file-input" accept=".xlsx,.csv" onchange="handleFiliaisImport(event)">
+        <button class="btn" onclick="document.getElementById('file-filiais').click()"><i class="ti ti-folder-open"></i> Selecionar arquivo</button>
+      </div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap">
+        <button class="btn" onclick="closeModal('modal-filiais')">Cancelar</button>
+        <button class="btn btn-primary" id="btn-salvar-filiais" onclick="salvarFiliais(this)"><i class="ti ti-check"></i> Salvar cadastros</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Filiais / Aliases — CADASTRO INDIVIDUAL (campos digitados) -->
 <div class="modal-overlay" id="modal-filiais-individual">
   <div class="modal" style="max-width:900px">
     <div class="modal-title"><i class="ti ti-map-pin"></i> Cadastro Individual de Centrais</div>
-    <div class="modal-sub">Preencha os campos abaixo. Clique em <b>+ Adicionar linha</b> para cadastrar mais de uma central de uma vez. Prefere importar um arquivo pronto? <button type="button" class="link-btn" onclick="focusFilialImport()">Selecionar arquivo</button>.</div>
+    <div class="modal-sub">Preencha os campos abaixo. Clique em <b>+ Adicionar linha</b> para cadastrar mais de uma central de uma vez. Para colar uma lista grande ou importar arquivo, use <button type="button" class="link-btn" onclick="closeModal('modal-filiais-individual');openModal('modal-filiais')">Cadastro em Lote</button>.</div>
 
     <div class="reg-individual-rows" id="filial-indiv-rows"></div>
     <button type="button" class="btn reg-add-row-btn" onclick="_addFilialIndivRow()"><i class="ti ti-plus"></i> Adicionar linha</button>
@@ -3688,30 +3649,38 @@
   </div>
 </div>
 
-<!-- MINI MODAL: Novo Regional (cadastra um regional sem precisar de uma central) -->
-<div class="modal-overlay" id="modal-novo-regional-central">
-  <div class="modal" style="width:420px">
-    <div class="modal-title"><i class="ti ti-map-pin"></i> Novo Regional</div>
-    <div class="modal-sub">Cadastra o regional no catálogo para uso futuro, mesmo sem nenhuma central vinculada ainda.</div>
+
+<!-- MODAL: Materiais / Grupo SAP — CADASTRO EM LOTE / IMPORTAÇÃO -->
+<div class="modal-overlay" id="modal-materiais">
+  <div class="modal" style="max-width:760px">
+    <div class="modal-title"><i class="ti ti-file-upload"></i> Cadastro de Materiais em Lote</div>
+    <div class="modal-sub">Use uma linha por cadastro. Formatos aceitos: <span class="td-mono">origem = grupo</span>, <span class="td-mono">origem = grupo = categoria</span>, <span class="td-mono">origem;grupo</span> ou importação por arquivo. O grupo será o nome exibido em Lançamentos. Categoria é opcional e deve ser uma das 5 fixas: Aglomerante, Agregado Graúdo, Agregado Miúdo, Aditivo ou Adição — valores fora dessa lista são ignorados. Para cadastrar poucos registros com campos guiados, use <button type="button" class="link-btn" onclick="closeModal('modal-materiais');abrirCadastroMaterialIndividual()">Cadastro Individual</button>.</div>
+
     <div class="form-grid" style="grid-template-columns:1fr">
       <div class="form-group">
-        <label class="form-label">Nome do regional</label>
-        <input type="text" class="form-input" id="novo-regional-central-nome" placeholder="Ex: João Pereira" onkeydown="if(event.key==='Enter'){event.preventDefault();salvarNovoRegionalCentral(document.getElementById('btn-salvar-novo-regional-central'));}">
+        <label class="form-label">Cadastro em lote</label>
+        <textarea id="materiais-text" class="form-input" style="min-height:220px; resize:vertical" placeholder="AREIA LAVADA = AREIA = Agregado Miúdo&#10;BRITA 01 = BRITA = Agregado Graúdo&#10;PÓ DE PEDRA = PÓ DE PEDRA"></textarea>
       </div>
     </div>
-    <div class="form-actions">
-      <button class="btn" onclick="closeModal('modal-novo-regional-central')">Cancelar</button>
-      <button class="btn btn-primary" id="btn-salvar-novo-regional-central" onclick="salvarNovoRegionalCentral(this)"><i class="ti ti-check"></i> Salvar</button>
+
+    <div class="form-actions" style="justify-content:space-between">
+      <div style="display:flex; gap:8px; flex-wrap:wrap">
+        <input type="file" id="file-materiais" class="file-input" accept=".xlsx,.csv" onchange="handleMateriaisImport(event)">
+        <button class="btn" onclick="document.getElementById('file-materiais').click()"><i class="ti ti-folder-open"></i> Selecionar arquivo</button>
+      </div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap">
+        <button class="btn" onclick="closeModal('modal-materiais')">Cancelar</button>
+        <button class="btn btn-primary" id="btn-salvar-materiais" onclick="salvarMateriais(this)"><i class="ti ti-check"></i> Salvar cadastros</button>
+      </div>
     </div>
   </div>
 </div>
 
-
-<!-- MODAL: Materiais / Grupo SAP — CADASTRO INDIVIDUAL (campos guiados) -->
+<!-- MODAL: Materiais / Grupo SAP — CADASTRO INDIVIDUAL (campos digitados) -->
 <div class="modal-overlay" id="modal-materiais-individual">
   <div class="modal" style="max-width:900px">
     <div class="modal-title"><i class="ti ti-stack-2"></i> Cadastro Individual de Materiais</div>
-    <div class="modal-sub">Preencha os campos abaixo. Clique em <b>+ Adicionar linha</b> para cadastrar mais de um material de uma vez. Prefere importar um arquivo pronto? <button type="button" class="link-btn" onclick="focusMaterialImport()">Selecionar arquivo</button>.</div>
+    <div class="modal-sub">Preencha os campos abaixo. Clique em <b>+ Adicionar linha</b> para cadastrar mais de um material de uma vez. Para colar uma lista grande ou importar arquivo, use <button type="button" class="link-btn" onclick="closeModal('modal-materiais-individual');openModal('modal-materiais')">Cadastro em Lote</button>.</div>
 
     <div class="reg-individual-rows" id="mat-indiv-rows"></div>
     <button type="button" class="btn reg-add-row-btn" onclick="_addMaterialIndivRow()"><i class="ti ti-plus"></i> Adicionar linha</button>
@@ -3719,24 +3688,6 @@
     <div class="form-actions">
       <button class="btn" onclick="closeModal('modal-materiais-individual')">Cancelar</button>
       <button class="btn btn-primary" id="btn-salvar-material-indiv" onclick="salvarMateriaisIndividual(this)"><i class="ti ti-check"></i> Cadastrar</button>
-    </div>
-  </div>
-</div>
-
-<!-- MINI MODAL: Novo Grupo SAP (cadastra um grupo sem precisar de um material) -->
-<div class="modal-overlay" id="modal-novo-grupo-material">
-  <div class="modal" style="width:420px">
-    <div class="modal-title"><i class="ti ti-stack-2"></i> Novo Grupo SAP</div>
-    <div class="modal-sub">Cadastra o grupo no catálogo para uso futuro, mesmo sem nenhum material vinculado ainda.</div>
-    <div class="form-grid" style="grid-template-columns:1fr">
-      <div class="form-group">
-        <label class="form-label">Nome do grupo</label>
-        <input type="text" class="form-input" id="novo-grupo-material-nome" placeholder="Ex: AREIA" onkeydown="if(event.key==='Enter'){event.preventDefault();salvarNovoGrupoMaterial(document.getElementById('btn-salvar-novo-grupo-material'));}">
-      </div>
-    </div>
-    <div class="form-actions">
-      <button class="btn" onclick="closeModal('modal-novo-grupo-material')">Cancelar</button>
-      <button class="btn btn-primary" id="btn-salvar-novo-grupo-material" onclick="salvarNovoGrupoMaterial(this)"><i class="ti ti-check"></i> Salvar</button>
     </div>
   </div>
 </div>
@@ -3912,24 +3863,14 @@
         <i class="ti ti-x"></i> <span>Fechar</span>
       </button>
     </div>
-    <div class="bdm-summary" id="bdm-summary"></div>
-    <div class="bdm-search">
-      <div class="bdm-search-wrap">
-        <i class="ti ti-search"></i>
-        <input type="text" class="bdm-search-input" id="bdm-search-input"
-          placeholder="Buscar por movimento, referência, usuário ou data…" autocomplete="off">
-      </div>
-    </div>
     <div class="bdm-body">
       <table class="bdm-table">
         <thead>
           <tr>
             <th>Movimento</th>
-            <th>Usuário</th>
             <th>Ref. / Doc.</th>
-            <th>Dt. Documento</th>
             <th>Dt. Lançamento</th>
-            <th>Dt. Registro</th>
+            <th>Usuário</th>
             <th style="text-align:right">Saldo</th>
           </tr>
         </thead>
@@ -3937,7 +3878,7 @@
       </table>
     </div>
     <div class="bdm-footer">
-      <span class="bdm-footer-label" id="bdm-footer-label">Total</span>
+      <span class="bdm-footer-label">Total</span>
       <span class="bdm-footer-total" id="bdm-total-val">—</span>
     </div>
   </div>

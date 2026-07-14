@@ -693,7 +693,7 @@ function _dgVgDrawDonutSvg(svgEl, slices, centerSvgFn, maxCallouts = 6, sizeOver
   // sizeOverride permite outro tamanho sem afetar quem não passar nada
   // (ex: os gauges de Saúde Geral, ajustados pro mesmo tamanho do
   // Dashboard Analítico — ver _dgVgRenderHealthDonutSvg).
-  const sz = sizeOverride || { vbW: 340, vbH: 220, CX: 170, CY: 108, R: 74, ri: 44, calloutOffset: 14, elbowOffset: 28, tickLen: 15 };
+  const sz = sizeOverride || { vbW: 340, vbH: 220, CX: 170, CY: 108, R: 74, ri: 44, calloutOffset: 14, elbowOffset: 28, tickLen: 15, calloutPctFontSize: 10, calloutLabelFontSize: 8 };
   svgEl.setAttribute('viewBox', `0 0 ${sz.vbW} ${sz.vbH}`);
 
   if (!slices.length || total <= 0) {
@@ -762,9 +762,9 @@ function _dgVgDrawDonutSvg(svgEl, slices, centerSvgFn, maxCallouts = 6, sizeOver
         fill="none" stroke="${col}" stroke-width="1.1" stroke-opacity="0.7" stroke-linecap="round" stroke-linejoin="round"/>
       <circle cx="${sx.toFixed(1)}" cy="${sy.toFixed(1)}" r="1.8" fill="${col}" opacity="0.7"/>
       <text x="${labelX.toFixed(1)}" y="${(ty - 3).toFixed(1)}" text-anchor="${labelAnchor}"
-        font-size="10" font-weight="700" font-family="var(--mono)" fill="${col}">${pctStr}%</text>
+        font-size="${sz.calloutPctFontSize}" font-weight="700" font-family="var(--mono)" fill="${col}">${pctStr}%</text>
       ${label ? `<text x="${labelX.toFixed(1)}" y="${(ty + 9).toFixed(1)}" text-anchor="${labelAnchor}"
-        font-size="8" font-family="var(--mono)" fill="${col}" opacity="0.7">${label}</text>` : ''}
+        font-size="${sz.calloutLabelFontSize}" font-family="var(--mono)" fill="${col}" opacity="0.7">${label}</text>` : ''}
     </g>`;
   });
 
@@ -903,21 +903,35 @@ function _dgVgRenderHealthDonutSvg(svgId, counts, scoreInfo, levelMeta, unitLabe
 
   // Tamanho igual ao dos donuts do Dashboard Analítico (macro.js:
   // _renderDonut) — viewBox 420×300, R:104/ri:60, mesmos offsets de
-  // callout — pra ficar visualmente consistente entre os dois dashboards.
+  // callout, mesmas fontes de callout (12/9,5) e do texto central
+  // (34/9). Posição Y do texto recalculada pra centralizar de verdade:
+  // no Analítico o bloco central tem 3 linhas (score + nível + "N
+  // centrais"), e as posições Y de lá foram pensadas pra esse bloco de
+  // 3. Aqui a 3ª linha vai pro cabeçalho do card (não fica dentro do
+  // donut), então com só 2 linhas nas MESMAS posições Y de lá, o bloco
+  // sobrava espaço embaixo e ficava puxado pra cima — CY/CY+21 centraliza
+  // o bloco de 2 linhas no anel.
   _dgVgDrawDonutSvg(svgEl, slices, (CX, CY, ri) => {
-    const SR = ri - 7, sCirc = 2 * Math.PI * SR, sDash = (scoreInfo.score / 100) * sCirc;
-    return `<circle cx="${CX}" cy="${CY}" r="${SR}" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="4.5" style="pointer-events:none"/>
-      <circle cx="${CX}" cy="${CY}" r="${SR}" fill="none" stroke="${scoreColor}" stroke-width="4.5"
+    const SR = ri - 8, sCirc = 2 * Math.PI * SR, sDash = (scoreInfo.score / 100) * sCirc;
+    return `<circle cx="${CX}" cy="${CY}" r="${SR}" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="5" style="pointer-events:none"/>
+      <circle cx="${CX}" cy="${CY}" r="${SR}" fill="none" stroke="${scoreColor}" stroke-width="5"
         stroke-dasharray="${sDash.toFixed(1)} ${sCirc.toFixed(1)}" stroke-dashoffset="${(sCirc / 4).toFixed(1)}"
         stroke-linecap="round" opacity="0.55" style="pointer-events:none"/>
-      <text class="dv-fit-text" data-max-width="60" x="${CX}" y="${CY - 3}" text-anchor="middle" font-size="24" font-weight="700" font-family="var(--mono)" fill="${scoreColor}" style="pointer-events:none">${scoreInfo.score}%</text>
-      <text x="${CX}" y="${CY + 13}" text-anchor="middle" font-size="8" font-weight="700" font-family="var(--mono)" fill="${scoreColor}" letter-spacing=".07em" opacity="0.9" style="pointer-events:none">${scoreLabelTxt}</text>`;
-  }, 6, { vbW: 420, vbH: 300, CX: 210, CY: 148, R: 104, ri: 60, calloutOffset: 22, elbowOffset: 44, tickLen: 22 });
+      <text class="dv-fit-text" data-max-width="92" x="${CX}" y="${CY + 4}" text-anchor="middle" font-size="34" font-weight="700" font-family="var(--mono)" fill="${scoreColor}" style="pointer-events:none">${scoreInfo.score}%</text>
+      <text x="${CX}" y="${CY + 25}" text-anchor="middle" font-size="9" font-weight="700" font-family="var(--mono)" fill="${scoreColor}" letter-spacing=".07em" opacity="0.9" style="pointer-events:none">${scoreLabelTxt}</text>`;
+  }, 6, { vbW: 420, vbH: 300, CX: 210, CY: 148, R: 104, ri: 60, calloutOffset: 22, elbowOffset: 44, tickLen: 22, calloutPctFontSize: 12, calloutLabelFontSize: 9.5 });
 }
 
 // ── Donut de Custo Absoluto (por material) — usado nas 4 categorias e no
 //    combinado "Grupo de Material". items: [{ mat, total, color }]
-function _dgVgRenderCustoDonutSvg(svgId, items, centerTop, centerBottom, maxCallouts = 6, subtitleId) {
+// sizeOverride: mesmo mecanismo de _dgVgDrawDonutSvg — null usa o tamanho
+// padrão (donuts de categoria); o combinado "Grupo de Material" passa um
+// maior, porque o card dele é proporcionalmente mais alto que largo (ao
+// contrário dos 4 pequenos, cujo card já bate certinho com o viewBox
+// padrão) — sem isso, o anel ficava "sobrando" espaço vazio acima/abaixo
+// dentro do card (letterboxing), parecendo pequeno demais pro tamanho do
+// próprio card.
+function _dgVgRenderCustoDonutSvg(svgId, items, centerTop, centerBottom, maxCallouts = 6, subtitleId, sizeOverride = null) {
   const svgEl = document.getElementById(svgId);
   if (!svgEl) return;
 
@@ -930,7 +944,7 @@ function _dgVgRenderCustoDonutSvg(svgId, items, centerTop, centerBottom, maxCall
     if (subEl) subEl.textContent = (!items.length || total <= 0) ? '' : (centerBottom || '');
   }
 
-  if (!items.length || total <= 0) { _dgVgDrawDonutSvg(svgEl, [], null); return; }
+  if (!items.length || total <= 0) { _dgVgDrawDonutSvg(svgEl, [], null, maxCallouts, sizeOverride); return; }
 
   const slices = items.map(it => ({
     value: it.total, color: it.color,
@@ -939,15 +953,13 @@ function _dgVgRenderCustoDonutSvg(svgId, items, centerTop, centerBottom, maxCall
   }));
 
   _dgVgDrawDonutSvg(svgEl, slices, (CX, CY, ri) => {
-    const top = [...slices].sort((a, b) => b.value - a.value)[0];
-    const SR = ri - 7, sCirc = 2 * Math.PI * SR, sDash = (top.value / total) * sCirc;
     const valStr = moneyShort(total);
-    return `<circle cx="${CX}" cy="${CY}" r="${SR}" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="4.5" style="pointer-events:none"/>
-      <circle cx="${CX}" cy="${CY}" r="${SR}" fill="none" stroke="${top.color}" stroke-width="4.5"
-        stroke-dasharray="${sDash.toFixed(1)} ${sCirc.toFixed(1)}" stroke-dashoffset="${(sCirc / 4).toFixed(1)}"
-        stroke-linecap="round" opacity="0.55" style="pointer-events:none"/>
-      <text class="dv-fit-text" data-max-width="${(2 * (SR - 8)).toFixed(0)}" x="${CX}" y="${CY + 6}" text-anchor="middle" font-size="17" font-weight="700" font-family="var(--mono)" fill="var(--text)" style="pointer-events:none">${valStr}</text>`;
-  }, maxCallouts);
+    // Fonte proporcional ao raio interno (base: 17px pro ri:44 padrão) —
+    // escala automaticamente pro tamanho maior do combinado, sem precisar
+    // de mais um campo no sizeOverride.
+    const fontSize = Math.round(17 * (ri / 44));
+    return `<text class="dv-fit-text" data-max-width="${(2 * (ri - 8)).toFixed(0)}" x="${CX}" y="${CY + 6}" text-anchor="middle" font-size="${fontSize}" font-weight="700" font-family="var(--mono)" fill="var(--text)" style="pointer-events:none">${valStr}</text>`;
+  }, maxCallouts, sizeOverride);
 }
 
 // ────────────────────────────────────────────
@@ -1007,10 +1019,12 @@ function renderDgVisaoGeralPdf(results, thresholds, dtIni, dtFim) {
   });
 }
 
-// ── 1. Hero: Variação Total + Custo Total em destaque, e Est. Inicial /
-//    Entradas / Saídas / Est. Final Total como KPIs secundários — mesmo
-//    padrão visual (classes inv-kpi-*) e estrutura em 2 níveis do
-//    resumo do Inventário, pra manter os dois dashboards consistentes.
+// ── 1. Resumo do Período: DOIS níveis — Variação Total + Custo Total
+//    maiores, em cima (.inv-kpi-featured-row); Est. Inicial/Entradas/
+//    Saídas/Est. Final Total menores, embaixo (.inv-kpi-secondary). Sem
+//    o wrapper "Destaque do Período" (removido — não fazia sentido), mas
+//    MANTENDO os 2 níveis de tamanho/agrupamento. Valores por extenso,
+//    sem abreviação M/K (fmtKg/money em vez de fmtKgShort/moneyShort).
 function _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais) {
   const el = document.getElementById('dg-vg-kpis-hero');
   if (!el) return;
@@ -1021,24 +1035,21 @@ function _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais) {
   const cstCol = colorFor(custoTotal),     cstBg = bgFor(custoTotal);
 
   el.innerHTML = `
-    <div class="inv-kpi-featured">
-      <div class="inv-kpi-featured-label"><i class="ti ti-alert-triangle"></i> Destaque do Período</div>
-      <div class="inv-kpi-featured-row">
-        <div class="inv-kpi-card inv-kpi-card-featured">
-          <div class="inv-kpi-icon" style="background:${varBg};color:${varCol}"><i class="ti ti-scale"></i></div>
-          <div class="inv-kpi-body">
-            <div class="inv-kpi-label">Variação Total</div>
-            <div class="inv-kpi-value" style="color:${varCol}">${varSymbol(varTotalFisica)} ${fmtKgShort(Math.abs(varTotalFisica))}</div>
-            <div class="inv-kpi-unit">Soma da variação física — todas as categorias</div>
-          </div>
+    <div class="inv-kpi-featured-row">
+      <div class="inv-kpi-card inv-kpi-card-featured">
+        <div class="inv-kpi-icon" style="background:${varBg};color:${varCol}"><i class="ti ti-scale"></i></div>
+        <div class="inv-kpi-body">
+          <div class="inv-kpi-label">Variação Total</div>
+          <div class="inv-kpi-value" style="color:${varCol}">${varSymbol(varTotalFisica)} ${fmtKg(Math.abs(varTotalFisica))}</div>
+          <div class="inv-kpi-unit">Soma da variação física — todas as categorias</div>
         </div>
-        <div class="inv-kpi-card inv-kpi-card-featured">
-          <div class="inv-kpi-icon" style="background:${cstBg};color:${cstCol}"><i class="ti ti-currency-dollar"></i></div>
-          <div class="inv-kpi-body">
-            <div class="inv-kpi-label">Custo Total</div>
-            <div class="inv-kpi-value" style="color:${cstCol}" title="${money(Math.abs(custoTotal))}">${varSymbol(custoTotal)} ${moneyShort(Math.abs(custoTotal))}</div>
-            <div class="inv-kpi-unit">Impacto financeiro implicado pela variação</div>
-          </div>
+      </div>
+      <div class="inv-kpi-card inv-kpi-card-featured">
+        <div class="inv-kpi-icon" style="background:${cstBg};color:${cstCol}"><i class="ti ti-currency-dollar"></i></div>
+        <div class="inv-kpi-body">
+          <div class="inv-kpi-label">Custo Total</div>
+          <div class="inv-kpi-value" style="color:${cstCol}">${varSymbol(custoTotal)} ${money(Math.abs(custoTotal))}</div>
+          <div class="inv-kpi-unit">Impacto financeiro implicado pela variação</div>
         </div>
       </div>
     </div>
@@ -1047,32 +1058,28 @@ function _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais) {
         <div class="inv-kpi-icon" style="background:var(--accent-dim);color:var(--accent)"><i class="ti ti-archive"></i></div>
         <div class="inv-kpi-body">
           <div class="inv-kpi-label">Est. Inicial Total</div>
-          <div class="inv-kpi-value">${fmtKgShort(estTotais.totalIni)}</div>
-          <div class="inv-kpi-unit">kg</div>
+          <div class="inv-kpi-value">${fmtKg(estTotais.totalIni)}</div>
         </div>
       </div>
       <div class="inv-kpi-card">
         <div class="inv-kpi-icon" style="background:var(--green-bg);color:var(--green)"><i class="ti ti-arrow-bar-to-down"></i></div>
         <div class="inv-kpi-body">
           <div class="inv-kpi-label">Entradas</div>
-          <div class="inv-kpi-value">${fmtKgShort(movTotais.totalEnt)}</div>
-          <div class="inv-kpi-unit">kg</div>
+          <div class="inv-kpi-value">${fmtKg(movTotais.totalEnt)}</div>
         </div>
       </div>
       <div class="inv-kpi-card">
         <div class="inv-kpi-icon" style="background:var(--red-bg);color:var(--red)"><i class="ti ti-arrow-bar-up"></i></div>
         <div class="inv-kpi-body">
           <div class="inv-kpi-label">Saídas</div>
-          <div class="inv-kpi-value">${fmtKgShort(movTotais.totalSai)}</div>
-          <div class="inv-kpi-unit">kg</div>
+          <div class="inv-kpi-value">${fmtKg(movTotais.totalSai)}</div>
         </div>
       </div>
       <div class="inv-kpi-card">
         <div class="inv-kpi-icon" style="background:var(--purple-bg);color:var(--purple)"><i class="ti ti-box"></i></div>
         <div class="inv-kpi-body">
           <div class="inv-kpi-label">Est. Final Total</div>
-          <div class="inv-kpi-value">${fmtKgShort(estTotais.totalFim)}</div>
-          <div class="inv-kpi-unit">kg</div>
+          <div class="inv-kpi-value">${fmtKg(estTotais.totalFim)}</div>
         </div>
       </div>
     </div>`;
@@ -1432,15 +1439,26 @@ function _dgVgRenderChartGrupoMaterial(custoAbsPorCat) {
   });
   flatRaw.sort((a, b) => b.total - a.total);
 
+  // Tamanho maior que o padrão (~1,12x, viewBox mais "quadrado") — o card
+  // desse donut é proporcionalmente mais alto que largo (ocupa a altura
+  // inteira da grade 2×2 ao lado), diferente dos 4 pequenos, cujo card já
+  // bate certo com o viewBox padrão 340×220. Sem isso, sobrava espaço
+  // vazio acima/abaixo do anel dentro do card (efeito "letterbox").
+  const sizeOverrideGrupo = {
+    vbW: 440, vbH: 361, CX: 220, CY: 180, R: 115, ri: 68,
+    calloutOffset: 19, elbowOffset: 38, tickLen: 20,
+    calloutPctFontSize: 11, calloutLabelFontSize: 9
+  };
+
   if (!flatRaw.length) {
-    _dgVgRenderCustoDonutSvg('dg-vg-chart-grupo', [], null, null, 6, 'dg-vg-grupo-subtitle');
+    _dgVgRenderCustoDonutSvg('dg-vg-chart-grupo', [], null, null, 6, 'dg-vg-grupo-subtitle', sizeOverrideGrupo);
     return;
   }
 
   // Materiais com menos de 5% de participação no total viram uma única
   // fatia "Outros" — evita poluir o anel com dezenas de fatias minúsculas.
   const flat = _dgVgAgruparOutros(flatRaw);
-  _dgVgRenderCustoDonutSvg('dg-vg-chart-grupo', flat, 'CUSTO VARIAÇÃO', `${flatRaw.length} materiais`, 6, 'dg-vg-grupo-subtitle');
+  _dgVgRenderCustoDonutSvg('dg-vg-chart-grupo', flat, 'CUSTO VARIAÇÃO', `${flatRaw.length} materiais`, 6, 'dg-vg-grupo-subtitle', sizeOverrideGrupo);
 }
 
 function _dgVgRenderDonutCategoria(svgId, items, catKey) {
