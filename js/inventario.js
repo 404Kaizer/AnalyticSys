@@ -1005,30 +1005,19 @@
         const entEntries = [], saiEntries = [];
         sapArrCalc.forEach(r => {
           const p = num(r.peso);
-          // openBreakdownModal (ui.js) espera [cod, value, ref, usuario, dtLanc, extra] —
-          // extração IDÊNTICA à usada pelo Analítico (toEntry, analitico.js): cod
-          // normalizado via normMov (mesma função usada pelos badges e pelo
-          // pareamento de transferências 861/862/309), ref com fallback pra
-          // documento, e um objeto extra com depósito + as 3 datas cruas
-          // (documento/lançamento/registro) — usado pelas colunas de data e
-          // pelo pareamento de transferência no modal.
-          const cod = normMov(r.movimento);
-          const ref = (r.ref && String(r.ref).trim()) ? String(r.ref).trim()
-                    : (r.documento && String(r.documento).trim()) ? String(r.documento).trim() : '';
-          const usr = String(r.usuario || '').trim();
+          const cod = String(r.movimento || '—').trim();
+          const ref = String(r.ref || r.documento || '—').trim();
+          const usr = String(r.usuario || '—').trim();
+          // openBreakdownModal (ui.js) espera [cod, value, ref, usuario, dtLanc] —
+          // 5 posições. Extração idêntica à usada pelo Analítico (toEntry, analitico.js):
+          // string bruta de dtLanc, com fallback para dtDoc, sem reformatar.
           const dtLancFmt = String(r.dtLanc || r.dtDoc || '').trim();
-          const extra = {
-            deposito: String(r.deposito || '').trim(),
-            dtDoc:    String(r.dtDoc    || '').trim(),
-            dtLanc:   String(r.dtLanc   || '').trim(),
-            dtReg:    String(r.dtReg    || '').trim()
-          };
           if (p > 0) {
             entradasKg += p;
-            entEntries.push([cod, p, ref, usr, dtLancFmt, extra]);
+            entEntries.push([cod, p, ref, usr, dtLancFmt]);
           } else if (p < 0) {
             saidasKg += Math.abs(p);
-            saiEntries.push([cod, p, ref, usr, dtLancFmt, extra]);
+            saiEntries.push([cod, p, ref, usr, dtLancFmt]);
           }
         });
 
@@ -1310,10 +1299,10 @@
       // efetivamente somada ao valor — deixa explícito o que foi afetado. ──
       const pendBadge = (label) => `<span class="absent-badge" style="background:var(--accent-dim,rgba(99,102,241,.15));color:var(--accent);border-color:var(--accent);margin-left:5px" title="Inclui volume de ${label} pendente de integração SAP (toggle 'Considerar NFs/OS pendentes' ligado)">pendente</span>`;
       const entCell = (_bdm
-        ? _bdm(r.entEntries || [], r.entradasKg, 'var(--green)', 'Entradas', null, r.material, r.central)
+        ? _bdm(r.entEntries || [], r.entradasKg, 'var(--green)', 'Entradas')
         : `<span class="td-mono" style="color:var(--green);font-weight:600">${_fmtKg(r.entradasKg)}</span>`) + (r.pendEntAplicado ? pendBadge('NF') : '');
       const saiCell = (_bdm
-        ? _bdm(r.saiEntries || [], r.saidasKg, 'var(--red)', 'Saídas', null, r.material, r.central)
+        ? _bdm(r.saiEntries || [], r.saidasKg, 'var(--red)', 'Saídas')
         : `<span class="td-mono" style="color:var(--red);font-weight:600">${_fmtKg(r.saidasKg)}</span>`) + (r.pendSaiAplicado ? pendBadge('OS') : '');
 
       // ── Est. Final: teal igual ao analítico. 3 estados possíveis:

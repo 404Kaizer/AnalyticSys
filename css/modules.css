@@ -2686,36 +2686,6 @@ td.var-cell-zero .ti-circle-check     { color: var(--text3); }
   text-overflow: ellipsis;
 }
 
-/* ── Campo de busca ── */
-.bdm-search {
-  padding: 10px 20px;
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-.bdm-search-wrap {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  background: var(--bg3);
-  border: 1px solid var(--border2);
-  border-radius: var(--radius);
-  padding: 6px 10px;
-}
-.bdm-search-wrap i {
-  font-size: 13px;
-  color: var(--text3);
-}
-.bdm-search-input {
-  background: none;
-  border: none;
-  outline: none;
-  font-size: 12.5px;
-  color: var(--text);
-  font-family: var(--font);
-  width: 100%;
-}
-.bdm-search-input::placeholder { color: var(--text3); }
-
 .bdm-body {
   flex: 1;
   overflow-y: auto;

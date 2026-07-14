@@ -826,16 +826,7 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
         const toDayEntry = s => {
           const ref = (s.ref && String(s.ref).trim()) ? String(s.ref).trim()
                     : (s.documento && String(s.documento).trim()) ? String(s.documento).trim() : '';
-          // extra: mesmos campos crus de toEntry (linha ~752) — depósito e as
-          // 3 datas cruas, usados pelas colunas Dt. Documento/Dt. Registro e
-          // pelo pareamento de transferências 861/862/309 no modal.
-          const extra = {
-            deposito: String(s.deposito || '').trim(),
-            dtDoc:    String(s.dtDoc    || '').trim(),
-            dtLanc:   String(s.dtLanc   || '').trim(),
-            dtReg:    String(s.dtReg    || '').trim()
-          };
-          return [normMov(s.movimento), num(s.peso), ref, String(s.usuario || '').trim(), String(s.dtLanc || s.dtDoc || '').trim(), extra];
+          return [normMov(s.movimento), num(s.peso), ref, String(s.usuario || '').trim(), String(s.dtLanc || s.dtDoc || '').trim()];
         };
         const dayEntEntries = daySnap.entRecords.map(toDayEntry);
         const daySaiEntries = daySnap.saiRecords.map(toDayEntry);
