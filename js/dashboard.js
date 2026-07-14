@@ -426,10 +426,16 @@ function _dgVgBuildPares(results, thresholds, dtIni, dtFim) {
       // outro cadastro não relacionado).
       const catKey = (r.materialCatKeyMap && r.materialCatKeyMap.get(mat)) || null;
 
-      let diff;
+      let diff, estoqueIni = 0, estoqueFim = 0;
       if (dtIni && dtFim) {
         const prev = getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni, dtFim, catKey });
         const fim  = getLastPeriodLaunchStockWithFallback({ central: r.central, material: mat, dtIni, dtFim });
+        // Captura os mesmos valores já resolvidos pra calcular o diff —
+        // usados pelos cards "Est. Inicial/Final Total" do resumo do
+        // período (ver _dgVgEstoqueTotais). Ausente fica 0 (sem aviso,
+        // diferente do Inventário — decisão confirmada com o Hugo).
+        estoqueIni = prev?.value ?? 0;
+        estoqueFim = (fim && !fim.missing) ? fim.value : 0;
         diff = buildSnapshot({
           lancs, sap,
           initialStockOverride: prev?.value ?? null,
@@ -446,11 +452,34 @@ function _dgVgBuildPares(results, thresholds, dtIni, dtFim) {
       const level    = !catKey ? 'sem_cadastro' : (neutro ? 'bom' : classifyVariation(Math.abs(diff), catKey, thresholds));
       const custoMed = (r.custoMedioPorMat || {})[mat] || 0;
 
-      pares.push({ central: r.central, regional, mat, catKey, diff, level, neutro, custoImplicado: diff * custoMed });
+      pares.push({ central: r.central, regional, mat, catKey, diff, level, neutro, custoImplicado: diff * custoMed, estoqueIni, estoqueFim });
     });
   });
 
   return pares;
+}
+
+// Est. Inicial / Est. Final Total — soma o estoqueIni/estoqueFim que
+// _dgVgBuildPares já resolve por par (mesma função usada no Inventário:
+// getPrePeriodLaunchStock / getLastPeriodLaunchStockWithFallback, em
+// ui.js) — sem custo extra de performance, só captura um valor que já
+// era calculado e descartado. Ausente conta como 0, sem aviso (decisão
+// confirmada: diferente do Inventário, que mostra "X ausentes").
+function _dgVgEstoqueTotais(pares) {
+  let totalIni = 0, totalFim = 0;
+  pares.forEach(p => { totalIni += p.estoqueIni || 0; totalFim += p.estoqueFim || 0; });
+  return { totalIni, totalFim };
+}
+
+// Entradas / Saídas Total — soma dos totais já calculados por central em
+// buildDashboardGerencialResults (mesma exclusão de "sem cadastro" já
+// aplicada na origem, antes mesmo de chegar em pares). Saídas vira
+// positivo pra bater com a convenção do Inventário (lá soma Math.abs(p);
+// aqui totalSaidas por central já vem negativo).
+function _dgVgMovimentacaoTotais(results) {
+  let totalEnt = 0, totalSai = 0;
+  results.forEach(r => { totalEnt += r.totalEntradas || 0; totalSai += Math.abs(r.totalSaidas || 0); });
+  return { totalEnt, totalSai };
 }
 
 // Tally de pares Central×Material por nível — MESMO critério usado em
@@ -972,7 +1001,10 @@ function renderDgVisaoGeralPdf(results, thresholds, dtIni, dtFim) {
   const custoVarMap    = _dgVgCustoVariacaoPorMaterial(pares);
   const custoAbsPorCat = _dgVgAgruparCustoVariacaoPorCategoria(custoVarMap);
 
-  _dgVgRenderKpisHero(varTotalFisica, custoTotal);
+  const estTotais = _dgVgEstoqueTotais(pares);
+  const movTotais = _dgVgMovimentacaoTotais(results);
+
+  _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais);
   _dgVgRenderHealthDonuts(pares, counts, scoreInfo, thresholds);
   _dgVgRenderChartCategoriaFisica(catFisicaPct);
   _dgVgRenderExtremos(extRegional, extCentral);
@@ -987,24 +1019,69 @@ function renderDgVisaoGeralPdf(results, thresholds, dtIni, dtFim) {
   });
 }
 
-// ── 1. Hero: Variação Total + Custo Total — os 2 KPIs mais importantes,
-//    isolados num destaque maior para bater o olho na situação do estoque.
-function _dgVgRenderKpisHero(varTotalFisica, custoTotal) {
+// ── 1. Resumo do Período: DOIS níveis — Variação Total + Custo Total
+//    maiores, em cima (.inv-kpi-featured-row); Est. Inicial/Entradas/
+//    Saídas/Est. Final Total menores, embaixo (.inv-kpi-secondary). Sem
+//    o wrapper "Destaque do Período" (removido — não fazia sentido), mas
+//    MANTENDO os 2 níveis de tamanho/agrupamento. Valores por extenso,
+//    sem abreviação M/K (fmtKg/money em vez de fmtKgShort/moneyShort).
+function _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais) {
   const el = document.getElementById('dg-vg-kpis-hero');
   if (!el) return;
-  const varCls   = varTotalFisica < -0.0001 ? 'hero-red' : varTotalFisica > 0.0001 ? 'hero-amber' : 'hero-teal';
-  const custoCls = custoTotal    < -0.0001 ? 'hero-red' : custoTotal    > 0.0001 ? 'hero-amber' : 'hero-teal';
+
+  const colorFor = v => v < -0.0001 ? 'var(--red)'    : v > 0.0001 ? 'var(--amber)'    : 'var(--teal)';
+  const bgFor    = v => v < -0.0001 ? 'var(--red-bg)' : v > 0.0001 ? 'var(--amber-bg)' : 'var(--teal-bg)';
+  const varCol = colorFor(varTotalFisica), varBg = bgFor(varTotalFisica);
+  const cstCol = colorFor(custoTotal),     cstBg = bgFor(custoTotal);
 
   el.innerHTML = `
-    <div class="dg-vg-hero-card ${varCls}">
-      <div class="dg-vg-hero-label"><i class="ti ti-scale"></i> Variação Total</div>
-      <div class="dg-vg-hero-value">${varSymbol(varTotalFisica)} ${fmtKgShort(Math.abs(varTotalFisica))}</div>
-      <div class="dg-vg-hero-sub">Soma da variação física — todas as categorias</div>
+    <div class="inv-kpi-featured-row">
+      <div class="inv-kpi-card inv-kpi-card-featured">
+        <div class="inv-kpi-icon" style="background:${varBg};color:${varCol}"><i class="ti ti-scale"></i></div>
+        <div class="inv-kpi-body">
+          <div class="inv-kpi-label">Variação Total</div>
+          <div class="inv-kpi-value" style="color:${varCol}">${varSymbol(varTotalFisica)} ${fmtKg(Math.abs(varTotalFisica))}</div>
+          <div class="inv-kpi-unit">Soma da variação física — todas as categorias</div>
+        </div>
+      </div>
+      <div class="inv-kpi-card inv-kpi-card-featured">
+        <div class="inv-kpi-icon" style="background:${cstBg};color:${cstCol}"><i class="ti ti-currency-dollar"></i></div>
+        <div class="inv-kpi-body">
+          <div class="inv-kpi-label">Custo Total</div>
+          <div class="inv-kpi-value" style="color:${cstCol}">${varSymbol(custoTotal)} ${money(Math.abs(custoTotal))}</div>
+          <div class="inv-kpi-unit">Impacto financeiro implicado pela variação</div>
+        </div>
+      </div>
     </div>
-    <div class="dg-vg-hero-card ${custoCls}">
-      <div class="dg-vg-hero-label"><i class="ti ti-currency-dollar"></i> Custo Total</div>
-      <div class="dg-vg-hero-value" title="${money(Math.abs(custoTotal))}">${varSymbol(custoTotal)} ${moneyShort(Math.abs(custoTotal))}</div>
-      <div class="dg-vg-hero-sub">Impacto financeiro implicado pela variação</div>
+    <div class="inv-kpi-secondary">
+      <div class="inv-kpi-card">
+        <div class="inv-kpi-icon" style="background:var(--accent-dim);color:var(--accent)"><i class="ti ti-archive"></i></div>
+        <div class="inv-kpi-body">
+          <div class="inv-kpi-label">Est. Inicial Total</div>
+          <div class="inv-kpi-value">${fmtKg(estTotais.totalIni)}</div>
+        </div>
+      </div>
+      <div class="inv-kpi-card">
+        <div class="inv-kpi-icon" style="background:var(--green-bg);color:var(--green)"><i class="ti ti-arrow-bar-to-down"></i></div>
+        <div class="inv-kpi-body">
+          <div class="inv-kpi-label">Entradas</div>
+          <div class="inv-kpi-value">${fmtKg(movTotais.totalEnt)}</div>
+        </div>
+      </div>
+      <div class="inv-kpi-card">
+        <div class="inv-kpi-icon" style="background:var(--red-bg);color:var(--red)"><i class="ti ti-arrow-bar-up"></i></div>
+        <div class="inv-kpi-body">
+          <div class="inv-kpi-label">Saídas</div>
+          <div class="inv-kpi-value">${fmtKg(movTotais.totalSai)}</div>
+        </div>
+      </div>
+      <div class="inv-kpi-card">
+        <div class="inv-kpi-icon" style="background:var(--purple-bg);color:var(--purple)"><i class="ti ti-box"></i></div>
+        <div class="inv-kpi-body">
+          <div class="inv-kpi-label">Est. Final Total</div>
+          <div class="inv-kpi-value">${fmtKg(estTotais.totalFim)}</div>
+        </div>
+      </div>
     </div>`;
 }
 

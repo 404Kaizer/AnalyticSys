@@ -9230,57 +9230,10 @@ td:has(.lanc-central-edit:focus) {
 .an-macro-toggle-btn.collapsed i { transform: rotate(180deg); }
 
 /* ── Visão Geral (reformulada) — KPIs executivos e gráficos agregados ── */
-
-/* Hero: Variação Total + Custo Total — os 2 KPIs mais importantes */
-.dg-vg-hero-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-}
-@media (max-width: 720px) { .dg-vg-hero-grid { grid-template-columns: 1fr; } }
-.dg-vg-hero-card {
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: 22px 26px;
-  position: relative;
-  overflow: hidden;
-}
-.dg-vg-hero-card::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0;
-  height: 3px;
-}
-.dg-vg-hero-card.hero-red::before   { background: var(--red); }
-.dg-vg-hero-card.hero-amber::before { background: var(--amber); }
-.dg-vg-hero-card.hero-teal::before  { background: var(--teal); }
-.dg-vg-hero-label {
-  font-size: 11.5px;
-  font-family: var(--mono);
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  color: var(--text3);
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 8px;
-}
-.dg-vg-hero-value {
-  font-size: 40px;
-  font-weight: 700;
-  font-family: var(--mono);
-  letter-spacing: -0.03em;
-  line-height: 1;
-  margin-bottom: 8px;
-}
-.dg-vg-hero-card.hero-red   .dg-vg-hero-value { color: var(--red); }
-.dg-vg-hero-card.hero-amber .dg-vg-hero-value { color: var(--amber); }
-.dg-vg-hero-card.hero-teal  .dg-vg-hero-value { color: var(--teal); }
-.dg-vg-hero-sub {
-  font-size: 11.5px;
-  color: var(--text3);
-}
+/* Resumo do Período: usa direto as classes inv-kpi-featured-row (Variação/
+   Custo Total, maiores, em cima) e inv-kpi-secondary (Est.Inicial/
+   Entradas/Saídas/Est.Final, menores, embaixo) — mesmo padrão visual do
+   Inventário (ver components.css), sem o wrapper "Destaque do Período". */
 
 .dg-vg-extremos-grid {
   display: grid;
