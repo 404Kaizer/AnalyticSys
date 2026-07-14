@@ -1759,12 +1759,42 @@
             </div>
           </div>
 
-          <!-- Toggle: só itens com variação sem justificativa (era o botão "Pendentes") -->
-          <button class="micro-filter-trigger" id="imft-pendentes" onclick="invToggleOnlyPendentes()" title="Mostra só itens com variação e sem justificativa">
-            <i class="ti ti-alert-triangle" style="color:var(--amber)"></i>
-            <span id="imft-pendentes-label">Só Pendentes</span>
-            <span id="inv-alertas-count" style="background:var(--amber);color:#000;border-radius:20px;padding:0 6px;font-size:10px;font-weight:700;min-width:18px;text-align:center;margin-left:2px">0</span>
-          </button>
+          <!-- Filtro "Justificativa" — dropdown de seleção única (Todos / Não
+               Justificados / Pendentes / Justificados / Ajustados), com base no
+               estado do botão Justificar de cada linha (_invEstadoDaLinha).
+               Substitui o antigo botão de toggle "Só Pendentes". -->
+          <div class="micro-filter-group" id="imfg-justificativa">
+            <button class="micro-filter-trigger" id="imft-justificativa" onclick="invToggleJustificativaDropdown()" title="Filtra pelo status do botão Justificar de cada linha (Não Justificados / Pendentes / Justificados / Ajustados)">
+              <i class="ti ti-alert-triangle" id="imft-justificativa-icon" style="color:var(--amber)"></i>
+              <span id="imft-justificativa-label">Justificativa</span>
+              <span id="inv-alertas-count" style="background:var(--amber);color:#000;border-radius:20px;padding:0 6px;font-size:10px;font-weight:700;min-width:18px;text-align:center;margin-left:2px">0</span>
+              <i class="ti ti-chevron-down micro-filter-chev" id="imfc-justificativa"></i>
+            </button>
+            <div class="micro-filter-dropdown" id="imfd-justificativa">
+              <div class="micro-filter-options">
+                <div class="micro-filter-option micro-filter-option--radio" data-val="false" onclick="invSetJustificativa(false)">
+                  <span class="micro-filter-option-label">Todos</span>
+                  <i class="ti ti-check micro-filter-option-check"></i>
+                </div>
+                <div class="micro-filter-option micro-filter-option--radio" data-val="justificar" onclick="invSetJustificativa('justificar')">
+                  <span class="micro-filter-option-label">Não Justificados</span>
+                  <i class="ti ti-check micro-filter-option-check"></i>
+                </div>
+                <div class="micro-filter-option micro-filter-option--radio" data-val="pendente" onclick="invSetJustificativa('pendente')">
+                  <span class="micro-filter-option-label">Pendentes</span>
+                  <i class="ti ti-check micro-filter-option-check"></i>
+                </div>
+                <div class="micro-filter-option micro-filter-option--radio" data-val="justificado" onclick="invSetJustificativa('justificado')">
+                  <span class="micro-filter-option-label">Justificados</span>
+                  <i class="ti ti-check micro-filter-option-check"></i>
+                </div>
+                <div class="micro-filter-option micro-filter-option--radio" data-val="ajustado" onclick="invSetJustificativa('ajustado')">
+                  <span class="micro-filter-option-label">Ajustados</span>
+                  <i class="ti ti-check micro-filter-option-check"></i>
+                </div>
+              </div>
+            </div>
+          </div>
 
           <!-- Toggle: considerar NFs/OS pendentes de integração SAP em Entradas/Saídas —
                mesma lógica da Visão Micro, mas global (todas as centrais de uma vez, já

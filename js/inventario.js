@@ -120,17 +120,20 @@
     // células da tabela e nos badges dos cards (estoqueIniMissing/
     // estoqueFimMissing).
     ausencia: false,
-    // Toggle simples: mostra só itens com variação (>0,01 kg) que ainda não
-    // têm justificativa operacional nem fiscal. Substitui o antigo botão
-    // "Pendentes" (que abria um painel separado) — agora filtra a própria
-    // tabela, igual aos demais toggles.
-    onlyPendentes: false,
+    // Filtro "Justificativa" — dropdown de seleção única com base no MESMO
+    // estado do botão Justificar de cada linha (_invEstadoDaLinha): false
+    // (Todos) -> 'justificar' (Não Justificados) -> 'pendente' (Pendentes)
+    // -> 'justificado' (Justificados) -> 'ajustado' (Ajustados). Substitui
+    // o antigo toggle booleano "Só Pendentes". Ao contrário do antigo
+    // _invIsPendente, NÃO considera relevância da variação — segue puro o
+    // estado do botão Justificar (ver invSetJustificativa/invFiltrar).
+    justificativa: false,
     // Toggle de 3 estados: false (desligado) -> 'com' (só itens com pelo
     // menos 1 categoria de Divergência identificada — registro manual,
     // duplicidade, pendência de integração SAP, ocorrência operacional
     // aberta — ver r.divergencias/r.divCount, calculados em invGerar) ->
     // 'sem' (só itens SEM nenhuma divergência) -> volta pra false. Mesmo
-    // padrão do onlyPendentes: fica de FORA de _invMatchesBaseFilters de
+    // padrão do justificativa: fica de FORA de _invMatchesBaseFilters de
     // propósito, pra o badge de contagem (inv-divergencias-count) mostrar
     // quantas linhas TERIAM achados dentro do recorte atual, sem "zerar" a
     // própria contagem quando o toggle já está ligado.
@@ -143,7 +146,7 @@
   // Linhas-base para calcular as opções de um filtro: considera TODOS os
   // demais filtros JÁ APLICADOS (dropdowns Regional/Central/Categoria/
   // Material, exceto o da própria chave, + os toggles Ocultar Var. 0,
-  // Início/Fim Ausente, Só Pendentes e Só Divergências) — se um registro
+  // Início/Fim Ausente, Justificativa e Só Divergências) — se um registro
   // não passa em algum filtro ativo, o valor dele não aparece como opção
   // em nenhum dropdown, mesmo que "exista" na base bruta.
   function _invOptionsSourceRows(key) {
@@ -158,7 +161,7 @@
       if (_invFilter.ausencia === 'ini' && !r.estoqueIniMissing) return false;
       if (_invFilter.ausencia === 'fim' && !r.estoqueFimMissing) return false;
       if (_invFilter.ausencia === 'sem' && (r.estoqueIniMissing || r.estoqueFimMissing)) return false;
-      if (_invFilter.onlyPendentes && !_invIsPendente(r)) return false;
+      if (!_invMatchesJustificativa(r)) return false;
       if (_invFilter.onlyDivergencias === 'com' && !(r.divCount > 0)) return false;
       if (_invFilter.onlyDivergencias === 'sem' && !(r.divCount === 0)) return false;
       return true;
@@ -285,11 +288,11 @@
     });
     _invFilter.hideVarZero = false;
     _invFilter.ausencia = false;
-    _invFilter.onlyPendentes = false;
+    _invFilter.justificativa = false;
     _invFilter.onlyDivergencias = false;
     _invSyncVarZeroBtn();
     _invSyncAusenteBtns();
-    _invSyncPendentesBtn();
+    _invSyncJustificativaBtn();
     _invSyncDivergenciasBtn();
     _invSyncClearBtn();
     invFiltrar();
@@ -329,13 +332,25 @@
     invAtualizarAlertas();
   };
 
-  // Toggle "Só Pendentes" — mostra só itens com variação sem justificativa.
-  // Antes era um botão que abria um painel à parte; agora é mais um filtro
-  // da tabela, no mesmo padrão dos demais toggles simples.
-  window.invToggleOnlyPendentes = function() {
-    _invFilter.onlyPendentes = !_invFilter.onlyPendentes;
-    _invSyncPendentesBtn();
+  // Filtro "Justificativa" — dropdown de seleção única (Todos / Não
+  // Justificados / Pendentes / Justificados / Ajustados), com base no MESMO
+  // estado do botão Justificar de cada linha (_invEstadoDaLinha). Substitui
+  // o antigo botão de toggle booleano "Só Pendentes" — mesmo padrão dos
+  // demais dropdowns simples (Ausência, Divergências).
+  window.invToggleJustificativaDropdown = function() {
+    _invCloseOtherSimpleDropdowns('justificativa');
+    const dd = document.getElementById('imfd-justificativa');
+    const chev = document.getElementById('imfc-justificativa');
+    if (!dd) return;
+    const isOpen = dd.classList.toggle('open');
+    chev?.classList.toggle('open', isOpen);
+  };
+
+  window.invSetJustificativa = function(state) {
+    _invFilter.justificativa = state;
+    _invSyncJustificativaBtn();
     _invSyncClearBtn();
+    _invCloseDropdownSimple('justificativa');
     invFiltrar();
     invAtualizarKpis();
     invAtualizarAlertas();
@@ -387,7 +402,7 @@
     document.getElementById(`imfc-${key}`)?.classList.remove('open');
   }
   function _invCloseOtherSimpleDropdowns(exceptKey) {
-    ['ausencia', 'divergencias'].filter(k => k !== exceptKey).forEach(_invCloseDropdownSimple);
+    ['ausencia', 'divergencias', 'justificativa'].filter(k => k !== exceptKey).forEach(_invCloseDropdownSimple);
   }
 
   function _invSyncVarZeroBtn() {
@@ -421,9 +436,37 @@
     });
   }
 
-  function _invSyncPendentesBtn() {
-    const btn = document.getElementById('imft-pendentes');
-    if (btn) btn.classList.toggle('active', _invFilter.onlyPendentes);
+  // Rótulos do dropdown "Justificativa" (plural, voltados a filtro) — os
+  // rótulos de _INV_ESTADO_STYLE são no singular e usados no botão de cada
+  // linha da tabela ("Justificar", "Pendente" etc.), por isso um mapa à parte aqui.
+  const _INV_JUSTIFICATIVA_FILTER_LABELS = {
+    justificar: 'Não Justificados',
+    pendente: 'Pendentes',
+    justificado: 'Justificados',
+    ajustado: 'Ajustados'
+  };
+
+  function _invSyncJustificativaBtn() {
+    const btn = document.getElementById('imft-justificativa');
+    if (!btn) return;
+    const state = _invFilter.justificativa; // false | 'justificar' | 'pendente' | 'justificado' | 'ajustado'
+    btn.classList.toggle('active', state !== false);
+    const label = document.getElementById('imft-justificativa-label');
+    const icon = document.getElementById('imft-justificativa-icon');
+    const st = state && _INV_ESTADO_STYLE[state];
+    if (label) label.textContent = st ? _INV_JUSTIFICATIVA_FILTER_LABELS[state] : 'Justificativa';
+    if (icon) {
+      icon.className = 'ti ' + (st ? st.icon : 'ti-alert-triangle');
+      icon.style.color = st ? st.color : 'var(--amber)';
+    }
+    btn.title = st
+      ? `Mostra só itens no estado "${_INV_ESTADO_STYLE[state].label}" do botão Justificar`
+      : 'Filtra pelo status do botão Justificar de cada linha (Não Justificados / Pendentes / Justificados / Ajustados)';
+    // Marca a opção ativa dentro do dropdown
+    document.querySelectorAll('#imfd-justificativa .micro-filter-option--radio').forEach(opt => {
+      const val = opt.dataset.val === 'false' ? false : opt.dataset.val;
+      opt.classList.toggle('selected', val === state);
+    });
   }
 
   function _invSyncDivergenciasBtn() {
@@ -518,7 +561,7 @@
   function _invSyncClearBtn() {
     const btn = document.getElementById('inv-filter-clear-btn');
     if (!btn) return;
-    const hasAny = _invFilter.applied.regional.size || _invFilter.applied.central.size || _invFilter.applied.categoria.size || _invFilter.applied.material.size || _invFilter.hideVarZero || _invFilter.ausencia || _invFilter.onlyPendentes || _invFilter.onlyDivergencias;
+    const hasAny = _invFilter.applied.regional.size || _invFilter.applied.central.size || _invFilter.applied.categoria.size || _invFilter.applied.material.size || _invFilter.hideVarZero || _invFilter.ausencia || _invFilter.justificativa || _invFilter.onlyDivergencias;
     btn.style.display = hasAny ? '' : 'none';
   }
 
@@ -1160,22 +1203,26 @@
     return true;
   }
 
-  // "Sem variação relevante" — usado tanto por "Ocultar Variação 0" quanto
-  // por "Só Pendentes" (_invIsPendente). Arredonda pra 2 casas decimais
-  // (mesma precisão exibida na coluna Variação) antes de comparar, então
-  // qualquer linha cuja variação apareça na tela como 0,01 kg ou menos —
-  // sobra (positiva) ou desfalque (negativa) — conta como "sem variação",
-  // nos dois filtros igualmente. Sem o arredondamento, ruído de ponto
-  // flutuante (ex.: 0.009999999999998 vs 0.010000000000002) fazia valores
-  // que pareciam idênticos na tela se comportar de forma inconsistente
-  // entre os dois filtros.
+  // "Sem variação relevante" — usado por "Ocultar Variação 0". Arredonda
+  // pra 2 casas decimais (mesma precisão exibida na coluna Variação) antes
+  // de comparar, então qualquer linha cuja variação apareça na tela como
+  // 0,01 kg ou menos — sobra (positiva) ou desfalque (negativa) — conta
+  // como "sem variação". Sem o arredondamento, ruído de ponto flutuante
+  // (ex.: 0.009999999999998 vs 0.010000000000002) fazia valores que
+  // pareciam idênticos na tela se comportar de forma inconsistente.
   function _invVarIrrelevante(varKg) {
     return Math.round(Math.abs(varKg) * 100) / 100 <= 0.01;
   }
 
-  function _invIsPendente(r) {
-    const j = invJustificativas[r.k] || {};
-    return !_invVarIrrelevante(r.varKg) && !(j.op && j.fiscal);
+  // Filtro "Justificativa" — compara o estado PURO do botão Justificar da
+  // linha (_invEstadoDaLinha, os mesmos 4 estados usados na tabela) contra
+  // o estado selecionado no dropdown. Ao contrário do antigo _invIsPendente,
+  // NÃO leva em conta se a variação é relevante ou não — quem quiser ver só
+  // linhas com variação pode combinar com o toggle "Ocultar Variação 0".
+  function _invMatchesJustificativa(r) {
+    const state = _invFilter.justificativa;
+    if (!state) return true;
+    return _invEstadoDaLinha(invJustificativas[r.k] || {}) === state;
   }
 
   // Existe algo salvo pra excluir? Usa "qualquer campo preenchido" (não
@@ -1207,7 +1254,7 @@
   window.invFiltrar = function() {
     invFiltered = invRows.filter(r => {
       if (!_invMatchesBaseFilters(r)) return false;
-      if (_invFilter.onlyPendentes && !_invIsPendente(r)) return false;
+      if (!_invMatchesJustificativa(r)) return false;
       if (_invFilter.onlyDivergencias === 'com' && !(r.divCount > 0)) return false;
       if (_invFilter.onlyDivergencias === 'sem' && !(r.divCount === 0)) return false;
       return true;
@@ -1577,17 +1624,34 @@
     if (fillJust) fillJust.style.width = (total ? (nJustificado / total) * 100 : 0) + '%';
   }
 
-  // ── Alertas pendentes (badge do filtro "Só Pendentes") ────
+  // ── Alertas pendentes (badge do filtro "Justificativa") ────
   function invAtualizarAlertas() {
     // Conta sob os filtros "base" (Regional/Central/Categoria/Material +
-    // toggles de zero/ausência), mas SEM aplicar o próprio "Só Pendentes"
-    // — assim o número no badge não vira sempre igual ao da tabela quando
-    // o filtro está ligado; ele mostra quantos itens pendentes existem
-    // dentro do recorte atual, ligado ou não. Mesmo raciocínio pro badge
-    // "Só Divergências" logo abaixo.
-    const pendentes = invRows.filter(r => _invMatchesBaseFilters(r) && _invIsPendente(r));
+    // toggles de zero/ausência), mas SEM aplicar o próprio filtro
+    // "Justificativa" — assim o número no badge não vira sempre igual ao
+    // da tabela quando um status já está selecionado; ele mostra quantos
+    // itens existem no estado relevante dentro do recorte atual, com
+    // filtro ligado ou não. Mesmo raciocínio pro badge "Só Divergências"
+    // logo abaixo.
+    //   • Com um status específico selecionado (Não Justificados/
+    //     Pendentes/Justificados/Ajustados): conta quantas linhas estão
+    //     NAQUELE estado.
+    //   • Com "Todos" selecionado (ou nenhum filtro ainda aplicado): conta
+    //     linhas "Não Justificados" + "Pendentes" — itens que ainda não
+    //     têm a narrativa (Operacional+Fiscal) completa, mesmo espírito do
+    //     antigo badge "Só Pendentes".
+    const justState = _invFilter.justificativa;
+    const pendentes = invRows.filter(r => {
+      if (!_invMatchesBaseFilters(r)) return false;
+      const estado = _invEstadoDaLinha(invJustificativas[r.k] || {});
+      return justState ? estado === justState : (estado === 'justificar' || estado === 'pendente');
+    });
     const badge = document.getElementById('inv-alertas-count');
-    if (badge) badge.textContent = pendentes.length;
+    if (badge) {
+      badge.textContent = pendentes.length;
+      const st = justState && _INV_ESTADO_STYLE[justState];
+      badge.style.background = st ? st.color : 'var(--amber)';
+    }
 
     const divBadge = document.getElementById('inv-divergencias-count');
     if (divBadge) {
@@ -2756,8 +2820,8 @@
         }
       }
     });
-    // Dropdowns simples (seleção única, sem Aplicar/Cancelar): Ausência e Divergências
-    ['ausencia','divergencias'].forEach(key => {
+    // Dropdowns simples (seleção única, sem Aplicar/Cancelar): Ausência, Divergências e Justificativa
+    ['ausencia','divergencias','justificativa'].forEach(key => {
       const group = document.getElementById(`imfg-${key}`);
       if (group && !group.contains(e.target)) _invCloseDropdownSimple(key);
     });
