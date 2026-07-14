@@ -426,10 +426,16 @@ function _dgVgBuildPares(results, thresholds, dtIni, dtFim) {
       // outro cadastro não relacionado).
       const catKey = (r.materialCatKeyMap && r.materialCatKeyMap.get(mat)) || null;
 
-      let diff;
+      let diff, estoqueIni = 0, estoqueFim = 0;
       if (dtIni && dtFim) {
         const prev = getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni, dtFim, catKey });
         const fim  = getLastPeriodLaunchStockWithFallback({ central: r.central, material: mat, dtIni, dtFim });
+        // Captura os mesmos valores já resolvidos pra calcular o diff —
+        // usados pelos cards "Est. Inicial/Final Total" do resumo do
+        // período (ver _dgVgEstoqueTotais). Ausente fica 0 (sem aviso,
+        // diferente do Inventário — decisão confirmada com o Hugo).
+        estoqueIni = prev?.value ?? 0;
+        estoqueFim = (fim && !fim.missing) ? fim.value : 0;
         diff = buildSnapshot({
           lancs, sap,
           initialStockOverride: prev?.value ?? null,
@@ -446,11 +452,34 @@ function _dgVgBuildPares(results, thresholds, dtIni, dtFim) {
       const level    = !catKey ? 'sem_cadastro' : (neutro ? 'bom' : classifyVariation(Math.abs(diff), catKey, thresholds));
       const custoMed = (r.custoMedioPorMat || {})[mat] || 0;
 
-      pares.push({ central: r.central, regional, mat, catKey, diff, level, neutro, custoImplicado: diff * custoMed });
+      pares.push({ central: r.central, regional, mat, catKey, diff, level, neutro, custoImplicado: diff * custoMed, estoqueIni, estoqueFim });
     });
   });
 
   return pares;
+}
+
+// Est. Inicial / Est. Final Total — soma o estoqueIni/estoqueFim que
+// _dgVgBuildPares já resolve por par (mesma função usada no Inventário:
+// getPrePeriodLaunchStock / getLastPeriodLaunchStockWithFallback, em
+// ui.js) — sem custo extra de performance, só captura um valor que já
+// era calculado e descartado. Ausente conta como 0, sem aviso (decisão
+// confirmada: diferente do Inventário, que mostra "X ausentes").
+function _dgVgEstoqueTotais(pares) {
+  let totalIni = 0, totalFim = 0;
+  pares.forEach(p => { totalIni += p.estoqueIni || 0; totalFim += p.estoqueFim || 0; });
+  return { totalIni, totalFim };
+}
+
+// Entradas / Saídas Total — soma dos totais já calculados por central em
+// buildDashboardGerencialResults (mesma exclusão de "sem cadastro" já
+// aplicada na origem, antes mesmo de chegar em pares). Saídas vira
+// positivo pra bater com a convenção do Inventário (lá soma Math.abs(p);
+// aqui totalSaidas por central já vem negativo).
+function _dgVgMovimentacaoTotais(results) {
+  let totalEnt = 0, totalSai = 0;
+  results.forEach(r => { totalEnt += r.totalEntradas || 0; totalSai += Math.abs(r.totalSaidas || 0); });
+  return { totalEnt, totalSai };
 }
 
 // Tally de pares Central×Material por nível — MESMO critério usado em
@@ -657,13 +686,18 @@ let _dgVgDonutUid = 0;
 // slices: [{ value, color, tipHtml, label(já escapado, opcional) }]
 // centerSvgFn(CX, CY, ri): retorna string SVG extra desenhada no centro
 // (anel + textos) — cada chamador desenha seu próprio conteúdo central.
-function _dgVgDrawDonutSvg(svgEl, slices, centerSvgFn, maxCallouts = 6) {
+function _dgVgDrawDonutSvg(svgEl, slices, centerSvgFn, maxCallouts = 6, sizeOverride = null) {
   if (!svgEl) return;
   const total = slices.reduce((s, x) => s + x.value, 0);
-  svgEl.setAttribute('viewBox', '0 0 340 220');
+  // Tamanho padrão (donuts de custo: Grupo de Material + 4 categorias) —
+  // sizeOverride permite outro tamanho sem afetar quem não passar nada
+  // (ex: os gauges de Saúde Geral, ajustados pro mesmo tamanho do
+  // Dashboard Analítico — ver _dgVgRenderHealthDonutSvg).
+  const sz = sizeOverride || { vbW: 340, vbH: 220, CX: 170, CY: 108, R: 74, ri: 44, calloutOffset: 14, elbowOffset: 28, tickLen: 15 };
+  svgEl.setAttribute('viewBox', `0 0 ${sz.vbW} ${sz.vbH}`);
 
   if (!slices.length || total <= 0) {
-    svgEl.innerHTML = `<text x="170" y="110" text-anchor="middle" font-size="12" fill="var(--text3)" font-family="var(--mono)">Sem dados</text>`;
+    svgEl.innerHTML = `<text x="${sz.vbW / 2}" y="${sz.vbH / 2}" text-anchor="middle" font-size="12" fill="var(--text3)" font-family="var(--mono)">Sem dados</text>`;
     return;
   }
 
@@ -673,8 +707,8 @@ function _dgVgDrawDonutSvg(svgEl, slices, centerSvgFn, maxCallouts = 6) {
   // do anel — dá margem horizontal extra pro texto sem espremer o callout
   // nem diminuir o donut. CALLOUT_R/ELBOW_R/TICK_LEN voltam à distância
   // confortável original.
-  const CX = 170, CY = 108, R = 74, ri = 44;
-  const CALLOUT_R = R + 14, ELBOW_R = R + 28, TICK_LEN = 15;
+  const CX = sz.CX, CY = sz.CY, R = sz.R, ri = sz.ri;
+  const CALLOUT_R = R + sz.calloutOffset, ELBOW_R = R + sz.elbowOffset, TICK_LEN = sz.tickLen;
   const gap = slices.length > 1 ? 0.022 : 0;
   let angle = -Math.PI / 2;
 
@@ -867,6 +901,9 @@ function _dgVgRenderHealthDonutSvg(svgId, counts, scoreInfo, levelMeta, unitLabe
     }
   }
 
+  // Tamanho igual ao dos donuts do Dashboard Analítico (macro.js:
+  // _renderDonut) — viewBox 420×300, R:104/ri:60, mesmos offsets de
+  // callout — pra ficar visualmente consistente entre os dois dashboards.
   _dgVgDrawDonutSvg(svgEl, slices, (CX, CY, ri) => {
     const SR = ri - 7, sCirc = 2 * Math.PI * SR, sDash = (scoreInfo.score / 100) * sCirc;
     return `<circle cx="${CX}" cy="${CY}" r="${SR}" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="4.5" style="pointer-events:none"/>
@@ -875,7 +912,7 @@ function _dgVgRenderHealthDonutSvg(svgId, counts, scoreInfo, levelMeta, unitLabe
         stroke-linecap="round" opacity="0.55" style="pointer-events:none"/>
       <text class="dv-fit-text" data-max-width="60" x="${CX}" y="${CY - 3}" text-anchor="middle" font-size="24" font-weight="700" font-family="var(--mono)" fill="${scoreColor}" style="pointer-events:none">${scoreInfo.score}%</text>
       <text x="${CX}" y="${CY + 13}" text-anchor="middle" font-size="8" font-weight="700" font-family="var(--mono)" fill="${scoreColor}" letter-spacing=".07em" opacity="0.9" style="pointer-events:none">${scoreLabelTxt}</text>`;
-  });
+  }, 6, { vbW: 420, vbH: 300, CX: 210, CY: 148, R: 104, ri: 60, calloutOffset: 22, elbowOffset: 44, tickLen: 22 });
 }
 
 // ── Donut de Custo Absoluto (por material) — usado nas 4 categorias e no
@@ -952,7 +989,10 @@ function renderDgVisaoGeralPdf(results, thresholds, dtIni, dtFim) {
   const custoVarMap    = _dgVgCustoVariacaoPorMaterial(pares);
   const custoAbsPorCat = _dgVgAgruparCustoVariacaoPorCategoria(custoVarMap);
 
-  _dgVgRenderKpisHero(varTotalFisica, custoTotal);
+  const estTotais = _dgVgEstoqueTotais(pares);
+  const movTotais = _dgVgMovimentacaoTotais(results);
+
+  _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais);
   _dgVgRenderHealthDonuts(pares, counts, scoreInfo, thresholds);
   _dgVgRenderChartCategoriaFisica(catFisicaPct);
   _dgVgRenderExtremos(extRegional, extCentral);
@@ -967,24 +1007,74 @@ function renderDgVisaoGeralPdf(results, thresholds, dtIni, dtFim) {
   });
 }
 
-// ── 1. Hero: Variação Total + Custo Total — os 2 KPIs mais importantes,
-//    isolados num destaque maior para bater o olho na situação do estoque.
-function _dgVgRenderKpisHero(varTotalFisica, custoTotal) {
+// ── 1. Hero: Variação Total + Custo Total em destaque, e Est. Inicial /
+//    Entradas / Saídas / Est. Final Total como KPIs secundários — mesmo
+//    padrão visual (classes inv-kpi-*) e estrutura em 2 níveis do
+//    resumo do Inventário, pra manter os dois dashboards consistentes.
+function _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais) {
   const el = document.getElementById('dg-vg-kpis-hero');
   if (!el) return;
-  const varCls   = varTotalFisica < -0.0001 ? 'hero-red' : varTotalFisica > 0.0001 ? 'hero-amber' : 'hero-teal';
-  const custoCls = custoTotal    < -0.0001 ? 'hero-red' : custoTotal    > 0.0001 ? 'hero-amber' : 'hero-teal';
+
+  const colorFor = v => v < -0.0001 ? 'var(--red)'    : v > 0.0001 ? 'var(--amber)'    : 'var(--teal)';
+  const bgFor    = v => v < -0.0001 ? 'var(--red-bg)' : v > 0.0001 ? 'var(--amber-bg)' : 'var(--teal-bg)';
+  const varCol = colorFor(varTotalFisica), varBg = bgFor(varTotalFisica);
+  const cstCol = colorFor(custoTotal),     cstBg = bgFor(custoTotal);
 
   el.innerHTML = `
-    <div class="dg-vg-hero-card ${varCls}">
-      <div class="dg-vg-hero-label"><i class="ti ti-scale"></i> Variação Total</div>
-      <div class="dg-vg-hero-value">${varSymbol(varTotalFisica)} ${fmtKgShort(Math.abs(varTotalFisica))}</div>
-      <div class="dg-vg-hero-sub">Soma da variação física — todas as categorias</div>
+    <div class="inv-kpi-featured">
+      <div class="inv-kpi-featured-label"><i class="ti ti-alert-triangle"></i> Destaque do Período</div>
+      <div class="inv-kpi-featured-row">
+        <div class="inv-kpi-card inv-kpi-card-featured">
+          <div class="inv-kpi-icon" style="background:${varBg};color:${varCol}"><i class="ti ti-scale"></i></div>
+          <div class="inv-kpi-body">
+            <div class="inv-kpi-label">Variação Total</div>
+            <div class="inv-kpi-value" style="color:${varCol}">${varSymbol(varTotalFisica)} ${fmtKgShort(Math.abs(varTotalFisica))}</div>
+            <div class="inv-kpi-unit">Soma da variação física — todas as categorias</div>
+          </div>
+        </div>
+        <div class="inv-kpi-card inv-kpi-card-featured">
+          <div class="inv-kpi-icon" style="background:${cstBg};color:${cstCol}"><i class="ti ti-currency-dollar"></i></div>
+          <div class="inv-kpi-body">
+            <div class="inv-kpi-label">Custo Total</div>
+            <div class="inv-kpi-value" style="color:${cstCol}" title="${money(Math.abs(custoTotal))}">${varSymbol(custoTotal)} ${moneyShort(Math.abs(custoTotal))}</div>
+            <div class="inv-kpi-unit">Impacto financeiro implicado pela variação</div>
+          </div>
+        </div>
+      </div>
     </div>
-    <div class="dg-vg-hero-card ${custoCls}">
-      <div class="dg-vg-hero-label"><i class="ti ti-currency-dollar"></i> Custo Total</div>
-      <div class="dg-vg-hero-value" title="${money(Math.abs(custoTotal))}">${varSymbol(custoTotal)} ${moneyShort(Math.abs(custoTotal))}</div>
-      <div class="dg-vg-hero-sub">Impacto financeiro implicado pela variação</div>
+    <div class="inv-kpi-secondary">
+      <div class="inv-kpi-card">
+        <div class="inv-kpi-icon" style="background:var(--accent-dim);color:var(--accent)"><i class="ti ti-archive"></i></div>
+        <div class="inv-kpi-body">
+          <div class="inv-kpi-label">Est. Inicial Total</div>
+          <div class="inv-kpi-value">${fmtKgShort(estTotais.totalIni)}</div>
+          <div class="inv-kpi-unit">kg</div>
+        </div>
+      </div>
+      <div class="inv-kpi-card">
+        <div class="inv-kpi-icon" style="background:var(--green-bg);color:var(--green)"><i class="ti ti-arrow-bar-to-down"></i></div>
+        <div class="inv-kpi-body">
+          <div class="inv-kpi-label">Entradas</div>
+          <div class="inv-kpi-value">${fmtKgShort(movTotais.totalEnt)}</div>
+          <div class="inv-kpi-unit">kg</div>
+        </div>
+      </div>
+      <div class="inv-kpi-card">
+        <div class="inv-kpi-icon" style="background:var(--red-bg);color:var(--red)"><i class="ti ti-arrow-bar-up"></i></div>
+        <div class="inv-kpi-body">
+          <div class="inv-kpi-label">Saídas</div>
+          <div class="inv-kpi-value">${fmtKgShort(movTotais.totalSai)}</div>
+          <div class="inv-kpi-unit">kg</div>
+        </div>
+      </div>
+      <div class="inv-kpi-card">
+        <div class="inv-kpi-icon" style="background:var(--purple-bg);color:var(--purple)"><i class="ti ti-box"></i></div>
+        <div class="inv-kpi-body">
+          <div class="inv-kpi-label">Est. Final Total</div>
+          <div class="inv-kpi-value">${fmtKgShort(estTotais.totalFim)}</div>
+          <div class="inv-kpi-unit">kg</div>
+        </div>
+      </div>
     </div>`;
 }
 
@@ -3135,17 +3225,15 @@ function _pendPadronizacaoAbrirCadastro(btn) {
   document.getElementById('alert-modal-pend-material')?.remove();
   document.getElementById('alert-modal-pend-central')?.remove();
   if (tipo === 'central') {
-    abrirCadastroFilialIndividual({ origem: nome, focus: 'alias' });
+    openModal('modal-filiais');
+    setVal('filiais-text', nome + ' = ');
+    _pendPadronizacaoFocarFinal('filiais-text');
     return;
   }
-  if (motivo === 'sem_categoria') {
-    // Origem/alias exatos do cadastro já existente — o analista só precisa
-    // completar a categoria (upsertMateriais casa por origem+alias, então
-    // isso atualiza o registro em vez de criar duplicata).
-    abrirCadastroMaterialIndividual({ origem, alias, focus: 'categoria' });
-  } else {
-    abrirCadastroMaterialIndividual({ origem: nome, focus: 'alias' });
-  }
+  const texto = motivo === 'sem_categoria' ? `${origem} = ${alias} = ` : `${nome} = `;
+  openModal('modal-materiais');
+  setVal('materiais-text', texto);
+  _pendPadronizacaoFocarFinal('materiais-text');
 }
 
 document.addEventListener('click', e => {
@@ -3257,7 +3345,9 @@ function _dupCadEditar(id) {
   const item = (state.materiais || []).find(m => m.id === id);
   if (!item) return;
   document.getElementById('alert-modal-dup-cad')?.remove();
-  abrirCadastroMaterialIndividual({ origem: item.origem, alias: item.alias, categoria: item.categoria, focus: 'alias' });
+  openModal('modal-materiais');
+  setVal('materiais-text', `${item.origem} = ${item.alias}${item.categoria ? ' = ' + item.categoria : ''}`);
+  _pendPadronizacaoFocarFinal('materiais-text');
 }
 window._dupCadEditar = _dupCadEditar;
 
