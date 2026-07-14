@@ -1722,11 +1722,32 @@
 
           <div class="micro-filter-divider"></div>
 
-          <!-- Toggle: ocultar variação 0,00 -->
-          <button class="micro-filter-trigger" id="imft-varzero" onclick="invToggleHideVarZero()" title="Oculta linhas com Variação igual a 0,00 kg">
-            <i class="ti ti-eye-off"></i>
-            <span id="imft-varzero-label">Ocultar Variação 0</span>
-          </button>
+          <!-- Filtro "Margem" — dropdown com faixa numérica De/Até (kg) sobre
+               a coluna Variação. Substitui o antigo toggle "Ocultar Variação 0". -->
+          <div class="micro-filter-group" id="imfg-margem">
+            <button class="micro-filter-trigger" id="imft-margem" onclick="invToggleMargemDropdown()" title="Filtra a coluna Variação (kg) por uma faixa De/Até definida por você">
+              <i class="ti ti-arrows-horizontal"></i>
+              <span id="imft-margem-label">Margem</span>
+              <i class="ti ti-chevron-down micro-filter-chev" id="imfc-margem"></i>
+            </button>
+            <div class="micro-filter-dropdown" id="imfd-margem" style="min-width:220px">
+              <div style="padding:12px 12px 8px;display:flex;flex-direction:column;gap:10px">
+                <div style="display:flex;flex-direction:column;gap:4px">
+                  <label for="imf-margem-min" style="font-size:11px;color:var(--text3);font-weight:600">DE (kg)</label>
+                  <input type="number" step="any" id="imf-margem-min" class="micro-filter-search" placeholder="sem mínimo" style="padding:7px 10px" onkeydown="if(event.key==='Enter') invApplyMargem()">
+                </div>
+                <div style="display:flex;flex-direction:column;gap:4px">
+                  <label for="imf-margem-max" style="font-size:11px;color:var(--text3);font-weight:600">ATÉ (kg)</label>
+                  <input type="number" step="any" id="imf-margem-max" class="micro-filter-search" placeholder="sem máximo" style="padding:7px 10px" onkeydown="if(event.key==='Enter') invApplyMargem()">
+                </div>
+              </div>
+              <div class="micro-filter-footer">
+                <button class="btn btn-filter-clear" onclick="invClearMargem()"><i class="ti ti-filter-off"></i> Limpar</button>
+                <button class="btn" onclick="invCancelMargem()"><i class="ti ti-x"></i> Cancelar</button>
+                <button class="btn btn-primary" onclick="invApplyMargem()"><i class="ti ti-check"></i> Aplicar</button>
+              </div>
+            </div>
+          </div>
 
           <!-- Filtro "Ausência de Estoque" — dropdown de seleção única
                (Todos / Só Est. Inicial Ausente / Só Est. Final Ausente /

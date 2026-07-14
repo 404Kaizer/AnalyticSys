@@ -109,10 +109,16 @@
     pending: { regional: new Set(), central: new Set(), categoria: new Set(), material: new Set() },
     applied: { regional: new Set(), central: new Set(), categoria: new Set(), material: new Set() },
     options: { regional: [], central: [], categoria: [], material: [] },
-    // Toggle simples (não é dropdown multi-seleção como os demais): oculta
-    // linhas cuja Variação (kg) é 0,00 — mesma tolerância usada na célula
-    // da tabela para decidir o que conta como "zero" (diff-zero).
-    hideVarZero: false,
+    // Filtro "Margem" — faixa numérica (De/Até) sobre a coluna Variação
+    // (kg). null em qualquer um dos dois lados = sem limite naquele lado
+    // (ex.: só margemMin preenchido = "≥ margemMin", sem teto). Substitui
+    // o antigo toggle booleano "Ocultar Variação 0" — que só escondia a
+    // faixa perto de zero; agora o usuário define a faixa exata que quer
+    // ver (ex.: DE -5000 ATÉ 20000), incluindo poder isolar só desfalque
+    // (ATÉ negativo) ou só sobra (DE positivo). Ver invApplyMargem/
+    // _invMatchesMargem.
+    margemMin: null,
+    margemMax: null,
     // Toggle único de 3 estados (um só botão, não dois): false (desligado)
     // -> 'ini' (só linhas com Est. Inicial AUSENTE) -> 'fim' (só linhas com
     // Est. Final AUSENTE) -> 'sem' (só linhas SEM nenhuma ausência — Inicial
@@ -145,10 +151,10 @@
 
   // Linhas-base para calcular as opções de um filtro: considera TODOS os
   // demais filtros JÁ APLICADOS (dropdowns Regional/Central/Categoria/
-  // Material, exceto o da própria chave, + os toggles Ocultar Var. 0,
-  // Início/Fim Ausente, Justificativa e Só Divergências) — se um registro
-  // não passa em algum filtro ativo, o valor dele não aparece como opção
-  // em nenhum dropdown, mesmo que "exista" na base bruta.
+  // Material, exceto o da própria chave, + os toggles Margem, Início/Fim
+  // Ausente, Justificativa e Só Divergências) — se um registro não passa
+  // em algum filtro ativo, o valor dele não aparece como opção em nenhum
+  // dropdown, mesmo que "exista" na base bruta.
   function _invOptionsSourceRows(key) {
     const keys = ['regional', 'central', 'categoria', 'material'];
     return invRows.filter(r => {
@@ -157,7 +163,7 @@
         const set = _invFilter.applied[k];
         if (set && set.size && !set.has(r[k])) return false;
       }
-      if (_invFilter.hideVarZero && _invVarIrrelevante(r.varKg)) return false;
+      if (!_invMatchesMargem(r)) return false;
       if (_invFilter.ausencia === 'ini' && !r.estoqueIniMissing) return false;
       if (_invFilter.ausencia === 'fim' && !r.estoqueFimMissing) return false;
       if (_invFilter.ausencia === 'sem' && (r.estoqueIniMissing || r.estoqueFimMissing)) return false;
@@ -286,11 +292,12 @@
       _invFilter.applied[key] = new Set();
       _invSyncTriggerLabel(key);
     });
-    _invFilter.hideVarZero = false;
+    _invFilter.margemMin = null;
+    _invFilter.margemMax = null;
     _invFilter.ausencia = false;
     _invFilter.justificativa = false;
     _invFilter.onlyDivergencias = false;
-    _invSyncVarZeroBtn();
+    _invSyncMargemBtn();
     _invSyncAusenteBtns();
     _invSyncJustificativaBtn();
     _invSyncDivergenciasBtn();
@@ -300,9 +307,67 @@
     invAtualizarAlertas();
   };
 
-  window.invToggleHideVarZero = function() {
-    _invFilter.hideVarZero = !_invFilter.hideVarZero;
-    _invSyncVarZeroBtn();
+  // Filtro "Margem" — dropdown com faixa numérica De/Até sobre a coluna
+  // Variação (kg), com Aplicar/Cancelar/Limpar (mesmo padrão dos filtros
+  // Regional/Central/Categoria/Material, mas com 2 campos numéricos em vez
+  // de lista de checkboxes). Substitui o antigo toggle "Ocultar Variação 0".
+  window.invToggleMargemDropdown = function() {
+    _invCloseOtherSimpleDropdowns('margem');
+    const dd = document.getElementById('imfd-margem');
+    const chev = document.getElementById('imfc-margem');
+    if (!dd) return;
+    const isOpen = dd.classList.toggle('open');
+    chev?.classList.toggle('open', isOpen);
+    if (isOpen) {
+      // Repopula os campos com o filtro já aplicado (não com um rascunho
+      // anterior não aplicado) toda vez que o dropdown é reaberto.
+      const minEl = document.getElementById('imf-margem-min');
+      const maxEl = document.getElementById('imf-margem-max');
+      if (minEl) minEl.value = _invFilter.margemMin ?? '';
+      if (maxEl) maxEl.value = _invFilter.margemMax ?? '';
+      setTimeout(() => minEl?.focus(), 50);
+    }
+  };
+
+  window.invApplyMargem = function() {
+    const minEl = document.getElementById('imf-margem-min');
+    const maxEl = document.getElementById('imf-margem-max');
+    let min = minEl && minEl.value !== '' ? parseFloat(minEl.value) : null;
+    let max = maxEl && maxEl.value !== '' ? parseFloat(maxEl.value) : null;
+    if (min !== null && isNaN(min)) min = null;
+    if (max !== null && isNaN(max)) max = null;
+    // DE/ATÉ digitados invertidos (ex.: DE 20000 ATÉ -5000) — troca os dois
+    // em vez de aplicar um filtro que zera a tabela por engano de digitação.
+    if (min !== null && max !== null && min > max) { const t = min; min = max; max = t; }
+    _invFilter.margemMin = min;
+    _invFilter.margemMax = max;
+    document.getElementById('imfd-margem')?.classList.remove('open');
+    document.getElementById('imfc-margem')?.classList.remove('open');
+    _invSyncMargemBtn();
+    _invSyncClearBtn();
+    invFiltrar();
+    invAtualizarKpis();
+    invAtualizarAlertas();
+  };
+
+  window.invCancelMargem = function() {
+    // Não reverte nada no estado: os campos só mostram um rascunho até
+    // "Aplicar"; ao reabrir, invToggleMargemDropdown repopula com o valor
+    // aplicado atual, descartando o rascunho cancelado.
+    document.getElementById('imfd-margem')?.classList.remove('open');
+    document.getElementById('imfc-margem')?.classList.remove('open');
+  };
+
+  window.invClearMargem = function() {
+    _invFilter.margemMin = null;
+    _invFilter.margemMax = null;
+    const minEl = document.getElementById('imf-margem-min');
+    const maxEl = document.getElementById('imf-margem-max');
+    if (minEl) minEl.value = '';
+    if (maxEl) maxEl.value = '';
+    document.getElementById('imfd-margem')?.classList.remove('open');
+    document.getElementById('imfc-margem')?.classList.remove('open');
+    _invSyncMargemBtn();
     _invSyncClearBtn();
     invFiltrar();
     invAtualizarKpis();
@@ -402,13 +467,27 @@
     document.getElementById(`imfc-${key}`)?.classList.remove('open');
   }
   function _invCloseOtherSimpleDropdowns(exceptKey) {
-    ['ausencia', 'divergencias', 'justificativa'].filter(k => k !== exceptKey).forEach(_invCloseDropdownSimple);
+    ['ausencia', 'divergencias', 'justificativa', 'margem'].filter(k => k !== exceptKey).forEach(_invCloseDropdownSimple);
   }
 
-  function _invSyncVarZeroBtn() {
-    const btn = document.getElementById('imft-varzero');
+  function _invSyncMargemBtn() {
+    const btn = document.getElementById('imft-margem');
     if (!btn) return;
-    btn.classList.toggle('active', _invFilter.hideVarZero);
+    const { margemMin, margemMax } = _invFilter;
+    const active = margemMin !== null || margemMax !== null;
+    btn.classList.toggle('active', active);
+    const label = document.getElementById('imft-margem-label');
+    const fmtNum = v => v.toLocaleString('pt-BR');
+    if (label) {
+      label.textContent = !active
+        ? 'Margem'
+        : (margemMin !== null && margemMax !== null) ? `${fmtNum(margemMin)} a ${fmtNum(margemMax)} kg`
+        : (margemMin !== null) ? `≥ ${fmtNum(margemMin)} kg`
+        : `≤ ${fmtNum(margemMax)} kg`;
+    }
+    btn.title = active
+      ? 'Filtra a coluna Variação (kg) pela faixa definida — clique para ajustar'
+      : 'Filtra a coluna Variação (kg) por uma faixa De/Até definida por você';
   }
 
   function _invSyncAusenteBtns() {
@@ -561,7 +640,7 @@
   function _invSyncClearBtn() {
     const btn = document.getElementById('inv-filter-clear-btn');
     if (!btn) return;
-    const hasAny = _invFilter.applied.regional.size || _invFilter.applied.central.size || _invFilter.applied.categoria.size || _invFilter.applied.material.size || _invFilter.hideVarZero || _invFilter.ausencia || _invFilter.justificativa || _invFilter.onlyDivergencias;
+    const hasAny = _invFilter.applied.regional.size || _invFilter.applied.central.size || _invFilter.applied.categoria.size || _invFilter.applied.material.size || _invFilter.margemMin !== null || _invFilter.margemMax !== null || _invFilter.ausencia || _invFilter.justificativa || _invFilter.onlyDivergencias;
     btn.style.display = hasAny ? '' : 'none';
   }
 
@@ -1196,20 +1275,33 @@
     if (cenSet.size && !cenSet.has(r.central))  return false;
     if (catSet.size && !catSet.has(r.categoria)) return false;
     if (matSet.size && !matSet.has(r.material))  return false;
-    if (_invFilter.hideVarZero && _invVarIrrelevante(r.varKg)) return false;
+    if (!_invMatchesMargem(r)) return false;
     if (_invFilter.ausencia === 'ini' && !r.estoqueIniMissing) return false;
     if (_invFilter.ausencia === 'fim' && !r.estoqueFimMissing) return false;
     if (_invFilter.ausencia === 'sem' && (r.estoqueIniMissing || r.estoqueFimMissing)) return false;
     return true;
   }
 
-  // "Sem variação relevante" — usado por "Ocultar Variação 0". Arredonda
-  // pra 2 casas decimais (mesma precisão exibida na coluna Variação) antes
-  // de comparar, então qualquer linha cuja variação apareça na tela como
-  // 0,01 kg ou menos — sobra (positiva) ou desfalque (negativa) — conta
-  // como "sem variação". Sem o arredondamento, ruído de ponto flutuante
-  // (ex.: 0.009999999999998 vs 0.010000000000002) fazia valores que
-  // pareciam idênticos na tela se comportar de forma inconsistente.
+  // Filtro "Margem" — faixa numérica (De/Até, em kg) sobre r.varKg (coluna
+  // Variação). null em qualquer lado = sem limite naquele lado. Substitui
+  // o antigo toggle "Ocultar Variação 0" (ver invApplyMargem/invClearMargem).
+  function _invMatchesMargem(r) {
+    const { margemMin, margemMax } = _invFilter;
+    if (margemMin !== null && r.varKg < margemMin) return false;
+    if (margemMax !== null && r.varKg > margemMax) return false;
+    return true;
+  }
+
+  // "Sem variação relevante" — usado pelo selo de alerta da tabela (ver
+  // alertBadge em invRenderTabela) e pelo resumo de progresso
+  // (_invAtualizarProgresso), pra não contar como "pendente"/"relevante"
+  // linha cuja variação é só ruído. Arredonda pra 2 casas decimais (mesma
+  // precisão exibida na coluna Variação) antes de comparar, então qualquer
+  // linha cuja variação apareça na tela como 0,01 kg ou menos — sobra
+  // (positiva) ou desfalque (negativa) — conta como "sem variação". Sem o
+  // arredondamento, ruído de ponto flutuante (ex.: 0.009999999999998 vs
+  // 0.010000000000002) fazia valores que pareciam idênticos na tela se
+  // comportar de forma inconsistente.
   function _invVarIrrelevante(varKg) {
     return Math.round(Math.abs(varKg) * 100) / 100 <= 0.01;
   }
@@ -2820,8 +2912,9 @@
         }
       }
     });
-    // Dropdowns simples (seleção única, sem Aplicar/Cancelar): Ausência, Divergências e Justificativa
-    ['ausencia','divergencias','justificativa'].forEach(key => {
+    // Dropdowns simples (seleção única/faixa, sem revert de "pending"):
+    // Ausência, Divergências, Justificativa e Margem
+    ['ausencia','divergencias','justificativa','margem'].forEach(key => {
       const group = document.getElementById(`imfg-${key}`);
       if (group && !group.contains(e.target)) _invCloseDropdownSimple(key);
     });
