@@ -2166,6 +2166,9 @@
           <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
             <div style="background:var(--bg3);border:1px solid var(--border2);border-radius:10px;padding:12px 8px;text-align:center">
               <div class="oc-label" style="margin-bottom:7px">Variação (kg)</div>
+              <div class="td-mono" style="font-size:10px;color:var(--text3);margin-bottom:4px;white-space:nowrap" title="Est. Final − Est. Teórico = Variação">
+                ${row.estoqueFimMissing ? '—' : _fmtKg(row.estoqueFimReal)} − ${_fmtKg(row.estTeor)}
+              </div>
               <div class="td-mono ${vkCls}" style="font-size:16px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:5px;white-space:nowrap">
                 ${_heroIcon(row.varKg)} ${_fmtKg(Math.abs(row.varKg))}
               </div>
@@ -2443,7 +2446,10 @@
               <div style="font-weight:700;font-size:13px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escape(row.material)}</div>
               <div style="font-size:11px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escape(row.central)} · ${_escape(row.regional)}</div>
             </div>
-            <div class="td-mono ${vkCls}" style="font-size:14px;font-weight:700;white-space:nowrap;flex-shrink:0">${_fmtKg(row.varKg)}</div>
+            <div style="text-align:right;flex-shrink:0">
+              <div class="td-mono" style="font-size:9px;color:var(--text3);white-space:nowrap;line-height:1.3;margin-bottom:1px" title="Est. Final − Est. Teórico = Variação">${row.estoqueFimMissing ? '—' : _fmtKg(row.estoqueFimReal)} − ${_fmtKg(row.estTeor)}</div>
+              <div class="td-mono ${vkCls}" style="font-size:14px;font-weight:700;white-space:nowrap">${_fmtKg(row.varKg)}</div>
+            </div>
             <div class="td-mono" id="lote-custosap-total-${idx}" style="font-size:14px;font-weight:700;white-space:nowrap;flex-shrink:0" title="Custo Total SAP (Custo Médio SAP × variação)">—</div>
             <div id="lote-status-${idx}" style="flex-shrink:0"></div>
             <button type="button" class="btn btn-primary" id="lote-btn-${idx}" style="flex-shrink:0;white-space:nowrap" onclick="_invLoteRegistrar('${k}')"><i class="ti ti-device-floppy"></i> Registrar</button>
