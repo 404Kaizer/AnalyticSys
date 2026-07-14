@@ -1034,22 +1034,31 @@ function _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais) {
   const varCol = colorFor(varTotalFisica), varBg = bgFor(varTotalFisica);
   const cstCol = colorFor(custoTotal),     cstBg = bgFor(custoTotal);
 
+  // Ícone remete a desfalque/sobra FÍSICA (caixa vazia vs. caixa cheia) e
+  // desfalque/sobra MONETÁRIA (moeda única vs. pilha de moedas) — mesmo
+  // critério de sinal usado em toda a Visão Geral (negativo=desfalque,
+  // vermelho / positivo=sobra, âmbar), aplicado também na faixa de
+  // destaque no topo do card, no estilo dos cards de resumo do período.
+  const varIcon = varTotalFisica < -0.0001 ? 'ti-box-off' : varTotalFisica > 0.0001 ? 'ti-box'  : 'ti-scale';
+  const cstIcon = custoTotal     < -0.0001 ? 'ti-coin'    : custoTotal     > 0.0001 ? 'ti-coins' : 'ti-currency-dollar';
+  const featTopStyle = col => `border-top:3px solid ${col};border-top-left-radius:var(--radius-lg);border-top-right-radius:var(--radius-lg)`;
+
   el.innerHTML = `
     <div class="inv-kpi-featured-row">
-      <div class="inv-kpi-card inv-kpi-card-featured">
-        <div class="inv-kpi-icon" style="background:${varBg};color:${varCol}"><i class="ti ti-scale"></i></div>
+      <div class="inv-kpi-card inv-kpi-card-featured" style="${featTopStyle(varCol)}">
+        <div class="inv-kpi-icon" style="background:${varBg};color:${varCol}"><i class="ti ${varIcon}"></i></div>
         <div class="inv-kpi-body">
-          <div class="inv-kpi-label">Variação Total</div>
+          <div class="inv-kpi-label">Variação</div>
           <div class="inv-kpi-value" style="color:${varCol}">${varSymbol(varTotalFisica)} ${fmtKg(Math.abs(varTotalFisica))}</div>
-          <div class="inv-kpi-unit">Soma da variação física — todas as categorias</div>
+          <div class="inv-kpi-unit">kg bruto</div>
         </div>
       </div>
-      <div class="inv-kpi-card inv-kpi-card-featured">
-        <div class="inv-kpi-icon" style="background:${cstBg};color:${cstCol}"><i class="ti ti-currency-dollar"></i></div>
+      <div class="inv-kpi-card inv-kpi-card-featured" style="${featTopStyle(cstCol)}">
+        <div class="inv-kpi-icon" style="background:${cstBg};color:${cstCol}"><i class="ti ${cstIcon}"></i></div>
         <div class="inv-kpi-body">
-          <div class="inv-kpi-label">Custo Total</div>
+          <div class="inv-kpi-label">Custo Var.</div>
           <div class="inv-kpi-value" style="color:${cstCol}">${varSymbol(custoTotal)} ${money(Math.abs(custoTotal))}</div>
-          <div class="inv-kpi-unit">Impacto financeiro implicado pela variação</div>
+          <div class="inv-kpi-unit">R$ bruto</div>
         </div>
       </div>
     </div>
