@@ -4082,6 +4082,17 @@ function _exportarModulos() {
 
     const lsGet = key => { try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch(e) { return null; } };
 
+    // Filtra dados de um módulo antes de exportar/contar. Hoje só afeta
+    // invJustificativas: uma justificativa "vazia" (registrada em branco,
+    // ver modal em lote/individual — campos deixaram de ser obrigatórios)
+    // não tem nenhuma informação real e não deveria ir pro backup — se
+    // for restaurada depois, uma entrada vazia pode SOBRESCREVER uma
+    // justificativa de verdade que exista nesse meio-tempo.
+    const _bkpFiltrarModulo = (key, arr) => {
+      if (key !== 'invJustificativas') return arr;
+      return (arr || []).filter(rec => !!(rec && (rec.op || rec.fiscal || rec.saldo || rec.custoMedioSap || rec.documentoSap)));
+    };
+
     // Metadados do arquivo
     const selectedKeys = [..._bkpSelected];
     const header = {
@@ -4090,7 +4101,7 @@ function _exportarModulos() {
       _modules:    selectedKeys,
       _counts:     {},
     };
-    selectedKeys.forEach(k => { header._counts[k] = (state[k] || []).length; });
+    selectedKeys.forEach(k => { header._counts[k] = _bkpFiltrarModulo(k, state[k]).length; });
 
     // Inclui dados auxiliares sempre
     header._notas      = lsGet('analyticsys_notes_v2');
@@ -4102,7 +4113,7 @@ function _exportarModulos() {
     parts.push(JSON.stringify(header).slice(0, -1)); // remove }
 
     for (const key of selectedKeys) {
-      const arr = state[key] || [];
+      const arr = _bkpFiltrarModulo(key, state[key]);
       parts.push(',"' + key + '":');
       if (arr.length === 0) {
         parts.push('[]');
@@ -4135,7 +4146,7 @@ function _exportarModulos() {
     setTimeout(() => URL.revokeObjectURL(url), 2000);
 
     closeModal('modal-backup');
-    const total = selectedKeys.reduce((s, k) => s + (state[k] || []).length, 0);
+    const total = selectedKeys.reduce((s, k) => s + _bkpFiltrarModulo(k, state[k]).length, 0);
     toast(`Backup exportado — ${selectedKeys.length} módulo(s), ${total.toLocaleString('pt-BR')} registros`);
   } catch(err) {
     console.error('Erro ao exportar backup:', err);
@@ -4336,7 +4347,26 @@ async function _restaurarModulosConfirmar() {
 
     // Aplica os módulos selecionados
     toRestore.forEach(m => {
-      if (Array.isArray(data[m.key])) state[m.key] = data[m.key];
+      if (!Array.isArray(data[m.key])) return;
+      if (m.key === 'invJustificativas') {
+        // Restaura só as justificativas PREENCHIDAS do backup (defensivo —
+        // backups antigos, de antes desse filtro existir na exportação,
+        // ainda podem ter entradas vazias), e MESCLA por chave em cima do
+        // que já existe hoje — nunca substitui a lista inteira. Uma
+        // justificativa que existe agora mas não está no backup (feita
+        // DEPOIS que o backup foi tirado) continua intacta; uma que existe
+        // nos dois lugares é sobrescrita pelo valor do backup, que é
+        // literalmente o que "restaurar aquele módulo" pede pra fazer.
+        // Isso evita o cenário que já aconteceu: restaurar um backup
+        // antigo apagando justificativas feitas depois dele.
+        const atual = new Map((state.invJustificativas || []).map(r => [r.k, r]));
+        data.invJustificativas
+          .filter(rec => !!(rec && (rec.op || rec.fiscal || rec.saldo || rec.custoMedioSap || rec.documentoSap)))
+          .forEach(rec => { if (rec && rec.k) atual.set(rec.k, rec); });
+        state.invJustificativas = [...atual.values()];
+      } else {
+        state[m.key] = data[m.key];
+      }
     });
 
     // Restaura acoesRelatorio se presente no arquivo (compatibilidade com backups antigos)

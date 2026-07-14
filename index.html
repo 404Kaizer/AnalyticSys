@@ -1597,7 +1597,10 @@
                 <div class="inv-kpi-label">Est. Final</div>
                 <div class="inv-kpi-value" id="inv-kpi-fin-v">—</div>
                 <div class="inv-kpi-unit">kg</div>
-                <div id="inv-kpi-fin-missing"></div>
+                <div style="display:flex;flex-wrap:wrap;gap:6px">
+                  <div id="inv-kpi-fin-missing"></div>
+                  <div id="inv-kpi-fin-fallback"></div>
+                </div>
               </div>
             </div>
           </div>
@@ -1725,17 +1728,36 @@
             <span id="imft-varzero-label">Ocultar Variação 0</span>
           </button>
 
-          <!-- Toggle: só Est. Inicial ausente -->
-          <button class="micro-filter-trigger" id="imft-iniausente" onclick="invToggleOnlyIniAusente()" title="Mostra só linhas com Est. Inicial AUSENTE">
-            <i class="ti ti-alert-triangle"></i>
-            <span id="imft-iniausente-label">Só Est. Inicial Ausente</span>
-          </button>
-
-          <!-- Toggle: só Est. Final ausente -->
-          <button class="micro-filter-trigger" id="imft-fimausente" onclick="invToggleOnlyFimAusente()" title="Mostra só linhas com Est. Final AUSENTE">
-            <i class="ti ti-alert-triangle"></i>
-            <span id="imft-fimausente-label">Só Est. Final Ausente</span>
-          </button>
+          <!-- Filtro "Ausência de Estoque" — dropdown de seleção única
+               (Todos / Só Est. Inicial Ausente / Só Est. Final Ausente /
+               Sem Ausência). Substitui os antigos dois botões separados. -->
+          <div class="micro-filter-group" id="imfg-ausencia">
+            <button class="micro-filter-trigger" id="imft-ausencia" onclick="invToggleAusenciaDropdown()" title="Filtra por ausência de Estoque Inicial/Final">
+              <i class="ti ti-alert-triangle" id="imft-ausencia-icon"></i>
+              <span id="imft-ausencia-label">Ausência de Estoque</span>
+              <i class="ti ti-chevron-down micro-filter-chev" id="imfc-ausencia"></i>
+            </button>
+            <div class="micro-filter-dropdown" id="imfd-ausencia">
+              <div class="micro-filter-options">
+                <div class="micro-filter-option micro-filter-option--radio" data-val="false" onclick="invSetAusencia(false)">
+                  <span class="micro-filter-option-label">Todos</span>
+                  <i class="ti ti-check micro-filter-option-check"></i>
+                </div>
+                <div class="micro-filter-option micro-filter-option--radio" data-val="ini" onclick="invSetAusencia('ini')">
+                  <span class="micro-filter-option-label">Só Est. Inicial Ausente</span>
+                  <i class="ti ti-check micro-filter-option-check"></i>
+                </div>
+                <div class="micro-filter-option micro-filter-option--radio" data-val="fim" onclick="invSetAusencia('fim')">
+                  <span class="micro-filter-option-label">Só Est. Final Ausente</span>
+                  <i class="ti ti-check micro-filter-option-check"></i>
+                </div>
+                <div class="micro-filter-option micro-filter-option--radio" data-val="sem" onclick="invSetAusencia('sem')">
+                  <span class="micro-filter-option-label">Sem Ausência</span>
+                  <i class="ti ti-check micro-filter-option-check"></i>
+                </div>
+              </div>
+            </div>
+          </div>
 
           <!-- Toggle: só itens com variação sem justificativa (era o botão "Pendentes") -->
           <button class="micro-filter-trigger" id="imft-pendentes" onclick="invToggleOnlyPendentes()" title="Mostra só itens com variação e sem justificativa">
@@ -1744,12 +1766,44 @@
             <span id="inv-alertas-count" style="background:var(--amber);color:#000;border-radius:20px;padding:0 6px;font-size:10px;font-weight:700;min-width:18px;text-align:center;margin-left:2px">0</span>
           </button>
 
-          <!-- Toggle: só itens com Divergências identificadas (manual/duplicidade/pendência SAP/ocorrência) -->
-          <button class="micro-filter-trigger" id="imft-divergencias" onclick="invToggleOnlyDivergencias()" title="Mostra só itens com possíveis causas da variação identificadas (registro manual, duplicidade, pendência de integração SAP ou ocorrência aberta)">
-            <i class="ti ti-list-search" style="color:var(--accent)"></i>
-            <span id="imft-divergencias-label">Só Divergências</span>
-            <span id="inv-divergencias-count" style="background:var(--accent);color:#fff;border-radius:20px;padding:0 6px;font-size:10px;font-weight:700;min-width:18px;text-align:center;margin-left:2px">0</span>
+          <!-- Toggle: considerar NFs/OS pendentes de integração SAP em Entradas/Saídas —
+               mesma lógica da Visão Micro, mas global (todas as centrais de uma vez, já
+               que aqui não há cards por central). Muda o VALOR calculado (não é só filtro
+               de exibição), por isso o botão fica visualmente destacado (.active) quando
+               ligado — e cada linha afetada ganha um selo "pendente" nas células de
+               Entradas/Saídas (ver invRenderTabela). -->
+          <button class="micro-filter-trigger" id="imft-pend-considerar" onclick="invToggleConsiderarPendentes()" title="Ao ligar, soma volumes de NFs/OS pendentes de integração SAP em Entradas/Saídas de TODAS as centrais — afeta Variação e Custo. Linhas afetadas ganham um selo 'pendente'.">
+            <i class="ti ti-plug-connected" style="color:var(--accent)"></i>
+            <span>Considerar NFs/OS pendentes</span>
           </button>
+
+          <!-- Filtro "Divergências" — dropdown de seleção única (Todos /
+               Só Divergências / Só Sem Divergências). Substitui o antigo
+               botão de toggle alternado. -->
+          <div class="micro-filter-group" id="imfg-divergencias">
+            <button class="micro-filter-trigger" id="imft-divergencias" onclick="invToggleDivergenciasDropdown()" title="Filtra por causas da variação identificadas (registro manual, duplicidade, pendência de integração SAP ou ocorrência aberta)">
+              <i class="ti ti-list-search" id="imft-divergencias-icon" style="color:var(--accent)"></i>
+              <span id="imft-divergencias-label">Divergências</span>
+              <span id="inv-divergencias-count" style="background:var(--accent);color:#fff;border-radius:20px;padding:0 6px;font-size:10px;font-weight:700;min-width:18px;text-align:center;margin-left:2px">0</span>
+              <i class="ti ti-chevron-down micro-filter-chev" id="imfc-divergencias"></i>
+            </button>
+            <div class="micro-filter-dropdown" id="imfd-divergencias">
+              <div class="micro-filter-options">
+                <div class="micro-filter-option micro-filter-option--radio" data-val="false" onclick="invSetDivergencias(false)">
+                  <span class="micro-filter-option-label">Todos</span>
+                  <i class="ti ti-check micro-filter-option-check"></i>
+                </div>
+                <div class="micro-filter-option micro-filter-option--radio" data-val="com" onclick="invSetDivergencias('com')">
+                  <span class="micro-filter-option-label">Só Divergências</span>
+                  <i class="ti ti-check micro-filter-option-check"></i>
+                </div>
+                <div class="micro-filter-option micro-filter-option--radio" data-val="sem" onclick="invSetDivergencias('sem')">
+                  <span class="micro-filter-option-label">Só Sem Divergências</span>
+                  <i class="ti ti-check micro-filter-option-check"></i>
+                </div>
+              </div>
+            </div>
+          </div>
 
           <!-- Toggle: modo seleção (checkboxes) pra Justificar em lote — movido pro
                cabeçalho da tabela (table-toolbar), junto com Expandir/Importar/Exportar -->
@@ -1772,6 +1826,9 @@
               <!-- Barra de ação em lote (aparece só no modo seleção) -->
               <div id="inv-batch-bar" style="display:none;align-items:center;gap:10px">
                 <span id="inv-batch-count" style="font-size:11px;color:var(--text2);white-space:nowrap">0 selecionadas</span>
+                <button class="btn" id="inv-batch-delete-btn" onclick="invExcluirJustLote()" disabled title="Exclui a justificativa das linhas selecionadas que tiverem alguma salva" style="color:var(--red);border-color:var(--red-border)">
+                  <i class="ti ti-trash"></i> Excluir Justificativas
+                </button>
                 <button class="btn btn-primary" id="inv-batch-btn" onclick="invAbrirJustLote()" disabled>
                   <i class="ti ti-stack-2"></i> Justificar em lote
                 </button>
