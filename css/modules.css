@@ -9818,18 +9818,20 @@ tr.sap-fechamento td {
    texto — a coluna Status virou só um sinalizador rápido, já que TODO
    registro do modal é, por definição, um Ajuste de Fechamento; o que
    varia é só se está desconsiderado (padrão) ou incluído manualmente. */
-.fechmgr-status-dot {
-  display: inline-block;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
+/* Indicador de status como SÍMBOLO (ícone), não só cor — circle-x para
+   Desconsiderado (excluído do cálculo) e circle-check para Incluído
+   manualmente/Considerado. Reforça a leitura pra quem não distingue bem
+   as duas cores (roxo × accent), já que a forma também muda. */
+.fechmgr-status-icon {
+  font-size: 16px;
+  line-height: 1;
   cursor: help;
 }
-.fechmgr-status-dot--desc {
-  background: var(--purple);
+.fechmgr-status-icon--desc {
+  color: var(--red);
 }
-.fechmgr-status-dot--inc {
-  background: var(--accent);
+.fechmgr-status-icon--inc {
+  color: var(--green);
 }
 
 /* ── Novos gráficos de ocorrências ── */

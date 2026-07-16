@@ -3567,8 +3567,8 @@ function _fechMgrRender() {
     // badge de texto — libera espaço horizontal pra material/valores, que
     // são as colunas que realmente importam pra decisão.
     const statusDot = r._statusExcluido
-      ? `<span class="fechmgr-status-dot fechmgr-status-dot--desc" title="Desconsiderado do cálculo de variação"></span>`
-      : `<span class="fechmgr-status-dot fechmgr-status-dot--inc" title="Incluído manualmente no cálculo"></span>`;
+      ? `<i class="ti ti-circle-x fechmgr-status-icon fechmgr-status-icon--desc" title="Desconsiderado do cálculo de variação"></i>`
+      : `<i class="ti ti-circle-check fechmgr-status-icon fechmgr-status-icon--inc" title="Incluído manualmente no cálculo (considerado)"></i>`;
     return `
     <tr class="${r._statusExcluido ? '' : 'fechmgr-row-incluido'}">
       <td class="th-checkbox"><input type="checkbox" ${checked ? 'checked' : ''} onchange="_fechMgrToggleSelecao('${r._chave.replace(/'/g,"\\'")}', this.checked)"></td>
