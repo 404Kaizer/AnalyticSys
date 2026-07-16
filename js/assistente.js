@@ -417,7 +417,11 @@ function _asstIntentSaldoMaterial(query) {
 
   const dtIni = window.__analiticoDtIni, dtFim = window.__analiticoDtFim;
   const lancsAll = getLancsByCentralInPeriod(central, dtIni, dtFim).filter(l => l.material === matAlias);
-  const sapAll   = getSapByCentralInPeriod(central, dtIni, dtFim).filter(s => s.material === matAlias);
+  // Ajustes de Fechamento Mensal (Y11/Y12) desconsiderados — mesmo critério
+  // usado em todo o sistema (ver isSapExcluidoPorFechamento, ui.js).
+  const sapAll   = getSapByCentralInPeriod(central, dtIni, dtFim)
+    .filter(s => s.material === matAlias)
+    .filter(s => !isSapExcluidoPorFechamento(s));
 
   const rawCat = (lancsAll[0]?.categoria || sapAll[0]?.categoria || '').trim().toUpperCase();
   const catKey = detectCatKey(rawCat) || detectCatFromMat(matAlias);

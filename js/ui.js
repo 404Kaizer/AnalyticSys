@@ -292,6 +292,68 @@ function toggleSomenteDuplicatas() {
 }
 window.toggleSomenteDuplicatas = toggleSomenteDuplicatas;
 
+// ── Filtro "Somente Fechamento" (Ajustes de Fechamento Mensal Y11/Y12) ───
+let _somenteFechamento = false;
+
+function toggleSomenteFechamento() {
+  _somenteFechamento = !_somenteFechamento;
+  const btn = document.getElementById('btn-fechamento-sap');
+  if (btn) {
+    btn.classList.toggle('active', _somenteFechamento);
+    btn.title = _somenteFechamento
+      ? 'Exibindo somente Ajustes de Fechamento Mensal — clique para voltar'
+      : 'Filtrar somente Ajustes de Fechamento Mensal (Y11/Y12)';
+  }
+  renderSAP?.() || renderModule?.('sap');
+}
+window.toggleSomenteFechamento = toggleSomenteFechamento;
+
+// ── Seleção em lote (checkbox por linha) para reincluir/reexcluir do
+//    cálculo — só aparece nas linhas detectadas pelo padrão de fechamento.
+//    Estado é só de sessão (não persiste), reconstruído a cada render.
+const _fechSelecionados = new Set(); // Set<chave (getSapFechKey)>
+
+function toggleFechSelecao(chave, checked) {
+  if (checked) _fechSelecionados.add(chave);
+  else _fechSelecionados.delete(chave);
+  _atualizarBarraFechLote();
+}
+window.toggleFechSelecao = toggleFechSelecao;
+
+function _atualizarBarraFechLote() {
+  const bar = document.getElementById('sap-fech-lote-bar');
+  if (!bar) return;
+  const n = _fechSelecionados.size;
+  bar.style.display = n > 0 ? 'flex' : 'none';
+  const countEl = document.getElementById('sap-fech-lote-count');
+  if (countEl) countEl.textContent = n === 1 ? '1 registro selecionado' : `${n} registros selecionados`;
+}
+
+// Aplica a ação em lote nos registros selecionados: incluir=true reinclui
+// no cálculo (override), incluir=false remove o override (volta ao
+// comportamento automático — desconsiderado de novo).
+function aplicarFechLote(incluir) {
+  if (!_fechSelecionados.size) return;
+  const chaves = [..._fechSelecionados];
+  setSapFechOverrideEmLote(chaves, incluir);
+  _fechSelecionados.clear();
+  _atualizarBarraFechLote();
+  toast(incluir
+    ? `${chaves.length} registro(s) reincluído(s) no cálculo de variação.`
+    : `${chaves.length} registro(s) voltaram a ser desconsiderados automaticamente.`);
+  renderSAP?.() || renderModule?.('sap');
+  // Recalcula qualquer análise já aberta para refletir a mudança
+  if (typeof updateDashboard === 'function') updateDashboard();
+}
+window.aplicarFechLote = aplicarFechLote;
+
+function limparFechSelecao() {
+  _fechSelecionados.clear();
+  _atualizarBarraFechLote();
+  renderSAP?.() || renderModule?.('sap');
+}
+window.limparFechSelecao = limparFechSelecao;
+
 const _SAP_REVERSE_MOVS = new Set(['102','864','863','552','802']);
 
 // ── Cache de duplicatas SAP ───────────────────────────────────────────────
@@ -742,7 +804,7 @@ const colFilterMeta = {
   entradas:    { tbodyId: 'tb-entradas',    fields: ['centralCompra','centralDestino','nf','dtEmissao','dtDescarga','fornecedor','categoria','material','peso','um','custo','valorTotal',null] },
   saidas:      { tbodyId: 'tb-saidas',      fields: ['central','dtEmissao','os','contrato','categoria','fornecedor','material','peso','um','custo','valorTotal',null] },
   lancamentos: { tbodyId: 'tb-lancamentos', fields: ['central','dtLanc','fornecedor','categoria','material','peso','um','custo','valorTotal',null] },
-  sap:         { tbodyId: 'tb-sap',         fields: ['usuario','movimento','ref','documento','central','deposito','dtDoc','dtLanc','dtReg','material','peso','um','custoUnit','valorTotal',null] },
+  sap:         { tbodyId: 'tb-sap',         fields: [null, 'usuario','movimento','ref','documento','central','deposito','dtDoc','dtLanc','dtReg','material','peso','um','custoUnit','valorTotal',null] },
   producao:    { tbodyId: 'tb-producao',    fields: ['mes','central','producao','um','precoMedio','custoMedio','margem','totalVendas',null] },
   imports:     { tbodyId: 'tb-imports',     fields: ['arquivo','modulo','registros','dataHora','status',null] },
   configs:     { tbodyId: 'tb-configs',     fields: ['key','value','desc','created',null] },
@@ -785,6 +847,9 @@ function _getModuleTextFilteredData(module) {
   if (module === 'sap' && _somenteDuplicatas) {
     const { cancelled, real } = getSapDuplicateKeys();
     data = data.filter(r => { const k = getSapRecordKey(r); return cancelled.has(k) || real.has(k); });
+  }
+  if (module === 'sap' && _somenteFechamento) {
+    data = data.filter(r => isSapFechamentoPattern(r));
   }
   if (module === 'lancamentos' && _somenteDuplicatasLanc) {
     const dupKeys = getLancamentoDuplicateKeys();
@@ -1171,18 +1236,22 @@ const analiticoDetailState = {
 
 window.__analiticoDetailCache = new Map();
 
-function buildAnaliticoDetailBreakdown(entries, total, colorVar, title, localCount = null, mat = '', central = '') {
-  if (!entries.length) {
+function buildAnaliticoDetailBreakdown(entries, total, colorVar, title, localCount = null, mat = '', central = '', fechExcluidos = []) {
+  if (!entries.length && !(fechExcluidos && fechExcluidos.length)) {
     return `<span class="analitico-detail-empty">—</span>`;
   }
 
   // Serialise entries into a data attribute so the modal can read them on click
   const encoded = encodeURIComponent(JSON.stringify(entries));
+  const encodedFech = (fechExcluidos && fechExcluidos.length)
+    ? encodeURIComponent(JSON.stringify(fechExcluidos))
+    : '';
 
   return `
     <button class="bdm-trigger" style="color:${colorVar}"
       onclick="event.stopPropagation(); openBreakdownModal(event.currentTarget)"
       data-entries="${encoded}"
+      data-fech-excluidos="${encodedFech}"
       data-title="${escapeHtml(title)}"
       data-color="${escapeHtml(colorVar)}"
       data-local-count="${localCount === null ? '' : localCount}"
@@ -1321,6 +1390,47 @@ function findMaterialTransferPair(central, usuario, extra, peso) {
   return material ? { material } : null;
 }
 
+// Renderiza o bloco de "Ajustes de Fechamento Mensal desconsiderados" no
+// resumo do modal de breakdown (Entradas/Saídas por material) — mostra a
+// soma de Peso e Custo Total, e uma lista expansível com cada registro
+// individual (para o Hugo poder ver exatamente quais foram excluídos).
+function _bdmFechExcluidosHtml(fechExcluidos) {
+  if (!fechExcluidos || !fechExcluidos.length) return '';
+  const { peso, custo } = (typeof somarPesoCustoSap === 'function')
+    ? somarPesoCustoSap(fechExcluidos)
+    : { peso: 0, custo: 0 };
+  const itensHtml = fechExcluidos.map(r => `
+    <div class="bdm-fech-item">
+      <span class="td-mono" style="color:${num(r.peso) < 0 ? '#ef4444' : '#22c55e'}">${r.movimento || '—'}</span>
+      <span class="td-muted">${r.documento || '—'}</span>
+      <span class="td-muted">${r.dtLanc || '—'}</span>
+      <span class="td-mono">${fmtKg(num(r.peso))}</span>
+      <span class="td-mono">${money(r.valorTotal || (num(r.custoUnit) * Math.abs(num(r.peso))))}</span>
+    </div>`).join('');
+
+  return `
+    <div class="bdm-summary-row bdm-fech-row">
+      <span class="bdm-summary-label">
+        <i class="ti ti-calendar-check" style="color:var(--purple)"></i>
+        Ajustes de Fechamento desconsiderados
+      </span>
+      <span class="bdm-summary-compare">
+        <b>${fechExcluidos.length}</b> registro(s) &nbsp;·&nbsp;
+        Peso: <b>${fmtKg(peso)}</b> &nbsp;·&nbsp;
+        Custo Total: <b>${money(custo)}</b>
+      </span>
+    </div>
+    <details class="bdm-fech-details">
+      <summary>Ver registros desconsiderados</summary>
+      <div class="bdm-fech-list">
+        <div class="bdm-fech-item bdm-fech-item--head">
+          <span>Mov.</span><span>Documento</span><span>Dt. Lanç.</span><span>Peso</span><span>Custo Total</span>
+        </div>
+        ${itensHtml}
+      </div>
+    </details>`;
+}
+
 function openBreakdownModal(trigger) {
   const overlay   = document.getElementById('breakdown-modal-overlay');
   const titleEl   = document.getElementById('bdm-title');
@@ -1333,6 +1443,8 @@ function openBreakdownModal(trigger) {
 
   let entries = [];
   try { entries = JSON.parse(decodeURIComponent(trigger.dataset.entries || '[]')); } catch(e) {}
+  let fechExcluidos = [];
+  try { fechExcluidos = JSON.parse(decodeURIComponent(trigger.dataset.fechExcluidos || '[]')); } catch(e) {}
   const title      = trigger.dataset.title  || '';
   const colorVar   = trigger.dataset.color  || 'var(--text)';
   const localCountRaw = trigger.dataset.localCount;
@@ -1393,7 +1505,7 @@ function openBreakdownModal(trigger) {
       <div class="bdm-summary-row">
         <span class="bdm-summary-label">Registros</span>
         <span class="bdm-summary-compare">${registrosHtml}</span>
-      </div>`;
+      </div>${_bdmFechExcluidosHtml(fechExcluidos)}`;
   }
 
   // ── Pré-computa HTML + texto de busca de cada linha, uma vez ─────────────
@@ -1510,6 +1622,73 @@ function closeBreakdownModal() {
   overlay.classList.remove('open');
   overlay.setAttribute('aria-hidden', 'true');
 }
+
+// ── Modal de Ajustes de Fechamento Mensal desconsiderados (Y11/Y12) ──────
+// Reutilizado pelo badge da Visão Geral (Dashboard Gerencial) e pelo badge
+// por linha do Inventário — recebe o array de registros SAP brutos já
+// filtrados (isSapExcluidoPorFechamento) e um rótulo de contexto (ex: nome
+// da central/material ou "Período selecionado").
+function openFechModal(records, contextLabel) {
+  const overlay  = document.getElementById('fech-modal-overlay');
+  const titleEl  = document.getElementById('fech-modal-title');
+  const summaryEl = document.getElementById('fech-modal-summary');
+  const tbody    = document.getElementById('fech-modal-tbody');
+  const pesoEl   = document.getElementById('fech-modal-total-peso');
+  const custoEl  = document.getElementById('fech-modal-total-custo');
+  if (!overlay || !tbody) return;
+
+  const recs = Array.isArray(records) ? records : [];
+  titleEl.textContent = contextLabel ? `Registros desconsiderados — ${contextLabel}` : 'Registros desconsiderados';
+
+  const { peso, custo } = somarPesoCustoSap(recs);
+  if (summaryEl) {
+    summaryEl.innerHTML = `
+      <div class="bdm-summary-row">
+        <span class="bdm-summary-label">Motivo</span>
+        <span class="bdm-summary-compare">Ajuste de saldo de fechamento mensal de inventário (Y11/Y12) — não entra no cálculo de variação para não mascarar o resultado do mês.</span>
+      </div>
+      <div class="bdm-summary-row">
+        <span class="bdm-summary-label">Registros</span>
+        <span class="bdm-summary-compare"><b>${recs.length}</b> registro(s)</span>
+      </div>`;
+  }
+
+  const sorted = recs.slice().sort((a, b) => {
+    const da = parseDate(a.dtLanc), db = parseDate(b.dtLanc);
+    return dateCmp(db ?? new Date(0), da ?? new Date(0));
+  });
+
+  tbody.innerHTML = sorted.length ? sorted.map(r => {
+    const neg = num(r.peso) < 0;
+    const custoLinha = num(r.valorTotal) !== 0 ? num(r.valorTotal) : (num(r.custoUnit) * Math.abs(num(r.peso)));
+    return `
+    <tr>
+      <td class="td-mono" style="color:${neg ? '#ef4444' : '#22c55e'}">${r.movimento || '—'}</td>
+      <td class="td-mono">${r.central || '—'}</td>
+      <td class="td-mono">${r.material || r.materialOriginal || '—'}</td>
+      <td class="td-mono">${r.documento || '—'}</td>
+      <td class="td-muted">${r.dtLanc || '—'}</td>
+      <td class="td-muted">${r.dtReg || '—'}</td>
+      <td class="td-mono" style="text-align:right">${fmtKg(num(r.peso))}</td>
+      <td class="td-mono" style="text-align:right">${money(custoLinha)}</td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="8"><div class="empty-state"><i class="ti ti-calendar-check"></i><p>Nenhum registro.</p></div></td></tr>';
+
+  if (pesoEl)  pesoEl.textContent  = 'Peso: ' + fmtKg(peso);
+  if (custoEl) custoEl.textContent = 'Custo Total: ' + money(custo);
+
+  overlay.classList.add('open');
+  overlay.setAttribute('aria-hidden', 'false');
+}
+window.openFechModal = openFechModal;
+
+function closeFechModal() {
+  const overlay = document.getElementById('fech-modal-overlay');
+  if (!overlay) return;
+  overlay.classList.remove('open');
+  overlay.setAttribute('aria-hidden', 'true');
+}
+window.closeFechModal = closeFechModal;
 
 // ── Pendentes de Integração SAP ──────────────────────────────────────────
 /**
@@ -3116,6 +3295,135 @@ function getSapByCentralInPeriod(central, dtIni, dtFim) {
 }
 
 // ═══════════════════════════════════════════════════════════
+// AJUSTES DE FECHAMENTO MENSAL DE INVENTÁRIO (Y11/Y12) ────────────────────
+// ═══════════════════════════════════════════════════════════
+// Contexto: todo fim de mês a central consolida estoque e faz ajustes de
+// saldo (movimentos SAP Y11 negativo / Y12 positivo) para bater o físico.
+// Esses ajustes são LANÇADOS NO SISTEMA e, se entrassem no cálculo de
+// variação (buildSnapshot), zerariam artificialmente a divergência que o
+// fechamento acabou de corrigir — mascarando o histórico de variação real
+// do mês. Precisam ser desconsiderados do cálculo em TODO o sistema
+// (Inventário, Dashboard Gerencial, Analítico, Trend, Macro, Assistente),
+// mas SEM alterar o dado bruto — a página SAP continua mostrando o
+// registro original, sempre, para auditoria.
+//
+// Critério de detecção (confirmado com o Hugo — sempre verdadeiro, sem
+// exceção conhecida): DT DOCUMENTO === DT LANÇAMENTO === último dia não-
+// domingo do mês, e DT REGISTRO alguns dias depois (tipicamente entre os
+// dias 5 e 15 do mês seguinte, quando a controladoria fecha o período).
+// Não existe nenhum outro campo no SAP (usuário, texto, motivo) que
+// diferencie um ajuste de fechamento de um ajuste feito durante o mês —
+// por isso a exclusão é automática por padrão de data, com uma via de
+// escape manual (override) para o caso raro de falso positivo, controlada
+// na própria página SAP (checkbox + ação em lote).
+
+// Retorna o último dia não-domingo do mês/ano da data informada.
+function _fechUltimoDiaUtilMes(date) {
+  const d = new Date(date.getFullYear(), date.getMonth() + 1, 0); // último dia do mês
+  while (d.getDay() === 0) d.setDate(d.getDate() - 1); // domingo → volta 1 dia
+  return d;
+}
+
+// Detecta se um registro SAP bate no padrão de Ajuste de Fechamento Mensal.
+// Pura — não considera overrides manuais (ver isSapExcluidoPorFechamento).
+function isSapFechamentoPattern(r) {
+  if (!r) return false;
+  const mov = normMov(r.movimento);
+  if (mov !== 'Y11' && mov !== 'Y12') return false;
+
+  const dtDoc  = parseDate(r.dtDoc);
+  const dtLanc = parseDate(r.dtLanc);
+  const dtReg  = parseDate(r.dtReg);
+  if (!dtDoc || !dtLanc || !dtReg) return false;
+
+  // DT DOCUMENTO === DT LANÇAMENTO (mesmo dia calendário)
+  if (localISODate(dtDoc) !== localISODate(dtLanc)) return false;
+
+  // DT LANÇAMENTO === último dia não-domingo do mês
+  const esperado = _fechUltimoDiaUtilMes(dtLanc);
+  if (localISODate(dtLanc) !== localISODate(esperado)) return false;
+
+  // DT REGISTRO deve vir depois (nunca antes) e dentro de uma janela
+  // generosa (~5 semanas) — a controladoria fecha tipicamente entre os
+  // dias 5-15 do mês seguinte, mas a data pode variar; a folga aqui é só
+  // uma rede de segurança contra dado corrompido/absurdo, não o critério
+  // principal (que já é bastante específico por si só).
+  const diffDias = Math.round((dtReg - dtLanc) / 86400000);
+  if (diffDias < 0 || diffDias > 35) return false;
+
+  return true;
+}
+
+// Chave única de um registro SAP para fins de override manual — usa o
+// número do documento (único por transação no SAP), diferente de
+// getSapRecordKey (usada para duplicatas), que NÃO inclui documento e por
+// isso não é precisa o bastante aqui: o Hugo confirmou que pode haver
+// vários Y11 independentes para o mesmo material/central no mesmo mês
+// (não vêm em pares), então cada um precisa de identidade própria.
+function getSapFechKey(r) {
+  return [
+    (r.documento || '').trim(),
+    (r.movimento || '').trim(),
+    (r.central   || '').trim(),
+    (r.deposito  || '').trim(),
+    (r.material  || r.materialOriginal || '').trim(),
+    (r.dtLanc    || '').trim(),
+    String(num(r.peso))
+  ].join('||');
+}
+
+// ── Cache do Set de overrides (reincluídos manualmente no cálculo) ───────
+let _fechOverrideSetCache = null;
+let _fechOverrideSetSig = null;
+
+function _getFechOverrideSet() {
+  const list = state.sapFechamentoOverrides || [];
+  const sig = list.length + '|' + (list.length ? list[list.length - 1] : '');
+  if (_fechOverrideSetCache && _fechOverrideSetSig === sig) return _fechOverrideSetCache;
+  _fechOverrideSetCache = new Set(list);
+  _fechOverrideSetSig = sig;
+  return _fechOverrideSetCache;
+}
+
+function invalidateFechOverrideCache() {
+  _fechOverrideSetCache = null;
+  _fechOverrideSetSig = null;
+}
+
+// Verdadeiro função de decisão usada por TODO o sistema: um registro deve
+// ser desconsiderado do cálculo de variação/entradas/saídas se bate no
+// padrão de fechamento E não foi reincluído manualmente pelo analista.
+function isSapExcluidoPorFechamento(r) {
+  if (!isSapFechamentoPattern(r)) return false;
+  return !_getFechOverrideSet().has(getSapFechKey(r));
+}
+
+// Soma Peso (kg) e Custo Total (R$) de um conjunto de registros SAP —
+// usada nos rodapés dos modais/popovers de Ajustes desconsiderados.
+// Custo Total: usa valorTotal quando disponível; senão custoUnit × |peso|.
+function somarPesoCustoSap(records) {
+  let peso = 0, custo = 0;
+  (records || []).forEach(r => {
+    peso += num(r.peso);
+    const vt = num(r.valorTotal);
+    custo += vt !== 0 ? vt : (num(r.custoUnit) * Math.abs(num(r.peso)));
+  });
+  return { peso, custo };
+}
+
+// ── Override manual (reincluir/reexcluir do cálculo) ──────────────────────
+// incluir=true: registro passa a contar no cálculo mesmo batendo no padrão.
+// incluir=false: remove o override (volta ao comportamento automático).
+function setSapFechOverrideEmLote(chaves, incluir) {
+  if (!Array.isArray(chaves) || !chaves.length) return;
+  const set = new Set(state.sapFechamentoOverrides || []);
+  chaves.forEach(k => { if (incluir) set.add(k); else set.delete(k); });
+  state.sapFechamentoOverrides = [...set];
+  invalidateFechOverrideCache();
+  if (typeof persist === 'function') persist();
+}
+
+// ═══════════════════════════════════════════════════════════
 // SAÚDE DA CENTRAL
 // ═══════════════════════════════════════════════════════════
 
@@ -3737,6 +4045,7 @@ const _BKP_MODULES = [
   { key: 'ocorrencias', label: 'Ocorrências',           icon: 'ti-alert-circle',    color: 'var(--red)'    },
   { key: 'imports',     label: 'Histórico de Importações', icon: 'ti-history',     color: 'var(--text3)'  },
   { key: 'invJustificativas', label: 'Inventário — Justificativas', icon: 'ti-clipboard-check', color: 'var(--amber)' },
+  { key: 'sapFechamentoOverrides', label: 'SAP — Overrides de Fechamento', icon: 'ti-calendar-check', color: 'var(--purple)' },
 ];
 
 // Módulos selecionados para exportar (persiste durante a sessão do modal)
@@ -4387,6 +4696,10 @@ async function _restaurarModulosConfirmar() {
     invalidateSaidasIndex();
     if (typeof invalidateAllSearchIndexes === 'function') invalidateAllSearchIndexes();
     if (typeof reaplicarPadronizacaoMateriais === 'function') reaplicarPadronizacaoMateriais();
+    // Se os overrides de Ajuste de Fechamento Mensal foram restaurados, o
+    // cache (Set derivado) precisa ser invalidado — senão o sistema continua
+    // aplicando as decisões antigas até a próxima mutação.
+    if (typeof invalidateFechOverrideCache === 'function') invalidateFechOverrideCache();
     _lstepSet('bkp-index', 'done'); _lbarSet(80);
 
     // Se as justificativas do Inventário foram restauradas, força o módulo a

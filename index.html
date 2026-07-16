@@ -2249,14 +2249,24 @@
             <div class="table-toolbar">
               <button id="btn-manuais-sap" class="btn btn-manuais-filter" onclick="toggleSomenteManuais('sap')" title="Filtrar somente registros manuais"><i class="ti ti-pencil"></i> Manuais</button>
               <button id="btn-duplicatas-sap" class="btn btn-duplicatas-filter" onclick="toggleSomenteDuplicatas()" title="Filtrar somente integrações duplicadas"><i class="ti ti-copy"></i> Duplicatas</button>
+              <button id="btn-fechamento-sap" class="btn btn-fechamento-filter" onclick="toggleSomenteFechamento()" title="Filtrar somente Ajustes de Fechamento Mensal (Y11/Y12)"><i class="ti ti-calendar-check"></i> Fechamento</button>
               <div id="pend-cad-sap-box"></div>
               <button class="btn btn-primary" onclick="openModal('modal-manual'); setModulo('SAP')"><i class="ti ti-plus"></i> Adicionar</button>
+            </div>
+          </div>
+          <div id="sap-fech-lote-bar" class="sap-fech-lote-bar" style="display:none">
+            <span id="sap-fech-lote-count">0 registros selecionados</span>
+            <div class="sap-fech-lote-actions">
+              <button class="btn btn-sm" onclick="aplicarFechLote(true)" title="Reincluir os registros selecionados no cálculo de variação"><i class="ti ti-check"></i> Incluir no cálculo</button>
+              <button class="btn btn-sm" onclick="aplicarFechLote(false)" title="Voltar os registros selecionados ao comportamento automático (desconsiderados)"><i class="ti ti-x"></i> Voltar ao automático</button>
+              <button class="btn btn-sm btn-ghost" onclick="limparFechSelecao()">Limpar seleção</button>
             </div>
           </div>
           <div class="table-scroll">
           <table>
             <thead>
               <tr>
+                <th class="th-checkbox"></th>
                 <th data-sort-col="usuario"   onclick="moduleSortBy('sap','usuario')">Usuário <i class="ti ti-selector mod-sort-icon"></i></th>
                 <th data-sort-col="movimento" onclick="moduleSortBy('sap','movimento')">Movimento <i class="ti ti-selector mod-sort-icon"></i></th>
                 <th data-sort-col="ref"       onclick="moduleSortBy('sap','ref')">Ref. <i class="ti ti-selector mod-sort-icon"></i></th>
@@ -2275,7 +2285,7 @@
               </tr>
             </thead>
             <tbody id="tb-sap">
-              <tr><td colspan="15"><div class="empty-state"><i class="ti ti-database"></i><p>Nenhuma movimentação SAP importada.</p></div></td></tr>
+              <tr><td colspan="16"><div class="empty-state"><i class="ti ti-database"></i><p>Nenhuma movimentação SAP importada.</p></div></td></tr>
             </tbody>
           </table>
           </div><!-- /table-scroll sap -->
@@ -3990,6 +4000,45 @@
     <div class="bdm-footer">
       <span class="bdm-footer-label" id="bdm-footer-label">Total</span>
       <span class="bdm-footer-total" id="bdm-total-val">—</span>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Ajustes de Fechamento Mensal desconsiderados (Y11/Y12) —
+     reutilizado pelo Dashboard Gerencial (Visão Geral) e pelo Inventário. -->
+<div class="bdm-overlay" id="fech-modal-overlay" aria-hidden="true">
+  <div class="bdm-dialog" role="dialog" aria-modal="true" aria-labelledby="fech-modal-title">
+    <div class="bdm-header">
+      <div class="bdm-header-text">
+        <div class="bdm-kicker"><i class="ti ti-calendar-check"></i> Ajustes de Fechamento Mensal</div>
+        <div class="bdm-title" id="fech-modal-title">Registros desconsiderados</div>
+      </div>
+      <button class="btn btn-primary" type="button" onclick="closeFechModal()">
+        <i class="ti ti-x"></i> <span>Fechar</span>
+      </button>
+    </div>
+    <div class="bdm-summary" id="fech-modal-summary"></div>
+    <div class="bdm-body">
+      <table class="bdm-table">
+        <thead>
+          <tr>
+            <th>Movimento</th>
+            <th>Central</th>
+            <th>Material</th>
+            <th>Documento</th>
+            <th>Dt. Lançamento</th>
+            <th>Dt. Registro</th>
+            <th style="text-align:right">Peso</th>
+            <th style="text-align:right">Custo Total</th>
+          </tr>
+        </thead>
+        <tbody id="fech-modal-tbody"></tbody>
+      </table>
+    </div>
+    <div class="bdm-footer">
+      <span class="bdm-footer-label">Soma</span>
+      <span class="bdm-footer-total" id="fech-modal-total-peso">—</span>
+      <span class="bdm-footer-total" id="fech-modal-total-custo">—</span>
     </div>
   </div>
 </div>

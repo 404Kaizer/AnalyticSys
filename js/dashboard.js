@@ -44,10 +44,22 @@ function buildDashboardGerencialResults(dtIni, dtFim) {
       materialCatKeyMap.set(r.material || '—', catKey);
       return true;
     });
+    // Ajustes de Fechamento Mensal (Y11/Y12) — desconsiderados do cálculo,
+    // coletados (globalmente e por material) para o badge/modal de
+    // "Ajustes desconsiderados" na Visão Geral do Dashboard Gerencial.
+    const sapFechExcluidos = [];
+    const sapFechExcluidosByMat = new Map();
     const sapNoPeriodo = sapNoPeriodoRaw.filter(r => {
       const catKey = getCatKeyDoCadastro(r.materialOriginal);
       if (!catKey) { matsSemCadastroSet.add(r.materialOriginal || '—'); return false; }
       materialCatKeyMap.set(r.material || '—', catKey);
+      if (isSapExcluidoPorFechamento(r)) {
+        sapFechExcluidos.push(r);
+        const mat = r.material || '—';
+        if (!sapFechExcluidosByMat.has(mat)) sapFechExcluidosByMat.set(mat, []);
+        sapFechExcluidosByMat.get(mat).push(r);
+        return false;
+      }
       return true;
     });
 
@@ -199,7 +211,8 @@ function buildDashboardGerencialResults(dtIni, dtFim) {
       materiaisLancPrimeiro, materiaisLancUltimo,
       sapNoPeriodo, lancsNoPeriodo, lancsByMat, custoMedioPorMat,
       matsSemCadastro: [...matsSemCadastroSet].sort(),
-      materialCatKeyMap
+      materialCatKeyMap,
+      sapFechExcluidos, sapFechExcluidosByMat
     });
   });
 
@@ -1004,7 +1017,11 @@ function renderDgVisaoGeralPdf(results, thresholds, dtIni, dtFim) {
   const estTotais = _dgVgEstoqueTotais(pares);
   const movTotais = _dgVgMovimentacaoTotais(results);
 
-  _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais);
+  // Ajustes de Fechamento Mensal desconsiderados — agregados de todas as
+  // centrais do período selecionado, para o badge/modal do card Variação.
+  const sapFechExcluidosPeriodo = results.reduce((acc, r) => acc.concat(r.sapFechExcluidos || []), []);
+
+  _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais, sapFechExcluidosPeriodo);
   _dgVgRenderHealthDonuts(pares, counts, scoreInfo, thresholds);
   _dgVgRenderChartCategoriaFisica(catFisicaPct);
   _dgVgRenderExtremos(extRegional, extCentral);
@@ -1025,7 +1042,7 @@ function renderDgVisaoGeralPdf(results, thresholds, dtIni, dtFim) {
 //    o wrapper "Destaque do Período" (removido — não fazia sentido), mas
 //    MANTENDO os 2 níveis de tamanho/agrupamento. Valores por extenso,
 //    sem abreviação M/K (fmtKg/money em vez de fmtKgShort/moneyShort).
-function _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais) {
+function _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais, fechExcluidos = []) {
   const el = document.getElementById('dg-vg-kpis-hero');
   if (!el) return;
 
@@ -1043,6 +1060,17 @@ function _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais) {
   const cstIcon = custoTotal     < -0.0001 ? 'ti-coin'    : custoTotal     > 0.0001 ? 'ti-coins' : 'ti-currency-dollar';
   const featTopStyle = col => `border-top:3px solid ${col};border-top-left-radius:var(--radius-lg);border-top-right-radius:var(--radius-lg)`;
 
+  // Badge de Ajustes de Fechamento Mensal desconsiderados — guarda os
+  // registros em variável global (evita serializar potencialmente
+  // centenas de registros num atributo HTML) para o modal reaproveitável
+  // (openFechModal, em ui.js) ler ao clicar.
+  window._dgVgFechExcluidosAtual = fechExcluidos;
+  const fechBadgeHtml = fechExcluidos.length
+    ? `<button class="dg-fech-badge" onclick="openFechModal(window._dgVgFechExcluidosAtual, 'Período selecionado')" title="Ver Ajustes de Fechamento Mensal desconsiderados deste período">
+        <i class="ti ti-calendar-check"></i> ${fechExcluidos.length} ajuste(s) de fechamento desconsiderado(s)
+      </button>`
+    : '';
+
   el.innerHTML = `
     <div class="inv-kpi-featured-row">
       <div class="inv-kpi-card inv-kpi-card-featured" style="${featTopStyle(varCol)}">
@@ -1051,6 +1079,7 @@ function _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais) {
           <div class="inv-kpi-label">Variação</div>
           <div class="inv-kpi-value" style="color:${varCol}">${varSymbol(varTotalFisica)} ${fmtKg(Math.abs(varTotalFisica))}</div>
           <div class="inv-kpi-unit">kg bruto</div>
+          ${fechBadgeHtml}
         </div>
       </div>
       <div class="inv-kpi-card inv-kpi-card-featured" style="${featTopStyle(cstCol)}">
@@ -3041,7 +3070,7 @@ function renderSAP() {
   renderSemCadastroModuloBox('sap');
 
   if (!getFilteredData('sap').length) {
-    tb.innerHTML = '<tr><td colspan="15"><div class="empty-state"><i class="ti ti-database"></i><p>Nenhuma movimentação SAP importada.</p></div></td></tr>';
+    tb.innerHTML = '<tr><td colspan="16"><div class="empty-state"><i class="ti ti-database"></i><p>Nenhuma movimentação SAP importada.</p></div></td></tr>';
     return;
   }
 
@@ -3055,13 +3084,26 @@ function renderSAP() {
     const rKey = getSapRecordKey(r);
     const isDupReal      = _sapDupKeys.real.has(rKey);
     const isDupCancelled = !isDupReal && _sapDupKeys.cancelled.has(rKey);
-    const trClass = isDupReal ? ' class="sap-duplicata"' : isDupCancelled ? ' class="sap-duplicata-anulada"' : '';
+    const isFechPattern  = typeof isSapFechamentoPattern === 'function' && isSapFechamentoPattern(r);
+    const isFechExcluido = isFechPattern && typeof isSapExcluidoPorFechamento === 'function' && isSapExcluidoPorFechamento(r);
+    const trClass = isDupReal ? ' class="sap-duplicata"' : isDupCancelled ? ' class="sap-duplicata-anulada"' : isFechPattern ? ' class="sap-fechamento"' : '';
     const trTitle = isDupReal ? ' title="Integração duplicada sem estorno correspondente"' : isDupCancelled ? ' title="Duplicata anulada por estorno"' : '';
     const _sapSemCad = !getCatKeyDoCadastro(r.materialOriginal);
+    const fechChave = isFechPattern ? getSapFechKey(r) : '';
+    const fechChecked = fechChave && _fechSelecionados.has(fechChave) ? ' checked' : '';
+    const fechCheckboxHtml = isFechPattern
+      ? `<input type="checkbox" class="sap-fech-checkbox" ${fechChecked} onclick="toggleFechSelecao('${fechChave.replace(/'/g,"\\'")}', this.checked)" title="Selecionar para ação em lote">`
+      : '';
+    const fechBadgeHtml = isFechPattern
+      ? (isFechExcluido
+          ? '<span class="badge-fechamento" title="Ajuste de Fechamento Mensal — desconsiderado do cálculo de variação">Fechamento</span>'
+          : '<span class="badge-fechamento badge-fechamento--incluido" title="Ajuste de Fechamento Mensal — reincluído manualmente no cálculo">Fechamento · incluído</span>')
+      : '';
     return `
     <tr${trClass}${trTitle}>
+      <td class="td-checkbox">${fechCheckboxHtml}</td>
       <td class="td-mono">${r.fonte === 'manual' ? '<span class="badge-manual" title="Registro inserido manualmente"><i class="ti ti-pencil"></i></span>' : ''}${r.usuario || '—'}</td>
-      <td class="td-mono" style="color:${neg ? red : green}">${r.movimento || '—'}</td>
+      <td class="td-mono" style="color:${neg ? red : green}">${r.movimento || '—'}${fechBadgeHtml}</td>
       <td class="td-muted">${r.ref || '—'}</td>
       <td class="td-mono">${r.documento || '—'}</td>
       <td class="td-mono">${r.central || '—'}</td>

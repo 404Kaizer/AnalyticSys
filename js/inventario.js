@@ -909,7 +909,7 @@
     if (!h) { toast('Sistema não iniciado. Aguarde e tente novamente.', 'error'); return; }
     _invHydrateJustificativas();
 
-    const { getLancIndex, getSapIndex, getCustoMedioPorMat, getFilialLookupIndex, normalizeText, parseDate, localISODate, dateCmp, num, state: getState, getCategoriaPorGrupo, getCatKeyDoCadastro } = h;
+    const { getLancIndex, getSapIndex, getCustoMedioPorMat, getFilialLookupIndex, normalizeText, parseDate, localISODate, dateCmp, num, state: getState, getCategoriaPorGrupo, getCatKeyDoCadastro, isSapExcluidoPorFechamento, somarPesoCustoSap } = h;
     const state = getState();
 
     // ── Fontes de "Divergências" (ver invAbrirDivergencias mais abaixo) ──
@@ -979,6 +979,10 @@
       });
       const sapByMat = new Map();
       const semCadSapByOriginal = new Map();
+      // Ajustes de Fechamento Mensal (Y11/Y12) — desconsiderados do cálculo
+      // de Entradas/Saídas/Variação, coletados por material para o badge
+      // por linha (ver invRenderTabela) com soma de peso/custo no modal.
+      const sapFechExcluidosByMat = new Map();
       sapPer.forEach(r => {
         const catKey = getCatKeyDoCadastro(r.materialOriginal);
         if (!catKey) {
@@ -988,6 +992,11 @@
           return;
         }
         const mat = r.material || '—';
+        if (isSapExcluidoPorFechamento(r)) {
+          if (!sapFechExcluidosByMat.has(mat)) sapFechExcluidosByMat.set(mat, []);
+          sapFechExcluidosByMat.get(mat).push(r);
+          return;
+        }
         if (!sapByMat.has(mat)) sapByMat.set(mat, []);
         sapByMat.get(mat).push(r);
       });
@@ -1208,7 +1217,8 @@
           estoqueFimReal, estoqueFimMissing, estoqueFimLastKnown,
           estoqueFimFallback, estoqueFimEsperado, estoqueFimUsadoLabel,
           pendEntAplicado, pendSaiAplicado,
-          custoMedio, entEntries, saiEntries, divergencias, divCount
+          custoMedio, entEntries, saiEntries, divergencias, divCount,
+          sapFechExcluidos: sapFechExcluidosByMat.get(mat) || []
         });
       });
 
@@ -1227,7 +1237,8 @@
           estoqueFimReal: 0, estoqueFimMissing: true, estoqueFimLastKnown: null,
           estoqueFimFallback: false, estoqueFimEsperado: null, estoqueFimUsadoLabel: null,
           pendEntAplicado: false, pendSaiAplicado: false,
-          custoMedio: 0, entEntries: [], saiEntries: [], divergencias: null, divCount: 0
+          custoMedio: 0, entEntries: [], saiEntries: [], divergencias: null, divCount: 0,
+          sapFechExcluidos: []
         });
       });
     });
@@ -1398,6 +1409,7 @@
     const _money     = h ? h.money     : fmtR;
     const _escape    = h ? h.escapeHtml: (s) => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     const _bdm       = h ? h.buildAnaliticoDetailBreakdown : null;
+    const _num       = h ? h.num : (v) => parseFloat(v) || 0;
 
     tbody.innerHTML = invFiltered.map(r => {
       const j = just[r.k] || {};
@@ -1448,11 +1460,13 @@
       // E este material teve NF (Entradas) e/ou OS (Saídas) pendente
       // efetivamente somada ao valor — deixa explícito o que foi afetado. ──
       const pendBadge = (label) => `<span class="absent-badge" style="background:var(--accent-dim,rgba(99,102,241,.15));color:var(--accent);border-color:var(--accent);margin-left:5px" title="Inclui volume de ${label} pendente de integração SAP (toggle 'Considerar NFs/OS pendentes' ligado)">pendente</span>`;
+      const _rowFechExcluidosEnt = (r.sapFechExcluidos || []).filter(x => _num(x.peso) > 0);
+      const _rowFechExcluidosSai = (r.sapFechExcluidos || []).filter(x => _num(x.peso) < 0);
       const entCell = (_bdm
-        ? _bdm(r.entEntries || [], r.entradasKg, 'var(--green)', 'Entradas', null, r.material, r.central)
+        ? _bdm(r.entEntries || [], r.entradasKg, 'var(--green)', 'Entradas', null, r.material, r.central, _rowFechExcluidosEnt)
         : `<span class="td-mono" style="color:var(--green);font-weight:600">${_fmtKg(r.entradasKg)}</span>`) + (r.pendEntAplicado ? pendBadge('NF') : '');
       const saiCell = (_bdm
-        ? _bdm(r.saiEntries || [], r.saidasKg, 'var(--red)', 'Saídas', null, r.material, r.central)
+        ? _bdm(r.saiEntries || [], r.saidasKg, 'var(--red)', 'Saídas', null, r.material, r.central, _rowFechExcluidosSai)
         : `<span class="td-mono" style="color:var(--red);font-weight:600">${_fmtKg(r.saidasKg)}</span>`) + (r.pendSaiAplicado ? pendBadge('OS') : '');
 
       // ── Est. Final: teal igual ao analítico. 3 estados possíveis:

@@ -42,7 +42,13 @@ const defaultState = () => ({
   // acontece naturalmente na própria chave — não precisa de bucket
   // separado por mês. Ver inventario.js (_invHydrateJustificativas /
   // _invSyncJustificativasToState).
-  invJustificativas: []
+  invJustificativas: [],
+  // Overrides manuais do filtro de "Ajuste de Fechamento Mensal" (Y11/Y12
+  // detectados automaticamente pelo padrão de datas — ver isSapFechamentoPattern
+  // em ui.js). Array de chaves (getSapFechKey) de registros que o analista
+  // reincluiu manualmente no cálculo de variação, mesmo batendo no padrão
+  // de fechamento. Controlado pela página SAP (checkbox + ação em lote).
+  sapFechamentoOverrides: []
 });
 
 

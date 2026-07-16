@@ -199,10 +199,23 @@ function _rodarAnaliticoCore(dtIni, dtFim, onDone, silent) {
       materialCatKeyMap.set(r.material || '—', catKey);
       return true;
     });
+    // Ajustes de Fechamento Mensal (Y11/Y12) detectados e não reincluídos
+    // manualmente — coletados por material para exibir no popover de
+    // breakdown (ver buildAnaliticoDetailBreakdown) com soma de peso/custo.
+    // Excluídos do cálculo de Entradas/Saídas/Variação abaixo, mas o dado
+    // bruto nunca é alterado — segue disponível na tela de Movimentações SAP.
+    const sapFechExcluidosByMat = new Map();
+
     const sapNoPeriodo = sapNoPeriodoRaw.filter(r => {
       const catKey = getCatKeyDoCadastro(r.materialOriginal);
       if (!catKey) { matsSemCadastroSet.add(r.materialOriginal || '—'); return false; }
       materialCatKeyMap.set(r.material || '—', catKey);
+      if (isSapExcluidoPorFechamento(r)) {
+        const mat = r.material || '—';
+        if (!sapFechExcluidosByMat.has(mat)) sapFechExcluidosByMat.set(mat, []);
+        sapFechExcluidosByMat.get(mat).push(r);
+        return false;
+      }
       return true;
     });
 
@@ -437,7 +450,8 @@ function _rodarAnaliticoCore(dtIni, dtFim, onDone, silent) {
       custoMedioPorMat,
       custoMedioFontePorMat,
       matsSemCadastro: [...matsSemCadastroSet].sort(),
-      materialCatKeyMap
+      materialCatKeyMap,
+      sapFechExcluidosByMat
     });
   });
 
@@ -1037,6 +1051,10 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
           >${varSymbol(_rowCustoVar)} ${money(Math.abs(_rowCustoVar))}</span>`
         : `<span style="color:var(--text3);font-size:11px">—</span>`;
 
+      const _matFechExcluidos = (r.sapFechExcluidosByMat && r.sapFechExcluidosByMat.get(mat)) || [];
+      const _matFechExcluidosEnt = _matFechExcluidos.filter(x => num(x.peso) > 0);
+      const _matFechExcluidosSai = _matFechExcluidos.filter(x => num(x.peso) < 0);
+
       matRowsHtml += `
         <tr class="material-row${
           (_matsComPendNF.has(mat) && _matsComPendOS.has(mat)) ? ' pend-injetado-ambos'
@@ -1058,8 +1076,8 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
               : (snapshot.pesoIniAusente ? `<span class='absent-badge' data-absent-tooltip='${buildAbsentTooltip(absentNearest)}' style='cursor:help'>AUSENTE</span>` : snapshot.dtIniLabel)
           }</td>
           <td class="td-mono" style="color:${(matSemCadastro || snapshot.pesoIniAusente) ? 'var(--text3)' : 'var(--text)'}">${(matSemCadastro || snapshot.pesoIniAusente) ? '—' : fmtKg(snapshot.pesoIni)}</td>
-          <td>${buildAnaliticoDetailBreakdown(entEntries, snapshot.totalEnt, 'var(--green)', 'Entradas', localEntCount, mat, r.central)}</td>
-          <td>${buildAnaliticoDetailBreakdown(saiEntries, snapshot.totalSai, 'var(--red)', 'Saídas', localSaiCount, mat, r.central)}</td>
+          <td>${buildAnaliticoDetailBreakdown(entEntries, snapshot.totalEnt, 'var(--green)', 'Entradas', localEntCount, mat, r.central, _matFechExcluidosEnt)}</td>
+          <td>${buildAnaliticoDetailBreakdown(saiEntries, snapshot.totalSai, 'var(--red)', 'Saídas', localSaiCount, mat, r.central, _matFechExcluidosSai)}</td>
           <td class="td-mono" style="color:var(--text2);font-size:11px">${
             snapshot.pesoFimAusente
               ? `<span class='absent-badge' data-absent-tooltip='${buildAbsentTooltip(absentNearest)}' style='cursor:help'>AUSENTE</span>`
@@ -3260,6 +3278,13 @@ window._inv_helpers = {
   // nunca como uma categoria padrão silenciosa.
   getCategoriaPorGrupo,
   getCatKeyDoCadastro,
+
+  // Ajustes de Fechamento Mensal (Y11/Y12) — detecção/exclusão do cálculo
+  // de variação (ver ui.js). Expostos aqui para o Inventário poder filtrar
+  // seus próprios agrupamentos de SAP por central/material da mesma forma
+  // que Analítico/Dashboard Gerencial/Trend, e montar o badge por linha.
+  isSapExcluidoPorFechamento,
+  somarPesoCustoSap,
 
   // Calcula custo médio ponderado por material para uma central/período,
   // usando EXATAMENTE a mesma lógica do Analítico:

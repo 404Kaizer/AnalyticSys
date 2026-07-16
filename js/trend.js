@@ -194,12 +194,17 @@ function _tCompute(type, name, dtIni, dtFim, selMats, custoMedioOverride) {
 
       allMats.forEach(material => {
         // ── SAP: terça anterior → terça atual (inclusive, 7 dias) ─────
+        // Ajustes de Fechamento Mensal (Y11/Y12) desconsiderados — mesmo
+        // critério usado em todo o sistema (ver isSapExcluidoPorFechamento,
+        // ui.js), para não zerar artificialmente a variação semanal do
+        // Trend com o ajuste que corrige o fechamento do mês.
         const sapAll  = sapMatMap?.get(material) || [];
         const sapWeek = sapAll.filter(s => {
           const d = parseDate(s.dtLanc);
           if (!d) return false;
           const dk = _tDK(d);
-          return dk >= sk && dk <= ek;
+          if (dk < sk || dk > ek) return false;
+          return !isSapExcluidoPorFechamento(s);
         });
 
         // ── Lançamento de inventário da terça atual (pesoFim) ─────────
