@@ -628,18 +628,19 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
       sapByMat.get(mat).push(rec);
     });
 
-    // ── Cópia limpa do SAP (sem pendentes injetados) ─────────────────────
-    // Usada pelo breakdown diário (Est. Inicial por dia) e pela classificação
-    // de saúde (badge/donut/"Maiores Variações") — ambos devem permanecer
-    // imunes ao toggle "Considerar NFs/OS pendentes", que deve afetar SOMENTE
-    // Entradas/Saídas/Variação/Custo do resumo da linha de material.
-    const sapByMatClean = new Map();
-    sapByMat.forEach((arr, mat) => sapByMatClean.set(mat, [...arr]));
-
     // ── Injeção de pendentes considerados ────────────────────────────────
     // Quando o analista ativa "Considerar NFs/OS pendentes", registros SAP
     // sintéticos são injetados em sapByMat para refletir o impacto no cálculo.
     // Os dados vêm de _pendCache, populado por buildPendIntegSection no render anterior.
+    //
+    // Por decisão explícita do usuário, essa injeção agora se propaga para
+    // TUDO que deriva de sapByMat — inclusive o detalhamento por dia (Est.
+    // Inicial/Final, variação e saúde do dia), não só o resumo da linha do
+    // material. Antes existia uma cópia "limpa" separada (sapByMatClean)
+    // mantida deliberadamente imune ao toggle só para o breakdown diário;
+    // essa separação foi removida a pedido — agora um único sapByMat (já
+    // com os sintéticos, quando o toggle está ativo) alimenta tanto o
+    // resumo quanto o breakdown diário.
     const _pendStateCentral = (window._pendConsiderados || {})[r.central] || {};
     const _pendCacheCentral = (window._pendCache        || {})[r.central] || {};
     const _matsComPendNF    = new Set();
@@ -716,9 +717,6 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
     allMatsSorted.forEach((mat, matIdx) => {
       const lancsMat = lancsByMat.get(mat) || [];
       const sapMat = sapByMat.get(mat) || [];
-      // Versão sem sintéticos — usada no breakdown diário (carry de Est. Inicial),
-      // que não deve ser afetado pelos pendentes considerados (ver nota acima).
-      const sapMatClean = sapByMatClean.get(mat) || [];
 
       // ── Classificação de categoria do material ──────────────────────────
       // Calculado antes do buildSnapshot para poder usar matCatKey no preCarry.
@@ -834,7 +832,7 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
         const key = dateKey(day);
         const isFirstDay = key === firstDayKey;
         const dayLancs = lancsMat.filter(rec => dateKey(parseDate(rec.dtLanc)) === key);
-        const daySap   = sapMatClean.filter(rec => dateKey(parseDate(rec.dtLanc)) === key);
+        const daySap   = sapMat.filter(rec => dateKey(parseDate(rec.dtLanc)) === key);
         const daySnap  = buildSnapshot({ lancs: dayLancs, sap: daySap });
 
         const toDayEntry = s => {
@@ -912,7 +910,7 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
           const sapFrom = carry && carry.date
             ? (() => { const d = new Date(carry.date); d.setDate(d.getDate() + 1); d.setHours(0,0,0,0); return d; })()
             : new Date(0);
-          const sapSemana = sapMatClean.filter(rec => {
+          const sapSemana = sapMat.filter(rec => {
             const d = parseDate(rec.dtLanc);
             return d && d >= sapFrom && d <= day;
           });
