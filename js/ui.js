@@ -292,68 +292,6 @@ function toggleSomenteDuplicatas() {
 }
 window.toggleSomenteDuplicatas = toggleSomenteDuplicatas;
 
-// ── Filtro "Somente Fechamento" (Ajustes de Fechamento Mensal Y11/Y12) ───
-let _somenteFechamento = false;
-
-function toggleSomenteFechamento() {
-  _somenteFechamento = !_somenteFechamento;
-  const btn = document.getElementById('btn-fechamento-sap');
-  if (btn) {
-    btn.classList.toggle('active', _somenteFechamento);
-    btn.title = _somenteFechamento
-      ? 'Exibindo somente Ajustes de Fechamento Mensal — clique para voltar'
-      : 'Filtrar somente Ajustes de Fechamento Mensal (Y11/Y12)';
-  }
-  renderSAP?.() || renderModule?.('sap');
-}
-window.toggleSomenteFechamento = toggleSomenteFechamento;
-
-// ── Seleção em lote (checkbox por linha) para reincluir/reexcluir do
-//    cálculo — só aparece nas linhas detectadas pelo padrão de fechamento.
-//    Estado é só de sessão (não persiste), reconstruído a cada render.
-const _fechSelecionados = new Set(); // Set<chave (getSapFechKey)>
-
-function toggleFechSelecao(chave, checked) {
-  if (checked) _fechSelecionados.add(chave);
-  else _fechSelecionados.delete(chave);
-  _atualizarBarraFechLote();
-}
-window.toggleFechSelecao = toggleFechSelecao;
-
-function _atualizarBarraFechLote() {
-  const bar = document.getElementById('sap-fech-lote-bar');
-  if (!bar) return;
-  const n = _fechSelecionados.size;
-  bar.style.display = n > 0 ? 'flex' : 'none';
-  const countEl = document.getElementById('sap-fech-lote-count');
-  if (countEl) countEl.textContent = n === 1 ? '1 registro selecionado' : `${n} registros selecionados`;
-}
-
-// Aplica a ação em lote nos registros selecionados: incluir=true reinclui
-// no cálculo (override), incluir=false remove o override (volta ao
-// comportamento automático — desconsiderado de novo).
-function aplicarFechLote(incluir) {
-  if (!_fechSelecionados.size) return;
-  const chaves = [..._fechSelecionados];
-  setSapFechOverrideEmLote(chaves, incluir);
-  _fechSelecionados.clear();
-  _atualizarBarraFechLote();
-  toast(incluir
-    ? `${chaves.length} registro(s) reincluído(s) no cálculo de variação.`
-    : `${chaves.length} registro(s) voltaram a ser desconsiderados automaticamente.`);
-  renderSAP?.() || renderModule?.('sap');
-  // Recalcula qualquer análise já aberta para refletir a mudança
-  if (typeof updateDashboard === 'function') updateDashboard();
-}
-window.aplicarFechLote = aplicarFechLote;
-
-function limparFechSelecao() {
-  _fechSelecionados.clear();
-  _atualizarBarraFechLote();
-  renderSAP?.() || renderModule?.('sap');
-}
-window.limparFechSelecao = limparFechSelecao;
-
 const _SAP_REVERSE_MOVS = new Set(['102','864','863','552','802']);
 
 // ── Cache de duplicatas SAP ───────────────────────────────────────────────
@@ -804,7 +742,7 @@ const colFilterMeta = {
   entradas:    { tbodyId: 'tb-entradas',    fields: ['centralCompra','centralDestino','nf','dtEmissao','dtDescarga','fornecedor','categoria','material','peso','um','custo','valorTotal',null] },
   saidas:      { tbodyId: 'tb-saidas',      fields: ['central','dtEmissao','os','contrato','categoria','fornecedor','material','peso','um','custo','valorTotal',null] },
   lancamentos: { tbodyId: 'tb-lancamentos', fields: ['central','dtLanc','fornecedor','categoria','material','peso','um','custo','valorTotal',null] },
-  sap:         { tbodyId: 'tb-sap',         fields: [null, 'usuario','movimento','ref','documento','central','deposito','dtDoc','dtLanc','dtReg','material','peso','um','custoUnit','valorTotal',null] },
+  sap:         { tbodyId: 'tb-sap',         fields: ['usuario','movimento','ref','documento','central','deposito','dtDoc','dtLanc','dtReg','material','peso','um','custoUnit','valorTotal',null] },
   producao:    { tbodyId: 'tb-producao',    fields: ['mes','central','producao','um','precoMedio','custoMedio','margem','totalVendas',null] },
   imports:     { tbodyId: 'tb-imports',     fields: ['arquivo','modulo','registros','dataHora','status',null] },
   configs:     { tbodyId: 'tb-configs',     fields: ['key','value','desc','created',null] },
@@ -847,9 +785,6 @@ function _getModuleTextFilteredData(module) {
   if (module === 'sap' && _somenteDuplicatas) {
     const { cancelled, real } = getSapDuplicateKeys();
     data = data.filter(r => { const k = getSapRecordKey(r); return cancelled.has(k) || real.has(k); });
-  }
-  if (module === 'sap' && _somenteFechamento) {
-    data = data.filter(r => isSapFechamentoPattern(r));
   }
   if (module === 'lancamentos' && _somenteDuplicatasLanc) {
     const dupKeys = getLancamentoDuplicateKeys();
@@ -3422,6 +3357,570 @@ function setSapFechOverrideEmLote(chaves, incluir) {
   invalidateFechOverrideCache();
   if (typeof persist === 'function') persist();
 }
+
+// ═══════════════════════════════════════════════════════════
+// MODAL: GERENCIAR AJUSTES DE FECHAMENTO MENSAL (Y11/Y12)
+// ═══════════════════════════════════════════════════════════
+// Ferramenta de gestão GLOBAL (não escopada a central/período) dos Ajustes
+// de Fechamento detectados em todo o state.sap — agrupados por mês, com
+// seleção em massa/individual e filtro por coluna. Aberta pelo botão
+// "Fechamento" da página Movimentações SAP (ver abrirFechManager). Toda a
+// decisão de incluir/desconsiderar acontece aqui — a tabela SAP em si só
+// mostra o destaque visual passivo (linha + badge), sem interação.
+//
+// O filtro por coluna replica visualmente o "COLUMN FILTER ENGINE" usado
+// no resto do sistema (mesmas classes .cf-popover/.cf-row/.cf-list etc,
+// reaproveitando buildColFilterHTML), mas com estado e wiring PRÓPRIOS
+// (_fechMgrColFilters, _fechMgrPopover...) — não usa colFilters[module]
+// nem _cfPopover porque este modal não é um "módulo" da paginação genérica
+// (pages/renderModuleByName), e sim uma lista computada (candidatos Y11/Y12
+// de todo o SAP), então integrá-lo ao motor genérico exigiria alterar
+// funções centrais usadas por todas as outras tabelas — risco desnecessário
+// para uma tela com volume de dados tipicamente pequeno (dezenas/centenas
+// de registros por mês, nunca a escala de 600k do SAP completo).
+
+const _fechMgrColFilters   = {};        // { colIdx: Set<string valor normalizado> }
+const _fechMgrSelecionados = new Set(); // Set<chave (getSapFechKey)>
+let _fechMgrPopover     = null;
+let _fechMgrPopColIdx   = null;
+let _fechMgrSearchQuery = '';
+let _fechMgrMesFiltro   = null; // 'AAAA-MM' de um botão de mês ativo, ou null = todos os meses
+let _fechMgrPage        = 0;    // página atual (0-based) — evita renderizar milhares de linhas de uma vez
+let _fechMgrLastFiltrados = [];  // cache do resultado filtrado+ordenado do último render — reaproveitado
+                                  // pra não recalcular tudo de novo a cada clique de checkbox individual
+
+// Índice da coluna (na <thead> do modal) → campo do registro. null = sem
+// filtro discreto nessa coluna (checkbox, Peso e Custo Total são valores
+// contínuos — não fazem sentido como lista de valores únicos, mesmo padrão
+// já usado nas colunas de valor das outras tabelas do sistema).
+const _FECHMGR_COLS = [null, 'movimento', 'central', 'deposito', 'material', 'documento', 'dtLanc', 'dtReg', null, null, '_statusLabel'];
+
+const _FECHMGR_MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+function _fechMgrMesAno(r) {
+  const d = parseDate(r.dtLanc);
+  if (!d) return '0000-00';
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+function _fechMgrMesLabel(r) {
+  const d = parseDate(r.dtLanc);
+  if (!d) return 'Data inválida';
+  return `${_FECHMGR_MESES[d.getMonth()]}/${d.getFullYear()}`;
+}
+
+// Cache dos registros SAP BRUTOS que batem no padrão de fechamento — a
+// varredura de isSapFechamentoPattern acontece sobre TODO o state.sap
+// (600k+ registros), então é recalculada uma única vez por abertura do
+// modal (ver abrirFechManager, que zera este cache) em vez de a cada
+// tecla digitada na busca ou clique num filtro. O que muda a cada render
+// (status desconsiderado/incluído) é barato de recalcular por registro.
+let _fechMgrCandidatosRawCache = null;
+
+// Todos os candidatos de TODO o state.sap (não filtrado por período/central
+// — é uma ferramenta de gestão global), já enriquecidos com os campos
+// computados usados pela tabela/filtros/botões de mês do modal.
+//
+// Otimização: como _fechMgrCandidatosRawCache já contém SÓ registros que
+// bateram isSapFechamentoPattern, não precisamos checar de novo aqui — só
+// precisamos saber se cada um está no Set de overrides (reincluído
+// manualmente). Chamar isSapExcluidoPorFechamento(r) de novo repetiria o
+// isSapFechamentoPattern (já sabido) E getSapFechKey (já calculado abaixo)
+// à toa — em 3-4 mil registros isso soma bastante trabalho redundante toda
+// vez que o modal renderiza.
+function _fechMgrGetTodosCandidatos() {
+  if (!_fechMgrCandidatosRawCache) {
+    _fechMgrCandidatosRawCache = (state.sap || []).filter(isSapFechamentoPattern);
+  }
+  const overrideSet = _getFechOverrideSet();
+  return _fechMgrCandidatosRawCache.map(r => {
+    const chave = getSapFechKey(r);
+    const excluido = !overrideSet.has(chave);
+    return {
+      ...r,
+      _chave: chave,
+      _statusLabel: excluido ? 'Desconsiderado' : 'Incluído manualmente',
+      _statusExcluido: excluido,
+      _mesAno: _fechMgrMesAno(r),
+      _mesLabel: _fechMgrMesLabel(r)
+    };
+  });
+}
+
+// Aplica busca livre + filtro de mês ativo + filtros de coluna sobre a
+// lista de candidatos. excludeMes=true pula o filtro de mês (usado para
+// calcular a CONTAGEM de cada botão de mês, que deve refletir busca/coluna
+// mas não o próprio botão, senão o botão ativo sempre mostraria "todos").
+function _fechMgrAplicarFiltros(lista, { excludeColIdx = null, excludeMes = false } = {}) {
+  let out = lista;
+  const q = normalizeText(_fechMgrSearchQuery);
+  if (q) {
+    out = out.filter(r => {
+      const hay = normalizeText([r.central, r.material, r.materialOriginal, r.documento, r.movimento, r._statusLabel].join(' '));
+      return hay.includes(q);
+    });
+  }
+  if (!excludeMes && _fechMgrMesFiltro) {
+    out = out.filter(r => r._mesAno === _fechMgrMesFiltro);
+  }
+  const entries = Object.entries(_fechMgrColFilters).filter(([, s]) => s && s.size > 0);
+  if (!entries.length) return out;
+  return out.filter(r => {
+    for (const [colIdx, activeSet] of entries) {
+      if (excludeColIdx !== null && Number(colIdx) === Number(excludeColIdx)) continue;
+      const field = _FECHMGR_COLS[Number(colIdx)];
+      if (!field) continue;
+      const cellVal = normalizeText(String(r[field] ?? '—'));
+      if (!activeSet.has(cellVal)) return false;
+    }
+    return true;
+  });
+}
+
+// Valores únicos disponíveis para o dropdown de uma coluna — respeita os
+// DEMAIS filtros ativos (estilo Excel: a lista de opções reflete o que
+// ainda é alcançável), exceto o da própria coluna.
+function _fechMgrGetColUniqueValues(colIdx) {
+  const field = _FECHMGR_COLS[colIdx];
+  if (!field) return [];
+  const base = _fechMgrAplicarFiltros(_fechMgrGetTodosCandidatos(), { excludeColIdx: colIdx });
+  const set = new Set();
+  base.forEach(r => set.add(normalizeText(String(r[field] ?? '—'))));
+  return [...set].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+}
+
+function abrirFechManager() {
+  const overlay = document.getElementById('fech-manager-overlay');
+  if (!overlay) return;
+  _fechMgrSelecionados.clear();
+  _fechMgrSearchQuery = '';
+  _fechMgrMesFiltro = null;
+  _fechMgrPage = 0;
+  _fechMgrCandidatosRawCache = null; // força reler o state.sap atual
+  Object.keys(_fechMgrColFilters).forEach(k => delete _fechMgrColFilters[k]);
+  const searchEl = document.getElementById('fechmgr-search-input');
+  if (searchEl) searchEl.value = '';
+  overlay.classList.add('open');
+  overlay.setAttribute('aria-hidden', 'false');
+  _fechMgrInjectColFilterButtons();
+  _fechMgrRender();
+}
+window.abrirFechManager = abrirFechManager;
+
+function fecharFechManager() {
+  _fechMgrClosePopover();
+  const overlay = document.getElementById('fech-manager-overlay');
+  if (!overlay) return;
+  overlay.classList.remove('open');
+  overlay.setAttribute('aria-hidden', 'true');
+}
+window.fecharFechManager = fecharFechManager;
+
+function _fechMgrBuscar(valor) {
+  _fechMgrSearchQuery = valor || '';
+  _fechMgrPage = 0;
+  _fechMgrRender();
+}
+window._fechMgrBuscar = _fechMgrBuscar;
+
+// Botão de mês: clique alterna — clicar no mês já ativo volta pra "todos".
+function _fechMgrSetMesFiltro(mesAno) {
+  _fechMgrMesFiltro = (_fechMgrMesFiltro === mesAno) ? null : mesAno;
+  _fechMgrPage = 0;
+  _fechMgrRender();
+}
+window._fechMgrSetMesFiltro = _fechMgrSetMesFiltro;
+
+function _fechMgrRenderBotoesMes(todos) {
+  const el = document.getElementById('fechmgr-month-filters');
+  if (!el) return;
+
+  // Base para as contagens: busca + filtros de coluna aplicados, mas SEM o
+  // filtro de mês (senão o botão ativo sempre contaria só a si mesmo).
+  const base = _fechMgrAplicarFiltros(todos, { excludeMes: true });
+  const porMes = new Map();
+  base.forEach(r => porMes.set(r._mesAno, (porMes.get(r._mesAno) || 0) + 1));
+  const mesesOrdenados = [...porMes.keys()].sort((a, b) => b.localeCompare(a));
+
+  if (!mesesOrdenados.length) { el.innerHTML = ''; return; }
+
+  const mesLabelPorAno = new Map();
+  base.forEach(r => { if (!mesLabelPorAno.has(r._mesAno)) mesLabelPorAno.set(r._mesAno, r._mesLabel); });
+
+  const chips = mesesOrdenados.map(mesAno => {
+    const ativo = _fechMgrMesFiltro === mesAno;
+    return `<button type="button" class="fechmgr-mes-chip${ativo ? ' active' : ''}" onclick="_fechMgrSetMesFiltro('${mesAno}')">
+      ${mesLabelPorAno.get(mesAno)} <span class="fechmgr-mes-chip-count">${porMes.get(mesAno)}</span>
+    </button>`;
+  }).join('');
+
+  const totalBase = base.length;
+  const todosAtivo = !_fechMgrMesFiltro;
+  el.innerHTML = `
+    <button type="button" class="fechmgr-mes-chip${todosAtivo ? ' active' : ''}" onclick="_fechMgrSetMesFiltro(null)">
+      Todos os meses <span class="fechmgr-mes-chip-count">${totalBase}</span>
+    </button>${chips}`;
+}
+
+function _fechMgrRender() {
+  const tbody = document.getElementById('fechmgr-tbody');
+  const cardsEl = document.getElementById('fechmgr-cards');
+  const subEl = document.getElementById('fechmgr-sub');
+  if (!tbody) return;
+
+  const todos = _fechMgrGetTodosCandidatos();
+  const filtrados = _fechMgrAplicarFiltros(todos);
+
+  _fechMgrRenderBotoesMes(todos);
+
+  // Resumo geral (sempre reflete TODOS os candidatos, não só o filtrado —
+  // pra dar uma visão fiel do estado real do sistema mesmo com filtro ativo)
+  const desconsiderados = todos.filter(r => r._statusExcluido);
+  const incluidosManual = todos.filter(r => !r._statusExcluido);
+  const { peso: pesoDesc, custo: custoDesc } = somarPesoCustoSap(desconsiderados);
+
+  if (subEl) {
+    subEl.textContent = filtrados.length !== todos.length
+      ? `${todos.length} registro(s) detectado(s) — exibindo ${filtrados.length} com o filtro atual`
+      : `${todos.length} registro(s) detectado(s) em todo o histórico`;
+  }
+
+  // Resumo em cards — mesmo componente visual usado no Inventário/Dashboard
+  // (.inv-kpi-card), pra manter consistência com o resto do sistema.
+  if (cardsEl) {
+    cardsEl.innerHTML = `
+      <div class="inv-kpi-card">
+        <div class="inv-kpi-icon" style="background:var(--purple-bg);color:var(--purple)"><i class="ti ti-calendar-check"></i></div>
+        <div class="inv-kpi-body">
+          <div class="inv-kpi-label">Desconsiderados</div>
+          <div class="inv-kpi-value">${desconsiderados.length}</div>
+          <div class="inv-kpi-unit">de ${todos.length} detectado(s)</div>
+        </div>
+      </div>
+      <div class="inv-kpi-card">
+        <div class="inv-kpi-icon" style="background:var(--purple-bg);color:var(--purple)"><i class="ti ti-scale"></i></div>
+        <div class="inv-kpi-body">
+          <div class="inv-kpi-label">Peso desconsiderado</div>
+          <div class="inv-kpi-value">${fmtKg(pesoDesc)}</div>
+          <div class="inv-kpi-unit">kg, soma bruta</div>
+        </div>
+      </div>
+      <div class="inv-kpi-card">
+        <div class="inv-kpi-icon" style="background:var(--purple-bg);color:var(--purple)"><i class="ti ti-currency-dollar"></i></div>
+        <div class="inv-kpi-body">
+          <div class="inv-kpi-label">Custo desconsiderado</div>
+          <div class="inv-kpi-value">${money(custoDesc)}</div>
+          <div class="inv-kpi-unit">custo total</div>
+        </div>
+      </div>
+      <div class="inv-kpi-card">
+        <div class="inv-kpi-icon" style="background:var(--accent-dim);color:var(--accent)"><i class="ti ti-hand-click"></i></div>
+        <div class="inv-kpi-body">
+          <div class="inv-kpi-label">Incluídos manualmente</div>
+          <div class="inv-kpi-value">${incluidosManual.length}</div>
+          <div class="inv-kpi-unit">reincluídos no cálculo</div>
+        </div>
+      </div>`;
+  }
+
+  // Ordena uma vez e guarda em cache — reaproveitado por _fechMgrAtualizarBarraLote
+  // e pela navegação de página, pra não repetir filtro+sort a cada clique.
+  const ordenados = filtrados.slice().sort((a, b) => dateCmp(parseDate(b.dtLanc) || new Date(0), parseDate(a.dtLanc) || new Date(0)));
+  _fechMgrLastFiltrados = ordenados;
+
+  if (!ordenados.length) {
+    tbody.innerHTML = `<tr><td colspan="11"><div class="empty-state"><i class="ti ti-calendar-check"></i><p>${todos.length ? 'Nenhum registro corresponde ao filtro.' : 'Nenhum Ajuste de Fechamento Mensal detectado.'}</p></div></td></tr>`;
+    _fechMgrRenderPaginacao(0, 0);
+    _fechMgrAtualizarBarraLote();
+    _fechMgrUpdateColFilterIcons();
+    return;
+  }
+
+  // ── Paginação: só monta o HTML da página atual, não da lista inteira —
+  // é o que evita travar a UI com milhares de linhas de uma vez. ──────────
+  const totalPaginas = Math.max(1, Math.ceil(ordenados.length / PAGE_SIZE));
+  _fechMgrPage = Math.min(Math.max(0, _fechMgrPage), totalPaginas - 1);
+  const inicio = _fechMgrPage * PAGE_SIZE;
+  const pagina = ordenados.slice(inicio, inicio + PAGE_SIZE);
+
+  tbody.innerHTML = pagina.map(r => {
+    const neg = num(r.peso) < 0;
+    const custoLinha = num(r.valorTotal) !== 0 ? num(r.valorTotal) : (num(r.custoUnit) * Math.abs(num(r.peso)));
+    const checked = _fechMgrSelecionados.has(r._chave);
+    // Status como indicador compacto (bolinha colorida + tooltip) em vez de
+    // badge de texto — libera espaço horizontal pra material/valores, que
+    // são as colunas que realmente importam pra decisão.
+    const statusDot = r._statusExcluido
+      ? `<span class="fechmgr-status-dot fechmgr-status-dot--desc" title="Desconsiderado do cálculo de variação"></span>`
+      : `<span class="fechmgr-status-dot fechmgr-status-dot--inc" title="Incluído manualmente no cálculo"></span>`;
+    return `
+    <tr class="${r._statusExcluido ? '' : 'fechmgr-row-incluido'}">
+      <td class="th-checkbox"><input type="checkbox" ${checked ? 'checked' : ''} onchange="_fechMgrToggleSelecao('${r._chave.replace(/'/g,"\\'")}', this.checked)"></td>
+      <td class="td-mono" style="color:${neg ? '#ef4444' : '#22c55e'};font-weight:600">${r.movimento || '—'}</td>
+      <td class="td-mono">${r.central || '—'}</td>
+      <td class="td-muted">${r.deposito || '—'}</td>
+      <td class="td-mono fechmgr-td-material" title="${escapeHtml(r.material || r.materialOriginal || '—')}">${r.material || r.materialOriginal || '—'}</td>
+      <td class="td-mono">${r.documento || '—'}</td>
+      <td class="td-muted">${r.dtLanc || '—'}</td>
+      <td class="td-muted">${r.dtReg || '—'}</td>
+      <td class="td-mono" style="text-align:right">${fmtKg(num(r.peso))}</td>
+      <td class="td-mono" style="text-align:right">${money(custoLinha)}</td>
+      <td style="text-align:center">${statusDot}</td>
+    </tr>`;
+  }).join('');
+
+  _fechMgrRenderPaginacao(ordenados.length, totalPaginas);
+  _fechMgrAtualizarBarraLote();
+  _fechMgrUpdateColFilterIcons();
+}
+
+function _fechMgrRenderPaginacao(total, totalPaginas) {
+  const infoEl = document.getElementById('fechmgr-page-info');
+  const linkEl = document.getElementById('fechmgr-select-all-filtered');
+  if (infoEl) {
+    if (!total) {
+      infoEl.textContent = '0 registros';
+    } else {
+      const inicio = _fechMgrPage * PAGE_SIZE + 1;
+      const fim = Math.min((_fechMgrPage + 1) * PAGE_SIZE, total);
+      infoEl.textContent = `${inicio}-${fim} de ${total} registro(s) (pág. ${_fechMgrPage + 1}/${totalPaginas})`;
+    }
+  }
+  if (linkEl) linkEl.style.display = total > PAGE_SIZE ? 'inline-flex' : 'none';
+}
+
+function _fechMgrIrParaPagina(p) {
+  _fechMgrPage = Math.max(0, p);
+  _fechMgrRender();
+}
+window._fechMgrIrParaPagina = _fechMgrIrParaPagina;
+
+function _fechMgrPaginaAnterior() {
+  _fechMgrPage = Math.max(0, _fechMgrPage - 1);
+  _fechMgrRender();
+}
+window._fechMgrPaginaAnterior = _fechMgrPaginaAnterior;
+
+function _fechMgrProximaPagina() {
+  const totalPaginas = Math.max(1, Math.ceil(_fechMgrLastFiltrados.length / PAGE_SIZE));
+  _fechMgrPage = Math.min(totalPaginas - 1, _fechMgrPage + 1);
+  _fechMgrRender();
+}
+window._fechMgrProximaPagina = _fechMgrProximaPagina;
+
+function _fechMgrIrParaUltima() {
+  _fechMgrPage = Math.max(0, Math.ceil(_fechMgrLastFiltrados.length / PAGE_SIZE) - 1);
+  _fechMgrRender();
+}
+window._fechMgrIrParaUltima = _fechMgrIrParaUltima;
+
+function _fechMgrToggleSelecao(chave, checked) {
+  if (checked) _fechMgrSelecionados.add(chave);
+  else _fechMgrSelecionados.delete(chave);
+  _fechMgrAtualizarBarraLote();
+}
+window._fechMgrToggleSelecao = _fechMgrToggleSelecao;
+
+// Seleciona/deseleciona os registros da PÁGINA ATUAL (checkbox no cabeçalho
+// da tabela) — usa o cache _fechMgrLastFiltrados, sem recalcular filtro.
+function _fechMgrToggleSelecionarTudo(checked) {
+  const inicio = _fechMgrPage * PAGE_SIZE;
+  const pagina = _fechMgrLastFiltrados.slice(inicio, inicio + PAGE_SIZE);
+  pagina.forEach(r => {
+    if (checked) _fechMgrSelecionados.add(r._chave);
+    else _fechMgrSelecionados.delete(r._chave);
+  });
+  _fechMgrAtualizarBarraLote();
+  // Só precisa re-renderizar as linhas (os checkboxes) — reaproveita a
+  // mesma página já calculada, sem refazer filtro/paginação do zero.
+  document.querySelectorAll('#fechmgr-tbody input[type="checkbox"]').forEach((cb, i) => {
+    if (pagina[i]) cb.checked = _fechMgrSelecionados.has(pagina[i]._chave);
+  });
+}
+window._fechMgrToggleSelecionarTudo = _fechMgrToggleSelecionarTudo;
+
+// Seleciona TODOS os registros filtrados (todas as páginas), não só a
+// página atual — link ao lado da paginação.
+function _fechMgrSelecionarTodosFiltrados() {
+  _fechMgrLastFiltrados.forEach(r => _fechMgrSelecionados.add(r._chave));
+  toast(`${_fechMgrLastFiltrados.length} registro(s) selecionado(s) (todas as páginas).`);
+  _fechMgrRender();
+}
+window._fechMgrSelecionarTodosFiltrados = _fechMgrSelecionarTodosFiltrados;
+
+function _fechMgrAtualizarBarraLote() {
+  const bar = document.getElementById('fechmgr-lote-bar');
+  const countEl = document.getElementById('fechmgr-lote-count');
+  const checkAllEl = document.getElementById('fechmgr-check-all');
+  const n = _fechMgrSelecionados.size;
+  if (bar) bar.style.display = n > 0 ? 'flex' : 'none';
+  if (countEl) countEl.textContent = n === 1 ? '1 registro selecionado' : `${n} registros selecionados`;
+  if (checkAllEl) {
+    // Reaproveita o cache da última renderização (não recalcula o filtro
+    // inteiro só pra saber o estado do checkbox "selecionar tudo").
+    const inicio = _fechMgrPage * PAGE_SIZE;
+    const pagina = _fechMgrLastFiltrados.slice(inicio, inicio + PAGE_SIZE);
+    const todosSelecionados = pagina.length > 0 && pagina.every(r => _fechMgrSelecionados.has(r._chave));
+    checkAllEl.checked = todosSelecionados;
+    checkAllEl.indeterminate = !todosSelecionados && pagina.some(r => _fechMgrSelecionados.has(r._chave));
+  }
+}
+
+function _fechMgrAplicarLote(incluir) {
+  if (!_fechMgrSelecionados.size) return;
+  const chaves = [..._fechMgrSelecionados];
+  setSapFechOverrideEmLote(chaves, incluir);
+  _fechMgrSelecionados.clear();
+  toast(incluir
+    ? `${chaves.length} registro(s) reincluído(s) no cálculo de variação.`
+    : `${chaves.length} registro(s) voltaram a ser desconsiderados automaticamente.`);
+  _fechMgrRender();
+  // Recalcula qualquer análise já aberta pra refletir a mudança imediatamente
+  if (typeof updateDashboard === 'function') updateDashboard();
+  if (typeof renderModule === 'function' && document.getElementById('page-sap')?.classList.contains('active')) renderModule('sap');
+}
+window._fechMgrAplicarLote = _fechMgrAplicarLote;
+
+function _fechMgrLimparSelecao() {
+  _fechMgrSelecionados.clear();
+  _fechMgrRender();
+}
+window._fechMgrLimparSelecao = _fechMgrLimparSelecao;
+
+// ── Filtro por coluna (réplica isolada do COLUMN FILTER ENGINE) ──────────
+function _fechMgrInjectColFilterButtons() {
+  const headRow = document.getElementById('fechmgr-thead-row');
+  if (!headRow) return;
+  const ths = headRow.querySelectorAll('th');
+  ths.forEach((th, idx) => {
+    if (!_FECHMGR_COLS[idx]) return;
+    if (th.querySelector('.cf-btn')) return;
+    const btn = document.createElement('button');
+    btn.className = 'cf-btn';
+    btn.innerHTML = '<i class="ti ti-filter"></i>';
+    btn.title = 'Filtrar coluna';
+    btn.setAttribute('aria-label', 'Filtrar coluna');
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      if (_fechMgrPopover && _fechMgrPopColIdx === idx) { _fechMgrClosePopover(); return; }
+      _fechMgrOpenColFilterPopover(th, idx);
+    });
+    th.appendChild(btn);
+  });
+  _fechMgrUpdateColFilterIcons();
+}
+
+function _fechMgrUpdateColFilterIcons() {
+  const headRow = document.getElementById('fechmgr-thead-row');
+  if (!headRow) return;
+  headRow.querySelectorAll('th').forEach((th, idx) => {
+    const btn = th.querySelector('.cf-btn');
+    if (!btn) return;
+    const active = _fechMgrColFilters[idx] && _fechMgrColFilters[idx].size > 0;
+    btn.classList.toggle('cf-btn--active', !!active);
+  });
+}
+
+function _fechMgrOpenColFilterPopover(thEl, colIdx) {
+  _fechMgrClosePopover();
+  _fechMgrPopColIdx = colIdx;
+
+  const activeSet = _fechMgrColFilters[colIdx] || new Set();
+  const allVals = _fechMgrGetColUniqueValues(colIdx);
+  if (!allVals.length) return;
+
+  const pop = document.createElement('div');
+  pop.className = 'cf-popover';
+  pop.setAttribute('role', 'dialog');
+  pop.innerHTML = buildColFilterHTML(allVals, activeSet, '');
+  document.body.appendChild(pop);
+  _fechMgrPopover = pop;
+
+  const rect = thEl.getBoundingClientRect();
+  const popW = 240, popH = 340;
+  let left = rect.left;
+  if (left + popW > window.innerWidth - 8) left = window.innerWidth - popW - 8;
+  left = Math.max(4, left);
+  let top = rect.bottom + 4;
+  if (top + popH > window.innerHeight - 8) top = rect.top - popH - 4;
+  top = Math.max(4, top);
+  pop.style.left = left + 'px';
+  pop.style.top  = top  + 'px';
+  pop.style.width = popW + 'px';
+
+  const searchEl = pop.querySelector('.cf-search');
+  if (searchEl) {
+    searchEl.addEventListener('input', () => _fechMgrRefreshPopoverList(searchEl.value));
+  }
+  const checkAll = pop.querySelector('.cf-check-all');
+  if (checkAll) {
+    checkAll.addEventListener('change', () => {
+      pop.querySelectorAll('.cf-check').forEach(c => { c.checked = checkAll.checked; });
+    });
+  }
+  pop.querySelector('[data-cf-action="apply"]')?.addEventListener('click', e => { e.stopPropagation(); _fechMgrApplyColFilter(); });
+  pop.querySelector('[data-cf-action="clear"]')?.addEventListener('click', e => { e.stopPropagation(); _fechMgrClearColFilter(); });
+
+  pop.querySelector('.cf-search')?.focus();
+  pop.addEventListener('mousedown', e => e.stopPropagation());
+}
+
+function _fechMgrRefreshPopoverList(query) {
+  if (!_fechMgrPopover || _fechMgrPopColIdx === null) return;
+  const currentChecked = new Set();
+  _fechMgrPopover.querySelectorAll('.cf-check:checked').forEach(c => currentChecked.add(c.value));
+  const saved = _fechMgrColFilters[_fechMgrPopColIdx] || new Set();
+  const merged = new Set([...saved, ...currentChecked]);
+
+  const allVals = _fechMgrGetColUniqueValues(_fechMgrPopColIdx);
+  const q = normalizeText(query || '');
+  const filtered = q ? allVals.filter(v => v.includes(q)) : allVals;
+  const allChecked = filtered.length > 0 && filtered.every(v => merged.has(v));
+  const someChecked = filtered.some(v => merged.has(v));
+
+  const list = _fechMgrPopover.querySelector('.cf-list');
+  const checkAll = _fechMgrPopover.querySelector('.cf-check-all');
+  if (checkAll) { checkAll.checked = allChecked; checkAll.indeterminate = !allChecked && someChecked; }
+  if (list) {
+    list.innerHTML = filtered.length ? filtered.map(v => {
+      const checked = merged.has(v) ? 'checked' : '';
+      const label = v === '' || v === '—' ? '<em style="opacity:.5">vazio</em>' : escapeHtml(v);
+      return `<label class="cf-row"><input type="checkbox" class="cf-check" value="${escapeHtml(v)}" ${checked}><span class="cf-label">${label}</span></label>`;
+    }).join('') : `<div class="cf-empty">Nenhum valor encontrado</div>`;
+  }
+}
+
+function _fechMgrApplyColFilter() {
+  if (!_fechMgrPopover || _fechMgrPopColIdx === null) return;
+  const checked = new Set();
+  _fechMgrPopover.querySelectorAll('.cf-check:checked').forEach(c => checked.add(c.value));
+  _fechMgrColFilters[_fechMgrPopColIdx] = checked;
+  _fechMgrClosePopover();
+  _fechMgrPage = 0;
+  _fechMgrRender();
+}
+
+function _fechMgrClearColFilter() {
+  if (_fechMgrPopColIdx === null) return;
+  delete _fechMgrColFilters[_fechMgrPopColIdx];
+  _fechMgrClosePopover();
+  _fechMgrPage = 0;
+  _fechMgrRender();
+}
+
+function _fechMgrClosePopover() {
+  if (_fechMgrPopover) _fechMgrPopover.remove();
+  _fechMgrPopover = null;
+  _fechMgrPopColIdx = null;
+}
+
+document.addEventListener('mousedown', e => {
+  if (_fechMgrPopover && !_fechMgrPopover.contains(e.target)) _fechMgrClosePopover();
+});
+document.addEventListener('scroll', e => {
+  if (!_fechMgrPopover) return;
+  if (_fechMgrPopover.contains(e.target)) return;
+  _fechMgrClosePopover();
+}, true);
 
 // ═══════════════════════════════════════════════════════════
 // SAÚDE DA CENTRAL

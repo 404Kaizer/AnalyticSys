@@ -2249,24 +2249,15 @@
             <div class="table-toolbar">
               <button id="btn-manuais-sap" class="btn btn-manuais-filter" onclick="toggleSomenteManuais('sap')" title="Filtrar somente registros manuais"><i class="ti ti-pencil"></i> Manuais</button>
               <button id="btn-duplicatas-sap" class="btn btn-duplicatas-filter" onclick="toggleSomenteDuplicatas()" title="Filtrar somente integrações duplicadas"><i class="ti ti-copy"></i> Duplicatas</button>
-              <button id="btn-fechamento-sap" class="btn btn-fechamento-filter" onclick="toggleSomenteFechamento()" title="Filtrar somente Ajustes de Fechamento Mensal (Y11/Y12)"><i class="ti ti-calendar-check"></i> Fechamento</button>
+              <button id="btn-fechamento-sap" class="btn btn-fechamento-filter" onclick="abrirFechManager()" title="Gerenciar Ajustes de Fechamento Mensal (Y11/Y12)"><i class="ti ti-calendar-check"></i> Fechamento</button>
               <div id="pend-cad-sap-box"></div>
               <button class="btn btn-primary" onclick="openModal('modal-manual'); setModulo('SAP')"><i class="ti ti-plus"></i> Adicionar</button>
-            </div>
-          </div>
-          <div id="sap-fech-lote-bar" class="sap-fech-lote-bar" style="display:none">
-            <span id="sap-fech-lote-count">0 registros selecionados</span>
-            <div class="sap-fech-lote-actions">
-              <button class="btn btn-sm" onclick="aplicarFechLote(true)" title="Reincluir os registros selecionados no cálculo de variação"><i class="ti ti-check"></i> Incluir no cálculo</button>
-              <button class="btn btn-sm" onclick="aplicarFechLote(false)" title="Voltar os registros selecionados ao comportamento automático (desconsiderados)"><i class="ti ti-x"></i> Voltar ao automático</button>
-              <button class="btn btn-sm btn-ghost" onclick="limparFechSelecao()">Limpar seleção</button>
             </div>
           </div>
           <div class="table-scroll">
           <table>
             <thead>
               <tr>
-                <th class="th-checkbox"></th>
                 <th data-sort-col="usuario"   onclick="moduleSortBy('sap','usuario')">Usuário <i class="ti ti-selector mod-sort-icon"></i></th>
                 <th data-sort-col="movimento" onclick="moduleSortBy('sap','movimento')">Movimento <i class="ti ti-selector mod-sort-icon"></i></th>
                 <th data-sort-col="ref"       onclick="moduleSortBy('sap','ref')">Ref. <i class="ti ti-selector mod-sort-icon"></i></th>
@@ -2285,7 +2276,7 @@
               </tr>
             </thead>
             <tbody id="tb-sap">
-              <tr><td colspan="16"><div class="empty-state"><i class="ti ti-database"></i><p>Nenhuma movimentação SAP importada.</p></div></td></tr>
+              <tr><td colspan="15"><div class="empty-state"><i class="ti ti-database"></i><p>Nenhuma movimentação SAP importada.</p></div></td></tr>
             </tbody>
           </table>
           </div><!-- /table-scroll sap -->
@@ -4039,6 +4030,92 @@
       <span class="bdm-footer-label">Soma</span>
       <span class="bdm-footer-total" id="fech-modal-total-peso">—</span>
       <span class="bdm-footer-total" id="fech-modal-total-custo">—</span>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Gerenciar Ajustes de Fechamento Mensal (Y11/Y12) — aberto pelo
+     botão "Fechamento" na página Movimentações SAP. Ferramenta global:
+     lista TODOS os ajustes detectados (todos os meses/centrais), agrupados
+     por mês, com seleção em massa/individual e filtro por coluna. -->
+<div class="bdm-overlay" id="fech-manager-overlay" aria-hidden="true">
+  <div class="bdm-dialog fechmgr-dialog" role="dialog" aria-modal="true" aria-labelledby="fechmgr-title">
+    <div class="bdm-header">
+      <div class="bdm-header-text">
+        <div class="bdm-kicker"><i class="ti ti-calendar-check"></i> Ajustes de Fechamento Mensal</div>
+        <div class="bdm-title" id="fechmgr-title">Gerenciar Ajustes de Fechamento</div>
+        <div class="fechmgr-sub" id="fechmgr-sub">—</div>
+      </div>
+      <button class="btn btn-primary" type="button" onclick="fecharFechManager()">
+        <i class="ti ti-x"></i> <span>Fechar</span>
+      </button>
+    </div>
+
+    <div class="fechmgr-cards" id="fechmgr-cards"></div>
+
+    <div class="fechmgr-toolbar">
+      <div class="bdm-search fechmgr-search">
+        <div class="bdm-search-wrap">
+          <i class="ti ti-search"></i>
+          <input type="text" class="bdm-search-input" id="fechmgr-search-input"
+            placeholder="Buscar por central, material, documento ou status…" autocomplete="off"
+            oninput="_fechMgrBuscar(this.value)">
+        </div>
+      </div>
+      <div class="fechmgr-month-filters" id="fechmgr-month-filters"></div>
+    </div>
+
+    <div class="fechmgr-lote-bar" id="fechmgr-lote-bar" style="display:none">
+      <span id="fechmgr-lote-count"><i class="ti ti-checks"></i> 0 registros selecionados</span>
+      <div class="fechmgr-lote-actions">
+        <button class="btn btn-sm" onclick="_fechMgrAplicarLote(true)" title="Reincluir os registros selecionados no cálculo de variação"><i class="ti ti-check"></i> Incluir no cálculo</button>
+        <button class="btn btn-sm" onclick="_fechMgrAplicarLote(false)" title="Voltar os registros selecionados ao comportamento automático (desconsiderados)"><i class="ti ti-x"></i> Voltar ao automático</button>
+        <button class="btn btn-sm fechmgr-btn-ghost" onclick="_fechMgrLimparSelecao()">Limpar seleção</button>
+      </div>
+    </div>
+
+    <div class="bdm-body">
+      <table class="bdm-table fechmgr-table">
+        <colgroup>
+          <col style="width:3.5%">
+          <col style="width:5.5%">
+          <col style="width:8%">
+          <col style="width:7%">
+          <col style="width:20%">
+          <col style="width:11%">
+          <col style="width:8.5%">
+          <col style="width:8.5%">
+          <col style="width:11%">
+          <col style="width:12%">
+          <col style="width:5%">
+        </colgroup>
+        <thead>
+          <tr id="fechmgr-thead-row">
+            <th class="th-checkbox"><input type="checkbox" id="fechmgr-check-all" onchange="_fechMgrToggleSelecionarTudo(this.checked)" title="Selecionar todos os registros desta página"></th>
+            <th>Mov.</th>
+            <th>Central</th>
+            <th>Depósito</th>
+            <th>Material</th>
+            <th>Documento</th>
+            <th>Dt. Lanç.</th>
+            <th>Dt. Registro</th>
+            <th style="text-align:right">Peso</th>
+            <th style="text-align:right">Custo Total</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="fechmgr-tbody"></tbody>
+      </table>
+    </div>
+    <div class="pagination">
+      <span class="page-info" id="fechmgr-page-info">0 registros</span>
+      <button class="btn fechmgr-select-all-link" id="fechmgr-select-all-filtered" onclick="_fechMgrSelecionarTodosFiltrados()">Selecionar todos os filtrados</button>
+      <div class="page-btns">
+        <button class="btn" title="Primeira" onclick="_fechMgrIrParaPagina(0)"><i class="ti ti-chevrons-left"></i></button>
+        <button class="btn" title="Anterior" onclick="_fechMgrPaginaAnterior()"><i class="ti ti-chevron-left"></i></button>
+        <button class="btn" title="Próxima" onclick="_fechMgrProximaPagina()"><i class="ti ti-chevron-right"></i></button>
+        <button class="btn" title="Última" onclick="_fechMgrIrParaUltima()"><i class="ti ti-chevrons-right"></i></button>
+      </div>
     </div>
   </div>
 </div>

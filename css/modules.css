@@ -3470,7 +3470,7 @@ thead th:hover .cf-btn,
 
 .cf-popover {
   position: fixed;
-  z-index: 300;
+  z-index: 2500; /* acima de todos os modais (maior z-index de modal no sistema é 1100) — necessário pois o filtro por coluna agora também é usado dentro de modais (ex: Gerenciar Ajustes de Fechamento) */
   background: var(--bg2);
   border: 1px solid var(--border2);
   border-radius: var(--radius-lg);
@@ -9590,8 +9590,11 @@ tr.lanc-duplicata td {
   border-bottom-color: rgba(239,68,68,.25) !important;
 }
 
-/* ── Botão, linhas e badge de Ajuste de Fechamento Mensal (Y11/Y12) ──────
-   Estático, sem animação/pulso — segue o padrão visual sóbrio do sistema. */
+/* ── Botão, linha e badge de Ajuste de Fechamento Mensal (Y11/Y12) ────────
+   Estático, sem animação/pulso — segue o padrão visual sóbrio do sistema.
+   O botão abre o modal Gerenciar Ajustes de Fechamento (ver #fech-manager-
+   overlay) — toda a seleção/ação acontece lá, a tabela SAP só mostra o
+   destaque visual passivo (linha + badge) para dar contexto. */
 .btn-fechamento-filter {
   font-size: 11px;
   font-family: var(--mono);
@@ -9610,15 +9613,6 @@ tr.lanc-duplicata td {
 }
 .btn-fechamento-filter:hover {
   background: var(--purple-bg);
-}
-.btn-fechamento-filter.active {
-  background: var(--purple-bg);
-  border-color: var(--purple);
-  font-weight: 700;
-}
-.btn-fechamento-filter.active::after {
-  content: ' ×';
-  opacity: .7;
 }
 
 tr.sap-fechamento {
@@ -9650,7 +9644,8 @@ tr.sap-fechamento td {
 }
 
 /* Badge clicável no card de KPI (Dashboard Gerencial) que abre o modal de
-   Ajustes de Fechamento Mensal desconsiderados. */
+   Ajustes de Fechamento Mensal desconsiderados (visualização somente-leitura,
+   contextual ao período — diferente do modal de gerenciamento). */
 .dg-fech-badge {
   display: inline-flex;
   align-items: center;
@@ -9671,49 +9666,196 @@ tr.sap-fechamento td {
   background: var(--purple-border);
 }
 
-th.th-checkbox, td.td-checkbox {
+/* ── Modal: Gerenciar Ajustes de Fechamento Mensal (Y11/Y12) ────────────── */
+.fechmgr-dialog {
+  max-width: min(1260px, 96vw);
+}
+.fechmgr-sub {
+  font-size: 11.5px;
+  color: var(--text3);
+  margin-top: 2px;
+}
+
+/* Resumo em cards — reaproveita o componente .inv-kpi-card já usado no
+   Inventário/Dashboard Gerencial, pra manter a mesma linguagem visual em
+   vez de blocos de texto empilhados. */
+.fechmgr-cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg1);
+}
+@media (max-width: 900px) {
+  .fechmgr-cards { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* Busca + chips de mês lado a lado num único bloco de toolbar, com respiro
+   generoso — antes ficavam empilhados sem separação visual clara. */
+.fechmgr-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.fechmgr-search {
+  padding: 0;
+  flex: 0 0 auto;
+  width: 320px;
+}
+.fechmgr-month-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  flex: 1;
+  min-width: 260px;
+}
+.fechmgr-mes-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border2);
+  background: var(--bg3);
+  color: var(--text2);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background .15s, border-color .15s, color .15s;
+}
+.fechmgr-mes-chip:hover {
+  border-color: var(--purple-border);
+  color: var(--text);
+}
+.fechmgr-mes-chip.active {
+  background: var(--purple-bg);
+  border-color: var(--purple);
+  color: var(--purple);
+  font-weight: 700;
+}
+.fechmgr-mes-chip-count {
+  font-size: 10px;
+  opacity: .75;
+}
+
+.fechmgr-lote-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 20px;
+  background: var(--purple-bg);
+  border-bottom: 1px solid var(--purple-border);
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+}
+.fechmgr-lote-bar #fechmgr-lote-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: var(--purple);
+}
+.fechmgr-lote-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.fechmgr-lote-bar .btn-sm {
+  font-size: 12px;
+  padding: 5px 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.fechmgr-btn-ghost {
+  background: transparent;
+  border-color: var(--border2);
+  color: var(--text2);
+}
+
+.fechmgr-select-all-link {
+  font-size: 11px;
+  padding: 4px 10px;
+  background: transparent;
+  border-color: var(--border2);
+  color: var(--purple);
+}
+.fechmgr-select-all-link:hover {
+  background: var(--purple-bg);
+  border-color: var(--purple-border);
+}
+
+/* ── Tabela: corrige o corte de texto herdado da regra genérica de célula
+   (tbody td { max-width:240px; overflow:hidden; ellipsis }), que faz
+   sentido pras tabelas de página cheia mas espreme demais dentro de um
+   modal com 11 colunas. Larguras vêm do <colgroup> no HTML; aqui só
+   liberamos o que cada tipo de coluna precisa pra nunca esconder um valor
+   importante (peso/custo nunca podem truncar). ── */
+.fechmgr-table thead th {
+  padding: 10px 14px;
+}
+.fechmgr-table tbody td {
+  padding: 10px 14px;
+  max-width: none;
+}
+.fechmgr-table tbody td.td-mono,
+.fechmgr-table tbody td.td-muted {
+  overflow: visible;
+  text-overflow: clip;
+}
+.fechmgr-td-material {
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.35;
+}
+.fechmgr-table tbody tr {
+  cursor: default;
+}
+.fechmgr-table tbody tr.fechmgr-row-incluido {
+  background: var(--accent-dim);
+}
+.fechmgr-table tbody tr.fechmgr-row-incluido:hover {
+  background: var(--bg3);
+}
+
+.th-checkbox {
   width: 32px;
   min-width: 32px;
   text-align: center;
   padding-left: 6px;
   padding-right: 6px;
 }
-.sap-fech-checkbox {
+.fechmgr-table input[type="checkbox"] {
   width: 15px;
   height: 15px;
   cursor: pointer;
   accent-color: var(--purple);
 }
 
-.sap-fech-lote-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 8px 16px;
-  background: var(--purple-bg);
-  border-top: 1px solid var(--purple-border);
-  border-bottom: 1px solid var(--purple-border);
-  font-family: var(--mono);
-  font-size: 12px;
-  color: var(--text);
+/* Indicador de status compacto (bolinha + tooltip) em vez de badge de
+   texto — a coluna Status virou só um sinalizador rápido, já que TODO
+   registro do modal é, por definição, um Ajuste de Fechamento; o que
+   varia é só se está desconsiderado (padrão) ou incluído manualmente. */
+.fechmgr-status-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  cursor: help;
 }
-.sap-fech-lote-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.fechmgr-status-dot--desc {
+  background: var(--purple);
 }
-.sap-fech-lote-bar .btn-sm {
-  font-size: 12px;
-  padding: 4px 10px;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-}
-.sap-fech-lote-bar .btn-ghost {
-  background: transparent;
-  border-color: var(--border2);
-  color: var(--text2);
+.fechmgr-status-dot--inc {
+  background: var(--accent);
 }
 
 /* ── Novos gráficos de ocorrências ── */

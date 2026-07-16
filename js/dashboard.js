@@ -3070,7 +3070,7 @@ function renderSAP() {
   renderSemCadastroModuloBox('sap');
 
   if (!getFilteredData('sap').length) {
-    tb.innerHTML = '<tr><td colspan="16"><div class="empty-state"><i class="ti ti-database"></i><p>Nenhuma movimentação SAP importada.</p></div></td></tr>';
+    tb.innerHTML = '<tr><td colspan="15"><div class="empty-state"><i class="ti ti-database"></i><p>Nenhuma movimentação SAP importada.</p></div></td></tr>';
     return;
   }
 
@@ -3089,19 +3089,13 @@ function renderSAP() {
     const trClass = isDupReal ? ' class="sap-duplicata"' : isDupCancelled ? ' class="sap-duplicata-anulada"' : isFechPattern ? ' class="sap-fechamento"' : '';
     const trTitle = isDupReal ? ' title="Integração duplicada sem estorno correspondente"' : isDupCancelled ? ' title="Duplicata anulada por estorno"' : '';
     const _sapSemCad = !getCatKeyDoCadastro(r.materialOriginal);
-    const fechChave = isFechPattern ? getSapFechKey(r) : '';
-    const fechChecked = fechChave && _fechSelecionados.has(fechChave) ? ' checked' : '';
-    const fechCheckboxHtml = isFechPattern
-      ? `<input type="checkbox" class="sap-fech-checkbox" ${fechChecked} onclick="toggleFechSelecao('${fechChave.replace(/'/g,"\\'")}', this.checked)" title="Selecionar para ação em lote">`
-      : '';
     const fechBadgeHtml = isFechPattern
       ? (isFechExcluido
-          ? '<span class="badge-fechamento" title="Ajuste de Fechamento Mensal — desconsiderado do cálculo de variação">Fechamento</span>'
-          : '<span class="badge-fechamento badge-fechamento--incluido" title="Ajuste de Fechamento Mensal — reincluído manualmente no cálculo">Fechamento · incluído</span>')
+          ? '<span class="badge-fechamento" title="Ajuste de Fechamento Mensal — desconsiderado do cálculo de variação. Gerencie em Movimentações SAP → botão Fechamento.">Fechamento</span>'
+          : '<span class="badge-fechamento badge-fechamento--incluido" title="Ajuste de Fechamento Mensal — reincluído manualmente no cálculo. Gerencie em Movimentações SAP → botão Fechamento.">Fechamento · incluído</span>')
       : '';
     return `
     <tr${trClass}${trTitle}>
-      <td class="td-checkbox">${fechCheckboxHtml}</td>
       <td class="td-mono">${r.fonte === 'manual' ? '<span class="badge-manual" title="Registro inserido manualmente"><i class="ti ti-pencil"></i></span>' : ''}${r.usuario || '—'}</td>
       <td class="td-mono" style="color:${neg ? red : green}">${r.movimento || '—'}${fechBadgeHtml}</td>
       <td class="td-muted">${r.ref || '—'}</td>
