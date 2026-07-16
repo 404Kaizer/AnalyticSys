@@ -3383,8 +3383,6 @@ const _fechMgrColFilters   = {};        // { colIdx: Set<string valor normalizad
 const _fechMgrSelecionados = new Set(); // Set<chave (getSapFechKey)>
 let _fechMgrPopover     = null;
 let _fechMgrPopColIdx   = null;
-let _fechMgrSearchQuery = '';
-let _fechMgrMesFiltro   = null; // 'AAAA-MM' de um botão de mês ativo, ou null = todos os meses
 let _fechMgrPage        = 0;    // página atual (0-based) — evita renderizar milhares de linhas de uma vez
 let _fechMgrLastFiltrados = [];  // cache do resultado filtrado+ordenado do último render — reaproveitado
                                   // pra não recalcular tudo de novo a cada clique de checkbox individual
@@ -3395,30 +3393,17 @@ let _fechMgrLastFiltrados = [];  // cache do resultado filtrado+ordenado do últ
 // já usado nas colunas de valor das outras tabelas do sistema).
 const _FECHMGR_COLS = [null, 'movimento', 'central', 'deposito', 'material', 'documento', 'dtLanc', 'dtReg', null, null, '_statusLabel'];
 
-const _FECHMGR_MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-
-function _fechMgrMesAno(r) {
-  const d = parseDate(r.dtLanc);
-  if (!d) return '0000-00';
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
-function _fechMgrMesLabel(r) {
-  const d = parseDate(r.dtLanc);
-  if (!d) return 'Data inválida';
-  return `${_FECHMGR_MESES[d.getMonth()]}/${d.getFullYear()}`;
-}
-
 // Cache dos registros SAP BRUTOS que batem no padrão de fechamento — a
 // varredura de isSapFechamentoPattern acontece sobre TODO o state.sap
 // (600k+ registros), então é recalculada uma única vez por abertura do
 // modal (ver abrirFechManager, que zera este cache) em vez de a cada
-// tecla digitada na busca ou clique num filtro. O que muda a cada render
-// (status desconsiderado/incluído) é barato de recalcular por registro.
+// clique num filtro de coluna. O que muda a cada render (status
+// desconsiderado/incluído) é barato de recalcular por registro.
 let _fechMgrCandidatosRawCache = null;
 
 // Todos os candidatos de TODO o state.sap (não filtrado por período/central
 // — é uma ferramenta de gestão global), já enriquecidos com os campos
-// computados usados pela tabela/filtros/botões de mês do modal.
+// computados usados pela tabela/filtros do modal.
 //
 // Otimização: como _fechMgrCandidatosRawCache já contém SÓ registros que
 // bateram isSapFechamentoPattern, não precisamos checar de novo aqui — só
@@ -3439,32 +3424,16 @@ function _fechMgrGetTodosCandidatos() {
       ...r,
       _chave: chave,
       _statusLabel: excluido ? 'Desconsiderado' : 'Incluído manualmente',
-      _statusExcluido: excluido,
-      _mesAno: _fechMgrMesAno(r),
-      _mesLabel: _fechMgrMesLabel(r)
+      _statusExcluido: excluido
     };
   });
 }
 
-// Aplica busca livre + filtro de mês ativo + filtros de coluna sobre a
-// lista de candidatos. excludeMes=true pula o filtro de mês (usado para
-// calcular a CONTAGEM de cada botão de mês, que deve refletir busca/coluna
-// mas não o próprio botão, senão o botão ativo sempre mostraria "todos").
-function _fechMgrAplicarFiltros(lista, { excludeColIdx = null, excludeMes = false } = {}) {
-  let out = lista;
-  const q = normalizeText(_fechMgrSearchQuery);
-  if (q) {
-    out = out.filter(r => {
-      const hay = normalizeText([r.central, r.material, r.materialOriginal, r.documento, r.movimento, r._statusLabel].join(' '));
-      return hay.includes(q);
-    });
-  }
-  if (!excludeMes && _fechMgrMesFiltro) {
-    out = out.filter(r => r._mesAno === _fechMgrMesFiltro);
-  }
+// Aplica os filtros de coluna ativos sobre a lista de candidatos.
+function _fechMgrAplicarFiltros(lista, { excludeColIdx = null } = {}) {
   const entries = Object.entries(_fechMgrColFilters).filter(([, s]) => s && s.size > 0);
-  if (!entries.length) return out;
-  return out.filter(r => {
+  if (!entries.length) return lista;
+  return lista.filter(r => {
     for (const [colIdx, activeSet] of entries) {
       if (excludeColIdx !== null && Number(colIdx) === Number(excludeColIdx)) continue;
       const field = _FECHMGR_COLS[Number(colIdx)];
@@ -3492,13 +3461,9 @@ function abrirFechManager() {
   const overlay = document.getElementById('fech-manager-overlay');
   if (!overlay) return;
   _fechMgrSelecionados.clear();
-  _fechMgrSearchQuery = '';
-  _fechMgrMesFiltro = null;
   _fechMgrPage = 0;
   _fechMgrCandidatosRawCache = null; // força reler o state.sap atual
   Object.keys(_fechMgrColFilters).forEach(k => delete _fechMgrColFilters[k]);
-  const searchEl = document.getElementById('fechmgr-search-input');
-  if (searchEl) searchEl.value = '';
   overlay.classList.add('open');
   overlay.setAttribute('aria-hidden', 'false');
   _fechMgrInjectColFilterButtons();
@@ -3515,52 +3480,6 @@ function fecharFechManager() {
 }
 window.fecharFechManager = fecharFechManager;
 
-function _fechMgrBuscar(valor) {
-  _fechMgrSearchQuery = valor || '';
-  _fechMgrPage = 0;
-  _fechMgrRender();
-}
-window._fechMgrBuscar = _fechMgrBuscar;
-
-// Botão de mês: clique alterna — clicar no mês já ativo volta pra "todos".
-function _fechMgrSetMesFiltro(mesAno) {
-  _fechMgrMesFiltro = (_fechMgrMesFiltro === mesAno) ? null : mesAno;
-  _fechMgrPage = 0;
-  _fechMgrRender();
-}
-window._fechMgrSetMesFiltro = _fechMgrSetMesFiltro;
-
-function _fechMgrRenderBotoesMes(todos) {
-  const el = document.getElementById('fechmgr-month-filters');
-  if (!el) return;
-
-  // Base para as contagens: busca + filtros de coluna aplicados, mas SEM o
-  // filtro de mês (senão o botão ativo sempre contaria só a si mesmo).
-  const base = _fechMgrAplicarFiltros(todos, { excludeMes: true });
-  const porMes = new Map();
-  base.forEach(r => porMes.set(r._mesAno, (porMes.get(r._mesAno) || 0) + 1));
-  const mesesOrdenados = [...porMes.keys()].sort((a, b) => b.localeCompare(a));
-
-  if (!mesesOrdenados.length) { el.innerHTML = ''; return; }
-
-  const mesLabelPorAno = new Map();
-  base.forEach(r => { if (!mesLabelPorAno.has(r._mesAno)) mesLabelPorAno.set(r._mesAno, r._mesLabel); });
-
-  const chips = mesesOrdenados.map(mesAno => {
-    const ativo = _fechMgrMesFiltro === mesAno;
-    return `<button type="button" class="fechmgr-mes-chip${ativo ? ' active' : ''}" onclick="_fechMgrSetMesFiltro('${mesAno}')">
-      ${mesLabelPorAno.get(mesAno)} <span class="fechmgr-mes-chip-count">${porMes.get(mesAno)}</span>
-    </button>`;
-  }).join('');
-
-  const totalBase = base.length;
-  const todosAtivo = !_fechMgrMesFiltro;
-  el.innerHTML = `
-    <button type="button" class="fechmgr-mes-chip${todosAtivo ? ' active' : ''}" onclick="_fechMgrSetMesFiltro(null)">
-      Todos os meses <span class="fechmgr-mes-chip-count">${totalBase}</span>
-    </button>${chips}`;
-}
-
 function _fechMgrRender() {
   const tbody = document.getElementById('fechmgr-tbody');
   const cardsEl = document.getElementById('fechmgr-cards');
@@ -3569,8 +3488,6 @@ function _fechMgrRender() {
 
   const todos = _fechMgrGetTodosCandidatos();
   const filtrados = _fechMgrAplicarFiltros(todos);
-
-  _fechMgrRenderBotoesMes(todos);
 
   // Resumo geral (sempre reflete TODOS os candidatos, não só o filtrado —
   // pra dar uma visão fiel do estado real do sistema mesmo com filtro ativo)
@@ -3675,7 +3592,6 @@ function _fechMgrRender() {
 
 function _fechMgrRenderPaginacao(total, totalPaginas) {
   const infoEl = document.getElementById('fechmgr-page-info');
-  const linkEl = document.getElementById('fechmgr-select-all-filtered');
   if (infoEl) {
     if (!total) {
       infoEl.textContent = '0 registros';
@@ -3685,7 +3601,6 @@ function _fechMgrRenderPaginacao(total, totalPaginas) {
       infoEl.textContent = `${inicio}-${fim} de ${total} registro(s) (pág. ${_fechMgrPage + 1}/${totalPaginas})`;
     }
   }
-  if (linkEl) linkEl.style.display = total > PAGE_SIZE ? 'inline-flex' : 'none';
 }
 
 function _fechMgrIrParaPagina(p) {
@@ -3737,15 +3652,6 @@ function _fechMgrToggleSelecionarTudo(checked) {
   });
 }
 window._fechMgrToggleSelecionarTudo = _fechMgrToggleSelecionarTudo;
-
-// Seleciona TODOS os registros filtrados (todas as páginas), não só a
-// página atual — link ao lado da paginação.
-function _fechMgrSelecionarTodosFiltrados() {
-  _fechMgrLastFiltrados.forEach(r => _fechMgrSelecionados.add(r._chave));
-  toast(`${_fechMgrLastFiltrados.length} registro(s) selecionado(s) (todas as páginas).`);
-  _fechMgrRender();
-}
-window._fechMgrSelecionarTodosFiltrados = _fechMgrSelecionarTodosFiltrados;
 
 function _fechMgrAtualizarBarraLote() {
   const bar = document.getElementById('fechmgr-lote-bar');

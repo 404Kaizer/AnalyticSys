@@ -9691,59 +9691,6 @@ tr.sap-fechamento td {
   .fechmgr-cards { grid-template-columns: repeat(2, 1fr); }
 }
 
-/* Busca + chips de mês lado a lado num único bloco de toolbar, com respiro
-   generoso — antes ficavam empilhados sem separação visual clara. */
-.fechmgr-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 14px 20px;
-  border-bottom: 1px solid var(--border);
-  flex-wrap: wrap;
-}
-.fechmgr-search {
-  padding: 0;
-  flex: 0 0 auto;
-  width: 320px;
-}
-.fechmgr-month-filters {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 7px;
-  flex: 1;
-  min-width: 260px;
-}
-.fechmgr-mes-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 12px;
-  border-radius: 999px;
-  border: 1px solid var(--border2);
-  background: var(--bg3);
-  color: var(--text2);
-  font-family: var(--mono);
-  font-size: 11px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background .15s, border-color .15s, color .15s;
-}
-.fechmgr-mes-chip:hover {
-  border-color: var(--purple-border);
-  color: var(--text);
-}
-.fechmgr-mes-chip.active {
-  background: var(--purple-bg);
-  border-color: var(--purple);
-  color: var(--purple);
-  font-weight: 700;
-}
-.fechmgr-mes-chip-count {
-  font-size: 10px;
-  opacity: .75;
-}
-
 .fechmgr-lote-bar {
   display: flex;
   align-items: center;
@@ -9779,18 +9726,6 @@ tr.sap-fechamento td {
   background: transparent;
   border-color: var(--border2);
   color: var(--text2);
-}
-
-.fechmgr-select-all-link {
-  font-size: 11px;
-  padding: 4px 10px;
-  background: transparent;
-  border-color: var(--border2);
-  color: var(--purple);
-}
-.fechmgr-select-all-link:hover {
-  background: var(--purple-bg);
-  border-color: var(--purple-border);
 }
 
 /* ── Tabela: corrige o corte de texto herdado da regra genérica de célula

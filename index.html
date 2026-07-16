@@ -4053,18 +4053,6 @@
 
     <div class="fechmgr-cards" id="fechmgr-cards"></div>
 
-    <div class="fechmgr-toolbar">
-      <div class="bdm-search fechmgr-search">
-        <div class="bdm-search-wrap">
-          <i class="ti ti-search"></i>
-          <input type="text" class="bdm-search-input" id="fechmgr-search-input"
-            placeholder="Buscar por central, material, documento ou status…" autocomplete="off"
-            oninput="_fechMgrBuscar(this.value)">
-        </div>
-      </div>
-      <div class="fechmgr-month-filters" id="fechmgr-month-filters"></div>
-    </div>
-
     <div class="fechmgr-lote-bar" id="fechmgr-lote-bar" style="display:none">
       <span id="fechmgr-lote-count"><i class="ti ti-checks"></i> 0 registros selecionados</span>
       <div class="fechmgr-lote-actions">
@@ -4109,7 +4097,6 @@
     </div>
     <div class="pagination">
       <span class="page-info" id="fechmgr-page-info">0 registros</span>
-      <button class="btn fechmgr-select-all-link" id="fechmgr-select-all-filtered" onclick="_fechMgrSelecionarTodosFiltrados()">Selecionar todos os filtrados</button>
       <div class="page-btns">
         <button class="btn" title="Primeira" onclick="_fechMgrIrParaPagina(0)"><i class="ti ti-chevrons-left"></i></button>
         <button class="btn" title="Anterior" onclick="_fechMgrPaginaAnterior()"><i class="ti ti-chevron-left"></i></button>
