@@ -3494,9 +3494,13 @@ function _fechMgrRender() {
   // aos filtros de coluna aplicados, servindo como um "subtotal" do que
   // está sendo exibido. Sem filtro ativo, filtrados === todos e o
   // comportamento não muda.
+  // Peso/Custo somam TODOS os registros filtrados, independente do status
+  // (desconsiderado ou incluído manualmente) — só as contagens abaixo
+  // (Desconsiderados/Incluídos manualmente) continuam segmentadas por
+  // status, já que é essa a razão de existir delas.
   const desconsiderados = filtrados.filter(r => r._statusExcluido);
   const incluidosManual = filtrados.filter(r => !r._statusExcluido);
-  const { peso: pesoDesc, custo: custoDesc } = somarPesoCustoSap(desconsiderados);
+  const { peso: pesoFiltro, custo: custoFiltro } = somarPesoCustoSap(filtrados);
   const filtroAtivo = filtrados.length !== todos.length;
 
   if (subEl) {
@@ -3518,19 +3522,19 @@ function _fechMgrRender() {
         </div>
       </div>
       <div class="inv-kpi-card">
-        <div class="inv-kpi-icon" style="background:var(--purple-bg);color:var(--purple)"><i class="ti ti-scale"></i></div>
+        <div class="inv-kpi-icon" style="background:var(--bg3);color:var(--text2)"><i class="ti ti-scale"></i></div>
         <div class="inv-kpi-body">
-          <div class="inv-kpi-label">Peso desconsiderado</div>
-          <div class="inv-kpi-value">${fmtKg(pesoDesc)}</div>
-          <div class="inv-kpi-unit">kg, soma bruta</div>
+          <div class="inv-kpi-label">Peso total filtrado</div>
+          <div class="inv-kpi-value">${fmtKg(pesoFiltro)}</div>
+          <div class="inv-kpi-unit">kg, soma bruta — considerados + desconsiderados</div>
         </div>
       </div>
       <div class="inv-kpi-card">
-        <div class="inv-kpi-icon" style="background:var(--purple-bg);color:var(--purple)"><i class="ti ti-currency-dollar"></i></div>
+        <div class="inv-kpi-icon" style="background:var(--bg3);color:var(--text2)"><i class="ti ti-currency-dollar"></i></div>
         <div class="inv-kpi-body">
-          <div class="inv-kpi-label">Custo desconsiderado</div>
-          <div class="inv-kpi-value">${money(custoDesc)}</div>
-          <div class="inv-kpi-unit">custo total</div>
+          <div class="inv-kpi-label">Custo total filtrado</div>
+          <div class="inv-kpi-value">${money(custoFiltro)}</div>
+          <div class="inv-kpi-unit">custo total — considerados + desconsiderados</div>
         </div>
       </div>
       <div class="inv-kpi-card">
