@@ -4062,6 +4062,13 @@
       </div>
     </div>
 
+    <div class="fechmgr-filter-bar" id="fechmgr-filter-bar" style="display:none">
+      <span id="fechmgr-filter-count"><i class="ti ti-filter"></i> Filtro(s) de coluna ativo(s)</span>
+      <button class="cf-active-badge" type="button" onclick="_fechMgrLimparTodosFiltros()">
+        <i class="ti ti-filter-off"></i> Limpar filtros
+      </button>
+    </div>
+
     <div class="bdm-body">
       <table class="bdm-table fechmgr-table">
         <colgroup>
@@ -4069,13 +4076,13 @@
           <col style="width:5.5%">
           <col style="width:8%">
           <col style="width:7%">
-          <col style="width:20%">
+          <col style="width:18.5%">
           <col style="width:11%">
           <col style="width:8.5%">
           <col style="width:8.5%">
           <col style="width:11%">
           <col style="width:12%">
-          <col style="width:5%">
+          <col style="width:6.5%">
         </colgroup>
         <thead>
           <tr id="fechmgr-thead-row">
@@ -4089,7 +4096,7 @@
             <th>Dt. Registro</th>
             <th style="text-align:right">Peso</th>
             <th style="text-align:right">Custo Total</th>
-            <th></th>
+            <th title="Desconsiderado do cálculo × incluído manualmente">Status</th>
           </tr>
         </thead>
         <tbody id="fechmgr-tbody"></tbody>

@@ -3572,13 +3572,13 @@ function _fechMgrRender() {
     return `
     <tr class="${r._statusExcluido ? '' : 'fechmgr-row-incluido'}">
       <td class="th-checkbox"><input type="checkbox" ${checked ? 'checked' : ''} onchange="_fechMgrToggleSelecao('${r._chave.replace(/'/g,"\\'")}', this.checked)"></td>
-      <td class="td-mono" style="color:${neg ? '#ef4444' : '#22c55e'};font-weight:600">${r.movimento || '—'}</td>
-      <td class="td-mono">${r.central || '—'}</td>
-      <td class="td-muted">${r.deposito || '—'}</td>
+      <td class="td-mono" style="color:${neg ? '#ef4444' : '#22c55e'};font-weight:600" title="${escapeHtml(r.movimento || '—')}">${r.movimento || '—'}</td>
+      <td class="td-mono" title="${escapeHtml(r.central || '—')}">${r.central || '—'}</td>
+      <td class="td-muted" title="${escapeHtml(r.deposito || '—')}">${r.deposito || '—'}</td>
       <td class="td-mono fechmgr-td-material" title="${escapeHtml(r.material || r.materialOriginal || '—')}">${r.material || r.materialOriginal || '—'}</td>
-      <td class="td-mono">${r.documento || '—'}</td>
-      <td class="td-muted">${r.dtLanc || '—'}</td>
-      <td class="td-muted">${r.dtReg || '—'}</td>
+      <td class="td-mono" title="${escapeHtml(r.documento || '—')}">${r.documento || '—'}</td>
+      <td class="td-muted" title="${escapeHtml(r.dtLanc || '—')}">${r.dtLanc || '—'}</td>
+      <td class="td-muted" title="${escapeHtml(r.dtReg || '—')}">${r.dtReg || '—'}</td>
       <td class="td-mono" style="text-align:right">${fmtKg(num(r.peso))}</td>
       <td class="td-mono" style="text-align:right">${money(custoLinha)}</td>
       <td style="text-align:center">${statusDot}</td>
@@ -3724,7 +3724,26 @@ function _fechMgrUpdateColFilterIcons() {
     const active = _fechMgrColFilters[idx] && _fechMgrColFilters[idx].size > 0;
     btn.classList.toggle('cf-btn--active', !!active);
   });
+  // Mostra a barra "Limpar filtros" só quando algum filtro de coluna
+  // está de fato ativo — mesma lógica do badge genérico (updateAllColFilterIcons).
+  const bar = document.getElementById('fechmgr-filter-bar');
+  if (bar) {
+    const qtdAtivos = Object.values(_fechMgrColFilters).filter(s => s && s.size > 0).length;
+    bar.style.display = qtdAtivos > 0 ? 'flex' : 'none';
+    const countEl = document.getElementById('fechmgr-filter-count');
+    if (countEl) {
+      countEl.innerHTML = `<i class="ti ti-filter"></i> ${qtdAtivos} filtro(s) de coluna ativo(s)`;
+    }
+  }
 }
+
+function _fechMgrLimparTodosFiltros() {
+  Object.keys(_fechMgrColFilters).forEach(k => delete _fechMgrColFilters[k]);
+  _fechMgrClosePopover();
+  _fechMgrPage = 0;
+  _fechMgrRender();
+}
+window._fechMgrLimparTodosFiltros = _fechMgrLimparTodosFiltros;
 
 function _fechMgrOpenColFilterPopover(thEl, colIdx) {
   _fechMgrClosePopover();

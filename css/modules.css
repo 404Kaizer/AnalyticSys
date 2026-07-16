@@ -9728,14 +9728,46 @@ tr.sap-fechamento td {
   color: var(--text2);
 }
 
+/* ── Barra "Limpar filtros" — só aparece quando algum filtro de coluna
+   está ativo (ver _fechMgrUpdateColFilterIcons). Mesma altura/formato da
+   barra de lote acima, mas em tom neutro (bg3) pra não competir
+   visualmente com o roxo da seleção em lote. */
+.fechmgr-filter-bar {
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 20px;
+  background: var(--bg3);
+  border-bottom: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--text3);
+}
+.fechmgr-filter-bar .cf-active-badge {
+  margin-left: 0;
+  opacity: 1;
+}
+
 /* ── Tabela: corrige o corte de texto herdado da regra genérica de célula
    (tbody td { max-width:240px; overflow:hidden; ellipsis }), que faz
    sentido pras tabelas de página cheia mas espreme demais dentro de um
    modal com 11 colunas. Larguras vêm do <colgroup> no HTML; aqui só
    liberamos o que cada tipo de coluna precisa pra nunca esconder um valor
    importante (peso/custo nunca podem truncar). ── */
-.fechmgr-table thead th {
-  padding: 10px 14px;
+.fechmgr-table thead th:not(.th-checkbox) {
+  position: relative;
+  padding: 10px 26px 10px 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Coluna de status (última) não tem rótulo alinhado à esquerda como as
+   demais — alinha ao centro pra bater com a bolinha centralizada no
+   tbody (ver td final em _fechMgrRender, ui.js), corrigindo o
+   desalinhamento herdado da regra genérica ".bdm-table thead th:last-child"
+   (que força text-align:right, pensada pra colunas de valor/ação, não
+   pra um indicador central). */
+.fechmgr-table thead th:last-child {
+  text-align: center;
 }
 .fechmgr-table tbody td {
   padding: 10px 14px;
@@ -9743,13 +9775,20 @@ tr.sap-fechamento td {
 }
 .fechmgr-table tbody td.td-mono,
 .fechmgr-table tbody td.td-muted {
-  overflow: visible;
-  text-overflow: clip;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.fechmgr-td-material {
+/* Especificidade elevada de propósito (".fechmgr-table tbody td" em vez de
+   só ".fechmgr-td-material") — precisa vencer ".bdm-table tbody td" (que
+   fixa white-space:nowrap) pra que a quebra de linha abaixo realmente
+   funcione. Sem isso, o Material fica numa linha só e vaza (overflow)
+   por cima da coluna Documento, causando texto sobreposto. */
+.fechmgr-table tbody td.fechmgr-td-material {
   white-space: normal;
   word-break: break-word;
   line-height: 1.35;
+  overflow: visible;
+  text-overflow: clip;
 }
 .fechmgr-table tbody tr {
   cursor: default;
