@@ -3391,7 +3391,7 @@ let _fechMgrLastFiltrados = [];  // cache do resultado filtrado+ordenado do últ
 // filtro discreto nessa coluna (checkbox, Peso e Custo Total são valores
 // contínuos — não fazem sentido como lista de valores únicos, mesmo padrão
 // já usado nas colunas de valor das outras tabelas do sistema).
-const _FECHMGR_COLS = [null, 'movimento', 'central', 'deposito', 'material', 'documento', 'dtLanc', 'dtReg', null, null, '_statusLabel'];
+const _FECHMGR_COLS = [null, 'usuario', 'movimento', 'central', 'deposito', 'material', 'documento', 'dtLanc', 'dtReg', null, null, '_statusLabel'];
 
 // Cache dos registros SAP BRUTOS que batem no padrão de fechamento — a
 // varredura de isSapFechamentoPattern acontece sobre TODO o state.sap
@@ -3545,7 +3545,7 @@ function _fechMgrRender() {
   _fechMgrLastFiltrados = ordenados;
 
   if (!ordenados.length) {
-    tbody.innerHTML = `<tr><td colspan="11"><div class="empty-state"><i class="ti ti-calendar-check"></i><p>${todos.length ? 'Nenhum registro corresponde ao filtro.' : 'Nenhum Ajuste de Fechamento Mensal detectado.'}</p></div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="12"><div class="empty-state"><i class="ti ti-calendar-check"></i><p>${todos.length ? 'Nenhum registro corresponde ao filtro.' : 'Nenhum Ajuste de Fechamento Mensal detectado.'}</p></div></td></tr>`;
     _fechMgrRenderPaginacao(0, 0);
     _fechMgrAtualizarBarraLote();
     _fechMgrUpdateColFilterIcons();
@@ -3572,6 +3572,7 @@ function _fechMgrRender() {
     return `
     <tr class="${r._statusExcluido ? '' : 'fechmgr-row-incluido'}">
       <td class="th-checkbox"><input type="checkbox" ${checked ? 'checked' : ''} onchange="_fechMgrToggleSelecao('${r._chave.replace(/'/g,"\\'")}', this.checked)"></td>
+      <td class="td-mono" title="${escapeHtml(r.usuario || '—')}">${r.usuario || '—'}</td>
       <td class="td-mono" style="color:${neg ? '#ef4444' : '#22c55e'};font-weight:600" title="${escapeHtml(r.movimento || '—')}">${r.movimento || '—'}</td>
       <td class="td-mono" title="${escapeHtml(r.central || '—')}">${r.central || '—'}</td>
       <td class="td-muted" title="${escapeHtml(r.deposito || '—')}">${r.deposito || '—'}</td>
