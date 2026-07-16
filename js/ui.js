@@ -3489,14 +3489,18 @@ function _fechMgrRender() {
   const todos = _fechMgrGetTodosCandidatos();
   const filtrados = _fechMgrAplicarFiltros(todos);
 
-  // Resumo geral (sempre reflete TODOS os candidatos, não só o filtrado —
-  // pra dar uma visão fiel do estado real do sistema mesmo com filtro ativo)
-  const desconsiderados = todos.filter(r => r._statusExcluido);
-  const incluidosManual = todos.filter(r => !r._statusExcluido);
+  // Resumo em cards agora reflete o FILTRO ATUAL da tabela (não mais
+  // sempre o total geral) — pedido explícito: os KPIs devem responder
+  // aos filtros de coluna aplicados, servindo como um "subtotal" do que
+  // está sendo exibido. Sem filtro ativo, filtrados === todos e o
+  // comportamento não muda.
+  const desconsiderados = filtrados.filter(r => r._statusExcluido);
+  const incluidosManual = filtrados.filter(r => !r._statusExcluido);
   const { peso: pesoDesc, custo: custoDesc } = somarPesoCustoSap(desconsiderados);
+  const filtroAtivo = filtrados.length !== todos.length;
 
   if (subEl) {
-    subEl.textContent = filtrados.length !== todos.length
+    subEl.textContent = filtroAtivo
       ? `${todos.length} registro(s) detectado(s) — exibindo ${filtrados.length} com o filtro atual`
       : `${todos.length} registro(s) detectado(s) em todo o histórico`;
   }
@@ -3510,7 +3514,7 @@ function _fechMgrRender() {
         <div class="inv-kpi-body">
           <div class="inv-kpi-label">Desconsiderados</div>
           <div class="inv-kpi-value">${desconsiderados.length}</div>
-          <div class="inv-kpi-unit">de ${todos.length} detectado(s)</div>
+          <div class="inv-kpi-unit">${filtroAtivo ? `de ${filtrados.length} exibido(s) no filtro` : `de ${todos.length} detectado(s)`}</div>
         </div>
       </div>
       <div class="inv-kpi-card">
