@@ -2538,33 +2538,6 @@ function renderAusencias() {
       <span class="aus-chip teal">${centrais} ${centrais !== 1 ? 'centrais' : 'central'}</span>
       <span class="aus-chip purple">${regionaisCount} ${regionaisCount !== 1 ? 'regionais' : 'regional'}</span>
       ${semCadastroCount > 0 ? `<span class="aus-chip amber" style="opacity:.85" title="Cadência assumida como diária por falta de cadastro"><i class="ti ti-help-circle" style="font-size:10px"></i> ${semCadastroCount} sem cadastro</span>` : ''}
-      <button onclick="event.stopPropagation();gerarRelatorioAusenciasGeral()"
-        style="margin-left:6px;display:inline-flex;align-items:center;gap:5px;background:transparent;
-          border:1px solid var(--border2);border-radius:5px;padding:2px 10px;font-size:10.5px;
-          font-family:var(--mono);font-weight:600;color:var(--text2);cursor:pointer;
-          transition:border-color .15s,color .15s" title="Gerar relatório geral de ausências"
-        onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
-        onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--text2)'">
-        <i class="ti ti-file-report" style="font-size:12px"></i> Relatório Geral
-      </button>
-      <button onclick="event.stopPropagation();gerarRankingCentrais()"
-        style="display:inline-flex;align-items:center;gap:5px;background:transparent;
-          border:1px solid var(--border2);border-radius:5px;padding:2px 10px;font-size:10.5px;
-          font-family:var(--mono);font-weight:600;color:var(--text2);cursor:pointer;
-          transition:border-color .15s,color .15s" title="Gerar ranking das piores centrais (Top 10)"
-        onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
-        onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--text2)'">
-        <i class="ti ti-trophy" style="font-size:12px"></i> Ranking Centrais
-      </button>
-      <button onclick="event.stopPropagation();gerarRankingRegionais()"
-        style="display:inline-flex;align-items:center;gap:5px;background:transparent;
-          border:1px solid var(--border2);border-radius:5px;padding:2px 10px;font-size:10.5px;
-          font-family:var(--mono);font-weight:600;color:var(--text2);cursor:pointer;
-          transition:border-color .15s,color .15s" title="Gerar ranking completo das piores regionais"
-        onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
-        onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--text2)'">
-        <i class="ti ti-map-2" style="font-size:12px"></i> Ranking Regionais
-      </button>
     </span>`;
 
     // ── Render agrupado por regional → central ──

@@ -1516,6 +1516,85 @@ window.gerarRelatorioAusenciasGeral = function() {
   w.focus();
 };
 
+// ═══════════════════════════════════════════════════════════════════
+// MODAL DE SELEÇÃO — Tipo de Relatório de Ausência de Lançamento
+// Unifica os 3 relatórios (Geral, Ranking Centrais, Ranking Regionais)
+// no botão único "Gerar Relatório". Mesmo padrão visual e comportamental
+// do abrirModalRelatorioCentral (Analítico): cartões clicáveis com
+// ícone + título + descrição, seleção única, fecha o modal e dispara
+// o relatório correspondente.
+// ═══════════════════════════════════════════════════════════════════
+window.abrirModalRelatorioAusencias = function() {
+  if (!window._ausenciasData?.length) { alert('Nenhuma ausência no período/filtros selecionados.'); return; }
+
+  let modal = document.getElementById('aus-rel-tipo-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'aus-rel-tipo-modal';
+    modal.className = 'modal-overlay';
+    modal.style.cssText = 'z-index:3200';
+    document.body.appendChild(modal);
+  }
+
+  modal.innerHTML = `
+    <div class="modal" style="max-width:460px;width:94vw">
+      <div class="modal-title" style="display:flex;align-items:center;gap:10px">
+        <i class="ti ti-file-report" style="color:var(--accent)"></i>
+        Gerar Relatório
+      </div>
+      <div class="modal-sub">Ausência de Lançamento · selecione o tipo de relatório</div>
+      <div style="display:flex;flex-direction:column;gap:10px;margin:20px 0">
+
+        <button onclick="document.getElementById('aus-rel-tipo-modal').classList.remove('open');gerarRelatorioAusenciasGeral();"
+          style="display:flex;align-items:flex-start;gap:14px;width:100%;padding:16px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;cursor:pointer;font-family:inherit;color:var(--text);text-align:left;transition:border-color .15s,background .15s"
+          onmouseover="this.style.borderColor='var(--accent)';this.style.background='var(--bg3)'"
+          onmouseout="this.style.borderColor='var(--border)';this.style.background='var(--bg2)'">
+          <div style="width:38px;height:38px;border-radius:9px;background:linear-gradient(135deg,rgba(29,78,216,0.18),rgba(37,99,235,0.12));border:1px solid rgba(37,99,235,0.3);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <i class="ti ti-file-report" style="color:#60a5fa;font-size:17px"></i>
+          </div>
+          <div>
+            <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:3px">Relatório Geral</div>
+            <div style="font-size:12px;color:var(--text2);line-height:1.5">Todas as ausências agrupadas por regional → central → material, com datas e detalhes de estoque.</div>
+          </div>
+        </button>
+
+        <button onclick="document.getElementById('aus-rel-tipo-modal').classList.remove('open');gerarRankingCentrais();"
+          style="display:flex;align-items:flex-start;gap:14px;width:100%;padding:16px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;cursor:pointer;font-family:inherit;color:var(--text);text-align:left;transition:border-color .15s,background .15s"
+          onmouseover="this.style.borderColor='var(--accent)';this.style.background='var(--bg3)'"
+          onmouseout="this.style.borderColor='var(--border)';this.style.background='var(--bg2)'">
+          <div style="width:38px;height:38px;border-radius:9px;background:linear-gradient(135deg,rgba(239,68,68,0.18),rgba(220,38,38,0.12));border:1px solid rgba(239,68,68,0.3);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <i class="ti ti-trophy" style="color:#f87171;font-size:17px"></i>
+          </div>
+          <div>
+            <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:3px">Ranking Centrais</div>
+            <div style="font-size:12px;color:var(--text2);line-height:1.5">Top 10 centrais com mais dias de ausência — cards de destaque e alerta de regularização imediata.</div>
+          </div>
+        </button>
+
+        <button onclick="document.getElementById('aus-rel-tipo-modal').classList.remove('open');gerarRankingRegionais();"
+          style="display:flex;align-items:flex-start;gap:14px;width:100%;padding:16px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;cursor:pointer;font-family:inherit;color:var(--text);text-align:left;transition:border-color .15s,background .15s"
+          onmouseover="this.style.borderColor='var(--accent)';this.style.background='var(--bg3)'"
+          onmouseout="this.style.borderColor='var(--border)';this.style.background='var(--bg2)'">
+          <div style="width:38px;height:38px;border-radius:9px;background:linear-gradient(135deg,rgba(168,85,247,0.18),rgba(147,51,234,0.12));border:1px solid rgba(168,85,247,0.3);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <i class="ti ti-map-2" style="color:#c084fc;font-size:17px"></i>
+          </div>
+          <div>
+            <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:3px">Ranking Regionais</div>
+            <div style="font-size:12px;color:var(--text2);line-height:1.5">Lista completa das regionais ordenadas por quantidade de centrais fora do padrão.</div>
+          </div>
+        </button>
+
+      </div>
+      <div class="form-actions">
+        <button class="btn" onclick="document.getElementById('aus-rel-tipo-modal').classList.remove('open')">Cancelar</button>
+      </div>
+    </div>`;
+
+  modal.classList.add('open');
+  if (modal._escHandler) document.removeEventListener('keydown', modal._escHandler);
+  modal._escHandler = (e) => { if (e.key === 'Escape') { modal.classList.remove('open'); document.removeEventListener('keydown', modal._escHandler); } };
+  document.addEventListener('keydown', modal._escHandler);
+};
 
 // ═══════════════════════════════════════════════════════════════════
 // RANKING DE AUSÊNCIAS — Piores Centrais e Piores Regionais
