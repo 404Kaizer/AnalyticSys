@@ -2646,6 +2646,9 @@ window.gerarRelatorioComAcoes = function(centralName) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // RELATÓRIO GERENCIAL DE OCORRÊNCIAS — visão executiva para diretoria
 // ═══════════════════════════════════════════════════════════════════════════════
+// RELATÓRIO GERENCIAL DE OCORRÊNCIAS — visão executiva (mesmo shell escuro dos
+// relatórios de Ranking/Ausência: _buildRankingShellHTML)
+// ═══════════════════════════════════════════════════════════════════════════════
 window.gerarRelatorioGeralOcorrencias = function() {
   const lista = (state.ocorrencias || []);
   if (!lista.length) {
@@ -2658,7 +2661,6 @@ window.gerarRelatorioGeralOcorrencias = function() {
 
   // ── helpers ─────────────────────────────────────────────────────────────────
   function escR(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-  function fmtBR(iso) { if (!iso) return '—'; const [y,m,d] = iso.split('-'); return `${d}/${m}/${y}`; }
 
   // Dias entre duas datas ISO (b - a), inteiro
   function diffDays(aISO, bISO) {
@@ -2698,7 +2700,7 @@ window.gerarRelatorioGeralOcorrencias = function() {
   const pctVenc    = abertas > 0 ? Math.round(vencidas / abertas * 100) : 0;
 
   // Semáforo: vermelho se >30% vencidas dentre abertas, amarelo se >10%, verde se ok
-  const semaforoColor = pctVenc > 30 ? '#ef4444' : pctVenc > 10 ? '#f59e0b' : '#10b981';
+  const semaforoColor = pctVenc > 30 ? '#ef4444' : pctVenc > 10 ? '#f59e0b' : '#22c55e';
   const semaforoLabel = pctVenc > 30 ? 'CRÍTICO' : pctVenc > 10 ? 'ATENÇÃO' : 'NORMAL';
   const semaforoDesc  = pctVenc > 30
     ? `${pctVenc}% das ocorrências abertas estão com prazo vencido — ação imediata necessária.`
@@ -2768,31 +2770,29 @@ window.gerarRelatorioGeralOcorrencias = function() {
     .slice(0, 12);
   const maxCentral = topCentrals[0]?.[1]?.total || 1;
 
-  // ── Pior regional (para badge no header) ─────────────────────────────────────
+  // ── Pior regional (para meta no header) ──────────────────────────────────────
   const piorRegional = regionaisOrdenados[0];
 
-  // ── Builders de seção ─────────────────────────────────────────────────────────
+  // ── Builders de seção (tema escuro) ──────────────────────────────────────────
   function buildRegionalRow([reg, r]) {
     const tm = r.tempoCount > 0 ? (r.tempoTotal / r.tempoCount).toFixed(1) : '—';
     const pctR = r.total > 0 ? Math.round(r.concluidas / r.total * 100) : 0;
     const barW = r.total > 0 ? Math.round(r.concluidas / r.total * 100) : 0;
-    const rowColor = r.vencidas > 0 ? '#fef2f2' : r.urgentes > 0 ? '#fffbeb' : '#f8fafc';
-    const vencColor = r.vencidas > 0 ? '#ef4444' : '#94a3b8';
-    const urgColor  = r.urgentes > 0 ? '#f59e0b' : '#94a3b8';
+    const rowBg = r.vencidas > 0 ? 'rgba(239,68,68,.06)' : r.urgentes > 0 ? 'rgba(245,158,11,.06)' : 'transparent';
+    const vencColor = r.vencidas > 0 ? '#f87171' : '#64748b';
+    const urgColor  = r.urgentes > 0 ? '#fbbf24' : '#64748b';
     return `
-    <tr style="border-bottom:1px solid #f1f5f9;background:${rowColor}">
-      <td style="padding:11px 14px;font-weight:700;font-size:13px;color:#0f172a">${escR(reg)}</td>
-      <td style="padding:11px 14px;text-align:center;font-family:'JetBrains Mono',monospace;font-weight:700;font-size:15px;color:#1e293b">${r.total}</td>
-      <td style="padding:11px 14px;text-align:center;font-family:'JetBrains Mono',monospace;font-weight:700;font-size:15px;color:#3b82f6">${r.abertas}</td>
-      <td style="padding:11px 14px;text-align:center;font-family:'JetBrains Mono',monospace;font-weight:800;font-size:15px;color:${vencColor}">${r.vencidas}</td>
-      <td style="padding:11px 14px;text-align:center;font-family:'JetBrains Mono',monospace;font-weight:800;font-size:15px;color:${urgColor}">${r.urgentes}</td>
-      <td style="padding:11px 14px;text-align:center;font-family:'JetBrains Mono',monospace;font-size:12px;color:#475569">${tm === '—' ? '—' : tm + 'd'}</td>
-      <td style="padding:11px 14px;min-width:130px">
+    <tr style="background:${rowBg}">
+      <td class="rk-name" style="font-size:12px">${escR(reg)}</td>
+      <td class="rk-num">${r.total}</td>
+      <td class="rk-num" style="color:#93c5fd">${r.abertas}</td>
+      <td class="rk-num" style="color:${vencColor}">${r.vencidas}</td>
+      <td class="rk-num" style="color:${urgColor}">${r.urgentes}</td>
+      <td class="rk-num" style="font-size:11px;color:#cbd5e1">${tm === '—' ? '—' : tm + 'd'}</td>
+      <td style="min-width:130px">
         <div style="display:flex;align-items:center;gap:8px">
-          <div style="flex:1;height:6px;background:#e2e8f0;border-radius:3px;overflow:hidden">
-            <div style="width:${barW}%;height:100%;background:#10b981;border-radius:3px"></div>
-          </div>
-          <span style="font-size:11px;font-family:'JetBrains Mono',monospace;color:#475569;min-width:32px;text-align:right">${pctR}%</span>
+          <div class="oc-bar-track"><div class="oc-bar-fill" style="width:${barW}%;background:#22c55e"></div></div>
+          <span style="font-size:10.5px;font-family:'JetBrains Mono',monospace;color:#94a3b8;min-width:30px;text-align:right">${pctR}%</span>
         </div>
       </td>
     </tr>`;
@@ -2800,326 +2800,167 @@ window.gerarRelatorioGeralOcorrencias = function() {
 
   function buildMotivoRow([motivo, m], idx) {
     const barW = Math.round(m.total / maxMotivo * 100);
-    const vColor = m.vencidas > 0 ? '#ef4444' : '#94a3b8';
+    const vColor = m.vencidas > 0 ? '#f87171' : '#64748b';
     return `
-    <tr style="border-bottom:1px solid #f1f5f9">
-      <td style="padding:10px 14px;font-size:11px;font-family:'JetBrains Mono',monospace;color:#94a3b8;font-weight:600">${idx+1}</td>
-      <td style="padding:10px 14px;font-weight:600;font-size:13px;color:#1e293b">${escR(motivo)}</td>
-      <td style="padding:10px 14px;min-width:160px">
+    <tr>
+      <td class="rk-num" style="color:#64748b;font-size:10px">${idx+1}</td>
+      <td class="rk-name" style="font-size:11.5px">${escR(motivo)}</td>
+      <td style="min-width:150px">
         <div style="display:flex;align-items:center;gap:8px">
-          <div style="flex:1;height:5px;background:#e2e8f0;border-radius:3px;overflow:hidden">
-            <div style="width:${barW}%;height:100%;background:#3b82f6;border-radius:3px"></div>
-          </div>
-          <span style="font-size:11px;font-family:'JetBrains Mono',monospace;color:#475569;min-width:24px;text-align:right">${m.total}</span>
+          <div class="oc-bar-track"><div class="oc-bar-fill" style="width:${barW}%;background:#3b82f6"></div></div>
+          <span style="font-size:10.5px;font-family:'JetBrains Mono',monospace;color:#94a3b8;min-width:22px;text-align:right">${m.total}</span>
         </div>
       </td>
-      <td style="padding:10px 14px;text-align:center;font-family:'JetBrains Mono',monospace;font-weight:700;font-size:13px;color:#3b82f6">${m.abertas}</td>
-      <td style="padding:10px 14px;text-align:center;font-family:'JetBrains Mono',monospace;font-weight:700;font-size:13px;color:${vColor}">${m.vencidas}</td>
+      <td class="rk-num" style="color:#93c5fd">${m.abertas}</td>
+      <td class="rk-num" style="color:${vColor}">${m.vencidas}</td>
     </tr>`;
   }
 
   function buildCentralRow([central, c], idx) {
     const barW = Math.round(c.total / maxCentral * 100);
     const reg = getRegional(central);
-    const vColor = c.vencidas > 0 ? '#ef4444' : '#94a3b8';
-    const uColor = c.urgentes > 0 ? '#f59e0b' : '#94a3b8';
-    const rowBg = c.vencidas > 0 ? '#fef2f2' : c.urgentes > 0 ? '#fffbeb' : '#ffffff';
+    const vColor = c.vencidas > 0 ? '#f87171' : '#64748b';
+    const uColor = c.urgentes > 0 ? '#fbbf24' : '#64748b';
+    const rowBg = c.vencidas > 0 ? 'rgba(239,68,68,.06)' : c.urgentes > 0 ? 'rgba(245,158,11,.06)' : 'transparent';
     return `
-    <tr style="border-bottom:1px solid #f1f5f9;background:${rowBg}">
-      <td style="padding:10px 14px;font-size:11px;font-family:'JetBrains Mono',monospace;color:#94a3b8;font-weight:600">${idx+1}</td>
-      <td style="padding:10px 14px;font-weight:700;font-size:13px;color:#1e293b">${escR(central)}</td>
-      <td style="padding:10px 14px;font-size:11px;color:#64748b">${escR(reg)}</td>
-      <td style="padding:10px 14px;min-width:130px">
+    <tr style="background:${rowBg}">
+      <td class="rk-num" style="color:#64748b;font-size:10px">${idx+1}</td>
+      <td class="rk-name" style="font-size:12px">${escR(central)}</td>
+      <td class="rk-sub" style="margin-top:0">${escR(reg)}</td>
+      <td style="min-width:120px">
         <div style="display:flex;align-items:center;gap:8px">
-          <div style="flex:1;height:5px;background:#e2e8f0;border-radius:3px;overflow:hidden">
-            <div style="width:${barW}%;height:100%;background:#6366f1;border-radius:3px"></div>
-          </div>
-          <span style="font-size:11px;font-family:'JetBrains Mono',monospace;color:#475569;min-width:20px;text-align:right">${c.total}</span>
+          <div class="oc-bar-track"><div class="oc-bar-fill" style="width:${barW}%;background:#818cf8"></div></div>
+          <span style="font-size:10.5px;font-family:'JetBrains Mono',monospace;color:#94a3b8;min-width:18px;text-align:right">${c.total}</span>
         </div>
       </td>
-      <td style="padding:10px 14px;text-align:center;font-family:'JetBrains Mono',monospace;font-weight:700;color:#3b82f6">${c.abertas}</td>
-      <td style="padding:10px 14px;text-align:center;font-family:'JetBrains Mono',monospace;font-weight:800;color:${vColor}">${c.vencidas}</td>
-      <td style="padding:10px 14px;text-align:center;font-family:'JetBrains Mono',monospace;font-weight:800;color:${uColor}">${c.urgentes}</td>
+      <td class="rk-num" style="color:#93c5fd">${c.abertas}</td>
+      <td class="rk-num" style="color:${vColor}">${c.vencidas}</td>
+      <td class="rk-num" style="color:${uColor}">${c.urgentes}</td>
     </tr>`;
   }
 
-  // ── HTML ──────────────────────────────────────────────────────────────────────
-  const html = `<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Relatório Gerencial de Ocorrências — ${now}</title>
-<style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
-  * { box-sizing:border-box; margin:0; padding:0; }
-  body { font-family:'Inter',system-ui,sans-serif; background:#f1f5f9; color:#0f172a; font-size:13px; line-height:1.5; -webkit-font-smoothing:antialiased; }
-  .page-wrap { max-width:1100px; margin:0 auto; padding:20px; }
+  // ── bodyHtml ──────────────────────────────────────────────────────────────────
+  const bodyHtml = `
+    <style>
+      .oc-semaforo { border-radius:10px; padding:16px 22px; display:flex; align-items:center; gap:16px; margin-bottom:22px; }
+      .oc-semaforo-dot { width:16px; height:16px; border-radius:50%; flex-shrink:0; }
+      .oc-semaforo-label { font-size:14px; font-weight:800; letter-spacing:.04em; }
+      .oc-semaforo-desc { font-size:11.5px; color:#94a3b8; margin-top:3px; }
 
-  /* Action bar */
-  .action-bar { position:sticky; top:0; z-index:100; background:#1e293b; display:flex; align-items:center; justify-content:space-between; padding:12px 24px; box-shadow:0 2px 12px rgba(0,0,0,0.2); }
-  .action-bar-title { color:#e2e8f0; font-size:13px; font-weight:500; }
-  .action-bar-title span { color:#64748b; font-size:12px; margin-left:10px; }
-  .action-bar-btns { display:flex; gap:10px; }
-  .btn-print { background:#2563eb; color:#fff; border:none; border-radius:7px; padding:8px 18px; font-size:13px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:7px; transition:background .15s; }
-  .btn-print:hover { background:#1d4ed8; }
-  .btn-close { background:#334155; color:#cbd5e1; border:none; border-radius:7px; padding:8px 14px; font-size:13px; font-weight:500; cursor:pointer; transition:background .15s; }
-  .btn-close:hover { background:#475569; }
+      .oc-highlight { background:rgba(255,255,255,.045); border:1px solid rgba(255,255,255,.09); border-radius:12px; padding:20px 24px; margin-bottom:24px; display:flex; align-items:center; gap:32px; flex-wrap:wrap; }
+      .oc-highlight-label { font-size:10.5px; color:#94a3b8; text-transform:uppercase; letter-spacing:.06em; }
+      .oc-highlight-value { font-family:'JetBrains Mono',monospace; font-weight:800; font-size:38px; color:#4ade80; line-height:1; margin-top:4px; }
+      .oc-highlight-value small { font-size:16px; font-weight:400; color:#94a3b8; margin-left:4px; }
+      .oc-highlight-sub { font-size:10.5px; color:#64748b; margin-top:4px; }
+      .oc-highlight-divider { width:1px; height:56px; background:rgba(255,255,255,.1); flex-shrink:0; }
+      .oc-highlight-stats { display:flex; flex-direction:column; gap:8px; flex:1; min-width:220px; }
+      .oc-highlight-row { display:flex; justify-content:space-between; font-size:11.5px; }
+      .oc-highlight-row span:first-child { color:#94a3b8; }
+      .oc-highlight-row strong { font-family:'JetBrains Mono',monospace; }
 
-  /* Report header */
-  .report-header { background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%); color:#fff; border-radius:14px; padding:32px 36px; margin-bottom:24px; position:relative; overflow:hidden; }
-  .report-header::before { content:''; position:absolute; top:-40px; right:-40px; width:200px; height:200px; border-radius:50%; background:rgba(16,185,129,0.08); border:2px solid rgba(16,185,129,0.12); }
-  .report-header::after { content:''; position:absolute; bottom:-60px; right:80px; width:150px; height:150px; border-radius:50%; background:rgba(239,68,68,0.06); border:2px solid rgba(239,68,68,0.10); }
-  .report-header-top { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:24px; }
-  .report-logo-area { display:flex; align-items:center; gap:12px; }
-  .report-logo-icon { width:48px; height:48px; border-radius:12px; background:rgba(16,185,129,0.18); border:1px solid rgba(16,185,129,0.3); display:flex; align-items:center; justify-content:center; font-size:22px; }
-  .report-logo-text h1 { font-size:20px; font-weight:800; color:#f8fafc; letter-spacing:-0.01em; }
-  .report-logo-text p { font-size:12px; color:#94a3b8; font-weight:400; margin-top:2px; }
-  .report-meta { text-align:right; }
-  .meta-label { font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:.06em; }
-  .meta-value { font-size:13px; color:#cbd5e1; font-weight:500; margin-top:2px; }
+      .oc-bar-track { flex:1; height:5px; background:rgba(255,255,255,.09); border-radius:3px; overflow:hidden; }
+      .oc-bar-fill { height:100%; border-radius:3px; }
+    </style>
 
-  /* Semáforo banner */
-  .semaforo-banner { border-radius:10px; padding:16px 22px; display:flex; align-items:center; gap:16px; margin-bottom:22px; }
-  .semaforo-dot { width:18px; height:18px; border-radius:50%; flex-shrink:0; }
-  .semaforo-label { font-size:15px; font-weight:800; letter-spacing:.04em; }
-  .semaforo-desc { font-size:12px; color:#94a3b8; margin-top:3px; }
-
-  /* KPI grid */
-  .kpi-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-bottom:0; }
-  .kpi-card { background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:16px 18px; text-align:center; }
-  .kpi-num { font-size:30px; font-weight:800; font-family:'JetBrains Mono',monospace; line-height:1; margin-bottom:5px; }
-  .kpi-label { font-size:10px; color:#94a3b8; text-transform:uppercase; letter-spacing:.05em; font-weight:500; }
-
-  /* Section title */
-  .section-title { font-size:12px; font-weight:700; color:#475569; text-transform:uppercase; letter-spacing:.08em; margin:28px 0 12px; display:flex; align-items:center; gap:10px; }
-  .section-title::after { content:''; flex:1; height:1px; background:#e2e8f0; }
-
-  /* Card wrapper */
-  .card { background:#fff; border:1px solid #e2e8f0; border-radius:12px; overflow:hidden; margin-bottom:20px; }
-  .card-header { background:#f8fafc; border-bottom:1px solid #e2e8f0; padding:12px 18px; font-size:12px; font-weight:700; color:#475569; text-transform:uppercase; letter-spacing:.06em; display:flex; align-items:center; justify-content:space-between; }
-  .card-badge { padding:3px 10px; border-radius:12px; font-size:11px; font-weight:700; }
-
-  /* Tables */
-  .data-table { width:100%; border-collapse:collapse; }
-  .data-table thead tr { background:#f8fafc; }
-  .data-table th { padding:10px 14px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:#64748b; text-align:left; border-bottom:1px solid #e2e8f0; }
-  .data-table th.center { text-align:center; }
-  .data-table tbody tr:last-child { border-bottom:none; }
-
-  /* Confidential */
-  .confidential-strip { text-align:center; padding:10px; background:#fef2f2; border:1px solid #fca5a5; border-radius:8px; margin-bottom:20px; font-size:11px; color:#dc2626; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
-
-  /* Footer */
-  .report-footer { margin-top:36px; padding:20px 24px; background:#1e293b; border-radius:12px; color:#64748b; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; font-size:11px; }
-  .report-footer strong { color:#94a3b8; }
-
-  /* Print */
-  @media print {
-    body { background:#fff !important; }
-    .action-bar { display:none !important; }
-    .page-wrap { padding:0 !important; max-width:100% !important; }
-    .report-header { background:#0f172a !important; -webkit-print-color-adjust:exact; color-adjust:exact; }
-    .kpi-card { -webkit-print-color-adjust:exact; color-adjust:exact; }
-    .semaforo-banner { -webkit-print-color-adjust:exact; color-adjust:exact; }
-    .card { page-break-inside:avoid; }
-  }
-</style>
-</head>
-<body>
-
-<div class="action-bar">
-  <div class="action-bar-title">
-    Relatório Gerencial de Ocorrências
-    <span>Gerado em ${now}</span>
-  </div>
-  <div class="action-bar-btns">
-    <button class="btn-print" onclick="window.print()">🖨️ Imprimir / Salvar PDF</button>
-    <button class="btn-close" onclick="window.close()">✕ Fechar</button>
-  </div>
-</div>
-
-<div class="page-wrap">
-
-  <div class="confidential-strip" style="margin-top:18px">
-    ⚠ Documento Confidencial — Uso interno · Diretoria
-  </div>
-
-  <!-- HEADER -->
-  <div class="report-header">
-    <div class="report-header-top">
-      <div class="report-logo-area">
-        <div class="report-logo-icon">📋</div>
-        <div class="report-logo-text">
-          <h1>Relatório Gerencial de Ocorrências</h1>
-          <p>AnalyticSys · Gestão Centralizada de Materiais</p>
-        </div>
-      </div>
-      <div class="report-meta">
-        <div class="meta-label">Gerado em</div>
-        <div class="meta-value">${now}</div>
-        ${piorRegional ? `<div class="meta-label" style="margin-top:8px">Regional com mais atenção</div>
-        <div class="meta-value" style="color:#fca5a5">${escR(piorRegional[0])}</div>` : ''}
-      </div>
-    </div>
-
-    <!-- Semáforo executivo -->
-    <div class="semaforo-banner" style="background:${semaforoColor}18;border:1px solid ${semaforoColor}40;margin-bottom:20px">
-      <div class="semaforo-dot" style="background:${semaforoColor};box-shadow:0 0 10px ${semaforoColor}80"></div>
+    <div class="oc-semaforo" style="background:${semaforoColor}18;border:1px solid ${semaforoColor}40">
+      <div class="oc-semaforo-dot" style="background:${semaforoColor};box-shadow:0 0 10px ${semaforoColor}80"></div>
       <div>
-        <div class="semaforo-label" style="color:${semaforoColor}">${semaforoLabel}</div>
-        <div class="semaforo-desc">${escR(semaforoDesc)}</div>
+        <div class="oc-semaforo-label" style="color:${semaforoColor}">${semaforoLabel}</div>
+        <div class="oc-semaforo-desc">${escR(semaforoDesc)}${piorRegional ? ` · Regional com mais atenção: <strong style="color:#e2e8f0">${escR(piorRegional[0])}</strong>` : ''}</div>
       </div>
     </div>
 
-    <!-- KPIs -->
-    <div class="kpi-grid">
-      <div class="kpi-card">
-        <div class="kpi-num" style="color:#e2e8f0">${total}</div>
-        <div class="kpi-label">Total de ocorrências</div>
+    ${tempoMedio !== null ? `
+    <div class="oc-highlight">
+      <div>
+        <div class="oc-highlight-label">Tempo médio de conclusão</div>
+        <div class="oc-highlight-value">${tempoMedio}<small>dias</small></div>
+        <div class="oc-highlight-sub">média entre as ${tempoCount} ocorrência${tempoCount!==1?'s':''} concluídas com datas</div>
       </div>
-      <div class="kpi-card">
-        <div class="kpi-num" style="color:#3b82f6">${abertas}</div>
-        <div class="kpi-label">Em aberto</div>
+      <div class="oc-highlight-divider"></div>
+      <div class="oc-highlight-stats">
+        <div class="oc-highlight-row"><span>Ocorrências abertas</span><strong style="color:#93c5fd">${abertas}</strong></div>
+        <div class="oc-highlight-row"><span>Vencidas (prazo expirado)</span><strong style="color:#f87171">${vencidas}</strong></div>
+        <div class="oc-highlight-row"><span>Urgentes (vencem em até 2 dias)</span><strong style="color:#fbbf24">${urgentes}</strong></div>
+        <div class="oc-highlight-row"><span>Em prazo normal</span><strong style="color:#a5b4fc">${normais}</strong></div>
       </div>
-      <div class="kpi-card">
-        <div class="kpi-num" style="color:#ef4444">${vencidas}</div>
-        <div class="kpi-label">🔴 Vencidas</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-num" style="color:#f59e0b">${urgentes}</div>
-        <div class="kpi-label">🟡 Urgentes</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-num" style="color:#10b981">${pctConc}%</div>
-        <div class="kpi-label">✅ Concluídas</div>
-      </div>
-    </div>
-  </div>
+    </div>` : ''}
 
-  <!-- TEMPO MÉDIO DE CONCLUSÃO (destaque) -->
-  ${tempoMedio !== null ? `
-  <div class="card" style="margin-bottom:20px">
-    <div class="card-header">
-      ⏱ Tempo Médio de Conclusão
-      <span class="card-badge" style="background:#f0fdf4;color:#16a34a;border:1px solid #86efac">${tempoCount} ocorrência${tempoCount!==1?'s':''} concluída${tempoCount!==1?'s':''} com datas</span>
-    </div>
-    <div style="padding:20px 24px;display:flex;align-items:center;gap:32px;flex-wrap:wrap">
-      <div style="display:flex;flex-direction:column;gap:4px">
-        <span style="font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.06em">Da abertura até a conclusão</span>
-        <span style="font-size:42px;font-family:'JetBrains Mono',monospace;font-weight:800;color:#10b981;line-height:1">${tempoMedio}<span style="font-size:20px;font-weight:400;color:#64748b;margin-left:4px">dias</span></span>
-        <span style="font-size:11px;color:#94a3b8">média entre as ${tempoCount} ocorrência${tempoCount!==1?'s':''} concluídas</span>
+    <div class="rk-table-wrap">
+      <div class="rk-table-head">
+        <div class="rk-table-head-title">Situação por Regional</div>
+        <div class="rk-table-head-cap">${regionaisOrdenados.length} ${regionaisOrdenados.length!==1?'regionais':'regional'} · ordenado por criticidade</div>
       </div>
-      <div style="width:1px;height:60px;background:#e2e8f0;flex-shrink:0"></div>
-      <div style="display:flex;flex-direction:column;gap:8px;flex:1;min-width:200px">
-        <div style="display:flex;justify-content:space-between;font-size:12px">
-          <span style="color:#64748b">Ocorrências abertas</span>
-          <strong style="color:#3b82f6">${abertas}</strong>
-        </div>
-        <div style="display:flex;justify-content:space-between;font-size:12px">
-          <span style="color:#64748b">Vencidas (prazo expirado)</span>
-          <strong style="color:#ef4444">${vencidas}</strong>
-        </div>
-        <div style="display:flex;justify-content:space-between;font-size:12px">
-          <span style="color:#64748b">Urgentes (vencem em até 2 dias)</span>
-          <strong style="color:#f59e0b">${urgentes}</strong>
-        </div>
-        <div style="display:flex;justify-content:space-between;font-size:12px">
-          <span style="color:#64748b">Em prazo normal</span>
-          <strong style="color:#6366f1">${normais}</strong>
-        </div>
+      <table class="rk-table">
+        <thead>
+          <tr>
+            <th>Regional</th><th style="text-align:center">Total</th><th style="text-align:center">Em Aberto</th>
+            <th style="text-align:center">Vencidas</th><th style="text-align:center">Urgentes</th>
+            <th style="text-align:center">Tempo Médio</th><th>% Concluídas</th>
+          </tr>
+        </thead>
+        <tbody>${regionaisOrdenados.map(buildRegionalRow).join('')}</tbody>
+      </table>
+    </div>
+
+    <div class="rk-table-wrap">
+      <div class="rk-table-head">
+        <div class="rk-table-head-title">Ranking de Centrais</div>
+        <div class="rk-table-head-cap">top ${topCentrals.length} por volume e criticidade</div>
       </div>
+      <table class="rk-table">
+        <thead>
+          <tr>
+            <th style="width:28px">#</th><th>Central</th><th>Regional</th><th>Volume</th>
+            <th style="text-align:center">Em Aberto</th><th style="text-align:center">Vencidas</th><th style="text-align:center">Urgentes</th>
+          </tr>
+        </thead>
+        <tbody>${topCentrals.map(buildCentralRow).join('')}</tbody>
+      </table>
     </div>
-  </div>` : ''}
 
-  <!-- TABELA POR REGIONAL -->
-  <div class="section-title">Situação por Regional</div>
-  <div class="card">
-    <div class="card-header">
-      🗺 Ranking de Regionais — ordenado por criticidade
-      <span class="card-badge" style="background:#fef2f2;color:#ef4444;border:1px solid #fca5a5">${regionaisOrdenados.length} ${regionaisOrdenados.length!==1?'regionais':'regional'}</span>
-    </div>
-    <table class="data-table">
-      <thead>
-        <tr>
-          <th>Regional</th>
-          <th class="center">Total</th>
-          <th class="center">Em Aberto</th>
-          <th class="center">🔴 Vencidas</th>
-          <th class="center">🟡 Urgentes</th>
-          <th class="center">Tempo Médio</th>
-          <th>% Concluídas</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${regionaisOrdenados.map(buildRegionalRow).join('')}
-      </tbody>
-    </table>
-  </div>
+    <div class="rk-table-wrap">
+      <div class="rk-table-head">
+        <div class="rk-table-head-title">Distribuição por Motivo</div>
+        <div class="rk-table-head-cap">${motivosOrdenados.length} motivo${motivosOrdenados.length!==1?'s':''}</div>
+      </div>
+      <table class="rk-table">
+        <thead>
+          <tr><th style="width:28px">#</th><th>Motivo</th><th>Volume</th><th style="text-align:center">Em Aberto</th><th style="text-align:center">Vencidas</th></tr>
+        </thead>
+        <tbody>${motivosOrdenados.map(buildMotivoRow).join('')}</tbody>
+      </table>
+    </div>`;
 
-  <!-- TOP CENTRAIS -->
-  <div class="section-title">Ranking de Centrais</div>
-  <div class="card">
-    <div class="card-header">
-      🏭 Top ${topCentrals.length} Centrais — por volume e criticidade
-      <span class="card-badge" style="background:#eff6ff;color:#2563eb;border:1px solid #bfdbfe">top ${topCentrals.length}</span>
-    </div>
-    <table class="data-table">
-      <thead>
-        <tr>
-          <th style="width:36px">#</th>
-          <th>Central</th>
-          <th>Regional</th>
-          <th>Volume total</th>
-          <th class="center">Em Aberto</th>
-          <th class="center">🔴 Vencidas</th>
-          <th class="center">🟡 Urgentes</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${topCentrals.map(buildCentralRow).join('')}
-      </tbody>
-    </table>
-  </div>
+  const d = {
+    periodoBadge: now.split(' ')[0],
+    periodo: 'Base completa de ocorrências',
+    now,
+    kpis: [
+      { value: total,           label: 'total de ocorrências', color: '#94a3b8' },
+      { value: abertas,         label: 'em aberto',            color: '#3b82f6' },
+      { value: vencidas,        label: 'vencidas',              color: '#ef4444' },
+      { value: urgentes,        label: 'urgentes',              color: '#f59e0b' },
+      { value: pctConc + '%',   label: 'concluídas',            color: '#22c55e' }
+    ]
+  };
 
-  <!-- OCORRÊNCIAS POR MOTIVO -->
-  <div class="section-title">Distribuição por Motivo</div>
-  <div class="card">
-    <div class="card-header">
-      🏷 Principais causas das ocorrências
-      <span class="card-badge" style="background:#fefce8;color:#d97706;border:1px solid #fde68a">${motivosOrdenados.length} motivo${motivosOrdenados.length!==1?'s':''}</span>
-    </div>
-    <table class="data-table">
-      <thead>
-        <tr>
-          <th style="width:36px">#</th>
-          <th>Motivo</th>
-          <th>Volume</th>
-          <th class="center">Em Aberto</th>
-          <th class="center">🔴 Vencidas</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${motivosOrdenados.map(buildMotivoRow).join('')}
-      </tbody>
-    </table>
-  </div>
-
-  <div class="report-footer">
-    <span>Concrelagos Concreto · <strong>AnalyticSys</strong> · Gestão Centralizada de Materiais</span>
-    <span>Gerado em <strong>${now}</strong> · ${total} ocorrência${total!==1?'s':''} no total</span>
-  </div>
-
-</div><!-- /page-wrap -->
-</body>
-</html>`;
+  const html = _buildRankingShellHTML(d, {
+    pageTitle:  'Relatório Gerencial de Ocorrências',
+    badge:      'Relatório Gerencial',
+    title:      'Painel de Ocorrências — Situação Geral',
+    subtitle:   'Visão executiva de abertura, prazos e conclusão de todas as ocorrências registradas.',
+    bodyHtml,
+    notaRodape: 'Vencida: prazo expirado. Urgente: vence em até 2 dias. Tempo médio calculado apenas entre ocorrências concluídas com data de abertura e conclusão registradas.'
+  });
 
   _openRelWindow(html);
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // RELATÓRIO DE COBRANÇA POR REGIONAL — ocorrências abertas/urgentes/vencidas
-// ordenadas por prioridade crítica, com filtro por regional
+// ordenadas por prioridade crítica, com filtro por regional (mesmo shell escuro
+// dos relatórios de Ranking/Ausência: _buildRankingShellHTML)
 // ═══════════════════════════════════════════════════════════════════════════════
 window.gerarRelatorioCobrancaRegional = function(regionalFiltro) {
   const nowISO = new Date().toISOString().split('T')[0];
@@ -3155,13 +2996,6 @@ window.gerarRelatorioCobrancaRegional = function(regionalFiltro) {
     return centralParaRegional[(central||'').trim().toLowerCase()] || 'Sem Regional';
   }
 
-  // Lista de regionais disponíveis (para o selector do modal)
-  const regionaisDisponiveis = [...new Set(
-    (state.ocorrencias || [])
-      .filter(o => !o.concluida)
-      .map(o => getRegional(o.central))
-  )].sort();
-
   // ── filtra só abertas (vencidas + urgentes + normais) ────────────────────────
   const abertas = (state.ocorrencias || []).filter(o => !o.concluida);
 
@@ -3184,8 +3018,6 @@ window.gerarRelatorioCobrancaRegional = function(regionalFiltro) {
   listaFiltrada.sort((a, b) => {
     const pa = statusPriority[ocStatus(a)], pb = statusPriority[ocStatus(b)];
     if (pa !== pb) return pa - pb;
-    // Dentro do mesmo status: vencidas = mais dias vencido primeiro;
-    // urgentes/normais = prazo mais próximo primeiro
     const da = a.dataLimite || '9999-12-31';
     const db = b.dataLimite || '9999-12-31';
     return da.localeCompare(db);
@@ -3215,87 +3047,61 @@ window.gerarRelatorioCobrancaRegional = function(regionalFiltro) {
   const totalNormal  = listaFiltrada.filter(o => ocStatus(o)==='normal').length;
 
   // ── Builders ─────────────────────────────────────────────────────────────────
-
-  // Célula de "tempo em aberto / dias vencido / dias para vencer"
   function buildTempoCell(o) {
     const st = ocStatus(o);
     const diasAberto = diffDays(o.dataAbertura, nowISO);
+    const abertoStr = diasAberto !== null ? diasAberto+'d' : '—';
 
     if (st === 'vencida') {
-      const diasVencido = diffDays(o.dataLimite, nowISO); // positivo = quantos dias passou
-      return `
-        <div style="display:flex;flex-direction:column;gap:3px">
-          <span style="font-size:11px;font-family:'JetBrains Mono',monospace;font-weight:800;color:#ef4444;white-space:nowrap">
-            ⚠ ${diasVencido}d vencido
-          </span>
-          <span style="font-size:10px;color:#94a3b8;font-family:'JetBrains Mono',monospace;white-space:nowrap">
-            aberto há ${diasAberto !== null ? diasAberto+'d' : '—'}
-          </span>
-        </div>`;
+      const diasVencido = diffDays(o.dataLimite, nowISO);
+      return `<div class="oc-tempo"><span class="oc-tempo-main" style="color:#f87171">⚠ ${diasVencido}d vencido</span><span class="oc-tempo-sub">aberto há ${abertoStr}</span></div>`;
     }
     if (st === 'urgente') {
-      const diasRestam = diffDays(nowISO, o.dataLimite); // positivo = dias que faltam
-      return `
-        <div style="display:flex;flex-direction:column;gap:3px">
-          <span style="font-size:11px;font-family:'JetBrains Mono',monospace;font-weight:800;color:#f59e0b;white-space:nowrap">
-            🔔 ${diasRestam}d p/ vencer
-          </span>
-          <span style="font-size:10px;color:#94a3b8;font-family:'JetBrains Mono',monospace;white-space:nowrap">
-            aberto há ${diasAberto !== null ? diasAberto+'d' : '—'}
-          </span>
-        </div>`;
+      const diasRestam = diffDays(nowISO, o.dataLimite);
+      return `<div class="oc-tempo"><span class="oc-tempo-main" style="color:#fbbf24">🔔 ${diasRestam}d p/ vencer</span><span class="oc-tempo-sub">aberto há ${abertoStr}</span></div>`;
     }
-    // normal — sem prazo ou prazo folgado
     const diasRestam = o.dataLimite ? diffDays(nowISO, o.dataLimite) : null;
-    return `
-      <div style="display:flex;flex-direction:column;gap:3px">
-        ${diasRestam !== null
-          ? `<span style="font-size:11px;font-family:'JetBrains Mono',monospace;color:#6366f1;white-space:nowrap">
-               ${diasRestam}d restantes
-             </span>`
-          : `<span style="font-size:11px;color:#94a3b8">Sem prazo</span>`}
-        <span style="font-size:10px;color:#94a3b8;font-family:'JetBrains Mono',monospace;white-space:nowrap">
-          aberto há ${diasAberto !== null ? diasAberto+'d' : '—'}
-        </span>
-      </div>`;
+    return `<div class="oc-tempo">${diasRestam !== null
+        ? `<span class="oc-tempo-main" style="color:#a5b4fc">${diasRestam}d restantes</span>`
+        : `<span style="font-size:10.5px;color:#64748b">Sem prazo</span>`}<span class="oc-tempo-sub">aberto há ${abertoStr}</span></div>`;
   }
 
   function buildStatusBadge(st) {
     const cfg = {
-      vencida: { bg:'#fef2f2', color:'#ef4444', border:'#fca5a5', label:'VENCIDA'   },
-      urgente: { bg:'#fffbeb', color:'#d97706', border:'#fde68a', label:'URGENTE'   },
-      normal:  { bg:'#eff6ff', color:'#2563eb', border:'#bfdbfe', label:'EM ABERTO' },
+      vencida: { cls:'oc-status-vencida', label:'VENCIDA'   },
+      urgente: { cls:'oc-status-urgente', label:'URGENTE'   },
+      normal:  { cls:'oc-status-normal',  label:'EM ABERTO' },
     };
     const c = cfg[st] || cfg.normal;
-    return `<span style="display:inline-block;padding:3px 9px;border-radius:12px;font-size:10px;font-weight:800;letter-spacing:.05em;background:${c.bg};color:${c.color};border:1px solid ${c.border}">${c.label}</span>`;
+    return `<span class="oc-status ${c.cls}">${c.label}</span>`;
   }
 
   function buildOcorrenciaRow(o, idx) {
-    const st      = ocStatus(o);
-    const rowBg   = st==='vencida' ? '#fffbf9' : st==='urgente' ? '#fffef5' : '#ffffff';
-    const leftBorder = st==='vencida' ? '#ef4444' : st==='urgente' ? '#f59e0b' : '#e2e8f0';
+    const st = ocStatus(o);
+    const leftColor = st==='vencida' ? '#ef4444' : st==='urgente' ? '#f59e0b' : 'rgba(255,255,255,.12)';
+    const rowBg     = st==='vencida' ? 'rgba(239,68,68,.05)' : st==='urgente' ? 'rgba(245,158,11,.05)' : 'transparent';
 
     return `
-    <tr style="border-bottom:1px solid #f1f5f9;background:${rowBg};border-left:3px solid ${leftBorder}">
-      <td style="padding:11px 14px;font-size:11px;font-family:'JetBrains Mono',monospace;color:#94a3b8;font-weight:600">${idx+1}</td>
-      <td style="padding:11px 10px">${buildStatusBadge(st)}</td>
-      <td style="padding:11px 14px">
-        <div style="font-weight:700;font-size:12px;color:#0f172a;font-family:'JetBrains Mono',monospace">${escR(o.id)}</div>
-        ${o.motivo ? `<div style="font-size:10px;color:#64748b;margin-top:2px">${escR(o.motivo)}</div>` : ''}
+    <tr style="background:${rowBg};box-shadow:inset 3px 0 0 ${leftColor}">
+      <td class="rk-num" style="color:#64748b;font-size:10px">${idx+1}</td>
+      <td>${buildStatusBadge(st)}</td>
+      <td>
+        <div style="font-weight:700;font-size:11.5px;color:#f1f5f9;font-family:'JetBrains Mono',monospace">${escR(o.id)}</div>
+        ${o.motivo ? `<div style="font-size:9.5px;color:#64748b;margin-top:2px">${escR(o.motivo)}</div>` : ''}
       </td>
-      <td style="padding:11px 14px;font-weight:600;font-size:13px;color:#1e293b">${escR(o.central||'—')}</td>
-      <td style="padding:11px 14px;font-size:12px;color:#475569">${escR(o.material||'—')}</td>
-      <td style="padding:11px 14px;font-size:11px;color:#475569">
+      <td class="rk-name" style="font-size:12px">${escR(o.central||'—')}</td>
+      <td style="font-size:11.5px;color:#cbd5e1">${escR(o.material||'—')}</td>
+      <td style="font-size:10.5px;color:#94a3b8">
         <div>${fmtBR(o.dataAbertura)}</div>
-        ${o.dataLimite ? `<div style="color:${st==='vencida'?'#ef4444':st==='urgente'?'#d97706':'#94a3b8'};font-size:10px;margin-top:2px">prazo: ${fmtBR(o.dataLimite)}</div>` : ''}
+        ${o.dataLimite ? `<div style="color:${st==='vencida'?'#f87171':st==='urgente'?'#fbbf24':'#64748b'};font-size:9.5px;margin-top:2px">prazo: ${fmtBR(o.dataLimite)}</div>` : ''}
       </td>
-      <td style="padding:11px 14px">${buildTempoCell(o)}</td>
-      <td style="padding:11px 14px;font-size:12px;color:#334155;max-width:240px">
+      <td>${buildTempoCell(o)}</td>
+      <td style="font-size:11.5px;color:#cbd5e1;max-width:240px">
         <div style="overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1.4">${escR(o.descricao||'—')}</div>
       </td>
-      <td style="padding:11px 14px;font-size:11px;color:#64748b">
+      <td style="font-size:10.5px;color:#94a3b8">
         <div>${escR(o.operador||'—')}</div>
-        ${o.contato ? `<div style="color:#94a3b8;margin-top:2px">${escR(o.contato)}</div>` : ''}
+        ${o.contato ? `<div style="color:#64748b;margin-top:2px">${escR(o.contato)}</div>` : ''}
       </td>
     </tr>`;
   }
@@ -3305,61 +3111,49 @@ window.gerarRelatorioCobrancaRegional = function(regionalFiltro) {
     const urg  = ocorrencias.filter(o => ocStatus(o)==='urgente').length;
     const norm = ocorrencias.filter(o => ocStatus(o)==='normal').length;
     const piorSt = venc > 0 ? 'vencida' : urg > 0 ? 'urgente' : 'normal';
-    const hdrBg = piorSt==='vencida' ? '#fef2f2' : piorSt==='urgente' ? '#fffbeb' : '#f8fafc';
-    const hdrBorder = piorSt==='vencida' ? '#fca5a5' : piorSt==='urgente' ? '#fde68a' : '#e2e8f0';
-    const hdrAccent = piorSt==='vencida' ? '#ef4444' : piorSt==='urgente' ? '#f59e0b' : '#64748b';
+    const accent = piorSt==='vencida' ? '#ef4444' : piorSt==='urgente' ? '#f59e0b' : '#64748b';
 
     const badges = [
-      venc > 0 ? `<span style="padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:#fef2f2;color:#ef4444;border:1px solid #fca5a5">🔴 ${venc} vencida${venc!==1?'s':''}</span>` : '',
-      urg  > 0 ? `<span style="padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:#fffbeb;color:#d97706;border:1px solid #fde68a">🟡 ${urg} urgente${urg!==1?'s':''}</span>` : '',
-      norm > 0 ? `<span style="padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:#eff6ff;color:#2563eb;border:1px solid #bfdbfe">🔵 ${norm} em aberto</span>` : '',
+      venc > 0 ? `<span class="oc-mini-badge" style="color:#fca5a5">🔴 ${venc} vencida${venc!==1?'s':''}</span>` : '',
+      urg  > 0 ? `<span class="oc-mini-badge" style="color:#fde68a">🟡 ${urg} urgente${urg!==1?'s':''}</span>` : '',
+      norm > 0 ? `<span class="oc-mini-badge" style="color:#93c5fd">🔵 ${norm} em aberto</span>` : '',
     ].filter(Boolean).join(' ');
 
     return `
-    <div style="margin-bottom:16px;border-radius:10px;overflow:hidden;border:1px solid ${hdrBorder};page-break-inside:avoid">
-      <div style="background:${hdrBg};border-bottom:1px solid ${hdrBorder};padding:10px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
-        <div style="display:flex;align-items:center;gap:10px">
-          <span style="width:6px;height:24px;border-radius:3px;background:${hdrAccent};flex-shrink:0"></span>
-          <span style="font-size:14px;font-weight:800;color:#0f172a">${escR(centralNome)}</span>
+    <div class="oc-central-block">
+      <div class="oc-central-hdr" style="background:rgba(255,255,255,.035);border-bottom:1px solid rgba(255,255,255,.08)">
+        <div class="oc-central-hdr-left">
+          <span style="width:5px;height:22px;border-radius:3px;background:${accent};flex-shrink:0;display:inline-block"></span>
+          <span class="oc-central-name">${escR(centralNome)}</span>
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">${badges}</div>
       </div>
-      <table class="data-table" style="font-size:12px">
+      <table class="rk-table">
         <thead>
           <tr>
-            <th style="width:28px">#</th>
-            <th style="width:88px">Status</th>
-            <th style="width:90px">ID / Motivo</th>
-            <th>Central</th>
-            <th>Material</th>
-            <th style="width:105px">Datas</th>
-            <th style="width:130px">Prazo / Tempo</th>
-            <th>Descrição</th>
-            <th style="width:110px">Responsável</th>
+            <th style="width:26px">#</th><th style="width:82px">Status</th><th style="width:88px">ID / Motivo</th>
+            <th>Central</th><th>Material</th><th style="width:100px">Datas</th>
+            <th style="width:125px">Prazo / Tempo</th><th>Descrição</th><th style="width:105px">Responsável</th>
           </tr>
         </thead>
-        <tbody>
-          ${ocorrencias.map(buildOcorrenciaRow).join('')}
-        </tbody>
+        <tbody>${ocorrencias.map(buildOcorrenciaRow).join('')}</tbody>
       </table>
     </div>`;
   }
 
   function buildRegionalSection([regNome, centrais]) {
-    const todasOc   = Object.values(centrais).flat();
-    const regVenc   = todasOc.filter(o => ocStatus(o)==='vencida').length;
-    const regUrg    = todasOc.filter(o => ocStatus(o)==='urgente').length;
-    const regNorm   = todasOc.filter(o => ocStatus(o)==='normal').length;
-    const regTotal  = todasOc.length;
-    const piorSt    = regVenc > 0 ? 'vencida' : regUrg > 0 ? 'urgente' : 'normal';
-    const regColor  = piorSt==='vencida' ? '#ef4444' : piorSt==='urgente' ? '#f59e0b' : '#3b82f6';
-    const regBg     = piorSt==='vencida'
+    const todasOc  = Object.values(centrais).flat();
+    const regVenc  = todasOc.filter(o => ocStatus(o)==='vencida').length;
+    const regUrg   = todasOc.filter(o => ocStatus(o)==='urgente').length;
+    const regNorm  = todasOc.filter(o => ocStatus(o)==='normal').length;
+    const regTotal = todasOc.length;
+    const piorSt   = regVenc > 0 ? 'vencida' : regUrg > 0 ? 'urgente' : 'normal';
+    const regBg    = piorSt==='vencida'
       ? 'linear-gradient(135deg,#7f1d1d 0%,#991b1b 60%,#b91c1c 100%)'
       : piorSt==='urgente'
       ? 'linear-gradient(135deg,#78350f 0%,#92400e 60%,#b45309 100%)'
       : 'linear-gradient(135deg,#1e3a5f 0%,#1e40af 60%,#2563eb 100%)';
 
-    // Ordena centrais: mais vencidas primeiro
     const centraisOrdenadas = Object.entries(centrais).sort((a, b) => {
       const sv = x => x.filter(o => ocStatus(o)==='vencida').length;
       const su = x => x.filter(o => ocStatus(o)==='urgente').length;
@@ -3367,172 +3161,93 @@ window.gerarRelatorioCobrancaRegional = function(regionalFiltro) {
     });
 
     return `
-    <div class="regional-section" style="margin-bottom:32px;page-break-inside:avoid">
-      <div style="background:${regBg};border-radius:12px 12px 0 0;padding:18px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;position:relative;overflow:hidden">
-        <div style="position:absolute;right:-20px;top:-20px;width:100px;height:100px;border-radius:50%;background:rgba(255,255,255,0.06);pointer-events:none"></div>
+    <div class="oc-regional-section">
+      <div class="oc-regional-hdr" style="background:${regBg}">
         <div style="display:flex;align-items:center;gap:14px;position:relative">
-          <div style="width:40px;height:40px;border-radius:10px;background:rgba(255,255,255,0.15);border:1.5px solid rgba(255,255,255,0.25);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">🗺</div>
+          <div class="oc-regional-icon"><i class="ti ti-map-2"></i></div>
           <div>
-            <div style="font-size:18px;font-weight:900;color:#fff;letter-spacing:-0.01em">${escR(regNome)}</div>
-            <div style="font-size:11px;color:rgba(255,255,255,0.6);margin-top:2px">${centraisOrdenadas.length} ${centraisOrdenadas.length!==1?'centrais':'central'} · ${regTotal} ocorrência${regTotal!==1?'s':''}</div>
+            <div class="oc-regional-name">${escR(regNome)}</div>
+            <div class="oc-regional-sub">${centraisOrdenadas.length} ${centraisOrdenadas.length!==1?'centrais':'central'} · ${regTotal} ocorrência${regTotal!==1?'s':''}</div>
           </div>
         </div>
-        <div style="display:flex;align-items:center;gap:0;position:relative">
-          <div style="text-align:center;padding:0 18px">
-            <span style="display:block;font-size:26px;font-weight:800;font-family:'JetBrains Mono',monospace;color:#fca5a5;line-height:1">${regVenc}</span>
-            <span style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,0.55);font-weight:600;margin-top:3px;display:block">Vencidas</span>
-          </div>
-          <div style="width:1px;height:40px;background:rgba(255,255,255,0.2)"></div>
-          <div style="text-align:center;padding:0 18px">
-            <span style="display:block;font-size:26px;font-weight:800;font-family:'JetBrains Mono',monospace;color:#fde68a;line-height:1">${regUrg}</span>
-            <span style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,0.55);font-weight:600;margin-top:3px;display:block">Urgentes</span>
-          </div>
-          <div style="width:1px;height:40px;background:rgba(255,255,255,0.2)"></div>
-          <div style="text-align:center;padding:0 18px">
-            <span style="display:block;font-size:26px;font-weight:800;font-family:'JetBrains Mono',monospace;color:#bfdbfe;line-height:1">${regNorm}</span>
-            <span style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,0.55);font-weight:600;margin-top:3px;display:block">Em Aberto</span>
-          </div>
+        <div class="oc-regional-stats">
+          <div class="oc-regional-stat"><strong style="color:#fca5a5">${regVenc}</strong><span>Vencidas</span></div>
+          <div class="oc-regional-stat-sep"></div>
+          <div class="oc-regional-stat"><strong style="color:#fde68a">${regUrg}</strong><span>Urgentes</span></div>
+          <div class="oc-regional-stat-sep"></div>
+          <div class="oc-regional-stat"><strong style="color:#bfdbfe">${regNorm}</strong><span>Em Aberto</span></div>
         </div>
       </div>
-      <div style="background:#fff;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 12px 12px;padding:16px">
+      <div class="oc-regional-body">
         ${centraisOrdenadas.map(([cn, ocs]) => buildCentralSection(cn, ocs)).join('')}
       </div>
     </div>`;
   }
 
-  // ── HTML ──────────────────────────────────────────────────────────────────────
+  // ── bodyHtml ──────────────────────────────────────────────────────────────────
   const tituloFiltro = regionalFiltro ? ` — ${regionalFiltro}` : ' — Todos os Regionais';
 
-  const html = `<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Relatório de Cobrança por Regional${tituloFiltro}</title>
-<style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap');
-  * { box-sizing:border-box; margin:0; padding:0; }
-  body { font-family:'Inter',system-ui,sans-serif; background:#f1f5f9; color:#0f172a; font-size:13px; line-height:1.5; -webkit-font-smoothing:antialiased; }
-  .page-wrap { max-width:1200px; margin:0 auto; padding:20px; }
+  const bodyHtml = `
+    <style>
+      .oc-status { display:inline-block; padding:3px 9px; border-radius:12px; font-size:9.5px; font-weight:800; letter-spacing:.05em; white-space:nowrap; }
+      .oc-status-vencida { background:rgba(239,68,68,.15); color:#fca5a5; border:1px solid rgba(239,68,68,.4); }
+      .oc-status-urgente { background:rgba(245,158,11,.15); color:#fde68a; border:1px solid rgba(245,158,11,.4); }
+      .oc-status-normal  { background:rgba(59,130,246,.15); color:#93c5fd; border:1px solid rgba(59,130,246,.4); }
 
-  .action-bar { position:sticky; top:0; z-index:100; background:#1e293b; display:flex; align-items:center; justify-content:space-between; padding:12px 24px; box-shadow:0 2px 12px rgba(0,0,0,0.2); flex-wrap:wrap; gap:10px; }
-  .action-bar-title { color:#e2e8f0; font-size:13px; font-weight:500; }
-  .action-bar-title span { color:#64748b; font-size:12px; margin-left:10px; }
-  .action-bar-btns { display:flex; gap:10px; }
-  .btn-print { background:#2563eb; color:#fff; border:none; border-radius:7px; padding:8px 18px; font-size:13px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:7px; }
-  .btn-print:hover { background:#1d4ed8; }
-  .btn-close { background:#334155; color:#cbd5e1; border:none; border-radius:7px; padding:8px 14px; font-size:13px; font-weight:500; cursor:pointer; }
-  .btn-close:hover { background:#475569; }
+      .oc-tempo { display:flex; flex-direction:column; gap:3px; }
+      .oc-tempo-main { font-size:10.5px; font-family:'JetBrains Mono',monospace; font-weight:800; white-space:nowrap; }
+      .oc-tempo-sub { font-size:9.5px; color:#64748b; font-family:'JetBrains Mono',monospace; white-space:nowrap; }
 
-  .report-header { background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%); color:#fff; border-radius:14px; padding:28px 32px; margin-bottom:24px; position:relative; overflow:hidden; }
-  .report-header::before { content:''; position:absolute; top:-40px; right:-40px; width:200px; height:200px; border-radius:50%; background:rgba(239,68,68,0.08); border:2px solid rgba(239,68,68,0.12); }
-  .report-header-top { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:20px; flex-wrap:wrap; gap:16px; }
-  .report-logo-area { display:flex; align-items:center; gap:12px; }
-  .report-logo-icon { width:48px; height:48px; border-radius:12px; background:rgba(239,68,68,0.18); border:1px solid rgba(239,68,68,0.3); display:flex; align-items:center; justify-content:center; font-size:22px; }
-  .report-logo-text h1 { font-size:19px; font-weight:800; color:#f8fafc; letter-spacing:-0.01em; }
-  .report-logo-text p { font-size:12px; color:#94a3b8; margin-top:2px; }
-  .report-meta { text-align:right; }
-  .meta-label { font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:.06em; }
-  .meta-value { font-size:13px; color:#cbd5e1; font-weight:500; margin-top:2px; }
+      .oc-regional-section { margin-bottom:26px; }
+      .oc-regional-section:last-child { margin-bottom:0; }
+      .oc-regional-hdr { border-radius:12px 12px 0 0; padding:16px 22px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; position:relative; overflow:hidden; }
+      .oc-regional-hdr::before { content:''; position:absolute; right:-20px; top:-20px; width:100px; height:100px; border-radius:50%; background:rgba(255,255,255,.06); pointer-events:none; }
+      .oc-regional-icon { width:38px; height:38px; border-radius:9px; background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.25); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+      .oc-regional-icon i { color:#fff; font-size:17px; }
+      .oc-regional-name { font-size:16px; font-weight:900; color:#fff; letter-spacing:-.01em; }
+      .oc-regional-sub { font-size:10.5px; color:rgba(255,255,255,.62); margin-top:2px; }
+      .oc-regional-stats { display:flex; align-items:center; position:relative; }
+      .oc-regional-stat { text-align:center; padding:0 16px; }
+      .oc-regional-stat strong { display:block; font-size:22px; font-weight:800; font-family:'JetBrains Mono',monospace; line-height:1; }
+      .oc-regional-stat span { font-size:9px; text-transform:uppercase; letter-spacing:.05em; color:rgba(255,255,255,.6); font-weight:700; margin-top:3px; display:block; }
+      .oc-regional-stat-sep { width:1px; height:34px; background:rgba(255,255,255,.2); }
+      .oc-regional-body { background:rgba(255,255,255,.025); border:1px solid rgba(255,255,255,.09); border-top:none; border-radius:0 0 12px 12px; padding:14px; }
 
-  .kpi-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
-  .kpi-card { background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:14px 18px; text-align:center; }
-  .kpi-num { font-size:28px; font-weight:800; font-family:'JetBrains Mono',monospace; line-height:1; margin-bottom:5px; }
-  .kpi-label { font-size:10px; color:#94a3b8; text-transform:uppercase; letter-spacing:.05em; font-weight:500; }
+      .oc-central-block { margin-bottom:14px; border-radius:10px; overflow:hidden; border:1px solid rgba(255,255,255,.09); page-break-inside:avoid; }
+      .oc-central-block:last-child { margin-bottom:0; }
+      .oc-central-hdr { padding:10px 16px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+      .oc-central-hdr-left { display:flex; align-items:center; gap:10px; }
+      .oc-central-name { font-size:13px; font-weight:800; color:#fff; }
+      .oc-mini-badge { padding:2px 8px; border-radius:10px; font-size:9px; font-weight:700; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12); }
+    </style>
 
-  .section-title { font-size:12px; font-weight:700; color:#475569; text-transform:uppercase; letter-spacing:.08em; margin:24px 0 12px; display:flex; align-items:center; gap:10px; }
-  .section-title::after { content:''; flex:1; height:1px; background:#e2e8f0; }
-
-  .regional-section { margin-bottom:32px; }
-  .data-table { width:100%; border-collapse:collapse; }
-  .data-table thead tr { background:#f8fafc; }
-  .data-table th { padding:9px 14px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:#64748b; text-align:left; border-bottom:1px solid #e2e8f0; }
-  .data-table tbody tr:last-child { border-bottom:none; }
-
-  .confidential-strip { text-align:center; padding:10px; background:#fef2f2; border:1px solid #fca5a5; border-radius:8px; margin-bottom:20px; font-size:11px; color:#dc2626; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
-
-  .report-footer { margin-top:32px; padding:18px 24px; background:#1e293b; border-radius:12px; color:#64748b; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; font-size:11px; }
-  .report-footer strong { color:#94a3b8; }
-
-  @media print {
-    body { background:#fff !important; }
-    .action-bar { display:none !important; }
-    .page-wrap { padding:0 !important; max-width:100% !important; }
-    .regional-section { page-break-before:auto; }
-    .report-header { background:#0f172a !important; -webkit-print-color-adjust:exact; color-adjust:exact; }
-    .kpi-card { -webkit-print-color-adjust:exact; color-adjust:exact; }
-    tr { -webkit-print-color-adjust:exact; color-adjust:exact; }
-    .data-table tbody tr { page-break-inside:avoid; }
-  }
-</style>
-</head>
-<body>
-
-<div class="action-bar">
-  <div class="action-bar-title">
-    Relatório de Cobrança por Regional${tituloFiltro}
-    <span>Gerado em ${now}</span>
-  </div>
-  <div class="action-bar-btns">
-    <button class="btn-print" onclick="window.print()">🖨️ Imprimir / Salvar PDF</button>
-    <button class="btn-close" onclick="window.close()">✕ Fechar</button>
-  </div>
-</div>
-
-<div class="page-wrap">
-  <div class="confidential-strip" style="margin-top:18px">
-    ⚠ Documento Confidencial — Uso interno · Gestão de Regionais
-  </div>
-
-  <div class="report-header">
-    <div class="report-header-top">
-      <div class="report-logo-area">
-        <div class="report-logo-icon">🚨</div>
-        <div class="report-logo-text">
-          <h1>Relatório de Cobrança por Regional</h1>
-          <p>AnalyticSys · Ocorrências em aberto · ordenadas por prioridade crítica${regionalFiltro ? ' · ' + escR(regionalFiltro) : ''}</p>
-        </div>
-      </div>
-      <div class="report-meta">
-        <div class="meta-label">Gerado em</div>
-        <div class="meta-value">${now}</div>
-        <div class="meta-label" style="margin-top:8px">Escopo</div>
-        <div class="meta-value">${regionalFiltro ? escR(regionalFiltro) : 'Todos os regionais'}</div>
-      </div>
+    <div class="rk-table-head" style="margin-bottom:16px">
+      <div class="rk-table-head-title">${escR(regionalFiltro ? regionalFiltro : 'Todos os Regionais')}</div>
+      <div class="rk-table-head-cap">ocorrências em aberto por prioridade</div>
     </div>
-    <div class="kpi-grid">
-      <div class="kpi-card">
-        <div class="kpi-num" style="color:#e2e8f0">${totalAberto}</div>
-        <div class="kpi-label">Total em aberto</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-num" style="color:#ef4444">${totalVencido}</div>
-        <div class="kpi-label">🔴 Vencidas</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-num" style="color:#f59e0b">${totalUrgente}</div>
-        <div class="kpi-label">🟡 Urgentes</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-num" style="color:#3b82f6">${totalNormal}</div>
-        <div class="kpi-label">🔵 Em prazo</div>
-      </div>
-    </div>
-  </div>
 
-  <div class="section-title">
-    ${regionalFiltro ? escR(regionalFiltro) : 'Todos os Regionais'} — Ocorrências em Aberto por Prioridade
-  </div>
+    ${regionaisOrdenados.map(buildRegionalSection).join('')}`;
 
-  ${regionaisOrdenados.map(buildRegionalSection).join('')}
+  const d = {
+    periodoBadge: now.split(' ')[0],
+    periodo: 'Ocorrências em aberto',
+    now,
+    kpis: [
+      { value: totalAberto,  label: 'total em aberto', color: '#94a3b8' },
+      { value: totalVencido, label: 'vencidas',        color: '#ef4444' },
+      { value: totalUrgente, label: 'urgentes',        color: '#f59e0b' },
+      { value: totalNormal,  label: 'em prazo',        color: '#3b82f6' }
+    ]
+  };
 
-  <div class="report-footer">
-    <span>Concrelagos Concreto · <strong>AnalyticSys</strong> · Gestão Centralizada de Materiais</span>
-    <span>${totalAberto} ocorrência${totalAberto!==1?'s':''} em aberto · Gerado em <strong>${now}</strong></span>
-  </div>
-</div>
-</body>
-</html>`;
+  const html = _buildRankingShellHTML(d, {
+    pageTitle:  `Relatório de Cobrança por Regional${tituloFiltro}`,
+    badge:      'Cobrança de Pendências',
+    title:      'Cobrança Regional — Ocorrências em Aberto',
+    subtitle:   `Ocorrências em aberto ordenadas por prioridade crítica${regionalFiltro ? ' · ' + escR(regionalFiltro) : ', agrupadas por regional e central'}.`,
+    bodyHtml,
+    notaRodape: 'Vencida: prazo expirado. Urgente: vence em até 2 dias. Regionais e centrais ordenados por quantidade de ocorrências vencidas/urgentes.'
+  });
 
   _openRelWindow(html);
 };
@@ -3623,6 +3338,7 @@ window.abrirSeletorRegionalOcorrencias = function() {
 // ═══════════════════════════════════════════════════════════════════════════════
 // RELATÓRIO DE COBRANÇA GERAL POR CENTRAL — todas as ocorrências abertas
 // agrupadas por central, com colunas de tempo detalhadas, para cobrança ampla
+// (mesmo shell escuro dos relatórios de Ranking/Ausência: _buildRankingShellHTML)
 // ═══════════════════════════════════════════════════════════════════════════════
 window.gerarRelatorioCobrancaCentral = function(centralFiltro) {
   const nowISO = new Date().toISOString().split('T')[0];
@@ -3664,7 +3380,6 @@ window.gerarRelatorioCobrancaCentral = function(centralFiltro) {
     return;
   }
 
-  // Aplica filtro de central se informado
   const abertas = centralFiltro
     ? todasAbertas.filter(o => (o.central || '—') === centralFiltro)
     : todasAbertas;
@@ -3674,7 +3389,6 @@ window.gerarRelatorioCobrancaCentral = function(centralFiltro) {
     return;
   }
 
-  // Ordena globalmente: vencidas → urgentes → normais; dentro do grupo por prazo
   abertas.sort((a, b) => {
     const pa = statusPriority[ocStatus(a)], pb = statusPriority[ocStatus(b)];
     if (pa !== pb) return pa - pb;
@@ -3689,7 +3403,6 @@ window.gerarRelatorioCobrancaCentral = function(centralFiltro) {
     porCentral[c].push(o);
   });
 
-  // Ordena centrais: mais vencidas → mais urgentes → mais abertas
   const centraisOrdenadas = Object.entries(porCentral).sort((a, b) => {
     const sv = arr => arr.filter(o => ocStatus(o)==='vencida').length;
     const su = arr => arr.filter(o => ocStatus(o)==='urgente').length;
@@ -3704,86 +3417,61 @@ window.gerarRelatorioCobrancaCentral = function(centralFiltro) {
   const totalNormal  = abertas.filter(o => ocStatus(o)==='normal').length;
   const totalCentral = centraisOrdenadas.length;
 
-  // ── Célula de tempo (três indicadores) ──────────────────────────────────────
+  // ── Célula de tempo ──────────────────────────────────────────────────────────
   function buildTempoCell(o) {
     const st = ocStatus(o);
     const diasAberto = diffDays(o.dataAbertura, nowISO);
     const abertoStr  = diasAberto !== null ? diasAberto+'d' : '—';
 
     if (st === 'vencida') {
-      const diasVencido = diffDays(o.dataLimite, nowISO); // positivo = passou do prazo
-      return `
-        <div style="display:flex;flex-direction:column;gap:4px">
-          <span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:6px;background:#fef2f2;border:1px solid #fca5a5;font-size:11px;font-family:'JetBrains Mono',monospace;font-weight:800;color:#dc2626;white-space:nowrap">
-            ⚠ ${diasVencido}d vencido
-          </span>
-          <span style="font-size:10px;color:#94a3b8;font-family:'JetBrains Mono',monospace;white-space:nowrap;padding-left:2px">
-            em aberto há ${abertoStr}
-          </span>
-        </div>`;
+      const diasVencido = diffDays(o.dataLimite, nowISO);
+      return `<div class="oc-tempo"><span class="oc-tempo-chip" style="background:rgba(239,68,68,.14);border:1px solid rgba(239,68,68,.4);color:#fca5a5">⚠ ${diasVencido}d vencido</span><span class="oc-tempo-sub">em aberto há ${abertoStr}</span></div>`;
     }
     if (st === 'urgente') {
-      const diasRestam = diffDays(nowISO, o.dataLimite); // positivo = dias restantes
-      return `
-        <div style="display:flex;flex-direction:column;gap:4px">
-          <span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:6px;background:#fffbeb;border:1px solid #fde68a;font-size:11px;font-family:'JetBrains Mono',monospace;font-weight:800;color:#d97706;white-space:nowrap">
-            🔔 ${diasRestam}d p/ vencer
-          </span>
-          <span style="font-size:10px;color:#94a3b8;font-family:'JetBrains Mono',monospace;white-space:nowrap;padding-left:2px">
-            em aberto há ${abertoStr}
-          </span>
-        </div>`;
+      const diasRestam = diffDays(nowISO, o.dataLimite);
+      return `<div class="oc-tempo"><span class="oc-tempo-chip" style="background:rgba(245,158,11,.14);border:1px solid rgba(245,158,11,.4);color:#fde68a">🔔 ${diasRestam}d p/ vencer</span><span class="oc-tempo-sub">em aberto há ${abertoStr}</span></div>`;
     }
-    // normal
     const diasRestam = o.dataLimite ? diffDays(nowISO, o.dataLimite) : null;
-    return `
-      <div style="display:flex;flex-direction:column;gap:4px">
-        ${diasRestam !== null
-          ? `<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:6px;background:#eff6ff;border:1px solid #bfdbfe;font-size:11px;font-family:'JetBrains Mono',monospace;font-weight:700;color:#2563eb;white-space:nowrap">
-               📅 ${diasRestam}d restantes
-             </span>`
-          : `<span style="font-size:11px;color:#94a3b8">Sem prazo</span>`}
-        <span style="font-size:10px;color:#94a3b8;font-family:'JetBrains Mono',monospace;white-space:nowrap;padding-left:2px">
-          em aberto há ${abertoStr}
-        </span>
-      </div>`;
+    return `<div class="oc-tempo">${diasRestam !== null
+        ? `<span class="oc-tempo-chip" style="background:rgba(59,130,246,.14);border:1px solid rgba(59,130,246,.35);color:#93c5fd">📅 ${diasRestam}d restantes</span>`
+        : `<span style="font-size:10.5px;color:#64748b">Sem prazo</span>`}<span class="oc-tempo-sub">em aberto há ${abertoStr}</span></div>`;
   }
 
   function buildStatusBadge(st) {
     const cfg = {
-      vencida: { bg:'#fef2f2', color:'#ef4444', border:'#fca5a5', label:'VENCIDA'   },
-      urgente: { bg:'#fffbeb', color:'#d97706', border:'#fde68a', label:'URGENTE'   },
-      normal:  { bg:'#eff6ff', color:'#2563eb', border:'#bfdbfe', label:'EM ABERTO' },
+      vencida: { cls:'oc-status-vencida', label:'VENCIDA'   },
+      urgente: { cls:'oc-status-urgente', label:'URGENTE'   },
+      normal:  { cls:'oc-status-normal',  label:'EM ABERTO' },
     };
     const c = cfg[st] || cfg.normal;
-    return `<span style="display:inline-block;padding:3px 9px;border-radius:12px;font-size:10px;font-weight:800;letter-spacing:.05em;background:${c.bg};color:${c.color};border:1px solid ${c.border}">${c.label}</span>`;
+    return `<span class="oc-status ${c.cls}">${c.label}</span>`;
   }
 
   function buildOcorrenciaRow(o, idx) {
     const st = ocStatus(o);
-    const rowBg      = st==='vencida' ? '#fffbf9' : st==='urgente' ? '#fffef5' : '#ffffff';
-    const leftBorder = st==='vencida' ? '#ef4444' : st==='urgente' ? '#f59e0b' : '#e2e8f0';
+    const leftColor = st==='vencida' ? '#ef4444' : st==='urgente' ? '#f59e0b' : 'rgba(255,255,255,.12)';
+    const rowBg     = st==='vencida' ? 'rgba(239,68,68,.05)' : st==='urgente' ? 'rgba(245,158,11,.05)' : 'transparent';
 
     return `
-    <tr style="border-bottom:1px solid #f1f5f9;background:${rowBg};border-left:3px solid ${leftBorder}">
-      <td style="padding:10px 12px;font-size:11px;font-family:'JetBrains Mono',monospace;color:#94a3b8;font-weight:600">${idx+1}</td>
-      <td style="padding:10px 10px">${buildStatusBadge(st)}</td>
-      <td style="padding:10px 12px">
-        <div style="font-weight:700;font-size:12px;color:#0f172a;font-family:'JetBrains Mono',monospace">${escR(o.id)}</div>
-        ${o.motivo ? `<div style="font-size:10px;color:#64748b;margin-top:1px">${escR(o.motivo)}</div>` : ''}
+    <tr style="background:${rowBg};box-shadow:inset 3px 0 0 ${leftColor}">
+      <td class="rk-num" style="color:#64748b;font-size:10px">${idx+1}</td>
+      <td>${buildStatusBadge(st)}</td>
+      <td>
+        <div style="font-weight:700;font-size:11.5px;color:#f1f5f9;font-family:'JetBrains Mono',monospace">${escR(o.id)}</div>
+        ${o.motivo ? `<div style="font-size:9.5px;color:#64748b;margin-top:1px">${escR(o.motivo)}</div>` : ''}
       </td>
-      <td style="padding:10px 12px;font-size:12px;color:#475569">${escR(o.material||'—')}</td>
-      <td style="padding:10px 12px;font-size:11px;color:#475569">
+      <td style="font-size:11.5px;color:#cbd5e1">${escR(o.material||'—')}</td>
+      <td style="font-size:10.5px;color:#94a3b8">
         <div>${fmtBR(o.dataAbertura)}</div>
-        ${o.dataLimite ? `<div style="color:${st==='vencida'?'#ef4444':st==='urgente'?'#d97706':'#94a3b8'};font-size:10px;margin-top:1px">prazo: ${fmtBR(o.dataLimite)}</div>` : ''}
+        ${o.dataLimite ? `<div style="color:${st==='vencida'?'#f87171':st==='urgente'?'#fbbf24':'#64748b'};font-size:9.5px;margin-top:1px">prazo: ${fmtBR(o.dataLimite)}</div>` : ''}
       </td>
-      <td style="padding:10px 12px">${buildTempoCell(o)}</td>
-      <td style="padding:10px 12px;font-size:12px;color:#334155;max-width:220px">
+      <td>${buildTempoCell(o)}</td>
+      <td style="font-size:11.5px;color:#cbd5e1;max-width:220px">
         <div style="overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1.4">${escR(o.descricao||'—')}</div>
       </td>
-      <td style="padding:10px 12px;font-size:11px;color:#64748b">
+      <td style="font-size:10.5px;color:#94a3b8">
         <div>${escR(o.operador||'—')}</div>
-        ${o.contato ? `<div style="color:#94a3b8;font-size:10px;margin-top:1px">${escR(o.contato)}</div>` : ''}
+        ${o.contato ? `<div style="color:#64748b;font-size:9.5px;margin-top:1px">${escR(o.contato)}</div>` : ''}
       </td>
     </tr>`;
   }
@@ -3794,8 +3482,6 @@ window.gerarRelatorioCobrancaCentral = function(centralFiltro) {
     const norm = ocorrencias.filter(o => ocStatus(o)==='normal').length;
     const reg  = getRegional(centralNome);
     const piorSt = venc > 0 ? 'vencida' : urg > 0 ? 'urgente' : 'normal';
-
-    // Cabeçalho da central: gradiente conforme pior status
     const hdrGrad = piorSt==='vencida'
       ? 'linear-gradient(135deg,#7f1d1d 0%,#991b1b 60%,#b91c1c 100%)'
       : piorSt==='urgente'
@@ -3803,224 +3489,135 @@ window.gerarRelatorioCobrancaCentral = function(centralFiltro) {
       : 'linear-gradient(135deg,#1e3a5f 0%,#1e40af 60%,#2563eb 100%)';
 
     const badges = [
-      venc > 0 ? `<span style="padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:rgba(255,255,255,0.15);color:#fca5a5;border:1px solid rgba(255,255,255,0.2)">🔴 ${venc} vencida${venc!==1?'s':''}</span>` : '',
-      urg  > 0 ? `<span style="padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:rgba(255,255,255,0.15);color:#fde68a;border:1px solid rgba(255,255,255,0.2)">🟡 ${urg} urgente${urg!==1?'s':''}</span>` : '',
-      norm > 0 ? `<span style="padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;background:rgba(255,255,255,0.15);color:#bfdbfe;border:1px solid rgba(255,255,255,0.2)">🔵 ${norm} em aberto</span>` : '',
+      venc > 0 ? `<span class="oc-mini-badge" style="color:#fca5a5">🔴 ${venc} vencida${venc!==1?'s':''}</span>` : '',
+      urg  > 0 ? `<span class="oc-mini-badge" style="color:#fde68a">🟡 ${urg} urgente${urg!==1?'s':''}</span>` : '',
+      norm > 0 ? `<span class="oc-mini-badge" style="color:#bfdbfe">🔵 ${norm} em aberto</span>` : '',
     ].filter(Boolean).join(' ');
 
     return `
-    <div style="margin-bottom:20px;border-radius:10px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.07);page-break-inside:avoid">
-      <div style="background:${hdrGrad};padding:12px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;position:relative;overflow:hidden">
-        <div style="position:absolute;right:-16px;top:-16px;width:70px;height:70px;border-radius:50%;background:rgba(255,255,255,0.05);pointer-events:none"></div>
+    <div class="oc-central-card" id="oc-central-${idx}">
+      <div class="oc-central-card-hdr" style="background:${hdrGrad}">
         <div style="display:flex;align-items:center;gap:10px;position:relative">
-          <div style="width:28px;height:28px;border-radius:7px;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.22);display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;font-weight:800;color:#fff;font-family:'JetBrains Mono',monospace">${idx+1}</div>
+          <div class="oc-central-num">${idx+1}</div>
           <div>
-            <div style="font-size:15px;font-weight:800;color:#fff;letter-spacing:-0.01em">${escR(centralNome)}</div>
-            <div style="font-size:10px;color:rgba(255,255,255,0.55);margin-top:1px">${escR(reg)} · ${ocorrencias.length} ocorrência${ocorrencias.length!==1?'s':''}</div>
+            <div class="oc-central-card-name">${escR(centralNome)}</div>
+            <div class="oc-central-card-sub">${escR(reg)} · ${ocorrencias.length} ocorrência${ocorrencias.length!==1?'s':''}</div>
           </div>
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;position:relative">${badges}</div>
       </div>
-      <table class="data-table" style="font-size:12px">
+      <table class="rk-table">
         <thead>
           <tr>
-            <th style="width:28px">#</th>
-            <th style="width:88px">Status</th>
-            <th style="width:90px">ID / Motivo</th>
-            <th>Material</th>
-            <th style="width:100px">Datas</th>
-            <th style="width:150px">Prazo / Tempo em Aberto</th>
-            <th>Descrição</th>
-            <th style="width:110px">Responsável</th>
+            <th style="width:26px">#</th><th style="width:82px">Status</th><th style="width:88px">ID / Motivo</th>
+            <th>Material</th><th style="width:95px">Datas</th><th style="width:135px">Prazo / Tempo</th>
+            <th>Descrição</th><th style="width:100px">Responsável</th>
           </tr>
         </thead>
-        <tbody>
-          ${ocorrencias.map(buildOcorrenciaRow).join('')}
-        </tbody>
+        <tbody>${ocorrencias.map(buildOcorrenciaRow).join('')}</tbody>
       </table>
     </div>`;
   }
 
-  // ── Sumário lateral: top centrais com badge visual ───────────────────────────
   function buildSumario() {
     return centraisOrdenadas.slice(0, 20).map(([cn, ocs], idx) => {
       const venc = ocs.filter(o => ocStatus(o)==='vencida').length;
       const urg  = ocs.filter(o => ocStatus(o)==='urgente').length;
       const total = ocs.length;
-      const cor  = venc > 0 ? '#ef4444' : urg > 0 ? '#f59e0b' : '#3b82f6';
+      const cor  = venc > 0 ? '#f87171' : urg > 0 ? '#fbbf24' : '#93c5fd';
       const barW = Math.round(total / (centraisOrdenadas[0][1].length || 1) * 100);
       return `
-      <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid #f1f5f9">
-        <span style="font-size:10px;font-family:'JetBrains Mono',monospace;color:#94a3b8;min-width:18px;font-weight:600">${idx+1}</span>
+      <a href="#oc-central-${idx}" class="oc-sumario-item">
+        <span class="oc-sumario-idx">${idx+1}</span>
         <div style="flex:1;min-width:0">
-          <div style="font-size:12px;font-weight:700;color:#1e293b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escR(cn)}</div>
+          <div class="oc-sumario-name">${escR(cn)}</div>
           <div style="display:flex;align-items:center;gap:5px;margin-top:3px">
-            <div style="flex:1;height:4px;background:#e2e8f0;border-radius:2px;overflow:hidden">
-              <div style="width:${barW}%;height:100%;background:${cor};border-radius:2px"></div>
-            </div>
-            <span style="font-size:10px;font-family:'JetBrains Mono',monospace;color:#64748b;min-width:20px;text-align:right">${total}</span>
+            <div class="oc-bar-track"><div class="oc-bar-fill" style="width:${barW}%;background:${cor}"></div></div>
+            <span style="font-size:9.5px;font-family:'JetBrains Mono',monospace;color:#64748b;min-width:18px;text-align:right">${total}</span>
           </div>
         </div>
         <div style="display:flex;gap:4px;flex-shrink:0">
-          ${venc>0 ? `<span style="padding:1px 6px;border-radius:8px;font-size:9px;font-weight:700;background:#fef2f2;color:#ef4444">🔴${venc}</span>` : ''}
-          ${urg>0  ? `<span style="padding:1px 6px;border-radius:8px;font-size:9px;font-weight:700;background:#fffbeb;color:#d97706">🟡${urg}</span>`  : ''}
+          ${venc>0 ? `<span class="oc-sumario-tag" style="color:#fca5a5">${venc}</span>` : ''}
+          ${urg>0  ? `<span class="oc-sumario-tag" style="color:#fde68a">${urg}</span>`  : ''}
         </div>
-      </div>`;
+      </a>`;
     }).join('');
   }
 
-  // ── HTML ──────────────────────────────────────────────────────────────────────
-  const html = `<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Relatório de Cobrança Geral por Central</title>
-<style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap');
-  * { box-sizing:border-box; margin:0; padding:0; }
-  body { font-family:'Inter',system-ui,sans-serif; background:#f1f5f9; color:#0f172a; font-size:13px; line-height:1.5; -webkit-font-smoothing:antialiased; }
-  .page-wrap { max-width:1200px; margin:0 auto; padding:20px; }
+  // ── bodyHtml ──────────────────────────────────────────────────────────────────
+  const bodyHtml = `
+    <style>
+      .oc-status { display:inline-block; padding:3px 9px; border-radius:12px; font-size:9.5px; font-weight:800; letter-spacing:.05em; white-space:nowrap; }
+      .oc-status-vencida { background:rgba(239,68,68,.15); color:#fca5a5; border:1px solid rgba(239,68,68,.4); }
+      .oc-status-urgente { background:rgba(245,158,11,.15); color:#fde68a; border:1px solid rgba(245,158,11,.4); }
+      .oc-status-normal  { background:rgba(59,130,246,.15); color:#93c5fd; border:1px solid rgba(59,130,246,.4); }
 
-  .action-bar { position:sticky; top:0; z-index:100; background:#1e293b; display:flex; align-items:center; justify-content:space-between; padding:12px 24px; box-shadow:0 2px 12px rgba(0,0,0,0.2); flex-wrap:wrap; gap:10px; }
-  .action-bar-title { color:#e2e8f0; font-size:13px; font-weight:500; }
-  .action-bar-title span { color:#64748b; font-size:12px; margin-left:10px; }
-  .action-bar-btns { display:flex; gap:10px; }
-  .btn-print { background:#2563eb; color:#fff; border:none; border-radius:7px; padding:8px 18px; font-size:13px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:7px; }
-  .btn-print:hover { background:#1d4ed8; }
-  .btn-close { background:#334155; color:#cbd5e1; border:none; border-radius:7px; padding:8px 14px; font-size:13px; font-weight:500; cursor:pointer; }
-  .btn-close:hover { background:#475569; }
+      .oc-tempo { display:flex; flex-direction:column; gap:4px; }
+      .oc-tempo-chip { display:inline-flex; align-items:center; gap:4px; padding:3px 8px; border-radius:6px; font-size:10.5px; font-family:'JetBrains Mono',monospace; font-weight:800; white-space:nowrap; width:fit-content; }
+      .oc-tempo-sub { font-size:9.5px; color:#64748b; font-family:'JetBrains Mono',monospace; white-space:nowrap; padding-left:2px; }
 
-  .report-header { background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%); color:#fff; border-radius:14px; padding:28px 32px; margin-bottom:24px; position:relative; overflow:hidden; }
-  .report-header::before { content:''; position:absolute; top:-40px; right:-40px; width:200px; height:200px; border-radius:50%; background:rgba(99,102,241,0.08); border:2px solid rgba(99,102,241,0.12); }
-  .report-header-top { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:20px; flex-wrap:wrap; gap:16px; }
-  .report-logo-icon { width:48px; height:48px; border-radius:12px; background:rgba(99,102,241,0.18); border:1px solid rgba(99,102,241,0.3); display:flex; align-items:center; justify-content:center; font-size:22px; }
-  .report-logo-text h1 { font-size:19px; font-weight:800; color:#f8fafc; letter-spacing:-0.01em; }
-  .report-logo-text p { font-size:12px; color:#94a3b8; margin-top:2px; }
-  .meta-label { font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:.06em; }
-  .meta-value { font-size:13px; color:#cbd5e1; font-weight:500; margin-top:2px; }
+      .oc-mini-badge { padding:2px 8px; border-radius:10px; font-size:9px; font-weight:700; background:rgba(255,255,255,.13); border:1px solid rgba(255,255,255,.2); }
 
-  .kpi-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
-  .kpi-card { background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:14px 18px; text-align:center; }
-  .kpi-num { font-size:28px; font-weight:800; font-family:'JetBrains Mono',monospace; line-height:1; margin-bottom:5px; }
-  .kpi-label { font-size:10px; color:#94a3b8; text-transform:uppercase; letter-spacing:.05em; font-weight:500; }
+      .oc-central-card { margin-bottom:16px; border-radius:10px; overflow:hidden; border:1px solid rgba(255,255,255,.09); page-break-inside:avoid; }
+      .oc-central-card:last-child { margin-bottom:0; }
+      .oc-central-card-hdr { padding:12px 18px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+      .oc-central-num { width:26px; height:26px; border-radius:7px; background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.22); display:flex; align-items:center; justify-content:center; font-size:11.5px; font-weight:800; color:#fff; font-family:'JetBrains Mono',monospace; flex-shrink:0; }
+      .oc-central-card-name { font-size:14px; font-weight:800; color:#fff; letter-spacing:-.01em; }
+      .oc-central-card-sub { font-size:10px; color:rgba(255,255,255,.6); margin-top:1px; }
 
-  /* Layout de duas colunas: sumário + conteúdo */
-  .layout-cols { display:grid; grid-template-columns:220px 1fr; gap:20px; align-items:start; }
-  .sumario-col { position:sticky; top:62px; background:#fff; border:1px solid #e2e8f0; border-radius:10px; overflow:hidden; }
-  .sumario-header { background:#f8fafc; border-bottom:1px solid #e2e8f0; padding:10px 14px; font-size:11px; font-weight:700; color:#475569; text-transform:uppercase; letter-spacing:.06em; }
-  .sumario-body { padding:4px 14px 10px; max-height:calc(100vh - 100px); overflow-y:auto; }
-  .content-col { min-width:0; }
+      .oc-layout { display:grid; grid-template-columns:220px 1fr; gap:22px; align-items:start; }
+      .oc-sumario-col { position:sticky; top:78px; background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.09); border-radius:10px; overflow:hidden; }
+      .oc-sumario-hdr { background:rgba(255,255,255,.04); border-bottom:1px solid rgba(255,255,255,.08); padding:10px 14px; font-size:10.5px; font-weight:800; color:#94a3b8; text-transform:uppercase; letter-spacing:.06em; }
+      .oc-sumario-body { padding:4px 12px 10px; max-height:calc(100vh - 140px); overflow-y:auto; }
+      .oc-sumario-item { display:flex; align-items:center; gap:9px; padding:7px 0; border-bottom:1px solid rgba(255,255,255,.06); text-decoration:none; }
+      .oc-sumario-item:last-child { border-bottom:none; }
+      .oc-sumario-idx { font-size:9.5px; font-family:'JetBrains Mono',monospace; color:#64748b; min-width:16px; font-weight:700; }
+      .oc-sumario-name { font-size:11px; font-weight:700; color:#e2e8f0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+      .oc-sumario-tag { padding:1px 6px; border-radius:8px; font-size:8.5px; font-weight:800; background:rgba(255,255,255,.08); }
+      .oc-bar-track { flex:1; height:4px; background:rgba(255,255,255,.09); border-radius:2px; overflow:hidden; }
+      .oc-bar-fill { height:100%; border-radius:2px; }
 
-  .section-title { font-size:12px; font-weight:700; color:#475569; text-transform:uppercase; letter-spacing:.08em; margin:0 0 14px; display:flex; align-items:center; gap:10px; }
-  .section-title::after { content:''; flex:1; height:1px; background:#e2e8f0; }
+      @media (max-width:900px) { .oc-layout { grid-template-columns:1fr; } .oc-sumario-col { position:static; } }
+      @media print { .oc-sumario-col { display:none; } .oc-layout { display:block; } }
+    </style>
 
-  .data-table { width:100%; border-collapse:collapse; }
-  .data-table thead tr { background:#f8fafc; }
-  .data-table th { padding:9px 12px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:#64748b; text-align:left; border-bottom:1px solid #e2e8f0; }
-  .data-table tbody tr:last-child { border-bottom:none; }
-
-  .confidential-strip { text-align:center; padding:10px; background:#fef2f2; border:1px solid #fca5a5; border-radius:8px; margin-bottom:20px; font-size:11px; color:#dc2626; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
-  .report-footer { margin-top:32px; padding:18px 24px; background:#1e293b; border-radius:12px; color:#64748b; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; font-size:11px; }
-  .report-footer strong { color:#94a3b8; }
-
-  @media print {
-    body { background:#fff !important; }
-    .action-bar { display:none !important; }
-    .page-wrap { padding:0 !important; max-width:100% !important; }
-    .layout-cols { display:block; }
-    .sumario-col { display:none; }
-    .report-header { background:#0f172a !important; -webkit-print-color-adjust:exact; color-adjust:exact; }
-    .kpi-card { -webkit-print-color-adjust:exact; color-adjust:exact; }
-    tr { -webkit-print-color-adjust:exact; color-adjust:exact; }
-    div[style*="border-radius:10px"] { page-break-inside:avoid; }
-  }
-</style>
-</head>
-<body>
-
-<div class="action-bar">
-  <div class="action-bar-title">
-    Relatório de Cobrança Geral por Central
-    <span>Gerado em ${now}</span>
-  </div>
-  <div class="action-bar-btns">
-    <button class="btn-print" onclick="window.print()">🖨️ Imprimir / Salvar PDF</button>
-    <button class="btn-close" onclick="window.close()">✕ Fechar</button>
-  </div>
-</div>
-
-<div class="page-wrap">
-  <div class="confidential-strip" style="margin-top:18px">
-    ⚠ Documento Confidencial — Uso interno · Gestão Operacional
-  </div>
-
-  <!-- HEADER -->
-  <div class="report-header">
-    <div class="report-header-top">
-      <div style="display:flex;align-items:center;gap:12px">
-        <div class="report-logo-icon">🏭</div>
-        <div class="report-logo-text">
-          <h1>Relatório de Cobrança Geral por Central</h1>
-          <p>AnalyticSys · Ocorrências em aberto · ordenadas por criticidade${centralFiltro ? ' · ' + escR(centralFiltro) : ''}</p>
+    <div class="oc-layout">
+      <div class="oc-sumario-col">
+        <div class="oc-sumario-hdr"><i class="ti ti-list-details"></i> Índice de Centrais</div>
+        <div class="oc-sumario-body">
+          ${buildSumario()}
+          ${centraisOrdenadas.length > 20 ? `<div style="padding:8px 0;font-size:9.5px;color:#64748b;font-style:italic">+ ${centraisOrdenadas.length - 20} centrais adicionais</div>` : ''}
         </div>
       </div>
-      <div style="text-align:right">
-        <div class="meta-label">Gerado em</div>
-        <div class="meta-value">${now}</div>
-        <div class="meta-label" style="margin-top:8px">Centrais com ocorrências</div>
-        <div class="meta-value">${totalCentral} centra${totalCentral!==1?'is':'l'}</div>
+      <div>
+        <div class="rk-table-head" style="margin-bottom:14px">
+          <div class="rk-table-head-title">${totalCentral} Centra${totalCentral!==1?'is':'l'}</div>
+          <div class="rk-table-head-cap">ocorrências em aberto por prioridade</div>
+        </div>
+        ${centraisOrdenadas.map(buildCentralSection).join('')}
       </div>
-    </div>
-    <div class="kpi-grid">
-      <div class="kpi-card">
-        <div class="kpi-num" style="color:#e2e8f0">${totalAberto}</div>
-        <div class="kpi-label">Total em aberto</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-num" style="color:#ef4444">${totalVencido}</div>
-        <div class="kpi-label">🔴 Vencidas</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-num" style="color:#f59e0b">${totalUrgente}</div>
-        <div class="kpi-label">🟡 Urgentes</div>
-      </div>
-      <div class="kpi-card">
-        <div class="kpi-num" style="color:#3b82f6">${totalNormal}</div>
-        <div class="kpi-label">🔵 Em prazo</div>
-      </div>
-    </div>
-  </div>
+    </div>`;
 
-  <!-- LAYOUT DUAS COLUNAS -->
-  <div class="layout-cols">
+  const d = {
+    periodoBadge: now.split(' ')[0],
+    periodo: 'Ocorrências em aberto',
+    now,
+    kpis: [
+      { value: totalAberto,  label: 'total em aberto', color: '#94a3b8' },
+      { value: totalVencido, label: 'vencidas',        color: '#ef4444' },
+      { value: totalUrgente, label: 'urgentes',        color: '#f59e0b' },
+      { value: totalNormal,  label: 'em prazo',        color: '#3b82f6' }
+    ]
+  };
 
-    <!-- SUMÁRIO LATERAL (sticky) -->
-    <div class="sumario-col">
-      <div class="sumario-header">📋 Índice de Centrais</div>
-      <div class="sumario-body">
-        ${buildSumario()}
-        ${centraisOrdenadas.length > 20 ? `<div style="padding:8px 0;font-size:10px;color:#94a3b8;font-style:italic">+ ${centraisOrdenadas.length - 20} centrais adicionais</div>` : ''}
-      </div>
-    </div>
-
-    <!-- CONTEÚDO PRINCIPAL -->
-    <div class="content-col">
-      <div class="section-title">
-        ${totalCentral} Centra${totalCentral!==1?'is':'l'} — Ocorrências em Aberto por Prioridade
-      </div>
-      ${centraisOrdenadas.map(buildCentralSection).join('')}
-    </div>
-
-  </div><!-- /layout-cols -->
-
-  <div class="report-footer">
-    <span>Concrelagos Concreto · <strong>AnalyticSys</strong> · Gestão Centralizada de Materiais</span>
-    <span>${totalAberto} ocorrência${totalAberto!==1?'s':''} em aberto · ${totalCentral} centra${totalCentral!==1?'is':'l'} · Gerado em <strong>${now}</strong></span>
-  </div>
-</div>
-</body>
-</html>`;
+  const html = _buildRankingShellHTML(d, {
+    pageTitle:  'Relatório de Cobrança Geral por Central',
+    badge:      'Cobrança de Pendências',
+    title:      'Cobrança por Central — Ocorrências em Aberto',
+    subtitle:   `Ocorrências em aberto agrupadas por central, ordenadas por criticidade${centralFiltro ? ' · ' + escR(centralFiltro) : ''}.`,
+    bodyHtml,
+    notaRodape: 'Vencida: prazo expirado. Urgente: vence em até 2 dias. Centrais ordenadas por quantidade de ocorrências vencidas/urgentes.'
+  });
 
   _openRelWindow(html);
 };
