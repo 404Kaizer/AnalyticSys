@@ -253,7 +253,7 @@ function _buildCriticidadeData(categoriasFiltro) {
       <div class="reg-cat-block-title">
         <span class="reg-cat-dot" style="background:${accent}"></span>
         <span style="color:${accent}">${escRel(label)}</span>
-        <span class="reg-cat-block-count">${regionais.length} regionai${regionais.length === 1 ? '' : 's'}</span>
+        <span class="reg-cat-block-count">${regionais.length} ${regionais.length === 1 ? 'regional' : 'regionais'}</span>
       </div>
       <div class="reg-item-list">${rows}</div>
     </div>`;
@@ -599,7 +599,8 @@ window._gerarRelatorioComCategorias = function(tipo) {
   } else {
     window.gerarRelatorioDetalhado(checked);
   }
-};
+};
+
 // ═══════════════════════════════════════════════════════════════════
 // RELATÓRIO DE AUSÊNCIAS DE LANÇAMENTO
 // ═══════════════════════════════════════════════════════════════════
@@ -1342,7 +1343,7 @@ function _buildRankSideCard(r, i) {
       </div>
       <div class="rk-side-sub">${r.centrais.map(c => _rankEsc(c)).join(' · ')}</div>
       <div class="rk-side-stats">
-        <div><strong>${r.nCentrais}</strong><span>central${r.nCentrais !== 1 ? 'is' : ''}</span></div>
+        <div><strong>${r.nCentrais}</strong><span>${r.nCentrais !== 1 ? 'centrais' : 'central'}</span></div>
         <div><strong>${r.registros}</strong><span>registros</span></div>
       </div>
     </div>`;
@@ -1499,12 +1500,12 @@ window.gerarRankingRegionais = function() {
       <div class="rank-card-name">${_rankEsc(r.regional)}</div>
       <div class="rank-card-sub">${r.centrais.map(c => _rankEsc(c)).join(' · ')}</div>
       <div class="rank-card-stats">
-        <div><strong>${r.nCentrais}</strong><span>central${r.nCentrais !== 1 ? 'is' : ''}</span></div>
+        <div><strong>${r.nCentrais}</strong><span>${r.nCentrais !== 1 ? 'centrais' : 'central'}</span></div>
         <div><strong>${r.registros}</strong><span>registros</span></div>
       </div>
     </div>`).join('');
 
-  const tierLabel = `Faixa crítica · ${emCards[0].nCentrais} central${emCards[0].nCentrais !== 1 ? 'is' : ''} fora do padrão`;
+  const tierLabel = `Faixa crítica · ${emCards[0].nCentrais} ${emCards[0].nCentrais !== 1 ? 'centrais' : 'central'} fora do padrão`;
 
   let restoHtml = '';
   if (noResto.length) {
