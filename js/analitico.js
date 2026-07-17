@@ -1349,7 +1349,7 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
       <div class="micro-filial-body" id="micro-body-${idx}">
         ${divPanelHtml}
 
-        ${buildPendIntegSection({ central: r.central, dtIni, dtFim, sapNoPeriodo: r.sapNoPeriodo || [] })}
+        ${buildPendIntegSection({ central: r.central, dtIni, dtFim, sapNoPeriodo: r.sapNoPeriodo || [], entradasDaCentral: opts.entradasByCentral ? (opts.entradasByCentral.get(r.central) || []) : undefined })}
 
         <div class="micro-body-section">
           <div class="micro-section-title"><i class="ti ti-box"></i> Análise por Material</div>
@@ -1691,8 +1691,22 @@ function renderAnaliticoMicro(results, dtIni, dtFim, silent) {
 
   const _cardBuffer = []; // collects cards before grouping
 
+  // Pré-agrupa Entradas por central (mesma chave usada em
+  // calcPendentesIntegracao: centralCompra com fallback para
+  // centralDestino) — evita que cada card refaça uma varredura completa de
+  // state.entradas (ver buildPendIntegSection/calcPendentesIntegracao em
+  // ui.js). Construído do zero a cada render, direto do state atual — não
+  // é um cache persistente entre renders, então não há risco de ficar
+  // desatualizado entre um "Analisar" e outro.
+  const _entradasByCentralMicro = new Map();
+  (state.entradas || []).forEach(e => {
+    const c = e.centralCompra || e.centralDestino || '';
+    if (!_entradasByCentralMicro.has(c)) _entradasByCentralMicro.set(c, []);
+    _entradasByCentralMicro.get(c).push(e);
+  });
+
   results.forEach((r, idx) => {
-    _cardBuffer.push(buildCentralCard(r, idx, dtIni, dtFim));
+    _cardBuffer.push(buildCentralCard(r, idx, dtIni, dtFim, { entradasByCentral: _entradasByCentralMicro }));
   });
 
   // ── Group cards by regional ──────────────────────────────────────────────

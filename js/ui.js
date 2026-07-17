@@ -1725,7 +1725,7 @@ function _nfNeedsConversionWarning(um, material) {
   return true;
 }
 
-function calcPendentesIntegracao({ central, dtIni, dtFim, sapNoPeriodo }) {
+function calcPendentesIntegracao({ central, dtIni, dtFim, sapNoPeriodo, entradasDaCentral }) {
 
   /**
    * Normalise a NF number for matching.
@@ -1813,9 +1813,16 @@ function calcPendentesIntegracao({ central, dtIni, dtFim, sapNoPeriodo }) {
   // pelo lado da centralCompra (onde a REF. da NF original de fato aparece
   // no SAP) evita esse falso-positivo. Fallback para centralDestino cobre
   // os registros sem centralCompra preenchida (comportamento antigo).
-  const pendNF = (state.entradas || []).filter(r => {
-    const cent = (r.centralCompra || r.centralDestino || '');
-    if (cent !== central) return false;
+  // Fonte das entradas desta central: se o chamador já pré-agrupou
+  // state.entradas por central (ver renderAnaliticoMicro em analitico.js),
+  // usa o array pronto — evita repetir a varredura completa de
+  // state.entradas uma vez por central (O(centrais × registros)). Sem o
+  // pré-agrupamento (ex.: refresh avulso de um único card), cai no filtro
+  // original — sempre correto, só não é o caminho rápido.
+  const entradasBase = entradasDaCentral || (state.entradas || []).filter(r =>
+    (r.centralCompra || r.centralDestino || '') === central
+  );
+  const pendNF = entradasBase.filter(r => {
     if (!inPeriodLocal(r.dtDescarga || r.dtEmissao)) return false;
     if (!r.nf) return false; // sem NF cadastrada — ignorar
     const nfNorm = normNF(r.nf);
@@ -1825,8 +1832,14 @@ function calcPendentesIntegracao({ central, dtIni, dtFim, sapNoPeriodo }) {
   // OS pendentes: saídas desta central no período cujo OS não aparece no SAP.
   // SAP stores the OS reference as "I004-NNNN"; the local Saídas module stores
   // just the number (e.g. "6047"). We match on the numeric part only.
-  const pendOS = (state.saidas || []).filter(r => {
-    if (r.central !== central) return false;
+  //
+  // Reaproveita o índice _saidasByCentral já mantido em ui.js (o mesmo usado
+  // pelo restante do Analítico/Dashboard Gerencial, com invalidação própria
+  // em todos os pontos onde state.saidas muda) em vez de filtrar
+  // state.saidas inteiro a cada central.
+  ensureSaidasIndex();
+  const saidasBase = _saidasByCentral.get(central) || [];
+  const pendOS = saidasBase.filter(r => {
     if (!inPeriodLocal(r.dtEmissao)) return false;
     if (!r.os) return false; // sem OS cadastrada — ignorar
     if (!num(r.peso)) return false; // peso 0 — ignorar
@@ -1840,8 +1853,8 @@ function calcPendentesIntegracao({ central, dtIni, dtFim, sapNoPeriodo }) {
 /**
  * Builds the "Pendentes de Integração SAP" section HTML for a central card.
  */
-function buildPendIntegSection({ central, dtIni, dtFim, sapNoPeriodo }) {
-  const { pendNF, pendOS } = calcPendentesIntegracao({ central, dtIni, dtFim, sapNoPeriodo });
+function buildPendIntegSection({ central, dtIni, dtFim, sapNoPeriodo, entradasDaCentral }) {
+  const { pendNF, pendOS } = calcPendentesIntegracao({ central, dtIni, dtFim, sapNoPeriodo, entradasDaCentral });
   const nfCount = pendNF.length;
   const osCount = pendOS.length;
 
