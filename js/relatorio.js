@@ -1808,10 +1808,11 @@ function _buildRankingShellHTML(d, opts) {
   .rk-period-sub { font-size:9px; color:#fca5a5; margin-top:5px; text-transform:uppercase; letter-spacing:.05em; font-weight:700; }
 
   /* Logos, discretos no rodapé do header */
-  .rk-hero-brand { display:flex; align-items:center; gap:14px; margin-bottom:20px; opacity:.8; }
-  .rk-hero-brand img { height:24px; width:auto; object-fit:contain; filter:invert(1) hue-rotate(178deg); }
-  .rk-hero-brand-sep { width:1px; height:20px; background:rgba(255,255,255,.15); }
-  .rk-hero-brand-text { font-size:10.5px; font-weight:800; letter-spacing:.06em; font-family:'JetBrains Mono',monospace; color:#cbd5e1; }
+  .rk-hero-brand { display:flex; align-items:center; gap:16px; margin-bottom:20px; opacity:.85; }
+  .rk-hero-brand img { height:38px; width:auto; object-fit:contain; filter:invert(1) hue-rotate(178deg); }
+  .rk-hero-sys-icon { height:38px; width:38px; flex-shrink:0; }
+  .rk-hero-brand-sep { width:1px; height:30px; background:rgba(255,255,255,.15); }
+  .rk-hero-brand-text { font-size:12px; font-weight:800; letter-spacing:.06em; font-family:'JetBrains Mono',monospace; color:#cbd5e1; }
   .rk-hero-brand-text span { color:#f97316; }
 
   /* KPIs com barra colorida, dentro do header */
@@ -1908,7 +1909,14 @@ function _buildRankingShellHTML(d, opts) {
     <div class="rk-hero-brand">
       <img src="https://concrelagos.com.br/wp-content/uploads/2021/10/Ativo-3.svg" alt="Concrelagos Concreto">
       <div class="rk-hero-brand-sep"></div>
-      <div class="rk-hero-brand-text">CONCRELAGOS · ANALYTIC<span>SYS</span></div>
+      <svg class="rk-hero-sys-icon" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="ícone AnalyticSys">
+        <polygon points="18,2 30,9 18,16 6,9" fill="#ff6b35"/>
+        <polygon points="18,16 30,9 30,23 18,30" fill="#c44e1f"/>
+        <polygon points="18,16 6,9 6,23 18,30" fill="#ff9060"/>
+        <polyline points="21,26 24,21 27,23 30,18" fill="none" stroke="rgba(255,255,255,0.55)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="30" cy="18" r="1.5" fill="white" opacity="0.8"/>
+      </svg>
+      <div class="rk-hero-brand-text">ANALYTIC<span>SYS</span></div>
     </div>
     <div class="rk-hero-top">
       <div>
