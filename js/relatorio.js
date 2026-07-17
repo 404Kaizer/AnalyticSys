@@ -861,25 +861,22 @@ window._gerarRelatorioComCategorias = function(tipo) {
 // RELATÓRIO DE AUSÊNCIAS DE LANÇAMENTO
 // ═══════════════════════════════════════════════════════════════════
 
-function _buildAusenciasRelHTML({ titulo, periodo, geradoEm, regionaisData, totalDias, totalMats, totalCentrals, totalRegionais }) {
-  function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-  function fmtDate(d) {
-    return String(d.getDate()).padStart(2,'0') + '/' +
-           String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
-  }
+function _buildAusenciasRelHTML({ titulo, badge, subtitle, notaRodape, periodo, geradoEm, regionaisData, totalDias, totalMats, totalCentrals, totalRegionais }) {
+  // Monta HTML regional → central → materiais — mesmo padrão visual (tema
+  // escuro) dos relatórios de Ranking Centrais/Regionais: reaproveita o
+  // shell _buildRankingShellHTML (hero, KPIs, tabela, footer).
+  const fmtDateChip = d => String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
 
-  // Monta HTML regional → central → materiais
-  let blockIdx = 0;
   const regionalSections = (regionaisData || []).map(({ regional, centrais }) => {
     const totalRegAus = centrais.reduce((s, c) => s + c.mats.length, 0);
     const nCentrals   = centrais.length;
 
     const centraisHtml = centrais.map(({ central, mats }) => {
       const totalAus = mats.length;
-      const matRows = mats.map(({ mat, tipo, dias, estoqueZerado, motivoZerado, ultimaData, ultimaPeso, ultimaEntrada, ultimaSaida, ultimoSap, totalLancs }, ri) => {
+      const matRows = mats.map(({ mat, tipo, dias, estoqueZerado, motivoZerado, ultimaData, ultimaPeso, ultimaEntrada, ultimaSaida, ultimoSap, totalLancs }) => {
         const isSemanal = tipo === 'Semanal';
         const chips = dias.map(d =>
-          `<span class="date-chip${estoqueZerado ? ' date-chip--zerado' : ''}">${fmtDate(d)}</span>`
+          `<span class="aus-date-chip${estoqueZerado ? ' aus-date-chip--zerado' : ''}">${fmtDateChip(d)}</span>`
         ).join('');
         const fmtD = d => d ? new Date(d).toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric' }) : '—';
         const _buildZeroTitleRel = () => {
@@ -893,35 +890,27 @@ function _buildAusenciasRelHTML({ titulo, periodo, geradoEm, regionaisData, tota
           if (totalLancs != null) lines.push(`Total de lançamentos históricos: ${totalLancs}`);
           return lines.join('&#10;');
         };
-        const zeroBadgeLabel = motivoZerado === 'inatividade' ? '&#9888; SEM MOVIMENTAÇÃO' : '&#9888; ESTOQUE ZERADO';
+        const zeroBadgeLabel = motivoZerado === 'inatividade' ? 'SEM MOVIMENTAÇÃO' : 'ESTOQUE ZERADO';
         const zeroBadge = estoqueZerado
-          ? `<span class="badge-zerado" title="${_buildZeroTitleRel()}">${zeroBadgeLabel}</span>`
+          ? `<span class="aus-badge-zerado" title="${_buildZeroTitleRel()}"><i class="ti ti-alert-triangle"></i> ${zeroBadgeLabel}</span>`
           : '';
         return `
-          <tr class="${ri % 2 === 0 ? 'row-even' : 'row-odd'}${estoqueZerado ? ' row-zerado' : ''}">
-            <td class="td-mat${estoqueZerado ? ' td-mat--zerado' : ''}">${esc(mat)}${zeroBadge}</td>
-            <td class="td-tipo">
-              <span class="badge-tipo ${isSemanal ? 'badge-semanal' : 'badge-diario'}">${tipo}</span>
-            </td>
-            <td class="td-count${estoqueZerado ? ' td-count--zerado' : ''}">${dias.length}</td>
-            <td class="td-dates">${chips}</td>
+          <tr>
+            <td class="rk-name" style="font-size:11.5px;font-weight:700">${_rankEsc(mat)}${zeroBadge}</td>
+            <td><span class="aus-badge-tipo ${isSemanal ? 'aus-badge-semanal' : 'aus-badge-diario'}">${tipo}</span></td>
+            <td class="rk-num" style="color:${estoqueZerado ? '#f87171' : '#e2e8f0'}">${dias.length}</td>
+            <td>${chips}</td>
           </tr>`;
       }).join('');
 
       return `
-        <div class="central-block" style="animation-delay:${(blockIdx++) * 0.04}s">
-          <div class="central-header">
-            <div class="central-header-left">
-              <span class="central-icon">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M3 21h18M3 7l9-4 9 4M4 7v14M20 7v14M9 21v-4a3 3 0 0 1 6 0v4"/>
-                </svg>
-              </span>
-              <span class="central-name">${esc(central)}</span>
-              <span class="central-badge">${totalAus} ausência${totalAus !== 1 ? 's' : ''}</span>
-            </div>
+        <div class="aus-central-block">
+          <div class="aus-central-header">
+            <i class="ti ti-building-warehouse"></i>
+            <span class="aus-central-name">${_rankEsc(central)}</span>
+            <span class="aus-central-badge">${totalAus} ausência${totalAus !== 1 ? 's' : ''}</span>
           </div>
-          <table class="data-table">
+          <table class="rk-table">
             <thead>
               <tr>
                 <th style="width:30%">Material</th>
@@ -936,438 +925,80 @@ function _buildAusenciasRelHTML({ titulo, periodo, geradoEm, regionaisData, tota
     }).join('');
 
     return `
-      <div class="regional-block">
-        <div class="regional-header">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
-            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-          </svg>
-          <span class="regional-name">${esc(regional)}</span>
-          <span class="regional-badge">${totalRegAus} ausência${totalRegAus !== 1 ? 's' : ''}</span>
-          <span class="regional-sub">${nCentrals} ${nCentrals !== 1 ? 'centrais' : 'central'}</span>
+      <div class="aus-regional-block">
+        <div class="aus-regional-header">
+          <i class="ti ti-users-group"></i>
+          <span class="aus-regional-name">${_rankEsc(regional)}</span>
+          <span class="aus-regional-badge">${totalRegAus} ausência${totalRegAus !== 1 ? 's' : ''}</span>
+          <span class="aus-regional-sub">${nCentrals} ${nCentrals !== 1 ? 'centrais' : 'central'}</span>
         </div>
-        <div class="regional-centrais">${centraisHtml}</div>
+        <div class="aus-regional-centrais">${centraisHtml}</div>
       </div>`;
   }).join('');
 
-  return `<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>${esc(titulo)}</title>
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  const bodyHtml = `
+    <style>
+      .aus-alert-banner { display:flex; align-items:flex-start; gap:12px; background:rgba(217,119,6,.10); border:1px solid rgba(217,119,6,.35); border-radius:10px; padding:14px 18px; margin-bottom:22px; font-size:12px; color:#fde68a; line-height:1.6; }
+      .aus-alert-banner i { font-size:17px; color:#f59e0b; flex-shrink:0; margin-top:1px; }
+      .aus-alert-banner strong { color:#fbbf24; }
 
-    body {
-      font-family: 'Segoe UI', 'Inter', system-ui, -apple-system, sans-serif;
-      background: #f0f4f8;
-      color: #1a2332;
-      line-height: 1.5;
-    }
+      .aus-regional-block { margin-bottom:24px; }
+      .aus-regional-block:last-child { margin-bottom:0; }
+      .aus-regional-header { display:flex; align-items:center; gap:10px; margin-bottom:13px; padding-bottom:9px; border-bottom:1px solid rgba(255,255,255,.1); }
+      .aus-regional-header i { color:#f87171; font-size:16px; flex-shrink:0; }
+      .aus-regional-name { font-size:14px; font-weight:800; color:#fff; }
+      .aus-regional-badge { background:rgba(220,38,38,.14); border:1px solid rgba(220,38,38,.35); color:#f87171; font-size:10px; font-weight:800; padding:3px 9px; border-radius:5px; font-family:'JetBrains Mono',monospace; }
+      .aus-regional-sub { font-size:10.5px; color:#64748b; margin-left:auto; }
 
-    /* ── Header ── */
-    .report-header {
-      background: #ffffff;
-      border-bottom: 3px solid #e8790a;
-      padding: 0;
-    }
-    .header-top {
-      background: #1a2332;
-      padding: 20px 48px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 24px;
-    }
-    .logos-wrap {
-      display: flex;
-      align-items: center;
-      gap: 28px;
-    }
-    .logo-concrelagos {
-      height: 44px;
-      width: auto;
-      object-fit: contain;
-      filter: invert(1) hue-rotate(178deg);
-      opacity: .95;
-    }
-    .logo-sep {
-      width: 1px;
-      height: 40px;
-      background: #334155;
-    }
-    .logo-analyticsys {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      opacity: .7;
-    }
-    .logo-analyticsys-text {
-      font-size: 12px;
-      font-weight: 800;
-      letter-spacing: .06em;
-      font-family: monospace;
-      line-height: 1;
-      color: #cbd5e1;
-    }
-    .logo-analyticsys-text span { color: #f97316; }
-    .logo-analyticsys-sub {
-      font-size: 8px;
-      color: #64748b;
-      letter-spacing: .14em;
-      text-transform: uppercase;
-      margin-top: 2px;
-    }
-    .header-meta {
-      text-align: right;
-      font-size: 11px;
-      color: #64748b;
-    }
-    .header-meta strong { color: #94a3b8; }
+      .aus-central-block { background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.08); border-radius:10px; padding:14px 16px; margin-bottom:12px; page-break-inside:avoid; }
+      .aus-central-block:last-child { margin-bottom:0; }
+      .aus-central-header { display:flex; align-items:center; gap:8px; margin-bottom:10px; }
+      .aus-central-header i { color:#93c5fd; font-size:14px; flex-shrink:0; }
+      .aus-central-name { font-size:12.5px; font-weight:800; color:#fff; }
+      .aus-central-badge { background:rgba(59,130,246,.12); border:1px solid rgba(59,130,246,.3); color:#93c5fd; font-size:9.5px; font-weight:700; padding:2px 8px; border-radius:4px; font-family:'JetBrains Mono',monospace; }
 
-    .header-body {
-      padding: 28px 48px 24px;
-      display: flex;
-      align-items: flex-end;
-      justify-content: space-between;
-      gap: 24px;
-      flex-wrap: wrap;
-    }
-    .report-title {
-      font-size: 24px;
-      font-weight: 700;
-      color: #1a2332;
-      line-height: 1.2;
-      letter-spacing: -.01em;
-    }
-    .report-period {
-      font-size: 13px;
-      color: #64748b;
-      margin-top: 6px;
-    }
-    .report-period strong { color: #1a2332; }
+      .aus-badge-tipo { display:inline-block; padding:2px 8px; border-radius:4px; font-size:9.5px; font-weight:700; font-family:'JetBrains Mono',monospace; }
+      .aus-badge-semanal { background:rgba(168,85,247,.14); border:1px solid rgba(168,85,247,.35); color:#c4b5fd; }
+      .aus-badge-diario  { background:rgba(34,197,94,.12); border:1px solid rgba(34,197,94,.32); color:#86efac; }
 
+      .aus-date-chip { display:inline-block; background:rgba(59,130,246,.12); border:1px solid rgba(59,130,246,.3); color:#93c5fd; border-radius:4px; padding:2px 7px; font-size:10px; font-family:'JetBrains Mono',monospace; white-space:nowrap; margin:1px 3px 1px 0; }
+      .aus-date-chip--zerado { background:rgba(239,68,68,.12); border-color:rgba(239,68,68,.35); color:#fca5a5; }
 
+      .aus-badge-zerado { display:inline-flex; align-items:center; gap:4px; margin-left:8px; background:rgba(239,68,68,.14); border:1px solid rgba(239,68,68,.4); color:#f87171; font-size:8.5px; font-weight:800; padding:2px 7px; border-radius:4px; letter-spacing:.03em; cursor:help; vertical-align:middle; }
+    </style>
 
-    /* ── Alert ── */
-    .alert-banner {
-      background: #fffbeb;
-      border-top: 1px solid #fde68a;
-      border-bottom: 1px solid #fde68a;
-      padding: 14px 48px;
-      display: flex;
-      align-items: flex-start;
-      gap: 12px;
-      font-size: 13px;
-      color: #78350f;
-      line-height: 1.6;
-    }
-
-    /* ── Content ── */
-    .content {
-      max-width: 1080px;
-      margin: 0 auto;
-      padding: 36px 48px;
-    }
-
-    /* ── Summary chips ── */
-    .summary-chips {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-    .s-chip {
-      display: inline-block;
-      border-radius: 5px;
-      padding: 4px 12px;
-      font-size: 11px;
-      font-weight: 700;
-      font-family: monospace;
-      letter-spacing: .04em;
-      border: 1px solid;
-    }
-    .s-chip-red    { background: #fff1f2; color: #b91c1c; border-color: #fecdd3; }
-    .s-chip-amber  { background: #fffbeb; color: #92400e; border-color: #fde68a; }
-    .s-chip-blue   { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
-    .s-chip-purple { background: #f5f3ff; color: #6d28d9; border-color: #ddd6fe; }
-
-    /* ── Regional block ── */
-    .regional-block {
-      margin-bottom: 32px;
-      page-break-inside: avoid;
-    }
-    .regional-block:last-child { margin-bottom: 0; }
-    .regional-header {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 12px 18px;
-      background: #1a2332;
-      color: #e2e8f0;
-      border-radius: 8px 8px 0 0;
-      margin-bottom: 0;
-      -webkit-print-color-adjust: exact;
-      print-color-adjust: exact;
-    }
-    .regional-header svg { color: #60a5fa; flex-shrink: 0; }
-    .regional-name {
-      font-size: 13px;
-      font-weight: 700;
-      letter-spacing: .06em;
-      text-transform: uppercase;
-      color: #f1f5f9;
-    }
-    .regional-badge {
-      background: rgba(220,38,38,.25);
-      color: #fca5a5;
-      border: 1px solid rgba(220,38,38,.4);
-      border-radius: 4px;
-      padding: 2px 8px;
-      font-size: 10px;
-      font-weight: 700;
-      font-family: monospace;
-    }
-    .regional-sub {
-      font-size: 10px;
-      color: #64748b;
-      font-family: monospace;
-    }
-    .regional-centrais {
-      padding: 12px;
-      background: #f8fafc;
-      border: 1px solid #e2e8f0;
-      border-top: none;
-      border-radius: 0 0 8px 8px;
-    }
-    .regional-centrais .central-block {
-      margin-bottom: 12px;
-    }
-    .regional-centrais .central-block:last-child { margin-bottom: 0; }
-
-    /* ── Central block ── */
-    .central-block {
-      background: #ffffff;
-      border-radius: 10px;
-      border: 1px solid #e2e8f0;
-      overflow: hidden;
-      margin-bottom: 20px;
-      box-shadow: 0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
-      page-break-inside: avoid;
-    }
-    .central-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 13px 18px;
-      background: #f8fafc;
-      border-bottom: 1px solid #e2e8f0;
-    }
-    .central-header-left {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    .central-icon {
-      width: 28px;
-      height: 28px;
-      border-radius: 6px;
-      background: #e8790a;
-      color: #fff;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-    }
-    .central-name {
-      font-size: 14px;
-      font-weight: 700;
-      color: #1a2332;
-      letter-spacing: .02em;
-    }
-    .central-badge {
-      font-size: 11px;
-      font-weight: 700;
-      font-family: monospace;
-      letter-spacing: .04em;
-      color: #b91c1c;
-      background: #fff1f2;
-      border: 1px solid #fecdd3;
-      border-radius: 5px;
-      padding: 3px 10px;
-    }
-
-    /* ── Table ── */
-    .data-table {
-      width: 100%;
-      border-collapse: collapse;
-    }
-    .data-table thead tr {
-      background: #f1f5f9;
-    }
-    .data-table th {
-      padding: 9px 16px;
-      font-size: 10.5px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: .07em;
-      color: #64748b;
-      text-align: left;
-      border-bottom: 1px solid #e2e8f0;
-    }
-    .row-even { background: #ffffff; }
-    .row-odd  { background: #f8fafc; }
-    .td-mat, .td-tipo, .td-count, .td-dates {
-      padding: 9px 16px;
-      border-bottom: 1px solid #f1f5f9;
-      vertical-align: middle;
-    }
-    .td-mat {
-      font-weight: 600;
-      font-size: 13px;
-      color: #1e293b;
-    }
-    .td-count {
-      text-align: center;
-      font-family: monospace;
-      font-size: 14px;
-      font-weight: 800;
-      color: #dc2626;
-    }
-    .td-dates { line-height: 1.8; }
-
-    /* ── Badges ── */
-    .badge-tipo {
-      display: inline-block;
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-size: 10px;
-      font-weight: 700;
-      font-family: monospace;
-      letter-spacing: .04em;
-    }
-    .badge-diario  { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
-
-    /* Linha zerada */
-    .row-zerado { background: #fff1f2 !important; }
-    .td-mat--zerado { color: #b91c1c !important; font-weight: 700; }
-    .td-count--zerado { color: #b91c1c !important; }
-    .date-chip--zerado { opacity: .45; }
-    .badge-zerado {
-      display: inline-block;
-      margin-left: 8px;
-      padding: 1px 6px;
-      border-radius: 3px;
-      font-size: 9px;
-      font-weight: 700;
-      letter-spacing: .05em;
-      background: #fff1f2;
-      color: #b91c1c;
-      border: 1px solid #fecdd3;
-      vertical-align: middle;
-      white-space: nowrap;
-    }
-    .badge-semanal { background: #f5f3ff; color: #6d28d9; border: 1px solid #ddd6fe; }
-
-    .date-chip {
-      display: inline-block;
-      background: #fff7ed;
-      border: 1px solid #fed7aa;
-      color: #9a3412;
-      border-radius: 4px;
-      padding: 2px 7px;
-      font-size: 11px;
-      font-family: monospace;
-      white-space: nowrap;
-      margin: 2px 3px 2px 0;
-    }
-
-    /* ── Footer ── */
-    .report-footer {
-      background: #1a2332;
-      color: #64748b;
-      padding: 18px 48px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 11px;
-      margin-top: 0;
-    }
-    .report-footer strong { color: #94a3b8; }
-
-    @media print {
-      body { background: #fff; }
-      .central-block { box-shadow: none; border: 1px solid #e2e8f0; }
-      .header-top { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      .report-footer { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    }
-  </style>
-</head>
-<body>
-
-<div class="report-header">
-  <div class="header-top">
-    <div class="logos-wrap">
-      <!-- Concrelagos em destaque -->
-      <img class="logo-concrelagos"
-        src="https://concrelagos.com.br/wp-content/uploads/2021/10/Ativo-3.svg"
-        alt="Concrelagos Concreto">
-      <div class="logo-sep"></div>
-      <!-- AnalyticSys menor -->
-      <div class="logo-analyticsys">
-        <svg width="22" height="24" viewBox="0 0 40 44" fill="none">
-          <polygon points="20,4 32,10 32,18 20,12" fill="#ff6b35" opacity=".95"/>
-          <polygon points="20,4 8,10 8,18 20,12" fill="#ffb380" opacity=".95"/>
-          <polygon points="20,12 32,18 8,18" fill="#ff6b35" opacity=".1"/>
-          <polygon points="20,16 34,22 34,31 20,25" fill="#ff6b35" opacity=".65"/>
-          <polygon points="20,16 6,22 6,31 20,25" fill="#ffb380" opacity=".65"/>
-          <polygon points="20,29 36,36 36,44 20,37" fill="#ff6b35" opacity=".35"/>
-          <polygon points="20,29 4,36 4,44 20,37" fill="#ffb380" opacity=".35"/>
-        </svg>
-        <div>
-          <div class="logo-analyticsys-text">ANALYTIC<span>SYS</span></div>
-          <div class="logo-analyticsys-sub">Estoque · Insumos</div>
-        </div>
-      </div>
+    <div class="aus-alert-banner">
+      <i class="ti ti-alert-triangle"></i>
+      <span><strong>ATENÇÃO:</strong> os lançamentos abaixo estão ausentes no sistema e comprometem diretamente a integridade dos estoques, a confiabilidade das análises e a rastreabilidade operacional. A ausência de lançamento distorce variações e invalida o inventário do período.</span>
     </div>
-    <div class="header-meta">
-      Gerado em <strong>${esc(geradoEm)}</strong>
-    </div>
-  </div>
 
-  <div class="header-body">
-    <div>
-      <div class="report-title">${esc(titulo)}</div>
-      <div class="report-period">Período de análise: <strong>${esc(periodo)}</strong></div>
-    </div>
-    <div class="summary-chips">
-      <span class="s-chip s-chip-red">${totalDias} lançamento${totalDias !== 1 ? 's' : ''} ausente${totalDias !== 1 ? 's' : ''}</span>
-      <span class="s-chip s-chip-amber">${totalMats} ${totalMats !== 1 ? 'materiais' : 'material'}</span>
-      <span class="s-chip s-chip-blue">${totalCentrals} ${totalCentrals !== 1 ? 'centrais' : 'central'}</span>
-      ${totalRegionais >= 1 ? `<span class="s-chip s-chip-purple">${totalRegionais} ${totalRegionais !== 1 ? 'regionais' : 'regional'}</span>` : ''}
-    </div>
-  </div>
-</div>
+    ${regionalSections}
 
-<div class="alert-banner">
-  <svg style="flex-shrink:0" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-  </svg>
-  <span><strong>ATENÇÃO:</strong> Os lançamentos abaixo estão <strong>ausentes</strong> no sistema e comprometem diretamente a integridade dos estoques, a confiabilidade das análises e a rastreabilidade operacional. A ausência de lançamento distorce variações e invalida o inventário do período. <strong style="color:#b45309;font-size:13.5px;display:inline-block;margin-top:4px">⚠ Regularização imediata é obrigatória.</strong></span>
-</div>
+    <div class="callout-regularizacao">
+      <div class="callout-regularizacao-title">⚠ Regularização Imediata</div>
+      <div class="callout-regularizacao-text">Revisar as datas apontadas e realizar o lançamento correto do estoque. Pendências mantidas serão escalonadas ao supervisor regional.</div>
+    </div>`;
 
-<div class="content">
-  ${regionalSections}
-</div>
+  const d = {
+    periodoBadge: _rankPeriodoBadgeLabel(),
+    periodo,
+    now: geradoEm,
+    kpis: [
+      { value: totalDias,      label: totalDias !== 1 ? 'ausências' : 'ausência',     color: '#ef4444' },
+      { value: totalMats,      label: totalMats !== 1 ? 'materiais' : 'material',     color: '#f59e0b' },
+      { value: totalCentrals,  label: totalCentrals !== 1 ? 'centrais' : 'central',   color: '#22c55e' },
+      { value: totalRegionais, label: totalRegionais !== 1 ? 'regionais' : 'regional', color: '#3b82f6' }
+    ]
+  };
 
-<div class="report-footer">
-  <span>Concrelagos Concreto &nbsp;·&nbsp; <strong>AnalyticSys</strong> &nbsp;·&nbsp; Gestão Centralizada de Estoque e Insumos</span>
-  <span>Período: <strong>${esc(periodo)}</strong></span>
-</div>
-
-</body>
-</html>`;
+  return _buildRankingShellHTML(d, {
+    pageTitle:  titulo,
+    badge:      badge || 'Cobrança de Pendências',
+    title:      titulo,
+    subtitle:   subtitle || 'Ausências de lançamento de estoque no período selecionado.',
+    bodyHtml,
+    notaRodape: notaRodape || '1 linha = 1 material com ausência(s) de lançamento no período. Frequência considerada conforme cadastro (diária ou semanal).'
+  });
 }
 
 
@@ -1442,6 +1073,8 @@ window.gerarRelatorioAusenciasCentral = function(central) {
   const periodo       = _ausGetPeriodo();
   const html = _buildAusenciasRelHTML({
     titulo:         `Ausências de Lançamento — ${central}`,
+    badge:          'Cobrança de Pendências',
+    subtitle:       'Materiais sem lançamento no período nesta central, para cobrança e regularização imediata.',
     periodo,
     geradoEm:       new Date().toLocaleString('pt-BR'),
     regionaisData,
@@ -1471,6 +1104,8 @@ window.gerarRelatorioAusenciasRegional = function(regional) {
   const periodo       = _ausGetPeriodo();
   const html = _buildAusenciasRelHTML({
     titulo:         `Ausências de Lançamento — ${regional}`,
+    badge:          'Cobrança de Pendências',
+    subtitle:       'Materiais sem lançamento no período nesta regional, agrupados por central, para cobrança e regularização imediata.',
     periodo,
     geradoEm:       new Date().toLocaleString('pt-BR'),
     regionaisData,
@@ -1487,7 +1122,7 @@ window.gerarRelatorioAusenciasRegional = function(regional) {
   w.focus();
 };
 
-// Relatório geral (todas as centrais filtradas)
+// Relatório de Cobrança (todas as centrais filtradas)
 window.gerarRelatorioAusenciasGeral = function() {
   if (!window._ausenciasData?.length) { alert('Nenhuma ausência no período selecionado.'); return; }
 
@@ -1499,7 +1134,10 @@ window.gerarRelatorioAusenciasGeral = function() {
   const regionaisCnt  = new Set(ausencias.map(a => a.regional || 'Sem regional')).size;
   const periodo       = _ausGetPeriodo();
   const html = _buildAusenciasRelHTML({
-    titulo:         'Relatório Geral de Ausências de Lançamento',
+    titulo:         'Relatório de Cobrança — Ausências de Lançamento',
+    badge:          'Cobrança de Pendências',
+    subtitle:       'Lista completa de materiais sem lançamento no período, organizada por regional e central, para cobrança e regularização imediata.',
+    notaRodape:     '1 linha = 1 material com ausência(s) de lançamento no período. Frequência considerada conforme cadastro (diária ou semanal).',
     periodo,
     geradoEm:       new Date().toLocaleString('pt-BR'),
     regionaisData,
@@ -1553,8 +1191,8 @@ window.abrirModalRelatorioAusencias = function() {
             <i class="ti ti-file-report" style="color:#60a5fa;font-size:17px"></i>
           </div>
           <div>
-            <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:3px">Relatório Geral</div>
-            <div style="font-size:12px;color:var(--text2);line-height:1.5">Todas as ausências agrupadas por regional → central → material, com datas e detalhes de estoque.</div>
+            <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:3px">Relatório de Cobrança</div>
+            <div style="font-size:12px;color:var(--text2);line-height:1.5">Todas as ausências agrupadas por regional → central → material, com datas e detalhes de estoque, para cobrança e regularização.</div>
           </div>
         </button>
 
