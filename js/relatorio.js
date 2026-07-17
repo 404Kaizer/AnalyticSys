@@ -327,401 +327,112 @@ function _buildCriticidadeData(categoriasFiltro) {
   };
 }
 
-// ── Shell HTML compartilhado (cabeçalho com logo, KPIs, footer) — o conteúdo do corpo varia por relatório ──
-function _buildCriticidadeShell(d, opts) {
-  const { periodo, now, totalCritico, totalUrgente, totalRegionais, totalGeral } = d;
-  return `<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>${opts.pageTitle}</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
-<style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+// ── CSS escuro compartilhado pelos fragmentos de HTML gerados em
+//    _buildCriticidadeData (execSummaryHtml e auditSectionsHtml). As classes
+//    abaixo têm os MESMOS NOMES usados nesses fragmentos — só a paleta muda
+//    para o tema escuro em tela cheia (mesmo padrão do Ranking/Ausência). ──
+function _criticidadeDarkStyles() {
+  return `
+    /* ── Resumo Executivo (Visão Diretoria) ── */
+    .exec-summary { background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.09); border-radius:14px; padding:24px 28px 28px; margin-bottom:24px; }
+    .exec-summary-title { display:flex; align-items:center; gap:14px; margin-bottom:20px; padding-bottom:16px; border-bottom:1px solid rgba(255,255,255,.08); }
+    .exec-summary-icon { width:40px; height:40px; border-radius:10px; background:rgba(59,130,246,.15); border:1px solid rgba(59,130,246,.35); display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0; }
+    .exec-title-main { font-size:16px; font-weight:800; color:#fff; letter-spacing:-.01em; }
+    .exec-title-sub { font-size:11.5px; color:#94a3b8; margin-top:2px; }
 
-  @page { size: A4 landscape; margin: 10mm 12mm; }
+    .exec-headline { position:relative; overflow:hidden; border-radius:14px; padding:22px 28px; margin-bottom:24px; display:flex; align-items:center; justify-content:space-between; gap:20px; flex-wrap:wrap; }
+    .exec-headline-glow { position:absolute; top:-50px; right:-30px; width:180px; height:180px; border-radius:50%; background:rgba(255,255,255,.08); pointer-events:none; }
+    .exec-headline-glow2 { position:absolute; bottom:-60px; right:120px; width:130px; height:130px; border-radius:50%; background:rgba(255,255,255,.05); pointer-events:none; }
+    .exec-headline-left { display:flex; align-items:center; gap:18px; position:relative; }
+    .exec-headline-icon { width:56px; height:56px; border-radius:14px; background:rgba(255,255,255,.15); border:1.5px solid rgba(255,255,255,.28); display:flex; align-items:center; justify-content:center; font-size:26px; flex-shrink:0; }
+    .exec-headline-label { font-size:11.5px; color:rgba(255,255,255,.72); text-transform:uppercase; letter-spacing:.06em; font-weight:600; margin-bottom:5px; }
+    .exec-headline-value { font-size:30px; font-weight:900; color:#fff; letter-spacing:-.01em; line-height:1; }
+    .exec-headline-value span { font-family:'JetBrains Mono',monospace; font-weight:800; }
+    .exec-headline-meta { display:flex; align-items:center; gap:18px; position:relative; }
+    .exec-headline-meta-item { text-align:center; }
+    .exec-headline-meta-item strong { display:block; font-size:24px; font-weight:800; color:#fff; font-family:'JetBrains Mono',monospace; line-height:1; }
+    .exec-headline-meta-item span { display:block; font-size:9.5px; color:rgba(255,255,255,.65); text-transform:uppercase; letter-spacing:.06em; margin-top:4px; }
+    .exec-headline-meta-sep { width:1px; height:34px; background:rgba(255,255,255,.2); }
 
-  * { box-sizing: border-box; margin:0; padding:0; }
-  body {
-    font-family: 'Inter', system-ui, sans-serif;
-    background: #f1f5f9;
-    color: #0f172a;
-    font-size: 12.5px;
-    line-height: 1.5;
-    -webkit-font-smoothing: antialiased;
-  }
+    .exec-blocks { display:flex; flex-direction:column; gap:18px; }
+    .exec-block { background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:22px 28px; border-top:4px solid rgba(255,255,255,.15); }
+    .exec-block--narrative { border-top-color:#3b82f6; }
+    .exec-block--bars { border-top-color:#dc2626; }
+    .exec-block-title { font-size:11.5px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:#94a3b8; margin-bottom:18px; display:flex; align-items:center; gap:8px; }
+    .exec-block-title-icon { font-size:14px; }
 
-  .page-wrap { max-width:1500px; margin:0 auto; padding:20px; }
+    .exec-narrative { max-width:880px; }
+    .exec-narrative p { font-size:13.5px; color:#cbd5e1; line-height:1.8; margin-bottom:12px; }
+    .exec-narrative p:last-child { margin-bottom:0; }
+    .exec-narrative strong { color:#fff; }
 
-  /* Top action bar */
-  .action-bar {
-    position: sticky; top: 0; z-index: 100;
-    background: #1e293b;
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 12px 24px;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.2);
-  }
-  .action-bar-title { color: #e2e8f0; font-size: 13px; font-weight: 500; }
-  .action-bar-title span { color: #64748b; font-size: 12px; margin-left: 10px; }
-  .action-bar-btns { display: flex; gap: 10px; }
-  .btn-print {
-    background: #2563eb; color: #fff; border: none; border-radius: 7px;
-    padding: 8px 18px; font-size: 13px; font-weight: 600; cursor: pointer;
-    display: flex; align-items: center; gap: 7px; transition: background .15s;
-  }
-  .btn-print:hover { background: #1d4ed8; }
-  .btn-close {
-    background: #334155; color: #cbd5e1; border: none; border-radius: 7px;
-    padding: 8px 14px; font-size: 13px; font-weight: 500; cursor: pointer;
-    transition: background .15s;
-  }
-  .btn-close:hover { background: #475569; }
+    .donut-empty { font-size:12px; color:#64748b; font-style:italic; padding:30px 0; text-align:center; }
 
-  /* Confidential strip */
-  .confidential-strip {
-    text-align: center; padding: 10px;
-    background: #fef2f2; border: 1px solid #fca5a5;
-    border-radius: 8px; margin-bottom: 20px;
-    font-size: 11px; color: #dc2626; font-weight: 700; letter-spacing: .08em;
-    text-transform: uppercase;
-  }
+    .reg-bar-legend { display:flex; gap:20px; margin-bottom:16px; padding:10px 14px; background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.08); border-radius:8px; font-size:11px; color:#cbd5e1; font-weight:600; }
+    .reg-bar-legend span { display:flex; align-items:center; gap:6px; }
+    .reg-bar-legend i { font-size:13px; }
+    .reg-cat-blocks-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(255px,1fr)); gap:16px; align-items:start; }
+    .reg-cat-block { min-width:0; background:rgba(255,255,255,.025); border:1px solid rgba(255,255,255,.08); border-top:3px solid rgba(255,255,255,.15); border-radius:10px; padding:16px 18px 18px; }
+    .reg-cat-block-title { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:#94a3b8; margin-bottom:14px; display:flex; align-items:center; gap:8px; padding-bottom:10px; border-bottom:1px solid rgba(255,255,255,.08); }
+    .reg-cat-dot { width:9px; height:9px; border-radius:3px; flex-shrink:0; }
+    .reg-cat-block-count { margin-left:auto; font-family:'JetBrains Mono',monospace; font-weight:700; color:#64748b; font-size:10px; text-transform:none; letter-spacing:0; }
+    .reg-item-list { display:flex; flex-direction:column; gap:4px; }
+    .reg-item-row { display:flex; flex-direction:column; gap:7px; }
+    .reg-item-row:not(.reg-item-row--top) { padding-bottom:12px; border-bottom:1px solid rgba(255,255,255,.06); }
+    .reg-item-row:not(.reg-item-row--top):last-child { border-bottom:none; padding-bottom:0; }
+    .reg-item-name-line { display:flex; align-items:center; gap:9px; }
+    .reg-item-rank { width:20px; height:20px; border-radius:6px; background:rgba(255,255,255,.08); color:#94a3b8; font-size:11px; font-weight:800; font-family:'JetBrains Mono',monospace; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .reg-item-label { font-size:14px; font-weight:800; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1; }
+    .reg-item-stats-line { display:flex; align-items:center; gap:7px; padding-left:29px; font-size:11.5px; color:#94a3b8; font-weight:600; }
+    .reg-item-sep { color:#475569; }
+    .reg-item-pct-full { color:#cbd5e1; }
+    .reg-item-net-line { font-size:13px; font-weight:800; font-family:'JetBrains Mono',monospace; padding-left:29px; }
+    .reg-item-level-line { display:flex; align-items:center; gap:6px; padding-left:29px; flex-wrap:wrap; }
+    .reg-item-level-badge { display:flex; align-items:center; gap:5px; font-size:11px; font-weight:800; padding:4px 10px; border-radius:7px; line-height:1.3; }
+    .reg-item-level-badge i { font-size:12px; }
+    .reg-item-level-badge--critico { background:rgba(220,38,38,.16); color:#f87171; }
+    .reg-item-level-badge--urgente { background:rgba(234,88,12,.16); color:#fb923c; }
 
-  /* Report header */
-  .report-header {
-    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-    color: #fff;
-    border-radius: 14px;
-    padding: 22px 32px;
-    margin-bottom: 22px;
-    position: relative;
-    overflow: hidden;
-  }
-  .report-header::before {
-    content: '';
-    position: absolute; top:-50px; right:-40px;
-    width:160px; height:160px;
-    border-radius:50%;
-    background: rgba(239,68,68,0.07);
-    border: 2px solid rgba(239,68,68,0.10);
-  }
-  .report-header::after {
-    content: '';
-    position: absolute; bottom:-70px; right:100px;
-    width:120px; height:120px;
-    border-radius:50%;
-    background: rgba(245,158,11,0.05);
-    border: 2px solid rgba(245,158,11,0.08);
-  }
-  .report-header-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; flex-wrap:wrap; gap:16px; position:relative; }
+    /* ── Estilo "Auditoria" — tabelas Crítico/Urgente lado a lado (Relatório Detalhado) ── */
+    .audit-section { margin-bottom:30px; }
+    .audit-section-title { font-size:15px; font-weight:900; text-transform:uppercase; letter-spacing:.05em; color:#fff; margin-bottom:10px; padding-left:2px; }
+    .audit-section-grid { display:grid; grid-template-columns:1fr 1fr; gap:18px; align-items:start; }
+    .audit-table-wrap { border:1px solid rgba(255,255,255,.15); border-radius:6px; overflow:hidden; }
+    .audit-table-header { padding:10px 16px; color:#fff; font-weight:900; font-size:14px; letter-spacing:.04em; display:flex; align-items:center; gap:8px; text-transform:uppercase; }
+    .audit-table-header i { font-size:15px; }
+    .audit-table-count { margin-left:auto; background:rgba(255,255,255,.22); border-radius:12px; padding:2px 10px; font-size:12px; font-family:'JetBrains Mono',monospace; }
+    .audit-table-empty { padding:16px; text-align:center; color:#64748b; font-style:italic; font-size:12px; background:rgba(255,255,255,.02); }
+    .audit-table { width:100%; border-collapse:collapse; background:rgba(255,255,255,.015); table-layout:fixed; }
+    .audit-table thead tr { background:rgba(255,255,255,.05); }
+    .audit-table th { padding:7px 8px; font-size:9.5px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:#94a3b8; text-align:left; border:1px solid rgba(255,255,255,.1); }
+    .audit-th-nivel { width:38px; text-align:center; }
+    .audit-th-var { width:110px; text-align:right; }
+    .audit-td { padding:6px 8px; font-size:11px; border:1px solid rgba(255,255,255,.07); color:#e2e8f0; }
+    .audit-td-nivel { text-align:center; font-size:13px; }
+    .audit-td-filial { font-family:'JetBrains Mono',monospace; font-weight:700; color:#cbd5e1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .audit-td-regional { font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:#e2e8f0; }
+    .audit-td-mat { color:#cbd5e1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .audit-td-var { font-family:'JetBrains Mono',monospace; font-weight:900; color:#fff; text-align:right; font-size:11.5px; white-space:nowrap; }
+    .audit-table tbody tr:nth-child(even) td:not(.audit-td-var) { background:rgba(255,255,255,.02); }
 
-  /* Logo real da empresa — mesmo padrão dos demais relatórios do sistema */
-  .logos-wrap { display:flex; align-items:center; gap:22px; }
-  .logo-concrelagos { height:38px; width:auto; object-fit:contain; filter:invert(1) hue-rotate(178deg); opacity:.95; }
-  .logo-sep { width:1px; height:34px; background:rgba(255,255,255,0.18); }
-  .logo-analyticsys { display:flex; align-items:center; gap:8px; opacity:.85; }
-  .logo-analyticsys-text { font-size:12px; font-weight:800; letter-spacing:.06em; font-family:'JetBrains Mono',monospace; line-height:1; color:#cbd5e1; }
-  .logo-analyticsys-text span { color:#f97316; }
-  .logo-analyticsys-sub { font-size:8px; color:#64748b; letter-spacing:.14em; text-transform:uppercase; margin-top:2px; }
+    .var-cell i, .cat-header-net i, .reg-item-net-line i, .exec-headline-value i { font-size:.9em; margin-right:3px; vertical-align:-1px; }
 
-  .report-title-block h1 { font-size:20px; font-weight:800; color:#f8fafc; letter-spacing:-0.01em; }
-  .report-title-block p { font-size:12px; color:#94a3b8; font-weight:400; margin-top:2px; }
-  .report-meta { text-align:right; position:relative; }
-  .report-meta .meta-label { font-size:11px; color:#64748b; text-transform:uppercase; letter-spacing:.06em; }
-  .report-meta .meta-value { font-size:13px; color:#cbd5e1; font-weight:500; margin-top:2px; }
-
-  .report-header-bottom {
-    display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px;
-    padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.08); position: relative;
-  }
-  .report-alert-inline { display: flex; align-items: center; gap: 10px; }
-  .alert-inline-icon { font-size: 16px; }
-  .alert-inline-text { font-size: 12px; color: #cbd5e1; }
-  .alert-inline-text strong { color: #fca5a5; font-weight: 700; }
-
-  .report-stats-inline { display: flex; align-items: center; gap: 16px; }
-  .stat-inline { display: flex; align-items: baseline; gap: 6px; }
-  .stat-inline strong { font-size: 18px; font-weight: 800; font-family: 'JetBrains Mono', monospace; line-height: 1; }
-  .stat-inline span { font-size: 10px; color: #94a3b8; text-transform: uppercase; letter-spacing: .04em; }
-  .stat-inline-sep { width: 1px; height: 16px; background: rgba(255,255,255,0.12); }
-
-  /* ── Resumo Executivo ── */
-  .exec-summary {
-    background: #fff; border: 1px solid #e2e8f0; border-radius: 14px;
-    padding: 24px 28px 28px; margin-bottom: 28px;
-    box-shadow: 0 8px 28px rgba(15,23,42,0.09);
-  }
-  .exec-summary-title { display:flex; align-items:center; gap:14px; margin-bottom:20px; padding-bottom:16px; border-bottom:1px solid #f1f5f9; }
-  .exec-summary-icon {
-    width:40px; height:40px; border-radius:10px;
-    background: linear-gradient(135deg,#eff6ff 0%,#dbeafe 100%);
-    border:1px solid #bfdbfe; box-shadow: inset 0 1px 2px rgba(255,255,255,.8), 0 2px 6px rgba(37,99,235,.12);
-    display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0;
-  }
-  .exec-title-main { font-size:16px; font-weight:800; color:#0f172a; letter-spacing:-0.01em; }
-  .exec-title-sub { font-size:11.5px; color:#94a3b8; margin-top:2px; }
-
-  /* Card de destaque — "herói" do resumo */
-  .exec-headline {
-    position: relative; overflow: hidden;
-    border-radius: 14px; padding: 22px 28px; margin-bottom: 24px;
-    display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap;
-    box-shadow: 0 10px 30px rgba(15,23,42,0.22);
-  }
-  .exec-headline-glow {
-    position:absolute; top:-50px; right:-30px; width:180px; height:180px; border-radius:50%;
-    background:rgba(255,255,255,0.08); pointer-events:none;
-  }
-  .exec-headline-glow2 {
-    position:absolute; bottom:-60px; right:120px; width:130px; height:130px; border-radius:50%;
-    background:rgba(255,255,255,0.05); pointer-events:none;
-  }
-  .exec-headline-left { display:flex; align-items:center; gap:18px; position:relative; }
-  .exec-headline-icon {
-    width:56px; height:56px; border-radius:14px; background:rgba(255,255,255,0.15);
-    border:1.5px solid rgba(255,255,255,0.28); display:flex; align-items:center; justify-content:center;
-    font-size:26px; flex-shrink:0;
-  }
-  .exec-headline-label { font-size:11.5px; color:rgba(255,255,255,0.72); text-transform:uppercase; letter-spacing:.06em; font-weight:600; margin-bottom:5px; }
-  .exec-headline-value { font-size:30px; font-weight:900; color:#fff; letter-spacing:-0.01em; line-height:1; }
-  .exec-headline-value span { font-family:'JetBrains Mono',monospace; font-weight:800; }
-  .exec-headline-meta { display:flex; align-items:center; gap:18px; position:relative; }
-  .exec-headline-meta-item { text-align:center; }
-  .exec-headline-meta-item strong { display:block; font-size:24px; font-weight:800; color:#fff; font-family:'JetBrains Mono',monospace; line-height:1; }
-  .exec-headline-meta-item span { display:block; font-size:9.5px; color:rgba(255,255,255,0.65); text-transform:uppercase; letter-spacing:.06em; margin-top:4px; }
-  .exec-headline-meta-sep { width:1px; height:34px; background:rgba(255,255,255,0.2); }
-
-  .exec-blocks { display:flex; flex-direction:column; gap: 18px; }
-  .exec-block {
-    background:#fff; border:1px solid #e9edf3; border-radius:12px; padding:22px 28px;
-    box-shadow: 0 4px 16px rgba(15,23,42,0.07);
-    border-top: 4px solid #cbd5e1;
-  }
-  .exec-block--narrative { border-top-color: #3b82f6; }
-  .exec-block--bars  { border-top-color: #dc2626; }
-  .exec-block-title {
-    font-size:11.5px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:#475569;
-    margin-bottom:18px; display:flex; align-items:center; gap:8px;
-  }
-  .exec-block-title-icon { font-size:14px; }
-
-  .exec-narrative { max-width: 880px; }
-  .exec-narrative p { font-size:13.5px; color:#334155; line-height:1.8; margin-bottom:12px; }
-  .exec-narrative p:last-child { margin-bottom:0; }
-  .exec-narrative strong { color:#0f172a; }
-
-  .donut-empty { font-size:12px; color:#94a3b8; font-style:italic; padding:30px 0; text-align:center; }
-
-  .reg-bar-legend {
-    display:flex; gap:20px; margin-bottom:16px; padding:10px 14px;
-    background:#f8fafc; border:1px solid #e9edf3; border-radius:8px; font-size:11px; color:#475569; font-weight:600;
-  }
-  .reg-bar-legend span { display:flex; align-items:center; gap:6px; }
-  .reg-bar-legend i { font-size:13px; }
-  .reg-cat-blocks-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(255px, 1fr)); gap: 16px; align-items:start; }
-  .reg-cat-block {
-    min-width: 0; background:#fbfcfd; border:1px solid #e9edf3; border-top:3px solid #cbd5e1;
-    border-radius:10px; padding:16px 18px 18px;
-  }
-  .reg-cat-block-title {
-    font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:#475569;
-    margin-bottom:14px; display:flex; align-items:center; gap:8px; padding-bottom:10px; border-bottom:1px solid #e9edf3;
-  }
-  .reg-cat-dot { width:9px; height:9px; border-radius:3px; flex-shrink:0; }
-  .reg-cat-block-count { margin-left:auto; font-family:'JetBrains Mono',monospace; font-weight:700; color:#94a3b8; font-size:10px; text-transform:none; letter-spacing:0; }
-  .reg-item-list { display:flex; flex-direction:column; gap:4px; }
-  .reg-item-row { display:flex; flex-direction:column; gap:7px; }
-  .reg-item-row:not(.reg-item-row--top) { padding-bottom:12px; border-bottom:1px solid #f1f5f9; }
-  .reg-item-row:not(.reg-item-row--top):last-child { border-bottom:none; padding-bottom:0; }
-  .reg-item-name-line { display:flex; align-items:center; gap:9px; }
-  .reg-item-rank {
-    width:20px; height:20px; border-radius:6px; background:#f1f5f9; color:#64748b;
-    font-size:11px; font-weight:800; font-family:'JetBrains Mono',monospace;
-    display:flex; align-items:center; justify-content:center; flex-shrink:0;
-  }
-  .reg-item-label { font-size:14px; font-weight:800; color:#1e293b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1; }
-  .reg-item-stats-line { display:flex; align-items:center; gap:7px; padding-left:29px; font-size:11.5px; color:#64748b; font-weight:600; }
-  .reg-item-sep { color:#cbd5e1; }
-  .reg-item-pct-full { color:#475569; }
-  .reg-item-net-line {
-    font-size:13px; font-weight:800; font-family:'JetBrains Mono',monospace;
-    padding-left:29px;
-  }
-  .reg-item-level-line { display:flex; align-items:center; gap:6px; padding-left:29px; flex-wrap:wrap; }
-  .reg-item-level-badge {
-    display:flex; align-items:center; gap:5px; font-size:11px; font-weight:800;
-    padding:4px 10px; border-radius:7px; line-height:1.3;
-  }
-  .reg-item-level-badge i { font-size:12px; }
-  .reg-item-level-badge--critico { background:#fef2f2; color:#dc2626; }
-  .reg-item-level-badge--urgente { background:#fff7ed; color:#ea580c; }
-
-  /* ── Estilo "Auditoria" — tabelas Crítico/Urgente lado a lado por categoria ── */
-  .audit-section { margin-bottom: 30px; }
-  .audit-section-title {
-    font-size: 15px; font-weight: 900; text-transform: uppercase; letter-spacing: .05em;
-    color: #0f172a; margin-bottom: 10px; padding-left: 2px;
-  }
-  .audit-section-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
-  .audit-table-wrap { border: 2px solid #0f172a; border-radius: 6px; overflow: hidden; }
-  .audit-table-header {
-    padding: 10px 16px; color: #fff; font-weight: 900; font-size: 14px; letter-spacing: .04em;
-    display: flex; align-items: center; gap: 8px; text-transform: uppercase;
-  }
-  .audit-table-header i { font-size: 15px; }
-  .audit-table-count {
-    margin-left: auto; background: rgba(255,255,255,.22); border-radius: 12px; padding: 2px 10px;
-    font-size: 12px; font-family: 'JetBrains Mono', monospace;
-  }
-  .audit-table-empty { padding: 16px; text-align: center; color: #94a3b8; font-style: italic; font-size: 12px; background:#fff; }
-  .audit-table { width: 100%; border-collapse: collapse; background: #fff; table-layout: fixed; }
-  .audit-table thead tr { background: #0f172a; }
-  .audit-table th {
-    padding: 7px 8px; font-size: 9.5px; font-weight: 800; text-transform: uppercase;
-    letter-spacing: .05em; color: #cbd5e1; text-align: left; border: 1px solid #1e293b;
-  }
-  .audit-th-nivel { width: 38px; text-align: center; }
-  .audit-th-var { width: 110px; text-align: right; }
-  .audit-td { padding: 6px 8px; font-size: 11px; border: 1px solid #d5dbe3; color: #0f172a; }
-  .audit-td-nivel { text-align: center; font-size: 13px; }
-  .audit-td-filial { font-family: 'JetBrains Mono', monospace; font-weight: 700; color: #334155; white-space: nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .audit-td-regional { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .audit-td-mat { color: #334155; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .audit-td-var { font-family: 'JetBrains Mono', monospace; font-weight: 900; color: #fff; text-align: right; font-size: 11.5px; white-space: nowrap; }
-  .audit-table tbody tr:nth-child(even) td:not(.audit-td-var) { background: #f8fafc; }
-
-  .var-cell i, .cat-header-net i, .reg-item-net-line i, .exec-headline-value i { font-size: 0.9em; margin-right: 3px; vertical-align: -1px; }
-
-  /* Footer */
-  .report-footer {
-    margin-top: 10px; padding: 18px 24px;
-    background: #1e293b; border-radius: 12px; color: #64748b;
-    display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;
-    font-size: 11px;
-  }
-  .report-footer strong { color: #94a3b8; }
-
-  /* Print */
-  @media print {
-    body { background: #fff !important; }
-    .action-bar { display: none !important; }
-    .page-wrap { padding: 0 !important; max-width: 100% !important; }
-    .audit-section { page-break-inside: avoid; }
-    .audit-table tr { page-break-inside: avoid; }
-    .report-header { background: #0f172a !important; -webkit-print-color-adjust: exact; color-adjust: exact; }
-    .report-header-bottom { -webkit-print-color-adjust: exact; color-adjust: exact; }
-    .audit-table-header { -webkit-print-color-adjust: exact; color-adjust: exact; }
-    .audit-table thead tr { -webkit-print-color-adjust: exact; color-adjust: exact; }
-    .audit-td-var { -webkit-print-color-adjust: exact; color-adjust: exact; }
-    .exec-summary { page-break-inside: avoid; box-shadow:none !important; }
-    .exec-headline { -webkit-print-color-adjust: exact; color-adjust: exact; box-shadow:none !important; }
-    .exec-block { box-shadow:none !important; }
-    .reg-item-level-badge--critico, .reg-item-level-badge--urgente, .reg-cat-dot, .reg-cat-block {
-      -webkit-print-color-adjust: exact; color-adjust: exact;
-    }
-  }
-</style>
-</head>
-<body>
-
-<!-- Action bar (hidden on print) -->
-<div class="action-bar">
-  <div class="action-bar-title">
-    ${opts.title}
-    <span>Período: ${periodo} · Gerado em ${now}</span>
-  </div>
-  <div class="action-bar-btns">
-    <button class="btn-print" onclick="window.print()">
-      🖨️ Imprimir / Salvar PDF
-    </button>
-    <button class="btn-close" onclick="window.close()">✕ Fechar</button>
-  </div>
-</div>
-
-<div class="page-wrap">
-
-  <!-- Confidential strip -->
-  <div class="confidential-strip" style="margin-top:18px">
-    ⚠ Documento Confidencial — Uso interno · Diretoria e Regionais
-  </div>
-
-  <!-- Report header -->
-  <div class="report-header">
-    <div class="report-header-top">
-      <div class="logos-wrap">
-        <img class="logo-concrelagos"
-          src="https://concrelagos.com.br/wp-content/uploads/2021/10/Ativo-3.svg"
-          alt="Concrelagos Concreto">
-        <div class="logo-sep"></div>
-        <div class="logo-analyticsys">
-          <svg width="20" height="22" viewBox="0 0 40 44" fill="none">
-            <polygon points="20,4 32,10 32,18 20,12" fill="#ff6b35" opacity=".95"/>
-            <polygon points="20,4 8,10 8,18 20,12" fill="#ffb380" opacity=".95"/>
-            <polygon points="20,12 32,18 8,18" fill="#ff6b35" opacity=".1"/>
-            <polygon points="20,16 34,22 34,31 20,25" fill="#ff6b35" opacity=".65"/>
-            <polygon points="20,16 6,22 6,31 20,25" fill="#ffb380" opacity=".65"/>
-            <polygon points="20,29 36,36 36,44 20,37" fill="#ff6b35" opacity=".35"/>
-            <polygon points="20,29 4,36 4,44 20,37" fill="#ffb380" opacity=".35"/>
-          </svg>
-          <div>
-            <div class="logo-analyticsys-text">ANALYTIC<span>SYS</span></div>
-            <div class="logo-analyticsys-sub">Estoque · Insumos</div>
-          </div>
-        </div>
-      </div>
-      <div class="report-meta">
-        <div class="meta-label">Período analisado</div>
-        <div class="meta-value">${periodo}</div>
-        <div class="meta-label" style="margin-top:8px">Gerado em</div>
-        <div class="meta-value">${now}</div>
-      </div>
-    </div>
-
-    <div class="report-title-block" style="margin-bottom:16px">
-      <h1>${opts.title}</h1>
-      <p>${opts.subtitle}</p>
-    </div>
-
-    <div class="report-header-bottom">
-      <div class="report-alert-inline">
-        <span class="alert-inline-icon">🚨</span>
-        <span class="alert-inline-text"><strong>Alerta de criticidade</strong> — ação imediata ou monitoramento reforçado necessário</span>
-      </div>
-      <div class="report-stats-inline">
-        <div class="stat-inline"><strong style="color:#f87171">${totalCritico}</strong><span>críticos</span></div>
-        <div class="stat-inline-sep"></div>
-        <div class="stat-inline"><strong style="color:#fb923c">${totalUrgente}</strong><span>urgentes</span></div>
-        <div class="stat-inline-sep"></div>
-        <div class="stat-inline"><strong style="color:#60a5fa">${totalRegionais}</strong><span>regionais</span></div>
-        <div class="stat-inline-sep"></div>
-        <div class="stat-inline"><strong style="color:#e2e8f0">${totalGeral}</strong><span>total</span></div>
-      </div>
-    </div>
-  </div>
-
-  ${opts.bodyHtml}
-
-  <!-- Footer -->
-  <div class="report-footer">
-    <div>
-      <strong>AnalyticSys</strong> · Gestão Centralizada de Materiais · Concrelagos Concreto<br>
-      Documento gerado automaticamente em ${now}
-    </div>
-    <div style="text-align:right">
-      Período: <strong style="color:#94a3b8">${periodo}</strong><br>
-      ${totalGeral} ocorrência${totalGeral !== 1 ? 's' : ''} (crítico + urgente) em ${totalRegionais} ${totalRegionais !== 1 ? 'regionais' : 'regional'}
-    </div>
-  </div>
-</div>
-
-</body>
-</html>`;
+    @media print {
+      .audit-section { page-break-inside:avoid; }
+      .audit-table tr { page-break-inside:avoid; }
+      .exec-summary { page-break-inside:avoid; }
+      .exec-headline, .audit-table-header, .audit-table thead tr, .audit-td-var,
+      .reg-item-level-badge--critico, .reg-item-level-badge--urgente, .reg-cat-dot, .reg-cat-block {
+        -webkit-print-color-adjust:exact; color-adjust:exact;
+      }
+    }`;
 }
 
-// ── Abre o relatório em nova janela ──
-function _openCriticidadeWindow(html) {
-  const w = window.open('', '_blank', 'width=1400,height=900,scrollbars=yes,resizable=yes');
-  if (!w) { alert('Popups bloqueados! Permita pop-ups para este site para gerar o relatório.'); return; }
+// ── Abre o relatório (HTML pronto) em nova janela — usado por todos os
+//    relatórios do sistema (Ausências, Ranking, Ocorrências, Criticidade). ──
+function _openRelWindow(html) {
+  const w = window.open('', '_blank', 'width=1200,height=900,scrollbars=yes,resizable=yes');
+  if (!w) { alert('Popups bloqueados! Permita pop-ups para gerar o relatório.'); return; }
   w.document.write(html);
   w.document.close();
   w.focus();
@@ -731,26 +442,58 @@ function _openCriticidadeWindow(html) {
 window.gerarVisaoDiretoria = function(categoriasFiltro) {
   const d = _buildCriticidadeData(categoriasFiltro);
   if (!d) return;
-  const html = _buildCriticidadeShell(d, {
-    pageTitle: `Visão Diretoria — ${d.periodo}`,
-    title: 'Visão Diretoria',
-    subtitle: 'Resumo executivo de criticidade · AnalyticSys · Concrelagos Concreto',
-    bodyHtml: d.execSummaryHtml,
+
+  const bodyHtml = `<style>${_criticidadeDarkStyles()}</style>${d.execSummaryHtml}`;
+
+  const html = _buildRankingShellHTML({
+    periodoBadge: d.periodo,
+    periodo: d.periodo,
+    now: d.now,
+    kpis: [
+      { value: d.totalCritico,   label: 'críticos',  color: '#ef4444' },
+      { value: d.totalUrgente,   label: 'urgentes',  color: '#f97316' },
+      { value: d.totalRegionais, label: 'regionais', color: '#3b82f6' },
+      { value: d.totalGeral,     label: 'total',     color: '#94a3b8' }
+    ]
+  }, {
+    pageTitle:  `Visão Diretoria — ${d.periodo}`,
+    badge:      'Alerta de Criticidade',
+    title:      'Visão Diretoria',
+    subtitle:   'Resumo executivo de criticidade — ação imediata ou monitoramento reforçado necessário.',
+    bodyHtml,
+    notaRodape: 'Crítico e urgente calculados a partir do desequilíbrio (desfalque/sobra) entre estoque físico e lançamentos no período selecionado.'
   });
-  _openCriticidadeWindow(html);
+
+  _openRelWindow(html);
 };
 
 // ── Botão "Relatório Detalhado" — Ranking completo Crítico/Urgente por regional, central e material ──
 window.gerarRelatorioDetalhado = function(categoriasFiltro) {
   const d = _buildCriticidadeData(categoriasFiltro);
   if (!d) return;
-  const html = _buildCriticidadeShell(d, {
-    pageTitle: `Relatório Detalhado de Criticidade — ${d.periodo}`,
-    title: 'Relatório Detalhado de Criticidade',
-    subtitle: 'Ranking completo por regional, central e material · AnalyticSys · Concrelagos Concreto',
-    bodyHtml: d.auditSectionsHtml,
+
+  const bodyHtml = `<style>${_criticidadeDarkStyles()}</style>${d.auditSectionsHtml}`;
+
+  const html = _buildRankingShellHTML({
+    periodoBadge: d.periodo,
+    periodo: d.periodo,
+    now: d.now,
+    kpis: [
+      { value: d.totalCritico,   label: 'críticos',  color: '#ef4444' },
+      { value: d.totalUrgente,   label: 'urgentes',  color: '#f97316' },
+      { value: d.totalRegionais, label: 'regionais', color: '#3b82f6' },
+      { value: d.totalGeral,     label: 'total',     color: '#94a3b8' }
+    ]
+  }, {
+    pageTitle:  `Relatório Detalhado de Criticidade — ${d.periodo}`,
+    badge:      'Alerta de Criticidade',
+    title:      'Relatório Detalhado de Criticidade',
+    subtitle:   'Ranking completo por regional, central e material — ação imediata ou monitoramento reforçado necessário.',
+    bodyHtml,
+    notaRodape: 'Tabelas lado a lado por categoria de material (Aglomerantes, Agregados, Aditivos, Adições), ordenadas do maior desfalque para a maior sobra.'
   });
-  _openCriticidadeWindow(html);
+
+  _openRelWindow(html);
 };
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1806,12 +1549,24 @@ window.gerarRankingRegionais = function() {
 };
 
 
-// ═══════════════════════════════════════════════════════════════════
+// ── CSS escuro compartilhado pelas tabelas de material (Relatório Regional e
+//    Relatório de Central — mesmas classes .data-table/.rank-cell/.mat-name) ──
+function _criticidadeMatTableStyles() {
+  return `
+    .data-table { width:100%; border-collapse:collapse; font-size:12px; }
+    .data-table th { background:rgba(255,255,255,.04); padding:9px 12px; text-align:left; font-weight:700; color:#94a3b8; font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid rgba(255,255,255,.1); }
+    .data-table td { padding:9px 12px; border-bottom:1px solid rgba(255,255,255,.06); vertical-align:top; color:#e2e8f0; }
+    .data-table tbody tr:last-child td { border-bottom:none; }
+    .data-row:hover { background:rgba(255,255,255,.02); }
+    .rank-cell { color:#64748b; font-weight:700; font-family:'JetBrains Mono',monospace; font-size:11px; }
+    .mat-name { font-weight:700; color:#fff; }
+    .var-cell strong { font-family:'JetBrains Mono',monospace; }`;
+}
 
 // ═══════════════════════════════════════════════════════════════════
 // RELATÓRIO POR REGIONAL (Crítico + Urgente de todas as centrais)
+// (mesmo shell escuro dos relatórios de Ranking/Ausência: _buildRankingShellHTML)
 // ═══════════════════════════════════════════════════════════════════
-
 window.gerarRelatorioRegional = function(regionalName) {
   const byLevel = window._rankByLevel;
   if (!byLevel) { alert('Nenhum dado de criticidade disponível. Execute a análise primeiro.'); return; }
@@ -1820,7 +1575,6 @@ window.gerarRelatorioRegional = function(regionalName) {
   const filter = item => (item.regional || '—') === regionalName;
   const criticos = (byLevel.critico || []).filter(filter);
   const urgentes = (byLevel.urgente || []).filter(filter);
-  const atencoes = (byLevel.atencao || []).filter(filter);
 
   if (!criticos.length && !urgentes.length) {
     alert('Nenhum material crítico ou urgente para este regional.');
@@ -1833,9 +1587,9 @@ window.gerarRelatorioRegional = function(regionalName) {
   // Helpers compartilhados
   function fmtKgR(v) { const n = Math.abs(Number(v)||0); return n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})+' kg'; }
   function varDir(v) { return v < -0.001 ? 'Desfalque' : v > 0.001 ? 'Sobra' : 'Equil.'; }
-  function varDirColor(v) { return v < -0.001 ? '#ef4444' : v > 0.001 ? '#10b981' : '#6b7280'; }
+  function varDirColor(v) { return v < -0.001 ? '#f87171' : v > 0.001 ? '#4ade80' : '#94a3b8'; }
   function trendLabel(t) { return t==='worsening'?'▲ Piorando':t==='improving'?'▼ Melhorando':'→ Estável'; }
-  function trendColor(t) { return t==='worsening'?'#ef4444':t==='improving'?'#10b981':'#6b7280'; }
+  function trendColor(t) { return t==='worsening'?'#f87171':t==='improving'?'#4ade80':'#94a3b8'; }
   function escR(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
   // Agrupa por central
@@ -1857,7 +1611,7 @@ window.gerarRelatorioRegional = function(regionalName) {
     }).join('');
   }
 
-  function buildCentralBlock(centralName, items, levelColor, levelBg, levelBorder, levelIcon, levelLabel) {
+  function buildCentralBlock(centralName, items, levelColor, levelBg, levelBorder, levelIcon, levelLabel, badgeColor) {
     return `
     <div class="central-section" style="margin-bottom:16px;border:1px solid ${levelBorder};border-left:4px solid ${levelColor};border-radius:8px;overflow:hidden;page-break-inside:avoid">
       <div style="background:${levelBg};padding:12px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid ${levelBorder}">
@@ -1865,10 +1619,10 @@ window.gerarRelatorioRegional = function(regionalName) {
           <span style="font-size:16px">${levelIcon}</span>
           <div>
             <div style="font-size:13px;font-weight:700;color:${levelColor}">${escR(centralName)}</div>
-            <div style="font-size:11px;color:#64748b;margin-top:2px">${levelLabel}</div>
+            <div style="font-size:11px;color:#94a3b8;margin-top:2px">${levelLabel}</div>
           </div>
         </div>
-        <span style="background:${levelColor};color:#fff;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700">${items.length} ${items.length>1?'materiais':'material'}</span>
+        <span style="background:${badgeColor};color:#fff;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700">${items.length} ${items.length>1?'materiais':'material'}</span>
       </div>
       <table class="data-table">
         <thead><tr><th style="width:36px">#</th><th>Material</th><th>Variação</th><th>Tendência</th></tr></thead>
@@ -1879,8 +1633,8 @@ window.gerarRelatorioRegional = function(regionalName) {
 
   // Monta seções por nível
   const levels = [
-    { key:'critico', items:criticos, color:'#ef4444', bg:'#fef2f2', border:'#fca5a5', icon:'🔴', label:'CRÍTICO — Ação imediata · Escalar à gerência', sectionTitle:'🔴 Crítico', sublabel:'Ação imediata — escalar à gerência' },
-    { key:'urgente', items:urgentes, color:'#f97316', bg:'#fff7ed', border:'#fdba74', icon:'🟠', label:'URGENTE — Atenção redobrada · Repassar aos operadores', sectionTitle:'🟠 Urgente', sublabel:'Atenção redobrada — repassar aos operadores' },
+    { key:'critico', items:criticos, color:'#f87171', badgeColor:'#dc2626', bg:'rgba(239,68,68,.08)', border:'rgba(239,68,68,.3)', icon:'🔴', sublabel:'Ação imediata — escalar à gerência' },
+    { key:'urgente', items:urgentes, color:'#fb923c', badgeColor:'#ea580c', bg:'rgba(249,115,22,.08)', border:'rgba(249,115,22,.3)', icon:'🟠', sublabel:'Atenção redobrada — repassar aos operadores' },
   ].filter(l => l.items.length > 0);
 
   const levelBgGradient = { critico: 'linear-gradient(135deg,#7f1d1d 0%,#991b1b 60%,#b91c1c 100%)', urgente: 'linear-gradient(135deg,#7c2d12 0%,#9a3412 60%,#c2410c 100%)' };
@@ -1889,7 +1643,7 @@ window.gerarRelatorioRegional = function(regionalName) {
   const sectionsHtml = levels.map(l => {
     const byCentral = groupByCentral(l.items);
     const centraisHtml = byCentral.map(([cn, items]) =>
-      buildCentralBlock(cn, items, l.color, l.bg, l.border, l.icon, l.sublabel)
+      buildCentralBlock(cn, items, l.color, l.bg, l.border, l.icon, l.sublabel, l.badgeColor)
     ).join('');
     const grad = levelBgGradient[l.key] || ('linear-gradient(135deg,' + l.color + ' 0%,' + l.color + 'cc 100%)');
     const glow = levelGlow[l.key] || (l.color + '55');
@@ -1911,7 +1665,7 @@ window.gerarRelatorioRegional = function(regionalName) {
           '<span style="font-size:11px;color:rgba(255,255,255,0.5);font-weight:600">' + byCentral.length + ' ' + (byCentral.length>1?'centrais':'central') + ' afetada' + (byCentral.length>1?'s':'') + '</span>' +
         '</div>' +
       '</div>' +
-      '<div style="background:#fff;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 12px 12px;padding:18px">' +
+      '<div style="background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.09);border-top:none;border-radius:0 0 12px 12px;padding:18px">' +
         centraisHtml +
       '</div>' +
     '</div>';
@@ -1921,13 +1675,24 @@ window.gerarRelatorioRegional = function(regionalName) {
   const totalGeral = criticos.length + urgentes.length;
   const centraisAfetadas = new Set([...criticos,...urgentes].map(i=>i.central)).size;
 
-  const html = _buildRelRegionalHTML({
-    titulo: `Relatório Regional — ${regionalName}`,
-    subtitulo: 'Materiais Críticos e Urgentes',
+  const bodyHtml = `<style>${_criticidadeMatTableStyles()}</style>${sectionsHtml}`;
+
+  const html = _buildRankingShellHTML({
+    periodoBadge: periodo,
     periodo, now,
-    totalCritico: criticos.length, totalUrgente: urgentes.length, totalGeral,
-    centraisAfetadas, sectionsHtml,
-    escR, regionalName,
+    kpis: [
+      { value: criticos.length,   label: 'críticos',            color: '#ef4444' },
+      { value: urgentes.length,   label: 'urgentes',            color: '#f97316' },
+      { value: centraisAfetadas,  label: 'centrais afetadas',   color: '#3b82f6' },
+      { value: totalGeral,        label: 'total',               color: '#94a3b8' }
+    ]
+  }, {
+    pageTitle:  `Relatório Regional — ${regionalName}`,
+    badge:      'Alerta de Criticidade',
+    title:      `Relatório Regional — ${regionalName}`,
+    subtitle:   'Materiais críticos e urgentes agrupados por central, para ação imediata ou monitoramento reforçado.',
+    bodyHtml,
+    notaRodape: 'Crítico e urgente calculados a partir do desequilíbrio (desfalque/sobra) entre estoque físico e lançamentos no período selecionado.'
   });
 
   _openRelWindow(html);
@@ -1939,108 +1704,6 @@ function _getAnPeriodo() {
   if (!ini && !fim) return 'Período não especificado';
   const fmt = v => { if (!v) return ''; const [y,m,d] = v.split('-'); return `${d}/${m}/${y}`; };
   return ini === fim ? fmt(ini) : `${fmt(ini)} a ${fmt(fim)}`;
-}
-
-function _openRelWindow(html) {
-  const w = window.open('', '_blank', 'width=1200,height=900,scrollbars=yes,resizable=yes');
-  if (!w) { alert('Popups bloqueados! Permita pop-ups para gerar o relatório.'); return; }
-  w.document.write(html);
-  w.document.close();
-  w.focus();
-}
-
-function _buildRelRegionalHTML({ titulo, subtitulo, periodo, now, totalCritico, totalUrgente, totalGeral, centraisAfetadas, sectionsHtml, escR, regionalName }) {
-  return `<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-<meta charset="UTF-8">
-<title>${titulo}</title>
-<style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
-  * { box-sizing:border-box; margin:0; padding:0; }
-  body { font-family:'Inter',system-ui,sans-serif; background:#f1f5f9; color:#0f172a; font-size:13px; line-height:1.5; -webkit-font-smoothing:antialiased; }
-  .page-wrap { max-width:1100px; margin:0 auto; padding:20px; }
-  .action-bar { position:sticky;top:0;z-index:100;background:#1e293b;display:flex;align-items:center;justify-content:space-between;padding:12px 24px;box-shadow:0 2px 12px rgba(0,0,0,0.2); }
-  .action-bar-title { color:#e2e8f0;font-size:13px;font-weight:500; }
-  .action-bar-title span { color:#64748b;font-size:12px;margin-left:10px; }
-  .action-bar-btns { display:flex;gap:10px; }
-  .btn-print { background:#2563eb;color:#fff;border:none;border-radius:7px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:7px; }
-  .btn-print:hover { background:#1d4ed8; }
-  .btn-close { background:#334155;color:#cbd5e1;border:none;border-radius:7px;padding:8px 14px;font-size:13px;font-weight:500;cursor:pointer; }
-  .btn-close:hover { background:#475569; }
-  .report-header { background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);color:#fff;border-radius:14px;padding:32px 36px;margin-bottom:24px;position:relative;overflow:hidden; }
-  .report-header::before { content:'';position:absolute;top:-40px;right:-40px;width:200px;height:200px;border-radius:50%;background:rgba(239,68,68,0.08);border:2px solid rgba(239,68,68,0.12); }
-  .report-header-top { display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px; }
-  .report-logo-area { display:flex;align-items:center;gap:12px; }
-  .report-logo-icon { width:48px;height:48px;border-radius:12px;background:rgba(239,68,68,0.18);border:1px solid rgba(239,68,68,0.3);display:flex;align-items:center;justify-content:center;font-size:22px; }
-  .report-logo-text h1 { font-size:18px;font-weight:800;color:#f8fafc;letter-spacing:-0.01em; }
-  .report-logo-text p { font-size:12px;color:#94a3b8;font-weight:400;margin-top:2px; }
-  .report-meta { text-align:right; }
-  .report-meta .meta-label { font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.06em; }
-  .report-meta .meta-value { font-size:13px;color:#cbd5e1;font-weight:500;margin-top:2px; }
-  .report-stats { display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:20px; }
-  .stat-card { background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:16px 18px;text-align:center; }
-  .stat-card-num { font-size:28px;font-weight:800;line-height:1;margin-bottom:6px;font-family:'JetBrains Mono',monospace; }
-  .stat-card-label { font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;font-weight:500; }
-  .confidential-strip { background:linear-gradient(90deg,#7f1d1d,#991b1b);color:#fecaca;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:7px 18px;border-radius:8px;text-align:center;margin-bottom:16px; }
-  .section-title { font-size:13px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.08em;margin:28px 0 14px;display:flex;align-items:center;gap:10px; }
-  .section-title::after { content:'';flex:1;height:1px;background:#e2e8f0; }
-  .data-table { width:100%;border-collapse:collapse;font-size:12px; }
-  .data-table th { background:#f8fafc;padding:9px 12px;text-align:left;font-weight:700;color:#475569;font-size:11px;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid #e2e8f0; }
-  .data-table td { padding:9px 12px;border-bottom:1px solid #f1f5f9;vertical-align:top; }
-  .data-row:hover { background:#f8fafc; }
-  .rank-cell { color:#94a3b8;font-weight:700;font-family:'JetBrains Mono',monospace;font-size:11px; }
-  .mat-name { font-weight:600;color:#0f172a; }
-  .report-footer { margin-top:40px;padding:20px 24px;background:#f8fafc;border-radius:12px;border:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;font-size:12px;color:#64748b; }
-  @media print {
-    .action-bar { display:none; }
-    body { background:#fff !important; }
-    .page-wrap { padding:0 !important;max-width:100% !important; }
-    .report-header { background:#0f172a !important;-webkit-print-color-adjust:exact;color-adjust:exact; }
-    .central-section { page-break-inside:avoid; }
-  }
-</style>
-</head>
-<body>
-<div class="action-bar">
-  <div class="action-bar-title">${escR(titulo)} <span>Período: ${escR(periodo)} · Gerado em ${now}</span></div>
-  <div class="action-bar-btns">
-    <button class="btn-print" onclick="window.print()">🖨️ Imprimir / Salvar PDF</button>
-    <button class="btn-close" onclick="window.close()">✕ Fechar</button>
-  </div>
-</div>
-<div class="page-wrap">
-  <div class="confidential-strip" style="margin-top:18px">⚠ Documento Confidencial — Uso interno · Regional e Gerência</div>
-  <div class="report-header">
-    <div class="report-header-top">
-      <div class="report-logo-area">
-        <div class="report-logo-icon">📋</div>
-        <div class="report-logo-text">
-          <h1>${escR(titulo)}</h1>
-          <p>${escR(subtitulo)} · AnalyticSys</p>
-        </div>
-      </div>
-      <div class="report-meta">
-        <div class="meta-label">Período analisado</div>
-        <div class="meta-value">${escR(periodo)}</div>
-        <div class="meta-label" style="margin-top:8px">Gerado em</div>
-        <div class="meta-value">${now}</div>
-      </div>
-    </div>
-    <div class="report-stats">
-      <div class="stat-card"><div class="stat-card-num" style="color:#f87171">${totalCritico}</div><div class="stat-card-label">🔴 Críticos</div></div>
-      <div class="stat-card"><div class="stat-card-num" style="color:#fb923c">${totalUrgente}</div><div class="stat-card-label">🟠 Urgentes</div></div>
-      <div class="stat-card"><div class="stat-card-num" style="color:#e2e8f0">${totalGeral}</div><div class="stat-card-label">📊 Total · ${centraisAfetadas} ${centraisAfetadas!==1?'centrais':'central'}</div></div>
-    </div>
-  </div>
-  ${sectionsHtml}
-  <div class="report-footer">
-    <span>Concrelagos Concreto · <strong>AnalyticSys</strong> · Gestão Centralizada de Estoque e Insumos</span>
-    <span>Período: <strong>${escR(periodo)}</strong></span>
-  </div>
-</div>
-</body>
-</html>`;
 }
 
 
@@ -2188,7 +1851,8 @@ function _resolverAcoesParaMaterial(materialNome, variacao, categoriaItem, nivel
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// RELATÓRIO POR CENTRAL (Atenção + Urgente + Crítico)
+// RELATÓRIO POR CENTRAL (Atenção + Urgente + Crítico) — Relatório Padrão
+// (mesmo shell escuro dos relatórios de Ranking/Ausência: _buildRankingShellHTML)
 // ═══════════════════════════════════════════════════════════════════
 
 window.gerarRelatorioCentral = function(centralName) {
@@ -2210,9 +1874,9 @@ window.gerarRelatorioCentral = function(centralName) {
 
   function fmtKgC(v) { const n=Math.abs(Number(v)||0); return n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})+' kg'; }
   function varDir(v) { return v<-0.001?'Desfalque':v>0.001?'Sobra':'Equil.'; }
-  function varDirColor(v) { return v<-0.001?'#ef4444':v>0.001?'#10b981':'#6b7280'; }
+  function varDirColor(v) { return v<-0.001?'#f87171':v>0.001?'#4ade80':'#94a3b8'; }
   function trendLabel(t) { return t==='worsening'?'▲ Piorando':t==='improving'?'▼ Melhorando':'→ Estável'; }
-  function trendColor(t) { return t==='worsening'?'#ef4444':t==='improving'?'#10b981':'#6b7280'; }
+  function trendColor(t) { return t==='worsening'?'#f87171':t==='improving'?'#4ade80':'#94a3b8'; }
   function escC(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
   function buildRows(items) {
@@ -2238,7 +1902,7 @@ window.gerarRelatorioCentral = function(centralName) {
     '#f59e0b': 'rgba(245,158,11,0.30)',
   };
 
-  function buildLevelSection(items, color, bg, border, icon, label, sublabel) {
+  function buildLevelSection(items, color, icon, label, sublabel) {
     const grad = _lvlGrad[color] || ('linear-gradient(135deg,' + color + ' 0%,' + color + 'cc 100%)');
     const glow = _lvlGlow[color] || (color + '55');
     return (
@@ -2255,7 +1919,7 @@ window.gerarRelatorioCentral = function(centralName) {
           '</div>' +
           '<span style="background:rgba(255,255,255,0.15);border:1.5px solid rgba(255,255,255,0.25);color:#fff;padding:6px 16px;border-radius:24px;font-size:13px;font-weight:800;letter-spacing:.03em;position:relative">' + items.length + ' ' + (items.length>1?'materiais':'material') + '</span>' +
         '</div>' +
-        '<div style="background:#fff;border:1px solid #e2e8f0;border-top:none">' +
+        '<div style="background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.09);border-top:none">' +
           '<table class="data-table"><thead><tr><th style="width:36px">#</th><th>Material</th><th>Variação</th><th>Tendência</th></tr></thead><tbody>' + buildRows(items) + '</tbody></table>' +
         '</div>' +
       '</div>'
@@ -2263,120 +1927,58 @@ window.gerarRelatorioCentral = function(centralName) {
   }
 
   const sectionsHtml = [
-    criticos.length && buildLevelSection(criticos,'#ef4444','#fef2f2','#fca5a5','🔴','CRÍTICO','Ação imediata — escalar à gerência'),
-    urgentes.length && buildLevelSection(urgentes,'#f97316','#fff7ed','#fdba74','🟠','URGENTE','Atenção redobrada — repassar aos regionais'),
-    atencoes.length && buildLevelSection(atencoes,'#f59e0b','#fffbeb','#fcd34d','⚠️','ATENÇÃO','Monitorar — contatar operador'),
+    criticos.length && buildLevelSection(criticos,'#ef4444','🔴','CRÍTICO','Ação imediata — escalar à gerência'),
+    urgentes.length && buildLevelSection(urgentes,'#f97316','🟠','URGENTE','Atenção redobrada — repassar aos regionais'),
+    atencoes.length && buildLevelSection(atencoes,'#f59e0b','⚠️','ATENÇÃO','Monitorar — contatar operador'),
   ].filter(Boolean).join('');
 
   const totalGeral = criticos.length + urgentes.length + atencoes.length;
   const regional = [...criticos,...urgentes,...atencoes][0]?.regional || '—';
 
-  const html = `<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-<meta charset="UTF-8">
-<title>Relatório Central — ${escC(centralName)}</title>
-<style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
-  * { box-sizing:border-box;margin:0;padding:0; }
-  body { font-family:'Inter',system-ui,sans-serif;background:#f1f5f9;color:#0f172a;font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased; }
-  .page-wrap { max-width:1100px;margin:0 auto;padding:20px; }
-  .action-bar { position:sticky;top:0;z-index:100;background:#1e293b;display:flex;align-items:center;justify-content:space-between;padding:12px 24px;box-shadow:0 2px 12px rgba(0,0,0,0.2); }
-  .action-bar-title { color:#e2e8f0;font-size:13px;font-weight:500; }
-  .action-bar-title span { color:#64748b;font-size:12px;margin-left:10px; }
-  .action-bar-btns { display:flex;gap:10px; }
-  .btn-print { background:#2563eb;color:#fff;border:none;border-radius:7px;padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:7px; }
-  .btn-print:hover { background:#1d4ed8; }
-  .btn-close { background:#334155;color:#cbd5e1;border:none;border-radius:7px;padding:8px 14px;font-size:13px;font-weight:500;cursor:pointer; }
-  .btn-close:hover { background:#475569; }
-  .report-header { background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);color:#fff;border-radius:14px;padding:32px 36px;margin-bottom:24px;position:relative;overflow:hidden; }
-  .report-header::before { content:'';position:absolute;top:-40px;right:-40px;width:200px;height:200px;border-radius:50%;background:rgba(239,68,68,0.08);border:2px solid rgba(239,68,68,0.12); }
-  .report-header-top { display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px; }
-  .report-logo-area { display:flex;align-items:center;gap:12px; }
-  .report-logo-icon { width:48px;height:48px;border-radius:12px;background:rgba(239,68,68,0.18);border:1px solid rgba(239,68,68,0.3);display:flex;align-items:center;justify-content:center;font-size:22px; }
-  .report-logo-text h1 { font-size:18px;font-weight:800;color:#f8fafc;letter-spacing:-0.01em; }
-  .report-logo-text p { font-size:12px;color:#94a3b8;font-weight:400;margin-top:2px; }
-  .report-meta { text-align:right; }
-  .report-meta .meta-label { font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:.06em; }
-  .report-meta .meta-value { font-size:13px;color:#cbd5e1;font-weight:500;margin-top:2px; }
-  .central-info-bar { display:flex;align-items:center;gap:16px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.10);border-radius:10px;padding:14px 18px;margin-bottom:20px;flex-wrap:wrap; }
-  .central-info-item { display:flex;flex-direction:column;gap:2px; }
-  .central-info-label { font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.06em; }
-  .central-info-value { font-size:13px;color:#e2e8f0;font-weight:600; }
-  .report-stats { display:grid;grid-template-columns:repeat(4,1fr);gap:14px; }
-  .stat-card { background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:14px 16px;text-align:center; }
-  .stat-card-num { font-size:26px;font-weight:800;line-height:1;margin-bottom:5px;font-family:'JetBrains Mono',monospace; }
-  .stat-card-label { font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;font-weight:500; }
-  .confidential-strip { background:linear-gradient(90deg,#7f1d1d,#991b1b);color:#fecaca;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:7px 18px;border-radius:8px;text-align:center;margin-bottom:16px; }
-  .data-table { width:100%;border-collapse:collapse;font-size:12px; }
-  .data-table th { background:#f8fafc;padding:9px 12px;text-align:left;font-weight:700;color:#475569;font-size:11px;text-transform:uppercase;letter-spacing:.05em;border-bottom:2px solid #e2e8f0; }
-  .data-table td { padding:9px 12px;border-bottom:1px solid #f1f5f9;vertical-align:top; }
-  .data-row:hover { background:#f8fafc; }
-  .rank-cell { color:#94a3b8;font-weight:700;font-family:'JetBrains Mono',monospace;font-size:11px; }
-  .mat-name { font-weight:600;color:#0f172a; }
-  .report-footer { margin-top:40px;padding:20px 24px;background:#f8fafc;border-radius:12px;border:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;font-size:12px;color:#64748b; }
-  @media print {
-    .action-bar { display:none; }
-    body { background:#fff !important; }
-    .page-wrap { padding:0 !important;max-width:100% !important; }
-    .report-header { background:#0f172a !important;-webkit-print-color-adjust:exact;color-adjust:exact; }
-  }
-</style>
-</head>
-<body>
-<div class="action-bar">
-  <div class="action-bar-title">Relatório Central — ${escC(centralName)} <span>Período: ${escC(periodo)} · Gerado em ${now}</span></div>
-  <div class="action-bar-btns">
-    <button class="btn-print" onclick="window.print()">🖨️ Imprimir / Salvar PDF</button>
-    <button class="btn-close" onclick="window.close()">✕ Fechar</button>
-  </div>
-</div>
-<div class="page-wrap">
-  <div class="confidential-strip" style="margin-top:18px">⚠ Documento Confidencial — Uso interno · Operadores e Gerência</div>
-  <div class="report-header">
-    <div class="report-header-top">
-      <div class="report-logo-area">
-        <div class="report-logo-icon">🏭</div>
-        <div class="report-logo-text">
-          <h1>Relatório de Central</h1>
-          <p>${escC(centralName)} · AnalyticSys · Gestão Centralizada de Materiais</p>
-        </div>
-      </div>
-      <div class="report-meta">
-        <div class="meta-label">Período analisado</div>
-        <div class="meta-value">${escC(periodo)}</div>
-        <div class="meta-label" style="margin-top:8px">Gerado em</div>
-        <div class="meta-value">${now}</div>
-      </div>
-    </div>
-    <div class="central-info-bar">
-      <div class="central-info-item"><span class="central-info-label">Central</span><span class="central-info-value">${escC(centralName)}</span></div>
-      <div style="width:1px;height:32px;background:rgba(255,255,255,0.1)"></div>
-      <div class="central-info-item"><span class="central-info-label">Regional</span><span class="central-info-value">${escC(regional)}</span></div>
-      <div style="width:1px;height:32px;background:rgba(255,255,255,0.1)"></div>
-      <div class="central-info-item"><span class="central-info-label">Total de materiais</span><span class="central-info-value">${totalGeral} ${totalGeral!==1?'materiais':'material'}</span></div>
-    </div>
-    <div class="report-stats">
-      <div class="stat-card"><div class="stat-card-num" style="color:#f87171">${criticos.length}</div><div class="stat-card-label">🔴 Críticos</div></div>
-      <div class="stat-card"><div class="stat-card-num" style="color:#fb923c">${urgentes.length}</div><div class="stat-card-label">🟠 Urgentes</div></div>
-      <div class="stat-card"><div class="stat-card-num" style="color:#fbbf24">${atencoes.length}</div><div class="stat-card-label">⚠️ Atenção</div></div>
-      <div class="stat-card"><div class="stat-card-num" style="color:#e2e8f0">${totalGeral}</div><div class="stat-card-label">📊 Total Geral</div></div>
-    </div>
-  </div>
-  ${sectionsHtml}
-  <div class="report-footer">
-    <span>Concrelagos Concreto · <strong>AnalyticSys</strong> · Gestão Centralizada de Estoque e Insumos</span>
-    <span>Período: <strong>${escC(periodo)}</strong></span>
-  </div>
-</div>
-</body>
-</html>`;
+  const infoBar = `
+    <div class="crit-info-bar">
+      <div class="crit-info-item"><span class="crit-info-label">Central</span><span class="crit-info-value">${escC(centralName)}</span></div>
+      <div style="width:1px;height:28px;background:rgba(255,255,255,.1)"></div>
+      <div class="crit-info-item"><span class="crit-info-label">Regional</span><span class="crit-info-value">${escC(regional)}</span></div>
+      <div style="width:1px;height:28px;background:rgba(255,255,255,.1)"></div>
+      <div class="crit-info-item"><span class="crit-info-label">Total de materiais</span><span class="crit-info-value">${totalGeral} ${totalGeral!==1?'materiais':'material'}</span></div>
+    </div>`;
+
+  const bodyHtml = `
+    <style>
+      ${_criticidadeMatTableStyles()}
+      .crit-info-bar { display:flex; align-items:center; gap:16px; background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.09); border-radius:10px; padding:12px 16px; margin-bottom:22px; flex-wrap:wrap; }
+      .crit-info-item { display:flex; flex-direction:column; gap:2px; }
+      .crit-info-label { font-size:9.5px; color:#64748b; text-transform:uppercase; letter-spacing:.06em; }
+      .crit-info-value { font-size:12.5px; color:#e2e8f0; font-weight:600; }
+    </style>
+    ${infoBar}
+    ${sectionsHtml}`;
+
+  const html = _buildRankingShellHTML({
+    periodoBadge: periodo,
+    periodo, now,
+    kpis: [
+      { value: criticos.length, label: 'críticos', color: '#ef4444' },
+      { value: urgentes.length, label: 'urgentes', color: '#f97316' },
+      { value: atencoes.length, label: 'atenção',  color: '#f59e0b' },
+      { value: totalGeral,      label: 'total',    color: '#94a3b8' }
+    ]
+  }, {
+    pageTitle:  `Relatório Central — ${centralName}`,
+    badge:      'Alerta de Criticidade',
+    title:      `Relatório de Central — ${centralName}`,
+    subtitle:   `${escC(regional)} · materiais críticos, urgentes e em atenção, por nível de prioridade.`,
+    bodyHtml,
+    notaRodape: 'Crítico, urgente e atenção calculados a partir do desequilíbrio (desfalque/sobra) entre estoque físico e lançamentos no período selecionado.'
+  });
 
   _openRelWindow(html);
 };
 
 // ═══════════════════════════════════════════════════════════════════
 // RELATÓRIO COM AÇÕES — igual ao Padrão + coluna de ações por material
+// (mesmo shell escuro dos relatórios de Ranking/Ausência: _buildRankingShellHTML)
 // ═══════════════════════════════════════════════════════════════════
 
 window.gerarRelatorioComAcoes = function(centralName) {
@@ -2403,9 +2005,9 @@ window.gerarRelatorioComAcoes = function(centralName) {
 
   function fmtKgC(v) { const n=Math.abs(Number(v)||0); return n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})+' kg'; }
   function varDir(v)  { return v < -0.001 ? 'Desfalque' : v > 0.001 ? 'Sobra' : 'Equilibrado'; }
-  function varColor(v){ return v < -0.001 ? '#ef4444'   : v > 0.001 ? '#f59e0b' : '#6b7280'; }
+  function varColor(v){ return v < -0.001 ? '#f87171'   : v > 0.001 ? '#fbbf24' : '#94a3b8'; }
   function trendLabel(t){ return t==='worsening' ? '▲ Piorando' : t==='improving' ? '▼ Melhorando' : '→ Estável'; }
-  function trendColor(t){ return t==='worsening' ? '#ef4444' : t==='improving' ? '#10b981' : '#64748b'; }
+  function trendColor(t){ return t==='worsening' ? '#f87171' : t==='improving' ? '#4ade80' : '#94a3b8'; }
   function escC(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
   // Monta cards de material — layout vertical, sem tabela
@@ -2416,7 +2018,6 @@ window.gerarRelatorioComAcoes = function(centralName) {
       const tc     = trendColor(item.trend);
       const hasAcao = acoes !== null;
 
-      // Cada ação separada por ponto-e-vírgula vira um bullet
       const acoesItems = hasAcao
         ? acoes.split(/[;|\n]/).map(a => a.trim()).filter(Boolean)
         : [];
@@ -2426,42 +2027,40 @@ window.gerarRelatorioComAcoes = function(centralName) {
       ).join('');
 
       const acoesBlock = hasAcao
-        ? '<div style="margin-top:14px;padding-top:14px;border-top:1px solid #e2e8f0">' +
+        ? '<div style="margin-top:14px;padding-top:14px;border-top:1px solid rgba(255,255,255,.08)">' +
             '<div style="display:flex;align-items:center;gap:7px;margin-bottom:10px">' +
-              '<span style="width:20px;height:20px;border-radius:50%;background:#dcfce7;border:1.5px solid #86efac;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px">✓</span>' +
-              '<span style="font-size:11px;font-weight:700;color:#15803d;text-transform:uppercase;letter-spacing:.06em">Ações propostas</span>' +
+              '<span style="width:20px;height:20px;border-radius:50%;background:rgba(34,197,94,.15);border:1.5px solid rgba(34,197,94,.4);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px;color:#4ade80">✓</span>' +
+              '<span style="font-size:11px;font-weight:700;color:#4ade80;text-transform:uppercase;letter-spacing:.06em">Ações propostas</span>' +
             '</div>' +
-            '<ul style="margin:0;padding-left:18px;font-size:13px;color:#1e293b;line-height:1.7;word-break:break-word;overflow-wrap:break-word">' + acoesBullets + '</ul>' +
+            '<ul style="margin:0;padding-left:18px;font-size:13px;color:#e2e8f0;line-height:1.7;word-break:break-word;overflow-wrap:break-word">' + acoesBullets + '</ul>' +
           '</div>'
-        : '<div style="margin-top:14px;padding-top:14px;border-top:1px solid #f1f5f9;display:flex;align-items:center;gap:7px">' +
-            '<span style="width:20px;height:20px;border-radius:50%;background:#f8fafc;border:1.5px solid #e2e8f0;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px;color:#94a3b8">—</span>' +
-            '<span style="font-size:12px;color:#94a3b8;font-style:italic">Sem regra cadastrada para esta variação</span>' +
+        : '<div style="margin-top:14px;padding-top:14px;border-top:1px solid rgba(255,255,255,.06);display:flex;align-items:center;gap:7px">' +
+            '<span style="width:20px;height:20px;border-radius:50%;background:rgba(255,255,255,.04);border:1.5px solid rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px;color:#64748b">—</span>' +
+            '<span style="font-size:12px;color:#64748b;font-style:italic">Sem regra cadastrada para esta variação</span>' +
           '</div>';
 
-      return '<div style="background:#fff;border:1px solid #e2e8f0;border-left:4px solid ' + levelColor + ';border-radius:10px;padding:18px 20px;margin-bottom:12px;page-break-inside:avoid;overflow:hidden;word-break:break-word">' +
+      return '<div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.09);border-left:4px solid ' + levelColor + ';border-radius:10px;padding:18px 20px;margin-bottom:12px;page-break-inside:avoid;overflow:hidden;word-break:break-word">' +
 
-        // Linha topo: número + nome do material
         '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px">' +
           '<div style="display:flex;align-items:center;gap:10px">' +
             '<span style="width:26px;height:26px;border-radius:7px;background:' + levelBg + ';color:' + levelColor + ';font-size:11px;font-weight:800;font-family:\'JetBrains Mono\',monospace;display:flex;align-items:center;justify-content:center;flex-shrink:0">' + (idx+1) + '</span>' +
-            '<span style="font-size:15px;font-weight:700;color:#0f172a">' + escC(item.mat) + '</span>' +
+            '<span style="font-size:15px;font-weight:700;color:#fff">' + escC(item.mat) + '</span>' +
           '</div>' +
           (hasAcao
-            ? '<span style="padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;background:#dcfce7;color:#15803d;border:1px solid #86efac;white-space:nowrap;flex-shrink:0">✓ Com ação</span>'
-            : '<span style="padding:3px 10px;border-radius:20px;font-size:10px;font-weight:600;background:#f8fafc;color:#94a3b8;border:1px solid #e2e8f0;white-space:nowrap;flex-shrink:0">Sem ação</span>'
+            ? '<span style="padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;background:rgba(34,197,94,.15);color:#4ade80;border:1px solid rgba(34,197,94,.4);white-space:nowrap;flex-shrink:0">✓ Com ação</span>'
+            : '<span style="padding:3px 10px;border-radius:20px;font-size:10px;font-weight:600;background:rgba(255,255,255,.04);color:#64748b;border:1px solid rgba(255,255,255,.12);white-space:nowrap;flex-shrink:0">Sem ação</span>'
           ) +
         '</div>' +
 
-        // Linha de métricas: variação + tendência
         '<div style="display:flex;gap:10px;flex-wrap:wrap">' +
-          '<div style="display:flex;align-items:center;gap:7px;padding:7px 12px;border-radius:8px;background:#f8fafc;border:1px solid #e2e8f0;min-width:160px">' +
+          '<div style="display:flex;align-items:center;gap:7px;padding:7px 12px;border-radius:8px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);min-width:160px">' +
             '<div>' +
               '<div style="font-size:10px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px">Variação</div>' +
               '<div style="font-size:14px;font-weight:800;color:' + vc + ';font-family:\'JetBrains Mono\',monospace">' + varDir(item.diff) + '</div>' +
               '<div style="font-size:12px;font-weight:500;color:' + vc + ';font-family:\'JetBrains Mono\',monospace">' + fmtKgC(item.diff) + '</div>' +
             '</div>' +
           '</div>' +
-          '<div style="display:flex;align-items:center;gap:7px;padding:7px 12px;border-radius:8px;background:#f8fafc;border:1px solid #e2e8f0;min-width:140px">' +
+          '<div style="display:flex;align-items:center;gap:7px;padding:7px 12px;border-radius:8px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);min-width:140px">' +
             '<div>' +
               '<div style="font-size:10px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px">Tendência</div>' +
               '<div style="font-size:13px;font-weight:700;color:' + tc + '">' + trendLabel(item.trend) + '</div>' +
@@ -2475,16 +2074,15 @@ window.gerarRelatorioComAcoes = function(centralName) {
   }
 
   const lvlCfg = {
-    critico: { color:'#ef4444', bg:'#fef2f2', grad:'linear-gradient(135deg,#7f1d1d 0%,#991b1b 60%,#b91c1c 100%)', glow:'rgba(239,68,68,0.30)', icon:'🔴', label:'CRÍTICO', sub:'Ação imediata — escalar à gerência' },
-    urgente: { color:'#f97316', bg:'#fff7ed', grad:'linear-gradient(135deg,#7c2d12 0%,#9a3412 60%,#c2410c 100%)', glow:'rgba(249,115,22,0.28)', icon:'🟠', label:'URGENTE', sub:'Atenção redobrada — repassar aos regionais' },
-    atencao: { color:'#f59e0b', bg:'#fffbeb', grad:'linear-gradient(135deg,#78350f 0%,#92400e 60%,#b45309 100%)', glow:'rgba(245,158,11,0.25)', icon:'⚠️', label:'ATENÇÃO', sub:'Monitorar — contatar operador' },
+    critico: { color:'#f87171', bg:'rgba(239,68,68,.16)', grad:'linear-gradient(135deg,#7f1d1d 0%,#991b1b 60%,#b91c1c 100%)', glow:'rgba(239,68,68,0.30)', icon:'🔴', label:'CRÍTICO', sub:'Ação imediata — escalar à gerência' },
+    urgente: { color:'#fb923c', bg:'rgba(249,115,22,.16)', grad:'linear-gradient(135deg,#7c2d12 0%,#9a3412 60%,#c2410c 100%)', glow:'rgba(249,115,22,0.28)', icon:'🟠', label:'URGENTE', sub:'Atenção redobrada — repassar aos regionais' },
+    atencao: { color:'#fbbf24', bg:'rgba(245,158,11,.16)', grad:'linear-gradient(135deg,#78350f 0%,#92400e 60%,#b45309 100%)', glow:'rgba(245,158,11,0.25)', icon:'⚠️', label:'ATENÇÃO', sub:'Monitorar — contatar operador' },
   };
 
   function buildLevelSection(items, cfg, levelKey) {
     if (!items.length) return '';
     const cards = buildCards(items, cfg.color, cfg.bg, levelKey);
     return '<div style="margin-bottom:32px;border-radius:14px;overflow:hidden;box-shadow:0 4px 24px ' + cfg.glow + ';page-break-inside:avoid">' +
-      // Header colorido
       '<div style="background:' + cfg.grad + ';padding:20px 28px;display:flex;align-items:center;justify-content:space-between;position:relative;overflow:hidden">' +
         '<div style="position:absolute;right:-20px;top:-20px;width:110px;height:110px;border-radius:50%;background:rgba(255,255,255,0.06);pointer-events:none"></div>' +
         '<div style="display:flex;align-items:center;gap:16px;position:relative">' +
@@ -2496,8 +2094,7 @@ window.gerarRelatorioComAcoes = function(centralName) {
         '</div>' +
         '<span style="background:rgba(255,255,255,0.15);border:1.5px solid rgba(255,255,255,0.25);color:#fff;padding:7px 18px;border-radius:24px;font-size:13px;font-weight:800;position:relative">' + items.length + ' ' + (items.length > 1 ? 'materiais' : 'material') + '</span>' +
       '</div>' +
-      // Cards de material
-      '<div style="background:#f8fafc;padding:16px 20px;border:1px solid #e2e8f0;border-top:none">' +
+      '<div style="background:rgba(255,255,255,.015);padding:16px 20px;border:1px solid rgba(255,255,255,.09);border-top:none">' +
         cards +
       '</div>' +
     '</div>';
@@ -2514,131 +2111,45 @@ window.gerarRelatorioComAcoes = function(centralName) {
     buildLevelSection(urgentes, lvlCfg.urgente, 'urgente') +
     buildLevelSection(atencoes, lvlCfg.atencao, 'atencao');
 
-  const html = `<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Relatório com Ações — ${escC(centralName)}</title>
-<style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap');
-  *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
-  body { font-family:'Inter',system-ui,sans-serif; background:#f1f5f9; color:#0f172a; font-size:13px; line-height:1.6; -webkit-font-smoothing:antialiased; }
-  .page-wrap { max-width:860px; margin:0 auto; padding:24px 20px 48px; }
+  const infoBar = `
+    <div class="crit-info-bar">
+      <div class="crit-info-item"><span class="crit-info-label">Central</span><span class="crit-info-value">${escC(centralName)}</span></div>
+      <div style="width:1px;height:28px;background:rgba(255,255,255,.1)"></div>
+      <div class="crit-info-item"><span class="crit-info-label">Regional</span><span class="crit-info-value">${escC(regional)}</span></div>
+      <div style="width:1px;height:28px;background:rgba(255,255,255,.1)"></div>
+      <div class="crit-info-item"><span class="crit-info-label">Total de materiais</span><span class="crit-info-value">${totalGeral}</span></div>
+      <div style="width:1px;height:28px;background:rgba(255,255,255,.1)"></div>
+      <div class="crit-info-item"><span class="crit-info-label">Regras cadastradas</span><span class="crit-info-value">${totalRegras}</span></div>
+    </div>`;
 
-  .action-bar { position:sticky; top:0; z-index:100; background:#1e293b; display:flex; align-items:center; justify-content:space-between; padding:12px 24px; box-shadow:0 2px 12px rgba(0,0,0,0.25); flex-wrap:wrap; gap:10px; }
-  .action-bar-title { color:#e2e8f0; font-size:13px; font-weight:500; }
-  .action-bar-title span { color:#64748b; font-size:11px; margin-left:10px; }
-  .action-bar-btns { display:flex; gap:10px; }
-  .btn-print { background:#2563eb; color:#fff; border:none; border-radius:7px; padding:8px 18px; font-size:13px; font-weight:600; cursor:pointer; }
-  .btn-print:hover { background:#1d4ed8; }
-  .btn-close { background:#334155; color:#cbd5e1; border:none; border-radius:7px; padding:8px 14px; font-size:13px; cursor:pointer; }
+  const bodyHtml = `
+    <style>
+      .crit-info-bar { display:flex; align-items:center; gap:16px; background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.09); border-radius:10px; padding:12px 16px; margin-bottom:22px; flex-wrap:wrap; }
+      .crit-info-item { display:flex; flex-direction:column; gap:2px; }
+      .crit-info-label { font-size:9.5px; color:#64748b; text-transform:uppercase; letter-spacing:.06em; }
+      .crit-info-value { font-size:12.5px; color:#e2e8f0; font-weight:600; }
+    </style>
+    ${infoBar}
+    ${sectionsHtml}`;
 
-  .report-header { background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%); color:#fff; border-radius:16px; padding:32px 36px; margin-bottom:28px; position:relative; overflow:hidden; }
-  .report-header::before { content:''; position:absolute; top:-50px; right:-50px; width:220px; height:220px; border-radius:50%; background:rgba(16,185,129,0.07); border:2px solid rgba(16,185,129,0.12); pointer-events:none; }
-  .rh-top { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:22px; flex-wrap:wrap; gap:16px; }
-  .rh-logo { display:flex; align-items:center; gap:14px; }
-  .rh-icon { width:52px; height:52px; border-radius:13px; background:rgba(16,185,129,0.18); border:1px solid rgba(16,185,129,0.3); display:flex; align-items:center; justify-content:center; font-size:24px; flex-shrink:0; }
-  .rh-title { font-size:20px; font-weight:800; color:#f8fafc; letter-spacing:-0.02em; line-height:1.2; }
-  .rh-sub { font-size:12px; color:#94a3b8; margin-top:3px; }
-  .rh-meta { text-align:right; }
-  .rh-meta-label { font-size:10px; color:#64748b; text-transform:uppercase; letter-spacing:.06em; }
-  .rh-meta-value { font-size:13px; color:#cbd5e1; font-weight:500; margin-top:2px; }
-
-  .info-bar { display:flex; align-items:center; gap:20px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.10); border-radius:10px; padding:14px 18px; margin-bottom:20px; flex-wrap:wrap; gap:16px; }
-  .info-item { display:flex; flex-direction:column; gap:2px; }
-  .info-label { font-size:10px; color:#64748b; text-transform:uppercase; letter-spacing:.06em; }
-  .info-value { font-size:13px; color:#e2e8f0; font-weight:600; }
-  .info-sep { width:1px; height:32px; background:rgba(255,255,255,0.10); flex-shrink:0; }
-
-  .stats-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:12px; }
-  .stat { background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:14px 12px; text-align:center; }
-  .stat-n { font-size:28px; font-weight:800; line-height:1; margin-bottom:4px; font-family:'JetBrains Mono',monospace; }
-  .stat-l { font-size:10px; color:#94a3b8; text-transform:uppercase; letter-spacing:.05em; font-weight:500; }
-
-  .confidential { background:linear-gradient(90deg,#064e3b,#065f46); color:#6ee7b7; font-size:11px; font-weight:700; letter-spacing:.10em; text-transform:uppercase; padding:7px 20px; border-radius:8px; text-align:center; margin-bottom:20px; }
-
-  .report-footer { margin-top:40px; padding:18px 24px; background:#1e293b; border-radius:12px; color:#64748b; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; font-size:11px; }
-  .report-footer strong { color:#94a3b8; }
-
-  @media print {
-    body { background:#fff !important; }
-    .action-bar { display:none !important; }
-    .page-wrap { padding:0 !important; max-width:100% !important; }
-    .report-header { background:#0f172a !important; -webkit-print-color-adjust:exact; color-adjust:exact; }
-    div[style*="page-break-inside:avoid"] { page-break-inside:avoid; }
-    ul li { -webkit-print-color-adjust:exact; color-adjust:exact; }
-  }
-  @media (max-width:600px) {
-    .stats-grid { grid-template-columns:repeat(3,1fr); }
-    .rh-top { flex-direction:column; }
-    .rh-meta { text-align:left; }
-  }
-</style>
-</head>
-<body>
-
-<div class="action-bar">
-  <div class="action-bar-title">
-    Relatório com Ações — ${escC(centralName)}
-    <span>Período: ${escC(periodo)} · Gerado em ${now}</span>
-  </div>
-  <div class="action-bar-btns">
-    <button class="btn-print" onclick="window.print()">🖨️ Imprimir / Salvar PDF</button>
-    <button class="btn-close" onclick="window.close()">✕ Fechar</button>
-  </div>
-</div>
-
-<div class="page-wrap">
-
-  <div class="confidential" style="margin-top:4px">⚠ Documento Confidencial — Uso interno · Operadores e Gerência</div>
-
-  <div class="report-header">
-    <div class="rh-top">
-      <div class="rh-logo">
-        <div class="rh-icon">✅</div>
-        <div>
-          <div class="rh-title">Relatório com Ações</div>
-          <div class="rh-sub">${escC(centralName)} · AnalyticSys · Gestão Centralizada de Materiais</div>
-        </div>
-      </div>
-      <div class="rh-meta">
-        <div class="rh-meta-label">Período analisado</div>
-        <div class="rh-meta-value">${escC(periodo)}</div>
-        <div class="rh-meta-label" style="margin-top:8px">Gerado em</div>
-        <div class="rh-meta-value">${now}</div>
-      </div>
-    </div>
-
-    <div class="info-bar">
-      <div class="info-item"><span class="info-label">Central</span><span class="info-value">${escC(centralName)}</span></div>
-      <div class="info-sep"></div>
-      <div class="info-item"><span class="info-label">Regional</span><span class="info-value">${escC(regional)}</span></div>
-      <div class="info-sep"></div>
-      <div class="info-item"><span class="info-label">Total de materiais</span><span class="info-value">${totalGeral}</span></div>
-      <div class="info-sep"></div>
-      <div class="info-item"><span class="info-label">Regras cadastradas</span><span class="info-value">${totalRegras}</span></div>
-    </div>
-
-    <div class="stats-grid">
-      <div class="stat"><div class="stat-n" style="color:#f87171">${criticos.length}</div><div class="stat-l">🔴 Críticos</div></div>
-      <div class="stat"><div class="stat-n" style="color:#fb923c">${urgentes.length}</div><div class="stat-l">🟠 Urgentes</div></div>
-      <div class="stat"><div class="stat-n" style="color:#fbbf24">${atencoes.length}</div><div class="stat-l">⚠️ Atenção</div></div>
-      <div class="stat"><div class="stat-n" style="color:#34d399">${comAcoes}</div><div class="stat-l">✅ Com ação</div></div>
-      <div class="stat"><div class="stat-n" style="color:#94a3b8">${semAcoes}</div><div class="stat-l">— Sem ação</div></div>
-    </div>
-  </div>
-
-  ${sectionsHtml}
-
-  <div class="report-footer">
-    <span>Concrelagos Concreto · <strong>AnalyticSys</strong> · Gestão Centralizada de Estoque e Insumos</span>
-    <span>Período: <strong>${escC(periodo)}</strong> · ${totalGeral} ${totalGeral !== 1 ? 'materiais' : 'material'} · ${comAcoes} com ação</span>
-  </div>
-
-</div>
-</body>
-</html>`;
+  const html = _buildRankingShellHTML({
+    periodoBadge: periodo,
+    periodo, now,
+    kpis: [
+      { value: criticos.length, label: 'críticos',  color: '#ef4444' },
+      { value: urgentes.length, label: 'urgentes',  color: '#f97316' },
+      { value: atencoes.length, label: 'atenção',   color: '#f59e0b' },
+      { value: comAcoes,        label: 'com ação',  color: '#22c55e' },
+      { value: semAcoes,        label: 'sem ação',  color: '#64748b' }
+    ]
+  }, {
+    pageTitle:  `Relatório com Ações — ${centralName}`,
+    badge:      'Cobrança de Pendências',
+    title:      `Relatório com Ações — ${centralName}`,
+    subtitle:   `${escC(regional)} · materiais críticos, urgentes e em atenção, com ações corretivas propostas por regra cadastrada.`,
+    bodyHtml,
+    notaRodape: 'Ações resolvidas a partir das regras cadastradas em Configurações → Ações de Relatório, pela combinação de material, categoria, nível e faixa de variação mais próxima.'
+  });
 
   _openRelWindow(html);
 };
