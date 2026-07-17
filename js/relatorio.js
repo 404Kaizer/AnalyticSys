@@ -1518,6 +1518,572 @@ window.gerarRelatorioAusenciasGeral = function() {
 
 
 // ═══════════════════════════════════════════════════════════════════
+// RANKING DE AUSÊNCIAS — Piores Centrais e Piores Regionais
+// ═══════════════════════════════════════════════════════════════════
+// Estrutura e tema visual seguem o alerta de referência ponto a ponto:
+// tema escuro em toda a página (não só no header), barra fina no topo,
+// header full-bleed com badge + título real do alerta, badge de período
+// destacado, KPIs com barra colorida dentro do header, layout em 2
+// colunas (tabela + sidebar de regionais críticas no relatório de
+// Centrais; tabela dividida em 2 blocos no relatório de Regionais).
+//
+// Fonte de dados: window._ausenciasData (já filtrado pela tela de
+// Ausências). Exclusão manual de central = desmarcá-la no filtro
+// Central da tela de Ausências antes de gerar o ranking.
+
+function _rankEsc(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// Comprime uma lista de Date[] em faixas compactas tipo "01-04 · 06-11 · 13-16"
+// (DD quando a faixa não cruza o mês, DD/MM quando cruza).
+function _rankCompactarDias(datas) {
+  const iso = [...new Set((datas || []).map(d => localISODate(d)))].filter(Boolean).sort();
+  if (!iso.length) return '—';
+
+  const groups = [];
+  let start = iso[0], prev = iso[0];
+  for (let i = 1; i < iso.length; i++) {
+    const cur = iso[i];
+    const diffDays = Math.round((new Date(cur + 'T12:00:00') - new Date(prev + 'T12:00:00')) / 86400000);
+    if (diffDays === 1) { prev = cur; continue; }
+    groups.push([start, prev]);
+    start = cur; prev = cur;
+  }
+  groups.push([start, prev]);
+
+  const fmtDM = i => { const p = i.split('-'); return `${p[2]}/${p[1]}`; };
+  const fmtD  = i => i.split('-')[2];
+
+  // "a" por extenso entre início e fim da faixa (em vez de hífen) — evita que
+  // "01-04" seja lido como dias isolados 01 e 04; "01 a 04" deixa claro que é
+  // o intervalo inteiro (01, 02, 03 e 04).
+  return groups.map(([a, b]) => {
+    if (a === b) return fmtDM(a);
+    const sameMonth = a.slice(0, 7) === b.slice(0, 7);
+    return sameMonth ? `${fmtD(a)} a ${fmtD(b)}` : `${fmtDM(a)} a ${fmtDM(b)}`;
+  }).join(' · ');
+}
+
+// Agrupa ausências (já filtradas) por central. Ordena por dias únicos com
+// QUALQUER ausência (desc), desempate por total de registros material-dia
+// ausentes (desc) — mesmo critério do alerta de referência.
+function _rankAgruparPorCentral(ausencias) {
+  const byCentral = new Map();
+  ausencias.forEach(a => {
+    if (!byCentral.has(a.central)) {
+      byCentral.set(a.central, { central: a.central, regional: a.regional || 'Sem regional', registros: 0, grupos: new Set(), diasSet: new Set() });
+    }
+    const g = byCentral.get(a.central);
+    g.registros += a.diasAusentes.length;
+    g.grupos.add(a.categoria || '—');
+    a.diasAusentes.forEach(d => g.diasSet.add(localISODate(d)));
+  });
+
+  return [...byCentral.values()]
+    .map(g => ({
+      central:    g.central,
+      regional:   g.regional,
+      registros:  g.registros,
+      grupos:     g.grupos.size,
+      diasUnicos: g.diasSet.size,
+      diasList:   [...g.diasSet].sort().map(iso => new Date(iso + 'T12:00:00'))
+    }))
+    .sort((a, b) => (b.diasUnicos - a.diasUnicos) || (b.registros - a.registros) || a.central.localeCompare(b.central));
+}
+
+// Agrupa ausências (já filtradas) por regional. Ordena por quantidade de
+// centrais fora do padrão (desc), desempate por total de registros
+// material-dia ausentes (desc).
+function _rankAgruparPorRegional(ausencias) {
+  const byRegional = new Map();
+  ausencias.forEach(a => {
+    const key = a.regional || 'Sem regional';
+    if (!byRegional.has(key)) byRegional.set(key, { regional: key, centrais: new Set(), registros: 0, grupos: new Set() });
+    const g = byRegional.get(key);
+    g.centrais.add(a.central);
+    g.registros += a.diasAusentes.length;
+    g.grupos.add(a.categoria || '—');
+  });
+
+  return [...byRegional.values()]
+    .map(g => ({
+      regional:  g.regional,
+      centrais:  [...g.centrais].sort(),
+      nCentrais: g.centrais.size,
+      registros: g.registros,
+      grupos:    g.grupos.size
+    }))
+    .sort((a, b) => (b.nCentrais - a.nCentrais) || (b.registros - a.registros) || a.regional.localeCompare(b.regional));
+}
+
+// Centrais fora do filtro aplicado (exclusão manual via filtro Central de
+// Ausências) — usado pro badge "X DESCONSIDERADA(S)" no header.
+function _rankCentraisDesconsideradas() {
+  try {
+    const todas    = (typeof _ausFilter !== 'undefined' && _ausFilter.options?.central) || [];
+    const aplicado = (typeof _ausFilter !== 'undefined' && _ausFilter.applied?.central) || new Set();
+    if (!aplicado.size) return [];
+    return todas.filter(c => !aplicado.has(c));
+  } catch (e) { return []; }
+}
+
+// Deriva "Mês/Ano" do período em análise (só quando início e fim caem no
+// mesmo mês — mesmo texto do alerta de referência, "DATAS REFERENTES A
+// JULHO/2026"); se o período cruzar meses, omite.
+function _rankMesAnoLabel() {
+  const ini = document.getElementById('aus-dt-ini')?.value || '';
+  const fim = document.getElementById('aus-dt-fim')?.value || '';
+  if (!ini || !fim) return '';
+  const [ya, ma] = ini.split('-');
+  const [yb, mb] = fim.split('-');
+  if (ya !== yb || ma !== mb) return '';
+  const meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  return `${meses[Number(ma) - 1]}/${ya}`;
+}
+
+// Badge de período compacto tipo "01 A 16 JUL 2026" (mesmo formato do
+// alerta de referência). Cai para o formato padrão dd/mm/aaaa se as datas
+// não puderem ser lidas dos campos de período.
+function _rankPeriodoBadgeLabel() {
+  const ini = document.getElementById('aus-dt-ini')?.value || '';
+  const fim = document.getElementById('aus-dt-fim')?.value || '';
+  const MESES_ABR = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
+  if (!ini || !fim) return (_ausGetPeriodo() || '').toUpperCase();
+  const [ya, ma, da] = ini.split('-').map(Number);
+  const [yb, mb, db] = fim.split('-').map(Number);
+  if (!ya || !yb) return (_ausGetPeriodo() || '').toUpperCase();
+  if (ya === yb && ma === mb) {
+    return da === db
+      ? `${String(da).padStart(2,'0')} ${MESES_ABR[ma - 1]} ${ya}`
+      : `${String(da).padStart(2,'0')} A ${String(db).padStart(2,'0')} ${MESES_ABR[mb - 1]} ${yb}`;
+  }
+  return `${String(da).padStart(2,'0')} ${MESES_ABR[ma - 1]} ${ya} A ${String(db).padStart(2,'0')} ${MESES_ABR[mb - 1]} ${yb}`;
+}
+
+// Cor de severidade por dias únicos com ausência (limiares do alerta de
+// referência: ≥10 vermelho, ≥5 âmbar, resto verde).
+function _rankSeverityDias(dias) {
+  if (dias >= 10) return '#ef4444';
+  if (dias >= 5)  return '#f59e0b';
+  return '#22c55e';
+}
+
+// Cor de severidade por quantidade de centrais fora do padrão (linhas da
+// tabela de regionais que não entraram nos cards do topo).
+function _rankSeverityCentrais(n) {
+  if (n >= 3) return '#ef4444';
+  if (n >= 2) return '#f59e0b';
+  return '#3b82f6';
+}
+
+// ── Shell HTML compartilhado pelos 2 relatórios de ranking ──────────────
+// Tema escuro em toda a página, header full-bleed, badge de alerta real,
+// badge de período destacado e KPIs com barra colorida — igual ao
+// alerta de referência.
+function _buildRankingShellHTML(d, opts) {
+  const { periodoBadge, periodo, now, kpis, desconsideradas } = d;
+
+  const kpisHtml = (kpis || []).map(k => `
+    <div class="rk-kpi" style="border-left-color:${k.color}">
+      <strong>${k.value}</strong>
+      <span>${_rankEsc(k.label)}</span>
+    </div>`
+  ).join('');
+
+  const descHtml = (desconsideradas && desconsideradas.length)
+    ? `<div class="rk-period-sub">${desconsideradas.map(c => _rankEsc(c)).join(', ')} desconsiderada${desconsideradas.length !== 1 ? 's' : ''}</div>`
+    : '';
+
+  return `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${_rankEsc(opts.pageTitle)}</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700;800&display=swap');
+  @page { size: A4 landscape; margin: 8mm 10mm; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:'Inter',system-ui,sans-serif; background:#0b1220; color:#e2e8f0; font-size:12.5px; line-height:1.5; -webkit-font-smoothing:antialiased; }
+
+  .action-bar { position:sticky; top:0; z-index:100; background:#1e293b; display:flex; align-items:center; justify-content:space-between; padding:12px 24px; box-shadow:0 2px 12px rgba(0,0,0,.3); }
+  .action-bar-title { color:#e2e8f0; font-size:13px; font-weight:500; }
+  .action-bar-title span { color:#64748b; font-size:12px; margin-left:10px; }
+  .action-bar-btns { display:flex; gap:10px; }
+  .btn-print { background:#e8790a; color:#fff; border:none; border-radius:7px; padding:8px 18px; font-size:13px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:7px; transition:background .15s; }
+  .btn-print:hover { background:#c9670a; }
+  .btn-close { background:#334155; color:#cbd5e1; border:none; border-radius:7px; padding:8px 14px; font-size:13px; font-weight:500; cursor:pointer; transition:background .15s; }
+  .btn-close:hover { background:#475569; }
+
+  .rk-topbar { height:6px; background:#dc2626; }
+
+  /* Header full-bleed */
+  .rk-hero { background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%); border-bottom:1px solid rgba(255,255,255,.06); }
+  .rk-hero-inner { max-width:1400px; margin:0 auto; padding:28px 40px 26px; }
+  .rk-hero-top { display:flex; align-items:flex-start; justify-content:space-between; gap:24px; flex-wrap:wrap; }
+  .rk-badge { display:inline-block; background:#dc2626; color:#fff; font-size:10.5px; font-weight:800; letter-spacing:.07em; text-transform:uppercase; padding:5px 12px; border-radius:5px; margin-bottom:12px; }
+  .rk-hero h1 { font-size:26px; font-weight:800; color:#f8fafc; letter-spacing:-.01em; line-height:1.25; }
+  .rk-hero p { font-size:13px; color:#94a3b8; font-weight:400; margin-top:8px; max-width:600px; }
+  .rk-period-badge { background:#0f172a; border:1px solid rgba(255,255,255,.12); border-radius:10px; padding:11px 20px; text-align:center; flex-shrink:0; }
+  .rk-period-main { font-size:14px; font-weight:800; color:#fff; letter-spacing:.03em; white-space:nowrap; }
+  .rk-period-sub { font-size:9px; color:#fca5a5; margin-top:5px; text-transform:uppercase; letter-spacing:.05em; font-weight:700; }
+
+  /* Logos, discretos no rodapé do header */
+  .rk-hero-brand { display:flex; align-items:center; gap:14px; margin-bottom:20px; opacity:.8; }
+  .rk-hero-brand img { height:24px; width:auto; object-fit:contain; filter:invert(1) hue-rotate(178deg); }
+  .rk-hero-brand-sep { width:1px; height:20px; background:rgba(255,255,255,.15); }
+  .rk-hero-brand-text { font-size:10.5px; font-weight:800; letter-spacing:.06em; font-family:'JetBrains Mono',monospace; color:#cbd5e1; }
+  .rk-hero-brand-text span { color:#f97316; }
+
+  /* KPIs com barra colorida, dentro do header */
+  .rk-kpi-row { display:flex; gap:14px; margin-top:22px; flex-wrap:wrap; }
+  .rk-kpi { flex:1; min-width:230px; background:rgba(255,255,255,.045); border-left:4px solid; border-radius:6px; padding:13px 18px; display:flex; align-items:baseline; gap:12px; }
+  .rk-kpi strong { font-size:26px; font-weight:900; font-family:'JetBrains Mono',monospace; color:#fff; line-height:1; white-space:nowrap; }
+  .rk-kpi span { font-size:9.5px; color:#94a3b8; text-transform:uppercase; letter-spacing:.05em; font-weight:700; }
+
+  /* Corpo */
+  .rk-page { max-width:1400px; margin:0 auto; padding:24px 40px 32px; }
+
+  .callout-regularizacao { text-align:center; background:linear-gradient(135deg,#dc2626,#991b1b); border-radius:10px; padding:16px 24px; margin:20px 0 0; }
+  .callout-regularizacao-title { font-size:12.5px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; color:#fff; margin-bottom:6px; }
+  .callout-regularizacao-text { font-size:11.5px; color:rgba(255,255,255,.92); line-height:1.6; max-width:640px; margin:0 auto; }
+
+  .tier-banner { display:inline-flex; align-items:center; gap:8px; background:rgba(220,38,38,.14); border:1px solid rgba(220,38,38,.4); border-radius:6px; padding:7px 14px; margin:0 0 14px; font-size:10.5px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:#f87171; }
+
+  /* Cards de destaque */
+  .rank-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; margin-bottom:20px; }
+  .rank-card { background:rgba(255,255,255,.045); border:1px solid rgba(255,255,255,.09); border-radius:12px; padding:15px 17px; page-break-inside:avoid; }
+  .rank-card-pos { display:inline-flex; align-items:center; justify-content:center; width:24px; height:24px; border-radius:6px; background:#dc2626; color:#fff; font-family:'JetBrains Mono',monospace; font-weight:800; font-size:11px; margin-bottom:9px; }
+  .rank-card-name { font-size:13.5px; font-weight:800; color:#fff; margin-bottom:3px; }
+  .rank-card-sub { font-size:10px; color:#94a3b8; margin-bottom:12px; font-family:'JetBrains Mono',monospace; line-height:1.6; }
+  .rank-card-stats { display:flex; gap:16px; }
+  .rank-card-stats strong { display:block; font-size:16px; font-weight:800; font-family:'JetBrains Mono',monospace; color:#f87171; line-height:1; }
+  .rank-card-stats span { display:block; font-size:8.5px; color:#94a3b8; text-transform:uppercase; letter-spacing:.04em; margin-top:3px; }
+
+  /* Tabela — tema escuro, cabeçalho simples (sem barra escura extra) */
+  .rk-table-head { display:flex; align-items:baseline; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:9px; }
+  .rk-table-head-title { font-size:11px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; color:#f87171; }
+  .rk-table-head-cap { font-size:9px; color:#64748b; text-transform:uppercase; letter-spacing:.05em; font-weight:700; }
+  .rk-table-wrap { margin-bottom:16px; }
+  .rk-table { width:100%; border-collapse:collapse; }
+  .rk-table thead tr { border-bottom:1px solid rgba(255,255,255,.14); }
+  .rk-table th { padding:7px 10px; font-size:9px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:#64748b; text-align:left; }
+  .rk-table td { padding:9px 10px; font-size:11.5px; border-bottom:1px solid rgba(255,255,255,.055); color:#e2e8f0; vertical-align:middle; }
+  .rkp-pos-cell { width:32px; text-align:center; }
+  .rkp-pos { display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; border-radius:5px; font-family:'JetBrains Mono',monospace; font-weight:800; font-size:10.5px; color:#fff; }
+  .rk-name { font-weight:800; color:#fff; font-size:12px; }
+  .rk-sub { font-size:9.5px; color:#94a3b8; margin-top:1px; }
+  .rk-num { font-family:'JetBrains Mono',monospace; font-weight:800; text-align:center; font-size:13px; }
+  .rk-chip { display:inline-block; background:rgba(59,130,246,.12); border:1px solid rgba(59,130,246,.3); color:#93c5fd; border-radius:4px; padding:2px 7px; font-size:10px; font-family:'JetBrains Mono',monospace; white-space:nowrap; margin:1px 3px 1px 0; }
+  .rk-dates { font-family:'JetBrains Mono',monospace; font-size:10px; color:#cbd5e1; line-height:1.7; }
+
+  /* Layout 2 colunas — tabela + sidebar (Centrais) */
+  .rk-layout { display:grid; grid-template-columns:1fr 280px; gap:24px; align-items:start; }
+  .rk-sidebar-title { font-size:10.5px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:#f87171; margin-bottom:11px; }
+  .rk-sidebar-cards { display:flex; flex-direction:column; gap:10px; }
+  .rk-side-card { background:rgba(255,255,255,.045); border:1px solid rgba(255,255,255,.09); border-radius:10px; padding:12px 14px; }
+  .rk-side-top { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+  .rk-side-pos { display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:5px; background:#dc2626; color:#fff; font-family:'JetBrains Mono',monospace; font-weight:800; font-size:9.5px; flex-shrink:0; }
+  .rk-side-name { font-size:12.5px; font-weight:800; color:#fff; }
+  .rk-side-sub { font-size:9px; color:#94a3b8; font-family:'JetBrains Mono',monospace; margin-bottom:9px; }
+  .rk-side-stats { display:flex; gap:14px; }
+  .rk-side-stats strong { display:block; font-size:14px; font-weight:800; color:#f87171; font-family:'JetBrains Mono',monospace; line-height:1; }
+  .rk-side-stats span { display:block; font-size:8px; color:#64748b; text-transform:uppercase; letter-spacing:.04em; margin-top:2px; }
+
+  /* Tabela dividida em 2 blocos lado a lado (Regionais) */
+  .rk-table-split { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+
+  @media (max-width:900px) {
+    .rk-layout, .rk-table-split { grid-template-columns:1fr; }
+  }
+
+  .report-footer { margin-top:14px; padding:16px 40px; background:#1e293b; color:#64748b; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; font-size:10.5px; }
+  .report-footer strong { color:#94a3b8; }
+  .footer-note { width:100%; margin-top:8px; padding-top:8px; border-top:1px solid rgba(255,255,255,.08); font-size:9.5px; color:#475569; }
+
+  @media print {
+    body { background:#0b1220 !important; }
+    .action-bar { display:none !important; }
+    * { -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
+    .rank-card, .rk-table-wrap, .rk-side-card { page-break-inside:avoid; }
+  }
+</style>
+</head>
+<body>
+
+<div class="action-bar">
+  <div class="action-bar-title">
+    ${_rankEsc(opts.title)}
+    <span>Período: ${_rankEsc(periodo)} · Gerado em ${_rankEsc(now)}</span>
+  </div>
+  <div class="action-bar-btns">
+    <button class="btn-print" onclick="window.print()">🖨️ Imprimir / Salvar PDF</button>
+    <button class="btn-close" onclick="window.close()">✕ Fechar</button>
+  </div>
+</div>
+
+<div class="rk-topbar"></div>
+
+<div class="rk-hero">
+  <div class="rk-hero-inner">
+    <div class="rk-hero-brand">
+      <img src="https://concrelagos.com.br/wp-content/uploads/2021/10/Ativo-3.svg" alt="Concrelagos Concreto">
+      <div class="rk-hero-brand-sep"></div>
+      <div class="rk-hero-brand-text">CONCRELAGOS · ANALYTIC<span>SYS</span></div>
+    </div>
+    <div class="rk-hero-top">
+      <div>
+        <span class="rk-badge">${_rankEsc(opts.badge)}</span>
+        <h1>${_rankEsc(opts.title)}</h1>
+        <p>${_rankEsc(opts.subtitle)}</p>
+      </div>
+      <div class="rk-period-badge">
+        <div class="rk-period-main">${_rankEsc(periodoBadge)}</div>
+        ${descHtml}
+      </div>
+    </div>
+    <div class="rk-kpi-row">${kpisHtml}</div>
+  </div>
+</div>
+
+<div class="rk-page">
+  ${opts.bodyHtml}
+
+  <div class="report-footer">
+    <div>
+      <strong>AnalyticSys</strong> · Gestão Centralizada de Estoque e Insumos · Concrelagos Concreto
+    </div>
+    <div style="text-align:right">
+      Período: <strong style="color:#94a3b8">${_rankEsc(periodo)}</strong>
+    </div>
+    ${opts.notaRodape ? `<div class="footer-note">${_rankEsc(opts.notaRodape)}</div>` : ''}
+  </div>
+</div>
+
+</body>
+</html>`;
+}
+
+// ── Componente: card compacto de sidebar (regional crítica) ─────────────
+function _buildRankSideCard(r, i) {
+  return `
+    <div class="rk-side-card">
+      <div class="rk-side-top">
+        <span class="rk-side-pos">${String(i + 1).padStart(2, '0')}</span>
+        <span class="rk-side-name">${_rankEsc(r.regional)}</span>
+      </div>
+      <div class="rk-side-sub">${r.centrais.map(c => _rankEsc(c)).join(' · ')}</div>
+      <div class="rk-side-stats">
+        <div><strong>${r.nCentrais}</strong><span>central${r.nCentrais !== 1 ? 'is' : ''}</span></div>
+        <div><strong>${r.registros}</strong><span>registros</span></div>
+      </div>
+    </div>`;
+}
+
+// ── Relatório 1 — Ranking de Centrais (Top 10 piores usinas) ────────────
+function _buildRankingCentraisBody(rows, mesAno, sidebarRows) {
+  const trs = rows.map((r, i) => {
+    const cor = _rankSeverityDias(r.diasUnicos);
+    return `
+    <tr>
+      <td class="rkp-pos-cell"><span class="rkp-pos" style="background:${cor}">${String(i + 1).padStart(2, '0')}</span></td>
+      <td><div class="rk-name">${_rankEsc(r.central)}</div><div class="rk-sub">${_rankEsc(r.regional)}</div></td>
+      <td class="rk-num" style="color:${cor}">${r.diasUnicos}</td>
+      <td class="rk-num" style="color:#e2e8f0">${r.registros}</td>
+      <td class="rk-num" style="color:#e2e8f0">${r.grupos}</td>
+      <td class="rk-dates">${_rankCompactarDias(r.diasList)}</td>
+    </tr>`;
+  }).join('');
+
+  const tableHtml = `
+    <div class="rk-table-head">
+      <span class="rk-table-head-title">Top ${rows.length} piores centrais · ordem por dias com ausência</span>
+      ${mesAno ? `<span class="rk-table-head-cap">Datas referentes a ${_rankEsc(mesAno.toUpperCase())}</span>` : ''}
+    </div>
+    <div class="rk-table-wrap">
+      <table class="rk-table">
+        <thead>
+          <tr>
+            <th style="width:32px">#</th>
+            <th>Central / Regional</th>
+            <th style="width:60px;text-align:center">Dias</th>
+            <th style="width:60px;text-align:center">Reg.</th>
+            <th style="width:70px;text-align:center">Grupos</th>
+            <th>Dias sem lançamento</th>
+          </tr>
+        </thead>
+        <tbody>${trs}</tbody>
+      </table>
+    </div>`;
+
+  const sidebarHtml = (sidebarRows && sidebarRows.length) ? `
+    <div>
+      <div class="rk-sidebar-title">Regionais mais críticas</div>
+      <div class="rk-sidebar-cards">${sidebarRows.map((r, i) => _buildRankSideCard(r, i)).join('')}</div>
+    </div>` : '<div></div>';
+
+  return `<div class="rk-layout">
+    <div>${tableHtml}</div>
+    ${sidebarHtml}
+  </div>`;
+}
+
+window.gerarRankingCentrais = function() {
+  if (!window._ausenciasData?.length) { alert('Nenhuma ausência no período selecionado.'); return; }
+
+  const ausencias = window._ausenciasData;
+  const todas      = _rankAgruparPorCentral(ausencias);
+  if (!todas.length) { alert('Nenhuma central com ausência no período/filtros atuais.'); return; }
+  const top10 = todas.slice(0, 10);
+  const pior  = top10[0];
+
+  const todasRegionais = _rankAgruparPorRegional(ausencias);
+  const sidebarRows    = todasRegionais.slice(0, 4);
+
+  const totalRegistros = todas.reduce((s, r) => s + r.registros, 0);
+  const periodo = _ausGetPeriodo();
+  const now     = new Date().toLocaleString('pt-BR');
+  const mesAno  = _rankMesAnoLabel();
+
+  const bodyHtml = `
+    ${_buildRankingCentraisBody(top10, mesAno, sidebarRows)}
+    <div class="callout-regularizacao">
+      <div class="callout-regularizacao-title">⚠ Regularização Imediata</div>
+      <div class="callout-regularizacao-text">Revisar as datas, apagar e relançar os estoques corretos. Pendências mantidas serão escalonadas ao supervisor regional.</div>
+    </div>`;
+
+  const html = _buildRankingShellHTML({
+    periodoBadge: _rankPeriodoBadgeLabel(),
+    periodo, now,
+    kpis: [
+      { value: todas.length,    label: 'centrais fora do padrão',         color: '#ef4444' },
+      { value: totalRegistros,  label: 'registros material-dia ausentes', color: '#f59e0b' },
+      { value: pior.diasUnicos, label: 'dias sem lançar na pior central', color: '#22c55e' }
+    ],
+    desconsideradas: _rankCentraisDesconsideradas()
+  }, {
+    pageTitle:  'Ranking de Centrais — Ausência de Lançamento',
+    badge:      'Alerta Crítico',
+    title:      'Falha no lançamento diário dos materiais',
+    subtitle:   'Ausências comprometem o fechamento, distorcem o estoque e impedem a rastreabilidade operacional.',
+    bodyHtml,
+    notaRodape: '1 registro = 1 material sem lançamento em 1 data. Ranking das centrais: dias únicos com qualquer ausência; desempate por registros.'
+  });
+
+  const w = window.open('', '_blank', 'width=1300,height=900,scrollbars=yes,resizable=yes');
+  if (!w) { alert('Popups bloqueados! Permita pop-ups para gerar o relatório.'); return; }
+  w.document.write(html);
+  w.document.close();
+  w.focus();
+};
+
+// ── Relatório 2 — Ranking de Regionais (lista completa) ──────────────────
+function _buildRankingRegionaisTableBlock(rows, offset) {
+  const trs = rows.map((r, i) => {
+    const cor   = _rankSeverityCentrais(r.nCentrais);
+    const chips = r.centrais.map(c => `<span class="rk-chip">${_rankEsc(c)}</span>`).join('');
+    return `
+      <tr>
+        <td class="rkp-pos-cell"><span class="rkp-pos" style="background:${cor}">${String(offset + i + 1).padStart(2, '0')}</span></td>
+        <td><div class="rk-name">${_rankEsc(r.regional)}</div><div class="rk-sub">${r.grupos} grupo${r.grupos !== 1 ? 's' : ''} de material</div></td>
+        <td class="rk-num" style="color:${cor}">${r.nCentrais}</td>
+        <td class="rk-num" style="color:#e2e8f0">${r.registros}</td>
+        <td>${chips}</td>
+      </tr>`;
+  }).join('');
+
+  return `
+    <table class="rk-table">
+      <thead>
+        <tr>
+          <th style="width:32px">#</th>
+          <th>Regional</th>
+          <th style="width:74px;text-align:center">Centrais</th>
+          <th style="width:80px;text-align:center">Reg.</th>
+          <th>Centrais</th>
+        </tr>
+      </thead>
+      <tbody>${trs}</tbody>
+    </table>`;
+}
+
+window.gerarRankingRegionais = function() {
+  if (!window._ausenciasData?.length) { alert('Nenhuma ausência no período selecionado.'); return; }
+
+  const ausencias = window._ausenciasData;
+  const todas      = _rankAgruparPorRegional(ausencias);
+  if (!todas.length) { alert('Nenhuma regional com ausência no período/filtros atuais.'); return; }
+
+  const totalCentrais  = new Set(ausencias.map(a => a.central)).size;
+  const totalRegistros = todas.reduce((s, r) => s + r.registros, 0);
+  const periodo = _ausGetPeriodo();
+  const now     = new Date().toLocaleString('pt-BR');
+
+  // Topo em destaque (cards) — até 4; o resto continua numerado, dividido
+  // em 2 blocos de tabela lado a lado (mesmo layout do alerta de referência).
+  const CARDS_N = Math.min(4, todas.length);
+  const emCards = todas.slice(0, CARDS_N);
+  const noResto = todas.length > CARDS_N ? todas.slice(CARDS_N) : [];
+
+  const cardsHtml = emCards.map((r, i) => `
+    <div class="rank-card">
+      <div class="rank-card-pos">${String(i + 1).padStart(2, '0')}</div>
+      <div class="rank-card-name">${_rankEsc(r.regional)}</div>
+      <div class="rank-card-sub">${r.centrais.map(c => _rankEsc(c)).join(' · ')}</div>
+      <div class="rank-card-stats">
+        <div><strong>${r.nCentrais}</strong><span>central${r.nCentrais !== 1 ? 'is' : ''}</span></div>
+        <div><strong>${r.registros}</strong><span>registros</span></div>
+      </div>
+    </div>`).join('');
+
+  const tierLabel = `Faixa crítica · ${emCards[0].nCentrais} central${emCards[0].nCentrais !== 1 ? 'is' : ''} fora do padrão`;
+
+  let restoHtml = '';
+  if (noResto.length) {
+    const metade = Math.ceil(noResto.length / 2);
+    const col1 = noResto.slice(0, metade);
+    const col2 = noResto.slice(metade);
+    restoHtml = `
+      <div class="rk-table-split">
+        <div class="rk-table-wrap">${_buildRankingRegionaisTableBlock(col1, CARDS_N)}</div>
+        ${col2.length ? `<div class="rk-table-wrap">${_buildRankingRegionaisTableBlock(col2, CARDS_N + col1.length)}</div>` : ''}
+      </div>`;
+  }
+
+  const bodyHtml = `
+    <div class="tier-banner"><i class="ti ti-alert-triangle"></i> ${tierLabel}</div>
+    <div class="rank-cards">${cardsHtml}</div>
+    ${restoHtml}`;
+
+  const html = _buildRankingShellHTML({
+    periodoBadge: _rankPeriodoBadgeLabel(),
+    periodo, now,
+    kpis: [
+      { value: todas.length,   label: 'regionais em alerta',             color: '#ef4444' },
+      { value: totalCentrais,  label: 'centrais fora do padrão',         color: '#f59e0b' },
+      { value: totalRegistros, label: 'registros material-dia ausentes', color: '#22c55e' }
+    ],
+    desconsideradas: _rankCentraisDesconsideradas()
+  }, {
+    pageTitle:  'Ranking de Regionais — Ausência de Lançamento',
+    badge:      'Regionais em Alerta',
+    title:      'Ranking completo das regionais',
+    subtitle:   'Quanto mais centrais fora do padrão, maior o risco de falha recorrente no acompanhamento diário.',
+    bodyHtml,
+    notaRodape: 'Ordem: quantidade de centrais fora do padrão; desempate pelo total de registros material-dia ausentes.'
+  });
+
+  const w = window.open('', '_blank', 'width=1300,height=900,scrollbars=yes,resizable=yes');
+  if (!w) { alert('Popups bloqueados! Permita pop-ups para gerar o relatório.'); return; }
+  w.document.write(html);
+  w.document.close();
+  w.focus();
+};
+
+
+// ═══════════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════════
 // RELATÓRIO POR REGIONAL (Crítico + Urgente de todas as centrais)
 // ═══════════════════════════════════════════════════════════════════
 

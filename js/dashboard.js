@@ -2547,6 +2547,24 @@ function renderAusencias() {
         onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--text2)'">
         <i class="ti ti-file-report" style="font-size:12px"></i> Relatório Geral
       </button>
+      <button onclick="event.stopPropagation();gerarRankingCentrais()"
+        style="display:inline-flex;align-items:center;gap:5px;background:transparent;
+          border:1px solid var(--border2);border-radius:5px;padding:2px 10px;font-size:10.5px;
+          font-family:var(--mono);font-weight:600;color:var(--text2);cursor:pointer;
+          transition:border-color .15s,color .15s" title="Gerar ranking das piores centrais (Top 10)"
+        onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
+        onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--text2)'">
+        <i class="ti ti-trophy" style="font-size:12px"></i> Ranking Centrais
+      </button>
+      <button onclick="event.stopPropagation();gerarRankingRegionais()"
+        style="display:inline-flex;align-items:center;gap:5px;background:transparent;
+          border:1px solid var(--border2);border-radius:5px;padding:2px 10px;font-size:10.5px;
+          font-family:var(--mono);font-weight:600;color:var(--text2);cursor:pointer;
+          transition:border-color .15s,color .15s" title="Gerar ranking completo das piores regionais"
+        onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
+        onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--text2)'">
+        <i class="ti ti-map-2" style="font-size:12px"></i> Ranking Regionais
+      </button>
     </span>`;
 
     // ── Render agrupado por regional → central ──
