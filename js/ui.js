@@ -1980,11 +1980,12 @@ function _pimGetSapCache() {
 function _pimClearSapCache() { _pimGlobalSapCache = null; }
 
 const _pimState = {
-  allItems:    [],     // todos os itens sem filtro de mês
-  filtered:    [],     // itens após filtro de mês
+  allItems:    [],     // todos os itens sem filtro de mês/busca
+  filtered:    [],     // itens após filtro de mês + busca
   tipo:        'NF',   // 'NF' | 'OS'
   isGlobal:    false,  // true = exibe coluna Central
   activeMonth: 'all',  // 'all' | 'YYYY-MM'
+  search:      '',     // texto de busca livre (Material, Fornecedor, NF/OS, Datas)
   centralLabel:'',     // texto exibido no sub-título (modal por central)
   page:        0,      // página atual (0-indexed)
   totalPages:  1,      // calculado em _pimRender
@@ -2009,6 +2010,38 @@ function _pimItemDate(it, tipo) {
   return tipo === 'NF' ? (it.dtDescarga || it.dtEmissao) : it.dtEmissao;
 }
 
+/**
+ * Verifica se um item bate com o texto de busca livre.
+ * Campos considerados: Material, Fornecedor, NF/OS e Datas (Emissão + Descarga
+ * quando aplicável). Comparação insensível a maiúsculas/acentos via normalizeText().
+ */
+function _pimMatchesSearch(it, tipo, normQuery) {
+  if (!normQuery) return true;
+  const haystack = [
+    it.material,
+    it.fornecedor,
+    tipo === 'NF' ? it.nf : it.os,
+    it.dtEmissao,
+    tipo === 'NF' ? it.dtDescarga : null
+  ];
+  return haystack.some(v => v != null && normalizeText(String(v)).includes(normQuery));
+}
+
+/**
+ * Reaplica o filtro de mês + busca sobre allItems e reseta para a primeira
+ * página. Chamada tanto por pimSetMonth quanto por pimSetSearch — mantém os
+ * dois filtros combinados (AND) sem duplicar a lógica de filtragem.
+ */
+function _pimApplyFilters() {
+  const { allItems, tipo, activeMonth, search } = _pimState;
+  const normQuery = normalizeText(search || '');
+  _pimState.filtered = allItems.filter(it => {
+    if (activeMonth !== 'all' && _pimMonthKey(_pimItemDate(it, tipo)) !== activeMonth) return false;
+    return _pimMatchesSearch(it, tipo, normQuery);
+  });
+  _pimState.page = 0;
+}
+
 /** Renderiza thead + tbody + count + pills + paginação com o estado atual. */
 function _pimRender() {
   const { filtered, tipo, isGlobal, allItems, activeMonth, PAGE_SIZE } = _pimState;
@@ -2030,6 +2063,54 @@ function _pimRender() {
     subEl.textContent = isGlobal
       ? `${subSuffix} em todas as centrais`
       : `Central: ${_pimState.centralLabel} · ${subSuffix}`;
+  }
+
+  // ── Resumo por material (topo do modal) ─────────────────────────────────
+  // Soma a quantidade pendente de cada material dentro do recorte ATUAL
+  // (mês + busca já aplicados em `filtered`) — dinâmico, some/reaparece
+  // conforme o usuário filtra. NF é sempre somado já convertido para KG
+  // (mesmo valor exibido na coluna Quantidade); OS agrupa por material+UM
+  // pra nunca somar unidades diferentes sob o mesmo total.
+  const summaryEl = document.getElementById('pim-material-summary');
+  if (summaryEl) {
+    if (!filtered.length) {
+      summaryEl.innerHTML = '';
+      summaryEl.style.display = 'none';
+    } else {
+      const totalsByKey = new Map(); // key -> { mat, um, qty }
+      filtered.forEach(it => {
+        const mat = it.material || '—';
+        if (tipo === 'NF') {
+          const qty = _convertNfPesoToKg(it.peso, it.um, it.material);
+          const cur = totalsByKey.get(mat) || { mat, um: 'KG', qty: 0 };
+          cur.qty += qty;
+          totalsByKey.set(mat, cur);
+        } else {
+          const um = String(it.um || 'kg').toUpperCase();
+          const key = mat + '|' + um;
+          const cur = totalsByKey.get(key) || { mat, um, qty: 0 };
+          cur.qty += _num(it.peso);
+          totalsByKey.set(key, cur);
+        }
+      });
+      const sortedTotals = [...totalsByKey.values()].sort((a, b) => b.qty - a.qty);
+      const MAX_CELLS = 24;
+      const shown = sortedTotals.slice(0, MAX_CELLS);
+      const rest  = sortedTotals.length - shown.length;
+      const chipColor = tipo === 'NF' ? 'var(--green)' : 'var(--red)';
+      const cellsHtml = shown.map(t => `
+        <div class="pim-material-cell" title="${escapeHtml(t.mat)}">
+          <div class="pim-material-cell-name">${escapeHtml(t.mat)}</div>
+          <div class="pim-material-cell-qty" style="color:${chipColor}">${_fmt(t.qty)} ${escapeHtml(t.um)}</div>
+        </div>`).join('');
+      const moreHtml = rest > 0
+        ? `<div class="pim-material-cell pim-material-cell-more">+${rest} material${rest > 1 ? 'is' : ''}</div>`
+        : '';
+      summaryEl.innerHTML = `
+        <div class="pim-material-summary-label">Total por material</div>
+        <div class="pim-material-grid">${cellsHtml}${moreHtml}</div>`;
+      summaryEl.style.display = '';
+    }
   }
 
   // ── Filter bar (pills de mês) ─────────────────────────────────────────────
@@ -2131,16 +2212,26 @@ function _pimRender() {
   }
 }
 
-/** Aplica filtro de mês, reseta para primeira página e re-renderiza. */
+/** Aplica filtro de mês (combinado com a busca ativa), reseta página e re-renderiza. */
 function pimSetMonth(monthKey) {
   _pimState.activeMonth = monthKey;
-  _pimState.page = 0;
-  _pimState.filtered = monthKey === 'all'
-    ? _pimState.allItems
-    : _pimState.allItems.filter(it =>
-        _pimMonthKey(_pimItemDate(it, _pimState.tipo)) === monthKey
-      );
+  _pimApplyFilters();
   _pimRender();
+}
+
+// Pequeno debounce evita re-renderizar a tabela inteira a cada tecla digitada
+// (a paginação/thead/tbody são recriados via innerHTML) — 120ms é imperceptível
+// pro usuário mas poupa DOM churn em buscas rápidas.
+let _pimSearchDebounce = null;
+
+/** Aplica busca livre (combinada com o filtro de mês ativo), reseta página e re-renderiza. */
+function pimSetSearch(value) {
+  _pimState.search = value || '';
+  clearTimeout(_pimSearchDebounce);
+  _pimSearchDebounce = setTimeout(() => {
+    _pimApplyFilters();
+    _pimRender();
+  }, 120);
 }
 
 /** Navega para uma página específica da tabela. */
@@ -2168,7 +2259,10 @@ function openPendIntegModal(trigger) {
   _pimState.tipo        = tipo;
   _pimState.isGlobal    = false;
   _pimState.activeMonth = 'all';
+  _pimState.search      = '';
   _pimState.centralLabel = central;
+  const pimSearchEl = document.getElementById('pim-search');
+  if (pimSearchEl) pimSearchEl.value = '';
 
   _pimRender();
   overlay.classList.add('open');
@@ -2210,6 +2304,11 @@ function openPendIntegGlobalModal(tipo) {
   document.getElementById('pim-sub').textContent = 'Calculando...';
   const filterBarEl = document.getElementById('pim-filter-bar');
   if (filterBarEl) { filterBarEl.innerHTML = ''; filterBarEl.style.display = 'none'; }
+  const summaryElInit = document.getElementById('pim-material-summary');
+  if (summaryElInit) { summaryElInit.innerHTML = ''; summaryElInit.style.display = 'none'; }
+  const pimSearchElInit = document.getElementById('pim-search');
+  if (pimSearchElInit) pimSearchElInit.value = '';
+  _pimState.search = '';
   const theadEl = document.getElementById('pim-thead');
   const tbodyEl = document.getElementById('pim-tbody');
   const colSpan = tipo === 'NF' ? 7 : 6;
@@ -2290,6 +2389,7 @@ function openPendIntegGlobalModal(tipo) {
     _pimState.tipo        = tipo;
     _pimState.isGlobal    = true;
     _pimState.activeMonth = 'all';
+    _pimState.search      = '';
     _pimState.centralLabel = '';
     _pimState.page        = 0;
 
