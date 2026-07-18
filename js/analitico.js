@@ -1,4 +1,57 @@
 // ═══════════════════════════════════════════════════════════
+// CACHE DE ESTOQUE POR PERÍODO (Est. Inicial / Est. Final) — escopo local
+// ═══════════════════════════════════════════════════════════
+// Dentro de uma única execução do Analítico, o mesmo par (central,
+// material) tem seu "Est. Inicial"/"Est. Final" recalculado várias vezes
+// em pontos diferentes (_rodarAnaliticoCore, comparador de ordenação por
+// central, comparador de ordenação por material, tabela principal do
+// card, painel de saúde) — sempre com os MESMOS argumentos, já que o
+// período (dtIni/dtFim) não muda durante uma análise. Medido via
+// Playwright: com 300 combinações central×material, isso gerava mais de
+// 3.300 chamadas reais para apenas 300 resultados distintos possíveis.
+//
+// IMPORTANTE — por que o cache não fica dentro de getPrePeriodLaunchStock/
+// getPrevDayLaunchStock/getLastPeriodLaunchStockWithFallback (ui.js):
+// essas funções também são usadas por Dashboard Gerencial, Inventário,
+// Macro, Notificações e o Assistente de IA — cada um com seu próprio
+// período e seu próprio momento de execução. Um cache dentro delas correria
+// o risco de devolver valor desatualizado para um desses outros módulos
+// caso os dados mudem entre uma execução do Analítico e a próxima consulta
+// de outro módulo. Por isso o cache abaixo é 100% local a este arquivo,
+// usado só pelos pontos de chamada do próprio Analítico — os demais
+// módulos continuam chamando as funções originais em ui.js, sem nenhuma
+// mudança de comportamento para eles.
+//
+// Limpo no início de cada _rodarAnaliticoCore (nova análise = cache novo).
+// Reaproveitado também pelo refresh avulso de um único card
+// (refreshCentralCard, ao ligar/desligar "considerar pendentes") — seguro,
+// porque essa ação não altera lançamentos/cadastro, só um filtro de
+// exibição, então o cache da última análise continua válido.
+const _anStockCache = new Map();
+function _anClearStockCache() { _anStockCache.clear(); }
+
+function _anGetPrePeriodStock(args) {
+  const k = 'pre|' + args.central + '|' + args.material + '|' + String(args.dtIni) + '|' + String(args.dtFim) + '|' + (args.catKey || '');
+  if (_anStockCache.has(k)) return _anStockCache.get(k);
+  const v = getPrePeriodLaunchStock(args);
+  _anStockCache.set(k, v);
+  return v;
+}
+function _anGetPrevDayStock(args) {
+  const k = 'day|' + args.central + '|' + args.material + '|' + String(args.dtIni) + '|' + (args.catKey || '');
+  if (_anStockCache.has(k)) return _anStockCache.get(k);
+  const v = getPrevDayLaunchStock(args);
+  _anStockCache.set(k, v);
+  return v;
+}
+function _anGetLastPeriodStockFallback(args) {
+  const k = 'fim|' + args.central + '|' + args.material + '|' + String(args.dtIni) + '|' + String(args.dtFim);
+  if (_anStockCache.has(k)) return _anStockCache.get(k);
+  const v = getLastPeriodLaunchStockWithFallback(args);
+  _anStockCache.set(k, v);
+  return v;
+}
+// ═══════════════════════════════════════════════════════════
 // ALTERNÂNCIA DE VISÃO — Visão Micro ↔ Visão Inventário
 // (o Inventário vive como uma segunda "lente" dentro do Dashboard
 // Analítico, com seletor de MÊS próprio — sincronizado automaticamente
@@ -114,7 +167,6 @@ function rodarAnalitico(iniOverride, fimOverride, onDone) {
     { id: 'an-calc',     icon: 'ti-calculator',         label: 'Calculando variações por central' },
     { id: 'an-saude',    icon: 'ti-heartbeat',           label: 'Calculando saúde e criticidade' },
     { id: 'an-render',   icon: 'ti-layout',              label: 'Renderizando resultados' },
-    { id: 'an-inv',      icon: 'ti-clipboard-check',     label: 'Recalculando fechamento de inventário' },
   ]);
   requestAnimationFrame(() => setTimeout(() => _rodarAnaliticoCore(dtIni, dtFim, onDone), 0));
 }
@@ -126,6 +178,8 @@ function rodarAnalitico(iniOverride, fimOverride, onDone) {
 // Chamada normal (clique em "Analisar") não passa esse parâmetro e
 // mantém o comportamento original.
 function _rodarAnaliticoCore(dtIni, dtFim, onDone, silent) {
+
+  _anClearStockCache();
 
   // Limpa estado de pendentes considerados — cada nova análise começa do zero
   if (window._pendConsiderados) window._pendConsiderados = {};
@@ -316,7 +370,7 @@ function _rodarAnaliticoCore(dtIni, dtFim, onDone, silent) {
 
     const _prePeriodoStockByMat = {};
     allMats.forEach(mat => {
-      const prev = getPrePeriodLaunchStock({ central, material: mat, dtIni, dtFim, catKey: _matCatKeyLookup[mat] });
+      const prev = _anGetPrePeriodStock({ central, material: mat, dtIni, dtFim, catKey: _matCatKeyLookup[mat] });
       if (prev) _prePeriodoStockByMat[mat] = prev.value;
     });
 
@@ -577,6 +631,13 @@ document.addEventListener('click', e => {
  * @returns {HTMLElement} o elemento .micro-filial-card pronto para inserir no DOM
  */
 function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
+  // Defensivo: garante o índice de Saídas por central construído mesmo no
+  // caminho de refresh avulso de um único card (refreshCentralCard), que
+  // não passa por _rodarAnaliticoCore (onde isso já é garantido no topo).
+  // Custo desprezível quando já construído (ensureSaidasIndex só reconstrói
+  // se necessário).
+  if (typeof ensureSaidasIndex === 'function') ensureSaidasIndex();
+
   const start = new Date(dtIni);
   start.setHours(0, 0, 0, 0);
   const end = new Date(dtFim);
@@ -706,13 +767,19 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
     window.__analiticoSemCadastroCache.set(idx, { central: r.central, materiais: _matsSemCadastroCentral });
 
     // Ordena materiais: maior desfalque (diff mais negativo) → maior sobra (diff mais positivo)
-    const allMatsSorted = [...r.allMats].sort((a, b) => {
-      const prevA = getPrePeriodLaunchStock({ central: r.central, material: a, dtIni, dtFim, catKey: _sortCatKeyLookup.get(a) });
-      const prevB = getPrePeriodLaunchStock({ central: r.central, material: b, dtIni, dtFim, catKey: _sortCatKeyLookup.get(b) });
-      const diffA = buildSnapshot({ lancs: lancsByMat.get(a) || [], sap: sapByMat.get(a) || [], initialStockOverride: prevA?.value ?? null }).diff;
-      const diffB = buildSnapshot({ lancs: lancsByMat.get(b) || [], sap: sapByMat.get(b) || [], initialStockOverride: prevB?.value ?? null }).diff;
-      return diffA - diffB;
-    });
+    // Calcula o "score" (diff) uma única vez por material — transformada de
+    // Schwartzian, mesmo padrão já usado na ordenação das centrais (ver
+    // getVariacaoCentral/variacaoCentralCache em renderAnaliticoMicro) — em
+    // vez de recalcular a cada comparação do sort (o comparador antigo
+    // rodava getPrePeriodLaunchStock + buildSnapshot O(m log m) vezes).
+    const _matDiffScore = (mat) => {
+      const prev = _anGetPrePeriodStock({ central: r.central, material: mat, dtIni, dtFim, catKey: _sortCatKeyLookup.get(mat) });
+      return buildSnapshot({ lancs: lancsByMat.get(mat) || [], sap: sapByMat.get(mat) || [], initialStockOverride: prev?.value ?? null }).diff;
+    };
+    const allMatsSorted = r.allMats
+      .map(mat => ({ mat, score: _matDiffScore(mat) }))
+      .sort((a, b) => a.score - b.score)
+      .map(entry => entry.mat);
 
     allMatsSorted.forEach((mat, matIdx) => {
       const lancsMat = lancsByMat.get(mat) || [];
@@ -737,13 +804,13 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
       // (Correção: antes chamava sem catKey, o que fazia a busca considerar
       // apenas o dia imediatamente anterior a dtIni, quase nunca uma terça,
       // resultando em AUSENTE indevido para Agregados no card.)
-      const prev = getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni, dtFim, catKey: matCatKey });
+      const prev = _anGetPrePeriodStock({ central: r.central, material: mat, dtIni, dtFim, catKey: matCatKey });
 
       // ── Est. Inicial do carry da tabela de dias ──────────────────────────
       // getPrevDayLaunchStock: busca usando regras por categoria
       // (agregado → última terça, 1º do mês → último dia do mês anterior, demais → dia anterior).
-      const preCarry = getPrevDayLaunchStock({ central: r.central, material: mat, dtIni, catKey: matCatKey });
-      const fim  = getLastPeriodLaunchStockWithFallback({ central: r.central, material: mat, dtIni, dtFim });
+      const preCarry = _anGetPrevDayStock({ central: r.central, material: mat, dtIni, catKey: matCatKey });
+      const fim  = _anGetLastPeriodStockFallback({ central: r.central, material: mat, dtIni, dtFim });
       const snapshot = buildSnapshot({
         lancs: lancsMat,
         sap: sapMat,
@@ -785,15 +852,21 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
       // Prioridade de central igual à de calcPendentesIntegracao (ui.js):
       // centralCompra primeiro, fallback centralDestino — evita que NF de
       // transferência conte na central errada.
-      const localEntCount = (state.entradas || []).filter(e => {
-        const cent = e.centralCompra || e.centralDestino || '';
-        if (cent !== r.central) return false;
+      // Reaproveita o pré-agrupamento por central já usado por
+      // buildPendIntegSection (opts.entradasByCentral, ver item 4 /
+      // renderAnaliticoMicro) e o índice _saidasByCentral já mantido em
+      // ui.js — em vez de varrer state.entradas/state.saidas inteiros a
+      // cada material de cada central.
+      const _entradasDestaCentral = opts.entradasByCentral
+        ? (opts.entradasByCentral.get(r.central) || [])
+        : (state.entradas || []).filter(e => (e.centralCompra || e.centralDestino || '') === r.central);
+      const localEntCount = _entradasDestaCentral.filter(e => {
         if (e.material !== mat) return false;
         const d = parseDate(e.dtDescarga || e.dtEmissao);
         return d && d >= start && d <= end;
       }).length;
-      const localSaiCount = (state.saidas || []).filter(s => {
-        if (s.central !== r.central) return false;
+      const _saidasDestaCentral = _saidasByCentral.get(r.central) || [];
+      const localSaiCount = _saidasDestaCentral.filter(s => {
         if (s.material !== mat) return false;
         const d = parseDate(s.dtEmissao);
         return d && d >= start && d <= end;
@@ -1117,8 +1190,8 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
     // cadastrados, então este é um lookup seguro, não uma re-derivação.
     const matDiffs = allMatsSorted.map(mat => {
       const catKey = _sortCatKeyLookup.get(mat) || null;
-      const prev = getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni, dtFim, catKey });
-      const fim  = getLastPeriodLaunchStockWithFallback({ central: r.central, material: mat, dtIni, dtFim });
+      const prev = _anGetPrePeriodStock({ central: r.central, material: mat, dtIni, dtFim, catKey });
+      const fim  = _anGetLastPeriodStockFallback({ central: r.central, material: mat, dtIni, dtFim });
       const snap = buildSnapshot({
         lancs: lancsByMat.get(mat) || [],
         sap:   sapByMat.get(mat) || [],
@@ -1667,7 +1740,7 @@ function renderAnaliticoMicro(results, dtIni, dtFim, silent) {
       const lm = lancsByMat.get(mat) || [];
       const sm = sapByMat.get(mat)   || [];
       const catKey = (r.materialCatKeyMap && r.materialCatKeyMap.get(mat)) || null;
-      const prev = getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni, dtFim, catKey });
+      const prev = _anGetPrePeriodStock({ central: r.central, material: mat, dtIni, dtFim, catKey });
       return acc + buildSnapshot({
         lancs: lm,
         sap:   sm,
@@ -1803,23 +1876,26 @@ function renderAnaliticoMicro(results, dtIni, dtFim, silent) {
 
   if (typeof _lstepSet === 'function') { _lstepSet('an-saude', 'done'); _lstepSet('an-render', 'running'); _lbarSet(85); }
 
-  // Atualizar sempre recalcula as duas visões (Micro e Inventário), já que
-  // compartilham o mesmo período — feito ANTES de esconder o overlay de
-  // loading, para que ele cubra as duas etapas.
-  // Antes de gerar, sincroniza o mês selecionado do Inventário com o mês
-  // da data INICIAL do período recém-analisado (mesmo se o usuário não
-  // estiver na aba Inventário agora — assim, ao entrar nela depois, já
-  // está no mês certo). Se o usuário trocar o mês manualmente no seletor
-  // do Inventário depois disso, essa escolha prevalece até o próximo
-  // "Analisar".
-  if (typeof _lstepSet === 'function') { _lstepSet('an-render', 'done'); _lstepSet('an-inv', 'running'); _lbarSet(95); }
+  // Sincroniza o mês selecionado do Inventário com o mês da data INICIAL do
+  // período recém-analisado (mesmo se o usuário não estiver na aba
+  // Inventário agora — assim, ao entrar nela depois, já está no mês certo).
+  // Se o usuário trocar o mês manualmente no seletor do Inventário depois
+  // disso, essa escolha prevalece até o próximo "Analisar".
+  //
+  // Decisão (Hugo, jul/2026): o Inventário NÃO é mais recalculado
+  // automaticamente aqui — só o mês pré-selecionado é sincronizado (custo
+  // desprezível, é só um valor de UI). invGerar() (o cálculo pesado de
+  // fechamento) só roda quando o usuário clica no botão "Atualizar" do
+  // próprio Inventário — ou, ao entrar na aba pela primeira vez na sessão,
+  // via anSwitchView (ver comentário lá, mantido de propósito: é uma ação
+  // do usuário, não um efeito colateral do "Analisar"). É um módulo que o
+  // analista não olha todo dia; não fazia sentido recalculá-lo em toda
+  // análise — inclusive na pré-carga silenciosa do boot.
   if (typeof window.invSyncMonthFromPeriod === 'function') {
     window.invSyncMonthFromPeriod(dtIni);
   }
-  if (typeof invGerar === 'function') {
-    invGerar();
-  }
-  if (typeof _lstepSet === 'function') { _lstepSet('an-inv', 'done'); }
+  if (typeof _lstepSet === 'function') { _lstepSet('an-render', 'done'); }
+  if (typeof _lbarSet === 'function') { _lbarSet(100); }
 
   if (!silent) {
     if (typeof hideLoadingOverlay === 'function') hideLoadingOverlay('Análise concluída');
