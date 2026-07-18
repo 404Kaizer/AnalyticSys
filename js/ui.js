@@ -2100,15 +2100,13 @@ function _pimRender() {
       const chipColor = tipo === 'NF' ? 'var(--green)' : 'var(--red)';
       const cellsHtml = shown.map(t => `
         <div class="pim-material-cell" title="${escapeHtml(t.mat)}">
-          <div class="pim-material-cell-name">${escapeHtml(t.mat)}</div>
+          <div class="pim-material-cell-name">Total ${escapeHtml(t.mat)}</div>
           <div class="pim-material-cell-qty" style="color:${chipColor}">${_fmt(t.qty)} ${escapeHtml(t.um)}</div>
         </div>`).join('');
       const moreHtml = rest > 0
         ? `<div class="pim-material-cell pim-material-cell-more">+${rest} material${rest > 1 ? 'is' : ''}</div>`
         : '';
-      summaryEl.innerHTML = `
-        <div class="pim-material-summary-label">Total por material</div>
-        <div class="pim-material-grid">${cellsHtml}${moreHtml}</div>`;
+      summaryEl.innerHTML = `<div class="pim-material-grid">${cellsHtml}${moreHtml}</div>`;
       summaryEl.style.display = '';
     }
   }
