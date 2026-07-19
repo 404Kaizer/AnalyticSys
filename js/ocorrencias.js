@@ -46,6 +46,7 @@ function ocDateStatus(dataLimite) {
 }
 
 function ocStatusLabel(o) {
+  if (o.origemAjusteSistemico) return 'ajuste_sistemico';
   if (o.concluida)     return 'concluída';
   if (o.inconclusiva)  return 'inconclusiva';
   return ocDateStatus(o.dataLimite);
@@ -880,9 +881,15 @@ function _buildOcHierarquiaDetail(o) {
 function renderOcorrencias() {
   if (!Array.isArray(state.ocorrencias)) state.ocorrencias = [];
   const lista = getOcorrenciasFiltradas();
-  renderOcKPIs(state.ocorrencias); // KPIs sempre no total
+  // KPIs/estatísticas (tempo médio de conclusão, vencidas, motivos etc.) são
+  // sobre o fluxo OPERACIONAL de ocorrências — registros de Ajuste Sistêmico
+  // (DAI) não têm prazo/fluxo de resolução real (nascem já concluídos no
+  // mesmo dia) e distorceriam esses números. Ficam de fora dos KPIs, mas
+  // continuam 100% visíveis e filtráveis na lista abaixo.
+  const listaOperacional = state.ocorrencias.filter(o => !o.origemAjusteSistemico);
+  renderOcKPIs(listaOperacional); // KPIs sempre no total (exceto Ajuste Sistêmico)
   _renderOcLista(lista);
-  _renderOcAlerts(state.ocorrencias);
+  _renderOcAlerts(listaOperacional);
 }
 
 function getOcorrenciasFiltradas() {
@@ -893,6 +900,7 @@ function getOcorrenciasFiltradas() {
   const fBusca   = (document.getElementById('oc-filter-busca')?.value || '').toLowerCase();
 
   return (state.ocorrencias || []).filter(o => {
+    if (fStatus === 'ajuste_sistemico' && !o.origemAjusteSistemico) return false;
     if (fStatus === 'concluida'    && !o.concluida) return false;
     if (fStatus === 'aberta'       && (o.concluida || o.inconclusiva)) return false;
     if (fStatus === 'vencida'      && (o.concluida || o.inconclusiva || ocDateStatus(o.dataLimite) !== 'vencida')) return false;
@@ -902,13 +910,13 @@ function getOcorrenciasFiltradas() {
     if (fMaterial && !(o.material || '').toLowerCase().includes(fMaterial)) return false;
     if (fOperador && !(o.operador || '').toLowerCase().includes(fOperador)) return false;
     if (fBusca) {
-      const hay = [o.central, o.material, o.operador, o.descricao, o.id].join(' ').toLowerCase();
+      const hay = [o.central, o.material, o.operador, o.descricao, o.id, o.daiNumero, o.daiTag].join(' ').toLowerCase();
       if (!hay.includes(fBusca)) return false;
     }
     return true;
   }).sort((a, b) => {
     const sa = ocStatusLabel(a), sb = ocStatusLabel(b);
-    const order = { vencida: 0, urgente: 1, normal: 2, inconclusiva: 3, 'concluída': 4 };
+    const order = { vencida: 0, urgente: 1, normal: 2, inconclusiva: 3, 'concluída': 4, ajuste_sistemico: 5 };
     if (order[sa] !== order[sb]) return order[sa] - order[sb];
     return (a.dataLimite || '').localeCompare(b.dataLimite || '');
   });
@@ -963,16 +971,17 @@ function _renderOcLista(lista) {
   }
 
   el.innerHTML = lista.map(o => {
-    const status = o.concluida ? 'concluida' : (o.inconclusiva ? 'inconclusiva' : ocDateStatus(o.dataLimite));
-    const statusLabel = { concluida: 'Concluída', vencida: 'Vencida', urgente: 'Urgente', normal: 'Em aberto', inconclusiva: 'Inconclusiva' };
-    const statusCls   = { concluida: 'oc-badge-green', vencida: 'oc-badge-red', urgente: 'oc-badge-amber', normal: 'oc-badge-blue', inconclusiva: 'oc-badge-purple' };
+    const status = o.origemAjusteSistemico ? 'ajuste_sistemico' : (o.concluida ? 'concluida' : (o.inconclusiva ? 'inconclusiva' : ocDateStatus(o.dataLimite)));
+    const statusLabel = { concluida: 'Concluída', vencida: 'Vencida', urgente: 'Urgente', normal: 'Em aberto', inconclusiva: 'Inconclusiva', ajuste_sistemico: 'Ajuste Sistêmico' };
+    const statusCls   = { concluida: 'oc-badge-green', vencida: 'oc-badge-red', urgente: 'oc-badge-amber', normal: 'oc-badge-blue', inconclusiva: 'oc-badge-purple', ajuste_sistemico: 'oc-badge-gold' };
     const waLink = o.contato ? buildWhatsAppLink(o.contato, o) : null;
+    const isAjuste = !!o.origemAjusteSistemico;
 
-    return `<div class="oc-card ${o.concluida ? 'oc-card-done' : ''} ${o.inconclusiva ? 'oc-card-inconclusiva' : ''} oc-card-${status}" onclick="openOcDetailModal('${o.id}')">
+    return `<div class="oc-card ${o.concluida && !isAjuste ? 'oc-card-done' : ''} ${o.inconclusiva ? 'oc-card-inconclusiva' : ''} ${isAjuste ? 'oc-card-ajuste-sistemico' : ''} oc-card-${status}" onclick="openOcDetailModal('${o.id}')">
       <div class="oc-card-header">
         <div class="oc-card-header-left">
-          <span class="oc-badge ${statusCls[status]}">${statusLabel[status]}</span>
-          <span class="oc-card-id">${escapeHtml(o.id)}</span>
+          <span class="oc-badge ${statusCls[status]}">${isAjuste ? '<i class="ti ti-stamp" style="margin-right:3px"></i>' : ''}${statusLabel[status]}</span>
+          <span class="oc-card-id" title="${isAjuste ? 'Ocorrência interna: ' + escapeHtml(o.id) + (o.daiNumero ? ' · Nº fiscal: ' + escapeHtml(o.daiNumero) : '') : ''}">${isAjuste && (o.daiTag || o.daiNumero) ? escapeHtml(o.daiTag || o.daiNumero) : escapeHtml(o.id)}</span>
           <span class="oc-card-central"><i class="ti ti-building-warehouse"></i> ${escapeHtml(o.central || '—')}</span>
           ${o.material ? `<span class="oc-card-material"><i class="ti ti-box"></i> ${escapeHtml(o.material)}</span>` : ''}
         </div>
@@ -1015,6 +1024,13 @@ function _renderOcLista(lista) {
           </a>` : ''}
         </div>
         <div class="oc-card-footer-right">
+          ${isAjuste ? `
+          <button class="btn btn-sm" onclick="event.stopPropagation();reimprimirDocumentoDai('${o.daiId || ''}')" title="Reimprimir Documento de Ajuste de Inventário">
+            <i class="ti ti-printer"></i>
+          </button>
+          <button class="btn btn-sm btn-danger-ghost" onclick="event.stopPropagation();confirmarExcluirAjusteSistemico('${o.id}')" title="Excluir (requer confirmação de ciência)">
+            <i class="ti ti-trash"></i>
+          </button>` : `
           ${!o.concluida && !o.inconclusiva ? `<button class="btn btn-sm oc-btn-inconclusiva" onclick="event.stopPropagation();openInconclusivaModal('${o.id}')" title="Marcar como inconclusiva">
             <i class="ti ti-alert-triangle"></i>
           </button>` : ''}
@@ -1035,7 +1051,7 @@ function _renderOcLista(lista) {
           </button>
           <button class="btn btn-sm btn-danger-ghost" onclick="event.stopPropagation();confirmarExcluirOcorrencia('${o.id}')" title="Excluir">
             <i class="ti ti-trash"></i>
-          </button>
+          </button>`}
         </div>
       </div>
     </div>`;
@@ -1046,19 +1062,21 @@ function _renderOcLista(lista) {
 function openOcDetailModal(id) {
   const o = (state.ocorrencias || []).find(oc => oc.id === id);
   if (!o) return;
-  const status = o.concluida ? 'concluida' : (o.inconclusiva ? 'inconclusiva' : ocDateStatus(o.dataLimite));
-  const statusLabel = { concluida: 'Concluída', vencida: 'Vencida', urgente: 'Urgente', normal: 'Em aberto', inconclusiva: 'Inconclusiva' };
-  const statusCls   = { concluida: 'oc-badge-green', vencida: 'oc-badge-red', urgente: 'oc-badge-amber', normal: 'oc-badge-blue', inconclusiva: 'oc-badge-purple' };
+  const isAjuste = !!o.origemAjusteSistemico;
+  const dai = isAjuste ? (state.ajustesSistemicos || []).find(d => d.id === o.daiId) : null;
+  const status = isAjuste ? 'ajuste_sistemico' : (o.concluida ? 'concluida' : (o.inconclusiva ? 'inconclusiva' : ocDateStatus(o.dataLimite)));
+  const statusLabel = { concluida: 'Concluída', vencida: 'Vencida', urgente: 'Urgente', normal: 'Em aberto', inconclusiva: 'Inconclusiva', ajuste_sistemico: 'Ajuste Sistêmico' };
+  const statusCls   = { concluida: 'oc-badge-green', vencida: 'oc-badge-red', urgente: 'oc-badge-amber', normal: 'oc-badge-blue', inconclusiva: 'oc-badge-purple', ajuste_sistemico: 'oc-badge-gold' };
   const waLink = o.contato ? buildWhatsAppLink(o.contato, o) : null;
 
   const el = document.getElementById('oc-detail-modal');
   if (!el) return;
 
   el.querySelector('.oc-detail-header').innerHTML = `
-    <span class="oc-badge ${statusCls[status]}">${statusLabel[status]}</span>
+    <span class="oc-badge ${statusCls[status]}">${isAjuste ? '<i class="ti ti-stamp" style="margin-right:3px"></i>' : ''}${statusLabel[status]}</span>
     <span class="oc-card-central"><i class="ti ti-building-warehouse"></i> ${escapeHtml(o.central || '—')}</span>
     ${o.material ? `<span class="oc-card-material"><i class="ti ti-box"></i> ${escapeHtml(o.material)}</span>` : ''}
-    <span style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-left:auto">${escapeHtml(o.id)}</span>`;
+    <span style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-left:auto" title="${isAjuste ? 'Ocorrência interna: ' + escapeHtml(o.id) + (o.daiNumero ? ' · Nº fiscal: ' + escapeHtml(o.daiNumero) : '') : ''}">${isAjuste && (o.daiTag || o.daiNumero) ? escapeHtml(o.daiTag || o.daiNumero) : escapeHtml(o.id)}</span>`;
 
   el.querySelector('.oc-detail-dates').innerHTML = `
     <span class="oc-card-date-group" style="align-items:flex-start">
@@ -1086,7 +1104,7 @@ function openOcDetailModal(id) {
     <div class="oc-detail-section-val">${escapeHtml(o.descricao || '—')}</div>`;
 
   el.querySelector('.oc-detail-conclusao').innerHTML = [
-    o.concluida && o.descConclusao ? `
+    (!isAjuste && o.concluida && o.descConclusao) ? `
       <div class="oc-detail-section-label">Conclusão</div>
       <div class="oc-detail-section-val" style="color:var(--green)">${escapeHtml(o.descConclusao)}</div>` : '',
     o.inconclusiva && !o.concluida && o.motivoInconclusiva ? `
@@ -1094,11 +1112,36 @@ function openOcDetailModal(id) {
       <div class="oc-detail-section-val" style="color:var(--purple)">${escapeHtml(o.motivoInconclusiva)}</div>` : '',
   ].join('');
 
+  // Seção exclusiva do Documento de Ajuste de Inventário (DAI)
+  const daiEl = el.querySelector('.oc-detail-dai');
+  if (daiEl) {
+    daiEl.innerHTML = (isAjuste && dai) ? `
+      <div class="oc-detail-section-label" style="color:var(--gold)">Documento de Ajuste de Inventário</div>
+      <div class="dai-numero-preview" style="margin-bottom:8px">${escapeHtml(dai.tag || dai.numero || '—')}</div>
+      <div class="oc-detail-section-val" style="line-height:1.8;overflow-wrap:anywhere">
+        Nº do documento (fiscal): <strong>${escapeHtml(dai.numero || '—')}</strong><br>
+        Central: <strong>${escapeHtml(dai.central || o.central || '—')}</strong>${dai.regionalCentral ? ` <span style="color:var(--text3)">(Regional ${escapeHtml(dai.regionalCentral)})</span>` : ''}${dai.cnpjCentral ? ` <span style="color:var(--text3)">(CNPJ ${escapeHtml(dai.cnpjCentral)})</span>` : ''}<br>
+        Material: <strong>${escapeHtml(dai.material || o.material || '—')}</strong> ·
+        Operador informante: <strong>${escapeHtml(dai.operador || o.operador || '—')}</strong><br>
+        Data do ocorrido: <strong>${fmtDateBR(dai.dataOcorrido)}</strong> · Gerado em: <strong>${dai.dataGeracao ? new Date(dai.dataGeracao).toLocaleString('pt-BR') : '—'}</strong><br>
+        Função do movimento SAP: <strong>${escapeHtml(dai.objetivo || '—')}</strong><br>
+        Tipo de movimento SAP: <strong>${escapeHtml(dai.tipoMovimentoSap || '—')}</strong> ·
+        Documento SAP: <strong>${escapeHtml(dai.sapDocumento || '—')}</strong><br>
+        Analista responsável (assinatura): <strong>${escapeHtml(dai.analista || '—')}</strong>
+        ${Array.isArray(dai.anexos) && dai.anexos.length ? `
+        <div class="dai-anexo-list">
+          ${dai.anexos.map(a => `<div class="dai-anexo-chip"><i class="ti ti-paperclip"></i><span class="dai-anexo-chip-nome">${escapeHtml(a.nome)}</span><span class="dai-anexo-chip-tam">${formatBytes(a.tamanho)}</span></div>`).join('')}
+        </div>` : ''}
+      </div>` : '';
+  }
+
   el.querySelector('.oc-detail-meta').innerHTML = `
     <span><i class="ti ti-user" style="margin-right:4px"></i>${escapeHtml(o.operador || '—')}</span>
     ${waLink ? `<a href="${waLink}" target="_blank" rel="noopener" class="oc-wa-btn"><i class="ti ti-brand-whatsapp"></i> ${escapeHtml(o.contato)}</a>` : ''}`;
 
-  el.querySelector('.oc-detail-actions').innerHTML = `
+  el.querySelector('.oc-detail-actions').innerHTML = isAjuste ? `
+    <button class="btn btn-sm" onclick="closeOcDetailModal();reimprimirDocumentoDai('${o.daiId || ''}')"><i class="ti ti-printer"></i> Reimprimir Documento</button>
+    <button class="btn btn-sm btn-danger-ghost" onclick="closeOcDetailModal();confirmarExcluirAjusteSistemico('${o.id}')"><i class="ti ti-trash"></i></button>` : `
     ${!o.concluida && !o.inconclusiva ? `<button class="btn btn-sm oc-btn-inconclusiva" onclick="closeOcDetailModal();openInconclusivaModal('${o.id}')"><i class="ti ti-alert-triangle"></i> Inconclusiva</button>` : ''}
     ${o.inconclusiva && !o.concluida ? `<button class="btn btn-sm oc-btn-reabrir" onclick="closeOcDetailModal();reabrirOcorrencia('${o.id}')"><i class="ti ti-rotate"></i> Reabrir</button>` : ''}
     ${o.concluida ? `<button class="btn btn-sm oc-btn-reabrir-concluida" onclick="closeOcDetailModal();reabrirOcorrenciaConcluida('${o.id}')"><i class="ti ti-rotate"></i> Reabrir</button>` : ''}
@@ -1109,10 +1152,11 @@ function openOcDetailModal(id) {
 
   // Seção de hierarquia no modal de detalhe
   const hierEl = el.querySelector('.oc-detail-hierarquia');
-  if (hierEl) hierEl.innerHTML = _buildOcHierarquiaDetail(o);
+  if (hierEl) hierEl.innerHTML = isAjuste ? '' : _buildOcHierarquiaDetail(o);
 
   el.classList.add('open');
 }
+
 
 function closeOcDetailModal() {
   document.getElementById('oc-detail-modal')?.classList.remove('open');
@@ -1385,6 +1429,77 @@ function confirmarExcluirOcorrencia(id) {
   });
 }
 
+// ── Exclusão de ocorrência de Ajuste Sistêmico (DAI) ───────────────────
+// Diferente de confirmarExcluirOcorrencia (destrutiva com undo simples),
+// este fluxo exige que o analista marque um checkbox de ciência antes de
+// poder confirmar — o registro está vinculado a um Documento de Ajuste de
+// Inventário já emitido/impresso, com validade fiscal. A exclusão aqui
+// NÃO tem undo por toast; em vez disso, grava um log permanente em
+// state.ajustesExcluidos (nunca apagado) para responder por que aquele
+// número de DAI não aparece mais no sistema, caso perguntado numa
+// auditoria futura. Ver decisão registrada com o analista responsável
+// pelo sistema (Hugo).
+function confirmarExcluirAjusteSistemico(id) {
+  const o = (state.ocorrencias || []).find(oc => oc.id === id);
+  if (!o || !o.origemAjusteSistemico) return;
+  const dai = (state.ajustesSistemicos || []).find(d => d.id === o.daiId) || null;
+  const tag = dai?.tag || o.daiTag || dai?.numero || o.daiNumero || '—';
+  const numero = dai?.numero || o.daiNumero || '—';
+
+  confirmarDestrutivo({
+    title: 'Excluir ocorrência de Ajuste Sistêmico',
+    sub: tag,
+    body: `
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="display:flex;gap:8px;align-items:center">
+          <span style="color:var(--text3);min-width:80px;font-size:12px">Documento</span>
+          <strong>${escapeHtml(tag)}</strong>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span style="color:var(--text3);min-width:80px;font-size:12px">Nº fiscal</span>
+          <span style="font-family:var(--mono);font-size:11.5px">${escapeHtml(numero)}</span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span style="color:var(--text3);min-width:80px;font-size:12px">Central</span>
+          <span>${escapeHtml(o.central || '—')}</span>
+        </div>
+        <div style="margin-top:8px;padding:10px 12px;background:var(--gold-bg);border:1px solid var(--gold-border);border-radius:6px;font-size:12px;color:var(--text2)">
+          <i class="ti ti-alert-triangle" style="color:var(--gold)"></i>
+          Este registro é vinculado a um Documento de Ajuste de Inventário (DAI) já gerado — provavelmente já impresso/enviado à controladoria. A exclusão daqui NÃO apaga o documento físico/PDF já emitido, e ficará registrada permanentemente num log interno de auditoria.
+        </div>
+      </div>`,
+    confirmLabel: 'Excluir mesmo assim',
+    requireConsent: true,
+    consentLabel: 'Estou ciente de que este documento já foi emitido/apresentado e assumo a responsabilidade por esta exclusão.',
+    onConfirm: () => {
+      // Log permanente — nunca removido, mesmo que o resto seja excluído
+      if (!Array.isArray(state.ajustesExcluidos)) state.ajustesExcluidos = [];
+      state.ajustesExcluidos.push({
+        daiTag: tag,
+        daiNumero: numero,
+        central: o.central || null,
+        dataGeracao: dai?.dataGeracao || null,
+        excluidoPor: (state.configs.find(c => c.key === '__responsavel_padrao__') || {}).value || null,
+        excluidoEm: Date.now(),
+      });
+
+      // Remove a cópia local dos anexos (a fonte oficial é o ZIP baixado na
+      // hora da geração — ver dai.js)
+      if (dai && Array.isArray(dai.anexos) && dai.anexos.length && typeof idbDeleteAnexosDai === 'function') {
+        idbDeleteAnexosDai(dai.id, dai.anexos.length);
+      }
+
+      // Remove o registro de metadados do DAI e a ocorrência
+      if (dai) state.ajustesSistemicos = (state.ajustesSistemicos || []).filter(d => d.id !== dai.id);
+      state.ocorrencias = (state.ocorrencias || []).filter(oc => oc.id !== id);
+
+      persist();
+      renderOcorrencias();
+      toast(`Ocorrência de Ajuste Sistêmico "${tag}" excluída. Registro de auditoria mantido.`, 'info');
+    }
+  });
+}
+
 // ── Render inicial da página ──────────────────────────────
 function renderOcorrenciasPage() {
   if (!Array.isArray(state.ocorrencias)) state.ocorrencias = [];
@@ -1414,6 +1529,7 @@ Object.assign(window, {
   reabrirOcorrencia,
   reabrirOcorrenciaConcluida,
   confirmarExcluirOcorrencia,
+  confirmarExcluirAjusteSistemico,
   getOcorrenciasFiltradas,
   openOcDetailModal,
   closeOcDetailModal,

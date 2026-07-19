@@ -48,7 +48,23 @@ const defaultState = () => ({
   // em ui.js). Array de chaves (getSapFechKey) de registros que o analista
   // reincluiu manualmente no cálculo de variação, mesmo batendo no padrão
   // de fechamento. Controlado pela página SAP (checkbox + ação em lote).
-  sapFechamentoOverrides: []
+  sapFechamentoOverrides: [],
+  // Documentos de Ajuste de Inventário (DAI) — gerados pelo módulo de
+  // Ajuste Sistêmico (ver dai.js). Cada item: { id, numero, dataGeracao,
+  // dataOcorrido, central, motivo, descricao, operador, analista,
+  // sapDocumento, ocorrenciaId, anexos: [{nome, tipo, tamanho, hash}] }.
+  // Os BYTES dos anexos NÃO ficam aqui — só metadados leves (entram no
+  // backup/export JSON normal). Os bytes originais vivem no ZIP baixado
+  // na hora da geração (fonte da verdade) e, como conveniência local, em
+  // chaves separadas do IndexedDB (ver idbPutAnexoDai/persist.js) — fora
+  // do snapshot principal, mesmo padrão dos chunks SAP.
+  ajustesSistemicos: [],
+  // Log permanente de DAIs cuja ocorrência vinculada foi excluída pelo
+  // analista (fluxo de consentimento — ver confirmarExcluirAjusteSistemico
+  // em ocorrencias.js). Nunca é apagado: existe só para responder "por que
+  // esse número não aparece mais no sistema?" numa auditoria futura. Não
+  // guarda anexos nem descrição completa, só metadados de rastreabilidade.
+  ajustesExcluidos: []
 });
 
 

@@ -2593,6 +2593,7 @@
               <option value="urgente">Urgentes</option>
               <option value="inconclusiva">Inconclusivas</option>
               <option value="concluida">Concluídas</option>
+              <option value="ajuste_sistemico">Ajuste Sistêmico</option>
             </select>
             <select id="oc-filter-central" class="macro-select" onchange="renderOcorrencias()">
               <option value="">Todas as centrais</option>
@@ -2604,9 +2605,14 @@
               <option value="">Todos os operadores</option>
             </select>
           </div>
-          <button class="btn btn-primary" onclick="openOcorrenciaModal()">
-            <i class="ti ti-plus"></i> Nova Ocorrência
-          </button>
+          <div style="display:flex;gap:8px">
+            <button class="btn" onclick="abrirModalDai()" title="Gerar Documento de Ajuste de Inventário (DAI)" style="gap:7px;font-size:12px;padding:8px 14px;background:linear-gradient(135deg,#8a6d1a,#c9a227);border:none;border-radius:8px;cursor:pointer;display:flex;align-items:center;color:#1c1608;font-weight:700;white-space:nowrap">
+              <i class="ti ti-stamp" style="font-size:14px"></i> Gerar Documento de Ajuste
+            </button>
+            <button class="btn btn-primary" onclick="openOcorrenciaModal()">
+              <i class="ti ti-plus"></i> Nova Ocorrência
+            </button>
+          </div>
         </div>
 
         <!-- Lista -->
@@ -3577,6 +3583,7 @@
     <div class="modal-title" style="color:var(--red)"><i class="ti ti-alert-triangle"></i> <span id="mcd-title">Confirmar exclusão</span></div>
     <div class="modal-sub" id="mcd-sub"></div>
     <div id="mcd-body" style="margin:16px 0;font-size:13px;color:var(--text2);line-height:1.6"></div>
+    <div id="mcd-consent" style="display:none;margin-bottom:16px"></div>
     <div class="form-actions">
       <button class="btn" onclick="closeModal('modal-confirm-destrutivo')" id="mcd-cancel-btn">Cancelar</button>
       <button class="btn" id="mcd-confirm-btn"
@@ -4163,6 +4170,7 @@
 
 <!-- Biblioteca externa -->
 <script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
 <!-- AnalyticSys — módulos JS (ordem importa) -->
 <script defer src="js/state.js"></script>
@@ -4184,6 +4192,7 @@
 <script defer src="js/relatorio.js"></script>
 <script defer src="js/agregados.js"></script>
 <script defer src="js/trend.js"></script>
+<script defer src="js/dai.js"></script>
 
 <!-- ═══ MODAL: Nova/Editar Ocorrência ═══ -->
 <div class="modal-overlay" id="oc-modal" role="dialog" aria-modal="true">
@@ -4340,9 +4349,100 @@
       <div class="oc-detail-dates"></div>
       <div class="oc-detail-section oc-detail-desc"></div>
       <div class="oc-detail-section oc-detail-conclusao"></div>
+      <div class="oc-detail-section oc-detail-dai"></div>
       <div class="oc-detail-section oc-detail-hierarquia"></div>
       <div class="oc-detail-meta"></div>
       <div class="oc-detail-actions"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL: Gerador de Documento de Ajuste de Inventário (DAI) ═══ -->
+<div class="modal-overlay" id="dai-modal" role="dialog" aria-modal="true">
+  <div class="modal-card" style="max-width:640px;width:100%">
+    <div class="modal-header">
+      <span class="modal-title"><i class="ti ti-stamp" style="color:var(--gold);margin-right:6px"></i>Gerar Documento de Ajuste de Inventário</span>
+      <button class="modal-close" onclick="closeModal('dai-modal')"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:14px;max-height:70vh;overflow-y:auto">
+
+      <div class="dai-intro-box">
+        <i class="ti ti-info-circle"></i>
+        <div>
+          Este documento tem validade fiscal e será usado para registrar ajustes de estoque (perdas, sobras, erros) perante a contabilidade, controladoria e eventuais fiscalizações. Ao gerar, uma ocorrência é aberta automaticamente na cor dourada, já concluída.
+        </div>
+      </div>
+
+      <div id="dai-numero-preview-wrap" style="display:none">
+        <span class="dai-numero-preview" id="dai-numero-preview"></span>
+      </div>
+
+      <div class="oc-form-row">
+        <div class="oc-form-group">
+          <label class="oc-label">Central <span class="oc-required">*</span></label>
+          <select id="dai-form-central" class="oc-input" onchange="_daiAtualizarCnpjPreview()">
+            <option value="">Selecione a central</option>
+          </select>
+          <div id="dai-cnpj-preview"></div>
+        </div>
+        <div class="oc-form-group">
+          <label class="oc-label">Data do ocorrido <span class="oc-required">*</span></label>
+          <input type="date" id="dai-form-data-ocorrido" class="oc-input">
+        </div>
+      </div>
+
+      <div class="oc-form-group">
+        <label class="oc-label">Nome do operador informante <span class="oc-required">*</span></label>
+        <input type="text" id="dai-form-operador" class="oc-input" placeholder="Nome de quem informou o ocorrido">
+      </div>
+
+      <div class="oc-form-group">
+        <label class="oc-label">Material <span class="oc-hint">(grupo SAP)</span> <span class="oc-required">*</span></label>
+        <select id="dai-form-material" class="oc-input">
+          <option value="">Selecione o grupo SAP</option>
+        </select>
+      </div>
+
+      <div class="oc-form-group">
+        <label class="oc-label">Descrição do ocorrido <span class="oc-required">*</span></label>
+        <textarea id="dai-form-descricao" class="oc-input oc-textarea" rows="5" placeholder="Descreva detalhadamente o que aconteceu, como foi identificado e o ajuste realizado…"></textarea>
+      </div>
+
+      <div class="oc-form-row">
+        <div class="oc-form-group">
+          <label class="oc-label">Tipo de movimento SAP <span class="oc-required">*</span></label>
+          <input type="text" id="dai-form-tipo-movimento" class="oc-input" placeholder="Ex.: 701, 702, Y11…" style="text-transform:uppercase" oninput="this.value = this.value.toUpperCase()">
+        </div>
+        <div class="oc-form-group">
+          <label class="oc-label">Nº do documento SAP (pós-ajuste) <span class="oc-required">*</span></label>
+          <input type="text" id="dai-form-sap" class="oc-input" inputmode="numeric" placeholder="Somente números" oninput="_daiFiltrarSapInput(this)">
+          <span class="oc-hint">Apenas dígitos — sem letras ou caracteres especiais</span>
+        </div>
+      </div>
+
+      <div class="oc-form-group">
+        <label class="oc-label">Função do movimento SAP <span class="oc-required">*</span></label>
+        <input type="text" id="dai-form-objetivo" class="oc-input" placeholder="Diminuir saldo em estoque, gerar documento de coleta de material, aumentar saldo em estoque…">
+      </div>
+
+      <div class="oc-form-group">
+        <label class="oc-label">Anexos <span class="oc-hint">(imagens, PDF ou Word — comprovação do ocorrido)</span></label>
+        <div class="drop-zone" onclick="document.getElementById('dai-form-anexos').click()">
+          <i class="ti ti-paperclip"></i>
+          Clique para anexar imagens, PDF ou DOCX
+        </div>
+        <input type="file" id="dai-form-anexos" class="file-input" style="display:none" multiple accept="image/*,.pdf,.doc,.docx" onchange="daiAdicionarAnexos(event)">
+        <div class="dai-anexo-list" id="dai-anexo-lista"></div>
+      </div>
+
+      <div id="dai-analista-wrap"></div>
+
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('dai-modal')">Cancelar</button>
+      <button class="btn" id="dai-btn-gerar" style="background:linear-gradient(135deg,#8a6d1a,#c9a227);border:none;color:#1c1608;font-weight:700" onclick="gerarDocumentoAjuste()">
+        <i class="ti ti-stamp"></i> Gerar Documento e Ocorrência
+      </button>
     </div>
   </div>
 </div>

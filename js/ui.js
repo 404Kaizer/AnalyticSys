@@ -4590,6 +4590,8 @@ const _BKP_MODULES = [
   { key: 'imports',     label: 'Histórico de Importações', icon: 'ti-history',     color: 'var(--text3)'  },
   { key: 'invJustificativas', label: 'Inventário — Justificativas', icon: 'ti-clipboard-check', color: 'var(--amber)' },
   { key: 'sapFechamentoOverrides', label: 'SAP — Overrides de Fechamento', icon: 'ti-calendar-check', color: 'var(--purple)' },
+  { key: 'ajustesSistemicos', label: 'Documentos de Ajuste (DAI)', icon: 'ti-stamp', color: 'var(--gold)' },
+  { key: 'ajustesExcluidos', label: 'DAI — Log de Exclusões', icon: 'ti-history', color: 'var(--gold)' },
 ];
 
 // Módulos selecionados para exportar (persiste durante a sessão do modal)

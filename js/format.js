@@ -202,17 +202,50 @@ function confirmarComUndo({ message, action, undo, delay = 5000 }) {
 }
 
 // Modal de confirmação para ações destrutivas
-function confirmarDestrutivo({ title = 'Confirmar exclusão', sub = '', body = '', confirmLabel = 'Excluir', onConfirm }) {
+// requireConsent/consentLabel: quando informado, acrescenta um checkbox
+// obrigatório abaixo do corpo — o botão de confirmar só fica habilitado
+// depois de marcado. Usado, por exemplo, na exclusão de uma ocorrência de
+// Ajuste Sistêmico vinculada a um DAI já emitido (ver ocorrencias.js).
+function confirmarDestrutivo({ title = 'Confirmar exclusão', sub = '', body = '', confirmLabel = 'Excluir', requireConsent = false, consentLabel = '', onConfirm }) {
   document.getElementById('mcd-title').textContent         = title;
   document.getElementById('mcd-sub').textContent           = sub;
   document.getElementById('mcd-body').innerHTML            = body;
   document.getElementById('mcd-confirm-label').textContent = confirmLabel;
 
+  const consentEl = document.getElementById('mcd-consent');
+  if (consentEl) {
+    if (requireConsent) {
+      consentEl.style.display = '';
+      consentEl.innerHTML = `
+        <div class="dai-consent-box">
+          <input type="checkbox" id="mcd-consent-check">
+          <label for="mcd-consent-check">${consentLabel}</label>
+        </div>`;
+    } else {
+      consentEl.style.display = 'none';
+      consentEl.innerHTML = '';
+    }
+  }
+
   const btn = document.getElementById('mcd-confirm-btn');
   // Remove previous listener
   const newBtn = btn.cloneNode(true);
   btn.parentNode.replaceChild(newBtn, btn);
+  newBtn.disabled = requireConsent; // só reabilita quando o checkbox for marcado
+  if (requireConsent) {
+    newBtn.style.opacity = '.5';
+    newBtn.style.cursor = 'not-allowed';
+    document.getElementById('mcd-consent-check')?.addEventListener('change', (e) => {
+      newBtn.disabled = !e.target.checked;
+      newBtn.style.opacity = e.target.checked ? '' : '.5';
+      newBtn.style.cursor = e.target.checked ? '' : 'not-allowed';
+    });
+  } else {
+    newBtn.style.opacity = '';
+    newBtn.style.cursor = '';
+  }
   newBtn.addEventListener('click', () => {
+    if (newBtn.disabled) return;
     closeModal('modal-confirm-destrutivo');
     onConfirm();
   });

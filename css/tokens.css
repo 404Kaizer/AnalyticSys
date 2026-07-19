@@ -42,6 +42,13 @@
   --teal-bg:  rgba(6,182,212,0.10);
   --teal-border: rgba(6,182,212,0.20);
 
+  /* Dourado — reservado para o status "Ajuste Sistêmico" (DAI) em
+     Ocorrências. Não usar para nenhum outro propósito, pra manter o
+     sinal visual exclusivo desse status auditável. */
+  --gold:     #c9a227;
+  --gold-bg:  rgba(201,162,39,0.12);
+  --gold-border: rgba(201,162,39,0.28);
+
   /* Geometry */
   --radius:    8px;
   --radius-lg: 14px;
@@ -110,6 +117,9 @@ body[data-theme="light"] {
   --teal:     #0891b2;
   --teal-bg:  rgba(8,145,178,0.08);
   --teal-border: rgba(8,145,178,0.18);
+  --gold:     #92700a;
+  --gold-bg:  rgba(146,112,10,0.08);
+  --gold-border: rgba(146,112,10,0.20);
   --logo-filter: none;
   color-scheme: light;
 }
@@ -145,6 +155,9 @@ body[data-theme="sand"] {
   --teal:     #0f766e;
   --teal-bg:  rgba(15,118,110,0.09);
   --teal-border: rgba(15,118,110,0.20);
+  --gold:     #7a5c0f;
+  --gold-bg:  rgba(122,92,15,0.09);
+  --gold-border: rgba(122,92,15,0.20);
   --logo-filter: none;
   color-scheme: light;
 }

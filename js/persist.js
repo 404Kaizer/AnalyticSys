@@ -4,7 +4,7 @@ const IDB_STORE = 'kv';
 const IDB_STATE_KEY = 'appState';
 const legacyStateKey = STORAGE_KEY;
 // 'sap' é excluído do snapshot unificado — salvo em chunks separados
-const saveSnapshotKeys = ['configs', 'filiais', 'materiais', 'gruposMateriais', 'regionaisCentrais', 'entradas', 'saidas', 'lancamentos', 'sap', 'producao', 'imports', 'ocorrencias', 'acoesRelatorio', 'notifications', 'invJustificativas', 'sapFechamentoOverrides'];
+const saveSnapshotKeys = ['configs', 'filiais', 'materiais', 'gruposMateriais', 'regionaisCentrais', 'entradas', 'saidas', 'lancamentos', 'sap', 'producao', 'imports', 'ocorrencias', 'acoesRelatorio', 'notifications', 'invJustificativas', 'sapFechamentoOverrides', 'ajustesSistemicos', 'ajustesExcluidos'];
 const SAP_CHUNK_SIZE  = 10000;  // registros por chunk
 const SAP_CHUNK_KEY   = 'sap_chunk_'; // prefixo das chaves: sap_chunk_0, sap_chunk_1...
 const SAP_META_KEY    = 'sap_meta';   // { totalChunks, totalRecords, savedAt }
@@ -290,6 +290,63 @@ function compactSapRecords(records) {
   });
 }
 
+// ── Anexos de DAI (Documento de Ajuste de Inventário) ─────────────────────
+// Cópia local de CONVENIÊNCIA dos arquivos anexados a um DAI (imagens,
+// docx, pdf de comprovação) — guardada em chaves separadas do snapshot
+// principal (mesmo padrão dos chunks SAP: ver saveSapChunks acima), para
+// não pesar toda gravação normal do sistema por causa de anexos binários
+// grandes/antigos. A FONTE DA VERDADE é o ZIP baixado no momento da
+// geração do documento (ver dai.js) — esta cópia serve só para reabrir/
+// reimprimir o DAI depois, sem depender do ZIP ainda estar disponível na
+// máquina do analista. idbPut já usa structured clone (não JSON.stringify),
+// então aceita Blob/File nativamente, sem precisar converter para base64.
+const DAI_ANEXO_KEY_PREFIX = 'dai_anexo_';
+
+function daiAnexoKey(daiId, idx) {
+  return `${DAI_ANEXO_KEY_PREFIX}${daiId}_${idx}`;
+}
+
+async function idbPutAnexoDai(daiId, idx, blob) {
+  try {
+    const db = await openDb();
+    if (!db) return false;
+    await idbPut(db, daiAnexoKey(daiId, idx), blob);
+    return true;
+  } catch (err) {
+    console.warn('[Persist] Falha ao salvar cópia local do anexo DAI (não crítico — o ZIP baixado continua sendo a fonte oficial):', err);
+    return false;
+  }
+}
+
+async function idbGetAnexoDai(daiId, idx) {
+  try {
+    const db = await openDb();
+    if (!db) return null;
+    return await idbGet(db, daiAnexoKey(daiId, idx));
+  } catch (err) {
+    console.warn('[Persist] Falha ao ler cópia local do anexo DAI:', err);
+    return null;
+  }
+}
+
+// Remove todas as cópias locais de anexos de um DAI (chamado quando a
+// ocorrência de Ajuste Sistêmico vinculada é excluída pelo analista — ver
+// confirmarExcluirAjusteSistemico em ocorrencias.js). Best-effort: se
+// falhar, os Blobs órfãos apenas ocupam espaço, sem causar inconsistência.
+async function idbDeleteAnexosDai(daiId, count) {
+  if (!daiId || !count) return;
+  try {
+    const db = await openDb();
+    if (!db) return;
+    const tx = db.transaction(IDB_STORE, 'readwrite');
+    const store = tx.objectStore(IDB_STORE);
+    for (let i = 0; i < count; i++) store.delete(daiAnexoKey(daiId, i));
+    await new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = rej; });
+  } catch (err) {
+    console.warn('[Persist] Falha ao remover cópia(s) local(is) de anexo(s) DAI (não crítico):', err);
+  }
+}
+
 function buildStateSnapshot() {
   return {
     version: STATE_VERSION,
@@ -307,8 +364,11 @@ function buildStateSnapshot() {
     imports: state.imports,
     ocorrencias: state.ocorrencias || [],
     acoesRelatorio: state.acoesRelatorio || [],
+    notifications: state.notifications || [],
     invJustificativas: state.invJustificativas || [],
-    sapFechamentoOverrides: state.sapFechamentoOverrides || []
+    sapFechamentoOverrides: state.sapFechamentoOverrides || [],
+    ajustesSistemicos: state.ajustesSistemicos || [],
+    ajustesExcluidos: state.ajustesExcluidos || []
   };
 }
 
@@ -722,7 +782,13 @@ function _emergencySave() {
       // não eram capturados aqui — ficavam vulneráveis a perda quando este
       // snapshot de emergência era aplicado por cima do save do IDB.
       notifications:     state.notifications    || [],
-      invJustificativas: state.invJustificativas || []
+      invJustificativas: state.invJustificativas || [],
+      // Mesma classe de risco: ajustesSistemicos/ajustesExcluidos (DAI —
+      // Documento de Ajuste de Inventário) fazem parte de saveSnapshotKeys
+      // e precisam sobreviver a um fechamento abrupto da aba, já que são
+      // registros com validade fiscal/auditoria.
+      ajustesSistemicos: state.ajustesSistemicos || [],
+      ajustesExcluidos:  state.ajustesExcluidos  || []
     };
     localStorage.setItem(legacyStateKey, JSON.stringify(snapshot));
     console.info('[Persist] Emergency save executado.');
