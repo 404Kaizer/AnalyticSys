@@ -109,13 +109,15 @@ function anSwitchView(view) {
   // Ao entrar na Visão Inventário pela primeira vez na sessão, gera
   // automaticamente o inventário do mês já selecionado por padrão no
   // seletor de mês do próprio módulo (mês atual, ver inventario.js).
+  // Ao entrar na Visão Inventário, só garante que o estado correto (empty
+  // state ou conteúdo já existente) esteja visível — renderInventario() é
+  // idempotente e não recalcula nada, só sincroniza a UI. A geração em si
+  // (invGerar) NÃO roda mais automaticamente aqui — decisão (Hugo,
+  // jul/2026): Inventário só é recalculado quando o usuário clica no
+  // próprio botão "Atualizar" do módulo. É uma tela que o analista não
+  // olha todo dia; abrir a aba sozinha não deve disparar o cálculo pesado.
   if (isInv) {
     if (typeof renderInventario === 'function') renderInventario();
-    const emptyState = document.getElementById('inv-empty-state');
-    const stillEmpty = emptyState && emptyState.style.display !== 'none';
-    if (stillEmpty && typeof invGerar === 'function') {
-      invGerar();
-    }
   }
 }
 window.anSwitchView = anSwitchView;

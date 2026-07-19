@@ -887,7 +887,7 @@
     try { return fn(...args); } catch (e) { return fallback; }
   }
 
-  window.invGerar = function() {
+  function _invGerarCore() {
     // Novo período gerado → chaves de linha (mesKey|||central|||material)
     // mudam de mês, então qualquer seleção anterior fica obsoleta. Sai do
     // modo seleção e limpa tudo pra não arrastar estado de um mês pro
@@ -1270,6 +1270,33 @@
     invAtualizarAlertas();
     _invSyncConsiderarPendentesBtn();
     toast('Inventário de ' + MESES_NOME[selMonth] + '/' + selYear + ' gerado: ' + invRows.length + ' itens.', 'success');
+  }
+
+  // Wrapper público de invGerar() — mostra o overlay de loading global
+  // ANTES de rodar o cálculo pesado (_invGerarCore, que pode envolver
+  // centenas/milhares de registros) e garante que ele feche ao final,
+  // mesmo em caso de retorno antecipado (ex.: "sistema não iniciado",
+  // "nenhum dado encontrado") ou erro — por isso o try/finally.
+  // O requestAnimationFrame + setTimeout(0) dá tempo do navegador pintar o
+  // overlay na tela ANTES do cálculo síncrono começar a travar a thread
+  // principal — mesmo padrão já usado em rodarAnalitico (analitico.js) e
+  // no boot (dashboard.js).
+  window.invGerar = function() {
+    if (typeof showLoadingOverlay === 'function') {
+      showLoadingOverlay('Atualizando Inventário', 'Calculando fechamento do mês selecionado...');
+    }
+    // Esconde qualquer checklist de etapas deixada por um overlay anterior
+    // (boot ou "Analisar" usam loadingShowSteps — o container não é limpo
+    // sozinho entre um uso e outro). O Inventário usa o overlay simples,
+    // sem lista de etapas, só o spinner + barra indeterminada.
+    if (typeof loadingHideSteps === 'function') loadingHideSteps();
+    requestAnimationFrame(() => setTimeout(() => {
+      try {
+        _invGerarCore();
+      } finally {
+        if (typeof hideLoadingOverlay === 'function') hideLoadingOverlay('Inventário atualizado');
+      }
+    }, 0));
   };
 
   // Testa os filtros "base" (Regional/Central/Categoria/Material + toggles
