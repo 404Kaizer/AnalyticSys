@@ -18,7 +18,7 @@
 //   • Variação irrelevante (mesma tolerância ±0.01 kg do resto do
 //     Inventário — ver _invVarIrrelevante) → ignorada
 //   • Linha sem cadastro (semCadastro) → ignorada
-//   • Linha sem justificativa OPERACIONAL salva (invJustificativas[k].op)
+//   • Linha sem justificativa FISCAL salva (invJustificativas[k].fiscal)
 //     → ignorada (o texto do motivo impresso no documento vem exatamente
 //     desse campo) — o usuário é avisado ao final de quantas foram puladas
 //   • Central sem CNPJ cadastrado (Configurações → Cadastros → Filiais)
@@ -227,7 +227,7 @@ function _ncdColetarGrupos(linhas, bridge) {
     if (bridge.varIrrelevante(r.varKg)) { ignoradosIrrelevantes++; return; }
 
     const j = bridge.justificativas[r.k] || {};
-    const motivo = (j.op || '').trim();
+    const motivo = (j.fiscal || '').trim();
     if (!motivo) { ignoradosSemJust++; return; }
 
     const tipo = r.varKg > 0 ? 'credito' : 'debito';
@@ -639,7 +639,7 @@ function ncdAbrirModal() {
   if (!gruposComCnpj.length) {
     const motivo = centraisSemCnpj.length
       ? `Nenhuma central com CNPJ cadastrado entre as afetadas (${centraisSemCnpj.join(', ')}).`
-      : 'Nenhum item elegível — confira se as linhas têm variação relevante e justificativa Operacional salva.';
+      : 'Nenhum item elegível — confira se as linhas têm variação relevante e justificativa Fiscal salva.';
     toast(motivo, 'error');
     return;
   }
@@ -652,7 +652,7 @@ function ncdAbrirModal() {
   const nItens = gruposComCnpj.reduce((s, g) => s + g.itens.length, 0);
 
   const avisos = [];
-  if (ignoradosSemJust) avisos.push(`${ignoradosSemJust} linha(s) sem justificativa Operacional salva serão ignoradas.`);
+  if (ignoradosSemJust) avisos.push(`${ignoradosSemJust} linha(s) sem justificativa Fiscal salva serão ignoradas.`);
   if (centraisSemCnpj.length) avisos.push(`Central(is) sem CNPJ cadastrado (não entrarão): ${centraisSemCnpj.join(', ')}.`);
 
   const resumoEl = document.getElementById('ncd-resumo-preview');
