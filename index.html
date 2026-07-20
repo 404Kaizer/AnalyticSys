@@ -1903,6 +1903,9 @@
               <button class="btn" onclick="invExportar()">
                 <i class="ti ti-file-spreadsheet"></i> Exportar CSV
               </button>
+              <button class="btn" onclick="ncdAbrirModal()" title="Gera notas de crédito/débito em PDF a partir das linhas selecionadas — ou de todas as linhas visíveis, se nenhuma estiver selecionada">
+                <i class="ti ti-receipt"></i> Notas Créd./Déb.
+              </button>
             </div>
           </div>
           <div class="inv-table-scroll">
@@ -4171,6 +4174,9 @@
 <!-- Biblioteca externa -->
 <script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<!-- jsPDF + jspdf-autotable — geração de PDF vetorial (Notas de Crédito/Débito, ver ncd.js) -->
+<script defer src="https://cdn.jsdelivr.net/npm/jspdf@4.2.1/dist/jspdf.umd.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/jspdf-autotable@5.0.8/dist/jspdf.plugin.autotable.min.js"></script>
 
 <!-- AnalyticSys — módulos JS (ordem importa) -->
 <script defer src="js/state.js"></script>
@@ -4188,6 +4194,7 @@
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script defer src="js/ocorrencias.js"></script>
 <script defer src="js/inventario.js"></script>
+<script defer src="js/ncd.js"></script>
 <script defer src="js/calendar.js"></script>
 <script defer src="js/relatorio.js"></script>
 <script defer src="js/agregados.js"></script>
@@ -4442,6 +4449,45 @@
       <button class="btn" onclick="closeModal('dai-modal')">Cancelar</button>
       <button class="btn" id="dai-btn-gerar" style="background:linear-gradient(135deg,#8a6d1a,#c9a227);border:none;color:#1c1608;font-weight:700" onclick="gerarDocumentoAjuste()">
         <i class="ti ti-stamp"></i> Gerar Documento e Ocorrência
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL: Notas de Crédito/Débito (Fechamento de Inventário) ═══ -->
+<div class="modal-overlay" id="ncd-modal" role="dialog" aria-modal="true">
+  <div class="modal-card" style="max-width:480px;width:100%">
+    <div class="modal-header">
+      <span class="modal-title"><i class="ti ti-receipt" style="color:var(--accent);margin-right:6px"></i>Gerar Notas de Crédito/Débito</span>
+      <button class="modal-close" onclick="closeModal('ncd-modal')"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:14px">
+
+      <div class="dai-intro-box">
+        <i class="ti ti-info-circle"></i>
+        <div id="ncd-resumo-preview">Calculando…</div>
+      </div>
+
+      <div class="oc-form-group">
+        <label class="oc-label">Nome do Responsável <span class="oc-required">*</span></label>
+        <input type="text" id="ncd-form-nome" class="oc-input" placeholder="Nome completo">
+      </div>
+
+      <div class="oc-form-group">
+        <label class="oc-label">CPF do Responsável <span class="oc-required">*</span></label>
+        <input type="text" id="ncd-form-cpf" class="oc-input" inputmode="numeric" placeholder="000.000.000-00" maxlength="14" oninput="_ncdMaskCpf(this)">
+      </div>
+
+      <div class="oc-form-group">
+        <label class="oc-label">E-mail do Responsável <span class="oc-required">*</span></label>
+        <input type="email" id="ncd-form-email" class="oc-input" placeholder="nome@empresa.com">
+      </div>
+
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('ncd-modal')">Cancelar</button>
+      <button class="btn btn-primary" id="ncd-btn-gerar" onclick="ncdGerarPdf()">
+        <i class="ti ti-file-download"></i> Gerar PDF
       </button>
     </div>
   </div>

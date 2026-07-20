@@ -602,6 +602,22 @@
     if (delBtn) delBtn.disabled = n < 1;
   }
 
+  // Bridge somente-leitura pro módulo de Notas de Crédito/Débito (ncd.js)
+  // — evita expor invRows/invFiltered/_invSelected/invJustificativas
+  // (todos privados a este IIFE) como variáveis globais soltas. Chamado
+  // só sob demanda (clique no botão de gerar notas), nunca em loop —
+  // retornar as referências atuais é seguro porque ncd.js só LÊ, nunca
+  // muta nada aqui.
+  window._invGetDadosParaNotas = function() {
+    return {
+      invRows,
+      invFiltered,
+      selecionados: new Set(_invSelected),
+      justificativas: invJustificativas,
+      varIrrelevante: _invVarIrrelevante,
+    };
+  };
+
   // "Selecionar todos" marca/desmarca só as linhas atualmente visíveis
   // (invFiltered) — não mexe em seleções de linhas escondidas por filtro.
   window.invToggleSelectAll = function(checked) {

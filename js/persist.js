@@ -4,7 +4,7 @@ const IDB_STORE = 'kv';
 const IDB_STATE_KEY = 'appState';
 const legacyStateKey = STORAGE_KEY;
 // 'sap' é excluído do snapshot unificado — salvo em chunks separados
-const saveSnapshotKeys = ['configs', 'filiais', 'materiais', 'gruposMateriais', 'regionaisCentrais', 'entradas', 'saidas', 'lancamentos', 'sap', 'producao', 'imports', 'ocorrencias', 'acoesRelatorio', 'notifications', 'invJustificativas', 'sapFechamentoOverrides', 'ajustesSistemicos', 'ajustesExcluidos'];
+const saveSnapshotKeys = ['configs', 'filiais', 'materiais', 'gruposMateriais', 'regionaisCentrais', 'entradas', 'saidas', 'lancamentos', 'sap', 'producao', 'imports', 'ocorrencias', 'acoesRelatorio', 'notifications', 'invJustificativas', 'sapFechamentoOverrides', 'ajustesSistemicos', 'ajustesExcluidos', 'notasAjuste'];
 const SAP_CHUNK_SIZE  = 10000;  // registros por chunk
 const SAP_CHUNK_KEY   = 'sap_chunk_'; // prefixo das chaves: sap_chunk_0, sap_chunk_1...
 const SAP_META_KEY    = 'sap_meta';   // { totalChunks, totalRecords, savedAt }
@@ -368,7 +368,8 @@ function buildStateSnapshot() {
     invJustificativas: state.invJustificativas || [],
     sapFechamentoOverrides: state.sapFechamentoOverrides || [],
     ajustesSistemicos: state.ajustesSistemicos || [],
-    ajustesExcluidos: state.ajustesExcluidos || []
+    ajustesExcluidos: state.ajustesExcluidos || [],
+    notasAjuste: state.notasAjuste || []
   };
 }
 
@@ -788,7 +789,10 @@ function _emergencySave() {
       // e precisam sobreviver a um fechamento abrupto da aba, já que são
       // registros com validade fiscal/auditoria.
       ajustesSistemicos: state.ajustesSistemicos || [],
-      ajustesExcluidos:  state.ajustesExcluidos  || []
+      ajustesExcluidos:  state.ajustesExcluidos  || [],
+      // Mesma classe de risco: Notas de Crédito/Débito do Inventário
+      // (ver ncd.js) — registro leve, mas com validade fiscal.
+      notasAjuste:       state.notasAjuste       || []
     };
     localStorage.setItem(legacyStateKey, JSON.stringify(snapshot));
     console.info('[Persist] Emergency save executado.');

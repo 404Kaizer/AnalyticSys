@@ -4592,6 +4592,7 @@ const _BKP_MODULES = [
   { key: 'sapFechamentoOverrides', label: 'SAP — Overrides de Fechamento', icon: 'ti-calendar-check', color: 'var(--purple)' },
   { key: 'ajustesSistemicos', label: 'Documentos de Ajuste (DAI)', icon: 'ti-stamp', color: 'var(--gold)' },
   { key: 'ajustesExcluidos', label: 'DAI — Log de Exclusões', icon: 'ti-history', color: 'var(--gold)' },
+  { key: 'notasAjuste', label: 'Notas de Crédito/Débito', icon: 'ti-receipt', color: 'var(--teal)' },
 ];
 
 // Módulos selecionados para exportar (persiste durante a sessão do modal)

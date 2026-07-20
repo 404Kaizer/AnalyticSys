@@ -64,7 +64,15 @@ const defaultState = () => ({
   // em ocorrencias.js). Nunca é apagado: existe só para responder "por que
   // esse número não aparece mais no sistema?" numa auditoria futura. Não
   // guarda anexos nem descrição completa, só metadados de rastreabilidade.
-  ajustesExcluidos: []
+  ajustesExcluidos: [],
+  // Notas de Crédito/Débito geradas a partir do Fechamento de Inventário
+  // (ver ncd.js — botão na Visão Inventário do Dashboard Analítico).
+  // Registro LEVE por nota: numero, tipo (credito/debito), central,
+  // itens (material/qtd/valor/motivo) — NUNCA o PDF em si (gerado on the
+  // fly e baixado direto, nunca guardado em disco). Existe pra manter a
+  // numeração sequencial (NC/ND-<CENTRAL>-<DATA>-<seq>) coerente entre
+  // sessões e permitir auditoria do que já foi emitido.
+  notasAjuste: []
 });
 
 
