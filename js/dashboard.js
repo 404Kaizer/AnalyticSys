@@ -509,6 +509,16 @@ function _dgVgMovimentacaoTotais(results) {
   return { totalEnt, totalSai };
 }
 
+// Percentual com sinal — mesmo padrão visual de signedKg/signedMoney
+// (format.js): "+ "/"− " explícito na frente do valor absoluto, nunca
+// dependendo do sinal nativo do toLocaleString.
+function _dgVgSignedPct(v, decimals = 1) {
+  const n = num(v);
+  if (!Number.isFinite(n)) return '—';
+  const sign = n > 0.0001 ? '+ ' : n < -0.0001 ? '− ' : '';
+  return sign + Math.abs(n).toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }) + '%';
+}
+
 // Custo de uma movimentação SAP individual — valorTotal do registro, com
 // fallback custoUnit × peso (MESMO padrão já usado no cálculo de
 // custoMedioPorMat, em buildDashboardGerencialResults/getCustoMedioPorMat).
@@ -604,12 +614,36 @@ function _dgVgAggPorChave(pares, keyFn) {
   return map;
 }
 
-function _dgVgExtremos(map) {
+// Mesma agregação por chave (Regional/Central), mas somando o SALDO da
+// variação (kg, p.diff) em vez do custo implicado — usado só pra anexar
+// o kg correspondente ao vencedor de cada extremo (ver _dgVgExtremos).
+// Mantido separado de _dgVgAggPorChave porque esse mapa de custo também
+// alimenta os gráficos de barra (chart Regional/Usina) e o Top 8, que
+// esperam valor numérico simples — não dá pra misturar sem quebrar esses
+// outros usos.
+function _dgVgAggKgPorChave(pares, keyFn) {
+  const map = new Map();
+  pares.forEach(p => {
+    const k = keyFn(p);
+    if (!k || k === '—') return;
+    map.set(k, (map.get(k) || 0) + p.diff);
+  });
+  return map;
+}
+
+function _dgVgExtremos(map, kgMap = null) {
   let min = null, max = null;
   map.forEach((v, k) => {
     if (!min || v < min.v) min = { k, v };
     if (!max || v > max.v) max = { k, v };
   });
+  // kgMap opcional: anexa o saldo da variação (kg) da MESMA chave
+  // vencedora (mesmo regional/central que já venceu por custo) — não
+  // recalcula o extremo por kg, só decora o resultado já decidido por custo.
+  if (kgMap) {
+    if (min) min.kg = kgMap.get(min.k) || 0;
+    if (max) max.kg = kgMap.get(max.k) || 0;
+  }
   return { min, max };
 }
 
@@ -1054,8 +1088,10 @@ function renderDgVisaoGeralPdf(results, thresholds, dtIni, dtFim) {
 
   const porRegional = _dgVgAggPorChave(pares, p => p.regional);
   const porCentral  = _dgVgAggPorChave(pares, p => p.central);
-  const extRegional = _dgVgExtremos(porRegional);
-  const extCentral  = _dgVgExtremos(porCentral);
+  const porRegionalKg = _dgVgAggKgPorChave(pares, p => p.regional);
+  const porCentralKg  = _dgVgAggKgPorChave(pares, p => p.central);
+  const extRegional = _dgVgExtremos(porRegional, porRegionalKg);
+  const extCentral  = _dgVgExtremos(porCentral, porCentralKg);
 
   const custoVarMap    = _dgVgCustoVariacaoPorMaterial(pares);
   const custoAbsPorCat = _dgVgAgruparCustoVariacaoPorCategoria(custoVarMap);
@@ -1107,6 +1143,31 @@ function _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais, f
   const cstIcon = custoTotal     < -0.0001 ? 'ti-coin'    : custoTotal     > 0.0001 ? 'ti-coins' : 'ti-currency-dollar';
   const featTopStyle = col => `border-top:3px solid ${col};border-top-left-radius:var(--radius-lg);border-top-right-radius:var(--radius-lg)`;
 
+  // % da Variação sobre o Est. Teórico Total (Ini + Ent − Saí) — "o real
+  // contra o esperado". Saídas aqui é movTotais.totalSai, que já vem em
+  // magnitude positiva (ver _dgVgMovimentacaoTotais), por isso subtrai em
+  // vez de somar. Base 0 → '—' em vez de dividir por zero (decisão: uma
+  // "porcentagem sobre nada" não tem significado, não é 0%).
+  const totalEstTeorico = estTotais.totalIni + movTotais.totalEnt - movTotais.totalSai;
+  const pctVariacao = Math.abs(totalEstTeorico) > 0.0001 ? (varTotalFisica / totalEstTeorico) * 100 : null;
+
+  // % do Custo Var. sobre o Custo Teórico Total — mesma convenção da %
+  // física acima, só que com os totais de custo (custoIni do custo médio
+  // do material; custoEnt/custoSai do valor real registrado no SAP).
+  const custoEstTeorico = (estTotais.custoIni || 0) + (custoMovTotais.custoEnt || 0) - (custoMovTotais.custoSai || 0);
+  const pctCusto = Math.abs(custoEstTeorico) > 0.0001 ? (custoTotal / custoEstTeorico) * 100 : null;
+
+  // Evolução Estoque — Est. Final Total vs. Est. Inicial Total (kg/custo/%).
+  // Diferente da Variação: aqui é a mudança BRUTA do saldo entre início e
+  // fim do período, sem descontar entradas/saídas — mistura movimentação
+  // real com desfalque/sobra. custoIni/custoFim já vêm calculados em
+  // _dgVgEstoqueTotais (kg × custo médio do material).
+  const kgEvolucao    = estTotais.totalFim - estTotais.totalIni;
+  const custoEvolucao = (estTotais.custoFim || 0) - (estTotais.custoIni || 0);
+  const pctEvolucao   = Math.abs(estTotais.totalIni) > 0.0001 ? (kgEvolucao / estTotais.totalIni) * 100 : null;
+  const evoCol = colorFor(kgEvolucao), evoBg = bgFor(kgEvolucao);
+  const evoIconCls = kgEvolucao < -0.0001 ? 'ti-trending-down' : kgEvolucao > 0.0001 ? 'ti-trending-up' : 'ti-minus';
+
   // Badge de Ajustes de Fechamento Mensal desconsiderados — guarda os
   // registros em variável global (evita serializar potencialmente
   // centenas de registros num atributo HTML) para o modal reaproveitável
@@ -1125,6 +1186,7 @@ function _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais, f
         <div class="inv-kpi-body">
           <div class="inv-kpi-label">Variação</div>
           <div class="inv-kpi-value" style="color:${varCol}">${varSymbol(varTotalFisica)} ${fmtKg(Math.abs(varTotalFisica))}</div>
+          <div class="inv-kpi-pct" style="color:${varCol}">${pctVariacao === null ? '—' : _dgVgSignedPct(pctVariacao)}<span class="inv-kpi-pct-label">do Est. Teórico</span></div>
           <div class="inv-kpi-unit">kg bruto</div>
           ${fechBadgeHtml}
         </div>
@@ -1134,6 +1196,7 @@ function _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais, f
         <div class="inv-kpi-body">
           <div class="inv-kpi-label">Custo Var.</div>
           <div class="inv-kpi-value" style="color:${cstCol}">${varSymbol(custoTotal)} ${money(Math.abs(custoTotal))}</div>
+          <div class="inv-kpi-pct" style="color:${cstCol}">${pctCusto === null ? '—' : _dgVgSignedPct(pctCusto)}<span class="inv-kpi-pct-label">do Custo Teórico</span></div>
           <div class="inv-kpi-unit">R$ bruto</div>
         </div>
       </div>
@@ -1169,6 +1232,15 @@ function _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais, f
           <div class="inv-kpi-label">Est. Final Total</div>
           <div class="inv-kpi-value">${money(estTotais.custoFim || 0)}</div>
           <div class="inv-kpi-unit">${fmtKg(estTotais.totalFim)}</div>
+        </div>
+      </div>
+      <div class="inv-kpi-card">
+        <div class="inv-kpi-icon" style="background:${evoBg};color:${evoCol}"><i class="ti ${evoIconCls}"></i></div>
+        <div class="inv-kpi-body">
+          <div class="inv-kpi-label">Evolução Estoque</div>
+          <div class="inv-kpi-value" style="color:${evoCol}">${pctEvolucao === null ? '—' : _dgVgSignedPct(pctEvolucao)}</div>
+          <div class="inv-kpi-unit">${signedMoney(custoEvolucao)}</div>
+          <div class="inv-kpi-unit">${signedKg(kgEvolucao)}</div>
         </div>
       </div>
     </div>`;
@@ -1310,6 +1382,7 @@ function _dgVgRenderExtremos(extRegional, extCentral) {
     return `<div class="dg-vg-extremo-box ${cls}">
       <span class="dg-vg-extremo-label">${label}</span>
       <span class="dg-vg-extremo-value">${varSymbol(ext.v)} ${money(Math.abs(ext.v))}</span>
+      <span class="dg-vg-extremo-kg">${varSymbol(ext.kg || 0)} ${fmtKg(Math.abs(ext.kg || 0))}</span>
       <span class="dg-vg-extremo-name" title="${escapeHtml(ext.k)}">${escapeHtml(ext.k)}</span>
     </div>`;
   };

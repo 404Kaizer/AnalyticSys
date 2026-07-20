@@ -9505,6 +9505,11 @@ td:has(.lanc-central-edit:focus) {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.dg-vg-extremo-kg {
+  font-size: 10px;
+  font-family: var(--mono);
+  color: var(--text3);
+}
 .dg-vg-extremo-neg .dg-vg-extremo-value { color: var(--red); }
 .dg-vg-extremo-pos .dg-vg-extremo-value { color: var(--amber); }
 .dg-vg-extremo-empty .dg-vg-extremo-value { color: var(--text3); }

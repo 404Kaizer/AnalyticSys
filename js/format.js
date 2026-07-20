@@ -160,6 +160,16 @@ function signedMoneyShort(v) {
   return sign + moneyShort(Math.abs(n));
 }
 
+// Forma completa (sem abreviação M/K) — usada nos KPIs do Resumo do
+// Período, que deliberadamente não abreviam (ver comentário em
+// _dgVgRenderKpisHero, dashboard.js).
+function signedMoney(v, decimals = 2) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return '—';
+  const sign = n > 0.0001 ? '+ ' : n < -0.0001 ? '− ' : '';
+  return sign + money(Math.abs(n), decimals);
+}
+
 function toast(msg, type = 'success') {
   const el = document.getElementById('toast');
   const icon = el?.querySelector('i');
