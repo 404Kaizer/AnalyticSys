@@ -581,6 +581,7 @@
     _invSyncSelectModeBtn();
     _invSyncBatchBar();
     invRenderTabela(); // garante que os checkboxes reflitam _invSelected (limpo ou não)
+    invAtualizarKpis(); // KPIs/barra seguem a seleção — precisa recalcular ao entrar/sair do modo
   };
 
   function _invSyncSelectModeBtn() {
@@ -627,11 +628,13 @@
     });
     invRenderTabela();
     _invSyncBatchBar();
+    invAtualizarKpis(); // KPIs/barra seguem a seleção
   };
 
   window.invToggleRowSelect = function(k, checked) {
     if (checked) _invSelected.add(k); else _invSelected.delete(k);
     _invSyncBatchBar();
+    invAtualizarKpis(); // KPIs/barra seguem a seleção
   };
 
   function _invSyncTriggerLabel(key) {
@@ -1634,10 +1637,21 @@
     // a todos os filtros ativos (Regional/Central/Categoria/Material/Margem/
     // Ausência/Justificativa/Divergências), mantendo os KPIs sempre
     // coerentes com o que o analista está vendo na tabela abaixo.
+    // Se houver linhas SELECIONADAS (checkboxes do modo seleção), os KPIs
+    // passam a refletir SÓ a seleção — mais específico que o filtro, então
+    // tem prioridade. Sem seleção, volta pro recorte filtrado normal.
     // Materiais SEM cadastro são excluídos de TODAS as somas — decisão
     // confirmada: bloqueados da análise até serem cadastrados, contados
     // à parte só no indicador de pendência (invAtualizarSemCadastro).
-    const invRowsCadastrados = invFiltered.filter(r => !r.semCadastro);
+    const usandoSelecao = _invSelected.size > 0;
+    const invRowsBase = usandoSelecao ? invFiltered.filter(r => _invSelected.has(r.k)) : invFiltered;
+    const invRowsCadastrados = invRowsBase.filter(r => !r.semCadastro);
+
+    const hintEl = document.getElementById('inv-kpi-selecao-hint');
+    if (hintEl) {
+      const n = _invSelected.size;
+      hintEl.textContent = usandoSelecao ? ` · com base em ${n} linha${n === 1 ? '' : 's'} selecionada${n === 1 ? '' : 's'}` : '';
+    }
     const totalIni = invRowsCadastrados.reduce((s,r)=>s+r.estoqueIni,0);
     const totalEnt = invRowsCadastrados.reduce((s,r)=>s+r.entradasKg,0);
     const totalSai = invRowsCadastrados.reduce((s,r)=>s+r.saidasKg,0);
@@ -1744,13 +1758,16 @@
   // Pendentes) — mesmo recorte exibido na tabela (invFiltered, já com
   // TODOS os filtros ativos: Regional/Central/Categoria/Material/Margem/
   // Ausência/Justificativa/Divergências), mantendo a barra sempre coerente
-  // com o que o analista está vendo na tabela abaixo. Só considera linhas
-  // com variação relevante — quem não tem nada a justificar não entra na
-  // conta (senão o "Pendentes" fica inflado com linha que não precisa de
-  // ação nenhuma). Materiais sem cadastro também ficam de fora, mesmo
-  // critério dos KPIs acima.
+  // com o que o analista está vendo na tabela abaixo. Se houver linhas
+  // SELECIONADAS (checkboxes do modo seleção), passa a considerar SÓ a
+  // seleção — mesma prioridade usada nos KPIs acima (invAtualizarKpis).
+  // Só considera linhas com variação relevante — quem não tem nada a
+  // justificar não entra na conta (senão o "Pendentes" fica inflado com
+  // linha que não precisa de ação nenhuma). Materiais sem cadastro também
+  // ficam de fora, mesmo critério dos KPIs acima.
   function _invAtualizarProgresso() {
-    const relevantes = invFiltered.filter(r => !r.semCadastro && !_invVarIrrelevante(r.varKg));
+    const baseRows = _invSelected.size > 0 ? invFiltered.filter(r => _invSelected.has(r.k)) : invFiltered;
+    const relevantes = baseRows.filter(r => !r.semCadastro && !_invVarIrrelevante(r.varKg));
     let nAjustado = 0, nJustificado = 0, nPendente = 0;
     relevantes.forEach(r => {
       const estado = _invEstadoDaLinha(invJustificativas[r.k] || {});
