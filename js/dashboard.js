@@ -465,7 +465,16 @@ function _dgVgBuildPares(results, thresholds, dtIni, dtFim) {
       const level    = !catKey ? 'sem_cadastro' : (neutro ? 'bom' : classifyVariation(Math.abs(diff), catKey, thresholds));
       const custoMed = (r.custoMedioPorMat || {})[mat] || 0;
 
-      pares.push({ central: r.central, regional, mat, catKey, diff, level, neutro, custoImplicado: diff * custoMed, estoqueIni, estoqueFim });
+      // custoIni/custoFim: custo do SALDO de estoque (kg × custo médio do
+      // material) — usados pelos cards "Est. Inicial/Final Total" do resumo
+      // do período (ver _dgVgEstoqueTotais). Diferente de custoImplicado
+      // (custo da VARIAÇÃO, diff × custoMed) — aqui é o custo do saldo em
+      // si, não da diferença. Decisão confirmada com o Hugo.
+      pares.push({
+        central: r.central, regional, mat, catKey, diff, level, neutro,
+        custoImplicado: diff * custoMed, estoqueIni, estoqueFim,
+        custoIni: estoqueIni * custoMed, custoFim: estoqueFim * custoMed
+      });
     });
   });
 
@@ -479,9 +488,14 @@ function _dgVgBuildPares(results, thresholds, dtIni, dtFim) {
 // era calculado e descartado. Ausente conta como 0, sem aviso (decisão
 // confirmada: diferente do Inventário, que mostra "X ausentes").
 function _dgVgEstoqueTotais(pares) {
-  let totalIni = 0, totalFim = 0;
-  pares.forEach(p => { totalIni += p.estoqueIni || 0; totalFim += p.estoqueFim || 0; });
-  return { totalIni, totalFim };
+  let totalIni = 0, totalFim = 0, custoIni = 0, custoFim = 0;
+  pares.forEach(p => {
+    totalIni += p.estoqueIni || 0;
+    totalFim += p.estoqueFim || 0;
+    custoIni += p.custoIni || 0;
+    custoFim += p.custoFim || 0;
+  });
+  return { totalIni, totalFim, custoIni, custoFim };
 }
 
 // Entradas / Saídas Total — soma dos totais já calculados por central em
@@ -493,6 +507,38 @@ function _dgVgMovimentacaoTotais(results) {
   let totalEnt = 0, totalSai = 0;
   results.forEach(r => { totalEnt += r.totalEntradas || 0; totalSai += Math.abs(r.totalSaidas || 0); });
   return { totalEnt, totalSai };
+}
+
+// Custo de uma movimentação SAP individual — valorTotal do registro, com
+// fallback custoUnit × peso (MESMO padrão já usado no cálculo de
+// custoMedioPorMat, em buildDashboardGerencialResults/getCustoMedioPorMat).
+function _dgVgValorCustoSap(s) {
+  const p = Math.abs(num(s.peso));
+  if (!p) return 0;
+  const vt = num(s.valorTotal);
+  const cu = num(s.custoUnit);
+  return vt !== 0 ? Math.abs(vt) : (cu !== 0 ? Math.abs(cu) * p : 0);
+}
+
+// Custo de Entradas/Saídas — soma o custo de cada registro SAP do período,
+// filtrando por CÓDIGO de movimento (101/801 = entrada, 201 = saída),
+// conforme decisão do Hugo — não pelo sinal do peso. Fonte é o próprio
+// registro SAP (valorTotal/custoUnit), não o custo médio por material.
+// Nota: o kg de Entradas/Saídas (_dgVgMovimentacaoTotais, acima) soma
+// TODOS os códigos pelo sinal do peso, não só 101/801/201 — se houver
+// outros códigos no período (ex.: 309/transferência), o custo aqui pode
+// não cobrir exatamente o mesmo conjunto de registros do kg exibido no
+// mesmo card.
+function _dgVgCustoMovimentacaoTotais(results) {
+  let custoEnt = 0, custoSai = 0;
+  results.forEach(r => {
+    (r.sapNoPeriodo || []).forEach(s => {
+      const cod = normMov(s.movimento);
+      if (CODIGOS_ENTRADA.has(cod))      custoEnt += _dgVgValorCustoSap(s);
+      else if (CODIGOS_SAIDA.has(cod))   custoSai += _dgVgValorCustoSap(s);
+    });
+  });
+  return { custoEnt, custoSai };
 }
 
 // Tally de pares Central×Material por nível — MESMO critério usado em
@@ -1014,14 +1060,15 @@ function renderDgVisaoGeralPdf(results, thresholds, dtIni, dtFim) {
   const custoVarMap    = _dgVgCustoVariacaoPorMaterial(pares);
   const custoAbsPorCat = _dgVgAgruparCustoVariacaoPorCategoria(custoVarMap);
 
-  const estTotais = _dgVgEstoqueTotais(pares);
-  const movTotais = _dgVgMovimentacaoTotais(results);
+  const estTotais      = _dgVgEstoqueTotais(pares);
+  const movTotais      = _dgVgMovimentacaoTotais(results);
+  const custoMovTotais = _dgVgCustoMovimentacaoTotais(results);
 
   // Ajustes de Fechamento Mensal desconsiderados — agregados de todas as
   // centrais do período selecionado, para o badge/modal do card Variação.
   const sapFechExcluidosPeriodo = results.reduce((acc, r) => acc.concat(r.sapFechExcluidos || []), []);
 
-  _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais, sapFechExcluidosPeriodo);
+  _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais, sapFechExcluidosPeriodo, custoMovTotais);
   _dgVgRenderHealthDonuts(pares, counts, scoreInfo, thresholds);
   _dgVgRenderChartCategoriaFisica(catFisicaPct);
   _dgVgRenderExtremos(extRegional, extCentral);
@@ -1042,7 +1089,7 @@ function renderDgVisaoGeralPdf(results, thresholds, dtIni, dtFim) {
 //    o wrapper "Destaque do Período" (removido — não fazia sentido), mas
 //    MANTENDO os 2 níveis de tamanho/agrupamento. Valores por extenso,
 //    sem abreviação M/K (fmtKg/money em vez de fmtKgShort/moneyShort).
-function _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais, fechExcluidos = []) {
+function _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais, fechExcluidos = [], custoMovTotais = {}) {
   const el = document.getElementById('dg-vg-kpis-hero');
   if (!el) return;
 
@@ -1096,28 +1143,32 @@ function _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais, f
         <div class="inv-kpi-icon" style="background:var(--accent-dim);color:var(--accent)"><i class="ti ti-archive"></i></div>
         <div class="inv-kpi-body">
           <div class="inv-kpi-label">Est. Inicial Total</div>
-          <div class="inv-kpi-value">${fmtKg(estTotais.totalIni)}</div>
+          <div class="inv-kpi-value">${money(estTotais.custoIni || 0)}</div>
+          <div class="inv-kpi-unit">${fmtKg(estTotais.totalIni)}</div>
         </div>
       </div>
       <div class="inv-kpi-card">
         <div class="inv-kpi-icon" style="background:var(--green-bg);color:var(--green)"><i class="ti ti-arrow-bar-to-down"></i></div>
         <div class="inv-kpi-body">
           <div class="inv-kpi-label">Entradas</div>
-          <div class="inv-kpi-value">${fmtKg(movTotais.totalEnt)}</div>
+          <div class="inv-kpi-value">${money(custoMovTotais.custoEnt || 0)}</div>
+          <div class="inv-kpi-unit">${fmtKg(movTotais.totalEnt)}</div>
         </div>
       </div>
       <div class="inv-kpi-card">
         <div class="inv-kpi-icon" style="background:var(--red-bg);color:var(--red)"><i class="ti ti-arrow-bar-up"></i></div>
         <div class="inv-kpi-body">
           <div class="inv-kpi-label">Saídas</div>
-          <div class="inv-kpi-value">${fmtKg(movTotais.totalSai)}</div>
+          <div class="inv-kpi-value">${money(custoMovTotais.custoSai || 0)}</div>
+          <div class="inv-kpi-unit">${fmtKg(movTotais.totalSai)}</div>
         </div>
       </div>
       <div class="inv-kpi-card">
         <div class="inv-kpi-icon" style="background:var(--purple-bg);color:var(--purple)"><i class="ti ti-box"></i></div>
         <div class="inv-kpi-body">
           <div class="inv-kpi-label">Est. Final Total</div>
-          <div class="inv-kpi-value">${fmtKg(estTotais.totalFim)}</div>
+          <div class="inv-kpi-value">${money(estTotais.custoFim || 0)}</div>
+          <div class="inv-kpi-unit">${fmtKg(estTotais.totalFim)}</div>
         </div>
       </div>
     </div>`;
