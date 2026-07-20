@@ -387,20 +387,39 @@
   box-shadow: 0 10px 30px rgba(0,0,0,0.24);
 }
 
+/* Dashboard Gerencial (Resumo do Período): Variação/Custo Var. sem a caixa
+   de ícone — o ícone entra pequeno e sem fundo, dentro do próprio rótulo,
+   mesmo tratamento aplicado ao bloco secundário abaixo. Escopado ao
+   container #dg-vg-kpis-hero de propósito: o "Destaque do fechamento" do
+   Inventário reaproveita esta MESMA classe .inv-kpi-card-featured, mas seu
+   HTML (estático, em index.html) ainda tem a caixa de ícone tradicional —
+   uma regra genérica aqui desalinharia aquele card sem motivo, já que ele
+   não teve o ícone removido do HTML. */
+#dg-vg-kpis-hero .inv-kpi-card-featured .inv-kpi-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+#dg-vg-kpis-hero .inv-kpi-card-featured .inv-kpi-label i {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
 /* ── Bloco SECUNDÁRIO — Est. Inicial, Entradas, Saídas, Est. Final ── */
 .inv-kpi-secondary {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+  gap: 14px;
 }
 
-/* Cards um pouco maiores que o padrão base — mais próximos em proporção
-   dos cards hero (featured), sem chegar no mesmo tamanho. Escopado só
-   dentro do bloco secundário do Resumo do Período; NÃO altera .inv-kpi-card
-   base, que é reaproveitado no Inventário e no resumo SAP. */
+/* Cards mais próximos em proporção dos cards hero (featured), sem chegar
+   no mesmo tamanho — mantém a hierarquia visual (Variação/Custo Var. como
+   os KPIs mais importantes) mas evita que este bloco pareça "pequeno
+   demais" perto dele. Escopado só dentro do bloco secundário do Resumo
+   do Período; NÃO altera .inv-kpi-card base, que é reaproveitado no
+   Inventário e no resumo SAP. */
 .inv-kpi-secondary .inv-kpi-card {
   padding: 20px 22px;
-  gap: 16px;
 }
 .inv-kpi-secondary .inv-kpi-icon {
   width: 46px;
@@ -408,13 +427,47 @@
   font-size: 20px;
 }
 .inv-kpi-secondary .inv-kpi-label {
-  font-size: 11.5px;
+  font-size: 12px;
 }
 .inv-kpi-secondary .inv-kpi-value {
-  font-size: 18px;
+  font-size: 20px;
 }
 .inv-kpi-secondary .inv-kpi-unit {
-  font-size: 11px;
+  font-size: 11.5px;
+}
+
+/* Dashboard Gerencial: mesmo motivo do bloco de destaque acima — ícone
+   pequeno dentro do rótulo, sem a caixa colorida. Escopado a
+   #dg-vg-kpis-hero porque o Inventário reaproveita .inv-kpi-secondary
+   mas manteve a caixa de ícone tradicional no HTML estático. */
+#dg-vg-kpis-hero .inv-kpi-secondary .inv-kpi-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+#dg-vg-kpis-hero .inv-kpi-secondary .inv-kpi-label i {
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+/* Símbolo padrão de sobra/desfalque (varSymbol, ícone ti-circle-arrow-*)
+   — a função tem font-size fixo em 11px, pensado pra linhas de tabela
+   (11-13px de texto). Nos cards do Resumo do Período o texto ao lado é
+   bem maior (25px no valor principal, 19-20px no %), e o ícone de 11px
+   ficava minúsculo perto dele. Sobrescrevemos com !important (única forma
+   de vencer o font-size inline) só aqui, sem tocar o padrão usado no
+   resto do sistema (tabelas do Analítico/Inventário/Macro etc.). */
+#dg-vg-kpis-hero .inv-kpi-card-featured .inv-kpi-value i.ti {
+  font-size: 20px !important;
+}
+#dg-vg-kpis-hero .inv-kpi-card-featured .inv-kpi-pct i.ti {
+  font-size: 16px !important;
+}
+#dg-vg-kpis-hero .inv-kpi-secondary .inv-kpi-value i.ti {
+  font-size: 17px !important;
+}
+#dg-vg-kpis-hero .inv-kpi-secondary .inv-kpi-unit i.ti {
+  font-size: 13px !important;
 }
 
 @media (max-width: 1120px) {

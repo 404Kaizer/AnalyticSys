@@ -9471,48 +9471,65 @@ td:has(.lanc-central-edit:focus) {
 
 .dg-vg-extremos-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
 }
 .dg-vg-extremo-box {
   background: var(--bg2);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  padding: 12px 14px;
+  padding: 20px 20px 18px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 7px;
   min-width: 0;
+  transition: border-color 0.15s, box-shadow 0.2s, transform 0.18s;
+}
+.dg-vg-extremo-box:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.22);
 }
 .dg-vg-extremo-label {
-  font-size: 9px;
+  font-size: 11px;
   font-family: var(--mono);
   letter-spacing: .06em;
   text-transform: uppercase;
   color: var(--text3);
 }
 .dg-vg-extremo-value {
-  font-size: 15px;
+  font-size: clamp(22px, 2.4vw, 28px);
   font-weight: 700;
   font-family: var(--mono);
+  letter-spacing: -0.02em;
   white-space: nowrap;
 }
 .dg-vg-extremo-name {
-  font-size: 11px;
+  font-size: 14px;
   color: var(--text2);
-  font-weight: 500;
+  font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .dg-vg-extremo-kg {
-  font-size: 10px;
+  font-size: 12.5px;
   font-family: var(--mono);
   color: var(--text3);
 }
 .dg-vg-extremo-neg .dg-vg-extremo-value { color: var(--red); }
 .dg-vg-extremo-pos .dg-vg-extremo-value { color: var(--amber); }
 .dg-vg-extremo-empty .dg-vg-extremo-value { color: var(--text3); }
+
+/* Símbolo padrão de sobra/desfalque (varSymbol) — mesmo motivo do Resumo
+   do Período: o ícone tem font-size fixo em 11px (pensado pra tabelas),
+   pequeno demais perto do valor agora em clamp(22-28px). !important pra
+   vencer o inline style; escopado só a estes 2 elementos. */
+.dg-vg-extremo-value i.ti {
+  font-size: 18px !important;
+}
+.dg-vg-extremo-kg i.ti {
+  font-size: 13px !important;
+}
 
 /* ── Visão Geral: donut "Grupo de Material" (grande, esquerda) + 4 donuts
    de categoria (Agregado/Aglomerante/Aditivo/Adição) em grade 2×2 à direita,

@@ -509,16 +509,6 @@ function _dgVgMovimentacaoTotais(results) {
   return { totalEnt, totalSai };
 }
 
-// Percentual com sinal — mesmo padrão visual de signedKg/signedMoney
-// (format.js): "+ "/"− " explícito na frente do valor absoluto, nunca
-// dependendo do sinal nativo do toLocaleString.
-function _dgVgSignedPct(v, decimals = 1) {
-  const n = num(v);
-  if (!Number.isFinite(n)) return '—';
-  const sign = n > 0.0001 ? '+ ' : n < -0.0001 ? '− ' : '';
-  return sign + Math.abs(n).toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }) + '%';
-}
-
 // Custo de uma movimentação SAP individual — valorTotal do registro, com
 // fallback custoUnit × peso (MESMO padrão já usado no cálculo de
 // custoMedioPorMat, em buildDashboardGerencialResults/getCustoMedioPorMat).
@@ -1130,9 +1120,8 @@ function _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais, f
   if (!el) return;
 
   const colorFor = v => v < -0.0001 ? 'var(--red)'    : v > 0.0001 ? 'var(--amber)'    : 'var(--teal)';
-  const bgFor    = v => v < -0.0001 ? 'var(--red-bg)' : v > 0.0001 ? 'var(--amber-bg)' : 'var(--teal-bg)';
-  const varCol = colorFor(varTotalFisica), varBg = bgFor(varTotalFisica);
-  const cstCol = colorFor(custoTotal),     cstBg = bgFor(custoTotal);
+  const varCol = colorFor(varTotalFisica);
+  const cstCol = colorFor(custoTotal);
 
   // Ícone remete a desfalque/sobra FÍSICA (caixa vazia vs. caixa cheia) e
   // desfalque/sobra MONETÁRIA (moeda única vs. pilha de moedas) — mesmo
@@ -1165,7 +1154,7 @@ function _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais, f
   const kgEvolucao    = estTotais.totalFim - estTotais.totalIni;
   const custoEvolucao = (estTotais.custoFim || 0) - (estTotais.custoIni || 0);
   const pctEvolucao   = Math.abs(estTotais.totalIni) > 0.0001 ? (kgEvolucao / estTotais.totalIni) * 100 : null;
-  const evoCol = colorFor(kgEvolucao), evoBg = bgFor(kgEvolucao);
+  const evoCol = colorFor(kgEvolucao);
   const evoIconCls = kgEvolucao < -0.0001 ? 'ti-trending-down' : kgEvolucao > 0.0001 ? 'ti-trending-up' : 'ti-minus';
 
   // Badge de Ajustes de Fechamento Mensal desconsiderados — guarda os
@@ -1179,68 +1168,66 @@ function _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais, f
       </button>`
     : '';
 
+  // Magnitude do percentual, sem sinal — o sinal de sobra/desfalque já vem
+  // do varSymbol() (ícone padrão do sistema), então não repetimos "+ "/"− "
+  // em texto aqui (evita redundância símbolo + sinal).
+  const pctAbsStr = p => Math.abs(p).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
+
   el.innerHTML = `
     <div class="inv-kpi-featured-row">
       <div class="inv-kpi-card inv-kpi-card-featured" style="${featTopStyle(varCol)}">
-        <div class="inv-kpi-icon" style="background:${varBg};color:${varCol}"><i class="ti ${varIcon}"></i></div>
         <div class="inv-kpi-body">
-          <div class="inv-kpi-label">Variação</div>
+          <div class="inv-kpi-label"><i class="ti ${varIcon}" style="color:${varCol}"></i>Variação</div>
           <div class="inv-kpi-value" style="color:${varCol}">${varSymbol(varTotalFisica)} ${fmtKg(Math.abs(varTotalFisica))}</div>
-          <div class="inv-kpi-pct" style="color:${varCol}">${pctVariacao === null ? '—' : _dgVgSignedPct(pctVariacao)}<span class="inv-kpi-pct-label">do Est. Teórico</span></div>
+          <div class="inv-kpi-pct" style="color:${varCol}">${pctVariacao === null ? '—' : varSymbol(varTotalFisica) + ' ' + pctAbsStr(pctVariacao)}<span class="inv-kpi-pct-label">do Est. Teórico</span></div>
           <div class="inv-kpi-unit">kg bruto</div>
           ${fechBadgeHtml}
         </div>
       </div>
       <div class="inv-kpi-card inv-kpi-card-featured" style="${featTopStyle(cstCol)}">
-        <div class="inv-kpi-icon" style="background:${cstBg};color:${cstCol}"><i class="ti ${cstIcon}"></i></div>
         <div class="inv-kpi-body">
-          <div class="inv-kpi-label">Custo Var.</div>
+          <div class="inv-kpi-label"><i class="ti ${cstIcon}" style="color:${cstCol}"></i>Custo Var.</div>
           <div class="inv-kpi-value" style="color:${cstCol}">${varSymbol(custoTotal)} ${money(Math.abs(custoTotal))}</div>
-          <div class="inv-kpi-pct" style="color:${cstCol}">${pctCusto === null ? '—' : _dgVgSignedPct(pctCusto)}<span class="inv-kpi-pct-label">do Custo Teórico</span></div>
+          <div class="inv-kpi-pct" style="color:${cstCol}">${pctCusto === null ? '—' : varSymbol(custoTotal) + ' ' + pctAbsStr(pctCusto)}<span class="inv-kpi-pct-label">do Custo Teórico</span></div>
           <div class="inv-kpi-unit">R$ bruto</div>
         </div>
       </div>
     </div>
     <div class="inv-kpi-secondary">
       <div class="inv-kpi-card">
-        <div class="inv-kpi-icon" style="background:var(--accent-dim);color:var(--accent)"><i class="ti ti-archive"></i></div>
         <div class="inv-kpi-body">
-          <div class="inv-kpi-label">Est. Inicial Total</div>
+          <div class="inv-kpi-label"><i class="ti ti-archive" style="color:var(--accent)"></i>Est. Inicial Total</div>
           <div class="inv-kpi-value">${money(estTotais.custoIni || 0)}</div>
           <div class="inv-kpi-unit">${fmtKg(estTotais.totalIni)}</div>
         </div>
       </div>
       <div class="inv-kpi-card">
-        <div class="inv-kpi-icon" style="background:var(--green-bg);color:var(--green)"><i class="ti ti-arrow-bar-to-down"></i></div>
         <div class="inv-kpi-body">
-          <div class="inv-kpi-label">Entradas</div>
+          <div class="inv-kpi-label"><i class="ti ti-arrow-bar-to-down" style="color:var(--green)"></i>Entradas</div>
           <div class="inv-kpi-value">${money(custoMovTotais.custoEnt || 0)}</div>
           <div class="inv-kpi-unit">${fmtKg(movTotais.totalEnt)}</div>
         </div>
       </div>
       <div class="inv-kpi-card">
-        <div class="inv-kpi-icon" style="background:var(--red-bg);color:var(--red)"><i class="ti ti-arrow-bar-up"></i></div>
         <div class="inv-kpi-body">
-          <div class="inv-kpi-label">Saídas</div>
+          <div class="inv-kpi-label"><i class="ti ti-arrow-bar-up" style="color:var(--red)"></i>Saídas</div>
           <div class="inv-kpi-value">${money(custoMovTotais.custoSai || 0)}</div>
           <div class="inv-kpi-unit">${fmtKg(movTotais.totalSai)}</div>
         </div>
       </div>
       <div class="inv-kpi-card">
-        <div class="inv-kpi-icon" style="background:var(--purple-bg);color:var(--purple)"><i class="ti ti-box"></i></div>
         <div class="inv-kpi-body">
-          <div class="inv-kpi-label">Est. Final Total</div>
+          <div class="inv-kpi-label"><i class="ti ti-box" style="color:var(--purple)"></i>Est. Final Total</div>
           <div class="inv-kpi-value">${money(estTotais.custoFim || 0)}</div>
           <div class="inv-kpi-unit">${fmtKg(estTotais.totalFim)}</div>
         </div>
       </div>
       <div class="inv-kpi-card">
-        <div class="inv-kpi-icon" style="background:${evoBg};color:${evoCol}"><i class="ti ${evoIconCls}"></i></div>
         <div class="inv-kpi-body">
-          <div class="inv-kpi-label">Evolução Estoque</div>
-          <div class="inv-kpi-value" style="color:${evoCol}">${pctEvolucao === null ? '—' : _dgVgSignedPct(pctEvolucao)}</div>
-          <div class="inv-kpi-unit">${signedMoney(custoEvolucao)}</div>
-          <div class="inv-kpi-unit">${signedKg(kgEvolucao)}</div>
+          <div class="inv-kpi-label"><i class="ti ${evoIconCls}" style="color:${evoCol}"></i>Evolução Estoque</div>
+          <div class="inv-kpi-value" style="color:${evoCol}">${pctEvolucao === null ? '—' : varSymbol(kgEvolucao) + ' ' + pctAbsStr(pctEvolucao)}</div>
+          <div class="inv-kpi-unit">${varSymbol(kgEvolucao)} ${money(Math.abs(custoEvolucao))}</div>
+          <div class="inv-kpi-unit">${varSymbol(kgEvolucao)} ${fmtKg(Math.abs(kgEvolucao))}</div>
         </div>
       </div>
     </div>`;
