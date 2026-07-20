@@ -1630,13 +1630,14 @@
   function invAtualizarKpis() {
     invAtualizarSemCadastro();
 
-    // Usa invRows (total geral do inventário gerado) — os cards NÃO reagem
-    // aos filtros de Regional/Central/Categoria/Material/Ocultar Variação 0.
-    // Só a tabela (invFiltered) e os Alertas Pendentes seguem o filtro.
+    // Usa invFiltered (mesmo recorte exibido na tabela) — os cards REAGEM
+    // a todos os filtros ativos (Regional/Central/Categoria/Material/Margem/
+    // Ausência/Justificativa/Divergências), mantendo os KPIs sempre
+    // coerentes com o que o analista está vendo na tabela abaixo.
     // Materiais SEM cadastro são excluídos de TODAS as somas — decisão
     // confirmada: bloqueados da análise até serem cadastrados, contados
     // à parte só no indicador de pendência (invAtualizarSemCadastro).
-    const invRowsCadastrados = invRows.filter(r => !r.semCadastro);
+    const invRowsCadastrados = invFiltered.filter(r => !r.semCadastro);
     const totalIni = invRowsCadastrados.reduce((s,r)=>s+r.estoqueIni,0);
     const totalEnt = invRowsCadastrados.reduce((s,r)=>s+r.entradasKg,0);
     const totalSai = invRowsCadastrados.reduce((s,r)=>s+r.saidasKg,0);
@@ -1740,16 +1741,16 @@
   }
 
   // ── Resumo de progresso do fechamento (Ajustadas · Justificadas ·
-  // Pendentes) — mesmo recorte de "base filters" do badge de Alertas
-  // Pendentes logo abaixo (Regional/Central/Categoria/Material + toggles
-  // de zero/ausência, mas SEM o próprio "Só Pendentes"/"Só Divergências"),
-  // pra não variar dependendo desses toggles estarem ligados ou não. Só
-  // considera linhas com variação relevante — quem não tem nada a
-  // justificar não entra na conta (senão o "Pendentes" fica inflado com
-  // linha que não precisa de ação nenhuma). Materiais sem cadastro também
-  // ficam de fora, mesmo critério dos KPIs acima.
+  // Pendentes) — mesmo recorte exibido na tabela (invFiltered, já com
+  // TODOS os filtros ativos: Regional/Central/Categoria/Material/Margem/
+  // Ausência/Justificativa/Divergências), mantendo a barra sempre coerente
+  // com o que o analista está vendo na tabela abaixo. Só considera linhas
+  // com variação relevante — quem não tem nada a justificar não entra na
+  // conta (senão o "Pendentes" fica inflado com linha que não precisa de
+  // ação nenhuma). Materiais sem cadastro também ficam de fora, mesmo
+  // critério dos KPIs acima.
   function _invAtualizarProgresso() {
-    const relevantes = invRows.filter(r => !r.semCadastro && _invMatchesBaseFilters(r) && !_invVarIrrelevante(r.varKg));
+    const relevantes = invFiltered.filter(r => !r.semCadastro && !_invVarIrrelevante(r.varKg));
     let nAjustado = 0, nJustificado = 0, nPendente = 0;
     relevantes.forEach(r => {
       const estado = _invEstadoDaLinha(invJustificativas[r.k] || {});
