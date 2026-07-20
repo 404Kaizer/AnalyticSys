@@ -3378,7 +3378,14 @@ window._inv_helpers = {
 
   // Calcula custo médio ponderado por material para uma central/período,
   // usando EXATAMENTE a mesma lógica do Analítico:
-  //   1ª fonte: Saídas (Σ valorTotal / Σ peso) no período
+  //   1ª fonte: Saídas (Σ valorTotal / Σ peso) no período, restrita a
+  //             materiais cadastrados (mesmo filtro por materialOriginal
+  //             usado em buildDashboardGerencialResults e no cálculo
+  //             interno de custo do Analítico — sem isso, saídas de
+  //             materiais sem cadastro podiam contaminar a média de um
+  //             material cadastrado com nome resolvido coincidente,
+  //             fazendo o Custo Var. do Inventário divergir do Dashboard
+  //             Gerencial mesmo com a mesma variação em kg)
   //   fallback: SAP no período
   // Retorna um objeto { [material]: custoMedio }
   getCustoMedioPorMat(central, dtIni, dtFim) {
@@ -3389,7 +3396,8 @@ window._inv_helpers = {
 
     // ── 1. Saídas ──────────────────────────────────────────
     const saidasDaCentral = (_saidasByCentral.get(central) || [])
-      .filter(s => { const d = parseD(s.dtEmissao); return d && d >= dtIni && d <= dtFim; });
+      .filter(s => { const d = parseD(s.dtEmissao); return d && d >= dtIni && d <= dtFim; })
+      .filter(s => !!getCatKeyDoCadastro(s.materialOriginal));
 
     const _custoPorMat = {};
     const _pesoPorMat  = {};
@@ -3404,9 +3412,19 @@ window._inv_helpers = {
       custoMedioPorMat[mat] = _pesoPorMat[mat] > 0 ? _custoPorMat[mat] / _pesoPorMat[mat] : 0;
     });
 
-    // ── 2. Fallback: SAP (materiais sem custo nas Saídas) ──
+    // ── 2. Fallback: SAP (materiais sem custo nas Saídas) ──────
+    // Mesmos dois filtros aplicados ao sapNoPeriodo usado internamente por
+    // buildDashboardGerencialResults (dashboard.js) antes de calcular seu
+    // custoMedioPorMat: (a) materialOriginal cadastrado — mesmo motivo do
+    // filtro das Saídas acima; (b) exclui Ajustes de Fechamento Mensal
+    // (Y11/Y12, ver isSapExcluidoPorFechamento em ui.js) — sem isso, um
+    // registro de ajuste de saldo (que pode trazer peso e custo unitário
+    // altos) entrava na média ponderada aqui mas não no Dashboard
+    // Gerencial, divergindo o Custo Var. mesmo com a mesma variação em kg.
     const sapDaCentral = (_sapByCentral.get(central) || [])
-      .filter(r => { const d = parseD(r.dtLanc); return d && d >= dtIni && d <= dtFim; });
+      .filter(r => { const d = parseD(r.dtLanc); return d && d >= dtIni && d <= dtFim; })
+      .filter(r => !!getCatKeyDoCadastro(r.materialOriginal))
+      .filter(r => !isSapExcluidoPorFechamento(r));
 
     sapDaCentral.forEach(s => {
       const mat = s.material || '—';
