@@ -573,6 +573,12 @@
             <button class="btn" onclick="limparDashboardGerencial()" title="Limpar">
               <i class="ti ti-x"></i>
             </button>
+            <!-- Relatório Gerencial em PDF da Visão Geral — desabilitado até
+                 haver uma análise renderizada (ver window._dgVgLastData,
+                 populado no fim de renderDgVisaoGeralPdf em dashboard.js). -->
+            <button class="btn" id="dg-btn-relatorio-gerencial" onclick="gerarRelatorioGerencialDashboard()" title="Gerar Relatório Gerencial em PDF da Visão Geral" disabled>
+              <i class="ti ti-file-analytics"></i> <span>Relatório Gerencial</span>
+            </button>
           </div>
         </div>
 
@@ -609,6 +615,7 @@
         <div id="dg-vg-kpis-hero" class="inv-kpi-groups" style="margin-bottom:14px"></div>
 
         <!-- 2b. Os dois donuts de Saúde Geral (Centrais e Materiais), grandes e em evidência -->
+        <div class="section-title" style="margin:28px 0 14px"><i class="ti ti-heart-rate-monitor" style="font-size:13px;margin-right:6px"></i>Saúde Geral — Centrais e Materiais</div>
         <div class="dg-giro-dual-grid" style="margin-bottom:14px">
           <div class="oc-chart-card">
             <div class="oc-chart-title dg-vg-donut-title-row">
@@ -644,11 +651,14 @@
           </div>
         </div>
 
-        <!-- 4. Regional/Central — maior desfalque e maior sobra -->
-        <div class="section-title" style="margin:28px 0 14px"><i class="ti ti-scale" style="font-size:13px;margin-right:6px"></i>Regional/Central — Maior Desfalque e Maior Sobra</div>
+        <!-- 4, 5 & 6. Custo por Regional/Central — destaques (extremos) e
+             distribuição completa (barras). Mesma base de dados
+             (porRegional/porCentral em dashboard.js) em duas visualizações:
+             card de destaque primeiro, gráfico completo logo abaixo. Um só
+             cabeçalho pros dois blocos, já que não são assuntos diferentes. -->
+        <div class="section-title" style="margin:28px 0 14px"><i class="ti ti-scale" style="font-size:13px;margin-right:6px"></i>Custo por Regional e Central</div>
         <div id="dg-vg-extremos" class="dg-vg-extremos-grid" style="margin-bottom:14px"></div>
 
-        <!-- 5 & 6. Variação de Custo por Regional / por Central -->
         <div class="dg-giro-dual-grid">
           <div class="oc-chart-card">
             <div class="oc-chart-title"><i class="ti ti-users" style="margin-right:5px"></i>Variação de Custo por Regional</div>
@@ -671,6 +681,7 @@
         <!-- 7 & 8. Custo Absoluto: Grupo de Material (combinado, em destaque à
              esquerda) + 4 donuts de categoria (Agregado/Aglomerante/Aditivo/
              Adição), menores, em grade 2×2 à direita, complementando o principal. -->
+        <div class="section-title" style="margin:28px 0 14px"><i class="ti ti-chart-pie" style="font-size:13px;margin-right:6px"></i>Custo Absoluto — Por Grupo e Categoria de Material</div>
         <div class="dg-vg-grupo-layout" style="margin:14px 0">
           <div class="oc-chart-card" style="display:flex;flex-direction:column">
             <div class="oc-chart-title dg-vg-donut-title-row">
@@ -777,6 +788,36 @@
               <div class="dg-empty-riscos"><i class="ti ti-loader"></i><span>Aguardando análise...</span></div>
             </div>
           </div>
+        </div>
+
+        <!-- 10. Detalhado Analítico — tabela de detalhamento por material
+             (Grupo SAP) + 4 rankings (Regional/Central/Material/
+             Categoria). Última seção da Visão Geral. -->
+        <div class="section-title" style="margin:28px 0 14px"><i class="ti ti-table" style="font-size:13px;margin-right:6px"></i>Detalhado Analítico</div>
+
+        <div class="oc-chart-card" style="margin-bottom:14px">
+          <div class="oc-chart-title"><i class="ti ti-list-details" style="margin-right:5px"></i>Detalhamento por Material (Grupo SAP)</div>
+          <div id="dg-da-material"></div>
+        </div>
+
+        <div class="oc-chart-card" style="margin-bottom:14px">
+          <div class="oc-chart-title"><i class="ti ti-map-pin" style="margin-right:5px"></i>Ranking de Regionais</div>
+          <div id="dg-da-rank-regional"></div>
+        </div>
+
+        <div class="oc-chart-card" style="margin-bottom:14px">
+          <div class="oc-chart-title"><i class="ti ti-building-factory-2" style="margin-right:5px"></i>Ranking de Centrais</div>
+          <div id="dg-da-rank-central"></div>
+        </div>
+
+        <div class="oc-chart-card" style="margin-bottom:14px">
+          <div class="oc-chart-title"><i class="ti ti-box" style="margin-right:5px"></i>Ranking de Materiais</div>
+          <div id="dg-da-rank-material"></div>
+        </div>
+
+        <div class="oc-chart-card" style="margin-bottom:14px">
+          <div class="oc-chart-title"><i class="ti ti-category-2" style="margin-right:5px"></i>Ranking de Categoria</div>
+          <div id="dg-da-rank-categoria"></div>
         </div>
 
         </div><!-- /dg-pane-visao -->
@@ -1537,7 +1578,7 @@
           <!-- ══ BLOCO DE DESTAQUE — Variação e Custo Var. (dados mais
                importantes do resumo, separados e em maior evidência) ══ -->
           <div class="inv-kpi-featured">
-            <div class="inv-kpi-featured-label"><i class="ti ti-alert-triangle"></i> Destaque do fechamento</div>
+            <div class="inv-kpi-featured-label"><i class="ti ti-alert-triangle"></i> Destaque do fechamento<span id="inv-kpi-selecao-hint" style="text-transform:none;letter-spacing:normal;font-weight:600;color:var(--text3)"></span></div>
             <div class="inv-kpi-featured-row">
               <div class="inv-kpi-card inv-kpi-card-featured" id="inv-kpi-var">
                 <div class="inv-kpi-icon" style="background:var(--teal-bg);color:var(--teal)"><i class="ti ti-trending-up"></i></div>
@@ -1902,6 +1943,9 @@
               <input type="file" id="inv-import-csv-input" accept=".csv" style="display:none" onchange="_invHandleImportFile(this)">
               <button class="btn" onclick="invExportar()">
                 <i class="ti ti-file-spreadsheet"></i> Exportar CSV
+              </button>
+              <button class="btn" onclick="ncdAbrirModal()" title="Gera notas de crédito/débito em PDF a partir das linhas selecionadas — ou de todas as linhas visíveis, se nenhuma estiver selecionada">
+                <i class="ti ti-receipt"></i> Notas Créd./Déb.
               </button>
             </div>
           </div>
@@ -2607,7 +2651,7 @@
           </div>
           <div style="display:flex;gap:8px">
             <button class="btn" onclick="abrirModalDai()" title="Gerar Documento de Ajuste de Inventário (DAI)" style="gap:7px;font-size:12px;padding:8px 14px;background:linear-gradient(135deg,#8a6d1a,#c9a227);border:none;border-radius:8px;cursor:pointer;display:flex;align-items:center;color:#1c1608;font-weight:700;white-space:nowrap">
-              <i class="ti ti-rubber-stamp" style="font-size:14px"></i> Gerar Documento de Ajuste
+              <i class="ti ti-stamp" style="font-size:14px"></i> Gerar Documento de Ajuste
             </button>
             <button class="btn btn-primary" onclick="openOcorrenciaModal()">
               <i class="ti ti-plus"></i> Nova Ocorrência
@@ -4171,6 +4215,9 @@
 <!-- Biblioteca externa -->
 <script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<!-- jsPDF + jspdf-autotable — geração de PDF vetorial (Notas de Crédito/Débito, ver ncd.js) -->
+<script defer src="https://cdn.jsdelivr.net/npm/jspdf@4.2.1/dist/jspdf.umd.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/jspdf-autotable@5.0.8/dist/jspdf.plugin.autotable.min.js"></script>
 
 <!-- AnalyticSys — módulos JS (ordem importa) -->
 <script defer src="js/state.js"></script>
@@ -4188,6 +4235,7 @@
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script defer src="js/ocorrencias.js"></script>
 <script defer src="js/inventario.js"></script>
+<script defer src="js/ncd.js"></script>
 <script defer src="js/calendar.js"></script>
 <script defer src="js/relatorio.js"></script>
 <script defer src="js/agregados.js"></script>
@@ -4361,7 +4409,7 @@
 <div class="modal-overlay" id="dai-modal" role="dialog" aria-modal="true">
   <div class="modal-card" style="max-width:640px;width:100%">
     <div class="modal-header">
-      <span class="modal-title"><i class="ti ti-rubber-stamp" style="color:var(--gold);margin-right:6px"></i>Gerar Documento de Ajuste de Inventário</span>
+      <span class="modal-title"><i class="ti ti-stamp" style="color:var(--gold);margin-right:6px"></i>Gerar Documento de Ajuste de Inventário</span>
       <button class="modal-close" onclick="closeModal('dai-modal')"><i class="ti ti-x"></i></button>
     </div>
     <div class="modal-body" style="display:flex;flex-direction:column;gap:14px;max-height:70vh;overflow-y:auto">
@@ -4441,7 +4489,46 @@
     <div class="modal-footer">
       <button class="btn" onclick="closeModal('dai-modal')">Cancelar</button>
       <button class="btn" id="dai-btn-gerar" style="background:linear-gradient(135deg,#8a6d1a,#c9a227);border:none;color:#1c1608;font-weight:700" onclick="gerarDocumentoAjuste()">
-        <i class="ti ti-rubber-stamp"></i> Gerar Documento e Ocorrência
+        <i class="ti ti-stamp"></i> Gerar Documento e Ocorrência
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL: Notas de Crédito/Débito (Fechamento de Inventário) ═══ -->
+<div class="modal-overlay" id="ncd-modal" role="dialog" aria-modal="true">
+  <div class="modal-card" style="max-width:480px;width:100%">
+    <div class="modal-header">
+      <span class="modal-title"><i class="ti ti-receipt" style="color:var(--accent);margin-right:6px"></i>Gerar Notas de Crédito/Débito</span>
+      <button class="modal-close" onclick="closeModal('ncd-modal')"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:14px">
+
+      <div class="dai-intro-box">
+        <i class="ti ti-info-circle"></i>
+        <div id="ncd-resumo-preview">Calculando…</div>
+      </div>
+
+      <div class="oc-form-group">
+        <label class="oc-label">Nome do Responsável <span class="oc-required">*</span></label>
+        <input type="text" id="ncd-form-nome" class="oc-input" placeholder="Nome completo">
+      </div>
+
+      <div class="oc-form-group">
+        <label class="oc-label">CPF do Responsável <span class="oc-required">*</span></label>
+        <input type="text" id="ncd-form-cpf" class="oc-input" inputmode="numeric" placeholder="000.000.000-00" maxlength="14" oninput="_ncdMaskCpf(this)">
+      </div>
+
+      <div class="oc-form-group">
+        <label class="oc-label">E-mail do Responsável <span class="oc-required">*</span></label>
+        <input type="email" id="ncd-form-email" class="oc-input" placeholder="nome@empresa.com">
+      </div>
+
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('ncd-modal')">Cancelar</button>
+      <button class="btn btn-primary" id="ncd-btn-gerar" onclick="ncdGerarPdf()">
+        <i class="ti ti-file-download"></i> Gerar PDF
       </button>
     </div>
   </div>
