@@ -2916,8 +2916,19 @@ function _dgrCapturarCategoriaAmpliada() {
   const wrap   = canvas?.parentElement;
   if (!canvas || !chart || !wrap) return _dgrCanvasParaPngDataUrl('dg-vg-chart-categoria');
 
-  const ALTURA_RELATORIO = '460px'; // bem mais alto que os 180px da tela
-  const alturaOriginal = wrap.style.height;
+  // Controla LARGURA e ALTURA da captura — não só a altura. Na tela, esse
+  // card é largura cheia do Dashboard (bem mais largo que a coluna do
+  // relatório em retrato, ~590px de conteúdo dentro do card). Só mudar a
+  // altura (versão anterior) deixava a imagem com proporção larga/rasa
+  // (ex.: 1200×460), e ao ser exibida no card mais estreito do relatório
+  // via max-width:100%;height:auto, a altura EFETIVA encolhia nessa mesma
+  // proporção — voltando a parecer espremida mesmo com 460px "de verdade"
+  // na captura. Fixando os dois valores aqui, a proporção da imagem final
+  // fica sempre previsível, não importa a largura da tela de quem gerou.
+  const LARGURA_RELATORIO = '760px';
+  const ALTURA_RELATORIO  = '560px'; // proporção ~0,74 → bem equilibrado nos ~590px do card do relatório
+  const larguraOriginal = wrap.style.width;
+  const alturaOriginal  = wrap.style.height;
 
   // Snapshot das fontes originais (todas nascem com os mesmos valores
   // hoje, mas cada uma é restaurada da sua própria referência por
@@ -2931,6 +2942,7 @@ function _dgrCapturarCategoriaAmpliada() {
 
   let dataUrl = null;
   try {
+    wrap.style.width  = LARGURA_RELATORIO;
     wrap.style.height = ALTURA_RELATORIO;
 
     opts.scales.x.ticks.font = { ...scaleXFontOriginal, size: 15 };
@@ -2947,6 +2959,7 @@ function _dgrCapturarCategoriaAmpliada() {
     console.error('[Relatório Gerencial - Dashboard] Falha ao ampliar gráfico Categoria para captura:', err);
   } finally {
     // Restaura a tela ao estado original, mudando ou não.
+    wrap.style.width  = larguraOriginal;
     wrap.style.height = alturaOriginal;
     opts.scales.x.ticks.font = scaleXFontOriginal;
     opts.scales.y.ticks.font = scaleYFontOriginal;
@@ -3202,9 +3215,11 @@ function _dgrNowrapNum(str) {
 }
 function _dgrTabelaMaterialHtml(dados) {
   if (!dados.linhas.length) return '';
-  const rows = dados.linhas.map(l => `
+  const rows = dados.linhas.map(l => {
+    const catLabel = l.catKey ? (DG_VG_CATSUB_LABELS[l.catSubKey] || DG_VG_CAT_LABELS[l.catKey] || l.catKey) : '';
+    return `
     <tr>
-      <td class="rk-name" style="font-size:10.5px">${_rankEsc(l.mat)}${l.catKey ? `<div class="rk-sub">${_rankEsc(DG_VG_CATSUB_LABELS[l.catSubKey] || DG_VG_CAT_LABELS[l.catKey] || l.catKey)}</div>` : ''}</td>
+      <td class="rk-name" style="font-size:10.5px" title="${_rankEsc(l.mat)}"><span class="dgr-nome-trunc-inner">${_rankEsc(_dgrTruncNome(l.mat, 20))}</span>${catLabel ? `<div class="rk-sub dgr-nome-trunc-inner" title="${_rankEsc(catLabel)}">${_rankEsc(_dgrTruncNome(catLabel, 20))}</div>` : ''}</td>
       <td class="rk-num" style="color:#06b6d4">${_dgrNowrapNum(fmtKg(l.estIni))}</td>
       <td class="rk-num" style="color:#10b981">${_dgrNowrapNum(fmtKg(l.entKg))}</td>
       <td class="rk-num" style="color:#f43f5e">${_dgrNowrapNum(fmtKg(l.saiKg))}</td>
@@ -3213,7 +3228,8 @@ function _dgrTabelaMaterialHtml(dados) {
       <td class="rk-num" style="color:${_dgrValCor(l.pctVariacao)}">${_dgrNowrapNum(_daFmtPctSigned(l.pctVariacao))}</td>
       <td class="rk-num">${_dgrNowrapNum(money(l.custoMedio) + '/kg')}</td>
       <td class="rk-num" style="color:${_dgrValCor(l.custoAjuste)}">${_dgrNowrapNum(_daFmtMoneySigned(l.custoAjuste))}</td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
   const t = dados.total;
   const totalRow = `
     <tr style="font-weight:800;background:rgba(255,255,255,.05)">
@@ -3232,13 +3248,13 @@ function _dgrTabelaMaterialHtml(dados) {
       <div class="rk-table-head"><div class="rk-table-head-title">Detalhamento por Material (Grupo SAP)</div><div class="rk-table-head-cap">${dados.linhas.length} materia${dados.linhas.length !== 1 ? 'is' : 'l'}</div></div>
       <table class="rk-table dgr-material-table">
         <thead><tr>
-          <th style="width:11%">Grupo SAP</th>
+          <th style="width:9%">Grupo SAP</th>
           <th style="width:12%;text-align:right">Est. Inicial</th>
           <th style="width:12%;text-align:right">Entradas</th>
           <th style="width:12%;text-align:right">Saídas</th>
           <th style="width:12%;text-align:right">Est. Teórico</th>
           <th style="width:12%;text-align:right">Est. Final</th>
-          <th style="width:7%;text-align:right">% Variação</th>
+          <th style="width:9%;text-align:right">% Variação</th>
           <th style="width:11%;text-align:right">Custo Médio</th>
           <th style="width:11%;text-align:right">Custo Ajuste</th>
         </tr></thead>
@@ -3351,9 +3367,9 @@ function _dgrEstilos() {
     .dgr-chart-title { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:var(--dgr-text, #e2e8f0); margin-bottom:12px; display:flex; align-items:center; gap:6px; }
     .dgr-chart-empty { padding:40px 0; color:var(--dgr-text-dim2, #64748b); font-size:11px; text-align:center; }
     .dgr-chart-grid { display:grid; grid-template-columns:1fr 1fr; gap:24px; margin-top:16px; }
-    .dgr-extremos-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:13px; margin-bottom:6px; }
-    .dgr-extremo-box { background:var(--dgr-card-bg, rgba(255,255,255,.045)); border:1px solid var(--dgr-card-border, rgba(255,255,255,.09)); border-radius:12px; padding:16px 18px; page-break-inside:avoid; }
-    .dgr-extremo-label { font-size:9px; font-family:'JetBrains Mono',monospace; letter-spacing:.05em; text-transform:uppercase; color:var(--dgr-text-dim2, #64748b); margin-bottom:5px; }
+    .dgr-extremos-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(125px,1fr)); gap:10px; margin-bottom:6px; }
+    .dgr-extremo-box { background:var(--dgr-card-bg, rgba(255,255,255,.045)); border:1px solid var(--dgr-card-border, rgba(255,255,255,.09)); border-radius:12px; padding:13px 12px; page-break-inside:avoid; }
+    .dgr-extremo-label { font-size:7.6px; font-family:'JetBrains Mono',monospace; letter-spacing:.01em; text-transform:uppercase; color:var(--dgr-text-dim2, #64748b); margin-bottom:5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .dgr-extremo-value { font-size:19px; font-weight:700; font-family:'JetBrains Mono',monospace; letter-spacing:-.02em; margin-bottom:3px; }
     .dgr-extremo-kg { font-size:9.5px; font-family:'JetBrains Mono',monospace; color:var(--dgr-text-dim2, #64748b); margin-bottom:5px; }
     .dgr-extremo-name { font-size:11px; color:var(--dgr-brand-text, #cbd5e1); font-weight:600; }
@@ -3366,7 +3382,7 @@ function _dgrEstilos() {
       background:var(--dgr-card-bg, rgba(255,255,255,.045));
       border:1px solid var(--dgr-card-border, rgba(255,255,255,.09));
       border-radius:12px;
-      padding:16px 18px;
+      padding:16px 6px;
     }
     /* Cabeçalho e total (thead/tfoot) SEM repetir a cada quebra de
        página — por padrão, tanto o display:table-header-group (thead)
@@ -3388,8 +3404,8 @@ function _dgrEstilos() {
        (Giro & Cobertura + Detalhado Analítico) pra não alterar .rk-table
        nos outros relatórios do sistema (Ocorrências, Ranking etc.), que
        usam a densidade padrão do shell. */
-    .dgr-chart-card .rk-table th, .dgr-table-wrap .rk-table th { padding:9px 2px; font-size:7.5px; }
-    .dgr-chart-card .rk-table td, .dgr-table-wrap .rk-table td { padding:10px 2px; line-height:1.4; overflow-wrap:break-word; font-size:7.5px; }
+    .dgr-chart-card .rk-table th, .dgr-table-wrap .rk-table th { padding:9px 3px; font-size:7.5px; white-space:nowrap; letter-spacing:.02em; }
+    .dgr-chart-card .rk-table td, .dgr-table-wrap .rk-table td { padding:10px 3px; line-height:1.4; overflow-wrap:break-word; font-size:7.5px; }
     /* Coluna de nome (1ª coluna) é a única que pode quebrar em várias
        linhas — mantém uma fonte um pouco maior, mais legível, já que ela
        tem a largura reservada pra isso. As demais colunas (números) usam
