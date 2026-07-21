@@ -9545,13 +9545,13 @@ td:has(.lanc-central-edit:focus) {
   width: 100%;
   min-width: 100%;
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: 13px;
 }
 .da-table thead th {
-  padding: 9px 14px;
+  padding: 10px 14px;
   text-align: left;
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text3);
@@ -9569,7 +9569,7 @@ td:has(.lanc-central-edit:focus) {
 .da-table tbody tr:last-child { border-bottom: none; }
 .da-table tbody tr:hover { background: var(--bg3); }
 .da-table td {
-  padding: 9px 14px;
+  padding: 10px 14px;
   color: var(--text);
   vertical-align: middle;
   white-space: nowrap;
@@ -9577,7 +9577,7 @@ td:has(.lanc-central-edit:focus) {
 .da-mat-name { font-weight: 600; }
 .da-mat-cat {
   display: block;
-  font-size: 9.5px;
+  font-size: 10.5px;
   font-family: var(--mono);
   color: var(--text3);
   text-transform: uppercase;
@@ -9591,6 +9591,17 @@ td:has(.lanc-central-edit:focus) {
   font-weight: 700;
 }
 .da-table tfoot .da-total-row td { color: var(--text); }
+
+/* Destaque de "maior impacto" (Caminhões/Carretas/IBCs) nos rankings do
+   Detalhado Analítico — chip discreto, mesmo padrão visual dos badges já
+   usados no sistema (fundo accent-dim), sem alterar a cor de sinal
+   (vermelho/âmbar) que já está no texto. */
+.da-impacto {
+  background: var(--accent-dim);
+  border-radius: 4px;
+  padding: 2px 7px;
+  font-weight: 700;
+}
 
 
 /* ── Visão Geral: donut "Grupo de Material" (grande, esquerda) + 4 donuts

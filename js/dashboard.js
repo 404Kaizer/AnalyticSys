@@ -37,11 +37,13 @@ function buildDashboardGerencialResults(dtIni, dtFim) {
     //    analitico.js — decisão confirmada: exclusão total até serem
     //    cadastrados, sem contar em nenhuma soma/gráfico/indicador.
     const materialCatKeyMap = new Map();
+    const materialCatSubKeyMap = new Map();
     const matsSemCadastroSet = new Set();
     const lancsNoPeriodo = lancsNoPeriodoRaw.filter(r => {
       const catKey = getCatKeyDoCadastro(r.materialOriginal);
       if (!catKey) { matsSemCadastroSet.add(r.materialOriginal || '—'); return false; }
       materialCatKeyMap.set(r.material || '—', catKey);
+      materialCatSubKeyMap.set(r.material || '—', getCatSubKeyDoCadastro(r.materialOriginal));
       return true;
     });
     // Ajustes de Fechamento Mensal (Y11/Y12) — desconsiderados do cálculo,
@@ -53,6 +55,7 @@ function buildDashboardGerencialResults(dtIni, dtFim) {
       const catKey = getCatKeyDoCadastro(r.materialOriginal);
       if (!catKey) { matsSemCadastroSet.add(r.materialOriginal || '—'); return false; }
       materialCatKeyMap.set(r.material || '—', catKey);
+      materialCatSubKeyMap.set(r.material || '—', getCatSubKeyDoCadastro(r.materialOriginal));
       if (isSapExcluidoPorFechamento(r)) {
         sapFechExcluidos.push(r);
         const mat = r.material || '—';
@@ -212,6 +215,7 @@ function buildDashboardGerencialResults(dtIni, dtFim) {
       sapNoPeriodo, lancsNoPeriodo, lancsByMat, custoMedioPorMat,
       matsSemCadastro: [...matsSemCadastroSet].sort(),
       materialCatKeyMap,
+      materialCatSubKeyMap,
       sapFechExcluidos, sapFechExcluidosByMat
     });
   });
@@ -377,6 +381,13 @@ const DG_VG_CAT_LABELS = { agregado: 'Agregado', aglomerante: 'Aglomerante', adi
 const DG_VG_CAT_COLORS = { agregado: '#8b5cf6', aglomerante: '#3b82f6', aditivo: '#f59e0b', adicao: '#10b981' };
 const DG_VG_CAT_ORDER  = ['agregado', 'aglomerante', 'aditivo', 'adicao'];
 
+// Rótulos de subcategoria de Agregado (Graúdo/Miúdo) — usados só pelo
+// Ranking de Categoria do Detalhado Analítico (jul/2026, a pedido do
+// Hugo). O restante da Visão Geral (KPIs, donuts, gráficos de saúde)
+// continua tratando Agregado como categoria única — só esse ranking abre
+// a distinção.
+const DG_VG_CATSUB_LABELS = { agregado_graudo: 'Agregado Graúdo', agregado_miudo: 'Agregado Miúdo' };
+
 let _dgVgCharts = {};
 function _dgVgDestroyChart(key) {
   if (_dgVgCharts[key]) {
@@ -438,6 +449,11 @@ function _dgVgBuildPares(results, thresholds, dtIni, dtFim) {
       // não uma re-derivação por nome resolvido (que poderia colidir com
       // outro cadastro não relacionado).
       const catKey = (r.materialCatKeyMap && r.materialCatKeyMap.get(mat)) || null;
+      // catSubKey distingue Agregado Graúdo/Miúdo (usado só pelo Ranking de
+      // Categoria) — mesmo lookup seguro via materialCatSubKeyMap, sem
+      // re-derivar por nome. null pra qualquer categoria que não seja
+      // Agregado (Aglomerante/Aditivo/Adição não têm subcategoria).
+      const catSubKey = (r.materialCatSubKeyMap && r.materialCatSubKeyMap.get(mat)) || null;
 
       let diff, estoqueIni = 0, estoqueFim = 0, entKg = 0, saiKg = 0;
       if (dtIni && dtFim) {
@@ -483,7 +499,7 @@ function _dgVgBuildPares(results, thresholds, dtIni, dtFim) {
       // (custo da VARIAÇÃO, diff × custoMed) — aqui é o custo do saldo em
       // si, não da diferença. Decisão confirmada com o Hugo.
       pares.push({
-        central: r.central, regional, mat, catKey, diff, level, neutro,
+        central: r.central, regional, mat, catKey, catSubKey, diff, level, neutro,
         custoImplicado: diff * custoMed, estoqueIni, estoqueFim,
         custoIni: estoqueIni * custoMed, custoFim: estoqueFim * custoMed,
         entKg, saiKg, custoMed
@@ -1193,7 +1209,7 @@ function _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais, f
   // Magnitude do percentual, sem sinal — o sinal de sobra/desfalque já vem
   // do varSymbol() (ícone padrão do sistema), então não repetimos "+ "/"− "
   // em texto aqui (evita redundância símbolo + sinal).
-  const pctAbsStr = p => Math.abs(p).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
+  const pctAbsStr = p => Math.abs(p).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%';
 
   el.innerHTML = `
     <div class="inv-kpi-featured-row">
@@ -1735,7 +1751,7 @@ function _daBuildTabelaMaterial(pares) {
   const map = new Map(); // mat -> acumulador
   pares.forEach(p => {
     if (!map.has(p.mat)) map.set(p.mat, {
-      mat: p.mat, catKey: p.catKey,
+      mat: p.mat, catKey: p.catKey, catSubKey: p.catSubKey,
       estIni: 0, entKg: 0, saiKg: 0, estFim: 0, custoAjuste: 0,
       somaValorPond: 0, somaPesoPond: 0
     });
@@ -1882,7 +1898,7 @@ function _daColorFor(v) {
 }
 function _daFmtPctSigned(pct) {
   if (pct === null || pct === undefined || !Number.isFinite(pct)) return '—';
-  return `${varSymbol(pct)} ${Math.abs(pct).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+  return `${varSymbol(pct)} ${Math.abs(pct).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
 }
 function _daFmtMoneySigned(v) {
   return `${varSymbol(v)} ${money(Math.abs(v))}`;
@@ -1904,7 +1920,7 @@ function _daRenderTabelaMaterial(containerId, dados) {
     <tr>
       <td>
         <span class="da-mat-name">${escapeHtml(l.mat)}</span>
-        ${l.catKey ? `<span class="da-mat-cat">${escapeHtml(DG_VG_CAT_LABELS[l.catKey] || l.catKey)}</span>` : ''}
+        ${l.catKey ? `<span class="da-mat-cat">${escapeHtml(DG_VG_CATSUB_LABELS[l.catSubKey] || DG_VG_CAT_LABELS[l.catKey] || l.catKey)}</span>` : ''}
       </td>
       <td class="da-num" style="color:var(--teal)">${fmtKg(l.estIni)}</td>
       <td class="da-num" style="color:var(--green)">${fmtKg(l.entKg)}</td>
@@ -1952,6 +1968,22 @@ function _daRenderTabelaMaterial(containerId, dados) {
     </div>`;
 }
 
+// Qual das 3 colunas (Caminhões/Carretas/IBCs) teve o MAIOR impacto
+// (maior valor absoluto) nessa linha — usado só pra destacar visualmente
+// a célula correspondente no ranking. Em empate, ou quando as 3 são ~0,
+// não destaca nenhuma (destacar uma das empatadas seria arbitrário).
+function _daMaiorImpacto(l) {
+  const abs = {
+    caminhoes: Math.abs(l.caminhoes || 0),
+    carretas:  Math.abs(l.carretas  || 0),
+    ibcs:      Math.abs(l.ibcs      || 0)
+  };
+  const max = Math.max(abs.caminhoes, abs.carretas, abs.ibcs);
+  if (max <= 0.0001) return null;
+  const empatados = Object.keys(abs).filter(k => Math.abs(abs[k] - max) <= 0.0001);
+  return empatados.length === 1 ? empatados[0] : null;
+}
+
 // ── Render: 2-5. Rankings (mesma estrutura de colunas nos 4) ───────────
 function _daRenderRanking(containerId, dados, colNomeLabel) {
   const el = document.getElementById(containerId);
@@ -1960,15 +1992,21 @@ function _daRenderRanking(containerId, dados, colNomeLabel) {
     el.innerHTML = '<div class="dg-empty-riscos"><i class="ti ti-database-off"></i><span>Sem dados no período.</span></div>';
     return;
   }
-  const rowsHtml = dados.linhas.map(l => `
+  const rowsHtml = dados.linhas.map(l => {
+    const imp = _daMaiorImpacto(l);
+    const cell = (campo, valor) => imp === campo
+      ? `<span class="da-impacto">${_daFmtCountSigned(valor)}</span>`
+      : _daFmtCountSigned(valor);
+    return `
     <tr>
       <td>${escapeHtml(l.nome)}</td>
-      <td class="da-num" style="color:${_daColorFor(l.caminhoes)}">${_daFmtCountSigned(l.caminhoes)}</td>
-      <td class="da-num" style="color:${_daColorFor(l.carretas)}">${_daFmtCountSigned(l.carretas)}</td>
-      <td class="da-num" style="color:${_daColorFor(l.ibcs)}">${_daFmtCountSigned(l.ibcs)}</td>
+      <td class="da-num" style="color:${_daColorFor(l.caminhoes)}">${cell('caminhoes', l.caminhoes)}</td>
+      <td class="da-num" style="color:${_daColorFor(l.carretas)}">${cell('carretas', l.carretas)}</td>
+      <td class="da-num" style="color:${_daColorFor(l.ibcs)}">${cell('ibcs', l.ibcs)}</td>
       <td class="da-num" style="color:${_daColorFor(l.pctVariacao)}">${_daFmtPctSigned(l.pctVariacao)}</td>
       <td class="da-num" style="color:${_daColorFor(l.custoTotal)}">${_daFmtMoneySigned(l.custoTotal)}</td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
 
   const t = dados.total;
   const totalHtml = `
@@ -2024,7 +2062,17 @@ function _daRenderDetalhadoAnalitico(results, pares, totalEstTeoricoKpi) {
   const rankRegional  = _daBuildRanking(pares, pesoMedio, p => p.regional, totalEstTeoricoKpi, k => k === '—' ? 'Sem regional' : k);
   const rankCentral   = _daBuildRanking(pares, pesoMedio, p => p.central,  totalEstTeoricoKpi);
   const rankMaterial  = _daBuildRanking(pares, pesoMedio, p => p.mat,      totalEstTeoricoKpi);
-  const rankCategoria = _daBuildRanking(pares, pesoMedio, p => p.catKey,   totalEstTeoricoKpi, k => DG_VG_CAT_LABELS[k] || k);
+  // Categoria: Agregado é dividido em Graúdo/Miúdo (catSubKey) — as outras
+  // 3 categorias (Aglomerante/Aditivo/Adição) continuam agrupadas normal,
+  // por catKey. "agregado_sem_subcategoria" é um fallback defensivo (não
+  // deve ocorrer na prática: o cadastro exige Graúdo ou Miúdo explícito
+  // pra qualquer material marcado como Agregado).
+  const rankCategoria = _daBuildRanking(
+    pares, pesoMedio,
+    p => p.catKey === 'agregado' ? (p.catSubKey || 'agregado_sem_subcategoria') : p.catKey,
+    totalEstTeoricoKpi,
+    k => DG_VG_CATSUB_LABELS[k] || DG_VG_CAT_LABELS[k] || (k === 'agregado_sem_subcategoria' ? 'Agregado (sem subcategoria)' : k)
+  );
 
   _daRenderRanking('dg-da-rank-regional',  rankRegional,  'Regional');
   _daRenderRanking('dg-da-rank-central',   rankCentral,   'Central');
