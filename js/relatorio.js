@@ -2925,13 +2925,13 @@ function _dgrCapturarCategoriaAmpliada() {
   // proporção — voltando a parecer espremida mesmo com 460px "de verdade"
   // na captura. Fixando os dois valores aqui, a proporção da imagem final
   // fica sempre previsível, não importa a largura da tela de quem gerou.
-  const LARGURA_RELATORIO = '760px';
-  const ALTURA_RELATORIO  = '560px'; // proporção ~0,74 → bem equilibrado nos ~590px do card do relatório
+  const LARGURA_RELATORIO = '840px';
+  const ALTURA_RELATORIO  = '620px'; // proporção ~0,74 → mantém o equilíbrio nos ~590px do card do relatório
   const larguraOriginal = wrap.style.width;
   const alturaOriginal  = wrap.style.height;
 
-  // Snapshot das fontes originais (todas nascem com os mesmos valores
-  // hoje, mas cada uma é restaurada da sua própria referência por
+  // Snapshot das fontes/opções originais (todas nascem com os mesmos
+  // valores hoje, mas cada uma é restaurada da sua própria referência por
   // segurança caso algum dia divirjam).
   const opts = chart.options;
   const scaleXFontOriginal   = { ...opts.scales.x.ticks.font };
@@ -2939,17 +2939,42 @@ function _dgrCapturarCategoriaAmpliada() {
   const legendFontOriginal   = { ...opts.plugins.legend.labels.font };
   const totalsFontSizeOriginal = opts.plugins.dgVgCategoryTotals.fontSize;
   const barLabelsFontSizeOriginal = opts.plugins.dgVgBarValueLabels.fontSize;
+  const graceOriginal = opts.scales.x.grace;
+  const categoryPercentageOriginal = opts.scales.y.categoryPercentage;
+  const barPercentageOriginal = opts.scales.y.barPercentage;
+  const paddingLeftOriginal  = opts.layout.padding.left;
+  const paddingRightOriginal = opts.layout.padding.right;
 
   let dataUrl = null;
   try {
     wrap.style.width  = LARGURA_RELATORIO;
     wrap.style.height = ALTURA_RELATORIO;
 
-    opts.scales.x.ticks.font = { ...scaleXFontOriginal, size: 15 };
-    opts.scales.y.ticks.font = { ...scaleYFontOriginal, size: 16 };
-    opts.plugins.legend.labels.font = { ...legendFontOriginal, size: 15 };
-    opts.plugins.dgVgCategoryTotals.fontSize = 15;
-    opts.plugins.dgVgBarValueLabels.fontSize = 15;
+    opts.scales.x.ticks.font = { ...scaleXFontOriginal, size: 17 };
+    opts.scales.y.ticks.font = { ...scaleYFontOriginal, size: 18 };
+    opts.plugins.legend.labels.font = { ...legendFontOriginal, size: 17 };
+    opts.plugins.dgVgCategoryTotals.fontSize = 17;
+    opts.plugins.dgVgBarValueLabels.fontSize = 17;
+
+    // Sobreposição "Adição"/"459,5 kg" e "11,0 K kg"/"Δ -5,1 K kg" das
+    // capturas anteriores corrigidas na raiz: _dgVgBarValueLabelsPlugin
+    // (dashboard.js) agora SEMPRE desenha dentro da barra quando ela tem
+    // espaço, ficando contido nos próprios limites dela — não depende
+    // mais de calcular o espaço "fora" (frágil, variava com os dados).
+    // Esse grace um pouco maior aqui é só respiro visual extra.
+    opts.scales.x.grace = '25%';
+    // Barras mais finas — pedido do usuário. categoryPercentage controla
+    // quanto da "fatia" de cada categoria a barra ocupa (0.8 = padrão do
+    // Chart.js); reduzindo, sobra mais respiro vertical entre as linhas
+    // e a barra fica visualmente mais fina, sem mudar o comprimento (%).
+    opts.scales.y.categoryPercentage = 0.5;
+    opts.scales.y.barPercentage = 0.85;
+    // Δ (dashboard.js) agora ancora pela borda direita do canvas — nunca
+    // mais corta, seja qual for o tamanho do texto. Esse padding.right
+    // ainda importa: é o espaço reservado pra essa coluna existir sem
+    // "empurrar"/sobrepor a área dos gráficos. Valor generoso de propósito.
+    opts.layout.padding.left  = 60;
+    opts.layout.padding.right = 190;
 
     chart.resize();
     chart.update('none'); // sem animação — desenha na hora, síncrono
@@ -2966,6 +2991,11 @@ function _dgrCapturarCategoriaAmpliada() {
     opts.plugins.legend.labels.font = legendFontOriginal;
     opts.plugins.dgVgCategoryTotals.fontSize = totalsFontSizeOriginal;
     opts.plugins.dgVgBarValueLabels.fontSize = barLabelsFontSizeOriginal;
+    opts.scales.x.grace = graceOriginal;
+    opts.scales.y.categoryPercentage = categoryPercentageOriginal;
+    opts.scales.y.barPercentage = barPercentageOriginal;
+    opts.layout.padding.left  = paddingLeftOriginal;
+    opts.layout.padding.right = paddingRightOriginal;
     try { chart.resize(); chart.update('none'); } catch (e) { /* noop */ }
   }
 

@@ -1500,14 +1500,37 @@ const _dgVgBarValueLabelsPlugin = {
         const pctValue = dataset.data[i];
         const kgValue  = (dataset.kgValues && dataset.kgValues[i]) || 0;
         if (!pctValue || !kgValue) return; // sem barra, sem rótulo
-        const { x, y } = bar.getProps(['x', 'y'], true);
+        const { x, y, base } = bar.getProps(['x', 'y', 'base'], true);
         const negative = pctValue < 0;
+        const texto = fmtKgShort(Math.abs(kgValue));
         ctx.save();
         ctx.font = `600 ${fontSize}px 'DM Mono', monospace`;
-        ctx.fillStyle = negative ? '#f43f5e' : '#f59e0b';
         ctx.textBaseline = 'middle';
-        ctx.textAlign = negative ? 'right' : 'left';
-        ctx.fillText(fmtKgShort(Math.abs(kgValue)), x + (negative ? -6 : 6), y);
+
+        // SEMPRE prefere desenhar DENTRO da barra quando ela tiver espaço
+        // pro texto — o texto fica então inteiramente contido dentro dos
+        // próprios limites da barra (base↔x), sem depender em nada da
+        // posição do rótulo do eixo Y (à esquerda) nem da coluna Δ
+        // desenhada por outro plugin (à direita). Isso elimina de vez o
+        // risco de colidir com qualquer um dos dois, pra qualquer
+        // combinação de dados/fonte. Só cai pra fora (comportamento
+        // antigo) quando a própria barra é curta demais pro texto caber
+        // dentro dela — nesse caso a barra também está longe das bordas
+        // (é a categoria menos grave), então sobra espaço de sobra fora.
+        const largura = ctx.measureText(texto).width;
+        const larguraBarra = Math.abs(base - x);
+        const MARGEM = 14;
+        const desenharDentro = larguraBarra >= largura + MARGEM;
+
+        if (desenharDentro) {
+          ctx.fillStyle = '#fff';
+          ctx.textAlign = negative ? 'left' : 'right';
+          ctx.fillText(texto, x + (negative ? 6 : -6), y);
+        } else {
+          ctx.fillStyle = negative ? '#f43f5e' : '#f59e0b';
+          ctx.textAlign = negative ? 'right' : 'left';
+          ctx.fillText(texto, x + (negative ? -6 : 6), y);
+        }
         ctx.restore();
       });
     });
@@ -1526,17 +1549,22 @@ const _dgVgCategoryTotalsPlugin = {
     const totals = chart.options.plugins?.dgVgCategoryTotals?.totals;
     if (!totals || !totals.length) return;
     const fontSize = chart.options.plugins?.dgVgCategoryTotals?.fontSize || 10;
-    const { ctx, chartArea, scales } = chart;
+    const { ctx, width } = chart;
     ctx.save();
     ctx.font = `600 ${fontSize}px 'DM Mono', monospace`;
     ctx.fillStyle = '#7b85a0';
     ctx.textBaseline = 'middle';
-    ctx.textAlign = 'left';
+    // Ancorado pela BORDA DIREITA do canvas (textAlign:'right', x fixo
+    // perto do fim), não por um X fixo à esquerda crescendo pra direita
+    // (versão anterior) — dessa forma o texto NUNCA passa da borda do
+    // canvas, não importa o tamanho (ex.: "Δ +123,6 K kg" cortado com
+    // fonte maior). O texto cresce "pra dentro" a partir da borda.
+    ctx.textAlign = 'right';
     totals.forEach((totalKg, i) => {
-      const y = scales.y.getPixelForTick(i);
+      const y = chart.scales.y.getPixelForTick(i);
       if (y == null) return;
       const sign = totalKg > 0.0001 ? '+' : '';
-      ctx.fillText(`Δ ${sign}${fmtKgShort(totalKg)}`, chartArea.right + 14, y);
+      ctx.fillText(`Δ ${sign}${fmtKgShort(totalKg)}`, width - 8, y);
     });
     ctx.restore();
   }
