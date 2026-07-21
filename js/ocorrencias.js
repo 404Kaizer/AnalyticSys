@@ -1030,7 +1030,7 @@ function _renderOcLista(lista) {
             <i class="ti ti-printer"></i>
           </button>
           <button class="btn btn-sm ${!o.concluida ? 'oc-btn-concluir' : ''}" onclick="event.stopPropagation();editarSapDai('${o.daiId || ''}')" title="${o.concluida ? 'Editar Nº do documento SAP' : 'Preencher Nº do documento SAP e concluir'}">
-            <i class="ti ti-edit"></i>${!o.concluida ? ' Preencher Nº SAP' : ''}
+            <i class="ti ti-edit"></i>
           </button>
           <button class="btn btn-sm" onclick="event.stopPropagation();baixarZipDai('${o.daiId || ''}')" title="Baixar ZIP (documento + anexos)">
             <i class="ti ti-download"></i>
