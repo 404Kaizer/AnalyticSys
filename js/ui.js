@@ -2983,7 +2983,7 @@ function toggleDetailFilter(btn) {
               title="Acumulado dos dias anteriores ocultos">
               <span class="bdm-total">${fmtKg(pendingTotal)}</span>
               <i class="ti ti-table-options bdm-icon"></i>
-              <i class="ti ti-layers" style="font-size:9px;opacity:.65;margin-left:3px"></i>
+              <i class="ti ti-stack-2" style="font-size:9px;opacity:.65;margin-left:3px"></i>
             </button>`;
           }
         };
@@ -4590,7 +4590,7 @@ const _BKP_MODULES = [
   { key: 'imports',     label: 'Histórico de Importações', icon: 'ti-history',     color: 'var(--text3)'  },
   { key: 'invJustificativas', label: 'Inventário — Justificativas', icon: 'ti-clipboard-check', color: 'var(--amber)' },
   { key: 'sapFechamentoOverrides', label: 'SAP — Overrides de Fechamento', icon: 'ti-calendar-check', color: 'var(--purple)' },
-  { key: 'ajustesSistemicos', label: 'Documentos de Ajuste (DAI)', icon: 'ti-stamp', color: 'var(--gold)' },
+  { key: 'ajustesSistemicos', label: 'Documentos de Ajuste (DAI)', icon: 'ti-rubber-stamp', color: 'var(--gold)' },
   { key: 'ajustesExcluidos', label: 'DAI — Log de Exclusões', icon: 'ti-history', color: 'var(--gold)' },
   { key: 'notasAjuste', label: 'Notas de Crédito/Débito', icon: 'ti-receipt', color: 'var(--teal)' },
 ];

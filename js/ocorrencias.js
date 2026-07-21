@@ -46,7 +46,7 @@ function ocDateStatus(dataLimite) {
 }
 
 function ocStatusLabel(o) {
-  if (o.origemAjusteSistemico) return 'ajuste_sistemico';
+  if (o.origemAjusteSistemico) return o.concluida ? 'ajuste_sistemico' : 'ajuste_sistemico_pendente';
   if (o.concluida)     return 'concluída';
   if (o.inconclusiva)  return 'inconclusiva';
   return ocDateStatus(o.dataLimite);
@@ -916,7 +916,7 @@ function getOcorrenciasFiltradas() {
     return true;
   }).sort((a, b) => {
     const sa = ocStatusLabel(a), sb = ocStatusLabel(b);
-    const order = { vencida: 0, urgente: 1, normal: 2, inconclusiva: 3, 'concluída': 4, ajuste_sistemico: 5 };
+    const order = { vencida: 0, urgente: 1, ajuste_sistemico_pendente: 2, normal: 3, inconclusiva: 4, 'concluída': 5, ajuste_sistemico: 6 };
     if (order[sa] !== order[sb]) return order[sa] - order[sb];
     return (a.dataLimite || '').localeCompare(b.dataLimite || '');
   });
@@ -971,16 +971,17 @@ function _renderOcLista(lista) {
   }
 
   el.innerHTML = lista.map(o => {
-    const status = o.origemAjusteSistemico ? 'ajuste_sistemico' : (o.concluida ? 'concluida' : (o.inconclusiva ? 'inconclusiva' : ocDateStatus(o.dataLimite)));
-    const statusLabel = { concluida: 'Concluída', vencida: 'Vencida', urgente: 'Urgente', normal: 'Em aberto', inconclusiva: 'Inconclusiva', ajuste_sistemico: 'Ajuste Sistêmico' };
-    const statusCls   = { concluida: 'oc-badge-green', vencida: 'oc-badge-red', urgente: 'oc-badge-amber', normal: 'oc-badge-blue', inconclusiva: 'oc-badge-purple', ajuste_sistemico: 'oc-badge-gold' };
+    const _rawStatus = ocStatusLabel(o);
+    const status = _rawStatus === 'concluída' ? 'concluida' : _rawStatus;
+    const statusLabel = { concluida: 'Concluída', vencida: 'Vencida', urgente: 'Urgente', normal: 'Em aberto', inconclusiva: 'Inconclusiva', ajuste_sistemico: 'Ajuste Sistêmico', ajuste_sistemico_pendente: 'Ajuste Sistêmico — Pendente' };
+    const statusCls   = { concluida: 'oc-badge-green', vencida: 'oc-badge-red', urgente: 'oc-badge-amber', normal: 'oc-badge-blue', inconclusiva: 'oc-badge-purple', ajuste_sistemico: 'oc-badge-gold', ajuste_sistemico_pendente: 'oc-badge-gold' };
     const waLink = o.contato ? buildWhatsAppLink(o.contato, o) : null;
     const isAjuste = !!o.origemAjusteSistemico;
 
     return `<div class="oc-card ${o.concluida && !isAjuste ? 'oc-card-done' : ''} ${o.inconclusiva ? 'oc-card-inconclusiva' : ''} ${isAjuste ? 'oc-card-ajuste-sistemico' : ''} oc-card-${status}" onclick="openOcDetailModal('${o.id}')">
       <div class="oc-card-header">
         <div class="oc-card-header-left">
-          <span class="oc-badge ${statusCls[status]}">${isAjuste ? '<i class="ti ti-stamp" style="margin-right:3px"></i>' : ''}${statusLabel[status]}</span>
+          <span class="oc-badge ${statusCls[status]}">${isAjuste ? `<i class="ti ${o.concluida ? "ti-rubber-stamp" : "ti-clock-hour-4"}" style="margin-right:3px"></i>` : ''}${statusLabel[status]}</span>
           <span class="oc-card-id" title="${isAjuste ? 'Ocorrência interna: ' + escapeHtml(o.id) + (o.daiNumero ? ' · Nº fiscal: ' + escapeHtml(o.daiNumero) : '') : ''}">${isAjuste && (o.daiTag || o.daiNumero) ? escapeHtml(o.daiTag || o.daiNumero) : escapeHtml(o.id)}</span>
           <span class="oc-card-central"><i class="ti ti-building-warehouse"></i> ${escapeHtml(o.central || '—')}</span>
           ${o.material ? `<span class="oc-card-material"><i class="ti ti-box"></i> ${escapeHtml(o.material)}</span>` : ''}
@@ -1028,6 +1029,18 @@ function _renderOcLista(lista) {
           <button class="btn btn-sm" onclick="event.stopPropagation();reimprimirDocumentoDai('${o.daiId || ''}')" title="Reimprimir Documento de Ajuste de Inventário">
             <i class="ti ti-printer"></i>
           </button>
+          <button class="btn btn-sm ${!o.concluida ? 'oc-btn-concluir' : ''}" onclick="event.stopPropagation();editarSapDai('${o.daiId || ''}')" title="${o.concluida ? 'Editar Nº do documento SAP' : 'Preencher Nº do documento SAP e concluir'}">
+            <i class="ti ti-edit"></i>${!o.concluida ? ' Preencher Nº SAP' : ''}
+          </button>
+          <button class="btn btn-sm" onclick="event.stopPropagation();baixarZipDai('${o.daiId || ''}')" title="Baixar ZIP (documento + anexos)">
+            <i class="ti ti-download"></i>
+          </button>
+          <button class="btn btn-sm" onclick="event.stopPropagation();gerarTermoResponsabilidade('${o.daiId || ''}')" title="Gerar Termo de Responsabilidade do Informante">
+            <i class="ti ti-signature"></i>
+          </button>
+          <button class="btn btn-sm" onclick="event.stopPropagation();adicionarAnexoDaiExistente('${o.daiId || ''}')" title="Anexar arquivo a este DAI">
+            <i class="ti ti-file-plus"></i>
+          </button>
           <button class="btn btn-sm btn-danger-ghost" onclick="event.stopPropagation();confirmarExcluirAjusteSistemico('${o.id}')" title="Excluir (requer confirmação de ciência)">
             <i class="ti ti-trash"></i>
           </button>` : `
@@ -1064,16 +1077,16 @@ function openOcDetailModal(id) {
   if (!o) return;
   const isAjuste = !!o.origemAjusteSistemico;
   const dai = isAjuste ? (state.ajustesSistemicos || []).find(d => d.id === o.daiId) : null;
-  const status = isAjuste ? 'ajuste_sistemico' : (o.concluida ? 'concluida' : (o.inconclusiva ? 'inconclusiva' : ocDateStatus(o.dataLimite)));
-  const statusLabel = { concluida: 'Concluída', vencida: 'Vencida', urgente: 'Urgente', normal: 'Em aberto', inconclusiva: 'Inconclusiva', ajuste_sistemico: 'Ajuste Sistêmico' };
-  const statusCls   = { concluida: 'oc-badge-green', vencida: 'oc-badge-red', urgente: 'oc-badge-amber', normal: 'oc-badge-blue', inconclusiva: 'oc-badge-purple', ajuste_sistemico: 'oc-badge-gold' };
+  const status = ocStatusLabel(o) === 'concluída' ? 'concluida' : ocStatusLabel(o);
+  const statusLabel = { concluida: 'Concluída', vencida: 'Vencida', urgente: 'Urgente', normal: 'Em aberto', inconclusiva: 'Inconclusiva', ajuste_sistemico: 'Ajuste Sistêmico', ajuste_sistemico_pendente: 'Ajuste Sistêmico — Pendente' };
+  const statusCls   = { concluida: 'oc-badge-green', vencida: 'oc-badge-red', urgente: 'oc-badge-amber', normal: 'oc-badge-blue', inconclusiva: 'oc-badge-purple', ajuste_sistemico: 'oc-badge-gold', ajuste_sistemico_pendente: 'oc-badge-gold' };
   const waLink = o.contato ? buildWhatsAppLink(o.contato, o) : null;
 
   const el = document.getElementById('oc-detail-modal');
   if (!el) return;
 
   el.querySelector('.oc-detail-header').innerHTML = `
-    <span class="oc-badge ${statusCls[status]}">${isAjuste ? '<i class="ti ti-stamp" style="margin-right:3px"></i>' : ''}${statusLabel[status]}</span>
+    <span class="oc-badge ${statusCls[status]}">${isAjuste ? `<i class="ti ${o.concluida ? "ti-rubber-stamp" : "ti-clock-hour-4"}" style="margin-right:3px"></i>` : ''}${statusLabel[status]}</span>
     <span class="oc-card-central"><i class="ti ti-building-warehouse"></i> ${escapeHtml(o.central || '—')}</span>
     ${o.material ? `<span class="oc-card-material"><i class="ti ti-box"></i> ${escapeHtml(o.material)}</span>` : ''}
     <span style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-left:auto" title="${isAjuste ? 'Ocorrência interna: ' + escapeHtml(o.id) + (o.daiNumero ? ' · Nº fiscal: ' + escapeHtml(o.daiNumero) : '') : ''}">${isAjuste && (o.daiTag || o.daiNumero) ? escapeHtml(o.daiTag || o.daiNumero) : escapeHtml(o.id)}</span>`;
@@ -1107,6 +1120,9 @@ function openOcDetailModal(id) {
     (!isAjuste && o.concluida && o.descConclusao) ? `
       <div class="oc-detail-section-label">Conclusão</div>
       <div class="oc-detail-section-val" style="color:var(--green)">${escapeHtml(o.descConclusao)}</div>` : '',
+    (isAjuste && !o.concluida) ? `
+      <div class="oc-detail-section-label" style="color:var(--amber)">Pendente</div>
+      <div class="oc-detail-section-val" style="color:var(--amber)">Aguardando preenchimento do Nº do documento SAP para concluir este ajuste.</div>` : '',
     o.inconclusiva && !o.concluida && o.motivoInconclusiva ? `
       <div class="oc-detail-section-label" style="color:var(--purple)">Motivo da inconclusividade</div>
       <div class="oc-detail-section-val" style="color:var(--purple)">${escapeHtml(o.motivoInconclusiva)}</div>` : '',
@@ -1126,7 +1142,7 @@ function openOcDetailModal(id) {
         Data do ocorrido: <strong>${fmtDateBR(dai.dataOcorrido)}</strong> · Gerado em: <strong>${dai.dataGeracao ? new Date(dai.dataGeracao).toLocaleString('pt-BR') : '—'}</strong><br>
         Função do movimento SAP: <strong>${escapeHtml(dai.objetivo || '—')}</strong><br>
         Tipo de movimento SAP: <strong>${escapeHtml(dai.tipoMovimentoSap || '—')}</strong> ·
-        Documento SAP: <strong>${escapeHtml(dai.sapDocumento || '—')}</strong><br>
+        Documento SAP: <strong ${dai.sapDocumento === 'PENDENTE' ? 'style="color:var(--amber)"' : ''}>${dai.sapDocumento === 'PENDENTE' ? 'Pendente de preenchimento' : escapeHtml(dai.sapDocumento || '—')}</strong><br>
         Analista responsável (assinatura): <strong>${escapeHtml(dai.analista || '—')}</strong>
         ${Array.isArray(dai.anexos) && dai.anexos.length ? `
         <div class="dai-anexo-list">
@@ -1140,7 +1156,11 @@ function openOcDetailModal(id) {
     ${waLink ? `<a href="${waLink}" target="_blank" rel="noopener" class="oc-wa-btn"><i class="ti ti-brand-whatsapp"></i> ${escapeHtml(o.contato)}</a>` : ''}`;
 
   el.querySelector('.oc-detail-actions').innerHTML = isAjuste ? `
-    <button class="btn btn-sm" onclick="closeOcDetailModal();reimprimirDocumentoDai('${o.daiId || ''}')"><i class="ti ti-printer"></i> Reimprimir Documento</button>
+    <button class="btn btn-sm" onclick="reimprimirDocumentoDai('${o.daiId || ''}')"><i class="ti ti-printer"></i> Reimprimir Documento</button>
+    <button class="btn btn-sm ${!o.concluida ? 'oc-btn-concluir' : ''}" onclick="editarSapDai('${o.daiId || ''}')"><i class="ti ti-edit"></i> ${o.concluida ? 'Editar Nº SAP' : 'Preencher Nº SAP'}</button>
+    <button class="btn btn-sm" onclick="baixarZipDai('${o.daiId || ''}')"><i class="ti ti-download"></i> Baixar ZIP</button>
+    <button class="btn btn-sm" onclick="gerarTermoResponsabilidade('${o.daiId || ''}')"><i class="ti ti-signature"></i> Termo de Responsabilidade</button>
+    <button class="btn btn-sm" onclick="adicionarAnexoDaiExistente('${o.daiId || ''}')"><i class="ti ti-file-plus"></i> Anexar Arquivo</button>
     <button class="btn btn-sm btn-danger-ghost" onclick="closeOcDetailModal();confirmarExcluirAjusteSistemico('${o.id}')"><i class="ti ti-trash"></i></button>` : `
     ${!o.concluida && !o.inconclusiva ? `<button class="btn btn-sm oc-btn-inconclusiva" onclick="closeOcDetailModal();openInconclusivaModal('${o.id}')"><i class="ti ti-alert-triangle"></i> Inconclusiva</button>` : ''}
     ${o.inconclusiva && !o.concluida ? `<button class="btn btn-sm oc-btn-reabrir" onclick="closeOcDetailModal();reabrirOcorrencia('${o.id}')"><i class="ti ti-rotate"></i> Reabrir</button>` : ''}

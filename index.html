@@ -2651,7 +2651,7 @@
           </div>
           <div style="display:flex;gap:8px">
             <button class="btn" onclick="abrirModalDai()" title="Gerar Documento de Ajuste de Inventário (DAI)" style="gap:7px;font-size:12px;padding:8px 14px;background:linear-gradient(135deg,#8a6d1a,#c9a227);border:none;border-radius:8px;cursor:pointer;display:flex;align-items:center;color:#1c1608;font-weight:700;white-space:nowrap">
-              <i class="ti ti-stamp" style="font-size:14px"></i> Gerar Documento de Ajuste
+              <i class="ti ti-rubber-stamp" style="font-size:14px"></i> Gerar Documento de Ajuste
             </button>
             <button class="btn btn-primary" onclick="openOcorrenciaModal()">
               <i class="ti ti-plus"></i> Nova Ocorrência
@@ -4409,7 +4409,7 @@
 <div class="modal-overlay" id="dai-modal" role="dialog" aria-modal="true">
   <div class="modal-card" style="max-width:640px;width:100%">
     <div class="modal-header">
-      <span class="modal-title"><i class="ti ti-stamp" style="color:var(--gold);margin-right:6px"></i>Gerar Documento de Ajuste de Inventário</span>
+      <span class="modal-title"><i class="ti ti-rubber-stamp" style="color:var(--gold);margin-right:6px"></i>Gerar Documento de Ajuste de Inventário</span>
       <button class="modal-close" onclick="closeModal('dai-modal')"><i class="ti ti-x"></i></button>
     </div>
     <div class="modal-body" style="display:flex;flex-direction:column;gap:14px;max-height:70vh;overflow-y:auto">
@@ -4462,9 +4462,9 @@
           <input type="text" id="dai-form-tipo-movimento" class="oc-input" placeholder="Ex.: 701, 702, Y11…" style="text-transform:uppercase" oninput="this.value = this.value.toUpperCase()">
         </div>
         <div class="oc-form-group">
-          <label class="oc-label">Nº do documento SAP (pós-ajuste) <span class="oc-required">*</span></label>
-          <input type="text" id="dai-form-sap" class="oc-input" inputmode="numeric" placeholder="Somente números" oninput="_daiFiltrarSapInput(this)">
-          <span class="oc-hint">Apenas dígitos — sem letras ou caracteres especiais</span>
+          <label class="oc-label">Nº do documento SAP (pós-ajuste) <span class="oc-hint">(opcional)</span></label>
+          <input type="text" id="dai-form-sap" class="oc-input" inputmode="numeric" placeholder="Somente números — deixe em branco se ainda não tiver o número" oninput="_daiFiltrarSapInput(this)">
+          <span class="oc-hint">Apenas dígitos — sem letras ou caracteres especiais. Se deixado em branco, o ajuste fica pendente até ser preenchido.</span>
         </div>
       </div>
 
@@ -4489,7 +4489,39 @@
     <div class="modal-footer">
       <button class="btn" onclick="closeModal('dai-modal')">Cancelar</button>
       <button class="btn" id="dai-btn-gerar" style="background:linear-gradient(135deg,#8a6d1a,#c9a227);border:none;color:#1c1608;font-weight:700" onclick="gerarDocumentoAjuste()">
-        <i class="ti ti-stamp"></i> Gerar Documento e Ocorrência
+        <i class="ti ti-rubber-stamp"></i> Gerar Documento e Ocorrência
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL: Editar Nº SAP do DAI (único campo editável pós-emissão) ═══ -->
+<div class="modal-overlay" id="dai-sap-modal" role="dialog" aria-modal="true">
+  <div class="modal-card" style="max-width:440px;width:100%">
+    <div class="modal-header">
+      <span class="modal-title"><i class="ti ti-edit" style="color:var(--gold);margin-right:6px"></i>Nº do Documento SAP</span>
+      <button class="modal-close" onclick="closeModal('dai-sap-modal')"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:14px">
+      <div class="dai-intro-box">
+        <i class="ti ti-info-circle"></i>
+        <div>Este é o único campo editável depois que o DAI é emitido. Ao preencher o número SAP e a data de conclusão, o ajuste é marcado como concluído.</div>
+      </div>
+      <input type="hidden" id="dai-sap-modal-daiid">
+      <div class="oc-form-group">
+        <label class="oc-label">Nº do documento SAP (pós-ajuste)</label>
+        <input type="text" id="dai-sap-modal-sap" class="oc-input" inputmode="numeric" placeholder="Somente números" oninput="_daiFiltrarSapInput(this)">
+        <span class="oc-hint">Apenas dígitos — deixe em branco para manter o ajuste pendente</span>
+      </div>
+      <div class="oc-form-group">
+        <label class="oc-label">Data de conclusão</label>
+        <input type="date" id="dai-sap-modal-data" class="oc-input">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('dai-sap-modal')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarSapDai()">
+        <i class="ti ti-device-floppy"></i> Salvar
       </button>
     </div>
   </div>

@@ -46,15 +46,22 @@ function _daiDataGeracaoKey(date) {
 }
 
 // ── Numeração ───────────────────────────────────────────────
+// Quando o Nº do documento SAP ainda não é conhecido na hora da geração
+// (campo opcional — ver gerarDocumentoAjuste), usamos este placeholder no
+// lugar dos dígitos do SAP. O número fiscal final só é calculado de
+// verdade quando o analista preenche o SAP depois (ver salvarSapDai).
+const DAI_SAP_PENDENTE = 'PENDENTE';
+
 function _daiProximoSequencial(sapDigits, dataKey) {
+  const chave = sapDigits || DAI_SAP_PENDENTE;
   const existentes = (state.ajustesSistemicos || []).filter(
-    a => a.sapDocumento === sapDigits && a.dataGeracaoKey === dataKey
+    a => a.sapDocumento === chave && a.dataGeracaoKey === dataKey
   );
   return String(existentes.length + 1).padStart(2, '0');
 }
 
 function _daiMontarNumero(sapDigits, dataKey, seq) {
-  return `DAI-${sapDigits}-${dataKey}-${seq}`;
+  return `DAI-${sapDigits || DAI_SAP_PENDENTE}-${dataKey}-${seq}`;
 }
 
 // Identificador curto e sequencial do DAI — mesmo padrão de _nextOcId()
@@ -76,10 +83,12 @@ function _daiAtualizarPreviewNumero() {
   const el = document.getElementById('dai-numero-preview');
   if (!wrap || !el) return;
   const sapDigits = _daiSomenteDigitos(document.getElementById('dai-form-sap')?.value);
-  if (!sapDigits) { wrap.style.display = 'none'; return; }
   const dataKey = _daiDataGeracaoKey(new Date());
   const seq = _daiProximoSequencial(sapDigits, dataKey);
-  el.innerHTML = `<i class="ti ti-hash"></i> ${escapeHtml(_daiMontarNumero(sapDigits, dataKey, seq))}`;
+  const numero = _daiMontarNumero(sapDigits, dataKey, seq);
+  el.innerHTML = sapDigits
+    ? `<i class="ti ti-hash"></i> ${escapeHtml(numero)}`
+    : `<i class="ti ti-clock-hour-4"></i> ${escapeHtml(numero)} <span style="font-weight:400">— fica pendente até o Nº SAP ser preenchido</span>`;
   wrap.style.display = '';
 }
 
@@ -271,7 +280,8 @@ async function gerarDocumentoAjuste() {
   if (!descricao)        return toast('Descreva o ocorrido.', 'error');
   if (!objetivo)         return toast('Informe a função do movimento SAP.', 'error');
   if (!tipoMovimentoSap) return toast('Informe o tipo de movimento SAP.', 'error');
-  if (!sapDigits)        return toast('Informe o número do documento SAP (somente dígitos).', 'error');
+  // Nº do documento SAP agora é opcional — se vazio, o ajuste fica
+  // pendente (não concluído) até ser preenchido depois (ver salvarSapDai).
 
   const cnpjCentral = _daiObterCnpjCentral(central);
   if (!cnpjCentral) return toast(`A central "${central}" não tem CNPJ cadastrado. Preencha em Configurações → Cadastros antes de gerar o documento.`, 'error');
@@ -328,7 +338,7 @@ async function gerarDocumentoAjuste() {
       operador,
       analista,
       atestadoManual,
-      sapDocumento: sapDigits,
+      sapDocumento: sapDigits || DAI_SAP_PENDENTE,
       ocorrenciaId: null, // preenchido abaixo
       anexos: anexosMeta,
     };
@@ -348,6 +358,7 @@ async function gerarDocumentoAjuste() {
     // HTML do documento oficial (aberto para impressão/PDF mais abaixo)
     const docHtml = _daiBuildDocumentoHtml(daiRecord);
 
+    const concluidaNaGeracao = !!sapDigits;
     const ocorrencia = {
       id: ocId,
       dataAbertura: dataOcorrido,
@@ -358,9 +369,11 @@ async function gerarDocumentoAjuste() {
       operador,
       contato: null,
       descricao,
-      concluida: true,
-      dataConclusao: dataGeracaoDate.toISOString().split('T')[0],
-      descConclusao: `Ajuste sistêmico registrado via Documento ${numero}. Função do movimento SAP: ${objetivo}. Tipo de movimento SAP: ${tipoMovimentoSap}. Documento SAP: ${sapDigits}.`,
+      concluida: concluidaNaGeracao,
+      dataConclusao: concluidaNaGeracao ? dataGeracaoDate.toISOString().split('T')[0] : null,
+      descConclusao: concluidaNaGeracao
+        ? `Ajuste sistêmico registrado via Documento ${numero}. Função do movimento SAP: ${objetivo}. Tipo de movimento SAP: ${tipoMovimentoSap}. Documento SAP: ${sapDigits}.`
+        : null,
       hierarquia: [],
       criadoEm: dataGeracaoTs,
       origemAjusteSistemico: true,
@@ -377,13 +390,14 @@ async function gerarDocumentoAjuste() {
     // Abre o documento para impressão/"Salvar PDF"
     _openRelWindow(docHtml);
 
-    // Baixa o ZIP (documento + anexos originais) — fonte da verdade,
-    // já fora do navegador
-    await _daiBaixarZip(daiRecord, docHtml, anexosFiles);
-
     closeModal('dai-modal');
     populateOcFiltros();
-    toast(`Documento ${numero} gerado e ocorrência ${ocId} registrada.`, 'success');
+    toast(
+      concluidaNaGeracao
+        ? `Documento ${numero} gerado e ocorrência ${ocId} concluída. Use os botões no card da ocorrência para baixar o ZIP ou gerar o Termo de Responsabilidade.`
+        : `Documento ${numero} gerado como PENDENTE — ocorrência ${ocId} ficará em aberto até o Nº do documento SAP ser preenchido (botão "Editar Nº SAP" no card).`,
+      'success'
+    );
   } catch (err) {
     console.error('[DAI] Falha ao gerar documento:', err);
     toast('Falha ao gerar o documento. Veja o console para detalhes.', 'error');
@@ -394,6 +408,74 @@ async function gerarDocumentoAjuste() {
 
 // Reimpressão — reconstrói o mesmo HTML a partir dos metadados salvos
 // (chamado a partir do card/detalhe da ocorrência de Ajuste Sistêmico).
+// ── Editar Nº do documento SAP — único campo editável pós-emissão ──
+// Abre o mini-modal com o Nº SAP atual (ou vazio, se ainda pendente) e a
+// data de conclusão. Disponível em QUALQUER DAI (pendente ou já
+// concluído) — permite tanto completar um ajuste pendente quanto
+// corrigir um número SAP já preenchido.
+function editarSapDai(daiId) {
+  const dai = (state.ajustesSistemicos || []).find(d => d.id === daiId);
+  if (!dai) { toast('Documento não encontrado — pode já ter sido excluído.', 'error'); return; }
+  document.getElementById('dai-sap-modal-daiid').value = daiId;
+  document.getElementById('dai-sap-modal-sap').value = dai.sapDocumento === DAI_SAP_PENDENTE ? '' : (dai.sapDocumento || '');
+  document.getElementById('dai-sap-modal-data').value = dai.dataConclusao ? new Date(dai.dataConclusao).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+  openModal('dai-sap-modal');
+}
+
+async function salvarSapDai() {
+  const daiId = document.getElementById('dai-sap-modal-daiid')?.value;
+  const dai = (state.ajustesSistemicos || []).find(d => d.id === daiId);
+  if (!dai) { toast('Documento não encontrado — pode já ter sido excluído.', 'error'); return; }
+
+  const sapDigits = _daiSomenteDigitos(document.getElementById('dai-sap-modal-sap')?.value);
+  const dataConclusao = document.getElementById('dai-sap-modal-data')?.value;
+
+  if (sapDigits && !dataConclusao) return toast('Informe a data de conclusão.', 'error');
+
+  // Recalcula o número fiscal com o SAP real, se informado — mesma data
+  // de geração original (a numeração reflete quando o DAI foi criado, o
+  // SAP só completa a informação). Exclui o próprio registro da contagem
+  // da sequência do dia, senão ele se contaria a si mesmo.
+  const outrosComMesmoSapEData = (state.ajustesSistemicos || []).filter(
+    d => d.id !== dai.id && d.sapDocumento === (sapDigits || DAI_SAP_PENDENTE) && d.dataGeracaoKey === dai.dataGeracaoKey
+  );
+  const seq = String(outrosComMesmoSapEData.length + 1).padStart(2, '0');
+  const numeroAnterior = dai.numero;
+  dai.sapDocumento = sapDigits || DAI_SAP_PENDENTE;
+  dai.numero = _daiMontarNumero(sapDigits, dai.dataGeracaoKey, seq);
+
+  const oc = (state.ocorrencias || []).find(o => o.daiId === dai.id);
+  if (oc) {
+    oc.daiNumero = dai.numero;
+    if (sapDigits) {
+      oc.concluida = true;
+      oc.dataConclusao = dataConclusao;
+      oc.descConclusao = `Ajuste sistêmico registrado via Documento ${dai.numero}. Função do movimento SAP: ${dai.objetivo}. Tipo de movimento SAP: ${dai.tipoMovimentoSap}. Documento SAP: ${sapDigits}.`;
+    } else {
+      // Voltou a ficar sem SAP — volta para pendente
+      oc.concluida = false;
+      oc.dataConclusao = null;
+      oc.descConclusao = null;
+    }
+  }
+
+  persist();
+  renderOcorrencias();
+  closeModal('dai-sap-modal');
+
+  const detailModal = document.getElementById('oc-detail-modal');
+  if (detailModal?.classList.contains('open') && oc && typeof openOcDetailModal === 'function') {
+    openOcDetailModal(oc.id);
+  }
+
+  toast(
+    sapDigits
+      ? `Ajuste concluído — número atualizado para ${dai.numero}.`
+      : `Nº SAP removido — ajuste voltou a ficar pendente (${dai.numero}).`,
+    'success'
+  );
+}
+
 function reimprimirDocumentoDai(daiId) {
   const dai = (state.ajustesSistemicos || []).find(d => d.id === daiId);
   if (!dai) { toast('Documento não encontrado — pode já ter sido excluído.', 'error'); return; }
@@ -401,31 +483,112 @@ function reimprimirDocumentoDai(daiId) {
   _openRelWindow(html);
 }
 
-// ── ZIP (documento + anexos originais) ─────────────────────
-async function _daiBaixarZip(daiRecord, docHtml, anexosFiles) {
+// ── Anexar arquivo a um DAI já emitido ──────────────────────
+// Chamado pelo botão "Anexar Arquivo" no card/detalhe da ocorrência de
+// Ajuste Sistêmico. Diferente do anexo na hora da geração (formulário),
+// este fluxo grava direto no DAI já existente: adiciona a cópia local no
+// IndexedDB (mesmo padrão de idbPutAnexoDai), registra os metadados em
+// state.ajustesSistemicos e persiste. O ZIP e o documento reimpresso já
+// refletem os novos anexos automaticamente, pois ambos são reconstruídos
+// sob demanda a partir de dai.anexos. Observação: uma cópia impressa/PDF
+// já entregue anteriormente não é alterada — só o registro digital.
+function adicionarAnexoDaiExistente(daiId) {
+  const dai = (state.ajustesSistemicos || []).find(d => d.id === daiId);
+  if (!dai) { toast('Documento não encontrado — pode já ter sido excluído.', 'error'); return; }
+
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.id = 'dai-anexo-add-input-temp';
+  input.multiple = true;
+  input.accept = 'image/*,.pdf,.doc,.docx';
+  input.style.display = 'none';
+  input.addEventListener('change', async (e) => {
+    const files = Array.from(e.target.files || []);
+    document.body.removeChild(input);
+    if (!files.length) return;
+    await _daiAdicionarAnexosPosGeracao(dai, files);
+  });
+  document.body.appendChild(input);
+  input.click();
+}
+
+async function _daiAdicionarAnexosPosGeracao(dai, files) {
+  if (!Array.isArray(dai.anexos)) dai.anexos = [];
+  let adicionados = 0;
+
+  for (const f of files) {
+    if (f.size > DAI_ANEXO_MAX_MB * 1024 * 1024) {
+      toast(`"${f.name}" excede ${DAI_ANEXO_MAX_MB}MB e não foi anexado.`, 'error');
+      continue;
+    }
+    const idx = dai.anexos.length; // próximo índice livre na cópia local
+    const salvou = (typeof idbPutAnexoDai === 'function') ? await idbPutAnexoDai(dai.id, idx, f) : false;
+    if (!salvou) {
+      toast(`Falha ao salvar "${f.name}" — tente novamente.`, 'error');
+      continue;
+    }
+    const hash = await _daiHashArquivo(f);
+    dai.anexos.push({ nome: f.name, tipo: f.type || 'application/octet-stream', tamanho: f.size, hash });
+    adicionados++;
+  }
+
+  if (!adicionados) return;
+
+  persist();
+  renderOcorrencias();
+
+  // Se o modal de detalhe desta ocorrência estiver aberto, atualiza a
+  // seção do DAI na hora para refletir o(s) anexo(s) recém-adicionado(s)
+  const detailModal = document.getElementById('oc-detail-modal');
+  if (detailModal?.classList.contains('open') && dai.ocorrenciaId && typeof openOcDetailModal === 'function') {
+    openOcDetailModal(dai.ocorrenciaId);
+  }
+
+  toast(`${adicionados} anexo(s) adicionado(s) ao ${dai.tag || dai.numero}.`, 'success');
+}
+
+// ── ZIP (documento + anexos originais) — sob demanda ───────
+// Chamado pelo botão "Baixar ZIP" no card/detalhe da ocorrência — não
+// dispara mais automaticamente na geração (decisão do Hugo: o analista
+// decide quando baixar). Reconstrói tudo a partir do que já está salvo
+// (state.ajustesSistemicos + cópias locais dos anexos no IndexedDB), então
+// funciona a qualquer momento depois da geração, não só na hora.
+async function baixarZipDai(daiId) {
+  const dai = (state.ajustesSistemicos || []).find(d => d.id === daiId);
+  if (!dai) { toast('Documento não encontrado — pode já ter sido excluído.', 'error'); return; }
   if (typeof JSZip === 'undefined') {
-    toast('Biblioteca de ZIP não carregada (verifique a conexão) — o documento foi gerado normalmente, mas não foi possível empacotar os anexos automaticamente.', 'error');
+    toast('Biblioteca de ZIP não carregada — verifique a conexão e tente novamente.', 'error');
     return;
   }
   try {
+    const docHtml = _daiBuildDocumentoHtml(dai);
     const zip = new JSZip();
-    zip.file(`${daiRecord.numero}.html`, docHtml);
-    if (anexosFiles.length) {
+    zip.file(`${dai.numero}.html`, docHtml);
+
+    const anexos = Array.isArray(dai.anexos) ? dai.anexos : [];
+    if (anexos.length) {
       const pasta = zip.folder('anexos');
-      anexosFiles.forEach(f => pasta.file(f.name, f));
+      let faltando = 0;
+      for (let i = 0; i < anexos.length; i++) {
+        const blob = (typeof idbGetAnexoDai === 'function') ? await idbGetAnexoDai(dai.id, i) : null;
+        if (blob) pasta.file(anexos[i].nome, blob);
+        else faltando++;
+      }
+      if (faltando) toast(`${faltando} anexo(s) não foram encontrados localmente e ficaram de fora do ZIP.`, 'error');
     }
+
     const blob = await zip.generateAsync({ type: 'blob' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${daiRecord.numero}.zip`;
+    a.download = `${dai.numero}.zip`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   } catch (err) {
-    console.warn('[DAI] Falha ao montar o ZIP de anexos (não crítico — o documento já foi gerado):', err);
-    toast('O documento foi gerado, mas houve falha ao montar o ZIP de anexos.', 'error');
+    console.warn('[DAI] Falha ao montar o ZIP de anexos:', err);
+    toast('Falha ao montar o ZIP. Veja o console para detalhes.', 'error');
   }
 }
 
@@ -534,6 +697,8 @@ function _daiBuildDocumentoHtml(dai) {
 
   <div class="confidential-strip"><i>⚠</i> Documento com validade fiscal — uso interno, contabilidade, controladoria e fiscalização</div>
 
+  ${dai.sapDocumento === DAI_SAP_PENDENTE ? `<div class="confidential-strip" style="background:#fef2e5;border-color:#c98527;color:#8a5a0f"><i>⏳</i> Ajuste pendente — aguardando preenchimento do Nº do documento SAP para conclusão</div>` : ''}
+
   <div class="field-grid">
     <div><div class="field-label">Central${dai.regionalCentral ? ` <span style="text-transform:none;font-weight:400">— Regional ${esc(dai.regionalCentral)}</span>` : ''}</div><div class="field-value">${esc(dai.central)}${dai.cnpjCentral ? ` <span style="font-weight:400;font-size:10.5px;color:#8a7a64">(CNPJ ${esc(dai.cnpjCentral)})</span>` : ''}</div></div>
     <div><div class="field-label">Data do ocorrido</div><div class="field-value">${esc(dataOcorridoFmt)}</div></div>
@@ -554,7 +719,7 @@ function _daiBuildDocumentoHtml(dai) {
 
   <div class="field-grid" style="margin-bottom:18px">
     <div><div class="field-label">Tipo de movimento SAP</div><div class="field-value">${esc(dai.tipoMovimentoSap)}</div></div>
-    <div><div class="field-label">Nº Documento SAP (pós-ajuste)</div><div class="field-value">${esc(dai.sapDocumento)}</div></div>
+    <div><div class="field-label">Nº Documento SAP (pós-ajuste)</div><div class="field-value">${dai.sapDocumento === DAI_SAP_PENDENTE ? '<span style="color:#a06a10">Pendente de preenchimento</span>' : esc(dai.sapDocumento)}</div></div>
   </div>
 
   ${anexosHtml}
@@ -575,11 +740,142 @@ function _daiBuildDocumentoHtml(dai) {
 </html>`;
 }
 
+// ── Termo de Responsabilidade do Informante ────────────────
+// Documento separado do DAI, gerado sob demanda (botão no card/detalhe
+// da ocorrência) — não é auto-gerado junto com o DAI. Destinado a ser
+// impresso/enviado ao operador informante para assinatura física,
+// atestando a veracidade das informações que ele prestou. Vinculado ao
+// DAI apenas por referência (rodapé) — não é uma cópia do documento
+// fiscal, é uma declaração independente do informante.
+function gerarTermoResponsabilidade(daiId) {
+  const dai = (state.ajustesSistemicos || []).find(d => d.id === daiId);
+  if (!dai) { toast('Documento não encontrado — pode já ter sido excluído.', 'error'); return; }
+  const html = _daiBuildTermoHtml(dai);
+  _openRelWindow(html);
+}
+
+function _daiBuildTermoHtml(dai) {
+  const esc = (typeof escapeHtml === 'function') ? escapeHtml : (s => String(s ?? ''));
+  const dataOcorridoFmt = (typeof fmtDateBR === 'function') ? fmtDateBR(dai.dataOcorrido) : (dai.dataOcorrido || '—');
+
+  return `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Termo de Responsabilidade — ${esc(dai.tag || dai.numero)}</title>
+<style>
+  @page { size: A4 portrait; margin: 14mm 16mm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif; background: #ece6d5; color: #1c1608; font-size: 12.5px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+
+  .action-bar { position: sticky; top: 0; z-index: 100; background: #1c1608; display: flex; align-items: center; justify-content: space-between; padding: 12px 24px; box-shadow: 0 2px 12px rgba(0,0,0,.3); }
+  .action-bar-title { color: #f4f1e8; font-size: 13px; font-weight: 500; }
+  .action-bar-title span { color: #c9a227; font-size: 12px; margin-left: 10px; font-family: monospace; }
+  .action-bar-btns { display: flex; gap: 10px; }
+  .btn-print { background: #c9a227; color: #1c1608; border: none; border-radius: 7px; padding: 8px 18px; font-size: 13px; font-weight: 700; cursor: pointer; }
+  .btn-print:hover { background: #b5911f; }
+  .btn-close { background: #3a2f14; color: #eee; border: none; border-radius: 7px; padding: 8px 14px; font-size: 13px; cursor: pointer; }
+  .btn-close:hover { background: #4a3d1c; }
+
+  .doc-wrap { max-width: 760px; margin: 28px auto 60px; background: #fff; color: #1c1608; padding: 34px 40px 44px; box-shadow: 0 6px 28px rgba(0,0,0,.18); }
+
+  .doc-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; border-bottom: 3px solid #c9a227; padding-bottom: 16px; margin-bottom: 18px; }
+  .doc-header img { height: 40px; width: auto; }
+  .doc-title { text-align: right; }
+  .doc-title h1 { font-size: 15.5px; letter-spacing: .04em; text-transform: uppercase; color: #1c1608; line-height: 1.35; }
+  .doc-title .numero { font-family: monospace; font-weight: 800; color: #8a6d1a; font-size: 13px; margin-top: 6px; }
+
+  .confidential-strip { text-align: center; padding: 9px; background: #fdf6e3; border: 1px solid #c9a227; border-radius: 6px; font-size: 10px; color: #7a5c0f; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; margin-bottom: 20px; }
+
+  .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 24px; margin-bottom: 18px; }
+  .field-label { font-size: 9.5px; text-transform: uppercase; letter-spacing: .06em; color: #8a7a64; margin-bottom: 4px; }
+  .field-value { font-size: 12.5px; font-weight: 700; border-bottom: 1px solid #e5ddc8; padding-bottom: 5px; color: #1c1608; overflow-wrap: anywhere; word-break: break-word; }
+
+  .declaracao { font-size: 13px; line-height: 1.85; text-align: justify; margin: 8px 0 24px; }
+  .declaracao strong { color: #1c1608; }
+
+  .desc-box { border: 1px solid #e5ddc8; border-radius: 6px; padding: 13px 15px; font-size: 12px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; margin: 6px 0 18px; color: #2a2110; }
+
+  .assinatura-box { margin-top: 56px; text-align: center; }
+  .assinatura-linha { border-top: 1px solid #1c1608; width: 320px; margin: 0 auto 8px; }
+  .assinatura-nome { font-weight: 800; font-size: 13px; }
+  .assinatura-sub { font-size: 10px; color: #8a7a64; margin-top: 2px; text-transform: uppercase; letter-spacing: .04em; }
+  .assinatura-data { margin-top: 28px; font-size: 12px; }
+  .assinatura-data .linha-preencher { display: inline-block; border-bottom: 1px solid #1c1608; width: 60px; margin: 0 3px; }
+
+  .doc-footer { margin-top: 30px; padding-top: 12px; border-top: 1px solid #e5ddc8; display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 9px; color: #8a7a64; flex-wrap: wrap; }
+
+  @media print {
+    .action-bar { display: none !important; }
+    body { background: #fff !important; padding: 0 !important; }
+    .doc-wrap { box-shadow: none !important; margin: 0 auto !important; }
+    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  }
+</style>
+</head>
+<body>
+
+<div class="action-bar">
+  <div class="action-bar-title">Termo de Responsabilidade do Informante <span>${esc(dai.tag || dai.numero)}</span></div>
+  <div class="action-bar-btns">
+    <button class="btn-print" onclick="window.print()">🖨️ Imprimir / Salvar PDF</button>
+    <button class="btn-close" onclick="window.close()">✕ Fechar</button>
+  </div>
+</div>
+
+<div class="doc-wrap">
+  <div class="doc-header">
+    <img src="https://concrelagos.com.br/wp-content/uploads/2021/10/Ativo-3.svg" alt="Concrelagos Concreto" onerror="this.style.display='none'">
+    <div class="doc-title">
+      <h1>Termo de<br>Responsabilidade</h1>
+      <div class="numero">Ref. ${esc(dai.tag || dai.numero)}</div>
+    </div>
+  </div>
+
+  <div class="confidential-strip"><i>⚠</i> Este termo deve ser assinado pelo informante e devolvido ao analista responsável</div>
+
+  <div class="field-grid">
+    <div><div class="field-label">Central</div><div class="field-value">${esc(dai.central)}</div></div>
+    <div><div class="field-label">Data do ocorrido</div><div class="field-value">${esc(dataOcorridoFmt)}</div></div>
+    <div><div class="field-label">Documento SAP</div><div class="field-value">${dai.sapDocumento === DAI_SAP_PENDENTE ? '<span style="color:#a06a10">Pendente</span>' : esc(dai.sapDocumento)}</div></div>
+    <div><div class="field-label">Função do movimento SAP</div><div class="field-value">${esc(dai.objetivo)}</div></div>
+  </div>
+
+  <div class="declaracao">
+    Eu, <strong>${esc(dai.operador)}</strong>, DECLARO que as informações por mim prestadas relativas ao ocorrido abaixo descrito, utilizadas para a geração do Documento de Ajuste de Inventário nº <strong>${esc(dai.tag || dai.numero)}</strong>, são verídicas e correspondem fielmente aos fatos por mim observados, estando ciente das responsabilidades decorrentes da prestação de informações falsas ou inexatas.
+  </div>
+
+  <div class="field-label">Descrição do ocorrido</div>
+  <div class="desc-box">${esc(dai.descricao)}</div>
+
+  <div class="assinatura-box">
+    <div class="assinatura-linha"></div>
+    <div class="assinatura-nome">${esc(dai.operador)}</div>
+    <div class="assinatura-sub">Assinatura do informante</div>
+    <div class="assinatura-data">Data: <span class="linha-preencher">&nbsp;</span>/<span class="linha-preencher">&nbsp;</span>/<span class="linha-preencher" style="width:90px">&nbsp;</span></div>
+  </div>
+
+  <div class="doc-footer">
+    <span>Concrelagos Concreto · AnalyticSys</span>
+    <span>DAI vinculado: ${esc(dai.tag || dai.numero)}</span>
+  </div>
+</div>
+
+</body>
+</html>`;
+}
+
 Object.assign(window, {
   abrirModalDai,
   daiAdicionarAnexos,
   daiRemoverAnexo,
   gerarDocumentoAjuste,
   reimprimirDocumentoDai,
+  editarSapDai,
+  salvarSapDai,
+  adicionarAnexoDaiExistente,
+  baixarZipDai,
+  gerarTermoResponsabilidade,
   formatBytes,
 });
