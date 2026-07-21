@@ -1377,17 +1377,16 @@ function _buildRankingShellHTML(d, opts) {
      - .dgr-page-section: seções "compactas" (Resumo, Saúde Geral+
        Categoria, Custo Regional/Central, Giro&Cobertura) — cada uma
        SEMPRE começa numa página nova (page-break-before:always) e nunca
-       é cortada no meio (avoid). A centralização vertical quando a seção
-       é menor que a página é feita via min-height calculado em JS (ver
-       script no fim do body) — sem min-height (fora do print, ou antes
-       do JS rodar) o flex não tem efeito visual nenhum, então é seguro
-       deixar sempre ligado, não só dentro de @media print.
+       é cortada no meio (avoid). Alinhadas no topo da página (fluxo
+       normal), com um padding-top de respiro — SEM centralização
+       vertical (removida a pedido do usuário; não precisa mais de JS
+       calculando altura de página).
      - .dgr-page-section-natural: usada só pelo "Detalhado Analítico", que
        contém a tabela de Detalhamento por Material — deliberadamente SEM
        corte de página único (decisão de jul/2026: lista completa, sem
        Top-N, pagina livremente quando maior que uma página). Recebe só o
-       "começa em página nova", sem forçar single-page nem centralizar. */
-  .dgr-page-section { display:flex; flex-direction:column; justify-content:center; }
+       "começa em página nova" + o mesmo padding-top, sem forçar single-page. */
+  .dgr-page-section, .dgr-page-section-natural { padding-top:24px; }
   @media print {
     .dgr-page-section {
       page-break-inside:avoid; break-inside:avoid;
@@ -1401,7 +1400,7 @@ function _buildRankingShellHTML(d, opts) {
   }
 </style>
 </head>
-<body>
+<body${opts.temaInicial === 'light' ? ' class="dgr-tema-claro"' : ''}>
 
 <div class="action-bar">
   <div class="action-bar-title">
@@ -1409,7 +1408,7 @@ function _buildRankingShellHTML(d, opts) {
     <span>Período: ${_rankEsc(periodo)} · Gerado em ${_rankEsc(now)}</span>
   </div>
   <div class="action-bar-btns">
-    ${opts.temaAlternavel ? `<button class="btn-tema" id="dgr-btn-tema" onclick="_dgrAlternarTema(this)"><i class="ti ti-sun"></i> Tema Claro</button>` : ''}
+    ${opts.temaAlternavel ? `<button class="btn-tema" id="dgr-btn-tema" onclick="_dgrAlternarTema(this)">${opts.temaInicial === 'light' ? '<i class="ti ti-moon"></i> Tema Escuro' : '<i class="ti ti-sun"></i> Tema Claro'}</button>` : ''}
     <button class="btn-print" onclick="window.print()">🖨️ Imprimir / Salvar PDF</button>
     <button class="btn-close" onclick="window.close()">✕ Fechar</button>
   </div>
@@ -1460,49 +1459,9 @@ function _buildRankingShellHTML(d, opts) {
   </div>
 </div>
 
-${opts.paginarSecoes ? _dgrScriptPaginacaoSecoes() : ''}
 ${opts.temaAlternavel ? _dgrScriptTema() : ''}
 </body>
 </html>`;
-}
-
-// ── Script de centralização vertical das seções (Relatório Gerencial) ──
-//    Calcula a altura ÚTIL de uma página A4 retrato (297mm - margens
-//    verticais do @page, 8mm+8mm) em px CSS (96px/pol, a mesma conversão
-//    que o navegador usa pro @page em mm — ver nota no @page acima). Roda
-//    em window.beforeprint (Chrome recalcula o layout pro tamanho real da
-//    página de impressão nesse momento — é o padrão usado por sites pra
-//    ajustes JS específicos de impressão) e define min-height em cada
-//    .dgr-page-section: a 1ª seção divide a página 1 com o cabeçalho
-//    (.rk-hero, que só aparece uma vez, não se repete por página), então
-//    subtrai a altura medida do hero; as demais seções recebem a página
-//    inteira. Sem isso (ex.: só abrindo a página sem imprimir), as seções
-//    ficam com altura natural — o flex/min-height não atrapalha em nada.
-function _dgrScriptPaginacaoSecoes() {
-  const PAGE_H_MM = 297, MARGIN_V_MM = 16; // 8mm topo + 8mm base (@page margin:8mm 10mm)
-  const PAGE_USABLE_PX = Math.round((PAGE_H_MM - MARGIN_V_MM) * 96 / 25.4); // ≈1062px
-  return `<script>
-(function() {
-  function _dgrAjustarSecoes() {
-    var pageH = ${PAGE_USABLE_PX};
-    var hero = document.querySelector('.rk-hero');
-    var heroH = hero ? hero.getBoundingClientRect().height : 0;
-    var secoes = document.querySelectorAll('.dgr-page-section');
-    secoes.forEach(function(sec, i) {
-      var disponivel = i === 0 ? (pageH - heroH) : pageH;
-      sec.style.minHeight = Math.max(disponivel, 120) + 'px';
-    });
-  }
-  function _dgrLimparSecoes() {
-    document.querySelectorAll('.dgr-page-section').forEach(function(sec) { sec.style.minHeight = ''; });
-  }
-  window.addEventListener('beforeprint', _dgrAjustarSecoes);
-  window.addEventListener('afterprint', _dgrLimparSecoes);
-  // Melhor esforço pra quem só visualizar a página (sem imprimir ainda)
-  // já ver uma prévia aproximada da centralização.
-  window.addEventListener('load', _dgrAjustarSecoes);
-})();
-<\/script>`;
 }
 
 // ── Script do botão de tema (Relatório Gerencial) — alterna a classe
@@ -2685,10 +2644,18 @@ function _dgrSvgParaPngDataUrl(svgEl, scale = 2) {
   return new Promise((resolve) => {
     if (!svgEl) { resolve(null); return; }
     try {
+      // Lê o valor JÁ COMPUTADO de --text/--text3 no body ATUAL — antes
+      // isso era hardcoded pros hex do tema escuro (sempre), o que fazia
+      // os gauges saírem sempre escuros no PDF mesmo com o Dashboard em
+      // tema claro. Lendo ao vivo, respeita seja o tema real da tela, seja
+      // o tema temporariamente forçado pra captura (ver _dgrCapturarComTema).
+      const cs = getComputedStyle(document.body);
+      const corText  = (cs.getPropertyValue('--text')  || '').trim()  || '#dde3f0';
+      const corText3 = (cs.getPropertyValue('--text3') || '').trim()  || '#404a60';
       let svgStr = new XMLSerializer().serializeToString(svgEl);
       svgStr = svgStr
-        .replace(/var\(--text3\)/g, '#404a60')
-        .replace(/var\(--text\)/g, '#dde3f0')
+        .replace(/var\(--text3\)/g, corText3)
+        .replace(/var\(--text\)/g, corText)
         .replace(/var\(--mono\)/g, "'JetBrains Mono',monospace");
       if (!svgStr.includes('xmlns=')) {
         svgStr = svgStr.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
@@ -2865,6 +2832,56 @@ function _dgrBuildSaudeGeralHtml(imgCentral, imgMateriais) {
 //    o overlay "Gerando relatório..." por cima). chart.update('none') é
 //    usado pra pular a animação e desenhar de forma síncrona antes do
 //    toDataURL(). ─────────────────────────────────────────────────────
+// ── Captura TODOS os gráficos/gauges do Relatório Gerencial já na cor do
+//    tema escolhido pelo usuário no modal (ver abrirModalTemaRelatorioGerencial).
+//    Duas famílias de gráfico, dois mecanismos diferentes:
+//    - Chart.js (categoria/regional/usina): a cor é "assada" em pixel no
+//      canvas no momento do render — só trocar o atributo data-theme NÃO
+//      redesenha um canvas já pintado. Preciso re-chamar as funções de
+//      render (com os dados já cacheados em window._dgVgLastData, sem
+//      recalcular nada) DEPOIS de trocar o tema, pra elas lerem a cor
+//      nova via _dgVgTheme().
+//    - Gauges SVG (Saúde Geral): usam fill="var(--text)" AO VIVO no
+//      próprio elemento — o navegador já repinta sozinho assim que
+//      data-theme muda, sem precisar re-render explícito. Só a CAPTURA
+//      (_dgrSvgParaPngDataUrl) precisa ler o valor computado atual, o que
+//      já foi corrigido lá.
+//    Tudo isso acontece com o overlay "Gerando relatório..." (z-index
+//    9100, cobre a tela inteira incl. sidebar) por cima, então a troca
+//    de tema "piscando" pra capturar nunca fica visível pro usuário — a
+//    tela volta exatamente como estava antes de o overlay fechar. ───────
+async function _dgrCapturarComTema(tema, d) {
+  const temaOriginal = document.body.dataset.theme; // undefined = escuro (padrão)
+  const redesenharGraficos = () => {
+    _dgVgRenderChartCategoriaFisica(d.catFisicaPct);
+    _dgVgRenderChartCustoPorChave('dg-vg-chart-regional', d.entriesRegional, 'chartRegional');
+    _dgVgRenderChartCustoPorChave('dg-vg-chart-usina', d.entriesCentral, 'chartUsina');
+  };
+
+  try {
+    if (tema === 'light') document.body.setAttribute('data-theme', 'light');
+    else document.body.removeAttribute('data-theme'); // 'dark' = tema raiz do tokens.css
+    redesenharGraficos();
+
+    const [imgGaugeCentral, imgGaugeMateriais] = await Promise.all([
+      _dgrSvgParaPngDataUrl(document.getElementById('dg-vg-gauge-central-svg')),
+      _dgrSvgParaPngDataUrl(document.getElementById('dg-vg-gauge-chart-svg'))
+    ]);
+    const imgCategoria = _dgrCapturarCategoriaAmpliada();
+    const imgRegional  = _dgrCanvasParaPngDataUrl('dg-vg-chart-regional');
+    const imgUsina     = _dgrCanvasParaPngDataUrl('dg-vg-chart-usina');
+
+    return { imgGaugeCentral, imgGaugeMateriais, imgCategoria, imgRegional, imgUsina };
+  } finally {
+    // Restaura o tema original da TELA (não do relatório) e redesenha os
+    // 3 gráficos de novo com a cor de volta — sem isso, o Dashboard ao
+    // vivo ficaria preso no tema usado só pra captura.
+    if (temaOriginal) document.body.setAttribute('data-theme', temaOriginal);
+    else document.body.removeAttribute('data-theme');
+    redesenharGraficos();
+  }
+}
+
 function _dgrCapturarCategoriaAmpliada() {
   const canvas = document.getElementById('dg-vg-chart-categoria');
   const chart  = window._dgVgCharts?.categoria;
@@ -3365,7 +3382,59 @@ function _dgrEstilos() {
     @media print { .dgr-kpi-card, .dgr-health-card, .dgr-chart-card, .dgr-extremo-box { page-break-inside:avoid; } }`;
 }
 
-window.gerarRelatorioGerencialDashboard = async function() {
+// ── Modal de escolha de tema, aberto pelo botão "Relatório Gerencial" —
+//    o tema escolhido aqui é usado tanto pra capturar os gráficos/gauges
+//    já na cor certa (ver _dgrCapturarComTema) quanto pro estado inicial
+//    do PDF gerado (sem precisar clicar de novo no botão de dentro do
+//    relatório). Segue o mesmo padrão visual de modal já usado no sistema
+//    (ver abrirModalCategoriasRelatorio, acima). ─────────────────────────
+window.abrirModalTemaRelatorioGerencial = function() {
+  if (!window._dgVgLastData) {
+    toast('Analise um período no Dashboard Gerencial antes de gerar o relatório.', 'error');
+    return;
+  }
+
+  let modal = document.getElementById('rel-tema-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'rel-tema-modal';
+    modal.className = 'modal-overlay';
+    modal.style.cssText = 'z-index:3200';
+    document.body.appendChild(modal);
+  }
+
+  modal.innerHTML = `
+    <div class="modal" style="max-width:400px;width:92vw">
+      <div class="modal-title" style="display:flex;align-items:center;gap:10px">
+        <i class="ti ti-palette" style="color:var(--accent)"></i>
+        Tema do Relatório
+      </div>
+      <div class="modal-sub">Escolha o tema antes de gerar — os gráficos e gauges já são capturados nessa cor.</div>
+      <div style="display:flex;gap:10px;margin-bottom:14px">
+        <button class="btn" style="flex:1;flex-direction:column;gap:8px;padding:20px 10px;font-size:12.5px" onclick="_dgrGerarComTemaEscolhido('dark')">
+          <i class="ti ti-moon" style="font-size:24px"></i>
+          Escuro
+        </button>
+        <button class="btn" style="flex:1;flex-direction:column;gap:8px;padding:20px 10px;font-size:12.5px" onclick="_dgrGerarComTemaEscolhido('light')">
+          <i class="ti ti-sun" style="font-size:24px"></i>
+          Claro
+        </button>
+      </div>
+      <div style="display:flex;justify-content:flex-end">
+        <button class="btn" onclick="document.getElementById('rel-tema-modal').classList.remove('open')">Cancelar</button>
+      </div>
+    </div>`;
+
+  modal.classList.add('open');
+};
+
+// Fecha o modal de tema e dispara a geração do relatório com o tema escolhido.
+window._dgrGerarComTemaEscolhido = function(tema) {
+  document.getElementById('rel-tema-modal')?.classList.remove('open');
+  window.gerarRelatorioGerencialDashboard(tema);
+};
+
+window.gerarRelatorioGerencialDashboard = async function(tema = 'dark') {
   const d = window._dgVgLastData;
   if (!d) {
     toast('Analise um período no Dashboard Gerencial antes de gerar o relatório.', 'error');
@@ -3383,19 +3452,17 @@ window.gerarRelatorioGerencialDashboard = async function() {
       ? `${d.dtIni.toLocaleDateString('pt-BR')} a ${d.dtFim.toLocaleDateString('pt-BR')}`
       : 'Período completo';
 
-    const [imgGaugeCentral, imgGaugeMateriais] = await Promise.all([
-      _dgrSvgParaPngDataUrl(document.getElementById('dg-vg-gauge-central-svg')),
-      _dgrSvgParaPngDataUrl(document.getElementById('dg-vg-gauge-chart-svg'))
-    ]);
-    const imgCategoria = _dgrCapturarCategoriaAmpliada();
-    const imgRegional  = _dgrCanvasParaPngDataUrl('dg-vg-chart-regional');
-    const imgUsina     = _dgrCanvasParaPngDataUrl('dg-vg-chart-usina');
+    // Captura tudo já na cor do tema escolhido no modal — troca o tema do
+    // Dashboard só durante a captura (escondida atrás do loading overlay)
+    // e devolve a tela exatamente como estava (ver _dgrCapturarComTema).
+    const { imgGaugeCentral, imgGaugeMateriais, imgCategoria, imgRegional, imgUsina } =
+      await _dgrCapturarComTema(tema, d);
 
     // Cada seção "compacta" (cards/gráficos curtos) vira uma página só,
-    // centralizada verticalmente se sobrar espaço (ver _dgrScriptPaginacaoSecoes
-    // no shell). O gráfico de Categoria (Seção 3) não tem título próprio —
-    // sempre foi pensado como continuação visual da Saúde Geral (mesmo na
-    // tela, ver index.html), então entra na mesma página/seção dela.
+    // alinhada no topo com padding (ver .dgr-page-section no shell). O
+    // gráfico de Categoria (Seção 3) não tem título próprio — sempre foi
+    // pensado como continuação visual da Saúde Geral (mesmo na tela, ver
+    // index.html), então entra na mesma página/seção dela.
     // Detalhado Analítico fica de fora dessa regra: contém a tabela de
     // Detalhamento por Material, que é deliberadamente sem corte por Top-N
     // e pagina livremente quando maior que uma página (decisão de jul/2026,
@@ -3417,6 +3484,7 @@ window.gerarRelatorioGerencialDashboard = async function() {
       pageOrientation: 'retrato',
       paginarSecoes: true,
       temaAlternavel: true,
+      temaInicial: tema === 'light' ? 'light' : 'dark',
       pageTitle:  'Relatório Gerencial — Dashboard Gerencial',
       badge:      'Relatório Gerencial',
       title:      'Visão Geral — Dashboard Gerencial',
