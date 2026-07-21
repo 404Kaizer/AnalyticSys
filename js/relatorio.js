@@ -2926,7 +2926,7 @@ function _dgrEstilos() {
     .dgr-table-wrap .rk-name { line-height:1.4; }
     .dgr-chart-card .rk-name.dgr-nome-trunc { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:150px; display:inline-block; }
     @media (max-width:900px) { .dgr-kpi-row, .dgr-kpi-secondary, .dgr-health-grid, .dgr-chart-grid, .dgr-grupo-layout, .dgr-donut-sub-grid { grid-template-columns:repeat(2,1fr); } }
-    @media print { .dgr-kpi-card, .dgr-health-card, .dgr-chart-card, .dgr-extremo-box { page-break-inside:avoid; } }`;
+    @media print { .dgr-kpi-card, .dgr-health-card, .dgr-chart-card, .dgr-extremo-box { page-break-inside:avoid; } .dgr-section-title, .dgr-table-wrap .rk-table-head { page-break-after:avoid; break-after:avoid; } }`;
 }
 
 window.gerarRelatorioGerencialDashboard = async function() {
