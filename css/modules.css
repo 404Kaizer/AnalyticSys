@@ -5139,7 +5139,7 @@ mark.search-highlight {
   justify-content: space-between;
 }
 .dg-top5-title {
-  font-size: 12.5px;
+  font-size: 13.5px;
   font-weight: 600;
   color: var(--text);
   display: flex;
@@ -5241,13 +5241,13 @@ mark.search-highlight {
 .dg-giro-mat-body { padding: 10px 14px 14px; overflow-x: auto; }
 .dg-giro-mat-head-row {
   display: grid;
-  grid-template-columns: minmax(0,1fr) 68px 80px 48px 72px 72px 72px 64px;
+  grid-template-columns: minmax(0,1fr) 68px 80px 52px 72px 72px 72px 70px;
   gap: 6px;
   align-items: center;
   margin-bottom: 6px;
   padding-bottom: 6px;
   border-bottom: 1px solid var(--border);
-  font-size: 9px;
+  font-size: 10px;
   font-family: var(--mono);
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -5255,7 +5255,7 @@ mark.search-highlight {
 }
 .dg-giro-mat-row {
   display: grid;
-  grid-template-columns: minmax(0,1fr) 68px 80px 48px 72px 72px 72px 64px;
+  grid-template-columns: minmax(0,1fr) 68px 80px 52px 72px 72px 72px 70px;
   gap: 6px;
   align-items: center;
   padding: 5px 0;
@@ -5269,7 +5269,7 @@ mark.search-highlight {
    colunas permanece sempre visível e alinhado. */
 #modal-giro-detalhe .dg-giro-mat-head-row,
 #modal-giro-detalhe .dg-giro-mat-row {
-  grid-template-columns: minmax(140px,1fr) 68px 80px 48px 72px 72px 72px 64px;
+  grid-template-columns: minmax(140px,1fr) 68px 80px 52px 72px 72px 72px 70px;
   min-width: max-content;
 }
 
@@ -5280,7 +5280,7 @@ mark.search-highlight {
   gap: 3px;
   padding: 2px 6px;
   border-radius: 5px;
-  font-size: 9.5px;
+  font-size: 10.5px;
   font-weight: 700;
   font-family: var(--mono);
   letter-spacing: 0.03em;
@@ -5294,7 +5294,7 @@ mark.search-highlight {
 .dg-giro-abast.neutral { background: var(--bg3);       color: var(--text3);  border: 1px solid var(--border2); }
 .dg-giro-mat-row:last-of-type { border-bottom: none; }
 .dg-giro-mat-name {
-  font-size: 11.5px;
+  font-size: 12.5px;
   font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -5304,7 +5304,7 @@ mark.search-highlight {
   gap: 3px;
 }
 .dg-giro-mat-num {
-  font-size: 10.5px;
+  font-size: 11.5px;
   font-family: var(--mono);
   text-align: right;
   white-space: nowrap;

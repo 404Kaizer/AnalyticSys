@@ -460,7 +460,7 @@
 #dg-vg-kpis-hero .inv-kpi-card-featured .inv-kpi-value i.ti {
   font-size: 20px !important;
 }
-#dg-vg-kpis-hero .inv-kpi-card-featured .inv-kpi-pct i.ti {
+#dg-vg-kpis-hero .inv-kpi-card-featured .da-pct-value i.ti {
   font-size: 16px !important;
 }
 #dg-vg-kpis-hero .inv-kpi-secondary .inv-kpi-value i.ti {
@@ -468,6 +468,52 @@
 }
 #dg-vg-kpis-hero .inv-kpi-secondary .inv-kpi-unit i.ti {
   font-size: 13px !important;
+}
+
+/* Zona de percentual com barra de magnitude, à direita dos cards Variação/
+   Custo Var. — substitui o % que antes ficava empilhado dentro do corpo do
+   card, ocupando um espaço lateral que sobrava vazio (card esticado a 50%
+   da linha, conteúdo bem mais estreito que isso). Classes próprias
+   (da-pct-*, não reaproveita .inv-kpi-pct/.inv-kpi-pct-label) porque essas
+   duas já são usadas pelo card do Inventário com uma estrutura de HTML
+   diferente (% e rótulo no mesmo elemento, não em blocos separados). */
+.da-pct-zone {
+  flex-shrink: 0;
+  text-align: center;
+  min-width: 128px;
+}
+.da-pct-value {
+  font-size: 24px;
+  font-weight: 700;
+  font-family: var(--mono);
+  letter-spacing: -0.01em;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 5px;
+}
+.da-pct-bar {
+  width: 96px;
+  height: 6px;
+  background: var(--bg4);
+  border-radius: 3px;
+  margin: 8px auto;
+  overflow: hidden;
+}
+.da-pct-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+.da-pct-caption {
+  font-size: 10px;
+  font-weight: 500;
+  font-family: var(--mono);
+  color: var(--text3);
+}
+@media (max-width: 640px) {
+  .inv-kpi-card-featured { flex-wrap: wrap; }
+  .da-pct-zone { margin: 0 auto; }
 }
 
 @media (max-width: 1120px) {

@@ -1210,6 +1210,10 @@ function _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais, f
   // do varSymbol() (ícone padrão do sistema), então não repetimos "+ "/"− "
   // em texto aqui (evita redundância símbolo + sinal).
   const pctAbsStr = p => Math.abs(p).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%';
+  // Largura da barra de magnitude (0-100%, "cheia" a partir de 100% de
+  // desvio) — só um indicador visual rápido de tamanho, não uma escala
+  // precisa. null (sem Est./Custo Teórico pra comparar) vira barra vazia.
+  const pctBarWidth = p => p === null ? 0 : Math.min(100, Math.abs(p));
 
   el.innerHTML = `
     <div class="inv-kpi-featured-row">
@@ -1217,17 +1221,25 @@ function _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais, f
         <div class="inv-kpi-body">
           <div class="inv-kpi-label"><i class="ti ${varIcon}" style="color:${varCol}"></i>Variação</div>
           <div class="inv-kpi-value" style="color:${varCol}">${varSymbol(varTotalFisica)} ${fmtKg(Math.abs(varTotalFisica))}</div>
-          <div class="inv-kpi-pct" style="color:${varCol}">${pctVariacao === null ? '—' : varSymbol(varTotalFisica) + ' ' + pctAbsStr(pctVariacao)}<span class="inv-kpi-pct-label">do Est. Teórico</span></div>
           <div class="inv-kpi-unit">kg bruto</div>
           ${fechBadgeHtml}
+        </div>
+        <div class="da-pct-zone">
+          <div class="da-pct-value" style="color:${varCol}">${pctVariacao === null ? '—' : varSymbol(varTotalFisica) + ' ' + pctAbsStr(pctVariacao)}</div>
+          <div class="da-pct-bar"><div class="da-pct-bar-fill" style="width:${pctBarWidth(pctVariacao)}%;background:${varCol}"></div></div>
+          <div class="da-pct-caption">do Est. Teórico</div>
         </div>
       </div>
       <div class="inv-kpi-card inv-kpi-card-featured" style="${featTopStyle(cstCol)}">
         <div class="inv-kpi-body">
           <div class="inv-kpi-label"><i class="ti ${cstIcon}" style="color:${cstCol}"></i>Custo Var.</div>
           <div class="inv-kpi-value" style="color:${cstCol}">${varSymbol(custoTotal)} ${money(Math.abs(custoTotal))}</div>
-          <div class="inv-kpi-pct" style="color:${cstCol}">${pctCusto === null ? '—' : varSymbol(custoTotal) + ' ' + pctAbsStr(pctCusto)}<span class="inv-kpi-pct-label">do Custo Teórico</span></div>
           <div class="inv-kpi-unit">R$ bruto</div>
+        </div>
+        <div class="da-pct-zone">
+          <div class="da-pct-value" style="color:${cstCol}">${pctCusto === null ? '—' : varSymbol(custoTotal) + ' ' + pctAbsStr(pctCusto)}</div>
+          <div class="da-pct-bar"><div class="da-pct-bar-fill" style="width:${pctBarWidth(pctCusto)}%;background:${cstCol}"></div></div>
+          <div class="da-pct-caption">do Custo Teórico</div>
         </div>
       </div>
     </div>
@@ -1626,14 +1638,18 @@ function _dgVgRenderChartGrupoMaterial(custoAbsPorCat) {
   });
   flatRaw.sort((a, b) => b.total - a.total);
 
-  // Tamanho maior que o padrão (~1,12x, viewBox mais "quadrado") — o card
-  // desse donut é proporcionalmente mais alto que largo (ocupa a altura
-  // inteira da grade 2×2 ao lado), diferente dos 4 pequenos, cujo card já
-  // bate certo com o viewBox padrão 340×220. Sem isso, sobrava espaço
-  // vazio acima/abaixo do anel dentro do card (efeito "letterbox").
+  // Tamanho maior que os 4 donuts de categoria e que os gauges de Saúde
+  // Geral (R:104, ver _dgVgRenderHealthDonutSvg) — mas moderadamente maior,
+  // não discrepante como antes (era R:115 contra categorias em R:74; agora
+  // as categorias sobem pro mesmo R:104 da Saúde Geral, então o hero só
+  // precisa de uma folga pequena pra continuar lendo como "o principal").
+  // vbW/vbH/CX/CY continuam os mesmos: o card do hero é proporcionalmente
+  // mais alto que largo (ocupa a altura inteira da grade 2×2 ao lado), e
+  // esse viewBox 440×361 já bate certo com essa proporção — só R/ri e os
+  // offsets de callout (que dependem de R) encolheram.
   const sizeOverrideGrupo = {
-    vbW: 440, vbH: 361, CX: 220, CY: 180, R: 115, ri: 68,
-    calloutOffset: 19, elbowOffset: 38, tickLen: 20,
+    vbW: 440, vbH: 361, CX: 220, CY: 180, R: 100, ri: 59,
+    calloutOffset: 16, elbowOffset: 33, tickLen: 17,
     calloutPctFontSize: 11, calloutLabelFontSize: 9
   };
 
@@ -1650,8 +1666,13 @@ function _dgVgRenderChartGrupoMaterial(custoAbsPorCat) {
 
 function _dgVgRenderDonutCategoria(svgId, items, catKey) {
   const subtitleId = `${svgId}-subtitle`;
+  // Mesmo tamanho dos donuts de Saúde Geral (ver _dgVgRenderHealthDonutSvg)
+  // — antes usavam o tamanho padrão de _dgVgDrawDonutSvg (R:74), bem menor
+  // que os outros donuts da página, o que deixava a grade 2×2 desproporcional
+  // perto do hero "Grupo de Material" e da própria Saúde Geral.
+  const sizeOverrideCategoria = { vbW: 420, vbH: 300, CX: 210, CY: 148, R: 104, ri: 60, calloutOffset: 22, elbowOffset: 44, tickLen: 22, calloutPctFontSize: 12, calloutLabelFontSize: 9.5 };
   if (!items.length) {
-    _dgVgRenderCustoDonutSvg(svgId, [], null, null, 3, subtitleId);
+    _dgVgRenderCustoDonutSvg(svgId, [], null, null, 3, subtitleId, sizeOverrideCategoria);
     return;
   }
 
@@ -1664,7 +1685,7 @@ function _dgVgRenderDonutCategoria(svgId, items, catKey) {
   // Mesmo agrupamento em "Outros" usado no donut combinado, para materiais
   // com menos de 5% de participação dentro da categoria.
   const flat = _dgVgAgruparOutros(flatRaw);
-  _dgVgRenderCustoDonutSvg(svgId, flat, (DG_VG_CAT_LABELS[catKey] || '').toUpperCase(), `${items.length} materiais`, 3, subtitleId);
+  _dgVgRenderCustoDonutSvg(svgId, flat, (DG_VG_CAT_LABELS[catKey] || '').toUpperCase(), `${items.length} materiais`, 3, subtitleId, sizeOverrideCategoria);
 }
 
 // ────────────────────────────────────────────
