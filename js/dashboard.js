@@ -2553,7 +2553,12 @@ function renderDgGiro(results, dtIni, dtFim) {
       matAlto: matPorNivelAsc.slice(0, 5),
       matBaixo: matPorNivelDesc.slice(0, 5),
       centralAlto: top5CentralAlto,
-      centralBaixo: top5CentralBaixo
+      centralBaixo: top5CentralBaixo,
+      // Array completo (não só o Top 5) — necessário pro rodapé de resumo
+      // "X parados / Y baixo giro / Est. total parado" do painel Materiais
+      // Mais Críticos no relatório (ver buildBaixoFooter acima, que soma
+      // sobre o array inteiro, não só os 5 exibidos).
+      matArrFull: matArr
     };
   }
 

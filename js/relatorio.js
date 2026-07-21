@@ -1199,9 +1199,9 @@ function _buildRankingShellHTML(d, opts) {
 
   /* Header full-bleed */
   .rk-hero { background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%); border-bottom:1px solid rgba(255,255,255,.06); }
-  .rk-hero-inner { max-width:1400px; margin:0 auto; padding:28px 40px 26px; }
+  .rk-hero-inner { max-width:1400px; margin:0 auto; padding:20px 40px 18px; }
   .rk-hero-top { display:flex; align-items:flex-start; justify-content:space-between; gap:24px; flex-wrap:wrap; }
-  .rk-badge { display:inline-block; background:#dc2626; color:#fff; font-size:10.5px; font-weight:800; letter-spacing:.07em; text-transform:uppercase; padding:5px 12px; border-radius:5px; margin-bottom:12px; }
+  .rk-badge { display:inline-block; background:#dc2626; color:#fff; font-size:10.5px; font-weight:800; letter-spacing:.07em; text-transform:uppercase; padding:5px 12px; border-radius:5px; margin-bottom:8px; }
   .rk-hero h1 { font-size:26px; font-weight:800; color:#f8fafc; letter-spacing:-.01em; line-height:1.25; }
   .rk-hero p { font-size:13px; color:#94a3b8; font-weight:400; margin-top:8px; max-width:600px; }
   .rk-period-badge { background:#0f172a; border:1px solid rgba(255,255,255,.12); border-radius:10px; padding:11px 20px; text-align:center; flex-shrink:0; }
@@ -1209,7 +1209,7 @@ function _buildRankingShellHTML(d, opts) {
   .rk-period-sub { font-size:9px; color:#fca5a5; margin-top:5px; text-transform:uppercase; letter-spacing:.05em; font-weight:700; }
 
   /* Logos, discretos no rodapé do header */
-  .rk-hero-brand { display:flex; align-items:center; gap:16px; margin-bottom:20px; opacity:.85; }
+  .rk-hero-brand { display:flex; align-items:center; gap:16px; margin-bottom:12px; opacity:.85; }
   .rk-hero-brand img { height:38px; width:auto; object-fit:contain; filter:invert(1) hue-rotate(178deg); }
   .rk-hero-sys-icon { height:38px; width:38px; flex-shrink:0; }
   .rk-hero-brand-sep { width:1px; height:30px; background:rgba(255,255,255,.15); }
@@ -1223,7 +1223,7 @@ function _buildRankingShellHTML(d, opts) {
   .rk-kpi span { font-size:9.5px; color:#94a3b8; text-transform:uppercase; letter-spacing:.05em; font-weight:700; }
 
   /* Corpo */
-  .rk-page { max-width:1400px; margin:0 auto; padding:24px 40px 32px; }
+  .rk-page { max-width:1400px; margin:0 auto; padding:18px 40px 24px; }
 
   .callout-regularizacao { text-align:center; background:linear-gradient(135deg,#dc2626,#991b1b); border-radius:10px; padding:16px 24px; margin:20px 0 0; }
   .callout-regularizacao-title { font-size:12.5px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; color:#fff; margin-bottom:6px; }
@@ -1278,9 +1278,9 @@ function _buildRankingShellHTML(d, opts) {
     .rk-layout, .rk-table-split { grid-template-columns:1fr; }
   }
 
-  .report-footer { margin-top:14px; padding:16px 40px; background:#1e293b; color:#64748b; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; font-size:10.5px; }
+  .report-footer { margin-top:10px; padding:12px 40px; background:#1e293b; color:#64748b; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; font-size:10.5px; }
   .report-footer strong { color:#94a3b8; }
-  .footer-note { width:100%; margin-top:8px; padding-top:8px; border-top:1px solid rgba(255,255,255,.08); font-size:9.5px; color:#475569; }
+  .footer-note { width:100%; margin-top:6px; padding-top:6px; border-top:1px solid rgba(255,255,255,.08); font-size:9.5px; color:#475569; }
 
   @media print {
     body { background:#0b1220 !important; }
@@ -2574,22 +2574,27 @@ function _dgrBuildResumoPeriodoHtml(d) {
 
   const pctStr = p => p === null ? '—' : Math.abs(p).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%';
 
-  // Blocos de Caminhões/Carretas/IBCs em evidência (equivalente em veículos
-  // da variação física) — mesmos dados/metodologia da tela (ver
-  // veiculosRowHtml em _dgVgRenderKpisHero, dashboard.js), agora como
-  // blocos maiores dentro do card hero, a pedido do Hugo.
+  // Saldo físico do card hero em toneladas (kg ÷ 1.000) — só essa linha,
+  // a pedido do Hugo; o resto do relatório (cards secundários, tabela de
+  // Detalhamento) continua em kg, que é o grão certo pra aquele nível de
+  // detalhe.
+  const fmtTon = kg => (kg / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ton';
+
+  // Caminhões/Carretas/IBCs (equivalente em veículos da variação física —
+  // mesma metodologia da tela, ver veiculosRowHtml em _dgVgRenderKpisHero,
+  // dashboard.js) — versão discreta, sem ícone/selo, pra ficar ao lado do
+  // saldo em vez de ocupar uma grade grande embaixo (ficava desbalanceado).
   const v = d.veiculosTotalKpi || {};
-  const veiculoBlock = (label, iconCls, valor) => `
-    <div class="dgr-kpi-veiculo-block">
-      <div class="dgr-kpi-veiculo-icon"><i class="ti ${iconCls}"></i></div>
-      <div class="dgr-kpi-veiculo-valor" style="color:${_dgrValCor(valor)}">${_daFmtCountSigned(valor)}</div>
-      <div class="dgr-kpi-veiculo-label">${label}</div>
+  const veiculoStat = (label, valor) => `
+    <div class="dgr-kpi-veiculo-simples">
+      <div class="dgr-kpi-veiculo-simples-valor" style="color:${_dgrValCor(valor)}">${_daFmtCountSigned(valor)}</div>
+      <div class="dgr-kpi-veiculo-simples-label">${label}</div>
     </div>`;
   const veiculosHtml = (v.caminhoes || v.carretas || v.ibcs) ? `
-    <div class="dgr-kpi-veiculos-evid">
-      ${veiculoBlock('Caminhões', 'ti-truck', v.caminhoes)}
-      ${veiculoBlock('Carretas', 'ti-container', v.carretas)}
-      ${veiculoBlock('IBCs', 'ti-box', v.ibcs)}
+    <div class="dgr-kpi-veiculos-simples">
+      ${veiculoStat('Caminhões', v.caminhoes)}
+      ${veiculoStat('Carretas', v.carretas)}
+      ${veiculoStat('IBCs', v.ibcs)}
     </div>` : '';
 
   // Card secundário padrão (rótulo + selo de ícone colorido no topo, valor
@@ -2639,9 +2644,13 @@ function _dgrBuildResumoPeriodoHtml(d) {
       </div>
       <div class="dgr-kpi-hero-custo" style="color:${cstCol}">${varSymbol(d.custoTotal)} ${money(Math.abs(d.custoTotal))}</div>
       <div class="dgr-kpi-unit">R$ bruto</div>
-      <div class="dgr-kpi-hero-saldo" style="color:${varCol}">${varSymbol(d.varTotalFisica)} ${fmtKg(Math.abs(d.varTotalFisica))}</div>
-      <div class="dgr-kpi-unit">kg bruto</div>
-      ${veiculosHtml}
+      <div class="dgr-kpi-hero-saldo-row">
+        <div>
+          <div class="dgr-kpi-hero-saldo" style="color:${varCol}">${varSymbol(d.varTotalFisica)} ${fmtTon(Math.abs(d.varTotalFisica))}</div>
+          <div class="dgr-kpi-unit">ton bruto</div>
+        </div>
+        ${veiculosHtml}
+      </div>
     </div>`;
 }
 
@@ -2699,8 +2708,8 @@ function _dgrBuildCustoRegionalCentralHtml(d, imgRegional, imgUsina) {
     return `
       <div class="dgr-extremo-box">
         <div class="dgr-extremo-label">${_rankEsc(label)}</div>
-        <div class="dgr-extremo-value" style="color:${col}">${varSymbol(ext.v)} ${money(Math.abs(ext.v))}</div>
-        <div class="dgr-extremo-kg">${varSymbol(ext.kg || 0)} ${fmtKg(Math.abs(ext.kg || 0))}</div>
+        <div class="dgr-extremo-value" style="color:${col}">${_dgrNowrapNum(`${varSymbol(ext.v)} ${money(Math.abs(ext.v))}`)}</div>
+        <div class="dgr-extremo-kg">${_dgrNowrapNum(`${varSymbol(ext.kg || 0)} ${fmtKg(Math.abs(ext.kg || 0))}`)}</div>
         <div class="dgr-extremo-name">${_rankEsc(ext.k)}</div>
       </div>`;
   };
@@ -2787,29 +2796,80 @@ function _dgrTruncNome(nome, max = 26) {
   const s = String(nome || '');
   return s.length > max ? s.slice(0, max - 1).trimEnd() + '…' : s;
 }
-function _dgrGiroListaHtml(titulo, iconCls, items) {
+// ── Abastecimento (entradas ÷ saídas) — MESMOS limiares/rótulos de
+//    buildAbastCell (função interna de renderDgGiro, dashboard.js, não
+//    acessível globalmente), só com cores literais em vez de var(--x) e
+//    sem os data-help/tooltips (não fazem sentido num PDF estático).
+//    panel: 'alto' (alto giro — risco de ruptura) ou 'baixo' (baixo giro —
+//    capital parado) — o mesmo % de abastecimento é lido de forma
+//    diferente conforme o painel, exatamente como na tela. ──────────────
+function _dgrAbastInfo(entradas, saidas, panel) {
+  if (saidas < 0.001 && entradas < 0.001) return { texto: '—', cor: '#64748b', icone: null };
+  if (saidas < 0.001) return { texto: 'acúmulo', cor: '#8b5cf6', icone: 'ti-arrow-up' };
+  const ratio = (entradas / saidas) * 100;
+  const label = ratio.toFixed(0) + '%';
+  if (panel === 'alto') {
+    if (ratio >= 100) return { texto: label, cor: '#10b981', icone: 'ti-circle-check' };
+    if (ratio >= 80)  return { texto: label, cor: '#f59e0b', icone: 'ti-alert-triangle' };
+    return { texto: label, cor: '#f43f5e', icone: 'ti-flame' };
+  }
+  if (ratio > 150)  return { texto: label, cor: '#8b5cf6', icone: 'ti-currency-dollar' };
+  if (ratio >= 100) return { texto: label, cor: '#f59e0b', icone: 'ti-arrow-up' };
+  if (ratio >= 80)  return { texto: label, cor: '#10b981', icone: 'ti-equal' };
+  return { texto: label, cor: '#f43f5e', icone: 'ti-trending-down' };
+}
+function _dgrGiroListaHtml(titulo, iconCls, items, panel, footerArr) {
   if (!items || !items.length) {
     return `<div class="dgr-chart-card"><div class="dgr-chart-title"><i class="ti ${iconCls}"></i>${_rankEsc(titulo)}</div><div class="dgr-chart-empty">Sem dados de giro</div></div>`;
   }
   const rows = items.map(item => {
     const cor = _dgrNivelCor(item.nivel.level);
+    const abast = _dgrAbastInfo(item.entradas, item.saidas, panel);
     return `
     <tr>
-      <td class="rk-name dgr-nome-trunc" style="font-size:11.5px" title="${_rankEsc(item.name)}">${_rankEsc(_dgrTruncNome(item.name))}</td>
-      <td><span style="display:inline-block;padding:2px 8px;border-radius:5px;font-size:9.5px;font-weight:700;white-space:nowrap;background:${cor}22;color:${cor};border:1px solid ${cor}55">${_rankEsc(item.nivel.label)}</span></td>
-      <td class="rk-num" style="font-size:10.5px">${item.cobertura === null ? 'sem consumo' : _dgrNowrapNum(item.cobertura.toFixed(1) + 'd')}</td>
-      <td class="rk-num" style="font-size:10.5px;color:${_dgrGiroCor(item.giro)}">${_dgrNowrapNum(item.giro.toFixed(2) + '×')}</td>
-      <td class="rk-num" style="font-size:10px;color:#94a3b8">${_dgrNowrapNum(fmtKgShort(item.entradas))}</td>
-      <td class="rk-num" style="font-size:10px;color:#94a3b8">${_dgrNowrapNum(fmtKgShort(item.saidas))}</td>
+      <td class="rk-name" style="font-size:10.5px" title="${_rankEsc(item.name)}"><span class="dgr-nome-trunc-inner">${_rankEsc(_dgrTruncNome(item.name))}</span></td>
+      <td><span style="display:inline-block;padding:2px 6px;border-radius:5px;font-size:8.5px;font-weight:700;white-space:nowrap;background:${cor}22;color:${cor};border:1px solid ${cor}55">${_rankEsc(item.nivel.label)}</span></td>
+      <td class="rk-num" style="font-size:9px">${item.cobertura === null ? 'sem consumo' : _dgrNowrapNum(item.cobertura.toFixed(1) + 'd')}</td>
+      <td class="rk-num" style="font-size:9px;color:${_dgrGiroCor(item.giro)}">${_dgrNowrapNum(item.giro.toFixed(2) + '×')}</td>
+      <td class="rk-num" style="font-size:8.5px;color:#94a3b8">${_dgrNowrapNum(fmtKgShort(item.entradas))}</td>
+      <td class="rk-num" style="font-size:8.5px;color:#94a3b8">${_dgrNowrapNum(fmtKgShort(item.saidas))}</td>
+      <td class="rk-num" style="font-size:8.5px;color:#94a3b8">${_dgrNowrapNum(fmtKgShort(item.estMedio || 0))}</td>
+      <td style="text-align:right"><span style="display:inline-flex;align-items:center;gap:3px;padding:2px 6px;border-radius:5px;font-size:8px;font-weight:700;white-space:nowrap;background:${abast.cor}22;color:${abast.cor};border:1px solid ${abast.cor}55">${abast.icone ? `<i class="ti ${abast.icone}" style="font-size:9px"></i>` : ''}${abast.texto}</span></td>
     </tr>`;
   }).join('');
+
+  // Rodapé de resumo (só no painel "Materiais Mais Críticos" — mesma
+  // condição withFooter=true de buildBaixoFooter na tela) — soma sobre o
+  // array COMPLETO (footerArr), não só os 5 exibidos na tabela.
+  const footerHtml = footerArr ? (() => {
+    const parados   = footerArr.filter(m => m.giro < 0.1).length;
+    const baixoGiro = footerArr.filter(m => m.giro >= 0.1 && m.giro < 1).length;
+    const estTotal  = footerArr.reduce((s, m) => s + (m.estMedio || 0), 0);
+    return `
+      <div class="dgr-giro-footer">
+        <span style="color:#f43f5e"><i class="ti ti-lock" style="font-size:10px"></i> ${parados} parado${parados !== 1 ? 's' : ''}</span>
+        <span style="color:#f59e0b"><i class="ti ti-alert-triangle" style="font-size:10px"></i> ${baixoGiro} baixo giro</span>
+        <span style="color:#64748b;margin-left:auto">Est. total parado: ${fmtKgShort(estTotal)}</span>
+      </div>`;
+  })() : '';
+
   return `
     <div class="dgr-chart-card">
       <div class="dgr-chart-title"><i class="ti ${iconCls}"></i>${_rankEsc(titulo)}</div>
       <table class="rk-table dgr-giro-table">
-        <thead><tr><th style="width:24%">Nome</th><th style="width:15%">Nível</th><th style="width:15%;text-align:right">Cobertura</th><th style="width:12%;text-align:right">Giro</th><th style="width:17%;text-align:right">Entradas</th><th style="width:17%;text-align:right">Saídas</th></tr></thead>
+        <thead><tr>
+          <th style="width:19%">Nome</th>
+          <th style="width:11%">Nível</th>
+          <th style="width:10%;text-align:right">Cobertura</th>
+          <th style="width:8%;text-align:right">Giro</th>
+          <th style="width:12%;text-align:right">Entradas</th>
+          <th style="width:12%;text-align:right">Saídas</th>
+          <th style="width:12%;text-align:right">Est.Médio</th>
+          <th style="width:16%;text-align:right">Abast.</th>
+        </tr></thead>
         <tbody>${rows}</tbody>
       </table>
+      ${footerHtml}
     </div>`;
 }
 function _dgrBuildGiroCoberturaHtml(d) {
@@ -2818,12 +2878,12 @@ function _dgrBuildGiroCoberturaHtml(d) {
   return `
     <div class="dgr-section-title" style="margin-top:26px"><i class="ti ti-arrows-exchange"></i>Giro & Cobertura — Top 5</div>
     <div class="dgr-chart-grid">
-      ${_dgrGiroListaHtml('Top 5 Centrais — Mais Saudáveis', 'ti-trending-up', g.centralAlto)}
-      ${_dgrGiroListaHtml('Top 5 Centrais — Mais Críticas', 'ti-trending-down', g.centralBaixo)}
+      ${_dgrGiroListaHtml('Top 5 Centrais — Mais Saudáveis', 'ti-trending-up', g.centralAlto, 'alto')}
+      ${_dgrGiroListaHtml('Top 5 Centrais — Mais Críticas', 'ti-trending-down', g.centralBaixo, 'baixo')}
     </div>
     <div class="dgr-chart-grid" style="margin-top:28px">
-      ${_dgrGiroListaHtml('Top 5 Materiais — Mais Saudáveis', 'ti-trending-up', g.matAlto)}
-      ${_dgrGiroListaHtml('Top 5 Materiais — Mais Críticos', 'ti-trending-down', g.matBaixo)}
+      ${_dgrGiroListaHtml('Top 5 Materiais — Mais Saudáveis', 'ti-trending-up', g.matAlto, 'alto')}
+      ${_dgrGiroListaHtml('Top 5 Materiais — Mais Críticos', 'ti-trending-down', g.matBaixo, 'baixo', g.matArrFull)}
     </div>`;
 }
 
@@ -2972,29 +3032,33 @@ function _dgrBuildDetalhadoAnaliticoHtml(d) {
 
 function _dgrEstilos() {
   return `
-    .dgr-section-title { font-size:11px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; color:#f87171; margin:0 0 12px; display:flex; align-items:center; gap:8px; }
-    .dgr-kpi-secondary { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:14px; }
+    .dgr-section-title { font-size:11px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; color:#f87171; margin:0 0 8px; display:flex; align-items:center; gap:8px; }
+    .dgr-kpi-secondary { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:8px; }
     .dgr-kpi-card { background:rgba(255,255,255,.045); border:1px solid rgba(255,255,255,.09); border-radius:12px; padding:18px 20px; border-top:3px solid transparent; page-break-inside:avoid; }
-    .dgr-kpi-secondary .dgr-kpi-card { padding:16px 18px; border-top:none; }
-    .dgr-kpi-card-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:12px; }
+    .dgr-kpi-secondary .dgr-kpi-card { padding:12px 16px; border-top:none; }
+    .dgr-kpi-card-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:8px; }
     .dgr-kpi-icon { width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; font-size:15px; flex-shrink:0; }
     .dgr-kpi-label { font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#94a3b8; }
     .dgr-kpi-value { font-family:'JetBrains Mono',monospace; font-size:21px; font-weight:800; color:#fff; }
     .dgr-kpi-secondary .dgr-kpi-value { font-size:18px; }
     .dgr-kpi-unit { font-size:10.5px; color:#64748b; margin-top:4px; font-family:'JetBrains Mono',monospace; }
-    .dgr-kpi-divider-row { display:flex; align-items:baseline; gap:7px; margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,.08); }
+    .dgr-kpi-divider-row { display:flex; align-items:baseline; gap:7px; margin-top:8px; padding-top:8px; border-top:1px solid rgba(255,255,255,.08); }
     .dgr-kpi-pct { font-family:'JetBrains Mono',monospace; font-size:19px; font-weight:800; }
     .dgr-kpi-pct-label { font-size:10px; color:#64748b; }
     /* Card hero "Variação Estoque" — custo em evidência (valor maior),
        saldo em kg abaixo (menor), veículos em blocos grandes por baixo. */
-    .dgr-kpi-hero { background:rgba(255,255,255,.045); border:1px solid rgba(255,255,255,.09); border-radius:12px; padding:24px 28px; border-top:3px solid transparent; page-break-inside:avoid; }
-    .dgr-kpi-hero-custo { font-family:'JetBrains Mono',monospace; font-size:32px; font-weight:800; }
-    .dgr-kpi-hero-saldo { font-family:'JetBrains Mono',monospace; font-size:19px; font-weight:700; margin-top:16px; }
-    .dgr-kpi-veiculos-evid { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-top:18px; padding-top:18px; border-top:1px solid rgba(255,255,255,.08); }
-    .dgr-kpi-veiculo-block { display:flex; flex-direction:column; align-items:center; text-align:center; gap:5px; }
-    .dgr-kpi-veiculo-icon { width:36px; height:36px; border-radius:10px; background:rgba(255,255,255,.06); display:flex; align-items:center; justify-content:center; font-size:17px; color:#cbd5e1; margin-bottom:2px; }
-    .dgr-kpi-veiculo-valor { font-family:'JetBrains Mono',monospace; font-size:21px; font-weight:800; }
-    .dgr-kpi-veiculo-label { font-size:10px; color:#64748b; text-transform:uppercase; letter-spacing:.05em; font-weight:700; }
+    .dgr-kpi-hero { background:rgba(255,255,255,.045); border:1px solid rgba(255,255,255,.09); border-radius:12px; padding:15px 22px; border-top:3px solid transparent; page-break-inside:avoid; }
+    .dgr-kpi-hero-custo { font-family:'JetBrains Mono',monospace; font-size:27px; font-weight:800; }
+    .dgr-kpi-hero-saldo { font-family:'JetBrains Mono',monospace; font-size:19px; font-weight:700; }
+    /* Linha do saldo (agora em toneladas) + veículos lado a lado — sem
+       selo/ícone (só número + rótulo pequeno), discretos, ao lado do
+       saldo em vez de embaixo numa grade grande — pedido do Hugo pra
+       corrigir o desbalanceamento do card hero. */
+    .dgr-kpi-hero-saldo-row { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:20px; margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,.08); }
+    .dgr-kpi-veiculos-simples { display:flex; gap:28px; flex-wrap:wrap; }
+    .dgr-kpi-veiculo-simples { text-align:center; }
+    .dgr-kpi-veiculo-simples-valor { font-family:'JetBrains Mono',monospace; font-size:15px; font-weight:800; }
+    .dgr-kpi-veiculo-simples-label { font-size:9px; color:#64748b; text-transform:uppercase; letter-spacing:.05em; font-weight:700; margin-top:2px; }
     .dgr-health-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
     .dgr-health-card { background:rgba(255,255,255,.045); border:1px solid rgba(255,255,255,.09); border-radius:12px; padding:18px; page-break-inside:avoid; }
     .dgr-health-card img { max-width:100%; height:auto; display:block; margin:0 auto; }
@@ -3005,12 +3069,12 @@ function _dgrEstilos() {
     .dgr-chart-title { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:#e2e8f0; margin-bottom:12px; display:flex; align-items:center; gap:6px; }
     .dgr-chart-empty { padding:40px 0; color:#64748b; font-size:11px; text-align:center; }
     .dgr-chart-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-top:14px; }
-    .dgr-extremos-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; margin-bottom:4px; }
-    .dgr-extremo-box { background:rgba(255,255,255,.045); border:1px solid rgba(255,255,255,.09); border-radius:12px; padding:16px 18px; page-break-inside:avoid; }
-    .dgr-extremo-label { font-size:10px; font-family:'JetBrains Mono',monospace; letter-spacing:.06em; text-transform:uppercase; color:#64748b; margin-bottom:6px; }
-    .dgr-extremo-value { font-size:22px; font-weight:700; font-family:'JetBrains Mono',monospace; letter-spacing:-.02em; margin-bottom:4px; }
-    .dgr-extremo-kg { font-size:11px; font-family:'JetBrains Mono',monospace; color:#64748b; margin-bottom:6px; }
-    .dgr-extremo-name { font-size:13px; color:#cbd5e1; font-weight:600; }
+    .dgr-extremos-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:4px; }
+    .dgr-extremo-box { background:rgba(255,255,255,.045); border:1px solid rgba(255,255,255,.09); border-radius:12px; padding:12px 14px; page-break-inside:avoid; }
+    .dgr-extremo-label { font-size:9px; font-family:'JetBrains Mono',monospace; letter-spacing:.05em; text-transform:uppercase; color:#64748b; margin-bottom:5px; }
+    .dgr-extremo-value { font-size:16px; font-weight:700; font-family:'JetBrains Mono',monospace; letter-spacing:-.02em; margin-bottom:3px; }
+    .dgr-extremo-kg { font-size:9.5px; font-family:'JetBrains Mono',monospace; color:#64748b; margin-bottom:5px; }
+    .dgr-extremo-name { font-size:11px; color:#cbd5e1; font-weight:600; }
     .dgr-grupo-layout { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
     .dgr-donut-grande img { max-width:100%; height:auto; }
     .dgr-donut-sub-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
@@ -3040,8 +3104,16 @@ function _dgrEstilos() {
        vizinha. */
     .dgr-table-wrap .rk-name, .dgr-chart-card .rk-name { font-size:10px !important; }
     .dgr-table-wrap .rk-name { line-height:1.4; }
-    .dgr-chart-card .rk-name.dgr-nome-trunc { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:150px; display:inline-block; }
+    /* Corte de texto do nome — num span INTERNO ao td (não no td em si),
+       com max-width:100% do pai. O td continua um table-cell normal,
+       respeitando a largura em % que table-layout:fixed calculou; um
+       display:inline-block com max-width fixo direto no td (versão
+       anterior) não respeitava essa largura de forma confiável e deixava
+       o texto vazar visualmente pra célula vizinha. */
+    .dgr-nome-trunc-inner { display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
     .dgr-chart-card table.rk-table { table-layout:fixed; }
+    .dgr-giro-footer { display:flex; gap:14px; padding:8px 0 0; margin-top:8px; border-top:1px solid rgba(255,255,255,.08); flex-wrap:wrap; font-size:9px; font-family:'JetBrains Mono',monospace; font-weight:700; }
+    .dgr-giro-footer span { display:flex; align-items:center; gap:4px; }
     /* Colapso dos pares de card (Giro, gráficos de barra) e das grades de
        3 colunas — SEMPRE ao imprimir/gerar PDF, não só condicional a
        largura. Medi e confirmei: @media(max-width) é avaliado contra a
@@ -3053,7 +3125,7 @@ function _dgrEstilos() {
        largura continua valendo também, só como bônus pra quem visualizar
        o HTML numa janela estreita antes de imprimir. */
     @media print, (max-width:900px) {
-      .dgr-kpi-secondary, .dgr-health-grid, .dgr-grupo-layout, .dgr-donut-sub-grid, .dgr-kpi-veiculos-evid { grid-template-columns:repeat(2,1fr); }
+      .dgr-kpi-secondary, .dgr-health-grid, .dgr-grupo-layout, .dgr-donut-sub-grid { grid-template-columns:repeat(2,1fr); }
       .dgr-chart-grid { grid-template-columns:1fr; }
     }
     @media print { .dgr-kpi-card, .dgr-health-card, .dgr-chart-card, .dgr-extremo-box { page-break-inside:avoid; } }`;
