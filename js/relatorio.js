@@ -1230,9 +1230,12 @@ function _buildRankingShellHTML(d, opts) {
      (mesmo sistema de cores claras usado no resto do AnalyticSys), com o
      vermelho de marca (#dc2626, badges/topbar) mantido igual nos dois
      temas — só o --dgr-accent-text (títulos em destaque) escurece pra
-     manter contraste legível em fundo claro. */
+     manter contraste legível em fundo claro. --dgr-bg um pouco mais
+     cinza que os cards (#ffffff) de propósito — com os dois quase no
+     mesmo tom, os cards ficavam praticamente invisíveis, mesclados no
+     fundo da página. */
   body.dgr-tema-claro {
-    --dgr-bg:                 #f0f4fa;
+    --dgr-bg:                 #e3e7ef;
     --dgr-text:               #0f172a;
     --dgr-text-strong:        #0f172a;
     --dgr-text-dim:           #3d4f6e;
@@ -1252,12 +1255,12 @@ function _buildRankingShellHTML(d, opts) {
     --dgr-brand-sep:          rgba(15,23,60,.15);
     --dgr-brand-text:         #3d4f6e;
     --dgr-logo-filter:        none;
-    --dgr-actionbar-bg:       #e8edf6;
+    --dgr-actionbar-bg:       #d7dce6;
     --dgr-actionbar-text:     #0f172a;
-    --dgr-btnclose-bg:        #dde3ee;
+    --dgr-btnclose-bg:        #cdd3e0;
     --dgr-btnclose-text:      #0f172a;
-    --dgr-btnclose-hover:     #c7d0e3;
-    --dgr-footer-bg:          #e8edf6;
+    --dgr-btnclose-hover:     #b9c1d3;
+    --dgr-footer-bg:          #d7dce6;
     --dgr-footer-text:        #3d4f6e;
     --dgr-footer-strong:      #0f172a;
   }
@@ -2852,6 +2855,18 @@ function _dgrBuildSaudeGeralHtml(imgCentral, imgMateriais) {
 //    tela volta exatamente como estava antes de o overlay fechar. ───────
 async function _dgrCapturarComTema(tema, d) {
   const temaOriginal = document.body.dataset.theme; // undefined = escuro (padrão)
+
+  // Desliga a animação de entrada do Chart.js (globalmente, só durante
+  // essa captura) — redesenharGraficos() DESTRÓI e RECRIA os 3 gráficos
+  // do zero (_dgVgDestroyChart + new Chart), e por padrão o Chart.js anima
+  // as barras crescendo de 0 até o valor final em ~1000ms. Como a captura
+  // do canvas (toDataURL) acontece na MESMA sincronia, sem isso ela pega
+  // um frame no meio dessa animação — barras minúsculas/cortadas, coladas
+  // no zero, exatamente o bug relatado. Restaurado no finally, então o uso
+  // normal do Dashboard (botão "Atualizar") continua animando como sempre.
+  const animOriginal = (typeof Chart !== 'undefined') ? Chart.defaults.animation : undefined;
+  if (typeof Chart !== 'undefined') Chart.defaults.animation = false;
+
   const redesenharGraficos = () => {
     _dgVgRenderChartCategoriaFisica(d.catFisicaPct);
     _dgVgRenderChartCustoPorChave('dg-vg-chart-regional', d.entriesRegional, 'chartRegional');
@@ -2875,10 +2890,15 @@ async function _dgrCapturarComTema(tema, d) {
   } finally {
     // Restaura o tema original da TELA (não do relatório) e redesenha os
     // 3 gráficos de novo com a cor de volta — sem isso, o Dashboard ao
-    // vivo ficaria preso no tema usado só pra captura.
+    // vivo ficaria preso no tema usado só pra captura. Anima normalmente
+    // de novo (ainda com animação desligada, restaurada logo abaixo) —
+    // como está tudo atrás do overlay, não faz diferença visual, e evita
+    // qualquer chance de o usuário ver o redraw "crescendo" quando o
+    // overlay fechar.
     if (temaOriginal) document.body.setAttribute('data-theme', temaOriginal);
     else document.body.removeAttribute('data-theme');
     redesenharGraficos();
+    if (typeof Chart !== 'undefined') Chart.defaults.animation = animOriginal;
   }
 }
 
