@@ -2479,6 +2479,211 @@ window.gerarRelatorioGeralOcorrencias = function() {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// RELATÓRIO GERENCIAL DO DASHBOARD GERENCIAL — Visão Geral, para diretoria/
+// presidência (mesmo shell escuro dos demais Relatórios Gerenciais:
+// _buildRankingShellHTML). Lê window._dgVgLastData (cache populado no fim de
+// renderDgVisaoGeralPdf, em dashboard.js) — nunca recalcula nada, garantindo
+// que os números do PDF batem exatamente com o que está na tela.
+//
+// FASE 1 (atual): Resumo do Período (KPIs) + Saúde Geral (gauges capturados
+// como imagem). Próximas fases adicionam: Categoria/Regional/Central,
+// Custo Absoluto, Giro & Cobertura, Detalhado Analítico — todas lendo do
+// mesmo _dgVgLastData, sem precisar tocar em dashboard.js de novo.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ── Rasteriza um <svg> vivo da tela em PNG (data URL), resolvendo as
+//    variáveis CSS (var(--text)/var(--text3)/var(--mono)) usadas nesses
+//    SVGs para valores literais do tema escuro — o relatório abre numa
+//    janela/documento própria, sem acesso às custom properties do app.
+//    scale:2 pra ficar nítido tanto na tela quanto impresso. ──────────────
+function _dgrSvgParaPngDataUrl(svgEl, scale = 2) {
+  return new Promise((resolve) => {
+    if (!svgEl) { resolve(null); return; }
+    try {
+      let svgStr = new XMLSerializer().serializeToString(svgEl);
+      svgStr = svgStr
+        .replace(/var\(--text3\)/g, '#404a60')
+        .replace(/var\(--text\)/g, '#dde3f0')
+        .replace(/var\(--mono\)/g, "'JetBrains Mono',monospace");
+      if (!svgStr.includes('xmlns=')) {
+        svgStr = svgStr.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
+      }
+      const vb = svgEl.viewBox && svgEl.viewBox.baseVal;
+      const rect = svgEl.getBoundingClientRect();
+      const w = (vb && vb.width)  || rect.width  || 300;
+      const h = (vb && vb.height) || rect.height || 220;
+      const blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = w * scale;
+        canvas.height = h * scale;
+        const ctx = canvas.getContext('2d');
+        ctx.scale(scale, scale);
+        ctx.drawImage(img, 0, 0, w, h);
+        URL.revokeObjectURL(url);
+        resolve(canvas.toDataURL('image/png'));
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+      img.src = url;
+    } catch (err) {
+      console.error('[Relatório Gerencial - Dashboard] Falha ao capturar SVG:', err);
+      resolve(null);
+    }
+  });
+}
+
+// ── Captura um <canvas> (Chart.js) já desenhado na tela em PNG — cores
+//    já vêm "assadas" nos pixels do canvas, sem depender de CSS var. ─────
+function _dgrCanvasParaPngDataUrl(canvasId) {
+  const c = document.getElementById(canvasId);
+  if (!c) return null;
+  try { return c.toDataURL('image/png'); }
+  catch (err) { console.error('[Relatório Gerencial - Dashboard] Falha ao capturar canvas', canvasId, err); return null; }
+}
+
+// ── Seção 1: Resumo do Período (réplica dos cards de KPI da tela, com
+//    cores literais do tema escuro em vez de var(--x) — ver nota acima). ──
+function _dgrBuildResumoPeriodoHtml(d) {
+  const colorFor = v => v < -0.0001 ? '#f43f5e' : v > 0.0001 ? '#f59e0b' : '#06b6d4';
+  const varCol = colorFor(d.varTotalFisica);
+  const cstCol = colorFor(d.custoTotal);
+
+  const totalEstTeorico = d.estTotais.totalIni + d.movTotais.totalEnt - d.movTotais.totalSai;
+  const pctVariacao = Math.abs(totalEstTeorico) > 0.0001 ? (d.varTotalFisica / totalEstTeorico) * 100 : null;
+  const custoEstTeorico = (d.estTotais.custoIni || 0) + (d.custoMovTotais.custoEnt || 0) - (d.custoMovTotais.custoSai || 0);
+  const pctCusto = Math.abs(custoEstTeorico) > 0.0001 ? (d.custoTotal / custoEstTeorico) * 100 : null;
+
+  const kgEvolucao    = d.estTotais.totalFim - d.estTotais.totalIni;
+  const custoEvolucao = (d.estTotais.custoFim || 0) - (d.estTotais.custoIni || 0);
+  const pctEvolucao   = Math.abs(d.estTotais.totalIni) > 0.0001 ? (kgEvolucao / d.estTotais.totalIni) * 100 : null;
+  const evoCol = colorFor(kgEvolucao);
+
+  const pctStr = p => p === null ? '—' : Math.abs(p).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%';
+
+  return `
+    <div class="dgr-section-title"><i class="ti ti-report-money"></i>Resumo do Período — Estoque, Movimentação e Variação</div>
+    <div class="dgr-kpi-row">
+      <div class="dgr-kpi-card" style="border-top-color:${varCol}">
+        <div class="dgr-kpi-label">Variação</div>
+        <div class="dgr-kpi-value" style="color:${varCol}">${varSymbol(d.varTotalFisica)} ${fmtKg(Math.abs(d.varTotalFisica))}</div>
+        <div class="dgr-kpi-unit">kg bruto ${pctVariacao === null ? '' : '· ' + varSymbol(d.varTotalFisica) + ' ' + pctStr(pctVariacao) + ' do Est. Teórico'}</div>
+      </div>
+      <div class="dgr-kpi-card" style="border-top-color:${cstCol}">
+        <div class="dgr-kpi-label">Custo Var.</div>
+        <div class="dgr-kpi-value" style="color:${cstCol}">${varSymbol(d.custoTotal)} ${money(Math.abs(d.custoTotal))}</div>
+        <div class="dgr-kpi-unit">R$ bruto ${pctCusto === null ? '' : '· ' + varSymbol(d.custoTotal) + ' ' + pctStr(pctCusto) + ' do Custo Teórico'}</div>
+      </div>
+    </div>
+    <div class="dgr-kpi-secondary">
+      <div class="dgr-kpi-card"><div class="dgr-kpi-label">Est. Inicial Total</div><div class="dgr-kpi-value">${money(d.estTotais.custoIni || 0)}</div><div class="dgr-kpi-unit">${fmtKg(d.estTotais.totalIni)}</div></div>
+      <div class="dgr-kpi-card"><div class="dgr-kpi-label">Entradas</div><div class="dgr-kpi-value">${money(d.custoMovTotais.custoEnt || 0)}</div><div class="dgr-kpi-unit">${fmtKg(d.movTotais.totalEnt)}</div></div>
+      <div class="dgr-kpi-card"><div class="dgr-kpi-label">Saídas</div><div class="dgr-kpi-value">${money(d.custoMovTotais.custoSai || 0)}</div><div class="dgr-kpi-unit">${fmtKg(d.movTotais.totalSai)}</div></div>
+      <div class="dgr-kpi-card"><div class="dgr-kpi-label">Est. Final Total</div><div class="dgr-kpi-value">${money(d.estTotais.custoFim || 0)}</div><div class="dgr-kpi-unit">${fmtKg(d.estTotais.totalFim)}</div></div>
+      <div class="dgr-kpi-card"><div class="dgr-kpi-label">Evolução Estoque</div><div class="dgr-kpi-value" style="color:${evoCol}">${pctEvolucao === null ? '—' : varSymbol(kgEvolucao) + ' ' + pctStr(pctEvolucao)}</div><div class="dgr-kpi-unit">${varSymbol(kgEvolucao)} ${money(Math.abs(custoEvolucao))}</div></div>
+    </div>`;
+}
+
+// ── Seção 2: Saúde Geral — Centrais e Materiais (gauges capturados como
+//    imagem + badges de contagem por nível, reaproveitados direto do DOM
+//    já renderizado — já usam cores literais, só o font-family precisa de
+//    resolução). ────────────────────────────────────────────────────────
+function _dgrBuildSaudeGeralHtml(imgCentral, imgMateriais) {
+  const resolveMono = html => (html || '').replace(/var\(--mono\)/g, "'JetBrains Mono',monospace");
+  const summaryCentral   = resolveMono(document.getElementById('dg-vg-health-central-summary')?.innerHTML);
+  const summaryMateriais = resolveMono(document.getElementById('dg-vg-health-materiais-summary')?.innerHTML);
+  const subCentral    = document.getElementById('dg-vg-health-central-subtitle')?.textContent || '';
+  const subMateriais  = document.getElementById('dg-vg-health-materiais-subtitle')?.textContent || '';
+
+  const card = (titulo, iconCls, sub, img, summary) => `
+    <div class="dgr-health-card">
+      <div class="dgr-health-title"><i class="ti ${iconCls}"></i><span>${_rankEsc(titulo)}</span><span style="margin-left:auto;font-weight:400;color:#64748b;font-size:10px">${_rankEsc(sub)}</span></div>
+      ${img ? `<img src="${img}" alt="${_rankEsc(titulo)}">` : '<div style="padding:40px 0;color:#64748b;font-size:11px;text-align:center">Gráfico indisponível</div>'}
+      <div class="dgr-health-summary">${summary}</div>
+    </div>`;
+
+  return `
+    <div class="dgr-section-title" style="margin-top:26px"><i class="ti ti-heart-rate-monitor"></i>Saúde Geral — Centrais e Materiais</div>
+    <div class="dgr-health-grid">
+      ${card('Saúde Geral — Centrais', 'ti-building-factory-2', subCentral, imgCentral, summaryCentral)}
+      ${card('Saúde Geral — Materiais', 'ti-heartbeat', subMateriais, imgMateriais, summaryMateriais)}
+    </div>`;
+}
+
+// ── CSS próprio do corpo deste relatório (escopado, como nos demais). ────
+function _dgrEstilos() {
+  return `
+    .dgr-section-title { font-size:11px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; color:#f87171; margin:0 0 12px; display:flex; align-items:center; gap:8px; }
+    .dgr-kpi-row { display:grid; grid-template-columns:repeat(2,1fr); gap:14px; margin-bottom:14px; }
+    .dgr-kpi-secondary { display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-bottom:10px; }
+    .dgr-kpi-card { background:rgba(255,255,255,.045); border:1px solid rgba(255,255,255,.09); border-radius:12px; padding:18px 20px; border-top:3px solid transparent; page-break-inside:avoid; }
+    .dgr-kpi-secondary .dgr-kpi-card { padding:13px 15px; border-top:none; }
+    .dgr-kpi-label { font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#94a3b8; margin-bottom:6px; }
+    .dgr-kpi-value { font-family:'JetBrains Mono',monospace; font-size:21px; font-weight:800; color:#fff; }
+    .dgr-kpi-secondary .dgr-kpi-value { font-size:15px; }
+    .dgr-kpi-unit { font-size:10px; color:#64748b; margin-top:4px; font-family:'JetBrains Mono',monospace; }
+    .dgr-health-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+    .dgr-health-card { background:rgba(255,255,255,.045); border:1px solid rgba(255,255,255,.09); border-radius:12px; padding:18px; page-break-inside:avoid; }
+    .dgr-health-card img { max-width:100%; height:auto; display:block; margin:0 auto; }
+    .dgr-health-title { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:#e2e8f0; margin-bottom:10px; display:flex; align-items:center; gap:6px; }
+    .dgr-health-summary { display:flex; flex-wrap:wrap; gap:6px; justify-content:center; margin-top:10px; }
+    @media (max-width:900px) { .dgr-kpi-row, .dgr-kpi-secondary, .dgr-health-grid { grid-template-columns:repeat(2,1fr); } }
+    @media print { .dgr-kpi-card, .dgr-health-card { page-break-inside:avoid; } }`;
+}
+
+window.gerarRelatorioGerencialDashboard = async function() {
+  const d = window._dgVgLastData;
+  if (!d) {
+    toast('Analise um período no Dashboard Gerencial antes de gerar o relatório.', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('dg-btn-relatorio-gerencial');
+  if (btn?.disabled) return;
+  if (typeof _setBtnLoading === 'function') _setBtnLoading(btn, true, 'Gerando...');
+  if (typeof showLoadingOverlay === 'function') showLoadingOverlay('Gerando relatório', 'Capturando gráficos e montando o PDF...');
+
+  try {
+    const now = new Date().toLocaleString('pt-BR');
+    const periodo = (d.dtIni && d.dtFim)
+      ? `${d.dtIni.toLocaleDateString('pt-BR')} a ${d.dtFim.toLocaleDateString('pt-BR')}`
+      : 'Período completo';
+
+    const [imgGaugeCentral, imgGaugeMateriais] = await Promise.all([
+      _dgrSvgParaPngDataUrl(document.getElementById('dg-vg-gauge-central-svg')),
+      _dgrSvgParaPngDataUrl(document.getElementById('dg-vg-gauge-chart-svg'))
+    ]);
+
+    const bodyHtml = `<style>${_dgrEstilos()}</style>`
+      + _dgrBuildResumoPeriodoHtml(d)
+      + _dgrBuildSaudeGeralHtml(imgGaugeCentral, imgGaugeMateriais);
+
+    const html = _buildRankingShellHTML({
+      periodoBadge: periodo,
+      periodo,
+      now,
+      kpis: []
+    }, {
+      pageTitle:  'Relatório Gerencial — Dashboard Gerencial',
+      badge:      'Relatório Gerencial',
+      title:      'Visão Geral — Dashboard Gerencial',
+      subtitle:   'Resumo executivo de estoque, movimentação, variação e saúde geral do período selecionado.',
+      bodyHtml,
+      notaRodape: 'Variação e Custo Var. desconsideram Ajustes de Fechamento Mensal não reincluídos manualmente. Saúde Geral considera os limiares configurados em Configurações → Parâmetros.'
+    });
+
+    _openRelWindow(html);
+  } catch (err) {
+    console.error('[Relatório Gerencial - Dashboard] Falha ao gerar:', err);
+    toast('Falha ao gerar o relatório. Veja o console para detalhes.', 'error');
+  } finally {
+    if (typeof _setBtnLoading === 'function') _setBtnLoading(btn, false);
+    if (typeof hideLoadingOverlay === 'function') hideLoadingOverlay();
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // RELATÓRIO DE COBRANÇA POR REGIONAL — ocorrências abertas/urgentes/vencidas
 // ordenadas por prioridade crítica, com filtro por regional (mesmo shell escuro
 // dos relatórios de Ranking/Ausência: _buildRankingShellHTML)

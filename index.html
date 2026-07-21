@@ -573,6 +573,12 @@
             <button class="btn" onclick="limparDashboardGerencial()" title="Limpar">
               <i class="ti ti-x"></i>
             </button>
+            <!-- Relatório Gerencial em PDF da Visão Geral — desabilitado até
+                 haver uma análise renderizada (ver window._dgVgLastData,
+                 populado no fim de renderDgVisaoGeralPdf em dashboard.js). -->
+            <button class="btn" id="dg-btn-relatorio-gerencial" onclick="gerarRelatorioGerencialDashboard()" title="Gerar Relatório Gerencial em PDF da Visão Geral" disabled>
+              <i class="ti ti-file-analytics"></i> <span>Relatório Gerencial</span>
+            </button>
           </div>
         </div>
 

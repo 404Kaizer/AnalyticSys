@@ -249,6 +249,8 @@ function rodarDashboardGerencial() {
     if (emptyEl)   emptyEl.style.display   = 'none';
     if (contentEl) contentEl.style.display = '';
     _renderDashboardConteudo(dtIni, dtFim);
+    const relBtn = document.getElementById('dg-btn-relatorio-gerencial');
+    if (relBtn) relBtn.disabled = !window._dgVgLastData;
     if (typeof _lstepSet === 'function') { _lstepSet('dg-calc', 'done'); _lstepSet('dg-render', 'running'); _lbarSet(75); }
     if (document.getElementById('dg-tab-btn-corte')?.classList.contains('active')) {
       if (typeof rodarControleAgregadosPorPeriodo === 'function' && dtIni && dtFim) {
@@ -273,6 +275,9 @@ function limparDashboardGerencial() {
   const contentEl = document.getElementById('dg-content');
   if (emptyEl)   emptyEl.style.display   = 'flex';
   if (contentEl) contentEl.style.display = 'none';
+  window._dgVgLastData = null;
+  const relBtn = document.getElementById('dg-btn-relatorio-gerencial');
+  if (relBtn) relBtn.disabled = true;
   if (window.updatePeriodFab) updatePeriodFab();
 }
 
@@ -1091,6 +1096,7 @@ function renderDgVisaoGeralPdf(results, thresholds, dtIni, dtFim) {
       .forEach(id => { const svgEl = document.getElementById(id); if (svgEl) svgEl.innerHTML = ''; });
     ['dg-vg-health-central-summary', 'dg-vg-health-materiais-summary']
       .forEach(id => { const e = document.getElementById(id); if (e) e.innerHTML = ''; });
+    window._dgVgLastData = null;
     return;
   }
 
@@ -1155,6 +1161,21 @@ function renderDgVisaoGeralPdf(results, thresholds, dtIni, dtFim) {
   // dos 4 rankings (ver nota em _daBuildRanking).
   _daRenderDetalhadoAnalitico(results, pares, totalEstTeoricoKpi);
 
+  // Cache de tudo o que já foi calculado nesta renderização — usado pelo
+  // botão "Relatório Gerencial" (ver relatorio.js, função
+  // gerarRelatorioGerencialDashboard) pra montar o PDF sem recalcular nada
+  // e sem risco de os números do relatório divergirem do que está na tela.
+  // Guarda também o necessário pras próximas fases do relatório (gráficos
+  // de categoria/regional/central, custo por grupo, detalhado analítico),
+  // pra não precisar tocar aqui de novo a cada fase. Invalidado (null) em
+  // limparDashboardGerencial() e quando o período não tem dados, acima.
+  window._dgVgLastData = {
+    dtIni, dtFim, results, pares, counts, scoreInfo, thresholds,
+    varTotalFisica, custoTotal, catFisicaPct,
+    estTotais, movTotais, custoMovTotais, totalEstTeoricoKpi,
+    extRegional, extCentral, entriesRegional, entriesCentral,
+    custoAbsPorCat, veiculosTotalKpi, fechExcluidos: sapFechExcluidosPeriodo
+  };
 }
 
 // ── 1. Resumo do Período: DOIS níveis — Variação Total + Custo Total
