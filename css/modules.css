@@ -9531,6 +9531,68 @@ td:has(.lanc-central-edit:focus) {
   font-size: 13px !important;
 }
 
+/* ── Detalhado Analítico — tabela de Detalhamento por Material + os 4
+   rankings (Regional/Central/Material/Categoria). Classe própria
+   (.da-table), não usa o seletor genérico <table> do resto do sistema —
+   aquele reserva padding-right pra ícone de ordenação e deixa a linha com
+   cursor:pointer (pensado pra tabelas que abrem modal ao clicar), nenhum
+   dos dois se aplica aqui. */
+.da-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.da-table {
+  width: 100%;
+  min-width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.da-table thead th {
+  padding: 9px 14px;
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text3);
+  border-bottom: 1px solid var(--border2);
+  white-space: nowrap;
+}
+.da-table th.da-num,
+.da-table td.da-num {
+  text-align: right;
+  font-family: var(--mono);
+}
+.da-table tbody tr {
+  border-bottom: 1px solid var(--border);
+}
+.da-table tbody tr:last-child { border-bottom: none; }
+.da-table tbody tr:hover { background: var(--bg3); }
+.da-table td {
+  padding: 9px 14px;
+  color: var(--text);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.da-mat-name { font-weight: 600; }
+.da-mat-cat {
+  display: block;
+  font-size: 9.5px;
+  font-family: var(--mono);
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 2px;
+}
+.da-table tfoot .da-total-row {
+  border-top: 2px solid var(--border2);
+  border-bottom: none;
+  background: var(--bg3);
+  font-weight: 700;
+}
+.da-table tfoot .da-total-row td { color: var(--text); }
+
+
 /* ── Visão Geral: donut "Grupo de Material" (grande, esquerda) + 4 donuts
    de categoria (Agregado/Aglomerante/Aditivo/Adição) em grade 2×2 à direita,
    menores e complementando o principal. ── */

@@ -439,7 +439,7 @@ function _dgVgBuildPares(results, thresholds, dtIni, dtFim) {
       // outro cadastro não relacionado).
       const catKey = (r.materialCatKeyMap && r.materialCatKeyMap.get(mat)) || null;
 
-      let diff, estoqueIni = 0, estoqueFim = 0;
+      let diff, estoqueIni = 0, estoqueFim = 0, entKg = 0, saiKg = 0;
       if (dtIni && dtFim) {
         const prev = getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni, dtFim, catKey });
         const fim  = getLastPeriodLaunchStockWithFallback({ central: r.central, material: mat, dtIni, dtFim });
@@ -449,13 +449,25 @@ function _dgVgBuildPares(results, thresholds, dtIni, dtFim) {
         // diferente do Inventário — decisão confirmada com o Hugo).
         estoqueIni = prev?.value ?? 0;
         estoqueFim = (fim && !fim.missing) ? fim.value : 0;
-        diff = buildSnapshot({
+        const snap = buildSnapshot({
           lancs, sap,
           initialStockOverride: prev?.value ?? null,
           finalStockOverride:   (fim && !fim.missing) ? fim.value : null
-        }).diff;
+        });
+        diff  = snap.diff;
+        // totalEnt/totalSai já vêm calculados pelo buildSnapshot (saiKg
+        // sai negativo de lá — normalizamos aqui pra magnitude positiva,
+        // mesma convenção usada em _dgVgMovimentacaoTotais/movTotais.totalSai
+        // no resto da Visão Geral) — usados pela tabela de Detalhamento
+        // por Material (Detalhado Analítico), sem custo extra: só passamos
+        // a guardar um valor que antes era descartado.
+        entKg = snap.totalEnt || 0;
+        saiKg = Math.abs(snap.totalSai || 0);
       } else {
-        diff = buildSnapshot({ lancs, sap }).diff;
+        const snap = buildSnapshot({ lancs, sap });
+        diff  = snap.diff;
+        entKg = snap.totalEnt || 0;
+        saiKg = Math.abs(snap.totalSai || 0);
       }
 
       const neutro = Math.abs(diff) <= 0.0001;
@@ -473,7 +485,8 @@ function _dgVgBuildPares(results, thresholds, dtIni, dtFim) {
       pares.push({
         central: r.central, regional, mat, catKey, diff, level, neutro,
         custoImplicado: diff * custoMed, estoqueIni, estoqueFim,
-        custoIni: estoqueIni * custoMed, custoFim: estoqueFim * custoMed
+        custoIni: estoqueIni * custoMed, custoFim: estoqueFim * custoMed,
+        entKg, saiKg, custoMed
       });
     });
   });
@@ -1054,7 +1067,7 @@ function renderDgVisaoGeralPdf(results, thresholds, dtIni, dtFim) {
 
   if (!results.length) {
     const msg = '<div class="dg-empty-riscos"><i class="ti ti-database-off"></i><span>Sem dados no período.</span></div>';
-    ['dg-vg-kpis-hero', 'dg-vg-extremos'].forEach(id => {
+    ['dg-vg-kpis-hero', 'dg-vg-extremos', 'dg-da-material', 'dg-da-rank-regional', 'dg-da-rank-central', 'dg-da-rank-material', 'dg-da-rank-categoria'].forEach(id => {
       const e = document.getElementById(id); if (e) e.innerHTML = msg;
     });
     ['categoria', 'chartRegional', 'chartUsina'].forEach(k => _dgVgDestroyChart(k));
@@ -1107,6 +1120,15 @@ function renderDgVisaoGeralPdf(results, thresholds, dtIni, dtFim) {
   DG_VG_CAT_ORDER.forEach(catKey => {
     _dgVgRenderDonutCategoria(`dg-vg-donut-${catKey}`, custoAbsPorCat[catKey] || [], catKey);
   });
+  // Est. Teórico total (mesma conta do card "Variação Total" do KPI hero:
+  // estTotais.totalIni + movTotais.totalEnt - movTotais.totalSai) — usado
+  // como DENOMINADOR COMUM da % Variação em CADA linha dos 4 rankings (ver
+  // nota em _daBuildRanking). É isso que faz cada linha representar sua
+  // fatia real da variação total, e a soma de todas as linhas reproduzir
+  // exatamente a % do card do topo.
+  const totalEstTeoricoKpi = estTotais.totalIni + movTotais.totalEnt - movTotais.totalSai;
+
+  _daRenderDetalhadoAnalitico(results, pares, totalEstTeoricoKpi);
 }
 
 // ── 1. Resumo do Período: DOIS níveis — Variação Total + Custo Total
@@ -1627,6 +1649,387 @@ function _dgVgRenderDonutCategoria(svgId, items, catKey) {
   // com menos de 5% de participação dentro da categoria.
   const flat = _dgVgAgruparOutros(flatRaw);
   _dgVgRenderCustoDonutSvg(svgId, flat, (DG_VG_CAT_LABELS[catKey] || '').toUpperCase(), `${items.length} materiais`, 3, subtitleId);
+}
+
+// ────────────────────────────────────────────
+// DETALHADO ANALÍTICO — última seção da Visão Geral: tabela de
+// detalhamento por material (Grupo SAP) + 4 rankings (Regional, Central,
+// Material, Categoria). Reaproveita 100% os "pares" (Central×Material) já
+// construídos por _dgVgBuildPares — nenhum recálculo de estoque/variação/
+// custo, só agregação em cima do que já existe.
+//
+// Caminhões/Carretas/IBCs — metodologia confirmada com o Hugo (jul/2026):
+// peso total de ENTRADAS SAP (cód. 101/801) da categoria, dividido pelo
+// peso médio observado por entrega da MESMA categoria — mesmo princípio
+// já usado em agregados.js (Controle de Corte, _avgTruckWeight), mas aqui
+// o peso médio é calculado uma única vez, GLOBALMENTE, sobre TODO o
+// período/todas as centrais (não recalculado por regional/central/
+// material) — decisão deliberada: garante que a coluna seja aditiva (a
+// soma das linhas bate com o total geral), já que "Total = soma" foi a
+// escolha confirmada pro rodapé dessas colunas.
+//   • Agregado              → "Caminhões"
+//   • Aglomerante           → "Carretas"
+//   • Aditivo + Adição      → "IBCs"
+// ────────────────────────────────────────────
+
+// Lista achatada de entradas SAP (só cód. 101/801, peso > 0, com cadastro
+// válido) já marcadas com regional/central/material/categoria/"tipo"
+// (caminhoes/carretas/ibcs) — fonte única reaproveitada tanto pro peso
+// médio global quanto pelas somas por escopo de cada ranking.
+function _daBuildEntradasFlat(results) {
+  const filIdx = getFilialLookupIndex();
+  const flat = [];
+  results.forEach(r => {
+    const filRec   = filIdx.exact.get(normalizeText(r.central));
+    const regional = (filRec?.regional || '').trim() || '—';
+    (r.sapNoPeriodo || []).forEach(s => {
+      const cod = normMov(s.movimento);
+      if (!CODIGOS_ENTRADA.has(cod)) return;
+      const peso = num(s.peso);
+      if (peso <= 0) return;
+      const mat = s.material || '—';
+      const catKey = (r.materialCatKeyMap && r.materialCatKeyMap.get(mat)) || null;
+      if (!catKey) return; // sem cadastro — mesmo critério do resto da Visão Geral
+      const tipo = catKey === 'agregado'    ? 'caminhoes'
+                 : catKey === 'aglomerante' ? 'carretas'
+                 : (catKey === 'aditivo' || catKey === 'adicao') ? 'ibcs'
+                 : null;
+      if (!tipo) return;
+      flat.push({ regional, central: r.central, mat, catKey, tipo, peso });
+    });
+  });
+  return flat;
+}
+
+// Peso médio global de UMA entrega, por tipo (caminhões/carretas/IBCs) —
+// calculado uma vez sobre TODO o período/todas as centrais (ver nota de
+// metodologia acima).
+function _daPesoMedioPorTipo(entradasFlat) {
+  const acc = { caminhoes: { soma: 0, n: 0 }, carretas: { soma: 0, n: 0 }, ibcs: { soma: 0, n: 0 } };
+  entradasFlat.forEach(e => { const a = acc[e.tipo]; if (a) { a.soma += e.peso; a.n++; } });
+  return {
+    caminhoes: acc.caminhoes.n ? acc.caminhoes.soma / acc.caminhoes.n : 0,
+    carretas:  acc.carretas.n  ? acc.carretas.soma  / acc.carretas.n  : 0,
+    ibcs:      acc.ibcs.n      ? acc.ibcs.soma      / acc.ibcs.n      : 0,
+  };
+}
+
+// ── 1. Detalhamento por Material (Grupo SAP) ──────────────────────────
+// Uma linha por material, agregando TODAS as centrais do período — mesmo
+// nível de resumo já usado em "Custo Médio por Material" (aba Custos),
+// com o detalhamento completo de estoque/variação/custo por cima.
+// "Sem variação relevante" — mesmo critério já usado no Inventário
+// (_invVarIrrelevante, ±0.01 kg, arredondado pra 2 casas pra evitar ruído
+// de ponto flutuante). Sem essa tolerância, uma variação praticamente nula
+// dividida por um Est. Teórico também pequeno gerava percentuais
+// instáveis/absurdos (ex: 100%) mesmo quando, na prática, não houve
+// variação real — daí a % ser forçada a 0 nesse caso, independente do
+// tamanho do denominador. Reimplementada localmente (em vez de reusar
+// window._inv_helpers.varIrrelevante) pra não criar dependência de o
+// módulo Inventário já ter sido inicializado.
+function _daVarIrrelevante(kg) {
+  return Math.round(Math.abs(kg) * 100) / 100 <= 0.01;
+}
+
+function _daBuildTabelaMaterial(pares) {
+  const map = new Map(); // mat -> acumulador
+  pares.forEach(p => {
+    if (!map.has(p.mat)) map.set(p.mat, {
+      mat: p.mat, catKey: p.catKey,
+      estIni: 0, entKg: 0, saiKg: 0, estFim: 0, custoAjuste: 0,
+      somaValorPond: 0, somaPesoPond: 0
+    });
+    const m = map.get(p.mat);
+    m.estIni      += p.estoqueIni || 0;
+    m.entKg       += p.entKg || 0;
+    m.saiKg       += p.saiKg || 0;
+    m.estFim      += p.estoqueFim || 0;
+    m.custoAjuste += p.custoImplicado || 0;
+    // Custo médio ponderado — MESMA lógica da aba Custos (renderDgCustos):
+    // pondera pelo peso de Saídas SAP do material naquela central,
+    // fallback 1 quando não há saída (evita descartar o custo médio de
+    // materiais sem consumo no período).
+    const peso = p.saiKg || 1;
+    m.somaValorPond += (p.custoMed || 0) * peso;
+    m.somaPesoPond  += peso;
+  });
+
+  const linhas = [...map.values()].map(m => {
+    const estTeorico  = m.estIni + m.entKg - m.saiKg;
+    const custoMedio  = m.somaPesoPond > 0 ? m.somaValorPond / m.somaPesoPond : 0;
+    const diffTotal   = m.estFim - estTeorico;
+    const pctVariacao = _daVarIrrelevante(diffTotal) ? 0
+                       : (Math.abs(estTeorico) > 0.0001 ? (diffTotal / estTeorico) * 100 : null);
+    return { ...m, estTeorico, custoMedio, pctVariacao };
+  }).sort((a, b) => a.custoAjuste - b.custoAjuste); // maior desfalque (mais negativo) primeiro
+
+  // Linha de total — Est Inicial/Entradas/Saídas/Est Final são SOMADOS
+  // normalmente (são aditivos de verdade). Est Teórico do Total é
+  // RECALCULADO a partir dessas somas (Ini+Ent-Sai), e a % Variação do
+  // Total é recalculada em cima do Est Teórico e Est Final somados — nunca
+  // é a soma nem a média das % de cada linha (percentual não é aditivo).
+  // Custo Médio também é recalculado (ponderado), pelo mesmo motivo.
+  const totEstIni = linhas.reduce((s, l) => s + l.estIni, 0);
+  const totEntKg  = linhas.reduce((s, l) => s + l.entKg, 0);
+  const totSaiKg  = linhas.reduce((s, l) => s + l.saiKg, 0);
+  const totEstFim = linhas.reduce((s, l) => s + l.estFim, 0);
+  const totAjuste = linhas.reduce((s, l) => s + l.custoAjuste, 0);
+  const totEstTeorico    = totEstIni + totEntKg - totSaiKg;
+  const totDiff           = totEstFim - totEstTeorico;
+  const totPctVariacao    = _daVarIrrelevante(totDiff) ? 0
+                           : (Math.abs(totEstTeorico) > 0.0001 ? (totDiff / totEstTeorico) * 100 : null);
+  const totSomaPondValor  = linhas.reduce((s, l) => s + (l.somaValorPond || 0), 0);
+  const totSomaPondPeso   = linhas.reduce((s, l) => s + (l.somaPesoPond || 0), 0);
+  const totCustoMedio     = totSomaPondPeso > 0 ? totSomaPondValor / totSomaPondPeso : 0;
+
+  return {
+    linhas,
+    total: {
+      estIni: totEstIni, entKg: totEntKg, saiKg: totSaiKg,
+      estTeorico: totEstTeorico, estFim: totEstFim,
+      pctVariacao: totPctVariacao, custoMedio: totCustoMedio, custoAjuste: totAjuste
+    }
+  };
+}
+
+
+// ── 2-5. Rankings (Regional / Central / Material / Categoria) ─────────
+// Função genérica reaproveitada pelos 4 rankings — só muda a chave de
+// agrupamento (keyFn) e, opcionalmente, o rótulo de exibição (labelFn,
+// usado pra Categoria e pra "Sem regional").
+//
+// % Variação (ajuste confirmado com o Hugo, jul/2026): cada linha passa a
+// representar a REPRESENTATIVIDADE daquele escopo na variação TOTAL do
+// período, não mais a variação percentual local do próprio escopo. Ou
+// seja: % da linha = diff do escopo (Est.Final - Est.Teórico DO ESCOPO) /
+// Est.Teórico TOTAL do período (totalEstTeoricoKpi, mesmo denominador do
+// card "Variação Total" do KPI hero, recebido como parâmetro) — o mesmo
+// denominador em TODAS as linhas, nunca o Est.Teórico individual de cada
+// escopo. É essa igualdade de denominador que garante, por construção
+// matemática (decomposição linear), que a SOMA das % de todas as linhas
+// reproduza EXATAMENTE a % do card do topo — por isso o Total volta a ser
+// a soma literal das linhas (não uma reconta separada).
+//
+// Caminhões/Carretas/IBCs (ajuste confirmado com o Hugo, jul/2026): a base
+// passou a ser a VARIAÇÃO (diff) do escopo, não mais o total de entradas
+// SAP do período — usar o total de entradas gerava números irreais (ex:
+// "500 caminhões" mesmo com variação baixa), já que não tinha relação
+// nenhuma com o tamanho do desfalque/sobra. Dentro de cada tipo
+// (Agregado→Caminhões / Aglomerante→Carretas / Aditivo+Adição→IBCs), o
+// diff é somado COM SINAL (soma líquida — sobra e desfalque do mesmo tipo
+// se cancelam) — e o resultado final MANTÉM o sinal (positivo = sobra,
+// negativo = desfalque), sem Math.abs(): é a formatação
+// (_daFmtCountSigned) que cuida do símbolo/cor, não o cálculo.
+function _daBuildRanking(pares, pesoMedio, keyFn, totalEstTeoricoKpi, labelFn) {
+  const map = new Map(); // key -> acumulador
+  pares.forEach(p => {
+    const k = keyFn(p);
+    if (k === null || k === undefined || k === '') return;
+    if (!map.has(k)) map.set(k, {
+      key: k, estIni: 0, entKg: 0, saiKg: 0, estFim: 0, custoTotal: 0,
+      caminhoesDiffKg: 0, carretasDiffKg: 0, ibcsDiffKg: 0
+    });
+    const m = map.get(k);
+    m.estIni     += p.estoqueIni || 0;
+    m.entKg      += p.entKg || 0;
+    m.saiKg      += p.saiKg || 0;
+    m.estFim     += p.estoqueFim || 0;
+    m.custoTotal += p.custoImplicado || 0;
+
+    const tipoField = p.catKey === 'agregado'    ? 'caminhoesDiffKg'
+                     : p.catKey === 'aglomerante' ? 'carretasDiffKg'
+                     : (p.catKey === 'aditivo' || p.catKey === 'adicao') ? 'ibcsDiffKg'
+                     : null;
+    if (tipoField) m[tipoField] += p.diff || 0;
+  });
+
+  const linhas = [...map.values()].map(m => {
+    const estTeorico = m.estIni + m.entKg - m.saiKg; // teórico DO ESCOPO — só pra achar o diff do escopo
+    const diff        = m.estFim - estTeorico;         // desfalque/sobra em kg DO ESCOPO
+    return {
+      nome: labelFn ? labelFn(m.key) : m.key,
+      caminhoes: pesoMedio.caminhoes ? m.caminhoesDiffKg / pesoMedio.caminhoes : 0,
+      carretas:  pesoMedio.carretas  ? m.carretasDiffKg  / pesoMedio.carretas  : 0,
+      ibcs:      pesoMedio.ibcs      ? m.ibcsDiffKg      / pesoMedio.ibcs      : 0,
+      // % = fatia desse escopo na variação total — denominador é o
+      // Est.Teórico TOTAL do período, igual em toda linha.
+      pctVariacao: _daVarIrrelevante(diff) ? 0
+                 : (Math.abs(totalEstTeoricoKpi) > 0.0001 ? (diff / totalEstTeoricoKpi) * 100 : null),
+      custoTotal: m.custoTotal
+    };
+  }).sort((a, b) => a.custoTotal - b.custoTotal); // maior desfalque primeiro
+
+  // Linha de total — Caminhões/Carretas/IBCs/Custo continuam soma literal
+  // (aditivos de verdade). % Variação também volta a ser soma literal das
+  // linhas: como todas usam o mesmo denominador (totalEstTeoricoKpi), essa
+  // soma reproduz exatamente a % Variação Total do KPI hero.
+  const total = linhas.reduce((t, l) => ({
+    caminhoes:   t.caminhoes   + (l.caminhoes   || 0),
+    carretas:    t.carretas    + (l.carretas    || 0),
+    ibcs:        t.ibcs        + (l.ibcs        || 0),
+    pctVariacao: t.pctVariacao + (l.pctVariacao || 0),
+    custoTotal:  t.custoTotal  + (l.custoTotal  || 0)
+  }), { caminhoes: 0, carretas: 0, ibcs: 0, pctVariacao: 0, custoTotal: 0 });
+
+  return { linhas, total };
+}
+
+// ── Helpers de formatação/cor — mesmo padrão de sinal (varSymbol) e cor
+//    (vermelho=desfalque, âmbar=sobra) já padronizado no resto da Visão
+//    Geral nesta conversa. ──
+function _daColorFor(v) {
+  return v < -0.0001 ? 'var(--red)' : v > 0.0001 ? 'var(--amber)' : 'var(--text3)';
+}
+function _daFmtPctSigned(pct) {
+  if (pct === null || pct === undefined || !Number.isFinite(pct)) return '—';
+  return `${varSymbol(pct)} ${Math.abs(pct).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+}
+function _daFmtMoneySigned(v) {
+  return `${varSymbol(v)} ${money(Math.abs(v))}`;
+}
+function _daFmtCountSigned(n) {
+  if (n === null || n === undefined || !Number.isFinite(n)) return '—';
+  return `${varSymbol(n)} ${Math.abs(n).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}`;
+}
+
+// ── Render: 1. Tabela de Detalhamento por Material ─────────────────────
+function _daRenderTabelaMaterial(containerId, dados) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  if (!dados.linhas.length) {
+    el.innerHTML = '<div class="dg-empty-riscos"><i class="ti ti-database-off"></i><span>Sem dados no período.</span></div>';
+    return;
+  }
+  const rowsHtml = dados.linhas.map(l => `
+    <tr>
+      <td>
+        <span class="da-mat-name">${escapeHtml(l.mat)}</span>
+        ${l.catKey ? `<span class="da-mat-cat">${escapeHtml(DG_VG_CAT_LABELS[l.catKey] || l.catKey)}</span>` : ''}
+      </td>
+      <td class="da-num" style="color:var(--teal)">${fmtKg(l.estIni)}</td>
+      <td class="da-num" style="color:var(--green)">${fmtKg(l.entKg)}</td>
+      <td class="da-num" style="color:var(--red)">${fmtKg(l.saiKg)}</td>
+      <td class="da-num" style="color:var(--teal)">${fmtKg(l.estTeorico)}</td>
+      <td class="da-num" style="color:var(--teal)">${fmtKg(l.estFim)}</td>
+      <td class="da-num" style="color:${_daColorFor(l.pctVariacao)}">${_daFmtPctSigned(l.pctVariacao)}</td>
+      <td class="da-num">${money(l.custoMedio)}/kg</td>
+      <td class="da-num" style="color:${_daColorFor(l.custoAjuste)}">${_daFmtMoneySigned(l.custoAjuste)}</td>
+    </tr>`).join('');
+
+  const t = dados.total;
+  const totalHtml = `
+    <tr class="da-total-row">
+      <td>Total</td>
+      <td class="da-num" style="color:var(--teal)">${fmtKg(t.estIni)}</td>
+      <td class="da-num" style="color:var(--green)">${fmtKg(t.entKg)}</td>
+      <td class="da-num" style="color:var(--red)">${fmtKg(t.saiKg)}</td>
+      <td class="da-num" style="color:var(--teal)">${fmtKg(t.estTeorico)}</td>
+      <td class="da-num" style="color:var(--teal)">${fmtKg(t.estFim)}</td>
+      <td class="da-num" style="color:${_daColorFor(t.pctVariacao)}">${_daFmtPctSigned(t.pctVariacao)}</td>
+      <td class="da-num">${money(t.custoMedio)}/kg</td>
+      <td class="da-num" style="color:${_daColorFor(t.custoAjuste)}">${_daFmtMoneySigned(t.custoAjuste)}</td>
+    </tr>`;
+
+  el.innerHTML = `
+    <div class="da-table-wrap">
+      <table class="da-table">
+        <thead>
+          <tr>
+            <th>Grupo SAP</th>
+            <th class="da-num">Est. Inicial</th>
+            <th class="da-num">Entradas</th>
+            <th class="da-num">Saídas</th>
+            <th class="da-num">Est. Teórico</th>
+            <th class="da-num">Est. Final</th>
+            <th class="da-num">% Variação</th>
+            <th class="da-num">Custo Médio</th>
+            <th class="da-num">Custo Ajuste</th>
+          </tr>
+        </thead>
+        <tbody>${rowsHtml}</tbody>
+        <tfoot>${totalHtml}</tfoot>
+      </table>
+    </div>`;
+}
+
+// ── Render: 2-5. Rankings (mesma estrutura de colunas nos 4) ───────────
+function _daRenderRanking(containerId, dados, colNomeLabel) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  if (!dados.linhas.length) {
+    el.innerHTML = '<div class="dg-empty-riscos"><i class="ti ti-database-off"></i><span>Sem dados no período.</span></div>';
+    return;
+  }
+  const rowsHtml = dados.linhas.map(l => `
+    <tr>
+      <td>${escapeHtml(l.nome)}</td>
+      <td class="da-num" style="color:${_daColorFor(l.caminhoes)}">${_daFmtCountSigned(l.caminhoes)}</td>
+      <td class="da-num" style="color:${_daColorFor(l.carretas)}">${_daFmtCountSigned(l.carretas)}</td>
+      <td class="da-num" style="color:${_daColorFor(l.ibcs)}">${_daFmtCountSigned(l.ibcs)}</td>
+      <td class="da-num" style="color:${_daColorFor(l.pctVariacao)}">${_daFmtPctSigned(l.pctVariacao)}</td>
+      <td class="da-num" style="color:${_daColorFor(l.custoTotal)}">${_daFmtMoneySigned(l.custoTotal)}</td>
+    </tr>`).join('');
+
+  const t = dados.total;
+  const totalHtml = `
+    <tr class="da-total-row">
+      <td>Total</td>
+      <td class="da-num" style="color:${_daColorFor(t.caminhoes)}">${_daFmtCountSigned(t.caminhoes)}</td>
+      <td class="da-num" style="color:${_daColorFor(t.carretas)}">${_daFmtCountSigned(t.carretas)}</td>
+      <td class="da-num" style="color:${_daColorFor(t.ibcs)}">${_daFmtCountSigned(t.ibcs)}</td>
+      <td class="da-num" style="color:${_daColorFor(t.pctVariacao)}">${_daFmtPctSigned(t.pctVariacao)}</td>
+      <td class="da-num" style="color:${_daColorFor(t.custoTotal)}">${_daFmtMoneySigned(t.custoTotal)}</td>
+    </tr>`;
+
+  el.innerHTML = `
+    <div class="da-table-wrap">
+      <table class="da-table">
+        <thead>
+          <tr>
+            <th>${escapeHtml(colNomeLabel)}</th>
+            <th class="da-num">Caminhões</th>
+            <th class="da-num">Carretas</th>
+            <th class="da-num">IBCs</th>
+            <th class="da-num">Variação</th>
+            <th class="da-num">Custo Total</th>
+          </tr>
+        </thead>
+        <tbody>${rowsHtml}</tbody>
+        <tfoot>${totalHtml}</tfoot>
+      </table>
+    </div>`;
+}
+
+// ── Entrada — orquestra o Detalhado Analítico inteiro (1 tabela + 4 rankings) ──
+// totalEstTeoricoKpi: Est. Teórico total do período (mesma conta do KPI
+// hero) — denominador comum usado pela % Variação nos 4 rankings.
+function _daRenderDetalhadoAnalitico(results, pares, totalEstTeoricoKpi) {
+  const el = document.getElementById('dg-da-material');
+  if (!el) return; // HTML não presente (defensivo)
+
+  const ids = ['dg-da-material', 'dg-da-rank-regional', 'dg-da-rank-central', 'dg-da-rank-material', 'dg-da-rank-categoria'];
+  if (!results.length) {
+    ids.forEach(id => {
+      const e = document.getElementById(id);
+      if (e) e.innerHTML = '<div class="dg-empty-riscos"><i class="ti ti-database-off"></i><span>Sem dados no período.</span></div>';
+    });
+    return;
+  }
+
+  const entradasFlat = _daBuildEntradasFlat(results);
+  const pesoMedio     = _daPesoMedioPorTipo(entradasFlat);
+
+  _daRenderTabelaMaterial('dg-da-material', _daBuildTabelaMaterial(pares));
+
+  const rankRegional  = _daBuildRanking(pares, pesoMedio, p => p.regional, totalEstTeoricoKpi, k => k === '—' ? 'Sem regional' : k);
+  const rankCentral   = _daBuildRanking(pares, pesoMedio, p => p.central,  totalEstTeoricoKpi);
+  const rankMaterial  = _daBuildRanking(pares, pesoMedio, p => p.mat,      totalEstTeoricoKpi);
+  const rankCategoria = _daBuildRanking(pares, pesoMedio, p => p.catKey,   totalEstTeoricoKpi, k => DG_VG_CAT_LABELS[k] || k);
+
+  _daRenderRanking('dg-da-rank-regional',  rankRegional,  'Regional');
+  _daRenderRanking('dg-da-rank-central',   rankCentral,   'Central');
+  _daRenderRanking('dg-da-rank-material',  rankMaterial,  'Material');
+  _daRenderRanking('dg-da-rank-categoria', rankCategoria, 'Categoria');
 }
 
 // ────────────────────────────────────────────
