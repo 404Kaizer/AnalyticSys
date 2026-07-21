@@ -2721,6 +2721,10 @@ function _dgrGiroCor(g) {
   if (g >= 0.2) return '#f97316';
   return '#f43f5e';
 }
+function _dgrTruncNome(nome, max = 26) {
+  const s = String(nome || '');
+  return s.length > max ? s.slice(0, max - 1).trimEnd() + '…' : s;
+}
 function _dgrGiroListaHtml(titulo, iconCls, items) {
   if (!items || !items.length) {
     return `<div class="dgr-chart-card"><div class="dgr-chart-title"><i class="ti ${iconCls}"></i>${_rankEsc(titulo)}</div><div class="dgr-chart-empty">Sem dados de giro</div></div>`;
@@ -2729,7 +2733,7 @@ function _dgrGiroListaHtml(titulo, iconCls, items) {
     const cor = _dgrNivelCor(item.nivel.level);
     return `
     <tr>
-      <td class="rk-name" style="font-size:11.5px">${_rankEsc(item.name)}</td>
+      <td class="rk-name dgr-nome-trunc" style="font-size:11.5px" title="${_rankEsc(item.name)}">${_rankEsc(_dgrTruncNome(item.name))}</td>
       <td><span style="display:inline-block;padding:2px 8px;border-radius:5px;font-size:9.5px;font-weight:700;white-space:nowrap;background:${cor}22;color:${cor};border:1px solid ${cor}55">${_rankEsc(item.nivel.label)}</span></td>
       <td class="rk-num" style="font-size:11px">${item.cobertura === null ? 'sem consumo' : item.cobertura.toFixed(1) + 'd'}</td>
       <td class="rk-num" style="font-size:11px;color:${_dgrGiroCor(item.giro)}">${item.giro.toFixed(2)}×</td>
@@ -2755,7 +2759,7 @@ function _dgrBuildGiroCoberturaHtml(d) {
       ${_dgrGiroListaHtml('Top 5 Centrais — Mais Saudáveis', 'ti-trending-up', g.centralAlto)}
       ${_dgrGiroListaHtml('Top 5 Centrais — Mais Críticas', 'ti-trending-down', g.centralBaixo)}
     </div>
-    <div class="dgr-chart-grid" style="margin-top:16px">
+    <div class="dgr-chart-grid" style="margin-top:28px">
       ${_dgrGiroListaHtml('Top 5 Materiais — Mais Saudáveis', 'ti-trending-up', g.matAlto)}
       ${_dgrGiroListaHtml('Top 5 Materiais — Mais Críticos', 'ti-trending-down', g.matBaixo)}
     </div>`;
@@ -2806,7 +2810,7 @@ function _dgrTabelaMaterialHtml(dados) {
     <div class="dgr-table-wrap">
       <div class="rk-table-head"><div class="rk-table-head-title">Detalhamento por Material (Grupo SAP)</div><div class="rk-table-head-cap">${dados.linhas.length} materia${dados.linhas.length !== 1 ? 'is' : 'l'}</div></div>
       <table class="rk-table">
-        <thead><tr><th>Grupo SAP</th><th style="text-align:right">Est. Inicial</th><th style="text-align:right">Entradas</th><th style="text-align:right">Saídas</th><th style="text-align:right">Est. Teórico</th><th style="text-align:right">Est. Final</th><th style="text-align:right">% Variação</th><th style="text-align:right">Custo Médio</th><th style="text-align:right">Custo Ajuste</th></tr></thead>
+        <thead><tr><th style="width:190px">Grupo SAP</th><th style="text-align:right">Est. Inicial</th><th style="text-align:right">Entradas</th><th style="text-align:right">Saídas</th><th style="text-align:right">Est. Teórico</th><th style="text-align:right">Est. Final</th><th style="text-align:right">% Variação</th><th style="text-align:right">Custo Médio</th><th style="text-align:right">Custo Ajuste</th></tr></thead>
         <tbody>${rows}</tbody>
         <tfoot>${totalRow}</tfoot>
       </table>
@@ -2841,7 +2845,7 @@ function _dgrRankingHtml(titulo, colLabel, dados) {
     <div class="dgr-table-wrap">
       <div class="rk-table-head"><div class="rk-table-head-title">${_rankEsc(titulo)}</div><div class="rk-table-head-cap">${dados.linhas.length} ${dados.linhas.length !== 1 ? 'itens' : 'item'}</div></div>
       <table class="rk-table">
-        <thead><tr><th>${_rankEsc(colLabel)}</th><th style="text-align:right">Caminhões</th><th style="text-align:right">Carretas</th><th style="text-align:right">IBCs</th><th style="text-align:right">Variação</th><th style="text-align:right">Custo Total</th></tr></thead>
+        <thead><tr><th style="width:220px">${_rankEsc(colLabel)}</th><th style="text-align:right">Caminhões</th><th style="text-align:right">Carretas</th><th style="text-align:right">IBCs</th><th style="text-align:right">Variação</th><th style="text-align:right">Custo Total</th></tr></thead>
         <tbody>${rows}</tbody>
         <tfoot>${totalRow}</tfoot>
       </table>
@@ -2890,7 +2894,7 @@ function _dgrEstilos() {
     .dgr-chart-card img { max-width:100%; height:auto; display:block; margin:0 auto; }
     .dgr-chart-title { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:#e2e8f0; margin-bottom:12px; display:flex; align-items:center; gap:6px; }
     .dgr-chart-empty { padding:40px 0; color:#64748b; font-size:11px; text-align:center; }
-    .dgr-chart-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:14px; }
+    .dgr-chart-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-top:14px; }
     .dgr-extremos-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; margin-bottom:4px; }
     .dgr-extremo-box { background:rgba(255,255,255,.045); border:1px solid rgba(255,255,255,.09); border-radius:12px; padding:16px 18px; page-break-inside:avoid; }
     .dgr-extremo-label { font-size:10px; font-family:'JetBrains Mono',monospace; letter-spacing:.06em; text-transform:uppercase; color:#64748b; margin-bottom:6px; }
@@ -2901,9 +2905,26 @@ function _dgrEstilos() {
     .dgr-donut-grande img { max-width:100%; height:auto; }
     .dgr-donut-sub-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
     .dgr-donut-small .dgr-chart-title { margin-bottom:8px; }
-    .dgr-table-wrap { margin-bottom:16px; }
+    .dgr-table-wrap {
+      margin-bottom:26px;
+      background:rgba(255,255,255,.045);
+      border:1px solid rgba(255,255,255,.09);
+      border-radius:12px;
+      padding:16px 18px;
+    }
     .dgr-table-wrap thead { display:table-header-group; }
     .dgr-table-wrap tbody tr { page-break-inside:avoid; }
+    .dgr-table-wrap .rk-table { table-layout:fixed; }
+    .dgr-table-wrap tbody tr:nth-child(even) { background:rgba(255,255,255,.025); }
+    .dgr-chart-card table.rk-table tbody tr:nth-child(even) { background:rgba(255,255,255,.025); }
+    /* Mais respiro nas células — escopado a .dgr-chart-card/.dgr-table-wrap
+       (Giro & Cobertura + Detalhado Analítico) pra não alterar .rk-table
+       nos outros relatórios do sistema (Ocorrências, Ranking etc.), que
+       usam a densidade padrão do shell. */
+    .dgr-chart-card .rk-table th, .dgr-table-wrap .rk-table th { padding:10px 12px; }
+    .dgr-chart-card .rk-table td, .dgr-table-wrap .rk-table td { padding:13px 12px; line-height:1.5; overflow-wrap:break-word; }
+    .dgr-table-wrap .rk-name { line-height:1.4; }
+    .dgr-chart-card .rk-name.dgr-nome-trunc { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:150px; display:inline-block; }
     @media (max-width:900px) { .dgr-kpi-row, .dgr-kpi-secondary, .dgr-health-grid, .dgr-chart-grid, .dgr-grupo-layout, .dgr-donut-sub-grid { grid-template-columns:repeat(2,1fr); } }
     @media print { .dgr-kpi-card, .dgr-health-card, .dgr-chart-card, .dgr-extremo-box { page-break-inside:avoid; } }`;
 }
