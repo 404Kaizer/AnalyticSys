@@ -3176,7 +3176,7 @@ function _dgrGiroListaHtml(titulo, iconCls, items, panel, footerArr) {
   })() : '';
 
   return `
-    <div class="dgr-chart-card">
+    <div class="dgr-chart-card dgr-giro-card">
       <div class="dgr-chart-title"><i class="ti ${iconCls}"></i>${_rankEsc(titulo)}</div>
       <table class="rk-table dgr-giro-table">
         <thead><tr>
@@ -3203,7 +3203,7 @@ function _dgrBuildGiroCoberturaHtml(d) {
       ${_dgrGiroListaHtml('Top 5 Centrais — Mais Saudáveis', 'ti-trending-up', g.centralAlto, 'alto')}
       ${_dgrGiroListaHtml('Top 5 Centrais — Mais Críticas', 'ti-trending-down', g.centralBaixo, 'baixo')}
     </div>
-    <div class="dgr-chart-grid" style="margin-top:28px">
+    <div class="dgr-chart-grid" style="margin-top:14px">
       ${_dgrGiroListaHtml('Top 5 Materiais — Mais Saudáveis', 'ti-trending-up', g.matAlto, 'alto')}
       ${_dgrGiroListaHtml('Top 5 Materiais — Mais Críticos', 'ti-trending-down', g.matBaixo, 'baixo', g.matArrFull)}
     </div>`;
@@ -3452,6 +3452,14 @@ function _dgrEstilos() {
        o texto vazar visualmente pra célula vizinha. */
     .dgr-nome-trunc-inner { display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
     .dgr-chart-card table.rk-table { table-layout:fixed; }
+    /* Cards de Giro & Cobertura — mais compactos que o padrão de
+       .dgr-chart-card (usado também pelos gráficos, que têm menos
+       conteúdo). São 4 tabelas na mesma seção/página; com o padding
+       padrão dos cards + células a seção passava de 1 página (a 4ª
+       tabela ficava sozinha numa página seguinte quase vazia). */
+    .dgr-giro-card { padding:13px 16px; }
+    .dgr-giro-card .rk-table th { padding:6px 3px; }
+    .dgr-giro-card .rk-table td { padding:6.5px 3px; }
     .dgr-giro-footer { display:flex; gap:14px; padding:8px 0 0; margin-top:8px; border-top:1px solid var(--dgr-divider, rgba(255,255,255,.08)); flex-wrap:wrap; font-size:9px; font-family:'JetBrains Mono',monospace; font-weight:700; }
     .dgr-giro-footer span { display:flex; align-items:center; gap:4px; }
     /* Colapso dos pares de card (Giro, gráficos de barra) e das grades de
