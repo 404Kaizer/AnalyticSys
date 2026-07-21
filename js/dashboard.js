@@ -2263,82 +2263,112 @@ function gerarRelatorioGerencialDG() {
 
   const bodyHtml = `
 <style>
-  @page { size: A4 portrait; margin: 12mm 14mm; }
+  /* ═══════════════════════════════════════════════════════════════════
+     RELATÓRIO GERENCIAL — layout 100% autocontido, pensado pra caber num
+     PDF A4 retrato. Reconstruído do zero: cada bloco lógico da Visão Geral
+     vira uma SEÇÃO paginada (uma seção = uma página, com bom senso), e todos
+     os elementos foram dimensionados pra caberem na largura útil da página
+     (~182mm) sem estourar/cortar. Nada depende do CSS do app.
+     ═══════════════════════════════════════════════════════════════════ */
+  @page { size: A4 portrait; margin: 11mm 12mm 13mm; }
   :root { --text:#f1f5f9; --text2:#cbd5e1; --text3:#94a3b8; --border:rgba(255,255,255,.08); --mono:'JetBrains Mono',monospace; }
 
-  .dgr-section { margin-bottom:26px; }
-  .dgr-section-title { display:flex; align-items:center; gap:8px; font-size:12.5px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:#f1f5f9; margin-bottom:13px; padding-bottom:9px; border-bottom:1px solid rgba(255,255,255,.1); }
+  /* Largura útil da página como teto pra QUALQUER filho do relatório —
+     impede que grids/tabelas/imagens vazem pra fora da margem. */
+  .rk-page { overflow-x:hidden; }
+
+  /* ── Seção = unidade de paginação ──────────────────────────────────────
+     Por padrão a seção NÃO força quebra (pra a 1ª conviver com o cabeçalho).
+     .dgr-section--break começa em página nova; .dgr-section--cont gruda na
+     página da seção anterior (usado quando duas seções curtas cabem juntas). */
+  .dgr-section { margin-bottom:22px; max-width:100%; }
+  .dgr-section--break { page-break-before:always; break-before:page; }
+  .dgr-section--cont { page-break-before:avoid; break-before:avoid; margin-top:26px; }
+  .dgr-section-title { display:flex; align-items:center; gap:8px; font-size:12.5px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:#f1f5f9; margin-bottom:13px; padding-bottom:9px; border-bottom:1px solid rgba(255,255,255,.12); }
   .dgr-section-title i { font-size:14px; color:#64748b; }
 
   .dgr-badge-fech { display:inline-flex; align-items:center; gap:6px; background:rgba(124,58,237,.14); border:1px solid rgba(124,58,237,.35); color:#c4b5fd; font-size:10.5px; font-weight:700; padding:5px 12px; border-radius:99px; margin-bottom:18px; }
 
+  /* ── Resumo do Período — 2 cards de destaque + faixa de mini-cards ── */
   .dgr-featured-row { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:12px; }
-  .dgr-featured-card { background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.09); border-top:3px solid; border-radius:12px; padding:16px 18px; page-break-inside:avoid; }
+  .dgr-featured-card { background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.09); border-top:3px solid; border-radius:12px; padding:16px 18px; page-break-inside:avoid; min-width:0; }
   .dgr-featured-label { font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:#94a3b8; margin-bottom:7px; display:flex; align-items:center; gap:6px; }
-  .dgr-featured-value { font-size:20px; font-weight:900; font-family:'JetBrains Mono',monospace; line-height:1.15; }
+  .dgr-featured-value { font-size:20px; font-weight:900; font-family:'JetBrains Mono',monospace; line-height:1.15; word-break:break-word; }
   .dgr-featured-unit { font-size:10px; color:#64748b; margin-top:3px; }
   .dgr-featured-pct { font-size:14px; font-weight:800; font-family:'JetBrains Mono',monospace; margin-top:10px; }
   .dgr-featured-pct-label { font-size:9px; color:#64748b; font-weight:500; margin-left:5px; text-transform:none; letter-spacing:0; }
   .dgr-pct-bar { width:90px; height:5px; background:rgba(255,255,255,.1); border-radius:3px; margin-top:5px; overflow:hidden; }
   .dgr-pct-bar-fill { height:100%; border-radius:3px; }
-  .dgr-veiculos-row { display:flex; gap:12px; margin-top:9px; font-family:'JetBrains Mono',monospace; font-size:10.5px; font-weight:700; }
+  .dgr-veiculos-row { display:flex; gap:12px; margin-top:9px; font-family:'JetBrains Mono',monospace; font-size:10.5px; font-weight:700; flex-wrap:wrap; }
   .dgr-veiculos-row i { font-size:12px; margin-right:3px; }
 
-  .dgr-mini-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:20px; }
-  .dgr-extremos-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:18px; }
-  .dgr-mini-card { background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.08); border-radius:10px; padding:11px 13px; page-break-inside:avoid; }
+  .dgr-mini-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:4px; }
+  .dgr-extremos-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px; }
+  .dgr-mini-card { background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.08); border-radius:10px; padding:11px 13px; page-break-inside:avoid; min-width:0; }
   .dgr-mini-label { font-size:9px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:#94a3b8; margin-bottom:6px; display:flex; align-items:center; gap:5px; }
-  .dgr-mini-value { font-size:14px; font-weight:800; font-family:'JetBrains Mono',monospace; color:#fff; }
-  .dgr-mini-sub { font-size:9.5px; color:#64748b; margin-top:4px; }
+  .dgr-mini-value { font-size:14px; font-weight:800; font-family:'JetBrains Mono',monospace; color:#fff; word-break:break-word; }
+  .dgr-mini-sub { font-size:9.5px; color:#64748b; margin-top:4px; word-break:break-word; }
 
-  .dgr-donut-grid-2, .dgr-donut-grid-4 { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:18px; }
-  .dgr-donut-box { background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:12px; text-align:center; page-break-inside:avoid; }
+  /* ── Donuts (saúde geral + custo absoluto por categoria) ── */
+  .dgr-donut-grid-2, .dgr-donut-grid-4 { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:4px; }
+  .dgr-donut-box { background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:12px; text-align:center; page-break-inside:avoid; min-width:0; }
   .dgr-donut-box svg { width:100%; height:auto; max-width:230px; }
   .dgr-donut-title { font-size:9.5px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:#94a3b8; margin-bottom:6px; }
-  .dgr-donut-hero { text-align:center; margin-bottom:16px; }
+  .dgr-donut-hero { text-align:center; margin-bottom:16px; page-break-inside:avoid; }
   .dgr-donut-hero svg { width:100%; max-width:320px; height:auto; }
 
-  .dgr-chart-box { background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:12px; margin-bottom:14px; page-break-inside:avoid; }
+  /* ── Gráficos de barra (snapshot de <canvas> → <img>) ── */
+  .dgr-chart-box { background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:12px; margin-bottom:12px; page-break-inside:avoid; }
   .dgr-chart-box img { width:100%; height:auto; display:block; }
 
-  /* ── Giro & Cobertura (clonado do dashboard, CSS próprio pro relatório) ── */
-  .dg-giro-dual-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px; }
+  /* ── Giro & Cobertura ─────────────────────────────────────────────────
+     Cada tabela tem 8 colunas; em A4 retrato NÃO cabem duas lado a lado
+     (as 7 colunas fixas somam ~366px, mais largas que meia página). Por
+     isso, no relatório, as tabelas de giro empilham em COLUNA ÚNICA e cada
+     uma ocupa a largura inteira da página. */
+  .dg-giro-dual-grid { display:grid; grid-template-columns:1fr; gap:12px; margin-bottom:12px; }
   .dg-giro-mat-card { background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.08); border-radius:10px; overflow:hidden; page-break-inside:avoid; }
-  .dg-giro-mat-header { padding:10px 13px; border-bottom:1px solid rgba(255,255,255,.08); display:flex; align-items:center; justify-content:space-between; }
+  .dg-giro-mat-header { padding:9px 13px; border-bottom:1px solid rgba(255,255,255,.08); display:flex; align-items:center; justify-content:space-between; }
   .dg-top5-title { font-size:11px; font-weight:700; color:#fff; display:flex; align-items:center; gap:6px; }
   .dg-giro-mat-body { padding:8px 11px 11px; }
-  .dg-giro-mat-head-row, .dg-giro-mat-row { display:grid; grid-template-columns:minmax(0,1fr) 52px 60px 40px 54px 54px 54px 52px; gap:4px; align-items:center; }
-  .dg-giro-mat-head-row { margin-bottom:5px; padding-bottom:5px; border-bottom:1px solid rgba(255,255,255,.1); font-size:7.5px; font-family:'JetBrains Mono',monospace; letter-spacing:.06em; text-transform:uppercase; color:#64748b; }
+  .dg-giro-mat-head-row, .dg-giro-mat-row { display:grid; grid-template-columns:minmax(0,1fr) 54px 64px 44px 58px 58px 58px 56px; gap:5px; align-items:center; }
+  .dg-giro-mat-head-row { margin-bottom:5px; padding-bottom:5px; border-bottom:1px solid rgba(255,255,255,.1); font-size:8px; font-family:'JetBrains Mono',monospace; letter-spacing:.05em; text-transform:uppercase; color:#64748b; }
   .dg-giro-mat-row { padding:4px 0; border-bottom:1px solid rgba(255,255,255,.05); }
   .dg-giro-mat-row:last-of-type { border-bottom:none; }
   .dg-giro-mat-name { font-size:9.5px; font-weight:600; color:#e2e8f0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .dg-giro-mat-num { font-size:8.5px; font-family:'JetBrains Mono',monospace; text-align:right; color:#cbd5e1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .dg-giro-abast { display:inline-flex; align-items:center; gap:2px; padding:1px 5px; border-radius:4px; font-size:7.5px; font-weight:700; font-family:'JetBrains Mono',monospace; white-space:nowrap; }
+  .dg-giro-mat-num { font-size:9px; font-family:'JetBrains Mono',monospace; text-align:right; color:#cbd5e1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .dg-giro-abast { display:inline-flex; align-items:center; gap:2px; padding:1px 5px; border-radius:4px; font-size:8px; font-weight:700; font-family:'JetBrains Mono',monospace; white-space:nowrap; }
   .dg-giro-abast.ok      { background:rgba(5,150,105,.14);  color:#34d399; }
   .dg-giro-abast.warn    { background:rgba(217,119,6,.14);  color:#fbbf24; }
   .dg-giro-abast.risk    { background:rgba(225,29,72,.14);  color:#f87171; }
   .dg-giro-abast.excess  { background:rgba(124,58,237,.14); color:#c4b5fd; }
   .dg-giro-abast.neutral { background:rgba(255,255,255,.06);color:#94a3b8; }
 
-  /* ── Detalhado Analítico (clonado, CSS próprio) ── */
-  .da-table-wrap { overflow-x:auto; margin-bottom:20px; }
-  .da-table { width:100%; border-collapse:collapse; font-size:9.5px; }
-  .da-table thead th { padding:7px 8px; text-align:left; font-family:'JetBrains Mono',monospace; font-size:8px; letter-spacing:.05em; text-transform:uppercase; color:#64748b; border-bottom:1px solid rgba(255,255,255,.12); white-space:nowrap; }
-  .da-table th.da-num, .da-table td.da-num { text-align:right; font-family:'JetBrains Mono',monospace; }
+  /* ── Detalhado Analítico + Rankings ───────────────────────────────────
+     Tabelas largas (Detalhado tem 9 colunas). Pra caberem na largura da
+     página sem scroll/corte: fonte compacta, SEM overflow horizontal, e a
+     1ª coluna (nome) pode quebrar em 2 linhas enquanto as numéricas ficam
+     em linha única. table-layout:fixed distribui a largura de forma
+     previsível. */
+  .da-table-wrap { overflow:visible; margin-bottom:8px; max-width:100%; }
+  .da-table { width:100%; border-collapse:collapse; font-size:8.6px; table-layout:fixed; }
+  .da-table thead th { padding:6px 6px; text-align:left; font-family:'JetBrains Mono',monospace; font-size:7.6px; letter-spacing:.03em; text-transform:uppercase; color:#64748b; border-bottom:1px solid rgba(255,255,255,.12); white-space:normal; word-break:break-word; line-height:1.25; }
+  .da-table th.da-num, .da-table td.da-num { text-align:right; font-family:'JetBrains Mono',monospace; white-space:nowrap; }
   .da-table tbody tr { border-bottom:1px solid rgba(255,255,255,.05); }
-  .da-table td { padding:6px 8px; color:#e2e8f0; vertical-align:middle; white-space:nowrap; }
+  .da-table td { padding:5px 6px; color:#e2e8f0; vertical-align:middle; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  /* 1ª coluna (nome) mais larga e com quebra; as numéricas dividem o resto. */
+  .da-table th:first-child, .da-table td:first-child { width:25%; white-space:normal; word-break:break-word; }
   .da-mat-name { font-weight:700; }
-  .da-mat-cat { display:block; font-size:8px; font-family:'JetBrains Mono',monospace; color:#64748b; text-transform:uppercase; }
+  .da-mat-cat { display:block; font-size:7.4px; font-family:'JetBrains Mono',monospace; color:#64748b; text-transform:uppercase; }
   .da-table tfoot .da-total-row { border-top:2px solid rgba(255,255,255,.18); background:rgba(255,255,255,.04); font-weight:800; }
   .da-veiculos-row, .da-impacto { display:none; }
 
-  @media (max-width:820px) {
-    .dgr-featured-row, .dg-giro-dual-grid, .dgr-donut-grid-2, .dgr-donut-grid-4 { grid-template-columns:1fr; }
-  }
   @media print {
-    .dgr-featured-card, .dgr-mini-card, .dgr-donut-box, .dgr-chart-box, .dg-giro-mat-card, .da-table-wrap {
-      -webkit-print-color-adjust:exact; color-adjust:exact;
+    .dgr-featured-card, .dgr-mini-card, .dgr-donut-box, .dgr-donut-hero, .dgr-chart-box, .dg-giro-mat-card, .da-table-wrap, .dgr-section {
+      -webkit-print-color-adjust:exact; print-color-adjust:exact; color-adjust:exact;
     }
+    /* Não deixa o título de seção órfão no rodapé da página */
+    .dgr-section-title { break-after:avoid; page-break-after:avoid; }
   }
 </style>
 
@@ -2359,7 +2389,7 @@ ${d.fechExcluidosCount ? `<div class="dgr-badge-fech"><i class="ti ti-calendar-c
   </div>
 </div>
 
-<div class="dgr-section">
+<div class="dgr-section dgr-section--break">
   <div class="dgr-section-title"><i class="ti ti-heart-rate-monitor"></i> Saúde Geral — Centrais e Materiais</div>
   <div class="dgr-donut-grid-2">
     ${_dgrDonutBox('Saúde Geral — Materiais', 'dg-vg-gauge-chart-svg')}
@@ -2367,12 +2397,12 @@ ${d.fechExcluidosCount ? `<div class="dgr-badge-fech"><i class="ti ti-calendar-c
   </div>
 </div>
 
-<div class="dgr-section">
+<div class="dgr-section dgr-section--cont">
   <div class="dgr-section-title"><i class="ti ti-chart-bar"></i> Desfalque e Sobra por Categoria</div>
   <div class="dgr-chart-box"><img src="${_dgrSnapshotCanvas('dg-vg-chart-categoria')}" alt=""></div>
 </div>
 
-<div class="dgr-section">
+<div class="dgr-section dgr-section--break">
   <div class="dgr-section-title"><i class="ti ti-scale"></i> Custo por Regional e Central</div>
   <div class="dgr-extremos-grid">
     ${_dgrExtremoCard('Regional · Maior Desfalque', d.extRegional.min && d.extRegional.min.v < 0 ? d.extRegional.min : null, 'variação')}
@@ -2384,13 +2414,13 @@ ${d.fechExcluidosCount ? `<div class="dgr-badge-fech"><i class="ti ti-calendar-c
   <div class="dgr-chart-box"><img src="${_dgrSnapshotCanvas('dg-vg-chart-usina')}" alt=""></div>
 </div>
 
-<div class="dgr-section">
+<div class="dgr-section dgr-section--break">
   <div class="dgr-section-title"><i class="ti ti-chart-pie"></i> Custo Absoluto — Por Grupo e Categoria de Material</div>
   <div class="dgr-donut-hero">${_dgrCloneSvg('dg-vg-chart-grupo') || '<div class="donut-empty">Sem dados</div>'}</div>
   <div class="dgr-donut-grid-4">${custoAbsHtml}</div>
 </div>
 
-<div class="dgr-section">
+<div class="dgr-section dgr-section--break">
   <div class="dgr-section-title"><i class="ti ti-refresh"></i> Giro & Cobertura</div>
   <div class="dg-giro-dual-grid">
     <div class="dg-giro-mat-card"><div class="dg-giro-mat-header"><span class="dg-top5-title" style="color:#34d399"><i class="ti ti-trending-up"></i> Top 5 Centrais — Mais Saudáveis</span></div><div class="dg-giro-mat-body">${_dgrCloneTable('dg-vg-giro-central-alto-body')}</div></div>
@@ -2402,37 +2432,35 @@ ${d.fechExcluidosCount ? `<div class="dgr-badge-fech"><i class="ti ti-calendar-c
   </div>
 </div>
 
-<div class="dgr-section">
+<div class="dgr-section dgr-section--break">
   <div class="dgr-section-title"><i class="ti ti-table"></i> Detalhado Analítico — Detalhamento por Material</div>
   ${_dgrCloneTable('dg-da-material')}
 </div>
-<div class="dgr-section">
+<div class="dgr-section dgr-section--break">
   <div class="dgr-section-title"><i class="ti ti-map-pin"></i> Ranking de Regionais</div>
   ${_dgrCloneTable('dg-da-rank-regional')}
 </div>
-<div class="dgr-section">
+<div class="dgr-section dgr-section--break">
   <div class="dgr-section-title"><i class="ti ti-building-factory-2"></i> Ranking de Centrais</div>
   ${_dgrCloneTable('dg-da-rank-central')}
 </div>
-<div class="dgr-section">
+<div class="dgr-section dgr-section--break">
   <div class="dgr-section-title"><i class="ti ti-box"></i> Ranking de Materiais</div>
   ${_dgrCloneTable('dg-da-rank-material')}
 </div>
-<div class="dgr-section">
+<div class="dgr-section dgr-section--break">
   <div class="dgr-section-title"><i class="ti ti-category-2"></i> Ranking de Categoria</div>
   ${_dgrCloneTable('dg-da-rank-categoria')}
 </div>`;
 
+  // Sem `kpis`: a barra de KPIs do header (.rk-kpi-row) NÃO é renderizada —
+  // esses mesmos números já aparecem, com mais contexto, na seção "Resumo do
+  // Período" logo abaixo, então no header eram redundantes. O shell trata
+  // `kpis` como opcional (ver _buildRankingShellHTML em relatorio.js).
   const html = _buildRankingShellHTML({
     periodoBadge: d.periodoLabel,
     periodo: d.periodoLabel,
-    now,
-    kpis: [
-      { value: `${varSymbol(d.varTotalFisica)} ${fmtKgShort(Math.abs(d.varTotalFisica))}`, label: 'variação física', color: varCol },
-      { value: `${varSymbol(d.custoTotal)} ${moneyShort(Math.abs(d.custoTotal))}`,          label: 'custo variação', color: cstCol },
-      { value: d.nCentrais, label: d.nCentrais === 1 ? 'central analisada' : 'centrais analisadas', color: '#3b82f6' },
-      { value: `${d.scoreInfo.score}%`, label: 'saúde geral', color: '#10b981' }
-    ]
+    now
   }, {
     pageTitle:  `Relatório Gerencial — ${d.periodoLabel}`,
     badge:      'Dashboard Gerencial',

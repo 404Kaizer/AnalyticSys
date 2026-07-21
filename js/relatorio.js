@@ -1143,12 +1143,21 @@ function _rankSeverityCentrais(n) {
 function _buildRankingShellHTML(d, opts) {
   const { periodoBadge, periodo, now, kpis, desconsideradas } = d;
 
+  // A linha de KPIs do header é OPCIONAL: só é renderizada quando `kpis` vem
+  // preenchido. Relatórios que passam o array (Ranking, Ausência, Cobrança,
+  // Criticidade, etc.) continuam exibindo a barra normalmente; quem omitir
+  // (ou passar vazio) — caso do Relatório Gerencial, onde esses números já
+  // aparecem na seção "Resumo do Período" e a barra ficava redundante — não
+  // renderiza a .rk-kpi-row nenhuma.
   const kpisHtml = (kpis || []).map(k => `
     <div class="rk-kpi" style="border-left-color:${k.color}">
       <strong>${k.value}</strong>
       <span>${_rankEsc(k.label)}</span>
     </div>`
   ).join('');
+  const kpiRowHtml = (kpis && kpis.length)
+    ? `<div class="rk-kpi-row">${kpisHtml}</div>`
+    : '';
 
   const descHtml = (desconsideradas && desconsideradas.length)
     ? `<div class="rk-period-sub">${desconsideradas.map(c => _rankEsc(c)).join(', ')} desconsiderada${desconsideradas.length !== 1 ? 's' : ''}</div>`
@@ -1311,7 +1320,7 @@ function _buildRankingShellHTML(d, opts) {
         ${descHtml}
       </div>
     </div>
-    <div class="rk-kpi-row">${kpisHtml}</div>
+    ${kpiRowHtml}
   </div>
 </div>
 
