@@ -1172,7 +1172,17 @@ function _buildRankingShellHTML(d, opts) {
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700;800&display=swap');
-  @page { size: A4 landscape; margin: 8mm 10mm; }
+  /* Orientação de página configurável por relatório — a maioria continua
+     travada em paisagem (comportamento original, preservado por padrão)
+     porque foi desenhada pra isso. O Relatório Gerencial do Dashboard
+     passa opts.pageOrientation:'livre' pra deixar o usuário escolher no
+     diálogo de impressão, com retrato como padrão do navegador — CSS não
+     pode "destravar e ainda assim sugerir retrato" ao mesmo tempo, então
+     a forma de fazer isso é simplesmente não declarar orientação nenhuma
+     (nem landscape nem portrait): sem palavra-chave de orientação no
+     @page, o Chrome deixa o seletor do diálogo livre, e retrato é o
+     padrão dele quando nada mais é especificado. */
+  @page { size: ${opts.pageOrientation === 'livre' ? 'A4' : 'A4 landscape'}; margin: 8mm 10mm; }
   * { box-sizing:border-box; margin:0; padding:0; }
   body { font-family:'Inter',system-ui,sans-serif; background:#0b1220; color:#e2e8f0; font-size:12.5px; line-height:1.5; -webkit-font-smoothing:antialiased; }
 
@@ -2564,26 +2574,74 @@ function _dgrBuildResumoPeriodoHtml(d) {
 
   const pctStr = p => p === null ? '—' : Math.abs(p).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%';
 
+  // Blocos de Caminhões/Carretas/IBCs em evidência (equivalente em veículos
+  // da variação física) — mesmos dados/metodologia da tela (ver
+  // veiculosRowHtml em _dgVgRenderKpisHero, dashboard.js), agora como
+  // blocos maiores dentro do card hero, a pedido do Hugo.
+  const v = d.veiculosTotalKpi || {};
+  const veiculoBlock = (label, iconCls, valor) => `
+    <div class="dgr-kpi-veiculo-block">
+      <div class="dgr-kpi-veiculo-icon"><i class="ti ${iconCls}"></i></div>
+      <div class="dgr-kpi-veiculo-valor" style="color:${_dgrValCor(valor)}">${_daFmtCountSigned(valor)}</div>
+      <div class="dgr-kpi-veiculo-label">${label}</div>
+    </div>`;
+  const veiculosHtml = (v.caminhoes || v.carretas || v.ibcs) ? `
+    <div class="dgr-kpi-veiculos-evid">
+      ${veiculoBlock('Caminhões', 'ti-truck', v.caminhoes)}
+      ${veiculoBlock('Carretas', 'ti-container', v.carretas)}
+      ${veiculoBlock('IBCs', 'ti-box', v.ibcs)}
+    </div>` : '';
+
+  // Card secundário padrão (rótulo + selo de ícone colorido no topo, valor
+  // grande, subvalor menor).
+  const card2 = (label, iconCls, iconCol, valor, sub) => `
+    <div class="dgr-kpi-card">
+      <div class="dgr-kpi-card-head">
+        <div class="dgr-kpi-label">${label}</div>
+        <div class="dgr-kpi-icon" style="background:${iconCol}1f;color:${iconCol}"><i class="ti ${iconCls}"></i></div>
+      </div>
+      <div class="dgr-kpi-value">${valor}</div>
+      <div class="dgr-kpi-unit">${sub}</div>
+    </div>`;
+
+  // Card "Variação Ajustada" — as % de Variação e de Custo Var. separadas
+  // do card hero, cada uma com seu mini-rótulo, uma acima da outra.
+  const cardVariacaoAjustada = `
+    <div class="dgr-kpi-card">
+      <div class="dgr-kpi-card-head">
+        <div class="dgr-kpi-label">Variação Ajustada</div>
+        <div class="dgr-kpi-icon" style="background:${varCol}1f;color:${varCol}"><i class="ti ti-adjustments"></i></div>
+      </div>
+      ${pctVariacao === null ? '<div class="dgr-kpi-unit">—</div>' : `
+      <div class="dgr-kpi-pct" style="color:${varCol}">${varSymbol(d.varTotalFisica)} ${pctStr(pctVariacao)}</div>
+      <div class="dgr-kpi-unit">Variação · do Est. Teórico</div>`}
+      ${pctCusto === null ? '' : `
+      <div class="dgr-kpi-divider-row">
+        <div class="dgr-kpi-pct" style="color:${cstCol}">${varSymbol(d.custoTotal)} ${pctStr(pctCusto)}</div>
+        <div class="dgr-kpi-pct-label">Custo Var. · do Custo Teórico</div>
+      </div>`}
+    </div>`;
+
   return `
     <div class="dgr-section-title"><i class="ti ti-report-money"></i>Resumo do Período — Estoque, Movimentação e Variação</div>
-    <div class="dgr-kpi-row">
-      <div class="dgr-kpi-card" style="border-top-color:${varCol}">
-        <div class="dgr-kpi-label">Variação</div>
-        <div class="dgr-kpi-value" style="color:${varCol}">${varSymbol(d.varTotalFisica)} ${fmtKg(Math.abs(d.varTotalFisica))}</div>
-        <div class="dgr-kpi-unit">kg bruto ${pctVariacao === null ? '' : '· ' + varSymbol(d.varTotalFisica) + ' ' + pctStr(pctVariacao) + ' do Est. Teórico'}</div>
-      </div>
-      <div class="dgr-kpi-card" style="border-top-color:${cstCol}">
-        <div class="dgr-kpi-label">Custo Var.</div>
-        <div class="dgr-kpi-value" style="color:${cstCol}">${varSymbol(d.custoTotal)} ${money(Math.abs(d.custoTotal))}</div>
-        <div class="dgr-kpi-unit">R$ bruto ${pctCusto === null ? '' : '· ' + varSymbol(d.custoTotal) + ' ' + pctStr(pctCusto) + ' do Custo Teórico'}</div>
-      </div>
-    </div>
     <div class="dgr-kpi-secondary">
-      <div class="dgr-kpi-card"><div class="dgr-kpi-label">Est. Inicial Total</div><div class="dgr-kpi-value">${money(d.estTotais.custoIni || 0)}</div><div class="dgr-kpi-unit">${fmtKg(d.estTotais.totalIni)}</div></div>
-      <div class="dgr-kpi-card"><div class="dgr-kpi-label">Entradas</div><div class="dgr-kpi-value">${money(d.custoMovTotais.custoEnt || 0)}</div><div class="dgr-kpi-unit">${fmtKg(d.movTotais.totalEnt)}</div></div>
-      <div class="dgr-kpi-card"><div class="dgr-kpi-label">Saídas</div><div class="dgr-kpi-value">${money(d.custoMovTotais.custoSai || 0)}</div><div class="dgr-kpi-unit">${fmtKg(d.movTotais.totalSai)}</div></div>
-      <div class="dgr-kpi-card"><div class="dgr-kpi-label">Est. Final Total</div><div class="dgr-kpi-value">${money(d.estTotais.custoFim || 0)}</div><div class="dgr-kpi-unit">${fmtKg(d.estTotais.totalFim)}</div></div>
-      <div class="dgr-kpi-card"><div class="dgr-kpi-label">Evolução Estoque</div><div class="dgr-kpi-value" style="color:${evoCol}">${pctEvolucao === null ? '—' : varSymbol(kgEvolucao) + ' ' + pctStr(pctEvolucao)}</div><div class="dgr-kpi-unit">${varSymbol(kgEvolucao)} ${money(Math.abs(custoEvolucao))}</div></div>
+      ${card2('Est. Inicial Total', 'ti-database', '#94a3b8', money(d.estTotais.custoIni || 0), fmtKg(d.estTotais.totalIni))}
+      ${card2('Entradas', 'ti-activity', '#10b981', money(d.custoMovTotais.custoEnt || 0), fmtKg(d.movTotais.totalEnt))}
+      ${card2('Saídas', 'ti-activity', '#f43f5e', money(d.custoMovTotais.custoSai || 0), fmtKg(d.movTotais.totalSai))}
+      ${card2('Est. Final Total', 'ti-circle-check', '#3b82f6', money(d.estTotais.custoFim || 0), fmtKg(d.estTotais.totalFim))}
+      ${card2('Evolução Estoque', 'ti-chart-line', '#8b5cf6', `<span style="color:${evoCol}">${pctEvolucao === null ? '—' : varSymbol(kgEvolucao) + ' ' + pctStr(pctEvolucao)}</span>`, `${varSymbol(kgEvolucao)} ${money(Math.abs(custoEvolucao))}`)}
+      ${cardVariacaoAjustada}
+    </div>
+    <div class="dgr-kpi-hero" style="border-top-color:${cstCol}">
+      <div class="dgr-kpi-card-head">
+        <div class="dgr-kpi-label">Variação Estoque</div>
+        <div class="dgr-kpi-icon" style="background:${cstCol}1f;color:${cstCol}"><i class="ti ti-currency-dollar"></i></div>
+      </div>
+      <div class="dgr-kpi-hero-custo" style="color:${cstCol}">${varSymbol(d.custoTotal)} ${money(Math.abs(d.custoTotal))}</div>
+      <div class="dgr-kpi-unit">R$ bruto</div>
+      <div class="dgr-kpi-hero-saldo" style="color:${varCol}">${varSymbol(d.varTotalFisica)} ${fmtKg(Math.abs(d.varTotalFisica))}</div>
+      <div class="dgr-kpi-unit">kg bruto</div>
+      ${veiculosHtml}
     </div>`;
 }
 
@@ -2672,7 +2730,11 @@ function _dgrBuildCustoRegionalCentralHtml(d, imgRegional, imgUsina) {
 //    em destaque) + 4 donuts de categoria (Agregado/Aglomerante/Aditivo/
 //    Adição), todos gerados por _dgVgRenderCustoDonutSvg (mesma função dos
 //    gauges de Saúde Geral) e capturados com a mesma técnica de resolução
-//    de var(--x) já validada na Fase 1 — nenhuma variável nova aqui. ─────
+//    de var(--x) já validada na Fase 1.
+//    NÃO CHAMADA ATUALMENTE — removida do corpo do relatório a pedido do
+//    Hugo (jul/2026). Função mantida (não deletada) pra reativar rápido
+//    caso ele queira essa seção de volta; a captura das imagens
+//    correspondentes também foi removida do fluxo principal.
 function _dgrBuildCustoAbsolutoHtml(imgGrupo, imgsCat) {
   const subGrupo = document.getElementById('dg-vg-grupo-subtitle')?.textContent || '';
   const catTitulos = {
@@ -2735,17 +2797,17 @@ function _dgrGiroListaHtml(titulo, iconCls, items) {
     <tr>
       <td class="rk-name dgr-nome-trunc" style="font-size:11.5px" title="${_rankEsc(item.name)}">${_rankEsc(_dgrTruncNome(item.name))}</td>
       <td><span style="display:inline-block;padding:2px 8px;border-radius:5px;font-size:9.5px;font-weight:700;white-space:nowrap;background:${cor}22;color:${cor};border:1px solid ${cor}55">${_rankEsc(item.nivel.label)}</span></td>
-      <td class="rk-num" style="font-size:11px">${item.cobertura === null ? 'sem consumo' : item.cobertura.toFixed(1) + 'd'}</td>
-      <td class="rk-num" style="font-size:11px;color:${_dgrGiroCor(item.giro)}">${item.giro.toFixed(2)}×</td>
-      <td class="rk-num" style="font-size:10.5px;color:#94a3b8">${fmtKgShort(item.entradas)}</td>
-      <td class="rk-num" style="font-size:10.5px;color:#94a3b8">${fmtKgShort(item.saidas)}</td>
+      <td class="rk-num" style="font-size:10.5px">${item.cobertura === null ? 'sem consumo' : _dgrNowrapNum(item.cobertura.toFixed(1) + 'd')}</td>
+      <td class="rk-num" style="font-size:10.5px;color:${_dgrGiroCor(item.giro)}">${_dgrNowrapNum(item.giro.toFixed(2) + '×')}</td>
+      <td class="rk-num" style="font-size:10px;color:#94a3b8">${_dgrNowrapNum(fmtKgShort(item.entradas))}</td>
+      <td class="rk-num" style="font-size:10px;color:#94a3b8">${_dgrNowrapNum(fmtKgShort(item.saidas))}</td>
     </tr>`;
   }).join('');
   return `
     <div class="dgr-chart-card">
       <div class="dgr-chart-title"><i class="ti ${iconCls}"></i>${_rankEsc(titulo)}</div>
-      <table class="rk-table">
-        <thead><tr><th>Nome</th><th>Nível</th><th style="text-align:right">Cobertura</th><th style="text-align:right">Giro</th><th style="text-align:right">Entradas</th><th style="text-align:right">Saídas</th></tr></thead>
+      <table class="rk-table dgr-giro-table">
+        <thead><tr><th style="width:24%">Nome</th><th style="width:15%">Nível</th><th style="width:15%;text-align:right">Cobertura</th><th style="width:12%;text-align:right">Giro</th><th style="width:17%;text-align:right">Entradas</th><th style="width:17%;text-align:right">Saídas</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>`;
@@ -2779,38 +2841,65 @@ function _dgrValCor(v) {
   if (v === null || v === undefined || !Number.isFinite(v)) return '#64748b';
   return v < -0.0001 ? '#f43f5e' : v > 0.0001 ? '#f59e0b' : '#64748b';
 }
+// Mantém o trecho numérico de um valor já formatado (money/fmtKg/pct etc.)
+// inteiro, numa unidade não-quebrável — prefixos (R$, ícone de seta) e
+// sufixos (kg, /kg, %, ×) continuam podendo quebrar pra linha seguinte
+// livremente, mas o número em si NUNCA quebra no meio de um dígito
+// (evita o "12.85|5.060|,00|kg" que acontecia em colunas estreitas).
+function _dgrNowrapNum(str) {
+  const s = String(str);
+  // Pega o ÚLTIMO trecho numérico da string — é sempre o valor formatado
+  // de verdade. Usar o primeiro (versão anterior, com bug) podia casar um
+  // número que apareça ANTES dele dentro de HTML já embutido, como o
+  // "11" de style="font-size:11px" no ícone que varSymbol() antepõe em
+  // _daFmtPctSigned/_daFmtMoneySigned/_daFmtCountSigned — o que quebrava
+  // a tag no meio e vazava texto cru pro PDF.
+  const m = s.match(/[\d.,]+(?!.*[\d.,])/);
+  if (!m) return s;
+  return s.slice(0, m.index) + `<span style="white-space:nowrap">${m[0]}</span>` + s.slice(m.index + m[0].length);
+}
 function _dgrTabelaMaterialHtml(dados) {
   if (!dados.linhas.length) return '';
   const rows = dados.linhas.map(l => `
     <tr>
-      <td class="rk-name" style="font-size:11px">${_rankEsc(l.mat)}${l.catKey ? `<div class="rk-sub">${_rankEsc(DG_VG_CATSUB_LABELS[l.catSubKey] || DG_VG_CAT_LABELS[l.catKey] || l.catKey)}</div>` : ''}</td>
-      <td class="rk-num" style="color:#06b6d4">${fmtKg(l.estIni)}</td>
-      <td class="rk-num" style="color:#10b981">${fmtKg(l.entKg)}</td>
-      <td class="rk-num" style="color:#f43f5e">${fmtKg(l.saiKg)}</td>
-      <td class="rk-num" style="color:#06b6d4">${fmtKg(l.estTeorico)}</td>
-      <td class="rk-num" style="color:#06b6d4">${fmtKg(l.estFim)}</td>
-      <td class="rk-num" style="color:${_dgrValCor(l.pctVariacao)}">${_daFmtPctSigned(l.pctVariacao)}</td>
-      <td class="rk-num">${money(l.custoMedio)}/kg</td>
-      <td class="rk-num" style="color:${_dgrValCor(l.custoAjuste)}">${_daFmtMoneySigned(l.custoAjuste)}</td>
+      <td class="rk-name" style="font-size:10.5px">${_rankEsc(l.mat)}${l.catKey ? `<div class="rk-sub">${_rankEsc(DG_VG_CATSUB_LABELS[l.catSubKey] || DG_VG_CAT_LABELS[l.catKey] || l.catKey)}</div>` : ''}</td>
+      <td class="rk-num" style="color:#06b6d4">${_dgrNowrapNum(fmtKg(l.estIni))}</td>
+      <td class="rk-num" style="color:#10b981">${_dgrNowrapNum(fmtKg(l.entKg))}</td>
+      <td class="rk-num" style="color:#f43f5e">${_dgrNowrapNum(fmtKg(l.saiKg))}</td>
+      <td class="rk-num" style="color:#06b6d4">${_dgrNowrapNum(fmtKg(l.estTeorico))}</td>
+      <td class="rk-num" style="color:#06b6d4">${_dgrNowrapNum(fmtKg(l.estFim))}</td>
+      <td class="rk-num" style="color:${_dgrValCor(l.pctVariacao)}">${_dgrNowrapNum(_daFmtPctSigned(l.pctVariacao))}</td>
+      <td class="rk-num">${_dgrNowrapNum(money(l.custoMedio) + '/kg')}</td>
+      <td class="rk-num" style="color:${_dgrValCor(l.custoAjuste)}">${_dgrNowrapNum(_daFmtMoneySigned(l.custoAjuste))}</td>
     </tr>`).join('');
   const t = dados.total;
   const totalRow = `
     <tr style="font-weight:800;background:rgba(255,255,255,.05)">
       <td class="rk-name">Total</td>
-      <td class="rk-num" style="color:#06b6d4">${fmtKg(t.estIni)}</td>
-      <td class="rk-num" style="color:#10b981">${fmtKg(t.entKg)}</td>
-      <td class="rk-num" style="color:#f43f5e">${fmtKg(t.saiKg)}</td>
-      <td class="rk-num" style="color:#06b6d4">${fmtKg(t.estTeorico)}</td>
-      <td class="rk-num" style="color:#06b6d4">${fmtKg(t.estFim)}</td>
-      <td class="rk-num" style="color:${_dgrValCor(t.pctVariacao)}">${_daFmtPctSigned(t.pctVariacao)}</td>
-      <td class="rk-num">${money(t.custoMedio)}/kg</td>
-      <td class="rk-num" style="color:${_dgrValCor(t.custoAjuste)}">${_daFmtMoneySigned(t.custoAjuste)}</td>
+      <td class="rk-num" style="color:#06b6d4">${_dgrNowrapNum(fmtKg(t.estIni))}</td>
+      <td class="rk-num" style="color:#10b981">${_dgrNowrapNum(fmtKg(t.entKg))}</td>
+      <td class="rk-num" style="color:#f43f5e">${_dgrNowrapNum(fmtKg(t.saiKg))}</td>
+      <td class="rk-num" style="color:#06b6d4">${_dgrNowrapNum(fmtKg(t.estTeorico))}</td>
+      <td class="rk-num" style="color:#06b6d4">${_dgrNowrapNum(fmtKg(t.estFim))}</td>
+      <td class="rk-num" style="color:${_dgrValCor(t.pctVariacao)}">${_dgrNowrapNum(_daFmtPctSigned(t.pctVariacao))}</td>
+      <td class="rk-num">${_dgrNowrapNum(money(t.custoMedio) + '/kg')}</td>
+      <td class="rk-num" style="color:${_dgrValCor(t.custoAjuste)}">${_dgrNowrapNum(_daFmtMoneySigned(t.custoAjuste))}</td>
     </tr>`;
   return `
     <div class="dgr-table-wrap">
       <div class="rk-table-head"><div class="rk-table-head-title">Detalhamento por Material (Grupo SAP)</div><div class="rk-table-head-cap">${dados.linhas.length} materia${dados.linhas.length !== 1 ? 'is' : 'l'}</div></div>
-      <table class="rk-table">
-        <thead><tr><th style="width:190px">Grupo SAP</th><th style="text-align:right">Est. Inicial</th><th style="text-align:right">Entradas</th><th style="text-align:right">Saídas</th><th style="text-align:right">Est. Teórico</th><th style="text-align:right">Est. Final</th><th style="text-align:right">% Variação</th><th style="text-align:right">Custo Médio</th><th style="text-align:right">Custo Ajuste</th></tr></thead>
+      <table class="rk-table dgr-material-table">
+        <thead><tr>
+          <th style="width:14%">Grupo SAP</th>
+          <th style="width:12%;text-align:right">Est. Inicial</th>
+          <th style="width:12%;text-align:right">Entradas</th>
+          <th style="width:12%;text-align:right">Saídas</th>
+          <th style="width:12%;text-align:right">Est. Teórico</th>
+          <th style="width:12%;text-align:right">Est. Final</th>
+          <th style="width:8%;text-align:right">% Variação</th>
+          <th style="width:9%;text-align:right">Custo Médio</th>
+          <th style="width:9%;text-align:right">Custo Ajuste</th>
+        </tr></thead>
         <tbody>${rows}</tbody>
         <tfoot>${totalRow}</tfoot>
       </table>
@@ -2820,32 +2909,39 @@ function _dgrRankingHtml(titulo, colLabel, dados) {
   if (!dados.linhas.length) return '';
   const rows = dados.linhas.map(l => {
     const imp = _daMaiorImpacto(l);
-    const cell = (campo, valor) => imp === campo ? `<strong>${_daFmtCountSigned(valor)}</strong>` : _daFmtCountSigned(valor);
+    const cell = (campo, valor) => imp === campo ? `<strong>${_dgrNowrapNum(_daFmtCountSigned(valor))}</strong>` : _dgrNowrapNum(_daFmtCountSigned(valor));
     return `
     <tr>
-      <td class="rk-name" style="font-size:11.5px">${_rankEsc(l.nome)}</td>
+      <td class="rk-name" style="font-size:11px">${_rankEsc(l.nome)}</td>
       <td class="rk-num" style="color:${_dgrValCor(l.caminhoes)}">${cell('caminhoes', l.caminhoes)}</td>
       <td class="rk-num" style="color:${_dgrValCor(l.carretas)}">${cell('carretas', l.carretas)}</td>
       <td class="rk-num" style="color:${_dgrValCor(l.ibcs)}">${cell('ibcs', l.ibcs)}</td>
-      <td class="rk-num" style="color:${_dgrValCor(l.pctVariacao)}">${_daFmtPctSigned(l.pctVariacao)}</td>
-      <td class="rk-num" style="color:${_dgrValCor(l.custoTotal)}">${_daFmtMoneySigned(l.custoTotal)}</td>
+      <td class="rk-num" style="color:${_dgrValCor(l.pctVariacao)}">${_dgrNowrapNum(_daFmtPctSigned(l.pctVariacao))}</td>
+      <td class="rk-num" style="color:${_dgrValCor(l.custoTotal)}">${_dgrNowrapNum(_daFmtMoneySigned(l.custoTotal))}</td>
     </tr>`;
   }).join('');
   const t = dados.total;
   const totalRow = `
     <tr style="font-weight:800;background:rgba(255,255,255,.05)">
       <td class="rk-name">Total</td>
-      <td class="rk-num" style="color:${_dgrValCor(t.caminhoes)}">${_daFmtCountSigned(t.caminhoes)}</td>
-      <td class="rk-num" style="color:${_dgrValCor(t.carretas)}">${_daFmtCountSigned(t.carretas)}</td>
-      <td class="rk-num" style="color:${_dgrValCor(t.ibcs)}">${_daFmtCountSigned(t.ibcs)}</td>
-      <td class="rk-num" style="color:${_dgrValCor(t.pctVariacao)}">${_daFmtPctSigned(t.pctVariacao)}</td>
-      <td class="rk-num" style="color:${_dgrValCor(t.custoTotal)}">${_daFmtMoneySigned(t.custoTotal)}</td>
+      <td class="rk-num" style="color:${_dgrValCor(t.caminhoes)}">${_dgrNowrapNum(_daFmtCountSigned(t.caminhoes))}</td>
+      <td class="rk-num" style="color:${_dgrValCor(t.carretas)}">${_dgrNowrapNum(_daFmtCountSigned(t.carretas))}</td>
+      <td class="rk-num" style="color:${_dgrValCor(t.ibcs)}">${_dgrNowrapNum(_daFmtCountSigned(t.ibcs))}</td>
+      <td class="rk-num" style="color:${_dgrValCor(t.pctVariacao)}">${_dgrNowrapNum(_daFmtPctSigned(t.pctVariacao))}</td>
+      <td class="rk-num" style="color:${_dgrValCor(t.custoTotal)}">${_dgrNowrapNum(_daFmtMoneySigned(t.custoTotal))}</td>
     </tr>`;
   return `
     <div class="dgr-table-wrap">
       <div class="rk-table-head"><div class="rk-table-head-title">${_rankEsc(titulo)}</div><div class="rk-table-head-cap">${dados.linhas.length} ${dados.linhas.length !== 1 ? 'itens' : 'item'}</div></div>
-      <table class="rk-table">
-        <thead><tr><th style="width:220px">${_rankEsc(colLabel)}</th><th style="text-align:right">Caminhões</th><th style="text-align:right">Carretas</th><th style="text-align:right">IBCs</th><th style="text-align:right">Variação</th><th style="text-align:right">Custo Total</th></tr></thead>
+      <table class="rk-table dgr-ranking-table">
+        <thead><tr>
+          <th style="width:26%">${_rankEsc(colLabel)}</th>
+          <th style="width:13%;text-align:right">Caminhões</th>
+          <th style="width:13%;text-align:right">Carretas</th>
+          <th style="width:13%;text-align:right">IBCs</th>
+          <th style="width:13%;text-align:right">Variação</th>
+          <th style="width:22%;text-align:right">Custo Total</th>
+        </tr></thead>
         <tbody>${rows}</tbody>
         <tfoot>${totalRow}</tfoot>
       </table>
@@ -2877,14 +2973,28 @@ function _dgrBuildDetalhadoAnaliticoHtml(d) {
 function _dgrEstilos() {
   return `
     .dgr-section-title { font-size:11px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; color:#f87171; margin:0 0 12px; display:flex; align-items:center; gap:8px; }
-    .dgr-kpi-row { display:grid; grid-template-columns:repeat(2,1fr); gap:14px; margin-bottom:14px; }
-    .dgr-kpi-secondary { display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-bottom:10px; }
+    .dgr-kpi-secondary { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:14px; }
     .dgr-kpi-card { background:rgba(255,255,255,.045); border:1px solid rgba(255,255,255,.09); border-radius:12px; padding:18px 20px; border-top:3px solid transparent; page-break-inside:avoid; }
-    .dgr-kpi-secondary .dgr-kpi-card { padding:13px 15px; border-top:none; }
-    .dgr-kpi-label { font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#94a3b8; margin-bottom:6px; }
+    .dgr-kpi-secondary .dgr-kpi-card { padding:16px 18px; border-top:none; }
+    .dgr-kpi-card-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:12px; }
+    .dgr-kpi-icon { width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; font-size:15px; flex-shrink:0; }
+    .dgr-kpi-label { font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#94a3b8; }
     .dgr-kpi-value { font-family:'JetBrains Mono',monospace; font-size:21px; font-weight:800; color:#fff; }
-    .dgr-kpi-secondary .dgr-kpi-value { font-size:15px; }
-    .dgr-kpi-unit { font-size:10px; color:#64748b; margin-top:4px; font-family:'JetBrains Mono',monospace; }
+    .dgr-kpi-secondary .dgr-kpi-value { font-size:18px; }
+    .dgr-kpi-unit { font-size:10.5px; color:#64748b; margin-top:4px; font-family:'JetBrains Mono',monospace; }
+    .dgr-kpi-divider-row { display:flex; align-items:baseline; gap:7px; margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,.08); }
+    .dgr-kpi-pct { font-family:'JetBrains Mono',monospace; font-size:19px; font-weight:800; }
+    .dgr-kpi-pct-label { font-size:10px; color:#64748b; }
+    /* Card hero "Variação Estoque" — custo em evidência (valor maior),
+       saldo em kg abaixo (menor), veículos em blocos grandes por baixo. */
+    .dgr-kpi-hero { background:rgba(255,255,255,.045); border:1px solid rgba(255,255,255,.09); border-radius:12px; padding:24px 28px; border-top:3px solid transparent; page-break-inside:avoid; }
+    .dgr-kpi-hero-custo { font-family:'JetBrains Mono',monospace; font-size:32px; font-weight:800; }
+    .dgr-kpi-hero-saldo { font-family:'JetBrains Mono',monospace; font-size:19px; font-weight:700; margin-top:16px; }
+    .dgr-kpi-veiculos-evid { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-top:18px; padding-top:18px; border-top:1px solid rgba(255,255,255,.08); }
+    .dgr-kpi-veiculo-block { display:flex; flex-direction:column; align-items:center; text-align:center; gap:5px; }
+    .dgr-kpi-veiculo-icon { width:36px; height:36px; border-radius:10px; background:rgba(255,255,255,.06); display:flex; align-items:center; justify-content:center; font-size:17px; color:#cbd5e1; margin-bottom:2px; }
+    .dgr-kpi-veiculo-valor { font-family:'JetBrains Mono',monospace; font-size:21px; font-weight:800; }
+    .dgr-kpi-veiculo-label { font-size:10px; color:#64748b; text-transform:uppercase; letter-spacing:.05em; font-weight:700; }
     .dgr-health-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
     .dgr-health-card { background:rgba(255,255,255,.045); border:1px solid rgba(255,255,255,.09); border-radius:12px; padding:18px; page-break-inside:avoid; }
     .dgr-health-card img { max-width:100%; height:auto; display:block; margin:0 auto; }
@@ -2921,12 +3031,32 @@ function _dgrEstilos() {
        (Giro & Cobertura + Detalhado Analítico) pra não alterar .rk-table
        nos outros relatórios do sistema (Ocorrências, Ranking etc.), que
        usam a densidade padrão do shell. */
-    .dgr-chart-card .rk-table th, .dgr-table-wrap .rk-table th { padding:10px 12px; }
-    .dgr-chart-card .rk-table td, .dgr-table-wrap .rk-table td { padding:13px 12px; line-height:1.5; overflow-wrap:break-word; }
+    .dgr-chart-card .rk-table th, .dgr-table-wrap .rk-table th { padding:9px 3px; font-size:8.2px; }
+    .dgr-chart-card .rk-table td, .dgr-table-wrap .rk-table td { padding:10px 3px; line-height:1.4; overflow-wrap:break-word; font-size:8.2px; }
+    /* Coluna de nome (1ª coluna) é a única que pode quebrar em várias
+       linhas — mantém uma fonte um pouco maior, mais legível, já que ela
+       tem a largura reservada pra isso. As demais colunas (números) usam
+       a fonte reduzida acima pra caber numa linha só sem vazar pra célula
+       vizinha. */
+    .dgr-table-wrap .rk-name, .dgr-chart-card .rk-name { font-size:10px !important; }
     .dgr-table-wrap .rk-name { line-height:1.4; }
     .dgr-chart-card .rk-name.dgr-nome-trunc { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:150px; display:inline-block; }
-    @media (max-width:900px) { .dgr-kpi-row, .dgr-kpi-secondary, .dgr-health-grid, .dgr-chart-grid, .dgr-grupo-layout, .dgr-donut-sub-grid { grid-template-columns:repeat(2,1fr); } }
-    @media print { .dgr-kpi-card, .dgr-health-card, .dgr-chart-card, .dgr-extremo-box { page-break-inside:avoid; } .dgr-section-title, .dgr-table-wrap .rk-table-head { page-break-after:avoid; break-after:avoid; } }`;
+    .dgr-chart-card table.rk-table { table-layout:fixed; }
+    /* Colapso dos pares de card (Giro, gráficos de barra) e das grades de
+       3 colunas — SEMPRE ao imprimir/gerar PDF, não só condicional a
+       largura. Medi e confirmei: @media(max-width) é avaliado contra a
+       largura da JANELA do navegador, não da página impressa — numa
+       janela larga a condição nunca dispara mesmo a página final saindo
+       estreita (retrato), o que já causou tabelas do Giro espremidas a
+       ponto de virar ilegíveis. Como as classes dgr-* só existem neste
+       relatório, é seguro deixar incondicional no papel. A condição por
+       largura continua valendo também, só como bônus pra quem visualizar
+       o HTML numa janela estreita antes de imprimir. */
+    @media print, (max-width:900px) {
+      .dgr-kpi-secondary, .dgr-health-grid, .dgr-grupo-layout, .dgr-donut-sub-grid, .dgr-kpi-veiculos-evid { grid-template-columns:repeat(2,1fr); }
+      .dgr-chart-grid { grid-template-columns:1fr; }
+    }
+    @media print { .dgr-kpi-card, .dgr-health-card, .dgr-chart-card, .dgr-extremo-box { page-break-inside:avoid; } }`;
 }
 
 window.gerarRelatorioGerencialDashboard = async function() {
@@ -2955,21 +3085,11 @@ window.gerarRelatorioGerencialDashboard = async function() {
     const imgRegional  = _dgrCanvasParaPngDataUrl('dg-vg-chart-regional');
     const imgUsina     = _dgrCanvasParaPngDataUrl('dg-vg-chart-usina');
 
-    const [imgGrupo, imgAgregado, imgAglomerante, imgAditivo, imgAdicao] = await Promise.all([
-      _dgrSvgParaPngDataUrl(document.getElementById('dg-vg-chart-grupo')),
-      _dgrSvgParaPngDataUrl(document.getElementById('dg-vg-donut-agregado')),
-      _dgrSvgParaPngDataUrl(document.getElementById('dg-vg-donut-aglomerante')),
-      _dgrSvgParaPngDataUrl(document.getElementById('dg-vg-donut-aditivo')),
-      _dgrSvgParaPngDataUrl(document.getElementById('dg-vg-donut-adicao'))
-    ]);
-    const imgsCat = { agregado: imgAgregado, aglomerante: imgAglomerante, aditivo: imgAditivo, adicao: imgAdicao };
-
     const bodyHtml = `<style>${_dgrEstilos()}</style>`
       + _dgrBuildResumoPeriodoHtml(d)
       + _dgrBuildSaudeGeralHtml(imgGaugeCentral, imgGaugeMateriais)
       + _dgrBuildCategoriaHtml(imgCategoria)
       + _dgrBuildCustoRegionalCentralHtml(d, imgRegional, imgUsina)
-      + _dgrBuildCustoAbsolutoHtml(imgGrupo, imgsCat)
       + _dgrBuildGiroCoberturaHtml(d)
       + _dgrBuildDetalhadoAnaliticoHtml(d);
 
@@ -2979,6 +3099,7 @@ window.gerarRelatorioGerencialDashboard = async function() {
       now,
       kpis: []
     }, {
+      pageOrientation: 'livre',
       pageTitle:  'Relatório Gerencial — Dashboard Gerencial',
       badge:      'Relatório Gerencial',
       title:      'Visão Geral — Dashboard Gerencial',
