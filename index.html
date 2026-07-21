@@ -604,6 +604,16 @@
         <!-- ABA: Visão Geral (reformulada — KPIs executivos + gráficos consolidados) -->
         <div class="dg-tab-pane active" id="dg-pane-visao">
 
+        <!-- Botão de exportação — monta um relatório autônomo (mesmo padrão
+             visual dos outros relatórios do sistema, ver relatorio.js:
+             _buildRankingShellHTML/_openRelWindow) numa aba nova, pronto pra
+             "Imprimir/Salvar como PDF" no navegador. -->
+        <div style="display:flex;justify-content:flex-end;margin-bottom:14px">
+          <button class="btn-secondary" onclick="gerarRelatorioGerencialDG()" style="display:flex;align-items:center;gap:7px">
+            <i class="ti ti-file-report"></i> Relatório Gerencial
+          </button>
+        </div>
+
         <!-- 1. Hero: Variação Total + Custo Total — os KPIs mais importantes, em evidência -->
         <div id="dg-vg-fech-badge-wrap" style="margin-bottom:8px"></div>
         <div class="section-title" style="margin:28px 0 14px"><i class="ti ti-report-money" style="font-size:13px;margin-right:6px"></i>Resumo do Período — Estoque, Movimentação e Variação</div>
