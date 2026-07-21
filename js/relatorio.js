@@ -2818,6 +2818,20 @@ function _dgrAbastInfo(entradas, saidas, panel) {
   if (ratio >= 80)  return { texto: label, cor: '#10b981', icone: 'ti-equal' };
   return { texto: label, cor: '#f43f5e', icone: 'ti-trending-down' };
 }
+// ── Cobertura (dias de estoque no ritmo de consumo atual) — MESMOS
+//    limiares/ícones de buildCoberturaCell (função interna de
+//    renderDgGiro, dashboard.js, não acessível globalmente), com cores
+//    literais em vez de var(--x). null (sem consumo) fica de fora — vira
+//    texto simples, sem badge, igual na tela. ─────────────────────────
+function _dgrCoberturaInfo(dias) {
+  if (dias === null) return null;
+  const d = dias.toFixed(1) + 'd';
+  if (dias < 5)   return { texto: d, cor: '#f43f5e', icone: 'ti-flame' };
+  if (dias < 10)  return { texto: d, cor: '#f59e0b', icone: 'ti-alert-triangle' };
+  if (dias < 20)  return { texto: d, cor: '#10b981', icone: 'ti-circle-check' };
+  if (dias <= 40) return { texto: d, cor: '#f59e0b', icone: 'ti-clock' };
+  return { texto: d, cor: '#8b5cf6', icone: 'ti-lock' };
+}
 function _dgrGiroListaHtml(titulo, iconCls, items, panel, footerArr) {
   if (!items || !items.length) {
     return `<div class="dgr-chart-card"><div class="dgr-chart-title"><i class="ti ${iconCls}"></i>${_rankEsc(titulo)}</div><div class="dgr-chart-empty">Sem dados de giro</div></div>`;
@@ -2825,11 +2839,14 @@ function _dgrGiroListaHtml(titulo, iconCls, items, panel, footerArr) {
   const rows = items.map(item => {
     const cor = _dgrNivelCor(item.nivel.level);
     const abast = _dgrAbastInfo(item.entradas, item.saidas, panel);
+    const cobertura = _dgrCoberturaInfo(item.cobertura);
     return `
     <tr>
       <td class="rk-name" style="font-size:10.5px" title="${_rankEsc(item.name)}"><span class="dgr-nome-trunc-inner">${_rankEsc(_dgrTruncNome(item.name))}</span></td>
       <td><span style="display:inline-block;padding:2px 6px;border-radius:5px;font-size:8.5px;font-weight:700;white-space:nowrap;background:${cor}22;color:${cor};border:1px solid ${cor}55">${_rankEsc(item.nivel.label)}</span></td>
-      <td class="rk-num" style="font-size:9px">${item.cobertura === null ? 'sem consumo' : _dgrNowrapNum(item.cobertura.toFixed(1) + 'd')}</td>
+      <td style="text-align:right">${cobertura
+        ? `<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 6px;border-radius:5px;font-size:8px;font-weight:700;white-space:nowrap;background:${cobertura.cor}22;color:${cobertura.cor};border:1px solid ${cobertura.cor}55"><i class="ti ${cobertura.icone}" style="font-size:9px"></i>${cobertura.texto}</span>`
+        : `<span class="rk-num" style="font-size:9px;color:#64748b">sem consumo</span>`}</td>
       <td class="rk-num" style="font-size:9px;color:${_dgrGiroCor(item.giro)}">${_dgrNowrapNum(item.giro.toFixed(2) + '×')}</td>
       <td class="rk-num" style="font-size:8.5px;color:#94a3b8">${_dgrNowrapNum(fmtKgShort(item.entradas))}</td>
       <td class="rk-num" style="font-size:8.5px;color:#94a3b8">${_dgrNowrapNum(fmtKgShort(item.saidas))}</td>
@@ -2918,47 +2935,76 @@ function _dgrNowrapNum(str) {
   if (!m) return s;
   return s.slice(0, m.index) + `<span style="white-space:nowrap">${m[0]}</span>` + s.slice(m.index + m[0].length);
 }
+// ── Fonte proporcional ao número de linhas — tabelas pequenas (poucas
+//    linhas, sobra espaço na página) ganham texto bem maior e mais
+//    legível; tabelas grandes continuam no tamanho compacto já validado
+//    contra o pior caso real (números de até 18 dígitos). 'material' tem
+//    9 colunas (mais apertado), 'ranking' tem 6 (mais folga por coluna).
+//    Cada patamar foi testado com os valores mais largos que aparecem no
+//    sistema pra garantir que não reintroduz overflow. ──────────────────
+function _dgrFontesPorLinhas(n, tipo) {
+  // A tabela de material (9 colunas) tem margem real mínima pra crescer,
+  // independente da quantidade de linhas — a largura de cada coluna é a
+  // MESMA % do container tanto com 5 quanto com 38 linhas (table-layout:
+  // fixed), então "menos linhas" não libera espaço horizontal nenhum, só
+  // vertical. Testei e confirmei: acima de ~8,3px já estoura com os
+  // valores mais largos reais do sistema. Fica praticamente fixa.
+  // A tabela de ranking (6 colunas, bem mais folga por coluna) sim ganha
+  // uma escala de verdade — validada com nomes/valores reais no pior
+  // caso (FERNANDO FIGUEIREDO, R$ 227.453,54) na largura real de página.
+  const escalas = {
+    material: [[Infinity, 8.2]],
+    ranking:  [[8, 10.5], [20, 9.5], [40, 8.8], [Infinity, 8.2]]
+  };
+  const escala = escalas[tipo] || escalas.material;
+  let base = 8.2;
+  for (const [limite, fonte] of escala) {
+    if (n <= limite) { base = fonte; break; }
+  }
+  return { base, nome: +(base + (tipo === 'ranking' ? 0.4 : 0.2)).toFixed(1), header: Math.max(7.5, +(base - 0.4).toFixed(1)) };
+}
 function _dgrTabelaMaterialHtml(dados) {
   if (!dados.linhas.length) return '';
+  const f = _dgrFontesPorLinhas(dados.linhas.length, 'material');
   const rows = dados.linhas.map(l => `
     <tr>
-      <td class="rk-name" style="font-size:10.5px">${_rankEsc(l.mat)}${l.catKey ? `<div class="rk-sub">${_rankEsc(DG_VG_CATSUB_LABELS[l.catSubKey] || DG_VG_CAT_LABELS[l.catKey] || l.catKey)}</div>` : ''}</td>
-      <td class="rk-num" style="color:#06b6d4">${_dgrNowrapNum(fmtKg(l.estIni))}</td>
-      <td class="rk-num" style="color:#10b981">${_dgrNowrapNum(fmtKg(l.entKg))}</td>
-      <td class="rk-num" style="color:#f43f5e">${_dgrNowrapNum(fmtKg(l.saiKg))}</td>
-      <td class="rk-num" style="color:#06b6d4">${_dgrNowrapNum(fmtKg(l.estTeorico))}</td>
-      <td class="rk-num" style="color:#06b6d4">${_dgrNowrapNum(fmtKg(l.estFim))}</td>
-      <td class="rk-num" style="color:${_dgrValCor(l.pctVariacao)}">${_dgrNowrapNum(_daFmtPctSigned(l.pctVariacao))}</td>
-      <td class="rk-num">${_dgrNowrapNum(money(l.custoMedio) + '/kg')}</td>
-      <td class="rk-num" style="color:${_dgrValCor(l.custoAjuste)}">${_dgrNowrapNum(_daFmtMoneySigned(l.custoAjuste))}</td>
+      <td class="rk-name" style="font-size:${f.nome}px">${_rankEsc(l.mat)}${l.catKey ? `<div class="rk-sub" style="font-size:${Math.max(8, f.nome - 2.5)}px">${_rankEsc(DG_VG_CATSUB_LABELS[l.catSubKey] || DG_VG_CAT_LABELS[l.catKey] || l.catKey)}</div>` : ''}</td>
+      <td class="rk-num" style="font-size:${f.base}px;color:#06b6d4">${_dgrNowrapNum(fmtKg(l.estIni))}</td>
+      <td class="rk-num" style="font-size:${f.base}px;color:#10b981">${_dgrNowrapNum(fmtKg(l.entKg))}</td>
+      <td class="rk-num" style="font-size:${f.base}px;color:#f43f5e">${_dgrNowrapNum(fmtKg(l.saiKg))}</td>
+      <td class="rk-num" style="font-size:${f.base}px;color:#06b6d4">${_dgrNowrapNum(fmtKg(l.estTeorico))}</td>
+      <td class="rk-num" style="font-size:${f.base}px;color:#06b6d4">${_dgrNowrapNum(fmtKg(l.estFim))}</td>
+      <td class="rk-num" style="font-size:${f.base}px;color:${_dgrValCor(l.pctVariacao)}">${_dgrNowrapNum(_daFmtPctSigned(l.pctVariacao))}</td>
+      <td class="rk-num" style="font-size:${f.base}px">${_dgrNowrapNum(money(l.custoMedio) + '/kg')}</td>
+      <td class="rk-num" style="font-size:${f.base}px;color:${_dgrValCor(l.custoAjuste)}">${_dgrNowrapNum(_daFmtMoneySigned(l.custoAjuste))}</td>
     </tr>`).join('');
   const t = dados.total;
   const totalRow = `
     <tr style="font-weight:800;background:rgba(255,255,255,.05)">
-      <td class="rk-name">Total</td>
-      <td class="rk-num" style="color:#06b6d4">${_dgrNowrapNum(fmtKg(t.estIni))}</td>
-      <td class="rk-num" style="color:#10b981">${_dgrNowrapNum(fmtKg(t.entKg))}</td>
-      <td class="rk-num" style="color:#f43f5e">${_dgrNowrapNum(fmtKg(t.saiKg))}</td>
-      <td class="rk-num" style="color:#06b6d4">${_dgrNowrapNum(fmtKg(t.estTeorico))}</td>
-      <td class="rk-num" style="color:#06b6d4">${_dgrNowrapNum(fmtKg(t.estFim))}</td>
-      <td class="rk-num" style="color:${_dgrValCor(t.pctVariacao)}">${_dgrNowrapNum(_daFmtPctSigned(t.pctVariacao))}</td>
-      <td class="rk-num">${_dgrNowrapNum(money(t.custoMedio) + '/kg')}</td>
-      <td class="rk-num" style="color:${_dgrValCor(t.custoAjuste)}">${_dgrNowrapNum(_daFmtMoneySigned(t.custoAjuste))}</td>
+      <td class="rk-name" style="font-size:${f.nome}px">Total</td>
+      <td class="rk-num" style="font-size:${f.base}px;color:#06b6d4">${_dgrNowrapNum(fmtKg(t.estIni))}</td>
+      <td class="rk-num" style="font-size:${f.base}px;color:#10b981">${_dgrNowrapNum(fmtKg(t.entKg))}</td>
+      <td class="rk-num" style="font-size:${f.base}px;color:#f43f5e">${_dgrNowrapNum(fmtKg(t.saiKg))}</td>
+      <td class="rk-num" style="font-size:${f.base}px;color:#06b6d4">${_dgrNowrapNum(fmtKg(t.estTeorico))}</td>
+      <td class="rk-num" style="font-size:${f.base}px;color:#06b6d4">${_dgrNowrapNum(fmtKg(t.estFim))}</td>
+      <td class="rk-num" style="font-size:${f.base}px;color:${_dgrValCor(t.pctVariacao)}">${_dgrNowrapNum(_daFmtPctSigned(t.pctVariacao))}</td>
+      <td class="rk-num" style="font-size:${f.base}px">${_dgrNowrapNum(money(t.custoMedio) + '/kg')}</td>
+      <td class="rk-num" style="font-size:${f.base}px;color:${_dgrValCor(t.custoAjuste)}">${_dgrNowrapNum(_daFmtMoneySigned(t.custoAjuste))}</td>
     </tr>`;
   return `
     <div class="dgr-table-wrap">
       <div class="rk-table-head"><div class="rk-table-head-title">Detalhamento por Material (Grupo SAP)</div><div class="rk-table-head-cap">${dados.linhas.length} materia${dados.linhas.length !== 1 ? 'is' : 'l'}</div></div>
       <table class="rk-table dgr-material-table">
         <thead><tr>
-          <th style="width:14%">Grupo SAP</th>
-          <th style="width:12%;text-align:right">Est. Inicial</th>
-          <th style="width:12%;text-align:right">Entradas</th>
-          <th style="width:12%;text-align:right">Saídas</th>
-          <th style="width:12%;text-align:right">Est. Teórico</th>
-          <th style="width:12%;text-align:right">Est. Final</th>
-          <th style="width:8%;text-align:right">% Variação</th>
-          <th style="width:9%;text-align:right">Custo Médio</th>
-          <th style="width:9%;text-align:right">Custo Ajuste</th>
+          <th style="width:14%;font-size:${f.header}px">Grupo SAP</th>
+          <th style="width:12%;text-align:right;font-size:${f.header}px">Est. Inicial</th>
+          <th style="width:12%;text-align:right;font-size:${f.header}px">Entradas</th>
+          <th style="width:12%;text-align:right;font-size:${f.header}px">Saídas</th>
+          <th style="width:12%;text-align:right;font-size:${f.header}px">Est. Teórico</th>
+          <th style="width:12%;text-align:right;font-size:${f.header}px">Est. Final</th>
+          <th style="width:8%;text-align:right;font-size:${f.header}px">% Variação</th>
+          <th style="width:9%;text-align:right;font-size:${f.header}px">Custo Médio</th>
+          <th style="width:9%;text-align:right;font-size:${f.header}px">Custo Ajuste</th>
         </tr></thead>
         <tbody>${rows}</tbody>
         <tfoot>${totalRow}</tfoot>
@@ -2967,40 +3013,41 @@ function _dgrTabelaMaterialHtml(dados) {
 }
 function _dgrRankingHtml(titulo, colLabel, dados) {
   if (!dados.linhas.length) return '';
+  const f = _dgrFontesPorLinhas(dados.linhas.length, 'ranking');
   const rows = dados.linhas.map(l => {
     const imp = _daMaiorImpacto(l);
     const cell = (campo, valor) => imp === campo ? `<strong>${_dgrNowrapNum(_daFmtCountSigned(valor))}</strong>` : _dgrNowrapNum(_daFmtCountSigned(valor));
     return `
     <tr>
-      <td class="rk-name" style="font-size:11px">${_rankEsc(l.nome)}</td>
-      <td class="rk-num" style="color:${_dgrValCor(l.caminhoes)}">${cell('caminhoes', l.caminhoes)}</td>
-      <td class="rk-num" style="color:${_dgrValCor(l.carretas)}">${cell('carretas', l.carretas)}</td>
-      <td class="rk-num" style="color:${_dgrValCor(l.ibcs)}">${cell('ibcs', l.ibcs)}</td>
-      <td class="rk-num" style="color:${_dgrValCor(l.pctVariacao)}">${_dgrNowrapNum(_daFmtPctSigned(l.pctVariacao))}</td>
-      <td class="rk-num" style="color:${_dgrValCor(l.custoTotal)}">${_dgrNowrapNum(_daFmtMoneySigned(l.custoTotal))}</td>
+      <td class="rk-name" style="font-size:${f.nome}px">${_rankEsc(l.nome)}</td>
+      <td class="rk-num" style="font-size:${f.base}px;color:${_dgrValCor(l.caminhoes)}">${cell('caminhoes', l.caminhoes)}</td>
+      <td class="rk-num" style="font-size:${f.base}px;color:${_dgrValCor(l.carretas)}">${cell('carretas', l.carretas)}</td>
+      <td class="rk-num" style="font-size:${f.base}px;color:${_dgrValCor(l.ibcs)}">${cell('ibcs', l.ibcs)}</td>
+      <td class="rk-num" style="font-size:${f.base}px;color:${_dgrValCor(l.pctVariacao)}">${_dgrNowrapNum(_daFmtPctSigned(l.pctVariacao))}</td>
+      <td class="rk-num" style="font-size:${f.base}px;color:${_dgrValCor(l.custoTotal)}">${_dgrNowrapNum(_daFmtMoneySigned(l.custoTotal))}</td>
     </tr>`;
   }).join('');
   const t = dados.total;
   const totalRow = `
     <tr style="font-weight:800;background:rgba(255,255,255,.05)">
-      <td class="rk-name">Total</td>
-      <td class="rk-num" style="color:${_dgrValCor(t.caminhoes)}">${_dgrNowrapNum(_daFmtCountSigned(t.caminhoes))}</td>
-      <td class="rk-num" style="color:${_dgrValCor(t.carretas)}">${_dgrNowrapNum(_daFmtCountSigned(t.carretas))}</td>
-      <td class="rk-num" style="color:${_dgrValCor(t.ibcs)}">${_dgrNowrapNum(_daFmtCountSigned(t.ibcs))}</td>
-      <td class="rk-num" style="color:${_dgrValCor(t.pctVariacao)}">${_dgrNowrapNum(_daFmtPctSigned(t.pctVariacao))}</td>
-      <td class="rk-num" style="color:${_dgrValCor(t.custoTotal)}">${_dgrNowrapNum(_daFmtMoneySigned(t.custoTotal))}</td>
+      <td class="rk-name" style="font-size:${f.nome}px">Total</td>
+      <td class="rk-num" style="font-size:${f.base}px;color:${_dgrValCor(t.caminhoes)}">${_dgrNowrapNum(_daFmtCountSigned(t.caminhoes))}</td>
+      <td class="rk-num" style="font-size:${f.base}px;color:${_dgrValCor(t.carretas)}">${_dgrNowrapNum(_daFmtCountSigned(t.carretas))}</td>
+      <td class="rk-num" style="font-size:${f.base}px;color:${_dgrValCor(t.ibcs)}">${_dgrNowrapNum(_daFmtCountSigned(t.ibcs))}</td>
+      <td class="rk-num" style="font-size:${f.base}px;color:${_dgrValCor(t.pctVariacao)}">${_dgrNowrapNum(_daFmtPctSigned(t.pctVariacao))}</td>
+      <td class="rk-num" style="font-size:${f.base}px;color:${_dgrValCor(t.custoTotal)}">${_dgrNowrapNum(_daFmtMoneySigned(t.custoTotal))}</td>
     </tr>`;
   return `
     <div class="dgr-table-wrap">
       <div class="rk-table-head"><div class="rk-table-head-title">${_rankEsc(titulo)}</div><div class="rk-table-head-cap">${dados.linhas.length} ${dados.linhas.length !== 1 ? 'itens' : 'item'}</div></div>
       <table class="rk-table dgr-ranking-table">
         <thead><tr>
-          <th style="width:26%">${_rankEsc(colLabel)}</th>
-          <th style="width:13%;text-align:right">Caminhões</th>
-          <th style="width:13%;text-align:right">Carretas</th>
-          <th style="width:13%;text-align:right">IBCs</th>
-          <th style="width:13%;text-align:right">Variação</th>
-          <th style="width:22%;text-align:right">Custo Total</th>
+          <th style="width:26%;font-size:${f.header}px">${_rankEsc(colLabel)}</th>
+          <th style="width:13%;text-align:right;font-size:${f.header}px">Caminhões</th>
+          <th style="width:13%;text-align:right;font-size:${f.header}px">Carretas</th>
+          <th style="width:13%;text-align:right;font-size:${f.header}px">IBCs</th>
+          <th style="width:13%;text-align:right;font-size:${f.header}px">Variação</th>
+          <th style="width:22%;text-align:right;font-size:${f.header}px">Custo Total</th>
         </tr></thead>
         <tbody>${rows}</tbody>
         <tfoot>${totalRow}</tfoot>
@@ -3159,9 +3206,9 @@ window.gerarRelatorioGerencialDashboard = async function() {
 
     const bodyHtml = `<style>${_dgrEstilos()}</style>`
       + _dgrBuildResumoPeriodoHtml(d)
+      + _dgrBuildCustoRegionalCentralHtml(d, imgRegional, imgUsina)
       + _dgrBuildSaudeGeralHtml(imgGaugeCentral, imgGaugeMateriais)
       + _dgrBuildCategoriaHtml(imgCategoria)
-      + _dgrBuildCustoRegionalCentralHtml(d, imgRegional, imgUsina)
       + _dgrBuildGiroCoberturaHtml(d)
       + _dgrBuildDetalhadoAnaliticoHtml(d);
 
