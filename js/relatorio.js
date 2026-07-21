@@ -2486,10 +2486,11 @@ window.gerarRelatorioGeralOcorrencias = function() {
 // que os números do PDF batem exatamente com o que está na tela.
 //
 // FASE 1: Resumo do Período (KPIs) + Saúde Geral (gauges capturados como
-// imagem). FASE 2 (atual): Categoria + Custo por Regional/Central (extremos
-// + 2 gráficos de barra capturados). Próximas fases adicionam: Custo
-// Absoluto, Giro & Cobertura, Detalhado Analítico — todas lendo do mesmo
-// _dgVgLastData, sem precisar tocar em dashboard.js de novo.
+// imagem). FASE 2: Categoria + Custo por Regional/Central (extremos + 2
+// gráficos de barra). FASE 3: Custo Absoluto (donut de Grupo + 4 donuts de
+// categoria). FASE 4 (final): Giro & Cobertura (Top 5) + Detalhado
+// Analítico (tabela de material + 4 rankings, lista completa). Relatório
+// completo — todas as 10 seções da Visão Geral.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // ── Rasteriza um <svg> vivo da tela em PNG (data URL), resolvendo as
@@ -2667,7 +2668,208 @@ function _dgrBuildCustoRegionalCentralHtml(d, imgRegional, imgUsina) {
     </div>`;
 }
 
-// ── CSS próprio do corpo deste relatório (escopado, como nos demais). ────
+// ── Seções 7/8: Custo Absoluto — 1 donut combinado (Grupo de Material,
+//    em destaque) + 4 donuts de categoria (Agregado/Aglomerante/Aditivo/
+//    Adição), todos gerados por _dgVgRenderCustoDonutSvg (mesma função dos
+//    gauges de Saúde Geral) e capturados com a mesma técnica de resolução
+//    de var(--x) já validada na Fase 1 — nenhuma variável nova aqui. ─────
+function _dgrBuildCustoAbsolutoHtml(imgGrupo, imgsCat) {
+  const subGrupo = document.getElementById('dg-vg-grupo-subtitle')?.textContent || '';
+  const catTitulos = {
+    agregado: 'Custo Absoluto por Agregado',
+    aglomerante: 'Custo Absoluto por Aglomerante',
+    aditivo: 'Custo Absoluto por Aditivo',
+    adicao: 'Custo Absoluto por Adição'
+  };
+
+  const smallCard = catKey => {
+    const sub = document.getElementById(`dg-vg-donut-${catKey}-subtitle`)?.textContent || '';
+    const img = imgsCat[catKey];
+    return `
+      <div class="dgr-chart-card dgr-donut-small">
+        <div class="dgr-chart-title"><span>${_rankEsc(catTitulos[catKey])}</span><span style="margin-left:auto;font-weight:400;color:#64748b;font-size:10px">${_rankEsc(sub)}</span></div>
+        ${img ? `<img src="${img}" alt="${_rankEsc(catTitulos[catKey])}">` : '<div class="dgr-chart-empty">Gráfico indisponível</div>'}
+      </div>`;
+  };
+
+  return `
+    <div class="dgr-section-title" style="margin-top:26px"><i class="ti ti-chart-pie"></i>Custo Absoluto — Por Grupo e Categoria de Material</div>
+    <div class="dgr-grupo-layout">
+      <div class="dgr-chart-card dgr-donut-grande">
+        <div class="dgr-chart-title"><span><i class="ti ti-chart-donut"></i>Custo Absoluto por Grupo de Material</span><span style="margin-left:auto;font-weight:400;color:#64748b;font-size:10px">${_rankEsc(subGrupo)}</span></div>
+        ${imgGrupo ? `<img src="${imgGrupo}" alt="Custo Absoluto por Grupo de Material">` : '<div class="dgr-chart-empty">Gráfico indisponível</div>'}
+      </div>
+      <div class="dgr-donut-sub-grid">
+        ${smallCard('agregado')}${smallCard('aglomerante')}${smallCard('aditivo')}${smallCard('adicao')}
+      </div>
+    </div>`;
+}
+
+// ── Seção 9: Giro & Cobertura — Top 5 Centrais/Materiais mais saudáveis e
+//    mais críticos. Lê d.giro (cache populado no fim de renderDgGiro, em
+//    dashboard.js — a lógica de classificação de nível/giro/cobertura NUNCA
+//    é duplicada aqui, só reformatada com cores literais). Tabelas
+//    reaproveitam .rk-table do shell (_buildRankingShellHTML). ───────────
+function _dgrNivelCor(level) {
+  return { bom: '#10b981', atencao: '#f59e0b', urgente: '#f97316', critico: '#f43f5e' }[level] || '#64748b';
+}
+function _dgrGiroCor(g) {
+  if (g > 4.0)  return '#f43f5e';
+  if (g >= 2.0) return '#10b981';
+  if (g >= 1.0) return '#06b6d4';
+  if (g >= 0.5) return '#f59e0b';
+  if (g >= 0.2) return '#f97316';
+  return '#f43f5e';
+}
+function _dgrGiroListaHtml(titulo, iconCls, items) {
+  if (!items || !items.length) {
+    return `<div class="dgr-chart-card"><div class="dgr-chart-title"><i class="ti ${iconCls}"></i>${_rankEsc(titulo)}</div><div class="dgr-chart-empty">Sem dados de giro</div></div>`;
+  }
+  const rows = items.map(item => {
+    const cor = _dgrNivelCor(item.nivel.level);
+    return `
+    <tr>
+      <td class="rk-name" style="font-size:11.5px">${_rankEsc(item.name)}</td>
+      <td><span style="display:inline-block;padding:2px 8px;border-radius:5px;font-size:9.5px;font-weight:700;white-space:nowrap;background:${cor}22;color:${cor};border:1px solid ${cor}55">${_rankEsc(item.nivel.label)}</span></td>
+      <td class="rk-num" style="font-size:11px">${item.cobertura === null ? 'sem consumo' : item.cobertura.toFixed(1) + 'd'}</td>
+      <td class="rk-num" style="font-size:11px;color:${_dgrGiroCor(item.giro)}">${item.giro.toFixed(2)}×</td>
+      <td class="rk-num" style="font-size:10.5px;color:#94a3b8">${fmtKgShort(item.entradas)}</td>
+      <td class="rk-num" style="font-size:10.5px;color:#94a3b8">${fmtKgShort(item.saidas)}</td>
+    </tr>`;
+  }).join('');
+  return `
+    <div class="dgr-chart-card">
+      <div class="dgr-chart-title"><i class="ti ${iconCls}"></i>${_rankEsc(titulo)}</div>
+      <table class="rk-table">
+        <thead><tr><th>Nome</th><th>Nível</th><th style="text-align:right">Cobertura</th><th style="text-align:right">Giro</th><th style="text-align:right">Entradas</th><th style="text-align:right">Saídas</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+function _dgrBuildGiroCoberturaHtml(d) {
+  const g = d.giro;
+  if (!g) return '';
+  return `
+    <div class="dgr-section-title" style="margin-top:26px"><i class="ti ti-arrows-exchange"></i>Giro & Cobertura — Top 5</div>
+    <div class="dgr-chart-grid">
+      ${_dgrGiroListaHtml('Top 5 Centrais — Mais Saudáveis', 'ti-trending-up', g.centralAlto)}
+      ${_dgrGiroListaHtml('Top 5 Centrais — Mais Críticas', 'ti-trending-down', g.centralBaixo)}
+    </div>
+    <div class="dgr-chart-grid" style="margin-top:16px">
+      ${_dgrGiroListaHtml('Top 5 Materiais — Mais Saudáveis', 'ti-trending-up', g.matAlto)}
+      ${_dgrGiroListaHtml('Top 5 Materiais — Mais Críticos', 'ti-trending-down', g.matBaixo)}
+    </div>`;
+}
+
+// ── Seção 10: Detalhado Analítico — tabela de Detalhamento por Material +
+//    4 rankings (Regional/Central/Material/Categoria). Chama DIRETO as
+//    mesmas funções puras de cálculo que dashboard.js usa na tela
+//    (_daBuildTabelaMaterial, _daBuildRanking, etc. — funções globais,
+//    reaproveitando d.pares/d.results/d.totalEstTeoricoKpi já cacheados),
+//    então os números nunca podem divergir da Visão Geral. Lista completa
+//    (sem corte por Top N) — decisão do Hugo, jul/2026: tabelas usam
+//    .dgr-table-wrap (sem page-break-inside:avoid, ao contrário de
+//    .rk-table-wrap do shell) pra paginar naturalmente na impressão em vez
+//    de forçar a tabela inteira numa página só. ───────────────────────────
+function _dgrValCor(v) {
+  if (v === null || v === undefined || !Number.isFinite(v)) return '#64748b';
+  return v < -0.0001 ? '#f43f5e' : v > 0.0001 ? '#f59e0b' : '#64748b';
+}
+function _dgrTabelaMaterialHtml(dados) {
+  if (!dados.linhas.length) return '';
+  const rows = dados.linhas.map(l => `
+    <tr>
+      <td class="rk-name" style="font-size:11px">${_rankEsc(l.mat)}${l.catKey ? `<div class="rk-sub">${_rankEsc(DG_VG_CATSUB_LABELS[l.catSubKey] || DG_VG_CAT_LABELS[l.catKey] || l.catKey)}</div>` : ''}</td>
+      <td class="rk-num" style="color:#06b6d4">${fmtKg(l.estIni)}</td>
+      <td class="rk-num" style="color:#10b981">${fmtKg(l.entKg)}</td>
+      <td class="rk-num" style="color:#f43f5e">${fmtKg(l.saiKg)}</td>
+      <td class="rk-num" style="color:#06b6d4">${fmtKg(l.estTeorico)}</td>
+      <td class="rk-num" style="color:#06b6d4">${fmtKg(l.estFim)}</td>
+      <td class="rk-num" style="color:${_dgrValCor(l.pctVariacao)}">${_daFmtPctSigned(l.pctVariacao)}</td>
+      <td class="rk-num">${money(l.custoMedio)}/kg</td>
+      <td class="rk-num" style="color:${_dgrValCor(l.custoAjuste)}">${_daFmtMoneySigned(l.custoAjuste)}</td>
+    </tr>`).join('');
+  const t = dados.total;
+  const totalRow = `
+    <tr style="font-weight:800;background:rgba(255,255,255,.05)">
+      <td class="rk-name">Total</td>
+      <td class="rk-num" style="color:#06b6d4">${fmtKg(t.estIni)}</td>
+      <td class="rk-num" style="color:#10b981">${fmtKg(t.entKg)}</td>
+      <td class="rk-num" style="color:#f43f5e">${fmtKg(t.saiKg)}</td>
+      <td class="rk-num" style="color:#06b6d4">${fmtKg(t.estTeorico)}</td>
+      <td class="rk-num" style="color:#06b6d4">${fmtKg(t.estFim)}</td>
+      <td class="rk-num" style="color:${_dgrValCor(t.pctVariacao)}">${_daFmtPctSigned(t.pctVariacao)}</td>
+      <td class="rk-num">${money(t.custoMedio)}/kg</td>
+      <td class="rk-num" style="color:${_dgrValCor(t.custoAjuste)}">${_daFmtMoneySigned(t.custoAjuste)}</td>
+    </tr>`;
+  return `
+    <div class="dgr-table-wrap">
+      <div class="rk-table-head"><div class="rk-table-head-title">Detalhamento por Material (Grupo SAP)</div><div class="rk-table-head-cap">${dados.linhas.length} materia${dados.linhas.length !== 1 ? 'is' : 'l'}</div></div>
+      <table class="rk-table">
+        <thead><tr><th>Grupo SAP</th><th style="text-align:right">Est. Inicial</th><th style="text-align:right">Entradas</th><th style="text-align:right">Saídas</th><th style="text-align:right">Est. Teórico</th><th style="text-align:right">Est. Final</th><th style="text-align:right">% Variação</th><th style="text-align:right">Custo Médio</th><th style="text-align:right">Custo Ajuste</th></tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot>${totalRow}</tfoot>
+      </table>
+    </div>`;
+}
+function _dgrRankingHtml(titulo, colLabel, dados) {
+  if (!dados.linhas.length) return '';
+  const rows = dados.linhas.map(l => {
+    const imp = _daMaiorImpacto(l);
+    const cell = (campo, valor) => imp === campo ? `<strong>${_daFmtCountSigned(valor)}</strong>` : _daFmtCountSigned(valor);
+    return `
+    <tr>
+      <td class="rk-name" style="font-size:11.5px">${_rankEsc(l.nome)}</td>
+      <td class="rk-num" style="color:${_dgrValCor(l.caminhoes)}">${cell('caminhoes', l.caminhoes)}</td>
+      <td class="rk-num" style="color:${_dgrValCor(l.carretas)}">${cell('carretas', l.carretas)}</td>
+      <td class="rk-num" style="color:${_dgrValCor(l.ibcs)}">${cell('ibcs', l.ibcs)}</td>
+      <td class="rk-num" style="color:${_dgrValCor(l.pctVariacao)}">${_daFmtPctSigned(l.pctVariacao)}</td>
+      <td class="rk-num" style="color:${_dgrValCor(l.custoTotal)}">${_daFmtMoneySigned(l.custoTotal)}</td>
+    </tr>`;
+  }).join('');
+  const t = dados.total;
+  const totalRow = `
+    <tr style="font-weight:800;background:rgba(255,255,255,.05)">
+      <td class="rk-name">Total</td>
+      <td class="rk-num" style="color:${_dgrValCor(t.caminhoes)}">${_daFmtCountSigned(t.caminhoes)}</td>
+      <td class="rk-num" style="color:${_dgrValCor(t.carretas)}">${_daFmtCountSigned(t.carretas)}</td>
+      <td class="rk-num" style="color:${_dgrValCor(t.ibcs)}">${_daFmtCountSigned(t.ibcs)}</td>
+      <td class="rk-num" style="color:${_dgrValCor(t.pctVariacao)}">${_daFmtPctSigned(t.pctVariacao)}</td>
+      <td class="rk-num" style="color:${_dgrValCor(t.custoTotal)}">${_daFmtMoneySigned(t.custoTotal)}</td>
+    </tr>`;
+  return `
+    <div class="dgr-table-wrap">
+      <div class="rk-table-head"><div class="rk-table-head-title">${_rankEsc(titulo)}</div><div class="rk-table-head-cap">${dados.linhas.length} ${dados.linhas.length !== 1 ? 'itens' : 'item'}</div></div>
+      <table class="rk-table">
+        <thead><tr><th>${_rankEsc(colLabel)}</th><th style="text-align:right">Caminhões</th><th style="text-align:right">Carretas</th><th style="text-align:right">IBCs</th><th style="text-align:right">Variação</th><th style="text-align:right">Custo Total</th></tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot>${totalRow}</tfoot>
+      </table>
+    </div>`;
+}
+function _dgrBuildDetalhadoAnaliticoHtml(d) {
+  const entradasFlat = _daBuildEntradasFlat(d.results);
+  const pesoMedio     = _daPesoMedioPorTipo(entradasFlat);
+  const tabelaMaterial = _daBuildTabelaMaterial(d.pares);
+  const rankRegional  = _daBuildRanking(d.pares, pesoMedio, p => p.regional, d.totalEstTeoricoKpi, k => k === '—' ? 'Sem regional' : k);
+  const rankCentral   = _daBuildRanking(d.pares, pesoMedio, p => p.central,  d.totalEstTeoricoKpi);
+  const rankMaterial  = _daBuildRanking(d.pares, pesoMedio, p => p.mat,      d.totalEstTeoricoKpi);
+  const rankCategoria = _daBuildRanking(
+    d.pares, pesoMedio,
+    p => p.catKey === 'agregado' ? (p.catSubKey || 'agregado_sem_subcategoria') : p.catKey,
+    d.totalEstTeoricoKpi,
+    k => DG_VG_CATSUB_LABELS[k] || DG_VG_CAT_LABELS[k] || (k === 'agregado_sem_subcategoria' ? 'Agregado (sem subcategoria)' : k)
+  );
+
+  return `
+    <div class="dgr-section-title" style="margin-top:26px"><i class="ti ti-table"></i>Detalhado Analítico</div>
+    ${_dgrTabelaMaterialHtml(tabelaMaterial)}
+    ${_dgrRankingHtml('Ranking de Regionais', 'Regional', rankRegional)}
+    ${_dgrRankingHtml('Ranking de Centrais', 'Central', rankCentral)}
+    ${_dgrRankingHtml('Ranking de Materiais', 'Material', rankMaterial)}
+    ${_dgrRankingHtml('Ranking de Categoria', 'Categoria', rankCategoria)}`;
+}
+
 function _dgrEstilos() {
   return `
     .dgr-section-title { font-size:11px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; color:#f87171; margin:0 0 12px; display:flex; align-items:center; gap:8px; }
@@ -2695,7 +2897,14 @@ function _dgrEstilos() {
     .dgr-extremo-value { font-size:22px; font-weight:700; font-family:'JetBrains Mono',monospace; letter-spacing:-.02em; margin-bottom:4px; }
     .dgr-extremo-kg { font-size:11px; font-family:'JetBrains Mono',monospace; color:#64748b; margin-bottom:6px; }
     .dgr-extremo-name { font-size:13px; color:#cbd5e1; font-weight:600; }
-    @media (max-width:900px) { .dgr-kpi-row, .dgr-kpi-secondary, .dgr-health-grid, .dgr-chart-grid { grid-template-columns:repeat(2,1fr); } }
+    .dgr-grupo-layout { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+    .dgr-donut-grande img { max-width:100%; height:auto; }
+    .dgr-donut-sub-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .dgr-donut-small .dgr-chart-title { margin-bottom:8px; }
+    .dgr-table-wrap { margin-bottom:16px; }
+    .dgr-table-wrap thead { display:table-header-group; }
+    .dgr-table-wrap tbody tr { page-break-inside:avoid; }
+    @media (max-width:900px) { .dgr-kpi-row, .dgr-kpi-secondary, .dgr-health-grid, .dgr-chart-grid, .dgr-grupo-layout, .dgr-donut-sub-grid { grid-template-columns:repeat(2,1fr); } }
     @media print { .dgr-kpi-card, .dgr-health-card, .dgr-chart-card, .dgr-extremo-box { page-break-inside:avoid; } }`;
 }
 
@@ -2725,11 +2934,23 @@ window.gerarRelatorioGerencialDashboard = async function() {
     const imgRegional  = _dgrCanvasParaPngDataUrl('dg-vg-chart-regional');
     const imgUsina     = _dgrCanvasParaPngDataUrl('dg-vg-chart-usina');
 
+    const [imgGrupo, imgAgregado, imgAglomerante, imgAditivo, imgAdicao] = await Promise.all([
+      _dgrSvgParaPngDataUrl(document.getElementById('dg-vg-chart-grupo')),
+      _dgrSvgParaPngDataUrl(document.getElementById('dg-vg-donut-agregado')),
+      _dgrSvgParaPngDataUrl(document.getElementById('dg-vg-donut-aglomerante')),
+      _dgrSvgParaPngDataUrl(document.getElementById('dg-vg-donut-aditivo')),
+      _dgrSvgParaPngDataUrl(document.getElementById('dg-vg-donut-adicao'))
+    ]);
+    const imgsCat = { agregado: imgAgregado, aglomerante: imgAglomerante, aditivo: imgAditivo, adicao: imgAdicao };
+
     const bodyHtml = `<style>${_dgrEstilos()}</style>`
       + _dgrBuildResumoPeriodoHtml(d)
       + _dgrBuildSaudeGeralHtml(imgGaugeCentral, imgGaugeMateriais)
       + _dgrBuildCategoriaHtml(imgCategoria)
-      + _dgrBuildCustoRegionalCentralHtml(d, imgRegional, imgUsina);
+      + _dgrBuildCustoRegionalCentralHtml(d, imgRegional, imgUsina)
+      + _dgrBuildCustoAbsolutoHtml(imgGrupo, imgsCat)
+      + _dgrBuildGiroCoberturaHtml(d)
+      + _dgrBuildDetalhadoAnaliticoHtml(d);
 
     const html = _buildRankingShellHTML({
       periodoBadge: periodo,

@@ -2543,6 +2543,20 @@ function renderDgGiro(results, dtIni, dtFim) {
   renderPanel('dg-vg-giro-central-alto-body',  top5CentralAlto,  'alto',  'Central', false);
   renderPanel('dg-vg-giro-central-baixo-body', top5CentralBaixo, 'baixo', 'Central', false);
 
+  // Cache pro botão "Relatório Gerencial" (ver relatorio.js) — mesmos Top 5
+  // já calculados/ordenados aqui, sem duplicar a lógica de classificação de
+  // giro/nível. window._dgVgLastData já existe neste ponto: renderDgGiro é
+  // sempre chamada logo depois de renderDgVisaoGeralPdf, na mesma
+  // _renderDashboardConteudo (ver rodarDashboardGerencial).
+  if (window._dgVgLastData) {
+    window._dgVgLastData.giro = {
+      matAlto: matPorNivelAsc.slice(0, 5),
+      matBaixo: matPorNivelDesc.slice(0, 5),
+      centralAlto: top5CentralAlto,
+      centralBaixo: top5CentralBaixo
+    };
+  }
+
   // Ativa os badges "?" injetados dinamicamente acima (KPIs + cabeçalhos de
   // tabela) — initHelpBadges() é idempotente, pula quem já foi ligado.
   if (typeof initHelpBadges === 'function') initHelpBadges();
