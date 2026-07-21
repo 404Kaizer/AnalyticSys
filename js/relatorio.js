@@ -2925,8 +2925,8 @@ function _dgrCapturarCategoriaAmpliada() {
   // proporção — voltando a parecer espremida mesmo com 460px "de verdade"
   // na captura. Fixando os dois valores aqui, a proporção da imagem final
   // fica sempre previsível, não importa a largura da tela de quem gerou.
-  const LARGURA_RELATORIO = '840px';
-  const ALTURA_RELATORIO  = '620px'; // proporção ~0,74 → mantém o equilíbrio nos ~590px do card do relatório
+  const LARGURA_RELATORIO = '680px';
+  const ALTURA_RELATORIO  = '320px'; // proporção ~0,47 — peso visual parecido com os cards de gauge vizinhos (Saúde Geral), que ficam bem mais compactos
   const larguraOriginal = wrap.style.width;
   const alturaOriginal  = wrap.style.height;
 
@@ -2950,11 +2950,11 @@ function _dgrCapturarCategoriaAmpliada() {
     wrap.style.width  = LARGURA_RELATORIO;
     wrap.style.height = ALTURA_RELATORIO;
 
-    opts.scales.x.ticks.font = { ...scaleXFontOriginal, size: 17 };
-    opts.scales.y.ticks.font = { ...scaleYFontOriginal, size: 18 };
-    opts.plugins.legend.labels.font = { ...legendFontOriginal, size: 17 };
-    opts.plugins.dgVgCategoryTotals.fontSize = 17;
-    opts.plugins.dgVgBarValueLabels.fontSize = 17;
+    opts.scales.x.ticks.font = { ...scaleXFontOriginal, size: 13 };
+    opts.scales.y.ticks.font = { ...scaleYFontOriginal, size: 14 };
+    opts.plugins.legend.labels.font = { ...legendFontOriginal, size: 13 };
+    opts.plugins.dgVgCategoryTotals.fontSize = 13;
+    opts.plugins.dgVgBarValueLabels.fontSize = 13;
 
     // Sobreposição "Adição"/"459,5 kg" e "11,0 K kg"/"Δ -5,1 K kg" das
     // capturas anteriores corrigidas na raiz: _dgVgBarValueLabelsPlugin
@@ -2973,8 +2973,8 @@ function _dgrCapturarCategoriaAmpliada() {
     // mais corta, seja qual for o tamanho do texto. Esse padding.right
     // ainda importa: é o espaço reservado pra essa coluna existir sem
     // "empurrar"/sobrepor a área dos gráficos. Valor generoso de propósito.
-    opts.layout.padding.left  = 60;
-    opts.layout.padding.right = 190;
+    opts.layout.padding.left  = 35;
+    opts.layout.padding.right = 125;
 
     chart.resize();
     chart.update('none'); // sem animação — desenha na hora, síncrono
