@@ -3567,8 +3567,8 @@ window.gerarRelatorioGerencialDashboard = async function(tema = 'dark') {
     // fonte ilegível se fosse forçada a caber numa página só.
     const bodyHtml = `<style>${_dgrEstilos()}</style>`
       + `<section class="dgr-page-section">${_dgrBuildResumoPeriodoHtml(d)}</section>`
-      + `<section class="dgr-page-section">${_dgrBuildSaudeGeralHtml(imgGaugeCentral, imgGaugeMateriais)}${_dgrBuildCategoriaHtml(imgCategoria)}</section>`
       + `<section class="dgr-page-section">${_dgrBuildCustoRegionalCentralHtml(d, imgRegional, imgUsina)}</section>`
+      + `<section class="dgr-page-section">${_dgrBuildSaudeGeralHtml(imgGaugeCentral, imgGaugeMateriais)}${_dgrBuildCategoriaHtml(imgCategoria)}</section>`
       + `<section class="dgr-page-section">${_dgrBuildGiroCoberturaHtml(d)}</section>`
       + `<section class="dgr-page-section-natural">${_dgrBuildDetalhadoAnaliticoHtml(d)}</section>`;
 
