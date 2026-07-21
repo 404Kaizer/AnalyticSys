@@ -2485,10 +2485,11 @@ window.gerarRelatorioGeralOcorrencias = function() {
 // renderDgVisaoGeralPdf, em dashboard.js) — nunca recalcula nada, garantindo
 // que os números do PDF batem exatamente com o que está na tela.
 //
-// FASE 1 (atual): Resumo do Período (KPIs) + Saúde Geral (gauges capturados
-// como imagem). Próximas fases adicionam: Categoria/Regional/Central,
-// Custo Absoluto, Giro & Cobertura, Detalhado Analítico — todas lendo do
-// mesmo _dgVgLastData, sem precisar tocar em dashboard.js de novo.
+// FASE 1: Resumo do Período (KPIs) + Saúde Geral (gauges capturados como
+// imagem). FASE 2 (atual): Categoria + Custo por Regional/Central (extremos
+// + 2 gráficos de barra capturados). Próximas fases adicionam: Custo
+// Absoluto, Giro & Cobertura, Detalhado Analítico — todas lendo do mesmo
+// _dgVgLastData, sem precisar tocar em dashboard.js de novo.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // ── Rasteriza um <svg> vivo da tela em PNG (data URL), resolvendo as
@@ -2611,6 +2612,61 @@ function _dgrBuildSaudeGeralHtml(imgCentral, imgMateriais) {
     </div>`;
 }
 
+// ── Seção 3: Desfalque e Sobra por Categoria — gráfico de barra (Chart.js)
+//    capturado como imagem; cores já vêm "assadas" nos pixels do canvas,
+//    sem depender de CSS var (ver _dgrCanvasParaPngDataUrl). ─────────────
+function _dgrBuildCategoriaHtml(imgCategoria) {
+  return `
+    <div class="dgr-chart-card" style="margin-top:26px">
+      <div class="dgr-chart-title"><i class="ti ti-chart-bar"></i>Desfalque e Sobra por Categoria — % do Volume Movimentado</div>
+      ${imgCategoria ? `<img src="${imgCategoria}" alt="Desfalque e Sobra por Categoria">` : '<div class="dgr-chart-empty">Gráfico indisponível</div>'}
+    </div>`;
+}
+
+// ── Seções 4/5/6: Custo por Regional e Central — 4 cards de destaque
+//    (extremos, reconstruídos a partir de d.extRegional/d.extCentral já
+//    calculados — mesma lógica de _dgVgRenderExtremos em dashboard.js, só
+//    com cores literais em vez de var(--x)) + os 2 gráficos de barra
+//    (Regional/Central) capturados como imagem. ──────────────────────────
+function _dgrBuildCustoRegionalCentralHtml(d, imgRegional, imgUsina) {
+  const extremoBox = (label, ext) => {
+    if (!ext) return `
+      <div class="dgr-extremo-box">
+        <div class="dgr-extremo-label">${_rankEsc(label)}</div>
+        <div class="dgr-extremo-value" style="color:#64748b">—</div>
+        <div class="dgr-extremo-name">Sem dados no período</div>
+      </div>`;
+    const col = ext.v < 0 ? '#f43f5e' : '#f59e0b';
+    return `
+      <div class="dgr-extremo-box">
+        <div class="dgr-extremo-label">${_rankEsc(label)}</div>
+        <div class="dgr-extremo-value" style="color:${col}">${varSymbol(ext.v)} ${money(Math.abs(ext.v))}</div>
+        <div class="dgr-extremo-kg">${varSymbol(ext.kg || 0)} ${fmtKg(Math.abs(ext.kg || 0))}</div>
+        <div class="dgr-extremo-name">${_rankEsc(ext.k)}</div>
+      </div>`;
+  };
+
+  const extremosHtml =
+    extremoBox('Regional · Maior Desfalque', d.extRegional.min && d.extRegional.min.v < 0 ? d.extRegional.min : null) +
+    extremoBox('Regional · Maior Sobra',     d.extRegional.max && d.extRegional.max.v > 0 ? d.extRegional.max : null) +
+    extremoBox('Central · Maior Desfalque',  d.extCentral.min  && d.extCentral.min.v  < 0 ? d.extCentral.min  : null) +
+    extremoBox('Central · Maior Sobra',      d.extCentral.max  && d.extCentral.max.v  > 0 ? d.extCentral.max  : null);
+
+  return `
+    <div class="dgr-section-title" style="margin-top:26px"><i class="ti ti-scale"></i>Custo por Regional e Central</div>
+    <div class="dgr-extremos-grid">${extremosHtml}</div>
+    <div class="dgr-chart-grid">
+      <div class="dgr-chart-card">
+        <div class="dgr-chart-title"><i class="ti ti-users"></i>Variação de Custo por Regional</div>
+        ${imgRegional ? `<img src="${imgRegional}" alt="Variação de Custo por Regional">` : '<div class="dgr-chart-empty">Gráfico indisponível</div>'}
+      </div>
+      <div class="dgr-chart-card">
+        <div class="dgr-chart-title"><i class="ti ti-building-factory-2"></i>Variação de Custo por Central</div>
+        ${imgUsina ? `<img src="${imgUsina}" alt="Variação de Custo por Central">` : '<div class="dgr-chart-empty">Gráfico indisponível</div>'}
+      </div>
+    </div>`;
+}
+
 // ── CSS próprio do corpo deste relatório (escopado, como nos demais). ────
 function _dgrEstilos() {
   return `
@@ -2628,8 +2684,19 @@ function _dgrEstilos() {
     .dgr-health-card img { max-width:100%; height:auto; display:block; margin:0 auto; }
     .dgr-health-title { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:#e2e8f0; margin-bottom:10px; display:flex; align-items:center; gap:6px; }
     .dgr-health-summary { display:flex; flex-wrap:wrap; gap:6px; justify-content:center; margin-top:10px; }
-    @media (max-width:900px) { .dgr-kpi-row, .dgr-kpi-secondary, .dgr-health-grid { grid-template-columns:repeat(2,1fr); } }
-    @media print { .dgr-kpi-card, .dgr-health-card { page-break-inside:avoid; } }`;
+    .dgr-chart-card { background:rgba(255,255,255,.045); border:1px solid rgba(255,255,255,.09); border-radius:12px; padding:16px 18px; page-break-inside:avoid; }
+    .dgr-chart-card img { max-width:100%; height:auto; display:block; margin:0 auto; }
+    .dgr-chart-title { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:#e2e8f0; margin-bottom:12px; display:flex; align-items:center; gap:6px; }
+    .dgr-chart-empty { padding:40px 0; color:#64748b; font-size:11px; text-align:center; }
+    .dgr-chart-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:14px; }
+    .dgr-extremos-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; margin-bottom:4px; }
+    .dgr-extremo-box { background:rgba(255,255,255,.045); border:1px solid rgba(255,255,255,.09); border-radius:12px; padding:16px 18px; page-break-inside:avoid; }
+    .dgr-extremo-label { font-size:10px; font-family:'JetBrains Mono',monospace; letter-spacing:.06em; text-transform:uppercase; color:#64748b; margin-bottom:6px; }
+    .dgr-extremo-value { font-size:22px; font-weight:700; font-family:'JetBrains Mono',monospace; letter-spacing:-.02em; margin-bottom:4px; }
+    .dgr-extremo-kg { font-size:11px; font-family:'JetBrains Mono',monospace; color:#64748b; margin-bottom:6px; }
+    .dgr-extremo-name { font-size:13px; color:#cbd5e1; font-weight:600; }
+    @media (max-width:900px) { .dgr-kpi-row, .dgr-kpi-secondary, .dgr-health-grid, .dgr-chart-grid { grid-template-columns:repeat(2,1fr); } }
+    @media print { .dgr-kpi-card, .dgr-health-card, .dgr-chart-card, .dgr-extremo-box { page-break-inside:avoid; } }`;
 }
 
 window.gerarRelatorioGerencialDashboard = async function() {
@@ -2654,10 +2721,15 @@ window.gerarRelatorioGerencialDashboard = async function() {
       _dgrSvgParaPngDataUrl(document.getElementById('dg-vg-gauge-central-svg')),
       _dgrSvgParaPngDataUrl(document.getElementById('dg-vg-gauge-chart-svg'))
     ]);
+    const imgCategoria = _dgrCanvasParaPngDataUrl('dg-vg-chart-categoria');
+    const imgRegional  = _dgrCanvasParaPngDataUrl('dg-vg-chart-regional');
+    const imgUsina     = _dgrCanvasParaPngDataUrl('dg-vg-chart-usina');
 
     const bodyHtml = `<style>${_dgrEstilos()}</style>`
       + _dgrBuildResumoPeriodoHtml(d)
-      + _dgrBuildSaudeGeralHtml(imgGaugeCentral, imgGaugeMateriais);
+      + _dgrBuildSaudeGeralHtml(imgGaugeCentral, imgGaugeMateriais)
+      + _dgrBuildCategoriaHtml(imgCategoria)
+      + _dgrBuildCustoRegionalCentralHtml(d, imgRegional, imgUsina);
 
     const html = _buildRankingShellHTML({
       periodoBadge: periodo,
