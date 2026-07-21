@@ -1175,45 +1175,125 @@ function _buildRankingShellHTML(d, opts) {
   /* Orientação de página configurável por relatório — a maioria continua
      travada em paisagem (comportamento original, preservado por padrão)
      porque foi desenhada pra isso. O Relatório Gerencial do Dashboard
-     passa opts.pageOrientation:'livre' pra deixar o usuário escolher no
-     diálogo de impressão, com retrato como padrão do navegador — CSS não
-     pode "destravar e ainda assim sugerir retrato" ao mesmo tempo, então
-     a forma de fazer isso é simplesmente não declarar orientação nenhuma
-     (nem landscape nem portrait): sem palavra-chave de orientação no
-     @page, o Chrome deixa o seletor do diálogo livre, e retrato é o
-     padrão dele quando nada mais é especificado. */
-  @page { size: ${opts.pageOrientation === 'livre' ? 'A4' : 'A4 landscape'}; margin: 8mm 10mm; }
+     usava opts.pageOrientation:'livre' (retrato/paisagem à escolha do
+     usuário no diálogo de impressão) até a introdução da regra "cada
+     seção cabe numa página só, centralizada quando pequena" — que exige
+     saber a altura ÚTIL exata da página pra calcular o min-height de
+     centralização, algo impossível de garantir com orientação livre (a
+     altura útil de retrato ~281mm e de paisagem ~194mm são bem
+     diferentes). Por decisão explícita do usuário, o Gerencial passou a
+     usar opts.pageOrientation:'retrato', travando A4 retrato só pra esse
+     relatório — os demais continuam com o mesmo comportamento de sempre. */
+  @page { size: ${opts.pageOrientation === 'retrato' ? 'A4 portrait' : opts.pageOrientation === 'livre' ? 'A4' : 'A4 landscape'}; margin: 8mm 10mm; }
   * { box-sizing:border-box; margin:0; padding:0; }
-  body { font-family:'Inter',system-ui,sans-serif; background:#0b1220; color:#e2e8f0; font-size:12.5px; line-height:1.5; -webkit-font-smoothing:antialiased; }
 
-  .action-bar { position:sticky; top:0; z-index:100; background:#1e293b; display:flex; align-items:center; justify-content:space-between; padding:12px 24px; box-shadow:0 2px 12px rgba(0,0,0,.3); }
-  .action-bar-title { color:#e2e8f0; font-size:13px; font-weight:500; }
-  .action-bar-title span { color:#64748b; font-size:12px; margin-left:10px; }
+  /* ── Variáveis de tema (Relatório Gerencial, jul/2026) ──────────────────
+     Declaradas sempre no body (inertes pros outros relatórios — Ranking,
+     Ausência, Ocorrências, Criticidade — que nunca recebem a classe
+     .dgr-tema-claro, então sempre usam os valores padrão = idênticos aos
+     hex que já existiam antes dessa mudança). Toda regra reescrita pra
+     usar var(--dgr-x, VALOR-ORIGINAL) mantém o VALOR-ORIGINAL como
+     fallback, então mesmo numa falha de suporte a CSS var a aparência
+     continua a mesma de sempre. Só o Relatório Gerencial injeta o botão
+     de alternância (opts.temaAlternavel) que troca essa classe. */
+  body {
+    --dgr-bg:                 #0b1220;
+    --dgr-text:               #e2e8f0;
+    --dgr-text-strong:        #ffffff;
+    --dgr-text-dim:           #94a3b8;
+    --dgr-text-dim2:          #64748b;
+    --dgr-accent-text:        #f87171;
+    --dgr-card-bg:            rgba(255,255,255,.045);
+    --dgr-card-border:        rgba(255,255,255,.09);
+    --dgr-divider:            rgba(255,255,255,.08);
+    --dgr-row-alt:            rgba(255,255,255,.025);
+    --dgr-table-border-forte: rgba(255,255,255,.14);
+    --dgr-table-border:       rgba(255,255,255,.055);
+    --dgr-hero-grad-1:        #0f172a;
+    --dgr-hero-grad-2:        #1e293b;
+    --dgr-hero-border:        rgba(255,255,255,.06);
+    --dgr-period-bg:          #0f172a;
+    --dgr-period-border:      rgba(255,255,255,.12);
+    --dgr-brand-sep:          rgba(255,255,255,.15);
+    --dgr-brand-text:         #cbd5e1;
+    --dgr-logo-filter:        invert(1) hue-rotate(178deg);
+    --dgr-actionbar-bg:       #1e293b;
+    --dgr-actionbar-text:     #e2e8f0;
+    --dgr-btnclose-bg:        #334155;
+    --dgr-btnclose-text:      #cbd5e1;
+    --dgr-btnclose-hover:     #475569;
+    --dgr-footer-bg:          #1e293b;
+    --dgr-footer-text:        #64748b;
+    --dgr-footer-strong:      #94a3b8;
+  }
+  /* ── Tema claro — paleta espelhada em tokens.css body[data-theme="light"]
+     (mesmo sistema de cores claras usado no resto do AnalyticSys), com o
+     vermelho de marca (#dc2626, badges/topbar) mantido igual nos dois
+     temas — só o --dgr-accent-text (títulos em destaque) escurece pra
+     manter contraste legível em fundo claro. */
+  body.dgr-tema-claro {
+    --dgr-bg:                 #f0f4fa;
+    --dgr-text:               #0f172a;
+    --dgr-text-strong:        #0f172a;
+    --dgr-text-dim:           #3d4f6e;
+    --dgr-text-dim2:          #64748b;
+    --dgr-accent-text:        #dc2626;
+    --dgr-card-bg:            #ffffff;
+    --dgr-card-border:        rgba(15,23,60,.12);
+    --dgr-divider:            rgba(15,23,60,.1);
+    --dgr-row-alt:            rgba(15,23,60,.03);
+    --dgr-table-border-forte: rgba(15,23,60,.16);
+    --dgr-table-border:       rgba(15,23,60,.08);
+    --dgr-hero-grad-1:        #eef2fb;
+    --dgr-hero-grad-2:        #dbe4f5;
+    --dgr-hero-border:        rgba(15,23,60,.08);
+    --dgr-period-bg:          #ffffff;
+    --dgr-period-border:      rgba(15,23,60,.14);
+    --dgr-brand-sep:          rgba(15,23,60,.15);
+    --dgr-brand-text:         #3d4f6e;
+    --dgr-logo-filter:        none;
+    --dgr-actionbar-bg:       #e8edf6;
+    --dgr-actionbar-text:     #0f172a;
+    --dgr-btnclose-bg:        #dde3ee;
+    --dgr-btnclose-text:      #0f172a;
+    --dgr-btnclose-hover:     #c7d0e3;
+    --dgr-footer-bg:          #e8edf6;
+    --dgr-footer-text:        #3d4f6e;
+    --dgr-footer-strong:      #0f172a;
+  }
+  body { font-family:'Inter',system-ui,sans-serif; background:var(--dgr-bg, #0b1220); color:var(--dgr-text, #e2e8f0); font-size:12.5px; line-height:1.5; -webkit-font-smoothing:antialiased; }
+
+
+  .action-bar { position:sticky; top:0; z-index:100; background:var(--dgr-actionbar-bg, #1e293b); display:flex; align-items:center; justify-content:space-between; padding:12px 24px; box-shadow:0 2px 12px rgba(0,0,0,.3); }
+  .action-bar-title { color:var(--dgr-actionbar-text, #e2e8f0); font-size:13px; font-weight:500; }
+  .action-bar-title span { color:var(--dgr-text-dim2, #64748b); font-size:12px; margin-left:10px; }
   .action-bar-btns { display:flex; gap:10px; }
   .btn-print { background:#e8790a; color:#fff; border:none; border-radius:7px; padding:8px 18px; font-size:13px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:7px; transition:background .15s; }
   .btn-print:hover { background:#c9670a; }
-  .btn-close { background:#334155; color:#cbd5e1; border:none; border-radius:7px; padding:8px 14px; font-size:13px; font-weight:500; cursor:pointer; transition:background .15s; }
-  .btn-close:hover { background:#475569; }
+  .btn-tema { background:var(--dgr-btnclose-bg, #334155); color:var(--dgr-btnclose-text, #cbd5e1); border:none; border-radius:7px; padding:8px 14px; font-size:13px; font-weight:500; cursor:pointer; transition:background .15s; display:flex; align-items:center; gap:7px; }
+  .btn-tema:hover { background:var(--dgr-btnclose-hover, #475569); }
+  .btn-close { background:var(--dgr-btnclose-bg, #334155); color:var(--dgr-btnclose-text, #cbd5e1); border:none; border-radius:7px; padding:8px 14px; font-size:13px; font-weight:500; cursor:pointer; transition:background .15s; }
+  .btn-close:hover { background:var(--dgr-btnclose-hover, #475569); }
 
   .rk-topbar { height:6px; background:#dc2626; }
 
   /* Header full-bleed */
-  .rk-hero { background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%); border-bottom:1px solid rgba(255,255,255,.06); }
+  .rk-hero { background:linear-gradient(135deg,var(--dgr-hero-grad-1, #0f172a) 0%,var(--dgr-hero-grad-2, #1e293b) 100%); border-bottom:1px solid var(--dgr-hero-border, rgba(255,255,255,.06)); }
   .rk-hero-inner { max-width:1400px; margin:0 auto; padding:20px 40px 18px; }
   .rk-hero-top { display:flex; align-items:flex-start; justify-content:space-between; gap:24px; flex-wrap:wrap; }
   .rk-badge { display:inline-block; background:#dc2626; color:#fff; font-size:10.5px; font-weight:800; letter-spacing:.07em; text-transform:uppercase; padding:5px 12px; border-radius:5px; margin-bottom:8px; }
-  .rk-hero h1 { font-size:26px; font-weight:800; color:#f8fafc; letter-spacing:-.01em; line-height:1.25; }
-  .rk-hero p { font-size:13px; color:#94a3b8; font-weight:400; margin-top:8px; max-width:600px; }
-  .rk-period-badge { background:#0f172a; border:1px solid rgba(255,255,255,.12); border-radius:10px; padding:11px 20px; text-align:center; flex-shrink:0; }
-  .rk-period-main { font-size:14px; font-weight:800; color:#fff; letter-spacing:.03em; white-space:nowrap; }
+  .rk-hero h1 { font-size:26px; font-weight:800; color:var(--dgr-text-strong, #f8fafc); letter-spacing:-.01em; line-height:1.25; }
+  .rk-hero p { font-size:13px; color:var(--dgr-text-dim, #94a3b8); font-weight:400; margin-top:8px; max-width:600px; }
+  .rk-period-badge { background:var(--dgr-period-bg, #0f172a); border:1px solid var(--dgr-period-border, rgba(255,255,255,.12)); border-radius:10px; padding:11px 20px; text-align:center; flex-shrink:0; }
+  .rk-period-main { font-size:14px; font-weight:800; color:var(--dgr-text-strong, #fff); letter-spacing:.03em; white-space:nowrap; }
   .rk-period-sub { font-size:9px; color:#fca5a5; margin-top:5px; text-transform:uppercase; letter-spacing:.05em; font-weight:700; }
 
   /* Logos, discretos no rodapé do header */
   .rk-hero-brand { display:flex; align-items:center; gap:16px; margin-bottom:12px; opacity:.85; }
-  .rk-hero-brand img { height:38px; width:auto; object-fit:contain; filter:invert(1) hue-rotate(178deg); }
+  .rk-hero-brand img { height:38px; width:auto; object-fit:contain; filter:var(--dgr-logo-filter, invert(1) hue-rotate(178deg)); }
   .rk-hero-sys-icon { height:38px; width:38px; flex-shrink:0; }
-  .rk-hero-brand-sep { width:1px; height:30px; background:rgba(255,255,255,.15); }
-  .rk-hero-brand-text { font-size:12px; font-weight:800; letter-spacing:.06em; font-family:'JetBrains Mono',monospace; color:#cbd5e1; }
+  .rk-hero-brand-sep { width:1px; height:30px; background:var(--dgr-brand-sep, rgba(255,255,255,.15)); }
+  .rk-hero-brand-text { font-size:12px; font-weight:800; letter-spacing:.06em; font-family:'JetBrains Mono',monospace; color:var(--dgr-brand-text, #cbd5e1); }
   .rk-hero-brand-text span { color:#f97316; }
 
   /* KPIs com barra colorida, dentro do header */
@@ -1243,17 +1323,17 @@ function _buildRankingShellHTML(d, opts) {
 
   /* Tabela — tema escuro, cabeçalho simples (sem barra escura extra) */
   .rk-table-head { display:flex; align-items:baseline; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:9px; }
-  .rk-table-head-title { font-size:11px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; color:#f87171; }
-  .rk-table-head-cap { font-size:9px; color:#64748b; text-transform:uppercase; letter-spacing:.05em; font-weight:700; }
+  .rk-table-head-title { font-size:11px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; color:var(--dgr-accent-text, #f87171); }
+  .rk-table-head-cap { font-size:9px; color:var(--dgr-text-dim2, #64748b); text-transform:uppercase; letter-spacing:.05em; font-weight:700; }
   .rk-table-wrap { margin-bottom:16px; }
   .rk-table { width:100%; border-collapse:collapse; }
-  .rk-table thead tr { border-bottom:1px solid rgba(255,255,255,.14); }
-  .rk-table th { padding:7px 10px; font-size:9px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:#64748b; text-align:left; }
-  .rk-table td { padding:9px 10px; font-size:11.5px; border-bottom:1px solid rgba(255,255,255,.055); color:#e2e8f0; vertical-align:middle; }
+  .rk-table thead tr { border-bottom:1px solid var(--dgr-table-border-forte, rgba(255,255,255,.14)); }
+  .rk-table th { padding:7px 10px; font-size:9px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:var(--dgr-text-dim2, #64748b); text-align:left; }
+  .rk-table td { padding:9px 10px; font-size:11.5px; border-bottom:1px solid var(--dgr-table-border, rgba(255,255,255,.055)); color:var(--dgr-text, #e2e8f0); vertical-align:middle; }
   .rkp-pos-cell { width:32px; text-align:center; }
   .rkp-pos { display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; border-radius:5px; font-family:'JetBrains Mono',monospace; font-weight:800; font-size:10.5px; color:#fff; }
-  .rk-name { font-weight:800; color:#fff; font-size:12px; }
-  .rk-sub { font-size:9.5px; color:#94a3b8; margin-top:1px; }
+  .rk-name { font-weight:800; color:var(--dgr-text-strong, #fff); font-size:12px; }
+  .rk-sub { font-size:9.5px; color:var(--dgr-text-dim, #94a3b8); margin-top:1px; }
   .rk-num { font-family:'JetBrains Mono',monospace; font-weight:800; text-align:center; font-size:13px; }
   .rk-chip { display:inline-block; background:rgba(59,130,246,.12); border:1px solid rgba(59,130,246,.3); color:#93c5fd; border-radius:4px; padding:2px 7px; font-size:10px; font-family:'JetBrains Mono',monospace; white-space:nowrap; margin:1px 3px 1px 0; }
   .rk-dates { font-family:'JetBrains Mono',monospace; font-size:10px; color:#cbd5e1; line-height:1.7; }
@@ -1278,15 +1358,46 @@ function _buildRankingShellHTML(d, opts) {
     .rk-layout, .rk-table-split { grid-template-columns:1fr; }
   }
 
-  .report-footer { margin-top:10px; padding:12px 40px; background:#1e293b; color:#64748b; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; font-size:10.5px; }
-  .report-footer strong { color:#94a3b8; }
-  .footer-note { width:100%; margin-top:6px; padding-top:6px; border-top:1px solid rgba(255,255,255,.08); font-size:9.5px; color:#475569; }
+  .report-footer { margin-top:10px; padding:12px 40px; background:var(--dgr-footer-bg, #1e293b); color:var(--dgr-footer-text, #64748b); display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; font-size:10.5px; }
+  .report-footer strong { color:var(--dgr-footer-strong, #94a3b8); }
+  .footer-note { width:100%; margin-top:6px; padding-top:6px; border-top:1px solid var(--dgr-divider, rgba(255,255,255,.08)); font-size:9.5px; color:#475569; }
 
   @media print {
-    body { background:#0b1220 !important; }
+    body { background:var(--dgr-bg, #0b1220) !important; }
     .action-bar { display:none !important; }
     * { -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; }
     .rank-card, .rk-table-wrap, .rk-side-card { page-break-inside:avoid; }
+  }
+
+  /* ── Paginação por seção (Relatório Gerencial do Dashboard, jul/2026) ──
+     Opt-in via opts.paginarSecoes — não existe em nenhum outro relatório,
+     então é seguro deixar essas regras sempre presentes no shell (ficam
+     inertes/sem efeito nos demais, já que a classe .dgr-page-section só é
+     usada pelo Gerencial). Duas classes:
+     - .dgr-page-section: seções "compactas" (Resumo, Saúde Geral+
+       Categoria, Custo Regional/Central, Giro&Cobertura) — cada uma
+       SEMPRE começa numa página nova (page-break-before:always) e nunca
+       é cortada no meio (avoid). A centralização vertical quando a seção
+       é menor que a página é feita via min-height calculado em JS (ver
+       script no fim do body) — sem min-height (fora do print, ou antes
+       do JS rodar) o flex não tem efeito visual nenhum, então é seguro
+       deixar sempre ligado, não só dentro de @media print.
+     - .dgr-page-section-natural: usada só pelo "Detalhado Analítico", que
+       contém a tabela de Detalhamento por Material — deliberadamente SEM
+       corte de página único (decisão de jul/2026: lista completa, sem
+       Top-N, pagina livremente quando maior que uma página). Recebe só o
+       "começa em página nova", sem forçar single-page nem centralizar. */
+  .dgr-page-section { display:flex; flex-direction:column; justify-content:center; }
+  @media print {
+    .dgr-page-section {
+      page-break-inside:avoid; break-inside:avoid;
+      page-break-before:always; break-before:page;
+    }
+    .dgr-page-section:first-of-type { page-break-before:avoid; break-before:avoid; }
+    .dgr-page-section-natural {
+      page-break-before:always; break-before:page;
+      page-break-inside:auto; break-inside:auto;
+    }
   }
 </style>
 </head>
@@ -1298,6 +1409,7 @@ function _buildRankingShellHTML(d, opts) {
     <span>Período: ${_rankEsc(periodo)} · Gerado em ${_rankEsc(now)}</span>
   </div>
   <div class="action-bar-btns">
+    ${opts.temaAlternavel ? `<button class="btn-tema" id="dgr-btn-tema" onclick="_dgrAlternarTema(this)"><i class="ti ti-sun"></i> Tema Claro</button>` : ''}
     <button class="btn-print" onclick="window.print()">🖨️ Imprimir / Salvar PDF</button>
     <button class="btn-close" onclick="window.close()">✕ Fechar</button>
   </div>
@@ -1348,10 +1460,71 @@ function _buildRankingShellHTML(d, opts) {
   </div>
 </div>
 
+${opts.paginarSecoes ? _dgrScriptPaginacaoSecoes() : ''}
+${opts.temaAlternavel ? _dgrScriptTema() : ''}
 </body>
 </html>`;
 }
 
+// ── Script de centralização vertical das seções (Relatório Gerencial) ──
+//    Calcula a altura ÚTIL de uma página A4 retrato (297mm - margens
+//    verticais do @page, 8mm+8mm) em px CSS (96px/pol, a mesma conversão
+//    que o navegador usa pro @page em mm — ver nota no @page acima). Roda
+//    em window.beforeprint (Chrome recalcula o layout pro tamanho real da
+//    página de impressão nesse momento — é o padrão usado por sites pra
+//    ajustes JS específicos de impressão) e define min-height em cada
+//    .dgr-page-section: a 1ª seção divide a página 1 com o cabeçalho
+//    (.rk-hero, que só aparece uma vez, não se repete por página), então
+//    subtrai a altura medida do hero; as demais seções recebem a página
+//    inteira. Sem isso (ex.: só abrindo a página sem imprimir), as seções
+//    ficam com altura natural — o flex/min-height não atrapalha em nada.
+function _dgrScriptPaginacaoSecoes() {
+  const PAGE_H_MM = 297, MARGIN_V_MM = 16; // 8mm topo + 8mm base (@page margin:8mm 10mm)
+  const PAGE_USABLE_PX = Math.round((PAGE_H_MM - MARGIN_V_MM) * 96 / 25.4); // ≈1062px
+  return `<script>
+(function() {
+  function _dgrAjustarSecoes() {
+    var pageH = ${PAGE_USABLE_PX};
+    var hero = document.querySelector('.rk-hero');
+    var heroH = hero ? hero.getBoundingClientRect().height : 0;
+    var secoes = document.querySelectorAll('.dgr-page-section');
+    secoes.forEach(function(sec, i) {
+      var disponivel = i === 0 ? (pageH - heroH) : pageH;
+      sec.style.minHeight = Math.max(disponivel, 120) + 'px';
+    });
+  }
+  function _dgrLimparSecoes() {
+    document.querySelectorAll('.dgr-page-section').forEach(function(sec) { sec.style.minHeight = ''; });
+  }
+  window.addEventListener('beforeprint', _dgrAjustarSecoes);
+  window.addEventListener('afterprint', _dgrLimparSecoes);
+  // Melhor esforço pra quem só visualizar a página (sem imprimir ainda)
+  // já ver uma prévia aproximada da centralização.
+  window.addEventListener('load', _dgrAjustarSecoes);
+})();
+<\/script>`;
+}
+
+// ── Script do botão de tema (Relatório Gerencial) — alterna a classe
+//    body.dgr-tema-claro, que troca todas as variáveis CSS --dgr-* (ver
+//    declaração no início do <style>). Não precisa recalcular a
+//    paginação (_dgrAjustarSecoes): trocar cores não muda a altura de
+//    nada, só o botão de imprimir precisa já estar com a classe certa
+//    aplicada antes de window.print() — o que já é garantido, já que a
+//    troca acontece só por clique explícito do usuário, sempre antes de
+//    imprimir. ─────────────────────────────────────────────────────────
+function _dgrScriptTema() {
+  return `<script>
+function _dgrAlternarTema(btn) {
+  var claro = document.body.classList.toggle('dgr-tema-claro');
+  if (btn) {
+    btn.innerHTML = claro
+      ? '<i class="ti ti-moon"></i> Tema Escuro'
+      : '<i class="ti ti-sun"></i> Tema Claro';
+  }
+}
+<\/script>`;
+}
 // ── Componente: card compacto de sidebar (regional crítica) ─────────────
 function _buildRankSideCard(r, i) {
   return `
@@ -2680,6 +2853,67 @@ function _dgrBuildSaudeGeralHtml(imgCentral, imgMateriais) {
     </div>`;
 }
 
+// ── Captura do gráfico "Desfalque e Sobra por Categoria" ampliado só pra
+//    o relatório: na tela (Visão Geral) esse canvas vive num container de
+//    180px de altura, adequado ao card compacto do dashboard, mas que
+//    fica espremido quando reaproveitado 1:1 no PDF (poucas linhas de
+//    respiro entre as 4 categorias + legenda + eixo). Em vez de mudar a
+//    altura fixa da tela (afetaria o dashboard ao vivo), redimensiona o
+//    <canvas> e reforça as fontes dos dois plugins/eixos SÓ durante a
+//    captura, e devolve tudo ao estado original logo depois — a tela
+//    nunca fica visivelmente diferente pro usuário (a troca acontece com
+//    o overlay "Gerando relatório..." por cima). chart.update('none') é
+//    usado pra pular a animação e desenhar de forma síncrona antes do
+//    toDataURL(). ─────────────────────────────────────────────────────
+function _dgrCapturarCategoriaAmpliada() {
+  const canvas = document.getElementById('dg-vg-chart-categoria');
+  const chart  = window._dgVgCharts?.categoria;
+  const wrap   = canvas?.parentElement;
+  if (!canvas || !chart || !wrap) return _dgrCanvasParaPngDataUrl('dg-vg-chart-categoria');
+
+  const ALTURA_RELATORIO = '340px'; // ~89% maior que os 180px da tela
+  const alturaOriginal = wrap.style.height;
+
+  // Snapshot das fontes originais (todas nascem com os mesmos valores
+  // hoje, mas cada uma é restaurada da sua própria referência por
+  // segurança caso algum dia divirjam).
+  const opts = chart.options;
+  const scaleXFontOriginal   = { ...opts.scales.x.ticks.font };
+  const scaleYFontOriginal   = { ...opts.scales.y.ticks.font };
+  const legendFontOriginal   = { ...opts.plugins.legend.labels.font };
+  const totalsFontSizeOriginal = opts.plugins.dgVgCategoryTotals.fontSize;
+  const barLabelsFontSizeOriginal = opts.plugins.dgVgBarValueLabels.fontSize;
+
+  let dataUrl = null;
+  try {
+    wrap.style.height = ALTURA_RELATORIO;
+
+    opts.scales.x.ticks.font = { ...scaleXFontOriginal, size: 12.5 };
+    opts.scales.y.ticks.font = { ...scaleYFontOriginal, size: 13 };
+    opts.plugins.legend.labels.font = { ...legendFontOriginal, size: 12 };
+    opts.plugins.dgVgCategoryTotals.fontSize = 12;
+    opts.plugins.dgVgBarValueLabels.fontSize = 12;
+
+    chart.resize();
+    chart.update('none'); // sem animação — desenha na hora, síncrono
+
+    dataUrl = _dgrCanvasParaPngDataUrl('dg-vg-chart-categoria');
+  } catch (err) {
+    console.error('[Relatório Gerencial - Dashboard] Falha ao ampliar gráfico Categoria para captura:', err);
+  } finally {
+    // Restaura a tela ao estado original, mudando ou não.
+    wrap.style.height = alturaOriginal;
+    opts.scales.x.ticks.font = scaleXFontOriginal;
+    opts.scales.y.ticks.font = scaleYFontOriginal;
+    opts.plugins.legend.labels.font = legendFontOriginal;
+    opts.plugins.dgVgCategoryTotals.fontSize = totalsFontSizeOriginal;
+    opts.plugins.dgVgBarValueLabels.fontSize = barLabelsFontSizeOriginal;
+    try { chart.resize(); chart.update('none'); } catch (e) { /* noop */ }
+  }
+
+  return dataUrl;
+}
+
 // ── Seção 3: Desfalque e Sobra por Categoria — gráfico de barra (Chart.js)
 //    capturado como imagem; cores já vêm "assadas" nos pixels do canvas,
 //    sem depender de CSS var (ver _dgrCanvasParaPngDataUrl). ─────────────
@@ -3032,65 +3266,65 @@ function _dgrBuildDetalhadoAnaliticoHtml(d) {
 
 function _dgrEstilos() {
   return `
-    .dgr-section-title { font-size:11px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; color:#f87171; margin:0 0 8px; display:flex; align-items:center; gap:8px; }
+    .dgr-section-title { font-size:11px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; color:var(--dgr-accent-text, #f87171); margin:0 0 8px; display:flex; align-items:center; gap:8px; }
     .dgr-kpi-secondary { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:8px; }
-    .dgr-kpi-card { background:rgba(255,255,255,.045); border:1px solid rgba(255,255,255,.09); border-radius:12px; padding:18px 20px; border-top:3px solid transparent; page-break-inside:avoid; }
+    .dgr-kpi-card { background:var(--dgr-card-bg, rgba(255,255,255,.045)); border:1px solid var(--dgr-card-border, rgba(255,255,255,.09)); border-radius:12px; padding:18px 20px; border-top:3px solid transparent; page-break-inside:avoid; }
     .dgr-kpi-secondary .dgr-kpi-card { padding:12px 16px; border-top:none; }
     .dgr-kpi-card-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:8px; }
     .dgr-kpi-icon { width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; font-size:15px; flex-shrink:0; }
-    .dgr-kpi-label { font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#94a3b8; }
-    .dgr-kpi-value { font-family:'JetBrains Mono',monospace; font-size:21px; font-weight:800; color:#fff; }
+    .dgr-kpi-label { font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--dgr-text-dim, #94a3b8); }
+    .dgr-kpi-value { font-family:'JetBrains Mono',monospace; font-size:21px; font-weight:800; color:var(--dgr-text-strong, #fff); }
     .dgr-kpi-secondary .dgr-kpi-value { font-size:18px; }
-    .dgr-kpi-unit { font-size:10.5px; color:#64748b; margin-top:4px; font-family:'JetBrains Mono',monospace; }
-    .dgr-kpi-divider-row { display:flex; align-items:baseline; gap:7px; margin-top:8px; padding-top:8px; border-top:1px solid rgba(255,255,255,.08); }
+    .dgr-kpi-unit { font-size:10.5px; color:var(--dgr-text-dim2, #64748b); margin-top:4px; font-family:'JetBrains Mono',monospace; }
+    .dgr-kpi-divider-row { display:flex; align-items:baseline; gap:7px; margin-top:8px; padding-top:8px; border-top:1px solid var(--dgr-divider, rgba(255,255,255,.08)); }
     .dgr-kpi-pct { font-family:'JetBrains Mono',monospace; font-size:19px; font-weight:800; }
-    .dgr-kpi-pct-label { font-size:10px; color:#64748b; }
+    .dgr-kpi-pct-label { font-size:10px; color:var(--dgr-text-dim2, #64748b); }
     /* Card hero "Variação Estoque" — custo em evidência (valor maior),
        saldo em kg abaixo (menor), veículos em blocos grandes por baixo. */
-    .dgr-kpi-hero { background:rgba(255,255,255,.045); border:1px solid rgba(255,255,255,.09); border-radius:12px; padding:15px 22px; border-top:3px solid transparent; page-break-inside:avoid; }
+    .dgr-kpi-hero { background:var(--dgr-card-bg, rgba(255,255,255,.045)); border:1px solid var(--dgr-card-border, rgba(255,255,255,.09)); border-radius:12px; padding:15px 22px; border-top:3px solid transparent; page-break-inside:avoid; }
     .dgr-kpi-hero-custo { font-family:'JetBrains Mono',monospace; font-size:27px; font-weight:800; }
     .dgr-kpi-hero-saldo { font-family:'JetBrains Mono',monospace; font-size:19px; font-weight:700; }
     /* Linha do saldo (agora em toneladas) + veículos lado a lado — sem
        selo/ícone (só número + rótulo pequeno), discretos, ao lado do
        saldo em vez de embaixo numa grade grande — pedido do Hugo pra
        corrigir o desbalanceamento do card hero. */
-    .dgr-kpi-hero-saldo-row { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:20px; margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,.08); }
+    .dgr-kpi-hero-saldo-row { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:20px; margin-top:12px; padding-top:12px; border-top:1px solid var(--dgr-divider, rgba(255,255,255,.08)); }
     .dgr-kpi-veiculos-simples { display:flex; gap:28px; flex-wrap:wrap; }
     .dgr-kpi-veiculo-simples { text-align:center; }
     .dgr-kpi-veiculo-simples-valor { font-family:'JetBrains Mono',monospace; font-size:15px; font-weight:800; }
-    .dgr-kpi-veiculo-simples-label { font-size:9px; color:#64748b; text-transform:uppercase; letter-spacing:.05em; font-weight:700; margin-top:2px; }
+    .dgr-kpi-veiculo-simples-label { font-size:9px; color:var(--dgr-text-dim2, #64748b); text-transform:uppercase; letter-spacing:.05em; font-weight:700; margin-top:2px; }
     .dgr-health-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
-    .dgr-health-card { background:rgba(255,255,255,.045); border:1px solid rgba(255,255,255,.09); border-radius:12px; padding:18px; page-break-inside:avoid; }
+    .dgr-health-card { background:var(--dgr-card-bg, rgba(255,255,255,.045)); border:1px solid var(--dgr-card-border, rgba(255,255,255,.09)); border-radius:12px; padding:18px; page-break-inside:avoid; }
     .dgr-health-card img { max-width:100%; height:auto; display:block; margin:0 auto; }
-    .dgr-health-title { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:#e2e8f0; margin-bottom:10px; display:flex; align-items:center; gap:6px; }
+    .dgr-health-title { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:var(--dgr-text, #e2e8f0); margin-bottom:10px; display:flex; align-items:center; gap:6px; }
     .dgr-health-summary { display:flex; flex-wrap:wrap; gap:6px; justify-content:center; margin-top:10px; }
-    .dgr-chart-card { background:rgba(255,255,255,.045); border:1px solid rgba(255,255,255,.09); border-radius:12px; padding:16px 18px; page-break-inside:avoid; }
+    .dgr-chart-card { background:var(--dgr-card-bg, rgba(255,255,255,.045)); border:1px solid var(--dgr-card-border, rgba(255,255,255,.09)); border-radius:12px; padding:16px 18px; page-break-inside:avoid; }
     .dgr-chart-card img { max-width:100%; height:auto; display:block; margin:0 auto; }
-    .dgr-chart-title { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:#e2e8f0; margin-bottom:12px; display:flex; align-items:center; gap:6px; }
-    .dgr-chart-empty { padding:40px 0; color:#64748b; font-size:11px; text-align:center; }
+    .dgr-chart-title { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:var(--dgr-text, #e2e8f0); margin-bottom:12px; display:flex; align-items:center; gap:6px; }
+    .dgr-chart-empty { padding:40px 0; color:var(--dgr-text-dim2, #64748b); font-size:11px; text-align:center; }
     .dgr-chart-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-top:14px; }
     .dgr-extremos-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:4px; }
-    .dgr-extremo-box { background:rgba(255,255,255,.045); border:1px solid rgba(255,255,255,.09); border-radius:12px; padding:12px 14px; page-break-inside:avoid; }
-    .dgr-extremo-label { font-size:9px; font-family:'JetBrains Mono',monospace; letter-spacing:.05em; text-transform:uppercase; color:#64748b; margin-bottom:5px; }
+    .dgr-extremo-box { background:var(--dgr-card-bg, rgba(255,255,255,.045)); border:1px solid var(--dgr-card-border, rgba(255,255,255,.09)); border-radius:12px; padding:12px 14px; page-break-inside:avoid; }
+    .dgr-extremo-label { font-size:9px; font-family:'JetBrains Mono',monospace; letter-spacing:.05em; text-transform:uppercase; color:var(--dgr-text-dim2, #64748b); margin-bottom:5px; }
     .dgr-extremo-value { font-size:16px; font-weight:700; font-family:'JetBrains Mono',monospace; letter-spacing:-.02em; margin-bottom:3px; }
-    .dgr-extremo-kg { font-size:9.5px; font-family:'JetBrains Mono',monospace; color:#64748b; margin-bottom:5px; }
-    .dgr-extremo-name { font-size:11px; color:#cbd5e1; font-weight:600; }
+    .dgr-extremo-kg { font-size:9.5px; font-family:'JetBrains Mono',monospace; color:var(--dgr-text-dim2, #64748b); margin-bottom:5px; }
+    .dgr-extremo-name { font-size:11px; color:var(--dgr-brand-text, #cbd5e1); font-weight:600; }
     .dgr-grupo-layout { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
     .dgr-donut-grande img { max-width:100%; height:auto; }
     .dgr-donut-sub-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
     .dgr-donut-small .dgr-chart-title { margin-bottom:8px; }
     .dgr-table-wrap {
       margin-bottom:26px;
-      background:rgba(255,255,255,.045);
-      border:1px solid rgba(255,255,255,.09);
+      background:var(--dgr-card-bg, rgba(255,255,255,.045));
+      border:1px solid var(--dgr-card-border, rgba(255,255,255,.09));
       border-radius:12px;
       padding:16px 18px;
     }
     .dgr-table-wrap thead { display:table-header-group; }
     .dgr-table-wrap tbody tr { page-break-inside:avoid; }
     .dgr-table-wrap .rk-table { table-layout:fixed; }
-    .dgr-table-wrap tbody tr:nth-child(even) { background:rgba(255,255,255,.025); }
-    .dgr-chart-card table.rk-table tbody tr:nth-child(even) { background:rgba(255,255,255,.025); }
+    .dgr-table-wrap tbody tr:nth-child(even) { background:var(--dgr-row-alt, rgba(255,255,255,.025)); }
+    .dgr-chart-card table.rk-table tbody tr:nth-child(even) { background:var(--dgr-row-alt, rgba(255,255,255,.025)); }
     /* Mais respiro nas células — escopado a .dgr-chart-card/.dgr-table-wrap
        (Giro & Cobertura + Detalhado Analítico) pra não alterar .rk-table
        nos outros relatórios do sistema (Ocorrências, Ranking etc.), que
@@ -3112,7 +3346,7 @@ function _dgrEstilos() {
        o texto vazar visualmente pra célula vizinha. */
     .dgr-nome-trunc-inner { display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
     .dgr-chart-card table.rk-table { table-layout:fixed; }
-    .dgr-giro-footer { display:flex; gap:14px; padding:8px 0 0; margin-top:8px; border-top:1px solid rgba(255,255,255,.08); flex-wrap:wrap; font-size:9px; font-family:'JetBrains Mono',monospace; font-weight:700; }
+    .dgr-giro-footer { display:flex; gap:14px; padding:8px 0 0; margin-top:8px; border-top:1px solid var(--dgr-divider, rgba(255,255,255,.08)); flex-wrap:wrap; font-size:9px; font-family:'JetBrains Mono',monospace; font-weight:700; }
     .dgr-giro-footer span { display:flex; align-items:center; gap:4px; }
     /* Colapso dos pares de card (Giro, gráficos de barra) e das grades de
        3 colunas — SEMPRE ao imprimir/gerar PDF, não só condicional a
@@ -3153,17 +3387,26 @@ window.gerarRelatorioGerencialDashboard = async function() {
       _dgrSvgParaPngDataUrl(document.getElementById('dg-vg-gauge-central-svg')),
       _dgrSvgParaPngDataUrl(document.getElementById('dg-vg-gauge-chart-svg'))
     ]);
-    const imgCategoria = _dgrCanvasParaPngDataUrl('dg-vg-chart-categoria');
+    const imgCategoria = _dgrCapturarCategoriaAmpliada();
     const imgRegional  = _dgrCanvasParaPngDataUrl('dg-vg-chart-regional');
     const imgUsina     = _dgrCanvasParaPngDataUrl('dg-vg-chart-usina');
 
+    // Cada seção "compacta" (cards/gráficos curtos) vira uma página só,
+    // centralizada verticalmente se sobrar espaço (ver _dgrScriptPaginacaoSecoes
+    // no shell). O gráfico de Categoria (Seção 3) não tem título próprio —
+    // sempre foi pensado como continuação visual da Saúde Geral (mesmo na
+    // tela, ver index.html), então entra na mesma página/seção dela.
+    // Detalhado Analítico fica de fora dessa regra: contém a tabela de
+    // Detalhamento por Material, que é deliberadamente sem corte por Top-N
+    // e pagina livremente quando maior que uma página (decisão de jul/2026,
+    // ver comentário em _dgrTabelaMaterialHtml) — teria dados truncados ou
+    // fonte ilegível se fosse forçada a caber numa página só.
     const bodyHtml = `<style>${_dgrEstilos()}</style>`
-      + _dgrBuildResumoPeriodoHtml(d)
-      + _dgrBuildSaudeGeralHtml(imgGaugeCentral, imgGaugeMateriais)
-      + _dgrBuildCategoriaHtml(imgCategoria)
-      + _dgrBuildCustoRegionalCentralHtml(d, imgRegional, imgUsina)
-      + _dgrBuildGiroCoberturaHtml(d)
-      + _dgrBuildDetalhadoAnaliticoHtml(d);
+      + `<section class="dgr-page-section">${_dgrBuildResumoPeriodoHtml(d)}</section>`
+      + `<section class="dgr-page-section">${_dgrBuildSaudeGeralHtml(imgGaugeCentral, imgGaugeMateriais)}${_dgrBuildCategoriaHtml(imgCategoria)}</section>`
+      + `<section class="dgr-page-section">${_dgrBuildCustoRegionalCentralHtml(d, imgRegional, imgUsina)}</section>`
+      + `<section class="dgr-page-section">${_dgrBuildGiroCoberturaHtml(d)}</section>`
+      + `<section class="dgr-page-section-natural">${_dgrBuildDetalhadoAnaliticoHtml(d)}</section>`;
 
     const html = _buildRankingShellHTML({
       periodoBadge: periodo,
@@ -3171,7 +3414,9 @@ window.gerarRelatorioGerencialDashboard = async function() {
       now,
       kpis: []
     }, {
-      pageOrientation: 'livre',
+      pageOrientation: 'retrato',
+      paginarSecoes: true,
+      temaAlternavel: true,
       pageTitle:  'Relatório Gerencial — Dashboard Gerencial',
       badge:      'Relatório Gerencial',
       title:      'Visão Geral — Dashboard Gerencial',

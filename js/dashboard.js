@@ -1492,6 +1492,7 @@ const _dgVgBarValueLabelsPlugin = {
   id: 'dgVgBarValueLabels',
   afterDatasetsDraw(chart) {
     const { ctx } = chart;
+    const fontSize = chart.options.plugins?.dgVgBarValueLabels?.fontSize || 10;
     chart.data.datasets.forEach((dataset, dsIndex) => {
       const meta = chart.getDatasetMeta(dsIndex);
       if (meta.hidden) return;
@@ -1502,7 +1503,7 @@ const _dgVgBarValueLabelsPlugin = {
         const { x, y } = bar.getProps(['x', 'y'], true);
         const negative = pctValue < 0;
         ctx.save();
-        ctx.font = "600 10px 'DM Mono', monospace";
+        ctx.font = `600 ${fontSize}px 'DM Mono', monospace`;
         ctx.fillStyle = negative ? '#f43f5e' : '#f59e0b';
         ctx.textBaseline = 'middle';
         ctx.textAlign = negative ? 'right' : 'left';
@@ -1524,9 +1525,10 @@ const _dgVgCategoryTotalsPlugin = {
   afterDatasetsDraw(chart) {
     const totals = chart.options.plugins?.dgVgCategoryTotals?.totals;
     if (!totals || !totals.length) return;
+    const fontSize = chart.options.plugins?.dgVgCategoryTotals?.fontSize || 10;
     const { ctx, chartArea, scales } = chart;
     ctx.save();
-    ctx.font = "600 10px 'DM Mono', monospace";
+    ctx.font = `600 ${fontSize}px 'DM Mono', monospace`;
     ctx.fillStyle = '#7b85a0';
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'left';
@@ -1593,7 +1595,8 @@ function _dgVgRenderChartCategoriaFisica(catFisicaPct) {
             }
           }
         },
-        dgVgCategoryTotals: { totals: totaisKg }
+        dgVgCategoryTotals: { totals: totaisKg, fontSize: 10 },
+        dgVgBarValueLabels: { fontSize: 10 }
       },
       scales: {
         x: { stacked: true, grace: '15%', grid: { color: gridCol }, ticks: { color: textCol, font: tickFont, callback: v => fmtPct(v) } },
