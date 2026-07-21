@@ -2904,11 +2904,19 @@ async function _dgrCapturarComTema(tema, d) {
 
 function _dgrCapturarCategoriaAmpliada() {
   const canvas = document.getElementById('dg-vg-chart-categoria');
-  const chart  = window._dgVgCharts?.categoria;
+  // _dgVgCharts é `let` no topo de dashboard.js — NÃO vira propriedade de
+  // window (só `var`/funções top-level viram). Como os dois arquivos são
+  // <script> clássicos na mesma página, a referência solta (sem "window.")
+  // enxerga a mesma variável, porque let/const de nível superior entram
+  // num escopo léxico global compartilhado entre scripts, só não em
+  // window. window._dgVgCharts (versão anterior) dava sempre undefined,
+  // então isso SEMPRE caía no fallback abaixo (canvas cru, 180px, largura
+  // total da tela) — o ajuste de altura nunca chegava a rodar de verdade.
+  const chart  = (typeof _dgVgCharts !== 'undefined' ? _dgVgCharts : window._dgVgCharts)?.categoria;
   const wrap   = canvas?.parentElement;
   if (!canvas || !chart || !wrap) return _dgrCanvasParaPngDataUrl('dg-vg-chart-categoria');
 
-  const ALTURA_RELATORIO = '340px'; // ~89% maior que os 180px da tela
+  const ALTURA_RELATORIO = '460px'; // bem mais alto que os 180px da tela
   const alturaOriginal = wrap.style.height;
 
   // Snapshot das fontes originais (todas nascem com os mesmos valores
@@ -2925,11 +2933,11 @@ function _dgrCapturarCategoriaAmpliada() {
   try {
     wrap.style.height = ALTURA_RELATORIO;
 
-    opts.scales.x.ticks.font = { ...scaleXFontOriginal, size: 12.5 };
-    opts.scales.y.ticks.font = { ...scaleYFontOriginal, size: 13 };
-    opts.plugins.legend.labels.font = { ...legendFontOriginal, size: 12 };
-    opts.plugins.dgVgCategoryTotals.fontSize = 12;
-    opts.plugins.dgVgBarValueLabels.fontSize = 12;
+    opts.scales.x.ticks.font = { ...scaleXFontOriginal, size: 15 };
+    opts.scales.y.ticks.font = { ...scaleYFontOriginal, size: 16 };
+    opts.plugins.legend.labels.font = { ...legendFontOriginal, size: 15 };
+    opts.plugins.dgVgCategoryTotals.fontSize = 15;
+    opts.plugins.dgVgBarValueLabels.fontSize = 15;
 
     chart.resize();
     chart.update('none'); // sem animação — desenha na hora, síncrono
@@ -3173,19 +3181,22 @@ function _dgrValCor(v) {
   return v < -0.0001 ? '#f43f5e' : v > 0.0001 ? '#f59e0b' : '#64748b';
 }
 // Mantém o trecho numérico de um valor já formatado (money/fmtKg/pct etc.)
-// inteiro, numa unidade não-quebrável — prefixos (R$, ícone de seta) e
-// sufixos (kg, /kg, %, ×) continuam podendo quebrar pra linha seguinte
-// livremente, mas o número em si NUNCA quebra no meio de um dígito
-// (evita o "12.85|5.060|,00|kg" que acontecia em colunas estreitas).
+// inteiro, numa unidade não-quebrável, JUNTO com um "R$" que vier logo
+// antes dele — prefixos (R$) e sufixos (kg, /kg, %, ×) continuam podendo
+// quebrar pra linha seguinte livremente quando não colados no número,
+// mas o "R$ 1.234,56" (ou só o número, sem R$) nunca quebra no meio nem
+// se separa um do outro (evita o "12.85|5.060|,00|kg" E o "R$|1.234,56"
+// que aconteciam em colunas estreitas).
 function _dgrNowrapNum(str) {
   const s = String(str);
-  // Pega o ÚLTIMO trecho numérico da string — é sempre o valor formatado
-  // de verdade. Usar o primeiro (versão anterior, com bug) podia casar um
-  // número que apareça ANTES dele dentro de HTML já embutido, como o
-  // "11" de style="font-size:11px" no ícone que varSymbol() antepõe em
-  // _daFmtPctSigned/_daFmtMoneySigned/_daFmtCountSigned — o que quebrava
-  // a tag no meio e vazava texto cru pro PDF.
-  const m = s.match(/[\d.,]+(?!.*[\d.,])/);
+  // Pega o ÚLTIMO trecho numérico da string (+ "R$ " logo antes dele, se
+  // houver) — é sempre o valor formatado de verdade. Usar o primeiro
+  // (versão anterior, com bug) podia casar um número que apareça ANTES
+  // dele dentro de HTML já embutido, como o "11" de style="font-size:11px"
+  // no ícone que varSymbol() antepõe em _daFmtPctSigned/_daFmtMoneySigned/
+  // _daFmtCountSigned — o que quebrava a tag no meio e vazava texto cru
+  // pro PDF.
+  const m = s.match(/(?:R\$\s*)?[\d.,]+(?!.*[\d.,])/);
   if (!m) return s;
   return s.slice(0, m.index) + `<span style="white-space:nowrap">${m[0]}</span>` + s.slice(m.index + m[0].length);
 }
@@ -3221,15 +3232,15 @@ function _dgrTabelaMaterialHtml(dados) {
       <div class="rk-table-head"><div class="rk-table-head-title">Detalhamento por Material (Grupo SAP)</div><div class="rk-table-head-cap">${dados.linhas.length} materia${dados.linhas.length !== 1 ? 'is' : 'l'}</div></div>
       <table class="rk-table dgr-material-table">
         <thead><tr>
-          <th style="width:14%">Grupo SAP</th>
+          <th style="width:11%">Grupo SAP</th>
           <th style="width:12%;text-align:right">Est. Inicial</th>
           <th style="width:12%;text-align:right">Entradas</th>
           <th style="width:12%;text-align:right">Saídas</th>
           <th style="width:12%;text-align:right">Est. Teórico</th>
           <th style="width:12%;text-align:right">Est. Final</th>
-          <th style="width:8%;text-align:right">% Variação</th>
-          <th style="width:9%;text-align:right">Custo Médio</th>
-          <th style="width:9%;text-align:right">Custo Ajuste</th>
+          <th style="width:7%;text-align:right">% Variação</th>
+          <th style="width:11%;text-align:right">Custo Médio</th>
+          <th style="width:11%;text-align:right">Custo Ajuste</th>
         </tr></thead>
         <tbody>${rows}</tbody>
         <tfoot>${totalRow}</tfoot>
@@ -3304,23 +3315,23 @@ function _dgrBuildDetalhadoAnaliticoHtml(d) {
 function _dgrEstilos() {
   return `
     .dgr-section-title { font-size:11px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; color:var(--dgr-accent-text, #f87171); margin:0 0 8px; display:flex; align-items:center; gap:8px; }
-    .dgr-kpi-secondary { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:8px; }
-    .dgr-kpi-card { background:var(--dgr-card-bg, rgba(255,255,255,.045)); border:1px solid var(--dgr-card-border, rgba(255,255,255,.09)); border-radius:12px; padding:18px 20px; border-top:3px solid transparent; page-break-inside:avoid; }
-    .dgr-kpi-secondary .dgr-kpi-card { padding:12px 16px; border-top:none; }
+    .dgr-kpi-secondary { display:grid; grid-template-columns:repeat(3,1fr); gap:13px; margin-bottom:8px; }
+    .dgr-kpi-card { background:var(--dgr-card-bg, rgba(255,255,255,.045)); border:1px solid var(--dgr-card-border, rgba(255,255,255,.09)); border-radius:12px; padding:22px 24px; border-top:3px solid transparent; page-break-inside:avoid; }
+    .dgr-kpi-secondary .dgr-kpi-card { padding:15px 19px; border-top:none; }
     .dgr-kpi-card-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:8px; }
     .dgr-kpi-icon { width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; font-size:15px; flex-shrink:0; }
     .dgr-kpi-label { font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--dgr-text-dim, #94a3b8); }
-    .dgr-kpi-value { font-family:'JetBrains Mono',monospace; font-size:21px; font-weight:800; color:var(--dgr-text-strong, #fff); }
-    .dgr-kpi-secondary .dgr-kpi-value { font-size:18px; }
+    .dgr-kpi-value { font-family:'JetBrains Mono',monospace; font-size:25px; font-weight:800; color:var(--dgr-text-strong, #fff); }
+    .dgr-kpi-secondary .dgr-kpi-value { font-size:21px; }
     .dgr-kpi-unit { font-size:10.5px; color:var(--dgr-text-dim2, #64748b); margin-top:4px; font-family:'JetBrains Mono',monospace; }
     .dgr-kpi-divider-row { display:flex; align-items:baseline; gap:7px; margin-top:8px; padding-top:8px; border-top:1px solid var(--dgr-divider, rgba(255,255,255,.08)); }
     .dgr-kpi-pct { font-family:'JetBrains Mono',monospace; font-size:19px; font-weight:800; }
     .dgr-kpi-pct-label { font-size:10px; color:var(--dgr-text-dim2, #64748b); }
     /* Card hero "Variação Estoque" — custo em evidência (valor maior),
        saldo em kg abaixo (menor), veículos em blocos grandes por baixo. */
-    .dgr-kpi-hero { background:var(--dgr-card-bg, rgba(255,255,255,.045)); border:1px solid var(--dgr-card-border, rgba(255,255,255,.09)); border-radius:12px; padding:15px 22px; border-top:3px solid transparent; page-break-inside:avoid; }
-    .dgr-kpi-hero-custo { font-family:'JetBrains Mono',monospace; font-size:27px; font-weight:800; }
-    .dgr-kpi-hero-saldo { font-family:'JetBrains Mono',monospace; font-size:19px; font-weight:700; }
+    .dgr-kpi-hero { background:var(--dgr-card-bg, rgba(255,255,255,.045)); border:1px solid var(--dgr-card-border, rgba(255,255,255,.09)); border-radius:12px; padding:19px 27px; border-top:3px solid transparent; page-break-inside:avoid; }
+    .dgr-kpi-hero-custo { font-family:'JetBrains Mono',monospace; font-size:32px; font-weight:800; }
+    .dgr-kpi-hero-saldo { font-family:'JetBrains Mono',monospace; font-size:23px; font-weight:700; }
     /* Linha do saldo (agora em toneladas) + veículos lado a lado — sem
        selo/ícone (só número + rótulo pequeno), discretos, ao lado do
        saldo em vez de embaixo numa grade grande — pedido do Hugo pra
@@ -3330,20 +3341,20 @@ function _dgrEstilos() {
     .dgr-kpi-veiculo-simples { text-align:center; }
     .dgr-kpi-veiculo-simples-valor { font-family:'JetBrains Mono',monospace; font-size:15px; font-weight:800; }
     .dgr-kpi-veiculo-simples-label { font-size:9px; color:var(--dgr-text-dim2, #64748b); text-transform:uppercase; letter-spacing:.05em; font-weight:700; margin-top:2px; }
-    .dgr-health-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
-    .dgr-health-card { background:var(--dgr-card-bg, rgba(255,255,255,.045)); border:1px solid var(--dgr-card-border, rgba(255,255,255,.09)); border-radius:12px; padding:18px; page-break-inside:avoid; }
+    .dgr-health-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+    .dgr-health-card { background:var(--dgr-card-bg, rgba(255,255,255,.045)); border:1px solid var(--dgr-card-border, rgba(255,255,255,.09)); border-radius:12px; padding:23px; page-break-inside:avoid; }
     .dgr-health-card img { max-width:100%; height:auto; display:block; margin:0 auto; }
     .dgr-health-title { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:var(--dgr-text, #e2e8f0); margin-bottom:10px; display:flex; align-items:center; gap:6px; }
     .dgr-health-summary { display:flex; flex-wrap:wrap; gap:6px; justify-content:center; margin-top:10px; }
-    .dgr-chart-card { background:var(--dgr-card-bg, rgba(255,255,255,.045)); border:1px solid var(--dgr-card-border, rgba(255,255,255,.09)); border-radius:12px; padding:16px 18px; page-break-inside:avoid; }
+    .dgr-chart-card { background:var(--dgr-card-bg, rgba(255,255,255,.045)); border:1px solid var(--dgr-card-border, rgba(255,255,255,.09)); border-radius:12px; padding:20px 23px; page-break-inside:avoid; }
     .dgr-chart-card img { max-width:100%; height:auto; display:block; margin:0 auto; }
     .dgr-chart-title { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:var(--dgr-text, #e2e8f0); margin-bottom:12px; display:flex; align-items:center; gap:6px; }
     .dgr-chart-empty { padding:40px 0; color:var(--dgr-text-dim2, #64748b); font-size:11px; text-align:center; }
-    .dgr-chart-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-top:14px; }
-    .dgr-extremos-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:4px; }
-    .dgr-extremo-box { background:var(--dgr-card-bg, rgba(255,255,255,.045)); border:1px solid var(--dgr-card-border, rgba(255,255,255,.09)); border-radius:12px; padding:12px 14px; page-break-inside:avoid; }
+    .dgr-chart-grid { display:grid; grid-template-columns:1fr 1fr; gap:24px; margin-top:16px; }
+    .dgr-extremos-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:13px; margin-bottom:6px; }
+    .dgr-extremo-box { background:var(--dgr-card-bg, rgba(255,255,255,.045)); border:1px solid var(--dgr-card-border, rgba(255,255,255,.09)); border-radius:12px; padding:16px 18px; page-break-inside:avoid; }
     .dgr-extremo-label { font-size:9px; font-family:'JetBrains Mono',monospace; letter-spacing:.05em; text-transform:uppercase; color:var(--dgr-text-dim2, #64748b); margin-bottom:5px; }
-    .dgr-extremo-value { font-size:16px; font-weight:700; font-family:'JetBrains Mono',monospace; letter-spacing:-.02em; margin-bottom:3px; }
+    .dgr-extremo-value { font-size:19px; font-weight:700; font-family:'JetBrains Mono',monospace; letter-spacing:-.02em; margin-bottom:3px; }
     .dgr-extremo-kg { font-size:9.5px; font-family:'JetBrains Mono',monospace; color:var(--dgr-text-dim2, #64748b); margin-bottom:5px; }
     .dgr-extremo-name { font-size:11px; color:var(--dgr-brand-text, #cbd5e1); font-weight:600; }
     .dgr-grupo-layout { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
@@ -3357,7 +3368,18 @@ function _dgrEstilos() {
       border-radius:12px;
       padding:16px 18px;
     }
-    .dgr-table-wrap thead { display:table-header-group; }
+    /* Cabeçalho e total (thead/tfoot) SEM repetir a cada quebra de
+       página — por padrão, tanto o display:table-header-group (thead)
+       quanto o table-footer-group (tfoot, já vem assim de fábrica no
+       navegador mesmo sem CSS nenhum) fazem o Chrome reimprimir essas
+       linhas em TODAS as páginas em que a tabela se estende. Forçando
+       os dois pra table-row-group (linha "comum"), eles saem da posição
+       de "cabeçalho/rodapé fixo por página" e passam a fluir no lugar
+       normal: thead continua no topo (primeiro no HTML) e tfoot no fim
+       (é o último elemento dentro de <table>, ver _dgrTabelaMaterialHtml/
+       _dgrRankingHtml), só que cada um aparece UMA vez só. */
+    .dgr-table-wrap thead, .dgr-chart-card table.rk-table thead { display:table-row-group; }
+    .dgr-table-wrap tfoot,  .dgr-chart-card table.rk-table tfoot  { display:table-row-group; }
     .dgr-table-wrap tbody tr { page-break-inside:avoid; }
     .dgr-table-wrap .rk-table { table-layout:fixed; }
     .dgr-table-wrap tbody tr:nth-child(even) { background:var(--dgr-row-alt, rgba(255,255,255,.025)); }
@@ -3366,15 +3388,16 @@ function _dgrEstilos() {
        (Giro & Cobertura + Detalhado Analítico) pra não alterar .rk-table
        nos outros relatórios do sistema (Ocorrências, Ranking etc.), que
        usam a densidade padrão do shell. */
-    .dgr-chart-card .rk-table th, .dgr-table-wrap .rk-table th { padding:9px 3px; font-size:8.2px; }
-    .dgr-chart-card .rk-table td, .dgr-table-wrap .rk-table td { padding:10px 3px; line-height:1.4; overflow-wrap:break-word; font-size:8.2px; }
+    .dgr-chart-card .rk-table th, .dgr-table-wrap .rk-table th { padding:9px 2px; font-size:7.5px; }
+    .dgr-chart-card .rk-table td, .dgr-table-wrap .rk-table td { padding:10px 2px; line-height:1.4; overflow-wrap:break-word; font-size:7.5px; }
     /* Coluna de nome (1ª coluna) é a única que pode quebrar em várias
        linhas — mantém uma fonte um pouco maior, mais legível, já que ela
        tem a largura reservada pra isso. As demais colunas (números) usam
        a fonte reduzida acima pra caber numa linha só sem vazar pra célula
        vizinha. */
-    .dgr-table-wrap .rk-name, .dgr-chart-card .rk-name { font-size:10px !important; }
-    .dgr-table-wrap .rk-name { line-height:1.4; }
+    .dgr-table-wrap .rk-name, .dgr-chart-card .rk-name { font-size:8.3px !important; }
+    .dgr-table-wrap .rk-name { line-height:1.35; }
+    .dgr-table-wrap .rk-sub, .dgr-chart-card .rk-sub { font-size:7.3px; }
     /* Corte de texto do nome — num span INTERNO ao td (não no td em si),
        com max-width:100% do pai. O td continua um table-cell normal,
        respeitando a largura em % que table-layout:fixed calculou; um
