@@ -9921,7 +9921,7 @@ tr.sap-fechamento td {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  margin-top: 6px;
+  margin: 10px 0 14px;
   padding: 2px 8px;
   border-radius: 999px;
   background: var(--purple-bg);

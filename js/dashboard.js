@@ -1091,6 +1091,8 @@ function renderDgVisaoGeralPdf(results, thresholds, dtIni, dtFim) {
       .forEach(id => { const svgEl = document.getElementById(id); if (svgEl) svgEl.innerHTML = ''; });
     ['dg-vg-health-central-summary', 'dg-vg-health-materiais-summary']
       .forEach(id => { const e = document.getElementById(id); if (e) e.innerHTML = ''; });
+    const fechWrapEl = document.getElementById('dg-vg-fech-badge-wrap');
+    if (fechWrapEl) fechWrapEl.innerHTML = '';
     return;
   }
 
@@ -1119,11 +1121,25 @@ function renderDgVisaoGeralPdf(results, thresholds, dtIni, dtFim) {
   const movTotais      = _dgVgMovimentacaoTotais(results);
   const custoMovTotais = _dgVgCustoMovimentacaoTotais(results);
 
+  // Est. Teórico total (mesma conta do card "Variação Total" do KPI hero) —
+  // usado tanto como denominador comum da % Variação de cada linha dos 4
+  // rankings (_daBuildRanking) quanto, aqui, só como argumento formal pro
+  // cálculo abaixo (que só precisa de Caminhões/Carretas/IBCs, não da %).
+  const totalEstTeoricoKpi = estTotais.totalIni + movTotais.totalEnt - movTotais.totalSai;
+
+  // Caminhões/Carretas/IBCs da empresa inteira, pro card "Variação" do KPI
+  // hero — mesma metodologia (e mesmas funções) já usadas nos 4 rankings
+  // do Detalhado Analítico: chamar _daBuildRanking com uma chave constante
+  // agrupa TODOS os pares numa linha só, sem duplicar nenhum cálculo.
+  const entradasFlatKpi = _daBuildEntradasFlat(results);
+  const pesoMedioKpi     = _daPesoMedioPorTipo(entradasFlatKpi);
+  const veiculosTotalKpi = _daBuildRanking(pares, pesoMedioKpi, () => 'total', totalEstTeoricoKpi).total;
+
   // Ajustes de Fechamento Mensal desconsiderados — agregados de todas as
   // centrais do período selecionado, para o badge/modal do card Variação.
   const sapFechExcluidosPeriodo = results.reduce((acc, r) => acc.concat(r.sapFechExcluidos || []), []);
 
-  _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais, sapFechExcluidosPeriodo, custoMovTotais);
+  _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais, sapFechExcluidosPeriodo, custoMovTotais, veiculosTotalKpi);
   _dgVgRenderHealthDonuts(pares, counts, scoreInfo, thresholds);
   _dgVgRenderChartCategoriaFisica(catFisicaPct);
   _dgVgRenderExtremos(extRegional, extCentral);
@@ -1136,14 +1152,9 @@ function renderDgVisaoGeralPdf(results, thresholds, dtIni, dtFim) {
   DG_VG_CAT_ORDER.forEach(catKey => {
     _dgVgRenderDonutCategoria(`dg-vg-donut-${catKey}`, custoAbsPorCat[catKey] || [], catKey);
   });
-  // Est. Teórico total (mesma conta do card "Variação Total" do KPI hero:
-  // estTotais.totalIni + movTotais.totalEnt - movTotais.totalSai) — usado
-  // como DENOMINADOR COMUM da % Variação em CADA linha dos 4 rankings (ver
-  // nota em _daBuildRanking). É isso que faz cada linha representar sua
-  // fatia real da variação total, e a soma de todas as linhas reproduzir
-  // exatamente a % do card do topo.
-  const totalEstTeoricoKpi = estTotais.totalIni + movTotais.totalEnt - movTotais.totalSai;
-
+  // Est. Teórico total já calculado mais acima (totalEstTeoricoKpi) —
+  // reaproveitado aqui como denominador comum da % Variação de cada linha
+  // dos 4 rankings (ver nota em _daBuildRanking).
   _daRenderDetalhadoAnalitico(results, pares, totalEstTeoricoKpi);
 }
 
@@ -1153,7 +1164,7 @@ function renderDgVisaoGeralPdf(results, thresholds, dtIni, dtFim) {
 //    o wrapper "Destaque do Período" (removido — não fazia sentido), mas
 //    MANTENDO os 2 níveis de tamanho/agrupamento. Valores por extenso,
 //    sem abreviação M/K (fmtKg/money em vez de fmtKgShort/moneyShort).
-function _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais, fechExcluidos = [], custoMovTotais = {}) {
+function _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais, fechExcluidos = [], custoMovTotais = {}, veiculos = {}) {
   const el = document.getElementById('dg-vg-kpis-hero');
   if (!el) return;
 
@@ -1198,13 +1209,38 @@ function _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais, f
   // Badge de Ajustes de Fechamento Mensal desconsiderados — guarda os
   // registros em variável global (evita serializar potencialmente
   // centenas de registros num atributo HTML) para o modal reaproveitável
-  // (openFechModal, em ui.js) ler ao clicar.
+  // (openFechModal, em ui.js) ler ao clicar. Renderizado num container
+  // PRÓPRIO (#dg-vg-fech-badge-wrap), posicionado acima do cabeçalho da
+  // seção "Resumo do Período" no HTML — pedido do usuário, pra não
+  // competir visualmente nem com o card Variação nem com o título da seção.
   window._dgVgFechExcluidosAtual = fechExcluidos;
   const fechBadgeHtml = fechExcluidos.length
     ? `<button class="dg-fech-badge" onclick="openFechModal(window._dgVgFechExcluidosAtual, 'Período selecionado')" title="Ver Ajustes de Fechamento Mensal desconsiderados deste período">
         <i class="ti ti-calendar-check"></i> ${fechExcluidos.length} ajuste(s) de fechamento desconsiderado(s)
       </button>`
     : '';
+  const fechBadgeWrapEl = document.getElementById('dg-vg-fech-badge-wrap');
+  if (fechBadgeWrapEl) fechBadgeWrapEl.innerHTML = fechBadgeHtml;
+
+  // Caminhões/Carretas/IBCs — equivalente em veículos da variação física
+  // total (mesma metodologia dos rankings do Detalhado Analítico: peso da
+  // variação de cada categoria ÷ peso médio observado por entrega).
+  // Ícone representa o tipo de veículo/contêiner de cada categoria:
+  // Agregado→caminhão, Aglomerante→carreta, Aditivo+Adição→IBC. ti-package
+  // não estava renderizando (glifo quebrado) — troquei por ti-box, ícone
+  // já usado em dezenas de outros lugares do sistema (bem mais testado).
+  const veiculosRowHtml = `
+    <div class="da-veiculos-row">
+      <span class="da-veiculo-stat" style="color:${_daColorFor(veiculos.caminhoes)}" title="Caminhões — equivalente da variação de Agregado">
+        <i class="ti ti-truck"></i>${_daFmtCountSigned(veiculos.caminhoes)}
+      </span>
+      <span class="da-veiculo-stat" style="color:${_daColorFor(veiculos.carretas)}" title="Carretas — equivalente da variação de Aglomerante">
+        <i class="ti ti-container"></i>${_daFmtCountSigned(veiculos.carretas)}
+      </span>
+      <span class="da-veiculo-stat" style="color:${_daColorFor(veiculos.ibcs)}" title="IBCs — equivalente da variação de Aditivo + Adição">
+        <i class="ti ti-box"></i>${_daFmtCountSigned(veiculos.ibcs)}
+      </span>
+    </div>`;
 
   // Magnitude do percentual, sem sinal — o sinal de sobra/desfalque já vem
   // do varSymbol() (ícone padrão do sistema), então não repetimos "+ "/"− "
@@ -1222,7 +1258,7 @@ function _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais, f
           <div class="inv-kpi-label"><i class="ti ${varIcon}" style="color:${varCol}"></i>Variação</div>
           <div class="inv-kpi-value" style="color:${varCol}">${varSymbol(varTotalFisica)} ${fmtKg(Math.abs(varTotalFisica))}</div>
           <div class="inv-kpi-unit">kg bruto</div>
-          ${fechBadgeHtml}
+          ${veiculosRowHtml}
         </div>
         <div class="da-pct-zone">
           <div class="da-pct-value" style="color:${varCol}">${pctVariacao === null ? '—' : varSymbol(varTotalFisica) + ' ' + pctAbsStr(pctVariacao)}</div>

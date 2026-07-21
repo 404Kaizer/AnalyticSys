@@ -511,6 +511,29 @@
   font-family: var(--mono);
   color: var(--text3);
 }
+
+/* Linha de Caminhões/Carretas/IBCs dentro do card Variação — substitui o
+   badge de ajustes de fechamento, que saiu do corpo do card (agora fica
+   fora, entre a linha de destaque e o bloco secundário). */
+.da-veiculos-row {
+  display: flex;
+  gap: 14px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+.da-veiculo-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: default;
+}
+.da-veiculo-stat i.ti {
+  font-size: 15px;
+}
+
 @media (max-width: 640px) {
   .inv-kpi-card-featured { flex-wrap: wrap; }
   .da-pct-zone { margin: 0 auto; }
