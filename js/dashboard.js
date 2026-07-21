@@ -1091,8 +1091,6 @@ function renderDgVisaoGeralPdf(results, thresholds, dtIni, dtFim) {
       .forEach(id => { const svgEl = document.getElementById(id); if (svgEl) svgEl.innerHTML = ''; });
     ['dg-vg-health-central-summary', 'dg-vg-health-materiais-summary']
       .forEach(id => { const e = document.getElementById(id); if (e) e.innerHTML = ''; });
-    const fechWrapEl = document.getElementById('dg-vg-fech-badge-wrap');
-    if (fechWrapEl) fechWrapEl.innerHTML = '';
     return;
   }
 
@@ -1210,17 +1208,15 @@ function _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais, f
   // Badge de Ajustes de Fechamento Mensal desconsiderados — guarda os
   // registros em variável global (evita serializar potencialmente
   // centenas de registros num atributo HTML) para o modal reaproveitável
-  // (openFechModal, em ui.js) ler ao clicar. Renderizado num container
-  // PRÓPRIO (#dg-vg-fech-badge-wrap), posicionado acima do cabeçalho da
-  // seção "Resumo do Período" no HTML.
+  // (openFechModal, em ui.js) ler ao clicar. Compacto (ícone + contagem,
+  // sem frase) e embutido na linha do rótulo do próprio card "Variação"
+  // do KPI hero — ver .dg-fech-badge-compact em modules.css.
   window._dgVgFechExcluidosAtual = fechExcluidos;
-  const fechBadgeHtml = fechExcluidos.length
-    ? `<button class="dg-fech-badge" onclick="openFechModal(window._dgVgFechExcluidosAtual, 'Período selecionado')" title="Ver Ajustes de Fechamento Mensal desconsiderados deste período">
-        <i class="ti ti-calendar-check"></i> ${fechExcluidos.length} ajuste(s) de fechamento desconsiderado(s)
+  const fechBadgeCompactHtml = fechExcluidos.length
+    ? `<button class="dg-fech-badge-compact" onclick="openFechModal(window._dgVgFechExcluidosAtual, 'Período selecionado')" title="${fechExcluidos.length} ajuste(s) de fechamento desconsiderado(s) neste período — clique para ver">
+        <i class="ti ti-calendar-check"></i>${fechExcluidos.length}
       </button>`
     : '';
-  const fechBadgeWrapEl = document.getElementById('dg-vg-fech-badge-wrap');
-  if (fechBadgeWrapEl) fechBadgeWrapEl.innerHTML = fechBadgeHtml;
 
   // Caminhões/Carretas/IBCs — equivalente em veículos da variação física
   // total (mesma metodologia dos rankings do Detalhado Analítico: peso da
@@ -1253,7 +1249,7 @@ function _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais, f
     <div class="inv-kpi-featured-row">
       <div class="inv-kpi-card inv-kpi-card-featured" style="${featTopStyle(varCol)}">
         <div class="inv-kpi-body">
-          <div class="inv-kpi-label"><i class="ti ${varIcon}" style="color:${varCol}"></i>Variação</div>
+          <div class="inv-kpi-label"><i class="ti ${varIcon}" style="color:${varCol}"></i>Variação${fechBadgeCompactHtml}</div>
           <div class="inv-kpi-value" style="color:${varCol}">${varSymbol(varTotalFisica)} ${fmtKg(Math.abs(varTotalFisica))}</div>
           <div class="inv-kpi-unit">kg bruto</div>
           ${veiculosRowHtml}

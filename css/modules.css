@@ -9914,14 +9914,19 @@ tr.sap-fechamento td {
   color: var(--accent);
 }
 
-/* Badge clicável no card de KPI (Dashboard Gerencial) que abre o modal de
-   Ajustes de Fechamento Mensal desconsiderados (visualização somente-leitura,
-   contextual ao período — diferente do modal de gerenciamento). */
-.dg-fech-badge {
+/* Badge clicável junto ao rótulo do card "Variação" (Dashboard Gerencial —
+   Visão Geral) que abre o modal de Ajustes de Fechamento Mensal
+   desconsiderados (visualização somente-leitura, contextual ao período —
+   diferente do modal de gerenciamento). Compacto (ícone + contagem, sem
+   frase). Inline no fluxo normal (não absoluto) — o rótulo do card já é
+   flex com gap (#dg-vg-kpis-hero .inv-kpi-card-featured .inv-kpi-label),
+   então o badge só entra como mais um item da linha, sem risco de
+   sobrepor a zona de percentual (.da-pct-zone) quando a altura do card
+   varia (ex.: linha de Caminhões/Carretas/IBCs presente ou não). */
+.dg-fech-badge-compact {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  margin: 10px 0 14px;
   padding: 2px 8px;
   border-radius: 999px;
   background: var(--purple-bg);
@@ -9929,12 +9934,16 @@ tr.sap-fechamento td {
   color: var(--purple);
   font-family: var(--mono);
   font-size: 10.5px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
+  flex-shrink: 0;
   transition: background .15s, border-color .15s;
 }
-.dg-fech-badge:hover {
+.dg-fech-badge-compact:hover {
   background: var(--purple-border);
+}
+.dg-fech-badge-compact i {
+  font-size: 11px;
 }
 
 /* ── Modal: Gerenciar Ajustes de Fechamento Mensal (Y11/Y12) ────────────── */
