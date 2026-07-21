@@ -3150,13 +3150,13 @@ function _dgrGiroListaHtml(titulo, iconCls, items, panel, footerArr) {
     return `
     <tr>
       <td class="rk-name" style="font-size:10.5px" title="${_rankEsc(item.name)}"><span class="dgr-nome-trunc-inner">${_rankEsc(_dgrTruncNome(item.name))}</span></td>
-      <td><span style="display:inline-block;padding:2px 6px;border-radius:5px;font-size:8.5px;font-weight:700;white-space:nowrap;background:${cor}22;color:${cor};border:1px solid ${cor}55">${_rankEsc(item.nivel.label)}</span></td>
+      <td><span style="display:inline-block;padding:1px 5px;border-radius:5px;font-size:8.5px;font-weight:700;white-space:nowrap;background:${cor}22;color:${cor};border:1px solid ${cor}55">${_rankEsc(item.nivel.label)}</span></td>
       <td class="rk-num" style="font-size:9px">${item.cobertura === null ? 'sem consumo' : _dgrNowrapNum(item.cobertura.toFixed(1) + 'd')}</td>
       <td class="rk-num" style="font-size:9px;color:${_dgrGiroCor(item.giro)}">${_dgrNowrapNum(item.giro.toFixed(2) + '×')}</td>
       <td class="rk-num" style="font-size:8.5px;color:#94a3b8">${_dgrNowrapNum(fmtKgShort(item.entradas))}</td>
       <td class="rk-num" style="font-size:8.5px;color:#94a3b8">${_dgrNowrapNum(fmtKgShort(item.saidas))}</td>
       <td class="rk-num" style="font-size:8.5px;color:#94a3b8">${_dgrNowrapNum(fmtKgShort(item.estMedio || 0))}</td>
-      <td style="text-align:right"><span style="display:inline-flex;align-items:center;gap:3px;padding:2px 6px;border-radius:5px;font-size:8px;font-weight:700;white-space:nowrap;background:${abast.cor}22;color:${abast.cor};border:1px solid ${abast.cor}55">${abast.icone ? `<i class="ti ${abast.icone}" style="font-size:9px"></i>` : ''}${abast.texto}</span></td>
+      <td style="text-align:right"><span style="display:inline-flex;align-items:center;gap:3px;padding:1px 5px;border-radius:5px;font-size:8px;font-weight:700;white-space:nowrap;background:${abast.cor}22;color:${abast.cor};border:1px solid ${abast.cor}55">${abast.icone ? `<i class="ti ${abast.icone}" style="font-size:9px"></i>` : ''}${abast.texto}</span></td>
     </tr>`;
   }).join('');
 
@@ -3203,7 +3203,7 @@ function _dgrBuildGiroCoberturaHtml(d) {
       ${_dgrGiroListaHtml('Top 5 Centrais — Mais Saudáveis', 'ti-trending-up', g.centralAlto, 'alto')}
       ${_dgrGiroListaHtml('Top 5 Centrais — Mais Críticas', 'ti-trending-down', g.centralBaixo, 'baixo')}
     </div>
-    <div class="dgr-chart-grid" style="margin-top:14px">
+    <div class="dgr-chart-grid" style="margin-top:6px">
       ${_dgrGiroListaHtml('Top 5 Materiais — Mais Saudáveis', 'ti-trending-up', g.matAlto, 'alto')}
       ${_dgrGiroListaHtml('Top 5 Materiais — Mais Críticos', 'ti-trending-down', g.matBaixo, 'baixo', g.matArrFull)}
     </div>`;
@@ -3457,10 +3457,11 @@ function _dgrEstilos() {
        conteúdo). São 4 tabelas na mesma seção/página; com o padding
        padrão dos cards + células a seção passava de 1 página (a 4ª
        tabela ficava sozinha numa página seguinte quase vazia). */
-    .dgr-giro-card { padding:13px 16px; }
-    .dgr-giro-card .rk-table th { padding:6px 3px; }
-    .dgr-giro-card .rk-table td { padding:6.5px 3px; }
-    .dgr-giro-footer { display:flex; gap:14px; padding:8px 0 0; margin-top:8px; border-top:1px solid var(--dgr-divider, rgba(255,255,255,.08)); flex-wrap:wrap; font-size:9px; font-family:'JetBrains Mono',monospace; font-weight:700; }
+    .dgr-giro-card { padding:8px 10px; }
+    .dgr-giro-card .dgr-chart-title { margin-bottom:5px; }
+    .dgr-giro-card .rk-table th { padding:4px 3px; }
+    .dgr-giro-card .rk-table td { padding:4px 3px; line-height:1.15; }
+    .dgr-giro-footer { display:flex; gap:14px; padding:4px 0 0; margin-top:4px; border-top:1px solid var(--dgr-divider, rgba(255,255,255,.08)); flex-wrap:wrap; font-size:9px; font-family:'JetBrains Mono',monospace; font-weight:700; }
     .dgr-giro-footer span { display:flex; align-items:center; gap:4px; }
     /* Colapso dos pares de card (Giro, gráficos de barra) e das grades de
        3 colunas — SEMPRE ao imprimir/gerar PDF, não só condicional a
