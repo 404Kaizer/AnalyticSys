@@ -9948,7 +9948,7 @@ tr.sap-fechamento td {
 
 /* ── Modal: Gerenciar Ajustes de Fechamento Mensal (Y11/Y12) ────────────── */
 .fechmgr-dialog {
-  max-width: min(1260px, 96vw);
+  max-width: min(1440px, 97vw);
 }
 .fechmgr-sub {
   font-size: 11.5px;
