@@ -639,9 +639,11 @@
    código de movimento), com Top N + "ver todas".
 ══════════════════════════════════════════ */
 .mod-summary-cards {
-  padding: 14px 20px 6px;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg1);
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px 20px 8px;
+  margin-bottom: 16px;
 }
 .mod-summary-hero {
   display: flex;
