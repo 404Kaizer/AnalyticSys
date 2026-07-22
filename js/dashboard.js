@@ -3762,14 +3762,21 @@ function renderSAP() {
     const isDupReal      = _sapDupKeys.real.has(rKey);
     const isDupCancelled = !isDupReal && _sapDupKeys.cancelled.has(rKey);
     const isFechPattern  = typeof isSapFechamentoPattern === 'function' && isSapFechamentoPattern(r);
+    // Documento justificado no Inventário tem prioridade sobre o resultado
+    // padrão de isSapExcluidoPorFechamento — mesma trava, só que aqui
+    // precisamos saber o MOTIVO específico pra escolher o badge certo
+    // (ver isSapDocJustificadoInventario, ui.js).
+    const isFechTravadoInv = isFechPattern && typeof isSapDocJustificadoInventario === 'function' && isSapDocJustificadoInventario(r);
     const isFechExcluido = isFechPattern && typeof isSapExcluidoPorFechamento === 'function' && isSapExcluidoPorFechamento(r);
     const trClass = isDupReal ? ' class="sap-duplicata"' : isDupCancelled ? ' class="sap-duplicata-anulada"' : isFechPattern ? ' class="sap-fechamento"' : '';
     const trTitle = isDupReal ? ' title="Integração duplicada sem estorno correspondente"' : isDupCancelled ? ' title="Duplicata anulada por estorno"' : '';
     const _sapSemCad = !getCatKeyDoCadastro(r.materialOriginal);
     const fechBadgeHtml = isFechPattern
-      ? (isFechExcluido
-          ? '<span class="badge-fechamento" title="Ajuste de Fechamento Mensal — desconsiderado do cálculo de variação. Gerencie em Movimentações SAP → botão Fechamento.">Fechamento</span>'
-          : '<span class="badge-fechamento badge-fechamento--incluido" title="Ajuste de Fechamento Mensal — reincluído manualmente no cálculo. Gerencie em Movimentações SAP → botão Fechamento.">Fechamento · incluído</span>')
+      ? (isFechTravadoInv
+          ? '<span class="badge-fechamento badge-fechamento--inventario" title="Documento SAP preenchido em uma justificativa do Inventário — sempre desconsiderado do cálculo de variação. Para reverter, apague o campo Documento SAP naquela justificativa.">Justificado no Inventário</span>'
+          : isFechExcluido
+            ? '<span class="badge-fechamento" title="Ajuste de Fechamento Mensal — desconsiderado do cálculo de variação. Gerencie em Movimentações SAP → botão Fechamento.">Fechamento</span>'
+            : '<span class="badge-fechamento badge-fechamento--incluido" title="Ajuste de Fechamento Mensal — reincluído manualmente no cálculo. Gerencie em Movimentações SAP → botão Fechamento.">Fechamento · incluído</span>')
       : '';
     return `
     <tr${trClass}${trTitle}>

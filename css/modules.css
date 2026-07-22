@@ -9913,6 +9913,14 @@ tr.sap-fechamento td {
   border-color: var(--accent);
   color: var(--accent);
 }
+/* Documento SAP justificado em alguma linha do Inventário — trava real
+   (não reversível pelo modal de Fechamento), cor distinta (teal) das
+   outras duas variantes acima pra sinalizar que é um motivo diferente. */
+.badge-fechamento--inventario {
+  background: var(--teal-bg);
+  border-color: var(--teal-border);
+  color: var(--teal);
+}
 
 /* Badge clicável junto ao rótulo do card "Variação" (Dashboard Gerencial —
    Visão Geral) que abre o modal de Ajustes de Fechamento Mensal
@@ -10209,6 +10217,14 @@ tr.sap-fechamento td {
 .fechmgr-table tbody tr.fechmgr-row-incluido:hover {
   background: var(--bg3);
 }
+/* Documento justificado no Inventário — trava real, cor distinta (teal) das
+   outras duas linhas pra deixar claro que não é um estado alternável aqui. */
+.fechmgr-table tbody tr.fechmgr-row-travado {
+  background: var(--teal-bg);
+}
+.fechmgr-table tbody tr.fechmgr-row-travado:hover {
+  background: var(--bg3);
+}
 
 .th-checkbox {
   width: 32px;
@@ -10222,6 +10238,10 @@ tr.sap-fechamento td {
   height: 15px;
   cursor: pointer;
   accent-color: var(--purple);
+}
+.fechmgr-table input[type="checkbox"]:disabled {
+  cursor: not-allowed;
+  opacity: .4;
 }
 
 /* Indicador de status compacto (bolinha + tooltip) em vez de badge de
@@ -10242,6 +10262,10 @@ tr.sap-fechamento td {
 }
 .fechmgr-status-icon--inc {
   color: var(--green);
+}
+.fechmgr-status-icon--travado {
+  color: var(--teal);
+  cursor: help;
 }
 
 /* ── Novos gráficos de ocorrências ── */

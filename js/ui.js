@@ -3432,11 +3432,52 @@ function invalidateFechOverrideCache() {
   _fechOverrideSetSig = null;
 }
 
-// Verdadeiro função de decisão usada por TODO o sistema: um registro deve
-// ser desconsiderado do cálculo de variação/entradas/saídas se bate no
-// padrão de fechamento E não foi reincluído manualmente pelo analista.
+// Conjunto de números de Documento SAP preenchidos em QUALQUER justificativa
+// do Inventário (campo "Documento SAP" do fechamento de inventário — ver
+// invJustificativas em inventario.js/state.js). Documentos aqui são
+// SEMPRE desconsiderados do cálculo (ver isSapExcluidoPorFechamento
+// abaixo), mesmo que reincluídos manualmente via override no modal de
+// Fechamento — trava real, não um valor-padrão reversível por ali.
+//
+// Propositalmente SEM CACHE (diferente de _getFechOverrideSet): a lista
+// de justificativas do Inventário é pequena (uma linha por central×
+// material×mês justificado, nunca a escala de 600k do SAP) e precisa
+// refletir o estado ATUAL a cada chamada — o Hugo confirmou que apagar o
+// campo Documento SAP de uma justificativa deve destravar aquele
+// documento imediatamente, sem nenhuma ação de "sincronizar". Cachear
+// aqui reintroduziria o mesmo risco de staleness entre módulos já
+// evitado de propósito em _anStockCache (ver notas de analitico.js).
+function _getInvJustDocSet() {
+  const set = new Set();
+  (state.invJustificativas || []).forEach(j => {
+    const doc = j && j.documentoSap;
+    if (doc && String(doc).trim()) set.add(_fechImportNormDoc(doc));
+  });
+  return set;
+}
+
+// Um registro SAP tem seu Documento "justificado no Inventário" quando
+// (a) bate no padrão Y11/Y12 de fechamento E (b) o número do documento
+// aparece em alguma justificativa do Inventário. Escopo intencionalmente
+// restrito a (a) — por decisão do Hugo, isto NÃO é um mecanismo de
+// exclusão genérico por documento, só uma trava adicional sobre o mesmo
+// universo de candidatos já coberto por isSapFechamentoPattern.
+function isSapDocJustificadoInventario(r) {
+  if (!isSapFechamentoPattern(r)) return false;
+  return _getInvJustDocSet().has(_fechImportNormDoc(r.documento));
+}
+
+// Verdadeira função de decisão usada por TODO o sistema: um registro deve
+// ser desconsiderado do cálculo de variação/entradas/saídas se:
+//   (1) o Documento SAP está justificado em alguma linha do Inventário —
+//       trava incondicional, verificada ANTES do override manual, então
+//       nenhum "Considerar Ajuste" no modal de Fechamento consegue
+//       reincluir esse registro enquanto o campo continuar preenchido; OU
+//   (2) bate no padrão de fechamento E não foi reincluído manualmente
+//       pelo analista (comportamento original, automático por data).
 function isSapExcluidoPorFechamento(r) {
   if (!isSapFechamentoPattern(r)) return false;
+  if (isSapDocJustificadoInventario(r)) return true;
   return !_getFechOverrideSet().has(getSapFechKey(r));
 }
 
@@ -3753,14 +3794,24 @@ function _fechMgrGetTodosCandidatos() {
     _fechMgrCandidatosRawCache = (state.sap || []).filter(isSapFechamentoPattern);
   }
   const overrideSet = _getFechOverrideSet();
+  const invDocSet = _getInvJustDocSet(); // sem cache, de propósito — ver _getInvJustDocSet
   return _fechMgrCandidatosRawCache.map(r => {
     const chave = getSapFechKey(r);
-    const excluido = !overrideSet.has(chave);
+    // Documento justificado no Inventário tem prioridade: trava a exclusão
+    // independente do override manual (mesma regra de isSapExcluidoPorFechamento,
+    // reaplicada aqui pra exibir o motivo certo em vez de só o resultado).
+    const travadoPorInventario = invDocSet.has(_fechImportNormDoc(r.documento));
+    const excluido = travadoPorInventario ? true : !overrideSet.has(chave);
+    let statusLabel;
+    if (travadoPorInventario) statusLabel = 'Justificado no Inventário';
+    else if (excluido)        statusLabel = 'Desconsiderado';
+    else                      statusLabel = 'Incluído manualmente';
     return {
       ...r,
       _chave: chave,
-      _statusLabel: excluido ? 'Desconsiderado' : 'Incluído manualmente',
-      _statusExcluido: excluido
+      _statusLabel: statusLabel,
+      _statusExcluido: excluido,
+      _travadoPorInventario: travadoPorInventario
     };
   });
 }
@@ -3836,6 +3887,7 @@ function _fechMgrRender() {
   // status, já que é essa a razão de existir delas.
   const desconsiderados = filtrados.filter(r => r._statusExcluido);
   const incluidosManual = filtrados.filter(r => !r._statusExcluido);
+  const travadosPorInventario = filtrados.filter(r => r._travadoPorInventario).length;
   const { peso: pesoFiltro, custo: custoFiltro } = somarPesoCustoSap(filtrados);
   const filtroAtivo = filtrados.length !== todos.length;
 
@@ -3854,7 +3906,7 @@ function _fechMgrRender() {
         <div class="inv-kpi-body">
           <div class="inv-kpi-label">Desconsiderados</div>
           <div class="inv-kpi-value">${desconsiderados.length}</div>
-          <div class="inv-kpi-unit">${filtroAtivo ? `de ${filtrados.length} exibido(s) no filtro` : `de ${todos.length} detectado(s)`}</div>
+          <div class="inv-kpi-unit">${filtroAtivo ? `de ${filtrados.length} exibido(s) no filtro` : `de ${todos.length} detectado(s)`}${travadosPorInventario ? ` · ${travadosPorInventario} via Inventário` : ''}</div>
         </div>
       </div>
       <div class="inv-kpi-card">
@@ -3909,10 +3961,13 @@ function _fechMgrRender() {
     const checked = _fechMgrSelecionados.has(r._chave);
     // Status como indicador compacto (bolinha colorida + tooltip) em vez de
     // badge de texto — libera espaço horizontal pra material/valores, que
-    // são as colunas que realmente importam pra decisão.
-    const statusDot = r._statusExcluido
-      ? `<i class="ti ti-circle-x fechmgr-status-icon fechmgr-status-icon--desc" title="Desconsiderado do cálculo de variação"></i>`
-      : `<i class="ti ti-circle-check fechmgr-status-icon fechmgr-status-icon--inc" title="Incluído manualmente no cálculo (considerado)"></i>`;
+    // são as colunas que realmente importam pra decisão. Cadeado (teal) tem
+    // prioridade sobre os outros dois — trava real, não reversível aqui.
+    const statusDot = r._travadoPorInventario
+      ? `<i class="ti ti-lock fechmgr-status-icon fechmgr-status-icon--travado" title="Documento SAP preenchido em uma justificativa do Inventário — sempre desconsiderado. Para reverter, apague o campo Documento SAP naquela justificativa."></i>`
+      : r._statusExcluido
+        ? `<i class="ti ti-circle-x fechmgr-status-icon fechmgr-status-icon--desc" title="Desconsiderado do cálculo de variação"></i>`
+        : `<i class="ti ti-circle-check fechmgr-status-icon fechmgr-status-icon--inc" title="Incluído manualmente no cálculo (considerado)"></i>`;
     // Escapa uma vez e reaproveita no title + conteúdo visível — antes só o
     // title era escapado; o texto exibido ia direto sem escapeHtml, então
     // um material/usuário/documento com "<", ">" ou "&" (comum em specs
@@ -3925,9 +3980,13 @@ function _fechMgrRender() {
     const documentoSafe = escapeHtml(r.documento || '—');
     const dtLancSafe    = escapeHtml(r.dtLanc || '—');
     const dtRegSafe     = escapeHtml(r.dtReg || '—');
+    const rowClass = r._travadoPorInventario ? 'fechmgr-row-travado' : (r._statusExcluido ? '' : 'fechmgr-row-incluido');
+    const checkboxHtml = r._travadoPorInventario
+      ? `<input type="checkbox" disabled title="Travado — Documento justificado no Inventário, não pode ser incluído/excluído em lote aqui.">`
+      : `<input type="checkbox" ${checked ? 'checked' : ''} onchange="_fechMgrToggleSelecao('${r._chave.replace(/'/g,"\\'")}', this.checked)">`;
     return `
-    <tr class="${r._statusExcluido ? '' : 'fechmgr-row-incluido'}">
-      <td class="th-checkbox"><input type="checkbox" ${checked ? 'checked' : ''} onchange="_fechMgrToggleSelecao('${r._chave.replace(/'/g,"\\'")}', this.checked)"></td>
+    <tr class="${rowClass}">
+      <td class="th-checkbox">${checkboxHtml}</td>
       <td class="td-mono" title="${usuarioSafe}">${usuarioSafe}</td>
       <td class="td-mono" style="color:${neg ? '#ef4444' : '#22c55e'};font-weight:600" title="${movimentoSafe}">${movimentoSafe}</td>
       <td class="td-mono" title="${centralSafe}">${centralSafe}</td>
@@ -3998,6 +4057,7 @@ function _fechMgrToggleSelecionarTudo(checked) {
   const inicio = _fechMgrPage * PAGE_SIZE;
   const pagina = _fechMgrLastFiltrados.slice(inicio, inicio + PAGE_SIZE);
   pagina.forEach(r => {
+    if (r._travadoPorInventario) return; // checkbox desabilitado — nunca entra na seleção
     if (checked) _fechMgrSelecionados.add(r._chave);
     else _fechMgrSelecionados.delete(r._chave);
   });
@@ -4022,10 +4082,15 @@ function _fechMgrAtualizarBarraLote() {
   // inteiro só pra saber o estado do checkbox "selecionar tudo").
   const inicio = _fechMgrPage * PAGE_SIZE;
   const pagina = _fechMgrLastFiltrados.slice(inicio, inicio + PAGE_SIZE);
-  const todosPaginaSelecionados = pagina.length > 0 && pagina.every(r => _fechMgrSelecionados.has(r._chave));
+  // Linhas travadas por Inventário nunca entram em _fechMgrSelecionados (o
+  // checkbox delas é disabled) — exclui do cálculo de "página inteira
+  // selecionada", senão uma página com pelo menos 1 linha travada nunca
+  // marcaria o checkbox de cabeçalho como completo.
+  const paginaSelecionavel = pagina.filter(r => !r._travadoPorInventario);
+  const todosPaginaSelecionados = paginaSelecionavel.length > 0 && paginaSelecionavel.every(r => _fechMgrSelecionados.has(r._chave));
   if (checkAllEl) {
     checkAllEl.checked = todosPaginaSelecionados;
-    checkAllEl.indeterminate = !todosPaginaSelecionados && pagina.some(r => _fechMgrSelecionados.has(r._chave));
+    checkAllEl.indeterminate = !todosPaginaSelecionados && paginaSelecionavel.some(r => _fechMgrSelecionados.has(r._chave));
   }
 
   // ── Banner "selecionar todos os N filtrados" (padrão Gmail) ────────────
@@ -4051,9 +4116,9 @@ function _fechMgrAtualizarBarraLote() {
 // página inteira já foi selecionada), evitando selecionar milhares de
 // registros sem querer.
 function _fechMgrSelecionarTodosFiltrados() {
-  _fechMgrLastFiltrados.forEach(r => _fechMgrSelecionados.add(r._chave));
+  _fechMgrLastFiltrados.forEach(r => { if (!r._travadoPorInventario) _fechMgrSelecionados.add(r._chave); });
   _fechMgrAtualizarBarraLote();
-  document.querySelectorAll('#fechmgr-tbody input[type="checkbox"]').forEach(cb => { cb.checked = true; });
+  document.querySelectorAll('#fechmgr-tbody input[type="checkbox"]:not(:disabled)').forEach(cb => { cb.checked = true; });
   toast(`${_fechMgrSelecionados.size.toLocaleString('pt-BR')} registro(s) selecionado(s).`);
 }
 window._fechMgrSelecionarTodosFiltrados = _fechMgrSelecionarTodosFiltrados;
