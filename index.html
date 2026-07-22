@@ -4121,11 +4121,13 @@
     <div class="fechmgr-lote-bar" id="fechmgr-lote-bar" style="display:none">
       <span id="fechmgr-lote-count"><i class="ti ti-checks"></i> 0 registros selecionados</span>
       <div class="fechmgr-lote-actions">
-        <button class="btn btn-sm" onclick="_fechMgrAplicarLote(true)" title="Reincluir os registros selecionados no cálculo de variação"><i class="ti ti-check"></i> Incluir no cálculo</button>
-        <button class="btn btn-sm" onclick="_fechMgrAplicarLote(false)" title="Voltar os registros selecionados ao comportamento automático (desconsiderados)"><i class="ti ti-x"></i> Voltar ao automático</button>
+        <button class="btn btn-sm" onclick="_fechMgrAplicarLote(true)" title="Considerar os registros selecionados no cálculo de estoque"><i class="ti ti-check"></i> Considerar Ajuste</button>
+        <button class="btn btn-sm" onclick="_fechMgrAplicarLote(false)" title="Desconsiderar os registros selecionados do cálculo de estoque"><i class="ti ti-x"></i> Desconsiderar Ajuste</button>
         <button class="btn btn-sm fechmgr-btn-ghost" onclick="_fechMgrLimparSelecao()">Limpar seleção</button>
       </div>
     </div>
+
+    <div class="fechmgr-selectall-banner" id="fechmgr-selectall-banner" style="display:none"></div>
 
     <div class="fechmgr-filter-bar" id="fechmgr-filter-bar" style="display:none">
       <span id="fechmgr-filter-count"><i class="ti ti-filter"></i> Filtro(s) de coluna ativo(s)</span>

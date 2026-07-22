@@ -3353,21 +3353,22 @@ function getSapByCentralInPeriod(central, dtIni, dtFim) {
 // mas SEM alterar o dado bruto — a página SAP continua mostrando o
 // registro original, sempre, para auditoria.
 //
-// Critério de detecção (confirmado com o Hugo — sempre verdadeiro, sem
-// exceção conhecida): DT DOCUMENTO === DT LANÇAMENTO === último dia não-
-// domingo do mês, e DT REGISTRO alguns dias depois (tipicamente entre os
-// dias 5 e 15 do mês seguinte, quando a controladoria fecha o período).
-// Não existe nenhum outro campo no SAP (usuário, texto, motivo) que
-// diferencie um ajuste de fechamento de um ajuste feito durante o mês —
-// por isso a exclusão é automática por padrão de data, com uma via de
-// escape manual (override) para o caso raro de falso positivo, controlada
-// na própria página SAP (checkbox + ação em lote).
+// Critério de detecção (definido com o usuário em 22/07/2026 — substitui a
+// versão anterior baseada em "último dia útil do mês" + janela de dias):
+// DT DOCUMENTO e DT LANÇAMENTO caem no mesmo mês/ano (o "mês anterior"), e
+// DT REGISTRO cai exatamente no mês/ano seguinte (o "mês atual"). Não
+// exige mais que DT DOCUMENTO === DT LANÇAMENTO no mesmo DIA, nem que a
+// DT LANÇAMENTO seja o último dia útil — só que ambas estejam no mesmo mês,
+// um mês antes do registro. Não existe nenhum outro campo no SAP (usuário,
+// texto, motivo) que diferencie um ajuste de fechamento de um ajuste feito
+// durante o mês — por isso a exclusão é automática por padrão de data, com
+// uma via de escape manual (override) para o caso raro de falso positivo,
+// controlada na própria página SAP (checkbox + ação em lote).
 
-// Retorna o último dia não-domingo do mês/ano da data informada.
-function _fechUltimoDiaUtilMes(date) {
-  const d = new Date(date.getFullYear(), date.getMonth() + 1, 0); // último dia do mês
-  while (d.getDay() === 0) d.setDate(d.getDate() - 1); // domingo → volta 1 dia
-  return d;
+// Retorna um índice numérico crescente pro mês/ano de uma data, útil pra
+// comparar "mesmo mês" ou "mês seguinte" sem se importar com o dia.
+function _fechMesIndice(date) {
+  return date.getFullYear() * 12 + date.getMonth();
 }
 
 // Detecta se um registro SAP bate no padrão de Ajuste de Fechamento Mensal.
@@ -3382,20 +3383,15 @@ function isSapFechamentoPattern(r) {
   const dtReg  = parseDate(r.dtReg);
   if (!dtDoc || !dtLanc || !dtReg) return false;
 
-  // DT DOCUMENTO === DT LANÇAMENTO (mesmo dia calendário)
-  if (localISODate(dtDoc) !== localISODate(dtLanc)) return false;
+  const mesDoc  = _fechMesIndice(dtDoc);
+  const mesLanc = _fechMesIndice(dtLanc);
+  const mesReg  = _fechMesIndice(dtReg);
 
-  // DT LANÇAMENTO === último dia não-domingo do mês
-  const esperado = _fechUltimoDiaUtilMes(dtLanc);
-  if (localISODate(dtLanc) !== localISODate(esperado)) return false;
+  // DT DOCUMENTO e DT LANÇAMENTO no mesmo mês/ano (o "mês anterior")
+  if (mesDoc !== mesLanc) return false;
 
-  // DT REGISTRO deve vir depois (nunca antes) e dentro de uma janela
-  // generosa (~5 semanas) — a controladoria fecha tipicamente entre os
-  // dias 5-15 do mês seguinte, mas a data pode variar; a folga aqui é só
-  // uma rede de segurança contra dado corrompido/absurdo, não o critério
-  // principal (que já é bastante específico por si só).
-  const diffDias = Math.round((dtReg - dtLanc) / 86400000);
-  if (diffDias < 0 || diffDias > 35) return false;
+  // DT REGISTRO exatamente um mês/ano depois (o "mês atual")
+  if (mesReg !== mesLanc + 1) return false;
 
   return true;
 }
@@ -3688,17 +3684,29 @@ function _fechMgrRender() {
     const statusDot = r._statusExcluido
       ? `<i class="ti ti-circle-x fechmgr-status-icon fechmgr-status-icon--desc" title="Desconsiderado do cálculo de variação"></i>`
       : `<i class="ti ti-circle-check fechmgr-status-icon fechmgr-status-icon--inc" title="Incluído manualmente no cálculo (considerado)"></i>`;
+    // Escapa uma vez e reaproveita no title + conteúdo visível — antes só o
+    // title era escapado; o texto exibido ia direto sem escapeHtml, então
+    // um material/usuário/documento com "<", ">" ou "&" (comum em specs
+    // técnicas, ex: "Ø<25mm") quebrava o HTML da linha.
+    const usuarioSafe   = escapeHtml(r.usuario || '—');
+    const movimentoSafe = escapeHtml(r.movimento || '—');
+    const centralSafe   = escapeHtml(r.central || '—');
+    const depositoSafe  = escapeHtml(r.deposito || '—');
+    const materialSafe  = escapeHtml(r.material || r.materialOriginal || '—');
+    const documentoSafe = escapeHtml(r.documento || '—');
+    const dtLancSafe    = escapeHtml(r.dtLanc || '—');
+    const dtRegSafe     = escapeHtml(r.dtReg || '—');
     return `
     <tr class="${r._statusExcluido ? '' : 'fechmgr-row-incluido'}">
       <td class="th-checkbox"><input type="checkbox" ${checked ? 'checked' : ''} onchange="_fechMgrToggleSelecao('${r._chave.replace(/'/g,"\\'")}', this.checked)"></td>
-      <td class="td-mono" title="${escapeHtml(r.usuario || '—')}">${r.usuario || '—'}</td>
-      <td class="td-mono" style="color:${neg ? '#ef4444' : '#22c55e'};font-weight:600" title="${escapeHtml(r.movimento || '—')}">${r.movimento || '—'}</td>
-      <td class="td-mono" title="${escapeHtml(r.central || '—')}">${r.central || '—'}</td>
-      <td class="td-muted" title="${escapeHtml(r.deposito || '—')}">${r.deposito || '—'}</td>
-      <td class="td-mono fechmgr-td-material" title="${escapeHtml(r.material || r.materialOriginal || '—')}">${r.material || r.materialOriginal || '—'}</td>
-      <td class="td-mono" title="${escapeHtml(r.documento || '—')}">${r.documento || '—'}</td>
-      <td class="td-muted" title="${escapeHtml(r.dtLanc || '—')}">${r.dtLanc || '—'}</td>
-      <td class="td-muted" title="${escapeHtml(r.dtReg || '—')}">${r.dtReg || '—'}</td>
+      <td class="td-mono" title="${usuarioSafe}">${usuarioSafe}</td>
+      <td class="td-mono" style="color:${neg ? '#ef4444' : '#22c55e'};font-weight:600" title="${movimentoSafe}">${movimentoSafe}</td>
+      <td class="td-mono" title="${centralSafe}">${centralSafe}</td>
+      <td class="td-muted" title="${depositoSafe}">${depositoSafe}</td>
+      <td class="td-mono fechmgr-td-material" title="${materialSafe}">${materialSafe}</td>
+      <td class="td-mono" title="${documentoSafe}">${documentoSafe}</td>
+      <td class="td-muted" title="${dtLancSafe}">${dtLancSafe}</td>
+      <td class="td-muted" title="${dtRegSafe}">${dtRegSafe}</td>
       <td class="td-mono" style="text-align:right">${fmtKg(num(r.peso))}</td>
       <td class="td-mono" style="text-align:right">${money(custoLinha)}</td>
       <td style="text-align:center">${statusDot}</td>
@@ -3780,25 +3788,67 @@ function _fechMgrAtualizarBarraLote() {
   const n = _fechMgrSelecionados.size;
   if (bar) bar.style.display = n > 0 ? 'flex' : 'none';
   if (countEl) countEl.textContent = n === 1 ? '1 registro selecionado' : `${n} registros selecionados`;
+
+  // Reaproveita o cache da última renderização (não recalcula o filtro
+  // inteiro só pra saber o estado do checkbox "selecionar tudo").
+  const inicio = _fechMgrPage * PAGE_SIZE;
+  const pagina = _fechMgrLastFiltrados.slice(inicio, inicio + PAGE_SIZE);
+  const todosPaginaSelecionados = pagina.length > 0 && pagina.every(r => _fechMgrSelecionados.has(r._chave));
   if (checkAllEl) {
-    // Reaproveita o cache da última renderização (não recalcula o filtro
-    // inteiro só pra saber o estado do checkbox "selecionar tudo").
-    const inicio = _fechMgrPage * PAGE_SIZE;
-    const pagina = _fechMgrLastFiltrados.slice(inicio, inicio + PAGE_SIZE);
-    const todosSelecionados = pagina.length > 0 && pagina.every(r => _fechMgrSelecionados.has(r._chave));
-    checkAllEl.checked = todosSelecionados;
-    checkAllEl.indeterminate = !todosSelecionados && pagina.some(r => _fechMgrSelecionados.has(r._chave));
+    checkAllEl.checked = todosPaginaSelecionados;
+    checkAllEl.indeterminate = !todosPaginaSelecionados && pagina.some(r => _fechMgrSelecionados.has(r._chave));
+  }
+
+  // ── Banner "selecionar todos os N filtrados" (padrão Gmail) ────────────
+  // Só aparece quando a página inteira já está marcada E ainda existe mais
+  // registro no filtro atual do que o já selecionado — senão não haveria
+  // nada a mais pra oferecer.
+  const banner = document.getElementById('fechmgr-selectall-banner');
+  if (banner) {
+    const totalFiltrado = _fechMgrLastFiltrados.length;
+    const mostrar = todosPaginaSelecionados && n < totalFiltrado;
+    banner.style.display = mostrar ? 'flex' : 'none';
+    if (mostrar) {
+      banner.innerHTML = `
+        <span><i class="ti ti-info-circle"></i> Todos os ${pagina.length} registros desta página estão selecionados.</span>
+        <button type="button" class="fechmgr-selectall-link" onclick="_fechMgrSelecionarTodosFiltrados()">Selecionar todos os ${totalFiltrado.toLocaleString('pt-BR')} que batem no filtro atual</button>
+      `;
+    }
   }
 }
+
+// Marca TODOS os registros que batem no filtro atual (não só a página
+// visível) — ação deliberada de 2º clique (banner só aparece depois que a
+// página inteira já foi selecionada), evitando selecionar milhares de
+// registros sem querer.
+function _fechMgrSelecionarTodosFiltrados() {
+  _fechMgrLastFiltrados.forEach(r => _fechMgrSelecionados.add(r._chave));
+  _fechMgrAtualizarBarraLote();
+  document.querySelectorAll('#fechmgr-tbody input[type="checkbox"]').forEach(cb => { cb.checked = true; });
+  toast(`${_fechMgrSelecionados.size.toLocaleString('pt-BR')} registro(s) selecionado(s).`);
+}
+window._fechMgrSelecionarTodosFiltrados = _fechMgrSelecionarTodosFiltrados;
 
 function _fechMgrAplicarLote(incluir) {
   if (!_fechMgrSelecionados.size) return;
   const chaves = [..._fechMgrSelecionados];
+  // Confirmação extra pra lotes grandes — "selecionar tudo o que bate no
+  // filtro" tornou possível marcar milhares de registros em 2 cliques, e
+  // Considerar/Desconsiderar afeta o cálculo de estoque em TODO o sistema
+  // (Dashboard, Analítico, Inventário, Trend, Assistente) — vale um
+  // freio antes de aplicar em massa. Mesmo padrão de confirm() já usado
+  // em outras ações destrutivas/grandes do sistema (ver restaurar backup).
+  const LIMITE_CONFIRMACAO_LOTE = 200;
+  if (chaves.length > LIMITE_CONFIRMACAO_LOTE) {
+    const acao = incluir ? 'considerar' : 'desconsiderar';
+    const msg = `Você está prestes a ${acao} ${chaves.length.toLocaleString('pt-BR')} registros no cálculo de estoque. Isso afeta Dashboard, Analítico, Inventário e Trend. Confirmar?`;
+    if (!confirm(msg)) return;
+  }
   setSapFechOverrideEmLote(chaves, incluir);
   _fechMgrSelecionados.clear();
   toast(incluir
-    ? `${chaves.length} registro(s) reincluído(s) no cálculo de variação.`
-    : `${chaves.length} registro(s) voltaram a ser desconsiderados automaticamente.`);
+    ? `${chaves.length} registro(s) considerado(s) no cálculo de estoque.`
+    : `${chaves.length} registro(s) desconsiderado(s) do cálculo de estoque.`);
   _fechMgrRender();
   // Recalcula qualquer análise já aberta pra refletir a mudança imediatamente
   if (typeof updateDashboard === 'function') updateDashboard();
@@ -3865,12 +3915,19 @@ function _fechMgrLimparTodosFiltros() {
 }
 window._fechMgrLimparTodosFiltros = _fechMgrLimparTodosFiltros;
 
+// Cache dos valores únicos da coluna ATUALMENTE aberta no popover — evita
+// recalcular _fechMgrGetTodosCandidatos() (map + getSapFechKey por
+// registro) e reaplicar os outros filtros do zero a cada tecla digitada
+// na busca do popover. Só é recalculado quando o popover abre/reabre.
+let _fechMgrPopoverAllVals = [];
+
 function _fechMgrOpenColFilterPopover(thEl, colIdx) {
   _fechMgrClosePopover();
   _fechMgrPopColIdx = colIdx;
 
   const activeSet = _fechMgrColFilters[colIdx] || new Set();
   const allVals = _fechMgrGetColUniqueValues(colIdx);
+  _fechMgrPopoverAllVals = allVals;
   if (!allVals.length) return;
 
   const pop = document.createElement('div');
@@ -3916,7 +3973,7 @@ function _fechMgrRefreshPopoverList(query) {
   const saved = _fechMgrColFilters[_fechMgrPopColIdx] || new Set();
   const merged = new Set([...saved, ...currentChecked]);
 
-  const allVals = _fechMgrGetColUniqueValues(_fechMgrPopColIdx);
+  const allVals = _fechMgrPopoverAllVals;
   const q = normalizeText(query || '');
   const filtered = q ? allVals.filter(v => v.includes(q)) : allVals;
   const allChecked = filtered.length > 0 && filtered.every(v => merged.has(v));
@@ -3956,6 +4013,7 @@ function _fechMgrClosePopover() {
   if (_fechMgrPopover) _fechMgrPopover.remove();
   _fechMgrPopover = null;
   _fechMgrPopColIdx = null;
+  _fechMgrPopoverAllVals = [];
 }
 
 document.addEventListener('mousedown', e => {

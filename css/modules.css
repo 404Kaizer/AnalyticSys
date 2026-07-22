@@ -10028,6 +10028,38 @@ tr.sap-fechamento td {
   opacity: 1;
 }
 
+/* ── Banner "selecionar todos os N filtrados" (padrão Gmail) — aparece só
+   quando a página inteira já está marcada e ainda há mais registros no
+   filtro atual pra selecionar (ver _fechMgrAtualizarBarraLote). Tom accent
+   (não neutro, não roxo) pra se diferenciar tanto da barra de lote quanto
+   da de filtro — é uma sugestão de ação, não um status. */
+.fechmgr-selectall-banner {
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 8px 20px;
+  background: var(--accent-dim);
+  border-bottom: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--text2);
+  text-align: center;
+}
+.fechmgr-selectall-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.fechmgr-selectall-link:hover {
+  color: var(--accent-hover, var(--accent));
+}
+
 /* ── Tabela: corrige o corte de texto herdado da regra genérica de célula
    (tbody td { max-width:240px; overflow:hidden; ellipsis }), que faz
    sentido pras tabelas de página cheia mas espreme demais dentro de um
