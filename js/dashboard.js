@@ -555,21 +555,20 @@ function _dgVgValorCustoSap(s) {
 }
 
 // Custo de Entradas/Saídas — soma o custo de cada registro SAP do período,
-// filtrando por CÓDIGO de movimento (101/801 = entrada, 201 = saída),
-// conforme decisão do Hugo — não pelo sinal do peso. Fonte é o próprio
-// registro SAP (valorTotal/custoUnit), não o custo médio por material.
-// Nota: o kg de Entradas/Saídas (_dgVgMovimentacaoTotais, acima) soma
-// TODOS os códigos pelo sinal do peso, não só 101/801/201 — se houver
-// outros códigos no período (ex.: 309/transferência), o custo aqui pode
-// não cobrir exatamente o mesmo conjunto de registros do kg exibido no
-// mesmo card.
+// filtrando pelo SINAL do peso (positivo = entrada, negativo = saída),
+// MESMO critério do kg (_dgVgMovimentacaoTotais, acima) — decisão do Hugo:
+// captura todo registro positivo/negativo do SAP, independente do código
+// de movimento (101/801/201/Y11/Y12/etc.). Fonte é o próprio registro SAP
+// (valorTotal/custoUnit), não o custo médio por material. Ajustes de
+// Fechamento Mensal (Y11/Y12) continuam de fora: já são filtrados antes,
+// em sapNoPeriodo (ver isSapExcluidoPorFechamento, buildDashboardGerencialResults).
 function _dgVgCustoMovimentacaoTotais(results) {
   let custoEnt = 0, custoSai = 0;
   results.forEach(r => {
     (r.sapNoPeriodo || []).forEach(s => {
-      const cod = normMov(s.movimento);
-      if (CODIGOS_ENTRADA.has(cod))      custoEnt += _dgVgValorCustoSap(s);
-      else if (CODIGOS_SAIDA.has(cod))   custoSai += _dgVgValorCustoSap(s);
+      const p = num(s.peso);
+      if (p > 0)      custoEnt += _dgVgValorCustoSap(s);
+      else if (p < 0) custoSai += _dgVgValorCustoSap(s);
     });
   });
   return { custoEnt, custoSai };
