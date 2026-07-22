@@ -9956,6 +9956,104 @@ tr.sap-fechamento td {
   margin-top: 2px;
 }
 
+/* Agrupa "Importar Documentos" + "Fechar" no header do modal — mesmo
+   flex-shrink:0 do botão isolado anterior, pra não espremer com o texto
+   à esquerda em telas estreitas. */
+.fechmgr-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* ── MODAL: Importar Documentos para Desconsiderar ────────────────────────
+   Reaproveita .bdm-overlay/.bdm-dialog/.bdm-header (mesma base visual dos
+   outros modais deste sistema), com um corpo simples (label + textarea +
+   botão + resultado), sem tabela. Nome "fechimp-" (não "fech-", que já é
+   usado pelo builder de alertas em config.js/index.html, nem "fechmgr-",
+   que é o modal principal) — evita colisão de leitura entre features. */
+.fechimp-dialog {
+  max-width: min(620px, 95vw);
+}
+.fechimp-body {
+  padding: 18px 20px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+}
+.fechimp-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--text3);
+  font-family: var(--mono);
+}
+.fechimp-textarea {
+  width: 100%;
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 12.5px;
+  font-family: var(--mono);
+  color: var(--text);
+  resize: vertical;
+  min-height: 140px;
+  line-height: 1.6;
+  outline: none;
+  transition: border-color .15s;
+}
+.fechimp-textarea:focus { border-color: var(--accent); }
+.fechimp-hint {
+  font-size: 11px;
+  color: var(--text3);
+  line-height: 1.6;
+}
+.fechimp-resultado {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+.fechimp-resumo {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.fechimp-linha {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border2);
+  background: var(--bg3);
+}
+.fechimp-linha i { margin-top: 2px; flex-shrink: 0; }
+.fechimp-ok i { color: var(--green); }
+.fechimp-neutro i { color: var(--text3); }
+.fechimp-erro { border-color: var(--red-border, var(--border2)); }
+.fechimp-erro i { color: var(--red); }
+.fechimp-nao-encontrados {
+  margin-top: 6px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--text2);
+  background: var(--bg2);
+  border-radius: 6px;
+  padding: 8px 10px;
+  word-break: break-all;
+}
+.fechimp-vazio {
+  font-size: 12.5px;
+  color: var(--text3);
+  padding: 8px 2px;
+}
+
 /* Resumo em cards — reaproveita o componente .inv-kpi-card já usado no
    Inventário/Dashboard Gerencial, pra manter a mesma linguagem visual em
    vez de blocos de texto empilhados. */

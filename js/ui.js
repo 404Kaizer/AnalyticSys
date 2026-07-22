@@ -4091,6 +4091,170 @@ function _fechMgrLimparSelecao() {
 }
 window._fechMgrLimparSelecao = _fechMgrLimparSelecao;
 
+// ═══════════════════════════════════════════════════════════
+// MODAL: IMPORTAR DOCUMENTOS PARA DESCONSIDERAR (atalho em lote)
+// ═══════════════════════════════════════════════════════════
+// Atalho de entrada pro mecanismo de override JÁ EXISTENTE
+// (setSapFechOverrideEmLote) — não é um mecanismo de exclusão novo/
+// paralelo. O usuário cola uma lista de números de Documento SAP; o
+// sistema casa cada um contra os candidatos Y11/Y12 já detectados
+// (_fechMgrGetTodosCandidatos, mesmo universo do modal principal) e
+// aplica "voltar ao automático" (incluir=false) nos que baterem — único
+// sentido suportado, por decisão explícita (não existe importação pra
+// "considerar"). Pensado pra corrigir em massa registros reincluídos
+// manualmente por engano, sem precisar filtrar/selecionar linha a linha.
+
+// Normaliza um número de documento pra comparação: trim + maiúsculas +
+// remove zeros à esquerda — mesmo padrão de normNF/normOS
+// (calcPendentesIntegracao, acima) — evita que "00123" colado no import
+// não bata com um documento salvo como "123", ou vice-versa.
+function _fechImportNormDoc(raw) {
+  return String(raw || '').trim().toUpperCase().replace(/^0+/, '') || '0';
+}
+
+// Guarda o resultado da última pré-visualização — usado por _fechImportAplicar
+// pra não precisar refazer o parsing/matching no momento de aplicar.
+let _fechImportUltimoResultado = null;
+
+function abrirFechImportModal() {
+  const overlay = document.getElementById('fech-import-overlay');
+  if (!overlay) return;
+  const textarea = document.getElementById('fech-import-textarea');
+  const resultEl = document.getElementById('fech-import-resultado');
+  if (textarea) textarea.value = '';
+  if (resultEl) resultEl.innerHTML = '';
+  _fechImportUltimoResultado = null;
+  overlay.classList.add('open');
+  overlay.setAttribute('aria-hidden', 'false');
+  if (textarea) setTimeout(() => textarea.focus(), 50);
+}
+window.abrirFechImportModal = abrirFechImportModal;
+
+function fecharFechImportModal() {
+  const overlay = document.getElementById('fech-import-overlay');
+  if (!overlay) return;
+  overlay.classList.remove('open');
+  overlay.setAttribute('aria-hidden', 'true');
+}
+window.fecharFechImportModal = fecharFechImportModal;
+
+// Faz o parsing da lista colada + o matching contra os candidatos Y11/Y12
+// já detectados, e mostra a pré-visualização — NÃO aplica nada ainda
+// (aplicação só acontece em _fechImportAplicar, com confirmação se o lote
+// afetado for grande).
+function _fechImportPreVisualizar() {
+  const textarea = document.getElementById('fech-import-textarea');
+  const resultEl = document.getElementById('fech-import-resultado');
+  if (!textarea || !resultEl) return;
+
+  // Aceita colagem direta de uma coluna do Excel (quebra de linha) ou lista
+  // separada por vírgula/ponto-e-vírgula/tab.
+  const bruto = textarea.value.split(/[\r\n,;\t]+/).map(s => s.trim()).filter(Boolean);
+  const docsUnicos = [...new Set(bruto.map(_fechImportNormDoc))];
+
+  if (!docsUnicos.length) {
+    resultEl.innerHTML = `<div class="fechimp-vazio"><i class="ti ti-info-circle"></i> Cole ao menos um número de documento.</div>`;
+    _fechImportUltimoResultado = null;
+    return;
+  }
+
+  // Candidatos Y11/Y12 já detectados — mesmo universo do modal principal
+  // (_fechMgrGetTodosCandidatos já traz _statusExcluido e _chave prontos).
+  const candidatos = _fechMgrGetTodosCandidatos();
+  const porDocNorm = new Map(); // docNorm -> [candidatos]
+  candidatos.forEach(r => {
+    const key = _fechImportNormDoc(r.documento);
+    if (!porDocNorm.has(key)) porDocNorm.set(key, []);
+    porDocNorm.get(key).push(r);
+  });
+
+  const encontrados = [];      // registros que serão desconsiderados (hoje incluídos manualmente)
+  const jaDesconsiderado = []; // registros encontrados mas já no padrão automático (no-op)
+  const naoEncontrados = [];   // documentos importados sem candidato correspondente (typo ou não é Y11/Y12)
+
+  docsUnicos.forEach(doc => {
+    const matches = porDocNorm.get(doc) || [];
+    if (!matches.length) { naoEncontrados.push(doc); return; }
+    matches.forEach(r => {
+      if (r._statusExcluido) jaDesconsiderado.push(r);
+      else encontrados.push(r);
+    });
+  });
+
+  _fechImportUltimoResultado = { encontrados, jaDesconsiderado, naoEncontrados };
+
+  const { peso, custo } = somarPesoCustoSap(encontrados);
+  const docsAfetados = new Set(encontrados.map(r => _fechImportNormDoc(r.documento))).size;
+
+  resultEl.innerHTML = `
+    <div class="fechimp-resumo">
+      <div class="fechimp-linha fechimp-ok">
+        <i class="ti ti-circle-check"></i>
+        <span><b>${encontrados.length}</b> registro(s) em <b>${docsAfetados}</b> documento(s) serão desconsiderados
+        ${encontrados.length ? `— Peso: <b>${fmtKg(peso)}</b> · Custo: <b>${money(custo)}</b>` : ''}</span>
+      </div>
+      ${jaDesconsiderado.length ? `
+      <div class="fechimp-linha fechimp-neutro">
+        <i class="ti ti-minus"></i>
+        <span><b>${jaDesconsiderado.length}</b> registro(s) já estavam desconsiderados (nenhuma mudança)</span>
+      </div>` : ''}
+      ${naoEncontrados.length ? `
+      <div class="fechimp-linha fechimp-erro">
+        <i class="ti ti-alert-triangle"></i>
+        <span><b>${naoEncontrados.length}</b> documento(s) não encontrados entre os Ajustes de Fechamento detectados nesta tela:
+        <div class="fechimp-nao-encontrados">${naoEncontrados.map(d => escapeHtml(d)).join(', ')}</div></span>
+      </div>` : ''}
+    </div>
+    <button class="btn btn-primary" type="button" onclick="_fechImportAplicar()" ${encontrados.length ? '' : 'disabled'}>
+      <i class="ti ti-check"></i> Aplicar — Desconsiderar ${encontrados.length} registro(s)
+    </button>`;
+}
+window._fechImportPreVisualizar = _fechImportPreVisualizar;
+
+function _fechImportAplicar() {
+  const resultado = _fechImportUltimoResultado;
+  if (!resultado || !resultado.encontrados.length) return;
+
+  const encontrados = resultado.encontrados;
+  const docsAfetados = new Set(encontrados.map(r => _fechImportNormDoc(r.documento))).size;
+
+  const aplicar = () => {
+    const chaves = encontrados.map(r => r._chave);
+    setSapFechOverrideEmLote(chaves, false);
+    fecharFechImportModal();
+    toast(`${chaves.length} registro(s) voltaram a ser desconsiderados do cálculo (${docsAfetados} documento(s)).`);
+    _fechMgrRender();
+    // Recalcula qualquer análise já aberta pra refletir a mudança imediatamente
+    // — mesmo padrão de _fechMgrAplicarLote.
+    if (typeof updateDashboard === 'function') updateDashboard();
+    if (typeof renderModule === 'function' && document.getElementById('page-sap')?.classList.contains('active')) renderModule('sap');
+  };
+
+  // Mesmo limiar de confirmação extra já usado em _fechMgrAplicarLote —
+  // lotes grandes merecem uma pausa antes de aplicar. Aqui usamos
+  // confirmarDestrutivo (em vez do confirm() simples) porque já temos um
+  // resumo rico (peso/custo/documentos) pra mostrar, o que ajuda a
+  // confirmar que a lista colada é mesmo a pretendida antes de aplicar.
+  const LIMITE_CONFIRMACAO_LOTE = 200;
+  if (encontrados.length > LIMITE_CONFIRMACAO_LOTE) {
+    confirmarDestrutivo({
+      title: 'Desconsiderar em massa via importação',
+      sub: `${encontrados.length} registro(s) — ${docsAfetados} documento(s)`,
+      body: `
+        <div style="font-size:12px;color:var(--text2);line-height:1.6">
+          Isso afeta o cálculo de variação em Dashboard, Analítico, Inventário e Trend.
+          Os registros voltam ao comportamento automático (desconsiderados) — nenhum dado bruto é alterado.
+        </div>`,
+      confirmLabel: `Desconsiderar ${encontrados.length} registro(s)`,
+      onConfirm: aplicar
+    });
+    return;
+  }
+
+  aplicar();
+}
+window._fechImportAplicar = _fechImportAplicar;
+
 // ── Filtro por coluna (réplica isolada do COLUMN FILTER ENGINE) ──────────
 function _fechMgrInjectColFilterButtons() {
   const headRow = document.getElementById('fechmgr-thead-row');

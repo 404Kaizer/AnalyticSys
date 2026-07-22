@@ -4114,9 +4114,14 @@
         <div class="bdm-title" id="fechmgr-title">Gerenciar Ajustes de Fechamento</div>
         <div class="fechmgr-sub" id="fechmgr-sub">—</div>
       </div>
-      <button class="btn btn-primary" type="button" onclick="fecharFechManager()">
-        <i class="ti ti-x"></i> <span>Fechar</span>
-      </button>
+      <div class="fechmgr-header-actions">
+        <button class="btn" type="button" onclick="abrirFechImportModal()" title="Colar uma lista de números de documento e desconsiderar em lote">
+          <i class="ti ti-upload"></i> <span>Importar Documentos</span>
+        </button>
+        <button class="btn btn-primary" type="button" onclick="fecharFechManager()">
+          <i class="ti ti-x"></i> <span>Fechar</span>
+        </button>
+      </div>
     </div>
 
     <div class="fechmgr-cards" id="fechmgr-cards"></div>
@@ -4182,6 +4187,39 @@
         <button class="btn" title="Próxima" onclick="_fechMgrProximaPagina()"><i class="ti ti-chevron-right"></i></button>
         <button class="btn" title="Última" onclick="_fechMgrIrParaUltima()"><i class="ti ti-chevrons-right"></i></button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Importar Documentos SAP para Desconsiderar em Lote — atalho pro
+     mecanismo de override já existente (setSapFechOverrideEmLote). Só atua
+     sobre candidatos que já batem no padrão Y11/Y12 (mesmo universo do
+     fech-manager-overlay) — não é um mecanismo de exclusão genérico por
+     documento. Aberto pelo botão "Importar Documentos" do modal acima. -->
+<div class="bdm-overlay" id="fech-import-overlay" aria-hidden="true">
+  <div class="bdm-dialog fechimp-dialog" role="dialog" aria-modal="true" aria-labelledby="fechimp-title">
+    <div class="bdm-header">
+      <div class="bdm-header-text">
+        <div class="bdm-kicker"><i class="ti ti-upload"></i> Ajustes de Fechamento Mensal</div>
+        <div class="bdm-title" id="fechimp-title">Importar Documentos para Desconsiderar</div>
+      </div>
+      <button class="btn btn-primary" type="button" onclick="fecharFechImportModal()">
+        <i class="ti ti-x"></i> <span>Fechar</span>
+      </button>
+    </div>
+    <div class="fechimp-body">
+      <label class="fechimp-label" for="fech-import-textarea">Números de Documento SAP</label>
+      <textarea id="fech-import-textarea" class="fechimp-textarea" rows="8"
+        placeholder="Cole um número de documento por linha (ou separados por vírgula, ponto-e-vírgula ou tab)&#10;Ex.:&#10;1400012345&#10;1400012346"></textarea>
+      <div class="fechimp-hint">
+        Só afeta registros que já batem no padrão automático de Ajuste de Fechamento Mensal (Y11/Y12) detectado nesta tela.
+        Documentos reincluídos manualmente (override) voltam ao comportamento padrão — desconsiderados do cálculo de variação
+        em Dashboard, Analítico, Inventário e Trend.
+      </div>
+      <button class="btn btn-primary" type="button" onclick="_fechImportPreVisualizar()">
+        <i class="ti ti-search"></i> Pré-visualizar
+      </button>
+      <div class="fechimp-resultado" id="fech-import-resultado"></div>
     </div>
   </div>
 </div>
