@@ -2605,6 +2605,7 @@ function renderDgGiro(results, dtIni, dtFim) {
   const data = pageSlice('entradas');
   updatePageInfo('entradas');
   renderSemCadastroModuloBox('entradas');
+  if (typeof renderEntradasSummary === 'function') renderEntradasSummary();
 
   if (!getFilteredData('entradas').length) {
     tb.innerHTML = '<tr><td colspan="13"><div class="empty-state"><i class="ti ti-package"></i><p>Nenhuma entrada cadastrada.</p></div></td></tr>';
@@ -2638,6 +2639,7 @@ function renderSaidas() {
   const data = pageSlice('saidas');
   updatePageInfo('saidas');
   renderSemCadastroModuloBox('saidas');
+  if (typeof renderSaidasSummary === 'function') renderSaidasSummary();
 
   if (!getFilteredData('saidas').length) {
     tb.innerHTML = '<tr><td colspan="12"><div class="empty-state"><i class="ti ti-truck"></i><p>Nenhuma saída cadastrada.</p></div></td></tr>';
@@ -3743,6 +3745,7 @@ function renderSAP() {
   const data = pageSlice('sap');
   updatePageInfo('sap');
   renderSemCadastroModuloBox('sap');
+  if (typeof renderSapSummary === 'function') renderSapSummary();
 
   if (!getFilteredData('sap').length) {
     tb.innerHTML = '<tr><td colspan="15"><div class="empty-state"><i class="ti ti-database"></i><p>Nenhuma movimentação SAP importada.</p></div></td></tr>';

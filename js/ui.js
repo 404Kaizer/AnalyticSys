@@ -3453,6 +3453,235 @@ function somarPesoCustoSap(records) {
   return { peso, custo };
 }
 
+// Mesma ideia de somarPesoCustoSap, mas para Entradas/Saídas — nesses dois
+// módulos o campo de custo unitário se chama `custo` (não `custoUnit` como
+// no SAP). Usada pelos cards-resumo das páginas Entradas/Saídas.
+function somarPesoValor(records) {
+  let peso = 0, valor = 0;
+  (records || []).forEach(r => {
+    peso += num(r.peso);
+    const vt = num(r.valorTotal);
+    valor += vt !== 0 ? vt : (num(r.custo) * Math.abs(num(r.peso)));
+  });
+  return { peso, valor };
+}
+
+// Mesma ideia de somarPesoValor, mas específica de ENTRADAS — aplica a MESMA
+// conversão de unidade de medida já usada no modal "Pendentes de Integração
+// SAP" (_convertNfPesoToKg, definida acima): o peso de uma NF pode vir em
+// TO ou M³ (fator dependente do material), não só em KG. Sem essa conversão,
+// os cards por central somariam grandezas de unidades diferentes juntas.
+// O CUSTO (fallback custoUnit×peso) continua usando o peso BRUTO — o custo
+// unitário cadastrado é sempre relativo à unidade original do registro
+// (ex.: R$/TO), não ao kg já convertido. Saídas NÃO usa esta função: o
+// sistema trata OS de propósito com peso bruto, sem conversão (ver
+// calcPendentesIntegracao/comentário de _convertNfPesoToKg acima).
+function somarPesoValorEntradas(records) {
+  let peso = 0, valor = 0;
+  (records || []).forEach(r => {
+    peso += _convertNfPesoToKg(r.peso, r.um, r.material);
+    const vt = num(r.valorTotal);
+    valor += vt !== 0 ? vt : (num(r.custo) * Math.abs(num(r.peso)));
+  });
+  return { peso, valor };
+}
+
+// ═══════════════════════════════════════════════════════════
+// CARDS-RESUMO — ENTRADAS / SAÍDAS / SAP
+// Reaproveitam o componente .inv-kpi-card (mesmo usado no Inventário/
+// Dashboard/Fechamento) — total geral em destaque + grid por grupo
+// (central pra Entradas/Saídas, código de movimento pro SAP). Sempre
+// reativos ao filtro atual da tabela (getFilteredData), sem duplicar
+// lógica de filtro. Estado de "ver todas" é mantido por containerId e
+// resetado ao trocar de página (não precisa persistir entre sessões).
+// ═══════════════════════════════════════════════════════════
+const _modSummaryExpandState = {};
+
+function _toggleModSummaryExpand(containerId) {
+  _modSummaryExpandState[containerId] = !_modSummaryExpandState[containerId];
+  if (containerId === 'ent-summary-cards') renderEntradasSummary();
+  else if (containerId === 'sai-summary-cards') renderSaidasSummary();
+  else if (containerId === 'sap-summary-cards') renderSapSummary();
+}
+window._toggleModSummaryExpand = _toggleModSummaryExpand;
+
+// Monta o HTML de 1 card de destaque "extra" no bloco hero — usado pelo SAP
+// pros cards de Total de Entradas/Total de Saídas (por sinal do peso).
+// Reaproveita o MESMO template dos cards de grupo (valor=peso, unit=custo
+// + contagem opcional), só que na área de destaque (.inv-kpi-card-featured).
+function _heroSubCardHtml({ icon, iconBg, iconColor, label, unitLabel, peso, custo, count, title }) {
+  return `
+      <div class="inv-kpi-card inv-kpi-card-featured"${title ? ` title="${escapeHtml(title)}"` : ''}>
+        <div class="inv-kpi-icon" style="background:${iconBg};color:${iconColor}"><i class="ti ${icon}"></i></div>
+        <div class="inv-kpi-body">
+          <div class="inv-kpi-label">${escapeHtml(label)}</div>
+          <div class="inv-kpi-value">${fmtKg(peso)}</div>
+          <div class="inv-kpi-unit">${money(custo)}${count !== undefined ? ` · ${count.toLocaleString('pt-BR')} registro(s)` : ''}</div>
+        </div>
+      </div>`;
+}
+
+// Monta o HTML do bloco: cards de total geral (Peso/Custo, + Registros se
+// totalCount for informado, + cards extras se extraHeroCards for informado)
+// em destaque + grid de cards por grupo, ordenados por peso absoluto desc,
+// limitados a topN até o usuário clicar em "ver todas". grupoLabelFn permite
+// customizar o rótulo do card (ex.: badge colorido de código de movimento
+// no SAP); por padrão usa o texto simples do grupo (ex.: nome da central).
+// totalCount/g.count/extraHeroCards são OPCIONAIS — só aparecem quando o
+// chamador informa (Entradas e SAP usam totalCount/count; só SAP usa
+// extraHeroCards; Saídas não usa nenhum dos dois).
+function _buildResumoCardsHtml({ totalLabel, totalPeso, totalValor, totalCount, grupos, grupoNomePlural, topN, containerId, grupoLabelFn, extraHeroCards }) {
+  if (!grupos.length) {
+    return `<div class="mod-summary-empty">Nenhum registro no filtro atual.</div>`;
+  }
+
+  const expandido = !!_modSummaryExpandState[containerId];
+  const ordenados = grupos.slice().sort((a, b) => Math.abs(b.peso) - Math.abs(a.peso));
+  const visiveis = expandido ? ordenados : ordenados.slice(0, topN);
+  const restantes = ordenados.length - visiveis.length;
+
+  const countCardHtml = totalCount !== undefined ? `
+      <div class="inv-kpi-card inv-kpi-card-featured">
+        <div class="inv-kpi-icon" style="background:var(--bg3);color:var(--text2)"><i class="ti ti-list-numbers"></i></div>
+        <div class="inv-kpi-body">
+          <div class="inv-kpi-label">${escapeHtml(totalLabel)} · Registros</div>
+          <div class="inv-kpi-value">${totalCount.toLocaleString('pt-BR')}</div>
+          <div class="inv-kpi-unit">registro(s) no filtro atual</div>
+        </div>
+      </div>` : '';
+
+  const extraHtml = (extraHeroCards || []).join('');
+
+  const heroHtml = `
+    <div class="mod-summary-hero">
+      <div class="inv-kpi-card inv-kpi-card-featured">
+        <div class="inv-kpi-icon" style="background:var(--accent-dim);color:var(--accent)"><i class="ti ti-scale"></i></div>
+        <div class="inv-kpi-body">
+          <div class="inv-kpi-label">${escapeHtml(totalLabel)} · Peso Total</div>
+          <div class="inv-kpi-value">${fmtKg(totalPeso)}</div>
+          <div class="inv-kpi-unit">kg — soma do filtro atual</div>
+        </div>
+      </div>
+      <div class="inv-kpi-card inv-kpi-card-featured">
+        <div class="inv-kpi-icon" style="background:var(--green-bg);color:var(--green)"><i class="ti ti-currency-dollar"></i></div>
+        <div class="inv-kpi-body">
+          <div class="inv-kpi-label">${escapeHtml(totalLabel)} · Custo Total</div>
+          <div class="inv-kpi-value">${money(totalValor)}</div>
+          <div class="inv-kpi-unit">soma do filtro atual</div>
+        </div>
+      </div>${countCardHtml}${extraHtml}
+    </div>`;
+
+  const gridHtml = `
+    <div class="mod-summary-grid">
+      ${visiveis.map(g => `
+        <div class="inv-kpi-card">
+          <div class="inv-kpi-body">
+            <div class="inv-kpi-label">${grupoLabelFn ? grupoLabelFn(g) : escapeHtml(g.label)}</div>
+            <div class="inv-kpi-value">${fmtKg(g.peso)}</div>
+            <div class="inv-kpi-unit">${money(g.valor)}</div>
+            ${g.count !== undefined ? `<div class="inv-kpi-unit">${g.count.toLocaleString('pt-BR')} registro(s)</div>` : ''}
+          </div>
+        </div>`).join('')}
+    </div>`;
+
+  const toggleHtml = ordenados.length > topN
+    ? `<button class="mod-summary-toggle" onclick="_toggleModSummaryExpand('${containerId}')">
+         <i class="ti ti-chevron-${expandido ? 'up' : 'down'}"></i>
+         ${expandido ? 'Ver menos' : `Ver todas as ${escapeHtml(grupoNomePlural)} (+${restantes})`}
+       </button>`
+    : '';
+
+  return heroHtml + gridHtml + toggleHtml;
+}
+
+// Agrupa um array de registros por uma chave (função ou nome de campo) e
+// retorna [{ key, records }], sem depender de agregações prévias — reaproveitável
+// pelos 3 renders abaixo.
+function _agruparRegistros(records, keyFn) {
+  const map = new Map();
+  (records || []).forEach(r => {
+    const key = keyFn(r) || '—';
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(r);
+  });
+  return map;
+}
+
+function renderEntradasSummary() {
+  const el = document.getElementById('ent-summary-cards');
+  if (!el) return;
+  const data = getFilteredData('entradas');
+  const { peso: totalPeso, valor: totalValor } = somarPesoValorEntradas(data);
+  const porCentral = _agruparRegistros(data, r => r.centralDestino);
+  const grupos = [...porCentral.entries()].map(([label, recs]) => {
+    const { peso, valor } = somarPesoValorEntradas(recs);
+    return { label, peso, valor, count: recs.length };
+  });
+  el.innerHTML = _buildResumoCardsHtml({
+    totalLabel: 'Entradas', totalPeso, totalValor, totalCount: data.length, grupos,
+    grupoNomePlural: 'centrais', topN: 6, containerId: 'ent-summary-cards'
+  });
+}
+window.renderEntradasSummary = renderEntradasSummary;
+
+function renderSaidasSummary() {
+  const el = document.getElementById('sai-summary-cards');
+  if (!el) return;
+  const data = getFilteredData('saidas');
+  const { peso: totalPeso, valor: totalValor } = somarPesoValor(data);
+  const porCentral = _agruparRegistros(data, r => r.central);
+  const grupos = [...porCentral.entries()].map(([label, recs]) => {
+    const { peso, valor } = somarPesoValor(recs);
+    return { label, peso, valor };
+  });
+  el.innerHTML = _buildResumoCardsHtml({
+    totalLabel: 'Saídas', totalPeso, totalValor, grupos,
+    grupoNomePlural: 'centrais', topN: 6, containerId: 'sai-summary-cards'
+  });
+}
+window.renderSaidasSummary = renderSaidasSummary;
+
+function renderSapSummary() {
+  const el = document.getElementById('sap-summary-cards');
+  if (!el) return;
+  const data = getFilteredData('sap');
+  const { peso: totalPeso, custo: totalValor } = somarPesoCustoSap(data);
+  const porMov = _agruparRegistros(data, r => normMov(r.movimento));
+  const grupos = [...porMov.entries()].map(([cod, recs]) => {
+    const { peso, custo } = somarPesoCustoSap(recs);
+    return { label: cod, cod, peso, valor: custo, count: recs.length };
+  });
+
+  // Total de Entradas/Saídas — pelo SINAL do peso (decisão do Hugo), cobre
+  // 100% dos registros do filtro (inclusive códigos de transferência/
+  // fechamento), diferente do critério por CÓDIGO (101/801/201) usado no
+  // Dashboard Gerencial. peso===0 não entra em nenhum dos dois.
+  const recsEntrada = data.filter(r => num(r.peso) > 0);
+  const recsSaida   = data.filter(r => num(r.peso) < 0);
+  const { peso: pesoEnt, custo: custoEnt } = somarPesoCustoSap(recsEntrada);
+  const { peso: pesoSai, custo: custoSai } = somarPesoCustoSap(recsSaida);
+
+  el.innerHTML = _buildResumoCardsHtml({
+    totalLabel: 'SAP', totalPeso, totalValor, totalCount: data.length, grupos,
+    grupoNomePlural: 'movimentações', topN: 8, containerId: 'sap-summary-cards',
+    grupoLabelFn: g => movBadgeHtml(g.cod),
+    extraHeroCards: [
+      _heroSubCardHtml({
+        icon: 'ti-package-import', iconBg: 'var(--green-bg)', iconColor: 'var(--green)',
+        label: 'SAP · Total de Entradas', peso: pesoEnt, custo: custoEnt, count: recsEntrada.length,
+        title: 'Todos os registros com peso positivo no filtro atual'
+      }),
+      _heroSubCardHtml({
+        icon: 'ti-package-export', iconBg: 'var(--red-bg)', iconColor: 'var(--red)',
+        label: 'SAP · Total de Saídas', peso: Math.abs(pesoSai), custo: Math.abs(custoSai), count: recsSaida.length,
+        title: 'Todos os registros com peso negativo no filtro atual'
+      })
+    ]
+  });
+}
+window.renderSapSummary = renderSapSummary;
+
 // ── Override manual (reincluir/reexcluir do cálculo) ──────────────────────
 // incluir=true: registro passa a contar no cálculo mesmo batendo no padrão.
 // incluir=false: remove o override (volta ao comportamento automático).

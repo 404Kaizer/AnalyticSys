@@ -631,6 +631,55 @@
   letter-spacing: -0.01em;
 }
 
+/* ══════════════════════════════════════════
+   CARDS-RESUMO — ENTRADAS / SAÍDAS / SAP
+   Reaproveita o componente .inv-kpi-card (Inventário/Dashboard/Fechamento)
+   pra manter a mesma linguagem visual em todo o sistema. Total geral em
+   destaque (.inv-kpi-card-featured) + grid de cards por grupo (central ou
+   código de movimento), com Top N + "ver todas".
+══════════════════════════════════════════ */
+.mod-summary-cards {
+  padding: 14px 20px 6px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg1);
+}
+.mod-summary-hero {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.mod-summary-hero .inv-kpi-card { flex: 1; min-width: 220px; }
+.mod-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.mod-summary-grid .inv-kpi-card { padding: 12px 14px; gap: 10px; }
+.mod-summary-toggle {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.mod-summary-toggle:hover { text-decoration: underline; }
+.mod-summary-empty {
+  font-size: 12px;
+  color: var(--text3);
+  padding: 4px 0 10px;
+}
+@media (max-width: 900px) {
+  .mod-summary-hero { flex-direction: column; }
+  .mod-summary-hero .inv-kpi-card { min-width: 0; }
+}
+
 /* ══ FILTER BAR ══ */
 .inv-filter-bar {
   display: flex;
