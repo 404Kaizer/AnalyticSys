@@ -3543,6 +3543,7 @@ function _toggleModSummaryExpand(containerId) {
   if (containerId === 'ent-summary-cards') renderEntradasSummary();
   else if (containerId === 'sai-summary-cards') renderSaidasSummary();
   else if (containerId === 'sap-summary-cards') renderSapSummary();
+  else if (containerId === 'lanc-summary-cards') renderLancamentosSummary();
 }
 window._toggleModSummaryExpand = _toggleModSummaryExpand;
 
@@ -3571,15 +3572,23 @@ function _heroSubCardHtml({ icon, iconBg, iconColor, label, unitLabel, peso, cus
 // totalCount/g.count/extraHeroCards são OPCIONAIS — só aparecem quando o
 // chamador informa (Entradas e SAP usam totalCount/count; só SAP usa
 // extraHeroCards; Saídas não usa nenhum dos dois).
-function _buildResumoCardsHtml({ totalLabel, totalPeso, totalValor, totalCount, grupos, grupoNomePlural, topN, containerId, grupoLabelFn, extraHeroCards }) {
+function _buildResumoCardsHtml({ totalLabel, totalPeso, totalValor, totalCount, grupos, grupoNomePlural, topN, containerId, grupoLabelFn, extraHeroCards, pesoLabel, sortMode, modulo, grupoTituloFn }) {
   if (!grupos.length) {
     return `<div class="mod-summary-empty">Nenhum registro no filtro atual.</div>`;
   }
 
   const expandido = !!_modSummaryExpandState[containerId];
-  const ordenados = grupos.slice().sort((a, b) => Math.abs(b.peso) - Math.abs(a.peso));
+  // sortMode: 'alfabetica' (Entradas/Saídas/Lançamentos — cards de central)
+  // ordena pelo rótulo (A-Z, pt-BR). Padrão ('peso', usado pelo SAP — cards
+  // de código de movimento) mantém a ordenação por peso absoluto desc.
+  const ordenados = grupos.slice().sort((a, b) =>
+    sortMode === 'alfabetica'
+      ? String(a.label).localeCompare(String(b.label), 'pt-BR', { sensitivity: 'base' })
+      : Math.abs(b.peso) - Math.abs(a.peso)
+  );
   const visiveis = expandido ? ordenados : ordenados.slice(0, topN);
   const restantes = ordenados.length - visiveis.length;
+  const _pesoLabel = pesoLabel || 'Peso Total';
 
   const countCardHtml = totalCount !== undefined ? `
       <div class="inv-kpi-card inv-kpi-card-featured">
@@ -3598,7 +3607,7 @@ function _buildResumoCardsHtml({ totalLabel, totalPeso, totalValor, totalCount, 
       <div class="inv-kpi-card inv-kpi-card-featured">
         <div class="inv-kpi-icon" style="background:var(--accent-dim);color:var(--accent)"><i class="ti ti-scale"></i></div>
         <div class="inv-kpi-body">
-          <div class="inv-kpi-label">${escapeHtml(totalLabel)} · Peso Total</div>
+          <div class="inv-kpi-label">${escapeHtml(totalLabel)} · ${escapeHtml(_pesoLabel)}</div>
           <div class="inv-kpi-value">${fmtKg(totalPeso)}</div>
           <div class="inv-kpi-unit">kg — soma do filtro atual</div>
         </div>
@@ -3613,17 +3622,26 @@ function _buildResumoCardsHtml({ totalLabel, totalPeso, totalValor, totalCount, 
       </div>${countCardHtml}${extraHtml}
     </div>`;
 
+  // Cards de GRUPO (não os de total geral) são clicáveis quando `modulo` é
+  // informado — abrem o modal de detalhamento por material (ver
+  // _abrirModalDetalheMaterial). Usa data-attributes em vez de interpolar
+  // o valor direto no onclick pra não quebrar com nomes de central/material
+  // que tenham aspas simples (escapeHtml não trata aspas simples, só é
+  // seguro pra atributos, não pra dentro de uma string JS de onclick).
   const gridHtml = `
     <div class="mod-summary-grid">
-      ${visiveis.map(g => `
-        <div class="inv-kpi-card">
+      ${visiveis.map(g => {
+        const clicavel = modulo ? ` onclick="_abrirModalDetalheMaterialFromEl(this)" data-modulo="${escapeHtml(modulo)}" data-grupo="${escapeHtml(g.label)}" data-titulo="${escapeHtml(grupoTituloFn ? grupoTituloFn(g) : g.label)}" title="Ver detalhamento por material"` : '';
+        return `
+        <div class="inv-kpi-card"${clicavel}>
           <div class="inv-kpi-body">
             <div class="inv-kpi-label">${grupoLabelFn ? grupoLabelFn(g) : escapeHtml(g.label)}</div>
             <div class="inv-kpi-value">${fmtKg(g.peso)}</div>
             <div class="inv-kpi-unit">${money(g.valor)}</div>
             ${g.count !== undefined ? `<div class="inv-kpi-unit">${g.count.toLocaleString('pt-BR')} registro(s)</div>` : ''}
           </div>
-        </div>`).join('')}
+        </div>`;
+      }).join('')}
     </div>`;
 
   const toggleHtml = ordenados.length > topN
@@ -3649,6 +3667,120 @@ function _agruparRegistros(records, keyFn) {
   return map;
 }
 
+// Soma peso/custo de um conjunto de registros, unificando o formato de
+// retorno ({peso, valor}) independente do módulo — Entradas usa
+// somarPesoValorEntradas (com conversão de unidade), Saídas usa
+// somarPesoValor (sem conversão), Lançamentos/SAP usam somarPesoCustoSap
+// (retorna {peso, custo} em vez de {peso, valor} — normalizado aqui).
+function _somaGenericaPorModulo(modulo, records) {
+  if (modulo === 'entradas') return somarPesoValorEntradas(records);
+  if (modulo === 'saidas') return somarPesoValor(records);
+  const { peso, custo } = somarPesoCustoSap(records);
+  return { peso, valor: custo };
+}
+
+// ═══════════════════════════════════════════════════════════
+// MODAL — Detalhamento por Material (clique num card de grupo)
+// Reaproveita o mesmo padrão de modal dinâmico já usado no Inventário
+// (.modal-overlay > .modal-card com .modal-header/.modal-body/.modal-footer,
+// injetado via JS, ESC fecha + botão explícito — NUNCA fecha ao clicar
+// fora). A tabela usa <table>/<thead>/<tbody> puro: o CSS global de
+// thead th/tbody tr já estiliza automaticamente, sem precisar de classe.
+// ═══════════════════════════════════════════════════════════
+function _abrirModalDetalheMaterialFromEl(el) {
+  _abrirModalDetalheMaterial(el.dataset.modulo, el.dataset.grupo, el.dataset.titulo);
+}
+window._abrirModalDetalheMaterialFromEl = _abrirModalDetalheMaterialFromEl;
+
+function _abrirModalDetalheMaterial(modulo, grupoValor, grupoTitulo) {
+  const data = getFilteredData(modulo);
+  let recsDoGrupo, tituloModulo;
+  if (modulo === 'entradas') {
+    recsDoGrupo = data.filter(r => (r.centralDestino || '—') === grupoValor);
+    tituloModulo = 'Entradas';
+  } else if (modulo === 'saidas') {
+    recsDoGrupo = data.filter(r => (r.central || '—') === grupoValor);
+    tituloModulo = 'Saídas';
+  } else if (modulo === 'lancamentos') {
+    recsDoGrupo = data.filter(r => (r.central || '—') === grupoValor);
+    tituloModulo = 'Lançamentos';
+  } else if (modulo === 'sap') {
+    recsDoGrupo = data.filter(r => normMov(r.movimento) === grupoValor);
+    tituloModulo = 'SAP';
+  } else {
+    return;
+  }
+
+  const porMaterial = _agruparRegistros(recsDoGrupo, r => r.material);
+  const linhas = [...porMaterial.entries()].map(([material, recs]) => {
+    const { peso, valor } = _somaGenericaPorModulo(modulo, recs);
+    return { material, peso, valor, count: recs.length };
+  }).sort((a, b) => Math.abs(b.peso) - Math.abs(a.peso));
+  const totais = _somaGenericaPorModulo(modulo, recsDoGrupo);
+
+  let modal = document.getElementById('mod-material-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'mod-material-modal';
+    modal.className = 'modal-overlay';
+    modal.style.cssText = 'position:fixed;z-index:9999';
+    document.body.appendChild(modal);
+  }
+
+  const linhasHtml = linhas.length ? linhas.map(l => `
+    <tr>
+      <td>${escapeHtml(l.material || '—')}</td>
+      <td style="text-align:right">${fmtKg(l.peso)}</td>
+      <td style="text-align:right">${money(l.valor)}</td>
+      <td style="text-align:right;color:var(--text3)">${l.count}</td>
+    </tr>`).join('') : `
+    <tr><td colspan="4" style="text-align:center;padding:28px;color:var(--text3)">Nenhum material encontrado no filtro atual.</td></tr>`;
+
+  modal.innerHTML = `
+    <div class="modal-card" style="max-width:640px;width:94vw">
+      <div class="modal-header">
+        <div>
+          <span class="modal-title"><i class="ti ti-list-details"></i> ${escapeHtml(tituloModulo)} · ${escapeHtml(grupoTitulo)}</span>
+          <div style="font-size:11px;color:var(--text2);margin-top:3px">Total por material — respeitando o filtro atual da tabela</div>
+        </div>
+        <button class="modal-close" onclick="_fecharModalDetalheMaterial()"><i class="ti ti-x"></i></button>
+      </div>
+      <div class="modal-body" style="max-height:60vh;overflow-y:auto;padding:0">
+        <table style="width:100%">
+          <thead>
+            <tr>
+              <th>Material</th>
+              <th style="text-align:right">Peso</th>
+              <th style="text-align:right">Custo</th>
+              <th style="text-align:right">Registros</th>
+            </tr>
+          </thead>
+          <tbody>${linhasHtml}</tbody>
+        </table>
+      </div>
+      <div class="modal-footer" style="justify-content:space-between">
+        <span style="font-size:12px;color:var(--text3)">${linhas.length} material${linhas.length === 1 ? '' : 'is'}</span>
+        <div style="display:flex;gap:16px;font-size:12px;font-weight:700">
+          <span>${fmtKg(totais.peso)}</span>
+          <span style="color:var(--green)">${money(totais.valor)}</span>
+        </div>
+      </div>
+    </div>`;
+  modal.classList.add('open');
+
+  const _escModMaterial = e => {
+    if (!document.body.contains(modal)) { document.removeEventListener('keydown', _escModMaterial); return; }
+    if (e.key === 'Escape') window._fecharModalDetalheMaterial();
+  };
+  document.addEventListener('keydown', _escModMaterial);
+}
+window._abrirModalDetalheMaterial = _abrirModalDetalheMaterial;
+
+function _fecharModalDetalheMaterial() {
+  document.getElementById('mod-material-modal')?.classList.remove('open');
+}
+window._fecharModalDetalheMaterial = _fecharModalDetalheMaterial;
+
 function renderEntradasSummary() {
   const el = document.getElementById('ent-summary-cards');
   if (!el) return;
@@ -3661,7 +3793,7 @@ function renderEntradasSummary() {
   });
   el.innerHTML = _buildResumoCardsHtml({
     totalLabel: 'Entradas', totalPeso, totalValor, totalCount: data.length, grupos,
-    grupoNomePlural: 'centrais', topN: 6, containerId: 'ent-summary-cards'
+    grupoNomePlural: 'centrais', topN: 6, containerId: 'ent-summary-cards', sortMode: 'alfabetica', modulo: 'entradas'
   });
 }
 window.renderEntradasSummary = renderEntradasSummary;
@@ -3678,7 +3810,7 @@ function renderSaidasSummary() {
   });
   el.innerHTML = _buildResumoCardsHtml({
     totalLabel: 'Saídas', totalPeso, totalValor, grupos,
-    grupoNomePlural: 'centrais', topN: 6, containerId: 'sai-summary-cards'
+    grupoNomePlural: 'centrais', topN: 6, containerId: 'sai-summary-cards', sortMode: 'alfabetica', modulo: 'saidas'
   });
 }
 window.renderSaidasSummary = renderSaidasSummary;
@@ -3707,6 +3839,7 @@ function renderSapSummary() {
     totalLabel: 'SAP', totalPeso, totalValor, totalCount: data.length, grupos,
     grupoNomePlural: 'movimentações', topN: 8, containerId: 'sap-summary-cards',
     grupoLabelFn: g => movBadgeHtml(g.cod),
+    modulo: 'sap', grupoTituloFn: g => 'Movimento ' + g.cod,
     extraHeroCards: [
       _heroSubCardHtml({
         icon: 'ti-package-import', iconBg: 'var(--green-bg)', iconColor: 'var(--green)',
@@ -3722,6 +3855,29 @@ function renderSapSummary() {
   });
 }
 window.renderSapSummary = renderSapSummary;
+
+// LANÇAMENTOS — "Est. Total" (peso) e "Custo Total", somando tudo que está
+// na tabela FILTRADA agora (sem lógica de período/Est. Inicial-Final — isso
+// fica pra quando retomarmos aquela discussão). Usa somarPesoCustoSap
+// direto porque os registros de Lançamentos usam os MESMOS nomes de campo
+// do SAP (custoUnit/valorTotal), não custo/valorTotal como Entradas/Saídas.
+function renderLancamentosSummary() {
+  const el = document.getElementById('lanc-summary-cards');
+  if (!el) return;
+  const data = getFilteredData('lancamentos');
+  const { peso: totalPeso, custo: totalValor } = somarPesoCustoSap(data);
+  const porCentral = _agruparRegistros(data, r => r.central);
+  const grupos = [...porCentral.entries()].map(([label, recs]) => {
+    const { peso, custo } = somarPesoCustoSap(recs);
+    return { label, peso, valor: custo, count: recs.length };
+  });
+  el.innerHTML = _buildResumoCardsHtml({
+    totalLabel: 'Lançamentos', totalPeso, totalValor, totalCount: data.length, grupos,
+    grupoNomePlural: 'centrais', topN: 6, containerId: 'lanc-summary-cards',
+    pesoLabel: 'Est. Total', sortMode: 'alfabetica', modulo: 'lancamentos'
+  });
+}
+window.renderLancamentosSummary = renderLancamentosSummary;
 
 // ── Override manual (reincluir/reexcluir do cálculo) ──────────────────────
 // incluir=true: registro passa a contar no cálculo mesmo batendo no padrão.

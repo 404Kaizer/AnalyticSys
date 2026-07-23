@@ -658,7 +658,16 @@
   gap: 10px;
   margin-bottom: 8px;
 }
-.mod-summary-grid .inv-kpi-card { padding: 12px 14px; gap: 10px; }
+.mod-summary-grid .inv-kpi-card {
+  padding: 12px 14px;
+  gap: 10px;
+  cursor: pointer;
+  transition: border-color .12s ease, background .12s ease;
+}
+.mod-summary-grid .inv-kpi-card:hover {
+  border-color: var(--accent);
+  background: var(--bg3);
+}
 .mod-summary-toggle {
   font-size: 11.5px;
   font-weight: 600;

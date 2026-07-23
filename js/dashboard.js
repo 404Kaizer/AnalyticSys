@@ -2673,6 +2673,7 @@ function renderLancamentos() {
   const data = pageSlice('lancamentos');
   updatePageInfo('lancamentos');
   renderSemCadastroModuloBox('lancamentos');
+  if (typeof renderLancamentosSummary === 'function') renderLancamentosSummary();
 
   if (!getFilteredData('lancamentos').length) {
     tb.innerHTML = '<tr><td colspan="10"><div class="empty-state"><i class="ti ti-clipboard"></i><p>Nenhum lançamento de saldo real.</p></div></td></tr>';
