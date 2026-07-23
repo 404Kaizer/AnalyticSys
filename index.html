@@ -4453,7 +4453,7 @@
       <div class="dai-intro-box">
         <i class="ti ti-info-circle"></i>
         <div>
-          Este documento tem validade fiscal e será usado para registrar ajustes de estoque (perdas, sobras, erros) perante a contabilidade, controladoria e eventuais fiscalizações. Ao gerar, uma ocorrência é aberta automaticamente na cor dourada, já concluída.
+          Este documento tem validade fiscal e será usado para registrar ajustes de estoque (perdas, sobras, erros) perante a contabilidade, controladoria e eventuais fiscalizações. Ao gerar, ocorrência(s) são abertas automaticamente na cor dourada, já concluídas (ou pendentes, se algum item ficar sem Nº SAP).
         </div>
       </div>
 
@@ -4476,37 +4476,28 @@
       </div>
 
       <div class="oc-form-group">
-        <label class="oc-label">Nome do operador informante <span class="oc-required">*</span></label>
-        <input type="text" id="dai-form-operador" class="oc-input" placeholder="Nome de quem informou o ocorrido">
-      </div>
-
-      <div class="oc-form-group">
-        <label class="oc-label">Material <span class="oc-hint">(grupo SAP)</span> <span class="oc-required">*</span></label>
-        <select id="dai-form-material" class="oc-input">
-          <option value="">Selecione o grupo SAP</option>
-        </select>
+        <label class="oc-label">Informante(s) <span class="oc-required">*</span> <span class="oc-hint">(quem informou o ocorrido — nome e cargo)</span></label>
+        <div class="reg-individual-rows" id="dai-informantes-rows" style="max-height:220px"></div>
+        <button type="button" class="btn reg-add-row-btn" onclick="_daiAddInformanteRow()"><i class="ti ti-plus"></i> Adicionar informante</button>
       </div>
 
       <div class="oc-form-group">
         <label class="oc-label">Descrição do ocorrido <span class="oc-required">*</span></label>
-        <textarea id="dai-form-descricao" class="oc-input oc-textarea" rows="5" placeholder="Descreva detalhadamente o que aconteceu, como foi identificado e o ajuste realizado…"></textarea>
-      </div>
-
-      <div class="oc-form-row">
-        <div class="oc-form-group">
-          <label class="oc-label">Tipo de movimento SAP <span class="oc-required">*</span></label>
-          <input type="text" id="dai-form-tipo-movimento" class="oc-input" placeholder="Ex.: 701, 702, Y11…" style="text-transform:uppercase" oninput="this.value = this.value.toUpperCase()">
-        </div>
-        <div class="oc-form-group">
-          <label class="oc-label">Nº do documento SAP (pós-ajuste) <span class="oc-hint">(opcional)</span></label>
-          <input type="text" id="dai-form-sap" class="oc-input" inputmode="numeric" placeholder="Somente números — deixe em branco se ainda não tiver o número" oninput="_daiFiltrarSapInput(this)">
-          <span class="oc-hint">Apenas dígitos — sem letras ou caracteres especiais. Se deixado em branco, o ajuste fica pendente até ser preenchido.</span>
-        </div>
+        <textarea id="dai-form-descricao" class="oc-input oc-textarea" rows="5" placeholder="Descreva detalhadamente o que aconteceu, como foi identificado e o(s) ajuste(s) realizado(s)…"></textarea>
       </div>
 
       <div class="oc-form-group">
-        <label class="oc-label">Função do movimento SAP <span class="oc-required">*</span></label>
-        <input type="text" id="dai-form-objetivo" class="oc-input" placeholder="Diminuir saldo em estoque, gerar documento de coleta de material, aumentar saldo em estoque…">
+        <label class="oc-label">Item(ns) do ajuste <span class="oc-required">*</span> <span class="oc-hint">(material, peso e movimento SAP — um item por lançamento)</span></label>
+        <div class="dai-items-list" id="dai-itens-rows"></div>
+        <button type="button" class="btn reg-add-row-btn" onclick="_daiAddItemRow()"><i class="ti ti-plus"></i> Adicionar item</button>
+      </div>
+
+      <div class="oc-form-group" id="dai-ocorrencia-modo-wrap" style="display:none">
+        <label class="oc-label">Ocorrência(s) geradas automaticamente</label>
+        <div class="dai-consent-box">
+          <input type="checkbox" id="dai-form-ocorrencia-por-item">
+          <label for="dai-form-ocorrencia-por-item">Gerar uma ocorrência separada para cada item (em vez de uma única ocorrência para o DAI inteiro)</label>
+        </div>
       </div>
 
       <div class="oc-form-group">
@@ -4525,33 +4516,30 @@
     <div class="modal-footer">
       <button class="btn" onclick="closeModal('dai-modal')">Cancelar</button>
       <button class="btn" id="dai-btn-gerar" style="background:linear-gradient(135deg,#8a6d1a,#c9a227);border:none;color:#1c1608;font-weight:700" onclick="gerarDocumentoAjuste()">
-        <i class="ti ti-rubber-stamp"></i> Gerar Documento e Ocorrência
+        <i class="ti ti-rubber-stamp"></i> Gerar Documento e Ocorrência(s)
       </button>
     </div>
   </div>
 </div>
 
-<!-- ═══ MODAL: Editar Nº SAP do DAI (único campo editável pós-emissão) ═══ -->
+<!-- ═══ MODAL: Editar Nº SAP do DAI (por item — único campo editável pós-emissão) ═══ -->
 <div class="modal-overlay" id="dai-sap-modal" role="dialog" aria-modal="true">
-  <div class="modal-card" style="max-width:440px;width:100%">
+  <div class="modal-card" style="max-width:520px;width:100%">
     <div class="modal-header">
       <span class="modal-title"><i class="ti ti-edit" style="color:var(--gold);margin-right:6px"></i>Nº do Documento SAP</span>
       <button class="modal-close" onclick="closeModal('dai-sap-modal')"><i class="ti ti-x"></i></button>
     </div>
-    <div class="modal-body" style="display:flex;flex-direction:column;gap:14px">
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:14px;max-height:70vh;overflow-y:auto">
       <div class="dai-intro-box">
         <i class="ti ti-info-circle"></i>
-        <div>Este é o único campo editável depois que o DAI é emitido. Ao preencher o número SAP e a data de conclusão, o ajuste é marcado como concluído.</div>
+        <div>O Nº SAP de cada item é o único dado editável depois que o DAI é emitido. O ajuste conclui quando todos os itens tiverem o Nº SAP preenchido.</div>
       </div>
       <input type="hidden" id="dai-sap-modal-daiid">
-      <div class="oc-form-group">
-        <label class="oc-label">Nº do documento SAP (pós-ajuste)</label>
-        <input type="text" id="dai-sap-modal-sap" class="oc-input" inputmode="numeric" placeholder="Somente números" oninput="_daiFiltrarSapInput(this)">
-        <span class="oc-hint">Apenas dígitos — deixe em branco para manter o ajuste pendente</span>
-      </div>
+      <div id="dai-sap-modal-itens"></div>
       <div class="oc-form-group">
         <label class="oc-label">Data de conclusão</label>
         <input type="date" id="dai-sap-modal-data" class="oc-input">
+        <span class="oc-hint">Aplicada aos itens preenchidos/alterados nesta edição</span>
       </div>
     </div>
     <div class="modal-footer">

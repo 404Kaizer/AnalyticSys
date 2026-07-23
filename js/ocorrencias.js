@@ -1084,6 +1084,7 @@ function openOcDetailModal(id) {
 
   const el = document.getElementById('oc-detail-modal');
   if (!el) return;
+  el.dataset.currentId = id; // usado para reabrir a mesma ocorrência após ações externas (ex: editar SAP de um DAI com múltiplas ocorrências vinculadas)
 
   el.querySelector('.oc-detail-header').innerHTML = `
     <span class="oc-badge ${statusCls[status]}">${isAjuste ? `<i class="ti ${o.concluida ? "ti-rubber-stamp" : "ti-clock-hour-4"}" style="margin-right:3px"></i>` : ''}${statusLabel[status]}</span>
@@ -1128,27 +1129,52 @@ function openOcDetailModal(id) {
       <div class="oc-detail-section-val" style="color:var(--purple)">${escapeHtml(o.motivoInconclusiva)}</div>` : '',
   ].join('');
 
-  // Seção exclusiva do Documento de Ajuste de Inventário (DAI)
+  // Seção exclusiva do Documento de Ajuste de Inventário (DAI) — mostra a
+  // tabela completa de itens (material/peso/movimento/SAP/função) e a
+  // lista de informantes. _daiGetItens/_daiGetInformantes (dai.js) also
+  // cobrem DAIs antigos (gerados antes desta funcionalidade), reconstruindo
+  // um item único a partir dos campos legados.
   const daiEl = el.querySelector('.oc-detail-dai');
   if (daiEl) {
-    daiEl.innerHTML = (isAjuste && dai) ? `
-      <div class="oc-detail-section-label" style="color:var(--gold)">Documento de Ajuste de Inventário</div>
-      <div class="dai-numero-preview" style="margin-bottom:8px">${escapeHtml(dai.tag || dai.numero || '—')}</div>
-      <div class="oc-detail-section-val" style="line-height:1.8;overflow-wrap:anywhere">
-        Nº do documento (fiscal): <strong>${escapeHtml(dai.numero || '—')}</strong><br>
-        Central: <strong>${escapeHtml(dai.central || o.central || '—')}</strong>${dai.regionalCentral ? ` <span style="color:var(--text3)">(Regional ${escapeHtml(dai.regionalCentral)})</span>` : ''}${dai.cnpjCentral ? ` <span style="color:var(--text3)">(CNPJ ${escapeHtml(dai.cnpjCentral)})</span>` : ''}<br>
-        Material: <strong>${escapeHtml(dai.material || o.material || '—')}</strong> ·
-        Operador informante: <strong>${escapeHtml(dai.operador || o.operador || '—')}</strong><br>
-        Data do ocorrido: <strong>${fmtDateBR(dai.dataOcorrido)}</strong> · Gerado em: <strong>${dai.dataGeracao ? new Date(dai.dataGeracao).toLocaleString('pt-BR') : '—'}</strong><br>
-        Função do movimento SAP: <strong>${escapeHtml(dai.objetivo || '—')}</strong><br>
-        Tipo de movimento SAP: <strong>${escapeHtml(dai.tipoMovimentoSap || '—')}</strong> ·
-        Documento SAP: <strong ${dai.sapDocumento === 'PENDENTE' ? 'style="color:var(--amber)"' : ''}>${dai.sapDocumento === 'PENDENTE' ? 'Pendente de preenchimento' : escapeHtml(dai.sapDocumento || '—')}</strong><br>
-        Analista responsável (assinatura): <strong>${escapeHtml(dai.analista || '—')}</strong>
+    if (isAjuste && dai) {
+      const itens = (typeof _daiGetItens === 'function') ? _daiGetItens(dai) : [];
+      const informantes = (typeof _daiGetInformantes === 'function') ? _daiGetInformantes(dai) : [];
+      const itemAtualId = o.daiItemId || null;
+      const informantesTxt = informantes.map(i => escapeHtml(i.nome) + (i.cargo ? ` (${escapeHtml(i.cargo)})` : '')).join(', ') || '—';
+      const itensRowsHtml = itens.map(it => {
+        const pendente = !it.sapDocumento || it.sapDocumento === 'PENDENTE';
+        return `<tr class="${it.id && it.id === itemAtualId ? 'oc-dai-item-atual' : ''}">
+          <td>${escapeHtml(it.material || '—')}</td>
+          <td>${it.peso !== null && it.peso !== undefined && it.peso !== '' ? Number(it.peso).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}</td>
+          <td>${escapeHtml(it.tipoMovimentoSap || '—')}</td>
+          <td ${pendente ? 'style="color:var(--amber)"' : ''}>${pendente ? 'Pendente' : escapeHtml(it.sapDocumento)}</td>
+          <td>${escapeHtml(it.objetivo || '—')}</td>
+        </tr>`;
+      }).join('');
+
+      daiEl.innerHTML = `
+        <div class="oc-detail-section-label" style="color:var(--gold)">Documento de Ajuste de Inventário</div>
+        <div class="dai-numero-preview" style="margin-bottom:8px">${escapeHtml(dai.tag || dai.numero || '—')}</div>
+        <div class="oc-detail-section-val" style="line-height:1.8;overflow-wrap:anywhere">
+          Nº do documento (fiscal): <strong>${escapeHtml(dai.numero || '—')}</strong><br>
+          Central: <strong>${escapeHtml(dai.central || o.central || '—')}</strong>${dai.regionalCentral ? ` <span style="color:var(--text3)">(Regional ${escapeHtml(dai.regionalCentral)})</span>` : ''}${dai.cnpjCentral ? ` <span style="color:var(--text3)">(CNPJ ${escapeHtml(dai.cnpjCentral)})</span>` : ''}<br>
+          Informante(s): <strong>${informantesTxt}</strong><br>
+          Data do ocorrido: <strong>${fmtDateBR(dai.dataOcorrido)}</strong> · Gerado em: <strong>${dai.dataGeracao ? new Date(dai.dataGeracao).toLocaleString('pt-BR') : '—'}</strong><br>
+          Analista responsável (assinatura): <strong>${escapeHtml(dai.analista || '—')}</strong>
+        </div>
+        <div style="margin-top:10px;overflow-x:auto">
+          <table class="oc-dai-itens-table">
+            <thead><tr><th>Material</th><th>Peso (kg)</th><th>Tipo Mov.</th><th>Nº Doc. SAP</th><th>Função do movimento</th></tr></thead>
+            <tbody>${itensRowsHtml}</tbody>
+          </table>
+        </div>
         ${Array.isArray(dai.anexos) && dai.anexos.length ? `
-        <div class="dai-anexo-list">
+        <div class="dai-anexo-list" style="margin-top:10px">
           ${dai.anexos.map(a => `<div class="dai-anexo-chip"><i class="ti ti-paperclip"></i><span class="dai-anexo-chip-nome">${escapeHtml(a.nome)}</span><span class="dai-anexo-chip-tam">${formatBytes(a.tamanho)}</span></div>`).join('')}
-        </div>` : ''}
-      </div>` : '';
+        </div>` : ''}`;
+    } else {
+      daiEl.innerHTML = '';
+    }
   }
 
   el.querySelector('.oc-detail-meta').innerHTML = `
