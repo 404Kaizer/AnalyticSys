@@ -224,18 +224,18 @@ function buildDashboardGerencialResults(dtIni, dtFim) {
 }
 
 // ── Funções de controle do filtro de período do Dashboard Gerencial ──
+// Período agora é SEMPRE um mês inteiro (ver _dgMonthState, mais abaixo) —
+// dtIni/dtFim são derivados do mês selecionado, não mais de um range livre.
+// Os hidden inputs dg-dt-ini/dg-dt-fim continuam sendo preenchidos (1º e
+// último dia do mês) por compatibilidade com dgSwitchTab('corte'), que lê
+// esses ids diretamente pra sincronizar o Controle de Corte.
 function rodarDashboardGerencial() {
-  const iniStr = document.getElementById('dg-dt-ini')?.value;
-  const fimStr = document.getElementById('dg-dt-fim')?.value;
-  let dtIni = null, dtFim = null;
-  if (iniStr && fimStr) {
-    dtIni = new Date(iniStr + 'T00:00:00');
-    dtFim = new Date(fimStr + 'T23:59:59');
-    if (isNaN(dtIni) || isNaN(dtFim) || dtIni > dtFim) {
-      toast('Período inválido', 'error');
-      return;
-    }
-  }
+  const dtIni = new Date(_dgMonthState.selectedYear, _dgMonthState.selectedMonth, 1);
+  const dtFim = new Date(_dgMonthState.selectedYear, _dgMonthState.selectedMonth + 1, 0, 23, 59, 59);
+  const iniEl = document.getElementById('dg-dt-ini');
+  const fimEl = document.getElementById('dg-dt-fim');
+  if (iniEl) iniEl.value = toISODate(dtIni);
+  if (fimEl) fimEl.value = toISODate(dtFim);
   if (typeof showLoadingOverlay === 'function') showLoadingOverlay('Carregando dashboard', 'Calculando métricas consolidadas...');
   if (typeof loadingShowSteps === 'function') loadingShowSteps([
     { id: 'dg-calc',   icon: 'ti-calculator', label: 'Calculando variações e estoques' },
@@ -265,11 +265,9 @@ function rodarDashboardGerencial() {
 }
 
 function limparDashboardGerencial() {
-  const ini = document.getElementById('dg-dt-ini');
-  const fim = document.getElementById('dg-dt-fim');
-  if (ini) ini.value = '';
-  if (fim) fim.value = '';
-  document.querySelectorAll('#dg-toolbar .qp-btn').forEach(b => b.classList.remove('active'));
+  // O mês selecionado no seletor (_dgMonthState) permanece como está —
+  // mesmo padrão do Inventário, que não tem um estado "vazio" de período.
+  // Limpar só reseta o conteúdo renderizado, não a seleção de mês.
   // Voltar ao estado vazio
   const emptyEl   = document.getElementById('dg-empty-state');
   const contentEl = document.getElementById('dg-content');
@@ -281,46 +279,107 @@ function limparDashboardGerencial() {
   if (window.updatePeriodFab) updatePeriodFab();
 }
 
-function setDgQuickPeriod(days) {
-  const end = new Date();
-  const start = new Date();
-  start.setDate(end.getDate() - days + 1);
-  const ini = document.getElementById('dg-dt-ini');
-  const fim = document.getElementById('dg-dt-fim');
-  if (ini) ini.value = toISODate(start);
-  if (fim) fim.value = toISODate(end);
-  document.querySelectorAll('#dg-toolbar .qp-btn').forEach(b => b.classList.remove('active'));
-  event?.target?.classList.add('active');
-  rodarDashboardGerencial();
+// ── Seletor de MÊS do Dashboard Gerencial ───────────────────────────────
+// Substitui o antigo seletor de range de dias (calendar.js/toggleCalPicker)
+// por um componente próprio, só de meses — mesmo padrão já usado no
+// Inventário (_invMonthState / invToggleMonthPicker, em inventario.js).
+// Motivo: o componente genérico de calendar.js foi feito pra seleção de
+// range de dias; aqui o período agora é sempre um mês inteiro.
+const MESES_ABREV_DG = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+const MESES_NOME_DG  = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+const _dgMonthState = {
+  viewYear:      new Date().getFullYear(),  // ano exibido no grid (navegação)
+  selectedYear:  new Date().getFullYear(),  // ano efetivamente selecionado
+  selectedMonth: new Date().getMonth()      // mês efetivamente selecionado (0-based)
+};
+
+function _dgUpdateMonthTriggerLabel() {
+  const label = document.getElementById('dg-month-label');
+  if (label) label.textContent = MESES_NOME_DG[_dgMonthState.selectedMonth] + ' de ' + _dgMonthState.selectedYear;
+  const trigger = document.getElementById('dg-month-trigger');
+  if (trigger) trigger.classList.add('has-value');
 }
 
-function setDgQuickPeriodMes() {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), 1);
-  const end   = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-  const ini = document.getElementById('dg-dt-ini');
-  const fim = document.getElementById('dg-dt-fim');
-  if (ini) ini.value = toISODate(start);
-  if (fim) fim.value = toISODate(end);
-  document.querySelectorAll('#dg-toolbar .qp-btn').forEach(b => b.classList.remove('active'));
-  event?.target?.classList.add('active');
-  rodarDashboardGerencial();
+function _dgRenderMonthGrid() {
+  const container = document.getElementById('dg-month-inner');
+  if (!container) return;
+  const y = _dgMonthState.viewYear;
+  const items = MESES_ABREV_DG.map((name, i) => {
+    const active = (i === _dgMonthState.selectedMonth && y === _dgMonthState.selectedYear) ? ' active' : '';
+    return `<button class="cal-grid-item${active}" onclick="dgSelectMonth(${i})" type="button">${name}</button>`;
+  }).join('');
+  container.innerHTML = `
+    <div class="cal-header">
+      <button class="cal-nav-btn" onclick="dgNavMonthYear(-1)" type="button"><i class="ti ti-chevron-left"></i></button>
+      <span class="cal-header-center" style="cursor:default">${y}</span>
+      <button class="cal-nav-btn" onclick="dgNavMonthYear(1)" type="button"><i class="ti ti-chevron-right"></i></button>
+    </div>
+    <div class="cal-month-grid">${items}</div>`;
 }
 
-function setDgQuickPeriodAno() {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), 0, 1);
-  const end   = new Date(now.getFullYear(), 11, 31);
-  const ini = document.getElementById('dg-dt-ini');
-  const fim = document.getElementById('dg-dt-fim');
-  if (ini) ini.value = toISODate(start);
-  if (fim) fim.value = toISODate(end);
-  document.querySelectorAll('#dg-toolbar .qp-btn').forEach(b => b.classList.remove('active'));
-  event?.target?.classList.add('active');
+window.dgNavMonthYear = function(dir) {
+  _dgMonthState.viewYear += dir;
+  _dgRenderMonthGrid();
+};
+
+window.dgSelectMonth = function(month) {
+  _dgMonthState.selectedYear  = _dgMonthState.viewYear;
+  _dgMonthState.selectedMonth = month;
+  _dgUpdateMonthTriggerLabel();
+  _dgCloseMonthPicker();
+  // Troca de mês: gera (ou regenera) o dashboard desse mês imediatamente.
   rodarDashboardGerencial();
+};
+
+function _dgCloseMonthPicker() {
+  document.getElementById('dg-month-dropdown')?.classList.remove('open');
+  document.getElementById('dg-month-trigger')?.classList.remove('open');
 }
 
-Object.assign(window, { rodarDashboardGerencial, limparDashboardGerencial, setDgQuickPeriod, setDgQuickPeriodMes, setDgQuickPeriodAno });
+window.dgToggleMonthPicker = function() {
+  const dropdown = document.getElementById('dg-month-dropdown');
+  const trigger  = document.getElementById('dg-month-trigger');
+  if (!dropdown) return;
+  const isOpen = dropdown.classList.contains('open');
+  // Fecha outros pickers de calendário abertos na página (mesmo padrão do calendar.js)
+  document.querySelectorAll('.cal-picker-dropdown.open').forEach(el => {
+    if (el !== dropdown) {
+      el.classList.remove('open');
+      document.getElementById(el.id.replace('-dropdown', '-trigger'))?.classList.remove('open');
+    }
+  });
+  if (isOpen) {
+    _dgCloseMonthPicker();
+  } else {
+    _dgMonthState.viewYear = _dgMonthState.selectedYear; // sempre abre focado no ano selecionado
+    dropdown.classList.add('open');
+    trigger?.classList.add('open');
+    _dgRenderMonthGrid();
+  }
+};
+
+// Fecha ao clicar fora (mesmo padrão usado pelos outros dropdowns do sistema)
+document.addEventListener('click', e => {
+  const wrap = document.getElementById('dg-month-wrap');
+  const dropdown = document.getElementById('dg-month-dropdown');
+  if (wrap && dropdown?.classList.contains('open') && !wrap.contains(e.target)) {
+    _dgCloseMonthPicker();
+  }
+});
+// Evita que cliques dentro do dropdown fechem ele mesmo (bubbling), e
+// inicializa o rótulo do trigger com o mês atual assim que o DOM carregar.
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('dg-month-dropdown')?.addEventListener('click', e => e.stopPropagation());
+  _dgUpdateMonthTriggerLabel();
+});
+
+Object.assign(window, {
+  rodarDashboardGerencial, limparDashboardGerencial,
+  dgToggleMonthPicker: window.dgToggleMonthPicker,
+  dgSelectMonth: window.dgSelectMonth,
+  dgNavMonthYear: window.dgNavMonthYear
+});
 
 function updateDashboard() {
   // O Dashboard Gerencial só é gerado quando o usuário clica em "Analisar".

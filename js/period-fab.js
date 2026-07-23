@@ -56,6 +56,16 @@
   window.updatePeriodFab = function() {
     const fab = document.getElementById('period-fab');
     if (!fab) return;
+    // Dashboard Gerencial: período agora é sempre um mês inteiro, escolhido
+    // pelo seletor próprio no topo da página (dgToggleMonthPicker, em
+    // dashboard.js). O FAB permitia escolher qualquer range de dias avulso,
+    // o que contradiz esse filtro — por isso fica desativado nesta página.
+    // A página Analítico (pfx 'an') continua com o FAB funcionando normal.
+    if (activePage() === 'dashboard') {
+      fab.classList.remove('visible');
+      closePeriodFab();
+      return;
+    }
     const show = contentVisible();
     fab.classList.toggle('visible', show);
     if (show) { syncFabLabel(); syncFabInputs(); }

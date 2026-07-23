@@ -542,28 +542,20 @@
         <!-- ── Filtro de período ── -->
         <div class="analitico-toolbar" id="dg-toolbar">
           <div class="analitico-period" style="align-items:center;gap:10px">
-            <!-- Custom date range picker trigger -->
-            <div class="cal-picker-wrap" id="dg-cal-wrap">
-              <button class="cal-picker-trigger" id="dg-cal-trigger" onclick="toggleCalPicker('dg')" type="button">
+            <!-- Seletor de MÊS único (mesmo padrão do Inventário — ver inv-month-wrap) -->
+            <div class="cal-picker-wrap" id="dg-month-wrap">
+              <button class="cal-picker-trigger has-value" id="dg-month-trigger" onclick="dgToggleMonthPicker()" type="button">
                 <i class="ti ti-calendar-event"></i>
-                <span id="dg-cal-label">Selecionar período</span>
-                <i class="ti ti-chevron-down cal-chev" id="dg-cal-chev"></i>
+                <span id="dg-month-label">Selecionar mês</span>
+                <i class="ti ti-chevron-down cal-chev"></i>
               </button>
-              <!-- Hidden inputs for compatibility -->
+              <!-- Hidden inputs for compatibility (dgSwitchTab('corte'), period-fab) -->
               <input type="hidden" id="dg-dt-ini">
               <input type="hidden" id="dg-dt-fim">
-              <!-- Dropdown calendar -->
-              <div class="cal-picker-dropdown" id="dg-cal-dropdown">
-                <div class="cal-picker-inner" id="dg-cal-inner" data-pfx="dg"></div>
+              <!-- Dropdown grid de meses -->
+              <div class="cal-picker-dropdown" id="dg-month-dropdown">
+                <div class="cal-picker-inner" id="dg-month-inner"></div>
               </div>
-            </div>
-            <!-- Quick period chips -->
-            <div class="cal-quick-chips">
-              <button class="cal-chip" onclick="calQuickHoje('dg')" type="button">Até hoje</button>
-              <button class="cal-chip" onclick="calQuickOntem('dg')" type="button">Até ontem</button>
-              <button class="cal-chip" onclick="calQuickUltimaTerca('dg')" type="button">Última terça</button>
-              <button class="cal-chip" onclick="calQuickMesAtual('dg')" type="button">Mês atual</button>
-              <button class="cal-chip" onclick="calQuickMesAnterior('dg')" type="button">Mês anterior</button>
             </div>
           </div>
           <div class="analitico-actions">
