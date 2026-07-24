@@ -723,7 +723,7 @@ td.pending-cell  { color: var(--text3) !important; font-style: italic; font-size
 /* ── Macro KPI strip ── */
 .macro-kpi-strip {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
   gap: 10px;
   margin-bottom: 20px;
   width: 100%;
@@ -9709,6 +9709,107 @@ td:has(.lanc-central-edit:focus) {
   height: 100%;
   width: 100%;
 }
+
+/* ── Badge de comparativo de período (Fornecimento/Consumo/Custos) ──
+   Convenção: alta = verde (ti-trending-up), baixa = vermelho
+   (ti-trending-down), estável = neutro (ti-minus). Mesma iconografia já
+   usada nos blocos "Top 5 Saudáveis/Críticas" de Giro & Cobertura, mas
+   aqui o significado é sempre "tendência do valor", não "saúde" — por
+   isso é uma classe própria (macro-kpi-delta), não reaproveita colorFor. */
+.macro-kpi-delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-family: var(--mono);
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+.macro-kpi-delta i { font-size: 10px; }
+.macro-kpi-delta.up   { color: var(--green); background: color-mix(in srgb, var(--green) 14%, transparent); }
+.macro-kpi-delta.down { color: var(--red);   background: color-mix(in srgb, var(--red) 14%, transparent); }
+.macro-kpi-delta.flat { color: var(--text3); background: var(--bg3); }
+.macro-kpi-delta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+.macro-kpi-delta-label {
+  font-size: 9px;
+  font-family: var(--mono);
+  letter-spacing: .05em;
+  color: var(--text3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Card de ranking genérico (Fornecimento/Consumo/Custos) ──
+   Mesmo padrão visual que a antiga aba Custos usava (.custos-grid-*),
+   recriado de forma genérica pra ser reaproveitado pelas 3 abas novas
+   do Gerencial, não só por uma delas. */
+.dg-rank-card {
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.dg-rank-head2 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 14px;
+  background: var(--bg3);
+  border-bottom: 1px solid var(--border2);
+  font-size: 10px;
+  font-family: var(--mono);
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: .07em;
+}
+.dg-rank-list { padding: 4px 0; }
+.dg-rank-item {
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--border);
+  transition: background .12s;
+}
+.dg-rank-item:last-child { border-bottom: none; }
+.dg-rank-item:hover { background: var(--bg3); }
+.dg-rank-item-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.dg-rank-item-name {
+  font-size: 12px;
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.dg-rank-item-sub { font-size: 10px; font-weight: 400; color: var(--text3); }
+.dg-rank-item-val {
+  font-size: 12px;
+  font-family: var(--mono);
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.dg-rank-item-bar-track { width: 100%; height: 6px; background: var(--bg4); border-radius: 3px; overflow: hidden; }
+.dg-rank-item-bar-fill  { height: 100%; border-radius: 3px; transition: width .4s ease; }
 
 /* ── Botão Abortar importação ── */
 .loading-abort-row {

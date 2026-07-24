@@ -399,8 +399,13 @@ function _renderDashboardConteudo(dtIni, dtFim) {
   // ── 1. Visão Geral — KPIs executivos + gráficos consolidados (reformulada) ──
   renderDgVisaoGeralPdf(results, thresholds, dtIni, dtFim);
 
-  // ── 2. Giro de Estoque ──
-  renderDgGiro(results, dtIni, dtFim);
+  // ── 2. Visão de Consumo — KPIs com comparativo automático vs. período
+  // anterior equivalente (mesma duração, encostado antes de dtIni) +
+  // rankings de Saídas + Giro & Cobertura (migrado da Visão Geral, agora
+  // renderizado só a partir daqui — ver renderDgConsumo). ──
+  const { dtIniAnt, dtFimAnt } = getPeriodoAnteriorEquivalente(dtIni, dtFim);
+  const resultsAnt = (dtIniAnt && dtFimAnt) ? buildDashboardGerencialResults(dtIniAnt, dtFimAnt) : [];
+  renderDgConsumo(results, resultsAnt, dtIni, dtFim);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -481,6 +486,21 @@ function _dgVgTheme() {
     gridCol:  isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.06)',
     tickFont: { family: "'DM Mono', monospace", size: 10 }
   };
+}
+
+// Chart.js desenha em <canvas> (bitmap), então NÃO entende "var(--x)" —
+// isso só é resolvido pelo motor de CSS em elementos reais do DOM. Sem
+// isso, backgroundColor recebe a string literal "var(--accent)" e o
+// Canvas cai no preto padrão (bug reportado: "barras pretas ao invés de
+// coloridas"). Resolve o valor REAL da variável (já considerando o tema
+// claro/escuro ativo) antes de repassar pro Chart.js.
+function _dgResolveCssColor(varName, fallback) {
+  try {
+    const v = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+    return v || fallback;
+  } catch (e) {
+    return fallback;
+  }
 }
 
 // ── Constrói os pares Central×Material com diff (variação), categoria,
@@ -2678,6 +2698,281 @@ function renderDgGiro(results, dtIni, dtFim) {
   `).join('');
   makeResizable(tb.closest('table'));
   injectColFilterButtons(tb.closest('table'), 'entradas');
+}
+
+// ═══════════════════════════════════════════════════════════
+// VISÃO DE CONSUMO (Saídas) — Fase 1 das 3 abas novas do Gerencial
+// (Fornecimento/Consumo/Custos). KPIs de topo com comparativo automático
+// vs. período anterior equivalente (mesma duração, encostado antes de
+// dtIni — decisão confirmada com o Hugo), rankings de Centrais/Materiais
+// por consumo e a seção Giro & Cobertura migrada da Visão Geral (deixou
+// de existir lá pra não duplicar conteúdo entre abas).
+// ═══════════════════════════════════════════════════════════
+
+// Período anterior equivalente — mesma duração do período selecionado,
+// encostado imediatamente antes de dtIni. Reaproveitado por Fornecimento
+// e Custos nas próximas fases, não só por Consumo.
+function getPeriodoAnteriorEquivalente(dtIni, dtFim) {
+  if (!dtIni || !dtFim) return { dtIniAnt: null, dtFimAnt: null };
+  const duracaoMs = dtFim.getTime() - dtIni.getTime();
+  const dtFimAnt = new Date(dtIni.getTime() - 1);
+  const dtIniAnt = new Date(dtFimAnt.getTime() - duracaoMs);
+  return { dtIniAnt, dtFimAnt };
+}
+
+// Badge de comparativo (▲/▼/estável) — atual vs. período anterior
+// equivalente. Sem juízo de valor sobre alta/baixa (verde=alta,
+// vermelho=baixa, sempre) — o significado de "bom"/"ruim" depende do
+// KPI e fica a cargo de quem lê o card, não da cor do badge.
+function _dgDeltaBadgeHtml(atual, anterior) {
+  if (anterior === null || anterior === undefined || Math.abs(anterior) < 0.0001) {
+    if (Math.abs(atual) < 0.0001) return '';
+    return `<span class="macro-kpi-delta flat"><i class="ti ti-minus"></i> sem base no período anterior</span>`;
+  }
+  const pct = ((atual - anterior) / Math.abs(anterior)) * 100;
+  if (Math.abs(pct) < 0.05) return `<span class="macro-kpi-delta flat"><i class="ti ti-minus"></i> estável</span>`;
+  const isUp = pct > 0;
+  const cls  = isUp ? 'up' : 'down';
+  const icon = isUp ? 'ti-trending-up' : 'ti-trending-down';
+  return `<span class="macro-kpi-delta ${cls}"><i class="ti ${icon}"></i> ${isUp ? '+' : ''}${pct.toFixed(1)}%</span>`;
+}
+
+// Giro Geral / Cobertura Geral agregados — MESMA metodologia já usada em
+// renderDgGiro (KPI do modal detalhado, acima), replicada aqui de forma
+// independente pra não alterar uma função já validada. Usada pelos KPIs
+// de topo da Visão de Consumo (e pelo comparativo vs. período anterior).
+function _dcCalcGiroCoberturaGeral(results) {
+  let totalSaidasKg = 0, totalEstMedioKg = 0;
+  results.forEach(r => {
+    const lancsByMat = new Map(), sapByMat = new Map();
+    r.lancsNoPeriodo.forEach(l => { const m = l.material || '—'; if (!lancsByMat.has(m)) lancsByMat.set(m, []); lancsByMat.get(m).push(l); });
+    r.sapNoPeriodo.forEach(s   => { const m = s.material  || '—'; if (!sapByMat.has(m))   sapByMat.set(m, []);   sapByMat.get(m).push(s); });
+    (r.allMats || []).forEach(mat => {
+      const snap = buildSnapshot({ lancs: lancsByMat.get(mat) || [], sap: sapByMat.get(mat) || [] });
+      totalSaidasKg   += Math.abs(snap.totalSai);
+      totalEstMedioKg += (snap.pesoIni + snap.pesoFim) / 2;
+    });
+  });
+  const periodoEstimado = results.length ? (() => {
+    let minDate = null, maxDate = null;
+    results.forEach(r => r.lancsNoPeriodo.forEach(l => {
+      const d = parseDate(l.dtLanc); if (!d) return;
+      if (!minDate || d < minDate) minDate = d;
+      if (!maxDate || d > maxDate) maxDate = d;
+    }));
+    return (minDate && maxDate) ? Math.max(1, Math.round((maxDate - minDate) / 86400000) + 1) : 30;
+  })() : 30;
+  const giroGeral      = totalEstMedioKg > 0 ? totalSaidasKg / totalEstMedioKg : 0;
+  const coberturaGeral = totalSaidasKg   > 0 ? (totalEstMedioKg / totalSaidasKg) * periodoEstimado : null;
+  return { giroGeral, coberturaGeral, totalSaidasKg, totalEstMedioKg };
+}
+
+// Ranking Centrais com Maior Consumo — agrupa os pares Central×Material
+// (já resolvidos por _dgVgBuildPares, mesma fonte usada em toda a Visão
+// Geral) por central, somando saiKg e o custo de saída (saiKg × custo
+// médio ponderado do material naquela central — mesma base de custo já
+// usada no resto do Gerencial, não o valorTotal registrado no SAP).
+function _dcBuildRankingCentrais(pares) {
+  const map = new Map();
+  pares.forEach(p => {
+    if (!map.has(p.central)) map.set(p.central, { nome: p.central, sub: p.regional || '—', saiKg: 0, custoSaida: 0 });
+    const m = map.get(p.central);
+    m.saiKg      += p.saiKg || 0;
+    m.custoSaida += (p.saiKg || 0) * (p.custoMed || 0);
+  });
+  return [...map.values()].filter(m => m.saiKg > 0.0001).sort((a, b) => b.saiKg - a.saiKg);
+}
+
+// Ranking Materiais Mais Consumidos — mesma fonte (pares), agrupado por
+// material em vez de central.
+function _dcBuildRankingMateriais(pares) {
+  const map = new Map();
+  pares.forEach(p => {
+    if (!map.has(p.mat)) map.set(p.mat, { nome: p.mat, sub: DG_VG_CAT_LABELS[p.catKey] || '—', saiKg: 0, custoSaida: 0 });
+    const m = map.get(p.mat);
+    m.saiKg      += p.saiKg || 0;
+    m.custoSaida += (p.saiKg || 0) * (p.custoMed || 0);
+  });
+  return [...map.values()].filter(m => m.saiKg > 0.0001).sort((a, b) => b.saiKg - a.saiKg);
+}
+
+// Renderiza um card de ranking genérico (.dg-rank-card) — reaproveitado
+// pelas 3 abas novas do Gerencial (Consumo agora; Fornecimento/Custos
+// nas próximas fases), não só por esta lista de centrais/materiais.
+function _dgRankCardHtml(rows, opts = {}) {
+  if (!rows.length) {
+    return '<div class="dg-empty-riscos" style="padding:16px"><i class="ti ti-database-off"></i><span>Sem dados no período.</span></div>';
+  }
+  const nameLabel = opts.nameLabel || 'Nome';
+  const subLabel  = opts.subLabel  || '';
+  const valLabel  = opts.valLabel  || 'Valor';
+  const color     = opts.color     || 'var(--accent)';
+  const valFmt    = opts.valFmt    || (r => fmtKgShort(r.saiKg));
+  const subFmt    = opts.subFmt    || (r => escapeHtml(r.sub || '—'));
+  const max = Math.max(...rows.map(r => r.saiKg), 0.0001);
+  const head = `<div class="dg-rank-head2"><span>${nameLabel}${subLabel ? ' · ' + subLabel : ''}</span><span>${valLabel}</span></div>`;
+  const body = rows.map(r => {
+    const pct = Math.min(100, (r.saiKg / max) * 100);
+    return `<div class="dg-rank-item">
+      <div class="dg-rank-item-top">
+        <span class="dg-rank-item-name" title="${escapeHtml(r.nome)}">${escapeHtml(r.nome)}<span class="dg-rank-item-sub"> · ${subFmt(r)}</span></span>
+        <span class="dg-rank-item-val">${valFmt(r)}</span>
+      </div>
+      <div class="dg-rank-item-bar-track"><div class="dg-rank-item-bar-fill" style="width:${pct}%;background:${color}"></div></div>
+    </div>`;
+  }).join('');
+  return `${head}<div class="dg-rank-list">${body}</div>`;
+}
+
+// Gráfico de barras (Chart.js) — MESMO padrão visual/tema já usado nos
+// gráficos de custo da Visão Geral (_dgVgRenderChartCustoPorChave),
+// reaproveitando o registro global _dgVgCharts pra destruir/recriar sem
+// vazar instâncias antigas do Chart.js entre re-renderizações.
+function _dcRenderChartRanking(canvasId, chartKey, rows, color) {
+  const ctx = document.getElementById(canvasId);
+  if (!ctx) return;
+  _dgVgDestroyChart(chartKey);
+  const { textCol, gridCol, tickFont } = _dgVgTheme();
+  const inner = ctx.parentElement;
+  if (inner) inner.style.width = '100%';
+
+  if (!rows.length) {
+    const c2d = ctx.getContext('2d');
+    c2d.clearRect(0, 0, ctx.width, ctx.height);
+    c2d.fillStyle = textCol;
+    c2d.font = "11px 'DM Mono', monospace";
+    c2d.textAlign = 'center';
+    c2d.fillText('Sem dados no período.', ctx.width / 2, 40);
+    return;
+  }
+
+  const top = rows.slice(0, 10);
+  const labels = top.map(r => r.nome);
+  const data   = top.map(r => r.saiKg);
+
+  _dgVgCharts[chartKey] = new Chart(ctx, {
+    type: 'bar',
+    data: { labels, datasets: [{ data, backgroundColor: color, borderRadius: 3, borderSkipped: false }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: c => fmtKg(c.raw) + ' kg' } }
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: textCol, font: { ...tickFont, size: 9.5 }, maxRotation: 55, minRotation: 35, autoSkip: false } },
+        y: { grid: { color: gridCol }, ticks: { color: textCol, font: tickFont, callback: v => fmtKgShort(v) } }
+      }
+    }
+  });
+}
+
+// KPIs de topo da Visão de Consumo, com badge de comparativo automático
+// vs. período anterior equivalente.
+function _dcRenderKpiStrip(results, resultsAnt, ranking) {
+  const el = document.getElementById('dg-cons-kpi-strip');
+  if (!el) return;
+
+  const movAtual = _dgVgMovimentacaoTotais(results);
+  const movAnt   = resultsAnt.length ? _dgVgMovimentacaoTotais(resultsAnt) : { totalSai: 0 };
+  const custoAtual = _dgVgCustoMovimentacaoTotais(results);
+  const custoAnt   = resultsAnt.length ? _dgVgCustoMovimentacaoTotais(resultsAnt) : { custoSai: 0 };
+  const giroAtual = _dcCalcGiroCoberturaGeral(results);
+  const giroAnt   = resultsAnt.length ? _dcCalcGiroCoberturaGeral(resultsAnt) : { giroGeral: 0, coberturaGeral: null };
+  const destaque = ranking[0] || null;
+
+  el.innerHTML = `
+    <div class="macro-kpi-card kc-blue">
+      <div class="macro-kpi-label"><i class="ti ti-scale"></i> Volume Consumido</div>
+      <div class="macro-kpi-cost">${fmtKgShort(movAtual.totalSai)} kg</div>
+      <div class="macro-kpi-delta-row">
+        <span class="macro-kpi-delta-label">vs. período anterior</span>
+        ${_dgDeltaBadgeHtml(movAtual.totalSai, movAnt.totalSai)}
+      </div>
+    </div>
+    <div class="macro-kpi-card kc-amber">
+      <div class="macro-kpi-label"><i class="ti ti-coin"></i> Custo Total de Saídas</div>
+      <div class="macro-kpi-cost">${money(custoAtual.custoSai || 0)}</div>
+      <div class="macro-kpi-delta-row">
+        <span class="macro-kpi-delta-label">vs. período anterior</span>
+        ${_dgDeltaBadgeHtml(custoAtual.custoSai || 0, custoAnt.custoSai || 0)}
+      </div>
+    </div>
+    <div class="macro-kpi-card kc-teal">
+      <div class="macro-kpi-label"><i class="ti ti-refresh"></i> Giro Geral</div>
+      <div class="macro-kpi-cost">${giroAtual.giroGeral.toFixed(2)}x</div>
+      <div class="macro-kpi-delta-row">
+        <span class="macro-kpi-delta-label">vs. período anterior</span>
+        ${_dgDeltaBadgeHtml(giroAtual.giroGeral, giroAnt.giroGeral)}
+      </div>
+    </div>
+    <div class="macro-kpi-card kc-purple">
+      <div class="macro-kpi-label"><i class="ti ti-calendar-time"></i> Cobertura Geral</div>
+      <div class="macro-kpi-cost">${giroAtual.coberturaGeral !== null ? Math.round(giroAtual.coberturaGeral) + ' dias' : '—'}</div>
+      <div class="macro-kpi-delta-row">
+        <span class="macro-kpi-delta-label">vs. período anterior</span>
+        ${_dgDeltaBadgeHtml(giroAtual.coberturaGeral || 0, giroAnt.coberturaGeral || 0)}
+      </div>
+    </div>
+    <div class="macro-kpi-card kc-green">
+      <div class="macro-kpi-label"><i class="ti ti-building-factory-2"></i> Central com Maior Consumo</div>
+      <div class="macro-kpi-cost" style="font-size:clamp(13px,1.6vw,17px)">${destaque ? escapeHtml(destaque.nome) : '—'}</div>
+      <div class="macro-kpi-sub">${destaque ? fmtKgShort(destaque.saiKg) + ' kg no período' : 'Sem dados'}</div>
+    </div>`;
+}
+
+// Orquestra a Visão de Consumo inteira — chamada por _renderDashboardConteudo
+// toda vez que o usuário clica "Analisar". resultsAnt vem do período
+// anterior equivalente (getPeriodoAnteriorEquivalente), calculado uma
+// única vez ali e repassado pra cá (evita recalcular duas vezes por
+// render caso outras seções também precisem do período anterior no
+// futuro — Fornecimento e Custos, nas próximas fases).
+function renderDgConsumo(results, resultsAnt, dtIni, dtFim) {
+  const kpiEl = document.getElementById('dg-cons-kpi-strip');
+  if (!kpiEl) return;
+
+  const rankCentraisEl  = document.getElementById('dg-cons-rank-centrais');
+  const rankMateriaisEl = document.getElementById('dg-cons-rank-materiais');
+
+  if (!results.length) {
+    kpiEl.innerHTML = '<div class="dg-empty-riscos" style="padding:16px"><i class="ti ti-database-off"></i><span>Sem dados no período.</span></div>';
+    if (rankCentraisEl)  rankCentraisEl.innerHTML  = '';
+    if (rankMateriaisEl) rankMateriaisEl.innerHTML = '';
+    _dgVgDestroyChart('consCentrais');
+    _dgVgDestroyChart('consMateriais');
+    return;
+  }
+
+  const thresholds = getHealthThresholds();
+  const pares = _dgVgBuildPares(results, thresholds, null, null);
+
+  const rankingCentrais  = _dcBuildRankingCentrais(pares);
+  const rankingMateriais = _dcBuildRankingMateriais(pares);
+
+  _dcRenderKpiStrip(results, resultsAnt, rankingCentrais);
+
+  if (rankCentraisEl) {
+    rankCentraisEl.innerHTML = _dgRankCardHtml(rankingCentrais, {
+      nameLabel: 'Central', subLabel: 'Regional', valLabel: 'Consumo (kg)',
+      color: 'var(--accent)',
+      valFmt: r => fmtKgShort(r.saiKg),
+      subFmt: r => escapeHtml(r.sub)
+    });
+  }
+  if (rankMateriaisEl) {
+    rankMateriaisEl.innerHTML = _dgRankCardHtml(rankingMateriais, {
+      nameLabel: 'Material', subLabel: 'Categoria', valLabel: 'Consumo (kg)',
+      color: 'var(--purple)',
+      valFmt: r => fmtKgShort(r.saiKg),
+      subFmt: r => escapeHtml(r.sub)
+    });
+  }
+
+  _dcRenderChartRanking('dg-cons-chart-centrais',  'consCentrais',  rankingCentrais,  _dgResolveCssColor('--accent', '#3b82f6'));
+  _dcRenderChartRanking('dg-cons-chart-materiais', 'consMateriais', rankingMateriais, _dgResolveCssColor('--purple', '#8b5cf6'));
+
+  // Giro & Cobertura — migrado da Visão Geral, mesma função/ids de antes.
+  renderDgGiro(results, dtIni, dtFim);
 }
 
 function renderSaidas() {

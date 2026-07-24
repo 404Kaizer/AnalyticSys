@@ -588,6 +588,9 @@
           <button class="dg-tab-btn active" id="dg-tab-btn-visao" onclick="dgSwitchTab('visao')">
             <i class="ti ti-layout-dashboard"></i> Visão Geral
           </button>
+          <button class="dg-tab-btn" id="dg-tab-btn-consumo" onclick="dgSwitchTab('consumo')">
+            <i class="ti ti-arrows-exchange"></i> Visão de Consumo
+          </button>
           <button class="dg-tab-btn" id="dg-tab-btn-corte" onclick="dgSwitchTab('corte')">
             <i class="ti ti-truck"></i> Controle de Corte
           </button>
@@ -718,65 +721,7 @@
           </div>
         </div>
 
-        <!-- 9. Giro & Cobertura — Top 5 Centrais e Materiais (melhor/pior), com acesso à análise completa -->
-        <div style="display:flex;align-items:center;gap:14px;margin-top:28px;margin-bottom:14px">
-          <div class="section-title" style="margin:0;flex:1"><i class="ti ti-arrows-exchange" style="font-size:13px;margin-right:6px"></i>Giro & Cobertura</div>
-          <button class="btn" type="button" onclick="dgAbrirGiroDetalhe()">
-            <i class="ti ti-maximize"></i> <span>Ver Detalhado</span>
-          </button>
-        </div>
-
-        <div class="dg-giro-dual-grid">
-          <div class="dg-giro-mat-card" style="margin-bottom:0">
-            <div class="dg-giro-mat-header">
-              <span class="dg-top5-title" style="color:var(--green)">
-                <i class="ti ti-trending-up" style="color:var(--green)"></i> Top 5 Centrais — Mais Saudáveis
-              </span>
-              <span style="font-size:10px;font-family:var(--mono);color:var(--text3)" title="Nível combinado de Cobertura, Giro e Abastecimento">nível de criticidade</span>
-            </div>
-            <div class="dg-giro-mat-body" id="dg-vg-giro-central-alto-body">
-              <div class="dg-empty-riscos"><i class="ti ti-loader"></i><span>Aguardando análise...</span></div>
-            </div>
-          </div>
-          <div class="dg-giro-mat-card" style="margin-bottom:0">
-            <div class="dg-giro-mat-header">
-              <span class="dg-top5-title" style="color:var(--red)">
-                <i class="ti ti-trending-down" style="color:var(--red)"></i> Top 5 Centrais — Mais Críticas
-              </span>
-              <span style="font-size:10px;font-family:var(--mono);color:var(--text3)" title="Nível combinado de Cobertura, Giro e Abastecimento">nível de criticidade</span>
-            </div>
-            <div class="dg-giro-mat-body" id="dg-vg-giro-central-baixo-body">
-              <div class="dg-empty-riscos"><i class="ti ti-loader"></i><span>Aguardando análise...</span></div>
-            </div>
-          </div>
-        </div>
-
-        <div class="dg-giro-dual-grid" style="margin-top:20px">
-          <div class="dg-giro-mat-card" style="margin-bottom:0">
-            <div class="dg-giro-mat-header">
-              <span class="dg-top5-title" style="color:var(--green)">
-                <i class="ti ti-trending-up" style="color:var(--green)"></i> Top 5 Materiais — Mais Saudáveis
-              </span>
-              <span style="font-size:10px;font-family:var(--mono);color:var(--text3)" title="Nível combinado de Cobertura, Giro e Abastecimento">nível de criticidade</span>
-            </div>
-            <div class="dg-giro-mat-body" id="dg-vg-giro-mat-alto-body">
-              <div class="dg-empty-riscos"><i class="ti ti-loader"></i><span>Aguardando análise...</span></div>
-            </div>
-          </div>
-          <div class="dg-giro-mat-card" style="margin-bottom:0">
-            <div class="dg-giro-mat-header">
-              <span class="dg-top5-title" style="color:var(--red)">
-                <i class="ti ti-trending-down" style="color:var(--red)"></i> Top 5 Materiais — Mais Críticos
-              </span>
-              <span style="font-size:10px;font-family:var(--mono);color:var(--text3)" title="Nível combinado de Cobertura, Giro e Abastecimento">nível de criticidade</span>
-            </div>
-            <div class="dg-giro-mat-body" id="dg-vg-giro-mat-baixo-body">
-              <div class="dg-empty-riscos"><i class="ti ti-loader"></i><span>Aguardando análise...</span></div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 10. Detalhado Analítico — tabela de detalhamento por material
+        <!-- 9. Detalhado Analítico — tabela de detalhamento por material
              (Grupo SAP) + 4 rankings (Regional/Central/Material/
              Categoria). Última seção da Visão Geral. -->
         <div class="section-title" style="margin:28px 0 14px"><i class="ti ti-table" style="font-size:13px;margin-right:6px"></i>Detalhado Analítico</div>
@@ -807,6 +752,97 @@
         </div>
 
         </div><!-- /dg-pane-visao -->
+
+        <!-- ABA: Visão de Consumo (Saídas) -->
+        <div class="dg-tab-pane" id="dg-pane-consumo">
+
+          <!-- 1. KPIs de topo — comparativo automático vs. período anterior equivalente -->
+          <div class="section-title" style="margin:0 0 14px"><i class="ti ti-arrows-exchange" style="font-size:13px;margin-right:6px"></i>Resumo do Consumo — Saídas do Período</div>
+          <div id="dg-cons-kpi-strip" class="macro-kpi-strip" style="margin-bottom:20px"></div>
+
+          <!-- 2. Centrais com Maior Consumo -->
+          <div class="section-title" style="margin:28px 0 14px"><i class="ti ti-building-factory-2" style="font-size:13px;margin-right:6px"></i>Centrais com Maior Consumo</div>
+          <div id="dg-cons-rank-centrais" class="dg-rank-card" style="margin-bottom:14px"></div>
+          <div class="oc-chart-card" style="margin-bottom:20px">
+            <div class="oc-chart-title"><i class="ti ti-chart-bar" style="margin-right:5px"></i>Consumo por Central (kg)</div>
+            <div class="dg-vg-bar-wrap" style="height:260px">
+              <div class="dg-vg-bar-inner">
+                <canvas id="dg-cons-chart-centrais"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <!-- 3. Materiais Mais Consumidos -->
+          <div class="section-title" style="margin:28px 0 14px"><i class="ti ti-box" style="font-size:13px;margin-right:6px"></i>Materiais Mais Consumidos</div>
+          <div id="dg-cons-rank-materiais" class="dg-rank-card" style="margin-bottom:14px"></div>
+          <div class="oc-chart-card" style="margin-bottom:20px">
+            <div class="oc-chart-title"><i class="ti ti-chart-bar" style="margin-right:5px"></i>Consumo por Material (kg)</div>
+            <div class="dg-vg-bar-wrap" style="height:260px">
+              <div class="dg-vg-bar-inner">
+                <canvas id="dg-cons-chart-materiais"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <!-- 4. Giro & Cobertura — migrado da Visão Geral (mesmos ids/lógica, só mudou de aba) -->
+          <div style="display:flex;align-items:center;gap:14px;margin-top:28px;margin-bottom:14px">
+            <div class="section-title" style="margin:0;flex:1"><i class="ti ti-arrows-exchange" style="font-size:13px;margin-right:6px"></i>Giro & Cobertura</div>
+            <button class="btn" type="button" onclick="dgAbrirGiroDetalhe()">
+              <i class="ti ti-maximize"></i> <span>Ver Detalhado</span>
+            </button>
+          </div>
+
+          <div class="dg-giro-dual-grid">
+            <div class="dg-giro-mat-card" style="margin-bottom:0">
+              <div class="dg-giro-mat-header">
+                <span class="dg-top5-title" style="color:var(--green)">
+                  <i class="ti ti-trending-up" style="color:var(--green)"></i> Top 5 Centrais — Mais Saudáveis
+                </span>
+                <span style="font-size:10px;font-family:var(--mono);color:var(--text3)" title="Nível combinado de Cobertura, Giro e Abastecimento">nível de criticidade</span>
+              </div>
+              <div class="dg-giro-mat-body" id="dg-vg-giro-central-alto-body">
+                <div class="dg-empty-riscos"><i class="ti ti-loader"></i><span>Aguardando análise...</span></div>
+              </div>
+            </div>
+            <div class="dg-giro-mat-card" style="margin-bottom:0">
+              <div class="dg-giro-mat-header">
+                <span class="dg-top5-title" style="color:var(--red)">
+                  <i class="ti ti-trending-down" style="color:var(--red)"></i> Top 5 Centrais — Mais Críticas
+                </span>
+                <span style="font-size:10px;font-family:var(--mono);color:var(--text3)" title="Nível combinado de Cobertura, Giro e Abastecimento">nível de criticidade</span>
+              </div>
+              <div class="dg-giro-mat-body" id="dg-vg-giro-central-baixo-body">
+                <div class="dg-empty-riscos"><i class="ti ti-loader"></i><span>Aguardando análise...</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="dg-giro-dual-grid" style="margin-top:20px">
+            <div class="dg-giro-mat-card" style="margin-bottom:0">
+              <div class="dg-giro-mat-header">
+                <span class="dg-top5-title" style="color:var(--green)">
+                  <i class="ti ti-trending-up" style="color:var(--green)"></i> Top 5 Materiais — Mais Saudáveis
+                </span>
+                <span style="font-size:10px;font-family:var(--mono);color:var(--text3)" title="Nível combinado de Cobertura, Giro e Abastecimento">nível de criticidade</span>
+              </div>
+              <div class="dg-giro-mat-body" id="dg-vg-giro-mat-alto-body">
+                <div class="dg-empty-riscos"><i class="ti ti-loader"></i><span>Aguardando análise...</span></div>
+              </div>
+            </div>
+            <div class="dg-giro-mat-card" style="margin-bottom:0">
+              <div class="dg-giro-mat-header">
+                <span class="dg-top5-title" style="color:var(--red)">
+                  <i class="ti ti-trending-down" style="color:var(--red)"></i> Top 5 Materiais — Mais Críticos
+                </span>
+                <span style="font-size:10px;font-family:var(--mono);color:var(--text3)" title="Nível combinado de Cobertura, Giro e Abastecimento">nível de criticidade</span>
+              </div>
+              <div class="dg-giro-mat-body" id="dg-vg-giro-mat-baixo-body">
+                <div class="dg-empty-riscos"><i class="ti ti-loader"></i><span>Aguardando análise...</span></div>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- /dg-pane-consumo -->
 
         <!-- ABA: Controle de Corte -->
         <div class="dg-tab-pane" id="dg-pane-corte">
