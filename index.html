@@ -588,14 +588,8 @@
           <button class="dg-tab-btn active" id="dg-tab-btn-visao" onclick="dgSwitchTab('visao')">
             <i class="ti ti-layout-dashboard"></i> Visão Geral
           </button>
-          <button class="dg-tab-btn" id="dg-tab-btn-custos" onclick="dgSwitchTab('custos')">
-            <i class="ti ti-coin"></i> Custos
-          </button>
           <button class="dg-tab-btn" id="dg-tab-btn-corte" onclick="dgSwitchTab('corte')">
             <i class="ti ti-truck"></i> Controle de Corte
-          </button>
-          <button class="dg-tab-btn" id="dg-tab-btn-comp" onclick="dgSwitchTab('comp')">
-            <i class="ti ti-chart-bar"></i> Comparativo
           </button>
         </div>
 
@@ -814,43 +808,6 @@
 
         </div><!-- /dg-pane-visao -->
 
-        <!-- ABA: Custos -->
-        <div class="dg-tab-pane" id="dg-pane-custos">
-
-          <!-- Empty state -->
-          <div id="custos-empty" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 20px;gap:12px;color:var(--text3)">
-            <i class="ti ti-coin" style="font-size:48px;opacity:0.3"></i>
-            <p style="font-size:13px;text-align:center">Selecione um período no seletor do Dashboard Gerencial<br>e clique em <strong style="color:var(--text2)">Analisar</strong> para gerar os custos.</p>
-          </div>
-
-          <!-- Conteúdo -->
-          <div id="custos-content" style="display:none">
-
-            <!-- KPIs topo -->
-            <div id="custos-kpi-strip" class="macro-kpi-strip" style="margin-bottom:20px"></div>
-
-            <!-- Custo médio por categoria -->
-            <div class="section-title" style="margin:28px 0 14px">
-              <i class="ti ti-tags" style="font-size:13px;margin-right:6px"></i>Custo Médio por Categoria
-            </div>
-            <div id="custos-categoria" style="margin-bottom:20px"></div>
-
-            <!-- Custo médio por material -->
-            <div class="section-title" style="margin:28px 0 14px">
-              <i class="ti ti-box" style="font-size:13px;margin-right:6px"></i>Custo Médio por Material
-            </div>
-            <div id="custos-material" style="margin-bottom:20px"></div>
-
-            <!-- Custo por regional e central -->
-            <div class="section-title" style="margin:28px 0 14px">
-              <i class="ti ti-building-factory-2" style="font-size:13px;margin-right:6px"></i>Custo por Regional e Central
-            </div>
-            <div id="custos-central" style="margin-bottom:20px"></div>
-
-          </div>
-
-        </div><!-- /dg-pane-custos -->
-
         <!-- ABA: Controle de Corte -->
         <div class="dg-tab-pane" id="dg-pane-corte">
         <!-- ── Controle de Corte de Agregados ── -->
@@ -1039,101 +996,6 @@
           </div>
         </div>
         </div><!-- /dg-pane-corte -->
-
-        <!-- ABA: Comparativo -->
-        <div class="dg-tab-pane" id="dg-pane-comp">
-
-          <!-- Seletores de período -->
-          <div class="comp-period-bar">
-            <div class="comp-period-col">
-              <div class="comp-period-label"><i class="ti ti-calendar-event" style="color:var(--accent)"></i> Período A</div>
-              <div class="cal-picker-wrap" id="comp-a-cal-wrap">
-                <button class="cal-picker-trigger" id="comp-a-cal-trigger" onclick="toggleCalPicker('comp-a')" type="button">
-                  <i class="ti ti-calendar"></i>
-                  <span id="comp-a-cal-label">Selecionar período A</span>
-                  <i class="ti ti-chevron-down cal-chev" id="comp-a-cal-chev"></i>
-                </button>
-                <input type="hidden" id="comp-a-dt-ini">
-                <input type="hidden" id="comp-a-dt-fim">
-                <div class="cal-picker-dropdown" id="comp-a-cal-dropdown">
-                  <div class="cal-picker-inner" id="comp-a-cal-inner" data-pfx="comp-a"></div>
-                </div>
-              </div>
-              <div class="cal-quick-chips">
-                <button class="cal-chip" onclick="calQuickMesAnterior('comp-a')" type="button">Mês anterior</button>
-                <button class="cal-chip" onclick="calQuickMesAtual('comp-a')" type="button">Mês atual</button>
-                <button class="cal-chip" onclick="calQuickUltimaTerca('comp-a')" type="button">Última terça</button>
-              </div>
-            </div>
-
-            <div class="comp-period-vs"><i class="ti ti-arrows-exchange"></i> VS</div>
-
-            <div class="comp-period-col">
-              <div class="comp-period-label"><i class="ti ti-calendar-event" style="color:var(--amber)"></i> Período B</div>
-              <div class="cal-picker-wrap" id="comp-b-cal-wrap">
-                <button class="cal-picker-trigger" id="comp-b-cal-trigger" onclick="toggleCalPicker('comp-b')" type="button">
-                  <i class="ti ti-calendar"></i>
-                  <span id="comp-b-cal-label">Selecionar período B</span>
-                  <i class="ti ti-chevron-down cal-chev" id="comp-b-cal-chev"></i>
-                </button>
-                <input type="hidden" id="comp-b-dt-ini">
-                <input type="hidden" id="comp-b-dt-fim">
-                <div class="cal-picker-dropdown" id="comp-b-cal-dropdown">
-                  <div class="cal-picker-inner" id="comp-b-cal-inner" data-pfx="comp-b"></div>
-                </div>
-              </div>
-              <div class="cal-quick-chips">
-                <button class="cal-chip" onclick="calQuickMesAnterior('comp-b')" type="button">Mês anterior</button>
-                <button class="cal-chip" onclick="calQuickMesAtual('comp-b')" type="button">Mês atual</button>
-                <button class="cal-chip" onclick="calQuickUltimaTerca('comp-b')" type="button">Última terça</button>
-              </div>
-            </div>
-
-            <button class="btn btn-primary comp-analisar-btn" onclick="rodarComparativo()">
-              <i class="ti ti-chart-bar"></i> Comparar
-            </button>
-          </div>
-
-          <!-- Empty state -->
-          <div id="comp-empty" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 20px;gap:12px;color:var(--text3)">
-            <i class="ti ti-chart-bar" style="font-size:48px;opacity:0.3"></i>
-            <p style="font-size:13px;text-align:center">Selecione dois períodos e clique em <strong style="color:var(--text2)">Comparar</strong>.</p>
-          </div>
-
-          <!-- Resultado -->
-          <div id="comp-content" style="display:none">
-
-            <!-- KPIs lado a lado -->
-            <div class="comp-kpi-header">
-              <div class="comp-kpi-col-label" id="comp-label-a" style="color:var(--accent)">Período A</div>
-              <div class="comp-kpi-col-label comp-kpi-col-delta">Δ</div>
-              <div class="comp-kpi-col-label" id="comp-label-b" style="color:var(--amber)">Período B</div>
-            </div>
-            <div id="comp-kpis-body"></div>
-
-            <!-- Giro & Cobertura lado a lado -->
-            <div class="section-title" style="margin:28px 0 14px"><i class="ti ti-arrows-exchange" style="font-size:13px;margin-right:6px"></i>Giro & Cobertura</div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
-              <div>
-                <div class="comp-col-header comp-col-a"><i class="ti ti-calendar-event"></i> <span id="comp-giro-label-a">Período A</span></div>
-                <div id="comp-giro-a"></div>
-              </div>
-              <div>
-                <div class="comp-col-header comp-col-b"><i class="ti ti-calendar-event"></i> <span id="comp-giro-label-b">Período B</span></div>
-                <div id="comp-giro-b"></div>
-              </div>
-            </div>
-
-            <!-- Saúde das centrais lado a lado -->
-            <div class="section-title" style="margin:28px 0 14px"><i class="ti ti-heart-rate-monitor" style="font-size:13px;margin-right:6px"></i>Saúde das Centrais</div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
-              <div id="comp-saude-a"></div>
-              <div id="comp-saude-b"></div>
-            </div>
-
-          </div>
-
-        </div><!-- /dg-pane-comp -->
 
         </div><!-- /dg-content -->
 
