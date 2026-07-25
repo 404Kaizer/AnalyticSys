@@ -4245,6 +4245,7 @@ function saveResponsavel(value) {
   else state.configs.unshift(rec);
   persist();
   updateImportPrereqUI();
+  if (typeof _configsSyncUpsert === 'function') _configsSyncUpsert(rec);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -6105,6 +6106,12 @@ async function restoreAndRender() {
     }
     if (typeof syncOcorrenciasFromSupabase === 'function') {
       await syncOcorrenciasFromSupabase();
+    }
+    if (typeof syncConfigsFromSupabase === 'function') {
+      await syncConfigsFromSupabase();
+    }
+    if (typeof syncCatalogosFromSupabase === 'function') {
+      await syncCatalogosFromSupabase();
     }
     _lstepSet('idb', 'done');
     _lbarSet(15);

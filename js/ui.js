@@ -5210,6 +5210,7 @@ function salvarHealthConfig() {
   const catLabels = { aglomerante:'Aglomerantes', agregado:'Agregados', aditivo:'Aditivos', adicao:'Adições' };
   const lvlLabels = { bom:'BOM', atencao:'ATENÇÃO', urgente:'URGENTE' };
   let saved = 0;
+  const recsParaSincronizar = [];
   cats.forEach(cat => {
     levels.forEach(lvl => {
       const input = document.getElementById(`hcfg-${cat}-${lvl}`);
@@ -5223,6 +5224,7 @@ function salvarHealthConfig() {
       const existing = state.configs.findIndex(c => normalizeText(c.key) === normalizeText(key));
       const rec = { key, value: String(n), desc, created: new Date().toLocaleDateString('pt-BR') };
       if (existing >= 0) state.configs[existing] = rec; else state.configs.unshift(rec);
+      recsParaSincronizar.push(rec);
       saved++;
     });
   });
@@ -5230,6 +5232,15 @@ function salvarHealthConfig() {
   renderConfigs();
   updateImportPrereqUI();
   toast(saved > 0 ? `${saved} limite(s) salvo(s)` : 'Nenhum valor preenchido', saved > 0 ? 'success' : 'error');
+  if (recsParaSincronizar.length && window.supabaseClient) {
+    window.supabaseClient.from('configs').upsert(recsParaSincronizar, { onConflict: 'user_id,key' })
+      .then(({ error }) => {
+        if (error) {
+          console.warn('[Supabase] Falha ao sincronizar limites de saúde:', error);
+          toast('⚠ Salvo nesta sessão, mas não foi possível sincronizar com a nuvem.', 'error');
+        }
+      });
+  }
 }
 
 function loadHealthConfigInputs() {

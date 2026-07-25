@@ -17,6 +17,69 @@ function _setBtnLoading(btn, loading, loadingLabel) {
   }
 }
 
+// ── Sincronização de configs com Supabase (Fase 2) ─────────────────────
+// "key" é a identidade natural aqui (não o id gerado pelo banco) — por
+// isso o upsert usa onConflict:'user_id,key' (restrição adicionada via
+// migração). Reaproveita mergePersistentConfigs para não perder defaults
+// locais que ainda não tenham sido sincronizados.
+async function _configsSyncUpsert(rec) {
+  const { error } = await window.supabaseClient
+    .from('configs')
+    .upsert(rec, { onConflict: 'user_id,key' });
+  if (error) {
+    console.warn('[Supabase] Falha ao sincronizar config:', error);
+    toast('⚠ Salvo nesta sessão, mas não foi possível sincronizar com a nuvem.', 'error');
+  }
+}
+
+async function _configsSyncDelete(key) {
+  const { error } = await window.supabaseClient
+    .from('configs')
+    .delete()
+    .eq('key', key)
+    .eq('user_id', window.currentUser?.id);
+  if (error) {
+    console.warn('[Supabase] Falha ao excluir config na nuvem:', error);
+    toast('⚠ Removida nesta sessão, mas não foi possível sincronizar com a nuvem.', 'error');
+  }
+}
+
+async function syncConfigsFromSupabase() {
+  try {
+    const { data, error } = await window.supabaseClient
+      .from('configs')
+      .select('key, value, desc, created')
+      .order('created', { ascending: false });
+    if (error) throw error;
+    state.configs = mergePersistentConfigs(state.configs, data || []);
+  } catch (err) {
+    console.warn('[Supabase] Falha ao buscar configs — mantendo dados locais.', err);
+  }
+}
+
+// Grupos de materiais e Regionais são catálogos simples (só nome) — merge
+// por nome normalizado, nuvem inclui o que faltar localmente sem duplicar.
+async function syncCatalogosFromSupabase() {
+  const mergeCatalogo = (localArr, remoteRows) => {
+    const vistos = new Map();
+    (localArr || []).forEach(n => { const k = normalizeText(n); if (k) vistos.set(k, n); });
+    (remoteRows || []).forEach(r => { const k = normalizeText(r.nome); if (k && !vistos.has(k)) vistos.set(k, r.nome); });
+    return [...vistos.values()];
+  };
+  try {
+    const [gruposRes, regionaisRes] = await Promise.all([
+      window.supabaseClient.from('grupos_materiais').select('nome'),
+      window.supabaseClient.from('regionais_centrais').select('nome'),
+    ]);
+    if (gruposRes.error) throw gruposRes.error;
+    if (regionaisRes.error) throw regionaisRes.error;
+    state.gruposMateriais = mergeCatalogo(state.gruposMateriais, gruposRes.data);
+    state.regionaisCentrais = mergeCatalogo(state.regionaisCentrais, regionaisRes.data);
+  } catch (err) {
+    console.warn('[Supabase] Falha ao buscar grupos/regionais — mantendo dados locais.', err);
+  }
+}
+
 function salvarConfig() {
   const key = val('cfg-key');
   const value = val('cfg-val-input');
@@ -31,6 +94,7 @@ function salvarConfig() {
   renderConfigs();
   toast('Configuração salva');
   closeModal('modal-config');
+  _configsSyncUpsert(rec);
 }
 
 function removerConfig(pagedIndex) {
@@ -43,6 +107,7 @@ function removerConfig(pagedIndex) {
   persist();
   renderConfigs();
   toast('Configuração removida', 'error');
+  _configsSyncDelete(rec.key);
 }
 
 function editConfig(key) {
@@ -62,6 +127,7 @@ function deleteConfig(key) {
   persist();
   renderConfigs();
   toast('Configuração excluída', 'error');
+  _configsSyncDelete(key);
 }
 
 
@@ -197,7 +263,13 @@ function registrarGrupoMaterial(nome) {
   if (!Array.isArray(state.gruposMateriais)) state.gruposMateriais = [];
   const key = normalizeText(grupo);
   const jaExiste = state.gruposMateriais.some(g => normalizeText(g) === key);
-  if (!jaExiste) state.gruposMateriais.push(grupo);
+  if (!jaExiste) {
+    state.gruposMateriais.push(grupo);
+    if (window.supabaseClient) {
+      window.supabaseClient.from('grupos_materiais').upsert({ nome: grupo }, { onConflict: 'user_id,nome' })
+        .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao sincronizar grupo de material:', error); });
+    }
+  }
 }
 
 // Lista ordenada e sem duplicatas de todos os grupos disponíveis para o
@@ -666,7 +738,13 @@ function registrarRegionalCentral(nome) {
   if (!Array.isArray(state.regionaisCentrais)) state.regionaisCentrais = [];
   const key = normalizeText(regional);
   const jaExiste = state.regionaisCentrais.some(r => normalizeText(r) === key);
-  if (!jaExiste) state.regionaisCentrais.push(regional);
+  if (!jaExiste) {
+    state.regionaisCentrais.push(regional);
+    if (window.supabaseClient) {
+      window.supabaseClient.from('regionais_centrais').upsert({ nome: regional }, { onConflict: 'user_id,nome' })
+        .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao sincronizar regional:', error); });
+    }
+  }
 }
 
 function getRegionaisCentraisDisponiveis() {
