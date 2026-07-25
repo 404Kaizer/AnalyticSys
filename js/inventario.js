@@ -53,6 +53,42 @@
     if (!st) return;
     st.invJustificativas = Object.keys(invJustificativas).map(k => ({ k, ...invJustificativas[k] }));
     if (typeof window.persist === 'function') window.persist();
+    _invSyncToSupabase();
+  }
+
+  // Sincroniza TODO o mapa atual com o Supabase (upsert) — as exclusões
+  // (invExcluirJust/invExcluirJustLote) têm sua própria chamada de delete,
+  // já que esta função só vê o que EXISTE agora no mapa, não o que saiu
+  // dele. Falha não bloqueia a UI (já atualizada localmente).
+  function _invSyncToSupabase() {
+    if (!window.supabaseClient) return;
+    const rows = Object.keys(invJustificativas).map(k => {
+      const j = invJustificativas[k] || {};
+      return {
+        k,
+        op: j.op || null,
+        fiscal: j.fiscal || null,
+        saldo: j.saldo != null && j.saldo !== '' ? String(j.saldo) : null,
+        custo_medio_sap: j.custoMedioSap != null && j.custoMedioSap !== '' ? String(j.custoMedioSap) : null,
+        documento_sap: j.documentoSap || null,
+      };
+    });
+    if (!rows.length) return;
+    window.supabaseClient.from('inv_justificativas').upsert(rows, { onConflict: 'user_id,k' })
+      .then(({ error }) => {
+        if (error) {
+          console.warn('[Supabase] Falha ao sincronizar justificativas de inventário:', error);
+          if (typeof toast === 'function') toast('⚠ Salvo nesta sessão, mas não foi possível sincronizar com a nuvem.', 'error');
+        }
+      });
+  }
+
+  function _invSyncDeleteFromSupabase(ks) {
+    if (!window.supabaseClient || !ks || !ks.length) return;
+    window.supabaseClient.from('inv_justificativas').delete().in('k', ks)
+      .then(({ error }) => {
+        if (error) console.warn('[Supabase] Falha ao excluir justificativa(s) na nuvem:', error);
+      });
   }
 
   // Força a re-hidratação do mapa em memória a partir do state. Necessária
@@ -2649,6 +2685,7 @@
         invAtualizarKpis();
         invAtualizarAlertas();
         _invSyncJustificativasToState();
+        _invSyncDeleteFromSupabase([k]);
         toast('Justificativa excluída.', 'success');
       }
     });
@@ -2688,6 +2725,7 @@
         invAtualizarKpis();
         invAtualizarAlertas();
         _invSyncJustificativasToState();
+        _invSyncDeleteFromSupabase(alvos.map(row => row.k));
         toast(`${alvos.length} justificativa${alvos.length === 1 ? '' : 's'} excluída${alvos.length === 1 ? '' : 's'}.`, 'success');
       }
     });
@@ -3001,3 +3039,29 @@
     });
   });
 })();
+
+// ═══════════════════════════════════════════════════════════
+// SYNC DE BOOT — invJustificativas (Fase 2)
+// ═══════════════════════════════════════════════════════════
+// Fora da IIFE de propósito: só mexe em state.invJustificativas (o array),
+// nunca no mapa privado do módulo — o módulo hidrata esse mapa de forma
+// lazy, na primeira geração do Inventário (_invHydrateJustificativas), bem
+// depois do boot. Por isso basta popular o array aqui, cedo, que a
+// hidratação lazy já vai pegar os dados da nuvem quando rodar.
+async function syncInvJustificativasFromSupabase() {
+  try {
+    const { data, error } = await window.supabaseClient
+      .from('inv_justificativas')
+      .select('k, op, fiscal, saldo, custo_medio_sap, documento_sap');
+    if (error) throw error;
+    const remoto = (data || []).map(r => ({
+      k: r.k, op: r.op, fiscal: r.fiscal, saldo: r.saldo,
+      custoMedioSap: r.custo_medio_sap, documentoSap: r.documento_sap
+    }));
+    const porK = new Map((state.invJustificativas || []).map(r => [r.k, r]));
+    remoto.forEach(r => porK.set(r.k, r));
+    state.invJustificativas = [...porK.values()];
+  } catch (err) {
+    console.warn('[Supabase] Falha ao buscar justificativas de inventário — mantendo dados locais.', err);
+  }
+}

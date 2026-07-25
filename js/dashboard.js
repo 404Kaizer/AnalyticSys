@@ -6113,6 +6113,18 @@ async function restoreAndRender() {
     if (typeof syncCatalogosFromSupabase === 'function') {
       await syncCatalogosFromSupabase();
     }
+    if (typeof syncFiliaisFromSupabase === 'function') {
+      await syncFiliaisFromSupabase();
+    }
+    if (typeof syncMateriaisFromSupabase === 'function') {
+      await syncMateriaisFromSupabase();
+    }
+    if (typeof syncInvJustificativasFromSupabase === 'function') {
+      await syncInvJustificativasFromSupabase();
+    }
+    if (typeof syncSapFechamentoOverridesFromSupabase === 'function') {
+      await syncSapFechamentoOverridesFromSupabase();
+    }
     _lstepSet('idb', 'done');
     _lbarSet(15);
     await nextFrame();

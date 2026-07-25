@@ -3893,6 +3893,29 @@ function setSapFechOverrideEmLote(chaves, incluir) {
   state.sapFechamentoOverrides = [...set];
   invalidateFechOverrideCache();
   if (typeof persist === 'function') persist();
+
+  if (!window.supabaseClient) return;
+  if (incluir) {
+    const rows = chaves.map(chave => ({ chave }));
+    window.supabaseClient.from('sap_fechamento_overrides').upsert(rows, { onConflict: 'user_id,chave' })
+      .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao sincronizar override de fechamento:', error); });
+  } else {
+    window.supabaseClient.from('sap_fechamento_overrides').delete().in('chave', chaves)
+      .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao remover override de fechamento na nuvem:', error); });
+  }
+}
+
+async function syncSapFechamentoOverridesFromSupabase() {
+  try {
+    const { data, error } = await window.supabaseClient.from('sap_fechamento_overrides').select('chave');
+    if (error) throw error;
+    const set = new Set(state.sapFechamentoOverrides || []);
+    (data || []).forEach(r => set.add(r.chave));
+    state.sapFechamentoOverrides = [...set];
+    invalidateFechOverrideCache();
+  } catch (err) {
+    console.warn('[Supabase] Falha ao buscar overrides de fechamento — mantendo dados locais.', err);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════

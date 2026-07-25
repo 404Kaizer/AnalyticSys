@@ -455,6 +455,29 @@ function normalizeImportedFilial(item, importId) {
   };
 }
 
+// Sincroniza com Supabase só o cadastro MANUAL (sem importId) — a
+// importação em lote fica de fora por ora (acoplada à exclusão em
+// cascata de excluirImportacao, ver Fase 4). Falha não bloqueia a UI.
+function _materiaisSyncUpsert(rec) {
+  if (rec.importId || !window.supabaseClient) return;
+  window.supabaseClient.from('materiais')
+    .upsert({ origem: rec.origem, alias: rec.alias, categoria: rec.categoria || null, created: rec.created }, { onConflict: 'user_id,origem,alias' })
+    .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao sincronizar material:', error); });
+}
+
+async function syncMateriaisFromSupabase() {
+  try {
+    const { data, error } = await window.supabaseClient.from('materiais').select('origem, alias, categoria, created');
+    if (error) throw error;
+    const importadosLocal = (state.materiais || []).filter(m => m.importId);
+    const nuvem = (data || []).map(r => ({ id: makeMaterialId(), origem: r.origem, alias: r.alias, categoria: r.categoria, created: r.created }));
+    state.materiais = [...nuvem, ...importadosLocal];
+    invalidateMaterialLookup();
+  } catch (err) {
+    console.warn('[Supabase] Falha ao buscar materiais — mantendo dados locais.', err);
+  }
+}
+
 function upsertMateriais(items) {
   (items || []).forEach(item => {
     const src = item && typeof item === 'object' ? item : {};
@@ -472,6 +495,7 @@ function upsertMateriais(items) {
     // guiado quanto a importação por arquivo (handleMateriaisImport), já
     // que ambos passam por aqui.
     registrarGrupoMaterial(rec.alias);
+    _materiaisSyncUpsert(rec);
   });
   invalidateMaterialLookup();
 }
@@ -650,6 +674,11 @@ async function removerMaterial(id, btn) {
       renderAll();
       updateImportPrereqUI();
       toast('Material removido');
+      // Delete no Supabase é inofensivo mesmo se o registro nunca tiver
+      // sido sincronizado (veio de importação em lote) — não acha nada.
+      window.supabaseClient?.from('materiais').delete()
+        .eq('origem', rec.origem).eq('alias', rec.alias)
+        .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao excluir material na nuvem:', error); });
       // Não precisa _setBtnLoading(false) aqui — o botão em si some do DOM
       // no próximo renderAll()/renderMateriais(), que redesenha a tabela.
     }
@@ -666,6 +695,8 @@ async function limparMateriais() {
   renderAll();
   updateImportPrereqUI();
   toast('Todos os materiais foram excluídos', 'error');
+  window.supabaseClient?.from('materiais').delete().eq('user_id', window.currentUser?.id)
+    .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao limpar materiais na nuvem:', error); });
 }
 
 // Exporta a Padronização de Materiais para uma planilha Excel (.xlsx),
@@ -869,6 +900,27 @@ async function salvarFiliaisIndividual(btn) {
   toast(`${imported.length} filial(is) cadastrada(s)`);
 }
 
+// Sincroniza com Supabase só o cadastro MANUAL (sem importId) — mesma
+// regra de materiais, ver _materiaisSyncUpsert.
+function _filiaisSyncUpsert(rec) {
+  if (rec.importId || !window.supabaseClient) return;
+  window.supabaseClient.from('filiais')
+    .upsert({ origem: rec.origem, alias: rec.alias, cnpj: rec.cnpj || null, regional: rec.regional || null, created: rec.created }, { onConflict: 'user_id,origem,alias' })
+    .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao sincronizar filial:', error); });
+}
+
+async function syncFiliaisFromSupabase() {
+  try {
+    const { data, error } = await window.supabaseClient.from('filiais').select('origem, alias, cnpj, regional, created');
+    if (error) throw error;
+    const importadosLocal = (state.filiais || []).filter(f => f.importId);
+    state.filiais = [...(data || []), ...importadosLocal];
+    invalidateFilialLookup();
+  } catch (err) {
+    console.warn('[Supabase] Falha ao buscar filiais — mantendo dados locais.', err);
+  }
+}
+
 function upsertFiliais(items) {
   (items || []).forEach(item => {
     const src = item && typeof item === 'object' ? item : {};
@@ -883,6 +935,7 @@ function upsertFiliais(items) {
     // Mantém o catálogo de Regionais em sincronia — cobre tanto o cadastro
     // guiado quanto a importação por arquivo (handleFiliaisImport).
     registrarRegionalCentral(rec.regional);
+    _filiaisSyncUpsert(rec);
   });
   invalidateFilialLookup();
 }
@@ -1040,6 +1093,11 @@ async function removerFilial(pagedIndex) {
       persist();
       renderAll();
       updateImportPrereqUI();
+      // Delete no Supabase é inofensivo mesmo se o registro nunca tiver
+      // sido sincronizado (veio de importação em lote) — não acha nada.
+      window.supabaseClient?.from('filiais').delete()
+        .eq('origem', snapshot.origem).eq('alias', snapshot.alias)
+        .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao excluir filial na nuvem:', error); });
     },
     undo: () => {
       const insertAt = originalIndex >= 0 && originalIndex <= state.filiais.length
@@ -1051,6 +1109,7 @@ async function removerFilial(pagedIndex) {
       persist();
       renderAll();
       updateImportPrereqUI();
+      _filiaisSyncUpsert(snapshot);
     },
   });
 }
@@ -1065,6 +1124,8 @@ async function limparFiliais() {
   renderAll();
   updateImportPrereqUI();
   toast('Todas as filiais foram excluídas', 'error');
+  window.supabaseClient?.from('filiais').delete().eq('user_id', window.currentUser?.id)
+    .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao limpar filiais na nuvem:', error); });
 }
 
 // Exporta a Padronização de Centrais para uma planilha Excel (.xlsx),
