@@ -6013,7 +6013,8 @@ const pageRenderers = {
   configuracoes: () => { renderConfigs(); renderAcoesRelatorio(); loadHealthConfigInputs(); updateParamGerais(); },
   filiais: () => renderFiliais(),
   materiais: () => renderMateriais(),
-  ocorrencias: () => renderOcorrenciasPage()
+  ocorrencias: () => renderOcorrenciasPage(),
+  admin: () => { if (typeof renderAdminPage === 'function') renderAdminPage(); }
 };
 
 // Páginas que são estáticas após o primeiro render (sem dados que mudam externamente)

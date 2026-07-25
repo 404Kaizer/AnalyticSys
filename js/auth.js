@@ -195,6 +195,11 @@ window.AuthGate = (function () {
     const roleEl = $('auth-account-role');
     if (emailEl) emailEl.textContent = user?.email || '—';
     if (roleEl) roleEl.textContent = profile?.role === 'admin' ? 'Administrador' : 'Usuário';
+
+    // Tab "Administração" só aparece pra quem é admin. Isso é só UI — a
+    // segurança de verdade está nas políticas de RLS de cada tabela.
+    const adminTab = $('tab-admin');
+    if (adminTab) adminTab.style.display = profile?.role === 'admin' ? '' : 'none';
   }
 
   // Ponto único que "entra" no app a partir de uma sessão válida — chamado

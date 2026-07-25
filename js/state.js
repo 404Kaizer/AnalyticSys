@@ -206,7 +206,8 @@ const pageTitleMap = {
   analitico: { title: 'Dashboard Analítico', sub: 'análise de estoque por período, filial e fechamento de inventário' },
   importar: { title: 'Importar Dados', sub: 'importe arquivos .xlsx ou .csv para cada módulo' },
   configuracoes: { title: 'Configurações', sub: 'parâmetros e informações de referência do sistema' },
-  ocorrencias: { title: 'Ocorrências', sub: 'solicitações abertas e gestão de ocorrências por central' }
+  ocorrencias: { title: 'Ocorrências', sub: 'solicitações abertas e gestão de ocorrências por central' },
+  admin: { title: 'Administração', sub: 'usuários e dados — acesso restrito ao ADM' }
 };
 
 

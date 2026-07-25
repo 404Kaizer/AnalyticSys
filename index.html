@@ -183,6 +183,14 @@
         </span>
       </button>
 
+      <button class="tab-item" id="tab-admin" onclick="navigate('admin')" data-page="admin" data-label="Administração" style="display:none">
+        <span class="tab-icon" style="--tab-color: var(--red)"><i class="ti ti-shield-lock"></i></span>
+        <span class="tab-text">
+          <span class="tab-title">Administração</span>
+          <span class="tab-sub">usuários e dados (ADM)</span>
+        </span>
+      </button>
+
       <button class="tab-item" onclick="navigate('importar')" data-page="importar" data-label="Importar Dados">
         <span class="tab-icon" style="--tab-color: var(--teal)"><i class="ti ti-file-upload"></i></span>
         <span class="tab-text">
@@ -2642,6 +2650,73 @@
 
       </div>
 
+      <div class="page" id="page-admin">
+
+        <div class="section-title" style="margin:0 0 14px"><i class="ti ti-shield-lock" style="font-size:13px;margin-right:6px"></i>Administração — usuários e dados</div>
+
+        <div class="admin-subnav">
+          <button class="admin-subnav-btn active" id="admin-subnav-usuarios" onclick="adminShowSection('usuarios')"><i class="ti ti-users"></i> Usuários</button>
+          <button class="admin-subnav-btn" id="admin-subnav-dados" onclick="adminShowSection('dados')"><i class="ti ti-database"></i> Dados por módulo</button>
+        </div>
+
+        <!-- Seção: Usuários -->
+        <div id="admin-section-usuarios">
+          <div class="table-card">
+            <div class="table-header">
+              <span class="table-title"><i class="ti ti-users"></i> Usuários do sistema</span>
+              <button class="btn" onclick="adminLoadUsuarios()"><i class="ti ti-refresh"></i> Atualizar</button>
+            </div>
+            <div style="overflow-x:auto">
+              <table style="width:100%">
+                <thead><tr><th>E-mail</th><th>Papel</th><th>Criado em</th><th></th></tr></thead>
+                <tbody id="admin-usuarios-tbody"><tr><td colspan="4"><div class="empty-state"><i class="ti ti-loader"></i><p>Carregando...</p></div></td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Seção: Dados por módulo -->
+        <div id="admin-section-dados" style="display:none">
+          <div class="table-card">
+            <div class="table-header">
+              <span class="table-title"><i class="ti ti-database"></i> Dados por módulo</span>
+              <div style="display:flex;gap:8px;align-items:center">
+                <select class="form-select" id="admin-modulo-select" onchange="adminLoadModulo()" style="width:auto">
+                  <option value="ocorrencias">Ocorrências</option>
+                  <option value="acoes_relatorio">Ações de Relatório</option>
+                </select>
+                <button class="btn" onclick="adminLoadModulo()"><i class="ti ti-refresh"></i> Atualizar</button>
+              </div>
+            </div>
+            <div style="font-size:11px;color:var(--text3);padding:10px 18px 0"><i class="ti ti-info-circle"></i> Mais módulos aparecem aqui conforme forem migrados para o Supabase.</div>
+            <div style="overflow-x:auto">
+              <table style="width:100%">
+                <thead id="admin-dados-thead"></thead>
+                <tbody id="admin-dados-tbody"><tr><td><div class="empty-state"><i class="ti ti-database"></i><p>Selecione um módulo</p></div></td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Modal de edição (JSON genérico — mesmo formulário serve pra qualquer módulo) -->
+        <div class="modal-overlay" id="admin-edit-modal">
+          <div class="modal" style="max-width:520px">
+            <div class="modal-title"><i class="ti ti-edit"></i> Editar registro</div>
+            <div class="modal-sub" id="admin-edit-sub"></div>
+            <div class="form-group">
+              <label class="form-label">Dados (JSON)</label>
+              <textarea class="form-input" id="admin-edit-json" rows="14" style="font-family:var(--mono);font-size:12px" spellcheck="false"></textarea>
+            </div>
+            <div id="admin-edit-error" style="display:none;color:var(--red);font-size:12px;margin-top:-8px;margin-bottom:8px"></div>
+            <div class="form-actions">
+              <button class="btn" onclick="closeModal('admin-edit-modal')">Cancelar</button>
+              <button class="btn btn-primary" onclick="adminSalvarEdicao()"><i class="ti ti-check"></i> Salvar</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
       <div class="page" id="page-configuracoes">
         <div class="section-title">Saúde das Centrais — Limites de Variação</div>
         <div class="table-card" style="margin-bottom:24px">
@@ -4256,6 +4331,7 @@
 <script defer src="js/help-badges.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script defer src="js/ocorrencias.js"></script>
+<script defer src="js/admin.js"></script>
 <script defer src="js/inventario.js"></script>
 <script defer src="js/ncd.js"></script>
 <script defer src="js/calendar.js"></script>
