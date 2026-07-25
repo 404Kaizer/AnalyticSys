@@ -332,6 +332,17 @@ window.AuthGate = (function () {
   async function signOut() {
     clearTimeout(idleWarnTimer);
     _idleHideWarning();
+    // Marca como offline ANTES de encerrar a sessão — depois do
+    // auth.signOut(), a requisição perde a permissão pra atualizar o
+    // próprio registro (RLS exige sessão válida). Falha aqui não deve
+    // impedir o logout de acontecer, por isso o try/catch silencioso.
+    if (window.currentUser?.id) {
+      try {
+        await window.supabaseClient.from('profiles').update({ last_seen: null }).eq('id', window.currentUser.id);
+      } catch (err) {
+        console.warn('[Presença] Falha ao marcar offline no logout:', err);
+      }
+    }
     await window.supabaseClient.auth.signOut();
     window.currentUser = null;
     window.location.reload();
