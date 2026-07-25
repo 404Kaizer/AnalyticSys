@@ -18,56 +18,86 @@
 
 <!-- Auth Gate (Fase 1) — tela de login. Fica visível por padrão e cobre
      tudo (z-index alto); js/auth.js a esconde só depois de confirmar sessão
-     válida. Cadastro de usuário é feito só pelo ADM, fora do app. -->
+     válida. Cadastro de usuário é feito só pelo ADM, fora do app. Layout
+     dividido, sempre escuro (independente do tema escolhido no app). -->
 <div id="auth-gate">
-  <div class="auth-gate-card">
-    <div class="auth-gate-brand">
-      <svg class="logo-analyticsys" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="ícone AnalyticSys">
-        <polygon points="18,2 30,9 18,16 6,9" fill="#ff6b35"/>
-        <polygon points="18,16 30,9 30,23 18,30" fill="#c44e1f"/>
-        <polygon points="18,16 6,9 6,23 18,30" fill="#ff9060"/>
-        <polyline points="21,26 24,21 27,23 30,18" fill="none" stroke="rgba(255,255,255,0.55)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
-        <circle cx="30" cy="18" r="1.5" fill="white" opacity="0.8"/>
-      </svg>
-      <div class="auth-gate-brand-name"><span class="brand-analytic">ANALYTIC</span><span class="brand-sys">SYS</span></div>
+
+  <!-- Painel de marca -->
+  <div class="auth-gate-brand-panel">
+    <div class="auth-gate-brand-glow" aria-hidden="true"></div>
+    <!-- Assinatura visual: as mesmas facetas do logo, ampliadas e em
+         opacidade baixa — extensão da própria marca, não decoração solta. -->
+    <svg class="auth-gate-brand-pattern" viewBox="0 0 200 200" aria-hidden="true">
+      <polygon points="100,10 170,50 100,90 30,50" fill="#ff6b35"/>
+      <polygon points="100,90 170,50 170,130 100,170" fill="#c44e1f"/>
+      <polygon points="100,90 30,50 30,130 100,170" fill="#ff9060"/>
+    </svg>
+
+    <div class="auth-gate-brand-content">
+      <div class="auth-gate-brand">
+        <svg class="logo-analyticsys auth-gate-logo" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="ícone AnalyticSys">
+          <polygon points="18,2 30,9 18,16 6,9" fill="#ff6b35"/>
+          <polygon points="18,16 30,9 30,23 18,30" fill="#c44e1f"/>
+          <polygon points="18,16 6,9 6,23 18,30" fill="#ff9060"/>
+          <polyline points="21,26 24,21 27,23 30,18" fill="none" stroke="rgba(255,255,255,0.55)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="30" cy="18" r="1.5" fill="white" opacity="0.8"/>
+        </svg>
+        <div class="auth-gate-brand-name-lg"><span class="brand-analytic">ANALYTIC</span><span class="brand-sys">SYS</span></div>
+      </div>
+      <div class="auth-gate-brand-tagline">
+        <span class="brand-divider"></span>
+        <span class="brand-tag-inline">ESTOQUE · INSUMOS</span>
+      </div>
+      <h1 class="auth-gate-headline">Estoque sob controle,<br>central por central.</h1>
+      <p class="auth-gate-brand-desc">Importação de dados, análise, ocorrências e ajustes fiscais — tudo em um só lugar.</p>
     </div>
+  </div>
 
-    <form id="auth-gate-form-login" class="auth-gate-form">
-      <div class="form-group">
-        <label class="form-label" for="auth-email">E-mail</label>
-        <input class="form-input" type="email" id="auth-email" autocomplete="username" required>
+  <!-- Painel de formulário -->
+  <div class="auth-gate-form-panel">
+    <div class="auth-gate-card">
+      <div class="auth-gate-card-head">
+        <div class="auth-gate-card-title">Entrar</div>
+        <div class="auth-gate-card-sub">Acesse com as credenciais fornecidas pelo administrador.</div>
       </div>
-      <div class="form-group">
-        <label class="form-label" for="auth-password">Senha</label>
-        <input class="form-input" type="password" id="auth-password" autocomplete="current-password" required>
-      </div>
-      <div id="auth-gate-error" class="auth-gate-error" role="alert" style="display:none"></div>
-      <button type="submit" class="btn btn-primary auth-gate-submit" id="auth-gate-submit-btn">Entrar</button>
-      <button type="button" class="auth-gate-forgot" id="auth-gate-forgot-btn">Esqueci minha senha</button>
-    </form>
 
-    <div id="auth-gate-forgot-sent" class="auth-gate-sent" style="display:none">
-      <i class="ti ti-mail-check"></i>
-      <p>Se o e-mail existir no sistema, enviamos um link para redefinir a senha.</p>
-      <button type="button" class="btn" id="auth-gate-back-btn">Voltar ao login</button>
+      <form id="auth-gate-form-login" class="auth-gate-form">
+        <div class="form-group">
+          <label class="form-label" for="auth-email">E-mail</label>
+          <input class="form-input" type="email" id="auth-email" autocomplete="username" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="auth-password">Senha</label>
+          <input class="form-input" type="password" id="auth-password" autocomplete="current-password" required>
+        </div>
+        <div id="auth-gate-error" class="auth-gate-error" role="alert" style="display:none"></div>
+        <button type="submit" class="btn btn-primary auth-gate-submit" id="auth-gate-submit-btn">Entrar</button>
+        <button type="button" class="auth-gate-forgot" id="auth-gate-forgot-btn">Esqueci minha senha</button>
+      </form>
+
+      <div id="auth-gate-forgot-sent" class="auth-gate-sent" style="display:none">
+        <i class="ti ti-mail-check"></i>
+        <p>Se o e-mail existir no sistema, enviamos um link para redefinir a senha.</p>
+        <button type="button" class="btn" id="auth-gate-back-btn">Voltar ao login</button>
+      </div>
+
+      <!-- Formulário de nova senha — aparece quando o link de e-mail (convite
+           ou redefinição) é clicado. O Supabase estabelece uma sessão
+           temporária e dispara o evento PASSWORD_RECOVERY (ver js/auth.js). -->
+      <form id="auth-gate-form-recovery" class="auth-gate-form" style="display:none">
+        <p class="auth-gate-recovery-intro">Defina sua senha para continuar.</p>
+        <div class="form-group">
+          <label class="form-label" for="auth-recovery-password">Nova senha</label>
+          <input class="form-input" type="password" id="auth-recovery-password" autocomplete="new-password" minlength="6" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="auth-recovery-password-confirm">Confirmar senha</label>
+          <input class="form-input" type="password" id="auth-recovery-password-confirm" autocomplete="new-password" minlength="6" required>
+        </div>
+        <div id="auth-gate-recovery-error" class="auth-gate-error" role="alert" style="display:none"></div>
+        <button type="submit" class="btn btn-primary auth-gate-submit" id="auth-gate-recovery-submit-btn">Salvar senha e entrar</button>
+      </form>
     </div>
-
-    <!-- Formulário de nova senha — aparece quando o link de e-mail (convite
-         ou redefinição) é clicado. O Supabase estabelece uma sessão
-         temporária e dispara o evento PASSWORD_RECOVERY (ver js/auth.js). -->
-    <form id="auth-gate-form-recovery" class="auth-gate-form" style="display:none">
-      <p class="auth-gate-recovery-intro">Defina sua senha para continuar.</p>
-      <div class="form-group">
-        <label class="form-label" for="auth-recovery-password">Nova senha</label>
-        <input class="form-input" type="password" id="auth-recovery-password" autocomplete="new-password" minlength="6" required>
-      </div>
-      <div class="form-group">
-        <label class="form-label" for="auth-recovery-password-confirm">Confirmar senha</label>
-        <input class="form-input" type="password" id="auth-recovery-password-confirm" autocomplete="new-password" minlength="6" required>
-      </div>
-      <div id="auth-gate-recovery-error" class="auth-gate-error" role="alert" style="display:none"></div>
-      <button type="submit" class="btn btn-primary auth-gate-submit" id="auth-gate-recovery-submit-btn">Salvar senha e entrar</button>
-    </form>
   </div>
 </div>
 
