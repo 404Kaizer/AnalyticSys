@@ -52,6 +52,29 @@ window.AuthGate = (function () {
     catch (_) { return true; }
   }
 
+  // ── Presença (indicador Online/Away/Offline no painel de Administração) ─
+  // Reaproveita a mesma atividade rastreada acima, mas com throttle próprio
+  // bem mais folgado (1 min) — não precisa da mesma granularidade do timer
+  // de logout, e evita gravar no banco a cada poucos segundos. O painel de
+  // Administração calcula o status (online ≤10min / away 10min-4h / offline
+  // >4h) a partir deste timestamp — ver admin.js.
+  const PRESENCE_THROTTLE_MS = 60 * 1000;
+  let presenceLastSentAt = 0;
+
+  function _presenceHeartbeat(force) {
+    if (!appBooted || !window.currentUser?.id) return;
+    const now = Date.now();
+    if (!force && now - presenceLastSentAt < PRESENCE_THROTTLE_MS) return;
+    presenceLastSentAt = now;
+    window.supabaseClient
+      .from('profiles')
+      .update({ last_seen: new Date().toISOString() })
+      .eq('id', window.currentUser.id)
+      .then(({ error }) => {
+        if (error) console.warn('[Presença] Falha ao atualizar last_seen:', error);
+      });
+  }
+
   function $(id) { return document.getElementById(id); }
 
   function _idleHideWarning() {
@@ -104,6 +127,7 @@ window.AuthGate = (function () {
     if (!warningOpen && now - idleLastActivityAt < IDLE_THROTTLE_MS) return;
     idleLastActivityAt = now;
     _idleResetTimer();
+    _presenceHeartbeat(false);
   }
 
   function _idleWireListeners() {
@@ -216,6 +240,7 @@ window.AuthGate = (function () {
     hideGate();
     _idleWireListeners();
     _idleResetTimer();
+    _presenceHeartbeat(true); // imediato — não espera o throttle de 1min
     if (typeof window.init === 'function') window.init();
   }
 

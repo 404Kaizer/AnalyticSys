@@ -21,12 +21,29 @@ const ADMIN_MODULOS = {
 };
 
 let _adminProfiles = [];        // cache do último fetch de profiles (email por user_id)
-let _adminUsuariosCarregados = false;
 let _adminCurrentRows = [];     // linhas do módulo atualmente exibido em "Dados"
 let _adminEditContext = null;   // { modulo, id } do registro em edição
+let _adminPresenceInterval = null; // atualização automática enquanto a seção Usuários está visível
 
 function _adminEsc(s) {
   return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// ── Status de presença (Online/Away/Offline) ────────────────
+// Calculado no cliente a partir de last_seen — não há assinatura em tempo
+// real (isso fica pra Fase 5, com Supabase Realtime); a lista se atualiza
+// sozinha a cada 30s enquanto a seção Usuários estiver aberta, o que já dá
+// uma visão "quase ao vivo" sem a complexidade de uma conexão persistente.
+const PRESENCE_ONLINE_MS = 10 * 60 * 1000;      // ≤10min = online
+const PRESENCE_AWAY_MS   = 4 * 60 * 60 * 1000;  // 10min–4h = away · >4h = offline
+const PRESENCE_POLL_MS   = 30 * 1000;
+
+function _adminStatusInfo(lastSeen) {
+  if (!lastSeen) return { key: 'offline', label: 'Offline', color: 'var(--text3)', bg: 'var(--bg4)' };
+  const diff = Date.now() - new Date(lastSeen).getTime();
+  if (diff <= PRESENCE_ONLINE_MS) return { key: 'online', label: 'Online', color: 'var(--green)', bg: 'var(--green-bg)' };
+  if (diff <= PRESENCE_AWAY_MS)   return { key: 'away',   label: 'Away',   color: 'var(--amber)', bg: 'var(--amber-bg)' };
+  return { key: 'offline', label: 'Offline', color: 'var(--text3)', bg: 'var(--bg4)' };
 }
 
 // ── Navegação entre as duas seções ─────────────────────────
@@ -38,8 +55,15 @@ function adminShowSection(section) {
   document.getElementById('admin-subnav-usuarios')?.classList.toggle('active', section === 'usuarios');
   document.getElementById('admin-subnav-dados')?.classList.toggle('active', section === 'dados');
 
-  if (section === 'usuarios' && !_adminUsuariosCarregados) adminLoadUsuarios();
+  if (section === 'usuarios') adminLoadUsuarios();
   if (section === 'dados') adminLoadModulo();
+
+  // Só mantém o polling de presença rodando enquanto a seção Usuários
+  // estiver de fato visível — evita chamadas desnecessárias em segundo plano.
+  clearInterval(_adminPresenceInterval);
+  if (section === 'usuarios') {
+    _adminPresenceInterval = setInterval(() => adminLoadUsuarios(true), PRESENCE_POLL_MS);
+  }
 }
 
 // Chamada ao entrar na página (ver navigate() em ui.js — ou dispara na
@@ -49,34 +73,56 @@ function renderAdminPage() {
 }
 
 // ── Seção: Usuários ─────────────────────────────────────────
-async function adminLoadUsuarios() {
+// silent=true é usado só pelo polling automático (a cada 30s) — evita
+// piscar "Carregando..." toda hora. Clique manual em "Atualizar" e a
+// primeira carga da página sempre mostram o feedback visual normalmente.
+async function adminLoadUsuarios(silent) {
+  // Segurança extra: se o polling automático continuar rodando depois do
+  // ADM ter saído da página (ex.: clicou em outro tab), para sozinho na
+  // próxima vez que o intervalo disparar, em vez de ficar chamando o
+  // Supabase em segundo plano para sempre.
+  const pageEl = document.getElementById('page-admin');
+  if (_adminPresenceInterval && pageEl && !pageEl.classList.contains('active')) {
+    clearInterval(_adminPresenceInterval);
+    _adminPresenceInterval = null;
+    return;
+  }
+
   const tbody = document.getElementById('admin-usuarios-tbody');
   if (!tbody) return;
-  tbody.innerHTML = '<tr><td colspan="4"><div class="empty-state"><i class="ti ti-loader"></i><p>Carregando...</p></div></td></tr>';
+  if (!silent) {
+    tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state"><i class="ti ti-loader"></i><p>Carregando...</p></div></td></tr>';
+  }
 
   const { data, error } = await window.supabaseClient
     .from('profiles')
-    .select('id, email, role, created_at')
+    .select('id, email, role, created_at, last_seen')
     .order('created_at', { ascending: true });
 
   if (error) {
-    tbody.innerHTML = `<tr><td colspan="4"><div class="empty-state"><i class="ti ti-alert-triangle"></i><p>Falha ao carregar: ${_adminEsc(error.message)}</p></div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state"><i class="ti ti-alert-triangle"></i><p>Falha ao carregar: ${_adminEsc(error.message)}</p></div></td></tr>`;
     return;
   }
 
   _adminProfiles = data || [];
-  _adminUsuariosCarregados = true;
 
   if (!_adminProfiles.length) {
-    tbody.innerHTML = '<tr><td colspan="4"><div class="empty-state"><i class="ti ti-users"></i><p>Nenhum usuário encontrado.</p></div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state"><i class="ti ti-users"></i><p>Nenhum usuário encontrado.</p></div></td></tr>';
     return;
   }
 
   tbody.innerHTML = _adminProfiles.map(u => {
     const isSelf = u.id === window.currentUser?.id;
     const criadoEm = u.created_at ? new Date(u.created_at).toLocaleDateString('pt-BR') : '—';
+    const status = _adminStatusInfo(u.last_seen);
     return `<tr>
       <td>${_adminEsc(u.email)}${isSelf ? ' <span style="color:var(--text3);font-size:11px">(você)</span>' : ''}</td>
+      <td>
+        <span style="display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;color:${status.color};background:${status.bg};border-radius:999px;padding:3px 10px">
+          <span style="width:7px;height:7px;border-radius:50%;background:${status.color};display:inline-block"></span>
+          ${status.label}
+        </span>
+      </td>
       <td>
         <select class="form-select" style="font-size:12px;padding:4px 8px;width:auto"
           onchange="adminAlterarPapel('${u.id}', this.value)"
