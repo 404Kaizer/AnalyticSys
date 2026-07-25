@@ -12,9 +12,49 @@
 <link rel="stylesheet" href="css/layout.css">
 <link rel="stylesheet" href="css/components.css">
 <link rel="stylesheet" href="css/modules.css">
+<link rel="stylesheet" href="css/auth-gate.css">
 </head>
 <body>
-<div class="layout">
+
+<!-- Auth Gate (Fase 1) — tela de login. Fica visível por padrão e cobre
+     tudo (z-index alto); js/auth.js a esconde só depois de confirmar sessão
+     válida. Cadastro de usuário é feito só pelo ADM, fora do app. -->
+<div id="auth-gate">
+  <div class="auth-gate-card">
+    <div class="auth-gate-brand">
+      <svg class="logo-analyticsys" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="ícone AnalyticSys">
+        <polygon points="18,2 30,9 18,16 6,9" fill="#ff6b35"/>
+        <polygon points="18,16 30,9 30,23 18,30" fill="#c44e1f"/>
+        <polygon points="18,16 6,9 6,23 18,30" fill="#ff9060"/>
+        <polyline points="21,26 24,21 27,23 30,18" fill="none" stroke="rgba(255,255,255,0.55)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="30" cy="18" r="1.5" fill="white" opacity="0.8"/>
+      </svg>
+      <div class="auth-gate-brand-name"><span class="brand-analytic">ANALYTIC</span><span class="brand-sys">SYS</span></div>
+    </div>
+
+    <form id="auth-gate-form-login" class="auth-gate-form">
+      <div class="form-group">
+        <label class="form-label" for="auth-email">E-mail</label>
+        <input class="form-input" type="email" id="auth-email" autocomplete="username" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="auth-password">Senha</label>
+        <input class="form-input" type="password" id="auth-password" autocomplete="current-password" required>
+      </div>
+      <div id="auth-gate-error" class="auth-gate-error" role="alert" style="display:none"></div>
+      <button type="submit" class="btn btn-primary auth-gate-submit" id="auth-gate-submit-btn">Entrar</button>
+      <button type="button" class="auth-gate-forgot" id="auth-gate-forgot-btn">Esqueci minha senha</button>
+    </form>
+
+    <div id="auth-gate-forgot-sent" class="auth-gate-sent" style="display:none">
+      <i class="ti ti-mail-check"></i>
+      <p>Se o e-mail existir no sistema, enviamos um link para redefinir a senha.</p>
+      <button type="button" class="btn" id="auth-gate-back-btn">Voltar ao login</button>
+    </div>
+  </div>
+</div>
+
+<div class="layout" hidden>
 
 <div class="mobile-nav-overlay" id="nav-overlay" onclick="closeSidebar()"></div>
 
@@ -301,6 +341,22 @@
               <button class="tools-theme-opt" data-theme="light"   onclick="setTheme('light');   updateToolsTheme()"><span class="theme-swatch light"></span>Claro</button>
               <button class="tools-theme-opt" data-theme="sand"    onclick="setTheme('sand');    updateToolsTheme()"><span class="theme-swatch sand"></span>Areia</button>
             </div>
+
+            <div class="tools-dropdown-section-label">Conta</div>
+            <div class="tools-item" style="cursor:default">
+              <div class="tools-item-icon" style="background:var(--accent-dim);color:var(--accent)"><i class="ti ti-user"></i></div>
+              <div class="tools-item-body">
+                <div class="tools-item-label" id="auth-account-email">—</div>
+                <div class="tools-item-sub" id="auth-account-role">—</div>
+              </div>
+            </div>
+            <button class="tools-item" onclick="window.AuthGate && window.AuthGate.signOut(); closeToolsMenu()">
+              <div class="tools-item-icon" style="background:var(--red-bg);color:var(--red)"><i class="ti ti-logout"></i></div>
+              <div class="tools-item-body">
+                <div class="tools-item-label">Sair</div>
+                <div class="tools-item-sub">Encerrar sessão neste dispositivo</div>
+              </div>
+            </button>
 
             </div><!-- /.tools-dropdown-scroll -->
           </div>
@@ -4152,6 +4208,10 @@
 <!-- jsPDF + jspdf-autotable — geração de PDF vetorial (Notas de Crédito/Débito, ver ncd.js) -->
 <script defer src="https://cdn.jsdelivr.net/npm/jspdf@4.2.1/dist/jspdf.umd.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/jspdf-autotable@5.0.8/dist/jspdf.plugin.autotable.min.js"></script>
+<!-- Supabase — cliente único (Fase 0) + autenticação (Fase 1, ver js/auth.js) -->
+<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script defer src="js/supabase-client.js"></script>
+<script defer src="js/auth.js"></script>
 
 <!-- AnalyticSys — módulos JS (ordem importa) -->
 <script defer src="js/state.js"></script>

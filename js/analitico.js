@@ -3283,6 +3283,15 @@ function setupModalCloseOnEscape() {
 }
 
 async function init() {
+  // Fase 1 — Autenticação: só prossegue com sessão válida. Sem sessão,
+  // AuthGate mostra a tela de login e devolve null aqui — o próprio submit
+  // do formulário de login rechama init() depois de autenticar (ver
+  // js/auth.js). Cadastro de usuário é feito só pelo ADM, fora do app.
+  if (typeof window.AuthGate !== 'undefined') {
+    const session = await window.AuthGate.ensureSession();
+    if (!session) return;
+  }
+
   // Dispara a checagem de aba única ativa (Web Locks API) em paralelo com o
   // resto do boot — não é aguardada (await) porque não deve atrasar o
   // carregamento normal da tela; ela só decide se esta aba pode gravar.
