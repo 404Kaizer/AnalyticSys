@@ -645,6 +645,12 @@ async function gerarDocumentoAjuste() {
     state.ajustesSistemicos.push(daiRecord);
     persist();
     renderOcorrencias();
+    // Sincroniza as ocorrências geradas com o Supabase (a tabela ocorrencias
+    // já existe — ver ocorrencias.js). ajustesSistemicos em si ainda é só
+    // local, fica pra etapa 6 do plano.
+    if (typeof _ocSyncUpsert === 'function') {
+      ocsCriadas.forEach(oc => _ocSyncUpsert(oc));
+    }
 
     // Abre o documento para impressão/"Salvar PDF"
     const docHtml = _daiBuildDocumentoHtml(daiRecord);

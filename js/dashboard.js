@@ -6095,12 +6095,15 @@ async function restoreAndRender() {
     updateLoadingOverlay('Lendo o banco de dados local...', 'Inicializando o sistema');
     await nextFrame();
     await loadState();
-    // Fase 2: acoesRelatorio já está migrada para o Supabase — busca a
-    // versão da nuvem e sobrescreve o que veio do IndexedDB local. Em caso
-    // de falha de rede, syncAcoesRelatorioFromSupabase mantém os dados
-    // locais como fallback (não zera a lista).
+    // Fase 2: acoesRelatorio e ocorrencias já estão migradas para o
+    // Supabase — busca a versão da nuvem e sobrescreve o que veio do
+    // IndexedDB local. Em caso de falha de rede, cada função de sync
+    // mantém os dados locais como fallback (não zera a lista).
     if (typeof syncAcoesRelatorioFromSupabase === 'function') {
       await syncAcoesRelatorioFromSupabase();
+    }
+    if (typeof syncOcorrenciasFromSupabase === 'function') {
+      await syncOcorrenciasFromSupabase();
     }
     _lstepSet('idb', 'done');
     _lbarSet(15);

@@ -19,19 +19,113 @@ function _nextOcId() {
   return 'OC-' + next;
 }
 
+// ── Sincronização com Supabase (Fase 2) ────────────────────
+// Conversão entre o formato usado em memória (camelCase, igual ao resto do
+// sistema) e as colunas da tabela ocorrencias (snake_case).
+function _ocToDbRow(o) {
+  return {
+    id: o.id,
+    data_abertura: o.dataAbertura || null,
+    motivo: o.motivo || null,
+    data_limite: o.dataLimite || null,
+    central: o.central || null,
+    material: o.material || null,
+    operador: o.operador || null,
+    contato: o.contato || null,
+    descricao: o.descricao || null,
+    concluida: !!o.concluida,
+    data_conclusao: o.dataConclusao || null,
+    desc_conclusao: o.descConclusao || null,
+    inconclusiva: !!o.inconclusiva,
+    data_inconclusiva: o.dataInconclusiva || null,
+    motivo_inconclusiva: o.motivoInconclusiva || null,
+    hierarquia: Array.isArray(o.hierarquia) ? o.hierarquia : [],
+    criado_em: o.criadoEm || Date.now(),
+    origem_ajuste_sistemico: !!o.origemAjusteSistemico,
+    dai_id: o.daiId || null,
+    dai_numero: o.daiNumero || null,
+    dai_tag: o.daiTag || null,
+    dai_item_id: o.daiItemId || null,
+  };
+}
+
+function _ocFromDbRow(row) {
+  return {
+    id: row.id,
+    dataAbertura: row.data_abertura,
+    motivo: row.motivo,
+    dataLimite: row.data_limite,
+    central: row.central,
+    material: row.material,
+    operador: row.operador,
+    contato: row.contato,
+    descricao: row.descricao,
+    concluida: !!row.concluida,
+    dataConclusao: row.data_conclusao,
+    descConclusao: row.desc_conclusao,
+    inconclusiva: !!row.inconclusiva,
+    dataInconclusiva: row.data_inconclusiva,
+    motivoInconclusiva: row.motivo_inconclusiva,
+    hierarquia: Array.isArray(row.hierarquia) ? row.hierarquia : [],
+    criadoEm: row.criado_em,
+    origemAjusteSistemico: !!row.origem_ajuste_sistemico,
+    daiId: row.dai_id,
+    daiNumero: row.dai_numero,
+    daiTag: row.dai_tag,
+    daiItemId: row.dai_item_id,
+  };
+}
+
+// Busca as ocorrências do Supabase e substitui state.ocorrencias — chamada
+// no boot (ver restoreAndRender em dashboard.js). Mantém os dados locais
+// como fallback se a rede falhar, em vez de zerar a lista.
+async function syncOcorrenciasFromSupabase() {
+  try {
+    const { data, error } = await window.supabaseClient
+      .from('ocorrencias')
+      .select('*')
+      .order('criado_em', { ascending: false });
+    if (error) throw error;
+    state.ocorrencias = (data || []).map(_ocFromDbRow);
+  } catch (err) {
+    console.warn('[Supabase] Falha ao buscar ocorrencias — mantendo dados locais.', err);
+  }
+}
+
+// Grava uma ocorrência no Supabase (upsert) — usada por todas as funções
+// de escrita abaixo. Falha não bloqueia a UI (já atualizada localmente);
+// só avisa por toast.
+async function _ocSyncUpsert(o) {
+  const { error } = await window.supabaseClient.from('ocorrencias').upsert(_ocToDbRow(o));
+  if (error) {
+    console.warn('[Supabase] Falha ao sincronizar ocorrência:', error);
+    toast('⚠ Salvo nesta sessão, mas não foi possível sincronizar com a nuvem.', 'error');
+  }
+}
+
+async function _ocSyncDelete(id) {
+  const { error } = await window.supabaseClient.from('ocorrencias').delete().eq('id', id);
+  if (error) {
+    console.warn('[Supabase] Falha ao excluir ocorrência na nuvem:', error);
+    toast('⚠ Removida nesta sessão, mas não foi possível sincronizar com a nuvem.', 'error');
+  }
+}
+
 function saveOcorrencia(ocorrencia) {
   if (!Array.isArray(state.ocorrencias)) state.ocorrencias = [];
   const idx = state.ocorrencias.findIndex(o => o.id === ocorrencia.id);
   if (idx >= 0) state.ocorrencias[idx] = ocorrencia;
   else state.ocorrencias.push(ocorrencia);
-  persist();
+  persist(); // fallback local (IndexedDB)
   renderOcorrencias();
+  _ocSyncUpsert(ocorrencia);
 }
 
 function deleteOcorrencia(id) {
   state.ocorrencias = (state.ocorrencias || []).filter(o => o.id !== id);
-  persist();
+  persist(); // fallback local (IndexedDB)
   renderOcorrencias();
+  _ocSyncDelete(id);
 }
 
 // ── Helpers ───────────────────────────────────────────────
@@ -186,10 +280,12 @@ window.descalonar = function(id) {
   const info = ocNivelInfo(removido.nivel);
   persist();
   renderOcorrencias();
+  _ocSyncUpsert(o);
   toast(`Descalonado de ${info.label}.`, 'info', 6000, () => {
     o.hierarquia = snapshot;
     persist();
     renderOcorrencias();
+    _ocSyncUpsert(o);
   });
 };
 
@@ -210,6 +306,7 @@ window.submitEscalonar = function() {
   persist();
   renderOcorrencias();
   closeEscalonarModal();
+  _ocSyncUpsert(o);
   const info = ocNivelInfo(nivel);
   toast(`Escalonado para ${info.label}.`, 'info');
 };
@@ -265,6 +362,7 @@ window.submitEditarEscalonamento = function() {
   renderOcorrencias();
   closeEditarEscalonamentoModal();
   openOcDetailModal(ocId);
+  _ocSyncUpsert(o);
   toast('Escalonamento atualizado.', 'success');
 };
 
@@ -1407,6 +1505,7 @@ function submitConcluir() {
   persist();
   renderOcorrencias();
   closeConcluirModal();
+  _ocSyncUpsert(o);
   toast('Ocorrência concluída!', 'success');
 }
 
@@ -1435,6 +1534,7 @@ function submitInconclusiva() {
   persist();
   renderOcorrencias();
   closeInconclusivaModal();
+  _ocSyncUpsert(o);
   toast('Ocorrência marcada como inconclusiva.', 'info');
 }
 
@@ -1446,6 +1546,7 @@ function reabrirOcorrencia(id) {
   o.motivoInconclusiva = null;
   persist();
   renderOcorrencias();
+  _ocSyncUpsert(o);
   toast('Ocorrência reaberta.', 'success');
 }
 
@@ -1457,6 +1558,7 @@ function reabrirOcorrenciaConcluida(id) {
   o.descConclusao  = null;
   persist();
   renderOcorrencias();
+  _ocSyncUpsert(o);
   toast('Ocorrência reaberta.', 'success');
 }
 
@@ -1465,13 +1567,15 @@ function confirmarExcluirOcorrencia(id) {
   const o = (state.ocorrencias || []).find(oc => oc.id === id);
   if (!o) return;
   const label = [o.central, o.material].filter(Boolean).join(' / ');
-  // Usa toast com undo
-  const prev = [...(state.ocorrencias || [])];
+  // Usa toast com undo — guarda o registro específico (não o array
+  // inteiro) para poder re-inserir só ele no Supabase se desfizer.
+  const ocSnapshot = { ...o };
   deleteOcorrencia(id);
   toast(`Ocorrência "${label}" removida.`, 'info', 6000, () => {
-    state.ocorrencias = prev;
+    state.ocorrencias.push(ocSnapshot);
     persist();
     renderOcorrencias();
+    _ocSyncUpsert(ocSnapshot);
   });
 }
 
@@ -1541,6 +1645,9 @@ function confirmarExcluirAjusteSistemico(id) {
 
       persist();
       renderOcorrencias();
+      // Só a ocorrência é sincronizada com o Supabase aqui — ajustesSistemicos
+      // e ajustesExcluidos ainda são só locais (ver etapa 6 do plano).
+      _ocSyncDelete(id);
       toast(`Ocorrência de Ajuste Sistêmico "${tag}" excluída. Registro de auditoria mantido.`, 'info');
     }
   });
