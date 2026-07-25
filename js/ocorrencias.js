@@ -1622,16 +1622,19 @@ function confirmarExcluirAjusteSistemico(id) {
     requireConsent: true,
     consentLabel: 'Estou ciente de que este documento já foi emitido/apresentado e assumo a responsabilidade por esta exclusão.',
     onConfirm: () => {
-      // Log permanente — nunca removido, mesmo que o resto seja excluído
+      // Log permanente — nunca removido, mesmo que o resto seja excluído.
+      // A tabela ajustes_excluidos no Supabase nem tem política de
+      // UPDATE/DELETE — a garantia de "nunca apagado" é do próprio banco.
       if (!Array.isArray(state.ajustesExcluidos)) state.ajustesExcluidos = [];
-      state.ajustesExcluidos.push({
+      const logExclusao = {
         daiTag: tag,
         daiNumero: numero,
         central: o.central || null,
         dataGeracao: dai?.dataGeracao || null,
         excluidoPor: (state.configs.find(c => c.key === '__responsavel_padrao__') || {}).value || null,
         excluidoEm: Date.now(),
-      });
+      };
+      state.ajustesExcluidos.push(logExclusao);
 
       // Remove a cópia local dos anexos (a fonte oficial é o ZIP baixado na
       // hora da geração — ver dai.js)
@@ -1645,12 +1648,46 @@ function confirmarExcluirAjusteSistemico(id) {
 
       persist();
       renderOcorrencias();
-      // Só a ocorrência é sincronizada com o Supabase aqui — ajustesSistemicos
-      // e ajustesExcluidos ainda são só locais (ver etapa 6 do plano).
       _ocSyncDelete(id);
+      if (dai && typeof _daiSyncDelete === 'function') _daiSyncDelete(dai.id);
+      if (window.supabaseClient) {
+        window.supabaseClient.from('ajustes_excluidos').insert({
+          dai_tag: logExclusao.daiTag,
+          dai_numero: logExclusao.daiNumero,
+          central: logExclusao.central,
+          data_geracao: logExclusao.dataGeracao,
+          excluido_por: logExclusao.excluidoPor,
+          excluido_em: logExclusao.excluidoEm,
+        }).then(({ error }) => {
+          if (error) {
+            console.warn('[Supabase] Falha ao registrar log de auditoria na nuvem:', error);
+            toast('⚠ Excluído nesta sessão, mas o log de auditoria não pôde ser sincronizado com a nuvem.', 'error');
+          }
+        });
+      }
       toast(`Ocorrência de Ajuste Sistêmico "${tag}" excluída. Registro de auditoria mantido.`, 'info');
     }
   });
+}
+
+// Busca no boot — log de auditoria é só união (nunca editado/excluído),
+// então simplesmente mescla o que veio da nuvem com o que já existe local,
+// sem risco de perder nada em qualquer direção.
+async function syncAjustesExcluidosFromSupabase() {
+  try {
+    const { data, error } = await window.supabaseClient.from('ajustes_excluidos')
+      .select('dai_tag, dai_numero, central, data_geracao, excluido_por, excluido_em');
+    if (error) throw error;
+    const remoto = (data || []).map(r => ({
+      daiTag: r.dai_tag, daiNumero: r.dai_numero, central: r.central,
+      dataGeracao: r.data_geracao, excluidoPor: r.excluido_por, excluidoEm: r.excluido_em,
+    }));
+    const vistos = new Set((state.ajustesExcluidos || []).map(r => r.daiTag + '|' + r.excluidoEm));
+    const novos = remoto.filter(r => !vistos.has(r.daiTag + '|' + r.excluidoEm));
+    state.ajustesExcluidos = [...(state.ajustesExcluidos || []), ...novos];
+  } catch (err) {
+    console.warn('[Supabase] Falha ao buscar log de auditoria (ajustesExcluidos) — mantendo dados locais.', err);
+  }
 }
 
 // ── Render inicial da página ──────────────────────────────

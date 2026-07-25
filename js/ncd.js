@@ -589,8 +589,9 @@ function _ncdMontarPdf(grupos, resp) {
 function _ncdPersistirRegistros(grupos, resp) {
   if (!Array.isArray(state.notasAjuste)) state.notasAjuste = [];
   const agora = Date.now();
+  const novosRegistros = [];
   grupos.forEach(g => {
-    state.notasAjuste.push({
+    const rec = {
       id: 'ncd_' + agora + '_' + Math.random().toString(36).slice(2, 8),
       numero: g.numero,
       tipo: g.tipo,
@@ -609,9 +610,55 @@ function _ncdPersistirRegistros(grupos, resp) {
         valorTotal: it.row.custoMedio > 0 ? it.row.custoVarBruto : null,
         motivo: it.motivo,
       })),
-    });
+    };
+    state.notasAjuste.push(rec);
+    novosRegistros.push(rec);
   });
   persist();
+  _ncdSyncToSupabase(novosRegistros);
+}
+
+// Registro é append-only (nunca editado/excluído — a numeração sequencial
+// depende disso), então basta inserir os novos. Falha não bloqueia a UI
+// (PDF já foi gerado e baixado antes desta chamada rodar).
+function _ncdSyncToSupabase(registros) {
+  if (!window.supabaseClient || !registros.length) return;
+  const rows = registros.map(r => ({
+    id: r.id, numero: r.numero, tipo: r.tipo, central: r.central,
+    cnpj_central: r.cnpjCentral, data_key: r.dataKey, data_geracao: r.dataGeracao,
+    valor_total: r.valorTotal, responsavel_nome: r.responsavelNome,
+    responsavel_cpf: r.responsavelCpf, responsavel_email: r.responsavelEmail,
+    itens: r.itens,
+  }));
+  window.supabaseClient.from('notas_ajuste').insert(rows)
+    .then(({ error }) => {
+      if (error) {
+        console.warn('[Supabase] Falha ao sincronizar notas de crédito/débito:', error);
+        toast('⚠ Nota(s) salva(s) nesta sessão, mas não foi possível sincronizar com a nuvem.', 'error');
+      }
+    });
+}
+
+// Busca no boot — append-only, então é só união por id (nunca há
+// atualização a mesclar). Essencial pra numeração sequencial ficar
+// correta entre sessões/dispositivos diferentes.
+async function syncNotasAjusteFromSupabase() {
+  try {
+    const { data, error } = await window.supabaseClient.from('notas_ajuste').select('*');
+    if (error) throw error;
+    const remoto = (data || []).map(r => ({
+      id: r.id, numero: r.numero, tipo: r.tipo, central: r.central,
+      cnpjCentral: r.cnpj_central, dataKey: r.data_key, dataGeracao: r.data_geracao,
+      valorTotal: r.valor_total, responsavelNome: r.responsavel_nome,
+      responsavelCpf: r.responsavel_cpf, responsavelEmail: r.responsavel_email,
+      itens: r.itens || [],
+    }));
+    const porId = new Map((state.notasAjuste || []).map(n => [n.id, n]));
+    remoto.forEach(n => porId.set(n.id, n));
+    state.notasAjuste = [...porId.values()];
+  } catch (err) {
+    console.warn('[Supabase] Falha ao buscar notas de crédito/débito — mantendo dados locais.', err);
+  }
 }
 
 // ── Estado do modal (preview calculado ao abrir, reaproveitado ao gerar) ─

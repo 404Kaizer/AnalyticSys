@@ -6125,6 +6125,15 @@ async function restoreAndRender() {
     if (typeof syncSapFechamentoOverridesFromSupabase === 'function') {
       await syncSapFechamentoOverridesFromSupabase();
     }
+    if (typeof syncAjustesSistemicosFromSupabase === 'function') {
+      await syncAjustesSistemicosFromSupabase();
+    }
+    if (typeof syncAjustesExcluidosFromSupabase === 'function') {
+      await syncAjustesExcluidosFromSupabase();
+    }
+    if (typeof syncNotasAjusteFromSupabase === 'function') {
+      await syncNotasAjusteFromSupabase();
+    }
     _lstepSet('idb', 'done');
     _lbarSet(15);
     await nextFrame();

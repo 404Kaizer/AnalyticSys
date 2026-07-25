@@ -33,6 +33,76 @@
 // registrado individualmente em cada linha da tabela do documento.
 // ═══════════════════════════════════════════════════════════
 
+// ── Sincronização com Supabase (Fase 2, etapa final) ────────────────────
+// Documento tem validade fiscal/auditoria — falha aqui não pode passar em
+// silêncio total (por isso o toast de aviso), mas também não trava a UI:
+// o documento já foi gerado, impresso e salvo localmente antes desta
+// chamada rodar.
+function _daiSyncUpsert(dai) {
+  if (!window.supabaseClient) return;
+  const row = {
+    id: dai.id,
+    tag: dai.tag,
+    numero: dai.numero,
+    data_geracao: dai.dataGeracao,
+    data_geracao_key: dai.dataGeracaoKey,
+    data_ocorrido: dai.dataOcorrido,
+    central: dai.central,
+    cnpj_central: dai.cnpjCentral,
+    regional_central: dai.regionalCentral,
+    descricao: dai.descricao,
+    informantes: dai.informantes || [],
+    itens: dai.itens || [],
+    analista: dai.analista,
+    atestado_manual: !!dai.atestadoManual,
+    ocorrencia_por_item: !!dai.ocorrenciaPorItem,
+    ocorrencia_ids: dai.ocorrenciaIds || [],
+    anexos: dai.anexos || [],
+    material: dai.material,
+    tipo_movimento_sap: dai.tipoMovimentoSap,
+    objetivo: dai.objetivo,
+    operador: dai.operador,
+    sap_documento: dai.sapDocumento,
+  };
+  window.supabaseClient.from('ajustes_sistemicos').upsert(row)
+    .then(({ error }) => {
+      if (error) {
+        console.warn('[Supabase] Falha ao sincronizar DAI:', error);
+        toast('⚠ Documento salvo nesta sessão, mas não foi possível sincronizar com a nuvem.', 'error');
+      }
+    });
+}
+
+function _daiSyncDelete(daiId) {
+  if (!window.supabaseClient) return;
+  window.supabaseClient.from('ajustes_sistemicos').delete().eq('id', daiId)
+    .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao excluir DAI na nuvem:', error); });
+}
+
+// Busca no boot — mescla por id, nuvem tem prioridade (mesmo padrão do
+// resto do sistema). Mantém dados locais em caso de falha de rede.
+async function syncAjustesSistemicosFromSupabase() {
+  try {
+    const { data, error } = await window.supabaseClient.from('ajustes_sistemicos').select('*');
+    if (error) throw error;
+    const remoto = (data || []).map(r => ({
+      id: r.id, tag: r.tag, numero: r.numero, dataGeracao: r.data_geracao,
+      dataGeracaoKey: r.data_geracao_key, dataOcorrido: r.data_ocorrido,
+      central: r.central, cnpjCentral: r.cnpj_central, regionalCentral: r.regional_central,
+      descricao: r.descricao, informantes: r.informantes || [], itens: r.itens || [],
+      analista: r.analista, atestadoManual: r.atestado_manual, ocorrenciaPorItem: r.ocorrencia_por_item,
+      ocorrenciaIds: r.ocorrencia_ids || [], anexos: r.anexos || [],
+      material: r.material, tipoMovimentoSap: r.tipo_movimento_sap, objetivo: r.objetivo,
+      operador: r.operador, sapDocumento: r.sap_documento,
+    }));
+    const porId = new Map((state.ajustesSistemicos || []).map(d => [d.id, d]));
+    remoto.forEach(d => porId.set(d.id, d));
+    state.ajustesSistemicos = [...porId.values()];
+  } catch (err) {
+    console.warn('[Supabase] Falha ao buscar DAIs — mantendo dados locais.', err);
+  }
+}
+
 let _daiAnexosPendentes = []; // File[] em memória, até o clique em "Gerar"
 let _daiInformanteRowSeq = 0;
 let _daiItemRowSeq = 0;
@@ -646,11 +716,11 @@ async function gerarDocumentoAjuste() {
     persist();
     renderOcorrencias();
     // Sincroniza as ocorrências geradas com o Supabase (a tabela ocorrencias
-    // já existe — ver ocorrencias.js). ajustesSistemicos em si ainda é só
-    // local, fica pra etapa 6 do plano.
+    // já existe — ver ocorrencias.js).
     if (typeof _ocSyncUpsert === 'function') {
       ocsCriadas.forEach(oc => _ocSyncUpsert(oc));
     }
+    _daiSyncUpsert(daiRecord);
 
     // Abre o documento para impressão/"Salvar PDF"
     const docHtml = _daiBuildDocumentoHtml(daiRecord);
@@ -774,6 +844,8 @@ async function salvarSapDai() {
   persist();
   renderOcorrencias();
   closeModal('dai-sap-modal');
+  _daiSyncUpsert(dai);
+  if (typeof _ocSyncUpsert === 'function') ocsVinculadas.forEach(oc => _ocSyncUpsert(oc));
 
   const detailModal = document.getElementById('oc-detail-modal');
   const currentDetailId = detailModal?.dataset.currentId;
@@ -850,6 +922,7 @@ async function _daiAdicionarAnexosPosGeracao(dai, files) {
 
   persist();
   renderOcorrencias();
+  _daiSyncUpsert(dai);
 
   // Se o modal de detalhe de alguma ocorrência ligada a este DAI estiver
   // aberto, atualiza a seção do DAI na hora para refletir o(s) anexo(s)
