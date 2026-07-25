@@ -3448,12 +3448,16 @@ function invalidateFechOverrideCache() {
 // aqui reintroduziria o mesmo risco de staleness entre módulos já
 // evitado de propósito em _anStockCache (ver notas de analitico.js).
 function _getInvJustDocSet() {
-  const set = new Set();
+  // Map em vez de Set: guarda o valor ORIGINAL (como foi digitado) junto
+  // com a chave normalizada, só para poder mostrar no tooltip do cadeado
+  // qual documento específico está causando o travamento — a comparação
+  // em si continua sendo pela chave normalizada, sem mudança de lógica.
+  const map = new Map();
   (state.invJustificativas || []).forEach(j => {
     const doc = j && j.documentoSap;
-    if (doc && String(doc).trim()) set.add(_fechImportNormDoc(doc));
+    if (doc && String(doc).trim()) map.set(_fechImportNormDoc(doc), String(doc).trim());
   });
-  return set;
+  return map;
 }
 
 // Um registro SAP tem seu Documento "justificado no Inventário" quando
@@ -3950,13 +3954,14 @@ function _fechMgrGetTodosCandidatos() {
     _fechMgrCandidatosRawCache = (state.sap || []).filter(isSapFechamentoPattern);
   }
   const overrideSet = _getFechOverrideSet();
-  const invDocSet = _getInvJustDocSet(); // sem cache, de propósito — ver _getInvJustDocSet
+  const invDocMap = _getInvJustDocSet(); // sem cache, de propósito — ver _getInvJustDocSet
   return _fechMgrCandidatosRawCache.map(r => {
     const chave = getSapFechKey(r);
     // Documento justificado no Inventário tem prioridade: trava a exclusão
     // independente do override manual (mesma regra de isSapExcluidoPorFechamento,
     // reaplicada aqui pra exibir o motivo certo em vez de só o resultado).
-    const travadoPorInventario = invDocSet.has(_fechImportNormDoc(r.documento));
+    const docNorm = _fechImportNormDoc(r.documento);
+    const travadoPorInventario = invDocMap.has(docNorm);
     const excluido = travadoPorInventario ? true : !overrideSet.has(chave);
     let statusLabel;
     if (travadoPorInventario) statusLabel = 'Justificado no Inventário';
@@ -3967,6 +3972,12 @@ function _fechMgrGetTodosCandidatos() {
       _chave: chave,
       _statusLabel: statusLabel,
       _statusExcluido: excluido,
+      // Valores crus pro diagnóstico no tooltip do cadeado — mostra lado a
+      // lado o que veio do SAP e o que está salvo no Inventário, mesmo que
+      // pareçam "iguais" a olho nu (ajuda a pegar espaço/zero à esquerda
+      // escondido, formatação diferente, etc.).
+      _travadoDocSap: r.documento,
+      _travadoDocInvOriginal: invDocMap.get(docNorm) || '',
       _travadoPorInventario: travadoPorInventario
     };
   });
@@ -4120,7 +4131,7 @@ function _fechMgrRender() {
     // são as colunas que realmente importam pra decisão. Cadeado (teal) tem
     // prioridade sobre os outros dois — trava real, não reversível aqui.
     const statusDot = r._travadoPorInventario
-      ? `<i class="ti ti-lock fechmgr-status-icon fechmgr-status-icon--travado" title="Documento SAP preenchido em uma justificativa do Inventário — sempre desconsiderado. Para reverter, apague o campo Documento SAP naquela justificativa."></i>`
+      ? `<i class="ti ti-lock fechmgr-status-icon fechmgr-status-icon--travado" title="Travado — Documento SAP desta linha: '${escapeHtml(r._travadoDocSap)}'. Encontrado na justificativa do Inventário como: '${escapeHtml(r._travadoDocInvOriginal)}'. Para reverter, apague o campo Documento SAP NAQUELA justificativa e verifique se não sobrou outra igual."></i>`
       : r._statusExcluido
         ? `<i class="ti ti-circle-x fechmgr-status-icon fechmgr-status-icon--desc" title="Desconsiderado do cálculo de variação"></i>`
         : `<i class="ti ti-circle-check fechmgr-status-icon fechmgr-status-icon--inc" title="Incluído manualmente no cálculo (considerado)"></i>`;
