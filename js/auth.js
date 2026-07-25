@@ -10,13 +10,110 @@
 // window.AuthGate.ensureSession() é chamada no início de init()
 // (analitico.js). Se já existir sessão válida, resolve com ela e o boot
 // normal do app continua. Se não existir, mostra a tela de login e
-// retorna null — o próprio submit do formulário de login rechama init()
-// depois de autenticar com sucesso.
+// retorna null.
+//
+// IMPORTANTE — links de e-mail (convite / redefinir senha): o Supabase
+// só estabelece a sessão temporária DEPOIS de ler o token que vem na
+// própria URL, de forma assíncrona — ou seja, pode acontecer um instante
+// depois do getSession() já ter rodado dentro de ensureSession() sem
+// encontrar nada. Por isso o app escuta onAuthStateChange continuamente
+// (não confia só na checagem única do boot), e reage tanto a uma sessão
+// que aparece atrasada quanto ao evento PASSWORD_RECOVERY (convite ou
+// redefinição), mostrando a tela de "defina sua senha".
 
 window.AuthGate = (function () {
   let wired = false;
+  let appBooted = false;
+
+  // ── Logout por inatividade ────────────────────────────────────────────
+  // 4h sem nenhuma atividade (mouse, teclado, clique, scroll, toque) →
+  // aviso de 60s com opção de continuar conectado → desloga se ninguém
+  // reagir. Só a aba que detém o lock de escrita (isActiveTab, definido em
+  // persist.js) efetivamente desloga — uma aba passiva em segundo plano
+  // não deve derrubar a sessão de quem está de fato usando o sistema na
+  // outra aba (a sessão do Supabase é compartilhada entre abas).
+  const IDLE_TIMEOUT_MS = 4 * 60 * 60 * 1000; // 4 horas
+  const IDLE_WARNING_LEAD_MS = 60 * 1000;     // aviso 60s antes de deslogar
+  const IDLE_ACTIVITY_EVENTS = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart', 'click'];
+  const IDLE_THROTTLE_MS = 2000; // não reagenda o timer a cada pixel de mousemove
+
+  let idleWarnTimer = null;
+  let idleCountdownInterval = null;
+  let idleLastActivityAt = 0;
+  let idleListenersWired = false;
+
+  // isActiveTab é um `let` de topo de arquivo em persist.js — como todos
+  // os scripts do sistema são clássicos (sem type="module"), compartilham
+  // o mesmo escopo global e o nome fica visível aqui diretamente. Se por
+  // algum motivo persist.js não tiver carregado, assume ativo para não
+  // travar o recurso.
+  function _idleThisTabIsActive() {
+    try { return typeof isActiveTab === 'undefined' ? true : isActiveTab; }
+    catch (_) { return true; }
+  }
 
   function $(id) { return document.getElementById(id); }
+
+  function _idleHideWarning() {
+    clearInterval(idleCountdownInterval);
+    idleCountdownInterval = null;
+    $('idle-warning-overlay')?.classList.remove('open');
+  }
+
+  function _idleShowWarning() {
+    if (!_idleThisTabIsActive()) {
+      // Aba passiva: não é ela quem decide o logout — só reagenda a
+      // checagem sem exibir nada (o overlay de aba somente-leitura já
+      // cobre a tela aqui).
+      idleWarnTimer = setTimeout(_idleShowWarning, 30000);
+      return;
+    }
+    const deadline = Date.now() + IDLE_WARNING_LEAD_MS;
+    $('idle-warning-overlay')?.classList.add('open');
+    idleCountdownInterval = setInterval(() => {
+      const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+      const el = $('idle-warning-countdown');
+      if (el) el.textContent = String(remaining);
+      if (remaining <= 0) {
+        clearInterval(idleCountdownInterval);
+        idleCountdownInterval = null;
+        if (_idleThisTabIsActive()) {
+          signOut();
+        } else {
+          _idleHideWarning();
+          _idleResetTimer();
+        }
+      }
+    }, 250);
+  }
+
+  function _idleResetTimer() {
+    clearTimeout(idleWarnTimer);
+    _idleHideWarning();
+    if (!appBooted) return; // só conta inatividade com sessão ativa
+    idleWarnTimer = setTimeout(_idleShowWarning, IDLE_TIMEOUT_MS - IDLE_WARNING_LEAD_MS);
+  }
+
+  function _idleOnActivity() {
+    if (!appBooted) return;
+    const now = Date.now();
+    // Durante o aviso, qualquer atividade cancela na hora (sem throttle) —
+    // é o caso em que a resposta rápida importa mais que economizar uma
+    // chamada de timer.
+    const warningOpen = $('idle-warning-overlay')?.classList.contains('open');
+    if (!warningOpen && now - idleLastActivityAt < IDLE_THROTTLE_MS) return;
+    idleLastActivityAt = now;
+    _idleResetTimer();
+  }
+
+  function _idleWireListeners() {
+    if (idleListenersWired) return;
+    idleListenersWired = true;
+    IDLE_ACTIVITY_EVENTS.forEach(evt => {
+      document.addEventListener(evt, _idleOnActivity, { passive: true });
+    });
+    $('idle-warning-stay-btn')?.addEventListener('click', _idleResetTimer);
+  }
 
   function showGate() {
     $('auth-gate').removeAttribute('hidden');
@@ -26,6 +123,24 @@ window.AuthGate = (function () {
   function hideGate() {
     $('auth-gate').setAttribute('hidden', '');
     document.querySelector('.layout')?.removeAttribute('hidden');
+  }
+
+  function showLoginForm() {
+    $('auth-gate-form-login').style.display = 'flex';
+    $('auth-gate-forgot-sent').style.display = 'none';
+    $('auth-gate-form-recovery').style.display = 'none';
+  }
+
+  function showForgotSent() {
+    $('auth-gate-form-login').style.display = 'none';
+    $('auth-gate-forgot-sent').style.display = 'flex';
+    $('auth-gate-form-recovery').style.display = 'none';
+  }
+
+  function showRecoveryForm() {
+    $('auth-gate-form-login').style.display = 'none';
+    $('auth-gate-forgot-sent').style.display = 'none';
+    $('auth-gate-form-recovery').style.display = 'flex';
   }
 
   function showError(msg) {
@@ -42,10 +157,24 @@ window.AuthGate = (function () {
     el.textContent = '';
   }
 
+  function showRecoveryError(msg) {
+    const el = $('auth-gate-recovery-error');
+    if (!el) return;
+    el.textContent = msg;
+    el.style.display = 'block';
+  }
+
+  function clearRecoveryError() {
+    const el = $('auth-gate-recovery-error');
+    if (!el) return;
+    el.style.display = 'none';
+    el.textContent = '';
+  }
+
   // Busca o papel (user/admin) do usuário logado. profiles é criado
   // automaticamente por um gatilho no banco quando o ADM cadastra o
-  // usuário (ver migração fase1_profiles_rls_dono_admin) — não deveria
-  // faltar, mas cai em 'user' por segurança se algo inesperado acontecer.
+  // usuário — não deveria faltar, mas cai em 'user' por segurança se algo
+  // inesperado acontecer.
   async function fetchProfile(userId) {
     try {
       const { data, error } = await window.supabaseClient
@@ -68,12 +197,28 @@ window.AuthGate = (function () {
     if (roleEl) roleEl.textContent = profile?.role === 'admin' ? 'Administrador' : 'Usuário';
   }
 
+  // Ponto único que "entra" no app a partir de uma sessão válida — chamado
+  // tanto pela checagem inicial (ensureSession) quanto pelo listener de
+  // auth state (login por senha, ou sessão detectada com atraso a partir
+  // de um link de e-mail). Idempotente via appBooted: pode ser chamado
+  // mais de uma vez sem duplicar o boot do app.
+  async function bootApp(session) {
+    if (appBooted) return;
+    appBooted = true;
+    const profile = await fetchProfile(session.user.id);
+    window.currentUser = { id: session.user.id, email: session.user.email, role: profile?.role || 'user' };
+    updateAccountUI(session.user, profile);
+    hideGate();
+    _idleWireListeners();
+    _idleResetTimer();
+    if (typeof window.init === 'function') window.init();
+  }
+
   function wireForm() {
     if (wired) return;
     wired = true;
 
-    const form = $('auth-gate-form-login');
-    form.addEventListener('submit', async (e) => {
+    $('auth-gate-form-login').addEventListener('submit', async (e) => {
       e.preventDefault();
       clearError();
       const btn = $('auth-gate-submit-btn');
@@ -83,7 +228,7 @@ window.AuthGate = (function () {
       btn.disabled = true;
       btn.innerHTML = '<span class="btn-spinner"></span> Entrando...';
 
-      const { data, error } = await window.supabaseClient.auth.signInWithPassword({ email, password });
+      const { error } = await window.supabaseClient.auth.signInWithPassword({ email, password });
 
       btn.disabled = false;
       btn.innerHTML = origHtml;
@@ -92,12 +237,8 @@ window.AuthGate = (function () {
         showError('E-mail ou senha inválidos.');
         return;
       }
-
-      const profile = await fetchProfile(data.user.id);
-      window.currentUser = { id: data.user.id, email: data.user.email, role: profile?.role || 'user' };
-      updateAccountUI(data.user, profile);
-      hideGate();
-      if (typeof window.init === 'function') window.init();
+      // Sucesso: o listener onAuthStateChange (SIGNED_IN) cuida do boot
+      // via bootApp() — mesmo caminho usado por sessões vindas de link.
     });
 
     $('auth-gate-forgot-btn').addEventListener('click', async () => {
@@ -105,40 +246,89 @@ window.AuthGate = (function () {
       const email = $('auth-email').value.trim();
       if (!email) { showError('Digite seu e-mail acima para receber o link de redefinição.'); return; }
       await window.supabaseClient.auth.resetPasswordForEmail(email);
-      $('auth-gate-form-login').style.display = 'none';
-      $('auth-gate-forgot-sent').style.display = 'flex';
+      showForgotSent();
     });
 
-    $('auth-gate-back-btn').addEventListener('click', () => {
-      $('auth-gate-forgot-sent').style.display = 'none';
-      $('auth-gate-form-login').style.display = 'flex';
+    $('auth-gate-back-btn').addEventListener('click', showLoginForm);
+
+    $('auth-gate-form-recovery').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      clearRecoveryError();
+      const pw1 = $('auth-recovery-password').value;
+      const pw2 = $('auth-recovery-password-confirm').value;
+
+      if (pw1.length < 6) { showRecoveryError('A senha precisa ter pelo menos 6 caracteres.'); return; }
+      if (pw1 !== pw2) { showRecoveryError('As senhas não coincidem.'); return; }
+
+      const btn = $('auth-gate-recovery-submit-btn');
+      const origHtml = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="btn-spinner"></span> Salvando...';
+
+      const { error } = await window.supabaseClient.auth.updateUser({ password: pw1 });
+
+      btn.disabled = false;
+      btn.innerHTML = origHtml;
+
+      if (error) {
+        showRecoveryError('Não foi possível salvar a senha. Tente novamente ou peça um novo link.');
+        return;
+      }
+
+      // A sessão temporária do link de recuperação já é uma sessão válida
+      // depois da senha definida — entra direto no app.
+      const { data: { session } } = await window.supabaseClient.auth.getSession();
+      if (session) bootApp(session);
     });
   }
 
   // Chamada no topo de init() (analitico.js). Retorna a sessão se já
   // autenticado (o boot normal do app prossegue); caso contrário mostra a
-  // tela de login e retorna null (init() para ali até o login acontecer).
+  // tela de login e retorna null (init() para ali até haver sessão).
   async function ensureSession() {
     wireForm();
     const { data: { session } } = await window.supabaseClient.auth.getSession();
 
     if (!session) {
       showGate();
+      showLoginForm();
       return null;
     }
 
-    const profile = await fetchProfile(session.user.id);
-    window.currentUser = { id: session.user.id, email: session.user.email, role: profile?.role || 'user' };
-    updateAccountUI(session.user, profile);
-    hideGate();
+    await bootApp(session);
     return session;
   }
 
   async function signOut() {
+    clearTimeout(idleWarnTimer);
+    _idleHideWarning();
     await window.supabaseClient.auth.signOut();
     window.currentUser = null;
     window.location.reload();
   }
+
+  // Escuta contínua — cobre o caso do link de e-mail: o supabase-js lê o
+  // token da URL de forma assíncrona, então a sessão pode aparecer (ou o
+  // evento de recuperação disparar) um instante depois do ensureSession()
+  // já ter rodado sem encontrar nada.
+  document.addEventListener('DOMContentLoaded', () => {
+    window.supabaseClient.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        wireForm();
+        showGate();
+        showRecoveryForm();
+        return;
+      }
+      if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
+        bootApp(session);
+      }
+      if (event === 'SIGNED_OUT') {
+        appBooted = false;
+        clearTimeout(idleWarnTimer);
+        _idleHideWarning();
+      }
+    });
+  });
 
   return { ensureSession, signOut, getCurrentUser: () => window.currentUser };
 })();

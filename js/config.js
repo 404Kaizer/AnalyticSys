@@ -1019,6 +1019,23 @@ function makeAcaoId() {
   return 'AR-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
 }
 
+// Busca as ações de relatório do Supabase e substitui state.acoesRelatorio —
+// chamada no boot (ver restoreAndRender em dashboard.js, dentro do STEP 1).
+// Em caso de falha de rede, mantém o que já foi carregado do IndexedDB local
+// como fallback, em vez de zerar a lista.
+async function syncAcoesRelatorioFromSupabase() {
+  try {
+    const { data, error } = await window.supabaseClient
+      .from('acoes_relatorio')
+      .select('id, user_id, categorias, nivel, acoes, created')
+      .order('created', { ascending: false });
+    if (error) throw error;
+    state.acoesRelatorio = data || [];
+  } catch (err) {
+    console.warn('[Supabase] Falha ao buscar acoesRelatorio — mantendo dados locais.', err);
+  }
+}
+
 function abrirModalAcaoRelatorio(id) {
   const item = id ? (state.acoesRelatorio || []).find(a => a.id === id) : null;
 
@@ -1046,7 +1063,7 @@ function abrirModalAcaoRelatorio(id) {
   openModal('modal-acoes-relatorio');
 }
 
-function salvarAcaoRelatorio() {
+async function salvarAcaoRelatorio() {
   const id    = val('ar-id');
   const nivel = val('ar-nivel');
   const acoes = val('ar-acoes').trim();
@@ -1071,34 +1088,52 @@ function salvarAcaoRelatorio() {
   if (idx >= 0) state.acoesRelatorio[idx] = rec;
   else state.acoesRelatorio.unshift(rec);
 
-  persist();
   renderAcoesRelatorio();
   toast(idx >= 0 ? 'Ação atualizada' : 'Ação cadastrada');
   closeModal('modal-acoes-relatorio');
+  persist(); // fallback local (IndexedDB) — mantém funcionamento offline
+
+  const { error } = await window.supabaseClient.from('acoes_relatorio').upsert(rec);
+  if (error) {
+    console.warn('[Supabase] Falha ao salvar ação de relatório:', error);
+    toast('⚠ Salvo nesta sessão, mas não foi possível sincronizar com a nuvem.', 'error');
+  }
 }
 
 function editarAcaoRelatorio(id) {
   abrirModalAcaoRelatorio(id);
 }
 
-function removerAcaoRelatorio(id) {
+async function removerAcaoRelatorio(id) {
   if (!confirm('Excluir esta ação de relatório?')) return;
   if (!Array.isArray(state.acoesRelatorio)) return;
   const idx = state.acoesRelatorio.findIndex(a => a.id === id);
   if (idx < 0) return;
   state.acoesRelatorio.splice(idx, 1);
-  persist();
   renderAcoesRelatorio();
   toast('Ação removida', 'error');
+  persist(); // fallback local (IndexedDB)
+
+  const { error } = await window.supabaseClient.from('acoes_relatorio').delete().eq('id', id);
+  if (error) {
+    console.warn('[Supabase] Falha ao excluir ação de relatório:', error);
+    toast('⚠ Removida nesta sessão, mas não foi possível sincronizar com a nuvem.', 'error');
+  }
 }
 
-function limparAcoesRelatorio() {
+async function limparAcoesRelatorio() {
   if (!(state.acoesRelatorio || []).length) return toast('Nenhuma ação cadastrada', 'error');
   if (!confirm('Excluir todas as ações de relatório?')) return;
   state.acoesRelatorio = [];
-  persist();
   renderAcoesRelatorio();
   toast('Todas as ações foram excluídas', 'error');
+  persist(); // fallback local (IndexedDB)
+
+  const { error } = await window.supabaseClient.from('acoes_relatorio').delete().eq('user_id', window.currentUser?.id);
+  if (error) {
+    console.warn('[Supabase] Falha ao limpar ações de relatório:', error);
+    toast('⚠ Removidas nesta sessão, mas não foi possível sincronizar com a nuvem.', 'error');
+  }
 }
 
 // ═══════════════════════════════════════════════════════════

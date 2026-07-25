@@ -72,3 +72,10 @@
 }
 .auth-gate-sent i { font-size: 28px; color: var(--accent); }
 .auth-gate-sent p { font-size: 13px; color: var(--text2); line-height: 1.5; }
+
+.auth-gate-recovery-intro {
+  font-size: 13px;
+  color: var(--text2);
+  line-height: 1.5;
+  margin-bottom: 4px;
+}

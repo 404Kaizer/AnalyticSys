@@ -51,6 +51,34 @@
       <p>Se o e-mail existir no sistema, enviamos um link para redefinir a senha.</p>
       <button type="button" class="btn" id="auth-gate-back-btn">Voltar ao login</button>
     </div>
+
+    <!-- Formulário de nova senha — aparece quando o link de e-mail (convite
+         ou redefinição) é clicado. O Supabase estabelece uma sessão
+         temporária e dispara o evento PASSWORD_RECOVERY (ver js/auth.js). -->
+    <form id="auth-gate-form-recovery" class="auth-gate-form" style="display:none">
+      <p class="auth-gate-recovery-intro">Defina sua senha para continuar.</p>
+      <div class="form-group">
+        <label class="form-label" for="auth-recovery-password">Nova senha</label>
+        <input class="form-input" type="password" id="auth-recovery-password" autocomplete="new-password" minlength="6" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="auth-recovery-password-confirm">Confirmar senha</label>
+        <input class="form-input" type="password" id="auth-recovery-password-confirm" autocomplete="new-password" minlength="6" required>
+      </div>
+      <div id="auth-gate-recovery-error" class="auth-gate-error" role="alert" style="display:none"></div>
+      <button type="submit" class="btn btn-primary auth-gate-submit" id="auth-gate-recovery-submit-btn">Salvar senha e entrar</button>
+    </form>
+  </div>
+</div>
+
+<!-- Aviso de logout por inatividade (Fase 1) — ver js/auth.js -->
+<div class="modal-overlay" id="idle-warning-overlay" style="z-index:10000">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-title"><i class="ti ti-clock-exclamation"></i> Sessão prestes a expirar</div>
+    <div class="modal-sub">Por inatividade, você será desconectado em <strong id="idle-warning-countdown">60</strong> segundos.</div>
+    <div class="form-actions">
+      <button class="btn btn-primary" id="idle-warning-stay-btn" type="button">Continuar conectado</button>
+    </div>
   </div>
 </div>
 
