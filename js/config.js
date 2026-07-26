@@ -22,10 +22,20 @@ function _setBtnLoading(btn, loading, loadingLabel) {
 // isso o upsert usa onConflict:'user_id,key' (restrição adicionada via
 // migração). Reaproveita mergePersistentConfigs para não perder defaults
 // locais que ainda não tenham sido sincronizados.
+//
+// CORREÇÃO: o objeto local usa os campos 'desc' e 'created' (nomes de
+// exibição/UI), mas a tabela no Supabase tem as colunas 'descricao' e
+// 'created_at' — enviar 'rec' direto pro upsert (como estava antes) batia
+// num erro "column configs.desc does not exist" a cada tentativa, sempre
+// silencioso (só console.warn + toast). 'created' também não é enviado:
+// é uma string de exibição em pt-BR ("26/07/2026"), incompatível com o
+// tipo timestamptz de created_at — deixamos o default now() do banco
+// cuidar disso na criação, sem tocar nela nas atualizações seguintes.
 async function _configsSyncUpsert(rec) {
+  const row = { key: rec.key, value: rec.value, descricao: rec.desc || null };
   const { error } = await window.supabaseClient
     .from('configs')
-    .upsert(rec, { onConflict: 'user_id,key' });
+    .upsert(row, { onConflict: 'user_id,key' });
   if (error) {
     console.warn('[Supabase] Falha ao sincronizar config:', error);
     toast('⚠ Salvo nesta sessão, mas não foi possível sincronizar com a nuvem.', 'error');
@@ -48,10 +58,18 @@ async function syncConfigsFromSupabase() {
   try {
     const { data, error } = await window.supabaseClient
       .from('configs')
-      .select('key, value, desc, created')
-      .order('created', { ascending: false });
+      .select('key, value, descricao, created_at')
+      .order('created_at', { ascending: false });
     if (error) throw error;
-    state.configs = mergePersistentConfigs(state.configs, data || []);
+    // Traduz de volta pro formato local (desc/created) esperado por
+    // mergePersistentConfigs e por toda a UI de Configurações.
+    const remoto = (data || []).map(r => ({
+      key: r.key,
+      value: r.value,
+      desc: r.descricao,
+      created: r.created_at ? new Date(r.created_at).toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR'),
+    }));
+    state.configs = mergePersistentConfigs(state.configs, remoto);
   } catch (err) {
     console.warn('[Supabase] Falha ao buscar configs — mantendo dados locais.', err);
   }
@@ -459,10 +477,17 @@ function normalizeImportedFilial(item, importId) {
 // em lote (Fase 4, Etapa 2; até aqui só o manual sincronizava). Guarda
 // import_id na nuvem para a futura etapa de exclusão em cascata (Fase 4,
 // Etapa 7) saber o que apagar lá também. Falha não bloqueia a UI.
+//
+// CORREÇÃO: a coluna real na tabela é 'created_at' (timestamptz, default
+// now()), não 'created' — enviar 'created' (string pt-BR de exibição, ex.
+// "26/07/2026") batia num erro "column materiais.created does not exist",
+// sempre silencioso. Não enviamos created_at no upsert: o default do banco
+// cuida da criação, e não queremos sobrescrever com uma string incompatível
+// nas atualizações seguintes.
 function _materiaisSyncUpsert(rec) {
   if (!window.supabaseClient) return;
   window.supabaseClient.from('materiais')
-    .upsert({ origem: rec.origem, alias: rec.alias, categoria: rec.categoria || null, import_id: rec.importId || null, created: rec.created }, { onConflict: 'user_id,origem,alias' })
+    .upsert({ origem: rec.origem, alias: rec.alias, categoria: rec.categoria || null, import_id: rec.importId || null }, { onConflict: 'user_id,origem,alias' })
     .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao sincronizar material:', error); });
 }
 
@@ -473,7 +498,7 @@ function _materiaisSyncUpsert(rec) {
 const CADASTRO_SYNC_BATCH_SIZE = 500;
 async function _materiaisSyncUpsertBatch(recs) {
   if (!window.supabaseClient || !recs || !recs.length) return;
-  const rows = recs.map(rec => ({ origem: rec.origem, alias: rec.alias, categoria: rec.categoria || null, import_id: rec.importId || null, created: rec.created }));
+  const rows = recs.map(rec => ({ origem: rec.origem, alias: rec.alias, categoria: rec.categoria || null, import_id: rec.importId || null }));
   for (let i = 0; i < rows.length; i += CADASTRO_SYNC_BATCH_SIZE) {
     const { error } = await window.supabaseClient.from('materiais').upsert(rows.slice(i, i + CADASTRO_SYNC_BATCH_SIZE), { onConflict: 'user_id,origem,alias' });
     if (error) { console.warn('[Supabase] Falha ao sincronizar lote de materiais:', error); break; }
@@ -490,7 +515,7 @@ async function _materiaisSyncUpsertBatch(recs) {
 // base já existente, mesmo padrão usado em Lançamentos).
 async function syncMateriaisFromSupabase() {
   try {
-    const { data, error } = await window.supabaseClient.from('materiais').select('origem, alias, categoria, import_id, created');
+    const { data, error } = await window.supabaseClient.from('materiais').select('origem, alias, categoria, import_id, created_at');
     if (error) throw error;
     const local = Array.isArray(state.materiais) ? state.materiais : [];
     const porChave = new Map(local.map(m => [materialMatchKey(m), m]));
@@ -500,7 +525,8 @@ async function syncMateriaisFromSupabase() {
       porChave.set(chave, {
         id: existenteLocal?.id || makeMaterialId(), // preserva id local se já existir — evita "churn" de id a cada boot
         origem: r.origem, alias: r.alias, categoria: r.categoria,
-        importId: r.import_id || undefined, created: r.created,
+        importId: r.import_id || undefined,
+        created: r.created_at ? new Date(r.created_at).toLocaleDateString('pt-BR') : (existenteLocal?.created || new Date().toLocaleDateString('pt-BR')),
       });
     });
     state.materiais = [...porChave.values()];
@@ -950,7 +976,7 @@ function filialMatchKey(item) {
 function _filiaisSyncUpsert(rec) {
   if (!window.supabaseClient) return;
   window.supabaseClient.from('filiais')
-    .upsert({ origem: rec.origem, alias: rec.alias, cnpj: rec.cnpj || null, regional: rec.regional || null, import_id: rec.importId || null, created: rec.created }, { onConflict: 'user_id,origem,alias' })
+    .upsert({ origem: rec.origem, alias: rec.alias, cnpj: rec.cnpj || null, regional: rec.regional || null, import_id: rec.importId || null }, { onConflict: 'user_id,origem,alias' })
     .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao sincronizar filial:', error); });
 }
 
@@ -958,7 +984,7 @@ function _filiaisSyncUpsert(rec) {
 // subiram pra nuvem. Mesmo padrão de _materiaisSyncUpsertBatch.
 async function _filiaisSyncUpsertBatch(recs) {
   if (!window.supabaseClient || !recs || !recs.length) return;
-  const rows = recs.map(rec => ({ origem: rec.origem, alias: rec.alias, cnpj: rec.cnpj || null, regional: rec.regional || null, import_id: rec.importId || null, created: rec.created }));
+  const rows = recs.map(rec => ({ origem: rec.origem, alias: rec.alias, cnpj: rec.cnpj || null, regional: rec.regional || null, import_id: rec.importId || null }));
   for (let i = 0; i < rows.length; i += CADASTRO_SYNC_BATCH_SIZE) {
     const { error } = await window.supabaseClient.from('filiais').upsert(rows.slice(i, i + CADASTRO_SYNC_BATCH_SIZE), { onConflict: 'user_id,origem,alias' });
     if (error) { console.warn('[Supabase] Falha ao sincronizar lote de filiais:', error); break; }
@@ -971,16 +997,21 @@ async function _filiaisSyncUpsertBatch(recs) {
 // também recebe cadastro importado). Depois do merge, sobe pra nuvem
 // qualquer filial local ainda não sincronizada (self-heal da base já
 // existente).
+//
+// CORREÇÃO: mesma causa raiz de Materiais/Configs — coluna real é
+// created_at, não created (erro "column filiais.created does not exist").
 async function syncFiliaisFromSupabase() {
   try {
-    const { data, error } = await window.supabaseClient.from('filiais').select('origem, alias, cnpj, regional, import_id, created');
+    const { data, error } = await window.supabaseClient.from('filiais').select('origem, alias, cnpj, regional, import_id, created_at');
     if (error) throw error;
     const local = Array.isArray(state.filiais) ? state.filiais : [];
     const porChave = new Map(local.map(f => [filialMatchKey(f), f]));
     (data || []).forEach(r => {
+      const existenteLocal = porChave.get(filialMatchKey(r));
       porChave.set(filialMatchKey(r), {
         origem: r.origem, alias: r.alias, cnpj: r.cnpj, regional: r.regional,
-        importId: r.import_id || undefined, created: r.created,
+        importId: r.import_id || undefined,
+        created: r.created_at ? new Date(r.created_at).toLocaleDateString('pt-BR') : (existenteLocal?.created || new Date().toLocaleDateString('pt-BR')),
       });
     });
     state.filiais = [...porChave.values()];
