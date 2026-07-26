@@ -218,6 +218,14 @@ function restaurarBackup(file) {
       fields.forEach(f => {
         state[f] = Array.isArray(parsed[f]) ? parsed[f] : (state[f] || []);
       });
+      // Backfill de id nos 5 módulos grandes (Fase 4) — um backup gerado
+      // antes desta atualização não tem id nos registros; sem isso, eles
+      // ficariam sem sincronizar com a nuvem até o próximo reload da página
+      // (o backfill normal só roda no boot, em applySavedState).
+      ['entradas', 'saidas', 'lancamentos', 'sap', 'producao'].forEach(key => {
+        if (!Array.isArray(state[key])) return;
+        state[key] = state[key].map(item => (item && item.id) ? item : { ...item, id: gerarIdRegistro() });
+      });
       _lstepSet('bkp-restore', 'done'); _lbarSet(50);
 
       // Reprocessa índices e normalizações
@@ -5934,6 +5942,15 @@ async function _restaurarModulosConfirmar() {
       } else {
         state[m.key] = data[m.key];
       }
+    });
+
+    // Backfill de id nos módulos grandes restaurados (Fase 4) — mesmo motivo
+    // do fluxo de backup legado: um backup anterior a esta atualização não
+    // tem id nos registros, e sem isso eles ficariam sem sincronizar com a
+    // nuvem até o próximo reload da página.
+    ['entradas', 'saidas', 'lancamentos', 'sap', 'producao'].forEach(key => {
+      if (!Array.isArray(state[key])) return;
+      state[key] = state[key].map(item => (item && item.id) ? item : { ...item, id: gerarIdRegistro() });
     });
 
     // Restaura acoesRelatorio se presente no arquivo (compatibilidade com backups antigos)

@@ -4754,7 +4754,19 @@ function _resolveConflicts(decisions) {
   const arr = _stateArrays();
   if (toRemove.size) {
     const stateKey = { 'Entrada': 'entradas', 'Saída': 'saidas', 'Lançamento': 'lancamentos', 'SAP': 'sap', 'Produção': 'producao' }[modulo];
-    if (stateKey) state[stateKey] = state[stateKey].filter(r => !toRemove.has(fp(r)));
+    if (stateKey) {
+      // Fase 4: registros já sincronizados com a nuvem (só Lançamentos por
+      // enquanto) precisam ser removidos lá também — senão, no próximo boot,
+      // syncLancamentosFromSupabase mescla local ∪ nuvem por id e o registro
+      // que você descartou aqui "ressuscita" porque ainda existe do lado da
+      // nuvem.
+      if (modulo === 'Lançamento' && typeof _lancSyncDelete === 'function') {
+        conflicts.forEach(c => {
+          if (toRemove.has(fp(c.manual)) && c.manual.id) _lancSyncDelete(c.manual.id);
+        });
+      }
+      state[stateKey] = state[stateKey].filter(r => !toRemove.has(fp(r)));
+    }
   }
 
   // Filtra importados conforme decisão
