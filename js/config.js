@@ -455,24 +455,60 @@ function normalizeImportedFilial(item, importId) {
   };
 }
 
-// Sincroniza com Supabase só o cadastro MANUAL (sem importId) — a
-// importação em lote fica de fora por ora (acoplada à exclusão em
-// cascata de excluirImportacao, ver Fase 4). Falha não bloqueia a UI.
+// Sincroniza com Supabase TODO cadastro de material — manual ou importado
+// em lote (Fase 4, Etapa 2; até aqui só o manual sincronizava). Guarda
+// import_id na nuvem para a futura etapa de exclusão em cascata (Fase 4,
+// Etapa 7) saber o que apagar lá também. Falha não bloqueia a UI.
 function _materiaisSyncUpsert(rec) {
-  if (rec.importId || !window.supabaseClient) return;
+  if (!window.supabaseClient) return;
   window.supabaseClient.from('materiais')
-    .upsert({ origem: rec.origem, alias: rec.alias, categoria: rec.categoria || null, created: rec.created }, { onConflict: 'user_id,origem,alias' })
+    .upsert({ origem: rec.origem, alias: rec.alias, categoria: rec.categoria || null, import_id: rec.importId || null, created: rec.created }, { onConflict: 'user_id,origem,alias' })
     .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao sincronizar material:', error); });
 }
 
+// Upsert em lote — usado na sincronização inicial (registros locais
+// pré-existentes que ainda não subiram pra nuvem, tipicamente uma base já
+// importada antes desta atualização). Quebrado em blocos, mesmo padrão de
+// _lancSyncUpsertBatch (import.js).
+const CADASTRO_SYNC_BATCH_SIZE = 500;
+async function _materiaisSyncUpsertBatch(recs) {
+  if (!window.supabaseClient || !recs || !recs.length) return;
+  const rows = recs.map(rec => ({ origem: rec.origem, alias: rec.alias, categoria: rec.categoria || null, import_id: rec.importId || null, created: rec.created }));
+  for (let i = 0; i < rows.length; i += CADASTRO_SYNC_BATCH_SIZE) {
+    const { error } = await window.supabaseClient.from('materiais').upsert(rows.slice(i, i + CADASTRO_SYNC_BATCH_SIZE), { onConflict: 'user_id,origem,alias' });
+    if (error) { console.warn('[Supabase] Falha ao sincronizar lote de materiais:', error); break; }
+  }
+}
+
+// Busca no boot — mescla por chave natural (origem+alias), NUNCA substitui
+// a lista local inteira. Antes desta correção (Fase 4), a nuvem só tinha o
+// cadastro manual, então o merge era "nuvem + tudo que for importado local"
+// (union simples). Agora que a nuvem também recebe cadastro importado, um
+// union simples duplicaria registros recém-sincronizados — o merge precisa
+// ser por chave, nuvem tem prioridade em conflito. Depois do merge, sobe
+// pra nuvem qualquer material local que ainda não esteja lá (self-heal da
+// base já existente, mesmo padrão usado em Lançamentos).
 async function syncMateriaisFromSupabase() {
   try {
-    const { data, error } = await window.supabaseClient.from('materiais').select('origem, alias, categoria, created');
+    const { data, error } = await window.supabaseClient.from('materiais').select('origem, alias, categoria, import_id, created');
     if (error) throw error;
-    const importadosLocal = (state.materiais || []).filter(m => m.importId);
-    const nuvem = (data || []).map(r => ({ id: makeMaterialId(), origem: r.origem, alias: r.alias, categoria: r.categoria, created: r.created }));
-    state.materiais = [...nuvem, ...importadosLocal];
+    const local = Array.isArray(state.materiais) ? state.materiais : [];
+    const porChave = new Map(local.map(m => [materialMatchKey(m), m]));
+    (data || []).forEach(r => {
+      const chave = materialMatchKey(r);
+      const existenteLocal = porChave.get(chave);
+      porChave.set(chave, {
+        id: existenteLocal?.id || makeMaterialId(), // preserva id local se já existir — evita "churn" de id a cada boot
+        origem: r.origem, alias: r.alias, categoria: r.categoria,
+        importId: r.import_id || undefined, created: r.created,
+      });
+    });
+    state.materiais = [...porChave.values()];
     invalidateMaterialLookup();
+
+    const chavesRemotas = new Set((data || []).map(materialMatchKey));
+    const naoSincronizados = local.filter(m => !chavesRemotas.has(materialMatchKey(m)));
+    if (naoSincronizados.length) await _materiaisSyncUpsertBatch(naoSincronizados);
   } catch (err) {
     console.warn('[Supabase] Falha ao buscar materiais — mantendo dados locais.', err);
   }
@@ -900,22 +936,59 @@ async function salvarFiliaisIndividual(btn) {
   toast(`${imported.length} filial(is) cadastrada(s)`);
 }
 
-// Sincroniza com Supabase só o cadastro MANUAL (sem importId) — mesma
-// regra de materiais, ver _materiaisSyncUpsert.
+// Chave natural de filial — mesma composição do onConflict do Supabase
+// (user_id, origem, alias) — usada tanto pro upsert quanto pro merge no
+// boot (ver syncFiliaisFromSupabase).
+function filialMatchKey(item) {
+  return [normalizeText(item?.origem), normalizeText(item?.alias)].join('||');
+}
+
+// Sincroniza com Supabase TODO cadastro de filial — manual ou importado em
+// lote (Fase 4, Etapa 2; até aqui só o manual sincronizava). Guarda
+// import_id na nuvem para a futura etapa de exclusão em cascata (Fase 4,
+// Etapa 7). Falha não bloqueia a UI.
 function _filiaisSyncUpsert(rec) {
-  if (rec.importId || !window.supabaseClient) return;
+  if (!window.supabaseClient) return;
   window.supabaseClient.from('filiais')
-    .upsert({ origem: rec.origem, alias: rec.alias, cnpj: rec.cnpj || null, regional: rec.regional || null, created: rec.created }, { onConflict: 'user_id,origem,alias' })
+    .upsert({ origem: rec.origem, alias: rec.alias, cnpj: rec.cnpj || null, regional: rec.regional || null, import_id: rec.importId || null, created: rec.created }, { onConflict: 'user_id,origem,alias' })
     .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao sincronizar filial:', error); });
 }
 
+// Upsert em lote — sincronização inicial dos registros locais que ainda não
+// subiram pra nuvem. Mesmo padrão de _materiaisSyncUpsertBatch.
+async function _filiaisSyncUpsertBatch(recs) {
+  if (!window.supabaseClient || !recs || !recs.length) return;
+  const rows = recs.map(rec => ({ origem: rec.origem, alias: rec.alias, cnpj: rec.cnpj || null, regional: rec.regional || null, import_id: rec.importId || null, created: rec.created }));
+  for (let i = 0; i < rows.length; i += CADASTRO_SYNC_BATCH_SIZE) {
+    const { error } = await window.supabaseClient.from('filiais').upsert(rows.slice(i, i + CADASTRO_SYNC_BATCH_SIZE), { onConflict: 'user_id,origem,alias' });
+    if (error) { console.warn('[Supabase] Falha ao sincronizar lote de filiais:', error); break; }
+  }
+}
+
+// Busca no boot — mescla por chave natural (origem+alias), nuvem tem
+// prioridade em conflito (mesmo motivo de syncMateriaisFromSupabase: um
+// union simples duplicaria registros recém-sincronizados agora que a nuvem
+// também recebe cadastro importado). Depois do merge, sobe pra nuvem
+// qualquer filial local ainda não sincronizada (self-heal da base já
+// existente).
 async function syncFiliaisFromSupabase() {
   try {
-    const { data, error } = await window.supabaseClient.from('filiais').select('origem, alias, cnpj, regional, created');
+    const { data, error } = await window.supabaseClient.from('filiais').select('origem, alias, cnpj, regional, import_id, created');
     if (error) throw error;
-    const importadosLocal = (state.filiais || []).filter(f => f.importId);
-    state.filiais = [...(data || []), ...importadosLocal];
+    const local = Array.isArray(state.filiais) ? state.filiais : [];
+    const porChave = new Map(local.map(f => [filialMatchKey(f), f]));
+    (data || []).forEach(r => {
+      porChave.set(filialMatchKey(r), {
+        origem: r.origem, alias: r.alias, cnpj: r.cnpj, regional: r.regional,
+        importId: r.import_id || undefined, created: r.created,
+      });
+    });
+    state.filiais = [...porChave.values()];
     invalidateFilialLookup();
+
+    const chavesRemotas = new Set((data || []).map(filialMatchKey));
+    const naoSincronizados = local.filter(f => !chavesRemotas.has(filialMatchKey(f)));
+    if (naoSincronizados.length) await _filiaisSyncUpsertBatch(naoSincronizados);
   } catch (err) {
     console.warn('[Supabase] Falha ao buscar filiais — mantendo dados locais.', err);
   }
