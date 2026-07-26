@@ -70,6 +70,12 @@ function excluirImportacao(importId) {
           invalidateAllSearchIndexes();
           persist();
           renderAll();
+
+          // Sincroniza a exclusão do próprio registro de log com a nuvem
+          // (Fase 4 — Etapa 3). Os demais módulos (Lançamentos, Filiais,
+          // Materiais) ainda NÃO têm seus registros apagados da nuvem por
+          // esta operação — isso fica pra Etapa 7 (cascata unificada).
+          if (typeof _importsSyncDelete === 'function') _importsSyncDelete(importId);
         },
         undo: () => {
           // A exclusão foi revertida — remove a marca para que um fechamento
@@ -94,6 +100,12 @@ function excluirImportacao(importId) {
           invalidateAllSearchIndexes();
           persist();
           renderAll();
+
+          // Restaura o registro de log na nuvem também.
+          if (typeof _importsSyncUpsert === 'function') {
+            const importSnap = snapshotImports.find(r => r.id === importId);
+            if (importSnap) _importsSyncUpsert(importSnap);
+          }
         },
       });
     }
@@ -487,6 +499,80 @@ async function syncLancamentosFromSupabase() {
     if (naoSincronizados.length) await _lancSyncUpsertBatch(naoSincronizados);
   } catch (err) {
     console.warn('[Supabase] Falha ao buscar lançamentos — mantendo dados locais.', err);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// LOG DE IMPORTAÇÕES — sincronização com o Supabase (Fase 4 — Etapa 3)
+// ═══════════════════════════════════════════════════════════
+// 'id' aqui já é o próprio importId (string estável gerada em
+// processImportedRows) — diferente de Lançamentos/Filiais/Materiais, este
+// módulo não precisou de nenhuma fundação de id novo.
+// Só sincroniza registros com status já definitivo (nunca 'Processando' —
+// esse é um estado transitório local, sem sentido persistir na nuvem).
+
+function _importsToDbRow(rec) {
+  return {
+    id: rec.id,
+    arquivo: rec.arquivo || null,
+    modulo: rec.modulo || null,
+    registros: rec.registros ?? null,
+    total_arquivo: rec.totalArquivo ?? null,
+    data_hora: rec.dataHora || null,
+    status: rec.status || null,
+    status_tip: rec.statusTip || null,
+    created_at: rec.createdAt || null,
+  };
+}
+
+function _importsFromDbRow(row) {
+  return {
+    id: row.id,
+    arquivo: row.arquivo,
+    modulo: row.modulo,
+    registros: row.registros,
+    totalArquivo: row.total_arquivo,
+    dataHora: row.data_hora,
+    status: row.status,
+    statusTip: row.status_tip,
+    createdAt: row.created_at,
+  };
+}
+
+function _importsSyncUpsert(rec) {
+  if (!window.supabaseClient || !rec || rec.status === 'Processando') return;
+  window.supabaseClient.from('imports').upsert(_importsToDbRow(rec))
+    .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao sincronizar log de importação:', error); });
+}
+
+function _importsSyncDelete(importId) {
+  if (!window.supabaseClient || !importId) return;
+  window.supabaseClient.from('imports').delete().eq('id', importId)
+    .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao excluir log de importação na nuvem:', error); });
+}
+
+// Busca no boot — merge por id (o próprio importId), nuvem tem prioridade
+// em conflito. Depois do merge, sincronização inicial: registros locais
+// definitivos ('Processando' fica de fora, é estado transitório) que ainda
+// não existem na nuvem sobem agora — mesmo padrão de Lançamentos/Filiais/
+// Materiais.
+async function syncImportsFromSupabase() {
+  if (!window.supabaseClient) return;
+  try {
+    const { data, error } = await window.supabaseClient.from('imports').select('*');
+    if (error) throw error;
+    const remoto = (data || []).map(_importsFromDbRow);
+    const idsRemotos = new Set(remoto.map(r => r.id));
+
+    const local = Array.isArray(state.imports) ? state.imports : [];
+    const porId = new Map(local.filter(r => r.id).map(r => [r.id, r]));
+    remoto.forEach(r => porId.set(r.id, r));
+    state.imports = [...porId.values()].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+    const naoSincronizados = local.filter(r => r.id && r.status !== 'Processando' && !idsRemotos.has(r.id));
+    naoSincronizados.forEach(_importsSyncUpsert);
+  } catch (err) {
+    console.warn('[Supabase] Falha ao buscar log de importações — mantendo dados locais.', err);
   }
 }
 

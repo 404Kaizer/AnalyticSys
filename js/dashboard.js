@@ -5361,12 +5361,15 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
       rec.statusTip = 'Não foi possível salvar no banco local. Os dados existem nesta sessão mas serão perdidos ao recarregar.';
     }
     renderImports();
+    // Fase 4 — Etapa 3: sincroniza o log já com o status definitivo.
+    if (typeof _importsSyncUpsert === 'function') _importsSyncUpsert(rec);
   }).catch(() => {
     const rec = state.imports.find(r => r.id === importId);
     if (rec) {
       rec.status = 'Sem persistência';
       rec.statusTip = 'Falha ao salvar no banco local.';
       renderImports();
+      if (typeof _importsSyncUpsert === 'function') _importsSyncUpsert(rec);
     }
   });
   } catch(outerErr) {
@@ -6153,6 +6156,7 @@ async function restoreAndRender() {
       'syncAjustesExcluidosFromSupabase',
       'syncNotasAjusteFromSupabase',
       'syncLancamentosFromSupabase', // Fase 4 — Etapa 1 (módulos grandes)
+      'syncImportsFromSupabase', // Fase 4 — Etapa 3 (log de importações)
     ];
     await Promise.all(
       SUPABASE_BOOT_SYNCS.map(fnName => {

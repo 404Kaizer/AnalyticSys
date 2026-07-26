@@ -82,7 +82,12 @@ async function reconcilePendingDeletes() {
   if (Array.isArray(state.imports)) {
     const beforeImports = state.imports.length;
     state.imports = state.imports.filter(r => !list.includes(r.id));
-    if (state.imports.length !== beforeImports) touched = true;
+    if (state.imports.length !== beforeImports) {
+      touched = true;
+      // A exclusão não tinha sido persistida localmente a tempo — também não
+      // deve ter sido sincronizada com a nuvem. Reconcilia lá também.
+      if (typeof _importsSyncDelete === 'function') list.forEach(_importsSyncDelete);
+    }
   }
 
   if (!touched) {
