@@ -3282,6 +3282,27 @@ function setupModalCloseOnEscape() {
   });
 }
 
+// BUG CORRIGIDO: init() podia rodar DUAS VEZES na mesma aba sempre que a
+// sessão já existia no carregamento da página. Isso acontecia porque
+// auth.js assina onAuthStateChange logo no DOMContentLoaded, e essa
+// assinatura dispara automaticamente um evento inicial (INITIAL_SESSION)
+// com a sessão atual — chamando bootApp() → window.init(). Em paralelo, o
+// próprio `document.addEventListener('DOMContentLoaded', init)' abaixo
+// também chama init() diretamente, que por sua vez chama ensureSession() →
+// bootApp() → window.init() de novo. O `appBooted` em auth.js impede que
+// bootApp() faça seu próprio setup duas vezes, mas NÃO impede que
+// window.init() seja disparado duas vezes a partir desses dois caminhos —
+// resultando em todo o boot (incluindo requestTabLock()) rodando duas
+// vezes na mesma aba. Consequência mais visível: a segunda chamada de
+// requestTabLock() disputava o lock contra a primeira chamada da MESMA
+// aba (o Web Locks API não sabe que são "a mesma aba" — cada request() é
+// independente), e a segunda perdia a disputa, marcando isActiveTab=false
+// e bloqueando gravações mesmo com uma única aba de verdade aberta.
+// Correção: trava simples de idempotência — a partir daqui, o boot
+// completo (requestTabLock, restoreAndRender, listeners, etc.) só
+// executa uma vez por aba, não importa quantas vezes init() seja chamado.
+let _appBootExecuted = false;
+
 async function init() {
   // Fase 1 — Autenticação: só prossegue com sessão válida. Sem sessão,
   // AuthGate mostra a tela de login e devolve null aqui — o próprio submit
@@ -3291,6 +3312,10 @@ async function init() {
     const session = await window.AuthGate.ensureSession();
     if (!session) return;
   }
+
+  // Ver comentário acima de _appBootExecuted: impede o boot duplicado.
+  if (_appBootExecuted) return;
+  _appBootExecuted = true;
 
   // Dispara a checagem de aba única ativa (Web Locks API) em paralelo com o
   // resto do boot — não é aguardada (await) porque não deve atrasar o

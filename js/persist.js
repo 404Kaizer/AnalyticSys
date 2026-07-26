@@ -703,26 +703,44 @@ function requestTabLock() {
     return;
   }
 
-  let settled = false;
-  // Se o lock não for concedido quase instantaneamente, é porque outra aba
-  // já o detém — mostra o aviso de somente-leitura enquanto aguardamos.
-  const waitTimer = setTimeout(() => {
-    if (!settled) _onPassiveTab();
-  }, 250);
-
-  navigator.locks.request(TAB_LOCK_NAME, { mode: 'exclusive' }, () => {
-    return new Promise((resolve) => {
-      settled = true;
-      clearTimeout(waitTimer);
-      _onBecomeActiveTab();
-      // Mantém o lock retido enquanto a aba estiver aberta. Ele é liberado
-      // automaticamente pelo navegador no fechamento/crash da aba, mesmo
-      // que este listener não chegue a rodar — não há risco de "lock preso".
-      window.addEventListener('pagehide', () => resolve(), { once: true });
-    });
+  // BUG CORRIGIDO (histórico): a versão anterior usava um setTimeout(250ms)
+  // como heurística — se o lock não fosse concedido nesse prazo, assumia
+  // que outra aba o detinha. Com uma base de dados grande, o boot (carregar
+  // o snapshot do IndexedDB + renderizar o dashboard) podia ocupar a thread
+  // principal por mais tempo que isso, atrasando o callback de concessão
+  // do lock mesmo SEM nenhuma aba concorrente — gerando o falso positivo
+  // "esta aba não é a aba ativa (outra aba está aberta)" com uma única aba.
+  //
+  // Correção: usar `ifAvailable` para perguntar ao próprio gerenciador de
+  // locks do navegador se o lock está livre ou não AGORA, sem depender de
+  // nenhum tempo de espera arbitrário. A resposta é factual (não uma
+  // suposição por timing), então não existe mais janela de falso positivo.
+  navigator.locks.request(TAB_LOCK_NAME, { mode: 'exclusive', ifAvailable: true }, (lock) => {
+    if (lock) {
+      // Lock estava livre agora mesmo — esta aba assume e passa a mantê-lo.
+      return _holdTabLockUntilClose();
+    }
+    // `lock` veio null: confirmação real (não suposição) de que outra aba
+    // detém o lock neste exato momento. Entra em modo somente-leitura e
+    // continua numa fila normal (bloqueante) para ser promovida assim que
+    // a aba ativa atual fechar.
+    _onPassiveTab();
+    return navigator.locks.request(TAB_LOCK_NAME, { mode: 'exclusive' }, () => _holdTabLockUntilClose());
   }).catch(err => {
     console.warn('[TabLock] Falha ao solicitar o lock — assumindo modo ativo.', err);
-    if (!settled) { settled = true; clearTimeout(waitTimer); _onBecomeActiveTab(); }
+    _onBecomeActiveTab();
+  });
+}
+
+// Mantém o lock retido enquanto a aba estiver aberta (chamado tanto no
+// caminho "livre imediatamente" quanto no caminho "promovida depois"). Ele
+// é liberado automaticamente pelo navegador no fechamento/crash da aba,
+// mesmo que o listener de pagehide não chegue a rodar — não há risco de
+// "lock preso".
+function _holdTabLockUntilClose() {
+  return new Promise((resolve) => {
+    _onBecomeActiveTab();
+    window.addEventListener('pagehide', () => resolve(), { once: true });
   });
 }
 

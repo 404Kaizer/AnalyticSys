@@ -411,6 +411,11 @@ window.AuthGate = (function () {
       }
       if (event === 'SIGNED_OUT') {
         appBooted = false;
+        // Espelha o reset acima na trava de idempotência de init()
+        // (analitico.js) — sem isso, se a sessão cair sem reload da
+        // página (ex.: SIGNED_OUT vindo de outro dispositivo), um novo
+        // login na mesma aba nunca conseguiria rodar o boot de novo.
+        if (typeof _appBootExecuted !== 'undefined') _appBootExecuted = false;
         clearTimeout(idleWarnTimer);
         _idleHideWarning();
       }
