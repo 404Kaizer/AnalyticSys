@@ -6097,43 +6097,35 @@ async function restoreAndRender() {
     updateLoadingOverlay('Lendo o banco de dados local...', 'Inicializando o sistema');
     await nextFrame();
     await loadState();
-    // Fase 2: acoesRelatorio e ocorrencias já estão migradas para o
-    // Supabase — busca a versão da nuvem e sobrescreve o que veio do
-    // IndexedDB local. Em caso de falha de rede, cada função de sync
-    // mantém os dados locais como fallback (não zera a lista).
-    if (typeof syncAcoesRelatorioFromSupabase === 'function') {
-      await syncAcoesRelatorioFromSupabase();
-    }
-    if (typeof syncOcorrenciasFromSupabase === 'function') {
-      await syncOcorrenciasFromSupabase();
-    }
-    if (typeof syncConfigsFromSupabase === 'function') {
-      await syncConfigsFromSupabase();
-    }
-    if (typeof syncCatalogosFromSupabase === 'function') {
-      await syncCatalogosFromSupabase();
-    }
-    if (typeof syncFiliaisFromSupabase === 'function') {
-      await syncFiliaisFromSupabase();
-    }
-    if (typeof syncMateriaisFromSupabase === 'function') {
-      await syncMateriaisFromSupabase();
-    }
-    if (typeof syncInvJustificativasFromSupabase === 'function') {
-      await syncInvJustificativasFromSupabase();
-    }
-    if (typeof syncSapFechamentoOverridesFromSupabase === 'function') {
-      await syncSapFechamentoOverridesFromSupabase();
-    }
-    if (typeof syncAjustesSistemicosFromSupabase === 'function') {
-      await syncAjustesSistemicosFromSupabase();
-    }
-    if (typeof syncAjustesExcluidosFromSupabase === 'function') {
-      await syncAjustesExcluidosFromSupabase();
-    }
-    if (typeof syncNotasAjusteFromSupabase === 'function') {
-      await syncNotasAjusteFromSupabase();
-    }
+
+    // Sincronização com o Supabase no boot — registro em vez de repetir o
+    // mesmo bloco "if (typeof X === 'function') await X()" onze vezes
+    // (facilita adicionar os módulos da Fase 4 aqui depois). Rodam em
+    // PARALELO (Promise.all), não uma esperando a outra: são buscas
+    // totalmente independentes entre si (cada uma só lê/mescla o seu
+    // próprio state.X), e cada função já trata o próprio erro
+    // internamente — uma falhar não derruba as demais nem quebra o boot.
+    // Cada uma mantém os dados locais como fallback se a rede falhar.
+    const SUPABASE_BOOT_SYNCS = [
+      'syncAcoesRelatorioFromSupabase',
+      'syncOcorrenciasFromSupabase',
+      'syncConfigsFromSupabase',
+      'syncCatalogosFromSupabase',
+      'syncFiliaisFromSupabase',
+      'syncMateriaisFromSupabase',
+      'syncInvJustificativasFromSupabase',
+      'syncSapFechamentoOverridesFromSupabase',
+      'syncAjustesSistemicosFromSupabase',
+      'syncAjustesExcluidosFromSupabase',
+      'syncNotasAjusteFromSupabase',
+    ];
+    await Promise.all(
+      SUPABASE_BOOT_SYNCS.map(fnName => {
+        const fn = window[fnName];
+        return typeof fn === 'function' ? fn() : Promise.resolve();
+      })
+    );
+
     _lstepSet('idb', 'done');
     _lbarSet(15);
     await nextFrame();
