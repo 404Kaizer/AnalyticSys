@@ -1,5 +1,17 @@
+// Gera um id estável e único para registros dos módulos grandes (Entradas,
+// Saídas, Lançamentos, SAP, Produção) — necessário para sincronização com o
+// Supabase (upsert/delete exigem uma chave primária inequívoca; o fingerprint
+// de deduplicação usado internamente NÃO serve pra isso, porque duplicatas
+// legítimas — mesma central/material/data/peso — são um caso suportado e
+// esperado pelo sistema, não um erro a ser colapsado).
+function gerarIdRegistro() {
+  if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+  return 'reg_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 10);
+}
+
 function stamp(obj) {
-  return { ...obj, createdAt: Date.now() };
+  const id = obj.id || gerarIdRegistro();
+  return { ...obj, id, createdAt: Date.now() };
 }
 
 // ═══════════════════════════════════════════════════════════════════════

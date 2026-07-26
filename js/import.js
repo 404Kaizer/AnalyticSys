@@ -343,6 +343,7 @@ function _criarRegistroLancamento(dados) {
   state.lancamentos.unshift(rec);
   invalidateLancIndex();
   persist();
+  _lancSyncUpsert(rec);
   return { ok: true, rec };
 }
 
@@ -363,6 +364,130 @@ function salvarLancamento() {
   renderLancamentos();
   updateDashboard();
   toast('Lançamento salvo com sucesso');
+}
+
+// ═══════════════════════════════════════════════════════════
+// LANÇAMENTOS — sincronização com o Supabase (Fase 4 — Etapa 1)
+// ═══════════════════════════════════════════════════════════
+// Primeiro dos 5 módulos grandes a sincronizar. Cobre: criação manual
+// (_criarRegistroLancamento, usada tanto pelo modal quanto pelo Assistente),
+// importação em lote (hook em processImportedRows, dashboard.js) e exclusão
+// individual (removerRegistro, dashboard.js). A exclusão em cascata de uma
+// importação inteira (excluirImportacao) AINDA NÃO remove da nuvem — isso
+// fica pra uma etapa própria da Fase 4, depois que os outros módulos também
+// estiverem sincronizando (evita reescrever excluirImportacao várias vezes).
+
+function _lancToDbRow(r) {
+  return {
+    id: r.id,
+    fonte: r.fonte || null,
+    central_original: r.centralOriginal || null,
+    central: r.central || null,
+    dt_lanc: r.dtLanc || null,
+    fornecedor: r.fornecedor || null,
+    categoria_original: r.categoriaOriginal || null,
+    categoria: r.categoria || null,
+    material_original: r.materialOriginal || null,
+    material: r.material || null,
+    peso: r.peso ?? null,
+    um: r.um || null,
+    custo: r.custo ?? null,
+    valor_total: r.valorTotal ?? null,
+    import_id: r.importId || null,
+    created_at: r.createdAt || null,
+  };
+}
+
+function _lancFromDbRow(row) {
+  return {
+    id: row.id,
+    fonte: row.fonte,
+    centralOriginal: row.central_original,
+    central: row.central,
+    dtLanc: row.dt_lanc,
+    fornecedor: row.fornecedor,
+    categoriaOriginal: row.categoria_original,
+    categoria: row.categoria,
+    materialOriginal: row.material_original,
+    material: row.material,
+    peso: row.peso,
+    um: row.um,
+    custo: row.custo,
+    valorTotal: row.valor_total,
+    importId: row.import_id || undefined,
+    createdAt: row.created_at,
+  };
+}
+
+// Upsert de um único lançamento (criação manual/Assistente). Falha não
+// bloqueia a UI (já gravado localmente) — só avisa por toast, mesmo padrão
+// de ocorrencias.js/dai.js.
+function _lancSyncUpsert(rec) {
+  if (!window.supabaseClient) return;
+  window.supabaseClient.from('lancamentos').upsert(_lancToDbRow(rec))
+    .then(({ error }) => {
+      if (error) {
+        console.warn('[Supabase] Falha ao sincronizar lançamento:', error);
+        toast('⚠ Lançamento salvo nesta sessão, mas não foi possível sincronizar com a nuvem.', 'error');
+      }
+    });
+}
+
+// Upsert em lote — usado na importação em massa e na sincronização inicial
+// (registros locais pré-existentes que ainda não subiram pra nuvem). Quebra
+// em blocos para não estourar o limite de payload do Postgrest em arquivos
+// grandes (semanas de lançamentos agregados podem chegar a milhares de
+// linhas de uma vez).
+const LANC_SYNC_BATCH_SIZE = 500;
+async function _lancSyncUpsertBatch(records) {
+  if (!window.supabaseClient || !records || !records.length) return;
+  const rows = records.map(_lancToDbRow);
+  for (let i = 0; i < rows.length; i += LANC_SYNC_BATCH_SIZE) {
+    const slice = rows.slice(i, i + LANC_SYNC_BATCH_SIZE);
+    const { error } = await window.supabaseClient.from('lancamentos').upsert(slice);
+    if (error) {
+      console.warn('[Supabase] Falha ao sincronizar lote de lançamentos:', error);
+      toast('⚠ Lançamentos salvos nesta sessão, mas não foi possível sincronizar todos com a nuvem.', 'error');
+      break; // evita repetir o mesmo toast a cada bloco que falhar
+    }
+  }
+}
+
+// Exclusão individual — chamada por removerRegistro (dashboard.js).
+function _lancSyncDelete(id) {
+  if (!window.supabaseClient || !id) return;
+  window.supabaseClient.from('lancamentos').delete().eq('id', id)
+    .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao excluir lançamento na nuvem:', error); });
+}
+
+// Busca no boot (ver SUPABASE_BOOT_SYNCS em dashboard.js). NUNCA substitui a
+// lista local inteira — mescla por id, nuvem tem prioridade em conflito.
+// Isso evita apagar localmente lançamentos que ainda não tiveram tempo de
+// subir (gravados offline, ou logo após esta sincronização ser ativada pela
+// 1ª vez, quando a base local já tem lançamentos e a nuvem ainda está
+// vazia). Depois do merge, qualquer registro local que ainda não exista na
+// nuvem sobe agora — é assim que a base já existente de cada analista se
+// sincroniza sozinha na primeira vez que abrir o sistema após esta
+// atualização, sem precisar de nenhuma migração manual.
+async function syncLancamentosFromSupabase() {
+  if (!window.supabaseClient) return;
+  try {
+    const { data, error } = await window.supabaseClient.from('lancamentos').select('*');
+    if (error) throw error;
+    const remoto = (data || []).map(_lancFromDbRow);
+    const idsRemotos = new Set(remoto.map(r => r.id));
+
+    const local = Array.isArray(state.lancamentos) ? state.lancamentos : [];
+    const porId = new Map(local.filter(r => r.id).map(r => [r.id, r]));
+    remoto.forEach(r => porId.set(r.id, r));
+    state.lancamentos = [...porId.values()];
+    if (typeof invalidateLancIndex === 'function') invalidateLancIndex();
+
+    const naoSincronizados = local.filter(r => r.id && !idsRemotos.has(r.id));
+    if (naoSincronizados.length) await _lancSyncUpsertBatch(naoSincronizados);
+  } catch (err) {
+    console.warn('[Supabase] Falha ao buscar lançamentos — mantendo dados locais.', err);
+  }
 }
 
 

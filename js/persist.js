@@ -393,6 +393,18 @@ function applySavedState(saved) {
     ...item
   }));
 
+  // Backfill de id nos 5 módulos grandes (Entradas, Saídas, Lançamentos, SAP,
+  // Produção) — historicamente esses registros nunca tiveram id (só
+  // fingerprint de deduplicação), o que impede sincronizar com o Supabase
+  // (upsert/delete exigem chave primária estável). Roda uma vez por registro:
+  // só cria objeto novo quando falta o id, preservando a referência original
+  // nos demais casos para não pesar em bases grandes (SAP pode ter 600k+
+  // registros) em todo boot.
+  ['entradas', 'saidas', 'lancamentos', 'sap', 'producao'].forEach(key => {
+    if (!Array.isArray(state[key])) return;
+    state[key] = state[key].map(item => (item && item.id) ? item : { ...item, id: gerarIdRegistro() });
+  });
+
   // Migra IDs de ocorrências do formato OC-timestamp para OC-N sequencial
   if (Array.isArray(state.ocorrencias)) {
     let counter = 1;

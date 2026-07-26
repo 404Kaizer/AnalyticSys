@@ -4642,6 +4642,12 @@ function removerRegistro(module, index) {
   renderModule(module);
   updateDashboard();
   toast('Registro excluído com sucesso');
+
+  // Sincroniza a exclusão com o Supabase (Fase 4 — por enquanto só Lançamentos
+  // têm sync ativo; os demais módulos grandes ainda não sobem pra nuvem).
+  if (module === 'lancamentos' && actual.id && typeof _lancSyncDelete === 'function') {
+    _lancSyncDelete(actual.id);
+  }
 }
 
 
@@ -4968,11 +4974,15 @@ function _mergeDedup(existing, incoming, fpFn) {
   // Registros que já existiam — são atualizados com os dados novos MAS preservam
   // o importId original, evitando que uma reimportação parcial "sequestre" registros
   // de importações anteriores e os remova junto ao excluir a importação nova.
+  // Preserva também o id original (Fase 4 — Supabase) pela mesma razão: sem
+  // isso, uma reimportação geraria um id novo a cada vez (stamp() sempre gera
+  // um id novo no momento do parse) e cada reimportação criaria uma linha
+  // duplicada na nuvem em vez de atualizar a existente.
   const updatedExisting = incoming
     .filter(r => existingByFp.has(fpFn(r)))
     .map(r => {
       const original = existingByFp.get(fpFn(r));
-      return { ...r, importId: original.importId };
+      return { ...r, importId: original.importId, id: original.id };
     });
   // Registros que existem e não colidiram com nenhum incoming — mantidos intactos
   const kept = existing.filter(r => !incomingFps.has(fpFn(r)));
@@ -5239,6 +5249,18 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
     };
     const stateKey = stateKeyMap[modulo];
     if (stateKey) state[stateKey] = _mergedResult;
+
+    // Sincroniza com o Supabase os registros afetados por esta importação
+    // (Fase 4 — por enquanto só Lançamentos tem sync ativo; os demais módulos
+    // grandes ainda não sobem pra nuvem). Usa o fingerprint pra identificar,
+    // dentro do resultado final já mesclado, exatamente quais registros esta
+    // importação tocou (novos ou atualizados) — o id já vem correto em ambos
+    // os casos graças ao preservado em _mergeDedup.
+    if (modulo === 'Lançamento' && typeof _lancSyncUpsertBatch === 'function') {
+      const tocadosFps = new Set(parsed.map(_fpLancamento));
+      const tocados = _mergedResult.filter(r => tocadosFps.has(_fpLancamento(r)));
+      _lancSyncUpsertBatch(tocados);
+    }
   }
 
   if (!parsed.length) {
@@ -6118,6 +6140,7 @@ async function restoreAndRender() {
       'syncAjustesSistemicosFromSupabase',
       'syncAjustesExcluidosFromSupabase',
       'syncNotasAjusteFromSupabase',
+      'syncLancamentosFromSupabase', // Fase 4 — Etapa 1 (módulos grandes)
     ];
     await Promise.all(
       SUPABASE_BOOT_SYNCS.map(fnName => {
