@@ -71,6 +71,7 @@
           <input class="form-input" type="password" id="auth-password" autocomplete="current-password" required>
         </div>
         <div id="auth-gate-error" class="auth-gate-error" role="alert" style="display:none"></div>
+        <div id="turnstile-login-widget" class="auth-gate-turnstile"></div>
         <button type="submit" class="btn btn-primary auth-gate-submit" id="auth-gate-submit-btn">Entrar</button>
         <button type="button" class="auth-gate-forgot" id="auth-gate-forgot-btn">Esqueci minha senha</button>
       </form>
@@ -4344,6 +4345,8 @@
 <!-- Supabase — cliente único (Fase 0) + autenticação (Fase 1, ver js/auth.js) -->
 <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script defer src="js/supabase-client.js"></script>
+<!-- Cloudflare Turnstile — proteção contra tentativas automatizadas de login -->
+<script defer src="https://challenges.cloudflare.com/turnstile/v0/api.js"></script>
 <script defer src="js/auth.js"></script>
 
 <!-- AnalyticSys — módulos JS (ordem importa) -->

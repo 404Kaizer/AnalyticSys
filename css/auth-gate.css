@@ -243,3 +243,8 @@
   .auth-gate-brand-content { max-width: none; }
   .auth-gate-form-panel { flex: 1 1 auto; padding: 28px 24px 40px; }
 }
+
+.auth-gate-turnstile {
+  display: flex;
+  justify-content: center;
+}

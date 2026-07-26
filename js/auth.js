@@ -244,13 +244,52 @@ window.AuthGate = (function () {
     if (typeof window.init === 'function') window.init();
   }
 
+  // ── Cloudflare Turnstile — protege login e "esqueci minha senha" contra
+  // tentativas automatizadas. Um único widget serve pros dois, já que
+  // ambos vivem no mesmo formulário visível (o botão "esqueci minha senha"
+  // fica dentro do form de login, não é uma tela separada). Renderização
+  // explícita (não implícita) pra poder resetar o token depois de cada
+  // tentativa — o token do Turnstile é de uso único.
+  const TURNSTILE_SITEKEY = '0x4AAAAAAD-V-RBGDDiirGsF';
+  let turnstileWidgetId = null;
+
+  function _turnstileRender() {
+    if (turnstileWidgetId !== null) return;
+    if (typeof turnstile === 'undefined') {
+      // Script ainda não carregou (ou foi bloqueado) — tenta de novo em
+      // breve, em vez de deixar o login sem proteção nenhuma.
+      setTimeout(_turnstileRender, 500);
+      return;
+    }
+    turnstileWidgetId = turnstile.render('#turnstile-login-widget', {
+      sitekey: TURNSTILE_SITEKEY,
+      theme: 'dark',
+    });
+  }
+
+  function _turnstileGetToken() {
+    if (typeof turnstile === 'undefined' || turnstileWidgetId === null) return null;
+    return turnstile.getResponse(turnstileWidgetId) || null;
+  }
+
+  function _turnstileReset() {
+    if (typeof turnstile === 'undefined' || turnstileWidgetId === null) return;
+    turnstile.reset(turnstileWidgetId);
+  }
+
   function wireForm() {
     if (wired) return;
     wired = true;
+    _turnstileRender();
 
     $('auth-gate-form-login').addEventListener('submit', async (e) => {
       e.preventDefault();
       clearError();
+      const captchaToken = _turnstileGetToken();
+      if (!captchaToken) {
+        showError('Confirme que você não é um robô antes de entrar.');
+        return;
+      }
       const btn = $('auth-gate-submit-btn');
       const email = $('auth-email').value.trim();
       const password = $('auth-password').value;
@@ -258,10 +297,11 @@ window.AuthGate = (function () {
       btn.disabled = true;
       btn.innerHTML = '<span class="btn-spinner"></span> Entrando...';
 
-      const { error } = await window.supabaseClient.auth.signInWithPassword({ email, password });
+      const { error } = await window.supabaseClient.auth.signInWithPassword({ email, password, options: { captchaToken } });
 
       btn.disabled = false;
       btn.innerHTML = origHtml;
+      _turnstileReset(); // token é de uso único — sempre reseta, com ou sem erro
 
       if (error) {
         showError('E-mail ou senha inválidos.');
@@ -275,7 +315,13 @@ window.AuthGate = (function () {
       clearError();
       const email = $('auth-email').value.trim();
       if (!email) { showError('Digite seu e-mail acima para receber o link de redefinição.'); return; }
-      await window.supabaseClient.auth.resetPasswordForEmail(email);
+      const captchaToken = _turnstileGetToken();
+      if (!captchaToken) {
+        showError('Confirme que você não é um robô antes de continuar.');
+        return;
+      }
+      await window.supabaseClient.auth.resetPasswordForEmail(email, { captchaToken });
+      _turnstileReset();
       showForgotSent();
     });
 
