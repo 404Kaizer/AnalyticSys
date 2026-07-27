@@ -275,6 +275,16 @@ async function loadSapChunks(db) {
 // usados em cálculos e na UI, descartando campos redundantes ou vazios.
 // Com 600k+ registros, cada campo extra pode custar 10-30MB de espaço.
 const SAP_PERSIST_FIELDS = [
+  'id',
+  // BUG REAL (achado em 27/07): 'id' não estava nesta lista. Todo registro
+  // SAP perdia o id a cada gravação/reload — o backfill de id (persist.js/
+  // ui.js) então gerava um id NOVO e aleatório a cada boot, porque nenhum
+  // registro chegava com id do disco. Como syncSAPFromSupabase() decide "já
+  // sincronizei isso?" comparando pelo id, o id mudando a cada boot fazia
+  // registros manuais já sincronizados serem reenviados como "novos" pra
+  // nuvem toda vez que a página recarregava — 4 registros reais viraram
+  // 295.200 linhas duplicadas na nuvem (e inflaram activity_log junto, via
+  // trigger). Limpo em 27/07 (ver "Bugs corrigidos" no resumo do projeto).
   'movimento','peso','material','central','dtLanc','dtDoc','ref',
   'documento','usuario','deposito','dtReg','valorTotal','custoUnit',
   'categoria','um','importId','fonte',
