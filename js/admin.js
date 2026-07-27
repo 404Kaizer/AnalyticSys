@@ -46,6 +46,19 @@ let _adminCurrentRows = [];     // linhas do módulo atualmente exibido em "Dado
 let _adminEditContext = null;   // { modulo, id } do registro em edição
 let _adminPresenceInterval = null; // atualização automática enquanto a seção Usuários está visível
 
+// ── Paginação de "Dados por módulo" — sempre por cursor (id > último
+// visto), nunca por OFFSET. Mesma convenção usada em fetchAllRows
+// (normalize.js) pro resto do sistema — ver "Decisões de arquitetura" no
+// documento de handoff. _adminPageCursors[i] guarda o id a partir do qual
+// a página i começa (null = do início); a pilha cresce conforme o ADM
+// avança, e "Anterior" só recua no que já foi visitado (sem precisar de
+// OFFSET pra "voltar").
+const ADMIN_PAGE_SIZE = 50;
+let _adminPageCursors = [null];
+let _adminPageIndex = 0;
+let _adminHasNextPage = false;
+let _adminPageTotal = null; // contagem aproximada da tabela atual (null = ainda não buscada)
+
 function _adminEsc(s) {
   return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
@@ -175,7 +188,11 @@ async function adminAlterarPapel(userId, novoPapel) {
 }
 
 // ── Seção: Dados por módulo ─────────────────────────────────
-async function adminLoadModulo() {
+// resetPaging=true (padrão): troca de módulo ou clique em "Atualizar" —
+// sempre volta pra primeira página. resetPaging=false: usado só pelas
+// funções de navegação abaixo, que já ajustaram _adminPageIndex antes de
+// chamar.
+async function adminLoadModulo(resetPaging = true) {
   const select = document.getElementById('admin-modulo-select');
   const modulo = select?.value;
   const cfg = ADMIN_MODULOS[modulo];
@@ -183,9 +200,16 @@ async function adminLoadModulo() {
   const tbody = document.getElementById('admin-dados-tbody');
   if (!cfg || !thead || !tbody) return;
 
+  if (resetPaging) {
+    _adminPageCursors = [null];
+    _adminPageIndex = 0;
+    _adminPageTotal = null;
+  }
+
   thead.innerHTML = `<tr><th>Dono</th>${cfg.cols.map(c => `<th>${_adminEsc(c)}</th>`).join('')}<th></th></tr>`;
   const colspan = cfg.cols.length + 2;
   tbody.innerHTML = `<tr><td colspan="${colspan}"><div class="empty-state"><i class="ti ti-loader"></i><p>Carregando...</p></div></td></tr>`;
+  _adminSetPageInfo('Carregando...');
 
   if (!_adminProfiles.length) {
     const { data } = await window.supabaseClient.from('profiles').select('id, email');
@@ -193,16 +217,40 @@ async function adminLoadModulo() {
   }
   const emailPorId = Object.fromEntries(_adminProfiles.map(p => [p.id, p.email]));
 
-  const { data, error } = await window.supabaseClient.from(modulo).select('*').limit(500);
+  // Busca contagem aproximada só quando a paginação é resetada (troca de
+  // módulo/atualizar) — não a cada página, pra não gastar uma query extra
+  // em toda virada de página. head:true não traz linhas, só o total.
+  if (_adminPageTotal === null) {
+    window.supabaseClient.from(modulo).select('*', { count: 'exact', head: true })
+      .then(({ count }) => { _adminPageTotal = count ?? null; _adminSetPageInfo(); });
+  }
+
+  // Busca PAGE_SIZE + 1 pra saber com certeza se existe próxima página,
+  // sem precisar de uma segunda query — depois corta o excedente.
+  const cursor = _adminPageCursors[_adminPageIndex];
+  let query = window.supabaseClient.from(modulo).select('*').order('id', { ascending: true }).limit(ADMIN_PAGE_SIZE + 1);
+  if (cursor !== null) query = query.gt('id', cursor);
+
+  const { data, error } = await query;
   if (error) {
     tbody.innerHTML = `<tr><td colspan="${colspan}"><div class="empty-state"><i class="ti ti-alert-triangle"></i><p>Falha ao carregar: ${_adminEsc(error.message)}</p></div></td></tr>`;
+    _adminSetPageInfo('—');
     return;
   }
 
-  _adminCurrentRows = data || [];
+  const rows = data || [];
+  _adminHasNextPage = rows.length > ADMIN_PAGE_SIZE;
+  _adminCurrentRows = _adminHasNextPage ? rows.slice(0, ADMIN_PAGE_SIZE) : rows;
+
+  // Registra o cursor da próxima página (se ainda não tiver sido
+  // registrado nessa navegação) — permite "Próxima" sem OFFSET.
+  if (_adminHasNextPage && _adminCurrentRows.length) {
+    _adminPageCursors[_adminPageIndex + 1] = _adminCurrentRows[_adminCurrentRows.length - 1].id;
+  }
 
   if (!_adminCurrentRows.length) {
     tbody.innerHTML = `<tr><td colspan="${colspan}"><div class="empty-state"><i class="ti ti-database-off"></i><p>Nenhum registro nesta tabela.</p></div></td></tr>`;
+    _adminSetPageInfo();
     return;
   }
 
@@ -227,6 +275,44 @@ async function adminLoadModulo() {
       </td>
     </tr>`;
   }).join('');
+
+  _adminSetPageInfo();
+}
+
+// Atualiza o rótulo "Página X — mostrando N registros (de ~total)" e o
+// estado habilitado/desabilitado dos botões Anterior/Próxima. Chamada sem
+// argumento usa o estado atual (_adminCurrentRows/_adminPageTotal); o
+// argumento string é só pros estados transitórios ("Carregando...", "—").
+function _adminSetPageInfo(textoFixo) {
+  const info = document.getElementById('admin-dados-page-info');
+  const btnPrev = document.getElementById('admin-dados-prev');
+  const btnNext = document.getElementById('admin-dados-next');
+  if (info) {
+    if (textoFixo) {
+      info.textContent = textoFixo;
+    } else {
+      const inicio = _adminPageIndex * ADMIN_PAGE_SIZE + 1;
+      const fim = _adminPageIndex * ADMIN_PAGE_SIZE + _adminCurrentRows.length;
+      const totalStr = _adminPageTotal !== null ? `${_adminPageTotal.toLocaleString('pt-BR')}` : '…';
+      info.textContent = _adminCurrentRows.length
+        ? `Página ${_adminPageIndex + 1} — ${inicio}–${fim} de ${totalStr} registros`
+        : 'Nenhum registro';
+    }
+  }
+  if (btnPrev) btnPrev.disabled = _adminPageIndex === 0;
+  if (btnNext) btnNext.disabled = !_adminHasNextPage;
+}
+
+function adminModuloProximaPagina() {
+  if (!_adminHasNextPage) return;
+  _adminPageIndex++;
+  adminLoadModulo(false);
+}
+
+function adminModuloPaginaAnterior() {
+  if (_adminPageIndex === 0) return;
+  _adminPageIndex--;
+  adminLoadModulo(false);
 }
 
 async function adminExcluirRegistro(modulo, id) {
@@ -289,6 +375,8 @@ Object.assign(window, {
   adminLoadUsuarios,
   adminAlterarPapel,
   adminLoadModulo,
+  adminModuloProximaPagina,
+  adminModuloPaginaAnterior,
   adminExcluirRegistro,
   adminAbrirEdicao,
   adminSalvarEdicao,
