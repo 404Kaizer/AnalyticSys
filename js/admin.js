@@ -67,6 +67,59 @@ let _adminHasNext = false;
 let _adminHasPrev = false;
 let _adminPageTotal = null; // contagem exata da tabela atual (null = ainda não buscada)
 
+// ── Seção: Saúde do banco ───────────────────────────────────
+// Usa a função admin_db_stats() (RPC, só-admin — SECURITY DEFINER com a
+// mesma checagem de is_admin() usada em toda função sensível do
+// projeto). "Linhas" é ESTIMATIVA (pg_class.reltuples, do último
+// ANALYZE), não COUNT(*) exato — trade-off intencional pra não fazer 19
+// varreduras completas de tabela só pra mostrar um número aproximado.
+const ADMIN_DB_LIMIT_BYTES = 500 * 1024 * 1024; // teto do plano gratuito
+
+async function adminLoadDbStats() {
+  const totalLabel = document.getElementById('admin-db-total-label');
+  const totalPct = document.getElementById('admin-db-total-pct');
+  const bar = document.getElementById('admin-db-total-bar');
+  const tbody = document.getElementById('admin-db-tables-tbody');
+  if (!totalLabel || !tbody) return;
+
+  totalLabel.textContent = 'Carregando...';
+  tbody.innerHTML = `<tr><td colspan="3"><div class="empty-state"><i class="ti ti-loader"></i><p>Carregando...</p></div></td></tr>`;
+
+  const { data, error } = await window.supabaseClient.rpc('admin_db_stats');
+  if (error) {
+    totalLabel.textContent = 'Falha ao carregar estatísticas.';
+    tbody.innerHTML = `<tr><td colspan="3"><div class="empty-state"><i class="ti ti-alert-triangle"></i><p>${_adminEsc(error.message)}</p></div></td></tr>`;
+    return;
+  }
+
+  // returns table (...) via RPC vem como array de 1 linha.
+  const stats = Array.isArray(data) ? data[0] : data;
+  if (!stats) {
+    totalLabel.textContent = '—';
+    tbody.innerHTML = `<tr><td colspan="3"><div class="empty-state"><i class="ti ti-database-off"></i><p>Sem dados.</p></div></td></tr>`;
+    return;
+  }
+
+  const pct = Math.min(100, (stats.total_bytes / ADMIN_DB_LIMIT_BYTES) * 100);
+  totalLabel.textContent = `${stats.total_pretty} usados de 500 MB`;
+  if (totalPct) totalPct.textContent = `${pct.toFixed(pct < 1 ? 2 : 1)}%`;
+  if (bar) {
+    bar.style.width = `${Math.max(pct, 0.5)}%`; // largura mínima visível mesmo com uso quase zero
+    bar.style.background = pct > 85 ? 'var(--red)' : pct > 60 ? 'var(--amber)' : 'var(--green)';
+  }
+
+  const tabelas = stats.tables || [];
+  if (!tabelas.length) {
+    tbody.innerHTML = `<tr><td colspan="3"><div class="empty-state"><i class="ti ti-database-off"></i><p>Nenhuma tabela encontrada.</p></div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = tabelas.map(t => `<tr>
+    <td>${_adminEsc(t.table)}</td>
+    <td>${_adminEsc(t.pretty)}</td>
+    <td>${Number(t.rows_estimadas || 0).toLocaleString('pt-BR')}</td>
+  </tr>`).join('');
+}
+
 function _adminEsc(s) {
   return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
@@ -112,7 +165,7 @@ function adminShowSection(section) {
   document.getElementById('admin-subnav-usuarios')?.classList.toggle('active', section === 'usuarios');
   document.getElementById('admin-subnav-dados')?.classList.toggle('active', section === 'dados');
 
-  if (section === 'usuarios') adminLoadUsuarios();
+  if (section === 'usuarios') { adminLoadUsuarios(); adminLoadDbStats(); }
   if (section === 'dados') adminLoadModulo();
 
   // Só mantém o polling de presença rodando enquanto a seção Usuários
@@ -441,6 +494,7 @@ Object.assign(window, {
   adminShowSection,
   adminLoadUsuarios,
   adminAlterarPapel,
+  adminLoadDbStats,
   adminLoadModulo,
   adminModuloPrimeiraPagina,
   adminModuloPaginaAnterior,
