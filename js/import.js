@@ -128,7 +128,7 @@ function excluirProducao(absIndex) {
       persist();
       renderProducao();
       updateDashboard();
-      if (rec.id && typeof _producaoSyncDelete === 'function') _producaoSyncDelete(rec.id);
+      if (rec.id && !rec.importId && typeof _producaoSyncDelete === 'function') _producaoSyncDelete(rec.id);
     },
 
     undo: () => {
@@ -435,11 +435,18 @@ function _lancFromDbRow(row) {
   };
 }
 
-// Upsert de um único lançamento (criação manual/Assistente). Falha não
-// bloqueia a UI (já gravado localmente) — só avisa por toast, mesmo padrão
-// de ocorrencias.js/dai.js.
+// Upsert de um único lançamento — SÓ manual/Assistente (fonte='manual',
+// sem importId). Decisão de 27/07: pra Entradas/Saídas/Lançamentos/SAP/
+// Produção, a nuvem guarda só o que é digitado direto no sistema —
+// importação em lote fica só local, porque o arquivo original já é a
+// cópia de segurança (o Hugo mantém os arquivos no PC e reimporta se
+// precisar). Motivo: volume de importação é ordens de grandeza maior que
+// manual (813k importados vs. 31 manuais em Lançamentos) e o plano
+// gratuito do Supabase (500MB) não é opção de upgrade — sincronizar tudo
+// estourava o limite rapidamente. Falha não bloqueia a UI (já gravado
+// localmente) — só avisa por toast, mesmo padrão de ocorrencias.js/dai.js.
 function _lancSyncUpsert(rec) {
-  if (!window.supabaseClient) return;
+  if (rec.importId || !window.supabaseClient) return;
   window.supabaseClient.from('lancamentos').upsert(_lancToDbRow(rec))
     .then(({ error }) => {
       if (error) {
@@ -449,11 +456,9 @@ function _lancSyncUpsert(rec) {
     });
 }
 
-// Upsert em lote — usado na importação em massa e na sincronização inicial
-// (registros locais pré-existentes que ainda não subiram pra nuvem). Quebra
-// em blocos para não estourar o limite de payload do Postgrest em arquivos
-// grandes (semanas de lançamentos agregados podem chegar a milhares de
-// linhas de uma vez).
+// Upsert em lote — usado só na sincronização inicial de registros manuais
+// pré-existentes que ainda não subiram (ver syncLancamentosFromSupabase).
+// NÃO é mais chamada durante importação em lote (ver decisão acima).
 const LANC_SYNC_BATCH_SIZE = 500;
 async function _lancSyncUpsertBatch(records) {
   if (!window.supabaseClient || !records || !records.length) return;
@@ -498,7 +503,7 @@ async function syncLancamentosFromSupabase() {
     state.lancamentos = [...porId.values()];
     if (typeof invalidateLancIndex === 'function') invalidateLancIndex();
 
-    const naoSincronizados = local.filter(r => r.id && !idsRemotos.has(r.id));
+    const naoSincronizados = local.filter(r => r.id && !r.importId && !idsRemotos.has(r.id));
     if (naoSincronizados.length) await _lancSyncUpsertBatch(naoSincronizados);
   } catch (err) {
     console.warn('[Supabase] Falha ao buscar lançamentos — mantendo dados locais.', err);
@@ -625,8 +630,9 @@ function _producaoFromDbRow(row) {
   };
 }
 
+// Decisão de 27/07: mesma regra de Lançamentos — só sincroniza manual.
 function _producaoSyncUpsert(rec) {
-  if (!window.supabaseClient) return;
+  if (rec.importId || !window.supabaseClient) return;
   window.supabaseClient.from('producao').upsert(_producaoToDbRow(rec))
     .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao sincronizar produção:', error); });
 }
@@ -659,7 +665,7 @@ async function syncProducaoFromSupabase() {
     remoto.forEach(r => porId.set(r.id, r));
     state.producao = [...porId.values()];
 
-    const naoSincronizados = local.filter(r => r.id && !idsRemotos.has(r.id));
+    const naoSincronizados = local.filter(r => r.id && !r.importId && !idsRemotos.has(r.id));
     if (naoSincronizados.length) await _producaoSyncUpsertBatch(naoSincronizados);
   } catch (err) {
     console.warn('[Supabase] Falha ao buscar produção — mantendo dados locais.', err);
@@ -725,8 +731,9 @@ function _entradasFromDbRow(row) {
   };
 }
 
+// Decisão de 27/07: mesma regra de Lançamentos — só sincroniza manual.
 function _entradasSyncUpsert(rec) {
-  if (!window.supabaseClient) return;
+  if (rec.importId || !window.supabaseClient) return;
   window.supabaseClient.from('entradas').upsert(_entradasToDbRow(rec))
     .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao sincronizar entrada:', error); });
 }
@@ -760,7 +767,7 @@ async function syncEntradasFromSupabase() {
     state.entradas = [...porId.values()];
     if (typeof invalidateSearchIndex === 'function') invalidateSearchIndex('entradas');
 
-    const naoSincronizados = local.filter(r => r.id && !idsRemotos.has(r.id));
+    const naoSincronizados = local.filter(r => r.id && !r.importId && !idsRemotos.has(r.id));
     if (naoSincronizados.length) await _entradasSyncUpsertBatch(naoSincronizados);
   } catch (err) {
     console.warn('[Supabase] Falha ao buscar entradas — mantendo dados locais.', err);

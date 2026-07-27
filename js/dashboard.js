@@ -4645,12 +4645,14 @@ function removerRegistro(module, index) {
 
   // Sincroniza a exclusão com o Supabase — só os módulos já migrados na
   // Fase 4 têm função aqui; os demais simplesmente não entram no mapa.
+  // Só dispara pra registros manuais (sem importId) — os importados nunca
+  // foram sincronizados (decisão de 27/07), então não há o que excluir lá.
   const syncDeleteByModule = {
     lancamentos: (typeof _lancSyncDelete === 'function') ? _lancSyncDelete : null,
     entradas:    (typeof _entradasSyncDelete === 'function') ? _entradasSyncDelete : null,
   };
   const syncDelete = syncDeleteByModule[module];
-  if (syncDelete && actual.id) syncDelete(actual.id);
+  if (syncDelete && actual.id && !actual.importId) syncDelete(actual.id);
 }
 
 
@@ -5273,23 +5275,15 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
     const stateKey = stateKeyMap[modulo];
     if (stateKey) state[stateKey] = _mergedResult;
 
-    // Sincroniza com o Supabase os registros afetados por esta importação
-    // (Fase 4 — só os módulos já migrados têm sync ativo; os demais
-    // simplesmente não entram no mapa abaixo). Usa o fingerprint pra
-    // identificar, dentro do resultado final já mesclado, exatamente quais
-    // registros esta importação tocou (novos ou atualizados) — o id já vem
-    // correto em ambos os casos graças ao preservado em _mergeDedup.
-    const syncBatchByModulo = {
-      'Lançamento': (typeof _lancSyncUpsertBatch === 'function') ? { fn: _lancSyncUpsertBatch, fp: _fpLancamento } : null,
-      'Produção':   (typeof _producaoSyncUpsertBatch === 'function') ? { fn: _producaoSyncUpsertBatch, fp: _fpProducao } : null,
-      'Entrada':    (typeof _entradasSyncUpsertBatch === 'function') ? { fn: _entradasSyncUpsertBatch, fp: _fpEntrada } : null,
-    };
-    const syncBatch = syncBatchByModulo[modulo];
-    if (syncBatch) {
-      const tocadosFps = new Set(parsed.map(syncBatch.fp));
-      const tocados = _mergedResult.filter(r => tocadosFps.has(syncBatch.fp(r)));
-      syncBatch.fn(tocados);
-    }
+    // Decisão de 27/07: Entradas/Saídas/Lançamentos/SAP/Produção NÃO
+    // sincronizam importação em lote com a nuvem — só registros manuais.
+    // Motivo: volume de importação é ordens de grandeza maior que manual
+    // (ex.: 813k importados vs. 31 manuais em Lançamentos), o plano gratuito
+    // do Supabase (500MB) não tem opção de upgrade, e os arquivos originais
+    // já são a cópia de segurança (o Hugo mantém localmente e reimporta se
+    // precisar). Por isso NÃO existe mais nenhum push pós-importação em
+    // lote aqui — a sincronização desses módulos acontece só na criação/
+    // edição/exclusão manual (ver import.js, funções _*SyncUpsert).
   }
 
   if (!parsed.length) {
