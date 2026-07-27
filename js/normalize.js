@@ -17,31 +17,55 @@ function stamp(obj) {
 // ═══════════════════════════════════════════════════════════════════════
 // PAGINAÇÃO DE LEITURA DO SUPABASE (Fase 4)
 // ═══════════════════════════════════════════════════════════════════════
-// BUG REAL ENCONTRADO: o Supabase (PostgREST) tem um limite padrão de 1000
-// linhas por requisição (db-max-rows) — um select('*') sem paginação NUNCA
-// retorna mais que isso, não importa quantas linhas existam na tabela.
-// Entradas (90k+) e Lançamentos (800k+) estavam perdendo dados
-// silenciosamente no boot por causa disso (sem erro — a resposta vinha
-// "certa", só truncada). Este helper pagina em blocos seguros e NUNCA
-// confia no limite do servidor, mesmo que ele seja aumentado depois.
-const SUPABASE_PAGE_SIZE = 1000;
+// BUG REAL Nº1 (encontrado antes): o Supabase (PostgREST) tem um limite
+// padrão de 1000 linhas por requisição (db-max-rows) — um select('*') sem
+// paginação NUNCA retorna mais que isso, não importa quantas linhas
+// existam na tabela. Entradas (90k+) e Lançamentos (800k+) estavam
+// perdendo dados silenciosamente no boot por causa disso.
+//
+// BUG REAL Nº2 (este, encontrado logo em seguida): a primeira correção
+// paginava certo, mas buscava as páginas UMA DE CADA VEZ, em sequência —
+// para Lançamentos (813 mil registros ÷ 1000/página) isso virou 813
+// requisições sequenciais, cada uma esperando a anterior terminar. Daí o
+// boot travando por vários minutos.
+//
+// Correção: descobre o total de linhas primeiro (1 requisição barata,
+// count exact + head:true, sem trazer dados), calcula quantas páginas são
+// necessárias, e busca em RODADAS de páginas em paralelo (não todas de
+// uma vez, pra não abrir centenas de conexões simultâneas e estourar o
+// pool do banco — nem uma de cada vez, que é o que causou o travamento).
+const SUPABASE_PAGE_SIZE = 5000;       // até 10.000/requisição no servidor hoje — 5000 dá margem seguindo o mesmo max_rows configurado (ver migração de aumento do db-max-rows)
+const SUPABASE_FETCH_CONCURRENCY = 6;  // rodadas de N páginas simultâneas
 
 async function fetchAllRows(table, columns = '*') {
   if (!window.supabaseClient) return [];
-  let all = [];
-  let from = 0;
-  while (true) {
-    const { data, error } = await window.supabaseClient
-      .from(table)
-      .select(columns)
-      .range(from, from + SUPABASE_PAGE_SIZE - 1);
-    if (error) throw error;
-    if (!data || !data.length) break;
-    all = all.concat(data);
-    if (data.length < SUPABASE_PAGE_SIZE) break; // última página
-    from += SUPABASE_PAGE_SIZE;
+
+  const { count, error: countError } = await window.supabaseClient
+    .from(table)
+    .select(columns, { count: 'exact', head: true });
+  if (countError) throw countError;
+  const total = count || 0;
+  if (total === 0) return [];
+
+  const pageSize  = SUPABASE_PAGE_SIZE;
+  const pageCount = Math.ceil(total / pageSize);
+  const pageIdx   = Array.from({ length: pageCount }, (_, i) => i);
+  const byPage    = new Array(pageCount);
+
+  for (let i = 0; i < pageIdx.length; i += SUPABASE_FETCH_CONCURRENCY) {
+    const slice = pageIdx.slice(i, i + SUPABASE_FETCH_CONCURRENCY);
+    const results = await Promise.all(slice.map(p => {
+      const from = p * pageSize;
+      const to   = Math.min(from + pageSize - 1, total - 1);
+      return window.supabaseClient.from(table).select(columns).range(from, to);
+    }));
+    results.forEach(({ data, error }, idx) => {
+      if (error) throw error;
+      byPage[slice[idx]] = data || [];
+    });
   }
-  return all;
+
+  return byPage.flat();
 }
 
 // ═══════════════════════════════════════════════════════════════════════
