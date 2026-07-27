@@ -91,9 +91,23 @@ function _agrCompute(dtIni, dtFim) {
   const year  = dtIni.getFullYear();
   const month = dtIni.getMonth();
 
-  const cutoff    = _agrCutoffDate(year, month);
   const firstDay  = _agrFirstWeekdayOfMonth(year, month);
   const lastDay   = _agrLastDayOfMonth(year, month);
+
+  // Data de corte: o analista pode sobrepor manualmente o cálculo automático
+  // (window._agrManualCutoffISO, controlado pelo input #agr-corte-manual-input em
+  // index.html). Só é aceita se cair dentro do mês computado — fora disso, ou se
+  // não houver valor definido, cai no cálculo automático de sempre.
+  let cutoff = _agrCutoffDate(year, month);
+  let cutoffManual = false;
+  if (window._agrManualCutoffISO) {
+    const [my, mm, md] = window._agrManualCutoffISO.split('-').map(Number);
+    const manualDate = new Date(my, (mm || 1) - 1, md || 1);
+    if (!isNaN(manualDate) && manualDate >= firstDay && manualDate <= lastDay) {
+      cutoff = manualDate;
+      cutoffManual = true;
+    }
+  }
 
   // Filter entradas: agregados in this month
   const entradas = (state.entradas || []).filter(e => {
@@ -298,7 +312,87 @@ function _agrCompute(dtIni, dtFim) {
     return b.centralPosKg - a.centralPosKg;
   });
 
-  return { centrais, cutoff, firstDay, lastDay };
+  return { centrais, cutoff, firstDay, lastDay, cutoffManual, entradasFiltradas: entradas };
+}
+
+// ═══════════════════════════════════════════════════════════
+// RESUMO POR REGIONAL — Média/dia Pré × Pós, por usina e consolidado
+// Reaproveita a mesma lista de entradas (categoria AGREGADO, já filtrada
+// por período em _agrCompute) e a mesma data de corte — só reagrupa por
+// dia e por central/regional, sem tocar em lançamentos/saídas (isso só é
+// necessário pro drill-down por material, que continua em _agrCompute).
+// ═══════════════════════════════════════════════════════════
+
+// Mapa central(normalizado) → regional, a partir de state.filiais.
+// Mesmo padrão já usado em relatorio.js (centralParaRegional).
+function _agrRegionalMap() {
+  const map = new Map();
+  (state.filiais || []).forEach(f => {
+    const alias = (f.alias || f.origem || '').trim();
+    if (!alias) return;
+    map.set(normalizeText(alias), (f.regional || '').trim() || 'Sem Regional');
+  });
+  return map;
+}
+
+function _agrRegionalDaCentral(central, map) {
+  return map.get(normalizeText(central || '')) || 'Sem Regional';
+}
+
+// Conta dias úteis (seg-sex) entre duas datas, inclusive.
+function _agrDiasUteis(dtIni, dtFim) {
+  let n = 0;
+  const cur = new Date(dtIni); cur.setHours(0, 0, 0, 0);
+  const fim = new Date(dtFim); fim.setHours(0, 0, 0, 0);
+  while (cur <= fim) {
+    if (!_agrIsWeekend(cur)) n++;
+    cur.setDate(cur.getDate() + 1);
+  }
+  return n;
+}
+
+function _agrSituacao(variacao) {
+  if (variacao > 0) return 'aumentou';
+  if (variacao < 0) return 'reduziu';
+  return 'estavel';
+}
+
+// Agrupa as entradas de agregado por central e por dia, calculando
+// média/dia Pré e Pós por usina.
+function _agrBuildResumo(entradasFiltradas, cutoff, firstDay, lastDay) {
+  const regionalMap = _agrRegionalMap();
+  const diasPre = _agrDiasUteis(firstDay, cutoff);
+  const nextDay = new Date(cutoff.getTime() + 86400000);
+  const diasPos = _agrDiasUteis(nextDay, lastDay);
+
+  const porCentral = new Map(); // central → { totalPre, totalPos, porDia: Map<dateKey, total> }
+  entradasFiltradas.forEach(e => {
+    const central = e.centralDestino || e.centralCompra || '—';
+    const d = _agrParseEntradaDate(e);
+    if (!d) return;
+    const dk   = _agrDateKey(d);
+    const peso = num(e.peso);
+    if (!porCentral.has(central)) porCentral.set(central, { totalPre: 0, totalPos: 0, porDia: new Map() });
+    const c = porCentral.get(central);
+    if (d <= cutoff) c.totalPre += peso; else c.totalPos += peso;
+    c.porDia.set(dk, (c.porDia.get(dk) || 0) + peso);
+  });
+
+  const usinas = [...porCentral.entries()].map(([central, v]) => {
+    const regional = _agrRegionalDaCentral(central, regionalMap);
+    const mediaPre = diasPre > 0 ? v.totalPre / diasPre : 0;
+    const mediaPos = diasPos > 0 ? v.totalPos / diasPos : 0;
+    const variacao = mediaPre > 0 ? ((mediaPos - mediaPre) / mediaPre) * 100 : (mediaPos > 0 ? Infinity : 0);
+    return {
+      central, regional, totalPre: v.totalPre, totalPos: v.totalPos,
+      mediaPre, mediaPos, variacao, situacao: _agrSituacao(variacao),
+      porDia: v.porDia,
+    };
+  });
+
+  const regionais = [...new Set(usinas.map(u => u.regional))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+
+  return { usinas, regionais, diasPre, diasPos };
 }
 
 // ── Render ───────────────────────────────────────────────
@@ -376,14 +470,27 @@ function rodarControleAgregadosPorPeriodo(dtIni, dtFim) {
 function _agrRunForMonth(dtIni, dtFim, containerEl) {
   const el = containerEl || document.getElementById('agr-results');
 
-  const { centrais, cutoff, firstDay, lastDay } = _agrCompute(dtIni, dtFim);
+  // Muda de mês → descarta corte manual do mês anterior (evita reaplicar sem querer
+  // um dia que só fazia sentido no mês computado antes).
+  if (!containerEl) {
+    const monthKey = `${dtIni.getFullYear()}-${dtIni.getMonth()}`;
+    if (window._agrLastComputedMonthKey && window._agrLastComputedMonthKey !== monthKey) {
+      window._agrManualCutoffISO = null;
+    }
+    window._agrLastComputedMonthKey = monthKey;
+    // Recompute sempre recolhe o drill-down de volta pro resumo consolidado.
+    const ddCard = document.getElementById('agregados-card');
+    if (ddCard) ddCard.style.display = 'none';
+  }
+
+  const { centrais, cutoff, firstDay, lastDay, cutoffManual, entradasFiltradas } = _agrCompute(dtIni, dtFim);
 
   // Info bar — só atualiza quando não está em modo multi-mês (containerEl é null)
   if (!containerEl) {
     document.getElementById('agr-info-bar').style.display = 'flex';
     document.getElementById('agr-pre-range').textContent  = `${_agrFmtDate(firstDay)} → ${_agrFmtDate(cutoff)}`;
     document.getElementById('agr-pos-range').textContent  = `${_agrFmtDate(new Date(cutoff.getTime() + 86400000))} → ${_agrFmtDate(lastDay)}`;
-    document.getElementById('agr-limit-date').textContent = _agrFmtDate(cutoff);
+    document.getElementById('agr-limit-date').textContent = _agrFmtDate(cutoff) + (cutoffManual ? ' · manual' : ' · automático');
     const criticas    = centrais.filter(c => c.criticidade === 'critico').length;
     const atencao     = centrais.filter(c => c.criticidade === 'atencao').length;
     const injustTotal = centrais.reduce((s, c) => s + c.injustificados, 0);
@@ -394,6 +501,11 @@ function _agrRunForMonth(dtIni, dtFim, containerEl) {
         : atencao > 0 ? `${atencao} em atenção` : 'Nenhuma';
       violEl.style.color = criticas > 0 ? 'var(--red)' : atencao > 0 ? 'var(--amber)' : 'var(--green)';
     }
+
+    // ── Resumo por Regional (novo) ──
+    window._agrResumoRaw = { entradasFiltradas, cutoff, firstDay, lastDay, cutoffManual };
+    _agrSyncCorteManualInput(cutoff, cutoffManual, firstDay, lastDay);
+    _agrRenderResumoRegional();
   }
 
   if (!centrais.length) {
@@ -479,6 +591,244 @@ function _agrRenderFull_UNUSED(centrais) { return centrais.map((c, ci) => {
       </div>`;
   }).join('');
 } // end _agrRenderFull_UNUSED
+
+// ═══════════════════════════════════════════════════════════
+// RENDER — Resumo por Regional
+// ═══════════════════════════════════════════════════════════
+
+// Sincroniza o input de data manual: define min/max pro mês computado e só
+// sobrescreve o valor exibido quando NÃO há corte manual ativo (pra não
+// apagar o que o analista acabou de digitar no meio de um recompute).
+function _agrSyncCorteManualInput(cutoff, cutoffManual, firstDay, lastDay) {
+  const input = document.getElementById('agr-corte-manual-input');
+  if (!input) return;
+  input.min = toISODate(firstDay);
+  input.max = toISODate(lastDay);
+  if (!cutoffManual) input.value = toISODate(cutoff);
+}
+
+// Disparado pelo input de data — recalcula tudo (o corte manual afeta também
+// o drill-down por material, não só o resumo).
+function agrSetManualCutoff(dateStr) {
+  window._agrManualCutoffISO = dateStr || null;
+  const iniStr = document.getElementById('dg-dt-ini')?.value;
+  const fimStr = document.getElementById('dg-dt-fim')?.value;
+  if (!iniStr || !fimStr || typeof rodarControleAgregadosPorPeriodo !== 'function') return;
+  const dtIni = new Date(iniStr + 'T00:00:00');
+  const dtFim = new Date(fimStr + 'T23:59:59');
+  if (!isNaN(dtIni) && !isNaN(dtFim)) rodarControleAgregadosPorPeriodo(dtIni, dtFim);
+}
+
+function _agrPopulateRegionalSelect(regionais) {
+  const sel = document.getElementById('agr-regional-select');
+  if (!sel) return;
+  const atual = sel.value || 'todos';
+  sel.innerHTML = `<option value="todos">Todos os Regionais</option>` +
+    regionais.map(r => `<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`).join('');
+  if ([...sel.options].some(o => o.value === atual)) sel.value = atual;
+}
+
+// Disparado pelo <select> de regional — re-render rápido, sem recomputar
+// _agrCompute (só reagrega window._agrResumoData, que já está pronto).
+function agrSetRegionalSelecionado() {
+  _agrRenderResumoRegional();
+}
+
+function _agrResumoKpiStripHtml(mediaPre, mediaPos, variacao, situacao, nUsinas) {
+  const varClass = situacao === 'aumentou' ? 'aumentou' : situacao === 'reduziu' ? 'reduziu' : '';
+  const varLabel = !isFinite(variacao) ? '—' : `${variacao > 0 ? '+' : ''}${variacao.toFixed(1)}%`;
+  const varSit   = situacao === 'aumentou' ? 'Aumentou compras' : situacao === 'reduziu' ? 'Reduziu compras' : 'Estável';
+  return `
+    <div class="agr-resumo-kpi-card">
+      <span class="agr-resumo-kpi-label">Média/dia · Pré</span>
+      <span class="agr-resumo-kpi-val">${_agrSmartFmt(mediaPre)}</span>
+    </div>
+    <div class="agr-resumo-kpi-card">
+      <span class="agr-resumo-kpi-label">Média/dia · Pós</span>
+      <span class="agr-resumo-kpi-val">${_agrSmartFmt(mediaPos)}</span>
+    </div>
+    <div class="agr-resumo-kpi-card">
+      <span class="agr-resumo-kpi-label">Variação</span>
+      <span class="agr-resumo-kpi-val ${varClass}">${varLabel}</span>
+      <span style="font-size:10px;color:var(--text3)">${varSit}</span>
+    </div>
+    <div class="agr-resumo-kpi-card">
+      <span class="agr-resumo-kpi-label">Usinas nessa seleção</span>
+      <span class="agr-resumo-kpi-val">${nUsinas}</span>
+    </div>`;
+}
+
+function _agrResumoTableHtml(usinas) {
+  if (!usinas.length) {
+    return `<div class="agr-empty"><i class="ti ti-truck-off"></i><span>Nenhuma usina com entrada de agregado nesse recorte.</span></div>`;
+  }
+  const rows = usinas.map(u => {
+    const badgeClass = u.situacao === 'aumentou' ? 'agr-status-critico' : u.situacao === 'reduziu' ? 'agr-status-ok' : 'agr-status-alerta';
+    const badgeLabel = u.situacao === 'aumentou' ? 'Aumentou' : u.situacao === 'reduziu' ? 'Reduziu' : 'Estável';
+    const varLabel = !isFinite(u.variacao) ? '—' : `${u.variacao > 0 ? '+' : ''}${u.variacao.toFixed(1)}%`;
+    const centralAttr = escapeHtml(u.central).replace(/'/g, '&#39;');
+    return `
+      <tr class="agr-resumo-row" onclick="_agrResumoRowClick('${centralAttr}')">
+        <td class="td-mono">
+          ${escapeHtml(u.central)}
+          <div style="font-size:9.5px;color:var(--text3);font-weight:400">${escapeHtml(u.regional)}</div>
+        </td>
+        <td class="td-mono">${_agrSmartFmt(u.mediaPre)}</td>
+        <td class="td-mono">${_agrSmartFmt(u.mediaPos)}</td>
+        <td class="td-mono">${varLabel}</td>
+        <td><span class="agr-status-badge ${badgeClass}">${badgeLabel}</span></td>
+      </tr>`;
+  }).join('');
+  return `
+    <table class="agr-resumo-table">
+      <thead><tr>
+        <th>Usina</th><th>Média/dia · Pré</th><th>Média/dia · Pós</th><th>Variação</th><th>Situação</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+let _agrResumoChartInstance = null;
+
+function _agrRenderResumoChart(usinasFiltradas, cutoff, firstDay, lastDay, mediaPreGlobal) {
+  const canvas = document.getElementById('agr-resumo-chart');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  // Dias úteis (seg-sex) do período, na ordem — fins de semana não entram
+  // no eixo (agregados não são comprados aos fins de semana).
+  const dias = [];
+  const cur = new Date(firstDay); cur.setHours(0, 0, 0, 0);
+  const fim = new Date(lastDay);  fim.setHours(0, 0, 0, 0);
+  while (cur <= fim) {
+    if (!_agrIsWeekend(cur)) dias.push(new Date(cur));
+    cur.setDate(cur.getDate() + 1);
+  }
+
+  const totalPorDia = new Map();
+  usinasFiltradas.forEach(u => {
+    u.porDia.forEach((v, dk) => totalPorDia.set(dk, (totalPorDia.get(dk) || 0) + v));
+  });
+
+  const cutoffKey = _agrDateKey(cutoff);
+  const labels  = dias.map(d => d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }));
+  const valores = dias.map(d => totalPorDia.get(_agrDateKey(d)) || 0);
+  const cores   = dias.map(d => _agrDateKey(d) <= cutoffKey ? 'rgba(52,168,120,0.55)' : 'rgba(217,119,87,0.6)');
+
+  if (_agrResumoChartInstance) { _agrResumoChartInstance.destroy(); _agrResumoChartInstance = null; }
+  if (!dias.length) return;
+
+  const rootStyle = getComputedStyle(document.documentElement);
+  const gridCol = rootStyle.getPropertyValue('--border').trim() || '#334155';
+  const textCol = rootStyle.getPropertyValue('--text3').trim() || '#94a3b8';
+
+  _agrResumoChartInstance = new Chart(canvas, {
+    data: {
+      labels,
+      datasets: [
+        {
+          type: 'bar',
+          label: 'Compras/dia',
+          data: valores,
+          backgroundColor: cores,
+          borderRadius: 3,
+          borderSkipped: false,
+          order: 2,
+        },
+        {
+          type: 'line',
+          label: 'Média Pré',
+          data: dias.map(() => mediaPreGlobal),
+          borderColor: textCol,
+          borderDash: [5, 5],
+          borderWidth: 1.5,
+          pointRadius: 0,
+          fill: false,
+          order: 1,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => ctx.dataset.type === 'line'
+              ? `Média Pré: ${_agrSmartFmt(ctx.raw)}`
+              : `${_agrSmartFmt(ctx.raw)}`,
+          },
+        },
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: textCol, font: { size: 9.5 } } },
+        y: { grid: { color: gridCol }, ticks: { color: textCol, font: { size: 9.5 } }, beginAtZero: true },
+      },
+    },
+  });
+}
+
+// Entrada principal: reagrega window._agrResumoData considerando o regional
+// selecionado e (re)renderiza KPIs + gráfico + tabela. Não recomputa
+// _agrCompute — é chamada tanto após um recompute completo (mês/corte manual)
+// quanto isoladamente ao trocar o regional no seletor.
+function _agrRenderResumoRegional() {
+  const raw     = window._agrResumoRaw;
+  const kpisEl  = document.getElementById('agr-resumo-kpis');
+  const tableEl = document.getElementById('agr-resumo-table-wrap');
+  const selectEl = document.getElementById('agr-regional-select');
+  if (!raw || !kpisEl || !tableEl) return;
+
+  const resumo = _agrBuildResumo(raw.entradasFiltradas, raw.cutoff, raw.firstDay, raw.lastDay);
+  window._agrResumoData = resumo;
+
+  _agrPopulateRegionalSelect(resumo.regionais);
+
+  const regionalSel = selectEl ? selectEl.value : 'todos';
+  const usinasFiltradas = regionalSel === 'todos'
+    ? resumo.usinas
+    : resumo.usinas.filter(u => u.regional === regionalSel);
+
+  const totalPre = usinasFiltradas.reduce((s, u) => s + u.totalPre, 0);
+  const totalPos = usinasFiltradas.reduce((s, u) => s + u.totalPos, 0);
+  const mediaPre = resumo.diasPre > 0 ? totalPre / resumo.diasPre : 0;
+  const mediaPos = resumo.diasPos > 0 ? totalPos / resumo.diasPos : 0;
+  const variacao = mediaPre > 0 ? ((mediaPos - mediaPre) / mediaPre) * 100 : (mediaPos > 0 ? Infinity : 0);
+  const situacao = _agrSituacao(variacao);
+
+  kpisEl.innerHTML = _agrResumoKpiStripHtml(mediaPre, mediaPos, variacao, situacao, usinasFiltradas.length);
+
+  const ordenadas = [...usinasFiltradas].sort((a, b) => {
+    const av = isFinite(a.variacao) ? a.variacao : 1e12;
+    const bv = isFinite(b.variacao) ? b.variacao : 1e12;
+    return bv - av;
+  });
+  tableEl.innerHTML = _agrResumoTableHtml(ordenadas);
+
+  _agrRenderResumoChart(usinasFiltradas, raw.cutoff, raw.firstDay, raw.lastDay, mediaPre);
+}
+
+// Clique numa linha da tabela de resumo → abre o card de drill-down
+// (detalhamento por material que já existia) filtrado só naquela usina.
+function _agrResumoRowClick(central) {
+  const card = document.getElementById('agregados-card');
+  if (!card) return;
+  card.style.display = '';
+  _agrPopulateOptions('central');
+  const opts = document.getElementById('agr-mfo-central');
+  if (opts) opts.querySelectorAll('input[type=checkbox]').forEach(cb => { cb.checked = (cb.value === central); });
+  agrApplyFilters();
+  card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  setTimeout(() => { document.querySelector('#agr-results .agr-central-header')?.click(); }, 150);
+}
+
+// Botão "Voltar ao resumo" no card de drill-down.
+function agrVoltarResumo() {
+  const card = document.getElementById('agregados-card');
+  if (card) card.style.display = 'none';
+  agrClearDropdown('central');
+  document.getElementById('agr-resumo-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
 
 function _agrToggle(idx) {
   const hdr = document.getElementById(`agr-hdr-${idx}`);
@@ -883,4 +1233,4 @@ function _agrRenderMatsTable(mats) {
   }).join('');
 }
 
-Object.assign(window, { rodarControleAgregados, rodarControleAgregadosPorPeriodo, _agrToggle, agrToggleMonthPicker, agrMonthNavYear, _agrSelectMonth, agrQuickMesAtual, agrQuickMesAnterior, agrToggleLegend, agrApplyFilters, agrClearFilters, agrToggleDropdown, agrCloseDropdown, agrClearDropdown, agrFilterDropdownSearch });
+Object.assign(window, { rodarControleAgregados, rodarControleAgregadosPorPeriodo, _agrToggle, agrToggleMonthPicker, agrMonthNavYear, _agrSelectMonth, agrQuickMesAtual, agrQuickMesAnterior, agrToggleLegend, agrApplyFilters, agrClearFilters, agrToggleDropdown, agrCloseDropdown, agrClearDropdown, agrFilterDropdownSearch, agrSetManualCutoff, agrSetRegionalSelecionado, _agrResumoRowClick, agrVoltarResumo });

@@ -8679,6 +8679,92 @@ mark.search-highlight {
   flex-shrink: 0;
 }
 
+/* ── Controle de Corte — Resumo por Regional (novo formato) ── */
+.agr-corte-manual-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  padding: 3px 9px;
+  font-size: 11px;
+  color: var(--text3);
+}
+.agr-corte-manual-wrap i { font-size: 13px; }
+.agr-corte-manual-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  white-space: nowrap;
+}
+.agr-corte-manual-input {
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 11px;
+  cursor: pointer;
+  outline: none;
+  color-scheme: dark;
+}
+
+.agr-resumo-kpi-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 10px;
+  margin: 16px 20px;
+}
+.agr-resumo-kpi-card {
+  background: var(--bg1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.agr-resumo-kpi-label {
+  font-size: 9.5px;
+  font-family: var(--mono);
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--text3);
+}
+.agr-resumo-kpi-val {
+  font-size: 19px;
+  font-weight: 700;
+  font-family: var(--mono);
+  color: var(--text);
+  letter-spacing: -.02em;
+}
+.agr-resumo-kpi-val.aumentou { color: var(--red); }
+.agr-resumo-kpi-val.reduziu  { color: var(--green); }
+
+.agr-resumo-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.agr-resumo-table th {
+  text-align: left;
+  padding: 8px 14px;
+  font-size: 9.5px;
+  font-family: var(--mono);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--text3);
+  background: var(--bg3);
+  position: sticky;
+  top: 0;
+}
+.agr-resumo-table td {
+  padding: 9px 14px;
+  border-top: 1px solid var(--border);
+  font-weight: 600;
+}
+.agr-resumo-row { cursor: pointer; transition: background .1s; }
+.agr-resumo-row:hover { background: var(--bg3); }
+
 .agr-legend-panel {
   border-bottom: 1px solid var(--border);
   background: var(--bg3);

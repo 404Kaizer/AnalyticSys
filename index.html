@@ -986,10 +986,49 @@
 
         <!-- ABA: Controle de Corte -->
         <div class="dg-tab-pane" id="dg-pane-corte">
-        <!-- ── Controle de Corte de Agregados ── -->
-        <div class="table-card" id="agregados-card">
+
+        <!-- ── Resumo por Regional — visão consolidada de compras Pré × Pós corte ── -->
+        <div class="table-card" id="agr-resumo-card">
           <div class="table-header">
-            <span class="table-title"><i class="ti ti-truck"></i> Controle de Corte — Agregados Miúdo e Graúdo</span>
+            <span class="table-title"><i class="ti ti-chart-bar"></i> Controle de Corte — Resumo por Regional</span>
+            <div class="table-toolbar" style="gap:8px;flex-wrap:wrap">
+              <select id="agr-regional-select" class="macro-select" onchange="agrSetRegionalSelecionado()">
+                <option value="todos">Todos os Regionais</option>
+              </select>
+              <div class="agr-corte-manual-wrap" title="Data de corte — sugerida automaticamente, mas editável pelo analista">
+                <i class="ti ti-calendar-due"></i>
+                <span class="agr-corte-manual-label">Corte</span>
+                <input type="date" id="agr-corte-manual-input" class="agr-corte-manual-input" onchange="agrSetManualCutoff(this.value)">
+              </div>
+            </div>
+          </div>
+
+          <div class="agr-resumo-kpi-strip" id="agr-resumo-kpis"></div>
+
+          <div class="oc-chart-card" style="margin:0 20px 16px">
+            <div class="oc-chart-title"><i class="ti ti-chart-bar" style="margin-right:5px"></i>Compras de Agregado por Dia — Pré (verde) × Pós (laranja)</div>
+            <div style="position:relative;height:260px">
+              <canvas id="agr-resumo-chart"></canvas>
+            </div>
+          </div>
+
+          <div style="padding:0 20px 4px;font-size:10px;color:var(--text3);font-family:var(--mono)">
+            Usinas dessa seleção, ordenadas por quem mais aumentou compras. Clique numa linha para ver o detalhamento por material.
+          </div>
+          <div class="agr-resumo-table-wrap" id="agr-resumo-table-wrap" style="margin:0 20px 20px">
+            <div class="agr-empty"><i class="ti ti-loader"></i><span>Selecione um período no Dashboard Gerencial e clique em Analisar.</span></div>
+          </div>
+        </div><!-- /agr-resumo-card -->
+
+        <!-- ── Detalhamento por Material (drill-down) — oculto até o analista clicar numa usina no resumo acima ── -->
+        <div class="table-card" id="agregados-card" style="display:none">
+          <div class="table-header">
+            <span class="table-title">
+              <button class="btn" onclick="agrVoltarResumo()" title="Voltar ao resumo" style="margin-right:8px;padding:4px 8px">
+                <i class="ti ti-arrow-left"></i>
+              </button>
+              <i class="ti ti-truck"></i> Controle de Corte — Detalhamento por Material
+            </span>
             <div class="table-toolbar" style="gap:8px;flex-wrap:wrap">
               <!-- Seletor de mês interno ocultado — período vem do cabeçalho unificado do DG -->
               <div class="agr-month-wrap" id="agr-month-wrap" style="display:none">
