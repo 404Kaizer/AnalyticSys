@@ -9,15 +9,36 @@
 // mesmo que alguém force a navegação pra cá sem ser admin, as chamadas ao
 // Supabase abaixo voltariam vazias/bloqueadas pelo próprio banco.
 //
-// "Dados por módulo" lista só as tabelas que já têm sincronização ativa
-// (ocorrencias, acoes_relatorio) — os cadastros (configs/filiais/
-// materiais/grupos_materiais/regionais_centrais) têm tabela no Supabase
-// desde a Fase 0, mas as funções de escrita ainda não foram migradas;
-// vão aparecer aqui assim que isso acontecer.
-
+// "Dados por módulo" cobre as 18 tabelas de dados do sistema (ver
+// ADMIN_MODULOS abaixo) — todas exceto `profiles`, que já tem sua própria
+// aba "Usuários". Atualizado em 27/07 pra refletir a Fase 4 completa
+// (antes só listava ocorrencias/acoes_relatorio, os únicos módulos
+// migrados na época em que esta tela foi construída). `readOnly` marca as
+// 2 tabelas append-only (ajustes_excluidos, notas_ajuste) que só têm
+// policy de INSERT/SELECT no banco — botões de editar/excluir ficam
+// ocultos pra essas, porque a tentativa falharia na RLS mesmo assim.
 const ADMIN_MODULOS = {
-  ocorrencias:     { label: 'Ocorrências',         cols: ['central', 'material', 'motivo', 'concluida', 'data_abertura'] },
-  acoes_relatorio: { label: 'Ações de Relatório',  cols: ['nivel', 'categorias', 'acoes', 'created'] },
+  // Cadastro / configuração
+  configs:                  { label: 'Configurações',              cols: ['key', 'value', 'descricao'] },
+  filiais:                  { label: 'Filiais',                    cols: ['origem', 'alias', 'cnpj', 'regional'] },
+  materiais:                { label: 'Materiais',                  cols: ['origem', 'alias', 'categoria'] },
+  grupos_materiais:         { label: 'Grupos de Materiais',        cols: ['nome'] },
+  regionais_centrais:       { label: 'Regionais',                  cols: ['nome'] },
+  imports:                  { label: 'Log de Importações',         cols: ['arquivo', 'modulo', 'registros', 'status'] },
+  // Operacional
+  ocorrencias:              { label: 'Ocorrências',                cols: ['central', 'material', 'motivo', 'concluida', 'data_abertura'] },
+  acoes_relatorio:          { label: 'Ações de Relatório',         cols: ['nivel', 'categorias', 'acoes', 'created'] },
+  inv_justificativas:       { label: 'Justificativas de Inventário', cols: ['k', 'op', 'saldo', 'documento_sap'] },
+  sap_fechamento_overrides: { label: 'Overrides de Fechamento SAP', cols: ['chave'] },
+  ajustes_sistemicos:       { label: 'DAI / Ajuste Sistêmico',     cols: ['tag', 'numero', 'central', 'analista', 'sap_documento'] },
+  ajustes_excluidos:        { label: 'Log de Exclusão de DAI',     cols: ['dai_tag', 'dai_numero', 'central', 'excluido_por'], readOnly: true },
+  notas_ajuste:             { label: 'Notas de Crédito/Débito',    cols: ['numero', 'tipo', 'central', 'valor_total', 'responsavel_nome'], readOnly: true },
+  // Módulos grandes (Fase 4)
+  lancamentos:              { label: 'Lançamentos',                cols: ['central', 'material', 'peso', 'valor_total', 'fonte', 'editado'] },
+  producao:                 { label: 'Produção',                   cols: ['central', 'mes', 'producao', 'custo_medio'] },
+  entradas:                 { label: 'Entradas',                   cols: ['central_compra', 'material', 'peso', 'valor_total', 'nf'] },
+  saidas:                   { label: 'Saídas',                     cols: ['central', 'material', 'peso', 'valor_total', 'os'] },
+  sap:                      { label: 'SAP',                        cols: ['central', 'material', 'movimento', 'peso', 'valor_total'] },
 };
 
 let _adminProfiles = [];        // cache do último fetch de profiles (email por user_id)
@@ -194,18 +215,22 @@ async function adminLoadModulo() {
       if (v && String(v).length > 60) v = String(v).slice(0, 60) + '…';
       return `<td>${_adminEsc(v ?? '—')}</td>`;
     }).join('');
+    const acoes = cfg.readOnly
+      ? `<span style="font-size:11px;color:var(--text3)" title="Registro append-only — sem edição/exclusão por design"><i class="ti ti-lock"></i> Somente leitura</span>`
+      : `<button class="btn-icon" title="Editar" onclick="adminAbrirEdicao('${modulo}','${row.id}')"><i class="ti ti-edit"></i></button>
+      <button class="btn-icon danger" title="Excluir" onclick="adminExcluirRegistro('${modulo}','${row.id}')"><i class="ti ti-trash"></i></button>`;
     return `<tr>
       <td style="font-size:11px;color:var(--text3)">${_adminEsc(dono)}</td>
       ${cells}
       <td style="white-space:nowrap">
-        <button class="btn-icon" title="Editar" onclick="adminAbrirEdicao('${modulo}','${row.id}')"><i class="ti ti-edit"></i></button>
-        <button class="btn-icon danger" title="Excluir" onclick="adminExcluirRegistro('${modulo}','${row.id}')"><i class="ti ti-trash"></i></button>
+        ${acoes}
       </td>
     </tr>`;
   }).join('');
 }
 
 async function adminExcluirRegistro(modulo, id) {
+  if (ADMIN_MODULOS[modulo]?.readOnly) return; // append-only — RLS bloquearia mesmo assim
   if (!confirm('Excluir este registro definitivamente? Esta ação não pode ser desfeita.')) return;
   const { error } = await window.supabaseClient.from(modulo).delete().eq('id', id);
   if (error) { toast('Falha ao excluir: ' + error.message, 'error'); return; }
@@ -215,6 +240,7 @@ async function adminExcluirRegistro(modulo, id) {
 
 // ── Edição (JSON genérico — funciona igual pra qualquer módulo) ────────
 function adminAbrirEdicao(modulo, id) {
+  if (ADMIN_MODULOS[modulo]?.readOnly) return; // append-only — RLS bloquearia mesmo assim
   const row = _adminCurrentRows.find(r => String(r.id) === String(id));
   if (!row) return;
   _adminEditContext = { modulo, id };

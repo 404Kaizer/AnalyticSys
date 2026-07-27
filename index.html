@@ -2713,13 +2713,35 @@
               <span class="table-title"><i class="ti ti-database"></i> Dados por módulo</span>
               <div style="display:flex;gap:8px;align-items:center">
                 <select class="form-select" id="admin-modulo-select" onchange="adminLoadModulo()" style="width:auto">
-                  <option value="ocorrencias">Ocorrências</option>
-                  <option value="acoes_relatorio">Ações de Relatório</option>
+                  <optgroup label="Cadastro / configuração">
+                    <option value="configs">Configurações</option>
+                    <option value="filiais">Filiais</option>
+                    <option value="materiais">Materiais</option>
+                    <option value="grupos_materiais">Grupos de Materiais</option>
+                    <option value="regionais_centrais">Regionais</option>
+                    <option value="imports">Log de Importações</option>
+                  </optgroup>
+                  <optgroup label="Operacional">
+                    <option value="ocorrencias">Ocorrências</option>
+                    <option value="acoes_relatorio">Ações de Relatório</option>
+                    <option value="inv_justificativas">Justificativas de Inventário</option>
+                    <option value="sap_fechamento_overrides">Overrides de Fechamento SAP</option>
+                    <option value="ajustes_sistemicos">DAI / Ajuste Sistêmico</option>
+                    <option value="ajustes_excluidos">Log de Exclusão de DAI</option>
+                    <option value="notas_ajuste">Notas de Crédito/Débito</option>
+                  </optgroup>
+                  <optgroup label="Módulos grandes (Fase 4)">
+                    <option value="lancamentos">Lançamentos</option>
+                    <option value="producao">Produção</option>
+                    <option value="entradas">Entradas</option>
+                    <option value="saidas">Saídas</option>
+                    <option value="sap">SAP</option>
+                  </optgroup>
                 </select>
                 <button class="btn" onclick="adminLoadModulo()"><i class="ti ti-refresh"></i> Atualizar</button>
               </div>
             </div>
-            <div style="font-size:11px;color:var(--text3);padding:10px 18px 0"><i class="ti ti-info-circle"></i> Mais módulos aparecem aqui conforme forem migrados para o Supabase.</div>
+            <div style="font-size:11px;color:var(--text3);padding:10px 18px 0"><i class="ti ti-info-circle"></i> Log de Exclusão de DAI e Notas de Crédito/Débito são registros append-only (auditoria) — somente leitura.</div>
             <div style="overflow-x:auto">
               <table style="width:100%">
                 <thead id="admin-dados-thead"></thead>
