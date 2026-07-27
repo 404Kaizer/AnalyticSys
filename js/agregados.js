@@ -357,40 +357,69 @@ function _agrSituacao(variacao) {
   return 'estavel';
 }
 
-// Agrupa as entradas de agregado por central e por dia, calculando
-// média/dia Pré e Pós por usina.
+// Agrupa as entradas de agregado por central e por dia. Métrica principal:
+// quantidade de PEDIDOS (NFs distintas registradas) — não soma de peso.
+// Peso é mantido como informação complementar, convertido pra KG com a
+// mesma regra de conversão por densidade de material já usada em NFs
+// Pendentes (_convertNfPesoToKg, ver ui.js), em vez de somar peso bruto
+// misturando toneladas e m³ sem converter.
 function _agrBuildResumo(entradasFiltradas, cutoff, firstDay, lastDay) {
   const regionalMap = _agrRegionalMap();
   const diasPre = _agrDiasUteis(firstDay, cutoff);
   const nextDay = new Date(cutoff.getTime() + 86400000);
   const diasPos = _agrDiasUteis(nextDay, lastDay);
 
-  const porCentral = new Map(); // central(sigla) → { totalPre, totalPos, porDia, label }
+  // central(sigla) → { label, nfPreSet, nfPosSet, pesoPreKg, pesoPosKg, porDiaNF: Map<dateKey, Set<nf>> }
+  const porCentral = new Map();
   entradasFiltradas.forEach(e => {
-    // Agrupa pela sigla resolvida (mesma chave usada pelo drill-down e pelo filtro
-    // de Central existente, pra o clique na linha continuar batendo certinho) —
-    // mas guarda o nome ORIGINAL importado só pra exibição.
-    const central = e.centralDestino || e.centralCompra || '—';
+    const central  = e.centralDestino || e.centralCompra || '—';
     const original = e.centralDestinoOriginal || e.centralCompraOriginal || central;
     const d = _agrParseEntradaDate(e);
     if (!d) return;
-    const dk   = _agrDateKey(d);
-    const peso = num(e.peso);
-    if (!porCentral.has(central)) porCentral.set(central, { totalPre: 0, totalPos: 0, porDia: new Map(), label: original });
+    const dk = _agrDateKey(d);
+    // NF distinta — várias linhas de material na mesma nota não contam
+    // como pedidos separados.
+    const nf = String(e.nf || '—').trim() || '—';
+    const pesoKg = typeof _convertNfPesoToKg === 'function'
+      ? _convertNfPesoToKg(e.peso, e.um, e.material)
+      : num(e.peso); // fallback defensivo, não deveria disparar (ui.js sempre carregado antes)
+
+    if (!porCentral.has(central)) {
+      porCentral.set(central, {
+        label: original, nfPreSet: new Set(), nfPosSet: new Set(),
+        pesoPreKg: 0, pesoPosKg: 0, porDiaNF: new Map(),
+      });
+    }
     const c = porCentral.get(central);
-    if (d <= cutoff) c.totalPre += peso; else c.totalPos += peso;
-    c.porDia.set(dk, (c.porDia.get(dk) || 0) + peso);
+    if (d <= cutoff) { c.nfPreSet.add(nf); c.pesoPreKg += pesoKg; }
+    else             { c.nfPosSet.add(nf); c.pesoPosKg += pesoKg; }
+
+    if (!c.porDiaNF.has(dk)) c.porDiaNF.set(dk, new Set());
+    c.porDiaNF.get(dk).add(nf);
   });
 
   const usinas = [...porCentral.entries()].map(([central, v]) => {
     const regional = _agrRegionalDaCentral(central, regionalMap);
-    const mediaPre = diasPre > 0 ? v.totalPre / diasPre : 0;
-    const mediaPos = diasPos > 0 ? v.totalPos / diasPos : 0;
-    const variacao = mediaPre > 0 ? ((mediaPos - mediaPre) / mediaPre) * 100 : (mediaPos > 0 ? Infinity : 0);
+    const countPre = v.nfPreSet.size;
+    const countPos = v.nfPosSet.size;
+    const mediaPedidosPre = diasPre > 0 ? countPre / diasPre : 0;
+    const mediaPedidosPos = diasPos > 0 ? countPos / diasPos : 0;
+    const variacao = mediaPedidosPre > 0
+      ? ((mediaPedidosPos - mediaPedidosPre) / mediaPedidosPre) * 100
+      : (mediaPedidosPos > 0 ? Infinity : 0);
+
+    // Contagem de NFs distintas por dia (pro gráfico).
+    const porDia = new Map();
+    v.porDiaNF.forEach((set, dk) => porDia.set(dk, set.size));
+
     return {
-      central, label: v.label, regional, totalPre: v.totalPre, totalPos: v.totalPos,
-      mediaPre, mediaPos, variacao, situacao: _agrSituacao(variacao),
-      porDia: v.porDia,
+      central, label: v.label, regional,
+      countPre, countPos, mediaPedidosPre, mediaPedidosPos,
+      pesoPreKg: v.pesoPreKg, pesoPosKg: v.pesoPosKg,
+      mediaPesoPreKg: diasPre > 0 ? v.pesoPreKg / diasPre : 0,
+      mediaPesoPosKg: diasPos > 0 ? v.pesoPosKg / diasPos : 0,
+      variacao, situacao: _agrSituacao(variacao),
+      porDia,
     };
   });
 
@@ -638,21 +667,24 @@ function agrSetRegionalSelecionado() {
   _agrRenderResumoRegional();
 }
 
-function _agrResumoKpiStripHtml(mediaPre, mediaPos, variacao, situacao, nUsinas) {
+function _agrResumoKpiStripHtml(mediaPedidosPre, mediaPedidosPos, mediaPesoPreKg, mediaPesoPosKg, variacao, situacao, nUsinas) {
   const varClass = situacao === 'aumentou' ? 'aumentou' : situacao === 'reduziu' ? 'reduziu' : '';
   const varLabel = !isFinite(variacao) ? '—' : `${variacao > 0 ? '+' : ''}${variacao.toFixed(1)}%`;
-  const varSit   = situacao === 'aumentou' ? 'Aumentou compras' : situacao === 'reduziu' ? 'Reduziu compras' : 'Estável';
+  const varSit   = situacao === 'aumentou' ? 'Aumentou pedidos' : situacao === 'reduziu' ? 'Reduziu pedidos' : 'Estável';
+  const pesoSub  = kg => `${_agrSmartFmt(kg / 1000)} t/dia`;
   return `
     <div class="agr-resumo-kpi-card">
-      <span class="agr-resumo-kpi-label">Peso médio/dia · Pré</span>
-      <span class="agr-resumo-kpi-val">${_agrSmartFmt(mediaPre)}</span>
+      <span class="agr-resumo-kpi-label">Pedidos/dia · Pré</span>
+      <span class="agr-resumo-kpi-val">${_agrSmartFmt(mediaPedidosPre)}</span>
+      <span class="agr-resumo-kpi-sub">${pesoSub(mediaPesoPreKg)}</span>
     </div>
     <div class="agr-resumo-kpi-card">
-      <span class="agr-resumo-kpi-label">Peso médio/dia · Pós</span>
-      <span class="agr-resumo-kpi-val">${_agrSmartFmt(mediaPos)}</span>
+      <span class="agr-resumo-kpi-label">Pedidos/dia · Pós</span>
+      <span class="agr-resumo-kpi-val">${_agrSmartFmt(mediaPedidosPos)}</span>
+      <span class="agr-resumo-kpi-sub">${pesoSub(mediaPesoPosKg)}</span>
     </div>
     <div class="agr-resumo-kpi-card">
-      <span class="agr-resumo-kpi-label">Variação de peso</span>
+      <span class="agr-resumo-kpi-label">Variação de pedidos</span>
       <span class="agr-resumo-kpi-val ${varClass}">${varLabel}</span>
       <span style="font-size:10px;color:var(--text3)">${varSit}</span>
     </div>
@@ -671,14 +703,15 @@ function _agrResumoTableHtml(usinas) {
     const badgeLabel = u.situacao === 'aumentou' ? 'Aumentou' : u.situacao === 'reduziu' ? 'Reduziu' : 'Estável';
     const varLabel = !isFinite(u.variacao) ? '—' : `${u.variacao > 0 ? '+' : ''}${u.variacao.toFixed(1)}%`;
     const centralAttr = escapeHtml(u.central).replace(/'/g, '&#39;');
+    const pesoSub = kg => `<div class="td-muted" style="font-size:9.5px;font-weight:400">${_agrSmartFmt(kg / 1000)} t/dia</div>`;
     return `
       <tr class="agr-resumo-row" onclick="_agrResumoRowClick('${centralAttr}')">
         <td class="td-mono">
           ${escapeHtml(u.label)}
           <div style="font-size:9.5px;color:var(--text3);font-weight:400">${escapeHtml(u.regional)}</div>
         </td>
-        <td class="td-mono">${_agrSmartFmt(u.mediaPre)}</td>
-        <td class="td-mono">${_agrSmartFmt(u.mediaPos)}</td>
+        <td class="td-mono">${_agrSmartFmt(u.mediaPedidosPre)}${pesoSub(u.mediaPesoPreKg)}</td>
+        <td class="td-mono">${_agrSmartFmt(u.mediaPedidosPos)}${pesoSub(u.mediaPesoPosKg)}</td>
         <td class="td-mono">${varLabel}</td>
         <td><span class="agr-status-badge ${badgeClass}">${badgeLabel}</span></td>
       </tr>`;
@@ -686,7 +719,7 @@ function _agrResumoTableHtml(usinas) {
   return `
     <table class="agr-resumo-table">
       <thead><tr>
-        <th>Usina (nome original)</th><th>Peso médio/dia · Pré</th><th>Peso médio/dia · Pós</th><th>Variação</th><th>Situação</th>
+        <th>Usina (nome original)</th><th>Pedidos/dia · Pré</th><th>Pedidos/dia · Pós</th><th>Variação</th><th>Situação</th>
       </tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
@@ -694,7 +727,7 @@ function _agrResumoTableHtml(usinas) {
 
 let _agrResumoChartInstance = null;
 
-function _agrRenderResumoChart(usinasFiltradas, cutoff, firstDay, lastDay, mediaPreGlobal) {
+function _agrRenderResumoChart(usinasFiltradas, cutoff, firstDay, lastDay, mediaPedidosPreGlobal) {
   const canvas = document.getElementById('agr-resumo-chart');
   if (!canvas || typeof Chart === 'undefined') return;
 
@@ -708,6 +741,8 @@ function _agrRenderResumoChart(usinasFiltradas, cutoff, firstDay, lastDay, media
     cur.setDate(cur.getDate() + 1);
   }
 
+  // Contagem de pedidos (NFs distintas) por dia, somada entre as usinas
+  // filtradas.
   const totalPorDia = new Map();
   usinasFiltradas.forEach(u => {
     u.porDia.forEach((v, dk) => totalPorDia.set(dk, (totalPorDia.get(dk) || 0) + v));
@@ -731,7 +766,7 @@ function _agrRenderResumoChart(usinasFiltradas, cutoff, firstDay, lastDay, media
       datasets: [
         {
           type: 'bar',
-          label: 'Compras/dia',
+          label: 'Pedidos/dia',
           data: valores,
           backgroundColor: cores,
           borderRadius: 3,
@@ -740,8 +775,8 @@ function _agrRenderResumoChart(usinasFiltradas, cutoff, firstDay, lastDay, media
         },
         {
           type: 'line',
-          label: 'Média Pré',
-          data: dias.map(() => mediaPreGlobal),
+          label: 'Média de pedidos (Pré)',
+          data: dias.map(() => mediaPedidosPreGlobal),
           borderColor: textCol,
           borderDash: [5, 5],
           borderWidth: 1.5,
@@ -759,14 +794,14 @@ function _agrRenderResumoChart(usinasFiltradas, cutoff, firstDay, lastDay, media
         tooltip: {
           callbacks: {
             label: ctx => ctx.dataset.type === 'line'
-              ? `Peso médio/dia (Pré): ${_agrSmartFmt(ctx.raw)}`
-              : `Peso do dia: ${_agrSmartFmt(ctx.raw)}`,
+              ? `Média de pedidos/dia (Pré): ${_agrSmartFmt(ctx.raw)}`
+              : `${_agrSmartFmt(ctx.raw)} pedido(s)`,
           },
         },
       },
       scales: {
         x: { grid: { display: false }, ticks: { color: textCol, font: { size: 9.5 } } },
-        y: { grid: { color: gridCol }, ticks: { color: textCol, font: { size: 9.5 } }, beginAtZero: true },
+        y: { grid: { color: gridCol }, ticks: { color: textCol, font: { size: 9.5 }, precision: 0 }, beginAtZero: true },
       },
     },
   });
@@ -793,14 +828,21 @@ function _agrRenderResumoRegional() {
     ? resumo.usinas
     : resumo.usinas.filter(u => u.regional === regionalSel);
 
-  const totalPre = usinasFiltradas.reduce((s, u) => s + u.totalPre, 0);
-  const totalPos = usinasFiltradas.reduce((s, u) => s + u.totalPos, 0);
-  const mediaPre = resumo.diasPre > 0 ? totalPre / resumo.diasPre : 0;
-  const mediaPos = resumo.diasPos > 0 ? totalPos / resumo.diasPos : 0;
-  const variacao = mediaPre > 0 ? ((mediaPos - mediaPre) / mediaPre) * 100 : (mediaPos > 0 ? Infinity : 0);
+  const countPreTotal = usinasFiltradas.reduce((s, u) => s + u.countPre, 0);
+  const countPosTotal = usinasFiltradas.reduce((s, u) => s + u.countPos, 0);
+  const pesoPreTotal  = usinasFiltradas.reduce((s, u) => s + u.pesoPreKg, 0);
+  const pesoPosTotal  = usinasFiltradas.reduce((s, u) => s + u.pesoPosKg, 0);
+
+  const mediaPedidosPre = resumo.diasPre > 0 ? countPreTotal / resumo.diasPre : 0;
+  const mediaPedidosPos = resumo.diasPos > 0 ? countPosTotal / resumo.diasPos : 0;
+  const mediaPesoPreKg  = resumo.diasPre > 0 ? pesoPreTotal / resumo.diasPre : 0;
+  const mediaPesoPosKg  = resumo.diasPos > 0 ? pesoPosTotal / resumo.diasPos : 0;
+  const variacao = mediaPedidosPre > 0
+    ? ((mediaPedidosPos - mediaPedidosPre) / mediaPedidosPre) * 100
+    : (mediaPedidosPos > 0 ? Infinity : 0);
   const situacao = _agrSituacao(variacao);
 
-  kpisEl.innerHTML = _agrResumoKpiStripHtml(mediaPre, mediaPos, variacao, situacao, usinasFiltradas.length);
+  kpisEl.innerHTML = _agrResumoKpiStripHtml(mediaPedidosPre, mediaPedidosPos, mediaPesoPreKg, mediaPesoPosKg, variacao, situacao, usinasFiltradas.length);
 
   const ordenadas = [...usinasFiltradas].sort((a, b) => {
     const av = isFinite(a.variacao) ? a.variacao : 1e12;
@@ -809,7 +851,7 @@ function _agrRenderResumoRegional() {
   });
   tableEl.innerHTML = _agrResumoTableHtml(ordenadas);
 
-  _agrRenderResumoChart(usinasFiltradas, raw.cutoff, raw.firstDay, raw.lastDay, mediaPre);
+  _agrRenderResumoChart(usinasFiltradas, raw.cutoff, raw.firstDay, raw.lastDay, mediaPedidosPre);
 }
 
 // Clique numa linha da tabela de resumo → abre o card de drill-down

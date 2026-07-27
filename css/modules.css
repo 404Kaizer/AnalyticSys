@@ -8739,6 +8739,11 @@ mark.search-highlight {
 }
 .agr-resumo-kpi-val.aumentou { color: var(--red); }
 .agr-resumo-kpi-val.reduziu  { color: var(--green); }
+.agr-resumo-kpi-sub {
+  font-size: 10.5px;
+  font-family: var(--mono);
+  color: var(--text3);
+}
 
 .agr-resumo-metric-note {
   display: flex;
