@@ -2695,7 +2695,10 @@
           <div class="table-card">
             <div class="table-header">
               <span class="table-title"><i class="ti ti-users"></i> Usuários do sistema</span>
-              <button class="btn" onclick="adminLoadUsuarios()"><i class="ti ti-refresh"></i> Atualizar</button>
+              <div class="table-toolbar">
+                <span id="admin-sync-error-badge" class="badge badge-amber" style="display:none" title="Falhas de sincronização com a nuvem nesta sessão (aba atual do navegador) — não é histórico persistido, reseta ao recarregar a página."><i class="ti ti-alert-triangle"></i> <span id="admin-sync-error-count">0</span> erro(s) de sync</span>
+                <button class="btn" onclick="adminLoadUsuarios()"><i class="ti ti-refresh"></i> Atualizar</button>
+              </div>
             </div>
             <div style="overflow-x:auto">
               <table style="width:100%">

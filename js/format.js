@@ -170,7 +170,24 @@ function signedMoney(v, decimals = 2) {
   return sign + money(Math.abs(n), decimals);
 }
 
+// ── Contador de erros de sincronização na sessão atual ──────────────────
+// Toda falha de sync com a nuvem no sistema segue o padrão
+// toast('⚠ ...sincronizar...', 'error') — mas nem todo toast com ⚠ é sync
+// (tem aviso de IndexedDB indisponível, conflito entre abas, recuperação
+// de sessão etc.), então o filtro é por "sincroniz" na mensagem, não só
+// pelo emoji. Em vez de instrumentar cada um dos ~13 pontos que já
+// emitem esse toast, intercepta aqui, no único lugar por onde todos
+// passam. É só um contador da ABA ATUAL (reseta ao recarregar a página)
+// — não é histórico persistido nem mostra erros de outros usuários/
+// dispositivos. Exibido no badge da aba Usuários da Administração (ver
+// admin.js, _syncErrorBadgeUpdate).
+let _syncErrorCount = 0;
+
 function toast(msg, type = 'success') {
+  if (type === 'error' && typeof msg === 'string' && msg.includes('sincroniz')) {
+    _syncErrorCount++;
+    if (typeof _syncErrorBadgeUpdate === 'function') _syncErrorBadgeUpdate();
+  }
   const el = document.getElementById('toast');
   const icon = el?.querySelector('i');
   const msgEl = document.getElementById('toast-msg');

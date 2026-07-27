@@ -71,6 +71,21 @@ function _adminEsc(s) {
   return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+// Atualiza o badge "N erro(s) de sincronização nesta sessão" na aba
+// Usuários — chamada tanto pelo toast() (format.js, toda vez que ocorre
+// um novo erro) quanto por adminLoadUsuarios() (garante que o badge já
+// apareça certo ao entrar na página, refletindo erros que já tinham
+// acontecido antes de abrir a aba Admin). Fica oculto quando o contador
+// é zero — sem ruído visual em uso normal.
+function _syncErrorBadgeUpdate() {
+  const el = document.getElementById('admin-sync-error-badge');
+  const countEl = document.getElementById('admin-sync-error-count');
+  if (!el || !countEl) return;
+  const n = typeof _syncErrorCount === 'number' ? _syncErrorCount : 0;
+  countEl.textContent = n;
+  el.style.display = n > 0 ? '' : 'none';
+}
+
 // ── Status de presença (Online/Away/Offline) ────────────────
 // Calculado no cliente a partir de last_seen — não há assinatura em tempo
 // real (isso fica pra Fase 5, com Supabase Realtime); a lista se atualiza
@@ -119,6 +134,8 @@ function renderAdminPage() {
 // piscar "Carregando..." toda hora. Clique manual em "Atualizar" e a
 // primeira carga da página sempre mostram o feedback visual normalmente.
 async function adminLoadUsuarios(silent) {
+  _syncErrorBadgeUpdate();
+
   // Segurança extra: se o polling automático continuar rodando depois do
   // ADM ter saído da página (ex.: clicou em outro tab), para sozinho na
   // próxima vez que o intervalo disparar, em vez de ficar chamando o
