@@ -4643,11 +4643,14 @@ function removerRegistro(module, index) {
   updateDashboard();
   toast('Registro excluído com sucesso');
 
-  // Sincroniza a exclusão com o Supabase (Fase 4 — por enquanto só Lançamentos
-  // têm sync ativo; os demais módulos grandes ainda não sobem pra nuvem).
-  if (module === 'lancamentos' && actual.id && typeof _lancSyncDelete === 'function') {
-    _lancSyncDelete(actual.id);
-  }
+  // Sincroniza a exclusão com o Supabase — só os módulos já migrados na
+  // Fase 4 têm função aqui; os demais simplesmente não entram no mapa.
+  const syncDeleteByModule = {
+    lancamentos: (typeof _lancSyncDelete === 'function') ? _lancSyncDelete : null,
+    entradas:    (typeof _entradasSyncDelete === 'function') ? _entradasSyncDelete : null,
+  };
+  const syncDelete = syncDeleteByModule[module];
+  if (syncDelete && actual.id) syncDelete(actual.id);
 }
 
 
@@ -4765,6 +4768,7 @@ function _resolveConflicts(decisions) {
       const syncDeleteByModulo = {
         'Lançamento': (typeof _lancSyncDelete === 'function') ? _lancSyncDelete : null,
         'Produção':   (typeof _producaoSyncDelete === 'function') ? _producaoSyncDelete : null,
+        'Entrada':    (typeof _entradasSyncDelete === 'function') ? _entradasSyncDelete : null,
       };
       const syncDelete = syncDeleteByModulo[modulo];
       if (syncDelete) {
@@ -5278,6 +5282,7 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
     const syncBatchByModulo = {
       'Lançamento': (typeof _lancSyncUpsertBatch === 'function') ? { fn: _lancSyncUpsertBatch, fp: _fpLancamento } : null,
       'Produção':   (typeof _producaoSyncUpsertBatch === 'function') ? { fn: _producaoSyncUpsertBatch, fp: _fpProducao } : null,
+      'Entrada':    (typeof _entradasSyncUpsertBatch === 'function') ? { fn: _entradasSyncUpsertBatch, fp: _fpEntrada } : null,
     };
     const syncBatch = syncBatchByModulo[modulo];
     if (syncBatch) {
@@ -6170,6 +6175,7 @@ async function restoreAndRender() {
       'syncLancamentosFromSupabase', // Fase 4 — Etapa 1 (módulos grandes)
       'syncImportsFromSupabase', // Fase 4 — Etapa 3 (log de importações)
       'syncProducaoFromSupabase', // Fase 4 — Etapa 4
+      'syncEntradasFromSupabase', // Fase 4 — Etapa 5
     ];
     await Promise.all(
       SUPABASE_BOOT_SYNCS.map(fnName => {

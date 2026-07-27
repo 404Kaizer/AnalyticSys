@@ -242,6 +242,7 @@ function _criarRegistroEntrada(dados) {
   state.entradas.unshift(rec);
   invalidateSearchIndex('entradas');
   persist();
+  if (typeof _entradasSyncUpsert === 'function') _entradasSyncUpsert(rec);
   return { ok: true, rec };
 }
 
@@ -665,6 +666,108 @@ async function syncProducaoFromSupabase() {
     if (naoSincronizados.length) await _producaoSyncUpsertBatch(naoSincronizados);
   } catch (err) {
     console.warn('[Supabase] Falha ao buscar produção — mantendo dados locais.', err);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// ENTRADAS — sincronização com o Supabase (Fase 4 — Etapa 5)
+// ═══════════════════════════════════════════════════════════
+// Primeiro módulo com volume real de dados (NFs de compra, não cadastro
+// esparso). Mesmo padrão: já tem id estável (fundação da Etapa 1). Cobre:
+// criação manual/Assistente, importação em lote, exclusão individual
+// (removerRegistro, dashboard.js) e resolução de conflito manual-vs-
+// importado (_resolveConflicts, dashboard.js).
+
+function _entradasToDbRow(r) {
+  return {
+    id: r.id,
+    fonte: r.fonte || null,
+    central_compra_original: r.centralCompraOriginal || null,
+    central_compra: r.centralCompra || null,
+    central_destino_original: r.centralDestinoOriginal || null,
+    central_destino: r.centralDestino || null,
+    nf: r.nf || null,
+    dt_emissao: r.dtEmissao || null,
+    dt_descarga: r.dtDescarga || null,
+    fornecedor: r.fornecedor || null,
+    categoria_original: r.categoriaOriginal || null,
+    categoria: r.categoria || null,
+    material_original: r.materialOriginal || null,
+    material: r.material || null,
+    peso: r.peso ?? null,
+    um: r.um || null,
+    custo: r.custo ?? null,
+    valor_total: r.valorTotal ?? null,
+    import_id: r.importId || null,
+    created_at: r.createdAt || null,
+  };
+}
+
+function _entradasFromDbRow(row) {
+  return {
+    id: row.id,
+    fonte: row.fonte,
+    centralCompraOriginal: row.central_compra_original,
+    centralCompra: row.central_compra,
+    centralDestinoOriginal: row.central_destino_original,
+    centralDestino: row.central_destino,
+    nf: row.nf,
+    dtEmissao: row.dt_emissao,
+    dtDescarga: row.dt_descarga,
+    fornecedor: row.fornecedor,
+    categoriaOriginal: row.categoria_original,
+    categoria: row.categoria,
+    materialOriginal: row.material_original,
+    material: row.material,
+    peso: row.peso,
+    um: row.um,
+    custo: row.custo,
+    valorTotal: row.valor_total,
+    importId: row.import_id || undefined,
+    createdAt: row.created_at,
+  };
+}
+
+function _entradasSyncUpsert(rec) {
+  if (!window.supabaseClient) return;
+  window.supabaseClient.from('entradas').upsert(_entradasToDbRow(rec))
+    .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao sincronizar entrada:', error); });
+}
+
+const ENTRADAS_SYNC_BATCH_SIZE = 500;
+async function _entradasSyncUpsertBatch(records) {
+  if (!window.supabaseClient || !records || !records.length) return;
+  const rows = records.map(_entradasToDbRow);
+  for (let i = 0; i < rows.length; i += ENTRADAS_SYNC_BATCH_SIZE) {
+    const { error } = await window.supabaseClient.from('entradas').upsert(rows.slice(i, i + ENTRADAS_SYNC_BATCH_SIZE));
+    if (error) { console.warn('[Supabase] Falha ao sincronizar lote de entradas:', error); break; }
+  }
+}
+
+function _entradasSyncDelete(id) {
+  if (!window.supabaseClient || !id) return;
+  window.supabaseClient.from('entradas').delete().eq('id', id)
+    .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao excluir entrada na nuvem:', error); });
+}
+
+async function syncEntradasFromSupabase() {
+  if (!window.supabaseClient) return;
+  try {
+    const { data, error } = await window.supabaseClient.from('entradas').select('*');
+    if (error) throw error;
+    const remoto = (data || []).map(_entradasFromDbRow);
+    const idsRemotos = new Set(remoto.map(r => r.id));
+
+    const local = Array.isArray(state.entradas) ? state.entradas : [];
+    const porId = new Map(local.filter(r => r.id).map(r => [r.id, r]));
+    remoto.forEach(r => porId.set(r.id, r));
+    state.entradas = [...porId.values()];
+    if (typeof invalidateSearchIndex === 'function') invalidateSearchIndex('entradas');
+
+    const naoSincronizados = local.filter(r => r.id && !idsRemotos.has(r.id));
+    if (naoSincronizados.length) await _entradasSyncUpsertBatch(naoSincronizados);
+  } catch (err) {
+    console.warn('[Supabase] Falha ao buscar entradas — mantendo dados locais.', err);
   }
 }
 
