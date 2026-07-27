@@ -4755,14 +4755,21 @@ function _resolveConflicts(decisions) {
   if (toRemove.size) {
     const stateKey = { 'Entrada': 'entradas', 'Saída': 'saidas', 'Lançamento': 'lancamentos', 'SAP': 'sap', 'Produção': 'producao' }[modulo];
     if (stateKey) {
-      // Fase 4: registros já sincronizados com a nuvem (só Lançamentos por
-      // enquanto) precisam ser removidos lá também — senão, no próximo boot,
-      // syncLancamentosFromSupabase mescla local ∪ nuvem por id e o registro
-      // que você descartou aqui "ressuscita" porque ainda existe do lado da
-      // nuvem.
-      if (modulo === 'Lançamento' && typeof _lancSyncDelete === 'function') {
+      // Fase 4: registros já sincronizados com a nuvem precisam ser
+      // removidos lá também — senão, no próximo boot, o sync mescla
+      // local ∪ nuvem por id e o registro que você descartou aqui
+      // "ressuscita" porque ainda existe do lado da nuvem. Mapa de função
+      // de exclusão por módulo — só os módulos já migrados na Fase 4 têm
+      // uma função aqui; os demais (Entrada/Saída/SAP ainda não
+      // sincronizados) simplesmente não entram no mapa.
+      const syncDeleteByModulo = {
+        'Lançamento': (typeof _lancSyncDelete === 'function') ? _lancSyncDelete : null,
+        'Produção':   (typeof _producaoSyncDelete === 'function') ? _producaoSyncDelete : null,
+      };
+      const syncDelete = syncDeleteByModulo[modulo];
+      if (syncDelete) {
         conflicts.forEach(c => {
-          if (toRemove.has(fp(c.manual)) && c.manual.id) _lancSyncDelete(c.manual.id);
+          if (toRemove.has(fp(c.manual)) && c.manual.id) syncDelete(c.manual.id);
         });
       }
       state[stateKey] = state[stateKey].filter(r => !toRemove.has(fp(r)));
@@ -5263,15 +5270,20 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
     if (stateKey) state[stateKey] = _mergedResult;
 
     // Sincroniza com o Supabase os registros afetados por esta importação
-    // (Fase 4 — por enquanto só Lançamentos tem sync ativo; os demais módulos
-    // grandes ainda não sobem pra nuvem). Usa o fingerprint pra identificar,
-    // dentro do resultado final já mesclado, exatamente quais registros esta
-    // importação tocou (novos ou atualizados) — o id já vem correto em ambos
-    // os casos graças ao preservado em _mergeDedup.
-    if (modulo === 'Lançamento' && typeof _lancSyncUpsertBatch === 'function') {
-      const tocadosFps = new Set(parsed.map(_fpLancamento));
-      const tocados = _mergedResult.filter(r => tocadosFps.has(_fpLancamento(r)));
-      _lancSyncUpsertBatch(tocados);
+    // (Fase 4 — só os módulos já migrados têm sync ativo; os demais
+    // simplesmente não entram no mapa abaixo). Usa o fingerprint pra
+    // identificar, dentro do resultado final já mesclado, exatamente quais
+    // registros esta importação tocou (novos ou atualizados) — o id já vem
+    // correto em ambos os casos graças ao preservado em _mergeDedup.
+    const syncBatchByModulo = {
+      'Lançamento': (typeof _lancSyncUpsertBatch === 'function') ? { fn: _lancSyncUpsertBatch, fp: _fpLancamento } : null,
+      'Produção':   (typeof _producaoSyncUpsertBatch === 'function') ? { fn: _producaoSyncUpsertBatch, fp: _fpProducao } : null,
+    };
+    const syncBatch = syncBatchByModulo[modulo];
+    if (syncBatch) {
+      const tocadosFps = new Set(parsed.map(syncBatch.fp));
+      const tocados = _mergedResult.filter(r => tocadosFps.has(syncBatch.fp(r)));
+      syncBatch.fn(tocados);
     }
   }
 
@@ -6157,6 +6169,7 @@ async function restoreAndRender() {
       'syncNotasAjusteFromSupabase',
       'syncLancamentosFromSupabase', // Fase 4 — Etapa 1 (módulos grandes)
       'syncImportsFromSupabase', // Fase 4 — Etapa 3 (log de importações)
+      'syncProducaoFromSupabase', // Fase 4 — Etapa 4
     ];
     await Promise.all(
       SUPABASE_BOOT_SYNCS.map(fnName => {

@@ -128,6 +128,7 @@ function excluirProducao(absIndex) {
       persist();
       renderProducao();
       updateDashboard();
+      if (rec.id && typeof _producaoSyncDelete === 'function') _producaoSyncDelete(rec.id);
     },
 
     undo: () => {
@@ -138,6 +139,7 @@ function excluirProducao(absIndex) {
       persist();
       renderProducao();
       updateDashboard();
+      if (typeof _producaoSyncUpsert === 'function') _producaoSyncUpsert(snapshot);
     },
   });
 }
@@ -161,6 +163,7 @@ function _criarRegistroProducao(dados) {
 
   state.producao.unshift(rec);
   persist();
+  if (typeof _producaoSyncUpsert === 'function') _producaoSyncUpsert(rec);
   return { ok: true, rec };
 }
 
@@ -573,6 +576,95 @@ async function syncImportsFromSupabase() {
     naoSincronizados.forEach(_importsSyncUpsert);
   } catch (err) {
     console.warn('[Supabase] Falha ao buscar log de importações — mantendo dados locais.', err);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// PRODUÇÃO — sincronização com o Supabase (Fase 4 — Etapa 4)
+// ═══════════════════════════════════════════════════════════
+// Já tem id estável desde a fundação da Etapa 1 (stamp() em normalize.js
+// cobre os 5 módulos grandes). Cobre: criação manual/Assistente
+// (_criarRegistroProducao), importação em lote (hook em
+// processImportedRows, dashboard.js), exclusão individual com undo
+// (excluirProducao) e resolução de conflito manual-vs-importado
+// (_resolveConflicts, dashboard.js — Produção já participava desse fluxo).
+// Mesmo gap conhecido: excluirImportacao ainda não apaga da nuvem (Etapa 7).
+
+function _producaoToDbRow(r) {
+  return {
+    id: r.id,
+    fonte: r.fonte || null,
+    mes: r.mes || null,
+    central_original: r.centralOriginal || null,
+    central: r.central || null,
+    producao: r.producao ?? null,
+    um: r.um || null,
+    preco_medio: r.precoMedio ?? null,
+    custo_medio: r.custoMedio ?? null,
+    margem: r.margem || null,
+    total_vendas: r.totalVendas ?? null,
+    import_id: r.importId || null,
+    created_at: r.createdAt || null,
+  };
+}
+
+function _producaoFromDbRow(row) {
+  return {
+    id: row.id,
+    fonte: row.fonte,
+    mes: row.mes,
+    centralOriginal: row.central_original,
+    central: row.central,
+    producao: row.producao,
+    um: row.um,
+    precoMedio: row.preco_medio,
+    custoMedio: row.custo_medio,
+    margem: row.margem,
+    totalVendas: row.total_vendas,
+    importId: row.import_id || undefined,
+    createdAt: row.created_at,
+  };
+}
+
+function _producaoSyncUpsert(rec) {
+  if (!window.supabaseClient) return;
+  window.supabaseClient.from('producao').upsert(_producaoToDbRow(rec))
+    .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao sincronizar produção:', error); });
+}
+
+const PRODUCAO_SYNC_BATCH_SIZE = 500;
+async function _producaoSyncUpsertBatch(records) {
+  if (!window.supabaseClient || !records || !records.length) return;
+  const rows = records.map(_producaoToDbRow);
+  for (let i = 0; i < rows.length; i += PRODUCAO_SYNC_BATCH_SIZE) {
+    const { error } = await window.supabaseClient.from('producao').upsert(rows.slice(i, i + PRODUCAO_SYNC_BATCH_SIZE));
+    if (error) { console.warn('[Supabase] Falha ao sincronizar lote de produção:', error); break; }
+  }
+}
+
+function _producaoSyncDelete(id) {
+  if (!window.supabaseClient || !id) return;
+  window.supabaseClient.from('producao').delete().eq('id', id)
+    .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao excluir produção na nuvem:', error); });
+}
+
+async function syncProducaoFromSupabase() {
+  if (!window.supabaseClient) return;
+  try {
+    const { data, error } = await window.supabaseClient.from('producao').select('*');
+    if (error) throw error;
+    const remoto = (data || []).map(_producaoFromDbRow);
+    const idsRemotos = new Set(remoto.map(r => r.id));
+
+    const local = Array.isArray(state.producao) ? state.producao : [];
+    const porId = new Map(local.filter(r => r.id).map(r => [r.id, r]));
+    remoto.forEach(r => porId.set(r.id, r));
+    state.producao = [...porId.values()];
+
+    const naoSincronizados = local.filter(r => r.id && !idsRemotos.has(r.id));
+    if (naoSincronizados.length) await _producaoSyncUpsertBatch(naoSincronizados);
+  } catch (err) {
+    console.warn('[Supabase] Falha ao buscar produção — mantendo dados locais.', err);
   }
 }
 
