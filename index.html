@@ -2729,6 +2729,18 @@
               </table>
             </div>
           </div>
+          <div class="table-card" style="margin-top:16px">
+            <div class="table-header">
+              <span class="table-title"><i class="ti ti-table"></i> Linhas por usuário, por tabela</span>
+              <button class="btn" onclick="adminLoadUserTableCounts()"><i class="ti ti-refresh"></i> Atualizar</button>
+            </div>
+            <div style="overflow-x:auto">
+              <table style="width:100%" id="admin-user-counts-table">
+                <thead id="admin-user-counts-thead"></thead>
+                <tbody id="admin-user-counts-tbody"><tr><td><div class="empty-state"><i class="ti ti-loader"></i><p>Carregando...</p></div></td></tr></tbody>
+              </table>
+            </div>
+          </div>
         </div>
 
         <!-- Seção: Dados por módulo -->

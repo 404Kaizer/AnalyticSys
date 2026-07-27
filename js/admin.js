@@ -120,6 +120,61 @@ async function adminLoadDbStats() {
   </tr>`).join('');
 }
 
+// ── Seção: Linhas por usuário, por tabela ───────────────────
+// Usa a função admin_user_table_counts() (RPC, só-admin). Mostra TODOS os
+// usuários de profiles como coluna, mesmo os com zero em tudo (é
+// informativo por si só — ex.: confirmar que uma conta "fantasma" está
+// mesmo zerada, não só "sem aparecer").
+async function adminLoadUserTableCounts() {
+  const thead = document.getElementById('admin-user-counts-thead');
+  const tbody = document.getElementById('admin-user-counts-tbody');
+  if (!thead || !tbody) return;
+
+  tbody.innerHTML = `<tr><td><div class="empty-state"><i class="ti ti-loader"></i><p>Carregando...</p></div></td></tr>`;
+
+  if (!_adminProfiles.length) {
+    const { data } = await window.supabaseClient.from('profiles').select('id, email');
+    _adminProfiles = data || [];
+  }
+  const usuarios = _adminProfiles.slice().sort((a, b) => (a.email || '').localeCompare(b.email || ''));
+
+  const { data: counts, error } = await window.supabaseClient.rpc('admin_user_table_counts');
+  if (error) {
+    tbody.innerHTML = `<tr><td><div class="empty-state"><i class="ti ti-alert-triangle"></i><p>Falha ao carregar: ${_adminEsc(error.message)}</p></div></td></tr>`;
+    return;
+  }
+
+  // matriz[tabela][user_id] = contagem
+  const matriz = {};
+  (counts || []).forEach(c => {
+    if (!matriz[c.table_name]) matriz[c.table_name] = {};
+    matriz[c.table_name][c.user_id] = Number(c.row_count) || 0;
+  });
+
+  const colspan = usuarios.length + 1;
+  thead.innerHTML = `<tr><th>Tabela</th>${usuarios.map(u => `<th style="text-align:center" title="${_adminEsc(u.email)}">${_adminEsc((u.email || '').split('@')[0])}</th>`).join('')}</tr>`;
+
+  const tabelas = Object.keys(ADMIN_MODULOS);
+  if (!usuarios.length || !tabelas.length) {
+    tbody.innerHTML = `<tr><td colspan="${colspan}"><div class="empty-state"><i class="ti ti-database-off"></i><p>Sem dados.</p></div></td></tr>`;
+    return;
+  }
+
+  const totalPorUsuario = usuarios.map(() => 0);
+  const linhas = tabelas.map(t => {
+    const cells = usuarios.map((u, i) => {
+      const n = matriz[t]?.[u.id] || 0;
+      totalPorUsuario[i] += n;
+      return `<td style="text-align:center;${n === 0 ? 'color:var(--text3)' : ''}">${n.toLocaleString('pt-BR')}</td>`;
+    }).join('');
+    return `<tr><td>${_adminEsc(ADMIN_MODULOS[t]?.label || t)}</td>${cells}</tr>`;
+  }).join('');
+
+  const linhaTotal = `<tr style="font-weight:600;border-top:2px solid var(--border2)"><td>Total</td>${totalPorUsuario.map(n => `<td style="text-align:center">${n.toLocaleString('pt-BR')}</td>`).join('')}</tr>`;
+
+  tbody.innerHTML = linhas + linhaTotal;
+}
+
 function _adminEsc(s) {
   return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
@@ -165,7 +220,7 @@ function adminShowSection(section) {
   document.getElementById('admin-subnav-usuarios')?.classList.toggle('active', section === 'usuarios');
   document.getElementById('admin-subnav-dados')?.classList.toggle('active', section === 'dados');
 
-  if (section === 'usuarios') { adminLoadUsuarios(); adminLoadDbStats(); }
+  if (section === 'usuarios') { adminLoadUsuarios(); adminLoadDbStats(); adminLoadUserTableCounts(); }
   if (section === 'dados') adminLoadModulo();
 
   // Só mantém o polling de presença rodando enquanto a seção Usuários
@@ -495,6 +550,7 @@ Object.assign(window, {
   adminLoadUsuarios,
   adminAlterarPapel,
   adminLoadDbStats,
+  adminLoadUserTableCounts,
   adminLoadModulo,
   adminModuloPrimeiraPagina,
   adminModuloPaginaAnterior,
