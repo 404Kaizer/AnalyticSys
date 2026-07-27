@@ -6336,6 +6336,10 @@ async function restoreAndRender() {
     updateLoadingOverlay('Verificando alertas e ocorrências...', 'Inicializando o sistema');
     await yieldToUI();
     if (typeof notifSync === 'function') notifSync(null);
+    // Fase 5 — canal Realtime de atividade (activity_log). Idempotente:
+    // se a aba já tiver um canal aberto (ex.: chamado duas vezes por
+    // algum motivo), a própria função não faz nada na segunda vez.
+    if (typeof _activityRealtimeInit === 'function') _activityRealtimeInit();
     _lstepSet('notif', 'done');
     _lbarSet(70);
     await nextFrame();

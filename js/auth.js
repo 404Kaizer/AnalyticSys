@@ -418,6 +418,11 @@ window.AuthGate = (function () {
         if (typeof _appBootExecuted !== 'undefined') _appBootExecuted = false;
         clearTimeout(idleWarnTimer);
         _idleHideWarning();
+        // Fecha o canal Realtime de atividade (Fase 5) — sem isso, uma
+        // sessão derrubada sem reload (ex.: SIGNED_OUT vindo de outro
+        // dispositivo) deixaria o canal antigo aberto com credenciais
+        // inválidas até a próxima navegação.
+        if (typeof _activityRealtimeStop === 'function') _activityRealtimeStop();
       }
     });
   });

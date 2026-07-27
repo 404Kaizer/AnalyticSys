@@ -294,6 +294,7 @@ const _NTM = {
   saude:      { icon:'ti-heartbeat'      },
   ocorrencia: { icon:'ti-alert-circle'   },
   conferencia:{ icon:'ti-calendar-event' },
+  atividade:  { icon:'ti-bolt'           },
 };
 
 function _notifTimeAgo(ts) {
@@ -456,9 +457,165 @@ function notifHideActivityToast() {
   clearTimeout(_notifToastTimer);
 }
 
+// ═══════════════════════════════════════════════════════════
+// REALTIME DE ATIVIDADE — Fase 5, Etapa 3
+// ═══════════════════════════════════════════════════════════
+// Assina só a activity_log (não as 19 tabelas diretamente — ver migração
+// da Etapa 2). A trigger de banco já grava lá toda escrita relevante; o
+// Postgres Changes do Supabase só entrega a cada cliente as linhas que a
+// RLS de activity_log permite (dono OU ator OU admin) — a regra abaixo é
+// uma segunda camada no cliente, não a barreira de segurança real.
+//
+// Regra (decidida com o Hugo em 27/07):
+//   - ADM é notificado de qualquer ação de QUALQUER outro usuário.
+//   - Um usuário comum é notificado só quando o ATOR foi o ADM mexendo
+//     num registro que é dele (dono).
+//   - Ninguém é notificado da própria ação.
+
+const _ACTIVITY_VERB = { INSERT: 'criou', UPDATE: 'editou', DELETE: 'excluiu' };
+
+function _activityShouldNotify(row) {
+  const me = window.currentUser;
+  if (!me || !row) return false;
+  if (row.actor_id === me.id) return false; // nunca notifica a própria ação
+  if (me.role === 'admin') return true;     // admin vê ação de qualquer outro
+  return row.owner_id === me.id;            // dono vê quando o ADM mexeu no que é dele
+}
+
+// ADMIN_MODULOS (admin.js) já tem o rótulo e as colunas mais relevantes
+// de cada tabela — reaproveitado aqui pra não duplicar essa lista.
+function _activityModuleLabel(tableName) {
+  if (tableName === 'profiles') return 'Usuários';
+  return (typeof ADMIN_MODULOS !== 'undefined' && ADMIN_MODULOS[tableName]?.label) || tableName;
+}
+function _activityDescribeRow(row) {
+  const cols = (typeof ADMIN_MODULOS !== 'undefined' && ADMIN_MODULOS[row.table_name]?.cols) || [];
+  const data = row.operation === 'DELETE' ? row.old_data : row.new_data;
+  if (!data) return '';
+  return cols.map(c => data[c]).filter(v => v !== null && v !== undefined && v !== '')
+    .slice(0, 2).join(' · ');
+}
+
+// A RLS de profiles é dono OU admin — um usuário comum não consegue ler
+// o e-mail de outra pessoa mesmo tentando, então pra ele o rótulo do
+// ator é sempre genérico. Só quando EU sou admin faz sentido resolver
+// e-mails de terceiros (e só admin tem visibilidade pra isso no banco).
+let _activityUserCache = null;
+async function _activityGetUserCache() {
+  if (_activityUserCache) return _activityUserCache;
+  _activityUserCache = new Map();
+  try {
+    const { data, error } = await window.supabaseClient.from('profiles').select('id, email');
+    if (!error && data) data.forEach(u => _activityUserCache.set(u.id, u.email));
+  } catch (e) { console.warn('[Activity] Falha ao carregar usuários:', e); }
+  return _activityUserCache;
+}
+async function _activityResolveActorLabel(actorId) {
+  const me = window.currentUser;
+  if (me?.role !== 'admin') return 'O administrador';
+  const cache = await _activityGetUserCache();
+  const email = cache.get(actorId);
+  return email ? email.split('@')[0] : 'Alguém';
+}
+
+async function _activityEmitNotification(row, count) {
+  const verb        = _ACTIVITY_VERB[row.operation] || 'alterou';
+  const moduleLabel = _activityModuleLabel(row.table_name);
+  const actorLabel  = await _activityResolveActorLabel(row.actor_id);
+
+  const title = count > 1
+    ? `${actorLabel} ${verb} ${count} registros em ${moduleLabel}`
+    : `${actorLabel} ${verb} um registro em ${moduleLabel}`;
+  const body = count === 1 ? _activityDescribeRow(row) : '';
+
+  if (!Array.isArray(state.notifications)) state.notifications = [];
+  state.notifications.unshift({
+    id: `atividade-${row.table_name}-${row.id}`,
+    type: 'atividade',
+    level: 'info',
+    title, body,
+    createdAt: Date.now(),
+    read: false,
+  });
+  // Cache local recente só pro dropdown — o histórico completo já vive
+  // na nuvem (activity_log), então não precisa crescer pra sempre aqui.
+  const ATIV_MAX_LOCAL = 200;
+  let seen = 0;
+  state.notifications = state.notifications.filter(n => {
+    if (n.type !== 'atividade') return true;
+    seen++;
+    return seen <= ATIV_MAX_LOCAL;
+  });
+  if (typeof persist === 'function') persist();
+
+  _notifRenderBadge();
+  if (_notifOpen) _notifRenderDropdown();
+
+  notifShowActivityToast(title, body);
+  notifPlaySound();
+}
+
+// ── Debounce por (ator, tabela, operação) ───────────────────
+// Evita spam quando uma importação em lote de Materiais/Filiais (os
+// únicos módulos que sincronizam também o importado, não só manual) gera
+// muitas linhas de uma vez. Cada grupo tem seu próprio timer; só "estoura"
+// numa notificação combinada quando fica ~2.5s sem novo evento do mesmo
+// grupo. O activity_log continua guardando cada linha individualmente —
+// o agrupamento é só da notificação visível, não do histórico.
+const _activityBatchData   = new Map();
+const _activityBatchTimers = new Map();
+const ACTIVITY_BATCH_MS = 2500;
+
+function _activityQueueEvent(row) {
+  if (!_activityShouldNotify(row)) return;
+  const key = `${row.actor_id}|${row.table_name}|${row.operation}`;
+  const entry = _activityBatchData.get(key) || { count: 0, sample: row };
+  entry.count++;
+  entry.sample = row;
+  _activityBatchData.set(key, entry);
+
+  clearTimeout(_activityBatchTimers.get(key));
+  _activityBatchTimers.set(key, setTimeout(() => {
+    const data = _activityBatchData.get(key);
+    _activityBatchData.delete(key);
+    _activityBatchTimers.delete(key);
+    if (data) _activityEmitNotification(data.sample, data.count);
+  }, ACTIVITY_BATCH_MS));
+}
+
+// ── Canal Realtime ────────────────────────────────────────
+// Chamada no boot (dashboard.js, STEP 5) — idempotente via _activityChannel.
+let _activityChannel = null;
+function _activityRealtimeInit() {
+  if (!window.supabaseClient || !window.currentUser || _activityChannel) return;
+  _activityChannel = window.supabaseClient
+    .channel('activity_log_notifications')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'activity_log' },
+      (payload) => { if (payload?.new) _activityQueueEvent(payload.new); })
+    .subscribe((status) => {
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        console.warn('[Activity] Canal Realtime com problema:', status);
+      }
+    });
+}
+// Chamada em auth.js no evento SIGNED_OUT (sessão caindo sem reload da
+// página) — o logout normal (signOut()) recarrega a página, o que já
+// derruba o canal sozinho; este caminho cobre o caso sem reload.
+function _activityRealtimeStop() {
+  if (_activityChannel && window.supabaseClient) {
+    window.supabaseClient.removeChannel(_activityChannel);
+  }
+  _activityChannel = null;
+  _activityBatchTimers.forEach(t => clearTimeout(t));
+  _activityBatchTimers.clear();
+  _activityBatchData.clear();
+  _activityUserCache = null;
+}
+
 Object.assign(window,{
   notifToggle,notifClose,notifOpen,
   notifMarkRead,notifMarkAllRead,notifNavigate,
   notifSync,notifBoot,notifUpdateFromAnalytico,notifSilentHealthCheck,
   notifPlaySound,notifShowActivityToast,notifHideActivityToast,
+  _activityRealtimeInit,_activityRealtimeStop,
 });
