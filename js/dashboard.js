@@ -3186,6 +3186,11 @@ function lancEditSave(cell) {
   persistStateNow().catch(e => console.warn('Falha ao salvar lançamento:', e));
   toast('Lançamento atualizado');
 
+  // Sincroniza com a nuvem — edição é ação manual e deliberada, sincroniza
+  // mesmo que o registro tenha vindo de importação (decisão de 27/07,
+  // revisada). _lancSyncUpsert já sabe verificar rec.editado internamente.
+  if (typeof _lancSyncUpsert === 'function') _lancSyncUpsert(r);
+
   // Atualiza célula com formato correto
   cell.textContent = _lancFieldDisplay(r, field);
 
@@ -4645,14 +4650,15 @@ function removerRegistro(module, index) {
 
   // Sincroniza a exclusão com o Supabase — só os módulos já migrados na
   // Fase 4 têm função aqui; os demais simplesmente não entram no mapa.
-  // Só dispara pra registros manuais (sem importId) — os importados nunca
-  // foram sincronizados (decisão de 27/07), então não há o que excluir lá.
+  // Dispara pra registros manuais OU editados — os importados nunca-
+  // editados nunca foram sincronizados (decisão de 27/07), então não há
+  // o que excluir lá.
   const syncDeleteByModule = {
     lancamentos: (typeof _lancSyncDelete === 'function') ? _lancSyncDelete : null,
     entradas:    (typeof _entradasSyncDelete === 'function') ? _entradasSyncDelete : null,
   };
   const syncDelete = syncDeleteByModule[module];
-  if (syncDelete && actual.id && !actual.importId) syncDelete(actual.id);
+  if (syncDelete && actual.id && (!actual.importId || actual.editado)) syncDelete(actual.id);
 }
 
 

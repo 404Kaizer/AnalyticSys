@@ -411,6 +411,7 @@ function _lancToDbRow(r) {
     valor_total: r.valorTotal ?? null,
     import_id: r.importId || null,
     created_at: r.createdAt || null,
+    editado: !!r.editado,
   };
 }
 
@@ -432,21 +433,20 @@ function _lancFromDbRow(row) {
     valorTotal: row.valor_total,
     importId: row.import_id || undefined,
     createdAt: row.created_at,
+    editado: !!row.editado,
   };
 }
 
-// Upsert de um único lançamento — SÓ manual/Assistente (fonte='manual',
-// sem importId). Decisão de 27/07: pra Entradas/Saídas/Lançamentos/SAP/
-// Produção, a nuvem guarda só o que é digitado direto no sistema —
-// importação em lote fica só local, porque o arquivo original já é a
-// cópia de segurança (o Hugo mantém os arquivos no PC e reimporta se
-// precisar). Motivo: volume de importação é ordens de grandeza maior que
-// manual (813k importados vs. 31 manuais em Lançamentos) e o plano
-// gratuito do Supabase (500MB) não é opção de upgrade — sincronizar tudo
-// estourava o limite rapidamente. Falha não bloqueia a UI (já gravado
-// localmente) — só avisa por toast, mesmo padrão de ocorrencias.js/dai.js.
+// Upsert de um único lançamento — manual/Assistente OU editado inline
+// (fonte='manual', OU sem importId, OU com editado=true). Decisão de
+// 27/07 (revisada): pra Entradas/Saídas/Lançamentos/SAP/Produção, a nuvem
+// guarda o que é digitado ou editado direto no sistema — importação em
+// lote em si fica só local (o arquivo original já é a cópia de
+// segurança). Mas uma EDIÇÃO feita depois, mesmo num registro importado,
+// é uma ação manual e deliberada — precisa sincronizar. A guarda,
+// portanto, é: bloqueia só se for importado E NUNCA editado.
 function _lancSyncUpsert(rec) {
-  if (rec.importId || !window.supabaseClient) return;
+  if ((rec.importId && !rec.editado) || !window.supabaseClient) return;
   window.supabaseClient.from('lancamentos').upsert(_lancToDbRow(rec))
     .then(({ error }) => {
       if (error) {
@@ -503,7 +503,7 @@ async function syncLancamentosFromSupabase() {
     state.lancamentos = [...porId.values()];
     if (typeof invalidateLancIndex === 'function') invalidateLancIndex();
 
-    const naoSincronizados = local.filter(r => r.id && !r.importId && !idsRemotos.has(r.id));
+    const naoSincronizados = local.filter(r => r.id && (!r.importId || r.editado) && !idsRemotos.has(r.id));
     if (naoSincronizados.length) await _lancSyncUpsertBatch(naoSincronizados);
   } catch (err) {
     console.warn('[Supabase] Falha ao buscar lançamentos — mantendo dados locais.', err);
