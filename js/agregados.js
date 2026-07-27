@@ -365,14 +365,18 @@ function _agrBuildResumo(entradasFiltradas, cutoff, firstDay, lastDay) {
   const nextDay = new Date(cutoff.getTime() + 86400000);
   const diasPos = _agrDiasUteis(nextDay, lastDay);
 
-  const porCentral = new Map(); // central → { totalPre, totalPos, porDia: Map<dateKey, total> }
+  const porCentral = new Map(); // central(sigla) → { totalPre, totalPos, porDia, label }
   entradasFiltradas.forEach(e => {
+    // Agrupa pela sigla resolvida (mesma chave usada pelo drill-down e pelo filtro
+    // de Central existente, pra o clique na linha continuar batendo certinho) —
+    // mas guarda o nome ORIGINAL importado só pra exibição.
     const central = e.centralDestino || e.centralCompra || '—';
+    const original = e.centralDestinoOriginal || e.centralCompraOriginal || central;
     const d = _agrParseEntradaDate(e);
     if (!d) return;
     const dk   = _agrDateKey(d);
     const peso = num(e.peso);
-    if (!porCentral.has(central)) porCentral.set(central, { totalPre: 0, totalPos: 0, porDia: new Map() });
+    if (!porCentral.has(central)) porCentral.set(central, { totalPre: 0, totalPos: 0, porDia: new Map(), label: original });
     const c = porCentral.get(central);
     if (d <= cutoff) c.totalPre += peso; else c.totalPos += peso;
     c.porDia.set(dk, (c.porDia.get(dk) || 0) + peso);
@@ -384,7 +388,7 @@ function _agrBuildResumo(entradasFiltradas, cutoff, firstDay, lastDay) {
     const mediaPos = diasPos > 0 ? v.totalPos / diasPos : 0;
     const variacao = mediaPre > 0 ? ((mediaPos - mediaPre) / mediaPre) * 100 : (mediaPos > 0 ? Infinity : 0);
     return {
-      central, regional, totalPre: v.totalPre, totalPos: v.totalPos,
+      central, label: v.label, regional, totalPre: v.totalPre, totalPos: v.totalPos,
       mediaPre, mediaPos, variacao, situacao: _agrSituacao(variacao),
       porDia: v.porDia,
     };
@@ -640,15 +644,15 @@ function _agrResumoKpiStripHtml(mediaPre, mediaPos, variacao, situacao, nUsinas)
   const varSit   = situacao === 'aumentou' ? 'Aumentou compras' : situacao === 'reduziu' ? 'Reduziu compras' : 'Estável';
   return `
     <div class="agr-resumo-kpi-card">
-      <span class="agr-resumo-kpi-label">Média/dia · Pré</span>
+      <span class="agr-resumo-kpi-label">Peso médio/dia · Pré</span>
       <span class="agr-resumo-kpi-val">${_agrSmartFmt(mediaPre)}</span>
     </div>
     <div class="agr-resumo-kpi-card">
-      <span class="agr-resumo-kpi-label">Média/dia · Pós</span>
+      <span class="agr-resumo-kpi-label">Peso médio/dia · Pós</span>
       <span class="agr-resumo-kpi-val">${_agrSmartFmt(mediaPos)}</span>
     </div>
     <div class="agr-resumo-kpi-card">
-      <span class="agr-resumo-kpi-label">Variação</span>
+      <span class="agr-resumo-kpi-label">Variação de peso</span>
       <span class="agr-resumo-kpi-val ${varClass}">${varLabel}</span>
       <span style="font-size:10px;color:var(--text3)">${varSit}</span>
     </div>
@@ -670,7 +674,7 @@ function _agrResumoTableHtml(usinas) {
     return `
       <tr class="agr-resumo-row" onclick="_agrResumoRowClick('${centralAttr}')">
         <td class="td-mono">
-          ${escapeHtml(u.central)}
+          ${escapeHtml(u.label)}
           <div style="font-size:9.5px;color:var(--text3);font-weight:400">${escapeHtml(u.regional)}</div>
         </td>
         <td class="td-mono">${_agrSmartFmt(u.mediaPre)}</td>
@@ -682,7 +686,7 @@ function _agrResumoTableHtml(usinas) {
   return `
     <table class="agr-resumo-table">
       <thead><tr>
-        <th>Usina</th><th>Média/dia · Pré</th><th>Média/dia · Pós</th><th>Variação</th><th>Situação</th>
+        <th>Usina (nome original)</th><th>Peso médio/dia · Pré</th><th>Peso médio/dia · Pós</th><th>Variação</th><th>Situação</th>
       </tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
@@ -755,8 +759,8 @@ function _agrRenderResumoChart(usinasFiltradas, cutoff, firstDay, lastDay, media
         tooltip: {
           callbacks: {
             label: ctx => ctx.dataset.type === 'line'
-              ? `Média Pré: ${_agrSmartFmt(ctx.raw)}`
-              : `${_agrSmartFmt(ctx.raw)}`,
+              ? `Peso médio/dia (Pré): ${_agrSmartFmt(ctx.raw)}`
+              : `Peso do dia: ${_agrSmartFmt(ctx.raw)}`,
           },
         },
       },

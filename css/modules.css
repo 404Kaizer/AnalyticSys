@@ -8740,6 +8740,22 @@ mark.search-highlight {
 .agr-resumo-kpi-val.aumentou { color: var(--red); }
 .agr-resumo-kpi-val.reduziu  { color: var(--green); }
 
+.agr-resumo-metric-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin: 0 20px 16px;
+  padding: 8px 12px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text3);
+}
+.agr-resumo-metric-note i { font-size: 13px; margin-top: 1px; flex-shrink: 0; color: var(--text3); }
+.agr-resumo-metric-note strong { color: var(--text2); }
+
 .agr-resumo-table {
   width: 100%;
   border-collapse: collapse;
