@@ -4656,6 +4656,7 @@ function removerRegistro(module, index) {
   const syncDeleteByModule = {
     lancamentos: (typeof _lancSyncDelete === 'function') ? _lancSyncDelete : null,
     entradas:    (typeof _entradasSyncDelete === 'function') ? _entradasSyncDelete : null,
+    saidas:      (typeof _saidasSyncDelete === 'function') ? _saidasSyncDelete : null,
   };
   const syncDelete = syncDeleteByModule[module];
   if (syncDelete && actual.id && (!actual.importId || actual.editado)) syncDelete(actual.id);
@@ -4777,6 +4778,7 @@ function _resolveConflicts(decisions) {
         'Lançamento': (typeof _lancSyncDelete === 'function') ? _lancSyncDelete : null,
         'Produção':   (typeof _producaoSyncDelete === 'function') ? _producaoSyncDelete : null,
         'Entrada':    (typeof _entradasSyncDelete === 'function') ? _entradasSyncDelete : null,
+        'Saída':      (typeof _saidasSyncDelete === 'function') ? _saidasSyncDelete : null,
       };
       const syncDelete = syncDeleteByModulo[modulo];
       if (syncDelete) {
@@ -5958,6 +5960,21 @@ async function handleImport(event, modulo) {
         console.info('[Entrada Import] ✓ Mapeamento de colunas:', colMap);
         console.info('[Entrada Import] ✓ Total de linhas de dados:', data.length);
         console.info('[Entrada Import] ✓ Amostra da 1ª linha:', data[0]);
+      } else if (modulo === 'Saída') {
+        // BUG CORRIGIDO (Etapa 6): faltava este ramo — Saída caía no `else`
+        // genérico sem colMap, e processImportedRows sempre usava o fallback
+        // posicional fixo (buildSaidaColumnMap existia mas nunca era chamada).
+        // Mesmo padrão de Entrada: cabeçalho é sempre a primeira linha.
+        const headerRow = rows[0] || [];
+        const colMap    = buildSaidaColumnMap(headerRow);
+
+        data  = rows.slice(1).filter(r => r.some(c => c !== '' && c !== null && c !== undefined));
+        extra = { colMap, isCsv };
+
+        console.info('[Saída Import] ✓ Cabeçalho:', headerRow);
+        console.info('[Saída Import] ✓ Mapeamento de colunas:', colMap);
+        console.info('[Saída Import] ✓ Total de linhas de dados:', data.length);
+        console.info('[Saída Import] ✓ Amostra da 1ª linha:', data[0]);
       } else {
         data = rows.slice(1).filter(r => r.some(c => c !== '' && c !== null && c !== undefined));
       }
@@ -6221,6 +6238,7 @@ async function restoreAndRender() {
       'syncImportsFromSupabase', // Fase 4 — Etapa 3 (log de importações)
       'syncProducaoFromSupabase', // Fase 4 — Etapa 4
       'syncEntradasFromSupabase', // Fase 4 — Etapa 5
+      'syncSaidasFromSupabase', // Fase 4 — Etapa 6
     ];
     await Promise.all(
       SUPABASE_BOOT_SYNCS.map(fnName => {

@@ -318,9 +318,19 @@ function _criarRegistroSaida(dados) {
     valorTotal:     total
   });
 
+  // Aviso de duplicata — mesmo padrão de Lançamentos/Entradas/Produção.
+  if (typeof _fpSaida === 'function') {
+    const fpNovo = _fpSaida(rec);
+    const jaExiste = (state.saidas || []).some(r => _fpSaida(r) === fpNovo);
+    if (jaExiste && !confirm('Já existe uma saída idêntica (mesma central, material, OS, data e peso). Deseja criar mesmo assim?')) {
+      return { ok: false, erro: 'Criação cancelada — saída duplicada' };
+    }
+  }
+
   state.saidas.unshift(rec);
   invalidateSearchIndex('saidas');
   persist();
+  if (typeof _saidasSyncUpsert === 'function') _saidasSyncUpsert(rec);
   return { ok: true, rec };
 }
 
@@ -801,6 +811,101 @@ async function syncEntradasFromSupabase() {
     if (naoSincronizados.length) await _entradasSyncUpsertBatch(naoSincronizados);
   } catch (err) {
     console.warn('[Supabase] Falha ao buscar entradas — mantendo dados locais.', err);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// SAÍDAS — sincronização com o Supabase (Fase 4 — Etapa 6)
+// ═══════════════════════════════════════════════════════════
+// Mesmo padrão de Entradas/Produção: só manual (regra central de 27/07),
+// sem edição inline ainda (se for adicionada no futuro, replicar o
+// tratamento de `editado` que Lançamentos já tem).
+
+function _saidasToDbRow(r) {
+  return {
+    id: r.id,
+    fonte: r.fonte || null,
+    central_original: r.centralOriginal || null,
+    central: r.central || null,
+    dt_emissao: r.dtEmissao || null,
+    os: r.os || null,
+    contrato: r.contrato || null,
+    categoria_original: r.categoriaOriginal || null,
+    categoria: r.categoria || null,
+    fornecedor: r.fornecedor || null,
+    material_original: r.materialOriginal || null,
+    material: r.material || null,
+    peso: r.peso ?? null,
+    um: r.um || null,
+    custo: r.custo ?? null,
+    valor_total: r.valorTotal ?? null,
+    import_id: r.importId || null,
+    created_at: r.createdAt || null,
+  };
+}
+
+function _saidasFromDbRow(row) {
+  return {
+    id: row.id,
+    fonte: row.fonte,
+    centralOriginal: row.central_original,
+    central: row.central,
+    dtEmissao: row.dt_emissao,
+    os: row.os,
+    contrato: row.contrato,
+    categoriaOriginal: row.categoria_original,
+    categoria: row.categoria,
+    fornecedor: row.fornecedor,
+    materialOriginal: row.material_original,
+    material: row.material,
+    peso: row.peso,
+    um: row.um,
+    custo: row.custo,
+    valorTotal: row.valor_total,
+    importId: row.import_id || undefined,
+    createdAt: row.created_at,
+  };
+}
+
+function _saidasSyncUpsert(rec) {
+  if (rec.importId || !window.supabaseClient) return;
+  window.supabaseClient.from('saidas').upsert(_saidasToDbRow(rec))
+    .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao sincronizar saída:', error); });
+}
+
+const SAIDAS_SYNC_BATCH_SIZE = 500;
+async function _saidasSyncUpsertBatch(records) {
+  if (!window.supabaseClient || !records || !records.length) return;
+  const rows = records.map(_saidasToDbRow);
+  for (let i = 0; i < rows.length; i += SAIDAS_SYNC_BATCH_SIZE) {
+    const { error } = await window.supabaseClient.from('saidas').upsert(rows.slice(i, i + SAIDAS_SYNC_BATCH_SIZE));
+    if (error) { console.warn('[Supabase] Falha ao sincronizar lote de saídas:', error); break; }
+  }
+}
+
+function _saidasSyncDelete(id) {
+  if (!window.supabaseClient || !id) return;
+  window.supabaseClient.from('saidas').delete().eq('id', id)
+    .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao excluir saída na nuvem:', error); });
+}
+
+async function syncSaidasFromSupabase() {
+  if (!window.supabaseClient) return;
+  try {
+    const data = await fetchAllRows('saidas');
+    const remoto = (data || []).map(_saidasFromDbRow);
+    const idsRemotos = new Set(remoto.map(r => r.id));
+
+    const local = Array.isArray(state.saidas) ? state.saidas : [];
+    const porId = new Map(local.filter(r => r.id).map(r => [r.id, r]));
+    remoto.forEach(r => porId.set(r.id, r));
+    state.saidas = [...porId.values()];
+    if (typeof invalidateSaidasIndex === 'function') invalidateSaidasIndex();
+
+    const naoSincronizados = local.filter(r => r.id && !r.importId && !idsRemotos.has(r.id));
+    if (naoSincronizados.length) await _saidasSyncUpsertBatch(naoSincronizados);
+  } catch (err) {
+    console.warn('[Supabase] Falha ao buscar saídas — mantendo dados locais.', err);
   }
 }
 
