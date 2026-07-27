@@ -644,8 +644,11 @@ function _ncdSyncToSupabase(registros) {
 // correta entre sessões/dispositivos diferentes.
 async function syncNotasAjusteFromSupabase() {
   try {
-    const { data, error } = await window.supabaseClient.from('notas_ajuste').select('*');
-    if (error) throw error;
+    // fetchAllRows (cursor por id) — select('*') direto tinha o mesmo risco
+    // de teto de 1000 linhas já corrigido em Lançamentos/Entradas. Aqui é
+    // ainda mais sensível: a numeração sequencial das notas depende de ter
+    // TODOS os registros, não só os primeiros 1000.
+    const data = await fetchAllRows('notas_ajuste');
     const remoto = (data || []).map(r => ({
       id: r.id, numero: r.numero, tipo: r.tipo, central: r.central,
       cnpjCentral: r.cnpj_central, dataKey: r.data_key, dataGeracao: r.data_geracao,

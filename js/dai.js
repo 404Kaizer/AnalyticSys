@@ -83,8 +83,10 @@ function _daiSyncDelete(daiId) {
 // resto do sistema). Mantém dados locais em caso de falha de rede.
 async function syncAjustesSistemicosFromSupabase() {
   try {
-    const { data, error } = await window.supabaseClient.from('ajustes_sistemicos').select('*');
-    if (error) throw error;
+    // fetchAllRows (cursor por id) — select('*') direto tinha o mesmo risco
+    // de teto de 1000 linhas já corrigido em Lançamentos/Entradas. Sem
+    // .order() antes, então a troca não muda ordenação nenhuma.
+    const data = await fetchAllRows('ajustes_sistemicos');
     const remoto = (data || []).map(r => ({
       id: r.id, tag: r.tag, numero: r.numero, dataGeracao: r.data_geracao,
       dataGeracaoKey: r.data_geracao_key, dataOcorrido: r.data_ocorrido,

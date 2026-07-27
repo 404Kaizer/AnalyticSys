@@ -81,11 +81,11 @@ function _ocFromDbRow(row) {
 // como fallback se a rede falhar, em vez de zerar a lista.
 async function syncOcorrenciasFromSupabase() {
   try {
-    const { data, error } = await window.supabaseClient
-      .from('ocorrencias')
-      .select('*')
-      .order('criado_em', { ascending: false });
-    if (error) throw error;
+    // fetchAllRows (paginação por cursor de id) — select('*') sem paginação
+    // aqui tinha o mesmo risco já corrigido em Lançamentos/Entradas (teto de
+    // 1000 linhas do PostgREST). Ordem de chegada não importa: a tela
+    // sempre reordena via getOcorrenciasFiltradas() antes de renderizar.
+    const data = await fetchAllRows('ocorrencias');
     state.ocorrencias = (data || []).map(_ocFromDbRow);
   } catch (err) {
     console.warn('[Supabase] Falha ao buscar ocorrencias — mantendo dados locais.', err);
