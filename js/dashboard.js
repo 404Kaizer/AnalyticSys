@@ -4926,7 +4926,7 @@ async function _mergeWithConflictCheck(modulo, incoming) {
     ? compactSapRecords(state[stateKey] || [])
     : (state[stateKey] || []);
 
-  const { result, added } = _mergeDedup(existingForMerge, resolvedIncoming, fp);
+  const { result, added } = _mergeDedup(existingForMerge, resolvedIncoming, fp, _fpBaseFns[modulo]);
   _importAddedCount += added;
 
   // Feedback pós-merge
@@ -4993,30 +4993,75 @@ function _fpProducao(r) {
 }
 
 // Merge deduplicado: mantém registros existentes que não conflitem com os novos,
-// depois adiciona os novos. Novos têm prioridade (substituem o existente se mesma chave).
+// depois adiciona os novos. Novos têm prioridade (substituem o existente se mesma chave)
+// — EXCETO quando o existente foi editado manualmente (ver abaixo).
 // Retorna { result, added } onde added = quantos registros foram de fato inseridos.
-function _mergeDedup(existing, incoming, fpFn) {
+//
+// CORREÇÃO (duplicidade): a chave completa de dedup inclui o peso (pra não
+// colapsar duplicatas legítimas — dois eventos reais no mesmo dia). Isso tem
+// um efeito colateral: se o usuário edita o peso de um registro inline, a
+// chave completa dele muda, e reimportar o arquivo original (peso antigo)
+// deixa de reconhecer aquele registro como "o mesmo" — criava um segundo
+// registro duplicado com o valor antigo. Pior: mesmo quando o peso não muda,
+// editar OUTRO campo (fornecedor, custo etc.) e depois reimportar sobrescrevia
+// a edição em silêncio, porque o registro reimportado tomava conta de tudo
+// exceto id/importId.
+//
+// Regra nova: registros com editado=true nunca são sobrescritos por
+// reimportação — nem quando a chave completa bate (o dado reimportado é
+// descartado, a edição prevalece), nem quando só a chave-base bate (peso
+// mudou) — nesse caso a linha reimportada é reconhecida como "o mesmo
+// evento, já corrigido" e simplesmente descartada, em vez de virar um
+// registro novo. fpBaseFn é opcional — se omitido, só a primeira proteção
+// (preservar edição em match exato) se aplica.
+function _mergeDedup(existing, incoming, fpFn, fpBaseFn) {
   if (!incoming.length) return { result: existing, added: 0 };
   const incomingFps = new Set(incoming.map(fpFn));
   // Monta mapa de fingerprint → registro existente para recuperar o importId original
   const existingByFp = new Map(existing.map(r => [fpFn(r), r]));
-  // Novos registros que não existem no state atual — entram com o importId da importação atual
-  const trulyNew = incoming.filter(r => !existingByFp.has(fpFn(r)));
-  // Registros que já existiam — são atualizados com os dados novos MAS preservam
-  // o importId original, evitando que uma reimportação parcial "sequestre" registros
-  // de importações anteriores e os remova junto ao excluir a importação nova.
-  // Preserva também o id original (Fase 4 — Supabase) pela mesma razão: sem
-  // isso, uma reimportação geraria um id novo a cada vez (stamp() sempre gera
-  // um id novo no momento do parse) e cada reimportação criaria uma linha
-  // duplicada na nuvem em vez de atualizar a existente.
+
+  // Candidatos editados indexados pela chave-base (sem peso) — só entra no
+  // mapa se a chave-base for única entre os editados, pra não casar errado
+  // quando há mais de uma edição no mesmo evento-base.
+  const editedByBase = new Map();
+  if (fpBaseFn) {
+    const baseCounts = new Map();
+    existing.forEach(r => {
+      if (!r.editado) return;
+      const b = fpBaseFn(r);
+      baseCounts.set(b, (baseCounts.get(b) || 0) + 1);
+    });
+    existing.forEach(r => {
+      if (!r.editado || baseCounts.get(fpBaseFn(r)) !== 1) return;
+      editedByBase.set(fpBaseFn(r), r);
+    });
+  }
+
+  // Registros que já existiam (chave completa bate) — atualizados com os
+  // dados novos, preservando importId/id. MAS se o existente foi editado
+  // manualmente, a edição prevalece por completo — só preenche importId se
+  // ainda estava vazio.
   const updatedExisting = incoming
     .filter(r => existingByFp.has(fpFn(r)))
     .map(r => {
       const original = existingByFp.get(fpFn(r));
+      if (original.editado) return { ...original, importId: original.importId || r.importId };
       return { ...r, importId: original.importId, id: original.id };
     });
-  // Registros que existem e não colidiram com nenhum incoming — mantidos intactos
+
+  // Novos registros que não bateram por chave completa. Antes de tratar como
+  // "novo de verdade", checa se a chave-base bate com um editado (mesmo
+  // evento, peso corrigido manualmente) — se bater, descarta a linha
+  // reimportada em vez de duplicar.
+  const trulyNew = incoming
+    .filter(r => !existingByFp.has(fpFn(r)))
+    .filter(r => !(fpBaseFn && editedByBase.has(fpBaseFn(r))));
+
+  // Registros que existem e não colidiram com nenhum incoming — mantidos
+  // intactos (isso já inclui os editados reconhecidos acima, porque a
+  // chave completa deles não está em incomingFps).
   const kept = existing.filter(r => !incomingFps.has(fpFn(r)));
+
   return { result: [...updatedExisting, ...trulyNew, ...kept], added: trulyNew.length };
 }
 

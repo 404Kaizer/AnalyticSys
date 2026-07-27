@@ -161,6 +161,15 @@ function _criarRegistroProducao(dados) {
 
   if (!rec.mes || !rec.central) return { ok: false, erro: 'Preencha mês e central' };
 
+  // Aviso de duplicata — mesmo padrão de Lançamentos/Entradas.
+  if (typeof _fpProducao === 'function') {
+    const fpNovo = _fpProducao(rec);
+    const jaExiste = (state.producao || []).some(r => _fpProducao(r) === fpNovo);
+    if (jaExiste && !confirm('Já existe um registro de produção para esta central neste mês. Deseja criar mesmo assim?')) {
+      return { ok: false, erro: 'Criação cancelada — produção duplicada' };
+    }
+  }
+
   state.producao.unshift(rec);
   persist();
   if (typeof _producaoSyncUpsert === 'function') _producaoSyncUpsert(rec);
@@ -238,6 +247,15 @@ function _criarRegistroEntrada(dados) {
     custo,
     valorTotal:     total
   });
+
+  // Aviso de duplicata — mesmo padrão de Lançamentos, não bloqueia.
+  if (typeof _fpEntrada === 'function') {
+    const fpNovo = _fpEntrada(rec);
+    const jaExiste = (state.entradas || []).some(r => _fpEntrada(r) === fpNovo);
+    if (jaExiste && !confirm('Já existe uma entrada idêntica (mesma central, material, NF, data e peso). Deseja criar mesmo assim?')) {
+      return { ok: false, erro: 'Criação cancelada — entrada duplicada' };
+    }
+  }
 
   state.entradas.unshift(rec);
   invalidateSearchIndex('entradas');
@@ -355,6 +373,18 @@ function _criarRegistroLancamento(dados) {
     custo,
     valorTotal:     total
   });
+
+  // Aviso de duplicata (não bloqueia — duplicata legítima é permitida por
+  // design, ex.: dois eventos reais na mesma central/material/data). Só
+  // avisa quando a chave completa (com peso) já existe, pra pegar
+  // duplo-clique ou "esqueci que já lancei isso" antes de acontecer.
+  if (typeof _fpLancamento === 'function') {
+    const fpNovo = _fpLancamento(rec);
+    const jaExiste = (state.lancamentos || []).some(r => _fpLancamento(r) === fpNovo);
+    if (jaExiste && !confirm('Já existe um lançamento idêntico (mesma central, material, data e peso). Deseja criar mesmo assim?')) {
+      return { ok: false, erro: 'Criação cancelada — lançamento duplicado' };
+    }
+  }
 
   state.lancamentos.unshift(rec);
   invalidateLancIndex();
