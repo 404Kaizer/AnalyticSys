@@ -85,8 +85,10 @@ async function reconcilePendingDeletes() {
     if (state.imports.length !== beforeImports) {
       touched = true;
       // A exclusão não tinha sido persistida localmente a tempo — também não
-      // deve ter sido sincronizada com a nuvem. Reconcilia lá também.
+      // deve ter sido sincronizada com a nuvem. Reconcilia lá também,
+      // incluindo a cascata nas demais tabelas (Fase 4 — Etapa 7).
       if (typeof _importsSyncDelete === 'function') list.forEach(_importsSyncDelete);
+      if (typeof _cascadeDeleteCloudByImportId === 'function') list.forEach(_cascadeDeleteCloudByImportId);
     }
   }
 

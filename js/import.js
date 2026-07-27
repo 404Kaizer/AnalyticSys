@@ -1,3 +1,42 @@
+// ═══════════════════════════════════════════════════════════
+// CASCATA DE EXCLUSÃO NA NUVEM (Fase 4 — Etapa 7)
+// ═══════════════════════════════════════════════════════════
+// Escopo real: hoje só Filiais/Materiais sincronizam TODO o cadastro
+// (manual + importado) — Entradas/Saídas/Lançamentos/Produção só
+// sincronizam manual OU editado (regra central de 27/07). Isso significa
+// que, na prática, só existe algo pra apagar na nuvem por causa de uma
+// importação em Filiais/Materiais, e em Lançamentos quando um registro
+// importado foi editado depois (aí ele foi sincronizado mesmo tendo
+// importId). Apagar por import_id nas outras tabelas é inofensivo — hoje
+// nunca vai encontrar nada lá, mas já deixa pronto pro dia que Entradas/
+// Saídas/Produção ganharem edição inline como Lançamentos já tem.
+const _CASCADE_TABELAS_NUVEM = ['filiais', 'materiais', 'lancamentos', 'entradas', 'saidas', 'producao'];
+
+function _cascadeDeleteCloudByImportId(importId) {
+  if (!window.supabaseClient || !importId) return;
+  _CASCADE_TABELAS_NUVEM.forEach(table => {
+    window.supabaseClient.from(table).delete().eq('import_id', importId)
+      .then(({ error }) => { if (error) console.warn(`[Supabase] Falha ao excluir ${table} da nuvem (cascata):`, error); });
+  });
+}
+
+// snapshots: { filiais, materiais, lancamentos, entradas, saidas, producao }
+// — arrays do estado local ANTES da exclusão (pra saber o que restaurar).
+function _cascadeRestoreCloudByImportId(importId, snapshots) {
+  if (!window.supabaseClient || !importId) return;
+  const porImport = arr => (arr || []).filter(r => r.importId === importId);
+  // Filiais/Materiais: tudo que tinha esse importId sincronizava, restaura tudo.
+  if (typeof _filiaisSyncUpsertBatch === 'function') _filiaisSyncUpsertBatch(porImport(snapshots.filiais));
+  if (typeof _materiaisSyncUpsertBatch === 'function') _materiaisSyncUpsertBatch(porImport(snapshots.materiais));
+  // Lançamentos/Entradas/Saídas/Produção: só o que estava editado é que
+  // pode ter ido pra nuvem — restaura só esses (nos 3 últimos, hoje nunca
+  // há nada aqui, já que não existe edição inline ainda).
+  if (typeof _lancSyncUpsertBatch === 'function') _lancSyncUpsertBatch(porImport(snapshots.lancamentos).filter(r => r.editado));
+  if (typeof _entradasSyncUpsertBatch === 'function') _entradasSyncUpsertBatch(porImport(snapshots.entradas).filter(r => r.editado));
+  if (typeof _saidasSyncUpsertBatch === 'function') _saidasSyncUpsertBatch(porImport(snapshots.saidas).filter(r => r.editado));
+  if (typeof _producaoSyncUpsertBatch === 'function') _producaoSyncUpsertBatch(porImport(snapshots.producao).filter(r => r.editado));
+}
+
 function excluirImportacao(importId) {
   const importRecord = state.imports.find(r => r.id === importId);
   const nomeArquivo  = importRecord?.arquivo ?? 'importação';
@@ -72,10 +111,10 @@ function excluirImportacao(importId) {
           renderAll();
 
           // Sincroniza a exclusão do próprio registro de log com a nuvem
-          // (Fase 4 — Etapa 3). Os demais módulos (Lançamentos, Filiais,
-          // Materiais) ainda NÃO têm seus registros apagados da nuvem por
-          // esta operação — isso fica pra Etapa 7 (cascata unificada).
+          // (Fase 4 — Etapa 3), e a cascata nas tabelas que de fato podem
+          // ter algo lá (Fase 4 — Etapa 7).
           if (typeof _importsSyncDelete === 'function') _importsSyncDelete(importId);
+          _cascadeDeleteCloudByImportId(importId);
         },
         undo: () => {
           // A exclusão foi revertida — remove a marca para que um fechamento
@@ -101,11 +140,17 @@ function excluirImportacao(importId) {
           persist();
           renderAll();
 
-          // Restaura o registro de log na nuvem também.
+          // Restaura o registro de log na nuvem também, e a cascata
+          // (Fase 4 — Etapa 7).
           if (typeof _importsSyncUpsert === 'function') {
             const importSnap = snapshotImports.find(r => r.id === importId);
             if (importSnap) _importsSyncUpsert(importSnap);
           }
+          _cascadeRestoreCloudByImportId(importId, {
+            filiais: snapshotFiliais, materiais: snapshotMateriais,
+            lancamentos: snapshotLancamentos, entradas: snapshotEntradas,
+            saidas: snapshotSaidas, producao: snapshotProducao,
+          });
         },
       });
     }
