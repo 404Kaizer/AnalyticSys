@@ -5711,6 +5711,56 @@ mark.search-highlight {
 .notif-go-hint { color: var(--text3); margin-left: auto; }
 .notif-mark-btn:hover { background: var(--green-bg); color: var(--green); border-color: var(--green-border); }
 
+/* Toast de atividade em tempo real — pop-up transiente abaixo do sino,
+   independente do dropdown (Fase 5 — Realtime, Etapa 1: infraestrutura
+   pronta, ainda sem gatilho automático nesta entrega). */
+.notif-activity-toast {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: 300px;
+  background: var(--bg2);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 8px 32px rgba(0,0,0,.35);
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  z-index: 600;
+  opacity: 0;
+  transform: translateY(-6px);
+  pointer-events: none;
+  cursor: pointer;
+  transition: opacity .18s ease, transform .18s ease;
+}
+.notif-activity-toast.show {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+.notif-toast-icon {
+  width: 30px; height: 30px;
+  border-radius: 8px;
+  background: var(--accent-dim);
+  color: var(--accent);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+.notif-toast-body-wrap { flex: 1; min-width: 0; }
+.notif-toast-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+.notif-toast-body {
+  font-size: 11px;
+  color: var(--text2);
+  line-height: 1.45;
+}
+
 /* ══════════════════════════════════════════
    CUSTOM CALENDAR DATE PICKER
 ══════════════════════════════════════════ */

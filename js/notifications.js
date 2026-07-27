@@ -135,14 +135,23 @@ function _notifCompute(healthScores) {
   return result;
 }
 
+// Tipos calculados/recalculados por _notifCompute a cada chamada de
+// notifSync. Preparado para a Etapa 3: notificações de 'atividade' (via
+// Realtime) são inseridas por fora deste ciclo (ver notifPushActivity,
+// a ser criado na próxima etapa) e não devem ser removidas aqui — sem
+// isso, a primeira recomputação de saúde depois de uma notificação de
+// atividade a apagaria da lista sem nenhum motivo relacionado a ela.
+const _NOTIF_MANAGED_TYPES = new Set(['saude','ocorrencia','conferencia']);
+
 // ── Sincroniza state.notifications ───────────────────────
 function notifSync(healthScores) {
   if (!Array.isArray(state.notifications)) state.notifications = [];
   const expected    = _notifCompute(healthScores);
   const expectedIds = new Set(expected.map(n=>n.id));
 
-  // Remove as que não se aplicam mais
-  state.notifications = state.notifications.filter(n=>expectedIds.has(n.id));
+  // Remove as que não se aplicam mais — só entre os tipos que este
+  // cálculo de fato gerencia (saude/ocorrencia/conferencia).
+  state.notifications = state.notifications.filter(n=>!_NOTIF_MANAGED_TYPES.has(n.type) || expectedIds.has(n.id));
 
   // Adiciona novas
   const existingIds = new Set(state.notifications.map(n=>n.id));
@@ -386,8 +395,70 @@ function notifBoot() {
   }
 }
 
+// ═══════════════════════════════════════════════════════════
+// SOM + TOAST DE ATIVIDADE — infraestrutura (Fase 5, Etapa 1)
+// ═══════════════════════════════════════════════════════════
+// Funções prontas para uso pela Etapa 3 (canal Realtime assinando
+// activity_log). Nesta entrega elas existem e funcionam isoladamente,
+// mas ainda não são chamadas por nenhum gatilho automático — a fiação
+// com o Realtime e com a regra "ADM vê ação de outros / dono vê ação do
+// ADM" fica pra próxima etapa.
+
+// Som curto (dois tons subindo), gerado via Web Audio API — sem depender
+// de nenhum arquivo de áudio externo. Contexto criado só na primeira
+// chamada (lazy) porque navegadores bloqueiam AudioContext antes de
+// qualquer interação do usuário; como o app já exige clique/login antes
+// de qualquer notificação chegar, isso nunca deve ser um problema na
+// prática. Falha (ex.: contexto bloqueado) é silenciosa — o toast visual
+// continua funcionando normalmente mesmo sem som.
+let _notifAudioCtx = null;
+function notifPlaySound() {
+  try {
+    if (!_notifAudioCtx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      _notifAudioCtx = new AC();
+    }
+    if (_notifAudioCtx.state === 'suspended') _notifAudioCtx.resume();
+    const ctx = _notifAudioCtx;
+    const osc  = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(880, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(1320, ctx.currentTime + 0.08);
+    gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.18, ctx.currentTime + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.28);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.3);
+  } catch (e) { console.warn('[Notif] Falha ao tocar som:', e); }
+}
+
+// Popup transiente embaixo do sino (elemento #notif-activity-toast,
+// ver index.html) — some sozinho depois de alguns segundos ou ao clicar
+// nele. Independente do dropdown/badge (que continuam representando o
+// histórico persistido); este é só o "flash" de algo acontecendo agora.
+let _notifToastTimer = null;
+function notifShowActivityToast(title, body) {
+  const el = document.getElementById('notif-activity-toast');
+  if (!el) return;
+  const titleEl = el.querySelector('.notif-toast-title');
+  const bodyEl  = el.querySelector('.notif-toast-body');
+  if (titleEl) titleEl.textContent = title || 'Atividade';
+  if (bodyEl)  bodyEl.textContent  = body  || '';
+  el.classList.add('show');
+  clearTimeout(_notifToastTimer);
+  _notifToastTimer = setTimeout(() => el.classList.remove('show'), 5000);
+}
+function notifHideActivityToast() {
+  document.getElementById('notif-activity-toast')?.classList.remove('show');
+  clearTimeout(_notifToastTimer);
+}
+
 Object.assign(window,{
   notifToggle,notifClose,notifOpen,
   notifMarkRead,notifMarkAllRead,notifNavigate,
   notifSync,notifBoot,notifUpdateFromAnalytico,notifSilentHealthCheck,
+  notifPlaySound,notifShowActivityToast,notifHideActivityToast,
 });
