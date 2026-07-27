@@ -23,49 +23,60 @@ function stamp(obj) {
 // existam na tabela. Entradas (90k+) e Lançamentos (800k+) estavam
 // perdendo dados silenciosamente no boot por causa disso.
 //
-// BUG REAL Nº2 (este, encontrado logo em seguida): a primeira correção
-// paginava certo, mas buscava as páginas UMA DE CADA VEZ, em sequência —
-// para Lançamentos (813 mil registros ÷ 1000/página) isso virou 813
-// requisições sequenciais, cada uma esperando a anterior terminar. Daí o
-// boot travando por vários minutos.
+// BUG REAL Nº2 (encontrado em seguida): a correção do Nº1 buscava as
+// páginas uma de cada vez, em sequência — 813 requisições sequenciais
+// pra Lançamentos, cada uma esperando a anterior. Boot travando por
+// minutos.
 //
-// Correção: descobre o total de linhas primeiro (1 requisição barata,
-// count exact + head:true, sem trazer dados), calcula quantas páginas são
-// necessárias, e busca em RODADAS de páginas em paralelo (não todas de
-// uma vez, pra não abrir centenas de conexões simultâneas e estourar o
-// pool do banco — nem uma de cada vez, que é o que causou o travamento).
-const SUPABASE_PAGE_SIZE = 5000;       // até 10.000/requisição no servidor hoje — 5000 dá margem seguindo o mesmo max_rows configurado (ver migração de aumento do db-max-rows)
-const SUPABASE_FETCH_CONCURRENCY = 6;  // rodadas de N páginas simultâneas
+// BUG REAL Nº3 (este): a correção do Nº2 passou a buscar em paralelo por
+// OFFSET (".range(from, to)") — mas paginação por OFFSET fica
+// progressivamente mais lenta quanto mais fundo se pagina, porque o
+// Postgres precisa varrer e descartar todas as linhas anteriores a cada
+// página. Por volta da linha 300.000 de Lançamentos, as consultas
+// passaram a estourar o timeout de 8s do banco (statement_timeout) e
+// voltar erro 500 — e como uma única página falhando derrubava a busca
+// inteira, Lançamentos simplesmente não voltava.
+//
+// Correção definitiva: paginação por CURSOR (keyset) usando o id (chave
+// primária, já indexada por natureza) — cada página busca "id > último id
+// visto ORDER BY id LIMIT N", que sempre usa o índice diretamente e tem o
+// MESMO custo não importa a profundidade. É sequencial (cada página
+// depende de saber o último id da anterior — não dá pra paralelizar sem
+// conhecer os limites de antemão), mas nunca trava nem falha por
+// profundidade, ao contrário do OFFSET.
+const SUPABASE_PAGE_SIZE = 5000;
+
+function _ensureIdSelected(columns) {
+  if (columns === '*') return '*';
+  const parts = columns.split(',').map(s => s.trim());
+  return parts.includes('id') ? columns : `${columns}, id`;
+}
 
 async function fetchAllRows(table, columns = '*') {
   if (!window.supabaseClient) return [];
+  const cols = _ensureIdSelected(columns);
+  const pageSize = SUPABASE_PAGE_SIZE;
+  let all = [];
+  let lastId = null;
 
-  const { count, error: countError } = await window.supabaseClient
-    .from(table)
-    .select(columns, { count: 'exact', head: true });
-  if (countError) throw countError;
-  const total = count || 0;
-  if (total === 0) return [];
+  while (true) {
+    let query = window.supabaseClient
+      .from(table)
+      .select(cols)
+      .order('id', { ascending: true })
+      .limit(pageSize);
+    if (lastId !== null) query = query.gt('id', lastId);
 
-  const pageSize  = SUPABASE_PAGE_SIZE;
-  const pageCount = Math.ceil(total / pageSize);
-  const pageIdx   = Array.from({ length: pageCount }, (_, i) => i);
-  const byPage    = new Array(pageCount);
+    const { data, error } = await query;
+    if (error) throw error;
+    if (!data || !data.length) break;
 
-  for (let i = 0; i < pageIdx.length; i += SUPABASE_FETCH_CONCURRENCY) {
-    const slice = pageIdx.slice(i, i + SUPABASE_FETCH_CONCURRENCY);
-    const results = await Promise.all(slice.map(p => {
-      const from = p * pageSize;
-      const to   = Math.min(from + pageSize - 1, total - 1);
-      return window.supabaseClient.from(table).select(columns).range(from, to);
-    }));
-    results.forEach(({ data, error }, idx) => {
-      if (error) throw error;
-      byPage[slice[idx]] = data || [];
-    });
+    all = all.concat(data);
+    lastId = data[data.length - 1].id;
+    if (data.length < pageSize) break; // última página
   }
 
-  return byPage.flat();
+  return all;
 }
 
 // ═══════════════════════════════════════════════════════════════════════
