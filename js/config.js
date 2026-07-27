@@ -56,19 +56,17 @@ async function _configsSyncDelete(key) {
 
 async function syncConfigsFromSupabase() {
   try {
-    const { data, error } = await window.supabaseClient
-      .from('configs')
-      .select('key, value, descricao, created_at')
-      .order('created_at', { ascending: false });
-    if (error) throw error;
+    const data = await fetchAllRows('configs', 'key, value, descricao, created_at');
     // Traduz de volta pro formato local (desc/created) esperado por
     // mergePersistentConfigs e por toda a UI de Configurações.
-    const remoto = (data || []).map(r => ({
-      key: r.key,
-      value: r.value,
-      desc: r.descricao,
-      created: r.created_at ? new Date(r.created_at).toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR'),
-    }));
+    const remoto = (data || [])
+      .sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+      .map(r => ({
+        key: r.key,
+        value: r.value,
+        desc: r.descricao,
+        created: r.created_at ? new Date(r.created_at).toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR'),
+      }));
     state.configs = mergePersistentConfigs(state.configs, remoto);
   } catch (err) {
     console.warn('[Supabase] Falha ao buscar configs — mantendo dados locais.', err);
@@ -515,8 +513,7 @@ async function _materiaisSyncUpsertBatch(recs) {
 // base já existente, mesmo padrão usado em Lançamentos).
 async function syncMateriaisFromSupabase() {
   try {
-    const { data, error } = await window.supabaseClient.from('materiais').select('origem, alias, categoria, import_id, created_at');
-    if (error) throw error;
+    const data = await fetchAllRows('materiais', 'origem, alias, categoria, import_id, created_at');
     const local = Array.isArray(state.materiais) ? state.materiais : [];
     const porChave = new Map(local.map(m => [materialMatchKey(m), m]));
     (data || []).forEach(r => {
@@ -1002,8 +999,7 @@ async function _filiaisSyncUpsertBatch(recs) {
 // created_at, não created (erro "column filiais.created does not exist").
 async function syncFiliaisFromSupabase() {
   try {
-    const { data, error } = await window.supabaseClient.from('filiais').select('origem, alias, cnpj, regional, import_id, created_at');
-    if (error) throw error;
+    const data = await fetchAllRows('filiais', 'origem, alias, cnpj, regional, import_id, created_at');
     const local = Array.isArray(state.filiais) ? state.filiais : [];
     const porChave = new Map(local.map(f => [filialMatchKey(f), f]));
     (data || []).forEach(r => {

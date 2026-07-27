@@ -488,8 +488,7 @@ function _lancSyncDelete(id) {
 async function syncLancamentosFromSupabase() {
   if (!window.supabaseClient) return;
   try {
-    const { data, error } = await window.supabaseClient.from('lancamentos').select('*');
-    if (error) throw error;
+    const data = await fetchAllRows('lancamentos');
     const remoto = (data || []).map(_lancFromDbRow);
     const idsRemotos = new Set(remoto.map(r => r.id));
 
@@ -563,8 +562,7 @@ function _importsSyncDelete(importId) {
 async function syncImportsFromSupabase() {
   if (!window.supabaseClient) return;
   try {
-    const { data, error } = await window.supabaseClient.from('imports').select('*');
-    if (error) throw error;
+    const data = await fetchAllRows('imports');
     const remoto = (data || []).map(_importsFromDbRow);
     const idsRemotos = new Set(remoto.map(r => r.id));
 
@@ -652,8 +650,7 @@ function _producaoSyncDelete(id) {
 async function syncProducaoFromSupabase() {
   if (!window.supabaseClient) return;
   try {
-    const { data, error } = await window.supabaseClient.from('producao').select('*');
-    if (error) throw error;
+    const data = await fetchAllRows('producao');
     const remoto = (data || []).map(_producaoFromDbRow);
     const idsRemotos = new Set(remoto.map(r => r.id));
 
@@ -753,8 +750,7 @@ function _entradasSyncDelete(id) {
 async function syncEntradasFromSupabase() {
   if (!window.supabaseClient) return;
   try {
-    const { data, error } = await window.supabaseClient.from('entradas').select('*');
-    if (error) throw error;
+    const data = await fetchAllRows('entradas');
     const remoto = (data || []).map(_entradasFromDbRow);
     const idsRemotos = new Set(remoto.map(r => r.id));
 

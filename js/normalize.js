@@ -15,6 +15,36 @@ function stamp(obj) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+// PAGINAÇÃO DE LEITURA DO SUPABASE (Fase 4)
+// ═══════════════════════════════════════════════════════════════════════
+// BUG REAL ENCONTRADO: o Supabase (PostgREST) tem um limite padrão de 1000
+// linhas por requisição (db-max-rows) — um select('*') sem paginação NUNCA
+// retorna mais que isso, não importa quantas linhas existam na tabela.
+// Entradas (90k+) e Lançamentos (800k+) estavam perdendo dados
+// silenciosamente no boot por causa disso (sem erro — a resposta vinha
+// "certa", só truncada). Este helper pagina em blocos seguros e NUNCA
+// confia no limite do servidor, mesmo que ele seja aumentado depois.
+const SUPABASE_PAGE_SIZE = 1000;
+
+async function fetchAllRows(table, columns = '*') {
+  if (!window.supabaseClient) return [];
+  let all = [];
+  let from = 0;
+  while (true) {
+    const { data, error } = await window.supabaseClient
+      .from(table)
+      .select(columns)
+      .range(from, from + SUPABASE_PAGE_SIZE - 1);
+    if (error) throw error;
+    if (!data || !data.length) break;
+    all = all.concat(data);
+    if (data.length < SUPABASE_PAGE_SIZE) break; // última página
+    from += SUPABASE_PAGE_SIZE;
+  }
+  return all;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
 // REGISTRO DE NOMES ORIGINAIS DE MATERIAIS (diagnóstico de padronização)
 // ═══════════════════════════════════════════════════════════════════════
 // Objetivo: capturar TODO nome original de material visto em Entradas,
