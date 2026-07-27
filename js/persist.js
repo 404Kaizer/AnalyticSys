@@ -422,6 +422,26 @@ function applySavedState(saved) {
     state[key] = state[key].map(item => (item && item.id) ? item : { ...item, id: gerarIdRegistro() });
   });
 
+  // LIMPEZA (27/07): remove localmente os registros SAP de teste que o bug
+  // de duplicação por id instável (ver "Bugs corrigidos" no resumo do
+  // projeto) já tinha baixado da nuvem pro IndexedDB de qualquer
+  // dispositivo que sincronizou antes da correção acima existir. Sem isso,
+  // mesmo com o id agora estável, esse volume ainda subiria pra nuvem de
+  // novo na próxima sincronização — só que sem crescer mais. Critério
+  // idêntico ao já confirmado 100% seguro na limpeza da nuvem em 27/07
+  // (usuario='pulzsys', fonte manual, sem importId — nenhum dado real bate
+  // com essa combinação). Roda uma vez por dispositivo: depois que os
+  // registros somem daqui, o filtro não encontra mais nada nos boots
+  // seguintes — inofensivo se este dispositivo nunca teve o problema.
+  if (Array.isArray(state.sap) && state.sap.length) {
+    const antesLimpeza = state.sap.length;
+    state.sap = state.sap.filter(r => !(r.usuario === 'pulzsys' && r.fonte === 'manual' && !r.importId));
+    const removidosLimpeza = antesLimpeza - state.sap.length;
+    if (removidosLimpeza > 0) {
+      console.info(`[Persist] Limpeza SAP: ${removidosLimpeza} registro(s) de teste do bug de duplicação removido(s) localmente.`);
+    }
+  }
+
   // Migra IDs de ocorrências do formato OC-timestamp para OC-N sequencial
   if (Array.isArray(state.ocorrencias)) {
     let counter = 1;
