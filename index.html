@@ -2751,23 +2751,6 @@
           </div>
         </div>
 
-        <!-- Modal de edição (JSON genérico — mesmo formulário serve pra qualquer módulo) -->
-        <div class="modal-overlay" id="admin-edit-modal">
-          <div class="modal" style="max-width:520px">
-            <div class="modal-title"><i class="ti ti-edit"></i> Editar registro</div>
-            <div class="modal-sub" id="admin-edit-sub"></div>
-            <div class="form-group">
-              <label class="form-label">Dados (JSON)</label>
-              <textarea class="form-input" id="admin-edit-json" rows="14" style="font-family:var(--mono);font-size:12px" spellcheck="false"></textarea>
-            </div>
-            <div id="admin-edit-error" style="display:none;color:var(--red);font-size:12px;margin-top:-8px;margin-bottom:8px"></div>
-            <div class="form-actions">
-              <button class="btn" onclick="closeModal('admin-edit-modal')">Cancelar</button>
-              <button class="btn btn-primary" onclick="adminSalvarEdicao()"><i class="ti ti-check"></i> Salvar</button>
-            </div>
-          </div>
-        </div>
-
       </div>
 
       <div class="page" id="page-configuracoes">
@@ -3048,6 +3031,32 @@
 </div>
 
 <!-- MODAL: Fechamento -->
+<!-- Modal de edição (JSON genérico — mesmo formulário serve pra qualquer
+     módulo da tela de Administração). Movido pra fora de qualquer .page em
+     27/07 — estava aninhado dentro de #page-admin, o único modal do
+     sistema nessa condição. .page.active tem animation:...both, que deixa
+     um transform:translateY(0) aplicado permanentemente enquanto a página
+     está ativa; um transform em ancestral cria um novo containing block
+     pra descendentes position:fixed, então o modal parava de cobrir a
+     viewport de verdade e ficava preso/cortado dentro de #page-admin —
+     sintoma visual de "z-index bugado" que na real era esse containing
+     block errado. -->
+<div class="modal-overlay" id="admin-edit-modal">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-title"><i class="ti ti-edit"></i> Editar registro</div>
+    <div class="modal-sub" id="admin-edit-sub"></div>
+    <div class="form-group">
+      <label class="form-label">Dados (JSON)</label>
+      <textarea class="form-input" id="admin-edit-json" rows="14" style="font-family:var(--mono);font-size:12px" spellcheck="false"></textarea>
+    </div>
+    <div id="admin-edit-error" style="display:none;color:var(--red);font-size:12px;margin-top:-8px;margin-bottom:8px"></div>
+    <div class="form-actions">
+      <button class="btn" onclick="closeModal('admin-edit-modal')">Cancelar</button>
+      <button class="btn btn-primary" onclick="adminSalvarEdicao()"><i class="ti ti-check"></i> Salvar</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-fechamento">
   <div class="modal fech-modal-shell" style="max-width:920px;width:96vw">
 
