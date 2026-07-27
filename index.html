@@ -2711,7 +2711,7 @@
           <div class="table-card">
             <div class="table-header">
               <span class="table-title"><i class="ti ti-database"></i> Dados por módulo</span>
-              <div style="display:flex;gap:8px;align-items:center">
+              <div class="table-toolbar">
                 <select class="form-select" id="admin-modulo-select" onchange="adminLoadModulo()" style="width:auto">
                   <optgroup label="Cadastro / configuração">
                     <option value="configs">Configurações</option>
@@ -2742,17 +2742,19 @@
               </div>
             </div>
             <div style="font-size:11px;color:var(--text3);padding:10px 18px 0"><i class="ti ti-info-circle"></i> Log de Exclusão de DAI e Notas de Crédito/Débito são registros append-only (auditoria) — somente leitura.</div>
-            <div style="overflow-x:auto">
-              <table style="width:100%">
-                <thead id="admin-dados-thead"></thead>
-                <tbody id="admin-dados-tbody"><tr><td><div class="empty-state"><i class="ti ti-database"></i><p>Selecione um módulo</p></div></td></tr></tbody>
-              </table>
-            </div>
-            <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 18px;border-top:1px solid var(--border2)">
-              <span class="page-info" id="admin-dados-page-info">—</span>
+            <div class="table-scroll">
+            <table>
+              <thead id="admin-dados-thead"></thead>
+              <tbody id="admin-dados-tbody"><tr><td><div class="empty-state"><i class="ti ti-database"></i><p>Selecione um módulo</p></div></td></tr></tbody>
+            </table>
+            </div><!-- /table-scroll admin-dados -->
+            <div class="pagination">
+              <span class="page-info" id="admin-dados-page-info">0 registros</span>
               <div class="page-btns">
-                <button class="btn" id="admin-dados-prev" onclick="adminModuloPaginaAnterior()"><i class="ti ti-chevron-left"></i> Anterior</button>
-                <button class="btn" id="admin-dados-next" onclick="adminModuloProximaPagina()">Próxima <i class="ti ti-chevron-right"></i></button>
+                <button class="btn" id="admin-dados-first" title="Primeiro" onclick="adminModuloPrimeiraPagina()"><i class="ti ti-chevrons-left"></i></button>
+                <button class="btn" id="admin-dados-prev" title="Anterior" onclick="adminModuloPaginaAnterior()"><i class="ti ti-chevron-left"></i></button>
+                <button class="btn" id="admin-dados-next" title="Próxima" onclick="adminModuloProximaPagina()"><i class="ti ti-chevron-right"></i></button>
+                <button class="btn" id="admin-dados-last" title="Último" onclick="adminModuloUltimaPagina()"><i class="ti ti-chevrons-right"></i></button>
               </div>
             </div>
           </div>

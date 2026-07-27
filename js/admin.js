@@ -46,18 +46,26 @@ let _adminCurrentRows = [];     // linhas do módulo atualmente exibido em "Dado
 let _adminEditContext = null;   // { modulo, id } do registro em edição
 let _adminPresenceInterval = null; // atualização automática enquanto a seção Usuários está visível
 
-// ── Paginação de "Dados por módulo" — sempre por cursor (id > último
-// visto), nunca por OFFSET. Mesma convenção usada em fetchAllRows
-// (normalize.js) pro resto do sistema — ver "Decisões de arquitetura" no
-// documento de handoff. _adminPageCursors[i] guarda o id a partir do qual
-// a página i começa (null = do início); a pilha cresce conforme o ADM
-// avança, e "Anterior" só recua no que já foi visitado (sem precisar de
-// OFFSET pra "voltar").
-const ADMIN_PAGE_SIZE = 50;
-let _adminPageCursors = [null];
-let _adminPageIndex = 0;
-let _adminHasNextPage = false;
-let _adminPageTotal = null; // contagem aproximada da tabela atual (null = ainda não buscada)
+// ── Paginação de "Dados por módulo" — mesmo padrão visual de Entradas/
+// Saídas/Lançamentos/SAP (table-scroll + .pagination com Primeiro/
+// Anterior/Próxima/Último), mas por CURSOR — nunca OFFSET (ver "Decisões
+// de arquitetura" no handoff). "Último" com cursor simples não dá pra
+// pular direto sem saber a página exata; a saída é bidirecional:
+// - Próxima:  id > lastId,  ORDER BY id ASC  — igual antes.
+// - Anterior: id < firstId, ORDER BY id DESC — resultado invertido pra
+//             exibir em ordem ascendente. Simétrico à Próxima.
+// - Primeiro: sem filtro, ORDER BY id ASC.
+// - Último:   sem filtro, ORDER BY id DESC — resultado invertido. Não
+//             precisa saber o total nem iterar página por página.
+// Cada busca pede PAGE_SIZE+1 e corta o excedente — assim sabe com
+// certeza se existe mais página pra aquele lado, sem query extra.
+const ADMIN_PAGE_SIZE = 50; // igual ao PAGE_SIZE do resto do sistema (state.js)
+let _adminPageIndex = 0;    // só cosmético, pro rótulo "(pág. X/Y)"
+let _adminPageFirstId = null;
+let _adminPageLastId = null;
+let _adminHasNext = false;
+let _adminHasPrev = false;
+let _adminPageTotal = null; // contagem exata da tabela atual (null = ainda não buscada)
 
 function _adminEsc(s) {
   return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -188,11 +196,10 @@ async function adminAlterarPapel(userId, novoPapel) {
 }
 
 // ── Seção: Dados por módulo ─────────────────────────────────
-// resetPaging=true (padrão): troca de módulo ou clique em "Atualizar" —
-// sempre volta pra primeira página. resetPaging=false: usado só pelas
-// funções de navegação abaixo, que já ajustaram _adminPageIndex antes de
-// chamar.
-async function adminLoadModulo(resetPaging = true) {
+// direction: 'first' (padrão — troca de módulo/Atualizar), 'next',
+// 'prev' ou 'last'. Cada uma monta a query de forma diferente (ver
+// comentário do estado acima), mas todas convergem pro mesmo render.
+async function adminLoadModulo(direction = 'first') {
   const select = document.getElementById('admin-modulo-select');
   const modulo = select?.value;
   const cfg = ADMIN_MODULOS[modulo];
@@ -200,9 +207,10 @@ async function adminLoadModulo(resetPaging = true) {
   const tbody = document.getElementById('admin-dados-tbody');
   if (!cfg || !thead || !tbody) return;
 
-  if (resetPaging) {
-    _adminPageCursors = [null];
+  if (direction === 'first') {
     _adminPageIndex = 0;
+    _adminPageFirstId = null;
+    _adminPageLastId = null;
     _adminPageTotal = null;
   }
 
@@ -217,19 +225,17 @@ async function adminLoadModulo(resetPaging = true) {
   }
   const emailPorId = Object.fromEntries(_adminProfiles.map(p => [p.id, p.email]));
 
-  // Busca contagem aproximada só quando a paginação é resetada (troca de
-  // módulo/atualizar) — não a cada página, pra não gastar uma query extra
-  // em toda virada de página. head:true não traz linhas, só o total.
+  // Contagem exata — só busca de novo quando a paginação reinicia (troca
+  // de módulo/Atualizar), não a cada Próxima/Anterior.
   if (_adminPageTotal === null) {
     window.supabaseClient.from(modulo).select('*', { count: 'exact', head: true })
       .then(({ count }) => { _adminPageTotal = count ?? null; _adminSetPageInfo(); });
   }
 
-  // Busca PAGE_SIZE + 1 pra saber com certeza se existe próxima página,
-  // sem precisar de uma segunda query — depois corta o excedente.
-  const cursor = _adminPageCursors[_adminPageIndex];
-  let query = window.supabaseClient.from(modulo).select('*').order('id', { ascending: true }).limit(ADMIN_PAGE_SIZE + 1);
-  if (cursor !== null) query = query.gt('id', cursor);
+  const asc = direction !== 'prev' && direction !== 'last'; // prev/last buscam em DESC pra pegar o "lado de baixo"
+  let query = window.supabaseClient.from(modulo).select('*').order('id', { ascending: asc }).limit(ADMIN_PAGE_SIZE + 1);
+  if (direction === 'next')  query = query.gt('id', _adminPageLastId);
+  if (direction === 'prev')  query = query.lt('id', _adminPageFirstId);
 
   const { data, error } = await query;
   if (error) {
@@ -238,15 +244,27 @@ async function adminLoadModulo(resetPaging = true) {
     return;
   }
 
-  const rows = data || [];
-  _adminHasNextPage = rows.length > ADMIN_PAGE_SIZE;
-  _adminCurrentRows = _adminHasNextPage ? rows.slice(0, ADMIN_PAGE_SIZE) : rows;
+  let rows = data || [];
+  const veioMais = rows.length > ADMIN_PAGE_SIZE; // existe mais alguma coisa "por baixo" da direção buscada
+  if (veioMais) rows = rows.slice(0, ADMIN_PAGE_SIZE);
+  if (!asc) rows = rows.slice().reverse(); // prev/last vieram em DESC — mostra sempre em ordem ascendente
 
-  // Registra o cursor da próxima página (se ainda não tiver sido
-  // registrado nessa navegação) — permite "Próxima" sem OFFSET.
-  if (_adminHasNextPage && _adminCurrentRows.length) {
-    _adminPageCursors[_adminPageIndex + 1] = _adminCurrentRows[_adminCurrentRows.length - 1].id;
-  }
+  // hasNext/hasPrev: 'first'/'next' sabem hasNext pelo "veio mais"; como
+  // vieram avançando, sempre existe "antes" (exceto first). 'prev'/'last'
+  // são o espelho disso.
+  if (direction === 'first') { _adminHasPrev = false; _adminHasNext = veioMais; }
+  if (direction === 'next')  { _adminHasPrev = true;  _adminHasNext = veioMais; }
+  if (direction === 'prev')  { _adminHasPrev = veioMais; _adminHasNext = true; }
+  if (direction === 'last')  { _adminHasPrev = veioMais; _adminHasNext = false; }
+
+  _adminCurrentRows = rows;
+  _adminPageFirstId = rows.length ? rows[0].id : null;
+  _adminPageLastId  = rows.length ? rows[rows.length - 1].id : null;
+
+  if (direction === 'next') _adminPageIndex++;
+  else if (direction === 'prev') _adminPageIndex = Math.max(0, _adminPageIndex - 1);
+  else if (direction === 'first') _adminPageIndex = 0;
+  else if (direction === 'last') _adminPageIndex = _adminPageTotal !== null ? Math.max(0, Math.ceil(_adminPageTotal / ADMIN_PAGE_SIZE) - 1) : _adminPageIndex;
 
   if (!_adminCurrentRows.length) {
     tbody.innerHTML = `<tr><td colspan="${colspan}"><div class="empty-state"><i class="ti ti-database-off"></i><p>Nenhum registro nesta tabela.</p></div></td></tr>`;
@@ -279,40 +297,72 @@ async function adminLoadModulo(resetPaging = true) {
   _adminSetPageInfo();
 }
 
-// Atualiza o rótulo "Página X — mostrando N registros (de ~total)" e o
-// estado habilitado/desabilitado dos botões Anterior/Próxima. Chamada sem
-// argumento usa o estado atual (_adminCurrentRows/_adminPageTotal); o
-// argumento string é só pros estados transitórios ("Carregando...", "—").
+// Rótulo "X-Y de N registros (pág. P/T)" — mesmo formato usado no resto
+// do sistema (ver _pageInfo em ui.js) — + habilita/desabilita os 4
+// botões conforme _adminHasPrev/_adminHasNext.
 function _adminSetPageInfo(textoFixo) {
   const info = document.getElementById('admin-dados-page-info');
-  const btnPrev = document.getElementById('admin-dados-prev');
-  const btnNext = document.getElementById('admin-dados-next');
+  const btnFirst = document.getElementById('admin-dados-first');
+  const btnPrev  = document.getElementById('admin-dados-prev');
+  const btnNext  = document.getElementById('admin-dados-next');
+  const btnLast  = document.getElementById('admin-dados-last');
   if (info) {
     if (textoFixo) {
       info.textContent = textoFixo;
+    } else if (!_adminCurrentRows.length) {
+      info.textContent = '0 registros';
     } else {
-      const inicio = _adminPageIndex * ADMIN_PAGE_SIZE + 1;
-      const fim = _adminPageIndex * ADMIN_PAGE_SIZE + _adminCurrentRows.length;
-      const totalStr = _adminPageTotal !== null ? `${_adminPageTotal.toLocaleString('pt-BR')}` : '…';
-      info.textContent = _adminCurrentRows.length
-        ? `Página ${_adminPageIndex + 1} — ${inicio}–${fim} de ${totalStr} registros`
-        : 'Nenhum registro';
+      // Âncoras confiáveis: quando não há "anterior", com certeza estamos
+      // no registro 1; quando não há "próxima", com certeza o último
+      // registro mostrado é o último da tabela (fim = total). Só nas
+      // páginas do "meio" alcançadas depois de pular pro Último e clicar
+      // Anterior (em tabela cujo total não é múltiplo exato de
+      // ADMIN_PAGE_SIZE) esse número fica aproximado — os REGISTROS
+      // mostrados continuam sempre corretos, sem pular nem duplicar
+      // nenhum, só esse rótulo ordinal que não dá pra cravar sem OFFSET.
+      let inicio, fim;
+      if (!_adminHasPrev) {
+        inicio = 1;
+        fim = _adminCurrentRows.length;
+      } else if (!_adminHasNext && _adminPageTotal !== null) {
+        fim = _adminPageTotal;
+        inicio = fim - _adminCurrentRows.length + 1;
+      } else {
+        inicio = _adminPageIndex * ADMIN_PAGE_SIZE + 1;
+        fim = inicio + _adminCurrentRows.length - 1;
+      }
+      if (_adminPageTotal !== null) {
+        const totalPages = Math.max(1, Math.ceil(_adminPageTotal / ADMIN_PAGE_SIZE));
+        info.textContent = `${inicio}-${fim} de ${_adminPageTotal.toLocaleString('pt-BR')} registros (pág. ${_adminPageIndex + 1}/${totalPages})`;
+      } else {
+        info.textContent = `${inicio}-${fim} de … registros`;
+      }
     }
   }
-  if (btnPrev) btnPrev.disabled = _adminPageIndex === 0;
-  if (btnNext) btnNext.disabled = !_adminHasNextPage;
+  if (btnFirst) btnFirst.disabled = !_adminHasPrev;
+  if (btnPrev)  btnPrev.disabled  = !_adminHasPrev;
+  if (btnNext)  btnNext.disabled  = !_adminHasNext;
+  if (btnLast)  btnLast.disabled  = !_adminHasNext;
 }
 
-function adminModuloProximaPagina() {
-  if (!_adminHasNextPage) return;
-  _adminPageIndex++;
-  adminLoadModulo(false);
+function adminModuloPrimeiraPagina() {
+  if (!_adminHasPrev) return;
+  adminLoadModulo('first');
 }
 
 function adminModuloPaginaAnterior() {
-  if (_adminPageIndex === 0) return;
-  _adminPageIndex--;
-  adminLoadModulo(false);
+  if (!_adminHasPrev) return;
+  adminLoadModulo('prev');
+}
+
+function adminModuloProximaPagina() {
+  if (!_adminHasNext) return;
+  adminLoadModulo('next');
+}
+
+function adminModuloUltimaPagina() {
+  if (!_adminHasNext) return;
+  adminLoadModulo('last');
 }
 
 async function adminExcluirRegistro(modulo, id) {
@@ -375,8 +425,10 @@ Object.assign(window, {
   adminLoadUsuarios,
   adminAlterarPapel,
   adminLoadModulo,
-  adminModuloProximaPagina,
+  adminModuloPrimeiraPagina,
   adminModuloPaginaAnterior,
+  adminModuloProximaPagina,
+  adminModuloUltimaPagina,
   adminExcluirRegistro,
   adminAbrirEdicao,
   adminSalvarEdicao,
