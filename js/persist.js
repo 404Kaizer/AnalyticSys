@@ -439,6 +439,22 @@ function applySavedState(saved) {
         ...o,
         id: idMap[o.id] || o.id,
       }));
+
+      // BLINDAGEM (27/07): se algum id antigo (OC-timestamp) já tiver sido
+      // sincronizado com a nuvem antes desta migração rodar, o registro
+      // (agora com id novo) seria visto como "nunca sincronizado" pelo
+      // syncOcorrenciasFromSupabase() e reenviado — criando uma duplicata
+      // na nuvem enquanto a linha com o id antigo fica órfã. Mesmo padrão
+      // de risco do bug de compactação do SAP (ver "Bugs corrigidos"),
+      // só que aqui é no máximo 1 duplicata por registro, não uma a cada
+      // boot. Como best-effort, apaga o id antigo na nuvem assim que
+      // possível — inofensivo se o id antigo nunca existiu lá (delete de
+      // linha inexistente não dá erro), e não bloqueia o boot se a rede/
+      // cliente Supabase ainda não estiver pronto.
+      const idsAntigosOcorrencias = Object.keys(idMap);
+      if (window.supabaseClient && typeof _ocSyncDelete === 'function') {
+        idsAntigosOcorrencias.forEach(oldId => _ocSyncDelete(oldId));
+      }
     }
   }
 
