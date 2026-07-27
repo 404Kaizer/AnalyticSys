@@ -86,7 +86,23 @@ async function syncOcorrenciasFromSupabase() {
     // 1000 linhas do PostgREST). Ordem de chegada não importa: a tela
     // sempre reordena via getOcorrenciasFiltradas() antes de renderizar.
     const data = await fetchAllRows('ocorrencias');
-    state.ocorrencias = (data || []).map(_ocFromDbRow);
+
+    // CORREÇÃO (27/07): antes sobrescrevia state.ocorrencias inteiro com
+    // o que veio da nuvem — se alguma ocorrência local ainda não tivesse
+    // sincronizado, essa troca APAGAVA ela da tela silenciosamente.
+    // Corrigido pra mesclar por id, mesmo padrão do resto do sistema, e
+    // sobe pra nuvem o que só existia local.
+    const local = Array.isArray(state.ocorrencias) ? state.ocorrencias : [];
+    const remoto = (data || []).map(_ocFromDbRow);
+    const porId = new Map(local.map(o => [o.id, o]));
+    remoto.forEach(o => porId.set(o.id, o));
+    state.ocorrencias = [...porId.values()];
+
+    const idsRemotos = new Set(remoto.map(o => o.id));
+    const naoSincronizadas = local.filter(o => o.id && !idsRemotos.has(o.id));
+    for (const o of naoSincronizadas) {
+      if (typeof _ocSyncUpsert === 'function') await _ocSyncUpsert(o);
+    }
   } catch (err) {
     console.warn('[Supabase] Falha ao buscar ocorrencias — mantendo dados locais.', err);
   }
@@ -1682,9 +1698,25 @@ async function syncAjustesExcluidosFromSupabase() {
       daiTag: r.dai_tag, daiNumero: r.dai_numero, central: r.central,
       dataGeracao: r.data_geracao, excluidoPor: r.excluido_por, excluidoEm: r.excluido_em,
     }));
-    const vistos = new Set((state.ajustesExcluidos || []).map(r => r.daiTag + '|' + r.excluidoEm));
-    const novos = remoto.filter(r => !vistos.has(r.daiTag + '|' + r.excluidoEm));
-    state.ajustesExcluidos = [...(state.ajustesExcluidos || []), ...novos];
+    const local = Array.isArray(state.ajustesExcluidos) ? state.ajustesExcluidos : [];
+    const chave = r => r.daiTag + '|' + r.excluidoEm;
+    const vistos = new Set(local.map(chave));
+    const novos = remoto.filter(r => !vistos.has(chave(r)));
+    state.ajustesExcluidos = [...local, ...novos];
+
+    // Corte de produção (27/07): registros de exclusão que só existem
+    // local (a chamada original falhou na hora) sobem agora. Append-only,
+    // então é insert — não upsert (a tabela não tem policy de UPDATE).
+    const remotoSet = new Set(remoto.map(chave));
+    const naoSincronizados = local.filter(r => !remotoSet.has(chave(r)));
+    if (naoSincronizados.length) {
+      const rows = naoSincronizados.map(r => ({
+        dai_tag: r.daiTag, dai_numero: r.daiNumero, central: r.central,
+        data_geracao: r.dataGeracao, excluido_por: r.excluidoPor, excluido_em: r.excluidoEm,
+      }));
+      const { error: insErr } = await window.supabaseClient.from('ajustes_excluidos').insert(rows);
+      if (insErr) console.warn('[Supabase] Falha ao sincronizar log de exclusão de DAI local:', insErr);
+    }
   } catch (err) {
     console.warn('[Supabase] Falha ao buscar log de auditoria (ajustesExcluidos) — mantendo dados locais.', err);
   }

@@ -656,9 +656,17 @@ async function syncNotasAjusteFromSupabase() {
       responsavelCpf: r.responsavel_cpf, responsavelEmail: r.responsavel_email,
       itens: r.itens || [],
     }));
-    const porId = new Map((state.notasAjuste || []).map(n => [n.id, n]));
+    const local = Array.isArray(state.notasAjuste) ? state.notasAjuste : [];
+    const porId = new Map(local.map(n => [n.id, n]));
     remoto.forEach(n => porId.set(n.id, n));
     state.notasAjuste = [...porId.values()];
+
+    // Corte de produção (27/07): notas geradas só local (registro é
+    // append-only, então isso só cobre falha de rede na hora da geração)
+    // sobem agora — reaproveita _ncdSyncToSupabase, já usada na criação.
+    const idsRemotos = new Set(remoto.map(n => n.id));
+    const naoSincronizadas = local.filter(n => n.id && !idsRemotos.has(n.id));
+    if (naoSincronizadas.length && typeof _ncdSyncToSupabase === 'function') _ncdSyncToSupabase(naoSincronizadas);
   } catch (err) {
     console.warn('[Supabase] Falha ao buscar notas de crédito/débito — mantendo dados locais.', err);
   }

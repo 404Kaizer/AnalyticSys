@@ -3058,9 +3058,29 @@ async function syncInvJustificativasFromSupabase() {
       k: r.k, op: r.op, fiscal: r.fiscal, saldo: r.saldo,
       custoMedioSap: r.custo_medio_sap, documentoSap: r.documento_sap
     }));
-    const porK = new Map((state.invJustificativas || []).map(r => [r.k, r]));
+    const local = Array.isArray(state.invJustificativas) ? state.invJustificativas : [];
+    const porK = new Map(local.map(r => [r.k, r]));
     remoto.forEach(r => porK.set(r.k, r));
     state.invJustificativas = [...porK.values()];
+
+    // Corte de produção (27/07): justificativas locais ainda não
+    // sincronizadas sobem agora. _invSyncToSupabase (usada nas edições
+    // manuais) é privada de uma IIFE em outro trecho deste arquivo e não
+    // dá pra chamar daqui — upsert direto, mesmo formato de linha.
+    const chavesRemotas = new Set(remoto.map(r => r.k));
+    const naoSincronizadas = local.filter(r => r.k && !chavesRemotas.has(r.k));
+    if (naoSincronizadas.length) {
+      const rows = naoSincronizadas.map(j => ({
+        k: j.k,
+        op: j.op || null,
+        fiscal: j.fiscal || null,
+        saldo: j.saldo != null && j.saldo !== '' ? String(j.saldo) : null,
+        custo_medio_sap: j.custoMedioSap != null && j.custoMedioSap !== '' ? String(j.custoMedioSap) : null,
+        documento_sap: j.documentoSap || null,
+      }));
+      const { error: upErr } = await window.supabaseClient.from('inv_justificativas').upsert(rows, { onConflict: 'user_id,k' });
+      if (upErr) console.warn('[Supabase] Falha ao sincronizar justificativas locais:', upErr);
+    }
   } catch (err) {
     console.warn('[Supabase] Falha ao buscar justificativas de inventário — mantendo dados locais.', err);
   }

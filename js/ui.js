@@ -3917,10 +3917,20 @@ async function syncSapFechamentoOverridesFromSupabase() {
   try {
     const { data, error } = await window.supabaseClient.from('sap_fechamento_overrides').select('chave');
     if (error) throw error;
-    const set = new Set(state.sapFechamentoOverrides || []);
+    const local = Array.isArray(state.sapFechamentoOverrides) ? state.sapFechamentoOverrides : [];
+    const set = new Set(local);
     (data || []).forEach(r => set.add(r.chave));
     state.sapFechamentoOverrides = [...set];
     invalidateFechOverrideCache();
+
+    // Corte de produção (27/07): chaves marcadas só localmente sobem agora.
+    const remotoSet = new Set((data || []).map(r => r.chave));
+    const naoSincronizadas = local.filter(k => k && !remotoSet.has(k));
+    if (naoSincronizadas.length) {
+      const rows = naoSincronizadas.map(chave => ({ chave }));
+      const { error: upErr } = await window.supabaseClient.from('sap_fechamento_overrides').upsert(rows, { onConflict: 'user_id,chave' });
+      if (upErr) console.warn('[Supabase] Falha ao sincronizar overrides de fechamento locais:', upErr);
+    }
   } catch (err) {
     console.warn('[Supabase] Falha ao buscar overrides de fechamento — mantendo dados locais.', err);
   }

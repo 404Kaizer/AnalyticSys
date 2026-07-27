@@ -97,9 +97,15 @@ async function syncAjustesSistemicosFromSupabase() {
       material: r.material, tipoMovimentoSap: r.tipo_movimento_sap, objetivo: r.objetivo,
       operador: r.operador, sapDocumento: r.sap_documento,
     }));
-    const porId = new Map((state.ajustesSistemicos || []).map(d => [d.id, d]));
+    const local = Array.isArray(state.ajustesSistemicos) ? state.ajustesSistemicos : [];
+    const porId = new Map(local.map(d => [d.id, d]));
     remoto.forEach(d => porId.set(d.id, d));
     state.ajustesSistemicos = [...porId.values()];
+
+    // Corte de produção (27/07): DAIs criados só local sobem agora.
+    const idsRemotos = new Set(remoto.map(d => d.id));
+    const naoSincronizados = local.filter(d => d.id && !idsRemotos.has(d.id));
+    naoSincronizados.forEach(d => { if (typeof _daiSyncUpsert === 'function') _daiSyncUpsert(d); });
   } catch (err) {
     console.warn('[Supabase] Falha ao buscar DAIs — mantendo dados locais.', err);
   }

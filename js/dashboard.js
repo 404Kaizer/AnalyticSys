@@ -6198,6 +6198,60 @@ function _lbarSet(pct) {
   fill.style.opacity = '1';
 }
 
+// Sincronização com o Supabase no boot — registro em vez de repetir o
+// mesmo bloco "if (typeof X === 'function') await X()" onze vezes
+// (facilita adicionar os módulos da Fase 4 aqui depois). Rodam em
+// PARALELO (Promise.all), não uma esperando a outra: são buscas
+// totalmente independentes entre si (cada uma só lê/mescla o seu
+// próprio state.X), e cada função já trata o próprio erro
+// internamente — uma falhar não derruba as demais nem quebra o boot.
+// Cada uma mantém os dados locais como fallback se a rede falhar.
+// Elevada pro escopo do arquivo (27/07) — antes vivia só dentro de
+// restoreAndRender(); agora sincronizarDadosLocaisAgora() (menu
+// Ferramentas → Dados) também reaproveita a mesma lista, sem duplicar.
+const SUPABASE_BOOT_SYNCS = [
+  'syncAcoesRelatorioFromSupabase',
+  'syncOcorrenciasFromSupabase',
+  'syncConfigsFromSupabase',
+  'syncCatalogosFromSupabase',
+  'syncFiliaisFromSupabase',
+  'syncMateriaisFromSupabase',
+  'syncInvJustificativasFromSupabase',
+  'syncSapFechamentoOverridesFromSupabase',
+  'syncAjustesSistemicosFromSupabase',
+  'syncAjustesExcluidosFromSupabase',
+  'syncNotasAjusteFromSupabase',
+  'syncLancamentosFromSupabase', // Fase 4 — Etapa 1 (módulos grandes)
+  'syncImportsFromSupabase', // Fase 4 — Etapa 3 (log de importações)
+  'syncProducaoFromSupabase', // Fase 4 — Etapa 4
+  'syncEntradasFromSupabase', // Fase 4 — Etapa 5
+  'syncSaidasFromSupabase', // Fase 4 — Etapa 6
+  'syncSAPFromSupabase', // Fase 4 — Etapa 8
+];
+
+// Roda a mesma sincronização do boot, sob demanda — botão "Sincronizar
+// dados locais" no menu Ferramentas (index.html). Cobre o caso de dado
+// criado localmente antes de existir sync pra aquele módulo, ou que
+// falhou por rede na hora e nunca foi tentado de novo (Corte de
+// produção, 27/07) — sem precisar recarregar a página pra disparar.
+async function sincronizarDadosLocaisAgora() {
+  if (!window.supabaseClient) {
+    toast('Sem conexão com o Supabase agora — tente de novo mais tarde.', 'error');
+    return false;
+  }
+  toast('Sincronizando dados locais com a nuvem...', 'success');
+  await Promise.all(
+    SUPABASE_BOOT_SYNCS.map(fnName => {
+      const fn = window[fnName];
+      return typeof fn === 'function' ? fn() : Promise.resolve();
+    })
+  );
+  if (typeof persist === 'function') persist();
+  if (typeof renderAll === 'function') renderAll();
+  toast('Sincronização concluída.', 'success');
+  return true;
+}
+
 async function restoreAndRender() {
   showLoadingOverlay('Inicializando o sistema', 'Preparando para carregar os dados...');
 
@@ -6215,33 +6269,10 @@ async function restoreAndRender() {
     await nextFrame();
     await loadState();
 
-    // Sincronização com o Supabase no boot — registro em vez de repetir o
-    // mesmo bloco "if (typeof X === 'function') await X()" onze vezes
-    // (facilita adicionar os módulos da Fase 4 aqui depois). Rodam em
-    // PARALELO (Promise.all), não uma esperando a outra: são buscas
-    // totalmente independentes entre si (cada uma só lê/mescla o seu
-    // próprio state.X), e cada função já trata o próprio erro
-    // internamente — uma falhar não derruba as demais nem quebra o boot.
-    // Cada uma mantém os dados locais como fallback se a rede falhar.
-    const SUPABASE_BOOT_SYNCS = [
-      'syncAcoesRelatorioFromSupabase',
-      'syncOcorrenciasFromSupabase',
-      'syncConfigsFromSupabase',
-      'syncCatalogosFromSupabase',
-      'syncFiliaisFromSupabase',
-      'syncMateriaisFromSupabase',
-      'syncInvJustificativasFromSupabase',
-      'syncSapFechamentoOverridesFromSupabase',
-      'syncAjustesSistemicosFromSupabase',
-      'syncAjustesExcluidosFromSupabase',
-      'syncNotasAjusteFromSupabase',
-      'syncLancamentosFromSupabase', // Fase 4 — Etapa 1 (módulos grandes)
-      'syncImportsFromSupabase', // Fase 4 — Etapa 3 (log de importações)
-      'syncProducaoFromSupabase', // Fase 4 — Etapa 4
-      'syncEntradasFromSupabase', // Fase 4 — Etapa 5
-      'syncSaidasFromSupabase', // Fase 4 — Etapa 6
-      'syncSAPFromSupabase', // Fase 4 — Etapa 8
-    ];
+    // Sincronização com o Supabase no boot — lista SUPABASE_BOOT_SYNCS
+    // (escopo do arquivo, ver acima) roda em PARALELO (Promise.all), não
+    // uma esperando a outra: são buscas totalmente independentes entre
+    // si, e cada função já trata o próprio erro internamente.
     await Promise.all(
       SUPABASE_BOOT_SYNCS.map(fnName => {
         const fn = window[fnName];

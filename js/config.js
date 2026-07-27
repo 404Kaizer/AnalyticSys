@@ -57,6 +57,7 @@ async function _configsSyncDelete(key) {
 async function syncConfigsFromSupabase() {
   try {
     const data = await fetchAllRows('configs', 'key, value, descricao, created_at');
+    const local = Array.isArray(state.configs) ? state.configs : [];
     // Traduz de volta pro formato local (desc/created) esperado por
     // mergePersistentConfigs e por toda a UI de Configurações.
     const remoto = (data || [])
@@ -68,6 +69,15 @@ async function syncConfigsFromSupabase() {
         created: r.created_at ? new Date(r.created_at).toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR'),
       }));
     state.configs = mergePersistentConfigs(state.configs, remoto);
+
+    // Corte de produção (27/07): configs criadas localmente antes de
+    // existir sync pra esse módulo, ou que falharam na hora, sobem agora
+    // — mesmo padrão já usado em Filiais/Materiais/Lançamentos.
+    const chavesRemotas = new Set((data || []).map(r => r.key));
+    const naoSincronizadas = local.filter(c => c.key && !chavesRemotas.has(c.key));
+    for (const c of naoSincronizadas) {
+      if (typeof _configsSyncUpsert === 'function') await _configsSyncUpsert(c);
+    }
   } catch (err) {
     console.warn('[Supabase] Falha ao buscar configs — mantendo dados locais.', err);
   }
@@ -89,8 +99,31 @@ async function syncCatalogosFromSupabase() {
     ]);
     if (gruposRes.error) throw gruposRes.error;
     if (regionaisRes.error) throw regionaisRes.error;
-    state.gruposMateriais = mergeCatalogo(state.gruposMateriais, gruposRes.data);
-    state.regionaisCentrais = mergeCatalogo(state.regionaisCentrais, regionaisRes.data);
+
+    const gruposLocal = Array.isArray(state.gruposMateriais) ? state.gruposMateriais : [];
+    const regionaisLocal = Array.isArray(state.regionaisCentrais) ? state.regionaisCentrais : [];
+
+    state.gruposMateriais = mergeCatalogo(gruposLocal, gruposRes.data);
+    state.regionaisCentrais = mergeCatalogo(regionaisLocal, regionaisRes.data);
+
+    // Corte de produção (27/07): nomes cadastrados só localmente sobem
+    // agora — mesmo padrão do resto do sistema. onConflict evita duplicar
+    // se por acaso já existir (corrida entre abas, por exemplo).
+    const gruposRemotosSet = new Set((gruposRes.data || []).map(r => normalizeText(r.nome)));
+    const gruposNaoSincronizados = gruposLocal.filter(g => g && !gruposRemotosSet.has(normalizeText(g)));
+    if (gruposNaoSincronizados.length) {
+      const { error } = await window.supabaseClient.from('grupos_materiais')
+        .upsert(gruposNaoSincronizados.map(nome => ({ nome })), { onConflict: 'user_id,nome' });
+      if (error) console.warn('[Supabase] Falha ao sincronizar grupos de materiais locais:', error);
+    }
+
+    const regionaisRemotosSet = new Set((regionaisRes.data || []).map(r => normalizeText(r.nome)));
+    const regionaisNaoSincronizados = regionaisLocal.filter(r => r && !regionaisRemotosSet.has(normalizeText(r)));
+    if (regionaisNaoSincronizados.length) {
+      const { error } = await window.supabaseClient.from('regionais_centrais')
+        .upsert(regionaisNaoSincronizados.map(nome => ({ nome })), { onConflict: 'user_id,nome' });
+      if (error) console.warn('[Supabase] Falha ao sincronizar regionais locais:', error);
+    }
   } catch (err) {
     console.warn('[Supabase] Falha ao buscar grupos/regionais — mantendo dados locais.', err);
   }
@@ -1269,7 +1302,24 @@ async function syncAcoesRelatorioFromSupabase() {
       .select('id, user_id, categorias, nivel, acoes, created')
       .order('created', { ascending: false });
     if (error) throw error;
-    state.acoesRelatorio = data || [];
+
+    // CORREÇÃO (27/07): antes sobrescrevia state.acoesRelatorio inteiro
+    // com o que veio da nuvem — se algum registro local ainda não tivesse
+    // sincronizado (falha de rede, ou criado antes de existir sync pra
+    // esse módulo), essa troca APAGAVA ele da tela silenciosamente, sem
+    // erro nenhum. Corrigido pra mesclar por id, mesmo padrão do resto
+    // do sistema, e sobe pra nuvem o que só existia local.
+    const local = Array.isArray(state.acoesRelatorio) ? state.acoesRelatorio : [];
+    const porId = new Map(local.map(a => [a.id, a]));
+    (data || []).forEach(r => porId.set(r.id, r));
+    state.acoesRelatorio = [...porId.values()];
+
+    const idsRemotos = new Set((data || []).map(r => r.id));
+    const naoSincronizadas = local.filter(a => a.id && !idsRemotos.has(a.id));
+    if (naoSincronizadas.length) {
+      const { error: upErr } = await window.supabaseClient.from('acoes_relatorio').upsert(naoSincronizadas);
+      if (upErr) console.warn('[Supabase] Falha ao sincronizar ações de relatório locais:', upErr);
+    }
   } catch (err) {
     console.warn('[Supabase] Falha ao buscar acoesRelatorio — mantendo dados locais.', err);
   }

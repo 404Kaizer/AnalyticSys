@@ -386,6 +386,13 @@
             </button>
 
             <div class="tools-dropdown-section-label">Dados</div>
+            <button class="tools-item" onclick="sincronizarDadosLocaisAgora(); closeToolsMenu()">
+              <div class="tools-item-icon" style="background:var(--accent-dim);color:var(--accent)"><i class="ti ti-cloud-upload"></i></div>
+              <div class="tools-item-body">
+                <div class="tools-item-label">Sincronizar dados locais</div>
+                <div class="tools-item-sub">Reenvia pra nuvem o que só está salvo neste dispositivo</div>
+              </div>
+            </button>
             <button class="tools-item" onclick="abrirModalBackup('exportar'); closeToolsMenu()">
               <div class="tools-item-icon" style="background:var(--green-bg);color:var(--green)"><i class="ti ti-download"></i></div>
               <div class="tools-item-body">
