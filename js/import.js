@@ -10,7 +10,7 @@
 // importId). Apagar por import_id nas outras tabelas é inofensivo — hoje
 // nunca vai encontrar nada lá, mas já deixa pronto pro dia que Entradas/
 // Saídas/Produção ganharem edição inline como Lançamentos já tem.
-const _CASCADE_TABELAS_NUVEM = ['filiais', 'materiais', 'lancamentos', 'entradas', 'saidas', 'producao'];
+const _CASCADE_TABELAS_NUVEM = ['filiais', 'materiais', 'lancamentos', 'entradas', 'saidas', 'producao', 'sap'];
 
 function _cascadeDeleteCloudByImportId(importId) {
   if (!window.supabaseClient || !importId) return;
@@ -35,6 +35,7 @@ function _cascadeRestoreCloudByImportId(importId, snapshots) {
   if (typeof _entradasSyncUpsertBatch === 'function') _entradasSyncUpsertBatch(porImport(snapshots.entradas).filter(r => r.editado));
   if (typeof _saidasSyncUpsertBatch === 'function') _saidasSyncUpsertBatch(porImport(snapshots.saidas).filter(r => r.editado));
   if (typeof _producaoSyncUpsertBatch === 'function') _producaoSyncUpsertBatch(porImport(snapshots.producao).filter(r => r.editado));
+  if (typeof _sapSyncUpsertBatch === 'function') _sapSyncUpsertBatch(porImport(snapshots.sap).filter(r => r.editado));
 }
 
 function excluirImportacao(importId) {
@@ -150,6 +151,7 @@ function excluirImportacao(importId) {
             filiais: snapshotFiliais, materiais: snapshotMateriais,
             lancamentos: snapshotLancamentos, entradas: snapshotEntradas,
             saidas: snapshotSaidas, producao: snapshotProducao,
+            sap: snapshotSap,
           });
         },
       });
@@ -955,6 +957,109 @@ async function syncSaidasFromSupabase() {
 }
 
 
+// ═══════════════════════════════════════════════════════════
+// SAP — sincronização com o Supabase (Fase 4 — Etapa 8)
+// ═══════════════════════════════════════════════════════════
+// Último dos 5 módulos grandes. Mesmo padrão de Entradas/Produção/Saídas:
+// só manual (regra central de 27/07), sem edição inline (se for adicionada
+// no futuro, replicar o tratamento de `editado` que Lançamentos já tem).
+// Importação em lote (handleImport → buildSapColumnMap) permanece só local,
+// nunca chama as funções abaixo — chunking local (compactSapRecords,
+// persist.js) continua como está, sem relação com a nuvem.
+
+function _sapToDbRow(r) {
+  return {
+    id: r.id,
+    fonte: r.fonte || null,
+    usuario: r.usuario || null,
+    movimento: r.movimento || null,
+    ref: r.ref || null,
+    documento: r.documento || null,
+    central_original: r.centralOriginal || null,
+    central: r.central || null,
+    deposito: r.deposito || null,
+    dt_doc: r.dtDoc || null,
+    dt_lanc: r.dtLanc || null,
+    dt_reg: r.dtReg || null,
+    material_original: r.materialOriginal || null,
+    material: r.material || null,
+    peso: r.peso ?? null,
+    um: r.um || null,
+    custo_unit: r.custoUnit ?? null,
+    valor_total: r.valorTotal ?? null,
+    import_id: r.importId || null,
+    created_at: r.createdAt || null,
+  };
+}
+
+function _sapFromDbRow(row) {
+  return {
+    id: row.id,
+    fonte: row.fonte,
+    usuario: row.usuario,
+    movimento: row.movimento,
+    ref: row.ref,
+    documento: row.documento,
+    centralOriginal: row.central_original,
+    central: row.central,
+    deposito: row.deposito,
+    dtDoc: row.dt_doc,
+    dtLanc: row.dt_lanc,
+    dtReg: row.dt_reg,
+    materialOriginal: row.material_original,
+    material: row.material,
+    peso: row.peso,
+    um: row.um,
+    custoUnit: row.custo_unit,
+    valorTotal: row.valor_total,
+    importId: row.import_id || undefined,
+    createdAt: row.created_at,
+  };
+}
+
+function _sapSyncUpsert(rec) {
+  if (rec.importId || !window.supabaseClient) return;
+  window.supabaseClient.from('sap').upsert(_sapToDbRow(rec))
+    .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao sincronizar movimentação SAP:', error); });
+}
+
+const SAP_SYNC_BATCH_SIZE = 500;
+async function _sapSyncUpsertBatch(records) {
+  if (!window.supabaseClient || !records || !records.length) return;
+  const rows = records.map(_sapToDbRow);
+  for (let i = 0; i < rows.length; i += SAP_SYNC_BATCH_SIZE) {
+    const { error } = await window.supabaseClient.from('sap').upsert(rows.slice(i, i + SAP_SYNC_BATCH_SIZE));
+    if (error) { console.warn('[Supabase] Falha ao sincronizar lote de SAP:', error); break; }
+  }
+}
+
+function _sapSyncDelete(id) {
+  if (!window.supabaseClient || !id) return;
+  window.supabaseClient.from('sap').delete().eq('id', id)
+    .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao excluir movimentação SAP na nuvem:', error); });
+}
+
+async function syncSAPFromSupabase() {
+  if (!window.supabaseClient) return;
+  try {
+    const data = await fetchAllRows('sap');
+    const remoto = (data || []).map(_sapFromDbRow);
+    const idsRemotos = new Set(remoto.map(r => r.id));
+
+    const local = Array.isArray(state.sap) ? state.sap : [];
+    const porId = new Map(local.filter(r => r.id).map(r => [r.id, r]));
+    remoto.forEach(r => porId.set(r.id, r));
+    state.sap = [...porId.values()];
+    if (typeof invalidateSapIndex === 'function') invalidateSapIndex();
+
+    const naoSincronizados = local.filter(r => r.id && !r.importId && !idsRemotos.has(r.id));
+    if (naoSincronizados.length) await _sapSyncUpsertBatch(naoSincronizados);
+  } catch (err) {
+    console.warn('[Supabase] Falha ao buscar movimentações SAP — mantendo dados locais.', err);
+  }
+}
+
+
 function _criarRegistroSAP(dados) {
   const central   = dados.central;
   const mat       = dados.mat;
@@ -991,6 +1096,7 @@ function _criarRegistroSAP(dados) {
   state.sap.unshift(rec);
   invalidateSapIndex();
   persist();
+  if (typeof _sapSyncUpsert === 'function') _sapSyncUpsert(rec);
   return { ok: true, rec };
 }
 

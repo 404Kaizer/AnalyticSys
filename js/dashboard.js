@@ -4657,6 +4657,7 @@ function removerRegistro(module, index) {
     lancamentos: (typeof _lancSyncDelete === 'function') ? _lancSyncDelete : null,
     entradas:    (typeof _entradasSyncDelete === 'function') ? _entradasSyncDelete : null,
     saidas:      (typeof _saidasSyncDelete === 'function') ? _saidasSyncDelete : null,
+    sap:         (typeof _sapSyncDelete === 'function') ? _sapSyncDelete : null,
   };
   const syncDelete = syncDeleteByModule[module];
   if (syncDelete && actual.id && (!actual.importId || actual.editado)) syncDelete(actual.id);
@@ -6239,6 +6240,7 @@ async function restoreAndRender() {
       'syncProducaoFromSupabase', // Fase 4 — Etapa 4
       'syncEntradasFromSupabase', // Fase 4 — Etapa 5
       'syncSaidasFromSupabase', // Fase 4 — Etapa 6
+      'syncSAPFromSupabase', // Fase 4 — Etapa 8
     ];
     await Promise.all(
       SUPABASE_BOOT_SYNCS.map(fnName => {
