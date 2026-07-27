@@ -488,8 +488,17 @@ function _activityModuleLabel(tableName) {
   if (tableName === 'profiles') return 'Usuários';
   return (typeof ADMIN_MODULOS !== 'undefined' && ADMIN_MODULOS[tableName]?.label) || tableName;
 }
+// ADMIN_MODULOS não cobre `profiles` de propósito (tem aba própria no
+// Admin — ver admin.js). Descrição própria só pra essa tabela, usada só
+// quando a mudança é de verdade (troca de papel — heartbeat de presença
+// já é filtrado na origem, na trigger do banco).
+const _ACTIVITY_EXTRA_COLS = {
+  profiles: ['email', 'role'],
+};
 function _activityDescribeRow(row) {
-  const cols = (typeof ADMIN_MODULOS !== 'undefined' && ADMIN_MODULOS[row.table_name]?.cols) || [];
+  const cols = _ACTIVITY_EXTRA_COLS[row.table_name]
+    || (typeof ADMIN_MODULOS !== 'undefined' && ADMIN_MODULOS[row.table_name]?.cols)
+    || [];
   const data = row.operation === 'DELETE' ? row.old_data : row.new_data;
   if (!data) return '';
   return cols.map(c => data[c]).filter(v => v !== null && v !== undefined && v !== '')
