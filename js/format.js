@@ -1165,6 +1165,109 @@ function _notesPersist() {
   if (ind) { ind.textContent = 'salvo'; ind.classList.add('show'); setTimeout(() => ind.classList.remove('show'), 1800); }
 }
 
+// ── Sync com Supabase (pessoal — tabela bloco_notas, RLS por user_id) ────
+// localStorage continua sendo a gravação PRINCIPAL (síncrona, nunca falha
+// por rede) — isto aqui é só a camada de nuvem por cima, mesmo padrão de
+// Ações de Relatório: se a rede falhar, a nota já está salva localmente e
+// o próximo boot tenta sincronizar de novo.
+function _notesToDbRow(card) {
+  return {
+    id:            card.id,
+    user_id:       window.currentUser?.id,
+    title:         card.title || null,
+    body:          card.body || null,
+    color:         card.color || 'none',
+    priority:      card.priority || 'none',
+    criado_em:     card.created ?? null,
+    modificado_em: card.modified ?? null,
+  };
+}
+
+function _notesFromDbRow(row) {
+  return {
+    id:       row.id,
+    title:    row.title || '',
+    body:     row.body || '',
+    color:    row.color || 'none',
+    priority: row.priority || 'none',
+    created:  row.criado_em ?? Date.now(),
+    modified: row.modificado_em ?? Date.now(),
+  };
+}
+
+// Upsert de uma nota — chamado a cada gravação local (criar, debounce de
+// edição, trocar cor). upsert por id é idempotente, então chamadas
+// repetidas (ex.: usuário digitando) nunca duplicam linha na nuvem.
+function _notesSyncUpsert(card) {
+  if (!window.supabaseClient || !card || !window.currentUser?.id) return;
+  window.supabaseClient.from('bloco_notas').upsert(_notesToDbRow(card))
+    .then(({ error }) => {
+      if (error) {
+        console.warn('[Supabase] Falha ao sincronizar nota:', error);
+        toast('⚠ Nota salva neste dispositivo, mas não foi possível sincronizar com a nuvem.', 'error');
+      }
+    });
+}
+
+const NOTES_SYNC_BATCH_SIZE = 200;
+async function _notesSyncUpsertBatch(cards) {
+  if (!window.supabaseClient || !cards || !cards.length) return;
+  const rows = cards.map(_notesToDbRow);
+  for (let i = 0; i < rows.length; i += NOTES_SYNC_BATCH_SIZE) {
+    const { error } = await window.supabaseClient.from('bloco_notas').upsert(rows.slice(i, i + NOTES_SYNC_BATCH_SIZE));
+    if (error) { console.warn('[Supabase] Falha ao sincronizar lote de notas:', error); break; }
+  }
+}
+
+function _notesSyncDelete(id) {
+  if (!window.supabaseClient || !id) return;
+  window.supabaseClient.from('bloco_notas').delete().eq('id', id)
+    .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao excluir nota na nuvem:', error); });
+}
+
+// Busca no boot (ver SUPABASE_BOOT_SYNCS em dashboard.js). Mescla por id
+// (nuvem tem prioridade em conflito) e sobe qualquer nota local que ainda
+// não exista na nuvem. Isso cobre dois casos com o MESMO código: a
+// sincronização contínua normal E a migração das notas que já existiam no
+// localStorage antes desta atualização — na primeira vez que roda pra um
+// usuário, a nuvem está vazia, então TUDO que está local sobe aqui, sem
+// nenhum passo manual. Lê o localStorage diretamente (não chama
+// _notesLoad) porque o painel de Notas pode nunca ter sido aberto nesta
+// sessão — _notesCards só é populado ao abrir o popover (ver openTool).
+async function syncNotesFromSupabase() {
+  if (!window.supabaseClient || !window.currentUser?.id) return;
+  try {
+    let local;
+    try {
+      const raw = localStorage.getItem(_NOTES_KEY);
+      local = raw ? JSON.parse(raw) : [];
+    } catch (e) { local = []; }
+
+    // A policy de SELECT libera admin pra ver notas de todo mundo (mesmo
+    // padrão de RLS do resto do sistema — ver ocorrencias, onde isso é
+    // proposital). Aqui NÃO é: Bloco de Notas é estritamente pessoal (
+    // decisão do usuário), então filtramos por user_id no cliente mesmo
+    // que a RLS deixe passar mais linhas — evita que um admin acabe
+    // enxergando/misturando notas de outros usuários no seu próprio painel.
+    const meuId = window.currentUser.id;
+    const data = await fetchAllRows('bloco_notas');
+    const remoto = (data || []).filter(r => r.user_id === meuId).map(_notesFromDbRow);
+    const idsRemotos = new Set(remoto.map(n => n.id));
+
+    const porId = new Map(local.filter(n => n && n.id).map(n => [n.id, n]));
+    remoto.forEach(n => porId.set(n.id, n));
+    _notesCards = [...porId.values()];
+    _notesPersist();
+
+    const naoSincronizadas = local.filter(n => n && n.id && !idsRemotos.has(n.id));
+    if (naoSincronizadas.length) await _notesSyncUpsertBatch(naoSincronizadas);
+
+    notesRender();
+  } catch (err) {
+    console.warn('[Supabase] Falha ao buscar notas — mantendo dados locais.', err);
+  }
+}
+
 // ── Card CRUD ────────────────────────────────────────────
 function notesNewCard() {
   const card = {
@@ -1178,6 +1281,7 @@ function notesNewCard() {
   };
   _notesCards.unshift(card);
   _notesPersist();
+  _notesSyncUpsert(card);
   notesRender();
   notesOpenEditor(card.id);
 }
@@ -1185,8 +1289,10 @@ function notesNewCard() {
 function notesDeleteCurrent() {
   if (!_notesActive) return;
   if (!confirm('Excluir esta nota?')) return;
-  _notesCards = _notesCards.filter(c => c.id !== _notesActive);
+  const id = _notesActive;
+  _notesCards = _notesCards.filter(c => c.id !== id);
   _notesPersist();
+  _notesSyncDelete(id);
   notesCloseEditor();
   notesRender();
 }
@@ -1197,6 +1303,7 @@ function notesDeleteCard(id, e) {
   _notesCards = _notesCards.filter(c => c.id !== id);
   if (_notesActive === id) notesCloseEditor();
   _notesPersist();
+  _notesSyncDelete(id);
   notesRender();
 }
 
@@ -1297,7 +1404,7 @@ function notesAutoSave() {
   card.priority = document.getElementById('notes-priority-select').value;
   card.modified = Date.now();
   clearTimeout(_notesSaveTimer);
-  _notesSaveTimer = setTimeout(() => { _notesPersist(); notesRender(); }, 700);
+  _notesSaveTimer = setTimeout(() => { _notesPersist(); _notesSyncUpsert(card); notesRender(); }, 700);
 }
 
 // ── Color ────────────────────────────────────────────────
@@ -1311,6 +1418,7 @@ function notesSetColor(color) {
   card.color    = color;
   card.modified = Date.now();
   _notesPersist();
+  _notesSyncUpsert(card);
   _notesSetColorDot(color);
   document.getElementById('notes-color-menu')?.classList.remove('open');
   notesRender();
@@ -1364,6 +1472,7 @@ function notesEditorUpdate() {
   clearTimeout(_notesSaveTimer);
   _notesSaveTimer = setTimeout(() => {
     _notesPersist();
+    _notesSyncUpsert(card);
     notesRender();
     const ind = document.getElementById('notes-saved-indicator');
     if (ind) { ind.classList.add('show'); setTimeout(() => ind.classList.remove('show'), 1500); }

@@ -6270,6 +6270,7 @@ const SUPABASE_BOOT_SYNCS = [
   'syncEntradasFromSupabase', // Fase 4 — Etapa 5
   'syncSaidasFromSupabase', // Fase 4 — Etapa 6
   'syncSAPFromSupabase', // Fase 4 — Etapa 8
+  'syncNotesFromSupabase', // Bloco de Notas — migração automática do localStorage
 ];
 
 // Roda a mesma sincronização do boot, sob demanda — botão "Sincronizar
