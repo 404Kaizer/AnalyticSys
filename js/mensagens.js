@@ -104,6 +104,11 @@ const MSGS_PRESENCE_POLL_MS   = 30 * 1000;
 
 let _presenceGlobalInterval = null;
 
+// Conversa aberta no momento no popover — 'geral' ou o id (uuid) da
+// pessoa. Lido por openTool() em format.js pra recarregar o histórico
+// certo quando o popover é reaberto (ver ali).
+let _msgsConversaAtiva = 'geral';
+
 function _presenceEsc(s) {
   return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
@@ -227,15 +232,139 @@ function msgsAbrirConversa(convId) {
   if (nameDst) nameDst.textContent = nameSrc;
   if (subDst)  subDst.textContent  = subSrc;
 
-  // Corpo da conversa — placeholder até a Etapa 6 (envio/recebimento real).
+  _msgsConversaAtiva = convId;
+
+  const input   = document.getElementById('msgs-input');
+  const sendBtn = document.getElementById('msgs-send-btn');
+  if (input)   input.disabled   = false;
+  if (sendBtn) sendBtn.disabled = false;
+
+  _msgsCarregarHistorico(convId);
+}
+
+// ═══════════════════════════════════════════════════════════
+// ENVIO/RECEBIMENTO — 1:1 e Geral (Etapas 6 e 7)
+// ═══════════════════════════════════════════════════════════
+// "Manual" de propósito (nome do plano original): carrega o histórico ao
+// abrir a conversa e envia por INSERT direto. Não há atualização
+// automática enquanto a janela fica aberta com a conversa parada — isso
+// é o canal Realtime dedicado da Etapa 8, ainda não implementado. RLS na
+// tabela `mensagens` já garante remetente/destinatário/geral/admin —
+// testado com múltiplas identidades reais antes desta entrega.
+
+function _msgsScrollParaFinal() {
   const body = document.getElementById('msgs-chat-body');
-  if (body) {
-    body.innerHTML = `
-      <div class="msgs-empty-state">
-        <i class="ti ti-message-circle-2"></i>
-        <p>Em construção — o envio de mensagens chega nas próximas etapas.</p>
-      </div>`;
+  if (body) body.scrollTop = body.scrollHeight;
+}
+
+function _msgsBubbleHTML(msg, souEu) {
+  const hora = new Date(msg.criado_em).toLocaleString('pt-BR', {
+    day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
+  });
+  return `<div class="msgs-msg ${souEu ? 'msgs-msg-mine' : 'msgs-msg-theirs'}">
+    ${escapeHtml(msg.conteudo)}
+    <div class="msgs-msg-meta">${hora}</div>
+  </div>`;
+}
+
+async function _msgsCarregarHistorico(convId) {
+  const body = document.getElementById('msgs-chat-body');
+  if (!body || !window.supabaseClient || !window.currentUser?.id) return;
+
+  const meuId = window.currentUser.id;
+  body.innerHTML = '<div class="msgs-empty-state"><i class="ti ti-loader-2" style="animation:spin .7s linear infinite"></i><p>Carregando...</p></div>';
+
+  let query = window.supabaseClient.from('mensagens').select('id, remetente_id, destinatario_id, conteudo, criado_em, lido');
+  query = (convId === 'geral')
+    ? query.is('destinatario_id', null)
+    : query.or(`and(remetente_id.eq.${meuId},destinatario_id.eq.${convId}),and(remetente_id.eq.${convId},destinatario_id.eq.${meuId})`);
+
+  const { data, error } = await query.order('criado_em', { ascending: true }).limit(200);
+
+  // A conversa pode ter mudado enquanto a busca estava em andamento — não
+  // pinta uma resposta desatualizada por cima da conversa atual.
+  if (_msgsConversaAtiva !== convId) return;
+
+  if (error) {
+    console.warn('[Mensagens] Falha ao carregar histórico:', error);
+    body.innerHTML = '<div class="msgs-empty-state"><i class="ti ti-alert-triangle"></i><p>Não foi possível carregar as mensagens.</p></div>';
+    return;
+  }
+
+  if (!data || !data.length) {
+    const msgVazio = convId === 'geral' ? 'Nenhuma mensagem ainda. Seja o primeiro a escrever.' : 'Nenhuma mensagem ainda. Comece a conversa.';
+    body.innerHTML = `<div class="msgs-empty-state"><i class="ti ti-message-circle-2"></i><p>${msgVazio}</p></div>`;
+  } else {
+    body.innerHTML = data.map(m => _msgsBubbleHTML(m, m.remetente_id === meuId)).join('');
+    _msgsScrollParaFinal();
+  }
+
+  // Marca como lidas as que eu recebi nessa conversa 1:1 — geral não tem
+  // "lido" por pessoa, então não se aplica (RLS também bloquearia: a
+  // policy de update só permite quando destinatario_id = eu).
+  if (convId !== 'geral') {
+    const temNaoLida = (data || []).some(m => m.destinatario_id === meuId && !m.lido);
+    if (temNaoLida) {
+      window.supabaseClient.from('mensagens')
+        .update({ lido: true })
+        .eq('destinatario_id', meuId)
+        .eq('remetente_id', convId)
+        .eq('lido', false)
+        .then(({ error: errLido }) => {
+          if (errLido) console.warn('[Mensagens] Falha ao marcar como lidas:', errLido);
+        });
+    }
   }
 }
 
-Object.assign(window, { avatarInfo, avatarHTML, msgsAbrirConversa, _presenceGlobalInit, _presenceGlobalStop });
+async function msgsEnviar() {
+  const input = document.getElementById('msgs-input');
+  const btn   = document.getElementById('msgs-send-btn');
+  if (!input || !window.supabaseClient || !window.currentUser?.id) return;
+
+  const texto = input.value.trim();
+  if (!texto) return;
+
+  const meuId           = window.currentUser.id;
+  const destinatarioId  = _msgsConversaAtiva === 'geral' ? null : _msgsConversaAtiva;
+
+  input.disabled = true;
+  if (btn) btn.disabled = true;
+
+  const { data, error } = await window.supabaseClient
+    .from('mensagens')
+    .insert({ remetente_id: meuId, destinatario_id: destinatarioId, conteudo: texto })
+    .select('id, remetente_id, destinatario_id, conteudo, criado_em')
+    .single();
+
+  input.disabled = false;
+  if (btn) btn.disabled = false;
+  input.focus();
+
+  if (error) {
+    console.warn('[Mensagens] Falha ao enviar:', error);
+    if (typeof toast === 'function') toast('Não foi possível enviar a mensagem. Tente de novo.', 'error');
+    return;
+  }
+
+  input.value = '';
+
+  // Só pinta a bolha se a conversa não mudou enquanto o insert corria.
+  const conversaDaMensagem = destinatarioId ?? 'geral';
+  const body = document.getElementById('msgs-chat-body');
+  if (body && _msgsConversaAtiva === conversaDaMensagem) {
+    const vazio = body.querySelector('.msgs-empty-state');
+    if (vazio) body.innerHTML = '';
+    body.insertAdjacentHTML('beforeend', _msgsBubbleHTML(data, true));
+    _msgsScrollParaFinal();
+  }
+}
+
+function _msgsInputKeydown(event) {
+  if (event.key === 'Enter' && !event.shiftKey) {
+    event.preventDefault();
+    msgsEnviar();
+  }
+}
+
+Object.assign(window, { avatarInfo, avatarHTML, msgsAbrirConversa, msgsEnviar, _msgsInputKeydown, _presenceGlobalInit, _presenceGlobalStop });

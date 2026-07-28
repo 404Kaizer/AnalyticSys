@@ -723,13 +723,13 @@
               </div>
               <div class="msgs-chat-body" id="msgs-chat-body">
                 <div class="msgs-empty-state">
-                  <i class="ti ti-message-circle-2"></i>
-                  <p>Em construção — o envio de mensagens chega nas próximas etapas.</p>
+                  <i class="ti ti-loader-2" style="animation:spin .7s linear infinite"></i>
+                  <p>Carregando...</p>
                 </div>
               </div>
               <div class="msgs-input-row">
-                <input type="text" class="msgs-input" id="msgs-input" placeholder="Escreva uma mensagem..." autocomplete="off" disabled>
-                <button class="msgs-send-btn" id="msgs-send-btn" title="Em breve" disabled><i class="ti ti-send"></i></button>
+                <input type="text" class="msgs-input" id="msgs-input" placeholder="Escreva uma mensagem..." autocomplete="off" disabled onkeydown="_msgsInputKeydown(event)">
+                <button class="msgs-send-btn" id="msgs-send-btn" title="Enviar" disabled onclick="msgsEnviar()"><i class="ti ti-send"></i></button>
               </div>
             </div>
           </div>

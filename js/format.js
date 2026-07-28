@@ -596,6 +596,10 @@ function openTool(name) {
   _makeDraggable(el);
   if (name === 'notes') _notesLoad();
   if (name === 'assistente' && typeof _asstLoadHistory === 'function') _asstLoadHistory();
+  // _msgsConversaAtiva é declarada em mensagens.js (carrega depois deste
+  // arquivo) — segura por só ser lida aqui dentro, em tempo de clique,
+  // nunca no carregamento do script.
+  if (name === 'mensagens' && typeof msgsAbrirConversa === 'function') msgsAbrirConversa(_msgsConversaAtiva);
 }
 
 function closeTool(name) {
