@@ -5468,15 +5468,25 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
     // findMaterialMatch já checa _batchImportMode a cada chamada, então
     // precisamos desligar a flag primeiro para o fuzzy scan funcionar.
     _batchImportMode = false;
+    const _stateModuloBkp = pageFromModulo(modulo); // 'Entrada' -> 'entradas', etc. — usado também no backup condensado abaixo
     if (typeof reaplicarPadronizacaoMateriais === 'function') {
       try {
-        const _stateModulo = pageFromModulo(modulo); // 'Entrada' -> 'entradas', etc.
-        if (['entradas', 'saidas', 'lancamentos', 'sap'].includes(_stateModulo)) {
-          reaplicarPadronizacaoMateriais([_stateModulo]);
+        if (['entradas', 'saidas', 'lancamentos', 'sap'].includes(_stateModuloBkp)) {
+          reaplicarPadronizacaoMateriais([_stateModuloBkp]);
         }
       } catch (err) {
         console.warn('[Importação] Falha ao reaplicar padronização de materiais pós-batch:', err);
       }
+    }
+    // Backup condensado na nuvem (27/07) — gatilho automático principal:
+    // roda logo após qualquer importação em lote de um dos 5 módulos
+    // grandes, que é justamente o momento em que o volume que NUNCA
+    // sincroniza linha a linha (ver decisão de 27/07 em import.js) muda
+    // de verdade. Em segundo plano, não bloqueia nem atrasa a conclusão
+    // da importação — falha (rede fora, navegador sem suporte) só gera
+    // um aviso no console, nunca interrompe o fluxo do analista.
+    if (typeof _cbUploadModulo === 'function' && CLOUD_BACKUP_MODULOS.includes(_stateModuloBkp)) {
+      _cbUploadModulo(_stateModuloBkp);
     }
     _importAborted = false;
     const _abortRowEnd = document.getElementById('loading-abort-row');
@@ -6246,6 +6256,15 @@ async function sincronizarDadosLocaisAgora() {
       return typeof fn === 'function' ? fn() : Promise.resolve();
     })
   );
+  // Backup condensado dos 5 módulos grandes (27/07) — este botão não
+  // dispara mais só a sincronização normal, também força uma cópia de
+  // segurança na nuvem, pra quem quiser ter certeza antes de trocar de
+  // dispositivo, por exemplo. Não é o gatilho principal (esse é
+  // automático, pós-importação — ver processImportedRows), só um
+  // reforço sob demanda reaproveitando o botão que já existe.
+  if (typeof _cbBackupTodosModulos === 'function') {
+    await _cbBackupTodosModulos();
+  }
   if (typeof persist === 'function') persist();
   if (typeof renderAll === 'function') renderAll();
   toast('Sincronização concluída.', 'success');
@@ -6298,6 +6317,23 @@ async function restoreAndRender() {
     _lbarSet(30);
     await nextFrame();
 
+    // ── STEP 2.5: Restaurar backup condensado da nuvem (27/07) ───────────
+    // Só entra em ação se algum dos 5 módulos grandes estiver VAZIO
+    // localmente (dispositivo novo, ou IndexedDB limpo/corrompido) — em
+    // uso normal, com dado local presente, esta etapa não faz nada (só
+    // confere e passa direto). Roda ANTES da padronização de materiais
+    // (step seguinte) de propósito: se algo for restaurado aqui, precisa
+    // ser padronizado/indexado junto com o resto, não depois.
+    _lstepSet('cloudbkp', 'running');
+    updateLoadingOverlay('Verificando cópia de segurança na nuvem...', 'Inicializando o sistema');
+    await yieldToUI();
+    if (typeof restaurarBackupCondensadoSeNecessario === 'function') {
+      await restaurarBackupCondensadoSeNecessario();
+    }
+    _lstepSet('cloudbkp', 'done');
+    _lbarSet(35);
+    await nextFrame();
+
     // ── STEP 3: Padronizar materiais ─────────────────────────────────────
     const totalRecs = (state.entradas?.length || 0) + (state.saidas?.length || 0) +
                       (state.lancamentos?.length || 0) + (state.sap?.length || 0);
@@ -6340,6 +6376,10 @@ async function restoreAndRender() {
     // se a aba já tiver um canal aberto (ex.: chamado duas vezes por
     // algum motivo), a própria função não faz nada na segunda vez.
     if (typeof _activityRealtimeInit === 'function') _activityRealtimeInit();
+    // Backup condensado (27/07) — reforço periódico silencioso (Etapa 4),
+    // cobre o que muda entre importações. Idempotente: seguro chamar de
+    // novo em qualquer reboot da mesma aba.
+    if (typeof cloudBackupPeriodicoInit === 'function') cloudBackupPeriodicoInit();
     _lstepSet('notif', 'done');
     _lbarSet(70);
     await nextFrame();
