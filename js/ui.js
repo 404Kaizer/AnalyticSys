@@ -5282,14 +5282,14 @@ function salvarHealthConfig() {
   renderConfigs();
   updateImportPrereqUI();
   toast(saved > 0 ? `${saved} limite(s) salvo(s)` : 'Nenhum valor preenchido', saved > 0 ? 'success' : 'error');
-  if (recsParaSincronizar.length && window.supabaseClient) {
-    window.supabaseClient.from('configs').upsert(recsParaSincronizar, { onConflict: 'user_id,key' })
-      .then(({ error }) => {
-        if (error) {
-          console.warn('[Supabase] Falha ao sincronizar limites de saúde:', error);
-          toast('⚠ Salvo nesta sessão, mas não foi possível sincronizar com a nuvem.', 'error');
-        }
-      });
+  // CORREÇÃO: esta função fazia upsert cru com os campos 'desc'/'created'
+  // (nomes de exibição), mas as colunas reais são 'descricao'/'created_at'
+  // — batia sempre em "Could not find the 'created' column of 'configs'
+  // in the schema cache" (PGRST204), silenciosamente (só toast de aviso).
+  // Reaproveita _configsSyncUpsert (config.js), que já faz o mapeamento
+  // certo, em vez de duplicar a lógica de upsert aqui.
+  if (recsParaSincronizar.length && window.supabaseClient && typeof _configsSyncUpsert === 'function') {
+    recsParaSincronizar.forEach(rec => _configsSyncUpsert(rec));
   }
 }
 
