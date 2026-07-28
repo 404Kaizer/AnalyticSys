@@ -304,7 +304,19 @@
 
           <div class="topbar-stat-sep"></div>
 
-          <!-- 3. Notificações -->
+          <!-- 3. Usuários online (estilo seletor de contas do Gmail) —
+               populado via JS (mensagens.js, próxima etapa) a partir da
+               presença já usada no Admin (profiles.last_seen). Vazio e
+               oculto até então (display:none no wrap inteiro, separador
+               incluso, pra não sobrar um traço solto sem ninguém online);
+               cada avatar clicável abre o chat direto com aquela pessoa
+               (ver Mensagens, Ferramentas). -->
+          <div class="online-users-wrap" id="online-users-wrap" style="display:none">
+            <div class="online-users-list" id="online-users-list"></div>
+            <div class="topbar-stat-sep"></div>
+          </div>
+
+          <!-- 4. Notificações -->
           <div class="notif-wrap" id="notif-wrap">
             <button class="notif-btn" id="notif-btn" onclick="notifToggle()" title="Notificações">
               <i class="ti ti-bell notif-bell-icon"></i>
@@ -365,6 +377,14 @@
               <div class="tools-item-body">
                 <div class="tools-item-label">Assistente</div>
                 <div class="tools-item-sub">Perguntas rápidas sobre a análise atual</div>
+              </div>
+              <i class="ti ti-chevron-right tools-item-arrow"></i>
+            </button>
+            <button class="tools-item" onclick="openTool('mensagens'); closeToolsMenu()">
+              <div class="tools-item-icon" style="background:var(--teal-bg);color:var(--teal)"><i class="ti ti-messages"></i></div>
+              <div class="tools-item-body">
+                <div class="tools-item-label">Mensagens</div>
+                <div class="tools-item-sub">Converse com outros usuários em tempo real</div>
               </div>
               <i class="ti ti-chevron-right tools-item-arrow"></i>
             </button>
@@ -663,6 +683,55 @@
             <div class="asst-dropdown" id="asst-dropdown" style="display:none"></div>
             <input type="text" class="asst-input" id="asst-input" placeholder="Digite / para escolher um contexto" autocomplete="off" oninput="_asstInputChanged(this)" onkeydown="_asstInputKeydown(event)">
             <button class="asst-send-btn" onclick="asstSend()" title="Enviar"><i class="ti ti-send"></i></button>
+          </div>
+        </div>
+
+        <!-- Mensagens (popover) — ETAPA 1: só casca visual, sem lógica de
+             dados ainda (ver js/mensagens.js). Lista de conversas 1:1 é
+             preenchida nas próximas etapas, a partir de profiles + presença;
+             "Geral" já vem fixo porque não depende de nenhum dado dinâmico. -->
+        <div class="tool-popover mensagens-popover" id="tool-mensagens" style="display:none">
+          <div class="tool-popover-header">
+            <span class="tool-popover-title"><i class="ti ti-messages"></i> Mensagens</span>
+            <button class="tool-popover-close" onclick="closeTool('mensagens')"><i class="ti ti-x"></i></button>
+          </div>
+          <div class="msgs-layout">
+            <!-- Lista de conversas -->
+            <div class="msgs-conv-pane">
+              <div class="msgs-conv-list" id="msgs-conv-list">
+                <button class="msgs-conv-item active" data-conv="geral" onclick="msgsAbrirConversa('geral')">
+                  <div class="msgs-conv-avatar msgs-conv-avatar-geral"><i class="ti ti-users"></i></div>
+                  <div class="msgs-conv-body">
+                    <div class="msgs-conv-name">Geral</div>
+                    <div class="msgs-conv-preview">Todos os usuários</div>
+                  </div>
+                </button>
+                <!-- Conversas 1:1 injetadas aqui via JS (msgsRenderConversas), uma por usuário online -->
+              </div>
+              <div class="msgs-conv-empty-hint" id="msgs-conv-empty-hint">
+                <i class="ti ti-user-circle"></i> Usuários aparecem aqui quando estiverem online.
+              </div>
+            </div>
+            <!-- Área da conversa -->
+            <div class="msgs-chat-pane">
+              <div class="msgs-chat-header" id="msgs-chat-header">
+                <div class="msgs-conv-avatar msgs-conv-avatar-geral" id="msgs-chat-header-avatar"><i class="ti ti-users"></i></div>
+                <div class="msgs-chat-header-body">
+                  <div class="msgs-chat-header-name" id="msgs-chat-header-name">Geral</div>
+                  <div class="msgs-chat-header-sub" id="msgs-chat-header-sub">Todos os usuários</div>
+                </div>
+              </div>
+              <div class="msgs-chat-body" id="msgs-chat-body">
+                <div class="msgs-empty-state">
+                  <i class="ti ti-message-circle-2"></i>
+                  <p>Em construção — o envio de mensagens chega nas próximas etapas.</p>
+                </div>
+              </div>
+              <div class="msgs-input-row">
+                <input type="text" class="msgs-input" id="msgs-input" placeholder="Escreva uma mensagem..." autocomplete="off" disabled>
+                <button class="msgs-send-btn" id="msgs-send-btn" title="Em breve" disabled><i class="ti ti-send"></i></button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -4981,6 +5050,7 @@
 
 <script defer src="js/notifications.js"></script>
 <script defer src="js/assistente.js"></script>
+<script defer src="js/mensagens.js"></script>
 
 <!-- ══════════════════════════════════════════════════════════
      MODAL BACKUP / RESTAURAR POR MÓDULOS
