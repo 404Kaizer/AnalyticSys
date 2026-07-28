@@ -5044,12 +5044,22 @@ function _mergeDedup(existing, incoming, fpFn, fpBaseFn) {
   // dados novos, preservando importId/id. MAS se o existente foi editado
   // manualmente, a edição prevalece por completo — só preenche importId se
   // ainda estava vazio.
+  //
+  // BLINDAGEM (28/07): createdAt também precisa ser preservado do
+  // ORIGINAL aqui — sem isso, reimportar o MESMO arquivo (0 registros
+  // novos) mudava silenciosamente o createdAt de todo registro batido,
+  // porque `r` (a linha recém-parseada desta reimportação) já vem
+  // carimbada com Date.now() em stamp() (normalize.js), e só id/importId
+  // eram sobrescritos de volta pro original — createdAt ficava com o
+  // valor novo. Efeito visível: reimportar um arquivo idêntico gerava
+  // chunks condensados DIFERENTES na nuvem (cloud-backup.js) pros MESMOS
+  // dados de negócio, só por causa desse campo mudando toda vez.
   const updatedExisting = incoming
     .filter(r => existingByFp.has(fpFn(r)))
     .map(r => {
       const original = existingByFp.get(fpFn(r));
       if (original.editado) return { ...original, importId: original.importId || r.importId };
-      return { ...r, importId: original.importId, id: original.id };
+      return { ...r, importId: original.importId, id: original.id, createdAt: original.createdAt };
     });
 
   // Novos registros que não bateram por chave completa. Antes de tratar como
@@ -5485,7 +5495,17 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
     // de verdade. Em segundo plano, não bloqueia nem atrasa a conclusão
     // da importação — falha (rede fora, navegador sem suporte) só gera
     // um aviso no console, nunca interrompe o fluxo do analista.
-    if (typeof _cbUploadModulo === 'function' && CLOUD_BACKUP_MODULOS.includes(_stateModuloBkp)) {
+    //
+    // BLINDAGEM (28/07): só dispara se ALGO novo foi realmente
+    // adicionado (_importAddedCount > 0). Reimportar o mesmo arquivo (0
+    // registros novos, dedup funcionando corretamente) não deve gerar um
+    // backup condensado novo — mesmo com o createdAt já preservado
+    // acima (_mergeDedup), o merge ainda pode reordenar o array
+    // (registros batidos voltam na ordem do arquivo reimportado, não na
+    // ordem em que já estavam), o que sozinho já produziria chunks
+    // comprimidos diferentes pros mesmos dados. Sem essa checagem, cada
+    // reimportação do mesmo arquivo desperdiçava espaço no Storage.
+    if (typeof _cbUploadModulo === 'function' && CLOUD_BACKUP_MODULOS.includes(_stateModuloBkp) && _importAddedCount > 0) {
       _cbUploadModulo(_stateModuloBkp);
     }
     _importAborted = false;
