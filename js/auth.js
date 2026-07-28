@@ -240,7 +240,7 @@ window.AuthGate = (function () {
     // de configs.
     const saveHealthBtn = $('btn-salvar-health-config');
     if (saveHealthBtn) saveHealthBtn.style.display = isAdmin ? '' : 'none';
-    document.querySelectorAll('.health-cfg-input').forEach(inp => { inp.disabled = !isAdmin; });
+    document.querySelectorAll('input[id^="hcfg-"]').forEach(inp => { inp.disabled = !isAdmin; });
     const healthReadonlyNote = $('health-cfg-readonly-note');
     if (healthReadonlyNote) healthReadonlyNote.style.display = isAdmin ? 'none' : '';
   }
