@@ -4473,6 +4473,7 @@ img { max-width: 100%; }
   background: var(--accent);
   border: 2px solid var(--bg2);
   cursor: pointer;
+  user-select: none;
   flex-shrink: 0;
   transition: transform .13s, box-shadow .13s;
 }
@@ -7908,6 +7909,7 @@ mark.search-highlight {
   font-weight: 700;
   color: #fff;
   background: var(--accent);
+  user-select: none;
   flex-shrink: 0;
 }
 .msgs-conv-avatar-geral { background: var(--teal); font-size: 13px; }

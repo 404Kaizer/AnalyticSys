@@ -129,16 +129,63 @@ async function _presenceGlobalTick() {
   if (!online.length) {
     wrap.style.display = 'none';
     list.innerHTML = '';
-    return;
+  } else {
+    // Clique no avatar do topbar abre o Mensagens já na conversa daquela
+    // pessoa (Etapa 9) — reaproveita openTool()/msgsAbrirConversa() que já
+    // existem, sem precisar de uma função nova só pra isso.
+    list.innerHTML = online.map(u => {
+      const nome = (u.email || '').split('@')[0];
+      const onclick = `openTool('mensagens'); msgsAbrirConversa('${u.id}')`;
+      return avatarHTML(u.email, 'online-avatar', `title="${_presenceEsc(nome)} — online" onclick="${onclick}"`);
+    }).join('');
+    wrap.style.display = 'flex';
   }
 
-  // Clique no avatar ainda não abre o chat com a pessoa — isso entra na
-  // Etapa 9 (junto com a função que vai abrir a conversa 1:1).
-  list.innerHTML = online.map(u => {
+  // Lista de conversas 1:1 no popover (Etapa 1, concluindo) — mesmo array
+  // de online já buscado acima, sem round-trip extra ao Supabase.
+  msgsRenderConversas(online);
+}
+
+// ═══════════════════════════════════════════════════════════
+// LISTA DE CONVERSAS 1:1 (Etapa 1, concluindo)
+// ═══════════════════════════════════════════════════════════
+// Chamada a cada tick de presença, com o array de usuários online que
+// _presenceGlobalTick já buscou. "Geral" é fixo no HTML (index.html) e
+// nunca é tocado aqui — só os itens 1:1, marcados com
+// .msgs-conv-item-injetado, são removidos e reconstruídos do zero a cada
+// chamada (mais simples que fazer diff, e o volume é pequeno).
+function msgsRenderConversas(online) {
+  const list = document.getElementById('msgs-conv-list');
+  const hint = document.getElementById('msgs-conv-empty-hint');
+  if (!list) return;
+
+  const activeId = list.querySelector('.msgs-conv-item.active')?.dataset.conv || 'geral';
+
+  list.querySelectorAll('.msgs-conv-item-injetado').forEach(el => el.remove());
+
+  online.forEach(u => {
     const nome = (u.email || '').split('@')[0];
-    return avatarHTML(u.email, 'online-avatar', `title="${_presenceEsc(nome)} — online"`);
-  }).join('');
-  wrap.style.display = 'flex';
+    list.insertAdjacentHTML('beforeend', `
+      <button class="msgs-conv-item msgs-conv-item-injetado" data-conv="${u.id}" onclick="msgsAbrirConversa('${u.id}')">
+        ${avatarHTML(u.email, 'msgs-conv-avatar')}
+        <div class="msgs-conv-body">
+          <div class="msgs-conv-name">${_presenceEsc(nome)}</div>
+          <div class="msgs-conv-preview">Online</div>
+        </div>
+      </button>`);
+  });
+
+  if (hint) hint.style.display = online.length ? 'none' : '';
+
+  // Se a conversa ativa era com alguém que ficou offline nesse intervalo,
+  // volta pro Geral em vez de deixar o cabeçalho apontando pra um item
+  // que não existe mais na lista.
+  const continuaExistindo = activeId === 'geral' || online.some(u => u.id === activeId);
+  if (continuaExistindo) {
+    list.querySelectorAll('.msgs-conv-item').forEach(el => el.classList.toggle('active', el.dataset.conv === activeId));
+  } else {
+    msgsAbrirConversa('geral');
+  }
 }
 
 // Chamada no boot (dashboard.js, STEP 5) — idempotente, mesmo padrão de
