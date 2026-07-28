@@ -442,39 +442,31 @@ function applySavedState(saved) {
     }
   }
 
-  // Migra IDs de ocorrências do formato OC-timestamp para OC-N sequencial
+  // CORREÇÃO (28/07) — a migração antiga aqui RENOMEAVA o `id` de
+  // ocorrências do formato legado "OC-<timestamp>" pra "OC-N" sequencial,
+  // reiniciando o contador em 1 a cada boot sem checar se esse número já
+  // estava em uso — por OUTRA CONTA. Como `id` é a chave primária da
+  // tabela compartilhada `ocorrencias` (sem escopo por usuário), isso
+  // criava colisões novas entre contas a cada boot num dispositivo com
+  // ids legados: upload pra nuvem falhando (RLS bloqueia sobrescrever
+  // registro de outro dono) e sobrescrita silenciosa em memória no merge
+  // por id. Ver "Correção do bug de colisão de ids entre contas" (28/07).
+  // O formato antigo "OC-<timestamp>" já era seguro por natureza (id
+  // realmente gerado uma vez, baseado em timestamp) — o problema era só
+  // a "limpeza" pra número bonito. Substituído por uma versão que NUNCA
+  // toca no `id` real — só preenche o campo `numero` (cosmético, pode
+  // repetir entre contas sem causar dano nenhum) pra quem ainda não tem.
   if (Array.isArray(state.ocorrencias)) {
-    let counter = 1;
-    const idMap = {};
-    // Ordena por criadoEm para manter ordem cronológica
-    const sorted = [...state.ocorrencias].sort((a, b) => (a.criadoEm || 0) - (b.criadoEm || 0));
-    sorted.forEach(o => {
-      const isLegacy = /^OC-\d{10,}$/.test(String(o.id));
-      if (isLegacy) {
-        idMap[o.id] = 'OC-' + counter++;
-      }
-    });
-    if (Object.keys(idMap).length > 0) {
-      state.ocorrencias = state.ocorrencias.map(o => ({
-        ...o,
-        id: idMap[o.id] || o.id,
-      }));
-
-      // BLINDAGEM (27/07): se algum id antigo (OC-timestamp) já tiver sido
-      // sincronizado com a nuvem antes desta migração rodar, o registro
-      // (agora com id novo) seria visto como "nunca sincronizado" pelo
-      // syncOcorrenciasFromSupabase() e reenviado — criando uma duplicata
-      // na nuvem enquanto a linha com o id antigo fica órfã. Mesmo padrão
-      // de risco do bug de compactação do SAP (ver "Bugs corrigidos"),
-      // só que aqui é no máximo 1 duplicata por registro, não uma a cada
-      // boot. Como best-effort, apaga o id antigo na nuvem assim que
-      // possível — inofensivo se o id antigo nunca existiu lá (delete de
-      // linha inexistente não dá erro), e não bloqueia o boot se a rede/
-      // cliente Supabase ainda não estiver pronto.
-      const idsAntigosOcorrencias = Object.keys(idMap);
-      if (window.supabaseClient && typeof _ocSyncDelete === 'function') {
-        idsAntigosOcorrencias.forEach(oldId => _ocSyncDelete(oldId));
-      }
+    const semNumero = state.ocorrencias.filter(o => !o.numero);
+    if (semNumero.length && typeof _nextOcId === 'function') {
+      const ordenados = [...semNumero].sort((a, b) => (a.criadoEm || 0) - (b.criadoEm || 0));
+      ordenados.forEach(o => {
+        // Se o id já parece um "OC-N" curto (formato atual), reaproveita
+        // ele mesmo como número de exibição — sem gerar nada novo. Só
+        // pede um número novo pro formato antigo "OC-<timestamp>" (feio
+        // demais pra mostrar na tela como está).
+        o.numero = /^OC-\d{1,9}$/.test(String(o.id)) ? o.id : _nextOcId();
+      });
     }
   }
 

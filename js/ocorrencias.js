@@ -10,13 +10,38 @@ function getOcorrencias() {
   return state.ocorrencias;
 }
 
+// CORREÇÃO (28/07) — bug de colisão de ids entre contas: _nextOcId()
+// contava só a partir do estado LOCAL de cada dispositivo/conta, então
+// contas diferentes geravam o mesmo "OC-N" de forma independente. Como
+// `id` é a chave primária da tabela compartilhada `ocorrencias` (sem
+// nenhum escopo por usuário), isso causava upsert falhando por RLS
+// (upload pra nuvem) e sobrescrita silenciosa em memória durante o merge
+// por id (syncOcorrenciasFromSupabase) — ocorrências de contas diferentes
+// com o mesmo "OC-N" se substituíam uma à outra.
+//
+// A partir de agora, _nextOcId() NÃO é mais usado como chave primária —
+// vira só o número de exibição (campo `numero`, cosmético, pode repetir
+// entre contas sem problema). A chave real (`id`) passa a vir de
+// _ocGerarIdSeguro(), mesmo padrão já usado com segurança em
+// ajustesSistemicos.id (dai.js) — timestamp + sufixo aleatório, nunca
+// colide. Registros antigos (de antes desta correção) não têm `numero`
+// gravado — usam o próprio `id` (que já parecia "OC-N") como número de
+// exibição também, por isso a checagem abaixo olha os dois.
 function _nextOcId() {
   const lista = getOcorrencias();
   const nums = lista
-    .map(o => { const m = String(o.id).match(/^OC-(\d+)$/); return m ? parseInt(m[1]) : 0; })
+    .map(o => {
+      const label = o.numero || o.id;
+      const m = String(label).match(/^OC-(\d+)$/);
+      return m ? parseInt(m[1]) : 0;
+    })
     .filter(n => n > 0);
   const next = nums.length ? Math.max(...nums) + 1 : 1;
   return 'OC-' + next;
+}
+
+function _ocGerarIdSeguro() {
+  return 'oc_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
 }
 
 // ── Sincronização com Supabase (Fase 2) ────────────────────
@@ -25,6 +50,7 @@ function _nextOcId() {
 function _ocToDbRow(o) {
   return {
     id: o.id,
+    numero: o.numero || null,
     data_abertura: o.dataAbertura || null,
     motivo: o.motivo || null,
     data_limite: o.dataLimite || null,
@@ -52,6 +78,7 @@ function _ocToDbRow(o) {
 function _ocFromDbRow(row) {
   return {
     id: row.id,
+    numero: row.numero || null,
     dataAbertura: row.data_abertura,
     motivo: row.motivo,
     dataLimite: row.data_limite,
@@ -1024,7 +1051,7 @@ function getOcorrenciasFiltradas() {
     if (fMaterial && !(o.material || '').toLowerCase().includes(fMaterial)) return false;
     if (fOperador && !(o.operador || '').toLowerCase().includes(fOperador)) return false;
     if (fBusca) {
-      const hay = [o.central, o.material, o.operador, o.descricao, o.id, o.daiNumero, o.daiTag].join(' ').toLowerCase();
+      const hay = [o.central, o.material, o.operador, o.descricao, o.id, o.numero, o.daiNumero, o.daiTag].join(' ').toLowerCase();
       if (!hay.includes(fBusca)) return false;
     }
     return true;
@@ -1053,7 +1080,7 @@ function _renderOcAlerts(lista) {
   if (vencidas.length) {
     const itens = vencidas.map(o => {
       const d = _dias(o);
-      return `<span class="oc-alert-item">${escapeHtml(o.id)} <span class="oc-alert-time">(${d}d atraso)</span></span>`;
+      return `<span class="oc-alert-item">${escapeHtml(o.numero || o.id)} <span class="oc-alert-time">(${d}d atraso)</span></span>`;
     }).join('');
     html += `<div class="oc-alert oc-alert-red">
       <i class="ti ti-alert-circle"></i>
@@ -1065,7 +1092,7 @@ function _renderOcAlerts(lista) {
     const itens = urgentes.map(o => {
       const d = _dias(o);
       const label = d === 0 ? 'hoje' : d === 1 ? '1d restante' : `${d}d restantes`;
-      return `<span class="oc-alert-item">${escapeHtml(o.id)} <span class="oc-alert-time">(${label})</span></span>`;
+      return `<span class="oc-alert-item">${escapeHtml(o.numero || o.id)} <span class="oc-alert-time">(${label})</span></span>`;
     }).join('');
     html += `<div class="oc-alert oc-alert-amber">
       <i class="ti ti-clock-exclamation"></i>
@@ -1096,7 +1123,7 @@ function _renderOcLista(lista) {
       <div class="oc-card-header">
         <div class="oc-card-header-left">
           <span class="oc-badge ${statusCls[status]}">${isAjuste ? `<i class="ti ${o.concluida ? "ti-rubber-stamp" : "ti-clock-hour-4"}" style="margin-right:3px"></i>` : ''}${statusLabel[status]}</span>
-          <span class="oc-card-id" title="${isAjuste ? 'Ocorrência interna: ' + escapeHtml(o.id) + (o.daiNumero ? ' · Nº fiscal: ' + escapeHtml(o.daiNumero) : '') : ''}">${isAjuste && (o.daiTag || o.daiNumero) ? escapeHtml(o.daiTag || o.daiNumero) : escapeHtml(o.id)}</span>
+          <span class="oc-card-id" title="${isAjuste ? 'Ocorrência interna: ' + escapeHtml(o.id) + (o.daiNumero ? ' · Nº fiscal: ' + escapeHtml(o.daiNumero) : '') : ''}">${isAjuste && (o.daiTag || o.daiNumero) ? escapeHtml(o.daiTag || o.daiNumero) : escapeHtml(o.numero || o.id)}</span>
           <span class="oc-card-central"><i class="ti ti-building-warehouse"></i> ${escapeHtml(o.central || '—')}</span>
           ${o.material ? `<span class="oc-card-material"><i class="ti ti-box"></i> ${escapeHtml(o.material)}</span>` : ''}
         </div>
@@ -1204,7 +1231,7 @@ function openOcDetailModal(id) {
     <span class="oc-badge ${statusCls[status]}">${isAjuste ? `<i class="ti ${o.concluida ? "ti-rubber-stamp" : "ti-clock-hour-4"}" style="margin-right:3px"></i>` : ''}${statusLabel[status]}</span>
     <span class="oc-card-central"><i class="ti ti-building-warehouse"></i> ${escapeHtml(o.central || '—')}</span>
     ${o.material ? `<span class="oc-card-material"><i class="ti ti-box"></i> ${escapeHtml(o.material)}</span>` : ''}
-    <span style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-left:auto" title="${isAjuste ? 'Ocorrência interna: ' + escapeHtml(o.id) + (o.daiNumero ? ' · Nº fiscal: ' + escapeHtml(o.daiNumero) : '') : ''}">${isAjuste && (o.daiTag || o.daiNumero) ? escapeHtml(o.daiTag || o.daiNumero) : escapeHtml(o.id)}</span>`;
+    <span style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-left:auto" title="${isAjuste ? 'Ocorrência interna: ' + escapeHtml(o.id) + (o.daiNumero ? ' · Nº fiscal: ' + escapeHtml(o.daiNumero) : '') : ''}">${isAjuste && (o.daiTag || o.daiNumero) ? escapeHtml(o.daiTag || o.daiNumero) : escapeHtml(o.numero || o.id)}</span>`;
 
   el.querySelector('.oc-detail-dates').innerHTML = `
     <span class="oc-card-date-group" style="align-items:flex-start">
@@ -1473,8 +1500,12 @@ function submitOcorrenciaForm() {
   }
 
   const existing = id ? (state.ocorrencias || []).find(o => o.id === id) : null;
+  // numero (exibição) nunca é regerado numa edição — mesmo em registros
+  // antigos sem `numero` gravado, existing.id já cumpre esse papel.
+  const numero = existing ? (existing.numero || existing.id) : _nextOcId();
   const ocorrencia = {
-    id:           id || _nextOcId(),
+    id:           id || _ocGerarIdSeguro(),
+    numero,
     dataAbertura: abertura,
     motivo:       motivo,
     dataLimite:   limite || null,

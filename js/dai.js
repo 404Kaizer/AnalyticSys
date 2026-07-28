@@ -658,11 +658,13 @@ async function gerarDocumentoAjuste() {
 
     if (daiRecord.ocorrenciaPorItem) {
       itens.forEach(item => {
-        const ocId = _nextOcId();
+        const ocId = _ocGerarIdSeguro();
+        const ocNumero = _nextOcId();
         daiRecord.ocorrenciaIds.push(ocId);
         const concluidaNaGeracao = item.sapDocumento !== DAI_SAP_PENDENTE;
         const oc = {
           id: ocId,
+          numero: ocNumero,
           dataAbertura: dataOcorrido,
           motivo: item.objetivo,
           dataLimite: null,
@@ -688,12 +690,14 @@ async function gerarDocumentoAjuste() {
         ocsCriadas.push(oc);
       });
     } else {
-      const ocId = _nextOcId();
+      const ocId = _ocGerarIdSeguro();
+      const ocNumero = _nextOcId();
       daiRecord.ocorrenciaIds.push(ocId);
       const todosConcluidos = itens.every(it => it.sapDocumento !== DAI_SAP_PENDENTE);
       const materiaisResumo = [...new Set(itens.map(it => it.material))].join(', ');
       const oc = {
         id: ocId,
+        numero: ocNumero,
         dataAbertura: dataOcorrido,
         motivo: itens[0].objetivo,
         dataLimite: null,
