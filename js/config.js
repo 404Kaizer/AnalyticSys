@@ -129,11 +129,24 @@ async function syncCatalogosFromSupabase() {
   }
 }
 
+// Chaves saude_* viraram globais e só o ADM pode criar/editar/excluir
+// (decisão 28/07, mesma trava de ui.js/salvarHealthConfig) — mesmo que o
+// usuário chegue nelas por aqui (tela genérica de Configurações) em vez
+// da tela dedicada de Saúde. A RLS de configs já bloqueia a escrita no
+// banco; isto só evita mexer no estado local e dar uma mensagem confusa.
+function _configEhChaveSaude(key) {
+  return typeof key === 'string' && key.toLowerCase().startsWith('saude_');
+}
+
 function salvarConfig() {
   const key = val('cfg-key');
   const value = val('cfg-val-input');
   const desc = val('cfg-desc');
   if (!key) { toast('Informe a chave', 'error'); return; }
+  if (_configEhChaveSaude(key) && window.currentUser?.role !== 'admin') {
+    toast('Somente o administrador pode alterar limites de saúde (chaves saude_*).', 'error');
+    return;
+  }
 
   const existing = state.configs.findIndex(c => normalizeText(c.key) === normalizeText(key));
   const rec = { key, value, desc, created: new Date().toLocaleDateString('pt-BR') };
@@ -150,6 +163,10 @@ function removerConfig(pagedIndex) {
   const { data } = getListPageData('configs');
   const rec = data[pagedIndex];
   if (!rec) return;
+  if (_configEhChaveSaude(rec.key) && window.currentUser?.role !== 'admin') {
+    toast('Somente o administrador pode remover limites de saúde (chaves saude_*).', 'error');
+    return;
+  }
   const idx = state.configs.indexOf(rec);
   if (idx < 0) return;
   state.configs.splice(idx, 1);
@@ -171,6 +188,10 @@ function editConfig(key) {
 function deleteConfig(key) {
   const idx = state.configs.findIndex(c => normalizeText(c.key) === normalizeText(key));
   if (idx < 0) { toast('Configuração não encontrada', 'error'); return; }
+  if (_configEhChaveSaude(key) && window.currentUser?.role !== 'admin') {
+    toast('Somente o administrador pode excluir limites de saúde (chaves saude_*).', 'error');
+    return;
+  }
   if (!confirm(`Excluir configuração "${key}"?`)) return;
   state.configs.splice(idx, 1);
   persist();

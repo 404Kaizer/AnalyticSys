@@ -5246,6 +5246,15 @@ function buildHealthPanel(central, dtIni, allMatsSorted, lancsByMat, sapByMat, c
 }
 
 function salvarHealthConfig() {
+  // Decisão 28/07: Limites de Saúde viram globais, só o ADM edita. Os
+  // campos/botão já ficam desabilitados pra quem não é admin (auth.js/
+  // updateAccountUI) e a RLS de configs bloqueia o UPSERT no banco pras
+  // chaves saude_* — esta guarda é só pra dar uma mensagem clara caso a
+  // função seja chamada por outro caminho.
+  if (window.currentUser?.role !== 'admin') {
+    toast('Somente o administrador pode alterar os limites de saúde.', 'error');
+    return;
+  }
   const cats = ['aglomerante','agregado','aditivo','adicao'];
   const levels = ['bom','atencao','urgente'];
   const catLabels = { aglomerante:'Aglomerantes', agregado:'Agregados', aditivo:'Aditivos', adicao:'Adições' };

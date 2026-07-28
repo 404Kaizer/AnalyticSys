@@ -676,6 +676,14 @@ async function syncNotasAjusteFromSupabase() {
 let _ncdPreview = null;
 
 function ncdAbrirModal() {
+  // Decisão 28/07: só o ADM pode gerar Notas de Crédito/Débito. O botão já
+  // fica escondido pra quem não é admin (auth.js/updateAccountUI) e a RLS
+  // de notas_ajuste bloqueia o INSERT no banco — esta guarda é só pra dar
+  // uma mensagem clara caso a função seja chamada por outro caminho.
+  if (window.currentUser?.role !== 'admin') {
+    toast('Somente o administrador pode gerar Notas de Crédito/Débito.', 'error');
+    return;
+  }
   const bridge = window._invGetDadosParaNotas ? window._invGetDadosParaNotas() : null;
   if (!bridge || !bridge.invRows || !bridge.invRows.length) {
     toast('Gere o inventário antes de criar as notas.', 'error');

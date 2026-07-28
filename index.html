@@ -2018,7 +2018,7 @@
               <button class="btn" onclick="invExportar()">
                 <i class="ti ti-file-spreadsheet"></i> Exportar CSV
               </button>
-              <button class="btn" onclick="ncdAbrirModal()" title="Gera notas de crédito/débito em PDF a partir das linhas selecionadas — ou de todas as linhas visíveis, se nenhuma estiver selecionada">
+              <button class="btn" id="btn-ncd-abrir" onclick="ncdAbrirModal()" title="Gera notas de crédito/débito em PDF a partir das linhas selecionadas — ou de todas as linhas visíveis, se nenhuma estiver selecionada">
                 <i class="ti ti-receipt"></i> Notas Créd./Déb.
               </button>
             </div>
@@ -2895,11 +2895,14 @@
         <div class="table-card" style="margin-bottom:24px">
           <div class="table-header">
             <span class="table-title"><i class="ti ti-heartbeat"></i> Critérios por Categoria de Material</span>
-            <button class="btn btn-primary" onclick="salvarHealthConfig()"><i class="ti ti-device-floppy"></i> Salvar Limites</button>
+            <button class="btn btn-primary" id="btn-salvar-health-config" onclick="salvarHealthConfig()"><i class="ti ti-device-floppy"></i> Salvar Limites</button>
           </div>
           <div style="padding:16px 18px">
             <div style="font-size:11.5px;color:var(--text2);margin-bottom:14px;line-height:1.6">
               Defina os limites de variação absoluta (em kg) para cada categoria. O sistema classifica automaticamente cada material e calcula a saúde da central.
+            </div>
+            <div id="health-cfg-readonly-note" style="display:none;font-size:11.5px;color:var(--text2);background:var(--bg2,rgba(255,255,255,0.04));border:1px solid var(--border,rgba(255,255,255,0.08));border-radius:8px;padding:10px 12px;margin-bottom:14px">
+              <i class="ti ti-lock"></i> Estes limites agora são globais (valem pra todas as contas) e só o administrador pode alterá-los.
             </div>
             <div class="health-cfg-grid">
               <div class="health-cfg-card">

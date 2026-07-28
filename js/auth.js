@@ -223,7 +223,26 @@ window.AuthGate = (function () {
     // Tab "Administração" só aparece pra quem é admin. Isso é só UI — a
     // segurança de verdade está nas políticas de RLS de cada tabela.
     const adminTab = $('tab-admin');
-    if (adminTab) adminTab.style.display = profile?.role === 'admin' ? '' : 'none';
+    const isAdmin = profile?.role === 'admin';
+    if (adminTab) adminTab.style.display = isAdmin ? '' : 'none';
+
+    // Decisão 28/07 — só o ADM gera Notas de Crédito/Débito. Botão some
+    // pra quem não é admin (a policy de INSERT de notas_ajuste já bloqueia
+    // no banco; isso é só pra não oferecer uma ação que vai falhar).
+    const ncdBtn = $('btn-ncd-abrir');
+    if (ncdBtn) ncdBtn.style.display = isAdmin ? '' : 'none';
+
+    // Decisão 28/07 — Limites de Saúde (Configurações) viram globais e só
+    // o ADM edita. Trava o botão "Salvar Limites" e os 12 campos pra quem
+    // não é admin; a leitura continua igual pra todos (RLS libera SELECT
+    // de chaves saude_* pra qualquer autenticado). Mesmo padrão: isto é
+    // só UI, a segurança de verdade está na policy de INSERT/UPDATE/DELETE
+    // de configs.
+    const saveHealthBtn = $('btn-salvar-health-config');
+    if (saveHealthBtn) saveHealthBtn.style.display = isAdmin ? '' : 'none';
+    document.querySelectorAll('.health-cfg-input').forEach(inp => { inp.disabled = !isAdmin; });
+    const healthReadonlyNote = $('health-cfg-readonly-note');
+    if (healthReadonlyNote) healthReadonlyNote.style.display = isAdmin ? 'none' : '';
   }
 
   // Ponto único que "entra" no app a partir de uma sessão válida — chamado
