@@ -25,6 +25,55 @@
 // preenchida — isso entra na Etapa 3, junto com a fileira de avatares do
 // topbar (mesma fonte de presença pras duas coisas).
 
+// ═══════════════════════════════════════════════════════════
+// AVATAR — cor determinística + inicial (Etapa 2)
+// ═══════════════════════════════════════════════════════════
+// Não existe coluna de foto em `profiles`, então o avatar é sempre
+// gerado: um círculo colorido com a inicial do e-mail, no estilo do
+// Gmail/Google Workspace quando o usuário não tem foto configurada.
+//
+// A cor vem de uma paleta FIXA das variáveis semânticas do próprio tema
+// (--accent/--teal/--purple/--green/--amber/--red), escolhida por um hash
+// simples do e-mail/id — a mesma pessoa sempre cai na mesma cor, e a cor
+// já se adapta sozinha à troca de tema (dark/graphite/light/sand), porque
+// é a variável CSS que muda, não um hex fixo calculado aqui.
+//
+// --gold fica de fora de propósito: é reservado só pro status "Ajuste
+// Sistêmico" (DAI) em Ocorrências (ver tokens.css) — não pode ser
+// reaproveitado pra mais nada, pra manter esse sinal visual exclusivo.
+//
+// Não prefixado com "msgs" de propósito — é usado tanto no chat quanto
+// na fileira de avatares do topbar (Etapa 3), e pode vir a ser reutilizado
+// em outras telas (ex.: tabela de usuários do Admin) no futuro.
+const AVATAR_COLOR_VARS = ['--accent', '--teal', '--purple', '--green', '--amber', '--red'];
+
+function _avatarHash(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) {
+    h = (h * 31 + str.charCodeAt(i)) >>> 0;
+  }
+  return h;
+}
+
+// Retorna { initial, colorVar } a partir de um e-mail (ou qualquer string
+// estável — id do usuário também serve, caso o e-mail não esteja
+// disponível no momento da chamada).
+function avatarInfo(seed) {
+  const s = String(seed || '').trim();
+  const colorVar = AVATAR_COLOR_VARS[_avatarHash(s) % AVATAR_COLOR_VARS.length];
+  const namePart = s.includes('@') ? s.split('@')[0] : s;
+  const initial = (namePart.trim()[0] || '?').toUpperCase();
+  return { initial, colorVar };
+}
+
+// Monta o HTML de um avatar circular pronto pra inserir no DOM. A classe
+// de tamanho/posição (online-avatar, msgs-conv-avatar...) é decidida por
+// quem chama — esta função só resolve cor + inicial, uma vez só.
+function avatarHTML(seed, className, extraAttrs) {
+  const { initial, colorVar } = avatarInfo(seed);
+  return `<div class="${className}" style="background:var(${colorVar})" ${extraAttrs || ''}>${initial}</div>`;
+}
+
 function msgsAbrirConversa(convId) {
   const list = document.getElementById('msgs-conv-list');
   if (!list) return;
@@ -54,4 +103,4 @@ function msgsAbrirConversa(convId) {
   }
 }
 
-Object.assign(window, { msgsAbrirConversa });
+Object.assign(window, { avatarInfo, avatarHTML, msgsAbrirConversa });
