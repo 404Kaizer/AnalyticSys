@@ -367,4 +367,119 @@ function _msgsInputKeydown(event) {
   }
 }
 
-Object.assign(window, { avatarInfo, avatarHTML, msgsAbrirConversa, msgsEnviar, _msgsInputKeydown, _presenceGlobalInit, _presenceGlobalStop });
+// ═══════════════════════════════════════════════════════════
+// CANAL REALTIME (Etapa 8)
+// ═══════════════════════════════════════════════════════════
+// Mesmo padrão do canal de atividade em notifications.js
+// (_activityRealtimeInit/_activityRealtimeStop) — chamado no boot
+// (dashboard.js) e parado no SIGNED_OUT sem reload (auth.js).
+//
+// RLS de `mensagens` já garante que cada usuário só recebe pelo canal os
+// INSERTs que a policy de select também deixaria ele ler via query normal
+// (confirmado na documentação do Supabase: Postgres Changes respeita RLS
+// nativamente) — remetente, destinatário, geral, ou admin. Não escrevemos
+// nenhuma policy adicional em realtime.messages porque não usamos canal
+// privado (private:true) — é o modo clássico postgres_changes, que já
+// aplica a RLS da própria tabela.
+let _msgsChannel = null;
+function _msgsRealtimeInit() {
+  if (!window.supabaseClient || !window.currentUser || _msgsChannel) return;
+  _msgsChannel = window.supabaseClient
+    .channel('mensagens_realtime')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mensagens' },
+      (payload) => { if (payload?.new) _msgsHandleNova(payload.new); })
+    .subscribe((status) => {
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        console.warn('[Mensagens] Canal Realtime com problema:', status);
+      }
+    });
+}
+function _msgsRealtimeStop() {
+  if (_msgsChannel && window.supabaseClient) {
+    window.supabaseClient.removeChannel(_msgsChannel);
+  }
+  _msgsChannel = null;
+}
+
+// ═══════════════════════════════════════════════════════════
+// BADGE DE NÃO LIDAS (Etapa 10)
+// ═══════════════════════════════════════════════════════════
+// Contador simples em memória (não persiste entre reloads de propósito —
+// ao recarregar a página, o histórico de cada conversa já reflete o que
+// está lido/não lido via a coluna `lido`; o badge é só o "flash" de coisa
+// nova chegando com a aba aberta, mesma filosofia do toast de atividade).
+let _msgsNaoLidas = 0;
+function _msgsBadgeIncrementar() {
+  _msgsNaoLidas++;
+  _msgsBadgeRender();
+}
+function _msgsBadgeZerar() {
+  _msgsNaoLidas = 0;
+  _msgsBadgeRender();
+}
+function _msgsBadgeRender() {
+  const badge = document.getElementById('msgs-badge');
+  if (!badge) return;
+  badge.textContent = _msgsNaoLidas > 9 ? '9+' : String(_msgsNaoLidas);
+  badge.style.display = _msgsNaoLidas > 0 ? '' : 'none';
+}
+
+// ═══════════════════════════════════════════════════════════
+// MENSAGEM NOVA — abertura automática + som (Etapa 10)
+// ═══════════════════════════════════════════════════════════
+// Chamada pelo canal Realtime a cada INSERT que a RLS deixa este usuário
+// ver. Duas ressalvas importantes:
+//
+// 1. Mensagem que EU mandei: já foi pintada localmente (otimista) em
+//    msgsEnviar() — ignorar aqui pra não duplicar a bolha.
+// 2. Visibilidade de admin sobre conversa alheia: is_admin() na policy
+//    deixa um admin RECEBER o evento de uma conversa entre duas outras
+//    pessoas da qual ele não participa. Isso é visibilidade, não uma
+//    notificação — abrir a janela e tocar som pra toda conversa privada
+//    da empresa seria spam, não o que a Etapa 10 pediu. Por isso só
+//    dispara abertura/som quando a mensagem é de fato dirigida a mim
+//    (geral ou DM comigo); do contrário, no máximo atualiza a bolha se eu
+//    já estiver com aquela conversa aberta (caso raro de estar navegando
+//    o histórico alheio como admin).
+async function _msgsHandleNova(msg) {
+  const meuId = window.currentUser?.id;
+  if (!meuId || msg.remetente_id === meuId) return;
+
+  const conversaDaMensagem = msg.destinatario_id === null ? 'geral' : msg.remetente_id;
+  const éParaMim = msg.destinatario_id === null || msg.destinatario_id === meuId;
+
+  const jaEstouNessaConversa = typeof _openTools !== 'undefined' && _openTools.has('mensagens')
+    && _msgsConversaAtiva === conversaDaMensagem;
+
+  if (jaEstouNessaConversa) {
+    // Já de olho nessa conversa — só pinta a bolha, sem interromper nada.
+    const body = document.getElementById('msgs-chat-body');
+    if (body) {
+      const vazio = body.querySelector('.msgs-empty-state');
+      if (vazio) body.innerHTML = '';
+      body.insertAdjacentHTML('beforeend', _msgsBubbleHTML(msg, false));
+      _msgsScrollParaFinal();
+    }
+    return;
+  }
+
+  if (!éParaMim) return; // visibilidade de admin sobre conversa alheia — sem notificação
+
+  // Garante que a pessoa já aparece na lista de conversas antes de tentar
+  // abrir a conversa com ela — cobre a corrida rara de receber uma
+  // mensagem antes do próximo tick de presença (30s) ter rodado.
+  if (conversaDaMensagem !== 'geral') {
+    const jaNaLista = document.querySelector(`#msgs-conv-list .msgs-conv-item[data-conv="${CSS.escape(conversaDaMensagem)}"]`);
+    if (!jaNaLista && typeof _presenceGlobalTick === 'function') await _presenceGlobalTick();
+  }
+
+  if (typeof openTool === 'function') openTool('mensagens');
+  msgsAbrirConversa(conversaDaMensagem);
+  if (typeof notifPlaySound === 'function') notifPlaySound();
+  _msgsBadgeIncrementar();
+}
+
+Object.assign(window, {
+  avatarInfo, avatarHTML, msgsAbrirConversa, msgsEnviar, _msgsInputKeydown,
+  _presenceGlobalInit, _presenceGlobalStop, _msgsRealtimeInit, _msgsRealtimeStop,
+});

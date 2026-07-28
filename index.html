@@ -381,7 +381,10 @@
               <i class="ti ti-chevron-right tools-item-arrow"></i>
             </button>
             <button class="tools-item" onclick="openTool('mensagens'); closeToolsMenu()">
-              <div class="tools-item-icon" style="background:var(--teal-bg);color:var(--teal)"><i class="ti ti-messages"></i></div>
+              <div class="tools-item-icon" style="background:var(--teal-bg);color:var(--teal);position:relative">
+                <i class="ti ti-messages"></i>
+                <span class="msgs-badge" id="msgs-badge" style="display:none">0</span>
+              </div>
               <div class="tools-item-body">
                 <div class="tools-item-label">Mensagens</div>
                 <div class="tools-item-sub">Converse com outros usuários em tempo real</div>

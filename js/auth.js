@@ -446,6 +446,10 @@ window.AuthGate = (function () {
         // limpa a fileira de avatares antes de uma eventual troca de
         // usuário na mesma aba sem reload.
         if (typeof _presenceGlobalStop === 'function') _presenceGlobalStop();
+        // Canal Realtime de mensagens (Etapa 8) — mesmo cuidado do canal
+        // de atividade: sem isso, ficaria escutando com credenciais
+        // inválidas até a próxima navegação.
+        if (typeof _msgsRealtimeStop === 'function') _msgsRealtimeStop();
       }
     });
   });

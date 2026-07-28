@@ -6399,6 +6399,10 @@ async function restoreAndRender() {
     // no topbar. Independente do polling do Admin: roda pra qualquer
     // usuário logado, sempre, não só com a tela de Usuários aberta.
     if (typeof _presenceGlobalInit === 'function') _presenceGlobalInit();
+    // Canal Realtime de mensagens (Etapa 8) — mesmo padrão do canal de
+    // atividade acima. RLS da tabela `mensagens` já filtra o que cada
+    // usuário recebe (remetente/destinatário/geral/admin).
+    if (typeof _msgsRealtimeInit === 'function') _msgsRealtimeInit();
     // Backup condensado (27/07) — reforço periódico silencioso (Etapa 4),
     // cobre o que muda entre importações. Idempotente: seguro chamar de
     // novo em qualquer reboot da mesma aba.

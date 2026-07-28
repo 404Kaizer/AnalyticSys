@@ -599,7 +599,10 @@ function openTool(name) {
   // _msgsConversaAtiva é declarada em mensagens.js (carrega depois deste
   // arquivo) — segura por só ser lida aqui dentro, em tempo de clique,
   // nunca no carregamento do script.
-  if (name === 'mensagens' && typeof msgsAbrirConversa === 'function') msgsAbrirConversa(_msgsConversaAtiva);
+  if (name === 'mensagens' && typeof msgsAbrirConversa === 'function') {
+    msgsAbrirConversa(_msgsConversaAtiva);
+    if (typeof _msgsBadgeZerar === 'function') _msgsBadgeZerar();
+  }
 }
 
 function closeTool(name) {
