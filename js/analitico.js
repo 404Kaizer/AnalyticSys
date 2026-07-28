@@ -2785,17 +2785,15 @@ Object.assign(window, {
 // ═══════════════════════════════════════════════════════════
 // CLOCK
 // ═══════════════════════════════════════════════════════════
-// ── Próxima terça de conferência ─────────────────────────────────────────
-function _nextTuesday() {
-  const now = new Date();
-  const dow = now.getDay(); // 0=dom ... 2=ter ... 6=sab
-  const daysUntil = dow === 2 ? 7 : (2 - dow + 7) % 7;
-  const next = new Date(now);
-  next.setDate(now.getDate() + daysUntil);
-  next.setHours(0, 0, 0, 0);
-  return next;
-}
-
+// _nextTuesday() removida daqui (28/07) — usa a versão global definida em
+// notifications.js, que carrega DEPOIS deste arquivo no index.html. Isso é
+// seguro porque _nextLancLabel() só é chamada em tempo de renderização
+// (nunca no topo do script), quando notifications.js já terminou de
+// carregar. O motivo de remover e não manter as duas: essa cópia daqui
+// nunca devolvia "hoje" mesmo quando hoje é terça — sempre pulava pra
+// semana seguinte —, o que é inconsistente com o diff===0 tratado logo
+// abaixo em _nextLancLabel(). A versão de notifications.js trata "hoje é
+// terça" corretamente; é ela quem deve ser a única fonte da verdade.
 function _nextLancLabel() {
   const next  = _nextTuesday();
   const now   = new Date(); now.setHours(0,0,0,0);

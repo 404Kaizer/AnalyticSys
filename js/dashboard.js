@@ -6214,32 +6214,17 @@ function initDropZones() {
   });
 }
 
-// ── Helpers de loading steps ─────────────────────────────────────────────
-function _lstepSet(id, state) {
-  const el = document.getElementById('lstep-' + id);
-  if (!el) return;
-  const stateEl = el.querySelector('.lstep-state');
-  if (!stateEl) return;
-  if (state === 'running') {
-    stateEl.className = 'lstep-state lstep-running';
-    stateEl.innerHTML = '<i class="ti ti-loader-2" style="animation:spin .7s linear infinite"></i>';
-  } else if (state === 'done') {
-    stateEl.className = 'lstep-state lstep-done';
-    stateEl.innerHTML = '<i class="ti ti-circle-check"></i>';
-  } else if (state === 'skip') {
-    stateEl.className = 'lstep-state lstep-skip';
-    stateEl.innerHTML = '<i class="ti ti-minus"></i>';
-  }
-}
-
-function _lbarSet(pct) {
-  const fill = document.getElementById('loading-bar-fill');
-  if (!fill) return;
-  fill.style.animation = 'none';
-  fill.style.width = pct + '%';
-  fill.style.transform = 'none';
-  fill.style.opacity = '1';
-}
+// _lstepSet/_lbarSet removidas daqui (28/07) — eram cópias divergentes das
+// que já existem em format.js (que carrega antes deste arquivo). Essa
+// duplicata era inferior: não tratava o estado 'error' e nunca gerenciava
+// a classe 'lstep-active' (a de format.js trata os 4 estados e cuida da
+// classe corretamente), e a barra ficava sem a transição de largura
+// ('width .35s ease'). Como function declarations de mesmo nome em
+// scripts diferentes não geram erro — só a última carregada "vence" —
+// essa cópia daqui vinha silenciosamente sobrescrevendo a boa. format.js
+// carrega antes de dashboard.js no index.html, então as chamadas abaixo
+// (_lstepSet/_lbarSet, usadas ao longo deste arquivo) continuam
+// funcionando normalmente, agora usando a versão completa e correta.
 
 // Sincronização com o Supabase no boot — registro em vez de repetir o
 // mesmo bloco "if (typeof X === 'function') await X()" onze vezes

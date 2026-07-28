@@ -92,8 +92,15 @@ function avatarHTML(seed, className, extraAttrs) {
 // (decisão de 28/07) — sem estados away/offline, porque quem não está
 // online simplesmente não aparece na fileira.
 
-const PRESENCE_ONLINE_MS = 10 * 60 * 1000;
-const PRESENCE_POLL_MS   = 30 * 1000;
+// Prefixo MSGS_ proposital — admin.js já declara PRESENCE_ONLINE_MS/
+// PRESENCE_POLL_MS no escopo global (com valores/propósito próprios, ver
+// _adminStatusInfo). Como nenhum dos dois arquivos é ES module, os dois
+// <script defer> compartilham o mesmo escopo global léxico da página, e
+// duas declarações `const` de mesmo nome em arquivos diferentes colidem
+// exatamente como colidiriam num arquivo só (SyntaxError: Identifier
+// already declared — quebrava mensagens.js inteiro, silenciosamente).
+const MSGS_PRESENCE_ONLINE_MS = 10 * 60 * 1000;
+const MSGS_PRESENCE_POLL_MS   = 30 * 1000;
 
 let _presenceGlobalInterval = null;
 
@@ -116,7 +123,7 @@ async function _presenceGlobalTick() {
   const agora = Date.now();
   const meuId = window.currentUser.id;
   const online = (data || [])
-    .filter(u => u.id !== meuId && u.last_seen && (agora - new Date(u.last_seen).getTime()) <= PRESENCE_ONLINE_MS)
+    .filter(u => u.id !== meuId && u.last_seen && (agora - new Date(u.last_seen).getTime()) <= MSGS_PRESENCE_ONLINE_MS)
     .sort((a, b) => (a.email || '').localeCompare(b.email || ''));
 
   if (!online.length) {
@@ -140,7 +147,7 @@ async function _presenceGlobalTick() {
 function _presenceGlobalInit() {
   if (_presenceGlobalInterval) return;
   _presenceGlobalTick();
-  _presenceGlobalInterval = setInterval(_presenceGlobalTick, PRESENCE_POLL_MS);
+  _presenceGlobalInterval = setInterval(_presenceGlobalTick, MSGS_PRESENCE_POLL_MS);
 }
 
 // Chamada no SIGNED_OUT sem reload (auth.js) — mesmo cuidado do canal de
