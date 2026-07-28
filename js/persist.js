@@ -451,21 +451,26 @@ function applySavedState(saved) {
   // ids legados: upload pra nuvem falhando (RLS bloqueia sobrescrever
   // registro de outro dono) e sobrescrita silenciosa em memória no merge
   // por id. Ver "Correção do bug de colisão de ids entre contas" (28/07).
-  // O formato antigo "OC-<timestamp>" já era seguro por natureza (id
-  // realmente gerado uma vez, baseado em timestamp) — o problema era só
-  // a "limpeza" pra número bonito. Substituído por uma versão que NUNCA
-  // toca no `id` real — só preenche o campo `numero` (cosmético, pode
-  // repetir entre contas sem causar dano nenhum) pra quem ainda não tem.
+  // Substituído por uma versão que NUNCA toca no `id` real — só preenche
+  // o campo `numero` (cosmético). Também tokeniza (ex.: "OC-HUGO-5") pra
+  // dar pra distinguir contas diferentes quando o número repete — inclusive
+  // retroativamente nos registros que já reaproveitavam o próprio id como
+  // "OC-N" puro (sem token), que é exatamente o caso que gerava "N OC-5"
+  // indistinguíveis pro ADM. Usa o e-mail de quem está logado pros
+  // próprios registros; pra registro de OUTRA conta (só o ADM enxerga
+  // isso, já que Ocorrências continua mostrando todo mundo — decisão
+  // 28/07), cai num token curto derivado do user_id (sem precisar
+  // resolver e-mail de terceiros de forma síncrona no boot).
   if (Array.isArray(state.ocorrencias)) {
-    const semNumero = state.ocorrencias.filter(o => !o.numero);
-    if (semNumero.length && typeof _nextOcId === 'function') {
-      const ordenados = [...semNumero].sort((a, b) => (a.criadoEm || 0) - (b.criadoEm || 0));
+    const meuId = window.currentUser?.id;
+    const precisaNumero = state.ocorrencias.filter(o => !/^OC-[A-Z0-9]+-\d+$/.test(String(o.numero || '')));
+    if (precisaNumero.length && typeof _nextOcId === 'function') {
+      const ordenados = [...precisaNumero].sort((a, b) => (a.criadoEm || 0) - (b.criadoEm || 0));
       ordenados.forEach(o => {
-        // Se o id já parece um "OC-N" curto (formato atual), reaproveita
-        // ele mesmo como número de exibição — sem gerar nada novo. Só
-        // pede um número novo pro formato antigo "OC-<timestamp>" (feio
-        // demais pra mostrar na tela como está).
-        o.numero = /^OC-\d{1,9}$/.test(String(o.id)) ? o.id : _nextOcId();
+        const ehMinha = !o.userId || o.userId === meuId;
+        o.numero = ehMinha
+          ? _nextOcId()
+          : _nextOcId(typeof _ocTokenFromUserId === 'function' ? _ocTokenFromUserId(o.userId) : undefined);
       });
     }
   }

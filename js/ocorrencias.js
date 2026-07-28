@@ -10,6 +10,24 @@ function getOcorrencias() {
   return state.ocorrencias;
 }
 
+// Token curto e legível derivado do e-mail — usado no número de exibição
+// pra dar pra distinguir quem criou o quê quando o mesmo "OC-N" existe em
+// mais de uma conta (Ocorrências continua mostrando todo mundo junto pro
+// ADM, por decisão de 28/07 — "sem mudança" nos itens 11,12,14,15,17).
+function _ocUserToken(email) {
+  const local = String(email || '').split('@')[0] || '';
+  const clean = local.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+  return clean.slice(0, 4) || 'USR';
+}
+
+// Registros antigos sem `numero`/sem e-mail resolvível (ex.: backfill no
+// boot do ADM, olhando ocorrência de outra conta) caem aqui — token
+// estável por conta, derivado do próprio user_id, sem precisar resolver
+// e-mail de terceiros de forma síncrona.
+function _ocTokenFromUserId(userId) {
+  return 'U' + String(userId || '').replace(/-/g, '').slice(0, 4).toUpperCase();
+}
+
 // CORREÇÃO (28/07) — bug de colisão de ids entre contas: _nextOcId()
 // contava só a partir do estado LOCAL de cada dispositivo/conta, então
 // contas diferentes geravam o mesmo "OC-N" de forma independente. Como
@@ -20,24 +38,31 @@ function getOcorrencias() {
 // com o mesmo "OC-N" se substituíam uma à outra.
 //
 // A partir de agora, _nextOcId() NÃO é mais usado como chave primária —
-// vira só o número de exibição (campo `numero`, cosmético, pode repetir
-// entre contas sem problema). A chave real (`id`) passa a vir de
-// _ocGerarIdSeguro(), mesmo padrão já usado com segurança em
-// ajustesSistemicos.id (dai.js) — timestamp + sufixo aleatório, nunca
-// colide. Registros antigos (de antes desta correção) não têm `numero`
-// gravado — usam o próprio `id` (que já parecia "OC-N") como número de
-// exibição também, por isso a checagem abaixo olha os dois.
-function _nextOcId() {
+// vira só o número de exibição (campo `numero`, cosmético). Passou a
+// incorporar um token curto do criador (ex.: "OC-HUGO-5") — mesmo que o
+// contador em si continue sendo por conta (não precisa mais ser globalmente
+// único, já que não é chave), o ADM consegue ver de cara que "OC-HUGO-5" e
+// "OC-MAYC-5" são de pessoas diferentes, em vez de dois "OC-5" idênticos.
+// A chave real (`id`) vem de _ocGerarIdSeguro() — timestamp + sufixo
+// aleatório, mesmo padrão já usado com segurança em ajustesSistemicos.id
+// (dai.js), nunca colide. Registros antigos (de antes desta correção) não
+// têm `numero` gravado — usam o próprio `id` (que já parecia "OC-N") como
+// número de exibição, sem token, até serem editados ou passarem pelo
+// preenchimento retroativo em persist.js.
+function _nextOcId(tokenOverride) {
+  const token = tokenOverride || _ocUserToken(window.currentUser?.email);
+  const prefix = `OC-${token}-`;
   const lista = getOcorrencias();
   const nums = lista
     .map(o => {
-      const label = o.numero || o.id;
-      const m = String(label).match(/^OC-(\d+)$/);
-      return m ? parseInt(m[1]) : 0;
+      const label = String(o.numero || o.id || '');
+      if (!label.startsWith(prefix)) return 0;
+      const n = parseInt(label.slice(prefix.length), 10);
+      return Number.isFinite(n) ? n : 0;
     })
     .filter(n => n > 0);
   const next = nums.length ? Math.max(...nums) + 1 : 1;
-  return 'OC-' + next;
+  return prefix + next;
 }
 
 function _ocGerarIdSeguro() {
@@ -79,6 +104,7 @@ function _ocFromDbRow(row) {
   return {
     id: row.id,
     numero: row.numero || null,
+    userId: row.user_id || null,
     dataAbertura: row.data_abertura,
     motivo: row.motivo,
     dataLimite: row.data_limite,
@@ -112,21 +138,31 @@ async function syncOcorrenciasFromSupabase() {
     // aqui tinha o mesmo risco já corrigido em Lançamentos/Entradas (teto de
     // 1000 linhas do PostgREST). Ordem de chegada não importa: a tela
     // sempre reordena via getOcorrenciasFiltradas() antes de renderizar.
+    // SEM FILTRO por dono de propósito — decisão de 28/07 ("Redefinição da
+    // Visão de ADM"): Ocorrências continua mostrando todo mundo pro ADM,
+    // ao contrário dos 5 módulos grandes.
     const data = await fetchAllRows('ocorrencias');
 
-    // CORREÇÃO (27/07): antes sobrescrevia state.ocorrencias inteiro com
-    // o que veio da nuvem — se alguma ocorrência local ainda não tivesse
-    // sincronizado, essa troca APAGAVA ela da tela silenciosamente.
-    // Corrigido pra mesclar por id, mesmo padrão do resto do sistema, e
-    // sobe pra nuvem o que só existia local.
+    // CORREÇÃO (28/07) — bug de colisão de ids entre contas: mesclar só
+    // por `id` deixava uma ocorrência de OUTRA conta sobrescrever a minha
+    // em memória sempre que o "OC-N" batia (chave primária era só `id`,
+    // sem escopo por usuário). Agora casa por (user_id, id) — mesmo escopo
+    // da nova chave primária composta do banco — então só uma linha
+    // realmente MINHA pode substituir a minha, mesmo o ADM vendo o array
+    // inteiro de todo mundo. Registros locais sem `userId` resolvido ainda
+    // (recém-criados nesta sessão, antes do primeiro round-trip) contam
+    // como meus por padrão.
+    const meuId = window.currentUser?.id;
+    const chave = o => `${o.userId || meuId}|${o.id}`;
+
     const local = Array.isArray(state.ocorrencias) ? state.ocorrencias : [];
     const remoto = (data || []).map(_ocFromDbRow);
-    const porId = new Map(local.map(o => [o.id, o]));
-    remoto.forEach(o => porId.set(o.id, o));
-    state.ocorrencias = [...porId.values()];
+    const porChave = new Map(local.map(o => [chave(o), o]));
+    remoto.forEach(o => porChave.set(chave(o), o));
+    state.ocorrencias = [...porChave.values()];
 
-    const idsRemotos = new Set(remoto.map(o => o.id));
-    const naoSincronizadas = local.filter(o => o.id && !idsRemotos.has(o.id));
+    const chavesRemotas = new Set(remoto.map(chave));
+    const naoSincronizadas = local.filter(o => o.id && !chavesRemotas.has(chave(o)));
     for (const o of naoSincronizadas) {
       if (typeof _ocSyncUpsert === 'function') await _ocSyncUpsert(o);
     }
@@ -137,9 +173,10 @@ async function syncOcorrenciasFromSupabase() {
 
 // Grava uma ocorrência no Supabase (upsert) — usada por todas as funções
 // de escrita abaixo. Falha não bloqueia a UI (já atualizada localmente);
-// só avisa por toast.
+// só avisa por toast. onConflict explícito (28/07) — a chave primária
+// agora é composta (user_id, id), mesmo padrão já usado em `configs`.
 async function _ocSyncUpsert(o) {
-  const { error } = await window.supabaseClient.from('ocorrencias').upsert(_ocToDbRow(o));
+  const { error } = await window.supabaseClient.from('ocorrencias').upsert(_ocToDbRow(o), { onConflict: 'user_id,id' });
   if (error) {
     console.warn('[Supabase] Falha ao sincronizar ocorrência:', error);
     toast('⚠ Salvo nesta sessão, mas não foi possível sincronizar com a nuvem.', 'error');
