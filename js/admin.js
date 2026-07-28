@@ -120,6 +120,78 @@ async function adminLoadDbStats() {
   </tr>`).join('');
 }
 
+// ── Seção: Saúde do Storage (28/07) ──────────────────────────
+// Espelha adminLoadDbStats() acima, mas pra Storage (arquivos do backup
+// condensado — ver cloud-backup.js) em vez do banco Postgres. Cota
+// separada: 1GB no plano gratuito, contra 500MB do banco. Usa a função
+// admin_storage_stats() (RPC, só-admin — mesma proteção is_admin()).
+const ADMIN_STORAGE_LIMIT_BYTES = 1024 * 1024 * 1024; // teto do plano gratuito
+
+let _adminHealthTab = 'db'; // 'db' | 'storage' — só cosmético, lembra a aba ativa entre atualizações manuais
+
+function adminHealthShowTab(tab) {
+  _adminHealthTab = tab;
+  const dbView = document.getElementById('admin-health-db-view');
+  const storageView = document.getElementById('admin-health-storage-view');
+  const btnDb = document.getElementById('admin-health-tab-db');
+  const btnStorage = document.getElementById('admin-health-tab-storage');
+  if (dbView) dbView.style.display = tab === 'db' ? '' : 'none';
+  if (storageView) storageView.style.display = tab === 'storage' ? '' : 'none';
+  if (btnDb) btnDb.classList.toggle('active', tab === 'db');
+  if (btnStorage) btnStorage.classList.toggle('active', tab === 'storage');
+  // Carrega sob demanda — só busca Storage na 1ª vez que a aba é aberta
+  // (Database já carrega de cara, junto com o resto de adminShowSection).
+  if (tab === 'storage' && !_adminStorageLoadedOnce) adminLoadStorageStats();
+}
+
+let _adminStorageLoadedOnce = false;
+
+async function adminLoadStorageStats() {
+  _adminStorageLoadedOnce = true;
+  const totalLabel = document.getElementById('admin-storage-total-label');
+  const totalPct = document.getElementById('admin-storage-total-pct');
+  const bar = document.getElementById('admin-storage-total-bar');
+  const tbody = document.getElementById('admin-storage-pastas-tbody');
+  if (!totalLabel || !tbody) return;
+
+  totalLabel.textContent = 'Carregando...';
+  tbody.innerHTML = `<tr><td colspan="4"><div class="empty-state"><i class="ti ti-loader"></i><p>Carregando...</p></div></td></tr>`;
+
+  const { data, error } = await window.supabaseClient.rpc('admin_storage_stats');
+  if (error) {
+    totalLabel.textContent = 'Falha ao carregar estatísticas.';
+    tbody.innerHTML = `<tr><td colspan="4"><div class="empty-state"><i class="ti ti-alert-triangle"></i><p>${_adminEsc(error.message)}</p></div></td></tr>`;
+    return;
+  }
+
+  const stats = Array.isArray(data) ? data[0] : data;
+  if (!stats) {
+    totalLabel.textContent = '—';
+    tbody.innerHTML = `<tr><td colspan="4"><div class="empty-state"><i class="ti ti-cloud-off"></i><p>Sem dados.</p></div></td></tr>`;
+    return;
+  }
+
+  const pct = Math.min(100, (stats.total_bytes / ADMIN_STORAGE_LIMIT_BYTES) * 100);
+  totalLabel.textContent = `${stats.total_pretty} usados de 1 GB`;
+  if (totalPct) totalPct.textContent = `${pct.toFixed(pct < 1 ? 2 : 1)}%`;
+  if (bar) {
+    bar.style.width = `${Math.max(pct, 0.5)}%`;
+    bar.style.background = pct > 85 ? 'var(--red)' : pct > 60 ? 'var(--amber)' : 'var(--green)';
+  }
+
+  const pastas = stats.pastas || [];
+  if (!pastas.length) {
+    tbody.innerHTML = `<tr><td colspan="4"><div class="empty-state"><i class="ti ti-cloud-off"></i><p>Nenhum arquivo no Storage ainda.</p></div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = pastas.map(p => `<tr>
+    <td>${_adminEsc(p.usuario)}</td>
+    <td>${_adminEsc(p.modulo || '—')}</td>
+    <td>${_adminEsc(p.pretty)}</td>
+    <td>${Number(p.arquivos || 0).toLocaleString('pt-BR')}</td>
+  </tr>`).join('');
+}
+
 // ── Seção: Linhas por usuário, por tabela ───────────────────
 // Usa a função admin_user_table_counts() (RPC, só-admin). Mostra TODOS os
 // usuários de profiles como coluna, mesmo os com zero em tudo (é
@@ -550,6 +622,8 @@ Object.assign(window, {
   adminLoadUsuarios,
   adminAlterarPapel,
   adminLoadDbStats,
+  adminLoadStorageStats,
+  adminHealthShowTab,
   adminLoadUserTableCounts,
   adminLoadModulo,
   adminModuloPrimeiraPagina,

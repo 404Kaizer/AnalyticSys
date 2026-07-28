@@ -10612,3 +10612,31 @@ tr.sap-fechamento td {
   background: var(--accent-dim);
   border-color: var(--accent);
 }
+
+/* Toggle Database/Storage (28/07) — mesma linguagem visual do subnav
+   acima, só que compacto, pra caber inline no header de um card. */
+.admin-health-toggle {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border-radius: var(--radius);
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+}
+.admin-health-toggle-btn {
+  padding: 5px 12px;
+  border-radius: calc(var(--radius) - 2px);
+  border: none;
+  background: transparent;
+  color: var(--text2);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.admin-health-toggle-btn:hover { color: var(--text); }
+.admin-health-toggle-btn.active {
+  color: var(--accent);
+  background: var(--bg1);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+}

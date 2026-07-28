@@ -2755,24 +2755,54 @@
         <div id="admin-section-usuarios">
           <div class="table-card" style="margin-bottom:16px">
             <div class="table-header">
-              <span class="table-title"><i class="ti ti-server-2"></i> Saúde do banco</span>
-              <button class="btn" onclick="adminLoadDbStats()"><i class="ti ti-refresh"></i> Atualizar</button>
-            </div>
-            <div style="padding:14px 18px 4px">
-              <div style="display:flex;justify-content:space-between;align-items:baseline;font-size:13px;margin-bottom:6px">
-                <span id="admin-db-total-label" style="color:var(--text2)">Carregando...</span>
-                <span id="admin-db-total-pct" style="font-size:11px;color:var(--text3)"></span>
+              <span class="table-title"><i class="ti ti-server-2"></i> Saúde</span>
+              <div style="display:flex;gap:10px;align-items:center">
+                <div class="admin-health-toggle">
+                  <button class="admin-health-toggle-btn active" id="admin-health-tab-db" onclick="adminHealthShowTab('db')">Database</button>
+                  <button class="admin-health-toggle-btn" id="admin-health-tab-storage" onclick="adminHealthShowTab('storage')">Storage</button>
+                </div>
+                <button class="btn" onclick="_adminHealthTab === 'storage' ? adminLoadStorageStats() : adminLoadDbStats()"><i class="ti ti-refresh"></i> Atualizar</button>
               </div>
-              <div style="height:8px;border-radius:4px;background:var(--bg3);overflow:hidden">
-                <div id="admin-db-total-bar" style="height:100%;width:0%;background:var(--green);transition:width .3s ease"></div>
-              </div>
-              <div style="font-size:11px;color:var(--text3);margin-top:4px">Teto do plano gratuito do Supabase: 500 MB</div>
             </div>
-            <div style="overflow-x:auto;max-height:260px;overflow-y:auto;margin-top:8px">
-              <table style="width:100%">
-                <thead><tr><th>Tabela</th><th>Tamanho</th><th>Linhas (estimado)</th></tr></thead>
-                <tbody id="admin-db-tables-tbody"><tr><td colspan="3"><div class="empty-state"><i class="ti ti-loader"></i><p>Carregando...</p></div></td></tr></tbody>
-              </table>
+
+            <!-- Aba: Database -->
+            <div id="admin-health-db-view">
+              <div style="padding:14px 18px 4px">
+                <div style="display:flex;justify-content:space-between;align-items:baseline;font-size:13px;margin-bottom:6px">
+                  <span id="admin-db-total-label" style="color:var(--text2)">Carregando...</span>
+                  <span id="admin-db-total-pct" style="font-size:11px;color:var(--text3)"></span>
+                </div>
+                <div style="height:8px;border-radius:4px;background:var(--bg3);overflow:hidden">
+                  <div id="admin-db-total-bar" style="height:100%;width:0%;background:var(--green);transition:width .3s ease"></div>
+                </div>
+                <div style="font-size:11px;color:var(--text3);margin-top:4px">Teto do plano gratuito do Supabase: 500 MB</div>
+              </div>
+              <div style="overflow-x:auto;max-height:260px;overflow-y:auto;margin-top:8px">
+                <table style="width:100%">
+                  <thead><tr><th>Tabela</th><th>Tamanho</th><th>Linhas (estimado)</th></tr></thead>
+                  <tbody id="admin-db-tables-tbody"><tr><td colspan="3"><div class="empty-state"><i class="ti ti-loader"></i><p>Carregando...</p></div></td></tr></tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Aba: Storage (28/07) — arquivos do backup condensado (cloud-backup.js), cota separada do banco -->
+            <div id="admin-health-storage-view" style="display:none">
+              <div style="padding:14px 18px 4px">
+                <div style="display:flex;justify-content:space-between;align-items:baseline;font-size:13px;margin-bottom:6px">
+                  <span id="admin-storage-total-label" style="color:var(--text2)">Carregando...</span>
+                  <span id="admin-storage-total-pct" style="font-size:11px;color:var(--text3)"></span>
+                </div>
+                <div style="height:8px;border-radius:4px;background:var(--bg3);overflow:hidden">
+                  <div id="admin-storage-total-bar" style="height:100%;width:0%;background:var(--green);transition:width .3s ease"></div>
+                </div>
+                <div style="font-size:11px;color:var(--text3);margin-top:4px">Teto do plano gratuito do Supabase: 1 GB</div>
+              </div>
+              <div style="overflow-x:auto;max-height:260px;overflow-y:auto;margin-top:8px">
+                <table style="width:100%">
+                  <thead><tr><th>Usuário</th><th>Módulo</th><th>Tamanho</th><th>Arquivos</th></tr></thead>
+                  <tbody id="admin-storage-pastas-tbody"><tr><td colspan="4"><div class="empty-state"><i class="ti ti-loader"></i><p>Carregando...</p></div></td></tr></tbody>
+                </table>
+              </div>
             </div>
           </div>
           <div class="table-card">
