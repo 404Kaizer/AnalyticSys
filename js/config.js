@@ -667,10 +667,19 @@ async function handleMateriaisImport(event) {
 
       if (fileName.endsWith('.csv')) {
         const wb = XLSX.read(String(e.target.result || ''), { type: 'string', raw: true });
+        // BLINDAGEM (28/07): mesma proteção aplicada na importação dos 5
+        // módulos grandes (dashboard.js) — ver comentário lá para o
+        // contexto completo do problema real que motivou isto.
+        if (!wb.Sheets[wb.SheetNames[0]]) {
+          throw new Error('Não foi possível localizar os dados da planilha neste arquivo. Tente reexportar e importar de novo.');
+        }
         const ws = sanitizeWorksheet(wb.Sheets[wb.SheetNames[0]]);
         rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' });
       } else {
         const wb = XLSX.read(e.target.result, { type: 'array', cellDates: false });
+        if (!wb.Sheets[wb.SheetNames[0]]) {
+          throw new Error('Não foi possível localizar os dados da planilha neste arquivo. Tente reexportar e importar de novo.');
+        }
         const ws = sanitizeWorksheet(wb.Sheets[wb.SheetNames[0]]);
         rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' });
       }
@@ -709,7 +718,7 @@ async function handleMateriaisImport(event) {
       event.target.value = '';
     } catch (err) {
       console.error(err);
-      toast('Falha ao importar materiais', 'error');
+      toast('Falha ao importar materiais: ' + (err?.message || 'erro desconhecido'), 'error');
     } finally {
       hideLoadingOverlay('Importação concluída');
     }
@@ -1145,10 +1154,19 @@ async function handleFiliaisImport(event) {
 
       if (fileName.endsWith('.csv')) {
         const wb = XLSX.read(String(e.target.result || ''), { type: 'string', raw: true });
+        // BLINDAGEM (28/07): mesma proteção aplicada na importação dos 5
+        // módulos grandes (dashboard.js) — ver comentário lá para o
+        // contexto completo do problema real que motivou isto.
+        if (!wb.Sheets[wb.SheetNames[0]]) {
+          throw new Error('Não foi possível localizar os dados da planilha neste arquivo. Tente reexportar e importar de novo.');
+        }
         const ws = sanitizeWorksheet(wb.Sheets[wb.SheetNames[0]]);
         rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' });
       } else {
         const wb = XLSX.read(e.target.result, { type: 'array', cellDates: false });
+        if (!wb.Sheets[wb.SheetNames[0]]) {
+          throw new Error('Não foi possível localizar os dados da planilha neste arquivo. Tente reexportar e importar de novo.');
+        }
         const ws = sanitizeWorksheet(wb.Sheets[wb.SheetNames[0]]);
         rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' });
       }
@@ -1184,7 +1202,7 @@ async function handleFiliaisImport(event) {
       event.target.value = '';
     } catch (err) {
       console.error(err);
-      toast('Falha ao importar filiais', 'error');
+      toast('Falha ao importar filiais: ' + (err?.message || 'erro desconhecido'), 'error');
     } finally {
       if (typeof loadingHideSteps === 'function') loadingHideSteps();
       hideLoadingOverlay('Importação concluída');

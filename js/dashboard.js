@@ -5895,6 +5895,19 @@ async function handleImport(event, modulo) {
         sheetUsed = realKey;
         console.info('[Import] Aba:', realKey);
 
+        // BLINDAGEM (28/07): já vimos, num arquivo real de exportação do
+        // SAP, o nome da aba em wb.SheetNames não bater com NENHUMA chave
+        // de wb.Sheets (nem exata nem por fallback) — provável diferença
+        // de encoding/caractere invisível introduzida pela ferramenta que
+        // gerou o arquivo. Sem esta checagem, wb.Sheets[realKey] vinha
+        // undefined e quebrava lá na frente com um TypeError nativo
+        // confuso ("Cannot convert undefined or null to object"), sem
+        // dar nenhuma pista do que fazer. Agora para aqui, de forma
+        // controlada, com uma mensagem que o analista consegue agir.
+        if (!wb.Sheets[realKey]) {
+          throw new Error(`Não foi possível localizar os dados da aba "${realKey}" neste arquivo — pode ser um problema na exportação. Tente reexportar o arquivo na origem (SAP/sistema) e importar de novo.`);
+        }
+
         const ws = sanitizeWorksheet(wb.Sheets[realKey]);
         rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' });
       }

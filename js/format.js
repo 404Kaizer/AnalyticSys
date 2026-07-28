@@ -110,6 +110,15 @@ function numXls(v) {
  * Também converte valores de texto que sejam strings de erro Excel.
  */
 function sanitizeWorksheet(ws) {
+  // BLINDAGEM (28/07): ws podia chegar undefined/null quando a aba
+  // detectada em wb.SheetNames não batia com nenhuma chave real de
+  // wb.Sheets (já visto num arquivo real de exportação do SAP — provável
+  // diferença de encoding/caractere invisível entre os dois). Sem essa
+  // proteção, Object.keys(ws) quebrava com "Cannot convert undefined or
+  // null to object", um erro nativo confuso, em vez de deixar o chamador
+  // mostrar uma mensagem clara ao analista (ver checagem correspondente
+  // logo antes da chamada, em dashboard.js).
+  if (!ws || typeof ws !== 'object') return ws;
   const EXCEL_ERR_RE = /^#(VALUE|DIV\/0|N\/A|REF|NAME\?|NUM|NULL|CALC|SPILL|FIELD|BLOCKED|CONNECT)!?$/i;
   Object.keys(ws).forEach(addr => {
     if (addr.startsWith('!')) return; // metadata da planilha — não tocar
