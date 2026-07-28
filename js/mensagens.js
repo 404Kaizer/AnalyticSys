@@ -74,6 +74,87 @@ function avatarHTML(seed, className, extraAttrs) {
   return `<div class="${className}" style="background:var(${colorVar})" ${extraAttrs || ''}>${initial}</div>`;
 }
 
+// ═══════════════════════════════════════════════════════════
+// PRESENÇA GLOBAL — fileira de avatares online no topbar (Etapa 3)
+// ═══════════════════════════════════════════════════════════
+// Independente do polling que já existe em admin.js (esse continua só
+// pra tabela detalhada da aba Usuários — email/role/created_at, que só
+// o admin consegue ler direto de `profiles` via RLS). Este aqui roda
+// pra QUALQUER usuário logado, o tempo todo — não só com uma tela
+// específica aberta — usando a RPC usuarios_presenca() (28/07): um
+// usuário comum não pode ler a linha de outra pessoa direto em
+// `profiles` (RLS é dono OU admin, e isso não mudou). A RPC devolve só
+// id/email/last_seen, nada além disso — profiles continua com a mesma
+// política restrita de sempre.
+//
+// Mesmo corte do admin.js (_adminStatusInfo): ≤10min sem heartbeat =
+// online. Diferente do admin, aqui só nos importa "online ou não"
+// (decisão de 28/07) — sem estados away/offline, porque quem não está
+// online simplesmente não aparece na fileira.
+
+const PRESENCE_ONLINE_MS = 10 * 60 * 1000;
+const PRESENCE_POLL_MS   = 30 * 1000;
+
+let _presenceGlobalInterval = null;
+
+function _presenceEsc(s) {
+  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+async function _presenceGlobalTick() {
+  if (!window.supabaseClient || !window.currentUser?.id) return;
+  const wrap = document.getElementById('online-users-wrap');
+  const list = document.getElementById('online-users-list');
+  if (!wrap || !list) return;
+
+  const { data, error } = await window.supabaseClient.rpc('usuarios_presenca');
+  if (error) {
+    console.warn('[Presença] Falha ao buscar usuários online:', error);
+    return;
+  }
+
+  const agora = Date.now();
+  const meuId = window.currentUser.id;
+  const online = (data || [])
+    .filter(u => u.id !== meuId && u.last_seen && (agora - new Date(u.last_seen).getTime()) <= PRESENCE_ONLINE_MS)
+    .sort((a, b) => (a.email || '').localeCompare(b.email || ''));
+
+  if (!online.length) {
+    wrap.style.display = 'none';
+    list.innerHTML = '';
+    return;
+  }
+
+  // Clique no avatar ainda não abre o chat com a pessoa — isso entra na
+  // Etapa 9 (junto com a função que vai abrir a conversa 1:1).
+  list.innerHTML = online.map(u => {
+    const nome = (u.email || '').split('@')[0];
+    return avatarHTML(u.email, 'online-avatar', `title="${_presenceEsc(nome)} — online"`);
+  }).join('');
+  wrap.style.display = 'flex';
+}
+
+// Chamada no boot (dashboard.js, STEP 5) — idempotente, mesmo padrão de
+// _activityRealtimeInit(). Roda pra qualquer usuário logado, o tempo
+// todo, não só dentro do Admin.
+function _presenceGlobalInit() {
+  if (_presenceGlobalInterval) return;
+  _presenceGlobalTick();
+  _presenceGlobalInterval = setInterval(_presenceGlobalTick, PRESENCE_POLL_MS);
+}
+
+// Chamada no SIGNED_OUT sem reload (auth.js) — mesmo cuidado do canal de
+// atividade: sem isso, o polling continuaria rodando com uma sessão
+// derrubada até a próxima navegação.
+function _presenceGlobalStop() {
+  clearInterval(_presenceGlobalInterval);
+  _presenceGlobalInterval = null;
+  const wrap = document.getElementById('online-users-wrap');
+  const list = document.getElementById('online-users-list');
+  if (wrap) wrap.style.display = 'none';
+  if (list) list.innerHTML = '';
+}
+
 function msgsAbrirConversa(convId) {
   const list = document.getElementById('msgs-conv-list');
   if (!list) return;
@@ -103,4 +184,4 @@ function msgsAbrirConversa(convId) {
   }
 }
 
-Object.assign(window, { avatarInfo, avatarHTML, msgsAbrirConversa });
+Object.assign(window, { avatarInfo, avatarHTML, msgsAbrirConversa, _presenceGlobalInit, _presenceGlobalStop });

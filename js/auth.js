@@ -442,6 +442,10 @@ window.AuthGate = (function () {
         // dispositivo) deixaria o canal antigo aberto com credenciais
         // inválidas até a próxima navegação.
         if (typeof _activityRealtimeStop === 'function') _activityRealtimeStop();
+        // Presença global (Mensagens) — mesmo cuidado: para o polling e
+        // limpa a fileira de avatares antes de uma eventual troca de
+        // usuário na mesma aba sem reload.
+        if (typeof _presenceGlobalStop === 'function') _presenceGlobalStop();
       }
     });
   });

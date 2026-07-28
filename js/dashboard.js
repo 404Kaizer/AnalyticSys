@@ -6410,6 +6410,10 @@ async function restoreAndRender() {
     // se a aba já tiver um canal aberto (ex.: chamado duas vezes por
     // algum motivo), a própria função não faz nada na segunda vez.
     if (typeof _activityRealtimeInit === 'function') _activityRealtimeInit();
+    // Presença global (Mensagens, Etapa 3) — fileira de avatares online
+    // no topbar. Independente do polling do Admin: roda pra qualquer
+    // usuário logado, sempre, não só com a tela de Usuários aberta.
+    if (typeof _presenceGlobalInit === 'function') _presenceGlobalInit();
     // Backup condensado (27/07) — reforço periódico silencioso (Etapa 4),
     // cobre o que muda entre importações. Idempotente: seguro chamar de
     // novo em qualquer reboot da mesma aba.
