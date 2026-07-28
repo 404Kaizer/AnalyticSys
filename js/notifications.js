@@ -338,10 +338,14 @@ function _notifRenderDropdown() {
   body.innerHTML=notifs.map(n=>{
     const lm=_NLM[n.level]||_NLM.info;
     const tm=_NTM[n.type]||_NTM.ocorrencia;
-    const hasRoute = !!_NOTIF_ROUTE[n.id];
+    const isAtividade = n.type === 'atividade';
+    const hasRoute = isAtividade ? !!n.activityLogId : !!_NOTIF_ROUTE[n.id];
+    const clickAttr = !hasRoute ? '' : isAtividade
+      ? `onclick="notifAbrirDetalheAtividade('${_notifEsc(n.id)}',event)"`
+      : `onclick="notifNavigate('${_notifEsc(n.id)}',event)"`;
     return `<div class="notif-item${n.read?' notif-item-read':''}${hasRoute?' notif-item-clickable':''}"
       data-id="${_notifEsc(n.id)}"
-      ${hasRoute?`onclick="notifNavigate('${_notifEsc(n.id)}',event)"`:''}>
+      ${clickAttr}>
       <div class="notif-item-icon" style="background:${lm.col}18;color:${lm.col};border:1px solid ${lm.col}30"><i class="ti ${tm.icon}"></i></div>
       <div class="notif-item-body">
         <div class="notif-item-title">${_notifEsc(n.title)}</div>
@@ -545,6 +549,12 @@ async function _activityEmitNotification(row, count) {
     title, body,
     createdAt: Date.now(),
     read: false,
+    // Referência direta pro activity_log — usada por notifAbrirDetalheAtividade
+    // pra buscar o registro completo (old_data/new_data) só quando clicado,
+    // sem precisar guardar tudo isso localmente pra cada notificação.
+    activityLogId: row.id,
+    activityTable: row.table_name,
+    activityCount: count,
   });
   // Cache local recente só pro dropdown — o histórico completo já vive
   // na nuvem (activity_log), então não precisa crescer pra sempre aqui.
@@ -564,7 +574,108 @@ async function _activityEmitNotification(row, count) {
   notifPlaySound();
 }
 
-// ── Debounce por (ator, tabela, operação) ───────────────────
+// ── Detalhe de atividade (modal, ao clicar numa notificação) ───────────
+// Busca o registro completo no activity_log só na hora do clique (não fica
+// guardado localmente por notificação) — a RLS de activity_log já libera
+// pro dono OU pro ator OU pro admin, então funciona pra qualquer papel.
+async function notifAbrirDetalheAtividade(notifId, event) {
+  event?.stopPropagation();
+  const n = (state.notifications||[]).find(x => x.id === notifId);
+  if (!n || n.type !== 'atividade') return;
+  n.read = true;
+  if (typeof persist==='function') persist();
+  _notifRenderBadge();
+  if (_notifOpen) _notifRenderDropdown();
+  notifClose();
+
+  const titleEl = document.getElementById('notif-detail-title');
+  const bodyEl = document.getElementById('notif-detail-body');
+  if (titleEl) titleEl.textContent = n.title;
+  if (bodyEl) bodyEl.innerHTML = `<div class="empty-state"><i class="ti ti-loader"></i><p>Carregando detalhes...</p></div>`;
+  if (typeof openModal === 'function') openModal('notif-detail-modal');
+
+  if (!n.activityLogId || !window.supabaseClient) {
+    if (bodyEl) bodyEl.innerHTML = `<p style="color:var(--text3);font-size:12.5px">Detalhe não disponível.</p>`;
+    return;
+  }
+
+  const { data, error } = await window.supabaseClient
+    .from('activity_log')
+    .select('*')
+    .eq('id', n.activityLogId)
+    .maybeSingle();
+
+  if (error || !data) {
+    if (bodyEl) bodyEl.innerHTML = `<p style="color:var(--text3);font-size:12.5px">Não foi possível carregar os detalhes${error ? ' ('+_notifEsc(error.message)+')' : ' (registro não encontrado)'}.</p>`;
+    return;
+  }
+  if (bodyEl) bodyEl.innerHTML = _notifRenderActivityDetail(n, data);
+}
+
+// Formata um valor de campo pro detalhe (mesmas regras de exibição usadas
+// em "Dados por módulo" — array vira lista separada por vírgula, boolean
+// vira Sim/Não, vazio vira travessão).
+function _notifFmtCampoValor(v) {
+  if (v === null || v === undefined || v === '') return '<span style="color:var(--text3)">—</span>';
+  if (typeof v === 'boolean') return v ? 'Sim' : 'Não';
+  if (Array.isArray(v)) return _notifEsc(v.join(', '));
+  if (typeof v === 'object') return _notifEsc(JSON.stringify(v));
+  return _notifEsc(String(v));
+}
+
+const _ACTIVITY_OP_LABEL = { INSERT: 'Criação', UPDATE: 'Edição', DELETE: 'Exclusão' };
+
+function _notifRenderActivityDetail(n, row) {
+  const label = _activityModuleLabel(row.table_name);
+  const opLabel = _ACTIVITY_OP_LABEL[row.operation] || row.operation;
+  const when = row.created_at ? new Date(row.created_at).toLocaleString('pt-BR') : '—';
+  const oldData = row.old_data || {};
+  const newData = row.new_data || {};
+  const keys = [...new Set([...Object.keys(oldData), ...Object.keys(newData)])]
+    .filter(k => k !== 'id' && k !== 'user_id')
+    .sort();
+
+  const isUpdate = row.operation === 'UPDATE';
+  const header = isUpdate
+    ? `<tr><th style="font-size:11px;color:var(--text3);text-align:left;font-weight:600">Campo</th><th style="font-size:11px;color:var(--text3);text-align:left;font-weight:600">Antes</th><th style="font-size:11px;color:var(--text3);text-align:left;font-weight:600">Depois</th></tr>`
+    : `<tr><th style="font-size:11px;color:var(--text3);text-align:left;font-weight:600">Campo</th><th colspan="2" style="font-size:11px;color:var(--text3);text-align:left;font-weight:600">Valor</th></tr>`;
+
+  const rowsHtml = keys.map(k => {
+    const before = oldData[k];
+    const after = newData[k];
+    if (row.operation === 'DELETE') {
+      return `<tr><td style="color:var(--text3);font-size:11px;white-space:nowrap">${_notifEsc(k)}</td><td colspan="2">${_notifFmtCampoValor(before)}</td></tr>`;
+    }
+    if (row.operation === 'INSERT') {
+      return `<tr><td style="color:var(--text3);font-size:11px;white-space:nowrap">${_notifEsc(k)}</td><td colspan="2">${_notifFmtCampoValor(after)}</td></tr>`;
+    }
+    const changed = JSON.stringify(before) !== JSON.stringify(after);
+    return `<tr${changed ? ' style="background:color-mix(in srgb, var(--accent) 8%, transparent)"' : ''}>
+      <td style="color:var(--text3);font-size:11px;white-space:nowrap">${_notifEsc(k)}</td>
+      <td>${_notifFmtCampoValor(before)}</td>
+      <td>${changed ? '<i class="ti ti-arrow-right" style="font-size:10px;color:var(--text3);margin-right:4px"></i>' : ''}${_notifFmtCampoValor(after)}</td>
+    </tr>`;
+  }).join('');
+
+  const grupoAviso = n.activityCount > 1
+    ? `<div style="font-size:11px;color:var(--text3);margin-bottom:12px;display:flex;align-items:center;gap:5px"><i class="ti ti-info-circle"></i> Esta notificação agrupa ${n.activityCount} alterações — mostrando a mais recente.</div>`
+    : '';
+
+  return `
+    <div style="display:flex;flex-direction:column;gap:2px;margin-bottom:12px">
+      <div style="font-size:13px"><strong>${_notifEsc(label)}</strong> — ${_notifEsc(opLabel)}</div>
+      <div style="color:var(--text3);font-size:11.5px">${_notifEsc(when)}</div>
+    </div>
+    ${grupoAviso}
+    <div style="overflow-x:auto;max-height:50vh;overflow-y:auto">
+      <table style="width:100%;font-size:12px;border-collapse:collapse">
+        <thead>${header}</thead>
+        <tbody>${rowsHtml || `<tr><td colspan="3" style="color:var(--text3)">Sem dados de campo pra exibir.</td></tr>`}</tbody>
+      </table>
+    </div>`;
+}
+
+
 // Evita spam quando uma importação em lote de Materiais/Filiais (os
 // únicos módulos que sincronizam também o importado, não só manual) gera
 // muitas linhas de uma vez. Cada grupo tem seu próprio timer; só "estoura"
@@ -626,5 +737,6 @@ Object.assign(window,{
   notifMarkRead,notifMarkAllRead,notifNavigate,
   notifSync,notifBoot,notifUpdateFromAnalytico,notifSilentHealthCheck,
   notifPlaySound,notifShowActivityToast,notifHideActivityToast,
+  notifAbrirDetalheAtividade,
   _activityRealtimeInit,_activityRealtimeStop,
 });

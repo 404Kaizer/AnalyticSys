@@ -46,6 +46,25 @@ let _adminCurrentRows = [];     // linhas do módulo atualmente exibido em "Dado
 let _adminEditContext = null;   // { modulo, id } do registro em edição
 let _adminPresenceInterval = null; // atualização automática enquanto a seção Usuários está visível
 
+// ── Tipos de campo por módulo (conferido no schema real do banco) ──────
+// Usado só pelo formulário de edição/busca — decide que tipo de input
+// renderizar (number/boolean/array) e quais colunas entram na busca por
+// texto (só as que sobraram de fora daqui, ou seja, as de tipo texto).
+// Colunas não listadas aqui são tratadas como texto simples.
+const _ADMIN_COL_TYPES = {
+  imports:         { registros: 'number' },
+  ocorrencias:      { concluida: 'boolean' },
+  acoes_relatorio:  { categorias: 'array' },
+  lancamentos:      { peso: 'number', valor_total: 'number', editado: 'boolean' },
+  producao:         { producao: 'number', custo_medio: 'number' },
+  entradas:         { peso: 'number', valor_total: 'number' },
+  saidas:           { peso: 'number', valor_total: 'number' },
+  sap:              { peso: 'number', valor_total: 'number' },
+};
+function _adminFieldType(modulo, col) {
+  return _ADMIN_COL_TYPES[modulo]?.[col] || 'text';
+}
+
 // ── Paginação de "Dados por módulo" — mesmo padrão visual de Entradas/
 // Saídas/Lançamentos/SAP (table-scroll + .pagination com Primeiro/
 // Anterior/Próxima/Último), mas por CURSOR — nunca OFFSET (ver "Decisões
@@ -66,6 +85,45 @@ let _adminPageLastId = null;
 let _adminHasNext = false;
 let _adminHasPrev = false;
 let _adminPageTotal = null; // contagem exata da tabela atual (null = ainda não buscada)
+
+// ── Busca por texto — "Dados por módulo" ────────────────────
+// Client trigger é explícito (Enter/botão), não a cada tecla — a busca
+// vai pro banco (.ilike, não é filtro local), então evita bater o
+// Supabase a cada caractere digitado.
+let _adminSearchTerm = '';
+
+function _adminBuildSearchOr(modulo, cfg) {
+  if (!_adminSearchTerm) return null;
+  const textCols = (cfg.cols || []).filter(c => _adminFieldType(modulo, c) === 'text');
+  if (!textCols.length) return null;
+  // remove % e vírgula — quebrariam a sintaxe do .ilike()/.or() do PostgREST
+  const term = _adminSearchTerm.replace(/[%,]/g, '').trim();
+  if (!term) return null;
+  return textCols.map(c => `${c}.ilike.%${term}%`).join(',');
+}
+
+function adminBuscarModulo() {
+  const input = document.getElementById('admin-search-input');
+  _adminSearchTerm = (input?.value || '').trim();
+  adminLoadModulo('first');
+}
+
+function adminLimparBuscaModulo() {
+  _adminSearchTerm = '';
+  const input = document.getElementById('admin-search-input');
+  if (input) input.value = '';
+  adminLoadModulo('first');
+}
+
+// Troca de módulo — limpa a busca (os campos de texto mudam de um módulo
+// pro outro, buscar pelo termo antigo não faria sentido no novo).
+function adminTrocarModulo() {
+  _adminSearchTerm = '';
+  const input = document.getElementById('admin-search-input');
+  if (input) input.value = '';
+  adminLoadModulo('first');
+}
+
 
 // ── Seção: Saúde do banco ───────────────────────────────────
 // Usa a função admin_db_stats() (RPC, só-admin — SECURITY DEFINER com a
@@ -423,14 +481,18 @@ async function adminLoadModulo(direction = 'first') {
   const emailPorId = Object.fromEntries(_adminProfiles.map(p => [p.id, p.email]));
 
   // Contagem exata — só busca de novo quando a paginação reinicia (troca
-  // de módulo/Atualizar), não a cada Próxima/Anterior.
+  // de módulo/Atualizar/nova busca), não a cada Próxima/Anterior.
   if (_adminPageTotal === null) {
-    window.supabaseClient.from(modulo).select('*', { count: 'exact', head: true })
-      .then(({ count }) => { _adminPageTotal = count ?? null; _adminSetPageInfo(); });
+    let countQuery = window.supabaseClient.from(modulo).select('*', { count: 'exact', head: true });
+    const orCount = _adminBuildSearchOr(modulo, cfg);
+    if (orCount) countQuery = countQuery.or(orCount);
+    countQuery.then(({ count }) => { _adminPageTotal = count ?? null; _adminSetPageInfo(); });
   }
 
   const asc = direction !== 'prev' && direction !== 'last'; // prev/last buscam em DESC pra pegar o "lado de baixo"
   let query = window.supabaseClient.from(modulo).select('*').order('id', { ascending: asc }).limit(ADMIN_PAGE_SIZE + 1);
+  const orData = _adminBuildSearchOr(modulo, cfg);
+  if (orData) query = query.or(orData);
   if (direction === 'next')  query = query.gt('id', _adminPageLastId);
   if (direction === 'prev')  query = query.lt('id', _adminPageFirstId);
 
@@ -464,7 +526,10 @@ async function adminLoadModulo(direction = 'first') {
   else if (direction === 'last') _adminPageIndex = _adminPageTotal !== null ? Math.max(0, Math.ceil(_adminPageTotal / ADMIN_PAGE_SIZE) - 1) : _adminPageIndex;
 
   if (!_adminCurrentRows.length) {
-    tbody.innerHTML = `<tr><td colspan="${colspan}"><div class="empty-state"><i class="ti ti-database-off"></i><p>Nenhum registro nesta tabela.</p></div></td></tr>`;
+    const msg = _adminSearchTerm
+      ? `Nenhum registro encontrado para "${_adminEsc(_adminSearchTerm)}".`
+      : 'Nenhum registro nesta tabela.';
+    tbody.innerHTML = `<tr><td colspan="${colspan}"><div class="empty-state"><i class="ti ti-database-off"></i><p>${msg}</p></div></td></tr>`;
     _adminSetPageInfo();
     return;
   }
@@ -571,14 +636,43 @@ async function adminExcluirRegistro(modulo, id) {
   adminLoadModulo();
 }
 
-// ── Edição (JSON genérico — funciona igual pra qualquer módulo) ────────
+// ── Edição (formulário estruturado — um input por coluna, tipado
+// conforme _ADMIN_COL_TYPES: texto, número, sim/não ou lista) ──────────
 function adminAbrirEdicao(modulo, id) {
   if (ADMIN_MODULOS[modulo]?.readOnly) return; // append-only — RLS bloquearia mesmo assim
   const row = _adminCurrentRows.find(r => String(r.id) === String(id));
   if (!row) return;
   _adminEditContext = { modulo, id };
   document.getElementById('admin-edit-sub').textContent = `${ADMIN_MODULOS[modulo]?.label || modulo} — ${id}`;
-  document.getElementById('admin-edit-json').value = JSON.stringify(row, null, 2);
+
+  const cols = ADMIN_MODULOS[modulo]?.cols || [];
+  const fieldsEl = document.getElementById('admin-edit-fields');
+  if (fieldsEl) {
+    fieldsEl.innerHTML = cols.map(col => {
+      const type = _adminFieldType(modulo, col);
+      const val = row[col];
+      const inputId = `admin-edit-field-${col}`;
+      let inputHtml;
+      if (type === 'boolean') {
+        inputHtml = `<label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="checkbox" id="${inputId}" ${val ? 'checked' : ''} style="width:16px;height:16px">
+          <span style="font-size:12.5px;color:var(--text2)">${val ? 'Sim' : 'Não'}</span>
+        </label>`;
+      } else if (type === 'number') {
+        inputHtml = `<input type="number" step="any" class="form-input" id="${inputId}" value="${val ?? ''}">`;
+      } else if (type === 'array') {
+        const joined = Array.isArray(val) ? val.join(', ') : '';
+        inputHtml = `<input type="text" class="form-input" id="${inputId}" value="${_adminEsc(joined)}" placeholder="separado por vírgula">`;
+      } else {
+        inputHtml = `<input type="text" class="form-input" id="${inputId}" value="${_adminEsc(val ?? '')}">`;
+      }
+      return `<div class="form-group" style="margin-bottom:0">
+        <label class="form-label">${_adminEsc(col)}</label>
+        ${inputHtml}
+      </div>`;
+    }).join('');
+  }
+
   const errEl = document.getElementById('admin-edit-error');
   if (errEl) errEl.style.display = 'none';
   openModal('admin-edit-modal');
@@ -588,24 +682,35 @@ async function adminSalvarEdicao() {
   const errEl = document.getElementById('admin-edit-error');
   errEl.style.display = 'none';
 
-  let parsed;
-  try {
-    parsed = JSON.parse(document.getElementById('admin-edit-json').value);
-  } catch (e) {
-    errEl.textContent = 'JSON inválido: ' + e.message;
-    errEl.style.display = 'block';
-    return;
-  }
-
   const { modulo, id } = _adminEditContext || {};
   if (!modulo || !id) return;
 
-  // Dono do registro não muda por aqui — remove se veio no JSON editado,
-  // pra não correr risco de "transferir" o registro sem querer.
-  delete parsed.user_id;
-  delete parsed.id; // chave primária não é editável
+  const cols = ADMIN_MODULOS[modulo]?.cols || [];
+  const patch = {};
+  for (const col of cols) {
+    const input = document.getElementById(`admin-edit-field-${col}`);
+    if (!input) continue;
+    const type = _adminFieldType(modulo, col);
+    if (type === 'boolean') {
+      patch[col] = input.checked;
+    } else if (type === 'number') {
+      const raw = input.value.trim();
+      if (raw === '') { patch[col] = null; continue; }
+      const n = Number(raw);
+      if (!Number.isFinite(n)) {
+        errEl.textContent = `Valor inválido em "${col}" — informe um número.`;
+        errEl.style.display = 'block';
+        return;
+      }
+      patch[col] = n;
+    } else if (type === 'array') {
+      patch[col] = input.value.split(',').map(s => s.trim()).filter(Boolean);
+    } else {
+      patch[col] = input.value;
+    }
+  }
 
-  const { error } = await window.supabaseClient.from(modulo).update(parsed).eq('id', id);
+  const { error } = await window.supabaseClient.from(modulo).update(patch).eq('id', id);
   if (error) {
     errEl.textContent = 'Falha ao salvar: ' + error.message;
     errEl.style.display = 'block';
@@ -626,6 +731,9 @@ Object.assign(window, {
   adminHealthShowTab,
   adminLoadUserTableCounts,
   adminLoadModulo,
+  adminTrocarModulo,
+  adminBuscarModulo,
+  adminLimparBuscaModulo,
   adminModuloPrimeiraPagina,
   adminModuloPaginaAnterior,
   adminModuloProximaPagina,
