@@ -10764,6 +10764,103 @@ tr.sap-fechamento td {
   opacity: .4;
 }
 
+/* ── Ações em massa — "Dados por módulo" (Administração) ─────────────────
+   Mesmo idioma visual da barra de lote do Gerenciador de Fechamento
+   (roxo = ação em lote, em qualquer parte do sistema — ver
+   .fechmgr-lote-bar acima), mas como classes próprias porque esta tabela
+   é genérica (qualquer uma das 18 tabelas de ADMIN_MODULOS, não só
+   Fechamento) — ver admin.js. */
+.admin-lote-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 20px;
+  background: var(--purple-bg);
+  border-bottom: 1px solid var(--purple-border);
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+}
+.admin-lote-bar #admin-lote-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: var(--purple);
+}
+.admin-lote-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.admin-lote-bar .btn-sm {
+  font-size: 12px;
+  padding: 5px 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.admin-btn-ghost {
+  background: transparent;
+  border-color: var(--border2);
+  color: var(--text2);
+}
+.admin-btn-danger {
+  background: var(--red-bg);
+  border-color: var(--red-border);
+  color: var(--red);
+}
+.admin-btn-danger:hover {
+  background: var(--red-border);
+}
+
+/* Banner "selecionar todos os N do filtro" (padrão Gmail) — mesmo
+   comportamento/condição de exibição do equivalente no Fechamento (ver
+   _adminAtualizarBarraLote, admin.js): só aparece quando a página
+   inteira já está marcada E ainda há mais registros no filtro atual. */
+.admin-selectall-banner {
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 8px 20px;
+  background: var(--accent-dim);
+  border-bottom: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--text2);
+  text-align: center;
+}
+.admin-selectall-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.admin-selectall-link:hover {
+  color: var(--accent-hover, var(--accent));
+}
+
+/* Checkboxes na tabela "Dados por módulo" — mesmo tamanho/cor do padrão
+   já usado no Fechamento, aplicado direto (a tabela de Admin usa <td>/
+   <th> soltos, não a classe .fechmgr-table). */
+#admin-dados-thead input[type="checkbox"],
+#admin-dados-tbody input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+  accent-color: var(--purple);
+}
+#admin-dados-tbody input[type="checkbox"]:disabled {
+  cursor: not-allowed;
+  opacity: .5;
+}
+
 /* Indicador de status compacto (bolinha + tooltip) em vez de badge de
    texto — a coluna Status virou só um sinalizador rápido, já que TODO
    registro do modal é, por definição, um Ajuste de Fechamento; o que

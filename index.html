@@ -2966,6 +2966,22 @@
                 <button class="btn" onclick="adminLoadModulo()"><i class="ti ti-refresh"></i> Atualizar</button>
               </div>
             </div>
+            <!-- Barra de ação em lote — só aparece com alguma seleção ativa
+                 (ver _adminAtualizarBarraLote, admin.js). Escondida por
+                 padrão via style inline, igual ao padrão já usado no
+                 Gerenciador de Fechamento (fechmgr-lote-bar, ui.js). -->
+            <div class="admin-lote-bar" id="admin-lote-bar" style="display:none">
+              <span id="admin-lote-count"><i class="ti ti-checks"></i> 0 registros selecionados</span>
+              <div class="admin-lote-actions">
+                <button class="btn btn-sm" onclick="adminAbrirEdicaoLote()"><i class="ti ti-edit"></i> Editar campo em massa</button>
+                <button class="btn btn-sm admin-btn-danger" onclick="adminExcluirLote()"><i class="ti ti-trash"></i> Excluir selecionados</button>
+                <button class="btn btn-sm admin-btn-ghost" onclick="adminLimparSelecao()">Limpar seleção</button>
+              </div>
+            </div>
+            <!-- Banner "selecionar todos os N do filtro" (padrão Gmail) —
+                 só aparece depois que a página inteira já foi marcada. Exige
+                 busca ativa pra virar link clicável (ver adminSelecionarTodosFiltro). -->
+            <div class="admin-selectall-banner" id="admin-selectall-banner" style="display:none"></div>
             <div style="font-size:11px;color:var(--text3);padding:10px 18px 0"><i class="ti ti-info-circle"></i> Log de Exclusão de DAI e Notas de Crédito/Débito são registros append-only (auditoria) — somente leitura.</div>
             <div class="table-scroll">
             <table>
@@ -3319,6 +3335,35 @@
     <div class="form-actions">
       <button class="btn" onclick="closeModal('admin-edit-modal')">Cancelar</button>
       <button class="btn btn-primary" onclick="adminSalvarEdicao()"><i class="ti ti-check"></i> Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal de edição EM MASSA — um campo por vez, aplicado a todos os
+     registros selecionados (IDs manuais ou "todos os N do filtro" — ver
+     admin.js). Confirmação de verdade acontece depois, no modal
+     modal-confirm-destrutivo (confirmarDestrutivo, format.js) — este
+     aqui só monta o patch antes de pedir a confirmação. Mesma posição
+     fora de .page que admin-edit-modal, pelo mesmo motivo (containing
+     block de position:fixed). -->
+<div class="modal-overlay" id="admin-lote-edit-modal">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-title"><i class="ti ti-edit"></i> Editar em massa</div>
+    <div class="modal-sub" id="admin-lote-edit-sub"></div>
+    <div style="display:flex;flex-direction:column;gap:12px;margin-top:12px">
+      <div class="form-group" style="margin-bottom:0">
+        <label class="form-label">Campo a alterar</label>
+        <select class="form-select" id="admin-lote-edit-campo" onchange="_adminLoteEditRenderCampo()"></select>
+      </div>
+      <div class="form-group" style="margin-bottom:0">
+        <label class="form-label">Novo valor</label>
+        <div id="admin-lote-edit-valor-wrap"></div>
+      </div>
+    </div>
+    <div id="admin-lote-edit-error" style="display:none;color:var(--red);font-size:12px;margin-top:10px"></div>
+    <div class="form-actions">
+      <button class="btn" onclick="closeModal('admin-lote-edit-modal')">Cancelar</button>
+      <button class="btn btn-primary" onclick="adminAplicarEdicaoLote()"><i class="ti ti-check"></i> Pré-visualizar e aplicar</button>
     </div>
   </div>
 </div>
