@@ -254,6 +254,26 @@ function setTheme(theme) {
   applyTheme(theme);
 }
 
+// ── Theme switcher (topbar) ──────────────────────────────
+let _themeSwitcherOpen = false;
+function toggleThemeSwitcher() {
+  _themeSwitcherOpen ? closeThemeSwitcher() : openThemeSwitcher();
+}
+function openThemeSwitcher() {
+  _themeSwitcherOpen = true;
+  document.getElementById('theme-switcher-menu')?.classList.add('open');
+  document.getElementById('theme-switcher-btn')?.classList.add('open');
+}
+function closeThemeSwitcher() {
+  _themeSwitcherOpen = false;
+  document.getElementById('theme-switcher-menu')?.classList.remove('open');
+  document.getElementById('theme-switcher-btn')?.classList.remove('open');
+}
+document.addEventListener('click', e => {
+  const wrap = document.getElementById('theme-switcher-wrap');
+  if (wrap && !wrap.contains(e.target) && _themeSwitcherOpen) closeThemeSwitcher();
+});
+
 function qs(sel, root = document) { return root.querySelector(sel); }
 function qsa(sel, root = document) { return Array.from(root.querySelectorAll(sel)); }
 function val(id) { return document.getElementById(id)?.value?.trim() || ''; }

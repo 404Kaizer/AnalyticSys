@@ -293,12 +293,19 @@
 
           <div class="topbar-stat-sep"></div>
 
-          <!-- 2. Saúde geral -->
-          <div class="topbar-stat" id="topbar-saude" title="Score médio de saúde das centrais (último cálculo do Dashboard Analítico)">
-            <i class="ti ti-heartbeat topbar-stat-icon" id="saude-icon"></i>
-            <div class="topbar-stat-body">
-              <span class="topbar-stat-label">Saúde geral</span>
-              <span class="topbar-stat-val" id="saude-val">—</span>
+          <!-- 2. Aparência -->
+          <div class="theme-switcher" id="theme-switcher-wrap">
+            <button class="theme-switcher-btn" id="theme-switcher-btn" onclick="toggleThemeSwitcher()" title="Aparência">
+              <i class="ti ti-palette"></i>
+            </button>
+            <div class="theme-menu" id="theme-switcher-menu">
+              <div class="tools-dropdown-section-label" style="margin-top:0;border-top:none">Aparência</div>
+              <div class="tools-theme-grid" id="tools-theme-grid">
+                <button class="tools-theme-opt" data-theme="dark"    onclick="setTheme('dark');    updateToolsTheme()"><span class="theme-swatch dark"></span>Escuro</button>
+                <button class="tools-theme-opt" data-theme="graphite" onclick="setTheme('graphite');updateToolsTheme()"><span class="theme-swatch graphite"></span>Grafite</button>
+                <button class="tools-theme-opt" data-theme="light"   onclick="setTheme('light');   updateToolsTheme()"><span class="theme-swatch light"></span>Claro</button>
+                <button class="tools-theme-opt" data-theme="sand"    onclick="setTheme('sand');    updateToolsTheme()"><span class="theme-swatch sand"></span>Areia</button>
+              </div>
             </div>
           </div>
 
@@ -440,14 +447,6 @@
                 <div class="tools-item-sub">Importar backup salvo anteriormente</div>
               </div>
             </button>
-
-            <div class="tools-dropdown-section-label">Aparência</div>
-            <div class="tools-theme-grid" id="tools-theme-grid">
-              <button class="tools-theme-opt" data-theme="dark"    onclick="setTheme('dark');    updateToolsTheme()"><span class="theme-swatch dark"></span>Escuro</button>
-              <button class="tools-theme-opt" data-theme="graphite" onclick="setTheme('graphite');updateToolsTheme()"><span class="theme-swatch graphite"></span>Grafite</button>
-              <button class="tools-theme-opt" data-theme="light"   onclick="setTheme('light');   updateToolsTheme()"><span class="theme-swatch light"></span>Claro</button>
-              <button class="tools-theme-opt" data-theme="sand"    onclick="setTheme('sand');    updateToolsTheme()"><span class="theme-swatch sand"></span>Areia</button>
-            </div>
 
             <div class="tools-dropdown-section-label">Conta</div>
             <div class="tools-item" style="cursor:default">

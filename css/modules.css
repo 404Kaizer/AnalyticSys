@@ -5582,8 +5582,8 @@ mark.search-highlight {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  width: 38px;
+  height: 38px;
   border-radius: 8px;
   border: 1px solid transparent;
   background: transparent;
@@ -5594,7 +5594,7 @@ mark.search-highlight {
 .notif-btn:hover,
 .notif-btn.open { background: var(--bg3); border-color: var(--border2); color: var(--text); }
 .notif-btn.notif-btn-active { color: var(--text); }
-.notif-bell-icon { font-size: 17px; }
+.notif-bell-icon { font-size: 19px; }
 
 /* Badge de contagem */
 .notif-badge {
