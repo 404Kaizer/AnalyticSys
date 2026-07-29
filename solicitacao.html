@@ -113,6 +113,12 @@
   .sol-informante-card { background: var(--bg3); border: 1px solid var(--border2); border-radius: var(--radius); padding: 14px; margin-bottom: 10px; position: relative; }
   .sol-informante-card .sol-item-row-rm { position: absolute; top: 10px; right: 10px; width: 26px; height: 26px; margin-top: 0; font-size: 12px; }
 
+  .sol-item-balanca { background: var(--bg3); border: 1px solid var(--border2); border-radius: var(--radius); padding: 14px; margin-bottom: 14px; position: relative; }
+  .sol-item-balanca .sol-item-row-rm { position: absolute; top: 10px; right: 10px; width: 26px; height: 26px; margin-top: 0; font-size: 12px; }
+  .sol-cantos-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(70px, 1fr)); gap: 10px; margin-bottom: 14px; }
+  .sol-var-display { background: var(--bg4); border: 1px solid var(--border2); border-radius: var(--radius); padding: 10px 12px; font-size: 13px; font-family: var(--mono); color: var(--text); }
+  .sol-var-display.alerta { color: var(--amber); border-color: var(--amber-border); background: var(--amber-bg); }
+
   .sol-alert { border-radius: var(--radius); padding: 12px 14px; font-size: 12.5px; line-height: 1.6; display: flex; gap: 10px; align-items: flex-start; margin-bottom: 16px; }
   .sol-alert i { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
   .sol-alert-error { background: var(--red-bg); border: 1px solid var(--red-border); color: #ff9a8a; }
@@ -244,7 +250,7 @@
         </div>
         <div id="sol-itens-lista"></div>
         <button type="button" class="sol-btn sol-add-row-btn" onclick="adicionarItemMaterial()">
-          <i class="ti ti-plus"></i> Adicionar outro material
+          <i class="ti ti-plus"></i> <span id="sol-add-item-label">Adicionar outro material</span>
         </button>
         <div class="sol-fg" style="margin-top:16px">
           <label class="sol-label">Descreva o ocorrido para a diretoria <span class="sol-required">*</span></label>

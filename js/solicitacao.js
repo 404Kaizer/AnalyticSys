@@ -34,6 +34,9 @@ const ANEXO_MAX_MB = 15;
 const ANEXO_MAX_COUNT = 10;
 const ANEXO_TIPOS_ACEITOS = /^image\/|^application\/pdf$|^application\/msword$|wordprocessingml/;
 const CATEGORIA_TRANSFERENCIA = 'Transferência de material entre filiais';
+const CATEGORIA_BALANCA = 'Perda de material devido a falha na balança';
+const CATEGORIAS_MATERIAL_BALANCA = ['Aglomerante', 'Agregado Graúdo', 'Agregado Miúdo', 'Aditivo', 'Adição'];
+const CANTOS_UNICO_CATEGORIAS = ['Aditivo', 'Adição'];
 
 // CRÍTICO: esta página fica no mesmo domínio do app principal. Sem estas
 // opções, o supabase-js reaproveitaria automaticamente uma sessão de
@@ -118,12 +121,25 @@ function validarSecaoOQueAconteceu() {
     if (!filialDestino) { mostrarAlerta('Selecione a filial de destino.', 'error'); return false; }
     if (filialDestino === central) { mostrarAlerta('A filial de destino não pode ser igual à central de origem.', 'error'); return false; }
   }
-  if (!_itensMateriais.length) { mostrarAlerta('Adicione ao menos um material.', 'error'); return false; }
-  for (const it of _itensMateriais) {
-    if (!it.material) { mostrarAlerta('Selecione o material em todas as linhas adicionadas (ou remova as vazias).', 'error'); return false; }
-    const pesoNum = parseFloat(String(it.peso).replace(',', '.'));
-    if (!it.peso || isNaN(pesoNum) || pesoNum <= 0) { mostrarAlerta(`Informe um peso válido para "${it.material}".`, 'error'); return false; }
+
+  if (categoriaSituacao === CATEGORIA_BALANCA) {
+    if (!_itensMateriais.length) { mostrarAlerta('Adicione ao menos um teste de aferição.', 'error'); return false; }
+    for (const it of _itensMateriais) {
+      if (!it.categoriaMaterial) { mostrarAlerta('Selecione a categoria do material em todos os testes adicionados.', 'error'); return false; }
+      const ref = parseFloat(String(it.referencia).replace(',', '.'));
+      if (!it.referencia || isNaN(ref) || ref <= 0) { mostrarAlerta(`Informe um peso/volume de referência válido para "${it.categoriaMaterial}".`, 'error'); return false; }
+      const cantosNum = (it.cantos || []).map((c) => parseFloat(String(c).replace(',', '.')));
+      if (!cantosNum.length || cantosNum.some((c) => isNaN(c) || c < 0)) { mostrarAlerta(`Preencha todos os cantos para "${it.categoriaMaterial}".`, 'error'); return false; }
+    }
+  } else {
+    if (!_itensMateriais.length) { mostrarAlerta('Adicione ao menos um material.', 'error'); return false; }
+    for (const it of _itensMateriais) {
+      if (!it.material) { mostrarAlerta('Selecione o material em todas as linhas adicionadas (ou remova as vazias).', 'error'); return false; }
+      const pesoNum = parseFloat(String(it.peso).replace(',', '.'));
+      if (!it.peso || isNaN(pesoNum) || pesoNum <= 0) { mostrarAlerta(`Informe um peso válido para "${it.material}".`, 'error'); return false; }
+    }
   }
+
   if (!descricao) { mostrarAlerta('Descreva o ocorrido.', 'error'); return false; }
   return true;
 }
@@ -219,6 +235,9 @@ function onCategoriaSituacaoChange() {
     wrap.style.display = 'none';
     sel.value = '';
   }
+  const addLabel = document.getElementById('sol-add-item-label');
+  if (addLabel) addLabel.textContent = val === CATEGORIA_BALANCA ? 'Adicionar outro teste de aferição' : 'Adicionar outro material';
+  _renderItensMateriais();
 }
 window.onCategoriaSituacaoChange = onCategoriaSituacaoChange;
 
@@ -232,7 +251,17 @@ function _popularFilialDestino() {
 }
 
 // ── Itens (materiais) — lista dinâmica ─────────────────────────────────
-function _novoItemMaterial() { return { id: 'im' + (_itemSeq++), material: '', peso: '' }; }
+// O mesmo array serve pros dois modos: normal (material + peso) e
+// aferição de balança (teste dos cantos) — a categoria de situação
+// escolhida decide qual conjunto de campos é renderizado pra TODOS os
+// itens da lista (ver _renderItensMateriais).
+function _novoItemMaterial() {
+  return {
+    id: 'im' + (_itemSeq++),
+    material: '', peso: '',
+    categoriaMaterial: '', unidade: 'kg', qtdCantos: 4, referencia: '', cantos: ['', '', '', ''],
+  };
+}
 
 function adicionarItemMaterial() {
   _itensMateriais.push(_novoItemMaterial());
@@ -259,9 +288,74 @@ function _onItemPesoChange(id, value) {
 }
 window._onItemPesoChange = _onItemPesoChange;
 
-function _renderItensMateriais() {
-  const el = document.getElementById('sol-itens-lista');
-  el.innerHTML = _itensMateriais.map((it) => `
+// ── Teste dos cantos (aferição de balança) ─────────────────────────────
+function _onCategoriaMaterialBalancaChange(id, value) {
+  const it = _itensMateriais.find((i) => i.id === id);
+  if (!it) return;
+  it.categoriaMaterial = value;
+  if (CANTOS_UNICO_CATEGORIAS.includes(value)) { it.qtdCantos = 1; it.cantos = [it.cantos[0] || '']; }
+  _renderItensMateriais();
+}
+window._onCategoriaMaterialBalancaChange = _onCategoriaMaterialBalancaChange;
+
+function _onUnidadeBalancaChange(id, value) {
+  const it = _itensMateriais.find((i) => i.id === id);
+  if (it) { it.unidade = value; _atualizarVariacao(id); }
+}
+window._onUnidadeBalancaChange = _onUnidadeBalancaChange;
+
+function _onReferenciaChange(id, value) {
+  const it = _itensMateriais.find((i) => i.id === id);
+  if (it) { it.referencia = value; _atualizarVariacao(id); }
+}
+window._onReferenciaChange = _onReferenciaChange;
+
+function _onQtdCantosChange(id, value) {
+  const it = _itensMateriais.find((i) => i.id === id);
+  if (!it) return;
+  const n = Math.min(4, Math.max(1, parseInt(value, 10) || 1));
+  it.qtdCantos = n;
+  it.cantos = Array.from({ length: n }).map((_, idx) => it.cantos[idx] || '');
+  _renderItensMateriais();
+}
+window._onQtdCantosChange = _onQtdCantosChange;
+
+function _onCantoChange(id, idx, value) {
+  const it = _itensMateriais.find((i) => i.id === id);
+  if (!it) return;
+  it.cantos[idx] = value;
+  _atualizarVariacao(id);
+}
+window._onCantoChange = _onCantoChange;
+
+// Retorna { media, variacaoAbs, variacaoPct } ou null se os dados ainda
+// não são suficientes pra calcular (referência/cantos incompletos).
+function _calcVariacaoBalanca(it) {
+  const ref = parseFloat(String(it.referencia).replace(',', '.'));
+  const cantosNum = (it.cantos || []).map((c) => parseFloat(String(c).replace(',', '.')));
+  if (!Number.isFinite(ref) || ref <= 0 || !cantosNum.length || cantosNum.some((c) => !Number.isFinite(c))) return null;
+  const media = cantosNum.reduce((a, b) => a + b, 0) / cantosNum.length;
+  const variacaoAbs = media - ref;
+  const variacaoPct = (variacaoAbs / ref) * 100;
+  return { media, variacaoAbs, variacaoPct };
+}
+
+// Atualiza só o texto do resultado (sem re-renderizar a lista inteira) —
+// pra não perder o foco/cursor do campo enquanto o operador ainda está
+// digitando os cantos.
+function _atualizarVariacao(id) {
+  const it = _itensMateriais.find((i) => i.id === id);
+  const el = document.getElementById('sol-var-' + id);
+  if (!it || !el) return;
+  const r = _calcVariacaoBalanca(it);
+  if (!r) { el.textContent = '—'; el.classList.remove('alerta'); return; }
+  const sinal = r.variacaoAbs >= 0 ? '+' : '';
+  el.textContent = `${sinal}${r.variacaoPct.toFixed(2)}% (${sinal}${r.variacaoAbs.toFixed(2)} ${it.unidade})`;
+  el.classList.toggle('alerta', Math.abs(r.variacaoPct) >= 1);
+}
+
+function _htmlItemMaterial(it) {
+  return `
     <div class="sol-item-row" data-item-id="${it.id}">
       <div class="sol-fg">
         <label class="sol-label">Material <span class="sol-required">*</span> <span class="sol-hint">(grupo SAP)</span></label>
@@ -274,7 +368,67 @@ function _renderItensMateriais() {
         <input type="number" class="sol-input" step="0.01" min="0" inputmode="decimal" placeholder="0,00" value="${escapeHtml(it.peso)}" oninput="_onItemPesoChange('${it.id}', this.value)">
       </div>
       ${_itensMateriais.length > 1 ? `<button type="button" class="sol-item-row-rm" onclick="removerItemMaterial('${it.id}')" title="Remover material"><i class="ti ti-x"></i></button>` : ''}
+    </div>`;
+}
+
+// Teste dos 4 cantos: peso/volume de referência conhecido colocado em
+// cada canto da balança, comparado com a leitura que ela mostrou —
+// mostra objetivamente o quanto a balança está descalibrada, em vez de
+// pedir pro operador "chutar" um peso perdido com a balança já falhando.
+function _htmlItemBalanca(it) {
+  const cantoUnico = CANTOS_UNICO_CATEGORIAS.includes(it.categoriaMaterial);
+  const qtd = cantoUnico ? 1 : (it.qtdCantos || 4);
+  const cantosHtml = Array.from({ length: qtd }).map((_, idx) => `
+    <div class="sol-fg" style="margin-bottom:0">
+      <label class="sol-label">Canto ${idx + 1} <span class="sol-required">*</span></label>
+      <input type="number" class="sol-input" step="0.01" min="0" inputmode="decimal" placeholder="0,00" value="${escapeHtml(it.cantos[idx] ?? '')}" oninput="_onCantoChange('${it.id}', ${idx}, this.value)">
     </div>`).join('');
+
+  return `
+    <div class="sol-item-balanca" data-item-id="${it.id}">
+      ${_itensMateriais.length > 1 ? `<button type="button" class="sol-item-row-rm" onclick="removerItemMaterial('${it.id}')" title="Remover teste"><i class="ti ti-x"></i></button>` : ''}
+      <div class="sol-grid">
+        <div class="sol-fg">
+          <label class="sol-label">Categoria do Material <span class="sol-required">*</span></label>
+          <select class="sol-select" onchange="_onCategoriaMaterialBalancaChange('${it.id}', this.value)">
+            <option value="">Selecione</option>
+            ${CATEGORIAS_MATERIAL_BALANCA.map((c) => `<option value="${c}" ${it.categoriaMaterial === c ? 'selected' : ''}>${c}</option>`).join('')}
+          </select>
+        </div>
+        <div class="sol-fg">
+          <label class="sol-label">Unidade <span class="sol-required">*</span></label>
+          <select class="sol-select" onchange="_onUnidadeBalancaChange('${it.id}', this.value)">
+            <option value="kg" ${it.unidade === 'kg' ? 'selected' : ''}>Quilogramas (kg)</option>
+            <option value="L" ${it.unidade === 'L' ? 'selected' : ''}>Litros (L)</option>
+          </select>
+        </div>
+      </div>
+      <div class="sol-grid">
+        <div class="sol-fg">
+          <label class="sol-label">Peso/Volume de Referência <span class="sol-required">*</span> <span class="sol-hint">(valor conhecido usado no teste)</span></label>
+          <input type="number" class="sol-input" step="0.01" min="0" inputmode="decimal" placeholder="0,00" value="${escapeHtml(it.referencia)}" oninput="_onReferenciaChange('${it.id}', this.value)">
+        </div>
+        <div class="sol-fg">
+          <label class="sol-label">Quantidade de Cantos <span class="sol-required">*</span></label>
+          <select class="sol-select" ${cantoUnico ? 'disabled' : ''} onchange="_onQtdCantosChange('${it.id}', this.value)">
+            ${[1, 2, 3, 4].map((n) => `<option value="${n}" ${(cantoUnico ? 1 : it.qtdCantos) === n ? 'selected' : ''}>${n}</option>`).join('')}
+          </select>
+          ${cantoUnico ? '<span class="sol-hint">Aditivos e Adições usam sempre 1 canto</span>' : ''}
+        </div>
+      </div>
+      <div class="sol-cantos-grid">${cantosHtml}</div>
+      <div class="sol-fg" style="margin-bottom:0">
+        <label class="sol-label">Variação apurada</label>
+        <div class="sol-var-display" id="sol-var-${it.id}">—</div>
+      </div>
+    </div>`;
+}
+
+function _renderItensMateriais() {
+  const el = document.getElementById('sol-itens-lista');
+  const modoBalanca = _valorAtual('sol-categoria-situacao') === CATEGORIA_BALANCA;
+  el.innerHTML = _itensMateriais.map((it) => modoBalanca ? _htmlItemBalanca(it) : _htmlItemMaterial(it)).join('');
+  if (modoBalanca) _itensMateriais.forEach((it) => _atualizarVariacao(it.id));
 }
 
 // ── Informantes — lista dinâmica ───────────────────────────────────────
@@ -422,9 +576,22 @@ function imprimirTermo() {
     return (y && m && d) ? `${d}/${m}/${y}` : dataOcorrido;
   })();
 
-  const itensValidos = _itensMateriais.filter((i) => i.material);
+  const modoBalanca = categoriaSituacao === CATEGORIA_BALANCA;
+  const itensValidos = modoBalanca
+    ? _itensMateriais.filter((i) => i.categoriaMaterial)
+    : _itensMateriais.filter((i) => i.material);
+  const colunaItem = modoBalanca ? 'Categoria' : 'Material';
+  const colunaValor = modoBalanca ? 'Aferição (teste dos cantos)' : 'Peso (kg)';
   const itensRows = itensValidos.length
-    ? itensValidos.map((i) => `<tr><td>${escapeHtml(i.material)}</td><td>${escapeHtml(i.peso || '—')}</td></tr>`).join('')
+    ? (modoBalanca
+        ? itensValidos.map((i) => {
+            const r = _calcVariacaoBalanca(i);
+            const cantosTxt = (i.cantos || []).map((c, idx) => `C${idx + 1}: ${escapeHtml(c || '—')}`).join(' · ');
+            const varTxt = r ? `${r.variacaoAbs >= 0 ? '+' : ''}${r.variacaoPct.toFixed(2)}%` : '—';
+            return `<tr><td>${escapeHtml(i.categoriaMaterial)}</td><td>Ref.: ${escapeHtml(i.referencia || '—')} ${escapeHtml(i.unidade)} · ${cantosTxt} · Variação: ${varTxt}</td></tr>`;
+          }).join('')
+        : itensValidos.map((i) => `<tr><td>${escapeHtml(i.material)}</td><td>${escapeHtml(i.peso || '—')}</td></tr>`).join('')
+      )
     : '<tr><td colspan="2">—</td></tr>';
 
   const assinaturasHtml = informantesValidos.map((inf) => `
@@ -494,7 +661,7 @@ function imprimirTermo() {
   </div>
   <div class="field-label">Item(ns) do ajuste</div>
   <table class="itens-table">
-    <thead><tr><th>Material</th><th>Peso (kg)</th></tr></thead>
+    <thead><tr><th>${colunaItem}</th><th>${colunaValor}</th></tr></thead>
     <tbody>${itensRows}</tbody>
   </table>
   <div class="field-label">Descrição do ocorrido</div>
@@ -553,7 +720,15 @@ async function enviarSolicitacao(ev) {
         categoriaSituacao,
         filialDestino: categoriaSituacao === CATEGORIA_TRANSFERENCIA ? filialDestino : null,
         descricao,
-        itens: _itensMateriais.map((i) => ({ grupoMaterial: i.material, peso: parseFloat(String(i.peso).replace(',', '.')) })),
+        itens: categoriaSituacao === CATEGORIA_BALANCA
+          ? _itensMateriais.map((i) => ({
+              tipo: 'afericao_balanca',
+              categoriaMaterial: i.categoriaMaterial,
+              unidade: i.unidade,
+              referencia: parseFloat(String(i.referencia).replace(',', '.')),
+              cantos: (i.cantos || []).map((c) => parseFloat(String(c).replace(',', '.'))),
+            }))
+          : _itensMateriais.map((i) => ({ grupoMaterial: i.material, peso: parseFloat(String(i.peso).replace(',', '.')) })),
         informantes: _informantes.map((i) => ({ nome: i.nome, cargo: i.cargo, contato: i.contato })),
         anexos: anexosOk.map((a) => ({ path: a.path, nome: a.nome, tipo: a.tipo, tamanho: a.tamanho })),
       }),
