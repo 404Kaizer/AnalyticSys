@@ -191,8 +191,6 @@ function imprimirTermo() {
   const dataOcorrido = _valorAtual('sol-data');
   const material = _valorAtual('sol-material');
   const peso = _valorAtual('sol-peso');
-  const movimento = _valorAtual('sol-movimento');
-  const objetivo = _valorAtual('sol-objetivo');
   const descricao = _valorAtual('sol-descricao');
   const nome = _valorAtual('sol-inf-nome');
   const cargo = _valorAtual('sol-inf-cargo');
@@ -257,8 +255,8 @@ function imprimirTermo() {
   </div>
   <div class="field-label">Item do ajuste</div>
   <table class="itens-table">
-    <thead><tr><th>Material</th><th>Peso (kg)</th><th>Tipo Mov.</th><th>Função do movimento</th></tr></thead>
-    <tbody><tr><td>${escapeHtml(material || '—')}</td><td>${escapeHtml(peso || '—')}</td><td>${escapeHtml(movimento || '—')}</td><td>${escapeHtml(objetivo || '—')}</td></tr></tbody>
+    <thead><tr><th>Material</th><th>Peso (kg)</th></tr></thead>
+    <tbody><tr><td>${escapeHtml(material || '—')}</td><td>${escapeHtml(peso || '—')}</td></tr></tbody>
   </table>
   <div class="field-label">Descrição do ocorrido</div>
   <div class="desc-box">${escapeHtml(descricao || '—')}</div>
@@ -296,8 +294,6 @@ async function enviarSolicitacao(ev) {
   const central = _valorAtual('sol-central');
   const material = _valorAtual('sol-material');
   const peso = _valorAtual('sol-peso');
-  const movimento = _valorAtual('sol-movimento');
-  const objetivo = _valorAtual('sol-objetivo');
   const dataOcorrido = _valorAtual('sol-data');
   const descricao = _valorAtual('sol-descricao');
   const nome = _valorAtual('sol-inf-nome');
@@ -308,8 +304,6 @@ async function enviarSolicitacao(ev) {
   if (!material) return mostrarAlerta('Selecione o material.', 'error');
   const pesoNum = parseFloat(String(peso).replace(',', '.'));
   if (!peso || isNaN(pesoNum) || pesoNum <= 0) return mostrarAlerta('Informe um peso válido.', 'error');
-  if (!movimento) return mostrarAlerta('Informe o tipo de movimento SAP.', 'error');
-  if (!objetivo) return mostrarAlerta('Informe a função do movimento.', 'error');
   if (!dataOcorrido) return mostrarAlerta('Informe a data do ocorrido.', 'error');
   if (dataOcorrido > hoje()) return mostrarAlerta('A data do ocorrido não pode ser no futuro.', 'error');
   if (!descricao) return mostrarAlerta('Descreva o ocorrido.', 'error');
@@ -332,7 +326,7 @@ async function enviarSolicitacao(ev) {
         action: 'submit',
         turnstileToken,
         central, grupoMaterial: material, peso: pesoNum,
-        tipoMovimentoSap: movimento, objetivo, dataOcorrido, descricao,
+        dataOcorrido, descricao,
         informanteNome: nome, informanteCargo: cargo, informanteContato: contato,
         anexos: anexosOk.map((a) => ({ path: a.path, nome: a.nome, tipo: a.tipo, tamanho: a.tamanho })),
       }),

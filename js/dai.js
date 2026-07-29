@@ -772,11 +772,23 @@ function editarSapDai(daiId) {
   const itens = _daiGetItens(dai);
   const wrap = document.getElementById('dai-sap-modal-itens');
   if (wrap) {
-    wrap.innerHTML = itens.map((it, idx) => `
+    wrap.innerHTML = itens.map((it, idx) => {
+      const precisaClassificar = !it.tipoMovimentoSap || !it.objetivo;
+      const extraCampos = precisaClassificar ? `
+        <div class="oc-form-group">
+          <label class="oc-label">Tipo de movimento SAP <span class="oc-required">*</span> <span class="oc-hint">(vindo do formulário público — só o analista sabe esse código)</span></label>
+          <input type="text" class="oc-input dai-sap-modal-item-movimento" data-item-id="${escapeHtml(it.id)}" placeholder="Ex.: 701, 702, Y11…" style="text-transform:uppercase" value="${escapeHtml(it.tipoMovimentoSap || '')}" oninput="this.value = this.value.toUpperCase()">
+        </div>
+        <div class="oc-form-group">
+          <label class="oc-label">Função do movimento <span class="oc-required">*</span></label>
+          <input type="text" class="oc-input dai-sap-modal-item-objetivo" data-item-id="${escapeHtml(it.id)}" placeholder="Diminuir saldo em estoque, gerar documento de coleta de material…" value="${escapeHtml(it.objetivo || '')}">
+        </div>` : '';
+      return `
       <div class="oc-form-group">
         <label class="oc-label">${escapeHtml(it.material || ('Item ' + (idx + 1)))} <span class="oc-hint">— Nº do documento SAP</span></label>
         <input type="text" class="oc-input dai-sap-modal-item-input" data-item-id="${escapeHtml(it.id)}" inputmode="numeric" placeholder="Somente números" value="${it.sapDocumento === DAI_SAP_PENDENTE ? '' : escapeHtml(it.sapDocumento || '')}" oninput="_daiFiltrarDigitosInput(this)">
-      </div>`).join('');
+      </div>${extraCampos}`;
+    }).join('');
   }
 
   openModal('dai-sap-modal');
@@ -794,12 +806,39 @@ async function salvarSapDai() {
   const vaiPreencherAlgum = inputs.some(inp => _daiSomenteDigitos(inp.value));
   if (vaiPreencherAlgum && !dataConclusao) return toast('Informe a data de conclusão.', 'error');
 
+  // Itens vindos do formulário público chegam sem Tipo de Movimento/Função
+  // do movimento (o operador não tem esse conhecimento) — o analista tem
+  // que classificar ANTES de poder fechar o item com um Nº SAP.
+  for (const inp of inputs) {
+    if (!_daiSomenteDigitos(inp.value)) continue; // item continuando pendente, não exige nada extra
+    const item = itens.find(it => it.id === inp.dataset.itemId);
+    if (!item) continue;
+    if (item.tipoMovimentoSap && item.objetivo) continue; // já classificado, nada a exigir
+    const movInput = document.querySelector(`.dai-sap-modal-item-movimento[data-item-id="${item.id}"]`);
+    const objInput = document.querySelector(`.dai-sap-modal-item-objetivo[data-item-id="${item.id}"]`);
+    if (!movInput?.value?.trim() || !objInput?.value?.trim()) {
+      return toast(`Preencha o Tipo de Movimento e a Função do movimento de "${item.material || 'item'}" antes de informar o Nº SAP.`, 'error');
+    }
+  }
+
   inputs.forEach(inp => {
     const item = itens.find(it => it.id === inp.dataset.itemId);
     if (!item) return;
     const digits = _daiSomenteDigitos(inp.value);
     item.sapDocumento = digits || DAI_SAP_PENDENTE;
+
+    const movInput = document.querySelector(`.dai-sap-modal-item-movimento[data-item-id="${item.id}"]`);
+    const objInput = document.querySelector(`.dai-sap-modal-item-objetivo[data-item-id="${item.id}"]`);
+    if (movInput) item.tipoMovimentoSap = movInput.value.trim().toUpperCase();
+    if (objInput) item.objetivo = objInput.value.trim();
   });
+
+  // Espelha o item[0] nos campos legados de nível-DAI (dai.tipoMovimentoSap/
+  // dai.objetivo) — é isso que _daiSyncUpsert() manda pro Supabase.
+  if (itens[0]) {
+    dai.tipoMovimentoSap = itens[0].tipoMovimentoSap;
+    dai.objetivo = itens[0].objetivo;
+  }
 
   // Registro legado (sem itens[] próprio) — grava a reconstrução de volta
   // no registro, migrando-o para o novo formato a partir de agora.

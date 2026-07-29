@@ -156,25 +156,16 @@
 
     <div class="sol-card">
       <div class="sol-card-title"><i class="ti ti-package"></i> O que aconteceu</div>
+      <div class="sol-hint" style="margin:-6px 0 4px">O tipo de movimento e a classificação SAP são preenchidos pelo analista depois — você não precisa saber esses códigos.</div>
       <div class="sol-fg">
         <label class="sol-label">Material <span class="sol-required">*</span> <span class="sol-hint">(grupo SAP)</span></label>
         <select id="sol-material" class="sol-select" required>
           <option value="">Selecione o material</option>
         </select>
       </div>
-      <div class="sol-grid">
-        <div class="sol-fg">
-          <label class="sol-label">Peso (kg) <span class="sol-required">*</span></label>
-          <input type="number" id="sol-peso" class="sol-input" step="0.01" min="0" inputmode="decimal" placeholder="0,00" required>
-        </div>
-        <div class="sol-fg">
-          <label class="sol-label">Tipo de movimento SAP <span class="sol-required">*</span></label>
-          <input type="text" id="sol-movimento" class="sol-input" placeholder="Ex.: 701, 702, Y11…" style="text-transform:uppercase" required>
-        </div>
-      </div>
       <div class="sol-fg">
-        <label class="sol-label">Função do movimento <span class="sol-required">*</span></label>
-        <input type="text" id="sol-objetivo" class="sol-input" placeholder="Diminuir saldo em estoque, gerar documento de coleta de material…" required>
+        <label class="sol-label">Peso (kg) <span class="sol-required">*</span></label>
+        <input type="number" id="sol-peso" class="sol-input" step="0.01" min="0" inputmode="decimal" placeholder="0,00" required>
       </div>
       <div class="sol-fg">
         <label class="sol-label">Descreva o ocorrido <span class="sol-required">*</span></label>
