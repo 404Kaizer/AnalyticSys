@@ -345,13 +345,17 @@ function _adminStatusInfo(lastSeen) {
 function adminShowSection(section) {
   const elUsuarios = document.getElementById('admin-section-usuarios');
   const elDados     = document.getElementById('admin-section-dados');
+  const elFormPublico = document.getElementById('admin-section-formpublico');
   if (elUsuarios) elUsuarios.style.display = section === 'usuarios' ? '' : 'none';
   if (elDados)    elDados.style.display    = section === 'dados' ? '' : 'none';
+  if (elFormPublico) elFormPublico.style.display = section === 'formpublico' ? '' : 'none';
   document.getElementById('admin-subnav-usuarios')?.classList.toggle('active', section === 'usuarios');
   document.getElementById('admin-subnav-dados')?.classList.toggle('active', section === 'dados');
+  document.getElementById('admin-subnav-formpublico')?.classList.toggle('active', section === 'formpublico');
 
   if (section === 'usuarios') { adminLoadUsuarios(); adminLoadDbStats(); adminLoadUserTableCounts(); }
   if (section === 'dados') adminLoadModulo();
+  if (section === 'formpublico') adminLoadFormPublico();
 
   // Só mantém o polling de presença rodando enquanto a seção Usuários
   // estiver de fato visível — evita chamadas desnecessárias em segundo plano.
@@ -721,8 +725,107 @@ async function adminSalvarEdicao() {
   adminLoadModulo();
 }
 
+// ── Seção: Formulário Público ────────────────────────────────
+// Duas partes: (1) o link fixo e público da página solicitacao.html —
+// puramente informativo/copiável, não depende de nenhuma chamada ao
+// Supabase; (2) o mapeamento categoria → analista responsável, usado
+// pela Edge Function solicitacao-dai para decidir a quem atribuir cada
+// nova DAI vinda do formulário. As 5 categorias são sempre as mesmas
+// (CATEGORIAS_MATERIAL, definida em normalize.js) — não é uma lista
+// livre, então a UI é sempre "1 linha por categoria fixa", nunca
+// adicionar/remover linha.
+function _adminCategoriasFormPublico() {
+  return (typeof CATEGORIAS_MATERIAL !== 'undefined' && CATEGORIAS_MATERIAL.length)
+    ? CATEGORIAS_MATERIAL
+    : ['Aglomerante', 'Agregado Graúdo', 'Agregado Miúdo', 'Aditivo', 'Adição'];
+}
+
+function adminCopiarLinkFormPublico() {
+  const input = document.getElementById('admin-formpublico-link');
+  if (!input) return;
+  input.select();
+  input.setSelectionRange(0, 99999);
+  navigator.clipboard?.writeText(input.value)
+    .then(() => toast('Link copiado.', 'success'))
+    .catch(() => toast('Não foi possível copiar automaticamente — selecione e copie manualmente.', 'error'));
+}
+
+async function adminLoadFormPublico() {
+  // Link — construído a partir da própria URL atual (funciona em
+  // qualquer domínio/subpasta onde o sistema esteja publicado, sem
+  // precisar hardcodar host nenhum).
+  const linkInput = document.getElementById('admin-formpublico-link');
+  if (linkInput) {
+    const base = window.location.href.replace(/index\.html?(\?.*)?(#.*)?$/, '').replace(/\/?$/, '/');
+    linkInput.value = base + 'solicitacao.html';
+  }
+
+  const rowsEl = document.getElementById('admin-analistas-categoria-rows');
+  if (!rowsEl) return;
+  rowsEl.innerHTML = '<div class="empty-state"><i class="ti ti-loader"></i><p>Carregando...</p></div>';
+
+  const [profilesRes, mapaRes] = await Promise.all([
+    window.supabaseClient.from('profiles').select('id, email').order('email', { ascending: true }),
+    window.supabaseClient.from('analistas_categoria').select('categoria, analista_user_id, analista_nome'),
+  ]);
+
+  if (profilesRes.error || mapaRes.error) {
+    rowsEl.innerHTML = `<div class="empty-state"><i class="ti ti-alert-triangle"></i><p>Falha ao carregar: ${_adminEsc((profilesRes.error || mapaRes.error).message)}</p></div>`;
+    return;
+  }
+
+  const usuarios = profilesRes.data || [];
+  const mapaAtual = new Map((mapaRes.data || []).map(m => [m.categoria, m.analista_user_id]));
+
+  rowsEl.innerHTML = _adminCategoriasFormPublico().map(categoria => {
+    const selectId = `admin-cat-select-${_adminEsc(categoria).replace(/[^a-zA-Z0-9]/g, '_')}`;
+    const atualId = mapaAtual.get(categoria) || '';
+    const options = usuarios.map(u =>
+      `<option value="${_adminEsc(u.id)}" ${u.id === atualId ? 'selected' : ''}>${_adminEsc(u.email)}</option>`
+    ).join('');
+    return `
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 12px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius)">
+        <span style="flex:0 0 160px;font-size:12.5px;font-weight:600">${_adminEsc(categoria)}</span>
+        <select class="form-select" id="${selectId}" style="flex:1;min-width:220px">
+          <option value="">— Nenhum analista configurado —</option>
+          ${options}
+        </select>
+        <button class="btn" onclick="adminSalvarAnalistaCategoria('${_adminEsc(categoria)}', '${selectId}')"><i class="ti ti-check"></i> Salvar</button>
+      </div>`;
+  }).join('');
+}
+
+async function adminSalvarAnalistaCategoria(categoria, selectId) {
+  const select = document.getElementById(selectId);
+  const userId = select?.value || '';
+  if (!userId) {
+    // Sem analista selecionado — remove o mapeamento, se existir (volta
+    // pro estado "sem analista configurado" para essa categoria).
+    const { error } = await window.supabaseClient.from('analistas_categoria').delete().eq('categoria', categoria);
+    if (error) { toast('Falha ao remover: ' + error.message, 'error'); return; }
+    toast(`Categoria "${categoria}" ficou sem analista configurado — novas solicitações dessa categoria serão recusadas.`, 'success');
+    return;
+  }
+  const email = select.options[select.selectedIndex]?.textContent || '';
+  const nome = email.split('@')[0] || email;
+
+  const { error } = await window.supabaseClient.from('analistas_categoria').upsert({
+    categoria,
+    analista_user_id: userId,
+    analista_nome: nome,
+    updated_by: window.currentUser?.id || null,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'categoria' });
+
+  if (error) { toast('Falha ao salvar: ' + error.message, 'error'); return; }
+  toast(`Categoria "${categoria}" atribuída a ${email}.`, 'success');
+}
+
 Object.assign(window, {
   renderAdminPage,
+  adminLoadFormPublico,
+  adminSalvarAnalistaCategoria,
+  adminCopiarLinkFormPublico,
   adminShowSection,
   adminLoadUsuarios,
   adminAlterarPapel,

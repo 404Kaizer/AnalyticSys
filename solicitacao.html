@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Solicitação de Ajuste de Estoque · AnalyticSys</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2036%2036%22%3E%0A%3Cpolygon%20points%3D%2218%2C2%2030%2C9%2018%2C16%206%2C9%22%20fill%3D%22%23ff6b35%22%2F%3E%0A%3Cpolygon%20points%3D%2218%2C16%2030%2C9%2030%2C23%2018%2C30%22%20fill%3D%22%23c44e1f%22%2F%3E%0A%3Cpolygon%20points%3D%2218%2C16%206%2C9%206%2C23%2018%2C30%22%20fill%3D%22%23ff9060%22%2F%3E%0A%3Cpolyline%20points%3D%2221%2C26%2024%2C21%2027%2C23%2030%2C18%22%20fill%3D%22none%22%20stroke%3D%22rgba%28255%2C255%2C255%2C0.55%29%22%20stroke-width%3D%221.4%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%2F%3E%0A%3Ccircle%20cx%3D%2230%22%20cy%3D%2218%22%20r%3D%221.5%22%20fill%3D%22white%22%20opacity%3D%220.8%22%2F%3E%0A%3C%2Fsvg%3E" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,400&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.44.0/dist/tabler-icons.min.css">
+<style>
+  /* Página isolada — não depende de tokens.css/layout.css/components.css
+     do app principal (nem faz sentido carregar o bundle inteiro pra uma
+     única tela pública). Paleta própria, no mesmo espírito visual do
+     auth-gate.css (dark, acento laranja da marca). */
+  :root {
+    --bg: #080c14; --bg2: #0d1220; --bg3: #131929; --bg4: #1a2236;
+    --border: rgba(255,255,255,0.08); --border2: rgba(255,255,255,0.14);
+    --text: #dde3f0; --text2: #7b85a0; --text3: #48526a;
+    --orange: #ff6b35; --orange-hover: #e85a28; --orange-dim: rgba(255,107,53,0.14);
+    --green: #10b981; --green-bg: rgba(16,185,129,0.10); --green-border: rgba(16,185,129,0.25);
+    --red: #f43f5e; --red-bg: rgba(244,63,94,0.10); --red-border: rgba(244,63,94,0.25);
+    --amber: #f59e0b; --amber-bg: rgba(245,158,11,0.10); --amber-border: rgba(245,158,11,0.25);
+    --radius: 8px; --radius-lg: 14px;
+    --font: 'Outfit', sans-serif; --mono: 'DM Mono', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: var(--font); background: var(--bg); color: var(--text);
+    min-height: 100vh; font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased;
+  }
+  .sol-shell { max-width: 720px; margin: 0 auto; padding: 40px 20px 80px; }
+
+  .sol-brand { display: flex; align-items: center; gap: 14px; margin-bottom: 6px; }
+  .sol-brand svg { width: 40px; height: 44px; flex-shrink: 0; }
+  .sol-brand-name { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+  .sol-brand-name .a { color: var(--text); } .sol-brand-name .s { color: var(--orange); }
+  .sol-tagline { font-family: var(--mono); font-size: 10.5px; letter-spacing: .18em; color: var(--text3); text-transform: uppercase; margin: 4px 0 28px; }
+
+  .sol-title { font-size: 24px; font-weight: 700; letter-spacing: -0.015em; margin-bottom: 6px; }
+  .sol-sub { font-size: 13px; color: var(--text2); line-height: 1.6; margin-bottom: 28px; max-width: 560px; }
+
+  .sol-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 24px; margin-bottom: 18px; }
+  .sol-card-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+  .sol-card-title i { color: var(--orange); font-size: 15px; }
+
+  .sol-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .sol-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+  @media (max-width: 620px) { .sol-grid, .sol-grid-3 { grid-template-columns: 1fr; } }
+
+  .sol-fg { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+  .sol-label { font-size: 11.5px; font-weight: 500; color: var(--text2); }
+  .sol-required { color: var(--orange); }
+  .sol-hint { font-size: 10.5px; color: var(--text3); font-weight: 400; }
+  .sol-input, .sol-select, .sol-textarea {
+    background: var(--bg3); border: 1px solid var(--border2); color: var(--text);
+    border-radius: var(--radius); padding: 10px 12px; font-size: 13px; font-family: var(--font);
+    width: 100%; outline: none; transition: border-color .15s;
+  }
+  .sol-input::placeholder, .sol-textarea::placeholder { color: var(--text3); }
+  .sol-input:focus, .sol-select:focus, .sol-textarea:focus { border-color: var(--orange); box-shadow: 0 0 0 3px var(--orange-dim); }
+  .sol-textarea { resize: vertical; min-height: 90px; }
+  .sol-select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%237b85a0'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 30px; }
+
+  .sol-dropzone {
+    border: 1.5px dashed var(--border2); border-radius: var(--radius); padding: 22px;
+    text-align: center; cursor: pointer; color: var(--text2); font-size: 12.5px; transition: border-color .15s, background .15s;
+  }
+  .sol-dropzone:hover, .sol-dropzone.drag { border-color: var(--orange); background: var(--orange-dim); }
+  .sol-dropzone i { font-size: 22px; color: var(--orange); display: block; margin-bottom: 6px; }
+
+  .sol-anexo-lista { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+  .sol-anexo-chip { display: flex; align-items: center; gap: 8px; background: var(--bg3); border: 1px solid var(--border2); border-radius: var(--radius); padding: 7px 10px; font-size: 12px; }
+  .sol-anexo-chip i.ti-paperclip { color: var(--text3); }
+  .sol-anexo-chip-nome { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sol-anexo-chip-tam { color: var(--text3); font-family: var(--mono); font-size: 10.5px; }
+  .sol-anexo-chip-status { font-size: 10.5px; }
+  .sol-anexo-chip-status.ok { color: var(--green); }
+  .sol-anexo-chip-status.up { color: var(--amber); }
+  .sol-anexo-chip-status.err { color: var(--red); }
+  .sol-anexo-chip-rm { background: none; border: none; color: var(--text3); cursor: pointer; font-size: 13px; padding: 2px; }
+  .sol-anexo-chip-rm:hover { color: var(--red); }
+
+  .sol-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+    background: var(--bg3); border: 1px solid var(--border2); color: var(--text);
+    border-radius: var(--radius); padding: 11px 18px; font-size: 13px; font-weight: 500;
+    cursor: pointer; font-family: var(--font); transition: all .15s;
+  }
+  .sol-btn:hover { border-color: var(--border2); background: var(--bg4); }
+  .sol-btn-primary { background: var(--orange); border-color: var(--orange); color: #0a0704; font-weight: 700; }
+  .sol-btn-primary:hover { background: var(--orange-hover); border-color: var(--orange-hover); }
+  .sol-btn:disabled { opacity: .5; cursor: not-allowed; }
+  .sol-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: space-between; align-items: center; margin-top: 22px; }
+  .sol-actions-right { display: flex; gap: 10px; flex-wrap: wrap; }
+
+  .sol-turnstile { display: flex; justify-content: center; margin: 20px 0 4px; }
+
+  .sol-alert { border-radius: var(--radius); padding: 12px 14px; font-size: 12.5px; line-height: 1.6; display: flex; gap: 10px; align-items: flex-start; margin-bottom: 16px; }
+  .sol-alert i { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+  .sol-alert-error { background: var(--red-bg); border: 1px solid var(--red-border); color: #ff9a8a; }
+  .sol-alert-info { background: var(--orange-dim); border: 1px solid rgba(255,107,53,0.3); color: #ffb497; }
+
+  .sol-success { text-align: center; padding: 50px 24px; }
+  .sol-success i { font-size: 52px; color: var(--green); margin-bottom: 18px; display: block; }
+  .sol-success h2 { font-size: 21px; margin-bottom: 10px; }
+  .sol-success p { color: var(--text2); font-size: 13.5px; line-height: 1.7; max-width: 420px; margin: 0 auto 6px; }
+  .sol-success .sol-numero { font-family: var(--mono); color: var(--orange); font-weight: 700; font-size: 15px; }
+
+  .sol-loading { text-align: center; padding: 60px 20px; color: var(--text2); font-size: 13px; }
+  .sol-loading i { font-size: 26px; display: block; margin-bottom: 10px; animation: sol-spin 1s linear infinite; }
+  @keyframes sol-spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div class="sol-shell">
+
+  <div class="sol-brand">
+    <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <polygon points="18,2 30,9 18,16 6,9" fill="#ff6b35"/>
+      <polygon points="18,16 30,9 30,23 18,30" fill="#c44e1f"/>
+      <polygon points="18,16 6,9 6,23 18,30" fill="#ff9060"/>
+    </svg>
+    <div class="sol-brand-name"><span class="a">ANALYTIC</span><span class="s">SYS</span></div>
+  </div>
+  <div class="sol-tagline">ESTOQUE · INSUMOS</div>
+
+  <div class="sol-title">Solicitação de Ajuste de Estoque</div>
+  <div class="sol-sub">Preencha para pesagem manual, transferência entre centrais, perda de material, coleta ou qualquer movimentação fora do sistema. Sua solicitação vai direto para o analista responsável — sem precisar de login.</div>
+
+  <div id="sol-loading" class="sol-loading">
+    <i class="ti ti-loader-2"></i> Carregando formulário…
+  </div>
+
+  <div id="sol-alert-area"></div>
+
+  <form id="sol-form" style="display:none">
+
+    <div class="sol-card">
+      <div class="sol-card-title"><i class="ti ti-building-warehouse"></i> Onde e quando</div>
+      <div class="sol-grid">
+        <div class="sol-fg">
+          <label class="sol-label">Central <span class="sol-required">*</span></label>
+          <select id="sol-central" class="sol-select" required>
+            <option value="">Selecione a central</option>
+          </select>
+        </div>
+        <div class="sol-fg">
+          <label class="sol-label">Data do ocorrido <span class="sol-required">*</span></label>
+          <input type="date" id="sol-data" class="sol-input" required>
+        </div>
+      </div>
+    </div>
+
+    <div class="sol-card">
+      <div class="sol-card-title"><i class="ti ti-package"></i> O que aconteceu</div>
+      <div class="sol-fg">
+        <label class="sol-label">Material <span class="sol-required">*</span> <span class="sol-hint">(grupo SAP)</span></label>
+        <select id="sol-material" class="sol-select" required>
+          <option value="">Selecione o material</option>
+        </select>
+      </div>
+      <div class="sol-grid">
+        <div class="sol-fg">
+          <label class="sol-label">Peso (kg) <span class="sol-required">*</span></label>
+          <input type="number" id="sol-peso" class="sol-input" step="0.01" min="0" inputmode="decimal" placeholder="0,00" required>
+        </div>
+        <div class="sol-fg">
+          <label class="sol-label">Tipo de movimento SAP <span class="sol-required">*</span></label>
+          <input type="text" id="sol-movimento" class="sol-input" placeholder="Ex.: 701, 702, Y11…" style="text-transform:uppercase" required>
+        </div>
+      </div>
+      <div class="sol-fg">
+        <label class="sol-label">Função do movimento <span class="sol-required">*</span></label>
+        <input type="text" id="sol-objetivo" class="sol-input" placeholder="Diminuir saldo em estoque, gerar documento de coleta de material…" required>
+      </div>
+      <div class="sol-fg">
+        <label class="sol-label">Descreva o ocorrido <span class="sol-required">*</span></label>
+        <textarea id="sol-descricao" class="sol-textarea" placeholder="O que aconteceu, como foi identificado…" required></textarea>
+      </div>
+    </div>
+
+    <div class="sol-card">
+      <div class="sol-card-title"><i class="ti ti-user"></i> Quem está informando</div>
+      <div class="sol-grid-3">
+        <div class="sol-fg">
+          <label class="sol-label">Nome <span class="sol-required">*</span></label>
+          <input type="text" id="sol-inf-nome" class="sol-input" placeholder="Seu nome completo" required>
+        </div>
+        <div class="sol-fg">
+          <label class="sol-label">Cargo <span class="sol-hint">(opcional)</span></label>
+          <input type="text" id="sol-inf-cargo" class="sol-input" placeholder="Operador, encarregado…">
+        </div>
+        <div class="sol-fg">
+          <label class="sol-label">Contato <span class="sol-hint">(opcional)</span></label>
+          <input type="text" id="sol-inf-contato" class="sol-input" placeholder="Telefone/WhatsApp">
+        </div>
+      </div>
+    </div>
+
+    <div class="sol-card">
+      <div class="sol-card-title"><i class="ti ti-file-signature"></i> Termo de Responsabilidade e anexos</div>
+      <div class="sol-alert sol-alert-info">
+        <i class="ti ti-info-circle"></i>
+        <div>Imprima o termo abaixo, assine, e anexe a foto/scan dele junto com qualquer outro comprovante (foto da pesagem, etc.) antes de enviar.</div>
+      </div>
+      <button type="button" class="sol-btn" id="sol-btn-imprimir" onclick="imprimirTermo()">
+        <i class="ti ti-printer"></i> Imprimir Termo de Responsabilidade
+      </button>
+
+      <div class="sol-fg" style="margin-top:16px">
+        <label class="sol-label">Anexos <span class="sol-required">*</span> <span class="sol-hint">(termo assinado + comprovantes — imagem, PDF ou Word, até 15MB cada)</span></label>
+        <div class="sol-dropzone" id="sol-dropzone" onclick="document.getElementById('sol-anexos-input').click()">
+          <i class="ti ti-cloud-upload"></i>
+          Clique ou arraste os arquivos aqui
+        </div>
+        <input type="file" id="sol-anexos-input" style="display:none" multiple accept="image/*,.pdf,.doc,.docx">
+        <div class="sol-anexo-lista" id="sol-anexo-lista"></div>
+      </div>
+    </div>
+
+    <div class="sol-turnstile" id="turnstile-solicitacao-widget"></div>
+
+    <div class="sol-actions">
+      <span style="font-size:11px;color:var(--text3)">Campos com <span class="sol-required">*</span> são obrigatórios.</span>
+      <div class="sol-actions-right">
+        <button type="submit" class="sol-btn sol-btn-primary" id="sol-btn-enviar">
+          <i class="ti ti-send"></i> Enviar solicitação
+        </button>
+      </div>
+    </div>
+  </form>
+
+  <div id="sol-success" class="sol-card sol-success" style="display:none"></div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+<script src="solicitacao.js"></script>
+</body>
+</html>

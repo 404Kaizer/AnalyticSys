@@ -2829,6 +2829,7 @@
         <div class="admin-subnav">
           <button class="admin-subnav-btn active" id="admin-subnav-usuarios" onclick="adminShowSection('usuarios')"><i class="ti ti-users"></i> Usuários</button>
           <button class="admin-subnav-btn" id="admin-subnav-dados" onclick="adminShowSection('dados')"><i class="ti ti-database"></i> Dados por módulo</button>
+          <button class="admin-subnav-btn" id="admin-subnav-formpublico" onclick="adminShowSection('formpublico')"><i class="ti ti-link"></i> Formulário Público</button>
         </div>
 
         <!-- Seção: Usuários -->
@@ -2970,6 +2971,38 @@
                 <button class="btn" id="admin-dados-next" title="Próxima" onclick="adminModuloProximaPagina()"><i class="ti ti-chevron-right"></i></button>
                 <button class="btn" id="admin-dados-last" title="Último" onclick="adminModuloUltimaPagina()"><i class="ti ti-chevrons-right"></i></button>
               </div>
+            </div>
+          </div>
+        </div>
+
+
+        <!-- Seção: Formulário Público (link + mapeamento analista x categoria) -->
+        <div id="admin-section-formpublico" style="display:none">
+          <div class="table-card" style="margin-bottom:16px">
+            <div class="table-header">
+              <span class="table-title"><i class="ti ti-link"></i> Link público de solicitação</span>
+            </div>
+            <div style="padding:16px 18px">
+              <div style="font-size:12px;color:var(--text3);line-height:1.6;margin-bottom:12px">
+                Envie este link fixo para os operadores das centrais. Não exige login — cada operador escolhe a central e o material dentro do próprio formulário. O link é o mesmo para todas as centrais e pode ser divulgado livremente (fixado num mural, enviado por WhatsApp, etc.).
+              </div>
+              <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                <input type="text" id="admin-formpublico-link" class="form-input" readonly style="flex:1;min-width:260px;font-family:var(--mono);font-size:12px" value="">
+                <button class="btn" onclick="adminCopiarLinkFormPublico()"><i class="ti ti-copy"></i> Copiar link</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="table-card">
+            <div class="table-header">
+              <span class="table-title"><i class="ti ti-users-group"></i> Analista responsável por categoria</span>
+              <button class="btn" onclick="adminLoadFormPublico()"><i class="ti ti-refresh"></i> Atualizar</button>
+            </div>
+            <div style="font-size:11px;color:var(--text3);padding:10px 18px 0">
+              <i class="ti ti-info-circle"></i> Toda solicitação enviada pelo formulário público é atribuída automaticamente ao analista configurado aqui, de acordo com a categoria do material informado. Categorias sem analista configurado recusam novas solicitações (com aviso claro para o operador tentar novamente mais tarde).
+            </div>
+            <div id="admin-analistas-categoria-rows" style="padding:14px 18px 18px;display:flex;flex-direction:column;gap:10px">
+              <div class="empty-state"><i class="ti ti-loader"></i><p>Carregando...</p></div>
             </div>
           </div>
         </div>
