@@ -1575,6 +1575,7 @@ const _SHORTCUT_DEFAULTS = [
   { id: 'notes',      group: 'Ferramentas', desc: 'Abrir bloco de notas',  sub: 'Abre/fecha o popover de notas',           mods: ['Ctrl'], key: '2'         },
   { id: 'novo_reg',   group: 'Ferramentas', desc: 'Novo Registro Manual',  sub: 'Abre o modal de novo registro manual',    mods: ['Ctrl'], key: '4'         },
   { id: 'nova_oc',    group: 'Ferramentas', desc: 'Nova Ocorrência',        sub: 'Abre o modal de nova ocorrência',         mods: ['Ctrl'], key: '5'         },
+  { id: 'mensagens',  group: 'Ferramentas', desc: 'Abrir mensagens',        sub: 'Abre/fecha o popover de mensagens',       mods: ['Ctrl'], key: '6'         },
 ];
 
 // Runtime registry — merged defaults + user overrides

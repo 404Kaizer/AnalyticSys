@@ -3229,6 +3229,15 @@ function setupKeyboardShortcuts() {
       return;
     }
 
+    // Mensagens
+    const scMensagens = getShortcut('mensagens');
+    if (scMensagens && _shortcutMatch(e, scMensagens)) {
+      e.preventDefault();
+      if (_openTools.has('mensagens')) closeTool('mensagens');
+      else openTool('mensagens');
+      return;
+    }
+
     // Novo Registro Manual
     const scNovoReg = getShortcut('novo_reg');
     if (scNovoReg && _shortcutMatch(e, scNovoReg)) {
