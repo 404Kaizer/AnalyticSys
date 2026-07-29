@@ -2923,6 +2923,28 @@
               </table>
             </div>
           </div>
+          <!-- "Resumo por Usuário" (29/07) — combina admin_user_table_counts +
+               admin_user_table_sizes (banco) com admin_storage_stats
+               (Storage — onde Entradas/Saídas/Lançamentos/SAP realmente
+               guardam o volume grande, como arquivos, não linhas). Carrega
+               SOB DEMANDA (botão), não junto com o resto da aba Usuários —
+               são 3 RPCs numa carga só, e o custo real em bases grandes
+               ainda não foi medido em produção. -->
+          <div class="table-card" style="margin-top:16px">
+            <div class="table-header">
+              <span class="table-title"><i class="ti ti-report-analytics"></i> Resumo por Usuário</span>
+              <button class="btn" onclick="adminLoadUserSummary()"><i class="ti ti-refresh"></i> Carregar / Atualizar</button>
+            </div>
+            <div style="font-size:11px;color:var(--text3);padding:10px 18px 0">
+              <i class="ti ti-info-circle"></i> "Total de Linhas" conta só o banco de dados — Entradas/Saídas/Lançamentos/SAP guardam o volume grande como arquivos no Storage (não linhas), mas entram somados no "Tamanho estimado".
+            </div>
+            <div style="overflow-x:auto;margin-top:8px">
+              <table style="width:100%" id="admin-user-summary-table">
+                <thead id="admin-user-summary-thead"></thead>
+                <tbody id="admin-user-summary-tbody"><tr><td><div class="empty-state"><i class="ti ti-report-analytics"></i><p>Clique em "Carregar" pra ver o resumo.</p></div></td></tr></tbody>
+              </table>
+            </div>
+          </div>
         </div>
 
         <!-- Seção: Dados por módulo -->

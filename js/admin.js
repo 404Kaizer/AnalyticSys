@@ -327,6 +327,94 @@ async function adminLoadUserTableCounts() {
   tbody.innerHTML = linhas + linhaTotal;
 }
 
+// ── "Resumo por Usuário" (29/07) ────────────────────────────
+// Combina TRÊS fontes pra dar o quadro completo de cada usuário:
+//   1) admin_user_table_counts() — linhas por tabela (já existente)
+//   2) admin_user_table_sizes()  — bytes por tabela no Postgres (novo)
+//   3) admin_storage_stats()     — bytes no Storage, por usuário+módulo
+//      (já existente — é onde Entradas/Saídas/Lançamentos/SAP realmente
+//      guardam o volume grande, como arquivos .json.gz, não como linhas
+//      — ver cloud-backup.js. Por isso "Total de Linhas" abaixo NÃO
+//      inclui esses 4 módulos de verdade, mas "Tamanho estimado" inclui
+//      as duas fontes somadas.)
+// admin_storage_stats() identifica o usuário por E-MAIL (não por
+// user_id, ver a própria função) — por isso o cruzamento com o banco
+// (que usa user_id) é feito via u.email, não via id.
+async function adminLoadUserSummary() {
+  const thead = document.getElementById('admin-user-summary-thead');
+  const tbody = document.getElementById('admin-user-summary-tbody');
+  if (!thead || !tbody) return;
+
+  tbody.innerHTML = `<tr><td><div class="empty-state"><i class="ti ti-loader"></i><p>Carregando...</p></div></td></tr>`;
+
+  if (!_adminProfiles.length) {
+    const { data } = await window.supabaseClient.from('profiles').select('id, email');
+    _adminProfiles = data || [];
+  }
+  const usuarios = _adminProfiles.slice().sort((a, b) => (a.email || '').localeCompare(b.email || ''));
+
+  const [countsRes, sizesRes, storageRes] = await Promise.all([
+    window.supabaseClient.rpc('admin_user_table_counts'),
+    window.supabaseClient.rpc('admin_user_table_sizes'),
+    window.supabaseClient.rpc('admin_storage_stats'),
+  ]);
+
+  const erro = countsRes.error || sizesRes.error || storageRes.error;
+  if (erro) {
+    tbody.innerHTML = `<tr><td><div class="empty-state"><i class="ti ti-alert-triangle"></i><p>Falha ao carregar: ${_adminEsc(erro.message)}</p></div></td></tr>`;
+    return;
+  }
+
+  // linhasPorTabela[tabela][user_id] = contagem
+  const linhasPorTabela = {};
+  (countsRes.data || []).forEach(c => {
+    if (!linhasPorTabela[c.table_name]) linhasPorTabela[c.table_name] = {};
+    linhasPorTabela[c.table_name][c.user_id] = Number(c.row_count) || 0;
+  });
+
+  // bytesBancoPorTabela[tabela][user_id] = bytes (só as 18 tabelas do Postgres)
+  const bytesBancoPorTabela = {};
+  (sizesRes.data || []).forEach(s => {
+    if (!bytesBancoPorTabela[s.table_name]) bytesBancoPorTabela[s.table_name] = {};
+    bytesBancoPorTabela[s.table_name][s.user_id] = Number(s.total_bytes) || 0;
+  });
+
+  // bytesStoragePorEmail[email] = soma de todos os módulos daquele usuário
+  // no Storage (Entradas/Saídas/Lançamentos/SAP entram aqui, não em linhas)
+  const storageStats = Array.isArray(storageRes.data) ? storageRes.data[0] : storageRes.data;
+  const bytesStoragePorEmail = {};
+  (storageStats?.pastas || []).forEach(p => {
+    bytesStoragePorEmail[p.usuario] = (bytesStoragePorEmail[p.usuario] || 0) + Number(p.bytes || 0);
+  });
+
+  const tabelas = Object.keys(ADMIN_MODULOS);
+  thead.innerHTML = `<tr><th>Usuário</th>${tabelas.map(t => `<th style="text-align:center">${_adminEsc(ADMIN_MODULOS[t]?.label || t)}</th>`).join('')}<th style="text-align:center">Total de Linhas</th><th style="text-align:center">Tamanho estimado</th></tr>`;
+
+  if (!usuarios.length) {
+    tbody.innerHTML = `<tr><td><div class="empty-state"><i class="ti ti-database-off"></i><p>Sem usuários.</p></div></td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = usuarios.map(u => {
+    let totalLinhas = 0;
+    let totalBytesBanco = 0;
+    const cells = tabelas.map(t => {
+      const n = linhasPorTabela[t]?.[u.id] || 0;
+      totalLinhas += n;
+      totalBytesBanco += bytesBancoPorTabela[t]?.[u.id] || 0;
+      return `<td style="text-align:center;${n === 0 ? 'color:var(--text3)' : ''}">${n.toLocaleString('pt-BR')}</td>`;
+    }).join('');
+    const bytesStorage = bytesStoragePorEmail[u.email] || 0;
+    const tamanhoTotal = totalBytesBanco + bytesStorage;
+    return `<tr>
+      <td title="${_adminEsc(u.email)}">${_adminEsc((u.email || '').split('@')[0])}</td>
+      ${cells}
+      <td style="text-align:center;font-weight:600">${totalLinhas.toLocaleString('pt-BR')}</td>
+      <td style="text-align:center;font-weight:600">${formatBytes(tamanhoTotal)}</td>
+    </tr>`;
+  }).join('');
+}
+
 function _adminEsc(s) {
   return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
@@ -1140,6 +1228,7 @@ Object.assign(window, {
   adminLoadStorageStats,
   adminHealthShowTab,
   adminLoadUserTableCounts,
+  adminLoadUserSummary,
   adminLoadModulo,
   adminTrocarModulo,
   adminBuscarModulo,
