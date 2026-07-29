@@ -269,13 +269,13 @@ async function restaurarBackupCondensadoSeNecessario() {
 // Cobre o que muda ENTRE importações (edição inline de um lançamento,
 // exclusão manual de um registro) — o gatilho pós-importação (Etapa 3,
 // em processImportedRows) já cobre o grosso do volume na hora que ele
-// aparece. Só a aba ativa roda isso (mesma flag isActiveTab do controle
-// de aba única em persist.js), evitando trabalho duplicado com várias
-// abas abertas. Idempotente — chamar de novo não cria um segundo timer.
+// aparece. Roda de forma independente em cada aba aberta (não há mais
+// controle de aba única) — é apenas um upload de backup para a nuvem, então
+// eventuais chamadas redundantes entre abas não representam risco de
+// integridade. Idempotente — chamar de novo não cria um segundo timer.
 function cloudBackupPeriodicoInit() {
   if (_cbPeriodicTimer) return;
   _cbPeriodicTimer = setInterval(() => {
-    if (typeof isActiveTab === 'undefined' || !isActiveTab) return;
     if (!window.supabaseClient || !window.currentUser?.id) return;
     const agora = Date.now();
     CLOUD_BACKUP_MODULOS.forEach(modulo => {

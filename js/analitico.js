@@ -3299,15 +3299,11 @@ function setupModalCloseOnEscape() {
 // bootApp() → window.init() de novo. O `appBooted` em auth.js impede que
 // bootApp() faça seu próprio setup duas vezes, mas NÃO impede que
 // window.init() seja disparado duas vezes a partir desses dois caminhos —
-// resultando em todo o boot (incluindo requestTabLock()) rodando duas
-// vezes na mesma aba. Consequência mais visível: a segunda chamada de
-// requestTabLock() disputava o lock contra a primeira chamada da MESMA
-// aba (o Web Locks API não sabe que são "a mesma aba" — cada request() é
-// independente), e a segunda perdia a disputa, marcando isActiveTab=false
-// e bloqueando gravações mesmo com uma única aba de verdade aberta.
+// resultando em todo o boot (restoreAndRender, listeners, etc.) rodando
+// duas vezes na mesma aba.
 // Correção: trava simples de idempotência — a partir daqui, o boot
-// completo (requestTabLock, restoreAndRender, listeners, etc.) só
-// executa uma vez por aba, não importa quantas vezes init() seja chamado.
+// completo só executa uma vez por aba, não importa quantas vezes init()
+// seja chamado.
 let _appBootExecuted = false;
 
 async function init() {
@@ -3323,11 +3319,6 @@ async function init() {
   // Ver comentário acima de _appBootExecuted: impede o boot duplicado.
   if (_appBootExecuted) return;
   _appBootExecuted = true;
-
-  // Dispara a checagem de aba única ativa (Web Locks API) em paralelo com o
-  // resto do boot — não é aguardada (await) porque não deve atrasar o
-  // carregamento normal da tela; ela só decide se esta aba pode gravar.
-  if (typeof requestTabLock === 'function') requestTabLock();
 
   applyTheme(getSavedTheme());
   setTimeout(updateToolsTheme, 0); // sync theme buttons in dropdown

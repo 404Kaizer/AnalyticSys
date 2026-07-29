@@ -653,48 +653,6 @@ body.loading-active { overflow: hidden; }
 }
 
 /* ══════════════════════════════════════════
-   TAB LOCK OVERLAY (aba única ativa)
-/* ══════════════════════════════════════════
-   BDM TRIGGER
-══════════════════════════════════════════ */
-.tab-lock-overlay {
-  position: fixed;
-  inset: 0;
-  display: none;
-  align-items: center;
-  justify-content: center;
-  padding: 16px;
-  background: rgba(8,12,20,0.82);
-  backdrop-filter: blur(12px);
-  z-index: 9090; /* logo abaixo do loading-overlay (9100) */
-}
-.tab-lock-overlay.open { display: flex; }
-
-.tab-lock-card {
-  width: min(440px, 100%);
-  background: var(--bg2);
-  border: 1px solid var(--amber-border);
-  border-radius: var(--radius-xl);
-  padding: 24px;
-  box-shadow: 0 32px 80px rgba(0,0,0,0.6);
-  color: var(--text);
-  text-align: center;
-}
-.tab-lock-icon {
-  width: 44px; height: 44px;
-  margin: 0 auto 14px;
-  border-radius: 12px;
-  display: grid;
-  place-items: center;
-  background: var(--amber-bg);
-  border: 1px solid var(--amber-border);
-  color: var(--amber);
-  font-size: 20px;
-}
-.tab-lock-title { font-size: 15px; font-weight: 700; color: var(--text); margin-bottom: 8px; letter-spacing: -0.02em; }
-.tab-lock-text  { font-size: 12.5px; line-height: 1.6; color: var(--text2); }
-
-/* ══════════════════════════════════════════
    SCROLLBAR (global)
 /* ══════════════════════════════════════════
    BDM TRIGGER

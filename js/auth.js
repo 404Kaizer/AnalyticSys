@@ -28,10 +28,11 @@ window.AuthGate = (function () {
   // ── Logout por inatividade ────────────────────────────────────────────
   // 4h sem nenhuma atividade (mouse, teclado, clique, scroll, toque) →
   // aviso de 60s com opção de continuar conectado → desloga se ninguém
-  // reagir. Só a aba que detém o lock de escrita (isActiveTab, definido em
-  // persist.js) efetivamente desloga — uma aba passiva em segundo plano
-  // não deve derrubar a sessão de quem está de fato usando o sistema na
-  // outra aba (a sessão do Supabase é compartilhada entre abas).
+  // reagir. Cada aba roda seu próprio timer de forma independente, mas
+  // atividade em QUALQUER aba é sincronizada para as demais (ver
+  // _idleSyncBroadcast/_idleSyncWireListener logo abaixo) — evita que uma
+  // aba parada em segundo plano desloge a sessão (compartilhada entre abas
+  // pelo Supabase) enquanto alguém trabalha ativamente em outra aba.
   const IDLE_TIMEOUT_MS = 4 * 60 * 60 * 1000; // 4 horas
   const IDLE_WARNING_LEAD_MS = 60 * 1000;     // aviso 60s antes de deslogar
   const IDLE_ACTIVITY_EVENTS = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart', 'click'];
@@ -42,14 +43,47 @@ window.AuthGate = (function () {
   let idleLastActivityAt = 0;
   let idleListenersWired = false;
 
-  // isActiveTab é um `let` de topo de arquivo em persist.js — como todos
-  // os scripts do sistema são clássicos (sem type="module"), compartilham
-  // o mesmo escopo global e o nome fica visível aqui diretamente. Se por
-  // algum motivo persist.js não tiver carregado, assume ativo para não
-  // travar o recurso.
-  function _idleThisTabIsActive() {
-    try { return typeof isActiveTab === 'undefined' ? true : isActiveTab; }
-    catch (_) { return true; }
+  // ── Sincronização de atividade entre abas ───────────────────────────────
+  // Substitui o antigo controle de aba única ativa (Web Locks API,
+  // removido — não é mais necessário). Via principal: BroadcastChannel,
+  // suportado por todos os navegadores relevantes em 2026. Fallback para
+  // navegadores muito antigos sem suporte: grava um timestamp no
+  // localStorage, que dispara o evento 'storage' nas OUTRAS abas (nunca na
+  // que gravou) — mesmo efeito prático de "avisar as demais abas".
+  const IDLE_SYNC_CHANNEL_NAME = 'central_analise_idle_sync_v1';
+  const IDLE_SYNC_STORAGE_KEY  = 'central_analise_idle_sync_ts_v1';
+  let idleSyncChannel = null;
+
+  function _idleSyncBroadcast(ts) {
+    try {
+      if (!idleSyncChannel && 'BroadcastChannel' in window) {
+        idleSyncChannel = new BroadcastChannel(IDLE_SYNC_CHANNEL_NAME);
+      }
+      if (idleSyncChannel) idleSyncChannel.postMessage(ts);
+    } catch (_) {}
+    try { localStorage.setItem(IDLE_SYNC_STORAGE_KEY, String(ts)); } catch (_) {}
+  }
+
+  // Chamado quando OUTRA aba avisa que houve atividade nela. Reseta o
+  // timer local, exatamente como se a atividade tivesse ocorrido aqui.
+  function _idleOnRemoteActivity(ts) {
+    if (!appBooted) return;
+    if (typeof ts !== 'number' || ts <= idleLastActivityAt) return; // já processado, evita reset redundante
+    idleLastActivityAt = ts;
+    _idleResetTimer();
+  }
+
+  function _idleSyncWireListener() {
+    try {
+      if ('BroadcastChannel' in window) {
+        if (!idleSyncChannel) idleSyncChannel = new BroadcastChannel(IDLE_SYNC_CHANNEL_NAME);
+        idleSyncChannel.addEventListener('message', (ev) => _idleOnRemoteActivity(ev.data));
+      }
+    } catch (_) {}
+    window.addEventListener('storage', (ev) => {
+      if (ev.key !== IDLE_SYNC_STORAGE_KEY || !ev.newValue) return;
+      _idleOnRemoteActivity(Number(ev.newValue));
+    });
   }
 
   // ── Presença (indicador Online/Away/Offline no painel de Administração) ─
@@ -84,13 +118,6 @@ window.AuthGate = (function () {
   }
 
   function _idleShowWarning() {
-    if (!_idleThisTabIsActive()) {
-      // Aba passiva: não é ela quem decide o logout — só reagenda a
-      // checagem sem exibir nada (o overlay de aba somente-leitura já
-      // cobre a tela aqui).
-      idleWarnTimer = setTimeout(_idleShowWarning, 30000);
-      return;
-    }
     const deadline = Date.now() + IDLE_WARNING_LEAD_MS;
     $('idle-warning-overlay')?.classList.add('open');
     idleCountdownInterval = setInterval(() => {
@@ -100,12 +127,7 @@ window.AuthGate = (function () {
       if (remaining <= 0) {
         clearInterval(idleCountdownInterval);
         idleCountdownInterval = null;
-        if (_idleThisTabIsActive()) {
-          signOut();
-        } else {
-          _idleHideWarning();
-          _idleResetTimer();
-        }
+        signOut();
       }
     }, 250);
   }
@@ -128,6 +150,7 @@ window.AuthGate = (function () {
     idleLastActivityAt = now;
     _idleResetTimer();
     _presenceHeartbeat(false);
+    _idleSyncBroadcast(now); // avisa as outras abas para resetarem o timer delas também
   }
 
   function _idleWireListeners() {
@@ -136,7 +159,11 @@ window.AuthGate = (function () {
     IDLE_ACTIVITY_EVENTS.forEach(evt => {
       document.addEventListener(evt, _idleOnActivity, { passive: true });
     });
-    $('idle-warning-stay-btn')?.addEventListener('click', _idleResetTimer);
+    $('idle-warning-stay-btn')?.addEventListener('click', () => {
+      _idleResetTimer();
+      _idleSyncBroadcast(Date.now());
+    });
+    _idleSyncWireListener();
   }
 
   function showGate() {
