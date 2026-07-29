@@ -243,6 +243,10 @@ window.AuthGate = (function () {
     document.querySelectorAll('input[id^="hcfg-"]').forEach(inp => { inp.disabled = !isAdmin; });
     const healthReadonlyNote = $('health-cfg-readonly-note');
     if (healthReadonlyNote) healthReadonlyNote.style.display = isAdmin ? 'none' : '';
+
+    // Avatar do ícone de Conta no topbar (29/07) — mesmo utilitário de
+    // avatar de mensagens.js (círculo colorido + inicial).
+    if (typeof _accountRenderAvatars === 'function') _accountRenderAvatars();
   }
 
   // Ponto único que "entra" no app a partir de uma sessão válida — chamado
@@ -456,3 +460,76 @@ window.AuthGate = (function () {
 
   return { ensureSession, signOut, getCurrentUser: () => window.currentUser };
 })();
+
+// ═══════════════════════════════════════════════════════════
+// CONTA — ícone/popover do topbar + modal "Gerenciar Conta"
+// Etapa 1 (29/07, combinado com o Hugo): só interface. Nada aqui
+// salva, envia foto ou troca senha de verdade ainda — isso fica pra
+// uma próxima etapa, separada desta.
+// ═══════════════════════════════════════════════════════════
+
+// ── Popover do topbar ────────────────────────────────────
+let _accountSwitcherOpen = false;
+function toggleAccountSwitcher() {
+  _accountSwitcherOpen ? closeAccountSwitcher() : openAccountSwitcher();
+}
+function openAccountSwitcher() {
+  _accountSwitcherOpen = true;
+  document.getElementById('account-switcher-menu')?.classList.add('open');
+  document.getElementById('account-switcher-btn')?.classList.add('open');
+}
+function closeAccountSwitcher() {
+  _accountSwitcherOpen = false;
+  document.getElementById('account-switcher-menu')?.classList.remove('open');
+  document.getElementById('account-switcher-btn')?.classList.remove('open');
+}
+document.addEventListener('click', e => {
+  const wrap = document.getElementById('account-switcher-wrap');
+  if (wrap && !wrap.contains(e.target) && _accountSwitcherOpen) closeAccountSwitcher();
+});
+
+// Preenche o botão do topbar e o cabeçalho do popover com o avatar
+// (círculo colorido + inicial — reaproveita avatarHTML()/avatarInfo(),
+// de mensagens.js, o mesmo utilitário já usado nos avatares online e
+// no chat). Chamado a partir de updateAccountUI() sempre que a sessão
+// é confirmada/atualizada.
+function _accountRenderAvatars() {
+  if (typeof avatarHTML !== 'function') return;
+  const seed = window.currentUser?.email || '';
+  const btnSlot  = document.getElementById('account-switcher-avatar-slot');
+  const headSlot = document.getElementById('account-switcher-avatar-lg-slot');
+  if (btnSlot)  btnSlot.innerHTML  = avatarHTML(seed, 'account-avatar-sm');
+  if (headSlot) headSlot.innerHTML = avatarHTML(seed, 'account-avatar-lg');
+}
+
+// ── Modal "Gerenciar Conta" ──────────────────────────────
+function abrirModalGerenciarConta() {
+  const seed = window.currentUser?.email || '';
+  const emailInput = document.getElementById('account-modal-email');
+  if (emailInput) emailInput.value = seed || '—';
+  const previewSlot = document.getElementById('account-modal-avatar-preview');
+  if (previewSlot && typeof avatarHTML === 'function') previewSlot.innerHTML = avatarHTML(seed, 'account-avatar-xl');
+  document.getElementById('modal-gerenciar-conta')?.classList.add('open');
+}
+
+// Pré-visualização local da foto escolhida — só mostra no círculo,
+// NÃO envia nem salva em lugar nenhum ainda.
+function _accountModalPreviewFoto(file) {
+  if (!file) return;
+  const slot = document.getElementById('account-modal-avatar-preview');
+  if (!slot) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    slot.innerHTML = `<img src="${e.target.result}" alt="Pré-visualização da foto de perfil">`;
+  };
+  reader.readAsDataURL(file);
+}
+
+function _accountModalSolicitarTrocaSenha() {
+  if (typeof toast === 'function') toast('Troca de senha ainda não está disponível — em desenvolvimento.', 'info');
+}
+
+function _accountModalSalvarPlaceholder() {
+  if (typeof toast === 'function') toast('Interface pronta — salvar ainda não está implementado nesta etapa.', 'info');
+  closeModal('modal-gerenciar-conta');
+}

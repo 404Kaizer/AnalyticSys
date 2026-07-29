@@ -367,6 +367,52 @@
 .modal-sub { font-size: 11.5px; color: var(--text3); margin-bottom: 22px; font-family: var(--mono); }
 
 /* ══════════════════════════════════════════
+   MODAL: GERENCIAR CONTA
+══════════════════════════════════════════ */
+.account-modal-photo-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 20px;
+}
+.account-modal-photo-wrap { position: relative; flex-shrink: 0; }
+.account-avatar-xl {
+  width: 72px; height: 72px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px; font-weight: 700; color: #fff;
+  user-select: none; flex-shrink: 0; overflow: hidden;
+}
+.account-avatar-xl img { width: 100%; height: 100%; object-fit: cover; }
+.account-modal-photo-edit {
+  position: absolute;
+  bottom: -2px; right: -2px;
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg3);
+  border: 2px solid var(--bg2);
+  color: var(--text2);
+  cursor: pointer;
+  font-size: 12px;
+  transition: background .13s, color .13s;
+}
+.account-modal-photo-edit:hover { background: var(--accent-dim); color: var(--accent); }
+.account-modal-photo-hint { font-size: 11px; color: var(--text3); line-height: 1.5; }
+.account-modal-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text3);
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  margin-top: 4px;
+}
+.account-modal-note i { color: var(--amber); flex-shrink: 0; }
+
+/* ══════════════════════════════════════════
    TABS
 ══════════════════════════════════════════ */
 .tabs {

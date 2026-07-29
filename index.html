@@ -448,23 +448,32 @@
               </div>
             </button>
 
-            <div class="tools-dropdown-section-label">Conta</div>
-            <div class="tools-item" style="cursor:default">
-              <div class="tools-item-icon" style="background:var(--accent-dim);color:var(--accent)"><i class="ti ti-user"></i></div>
-              <div class="tools-item-body">
+            </div><!-- /.tools-dropdown-scroll -->
+          </div>
+        </div>
+
+        <!-- ── Conta ── -->
+        <div class="account-switcher" id="account-switcher-wrap">
+          <button class="account-switcher-btn" id="account-switcher-btn" onclick="toggleAccountSwitcher()" title="Conta">
+            <span id="account-switcher-avatar-slot"></span>
+          </button>
+          <div class="account-switcher-menu" id="account-switcher-menu">
+            <div class="account-switcher-head">
+              <span id="account-switcher-avatar-lg-slot"></span>
+              <div class="account-switcher-head-body">
                 <div class="tools-item-label" id="auth-account-email">—</div>
                 <div class="tools-item-sub" id="auth-account-role">—</div>
               </div>
             </div>
-            <button class="tools-item" onclick="window.AuthGate && window.AuthGate.signOut(); closeToolsMenu()">
-              <div class="tools-item-icon" style="background:var(--red-bg);color:var(--red)"><i class="ti ti-logout"></i></div>
-              <div class="tools-item-body">
-                <div class="tools-item-label">Sair</div>
-                <div class="tools-item-sub">Encerrar sessão neste dispositivo</div>
-              </div>
-            </button>
-
-            </div><!-- /.tools-dropdown-scroll -->
+            <div class="account-switcher-actions">
+              <button class="btn btn-primary" onclick="abrirModalGerenciarConta(); closeAccountSwitcher()">
+                <i class="ti ti-user-cog"></i> Gerenciar Conta
+              </button>
+              <button class="btn" style="background:var(--red-bg);border-color:var(--red-border);color:var(--red)"
+                onclick="window.AuthGate && window.AuthGate.signOut(); closeAccountSwitcher()">
+                <i class="ti ti-logout"></i> Sair
+              </button>
+            </div>
           </div>
         </div>
 
@@ -4004,7 +4013,59 @@
   </div>
 </div>
 
+<!-- MODAL: Gerenciar Conta — Etapa 1 (interface). Salvar/upload real
+     ficam pra próxima etapa; combinado com o Hugo em 29/07. -->
+<div class="modal-overlay" id="modal-gerenciar-conta">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-title"><i class="ti ti-user-cog"></i> Gerenciar Conta</div>
+    <div class="modal-sub">informações do seu perfil</div>
 
+    <div class="account-modal-photo-row">
+      <div class="account-modal-photo-wrap">
+        <span id="account-modal-avatar-preview"></span>
+        <button type="button" class="account-modal-photo-edit" onclick="document.getElementById('account-modal-photo-input').click()" title="Trocar foto">
+          <i class="ti ti-camera"></i>
+        </button>
+        <input type="file" id="account-modal-photo-input" accept="image/*" style="display:none" onchange="_accountModalPreviewFoto(this.files[0])">
+      </div>
+      <div class="account-modal-photo-hint">
+        JPG ou PNG · recomendado até 300 KB<br>
+        <span style="color:var(--text3)">Pré-visualização local — envio ainda não é salvo.</span>
+      </div>
+    </div>
+
+    <div class="form-grid" style="grid-template-columns: 1fr">
+      <div class="form-group">
+        <label class="form-label">Nome completo</label>
+        <input type="text" class="form-input" id="account-modal-nome-completo" placeholder="Seu nome completo">
+        <span class="oc-hint">Vai substituir o "responsável padrão" usado em documentos e relatórios.</span>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nome de exibição</label>
+        <input type="text" class="form-input" id="account-modal-nome-exibicao" placeholder="Como seu nome aparece no sistema">
+        <span class="oc-hint">Vai substituir seu nome onde ele aparece hoje (Mensagens, usuários online etc.).</span>
+      </div>
+      <div class="form-group">
+        <label class="form-label">E-mail</label>
+        <input type="email" class="form-input" id="account-modal-email" value="" disabled>
+      </div>
+      <div class="form-group">
+        <button class="btn" style="width:100%;justify-content:center" onclick="_accountModalSolicitarTrocaSenha()">
+          <i class="ti ti-lock"></i> Solicitar troca de senha
+        </button>
+      </div>
+    </div>
+
+    <div class="account-modal-note">
+      <i class="ti ti-info-circle"></i> Interface pronta — salvar, foto e troca de senha ainda não fazem nada de verdade (próxima etapa).
+    </div>
+
+    <div class="form-actions">
+      <button class="btn" onclick="closeModal('modal-gerenciar-conta')">Fechar</button>
+      <button class="btn btn-primary" onclick="_accountModalSalvarPlaceholder()"><i class="ti ti-device-floppy"></i> Salvar</button>
+    </div>
+  </div>
+</div>
 
 <!-- MODAL: Nova / Editar Ação de Relatório -->
 <div class="modal-overlay" id="modal-acoes-relatorio">
