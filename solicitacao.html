@@ -97,20 +97,6 @@
 
   .sol-turnstile { display: flex; justify-content: center; margin: 20px 0 4px; }
 
-  .sol-item-row { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 14px; }
-  .sol-item-row .sol-fg { margin-bottom: 0; flex: 2; }
-  .sol-item-row .sol-fg.sol-fg-peso { flex: 1; }
-  .sol-item-row-rm {
-    background: var(--bg3); border: 1px solid var(--border2); color: var(--text3);
-    border-radius: var(--radius); width: 38px; height: 38px; flex-shrink: 0;
-    cursor: pointer; font-size: 14px; margin-top: 20px;
-  }
-  .sol-item-row-rm:hover { color: var(--red); border-color: var(--red-border); background: var(--red-bg); }
-  .sol-add-row-btn { font-size: 12px; padding: 8px 14px; margin-bottom: 6px; }
-
-  .sol-informante-card { background: var(--bg3); border: 1px solid var(--border2); border-radius: var(--radius); padding: 14px; margin-bottom: 10px; position: relative; }
-  .sol-informante-card .sol-item-row-rm { position: absolute; top: 10px; right: 10px; width: 26px; height: 26px; margin-top: 0; font-size: 12px; }
-
   .sol-alert { border-radius: var(--radius); padding: 12px 14px; font-size: 12.5px; line-height: 1.6; display: flex; gap: 10px; align-items: flex-start; margin-bottom: 16px; }
   .sol-alert i { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
   .sol-alert-error { background: var(--red-bg); border: 1px solid var(--red-border); color: #ff9a8a; }
@@ -166,35 +152,22 @@
           <input type="date" id="sol-data" class="sol-input" required>
         </div>
       </div>
-      <div class="sol-fg">
-        <label class="sol-label">Categoria de Situação <span class="sol-required">*</span></label>
-        <select id="sol-categoria-situacao" class="sol-select" required onchange="onCategoriaSituacaoChange()">
-          <option value="">Selecione a situação</option>
-          <option value="Perda de material devido a falha na balança">Perda de material devido a falha na balança</option>
-          <option value="Perda de material devido a contaminação">Perda de material devido a contaminação</option>
-          <option value="Perda de material por motivos climáticos ou de terreno">Perda de material por motivos climáticos ou de terreno</option>
-          <option value="Coleta de material contaminado">Coleta de material contaminado</option>
-          <option value="Coleta de material para substituição">Coleta de material para substituição</option>
-          <option value="Pesagem manual (fora da automação)">Pesagem manual (fora da automação)</option>
-          <option value="Transferência de material entre filiais">Transferência de material entre filiais</option>
-        </select>
-      </div>
-      <div class="sol-fg" id="sol-fg-filial-destino" style="display:none">
-        <label class="sol-label">Filial de Destino <span class="sol-required">*</span></label>
-        <select id="sol-filial-destino" class="sol-select">
-          <option value="">Selecione a filial de destino</option>
-        </select>
-      </div>
     </div>
 
     <div class="sol-card">
       <div class="sol-card-title"><i class="ti ti-package"></i> O que aconteceu</div>
-      <div class="sol-hint" style="margin:-6px 0 10px">O tipo de movimento e a classificação SAP são preenchidos pelo analista depois — você não precisa saber esses códigos.</div>
-      <div id="sol-itens-lista"></div>
-      <button type="button" class="sol-btn sol-add-row-btn" onclick="adicionarItemMaterial()">
-        <i class="ti ti-plus"></i> Adicionar outro material
-      </button>
-      <div class="sol-fg" style="margin-top:16px">
+      <div class="sol-hint" style="margin:-6px 0 4px">O tipo de movimento e a classificação SAP são preenchidos pelo analista depois — você não precisa saber esses códigos.</div>
+      <div class="sol-fg">
+        <label class="sol-label">Material <span class="sol-required">*</span> <span class="sol-hint">(grupo SAP)</span></label>
+        <select id="sol-material" class="sol-select" required>
+          <option value="">Selecione o material</option>
+        </select>
+      </div>
+      <div class="sol-fg">
+        <label class="sol-label">Peso (kg) <span class="sol-required">*</span></label>
+        <input type="number" id="sol-peso" class="sol-input" step="0.01" min="0" inputmode="decimal" placeholder="0,00" required>
+      </div>
+      <div class="sol-fg">
         <label class="sol-label">Descreva o ocorrido <span class="sol-required">*</span></label>
         <textarea id="sol-descricao" class="sol-textarea" placeholder="O que aconteceu, como foi identificado…" required></textarea>
       </div>
@@ -202,19 +175,27 @@
 
     <div class="sol-card">
       <div class="sol-card-title"><i class="ti ti-user"></i> Quem está informando</div>
-      <div class="sol-hint" style="margin:-6px 0 10px">Cada informante se responsabiliza pelas próprias informações prestadas ao setor de Estoque/Insumos.</div>
-      <div id="sol-informantes-lista"></div>
-      <button type="button" class="sol-btn sol-add-row-btn" onclick="adicionarInformante()">
-        <i class="ti ti-plus"></i> Adicionar outro informante
-      </button>
+      <div class="sol-grid-3">
+        <div class="sol-fg">
+          <label class="sol-label">Nome <span class="sol-required">*</span></label>
+          <input type="text" id="sol-inf-nome" class="sol-input" placeholder="Seu nome completo" required>
+        </div>
+        <div class="sol-fg">
+          <label class="sol-label">Cargo <span class="sol-hint">(opcional)</span></label>
+          <input type="text" id="sol-inf-cargo" class="sol-input" placeholder="Operador, encarregado…">
+        </div>
+        <div class="sol-fg">
+          <label class="sol-label">Contato <span class="sol-hint">(opcional)</span></label>
+          <input type="text" id="sol-inf-contato" class="sol-input" placeholder="Telefone/WhatsApp">
+        </div>
+      </div>
     </div>
-
 
     <div class="sol-card">
       <div class="sol-card-title"><i class="ti ti-file-signature"></i> Termo de Responsabilidade e anexos</div>
       <div class="sol-alert sol-alert-info">
         <i class="ti ti-info-circle"></i>
-        <div>Ao assinar o Termo de Responsabilidade, você (o informante) declara que as informações prestadas nesta solicitação são verídicas e assume a responsabilidade por elas perante o setor de Estoque/Insumos. Imprima o termo abaixo, assine, e anexe a foto/scan dele junto com qualquer outro comprovante (foto da pesagem, etc.) antes de enviar.</div>
+        <div>Imprima o termo abaixo, assine, e anexe a foto/scan dele junto com qualquer outro comprovante (foto da pesagem, etc.) antes de enviar.</div>
       </div>
       <button type="button" class="sol-btn" id="sol-btn-imprimir" onclick="imprimirTermo()">
         <i class="ti ti-printer"></i> Imprimir Termo de Responsabilidade

@@ -293,69 +293,57 @@
 
           <div class="topbar-stat-sep"></div>
 
-          <!-- 2. Aparência -->
-          <div class="theme-switcher" id="theme-switcher-wrap">
-            <button class="theme-switcher-btn" id="theme-switcher-btn" onclick="toggleThemeSwitcher()" title="Aparência">
-              <i class="ti ti-palette"></i>
-            </button>
-            <div class="theme-menu" id="theme-switcher-menu">
-              <div class="tools-dropdown-section-label" style="margin-top:0;border-top:none">Aparência</div>
-              <div class="tools-theme-grid" id="tools-theme-grid">
-                <button class="tools-theme-opt" data-theme="dark"    onclick="setTheme('dark');    updateToolsTheme()"><span class="theme-swatch dark"></span>Escuro</button>
-                <button class="tools-theme-opt" data-theme="graphite" onclick="setTheme('graphite');updateToolsTheme()"><span class="theme-swatch graphite"></span>Grafite</button>
-                <button class="tools-theme-opt" data-theme="light"   onclick="setTheme('light');   updateToolsTheme()"><span class="theme-swatch light"></span>Claro</button>
-                <button class="tools-theme-opt" data-theme="sand"    onclick="setTheme('sand');    updateToolsTheme()"><span class="theme-swatch sand"></span>Areia</button>
+          <!-- Grupo: Ações do sistema (Aparência · Notificações · Ferramentas) -->
+          <div class="topbar-action-group">
+
+            <!-- 2. Aparência -->
+            <div class="theme-switcher" id="theme-switcher-wrap">
+              <button class="theme-switcher-btn" id="theme-switcher-btn" onclick="toggleThemeSwitcher()" title="Aparência">
+                <i class="ti ti-palette"></i>
+              </button>
+              <div class="theme-menu" id="theme-switcher-menu">
+                <div class="tools-dropdown-section-label" style="margin-top:0;border-top:none">Aparência</div>
+                <div class="tools-theme-grid" id="tools-theme-grid">
+                  <button class="tools-theme-opt" data-theme="dark"    onclick="setTheme('dark');    updateToolsTheme()"><span class="theme-swatch dark"></span>Escuro</button>
+                  <button class="tools-theme-opt" data-theme="graphite" onclick="setTheme('graphite');updateToolsTheme()"><span class="theme-swatch graphite"></span>Grafite</button>
+                  <button class="tools-theme-opt" data-theme="light"   onclick="setTheme('light');   updateToolsTheme()"><span class="theme-swatch light"></span>Claro</button>
+                  <button class="tools-theme-opt" data-theme="sand"    onclick="setTheme('sand');    updateToolsTheme()"><span class="theme-swatch sand"></span>Areia</button>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div class="topbar-stat-sep"></div>
-
-          <!-- 3. Usuários online (estilo seletor de contas do Gmail) —
-               populado via JS (mensagens.js, próxima etapa) a partir da
-               presença já usada no Admin (profiles.last_seen). Vazio e
-               oculto até então (display:none no wrap inteiro, separador
-               incluso, pra não sobrar um traço solto sem ninguém online);
-               cada avatar clicável abre o chat direto com aquela pessoa
-               (ver Mensagens, Ferramentas). -->
-          <div class="online-users-wrap" id="online-users-wrap" style="display:none">
-            <div class="online-users-list" id="online-users-list"></div>
-            <div class="topbar-stat-sep"></div>
-          </div>
-
-          <!-- 4. Notificações -->
-          <div class="notif-wrap" id="notif-wrap">
-            <button class="notif-btn" id="notif-btn" onclick="notifToggle()" title="Notificações">
-              <i class="ti ti-bell notif-bell-icon"></i>
-              <span class="notif-badge" id="notif-badge" style="display:none">0</span>
-            </button>
-            <!-- Dropdown -->
-            <div class="notif-dropdown" id="notif-dropdown">
-              <div class="notif-dropdown-header">
-                <span class="notif-dropdown-title"><i class="ti ti-bell" style="margin-right:6px"></i>Notificações</span>
-                <button class="notif-mark-all-btn" onclick="notifMarkAllRead()" title="Marcar todas como lidas">
-                  <i class="ti ti-checks"></i> Marcar todas
-                </button>
+            <!-- 3. Notificações -->
+            <div class="notif-wrap" id="notif-wrap">
+              <button class="notif-btn" id="notif-btn" onclick="notifToggle()" title="Notificações">
+                <i class="ti ti-bell notif-bell-icon"></i>
+                <span class="notif-badge" id="notif-badge" style="display:none">0</span>
+              </button>
+              <!-- Dropdown -->
+              <div class="notif-dropdown" id="notif-dropdown">
+                <div class="notif-dropdown-header">
+                  <span class="notif-dropdown-title"><i class="ti ti-bell" style="margin-right:6px"></i>Notificações</span>
+                  <button class="notif-mark-all-btn" onclick="notifMarkAllRead()" title="Marcar todas como lidas">
+                    <i class="ti ti-checks"></i> Marcar todas
+                  </button>
+                </div>
+                <div class="notif-list" id="notif-list"></div>
               </div>
-              <div class="notif-list" id="notif-list"></div>
-            </div>
-            <!-- Toast de atividade em tempo real (Fase 5 — Realtime).
-                 Infraestrutura pronta nesta entrega (som + popup); ainda
-                 não é disparada por nenhum evento — isso fica pra Etapa 3. -->
-            <div class="notif-activity-toast" id="notif-activity-toast" onclick="notifHideActivityToast()">
-              <i class="ti ti-bolt notif-toast-icon"></i>
-              <div class="notif-toast-body-wrap">
-                <div class="notif-toast-title">Atividade</div>
-                <div class="notif-toast-body"></div>
+              <!-- Toast de atividade em tempo real (Fase 5 — Realtime).
+                   Infraestrutura pronta nesta entrega (som + popup); ainda
+                   não é disparada por nenhum evento — isso fica pra Etapa 3. -->
+              <div class="notif-activity-toast" id="notif-activity-toast" onclick="notifHideActivityToast()">
+                <i class="ti ti-bolt notif-toast-icon"></i>
+                <div class="notif-toast-body-wrap">
+                  <div class="notif-toast-title">Atividade</div>
+                  <div class="notif-toast-body"></div>
+                </div>
               </div>
             </div>
-          </div>
 
-        </div>
-        <!-- ── Ferramentas ── -->
-        <div class="tools-wrap" id="tools-wrap">
-          <button class="btn tools-trigger-btn" id="tools-trigger-btn" onclick="toggleToolsMenu()" title="Ferramentas do analista">
-            <i class="ti ti-tools"></i> <span>Ferramentas</span> <i class="ti ti-chevron-down tools-chev" id="tools-chev"></i>
+            <!-- 4. Ferramentas -->
+            <div class="tools-wrap" id="tools-wrap">
+              <button class="tools-trigger-btn" id="tools-trigger-btn" onclick="toggleToolsMenu()" title="Ferramentas do analista">
+                <i class="ti ti-tools"></i>
           </button>
 
           <!-- Dropdown menu -->
@@ -452,32 +440,54 @@
           </div>
         </div>
 
-        <!-- ── Conta ── -->
-        <div class="account-switcher" id="account-switcher-wrap">
-          <button class="account-switcher-btn" id="account-switcher-btn" onclick="toggleAccountSwitcher()" title="Conta">
-            <span id="account-switcher-avatar-slot"></span>
-          </button>
-          <div class="account-switcher-menu" id="account-switcher-menu">
-            <div class="account-switcher-head">
-              <span id="account-switcher-avatar-lg-slot"></span>
-              <div class="account-switcher-head-body">
-                <div class="tools-item-label" id="auth-account-email">—</div>
-                <div class="tools-item-sub" id="auth-account-role">—</div>
+          </div><!-- /.topbar-action-group -->
+
+          <div class="topbar-stat-sep"></div>
+
+          <!-- Grupo: Pessoas (usuários online + conta) -->
+          <div class="topbar-people-group">
+
+            <!-- Usuários online (estilo seletor de contas do Gmail) —
+                 populado via JS (mensagens.js) a partir da presença já
+                 usada no Admin (profiles.last_seen). Vazio e oculto até
+                 então (display:none no wrap inteiro); cada avatar
+                 clicável abre o chat direto com aquela pessoa (ver
+                 Mensagens, Ferramentas). -->
+            <div class="online-users-wrap" id="online-users-wrap" style="display:none">
+              <div class="online-users-list" id="online-users-list"></div>
+            </div>
+
+            <!-- Conta -->
+            <div class="account-switcher" id="account-switcher-wrap">
+              <button class="account-switcher-btn" id="account-switcher-btn" onclick="toggleAccountSwitcher()" title="Conta">
+                <span id="account-switcher-avatar-slot"></span>
+              </button>
+              <div class="account-switcher-menu" id="account-switcher-menu">
+                <div class="account-switcher-head">
+                  <span id="account-switcher-avatar-lg-slot"></span>
+                  <div class="account-switcher-head-body">
+                    <div class="tools-item-label" id="auth-account-email">—</div>
+                    <div class="tools-item-sub" id="auth-account-role">—</div>
+                  </div>
+                </div>
+                <div class="account-switcher-actions">
+                  <button class="btn btn-primary" onclick="abrirModalGerenciarConta(); closeAccountSwitcher()">
+                    <i class="ti ti-user-cog"></i> Gerenciar Conta
+                  </button>
+                  <button class="btn" style="background:var(--red-bg);border-color:var(--red-border);color:var(--red)"
+                    onclick="window.AuthGate && window.AuthGate.signOut(); closeAccountSwitcher()">
+                    <i class="ti ti-logout"></i> Sair
+                  </button>
+                </div>
               </div>
             </div>
-            <div class="account-switcher-actions">
-              <button class="btn btn-primary" onclick="abrirModalGerenciarConta(); closeAccountSwitcher()">
-                <i class="ti ti-user-cog"></i> Gerenciar Conta
-              </button>
-              <button class="btn" style="background:var(--red-bg);border-color:var(--red-border);color:var(--red)"
-                onclick="window.AuthGate && window.AuthGate.signOut(); closeAccountSwitcher()">
-                <i class="ti ti-logout"></i> Sair
-              </button>
-            </div>
-          </div>
-        </div>
+
+          </div><!-- /.topbar-people-group -->
+
+        </div><!-- /.topbar-status-bar -->
 
         <!-- Calculadora (popover) -->
+
         <div class="tool-popover" id="tool-calc" style="display:none">
           <div class="tool-popover-header">
             <span class="tool-popover-title"><i class="ti ti-calculator"></i> Calculadora</span>
@@ -2913,6 +2923,28 @@
               </table>
             </div>
           </div>
+          <!-- "Resumo por Usuário" (29/07) — combina admin_user_table_counts +
+               admin_user_table_sizes (banco) com admin_storage_stats
+               (Storage — onde Entradas/Saídas/Lançamentos/SAP realmente
+               guardam o volume grande, como arquivos, não linhas). Carrega
+               SOB DEMANDA (botão), não junto com o resto da aba Usuários —
+               são 3 RPCs numa carga só, e o custo real em bases grandes
+               ainda não foi medido em produção. -->
+          <div class="table-card" style="margin-top:16px">
+            <div class="table-header">
+              <span class="table-title"><i class="ti ti-report-analytics"></i> Resumo por Usuário</span>
+              <button class="btn" onclick="adminLoadUserSummary()"><i class="ti ti-refresh"></i> Carregar / Atualizar</button>
+            </div>
+            <div style="font-size:11px;color:var(--text3);padding:10px 18px 0">
+              <i class="ti ti-info-circle"></i> "Total de Linhas" conta só o banco de dados — Entradas/Saídas/Lançamentos/SAP guardam o volume grande como arquivos no Storage (não linhas), mas entram somados no "Tamanho estimado".
+            </div>
+            <div style="overflow-x:auto;margin-top:8px">
+              <table style="width:100%" id="admin-user-summary-table">
+                <thead id="admin-user-summary-thead"></thead>
+                <tbody id="admin-user-summary-tbody"><tr><td><div class="empty-state"><i class="ti ti-report-analytics"></i><p>Clique em "Carregar" pra ver o resumo.</p></div></td></tr></tbody>
+              </table>
+            </div>
+          </div>
         </div>
 
         <!-- Seção: Dados por módulo -->
@@ -2956,6 +2988,22 @@
                 <button class="btn" onclick="adminLoadModulo()"><i class="ti ti-refresh"></i> Atualizar</button>
               </div>
             </div>
+            <!-- Barra de ação em lote — só aparece com alguma seleção ativa
+                 (ver _adminAtualizarBarraLote, admin.js). Escondida por
+                 padrão via style inline, igual ao padrão já usado no
+                 Gerenciador de Fechamento (fechmgr-lote-bar, ui.js). -->
+            <div class="admin-lote-bar" id="admin-lote-bar" style="display:none">
+              <span id="admin-lote-count"><i class="ti ti-checks"></i> 0 registros selecionados</span>
+              <div class="admin-lote-actions">
+                <button class="btn btn-sm" onclick="adminAbrirEdicaoLote()"><i class="ti ti-edit"></i> Editar campo em massa</button>
+                <button class="btn btn-sm admin-btn-danger" onclick="adminExcluirLote()"><i class="ti ti-trash"></i> Excluir selecionados</button>
+                <button class="btn btn-sm admin-btn-ghost" onclick="adminLimparSelecao()">Limpar seleção</button>
+              </div>
+            </div>
+            <!-- Banner "selecionar todos os N do filtro" (padrão Gmail) —
+                 só aparece depois que a página inteira já foi marcada. Exige
+                 busca ativa pra virar link clicável (ver adminSelecionarTodosFiltro). -->
+            <div class="admin-selectall-banner" id="admin-selectall-banner" style="display:none"></div>
             <div style="font-size:11px;color:var(--text3);padding:10px 18px 0"><i class="ti ti-info-circle"></i> Log de Exclusão de DAI e Notas de Crédito/Débito são registros append-only (auditoria) — somente leitura.</div>
             <div class="table-scroll">
             <table>
@@ -3309,6 +3357,35 @@
     <div class="form-actions">
       <button class="btn" onclick="closeModal('admin-edit-modal')">Cancelar</button>
       <button class="btn btn-primary" onclick="adminSalvarEdicao()"><i class="ti ti-check"></i> Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal de edição EM MASSA — um campo por vez, aplicado a todos os
+     registros selecionados (IDs manuais ou "todos os N do filtro" — ver
+     admin.js). Confirmação de verdade acontece depois, no modal
+     modal-confirm-destrutivo (confirmarDestrutivo, format.js) — este
+     aqui só monta o patch antes de pedir a confirmação. Mesma posição
+     fora de .page que admin-edit-modal, pelo mesmo motivo (containing
+     block de position:fixed). -->
+<div class="modal-overlay" id="admin-lote-edit-modal">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-title"><i class="ti ti-edit"></i> Editar em massa</div>
+    <div class="modal-sub" id="admin-lote-edit-sub"></div>
+    <div style="display:flex;flex-direction:column;gap:12px;margin-top:12px">
+      <div class="form-group" style="margin-bottom:0">
+        <label class="form-label">Campo a alterar</label>
+        <select class="form-select" id="admin-lote-edit-campo" onchange="_adminLoteEditRenderCampo()"></select>
+      </div>
+      <div class="form-group" style="margin-bottom:0">
+        <label class="form-label">Novo valor</label>
+        <div id="admin-lote-edit-valor-wrap"></div>
+      </div>
+    </div>
+    <div id="admin-lote-edit-error" style="display:none;color:var(--red);font-size:12px;margin-top:10px"></div>
+    <div class="form-actions">
+      <button class="btn" onclick="closeModal('admin-lote-edit-modal')">Cancelar</button>
+      <button class="btn btn-primary" onclick="adminAplicarEdicaoLote()"><i class="ti ti-check"></i> Pré-visualizar e aplicar</button>
     </div>
   </div>
 </div>

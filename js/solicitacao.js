@@ -13,10 +13,6 @@
 // sistema — a proteção real é a política de RLS do bucket, que só libera
 // INSERT para quem não tem sessão, nunca leitura). Só o CAMINHO do
 // arquivo é enviado depois para a Edge Function.
-//
-// Suporta múltiplos materiais (cada um pode virar uma DAI separada, se
-// forem de categorias diferentes — resolvido no servidor) e múltiplos
-// informantes (cada um se responsabiliza pelo que declarou).
 // ═══════════════════════════════════════════════════════════
 
 const SUPABASE_URL = 'https://kgbmswykhqhmcajxlvri.supabase.co';
@@ -33,7 +29,6 @@ const TURNSTILE_SITEKEY = '0x4AAAAAAD-V-RBGDDiirGsF';
 const ANEXO_MAX_MB = 15;
 const ANEXO_MAX_COUNT = 10;
 const ANEXO_TIPOS_ACEITOS = /^image\/|^application\/pdf$|^application\/msword$|wordprocessingml/;
-const CATEGORIA_TRANSFERENCIA = 'Transferência de material entre filiais';
 
 // CRÍTICO: esta página fica no mesmo domínio do app principal. Sem estas
 // opções, o supabase-js reaproveitaria automaticamente uma sessão de
@@ -52,11 +47,6 @@ let _anexos = []; // { id, file, nome, tamanho, tipo, path, status: 'pendente'|'
 let _anexoSeq = 0;
 let turnstileWidgetId = null;
 
-let _itensMateriais = []; // { id, material, peso }
-let _itemSeq = 0;
-let _informantes = []; // { id, nome, cargo, contato }
-let _infSeq = 0;
-
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
@@ -67,7 +57,6 @@ function formatBytes(bytes) {
   return (bytes / 1024 / 1024).toFixed(1) + ' MB';
 }
 function hoje() { return new Date().toISOString().split('T')[0]; }
-function _valorAtual(id) { return (document.getElementById(id)?.value || '').trim(); }
 
 function mostrarAlerta(msg, tipo) {
   const area = document.getElementById('sol-alert-area');
@@ -114,146 +103,18 @@ function popularCentrais() {
     + _catalogo.centrais.map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
 }
 
-function _materialOptionsHtml(selecionado) {
+function popularMateriais() {
+  const sel = document.getElementById('sol-material');
   const grupos = _catalogo.materiaisPorCategoria || {};
   let html = '<option value="">Selecione o material</option>';
   Object.keys(grupos).forEach((categoria) => {
     const itens = grupos[categoria];
     if (!itens || !itens.length) return;
     html += `<optgroup label="${escapeHtml(categoria)}">`
-      + itens.map((m) => `<option value="${escapeHtml(m)}" ${m === selecionado ? 'selected' : ''}>${escapeHtml(m)}</option>`).join('')
+      + itens.map((m) => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join('')
       + '</optgroup>';
   });
-  return html;
-}
-
-// ── Categoria de situação → Filial de destino condicional ─────────────
-function onCategoriaSituacaoChange() {
-  const val = _valorAtual('sol-categoria-situacao');
-  const wrap = document.getElementById('sol-fg-filial-destino');
-  const sel = document.getElementById('sol-filial-destino');
-  if (val === CATEGORIA_TRANSFERENCIA) {
-    wrap.style.display = '';
-    _popularFilialDestino();
-  } else {
-    wrap.style.display = 'none';
-    sel.value = '';
-  }
-}
-window.onCategoriaSituacaoChange = onCategoriaSituacaoChange;
-
-function _popularFilialDestino() {
-  const origem = _valorAtual('sol-central');
-  const sel = document.getElementById('sol-filial-destino');
-  const valorAtual = sel.value;
-  const opcoes = (_catalogo.centrais || []).filter((c) => c !== origem);
-  sel.innerHTML = '<option value="">Selecione a filial de destino</option>'
-    + opcoes.map((c) => `<option value="${escapeHtml(c)}" ${c === valorAtual ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('');
-}
-
-// ── Itens (materiais) — lista dinâmica ─────────────────────────────────
-function _novoItemMaterial() { return { id: 'im' + (_itemSeq++), material: '', peso: '' }; }
-
-function adicionarItemMaterial() {
-  _itensMateriais.push(_novoItemMaterial());
-  _renderItensMateriais();
-}
-window.adicionarItemMaterial = adicionarItemMaterial;
-
-function removerItemMaterial(id) {
-  if (_itensMateriais.length <= 1) return;
-  _itensMateriais = _itensMateriais.filter((i) => i.id !== id);
-  _renderItensMateriais();
-}
-window.removerItemMaterial = removerItemMaterial;
-
-function _onItemMaterialChange(id, value) {
-  const it = _itensMateriais.find((i) => i.id === id);
-  if (it) it.material = value;
-}
-window._onItemMaterialChange = _onItemMaterialChange;
-
-function _onItemPesoChange(id, value) {
-  const it = _itensMateriais.find((i) => i.id === id);
-  if (it) it.peso = value;
-}
-window._onItemPesoChange = _onItemPesoChange;
-
-function _renderItensMateriais() {
-  const el = document.getElementById('sol-itens-lista');
-  el.innerHTML = _itensMateriais.map((it) => `
-    <div class="sol-item-row" data-item-id="${it.id}">
-      <div class="sol-fg">
-        <label class="sol-label">Material <span class="sol-required">*</span> <span class="sol-hint">(grupo SAP)</span></label>
-        <select class="sol-select" onchange="_onItemMaterialChange('${it.id}', this.value)">
-          ${_materialOptionsHtml(it.material)}
-        </select>
-      </div>
-      <div class="sol-fg sol-fg-peso">
-        <label class="sol-label">Peso (kg) <span class="sol-required">*</span></label>
-        <input type="number" class="sol-input" step="0.01" min="0" inputmode="decimal" placeholder="0,00" value="${escapeHtml(it.peso)}" oninput="_onItemPesoChange('${it.id}', this.value)">
-      </div>
-      ${_itensMateriais.length > 1 ? `<button type="button" class="sol-item-row-rm" onclick="removerItemMaterial('${it.id}')" title="Remover material"><i class="ti ti-x"></i></button>` : ''}
-    </div>`).join('');
-}
-
-// ── Informantes — lista dinâmica ───────────────────────────────────────
-function _novoInformante() { return { id: 'inf' + (_infSeq++), nome: '', cargo: '', contato: '' }; }
-
-function adicionarInformante() {
-  _informantes.push(_novoInformante());
-  _renderInformantes();
-}
-window.adicionarInformante = adicionarInformante;
-
-function removerInformante(id) {
-  if (_informantes.length <= 1) return;
-  _informantes = _informantes.filter((i) => i.id !== id);
-  _renderInformantes();
-}
-window.removerInformante = removerInformante;
-
-function _onInfChange(id, campo, value) {
-  const inf = _informantes.find((i) => i.id === id);
-  if (inf) inf[campo] = value;
-}
-window._onInfChange = _onInfChange;
-
-// Máscara simples de telefone BR: (99) 99999-9999 / (99) 9999-9999
-function _maskTelefone(el) {
-  let v = el.value.replace(/\D/g, '').slice(0, 11);
-  if (v.length > 10) v = v.replace(/^(\d{2})(\d{5})(\d{0,4}).*/, '($1) $2-$3');
-  else if (v.length > 6) v = v.replace(/^(\d{2})(\d{4})(\d{0,4}).*/, '($1) $2-$3');
-  else if (v.length > 2) v = v.replace(/^(\d{2})(\d{0,5})/, '($1) $2');
-  else if (v.length > 0) v = v.replace(/^(\d{0,2})/, '($1');
-  el.value = v;
-}
-window._maskTelefone = _maskTelefone;
-
-function _renderInformantes() {
-  const el = document.getElementById('sol-informantes-lista');
-  el.innerHTML = _informantes.map((inf) => `
-    <div class="sol-informante-card" data-inf-id="${inf.id}">
-      ${_informantes.length > 1 ? `<button type="button" class="sol-item-row-rm" onclick="removerInformante('${inf.id}')" title="Remover informante"><i class="ti ti-x"></i></button>` : ''}
-      <div class="sol-grid-3">
-        <div class="sol-fg">
-          <label class="sol-label">Nome <span class="sol-required">*</span></label>
-          <input type="text" class="sol-input" placeholder="Nome completo" value="${escapeHtml(inf.nome)}" oninput="_onInfChange('${inf.id}','nome',this.value)">
-        </div>
-        <div class="sol-fg">
-          <label class="sol-label">Cargo <span class="sol-required">*</span></label>
-          <select class="sol-select" onchange="_onInfChange('${inf.id}','cargo',this.value)">
-            <option value="">Selecione</option>
-            <option value="Operador" ${inf.cargo === 'Operador' ? 'selected' : ''}>Operador</option>
-            <option value="Regional" ${inf.cargo === 'Regional' ? 'selected' : ''}>Regional</option>
-          </select>
-        </div>
-        <div class="sol-fg">
-          <label class="sol-label">Contato WhatsApp <span class="sol-hint">(opcional)</span></label>
-          <input type="text" class="sol-input" placeholder="(00) 00000-0000" inputmode="numeric" maxlength="15" value="${escapeHtml(inf.contato)}" oninput="_maskTelefone(this); _onInfChange('${inf.id}','contato',this.value)">
-        </div>
-      </div>
-    </div>`).join('');
+  sel.innerHTML = html;
 }
 
 // ── Anexos ──────────────────────────────────────────────────────────
@@ -322,18 +183,20 @@ window.removerAnexo = removerAnexo;
 // ── Termo de Responsabilidade (impressão) ──────────────────────────────
 // Usa os dados já preenchidos no formulário — a DAI ainda não existe
 // nesse momento (é gerada só no envio), então a referência fica em
-// aberto ("A PREENCHER") até o operador anexar o termo assinado. Um
-// bloco de declaração + assinatura é gerado por informante.
+// aberto ("A PREENCHER") até o operador anexar o termo assinado.
+function _valorAtual(id) { return (document.getElementById(id)?.value || '').trim(); }
+
 function imprimirTermo() {
   const central = _valorAtual('sol-central');
   const dataOcorrido = _valorAtual('sol-data');
-  const categoriaSituacao = _valorAtual('sol-categoria-situacao');
-  const filialDestino = _valorAtual('sol-filial-destino');
+  const material = _valorAtual('sol-material');
+  const peso = _valorAtual('sol-peso');
   const descricao = _valorAtual('sol-descricao');
+  const nome = _valorAtual('sol-inf-nome');
+  const cargo = _valorAtual('sol-inf-cargo');
 
-  const informantesValidos = _informantes.filter((i) => i.nome.trim());
-  if (!central || !dataOcorrido || !informantesValidos.length) {
-    mostrarAlerta('Preencha ao menos Central, Data do ocorrido e o nome de ao menos um informante antes de imprimir o termo.', 'error');
+  if (!central || !dataOcorrido || !nome) {
+    mostrarAlerta('Preencha ao menos Central, Data do ocorrido e seu Nome antes de imprimir o termo.', 'error');
     return;
   }
 
@@ -341,26 +204,6 @@ function imprimirTermo() {
     const [y, m, d] = dataOcorrido.split('-');
     return (y && m && d) ? `${d}/${m}/${y}` : dataOcorrido;
   })();
-
-  const itensValidos = _itensMateriais.filter((i) => i.material);
-  const itensRows = itensValidos.length
-    ? itensValidos.map((i) => `<tr><td>${escapeHtml(i.material)}</td><td>${escapeHtml(i.peso || '—')}</td></tr>`).join('')
-    : '<tr><td colspan="2">—</td></tr>';
-
-  const assinaturasHtml = informantesValidos.map((inf) => `
-    <div class="declaracao">
-      Eu, <strong>${escapeHtml(inf.nome)}</strong>${inf.cargo ? ` (${escapeHtml(inf.cargo)})` : ''}, DECLARO que as informações por mim prestadas relativas ao ocorrido acima descrito são verídicas, e assumo a responsabilidade por elas perante o setor de Estoque/Insumos, estando ciente das responsabilidades decorrentes da prestação de informações falsas ou inexatas.
-    </div>
-    <div class="assinatura-box">
-      <div class="assinatura-linha"></div>
-      <div class="assinatura-nome">${escapeHtml(inf.nome)}</div>
-      <div class="assinatura-sub">${inf.cargo ? escapeHtml(inf.cargo) + ' — ' : ''}Assinatura do informante</div>
-      <div class="assinatura-data">Data: <span class="linha-preencher">&nbsp;</span>/<span class="linha-preencher">&nbsp;</span>/<span class="linha-preencher" style="width:90px">&nbsp;</span></div>
-    </div>`).join('<div style="height:22px"></div>');
-
-  const campoFilialDestino = filialDestino
-    ? `<div><div class="field-label">Filial de destino</div><div class="field-value">${escapeHtml(filialDestino)}</div></div>`
-    : '';
 
   const html = `<!DOCTYPE html>
 <html lang="pt-BR"><head><meta charset="UTF-8">
@@ -381,23 +224,23 @@ function imprimirTermo() {
   .field-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px 24px; margin-bottom:18px; }
   .field-label { font-size:9.5px; text-transform:uppercase; letter-spacing:.06em; color:#8a7a64; margin-bottom:4px; }
   .field-value { font-size:12.5px; font-weight:700; border-bottom:1px solid #e5ddc8; padding-bottom:5px; overflow-wrap:anywhere; }
-  .declaracao { font-size:13px; line-height:1.85; text-align:justify; margin:8px 0 18px; }
+  .declaracao { font-size:13px; line-height:1.85; text-align:justify; margin:8px 0 24px; }
   .desc-box { border:1px solid #e5ddc8; border-radius:6px; padding:13px 15px; font-size:12px; line-height:1.7; white-space:pre-wrap; margin:6px 0 18px; }
   .itens-table { width:100%; border-collapse:collapse; margin:6px 0 20px; font-size:11px; }
   .itens-table th { text-align:left; font-size:9px; text-transform:uppercase; letter-spacing:.05em; color:#8a7a64; padding:6px 8px; border-bottom:2px solid #ff6b35; }
   .itens-table td { padding:7px 8px; border-bottom:1px solid #e5ddc8; }
-  .assinatura-box { margin-top:26px; text-align:center; }
+  .assinatura-box { margin-top:40px; text-align:center; }
   .assinatura-linha { border-top:1px solid #1c1608; width:320px; margin:0 auto 8px; }
   .assinatura-nome { font-weight:800; font-size:13px; }
   .assinatura-sub { font-size:10px; color:#8a7a64; margin-top:2px; text-transform:uppercase; }
-  .assinatura-data { margin-top:20px; font-size:12px; }
+  .assinatura-data { margin-top:28px; font-size:12px; }
   .linha-preencher { display:inline-block; border-bottom:1px solid #1c1608; width:60px; margin:0 3px; }
   .doc-footer { margin-top:30px; padding-top:12px; border-top:1px solid #e5ddc8; font-size:9px; color:#8a7a64; }
   @media print { .action-bar { display:none !important; } body { background:#fff !important; } .doc-wrap { box-shadow:none !important; margin:0 auto !important; } }
 </style></head>
 <body>
 <div class="action-bar">
-  <div class="action-bar-title">Termo de Responsabilidade do(s) Informante(s)</div>
+  <div class="action-bar-title">Termo de Responsabilidade do Informante</div>
   <div><button class="btn-print" onclick="window.print()">🖨️ Imprimir / Salvar PDF</button><button class="btn-close" onclick="window.close()">✕ Fechar</button></div>
 </div>
 <div class="doc-wrap">
@@ -405,21 +248,27 @@ function imprimirTermo() {
     <img src="https://concrelagos.com.br/wp-content/uploads/2021/10/Ativo-3.svg" alt="Concrelagos Concreto" height="40" onerror="this.style.display='none'">
     <div class="doc-title"><h1>Termo de<br>Responsabilidade</h1><div class="numero">Ref. A PREENCHER NO ENVIO</div></div>
   </div>
-  <div class="confidential-strip">⚠ Cada informante deve assinar este termo. Anexe-o (foto/scan) no formulário e só então envie a solicitação</div>
+  <div class="confidential-strip">⚠ Assine este termo, anexe-o (foto/scan) no formulário e só então envie a solicitação</div>
   <div class="field-grid">
     <div><div class="field-label">Central</div><div class="field-value">${escapeHtml(central)}</div></div>
     <div><div class="field-label">Data do ocorrido</div><div class="field-value">${escapeHtml(dataFmt)}</div></div>
-    <div><div class="field-label">Categoria de situação</div><div class="field-value">${escapeHtml(categoriaSituacao || '—')}</div></div>
-    ${campoFilialDestino}
   </div>
-  <div class="field-label">Item(ns) do ajuste</div>
+  <div class="field-label">Item do ajuste</div>
   <table class="itens-table">
     <thead><tr><th>Material</th><th>Peso (kg)</th></tr></thead>
-    <tbody>${itensRows}</tbody>
+    <tbody><tr><td>${escapeHtml(material || '—')}</td><td>${escapeHtml(peso || '—')}</td></tr></tbody>
   </table>
   <div class="field-label">Descrição do ocorrido</div>
   <div class="desc-box">${escapeHtml(descricao || '—')}</div>
-  ${assinaturasHtml}
+  <div class="declaracao">
+    Eu, <strong>${escapeHtml(nome)}</strong>${cargo ? ` (${escapeHtml(cargo)})` : ''}, DECLARO que as informações por mim prestadas relativas ao ocorrido acima descrito são verídicas e correspondem fielmente aos fatos por mim observados, estando ciente das responsabilidades decorrentes da prestação de informações falsas ou inexatas.
+  </div>
+  <div class="assinatura-box">
+    <div class="assinatura-linha"></div>
+    <div class="assinatura-nome">${escapeHtml(nome)}</div>
+    <div class="assinatura-sub">${cargo ? escapeHtml(cargo) + ' — ' : ''}Assinatura do informante</div>
+    <div class="assinatura-data">Data: <span class="linha-preencher">&nbsp;</span>/<span class="linha-preencher">&nbsp;</span>/<span class="linha-preencher" style="width:90px">&nbsp;</span></div>
+  </div>
   <div class="doc-footer">Concrelagos Concreto · AnalyticSys — Documento gerado a partir do formulário público de solicitação</div>
 </div>
 </body></html>`;
@@ -443,31 +292,22 @@ async function enviarSolicitacao(ev) {
   limparAlerta();
 
   const central = _valorAtual('sol-central');
+  const material = _valorAtual('sol-material');
+  const peso = _valorAtual('sol-peso');
   const dataOcorrido = _valorAtual('sol-data');
-  const categoriaSituacao = _valorAtual('sol-categoria-situacao');
-  const filialDestino = _valorAtual('sol-filial-destino');
   const descricao = _valorAtual('sol-descricao');
+  const nome = _valorAtual('sol-inf-nome');
+  const cargo = _valorAtual('sol-inf-cargo');
+  const contato = _valorAtual('sol-inf-contato');
 
   if (!central) return mostrarAlerta('Selecione a central.', 'error');
+  if (!material) return mostrarAlerta('Selecione o material.', 'error');
+  const pesoNum = parseFloat(String(peso).replace(',', '.'));
+  if (!peso || isNaN(pesoNum) || pesoNum <= 0) return mostrarAlerta('Informe um peso válido.', 'error');
   if (!dataOcorrido) return mostrarAlerta('Informe a data do ocorrido.', 'error');
   if (dataOcorrido > hoje()) return mostrarAlerta('A data do ocorrido não pode ser no futuro.', 'error');
-  if (!categoriaSituacao) return mostrarAlerta('Selecione a categoria de situação.', 'error');
-  if (categoriaSituacao === CATEGORIA_TRANSFERENCIA && !filialDestino) return mostrarAlerta('Selecione a filial de destino.', 'error');
-  if (categoriaSituacao === CATEGORIA_TRANSFERENCIA && filialDestino === central) return mostrarAlerta('A filial de destino não pode ser igual à central de origem.', 'error');
   if (!descricao) return mostrarAlerta('Descreva o ocorrido.', 'error');
-
-  if (!_itensMateriais.length) return mostrarAlerta('Adicione ao menos um material.', 'error');
-  for (const it of _itensMateriais) {
-    if (!it.material) return mostrarAlerta('Selecione o material em todas as linhas adicionadas (ou remova as vazias).', 'error');
-    const pesoNum = parseFloat(String(it.peso).replace(',', '.'));
-    if (!it.peso || isNaN(pesoNum) || pesoNum <= 0) return mostrarAlerta(`Informe um peso válido para "${it.material}".`, 'error');
-  }
-
-  if (!_informantes.length) return mostrarAlerta('Informe ao menos um informante.', 'error');
-  for (const inf of _informantes) {
-    if (!inf.nome.trim()) return mostrarAlerta('Informe o nome em todas as linhas de informante adicionadas (ou remova as vazias).', 'error');
-    if (!inf.cargo) return mostrarAlerta(`Selecione o cargo de "${inf.nome}".`, 'error');
-  }
+  if (!nome) return mostrarAlerta('Informe seu nome.', 'error');
 
   if (_anexos.some((a) => a.status === 'enviando')) return mostrarAlerta('Aguarde o envio dos anexos terminar.', 'error');
   if (_anexos.some((a) => a.status === 'erro')) return mostrarAlerta('Remova ou reenvie os anexos que falharam antes de continuar.', 'error');
@@ -485,13 +325,9 @@ async function enviarSolicitacao(ev) {
       body: JSON.stringify({
         action: 'submit',
         turnstileToken,
-        central,
-        dataOcorrido,
-        categoriaSituacao,
-        filialDestino: categoriaSituacao === CATEGORIA_TRANSFERENCIA ? filialDestino : null,
-        descricao,
-        itens: _itensMateriais.map((i) => ({ grupoMaterial: i.material, peso: parseFloat(String(i.peso).replace(',', '.')) })),
-        informantes: _informantes.map((i) => ({ nome: i.nome, cargo: i.cargo, contato: i.contato })),
+        central, grupoMaterial: material, peso: pesoNum,
+        dataOcorrido, descricao,
+        informanteNome: nome, informanteCargo: cargo, informanteContato: contato,
         anexos: anexosOk.map((a) => ({ path: a.path, nome: a.nome, tipo: a.tipo, tamanho: a.tamanho })),
       }),
     });
@@ -502,7 +338,7 @@ async function enviarSolicitacao(ev) {
       _setBtnEnviarLoading(false);
       return;
     }
-    _mostrarSucesso(data.dais || []);
+    _mostrarSucesso(data.numero, data.tag);
   } catch (err) {
     console.error('[Solicitação] Falha no envio:', err);
     _turnstileReset();
@@ -511,18 +347,15 @@ async function enviarSolicitacao(ev) {
   }
 }
 
-function _mostrarSucesso(dais) {
+function _mostrarSucesso(numero, tag) {
   document.getElementById('sol-form').style.display = 'none';
   const el = document.getElementById('sol-success');
   el.style.display = 'block';
-  const lista = (dais || []).length
-    ? `<p>Foi${dais.length > 1 ? 'ram' : ''} registrada${dais.length > 1 ? 's' : ''} como: ${dais.map((d) => `<span class="sol-numero">${escapeHtml(d.tag)}</span>`).join(', ')}</p>`
-    : '';
   el.innerHTML = `
     <i class="ti ti-circle-check"></i>
     <h2>Solicitação enviada com sucesso</h2>
-    <p>Sua solicitação já está com o(s) analista(s) responsável(is), aguardando o ajuste no SAP.</p>
-    ${lista}
+    <p>Sua solicitação foi registrada como <span class="sol-numero">${escapeHtml(tag)}</span> e já está com o analista responsável, aguardando o ajuste no SAP.</p>
+    <p>Guarde a referência <span class="sol-numero">${escapeHtml(numero)}</span> para acompanhamento, se precisar.</p>
     <button type="button" class="sol-btn" style="margin-top:18px" onclick="location.reload()"><i class="ti ti-plus"></i> Enviar outra solicitação</button>
   `;
 }
@@ -531,13 +364,6 @@ function _mostrarSucesso(dais) {
 async function boot() {
   _turnstileRender();
   document.getElementById('sol-data').max = hoje();
-
-  _itensMateriais.push(_novoItemMaterial());
-  _informantes.push(_novoInformante());
-
-  document.getElementById('sol-central').addEventListener('change', () => {
-    if (document.getElementById('sol-fg-filial-destino').style.display !== 'none') _popularFilialDestino();
-  });
 
   const dropzone = document.getElementById('sol-dropzone');
   document.getElementById('sol-anexos-input').addEventListener('change', (e) => {
@@ -553,8 +379,7 @@ async function boot() {
   try {
     _catalogo = await carregarCatalogo();
     popularCentrais();
-    _renderItensMateriais();
-    _renderInformantes();
+    popularMateriais();
     document.getElementById('sol-loading').style.display = 'none';
     document.getElementById('sol-form').style.display = 'block';
   } catch (err) {
