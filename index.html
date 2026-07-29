@@ -293,69 +293,57 @@
 
           <div class="topbar-stat-sep"></div>
 
-          <!-- 2. Aparência -->
-          <div class="theme-switcher" id="theme-switcher-wrap">
-            <button class="theme-switcher-btn" id="theme-switcher-btn" onclick="toggleThemeSwitcher()" title="Aparência">
-              <i class="ti ti-palette"></i>
-            </button>
-            <div class="theme-menu" id="theme-switcher-menu">
-              <div class="tools-dropdown-section-label" style="margin-top:0;border-top:none">Aparência</div>
-              <div class="tools-theme-grid" id="tools-theme-grid">
-                <button class="tools-theme-opt" data-theme="dark"    onclick="setTheme('dark');    updateToolsTheme()"><span class="theme-swatch dark"></span>Escuro</button>
-                <button class="tools-theme-opt" data-theme="graphite" onclick="setTheme('graphite');updateToolsTheme()"><span class="theme-swatch graphite"></span>Grafite</button>
-                <button class="tools-theme-opt" data-theme="light"   onclick="setTheme('light');   updateToolsTheme()"><span class="theme-swatch light"></span>Claro</button>
-                <button class="tools-theme-opt" data-theme="sand"    onclick="setTheme('sand');    updateToolsTheme()"><span class="theme-swatch sand"></span>Areia</button>
+          <!-- Grupo: Ações do sistema (Aparência · Notificações · Ferramentas) -->
+          <div class="topbar-action-group">
+
+            <!-- 2. Aparência -->
+            <div class="theme-switcher" id="theme-switcher-wrap">
+              <button class="theme-switcher-btn" id="theme-switcher-btn" onclick="toggleThemeSwitcher()" title="Aparência">
+                <i class="ti ti-palette"></i>
+              </button>
+              <div class="theme-menu" id="theme-switcher-menu">
+                <div class="tools-dropdown-section-label" style="margin-top:0;border-top:none">Aparência</div>
+                <div class="tools-theme-grid" id="tools-theme-grid">
+                  <button class="tools-theme-opt" data-theme="dark"    onclick="setTheme('dark');    updateToolsTheme()"><span class="theme-swatch dark"></span>Escuro</button>
+                  <button class="tools-theme-opt" data-theme="graphite" onclick="setTheme('graphite');updateToolsTheme()"><span class="theme-swatch graphite"></span>Grafite</button>
+                  <button class="tools-theme-opt" data-theme="light"   onclick="setTheme('light');   updateToolsTheme()"><span class="theme-swatch light"></span>Claro</button>
+                  <button class="tools-theme-opt" data-theme="sand"    onclick="setTheme('sand');    updateToolsTheme()"><span class="theme-swatch sand"></span>Areia</button>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div class="topbar-stat-sep"></div>
-
-          <!-- 3. Usuários online (estilo seletor de contas do Gmail) —
-               populado via JS (mensagens.js, próxima etapa) a partir da
-               presença já usada no Admin (profiles.last_seen). Vazio e
-               oculto até então (display:none no wrap inteiro, separador
-               incluso, pra não sobrar um traço solto sem ninguém online);
-               cada avatar clicável abre o chat direto com aquela pessoa
-               (ver Mensagens, Ferramentas). -->
-          <div class="online-users-wrap" id="online-users-wrap" style="display:none">
-            <div class="online-users-list" id="online-users-list"></div>
-            <div class="topbar-stat-sep"></div>
-          </div>
-
-          <!-- 4. Notificações -->
-          <div class="notif-wrap" id="notif-wrap">
-            <button class="notif-btn" id="notif-btn" onclick="notifToggle()" title="Notificações">
-              <i class="ti ti-bell notif-bell-icon"></i>
-              <span class="notif-badge" id="notif-badge" style="display:none">0</span>
-            </button>
-            <!-- Dropdown -->
-            <div class="notif-dropdown" id="notif-dropdown">
-              <div class="notif-dropdown-header">
-                <span class="notif-dropdown-title"><i class="ti ti-bell" style="margin-right:6px"></i>Notificações</span>
-                <button class="notif-mark-all-btn" onclick="notifMarkAllRead()" title="Marcar todas como lidas">
-                  <i class="ti ti-checks"></i> Marcar todas
-                </button>
+            <!-- 3. Notificações -->
+            <div class="notif-wrap" id="notif-wrap">
+              <button class="notif-btn" id="notif-btn" onclick="notifToggle()" title="Notificações">
+                <i class="ti ti-bell notif-bell-icon"></i>
+                <span class="notif-badge" id="notif-badge" style="display:none">0</span>
+              </button>
+              <!-- Dropdown -->
+              <div class="notif-dropdown" id="notif-dropdown">
+                <div class="notif-dropdown-header">
+                  <span class="notif-dropdown-title"><i class="ti ti-bell" style="margin-right:6px"></i>Notificações</span>
+                  <button class="notif-mark-all-btn" onclick="notifMarkAllRead()" title="Marcar todas como lidas">
+                    <i class="ti ti-checks"></i> Marcar todas
+                  </button>
+                </div>
+                <div class="notif-list" id="notif-list"></div>
               </div>
-              <div class="notif-list" id="notif-list"></div>
-            </div>
-            <!-- Toast de atividade em tempo real (Fase 5 — Realtime).
-                 Infraestrutura pronta nesta entrega (som + popup); ainda
-                 não é disparada por nenhum evento — isso fica pra Etapa 3. -->
-            <div class="notif-activity-toast" id="notif-activity-toast" onclick="notifHideActivityToast()">
-              <i class="ti ti-bolt notif-toast-icon"></i>
-              <div class="notif-toast-body-wrap">
-                <div class="notif-toast-title">Atividade</div>
-                <div class="notif-toast-body"></div>
+              <!-- Toast de atividade em tempo real (Fase 5 — Realtime).
+                   Infraestrutura pronta nesta entrega (som + popup); ainda
+                   não é disparada por nenhum evento — isso fica pra Etapa 3. -->
+              <div class="notif-activity-toast" id="notif-activity-toast" onclick="notifHideActivityToast()">
+                <i class="ti ti-bolt notif-toast-icon"></i>
+                <div class="notif-toast-body-wrap">
+                  <div class="notif-toast-title">Atividade</div>
+                  <div class="notif-toast-body"></div>
+                </div>
               </div>
             </div>
-          </div>
 
-        </div>
-        <!-- ── Ferramentas ── -->
-        <div class="tools-wrap" id="tools-wrap">
-          <button class="tools-trigger-btn" id="tools-trigger-btn" onclick="toggleToolsMenu()" title="Ferramentas do analista">
-            <i class="ti ti-tools"></i>
+            <!-- 4. Ferramentas -->
+            <div class="tools-wrap" id="tools-wrap">
+              <button class="tools-trigger-btn" id="tools-trigger-btn" onclick="toggleToolsMenu()" title="Ferramentas do analista">
+                <i class="ti ti-tools"></i>
           </button>
 
           <!-- Dropdown menu -->
@@ -452,32 +440,54 @@
           </div>
         </div>
 
-        <!-- ── Conta ── -->
-        <div class="account-switcher" id="account-switcher-wrap">
-          <button class="account-switcher-btn" id="account-switcher-btn" onclick="toggleAccountSwitcher()" title="Conta">
-            <span id="account-switcher-avatar-slot"></span>
-          </button>
-          <div class="account-switcher-menu" id="account-switcher-menu">
-            <div class="account-switcher-head">
-              <span id="account-switcher-avatar-lg-slot"></span>
-              <div class="account-switcher-head-body">
-                <div class="tools-item-label" id="auth-account-email">—</div>
-                <div class="tools-item-sub" id="auth-account-role">—</div>
+          </div><!-- /.topbar-action-group -->
+
+          <div class="topbar-stat-sep"></div>
+
+          <!-- Grupo: Pessoas (usuários online + conta) -->
+          <div class="topbar-people-group">
+
+            <!-- Usuários online (estilo seletor de contas do Gmail) —
+                 populado via JS (mensagens.js) a partir da presença já
+                 usada no Admin (profiles.last_seen). Vazio e oculto até
+                 então (display:none no wrap inteiro); cada avatar
+                 clicável abre o chat direto com aquela pessoa (ver
+                 Mensagens, Ferramentas). -->
+            <div class="online-users-wrap" id="online-users-wrap" style="display:none">
+              <div class="online-users-list" id="online-users-list"></div>
+            </div>
+
+            <!-- Conta -->
+            <div class="account-switcher" id="account-switcher-wrap">
+              <button class="account-switcher-btn" id="account-switcher-btn" onclick="toggleAccountSwitcher()" title="Conta">
+                <span id="account-switcher-avatar-slot"></span>
+              </button>
+              <div class="account-switcher-menu" id="account-switcher-menu">
+                <div class="account-switcher-head">
+                  <span id="account-switcher-avatar-lg-slot"></span>
+                  <div class="account-switcher-head-body">
+                    <div class="tools-item-label" id="auth-account-email">—</div>
+                    <div class="tools-item-sub" id="auth-account-role">—</div>
+                  </div>
+                </div>
+                <div class="account-switcher-actions">
+                  <button class="btn btn-primary" onclick="abrirModalGerenciarConta(); closeAccountSwitcher()">
+                    <i class="ti ti-user-cog"></i> Gerenciar Conta
+                  </button>
+                  <button class="btn" style="background:var(--red-bg);border-color:var(--red-border);color:var(--red)"
+                    onclick="window.AuthGate && window.AuthGate.signOut(); closeAccountSwitcher()">
+                    <i class="ti ti-logout"></i> Sair
+                  </button>
+                </div>
               </div>
             </div>
-            <div class="account-switcher-actions">
-              <button class="btn btn-primary" onclick="abrirModalGerenciarConta(); closeAccountSwitcher()">
-                <i class="ti ti-user-cog"></i> Gerenciar Conta
-              </button>
-              <button class="btn" style="background:var(--red-bg);border-color:var(--red-border);color:var(--red)"
-                onclick="window.AuthGate && window.AuthGate.signOut(); closeAccountSwitcher()">
-                <i class="ti ti-logout"></i> Sair
-              </button>
-            </div>
-          </div>
-        </div>
+
+          </div><!-- /.topbar-people-group -->
+
+        </div><!-- /.topbar-status-bar -->
 
         <!-- Calculadora (popover) -->
+
         <div class="tool-popover" id="tool-calc" style="display:none">
           <div class="tool-popover-header">
             <span class="tool-popover-title"><i class="ti ti-calculator"></i> Calculadora</span>

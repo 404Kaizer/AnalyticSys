@@ -7382,8 +7382,8 @@ mark.search-highlight {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  width: 38px;
+  height: 38px;
   border-radius: 8px;
   border: 1px solid transparent;
   background: transparent;
@@ -7391,7 +7391,7 @@ mark.search-highlight {
   cursor: pointer;
   transition: background .15s, border-color .15s, color .15s;
 }
-.tools-trigger-btn i { font-size: 17px; }
+.tools-trigger-btn i { font-size: 19px; }
 .tools-trigger-btn:hover,
 .tools-trigger-btn.active {
   background: var(--bg3);
