@@ -7379,21 +7379,25 @@ mark.search-highlight {
   position: relative;
 }
 .tools-trigger-btn {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text2);
+  cursor: pointer;
+  transition: background .15s, border-color .15s, color .15s;
 }
+.tools-trigger-btn i { font-size: 17px; }
+.tools-trigger-btn:hover,
 .tools-trigger-btn.active {
-  background: var(--accent-dim);
-  border-color: var(--accent);
-  color: var(--accent);
+  background: var(--bg3);
+  border-color: var(--border2);
+  color: var(--text);
 }
-.tools-chev {
-  font-size: 11px;
-  transition: transform .2s;
-  opacity: .6;
-}
-.tools-trigger-btn.active .tools-chev { transform: rotate(180deg); }
 
 /* Dropdown menu */
 .tools-dropdown {
