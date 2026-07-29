@@ -7930,6 +7930,8 @@ mark.search-highlight {
   flex-shrink: 0;
 }
 .msgs-conv-avatar-geral { background: var(--teal); font-size: 13px; }
+.msgs-conv-item-offline .msgs-conv-avatar { opacity: .45; }
+.msgs-conv-preview-online { color: var(--green); }
 .msgs-conv-body { min-width: 0; flex: 1; }
 .msgs-conv-name {
   font-size: 12px;

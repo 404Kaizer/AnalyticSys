@@ -115,40 +115,52 @@ function _presenceEsc(s) {
 
 async function _presenceGlobalTick() {
   if (!window.supabaseClient || !window.currentUser?.id) return;
-  const wrap = document.getElementById('online-users-wrap');
-  const list = document.getElementById('online-users-list');
-  if (!wrap || !list) return;
 
   const { data, error } = await window.supabaseClient.rpc('usuarios_presenca');
   if (error) {
-    console.warn('[Presença] Falha ao buscar usuários online:', error);
+    console.warn('[Presença] Falha ao buscar usuários:', error);
     return;
   }
 
   const agora = Date.now();
   const meuId = window.currentUser.id;
-  const online = (data || [])
-    .filter(u => u.id !== meuId && u.last_seen && (agora - new Date(u.last_seen).getTime()) <= MSGS_PRESENCE_ONLINE_MS)
+  const todos = (data || [])
+    .filter(u => u.id !== meuId)
     .sort((a, b) => (a.email || '').localeCompare(b.email || ''));
 
-  if (!online.length) {
-    wrap.style.display = 'none';
-    list.innerHTML = '';
-  } else {
-    // Clique no avatar do topbar abre o Mensagens já na conversa daquela
-    // pessoa (Etapa 9) — reaproveita openTool()/msgsAbrirConversa() que já
-    // existem, sem precisar de uma função nova só pra isso.
-    list.innerHTML = online.map(u => {
-      const nome = (u.email || '').split('@')[0];
-      const onclick = `openTool('mensagens'); msgsAbrirConversa('${u.id}')`;
-      return avatarHTML(u.email, 'online-avatar', `title="${_presenceEsc(nome)} — online" onclick="${onclick}"`);
-    }).join('');
-    wrap.style.display = 'flex';
+  const onlineIds = new Set(
+    todos
+      .filter(u => u.last_seen && (agora - new Date(u.last_seen).getTime()) <= MSGS_PRESENCE_ONLINE_MS)
+      .map(u => u.id)
+  );
+
+  // Fileira de avatares do topbar — continua só com quem está online agora
+  // (isso aqui é presença de verdade, não lista de contatos).
+  const wrap = document.getElementById('online-users-wrap');
+  const list = document.getElementById('online-users-list');
+  if (wrap && list) {
+    const online = todos.filter(u => onlineIds.has(u.id));
+    if (!online.length) {
+      wrap.style.display = 'none';
+      list.innerHTML = '';
+    } else {
+      // Clique no avatar do topbar abre o Mensagens já na conversa daquela
+      // pessoa (Etapa 9) — reaproveita openTool()/msgsAbrirConversa() que já
+      // existem, sem precisar de uma função nova só pra isso.
+      list.innerHTML = online.map(u => {
+        const nome = (u.email || '').split('@')[0];
+        const onclick = `openTool('mensagens'); msgsAbrirConversa('${u.id}')`;
+        return avatarHTML(u.email, 'online-avatar', `title="${_presenceEsc(nome)} — online" onclick="${onclick}"`);
+      }).join('');
+      wrap.style.display = 'flex';
+    }
   }
 
-  // Lista de conversas 1:1 no popover (Etapa 1, concluindo) — mesmo array
-  // de online já buscado acima, sem round-trip extra ao Supabase.
-  msgsRenderConversas(online);
+  // Lista de conversas do popover — TODO MUNDO, esteja online ou não (28/07:
+  // Hugo pediu pra poder mandar mensagem independente de status). O status
+  // ainda aparece no subtítulo de cada item, só não filtra mais quem entra
+  // na lista.
+  msgsRenderConversas(todos, onlineIds);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -159,7 +171,7 @@ async function _presenceGlobalTick() {
 // nunca é tocado aqui — só os itens 1:1, marcados com
 // .msgs-conv-item-injetado, são removidos e reconstruídos do zero a cada
 // chamada (mais simples que fazer diff, e o volume é pequeno).
-function msgsRenderConversas(online) {
+function msgsRenderConversas(todos, onlineIds) {
   const list = document.getElementById('msgs-conv-list');
   const hint = document.getElementById('msgs-conv-empty-hint');
   if (!list) return;
@@ -168,24 +180,28 @@ function msgsRenderConversas(online) {
 
   list.querySelectorAll('.msgs-conv-item-injetado').forEach(el => el.remove());
 
-  online.forEach(u => {
+  todos.forEach(u => {
     const nome = (u.email || '').split('@')[0];
+    const estaOnline = onlineIds.has(u.id);
+    const classeItem = 'msgs-conv-item msgs-conv-item-injetado' + (estaOnline ? '' : ' msgs-conv-item-offline');
+    const classePreview = 'msgs-conv-preview' + (estaOnline ? ' msgs-conv-preview-online' : '');
     list.insertAdjacentHTML('beforeend', `
-      <button class="msgs-conv-item msgs-conv-item-injetado" data-conv="${u.id}" onclick="msgsAbrirConversa('${u.id}')">
+      <button class="${classeItem}" data-conv="${u.id}" onclick="msgsAbrirConversa('${u.id}')">
         ${avatarHTML(u.email, 'msgs-conv-avatar')}
         <div class="msgs-conv-body">
           <div class="msgs-conv-name">${_presenceEsc(nome)}</div>
-          <div class="msgs-conv-preview">Online</div>
+          <div class="${classePreview}">${estaOnline ? 'Online' : 'Offline'}</div>
         </div>
       </button>`);
   });
 
-  if (hint) hint.style.display = online.length ? 'none' : '';
+  if (hint) hint.style.display = todos.length ? 'none' : '';
 
-  // Se a conversa ativa era com alguém que ficou offline nesse intervalo,
-  // volta pro Geral em vez de deixar o cabeçalho apontando pra um item
-  // que não existe mais na lista.
-  const continuaExistindo = activeId === 'geral' || online.some(u => u.id === activeId);
+  // Se a conversa ativa era com alguém que não existe mais na lista (caso
+  // raro — usuário removido do sistema), volta pro Geral. Como a lista
+  // agora traz todo mundo (não só quem está online), isso praticamente
+  // nunca mais deve acontecer por alguém simplesmente ter saído do ar.
+  const continuaExistindo = activeId === 'geral' || todos.some(u => u.id === activeId);
   if (continuaExistindo) {
     list.querySelectorAll('.msgs-conv-item').forEach(el => el.classList.toggle('active', el.dataset.conv === activeId));
   } else {
