@@ -1310,6 +1310,81 @@ function _daiBuildTermoHtml(dai) {
 </html>`;
 }
 
+// ── Baixar ZIP (documento + anexos) ────────────────────────────────────
+// Essa função era referenciada pelo botão "Baixar ZIP" nos cards de
+// ocorrência (ver ocorrencias.js), mas nunca tinha sido implementada —
+// por isso o download simplesmente não funcionava para NENHUM DAI,
+// manual ou vindo do formulário público. Agora: monta um ZIP com o
+// documento (HTML) + cada anexo, buscando o arquivo de onde ele estiver
+// disponível — no Supabase Storage (anexos com "path", vindos do
+// formulário público) ou no IndexedDB local (anexos da criação manual,
+// que só existem no navegador de quem gerou o DAI).
+async function baixarZipDai(daiId) {
+  const dai = (state.ajustesSistemicos || []).find(d => d.id === daiId);
+  if (!dai) { toast('Documento não encontrado — pode já ter sido excluído.', 'error'); return; }
+  if (typeof JSZip === 'undefined') { toast('Biblioteca de compactação não carregou — recarregue a página e tente de novo.', 'error'); return; }
+
+  const btn = (typeof event !== 'undefined' && event?.currentTarget) ? event.currentTarget : null;
+  if (typeof _setBtnLoading === 'function' && btn) _setBtnLoading(btn, true);
+
+  try {
+    const zip = new JSZip();
+    zip.file(`${(dai.tag || dai.numero || 'documento').replace(/[\\/:*?"<>|]/g, '_')}.html`, _daiBuildDocumentoHtml(dai));
+
+    const anexos = Array.isArray(dai.anexos) ? dai.anexos : [];
+    let faltantes = 0;
+    for (let idx = 0; idx < anexos.length; idx++) {
+      const a = anexos[idx];
+      let blob = null;
+
+      // Anexos do formulário público têm "path" no Storage.
+      if (a.path && window.supabaseClient) {
+        try {
+          const { data, error } = await window.supabaseClient.storage.from('solicitacoes-anexos').download(a.path);
+          if (!error && data) blob = data;
+        } catch (err) {
+          console.warn('[DAI] Falha ao baixar anexo do Storage:', err);
+        }
+      }
+
+      // Anexos da criação manual só existem no IndexedDB local (deste
+      // navegador/dispositivo específico).
+      if (!blob && typeof idbGetAnexoDai === 'function') {
+        try { blob = await idbGetAnexoDai(daiId, idx); } catch { /* segue sem esse anexo */ }
+      }
+
+      if (blob) {
+        const nomeSeguro = (a.nome || `anexo_${idx + 1}`).replace(/[\\/:*?"<>|]/g, '_');
+        zip.file(nomeSeguro, blob);
+      } else {
+        faltantes++;
+      }
+    }
+
+    const blobZip = await zip.generateAsync({ type: 'blob' });
+    const url = URL.createObjectURL(blobZip);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${(dai.tag || dai.numero || 'documento').replace(/[\\/:*?"<>|]/g, '_')}.zip`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+
+    toast(
+      faltantes > 0
+        ? `ZIP gerado — ${faltantes} anexo(s) não puderam ser recuperados (só existiam localmente em outro dispositivo).`
+        : `ZIP de ${dai.tag || dai.numero} gerado com sucesso.`,
+      faltantes > 0 ? 'error' : 'success'
+    );
+  } catch (err) {
+    console.error('[DAI] Falha ao gerar ZIP:', err);
+    toast('Falha ao gerar o ZIP. Veja o console para detalhes.', 'error');
+  } finally {
+    if (typeof _setBtnLoading === 'function' && btn) _setBtnLoading(btn, false);
+  }
+}
+
 Object.assign(window, {
   abrirModalDai,
   _daiAddInformanteRow,
@@ -1329,4 +1404,5 @@ Object.assign(window, {
   adicionarAnexoDaiExistente,
   gerarTermoResponsabilidade,
   formatBytes,
+  baixarZipDai,
 });
