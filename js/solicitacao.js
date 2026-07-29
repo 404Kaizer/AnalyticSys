@@ -16,7 +16,13 @@
 // ═══════════════════════════════════════════════════════════
 
 const SUPABASE_URL = 'https://kgbmswykhqhmcajxlvri.supabase.co';
-const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_SFDcmWJ0fSuS0tmWkiibnQ_RLjfRJug';
+// Usando a chave "anon" legada (formato JWT) em vez da chave publicável nova
+// (sb_publishable_...) — o serviço de Storage do Supabase não estava
+// aplicando corretamente o papel "anon" com a chave nova nos uploads
+// anônimos (confirmado por teste: a mesma operação via SQL direto
+// funcionava, mas via API de Storage com a chave nova falhava). Mesmo
+// nível de segurança, formato mais antigo e mais compatível.
+const SUPABASE_PUBLISHABLE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtnYm1zd3lraHFobWNhanhsdnJpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ5NDU5NjEsImV4cCI6MjEwMDUyMTk2MX0.njF0oDlHxJ1DKp_ZcLEGaXnFjCvFLRHnt8N_TGhLJSg';
 const FUNCTION_URL = SUPABASE_URL + '/functions/v1/solicitacao-dai';
 const TURNSTILE_SITEKEY = '0x4AAAAAAD-V-RBGDDiirGsF';
 
