@@ -30,7 +30,17 @@ const ANEXO_MAX_MB = 15;
 const ANEXO_MAX_COUNT = 10;
 const ANEXO_TIPOS_ACEITOS = /^image\/|^application\/pdf$|^application\/msword$|wordprocessingml/;
 
-const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+// CRÍTICO: esta página fica no mesmo domínio do app principal. Sem estas
+// opções, o supabase-js reaproveitaria automaticamente uma sessão de
+// login já salva no navegador (localStorage) — se quem acessasse o link
+// público também estivesse logado no sistema em outra aba, a requisição
+// sairia autenticada como aquele usuário, não como anônima, e o upload
+// falharia (só existe policy de INSERT pra "anon" nesse bucket, de
+// propósito). Estas opções garantem que esta página nunca lê, nunca usa
+// e nunca grava sessão nenhuma — é sempre 100% anônima.
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+  auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+});
 
 let _catalogo = { centrais: [], materiaisPorCategoria: {} };
 let _anexos = []; // { id, file, nome, tamanho, tipo, path, status: 'pendente'|'enviando'|'ok'|'erro' }
