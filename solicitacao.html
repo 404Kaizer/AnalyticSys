@@ -125,24 +125,49 @@
   .sol-loading { text-align: center; padding: 60px 20px; color: var(--text2); font-size: 13px; }
   .sol-loading i { font-size: 26px; display: block; margin-bottom: 10px; animation: sol-spin 1s linear infinite; }
   @keyframes sol-spin { to { transform: rotate(360deg); } }
+
+  .sol-steps-indicator { display: flex; gap: 6px; margin-bottom: 10px; }
+  .sol-steps-indicator .seg { flex: 1; height: 4px; border-radius: 2px; background: var(--border2); transition: background .2s; }
+  .sol-steps-indicator .seg.active, .sol-steps-indicator .seg.done { background: var(--orange); }
+  .sol-steps-label { font-family: var(--mono); font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--text3); margin-bottom: 18px; }
+  .sol-step-footer { display: flex; gap: 10px; flex-wrap: wrap; justify-content: space-between; align-items: center; margin: -4px 0 22px; }
+  .sol-step-footer-right { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+
+  .sol-brand-row { display: flex; align-items: center; gap: 16px; margin-bottom: 6px; flex-wrap: wrap; }
+  .sol-logo-badge { background: #fff; border-radius: 10px; padding: 8px 16px; display: flex; align-items: center; flex-shrink: 0; }
+  .sol-logo-badge img { height: 30px; display: block; }
+  .sol-brand-divider { width: 1px; height: 30px; background: var(--border2); flex-shrink: 0; }
+
+  .sol-card-title { font-size: 16px; font-weight: 700; color: var(--text); margin-bottom: 4px; display: flex; align-items: center; gap: 12px; letter-spacing: -0.01em; }
+  .sol-card-title .icon-badge {
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    width: 34px; height: 34px; border-radius: 10px; background: var(--orange-dim); color: var(--orange); font-size: 16px;
+  }
+  .sol-card-desc { font-size: 12px; color: var(--text2); line-height: 1.6; margin: 0 0 18px; padding-left: 46px; }
 </style>
 </head>
 <body>
 
 <div class="sol-shell">
 
-  <div class="sol-brand">
-    <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <polygon points="18,2 30,9 18,16 6,9" fill="#ff6b35"/>
-      <polygon points="18,16 30,9 30,23 18,30" fill="#c44e1f"/>
-      <polygon points="18,16 6,9 6,23 18,30" fill="#ff9060"/>
-    </svg>
-    <div class="sol-brand-name"><span class="a">ANALYTIC</span><span class="s">SYS</span></div>
+  <div class="sol-brand-row">
+    <div class="sol-logo-badge">
+      <img src="https://concrelagos.com.br/wp-content/uploads/2021/10/Ativo-3.svg" alt="Concrelagos Concreto" onerror="this.parentElement.style.display='none'">
+    </div>
+    <div class="sol-brand-divider"></div>
+    <div class="sol-brand">
+      <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <polygon points="18,2 30,9 18,16 6,9" fill="#ff6b35"/>
+        <polygon points="18,16 30,9 30,23 18,30" fill="#c44e1f"/>
+        <polygon points="18,16 6,9 6,23 18,30" fill="#ff9060"/>
+      </svg>
+      <div class="sol-brand-name"><span class="a">ANALYTIC</span><span class="s">SYS</span></div>
+    </div>
   </div>
   <div class="sol-tagline">ESTOQUE · INSUMOS</div>
 
   <div class="sol-title">Solicitação de Ajuste de Estoque</div>
-  <div class="sol-sub">Preencha para pesagem manual, transferência entre centrais, perda de material, coleta ou qualquer movimentação fora do sistema. Sua solicitação vai direto para o analista responsável — sem precisar de login.</div>
+  <div class="sol-sub">Toda movimentação que muda o estoque físico fora do padrão — ou seja, sem passar por nota de entrada ou consumo da produção — precisa ser registrada aqui: pesagem manual, transferência entre centrais, perda de material, coleta, entre outras. Isso dá rastreabilidade ao que acontece em cada central e evita divergência entre o estoque físico, o controle diário e o sistema — a mesma informação que sustenta os números que chegam até a gerência. Sua solicitação vai direto para o analista responsável, sem precisar de login.</div>
 
   <div id="sol-loading" class="sol-loading">
     <i class="ti ti-loader-2"></i> Carregando formulário…
@@ -152,93 +177,130 @@
 
   <form id="sol-form" style="display:none">
 
-    <div class="sol-card">
-      <div class="sol-card-title"><i class="ti ti-building-warehouse"></i> Onde e quando</div>
-      <div class="sol-grid">
+    <div class="sol-steps-indicator">
+      <div class="seg" data-seg="1"></div>
+      <div class="seg" data-seg="2"></div>
+      <div class="seg" data-seg="3"></div>
+      <div class="seg" data-seg="4"></div>
+    </div>
+    <div class="sol-steps-label" id="sol-steps-label">Etapa 1 de 4 — Onde e quando</div>
+
+    <div class="sol-step" data-step="1">
+      <div class="sol-card">
+        <div class="sol-card-title"><span class="icon-badge"><i class="ti ti-building-warehouse"></i></span> Onde e quando</div>
+        <div class="sol-card-desc">Em qual central a movimentação aconteceu, e a data real do ocorrido (não precisa ser hoje).</div>
+        <div class="sol-grid">
+          <div class="sol-fg">
+            <label class="sol-label">Central <span class="sol-required">*</span></label>
+            <select id="sol-central" class="sol-select" required>
+              <option value="">Selecione a central</option>
+            </select>
+          </div>
+          <div class="sol-fg">
+            <label class="sol-label">Data do ocorrido <span class="sol-required">*</span></label>
+            <input type="date" id="sol-data" class="sol-input" required>
+          </div>
+        </div>
+      </div>
+      <div class="sol-step-footer">
+        <span></span>
+        <div class="sol-step-footer-right">
+          <button type="button" class="sol-btn sol-btn-primary" onclick="avancarStep()">Próximo <i class="ti ti-arrow-right"></i></button>
+        </div>
+      </div>
+    </div>
+
+    <div class="sol-step" data-step="2" style="display:none">
+      <div class="sol-card">
+        <div class="sol-card-title"><span class="icon-badge"><i class="ti ti-package"></i></span> O que aconteceu</div>
+        <div class="sol-card-desc">Motivo da movimentação, material(is) envolvido(s) e uma descrição de como foi identificado.</div>
         <div class="sol-fg">
-          <label class="sol-label">Central <span class="sol-required">*</span></label>
-          <select id="sol-central" class="sol-select" required>
-            <option value="">Selecione a central</option>
+          <label class="sol-label">Categoria de Situação <span class="sol-required">*</span></label>
+          <select id="sol-categoria-situacao" class="sol-select" required onchange="onCategoriaSituacaoChange()">
+            <option value="">Selecione a situação</option>
+            <option value="Perda de material devido a falha na balança">Perda de material devido a falha na balança</option>
+            <option value="Perda de material devido a contaminação">Perda de material devido a contaminação</option>
+            <option value="Perda de material por motivos climáticos ou de terreno">Perda de material por motivos climáticos ou de terreno</option>
+            <option value="Coleta de material contaminado">Coleta de material contaminado</option>
+            <option value="Coleta de material para substituição">Coleta de material para substituição</option>
+            <option value="Pesagem manual (fora da automação)">Pesagem manual (fora da automação)</option>
+            <option value="Transferência de material entre filiais">Transferência de material entre filiais</option>
           </select>
         </div>
-        <div class="sol-fg">
-          <label class="sol-label">Data do ocorrido <span class="sol-required">*</span></label>
-          <input type="date" id="sol-data" class="sol-input" required>
+        <div class="sol-fg" id="sol-fg-filial-destino" style="display:none">
+          <label class="sol-label">Filial de Destino <span class="sol-required">*</span></label>
+          <select id="sol-filial-destino" class="sol-select">
+            <option value="">Selecione a filial de destino</option>
+          </select>
         </div>
-      </div>
-      <div class="sol-fg">
-        <label class="sol-label">Categoria de Situação <span class="sol-required">*</span></label>
-        <select id="sol-categoria-situacao" class="sol-select" required onchange="onCategoriaSituacaoChange()">
-          <option value="">Selecione a situação</option>
-          <option value="Perda de material devido a falha na balança">Perda de material devido a falha na balança</option>
-          <option value="Perda de material devido a contaminação">Perda de material devido a contaminação</option>
-          <option value="Perda de material por motivos climáticos ou de terreno">Perda de material por motivos climáticos ou de terreno</option>
-          <option value="Coleta de material contaminado">Coleta de material contaminado</option>
-          <option value="Coleta de material para substituição">Coleta de material para substituição</option>
-          <option value="Pesagem manual (fora da automação)">Pesagem manual (fora da automação)</option>
-          <option value="Transferência de material entre filiais">Transferência de material entre filiais</option>
-        </select>
-      </div>
-      <div class="sol-fg" id="sol-fg-filial-destino" style="display:none">
-        <label class="sol-label">Filial de Destino <span class="sol-required">*</span></label>
-        <select id="sol-filial-destino" class="sol-select">
-          <option value="">Selecione a filial de destino</option>
-        </select>
-      </div>
-    </div>
-
-    <div class="sol-card">
-      <div class="sol-card-title"><i class="ti ti-package"></i> O que aconteceu</div>
-      <div class="sol-hint" style="margin:-6px 0 10px">O tipo de movimento e a classificação SAP são preenchidos pelo analista depois — você não precisa saber esses códigos.</div>
-      <div id="sol-itens-lista"></div>
-      <button type="button" class="sol-btn sol-add-row-btn" onclick="adicionarItemMaterial()">
-        <i class="ti ti-plus"></i> Adicionar outro material
-      </button>
-      <div class="sol-fg" style="margin-top:16px">
-        <label class="sol-label">Descreva o ocorrido <span class="sol-required">*</span></label>
-        <textarea id="sol-descricao" class="sol-textarea" placeholder="O que aconteceu, como foi identificado…" required></textarea>
-      </div>
-    </div>
-
-    <div class="sol-card">
-      <div class="sol-card-title"><i class="ti ti-user"></i> Quem está informando</div>
-      <div class="sol-hint" style="margin:-6px 0 10px">Cada informante se responsabiliza pelas próprias informações prestadas ao setor de Estoque/Insumos.</div>
-      <div id="sol-informantes-lista"></div>
-      <button type="button" class="sol-btn sol-add-row-btn" onclick="adicionarInformante()">
-        <i class="ti ti-plus"></i> Adicionar outro informante
-      </button>
-    </div>
-
-
-    <div class="sol-card">
-      <div class="sol-card-title"><i class="ti ti-file-signature"></i> Termo de Responsabilidade e anexos</div>
-      <div class="sol-alert sol-alert-info">
-        <i class="ti ti-info-circle"></i>
-        <div>Ao assinar o Termo de Responsabilidade, você (o informante) declara que as informações prestadas nesta solicitação são verídicas e assume a responsabilidade por elas perante o setor de Estoque/Insumos. Imprima o termo abaixo, assine, e anexe a foto/scan dele junto com qualquer outro comprovante (foto da pesagem, etc.) antes de enviar.</div>
-      </div>
-      <button type="button" class="sol-btn" id="sol-btn-imprimir" onclick="imprimirTermo()">
-        <i class="ti ti-printer"></i> Imprimir Termo de Responsabilidade
-      </button>
-
-      <div class="sol-fg" style="margin-top:16px">
-        <label class="sol-label">Anexos <span class="sol-required">*</span> <span class="sol-hint">(termo assinado + comprovantes — imagem, PDF ou Word, até 15MB cada)</span></label>
-        <div class="sol-dropzone" id="sol-dropzone" onclick="document.getElementById('sol-anexos-input').click()">
-          <i class="ti ti-cloud-upload"></i>
-          Clique ou arraste os arquivos aqui
-        </div>
-        <input type="file" id="sol-anexos-input" style="display:none" multiple accept="image/*,.pdf,.doc,.docx">
-        <div class="sol-anexo-lista" id="sol-anexo-lista"></div>
-      </div>
-    </div>
-
-    <div class="sol-turnstile" id="turnstile-solicitacao-widget"></div>
-
-    <div class="sol-actions">
-      <span style="font-size:11px;color:var(--text3)">Campos com <span class="sol-required">*</span> são obrigatórios.</span>
-      <div class="sol-actions-right">
-        <button type="submit" class="sol-btn sol-btn-primary" id="sol-btn-enviar">
-          <i class="ti ti-send"></i> Enviar solicitação
+        <div class="sol-hint" style="margin:6px 0 10px">O tipo de movimento e a classificação SAP são preenchidos pelo analista depois — você não precisa saber esses códigos.</div>
+        <div id="sol-itens-lista"></div>
+        <button type="button" class="sol-btn sol-add-row-btn" onclick="adicionarItemMaterial()">
+          <i class="ti ti-plus"></i> Adicionar outro material
         </button>
+        <div class="sol-fg" style="margin-top:16px">
+          <label class="sol-label">Descreva o ocorrido <span class="sol-required">*</span></label>
+          <textarea id="sol-descricao" class="sol-textarea" placeholder="O que aconteceu, como foi identificado…" required></textarea>
+        </div>
+      </div>
+      <div class="sol-step-footer">
+        <button type="button" class="sol-btn" onclick="voltarStep()"><i class="ti ti-arrow-left"></i> Anterior</button>
+        <div class="sol-step-footer-right">
+          <button type="button" class="sol-btn sol-btn-primary" onclick="avancarStep()">Próximo <i class="ti ti-arrow-right"></i></button>
+        </div>
+      </div>
+    </div>
+
+    <div class="sol-step" data-step="3" style="display:none">
+      <div class="sol-card">
+        <div class="sol-card-title"><span class="icon-badge"><i class="ti ti-user"></i></span> Quem está informando</div>
+        <div class="sol-card-desc">Nome, cargo e contato de cada pessoa que está relatando o ocorrido — cada informante se responsabiliza pelo que declarou.</div>
+        <div id="sol-informantes-lista"></div>
+        <button type="button" class="sol-btn sol-add-row-btn" onclick="adicionarInformante()">
+          <i class="ti ti-plus"></i> Adicionar outro informante
+        </button>
+      </div>
+      <div class="sol-step-footer">
+        <button type="button" class="sol-btn" onclick="voltarStep()"><i class="ti ti-arrow-left"></i> Anterior</button>
+        <div class="sol-step-footer-right">
+          <button type="button" class="sol-btn sol-btn-primary" onclick="avancarStep()">Próximo <i class="ti ti-arrow-right"></i></button>
+        </div>
+      </div>
+    </div>
+
+    <div class="sol-step" data-step="4" style="display:none">
+      <div class="sol-card">
+        <div class="sol-card-title"><span class="icon-badge"><i class="ti ti-file-signature"></i></span> Termo de Responsabilidade e anexos</div>
+        <div class="sol-card-desc">Documento que formaliza a responsabilidade sobre o que foi declarado, mais o comprovante da movimentação.</div>
+        <div class="sol-alert sol-alert-info">
+          <i class="ti ti-info-circle"></i>
+          <div>Ao assinar o Termo de Responsabilidade, você (o informante) declara que as informações prestadas nesta solicitação são verídicas e assume a responsabilidade por elas perante o setor de Estoque/Insumos. Imprima o termo abaixo, assine, e anexe a foto/scan dele junto com qualquer outro comprovante (foto da pesagem, etc.) antes de enviar.</div>
+        </div>
+        <button type="button" class="sol-btn" id="sol-btn-imprimir" onclick="imprimirTermo()">
+          <i class="ti ti-printer"></i> Imprimir Termo de Responsabilidade
+        </button>
+
+        <div class="sol-fg" style="margin-top:16px">
+          <label class="sol-label">Anexos <span class="sol-required">*</span> <span class="sol-hint">(termo assinado + comprovantes — imagem, PDF ou Word, até 15MB cada)</span></label>
+          <div class="sol-dropzone" id="sol-dropzone" onclick="document.getElementById('sol-anexos-input').click()">
+            <i class="ti ti-cloud-upload"></i>
+            Clique ou arraste os arquivos aqui
+          </div>
+          <input type="file" id="sol-anexos-input" style="display:none" multiple accept="image/*,.pdf,.doc,.docx">
+          <div class="sol-anexo-lista" id="sol-anexo-lista"></div>
+        </div>
+      </div>
+
+      <div class="sol-turnstile" id="turnstile-solicitacao-widget"></div>
+
+      <div class="sol-step-footer">
+        <button type="button" class="sol-btn" onclick="voltarStep()"><i class="ti ti-arrow-left"></i> Anterior</button>
+        <div class="sol-step-footer-right">
+          <span style="font-size:11px;color:var(--text3)">Campos com <span class="sol-required">*</span> são obrigatórios.</span>
+          <button type="submit" class="sol-btn sol-btn-primary" id="sol-btn-enviar">
+            <i class="ti ti-send"></i> Enviar solicitação
+          </button>
+        </div>
       </div>
     </div>
   </form>

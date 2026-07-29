@@ -57,6 +57,86 @@ let _itemSeq = 0;
 let _informantes = []; // { id, nome, cargo, contato }
 let _infSeq = 0;
 
+// ── Navegação por etapas (wizard) ──────────────────────────────────────
+const STEP_LABELS = {
+  1: 'Etapa 1 de 4 — Onde e quando',
+  2: 'Etapa 2 de 4 — O que aconteceu',
+  3: 'Etapa 3 de 4 — Quem está informando',
+  4: 'Etapa 4 de 4 — Termo e anexos',
+};
+let _stepAtual = 1;
+
+function irParaStep(n) {
+  document.querySelectorAll('.sol-step').forEach((el) => {
+    el.style.display = Number(el.dataset.step) === n ? '' : 'none';
+  });
+  document.querySelectorAll('.sol-steps-indicator .seg').forEach((el) => {
+    const s = Number(el.dataset.seg);
+    el.classList.toggle('active', s === n);
+    el.classList.toggle('done', s < n);
+  });
+  const label = document.getElementById('sol-steps-label');
+  if (label) label.textContent = STEP_LABELS[n] || '';
+  _stepAtual = n;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function avancarStep() {
+  limparAlerta();
+  if (_stepAtual === 1 && !validarSecaoOndeEQuando()) return;
+  if (_stepAtual === 2 && !validarSecaoOQueAconteceu()) return;
+  if (_stepAtual === 3 && !validarSecaoInformantes()) return;
+  irParaStep(Math.min(_stepAtual + 1, 4));
+}
+window.avancarStep = avancarStep;
+
+function voltarStep() {
+  limparAlerta();
+  irParaStep(Math.max(_stepAtual - 1, 1));
+}
+window.voltarStep = voltarStep;
+
+// ── Validação por seção (reaproveitada tanto pra avançar de etapa
+// quanto pela checagem final antes do envio) ───────────────────────────
+function validarSecaoOndeEQuando() {
+  const central = _valorAtual('sol-central');
+  const dataOcorrido = _valorAtual('sol-data');
+  if (!central) { mostrarAlerta('Selecione a central.', 'error'); return false; }
+  if (!dataOcorrido) { mostrarAlerta('Informe a data do ocorrido.', 'error'); return false; }
+  if (dataOcorrido > hoje()) { mostrarAlerta('A data do ocorrido não pode ser no futuro.', 'error'); return false; }
+  return true;
+}
+
+function validarSecaoOQueAconteceu() {
+  const central = _valorAtual('sol-central');
+  const categoriaSituacao = _valorAtual('sol-categoria-situacao');
+  const filialDestino = _valorAtual('sol-filial-destino');
+  const descricao = _valorAtual('sol-descricao');
+
+  if (!categoriaSituacao) { mostrarAlerta('Selecione a categoria de situação.', 'error'); return false; }
+  if (categoriaSituacao === CATEGORIA_TRANSFERENCIA) {
+    if (!filialDestino) { mostrarAlerta('Selecione a filial de destino.', 'error'); return false; }
+    if (filialDestino === central) { mostrarAlerta('A filial de destino não pode ser igual à central de origem.', 'error'); return false; }
+  }
+  if (!_itensMateriais.length) { mostrarAlerta('Adicione ao menos um material.', 'error'); return false; }
+  for (const it of _itensMateriais) {
+    if (!it.material) { mostrarAlerta('Selecione o material em todas as linhas adicionadas (ou remova as vazias).', 'error'); return false; }
+    const pesoNum = parseFloat(String(it.peso).replace(',', '.'));
+    if (!it.peso || isNaN(pesoNum) || pesoNum <= 0) { mostrarAlerta(`Informe um peso válido para "${it.material}".`, 'error'); return false; }
+  }
+  if (!descricao) { mostrarAlerta('Descreva o ocorrido.', 'error'); return false; }
+  return true;
+}
+
+function validarSecaoInformantes() {
+  if (!_informantes.length) { mostrarAlerta('Informe ao menos um informante.', 'error'); return false; }
+  for (const inf of _informantes) {
+    if (!inf.nome.trim()) { mostrarAlerta('Informe o nome em todas as linhas de informante adicionadas (ou remova as vazias).', 'error'); return false; }
+    if (!inf.cargo) { mostrarAlerta(`Selecione o cargo de "${inf.nome}".`, 'error'); return false; }
+  }
+  return true;
+}
+
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
@@ -442,32 +522,15 @@ async function enviarSolicitacao(ev) {
   ev.preventDefault();
   limparAlerta();
 
+  if (!validarSecaoOndeEQuando()) return;
+  if (!validarSecaoOQueAconteceu()) return;
+  if (!validarSecaoInformantes()) return;
+
   const central = _valorAtual('sol-central');
   const dataOcorrido = _valorAtual('sol-data');
   const categoriaSituacao = _valorAtual('sol-categoria-situacao');
   const filialDestino = _valorAtual('sol-filial-destino');
   const descricao = _valorAtual('sol-descricao');
-
-  if (!central) return mostrarAlerta('Selecione a central.', 'error');
-  if (!dataOcorrido) return mostrarAlerta('Informe a data do ocorrido.', 'error');
-  if (dataOcorrido > hoje()) return mostrarAlerta('A data do ocorrido não pode ser no futuro.', 'error');
-  if (!categoriaSituacao) return mostrarAlerta('Selecione a categoria de situação.', 'error');
-  if (categoriaSituacao === CATEGORIA_TRANSFERENCIA && !filialDestino) return mostrarAlerta('Selecione a filial de destino.', 'error');
-  if (categoriaSituacao === CATEGORIA_TRANSFERENCIA && filialDestino === central) return mostrarAlerta('A filial de destino não pode ser igual à central de origem.', 'error');
-  if (!descricao) return mostrarAlerta('Descreva o ocorrido.', 'error');
-
-  if (!_itensMateriais.length) return mostrarAlerta('Adicione ao menos um material.', 'error');
-  for (const it of _itensMateriais) {
-    if (!it.material) return mostrarAlerta('Selecione o material em todas as linhas adicionadas (ou remova as vazias).', 'error');
-    const pesoNum = parseFloat(String(it.peso).replace(',', '.'));
-    if (!it.peso || isNaN(pesoNum) || pesoNum <= 0) return mostrarAlerta(`Informe um peso válido para "${it.material}".`, 'error');
-  }
-
-  if (!_informantes.length) return mostrarAlerta('Informe ao menos um informante.', 'error');
-  for (const inf of _informantes) {
-    if (!inf.nome.trim()) return mostrarAlerta('Informe o nome em todas as linhas de informante adicionadas (ou remova as vazias).', 'error');
-    if (!inf.cargo) return mostrarAlerta(`Selecione o cargo de "${inf.nome}".`, 'error');
-  }
 
   if (_anexos.some((a) => a.status === 'enviando')) return mostrarAlerta('Aguarde o envio dos anexos terminar.', 'error');
   if (_anexos.some((a) => a.status === 'erro')) return mostrarAlerta('Remova ou reenvie os anexos que falharam antes de continuar.', 'error');
@@ -555,6 +618,7 @@ async function boot() {
     popularCentrais();
     _renderItensMateriais();
     _renderInformantes();
+    irParaStep(1);
     document.getElementById('sol-loading').style.display = 'none';
     document.getElementById('sol-form').style.display = 'block';
   } catch (err) {
