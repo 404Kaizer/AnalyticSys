@@ -46,6 +46,25 @@ let _adminCurrentRows = [];     // linhas do módulo atualmente exibido em "Dado
 let _adminEditContext = null;   // { modulo, id } do registro em edição
 let _adminPresenceInterval = null; // atualização automática enquanto a seção Usuários está visível
 
+// ── Seleção em massa (ações em lote — excluir/editar vários registros) ──
+// Dois modos, mutuamente exclusivos:
+//  1) Seleção manual — Set de IDs marcados individualmente. SOBREVIVE à
+//     paginação de propósito (o Hugo pode marcar itens em páginas
+//     diferentes antes de aplicar uma ação), mas é resetada ao trocar de
+//     módulo ou de termo de busca (os IDs de um módulo/filtro não fazem
+//     sentido no outro).
+//  2) "Todos os N do filtro" — flag booleana. Ativada só a partir do
+//     banner (2º clique, padrão Gmail — nunca no 1º clique em "selecionar
+//     tudo da página"), e só quando existe uma busca ativa (ver
+//     adminSelecionarTodosFiltro). Enquanto ativa, os checkboxes ficam
+//     travados (checked+disabled) — decisão deliberada pra não ter que
+//     lidar com "lista de exclusão dentro do modo todos", que é a fonte
+//     clássica de bug de seleção em massa. Sair do modo (Limpar seleção)
+//     sempre zera pra um estado limpo, nunca reconstrói um meio-termo.
+let _adminSelectedIds = new Set();
+let _adminSelecaoTodosFiltro = false;
+let _adminLoteEditContext = null; // { modulo } — módulo alvo do modal de edição em massa
+
 // ── Tipos de campo por módulo (conferido no schema real do banco) ──────
 // Usado só pelo formulário de edição/busca — decide que tipo de input
 // renderizar (number/boolean/array) e quais colunas entram na busca por
@@ -105,6 +124,7 @@ function _adminBuildSearchOr(modulo, cfg) {
 function adminBuscarModulo() {
   const input = document.getElementById('admin-search-input');
   _adminSearchTerm = (input?.value || '').trim();
+  _adminLimparSelecaoInterno(); // novo filtro — os IDs/modo "todos" do filtro anterior não valem mais
   adminLoadModulo('first');
 }
 
@@ -112,6 +132,7 @@ function adminLimparBuscaModulo() {
   _adminSearchTerm = '';
   const input = document.getElementById('admin-search-input');
   if (input) input.value = '';
+  _adminLimparSelecaoInterno();
   adminLoadModulo('first');
 }
 
@@ -121,6 +142,7 @@ function adminTrocarModulo() {
   _adminSearchTerm = '';
   const input = document.getElementById('admin-search-input');
   if (input) input.value = '';
+  _adminLimparSelecaoInterno(); // troca de tabela — IDs de um módulo não existem no outro
   adminLoadModulo('first');
 }
 
@@ -305,6 +327,94 @@ async function adminLoadUserTableCounts() {
   tbody.innerHTML = linhas + linhaTotal;
 }
 
+// ── "Resumo por Usuário" (29/07) ────────────────────────────
+// Combina TRÊS fontes pra dar o quadro completo de cada usuário:
+//   1) admin_user_table_counts() — linhas por tabela (já existente)
+//   2) admin_user_table_sizes()  — bytes por tabela no Postgres (novo)
+//   3) admin_storage_stats()     — bytes no Storage, por usuário+módulo
+//      (já existente — é onde Entradas/Saídas/Lançamentos/SAP realmente
+//      guardam o volume grande, como arquivos .json.gz, não como linhas
+//      — ver cloud-backup.js. Por isso "Total de Linhas" abaixo NÃO
+//      inclui esses 4 módulos de verdade, mas "Tamanho estimado" inclui
+//      as duas fontes somadas.)
+// admin_storage_stats() identifica o usuário por E-MAIL (não por
+// user_id, ver a própria função) — por isso o cruzamento com o banco
+// (que usa user_id) é feito via u.email, não via id.
+async function adminLoadUserSummary() {
+  const thead = document.getElementById('admin-user-summary-thead');
+  const tbody = document.getElementById('admin-user-summary-tbody');
+  if (!thead || !tbody) return;
+
+  tbody.innerHTML = `<tr><td><div class="empty-state"><i class="ti ti-loader"></i><p>Carregando...</p></div></td></tr>`;
+
+  if (!_adminProfiles.length) {
+    const { data } = await window.supabaseClient.from('profiles').select('id, email');
+    _adminProfiles = data || [];
+  }
+  const usuarios = _adminProfiles.slice().sort((a, b) => (a.email || '').localeCompare(b.email || ''));
+
+  const [countsRes, sizesRes, storageRes] = await Promise.all([
+    window.supabaseClient.rpc('admin_user_table_counts'),
+    window.supabaseClient.rpc('admin_user_table_sizes'),
+    window.supabaseClient.rpc('admin_storage_stats'),
+  ]);
+
+  const erro = countsRes.error || sizesRes.error || storageRes.error;
+  if (erro) {
+    tbody.innerHTML = `<tr><td><div class="empty-state"><i class="ti ti-alert-triangle"></i><p>Falha ao carregar: ${_adminEsc(erro.message)}</p></div></td></tr>`;
+    return;
+  }
+
+  // linhasPorTabela[tabela][user_id] = contagem
+  const linhasPorTabela = {};
+  (countsRes.data || []).forEach(c => {
+    if (!linhasPorTabela[c.table_name]) linhasPorTabela[c.table_name] = {};
+    linhasPorTabela[c.table_name][c.user_id] = Number(c.row_count) || 0;
+  });
+
+  // bytesBancoPorTabela[tabela][user_id] = bytes (só as 18 tabelas do Postgres)
+  const bytesBancoPorTabela = {};
+  (sizesRes.data || []).forEach(s => {
+    if (!bytesBancoPorTabela[s.table_name]) bytesBancoPorTabela[s.table_name] = {};
+    bytesBancoPorTabela[s.table_name][s.user_id] = Number(s.total_bytes) || 0;
+  });
+
+  // bytesStoragePorEmail[email] = soma de todos os módulos daquele usuário
+  // no Storage (Entradas/Saídas/Lançamentos/SAP entram aqui, não em linhas)
+  const storageStats = Array.isArray(storageRes.data) ? storageRes.data[0] : storageRes.data;
+  const bytesStoragePorEmail = {};
+  (storageStats?.pastas || []).forEach(p => {
+    bytesStoragePorEmail[p.usuario] = (bytesStoragePorEmail[p.usuario] || 0) + Number(p.bytes || 0);
+  });
+
+  const tabelas = Object.keys(ADMIN_MODULOS);
+  thead.innerHTML = `<tr><th>Usuário</th>${tabelas.map(t => `<th style="text-align:center">${_adminEsc(ADMIN_MODULOS[t]?.label || t)}</th>`).join('')}<th style="text-align:center">Total de Linhas</th><th style="text-align:center">Tamanho estimado</th></tr>`;
+
+  if (!usuarios.length) {
+    tbody.innerHTML = `<tr><td><div class="empty-state"><i class="ti ti-database-off"></i><p>Sem usuários.</p></div></td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = usuarios.map(u => {
+    let totalLinhas = 0;
+    let totalBytesBanco = 0;
+    const cells = tabelas.map(t => {
+      const n = linhasPorTabela[t]?.[u.id] || 0;
+      totalLinhas += n;
+      totalBytesBanco += bytesBancoPorTabela[t]?.[u.id] || 0;
+      return `<td style="text-align:center;${n === 0 ? 'color:var(--text3)' : ''}">${n.toLocaleString('pt-BR')}</td>`;
+    }).join('');
+    const bytesStorage = bytesStoragePorEmail[u.email] || 0;
+    const tamanhoTotal = totalBytesBanco + bytesStorage;
+    return `<tr>
+      <td title="${_adminEsc(u.email)}">${_adminEsc((u.email || '').split('@')[0])}</td>
+      ${cells}
+      <td style="text-align:center;font-weight:600">${totalLinhas.toLocaleString('pt-BR')}</td>
+      <td style="text-align:center;font-weight:600">${formatBytes(tamanhoTotal)}</td>
+    </tr>`;
+  }).join('');
+}
+
 function _adminEsc(s) {
   return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
@@ -473,8 +583,9 @@ async function adminLoadModulo(direction = 'first') {
     _adminPageTotal = null;
   }
 
-  thead.innerHTML = `<tr><th>Dono</th>${cfg.cols.map(c => `<th>${_adminEsc(c)}</th>`).join('')}<th></th></tr>`;
-  const colspan = cfg.cols.length + 2;
+  const checkboxTh = cfg.readOnly ? '' : `<th class="th-checkbox"><input type="checkbox" id="admin-check-all" onchange="adminToggleSelecionarTudoPagina(this.checked)" title="Selecionar todos os registros desta página"></th>`;
+  thead.innerHTML = `<tr>${checkboxTh}<th>Dono</th>${cfg.cols.map(c => `<th>${_adminEsc(c)}</th>`).join('')}<th></th></tr>`;
+  const colspan = cfg.cols.length + 2 + (cfg.readOnly ? 0 : 1);
   tbody.innerHTML = `<tr><td colspan="${colspan}"><div class="empty-state"><i class="ti ti-loader"></i><p>Carregando...</p></div></td></tr>`;
   _adminSetPageInfo('Carregando...');
 
@@ -490,7 +601,7 @@ async function adminLoadModulo(direction = 'first') {
     let countQuery = window.supabaseClient.from(modulo).select('*', { count: 'exact', head: true });
     const orCount = _adminBuildSearchOr(modulo, cfg);
     if (orCount) countQuery = countQuery.or(orCount);
-    countQuery.then(({ count }) => { _adminPageTotal = count ?? null; _adminSetPageInfo(); });
+    countQuery.then(({ count }) => { _adminPageTotal = count ?? null; _adminSetPageInfo(); _adminAtualizarBarraLote(); });
   }
 
   const asc = direction !== 'prev' && direction !== 'last'; // prev/last buscam em DESC pra pegar o "lado de baixo"
@@ -504,6 +615,7 @@ async function adminLoadModulo(direction = 'first') {
   if (error) {
     tbody.innerHTML = `<tr><td colspan="${colspan}"><div class="empty-state"><i class="ti ti-alert-triangle"></i><p>Falha ao carregar: ${_adminEsc(error.message)}</p></div></td></tr>`;
     _adminSetPageInfo('—');
+    _adminAtualizarBarraLote();
     return;
   }
 
@@ -535,10 +647,12 @@ async function adminLoadModulo(direction = 'first') {
       : 'Nenhum registro nesta tabela.';
     tbody.innerHTML = `<tr><td colspan="${colspan}"><div class="empty-state"><i class="ti ti-database-off"></i><p>${msg}</p></div></td></tr>`;
     _adminSetPageInfo();
+    _adminAtualizarBarraLote();
     return;
   }
 
   tbody.innerHTML = _adminCurrentRows.map(row => {
+    const idStr = String(row.id);
     const dono = emailPorId[row.user_id] || '—';
     const cells = cfg.cols.map(c => {
       let v = row[c];
@@ -551,7 +665,9 @@ async function adminLoadModulo(direction = 'first') {
       ? `<span style="font-size:11px;color:var(--text3)" title="Registro append-only — sem edição/exclusão por design"><i class="ti ti-lock"></i> Somente leitura</span>`
       : `<button class="btn-icon" title="Editar" onclick="adminAbrirEdicao('${modulo}','${row.id}')"><i class="ti ti-edit"></i></button>
       <button class="btn-icon danger" title="Excluir" onclick="adminExcluirRegistro('${modulo}','${row.id}')"><i class="ti ti-trash"></i></button>`;
+    const checkboxTd = cfg.readOnly ? '' : `<td class="th-checkbox"><input type="checkbox" ${(_adminSelecaoTodosFiltro || _adminSelectedIds.has(idStr)) ? 'checked' : ''} ${_adminSelecaoTodosFiltro ? 'disabled' : ''} onchange="adminToggleSelecaoLinha('${idStr}', this.checked)"></td>`;
     return `<tr>
+      ${checkboxTd}
       <td style="font-size:11px;color:var(--text3)">${_adminEsc(dono)}</td>
       ${cells}
       <td style="white-space:nowrap">
@@ -561,6 +677,7 @@ async function adminLoadModulo(direction = 'first') {
   }).join('');
 
   _adminSetPageInfo();
+  _adminAtualizarBarraLote();
 }
 
 // Rótulo "X-Y de N registros (pág. P/T)" — mesmo formato usado no resto
@@ -631,6 +748,273 @@ function adminModuloUltimaPagina() {
   adminLoadModulo('last');
 }
 
+// ── Seleção em massa ──────────────────────────────────────────
+// Reset "silencioso" (sem re-render de tela) usado só internamente pelos
+// pontos que já vão chamar adminLoadModulo('first') logo em seguida
+// (busca/limpar busca/trocar módulo) — o próprio reload já reconstrói o
+// thead/tbody do zero, então não precisa (nem faz sentido) tocar no DOM
+// aqui antes disso.
+function _adminLimparSelecaoInterno() {
+  _adminSelectedIds.clear();
+  _adminSelecaoTodosFiltro = false;
+}
+
+function adminToggleSelecaoLinha(id, checked) {
+  if (_adminSelecaoTodosFiltro) return; // travado nesse modo — só "Limpar seleção" sai dele
+  if (checked) _adminSelectedIds.add(String(id));
+  else _adminSelectedIds.delete(String(id));
+  _adminAtualizarBarraLote();
+}
+
+// Checkbox do cabeçalho — marca/desmarca só os registros da PÁGINA ATUAL
+// (⇒ nunca mexe em linhas fora da tela). "Selecionar todos os N do
+// filtro" é uma ação deliberada à parte, via banner (ver
+// adminSelecionarTodosFiltro), nunca um efeito colateral deste checkbox.
+function adminToggleSelecionarTudoPagina(checked) {
+  if (_adminSelecaoTodosFiltro) return;
+  _adminCurrentRows.forEach(r => {
+    const id = String(r.id);
+    if (checked) _adminSelectedIds.add(id);
+    else _adminSelectedIds.delete(id);
+  });
+  document.querySelectorAll('#admin-dados-tbody input[type="checkbox"]').forEach((cb, i) => {
+    if (_adminCurrentRows[i]) cb.checked = _adminSelectedIds.has(String(_adminCurrentRows[i].id));
+  });
+  _adminAtualizarBarraLote();
+}
+
+// Ativa o modo "todos os N registros do filtro" — só alcançável a partir
+// do banner (2º clique, depois que a página inteira já foi marcada), e
+// SÓ com uma busca ativa. Essa exigência é proposital: sem ela, "todos"
+// numa tabela sem filtro poderia significar literalmente a tabela
+// inteira (ex.: 600 mil linhas em `sap`/`lancamentos`) selecionada em 2
+// cliques — risco grande demais pra uma ação que alimenta exclusão/edição
+// em massa. Com filtro obrigatório, a ação em lote sempre tem uma
+// cláusula WHERE de verdade por trás (ver _adminExecutar* abaixo).
+function adminSelecionarTodosFiltro() {
+  if (!_adminSearchTerm || _adminPageTotal === null) return;
+  _adminSelecaoTodosFiltro = true;
+  _adminSelectedIds.clear(); // o modo "todos" substitui qualquer seleção manual anterior
+  document.querySelectorAll('#admin-dados-tbody input[type="checkbox"]').forEach(cb => { cb.checked = true; cb.disabled = true; });
+  const checkAll = document.getElementById('admin-check-all');
+  if (checkAll) { checkAll.checked = true; checkAll.indeterminate = false; checkAll.disabled = true; }
+  _adminAtualizarBarraLote();
+  toast(`Todos os ${_adminPageTotal.toLocaleString('pt-BR')} registros que batem na busca atual foram selecionados.`, 'success');
+}
+
+// Sai de qualquer modo de seleção (manual ou "todos do filtro") e volta
+// a tela ao estado neutro — sem recarregar do banco, só desmarca/reabilita
+// os checkboxes já renderizados na página atual.
+function adminLimparSelecao() {
+  _adminSelectedIds.clear();
+  _adminSelecaoTodosFiltro = false;
+  document.querySelectorAll('#admin-dados-tbody input[type="checkbox"]').forEach(cb => { cb.checked = false; cb.disabled = false; });
+  const checkAll = document.getElementById('admin-check-all');
+  if (checkAll) { checkAll.checked = false; checkAll.indeterminate = false; checkAll.disabled = false; }
+  _adminAtualizarBarraLote();
+}
+
+function _adminContagemSelecionada() {
+  return _adminSelecaoTodosFiltro ? (_adminPageTotal || 0) : _adminSelectedIds.size;
+}
+
+// Atualiza a barra de ação em lote, o checkbox "selecionar tudo" do
+// cabeçalho (estado marcado/indeterminado) e o banner "selecionar todos
+// os N do filtro" — chamada depois de qualquer mudança de seleção ou
+// depois que a contagem exata assíncrona chega (ver adminLoadModulo).
+function _adminAtualizarBarraLote() {
+  const bar = document.getElementById('admin-lote-bar');
+  const countEl = document.getElementById('admin-lote-count');
+  const checkAllEl = document.getElementById('admin-check-all');
+  const banner = document.getElementById('admin-selectall-banner');
+  const n = _adminContagemSelecionada();
+
+  if (bar) bar.style.display = n > 0 ? 'flex' : 'none';
+  if (countEl) {
+    countEl.innerHTML = _adminSelecaoTodosFiltro
+      ? `<i class="ti ti-checks"></i> Todos os ${n.toLocaleString('pt-BR')} registros deste filtro selecionados`
+      : `<i class="ti ti-checks"></i> ${n === 1 ? '1 registro selecionado' : n.toLocaleString('pt-BR') + ' registros selecionados'}`;
+  }
+
+  const idsPagina = _adminCurrentRows.map(r => String(r.id));
+  const todosPaginaSelecionados = idsPagina.length > 0 && idsPagina.every(id => _adminSelectedIds.has(id));
+
+  if (checkAllEl && !_adminSelecaoTodosFiltro) {
+    checkAllEl.disabled = false;
+    checkAllEl.checked = todosPaginaSelecionados;
+    checkAllEl.indeterminate = !todosPaginaSelecionados && idsPagina.some(id => _adminSelectedIds.has(id));
+  }
+
+  if (banner) {
+    if (_adminSelecaoTodosFiltro) {
+      banner.style.display = 'none'; // já é "tudo" — nada mais a oferecer
+    } else {
+      const totalFiltro = _adminPageTotal;
+      const haMaisParaSelecionar = totalFiltro !== null && totalFiltro > _adminSelectedIds.size;
+      const mostrar = todosPaginaSelecionados && haMaisParaSelecionar;
+      banner.style.display = mostrar ? 'flex' : 'none';
+      if (mostrar) {
+        banner.innerHTML = _adminSearchTerm
+          ? `<span><i class="ti ti-info-circle"></i> Todos os ${idsPagina.length} registros desta página estão selecionados.</span>
+             <button type="button" class="admin-selectall-link" onclick="adminSelecionarTodosFiltro()">Selecionar todos os ${totalFiltro.toLocaleString('pt-BR')} que batem na busca atual</button>`
+          : `<span><i class="ti ti-info-circle"></i> Todos os ${idsPagina.length} registros desta página estão selecionados. Pra selecionar mais que isso de uma vez, aplique uma busca primeiro — seleção de "todos" sem filtro ativo não é permitida, por segurança.</span>`;
+      }
+    }
+  }
+}
+
+// ── Exclusão em massa ─────────────────────────────────────────
+function adminExcluirLote() {
+  const modulo = document.getElementById('admin-modulo-select')?.value;
+  const cfg = ADMIN_MODULOS[modulo];
+  if (!cfg || cfg.readOnly) return; // append-only — RLS bloquearia mesmo assim
+  const n = _adminContagemSelecionada();
+  if (!n) return;
+
+  const escopoTexto = _adminSelecaoTodosFiltro
+    ? `TODOS os ${n.toLocaleString('pt-BR')} registros que batem na busca "${_adminEsc(_adminSearchTerm)}" — não só os visíveis nesta página`
+    : `${n.toLocaleString('pt-BR')} registro(s) selecionado(s) manualmente`;
+
+  confirmarDestrutivo({
+    title: 'Confirmar exclusão em massa',
+    sub: cfg.label,
+    body: `Você está prestes a excluir definitivamente ${escopoTexto}, da tabela <strong>${_adminEsc(cfg.label)}</strong>. Esta ação não pode ser desfeita.`,
+    confirmLabel: 'Excluir em massa',
+    requireConsent: true,
+    consentLabel: `Entendo que isso exclui ${n.toLocaleString('pt-BR')} registro(s) permanentemente.`,
+    onConfirm: () => _adminExecutarExclusaoLote(modulo),
+  });
+}
+
+async function _adminExecutarExclusaoLote(modulo) {
+  const cfg = ADMIN_MODULOS[modulo];
+  if (!cfg || cfg.readOnly) return;
+
+  let query = window.supabaseClient.from(modulo).delete();
+  if (_adminSelecaoTodosFiltro) {
+    // Segunda checagem (defesa em profundidade) — mesmo que algum caminho
+    // de UI inesperado chegasse aqui sem busca ativa, a ação é bloqueada
+    // antes de qualquer chamada ao banco. Nunca um DELETE sem filtro.
+    const orClause = _adminBuildSearchOr(modulo, cfg);
+    if (!_adminSearchTerm || !orClause) {
+      toast('Ação bloqueada: exclusão de "todos os registros do filtro" exige uma busca ativa.', 'error');
+      return;
+    }
+    query = query.or(orClause);
+  } else {
+    const ids = [..._adminSelectedIds];
+    if (!ids.length) return;
+    query = query.in('id', ids);
+  }
+
+  const { error } = await query;
+  if (error) { toast('Falha ao excluir em massa: ' + error.message, 'error'); return; }
+  toast('Registros excluídos.', 'success');
+  adminLimparSelecao();
+  adminLoadModulo();
+}
+
+// ── Edição em massa (um campo por vez) ──────────────────────────
+function adminAbrirEdicaoLote() {
+  const modulo = document.getElementById('admin-modulo-select')?.value;
+  const cfg = ADMIN_MODULOS[modulo];
+  if (!cfg || cfg.readOnly) return;
+  const n = _adminContagemSelecionada();
+  if (!n) return;
+
+  _adminLoteEditContext = { modulo };
+  const subEl = document.getElementById('admin-lote-edit-sub');
+  if (subEl) subEl.textContent = `${cfg.label} — ${n.toLocaleString('pt-BR')} registro(s) selecionado(s)`;
+
+  const campoSelect = document.getElementById('admin-lote-edit-campo');
+  if (campoSelect) campoSelect.innerHTML = cfg.cols.map(c => `<option value="${_adminEsc(c)}">${_adminEsc(c)}</option>`).join('');
+
+  _adminLoteEditRenderCampo();
+  const errEl = document.getElementById('admin-lote-edit-error');
+  if (errEl) errEl.style.display = 'none';
+  openModal('admin-lote-edit-modal');
+}
+
+// Redesenha o input de valor quando o campo escolhido muda (tipo
+// texto/número/sim-não/lista) — reaproveita _adminRenderFieldInput, o
+// mesmo helper usado pelo formulário de edição individual.
+function _adminLoteEditRenderCampo() {
+  const { modulo } = _adminLoteEditContext || {};
+  const col = document.getElementById('admin-lote-edit-campo')?.value;
+  const wrap = document.getElementById('admin-lote-edit-valor-wrap');
+  if (!modulo || !col || !wrap) return;
+  wrap.innerHTML = _adminRenderFieldInput(modulo, col, '', 'admin-lote-edit-valor');
+}
+
+function adminAplicarEdicaoLote() {
+  const { modulo } = _adminLoteEditContext || {};
+  const cfg = ADMIN_MODULOS[modulo];
+  const errEl = document.getElementById('admin-lote-edit-error');
+  if (errEl) errEl.style.display = 'none';
+  if (!cfg || cfg.readOnly) return;
+
+  const col = document.getElementById('admin-lote-edit-campo')?.value;
+  const input = document.getElementById('admin-lote-edit-valor');
+  if (!col || !input) return;
+
+  const parsed = _adminParseFieldValue(modulo, col, input);
+  if (!parsed.ok) {
+    if (errEl) { errEl.textContent = parsed.error; errEl.style.display = 'block'; }
+    return;
+  }
+
+  const n = _adminContagemSelecionada();
+  if (!n) return;
+
+  const valorExibicao = Array.isArray(parsed.value)
+    ? (parsed.value.join(', ') || '(lista vazia)')
+    : (typeof parsed.value === 'boolean' ? (parsed.value ? 'Sim' : 'Não') : (parsed.value === null || parsed.value === '' ? '(vazio)' : parsed.value));
+
+  const escopoTexto = _adminSelecaoTodosFiltro
+    ? `TODOS os ${n.toLocaleString('pt-BR')} registros que batem na busca "${_adminEsc(_adminSearchTerm)}" — não só os visíveis nesta página`
+    : `${n.toLocaleString('pt-BR')} registro(s) selecionado(s) manualmente`;
+
+  closeModal('admin-lote-edit-modal');
+
+  confirmarDestrutivo({
+    title: 'Confirmar edição em massa',
+    sub: `${cfg.label} — campo "${col}"`,
+    body: `Você está prestes a alterar o campo <strong>${_adminEsc(col)}</strong> para <strong>${_adminEsc(String(valorExibicao))}</strong> em ${escopoTexto}. Esta ação não pode ser desfeita.`,
+    confirmLabel: 'Aplicar em massa',
+    requireConsent: true,
+    consentLabel: `Entendo que isso altera ${n.toLocaleString('pt-BR')} registro(s) permanentemente.`,
+    onConfirm: () => _adminExecutarEdicaoLote(modulo, col, parsed.value),
+  });
+}
+
+async function _adminExecutarEdicaoLote(modulo, col, value) {
+  const cfg = ADMIN_MODULOS[modulo];
+  if (!cfg || cfg.readOnly) return;
+  const patch = { [col]: value };
+
+  let query = window.supabaseClient.from(modulo).update(patch);
+  if (_adminSelecaoTodosFiltro) {
+    // Mesma defesa em profundidade da exclusão em massa — nunca um UPDATE
+    // sem filtro de verdade por trás.
+    const orClause = _adminBuildSearchOr(modulo, cfg);
+    if (!_adminSearchTerm || !orClause) {
+      toast('Ação bloqueada: edição de "todos os registros do filtro" exige uma busca ativa.', 'error');
+      return;
+    }
+    query = query.or(orClause);
+  } else {
+    const ids = [..._adminSelectedIds];
+    if (!ids.length) return;
+    query = query.in('id', ids);
+  }
+
+  const { error } = await query;
+  if (error) { toast('Falha ao editar em massa: ' + error.message, 'error'); return; }
+  toast('Registros atualizados.', 'success');
+  adminLimparSelecao();
+  adminLoadModulo();
+}
+
 async function adminExcluirRegistro(modulo, id) {
   if (ADMIN_MODULOS[modulo]?.readOnly) return; // append-only — RLS bloquearia mesmo assim
   if (!confirm('Excluir este registro definitivamente? Esta ação não pode ser desfeita.')) return;
@@ -642,6 +1026,43 @@ async function adminExcluirRegistro(modulo, id) {
 
 // ── Edição (formulário estruturado — um input por coluna, tipado
 // conforme _ADMIN_COL_TYPES: texto, número, sim/não ou lista) ──────────
+// _adminRenderFieldInput/_adminParseFieldValue abaixo são compartilhados
+// entre o formulário de edição individual (aqui) e o modal de edição em
+// massa (adminAbrirEdicaoLote/adminAplicarEdicaoLote, acima) — mesmo
+// tipo de campo, mesma validação, um único lugar pra manter.
+function _adminRenderFieldInput(modulo, col, val, inputId) {
+  const type = _adminFieldType(modulo, col);
+  if (type === 'boolean') {
+    return `<label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+      <input type="checkbox" id="${inputId}" ${val ? 'checked' : ''} style="width:16px;height:16px">
+      <span style="font-size:12.5px;color:var(--text2)">${val ? 'Sim' : 'Não'}</span>
+    </label>`;
+  } else if (type === 'number') {
+    return `<input type="number" step="any" class="form-input" id="${inputId}" value="${val ?? ''}">`;
+  } else if (type === 'array') {
+    const joined = Array.isArray(val) ? val.join(', ') : '';
+    return `<input type="text" class="form-input" id="${inputId}" value="${_adminEsc(joined)}" placeholder="separado por vírgula">`;
+  }
+  return `<input type="text" class="form-input" id="${inputId}" value="${_adminEsc(val ?? '')}">`;
+}
+
+// Valida e converte o valor bruto de um <input> pro tipo esperado da
+// coluna. Retorna { ok:true, value } ou { ok:false, error } — nunca
+// lança exceção, pra quem chama só precisar checar `.ok`.
+function _adminParseFieldValue(modulo, col, inputEl) {
+  const type = _adminFieldType(modulo, col);
+  if (type === 'boolean') return { ok: true, value: inputEl.checked };
+  if (type === 'number') {
+    const raw = inputEl.value.trim();
+    if (raw === '') return { ok: true, value: null };
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return { ok: false, error: `Valor inválido em "${col}" — informe um número.` };
+    return { ok: true, value: n };
+  }
+  if (type === 'array') return { ok: true, value: inputEl.value.split(',').map(s => s.trim()).filter(Boolean) };
+  return { ok: true, value: inputEl.value };
+}
+
 function adminAbrirEdicao(modulo, id) {
   if (ADMIN_MODULOS[modulo]?.readOnly) return; // append-only — RLS bloquearia mesmo assim
   const row = _adminCurrentRows.find(r => String(r.id) === String(id));
@@ -653,23 +1074,8 @@ function adminAbrirEdicao(modulo, id) {
   const fieldsEl = document.getElementById('admin-edit-fields');
   if (fieldsEl) {
     fieldsEl.innerHTML = cols.map(col => {
-      const type = _adminFieldType(modulo, col);
-      const val = row[col];
       const inputId = `admin-edit-field-${col}`;
-      let inputHtml;
-      if (type === 'boolean') {
-        inputHtml = `<label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-          <input type="checkbox" id="${inputId}" ${val ? 'checked' : ''} style="width:16px;height:16px">
-          <span style="font-size:12.5px;color:var(--text2)">${val ? 'Sim' : 'Não'}</span>
-        </label>`;
-      } else if (type === 'number') {
-        inputHtml = `<input type="number" step="any" class="form-input" id="${inputId}" value="${val ?? ''}">`;
-      } else if (type === 'array') {
-        const joined = Array.isArray(val) ? val.join(', ') : '';
-        inputHtml = `<input type="text" class="form-input" id="${inputId}" value="${_adminEsc(joined)}" placeholder="separado por vírgula">`;
-      } else {
-        inputHtml = `<input type="text" class="form-input" id="${inputId}" value="${_adminEsc(val ?? '')}">`;
-      }
+      const inputHtml = _adminRenderFieldInput(modulo, col, row[col], inputId);
       return `<div class="form-group" style="margin-bottom:0">
         <label class="form-label">${_adminEsc(col)}</label>
         ${inputHtml}
@@ -694,24 +1100,13 @@ async function adminSalvarEdicao() {
   for (const col of cols) {
     const input = document.getElementById(`admin-edit-field-${col}`);
     if (!input) continue;
-    const type = _adminFieldType(modulo, col);
-    if (type === 'boolean') {
-      patch[col] = input.checked;
-    } else if (type === 'number') {
-      const raw = input.value.trim();
-      if (raw === '') { patch[col] = null; continue; }
-      const n = Number(raw);
-      if (!Number.isFinite(n)) {
-        errEl.textContent = `Valor inválido em "${col}" — informe um número.`;
-        errEl.style.display = 'block';
-        return;
-      }
-      patch[col] = n;
-    } else if (type === 'array') {
-      patch[col] = input.value.split(',').map(s => s.trim()).filter(Boolean);
-    } else {
-      patch[col] = input.value;
+    const parsed = _adminParseFieldValue(modulo, col, input);
+    if (!parsed.ok) {
+      errEl.textContent = parsed.error;
+      errEl.style.display = 'block';
+      return;
     }
+    patch[col] = parsed.value;
   }
 
   const { error } = await window.supabaseClient.from(modulo).update(patch).eq('id', id);
@@ -833,6 +1228,7 @@ Object.assign(window, {
   adminLoadStorageStats,
   adminHealthShowTab,
   adminLoadUserTableCounts,
+  adminLoadUserSummary,
   adminLoadModulo,
   adminTrocarModulo,
   adminBuscarModulo,
@@ -844,4 +1240,12 @@ Object.assign(window, {
   adminExcluirRegistro,
   adminAbrirEdicao,
   adminSalvarEdicao,
+  adminToggleSelecaoLinha,
+  adminToggleSelecionarTudoPagina,
+  adminSelecionarTodosFiltro,
+  adminLimparSelecao,
+  adminExcluirLote,
+  adminAbrirEdicaoLote,
+  _adminLoteEditRenderCampo,
+  adminAplicarEdicaoLote,
 });
