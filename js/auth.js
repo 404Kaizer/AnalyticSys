@@ -520,7 +520,7 @@ function _accountModalPreviewFoto(file) {
   if (!slot) return;
   const reader = new FileReader();
   reader.onload = e => {
-    slot.innerHTML = `<img src="${e.target.result}" alt="Pré-visualização da foto de perfil">`;
+    slot.innerHTML = `<img class="account-avatar-xl" src="${e.target.result}" alt="Pré-visualização da foto de perfil">`;
   };
   reader.readAsDataURL(file);
 }
