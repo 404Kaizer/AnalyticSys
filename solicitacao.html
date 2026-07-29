@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Solicitação de Ajuste de Estoque · AnalyticSys</title>
+<title>Solicitação de Movimentação de Estoque · AnalyticSys</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2036%2036%22%3E%0A%3Cpolygon%20points%3D%2218%2C2%2030%2C9%2018%2C16%206%2C9%22%20fill%3D%22%23ff6b35%22%2F%3E%0A%3Cpolygon%20points%3D%2218%2C16%2030%2C9%2030%2C23%2018%2C30%22%20fill%3D%22%23c44e1f%22%2F%3E%0A%3Cpolygon%20points%3D%2218%2C16%206%2C9%206%2C23%2018%2C30%22%20fill%3D%22%23ff9060%22%2F%3E%0A%3Cpolyline%20points%3D%2221%2C26%2024%2C21%2027%2C23%2030%2C18%22%20fill%3D%22none%22%20stroke%3D%22rgba%28255%2C255%2C255%2C0.55%29%22%20stroke-width%3D%221.4%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%2F%3E%0A%3Ccircle%20cx%3D%2230%22%20cy%3D%2218%22%20r%3D%221.5%22%20fill%3D%22white%22%20opacity%3D%220.8%22%2F%3E%0A%3C%2Fsvg%3E" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,400&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -32,14 +32,16 @@
   }
   .sol-shell { max-width: 720px; margin: 0 auto; padding: 40px 20px 80px; }
 
-  .sol-brand { display: flex; align-items: center; gap: 14px; margin-bottom: 6px; }
+  .sol-brand { display: flex; align-items: center; gap: 14px; }
   .sol-brand svg { width: 30px; height: 33px; flex-shrink: 0; }
   .sol-brand-name { font-size: 16px; font-weight: 700; letter-spacing: -0.01em; }
   .sol-brand-name .a { color: var(--text); } .sol-brand-name .s { color: var(--orange); }
-  .sol-tagline { font-family: var(--mono); font-size: 10.5px; letter-spacing: .18em; color: var(--text3); text-transform: uppercase; margin: 4px 0 28px; }
+  .sol-brand-tagline { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+  .sol-tag-divider { display: block; width: 12px; height: 1.5px; background: var(--orange); opacity: .5; border-radius: 2px; flex-shrink: 0; }
+  .sol-tag-inline { font-family: var(--mono); font-size: 9px; letter-spacing: .16em; color: var(--text3); text-transform: uppercase; white-space: nowrap; line-height: 1; }
 
   .sol-title { font-size: 24px; font-weight: 700; letter-spacing: -0.015em; margin-bottom: 6px; }
-  .sol-sub { font-size: 13px; color: var(--text2); line-height: 1.6; margin-bottom: 28px; max-width: 560px; }
+  .sol-sub { font-size: 13px; color: var(--text2); line-height: 1.6; margin-bottom: 28px; }
 
   .sol-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 24px; margin-bottom: 18px; }
   .sol-card-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
@@ -133,7 +135,7 @@
   .sol-step-footer { display: flex; gap: 10px; flex-wrap: wrap; justify-content: space-between; align-items: center; margin: -4px 0 22px; }
   .sol-step-footer-right { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 
-  .sol-brand-row { display: flex; align-items: center; gap: 16px; margin-bottom: 6px; flex-wrap: wrap; }
+  .sol-brand-row { display: flex; align-items: center; gap: 16px; margin-bottom: 28px; flex-wrap: wrap; }
   .sol-logo-badge { display: flex; align-items: center; flex-shrink: 0; }
   .sol-logo-badge img { height: 38px; display: block; filter: invert(1) hue-rotate(178deg); }
   .sol-brand-divider { width: 1px; height: 30px; background: var(--border2); flex-shrink: 0; }
@@ -163,13 +165,18 @@
         <polyline points="21,26 24,21 27,23 30,18" fill="none" stroke="rgba(255,255,255,0.55)" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
         <circle cx="30" cy="18" r="1.5" fill="white" opacity="0.8"/>
       </svg>
-      <div class="sol-brand-name"><span class="a">ANALYTIC</span><span class="s">SYS</span></div>
+      <div>
+        <div class="sol-brand-name"><span class="a">ANALYTIC</span><span class="s">SYS</span></div>
+        <div class="sol-brand-tagline">
+          <span class="sol-tag-divider"></span>
+          <span class="sol-tag-inline">ESTOQUE · INSUMOS</span>
+        </div>
+      </div>
     </div>
   </div>
-  <div class="sol-tagline">ESTOQUE · INSUMOS</div>
 
-  <div class="sol-title">Solicitação de Ajuste de Estoque</div>
-  <div class="sol-sub">Toda movimentação que muda o estoque físico fora do padrão — ou seja, sem passar por nota de entrada ou consumo da produção — precisa ser registrada aqui: pesagem manual, transferência entre centrais, perda de material, coleta, entre outras. Isso dá rastreabilidade ao que acontece em cada central e evita divergência entre o estoque físico, o controle diário e o sistema — a mesma informação que sustenta os números que chegam até a gerência. Sua solicitação vai direto para o analista responsável, sem precisar de login.</div>
+  <div class="sol-title">Solicitação de Movimentação de Estoque</div>
+  <div class="sol-sub">Use este formulário para registrar qualquer movimentação de estoque que fuja do padrão — pesagem manual, transferência entre centrais, perda de material, coleta, entre outras — para que ela seja conferida e lançada corretamente pelo analista responsável, sem precisar de login.</div>
 
   <div id="sol-loading" class="sol-loading">
     <i class="ti ti-loader-2"></i> Carregando formulário…
@@ -235,13 +242,12 @@
             <option value="">Selecione a filial de destino</option>
           </select>
         </div>
-        <div class="sol-hint" style="margin:6px 0 10px">O tipo de movimento e a classificação SAP são preenchidos pelo analista depois — você não precisa saber esses códigos.</div>
         <div id="sol-itens-lista"></div>
         <button type="button" class="sol-btn sol-add-row-btn" onclick="adicionarItemMaterial()">
           <i class="ti ti-plus"></i> Adicionar outro material
         </button>
         <div class="sol-fg" style="margin-top:16px">
-          <label class="sol-label">Descreva o ocorrido <span class="sol-required">*</span></label>
+          <label class="sol-label">Descreva o ocorrido para a diretoria <span class="sol-required">*</span></label>
           <textarea id="sol-descricao" class="sol-textarea" placeholder="O que aconteceu, como foi identificado…" required></textarea>
         </div>
       </div>
@@ -272,11 +278,11 @@
 
     <div class="sol-step" data-step="4" style="display:none">
       <div class="sol-card">
-        <div class="sol-card-title"><span class="icon-badge"><i class="ti ti-file-signature"></i></span> Termo de Responsabilidade e anexos</div>
+        <div class="sol-card-title"><span class="icon-badge"><i class="ti ti-signature"></i></span> Termo de Responsabilidade sobre Declaração</div>
         <div class="sol-card-desc">Documento que formaliza a responsabilidade sobre o que foi declarado, mais o comprovante da movimentação.</div>
         <div class="sol-alert sol-alert-info">
           <i class="ti ti-info-circle"></i>
-          <div>Ao assinar o Termo de Responsabilidade, você (o informante) declara que as informações prestadas nesta solicitação são verídicas e assume a responsabilidade por elas perante o setor de Estoque/Insumos. Imprima o termo abaixo, assine, e anexe a foto/scan dele junto com qualquer outro comprovante (foto da pesagem, etc.) antes de enviar.</div>
+          <div>Ao assinar o Termo de Responsabilidade, você (o informante) declara que as informações prestadas nesta solicitação são verídicas e assume a responsabilidade por elas perante o setor de Estoque/Insumos e diretoria da Concrelagos. Imprima o termo abaixo, leia, assine, e anexe a foto/scan dele junto com qualquer outro comprovante (foto da pesagem, nota de coleta, anotações, etc.) antes de enviar.</div>
         </div>
         <button type="button" class="sol-btn" id="sol-btn-imprimir" onclick="imprimirTermo()">
           <i class="ti ti-printer"></i> Imprimir Termo de Responsabilidade
