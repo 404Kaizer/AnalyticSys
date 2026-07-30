@@ -2840,6 +2840,7 @@
           <button class="admin-subnav-btn active" id="admin-subnav-usuarios" onclick="adminShowSection('usuarios')"><i class="ti ti-users"></i> Usuários</button>
           <button class="admin-subnav-btn" id="admin-subnav-dados" onclick="adminShowSection('dados')"><i class="ti ti-database"></i> Dados por módulo</button>
           <button class="admin-subnav-btn" id="admin-subnav-formpublico" onclick="adminShowSection('formpublico')"><i class="ti ti-link"></i> Formulário Público</button>
+          <button class="admin-subnav-btn" id="admin-subnav-servidor" onclick="adminShowSection('servidor')"><i class="ti ti-server"></i> Servidor</button>
         </div>
 
         <!-- Seção: Usuários -->
@@ -2906,20 +2907,8 @@
             </div>
             <div style="overflow-x:auto">
               <table style="width:100%">
-                <thead><tr><th>E-mail</th><th>Status</th><th>Papel</th><th>Criado em</th><th></th></tr></thead>
-                <tbody id="admin-usuarios-tbody"><tr><td colspan="5"><div class="empty-state"><i class="ti ti-loader"></i><p>Carregando...</p></div></td></tr></tbody>
-              </table>
-            </div>
-          </div>
-          <div class="table-card" style="margin-top:16px">
-            <div class="table-header">
-              <span class="table-title"><i class="ti ti-table"></i> Linhas por usuário, por tabela</span>
-              <button class="btn" onclick="adminLoadUserTableCounts()"><i class="ti ti-refresh"></i> Atualizar</button>
-            </div>
-            <div style="overflow-x:auto">
-              <table style="width:100%" id="admin-user-counts-table">
-                <thead id="admin-user-counts-thead"></thead>
-                <tbody id="admin-user-counts-tbody"><tr><td><div class="empty-state"><i class="ti ti-loader"></i><p>Carregando...</p></div></td></tr></tbody>
+                <thead><tr><th>E-mail</th><th>Status</th><th>Acesso</th><th>Último login</th><th>Papel</th><th>Criado em</th><th></th></tr></thead>
+                <tbody id="admin-usuarios-tbody"><tr><td colspan="7"><div class="empty-state"><i class="ti ti-loader"></i><p>Carregando...</p></div></td></tr></tbody>
               </table>
             </div>
           </div>
@@ -2929,14 +2918,16 @@
                guardam o volume grande, como arquivos, não linhas). Carrega
                SOB DEMANDA (botão), não junto com o resto da aba Usuários —
                são 3 RPCs numa carga só, e o custo real em bases grandes
-               ainda não foi medido em produção. -->
+               ainda não foi medido em produção. Tabela nas linhas, usuário
+               nas colunas (30/07 — absorveu a tabela "Linhas por usuário,
+               por tabela", que mostrava a mesma matriz sem os bytes). -->
           <div class="table-card" style="margin-top:16px">
             <div class="table-header">
               <span class="table-title"><i class="ti ti-report-analytics"></i> Resumo por Usuário</span>
               <button class="btn" onclick="adminLoadUserSummary()"><i class="ti ti-refresh"></i> Carregar / Atualizar</button>
             </div>
             <div style="font-size:11px;color:var(--text3);padding:10px 18px 0">
-              <i class="ti ti-info-circle"></i> "Total de Linhas" conta só o banco de dados — Entradas/Saídas/Lançamentos/SAP guardam o volume grande como arquivos no Storage (não linhas), mas entram somados no "Tamanho estimado".
+              <i class="ti ti-info-circle"></i> Linhas de tabela mostram contagem por usuário; "Storage (backups)" é onde Entradas/Saídas/Lançamentos/SAP guardam o volume grande de verdade (arquivos, não linhas no banco).
             </div>
             <div style="overflow-x:auto;margin-top:8px">
               <table style="width:100%" id="admin-user-summary-table">
@@ -3051,6 +3042,62 @@
             </div>
             <div id="admin-analistas-categoria-rows" style="padding:14px 18px 18px;display:flex;flex-direction:column;gap:10px">
               <div class="empty-state"><i class="ti ti-loader"></i><p>Carregando...</p></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Seção: Servidor — dono do projeto: info de referência do Supabase
+             + navegador de Storage arquivo-a-arquivo, pra não precisar abrir
+             o dashboard do Supabase numa aba separada. -->
+        <div id="admin-section-servidor" style="display:none">
+          <div class="table-card" style="margin-bottom:16px">
+            <div class="table-header">
+              <span class="table-title"><i class="ti ti-server-2"></i> Projeto Supabase</span>
+            </div>
+            <div style="padding:14px 18px;display:flex;flex-direction:column;gap:10px">
+              <div style="font-size:12px;color:var(--text2)">
+                <strong>analyticsys</strong> · região sa-east-1 · Postgres 17 · plano gratuito
+              </div>
+              <div>
+                <label class="form-label" style="font-size:11px">URL do projeto</label>
+                <div style="display:flex;gap:8px;align-items:center">
+                  <input type="text" id="admin-srv-url" class="form-input" readonly style="flex:1;min-width:220px;font-family:var(--mono);font-size:12px" value="https://kgbmswykhqhmcajxlvri.supabase.co">
+                  <button class="btn" onclick="adminServidorCopiar('admin-srv-url')"><i class="ti ti-copy"></i> Copiar</button>
+                </div>
+              </div>
+              <div>
+                <label class="form-label" style="font-size:11px">Chave publicável (anon)</label>
+                <div style="display:flex;gap:8px;align-items:center">
+                  <input type="text" id="admin-srv-key" class="form-input" readonly style="flex:1;min-width:220px;font-family:var(--mono);font-size:12px" value="sb_publishable_SFDcmWJ0fSuS0tmWkiibnQ_RLjfRJug">
+                  <button class="btn" onclick="adminServidorCopiar('admin-srv-key')"><i class="ti ti-copy"></i> Copiar</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="table-card">
+            <div class="table-header">
+              <span class="table-title"><i class="ti ti-folder"></i> Navegador de Storage</span>
+              <div class="table-toolbar">
+                <select class="form-select" id="admin-srv-bucket-select" onchange="adminServidorTrocarBucket()" style="width:auto">
+                  <option value="backups-condensados">backups-condensados</option>
+                  <option value="solicitacoes-anexos">solicitacoes-anexos</option>
+                </select>
+                <button class="btn" onclick="adminServidorListar()"><i class="ti ti-refresh"></i> Atualizar</button>
+              </div>
+            </div>
+            <div style="padding:10px 18px;font-size:12px;font-family:var(--mono)" id="admin-srv-breadcrumb"></div>
+            <div class="admin-lote-bar" id="admin-srv-lote-bar" style="display:none">
+              <span id="admin-srv-lote-count">0 arquivo(s) selecionado(s)</span>
+              <div class="admin-lote-actions">
+                <button class="btn btn-sm admin-btn-danger" onclick="adminServidorExcluirSelecionados()"><i class="ti ti-trash"></i> Excluir selecionados</button>
+              </div>
+            </div>
+            <div class="table-scroll">
+              <table>
+                <thead><tr><th style="width:32px"></th><th>Nome</th><th>Tamanho</th><th></th></tr></thead>
+                <tbody id="admin-srv-tbody"><tr><td colspan="4"><div class="empty-state"><i class="ti ti-loader"></i><p>Carregando...</p></div></td></tr></tbody>
+              </table>
             </div>
           </div>
         </div>

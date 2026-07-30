@@ -42,6 +42,7 @@ const ADMIN_MODULOS = {
 };
 
 let _adminProfiles = [];        // cache do último fetch de profiles (email por user_id)
+let _adminAuthInfo = {};        // cache de admin_list_auth_users(), por user_id — confirmação, último login, suspensão
 let _adminCurrentRows = [];     // linhas do módulo atualmente exibido em "Dados"
 let _adminEditContext = null;   // { modulo, id } do registro em edição
 let _adminPresenceInterval = null; // atualização automática enquanto a seção Usuários está visível
@@ -272,71 +273,19 @@ async function adminLoadStorageStats() {
   </tr>`).join('');
 }
 
-// ── Seção: Linhas por usuário, por tabela ───────────────────
-// Usa a função admin_user_table_counts() (RPC, só-admin). Mostra TODOS os
-// usuários de profiles como coluna, mesmo os com zero em tudo (é
-// informativo por si só — ex.: confirmar que uma conta "fantasma" está
-// mesmo zerada, não só "sem aparecer").
-async function adminLoadUserTableCounts() {
-  const thead = document.getElementById('admin-user-counts-thead');
-  const tbody = document.getElementById('admin-user-counts-tbody');
-  if (!thead || !tbody) return;
-
-  tbody.innerHTML = `<tr><td><div class="empty-state"><i class="ti ti-loader"></i><p>Carregando...</p></div></td></tr>`;
-
-  if (!_adminProfiles.length) {
-    const { data } = await window.supabaseClient.from('profiles').select('id, email');
-    _adminProfiles = data || [];
-  }
-  const usuarios = _adminProfiles.slice().sort((a, b) => (a.email || '').localeCompare(b.email || ''));
-
-  const { data: counts, error } = await window.supabaseClient.rpc('admin_user_table_counts');
-  if (error) {
-    tbody.innerHTML = `<tr><td><div class="empty-state"><i class="ti ti-alert-triangle"></i><p>Falha ao carregar: ${_adminEsc(error.message)}</p></div></td></tr>`;
-    return;
-  }
-
-  // matriz[tabela][user_id] = contagem
-  const matriz = {};
-  (counts || []).forEach(c => {
-    if (!matriz[c.table_name]) matriz[c.table_name] = {};
-    matriz[c.table_name][c.user_id] = Number(c.row_count) || 0;
-  });
-
-  const colspan = usuarios.length + 1;
-  thead.innerHTML = `<tr><th>Tabela</th>${usuarios.map(u => `<th style="text-align:center" title="${_adminEsc(u.email)}">${_adminEsc((u.email || '').split('@')[0])}</th>`).join('')}</tr>`;
-
-  const tabelas = Object.keys(ADMIN_MODULOS);
-  if (!usuarios.length || !tabelas.length) {
-    tbody.innerHTML = `<tr><td colspan="${colspan}"><div class="empty-state"><i class="ti ti-database-off"></i><p>Sem dados.</p></div></td></tr>`;
-    return;
-  }
-
-  const totalPorUsuario = usuarios.map(() => 0);
-  const linhas = tabelas.map(t => {
-    const cells = usuarios.map((u, i) => {
-      const n = matriz[t]?.[u.id] || 0;
-      totalPorUsuario[i] += n;
-      return `<td style="text-align:center;${n === 0 ? 'color:var(--text3)' : ''}">${n.toLocaleString('pt-BR')}</td>`;
-    }).join('');
-    return `<tr><td>${_adminEsc(ADMIN_MODULOS[t]?.label || t)}</td>${cells}</tr>`;
-  }).join('');
-
-  const linhaTotal = `<tr style="font-weight:600;border-top:2px solid var(--border2)"><td>Total</td>${totalPorUsuario.map(n => `<td style="text-align:center">${n.toLocaleString('pt-BR')}</td>`).join('')}</tr>`;
-
-  tbody.innerHTML = linhas + linhaTotal;
-}
-
-// ── "Resumo por Usuário" (29/07) ────────────────────────────
-// Combina TRÊS fontes pra dar o quadro completo de cada usuário:
-//   1) admin_user_table_counts() — linhas por tabela (já existente)
-//   2) admin_user_table_sizes()  — bytes por tabela no Postgres (novo)
+// ── "Resumo por Usuário" (29/07, refundida em 30/07) ─────────
+// Fundiu duas tabelas que mostravam a mesma matriz linhas-por-tabela em
+// orientações diferentes ("Linhas por usuário, por tabela" e "Resumo por
+// Usuário") — mantido só esta, com tabela nas LINHAS e usuário nas
+// COLUNAS (orientação da que foi removida), mas com os bytes que só a
+// outra tinha. Combina TRÊS fontes:
+//   1) admin_user_table_counts() — linhas por tabela
+//   2) admin_user_table_sizes()  — bytes por tabela no Postgres, por linha
 //   3) admin_storage_stats()     — bytes no Storage, por usuário+módulo
-//      (já existente — é onde Entradas/Saídas/Lançamentos/SAP realmente
-//      guardam o volume grande, como arquivos .json.gz, não como linhas
-//      — ver cloud-backup.js. Por isso "Total de Linhas" abaixo NÃO
-//      inclui esses 4 módulos de verdade, mas "Tamanho estimado" inclui
-//      as duas fontes somadas.)
+//      (é onde Entradas/Saídas/Lançamentos/SAP realmente guardam o
+//      volume grande, como arquivos .json.gz, não como linhas — ver
+//      cloud-backup.js. Por isso vira uma linha própria "Storage
+//      (backups)" no rodapé, não uma coluna por tabela.)
 // admin_storage_stats() identifica o usuário por E-MAIL (não por
 // user_id, ver a própria função) — por isso o cruzamento com o banco
 // (que usa user_id) é feito via u.email, não via id.
@@ -388,31 +337,57 @@ async function adminLoadUserSummary() {
   });
 
   const tabelas = Object.keys(ADMIN_MODULOS);
-  thead.innerHTML = `<tr><th>Usuário</th>${tabelas.map(t => `<th style="text-align:center">${_adminEsc(ADMIN_MODULOS[t]?.label || t)}</th>`).join('')}<th style="text-align:center">Total de Linhas</th><th style="text-align:center">Tamanho estimado</th></tr>`;
 
   if (!usuarios.length) {
+    thead.innerHTML = '';
     tbody.innerHTML = `<tr><td><div class="empty-state"><i class="ti ti-database-off"></i><p>Sem usuários.</p></div></td></tr>`;
     return;
   }
 
-  tbody.innerHTML = usuarios.map(u => {
-    let totalLinhas = 0;
-    let totalBytesBanco = 0;
-    const cells = tabelas.map(t => {
+  thead.innerHTML = `<tr><th>Tabela</th>${usuarios.map(u => `<th style="text-align:center" title="${_adminEsc(u.email)}">${_adminEsc((u.email || '').split('@')[0])}</th>`).join('')}<th style="text-align:center">Tamanho (banco)</th></tr>`;
+
+  const totalLinhasPorUsuario = usuarios.map(() => 0);
+  const totalBytesBancoPorUsuario = usuarios.map(() => 0);
+  let totalBytesBancoGeral = 0;
+
+  const linhasTabelas = tabelas.map(t => {
+    let bytesTabela = 0;
+    const cells = usuarios.map((u, i) => {
       const n = linhasPorTabela[t]?.[u.id] || 0;
-      totalLinhas += n;
-      totalBytesBanco += bytesBancoPorTabela[t]?.[u.id] || 0;
+      const bytes = bytesBancoPorTabela[t]?.[u.id] || 0;
+      totalLinhasPorUsuario[i] += n;
+      totalBytesBancoPorUsuario[i] += bytes;
+      bytesTabela += bytes;
       return `<td style="text-align:center;${n === 0 ? 'color:var(--text3)' : ''}">${n.toLocaleString('pt-BR')}</td>`;
     }).join('');
-    const bytesStorage = bytesStoragePorEmail[u.email] || 0;
-    const tamanhoTotal = totalBytesBanco + bytesStorage;
-    return `<tr>
-      <td title="${_adminEsc(u.email)}">${_adminEsc((u.email || '').split('@')[0])}</td>
-      ${cells}
-      <td style="text-align:center;font-weight:600">${totalLinhas.toLocaleString('pt-BR')}</td>
-      <td style="text-align:center;font-weight:600">${formatBytes(tamanhoTotal)}</td>
-    </tr>`;
+    totalBytesBancoGeral += bytesTabela;
+    return `<tr><td>${_adminEsc(ADMIN_MODULOS[t]?.label || t)}</td>${cells}<td style="text-align:center;color:var(--text2)">${formatBytes(bytesTabela)}</td></tr>`;
   }).join('');
+
+  const linhaTotalBanco = `<tr style="font-weight:600;border-top:2px solid var(--border2)">
+    <td>Total (banco)</td>
+    ${totalLinhasPorUsuario.map(n => `<td style="text-align:center">${n.toLocaleString('pt-BR')}</td>`).join('')}
+    <td style="text-align:center">${formatBytes(totalBytesBancoGeral)}</td>
+  </tr>`;
+
+  let totalBytesStorageGeral = 0;
+  const linhaStorage = `<tr style="color:var(--text2)">
+    <td>Storage (backups)</td>
+    ${usuarios.map(u => {
+      const b = bytesStoragePorEmail[u.email] || 0;
+      totalBytesStorageGeral += b;
+      return `<td style="text-align:center">${b ? formatBytes(b) : '—'}</td>`;
+    }).join('')}
+    <td style="text-align:center">${formatBytes(totalBytesStorageGeral)}</td>
+  </tr>`;
+
+  const linhaTotalGeral = `<tr style="font-weight:700;border-top:2px solid var(--border2)">
+    <td>Tamanho total</td>
+    ${usuarios.map((u, i) => `<td style="text-align:center">${formatBytes(totalBytesBancoPorUsuario[i] + (bytesStoragePorEmail[u.email] || 0))}</td>`).join('')}
+    <td style="text-align:center">${formatBytes(totalBytesBancoGeral + totalBytesStorageGeral)}</td>
+  </tr>`;
+
+  tbody.innerHTML = linhasTabelas + linhaTotalBanco + linhaStorage + linhaTotalGeral;
 }
 
 function _adminEsc(s) {
@@ -456,16 +431,20 @@ function adminShowSection(section) {
   const elUsuarios = document.getElementById('admin-section-usuarios');
   const elDados     = document.getElementById('admin-section-dados');
   const elFormPublico = document.getElementById('admin-section-formpublico');
+  const elServidor = document.getElementById('admin-section-servidor');
   if (elUsuarios) elUsuarios.style.display = section === 'usuarios' ? '' : 'none';
   if (elDados)    elDados.style.display    = section === 'dados' ? '' : 'none';
   if (elFormPublico) elFormPublico.style.display = section === 'formpublico' ? '' : 'none';
+  if (elServidor) elServidor.style.display = section === 'servidor' ? '' : 'none';
   document.getElementById('admin-subnav-usuarios')?.classList.toggle('active', section === 'usuarios');
   document.getElementById('admin-subnav-dados')?.classList.toggle('active', section === 'dados');
   document.getElementById('admin-subnav-formpublico')?.classList.toggle('active', section === 'formpublico');
+  document.getElementById('admin-subnav-servidor')?.classList.toggle('active', section === 'servidor');
 
-  if (section === 'usuarios') { adminLoadUsuarios(); adminLoadDbStats(); adminLoadUserTableCounts(); }
+  if (section === 'usuarios') { adminLoadUsuarios(); adminLoadDbStats(); }
   if (section === 'dados') adminLoadModulo();
   if (section === 'formpublico') adminLoadFormPublico();
+  if (section === 'servidor') adminServidorListar();
 
   // Só mantém o polling de presença rodando enquanto a seção Usuários
   // estiver de fato visível — evita chamadas desnecessárias em segundo plano.
@@ -502,23 +481,24 @@ async function adminLoadUsuarios(silent) {
   const tbody = document.getElementById('admin-usuarios-tbody');
   if (!tbody) return;
   if (!silent) {
-    tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state"><i class="ti ti-loader"></i><p>Carregando...</p></div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><i class="ti ti-loader"></i><p>Carregando...</p></div></td></tr>';
   }
 
-  const { data, error } = await window.supabaseClient
-    .from('profiles')
-    .select('id, email, role, created_at, last_seen')
-    .order('created_at', { ascending: true });
+  const [profilesRes, authRes] = await Promise.all([
+    window.supabaseClient.from('profiles').select('id, email, role, created_at, last_seen').order('created_at', { ascending: true }),
+    window.supabaseClient.rpc('admin_list_auth_users'),
+  ]);
 
-  if (error) {
-    tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state"><i class="ti ti-alert-triangle"></i><p>Falha ao carregar: ${_adminEsc(error.message)}</p></div></td></tr>`;
+  if (profilesRes.error) {
+    tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><i class="ti ti-alert-triangle"></i><p>Falha ao carregar: ${_adminEsc(profilesRes.error.message)}</p></div></td></tr>`;
     return;
   }
 
-  _adminProfiles = data || [];
+  _adminProfiles = profilesRes.data || [];
+  _adminAuthInfo = Object.fromEntries((authRes.data || []).map(a => [a.id, a]));
 
   if (!_adminProfiles.length) {
-    tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state"><i class="ti ti-users"></i><p>Nenhum usuário encontrado.</p></div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><i class="ti ti-users"></i><p>Nenhum usuário encontrado.</p></div></td></tr>';
     return;
   }
 
@@ -526,14 +506,26 @@ async function adminLoadUsuarios(silent) {
     const isSelf = u.id === window.currentUser?.id;
     const criadoEm = u.created_at ? new Date(u.created_at).toLocaleDateString('pt-BR') : '—';
     const status = _adminStatusInfo(u.last_seen);
+    const auth = _adminAuthInfo[u.id] || {};
+    const confirmadoIcon = auth.email_confirmed_at
+      ? `<i class="ti ti-rosette-discount-check" style="color:var(--green)" title="E-mail confirmado em ${new Date(auth.email_confirmed_at).toLocaleDateString('pt-BR')}"></i>`
+      : `<i class="ti ti-alert-circle" style="color:var(--amber)" title="E-mail ainda não confirmado"></i>`;
+    const ultimoLogin = auth.last_sign_in_at ? new Date(auth.last_sign_in_at).toLocaleString('pt-BR') : '—';
+    const suspenso = !!auth.banned_until;
     return `<tr>
-      <td>${_adminEsc(u.email)}${isSelf ? ' <span style="color:var(--text3);font-size:11px">(você)</span>' : ''}</td>
+      <td>${_adminEsc(u.email)} ${confirmadoIcon}${isSelf ? ' <span style="color:var(--text3);font-size:11px">(você)</span>' : ''}</td>
       <td>
         <span style="display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;color:${status.color};background:${status.bg};border-radius:999px;padding:3px 10px">
           <span style="width:7px;height:7px;border-radius:50%;background:${status.color};display:inline-block"></span>
           ${status.label}
         </span>
       </td>
+      <td>
+        <span style="display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;color:${suspenso ? 'var(--red)' : 'var(--green)'};background:${suspenso ? 'var(--red-bg)' : 'var(--green-bg)'};border-radius:999px;padding:3px 10px">
+          <i class="ti ti-${suspenso ? 'lock' : 'lock-open'}"></i> ${suspenso ? 'Suspenso' : 'Ativo'}
+        </span>
+      </td>
+      <td style="color:var(--text2);font-size:12px">${ultimoLogin}</td>
       <td>
         <select class="form-select" style="font-size:12px;padding:4px 8px;width:auto"
           onchange="adminAlterarPapel('${u.id}', this.value)"
@@ -543,7 +535,12 @@ async function adminLoadUsuarios(silent) {
         </select>
       </td>
       <td style="color:var(--text2)">${criadoEm}</td>
-      <td></td>
+      <td style="white-space:nowrap">
+        ${isSelf ? '' : `
+          <button class="btn-icon" title="${suspenso ? 'Reativar acesso' : 'Suspender acesso'}" onclick="adminSuspenderUsuario('${u.id}', ${suspenso ? 'false' : 'true'})"><i class="ti ti-${suspenso ? 'lock-open' : 'lock'}"></i></button>
+          <button class="btn-icon danger" title="Resetar dados deste usuário" onclick="adminResetarUsuario('${u.id}')"><i class="ti ti-eraser"></i></button>
+        `}
+      </td>
     </tr>`;
   }).join('');
 }
@@ -562,6 +559,88 @@ async function adminAlterarPapel(userId, novoPapel) {
   }
   toast('Papel atualizado.', 'success');
   adminLoadUsuarios();
+}
+
+// ── Suspender / reativar acesso ─────────────────────────────
+// Usa admin_set_user_banned() (RPC, só-admin) — seta/limpa banned_until
+// no auth.users. Reversível (por isso sem consentLabel/checkbox extra,
+// diferente do reset). Sessão já aberta do usuário continua valendo até
+// expirar/renovar — o bloqueio vale a partir do próximo login.
+function adminSuspenderUsuario(userId, suspender) {
+  const email = _adminProfiles.find(p => p.id === userId)?.email || userId;
+  confirmarDestrutivo({
+    title: suspender ? 'Confirmar suspensão de acesso' : 'Confirmar reativação de acesso',
+    sub: email,
+    body: suspender
+      ? `O usuário <strong>${_adminEsc(email)}</strong> não vai mais conseguir entrar no sistema. Sessões já abertas continuam válidas até expirarem — o bloqueio vale a partir do próximo login.`
+      : `O usuário <strong>${_adminEsc(email)}</strong> volta a conseguir entrar no sistema normalmente.`,
+    confirmLabel: suspender ? 'Suspender acesso' : 'Reativar acesso',
+    onConfirm: async () => {
+      const { error } = await window.supabaseClient.rpc('admin_set_user_banned', { target_user_id: userId, banned: suspender });
+      if (error) { toast(`Falha ao ${suspender ? 'suspender' : 'reativar'}: ` + error.message, 'error'); return; }
+      toast(suspender ? 'Acesso suspenso.' : 'Acesso reativado.', 'success');
+      adminLoadUsuarios();
+    },
+  });
+}
+
+// ── Resetar usuário ──────────────────────────────────────────
+// Apaga TODOS os dados operacionais do usuário (19 tabelas com user_id,
+// via admin_reset_user() RPC — só-admin) + a pasta dele no bucket
+// backups-condensados. NÃO mexe em login/senha (auth.users) nem no
+// registro de profiles (papel/e-mail continuam intactos) — "reset" aqui
+// é "esvaziar o que a conta produziu", não "apagar a conta".
+// A limpeza do Storage é feita aqui no cliente (não na RPC) porque
+// apagar a linha de storage.objects via SQL só remove metadado, não o
+// blob de verdade — isso exige passar pela Storage API (.remove()).
+function adminResetarUsuario(userId) {
+  const email = _adminProfiles.find(p => p.id === userId)?.email || userId;
+  confirmarDestrutivo({
+    title: 'Confirmar reset de usuário',
+    sub: email,
+    body: `Isso apaga <strong>permanentemente</strong> todos os dados operacionais de <strong>${_adminEsc(email)}</strong> — ocorrências, lançamentos, entradas/saídas, DAIs, notas, importações, backups no Storage etc. — nas 19 tabelas do sistema. O login, a senha e o cadastro (papel/e-mail) NÃO são afetados; a conta continua existindo, só some o que foi produzido com ela. Esta ação não pode ser desfeita.`,
+    confirmLabel: 'Resetar usuário',
+    requireConsent: true,
+    consentLabel: `Entendo que isso apaga permanentemente todos os dados de ${email}.`,
+    onConfirm: () => _adminExecutarResetUsuario(userId),
+  });
+}
+
+async function _adminExecutarResetUsuario(userId) {
+  const { data, error } = await window.supabaseClient.rpc('admin_reset_user', { target_user_id: userId });
+  if (error) { toast('Falha ao resetar: ' + error.message, 'error'); return; }
+
+  const totalLinhas = Object.values(data || {}).reduce((soma, n) => soma + Number(n || 0), 0);
+
+  let arquivosRemovidos = 0;
+  const paths = await _adminListStorageRecursivo('backups-condensados', userId);
+  if (paths.length) {
+    const { error: storageError } = await window.supabaseClient.storage.from('backups-condensados').remove(paths);
+    if (!storageError) arquivosRemovidos = paths.length;
+  }
+
+  toast(`Usuário resetado: ${totalLinhas.toLocaleString('pt-BR')} registro(s) e ${arquivosRemovidos} arquivo(s) removidos.`, 'success');
+  adminLoadUsuarios();
+  adminLoadDbStats();
+  adminLoadUserSummary();
+  if (_adminStorageLoadedOnce) adminLoadStorageStats();
+}
+
+// Lista recursivamente todos os ARQUIVOS (não pastas) sob um prefixo de
+// um bucket — a Storage API só lista um nível por vez (pastas vêm com
+// id:null), então desce nível por nível. Usada pelo reset de usuário
+// acima e pelo navegador de Storage (seção Servidor) abaixo.
+async function _adminListStorageRecursivo(bucket, prefix) {
+  const { data, error } = await window.supabaseClient.storage.from(bucket).list(prefix, { limit: 1000 });
+  if (error || !data) return [];
+  let paths = [];
+  for (const item of data) {
+    if (item.name === '.emptyFolderPlaceholder') continue;
+    const full = `${prefix}/${item.name}`;
+    if (item.id === null) paths = paths.concat(await _adminListStorageRecursivo(bucket, full));
+    else paths.push(full);
+  }
+  return paths;
 }
 
 // ── Seção: Dados por módulo ─────────────────────────────────
@@ -1216,6 +1295,159 @@ async function adminSalvarAnalistaCategoria(categoria, selectId) {
   toast(`Categoria "${categoria}" atribuída a ${email}.`, 'success');
 }
 
+// ── Seção: Servidor (navegador de Storage) ──────────────────
+// Complementa o resumo agregado de "Saúde do Storage" (na aba Usuários)
+// com controle arquivo-a-arquivo: navega pasta por pasta em qualquer
+// bucket e apaga arquivo individual, seleção múltipla ou pasta inteira.
+// Existe pra cobrir o caso que o resumo não cobre — "esse arquivo
+// específico está estranho, quero ver e apagar só ele" — sem precisar
+// abrir o dashboard do Supabase numa aba separada.
+let _srvBucket = 'backups-condensados';
+let _srvPath = [];           // array de segmentos do caminho atual
+let _srvSelected = new Set(); // paths completos dos arquivos marcados (só arquivos, pastas não entram aqui)
+
+function adminServidorTrocarBucket() {
+  const sel = document.getElementById('admin-srv-bucket-select');
+  _srvBucket = sel?.value || 'backups-condensados';
+  _srvPath = [];
+  adminServidorListar();
+}
+
+function _srvPrefixAtual() { return _srvPath.join('/'); }
+
+async function adminServidorListar() {
+  const tbody = document.getElementById('admin-srv-tbody');
+  const breadcrumb = document.getElementById('admin-srv-breadcrumb');
+  if (!tbody) return;
+  tbody.innerHTML = `<tr><td colspan="4"><div class="empty-state"><i class="ti ti-loader"></i><p>Carregando...</p></div></td></tr>`;
+  _srvSelected.clear();
+  _adminSrvAtualizarBarra();
+
+  const prefix = _srvPrefixAtual();
+  const { data, error } = await window.supabaseClient.storage.from(_srvBucket).list(prefix, { limit: 1000, sortBy: { column: 'name', order: 'asc' } });
+
+  if (breadcrumb) {
+    const partes = [`<a href="#" onclick="adminServidorIrPara(0);return false">${_adminEsc(_srvBucket)}</a>`]
+      .concat(_srvPath.map((p, i) => `<a href="#" onclick="adminServidorIrPara(${i + 1});return false">${_adminEsc(p)}</a>`));
+    breadcrumb.innerHTML = partes.join(' <span style="color:var(--text3)">/</span> ');
+  }
+
+  if (error) {
+    tbody.innerHTML = `<tr><td colspan="4"><div class="empty-state"><i class="ti ti-alert-triangle"></i><p>Falha ao listar: ${_adminEsc(error.message)}</p></div></td></tr>`;
+    return;
+  }
+
+  const entradas = (data || []).filter(e => e.name !== '.emptyFolderPlaceholder');
+  if (!entradas.length) {
+    tbody.innerHTML = `<tr><td colspan="4"><div class="empty-state"><i class="ti ti-folder-open"></i><p>Pasta vazia.</p></div></td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = entradas.map(e => {
+    const isFolder = e.id === null; // pastas não têm id de objeto no Storage
+    const fullPath = prefix ? `${prefix}/${e.name}` : e.name;
+    if (isFolder) {
+      return `<tr>
+        <td></td>
+        <td><a href="#" onclick="adminServidorAbrirPasta('${_adminEsc(e.name)}');return false"><i class="ti ti-folder"></i> ${_adminEsc(e.name)}</a></td>
+        <td>—</td>
+        <td><button class="btn-icon danger" title="Excluir pasta inteira" onclick="adminServidorExcluirPasta('${_adminEsc(fullPath)}')"><i class="ti ti-trash"></i></button></td>
+      </tr>`;
+    }
+    const tamanho = e.metadata?.size ? formatBytes(e.metadata.size) : '—';
+    return `<tr>
+      <td><input type="checkbox" onchange="adminServidorToggleSelecao('${_adminEsc(fullPath)}', this.checked)"></td>
+      <td><i class="ti ti-file"></i> ${_adminEsc(e.name)}</td>
+      <td>${tamanho}</td>
+      <td><button class="btn-icon danger" title="Excluir arquivo" onclick="adminServidorExcluirArquivo('${_adminEsc(fullPath)}')"><i class="ti ti-trash"></i></button></td>
+    </tr>`;
+  }).join('');
+}
+
+function adminServidorAbrirPasta(nome) {
+  _srvPath.push(nome);
+  adminServidorListar();
+}
+
+function adminServidorIrPara(nivel) {
+  _srvPath = _srvPath.slice(0, nivel);
+  adminServidorListar();
+}
+
+function adminServidorToggleSelecao(path, checked) {
+  if (checked) _srvSelected.add(path);
+  else _srvSelected.delete(path);
+  _adminSrvAtualizarBarra();
+}
+
+function _adminSrvAtualizarBarra() {
+  const bar = document.getElementById('admin-srv-lote-bar');
+  const count = document.getElementById('admin-srv-lote-count');
+  if (count) count.textContent = `${_srvSelected.size} arquivo(s) selecionado(s)`;
+  if (bar) bar.style.display = _srvSelected.size > 0 ? 'flex' : 'none';
+}
+
+function adminServidorExcluirSelecionados() {
+  const n = _srvSelected.size;
+  if (!n) return;
+  const paths = [..._srvSelected];
+  confirmarDestrutivo({
+    title: 'Confirmar exclusão de arquivos',
+    sub: _srvBucket,
+    body: `Você está prestes a excluir permanentemente ${n} arquivo(s) do Storage. Esta ação não pode ser desfeita.`,
+    confirmLabel: 'Excluir arquivos',
+    onConfirm: async () => {
+      const { error } = await window.supabaseClient.storage.from(_srvBucket).remove(paths);
+      if (error) { toast('Falha ao excluir: ' + error.message, 'error'); return; }
+      toast(`${n} arquivo(s) excluído(s).`, 'success');
+      adminServidorListar();
+    },
+  });
+}
+
+function adminServidorExcluirArquivo(path) {
+  confirmarDestrutivo({
+    title: 'Confirmar exclusão',
+    sub: path,
+    body: `Excluir permanentemente o arquivo <strong>${_adminEsc(path)}</strong>? Esta ação não pode ser desfeita.`,
+    confirmLabel: 'Excluir',
+    onConfirm: async () => {
+      const { error } = await window.supabaseClient.storage.from(_srvBucket).remove([path]);
+      if (error) { toast('Falha ao excluir: ' + error.message, 'error'); return; }
+      toast('Arquivo excluído.', 'success');
+      adminServidorListar();
+    },
+  });
+}
+
+function adminServidorExcluirPasta(path) {
+  confirmarDestrutivo({
+    title: 'Confirmar exclusão de pasta',
+    sub: path,
+    body: `Excluir permanentemente a pasta <strong>${_adminEsc(path)}</strong> e TODO o conteúdo dentro dela? Esta ação não pode ser desfeita.`,
+    confirmLabel: 'Excluir pasta',
+    requireConsent: true,
+    consentLabel: 'Entendo que isso apaga todos os arquivos dentro desta pasta permanentemente.',
+    onConfirm: async () => {
+      const paths = await _adminListStorageRecursivo(_srvBucket, path);
+      if (!paths.length) { toast('Pasta já está vazia.', 'success'); adminServidorListar(); return; }
+      const { error } = await window.supabaseClient.storage.from(_srvBucket).remove(paths);
+      if (error) { toast('Falha ao excluir: ' + error.message, 'error'); return; }
+      toast(`${paths.length} arquivo(s) excluído(s).`, 'success');
+      adminServidorListar();
+    },
+  });
+}
+
+function adminServidorCopiar(elId) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  const valor = el.value ?? el.textContent;
+  navigator.clipboard?.writeText(valor)
+    .then(() => toast('Copiado.', 'success'))
+    .catch(() => toast('Não foi possível copiar automaticamente — selecione e copie manualmente.', 'error'));
+}
+
 Object.assign(window, {
   renderAdminPage,
   adminLoadFormPublico,
@@ -1224,10 +1456,20 @@ Object.assign(window, {
   adminShowSection,
   adminLoadUsuarios,
   adminAlterarPapel,
+  adminSuspenderUsuario,
+  adminResetarUsuario,
+  adminServidorTrocarBucket,
+  adminServidorListar,
+  adminServidorAbrirPasta,
+  adminServidorIrPara,
+  adminServidorToggleSelecao,
+  adminServidorExcluirSelecionados,
+  adminServidorExcluirArquivo,
+  adminServidorExcluirPasta,
+  adminServidorCopiar,
   adminLoadDbStats,
   adminLoadStorageStats,
   adminHealthShowTab,
-  adminLoadUserTableCounts,
   adminLoadUserSummary,
   adminLoadModulo,
   adminTrocarModulo,
