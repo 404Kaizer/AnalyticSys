@@ -744,7 +744,10 @@
             <div class="msgs-conv-pane">
               <div class="msgs-conv-list" id="msgs-conv-list">
                 <button class="msgs-conv-item active" data-conv="geral" onclick="msgsAbrirConversa('geral')">
-                  <div class="msgs-conv-avatar msgs-conv-avatar-geral"><i class="ti ti-users"></i></div>
+                  <span class="msgs-avatar-badge-wrap">
+                    <div class="msgs-conv-avatar msgs-conv-avatar-geral"><i class="ti ti-users"></i></div>
+                    <span class="msgs-unread-dot" id="msgs-conv-geral-badge" style="display:none">0</span>
+                  </span>
                   <div class="msgs-conv-body">
                     <div class="msgs-conv-name">Geral</div>
                     <div class="msgs-conv-preview">Todos os usuários</div>
@@ -772,10 +775,17 @@
                   <p>Carregando...</p>
                 </div>
               </div>
+              <div class="msgs-reply-bar" id="msgs-reply-bar" style="display:none">
+                <div class="msgs-reply-bar-body">
+                  <div class="msgs-reply-bar-nome" id="msgs-reply-bar-nome"></div>
+                  <div class="msgs-reply-bar-snippet" id="msgs-reply-bar-snippet"></div>
+                </div>
+                <button class="btn-icon" title="Cancelar resposta" onclick="_msgsCancelarResposta()"><i class="ti ti-x"></i></button>
+              </div>
               <div class="msgs-input-row">
                 <button class="btn-icon" id="msgs-attach-btn" title="Anexar arquivo" disabled onclick="_msgsAbrirSeletorAnexo()"><i class="ti ti-paperclip"></i></button>
                 <input type="file" id="msgs-anexo-input" style="display:none" onchange="_msgsEnviarAnexo(this.files[0]); this.value=''">
-                <input type="text" class="msgs-input" id="msgs-input" placeholder="Escreva uma mensagem..." autocomplete="off" disabled onkeydown="_msgsInputKeydown(event)">
+                <input type="text" class="msgs-input" id="msgs-input" placeholder="Escreva uma mensagem..." autocomplete="off" disabled onkeydown="_msgsInputKeydown(event)" oninput="_msgsInputOnInput()">
                 <button class="msgs-send-btn" id="msgs-send-btn" title="Enviar" disabled onclick="msgsEnviar()"><i class="ti ti-send"></i></button>
               </div>
             </div>

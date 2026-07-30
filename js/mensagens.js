@@ -123,6 +123,44 @@ function _presenceEsc(s) {
 // segunda consulta — a mesma RPC já traz tudo que precisamos.
 let _msgsUsuariosPorId = {};
 
+// Contador de não lidas por conversa (id do outro usuário, ou 'geral') —
+// vem da RPC mensagens_nao_lidas() a cada tick de presença, e é zerado
+// otimisticamente na hora ao abrir/ler uma conversa (_msgsCarregarHistorico),
+// sem esperar o próximo tick pra sumir o dot.
+let _msgsContadoresPorConversa = {};
+
+async function _msgsAtualizarContadores() {
+  if (!window.supabaseClient) return;
+  const { data, error } = await window.supabaseClient.rpc('mensagens_nao_lidas');
+  if (error) {
+    console.warn('[Mensagens] Falha ao buscar não lidas:', error);
+    return;
+  }
+  const novos = {};
+  (data || []).forEach(r => { novos[r.conversa] = Number(r.nao_lidas) || 0; });
+  _msgsContadoresPorConversa = novos;
+}
+
+// Envolve um avatar já pronto (avatarHTML) num dot de não lidas — precisa
+// de um <span> por fora porque avatar sem foto é <div> e com foto é
+// <img>, e <img> não pode ter filho.
+function _msgsAvatarComBadge(avatarHtml, count) {
+  if (!count) return avatarHtml;
+  const label = count > 9 ? '9+' : String(count);
+  return `<span class="msgs-avatar-badge-wrap">${avatarHtml}<span class="msgs-unread-dot">${label}</span></span>`;
+}
+
+// Reaplica o dot do item fixo "Geral" (nunca reconstruído via HTML, ao
+// contrário dos itens 1:1 — esses já saem com o badge embutido de
+// _msgsAvatarComBadge sempre que a lista é redesenhada).
+function _msgsAtualizarBadges() {
+  const geralDot = document.getElementById('msgs-conv-geral-badge');
+  if (!geralDot) return;
+  const count = _msgsContadoresPorConversa['geral'] || 0;
+  geralDot.textContent = count > 9 ? '9+' : String(count);
+  geralDot.style.display = count > 0 ? '' : 'none';
+}
+
 async function _presenceGlobalTick() {
   if (!window.supabaseClient || !window.currentUser?.id) return;
 
@@ -133,6 +171,7 @@ async function _presenceGlobalTick() {
   }
 
   (data || []).forEach(u => { _msgsUsuariosPorId[u.id] = u; });
+  await _msgsAtualizarContadores();
 
   const agora = Date.now();
   const meuId = window.currentUser.id;
@@ -162,11 +201,13 @@ async function _presenceGlobalTick() {
       list.innerHTML = online.map(u => {
         const nome = u.nome_exibicao?.trim() || (u.email || '').split('@')[0];
         const onclick = `openTool('mensagens'); msgsAbrirConversa('${u.id}')`;
-        return avatarHTML(u.email, 'online-avatar', `title="${_presenceEsc(nome)} — online" onclick="${onclick}"`, u.avatar_url);
+        const avatar = avatarHTML(u.email, 'online-avatar', `title="${_presenceEsc(nome)} — online" onclick="${onclick}"`, u.avatar_url);
+        return _msgsAvatarComBadge(avatar, _msgsContadoresPorConversa[u.id]);
       }).join('');
       wrap.style.display = 'flex';
     }
   }
+  _msgsAtualizarBadges();
 
   // Lista de conversas do popover — TODO MUNDO, esteja online ou não (28/07:
   // Hugo pediu pra poder mandar mensagem independente de status). O status
@@ -197,9 +238,10 @@ function msgsRenderConversas(todos, onlineIds) {
     const estaOnline = onlineIds.has(u.id);
     const classeItem = 'msgs-conv-item msgs-conv-item-injetado' + (estaOnline ? '' : ' msgs-conv-item-offline');
     const classePreview = 'msgs-conv-preview' + (estaOnline ? ' msgs-conv-preview-online' : '');
+    const avatar = _msgsAvatarComBadge(avatarHTML(u.email, 'msgs-conv-avatar', '', u.avatar_url), _msgsContadoresPorConversa[u.id]);
     list.insertAdjacentHTML('beforeend', `
       <button class="${classeItem}" data-conv="${u.id}" onclick="msgsAbrirConversa('${u.id}')">
-        ${avatarHTML(u.email, 'msgs-conv-avatar', '', u.avatar_url)}
+        ${avatar}
         <div class="msgs-conv-body">
           <div class="msgs-conv-name">${_presenceEsc(nome)}</div>
           <div class="${classePreview}">${estaOnline ? 'Online' : 'Offline'}</div>
@@ -259,6 +301,11 @@ function msgsAbrirConversa(convId) {
   const nameSrc = item.querySelector('.msgs-conv-name')?.textContent || '';
   const subSrc  = item.querySelector('.msgs-conv-preview')?.textContent || '';
   const avatarSrc = item.querySelector('.msgs-conv-avatar');
+  // Bolha de "está digitando..." pendente de uma conversa que não é mais
+  // esta — o histórico novo vai substituir o body inteiro de qualquer
+  // forma, mas isso já limpa o timeout/estado antes de reatribuir.
+  _msgsEsconderDigitando();
+
   if (nameDst) nameDst.textContent = nameSrc;
   if (subDst)  subDst.textContent  = subSrc;
   if (avatarDst && avatarSrc) {
@@ -268,6 +315,7 @@ function msgsAbrirConversa(convId) {
   }
 
   _msgsConversaAtiva = convId;
+  _msgsCancelarResposta();
 
   const input      = document.getElementById('msgs-input');
   const sendBtn    = document.getElementById('msgs-send-btn');
@@ -315,8 +363,14 @@ function _msgsAutorHTML(remetenteId) {
 let _msgsSignedUrlCache = {};
 const _MSGS_SIGNED_URL_TTL_MS = 60 * 60 * 1000; // 1h — mesmo prazo passado pro createSignedUrls
 
+// Cache de mensagens por id (mesmos pontos de entrada do cache de signed
+// URLs, acima) — usado pra resolver a prévia de "responder a" sem
+// precisar de uma consulta extra por resposta.
+let _msgsMensagensPorId = {};
+
 async function _msgsPreCarregarPreviews(msgs) {
   if (!window.supabaseClient) return;
+  (msgs || []).forEach(m => { _msgsMensagensPorId[m.id] = m; });
   const agora = Date.now();
   const paths = [...new Set(
     (msgs || [])
@@ -372,6 +426,21 @@ function _msgsExcluirHTML(msg, souEu) {
   return `<button type="button" class="msgs-msg-del" title="Excluir mensagem" onclick="_msgsExcluir('${msg.id}', ${anexoArg})"><i class="ti ti-trash"></i></button>`;
 }
 
+// Responder qualquer mensagem (própria ou alheia) — WhatsApp/Telegram.
+function _msgsResponderHTML(msg) {
+  return `<button type="button" class="msgs-msg-reply-btn" title="Responder" onclick="_msgsResponder('${msg.id}')"><i class="ti ti-arrow-back-up"></i></button>`;
+}
+
+// Check simples (não lida) / duplo azul (lida) — só faz sentido pra
+// mensagem própria em 1:1 (Geral tem vários destinatários, não um "lido"
+// só; RLS de UPDATE de lido também só existe pro destinatário 1:1).
+function _msgsLidoHTML(msg, souEu) {
+  if (!souEu || msg.destinatario_id === null) return '';
+  return msg.lido
+    ? '<i class="ti ti-checks msgs-msg-lido msgs-msg-lido-visto" title="Lida"></i>'
+    : '<i class="ti ti-check msgs-msg-lido" title="Enviada"></i>';
+}
+
 // Nome de exibição de quem apagou — "Você" só na tela de quem
 // efetivamente apagou (cada cliente resolve contra o próprio
 // currentUser.id), o nome de verdade pra todo mundo mais.
@@ -379,6 +448,59 @@ function _msgsNomeUsuario(userId) {
   if (userId === window.currentUser?.id) return 'Você';
   const u = _msgsUsuariosPorId[userId];
   return u?.nome_exibicao?.trim() || (u?.email || '').split('@')[0] || 'um usuário';
+}
+
+// Bloco citado no topo da bolha quando a mensagem é resposta a outra —
+// resolve do cache local (_msgsMensagensPorId, populado por
+// _msgsPreCarregarPreviews); se a original não estiver carregada (fora
+// da janela de 200 mensagens, caso raro), cai num aviso genérico em vez
+// de fazer uma consulta extra só pra isso. Clique rola até a original se
+// ela estiver na tela agora (_msgsIrParaMensagem).
+function _msgsRespostaHTML(msg) {
+  if (!msg.resposta_a) return '';
+  const original = _msgsMensagensPorId[msg.resposta_a];
+  if (!original) {
+    return `<div class="msgs-msg-quote msgs-msg-quote-indisponivel"><i class="ti ti-corner-up-left"></i> Mensagem original não disponível</div>`;
+  }
+  const nome = _msgsNomeUsuario(original.remetente_id);
+  const snippet = original.excluida_em
+    ? 'mensagem apagada'
+    : (original.conteudo || (original.anexo_nome ? `📎 ${original.anexo_nome}` : ''));
+  return `<div class="msgs-msg-quote" onclick="_msgsIrParaMensagem('${msg.resposta_a}')">
+    <strong>${escapeHtml(nome)}</strong>
+    <div class="msgs-msg-quote-snippet">${escapeHtml(String(snippet).slice(0, 80))}</div>
+  </div>`;
+}
+
+function _msgsIrParaMensagem(id) {
+  const el = document.querySelector(`.msgs-msg[data-msg-id="${CSS.escape(id)}"]`);
+  if (!el) return;
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  el.classList.add('msgs-msg-highlight');
+  setTimeout(() => el.classList.remove('msgs-msg-highlight'), 1500);
+}
+
+// Barra "Respondendo a..." acima do input — fica em memória até enviar
+// (ou cancelar); é quando de fato vira resposta_a na mensagem nova.
+let _msgsRespostaAtiva = null;
+
+function _msgsResponder(msgId) {
+  const msg = _msgsMensagensPorId[msgId];
+  if (!msg) return;
+  _msgsRespostaAtiva = msg;
+  const nomeEl = document.getElementById('msgs-reply-bar-nome');
+  const snipEl = document.getElementById('msgs-reply-bar-snippet');
+  const bar    = document.getElementById('msgs-reply-bar');
+  if (nomeEl) nomeEl.textContent = _msgsNomeUsuario(msg.remetente_id);
+  if (snipEl) snipEl.textContent = msg.conteudo || (msg.anexo_nome ? `📎 ${msg.anexo_nome}` : '');
+  if (bar) bar.style.display = 'flex';
+  document.getElementById('msgs-input')?.focus();
+}
+
+function _msgsCancelarResposta() {
+  _msgsRespostaAtiva = null;
+  const bar = document.getElementById('msgs-reply-bar');
+  if (bar) bar.style.display = 'none';
 }
 
 // Mensagem apagada (soft delete) — vira uma "lápide" no lugar dela: quem
@@ -408,13 +530,17 @@ function _msgsBubbleHTML(msg, souEu) {
   const texto = msg.conteudo ? escapeHtml(msg.conteudo) : '';
   return `<div class="msgs-msg ${souEu ? 'msgs-msg-mine' : 'msgs-msg-theirs'}" data-msg-id="${msg.id}">
     ${autorHTML}
+    ${_msgsRespostaHTML(msg)}
     ${_msgsAnexoHTML(msg)}
     ${texto}
-    <div class="msgs-msg-meta">${hora}${_msgsExcluirHTML(msg, souEu)}</div>
+    <div class="msgs-msg-meta">
+      <span>${hora}${_msgsLidoHTML(msg, souEu)}</span>
+      <span class="msgs-msg-meta-actions">${_msgsResponderHTML(msg)}${_msgsExcluirHTML(msg, souEu)}</span>
+    </div>
   </div>`;
 }
 
-const _MSGS_SELECT_COLS = 'id, remetente_id, destinatario_id, conteudo, criado_em, lido, anexo_path, anexo_nome, anexo_tamanho, excluida_em, excluida_por';
+const _MSGS_SELECT_COLS = 'id, remetente_id, destinatario_id, conteudo, criado_em, lido, anexo_path, anexo_nome, anexo_tamanho, excluida_em, excluida_por, resposta_a';
 
 async function _msgsExcluir(msgId, anexoPath) {
   if (!window.supabaseClient || !window.currentUser?.id) return;
@@ -543,6 +669,7 @@ function _msgsAbrirAnexoNovaGuia() {
 async function _msgsCarregarHistorico(convId) {
   const body = document.getElementById('msgs-chat-body');
   if (!body || !window.supabaseClient || !window.currentUser?.id) return;
+  _msgsEsconderDigitando(); // body vai ser substituído inteiro — não deixa a referência antiga órfã
 
   const meuId = window.currentUser.id;
   body.innerHTML = '<div class="msgs-empty-state"><i class="ti ti-loader-2" style="animation:spin .7s linear infinite"></i><p>Carregando...</p></div>';
@@ -574,10 +701,17 @@ async function _msgsCarregarHistorico(convId) {
     _msgsScrollParaFinal();
   }
 
-  // Marca como lidas as que eu recebi nessa conversa 1:1 — geral não tem
-  // "lido" por pessoa, então não se aplica (RLS também bloquearia: a
-  // policy de update só permite quando destinatario_id = eu).
-  if (convId !== 'geral') {
+  // Marca como lida: 1:1 é por mensagem (coluna lido); Geral não tem
+  // destinatário único, então é por "até quando eu já vi" (tabela
+  // mensagens_geral_lido, um upsert só). Zera o contador dessa conversa
+  // na hora (sem esperar o próximo tick de presença).
+  if (convId === 'geral') {
+    window.supabaseClient.from('mensagens_geral_lido')
+      .upsert({ user_id: meuId, lido_ate: new Date().toISOString() })
+      .then(({ error: errLido }) => {
+        if (errLido) console.warn('[Mensagens] Falha ao marcar Geral como lido:', errLido);
+      });
+  } else {
     const temNaoLida = (data || []).some(m => m.destinatario_id === meuId && !m.lido);
     if (temNaoLida) {
       window.supabaseClient.from('mensagens')
@@ -590,6 +724,8 @@ async function _msgsCarregarHistorico(convId) {
         });
     }
   }
+  _msgsContadoresPorConversa[convId] = 0;
+  _msgsAtualizarBadges();
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -711,13 +847,14 @@ async function msgsEnviar() {
 
   const meuId           = window.currentUser.id;
   const destinatarioId  = _msgsConversaAtiva === 'geral' ? null : _msgsConversaAtiva;
+  const respostaA       = _msgsRespostaAtiva?.id ?? null;
 
   input.disabled = true;
   if (btn) btn.disabled = true;
 
   const { data, error } = await window.supabaseClient
     .from('mensagens')
-    .insert({ remetente_id: meuId, destinatario_id: destinatarioId, conteudo: texto })
+    .insert({ remetente_id: meuId, destinatario_id: destinatarioId, conteudo: texto, resposta_a: respostaA })
     .select(_MSGS_SELECT_COLS)
     .single();
 
@@ -732,6 +869,8 @@ async function msgsEnviar() {
   }
 
   input.value = '';
+  _msgsCancelarResposta();
+  await _msgsPreCarregarPreviews([data]);
 
   // Só pinta a bolha se a conversa não mudou enquanto o insert corria.
   const conversaDaMensagem = destinatarioId ?? 'geral';
@@ -748,6 +887,55 @@ function _msgsInputKeydown(event) {
   if (event.key === 'Enter' && !event.shiftKey) {
     event.preventDefault();
     msgsEnviar();
+  }
+}
+
+// ── "Está digitando..." (Etapa 16) ───────────────────────
+// Broadcast efêmero no canal Realtime (sem gravar nada em mensagens) —
+// enviado no máximo 1x a cada 2s enquanto a pessoa digita. Do lado de
+// quem recebe, vira uma "pré-mensagem": bolha igual às de resposta
+// alheia, com 3 pontinhos pulsando, sempre no final da conversa — some
+// sozinha depois de 3s sem um novo evento, sem precisar de um evento
+// explícito de "parou de digitar".
+let _msgsUltimoEnvioDigitando = 0;
+let _msgsDigitandoTimeout = null;
+let _msgsDigitandoEl = null;
+
+function _msgsInputOnInput() {
+  const agora = Date.now();
+  if (agora - _msgsUltimoEnvioDigitando < 2000) return;
+  _msgsUltimoEnvioDigitando = agora;
+  if (!_msgsChannel || !window.currentUser?.id) return;
+  const para = _msgsConversaAtiva === 'geral' ? null : _msgsConversaAtiva;
+  _msgsChannel.send({ type: 'broadcast', event: 'digitando', payload: { de: window.currentUser.id, para } });
+}
+
+function _msgsMostrarDigitando(remetenteId) {
+  const body = document.getElementById('msgs-chat-body');
+  if (!body) return;
+
+  if (!_msgsDigitandoEl) {
+    const vazio = body.querySelector('.msgs-empty-state');
+    if (vazio) body.innerHTML = '';
+    const autorHTML = _msgsConversaAtiva === 'geral' ? _msgsAutorHTML(remetenteId) : '';
+    body.insertAdjacentHTML('beforeend', `
+      <div class="msgs-msg msgs-msg-theirs msgs-msg-digitando" id="msgs-digitando-bubble">
+        ${autorHTML}
+        <div class="msgs-digitando-dots"><span></span><span></span><span></span></div>
+      </div>`);
+    _msgsDigitandoEl = document.getElementById('msgs-digitando-bubble');
+  }
+  _msgsScrollParaFinal();
+
+  clearTimeout(_msgsDigitandoTimeout);
+  _msgsDigitandoTimeout = setTimeout(_msgsEsconderDigitando, 3000);
+}
+
+function _msgsEsconderDigitando() {
+  clearTimeout(_msgsDigitandoTimeout);
+  if (_msgsDigitandoEl) {
+    _msgsDigitandoEl.remove();
+    _msgsDigitandoEl = null;
   }
 }
 
@@ -778,6 +966,7 @@ async function _msgsEnviarAnexo(file) {
 
   const meuId          = window.currentUser.id;
   const destinatarioId = _msgsConversaAtiva === 'geral' ? null : _msgsConversaAtiva;
+  const respostaA      = _msgsRespostaAtiva?.id ?? null;
   // Id gerado no cliente pra já poder montar o caminho do Storage
   // (remetente/mensagem/arquivo) antes do INSERT existir — mesmo motivo
   // pelo qual a policy de SELECT do bucket cruza com mensagens.id.
@@ -802,7 +991,7 @@ async function _msgsEnviarAnexo(file) {
     .from('mensagens')
     .insert({
       id: msgId, remetente_id: meuId, destinatario_id: destinatarioId, conteudo: '',
-      anexo_path: path, anexo_nome: file.name, anexo_tamanho: file.size,
+      anexo_path: path, anexo_nome: file.name, anexo_tamanho: file.size, resposta_a: respostaA,
     })
     .select(_MSGS_SELECT_COLS)
     .single();
@@ -820,6 +1009,7 @@ async function _msgsEnviarAnexo(file) {
     return;
   }
 
+  _msgsCancelarResposta();
   await _msgsPreCarregarPreviews([data]);
 
   const conversaDaMensagem = destinatarioId ?? 'geral';
@@ -853,15 +1043,27 @@ function _msgsRealtimeInit() {
     .channel('mensagens_realtime')
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mensagens' },
       (payload) => { if (payload?.new) _msgsHandleNova(payload.new); })
-    // Exclusão é soft delete (UPDATE, não DELETE) — só nos importa quando
-    // excluida_em passa a existir; ignora updates de "marcar como lida".
+    // Cobre tanto soft delete (excluida_em) quanto "lido" virando true —
+    // re-renderiza a bolha inteira nos dois casos (idempotente, barato);
+    // é o que troca o check simples pelo duplo azul assim que o outro lado
+    // vê a mensagem, e o que vira lápide quando alguém apaga.
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'mensagens' },
       (payload) => {
         const novo = payload?.new;
-        if (!novo?.excluida_em) return;
+        if (!novo) return;
+        _msgsMensagensPorId[novo.id] = novo;
         const el = document.querySelector(`.msgs-msg[data-msg-id="${CSS.escape(novo.id)}"]`);
         if (el) el.outerHTML = _msgsBubbleHTML(novo, novo.remetente_id === window.currentUser?.id);
       })
+    // Indicador de "fulano está digitando" (Etapa 16) — broadcast efêmero,
+    // não grava nada no banco. Mesmo canal do postgres_changes acima; os
+    // dois convivem numa única subscription sem conflito.
+    .on('broadcast', { event: 'digitando' }, ({ payload }) => {
+      if (!payload || payload.de === window.currentUser?.id) return;
+      const relevante = (payload.para === null && _msgsConversaAtiva === 'geral')
+        || (payload.para === window.currentUser?.id && payload.de === _msgsConversaAtiva);
+      if (relevante) _msgsMostrarDigitando(payload.de);
+    })
     .subscribe((status) => {
       if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
         console.warn('[Mensagens] Canal Realtime com problema:', status);
@@ -878,24 +1080,23 @@ function _msgsRealtimeStop() {
 // ═══════════════════════════════════════════════════════════
 // BADGE DE NÃO LIDAS (Etapa 10)
 // ═══════════════════════════════════════════════════════════
-// Contador simples em memória (não persiste entre reloads de propósito —
-// ao recarregar a página, o histórico de cada conversa já reflete o que
-// está lido/não lido via a coluna `lido`; o badge é só o "flash" de coisa
-// nova chegando com a aba aberta, mesma filosofia do toast de atividade).
-let _msgsNaoLidas = 0;
-function _msgsBadgeIncrementar() {
-  _msgsNaoLidas++;
-  _msgsBadgeRender();
-}
-function _msgsBadgeZerar() {
-  _msgsNaoLidas = 0;
-  _msgsBadgeRender();
-}
+// Total = soma de _msgsContadoresPorConversa (as mesmas contagens reais
+// por conversa que alimentam os dots nos avatares, Etapa 15) — não é
+// mais um flash manual desligado da realidade; reflete direto o que a
+// RPC mensagens_nao_lidas() calculou, então sobrevive a reabrir o
+// popover/recarregar a página sem ficar dessincronizado.
 function _msgsBadgeRender() {
   const badge = document.getElementById('msgs-badge');
   if (!badge) return;
-  badge.textContent = _msgsNaoLidas > 9 ? '9+' : String(_msgsNaoLidas);
-  badge.style.display = _msgsNaoLidas > 0 ? '' : 'none';
+  const total = Object.values(_msgsContadoresPorConversa).reduce((a, b) => a + b, 0);
+  badge.textContent = total > 9 ? '9+' : String(total);
+  badge.style.display = total > 0 ? '' : 'none';
+}
+// Nome mantido por compatibilidade (chamado por format.js ao abrir a
+// ferramenta) — o que "zera" de verdade é _msgsCarregarHistorico() ao
+// marcar a conversa aberta como lida; isso aqui só re-renderiza.
+function _msgsBadgeZerar() {
+  _msgsBadgeRender();
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -926,8 +1127,12 @@ async function _msgsHandleNova(msg) {
     && _msgsConversaAtiva === conversaDaMensagem;
 
   if (jaEstouNessaConversa) {
-    // Já de olho nessa conversa — só pinta a bolha, sem interromper nada.
+    // Já de olho nessa conversa — pinta a bolha e toca o som mesmo assim
+    // (30/07: som deve avisar mesmo com o chat já aberto). Também marca
+    // como lida na hora — senão o dot/checkmark de leitura ficariam
+    // "atrasados" até a próxima vez que a conversa fosse reaberta.
     await _msgsPreCarregarPreviews([msg]);
+    _msgsEsconderDigitando(); // a mensagem chegou — não faz sentido mais mostrar os pontinhos
     const body = document.getElementById('msgs-chat-body');
     if (body) {
       const vazio = body.querySelector('.msgs-empty-state');
@@ -935,28 +1140,37 @@ async function _msgsHandleNova(msg) {
       body.insertAdjacentHTML('beforeend', _msgsBubbleHTML(msg, false));
       _msgsScrollParaFinal();
     }
+    if (typeof notifPlaySound === 'function') notifPlaySound();
+
+    if (éParaMim) {
+      if (conversaDaMensagem === 'geral') {
+        window.supabaseClient.from('mensagens_geral_lido')
+          .upsert({ user_id: meuId, lido_ate: new Date().toISOString() })
+          .then(({ error }) => { if (error) console.warn('[Mensagens] Falha ao marcar Geral como lido:', error); });
+      } else {
+        window.supabaseClient.from('mensagens').update({ lido: true }).eq('id', msg.id)
+          .then(({ error }) => { if (error) console.warn('[Mensagens] Falha ao marcar como lida:', error); });
+      }
+    }
     return;
   }
 
   if (!éParaMim) return; // visibilidade de admin sobre conversa alheia — sem notificação
 
-  // Garante que a pessoa já aparece na lista de conversas antes de tentar
-  // abrir a conversa com ela — cobre a corrida rara de receber uma
-  // mensagem antes do próximo tick de presença (30s) ter rodado.
-  if (conversaDaMensagem !== 'geral') {
-    const jaNaLista = document.querySelector(`#msgs-conv-list .msgs-conv-item[data-conv="${CSS.escape(conversaDaMensagem)}"]`);
-    if (!jaNaLista && typeof _presenceGlobalTick === 'function') await _presenceGlobalTick();
-  }
+  // Atualiza presença/contadores na hora — cobre tanto a pessoa ainda não
+  // aparecer na lista (corrida rara com o tick de 30s) quanto o dot de
+  // não lidas demorar até o próximo poll.
+  if (typeof _presenceGlobalTick === 'function') await _presenceGlobalTick();
 
   if (typeof openTool === 'function') openTool('mensagens');
   msgsAbrirConversa(conversaDaMensagem);
   if (typeof notifPlaySound === 'function') notifPlaySound();
-  _msgsBadgeIncrementar();
 }
 
 Object.assign(window, {
-  avatarInfo, avatarHTML, msgsAbrirConversa, msgsEnviar, _msgsInputKeydown,
+  avatarInfo, avatarHTML, msgsAbrirConversa, msgsEnviar, _msgsInputKeydown, _msgsInputOnInput,
   _msgsAbrirSeletorAnexo, _msgsEnviarAnexo, _msgsAbrirAnexo, _msgsAbrirAnexoNovaGuia,
   _msgsExcluir, _msgsLimparConversa, _msgsAbrirBusca, _msgsFecharBusca, _msgsBuscar,
+  _msgsResponder, _msgsCancelarResposta, _msgsIrParaMensagem,
   _presenceGlobalInit, _presenceGlobalStop, _msgsRealtimeInit, _msgsRealtimeStop,
 });
