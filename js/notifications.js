@@ -295,7 +295,27 @@ const _NTM = {
   ocorrencia: { icon:'ti-alert-circle'   },
   conferencia:{ icon:'ti-calendar-event' },
   atividade:  { icon:'ti-bolt'           },
+  auth:       { icon:'ti-fingerprint'    },
 };
+
+// Cor do ícone de notificações de atividade/auth — por módulo (mesma cor
+// da aba correspondente em index.html, ex.: entradas=verde, saídas=vermelho),
+// não por level (que pra esse tipo é sempre 'info', sem significado). Level
+// continua mandando a cor pra saude/ocorrencia/conferencia (ali sim é
+// severidade de verdade). Tabelas sem aba própria (cadastro/config) caem
+// no cinza neutro da aba Configurações.
+const _ACTIVITY_MODULE_COLOR = {
+  entradas:    'var(--green)',
+  saidas:      'var(--red)',
+  lancamentos: 'var(--amber)',
+  ocorrencias: 'var(--amber)',
+  producao:    'var(--purple)',
+  sap:         'var(--accent)',
+  imports:     'var(--teal)',
+  profiles:    'var(--red)',
+};
+const _ACTIVITY_DEFAULT_COLOR = 'var(--text2)';
+const _AUTH_COLOR = 'var(--accent)';
 
 function _notifTimeAgo(ts) {
   if (!ts) return '';
@@ -338,7 +358,10 @@ function _notifRenderDropdown() {
   body.innerHTML=notifs.map(n=>{
     const lm=_NLM[n.level]||_NLM.info;
     const tm=_NTM[n.type]||_NTM.ocorrencia;
-    const isAtividade = n.type === 'atividade';
+    const isAtividade = n.type === 'atividade' || n.type === 'auth';
+    const iconCol = n.type === 'auth' ? _AUTH_COLOR
+      : n.type === 'atividade' ? (_ACTIVITY_MODULE_COLOR[n.activityTable] || _ACTIVITY_DEFAULT_COLOR)
+      : lm.col;
     const hasRoute = isAtividade ? !!n.activityLogId : !!_NOTIF_ROUTE[n.id];
     const clickAttr = !hasRoute ? '' : isAtividade
       ? `onclick="notifAbrirDetalheAtividade('${_notifEsc(n.id)}',event)"`
@@ -346,7 +369,7 @@ function _notifRenderDropdown() {
     return `<div class="notif-item${n.read?' notif-item-read':''}${hasRoute?' notif-item-clickable':''}"
       data-id="${_notifEsc(n.id)}"
       ${clickAttr}>
-      <div class="notif-item-icon" style="background:${lm.col}18;color:${lm.col};border:1px solid ${lm.col}30"><i class="ti ${tm.icon}"></i></div>
+      <div class="notif-item-icon" style="background:color-mix(in srgb, ${iconCol} 18%, transparent);color:${iconCol};border:1px solid color-mix(in srgb, ${iconCol} 30%, transparent)"><i class="ti ${tm.icon}"></i></div>
       <div class="notif-item-body">
         <div class="notif-item-title">${_notifEsc(n.title)}</div>
         <div class="notif-item-desc">${_notifEsc(n.body)}</div>
@@ -490,6 +513,15 @@ function notifHideActivityToast() {
 
 const _ACTIVITY_VERB = { INSERT: 'criou', UPDATE: 'editou', DELETE: 'excluiu' };
 
+// Eventos de auth não são um registro de dado sendo mexido — não fazem
+// sentido no molde "{ator} {verbo} um registro em {módulo}". Frase própria
+// por evento, sem módulo nem corpo (auth nunca carrega old_data/new_data).
+const _ACTIVITY_AUTH_LABEL = {
+  LOGIN:           'entrou no sistema',
+  LOGOUT:          'saiu do sistema',
+  PASSWORD_CHANGE: 'trocou a senha',
+};
+
 function _activityShouldNotify(row) {
   const me = window.currentUser;
   if (!me || !row) return false;
@@ -544,19 +576,26 @@ async function _activityResolveActorLabel(actorId) {
 }
 
 async function _activityEmitNotification(row, count) {
-  const verb        = _ACTIVITY_VERB[row.operation] || 'alterou';
-  const moduleLabel = _activityModuleLabel(row.table_name);
+  const isAuth      = row.table_name === 'auth';
   const actorLabel  = await _activityResolveActorLabel(row.actor_id);
 
-  const title = count > 1
-    ? `${actorLabel} ${verb} ${count} registros em ${moduleLabel}`
-    : `${actorLabel} ${verb} um registro em ${moduleLabel}`;
-  const body = count === 1 ? _activityDescribeRow(row) : '';
+  let title, body;
+  if (isAuth) {
+    title = `${actorLabel} ${_ACTIVITY_AUTH_LABEL[row.operation] || 'mexeu na conta'}`;
+    body  = '';
+  } else {
+    const verb        = _ACTIVITY_VERB[row.operation] || 'alterou';
+    const moduleLabel = _activityModuleLabel(row.table_name);
+    title = count > 1
+      ? `${actorLabel} ${verb} ${count} registros em ${moduleLabel}`
+      : `${actorLabel} ${verb} um registro em ${moduleLabel}`;
+    body = count === 1 ? _activityDescribeRow(row) : '';
+  }
 
   if (!Array.isArray(state.notifications)) state.notifications = [];
   state.notifications.unshift({
     id: `atividade-${row.table_name}-${row.id}`,
-    type: 'atividade',
+    type: isAuth ? 'auth' : 'atividade',
     level: 'info',
     title, body,
     createdAt: Date.now(),
@@ -573,7 +612,7 @@ async function _activityEmitNotification(row, count) {
   const ATIV_MAX_LOCAL = 200;
   let seen = 0;
   state.notifications = state.notifications.filter(n => {
-    if (n.type !== 'atividade') return true;
+    if (n.type !== 'atividade' && n.type !== 'auth') return true;
     seen++;
     return seen <= ATIV_MAX_LOCAL;
   });
@@ -593,7 +632,7 @@ async function _activityEmitNotification(row, count) {
 async function notifAbrirDetalheAtividade(notifId, event) {
   event?.stopPropagation();
   const n = (state.notifications||[]).find(x => x.id === notifId);
-  if (!n || n.type !== 'atividade') return;
+  if (!n || (n.type !== 'atividade' && n.type !== 'auth')) return;
   n.read = true;
   if (typeof persist==='function') persist();
   _notifRenderBadge();
@@ -638,6 +677,14 @@ function _notifFmtCampoValor(v) {
 const _ACTIVITY_OP_LABEL = { INSERT: 'Criação', UPDATE: 'Edição', DELETE: 'Exclusão' };
 
 function _notifRenderActivityDetail(n, row) {
+  if (row.table_name === 'auth') {
+    const when = row.created_at ? new Date(row.created_at).toLocaleString('pt-BR') : '—';
+    return `
+      <div style="display:flex;flex-direction:column;gap:2px">
+        <div style="font-size:13px">${_notifEsc(n.title)}</div>
+        <div style="color:var(--text3);font-size:11.5px">${_notifEsc(when)}</div>
+      </div>`;
+  }
   const label = _activityModuleLabel(row.table_name);
   const opLabel = _ACTIVITY_OP_LABEL[row.operation] || row.operation;
   const when = row.created_at ? new Date(row.created_at).toLocaleString('pt-BR') : '—';

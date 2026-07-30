@@ -257,7 +257,7 @@ window.AuthGate = (function () {
     const emailEl = $('auth-account-email');
     const roleEl = $('auth-account-role');
     if (emailEl) emailEl.textContent = user?.email || '—';
-    if (roleEl) roleEl.textContent = profile?.role === 'admin' ? 'Administrador' : 'Usuário';
+    if (roleEl) roleEl.textContent = profile?.role === 'admin' ? 'Supervisor' : 'Usuário';
 
     // Tab "Administração" só aparece pra quem é admin. Isso é só UI — a
     // segurança de verdade está nas políticas de RLS de cada tabela.

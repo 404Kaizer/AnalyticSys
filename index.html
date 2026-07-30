@@ -58,7 +58,7 @@
     <div class="auth-gate-card">
       <div class="auth-gate-card-head">
         <div class="auth-gate-card-title">Entrar</div>
-        <div class="auth-gate-card-sub">Acesse com as credenciais fornecidas pelo administrador.</div>
+        <div class="auth-gate-card-sub">Acesse com as credenciais fornecidas pelo supervisor.</div>
       </div>
 
       <form id="auth-gate-form-login" class="auth-gate-form">
@@ -214,11 +214,11 @@
         </span>
       </button>
 
-      <button class="tab-item" id="tab-admin" onclick="navigate('admin')" data-page="admin" data-label="Administração" style="display:none">
+      <button class="tab-item" id="tab-admin" onclick="navigate('admin')" data-page="admin" data-label="Supervisão" style="display:none">
         <span class="tab-icon" style="--tab-color: var(--red)"><i class="ti ti-shield-lock"></i></span>
         <span class="tab-text">
-          <span class="tab-title">Administração</span>
-          <span class="tab-sub">usuários e dados (ADM)</span>
+          <span class="tab-title">Supervisão</span>
+          <span class="tab-sub">usuários e dados (SUPERVISOR)</span>
         </span>
       </button>
 
@@ -2870,7 +2870,7 @@
 
       <div class="page" id="page-admin">
 
-        <div class="section-title" style="margin:0 0 14px"><i class="ti ti-shield-lock" style="font-size:13px;margin-right:6px"></i>Administração — usuários e dados</div>
+        <div class="section-title" style="margin:0 0 14px"><i class="ti ti-shield-lock" style="font-size:13px;margin-right:6px"></i>Supervisão — usuários e dados</div>
 
         <div class="admin-subnav">
           <button class="admin-subnav-btn active" id="admin-subnav-usuarios" onclick="adminShowSection('usuarios')"><i class="ti ti-users"></i> Usuários</button>

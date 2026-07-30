@@ -680,7 +680,7 @@ async function adminLoadUsuarios(silent) {
           onchange="adminAlterarPapel('${u.id}', this.value)"
           ${isSelf ? 'disabled title="Não é possível alterar o próprio papel por aqui — peça a outro admin, se precisar."' : ''}>
           <option value="user" ${u.role === 'user' ? 'selected' : ''}>Usuário</option>
-          <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Administrador</option>
+          <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Supervisor</option>
         </select>
       </td>
       <td style="color:var(--text2)">${criadoEm}</td>
@@ -695,7 +695,7 @@ async function adminLoadUsuarios(silent) {
 }
 
 async function adminAlterarPapel(userId, novoPapel) {
-  const label = novoPapel === 'admin' ? 'Administrador' : 'Usuário';
+  const label = novoPapel === 'admin' ? 'Supervisor' : 'Usuário';
   if (!confirm(`Confirma alterar o papel deste usuário para "${label}"?`)) {
     adminLoadUsuarios(); // desfaz a troca visual do <select>
     return;

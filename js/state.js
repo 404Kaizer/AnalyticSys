@@ -207,7 +207,7 @@ const pageTitleMap = {
   importar: { title: 'Importar Dados', sub: 'importe arquivos .xlsx ou .csv para cada módulo' },
   configuracoes: { title: 'Configurações', sub: 'parâmetros e informações de referência do sistema' },
   ocorrencias: { title: 'Ocorrências', sub: 'solicitações abertas e gestão de ocorrências por central' },
-  admin: { title: 'Administração', sub: 'usuários e dados — acesso restrito ao ADM' }
+  admin: { title: 'Supervisão', sub: 'usuários e dados — acesso restrito ao supervisor' }
 };
 
 
