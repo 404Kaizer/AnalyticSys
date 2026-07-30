@@ -17,28 +17,34 @@
 // 2 tabelas append-only (ajustes_excluidos, notas_ajuste) que só têm
 // policy de INSERT/SELECT no banco — botões de editar/excluir ficam
 // ocultos pra essas, porque a tentativa falharia na RLS mesmo assim.
+// `cols` lista TODAS as colunas de cada tabela (exceto id/user_id, que já
+// têm tratamento próprio — id no modal de edição, user_id na coluna
+// "Dono") — conferido contra o schema real em 30/07. Antes só listava um
+// subconjunto "principal" por módulo, o que deixava campo de verdade
+// (ex.: hierarquia/itens/anexos em jsonb, todo "_original", created_at)
+// invisível e não-editável no admin sem motivo — só corrigido aqui.
 const ADMIN_MODULOS = {
   // Cadastro / configuração
-  configs:                  { label: 'Configurações',              cols: ['key', 'value', 'descricao'] },
-  filiais:                  { label: 'Filiais',                    cols: ['origem', 'alias', 'cnpj', 'regional'] },
-  materiais:                { label: 'Materiais',                  cols: ['origem', 'alias', 'categoria'] },
-  grupos_materiais:         { label: 'Grupos de Materiais',        cols: ['nome'] },
-  regionais_centrais:       { label: 'Regionais',                  cols: ['nome'] },
-  imports:                  { label: 'Log de Importações',         cols: ['arquivo', 'modulo', 'registros', 'status'] },
+  configs:                  { label: 'Configurações',              cols: ['key', 'value', 'descricao', 'created_at'] },
+  filiais:                  { label: 'Filiais',                    cols: ['origem', 'alias', 'cnpj', 'regional', 'import_id', 'created_at'] },
+  materiais:                { label: 'Materiais',                  cols: ['origem', 'alias', 'categoria', 'import_id', 'created_at'] },
+  grupos_materiais:         { label: 'Grupos de Materiais',        cols: ['nome', 'created_at'] },
+  regionais_centrais:       { label: 'Regionais',                  cols: ['nome', 'created_at'] },
+  imports:                  { label: 'Log de Importações',         cols: ['arquivo', 'modulo', 'registros', 'total_arquivo', 'data_hora', 'status', 'status_tip', 'created_at'] },
   // Operacional
-  ocorrencias:              { label: 'Ocorrências',                cols: ['central', 'material', 'motivo', 'concluida', 'data_abertura'] },
+  ocorrencias:              { label: 'Ocorrências',                cols: ['data_abertura', 'motivo', 'data_limite', 'central', 'material', 'operador', 'contato', 'descricao', 'concluida', 'data_conclusao', 'desc_conclusao', 'inconclusiva', 'data_inconclusiva', 'motivo_inconclusiva', 'hierarquia', 'criado_em', 'origem_ajuste_sistemico', 'dai_id', 'dai_numero', 'dai_tag', 'dai_item_id', 'numero', 'co_owners'] },
   acoes_relatorio:          { label: 'Ações de Relatório',         cols: ['nivel', 'categorias', 'acoes', 'created'] },
-  inv_justificativas:       { label: 'Justificativas de Inventário', cols: ['k', 'op', 'saldo', 'documento_sap'] },
+  inv_justificativas:       { label: 'Justificativas de Inventário', cols: ['k', 'op', 'fiscal', 'saldo', 'custo_medio_sap', 'documento_sap'] },
   sap_fechamento_overrides: { label: 'Overrides de Fechamento SAP', cols: ['chave'] },
-  ajustes_sistemicos:       { label: 'DAI / Ajuste Sistêmico',     cols: ['tag', 'numero', 'central', 'analista', 'sap_documento'] },
-  ajustes_excluidos:        { label: 'Log de Exclusão de DAI',     cols: ['dai_tag', 'dai_numero', 'central', 'excluido_por'], readOnly: true },
-  notas_ajuste:             { label: 'Notas de Crédito/Débito',    cols: ['numero', 'tipo', 'central', 'valor_total', 'responsavel_nome'], readOnly: true },
+  ajustes_sistemicos:       { label: 'DAI / Ajuste Sistêmico',     cols: ['tag', 'numero', 'data_geracao', 'data_geracao_key', 'data_ocorrido', 'central', 'cnpj_central', 'regional_central', 'descricao', 'informantes', 'itens', 'analista', 'atestado_manual', 'ocorrencia_por_item', 'ocorrencia_ids', 'anexos', 'material', 'tipo_movimento_sap', 'objetivo', 'operador', 'sap_documento', 'origem', 'categoria_situacao', 'filial_destino'] },
+  ajustes_excluidos:        { label: 'Log de Exclusão de DAI',     cols: ['dai_tag', 'dai_numero', 'central', 'data_geracao', 'excluido_por', 'excluido_em'], readOnly: true },
+  notas_ajuste:             { label: 'Notas de Crédito/Débito',    cols: ['numero', 'tipo', 'central', 'cnpj_central', 'data_key', 'data_geracao', 'valor_total', 'responsavel_nome', 'responsavel_cpf', 'responsavel_email', 'itens'], readOnly: true },
   // Módulos grandes (Fase 4)
-  lancamentos:              { label: 'Lançamentos',                cols: ['central', 'material', 'peso', 'valor_total', 'fonte', 'editado'] },
-  producao:                 { label: 'Produção',                   cols: ['central', 'mes', 'producao', 'custo_medio'] },
-  entradas:                 { label: 'Entradas',                   cols: ['central_compra', 'material', 'peso', 'valor_total', 'nf'] },
-  saidas:                   { label: 'Saídas',                     cols: ['central', 'material', 'peso', 'valor_total', 'os'] },
-  sap:                      { label: 'SAP',                        cols: ['central', 'material', 'movimento', 'peso', 'valor_total'] },
+  lancamentos:              { label: 'Lançamentos',                cols: ['fonte', 'central_original', 'central', 'dt_lanc', 'fornecedor', 'categoria_original', 'categoria', 'material_original', 'material', 'peso', 'um', 'custo', 'valor_total', 'import_id', 'created_at', 'criado_em', 'editado'] },
+  producao:                 { label: 'Produção',                   cols: ['fonte', 'mes', 'central_original', 'central', 'producao', 'um', 'preco_medio', 'custo_medio', 'margem', 'total_vendas', 'import_id', 'created_at'] },
+  entradas:                 { label: 'Entradas',                   cols: ['fonte', 'central_compra_original', 'central_compra', 'central_destino_original', 'central_destino', 'nf', 'dt_emissao', 'dt_descarga', 'fornecedor', 'categoria_original', 'categoria', 'material_original', 'material', 'peso', 'um', 'custo', 'valor_total', 'import_id', 'created_at'] },
+  saidas:                   { label: 'Saídas',                     cols: ['fonte', 'central_original', 'central', 'dt_emissao', 'os', 'contrato', 'categoria_original', 'categoria', 'fornecedor', 'material_original', 'material', 'peso', 'um', 'custo', 'valor_total', 'import_id', 'created_at'] },
+  sap:                      { label: 'SAP',                        cols: ['fonte', 'usuario', 'movimento', 'ref', 'documento', 'central_original', 'central', 'deposito', 'dt_doc', 'dt_lanc', 'dt_reg', 'material_original', 'material', 'peso', 'um', 'custo_unit', 'valor_total', 'import_id', 'created_at'] },
 };
 
 let _adminProfiles = [];        // cache do último fetch de profiles (email por user_id)
@@ -72,14 +78,17 @@ let _adminLoteEditContext = null; // { modulo } — módulo alvo do modal de edi
 // texto (só as que sobraram de fora daqui, ou seja, as de tipo texto).
 // Colunas não listadas aqui são tratadas como texto simples.
 const _ADMIN_COL_TYPES = {
-  imports:         { registros: 'number' },
-  ocorrencias:      { concluida: 'boolean' },
-  acoes_relatorio:  { categorias: 'array' },
-  lancamentos:      { peso: 'number', valor_total: 'number', editado: 'boolean' },
-  producao:         { producao: 'number', custo_medio: 'number' },
-  entradas:         { peso: 'number', valor_total: 'number' },
-  saidas:           { peso: 'number', valor_total: 'number' },
-  sap:              { peso: 'number', valor_total: 'number' },
+  imports:                  { registros: 'number', total_arquivo: 'number', created_at: 'number' },
+  ocorrencias:              { concluida: 'boolean', inconclusiva: 'boolean', origem_ajuste_sistemico: 'boolean', criado_em: 'number', hierarquia: 'json', co_owners: 'user_multi' },
+  acoes_relatorio:          { categorias: 'array' },
+  ajustes_sistemicos:       { data_geracao: 'number', atestado_manual: 'boolean', ocorrencia_por_item: 'boolean', informantes: 'json', itens: 'json', ocorrencia_ids: 'json', anexos: 'json' },
+  ajustes_excluidos:        { data_geracao: 'number', excluido_em: 'number' },
+  notas_ajuste:             { data_geracao: 'number', valor_total: 'number', itens: 'json' },
+  lancamentos:              { peso: 'number', valor_total: 'number', custo: 'number', created_at: 'number', editado: 'boolean' },
+  producao:                 { producao: 'number', custo_medio: 'number', preco_medio: 'number', total_vendas: 'number', created_at: 'number' },
+  entradas:                 { peso: 'number', valor_total: 'number', custo: 'number', created_at: 'number' },
+  saidas:                   { peso: 'number', valor_total: 'number', custo: 'number', created_at: 'number' },
+  sap:                      { peso: 'number', valor_total: 'number', custo_unit: 'number', created_at: 'number' },
 };
 function _adminFieldType(modulo, col) {
   return _ADMIN_COL_TYPES[modulo]?.[col] || 'text';
@@ -112,6 +121,15 @@ let _adminPageTotal = null; // contagem exata da tabela atual (null = ainda não
 // Supabase a cada caractere digitado.
 let _adminSearchTerm = '';
 
+// ── Filtro por dono — "Dados por módulo" (30/07) ────────────
+// Clicar no e-mail da coluna "Dono" filtra a tabela só pros registros
+// daquele usuário, no mesmo espírito de navegar pra dentro de uma pasta
+// no navegador de Storage (aba Servidor). Diferente da busca por texto,
+// PERSISTE ao trocar de módulo — user_id é a mesma coluna em toda
+// tabela, então "ver só os dados deste usuário" continua fazendo
+// sentido ao ir de um módulo pro outro; só "Limpar filtro" tira.
+let _adminDonoFiltro = null; // { id, email } | null
+
 function _adminBuildSearchOr(modulo, cfg) {
   if (!_adminSearchTerm) return null;
   const textCols = (cfg.cols || []).filter(c => _adminFieldType(modulo, c) === 'text');
@@ -120,6 +138,124 @@ function _adminBuildSearchOr(modulo, cfg) {
   const term = _adminSearchTerm.replace(/[%,]/g, '').trim();
   if (!term) return null;
   return textCols.map(c => `${c}.ilike.%${term}%`).join(',');
+}
+
+// Compõe o filtro de dono (.eq) + busca de texto (.or) num query builder
+// só — usado na contagem, na busca de linhas e nas ações em lote "todos
+// os N do filtro", pra garantir que a mesma combinação de filtros vista
+// na tela é exatamente a aplicada na ação.
+function _adminAplicarFiltros(query, modulo, cfg) {
+  if (_adminDonoFiltro) query = query.eq('user_id', _adminDonoFiltro.id);
+  const orClause = _adminBuildSearchOr(modulo, cfg);
+  if (orClause) query = query.or(orClause);
+  return query;
+}
+
+function _adminTemFiltroAtivo() {
+  return !!_adminSearchTerm || !!_adminDonoFiltro;
+}
+
+// Ocorrências vinculadas a um DAI (origem_ajuste_sistemico=true) têm um
+// fluxo de exclusão próprio e obrigatório (checkbox de ciência + log
+// permanente em ajustes_excluidos — ver confirmarExcluirAjusteSistemico,
+// ocorrencias.js) porque representam um documento fiscal já emitido.
+// Ações EM MASSA daqui (checkbox ou "todos os N do filtro") nunca devem
+// tocar essas linhas — só o clique individual (que abre o modal de
+// verdade, ver ADMIN_MODAL_PROPRIO) passa por esse cuidado. .or() em vez
+// de .eq()/.neq() sozinho pra não excluir por engano uma linha antiga
+// com a coluna NULL (NULL = false é NULL em SQL, não true).
+function _adminExcluirDaiDoLote(query, modulo) {
+  if (modulo !== 'ocorrencias') return query;
+  return query.or('origem_ajuste_sistemico.is.null,origem_ajuste_sistemico.eq.false');
+}
+
+// Descreve em texto os filtros ativos (dono + busca) pra usar nas frases
+// de confirmação das ações em lote — combina os dois quando ambos estão
+// ativos, ex.: "do usuário fulano@x.com que batem na busca "abc"".
+function _adminDescricaoFiltroAtivo() {
+  const partes = [];
+  if (_adminDonoFiltro) partes.push(`do usuário ${_adminDonoFiltro.email}`);
+  if (_adminSearchTerm) partes.push(`que batem na busca "${_adminEsc(_adminSearchTerm)}"`);
+  return partes.join(' ');
+}
+
+function adminFiltrarPorDono(userId) {
+  if (!userId) return;
+  const email = _adminProfiles.find(p => p.id === userId)?.email || userId;
+  _adminDonoFiltro = { id: userId, email };
+  _adminLimparSelecaoInterno(); // novo filtro — seleção do filtro anterior não vale mais
+  adminLoadModulo('first');
+}
+
+function adminLimparFiltroDono() {
+  _adminDonoFiltro = null;
+  _adminLimparSelecaoInterno();
+  adminLoadModulo('first');
+}
+
+// Handler do <select id="admin-dono-select"> — via dropdown, não precisa
+// mais caçar o usuário clicando numa linha da tabela (útil quando a
+// lista já tem muitos registros do usuário errado antes do certo).
+function adminSelecionarDono(userId) {
+  if (!userId) { adminLimparFiltroDono(); return; }
+  adminFiltrarPorDono(userId);
+}
+
+// Popula o <select id="admin-dono-select"> com os usuários de _adminProfiles
+// (já carregado nesse ponto por adminLoadModulo) e mantém a opção
+// selecionada em sincronia com _adminDonoFiltro — chamada em toda carga
+// de "Dados por módulo", inclusive quando o filtro muda por outro
+// caminho (clique na coluna "Dono").
+function _adminPopularSelectDono() {
+  const select = document.getElementById('admin-dono-select');
+  if (!select) return;
+  const usuarios = _adminProfiles.slice().sort((a, b) => (a.email || '').localeCompare(b.email || ''));
+  const atualId = _adminDonoFiltro?.id || '';
+  select.innerHTML = `<option value="">Todos os usuários</option>` +
+    usuarios.map(u => `<option value="${u.id}" ${u.id === atualId ? 'selected' : ''}>${_adminEsc(u.email)}</option>`).join('');
+}
+
+function _adminAtualizarBannerDono(cfg) {
+  const banner = document.getElementById('admin-dono-filtro-banner');
+  const label = document.getElementById('admin-dono-filtro-label');
+  const btnExcluir = document.getElementById('admin-dono-filtro-excluir');
+  if (!banner) return;
+  if (!_adminDonoFiltro) { banner.style.display = 'none'; return; }
+  banner.style.display = 'flex';
+  if (label) label.textContent = `Filtrando por usuário: ${_adminDonoFiltro.email}`;
+  if (btnExcluir) btnExcluir.style.display = cfg?.readOnly ? 'none' : '';
+}
+
+// "Excluir tudo deste usuário neste módulo" — equivalente ao "excluir
+// pasta inteira" do navegador de Storage: apaga de uma vez TODOS os
+// registros que batem no filtro por dono atual (+ busca de texto, se
+// houver alguma combinada), sem precisar selecionar linha por linha.
+function adminExcluirTudoDono() {
+  const modulo = document.getElementById('admin-modulo-select')?.value;
+  const cfg = ADMIN_MODULOS[modulo];
+  if (!cfg || cfg.readOnly || !_adminDonoFiltro) return;
+
+  const totalTxt = _adminPageTotal !== null ? `${_adminPageTotal.toLocaleString('pt-BR')} ` : '';
+  const buscaTxt = _adminSearchTerm ? ` que batem na busca "${_adminEsc(_adminSearchTerm)}"` : '';
+
+  confirmarDestrutivo({
+    title: 'Confirmar exclusão por usuário',
+    sub: cfg.label,
+    body: `Você está prestes a excluir permanentemente ${totalTxt}registro(s) de <strong>${_adminEsc(_adminDonoFiltro.email)}</strong> na tabela <strong>${_adminEsc(cfg.label)}</strong>${buscaTxt}. Esta ação não pode ser desfeita.`,
+    confirmLabel: 'Excluir tudo deste usuário',
+    requireConsent: true,
+    consentLabel: `Entendo que isso apaga permanentemente os registros de ${_adminDonoFiltro.email} nesta tabela.`,
+    onConfirm: async () => {
+      let query = window.supabaseClient.from(modulo).delete();
+      query = _adminAplicarFiltros(query, modulo, cfg);
+      query = _adminExcluirDaiDoLote(query, modulo);
+      const { error } = await query;
+      if (error) { toast('Falha ao excluir: ' + error.message, 'error'); return; }
+      toast('Registros excluídos.', 'success');
+      adminLimparSelecao();
+      adminLoadModulo();
+    },
+  });
 }
 
 function adminBuscarModulo() {
@@ -137,8 +273,9 @@ function adminLimparBuscaModulo() {
   adminLoadModulo('first');
 }
 
-// Troca de módulo — limpa a busca (os campos de texto mudam de um módulo
-// pro outro, buscar pelo termo antigo não faria sentido no novo).
+// Troca de módulo — limpa a busca de texto (os campos mudam de um
+// módulo pro outro, buscar pelo termo antigo não faria sentido no
+// novo), mas MANTÉM o filtro por dono (ver comentário de _adminDonoFiltro).
 function adminTrocarModulo() {
   _adminSearchTerm = '';
   const input = document.getElementById('admin-search-input');
@@ -663,8 +800,8 @@ async function adminLoadModulo(direction = 'first') {
   }
 
   const checkboxTh = cfg.readOnly ? '' : `<th class="th-checkbox"><input type="checkbox" id="admin-check-all" onchange="adminToggleSelecionarTudoPagina(this.checked)" title="Selecionar todos os registros desta página"></th>`;
-  thead.innerHTML = `<tr>${checkboxTh}<th>Dono</th>${cfg.cols.map(c => `<th>${_adminEsc(c)}</th>`).join('')}<th></th></tr>`;
-  const colspan = cfg.cols.length + 2 + (cfg.readOnly ? 0 : 1);
+  thead.innerHTML = `<tr>${checkboxTh}<th>Dono</th>${cfg.cols.map(c => `<th>${_adminEsc(c)}</th>`).join('')}</tr>`;
+  const colspan = cfg.cols.length + 1 + (cfg.readOnly ? 0 : 1);
   tbody.innerHTML = `<tr><td colspan="${colspan}"><div class="empty-state"><i class="ti ti-loader"></i><p>Carregando...</p></div></td></tr>`;
   _adminSetPageInfo('Carregando...');
 
@@ -673,20 +810,20 @@ async function adminLoadModulo(direction = 'first') {
     _adminProfiles = data || [];
   }
   const emailPorId = Object.fromEntries(_adminProfiles.map(p => [p.id, p.email]));
+  _adminPopularSelectDono();
+  _adminAtualizarBannerDono(cfg);
 
   // Contagem exata — só busca de novo quando a paginação reinicia (troca
   // de módulo/Atualizar/nova busca), não a cada Próxima/Anterior.
   if (_adminPageTotal === null) {
     let countQuery = window.supabaseClient.from(modulo).select('*', { count: 'exact', head: true });
-    const orCount = _adminBuildSearchOr(modulo, cfg);
-    if (orCount) countQuery = countQuery.or(orCount);
+    countQuery = _adminAplicarFiltros(countQuery, modulo, cfg);
     countQuery.then(({ count }) => { _adminPageTotal = count ?? null; _adminSetPageInfo(); _adminAtualizarBarraLote(); });
   }
 
   const asc = direction !== 'prev' && direction !== 'last'; // prev/last buscam em DESC pra pegar o "lado de baixo"
   let query = window.supabaseClient.from(modulo).select('*').order('id', { ascending: asc }).limit(ADMIN_PAGE_SIZE + 1);
-  const orData = _adminBuildSearchOr(modulo, cfg);
-  if (orData) query = query.or(orData);
+  query = _adminAplicarFiltros(query, modulo, cfg);
   if (direction === 'next')  query = query.gt('id', _adminPageLastId);
   if (direction === 'prev')  query = query.lt('id', _adminPageFirstId);
 
@@ -721,8 +858,8 @@ async function adminLoadModulo(direction = 'first') {
   else if (direction === 'last') _adminPageIndex = _adminPageTotal !== null ? Math.max(0, Math.ceil(_adminPageTotal / ADMIN_PAGE_SIZE) - 1) : _adminPageIndex;
 
   if (!_adminCurrentRows.length) {
-    const msg = _adminSearchTerm
-      ? `Nenhum registro encontrado para "${_adminEsc(_adminSearchTerm)}".`
+    const msg = _adminTemFiltroAtivo()
+      ? 'Nenhum registro encontrado para este filtro.'
       : 'Nenhum registro nesta tabela.';
     tbody.innerHTML = `<tr><td colspan="${colspan}"><div class="empty-state"><i class="ti ti-database-off"></i><p>${msg}</p></div></td></tr>`;
     _adminSetPageInfo();
@@ -733,25 +870,32 @@ async function adminLoadModulo(direction = 'first') {
   tbody.innerHTML = _adminCurrentRows.map(row => {
     const idStr = String(row.id);
     const dono = emailPorId[row.user_id] || '—';
+    const donoTd = row.user_id
+      ? `<a href="#" onclick="event.stopPropagation();adminFiltrarPorDono('${row.user_id}');return false" style="color:var(--text3)" title="Filtrar por este usuário"><i class="ti ti-filter" style="font-size:10px"></i> ${_adminEsc(dono)}</a>`
+      : _adminEsc(dono);
     const cells = cfg.cols.map(c => {
       let v = row[c];
-      if (Array.isArray(v)) v = v.join(', ');
+      if (Array.isArray(v)) v = _adminFieldType(modulo, c) === 'user_multi' ? v.map(id => emailPorId[id] || id).join(', ') : v.join(', ');
+      else if (v && typeof v === 'object') v = JSON.stringify(v); // jsonb não-array (hierarquia, itens, etc.)
       if (typeof v === 'boolean') v = v ? 'Sim' : 'Não';
       if (v && String(v).length > 60) v = String(v).slice(0, 60) + '…';
       return `<td>${_adminEsc(v ?? '—')}</td>`;
     }).join('');
-    const acoes = cfg.readOnly
-      ? `<span style="font-size:11px;color:var(--text3)" title="Registro append-only — sem edição/exclusão por design"><i class="ti ti-lock"></i> Somente leitura</span>`
-      : `<button class="btn-icon" title="Editar" onclick="adminAbrirEdicao('${modulo}','${row.id}')"><i class="ti ti-edit"></i></button>
-      <button class="btn-icon danger" title="Excluir" onclick="adminExcluirRegistro('${modulo}','${row.id}')"><i class="ti ti-trash"></i></button>`;
-    const checkboxTd = cfg.readOnly ? '' : `<td class="th-checkbox"><input type="checkbox" ${(_adminSelecaoTodosFiltro || _adminSelectedIds.has(idStr)) ? 'checked' : ''} ${_adminSelecaoTodosFiltro ? 'disabled' : ''} onchange="adminToggleSelecaoLinha('${idStr}', this.checked)"></td>`;
-    return `<tr>
+    // Ocorrência de DAI (documento fiscal já emitido) — exclusão/edição
+    // em massa fica bloqueada pra essas linhas (ver _adminExcluirDaiDoLote
+    // e o comentário em ADMIN_MODAL_PROPRIO); sem checkbox, só cadeado.
+    const ehDai = modulo === 'ocorrencias' && row.origem_ajuste_sistemico === true;
+    // Linha inteira clicável abre o modal de edição (que também tem o
+    // botão Excluir agora) — ver adminAbrirEdicao. stopPropagation no
+    // checkbox e no link "Dono" pra esses cliques não abrirem o modal
+    // junto.
+    const checkboxTd = cfg.readOnly ? '' : ehDai
+      ? `<td class="th-checkbox" onclick="event.stopPropagation()" title="Vinculado a um DAI (documento fiscal) — sem exclusão/edição em massa; abra o registro pra excluir individualmente"><i class="ti ti-lock" style="color:var(--text3);font-size:12px"></i></td>`
+      : `<td class="th-checkbox" onclick="event.stopPropagation()"><input type="checkbox" ${(_adminSelecaoTodosFiltro || _adminSelectedIds.has(idStr)) ? 'checked' : ''} ${_adminSelecaoTodosFiltro ? 'disabled' : ''} onchange="adminToggleSelecaoLinha('${idStr}', this.checked)"></td>`;
+    return `<tr data-id="${idStr}" onclick="adminAbrirEdicao('${modulo}','${row.id}')" style="cursor:pointer">
       ${checkboxTd}
-      <td style="font-size:11px;color:var(--text3)">${_adminEsc(dono)}</td>
+      <td style="font-size:11px">${donoTd}</td>
       ${cells}
-      <td style="white-space:nowrap">
-        ${acoes}
-      </td>
     </tr>`;
   }).join('');
 
@@ -851,34 +995,41 @@ function adminToggleSelecaoLinha(id, checked) {
 // adminSelecionarTodosFiltro), nunca um efeito colateral deste checkbox.
 function adminToggleSelecionarTudoPagina(checked) {
   if (_adminSelecaoTodosFiltro) return;
+  const modulo = document.getElementById('admin-modulo-select')?.value;
   _adminCurrentRows.forEach(r => {
+    if (modulo === 'ocorrencias' && r.origem_ajuste_sistemico === true) return; // sem checkbox — nunca entra na seleção
     const id = String(r.id);
     if (checked) _adminSelectedIds.add(id);
     else _adminSelectedIds.delete(id);
   });
-  document.querySelectorAll('#admin-dados-tbody input[type="checkbox"]').forEach((cb, i) => {
-    if (_adminCurrentRows[i]) cb.checked = _adminSelectedIds.has(String(_adminCurrentRows[i].id));
+  // Casa pelo data-id da <tr>, não por índice posicional — linhas de DAI
+  // não têm checkbox, então a posição do <input> na lista diverge da
+  // posição da linha em _adminCurrentRows.
+  document.querySelectorAll('#admin-dados-tbody tr[data-id]').forEach(tr => {
+    const cb = tr.querySelector('input[type="checkbox"]');
+    if (cb) cb.checked = _adminSelectedIds.has(tr.dataset.id);
   });
   _adminAtualizarBarraLote();
 }
 
 // Ativa o modo "todos os N registros do filtro" — só alcançável a partir
 // do banner (2º clique, depois que a página inteira já foi marcada), e
-// SÓ com uma busca ativa. Essa exigência é proposital: sem ela, "todos"
+// SÓ com busca de texto e/ou filtro por dono ativos (ver
+// _adminTemFiltroAtivo). Essa exigência é proposital: sem ela, "todos"
 // numa tabela sem filtro poderia significar literalmente a tabela
 // inteira (ex.: 600 mil linhas em `sap`/`lancamentos`) selecionada em 2
 // cliques — risco grande demais pra uma ação que alimenta exclusão/edição
 // em massa. Com filtro obrigatório, a ação em lote sempre tem uma
 // cláusula WHERE de verdade por trás (ver _adminExecutar* abaixo).
 function adminSelecionarTodosFiltro() {
-  if (!_adminSearchTerm || _adminPageTotal === null) return;
+  if (!_adminTemFiltroAtivo() || _adminPageTotal === null) return;
   _adminSelecaoTodosFiltro = true;
   _adminSelectedIds.clear(); // o modo "todos" substitui qualquer seleção manual anterior
   document.querySelectorAll('#admin-dados-tbody input[type="checkbox"]').forEach(cb => { cb.checked = true; cb.disabled = true; });
   const checkAll = document.getElementById('admin-check-all');
   if (checkAll) { checkAll.checked = true; checkAll.indeterminate = false; checkAll.disabled = true; }
   _adminAtualizarBarraLote();
-  toast(`Todos os ${_adminPageTotal.toLocaleString('pt-BR')} registros que batem na busca atual foram selecionados.`, 'success');
+  toast(`Todos os ${_adminPageTotal.toLocaleString('pt-BR')} registros que batem no filtro atual foram selecionados.`, 'success');
 }
 
 // Sai de qualquer modo de seleção (manual ou "todos do filtro") e volta
@@ -915,7 +1066,13 @@ function _adminAtualizarBarraLote() {
       : `<i class="ti ti-checks"></i> ${n === 1 ? '1 registro selecionado' : n.toLocaleString('pt-BR') + ' registros selecionados'}`;
   }
 
-  const idsPagina = _adminCurrentRows.map(r => String(r.id));
+  // Exclui linhas de DAI da contagem "página inteira selecionada" — elas
+  // nunca têm checkbox (ver adminLoadModulo), então nunca deveriam contar
+  // contra o "selecionou tudo".
+  const moduloAtual = document.getElementById('admin-modulo-select')?.value;
+  const idsPagina = _adminCurrentRows
+    .filter(r => !(moduloAtual === 'ocorrencias' && r.origem_ajuste_sistemico === true))
+    .map(r => String(r.id));
   const todosPaginaSelecionados = idsPagina.length > 0 && idsPagina.every(id => _adminSelectedIds.has(id));
 
   if (checkAllEl && !_adminSelecaoTodosFiltro) {
@@ -933,10 +1090,10 @@ function _adminAtualizarBarraLote() {
       const mostrar = todosPaginaSelecionados && haMaisParaSelecionar;
       banner.style.display = mostrar ? 'flex' : 'none';
       if (mostrar) {
-        banner.innerHTML = _adminSearchTerm
+        banner.innerHTML = _adminTemFiltroAtivo()
           ? `<span><i class="ti ti-info-circle"></i> Todos os ${idsPagina.length} registros desta página estão selecionados.</span>
-             <button type="button" class="admin-selectall-link" onclick="adminSelecionarTodosFiltro()">Selecionar todos os ${totalFiltro.toLocaleString('pt-BR')} que batem na busca atual</button>`
-          : `<span><i class="ti ti-info-circle"></i> Todos os ${idsPagina.length} registros desta página estão selecionados. Pra selecionar mais que isso de uma vez, aplique uma busca primeiro — seleção de "todos" sem filtro ativo não é permitida, por segurança.</span>`;
+             <button type="button" class="admin-selectall-link" onclick="adminSelecionarTodosFiltro()">Selecionar todos os ${totalFiltro.toLocaleString('pt-BR')} que batem no filtro atual</button>`
+          : `<span><i class="ti ti-info-circle"></i> Todos os ${idsPagina.length} registros desta página estão selecionados. Pra selecionar mais que isso de uma vez, aplique uma busca ou clique no "Dono" de uma linha primeiro — seleção de "todos" sem filtro ativo não é permitida, por segurança.</span>`;
       }
     }
   }
@@ -951,7 +1108,7 @@ function adminExcluirLote() {
   if (!n) return;
 
   const escopoTexto = _adminSelecaoTodosFiltro
-    ? `TODOS os ${n.toLocaleString('pt-BR')} registros que batem na busca "${_adminEsc(_adminSearchTerm)}" — não só os visíveis nesta página`
+    ? `TODOS os ${n.toLocaleString('pt-BR')} registros ${_adminDescricaoFiltroAtivo()} — não só os visíveis nesta página`
     : `${n.toLocaleString('pt-BR')} registro(s) selecionado(s) manualmente`;
 
   confirmarDestrutivo({
@@ -972,18 +1129,19 @@ async function _adminExecutarExclusaoLote(modulo) {
   let query = window.supabaseClient.from(modulo).delete();
   if (_adminSelecaoTodosFiltro) {
     // Segunda checagem (defesa em profundidade) — mesmo que algum caminho
-    // de UI inesperado chegasse aqui sem busca ativa, a ação é bloqueada
+    // de UI inesperado chegasse aqui sem filtro ativo, a ação é bloqueada
     // antes de qualquer chamada ao banco. Nunca um DELETE sem filtro.
-    const orClause = _adminBuildSearchOr(modulo, cfg);
-    if (!_adminSearchTerm || !orClause) {
-      toast('Ação bloqueada: exclusão de "todos os registros do filtro" exige uma busca ativa.', 'error');
+    if (!_adminTemFiltroAtivo()) {
+      toast('Ação bloqueada: exclusão de "todos os registros do filtro" exige uma busca ou filtro de dono ativo.', 'error');
       return;
     }
-    query = query.or(orClause);
+    query = _adminAplicarFiltros(query, modulo, cfg);
+    query = _adminExcluirDaiDoLote(query, modulo);
   } else {
     const ids = [..._adminSelectedIds];
     if (!ids.length) return;
     query = query.in('id', ids);
+    query = _adminExcluirDaiDoLote(query, modulo); // defesa em profundidade — checkbox já vem oculto pra linha de DAI
   }
 
   const { error } = await query;
@@ -1046,11 +1204,13 @@ function adminAplicarEdicaoLote() {
   if (!n) return;
 
   const valorExibicao = Array.isArray(parsed.value)
-    ? (parsed.value.join(', ') || '(lista vazia)')
+    ? (_adminFieldType(modulo, col) === 'user_multi'
+        ? (parsed.value.map(id => _adminProfiles.find(p => p.id === id)?.email || id).join(', ') || '(nenhum usuário)')
+        : (parsed.value.join(', ') || '(lista vazia)'))
     : (typeof parsed.value === 'boolean' ? (parsed.value ? 'Sim' : 'Não') : (parsed.value === null || parsed.value === '' ? '(vazio)' : parsed.value));
 
   const escopoTexto = _adminSelecaoTodosFiltro
-    ? `TODOS os ${n.toLocaleString('pt-BR')} registros que batem na busca "${_adminEsc(_adminSearchTerm)}" — não só os visíveis nesta página`
+    ? `TODOS os ${n.toLocaleString('pt-BR')} registros ${_adminDescricaoFiltroAtivo()} — não só os visíveis nesta página`
     : `${n.toLocaleString('pt-BR')} registro(s) selecionado(s) manualmente`;
 
   closeModal('admin-lote-edit-modal');
@@ -1075,16 +1235,17 @@ async function _adminExecutarEdicaoLote(modulo, col, value) {
   if (_adminSelecaoTodosFiltro) {
     // Mesma defesa em profundidade da exclusão em massa — nunca um UPDATE
     // sem filtro de verdade por trás.
-    const orClause = _adminBuildSearchOr(modulo, cfg);
-    if (!_adminSearchTerm || !orClause) {
-      toast('Ação bloqueada: edição de "todos os registros do filtro" exige uma busca ativa.', 'error');
+    if (!_adminTemFiltroAtivo()) {
+      toast('Ação bloqueada: edição de "todos os registros do filtro" exige uma busca ou filtro de dono ativo.', 'error');
       return;
     }
-    query = query.or(orClause);
+    query = _adminAplicarFiltros(query, modulo, cfg);
+    query = _adminExcluirDaiDoLote(query, modulo);
   } else {
     const ids = [..._adminSelectedIds];
     if (!ids.length) return;
     query = query.in('id', ids);
+    query = _adminExcluirDaiDoLote(query, modulo); // defesa em profundidade — checkbox já vem oculto pra linha de DAI
   }
 
   const { error } = await query;
@@ -1100,7 +1261,17 @@ async function adminExcluirRegistro(modulo, id) {
   const { error } = await window.supabaseClient.from(modulo).delete().eq('id', id);
   if (error) { toast('Falha ao excluir: ' + error.message, 'error'); return; }
   toast('Registro excluído.', 'success');
+  closeModal('admin-edit-modal'); // no-op se não estiver aberto (chamada também vem do botão dentro do modal)
   adminLoadModulo();
+}
+
+// Botão "Excluir" de dentro do modal de edição — único caminho de
+// exclusão individual agora (30/07: linha da tabela não tem mais os dois
+// botões de ícone, clicar na linha abre o modal e a exclusão sai daqui).
+function adminExcluirRegistroModal() {
+  const { modulo, id } = _adminEditContext || {};
+  if (!modulo || !id) return;
+  adminExcluirRegistro(modulo, id);
 }
 
 // ── Edição (formulário estruturado — um input por coluna, tipado
@@ -1112,17 +1283,48 @@ async function adminExcluirRegistro(modulo, id) {
 function _adminRenderFieldInput(modulo, col, val, inputId) {
   const type = _adminFieldType(modulo, col);
   if (type === 'boolean') {
-    return `<label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-      <input type="checkbox" id="${inputId}" ${val ? 'checked' : ''} style="width:16px;height:16px">
-      <span style="font-size:12.5px;color:var(--text2)">${val ? 'Sim' : 'Não'}</span>
-    </label>`;
+    // Pill Sim/Não (mesma linguagem visual do badge Ativo/Suspenso da
+    // aba Usuários) em vez de um checkbox nu — valor real fica em
+    // data-value, lido por _adminParseFieldValue.
+    return `<div class="admin-bool-toggle" id="${inputId}" data-value="${val ? 'true' : 'false'}">
+      <button type="button" class="admin-bool-btn ${val ? 'admin-bool-active-sim' : ''}" onclick="_adminToggleBool('${inputId}', true)">Sim</button>
+      <button type="button" class="admin-bool-btn ${!val ? 'admin-bool-active-nao' : ''}" onclick="_adminToggleBool('${inputId}', false)">Não</button>
+    </div>`;
   } else if (type === 'number') {
     return `<input type="number" step="any" class="form-input" id="${inputId}" value="${val ?? ''}">`;
   } else if (type === 'array') {
     const joined = Array.isArray(val) ? val.join(', ') : '';
     return `<input type="text" class="form-input" id="${inputId}" value="${_adminEsc(joined)}" placeholder="separado por vírgula">`;
+  } else if (type === 'user_multi') {
+    // Co-donos (ver ocorrencias_co_owners) — checkbox por usuário em vez
+    // de UUID cru, reaproveitando _adminProfiles já carregado.
+    const selecionados = new Set(Array.isArray(val) ? val : []);
+    const usuarios = _adminProfiles.slice().sort((a, b) => (a.email || '').localeCompare(b.email || ''));
+    const opcoes = usuarios.map(u => `<label style="display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer">
+      <input type="checkbox" value="${u.id}" ${selecionados.has(u.id) ? 'checked' : ''} style="width:15px;height:15px">
+      <span style="font-size:12.5px">${_adminEsc(u.email)}</span>
+    </label>`).join('') || `<span style="font-size:12px;color:var(--text3)">Nenhum usuário cadastrado.</span>`;
+    return `<div id="${inputId}" style="max-height:160px;overflow-y:auto;border:1px solid var(--border2);border-radius:var(--radius);padding:8px 10px">${opcoes}</div>`;
+  } else if (type === 'json') {
+    // Colunas jsonb (itens, anexos, hierarquia etc.) — sem editor
+    // estruturado próprio, mas visível e editável como JSON bruto em vez
+    // de completamente invisível/read-only.
+    const texto = val != null ? JSON.stringify(val, null, 2) : '';
+    return `<textarea class="form-input admin-field-json" id="${inputId}" rows="6" style="font-family:var(--mono);font-size:11.5px;min-height:120px">${_adminEsc(texto)}</textarea>`;
   }
   return `<input type="text" class="form-input" id="${inputId}" value="${_adminEsc(val ?? '')}">`;
+}
+
+// Clique num dos dois botões do pill Sim/Não — só troca a classe ativa e
+// o data-value, não dispara nenhuma leitura/gravação (isso só acontece
+// quando o formulário é salvo, via _adminParseFieldValue).
+function _adminToggleBool(inputId, valor) {
+  const el = document.getElementById(inputId);
+  if (!el) return;
+  el.dataset.value = valor ? 'true' : 'false';
+  const [btnSim, btnNao] = el.querySelectorAll('.admin-bool-btn');
+  btnSim?.classList.toggle('admin-bool-active-sim', valor);
+  btnNao?.classList.toggle('admin-bool-active-nao', !valor);
 }
 
 // Valida e converte o valor bruto de um <input> pro tipo esperado da
@@ -1130,7 +1332,7 @@ function _adminRenderFieldInput(modulo, col, val, inputId) {
 // lança exceção, pra quem chama só precisar checar `.ok`.
 function _adminParseFieldValue(modulo, col, inputEl) {
   const type = _adminFieldType(modulo, col);
-  if (type === 'boolean') return { ok: true, value: inputEl.checked };
+  if (type === 'boolean') return { ok: true, value: inputEl.dataset.value === 'true' };
   if (type === 'number') {
     const raw = inputEl.value.trim();
     if (raw === '') return { ok: true, value: null };
@@ -1139,31 +1341,94 @@ function _adminParseFieldValue(modulo, col, inputEl) {
     return { ok: true, value: n };
   }
   if (type === 'array') return { ok: true, value: inputEl.value.split(',').map(s => s.trim()).filter(Boolean) };
+  if (type === 'user_multi') return { ok: true, value: [...inputEl.querySelectorAll('input[type="checkbox"]:checked')].map(cb => cb.value) };
+  if (type === 'json') {
+    const raw = inputEl.value.trim();
+    if (raw === '') return { ok: true, value: null };
+    try {
+      return { ok: true, value: JSON.parse(raw) };
+    } catch {
+      return { ok: false, error: `JSON inválido em "${col}" — corrija a sintaxe antes de salvar.` };
+    }
+  }
   return { ok: true, value: inputEl.value };
 }
 
-function adminAbrirEdicao(modulo, id) {
-  if (ADMIN_MODULOS[modulo]?.readOnly) return; // append-only — RLS bloquearia mesmo assim
-  const row = _adminCurrentRows.find(r => String(r.id) === String(id));
-  if (!row) return;
-  _adminEditContext = { modulo, id };
-  document.getElementById('admin-edit-sub').textContent = `${ADMIN_MODULOS[modulo]?.label || modulo} — ${id}`;
+// Módulos que já têm um modal de visualização/edição de verdade no resto
+// do app (não o formulário genérico campo-a-campo) — mapeados por
+// investigação em 30/07. Só ocorrencias qualificou: o modal lê de
+// state.ocorrencias, que pra uma conta admin já vem com os registros de
+// TODOS os usuários (sync sem filtro por dono — ver
+// syncOcorrenciasFromSupabase em ocorrencias.js), então funciona pra
+// qualquer linha clicada aqui, não só as do próprio admin. Os outros
+// candidatos óbvios NÃO qualificaram:
+//  - ajustes_sistemicos (DAI): o único modal existente (editarSapDai) só
+//    edita o Nº de documento SAP por item, não a linha inteira — mais
+//    estreito que o formulário genérico, que já cobre isso e todo o
+//    resto (itens/informantes/anexos em JSON).
+//  - notas_ajuste: não existe modal de abrir um registro já gerado — o
+//    ncd-modal é um assistente de GERAÇÃO em lote, não um viewer por id.
+//  - inv_justificativas: o modal (_invRenderJustModal) depende de
+//    invRows/invFiltered, variáveis privadas só populadas depois de
+//    rodar o relatório de Inventário inteiro pra uma central/período —
+//    não dá pra abrir a partir de um id isolado sem essa página inteira
+//    carregada antes.
+const ADMIN_MODAL_PROPRIO = {
+  ocorrencias: (id) => {
+    if (typeof openOcDetailModal !== 'function') return false;
+    if (!(state.ocorrencias || []).some(o => o.id === id)) return false; // ainda não sincronizado — cai no genérico
+    openOcDetailModal(id);
+    return true;
+  },
+};
 
-  const cols = ADMIN_MODULOS[modulo]?.cols || [];
+// Abre o modal de edição. Módulos em ADMIN_MODAL_PROPRIO abrem o modal
+// de verdade do app (com escalonamento, conclusão, DAI etc.) em vez do
+// formulário genérico abaixo. Pra tabelas append-only (readOnly), abre
+// no modo SÓ VISUALIZAÇÃO (campos desabilitados, sem Salvar/Excluir): a
+// linha inteira é clicável em toda tabela, então precisa de algum lugar
+// pra ir quando não dá pra editar. RLS bloquearia a escrita mesmo se os
+// botões estivessem visíveis; escondê-los aqui é só sobre a UI.
+function adminAbrirEdicao(modulo, id) {
+  if (ADMIN_MODAL_PROPRIO[modulo]?.(id)) return;
+
+  const cfg = ADMIN_MODULOS[modulo];
+  const row = _adminCurrentRows.find(r => String(r.id) === String(id));
+  if (!row || !cfg) return;
+  _adminEditContext = { modulo, id };
+
+  const readOnly = !!cfg.readOnly;
+  document.getElementById('admin-edit-sub').textContent = `${cfg.label || modulo} — ${id}`;
+
+  const cols = cfg.cols || [];
   const fieldsEl = document.getElementById('admin-edit-fields');
   if (fieldsEl) {
+    let divisorPosto = false;
     fieldsEl.innerHTML = cols.map(col => {
       const inputId = `admin-edit-field-${col}`;
       const inputHtml = _adminRenderFieldInput(modulo, col, row[col], inputId);
-      return `<div class="form-group" style="margin-bottom:0">
+      const largo = ['json', 'user_multi'].includes(_adminFieldType(modulo, col));
+      // Divisor uma única vez, antes do 1º campo largo — separa visualmente
+      // os campos simples (grade) dos estruturados (JSON/lista de co-donos),
+      // sem precisar de nenhum conhecimento do domínio de cada tabela.
+      const divisor = (largo && !divisorPosto) ? (divisorPosto = true, '<div class="admin-field-divider">Dados estruturados</div>') : '';
+      return `${divisor}<div class="form-group" style="margin-bottom:0${largo ? ';grid-column:1/-1' : ''}">
         <label class="form-label">${_adminEsc(col)}</label>
         ${inputHtml}
       </div>`;
     }).join('');
+    if (readOnly) fieldsEl.querySelectorAll('input, textarea, .admin-bool-btn').forEach(el => { el.disabled = true; });
   }
 
   const errEl = document.getElementById('admin-edit-error');
   if (errEl) errEl.style.display = 'none';
+  const notaEl = document.getElementById('admin-edit-readonly-note');
+  if (notaEl) notaEl.style.display = readOnly ? '' : 'none';
+  const btnSalvar = document.getElementById('admin-edit-btn-salvar');
+  if (btnSalvar) btnSalvar.style.display = readOnly ? 'none' : '';
+  const btnExcluir = document.getElementById('admin-edit-btn-excluir');
+  if (btnExcluir) btnExcluir.style.display = readOnly ? 'none' : '';
+
   openModal('admin-edit-modal');
 }
 
@@ -1475,11 +1740,16 @@ Object.assign(window, {
   adminTrocarModulo,
   adminBuscarModulo,
   adminLimparBuscaModulo,
+  adminFiltrarPorDono,
+  adminLimparFiltroDono,
+  adminExcluirTudoDono,
+  adminSelecionarDono,
   adminModuloPrimeiraPagina,
   adminModuloPaginaAnterior,
   adminModuloProximaPagina,
   adminModuloUltimaPagina,
   adminExcluirRegistro,
+  adminExcluirRegistroModal,
   adminAbrirEdicao,
   adminSalvarEdicao,
   adminToggleSelecaoLinha,
@@ -1490,4 +1760,5 @@ Object.assign(window, {
   adminAbrirEdicaoLote,
   _adminLoteEditRenderCampo,
   adminAplicarEdicaoLote,
+  _adminToggleBool,
 });

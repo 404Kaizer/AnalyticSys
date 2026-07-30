@@ -2970,6 +2970,9 @@
                     <option value="sap">SAP</option>
                   </optgroup>
                 </select>
+                <select class="form-select" id="admin-dono-select" onchange="adminSelecionarDono(this.value)" style="width:auto" title="Filtrar por usuário">
+                  <option value="">Todos os usuários</option>
+                </select>
                 <div class="oc-search-wrap admin-search-wrap">
                   <i class="ti ti-search oc-search-icon"></i>
                   <input id="admin-search-input" class="oc-search-input" type="text" placeholder="Buscar nos campos de texto…" onkeydown="if(event.key==='Enter')adminBuscarModulo()">
@@ -2977,6 +2980,17 @@
                 <button class="btn" title="Buscar" onclick="adminBuscarModulo()"><i class="ti ti-search"></i></button>
                 <button class="btn" title="Limpar busca" onclick="adminLimparBuscaModulo()"><i class="ti ti-x"></i></button>
                 <button class="btn" onclick="adminLoadModulo()"><i class="ti ti-refresh"></i> Atualizar</button>
+              </div>
+            </div>
+            <!-- Filtro por dono (30/07) — clicar no e-mail da coluna "Dono"
+                 filtra a tabela só pros registros daquele usuário, no mesmo
+                 espírito de navegar pra dentro de uma pasta no navegador de
+                 Storage (aba Servidor). Ver _adminAtualizarBannerDono. -->
+            <div class="admin-lote-bar" id="admin-dono-filtro-banner" style="display:none">
+              <span id="admin-dono-filtro-label"><i class="ti ti-filter"></i></span>
+              <div class="admin-lote-actions">
+                <button class="btn btn-sm admin-btn-danger" id="admin-dono-filtro-excluir" onclick="adminExcluirTudoDono()"><i class="ti ti-trash"></i> Excluir tudo deste usuário neste módulo</button>
+                <button class="btn btn-sm admin-btn-ghost" onclick="adminLimparFiltroDono()">Limpar filtro</button>
               </div>
             </div>
             <!-- Barra de ação em lote — só aparece com alguma seleção ativa
@@ -3396,14 +3410,21 @@
      sintoma visual de "z-index bugado" que na real era esse containing
      block errado. -->
 <div class="modal-overlay" id="admin-edit-modal">
-  <div class="modal" style="max-width:520px">
+  <div class="modal" style="max-width:760px">
     <div class="modal-title"><i class="ti ti-edit"></i> Editar registro</div>
     <div class="modal-sub" id="admin-edit-sub"></div>
-    <div id="admin-edit-fields" style="display:flex;flex-direction:column;gap:12px;max-height:60vh;overflow-y:auto;padding-right:4px"></div>
+    <div id="admin-edit-readonly-note" style="display:none;font-size:11.5px;color:var(--text2);background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);padding:8px 12px;margin-top:10px">
+      <i class="ti ti-lock"></i> Registro append-only (auditoria) — somente leitura.
+    </div>
+    <!-- Grid de 2 colunas — campos curtos (texto/número/booleano) lado a
+         lado, campos largos (JSON, lista de co-donos) ocupam a linha
+         inteira via grid-column:1/-1 (ver adminAbrirEdicao, admin.js). -->
+    <div id="admin-edit-fields" style="display:grid;grid-template-columns:1fr 1fr;gap:12px 16px;max-height:60vh;overflow-y:auto;padding-right:4px;margin-top:10px"></div>
     <div id="admin-edit-error" style="display:none;color:var(--red);font-size:12px;margin-top:10px"></div>
     <div class="form-actions">
+      <button class="btn admin-btn-danger" id="admin-edit-btn-excluir" style="margin-right:auto" onclick="adminExcluirRegistroModal()"><i class="ti ti-trash"></i> Excluir</button>
       <button class="btn" onclick="closeModal('admin-edit-modal')">Cancelar</button>
-      <button class="btn btn-primary" onclick="adminSalvarEdicao()"><i class="ti ti-check"></i> Salvar</button>
+      <button class="btn btn-primary" id="admin-edit-btn-salvar" onclick="adminSalvarEdicao()"><i class="ti ti-check"></i> Salvar</button>
     </div>
   </div>
 </div>

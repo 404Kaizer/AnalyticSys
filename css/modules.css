@@ -11023,3 +11023,46 @@ tr.sap-fechamento td {
   background: var(--bg1);
   box-shadow: 0 1px 2px rgba(0,0,0,0.08);
 }
+
+/* Modal de edição genérico "Dados por módulo" (30/07) — mesma linguagem
+   visual do resto do admin (pill verde/neutro já usado em Ativo/Suspenso
+   na aba Usuários), aplicada aos campos booleanos em vez de um checkbox
+   nu. .admin-field-json é só o textarea de colunas jsonb com uma borda
+   um pouco mais viva pra se diferenciar de texto simples. */
+.admin-bool-toggle { display: flex; gap: 6px; }
+.admin-bool-btn {
+  flex: 1;
+  padding: 7px 0;
+  border-radius: var(--radius);
+  border: 1px solid var(--border2);
+  background: var(--bg3);
+  color: var(--text3);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.admin-bool-btn:hover { color: var(--text2); }
+.admin-bool-btn.admin-bool-active-sim { background: var(--green-bg); color: var(--green); border-color: var(--green-border); }
+.admin-bool-btn.admin-bool-active-nao { background: var(--red-bg); color: var(--red); border-color: var(--red-border); }
+
+.admin-field-json {
+  border: 1px solid var(--accent-dim);
+  background: var(--bg2, var(--bg3));
+}
+
+/* Divisor antes do primeiro campo "largo" (JSON / lista de co-donos) do
+   modal de edição — separa visualmente os campos simples (grade 2
+   colunas) dos estruturados, sem precisar saber nada do domínio de cada
+   tabela pra decidir onde agrupar. */
+.admin-field-divider {
+  grid-column: 1 / -1;
+  font-size: 9px;
+  font-family: var(--mono);
+  color: var(--text3);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  border-top: 1px solid var(--border2);
+  padding-top: 10px;
+  margin-top: 4px;
+}
