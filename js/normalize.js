@@ -141,14 +141,27 @@ async function fetchMineOrIntegrated(table, columns = '*') {
 // ainda não sincronizado" de "de outro dono, só ficou perdido no cache".
 // Só remove o que está CONFIRMADO no banco como de outro dono — um id que
 // não existe em lugar nenhum (candidato a pendente de sync) nunca é tocado.
+// BUG REAL (30/07): a 1ª versão mandava todos os candidatos de uma vez num
+// único `.in('id', candidatos)` — com cache local grande o bastante (ex.:
+// ADM logando pela 1ª vez depois desse filtro existir), isso virou uma URL
+// com milhares de UUIDs e estourou limite de tamanho de requisição
+// (ERR_FAILED/ERR_CONNECTION_RESET/ERR_HTTP2_PROTOCOL_ERROR, derrubando até
+// requisições concorrentes no boot). Corrigido com paginação em lotes —
+// mesmo tamanho de lote já usado pros upserts (ex.: PRODUCAO_SYNC_BATCH_SIZE).
+const _POD_PRUNE_BATCH_SIZE = 200;
 async function _podarPoluicaoLocal(table, localRows, idsRemotos, meuId) {
   if (window.currentUser?.role !== 'admin' || !Array.isArray(localRows) || !localRows.length) return localRows;
   const candidatos = localRows.filter(r => r.id && !idsRemotos.has(r.id)).map(r => r.id);
   if (!candidatos.length) return localRows;
-  const { data, error } = await window.supabaseClient
-    .from(table).select('id').in('id', candidatos).neq('user_id', meuId);
-  if (error || !data?.length) return localRows;
-  const confirmadosDeOutros = new Set(data.map(r => r.id));
+  const confirmadosDeOutros = new Set();
+  for (let i = 0; i < candidatos.length; i += _POD_PRUNE_BATCH_SIZE) {
+    const lote = candidatos.slice(i, i + _POD_PRUNE_BATCH_SIZE);
+    const { data, error } = await window.supabaseClient
+      .from(table).select('id').in('id', lote).neq('user_id', meuId);
+    if (error) { console.warn(`[Integração] Falha ao podar cache local de ${table}:`, error); continue; }
+    (data || []).forEach(r => confirmadosDeOutros.add(r.id));
+  }
+  if (!confirmadosDeOutros.size) return localRows;
   return localRows.filter(r => !confirmadosDeOutros.has(r.id));
 }
 
