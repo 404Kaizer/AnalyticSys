@@ -1626,13 +1626,29 @@ async function adminServidorListar() {
     return;
   }
 
+  // Na raiz do bucket, cada pasta é o id do dono (padrão usado em todos os
+  // buckets do sistema) — busca email/nome pra mostrar em vez do UUID cru.
+  let donoPorId = {};
+  if (!prefix) {
+    const ids = entradas.filter(e => e.id === null).map(e => e.name);
+    if (ids.length) {
+      const { data: profiles } = await window.supabaseClient
+        .from('profiles').select('id, email, nome_exibicao').in('id', ids);
+      (profiles || []).forEach(p => { donoPorId[p.id] = p.nome_exibicao?.trim() || p.email || p.id; });
+    }
+  }
+
   tbody.innerHTML = entradas.map(e => {
     const isFolder = e.id === null; // pastas não têm id de objeto no Storage
     const fullPath = prefix ? `${prefix}/${e.name}` : e.name;
     if (isFolder) {
+      const dono = donoPorId[e.name];
+      const rotulo = dono
+        ? `${_adminEsc(dono)} <span style="color:var(--text3);font-size:10px;font-family:var(--mono)">(${_adminEsc(e.name)})</span>`
+        : _adminEsc(e.name);
       return `<tr>
         <td></td>
-        <td><a href="#" onclick="adminServidorAbrirPasta('${_adminEsc(e.name)}');return false"><i class="ti ti-folder"></i> ${_adminEsc(e.name)}</a></td>
+        <td><a href="#" onclick="adminServidorAbrirPasta('${_adminEsc(e.name)}');return false"><i class="ti ti-folder"></i> ${rotulo}</a></td>
         <td>—</td>
         <td><button class="btn-icon danger" title="Excluir pasta inteira" onclick="adminServidorExcluirPasta('${_adminEsc(fullPath)}')"><i class="ti ti-trash"></i></button></td>
       </tr>`;

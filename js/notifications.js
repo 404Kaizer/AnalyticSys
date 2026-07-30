@@ -390,6 +390,17 @@ function notifUpdateFromAnalytico(centralScore, matScore, dtIni, dtFim) {
 }
 function notifBoot() {
   if (!Array.isArray(state.notifications)) state.notifications=[];
+
+  // Descarta notificações de atividade já lidas — só limpeza local (essa
+  // lista nem é o registro de verdade, que continua intacto no
+  // activity_log). Não mexe nos tipos "gerenciados" (saude/ocorrencia/
+  // conferencia, ver _NOTIF_MANAGED_TYPES): esses representam uma
+  // condição em aberto, não um evento pontual — sumir com a versão lida
+  // faria o aviso reaparecer como não lido enquanto a condição persistir.
+  const antes = state.notifications.length;
+  state.notifications = state.notifications.filter(n => n.type !== 'atividade' || !n.read);
+  if (state.notifications.length !== antes && typeof persist === 'function') persist();
+
   _notifRenderBadge();
   // Delay generoso — o cálculo silencioso de saúde é pesado (percorre todos os dados).
   // Só executa quando o browser está ocioso para não travar a UI logo após o boot.
@@ -432,11 +443,12 @@ function notifPlaySound() {
     osc.frequency.setValueAtTime(880, ctx.currentTime);
     osc.frequency.exponentialRampToValueAtTime(1320, ctx.currentTime + 0.08);
     gain.gain.setValueAtTime(0.0001, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.18, ctx.currentTime + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.28);
+    gain.gain.exponentialRampToValueAtTime(0.6, ctx.currentTime + 0.02);
+    gain.gain.setValueAtTime(0.6, ctx.currentTime + 0.2); // sustém no pico em vez de já cair
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.32);
     osc.connect(gain).connect(ctx.destination);
     osc.start();
-    osc.stop(ctx.currentTime + 0.3);
+    osc.stop(ctx.currentTime + 0.32);
   } catch (e) { console.warn('[Notif] Falha ao tocar som:', e); }
 }
 
