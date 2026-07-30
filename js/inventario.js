@@ -226,7 +226,7 @@
 
   function _invEscape(s) {
     const h = window._inv_helpers;
-    return h ? h.escapeHtml(s) : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    return h ? h.escapeHtml(s) : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   }
 
   function _invBuildOptionsList(key, query = '') {
@@ -1903,7 +1903,7 @@
   // senão cai no fallback local (mesmo padrão já usado em invRenderTabela).
   function _invEscape(s) {
     const h = window._inv_helpers;
-    return h ? h.escapeHtml(s) : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    return h ? h.escapeHtml(s) : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   }
 
   // Abre o modal com a lista completa de materiais sem cadastro (scroll

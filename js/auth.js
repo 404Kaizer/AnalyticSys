@@ -111,6 +111,18 @@ window.AuthGate = (function () {
 
   function $(id) { return document.getElementById(id); }
 
+  // Registra login/logout/troca de senha no activity_log. O ator é sempre
+  // resolvido no servidor a partir de auth.uid() — o que se manda daqui é
+  // só o tipo do evento, validado contra allowlist. Falha aqui nunca pode
+  // atrapalhar o fluxo de autenticação, por isso o catch silencioso.
+  async function _logEventoAuth(evento) {
+    try {
+      await window.supabaseClient.rpc('registrar_evento_auth', { evento });
+    } catch (err) {
+      console.warn('[Auditoria] Falha ao registrar evento de autenticação:', evento, err);
+    }
+  }
+
   function _idleHideWarning() {
     clearInterval(idleCountdownInterval);
     idleCountdownInterval = null;
@@ -281,8 +293,40 @@ window.AuthGate = (function () {
   // auth state (login por senha, ou sessão detectada com atraso a partir
   // de um link de e-mail). Idempotente via appBooted: pode ser chamado
   // mais de uma vez sem duplicar o boot do app.
+  // ── Política de senha ────────────────────────────────────────────────
+  // O mínimo era 6 caracteres sem nenhuma exigência de composição. Este é
+  // o ponto único de validação — usado tanto na redefinição por link de
+  // e-mail quanto na troca de senha dentro do app, que antes checavam
+  // cada um o seu "length < 6".
+  //
+  // O servidor tem a palavra final (Authentication → Password Policy, no
+  // painel): esta função só evita uma ida ao servidor para falhar e
+  // explica ao usuário o que falta.
+  const SENHA_MIN = 10;
+  function validarSenha(senha) {
+    if (senha.length < SENHA_MIN) return `A senha precisa ter pelo menos ${SENHA_MIN} caracteres.`;
+    if (!/[a-z]/.test(senha))     return 'A senha precisa ter pelo menos uma letra minúscula.';
+    if (!/[A-Z]/.test(senha))     return 'A senha precisa ter pelo menos uma letra maiúscula.';
+    if (!/[0-9]/.test(senha))     return 'A senha precisa ter pelo menos um número.';
+    if (!/[^A-Za-z0-9]/.test(senha)) return 'A senha precisa ter pelo menos um símbolo (ex.: ! @ # $).';
+    return null;
+  }
+
   async function bootApp(session) {
     if (appBooted) return;
+
+    // E-mail não confirmado não entra. O cadastro é feito pelo ADM e o
+    // usuário chega por link de convite (que já confirma o e-mail ao ser
+    // aberto) — chegar aqui sem confirmação significa que o fluxo foi
+    // contornado, então a sessão é encerrada em vez de liberar o app.
+    if (!session.user.email_confirmed_at) {
+      await window.supabaseClient.auth.signOut();
+      showGate();
+      showLoginForm();
+      showError('Confirme seu e-mail pelo link que enviamos antes de acessar o sistema.');
+      return;
+    }
+
     appBooted = true;
     const profile = await fetchProfile(session.user.id);
     window.currentUser = {
@@ -390,7 +434,8 @@ window.AuthGate = (function () {
       const pw1 = $('auth-recovery-password').value;
       const pw2 = $('auth-recovery-password-confirm').value;
 
-      if (pw1.length < 6) { showRecoveryError('A senha precisa ter pelo menos 6 caracteres.'); return; }
+      const erroSenha = validarSenha(pw1);
+      if (erroSenha) { showRecoveryError(erroSenha); return; }
       if (pw1 !== pw2) { showRecoveryError('As senhas não coincidem.'); return; }
 
       const btn = $('auth-gate-recovery-submit-btn');
@@ -407,6 +452,8 @@ window.AuthGate = (function () {
         showRecoveryError('Não foi possível salvar a senha. Tente novamente ou peça um novo link.');
         return;
       }
+
+      await _logEventoAuth('PASSWORD_CHANGE');
 
       // A sessão temporária do link de recuperação já é uma sessão válida
       // depois da senha definida — entra direto no app.
@@ -440,6 +487,7 @@ window.AuthGate = (function () {
     // próprio registro (RLS exige sessão válida). Falha aqui não deve
     // impedir o logout de acontecer, por isso o try/catch silencioso.
     if (window.currentUser?.id) {
+      await _logEventoAuth('LOGOUT'); // antes do signOut — depois não há sessão para autenticar a chamada
       try {
         await window.supabaseClient.from('profiles').update({ last_seen: null }).eq('id', window.currentUser.id);
       } catch (err) {
@@ -464,6 +512,10 @@ window.AuthGate = (function () {
         return;
       }
       if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
+        // Só SIGNED_IN vira registro de login — INITIAL_SESSION dispara a
+        // cada recarga de página com sessão já existente, o que encheria a
+        // auditoria de eventos que não são autenticação de verdade.
+        if (event === 'SIGNED_IN') _logEventoAuth('LOGIN');
         bootApp(session);
       }
       if (event === 'SIGNED_OUT') {
@@ -492,7 +544,7 @@ window.AuthGate = (function () {
     });
   });
 
-  return { ensureSession, signOut, getCurrentUser: () => window.currentUser };
+  return { ensureSession, signOut, getCurrentUser: () => window.currentUser, validarSenha };
 })();
 
 // ═══════════════════════════════════════════════════════════
@@ -542,6 +594,19 @@ function _accountRenderAvatars() {
 // Fica em memória até o Salvar — é quando de fato sobe pro Storage.
 let _accountModalFotoFile = null;
 
+// Tipos aceitos para foto de perfil. Espelha exatamente a allowlist
+// configurada no bucket "avatars" (allowed_mime_types) — o servidor do
+// Storage é quem decide de verdade; isto aqui é só pra avisar o usuário
+// antes de tentar. O valor também define a extensão gravada, para o nome
+// do arquivo do usuário nunca chegar ao Storage.
+const AVATAR_EXT_POR_MIME = {
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/webp': 'webp',
+  'image/gif': 'gif',
+};
+const AVATAR_MAX_BYTES = 2 * 1024 * 1024; // 2 MB — igual ao file_size_limit do bucket
+
 function abrirModalGerenciarConta() {
   _accountModalFotoFile = null;
   const seed = window.currentUser?.email || '';
@@ -565,6 +630,10 @@ function abrirModalGerenciarConta() {
 // Storage só acontece quando o usuário clica em Salvar.
 function _accountModalPreviewFoto(file) {
   if (!file) return;
+  // Rejeita já na escolha — sem isso, um arquivo inválido ficava
+  // pré-visualizado como se fosse aceito e só falhava no Salvar.
+  if (!AVATAR_EXT_POR_MIME[file.type]) { toast('Formato inválido. Envie PNG, JPG, WEBP ou GIF.', 'error'); return; }
+  if (file.size > AVATAR_MAX_BYTES) { toast('Imagem muito grande — o limite é 2 MB.', 'error'); return; }
   _accountModalFotoFile = file;
   const slot = document.getElementById('account-modal-avatar-preview');
   if (!slot) return;
@@ -583,7 +652,8 @@ async function _accountModalTrocarSenha() {
   const atual = document.getElementById('account-modal-senha-atual')?.value || '';
   const nova = document.getElementById('account-modal-senha-nova')?.value || '';
   if (!atual) return toast('Informe sua senha atual.', 'error');
-  if (nova.length < 6) return toast('A nova senha precisa ter pelo menos 6 caracteres.', 'error');
+  const erroSenha = window.AuthGate.validarSenha(nova);
+  if (erroSenha) return toast(erroSenha, 'error');
 
   const email = window.currentUser?.email;
   const { error: authError } = await window.supabaseClient.auth.signInWithPassword({ email, password: atual });
@@ -591,6 +661,8 @@ async function _accountModalTrocarSenha() {
 
   const { error } = await window.supabaseClient.auth.updateUser({ password: nova });
   if (error) return toast('Não foi possível trocar a senha. Tente novamente.', 'error');
+
+  try { await window.supabaseClient.rpc('registrar_evento_auth', { evento: 'PASSWORD_CHANGE' }); } catch (_) {}
 
   document.getElementById('account-modal-senha-atual').value = '';
   document.getElementById('account-modal-senha-nova').value = '';
@@ -606,7 +678,14 @@ async function _accountModalSalvar() {
   const payload = { nome_completo: nomeCompleto, nome_exibicao: nomeExibicao };
 
   if (_accountModalFotoFile) {
-    const ext = (_accountModalFotoFile.name.split('.').pop() || 'jpg').toLowerCase();
+    // Extensão derivada do tipo REAL do arquivo, nunca do nome que veio do
+    // usuário — nome de arquivo é dado não confiável e antes definia
+    // sozinho a extensão gravada no Storage (dava pra subir .html).
+    // A mesma allowlist existe no bucket (allowed_mime_types), que é quem
+    // de fato decide; esta checagem só evita uma ida ao servidor pra falhar.
+    const ext = AVATAR_EXT_POR_MIME[_accountModalFotoFile.type];
+    if (!ext) return toast('Formato inválido. Envie PNG, JPG, WEBP ou GIF.', 'error');
+    if (_accountModalFotoFile.size > AVATAR_MAX_BYTES) return toast('Imagem muito grande — o limite é 2 MB.', 'error');
     const path = `${userId}/avatar.${ext}`;
     const { error: uploadError } = await window.supabaseClient.storage
       .from('avatars')

@@ -169,7 +169,7 @@ function exportarDados() {
     toast('Backup exportado com sucesso');
   } catch(err) {
     console.error('Erro ao exportar backup:', err);
-    toast('Erro ao gerar backup: ' + err.message, 'error');
+    toast('Erro ao gerar backup — tente novamente.', 'error');
   }
 }
 
@@ -1144,8 +1144,17 @@ function injectColFilterButtons(table, module) {
   });
 }
 
+// Escapa os 5 caracteres que têm significado em HTML. As duas aspas são
+// obrigatórias: sem elas, qualquer valor interpolado dentro de um atributo
+// (title="...", data-x='...') consegue fechar o atributo e injetar outro.
+//
+// ATENÇÃO — isto NÃO torna seguro interpolar dado em handler inline
+// (onclick="fn('${...}')"). Naquele contexto o navegador decodifica a
+// entidade ANTES do motor de JS ler o atributo, então &#39; volta a ser
+// aspa e a injeção reabre. Em handler inline, passe o dado por data-* e
+// leia com this.dataset — ver o render da tabela em admin.js.
 function escapeHtml(str) {
-  return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
 // ── Badge colorido por código de MOVIMENTO ───────────────────────────────
@@ -5744,7 +5753,7 @@ function _exportarModulos() {
     toast(`Backup exportado — ${selectedKeys.length} módulo(s), ${total.toLocaleString('pt-BR')} registros`);
   } catch(err) {
     console.error('Erro ao exportar backup:', err);
-    toast('Erro ao gerar backup: ' + err.message, 'error');
+    toast('Erro ao gerar backup — tente novamente.', 'error');
   }
 }
 

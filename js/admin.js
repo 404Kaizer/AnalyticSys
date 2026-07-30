@@ -250,7 +250,7 @@ function adminExcluirTudoDono() {
       query = _adminAplicarFiltros(query, modulo, cfg);
       query = _adminExcluirDaiDoLote(query, modulo);
       const { error } = await query;
-      if (error) { toast('Falha ao excluir: ' + error.message, 'error'); return; }
+      if (error) { toast('Falha ao excluir: ' + _adminErroDetalhe(error), 'error'); return; }
       toast('Registros excluídos.', 'success');
       adminLimparSelecao();
       adminLoadModulo();
@@ -306,7 +306,7 @@ async function adminLoadDbStats() {
   const { data, error } = await window.supabaseClient.rpc('admin_db_stats');
   if (error) {
     totalLabel.textContent = 'Falha ao carregar estatísticas.';
-    tbody.innerHTML = `<tr><td colspan="3"><div class="empty-state"><i class="ti ti-alert-triangle"></i><p>${_adminEsc(error.message)}</p></div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="3"><div class="empty-state"><i class="ti ti-alert-triangle"></i><p>Falha ao carregar: ${_adminErroDetalhe(error)}</p></div></td></tr>`;
     return;
   }
 
@@ -378,7 +378,7 @@ async function adminLoadStorageStats() {
   const { data, error } = await window.supabaseClient.rpc('admin_storage_stats');
   if (error) {
     totalLabel.textContent = 'Falha ao carregar estatísticas.';
-    tbody.innerHTML = `<tr><td colspan="4"><div class="empty-state"><i class="ti ti-alert-triangle"></i><p>${_adminEsc(error.message)}</p></div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="4"><div class="empty-state"><i class="ti ti-alert-triangle"></i><p>Falha ao carregar: ${_adminErroDetalhe(error)}</p></div></td></tr>`;
     return;
   }
 
@@ -527,8 +527,20 @@ async function adminLoadUserSummary() {
   tbody.innerHTML = linhasTabelas + linhaTotalBanco + linhaStorage + linhaTotalGeral;
 }
 
+// Escapa os 5 caracteres com significado em HTML. As aspas faltavam e este
+// helper é usado dentro de atributos (title="...", data-id="..."), onde a
+// ausência delas permitia fechar o atributo e injetar outro.
 function _adminEsc(s) {
-  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// Mensagem de erro segura para exibir. O texto cru do Postgres (nome de
+// tabela, coluna, constraint violada) ia direto para a tela e entregava a
+// estrutura do banco de graça a quem estivesse olhando. O detalhe técnico
+// continua disponível — só que no console, para quem está depurando.
+function _adminErroDetalhe(error) {
+  console.error('[Admin] Falha na operação:', error);
+  return 'tente novamente ou contate o suporte.';
 }
 
 // Atualiza o badge "N erro(s) de sincronização nesta sessão" na aba
@@ -627,7 +639,7 @@ async function adminLoadUsuarios(silent) {
   ]);
 
   if (profilesRes.error) {
-    tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><i class="ti ti-alert-triangle"></i><p>Falha ao carregar: ${_adminEsc(profilesRes.error.message)}</p></div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><i class="ti ti-alert-triangle"></i><p>Falha ao carregar: ${_adminErroDetalhe(profilesRes.error)}</p></div></td></tr>`;
     return;
   }
 
@@ -690,7 +702,7 @@ async function adminAlterarPapel(userId, novoPapel) {
   }
   const { error } = await window.supabaseClient.from('profiles').update({ role: novoPapel }).eq('id', userId);
   if (error) {
-    toast('Falha ao alterar o papel: ' + error.message, 'error');
+    toast('Falha ao alterar o papel: ' + _adminErroDetalhe(error), 'error');
     adminLoadUsuarios();
     return;
   }
@@ -714,7 +726,7 @@ function adminSuspenderUsuario(userId, suspender) {
     confirmLabel: suspender ? 'Suspender acesso' : 'Reativar acesso',
     onConfirm: async () => {
       const { error } = await window.supabaseClient.rpc('admin_set_user_banned', { target_user_id: userId, banned: suspender });
-      if (error) { toast(`Falha ao ${suspender ? 'suspender' : 'reativar'}: ` + error.message, 'error'); return; }
+      if (error) { toast(`Falha ao ${suspender ? 'suspender' : 'reativar'}: ` + _adminErroDetalhe(error), 'error'); return; }
       toast(suspender ? 'Acesso suspenso.' : 'Acesso reativado.', 'success');
       adminLoadUsuarios();
     },
@@ -745,7 +757,7 @@ function adminResetarUsuario(userId) {
 
 async function _adminExecutarResetUsuario(userId) {
   const { data, error } = await window.supabaseClient.rpc('admin_reset_user', { target_user_id: userId });
-  if (error) { toast('Falha ao resetar: ' + error.message, 'error'); return; }
+  if (error) { toast('Falha ao resetar: ' + _adminErroDetalhe(error), 'error'); return; }
 
   const totalLinhas = Object.values(data || {}).reduce((soma, n) => soma + Number(n || 0), 0);
 
@@ -829,7 +841,7 @@ async function adminLoadModulo(direction = 'first') {
 
   const { data, error } = await query;
   if (error) {
-    tbody.innerHTML = `<tr><td colspan="${colspan}"><div class="empty-state"><i class="ti ti-alert-triangle"></i><p>Falha ao carregar: ${_adminEsc(error.message)}</p></div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="${colspan}"><div class="empty-state"><i class="ti ti-alert-triangle"></i><p>Falha ao carregar: ${_adminErroDetalhe(error)}</p></div></td></tr>`;
     _adminSetPageInfo('—');
     _adminAtualizarBarraLote();
     return;
@@ -871,7 +883,7 @@ async function adminLoadModulo(direction = 'first') {
     const idStr = String(row.id);
     const dono = emailPorId[row.user_id] || '—';
     const donoTd = row.user_id
-      ? `<a href="#" onclick="event.stopPropagation();adminFiltrarPorDono('${row.user_id}');return false" style="color:var(--text3)" title="Filtrar por este usuário"><i class="ti ti-filter" style="font-size:10px"></i> ${_adminEsc(dono)}</a>`
+      ? `<a href="#" data-dono="${_adminEsc(row.user_id)}" onclick="event.stopPropagation();adminFiltrarPorDono(this.dataset.dono);return false" style="color:var(--text3)" title="Filtrar por este usuário"><i class="ti ti-filter" style="font-size:10px"></i> ${_adminEsc(dono)}</a>`
       : _adminEsc(dono);
     const cells = cfg.cols.map(c => {
       let v = row[c];
@@ -891,8 +903,14 @@ async function adminLoadModulo(direction = 'first') {
     // junto.
     const checkboxTd = cfg.readOnly ? '' : ehDai
       ? `<td class="th-checkbox" onclick="event.stopPropagation()" title="Vinculado a um DAI (documento fiscal) — sem exclusão/edição em massa; abra o registro pra excluir individualmente"><i class="ti ti-lock" style="color:var(--text3);font-size:12px"></i></td>`
-      : `<td class="th-checkbox" onclick="event.stopPropagation()"><input type="checkbox" ${(_adminSelecaoTodosFiltro || _adminSelectedIds.has(idStr)) ? 'checked' : ''} ${_adminSelecaoTodosFiltro ? 'disabled' : ''} onchange="adminToggleSelecaoLinha('${idStr}', this.checked)"></td>`;
-    return `<tr data-id="${idStr}" onclick="adminAbrirEdicao('${modulo}','${row.id}')" style="cursor:pointer">
+      : `<td class="th-checkbox" onclick="event.stopPropagation()"><input type="checkbox" ${(_adminSelecaoTodosFiltro || _adminSelectedIds.has(idStr)) ? 'checked' : ''} ${_adminSelecaoTodosFiltro ? 'disabled' : ''} onchange="adminToggleSelecaoLinha(this.closest('tr').dataset.id, this.checked)"></td>`;
+    // id/módulo vão por data-* e são lidos com this.dataset — NUNCA
+    // interpolados dentro do onclick. O id destas tabelas é PK de texto
+    // vinda do cliente; interpolado no handler, um id com aspa fechava a
+    // string e executava JS arbitrário no navegador do ADM (esta tabela
+    // renderiza linhas de TODOS os usuários). Escapar HTML não resolveria:
+    // o atributo é decodificado antes de o JS ser interpretado.
+    return `<tr data-id="${_adminEsc(idStr)}" data-modulo="${_adminEsc(modulo)}" onclick="adminAbrirEdicao(this.dataset.modulo, this.dataset.id)" style="cursor:pointer">
       ${checkboxTd}
       <td style="font-size:11px">${donoTd}</td>
       ${cells}
@@ -1145,7 +1163,7 @@ async function _adminExecutarExclusaoLote(modulo) {
   }
 
   const { error } = await query;
-  if (error) { toast('Falha ao excluir em massa: ' + error.message, 'error'); return; }
+  if (error) { toast('Falha ao excluir em massa: ' + _adminErroDetalhe(error), 'error'); return; }
   toast('Registros excluídos.', 'success');
   adminLimparSelecao();
   adminLoadModulo();
@@ -1249,7 +1267,7 @@ async function _adminExecutarEdicaoLote(modulo, col, value) {
   }
 
   const { error } = await query;
-  if (error) { toast('Falha ao editar em massa: ' + error.message, 'error'); return; }
+  if (error) { toast('Falha ao editar em massa: ' + _adminErroDetalhe(error), 'error'); return; }
   toast('Registros atualizados.', 'success');
   adminLimparSelecao();
   adminLoadModulo();
@@ -1259,7 +1277,7 @@ async function adminExcluirRegistro(modulo, id) {
   if (ADMIN_MODULOS[modulo]?.readOnly) return; // append-only — RLS bloquearia mesmo assim
   if (!confirm('Excluir este registro definitivamente? Esta ação não pode ser desfeita.')) return;
   const { error } = await window.supabaseClient.from(modulo).delete().eq('id', id);
-  if (error) { toast('Falha ao excluir: ' + error.message, 'error'); return; }
+  if (error) { toast('Falha ao excluir: ' + _adminErroDetalhe(error), 'error'); return; }
   toast('Registro excluído.', 'success');
   closeModal('admin-edit-modal'); // no-op se não estiver aberto (chamada também vem do botão dentro do modal)
   adminLoadModulo();
@@ -1455,7 +1473,7 @@ async function adminSalvarEdicao() {
 
   const { error } = await window.supabaseClient.from(modulo).update(patch).eq('id', id);
   if (error) {
-    errEl.textContent = 'Falha ao salvar: ' + error.message;
+    errEl.textContent = 'Falha ao salvar: ' + _adminErroDetalhe(error);
     errEl.style.display = 'block';
     return;
   }
@@ -1541,7 +1559,7 @@ async function adminSalvarAnalistaCategoria(categoria, selectId) {
     // Sem analista selecionado — remove o mapeamento, se existir (volta
     // pro estado "sem analista configurado" para essa categoria).
     const { error } = await window.supabaseClient.from('analistas_categoria').delete().eq('categoria', categoria);
-    if (error) { toast('Falha ao remover: ' + error.message, 'error'); return; }
+    if (error) { toast('Falha ao remover: ' + _adminErroDetalhe(error), 'error'); return; }
     toast(`Categoria "${categoria}" ficou sem analista configurado — novas solicitações dessa categoria serão recusadas.`, 'success');
     return;
   }
@@ -1556,7 +1574,7 @@ async function adminSalvarAnalistaCategoria(categoria, selectId) {
     updated_at: new Date().toISOString(),
   }, { onConflict: 'categoria' });
 
-  if (error) { toast('Falha ao salvar: ' + error.message, 'error'); return; }
+  if (error) { toast('Falha ao salvar: ' + _adminErroDetalhe(error), 'error'); return; }
   toast(`Categoria "${categoria}" atribuída a ${email}.`, 'success');
 }
 
@@ -1598,7 +1616,7 @@ async function adminServidorListar() {
   }
 
   if (error) {
-    tbody.innerHTML = `<tr><td colspan="4"><div class="empty-state"><i class="ti ti-alert-triangle"></i><p>Falha ao listar: ${_adminEsc(error.message)}</p></div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="4"><div class="empty-state"><i class="ti ti-alert-triangle"></i><p>Falha ao listar: ${_adminErroDetalhe(error)}</p></div></td></tr>`;
     return;
   }
 
@@ -1663,7 +1681,7 @@ function adminServidorExcluirSelecionados() {
     confirmLabel: 'Excluir arquivos',
     onConfirm: async () => {
       const { error } = await window.supabaseClient.storage.from(_srvBucket).remove(paths);
-      if (error) { toast('Falha ao excluir: ' + error.message, 'error'); return; }
+      if (error) { toast('Falha ao excluir: ' + _adminErroDetalhe(error), 'error'); return; }
       toast(`${n} arquivo(s) excluído(s).`, 'success');
       adminServidorListar();
     },
@@ -1678,7 +1696,7 @@ function adminServidorExcluirArquivo(path) {
     confirmLabel: 'Excluir',
     onConfirm: async () => {
       const { error } = await window.supabaseClient.storage.from(_srvBucket).remove([path]);
-      if (error) { toast('Falha ao excluir: ' + error.message, 'error'); return; }
+      if (error) { toast('Falha ao excluir: ' + _adminErroDetalhe(error), 'error'); return; }
       toast('Arquivo excluído.', 'success');
       adminServidorListar();
     },
@@ -1697,7 +1715,7 @@ function adminServidorExcluirPasta(path) {
       const paths = await _adminListStorageRecursivo(_srvBucket, path);
       if (!paths.length) { toast('Pasta já está vazia.', 'success'); adminServidorListar(); return; }
       const { error } = await window.supabaseClient.storage.from(_srvBucket).remove(paths);
-      if (error) { toast('Falha ao excluir: ' + error.message, 'error'); return; }
+      if (error) { toast('Falha ao excluir: ' + _adminErroDetalhe(error), 'error'); return; }
       toast(`${paths.length} arquivo(s) excluído(s).`, 'success');
       adminServidorListar();
     },
