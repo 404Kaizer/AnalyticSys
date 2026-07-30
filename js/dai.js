@@ -330,14 +330,14 @@ function _daiAtualizarCnpjPreview() {
     : `<div class="dai-cnpj-missing"><i class="ti ti-alert-triangle"></i> Esta central não tem CNPJ cadastrado. Preencha em Configurações → Cadastros antes de gerar o documento.</div>`;
 }
 
-// Nome do analista: preenchido automaticamente a partir de Configurações
-// (__responsavel_padrao__ — mesmo campo usado em todo o resto do sistema).
-// Se vazio, exige preenchimento manual + checkbox de ciência dos riscos
-// antes de permitir gerar o documento.
+// Nome do analista: preenchido automaticamente a partir do nome completo
+// do perfil (Conta → Gerenciar Conta — mesmo campo usado em todo o resto
+// do sistema). Se vazio, exige preenchimento manual + checkbox de
+// ciência dos riscos antes de permitir gerar o documento.
 function _daiRenderAnalistaBlock() {
   const wrap = document.getElementById('dai-analista-wrap');
   if (!wrap) return;
-  const nomeConfig = ((state.configs || []).find(c => c.key === '__responsavel_padrao__') || {}).value || '';
+  const nomeConfig = window.currentUser?.nome_completo || '';
 
   if (nomeConfig.trim()) {
     wrap.innerHTML = `
@@ -347,7 +347,7 @@ function _daiRenderAnalistaBlock() {
           <i class="ti ti-signature" style="color:var(--gold)"></i>
           <div>
             <strong>${escapeHtml(nomeConfig.trim())}</strong><br>
-            <span style="font-size:10.5px;color:var(--text3)">Preenchido automaticamente a partir de Configurações → responsável padrão.</span>
+            <span style="font-size:10.5px;color:var(--text3)">Preenchido automaticamente a partir do seu nome completo (Conta → Gerenciar Conta).</span>
           </div>
         </div>
       </div>`;
@@ -356,7 +356,7 @@ function _daiRenderAnalistaBlock() {
       <div class="oc-form-group">
         <label class="oc-label">Nome do analista responsável (assinatura) <span class="oc-required">*</span></label>
         <input type="text" id="dai-form-analista" class="oc-input" placeholder="Seu nome completo">
-        <span class="oc-hint">Não há responsável padrão preenchido em Configurações — informe seu nome aqui para este documento.</span>
+        <span class="oc-hint">Você ainda não preencheu seu nome completo em Conta → Gerenciar Conta — informe seu nome aqui para este documento.</span>
       </div>
       <div class="dai-consent-box" style="margin-top:8px">
         <input type="checkbox" id="dai-form-atestado">
@@ -568,7 +568,7 @@ async function gerarDocumentoAjuste() {
   const regionalCentral = _daiObterRegionalCentral(central);
 
   // Analista responsável / atestado de ciência
-  const nomeConfig = ((state.configs || []).find(c => c.key === '__responsavel_padrao__') || {}).value || '';
+  const nomeConfig = window.currentUser?.nome_completo || '';
   let analista = nomeConfig.trim();
   let atestadoManual = false;
   if (!analista) {

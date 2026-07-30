@@ -586,9 +586,10 @@ function openTool(name) {
 
   const topbarH = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--topbar-h')) || 56;
   const offset  = _openTools.size * 20;
-  const elW     = el.offsetWidth || 300;
-  el.style.left       = Math.max(8, window.innerWidth - elW - 20 - offset) + 'px';
-  el.style.top        = (topbarH + 10 + offset) + 'px';
+  const elW     = el.offsetWidth  || 300;
+  const elH     = el.offsetHeight || 400;
+  el.style.left       = Math.max(8, (window.innerWidth  - elW) / 2 + offset) + 'px';
+  el.style.top        = Math.max(topbarH + 10, (window.innerHeight - elH) / 2 + offset) + 'px';
   el.style.zIndex     = _nextToolZ();
   el.style.visibility = '';
 
@@ -614,6 +615,21 @@ function closeTool(name) {
 
 let _toolZBase = 5000;
 function _nextToolZ() { return ++_toolZBase; }
+
+// ESC fecha o popover "de cima" (maior z-index), se houver mais de um
+// aberto — mesmo padrão de setupModalCloseOnEscape() (analitico.js), só
+// que pra .tool-popover em vez de .modal-overlay.
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape' || !_openTools.size) return;
+  let top = null, topZ = -Infinity, topName = null;
+  _openTools.forEach(name => {
+    const el = document.getElementById('tool-' + name);
+    if (!el) return;
+    const z = parseFloat(el.style.zIndex) || 0;
+    if (z >= topZ) { topZ = z; top = el; topName = name; }
+  });
+  if (topName) closeTool(topName);
+});
 
 // Legacy: keep toggleCalc working (mapped to tool system)
 function toggleCalc() {

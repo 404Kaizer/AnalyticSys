@@ -230,7 +230,7 @@ window.AuthGate = (function () {
     try {
       const { data, error } = await window.supabaseClient
         .from('profiles')
-        .select('id, email, role')
+        .select('id, email, role, nome_completo, nome_exibicao, avatar_url')
         .eq('id', userId)
         .single();
       if (error) throw error;
@@ -285,7 +285,14 @@ window.AuthGate = (function () {
     if (appBooted) return;
     appBooted = true;
     const profile = await fetchProfile(session.user.id);
-    window.currentUser = { id: session.user.id, email: session.user.email, role: profile?.role || 'user' };
+    window.currentUser = {
+      id: session.user.id,
+      email: session.user.email,
+      role: profile?.role || 'user',
+      nome_completo: profile?.nome_completo || '',
+      nome_exibicao: profile?.nome_exibicao || '',
+      avatar_url: profile?.avatar_url || null,
+    };
     updateAccountUI(session.user, profile);
     hideGate();
     _idleWireListeners();
@@ -490,9 +497,8 @@ window.AuthGate = (function () {
 
 // ═══════════════════════════════════════════════════════════
 // CONTA — ícone/popover do topbar + modal "Gerenciar Conta"
-// Etapa 1 (29/07, combinado com o Hugo): só interface. Nada aqui
-// salva, envia foto ou troca senha de verdade ainda — isso fica pra
-// uma próxima etapa, separada desta.
+// Etapa 2 (30/07): nome completo/exibição, foto e troca de senha
+// agora salvam de verdade em profiles + Storage (bucket "avatars").
 // ═══════════════════════════════════════════════════════════
 
 // ── Popover do topbar ────────────────────────────────────
@@ -516,33 +522,50 @@ document.addEventListener('click', e => {
 });
 
 // Preenche o botão do topbar e o cabeçalho do popover com o avatar
-// (círculo colorido + inicial — reaproveita avatarHTML()/avatarInfo(),
-// de mensagens.js, o mesmo utilitário já usado nos avatares online e
-// no chat). Chamado a partir de updateAccountUI() sempre que a sessão
-// é confirmada/atualizada.
+// (avatarHTML(), de mensagens.js — mesmo utilitário usado nos avatares
+// online e no chat; foto real em avatar_url tem prioridade sobre o
+// círculo colorido). Chamado a partir de updateAccountUI() sempre que a
+// sessão é confirmada/atualizada, e depois de salvar uma foto nova no
+// modal.
 function _accountRenderAvatars() {
   if (typeof avatarHTML !== 'function') return;
   const seed = window.currentUser?.email || '';
+  const url = window.currentUser?.avatar_url;
   const btnSlot  = document.getElementById('account-switcher-avatar-slot');
   const headSlot = document.getElementById('account-switcher-avatar-lg-slot');
-  if (btnSlot)  btnSlot.innerHTML  = avatarHTML(seed, 'account-avatar-sm');
-  if (headSlot) headSlot.innerHTML = avatarHTML(seed, 'account-avatar-lg');
+  if (btnSlot)  btnSlot.innerHTML  = avatarHTML(seed, 'account-avatar-sm', '', url);
+  if (headSlot) headSlot.innerHTML = avatarHTML(seed, 'account-avatar-lg', '', url);
 }
 
 // ── Modal "Gerenciar Conta" ──────────────────────────────
+// Arquivo de foto escolhido nesta abertura do modal (só um por vez).
+// Fica em memória até o Salvar — é quando de fato sobe pro Storage.
+let _accountModalFotoFile = null;
+
 function abrirModalGerenciarConta() {
+  _accountModalFotoFile = null;
   const seed = window.currentUser?.email || '';
   const emailInput = document.getElementById('account-modal-email');
   if (emailInput) emailInput.value = seed || '—';
+  const nomeCompletoInput = document.getElementById('account-modal-nome-completo');
+  if (nomeCompletoInput) nomeCompletoInput.value = window.currentUser?.nome_completo || '';
+  const nomeExibicaoInput = document.getElementById('account-modal-nome-exibicao');
+  if (nomeExibicaoInput) nomeExibicaoInput.value = window.currentUser?.nome_exibicao || '';
+  const senhaAtualInput = document.getElementById('account-modal-senha-atual');
+  const senhaNovaInput = document.getElementById('account-modal-senha-nova');
+  if (senhaAtualInput) senhaAtualInput.value = '';
+  if (senhaNovaInput) senhaNovaInput.value = '';
   const previewSlot = document.getElementById('account-modal-avatar-preview');
-  if (previewSlot && typeof avatarHTML === 'function') previewSlot.innerHTML = avatarHTML(seed, 'account-avatar-xl');
+  if (previewSlot && typeof avatarHTML === 'function') previewSlot.innerHTML = avatarHTML(seed, 'account-avatar-xl', '', window.currentUser?.avatar_url);
   document.getElementById('modal-gerenciar-conta')?.classList.add('open');
 }
 
-// Pré-visualização local da foto escolhida — só mostra no círculo,
-// NÃO envia nem salva em lugar nenhum ainda.
+// Pré-visualização local da foto escolhida (mostra no círculo na hora)
+// e guarda o File em _accountModalFotoFile — o envio de verdade pro
+// Storage só acontece quando o usuário clica em Salvar.
 function _accountModalPreviewFoto(file) {
   if (!file) return;
+  _accountModalFotoFile = file;
   const slot = document.getElementById('account-modal-avatar-preview');
   if (!slot) return;
   const reader = new FileReader();
@@ -552,11 +575,53 @@ function _accountModalPreviewFoto(file) {
   reader.readAsDataURL(file);
 }
 
-function _accountModalSolicitarTrocaSenha() {
-  if (typeof toast === 'function') toast('Troca de senha ainda não está disponível — em desenvolvimento.', 'info');
+// Troca de senha inline: confirma a senha atual reautenticando (o
+// Supabase updateUser() não pede senha atual sozinho) e só então aplica
+// a nova. Mesmo limite de 6 caracteres do fluxo de recuperação por
+// e-mail (auth-gate-form-recovery, acima).
+async function _accountModalTrocarSenha() {
+  const atual = document.getElementById('account-modal-senha-atual')?.value || '';
+  const nova = document.getElementById('account-modal-senha-nova')?.value || '';
+  if (!atual) return toast('Informe sua senha atual.', 'error');
+  if (nova.length < 6) return toast('A nova senha precisa ter pelo menos 6 caracteres.', 'error');
+
+  const email = window.currentUser?.email;
+  const { error: authError } = await window.supabaseClient.auth.signInWithPassword({ email, password: atual });
+  if (authError) return toast('Senha atual incorreta.', 'error');
+
+  const { error } = await window.supabaseClient.auth.updateUser({ password: nova });
+  if (error) return toast('Não foi possível trocar a senha. Tente novamente.', 'error');
+
+  document.getElementById('account-modal-senha-atual').value = '';
+  document.getElementById('account-modal-senha-nova').value = '';
+  toast('Senha alterada com sucesso.', 'success');
 }
 
-function _accountModalSalvarPlaceholder() {
-  if (typeof toast === 'function') toast('Interface pronta — salvar ainda não está implementado nesta etapa.', 'info');
+async function _accountModalSalvar() {
+  const nomeCompleto = (document.getElementById('account-modal-nome-completo')?.value || '').trim();
+  const nomeExibicao = (document.getElementById('account-modal-nome-exibicao')?.value || '').trim();
+  const userId = window.currentUser?.id;
+  if (!userId) return;
+
+  const payload = { nome_completo: nomeCompleto, nome_exibicao: nomeExibicao };
+
+  if (_accountModalFotoFile) {
+    const ext = (_accountModalFotoFile.name.split('.').pop() || 'jpg').toLowerCase();
+    const path = `${userId}/avatar.${ext}`;
+    const { error: uploadError } = await window.supabaseClient.storage
+      .from('avatars')
+      .upload(path, _accountModalFotoFile, { upsert: true, contentType: _accountModalFotoFile.type });
+    if (uploadError) return toast('Não foi possível enviar a foto. Tente novamente.', 'error');
+    const { data: { publicUrl } } = window.supabaseClient.storage.from('avatars').getPublicUrl(path);
+    payload.avatar_url = `${publicUrl}?t=${Date.now()}`; // cache-bust — mesmo path do upload anterior
+  }
+
+  const { error } = await window.supabaseClient.from('profiles').update(payload).eq('id', userId);
+  if (error) return toast('Não foi possível salvar. Tente novamente.', 'error');
+
+  Object.assign(window.currentUser, payload);
+  _accountModalFotoFile = null;
+  _accountRenderAvatars();
+  toast('Dados da conta salvos.', 'success');
   closeModal('modal-gerenciar-conta');
 }

@@ -1715,7 +1715,7 @@ function confirmarExcluirAjusteSistemico(id) {
         daiNumero: numero,
         central: o.central || null,
         dataGeracao: dai?.dataGeracao || null,
-        excluidoPor: (state.configs.find(c => c.key === '__responsavel_padrao__') || {}).value || null,
+        excluidoPor: window.currentUser?.nome_completo || null,
         excluidoEm: Date.now(),
       };
       state.ajustesExcluidos.push(logExclusao);
