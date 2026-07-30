@@ -3190,6 +3190,9 @@ function lancEditSave(cell) {
   // mesmo que o registro tenha vindo de importação (decisão de 27/07,
   // revisada). _lancSyncUpsert já sabe verificar rec.editado internamente.
   if (typeof _lancSyncUpsert === 'function') _lancSyncUpsert(r);
+  // Reforça o backup condensado também (30/07) — mantém o snapshot da
+  // nuvem com o valor corrigido, sem esperar o reforço periódico.
+  if (typeof _cbUploadModulo === 'function') _cbUploadModulo('lancamentos');
 
   // Atualiza célula com formato correto
   cell.textContent = _lancFieldDisplay(r, field);
@@ -4661,6 +4664,14 @@ function removerRegistro(module, index) {
   };
   const syncDelete = syncDeleteByModule[module];
   if (syncDelete && actual.id && (!actual.importId || actual.editado)) syncDelete(actual.id);
+
+  // Reforça o backup condensado na hora (30/07) — antes só o gatilho
+  // pós-importação e o reforço periódico (até 3h de atraso) atualizavam
+  // este snapshot; excluir um registro importado só sumia localmente até
+  // lá, deixando a cópia na nuvem com o registro já excluído por horas.
+  if (typeof _cbUploadModulo === 'function' && typeof CLOUD_BACKUP_MODULOS !== 'undefined' && CLOUD_BACKUP_MODULOS.includes(module)) {
+    _cbUploadModulo(module);
+  }
 }
 
 

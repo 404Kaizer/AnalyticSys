@@ -20,6 +20,16 @@ function _cascadeDeleteCloudByImportId(importId) {
   });
 }
 
+// Reforça o backup condensado (cloud-backup.js) dos 5 módulos grandes de
+// uma vez — usado depois de excluirImportacao (e seu undo), que pode
+// mexer em qualquer um deles. _cbUploadModulo já ignora módulos vazios
+// e evita rodar duas vezes em paralelo, então chamar os 5 sempre é
+// barato mesmo quando só um mudou de verdade.
+function _cbReforcarBackupModulos() {
+  if (typeof _cbUploadModulo !== 'function' || typeof CLOUD_BACKUP_MODULOS === 'undefined') return;
+  CLOUD_BACKUP_MODULOS.forEach(modulo => _cbUploadModulo(modulo));
+}
+
 // snapshots: { filiais, materiais, lancamentos, entradas, saidas, producao }
 // — arrays do estado local ANTES da exclusão (pra saber o que restaurar).
 function _cascadeRestoreCloudByImportId(importId, snapshots) {
@@ -116,6 +126,10 @@ function excluirImportacao(importId) {
           // ter algo lá (Fase 4 — Etapa 7).
           if (typeof _importsSyncDelete === 'function') _importsSyncDelete(importId);
           _cascadeDeleteCloudByImportId(importId);
+          // Reforça o backup condensado dos 5 módulos grandes na hora
+          // (30/07) — sem isso, excluir uma importação inteira só mudava
+          // localmente até o próximo reforço periódico (até 3h depois).
+          _cbReforcarBackupModulos();
         },
         undo: () => {
           // A exclusão foi revertida — remove a marca para que um fechamento
@@ -153,6 +167,7 @@ function excluirImportacao(importId) {
             saidas: snapshotSaidas, producao: snapshotProducao,
             sap: snapshotSap,
           });
+          _cbReforcarBackupModulos();
         },
       });
     }
@@ -176,6 +191,10 @@ function excluirProducao(absIndex) {
       renderProducao();
       updateDashboard();
       if (rec.id && !rec.importId && typeof _producaoSyncDelete === 'function') _producaoSyncDelete(rec.id);
+      // Reforça o backup condensado na hora (30/07) — ver removerRegistro
+      // (dashboard.js) pro mesmo motivo: sem isso, um registro importado
+      // excluído só some localmente até o próximo reforço periódico (até 3h).
+      if (typeof _cbUploadModulo === 'function') _cbUploadModulo('producao');
     },
 
     undo: () => {
@@ -187,6 +206,7 @@ function excluirProducao(absIndex) {
       renderProducao();
       updateDashboard();
       if (typeof _producaoSyncUpsert === 'function') _producaoSyncUpsert(snapshot);
+      if (typeof _cbUploadModulo === 'function') _cbUploadModulo('producao');
     },
   });
 }

@@ -34,10 +34,14 @@
 //      confirmados na nuvem — mesmo padrão já usado no chunking local
 //      do SAP (saveSapChunks, persist.js). Uma falha no meio do
 //      caminho nunca deixa o manifest apontando pra um backup parcial.
-//   5. Só ESCREVE por cima de dados vazios/ausentes — nunca sobrescreve
-//      dado local já existente. Restauração roda apenas quando o
-//      módulo está vazio localmente (dispositivo novo ou IndexedDB
-//      limpo), nunca como merge do dia a dia.
+//   5. Restauração é sempre SUBSTITUIÇÃO, nunca merge — o backup condensado
+//      é a fonte de verdade pro volume importado (30/07, corrigido: a regra
+//      antiga de "só restaura se local vazio" deixava a restauração ser
+//      pulada sempre que o dispositivo já tinha os poucos registros
+//      manuais sincronizados via Postgres, mesmo sem o volume importado de
+//      verdade — ver restaurarBackupCondensadoSeNecessario). Hoje a decisão
+//      é por contagem: local com MENOS registros que o manifest é
+//      substituído inteiro; local igual ou à frente não é tocado.
 // ═══════════════════════════════════════════════════════════════════════
 
 const CLOUD_BACKUP_BUCKET = 'backups-condensados';
@@ -245,22 +249,45 @@ async function _cbRestaurarModulo(modulo) {
 }
 
 // Chamada no boot (restoreAndRender, dashboard.js), depois que o estado
-// local foi carregado — só age nos módulos que estiverem VAZIOS
-// localmente (dispositivo novo / IndexedDB limpo). Nunca mescla nem
-// sobrescreve dado local já existente (princípio #5 do cabeçalho).
+// local foi carregado E depois que os syncXFromSupabase já rodaram.
+//
+// CORRIGIDO (30/07): a checagem antiga só agia se o módulo estivesse
+// "vazio" localmente — mas nesses 5 módulos o Supabase só guarda os
+// registros MANUAIS (decisão de 27/07), e os syncXFromSupabase já
+// rodaram antes desta função. Um dispositivo novo com só 2-3 manuais
+// sincronizados já não estava "vazio", e a restauração do volume
+// importado de verdade (só existe no backup condensado) era pulada
+// inteira — o usuário reimportava a planilha original pra recuperar,
+// gerando um segundo conjunto de ids (gerarIdRegistro() é aleatório,
+// normalize.js) pro mesmo dado, que divergia entre dispositivos.
+//
+// Agora a decisão é por CONTAGEM: só baixa/descomprime os chunks (caro
+// em módulos com 600k+ linhas) se o local tiver MENOS registros que o
+// manifest do backup — local igual ou à frente (import recente ainda
+// não re-backupeado) não precisa de nada. Quando decide restaurar, o
+// backup condensado é tratado como autoritativo: SUBSTITUI o local
+// inteiro, nunca mescla (princípio #5 do cabeçalho, mantido).
 async function restaurarBackupCondensadoSeNecessario() {
   if (!window.supabaseClient || !window.currentUser?.id) return;
   for (const modulo of CLOUD_BACKUP_MODULOS) {
-    if (Array.isArray(state[modulo]) && state[modulo].length > 0) continue;
     try {
+      const basePath = `${window.currentUser.id}/${modulo}`;
+      const { data, error } = await window.supabaseClient.storage
+        .from(CLOUD_BACKUP_BUCKET).download(`${basePath}/manifest.json`);
+      if (error || !data) continue; // sem backup — nada a conferir, normal se este módulo nunca teve importação grande
+
+      const manifest = JSON.parse(await data.text());
+      const localCount = Array.isArray(state[modulo]) ? state[modulo].length : 0;
+      if (localCount >= (manifest.totalRecords || 0)) continue;
+
       const registros = await _cbRestaurarModulo(modulo);
       if (registros && registros.length) {
         state[modulo] = registros;
-        console.info(`[CloudBackup] "${modulo}": ${registros.length.toLocaleString('pt-BR')} registros restaurados da cópia condensada na nuvem.`);
-        toast(`${registros.length.toLocaleString('pt-BR')} registro(s) de ${modulo} restaurados da cópia de segurança na nuvem.`, 'success');
+        console.info(`[CloudBackup] "${modulo}": ${registros.length.toLocaleString('pt-BR')} registros restaurados/corrigidos da cópia condensada na nuvem.`);
+        toast(`${registros.length.toLocaleString('pt-BR')} registro(s) de ${modulo} sincronizados da cópia de segurança na nuvem.`, 'success');
       }
     } catch (err) {
-      console.warn(`[CloudBackup] Falha ao restaurar "${modulo}":`, err);
+      console.warn(`[CloudBackup] Falha ao verificar/restaurar "${modulo}":`, err);
     }
   }
 }
