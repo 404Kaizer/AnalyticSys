@@ -2875,6 +2875,7 @@
         <div class="admin-subnav">
           <button class="admin-subnav-btn active" id="admin-subnav-usuarios" onclick="adminShowSection('usuarios')"><i class="ti ti-users"></i> Usuários</button>
           <button class="admin-subnav-btn" id="admin-subnav-dados" onclick="adminShowSection('dados')"><i class="ti ti-database"></i> Dados por módulo</button>
+          <button class="admin-subnav-btn" id="admin-subnav-pendentes" onclick="adminShowSection('pendentes')"><i class="ti ti-inbox"></i> Pendentes de integração</button>
           <button class="admin-subnav-btn" id="admin-subnav-formpublico" onclick="adminShowSection('formpublico')"><i class="ti ti-link"></i> Formulário Público</button>
           <button class="admin-subnav-btn" id="admin-subnav-servidor" onclick="adminShowSection('servidor')"><i class="ti ti-server"></i> Servidor</button>
         </div>
@@ -3061,6 +3062,38 @@
                 <button class="btn" id="admin-dados-last" title="Último" onclick="adminModuloUltimaPagina()"><i class="ti ti-chevrons-right"></i></button>
               </div>
             </div>
+          </div>
+        </div>
+
+        <!-- Seção: Pendentes de integração — registros de outros usuários que
+             o ADM ainda não aceitou (record_integrations). Complementa a
+             notificação em tempo real (js/notifications.js): cobre o que já
+             existia antes do fluxo de aceite, que a notificação por Realtime
+             não recria retroativamente. -->
+        <div id="admin-section-pendentes" style="display:none">
+          <div class="table-card">
+            <div class="table-header">
+              <span class="table-title"><i class="ti ti-inbox"></i> Pendentes de integração</span>
+              <div class="table-toolbar">
+                <select class="form-select" id="admin-pendentes-modulo-select" onchange="adminLoadPendentes()" style="width:auto">
+                  <option value="lancamentos">Lançamentos</option>
+                  <option value="entradas">Entradas</option>
+                  <option value="saidas">Saídas</option>
+                  <option value="sap">SAP</option>
+                  <option value="producao">Produção</option>
+                  <option value="ajustes_sistemicos">DAI / Ajuste Sistêmico</option>
+                  <option value="notas_ajuste">Notas de Crédito/Débito</option>
+                  <option value="ajustes_excluidos">Log de Exclusão de DAI</option>
+                  <option value="inv_justificativas">Justificativas de Inventário</option>
+                  <option value="sap_fechamento_overrides">Overrides de Fechamento SAP</option>
+                  <option value="imports">Log de Importações</option>
+                </select>
+                <span id="admin-pendentes-count" style="color:var(--text2);font-size:12px"></span>
+                <button class="btn" onclick="adminLoadPendentes()"><i class="ti ti-refresh"></i> Atualizar</button>
+                <button class="btn" onclick="adminAceitarTodosPendentes()"><i class="ti ti-checks"></i> Aceitar todos os listados</button>
+              </div>
+            </div>
+            <div id="admin-pendentes-list"></div>
           </div>
         </div>
 

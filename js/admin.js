@@ -94,6 +94,85 @@ function _adminFieldType(modulo, col) {
   return _ADMIN_COL_TYPES[modulo]?.[col] || 'text';
 }
 
+// ═══════════════════════════════════════════════════════════
+// PENDENTES DE INTEGRAÇÃO — registros de outros usuários que o ADM ainda
+// não aceitou (record_integrations). Complementa a notificação em tempo
+// real (js/notifications.js): a notificação só dispara pra um INSERT novo
+// via Realtime, não recria eventos passados — esta lista cobre o que já
+// existia antes do fluxo de aceite existir, ou que passou despercebido.
+// Lista simples (sem paginação por cursor como "Dados por módulo") porque
+// esta é uma fila de revisão, não um navegador de dados completo — teto de
+// _ADMIN_PENDENTES_CAP por módulo é suficiente pro uso real do sistema.
+// ═══════════════════════════════════════════════════════════
+const _ADMIN_PENDENTES_CAP = 300;
+let _adminPendentesAtual = []; // linhas pendentes carregadas do módulo selecionado
+
+function adminModulosIntegracao() {
+  return (typeof RECORD_INTEGRATION_TABLES !== 'undefined' ? RECORD_INTEGRATION_TABLES : [])
+    .filter(t => ADMIN_MODULOS[t]);
+}
+
+function _adminPendentesResumoLinha(modulo, row) {
+  const cols = ADMIN_MODULOS[modulo]?.cols || [];
+  return cols.map(c => row[c]).filter(v => v !== null && v !== undefined && v !== '')
+    .slice(0, 3).join(' · ') || '—';
+}
+
+async function adminLoadPendentes() {
+  const sel = document.getElementById('admin-pendentes-modulo-select');
+  const modulo = sel?.value || adminModulosIntegracao()[0];
+  if (!modulo) return;
+  const listEl = document.getElementById('admin-pendentes-list');
+  const countEl = document.getElementById('admin-pendentes-count');
+  if (listEl) listEl.innerHTML = `<div class="empty-state"><i class="ti ti-loader"></i><p>Carregando...</p></div>`;
+
+  const meuId = window.currentUser?.id;
+  const [{ data: rows, error: rowsErr }, { data: integrados, error: intErr }, { data: perfis }] = await Promise.all([
+    window.supabaseClient.from(modulo).select('*').neq('user_id', meuId).limit(_ADMIN_PENDENTES_CAP),
+    window.supabaseClient.from('record_integrations').select('row_id').eq('table_name', modulo).eq('integrated_by', meuId),
+    window.supabaseClient.from('profiles').select('id, email'),
+  ]);
+  if (rowsErr || intErr) {
+    if (listEl) listEl.innerHTML = `<div class="empty-state"><i class="ti ti-alert-triangle"></i><p>Falha ao carregar: ${_adminEsc((rowsErr||intErr).message)}</p></div>`;
+    return;
+  }
+  const jaIntegrados = new Set((integrados||[]).map(r => r.row_id));
+  const emailPorId = new Map((perfis||[]).map(p => [p.id, p.email]));
+  _adminPendentesAtual = (rows||[]).filter(r => !jaIntegrados.has(String(r.id)));
+
+  if (countEl) countEl.textContent = `${_adminPendentesAtual.length} pendente(s)`;
+  if (!listEl) return;
+  if (!_adminPendentesAtual.length) {
+    listEl.innerHTML = `<div class="empty-state"><i class="ti ti-circle-check"></i><p>Nada pendente neste módulo.</p></div>`;
+    return;
+  }
+  listEl.innerHTML = _adminPendentesAtual.map(r => `
+    <div class="admin-pendente-item" data-row-id="${_adminEsc(r.id)}">
+      <div class="admin-pendente-info">
+        <div class="admin-pendente-resumo">${_adminEsc(_adminPendentesResumoLinha(modulo, r))}</div>
+        <div class="admin-pendente-dono">${_adminEsc(emailPorId.get(r.user_id) || r.user_id)}</div>
+      </div>
+      <button class="btn btn-sm" onclick="adminAceitarPendente('${_adminEsc(modulo)}','${_adminEsc(r.id)}')"><i class="ti ti-download"></i> Aceitar</button>
+    </div>`).join('');
+}
+
+async function adminAceitarPendente(modulo, rowId) {
+  const ok = await integrarRegistro(modulo, rowId);
+  if (!ok) { toast('Falha ao aceitar registro.', 'error'); return; }
+  _adminPendentesAtual = _adminPendentesAtual.filter(r => String(r.id) !== String(rowId));
+  adminLoadPendentes();
+}
+
+async function adminAceitarTodosPendentes() {
+  const sel = document.getElementById('admin-pendentes-modulo-select');
+  const modulo = sel?.value;
+  if (!modulo || !_adminPendentesAtual.length) return;
+  if (!confirm(`Aceitar todos os ${_adminPendentesAtual.length} registros pendentes listados?`)) return;
+  for (const r of _adminPendentesAtual) await integrarRegistro(modulo, r.id);
+  toast('Registros integrados.', 'success');
+  adminLoadPendentes();
+}
+
 // ── Paginação de "Dados por módulo" — mesmo padrão visual de Entradas/
 // Saídas/Lançamentos/SAP (table-scroll + .pagination com Primeiro/
 // Anterior/Próxima/Último), mas por CURSOR — nunca OFFSET (ver "Decisões
@@ -579,19 +658,23 @@ function _adminStatusInfo(lastSeen) {
 function adminShowSection(section) {
   const elUsuarios = document.getElementById('admin-section-usuarios');
   const elDados     = document.getElementById('admin-section-dados');
+  const elPendentes = document.getElementById('admin-section-pendentes');
   const elFormPublico = document.getElementById('admin-section-formpublico');
   const elServidor = document.getElementById('admin-section-servidor');
   if (elUsuarios) elUsuarios.style.display = section === 'usuarios' ? '' : 'none';
   if (elDados)    elDados.style.display    = section === 'dados' ? '' : 'none';
+  if (elPendentes) elPendentes.style.display = section === 'pendentes' ? '' : 'none';
   if (elFormPublico) elFormPublico.style.display = section === 'formpublico' ? '' : 'none';
   if (elServidor) elServidor.style.display = section === 'servidor' ? '' : 'none';
   document.getElementById('admin-subnav-usuarios')?.classList.toggle('active', section === 'usuarios');
   document.getElementById('admin-subnav-dados')?.classList.toggle('active', section === 'dados');
+  document.getElementById('admin-subnav-pendentes')?.classList.toggle('active', section === 'pendentes');
   document.getElementById('admin-subnav-formpublico')?.classList.toggle('active', section === 'formpublico');
   document.getElementById('admin-subnav-servidor')?.classList.toggle('active', section === 'servidor');
 
   if (section === 'usuarios') { adminLoadUsuarios(); adminLoadDbStats(); }
   if (section === 'dados') adminLoadModulo();
+  if (section === 'pendentes') adminLoadPendentes();
   if (section === 'formpublico') adminLoadFormPublico();
   if (section === 'servidor') adminServidorListar();
 
@@ -1795,4 +1878,7 @@ Object.assign(window, {
   _adminLoteEditRenderCampo,
   adminAplicarEdicaoLote,
   _adminToggleBool,
+  adminLoadPendentes,
+  adminAceitarPendente,
+  adminAceitarTodosPendentes,
 });

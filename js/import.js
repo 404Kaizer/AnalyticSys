@@ -600,14 +600,14 @@ function _lancSyncDelete(id) {
 async function syncLancamentosFromSupabase() {
   if (!window.supabaseClient) return;
   try {
-    const data = await fetchAllRows('lancamentos');
+    const data = await fetchMineOrIntegrated('lancamentos');
     const remoto = (data || []).map(_lancFromDbRow);
     const idsRemotos = new Set(remoto.map(r => r.id));
 
     const local = Array.isArray(state.lancamentos) ? state.lancamentos : [];
     const porId = new Map(local.filter(r => r.id).map(r => [r.id, r]));
     remoto.forEach(r => porId.set(r.id, r));
-    state.lancamentos = [...porId.values()];
+    state.lancamentos = await _podarPoluicaoLocal('lancamentos', [...porId.values()], idsRemotos, window.currentUser?.id);
     if (typeof invalidateLancIndex === 'function') invalidateLancIndex();
 
     const naoSincronizados = local.filter(r => r.id && (!r.importId || r.editado) && !idsRemotos.has(r.id));
@@ -674,14 +674,15 @@ function _importsSyncDelete(importId) {
 async function syncImportsFromSupabase() {
   if (!window.supabaseClient) return;
   try {
-    const data = await fetchAllRows('imports');
+    const data = await fetchMineOrIntegrated('imports');
     const remoto = (data || []).map(_importsFromDbRow);
     const idsRemotos = new Set(remoto.map(r => r.id));
 
     const local = Array.isArray(state.imports) ? state.imports : [];
     const porId = new Map(local.filter(r => r.id).map(r => [r.id, r]));
     remoto.forEach(r => porId.set(r.id, r));
-    state.imports = [...porId.values()].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    const podado = await _podarPoluicaoLocal('imports', [...porId.values()], idsRemotos, window.currentUser?.id);
+    state.imports = podado.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
     const naoSincronizados = local.filter(r => r.id && r.status !== 'Processando' && !idsRemotos.has(r.id));
     naoSincronizados.forEach(_importsSyncUpsert);
@@ -763,14 +764,14 @@ function _producaoSyncDelete(id) {
 async function syncProducaoFromSupabase() {
   if (!window.supabaseClient) return;
   try {
-    const data = await fetchAllRows('producao');
+    const data = await fetchMineOrIntegrated('producao');
     const remoto = (data || []).map(_producaoFromDbRow);
     const idsRemotos = new Set(remoto.map(r => r.id));
 
     const local = Array.isArray(state.producao) ? state.producao : [];
     const porId = new Map(local.filter(r => r.id).map(r => [r.id, r]));
     remoto.forEach(r => porId.set(r.id, r));
-    state.producao = [...porId.values()];
+    state.producao = await _podarPoluicaoLocal('producao', [...porId.values()], idsRemotos, window.currentUser?.id);
 
     const naoSincronizados = local.filter(r => r.id && !r.importId && !idsRemotos.has(r.id));
     if (naoSincronizados.length) await _producaoSyncUpsertBatch(naoSincronizados);
@@ -864,14 +865,14 @@ function _entradasSyncDelete(id) {
 async function syncEntradasFromSupabase() {
   if (!window.supabaseClient) return;
   try {
-    const data = await fetchAllRows('entradas');
+    const data = await fetchMineOrIntegrated('entradas');
     const remoto = (data || []).map(_entradasFromDbRow);
     const idsRemotos = new Set(remoto.map(r => r.id));
 
     const local = Array.isArray(state.entradas) ? state.entradas : [];
     const porId = new Map(local.filter(r => r.id).map(r => [r.id, r]));
     remoto.forEach(r => porId.set(r.id, r));
-    state.entradas = [...porId.values()];
+    state.entradas = await _podarPoluicaoLocal('entradas', [...porId.values()], idsRemotos, window.currentUser?.id);
     if (typeof invalidateSearchIndex === 'function') invalidateSearchIndex('entradas');
 
     const naoSincronizados = local.filter(r => r.id && !r.importId && !idsRemotos.has(r.id));
@@ -959,14 +960,14 @@ function _saidasSyncDelete(id) {
 async function syncSaidasFromSupabase() {
   if (!window.supabaseClient) return;
   try {
-    const data = await fetchAllRows('saidas');
+    const data = await fetchMineOrIntegrated('saidas');
     const remoto = (data || []).map(_saidasFromDbRow);
     const idsRemotos = new Set(remoto.map(r => r.id));
 
     const local = Array.isArray(state.saidas) ? state.saidas : [];
     const porId = new Map(local.filter(r => r.id).map(r => [r.id, r]));
     remoto.forEach(r => porId.set(r.id, r));
-    state.saidas = [...porId.values()];
+    state.saidas = await _podarPoluicaoLocal('saidas', [...porId.values()], idsRemotos, window.currentUser?.id);
     if (typeof invalidateSaidasIndex === 'function') invalidateSaidasIndex();
 
     const naoSincronizados = local.filter(r => r.id && !r.importId && !idsRemotos.has(r.id));
@@ -1062,14 +1063,14 @@ function _sapSyncDelete(id) {
 async function syncSAPFromSupabase() {
   if (!window.supabaseClient) return;
   try {
-    const data = await fetchAllRows('sap');
+    const data = await fetchMineOrIntegrated('sap');
     const remoto = (data || []).map(_sapFromDbRow);
     const idsRemotos = new Set(remoto.map(r => r.id));
 
     const local = Array.isArray(state.sap) ? state.sap : [];
     const porId = new Map(local.filter(r => r.id).map(r => [r.id, r]));
     remoto.forEach(r => porId.set(r.id, r));
-    state.sap = [...porId.values()];
+    state.sap = await _podarPoluicaoLocal('sap', [...porId.values()], idsRemotos, window.currentUser?.id);
     if (typeof invalidateSapIndex === 'function') invalidateSapIndex();
 
     const naoSincronizados = local.filter(r => r.id && !r.importId && !idsRemotos.has(r.id));

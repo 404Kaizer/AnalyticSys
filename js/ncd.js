@@ -648,7 +648,7 @@ async function syncNotasAjusteFromSupabase() {
     // de teto de 1000 linhas já corrigido em Lançamentos/Entradas. Aqui é
     // ainda mais sensível: a numeração sequencial das notas depende de ter
     // TODOS os registros, não só os primeiros 1000.
-    const data = await fetchAllRows('notas_ajuste');
+    const data = await fetchMineOrIntegrated('notas_ajuste');
     const remoto = (data || []).map(r => ({
       id: r.id, numero: r.numero, tipo: r.tipo, central: r.central,
       cnpjCentral: r.cnpj_central, dataKey: r.data_key, dataGeracao: r.data_geracao,
@@ -659,12 +659,12 @@ async function syncNotasAjusteFromSupabase() {
     const local = Array.isArray(state.notasAjuste) ? state.notasAjuste : [];
     const porId = new Map(local.map(n => [n.id, n]));
     remoto.forEach(n => porId.set(n.id, n));
-    state.notasAjuste = [...porId.values()];
+    const idsRemotos = new Set(remoto.map(n => n.id));
+    state.notasAjuste = await _podarPoluicaoLocal('notas_ajuste', [...porId.values()], idsRemotos, window.currentUser?.id);
 
     // Corte de produção (27/07): notas geradas só local (registro é
     // append-only, então isso só cobre falha de rede na hora da geração)
     // sobem agora — reaproveita _ncdSyncToSupabase, já usada na criação.
-    const idsRemotos = new Set(remoto.map(n => n.id));
     const naoSincronizadas = local.filter(n => n.id && !idsRemotos.has(n.id));
     if (naoSincronizadas.length && typeof _ncdSyncToSupabase === 'function') _ncdSyncToSupabase(naoSincronizadas);
   } catch (err) {

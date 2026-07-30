@@ -80,6 +80,106 @@ async function fetchAllRows(table, columns = '*') {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+// INTEGRAÇÃO DE REGISTROS DE OUTROS USUÁRIOS (fluxo de aceite do ADM)
+// ═══════════════════════════════════════════════════════════════════════
+// RLS dá ao ADM (is_admin()) acesso a todo registro de todo usuário — mas
+// isso não deve poluir as telas normais de trabalho, só o painel de
+// Supervisão (que é a tela dedicada a ver tudo). Nas tabelas transacionais,
+// o ADM só deve ver: (1) os próprios registros, (2) registros de outros que
+// ele explicitamente aceitou integrar (tabela record_integrations). Usuário
+// comum não muda nada — a RLS dele já é só `user_id = auth.uid()`.
+const RECORD_INTEGRATION_TABLES = [
+  'lancamentos', 'entradas', 'saidas', 'sap', 'producao',
+  'ajustes_sistemicos', 'notas_ajuste', 'ajustes_excluidos',
+  'inv_justificativas', 'sap_fechamento_overrides', 'imports',
+];
+
+let _integracoesCache = null; // Map<table_name, Set<row_id>> — um fetch por boot, invalidado ao aceitar
+
+async function _integracoesDoAdmin(table) {
+  if (!_integracoesCache) {
+    _integracoesCache = new Map();
+    if (window.currentUser?.role === 'admin' && window.supabaseClient) {
+      const { data, error } = await window.supabaseClient
+        .from('record_integrations').select('table_name, row_id');
+      if (!error) {
+        for (const r of data || []) {
+          if (!_integracoesCache.has(r.table_name)) _integracoesCache.set(r.table_name, new Set());
+          _integracoesCache.get(r.table_name).add(r.row_id);
+        }
+      }
+    }
+  }
+  return _integracoesCache.get(table) || new Set();
+}
+
+function _integracoesCacheInvalidar() {
+  _integracoesCache = null;
+}
+
+// Filtra `rows` (já vindas do banco, sem restrição — RLS deixou passar tudo
+// pro ADM) para "meus ou já integrados". Não-admin recebe `rows` sem
+// alteração (RLS já restringiu no banco).
+async function _filtrarMineOuIntegrado(table, rows) {
+  if (window.currentUser?.role !== 'admin') return rows;
+  const meuId = window.currentUser.id;
+  const integrados = await _integracoesDoAdmin(table);
+  return rows.filter(r => r.user_id === meuId || integrados.has(String(r.id)));
+}
+
+async function fetchMineOrIntegrated(table, columns = '*') {
+  const rows = await fetchAllRows(table, columns);
+  return _filtrarMineOuIntegrado(table, rows);
+}
+
+// Poda o cache local (IndexedDB, via state.*) de registros de outros
+// usuários que ficaram presos de sessões anteriores ao filtro acima existir.
+// O merge por id de cada syncXFromSupabase preserva de propósito qualquer
+// entrada local ausente no fetch remoto — é assim que uma edição feita
+// offline sobrevive até conseguir sincronizar. Isso significa que o filtro
+// sozinho não limpa o que já estava no cache: precisa distinguir "meu,
+// ainda não sincronizado" de "de outro dono, só ficou perdido no cache".
+// Só remove o que está CONFIRMADO no banco como de outro dono — um id que
+// não existe em lugar nenhum (candidato a pendente de sync) nunca é tocado.
+async function _podarPoluicaoLocal(table, localRows, idsRemotos, meuId) {
+  if (window.currentUser?.role !== 'admin' || !Array.isArray(localRows) || !localRows.length) return localRows;
+  const candidatos = localRows.filter(r => r.id && !idsRemotos.has(r.id)).map(r => r.id);
+  if (!candidatos.length) return localRows;
+  const { data, error } = await window.supabaseClient
+    .from(table).select('id').in('id', candidatos).neq('user_id', meuId);
+  if (error || !data?.length) return localRows;
+  const confirmadosDeOutros = new Set(data.map(r => r.id));
+  return localRows.filter(r => !confirmadosDeOutros.has(r.id));
+}
+
+// tabela → função de resync (SUPABASE_BOOT_SYNCS em dashboard.js) — usada
+// pra atualizar só o módulo afetado depois de um aceite, sem re-sincronizar
+// tudo de novo.
+const RECORD_INTEGRATION_RESYNC = {
+  lancamentos: 'syncLancamentosFromSupabase',
+  entradas: 'syncEntradasFromSupabase',
+  saidas: 'syncSaidasFromSupabase',
+  sap: 'syncSAPFromSupabase',
+  producao: 'syncProducaoFromSupabase',
+  ajustes_sistemicos: 'syncAjustesSistemicosFromSupabase',
+  notas_ajuste: 'syncNotasAjusteFromSupabase',
+  ajustes_excluidos: 'syncAjustesExcluidosFromSupabase',
+  inv_justificativas: 'syncInvJustificativasFromSupabase',
+  sap_fechamento_overrides: 'syncSapFechamentoOverridesFromSupabase',
+  imports: 'syncImportsFromSupabase',
+};
+
+async function integrarRegistro(tableName, rowId) {
+  const { error } = await window.supabaseClient.from('record_integrations')
+    .upsert({ table_name: tableName, row_id: String(rowId), integrated_by: window.currentUser.id });
+  if (error) { console.warn('[Integração] Falha ao aceitar registro:', error); return false; }
+  _integracoesCacheInvalidar();
+  const fn = window[RECORD_INTEGRATION_RESYNC[tableName]];
+  if (typeof fn === 'function') await fn();
+  return true;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
 // REGISTRO DE NOMES ORIGINAIS DE MATERIAIS (diagnóstico de padronização)
 // ═══════════════════════════════════════════════════════════════════════
 // Objetivo: capturar TODO nome original de material visto em Entradas,

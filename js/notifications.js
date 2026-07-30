@@ -379,9 +379,29 @@ function _notifRenderDropdown() {
           ${hasRoute?`<span class="notif-go-hint"><i class="ti ti-arrow-right" style="font-size:10px"></i></span>`:''}
         </div>
       </div>
-      ${!n.read?`<button class="notif-mark-btn" onclick="notifMarkRead('${_notifEsc(n.id)}',event)" title="Marcar como lida"><i class="ti ti-check"></i></button>`:''}
+      ${n.integrable ? (n.integrated
+          ? `<span class="notif-integrated-badge" title="Integrado aos seus dados"><i class="ti ti-circle-check"></i></span>`
+          : `<button class="notif-integrar-btn" onclick="notifIntegrar('${_notifEsc(n.id)}',event)" title="Aceitar — passa a contar nos seus dados"><i class="ti ti-download"></i> Aceitar</button>`)
+        : (!n.read?`<button class="notif-mark-btn" onclick="notifMarkRead('${_notifEsc(n.id)}',event)" title="Marcar como lida"><i class="ti ti-check"></i></button>`:'')}
     </div>`;
   }).join('');
+}
+
+// Aceita um registro de outro usuário: passa a contar nas telas de
+// trabalho do ADM (record_integrations, via integrarRegistro em
+// normalize.js) e re-sincroniza só o módulo afetado.
+async function notifIntegrar(id, event) {
+  event?.stopPropagation();
+  const n = (state.notifications||[]).find(n=>n.id===id);
+  if (!n || !n.integrable || n.integrated) return;
+  const ok = await integrarRegistro(n.activityTable, n.integratedRowId);
+  if (!ok) { toast('Não foi possível aceitar o registro.', 'error'); return; }
+  n.integrated = true;
+  n.read = true;
+  if (typeof persist==='function') persist();
+  _notifRenderBadge();
+  _notifRenderDropdown();
+  toast('Registro integrado aos seus dados.', 'success');
 }
 
 // ── Ações ─────────────────────────────────────────────────
@@ -575,6 +595,19 @@ async function _activityResolveActorLabel(actorId) {
   return email ? email.split('@')[0] : 'Alguém';
 }
 
+// Só oferece "Aceitar integração" pra INSERT único (não em lote — um
+// import em massa de outro usuário deve ser tratado pela lista de
+// pendências no painel de Supervisão, não aceito às cegas por uma
+// notificação que só carrega a amostra mais recente do grupo) numa das
+// tabelas do fluxo de integração, e só pro ADM (só ele tem RLS bypass
+// pra sequer receber o evento de outro dono).
+function _activityIsIntegrable(row, count) {
+  return row.operation === 'INSERT' && count === 1
+    && typeof RECORD_INTEGRATION_TABLES !== 'undefined'
+    && RECORD_INTEGRATION_TABLES.includes(row.table_name)
+    && window.currentUser?.role === 'admin';
+}
+
 async function _activityEmitNotification(row, count) {
   const isAuth      = row.table_name === 'auth';
   const actorLabel  = await _activityResolveActorLabel(row.actor_id);
@@ -606,6 +639,12 @@ async function _activityEmitNotification(row, count) {
     activityLogId: row.id,
     activityTable: row.table_name,
     activityCount: count,
+    // Fluxo de aceite (js/normalize.js: integrarRegistro) — row_id é o id
+    // do registro em `activityTable`, já vem pronto da trigger do banco
+    // (v_id em _activity_log_capture), sem precisar abrir new_data.
+    integrable: _activityIsIntegrable(row, count),
+    integratedRowId: row.row_id,
+    integrated: false,
   });
   // Cache local recente só pro dropdown — o histórico completo já vive
   // na nuvem (activity_log), então não precisa crescer pra sempre aqui.
@@ -793,7 +832,7 @@ function _activityRealtimeStop() {
 
 Object.assign(window,{
   notifToggle,notifClose,notifOpen,
-  notifMarkRead,notifMarkAllRead,notifNavigate,
+  notifMarkRead,notifMarkAllRead,notifNavigate,notifIntegrar,
   notifSync,notifBoot,notifUpdateFromAnalytico,notifSilentHealthCheck,
   notifPlaySound,notifShowActivityToast,notifHideActivityToast,
   notifAbrirDetalheAtividade,

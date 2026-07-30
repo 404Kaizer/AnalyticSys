@@ -3924,11 +3924,12 @@ function setSapFechOverrideEmLote(chaves, incluir) {
 
 async function syncSapFechamentoOverridesFromSupabase() {
   try {
-    const { data, error } = await window.supabaseClient.from('sap_fechamento_overrides').select('chave');
+    const { data, error } = await window.supabaseClient.from('sap_fechamento_overrides').select('id, user_id, chave');
     if (error) throw error;
+    const filtrado = await _filtrarMineOuIntegrado('sap_fechamento_overrides', data || []);
     const local = Array.isArray(state.sapFechamentoOverrides) ? state.sapFechamentoOverrides : [];
     const set = new Set(local);
-    (data || []).forEach(r => set.add(r.chave));
+    filtrado.forEach(r => set.add(r.chave));
     state.sapFechamentoOverrides = [...set];
     invalidateFechOverrideCache();
 

@@ -1760,9 +1760,10 @@ function confirmarExcluirAjusteSistemico(id) {
 async function syncAjustesExcluidosFromSupabase() {
   try {
     const { data, error } = await window.supabaseClient.from('ajustes_excluidos')
-      .select('dai_tag, dai_numero, central, data_geracao, excluido_por, excluido_em');
+      .select('id, user_id, dai_tag, dai_numero, central, data_geracao, excluido_por, excluido_em');
     if (error) throw error;
-    const remoto = (data || []).map(r => ({
+    const filtrado = await _filtrarMineOuIntegrado('ajustes_excluidos', data || []);
+    const remoto = filtrado.map(r => ({
       daiTag: r.dai_tag, daiNumero: r.dai_numero, central: r.central,
       dataGeracao: r.data_geracao, excluidoPor: r.excluido_por, excluidoEm: r.excluido_em,
     }));

@@ -3052,9 +3052,10 @@ async function syncInvJustificativasFromSupabase() {
   try {
     const { data, error } = await window.supabaseClient
       .from('inv_justificativas')
-      .select('k, op, fiscal, saldo, custo_medio_sap, documento_sap');
+      .select('id, user_id, k, op, fiscal, saldo, custo_medio_sap, documento_sap');
     if (error) throw error;
-    const remoto = (data || []).map(r => ({
+    const filtrado = await _filtrarMineOuIntegrado('inv_justificativas', data || []);
+    const remoto = filtrado.map(r => ({
       k: r.k, op: r.op, fiscal: r.fiscal, saldo: r.saldo,
       custoMedioSap: r.custo_medio_sap, documentoSap: r.documento_sap
     }));

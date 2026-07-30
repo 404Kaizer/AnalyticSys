@@ -86,7 +86,7 @@ async function syncAjustesSistemicosFromSupabase() {
     // fetchAllRows (cursor por id) — select('*') direto tinha o mesmo risco
     // de teto de 1000 linhas já corrigido em Lançamentos/Entradas. Sem
     // .order() antes, então a troca não muda ordenação nenhuma.
-    const data = await fetchAllRows('ajustes_sistemicos');
+    const data = await fetchMineOrIntegrated('ajustes_sistemicos');
     const remoto = (data || []).map(r => ({
       id: r.id, tag: r.tag, numero: r.numero, dataGeracao: r.data_geracao,
       dataGeracaoKey: r.data_geracao_key, dataOcorrido: r.data_ocorrido,
@@ -100,10 +100,10 @@ async function syncAjustesSistemicosFromSupabase() {
     const local = Array.isArray(state.ajustesSistemicos) ? state.ajustesSistemicos : [];
     const porId = new Map(local.map(d => [d.id, d]));
     remoto.forEach(d => porId.set(d.id, d));
-    state.ajustesSistemicos = [...porId.values()];
+    const idsRemotos = new Set(remoto.map(d => d.id));
+    state.ajustesSistemicos = await _podarPoluicaoLocal('ajustes_sistemicos', [...porId.values()], idsRemotos, window.currentUser?.id);
 
     // Corte de produção (27/07): DAIs criados só local sobem agora.
-    const idsRemotos = new Set(remoto.map(d => d.id));
     const naoSincronizados = local.filter(d => d.id && !idsRemotos.has(d.id));
     naoSincronizados.forEach(d => { if (typeof _daiSyncUpsert === 'function') _daiSyncUpsert(d); });
   } catch (err) {
