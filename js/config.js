@@ -57,9 +57,8 @@ async function _configsSyncDelete(key) {
 async function syncConfigsFromSupabase() {
   try {
     const data = await fetchAllRows('configs', 'key, value, descricao, created_at');
-    const local = Array.isArray(state.configs) ? state.configs : [];
-    // Traduz de volta pro formato local (desc/created) esperado por
-    // mergePersistentConfigs e por toda a UI de Configurações.
+    // O BANCO MANDA (30/07) — o self-heal daqui reenviava config apagada.
+    // Traduz de volta pro formato local (desc/created) esperado pela UI.
     const remoto = (data || [])
       .sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
       .map(r => ({
@@ -68,30 +67,23 @@ async function syncConfigsFromSupabase() {
         desc: r.descricao,
         created: r.created_at ? new Date(r.created_at).toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR'),
       }));
-    state.configs = mergePersistentConfigs(state.configs, remoto);
-
-    // Corte de produção (27/07): configs criadas localmente antes de
-    // existir sync pra esse módulo, ou que falharam na hora, sobem agora
-    // — mesmo padrão já usado em Filiais/Materiais/Lançamentos.
-    const chavesRemotas = new Set((data || []).map(r => r.key));
-    const naoSincronizadas = local.filter(c => c.key && !chavesRemotas.has(c.key));
-    for (const c of naoSincronizadas) {
-      if (typeof _configsSyncUpsert === 'function') await _configsSyncUpsert(c);
-    }
+    // Passa [] como "existente": nada do local sobrevive, a nuvem é a
+    // verdade. mergePersistentConfigs segue no caminho só pelo que ela faz
+    // de útil aqui — normalizar a chave (normalizeConfigKey) e remover
+    // duplicata de chave equivalente. Não há config padrão de fábrica a
+    // preservar: state.configs nasce [] (state.js:24).
+    state.configs = mergePersistentConfigs([], remoto);
   } catch (err) {
     console.warn('[Supabase] Falha ao buscar configs — mantendo dados locais.', err);
   }
 }
 
-// Grupos de materiais e Regionais são catálogos simples (só nome) — merge
-// por nome normalizado, nuvem inclui o que faltar localmente sem duplicar.
+// Grupos de materiais e Regionais são catálogos simples (só nome).
+// O BANCO MANDA (30/07): antes o merge unia local ∪ nuvem e reenviava os
+// nomes que só existiam localmente — então apagar um grupo pelo painel de
+// Supervisão era desfeito pelo próprio navegador no boot seguinte. Agora a
+// nuvem substitui; erro de busca cai no catch e preserva o local.
 async function syncCatalogosFromSupabase() {
-  const mergeCatalogo = (localArr, remoteRows) => {
-    const vistos = new Map();
-    (localArr || []).forEach(n => { const k = normalizeText(n); if (k) vistos.set(k, n); });
-    (remoteRows || []).forEach(r => { const k = normalizeText(r.nome); if (k && !vistos.has(k)) vistos.set(k, r.nome); });
-    return [...vistos.values()];
-  };
   try {
     const [gruposRes, regionaisRes] = await Promise.all([
       window.supabaseClient.from('grupos_materiais').select('nome'),
@@ -100,30 +92,16 @@ async function syncCatalogosFromSupabase() {
     if (gruposRes.error) throw gruposRes.error;
     if (regionaisRes.error) throw regionaisRes.error;
 
-    const gruposLocal = Array.isArray(state.gruposMateriais) ? state.gruposMateriais : [];
-    const regionaisLocal = Array.isArray(state.regionaisCentrais) ? state.regionaisCentrais : [];
+    // Dedup por nome normalizado continua necessário: a mesma central pode
+    // estar cadastrada por mais de um usuário com grafia diferente.
+    const dedup = (rows) => {
+      const vistos = new Map();
+      (rows || []).forEach(r => { const k = normalizeText(r.nome); if (k && !vistos.has(k)) vistos.set(k, r.nome); });
+      return [...vistos.values()];
+    };
 
-    state.gruposMateriais = mergeCatalogo(gruposLocal, gruposRes.data);
-    state.regionaisCentrais = mergeCatalogo(regionaisLocal, regionaisRes.data);
-
-    // Corte de produção (27/07): nomes cadastrados só localmente sobem
-    // agora — mesmo padrão do resto do sistema. onConflict evita duplicar
-    // se por acaso já existir (corrida entre abas, por exemplo).
-    const gruposRemotosSet = new Set((gruposRes.data || []).map(r => normalizeText(r.nome)));
-    const gruposNaoSincronizados = gruposLocal.filter(g => g && !gruposRemotosSet.has(normalizeText(g)));
-    if (gruposNaoSincronizados.length) {
-      const { error } = await window.supabaseClient.from('grupos_materiais')
-        .upsert(gruposNaoSincronizados.map(nome => ({ nome })), { onConflict: 'user_id,nome' });
-      if (error) console.warn('[Supabase] Falha ao sincronizar grupos de materiais locais:', error);
-    }
-
-    const regionaisRemotosSet = new Set((regionaisRes.data || []).map(r => normalizeText(r.nome)));
-    const regionaisNaoSincronizados = regionaisLocal.filter(r => r && !regionaisRemotosSet.has(normalizeText(r)));
-    if (regionaisNaoSincronizados.length) {
-      const { error } = await window.supabaseClient.from('regionais_centrais')
-        .upsert(regionaisNaoSincronizados.map(nome => ({ nome })), { onConflict: 'user_id,nome' });
-      if (error) console.warn('[Supabase] Falha ao sincronizar regionais locais:', error);
-    }
+    state.gruposMateriais = dedup(gruposRes.data);
+    state.regionaisCentrais = dedup(regionaisRes.data);
   } catch (err) {
     console.warn('[Supabase] Falha ao buscar grupos/regionais — mantendo dados locais.', err);
   }
@@ -568,24 +546,24 @@ async function _materiaisSyncUpsertBatch(recs) {
 async function syncMateriaisFromSupabase() {
   try {
     const data = await fetchAllRows('materiais', 'origem, alias, categoria, import_id, created_at');
+    // O BANCO MANDA (30/07): o self-heal que existia aqui reenviava todo
+    // material local ausente da nuvem, o que desfazia qualquer exclusão
+    // feita pelo painel de Supervisão no boot seguinte. A nuvem substitui.
+    // Erro de busca cai no catch e preserva o local.
     const local = Array.isArray(state.materiais) ? state.materiais : [];
-    const porChave = new Map(local.map(m => [materialMatchKey(m), m]));
-    (data || []).forEach(r => {
-      const chave = materialMatchKey(r);
-      const existenteLocal = porChave.get(chave);
-      porChave.set(chave, {
-        id: existenteLocal?.id || makeMaterialId(), // preserva id local se já existir — evita "churn" de id a cada boot
+    const porChaveLocal = new Map(local.map(m => [materialMatchKey(m), m]));
+    state.materiais = (data || []).map(r => {
+      // Preserva o id local quando o material já era conhecido — evita
+      // "churn" de id a cada boot (o resto do estado referencia esse id).
+      const existenteLocal = porChaveLocal.get(materialMatchKey(r));
+      return {
+        id: existenteLocal?.id || makeMaterialId(),
         origem: r.origem, alias: r.alias, categoria: r.categoria,
         importId: r.import_id || undefined,
         created: r.created_at ? new Date(r.created_at).toLocaleDateString('pt-BR') : (existenteLocal?.created || new Date().toLocaleDateString('pt-BR')),
-      });
+      };
     });
-    state.materiais = [...porChave.values()];
     invalidateMaterialLookup();
-
-    const chavesRemotas = new Set((data || []).map(materialMatchKey));
-    const naoSincronizados = local.filter(m => !chavesRemotas.has(materialMatchKey(m)));
-    if (naoSincronizados.length) await _materiaisSyncUpsertBatch(naoSincronizados);
   } catch (err) {
     console.warn('[Supabase] Falha ao buscar materiais — mantendo dados locais.', err);
   }
@@ -1063,22 +1041,19 @@ async function _filiaisSyncUpsertBatch(recs) {
 async function syncFiliaisFromSupabase() {
   try {
     const data = await fetchAllRows('filiais', 'origem, alias, cnpj, regional, import_id, created_at');
+    // O BANCO MANDA (30/07) — ver syncMateriaisFromSupabase pro mesmo motivo:
+    // o self-heal daqui desfazia exclusão feita pelo painel de Supervisão.
     const local = Array.isArray(state.filiais) ? state.filiais : [];
-    const porChave = new Map(local.map(f => [filialMatchKey(f), f]));
-    (data || []).forEach(r => {
-      const existenteLocal = porChave.get(filialMatchKey(r));
-      porChave.set(filialMatchKey(r), {
+    const porChaveLocal = new Map(local.map(f => [filialMatchKey(f), f]));
+    state.filiais = (data || []).map(r => {
+      const existenteLocal = porChaveLocal.get(filialMatchKey(r));
+      return {
         origem: r.origem, alias: r.alias, cnpj: r.cnpj, regional: r.regional,
         importId: r.import_id || undefined,
         created: r.created_at ? new Date(r.created_at).toLocaleDateString('pt-BR') : (existenteLocal?.created || new Date().toLocaleDateString('pt-BR')),
-      });
+      };
     });
-    state.filiais = [...porChave.values()];
     invalidateFilialLookup();
-
-    const chavesRemotas = new Set((data || []).map(filialMatchKey));
-    const naoSincronizados = local.filter(f => !chavesRemotas.has(filialMatchKey(f)));
-    if (naoSincronizados.length) await _filiaisSyncUpsertBatch(naoSincronizados);
   } catch (err) {
     console.warn('[Supabase] Falha ao buscar filiais — mantendo dados locais.', err);
   }

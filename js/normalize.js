@@ -117,6 +117,13 @@ function _integracoesCacheInvalidar() {
   _integracoesCache = null;
 }
 
+// Dono (user_id) por id, montado a partir do MESMO fetch que o
+// fetchMineOrIntegrated já fez — a RLS entrega ao ADM as linhas de todo
+// mundo, então esse mapa sai de graça, sem nenhuma requisição extra. É o
+// que permite a poda abaixo custar zero rede (ver o BUG REAL ali).
+// Exige `user_id` na projeção; todos os chamadores usam select '*'.
+const _donosPorTabela = {};
+
 // Filtra `rows` (já vindas do banco, sem restrição — RLS deixou passar tudo
 // pro ADM) para "meus ou já integrados". Não-admin recebe `rows` sem
 // alteração (RLS já restringiu no banco).
@@ -129,6 +136,9 @@ async function _filtrarMineOuIntegrado(table, rows) {
 
 async function fetchMineOrIntegrated(table, columns = '*') {
   const rows = await fetchAllRows(table, columns);
+  const donos = new Map();
+  for (const r of rows) if (r.id != null) donos.set(String(r.id), r.user_id);
+  _donosPorTabela[table] = donos;
   return _filtrarMineOuIntegrado(table, rows);
 }
 
@@ -139,30 +149,36 @@ async function fetchMineOrIntegrated(table, columns = '*') {
 // offline sobrevive até conseguir sincronizar. Isso significa que o filtro
 // sozinho não limpa o que já estava no cache: precisa distinguir "meu,
 // ainda não sincronizado" de "de outro dono, só ficou perdido no cache".
-// Só remove o que está CONFIRMADO no banco como de outro dono — um id que
-// não existe em lugar nenhum (candidato a pendente de sync) nunca é tocado.
-// BUG REAL (30/07): a 1ª versão mandava todos os candidatos de uma vez num
-// único `.in('id', candidatos)` — com cache local grande o bastante (ex.:
-// ADM logando pela 1ª vez depois desse filtro existir), isso virou uma URL
-// com milhares de UUIDs e estourou limite de tamanho de requisição
-// (ERR_FAILED/ERR_CONNECTION_RESET/ERR_HTTP2_PROTOCOL_ERROR, derrubando até
-// requisições concorrentes no boot). Corrigido com paginação em lotes —
-// mesmo tamanho de lote já usado pros upserts (ex.: PRODUCAO_SYNC_BATCH_SIZE).
-const _POD_PRUNE_BATCH_SIZE = 200;
-async function _podarPoluicaoLocal(table, localRows, idsRemotos, meuId) {
+//
+// BUG REAL (30/07), duas vezes seguidas, e a lição das duas:
+//   1ª versão — mandava todos os candidatos num único `.in('id', ...)`:
+//      URL com milhares de UUIDs, estourou limite de requisição
+//      (ERR_FAILED/ERR_CONNECTION_RESET), derrubando até chamadas vizinhas.
+//   2ª versão — quebrou em lotes de 200: parou de falhar, mas com os caches
+//      reais do ADM (Saídas ~560k, SAP ~600k) virou +6.000 requisições
+//      SEQUENCIAIS no boot. O app ficava minutos travado no primeiro passo
+//      da tela de carregamento. Trocar "falha rápido" por "trava" é pior.
+//   3ª e atual — ZERO requisição: o dono de cada id já veio no fetch que o
+//      fetchMineOrIntegrated fez logo acima. Perguntar de novo ao servidor
+//      o que já está na memória era o erro de fundo das duas primeiras.
+//
+// Regra: só remove o que está CONFIRMADO no banco como de outro dono. Id que
+// não aparece no fetch não existe no banco (registro local ainda não
+// sincronizado, ou volume importado que nunca vai pro Postgres) — nunca é
+// tocado.
+function _podarPoluicaoLocal(table, localRows, idsRemotos, meuId) {
   if (window.currentUser?.role !== 'admin' || !Array.isArray(localRows) || !localRows.length) return localRows;
-  const candidatos = localRows.filter(r => r.id && !idsRemotos.has(r.id)).map(r => r.id);
-  if (!candidatos.length) return localRows;
-  const confirmadosDeOutros = new Set();
-  for (let i = 0; i < candidatos.length; i += _POD_PRUNE_BATCH_SIZE) {
-    const lote = candidatos.slice(i, i + _POD_PRUNE_BATCH_SIZE);
-    const { data, error } = await window.supabaseClient
-      .from(table).select('id').in('id', lote).neq('user_id', meuId);
-    if (error) { console.warn(`[Integração] Falha ao podar cache local de ${table}:`, error); continue; }
-    (data || []).forEach(r => confirmadosDeOutros.add(r.id));
-  }
-  if (!confirmadosDeOutros.size) return localRows;
-  return localRows.filter(r => !confirmadosDeOutros.has(r.id));
+  const donos = _donosPorTabela[table];
+  if (!donos || !donos.size) return localRows; // sem fetch recente — não dá pra afirmar nada, então mantém
+  const integrados = _integracoesCache?.get(table) || new Set();
+  return localRows.filter(r => {
+    if (!r.id) return true;
+    const id = String(r.id);
+    if (idsRemotos?.has(r.id)) return true;   // já passou pelo filtro de "meu ou integrado"
+    const dono = donos.get(id);
+    if (dono === undefined) return true;      // não existe no banco — pode ser local ainda não sincronizado
+    return dono === meuId || integrados.has(id);
+  });
 }
 
 // tabela → função de resync (SUPABASE_BOOT_SYNCS em dashboard.js) — usada

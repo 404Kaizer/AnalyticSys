@@ -3927,20 +3927,14 @@ async function syncSapFechamentoOverridesFromSupabase() {
     const { data, error } = await window.supabaseClient.from('sap_fechamento_overrides').select('id, user_id, chave');
     if (error) throw error;
     const filtrado = await _filtrarMineOuIntegrado('sap_fechamento_overrides', data || []);
-    const local = Array.isArray(state.sapFechamentoOverrides) ? state.sapFechamentoOverrides : [];
-    const set = new Set(local);
-    filtrado.forEach(r => set.add(r.chave));
-    state.sapFechamentoOverrides = [...set];
+    // O BANCO MANDA (30/07). Este era o caso mais exposto do sistema: o
+    // estado local é só um conjunto de textos, sem id nem data, então unir
+    // local ∪ nuvem e reenviar o que sobrasse tornava impossível distinguir
+    // "removi este override de propósito" de "esta chave é nova aqui" — e
+    // todo override desmarcado voltava sozinho. A nuvem substitui o
+    // conjunto inteiro; erro de busca cai no catch e preserva o local.
+    state.sapFechamentoOverrides = [...new Set(filtrado.map(r => r.chave))];
     invalidateFechOverrideCache();
-
-    // Corte de produção (27/07): chaves marcadas só localmente sobem agora.
-    const remotoSet = new Set((data || []).map(r => r.chave));
-    const naoSincronizadas = local.filter(k => k && !remotoSet.has(k));
-    if (naoSincronizadas.length) {
-      const rows = naoSincronizadas.map(chave => ({ chave }));
-      const { error: upErr } = await window.supabaseClient.from('sap_fechamento_overrides').upsert(rows, { onConflict: 'user_id,chave' });
-      if (upErr) console.warn('[Supabase] Falha ao sincronizar overrides de fechamento locais:', upErr);
-    }
   } catch (err) {
     console.warn('[Supabase] Falha ao buscar overrides de fechamento — mantendo dados locais.', err);
   }

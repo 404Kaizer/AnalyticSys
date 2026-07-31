@@ -25,9 +25,13 @@ function _cascadeDeleteCloudByImportId(importId) {
 // mexer em qualquer um deles. _cbUploadModulo já ignora módulos vazios
 // e evita rodar duas vezes em paralelo, então chamar os 5 sempre é
 // barato mesmo quando só um mudou de verdade.
+// permitirReducao: true — só é chamada a partir de excluirImportacao (e do
+// seu undo), onde a queda na contagem é EXATAMENTE o que o usuário pediu.
+// Sem isso a guarda de encolhimento do cloud-backup bloquearia o envio e o
+// lote excluído voltaria na próxima restauração.
 function _cbReforcarBackupModulos() {
   if (typeof _cbUploadModulo !== 'function' || typeof CLOUD_BACKUP_MODULOS === 'undefined') return;
-  CLOUD_BACKUP_MODULOS.forEach(modulo => _cbUploadModulo(modulo));
+  CLOUD_BACKUP_MODULOS.forEach(modulo => _cbUploadModulo(modulo, { permitirReducao: true }));
 }
 
 // snapshots: { filiais, materiais, lancamentos, entradas, saidas, producao }
@@ -194,7 +198,8 @@ function excluirProducao(absIndex) {
       // Reforça o backup condensado na hora (30/07) — ver removerRegistro
       // (dashboard.js) pro mesmo motivo: sem isso, um registro importado
       // excluído só some localmente até o próximo reforço periódico (até 3h).
-      if (typeof _cbUploadModulo === 'function') _cbUploadModulo('producao');
+      // permitirReducao: a contagem cair é o próprio objetivo da exclusão.
+      if (typeof _cbUploadModulo === 'function') _cbUploadModulo('producao', { permitirReducao: true });
     },
 
     undo: () => {
@@ -666,26 +671,31 @@ function _importsSyncDelete(importId) {
     .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao excluir log de importação na nuvem:', error); });
 }
 
-// Busca no boot — merge por id (o próprio importId), nuvem tem prioridade
-// em conflito. Depois do merge, sincronização inicial: registros locais
-// definitivos ('Processando' fica de fora, é estado transitório) que ainda
-// não existem na nuvem sobem agora — mesmo padrão de Lançamentos/Filiais/
-// Materiais.
+// Busca no boot — O BANCO MANDA (30/07). Antes isto fundia local ∪ nuvem e
+// reenviava o que sobrasse só local ("Corte de produção 27/07"), o que
+// transformava toda exclusão feita pelo painel de Supervisão em ida e volta:
+// o registro era apagado no banco e o próprio navegador do supervisor o
+// reenviava no boot seguinte. Confirmado no activity_log: 134 exclusões às
+// 00:11, 128 delas de volta às 00:12, mesmo usuário.
+// Agora a nuvem substitui o local; um erro de busca preserva o local
+// (ver dado velho é aceitável, tela vazia por falha de rede não é).
 async function syncImportsFromSupabase() {
   if (!window.supabaseClient) return;
   try {
     const data = await fetchMineOrIntegrated('imports');
+    // Chegar aqui já significa busca COMPLETA e bem-sucedida: fetchAllRows
+    // lança em qualquer erro de página. Só sob essa garantia o banco pode
+    // substituir o local — num erro, o catch abaixo preserva o que já tem.
     const remoto = (data || []).map(_importsFromDbRow);
-    const idsRemotos = new Set(remoto.map(r => r.id));
 
+    // 'Processando' é estado transitório que de propósito nunca sobe pro
+    // banco. Substituir cru faria a importação em andamento sumir da tela
+    // no meio do processo.
     const local = Array.isArray(state.imports) ? state.imports : [];
-    const porId = new Map(local.filter(r => r.id).map(r => [r.id, r]));
-    remoto.forEach(r => porId.set(r.id, r));
-    const podado = await _podarPoluicaoLocal('imports', [...porId.values()], idsRemotos, window.currentUser?.id);
-    state.imports = podado.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    const emAndamento = local.filter(r => r.status === 'Processando');
 
-    const naoSincronizados = local.filter(r => r.id && r.status !== 'Processando' && !idsRemotos.has(r.id));
-    naoSincronizados.forEach(_importsSyncUpsert);
+    state.imports = [...emAndamento, ...remoto]
+      .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   } catch (err) {
     console.warn('[Supabase] Falha ao buscar log de importações — mantendo dados locais.', err);
   }

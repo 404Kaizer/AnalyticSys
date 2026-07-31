@@ -157,15 +157,16 @@ async function syncOcorrenciasFromSupabase() {
 
     const local = Array.isArray(state.ocorrencias) ? state.ocorrencias : [];
     const remoto = (data || []).map(_ocFromDbRow);
-    const porChave = new Map(local.map(o => [chave(o), o]));
-    remoto.forEach(o => porChave.set(chave(o), o));
-    state.ocorrencias = [...porChave.values()];
 
+    // O BANCO MANDA (30/07): antes isto fundia local ∪ nuvem e reenviava as
+    // ocorrências que só existiam local, desfazendo exclusão feita em outro
+    // dispositivo ou pelo painel de Supervisão.
+    // Exceção necessária: ocorrência criada nesta sessão que ainda não
+    // completou o round-trip (sem userId resolvido) ainda não está na nuvem
+    // — descartá-la apagaria trabalho recém-feito na tela do usuário.
     const chavesRemotas = new Set(remoto.map(chave));
-    const naoSincronizadas = local.filter(o => o.id && !chavesRemotas.has(chave(o)));
-    for (const o of naoSincronizadas) {
-      if (typeof _ocSyncUpsert === 'function') await _ocSyncUpsert(o);
-    }
+    const aindaSubindo = local.filter(o => o.id && !o.userId && !chavesRemotas.has(chave(o)));
+    state.ocorrencias = [...remoto, ...aindaSubindo];
   } catch (err) {
     console.warn('[Supabase] Falha ao buscar ocorrencias — mantendo dados locais.', err);
   }

@@ -97,15 +97,10 @@ async function syncAjustesSistemicosFromSupabase() {
       material: r.material, tipoMovimentoSap: r.tipo_movimento_sap, objetivo: r.objetivo,
       operador: r.operador, sapDocumento: r.sap_documento,
     }));
-    const local = Array.isArray(state.ajustesSistemicos) ? state.ajustesSistemicos : [];
-    const porId = new Map(local.map(d => [d.id, d]));
-    remoto.forEach(d => porId.set(d.id, d));
-    const idsRemotos = new Set(remoto.map(d => d.id));
-    state.ajustesSistemicos = await _podarPoluicaoLocal('ajustes_sistemicos', [...porId.values()], idsRemotos, window.currentUser?.id);
-
-    // Corte de produção (27/07): DAIs criados só local sobem agora.
-    const naoSincronizados = local.filter(d => d.id && !idsRemotos.has(d.id));
-    naoSincronizados.forEach(d => { if (typeof _daiSyncUpsert === 'function') _daiSyncUpsert(d); });
+    // O BANCO MANDA (30/07): o self-heal que existia aqui reenviava DAI
+    // apagado, desfazendo a exclusão no boot seguinte. A nuvem substitui;
+    // erro de busca cai no catch e preserva o local.
+    state.ajustesSistemicos = remoto;
   } catch (err) {
     console.warn('[Supabase] Falha ao buscar DAIs — mantendo dados locais.', err);
   }

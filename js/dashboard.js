@@ -4669,8 +4669,11 @@ function removerRegistro(module, index) {
   // pós-importação e o reforço periódico (até 3h de atraso) atualizavam
   // este snapshot; excluir um registro importado só sumia localmente até
   // lá, deixando a cópia na nuvem com o registro já excluído por horas.
+  // permitirReducao: a contagem cair é o próprio objetivo da exclusão — sem
+  // isso a guarda de encolhimento bloquearia o envio e o registro excluído
+  // voltaria na próxima restauração.
   if (typeof _cbUploadModulo === 'function' && typeof CLOUD_BACKUP_MODULOS !== 'undefined' && CLOUD_BACKUP_MODULOS.includes(module)) {
-    _cbUploadModulo(module);
+    _cbUploadModulo(module, { permitirReducao: true });
   }
 }
 
