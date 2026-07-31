@@ -88,10 +88,15 @@ async function fetchAllRows(table, columns = '*') {
 // o ADM só deve ver: (1) os próprios registros, (2) registros de outros que
 // ele explicitamente aceitou integrar (tabela record_integrations). Usuário
 // comum não muda nada — a RLS dele já é só `user_id = auth.uid()`.
+// `ocorrencias` entrou em 31/07: até então era exceção deliberada (28/07),
+// com o ADM puxando as ocorrências de todo mundo pro próprio estado. A RLS
+// já restringe o usuário comum às dele (user_id OR co_owners OR is_admin),
+// então esta lista muda o comportamento apenas do ADM.
 const RECORD_INTEGRATION_TABLES = [
   'lancamentos', 'entradas', 'saidas', 'sap', 'producao',
   'ajustes_sistemicos', 'notas_ajuste', 'ajustes_excluidos',
   'inv_justificativas', 'sap_fechamento_overrides', 'imports',
+  'ocorrencias',
 ];
 
 let _integracoesCache = null; // Map<table_name, Set<row_id>> — um fetch por boot, invalidado ao aceitar
@@ -196,6 +201,7 @@ const RECORD_INTEGRATION_RESYNC = {
   inv_justificativas: 'syncInvJustificativasFromSupabase',
   sap_fechamento_overrides: 'syncSapFechamentoOverridesFromSupabase',
   imports: 'syncImportsFromSupabase',
+  ocorrencias: 'syncOcorrenciasFromSupabase',
 };
 
 async function integrarRegistro(tableName, rowId) {

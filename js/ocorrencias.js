@@ -138,10 +138,16 @@ async function syncOcorrenciasFromSupabase() {
     // aqui tinha o mesmo risco já corrigido em Lançamentos/Entradas (teto de
     // 1000 linhas do PostgREST). Ordem de chegada não importa: a tela
     // sempre reordena via getOcorrenciasFiltradas() antes de renderizar.
-    // SEM FILTRO por dono de propósito — decisão de 28/07 ("Redefinição da
-    // Visão de ADM"): Ocorrências continua mostrando todo mundo pro ADM,
-    // ao contrário dos 5 módulos grandes.
-    const data = await fetchAllRows('ocorrencias');
+    // FILTRO POR DONO (31/07) — reverte a exceção de 28/07 ("Redefinição da
+    // Visão de ADM"), que deixava o ADM puxar as ocorrências de todo mundo
+    // pro próprio estado e poluía a conta dele. Agora Ocorrências segue a
+    // mesma regra dos demais módulos: as minhas + as que o ADM aceitou
+    // integrar (record_integrations).
+    // Para o usuário COMUM nada muda: a RLS da tabela já o restringe às
+    // dele (user_id OR co_owners OR is_admin) — quem enxergava tudo era só
+    // o ADM, via is_admin(). A tela de Supervisão continua vendo tudo, que
+    // é o lugar certo pra visão completa.
+    const data = await fetchMineOrIntegrated('ocorrencias');
 
     // CORREÇÃO (28/07) — bug de colisão de ids entre contas: mesclar só
     // por `id` deixava uma ocorrência de OUTRA conta sobrescrever a minha
