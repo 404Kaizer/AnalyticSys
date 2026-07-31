@@ -1407,6 +1407,7 @@ function ocToggleMicroFilter(key) {
       _ocCloseMicroFilterDropdown(otherKey);
     }
   });
+  _ocCloseOrdenarDropdown(); // só um dropdown aberto por vez na barra inteira
   const isOpen = dd.classList.toggle('open');
   chev.classList.toggle('open', isOpen);
   if (isOpen) {
@@ -1496,7 +1497,80 @@ document.addEventListener('click', e => {
       }
     }
   });
+  const ordenarGroup = document.getElementById('omfg-ordenar');
+  if (ordenarGroup && !ordenarGroup.contains(e.target)) _ocCloseOrdenarDropdown();
 });
+
+// Ordenação (31/07) — padrão é DATA DE ABERTURA (dataAbertura — quando a
+// ocorrência/DAI foi aberta, não quando o registro entrou no sistema), da
+// mais nova pra mais antiga. dataAbertura é string "AAAA-MM-DD", por isso
+// localeCompare em vez de subtração numérica (mesmo formato/comparação já
+// usada em dataLimite no modo "prioridade"). O antigo comportamento
+// (vencida/urgente primeiro) vira só mais uma opção no seletor.
+const OC_SORT_OPTIONS = [
+  { value: 'abertura_desc', label: 'Mais recentes primeiro' },
+  { value: 'abertura_asc',  label: 'Mais antigas primeiro' },
+  { value: 'prioridade',    label: 'Prioridade (vencidas primeiro)' },
+];
+// 31/07: virou um dropdown no mesmo padrão visual dos filtros (pill +
+// chevron + opções), não mais um <select> nativo destoando dos outros
+// botões — mesmo padrão de "dropdown simples" (seleção única, sem
+// Aplicar/Cancelar) já usado em Inventário pra Justificativa/Divergências
+// (ver invSetJustificativa/invToggleJustificativaDropdown).
+let _ocSortMode = 'abertura_desc';
+
+function _ocSyncOrdenarBtn() {
+  const btn = document.getElementById('omft-ordenar');
+  const label = document.getElementById('omft-ordenar-label');
+  if (!btn || !label) return;
+  const isDefault = _ocSortMode === 'abertura_desc';
+  const opt = OC_SORT_OPTIONS.find(o => o.value === _ocSortMode);
+  label.textContent = isDefault ? 'Ordenar' : (opt?.label || 'Ordenar');
+  btn.classList.toggle('active', !isDefault);
+  document.querySelectorAll('#omfd-ordenar .micro-filter-option--radio').forEach(el => {
+    el.classList.toggle('selected', el.dataset.val === _ocSortMode);
+  });
+}
+
+function _ocCloseOrdenarDropdown() {
+  document.getElementById('omfd-ordenar')?.classList.remove('open');
+  document.getElementById('omfc-ordenar')?.classList.remove('open');
+}
+
+function ocToggleOrdenarDropdown() {
+  const dd = document.getElementById('omfd-ordenar');
+  const chev = document.getElementById('omfc-ordenar');
+  if (!dd) return;
+  // Fecha os dropdowns de filtro se algum estiver aberto (mesmo cuidado
+  // do lado deles em relação a este) — revertendo pending não aplicado.
+  ['status', 'central', 'material', 'regional'].forEach(key => {
+    const otherDd = document.getElementById(`omfd-${key}`);
+    if (otherDd?.classList.contains('open')) {
+      _ocMicroFilter.pending[key] = new Set(_ocMicroFilter.applied[key]);
+      _ocCloseMicroFilterDropdown(key);
+    }
+  });
+  const isOpen = dd.classList.toggle('open');
+  chev?.classList.toggle('open', isOpen);
+}
+
+function ocSetOrdenar(value) {
+  _ocSortMode = value;
+  _ocSyncOrdenarBtn();
+  _ocCloseOrdenarDropdown();
+  renderOcorrencias();
+}
+
+function _ocCompararOrdenacao(a, b, sortMode) {
+  if (sortMode === 'abertura_asc') return (a.dataAbertura || '').localeCompare(b.dataAbertura || '');
+  if (sortMode === 'prioridade') {
+    const sa = ocStatusLabel(a), sb = ocStatusLabel(b);
+    const order = { vencida: 0, urgente: 1, ajuste_sistemico_pendente: 2, normal: 3, inconclusiva: 4, 'concluída': 5, ajuste_sistemico: 6 };
+    if (order[sa] !== order[sb]) return order[sa] - order[sb];
+    return (a.dataLimite || '').localeCompare(b.dataLimite || '');
+  }
+  return (b.dataAbertura || '').localeCompare(a.dataAbertura || ''); // 'abertura_desc' (padrão)
+}
 
 function getOcorrenciasFiltradas() {
   const fStatus   = _ocMicroFilter.applied.status;
@@ -1504,6 +1578,7 @@ function getOcorrenciasFiltradas() {
   const fMaterial = _ocMicroFilter.applied.material;
   const fRegional = _ocMicroFilter.applied.regional;
   const fBusca    = (document.getElementById('oc-filter-busca')?.value || '').toLowerCase();
+  const sortMode  = _ocSortMode;
   // Só resolve o mapa central→regional se o filtro estiver mesmo em uso —
   // evita varrer state.filiais à toa em toda renderização.
   const mapaRegional = fRegional.size ? _ocRegionalPorCentral() : null;
@@ -1521,12 +1596,7 @@ function getOcorrenciasFiltradas() {
       if (!hay.includes(fBusca)) return false;
     }
     return true;
-  }).sort((a, b) => {
-    const sa = ocStatusLabel(a), sb = ocStatusLabel(b);
-    const order = { vencida: 0, urgente: 1, ajuste_sistemico_pendente: 2, normal: 3, inconclusiva: 4, 'concluída': 5, ajuste_sistemico: 6 };
-    if (order[sa] !== order[sb]) return order[sa] - order[sb];
-    return (a.dataLimite || '').localeCompare(b.dataLimite || '');
-  });
+  }).sort((a, b) => _ocCompararOrdenacao(a, b, sortMode));
 }
 
 function _renderOcLista(lista) {
@@ -1771,14 +1841,6 @@ function closeOcDetailModal() {
   document.getElementById('oc-detail-modal')?.classList.remove('open');
 }
 
-// Formata um material cadastrado em Configurações como "GRUPO SAP: ORIGINAL"
-function formatMaterialCadastro(m) {
-  const origem = String(m?.origem || '').trim();
-  const alias  = String(m?.alias  || '').trim();
-  if (alias && origem) return `${alias}: ${origem}`;
-  return alias || origem;
-}
-
 // ── Populares opções de filtro ────────────────────────────
 function populateOcFiltros() {
   const centrais  = [...new Set((state.ocorrencias || []).map(o => o.central).filter(Boolean))].sort();
@@ -1808,6 +1870,7 @@ function populateOcFiltros() {
     _ocSyncTriggerLabel(key);
   });
   _ocSyncClearBtn();
+  _ocSyncOrdenarBtn();
 
   // Centrais do cadastro: campo "origem" (código/nome da central) — só pro
   // formulário de Nova Ocorrência (mCentral abaixo), que continua
@@ -1816,12 +1879,14 @@ function populateOcFiltros() {
     .map(f => (f.alias || f.origem || '').trim())
     .filter(Boolean)
     .sort();
-  // Materiais do cadastro: "GRUPO SAP: ORIGINAL" — 31/07: o formulário de
-  // Nova Ocorrência passa a oferecer SÓ o que está cadastrado em
+  // Materiais do cadastro — 31/07: só o GRUPO (alias), não mais
+  // "GRUPO: NOME ORIGINAL". Cai pro nome original só se o cadastro não
+  // tiver alias preenchido (registro incompleto, melhor mostrar algo do
+  // que nada). O formulário de Nova Ocorrência oferece SÓ o cadastrado em
   // Configurações (sem mesclar com materiais digitados livremente em
   // ocorrências antigas), pra não deixar escolher algo fora do catálogo.
   const stMateriais = [...new Set((state.materiais || [])
-    .map(formatMaterialCadastro)
+    .map(m => (m.alias || m.origem || '').trim())
     .filter(Boolean))].sort();
 
   const mCentral  = document.getElementById('oc-form-central');
@@ -2246,6 +2311,8 @@ Object.assign(window, {
   ocCancelMicroFilter,
   ocClearMicroFilter,
   ocClearAllMicroFilters,
+  ocToggleOrdenarDropdown,
+  ocSetOrdenar,
   ocStatusMatches,
   _ocMicroFilter,
   renderOcorrenciasPage,

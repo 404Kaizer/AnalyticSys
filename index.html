@@ -2910,6 +2910,36 @@
               </div>
             </div>
 
+            <div class="micro-filter-divider"></div>
+
+            <!-- Ordenar (31/07) — padrão é abertura mais recente primeiro. Mesmo
+                 padrão visual dos outros filtros (pill + dropdown), seleção
+                 única sem Aplicar/Cancelar (ver Justificativa/Divergências
+                 em Inventário — invSetJustificativa/invToggleJustificativaDropdown). -->
+            <div class="micro-filter-group" id="omfg-ordenar">
+              <button class="micro-filter-trigger" id="omft-ordenar" onclick="ocToggleOrdenarDropdown()">
+                <i class="ti ti-arrows-sort"></i>
+                <span id="omft-ordenar-label">Ordenar</span>
+                <i class="ti ti-chevron-down micro-filter-chev" id="omfc-ordenar"></i>
+              </button>
+              <div class="micro-filter-dropdown" id="omfd-ordenar">
+                <div class="micro-filter-options">
+                  <div class="micro-filter-option micro-filter-option--radio" data-val="abertura_desc" onclick="ocSetOrdenar('abertura_desc')">
+                    <span class="micro-filter-option-label">Mais recentes primeiro</span>
+                    <i class="ti ti-check micro-filter-option-check"></i>
+                  </div>
+                  <div class="micro-filter-option micro-filter-option--radio" data-val="abertura_asc" onclick="ocSetOrdenar('abertura_asc')">
+                    <span class="micro-filter-option-label">Mais antigas primeiro</span>
+                    <i class="ti ti-check micro-filter-option-check"></i>
+                  </div>
+                  <div class="micro-filter-option micro-filter-option--radio" data-val="prioridade" onclick="ocSetOrdenar('prioridade')">
+                    <span class="micro-filter-option-label">Prioridade (vencidas primeiro)</span>
+                    <i class="ti ti-check micro-filter-option-check"></i>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <button class="btn micro-filter-clear" id="oc-mf-clear-btn" onclick="ocClearAllMicroFilters()" style="display:none">
               <i class="ti ti-filter-off"></i> Limpar Filtros
             </button>
@@ -3078,6 +3108,14 @@
                 <button class="btn" title="Buscar" onclick="adminBuscarModulo()"><i class="ti ti-search"></i></button>
                 <button class="btn" title="Limpar busca" onclick="adminLimparBuscaModulo()"><i class="ti ti-x"></i></button>
                 <button class="btn" onclick="adminLoadModulo()"><i class="ti ti-refresh"></i> Atualizar</button>
+                <!-- Botão único de exclusão (31/07) — substitui os dois
+                     botões que só apareciam com um usuário filtrado no
+                     banner abaixo ("Excluir tudo"/"Resetar dados locais").
+                     Fica sempre visível aqui e abre um modal onde o ADM
+                     escolhe ação (local/nuvem/ambos) + usuário(s) +
+                     módulo(s), em vez de depender do filtro ativo. Ver
+                     adminAbrirExclusaoMassa, admin.js. -->
+                <button class="btn btn-sm admin-btn-danger" onclick="adminAbrirExclusaoMassa()"><i class="ti ti-trash"></i> Excluir dados</button>
               </div>
             </div>
             <!-- Filtro por dono (30/07) — clicar no e-mail da coluna "Dono"
@@ -3087,12 +3125,6 @@
             <div class="admin-lote-bar" id="admin-dono-filtro-banner" style="display:none">
               <span id="admin-dono-filtro-label"><i class="ti ti-filter"></i></span>
               <div class="admin-lote-actions">
-                <button class="btn btn-sm admin-btn-danger" id="admin-dono-filtro-excluir" onclick="adminExcluirTudoDono()"><i class="ti ti-trash"></i> Excluir tudo deste usuário neste módulo</button>
-                <!-- Só aparece nos 5 módulos híbridos (Fase 4) — ver
-                     _adminAtualizarBannerDono/CLOUD_BACKUP_MODULOS. Apaga
-                     Postgres+Storage e sinaliza o navegador do usuário a
-                     limpar o volume importado que só existe localmente. -->
-                <button class="btn btn-sm admin-btn-danger" id="admin-dono-filtro-reset-local" style="display:none" onclick="adminResetarDadosLocaisDono()"><i class="ti ti-device-floppy"></i> Resetar dados locais deste usuário</button>
                 <button class="btn btn-sm admin-btn-ghost" onclick="adminLimparFiltroDono()">Limpar filtro</button>
               </div>
             </div>
@@ -3590,6 +3622,57 @@
     <div class="form-actions">
       <button class="btn" onclick="closeModal('admin-lote-edit-modal')">Cancelar</button>
       <button class="btn btn-primary" onclick="adminAplicarEdicaoLote()"><i class="ti ti-check"></i> Pré-visualizar e aplicar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal de exclusão em massa (31/07) — botão único "Excluir dados" no
+     cabeçalho de "Dados por módulo" (sempre visível, sem depender de
+     filtro por usuário ativo). ADM escolhe aqui a ação (dados locais e/ou
+     dados da nuvem), um ou mais usuários e um ou mais módulos; a
+     confirmação de verdade acontece depois, no modal-confirm-destrutivo
+     (ver adminConfirmarExclusaoMassa, admin.js). -->
+<div class="modal-overlay" id="admin-excluir-massa-modal">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-title"><i class="ti ti-trash"></i> Excluir dados</div>
+    <div class="modal-sub">Escolha a ação, os usuários e os módulos afetados.</div>
+    <div style="display:flex;flex-direction:column;gap:16px;margin-top:4px">
+      <div class="form-group" style="margin-bottom:0">
+        <label class="form-label">Ação</label>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+            <input type="checkbox" id="adminex-acao-local" style="width:15px;height:15px">
+            <span style="font-size:12.5px">Dados locais (navegador — só existe nos módulos híbridos: Lançamentos, Produção, Entradas, Saídas, SAP)</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+            <input type="checkbox" id="adminex-acao-nuvem" style="width:15px;height:15px">
+            <span style="font-size:12.5px">Dados da nuvem (banco)</span>
+          </label>
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:0">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <label class="form-label" style="margin-bottom:0">Usuários</label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text3);cursor:pointer">
+            <input type="checkbox" onchange="adminExclusaoMassaToggleTodos('adminex-usuario', this.checked)" style="width:13px;height:13px"> Selecionar todos
+          </label>
+        </div>
+        <div id="adminex-usuarios" style="max-height:150px;overflow-y:auto;border:1px solid var(--border2);border-radius:var(--radius);padding:8px 10px;margin-top:6px"></div>
+      </div>
+      <div class="form-group" style="margin-bottom:0">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <label class="form-label" style="margin-bottom:0">Módulos</label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text3);cursor:pointer">
+            <input type="checkbox" onchange="adminExclusaoMassaToggleTodos('adminex-modulo', this.checked)" style="width:13px;height:13px"> Selecionar todos
+          </label>
+        </div>
+        <div id="adminex-modulos" style="max-height:150px;overflow-y:auto;border:1px solid var(--border2);border-radius:var(--radius);padding:8px 10px;margin-top:6px"></div>
+      </div>
+    </div>
+    <div id="adminex-error" style="display:none;color:var(--red);font-size:12px;margin-top:10px"></div>
+    <div class="form-actions">
+      <button class="btn" onclick="closeModal('admin-excluir-massa-modal')">Cancelar</button>
+      <button class="btn btn-primary" onclick="adminConfirmarExclusaoMassa()"><i class="ti ti-check"></i> Continuar</button>
     </div>
   </div>
 </div>

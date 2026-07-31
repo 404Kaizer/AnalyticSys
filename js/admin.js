@@ -298,56 +298,13 @@ function _adminPopularSelectDono() {
     usuarios.map(u => `<option value="${u.id}" ${u.id === atualId ? 'selected' : ''}>${_adminEsc(u.email)}</option>`).join('');
 }
 
-function _adminAtualizarBannerDono(cfg) {
+function _adminAtualizarBannerDono() {
   const banner = document.getElementById('admin-dono-filtro-banner');
   const label = document.getElementById('admin-dono-filtro-label');
-  const btnExcluir = document.getElementById('admin-dono-filtro-excluir');
-  const btnResetLocal = document.getElementById('admin-dono-filtro-reset-local');
   if (!banner) return;
   if (!_adminDonoFiltro) { banner.style.display = 'none'; return; }
   banner.style.display = 'flex';
   if (label) label.textContent = `Filtrando por usuário: ${_adminDonoFiltro.email}`;
-  if (btnExcluir) btnExcluir.style.display = cfg?.readOnly ? 'none' : '';
-  // "Resetar dados locais" só faz sentido nos 5 módulos híbridos (Fase 4) —
-  // os únicos onde o volume importado em lote vive só no navegador do
-  // usuário, fora do alcance de "Excluir tudo deste usuário" (que só apaga
-  // Postgres). Ver CLOUD_BACKUP_MODULOS (cloud-backup.js).
-  const modulo = document.getElementById('admin-modulo-select')?.value;
-  if (btnResetLocal) {
-    btnResetLocal.style.display = (typeof CLOUD_BACKUP_MODULOS !== 'undefined' && CLOUD_BACKUP_MODULOS.includes(modulo)) ? '' : 'none';
-  }
-}
-
-// "Excluir tudo deste usuário neste módulo" — equivalente ao "excluir
-// pasta inteira" do navegador de Storage: apaga de uma vez TODOS os
-// registros que batem no filtro por dono atual (+ busca de texto, se
-// houver alguma combinada), sem precisar selecionar linha por linha.
-function adminExcluirTudoDono() {
-  const modulo = document.getElementById('admin-modulo-select')?.value;
-  const cfg = ADMIN_MODULOS[modulo];
-  if (!cfg || cfg.readOnly || !_adminDonoFiltro) return;
-
-  const totalTxt = _adminPageTotal !== null ? `${_adminPageTotal.toLocaleString('pt-BR')} ` : '';
-  const buscaTxt = _adminSearchTerm ? ` que batem na busca "${_adminEsc(_adminSearchTerm)}"` : '';
-
-  confirmarDestrutivo({
-    title: 'Confirmar exclusão por usuário',
-    sub: cfg.label,
-    body: `Você está prestes a excluir permanentemente ${totalTxt}registro(s) de <strong>${_adminEsc(_adminDonoFiltro.email)}</strong> na tabela <strong>${_adminEsc(cfg.label)}</strong>${buscaTxt}. Esta ação não pode ser desfeita.`,
-    confirmLabel: 'Excluir tudo deste usuário',
-    requireConsent: true,
-    consentLabel: `Entendo que isso apaga permanentemente os registros de ${_adminDonoFiltro.email} nesta tabela.`,
-    onConfirm: async () => {
-      let query = window.supabaseClient.from(modulo).delete();
-      query = _adminAplicarFiltros(query, modulo, cfg);
-      query = _adminExcluirDaiDoLote(query, modulo);
-      const { error } = await query;
-      if (error) { toast('Falha ao excluir: ' + _adminErroDetalhe(error), 'error'); return; }
-      toast('Registros excluídos.', 'success');
-      adminLimparSelecao();
-      adminLoadModulo();
-    },
-  });
 }
 
 // ── Reset de dados locais (módulos híbridos) ────────────────────────────
@@ -385,27 +342,131 @@ async function _adminResetarDadosLocaisModulo(userId, modulo) {
   return true;
 }
 
-function adminResetarDadosLocaisDono() {
-  const modulo = document.getElementById('admin-modulo-select')?.value;
-  if (!modulo || typeof CLOUD_BACKUP_MODULOS === 'undefined' || !CLOUD_BACKUP_MODULOS.includes(modulo) || !_adminDonoFiltro) return;
-  const label = ADMIN_MODULOS[modulo]?.label || modulo;
-  const email = _adminDonoFiltro.email;
+// Exclusão simples no Postgres (só a tabela do módulo, sem tocar Storage/
+// local) — usada pela ação "nuvem" do modal de exclusão em massa abaixo, e
+// equivalente ao que era antes "Excluir tudo deste usuário neste módulo".
+async function _adminExcluirNuvemModulo(userId, modulo) {
+  const cfg = ADMIN_MODULOS[modulo];
+  if (!cfg || cfg.readOnly) return true; // nada a fazer — não é erro
+  let query = window.supabaseClient.from(modulo).delete().eq('user_id', userId);
+  query = _adminExcluirDaiDoLote(query, modulo);
+  const { error } = await query;
+  if (error) { toast(`Falha ao excluir ${cfg.label}: ` + _adminErroDetalhe(error), 'error'); return false; }
+  return true;
+}
+
+// ── Exclusão em massa (31/07) ───────────────────────────────────────────
+// Botão único "Excluir dados", sempre visível no cabeçalho de "Dados por
+// módulo" — substitui os dois botões que só apareciam com um usuário
+// filtrado ("Excluir tudo deste usuário"/"Resetar dados locais"). Aqui o
+// ADM escolhe a ação, um ou mais usuários e um ou mais módulos de uma vez.
+async function adminAbrirExclusaoMassa() {
+  if (!_adminProfiles.length) {
+    const { data } = await window.supabaseClient.from('profiles').select('id, email');
+    _adminProfiles = data || [];
+  }
+  const usuarios = _adminProfiles.slice().sort((a, b) => (a.email || '').localeCompare(b.email || ''));
+  const usuariosWrap = document.getElementById('adminex-usuarios');
+  if (usuariosWrap) {
+    usuariosWrap.innerHTML = usuarios.map(u => `<label style="display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer">
+      <input type="checkbox" class="adminex-usuario" value="${u.id}" style="width:15px;height:15px">
+      <span style="font-size:12.5px">${_adminEsc(u.email)}</span>
+    </label>`).join('') || `<span style="font-size:12px;color:var(--text3)">Nenhum usuário cadastrado.</span>`;
+  }
+
+  const modulosWrap = document.getElementById('adminex-modulos');
+  if (modulosWrap) {
+    modulosWrap.innerHTML = Object.entries(ADMIN_MODULOS).map(([key, cfg]) => `<label style="display:flex;align-items:center;gap:8px;padding:4px 0;${cfg.readOnly ? 'opacity:.5' : 'cursor:pointer'}">
+      <input type="checkbox" class="adminex-modulo" value="${key}" ${cfg.readOnly ? 'disabled title="Somente leitura — sem exclusão"' : ''} style="width:15px;height:15px">
+      <span style="font-size:12.5px">${_adminEsc(cfg.label)}</span>
+    </label>`).join('');
+  }
+
+  const acaoLocal = document.getElementById('adminex-acao-local');
+  const acaoNuvem = document.getElementById('adminex-acao-nuvem');
+  if (acaoLocal) acaoLocal.checked = false;
+  if (acaoNuvem) acaoNuvem.checked = false;
+  const errEl = document.getElementById('adminex-error');
+  if (errEl) errEl.style.display = 'none';
+  openModal('admin-excluir-massa-modal');
+}
+
+// Handler dos checkboxes "Selecionar todos" (usuários/módulos) — ignora
+// opções desabilitadas (módulos readOnly, sem policy de DELETE no banco).
+function adminExclusaoMassaToggleTodos(className, checked) {
+  document.querySelectorAll(`#admin-excluir-massa-modal .${className}:not(:disabled)`).forEach(el => { el.checked = checked; });
+}
+
+// Lê as escolhas do modal, valida e passa pra confirmação destrutiva de
+// verdade (confirmarDestrutivo, format.js) antes de executar qualquer coisa.
+function adminConfirmarExclusaoMassa() {
+  const modal = document.getElementById('admin-excluir-massa-modal');
+  const acaoLocal = document.getElementById('adminex-acao-local')?.checked;
+  const acaoNuvem = document.getElementById('adminex-acao-nuvem')?.checked;
+  const userIds = [...modal.querySelectorAll('.adminex-usuario:checked')].map(el => el.value);
+  const modulos = [...modal.querySelectorAll('.adminex-modulo:checked')].map(el => el.value);
+
+  const errEl = document.getElementById('adminex-error');
+  const erro = !acaoLocal && !acaoNuvem ? 'Selecione ao menos uma ação (dados locais e/ou dados da nuvem).'
+    : !userIds.length ? 'Selecione ao menos um usuário.'
+    : !modulos.length ? 'Selecione ao menos um módulo.'
+    : null;
+  if (erro) {
+    if (errEl) { errEl.textContent = erro; errEl.style.display = 'block'; }
+    return;
+  }
+  if (errEl) errEl.style.display = 'none';
+
+  const emails = userIds.map(id => _adminProfiles.find(p => p.id === id)?.email || id);
+  const labels = modulos.map(m => ADMIN_MODULOS[m]?.label || m);
+  // "Dados locais" só existe nos módulos híbridos (CLOUD_BACKUP_MODULOS) —
+  // se algum módulo escolhido não é híbrido e só "local" está marcado, não
+  // há nada a apagar ali (avisado no corpo da confirmação, não silenciado).
+  const semLocal = modulos.filter(m => !(typeof CLOUD_BACKUP_MODULOS !== 'undefined' && CLOUD_BACKUP_MODULOS.includes(m)));
+  const ignorados = acaoLocal && !acaoNuvem ? semLocal : [];
+
+  const acaoTxt = acaoLocal && acaoNuvem ? 'os dados locais E os dados da nuvem' : acaoLocal ? 'os dados locais' : 'os dados da nuvem';
+
+  closeModal('admin-excluir-massa-modal');
 
   confirmarDestrutivo({
-    title: 'Resetar dados locais deste usuário',
-    sub: label,
-    body: `Isso apaga <strong>permanentemente</strong>, para <strong>${_adminEsc(email)}</strong>, os registros de ${_adminEsc(label)} no banco e a cópia de segurança no Storage — e sinaliza o navegador dele pra apagar também o volume importado em lote que existe SÓ localmente (não aparece nesta tela). A limpeza local só é aplicada na próxima vez que ${_adminEsc(email)} abrir o sistema, ou na hora, se a sessão dele estiver aberta agora. Esta ação não pode ser desfeita.`,
-    confirmLabel: 'Resetar dados locais',
+    title: 'Confirmar exclusão em massa',
+    sub: `${userIds.length} usuário(s) · ${modulos.length} módulo(s)`,
+    body: `Você está prestes a excluir permanentemente <strong>${_adminEsc(acaoTxt)}</strong> de <strong>${_adminEsc(emails.join(', '))}</strong>, nos módulos: <strong>${_adminEsc(labels.join(', '))}</strong>.`
+      + (ignorados.length ? `<br><br>"Dados locais" não existe fora dos módulos híbridos — nada será apagado em <strong>${_adminEsc(ignorados.map(m => ADMIN_MODULOS[m]?.label || m).join(', '))}</strong>.` : '')
+      + ` Esta ação não pode ser desfeita.`,
+    confirmLabel: 'Excluir dados',
     requireConsent: true,
-    consentLabel: `Entendo que isso apaga permanentemente os dados de ${email} em ${label} no banco, no Storage, e sinaliza a limpeza do navegador dele.`,
-    onConfirm: async () => {
-      const ok = await _adminResetarDadosLocaisModulo(_adminDonoFiltro.id, modulo);
-      if (!ok) return;
-      toast('Dados locais resetados — será aplicado no navegador do usuário no próximo acesso.', 'success');
-      adminLimparSelecao();
-      adminLoadModulo();
-    },
+    consentLabel: 'Entendo que isso apaga permanentemente os dados selecionados.',
+    onConfirm: () => _adminExecutarExclusaoMassa(userIds, modulos, acaoLocal, acaoNuvem),
   });
+}
+
+// Executa a exclusão combo a combo (usuário × módulo). Em módulos híbridos
+// com "local" marcado, delega tudo (banco+Storage+tombstone) pra
+// _adminResetarDadosLocaisModulo — não faz sentido apagar o banco duas
+// vezes se "nuvem" também estiver marcado.
+async function _adminExecutarExclusaoMassa(userIds, modulos, acaoLocal, acaoNuvem) {
+  let falhas = 0;
+  for (const userId of userIds) {
+    for (const modulo of modulos) {
+      const cfg = ADMIN_MODULOS[modulo];
+      if (!cfg || cfg.readOnly) continue;
+      const hibrido = typeof CLOUD_BACKUP_MODULOS !== 'undefined' && CLOUD_BACKUP_MODULOS.includes(modulo);
+      let ok;
+      if (acaoLocal && hibrido) {
+        ok = await _adminResetarDadosLocaisModulo(userId, modulo);
+      } else if (acaoNuvem) {
+        ok = await _adminExcluirNuvemModulo(userId, modulo);
+      } else {
+        continue; // "local" pedido num módulo não-híbrido — nada a fazer
+      }
+      if (!ok) falhas++;
+    }
+  }
+  toast(falhas ? `Concluído com ${falhas} falha(s) — veja os detalhes acima.` : 'Exclusão concluída.', falhas ? 'error' : 'success');
+  adminLimparSelecao();
+  adminLoadModulo();
 }
 
 function adminBuscarModulo() {
@@ -995,7 +1056,7 @@ async function adminLoadModulo(direction = 'first') {
   }
   const emailPorId = Object.fromEntries(_adminProfiles.map(p => [p.id, p.email]));
   _adminPopularSelectDono();
-  _adminAtualizarBannerDono(cfg);
+  _adminAtualizarBannerDono();
 
   // Contagem exata — só busca de novo quando a paginação reinicia (troca
   // de módulo/Atualizar/nova busca), não a cada Próxima/Anterior.
@@ -1948,8 +2009,10 @@ Object.assign(window, {
   adminLimparBuscaModulo,
   adminFiltrarPorDono,
   adminLimparFiltroDono,
-  adminExcluirTudoDono,
   adminSelecionarDono,
+  adminAbrirExclusaoMassa,
+  adminExclusaoMassaToggleTodos,
+  adminConfirmarExclusaoMassa,
   adminModuloPrimeiraPagina,
   adminModuloPaginaAnterior,
   adminModuloProximaPagina,

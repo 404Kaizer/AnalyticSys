@@ -1244,12 +1244,13 @@
         const dupFim = fimRecs.some(r => lancDupKeys.has(_invSafeCall('getLancamentoRecordKey', '', r)));
         const sapDupRecs = sapArr.filter(r => sapDupInfo.real.has(_invSafeCall('getSapRecordKey', '', r)));
 
-        // Ocorrências: campo Material é salvo como "ALIAS: ORIGEM" (ver
-        // formatMaterialCadastro em ocorrencias.js) — extrai só o ALIAS
-        // (texto antes do ":") pra comparar com `mat`, que já é o alias
-        // resolvido da linha. Ocorrências sem ":" (formato antigo/atípico)
-        // comparam a string inteira — na pior hipótese, só deixam de casar
-        // (falso negativo), nunca casam errado.
+        // Ocorrências: campo Material hoje é salvo só como o ALIAS (31/07)
+        // — antes vinha "ALIAS: ORIGEM" (formulário em ocorrencias.js).
+        // split(':')[0] extrai o ALIAS nos dois formatos: sem ":" (padrão
+        // atual) devolve a string inteira, que já É o alias; com ":"
+        // (registros antigos) corta antes dele — pra comparar com `mat`,
+        // que já é o alias resolvido da linha. Na pior hipótese só deixa
+        // de casar (falso negativo), nunca casa errado.
         const ocsMat = ocsCentral.filter(o => {
           const aliasOc = String(o.material || '').split(':')[0].trim();
           return aliasOc === mat;

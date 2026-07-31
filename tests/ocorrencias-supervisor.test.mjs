@@ -602,6 +602,86 @@ teste('populateOcFiltros: campo Material do formulário mostra só o CADASTRADO,
   assert.ok(!fakeSelect.innerHTML.includes('MATERIAL-FORA-DO-CADASTRO'));
 });
 
+teste('populateOcFiltros: material do formulário mostra só o GRUPO (alias), não "GRUPO: ORIGINAL"', () => {
+  const ctx = montar();
+  const fakeSelect = { innerHTML: '' };
+  ctx.document.getElementById = (id) => id === 'oc-form-material' ? fakeSelect : null;
+  ctx.escapeHtml = (s) => String(s ?? '');
+  ctx.state.filiais = [];
+  ctx.state.materiais = [{ alias: 'CIMENTO CP-II', origem: 'CIMENTO PORTLAND COMPOSTO' }];
+  ctx.state.ocorrencias = [];
+  ctx.populateOcFiltros();
+  assert.ok(fakeSelect.innerHTML.includes('CIMENTO CP-II'));
+  assert.ok(!fakeSelect.innerHTML.includes('CIMENTO PORTLAND COMPOSTO'));
+  assert.ok(!fakeSelect.innerHTML.includes(':'));
+});
+
+// ── Ordenação por DATA DE ABERTURA (31/07) ─────────────────────────────
+// Padrão é dataAbertura (quando a ocorrência/DAI foi aberta — pedido
+// explícito do usuário, não criadoEm/timestamp de sistema), não mais
+// status/prioridade — e virou um seletor (#oc-sort-select) com 3 opções
+// em vez de fixo no código. dataAbertura é string "AAAA-MM-DD" (mesmo
+// campo usado tanto por ocorrência comum quanto por DAI — ver
+// solicitacao-dai/dai.js, ambos gravam data_abertura na mesma tabela).
+
+teste('_ocCompararOrdenacao: "abertura_desc" (padrão) — mais recente primeiro', () => {
+  const ctx = montar();
+  const antiga = { dataAbertura: '2026-01-01' }, nova = { dataAbertura: '2026-06-01' };
+  assert.ok(ctx._ocCompararOrdenacao(antiga, nova, 'abertura_desc') > 0); // nova vem antes de antiga
+  assert.ok(ctx._ocCompararOrdenacao(nova, antiga, 'abertura_desc') < 0);
+});
+
+teste('_ocCompararOrdenacao: "abertura_asc" — mais antiga primeiro', () => {
+  const ctx = montar();
+  const antiga = { dataAbertura: '2026-01-01' }, nova = { dataAbertura: '2026-06-01' };
+  assert.ok(ctx._ocCompararOrdenacao(antiga, nova, 'abertura_asc') < 0); // antiga vem antes de nova
+});
+
+teste('_ocCompararOrdenacao: registro sem dataAbertura vai pro fim, não quebra', () => {
+  const ctx = montar();
+  const comData = { dataAbertura: '2026-01-01' };
+  const semData = {};
+  const r = ctx._ocCompararOrdenacao(semData, comData, 'abertura_desc');
+  assert.ok(Number.isFinite(r) && r > 0); // sem data conta como "mais antiga possível", fica depois
+});
+
+teste('_ocCompararOrdenacao: "prioridade" ainda põe vencida antes de normal, mesmo aberta bem depois', () => {
+  const ctx = montar();
+  const vencida = { concluida: false, inconclusiva: false, dataLimite: amanha(-3), dataAbertura: '2020-01-01' };
+  const normal  = { concluida: false, inconclusiva: false, dataLimite: null, dataAbertura: '2026-06-01' };
+  assert.ok(ctx._ocCompararOrdenacao(vencida, normal, 'prioridade') < 0);
+});
+
+teste('getOcorrenciasFiltradas: sem nenhuma troca de ordenação, usa abertura_desc por padrão', () => {
+  const ctx = montar();
+  ctx.state.ocorrencias = [
+    { id: 'antiga', dataAbertura: '2026-01-01' },
+    { id: 'nova', dataAbertura: '2026-06-01' },
+  ];
+  const ids = ctx.getOcorrenciasFiltradas().map(o => o.id);
+  assert.deepEqual(ids, ['nova', 'antiga']);
+});
+
+// 31/07: virou dropdown no padrão dos filtros (pill), não mais <select>
+// nativo — ocSetOrdenar muda o modo lido por getOcorrenciasFiltradas.
+teste('ocSetOrdenar: muda o modo de ordenação usado por getOcorrenciasFiltradas', () => {
+  const ctx = montar();
+  ctx.state.ocorrencias = [
+    { id: 'antiga', dataAbertura: '2026-01-01' },
+    { id: 'nova', dataAbertura: '2026-06-01' },
+  ];
+  ctx.ocSetOrdenar('abertura_asc');
+  const ids = ctx.getOcorrenciasFiltradas().map(o => o.id);
+  assert.deepEqual(ids, ['antiga', 'nova']);
+});
+
+teste('_ocCompararOrdenacao: vale igual pra DAI (mesmo campo dataAbertura, sem tratamento especial)', () => {
+  const ctx = montar();
+  const daiAntiga = { origemAjusteSistemico: true, dataAbertura: '2026-01-01' };
+  const daiNova   = { origemAjusteSistemico: true, dataAbertura: '2026-06-01' };
+  assert.ok(ctx._ocCompararOrdenacao(daiAntiga, daiNova, 'abertura_desc') > 0);
+});
+
 let falhou = 0;
 for (const { nome, fn } of casos) {
   try {
