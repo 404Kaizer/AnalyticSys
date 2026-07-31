@@ -839,8 +839,26 @@ const _activityBatchData   = new Map();
 const _activityBatchTimers = new Map();
 const ACTIVITY_BATCH_MS = 2500;
 
-function _activityQueueEvent(row) {
+// Ocorrência de outro usuário que virou 'escalonamento'/'dai' pro Supervisor
+// já ganha a notificação DEDICADA (ver notifPushOcorrenciaSupervisor,
+// disparada por ocorrencias.js/_ocRealtimeInit) — sem este corte, o mesmo
+// evento gerava as DUAS notificações (a genérica de atividade E a
+// dedicada) pra mesma ocorrência (achado do usuário, 31/07). Reusa
+// _ocMotivoRelevancia (ocorrencias.js) em vez de reimplementar a regra,
+// pra nunca dessincronizar dos dois motivos que a notificação dedicada de
+// fato cobre — 'proprio' (o próprio ADM é dono) e 'integrado' continuam só
+// com a notificação genérica, já que a dedicada não existe pra eles.
+async function _activityEhOcorrenciaPrioritariaParaMim(row) {
+  if (window.currentUser?.role !== 'admin' || row.table_name !== 'ocorrencias') return false;
+  const data = row.operation === 'DELETE' ? row.old_data : row.new_data;
+  if (!data || typeof _ocMotivoRelevancia !== 'function') return false;
+  const motivo = await _ocMotivoRelevancia(data);
+  return motivo === 'escalonamento' || motivo === 'dai';
+}
+
+async function _activityQueueEvent(row) {
   if (!_activityShouldNotify(row)) return;
+  if (await _activityEhOcorrenciaPrioritariaParaMim(row)) return;
   const key = `${row.actor_id}|${row.table_name}|${row.operation}`;
   const entry = _activityBatchData.get(key) || { count: 0, sample: row };
   entry.count++;

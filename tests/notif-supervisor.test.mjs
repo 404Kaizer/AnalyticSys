@@ -16,7 +16,7 @@ import assert from 'node:assert/strict';
 const raiz = join(dirname(fileURLToPath(import.meta.url)), '..');
 const fonte = readFileSync(join(raiz, 'js', 'notifications.js'), 'utf8');
 
-function montar() {
+function montar({ role = 'admin', motivo = null } = {}) {
   const chamadas = { navigate: [], openOcDetailModal: [], persist: 0 };
   const ctx = {
     console: { info() {}, warn() {}, error() {} },
@@ -31,10 +31,14 @@ function montar() {
     persist: () => { chamadas.persist++; },
     navigate: (page) => { chamadas.navigate.push(page); },
     openOcDetailModal: (id) => { chamadas.openOcDetailModal.push(id); },
+    // Stub de ocorrencias.js (fora do escopo deste arquivo) — só o
+    // suficiente pra _activityEhOcorrenciaPrioritariaParaMim funcionar
+    // isolado, sem carregar o módulo inteiro de Ocorrências.
+    _ocMotivoRelevancia: async () => motivo,
   };
   ctx.window = ctx; // window === global, mesmo motivo do teste de ocorrencias.js
   ctx.globalThis = ctx;
-  ctx.currentUser = { id: 'u-adm', role: 'admin' };
+  ctx.currentUser = { id: 'u-adm', role };
   vm.createContext(ctx);
   vm.runInContext(fonte, ctx);
   return { ctx, chamadas };
@@ -84,6 +88,58 @@ teste('clicar numa notificação inexistente não quebra e não navega', () => {
   ctx.notifAbrirOcorrenciaPrioritaria('escalonamento-oc-nao-existe');
   assert.deepEqual(chamadas.navigate, []);
   assert.deepEqual(chamadas.openOcDetailModal, []);
+});
+
+// ── _activityEhOcorrenciaPrioritariaParaMim (31/07) ────────────────────
+// Achado do usuário: a mesma ocorrência escalonada gerava DUAS notificações
+// — a genérica de atividade ("fulano criou um registro") E a dedicada
+// ("Ocorrência escalonada"). Esta função corta a genérica quando (e só
+// quando) a dedicada já cobre o caso — reusa _ocMotivoRelevancia pra nunca
+// dessincronizar dos dois motivos ('escalonamento'/'dai') que a dedicada
+// realmente dispara.
+
+const activityRowOc = { table_name: 'ocorrencias', operation: 'INSERT', new_data: { id: 'oc_1' } };
+
+teste('corta a genérica quando o motivo é "escalonamento"', async () => {
+  const { ctx } = montar({ motivo: 'escalonamento' });
+  assert.equal(await ctx._activityEhOcorrenciaPrioritariaParaMim(activityRowOc), true);
+});
+
+teste('corta a genérica quando o motivo é "dai"', async () => {
+  const { ctx } = montar({ motivo: 'dai' });
+  assert.equal(await ctx._activityEhOcorrenciaPrioritariaParaMim(activityRowOc), true);
+});
+
+teste('NÃO corta quando o motivo é "proprio" — a dedicada nunca dispara pra ocorrência do próprio ADM', async () => {
+  const { ctx } = montar({ motivo: 'proprio' });
+  assert.equal(await ctx._activityEhOcorrenciaPrioritariaParaMim(activityRowOc), false);
+});
+
+teste('NÃO corta quando o motivo é "integrado" — a dedicada não cobre integração manual', async () => {
+  const { ctx } = montar({ motivo: 'integrado' });
+  assert.equal(await ctx._activityEhOcorrenciaPrioritariaParaMim(activityRowOc), false);
+});
+
+teste('NÃO corta quando não há motivo nenhum (null)', async () => {
+  const { ctx } = montar({ motivo: null });
+  assert.equal(await ctx._activityEhOcorrenciaPrioritariaParaMim(activityRowOc), false);
+});
+
+teste('NÃO corta pra usuário comum (a dedicada só existe pro Supervisor)', async () => {
+  const { ctx } = montar({ role: 'user', motivo: 'escalonamento' });
+  assert.equal(await ctx._activityEhOcorrenciaPrioritariaParaMim(activityRowOc), false);
+});
+
+teste('NÃO corta atividade de outra tabela, mesmo com motivo "escalonamento" (não faz sentido fora de ocorrencias)', async () => {
+  const { ctx } = montar({ motivo: 'escalonamento' });
+  const row = { ...activityRowOc, table_name: 'lancamentos' };
+  assert.equal(await ctx._activityEhOcorrenciaPrioritariaParaMim(row), false);
+});
+
+teste('DELETE usa old_data, não new_data', async () => {
+  const { ctx } = montar({ motivo: 'dai' });
+  const row = { table_name: 'ocorrencias', operation: 'DELETE', old_data: { id: 'oc_1' }, new_data: null };
+  assert.equal(await ctx._activityEhOcorrenciaPrioritariaParaMim(row), true);
 });
 
 let falhou = 0;
