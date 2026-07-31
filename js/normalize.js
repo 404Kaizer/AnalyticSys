@@ -993,3 +993,89 @@ function getDuplicatasCadastroMateriais() {
 
   return conflitos.sort((a, b) => a.origem.localeCompare(b.origem, 'pt-BR'));
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// RESET REMOTO DE DADOS LOCAIS (módulos híbridos) — consumo do tombstone
+// ═══════════════════════════════════════════════════════════════════════
+// Os 5 módulos híbridos (lancamentos/entradas/saidas/producao/sap — Fase 4)
+// só sobem pro Postgres o registro manual/editado; o volume importado em
+// lote vive só no IndexedDB deste navegador + backup condensado no
+// Storage. O ADM (admin.js, "Resetar dados locais deste usuário") não
+// consegue alcançar esse IndexedDB remotamente — grava um pedido em
+// `local_wipe_pendencias`, e é ESTE navegador que se limpa sozinho, lendo
+// o próprio pedido.
+//
+// Nunca apagamos a linha do servidor — cada dispositivo deste usuário
+// guarda seu PRÓPRIO carimbo de "já processei até quando" no IndexedDB
+// (chave `_wipeAcked`, fora de saveSnapshotKeys — não é dado de negócio).
+// Isso garante que 2+ dispositivos do mesmo usuário apliquem o mesmo
+// pedido de forma independente, sem que um "consuma" o sinal pro outro.
+//
+// Chamada em restoreAndRender (dashboard.js) ANTES dos boot syncs dos 5
+// módulos híbridos e ANTES da restauração do backup condensado — ordem
+// importa: só depois de `state[modulo] = []` é que a checagem de
+// "preciso restaurar o backup?" (cloud-backup.js) vê o módulo
+// corretamente vazio E o backup já foi apagado pelo ADM antes do
+// tombstone (ver admin.js), então não há o que restaurar.
+const WIPE_ACK_KEY = '_wipeAcked';
+
+async function checarWipePendente() {
+  if (!window.supabaseClient || !window.currentUser?.id) return;
+  try {
+    const { data, error } = await window.supabaseClient
+      .from('local_wipe_pendencias')
+      .select('modulo, solicitado_em')
+      .eq('user_id', window.currentUser.id);
+    if (error || !data || !data.length) return;
+
+    const db = await openDb();
+    const acked = (db && await idbGet(db, WIPE_ACK_KEY)) || {};
+    let mudou = false;
+
+    for (const row of data) {
+      const jaProcessado = acked[row.modulo];
+      if (jaProcessado && new Date(jaProcessado).getTime() >= new Date(row.solicitado_em).getTime()) continue;
+      if (Array.isArray(state[row.modulo])) {
+        state[row.modulo] = [];
+        console.info(`[WipeLocal] "${row.modulo}" resetado localmente por pedido do ADM (${row.solicitado_em}).`);
+        if (typeof toast === 'function') {
+          toast(`Seus dados locais de ${row.modulo} foram resetados por um administrador.`, 'error');
+        }
+      }
+      acked[row.modulo] = row.solicitado_em;
+      mudou = true;
+    }
+
+    if (mudou) {
+      if (db) await idbPut(db, WIPE_ACK_KEY, acked);
+      // persistStateNow (não o persist() debounced) — é um pedido raro e
+      // crítico do ADM, não uma edição rápida do usuário; queremos ele
+      // gravado antes de qualquer outra coisa acontecer no boot.
+      if (typeof persistStateNow === 'function') await persistStateNow();
+      ['invalidateSapIndex', 'invalidateSaidasIndex', 'invalidateLancIndex', 'invalidateSearchIndex']
+        .forEach(fn => { if (typeof window[fn] === 'function') window[fn](); });
+    }
+  } catch (err) {
+    console.warn('[WipeLocal] Falha ao checar pedidos de limpeza local:', err);
+  }
+}
+
+// Realtime — aplica na hora se o usuário estiver com a sessão aberta quando
+// o ADM agir, em vez de esperar o próximo boot. RLS já restringe SELECT ao
+// próprio user_id, e Realtime clássico já respeita RLS por assinante (mesmo
+// padrão confirmado em activity_log/mensagens) — sem filter explícito.
+let _wipeRealtimeChannel = null;
+function wipeRealtimeInit() {
+  if (!window.supabaseClient || !window.currentUser || _wipeRealtimeChannel) return;
+  _wipeRealtimeChannel = window.supabaseClient
+    .channel('local_wipe_pendencias_realtime')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'local_wipe_pendencias' },
+      () => { checarWipePendente(); })
+    .subscribe();
+}
+function wipeRealtimeStop() {
+  if (_wipeRealtimeChannel && window.supabaseClient) window.supabaseClient.removeChannel(_wipeRealtimeChannel);
+  _wipeRealtimeChannel = null;
+}
+
+Object.assign(window, { checarWipePendente, wipeRealtimeInit, wipeRealtimeStop });

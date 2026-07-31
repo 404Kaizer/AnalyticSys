@@ -339,6 +339,50 @@ async function idbDeleteAnexosDai(daiId, count) {
   }
 }
 
+// Limpeza de órfãos: cópias locais de anexos cujo DAI não existe mais em
+// state.ajustesSistemicos (excluído por qualquer caminho — o próprio
+// analista, outro admin, ou admin_reset_user). `ajustes_sistemicos` já
+// sincroniza por completo com o Postgres (não é módulo híbrido), então a
+// ausência do id ali já é o sinal de verdade — sem precisar de tombstone
+// nenhum aqui, diferente do reset dos módulos híbridos (ver
+// checarWipePendente, normalize.js). Chamada depois que
+// syncAjustesSistemicosFromSupabase já rodou (boot e
+// sincronizarDadosLocaisAgora, dashboard.js).
+async function limparAnexosDaiOrfaos() {
+  try {
+    const db = await openDb();
+    if (!db) return;
+    const chaves = await new Promise((res, rej) => {
+      const tx = db.transaction(IDB_STORE, 'readonly');
+      const req = tx.objectStore(IDB_STORE).getAllKeys();
+      req.onsuccess = () => res(req.result || []);
+      req.onerror = () => rej(req.error);
+    });
+
+    const idsVivos = new Set((state.ajustesSistemicos || []).map(d => d.id));
+    // Chave: `dai_anexo_<daiId>_<idx>` — daiId pode ter underscore (formato
+    // "dai_<timestamp>_<random>"), então o daiId é tudo antes do ÚLTIMO
+    // underscore (idx é sempre o segmento final, puramente numérico).
+    const orfas = chaves.filter(k => {
+      if (typeof k !== 'string' || !k.startsWith(DAI_ANEXO_KEY_PREFIX)) return false;
+      const resto = k.slice(DAI_ANEXO_KEY_PREFIX.length);
+      const daiId = resto.slice(0, resto.lastIndexOf('_'));
+      return daiId && !idsVivos.has(daiId);
+    });
+    if (!orfas.length) return;
+
+    await new Promise((res, rej) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      orfas.forEach(k => tx.objectStore(IDB_STORE).delete(k));
+      tx.oncomplete = res;
+      tx.onerror = rej;
+    });
+    console.info(`[Persist] ${orfas.length} cópia(s) local(is) de anexo(s) DAI órfã(s) removida(s).`);
+  } catch (err) {
+    console.warn('[Persist] Falha ao limpar anexos DAI órfãos (não crítico):', err);
+  }
+}
+
 function buildStateSnapshot() {
   return {
     version: STATE_VERSION,

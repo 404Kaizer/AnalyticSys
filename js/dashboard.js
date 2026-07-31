@@ -6283,12 +6283,17 @@ async function sincronizarDadosLocaisAgora() {
     return false;
   }
   toast('Sincronizando dados locais com a nuvem...', 'success');
+  // Mesmo cuidado do boot: se um pedido de reset remoto (admin.js) ainda
+  // não tiver sido aplicado (ex.: Realtime perdeu o evento), aplica agora
+  // antes dos syncs — ver checarWipePendente (normalize.js).
+  if (typeof checarWipePendente === 'function') await checarWipePendente();
   await Promise.all(
     SUPABASE_BOOT_SYNCS.map(fnName => {
       const fn = window[fnName];
       return typeof fn === 'function' ? fn() : Promise.resolve();
     })
   );
+  if (typeof limparAnexosDaiOrfaos === 'function') limparAnexosDaiOrfaos();
   // Backup condensado dos 5 módulos grandes (27/07) — este botão não
   // dispara mais só a sincronização normal, também força uma cópia de
   // segurança na nuvem, pra quem quiser ter certeza antes de trocar de
@@ -6321,6 +6326,14 @@ async function restoreAndRender() {
     await nextFrame();
     await loadState();
 
+    // Reset remoto de dados locais (módulos híbridos) — precisa rodar
+    // ANTES dos boot syncs abaixo e da restauração do backup condensado
+    // (STEP 2.5): se o ADM pediu limpeza de um módulo híbrido, este
+    // navegador precisa esvaziar o próprio estado ANTES de qualquer coisa
+    // decidir "restaurar backup" ou mesclar dado remanescente. Ver
+    // checarWipePendente (normalize.js).
+    if (typeof checarWipePendente === 'function') await checarWipePendente();
+
     // Sincronização com o Supabase no boot — lista SUPABASE_BOOT_SYNCS
     // (escopo do arquivo, ver acima) roda em PARALELO (Promise.all), não
     // uma esperando a outra: são buscas totalmente independentes entre
@@ -6331,6 +6344,10 @@ async function restoreAndRender() {
         return typeof fn === 'function' ? fn() : Promise.resolve();
       })
     );
+    // Depois que ajustesSistemicos já veio do Postgres (fonte de verdade) —
+    // limpa cópias locais de anexo de DAI que já não têm dono. Ver
+    // limparAnexosDaiOrfaos (persist.js).
+    if (typeof limparAnexosDaiOrfaos === 'function') limparAnexosDaiOrfaos();
 
     _lstepSet('idb', 'done');
     _lbarSet(15);
@@ -6409,6 +6426,10 @@ async function restoreAndRender() {
     // se a aba já tiver um canal aberto (ex.: chamado duas vezes por
     // algum motivo), a própria função não faz nada na segunda vez.
     if (typeof _activityRealtimeInit === 'function') _activityRealtimeInit();
+    // Reset remoto de dados locais (módulos híbridos) — aplica na hora se
+    // o ADM agir enquanto esta sessão está aberta, em vez de só no próximo
+    // boot. Ver checarWipePendente/wipeRealtimeInit (normalize.js).
+    if (typeof wipeRealtimeInit === 'function') wipeRealtimeInit();
     // Presença global (Mensagens, Etapa 3) — fileira de avatares online
     // no topbar. Independente do polling do Admin: roda pra qualquer
     // usuário logado, sempre, não só com a tela de Usuários aberta.

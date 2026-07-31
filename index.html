@@ -3027,6 +3027,11 @@
               <span id="admin-dono-filtro-label"><i class="ti ti-filter"></i></span>
               <div class="admin-lote-actions">
                 <button class="btn btn-sm admin-btn-danger" id="admin-dono-filtro-excluir" onclick="adminExcluirTudoDono()"><i class="ti ti-trash"></i> Excluir tudo deste usuário neste módulo</button>
+                <!-- Só aparece nos 5 módulos híbridos (Fase 4) — ver
+                     _adminAtualizarBannerDono/CLOUD_BACKUP_MODULOS. Apaga
+                     Postgres+Storage e sinaliza o navegador do usuário a
+                     limpar o volume importado que só existe localmente. -->
+                <button class="btn btn-sm admin-btn-danger" id="admin-dono-filtro-reset-local" style="display:none" onclick="adminResetarDadosLocaisDono()"><i class="ti ti-device-floppy"></i> Resetar dados locais deste usuário</button>
                 <button class="btn btn-sm admin-btn-ghost" onclick="adminLimparFiltroDono()">Limpar filtro</button>
               </div>
             </div>

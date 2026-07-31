@@ -302,11 +302,20 @@ function _adminAtualizarBannerDono(cfg) {
   const banner = document.getElementById('admin-dono-filtro-banner');
   const label = document.getElementById('admin-dono-filtro-label');
   const btnExcluir = document.getElementById('admin-dono-filtro-excluir');
+  const btnResetLocal = document.getElementById('admin-dono-filtro-reset-local');
   if (!banner) return;
   if (!_adminDonoFiltro) { banner.style.display = 'none'; return; }
   banner.style.display = 'flex';
   if (label) label.textContent = `Filtrando por usuário: ${_adminDonoFiltro.email}`;
   if (btnExcluir) btnExcluir.style.display = cfg?.readOnly ? 'none' : '';
+  // "Resetar dados locais" só faz sentido nos 5 módulos híbridos (Fase 4) —
+  // os únicos onde o volume importado em lote vive só no navegador do
+  // usuário, fora do alcance de "Excluir tudo deste usuário" (que só apaga
+  // Postgres). Ver CLOUD_BACKUP_MODULOS (cloud-backup.js).
+  const modulo = document.getElementById('admin-modulo-select')?.value;
+  if (btnResetLocal) {
+    btnResetLocal.style.display = (typeof CLOUD_BACKUP_MODULOS !== 'undefined' && CLOUD_BACKUP_MODULOS.includes(modulo)) ? '' : 'none';
+  }
 }
 
 // "Excluir tudo deste usuário neste módulo" — equivalente ao "excluir
@@ -335,6 +344,64 @@ function adminExcluirTudoDono() {
       const { error } = await query;
       if (error) { toast('Falha ao excluir: ' + _adminErroDetalhe(error), 'error'); return; }
       toast('Registros excluídos.', 'success');
+      adminLimparSelecao();
+      adminLoadModulo();
+    },
+  });
+}
+
+// ── Reset de dados locais (módulos híbridos) ────────────────────────────
+// "Excluir tudo deste usuário" (acima) só apaga o Postgres — pros 5 módulos
+// híbridos (Fase 4: lancamentos/entradas/saidas/producao/sap) isso é a
+// MENOR fatia do dado real: o volume importado em lote vive só no
+// IndexedDB do navegador do usuário + backup condensado no Storage, e
+// nem aparece nesta tela pra seleção. Esta ação apaga as três cópias que o
+// ADM alcança (Postgres, Storage) e sinaliza o navegador do usuário
+// (local_wipe_pendencias) pra apagar a própria cópia local sozinho, no
+// próximo boot ou via Realtime se estiver online na hora.
+//
+// ORDEM ESTRITA — Postgres, DEPOIS Storage, SÓ ENTÃO o tombstone: se o
+// tombstone fosse escrito antes do Storage estar limpo, um usuário online
+// naquele instante poderia processar o sinal e ter o dado ressuscitado pelo
+// próprio mecanismo de restauração do backup condensado (cloud-backup.js) —
+// exatamente o problema que esta função existe pra evitar.
+async function _adminResetarDadosLocaisModulo(userId, modulo) {
+  const { error: delErr } = await window.supabaseClient.from(modulo).delete().eq('user_id', userId);
+  if (delErr) { toast('Falha ao excluir no banco: ' + _adminErroDetalhe(delErr), 'error'); return false; }
+
+  const paths = await _adminListStorageRecursivo('backups-condensados', `${userId}/${modulo}`);
+  if (paths.length) {
+    const { error: storageError } = await window.supabaseClient.storage.from('backups-condensados').remove(paths);
+    if (storageError) {
+      toast('Falha ao limpar o backup no Storage — o sinal de limpeza NÃO foi enviado ao usuário. Tente de novo.', 'error');
+      return false;
+    }
+  }
+
+  const { error: wipeErr } = await window.supabaseClient.from('local_wipe_pendencias')
+    .upsert({ user_id: userId, modulo, solicitado_em: new Date().toISOString(), solicitado_por: window.currentUser.id });
+  if (wipeErr) { toast('Falha ao sinalizar a limpeza local: ' + _adminErroDetalhe(wipeErr), 'error'); return false; }
+
+  return true;
+}
+
+function adminResetarDadosLocaisDono() {
+  const modulo = document.getElementById('admin-modulo-select')?.value;
+  if (!modulo || typeof CLOUD_BACKUP_MODULOS === 'undefined' || !CLOUD_BACKUP_MODULOS.includes(modulo) || !_adminDonoFiltro) return;
+  const label = ADMIN_MODULOS[modulo]?.label || modulo;
+  const email = _adminDonoFiltro.email;
+
+  confirmarDestrutivo({
+    title: 'Resetar dados locais deste usuário',
+    sub: label,
+    body: `Isso apaga <strong>permanentemente</strong>, para <strong>${_adminEsc(email)}</strong>, os registros de ${_adminEsc(label)} no banco e a cópia de segurança no Storage — e sinaliza o navegador dele pra apagar também o volume importado em lote que existe SÓ localmente (não aparece nesta tela). A limpeza local só é aplicada na próxima vez que ${_adminEsc(email)} abrir o sistema, ou na hora, se a sessão dele estiver aberta agora. Esta ação não pode ser desfeita.`,
+    confirmLabel: 'Resetar dados locais',
+    requireConsent: true,
+    consentLabel: `Entendo que isso apaga permanentemente os dados de ${email} em ${label} no banco, no Storage, e sinaliza a limpeza do navegador dele.`,
+    onConfirm: async () => {
+      const ok = await _adminResetarDadosLocaisModulo(_adminDonoFiltro.id, modulo);
+      if (!ok) return;
+      toast('Dados locais resetados — será aplicado no navegador do usuário no próximo acesso.', 'success');
       adminLimparSelecao();
       adminLoadModulo();
     },
@@ -849,10 +916,28 @@ async function _adminExecutarResetUsuario(userId) {
   const totalLinhas = Object.values(data || {}).reduce((soma, n) => soma + Number(n || 0), 0);
 
   let arquivosRemovidos = 0;
+  let storageOk = true;
   const paths = await _adminListStorageRecursivo('backups-condensados', userId);
   if (paths.length) {
     const { error: storageError } = await window.supabaseClient.storage.from('backups-condensados').remove(paths);
-    if (!storageError) arquivosRemovidos = paths.length;
+    if (storageError) { storageOk = false; }
+    else arquivosRemovidos = paths.length;
+  }
+
+  // Reset completo também precisa sinalizar os 5 módulos híbridos (o
+  // delete acima só limpou a fatia manual/editada no Postgres — o volume
+  // importado em lote vive só no navegador do usuário). Mesma ordem
+  // estrita de _adminResetarDadosLocaisModulo: só grava o tombstone se o
+  // Storage foi mesmo limpo, senão o backup condensado ainda vivo poderia
+  // ressuscitar o dado no navegador do usuário.
+  if (storageOk && typeof CLOUD_BACKUP_MODULOS !== 'undefined') {
+    const tombstones = CLOUD_BACKUP_MODULOS.map(modulo => ({
+      user_id: userId, modulo, solicitado_em: new Date().toISOString(), solicitado_por: window.currentUser.id,
+    }));
+    const { error: wipeErr } = await window.supabaseClient.from('local_wipe_pendencias').upsert(tombstones);
+    if (wipeErr) console.warn('[Admin] Falha ao sinalizar limpeza local pós-reset:', wipeErr);
+  } else if (!storageOk) {
+    toast('Reset feito, mas falhou ao limpar o backup no Storage — o sinal de limpeza local NÃO foi enviado. Use "Resetar dados locais" por módulo pra tentar de novo.', 'error');
   }
 
   toast(`Usuário resetado: ${totalLinhas.toLocaleString('pt-BR')} registro(s) e ${arquivosRemovidos} arquivo(s) removidos.`, 'success');

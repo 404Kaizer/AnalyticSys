@@ -540,6 +540,8 @@ window.AuthGate = (function () {
         // de atividade: sem isso, ficaria escutando com credenciais
         // inválidas até a próxima navegação.
         if (typeof _msgsRealtimeStop === 'function') _msgsRealtimeStop();
+        // Canal Realtime de reset remoto de dados locais — mesmo cuidado.
+        if (typeof wipeRealtimeStop === 'function') wipeRealtimeStop();
       }
     });
   });
