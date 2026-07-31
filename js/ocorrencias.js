@@ -204,22 +204,37 @@ async function syncOcorrenciasFromSupabase() {
 // que chega nesta subscription; pro ADM, sem este filtro o Realtime
 // entregaria TODA ocorrência de TODO usuário (RLS libera is_admin() a ver
 // tudo) e reviveria a poluição revertida em 31/07.
-async function _ocEhRelevantePraMim(row) {
-  if (window.currentUser?.role !== 'admin') return true;
-  if (row.user_id === window.currentUser?.id) return true;
+// Motivo, não só booleano — a notificação de prioridade (ver mais abaixo)
+// só deve disparar quando o motivo for especificamente 'escalonamento' ou
+// 'dai' (não 'proprio'/'integrado'/'rls', que já têm seus próprios avisos).
+async function _ocMotivoRelevancia(row) {
+  if (window.currentUser?.role !== 'admin') return 'rls';
+  if (row.user_id === window.currentUser?.id) return 'proprio';
   const integrados = await _integracoesDoAdmin('ocorrencias');
-  if (integrados.has(String(row.id))) return true;
-  return ocApareceAutoParaSupervisor(row);
+  if (integrados.has(String(row.id))) return 'integrado';
+  if (!ocApareceAutoParaSupervisor(row)) return null;
+  return row.origem_ajuste_sistemico === true ? 'dai' : 'escalonamento';
+}
+async function _ocEhRelevantePraMim(row) {
+  return (await _ocMotivoRelevancia(row)) !== null;
 }
 function _ocUpsertLocal(row) {
   if (!Array.isArray(state.ocorrencias)) state.ocorrencias = [];
   const oc = _ocFromDbRow(row);
-  const idx = state.ocorrencias.findIndex(o => o.id === oc.id && o.userId === oc.userId);
+  const meuId = window.currentUser?.id;
+  // (o.userId || meuId): mesmo fallback do merge em syncOcorrenciasFromSupabase
+  // — uma ocorrência recém-criada nesta sessão entra otimista no state ANTES
+  // do round-trip, com userId ainda vazio. Sem esse fallback aqui, o INSERT
+  // que o próprio upsert dispara chega pelo Realtime com user_id já
+  // resolvido, não bate com a entrada local (undefined !== uuid) e duplica
+  // o card em vez de atualizar no lugar.
+  const idx = state.ocorrencias.findIndex(o => o.id === oc.id && (o.userId || meuId) === oc.userId);
   if (idx >= 0) state.ocorrencias[idx] = oc; else state.ocorrencias.push(oc);
 }
 function _ocRemoveLocal(id, userId) {
   if (!Array.isArray(state.ocorrencias)) return;
-  state.ocorrencias = state.ocorrencias.filter(o => !(o.id === id && o.userId === userId));
+  const meuId = window.currentUser?.id;
+  state.ocorrencias = state.ocorrencias.filter(o => !(o.id === id && (o.userId || meuId) === userId));
 }
 
 let _ocChannel = null;
@@ -229,8 +244,29 @@ function _ocRealtimeInit() {
     const row = tipo === 'DELETE' ? payload.old : payload.new;
     if (!row) return;
     if (tipo === 'DELETE') { _ocRemoveLocal(row.id, row.user_id); }
-    else if (await _ocEhRelevantePraMim(row)) { _ocUpsertLocal(row); }
-    else { _ocRemoveLocal(row.id, row.user_id); } // deixou de ser relevante (ex.: descalonada abaixo do nível do Supervisor)
+    else {
+      const meuId = window.currentUser?.id;
+      // Só o SUPERVISOR se importa com "já existia" — pra ele decidir se é
+      // a PRIMEIRA vez que a ocorrência entra na tela dele (dispara aviso
+      // de prioridade) ou só mais uma edição de algo que ele já via.
+      const jaExistia = state.ocorrencias.some(o => o.id === row.id && (o.userId || meuId) === row.user_id);
+      const motivo = await _ocMotivoRelevancia(row);
+      if (motivo) {
+        _ocUpsertLocal(row);
+        if (!jaExistia && (motivo === 'escalonamento' || motivo === 'dai') && typeof notifPushOcorrenciaSupervisor === 'function') {
+          notifPushOcorrenciaSupervisor({
+            ocorrenciaId: row.id,
+            tipo: motivo,
+            titulo: motivo === 'dai'
+              ? `Nova DAI — ${row.dai_tag || row.dai_numero || row.numero || row.id}`
+              : `Ocorrência escalonada — ${ocNivelInfo(ocNivelAtual(row))?.label || 'Supervisor'}`,
+            corpo: [row.central, motivo === 'dai' ? row.material : row.motivo].filter(Boolean).join(' · '),
+          });
+        }
+      } else {
+        _ocRemoveLocal(row.id, row.user_id); // deixou de ser relevante (ex.: descalonada abaixo do nível do Supervisor)
+      }
+    }
     if (typeof renderOcorrencias === 'function') renderOcorrencias();
   };
   _ocChannel = window.supabaseClient

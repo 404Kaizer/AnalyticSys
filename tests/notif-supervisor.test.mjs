@@ -1,0 +1,101 @@
+// Teste da notificação de prioridade do Supervisor (escalonamento/DAI, ver
+// notifPushOcorrenciaSupervisor/notifAbrirOcorrenciaPrioritaria em
+// notifications.js, disparada por ocorrencias.js/_ocRealtimeInit). Cobre
+// os dois requisitos: (1) não duplicar a mesma ocorrência na lista de
+// notificações e (2) o clique abrir o modal PADRÃO de Ocorrências
+// (openOcDetailModal), não o modal genérico de detalhe de atividade.
+//
+// Rode com: node tests/notif-supervisor.test.mjs
+
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+import vm from 'node:vm';
+import assert from 'node:assert/strict';
+
+const raiz = join(dirname(fileURLToPath(import.meta.url)), '..');
+const fonte = readFileSync(join(raiz, 'js', 'notifications.js'), 'utf8');
+
+function montar() {
+  const chamadas = { navigate: [], openOcDetailModal: [], persist: 0 };
+  const ctx = {
+    console: { info() {}, warn() {}, error() {} },
+    state: { notifications: [] },
+    // notifications.js registra um listener de click no document já no
+    // carregamento (fora de qualquer função) — precisa existir pra
+    // vm.runInContext não quebrar.
+    document: {
+      addEventListener() {},
+      getElementById() { return null; },
+    },
+    persist: () => { chamadas.persist++; },
+    navigate: (page) => { chamadas.navigate.push(page); },
+    openOcDetailModal: (id) => { chamadas.openOcDetailModal.push(id); },
+  };
+  ctx.window = ctx; // window === global, mesmo motivo do teste de ocorrencias.js
+  ctx.globalThis = ctx;
+  ctx.currentUser = { id: 'u-adm', role: 'admin' };
+  vm.createContext(ctx);
+  vm.runInContext(fonte, ctx);
+  return { ctx, chamadas };
+}
+
+const casos = [];
+const teste = (nome, fn) => casos.push({ nome, fn });
+
+teste('cria notificação de escalonamento com id previsível e level crítico', () => {
+  const { ctx } = montar();
+  ctx.notifPushOcorrenciaSupervisor({ ocorrenciaId: 'oc_1', tipo: 'escalonamento', titulo: 'Ocorrência escalonada', corpo: 'ABA1' });
+  assert.equal(ctx.state.notifications.length, 1);
+  const n = ctx.state.notifications[0];
+  assert.equal(n.id, 'escalonamento-oc-oc_1');
+  assert.equal(n.type, 'escalonamento');
+  assert.equal(n.level, 'critico');
+  assert.equal(n.ocorrenciaId, 'oc_1');
+  assert.equal(n.read, false);
+});
+
+teste('não duplica ao chamar de novo pra mesma ocorrência/motivo', () => {
+  const { ctx } = montar();
+  ctx.notifPushOcorrenciaSupervisor({ ocorrenciaId: 'oc_1', tipo: 'dai', titulo: 'Nova DAI', corpo: 'ABA1' });
+  ctx.notifPushOcorrenciaSupervisor({ ocorrenciaId: 'oc_1', tipo: 'dai', titulo: 'Nova DAI (de novo)', corpo: 'ABA1' });
+  assert.equal(ctx.state.notifications.length, 1);
+  assert.equal(ctx.state.notifications[0].title, 'Nova DAI'); // a primeira, não sobrescrita
+});
+
+teste('escalonamento e dai da MESMA ocorrência são entradas distintas (ids diferentes)', () => {
+  const { ctx } = montar();
+  ctx.notifPushOcorrenciaSupervisor({ ocorrenciaId: 'oc_1', tipo: 'escalonamento', titulo: 'Escalonada', corpo: '' });
+  ctx.notifPushOcorrenciaSupervisor({ ocorrenciaId: 'oc_1', tipo: 'dai', titulo: 'Nova DAI', corpo: '' });
+  assert.equal(ctx.state.notifications.length, 2);
+});
+
+teste('clicar na notificação abre o modal PADRÃO de Ocorrências (não o genérico de atividade)', () => {
+  const { ctx, chamadas } = montar();
+  ctx.notifPushOcorrenciaSupervisor({ ocorrenciaId: 'oc_42', tipo: 'escalonamento', titulo: 'x', corpo: '' });
+  ctx.notifAbrirOcorrenciaPrioritaria('escalonamento-oc-oc_42');
+  assert.deepEqual(chamadas.navigate, ['ocorrencias']);
+  assert.deepEqual(chamadas.openOcDetailModal, ['oc_42']);
+  assert.equal(ctx.state.notifications[0].read, true);
+});
+
+teste('clicar numa notificação inexistente não quebra e não navega', () => {
+  const { ctx, chamadas } = montar();
+  ctx.notifAbrirOcorrenciaPrioritaria('escalonamento-oc-nao-existe');
+  assert.deepEqual(chamadas.navigate, []);
+  assert.deepEqual(chamadas.openOcDetailModal, []);
+});
+
+let falhou = 0;
+for (const { nome, fn } of casos) {
+  try {
+    await fn();
+    console.log(`  ok  ${nome}`);
+  } catch (err) {
+    falhou++;
+    console.error(`FALHA  ${nome}`);
+    console.error(err);
+  }
+}
+console.log(`\n${casos.length - falhou}/${casos.length} passaram`);
+if (falhou) process.exit(1);

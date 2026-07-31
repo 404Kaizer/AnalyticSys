@@ -291,11 +291,17 @@ const _NLM = {
   info:   { col:'#3b82f6',      icon:'ti-info-circle',    label:'Info'    },
 };
 const _NTM = {
-  saude:      { icon:'ti-heartbeat'      },
-  ocorrencia: { icon:'ti-alert-circle'   },
-  conferencia:{ icon:'ti-calendar-event' },
-  atividade:  { icon:'ti-bolt'           },
-  auth:       { icon:'ti-fingerprint'    },
+  saude:        { icon:'ti-heartbeat'       },
+  ocorrencia:   { icon:'ti-alert-circle'    },
+  conferencia:  { icon:'ti-calendar-event'  },
+  atividade:    { icon:'ti-bolt'            },
+  auth:         { icon:'ti-fingerprint'     },
+  // Prioridade do Supervisor (31/07) — ícone e cor próprios (ver
+  // _SUPERVISOR_PRIORITY_COLOR abaixo), pra não se confundir visualmente
+  // nem com os alertas de saúde/prazo (ocorrencia) nem com o feed genérico
+  // de atividade de terceiros.
+  escalonamento:{ icon:'ti-arrow-up-circle' },
+  dai:          { icon:'ti-file-text'       },
 };
 
 // Cor do ícone de notificações de atividade/auth — por módulo (mesma cor
@@ -316,6 +322,13 @@ const _ACTIVITY_MODULE_COLOR = {
 };
 const _ACTIVITY_DEFAULT_COLOR = 'var(--text2)';
 const _AUTH_COLOR = 'var(--accent)';
+
+// Cor das notificações de prioridade do Supervisor — reaproveita as MESMAS
+// cores já usadas pra essas coisas no resto do app, em vez de inventar uma
+// nova: roxo é a cor do nível "Supervisor do Setor" em OC_HIERARQUIA
+// (ocorrencias.js), dourado é a cor de tudo que é DAI/Ajuste Sistêmico
+// (--gold, ver oc-badge-gold/oc-card-ajuste-sistemico em modules.css).
+const _SUPERVISOR_PRIORITY_COLOR = { escalonamento: 'var(--purple)', dai: 'var(--gold)' };
 
 function _notifTimeAgo(ts) {
   if (!ts) return '';
@@ -347,6 +360,40 @@ function notifNavigate(id, event) {
   _notifRenderBadge();
 }
 
+// ── Prioridade do Supervisor: ocorrência escalonada / nova DAI (31/07) ──
+// Disparada pelo Realtime de ocorrencias.js (_ocRealtimeInit) só na
+// PRIMEIRA vez que uma ocorrência de outro usuário entra na tela do
+// Supervisor por escalonamento ou DAI — não a cada edição. Ao contrário da
+// notificação genérica de atividade, o clique abre o modal PADRÃO de
+// Ocorrências/DAI (openOcDetailModal, o mesmo que os cards da tela usam),
+// não um modal genérico de antes/depois de campos.
+function notifPushOcorrenciaSupervisor({ ocorrenciaId, tipo, titulo, corpo }) {
+  if (!Array.isArray(state.notifications)) state.notifications = [];
+  const id = `${tipo}-oc-${ocorrenciaId}`;
+  if (state.notifications.some(n => n.id === id)) return; // já notificado nesta sessão
+  state.notifications.unshift({
+    id, type: tipo, level: 'critico', title: titulo, body: (corpo || '').slice(0, 140),
+    createdAt: Date.now(), read: false, ocorrenciaId,
+  });
+  if (typeof persist === 'function') persist();
+  _notifRenderBadge();
+  if (_notifOpen) _notifRenderDropdown();
+  notifShowActivityToast(titulo, corpo || '');
+  notifPlaySound();
+}
+
+function notifAbrirOcorrenciaPrioritaria(notifId, event) {
+  event?.stopPropagation();
+  const n = (state.notifications||[]).find(x => x.id === notifId);
+  if (!n || !n.ocorrenciaId) return;
+  n.read = true;
+  if (typeof persist === 'function') persist();
+  _notifRenderBadge();
+  notifClose();
+  if (typeof navigate === 'function') navigate('ocorrencias');
+  if (typeof openOcDetailModal === 'function') openOcDetailModal(n.ocorrenciaId);
+}
+
 function _notifRenderDropdown() {
   const body=document.getElementById('notif-list');
   if (!body) return;
@@ -359,12 +406,19 @@ function _notifRenderDropdown() {
     const lm=_NLM[n.level]||_NLM.info;
     const tm=_NTM[n.type]||_NTM.ocorrencia;
     const isAtividade = n.type === 'atividade' || n.type === 'auth';
+    // Prioridade do Supervisor (31/07) — escalonamento/DAI abrem o modal
+    // PADRÃO de Ocorrências (o mesmo que o card na tela usa), não o modal
+    // genérico de detalhe de atividade.
+    const isPrioritariaSupervisor = n.type === 'escalonamento' || n.type === 'dai';
     const iconCol = n.type === 'auth' ? _AUTH_COLOR
       : n.type === 'atividade' ? (_ACTIVITY_MODULE_COLOR[n.activityTable] || _ACTIVITY_DEFAULT_COLOR)
+      : isPrioritariaSupervisor ? _SUPERVISOR_PRIORITY_COLOR[n.type]
       : lm.col;
-    const hasRoute = isAtividade ? !!n.activityLogId : !!_NOTIF_ROUTE[n.id];
+    const hasRoute = isAtividade ? !!n.activityLogId : isPrioritariaSupervisor ? !!n.ocorrenciaId : !!_NOTIF_ROUTE[n.id];
     const clickAttr = !hasRoute ? '' : isAtividade
       ? `onclick="notifAbrirDetalheAtividade('${_notifEsc(n.id)}',event)"`
+      : isPrioritariaSupervisor
+      ? `onclick="notifAbrirOcorrenciaPrioritaria('${_notifEsc(n.id)}',event)"`
       : `onclick="notifNavigate('${_notifEsc(n.id)}',event)"`;
     return `<div class="notif-item${n.read?' notif-item-read':''}${hasRoute?' notif-item-clickable':''}"
       data-id="${_notifEsc(n.id)}"
@@ -441,7 +495,8 @@ function notifBoot() {
   // condição em aberto, não um evento pontual — sumir com a versão lida
   // faria o aviso reaparecer como não lido enquanto a condição persistir.
   const antes = state.notifications.length;
-  state.notifications = state.notifications.filter(n => n.type !== 'atividade' || !n.read);
+  const _TIPOS_PONTUAIS = new Set(['atividade', 'escalonamento', 'dai']);
+  state.notifications = state.notifications.filter(n => !_TIPOS_PONTUAIS.has(n.type) || !n.read);
   if (state.notifications.length !== antes && typeof persist === 'function') persist();
 
   _notifRenderBadge();
@@ -836,5 +891,6 @@ Object.assign(window,{
   notifSync,notifBoot,notifUpdateFromAnalytico,notifSilentHealthCheck,
   notifPlaySound,notifShowActivityToast,notifHideActivityToast,
   notifAbrirDetalheAtividade,
+  notifPushOcorrenciaSupervisor,notifAbrirOcorrenciaPrioritaria,
   _activityRealtimeInit,_activityRealtimeStop,
 });

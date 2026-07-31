@@ -112,6 +112,45 @@ teste('admin: ocorrência de outro dono só entra se integrada manualmente', asy
   assert.equal(await ctx._ocEhRelevantePraMim({ ...rowBase }), true);
 });
 
+// ── _ocMotivoRelevancia (31/07) — o MOTIVO, não só se é relevante. É o que
+// decide se a notificação de prioridade do Supervisor dispara: só deve
+// disparar pra 'escalonamento'/'dai', nunca pra 'proprio'/'integrado'/'rls'
+// (esses já têm seus próprios avisos, ou nem fazem sentido pro usuário
+// comum, que nunca entra nesses dois motivos).
+
+teste('motivo: usuário comum é sempre "rls" (confia na RLS)', async () => {
+  const ctx = montar({ role: 'user' });
+  assert.equal(await ctx._ocMotivoRelevancia({ ...rowBase }), 'rls');
+});
+
+teste('motivo: ocorrência própria do admin é "proprio"', async () => {
+  const ctx = montar({ role: 'admin' });
+  assert.equal(await ctx._ocMotivoRelevancia({ ...rowBase, user_id: 'u-adm' }), 'proprio');
+});
+
+teste('motivo: ocorrência integrada manualmente é "integrado", mesmo já escalonada (integração manual tem prioridade)', async () => {
+  const ctx = montar({ role: 'admin', integrados: new Set(['oc_1']) });
+  const row = { ...rowBase, hierarquia: [{ nivel: 2 }] };
+  assert.equal(await ctx._ocMotivoRelevancia(row), 'integrado');
+});
+
+teste('motivo: escalonada pro nível do Supervisor, sem DAI, é "escalonamento"', async () => {
+  const ctx = montar({ role: 'admin' });
+  const row = { ...rowBase, hierarquia: [{ nivel: 2 }] };
+  assert.equal(await ctx._ocMotivoRelevancia(row), 'escalonamento');
+});
+
+teste('motivo: origem_ajuste_sistemico=true é "dai", mesmo sem nenhum escalonamento', async () => {
+  const ctx = montar({ role: 'admin' });
+  const row = { ...rowBase, origem_ajuste_sistemico: true };
+  assert.equal(await ctx._ocMotivoRelevancia(row), 'dai');
+});
+
+teste('motivo: nada disso (nível baixo, sem DAI, não integrada, não própria) é null', async () => {
+  const ctx = montar({ role: 'admin' });
+  assert.equal(await ctx._ocMotivoRelevancia({ ...rowBase }), null);
+});
+
 teste('admin: ocorrência escalonada pro nível do Supervisor entra mesmo sem integração manual', async () => {
   const ctx = montar({ role: 'admin' });
   const row = { ...rowBase, hierarquia: [{ nivel: 2 }] };
@@ -137,6 +176,20 @@ teste('_ocRemoveLocal remove só o par (id, userId) certo, não mexe em outros d
   ctx._ocRemoveLocal('oc_1', 'dono-a');
   assert.equal(ctx.state.ocorrencias.length, 1);
   assert.equal(ctx.state.ocorrencias[0].userId, 'dono-b');
+});
+
+// BUG REAL (31/07): criei uma ocorrência → entra otimista no state com
+// userId ainda vazio (round-trip não terminou) → o INSERT que o próprio
+// upsert dispara chega pelo canal Realtime com user_id já resolvido pelo
+// banco → _ocUpsertLocal comparava userId==userId sem fallback, não
+// achava a entrada local (undefined !== uuid) e duplicava o card.
+teste('_ocUpsertLocal não duplica quando o evento Realtime confirma uma ocorrência recém-criada localmente (userId ainda não resolvido)', () => {
+  const ctx = montar({ role: 'user' });
+  ctx.currentUser = { id: 'dono-a', role: 'user' };
+  ctx.state.ocorrencias = [{ id: 'OC-HUGO-1', userId: undefined, motivo: 'criada localmente' }];
+  ctx._ocUpsertLocal({ ...rowBase, id: 'OC-HUGO-1', user_id: 'dono-a', motivo: 'criada localmente' });
+  assert.equal(ctx.state.ocorrencias.length, 1);
+  assert.equal(ctx.state.ocorrencias[0].userId, 'dono-a');
 });
 
 let falhou = 0;
