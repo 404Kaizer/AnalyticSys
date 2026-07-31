@@ -4974,6 +4974,13 @@
     </div>
     <div class="modal-body" style="display:flex;flex-direction:column;gap:14px">
       <input type="hidden" id="oc-form-id">
+      <!-- Atribuir pra outro usuário — só Supervisor, só em nova ocorrência (ver openOcorrenciaModal em ocorrencias.js) -->
+      <div class="oc-form-group" id="oc-form-atribuir-wrap" style="grid-column:1/-1;display:none">
+        <label class="oc-label">Atribuir para <span class="oc-hint">(fica como dono da ocorrência)</span></label>
+        <select id="oc-form-atribuir" class="oc-input">
+          <option value="">Eu mesmo</option>
+        </select>
+      </div>
       <div class="oc-form-row">
         <div class="oc-form-group">
           <label class="oc-label">Data de abertura</label>
@@ -5316,6 +5323,27 @@
     <div class="modal-footer">
       <button class="btn" onclick="closeEscalonarModal()">Cancelar</button>
       <button class="btn oc-btn-escalonar" style="padding:8px 18px" onclick="submitEscalonar()"><i class="ti ti-arrow-up-circle"></i> Confirmar escalonamento</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal de Atribuição (Supervisor → usuário comum) -->
+<div class="modal-overlay" id="oc-atribuir-modal" role="dialog" aria-modal="true">
+  <div class="modal-card" style="max-width:420px;width:100%">
+    <div class="modal-header">
+      <span class="modal-title"><i class="ti ti-user-plus" style="color:var(--purple);margin-right:6px"></i>Atribuir Ocorrência</span>
+      <button class="modal-close" onclick="closeAtribuirModal()"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:14px">
+      <input type="hidden" id="oc-atribuir-id">
+      <div class="oc-form-group">
+        <label class="oc-label">Atribuir para <span class="oc-required">*</span></label>
+        <select id="oc-atribuir-select" class="oc-input"></select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeAtribuirModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="submitAtribuir()"><i class="ti ti-check"></i> Atribuir</button>
     </div>
   </div>
 </div>

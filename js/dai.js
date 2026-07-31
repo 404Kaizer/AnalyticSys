@@ -81,6 +81,24 @@ function _daiSyncDelete(daiId, ownerId) {
     .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao excluir DAI na nuvem:', error); });
 }
 
+// Reatribuição (31/07) — chamada por reatribuirOcorrencia (ocorrencias.js)
+// quando a ocorrência reatribuída é uma DAI, pra manter os dois com o
+// mesmo dono. PK de ajustes_sistemicos é só `id` (não composta como
+// ocorrencias), então um UPDATE simples já move a linha — sem risco de
+// virar INSERT por engano.
+async function _daiSyncReatribuir(daiId, donoAntigo, donoNovo) {
+  const { error } = await window.supabaseClient
+    .from('ajustes_sistemicos')
+    .update({ user_id: donoNovo })
+    .eq('id', daiId)
+    .eq('user_id', donoAntigo);
+  if (error) {
+    console.warn('[Supabase] Falha ao reatribuir DAI:', error);
+    return false;
+  }
+  return true;
+}
+
 // Busca no boot — mescla por id, nuvem tem prioridade (mesmo padrão do
 // resto do sistema). Mantém dados locais em caso de falha de rede.
 // Extraído do corpo de syncAjustesSistemicosFromSupabase (31/07) pra dar
@@ -1454,4 +1472,5 @@ Object.assign(window, {
   baixarZipDai,
   _daiRealtimeInit,
   _daiRealtimeStop,
+  _daiSyncReatribuir,
 });

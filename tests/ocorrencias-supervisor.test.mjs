@@ -43,6 +43,35 @@ function montar({ role = 'admin', integrados = new Set() } = {}) {
   return ctx;
 }
 
+// Mesma montagem, mas com window.supabaseClient mockado (chain
+// from().update().eq().eq()) e persist/renderOcorrencias/toast espiados —
+// pra testar _ocSyncReatribuir/reatribuirOcorrencia sem rede de verdade.
+function montarComSupabase({ role = 'admin', erro = null } = {}) {
+  const ctx = montar({ role });
+  const chamadas = { from: [], update: [], eq: [], persist: 0, render: 0, toasts: [], daiReatribuir: [] };
+  ctx.persist = () => { chamadas.persist++; };
+  ctx.renderOcorrencias = () => { chamadas.render++; };
+  ctx.toast = (msg, tipo) => { chamadas.toasts.push({ msg, tipo }); };
+  ctx._daiSyncReatribuir = async (...args) => { chamadas.daiReatribuir.push(args); return true; };
+  ctx.supabaseClient = {
+    from(tabela) {
+      chamadas.from.push(tabela);
+      return {
+        update(payload) {
+          chamadas.update.push(payload);
+          return {
+            eq(col, val) {
+              chamadas.eq.push([col, val]);
+              return { eq: (col2, val2) => { chamadas.eq.push([col2, val2]); return Promise.resolve({ error: erro }); } };
+            },
+          };
+        },
+      };
+    },
+  };
+  return { ctx, chamadas };
+}
+
 const casos = [];
 const teste = (nome, fn) => casos.push({ nome, fn });
 
@@ -274,6 +303,63 @@ teste('old_data ou new_data ausentes devolve null (não quebra)', () => {
   const ctx = montar();
   assert.equal(ctx._ocDetectarMudancaPrioritaria(null, daiBase), null);
   assert.equal(ctx._ocDetectarMudancaPrioritaria(daiBase, null), null);
+});
+
+// ── Atribuição (31/07) — Supervisor delegando pra um usuário comum ─────
+// Mesma classe de bug que já deu dois problemas reais nesta área (upsert
+// mudando a chave composta sem querer) — user_id é PARTE da PK, então
+// tem que ser um UPDATE explícito filtrando pela chave ANTIGA, nunca um
+// upsert com a chave nova.
+
+teste('_ocSyncReatribuir manda UPDATE com o user_id NOVO, filtrando pela chave ANTIGA', async () => {
+  const { ctx, chamadas } = montarComSupabase();
+  const ok = await ctx._ocSyncReatribuir('oc_1', 'dono-antigo', 'dono-novo');
+  assert.equal(ok, true);
+  assert.deepEqual(chamadas.from, ['ocorrencias']);
+  // JSON.parse(JSON.stringify(...)) normaliza pro realm de fora — o objeto
+  // do payload foi criado DENTRO do vm (outro realm), deepEqual cru
+  // reclama de "mesma estrutura mas não é a mesma referência de Object".
+  assert.deepEqual(JSON.parse(JSON.stringify(chamadas.update)), [{ user_id: 'dono-novo' }]);
+  assert.deepEqual(chamadas.eq, [['user_id', 'dono-antigo'], ['id', 'oc_1']]);
+});
+
+teste('_ocSyncReatribuir devolve false em erro (RLS etc.), sem lançar exceção', async () => {
+  const { ctx } = montarComSupabase({ erro: { message: 'RLS' } });
+  const ok = await ctx._ocSyncReatribuir('oc_1', 'a', 'b');
+  assert.equal(ok, false);
+});
+
+teste('reatribuirOcorrencia move o dono localmente e persiste/renderiza', async () => {
+  const { ctx, chamadas } = montarComSupabase();
+  ctx.state.ocorrencias = [{ id: 'oc_1', userId: 'dono-antigo', origemAjusteSistemico: false }];
+  await ctx.reatribuirOcorrencia('oc_1', 'dono-novo');
+  assert.equal(ctx.state.ocorrencias[0].userId, 'dono-novo');
+  assert.equal(chamadas.persist, 1);
+  assert.equal(chamadas.render, 1);
+  assert.deepEqual(chamadas.daiReatribuir, []); // não é DAI — não mexe em ajustes_sistemicos
+});
+
+teste('reatribuirOcorrencia de uma DAI também reatribui o documento vinculado (mesmo dono nos dois)', async () => {
+  const { ctx, chamadas } = montarComSupabase();
+  ctx.state.ocorrencias = [{ id: 'oc_1', userId: 'dono-antigo', origemAjusteSistemico: true, daiId: 'dai_1' }];
+  await ctx.reatribuirOcorrencia('oc_1', 'dono-novo');
+  assert.deepEqual(chamadas.daiReatribuir, [['dai_1', 'dono-antigo', 'dono-novo']]);
+});
+
+teste('reatribuirOcorrencia não faz nada se o novo dono já é o atual', async () => {
+  const { ctx, chamadas } = montarComSupabase();
+  ctx.state.ocorrencias = [{ id: 'oc_1', userId: 'mesmo-dono' }];
+  await ctx.reatribuirOcorrencia('oc_1', 'mesmo-dono');
+  assert.equal(chamadas.from.length, 0);
+  assert.equal(chamadas.persist, 0);
+});
+
+teste('reatribuirOcorrencia não persiste localmente se o UPDATE falhar', async () => {
+  const { ctx, chamadas } = montarComSupabase({ erro: { message: 'RLS' } });
+  ctx.state.ocorrencias = [{ id: 'oc_1', userId: 'dono-antigo' }];
+  await ctx.reatribuirOcorrencia('oc_1', 'dono-novo');
+  assert.equal(ctx.state.ocorrencias[0].userId, 'dono-antigo'); // não mudou
+  assert.equal(chamadas.persist, 0);
 });
 
 let falhou = 0;

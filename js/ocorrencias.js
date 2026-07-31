@@ -319,6 +319,79 @@ async function _ocSyncDelete(id, ownerId) {
   }
 }
 
+// ── Atribuição (31/07) — Supervisor delegando pra um usuário comum ─────
+// Transfere o DONO de verdade (user_id), não é co_owner nem integração:
+// a ocorrência passa a ser dela, com tudo que isso já implica (RLS,
+// visibilidade, sync) — sem tabela/coluna nova.
+// user_id é PARTE da PK composta (user_id, id) — upsert mudaria a chave
+// e criaria uma linha NOVA em vez de mover a existente (mesma classe do
+// bug corrigido em _ocToDbRow). Por isso é um UPDATE explícito, filtrando
+// pela chave ANTIGA.
+async function _ocSyncReatribuir(id, donoAntigo, donoNovo) {
+  const { error } = await window.supabaseClient
+    .from('ocorrencias')
+    .update({ user_id: donoNovo })
+    .eq('user_id', donoAntigo)
+    .eq('id', id);
+  if (error) {
+    console.warn('[Supabase] Falha ao reatribuir ocorrência:', error);
+    toast('⚠ Falha ao reatribuir — tente novamente.', 'error');
+    return false;
+  }
+  return true;
+}
+
+// Lista de usuários pra atribuir — reaproveita o cache de presença global
+// (mensagens.js, roda pra qualquer usuário logado desde o boot) em vez de
+// buscar de novo; já tem id/email/nome de todo mundo, sem RPC extra.
+function _ocUsuariosParaAtribuir() {
+  const meuId = window.currentUser?.id;
+  return Object.values(typeof _msgsUsuariosPorId !== 'undefined' ? _msgsUsuariosPorId : {})
+    .filter(u => u.id !== meuId)
+    .sort((a, b) => (a.nome_exibicao || a.email || '').localeCompare(b.nome_exibicao || b.email || ''));
+}
+
+async function reatribuirOcorrencia(id, novoDonoId) {
+  const o = (state.ocorrencias || []).find(oc => oc.id === id);
+  if (!o || !novoDonoId || o.userId === novoDonoId) return;
+  const donoAntigo = o.userId;
+  const ok = await _ocSyncReatribuir(id, donoAntigo, novoDonoId);
+  if (!ok) return;
+  // DAI: o documento (ajustes_sistemicos) nasce com o MESMO dono da
+  // ocorrência vinculada (ver dai.js/solicitacao-dai) — reatribui os dois
+  // juntos pra não ficar um dono diferente do outro.
+  if (o.origemAjusteSistemico && o.daiId && typeof _daiSyncReatribuir === 'function') {
+    _daiSyncReatribuir(o.daiId, donoAntigo, novoDonoId);
+  }
+  o.userId = novoDonoId;
+  persist();
+  renderOcorrencias();
+  toast('Ocorrência atribuída.', 'success');
+}
+
+window.openAtribuirModal = function(id) {
+  const o = (state.ocorrencias || []).find(oc => oc.id === id);
+  if (!o) return;
+  const usuarios = _ocUsuariosParaAtribuir();
+  const select = document.getElementById('oc-atribuir-select');
+  if (!select) return;
+  select.innerHTML = usuarios.length
+    ? usuarios.map(u => `<option value="${u.id}" ${u.id === o.userId ? 'selected' : ''}>${escapeHtml(u.nome_exibicao || u.email)}</option>`).join('')
+    : `<option value="">Nenhum outro usuário cadastrado</option>`;
+  document.getElementById('oc-atribuir-id').value = id;
+  document.getElementById('oc-atribuir-modal')?.classList.add('open');
+};
+window.closeAtribuirModal = function() {
+  document.getElementById('oc-atribuir-modal')?.classList.remove('open');
+};
+window.submitAtribuir = function() {
+  const id = document.getElementById('oc-atribuir-id').value;
+  const novoDonoId = document.getElementById('oc-atribuir-select').value;
+  if (!novoDonoId) { toast('Selecione um usuário.', 'error'); return; }
+  closeAtribuirModal();
+  reatribuirOcorrencia(id, novoDonoId);
+};
+
 function saveOcorrencia(ocorrencia) {
   if (!Array.isArray(state.ocorrencias)) state.ocorrencias = [];
   const idx = state.ocorrencias.findIndex(o => o.id === ocorrencia.id);
@@ -1320,7 +1393,6 @@ function _renderOcLista(lista) {
     const status = _rawStatus === 'concluída' ? 'concluida' : _rawStatus;
     const statusLabel = { concluida: 'Concluída', vencida: 'Vencida', urgente: 'Urgente', normal: 'Em aberto', inconclusiva: 'Inconclusiva', ajuste_sistemico: 'Ajuste Sistêmico', ajuste_sistemico_pendente: 'Ajuste Sistêmico — Pendente' };
     const statusCls   = { concluida: 'oc-badge-green', vencida: 'oc-badge-red', urgente: 'oc-badge-amber', normal: 'oc-badge-blue', inconclusiva: 'oc-badge-purple', ajuste_sistemico: 'oc-badge-gold', ajuste_sistemico_pendente: 'oc-badge-gold' };
-    const waLink = o.contato ? buildWhatsAppLink(o.contato, o) : null;
     const isAjuste = !!o.origemAjusteSistemico;
 
     return `<div class="oc-card ${o.concluida && !isAjuste ? 'oc-card-done' : ''} ${o.inconclusiva ? 'oc-card-inconclusiva' : ''} ${isAjuste ? 'oc-card-ajuste-sistemico' : ''} oc-card-${status}" onclick="openOcDetailModal('${o.id}')">
@@ -1362,14 +1434,11 @@ function _renderOcLista(lista) {
       </div>
 
       <div class="oc-card-footer">
-        <div class="oc-card-footer-left">
-          <i class="ti ti-user"></i>
-          <span>${escapeHtml(o.operador || '—')}</span>
-          ${waLink ? `<a href="${waLink}" target="_blank" rel="noopener" class="oc-wa-btn" title="WhatsApp" onclick="event.stopPropagation()">
-            <i class="ti ti-brand-whatsapp"></i> ${escapeHtml(o.contato)}
-          </a>` : ''}
-        </div>
+        <div class="oc-card-footer-left"></div>
         <div class="oc-card-footer-right">
+          ${window.currentUser?.role === 'admin' ? `<button class="btn btn-sm" onclick="event.stopPropagation();openAtribuirModal('${o.id}')" title="Atribuir a outro usuário">
+            <i class="ti ti-user-plus"></i>
+          </button>` : ''}
           ${isAjuste ? `
           <button class="btn btn-sm" onclick="event.stopPropagation();reimprimirDocumentoDai('${o.daiId || ''}')" title="Reimprimir Documento de Ajuste de Inventário">
             <i class="ti ti-printer"></i>
@@ -1637,6 +1706,20 @@ function openOcorrenciaModal(id) {
   document.getElementById('oc-form-esc-responsavel').value = '';
   document.getElementById('oc-form-esc-data').value        = new Date().toISOString().split('T')[0];
 
+  // Atribuir pra outro usuário — só em nova ocorrência, só pro Supervisor
+  // (reatribuir uma já existente é feito pelo botão no card, não aqui).
+  const atribuirWrap = document.getElementById('oc-form-atribuir-wrap');
+  const atribuirSel   = document.getElementById('oc-form-atribuir');
+  if (atribuirWrap && atribuirSel) {
+    const mostrar = isNova && window.currentUser?.role === 'admin';
+    atribuirWrap.style.display = mostrar ? '' : 'none';
+    if (mostrar) {
+      const usuarios = _ocUsuariosParaAtribuir();
+      atribuirSel.innerHTML = `<option value="">Eu mesmo</option>` +
+        usuarios.map(u => `<option value="${u.id}">${escapeHtml(u.nome_exibicao || u.email)}</option>`).join('');
+    }
+  }
+
   document.getElementById('oc-modal').classList.add('open');
   initPhoneMasks();
 }
@@ -1685,6 +1768,10 @@ function submitOcorrenciaForm() {
   const contato    = contatoRaw.replace(/\D/g, '') || null;
   const descricao  = document.getElementById('oc-form-descricao').value.trim();
   const motivo     = document.getElementById('oc-form-motivo')?.value.trim() || '';
+  // Atribuir pra outro usuário (só existe/aparece em nova ocorrência, ver
+  // openOcorrenciaModal) — vazio = "eu mesmo", vira undefined igual a uma
+  // ocorrência nova sem atribuição (cai no fallback de _ocToDbRow).
+  const atribuidoId = !id ? (document.getElementById('oc-form-atribuir')?.value || undefined) : undefined;
 
   if (!central)   { toast('Informe a central.', 'error'); return; }
   if (!descricao) { toast('Informe a descrição da solicitação.', 'error'); return; }
@@ -1709,11 +1796,14 @@ function submitOcorrenciaForm() {
   const numero = existing ? (existing.numero || existing.id) : _nextOcId();
   const ocorrencia = {
     id:           id || _ocGerarIdSeguro(),
-    // Preserva o DONO ORIGINAL numa edição (undefined numa criação — vira
-    // "ainda não resolvido", mesmo padrão do resto do arquivo). Sem isto,
-    // editar a ocorrência de outra pessoa perdia o vínculo com o dono real
-    // — ver o comentário em _ocToDbRow (BUG REAL, 31/07).
-    userId:       existing?.userId,
+    // Preserva o DONO ORIGINAL numa edição (undefined numa criação sem
+    // atribuição — vira "ainda não resolvido", mesmo padrão do resto do
+    // arquivo, cai no fallback de _ocToDbRow). Sem isto, editar a
+    // ocorrência de outra pessoa perdia o vínculo com o dono real — ver o
+    // comentário em _ocToDbRow (BUG REAL, 31/07). Numa criação NOVA com
+    // atribuição (Supervisor escolheu alguém no modal), o escolhido já
+    // nasce como dono — não precisa de reatribuição depois.
+    userId:       existing?.userId || atribuidoId,
     numero,
     dataAbertura: abertura,
     motivo:       motivo,
@@ -1819,19 +1909,31 @@ function reabrirOcorrenciaConcluida(id) {
 }
 
 
+// Modal de confirmação (31/07) — antes disparava direto no clique, só com
+// undo por toast depois. Um clique sem querer já apagava, e o toast
+// desaparecia em 6s sem ninguém notar. O modal agora é a barreira real; o
+// undo continua como rede extra pra quem confirmou e se arrependeu.
 function confirmarExcluirOcorrencia(id) {
   const o = (state.ocorrencias || []).find(oc => oc.id === id);
   if (!o) return;
   const label = [o.central, o.material].filter(Boolean).join(' / ');
-  // Usa toast com undo — guarda o registro específico (não o array
-  // inteiro) para poder re-inserir só ele no Supabase se desfizer.
-  const ocSnapshot = { ...o };
-  deleteOcorrencia(id);
-  toast(`Ocorrência "${label}" removida.`, 'info', 6000, () => {
-    state.ocorrencias.push(ocSnapshot);
-    persist();
-    renderOcorrencias();
-    _ocSyncUpsert(ocSnapshot);
+  confirmarDestrutivo({
+    title: 'Excluir ocorrência',
+    sub: o.numero || o.id,
+    body: `Isso remove a ocorrência${label ? ` <strong>${escapeHtml(label)}</strong>` : ''}. Depois de confirmar, ainda dá pra desfazer por alguns segundos no aviso que aparece.`,
+    confirmLabel: 'Excluir',
+    onConfirm: () => {
+      // Usa toast com undo — guarda o registro específico (não o array
+      // inteiro) para poder re-inserir só ele no Supabase se desfizer.
+      const ocSnapshot = { ...o };
+      deleteOcorrencia(id);
+      toast(`Ocorrência "${label}" removida.`, 'info', 6000, () => {
+        state.ocorrencias.push(ocSnapshot);
+        persist();
+        renderOcorrencias();
+        _ocSyncUpsert(ocSnapshot);
+      });
+    },
   });
 }
 
@@ -2001,6 +2103,10 @@ Object.assign(window, {
   openEscalonarModal,
   closeEscalonarModal,
   submitEscalonar,
+  openAtribuirModal,
+  closeAtribuirModal,
+  submitAtribuir,
+  reatribuirOcorrencia,
   ocSelecionarNivel,
   openEditarEscalonamentoModal,
   closeEditarEscalonamentoModal,
