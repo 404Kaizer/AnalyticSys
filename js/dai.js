@@ -16,9 +16,11 @@
 //   1. Monta um HTML corporativo e abre numa nova janela, com botão
 //      "Imprimir / Salvar PDF" — mesmo padrão já usado em relatorio.js
 //      (window.print()), sem depender de nenhuma lib de PDF.
-//   2. Guarda uma cópia local de conveniência dos anexos no IndexedDB
-//      (fora do snapshot principal — ver idbPutAnexoDai em persist.js),
-//      só para permitir reabrir/reimprimir o documento depois.
+//   2. Sobe os anexos pro Supabase Storage (mesmo bucket dos anexos do
+//      formulário público, ver _daiSubirAnexo) — fonte de verdade única,
+//      acessível de qualquer dispositivo/usuário. DAIs geradas antes desta
+//      mudança (31/07) têm anexos só no IndexedDB de quem as criou (ver
+//      idbGetAnexoDai em persist.js) — baixarZipDai cai nesse fallback.
 //   3. Abre automaticamente ocorrência(s) dourada(s) em Ocorrências (ver
 //      ocorrencias.js), com o status exclusivo "Ajuste Sistêmico" — só
 //      criado por este módulo. Por padrão é UMA única ocorrência para o
@@ -121,7 +123,17 @@ async function syncAjustesSistemicosFromSupabase() {
     // fetchAllRows (cursor por id) — select('*') direto tinha o mesmo risco
     // de teto de 1000 linhas já corrigido em Lançamentos/Entradas. Sem
     // .order() antes, então a troca não muda ordenação nenhuma.
-    const data = await fetchMineOrIntegrated('ajustes_sistemicos');
+    // ADM (31/07): ajustes_sistemicos só é lido por id (modal de detalhe,
+    // exclusão) — nenhuma tela monta uma lista própria a partir dele, então
+    // não existe o risco de "poluir a lista de trabalho" que motivou o
+    // filtro mine+integrada em syncOcorrenciasFromSupabase. Sem isto, uma
+    // DAI reatribuída pra outro usuário (ou vista via card/notificação)
+    // ficava de fora de state.ajustesSistemicos e o modal de detalhe
+    // (openOcDetailModal) renderizava sem a seção "Documento de Ajuste de
+    // Inventário" — RLS (is_admin()) já libera o ADM a ler tudo.
+    const data = window.currentUser?.role === 'admin'
+      ? await fetchAllRows('ajustes_sistemicos')
+      : await fetchMineOrIntegrated('ajustes_sistemicos');
     // O BANCO MANDA (30/07): o self-heal que existia aqui reenviava DAI
     // apagado, desfazendo a exclusão no boot seguinte. A nuvem substitui;
     // erro de busca cai no catch e preserva o local.
@@ -132,15 +144,12 @@ async function syncAjustesSistemicosFromSupabase() {
 }
 
 // ── Realtime (31/07) ────────────────────────────────────────────────────
-// Mesma regra do fetch acima (mine + integrada) aplicada evento a evento —
-// pro usuário comum a RLS (dono OU is_admin) já restringe o que chega
-// nesta subscription; pro ADM, sem este filtro o Realtime entregaria TODO
-// DAI de TODO usuário (RLS libera is_admin() a ver tudo).
+// Mesma regra do fetch acima aplicada evento a evento: usuário comum já
+// vem restringido pela RLS (dono OU is_admin); ADM vê tudo, espelhando o
+// fetch inicial (fetchAllRows acima) — sem isto o Realtime dessincronizava
+// de novo logo após o primeiro DAI reatribuído/criado por outro usuário.
 async function _daiEhRelevantePraMim(row) {
-  if (window.currentUser?.role !== 'admin') return true;
-  if (row.user_id === window.currentUser?.id) return true;
-  const integrados = await _integracoesDoAdmin('ajustes_sistemicos');
-  return integrados.has(String(row.id));
+  return true;
 }
 function _daiUpsertLocal(row) {
   if (!Array.isArray(state.ajustesSistemicos)) state.ajustesSistemicos = [];
@@ -571,6 +580,28 @@ function _daiColetarItensDoModal() {
 // ── Anexos ──────────────────────────────────────────────────
 const DAI_ANEXO_MAX_MB = 15;
 
+// Sobe o anexo pro Storage (31/07) — mesmo bucket já usado pelos anexos do
+// formulário público (solicitacoes-anexos), sob o prefixo "interno/" (a
+// policy de INSERT autenticado cobre só esse prefixo; "publico/" continua
+// exclusivo do formulário anônimo). Antes, anexos de DAI manual ficavam só
+// no IndexedDB do navegador de quem gerou — outro analista/ADM, ou o mesmo
+// analista depois de limpar o navegador, não conseguia mais recuperá-los
+// (baixarZipDai reportava como "faltante"). Devolve o `path` salvo, ou
+// null se o upload falhar (fica só com os metadados, sem travar o fluxo).
+async function _daiSubirAnexo(daiId, file) {
+  if (!window.supabaseClient) return null;
+  const nomeSeguro = file.name.replace(/[^a-zA-Z0-9_.\-]/g, '_').slice(-120);
+  const path = `interno/${daiId}/${Date.now()}_${nomeSeguro}`;
+  const { error } = await window.supabaseClient.storage
+    .from('solicitacoes-anexos')
+    .upload(path, file, { contentType: file.type || 'application/octet-stream' });
+  if (error) {
+    console.warn('[DAI] Falha ao subir anexo pro Storage:', error);
+    return null;
+  }
+  return path;
+}
+
 function daiAdicionarAnexos(event) {
   const files = Array.from(event.target.files || []);
   files.forEach(f => {
@@ -671,14 +702,20 @@ async function gerarDocumentoAjuste() {
     const tag    = _nextDaiTag();
     const daiId  = 'dai_' + dataGeracaoTs + '_' + Math.random().toString(36).slice(2, 8);
 
-    // Hash + metadados dos anexos (arquivos originais ficam em memória
-    // até a cópia local ser gravada logo abaixo)
+    // Hash + upload dos anexos pro Storage (path vira a fonte de verdade —
+    // ver _daiSubirAnexo). Se o upload falhar, o anexo fica só com os
+    // metadados (sem path) e o toast avisa; não trava a geração do
+    // documento, que já é o dado mais importante.
     const anexosFiles = [..._daiAnexosPendentes];
     const anexosMeta = [];
+    let anexosComFalha = 0;
     for (const f of anexosFiles) {
       const hash = await _daiHashArquivo(f);
-      anexosMeta.push({ nome: f.name, tipo: f.type || 'application/octet-stream', tamanho: f.size, hash });
+      const path = await _daiSubirAnexo(daiId, f);
+      if (!path) anexosComFalha++;
+      anexosMeta.push({ nome: f.name, tipo: f.type || 'application/octet-stream', tamanho: f.size, hash, path });
     }
+    if (anexosComFalha) toast(`${anexosComFalha} anexo(s) não puderam ser enviados — o documento foi gerado mesmo assim.`, 'error');
 
     const daiRecord = {
       id: daiId,
@@ -707,11 +744,6 @@ async function gerarDocumentoAjuste() {
       operador: informantes.map(i => i.nome).join(', '),
       sapDocumento: itens[0].sapDocumento,
     };
-
-    // Cópia local de conveniência dos anexos (best-effort)
-    for (let i = 0; i < anexosFiles.length; i++) {
-      if (typeof idbPutAnexoDai === 'function') await idbPutAnexoDai(daiId, i, anexosFiles[i]);
-    }
 
     // Ocorrência(s) automática(s) — dourada(s), status exclusivo. Os ids
     // são reservados um a um (push direto em state.ocorrencias) para que
@@ -989,8 +1021,8 @@ function reimprimirDocumentoDai(daiId) {
 // ── Anexar arquivo a um DAI já emitido ──────────────────────
 // Chamado pelo botão "Anexar Arquivo" no card/detalhe da ocorrência de
 // Ajuste Sistêmico. Diferente do anexo na hora da geração (formulário),
-// este fluxo grava direto no DAI já existente: adiciona a cópia local no
-// IndexedDB (mesmo padrão de idbPutAnexoDai), registra os metadados em
+// este fluxo grava direto no DAI já existente: sobe o arquivo pro Storage
+// (ver _daiSubirAnexo), registra os metadados (com `path`) em
 // state.ajustesSistemicos e persiste. O documento reimpresso já reflete
 // os novos anexos automaticamente, pois é reconstruído sob demanda a
 // partir de dai.anexos.
@@ -1023,14 +1055,13 @@ async function _daiAdicionarAnexosPosGeracao(dai, files) {
       toast(`"${f.name}" excede ${DAI_ANEXO_MAX_MB}MB e não foi anexado.`, 'error');
       continue;
     }
-    const idx = dai.anexos.length; // próximo índice livre na cópia local
-    const salvou = (typeof idbPutAnexoDai === 'function') ? await idbPutAnexoDai(dai.id, idx, f) : false;
-    if (!salvou) {
-      toast(`Falha ao salvar "${f.name}" — tente novamente.`, 'error');
+    const path = await _daiSubirAnexo(dai.id, f);
+    if (!path) {
+      toast(`Falha ao enviar "${f.name}" — tente novamente.`, 'error');
       continue;
     }
     const hash = await _daiHashArquivo(f);
-    dai.anexos.push({ nome: f.name, tipo: f.type || 'application/octet-stream', tamanho: f.size, hash });
+    dai.anexos.push({ nome: f.name, tipo: f.type || 'application/octet-stream', tamanho: f.size, hash, path });
     adicionados++;
   }
 
@@ -1379,11 +1410,12 @@ function _daiBuildTermoHtml(dai) {
 // Essa função era referenciada pelo botão "Baixar ZIP" nos cards de
 // ocorrência (ver ocorrencias.js), mas nunca tinha sido implementada —
 // por isso o download simplesmente não funcionava para NENHUM DAI,
-// manual ou vindo do formulário público. Agora: monta um ZIP com o
-// documento (HTML) + cada anexo, buscando o arquivo de onde ele estiver
-// disponível — no Supabase Storage (anexos com "path", vindos do
-// formulário público) ou no IndexedDB local (anexos da criação manual,
-// que só existem no navegador de quem gerou o DAI).
+// manual ou vindo do formulário público. Monta um ZIP com o documento
+// (HTML) + cada anexo, buscando o arquivo de onde ele estiver disponível
+// — no Supabase Storage (anexos com "path", que desde 31/07 cobre tanto o
+// formulário público quanto a criação/anexo manual, ver _daiSubirAnexo)
+// ou, só como fallback pra DAIs geradas ANTES dessa mudança, no
+// IndexedDB local (existe apenas no navegador de quem gerou o DAI).
 async function baixarZipDai(daiId) {
   const dai = (state.ajustesSistemicos || []).find(d => d.id === daiId);
   if (!dai) { toast('Documento não encontrado — pode já ter sido excluído.', 'error'); return; }

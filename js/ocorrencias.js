@@ -756,10 +756,33 @@ function buildOcKPIs(lista) {
     .map(([reg, { total, count }]) => [reg, count > 0 ? total / count : 0, count])
     .sort((a, b) => b[1] - a[1]); // ordena do maior tempo para o menor
 
+  // Sublegenda do donut (31/07) — 3 métricas extra fora das fatias do
+  // gráfico: escalonadas por nível (só as ainda ABERTAS, no nível atual —
+  // mesma leitura de ocNivelAtual/OC_HIERARQUIA usada no resto da tela),
+  // concluídas em atraso (conclusão depois do prazo) e total de DAIs
+  // (documentos únicos, não ocorrências — um DAI pode gerar várias).
+  const escalonadas = { regional: 0, supervisor: 0, gerencia: 0 };
+  lista.forEach(o => {
+    if (o.concluida || o.inconclusiva) return;
+    const nivel = ocNivelAtual(o);
+    if (nivel === 1) escalonadas.regional++;
+    else if (nivel === 2) escalonadas.supervisor++;
+    else if (nivel === 3) escalonadas.gerencia++;
+  });
+
+  const concluidasAtraso = lista.filter(o =>
+    o.concluida && o.dataLimite && o.dataConclusao && o.dataConclusao > o.dataLimite
+  ).length;
+
+  const daisCriadas = new Set(
+    lista.filter(o => o.origemAjusteSistemico && o.daiId).map(o => o.daiId)
+  ).size;
+
   return { total, concluidas, inconclusivas, abertas, vencidas, urgentes, pctConc,
            topCentrals, porCentral, topMotivos, porMotivo,
            temposBuckets, tempoMedioMin, tempoCount,
            tempoMedioRegional,
+           escalonadas, concluidasAtraso, daisCriadas,
            _lista: lista };
 }
 
@@ -775,10 +798,12 @@ function _destroyOcCharts() {
 }
 
 // ── Donut "Status das ocorrências" ─────────────────────────
+// 31/07: reduzido a 3 categorias (Em aberto/Concluída/Inconclusiva) —
+// vencida/urgente continuam existindo como dado (cards, filtros), só
+// saem do gráfico/legenda principal. Métricas de escalonamento/atraso/
+// DAIs viram sublegenda abaixo, fora das fatias (ver _buildOcSublegenda).
 const OC_DONUT_META = {
-  vencida:      { col: '#ef4444', label: 'Vencida'       },
-  urgente:      { col: '#f59e0b', label: 'Urgente'       },
-  normal:       { col: '#3b82f6', label: 'Em aberto'     },
+  aberta:       { col: '#3b82f6', label: 'Em aberto'     },
   inconclusiva: { col: '#8b5cf6', label: 'Inconclusiva'  },
   concluida:    { col: '#10b981', label: 'Concluída'     }
 };
@@ -789,11 +814,8 @@ function _buildOcDonut(kpis) {
     return `<div style="display:flex;align-items:center;justify-content:center;height:160px;color:var(--text3);font-size:12px;font-family:var(--mono)">Sem ocorrências</div>`;
   }
 
-  const normais = Math.max(0, kpis.abertas - kpis.vencidas - kpis.urgentes);
   const segs = [
-    { key: 'vencida',      n: kpis.vencidas      },
-    { key: 'urgente',      n: kpis.urgentes      },
-    { key: 'normal',       n: normais            },
+    { key: 'aberta',       n: kpis.abertas       },
     { key: 'inconclusiva', n: kpis.inconclusivas },
     { key: 'concluida',    n: kpis.concluidas    },
   ].filter(s => s.n > 0);
@@ -836,6 +858,29 @@ function _buildOcDonut(kpis) {
         </div>
       </div>
       <div style="display:flex;flex-direction:column;gap:8px;min-width:130px">${legend}</div>
+    </div>
+    ${_buildOcSublegenda(kpis)}`;
+}
+
+// Sublegenda (31/07) — métricas extras fora das fatias do donut: nível de
+// escalonamento (só as ainda abertas), atraso na conclusão e total de DAIs
+// geradas. Mesmos dados de buildOcKPIs, sem gráfico novo nem lib nova.
+function _buildOcSublegenda(kpis) {
+  const { regional, supervisor, gerencia } = kpis.escalonadas;
+  const itens = [
+    { icon: 'ti-map-pin',        label: 'Escalonadas ao Regional',            val: regional },
+    { icon: 'ti-user-shield',    label: 'Escalonadas ao Supervisor do Setor', val: supervisor },
+    { icon: 'ti-crown',          label: 'Escalonadas à Gerência',             val: gerencia },
+    { icon: 'ti-clock-exclamation', label: 'Concluídas em atraso',            val: kpis.concluidasAtraso },
+    { icon: 'ti-file-certificate',  label: 'DAIs criadas',                    val: kpis.daisCriadas },
+  ];
+  return `
+    <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border2);display:flex;flex-direction:column;gap:6px">
+      ${itens.map(it => `<div style="display:flex;align-items:center;gap:7px;font-size:10.5px">
+        <i class="ti ${it.icon}" style="font-size:12px;color:var(--text3);width:14px;text-align:center;flex-shrink:0"></i>
+        <span style="color:var(--text3);flex:1">${it.label}</span>
+        <span style="font-family:var(--mono);color:var(--text2);font-weight:600">${it.val}</span>
+      </div>`).join('')}
     </div>`;
 }
 

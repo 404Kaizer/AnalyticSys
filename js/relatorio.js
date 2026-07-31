@@ -2701,6 +2701,268 @@ window.gerarRelatorioGeralOcorrencias = function() {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// RELATÓRIO DE DAIs (31/07) — todas as Documento de Ajuste de Inventário já
+// geradas + dashboard gerencial com KPIs SMART (Específicos/Mensuráveis/
+// Atingíveis/Relevantes/Temporais — todos calculados sobre dados que já
+// existem em state.ajustesSistemicos/state.ocorrencias, sem inventar campo
+// novo). Mesmo shell dos demais relatórios gerenciais (_buildRankingShellHTML)
+// e mesma estrutura de gerarRelatorioGeralOcorrencias logo acima — só troca
+// a fonte de dados de ocorrências pra DAIs.
+// ═══════════════════════════════════════════════════════════════════════════════
+window.gerarRelatorioDAIs = function() {
+  const lista = (state.ajustesSistemicos || []);
+  if (!lista.length) {
+    alert('Nenhuma DAI cadastrada para gerar o relatório.');
+    return;
+  }
+
+  const now = new Date().toLocaleString('pt-BR');
+  function escR(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function diffDays(aISO, bISO) {
+    if (!aISO || !bISO) return null;
+    const a = new Date(aISO + 'T00:00:00'), b = new Date(bISO + 'T00:00:00');
+    if (isNaN(a) || isNaN(b)) return null;
+    return Math.round((b - a) / 86400000);
+  }
+
+  const centralParaRegional = {};
+  (state.filiais || []).forEach(f => {
+    const key = (f.alias || f.origem || '').trim().toLowerCase();
+    if (key) centralParaRegional[key] = (f.regional || '').trim() || 'Sem Regional';
+  });
+  function getRegional(central) {
+    return centralParaRegional[(central||'').trim().toLowerCase()] || 'Sem Regional';
+  }
+
+  // Pendente = algum item ainda sem Nº do documento SAP (mesmo critério já
+  // usado no modal de detalhe — ver openOcDetailModal em ocorrencias.js).
+  function daiItens(dai) { return (typeof _daiGetItens === 'function') ? _daiGetItens(dai) : (dai.itens || []); }
+  function daiPendente(dai) { return daiItens(dai).some(it => !it.sapDocumento || it.sapDocumento === 'PENDENTE'); }
+  function daiDataGeracaoISO(dai) { return dai.dataGeracao ? new Date(dai.dataGeracao).toISOString().split('T')[0] : null; }
+  // Conclusão de uma DAI = maior dataConclusao entre as ocorrências vinculadas
+  // (uma por item, quando "ocorrência por item" foi usada na geração).
+  function daiDataConclusaoISO(dai) {
+    const ocs = (state.ocorrencias || []).filter(o => o.daiId === dai.id && o.concluida && o.dataConclusao);
+    if (!ocs.length) return null;
+    return ocs.map(o => o.dataConclusao).sort().pop();
+  }
+
+  // ── KPIs globais (SMART) ────────────────────────────────────────────────
+  const total       = lista.length;
+  const pendentes    = lista.filter(daiPendente).length;
+  const concluidas   = total - pendentes;
+  const pctConc      = total > 0 ? Math.round(concluidas / total * 100) : 0;
+  const pctPend      = total > 0 ? Math.round(pendentes / total * 100) : 0;
+
+  let tempoTotal = 0, tempoCount = 0;
+  lista.forEach(dai => {
+    if (daiPendente(dai)) return;
+    const d = diffDays(daiDataGeracaoISO(dai), daiDataConclusaoISO(dai));
+    if (d === null || d < 0) return;
+    tempoTotal += d; tempoCount++;
+  });
+  const tempoMedio = tempoCount > 0 ? (tempoTotal / tempoCount).toFixed(1) : null;
+
+  const semaforoColor = pctPend > 30 ? '#ef4444' : pctPend > 10 ? '#f59e0b' : '#22c55e';
+  const semaforoLabel = pctPend > 30 ? 'CRÍTICO' : pctPend > 10 ? 'ATENÇÃO' : 'NORMAL';
+  const semaforoDesc  = pctPend > 30
+    ? `${pctPend}% das DAIs ainda aguardam o Nº do documento SAP — ação imediata necessária.`
+    : pctPend > 10
+    ? `${pctPend}% das DAIs aguardam o Nº do documento SAP — acompanhamento necessário.`
+    : `Situação sob controle. ${pctPend}% de pendência entre as DAIs geradas.`;
+
+  // ── por Regional ─────────────────────────────────────────────────────────
+  const porRegional = {};
+  lista.forEach(dai => {
+    const reg = (dai.regionalCentral || '').trim() || getRegional(dai.central);
+    if (!porRegional[reg]) porRegional[reg] = { total:0, pendentes:0, concluidas:0 };
+    const r = porRegional[reg];
+    r.total++;
+    if (daiPendente(dai)) r.pendentes++; else r.concluidas++;
+  });
+  const regionaisOrdenados = Object.entries(porRegional).sort((a, b) =>
+    (b[1].pendentes * 100 + b[1].total) - (a[1].pendentes * 100 + a[1].total)
+  );
+
+  // ── Ranking de centrais ──────────────────────────────────────────────────
+  const porCentral = {};
+  lista.forEach(dai => {
+    const c = dai.central || '—';
+    if (!porCentral[c]) porCentral[c] = { total:0, pendentes:0 };
+    porCentral[c].total++;
+    if (daiPendente(dai)) porCentral[c].pendentes++;
+  });
+  const topCentrals = Object.entries(porCentral).sort((a, b) => b[1].total - a[1].total).slice(0, 12);
+  const maxCentral = topCentrals[0]?.[1]?.total || 1;
+
+  // ── linhas de tabela ──────────────────────────────────────────────────────
+  function buildRegionalRow([reg, r]) {
+    const pctR = r.total > 0 ? Math.round(r.concluidas / r.total * 100) : 0;
+    const rowBg = r.pendentes > 0 ? 'rgba(245,158,11,.06)' : 'transparent';
+    return `
+    <tr style="background:${rowBg}">
+      <td class="rk-name" style="font-size:12px">${escR(reg)}</td>
+      <td class="rk-num">${r.total}</td>
+      <td class="rk-num" style="color:${r.pendentes>0?'#fbbf24':'#64748b'}">${r.pendentes}</td>
+      <td class="rk-num" style="color:#4ade80">${r.concluidas}</td>
+      <td style="min-width:130px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="oc-bar-track"><div class="oc-bar-fill" style="width:${pctR}%;background:#22c55e"></div></div>
+          <span style="font-size:10.5px;font-family:'JetBrains Mono',monospace;color:#94a3b8;min-width:30px;text-align:right">${pctR}%</span>
+        </div>
+      </td>
+    </tr>`;
+  }
+
+  function buildCentralRow([central, c], idx) {
+    const barW = Math.round(c.total / maxCentral * 100);
+    const reg = getRegional(central);
+    return `
+    <tr style="background:${c.pendentes>0?'rgba(245,158,11,.06)':'transparent'}">
+      <td class="rk-num" style="color:#64748b;font-size:10px">${idx+1}</td>
+      <td class="rk-name" style="font-size:12px">${escR(central)}</td>
+      <td class="rk-sub" style="margin-top:0">${escR(reg)}</td>
+      <td style="min-width:120px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="oc-bar-track"><div class="oc-bar-fill" style="width:${barW}%;background:#818cf8"></div></div>
+          <span style="font-size:10.5px;font-family:'JetBrains Mono',monospace;color:#94a3b8;min-width:18px;text-align:right">${c.total}</span>
+        </div>
+      </td>
+      <td class="rk-num" style="color:${c.pendentes>0?'#fbbf24':'#64748b'}">${c.pendentes}</td>
+    </tr>`;
+  }
+
+  const daisOrdenadas = lista.slice().sort((a, b) => (b.dataGeracao||0) - (a.dataGeracao||0));
+  function buildDaiRow(dai) {
+    const pendente = daiPendente(dai);
+    const reg = (dai.regionalCentral || '').trim() || getRegional(dai.central);
+    return `
+    <tr style="background:${pendente?'rgba(245,158,11,.06)':'transparent'}">
+      <td class="rk-name" style="font-size:11.5px">${escR(dai.tag || dai.numero || '—')}</td>
+      <td class="rk-sub" style="margin-top:0;font-family:'JetBrains Mono',monospace">${escR(dai.numero || '—')}</td>
+      <td class="rk-name" style="font-size:11.5px;font-weight:600">${escR(dai.central || '—')}</td>
+      <td class="rk-sub" style="margin-top:0">${escR(reg)}</td>
+      <td style="font-size:11px;color:#cbd5e1">${dai.dataGeracao ? new Date(dai.dataGeracao).toLocaleDateString('pt-BR') : '—'}</td>
+      <td style="font-size:11px;color:#cbd5e1">${escR(dai.analista || '—')}</td>
+      <td style="font-size:11px;color:#94a3b8">${escR(dai.material || '—')}</td>
+      <td style="text-align:center">
+        <span style="display:inline-block;padding:2px 9px;border-radius:5px;font-size:9.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;${pendente ? 'background:rgba(245,158,11,.16);color:#fbbf24' : 'background:rgba(34,197,94,.16);color:#4ade80'}">${pendente ? 'Pendente' : 'Concluída'}</span>
+      </td>
+    </tr>`;
+  }
+
+  // ── bodyHtml ──────────────────────────────────────────────────────────────
+  const bodyHtml = `
+    <style>
+      .oc-semaforo { border-radius:10px; padding:16px 22px; display:flex; align-items:center; gap:16px; margin-bottom:22px; }
+      .oc-semaforo-dot { width:16px; height:16px; border-radius:50%; flex-shrink:0; }
+      .oc-semaforo-label { font-size:14px; font-weight:800; letter-spacing:.04em; }
+      .oc-semaforo-desc { font-size:11.5px; color:#94a3b8; margin-top:3px; }
+
+      .oc-highlight { background:rgba(255,255,255,.045); border:1px solid rgba(255,255,255,.09); border-radius:12px; padding:20px 24px; margin-bottom:24px; display:flex; align-items:center; gap:32px; flex-wrap:wrap; }
+      .oc-highlight-label { font-size:10.5px; color:#94a3b8; text-transform:uppercase; letter-spacing:.06em; }
+      .oc-highlight-value { font-family:'JetBrains Mono',monospace; font-weight:800; font-size:38px; color:#4ade80; line-height:1; margin-top:4px; }
+      .oc-highlight-value small { font-size:16px; font-weight:400; color:#94a3b8; margin-left:4px; }
+      .oc-highlight-sub { font-size:10.5px; color:#64748b; margin-top:4px; }
+      .oc-highlight-divider { width:1px; height:56px; background:rgba(255,255,255,.1); flex-shrink:0; }
+      .oc-highlight-stats { display:flex; flex-direction:column; gap:8px; flex:1; min-width:220px; }
+      .oc-highlight-row { display:flex; justify-content:space-between; font-size:11.5px; }
+      .oc-highlight-row span:first-child { color:#94a3b8; }
+      .oc-highlight-row strong { font-family:'JetBrains Mono',monospace; }
+
+      .oc-bar-track { flex:1; height:5px; background:rgba(255,255,255,.09); border-radius:3px; overflow:hidden; }
+      .oc-bar-fill { height:100%; border-radius:3px; }
+    </style>
+
+    <div class="oc-semaforo" style="background:${semaforoColor}18;border:1px solid ${semaforoColor}40">
+      <div class="oc-semaforo-dot" style="background:${semaforoColor};box-shadow:0 0 10px ${semaforoColor}80"></div>
+      <div>
+        <div class="oc-semaforo-label" style="color:${semaforoColor}">${semaforoLabel}</div>
+        <div class="oc-semaforo-desc">${escR(semaforoDesc)}</div>
+      </div>
+    </div>
+
+    ${tempoMedio !== null ? `
+    <div class="oc-highlight">
+      <div>
+        <div class="oc-highlight-label">Tempo médio de conclusão</div>
+        <div class="oc-highlight-value">${tempoMedio}<small>dias</small></div>
+        <div class="oc-highlight-sub">média entre geração e conclusão, ${tempoCount} DAI${tempoCount!==1?'s':''} com datas completas</div>
+      </div>
+      <div class="oc-highlight-divider"></div>
+      <div class="oc-highlight-stats">
+        <div class="oc-highlight-row"><span>DAIs criadas</span><strong style="color:#fff">${total}</strong></div>
+        <div class="oc-highlight-row"><span>Concluídas (Nº SAP preenchido)</span><strong style="color:#4ade80">${concluidas}</strong></div>
+        <div class="oc-highlight-row"><span>Pendentes (aguardando Nº SAP)</span><strong style="color:#fbbf24">${pendentes}</strong></div>
+        <div class="oc-highlight-row"><span>% concluídas</span><strong style="color:#93c5fd">${pctConc}%</strong></div>
+      </div>
+    </div>` : ''}
+
+    <div class="rk-table-wrap">
+      <div class="rk-table-head">
+        <div class="rk-table-head-title">Situação por Regional</div>
+        <div class="rk-table-head-cap">${regionaisOrdenados.length} ${regionaisOrdenados.length!==1?'regionais':'regional'}</div>
+      </div>
+      <table class="rk-table">
+        <thead>
+          <tr><th>Regional</th><th style="text-align:center">Total</th><th style="text-align:center">Pendentes</th><th style="text-align:center">Concluídas</th><th>% Concluídas</th></tr>
+        </thead>
+        <tbody>${regionaisOrdenados.map(buildRegionalRow).join('')}</tbody>
+      </table>
+    </div>
+
+    <div class="rk-table-wrap">
+      <div class="rk-table-head">
+        <div class="rk-table-head-title">Ranking de Centrais</div>
+        <div class="rk-table-head-cap">top ${topCentrals.length} por volume de DAIs</div>
+      </div>
+      <table class="rk-table">
+        <thead>
+          <tr><th style="width:28px">#</th><th>Central</th><th>Regional</th><th>Volume</th><th style="text-align:center">Pendentes</th></tr>
+        </thead>
+        <tbody>${topCentrals.map(buildCentralRow).join('')}</tbody>
+      </table>
+    </div>
+
+    <div class="rk-table-wrap">
+      <div class="rk-table-head">
+        <div class="rk-table-head-title">Todas as DAIs Criadas</div>
+        <div class="rk-table-head-cap">${total} documento${total!==1?'s':''} · mais recente primeiro</div>
+      </div>
+      <table class="rk-table">
+        <thead>
+          <tr><th>Tag</th><th>Nº Documento</th><th>Central</th><th>Regional</th><th>Geração</th><th>Analista</th><th>Material(is)</th><th style="text-align:center">Status</th></tr>
+        </thead>
+        <tbody>${daisOrdenadas.map(buildDaiRow).join('')}</tbody>
+      </table>
+    </div>`;
+
+  const d = {
+    periodoBadge: now.split(' ')[0],
+    periodo: 'Base completa de DAIs',
+    now,
+    kpis: [
+      { value: total,          label: 'DAIs criadas',    color: '#94a3b8' },
+      { value: concluidas,     label: 'concluídas',      color: '#22c55e' },
+      { value: pendentes,      label: 'pendentes (SAP)', color: '#f59e0b' },
+      { value: pctConc + '%',  label: '% concluídas',    color: '#3b82f6' },
+      { value: tempoMedio !== null ? tempoMedio + 'd' : '—', label: 'tempo médio conclusão', color: '#8b5cf6' }
+    ]
+  };
+
+  const html = _buildRankingShellHTML(d, {
+    pageTitle:  'Relatório de DAIs',
+    badge:      'Relatório Gerencial',
+    title:      'Painel de DAIs — Documentos de Ajuste de Inventário',
+    subtitle:   'Visão executiva de todas as DAIs geradas: pendências de Nº SAP, tempo de conclusão e distribuição por regional/central.',
+    bodyHtml,
+    notaRodape: 'Pendente: DAI com ao menos um item aguardando o Nº do documento SAP. Tempo médio calculado apenas entre DAIs concluídas com data de geração e conclusão registradas.'
+  });
+
+  _openRelWindow(html);
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // RELATÓRIO GERENCIAL DO DASHBOARD GERENCIAL — Visão Geral, para diretoria/
 // presidência (mesmo shell escuro dos demais Relatórios Gerenciais:
 // _buildRankingShellHTML). Lê window._dgVgLastData (cache populado no fim de
