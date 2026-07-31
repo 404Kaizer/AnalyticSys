@@ -83,29 +83,79 @@ function _daiSyncDelete(daiId, ownerId) {
 
 // Busca no boot — mescla por id, nuvem tem prioridade (mesmo padrão do
 // resto do sistema). Mantém dados locais em caso de falha de rede.
+// Extraído do corpo de syncAjustesSistemicosFromSupabase (31/07) pra dar
+// pra reusar no handler do Realtime também, sem duplicar o mapeamento.
+function _daiFromDbRow(r) {
+  return {
+    id: r.id, tag: r.tag, numero: r.numero, dataGeracao: r.data_geracao,
+    dataGeracaoKey: r.data_geracao_key, dataOcorrido: r.data_ocorrido,
+    central: r.central, cnpjCentral: r.cnpj_central, regionalCentral: r.regional_central,
+    descricao: r.descricao, informantes: r.informantes || [], itens: r.itens || [],
+    analista: r.analista, atestadoManual: r.atestado_manual, ocorrenciaPorItem: r.ocorrencia_por_item,
+    ocorrenciaIds: r.ocorrencia_ids || [], anexos: r.anexos || [],
+    material: r.material, tipoMovimentoSap: r.tipo_movimento_sap, objetivo: r.objetivo,
+    operador: r.operador, sapDocumento: r.sap_documento,
+  };
+}
+
 async function syncAjustesSistemicosFromSupabase() {
   try {
     // fetchAllRows (cursor por id) — select('*') direto tinha o mesmo risco
     // de teto de 1000 linhas já corrigido em Lançamentos/Entradas. Sem
     // .order() antes, então a troca não muda ordenação nenhuma.
     const data = await fetchMineOrIntegrated('ajustes_sistemicos');
-    const remoto = (data || []).map(r => ({
-      id: r.id, tag: r.tag, numero: r.numero, dataGeracao: r.data_geracao,
-      dataGeracaoKey: r.data_geracao_key, dataOcorrido: r.data_ocorrido,
-      central: r.central, cnpjCentral: r.cnpj_central, regionalCentral: r.regional_central,
-      descricao: r.descricao, informantes: r.informantes || [], itens: r.itens || [],
-      analista: r.analista, atestadoManual: r.atestado_manual, ocorrenciaPorItem: r.ocorrencia_por_item,
-      ocorrenciaIds: r.ocorrencia_ids || [], anexos: r.anexos || [],
-      material: r.material, tipoMovimentoSap: r.tipo_movimento_sap, objetivo: r.objetivo,
-      operador: r.operador, sapDocumento: r.sap_documento,
-    }));
     // O BANCO MANDA (30/07): o self-heal que existia aqui reenviava DAI
     // apagado, desfazendo a exclusão no boot seguinte. A nuvem substitui;
     // erro de busca cai no catch e preserva o local.
-    state.ajustesSistemicos = remoto;
+    state.ajustesSistemicos = (data || []).map(_daiFromDbRow);
   } catch (err) {
     console.warn('[Supabase] Falha ao buscar DAIs — mantendo dados locais.', err);
   }
+}
+
+// ── Realtime (31/07) ────────────────────────────────────────────────────
+// Mesma regra do fetch acima (mine + integrada) aplicada evento a evento —
+// pro usuário comum a RLS (dono OU is_admin) já restringe o que chega
+// nesta subscription; pro ADM, sem este filtro o Realtime entregaria TODO
+// DAI de TODO usuário (RLS libera is_admin() a ver tudo).
+async function _daiEhRelevantePraMim(row) {
+  if (window.currentUser?.role !== 'admin') return true;
+  if (row.user_id === window.currentUser?.id) return true;
+  const integrados = await _integracoesDoAdmin('ajustes_sistemicos');
+  return integrados.has(String(row.id));
+}
+function _daiUpsertLocal(row) {
+  if (!Array.isArray(state.ajustesSistemicos)) state.ajustesSistemicos = [];
+  const dai = _daiFromDbRow(row);
+  const idx = state.ajustesSistemicos.findIndex(d => d.id === dai.id);
+  if (idx >= 0) state.ajustesSistemicos[idx] = dai; else state.ajustesSistemicos.push(dai);
+}
+function _daiRemoveLocal(rowId) {
+  if (!Array.isArray(state.ajustesSistemicos)) return;
+  state.ajustesSistemicos = state.ajustesSistemicos.filter(d => d.id !== rowId);
+}
+
+let _daiChannel = null;
+function _daiRealtimeInit() {
+  if (!window.supabaseClient || !window.currentUser || _daiChannel) return;
+  const handle = async (payload, tipo) => {
+    const row = tipo === 'DELETE' ? payload.old : payload.new;
+    if (!row) return;
+    if (tipo === 'DELETE') { _daiRemoveLocal(row.id); return; }
+    if (await _daiEhRelevantePraMim(row)) _daiUpsertLocal(row); else _daiRemoveLocal(row.id);
+  };
+  _daiChannel = window.supabaseClient
+    .channel('ajustes_sistemicos_realtime')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ajustes_sistemicos' }, (p) => handle(p, 'INSERT'))
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'ajustes_sistemicos' }, (p) => handle(p, 'UPDATE'))
+    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'ajustes_sistemicos' }, (p) => handle(p, 'DELETE'))
+    .subscribe((status) => {
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') console.warn('[DAI] Canal Realtime com problema:', status);
+    });
+}
+function _daiRealtimeStop() {
+  if (_daiChannel && window.supabaseClient) window.supabaseClient.removeChannel(_daiChannel);
+  _daiChannel = null;
 }
 
 let _daiAnexosPendentes = []; // File[] em memória, até o clique em "Gerar"
@@ -1402,4 +1452,6 @@ Object.assign(window, {
   gerarTermoResponsabilidade,
   formatBytes,
   baixarZipDai,
+  _daiRealtimeInit,
+  _daiRealtimeStop,
 });

@@ -6438,6 +6438,12 @@ async function restoreAndRender() {
     // atividade acima. RLS da tabela `mensagens` já filtra o que cada
     // usuário recebe (remetente/destinatário/geral/admin).
     if (typeof _msgsRealtimeInit === 'function') _msgsRealtimeInit();
+    // Canais Realtime de Ocorrências e DAI (31/07) — mesmo padrão dos
+    // acima. Cada handler já reaplica a regra de relevância do fetch
+    // inicial (mine + integrada + visão do Supervisor pra Ocorrências) —
+    // ver ocorrencias.js/dai.js.
+    if (typeof _ocRealtimeInit === 'function') _ocRealtimeInit();
+    if (typeof _daiRealtimeInit === 'function') _daiRealtimeInit();
     // Backup condensado (27/07) — reforço periódico silencioso (Etapa 4),
     // cobre o que muda entre importações. Idempotente: seguro chamar de
     // novo em qualquer reboot da mesma aba.

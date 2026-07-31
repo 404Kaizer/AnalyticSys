@@ -149,6 +149,25 @@ async function syncOcorrenciasFromSupabase() {
     // é o lugar certo pra visão completa.
     const data = await fetchMineOrIntegrated('ocorrencias');
 
+    // Visão do Supervisor (31/07): fora do "própria + integrada" acima, o
+    // Supervisor precisa ver automaticamente, sem aceite manual — (1) toda
+    // ocorrência já escalonada pra ele ou acima (nível 2 = Supervisor do
+    // Setor, 3 = Gerência) e (2) toda ocorrência de DAI, pública ou de
+    // usuário autenticado — ambas já chegam aqui com
+    // origem_ajuste_sistemico=true (ver dai.js e a Edge Function
+    // solicitacao-dai). RLS já deixa o ADM ler a tabela inteira; isto só
+    // decide o que entra automaticamente na tela de trabalho dele, sem
+    // reviver o "vê tudo" que foi revertido acima.
+    let combinadas = data;
+    if (window.currentUser?.role === 'admin') {
+      const todas = await fetchAllRows('ocorrencias');
+      const jaIncluidas = new Set(data.map(r => `${r.user_id}|${r.id}`));
+      const extras = todas.filter(r =>
+        !jaIncluidas.has(`${r.user_id}|${r.id}`) && ocApareceAutoParaSupervisor(r)
+      );
+      combinadas = [...data, ...extras];
+    }
+
     // CORREÇÃO (28/07) — bug de colisão de ids entre contas: mesclar só
     // por `id` deixava uma ocorrência de OUTRA conta sobrescrever a minha
     // em memória sempre que o "OC-N" batia (chave primária era só `id`,
@@ -162,7 +181,7 @@ async function syncOcorrenciasFromSupabase() {
     const chave = o => `${o.userId || meuId}|${o.id}`;
 
     const local = Array.isArray(state.ocorrencias) ? state.ocorrencias : [];
-    const remoto = (data || []).map(_ocFromDbRow);
+    const remoto = (combinadas || []).map(_ocFromDbRow);
 
     // O BANCO MANDA (30/07): antes isto fundia local ∪ nuvem e reenviava as
     // ocorrências que só existiam local, desfazendo exclusão feita em outro
@@ -176,6 +195,56 @@ async function syncOcorrenciasFromSupabase() {
   } catch (err) {
     console.warn('[Supabase] Falha ao buscar ocorrencias — mantendo dados locais.', err);
   }
+}
+
+// ── Realtime (31/07) ────────────────────────────────────────────────────
+// Mesma regra de relevância do fetch acima (mine + integrada + visão do
+// Supervisor via ocApareceAutoParaSupervisor) aplicada evento a evento —
+// pro usuário comum a RLS (dono OU co_owner OU is_admin) já restringe o
+// que chega nesta subscription; pro ADM, sem este filtro o Realtime
+// entregaria TODA ocorrência de TODO usuário (RLS libera is_admin() a ver
+// tudo) e reviveria a poluição revertida em 31/07.
+async function _ocEhRelevantePraMim(row) {
+  if (window.currentUser?.role !== 'admin') return true;
+  if (row.user_id === window.currentUser?.id) return true;
+  const integrados = await _integracoesDoAdmin('ocorrencias');
+  if (integrados.has(String(row.id))) return true;
+  return ocApareceAutoParaSupervisor(row);
+}
+function _ocUpsertLocal(row) {
+  if (!Array.isArray(state.ocorrencias)) state.ocorrencias = [];
+  const oc = _ocFromDbRow(row);
+  const idx = state.ocorrencias.findIndex(o => o.id === oc.id && o.userId === oc.userId);
+  if (idx >= 0) state.ocorrencias[idx] = oc; else state.ocorrencias.push(oc);
+}
+function _ocRemoveLocal(id, userId) {
+  if (!Array.isArray(state.ocorrencias)) return;
+  state.ocorrencias = state.ocorrencias.filter(o => !(o.id === id && o.userId === userId));
+}
+
+let _ocChannel = null;
+function _ocRealtimeInit() {
+  if (!window.supabaseClient || !window.currentUser || _ocChannel) return;
+  const handle = async (payload, tipo) => {
+    const row = tipo === 'DELETE' ? payload.old : payload.new;
+    if (!row) return;
+    if (tipo === 'DELETE') { _ocRemoveLocal(row.id, row.user_id); }
+    else if (await _ocEhRelevantePraMim(row)) { _ocUpsertLocal(row); }
+    else { _ocRemoveLocal(row.id, row.user_id); } // deixou de ser relevante (ex.: descalonada abaixo do nível do Supervisor)
+    if (typeof renderOcorrencias === 'function') renderOcorrencias();
+  };
+  _ocChannel = window.supabaseClient
+    .channel('ocorrencias_realtime')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ocorrencias' }, (p) => handle(p, 'INSERT'))
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'ocorrencias' }, (p) => handle(p, 'UPDATE'))
+    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'ocorrencias' }, (p) => handle(p, 'DELETE'))
+    .subscribe((status) => {
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') console.warn('[Ocorrências] Canal Realtime com problema:', status);
+    });
+}
+function _ocRealtimeStop() {
+  if (_ocChannel && window.supabaseClient) window.supabaseClient.removeChannel(_ocChannel);
+  _ocChannel = null;
 }
 
 // Grava uma ocorrência no Supabase (upsert) — usada por todas as funções
@@ -308,6 +377,13 @@ function ocNivelAtual(o) {
 
 function ocNivelInfo(nivel) {
   return OC_HIERARQUIA[Math.min(nivel, OC_HIERARQUIA.length - 1)];
+}
+
+// Regra de visão automática do Supervisor (31/07) — ver
+// syncOcorrenciasFromSupabase(). Separada em função nomeada só pra dar pra
+// testar sem precisar simular o fetch inteiro do Supabase.
+function ocApareceAutoParaSupervisor(row) {
+  return row.origem_ajuste_sistemico === true || ocNivelAtual(row) >= 2;
 }
 
 function ocPodeEscalonar(o) {
@@ -1816,6 +1892,8 @@ function renderOcorrenciasPage() {
 // é necessário aqui.
 
 Object.assign(window, {
+  _ocRealtimeInit,
+  _ocRealtimeStop,
   renderOcorrenciasPage,
   renderOcorrencias,
   openOcorrenciaModal,

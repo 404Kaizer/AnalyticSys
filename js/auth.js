@@ -540,6 +540,9 @@ window.AuthGate = (function () {
         // de atividade: sem isso, ficaria escutando com credenciais
         // inválidas até a próxima navegação.
         if (typeof _msgsRealtimeStop === 'function') _msgsRealtimeStop();
+        // Canais Realtime de Ocorrências e DAI — mesmo cuidado.
+        if (typeof _ocRealtimeStop === 'function') _ocRealtimeStop();
+        if (typeof _daiRealtimeStop === 'function') _daiRealtimeStop();
         // Canal Realtime de reset remoto de dados locais — mesmo cuidado.
         if (typeof wipeRealtimeStop === 'function') wipeRealtimeStop();
       }
