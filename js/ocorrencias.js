@@ -10,14 +10,18 @@ function getOcorrencias() {
   return state.ocorrencias;
 }
 
-// Token curto e legível derivado do e-mail — usado no número de exibição
-// pra dar pra distinguir quem criou o quê quando o mesmo "OC-N" existe em
-// mais de uma conta (Ocorrências continua mostrando todo mundo junto pro
-// ADM, por decisão de 28/07 — "sem mudança" nos itens 11,12,14,15,17).
-function _ocUserToken(email) {
-  const local = String(email || '').split('@')[0] || '';
-  const clean = local.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-  return clean.slice(0, 4) || 'USR';
+// Token legível derivado do PRIMEIRO NOME do usuário — usado no número de
+// exibição pra dar pra distinguir quem criou o quê quando o mesmo "OC-N"
+// existe em mais de uma conta (Ocorrências continua mostrando todo mundo
+// junto pro ADM, por decisão de 28/07 — "sem mudança" nos itens
+// 11,12,14,15,17). 31/07: trocado de "4 letras do e-mail" (ex. "MAYC")
+// pro primeiro nome inteiro (ex. "MAYCON") — mesma normalização (NFD +
+// remove acento) já usada no resto do sistema pra nomes de central/material.
+function _ocUserToken(nomeCompleto, email) {
+  const primeiroNome = String(nomeCompleto || '').trim().split(/\s+/)[0] || '';
+  const base = primeiroNome || String(email || '').split('@')[0] || '';
+  const clean = base.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+  return clean || 'USR';
 }
 
 // Registros antigos sem `numero`/sem e-mail resolvível (ex.: backfill no
@@ -50,7 +54,7 @@ function _ocTokenFromUserId(userId) {
 // número de exibição, sem token, até serem editados ou passarem pelo
 // preenchimento retroativo em persist.js.
 function _nextOcId(tokenOverride) {
-  const token = tokenOverride || _ocUserToken(window.currentUser?.email);
+  const token = tokenOverride || _ocUserToken(window.currentUser?.nome_completo, window.currentUser?.email);
   const prefix = `OC-${token}-`;
   const lista = getOcorrencias();
   const nums = lista

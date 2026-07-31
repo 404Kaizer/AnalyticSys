@@ -235,17 +235,33 @@ function _daiMontarNumero(sapDigits, dataKey, seq) {
 }
 
 // Identificador curto e sequencial do DAI — mesmo padrão de _nextOcId()
-// (OC-1, OC-2...) em ocorrencias.js. Diferente do número fiscal do
+// (OC-HUGO-1, OC-MAYCON-2...) em ocorrencias.js, incluindo o token do
+// primeiro nome do criador (31/07: antes era só "DAI-N", sem token —
+// como state.ajustesSistemicos só reflete o que o usuário atual vê
+// (mine+integrada), duas contas diferentes podiam gerar a mesma tag
+// "DAI-1" de forma independente; o token resolve isso do mesmo jeito
+// que já resolvia pra ocorrências). Diferente do número fiscal do
 // documento (dai.numero, formato DAI-<SAP>-<AAAAMMDD>-<seq>), que
 // continua sendo o número oficial impresso no documento; este "tag" serve
-// só como referência rápida em cards, tooltips e cross-referências.
+// só como referência rápida em cards, tooltips e cross-referências —
+// nunca é usada como chave de busca (ver dai.id, esse sim único de
+// verdade), então uma colisão aqui é só estética, não funcional.
 function _nextDaiTag() {
+  const token = (typeof _ocUserToken === 'function')
+    ? _ocUserToken(window.currentUser?.nome_completo, window.currentUser?.email)
+    : 'USR';
+  const prefix = `DAI-${token}-`;
   const lista = state.ajustesSistemicos || [];
   const nums = lista
-    .map(d => { const m = String(d.tag || '').match(/^DAI-(\d+)$/); return m ? parseInt(m[1]) : 0; })
+    .map(d => {
+      const label = String(d.tag || '');
+      if (!label.startsWith(prefix)) return 0;
+      const n = parseInt(label.slice(prefix.length), 10);
+      return Number.isFinite(n) ? n : 0;
+    })
     .filter(n => n > 0);
   const next = nums.length ? Math.max(...nums) + 1 : 1;
-  return 'DAI-' + next;
+  return prefix + next;
 }
 
 // Preview do número fiscal no modal de geração — baseado no Nº SAP do
