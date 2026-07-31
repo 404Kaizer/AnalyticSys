@@ -302,6 +302,11 @@ const _NTM = {
   // de atividade de terceiros.
   escalonamento:{ icon:'ti-arrow-up-circle' },
   dai:          { icon:'ti-file-text'       },
+  // Lado do DONO (31/07) — o Supervisor escalonou/concluiu/marcou
+  // inconclusiva/reabriu/descalonou a ocorrência dele. Um ícone/cor só,
+  // reaproveitado pros vários sub-tipos (ver _ocDetectarMudancaPrioritaria
+  // em ocorrencias.js) — o título já diz qual foi a ação específica.
+  'acao-supervisor': { icon:'ti-user-shield' },
 };
 
 // Cor do ícone de notificações de atividade/auth — por módulo (mesma cor
@@ -328,7 +333,7 @@ const _AUTH_COLOR = 'var(--accent)';
 // nova: roxo é a cor do nível "Supervisor do Setor" em OC_HIERARQUIA
 // (ocorrencias.js), dourado é a cor de tudo que é DAI/Ajuste Sistêmico
 // (--gold, ver oc-badge-gold/oc-card-ajuste-sistemico em modules.css).
-const _SUPERVISOR_PRIORITY_COLOR = { escalonamento: 'var(--purple)', dai: 'var(--gold)' };
+const _SUPERVISOR_PRIORITY_COLOR = { escalonamento: 'var(--purple)', dai: 'var(--gold)', 'acao-supervisor': 'var(--purple)' };
 
 function _notifTimeAgo(ts) {
   if (!ts) return '';
@@ -406,18 +411,20 @@ function _notifRenderDropdown() {
     const lm=_NLM[n.level]||_NLM.info;
     const tm=_NTM[n.type]||_NTM.ocorrencia;
     const isAtividade = n.type === 'atividade' || n.type === 'auth';
-    // Prioridade do Supervisor (31/07) — escalonamento/DAI abrem o modal
+    // Notificações vinculadas a uma ocorrência (31/07: escalonamento/dai do
+    // lado do Supervisor, acao-supervisor do lado do dono) abrem o modal
     // PADRÃO de Ocorrências (o mesmo que o card na tela usa), não o modal
-    // genérico de detalhe de atividade.
-    const isPrioritariaSupervisor = n.type === 'escalonamento' || n.type === 'dai';
+    // genérico de detalhe de atividade — discriminado por ocorrenciaId, não
+    // por type, pra qualquer tipo novo desse grupo cair aqui automaticamente.
+    const temOcorrenciaVinculada = !!n.ocorrenciaId;
     const iconCol = n.type === 'auth' ? _AUTH_COLOR
       : n.type === 'atividade' ? (_ACTIVITY_MODULE_COLOR[n.activityTable] || _ACTIVITY_DEFAULT_COLOR)
-      : isPrioritariaSupervisor ? _SUPERVISOR_PRIORITY_COLOR[n.type]
+      : temOcorrenciaVinculada ? (_SUPERVISOR_PRIORITY_COLOR[n.type] || 'var(--purple)')
       : lm.col;
-    const hasRoute = isAtividade ? !!n.activityLogId : isPrioritariaSupervisor ? !!n.ocorrenciaId : !!_NOTIF_ROUTE[n.id];
+    const hasRoute = isAtividade ? !!n.activityLogId : temOcorrenciaVinculada ? true : !!_NOTIF_ROUTE[n.id];
     const clickAttr = !hasRoute ? '' : isAtividade
       ? `onclick="notifAbrirDetalheAtividade('${_notifEsc(n.id)}',event)"`
-      : isPrioritariaSupervisor
+      : temOcorrenciaVinculada
       ? `onclick="notifAbrirOcorrenciaPrioritaria('${_notifEsc(n.id)}',event)"`
       : `onclick="notifNavigate('${_notifEsc(n.id)}',event)"`;
     return `<div class="notif-item${n.read?' notif-item-read':''}${hasRoute?' notif-item-clickable':''}"
@@ -495,7 +502,7 @@ function notifBoot() {
   // condição em aberto, não um evento pontual — sumir com a versão lida
   // faria o aviso reaparecer como não lido enquanto a condição persistir.
   const antes = state.notifications.length;
-  const _TIPOS_PONTUAIS = new Set(['atividade', 'escalonamento', 'dai']);
+  const _TIPOS_PONTUAIS = new Set(['atividade', 'escalonamento', 'dai', 'acao-supervisor']);
   state.notifications = state.notifications.filter(n => !_TIPOS_PONTUAIS.has(n.type) || !n.read);
   if (state.notifications.length !== antes && typeof persist === 'function') persist();
 
@@ -856,9 +863,50 @@ async function _activityEhOcorrenciaPrioritariaParaMim(row) {
   return motivo === 'escalonamento' || motivo === 'dai';
 }
 
+// Lado do DONO (31/07): quando o Supervisor escalona/conclui/marca
+// inconclusiva/reabre/descalona a ocorrência de outra pessoa, o dono deve
+// ver isso ESPECIFICAMENTE, não só "o administrador editou um registro".
+// Usa old_data/new_data (só o activity_log tem os dois completos — o
+// canal direto de `ocorrencias` só traz a PK no DELETE) pra descobrir o
+// que mudou de verdade — ver _ocDetectarMudancaPrioritaria (ocorrencias.js).
+// Edição "de campo" (central, descrição etc.) devolve null e cai na
+// notificação genérica normalmente.
+function _activityNotificarMudancaOcorrencia(row) {
+  if (row.table_name !== 'ocorrencias' || row.operation !== 'UPDATE') return false;
+  if (window.currentUser?.role === 'admin') return false; // esta é pro DONO, não pro Supervisor
+  if (typeof _ocDetectarMudancaPrioritaria !== 'function') return false;
+  const mudanca = _ocDetectarMudancaPrioritaria(row.old_data, row.new_data);
+  if (!mudanca) return false;
+  if (typeof notifPushMudancaOcorrencia === 'function') {
+    notifPushMudancaOcorrencia({ ocorrenciaId: row.row_id, activityLogId: row.id, ...mudanca });
+  }
+  return true;
+}
+
+function notifPushMudancaOcorrencia({ ocorrenciaId, activityLogId, tipo, titulo, corpo }) {
+  if (!Array.isArray(state.notifications)) state.notifications = [];
+  state.notifications.unshift({
+    id: `acao-supervisor-${activityLogId}`,
+    type: 'acao-supervisor',
+    level: 'critico',
+    title: titulo,
+    body: (corpo || '').slice(0, 140),
+    createdAt: Date.now(),
+    read: false,
+    ocorrenciaId,
+    _subtipo: tipo, // só pra depuração/telemetria futura — não usado no render
+  });
+  if (typeof persist === 'function') persist();
+  _notifRenderBadge();
+  if (_notifOpen) _notifRenderDropdown();
+  notifShowActivityToast(titulo, corpo || '');
+  notifPlaySound();
+}
+
 async function _activityQueueEvent(row) {
   if (!_activityShouldNotify(row)) return;
   if (await _activityEhOcorrenciaPrioritariaParaMim(row)) return;
+  if (_activityNotificarMudancaOcorrencia(row)) return;
   const key = `${row.actor_id}|${row.table_name}|${row.operation}`;
   const entry = _activityBatchData.get(key) || { count: 0, sample: row };
   entry.count++;
@@ -909,6 +957,6 @@ Object.assign(window,{
   notifSync,notifBoot,notifUpdateFromAnalytico,notifSilentHealthCheck,
   notifPlaySound,notifShowActivityToast,notifHideActivityToast,
   notifAbrirDetalheAtividade,
-  notifPushOcorrenciaSupervisor,notifAbrirOcorrenciaPrioritaria,
+  notifPushOcorrenciaSupervisor,notifAbrirOcorrenciaPrioritaria,notifPushMudancaOcorrencia,
   _activityRealtimeInit,_activityRealtimeStop,
 });

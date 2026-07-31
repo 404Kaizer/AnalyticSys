@@ -75,6 +75,17 @@ function _ocGerarIdSeguro() {
 function _ocToDbRow(o) {
   return {
     id: o.id,
+    // BUG REAL (31/07): faltava aqui. A coluna user_id tem
+    // `default auth.uid()` — sem mandar explícito, um upsert de UMA
+    // ocorrência de outro dono (Supervisor editando algo escalonado pra
+    // ele) caía no default (o PRÓPRIO uid do Supervisor), e o
+    // onConflict:'user_id,id' passava a mirar (meu_id, id) em vez de
+    // (dono_real, id) — sem linha existente com essa combinação, o
+    // upsert INSERIA uma cópia nova em vez de atualizar a original:
+    // duplicava pro Supervisor e a edição nunca chegava no dono de
+    // verdade. Mesmo fallback (o.userId || meuId) usado no resto do
+    // arquivo pra ocorrência recém-criada, ainda sem round-trip.
+    user_id: o.userId || window.currentUser?.id,
     numero: o.numero || null,
     data_abertura: o.dataAbertura || null,
     motivo: o.motivo || null,
@@ -420,6 +431,37 @@ function ocNivelInfo(nivel) {
 // testar sem precisar simular o fetch inteiro do Supabase.
 function ocApareceAutoParaSupervisor(row) {
   return row.origem_ajuste_sistemico === true || ocNivelAtual(row) >= 2;
+}
+
+// Detecta uma mudança de PRIORIDADE feita pelo Supervisor numa ocorrência
+// do usuário comum (escalonou/concluiu/marcou inconclusiva/reabriu/
+// descalonou) — usada por notifications.js (_activityNotificarMudancaOcorrencia,
+// via activity_log, que tem old_data/new_data completos) pra avisar o DONO
+// com uma notificação ESPECÍFICA em vez da genérica "o administrador
+// editou um registro". Edição "de campo" (central, descrição etc., sem
+// mudar concluida/inconclusiva/nível) devolve null — essas continuam só
+// na notificação genérica.
+function _ocDetectarMudancaPrioritaria(oldData, newData) {
+  if (!oldData || !newData) return null;
+  const corpo = [newData.central, newData.numero || newData.id].filter(Boolean).join(' · ');
+  if (!oldData.concluida && newData.concluida) {
+    return { tipo: 'concluida', titulo: 'O Supervisor concluiu sua ocorrência', corpo };
+  }
+  if (!oldData.inconclusiva && newData.inconclusiva) {
+    return { tipo: 'inconclusiva', titulo: 'O Supervisor marcou sua ocorrência como inconclusiva', corpo };
+  }
+  if ((oldData.concluida && !newData.concluida) || (oldData.inconclusiva && !newData.inconclusiva)) {
+    return { tipo: 'reaberta', titulo: 'O Supervisor reabriu sua ocorrência', corpo };
+  }
+  const nivelAntes = ocNivelAtual(oldData);
+  const nivelDepois = ocNivelAtual(newData);
+  if (nivelDepois > nivelAntes) {
+    return { tipo: 'escalonada', titulo: `O Supervisor escalonou sua ocorrência para ${ocNivelInfo(nivelDepois)?.label || 'um nível superior'}`, corpo };
+  }
+  if (nivelDepois < nivelAntes) {
+    return { tipo: 'descalonada', titulo: 'O Supervisor descalonou sua ocorrência', corpo };
+  }
+  return null;
 }
 
 function ocPodeEscalonar(o) {
@@ -1667,6 +1709,11 @@ function submitOcorrenciaForm() {
   const numero = existing ? (existing.numero || existing.id) : _nextOcId();
   const ocorrencia = {
     id:           id || _ocGerarIdSeguro(),
+    // Preserva o DONO ORIGINAL numa edição (undefined numa criação — vira
+    // "ainda não resolvido", mesmo padrão do resto do arquivo). Sem isto,
+    // editar a ocorrência de outra pessoa perdia o vínculo com o dono real
+    // — ver o comentário em _ocToDbRow (BUG REAL, 31/07).
+    userId:       existing?.userId,
     numero,
     dataAbertura: abertura,
     motivo:       motivo,
@@ -1930,6 +1977,7 @@ function renderOcorrenciasPage() {
 Object.assign(window, {
   _ocRealtimeInit,
   _ocRealtimeStop,
+  _ocDetectarMudancaPrioritaria,
   renderOcorrenciasPage,
   renderOcorrencias,
   openOcorrenciaModal,

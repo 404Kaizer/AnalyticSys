@@ -16,7 +16,7 @@ import assert from 'node:assert/strict';
 const raiz = join(dirname(fileURLToPath(import.meta.url)), '..');
 const fonte = readFileSync(join(raiz, 'js', 'notifications.js'), 'utf8');
 
-function montar({ role = 'admin', motivo = null } = {}) {
+function montar({ role = 'admin', motivo = null, mudanca = null } = {}) {
   const chamadas = { navigate: [], openOcDetailModal: [], persist: 0 };
   const ctx = {
     console: { info() {}, warn() {}, error() {} },
@@ -31,10 +31,12 @@ function montar({ role = 'admin', motivo = null } = {}) {
     persist: () => { chamadas.persist++; },
     navigate: (page) => { chamadas.navigate.push(page); },
     openOcDetailModal: (id) => { chamadas.openOcDetailModal.push(id); },
-    // Stub de ocorrencias.js (fora do escopo deste arquivo) — só o
-    // suficiente pra _activityEhOcorrenciaPrioritariaParaMim funcionar
-    // isolado, sem carregar o módulo inteiro de Ocorrências.
+    // Stubs de ocorrencias.js (fora do escopo deste arquivo) — só o
+    // suficiente pra _activityEhOcorrenciaPrioritariaParaMim/
+    // _activityNotificarMudancaOcorrencia funcionarem isolados, sem
+    // carregar o módulo inteiro de Ocorrências.
     _ocMotivoRelevancia: async () => motivo,
+    _ocDetectarMudancaPrioritaria: () => mudanca,
   };
   ctx.window = ctx; // window === global, mesmo motivo do teste de ocorrencias.js
   ctx.globalThis = ctx;
@@ -140,6 +142,50 @@ teste('DELETE usa old_data, não new_data', async () => {
   const { ctx } = montar({ motivo: 'dai' });
   const row = { table_name: 'ocorrencias', operation: 'DELETE', old_data: { id: 'oc_1' }, new_data: null };
   assert.equal(await ctx._activityEhOcorrenciaPrioritariaParaMim(row), true);
+});
+
+// ── _activityNotificarMudancaOcorrencia / notifPushMudancaOcorrencia ──
+// Lado do DONO: quando o Supervisor escalona/conclui/etc. a ocorrência de
+// outra pessoa, o dono recebe uma notificação ESPECÍFICA (não a genérica).
+
+const activityRowUpdate = { id: 'log_1', row_id: 'oc_1', table_name: 'ocorrencias', operation: 'UPDATE', old_data: {}, new_data: {} };
+
+teste('dispara e cria a notificação quando há mudança de prioridade', () => {
+  const { ctx } = montar({ role: 'user', mudanca: { tipo: 'escalonada', titulo: 'O Supervisor escalonou sua ocorrência para Gerência', corpo: 'ABA1' } });
+  const disparou = ctx._activityNotificarMudancaOcorrencia(activityRowUpdate);
+  assert.equal(disparou, true);
+  assert.equal(ctx.state.notifications.length, 1);
+  const n = ctx.state.notifications[0];
+  assert.equal(n.type, 'acao-supervisor');
+  assert.equal(n.ocorrenciaId, 'oc_1');
+  assert.equal(n.id, 'acao-supervisor-log_1');
+  assert.equal(n.level, 'critico');
+});
+
+teste('não dispara quando não há mudança de prioridade (edição de campo)', () => {
+  const { ctx } = montar({ role: 'user', mudanca: null });
+  assert.equal(ctx._activityNotificarMudancaOcorrencia(activityRowUpdate), false);
+  assert.equal(ctx.state.notifications.length, 0);
+});
+
+teste('não dispara pro próprio Supervisor (essa notificação é pro DONO)', () => {
+  const { ctx } = montar({ role: 'admin', mudanca: { tipo: 'concluida', titulo: 'x', corpo: '' } });
+  assert.equal(ctx._activityNotificarMudancaOcorrencia(activityRowUpdate), false);
+  assert.equal(ctx.state.notifications.length, 0);
+});
+
+teste('não dispara pra outra tabela nem pra INSERT/DELETE', () => {
+  const { ctx } = montar({ role: 'user', mudanca: { tipo: 'concluida', titulo: 'x', corpo: '' } });
+  assert.equal(ctx._activityNotificarMudancaOcorrencia({ ...activityRowUpdate, table_name: 'lancamentos' }), false);
+  assert.equal(ctx._activityNotificarMudancaOcorrencia({ ...activityRowUpdate, operation: 'INSERT' }), false);
+});
+
+teste('clicar na notificação de mudança abre o modal padrão de Ocorrências', () => {
+  const { ctx, chamadas } = montar({ role: 'user', mudanca: { tipo: 'inconclusiva', titulo: 'x', corpo: '' } });
+  ctx._activityNotificarMudancaOcorrencia(activityRowUpdate);
+  ctx.notifAbrirOcorrenciaPrioritaria('acao-supervisor-log_1');
+  assert.deepEqual(chamadas.navigate, ['ocorrencias']);
+  assert.deepEqual(chamadas.openOcDetailModal, ['oc_1']);
 });
 
 let falhou = 0;

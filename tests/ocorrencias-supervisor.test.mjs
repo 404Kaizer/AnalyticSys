@@ -192,6 +192,90 @@ teste('_ocUpsertLocal não duplica quando o evento Realtime confirma uma ocorrê
   assert.equal(ctx.state.ocorrencias[0].userId, 'dono-a');
 });
 
+// ── _ocToDbRow: user_id explícito (31/07) ──────────────────────────────
+// BUG REAL: a coluna ocorrencias.user_id tem `default auth.uid()`. Sem
+// mandar user_id explícito no upsert, editar a ocorrência de OUTRO dono
+// (Supervisor mexendo em algo escalonado pra ele) caía no default — o
+// PRÓPRIO uid de quem editou — e o onConflict:'user_id,id' passava a
+// mirar (meu_id, id) em vez de (dono_real, id): sem linha existente ali,
+// o upsert INSERIA uma cópia nova em vez de atualizar a original —
+// duplicava pro Supervisor e a edição nunca chegava no dono de verdade.
+
+teste('_ocToDbRow manda o user_id do DONO ORIGINAL, não do currentUser', () => {
+  const ctx = montar({ role: 'admin' }); // currentUser.id = 'u-adm'
+  const row = ctx._ocToDbRow({ id: 'oc_1', userId: 'dono-real' });
+  assert.equal(row.user_id, 'dono-real');
+});
+
+teste('_ocToDbRow cai no currentUser só quando userId ainda não foi resolvido (criação nova)', () => {
+  const ctx = montar({ role: 'admin' });
+  const row = ctx._ocToDbRow({ id: 'oc_1', userId: undefined });
+  assert.equal(row.user_id, 'u-adm');
+});
+
+// ── _ocDetectarMudancaPrioritaria (31/07) ──────────────────────────────
+// Notificação pro DONO quando o Supervisor mexe na ocorrência dele —
+// precisa acertar exatamente QUAL mudança aconteceu (escalonou/concluiu/
+// marcou inconclusiva/reabriu/descalonou), e não disparar nada pra edição
+// "de campo" (central, descrição etc.).
+
+const daiBase = { central: 'ABA1', numero: 'OC-HUGO-1', concluida: false, inconclusiva: false, hierarquia: [] };
+
+teste('mudança: concluida false→true é "concluida"', () => {
+  const ctx = montar();
+  const r = ctx._ocDetectarMudancaPrioritaria(daiBase, { ...daiBase, concluida: true });
+  assert.equal(r.tipo, 'concluida');
+});
+
+teste('mudança: inconclusiva false→true é "inconclusiva"', () => {
+  const ctx = montar();
+  const r = ctx._ocDetectarMudancaPrioritaria(daiBase, { ...daiBase, inconclusiva: true });
+  assert.equal(r.tipo, 'inconclusiva');
+});
+
+teste('mudança: concluida true→false é "reaberta"', () => {
+  const ctx = montar();
+  const r = ctx._ocDetectarMudancaPrioritaria({ ...daiBase, concluida: true }, { ...daiBase, concluida: false });
+  assert.equal(r.tipo, 'reaberta');
+});
+
+teste('mudança: inconclusiva true→false é "reaberta"', () => {
+  const ctx = montar();
+  const r = ctx._ocDetectarMudancaPrioritaria({ ...daiBase, inconclusiva: true }, { ...daiBase, inconclusiva: false });
+  assert.equal(r.tipo, 'reaberta');
+});
+
+teste('mudança: nível sobe (escalonou pra Gerência) é "escalonada", com o nome do nível no título', () => {
+  const ctx = montar();
+  const r = ctx._ocDetectarMudancaPrioritaria(
+    { ...daiBase, hierarquia: [{ nivel: 2 }] },
+    { ...daiBase, hierarquia: [{ nivel: 2 }, { nivel: 3 }] },
+  );
+  assert.equal(r.tipo, 'escalonada');
+  assert.match(r.titulo, /Gerência/);
+});
+
+teste('mudança: nível desce é "descalonada"', () => {
+  const ctx = montar();
+  const r = ctx._ocDetectarMudancaPrioritaria(
+    { ...daiBase, hierarquia: [{ nivel: 2 }, { nivel: 3 }] },
+    { ...daiBase, hierarquia: [{ nivel: 2 }] },
+  );
+  assert.equal(r.tipo, 'descalonada');
+});
+
+teste('sem mudança de prioridade (só editou central/descrição) devolve null', () => {
+  const ctx = montar();
+  const r = ctx._ocDetectarMudancaPrioritaria(daiBase, { ...daiBase, central: 'ABA2' });
+  assert.equal(r, null);
+});
+
+teste('old_data ou new_data ausentes devolve null (não quebra)', () => {
+  const ctx = montar();
+  assert.equal(ctx._ocDetectarMudancaPrioritaria(null, daiBase), null);
+  assert.equal(ctx._ocDetectarMudancaPrioritaria(daiBase, null), null);
+});
+
 let falhou = 0;
 for (const { nome, fn } of casos) {
   try {
