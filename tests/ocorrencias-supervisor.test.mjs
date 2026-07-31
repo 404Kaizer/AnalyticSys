@@ -27,6 +27,13 @@ function montar({ role = 'admin', integrados = new Set() } = {}) {
   const ctx = {
     console: { info() {}, warn() {}, error() {} },
     state: { ocorrencias: [] },
+    // O arquivo registra um listener de clique pros dropdowns de filtro já
+    // no carregamento (fora de qualquer função) — precisa existir pra
+    // vm.runInContext não quebrar.
+    document: {
+      addEventListener() {},
+      getElementById() { return null; },
+    },
   };
   // window === global (mesmo objeto), como no navegador de verdade — o
   // arquivo faz `window.foo = function(){}` e depois `Object.assign(window,
@@ -360,6 +367,239 @@ teste('reatribuirOcorrencia não persiste localmente se o UPDATE falhar', async 
   await ctx.reatribuirOcorrencia('oc_1', 'dono-novo');
   assert.equal(ctx.state.ocorrencias[0].userId, 'dono-antigo'); // não mudou
   assert.equal(chamadas.persist, 0);
+});
+
+// ── Filtros no padrão Visão Micro (31/07) ──────────────────────────────
+// ocStatusMatches é a mesma lógica que já existia inline no <select> antigo,
+// só extraída pra dar pra checar "bate com QUALQUER status marcado" no
+// multi-seleção — precisa continuar batendo exatamente igual, senão o
+// filtro passa a mostrar (ou esconder) a coisa errada silenciosamente.
+
+function amanha(dias) {
+  const d = new Date(); d.setDate(d.getDate() + dias);
+  return d.toISOString().split('T')[0];
+}
+
+teste('ocStatusMatches: "aberta" bate com não-concluída e não-inconclusiva', () => {
+  const ctx = montar();
+  assert.equal(ctx.ocStatusMatches({ concluida: false, inconclusiva: false }, 'aberta'), true);
+  assert.equal(ctx.ocStatusMatches({ concluida: true, inconclusiva: false }, 'aberta'), false);
+});
+
+teste('ocStatusMatches: "vencida" exige prazo no passado e não concluída/inconclusiva', () => {
+  const ctx = montar();
+  const vencida = { concluida: false, inconclusiva: false, dataLimite: amanha(-3) };
+  assert.equal(ctx.ocStatusMatches(vencida, 'vencida'), true);
+  assert.equal(ctx.ocStatusMatches({ ...vencida, concluida: true }, 'vencida'), false);
+  assert.equal(ctx.ocStatusMatches({ ...vencida, dataLimite: amanha(3) }, 'vencida'), false);
+});
+
+teste('ocStatusMatches: "urgente" é prazo em até 2 dias, não vencido', () => {
+  const ctx = montar();
+  assert.equal(ctx.ocStatusMatches({ concluida: false, inconclusiva: false, dataLimite: amanha(1) }, 'urgente'), true);
+  assert.equal(ctx.ocStatusMatches({ concluida: false, inconclusiva: false, dataLimite: amanha(5) }, 'urgente'), false);
+});
+
+teste('ocStatusMatches: "concluida"/"inconclusiva"/"ajuste_sistemico" batem no campo direto', () => {
+  const ctx = montar();
+  assert.equal(ctx.ocStatusMatches({ concluida: true }, 'concluida'), true);
+  assert.equal(ctx.ocStatusMatches({ inconclusiva: true, concluida: false }, 'inconclusiva'), true);
+  assert.equal(ctx.ocStatusMatches({ inconclusiva: true, concluida: true }, 'inconclusiva'), false); // concluída tem prioridade
+  assert.equal(ctx.ocStatusMatches({ origemAjusteSistemico: true }, 'ajuste_sistemico'), true);
+});
+
+teste('getOcorrenciasFiltradas: sem nenhum filtro aplicado, mostra tudo', () => {
+  const ctx = montar();
+  ctx.state.ocorrencias = [{ id: 'a', central: 'ABA1' }, { id: 'b', central: 'ABA2' }];
+  assert.equal(ctx.getOcorrenciasFiltradas().length, 2);
+});
+
+teste('getOcorrenciasFiltradas: filtro de central é OU entre os selecionados (multi-seleção de verdade)', () => {
+  const ctx = montar();
+  ctx.state.ocorrencias = [
+    { id: 'a', central: 'ABA1' },
+    { id: 'b', central: 'ABA2' },
+    { id: 'c', central: 'ABA3' },
+  ];
+  ctx._ocMicroFilter.applied.central = new Set(['ABA1', 'ABA3']);
+  const ids = ctx.getOcorrenciasFiltradas().map(o => o.id).sort();
+  assert.deepEqual(ids, ['a', 'c']);
+});
+
+teste('getOcorrenciasFiltradas: match EXATO de central, não substring (corrige o bug do <select> antigo)', () => {
+  const ctx = montar();
+  ctx.state.ocorrencias = [{ id: 'a', central: 'ABA1' }, { id: 'b', central: 'ABA10' }];
+  ctx._ocMicroFilter.applied.central = new Set(['ABA1']);
+  const ids = ctx.getOcorrenciasFiltradas().map(o => o.id);
+  assert.deepEqual(ids, ['a']); // "ABA10" não deveria bater com "ABA1"
+});
+
+teste('getOcorrenciasFiltradas: filtro de status casa com QUALQUER valor marcado', () => {
+  const ctx = montar();
+  ctx.state.ocorrencias = [
+    { id: 'a', concluida: true, inconclusiva: false },
+    { id: 'b', concluida: false, inconclusiva: true },
+    { id: 'c', concluida: false, inconclusiva: false },
+  ];
+  ctx._ocMicroFilter.applied.status = new Set(['concluida', 'inconclusiva']);
+  const ids = ctx.getOcorrenciasFiltradas().map(o => o.id).sort();
+  assert.deepEqual(ids, ['a', 'b']);
+});
+
+teste('ocApplyMicroFilter: comita pending pra applied e limpa pending do outro lado (via toggle)', () => {
+  const ctx = montar();
+  ctx.state.ocorrencias = [];
+  ctx._ocMicroFilter.pending.central = new Set(['ABA1']);
+  ctx.ocApplyMicroFilter('central');
+  assert.deepEqual([...ctx._ocMicroFilter.applied.central], ['ABA1']);
+});
+
+teste('ocCancelMicroFilter: descarta pending, applied não muda', () => {
+  const ctx = montar();
+  ctx._ocMicroFilter.applied.central = new Set(['ABA1']);
+  ctx._ocMicroFilter.pending.central = new Set(['ABA1', 'ABA2']); // usuário marcou mais uma, mas não aplicou
+  ctx.ocCancelMicroFilter('central');
+  assert.deepEqual([...ctx._ocMicroFilter.pending.central], ['ABA1']); // voltou a copiar de applied
+  assert.deepEqual([...ctx._ocMicroFilter.applied.central], ['ABA1']); // applied intacto
+});
+
+teste('ocClearMicroFilter: zera pending E applied de uma chave só', () => {
+  const ctx = montar();
+  ctx.state.ocorrencias = [];
+  ctx._ocMicroFilter.applied.central = new Set(['ABA1']);
+  ctx._ocMicroFilter.applied.status = new Set(['concluida']);
+  ctx.ocClearMicroFilter('central');
+  assert.equal(ctx._ocMicroFilter.applied.central.size, 0);
+  assert.equal(ctx._ocMicroFilter.applied.status.size, 1); // outra chave não mexida
+});
+
+teste('ocClearAllMicroFilters: zera as 4 chaves de uma vez', () => {
+  const ctx = montar();
+  ctx.state.ocorrencias = [];
+  ctx._ocMicroFilter.applied.central = new Set(['ABA1']);
+  ctx._ocMicroFilter.applied.status = new Set(['concluida']);
+  ctx._ocMicroFilter.applied.material = new Set(['X']);
+  ctx._ocMicroFilter.applied.regional = new Set(['Y']);
+  ctx.ocClearAllMicroFilters();
+  const f = ctx._ocMicroFilter.applied;
+  assert.equal(f.central.size + f.status.size + f.material.size + f.regional.size, 0);
+});
+
+// ── populateOcFiltros: opções refletem só o que existe (31/07) ─────────
+// Achado do usuário: Central/Material mostravam o cadastro INTEIRO
+// (state.filiais/state.materiais), inclusive coisa nunca usada em nenhuma
+// ocorrência. Agora é só o que já apareceu em alguma ocorrência de
+// verdade — o cadastro completo continua só no formulário de Nova
+// Ocorrência (mCentral/mMaterial), que é um caso de uso diferente
+// (cadastrar algo novo, não filtrar o que já existe).
+
+teste('populateOcFiltros: Central/Material só mostram valores que JÁ existem numa ocorrência, não o cadastro inteiro', () => {
+  const ctx = montar();
+  ctx.state.ocorrencias = [{ id: 'a', central: 'ABA1', material: 'CIMENTO', concluida: false, inconclusiva: false }];
+  ctx.state.filiais = [{ alias: 'ABA1' }, { alias: 'ABA9-NUNCA-USADA' }];
+  ctx.state.materiais = [{ origem: 'CIMENTO' }, { origem: 'NUNCA-USADO' }];
+  ctx.populateOcFiltros();
+  // JSON round-trip: os arrays vêm de .map() executado com o Array do
+  // realm do vm — deepEqual cru reclama de "mesma estrutura mas não é a
+  // mesma referência de Object/Array" comparando com um array literal daqui.
+  const paraFora = arr => JSON.parse(JSON.stringify(arr));
+  assert.deepEqual(paraFora(ctx._ocMicroFilter.options.central.map(o => o.value)), ['ABA1']);
+  assert.deepEqual(paraFora(ctx._ocMicroFilter.options.material.map(o => o.value)), ['CIMENTO']);
+});
+
+teste('populateOcFiltros: Status só lista valores com pelo menos 1 ocorrência batendo agora', () => {
+  const ctx = montar();
+  ctx.state.filiais = [];
+  ctx.state.materiais = [];
+  ctx.state.ocorrencias = [{ id: 'a', central: 'X', concluida: true, inconclusiva: false }]; // só "concluida" ocorre
+  ctx.populateOcFiltros();
+  const statusValues = JSON.parse(JSON.stringify(ctx._ocMicroFilter.options.status.map(o => o.value)));
+  assert.deepEqual(statusValues, ['concluida']);
+});
+
+teste('populateOcFiltros: sem nenhuma ocorrência registrada, os dropdowns ficam vazios (não caem no cadastro)', () => {
+  const ctx = montar();
+  ctx.state.ocorrencias = [];
+  ctx.state.filiais = [{ alias: 'ABA1' }];
+  ctx.state.materiais = [{ origem: 'CIMENTO' }];
+  ctx.populateOcFiltros();
+  assert.equal(ctx._ocMicroFilter.options.status.length, 0);
+  assert.equal(ctx._ocMicroFilter.options.central.length, 0);
+  assert.equal(ctx._ocMicroFilter.options.material.length, 0);
+});
+
+// ── Regional substituiu Operador como filtro (31/07) ───────────────────
+// Ocorrências não têm campo regional próprio — só central. O filtro
+// resolve via state.filiais (central → regional), igual ao resto do app
+// já faz (ver agregados.js/analitico.js).
+
+teste('_ocRegionalPorCentral: resolve pelo alias/origem da filial (mesma normalização do resto do arquivo)', () => {
+  const ctx = montar();
+  ctx.state.filiais = [
+    { alias: 'ABA1', regional: 'Sudeste' },
+    { origem: 'ABA2-SEM-ALIAS', regional: 'Sul' },
+    { alias: 'ABA3', regional: '' }, // sem regional preenchido — não entra
+  ];
+  const mapa = ctx._ocRegionalPorCentral();
+  assert.equal(mapa.get('ABA1'), 'Sudeste');
+  assert.equal(mapa.get('ABA2-SEM-ALIAS'), 'Sul');
+  assert.equal(mapa.has('ABA3'), false);
+});
+
+teste('getOcorrenciasFiltradas: filtro de regional resolve via central e é OU entre os selecionados', () => {
+  const ctx = montar();
+  ctx.state.filiais = [
+    { alias: 'ABA1', regional: 'Sudeste' },
+    { alias: 'ABA2', regional: 'Sul' },
+    { alias: 'ABA3', regional: 'Norte' },
+  ];
+  ctx.state.ocorrencias = [
+    { id: 'a', central: 'ABA1' },
+    { id: 'b', central: 'ABA2' },
+    { id: 'c', central: 'ABA3' },
+  ];
+  ctx._ocMicroFilter.applied.regional = new Set(['Sudeste', 'Norte']);
+  const ids = ctx.getOcorrenciasFiltradas().map(o => o.id).sort();
+  assert.deepEqual(ids, ['a', 'c']);
+});
+
+teste('getOcorrenciasFiltradas: central sem filial cadastrada (ou sem regional) não bate com nenhum filtro de regional', () => {
+  const ctx = montar();
+  ctx.state.filiais = []; // nenhuma filial cadastrada
+  ctx.state.ocorrencias = [{ id: 'a', central: 'CENTRAL-DESCONHECIDA' }];
+  ctx._ocMicroFilter.applied.regional = new Set(['Sudeste']);
+  assert.equal(ctx.getOcorrenciasFiltradas().length, 0);
+});
+
+teste('populateOcFiltros: opções de Regional só incluem regionais de centrais que já têm ocorrência', () => {
+  const ctx = montar();
+  ctx.state.filiais = [
+    { alias: 'ABA1', regional: 'Sudeste' },
+    { alias: 'ABA9-NUNCA-USADA', regional: 'Nordeste' }, // sem ocorrência nenhuma
+  ];
+  ctx.state.materiais = [];
+  ctx.state.ocorrencias = [{ id: 'a', central: 'ABA1', concluida: false, inconclusiva: false }];
+  ctx.populateOcFiltros();
+  const paraFora = arr => JSON.parse(JSON.stringify(arr));
+  assert.deepEqual(paraFora(ctx._ocMicroFilter.options.regional.map(o => o.value)), ['Sudeste']);
+});
+
+// ── Material do formulário de Nova Ocorrência: só o cadastrado (31/07) ─
+
+teste('populateOcFiltros: campo Material do formulário mostra só o CADASTRADO, não o que foi digitado em ocorrências antigas', () => {
+  const ctx = montar();
+  const fakeSelect = { innerHTML: '' };
+  ctx.document.getElementById = (id) => id === 'oc-form-material' ? fakeSelect : null;
+  // escapeHtml é de format.js (fora do escopo deste arquivo) — só entra em
+  // jogo agora porque este é o primeiro teste em que mMaterial existe de
+  // verdade (os outros usam o stub que devolve null pra tudo).
+  ctx.escapeHtml = (s) => String(s ?? '');
+  ctx.state.filiais = [];
+  ctx.state.materiais = [{ origem: 'CIMENTO' }];
+  ctx.state.ocorrencias = [{ id: 'a', central: 'X', material: 'MATERIAL-FORA-DO-CADASTRO' }];
+  ctx.populateOcFiltros();
+  assert.ok(fakeSelect.innerHTML.includes('CIMENTO'));
+  assert.ok(!fakeSelect.innerHTML.includes('MATERIAL-FORA-DO-CADASTRO'));
 });
 
 let falhou = 0;

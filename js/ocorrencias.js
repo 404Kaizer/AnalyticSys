@@ -1309,23 +1309,213 @@ function renderOcorrencias() {
   _renderOcLista(lista);
 }
 
+// ── Filtros (31/07) — padrão "Visão Micro" (Dashboard Analítico) ───────
+// Mesmo padrão já usado 3x no app (Agregados, Inventário, Ausências —
+// prefixo `imf`/`inv` em Inventário): dropdown com checkbox multi-seleção,
+// busca interna, e um estado pendente/aplicado (Aplicar só confirma ao
+// clicar, Cancelar ou clique fora descarta). Cópia do padrão, não extração
+// de componente — é assim que as outras 3 telas fizeram, cada uma com seu
+// próprio prefixo de id/função (aqui: `omf`/`oc`).
+const OC_STATUS_OPTIONS = [
+  { value: 'aberta',           label: 'Em aberto' },
+  { value: 'vencida',          label: 'Vencidas' },
+  { value: 'urgente',          label: 'Urgentes' },
+  { value: 'inconclusiva',     label: 'Inconclusivas' },
+  { value: 'concluida',        label: 'Concluídas' },
+  { value: 'ajuste_sistemico', label: 'Ajuste Sistêmico' },
+];
+const _OC_FILTER_KEY_LABELS = { status: 'Status', central: 'Central', material: 'Material', regional: 'Regional' };
+const _ocMicroFilter = {
+  pending:  { status: new Set(), central: new Set(), material: new Set(), regional: new Set() },
+  applied:  { status: new Set(), central: new Set(), material: new Set(), regional: new Set() },
+  options:  { status: OC_STATUS_OPTIONS, central: [], material: [], regional: [] },
+};
+
+// Central → Regional (state.filiais) — ocorrências não têm campo regional
+// próprio, só central; pra filtrar por regional precisa resolver via o
+// cadastro de filiais (mesma normalização usada no resto do arquivo:
+// alias || origem, trim). Central sem filial cadastrada (ou sem regional
+// preenchido) cai fora do filtro — não aparece em nenhuma opção.
+function _ocRegionalPorCentral() {
+  const map = new Map();
+  (state.filiais || []).forEach(f => {
+    const nome = (f.alias || f.origem || '').trim();
+    const regional = (f.regional || '').trim();
+    if (nome && regional) map.set(nome, regional);
+  });
+  return map;
+}
+
+// Mesma lógica que já existia inline no filtro antigo — extraída pra dar
+// pra checar "bate com QUALQUER status marcado" no multi-seleção.
+function ocStatusMatches(o, statusValue) {
+  switch (statusValue) {
+    case 'ajuste_sistemico': return !!o.origemAjusteSistemico;
+    case 'concluida':        return !!o.concluida;
+    case 'aberta':           return !o.concluida && !o.inconclusiva;
+    case 'vencida':          return !o.concluida && !o.inconclusiva && ocDateStatus(o.dataLimite) === 'vencida';
+    case 'urgente':          return !o.concluida && !o.inconclusiva && ocDateStatus(o.dataLimite) === 'urgente';
+    case 'inconclusiva':     return !!o.inconclusiva && !o.concluida;
+    default:                 return false;
+  }
+}
+
+function _ocBuildOptionsList(key, query = '') {
+  const container = document.getElementById(`omfo-${key}`);
+  if (!container) return;
+  const opts = _ocMicroFilter.options[key] || [];
+  const q = query.toLowerCase().trim();
+  const filtered = q ? opts.filter(o => o.label.toLowerCase().includes(q)) : opts;
+  const applied = _ocMicroFilter.applied[key];
+  const pending = _ocMicroFilter.pending[key];
+
+  if (!filtered.length) {
+    container.innerHTML = `<div style="padding:12px 10px;color:var(--text3);font-size:12px;text-align:center">Nenhum resultado</div>`;
+    return;
+  }
+  container.innerHTML = filtered.map(opt => {
+    const checked = pending.size ? pending.has(opt.value) : applied.has(opt.value);
+    const id = `omfopt-${key}-${opt.value.replace(/[^a-z0-9]/gi, '_')}`;
+    return `<label class="micro-filter-option" for="${id}">
+      <input type="checkbox" id="${id}" value="${escapeHtml(opt.value)}" ${checked ? 'checked' : ''}
+        onchange="_ocMicroFilterCheckChange('${key}', this)">
+      <span class="micro-filter-option-label" title="${escapeHtml(opt.label)}">${escapeHtml(opt.label)}</span>
+    </label>`;
+  }).join('');
+}
+
+function _ocMicroFilterCheckChange(key, checkbox) {
+  const pending = _ocMicroFilter.pending[key];
+  if (checkbox.checked) pending.add(checkbox.value); else pending.delete(checkbox.value);
+}
+
+function _ocCloseMicroFilterDropdown(key) {
+  document.getElementById(`omfd-${key}`)?.classList.remove('open');
+  document.getElementById(`omfc-${key}`)?.classList.remove('open');
+}
+
+function ocToggleMicroFilter(key) {
+  const dd = document.getElementById(`omfd-${key}`);
+  const chev = document.getElementById(`omfc-${key}`);
+  if (!dd || !chev) return;
+  const allKeys = ['status', 'central', 'material', 'regional'];
+  // Fecha os outros dropdowns primeiro, revertendo pending não aplicado.
+  allKeys.filter(k => k !== key).forEach(otherKey => {
+    const otherDd = document.getElementById(`omfd-${otherKey}`);
+    if (otherDd?.classList.contains('open')) {
+      _ocMicroFilter.pending[otherKey] = new Set(_ocMicroFilter.applied[otherKey]);
+      _ocCloseMicroFilterDropdown(otherKey);
+    }
+  });
+  const isOpen = dd.classList.toggle('open');
+  chev.classList.toggle('open', isOpen);
+  if (isOpen) {
+    _ocMicroFilter.pending[key] = new Set(_ocMicroFilter.applied[key]);
+    const searchEl = document.getElementById(`omfs-${key}`);
+    if (searchEl) searchEl.value = '';
+    _ocBuildOptionsList(key);
+    setTimeout(() => searchEl?.focus(), 50);
+  }
+}
+
+function ocFilterMicroOptions(key, query) {
+  _ocBuildOptionsList(key, query);
+}
+
+function ocApplyMicroFilter(key) {
+  _ocMicroFilter.applied[key] = new Set(_ocMicroFilter.pending[key]);
+  _ocCloseMicroFilterDropdown(key);
+  _ocSyncTriggerLabel(key);
+  _ocSyncClearBtn();
+  renderOcorrencias();
+}
+
+function ocCancelMicroFilter(key) {
+  _ocMicroFilter.pending[key] = new Set(_ocMicroFilter.applied[key]);
+  _ocCloseMicroFilterDropdown(key);
+}
+
+function ocClearMicroFilter(key) {
+  _ocMicroFilter.pending[key] = new Set();
+  _ocMicroFilter.applied[key] = new Set();
+  _ocCloseMicroFilterDropdown(key);
+  _ocSyncTriggerLabel(key);
+  _ocSyncClearBtn();
+  renderOcorrencias();
+}
+
+function ocClearAllMicroFilters() {
+  ['status', 'central', 'material', 'regional'].forEach(key => {
+    _ocMicroFilter.pending[key] = new Set();
+    _ocMicroFilter.applied[key] = new Set();
+    _ocSyncTriggerLabel(key);
+  });
+  _ocSyncClearBtn();
+  renderOcorrencias();
+}
+
+function _ocSyncTriggerLabel(key) {
+  const btn = document.getElementById(`omft-${key}`);
+  const label = document.getElementById(`omft-${key}-label`);
+  if (!label || !btn) return;
+  const keyLabel = _OC_FILTER_KEY_LABELS[key] || key;
+  const applied = _ocMicroFilter.applied[key];
+  if (!applied.size) {
+    label.innerHTML = keyLabel;
+    btn.classList.remove('active');
+  } else if (applied.size === 1) {
+    const val = [...applied][0];
+    const opt = (_ocMicroFilter.options[key] || []).find(o => o.value === val);
+    const texto = opt ? opt.label : val;
+    label.innerHTML = `${keyLabel}: <strong>${escapeHtml(texto.length > 18 ? texto.slice(0, 18) + '…' : texto)}</strong>`;
+    btn.classList.add('active');
+  } else {
+    label.innerHTML = `${keyLabel} <span class="micro-filter-badge">${applied.size}</span>`;
+    btn.classList.add('active');
+  }
+}
+
+function _ocSyncClearBtn() {
+  const btn = document.getElementById('oc-mf-clear-btn');
+  if (!btn) return;
+  const f = _ocMicroFilter.applied;
+  const hasAny = f.status.size || f.central.size || f.material.size || f.regional.size;
+  btn.style.display = hasAny ? '' : 'none';
+}
+
+// Fecha o dropdown aberto ao clicar fora dele, descartando qualquer edição
+// pendente não aplicada (mesmo comportamento do padrão em analitico.js).
+document.addEventListener('click', e => {
+  ['status', 'central', 'material', 'regional'].forEach(key => {
+    const group = document.getElementById(`omfg-${key}`);
+    if (group && !group.contains(e.target)) {
+      const dd = document.getElementById(`omfd-${key}`);
+      if (dd?.classList.contains('open')) {
+        _ocMicroFilter.pending[key] = new Set(_ocMicroFilter.applied[key]);
+        _ocCloseMicroFilterDropdown(key);
+      }
+    }
+  });
+});
+
 function getOcorrenciasFiltradas() {
-  const fStatus  = document.getElementById('oc-filter-status')?.value || '';
-  const fCentral = (document.getElementById('oc-filter-central')?.value || '').toLowerCase();
-  const fMaterial = (document.getElementById('oc-filter-material')?.value || '').toLowerCase();
-  const fOperador = (document.getElementById('oc-filter-operador')?.value || '').toLowerCase();
-  const fBusca   = (document.getElementById('oc-filter-busca')?.value || '').toLowerCase();
+  const fStatus   = _ocMicroFilter.applied.status;
+  const fCentral  = _ocMicroFilter.applied.central;
+  const fMaterial = _ocMicroFilter.applied.material;
+  const fRegional = _ocMicroFilter.applied.regional;
+  const fBusca    = (document.getElementById('oc-filter-busca')?.value || '').toLowerCase();
+  // Só resolve o mapa central→regional se o filtro estiver mesmo em uso —
+  // evita varrer state.filiais à toa em toda renderização.
+  const mapaRegional = fRegional.size ? _ocRegionalPorCentral() : null;
 
   return (state.ocorrencias || []).filter(o => {
-    if (fStatus === 'ajuste_sistemico' && !o.origemAjusteSistemico) return false;
-    if (fStatus === 'concluida'    && !o.concluida) return false;
-    if (fStatus === 'aberta'       && (o.concluida || o.inconclusiva)) return false;
-    if (fStatus === 'vencida'      && (o.concluida || o.inconclusiva || ocDateStatus(o.dataLimite) !== 'vencida')) return false;
-    if (fStatus === 'urgente'      && (o.concluida || o.inconclusiva || ocDateStatus(o.dataLimite) !== 'urgente')) return false;
-    if (fStatus === 'inconclusiva' && (!o.inconclusiva || o.concluida)) return false;
-    if (fCentral  && !(o.central  || '').toLowerCase().includes(fCentral)) return false;
-    if (fMaterial && !(o.material || '').toLowerCase().includes(fMaterial)) return false;
-    if (fOperador && !(o.operador || '').toLowerCase().includes(fOperador)) return false;
+    if (fStatus.size && ![...fStatus].some(s => ocStatusMatches(o, s))) return false;
+    if (fCentral.size && !fCentral.has(o.central || '')) return false;
+    if (fMaterial.size && !fMaterial.has(o.material || '')) return false;
+    if (fRegional.size) {
+      const reg = mapaRegional.get((o.central || '').trim());
+      if (!reg || !fRegional.has(reg)) return false;
+    }
     if (fBusca) {
       const hay = [o.central, o.material, o.operador, o.descricao, o.id, o.numero, o.daiNumero, o.daiTag].join(' ').toLowerCase();
       if (!hay.includes(fBusca)) return false;
@@ -1593,35 +1783,46 @@ function formatMaterialCadastro(m) {
 function populateOcFiltros() {
   const centrais  = [...new Set((state.ocorrencias || []).map(o => o.central).filter(Boolean))].sort();
   const materiais = [...new Set((state.ocorrencias || []).map(o => o.material).filter(Boolean))].sort();
-  const operadores = [...new Set((state.ocorrencias || []).map(o => o.operador).filter(Boolean))].sort();
 
-  const selC = document.getElementById('oc-filter-central');
-  const selM = document.getElementById('oc-filter-material');
-  const selO = document.getElementById('oc-filter-operador');
-  // Filtros: combina centrais/materiais do cadastro + das ocorrências existentes
-  const allCentrals  = [...new Set([
-    ...(state.filiais || []).map(f => (f.alias || f.origem || '').trim()),
-    ...centrais
-  ])].filter(Boolean).sort();
-  const allMateriais = [...new Set([
-    ...(state.materiais || []).map(formatMaterialCadastro),
-    ...materiais
-  ])].filter(Boolean).sort();
+  // Dropdowns da toolbar (padrão Visão Micro, ver _ocMicroFilter acima) —
+  // 31/07: mostram só o que já existe numa ocorrência registrada, não o
+  // cadastro inteiro (esse continua completo só no formulário de Nova
+  // Ocorrência, mais abaixo — lá faz sentido oferecer qualquer central/
+  // material cadastrado; aqui é um filtro do que já foi lançado, não um
+  // seletor de cadastro). Status também é filtrado pelo mesmo critério —
+  // só entra na lista quem tem pelo menos 1 ocorrência batendo agora.
+  _ocMicroFilter.options.status = OC_STATUS_OPTIONS.filter(opt =>
+    (state.ocorrencias || []).some(o => ocStatusMatches(o, opt.value))
+  );
+  _ocMicroFilter.options.central  = centrais.map(c => ({ value: c, label: c }));
+  _ocMicroFilter.options.material = materiais.map(m => ({ value: m, label: m }));
+  // Regional (substituiu Operador, 31/07) — resolvido via central→regional
+  // (state.filiais), só os que aparecem em alguma ocorrência agora.
+  const mapaRegional = _ocRegionalPorCentral();
+  const regionais = [...new Set(
+    centrais.map(c => mapaRegional.get(c)).filter(Boolean)
+  )].sort();
+  _ocMicroFilter.options.regional = regionais.map(r => ({ value: r, label: r }));
+  ['status', 'central', 'material', 'regional'].forEach(key => {
+    _ocBuildOptionsList(key);
+    _ocSyncTriggerLabel(key);
+  });
+  _ocSyncClearBtn();
 
-  if (selC) selC.innerHTML = '<option value="">Todas as centrais</option>'  + allCentrals.map(c  => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
-  if (selM) selM.innerHTML = '<option value="">Todos os materiais</option>' + allMateriais.map(m => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join('');
-  if (selO) selO.innerHTML = '<option value="">Todos os operadores</option>' + operadores.map(op => `<option value="${escapeHtml(op)}">${escapeHtml(op)}</option>`).join('');
-
-  // Centrais do cadastro: campo "origem" (código/nome da central)
+  // Centrais do cadastro: campo "origem" (código/nome da central) — só pro
+  // formulário de Nova Ocorrência (mCentral abaixo), que continua
+  // oferecendo o cadastro completo, diferente do filtro da toolbar acima.
   const stCentrals  = (state.filiais  || [])
     .map(f => (f.alias || f.origem || '').trim())
     .filter(Boolean)
     .sort();
-  // Materiais do cadastro: "GRUPO SAP: ORIGINAL"
-  const stMateriais = (state.materiais || [])
+  // Materiais do cadastro: "GRUPO SAP: ORIGINAL" — 31/07: o formulário de
+  // Nova Ocorrência passa a oferecer SÓ o que está cadastrado em
+  // Configurações (sem mesclar com materiais digitados livremente em
+  // ocorrências antigas), pra não deixar escolher algo fora do catálogo.
+  const stMateriais = [...new Set((state.materiais || [])
     .map(formatMaterialCadastro)
-    .filter(Boolean)
-    .sort();
+    .filter(Boolean))].sort();
 
   const mCentral  = document.getElementById('oc-form-central');
   const mMaterial = document.getElementById('oc-form-material');
@@ -1632,9 +1833,8 @@ function populateOcFiltros() {
       + opts.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
   }
   if (mMaterial) {
-    const opts = [...new Set([...stMateriais, ...materiais])].sort();
     mMaterial.innerHTML = '<option value="">Selecione o material (opcional)</option>'
-      + opts.map(m => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join('');
+      + stMateriais.map(m => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join('');
   }
 }
 
@@ -2039,6 +2239,15 @@ Object.assign(window, {
   _ocRealtimeInit,
   _ocRealtimeStop,
   _ocDetectarMudancaPrioritaria,
+  _ocMicroFilterCheckChange,
+  ocToggleMicroFilter,
+  ocFilterMicroOptions,
+  ocApplyMicroFilter,
+  ocCancelMicroFilter,
+  ocClearMicroFilter,
+  ocClearAllMicroFilters,
+  ocStatusMatches,
+  _ocMicroFilter,
   renderOcorrenciasPage,
   renderOcorrencias,
   openOcorrenciaModal,

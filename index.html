@@ -2822,29 +2822,97 @@
 
         <!-- Toolbar -->
         <div class="oc-toolbar">
-          <div class="oc-filters">
+          <div class="micro-filter-bar" id="oc-mf-bar" style="flex:1">
             <div class="oc-search-wrap">
               <i class="ti ti-search oc-search-icon"></i>
               <input id="oc-filter-busca" class="oc-search-input" type="text" placeholder="Buscar ocorrência…" oninput="renderOcorrencias()">
             </div>
-            <select id="oc-filter-status" class="macro-select" onchange="renderOcorrencias()">
-              <option value="">Todos os status</option>
-              <option value="aberta">Em aberto</option>
-              <option value="vencida">Vencidas</option>
-              <option value="urgente">Urgentes</option>
-              <option value="inconclusiva">Inconclusivas</option>
-              <option value="concluida">Concluídas</option>
-              <option value="ajuste_sistemico">Ajuste Sistêmico</option>
-            </select>
-            <select id="oc-filter-central" class="macro-select" onchange="renderOcorrencias()">
-              <option value="">Todas as centrais</option>
-            </select>
-            <select id="oc-filter-material" class="macro-select" onchange="renderOcorrencias()">
-              <option value="">Todos os materiais</option>
-            </select>
-            <select id="oc-filter-operador" class="macro-select" onchange="renderOcorrencias()">
-              <option value="">Todos os operadores</option>
-            </select>
+
+            <div class="micro-filter-divider"></div>
+
+            <!-- Filtro Status (lista fixa curta — sem busca interna, mesmo padrão do dropdown de Saúde na Visão Micro) -->
+            <div class="micro-filter-group" id="omfg-status">
+              <button class="micro-filter-trigger" id="omft-status" onclick="ocToggleMicroFilter('status')">
+                <i class="ti ti-flag"></i>
+                <span id="omft-status-label">Status</span>
+                <i class="ti ti-chevron-down micro-filter-chev" id="omfc-status"></i>
+              </button>
+              <div class="micro-filter-dropdown" id="omfd-status">
+                <div class="micro-filter-options" id="omfo-status"></div>
+                <div class="micro-filter-footer">
+                  <button class="btn btn-filter-clear" onclick="ocClearMicroFilter('status')"><i class="ti ti-filter-off"></i> Limpar</button>
+                  <button class="btn" onclick="ocCancelMicroFilter('status')"><i class="ti ti-x"></i> Cancelar</button>
+                  <button class="btn btn-primary" onclick="ocApplyMicroFilter('status')"><i class="ti ti-check"></i> Aplicar</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Filtro Central -->
+            <div class="micro-filter-group" id="omfg-central">
+              <button class="micro-filter-trigger" id="omft-central" onclick="ocToggleMicroFilter('central')">
+                <i class="ti ti-building-warehouse"></i>
+                <span id="omft-central-label">Central</span>
+                <i class="ti ti-chevron-down micro-filter-chev" id="omfc-central"></i>
+              </button>
+              <div class="micro-filter-dropdown" id="omfd-central">
+                <div class="micro-filter-search-wrap">
+                  <i class="ti ti-search"></i>
+                  <input class="micro-filter-search" id="omfs-central" type="text" placeholder="Buscar central…" oninput="ocFilterMicroOptions('central',this.value)">
+                </div>
+                <div class="micro-filter-options" id="omfo-central"></div>
+                <div class="micro-filter-footer">
+                  <button class="btn btn-filter-clear" onclick="ocClearMicroFilter('central')"><i class="ti ti-filter-off"></i> Limpar</button>
+                  <button class="btn" onclick="ocCancelMicroFilter('central')"><i class="ti ti-x"></i> Cancelar</button>
+                  <button class="btn btn-primary" onclick="ocApplyMicroFilter('central')"><i class="ti ti-check"></i> Aplicar</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Filtro Material -->
+            <div class="micro-filter-group" id="omfg-material">
+              <button class="micro-filter-trigger" id="omft-material" onclick="ocToggleMicroFilter('material')">
+                <i class="ti ti-box"></i>
+                <span id="omft-material-label">Material</span>
+                <i class="ti ti-chevron-down micro-filter-chev" id="omfc-material"></i>
+              </button>
+              <div class="micro-filter-dropdown" id="omfd-material">
+                <div class="micro-filter-search-wrap">
+                  <i class="ti ti-search"></i>
+                  <input class="micro-filter-search" id="omfs-material" type="text" placeholder="Buscar material…" oninput="ocFilterMicroOptions('material',this.value)">
+                </div>
+                <div class="micro-filter-options" id="omfo-material"></div>
+                <div class="micro-filter-footer">
+                  <button class="btn btn-filter-clear" onclick="ocClearMicroFilter('material')"><i class="ti ti-filter-off"></i> Limpar</button>
+                  <button class="btn" onclick="ocCancelMicroFilter('material')"><i class="ti ti-x"></i> Cancelar</button>
+                  <button class="btn btn-primary" onclick="ocApplyMicroFilter('material')"><i class="ti ti-check"></i> Aplicar</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Filtro Regional (substituiu Operador, 31/07) -->
+            <div class="micro-filter-group" id="omfg-regional">
+              <button class="micro-filter-trigger" id="omft-regional" onclick="ocToggleMicroFilter('regional')">
+                <i class="ti ti-map-pin"></i>
+                <span id="omft-regional-label">Regional</span>
+                <i class="ti ti-chevron-down micro-filter-chev" id="omfc-regional"></i>
+              </button>
+              <div class="micro-filter-dropdown" id="omfd-regional">
+                <div class="micro-filter-search-wrap">
+                  <i class="ti ti-search"></i>
+                  <input class="micro-filter-search" id="omfs-regional" type="text" placeholder="Buscar regional…" oninput="ocFilterMicroOptions('regional',this.value)">
+                </div>
+                <div class="micro-filter-options" id="omfo-regional"></div>
+                <div class="micro-filter-footer">
+                  <button class="btn btn-filter-clear" onclick="ocClearMicroFilter('regional')"><i class="ti ti-filter-off"></i> Limpar</button>
+                  <button class="btn" onclick="ocCancelMicroFilter('regional')"><i class="ti ti-x"></i> Cancelar</button>
+                  <button class="btn btn-primary" onclick="ocApplyMicroFilter('regional')"><i class="ti ti-check"></i> Aplicar</button>
+                </div>
+              </div>
+            </div>
+
+            <button class="btn micro-filter-clear" id="oc-mf-clear-btn" onclick="ocClearAllMicroFilters()" style="display:none">
+              <i class="ti ti-filter-off"></i> Limpar Filtros
+            </button>
           </div>
           <div style="display:flex;gap:8px">
             <button class="btn" onclick="abrirModalDai()" title="Gerar Documento de Ajuste de Inventário (DAI)" style="gap:7px;font-size:12px;padding:8px 14px;background:linear-gradient(135deg,#8a6d1a,#c9a227);border:none;border-radius:8px;cursor:pointer;display:flex;align-items:center;color:#1c1608;font-weight:700;white-space:nowrap">
