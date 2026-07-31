@@ -3642,34 +3642,46 @@
     <div style="display:flex;flex-direction:column;gap:16px;margin-top:4px">
       <div class="form-group" style="margin-bottom:0">
         <label class="form-label">Ação</label>
-        <div style="display:flex;flex-direction:column;gap:6px">
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-            <input type="checkbox" id="adminex-acao-local" style="width:15px;height:15px">
-            <span style="font-size:12.5px">Dados locais (navegador — só existe nos módulos híbridos: Lançamentos, Produção, Entradas, Saídas, SAP)</span>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <label class="adminex-chip">
+            <input type="checkbox" id="adminex-acao-local">
+            <i class="ti ti-device-floppy"></i>
+            <span>
+              <div class="adminex-chip-title">Dados locais</div>
+              <div class="adminex-chip-sub">Navegador — só nos módulos híbridos</div>
+            </span>
+            <i class="ti ti-check adminex-chip-check"></i>
           </label>
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-            <input type="checkbox" id="adminex-acao-nuvem" style="width:15px;height:15px">
-            <span style="font-size:12.5px">Dados da nuvem (banco)</span>
+          <label class="adminex-chip">
+            <input type="checkbox" id="adminex-acao-nuvem">
+            <i class="ti ti-cloud"></i>
+            <span>
+              <div class="adminex-chip-title">Dados da nuvem</div>
+              <div class="adminex-chip-sub">Banco (Postgres)</div>
+            </span>
+            <i class="ti ti-check adminex-chip-check"></i>
           </label>
         </div>
       </div>
       <div class="form-group" style="margin-bottom:0">
-        <div style="display:flex;justify-content:space-between;align-items:center">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
           <label class="form-label" style="margin-bottom:0">Usuários</label>
-          <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text3);cursor:pointer">
-            <input type="checkbox" onchange="adminExclusaoMassaToggleTodos('adminex-usuario', this.checked)" style="width:13px;height:13px"> Selecionar todos
+          <label class="micro-filter-option" style="padding:2px 6px">
+            <input type="checkbox" onchange="adminExclusaoMassaToggleTodos('adminex-usuario', this.checked)">
+            <span class="micro-filter-option-label" style="font-size:11.5px;color:var(--text3)">Selecionar todos</span>
           </label>
         </div>
-        <div id="adminex-usuarios" style="max-height:150px;overflow-y:auto;border:1px solid var(--border2);border-radius:var(--radius);padding:8px 10px;margin-top:6px"></div>
+        <div id="adminex-usuarios" class="adminex-list"></div>
       </div>
       <div class="form-group" style="margin-bottom:0">
-        <div style="display:flex;justify-content:space-between;align-items:center">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
           <label class="form-label" style="margin-bottom:0">Módulos</label>
-          <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text3);cursor:pointer">
-            <input type="checkbox" onchange="adminExclusaoMassaToggleTodos('adminex-modulo', this.checked)" style="width:13px;height:13px"> Selecionar todos
+          <label class="micro-filter-option" style="padding:2px 6px">
+            <input type="checkbox" onchange="adminExclusaoMassaToggleTodos('adminex-modulo', this.checked)">
+            <span class="micro-filter-option-label" style="font-size:11.5px;color:var(--text3)">Selecionar todos</span>
           </label>
         </div>
-        <div id="adminex-modulos" style="max-height:150px;overflow-y:auto;border:1px solid var(--border2);border-radius:var(--radius);padding:8px 10px;margin-top:6px"></div>
+        <div id="adminex-modulos" class="adminex-list"></div>
       </div>
     </div>
     <div id="adminex-error" style="display:none;color:var(--red);font-size:12px;margin-top:10px"></div>

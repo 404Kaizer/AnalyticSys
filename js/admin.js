@@ -368,17 +368,17 @@ async function adminAbrirExclusaoMassa() {
   const usuarios = _adminProfiles.slice().sort((a, b) => (a.email || '').localeCompare(b.email || ''));
   const usuariosWrap = document.getElementById('adminex-usuarios');
   if (usuariosWrap) {
-    usuariosWrap.innerHTML = usuarios.map(u => `<label style="display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer">
-      <input type="checkbox" class="adminex-usuario" value="${u.id}" style="width:15px;height:15px">
-      <span style="font-size:12.5px">${_adminEsc(u.email)}</span>
-    </label>`).join('') || `<span style="font-size:12px;color:var(--text3)">Nenhum usuário cadastrado.</span>`;
+    usuariosWrap.innerHTML = usuarios.map(u => `<label class="micro-filter-option">
+      <input type="checkbox" class="adminex-usuario" value="${u.id}">
+      <span class="micro-filter-option-label">${_adminEsc(u.email)}</span>
+    </label>`).join('') || `<span style="font-size:12px;color:var(--text3);padding:4px 6px">Nenhum usuário cadastrado.</span>`;
   }
 
   const modulosWrap = document.getElementById('adminex-modulos');
   if (modulosWrap) {
-    modulosWrap.innerHTML = Object.entries(ADMIN_MODULOS).map(([key, cfg]) => `<label style="display:flex;align-items:center;gap:8px;padding:4px 0;${cfg.readOnly ? 'opacity:.5' : 'cursor:pointer'}">
-      <input type="checkbox" class="adminex-modulo" value="${key}" ${cfg.readOnly ? 'disabled title="Somente leitura — sem exclusão"' : ''} style="width:15px;height:15px">
-      <span style="font-size:12.5px">${_adminEsc(cfg.label)}</span>
+    modulosWrap.innerHTML = Object.entries(ADMIN_MODULOS).map(([key, cfg]) => `<label class="micro-filter-option" ${cfg.readOnly ? 'style="opacity:.5;cursor:default"' : ''}>
+      <input type="checkbox" class="adminex-modulo" value="${key}" ${cfg.readOnly ? 'disabled title="Somente leitura — sem exclusão"' : ''}>
+      <span class="micro-filter-option-label">${_adminEsc(cfg.label)}</span>
     </label>`).join('');
   }
 

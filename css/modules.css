@@ -11381,6 +11381,54 @@ tr.sap-fechamento td {
 .admin-bool-btn.admin-bool-active-sim { background: var(--green-bg); color: var(--green); border-color: var(--green-border); }
 .admin-bool-btn.admin-bool-active-nao { background: var(--red-bg); color: var(--red); border-color: var(--red-border); }
 
+/* Modal "Excluir dados" (31/07) — chips de ação (local/nuvem) na mesma
+   linguagem do pill Sim/Não acima, e lista de checkboxes reaproveitando
+   .micro-filter-option (ocorrencias.js), já usada nos dropdowns de
+   micro-filtro, pra usuários/módulos não ficarem com checkbox nu
+   encostado no texto. */
+.adminex-chip {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border2);
+  background: var(--bg3);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.adminex-chip:hover { border-color: var(--accent); }
+/* Checkbox real continua no DOM (estado/leitura em JS) mas some
+   visualmente — o cartão inteiro vira o alvo clicável, sem o quadrado
+   nu ao lado do texto. Clip em vez de display:none pra não perder o
+   foco/toggle por teclado (label continua delegando pro input). */
+.adminex-chip input[type="checkbox"] {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0,0,0,0);
+  white-space: nowrap;
+  border: 0;
+}
+.adminex-chip i { font-size: 17px; color: var(--text3); flex-shrink: 0; transition: color 0.15s; }
+.adminex-chip-title { font-size: 12.5px; font-weight: 600; color: var(--text); }
+.adminex-chip-sub { font-size: 11px; color: var(--text3); margin-top: 1px; }
+.adminex-chip-check { margin-left: auto; font-size: 16px; color: var(--accent); opacity: 0; flex-shrink: 0; }
+.adminex-chip:has(input:checked) { background: var(--accent-dim); border-color: var(--accent); }
+.adminex-chip:has(input:checked) i { color: var(--accent); }
+.adminex-chip:has(input:checked) .adminex-chip-check { opacity: 1; }
+
+.adminex-list {
+  max-height: 172px;
+  overflow-y: auto;
+  padding: 5px;
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  background: var(--bg3);
+}
+
 .admin-field-json {
   border: 1px solid var(--accent-dim);
   background: var(--bg2, var(--bg3));
