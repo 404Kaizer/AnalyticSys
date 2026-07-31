@@ -73,9 +73,11 @@ function _daiSyncUpsert(dai) {
     });
 }
 
-function _daiSyncDelete(daiId) {
-  if (!window.supabaseClient) return;
-  window.supabaseClient.from('ajustes_sistemicos').delete().eq('id', daiId)
+// ownerId — dono real do DAI (mesmo dono da ocorrência vinculada, criados
+// juntos no mesmo fluxo — ver ocorrencias.js). Default currentUser.id
+// cobre o caso comum (analista excluindo o próprio documento).
+function _daiSyncDelete(daiId, ownerId) {
+  _supaDeleteOwned('ajustes_sistemicos', { id: daiId }, null, ownerId)
     .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao excluir DAI na nuvem:', error); });
 }
 

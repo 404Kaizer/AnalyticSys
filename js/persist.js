@@ -693,35 +693,16 @@ function _emergencySave() {
   clearTimeout(persistTimer); // cancela debounce pendente
   if (!stateHydrated) return;
   try {
-    const snapshot = {
-      version:           STATE_VERSION,
-      savedAt:           Date.now(),
-      configs:           state.configs,
-      filiais:           state.filiais,
-      materiais:         state.materiais,
-      entradas:          state.entradas,
-      saidas:            state.saidas,
-      lancamentos:       state.lancamentos,
-      sap:               [],  // excluído — chunks IDB são a fonte autoritativa
-      producao:          state.producao,
-      imports:           state.imports,
-      ocorrencias:       state.ocorrencias      || [],
-      acoesRelatorio:    state.acoesRelatorio   || [],
-      // Corrigido: estes dois campos faziam parte de saveSnapshotKeys mas
-      // não eram capturados aqui — ficavam vulneráveis a perda quando este
-      // snapshot de emergência era aplicado por cima do save do IDB.
-      notifications:     state.notifications    || [],
-      invJustificativas: state.invJustificativas || [],
-      // Mesma classe de risco: ajustesSistemicos/ajustesExcluidos (DAI —
-      // Documento de Ajuste de Inventário) fazem parte de saveSnapshotKeys
-      // e precisam sobreviver a um fechamento abrupto da aba, já que são
-      // registros com validade fiscal/auditoria.
-      ajustesSistemicos: state.ajustesSistemicos || [],
-      ajustesExcluidos:  state.ajustesExcluidos  || [],
-      // Mesma classe de risco: Notas de Crédito/Débito do Inventário
-      // (ver ncd.js) — registro leve, mas com validade fiscal.
-      notasAjuste:       state.notasAjuste       || []
-    };
+    // Derivado de saveSnapshotKeys (fonte única) em vez de listado à mão —
+    // esta lista já esqueceu campos novos duas vezes no passado
+    // (notifications/invJustificativas, depois ajustesSistemicos/
+    // ajustesExcluidos/notasAjuste), cada esquecimento causando perda de
+    // dado com validade fiscal/auditoria num fechamento abrupto da aba.
+    const snapshot = { version: STATE_VERSION, savedAt: Date.now() };
+    for (const key of saveSnapshotKeys) {
+      // SAP excluído — chunks IDB são a fonte autoritativa e não cabem no localStorage.
+      snapshot[key] = key === 'sap' ? [] : (state[key] || []);
+    }
     localStorage.setItem(legacyStateKey, JSON.stringify(snapshot));
     console.info('[Persist] Emergency save executado.');
   } catch (e) {

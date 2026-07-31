@@ -190,8 +190,13 @@ async function _ocSyncUpsert(o) {
   }
 }
 
-async function _ocSyncDelete(id) {
-  const { error } = await window.supabaseClient.from('ocorrencias').delete().eq('id', id);
+// ownerId — dono real da ocorrência (o.userId). Necessário explícito aqui:
+// a PK é composta (user_id, id) porque `id` sozinho colide entre contas
+// (ver histórico de correção em persist.js), e quem apaga pode ser um
+// co-owner, não necessariamente o dono — por isso não dá pra assumir
+// currentUser.id como em _supaDeleteOwned (ver normalize.js).
+async function _ocSyncDelete(id, ownerId) {
+  const { error } = await _supaDeleteOwned('ocorrencias', { id }, null, ownerId);
   if (error) {
     console.warn('[Supabase] Falha ao excluir ocorrência na nuvem:', error);
     toast('⚠ Removida nesta sessão, mas não foi possível sincronizar com a nuvem.', 'error');
@@ -209,10 +214,11 @@ function saveOcorrencia(ocorrencia) {
 }
 
 function deleteOcorrencia(id) {
+  const rec = (state.ocorrencias || []).find(o => o.id === id);
   state.ocorrencias = (state.ocorrencias || []).filter(o => o.id !== id);
   persist(); // fallback local (IndexedDB)
   renderOcorrencias();
-  _ocSyncDelete(id);
+  _ocSyncDelete(id, rec?.userId);
 }
 
 // ── Helpers ───────────────────────────────────────────────
@@ -1739,8 +1745,8 @@ function confirmarExcluirAjusteSistemico(id) {
 
       persist();
       renderOcorrencias();
-      _ocSyncDelete(id);
-      if (dai && typeof _daiSyncDelete === 'function') _daiSyncDelete(dai.id);
+      _ocSyncDelete(id, o.userId);
+      if (dai && typeof _daiSyncDelete === 'function') _daiSyncDelete(dai.id, o.userId);
       if (window.supabaseClient) {
         window.supabaseClient.from('ajustes_excluidos').insert({
           dai_tag: logExclusao.daiTag,
@@ -1766,10 +1772,9 @@ function confirmarExcluirAjusteSistemico(id) {
 // sem risco de perder nada em qualquer direção.
 async function syncAjustesExcluidosFromSupabase() {
   try {
-    const { data, error } = await window.supabaseClient.from('ajustes_excluidos')
-      .select('id, user_id, dai_tag, dai_numero, central, data_geracao, excluido_por, excluido_em');
-    if (error) throw error;
-    const filtrado = await _filtrarMineOuIntegrado('ajustes_excluidos', data || []);
+    // fetchMineOrIntegrated pagina por cursor (sem teto de 10k do PostgREST)
+    // e já aplica o filtro mine-or-integrated internamente.
+    const filtrado = await fetchMineOrIntegrated('ajustes_excluidos', 'id, user_id, dai_tag, dai_numero, central, data_geracao, excluido_por, excluido_em');
     const remoto = filtrado.map(r => ({
       daiTag: r.dai_tag, daiNumero: r.dai_numero, central: r.central,
       dataGeracao: r.data_geracao, excluidoPor: r.excluido_por, excluidoEm: r.excluido_em,

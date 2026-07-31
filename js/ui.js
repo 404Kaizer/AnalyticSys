@@ -3917,16 +3917,20 @@ function setSapFechOverrideEmLote(chaves, incluir) {
     window.supabaseClient.from('sap_fechamento_overrides').upsert(rows, { onConflict: 'user_id,chave' })
       .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao sincronizar override de fechamento:', error); });
   } else {
-    window.supabaseClient.from('sap_fechamento_overrides').delete().in('chave', chaves)
+    // Escopado ao próprio user_id (ver _supaDeleteOwned, normalize.js):
+    // `chave` já é uma composta de negócio, mesma classe de risco de `k`
+    // em inv_justificativas.
+    _supaDeleteOwned('sap_fechamento_overrides', null, { chave: chaves })
       .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao remover override de fechamento na nuvem:', error); });
   }
 }
 
 async function syncSapFechamentoOverridesFromSupabase() {
   try {
-    const { data, error } = await window.supabaseClient.from('sap_fechamento_overrides').select('id, user_id, chave');
-    if (error) throw error;
-    const filtrado = await _filtrarMineOuIntegrado('sap_fechamento_overrides', data || []);
+    // fetchMineOrIntegrated pagina por cursor (sem teto de 10k do PostgREST —
+    // esta tabela já passou de 4.000 linhas) e já aplica o filtro mine-or-
+    // integrated internamente.
+    const filtrado = await fetchMineOrIntegrated('sap_fechamento_overrides', 'id, user_id, chave');
     // O BANCO MANDA (30/07). Este era o caso mais exposto do sistema: o
     // estado local é só um conjunto de textos, sem id nem data, então unir
     // local ∪ nuvem e reenviar o que sobrasse tornava impossível distinguir

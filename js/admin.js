@@ -168,7 +168,11 @@ async function adminAceitarTodosPendentes() {
   const modulo = sel?.value;
   if (!modulo || !_adminPendentesAtual.length) return;
   if (!confirm(`Aceitar todos os ${_adminPendentesAtual.length} registros pendentes listados?`)) return;
-  for (const r of _adminPendentesAtual) await integrarRegistro(modulo, r.id);
+  // Upsert em lote + um resync único — antes eram N resyncs completos da
+  // tabela (um por registro aceito), o que travava o painel por minutos
+  // com 300 pendentes de um módulo grande.
+  const ok = await integrarRegistrosEmLote(modulo, _adminPendentesAtual.map(r => r.id));
+  if (!ok) { toast('Falha ao aceitar registros.', 'error'); return; }
   toast('Registros integrados.', 'success');
   adminLoadPendentes();
 }

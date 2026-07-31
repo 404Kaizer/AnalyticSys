@@ -13,11 +13,36 @@
 const _CASCADE_TABELAS_NUVEM = ['filiais', 'materiais', 'lancamentos', 'entradas', 'saidas', 'producao', 'sap'];
 
 function _cascadeDeleteCloudByImportId(importId) {
-  if (!window.supabaseClient || !importId) return;
+  if (!importId) return;
+  // Escopado ao próprio user_id (ver _supaDeleteOwned, normalize.js) — sem
+  // isso, esta cascata apagava por import_id em 7 tabelas SEM NENHUM filtro
+  // de dono, e o import_id (gerado por timestamp+random) não é garantia de
+  // unicidade entre contas.
   _CASCADE_TABELAS_NUVEM.forEach(table => {
-    window.supabaseClient.from(table).delete().eq('import_id', importId)
+    _supaDeleteOwned(table, { import_id: importId })
       .then(({ error }) => { if (error) console.warn(`[Supabase] Falha ao excluir ${table} da nuvem (cascata):`, error); });
   });
+}
+
+// ── Regra de mesclagem dos 5 módulos grandes (Fase 4, 31/07) ────────────
+// Estes módulos são híbridos por decisão de 27/07: o volume IMPORTADO fica
+// só no navegador (+ backup condensado no Storage) porque não caberia no
+// teto de 500 MB do Postgres no plano free; só o que é digitado ou editado
+// à mão sobe pro banco.
+//
+// A mesclagem antiga fundia local ∪ nuvem e reenviava tudo que sobrasse só
+// local — o que fazia toda exclusão de registro manual feita pelo painel de
+// Supervisão voltar no boot seguinte. Confirmado no activity_log: exclusão
+// de `entradas`/`sap` às 00:56, reinserção pelo MESMO usuário às 00:57.
+//
+// Agora a divisão é por REGISTRO, não por tabela:
+//   • tem importId e não foi editado → volume importado, vive só local
+//   • qualquer outro (manual, ou importado que foi editado) → o banco manda
+// Um registro manual apagado no banco some de vez, como esperado; o volume
+// importado nunca é tocado por esta função.
+function _mesclarGrandeComBanco(local, remoto) {
+  const soLocal = (local || []).filter(r => r.importId && !r.editado);
+  return [...soLocal, ...(remoto || [])];
 }
 
 // Reforça o backup condensado (cloud-backup.js) dos 5 módulos grandes de
@@ -607,16 +632,9 @@ async function syncLancamentosFromSupabase() {
   try {
     const data = await fetchMineOrIntegrated('lancamentos');
     const remoto = (data || []).map(_lancFromDbRow);
-    const idsRemotos = new Set(remoto.map(r => r.id));
-
     const local = Array.isArray(state.lancamentos) ? state.lancamentos : [];
-    const porId = new Map(local.filter(r => r.id).map(r => [r.id, r]));
-    remoto.forEach(r => porId.set(r.id, r));
-    state.lancamentos = await _podarPoluicaoLocal('lancamentos', [...porId.values()], idsRemotos, window.currentUser?.id);
+    state.lancamentos = _mesclarGrandeComBanco(local, remoto);
     if (typeof invalidateLancIndex === 'function') invalidateLancIndex();
-
-    const naoSincronizados = local.filter(r => r.id && (!r.importId || r.editado) && !idsRemotos.has(r.id));
-    if (naoSincronizados.length) await _lancSyncUpsertBatch(naoSincronizados);
   } catch (err) {
     console.warn('[Supabase] Falha ao buscar lançamentos — mantendo dados locais.', err);
   }
@@ -776,15 +794,8 @@ async function syncProducaoFromSupabase() {
   try {
     const data = await fetchMineOrIntegrated('producao');
     const remoto = (data || []).map(_producaoFromDbRow);
-    const idsRemotos = new Set(remoto.map(r => r.id));
-
     const local = Array.isArray(state.producao) ? state.producao : [];
-    const porId = new Map(local.filter(r => r.id).map(r => [r.id, r]));
-    remoto.forEach(r => porId.set(r.id, r));
-    state.producao = await _podarPoluicaoLocal('producao', [...porId.values()], idsRemotos, window.currentUser?.id);
-
-    const naoSincronizados = local.filter(r => r.id && !r.importId && !idsRemotos.has(r.id));
-    if (naoSincronizados.length) await _producaoSyncUpsertBatch(naoSincronizados);
+    state.producao = _mesclarGrandeComBanco(local, remoto);
   } catch (err) {
     console.warn('[Supabase] Falha ao buscar produção — mantendo dados locais.', err);
   }
@@ -877,16 +888,9 @@ async function syncEntradasFromSupabase() {
   try {
     const data = await fetchMineOrIntegrated('entradas');
     const remoto = (data || []).map(_entradasFromDbRow);
-    const idsRemotos = new Set(remoto.map(r => r.id));
-
     const local = Array.isArray(state.entradas) ? state.entradas : [];
-    const porId = new Map(local.filter(r => r.id).map(r => [r.id, r]));
-    remoto.forEach(r => porId.set(r.id, r));
-    state.entradas = await _podarPoluicaoLocal('entradas', [...porId.values()], idsRemotos, window.currentUser?.id);
+    state.entradas = _mesclarGrandeComBanco(local, remoto);
     if (typeof invalidateSearchIndex === 'function') invalidateSearchIndex('entradas');
-
-    const naoSincronizados = local.filter(r => r.id && !r.importId && !idsRemotos.has(r.id));
-    if (naoSincronizados.length) await _entradasSyncUpsertBatch(naoSincronizados);
   } catch (err) {
     console.warn('[Supabase] Falha ao buscar entradas — mantendo dados locais.', err);
   }
@@ -972,16 +976,9 @@ async function syncSaidasFromSupabase() {
   try {
     const data = await fetchMineOrIntegrated('saidas');
     const remoto = (data || []).map(_saidasFromDbRow);
-    const idsRemotos = new Set(remoto.map(r => r.id));
-
     const local = Array.isArray(state.saidas) ? state.saidas : [];
-    const porId = new Map(local.filter(r => r.id).map(r => [r.id, r]));
-    remoto.forEach(r => porId.set(r.id, r));
-    state.saidas = await _podarPoluicaoLocal('saidas', [...porId.values()], idsRemotos, window.currentUser?.id);
+    state.saidas = _mesclarGrandeComBanco(local, remoto);
     if (typeof invalidateSaidasIndex === 'function') invalidateSaidasIndex();
-
-    const naoSincronizados = local.filter(r => r.id && !r.importId && !idsRemotos.has(r.id));
-    if (naoSincronizados.length) await _saidasSyncUpsertBatch(naoSincronizados);
   } catch (err) {
     console.warn('[Supabase] Falha ao buscar saídas — mantendo dados locais.', err);
   }
@@ -1075,16 +1072,9 @@ async function syncSAPFromSupabase() {
   try {
     const data = await fetchMineOrIntegrated('sap');
     const remoto = (data || []).map(_sapFromDbRow);
-    const idsRemotos = new Set(remoto.map(r => r.id));
-
     const local = Array.isArray(state.sap) ? state.sap : [];
-    const porId = new Map(local.filter(r => r.id).map(r => [r.id, r]));
-    remoto.forEach(r => porId.set(r.id, r));
-    state.sap = await _podarPoluicaoLocal('sap', [...porId.values()], idsRemotos, window.currentUser?.id);
+    state.sap = _mesclarGrandeComBanco(local, remoto);
     if (typeof invalidateSapIndex === 'function') invalidateSapIndex();
-
-    const naoSincronizados = local.filter(r => r.id && !r.importId && !idsRemotos.has(r.id));
-    if (naoSincronizados.length) await _sapSyncUpsertBatch(naoSincronizados);
   } catch (err) {
     console.warn('[Supabase] Falha ao buscar movimentações SAP — mantendo dados locais.', err);
   }

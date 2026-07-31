@@ -80,6 +80,42 @@ async function fetchAllRows(table, columns = '*') {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+// EXCLUSÃO SEMPRE ESCOPADA AO DONO DA SESSÃO
+// ═══════════════════════════════════════════════════════════════════════
+// BUG REAL (achado em auditoria): vários pontos de exclusão do sistema
+// apagavam por chave lógica (id, origem+alias, k, chave, import_id) sem
+// filtrar por user_id. Pra usuário comum a RLS já barra (DELETE exige
+// user_id = auth.uid()); pro ADM, cuja RLS de DELETE também libera
+// is_admin(), a ausência desse filtro fazia a exclusão do PRÓPRIO registro
+// do ADM varrer a tabela inteira sempre que a chave lógica se repetia entre
+// contas — confirmado no activity_log: milhares de exclusões cross-usuário
+// (sap_fechamento_overrides, inv_justificativas, ocorrencias, materiais,
+// filiais) na mesma sessão em que o ADM só tinha apagado o próprio registro.
+// Esta função centraliza a exclusão "apagar UM registro com dono conhecido"
+// — sempre injeta user_id, então nenhum chamador pode esquecer.
+// NÃO usar isto no painel "Dados por módulo" (admin.js) — ali a exclusão
+// cross-usuário é a funcionalidade pretendida (ADM apagando dado de
+// terceiro de propósito, com consentimento explícito nomeando o dono).
+//
+// matchEq  — { coluna: valor, ... } aplica .eq() em cada par.
+// matchIn  — { coluna: [valores] } aplica .in() numa única coluna (opcional).
+// ownerId  — dono real da linha (default: usuário logado). Só precisa ser
+// explícito em tabelas onde OUTRO usuário além do dono pode legitimamente
+// apagar o registro (ex.: ocorrências com co_owners) — nesses casos o dono
+// da linha não é necessariamente quem está clicando em excluir.
+async function _supaDeleteOwned(table, matchEq, matchIn, ownerId) {
+  const uid = ownerId || window.currentUser?.id;
+  if (!window.supabaseClient || !uid) return { error: null };
+  let query = window.supabaseClient.from(table).delete().eq('user_id', uid);
+  for (const [col, val] of Object.entries(matchEq || {})) query = query.eq(col, val);
+  if (matchIn) {
+    const [col, vals] = Object.entries(matchIn)[0];
+    query = query.in(col, vals);
+  }
+  return query;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
 // INTEGRAÇÃO DE REGISTROS DE OUTROS USUÁRIOS (fluxo de aceite do ADM)
 // ═══════════════════════════════════════════════════════════════════════
 // RLS dá ao ADM (is_admin()) acesso a todo registro de todo usuário — mas
@@ -100,26 +136,36 @@ const RECORD_INTEGRATION_TABLES = [
 ];
 
 let _integracoesCache = null; // Map<table_name, Set<row_id>> — um fetch por boot, invalidado ao aceitar
+let _integracoesPromise = null; // Promise do fetch em andamento — evita que as demais sincronizações
+// paralelas do boot (Promise.all, dashboard.js) vejam o Map "pronto" (mas vazio) antes do fetch
+// terminar e sigam sem nenhuma integração aplicada. Toda chamada concorrente aguarda a MESMA Promise.
 
 async function _integracoesDoAdmin(table) {
   if (!_integracoesCache) {
-    _integracoesCache = new Map();
-    if (window.currentUser?.role === 'admin' && window.supabaseClient) {
-      const { data, error } = await window.supabaseClient
-        .from('record_integrations').select('table_name, row_id');
-      if (!error) {
-        for (const r of data || []) {
-          if (!_integracoesCache.has(r.table_name)) _integracoesCache.set(r.table_name, new Set());
-          _integracoesCache.get(r.table_name).add(r.row_id);
+    if (!_integracoesPromise) {
+      _integracoesPromise = (async () => {
+        const map = new Map();
+        if (window.currentUser?.role === 'admin' && window.supabaseClient) {
+          const { data, error } = await window.supabaseClient
+            .from('record_integrations').select('table_name, row_id');
+          if (!error) {
+            for (const r of data || []) {
+              if (!map.has(r.table_name)) map.set(r.table_name, new Set());
+              map.get(r.table_name).add(r.row_id);
+            }
+          }
         }
-      }
+        return map;
+      })();
     }
+    _integracoesCache = await _integracoesPromise;
   }
   return _integracoesCache.get(table) || new Set();
 }
 
 function _integracoesCacheInvalidar() {
   _integracoesCache = null;
+  _integracoesPromise = null;
 }
 
 // Dono (user_id) por id, montado a partir do MESMO fetch que o
@@ -208,6 +254,22 @@ async function integrarRegistro(tableName, rowId) {
   const { error } = await window.supabaseClient.from('record_integrations')
     .upsert({ table_name: tableName, row_id: String(rowId), integrated_by: window.currentUser.id });
   if (error) { console.warn('[Integração] Falha ao aceitar registro:', error); return false; }
+  _integracoesCacheInvalidar();
+  const fn = window[RECORD_INTEGRATION_RESYNC[tableName]];
+  if (typeof fn === 'function') await fn();
+  return true;
+}
+
+// Versão em lote de integrarRegistro — usada por "aceitar todos os
+// pendentes" (admin.js). A versão registro-a-registro fazia um upsert +
+// um resync completo da tabela POR REGISTRO aceito (300 pendentes de
+// `sap`/`lancamentos` = 300 downloads da tabela inteira, travando o
+// painel por minutos). Aqui é um upsert único + um resync único no final.
+async function integrarRegistrosEmLote(tableName, rowIds) {
+  if (!rowIds || !rowIds.length) return true;
+  const rows = rowIds.map(id => ({ table_name: tableName, row_id: String(id), integrated_by: window.currentUser.id }));
+  const { error } = await window.supabaseClient.from('record_integrations').upsert(rows);
+  if (error) { console.warn('[Integração] Falha ao aceitar lote de registros:', error); return false; }
   _integracoesCacheInvalidar();
   const fn = window[RECORD_INTEGRATION_RESYNC[tableName]];
   if (typeof fn === 'function') await fn();

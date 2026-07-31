@@ -85,12 +85,12 @@ async function syncConfigsFromSupabase() {
 // nuvem substitui; erro de busca cai no catch e preserva o local.
 async function syncCatalogosFromSupabase() {
   try {
-    const [gruposRes, regionaisRes] = await Promise.all([
-      window.supabaseClient.from('grupos_materiais').select('nome'),
-      window.supabaseClient.from('regionais_centrais').select('nome'),
+    // fetchAllRows pagina por cursor (sem teto de 10k do PostgREST) —
+    // antes era um .select() cru, sem paginação nem ordenação.
+    const [gruposData, regionaisData] = await Promise.all([
+      fetchAllRows('grupos_materiais', 'nome'),
+      fetchAllRows('regionais_centrais', 'nome'),
     ]);
-    if (gruposRes.error) throw gruposRes.error;
-    if (regionaisRes.error) throw regionaisRes.error;
 
     // Dedup por nome normalizado continua necessário: a mesma central pode
     // estar cadastrada por mais de um usuário com grafia diferente.
@@ -100,8 +100,8 @@ async function syncCatalogosFromSupabase() {
       return [...vistos.values()];
     };
 
-    state.gruposMateriais = dedup(gruposRes.data);
-    state.regionaisCentrais = dedup(regionaisRes.data);
+    state.gruposMateriais = dedup(gruposData);
+    state.regionaisCentrais = dedup(regionaisData);
   } catch (err) {
     console.warn('[Supabase] Falha ao buscar grupos/regionais — mantendo dados locais.', err);
   }
@@ -776,8 +776,10 @@ async function removerMaterial(id, btn) {
       toast('Material removido');
       // Delete no Supabase é inofensivo mesmo se o registro nunca tiver
       // sido sincronizado (veio de importação em lote) — não acha nada.
-      window.supabaseClient?.from('materiais').delete()
-        .eq('origem', rec.origem).eq('alias', rec.alias)
+      // Escopado ao próprio user_id (ver _supaDeleteOwned, normalize.js):
+      // origem+alias sozinhos colidem entre contas (ex.: duas centrais
+      // chamadas "MATRIZ" em usuários diferentes).
+      _supaDeleteOwned('materiais', { origem: rec.origem, alias: rec.alias })
         .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao excluir material na nuvem:', error); });
       // Não precisa _setBtnLoading(false) aqui — o botão em si some do DOM
       // no próximo renderAll()/renderMateriais(), que redesenha a tabela.
@@ -1242,8 +1244,9 @@ async function removerFilial(pagedIndex) {
       updateImportPrereqUI();
       // Delete no Supabase é inofensivo mesmo se o registro nunca tiver
       // sido sincronizado (veio de importação em lote) — não acha nada.
-      window.supabaseClient?.from('filiais').delete()
-        .eq('origem', snapshot.origem).eq('alias', snapshot.alias)
+      // Escopado ao próprio user_id (ver _supaDeleteOwned, normalize.js):
+      // origem+alias sozinhos colidem entre contas.
+      _supaDeleteOwned('filiais', { origem: snapshot.origem, alias: snapshot.alias })
         .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao excluir filial na nuvem:', error); });
     },
     undo: () => {
@@ -1317,23 +1320,12 @@ async function syncAcoesRelatorioFromSupabase() {
       .order('created', { ascending: false });
     if (error) throw error;
 
-    // CORREÇÃO (27/07): antes sobrescrevia state.acoesRelatorio inteiro
-    // com o que veio da nuvem — se algum registro local ainda não tivesse
-    // sincronizado (falha de rede, ou criado antes de existir sync pra
-    // esse módulo), essa troca APAGAVA ele da tela silenciosamente, sem
-    // erro nenhum. Corrigido pra mesclar por id, mesmo padrão do resto
-    // do sistema, e sobe pra nuvem o que só existia local.
-    const local = Array.isArray(state.acoesRelatorio) ? state.acoesRelatorio : [];
-    const porId = new Map(local.map(a => [a.id, a]));
-    (data || []).forEach(r => porId.set(r.id, r));
-    state.acoesRelatorio = [...porId.values()];
-
-    const idsRemotos = new Set((data || []).map(r => r.id));
-    const naoSincronizadas = local.filter(a => a.id && !idsRemotos.has(a.id));
-    if (naoSincronizadas.length) {
-      const { error: upErr } = await window.supabaseClient.from('acoes_relatorio').upsert(naoSincronizadas);
-      if (upErr) console.warn('[Supabase] Falha ao sincronizar ações de relatório locais:', upErr);
-    }
+    // O BANCO MANDA — mesmo padrão já aplicado nos outros módulos em 30/07.
+    // O self-heal que existia aqui (mesclar local ∪ nuvem e reenviar o que
+    // sobrasse só local) reenviava pro banco uma ação de relatório que
+    // tivesse sido apagada pelo painel de Supervisão. Erro de busca cai no
+    // catch e preserva o que já foi carregado do IndexedDB.
+    state.acoesRelatorio = data || [];
   } catch (err) {
     console.warn('[Supabase] Falha ao buscar acoesRelatorio — mantendo dados locais.', err);
   }
@@ -1417,7 +1409,9 @@ async function removerAcaoRelatorio(id) {
   toast('Ação removida', 'error');
   persist(); // fallback local (IndexedDB)
 
-  const { error } = await window.supabaseClient.from('acoes_relatorio').delete().eq('id', id);
+  // id é gerado por timestamp+random (não UUID) — escopado ao próprio
+  // user_id (ver _supaDeleteOwned, normalize.js) por segurança.
+  const { error } = await _supaDeleteOwned('acoes_relatorio', { id });
   if (error) {
     console.warn('[Supabase] Falha ao excluir ação de relatório:', error);
     toast('⚠ Removida nesta sessão, mas não foi possível sincronizar com a nuvem.', 'error');

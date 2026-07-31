@@ -84,8 +84,11 @@
   }
 
   function _invSyncDeleteFromSupabase(ks) {
-    if (!window.supabaseClient || !ks || !ks.length) return;
-    window.supabaseClient.from('inv_justificativas').delete().in('k', ks)
+    if (!ks || !ks.length) return;
+    // Escopado ao próprio user_id (ver _supaDeleteOwned, normalize.js): `k`
+    // é uma chave composta de negócio (mês|central|material) que já colide
+    // entre contas de usuários diferentes.
+    _supaDeleteOwned('inv_justificativas', null, { k: ks })
       .then(({ error }) => {
         if (error) console.warn('[Supabase] Falha ao excluir justificativa(s) na nuvem:', error);
       });
@@ -3050,11 +3053,10 @@
 // hidratação lazy já vai pegar os dados da nuvem quando rodar.
 async function syncInvJustificativasFromSupabase() {
   try {
-    const { data, error } = await window.supabaseClient
-      .from('inv_justificativas')
-      .select('id, user_id, k, op, fiscal, saldo, custo_medio_sap, documento_sap');
-    if (error) throw error;
-    const filtrado = await _filtrarMineOuIntegrado('inv_justificativas', data || []);
+    // fetchMineOrIntegrated pagina por cursor (sem teto de 10k do PostgREST —
+    // esta tabela já passou de 1.400 linhas) e já aplica o filtro mine-or-
+    // integrated internamente.
+    const filtrado = await fetchMineOrIntegrated('inv_justificativas', 'id, user_id, k, op, fiscal, saldo, custo_medio_sap, documento_sap');
     const remoto = filtrado.map(r => ({
       k: r.k, op: r.op, fiscal: r.fiscal, saldo: r.saldo,
       custoMedioSap: r.custo_medio_sap, documentoSap: r.documento_sap

@@ -1243,8 +1243,10 @@ async function _notesSyncUpsertBatch(cards) {
 }
 
 function _notesSyncDelete(id) {
-  if (!window.supabaseClient || !id) return;
-  window.supabaseClient.from('bloco_notas').delete().eq('id', id)
+  if (!id) return;
+  // PK é composta (user_id, id) — escopado ao próprio user_id (ver
+  // _supaDeleteOwned, normalize.js).
+  _supaDeleteOwned('bloco_notas', { id })
     .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao excluir nota na nuvem:', error); });
 }
 
