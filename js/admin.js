@@ -3,9 +3,9 @@
 // ═══════════════════════════════════════════════════════════
 // ADMINISTRAÇÃO — usuários e dados
 // ═══════════════════════════════════════════════════════════
-// Visível só para quem tem role 'admin' (o tab #tab-admin é mostrado em
-// auth.js/bootApp). A segurança de verdade está nas políticas de RLS de
-// cada tabela (is_admin() dá acesso a tudo) — esta tela é só a interface;
+// Visível só para quem tem role 'admin' (botão Supervisão no dropdown de
+// perfil, mostrado em auth.js/updateAccountUI). A segurança de verdade
+// está nas políticas de RLS de cada tabela (is_admin() dá acesso a tudo) — esta tela é só a interface;
 // mesmo que alguém force a navegação pra cá sem ser admin, as chamadas ao
 // Supabase abaixo voltariam vazias/bloqueadas pelo próprio banco.
 //

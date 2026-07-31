@@ -188,6 +188,35 @@ teste('clicar na notificação de mudança abre o modal padrão de Ocorrências'
   assert.deepEqual(chamadas.openOcDetailModal, ['oc_1']);
 });
 
+// ── _activityShouldNotify: LOGIN não notifica mais (31/07) ─────────────
+// Achado do usuário: LOGIN de qualquer usuário pousava no sino do
+// Supervisor toda vez — virou ruído puro. O corte é só da NOTIFICAÇÃO
+// (activity_log continua gravando tudo, auditoria intacta).
+
+teste('LOGIN de outro usuário não notifica o admin (antes notificava)', () => {
+  const { ctx } = montar({ role: 'admin' });
+  const row = { table_name: 'auth', operation: 'LOGIN', actor_id: 'outro-usuario' };
+  assert.equal(ctx._activityShouldNotify(row), false);
+});
+
+teste('LOGOUT de outro usuário continua notificando o admin normalmente', () => {
+  const { ctx } = montar({ role: 'admin' });
+  const row = { table_name: 'auth', operation: 'LOGOUT', actor_id: 'outro-usuario' };
+  assert.equal(ctx._activityShouldNotify(row), true);
+});
+
+teste('PASSWORD_CHANGE de outro usuário continua notificando o admin normalmente', () => {
+  const { ctx } = montar({ role: 'admin' });
+  const row = { table_name: 'auth', operation: 'PASSWORD_CHANGE', actor_id: 'outro-usuario' };
+  assert.equal(ctx._activityShouldNotify(row), true);
+});
+
+teste('atividade normal (não-auth) continua notificando o admin normalmente', () => {
+  const { ctx } = montar({ role: 'admin' });
+  const row = { table_name: 'ocorrencias', operation: 'UPDATE', actor_id: 'outro-usuario' };
+  assert.equal(ctx._activityShouldNotify(row), true);
+});
+
 let falhou = 0;
 for (const { nome, fn } of casos) {
   try {

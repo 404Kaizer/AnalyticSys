@@ -214,14 +214,6 @@
         </span>
       </button>
 
-      <button class="tab-item" id="tab-admin" onclick="navigate('admin')" data-page="admin" data-label="Supervisão" style="display:none">
-        <span class="tab-icon" style="--tab-color: var(--red)"><i class="ti ti-shield-lock"></i></span>
-        <span class="tab-text">
-          <span class="tab-title">Supervisão</span>
-          <span class="tab-sub">usuários e dados (SUPERVISOR)</span>
-        </span>
-      </button>
-
       <button class="tab-item" onclick="navigate('importar')" data-page="importar" data-label="Importar Dados">
         <span class="tab-icon" style="--tab-color: var(--teal)"><i class="ti ti-file-upload"></i></span>
         <span class="tab-text">
@@ -471,6 +463,10 @@
                   </div>
                 </div>
                 <div class="account-switcher-actions">
+                  <!-- Supervisão (31/07) — saiu da sidebar, virou botão aqui. Só admin (toggle em updateAccountUI, auth.js). -->
+                  <button class="btn" id="account-switcher-supervisao-btn" style="display:none" onclick="navigate('admin'); closeAccountSwitcher()">
+                    <i class="ti ti-shield-lock"></i> Supervisão
+                  </button>
                   <button class="btn btn-primary" onclick="abrirModalGerenciarConta(); closeAccountSwitcher()">
                     <i class="ti ti-user-cog"></i> Gerenciar Conta
                   </button>
@@ -2803,9 +2799,6 @@
            OCORRÊNCIAS
       ════════════════════════════════════════════ -->
       <div class="page" id="page-ocorrencias">
-
-        <!-- Alertas de prazo -->
-        <div id="oc-alerts"></div>
 
         <div style="display:flex;align-items:center;justify-content:space-between;margin:20px 0 14px;flex-wrap:wrap;gap:10px">
           <div class="section-title" style="margin:0"><i class="ti ti-building-factory-2" style="font-size:13px;margin-right:6px"></i>Visão Geral de Ocorrências Registradas</div>

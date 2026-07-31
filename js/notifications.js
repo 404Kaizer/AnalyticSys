@@ -608,6 +608,11 @@ function _activityShouldNotify(row) {
   const me = window.currentUser;
   if (!me || !row) return false;
   if (row.actor_id === me.id) return false; // nunca notifica a própria ação
+  // LOGIN pousa toda vez que qualquer usuário abre o sistema — virou
+  // ruído puro poluindo o sino do Supervisor (achado do usuário, 31/07).
+  // O evento continua gravado no activity_log (auditoria intacta); só a
+  // NOTIFICAÇÃO é cortada. LOGOUT/PASSWORD_CHANGE continuam normalmente.
+  if (row.table_name === 'auth' && row.operation === 'LOGIN') return false;
   if (me.role === 'admin') return true;     // admin vê ação de qualquer outro
   return row.owner_id === me.id;            // dono vê quando o ADM mexeu no que é dele
 }

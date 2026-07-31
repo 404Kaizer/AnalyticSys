@@ -1307,7 +1307,6 @@ function renderOcorrencias() {
   const listaOperacional = state.ocorrencias.filter(o => !o.origemAjusteSistemico);
   renderOcKPIs(listaOperacional); // KPIs sempre no total (exceto Ajuste Sistêmico)
   _renderOcLista(lista);
-  _renderOcAlerts(listaOperacional);
 }
 
 function getOcorrenciasFiltradas() {
@@ -1338,46 +1337,6 @@ function getOcorrenciasFiltradas() {
     if (order[sa] !== order[sb]) return order[sa] - order[sb];
     return (a.dataLimite || '').localeCompare(b.dataLimite || '');
   });
-}
-
-function _renderOcAlerts(lista) {
-  const el = document.getElementById('oc-alerts');
-  if (!el) return;
-  const hoje = new Date(); hoje.setHours(0,0,0,0);
-  const vencidas = lista.filter(o => !o.concluida && !o.inconclusiva && ocDateStatus(o.dataLimite) === 'vencida');
-  const urgentes = lista.filter(o => !o.concluida && !o.inconclusiva && ocDateStatus(o.dataLimite) === 'urgente');
-  if (!vencidas.length && !urgentes.length) { el.innerHTML = ''; return; }
-
-  const _dias = o => {
-    const lim = new Date(o.dataLimite + 'T00:00:00');
-    return Math.round(Math.abs(lim - hoje) / 86400000);
-  };
-
-  let html = '';
-  if (vencidas.length) {
-    const itens = vencidas.map(o => {
-      const d = _dias(o);
-      return `<span class="oc-alert-item">${escapeHtml(o.numero || o.id)} <span class="oc-alert-time">(${d}d atraso)</span></span>`;
-    }).join('');
-    html += `<div class="oc-alert oc-alert-red">
-      <i class="ti ti-alert-circle"></i>
-      <strong>${vencidas.length} ocorrência${vencidas.length>1?'s':''} vencida${vencidas.length>1?'s':''}</strong>
-      — ${itens}
-    </div>`;
-  }
-  if (urgentes.length) {
-    const itens = urgentes.map(o => {
-      const d = _dias(o);
-      const label = d === 0 ? 'hoje' : d === 1 ? '1d restante' : `${d}d restantes`;
-      return `<span class="oc-alert-item">${escapeHtml(o.numero || o.id)} <span class="oc-alert-time">(${label})</span></span>`;
-    }).join('');
-    html += `<div class="oc-alert oc-alert-amber">
-      <i class="ti ti-clock-exclamation"></i>
-      <strong>${urgentes.length} ocorrência${urgentes.length>1?'s':''} vence${urgentes.length>1?'m':''} em breve</strong>
-      — ${itens}
-    </div>`;
-  }
-  el.innerHTML = html;
 }
 
 function _renderOcLista(lista) {

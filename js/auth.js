@@ -259,11 +259,12 @@ window.AuthGate = (function () {
     if (emailEl) emailEl.textContent = user?.email || '—';
     if (roleEl) roleEl.textContent = profile?.role === 'admin' ? 'Supervisor' : 'Usuário';
 
-    // Tab "Administração" só aparece pra quem é admin. Isso é só UI — a
-    // segurança de verdade está nas políticas de RLS de cada tabela.
-    const adminTab = $('tab-admin');
+    // Supervisão só aparece pra quem é admin — botão no dropdown de perfil
+    // (31/07, saiu da sidebar). Isso é só UI — a segurança de verdade está
+    // nas políticas de RLS de cada tabela.
+    const supervisaoBtn = $('account-switcher-supervisao-btn');
     const isAdmin = profile?.role === 'admin';
-    if (adminTab) adminTab.style.display = isAdmin ? '' : 'none';
+    if (supervisaoBtn) supervisaoBtn.style.display = isAdmin ? '' : 'none';
 
     // Decisão 28/07 — só o ADM gera Notas de Crédito/Débito. Botão some
     // pra quem não é admin (a policy de INSERT de notas_ajuste já bloqueia
