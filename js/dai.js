@@ -798,6 +798,7 @@ async function gerarDocumentoAjuste() {
           daiNumero: numero,
           daiTag: tag,
           daiItemId: item.id,
+          criadoPorNome: analista,
         };
         state.ocorrencias.push(oc);
         ocsCriadas.push(oc);
@@ -831,6 +832,7 @@ async function gerarDocumentoAjuste() {
         daiNumero: numero,
         daiTag: tag,
         daiItemId: null,
+        criadoPorNome: analista,
       };
       state.ocorrencias.push(oc);
       ocsCriadas.push(oc);

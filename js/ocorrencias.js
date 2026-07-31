@@ -10,6 +10,16 @@ function getOcorrencias() {
   return state.ocorrencias;
 }
 
+// Nome de quem está executando a ação AGORA (31/07) — usado em todo evento
+// de hierarquia (escalonar) e mudança de status (concluir/reabrir/marcar
+// inconclusiva/descalonar), pra notificação e histórico citarem QUEM fez,
+// não só "o Supervisor". Snapshot automático (nunca um campo de
+// formulário) — diferente de `responsavel` (texto livre, já existia,
+// significa "responsável por aquele nível", não "quem clicou").
+function _ocNomeAtor() {
+  return window.currentUser?.nome_completo || window.currentUser?.email || null;
+}
+
 // Token legível derivado do PRIMEIRO NOME do usuário — usado no número de
 // exibição pra dar pra distinguir quem criou o quê quando o mesmo "OC-N"
 // existe em mais de uma conta (Ocorrências continua mostrando todo mundo
@@ -106,12 +116,15 @@ function _ocToDbRow(o) {
     data_inconclusiva: o.dataInconclusiva || null,
     motivo_inconclusiva: o.motivoInconclusiva || null,
     hierarquia: Array.isArray(o.hierarquia) ? o.hierarquia : [],
+    ultima_acao_tipo: o.ultimaAcaoTipo || null,
+    ultima_acao_por_nome: o.ultimaAcaoPorNome || null,
     criado_em: o.criadoEm || Date.now(),
     origem_ajuste_sistemico: !!o.origemAjusteSistemico,
     dai_id: o.daiId || null,
     dai_numero: o.daiNumero || null,
     dai_tag: o.daiTag || null,
     dai_item_id: o.daiItemId || null,
+    criado_por_nome: o.criadoPorNome || null,
   };
 }
 
@@ -135,12 +148,15 @@ function _ocFromDbRow(row) {
     dataInconclusiva: row.data_inconclusiva,
     motivoInconclusiva: row.motivo_inconclusiva,
     hierarquia: Array.isArray(row.hierarquia) ? row.hierarquia : [],
+    ultimaAcaoTipo: row.ultima_acao_tipo || null,
+    ultimaAcaoPorNome: row.ultima_acao_por_nome || null,
     criadoEm: row.criado_em,
     origemAjusteSistemico: !!row.origem_ajuste_sistemico,
     daiId: row.dai_id,
     daiNumero: row.dai_numero,
     daiTag: row.dai_tag,
     daiItemId: row.dai_item_id,
+    criadoPorNome: row.criado_por_nome || null,
   };
 }
 
@@ -252,6 +268,22 @@ function _ocRemoveLocal(id, userId) {
   state.ocorrencias = state.ocorrencias.filter(o => !(o.id === id && (o.userId || meuId) === userId));
 }
 
+// Título do aviso de prioridade pro Supervisor (31/07) — extraído do
+// handler do Realtime só pra dar pra testar sem simular a subscription
+// inteira (mesmo motivo de _ocDetectarMudancaPrioritaria). Cita de QUEM é
+// a ocorrência (criado_por_nome) e, se for escalonamento, quem executou a
+// ação (acionadoPor no item mais recente de hierarquia) — antes só tinha
+// central+motivo, sem dizer de quem era nem quem escalonou.
+function _ocMontarTituloNotificacaoSupervisor(row, motivo) {
+  const dono = row.criado_por_nome || 'usuário';
+  if (motivo === 'dai') {
+    return `Nova DAI de ${dono} — ${row.dai_tag || row.dai_numero || row.numero || row.id}`;
+  }
+  const ultimaEsc = Array.isArray(row.hierarquia) && row.hierarquia.length ? row.hierarquia[row.hierarquia.length - 1] : null;
+  const porQuem = ultimaEsc?.acionadoPor ? ` (por ${ultimaEsc.acionadoPor})` : '';
+  return `Ocorrência de ${dono} escalonada${porQuem} — ${ocNivelInfo(ocNivelAtual(row))?.label || 'Supervisor'}`;
+}
+
 let _ocChannel = null;
 function _ocRealtimeInit() {
   if (!window.supabaseClient || !window.currentUser || _ocChannel) return;
@@ -272,9 +304,7 @@ function _ocRealtimeInit() {
           notifPushOcorrenciaSupervisor({
             ocorrenciaId: row.id,
             tipo: motivo,
-            titulo: motivo === 'dai'
-              ? `Nova DAI — ${row.dai_tag || row.dai_numero || row.numero || row.id}`
-              : `Ocorrência escalonada — ${ocNivelInfo(ocNivelAtual(row))?.label || 'Supervisor'}`,
+            titulo: _ocMontarTituloNotificacaoSupervisor(row, motivo),
             corpo: [row.central, motivo === 'dai' ? row.material : row.motivo].filter(Boolean).join(' · '),
           });
         }
@@ -521,22 +551,30 @@ function ocApareceAutoParaSupervisor(row) {
 function _ocDetectarMudancaPrioritaria(oldData, newData) {
   if (!oldData || !newData) return null;
   const corpo = [newData.central, newData.numero || newData.id].filter(Boolean).join(' · ');
+  // 31/07: nome de quem agiu, gravado no próprio evento (ultima_acao_por_nome
+  // pra concluir/reabrir/inconclusiva, acionadoPor dentro do item mais
+  // recente de hierarquia pra escalonar/descalonar) — antes disso não tinha
+  // como saber QUEM, só "o Supervisor" genérico (RLS de profiles impede o
+  // dono de resolver o nome de quem tem role=admin).
+  const ator = newData.ultima_acao_por_nome ? `${newData.ultima_acao_por_nome} ` : 'O Supervisor ';
   if (!oldData.concluida && newData.concluida) {
-    return { tipo: 'concluida', titulo: 'O Supervisor concluiu sua ocorrência', corpo };
+    return { tipo: 'concluida', titulo: `${ator}concluiu sua ocorrência`, corpo };
   }
   if (!oldData.inconclusiva && newData.inconclusiva) {
-    return { tipo: 'inconclusiva', titulo: 'O Supervisor marcou sua ocorrência como inconclusiva', corpo };
+    return { tipo: 'inconclusiva', titulo: `${ator}marcou sua ocorrência como inconclusiva`, corpo };
   }
   if ((oldData.concluida && !newData.concluida) || (oldData.inconclusiva && !newData.inconclusiva)) {
-    return { tipo: 'reaberta', titulo: 'O Supervisor reabriu sua ocorrência', corpo };
+    return { tipo: 'reaberta', titulo: `${ator}reabriu sua ocorrência`, corpo };
   }
   const nivelAntes = ocNivelAtual(oldData);
   const nivelDepois = ocNivelAtual(newData);
   if (nivelDepois > nivelAntes) {
-    return { tipo: 'escalonada', titulo: `O Supervisor escalonou sua ocorrência para ${ocNivelInfo(nivelDepois)?.label || 'um nível superior'}`, corpo };
+    const ultimaEntrada = (newData.hierarquia || [])[newData.hierarquia.length - 1];
+    const atorEsc = ultimaEntrada?.acionadoPor ? `${ultimaEntrada.acionadoPor} ` : 'O Supervisor ';
+    return { tipo: 'escalonada', titulo: `${atorEsc}escalonou sua ocorrência para ${ocNivelInfo(nivelDepois)?.label || 'um nível superior'}`, corpo };
   }
   if (nivelDepois < nivelAntes) {
-    return { tipo: 'descalonada', titulo: 'O Supervisor descalonou sua ocorrência', corpo };
+    return { tipo: 'descalonada', titulo: `${ator}descalonou sua ocorrência`, corpo };
   }
   return null;
 }
@@ -602,6 +640,8 @@ window.descalonar = function(id) {
   const snapshot = JSON.parse(JSON.stringify(o.hierarquia));
   const removido = o.hierarquia.pop();
   const info = ocNivelInfo(removido.nivel);
+  o.ultimaAcaoTipo = 'descalonada';
+  o.ultimaAcaoPorNome = _ocNomeAtor();
   persist();
   renderOcorrencias();
   _ocSyncUpsert(o);
@@ -626,7 +666,7 @@ window.submitEscalonar = function() {
   if (!o) return;
   if (!Array.isArray(o.hierarquia)) o.hierarquia = [];
   if (contato !== null) o.contato = contato;
-  o.hierarquia.push({ nivel, motivo, responsavel: responsavel || null, data, criadoEm: Date.now() });
+  o.hierarquia.push({ nivel, motivo, responsavel: responsavel || null, data, criadoEm: Date.now(), acionadoPor: _ocNomeAtor() });
   persist();
   renderOcorrencias();
   closeEscalonarModal();
@@ -1226,6 +1266,19 @@ function _buildOcCharts(kpis, textCol, gridCol, tickFont) {
 }
 
 // ── Helpers de renderização de hierarquia ─────────────────
+// Texto "· responsável (escalonado por Fulano)" pra uma entrada de
+// hierarquia (31/07) — `responsavel` é texto livre (quem deve tratar
+// aquele nível) e `acionadoPor` é automático (quem de fato clicou pra
+// escalonar); mostra os dois quando existem, nunca confunde um com o
+// outro. Reaproveitado na barra do card e no timeline do modal de detalhe.
+function _ocHierMetaTexto(entrada) {
+  if (!entrada) return '';
+  const partes = [];
+  if (entrada.responsavel) partes.push(escapeHtml(entrada.responsavel));
+  if (entrada.acionadoPor) partes.push(`escalonado por ${escapeHtml(entrada.acionadoPor)}`);
+  return partes.length ? ` · ${partes.join(' · ')}` : '';
+}
+
 function _buildOcHierarquiaBar(o) {
   const nivelAtual = ocNivelAtual(o);
   if (nivelAtual === 0 && !(o.hierarquia && o.hierarquia.length)) return '';
@@ -1248,7 +1301,7 @@ function _buildOcHierarquiaBar(o) {
     </div>
     <div class="oc-card-hier-body">
       <span class="oc-card-hier-label" style="color:${atvInfo.color}">${atvInfo.label}</span>
-      ${atvEntrada ? `<span class="oc-card-hier-meta">${fmtDateBR(atvEntrada.data)}${atvEntrada.responsavel ? ` · ${escapeHtml(atvEntrada.responsavel)}` : ''}</span>` : ''}
+      ${atvEntrada ? `<span class="oc-card-hier-meta">${fmtDateBR(atvEntrada.data)}${_ocHierMetaTexto(atvEntrada)}</span>` : ''}
     </div>
     <span class="oc-card-hier-badge" style="background:${atvInfo.colorBg};color:${atvInfo.color};border-color:${atvInfo.colorBorder}">atual</span>
     ${podeDesc ? `<button class="btn btn-xs oc-btn-descalonar oc-hier-desc-btn" onclick="event.stopPropagation();descalonar('${o.id}')" title="Voltar ao nível anterior"><i class="ti ti-arrow-down-circle"></i></button>` : ''}
@@ -1269,7 +1322,7 @@ function _buildOcHierarquiaBar(o) {
       </div>
       <div class="oc-card-hier-body">
         <span class="oc-card-hier-label" style="color:var(--text3)">${h.label}</span>
-        ${entrada ? `<span class="oc-card-hier-meta">${fmtDateBR(entrada.data)}${entrada.responsavel ? ` · ${escapeHtml(entrada.responsavel)}` : ''}</span>` : ''}
+        ${entrada ? `<span class="oc-card-hier-meta">${fmtDateBR(entrada.data)}${_ocHierMetaTexto(entrada)}</span>` : ''}
       </div>
       ${clicavel ? `<i class="ti ti-chevron-right oc-hier-item-arrow"></i>` : ''}
     </div>`;
@@ -1334,7 +1387,7 @@ function _buildOcHierarquiaDetail(o) {
               ${i > 0 && entrada ? `<button class="btn btn-sm oc-hier-tl-edit-btn" onclick="closeOcDetailModal();openEditarEscalonamentoModal('${o.id}',${i})" title="Editar escalonamento"><i class="ti ti-pencil"></i></button>` : ''}
             </div>
             ${entrada ? `
-              <span class="oc-hier-tl-meta">${fmtDateBR(entrada.data)}${entrada.responsavel ? ` · ${escapeHtml(entrada.responsavel)}` : ''}</span>
+              <span class="oc-hier-tl-meta">${fmtDateBR(entrada.data)}${_ocHierMetaTexto(entrada)}</span>
               ${i > 0 ? `<span class="oc-hier-tl-motivo">${escapeHtml(entrada.motivo)}</span>` : ''}
             ` : `<span class="oc-hier-tl-meta">Não escalonado</span>`}
             ${ativo && !o.concluida && !o.inconclusiva ? `<span class="oc-hier-tl-badge">Nível atual</span>` : ''}
@@ -1702,7 +1755,7 @@ function _renderOcLista(lista) {
       </div>
 
       <div class="oc-card-footer">
-        <div class="oc-card-footer-left"></div>
+        <div class="oc-card-footer-left">${o.criadoPorNome ? `<span class="oc-card-criador" title="Criado por"><i class="ti ti-user-circle"></i> ${escapeHtml(o.criadoPorNome)}</span>` : ''}</div>
         <div class="oc-card-footer-right">
           ${window.currentUser?.role === 'admin' ? `<button class="btn btn-sm" onclick="event.stopPropagation();openAtribuirModal('${o.id}')" title="Atribuir a outro usuário">
             <i class="ti ti-user-plus"></i>
@@ -1799,16 +1852,17 @@ function openOcDetailModal(id) {
     <div class="oc-detail-section-label">Descrição</div>
     <div class="oc-detail-section-val">${escapeHtml(o.descricao || '—')}</div>`;
 
+  const acaoPorTxt = o.ultimaAcaoPorNome ? ` <span style="color:var(--text3);font-weight:400">— por ${escapeHtml(o.ultimaAcaoPorNome)}</span>` : '';
   el.querySelector('.oc-detail-conclusao').innerHTML = [
     (!isAjuste && o.concluida && o.descConclusao) ? `
       <div class="oc-detail-section-label">Conclusão</div>
-      <div class="oc-detail-section-val" style="color:var(--green)">${escapeHtml(o.descConclusao)}</div>` : '',
+      <div class="oc-detail-section-val" style="color:var(--green)">${escapeHtml(o.descConclusao)}${o.ultimaAcaoTipo === 'concluida' ? acaoPorTxt : ''}</div>` : '',
     (isAjuste && !o.concluida) ? `
       <div class="oc-detail-section-label" style="color:var(--amber)">Pendente</div>
       <div class="oc-detail-section-val" style="color:var(--amber)">Aguardando preenchimento do Nº do documento SAP para concluir este ajuste.</div>` : '',
     o.inconclusiva && !o.concluida && o.motivoInconclusiva ? `
       <div class="oc-detail-section-label" style="color:var(--purple)">Motivo da inconclusividade</div>
-      <div class="oc-detail-section-val" style="color:var(--purple)">${escapeHtml(o.motivoInconclusiva)}</div>` : '',
+      <div class="oc-detail-section-val" style="color:var(--purple)">${escapeHtml(o.motivoInconclusiva)}${o.ultimaAcaoTipo === 'inconclusiva' ? acaoPorTxt : ''}</div>` : '',
   ].join('');
 
   // Seção exclusiva do Documento de Ajuste de Inventário (DAI) — mostra a
@@ -1861,6 +1915,7 @@ function openOcDetailModal(id) {
 
   el.querySelector('.oc-detail-meta').innerHTML = `
     <span><i class="ti ti-user" style="margin-right:4px"></i>${escapeHtml(o.operador || '—')}</span>
+    ${o.criadoPorNome ? `<span title="Criado por"><i class="ti ti-user-circle" style="margin-right:4px"></i>${escapeHtml(o.criadoPorNome)}</span>` : ''}
     ${waLink ? `<a href="${waLink}" target="_blank" rel="noopener" class="oc-wa-btn"><i class="ti ti-brand-whatsapp"></i> ${escapeHtml(o.contato)}</a>` : ''}`;
 
   el.querySelector('.oc-detail-actions').innerHTML = isAjuste ? `
@@ -2060,7 +2115,7 @@ function submitOcorrenciaForm() {
     const escResp     = document.getElementById('oc-form-esc-responsavel').value.trim();
     const escData     = document.getElementById('oc-form-esc-data').value;
     if (!escMotivo) { toast('Informe o motivo do escalonamento inicial.', 'error'); return; }
-    hierarquiaInicial = [{ nivel: escNivel, motivo: escMotivo, responsavel: escResp || null, data: escData, criadoEm: Date.now() }];
+    hierarquiaInicial = [{ nivel: escNivel, motivo: escMotivo, responsavel: escResp || null, data: escData, criadoEm: Date.now(), acionadoPor: _ocNomeAtor() }];
   }
 
   const existing = id ? (state.ocorrencias || []).find(o => o.id === id) : null;
@@ -2091,6 +2146,12 @@ function submitOcorrenciaForm() {
     descConclusao: existing?.descConclusao || null,
     hierarquia:   existing?.hierarquia    || hierarquiaInicial,
     criadoEm:     existing?.criadoEm      || Date.now(),
+    // Nome de quem criou (31/07) — snapshot automático, nunca reescrito
+    // numa edição (preserva o criador original mesmo se outra pessoa
+    // editar depois). Sem isso, quem visse a ocorrência de outra conta
+    // não tinha como saber de quem era (RLS de profiles bloqueia resolver
+    // o nome de outro usuário — ver _ocToDbRow/criado_por_nome).
+    criadoPorNome: existing?.criadoPorNome || window.currentUser?.nome_completo || window.currentUser?.email || null,
   };
 
   saveOcorrencia(ocorrencia);
@@ -2121,6 +2182,8 @@ function submitConcluir() {
   o.concluida     = true;
   o.dataConclusao = data;
   o.descConclusao = desc;
+  o.ultimaAcaoTipo = 'concluida';
+  o.ultimaAcaoPorNome = _ocNomeAtor();
   persist();
   renderOcorrencias();
   closeConcluirModal();
@@ -2150,6 +2213,8 @@ function submitInconclusiva() {
   o.inconclusiva       = true;
   o.dataInconclusiva   = data;
   o.motivoInconclusiva = motivo;
+  o.ultimaAcaoTipo = 'inconclusiva';
+  o.ultimaAcaoPorNome = _ocNomeAtor();
   persist();
   renderOcorrencias();
   closeInconclusivaModal();
@@ -2163,6 +2228,8 @@ function reabrirOcorrencia(id) {
   o.inconclusiva       = false;
   o.dataInconclusiva   = null;
   o.motivoInconclusiva = null;
+  o.ultimaAcaoTipo = 'reaberta';
+  o.ultimaAcaoPorNome = _ocNomeAtor();
   persist();
   renderOcorrencias();
   _ocSyncUpsert(o);
@@ -2175,6 +2242,8 @@ function reabrirOcorrenciaConcluida(id) {
   o.concluida      = false;
   o.dataConclusao  = null;
   o.descConclusao  = null;
+  o.ultimaAcaoTipo = 'reaberta';
+  o.ultimaAcaoPorNome = _ocNomeAtor();
   persist();
   renderOcorrencias();
   _ocSyncUpsert(o);
