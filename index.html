@@ -3692,6 +3692,13 @@
   </div>
 </div>
 
+<!-- Menu "···" dos cards de Ocorrências/DAI (31/07) — elemento único
+     compartilhado por todos os cards, populado e posicionado via JS a
+     cada abertura (ver _ocAbrirMenuCard, ocorrencias.js). Fica fora de
+     .oc-card de propósito: .oc-card tem overflow:hidden (pro card
+     arredondado), então um menu preso lá dentro seria cortado. -->
+<div class="oc-card-menu" id="oc-card-menu"></div>
+
 <!-- ═══ MODAL: Detalhe de notificação de atividade (o que foi feito) ═══ -->
 <div class="modal-overlay" id="notif-detail-modal">
   <div class="modal" style="max-width:560px">

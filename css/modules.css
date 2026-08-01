@@ -6404,6 +6404,45 @@ mark.search-highlight {
 .oc-card-footer-left > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .oc-card-footer-right { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
 
+/* Menu "···" dos cards (31/07) — mesmo visual de .micro-filter-dropdown,
+   mas position:fixed (posicionado via JS em cada abertura, ver
+   _ocAbrirMenuCard) e fora de .oc-card: como .oc-card tem overflow:hidden
+   (pro card arredondado), um dropdown preso lá dentro seria cortado. */
+.oc-card-menu {
+  position: fixed;
+  min-width: 190px;
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 16px 40px rgba(0,0,0,0.3), 0 0 0 1px var(--border);
+  z-index: 300;
+  display: none;
+  flex-direction: column;
+  padding: 6px;
+  gap: 2px;
+  animation: popIn 0.15s ease;
+}
+.oc-card-menu.open { display: flex; }
+.oc-card-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12.5px;
+  color: var(--text2);
+  background: none;
+  border: none;
+  width: 100%;
+  text-align: left;
+  font-family: var(--font);
+}
+.oc-card-menu-item:hover { background: var(--bg3); color: var(--text); }
+.oc-card-menu-item i { font-size: 14px; width: 16px; text-align: center; flex-shrink: 0; }
+.oc-card-menu-item.oc-card-menu-item-danger { color: var(--red); }
+.oc-card-menu-item.oc-card-menu-item-danger:hover { background: var(--red-bg); }
+
 /* ── Modal de detalhes da ocorrência ───────────────────── */
 #oc-detail-modal .modal-box { max-width: 600px; }
 .oc-detail-header { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }

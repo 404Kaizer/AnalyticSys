@@ -1616,6 +1616,10 @@ document.addEventListener('click', e => {
   });
   const ordenarGroup = document.getElementById('omfg-ordenar');
   if (ordenarGroup && !ordenarGroup.contains(e.target)) _ocCloseOrdenarDropdown();
+  // Menu "···" dos cards — fora de .oc-card no DOM (ver _ocAbrirMenuCard),
+  // então só fecha por não estar dentro do próprio menu.
+  const cardMenu = document.getElementById('oc-card-menu');
+  if (cardMenu?.classList.contains('open') && !cardMenu.contains(e.target)) _ocFecharMenuCard();
 });
 
 // Ordenação (31/07) — padrão é DATA DE ABERTURA (dataAbertura — quando a
@@ -1716,6 +1720,57 @@ function getOcorrenciasFiltradas() {
   }).sort((a, b) => _ocCompararOrdenacao(a, b, sortMode));
 }
 
+// ── Menu "···" dos cards (31/07) ────────────────────────────
+// Com o crescimento de ações (DAI já tem 7), o rodapé do card ficava
+// apertado e cortava botão. Fica visível só o essencial — ação
+// principal do fluxo (Editar Nº SAP/Preencher Nº SAP na DAI; Concluir/
+// Reabrir/Reabrir concluída na comum), Editar/Termo e Excluir — o resto
+// entra neste menu único, compartilhado por todos os cards e populado a
+// cada abertura (ver _renderOcLista pro HTML do gatilho "···").
+function _ocAbrirMenuCard(event, id) {
+  event.stopPropagation();
+  const o = (state.ocorrencias || []).find(oc => oc.id === id);
+  const menu = document.getElementById('oc-card-menu');
+  if (!o || !menu) return;
+
+  // Clicar de novo no mesmo gatilho fecha (toggle), em vez de reabrir
+  // idêntico no mesmo lugar.
+  if (menu.classList.contains('open') && menu.dataset.ocId === id) {
+    _ocFecharMenuCard();
+    return;
+  }
+
+  const isAjuste = !!o.origemAjusteSistemico;
+  const isAdmin = window.currentUser?.role === 'admin';
+  const itens = [];
+  if (isAdmin) itens.push({ icon: 'ti-user-plus', label: 'Atribuir a outro usuário', acao: `openAtribuirModal('${o.id}')` });
+  if (isAjuste) {
+    itens.push({ icon: 'ti-printer',   label: 'Reimprimir Documento',       acao: `reimprimirDocumentoDai('${o.daiId || ''}')` });
+    itens.push({ icon: 'ti-download',  label: 'Baixar ZIP',                 acao: `baixarZipDai('${o.daiId || ''}')` });
+    itens.push({ icon: 'ti-file-plus', label: 'Anexar Arquivo',             acao: `adicionarAnexoDaiExistente('${o.daiId || ''}')` });
+  } else {
+    if (!o.concluida && !o.inconclusiva) itens.push({ icon: 'ti-alert-triangle',  label: 'Marcar como inconclusiva', acao: `openInconclusivaModal('${o.id}')` });
+    if (ocPodeEscalonar(o))              itens.push({ icon: 'ti-arrow-up-circle', label: 'Escalonar',                acao: `openEscalonarModal('${o.id}')` });
+  }
+
+  menu.innerHTML = itens.map(it => `<button type="button" class="oc-card-menu-item" onclick="event.stopPropagation();_ocFecharMenuCard();${it.acao}">
+    <i class="ti ${it.icon}"></i> ${it.label}
+  </button>`).join('') || `<div style="padding:8px 10px;font-size:11.5px;color:var(--text3)">Nenhuma ação extra.</div>`;
+
+  const rect = event.currentTarget.getBoundingClientRect();
+  menu.style.top = `${rect.bottom + 6}px`;
+  // Alinha a borda DIREITA do menu com a do botão (que fica no canto
+  // direito do card) — evita estourar a borda direita da tela.
+  menu.style.left = 'auto';
+  menu.style.right = `${window.innerWidth - rect.right}px`;
+  menu.dataset.ocId = id;
+  menu.classList.add('open');
+}
+
+function _ocFecharMenuCard() {
+  document.getElementById('oc-card-menu')?.classList.remove('open');
+}
+
 function _renderOcLista(lista) {
   const el = document.getElementById('oc-lista');
   if (!el) return;
@@ -1772,30 +1827,18 @@ function _renderOcLista(lista) {
       <div class="oc-card-footer">
         <div class="oc-card-footer-left">${o.criadoPorNome ? `<span class="oc-card-criador" title="Criado por"><i class="ti ti-user-circle"></i> ${escapeHtml(o.criadoPorNome)}</span>` : ''}</div>
         <div class="oc-card-footer-right">
-          ${window.currentUser?.role === 'admin' ? `<button class="btn btn-sm" onclick="event.stopPropagation();openAtribuirModal('${o.id}')" title="Atribuir a outro usuário">
-            <i class="ti ti-user-plus"></i>
-          </button>` : ''}
           ${isAjuste ? `
-          <button class="btn btn-sm" onclick="event.stopPropagation();reimprimirDocumentoDai('${o.daiId || ''}')" title="Reimprimir Documento de Ajuste de Inventário">
-            <i class="ti ti-printer"></i>
-          </button>
           <button class="btn btn-sm ${!o.concluida ? 'oc-btn-concluir' : ''}" onclick="event.stopPropagation();editarSapDai('${o.daiId || ''}')" title="${o.concluida ? 'Editar Nº do documento SAP' : 'Preencher Nº do documento SAP e concluir'}">
             <i class="ti ti-edit"></i>
-          </button>
-          <button class="btn btn-sm" onclick="event.stopPropagation();baixarZipDai('${o.daiId || ''}')" title="Baixar ZIP (documento + anexos)">
-            <i class="ti ti-download"></i>
           </button>
           <button class="btn btn-sm" onclick="event.stopPropagation();gerarTermoResponsabilidade('${o.daiId || ''}')" title="Gerar Termo de Responsabilidade do Informante">
             <i class="ti ti-signature"></i>
           </button>
-          <button class="btn btn-sm" onclick="event.stopPropagation();adicionarAnexoDaiExistente('${o.daiId || ''}')" title="Anexar arquivo a este DAI">
-            <i class="ti ti-file-plus"></i>
-          </button>
           <button class="btn btn-sm btn-danger-ghost" onclick="event.stopPropagation();confirmarExcluirAjusteSistemico('${o.id}')" title="Excluir (requer confirmação de ciência)">
             <i class="ti ti-trash"></i>
           </button>` : `
-          ${!o.concluida && !o.inconclusiva ? `<button class="btn btn-sm oc-btn-inconclusiva" onclick="event.stopPropagation();openInconclusivaModal('${o.id}')" title="Marcar como inconclusiva">
-            <i class="ti ti-alert-triangle"></i>
+          ${!o.concluida && !o.inconclusiva ? `<button class="btn btn-sm oc-btn-concluir" onclick="event.stopPropagation();openConcluirModal('${o.id}')" title="Concluir">
+            <i class="ti ti-circle-check"></i>
           </button>` : ''}
           ${o.inconclusiva && !o.concluida ? `<button class="btn btn-sm oc-btn-reabrir" onclick="event.stopPropagation();reabrirOcorrencia('${o.id}')" title="Reabrir ocorrência">
             <i class="ti ti-rotate"></i>
@@ -1803,18 +1846,15 @@ function _renderOcLista(lista) {
           ${o.concluida ? `<button class="btn btn-sm oc-btn-reabrir-concluida" onclick="event.stopPropagation();reabrirOcorrenciaConcluida('${o.id}')" title="Reabrir ocorrência concluída">
             <i class="ti ti-rotate"></i>
           </button>` : ''}
-          ${ocPodeEscalonar(o) ? `<button class="btn btn-sm oc-btn-escalonar" onclick="event.stopPropagation();openEscalonarModal('${o.id}')" title="Escalonar para próximo nível">
-            <i class="ti ti-arrow-up-circle"></i>
-          </button>` : ''}
-          ${!o.concluida ? `<button class="btn btn-sm oc-btn-concluir" onclick="event.stopPropagation();openConcluirModal('${o.id}')" title="Concluir">
-            <i class="ti ti-circle-check"></i>
-          </button>` : ''}
           <button class="btn btn-sm" onclick="event.stopPropagation();openOcorrenciaModal('${o.id}')" title="Editar">
             <i class="ti ti-edit"></i>
           </button>
           <button class="btn btn-sm btn-danger-ghost" onclick="event.stopPropagation();confirmarExcluirOcorrencia('${o.id}')" title="Excluir">
             <i class="ti ti-trash"></i>
           </button>`}
+          <button class="btn btn-sm" onclick="_ocAbrirMenuCard(event,'${o.id}')" title="Mais ações">
+            <i class="ti ti-dots-vertical"></i>
+          </button>
         </div>
       </div>
     </div>`;
