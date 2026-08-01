@@ -733,21 +733,35 @@ window.submitEditarEscalonamento = function() {
 // ── KPIs ──────────────────────────────────────────────────
 function buildOcKPIs(lista) {
   const total          = lista.length;
-  const concluidas     = lista.filter(o => o.concluida).length;
-  const inconclusivas  = lista.filter(o => !o.concluida && o.inconclusiva).length;
-  const abertas        = total - concluidas - inconclusivas;
+  // DAI (31/07) é categoria própria no donut, igual ao badge dourado
+  // "Ajuste Sistêmico" que o card já usa (ver ocStatusLabel) — exclusiva
+  // das outras 3: uma ocorrência de DAI concluída conta em "DAI", não em
+  // "Concluída" (senão o total do gráfico ficaria maior que a soma das
+  // fatias visíveis, já que ela apareceria contada duas vezes).
+  const daiOcorrencias = lista.filter(o => o.origemAjusteSistemico).length;
+  const concluidas     = lista.filter(o => !o.origemAjusteSistemico && o.concluida).length;
+  const inconclusivas  = lista.filter(o => !o.origemAjusteSistemico && !o.concluida && o.inconclusiva).length;
+  const abertas        = total - daiOcorrencias - concluidas - inconclusivas;
   const vencidas       = lista.filter(o => !o.concluida && !o.inconclusiva && ocDateStatus(o.dataLimite) === 'vencida').length;
   const urgentes       = lista.filter(o => !o.concluida && !o.inconclusiva && ocDateStatus(o.dataLimite) === 'urgente').length;
   const pctConc        = total > 0 ? Math.round(concluidas / total * 100) : 0;
 
+  // Métricas de tempo/ranking abaixo continuam de fora do Ajuste Sistêmico
+  // (DAI) — nasce já concluído no mesmo dia, sem prazo/fluxo de resolução
+  // real, e distorceria tempo médio/ranking. Só o bloco acima (donut) conta
+  // DAI — precisa do `lista` cheio pra isso (ver renderOcorrencias, que
+  // agora manda state.ocorrencias inteiro pra cá, não mais pré-filtrado —
+  // do contrário a fatia "DAI" do donut nunca teria nada pra contar).
+  const operacional = lista.filter(o => !o.origemAjusteSistemico);
+
   // Contagem por central (top 12)
   const porCentral = {};
-  lista.forEach(o => { const c = o.central || '—'; porCentral[c] = (porCentral[c] || 0) + 1; });
+  operacional.forEach(o => { const c = o.central || '—'; porCentral[c] = (porCentral[c] || 0) + 1; });
   const topCentrals = Object.entries(porCentral).sort((a, b) => b[1] - a[1]).slice(0, 12);
 
   // Contagem por motivo
   const porMotivo = {};
-  lista.forEach(o => {
+  operacional.forEach(o => {
     const m = (o.motivo || '').trim() || 'Sem motivo';
     porMotivo[m] = (porMotivo[m] || 0) + 1;
   });
@@ -759,7 +773,7 @@ function buildOcKPIs(lista) {
   // cancelariam numa média simples, distorcendo o indicador.
   const temposBuckets = { '1d':0, '2-3d':0, '4-7d':0, '8-15d':0, '16-30d':0, '>30d':0 };
   let tempoTotal = 0, tempoCount = 0;
-  lista.forEach(o => {
+  operacional.forEach(o => {
     if (!o.concluida || !o.dataLimite || !o.dataConclusao) return;
     const ini = new Date(o.dataLimite + 'T00:00:00'), fim = new Date(o.dataConclusao + 'T00:00:00');
     if (isNaN(ini) || isNaN(fim)) return;
@@ -784,7 +798,7 @@ function buildOcKPIs(lista) {
   });
 
   const regionalTempos = {}; // regional → { total: dias, count: n }
-  lista.forEach(o => {
+  operacional.forEach(o => {
     if (!o.concluida || !o.dataAbertura || !o.dataConclusao) return;
     const ini = new Date(o.dataAbertura + 'T00:00:00'), fim = new Date(o.dataConclusao + 'T00:00:00');
     if (isNaN(ini) || isNaN(fim)) return;
@@ -800,13 +814,13 @@ function buildOcKPIs(lista) {
     .map(([reg, { total, count }]) => [reg, count > 0 ? total / count : 0, count])
     .sort((a, b) => b[1] - a[1]); // ordena do maior tempo para o menor
 
-  // Sublegenda do donut (31/07) — 3 métricas extra fora das fatias do
+  // Sublegenda do donut (31/07) — métricas extra fora das fatias do
   // gráfico: escalonadas por nível (só as ainda ABERTAS, no nível atual —
-  // mesma leitura de ocNivelAtual/OC_HIERARQUIA usada no resto da tela),
-  // concluídas em atraso (conclusão depois do prazo) e total de DAIs
-  // (documentos únicos, não ocorrências — um DAI pode gerar várias).
+  // mesma leitura de ocNivelAtual/OC_HIERARQUIA usada no resto da tela) e
+  // concluídas em atraso (conclusão depois do prazo). DAI saiu daqui —
+  // agora é fatia própria do donut (daiOcorrencias, calculado acima).
   const escalonadas = { regional: 0, supervisor: 0, gerencia: 0 };
-  lista.forEach(o => {
+  operacional.forEach(o => {
     if (o.concluida || o.inconclusiva) return;
     const nivel = ocNivelAtual(o);
     if (nivel === 1) escalonadas.regional++;
@@ -814,19 +828,16 @@ function buildOcKPIs(lista) {
     else if (nivel === 3) escalonadas.gerencia++;
   });
 
-  const concluidasAtraso = lista.filter(o =>
+  const concluidasAtraso = operacional.filter(o =>
     o.concluida && o.dataLimite && o.dataConclusao && o.dataConclusao > o.dataLimite
   ).length;
 
-  const daisCriadas = new Set(
-    lista.filter(o => o.origemAjusteSistemico && o.daiId).map(o => o.daiId)
-  ).size;
-
   return { total, concluidas, inconclusivas, abertas, vencidas, urgentes, pctConc,
+           daiOcorrencias,
            topCentrals, porCentral, topMotivos, porMotivo,
            temposBuckets, tempoMedioMin, tempoCount,
            tempoMedioRegional,
-           escalonadas, concluidasAtraso, daisCriadas,
+           escalonadas, concluidasAtraso,
            _lista: lista };
 }
 
@@ -842,14 +853,16 @@ function _destroyOcCharts() {
 }
 
 // ── Donut "Status das ocorrências" ─────────────────────────
-// 31/07: reduzido a 3 categorias (Em aberto/Concluída/Inconclusiva) —
-// vencida/urgente continuam existindo como dado (cards, filtros), só
-// saem do gráfico/legenda principal. Métricas de escalonamento/atraso/
-// DAIs viram sublegenda abaixo, fora das fatias (ver _buildOcSublegenda).
+// 31/07: 4 categorias (Em aberto/Inconclusiva/Concluída/DAI) — vencida/
+// urgente continuam existindo como dado (cards, filtros), só saem do
+// gráfico/legenda principal. DAI é categoria própria (exclusiva das
+// outras 3, ver buildOcKPIs), não sublegenda. Escalonamento/atraso
+// continuam na sublegenda abaixo (ver _buildOcSublegenda).
 const OC_DONUT_META = {
   aberta:       { col: '#3b82f6', label: 'Em aberto'     },
   inconclusiva: { col: '#8b5cf6', label: 'Inconclusiva'  },
-  concluida:    { col: '#10b981', label: 'Concluída'     }
+  concluida:    { col: '#10b981', label: 'Concluída'     },
+  dai:          { col: '#eab308', label: 'DAI'           }
 };
 
 function _buildOcDonut(kpis) {
@@ -859,9 +872,10 @@ function _buildOcDonut(kpis) {
   }
 
   const segs = [
-    { key: 'aberta',       n: kpis.abertas       },
-    { key: 'inconclusiva', n: kpis.inconclusivas },
-    { key: 'concluida',    n: kpis.concluidas    },
+    { key: 'aberta',       n: kpis.abertas        },
+    { key: 'inconclusiva', n: kpis.inconclusivas  },
+    { key: 'concluida',    n: kpis.concluidas     },
+    { key: 'dai',          n: kpis.daiOcorrencias },
   ].filter(s => s.n > 0);
 
   const CX = 90, CY = 90, R = 72, ring = 26;
@@ -907,16 +921,17 @@ function _buildOcDonut(kpis) {
 }
 
 // Sublegenda (31/07) — métricas extras fora das fatias do donut: nível de
-// escalonamento (só as ainda abertas), atraso na conclusão e total de DAIs
-// geradas. Mesmos dados de buildOcKPIs, sem gráfico novo nem lib nova.
+// escalonamento (só as ainda abertas), vencidas em aberto e atraso na
+// conclusão. DAI saiu daqui — virou fatia própria do donut (ver
+// OC_DONUT_META/_buildOcDonut).
 function _buildOcSublegenda(kpis) {
   const { regional, supervisor, gerencia } = kpis.escalonadas;
   const itens = [
     { icon: 'ti-map-pin',        label: 'Escalonadas ao Regional',            val: regional },
     { icon: 'ti-user-shield',    label: 'Escalonadas ao Supervisor do Setor', val: supervisor },
     { icon: 'ti-crown',          label: 'Escalonadas à Gerência',             val: gerencia },
+    { icon: 'ti-alert-triangle', label: 'Vencidas em aberto',                 val: kpis.vencidas },
     { icon: 'ti-clock-exclamation', label: 'Concluídas em atraso',            val: kpis.concluidasAtraso },
-    { icon: 'ti-file-certificate',  label: 'DAIs criadas',                    val: kpis.daisCriadas },
   ];
   return `
     <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border2);display:flex;flex-direction:column;gap:6px">
@@ -1401,13 +1416,13 @@ function _buildOcHierarquiaDetail(o) {
 function renderOcorrencias() {
   if (!Array.isArray(state.ocorrencias)) state.ocorrencias = [];
   const lista = getOcorrenciasFiltradas();
-  // KPIs/estatísticas (tempo médio de conclusão, vencidas, motivos etc.) são
-  // sobre o fluxo OPERACIONAL de ocorrências — registros de Ajuste Sistêmico
-  // (DAI) não têm prazo/fluxo de resolução real (nascem já concluídos no
-  // mesmo dia) e distorceriam esses números. Ficam de fora dos KPIs, mas
-  // continuam 100% visíveis e filtráveis na lista abaixo.
-  const listaOperacional = state.ocorrencias.filter(o => !o.origemAjusteSistemico);
-  renderOcKPIs(listaOperacional); // KPIs sempre no total (exceto Ajuste Sistêmico)
+  // KPIs sempre no TOTAL de state.ocorrencias, não na lista com micro-filtro
+  // aplicado (mesmo comportamento de antes) — a exclusão de Ajuste
+  // Sistêmico (DAI) das métricas de tempo médio/ranking (que não fazem
+  // sentido pra um registro que nasce já concluído no mesmo dia, sem prazo
+  // real) agora é decidida DENTRO de buildOcKPIs, métrica por métrica —
+  // o donut e a contagem total continuam precisando ver as DAIs.
+  renderOcKPIs(state.ocorrencias);
   _renderOcLista(lista);
 }
 

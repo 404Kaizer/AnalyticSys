@@ -1,10 +1,13 @@
-// Teste do donut "Status das ocorrências" reduzido a 3 categorias + a
-// sublegenda nova (31/07, pedido do usuário): o gráfico/legenda principal
-// passa a mostrar só Em aberto/Concluída/Inconclusiva (vencida/urgente
-// somam dentro de "Em aberto", mas continuam existindo como dado em
-// outros lugares da tela). Abaixo, uma sublegenda de texto com
-// escalonamento por nível (só ocorrências ainda ABERTAS), atraso na
-// conclusão e total de DAIs geradas (documentos únicos, não ocorrências).
+// Teste do donut "Status das ocorrências" (31/07, pedido do usuário):
+// gráfico/legenda principal com 4 categorias — Em aberto/Inconclusiva/
+// Concluída/DAI (vencida/urgente somam dentro de "Em aberto", mas
+// continuam existindo como dado em outros lugares da tela). DAI é
+// categoria PRÓPRIA e EXCLUSIVA das outras 3 — uma ocorrência de DAI
+// concluída conta em "DAI", não em "Concluída" (mesmo critério do badge
+// dourado "Ajuste Sistêmico" que o card já usa, ver ocStatusLabel).
+// Abaixo do donut, uma sublegenda de texto com escalonamento por nível
+// (só ocorrências ainda ABERTAS) e atraso na conclusão — DAI NÃO entra
+// mais aqui, virou fatia do gráfico.
 //
 // Rode com: node tests/oc-donut-kpis.test.mjs
 
@@ -38,7 +41,7 @@ function montar() {
 const casos = [];
 const teste = (nome, fn) => casos.push({ nome, fn });
 
-// ── buildOcKPIs: escalonadas/concluidasAtraso/daisCriadas ──────────────
+// ── buildOcKPIs: escalonadas/concluidasAtraso/daiOcorrencias ───────────
 
 teste('escalonadas: só conta ocorrência ABERTA (não concluída/inconclusiva) no nível atual', () => {
   const ctx = montar();
@@ -68,21 +71,66 @@ teste('concluidasAtraso: só quando dataConclusao é depois de dataLimite', () =
   assert.equal(kpis.concluidasAtraso, 1);
 });
 
-teste('daisCriadas: conta daiId ÚNICOS, não ocorrências (1 DAI pode gerar várias)', () => {
+teste('daiOcorrencias: conta OCORRÊNCIAS de DAI (não documentos únicos) — 1 DAI pode gerar várias', () => {
   const ctx = montar();
   const lista = [
     { id: 'a', origemAjusteSistemico: true, daiId: 'dai_1' },
-    { id: 'b', origemAjusteSistemico: true, daiId: 'dai_1' }, // mesmo DAI, item diferente
+    { id: 'b', origemAjusteSistemico: true, daiId: 'dai_1' }, // mesmo DAI, item diferente — conta as 2
     { id: 'c', origemAjusteSistemico: true, daiId: 'dai_2' },
     { id: 'd', origemAjusteSistemico: false, daiId: null },
   ];
   const kpis = ctx.buildOcKPIs(lista);
-  assert.equal(kpis.daisCriadas, 2);
+  assert.equal(kpis.daiOcorrencias, 3);
 });
 
-// ── _buildOcDonut: só 3 categorias no gráfico/legenda principal ────────
+teste('DAI é exclusiva das outras 3 categorias: concluída/inconclusiva/aberta NUNCA contam uma ocorrência de DAI', () => {
+  const ctx = montar();
+  const lista = [
+    { id: 'a', origemAjusteSistemico: true, concluida: true },  // DAI concluída — não é "Concluída"
+    { id: 'b', origemAjusteSistemico: true, concluida: false, inconclusiva: false }, // DAI pendente — não é "Em aberto"
+    { id: 'c', origemAjusteSistemico: false, concluida: true },
+  ];
+  const kpis = ctx.buildOcKPIs(lista);
+  assert.equal(kpis.daiOcorrencias, 2);
+  assert.equal(kpis.concluidas, 1); // só a "c", não a "a"
+  assert.equal(kpis.abertas, 0);    // "b" não conta como aberta, virou DAI
+  assert.equal(kpis.total, 3);      // total continua contando todo mundo
+});
 
-teste('_buildOcDonut: mostra só Em aberto/Inconclusiva/Concluída — sem Vencida/Urgente separadas', () => {
+// BUG REAL (31/07): renderOcorrencias mandava listaOperacional (DAI já
+// excluída ANTES de chegar em buildOcKPIs) pro donut — a fatia "DAI" (e a
+// extinta sublegenda "DAIs criadas") nunca tinham o que contar, mesmo com
+// DAIs de verdade na tela (usuário reportou "21 DAIs na tela, não estão
+// sendo contabilizadas"). Corrigido passando o `lista` cheio pra
+// buildOcKPIs, que agora decide a exclusão de DAI internamente, métrica
+// por métrica: total/donut contam TUDO, tempo médio/ranking (que não
+// fazem sentido pra um registro sem prazo real) excluem DAI só ali dentro.
+teste('buildOcKPIs: total/daiOcorrencias contam DAI mesmo que o CALLER não tenha pré-filtrado nada (lista cheia)', () => {
+  const ctx = montar();
+  const lista = [
+    { id: 'a', origemAjusteSistemico: true, central: 'ABA1', concluida: true, dataAbertura: '2026-07-01', dataConclusao: '2026-07-01' },
+    { id: 'b', concluida: false, inconclusiva: false, central: 'ABA2' },
+  ];
+  const kpis = ctx.buildOcKPIs(lista);
+  assert.equal(kpis.total, 2);
+  assert.equal(kpis.daiOcorrencias, 1);
+});
+
+teste('buildOcKPIs: tempo médio/ranking de central continuam SEM DAI (nasce já concluído no mesmo dia, sem prazo real)', () => {
+  const ctx = montar();
+  const lista = [
+    // DAI: "concluída" no mesmo dia do prazo — se entrasse no tempo médio, puxaria a média pra baixo artificialmente
+    { id: 'a', origemAjusteSistemico: true, central: 'DAI-CENTRAL', concluida: true, dataLimite: '2026-07-01', dataConclusao: '2026-07-01' },
+    { id: 'b', concluida: true, central: 'ABA2', dataLimite: '2026-07-01', dataConclusao: '2026-07-11' }, // 10 dias
+  ];
+  const kpis = ctx.buildOcKPIs(lista);
+  assert.equal(kpis.tempoMedioMin, 10); // só a "b" — se a DAI entrasse, seria (0+10)/2=5
+  assert.ok(!kpis.topCentrals.some(([central]) => central === 'DAI-CENTRAL'));
+});
+
+// ── _buildOcDonut: 4 categorias no gráfico/legenda principal ───────────
+
+teste('_buildOcDonut: mostra Em aberto/Inconclusiva/Concluída — sem Vencida/Urgente separadas', () => {
   const ctx = montar();
   const lista = [
     { id: 'a', concluida: false, inconclusiva: false, dataLimite: '2020-01-01' }, // vencida
@@ -99,19 +147,62 @@ teste('_buildOcDonut: mostra só Em aberto/Inconclusiva/Concluída — sem Venci
   assert.ok(!html.includes('data-label="Urgente"'));
   // "Em aberto" soma vencida+urgente+normal — as 2 abertas da lista (a, b)
   assert.ok(html.includes('data-count="2"'));
+  // sem nenhuma ocorrência de DAI na lista, a fatia "DAI" nem aparece
+  assert.ok(!html.includes('data-label="DAI"'));
 });
 
-teste('_buildOcDonut: inclui a sublegenda (escalonadas/atraso/DAIs) abaixo da legenda', () => {
+teste('_buildOcDonut: com ocorrência de DAI, mostra a fatia "DAI" em amarelo (#eab308)', () => {
+  const ctx = montar();
+  const lista = [
+    { id: 'a', origemAjusteSistemico: true, concluida: true },
+    { id: 'b', concluida: false, inconclusiva: false, dataLimite: null },
+  ];
+  const kpis = ctx.buildOcKPIs(lista);
+  const html = ctx._buildOcDonut(kpis);
+  assert.ok(html.includes('data-label="DAI"'));
+  assert.ok(html.includes('data-count="1"'));
+  assert.ok(html.includes('#eab308'));
+});
+
+function amanha(dias) {
+  const d = new Date(); d.setDate(d.getDate() + dias);
+  return d.toISOString().split('T')[0];
+}
+
+teste('vencidas (sublegenda "Vencidas em aberto"): só ocorrência ABERTA com prazo no passado', () => {
+  const ctx = montar();
+  const lista = [
+    { id: 'a', concluida: false, inconclusiva: false, dataLimite: amanha(-3) }, // vencida em aberto
+    { id: 'b', concluida: true,  inconclusiva: false, dataLimite: amanha(-3) }, // vencida mas já concluída — não conta
+    { id: 'c', concluida: false, inconclusiva: false, dataLimite: amanha(5) },  // no prazo
+    { id: 'd', origemAjusteSistemico: true, concluida: false, dataLimite: null }, // DAI nunca tem dataLimite
+  ];
+  const kpis = ctx.buildOcKPIs(lista);
+  assert.equal(kpis.vencidas, 1);
+});
+
+teste('_buildOcDonut: sublegenda mostra "Vencidas em aberto"', () => {
+  const ctx = montar();
+  const lista = [
+    { id: 'a', concluida: false, inconclusiva: false, dataLimite: amanha(-3) },
+  ];
+  const kpis = ctx.buildOcKPIs(lista);
+  const html = ctx._buildOcDonut(kpis);
+  assert.match(html, /Vencidas em aberto[\s\S]*?>1</);
+});
+
+teste('_buildOcDonut: sublegenda mostra escalonadas/atraso mas NÃO mostra mais "DAIs criadas"', () => {
   const ctx = montar();
   const lista = [
     { id: 'a', concluida: false, inconclusiva: false, hierarquia: [{ nivel: 2 }] },
-    { id: 'b', concluida: true, dataLimite: '2026-01-01', dataConclusao: '2026-01-10', origemAjusteSistemico: true, daiId: 'dai_1' },
+    { id: 'b', concluida: true, dataLimite: '2026-01-01', dataConclusao: '2026-01-10' },
+    { id: 'c', origemAjusteSistemico: true, daiId: 'dai_1' },
   ];
   const kpis = ctx.buildOcKPIs(lista);
   const html = ctx._buildOcDonut(kpis);
   assert.ok(html.includes('Escalonadas ao Supervisor do Setor'));
   assert.ok(html.includes('Concluídas em atraso'));
-  assert.ok(html.includes('DAIs criadas'));
+  assert.ok(!html.includes('DAIs criadas'));
 });
 
 let falhou = 0;
