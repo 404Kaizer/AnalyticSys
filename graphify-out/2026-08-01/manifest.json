@@ -105,9 +105,9 @@
     "semantic_hash": "3982f4d07a02eb9ceaacd6d7552971e0"
   },
   "js/ocorrencias.js": {
-    "mtime": 1785527881.1377556,
-    "ast_hash": "2c36a13b94141daab57c62e01e8d088f",
-    "semantic_hash": "2c36a13b94141daab57c62e01e8d088f"
+    "mtime": 1785571868.9725077,
+    "ast_hash": "a67caa845ac92b13528cbd04ec9e2d87",
+    "semantic_hash": ""
   },
   "js/period-fab.js": {
     "mtime": 1784788326.334901,
@@ -200,9 +200,9 @@
     "semantic_hash": "4c27b2a1da07d7e65d220c5709e52922"
   },
   "tests/oc-donut-kpis.test.mjs": {
-    "mtime": 1785518844.4914317,
-    "ast_hash": "ca55705a43a3c01cbaf54de312a3e549",
-    "semantic_hash": "ca55705a43a3c01cbaf54de312a3e549"
+    "mtime": 1785571907.8036468,
+    "ast_hash": "891e123e8c64d445fce4b01c334fbe7c",
+    "semantic_hash": ""
   },
   "tests/ocorrencias-supervisor.test.mjs": {
     "mtime": 1785512502.5556374,

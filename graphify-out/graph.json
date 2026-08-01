@@ -78,8 +78,8 @@
       "source_location": "L19",
       "_origin": "ast",
       "id": "js_ocorrencias_ocnomeator",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 43,
+      "community_name": "renderOcorrencias",
       "norm_label": "_ocnomeator()"
     },
     {
@@ -133,8 +133,8 @@
       "source_location": "L89",
       "_origin": "ast",
       "id": "js_ocorrencias_octodbrow",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 43,
+      "community_name": "renderOcorrencias",
       "norm_label": "_octodbrow()"
     },
     {
@@ -144,8 +144,8 @@
       "source_location": "L131",
       "_origin": "ast",
       "id": "js_ocorrencias_ocfromdbrow",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 90,
+      "community_name": "_ocRealtimeInit",
       "norm_label": "_ocfromdbrow()"
     },
     {
@@ -155,8 +155,8 @@
       "source_location": "L166",
       "_origin": "ast",
       "id": "js_ocorrencias_syncocorrenciasfromsupabase",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 90,
+      "community_name": "_ocRealtimeInit",
       "norm_label": "syncocorrenciasfromsupabase()"
     },
     {
@@ -166,8 +166,8 @@
       "source_location": "L241",
       "_origin": "ast",
       "id": "js_ocorrencias_ocmotivorelevancia",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 90,
+      "community_name": "_ocRealtimeInit",
       "norm_label": "_ocmotivorelevancia()"
     },
     {
@@ -177,8 +177,8 @@
       "source_location": "L249",
       "_origin": "ast",
       "id": "js_ocorrencias_ocehrelevantepramim",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 90,
+      "community_name": "_ocRealtimeInit",
       "norm_label": "_ocehrelevantepramim()"
     },
     {
@@ -188,8 +188,8 @@
       "source_location": "L252",
       "_origin": "ast",
       "id": "js_ocorrencias_ocupsertlocal",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 90,
+      "community_name": "_ocRealtimeInit",
       "norm_label": "_ocupsertlocal()"
     },
     {
@@ -199,8 +199,8 @@
       "source_location": "L265",
       "_origin": "ast",
       "id": "js_ocorrencias_ocremovelocal",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 90,
+      "community_name": "_ocRealtimeInit",
       "norm_label": "_ocremovelocal()"
     },
     {
@@ -210,8 +210,8 @@
       "source_location": "L277",
       "_origin": "ast",
       "id": "js_ocorrencias_ocmontartitulonotificacaosupervisor",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 38,
+      "community_name": "_buildOcHierarquiaBar",
       "norm_label": "_ocmontartitulonotificacaosupervisor()"
     },
     {
@@ -221,8 +221,8 @@
       "source_location": "L288",
       "_origin": "ast",
       "id": "js_ocorrencias_ocrealtimeinit",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 90,
+      "community_name": "_ocRealtimeInit",
       "norm_label": "_ocrealtimeinit()"
     },
     {
@@ -243,8 +243,8 @@
       "source_location": "L335",
       "_origin": "ast",
       "id": "js_ocorrencias_ocsyncupsert",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 43,
+      "community_name": "renderOcorrencias",
       "norm_label": "_ocsyncupsert()"
     },
     {
@@ -254,8 +254,8 @@
       "source_location": "L348",
       "_origin": "ast",
       "id": "js_ocorrencias_ocsyncdelete",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 43,
+      "community_name": "renderOcorrencias",
       "norm_label": "_ocsyncdelete()"
     },
     {
@@ -298,8 +298,8 @@
       "source_location": "L429",
       "_origin": "ast",
       "id": "js_ocorrencias_saveocorrencia",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 43,
+      "community_name": "renderOcorrencias",
       "norm_label": "saveocorrencia()"
     },
     {
@@ -309,8 +309,8 @@
       "source_location": "L439",
       "_origin": "ast",
       "id": "js_ocorrencias_deleteocorrencia",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 43,
+      "community_name": "renderOcorrencias",
       "norm_label": "deleteocorrencia()"
     },
     {
@@ -320,8 +320,8 @@
       "source_location": "L448",
       "_origin": "ast",
       "id": "js_ocorrencias_ocdatestatus",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 68,
+      "community_name": "renderOcKPIs",
       "norm_label": "ocdatestatus()"
     },
     {
@@ -331,8 +331,8 @@
       "source_location": "L458",
       "_origin": "ast",
       "id": "js_ocorrencias_ocstatuslabel",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 38,
+      "community_name": "_buildOcHierarquiaBar",
       "norm_label": "ocstatuslabel()"
     },
     {
@@ -342,8 +342,8 @@
       "source_location": "L465",
       "_origin": "ast",
       "id": "js_ocorrencias_fmtdatebr",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 38,
+      "community_name": "_buildOcHierarquiaBar",
       "norm_label": "fmtdatebr()"
     },
     {
@@ -353,8 +353,8 @@
       "source_location": "L471",
       "_origin": "ast",
       "id": "js_ocorrencias_buildwhatsapplink",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 38,
+      "community_name": "_buildOcHierarquiaBar",
       "norm_label": "buildwhatsapplink()"
     },
     {
@@ -408,8 +408,8 @@
       "source_location": "L527",
       "_origin": "ast",
       "id": "js_ocorrencias_ocnivelatual",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 38,
+      "community_name": "_buildOcHierarquiaBar",
       "norm_label": "ocnivelatual()"
     },
     {
@@ -419,8 +419,8 @@
       "source_location": "L532",
       "_origin": "ast",
       "id": "js_ocorrencias_ocnivelinfo",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 38,
+      "community_name": "_buildOcHierarquiaBar",
       "norm_label": "ocnivelinfo()"
     },
     {
@@ -430,8 +430,8 @@
       "source_location": "L539",
       "_origin": "ast",
       "id": "js_ocorrencias_ocapareceautoparasupervisor",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 90,
+      "community_name": "_ocRealtimeInit",
       "norm_label": "ocapareceautoparasupervisor()"
     },
     {
@@ -441,8 +441,8 @@
       "source_location": "L551",
       "_origin": "ast",
       "id": "js_ocorrencias_ocdetectarmudancaprioritaria",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 38,
+      "community_name": "_buildOcHierarquiaBar",
       "norm_label": "_ocdetectarmudancaprioritaria()"
     },
     {
@@ -452,8 +452,8 @@
       "source_location": "L582",
       "_origin": "ast",
       "id": "js_ocorrencias_ocpodeescalonar",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 38,
+      "community_name": "_buildOcHierarquiaBar",
       "norm_label": "ocpodeescalonar()"
     },
     {
@@ -463,8 +463,8 @@
       "source_location": "L632",
       "_origin": "ast",
       "id": "js_ocorrencias_ocpodedescalonar",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 38,
+      "community_name": "_buildOcHierarquiaBar",
       "norm_label": "ocpodedescalonar()"
     },
     {
@@ -474,8 +474,8 @@
       "source_location": "L734",
       "_origin": "ast",
       "id": "js_ocorrencias_buildockpis",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 68,
+      "community_name": "renderOcKPIs",
       "norm_label": "buildockpis()"
     },
     {
@@ -485,8 +485,8 @@
       "source_location": "L850",
       "_origin": "ast",
       "id": "js_ocorrencias_destroyoccharts",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 68,
+      "community_name": "renderOcKPIs",
       "norm_label": "_destroyoccharts()"
     },
     {
@@ -507,8 +507,8 @@
       "source_location": "L868",
       "_origin": "ast",
       "id": "js_ocorrencias_buildocdonut",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 68,
+      "community_name": "renderOcKPIs",
       "norm_label": "_buildocdonut()"
     },
     {
@@ -518,8 +518,8 @@
       "source_location": "L927",
       "_origin": "ast",
       "id": "js_ocorrencias_buildocsublegenda",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 68,
+      "community_name": "renderOcKPIs",
       "norm_label": "_buildocsublegenda()"
     },
     {
@@ -529,8 +529,8 @@
       "source_location": "L946",
       "_origin": "ast",
       "id": "js_ocorrencias_bindocdonuthover",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 68,
+      "community_name": "renderOcKPIs",
       "norm_label": "_bindocdonuthover()"
     },
     {
@@ -540,8 +540,8 @@
       "source_location": "L967",
       "_origin": "ast",
       "id": "js_ocorrencias_renderockpis",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 68,
+      "community_name": "renderOcKPIs",
       "norm_label": "renderockpis()"
     },
     {
@@ -551,8 +551,8 @@
       "source_location": "L1067",
       "_origin": "ast",
       "id": "js_ocorrencias_buildoccharts",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 68,
+      "community_name": "renderOcKPIs",
       "norm_label": "_buildoccharts()"
     },
     {
@@ -562,8 +562,8 @@
       "source_location": "L1289",
       "_origin": "ast",
       "id": "js_ocorrencias_ochiermetatexto",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 38,
+      "community_name": "_buildOcHierarquiaBar",
       "norm_label": "_ochiermetatexto()"
     },
     {
@@ -573,8 +573,8 @@
       "source_location": "L1297",
       "_origin": "ast",
       "id": "js_ocorrencias_buildochierarquiabar",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 38,
+      "community_name": "_buildOcHierarquiaBar",
       "norm_label": "_buildochierarquiabar()"
     },
     {
@@ -584,8 +584,8 @@
       "source_location": "L1369",
       "_origin": "ast",
       "id": "js_ocorrencias_buildochierarquiadetail",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 38,
+      "community_name": "_buildOcHierarquiaBar",
       "norm_label": "_buildochierarquiadetail()"
     },
     {
@@ -595,8 +595,8 @@
       "source_location": "L1416",
       "_origin": "ast",
       "id": "js_ocorrencias_renderocorrencias",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 43,
+      "community_name": "renderOcorrencias",
       "norm_label": "renderocorrencias()"
     },
     {
@@ -639,8 +639,8 @@
       "source_location": "L1456",
       "_origin": "ast",
       "id": "js_ocorrencias_ocregionalporcentral",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 49,
+      "community_name": "populateOcFiltros",
       "norm_label": "_ocregionalporcentral()"
     },
     {
@@ -650,8 +650,8 @@
       "source_location": "L1468",
       "_origin": "ast",
       "id": "js_ocorrencias_ocstatusmatches",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 49,
+      "community_name": "populateOcFiltros",
       "norm_label": "ocstatusmatches()"
     },
     {
@@ -661,8 +661,8 @@
       "source_location": "L1480",
       "_origin": "ast",
       "id": "js_ocorrencias_ocbuildoptionslist",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 49,
+      "community_name": "populateOcFiltros",
       "norm_label": "_ocbuildoptionslist()"
     },
     {
@@ -683,8 +683,8 @@
       "source_location": "L1509",
       "_origin": "ast",
       "id": "js_ocorrencias_occlosemicrofilterdropdown",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 91,
+      "community_name": "_ocCloseMicroFilterDropdown",
       "norm_label": "_occlosemicrofilterdropdown()"
     },
     {
@@ -694,8 +694,8 @@
       "source_location": "L1514",
       "_origin": "ast",
       "id": "js_ocorrencias_octogglemicrofilter",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 49,
+      "community_name": "populateOcFiltros",
       "norm_label": "octogglemicrofilter()"
     },
     {
@@ -705,8 +705,8 @@
       "source_location": "L1539",
       "_origin": "ast",
       "id": "js_ocorrencias_ocfiltermicrooptions",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 49,
+      "community_name": "populateOcFiltros",
       "norm_label": "ocfiltermicrooptions()"
     },
     {
@@ -716,8 +716,8 @@
       "source_location": "L1543",
       "_origin": "ast",
       "id": "js_ocorrencias_ocapplymicrofilter",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 91,
+      "community_name": "_ocCloseMicroFilterDropdown",
       "norm_label": "ocapplymicrofilter()"
     },
     {
@@ -727,8 +727,8 @@
       "source_location": "L1551",
       "_origin": "ast",
       "id": "js_ocorrencias_occancelmicrofilter",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 91,
+      "community_name": "_ocCloseMicroFilterDropdown",
       "norm_label": "occancelmicrofilter()"
     },
     {
@@ -738,8 +738,8 @@
       "source_location": "L1556",
       "_origin": "ast",
       "id": "js_ocorrencias_occlearmicrofilter",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 91,
+      "community_name": "_ocCloseMicroFilterDropdown",
       "norm_label": "occlearmicrofilter()"
     },
     {
@@ -749,8 +749,8 @@
       "source_location": "L1565",
       "_origin": "ast",
       "id": "js_ocorrencias_occlearallmicrofilters",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 91,
+      "community_name": "_ocCloseMicroFilterDropdown",
       "norm_label": "occlearallmicrofilters()"
     },
     {
@@ -760,8 +760,8 @@
       "source_location": "L1575",
       "_origin": "ast",
       "id": "js_ocorrencias_ocsynctriggerlabel",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 91,
+      "community_name": "_ocCloseMicroFilterDropdown",
       "norm_label": "_ocsynctriggerlabel()"
     },
     {
@@ -771,114 +771,136 @@
       "source_location": "L1596",
       "_origin": "ast",
       "id": "js_ocorrencias_ocsyncclearbtn",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 91,
+      "community_name": "_ocCloseMicroFilterDropdown",
       "norm_label": "_ocsyncclearbtn()"
     },
     {
       "label": "OC_SORT_OPTIONS",
       "file_type": "code",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L1627",
+      "source_location": "L1631",
       "_origin": "ast",
       "id": "js_ocorrencias_oc_sort_options",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 49,
+      "community_name": "populateOcFiltros",
       "norm_label": "oc_sort_options"
     },
     {
       "label": "_ocSyncOrdenarBtn()",
       "file_type": "code",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L1639",
+      "source_location": "L1643",
       "_origin": "ast",
       "id": "js_ocorrencias_ocsyncordenarbtn",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 49,
+      "community_name": "populateOcFiltros",
       "norm_label": "_ocsyncordenarbtn()"
     },
     {
       "label": "_ocCloseOrdenarDropdown()",
       "file_type": "code",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L1652",
+      "source_location": "L1656",
       "_origin": "ast",
       "id": "js_ocorrencias_occloseordenardropdown",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 49,
+      "community_name": "populateOcFiltros",
       "norm_label": "_occloseordenardropdown()"
     },
     {
       "label": "ocToggleOrdenarDropdown()",
       "file_type": "code",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L1657",
+      "source_location": "L1661",
       "_origin": "ast",
       "id": "js_ocorrencias_octoggleordenardropdown",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 91,
+      "community_name": "_ocCloseMicroFilterDropdown",
       "norm_label": "octoggleordenardropdown()"
     },
     {
       "label": "ocSetOrdenar()",
       "file_type": "code",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L1674",
+      "source_location": "L1678",
       "_origin": "ast",
       "id": "js_ocorrencias_ocsetordenar",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 49,
+      "community_name": "populateOcFiltros",
       "norm_label": "ocsetordenar()"
     },
     {
       "label": "_ocCompararOrdenacao()",
       "file_type": "code",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L1681",
+      "source_location": "L1685",
       "_origin": "ast",
       "id": "js_ocorrencias_occompararordenacao",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 38,
+      "community_name": "_buildOcHierarquiaBar",
       "norm_label": "_occompararordenacao()"
     },
     {
       "label": "getOcorrenciasFiltradas()",
       "file_type": "code",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L1692",
+      "source_location": "L1696",
       "_origin": "ast",
       "id": "js_ocorrencias_getocorrenciasfiltradas",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 49,
+      "community_name": "populateOcFiltros",
       "norm_label": "getocorrenciasfiltradas()"
+    },
+    {
+      "label": "_ocAbrirMenuCard()",
+      "file_type": "code",
+      "source_file": "js/ocorrencias.js",
+      "source_location": "L1730",
+      "_origin": "ast",
+      "id": "js_ocorrencias_ocabrirmenucard",
+      "community": 38,
+      "community_name": "_buildOcHierarquiaBar",
+      "norm_label": "_ocabrirmenucard()"
+    },
+    {
+      "label": "_ocFecharMenuCard()",
+      "file_type": "code",
+      "source_file": "js/ocorrencias.js",
+      "source_location": "L1770",
+      "_origin": "ast",
+      "id": "js_ocorrencias_ocfecharmenucard",
+      "community": 38,
+      "community_name": "_buildOcHierarquiaBar",
+      "norm_label": "_ocfecharmenucard()"
     },
     {
       "label": "_renderOcLista()",
       "file_type": "code",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L1719",
+      "source_location": "L1774",
       "_origin": "ast",
       "id": "js_ocorrencias_renderoclista",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 38,
+      "community_name": "_buildOcHierarquiaBar",
       "norm_label": "_renderoclista()"
     },
     {
       "label": "openOcDetailModal()",
       "file_type": "code",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L1825",
+      "source_location": "L1865",
       "_origin": "ast",
       "id": "js_ocorrencias_openocdetailmodal",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 38,
+      "community_name": "_buildOcHierarquiaBar",
       "norm_label": "openocdetailmodal()"
     },
     {
       "label": "closeOcDetailModal()",
       "file_type": "code",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L1959",
+      "source_location": "L1999",
       "_origin": "ast",
       "id": "js_ocorrencias_closeocdetailmodal",
       "community": 1,
@@ -889,18 +911,18 @@
       "label": "populateOcFiltros()",
       "file_type": "code",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L1964",
+      "source_location": "L2004",
       "_origin": "ast",
       "id": "js_ocorrencias_populateocfiltros",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 49,
+      "community_name": "populateOcFiltros",
       "norm_label": "populateocfiltros()"
     },
     {
       "label": "openOcorrenciaModal()",
       "file_type": "code",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2026",
+      "source_location": "L2066",
       "_origin": "ast",
       "id": "js_ocorrencias_openocorrenciamodal",
       "community": 1,
@@ -911,7 +933,7 @@
       "label": "_ocFormEscBuildNiveis()",
       "file_type": "code",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2070",
+      "source_location": "L2110",
       "_origin": "ast",
       "id": "js_ocorrencias_ocformescbuildniveis",
       "community": 1,
@@ -922,7 +944,7 @@
       "label": "closeOcorrenciaModal()",
       "file_type": "code",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2099",
+      "source_location": "L2139",
       "_origin": "ast",
       "id": "js_ocorrencias_closeocorrenciamodal",
       "community": 1,
@@ -933,7 +955,7 @@
       "label": "submitOcorrenciaForm()",
       "file_type": "code",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2103",
+      "source_location": "L2143",
       "_origin": "ast",
       "id": "js_ocorrencias_submitocorrenciaform",
       "community": 1,
@@ -944,7 +966,7 @@
       "label": "openConcluirModal()",
       "file_type": "code",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2179",
+      "source_location": "L2219",
       "_origin": "ast",
       "id": "js_ocorrencias_openconcluirmodal",
       "community": 1,
@@ -955,29 +977,29 @@
       "label": "closeConcluirModal()",
       "file_type": "code",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2186",
+      "source_location": "L2226",
       "_origin": "ast",
       "id": "js_ocorrencias_closeconcluirmodal",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 43,
+      "community_name": "renderOcorrencias",
       "norm_label": "closeconcluirmodal()"
     },
     {
       "label": "submitConcluir()",
       "file_type": "code",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2190",
+      "source_location": "L2230",
       "_origin": "ast",
       "id": "js_ocorrencias_submitconcluir",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 43,
+      "community_name": "renderOcorrencias",
       "norm_label": "submitconcluir()"
     },
     {
       "label": "openInconclusivaModal()",
       "file_type": "code",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2210",
+      "source_location": "L2250",
       "_origin": "ast",
       "id": "js_ocorrencias_openinconclusivamodal",
       "community": 1,
@@ -988,73 +1010,73 @@
       "label": "closeInconclusivaModal()",
       "file_type": "code",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2217",
+      "source_location": "L2257",
       "_origin": "ast",
       "id": "js_ocorrencias_closeinconclusivamodal",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 43,
+      "community_name": "renderOcorrencias",
       "norm_label": "closeinconclusivamodal()"
     },
     {
       "label": "submitInconclusiva()",
       "file_type": "code",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2221",
+      "source_location": "L2261",
       "_origin": "ast",
       "id": "js_ocorrencias_submitinconclusiva",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 43,
+      "community_name": "renderOcorrencias",
       "norm_label": "submitinconclusiva()"
     },
     {
       "label": "reabrirOcorrencia()",
       "file_type": "code",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2240",
+      "source_location": "L2280",
       "_origin": "ast",
       "id": "js_ocorrencias_reabrirocorrencia",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 43,
+      "community_name": "renderOcorrencias",
       "norm_label": "reabrirocorrencia()"
     },
     {
       "label": "reabrirOcorrenciaConcluida()",
       "file_type": "code",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2254",
+      "source_location": "L2294",
       "_origin": "ast",
       "id": "js_ocorrencias_reabrirocorrenciaconcluida",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 43,
+      "community_name": "renderOcorrencias",
       "norm_label": "reabrirocorrenciaconcluida()"
     },
     {
       "label": "confirmarExcluirOcorrencia()",
       "file_type": "code",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2273",
+      "source_location": "L2313",
       "_origin": "ast",
       "id": "js_ocorrencias_confirmarexcluirocorrencia",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 43,
+      "community_name": "renderOcorrencias",
       "norm_label": "confirmarexcluirocorrencia()"
     },
     {
       "label": "confirmarExcluirAjusteSistemico()",
       "file_type": "code",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2307",
+      "source_location": "L2347",
       "_origin": "ast",
       "id": "js_ocorrencias_confirmarexcluirajustesistemico",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 43,
+      "community_name": "renderOcorrencias",
       "norm_label": "confirmarexcluirajustesistemico()"
     },
     {
       "label": "syncAjustesExcluidosFromSupabase()",
       "file_type": "code",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2391",
+      "source_location": "L2431",
       "_origin": "ast",
       "id": "js_ocorrencias_syncajustesexcluidosfromsupabase",
       "community": 1,
@@ -1065,12 +1087,89 @@
       "label": "renderOcorrenciasPage()",
       "file_type": "code",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2425",
+      "source_location": "L2465",
       "_origin": "ast",
       "id": "js_ocorrencias_renderocorrenciaspage",
-      "community": 1,
-      "community_name": "ocorrencias.js",
+      "community": 49,
+      "community_name": "populateOcFiltros",
       "norm_label": "renderocorrenciaspage()"
+    },
+    {
+      "label": "oc-card-menu.test.mjs",
+      "file_type": "code",
+      "source_file": "tests/oc-card-menu.test.mjs",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "tests_oc_card_menu_test",
+      "community": 94,
+      "community_name": "oc-card-menu.test.mjs",
+      "norm_label": "oc-card-menu.test.mjs"
+    },
+    {
+      "label": "raiz",
+      "file_type": "code",
+      "source_file": "tests/oc-card-menu.test.mjs",
+      "source_location": "L17",
+      "_origin": "ast",
+      "id": "tests_oc_card_menu_test_raiz",
+      "community": 94,
+      "community_name": "oc-card-menu.test.mjs",
+      "norm_label": "raiz"
+    },
+    {
+      "label": "fonteOcorrencias",
+      "file_type": "code",
+      "source_file": "tests/oc-card-menu.test.mjs",
+      "source_location": "L18",
+      "_origin": "ast",
+      "id": "tests_oc_card_menu_test_fonteocorrencias",
+      "community": 94,
+      "community_name": "oc-card-menu.test.mjs",
+      "norm_label": "fonteocorrencias"
+    },
+    {
+      "label": "montar()",
+      "file_type": "code",
+      "source_file": "tests/oc-card-menu.test.mjs",
+      "source_location": "L20",
+      "_origin": "ast",
+      "id": "tests_oc_card_menu_test_montar",
+      "community": 94,
+      "community_name": "oc-card-menu.test.mjs",
+      "norm_label": "montar()"
+    },
+    {
+      "label": "fakeEvent()",
+      "file_type": "code",
+      "source_file": "tests/oc-card-menu.test.mjs",
+      "source_location": "L39",
+      "_origin": "ast",
+      "id": "tests_oc_card_menu_test_fakeevent",
+      "community": 94,
+      "community_name": "oc-card-menu.test.mjs",
+      "norm_label": "fakeevent()"
+    },
+    {
+      "label": "casos",
+      "file_type": "code",
+      "source_file": "tests/oc-card-menu.test.mjs",
+      "source_location": "L43",
+      "_origin": "ast",
+      "id": "tests_oc_card_menu_test_casos",
+      "community": 94,
+      "community_name": "oc-card-menu.test.mjs",
+      "norm_label": "casos"
+    },
+    {
+      "label": "teste()",
+      "file_type": "code",
+      "source_file": "tests/oc-card-menu.test.mjs",
+      "source_location": "L44",
+      "_origin": "ast",
+      "id": "tests_oc_card_menu_test_teste",
+      "community": 94,
+      "community_name": "oc-card-menu.test.mjs",
+      "norm_label": "teste()"
     },
     {
       "label": "oc-donut-kpis.test.mjs",
@@ -1078,10 +1177,10 @@
       "source_file": "tests/oc-donut-kpis.test.mjs",
       "source_location": "L1",
       "_origin": "ast",
-      "id": "tests_oc_donut_kpis_test",
       "community": 72,
       "community_name": "oc-donut-kpis.test.mjs",
-      "norm_label": "oc-donut-kpis.test.mjs"
+      "norm_label": "oc-donut-kpis.test.mjs",
+      "id": "tests_oc_donut_kpis_test"
     },
     {
       "label": "raiz",
@@ -1089,10 +1188,10 @@
       "source_file": "tests/oc-donut-kpis.test.mjs",
       "source_location": "L20",
       "_origin": "ast",
-      "id": "tests_oc_donut_kpis_test_raiz",
       "community": 72,
       "community_name": "oc-donut-kpis.test.mjs",
-      "norm_label": "raiz"
+      "norm_label": "raiz",
+      "id": "tests_oc_donut_kpis_test_raiz"
     },
     {
       "label": "fonteOcorrencias",
@@ -1100,10 +1199,10 @@
       "source_file": "tests/oc-donut-kpis.test.mjs",
       "source_location": "L21",
       "_origin": "ast",
-      "id": "tests_oc_donut_kpis_test_fonteocorrencias",
       "community": 72,
       "community_name": "oc-donut-kpis.test.mjs",
-      "norm_label": "fonteocorrencias"
+      "norm_label": "fonteocorrencias",
+      "id": "tests_oc_donut_kpis_test_fonteocorrencias"
     },
     {
       "label": "montar()",
@@ -1111,10 +1210,10 @@
       "source_file": "tests/oc-donut-kpis.test.mjs",
       "source_location": "L23",
       "_origin": "ast",
-      "id": "tests_oc_donut_kpis_test_montar",
       "community": 72,
       "community_name": "oc-donut-kpis.test.mjs",
-      "norm_label": "montar()"
+      "norm_label": "montar()",
+      "id": "tests_oc_donut_kpis_test_montar"
     },
     {
       "label": "casos",
@@ -1122,10 +1221,10 @@
       "source_file": "tests/oc-donut-kpis.test.mjs",
       "source_location": "L41",
       "_origin": "ast",
-      "id": "tests_oc_donut_kpis_test_casos",
       "community": 72,
       "community_name": "oc-donut-kpis.test.mjs",
-      "norm_label": "casos"
+      "norm_label": "casos",
+      "id": "tests_oc_donut_kpis_test_casos"
     },
     {
       "label": "teste()",
@@ -1133,10 +1232,10 @@
       "source_file": "tests/oc-donut-kpis.test.mjs",
       "source_location": "L42",
       "_origin": "ast",
-      "id": "tests_oc_donut_kpis_test_teste",
       "community": 72,
       "community_name": "oc-donut-kpis.test.mjs",
-      "norm_label": "teste()"
+      "norm_label": "teste()",
+      "id": "tests_oc_donut_kpis_test_teste"
     },
     {
       "label": "amanha()",
@@ -1144,10 +1243,10 @@
       "source_file": "tests/oc-donut-kpis.test.mjs",
       "source_location": "L167",
       "_origin": "ast",
-      "id": "tests_oc_donut_kpis_test_amanha",
       "community": 72,
       "community_name": "oc-donut-kpis.test.mjs",
-      "norm_label": "amanha()"
+      "norm_label": "amanha()",
+      "id": "tests_oc_donut_kpis_test_amanha"
     },
     {
       "label": "query_20260731_203851_why_does_cloud_backup_modulos_connect_cloud_backup.md",
@@ -8052,9 +8151,9 @@
       "source_file": "js/dashboard.js",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 21,
+      "community": 36,
       "norm_label": "builddashboardgerencialresults()",
-      "community_name": "renderDgVisaoGeralPdf",
+      "community_name": "parseDate",
       "id": "js_dashboard_builddashboardgerencialresults"
     },
     {
@@ -8063,9 +8162,9 @@
       "source_file": "js/dashboard.js",
       "source_location": "L232",
       "_origin": "ast",
-      "community": 21,
+      "community": 36,
       "norm_label": "rodardashboardgerencial()",
-      "community_name": "renderDgVisaoGeralPdf",
+      "community_name": "parseDate",
       "id": "js_dashboard_rodardashboardgerencial"
     },
     {
@@ -8162,9 +8261,9 @@
       "source_file": "js/dashboard.js",
       "source_location": "L394",
       "_origin": "ast",
-      "community": 21,
+      "community": 36,
       "norm_label": "_renderdashboardconteudo()",
-      "community_name": "renderDgVisaoGeralPdf",
+      "community_name": "parseDate",
       "id": "js_dashboard_renderdashboardconteudo"
     },
     {
@@ -8338,9 +8437,9 @@
       "source_file": "js/dashboard.js",
       "source_location": "L668",
       "_origin": "ast",
-      "community": 43,
+      "community": 21,
       "norm_label": "_dgvgscorefromcounts()",
-      "community_name": "_dgVgRenderChartGrupoMaterial",
+      "community_name": "renderDgVisaoGeralPdf",
       "id": "js_dashboard_dgvgscorefromcounts"
     },
     {
@@ -8349,9 +8448,9 @@
       "source_file": "js/dashboard.js",
       "source_location": "L682",
       "_origin": "ast",
-      "community": 43,
+      "community": 21,
       "norm_label": "_dgvgbuildcentralhealthdata()",
-      "community_name": "_dgVgRenderChartGrupoMaterial",
+      "community_name": "renderDgVisaoGeralPdf",
       "id": "js_dashboard_dgvgbuildcentralhealthdata"
     },
     {
@@ -8459,9 +8558,9 @@
       "source_file": "js/dashboard.js",
       "source_location": "L856",
       "_origin": "ast",
-      "community": 43,
+      "community": 21,
       "norm_label": "_dgvgshade()",
-      "community_name": "_dgVgRenderChartGrupoMaterial",
+      "community_name": "renderDgVisaoGeralPdf",
       "id": "js_dashboard_dgvgshade"
     },
     {
@@ -8470,9 +8569,9 @@
       "source_file": "js/dashboard.js",
       "source_location": "L881",
       "_origin": "ast",
-      "community": 43,
+      "community": 21,
       "norm_label": "_dgvgdrawdonutsvg()",
-      "community_name": "_dgVgRenderChartGrupoMaterial",
+      "community_name": "renderDgVisaoGeralPdf",
       "id": "js_dashboard_dgvgdrawdonutsvg"
     },
     {
@@ -8481,9 +8580,9 @@
       "source_file": "js/dashboard.js",
       "source_location": "L1003",
       "_origin": "ast",
-      "community": 43,
+      "community": 21,
       "norm_label": "_dgvghealthtiphtml()",
-      "community_name": "_dgVgRenderChartGrupoMaterial",
+      "community_name": "renderDgVisaoGeralPdf",
       "id": "js_dashboard_dgvghealthtiphtml"
     },
     {
@@ -8492,9 +8591,9 @@
       "source_file": "js/dashboard.js",
       "source_location": "L1026",
       "_origin": "ast",
-      "community": 43,
+      "community": 21,
       "norm_label": "_dgvgmaterialtiphtml()",
-      "community_name": "_dgVgRenderChartGrupoMaterial",
+      "community_name": "renderDgVisaoGeralPdf",
       "id": "js_dashboard_dgvgmaterialtiphtml"
     },
     {
@@ -8503,9 +8602,9 @@
       "source_file": "js/dashboard.js",
       "source_location": "L1038",
       "_origin": "ast",
-      "community": 43,
+      "community": 21,
       "norm_label": "_dgvgbuildhealthdonutdata()",
-      "community_name": "_dgVgRenderChartGrupoMaterial",
+      "community_name": "renderDgVisaoGeralPdf",
       "id": "js_dashboard_dgvgbuildhealthdonutdata"
     },
     {
@@ -8514,9 +8613,9 @@
       "source_file": "js/dashboard.js",
       "source_location": "L1051",
       "_origin": "ast",
-      "community": 43,
+      "community": 21,
       "norm_label": "_dgvgrenderhealthdonutsvg()",
-      "community_name": "_dgVgRenderChartGrupoMaterial",
+      "community_name": "renderDgVisaoGeralPdf",
       "id": "js_dashboard_dgvgrenderhealthdonutsvg"
     },
     {
@@ -8525,9 +8624,9 @@
       "source_file": "js/dashboard.js",
       "source_location": "L1126",
       "_origin": "ast",
-      "community": 43,
+      "community": 21,
       "norm_label": "_dgvgrendercustodonutsvg()",
-      "community_name": "_dgVgRenderChartGrupoMaterial",
+      "community_name": "renderDgVisaoGeralPdf",
       "id": "js_dashboard_dgvgrendercustodonutsvg"
     },
     {
@@ -8624,9 +8723,9 @@
       "source_file": "js/dashboard.js",
       "source_location": "L1518",
       "_origin": "ast",
-      "community": 43,
+      "community": 21,
       "norm_label": "_dgvgrenderhealthdonuts()",
-      "community_name": "_dgVgRenderChartGrupoMaterial",
+      "community_name": "renderDgVisaoGeralPdf",
       "id": "js_dashboard_dgvgrenderhealthdonuts"
     },
     {
@@ -8701,9 +8800,9 @@
       "source_file": "js/dashboard.js",
       "source_location": "L1767",
       "_origin": "ast",
-      "community": 43,
+      "community": 21,
       "norm_label": "_dgvgagruparoutros()",
-      "community_name": "_dgVgRenderChartGrupoMaterial",
+      "community_name": "renderDgVisaoGeralPdf",
       "id": "js_dashboard_dgvgagruparoutros"
     },
     {
@@ -8712,9 +8811,9 @@
       "source_file": "js/dashboard.js",
       "source_location": "L1780",
       "_origin": "ast",
-      "community": 43,
+      "community": 21,
       "norm_label": "_dgvgrenderchartgrupomaterial()",
-      "community_name": "_dgVgRenderChartGrupoMaterial",
+      "community_name": "renderDgVisaoGeralPdf",
       "id": "js_dashboard_dgvgrenderchartgrupomaterial"
     },
     {
@@ -8723,9 +8822,9 @@
       "source_file": "js/dashboard.js",
       "source_location": "L1817",
       "_origin": "ast",
-      "community": 43,
+      "community": 21,
       "norm_label": "_dgvgrenderdonutcategoria()",
-      "community_name": "_dgVgRenderChartGrupoMaterial",
+      "community_name": "renderDgVisaoGeralPdf",
       "id": "js_dashboard_dgvgrenderdonutcategoria"
     },
     {
@@ -8899,9 +8998,9 @@
       "source_file": "js/dashboard.js",
       "source_location": "L2715",
       "_origin": "ast",
-      "community": 21,
+      "community": 36,
       "norm_label": "getperiodoanteriorequivalente()",
-      "community_name": "renderDgVisaoGeralPdf",
+      "community_name": "parseDate",
       "id": "js_dashboard_getperiodoanteriorequivalente"
     },
     {
@@ -10230,9 +10329,9 @@
       "source_file": "js/dashboard.js",
       "source_location": "L6596",
       "_origin": "ast",
-      "community": 21,
+      "community": 36,
       "norm_label": "datecmp()",
-      "community_name": "renderDgVisaoGeralPdf",
+      "community_name": "parseDate",
       "id": "js_dashboard_datecmp"
     },
     {
@@ -10329,9 +10428,9 @@
       "source_file": "js/dashboard.js",
       "source_location": "L6651",
       "_origin": "ast",
-      "community": 21,
+      "community": 36,
       "norm_label": "normmov()",
-      "community_name": "renderDgVisaoGeralPdf",
+      "community_name": "parseDate",
       "id": "js_dashboard_normmov"
     },
     {
@@ -10340,9 +10439,9 @@
       "source_file": "js/dashboard.js",
       "source_location": "L6655",
       "_origin": "ast",
-      "community": 27,
+      "community": 21,
       "norm_label": "codigos_entrada",
-      "community_name": "escapeHtml",
+      "community_name": "renderDgVisaoGeralPdf",
       "id": "js_dashboard_codigos_entrada"
     },
     {
@@ -11814,9 +11913,9 @@
       "source_file": "js/import.js",
       "source_location": "L15",
       "_origin": "ast",
-      "community": 17,
+      "community": 92,
       "norm_label": "_cascadedeletecloudbyimportid()",
-      "community_name": "import.js",
+      "community_name": "excluirImportacao",
       "id": "js_import_cascadedeletecloudbyimportid"
     },
     {
@@ -11825,9 +11924,9 @@
       "source_file": "js/import.js",
       "source_location": "L43",
       "_origin": "ast",
-      "community": 17,
+      "community": 63,
       "norm_label": "_mesclargrandecombanco()",
-      "community_name": "import.js",
+      "community_name": "_mesclarGrandeComBanco",
       "id": "js_import_mesclargrandecombanco"
     },
     {
@@ -11836,9 +11935,9 @@
       "source_file": "js/import.js",
       "source_location": "L57",
       "_origin": "ast",
-      "community": 17,
+      "community": 92,
       "norm_label": "_cbreforcarbackupmodulos()",
-      "community_name": "import.js",
+      "community_name": "excluirImportacao",
       "id": "js_import_cbreforcarbackupmodulos"
     },
     {
@@ -11858,9 +11957,9 @@
       "source_file": "js/import.js",
       "source_location": "L80",
       "_origin": "ast",
-      "community": 17,
+      "community": 92,
       "norm_label": "excluirimportacao()",
-      "community_name": "import.js",
+      "community_name": "excluirImportacao",
       "id": "js_import_excluirimportacao"
     },
     {
@@ -11869,9 +11968,9 @@
       "source_file": "js/import.js",
       "source_location": "L206",
       "_origin": "ast",
-      "community": 17,
+      "community": 93,
       "norm_label": "excluirproducao()",
-      "community_name": "import.js",
+      "community_name": "excluirProducao",
       "id": "js_import_excluirproducao"
     },
     {
@@ -11880,9 +11979,9 @@
       "source_file": "js/import.js",
       "source_location": "L244",
       "_origin": "ast",
-      "community": 17,
+      "community": 93,
       "norm_label": "_criarregistroproducao()",
-      "community_name": "import.js",
+      "community_name": "excluirProducao",
       "id": "js_import_criarregistroproducao"
     },
     {
@@ -11891,9 +11990,9 @@
       "source_file": "js/import.js",
       "source_location": "L276",
       "_origin": "ast",
-      "community": 17,
+      "community": 93,
       "norm_label": "salvarproducao()",
-      "community_name": "import.js",
+      "community_name": "excluirProducao",
       "id": "js_import_salvarproducao"
     },
     {
@@ -12001,9 +12100,9 @@
       "source_file": "js/import.js",
       "source_location": "L555",
       "_origin": "ast",
-      "community": 17,
+      "community": 63,
       "norm_label": "_lancfromdbrow()",
-      "community_name": "import.js",
+      "community_name": "_mesclarGrandeComBanco",
       "id": "js_import_lancfromdbrow"
     },
     {
@@ -12045,9 +12144,9 @@
       "source_file": "js/import.js",
       "source_location": "L630",
       "_origin": "ast",
-      "community": 17,
+      "community": 63,
       "norm_label": "synclancamentosfromsupabase()",
-      "community_name": "import.js",
+      "community_name": "_mesclarGrandeComBanco",
       "id": "js_import_synclancamentosfromsupabase"
     },
     {
@@ -12056,9 +12155,9 @@
       "source_file": "js/import.js",
       "source_location": "L652",
       "_origin": "ast",
-      "community": 17,
+      "community": 92,
       "norm_label": "_importstodbrow()",
-      "community_name": "import.js",
+      "community_name": "excluirImportacao",
       "id": "js_import_importstodbrow"
     },
     {
@@ -12078,9 +12177,9 @@
       "source_file": "js/import.js",
       "source_location": "L680",
       "_origin": "ast",
-      "community": 17,
+      "community": 92,
       "norm_label": "_importssyncupsert()",
-      "community_name": "import.js",
+      "community_name": "excluirImportacao",
       "id": "js_import_importssyncupsert"
     },
     {
@@ -12089,9 +12188,9 @@
       "source_file": "js/import.js",
       "source_location": "L686",
       "_origin": "ast",
-      "community": 17,
+      "community": 92,
       "norm_label": "_importssyncdelete()",
-      "community_name": "import.js",
+      "community_name": "excluirImportacao",
       "id": "js_import_importssyncdelete"
     },
     {
@@ -12111,9 +12210,9 @@
       "source_file": "js/import.js",
       "source_location": "L733",
       "_origin": "ast",
-      "community": 17,
+      "community": 93,
       "norm_label": "_producaotodbrow()",
-      "community_name": "import.js",
+      "community_name": "excluirProducao",
       "id": "js_import_producaotodbrow"
     },
     {
@@ -12122,9 +12221,9 @@
       "source_file": "js/import.js",
       "source_location": "L751",
       "_origin": "ast",
-      "community": 17,
+      "community": 63,
       "norm_label": "_producaofromdbrow()",
-      "community_name": "import.js",
+      "community_name": "_mesclarGrandeComBanco",
       "id": "js_import_producaofromdbrow"
     },
     {
@@ -12133,9 +12232,9 @@
       "source_file": "js/import.js",
       "source_location": "L770",
       "_origin": "ast",
-      "community": 17,
+      "community": 93,
       "norm_label": "_producaosyncupsert()",
-      "community_name": "import.js",
+      "community_name": "excluirProducao",
       "id": "js_import_producaosyncupsert"
     },
     {
@@ -12144,9 +12243,9 @@
       "source_file": "js/import.js",
       "source_location": "L777",
       "_origin": "ast",
-      "community": 17,
+      "community": 93,
       "norm_label": "_producaosyncupsertbatch()",
-      "community_name": "import.js",
+      "community_name": "excluirProducao",
       "id": "js_import_producaosyncupsertbatch"
     },
     {
@@ -12155,9 +12254,9 @@
       "source_file": "js/import.js",
       "source_location": "L786",
       "_origin": "ast",
-      "community": 17,
+      "community": 93,
       "norm_label": "_producaosyncdelete()",
-      "community_name": "import.js",
+      "community_name": "excluirProducao",
       "id": "js_import_producaosyncdelete"
     },
     {
@@ -12166,9 +12265,9 @@
       "source_file": "js/import.js",
       "source_location": "L792",
       "_origin": "ast",
-      "community": 17,
+      "community": 63,
       "norm_label": "syncproducaofromsupabase()",
-      "community_name": "import.js",
+      "community_name": "_mesclarGrandeComBanco",
       "id": "js_import_syncproducaofromsupabase"
     },
     {
@@ -12188,9 +12287,9 @@
       "source_file": "js/import.js",
       "source_location": "L838",
       "_origin": "ast",
-      "community": 17,
+      "community": 63,
       "norm_label": "_entradasfromdbrow()",
-      "community_name": "import.js",
+      "community_name": "_mesclarGrandeComBanco",
       "id": "js_import_entradasfromdbrow"
     },
     {
@@ -12232,9 +12331,9 @@
       "source_file": "js/import.js",
       "source_location": "L886",
       "_origin": "ast",
-      "community": 17,
+      "community": 63,
       "norm_label": "syncentradasfromsupabase()",
-      "community_name": "import.js",
+      "community_name": "_mesclarGrandeComBanco",
       "id": "js_import_syncentradasfromsupabase"
     },
     {
@@ -12254,9 +12353,9 @@
       "source_file": "js/import.js",
       "source_location": "L929",
       "_origin": "ast",
-      "community": 17,
+      "community": 63,
       "norm_label": "_saidasfromdbrow()",
-      "community_name": "import.js",
+      "community_name": "_mesclarGrandeComBanco",
       "id": "js_import_saidasfromdbrow"
     },
     {
@@ -12298,9 +12397,9 @@
       "source_file": "js/import.js",
       "source_location": "L974",
       "_origin": "ast",
-      "community": 17,
+      "community": 63,
       "norm_label": "syncsaidasfromsupabase()",
-      "community_name": "import.js",
+      "community_name": "_mesclarGrandeComBanco",
       "id": "js_import_syncsaidasfromsupabase"
     },
     {
@@ -12320,9 +12419,9 @@
       "source_file": "js/import.js",
       "source_location": "L1023",
       "_origin": "ast",
-      "community": 17,
+      "community": 63,
       "norm_label": "_sapfromdbrow()",
-      "community_name": "import.js",
+      "community_name": "_mesclarGrandeComBanco",
       "id": "js_import_sapfromdbrow"
     },
     {
@@ -12364,9 +12463,9 @@
       "source_file": "js/import.js",
       "source_location": "L1070",
       "_origin": "ast",
-      "community": 17,
+      "community": 63,
       "norm_label": "syncsapfromsupabase()",
-      "community_name": "import.js",
+      "community_name": "_mesclarGrandeComBanco",
       "id": "js_import_syncsapfromsupabase"
     },
     {
@@ -15257,9 +15356,9 @@
       "source_file": "js/persist.js",
       "source_location": "L65",
       "_origin": "ast",
-      "community": 23,
+      "community": 92,
       "norm_label": "reconcilependingdeletes()",
-      "community_name": "persist.js",
+      "community_name": "excluirImportacao",
       "id": "js_persist_reconcilependingdeletes"
     },
     {
@@ -17369,9 +17468,9 @@
       "source_file": "js/ui.js",
       "source_location": "L827",
       "_origin": "ast",
-      "community": 42,
+      "community": 24,
       "norm_label": "getcoluniquevalues()",
-      "community_name": "applyColFilter",
+      "community_name": "renderImports",
       "id": "js_ui_getcoluniquevalues"
     },
     {
@@ -17402,9 +17501,9 @@
       "source_file": "js/ui.js",
       "source_location": "L858",
       "_origin": "ast",
-      "community": 24,
+      "community": 42,
       "norm_label": "modulehascolfilter()",
-      "community_name": "renderImports",
+      "community_name": "applyColFilter",
       "id": "js_ui_modulehascolfilter"
     },
     {
@@ -17710,9 +17809,9 @@
       "source_file": "js/ui.js",
       "source_location": "L1349",
       "_origin": "ast",
-      "community": 45,
+      "community": 37,
       "norm_label": "_bdmfechexcluidoshtml()",
-      "community_name": "_fechMgrGetTodosCandidatos",
+      "community_name": "getFilteredData",
       "id": "js_ui_bdmfechexcluidoshtml"
     },
     {
@@ -17743,9 +17842,9 @@
       "source_file": "js/ui.js",
       "source_location": "L1583",
       "_origin": "ast",
-      "community": 45,
+      "community": 37,
       "norm_label": "openfechmodal()",
-      "community_name": "_fechMgrGetTodosCandidatos",
+      "community_name": "getFilteredData",
       "id": "js_ui_openfechmodal"
     },
     {
@@ -17787,9 +17886,9 @@
       "source_file": "js/ui.js",
       "source_location": "L1745",
       "_origin": "ast",
-      "community": 27,
+      "community": 3,
       "norm_label": "calcpendentesintegracao()",
-      "community_name": "escapeHtml",
+      "community_name": "ui.js",
       "id": "js_ui_calcpendentesintegracao"
     },
     {
@@ -17798,9 +17897,9 @@
       "source_file": "js/ui.js",
       "source_location": "L1873",
       "_origin": "ast",
-      "community": 27,
+      "community": 3,
       "norm_label": "buildpendintegsection()",
-      "community_name": "escapeHtml",
+      "community_name": "ui.js",
       "id": "js_ui_buildpendintegsection"
     },
     {
@@ -17809,9 +17908,9 @@
       "source_file": "js/ui.js",
       "source_location": "L1953",
       "_origin": "ast",
-      "community": 3,
+      "community": 33,
       "norm_label": "_pimnormnf()",
-      "community_name": "ui.js",
+      "community_name": "_pimRender",
       "id": "js_ui_pimnormnf"
     },
     {
@@ -17820,9 +17919,9 @@
       "source_file": "js/ui.js",
       "source_location": "L1958",
       "_origin": "ast",
-      "community": 3,
+      "community": 33,
       "norm_label": "_pimnormos()",
-      "community_name": "ui.js",
+      "community_name": "_pimRender",
       "id": "js_ui_pimnormos"
     },
     {
@@ -17831,9 +17930,9 @@
       "source_file": "js/ui.js",
       "source_location": "L1959",
       "_origin": "ast",
-      "community": 3,
+      "community": 33,
       "norm_label": "_pimnormsaprefos()",
-      "community_name": "ui.js",
+      "community_name": "_pimRender",
       "id": "js_ui_pimnormsaprefos"
     },
     {
@@ -17842,9 +17941,9 @@
       "source_file": "js/ui.js",
       "source_location": "L1970",
       "_origin": "ast",
-      "community": 3,
+      "community": 33,
       "norm_label": "_pimgetsapcache()",
-      "community_name": "ui.js",
+      "community_name": "_pimRender",
       "id": "js_ui_pimgetsapcache"
     },
     {
@@ -17996,9 +18095,9 @@
       "source_file": "js/ui.js",
       "source_location": "L2309",
       "_origin": "ast",
-      "community": 3,
+      "community": 33,
       "norm_label": "openpendintegglobalmodal()",
-      "community_name": "ui.js",
+      "community_name": "_pimRender",
       "id": "js_ui_openpendintegglobalmodal"
     },
     {
@@ -18040,9 +18139,9 @@
       "source_file": "js/ui.js",
       "source_location": "L2490",
       "_origin": "ast",
-      "community": 50,
+      "community": 27,
       "norm_label": "_lrcrefreshdetailmodal()",
-      "community_name": "lrcDelete",
+      "community_name": "escapeHtml",
       "id": "js_ui_lrcrefreshdetailmodal"
     },
     {
@@ -18282,9 +18381,9 @@
       "source_file": "js/ui.js",
       "source_location": "L3222",
       "_origin": "ast",
-      "community": 38,
+      "community": 3,
       "norm_label": "_buildlancindex()",
-      "community_name": "buildHealthPanel",
+      "community_name": "ui.js",
       "id": "js_ui_buildlancindex"
     },
     {
@@ -18293,9 +18392,9 @@
       "source_file": "js/ui.js",
       "source_location": "L3255",
       "_origin": "ast",
-      "community": 3,
+      "community": 33,
       "norm_label": "_buildsapindex()",
-      "community_name": "ui.js",
+      "community_name": "_pimRender",
       "id": "js_ui_buildsapindex"
     },
     {
@@ -18337,9 +18436,9 @@
       "source_file": "js/ui.js",
       "source_location": "L3297",
       "_origin": "ast",
-      "community": 27,
+      "community": 3,
       "norm_label": "_buildsaidasindex()",
-      "community_name": "escapeHtml",
+      "community_name": "ui.js",
       "id": "js_ui_buildsaidasindex"
     },
     {
@@ -18359,9 +18458,9 @@
       "source_file": "js/ui.js",
       "source_location": "L3315",
       "_origin": "ast",
-      "community": 27,
+      "community": 3,
       "norm_label": "ensuresaidasindex()",
-      "community_name": "escapeHtml",
+      "community_name": "ui.js",
       "id": "js_ui_ensuresaidasindex"
     },
     {
@@ -18370,9 +18469,9 @@
       "source_file": "js/ui.js",
       "source_location": "L3319",
       "_origin": "ast",
-      "community": 38,
+      "community": 3,
       "norm_label": "getlancindex()",
-      "community_name": "buildHealthPanel",
+      "community_name": "ui.js",
       "id": "js_ui_getlancindex"
     },
     {
@@ -18381,9 +18480,9 @@
       "source_file": "js/ui.js",
       "source_location": "L3324",
       "_origin": "ast",
-      "community": 3,
+      "community": 33,
       "norm_label": "getsapindex()",
-      "community_name": "ui.js",
+      "community_name": "_pimRender",
       "id": "js_ui_getsapindex"
     },
     {
@@ -18392,9 +18491,9 @@
       "source_file": "js/ui.js",
       "source_location": "L3333",
       "_origin": "ast",
-      "community": 38,
+      "community": 3,
       "norm_label": "getlancsbycentralinperiod()",
-      "community_name": "buildHealthPanel",
+      "community_name": "ui.js",
       "id": "js_ui_getlancsbycentralinperiod"
     },
     {
@@ -18403,9 +18502,9 @@
       "source_file": "js/ui.js",
       "source_location": "L3347",
       "_origin": "ast",
-      "community": 3,
+      "community": 33,
       "norm_label": "getsapbycentralinperiod()",
-      "community_name": "ui.js",
+      "community_name": "_pimRender",
       "id": "js_ui_getsapbycentralinperiod"
     },
     {
@@ -18502,9 +18601,9 @@
       "source_file": "js/ui.js",
       "source_location": "L3508",
       "_origin": "ast",
-      "community": 45,
+      "community": 37,
       "norm_label": "somarpesocustosap()",
-      "community_name": "_fechMgrGetTodosCandidatos",
+      "community_name": "getFilteredData",
       "id": "js_ui_somarpesocustosap"
     },
     {
@@ -19096,9 +19195,9 @@
       "source_file": "js/ui.js",
       "source_location": "L4714",
       "_origin": "ast",
-      "community": 38,
+      "community": 3,
       "norm_label": "detectcatkey()",
-      "community_name": "buildHealthPanel",
+      "community_name": "ui.js",
       "id": "js_ui_detectcatkey"
     },
     {
@@ -19107,9 +19206,9 @@
       "source_file": "js/ui.js",
       "source_location": "L4724",
       "_origin": "ast",
-      "community": 38,
+      "community": 3,
       "norm_label": "detectcatfrommat()",
-      "community_name": "buildHealthPanel",
+      "community_name": "ui.js",
       "id": "js_ui_detectcatfrommat"
     },
     {
@@ -19129,9 +19228,9 @@
       "source_file": "js/ui.js",
       "source_location": "L4749",
       "_origin": "ast",
-      "community": 38,
+      "community": 3,
       "norm_label": "gethealththresholds()",
-      "community_name": "buildHealthPanel",
+      "community_name": "ui.js",
       "id": "js_ui_gethealththresholds"
     },
     {
@@ -19140,9 +19239,9 @@
       "source_file": "js/ui.js",
       "source_location": "L4769",
       "_origin": "ast",
-      "community": 38,
+      "community": 3,
       "norm_label": "classifyvariation()",
-      "community_name": "buildHealthPanel",
+      "community_name": "ui.js",
       "id": "js_ui_classifyvariation"
     },
     {
@@ -19162,9 +19261,9 @@
       "source_file": "js/ui.js",
       "source_location": "L4781",
       "_origin": "ast",
-      "community": 38,
+      "community": 3,
       "norm_label": "calchealthscore()",
-      "community_name": "buildHealthPanel",
+      "community_name": "ui.js",
       "id": "js_ui_calchealthscore"
     },
     {
@@ -19173,9 +19272,9 @@
       "source_file": "js/ui.js",
       "source_location": "L4836",
       "_origin": "ast",
-      "community": 38,
+      "community": 3,
       "norm_label": "getnearestlancsforabsent()",
-      "community_name": "buildHealthPanel",
+      "community_name": "ui.js",
       "id": "js_ui_getnearestlancsforabsent"
     },
     {
@@ -19184,9 +19283,9 @@
       "source_file": "js/ui.js",
       "source_location": "L4884",
       "_origin": "ast",
-      "community": 38,
+      "community": 3,
       "norm_label": "getprevdaylaunchstock()",
-      "community_name": "buildHealthPanel",
+      "community_name": "ui.js",
       "id": "js_ui_getprevdaylaunchstock"
     },
     {
@@ -19195,9 +19294,9 @@
       "source_file": "js/ui.js",
       "source_location": "L4970",
       "_origin": "ast",
-      "community": 38,
+      "community": 3,
       "norm_label": "getpreperiodlaunchstock()",
-      "community_name": "buildHealthPanel",
+      "community_name": "ui.js",
       "id": "js_ui_getpreperiodlaunchstock"
     },
     {
@@ -19206,9 +19305,9 @@
       "source_file": "js/ui.js",
       "source_location": "L4987",
       "_origin": "ast",
-      "community": 38,
+      "community": 3,
       "norm_label": "getlastperiodlaunchstockwithfallback()",
-      "community_name": "buildHealthPanel",
+      "community_name": "ui.js",
       "id": "js_ui_getlastperiodlaunchstockwithfallback"
     },
     {
@@ -19217,9 +19316,9 @@
       "source_file": "js/ui.js",
       "source_location": "L5036",
       "_origin": "ast",
-      "community": 38,
+      "community": 3,
       "norm_label": "getlastperiodlaunchstock()",
-      "community_name": "buildHealthPanel",
+      "community_name": "ui.js",
       "id": "js_ui_getlastperiodlaunchstock"
     },
     {
@@ -19228,9 +19327,9 @@
       "source_file": "js/ui.js",
       "source_location": "L5073",
       "_origin": "ast",
-      "community": 38,
+      "community": 3,
       "norm_label": "buildsnapshot()",
-      "community_name": "buildHealthPanel",
+      "community_name": "ui.js",
       "id": "js_ui_buildsnapshot"
     },
     {
@@ -19239,9 +19338,9 @@
       "source_file": "js/ui.js",
       "source_location": "L5172",
       "_origin": "ast",
-      "community": 38,
+      "community": 3,
       "norm_label": "buildhealthpanel()",
-      "community_name": "buildHealthPanel",
+      "community_name": "ui.js",
       "id": "js_ui_buildhealthpanel"
     },
     {
@@ -19305,9 +19404,9 @@
       "source_file": "js/ui.js",
       "source_location": "L5370",
       "_origin": "ast",
-      "community": 50,
+      "community": 88,
       "norm_label": "_bkpparsestreaming()",
-      "community_name": "lrcDelete",
+      "community_name": "_bkpCarregarArquivo",
       "id": "js_ui_bkpparsestreaming"
     },
     {
@@ -21017,7 +21116,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2459",
+      "source_location": "L2499",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -21029,7 +21128,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2462",
+      "source_location": "L2502",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -21041,7 +21140,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2470",
+      "source_location": "L2510",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -21053,7 +21152,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2454",
+      "source_location": "L2494",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -21065,7 +21164,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2467",
+      "source_location": "L2507",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -21077,7 +21176,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2466",
+      "source_location": "L2506",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -21144,7 +21243,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2468",
+      "source_location": "L2508",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -21211,7 +21310,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L1627",
+      "source_location": "L1631",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias",
@@ -21233,6 +21332,17 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
+      "source_location": "L1730",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "js_ocorrencias",
+      "target": "js_ocorrencias_ocabrirmenucard",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "js/ocorrencias.js",
       "source_location": "L539",
       "weight": 1.0,
       "_origin": "ast",
@@ -21244,7 +21354,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2443",
+      "source_location": "L2483",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -21267,7 +21377,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2444",
+      "source_location": "L2484",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -21279,7 +21389,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2446",
+      "source_location": "L2486",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -21291,7 +21401,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2445",
+      "source_location": "L2485",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -21314,7 +21424,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L1652",
+      "source_location": "L1656",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias",
@@ -21325,7 +21435,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L1681",
+      "source_location": "L1685",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias",
@@ -21347,7 +21457,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2439",
+      "source_location": "L2479",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -21367,10 +21477,21 @@
       "confidence_score": 1.0
     },
     {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "js/ocorrencias.js",
+      "source_location": "L1770",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "js_ocorrencias",
+      "target": "js_ocorrencias_ocfecharmenucard",
+      "confidence_score": 1.0
+    },
+    {
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2442",
+      "source_location": "L2482",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -21382,7 +21503,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2070",
+      "source_location": "L2110",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias",
@@ -21437,7 +21558,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2440",
+      "source_location": "L2480",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -21526,7 +21647,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2437",
+      "source_location": "L2477",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -21538,7 +21659,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2438",
+      "source_location": "L2478",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -21572,7 +21693,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2448",
+      "source_location": "L2488",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -21595,7 +21716,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2449",
+      "source_location": "L2489",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -21629,7 +21750,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L1639",
+      "source_location": "L1643",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias",
@@ -21684,7 +21805,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2441",
+      "source_location": "L2481",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -21696,7 +21817,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2447",
+      "source_location": "L2487",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -21752,7 +21873,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2458",
+      "source_location": "L2498",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -21764,7 +21885,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2461",
+      "source_location": "L2501",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -21776,7 +21897,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2469",
+      "source_location": "L2509",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -21788,7 +21909,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2453",
+      "source_location": "L2493",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -21800,7 +21921,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L1964",
+      "source_location": "L2004",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias",
@@ -21811,7 +21932,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2464",
+      "source_location": "L2504",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -21823,7 +21944,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2465",
+      "source_location": "L2505",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -21835,7 +21956,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2477",
+      "source_location": "L2517",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -21858,7 +21979,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L1719",
+      "source_location": "L1774",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias",
@@ -21869,7 +21990,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2452",
+      "source_location": "L2492",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -21881,7 +22002,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2451",
+      "source_location": "L2491",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -21904,7 +22025,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2460",
+      "source_location": "L2500",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -21916,7 +22037,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2463",
+      "source_location": "L2503",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -21928,7 +22049,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2455",
+      "source_location": "L2495",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -21940,7 +22061,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2391",
+      "source_location": "L2431",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias",
@@ -21975,7 +22096,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2247",
+      "source_location": "L2287",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias_reabrirocorrencia",
@@ -21987,7 +22108,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2261",
+      "source_location": "L2301",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias_reabrirocorrenciaconcluida",
@@ -21999,7 +22120,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2201",
+      "source_location": "L2241",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias_submitconcluir",
@@ -22011,7 +22132,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2232",
+      "source_location": "L2272",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias_submitinconclusiva",
@@ -22023,7 +22144,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2133",
+      "source_location": "L2173",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias_submitocorrenciaform",
@@ -22047,7 +22168,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2139",
+      "source_location": "L2179",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias_submitocorrenciaform",
@@ -22059,7 +22180,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2141",
+      "source_location": "L2181",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias_submitocorrenciaform",
@@ -22227,7 +22348,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2291",
+      "source_location": "L2331",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias_confirmarexcluirocorrencia",
@@ -22239,7 +22360,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2250",
+      "source_location": "L2290",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias_reabrirocorrencia",
@@ -22251,7 +22372,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2264",
+      "source_location": "L2304",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias_reabrirocorrenciaconcluida",
@@ -22275,7 +22396,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2205",
+      "source_location": "L2245",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias_submitconcluir",
@@ -22287,7 +22408,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2236",
+      "source_location": "L2276",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias_submitinconclusiva",
@@ -22299,7 +22420,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2366",
+      "source_location": "L2406",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias_confirmarexcluirajustesistemico",
@@ -22335,7 +22456,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2060",
+      "source_location": "L2100",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias_openocorrenciamodal",
@@ -22371,7 +22492,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2172",
+      "source_location": "L2212",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias_submitocorrenciaform",
@@ -22383,7 +22504,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2286",
+      "source_location": "L2326",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias_confirmarexcluirocorrencia",
@@ -22443,7 +22564,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L1684",
+      "source_location": "L1688",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias_occompararordenacao",
@@ -22455,7 +22576,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L1830",
+      "source_location": "L1870",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias_openocdetailmodal",
@@ -22467,7 +22588,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L1728",
+      "source_location": "L1783",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias_renderoclista",
@@ -22515,7 +22636,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L1848",
+      "source_location": "L1888",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias_openocdetailmodal",
@@ -22527,7 +22648,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L1745",
+      "source_location": "L1800",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias_renderoclista",
@@ -22539,7 +22660,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L1833",
+      "source_location": "L1873",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias_openocdetailmodal",
@@ -22551,7 +22672,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2036",
+      "source_location": "L2076",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias_openocorrenciamodal",
@@ -22575,7 +22696,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2067",
+      "source_location": "L2107",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias_openocorrenciamodal",
@@ -22600,7 +22721,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2074",
+      "source_location": "L2114",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias_ocformescbuildniveis",
@@ -22707,10 +22828,10 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L1946",
+      "source_location": "L1753",
       "weight": 1.0,
       "_origin": "ast",
-      "source": "js_ocorrencias_openocdetailmodal",
+      "source": "js_ocorrencias_ocabrirmenucard",
       "target": "js_ocorrencias_ocpodeescalonar",
       "confidence_score": 1.0
     },
@@ -22719,10 +22840,10 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L1806",
+      "source_location": "L1986",
       "weight": 1.0,
       "_origin": "ast",
-      "source": "js_ocorrencias_renderoclista",
+      "source": "js_ocorrencias_openocdetailmodal",
       "target": "js_ocorrencias_ocpodeescalonar",
       "confidence_score": 1.0
     },
@@ -22851,7 +22972,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L1769",
+      "source_location": "L1824",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias_renderoclista",
@@ -22863,7 +22984,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L1953",
+      "source_location": "L1993",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias_openocdetailmodal",
@@ -22875,7 +22996,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2365",
+      "source_location": "L2405",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias_confirmarexcluirajustesistemico",
@@ -22887,7 +23008,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2290",
+      "source_location": "L2330",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias_confirmarexcluirocorrencia",
@@ -22935,7 +23056,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L1678",
+      "source_location": "L1682",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias_ocsetordenar",
@@ -22947,7 +23068,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2249",
+      "source_location": "L2289",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias_reabrirocorrencia",
@@ -22959,7 +23080,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2263",
+      "source_location": "L2303",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias_reabrirocorrenciaconcluida",
@@ -22995,7 +23116,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2428",
+      "source_location": "L2468",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias_renderocorrenciaspage",
@@ -23007,7 +23128,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2203",
+      "source_location": "L2243",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias_submitconcluir",
@@ -23019,7 +23140,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2234",
+      "source_location": "L2274",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias_submitinconclusiva",
@@ -23031,7 +23152,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L1701",
+      "source_location": "L1705",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias_getocorrenciasfiltradas",
@@ -23043,7 +23164,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L1982",
+      "source_location": "L2022",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias_populateocfiltros",
@@ -23055,7 +23176,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L1704",
+      "source_location": "L1708",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias_getocorrenciasfiltradas",
@@ -23067,7 +23188,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L1976",
+      "source_location": "L2016",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias_populateocfiltros",
@@ -23103,7 +23224,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L1988",
+      "source_location": "L2028",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias_populateocfiltros",
@@ -23163,7 +23284,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L1667",
+      "source_location": "L1671",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias_octoggleordenardropdown",
@@ -23259,7 +23380,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L1989",
+      "source_location": "L2029",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias_populateocfiltros",
@@ -23271,7 +23392,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L1991",
+      "source_location": "L2031",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias_populateocfiltros",
@@ -23284,7 +23405,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "js/ocorrencias.js",
-      "source_location": "L1644",
+      "source_location": "L1648",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias_ocsyncordenarbtn",
@@ -23295,7 +23416,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L1676",
+      "source_location": "L1680",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias_ocsetordenar",
@@ -23307,7 +23428,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L1992",
+      "source_location": "L2032",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias_populateocfiltros",
@@ -23319,7 +23440,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L1677",
+      "source_location": "L1681",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias_ocsetordenar",
@@ -23331,7 +23452,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L1716",
+      "source_location": "L1720",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias_getocorrenciasfiltradas",
@@ -23343,7 +23464,19 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2028",
+      "source_location": "L1739",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "js_ocorrencias_ocabrirmenucard",
+      "target": "js_ocorrencias_ocfecharmenucard",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "js/ocorrencias.js",
+      "source_location": "L2068",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias_openocorrenciamodal",
@@ -23355,7 +23488,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2427",
+      "source_location": "L2467",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias_renderocorrenciaspage",
@@ -23367,7 +23500,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2174",
+      "source_location": "L2214",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias_submitocorrenciaform",
@@ -23379,7 +23512,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2047",
+      "source_location": "L2087",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias_openocorrenciamodal",
@@ -23391,7 +23524,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2173",
+      "source_location": "L2213",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias_submitocorrenciaform",
@@ -23403,7 +23536,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2204",
+      "source_location": "L2244",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias_submitconcluir",
@@ -23415,7 +23548,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/ocorrencias.js",
-      "source_location": "L2235",
+      "source_location": "L2275",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_ocorrencias_submitinconclusiva",
@@ -23425,13 +23558,79 @@
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
+      "source_file": "tests/oc-card-menu.test.mjs",
+      "source_location": "L43",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "tests_oc_card_menu_test",
+      "target": "tests_oc_card_menu_test_casos",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/oc-card-menu.test.mjs",
+      "source_location": "L39",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "tests_oc_card_menu_test",
+      "target": "tests_oc_card_menu_test_fakeevent",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/oc-card-menu.test.mjs",
+      "source_location": "L18",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "tests_oc_card_menu_test",
+      "target": "tests_oc_card_menu_test_fonteocorrencias",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/oc-card-menu.test.mjs",
+      "source_location": "L20",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "tests_oc_card_menu_test",
+      "target": "tests_oc_card_menu_test_montar",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/oc-card-menu.test.mjs",
+      "source_location": "L17",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "tests_oc_card_menu_test",
+      "target": "tests_oc_card_menu_test_raiz",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/oc-card-menu.test.mjs",
+      "source_location": "L44",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "tests_oc_card_menu_test",
+      "target": "tests_oc_card_menu_test_teste",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
       "source_file": "tests/oc-donut-kpis.test.mjs",
       "source_location": "L167",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "tests_oc_donut_kpis_test",
-      "target": "tests_oc_donut_kpis_test_amanha",
-      "confidence_score": 1.0
+      "target": "tests_oc_donut_kpis_test_amanha"
     },
     {
       "relation": "contains",
@@ -23440,9 +23639,9 @@
       "source_location": "L41",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "tests_oc_donut_kpis_test",
-      "target": "tests_oc_donut_kpis_test_casos",
-      "confidence_score": 1.0
+      "target": "tests_oc_donut_kpis_test_casos"
     },
     {
       "relation": "contains",
@@ -23451,9 +23650,9 @@
       "source_location": "L21",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "tests_oc_donut_kpis_test",
-      "target": "tests_oc_donut_kpis_test_fonteocorrencias",
-      "confidence_score": 1.0
+      "target": "tests_oc_donut_kpis_test_fonteocorrencias"
     },
     {
       "relation": "contains",
@@ -23462,9 +23661,9 @@
       "source_location": "L23",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "tests_oc_donut_kpis_test",
-      "target": "tests_oc_donut_kpis_test_montar",
-      "confidence_score": 1.0
+      "target": "tests_oc_donut_kpis_test_montar"
     },
     {
       "relation": "contains",
@@ -23473,9 +23672,9 @@
       "source_location": "L20",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "tests_oc_donut_kpis_test",
-      "target": "tests_oc_donut_kpis_test_raiz",
-      "confidence_score": 1.0
+      "target": "tests_oc_donut_kpis_test_raiz"
     },
     {
       "relation": "contains",
@@ -23484,9 +23683,9 @@
       "source_location": "L42",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "tests_oc_donut_kpis_test",
-      "target": "tests_oc_donut_kpis_test_teste",
-      "confidence_score": 1.0
+      "target": "tests_oc_donut_kpis_test_teste"
     },
     {
       "relation": "contains",
@@ -66014,5 +66213,5 @@
       "source_file": "index.html"
     }
   ],
-  "built_at_commit": "4fb669f728a58745bdbccd93282a563c930bc67e"
+  "built_at_commit": "574bc0b7e8423ba3202edb55926eff4c88cc6365"
 }

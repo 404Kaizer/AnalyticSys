@@ -1,16 +1,16 @@
 # Graph Report - AnalyticSys  (2026-08-01)
 
 ## Corpus Check
-- 44 files · ~284,988 words
+- 44 files · ~285,763 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1885 nodes · 3881 edges · 90 communities (82 shown, 8 thin omitted)
+- 1886 nodes · 3882 edges · 87 communities (79 shown, 8 thin omitted)
 - Extraction: 88% EXTRACTED · 12% INFERRED · 0% AMBIGUOUS · INFERRED: 483 edges (avg confidence: 0.56)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `1711c46d`
+- Built from commit: `4fb669f7`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -64,7 +64,6 @@
 - help-badges.js
 - varSymbol
 - toast
-- _mesclarGrandeComBanco
 - lrcDelete
 - _buildOptionsList
 - toggleAllCentralis
@@ -78,12 +77,10 @@
 - relatorio-dais.test.mjs
 - openModal
 - openTool
-- excluirImportacao
 - cloud-backup.test.mjs
 - dai-anexos-storage.test.mjs
 - dai-sync-admin.test.mjs
 - nome-token-ids.test.mjs
-- excluirProducao
 - autoria-notificacoes.test.mjs
 - criador-nome.test.mjs
 - integracao-local.test.mjs
@@ -110,8 +107,8 @@
 2. `adminLoadModulo()` - 25 edges
 3. `_adminEsc()` - 22 edges
 4. `escapeHtml()` - 20 edges
-5. `_adminErroDetalhe()` - 19 edges
-6. `renderOcorrencias()` - 19 edges
+5. `renderOcorrencias()` - 19 edges
+6. `_adminErroDetalhe()` - 19 edges
 7. `_fechMgrRender()` - 19 edges
 8. `getFilteredData()` - 16 edges
 9. `_asstHasAnalise()` - 14 edges
@@ -137,7 +134,7 @@
 - **Calculadora/Notas/Assistente/Mensagens all implement the same generic tool-popover open/close pattern (openTool/closeTool, .tool-popover)** — index_calc_popover, index_notes_popover, index_assistente_popover, index_mensagens_popover [EXTRACTED 1.00]
 - **DAI generation, Ocorrências, and the public-form/admin routing jointly form the inventory-adjustment reporting flow** — index_dai_modal, index_ocorrencias_page, index_admin_formpublico, solicitacao [INFERRED 0.75]
 
-## Communities (90 total, 8 thin omitted)
+## Communities (87 total, 8 thin omitted)
 
 ### Community 0 - "admin.js"
 Cohesion: 0.05
@@ -208,8 +205,8 @@ Cohesion: 0.06
 Nodes (25): _anStockCache, _closeBdPortal(), _ensureBdPortal(), _gsHighlight(), handleGlobalSearch(), _microFilter, _microFilterResults, _MODAL_ESC_JA_TRATADO (+17 more)
 
 ### Community 17 - "import.js"
-Cohesion: 0.12
-Nodes (25): _CASCADE_TABELAS_NUVEM, _cascadeRestoreCloudByImportId(), _criarRegistroEntrada(), _criarRegistroLancamento(), _criarRegistroSaida(), _criarRegistroSAP(), _entradasSyncUpsert(), _entradasSyncUpsertBatch() (+17 more)
+Cohesion: 0.07
+Nodes (49): _CASCADE_TABELAS_NUVEM, _cascadeDeleteCloudByImportId(), _cascadeRestoreCloudByImportId(), _cbReforcarBackupModulos(), _criarRegistroEntrada(), _criarRegistroLancamento(), _criarRegistroProducao(), _criarRegistroSaida() (+41 more)
 
 ### Community 18 - "ncd.js"
 Cohesion: 0.13
@@ -233,7 +230,7 @@ Nodes (24): getMateriaisSemCadastroDoModulo(), _pendPadronizacaoBtnHtml(), remov
 
 ### Community 23 - "persist.js"
 Cohesion: 0.18
-Nodes (19): applySavedState(), buildStateSnapshot(), compactSapRecords(), daiAnexoKey(), flushPersistQueue(), idbDeleteAnexosDai(), idbGet(), idbGetAnexoDai() (+11 more)
+Nodes (20): applySavedState(), buildStateSnapshot(), compactSapRecords(), daiAnexoKey(), flushPersistQueue(), idbDeleteAnexosDai(), idbGet(), idbGetAnexoDai() (+12 more)
 
 ### Community 24 - "renderImports"
 Cohesion: 0.14
@@ -335,10 +332,6 @@ Nodes (11): _daColorFor(), _daFmtCountSigned(), _daFmtMoneySigned(), _daFmtPctSi
 Cohesion: 0.24
 Nodes (11): calcCopy(), confirmarComUndo(), fechamentoAbrirPrint(), fechamentoCopiarWhatsapp(), fechamentoGerarImagem(), _fechFmtDate(), _fechGerarImagemCanvas(), _fechGetPlainText() (+3 more)
 
-### Community 49 - "_mesclarGrandeComBanco"
-Cohesion: 0.18
-Nodes (11): _entradasFromDbRow(), _lancFromDbRow(), _mesclarGrandeComBanco(), _producaoFromDbRow(), _saidasFromDbRow(), _sapFromDbRow(), syncEntradasFromSupabase(), syncLancamentosFromSupabase() (+3 more)
-
 ### Community 50 - "lrcDelete"
 Cohesion: 0.12
 Nodes (21): bkpConfirmar(), _bkpParseStreaming(), closeLancConflictModal(), _exportarModulos(), _invalidateLancDupCache(), invalidateLancIndex(), _invalidateMatTransferPairCache(), invalidateSaidasIndex() (+13 more)
@@ -391,10 +384,6 @@ Nodes (7): abrirFechamento(), closeModal(), closeToolsMenu(), confirmarDestrutiv
 Cohesion: 0.38
 Nodes (7): closeTool(), _makeDraggable(), _makeResizable(), _nextToolZ(), _notesLoad(), openTool(), toggleCalc()
 
-### Community 63 - "excluirImportacao"
-Cohesion: 0.33
-Nodes (7): _cascadeDeleteCloudByImportId(), _cbReforcarBackupModulos(), excluirImportacao(), _importsSyncDelete(), _importsSyncUpsert(), _importsToDbRow(), reconcilePendingDeletes()
-
 ### Community 64 - "cloud-backup.test.mjs"
 Cohesion: 0.33
 Nodes (5): casos, fonte, montar(), raiz, sha256()
@@ -411,10 +400,6 @@ Nodes (4): casos, fonteDai, raiz, rowDai
 Cohesion: 0.29
 Nodes (4): casos, fonteDai, fonteOcorrencias, raiz
 
-### Community 68 - "excluirProducao"
-Cohesion: 0.29
-Nodes (7): _criarRegistroProducao(), excluirProducao(), _producaoSyncDelete(), _producaoSyncUpsert(), _producaoSyncUpsertBatch(), _producaoToDbRow(), salvarProducao()
-
 ### Community 69 - "autoria-notificacoes.test.mjs"
 Cohesion: 0.33
 Nodes (3): casos, fonteOcorrencias, raiz
@@ -428,7 +413,7 @@ Cohesion: 0.33
 Nodes (3): casos, fonte, raiz
 
 ### Community 72 - "oc-donut-kpis.test.mjs"
-Cohesion: 0.33
+Cohesion: 0.29
 Nodes (3): casos, fonteOcorrencias, raiz
 
 ### Community 73 - "rodarAnalitico"
@@ -464,20 +449,20 @@ Cohesion: 0.40
 Nodes (4): Answer, Outcome, Q: Why does CLOUD_BACKUP_MODULOS connect Cloud Backup Module to Admin Panel, Dashboard Conflict Detection, Dashboard Rendering & Cleanup, Import Deletion & Backup Sync?, Source Nodes
 
 ## Knowledge Gaps
-- **219 isolated node(s):** `Answer`, `Outcome`, `Source Nodes`, `_MESES_BR`, `_MESES_FULL` (+214 more)
+- **219 isolated node(s):** `OC_DONUT_META`, `OC_STATUS_OPTIONS`, `_OC_FILTER_KEY_LABELS`, `_ocMicroFilter`, `raiz` (+214 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **8 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `CLOUD_BACKUP_MODULOS` connect `cloud-backup.js` to `admin.js`, `processImportedRows`, `renderModule`, `excluirImportacao`?**
-  _High betweenness centrality (0.093) - this node is a cross-community bridge._
+- **Why does `CLOUD_BACKUP_MODULOS` connect `cloud-backup.js` to `admin.js`, `import.js`, `processImportedRows`, `renderModule`?**
+  _High betweenness centrality (0.116) - this node is a cross-community bridge._
 - **Why does `removerRegistro()` connect `renderModule` to `analitico.js`, `dashboard.js`, `cloud-backup.js`?**
-  _High betweenness centrality (0.080) - this node is a cross-community bridge._
-- **Why does `adminConfirmarExclusaoMassa()` connect `admin.js` to `cloud-backup.js`?**
-  _High betweenness centrality (0.042) - this node is a cross-community bridge._
-- **What connects `Answer`, `Outcome`, `Source Nodes` to the rest of the system?**
+  _High betweenness centrality (0.095) - this node is a cross-community bridge._
+- **Why does `_adminExecutarExclusaoMassa()` connect `admin.js` to `cloud-backup.js`?**
+  _High betweenness centrality (0.051) - this node is a cross-community bridge._
+- **What connects `OC_DONUT_META`, `OC_STATUS_OPTIONS`, `_OC_FILTER_KEY_LABELS` to the rest of the system?**
   _219 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `admin.js` be split into smaller, more focused modules?**
   _Cohesion score 0.05423094904160823 - nodes in this community are weakly interconnected._
