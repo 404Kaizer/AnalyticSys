@@ -105,8 +105,8 @@
     "semantic_hash": "3982f4d07a02eb9ceaacd6d7552971e0"
   },
   "js/ocorrencias.js": {
-    "mtime": 1785571868.9725077,
-    "ast_hash": "a67caa845ac92b13528cbd04ec9e2d87",
+    "mtime": 1785576257.7768457,
+    "ast_hash": "1d58aef09d12172ccf28f10e321c6eec",
     "semantic_hash": ""
   },
   "js/period-fab.js": {
@@ -150,9 +150,9 @@
     "semantic_hash": "9704d4371224746279c5c2cd7eba7e25"
   },
   "index.html": {
-    "mtime": 1785529058.4588225,
-    "ast_hash": "04323e36cc2463e8f13038a58fd2966c",
-    "semantic_hash": "04323e36cc2463e8f13038a58fd2966c"
+    "mtime": 1785576139.197242,
+    "ast_hash": "80540542efdd72bd4dac69f324444fed",
+    "semantic_hash": ""
   },
   "solicitacao.html": {
     "mtime": 1785499709.6254296,
@@ -232,6 +232,11 @@
   "graphify-out/memory/query_20260731_203851_why_does_cloud_backup_modulos_connect_cloud_backup.md": {
     "mtime": 1785530331.622488,
     "ast_hash": "0b75857aef1d1b80f3197625edd5dd90",
+    "semantic_hash": ""
+  },
+  "tests/oc-card-menu.test.mjs": {
+    "mtime": 1785576320.1757388,
+    "ast_hash": "64a5fdd08a262b0cbe00384c43e6d746",
     "semantic_hash": ""
   }
 }
