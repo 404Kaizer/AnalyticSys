@@ -6154,6 +6154,16 @@ mark.search-highlight {
    OCORRÊNCIAS — módulo completo
 ════════════════════════════════════════════════════════ */
 
+/* Filtro de período (31/07) — .cal-picker-trigger usa var(--text) (texto
+   forte) porque nas outras telas (Analítico/Dashboard Gerencial) ele é o
+   único controle da barra, não uma pílula entre outras. Na barra de
+   Ocorrências ele senta ao lado de Status/Central/Material/Regional
+   (.micro-filter-trigger, var(--text2), mais apagado) — sem isto ficava
+   destoante, em negrito/branco no meio de pílulas cinza. :not(.has-value)
+   pra não brigar com o destaque de cor de acento que .has-value já aplica
+   quando um período está selecionado (mesmo feedback visual que as
+   outras pílulas dão quando ficam .active). */
+#oc-cal-trigger:not(.has-value) { color: var(--text2); }
 
 /* ── Toolbar + filtros ────────────────────────────────── */
 .oc-toolbar {

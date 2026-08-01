@@ -571,6 +571,48 @@ teste('getOcorrenciasFiltradas: central sem filial cadastrada (ou sem regional) 
   assert.equal(ctx.getOcorrenciasFiltradas().length, 0);
 });
 
+// ── Filtro de período (31/07) — calendário compartilhado (js/calendar.js,
+// pfx="oc"), lido via os hidden inputs oc-dt-ini/oc-dt-fim (mesmo padrão
+// já usado em Analítico/Dashboard Gerencial/Ausências). Compara por
+// dataAbertura (string ISO "AAAA-MM-DD", comparação direta de string).
+
+function comIniFim(ctx, ini, fim) {
+  const stub = { 'oc-dt-ini': { value: ini || '' }, 'oc-dt-fim': { value: fim || '' } };
+  ctx.document.getElementById = (id) => stub[id] || null;
+}
+
+teste('getOcorrenciasFiltradas: sem período selecionado, mostra tudo (hidden inputs vazios)', () => {
+  const ctx = montar();
+  ctx.state.ocorrencias = [{ id: 'a', dataAbertura: '2026-01-01' }, { id: 'b', dataAbertura: '2026-12-31' }];
+  comIniFim(ctx, '', '');
+  assert.equal(ctx.getOcorrenciasFiltradas().length, 2);
+});
+
+teste('getOcorrenciasFiltradas: período com início e fim inclui as bordas, exclui fora do intervalo', () => {
+  const ctx = montar();
+  ctx.state.ocorrencias = [
+    { id: 'antes',  dataAbertura: '2026-07-31' },
+    { id: 'inicio', dataAbertura: '2026-08-01' },
+    { id: 'meio',   dataAbertura: '2026-08-15' },
+    { id: 'fim',    dataAbertura: '2026-08-31' },
+    { id: 'depois', dataAbertura: '2026-09-01' },
+  ];
+  comIniFim(ctx, '2026-08-01', '2026-08-31');
+  const ids = ctx.getOcorrenciasFiltradas().map(o => o.id).sort();
+  assert.deepEqual(ids, ['fim', 'inicio', 'meio']);
+});
+
+teste('getOcorrenciasFiltradas: só início preenchido (sem fim) filtra em aberto pra frente', () => {
+  const ctx = montar();
+  ctx.state.ocorrencias = [
+    { id: 'antes', dataAbertura: '2026-07-31' },
+    { id: 'depois', dataAbertura: '2026-08-01' },
+  ];
+  comIniFim(ctx, '2026-08-01', '');
+  const ids = ctx.getOcorrenciasFiltradas().map(o => o.id);
+  assert.deepEqual(ids, ['depois']);
+});
+
 teste('populateOcFiltros: opções de Regional só incluem regionais de centrais que já têm ocorrência', () => {
   const ctx = montar();
   ctx.state.filiais = [

@@ -1424,6 +1424,10 @@ function renderOcorrencias() {
   // o donut e a contagem total continuam precisando ver as DAIs.
   renderOcKPIs(state.ocorrencias);
   _renderOcLista(lista);
+  // Cobre o filtro de período (calendar.js chama renderOcorrencias direto
+  // ao completar o range, sem passar pelos outros pontos que já
+  // sincronizavam este botão — ver _ocSyncClearBtn).
+  _ocSyncClearBtn();
 }
 
 // ── Filtros (31/07) — padrão "Visão Micro" (Dashboard Analítico) ───────
@@ -1568,6 +1572,7 @@ function ocClearAllMicroFilters() {
     _ocMicroFilter.applied[key] = new Set();
     _ocSyncTriggerLabel(key);
   });
+  if (typeof calClearRange === 'function') calClearRange('oc');
   _ocSyncClearBtn();
   renderOcorrencias();
 }
@@ -1597,7 +1602,8 @@ function _ocSyncClearBtn() {
   const btn = document.getElementById('oc-mf-clear-btn');
   if (!btn) return;
   const f = _ocMicroFilter.applied;
-  const hasAny = f.status.size || f.central.size || f.material.size || f.regional.size;
+  const hasPeriodo = !!document.getElementById('oc-dt-ini')?.value;
+  const hasAny = f.status.size || f.central.size || f.material.size || f.regional.size || hasPeriodo;
   btn.style.display = hasAny ? '' : 'none';
 }
 
@@ -1700,6 +1706,11 @@ function getOcorrenciasFiltradas() {
   const fRegional = _ocMicroFilter.applied.regional;
   const fBusca    = (document.getElementById('oc-filter-busca')?.value || '').toLowerCase();
   const sortMode  = _ocSortMode;
+  // Filtro de período (31/07) — datas ISO gravadas pelo calendário
+  // compartilhado (js/calendar.js, pfx="oc") nos hidden inputs; compara
+  // por dataAbertura (mesmo campo já usado em toda a tela/ordenação).
+  const dtIni = document.getElementById('oc-dt-ini')?.value || '';
+  const dtFim = document.getElementById('oc-dt-fim')?.value || '';
   // Só resolve o mapa central→regional se o filtro estiver mesmo em uso —
   // evita varrer state.filiais à toa em toda renderização.
   const mapaRegional = fRegional.size ? _ocRegionalPorCentral() : null;
@@ -1712,6 +1723,8 @@ function getOcorrenciasFiltradas() {
       const reg = mapaRegional.get((o.central || '').trim());
       if (!reg || !fRegional.has(reg)) return false;
     }
+    if (dtIni && (o.dataAbertura || '') < dtIni) return false;
+    if (dtFim && (o.dataAbertura || '') > dtFim) return false;
     if (fBusca) {
       const hay = [o.central, o.material, o.operador, o.descricao, o.id, o.numero, o.daiNumero, o.daiTag].join(' ').toLowerCase();
       if (!hay.includes(fBusca)) return false;

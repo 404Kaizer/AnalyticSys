@@ -2913,6 +2913,26 @@
               </div>
             </div>
 
+            <!-- Filtro de período (31/07) — mesmo componente de calendário
+                 já usado em Analítico/Dashboard Gerencial/Ausências
+                 (js/calendar.js, pfx="oc"), filtra por dataAbertura. Sem os
+                 chips de atalho (Até hoje/Mês atual...) de propósito — a
+                 barra de Ocorrências já é uma linha só de pílulas, os
+                 chips são pensados pra telas com uma seção de período
+                 dedicada (Analítico), não pra caber aqui do lado. -->
+            <div class="cal-picker-wrap" id="oc-cal-wrap">
+              <button class="cal-picker-trigger" id="oc-cal-trigger" onclick="toggleCalPicker('oc')" type="button" style="min-width:0">
+                <i class="ti ti-calendar-event"></i>
+                <span id="oc-cal-label">Período</span>
+                <i class="ti ti-chevron-down cal-chev" id="oc-cal-chev"></i>
+              </button>
+              <input type="hidden" id="oc-dt-ini">
+              <input type="hidden" id="oc-dt-fim">
+              <div class="cal-picker-dropdown" id="oc-cal-dropdown">
+                <div class="cal-picker-inner" id="oc-cal-inner" data-pfx="oc"></div>
+              </div>
+            </div>
+
             <div class="micro-filter-divider"></div>
 
             <!-- Ordenar (31/07) — padrão é abertura mais recente primeiro. Mesmo

@@ -382,9 +382,12 @@
     updateTriggerLabel(pfx);
     renderCal(pfx);
 
-    // Callback: disparar renderAusencias quando range estiver completo
+    // Callback: disparar renderAusencias/renderOcorrencias quando range estiver completo
     if (pfx === 'aus' && p.startDate && p.endDate && typeof renderAusencias === 'function') {
       renderAusencias();
+    }
+    if (pfx === 'oc' && p.startDate && p.endDate && typeof renderOcorrencias === 'function') {
+      renderOcorrencias();
     }
 
 
@@ -445,6 +448,24 @@
     const end   = new Date(fimISO + 'T23:59:59');
     if (isNaN(start) || isNaN(end)) return;
     setRange(pfx, start, end);
+  };
+
+  // Limpa a seleção (31/07) — contraparte de calSetRange, pra quem só quer
+  // "esvaziar o período" sem precisar acessar o estado interno do picker
+  // (que é privado desta IIFE). Reaproveitado por qualquer "Limpar
+  // Filtros" de página, em vez do monkey-patch em limparAnalitico/
+  // limparDashboardGerencial logo abaixo (mantidos por compatibilidade,
+  // mas esta é a forma direta pra código novo).
+  window.calClearRange = function(pfx) {
+    const p = getPicker(pfx);
+    p.startDate = null;
+    p.endDate = null;
+    p.selecting = 'start';
+    p.hoverDate = null;
+    syncInputs(pfx);
+    updateTriggerLabel(pfx);
+    if (document.getElementById(pfx + '-cal-dropdown')?.classList.contains('open')) renderCal(pfx);
+    document.querySelectorAll(`[onclick^="calQuick"][onclick*="'${pfx}'"]`).forEach(b => b.classList.remove('active'));
   };
 
   window.calQuickHoje = function(pfx) {
@@ -515,11 +536,21 @@
     }
   };
 
-  // Prevent clicks INSIDE the dropdown from bubbling to document
+  // Prevent clicks INSIDE the dropdown from bubbling to document (31/07:
+  // trocado de lista fixa de ids pra querySelectorAll(.cal-picker-dropdown)
+  // — cobria só 3 dos 5 pickers que já existiam ('an'/'aus'/'trend'; 'dg'
+  // e 'inv' ficaram de fora por esquecimento), o que já quebrava o menu
+  // deles do mesmo jeito. Causa raiz: calDayClick → renderCal reconstrói
+  // o grid de dias (o botão clicado é REMOVIDO e um novo é criado no
+  // lugar); quando o clique original termina de borbulhar até o
+  // document, o alvo (agora um nó desanexado) não está mais dentro de
+  // .cal-picker-wrap, então o listener "fechar ao clicar fora" (mais
+  // abaixo) achava que foi um clique de fora e fechava o dropdown a cada
+  // clique. Generalizar aqui cobre qualquer pfx, atual ou futuro, sem
+  // precisar lembrar de adicionar o id numa lista de novo.
   document.addEventListener('DOMContentLoaded', function() {
-    ['an-cal-dropdown', 'aus-cal-dropdown', 'trend-cal-dropdown'].forEach(function(id) {
-      var el = document.getElementById(id);
-      if (el) el.addEventListener('click', function(e) { e.stopPropagation(); });
+    document.querySelectorAll('.cal-picker-dropdown').forEach(function(el) {
+      el.addEventListener('click', function(e) { e.stopPropagation(); });
     });
   });
 
