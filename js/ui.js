@@ -5224,7 +5224,7 @@ function buildHealthPanel(central, dtIni, allMatsSorted, lancsByMat, sapByMat, c
   const badgeStyle = {
     bom:     'background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)',
     atencao: 'background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border)',
-    urgente: 'background:rgba(249,115,22,0.10);color:#f97316;border:1px solid rgba(249,115,22,0.22)',
+    urgente: 'background:var(--urgente-bg);color:var(--urgente);border:1px solid var(--urgente-border)',
     critico: 'background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)'
   };
 

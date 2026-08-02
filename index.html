@@ -1485,11 +1485,11 @@
 
           <!-- Botões de relatório -->
           <div style="display:flex;justify-content:flex-end;gap:10px;margin-bottom:10px">
-            <button class="btn btn-secondary" onclick="abrirModalCategoriasRelatorio('diretoria')" style="gap:7px;font-size:13px;padding:8px 18px;background:linear-gradient(135deg,#7c3aed,#8b5cf6);border:none;border-radius:8px;cursor:pointer;display:flex;align-items:center;color:#fff">
+            <button class="btn btn-gradient-purple" onclick="abrirModalCategoriasRelatorio('diretoria')" style="gap:7px;font-size:13px;padding:8px 18px;border-radius:8px;cursor:pointer;display:flex;align-items:center">
               <i class="ti ti-chart-pie" style="font-size:15px"></i>
               <span>Visão Diretoria</span>
             </button>
-            <button class="btn btn-primary" onclick="abrirModalCategoriasRelatorio('detalhado')" style="gap:7px;font-size:13px;padding:8px 18px;background:linear-gradient(135deg,#1d4ed8,#2563eb);border:none;border-radius:8px;cursor:pointer;display:flex;align-items:center">
+            <button class="btn btn-primary btn-gradient-blue" onclick="abrirModalCategoriasRelatorio('detalhado')" style="gap:7px;font-size:13px;padding:8px 18px;border-radius:8px;cursor:pointer;display:flex;align-items:center">
               <i class="ti ti-file-report" style="font-size:15px"></i>
               <span>Relatório Detalhado</span>
             </button>
@@ -1659,7 +1659,7 @@
                   <div class="mfr-chips" id="mfr-health-levels">
                     <label class="mfr-chip"><input type="checkbox" value="ok"      onchange="_varFilterChange()"> <i class="ti ti-circle-check"   style="color:var(--green)"></i> Saudável</label>
                     <label class="mfr-chip"><input type="checkbox" value="atencao" onchange="_varFilterChange()"> <i class="ti ti-alert-triangle" style="color:var(--amber)"></i> Atenção</label>
-                    <label class="mfr-chip"><input type="checkbox" value="urgente" onchange="_varFilterChange()"> <i class="ti ti-alert-circle"   style="color:#f97316"></i> Urgente</label>
+                    <label class="mfr-chip"><input type="checkbox" value="urgente" onchange="_varFilterChange()"> <i class="ti ti-alert-circle"   style="color:var(--urgente)"></i> Urgente</label>
                     <label class="mfr-chip"><input type="checkbox" value="critico" onchange="_varFilterChange()"> <i class="ti ti-flame"          style="color:var(--red)"></i> Crítico</label>
                     <label class="mfr-chip"><input type="checkbox" value="none"    onchange="_varFilterChange()"> <i class="ti ti-minus"          style="color:var(--text3)"></i> Sem saúde</label>
                   </div>

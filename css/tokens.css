@@ -34,6 +34,11 @@
   --amber-bg: rgba(245,158,11,0.10);
   --amber-border: rgba(245,158,11,0.20);
 
+  /* Urgente — tier entre amber (atenção) e red (crítico) */
+  --urgente:    #f97316;
+  --urgente-bg: rgba(249,115,22,0.10);
+  --urgente-border: rgba(249,115,22,0.20);
+
   --purple:   #8b5cf6;
   --purple-bg: rgba(139,92,246,0.10);
   --purple-border: rgba(139,92,246,0.20);
@@ -111,6 +116,9 @@ body[data-theme="light"] {
   --amber:    #d97706;
   --amber-bg: rgba(217,119,6,0.08);
   --amber-border: rgba(217,119,6,0.18);
+  --urgente:    #ea580c;
+  --urgente-bg: rgba(234,88,12,0.08);
+  --urgente-border: rgba(234,88,12,0.18);
   --purple:   #7c3aed;
   --purple-bg: rgba(124,58,237,0.08);
   --purple-border: rgba(124,58,237,0.18);
@@ -149,6 +157,9 @@ body[data-theme="sand"] {
   --amber:    #92400e;
   --amber-bg: rgba(146,64,14,0.09);
   --amber-border: rgba(146,64,14,0.20);
+  --urgente:    #9a3412;
+  --urgente-bg: rgba(154,52,18,0.09);
+  --urgente-border: rgba(154,52,18,0.20);
   --purple:   #5b21b6;
   --purple-bg: rgba(91,33,182,0.09);
   --purple-border: rgba(91,33,182,0.20);
@@ -176,6 +187,4 @@ body {
 
 /* ══════════════════════════════════════════
    LAYOUT SHELL
-/* ══════════════════════════════════════════
-   BDM TRIGGER
 ══════════════════════════════════════════ */

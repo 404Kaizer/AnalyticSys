@@ -6,21 +6,9 @@
 
 /* ══════════════════════════════════════════
    SIDEBAR
-/* ══════════════════════════════════════════
-   BDM TRIGGER
 ══════════════════════════════════════════ */
 /* .sidebar base: defined in modules.css (Brave-style tabs) */
-
-.sidebar-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 14px 14px;
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-  gap: 8px;
-  overflow: hidden;
-}
+/* .sidebar-header base: defined in modules.css (needs --sidebar-w for the collapse animation) */
 
 .sidebar-header-brand {
   display: flex;
@@ -182,8 +170,6 @@
 
 /* ══════════════════════════════════════════
    MAIN AREA
-/* ══════════════════════════════════════════
-   BDM TRIGGER
 ══════════════════════════════════════════ */
 .main {
   flex: 1;
@@ -196,8 +182,6 @@
 
 /* ══════════════════════════════════════════
    TOPBAR
-/* ══════════════════════════════════════════
-   BDM TRIGGER
 ══════════════════════════════════════════ */
 .topbar {
   background: var(--bg2);

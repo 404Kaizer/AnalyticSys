@@ -2477,7 +2477,7 @@ function renderDgGiro(results, dtIni, dtFim) {
   const _NIVEL_DEFS = [
     { level: 'bom',     label: 'Bom',     style: 'background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)' },
     { level: 'atencao', label: 'Atenção', style: 'background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border)' },
-    { level: 'urgente', label: 'Urgente', style: 'background:rgba(249,115,22,0.10);color:#f97316;border:1px solid rgba(249,115,22,0.22)' },
+    { level: 'urgente', label: 'Urgente', style: 'background:var(--urgente-bg);color:var(--urgente);border:1px solid var(--urgente-border)' },
     { level: 'critico', label: 'Crítico', style: 'background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)' },
   ];
   function _giroNivelInfo(item) {
@@ -2493,7 +2493,7 @@ function renderDgGiro(results, dtIni, dtFim) {
     if (g >= 2.0) return 'var(--green)';
     if (g >= 1.0) return 'var(--teal)';
     if (g >= 0.5) return 'var(--amber)';
-    if (g >= 0.2) return '#f97316';
+    if (g >= 0.2) return 'var(--urgente)';
     return 'var(--red)';
   }
 
@@ -2502,7 +2502,7 @@ function renderDgGiro(results, dtIni, dtFim) {
     if (g >= 2.0) return { label:'Alto',          style:'background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)' };
     if (g >= 1.0) return { label:'Saudável',      style:'background:var(--teal-bg);color:var(--teal);border:1px solid var(--teal-border)' };
     if (g >= 0.5) return { label:'Baixo',         style:'background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border)' };
-    if (g >= 0.2) return { label:'Muito Baixo',   style:'background:rgba(249,115,22,0.10);color:#f97316;border:1px solid rgba(249,115,22,0.22)' };
+    if (g >= 0.2) return { label:'Muito Baixo',   style:'background:var(--urgente-bg);color:var(--urgente);border:1px solid var(--urgente-border)' };
     return { label:'Parado', style:'background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)' };
   }
 

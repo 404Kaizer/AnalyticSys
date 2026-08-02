@@ -288,7 +288,7 @@ document.addEventListener('click', e=>{
 const _NLM = {
   critico:{ col:'var(--red)',   icon:'ti-flame',          label:'Crítico' },
   atencao:{ col:'var(--amber)', icon:'ti-alert-triangle', label:'Atenção' },
-  info:   { col:'#3b82f6',      icon:'ti-info-circle',    label:'Info'    },
+  info:   { col:'var(--accent)', icon:'ti-info-circle',    label:'Info'    },
 };
 const _NTM = {
   saude:        { icon:'ti-heartbeat'       },
