@@ -152,6 +152,17 @@ const pages = {
   sap: 0
 };
 
+// Seleção em massa (exclusão) por módulo — Set de referências de objeto
+// direto de state[module] (não clonadas por getFilteredData/pageSlice, ver
+// removerRegistro), então basta comparar por identidade, sem precisar de
+// chave/id sintético.
+const bulkSelected = {
+  entradas: new Set(),
+  saidas: new Set(),
+  lancamentos: new Set(),
+  sap: new Set()
+};
+
 const filters = {
   entradas: '',
   saidas: '',

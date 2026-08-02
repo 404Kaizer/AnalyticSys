@@ -607,8 +607,17 @@ function getFilteredData(module) {
   return _applyModuleSort(module, result);
 }
 
+// Cache do último getFilteredData(module) resolvido por pageSlice — a
+// seleção em massa (toggleSelecaoRegistro/atualizarBarraLote, dashboard.js)
+// lê daqui em vez de recalcular filtro+sort a cada clique de checkbox.
+// Sem isso, com ordenação ativa numa tabela grande, cada clique custava um
+// re-sort completo (O(n log n), ~500ms em 50 mil linhas) — 2x por clique,
+// já que os dois pontos de leitura chamavam getFilteredData direto.
+const _lastFiltered = {};
+
 function pageSlice(module) {
   const data = getFilteredData(module);
+  _lastFiltered[module] = data;
   const page = module === 'producao' ? currentPageProducao : pages[module];
   const totalPages = Math.max(1, Math.ceil(data.length / PAGE_SIZE));
   const safePage = Math.min(Math.max(page, 0), totalPages - 1);
@@ -747,10 +756,10 @@ const colFilters = {};
 // Map each module to its tbody id and the data-field for each column index
 // (same order as the thead <th> elements)
 const colFilterMeta = {
-  entradas:    { tbodyId: 'tb-entradas',    fields: ['centralCompra','centralDestino','nf','dtEmissao','dtDescarga','fornecedor','categoria','material','peso','um','custo','valorTotal',null] },
-  saidas:      { tbodyId: 'tb-saidas',      fields: ['central','dtEmissao','os','contrato','categoria','fornecedor','material','peso','um','custo','valorTotal',null] },
-  lancamentos: { tbodyId: 'tb-lancamentos', fields: ['central','dtLanc','fornecedor','categoria','material','peso','um','custo','valorTotal',null] },
-  sap:         { tbodyId: 'tb-sap',         fields: ['usuario','movimento','ref','documento','central','deposito','dtDoc','dtLanc','dtReg','material','peso','um','custoUnit','valorTotal',null] },
+  entradas:    { tbodyId: 'tb-entradas',    fields: [null,'centralCompra','centralDestino','nf','dtEmissao','dtDescarga','fornecedor','categoria','material','peso','um','custo','valorTotal',null] },
+  saidas:      { tbodyId: 'tb-saidas',      fields: [null,'central','dtEmissao','os','contrato','categoria','fornecedor','material','peso','um','custo','valorTotal',null] },
+  lancamentos: { tbodyId: 'tb-lancamentos', fields: [null,'central','dtLanc','fornecedor','categoria','material','peso','um','custo','valorTotal',null] },
+  sap:         { tbodyId: 'tb-sap',         fields: [null,'usuario','movimento','ref','documento','central','deposito','dtDoc','dtLanc','dtReg','material','peso','um','custoUnit','valorTotal',null] },
   producao:    { tbodyId: 'tb-producao',    fields: ['mes','central','producao','um','precoMedio','custoMedio','margem','totalVendas',null] },
   imports:     { tbodyId: 'tb-imports',     fields: ['arquivo','modulo','registros','dataHora','status',null] },
   configs:     { tbodyId: 'tb-configs',     fields: ['key','value','desc','created',null] },
@@ -3805,7 +3814,11 @@ window._fecharModalDetalheMaterial = _fecharModalDetalheMaterial;
 function renderEntradasSummary() {
   const el = document.getElementById('ent-summary-cards');
   if (!el) return;
-  const data = getFilteredData('entradas');
+  // pageSlice já rodou getFilteredData+sort um pouco antes (dentro de
+  // renderEntradas) e deixou o resultado em cache — reaproveita em vez de
+  // recalcular filtro+sort do zero de novo aqui (2x o custo por render sem
+  // isso). Fallback cobre a chamada avulsa antes de qualquer render.
+  const data = _lastFiltered.entradas || getFilteredData('entradas');
   const { peso: totalPeso, valor: totalValor } = somarPesoValorEntradas(data);
   const porCentral = _agruparRegistros(data, r => r.centralDestino);
   const grupos = [...porCentral.entries()].map(([label, recs]) => {
@@ -3822,7 +3835,7 @@ window.renderEntradasSummary = renderEntradasSummary;
 function renderSaidasSummary() {
   const el = document.getElementById('sai-summary-cards');
   if (!el) return;
-  const data = getFilteredData('saidas');
+  const data = _lastFiltered.saidas || getFilteredData('saidas');
   const { peso: totalPeso, valor: totalValor } = somarPesoValor(data);
   const porCentral = _agruparRegistros(data, r => r.central);
   const grupos = [...porCentral.entries()].map(([label, recs]) => {
@@ -3839,7 +3852,7 @@ window.renderSaidasSummary = renderSaidasSummary;
 function renderSapSummary() {
   const el = document.getElementById('sap-summary-cards');
   if (!el) return;
-  const data = getFilteredData('sap');
+  const data = _lastFiltered.sap || getFilteredData('sap');
   const { peso: totalPeso, custo: totalValor } = somarPesoCustoSap(data);
   const porMov = _agruparRegistros(data, r => normMov(r.movimento));
   const grupos = [...porMov.entries()].map(([cod, recs]) => {
@@ -3885,7 +3898,7 @@ window.renderSapSummary = renderSapSummary;
 function renderLancamentosSummary() {
   const el = document.getElementById('lanc-summary-cards');
   if (!el) return;
-  const data = getFilteredData('lancamentos');
+  const data = _lastFiltered.lancamentos || getFilteredData('lancamentos');
   const { peso: totalPeso, custo: totalValor } = somarPesoCustoSap(data);
   const porCentral = _agruparRegistros(data, r => r.central);
   const grupos = [...porCentral.entries()].map(([label, recs]) => {

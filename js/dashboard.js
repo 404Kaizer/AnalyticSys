@@ -2674,13 +2674,15 @@ function renderDgGiro(results, dtIni, dtFim) {
   renderSemCadastroModuloBox('entradas');
   if (typeof renderEntradasSummary === 'function') renderEntradasSummary();
 
-  if (!getFilteredData('entradas').length) {
-    tb.innerHTML = '<tr><td colspan="13"><div class="empty-state"><i class="ti ti-package"></i><p>Nenhuma entrada cadastrada.</p></div></td></tr>';
+  if (!_lastFiltered.entradas.length) {
+    tb.innerHTML = '<tr><td colspan="14"><div class="empty-state"><i class="ti ti-package"></i><p>Nenhuma entrada cadastrada.</p></div></td></tr>';
+    atualizarBarraLote('entradas');
     return;
   }
 
   tb.innerHTML = data.map((r, i) => `
     <tr>
+      <td class="th-checkbox"><input type="checkbox" ${bulkSelected.entradas.has(r) ? 'checked' : ''} onchange="toggleSelecaoRegistro('entradas', ${i}, this.checked)"></td>
       <td class="td-mono">${r.fonte === 'manual' ? '<span class="badge-manual" title="Registro inserido manualmente"><i class="ti ti-pencil"></i></span>' : ''}${r.centralCompra || '—'}</td>
       <td class="td-mono">${r.centralDestino || '—'}</td>
       <td class="td-mono">${r.nf || '—'}</td>
@@ -2698,6 +2700,7 @@ function renderDgGiro(results, dtIni, dtFim) {
   `).join('');
   makeResizable(tb.closest('table'));
   injectColFilterButtons(tb.closest('table'), 'entradas');
+  atualizarBarraLote('entradas');
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -2983,13 +2986,15 @@ function renderSaidas() {
   renderSemCadastroModuloBox('saidas');
   if (typeof renderSaidasSummary === 'function') renderSaidasSummary();
 
-  if (!getFilteredData('saidas').length) {
-    tb.innerHTML = '<tr><td colspan="12"><div class="empty-state"><i class="ti ti-truck"></i><p>Nenhuma saída cadastrada.</p></div></td></tr>';
+  if (!_lastFiltered.saidas.length) {
+    tb.innerHTML = '<tr><td colspan="13"><div class="empty-state"><i class="ti ti-truck"></i><p>Nenhuma saída cadastrada.</p></div></td></tr>';
+    atualizarBarraLote('saidas');
     return;
   }
 
   tb.innerHTML = data.map((r, i) => `
     <tr>
+      <td class="th-checkbox"><input type="checkbox" ${bulkSelected.saidas.has(r) ? 'checked' : ''} onchange="toggleSelecaoRegistro('saidas', ${i}, this.checked)"></td>
       <td class="td-mono">${r.fonte === 'manual' ? '<span class="badge-manual" title="Registro inserido manualmente"><i class="ti ti-pencil"></i></span>' : ''}${r.central || '—'}</td>
       <td class="td-muted">${r.dtEmissao || '—'}</td>
       <td class="td-mono">${r.os || '—'}</td>
@@ -3006,6 +3011,7 @@ function renderSaidas() {
   `).join('');
   makeResizable(tb.closest('table'));
   injectColFilterButtons(tb.closest('table'), 'saidas');
+  atualizarBarraLote('saidas');
 }
 
 function renderLancamentos() {
@@ -3018,8 +3024,9 @@ function renderLancamentos() {
   renderSemCadastroModuloBox('lancamentos');
   if (typeof renderLancamentosSummary === 'function') renderLancamentosSummary();
 
-  if (!getFilteredData('lancamentos').length) {
-    tb.innerHTML = '<tr><td colspan="10"><div class="empty-state"><i class="ti ti-clipboard"></i><p>Nenhum lançamento de saldo real.</p></div></td></tr>';
+  if (!_lastFiltered.lancamentos.length) {
+    tb.innerHTML = '<tr><td colspan="11"><div class="empty-state"><i class="ti ti-clipboard"></i><p>Nenhum lançamento de saldo real.</p></div></td></tr>';
+    atualizarBarraLote('lancamentos');
     return;
   }
 
@@ -3042,7 +3049,8 @@ function renderLancamentos() {
         onblur="lancEditSave(this)">${escapeHtml(r.categoria || '—')}</td>`;
   return `
     <tr${trClass}${trTitle}>
-      <td class="td-mono" style="display:flex;align-items:center;">
+      <td class="th-checkbox"><input type="checkbox" ${bulkSelected.lancamentos.has(r) ? 'checked' : ''} onchange="toggleSelecaoRegistro('lancamentos', ${i}, this.checked)"></td>
+      <td class="td-mono lanc-central-cell" style="display:flex;align-items:center;">
         ${r.fonte === 'manual' ? '<span class="badge-manual" title="Registro inserido manualmente"><i class="ti ti-pencil"></i></span>' : ''}
         ${r.editado ? '<span class="badge-editado" title="Registro editado manualmente"><i class="ti ti-pencil"></i></span>' : ''}
         <span class="lanc-central-edit" contenteditable="true" spellcheck="false"
@@ -3092,6 +3100,7 @@ function renderLancamentos() {
   }).join('');
   makeResizable(tb.closest('table'));
   injectColFilterButtons(tb.closest('table'), 'lancamentos');
+  atualizarBarraLote('lancamentos');
 }
 
 
@@ -3169,7 +3178,7 @@ function lancEditSave(cell) {
   if (!r.editado) {
     r.editado = true;
     const row     = cell.closest('tr');
-    const firstTd = row?.querySelector('td:first-child');
+    const firstTd = row?.querySelector('.lanc-central-cell');
     if (firstTd && !firstTd.querySelector('.badge-editado')) {
       const badge = document.createElement('span');
       badge.className = 'badge-editado';
@@ -4098,8 +4107,9 @@ function renderSAP() {
   renderSemCadastroModuloBox('sap');
   if (typeof renderSapSummary === 'function') renderSapSummary();
 
-  if (!getFilteredData('sap').length) {
-    tb.innerHTML = '<tr><td colspan="15"><div class="empty-state"><i class="ti ti-database"></i><p>Nenhuma movimentação SAP importada.</p></div></td></tr>';
+  if (!_lastFiltered.sap.length) {
+    tb.innerHTML = '<tr><td colspan="16"><div class="empty-state"><i class="ti ti-database"></i><p>Nenhuma movimentação SAP importada.</p></div></td></tr>';
+    atualizarBarraLote('sap');
     return;
   }
 
@@ -4132,6 +4142,7 @@ function renderSAP() {
       : '';
     return `
     <tr${trClass}${trTitle}>
+      <td class="th-checkbox"><input type="checkbox" ${bulkSelected.sap.has(r) ? 'checked' : ''} onchange="toggleSelecaoRegistro('sap', ${i}, this.checked)"></td>
       <td class="td-mono">${r.fonte === 'manual' ? '<span class="badge-manual" title="Registro inserido manualmente"><i class="ti ti-pencil"></i></span>' : ''}${r.usuario || '—'}</td>
       <td class="td-mono" style="color:${neg ? red : green}">${r.movimento || '—'}${fechBadgeHtml}</td>
       <td class="td-muted">${r.ref || '—'}</td>
@@ -4151,6 +4162,7 @@ function renderSAP() {
   }).join('');
   makeResizable(tb.closest('table'));
   injectColFilterButtons(tb.closest('table'), 'sap');
+  atualizarBarraLote('sap');
 }
 
 function renderProducao() {
@@ -4672,6 +4684,115 @@ function removerRegistro(module, index) {
   // permitirReducao: a contagem cair é o próprio objetivo da exclusão — sem
   // isso a guarda de encolhimento bloquearia o envio e o registro excluído
   // voltaria na próxima restauração.
+  if (typeof _cbUploadModulo === 'function' && typeof CLOUD_BACKUP_MODULOS !== 'undefined' && CLOUD_BACKUP_MODULOS.includes(module)) {
+    _cbUploadModulo(module, { permitirReducao: true });
+  }
+}
+
+// ── Exclusão em massa (Entradas/Saídas/Lançamentos/SAP) ─────────────────
+// Mesma lógica de removerRegistro, mas para um conjunto de linhas marcadas
+// via checkbox (bulkSelected[module], ver state.js). Seleção só cobre a
+// página atual por vez — "selecionar tudo do filtro" fica de fora por ora,
+// sem pedido explícito pra isso.
+function toggleSelecaoRegistro(module, index, checked) {
+  // Lê do cache que pageSlice já deixou pronto no último render (ver
+  // _lastFiltered, ui.js) em vez de rodar filtro+sort de novo a cada
+  // clique — com sort ativo numa tabela grande isso custava um re-sort
+  // completo por clique.
+  const r = (_lastFiltered[module] || [])[pages[module] * PAGE_SIZE + index];
+  if (!r) return;
+  if (checked) bulkSelected[module].add(r);
+  else bulkSelected[module].delete(r);
+  atualizarBarraLote(module);
+}
+
+function toggleSelecionarTudoPagina(module, checked) {
+  pageSlice(module).forEach(r => checked ? bulkSelected[module].add(r) : bulkSelected[module].delete(r));
+  renderModule(module);
+}
+
+// Marca TODOS os registros do filtro atual (todas as páginas, não só a
+// visível) — os módulos rodam 100% no cliente (state[module] já está
+// inteiro na memória, a paginação é só de exibição), então "selecionar
+// tudo" é simplesmente popular o Set com cada referência já filtrada, sem
+// precisar do modo "todos" à parte que o Admin usa (lá a tabela pagina via
+// cursor no Supabase e a maioria das linhas nunca chega ao cliente).
+function selecionarTodosFiltrados(module) {
+  getFilteredData(module).forEach(r => bulkSelected[module].add(r));
+  renderModule(module);
+  toast(`${bulkSelected[module].size.toLocaleString('pt-BR')} registro(s) selecionado(s).`);
+}
+
+function limparSelecaoLote(module) {
+  bulkSelected[module].clear();
+  renderModule(module);
+}
+
+function atualizarBarraLote(module) {
+  const bar = document.getElementById('lote-bar-' + module);
+  const countEl = document.getElementById('lote-count-' + module);
+  const n = bulkSelected[module].size;
+  if (bar) bar.style.display = n > 0 ? 'flex' : 'none';
+  if (countEl) countEl.textContent = n === 1 ? '1 registro selecionado' : `${n} registros selecionados`;
+
+  // Mesmo cache de toggleSelecaoRegistro — evita repetir filtro+sort a cada
+  // clique (ver _lastFiltered, ui.js).
+  const todos = _lastFiltered[module] || [];
+  const pagina = todos.slice(pages[module] * PAGE_SIZE, (pages[module] + 1) * PAGE_SIZE);
+  const todosMarcados = pagina.length > 0 && pagina.every(r => bulkSelected[module].has(r));
+
+  const chkAll = document.getElementById('chk-all-' + module);
+  if (chkAll) {
+    chkAll.checked = todosMarcados;
+    chkAll.indeterminate = !todosMarcados && pagina.some(r => bulkSelected[module].has(r));
+  }
+
+  // Banner "selecionar todos os N do filtro" (padrão Gmail, mesmo já usado
+  // no Gerenciador de Fechamento e no Admin) — só aparece depois que a
+  // página inteira já foi marcada e ainda sobra mais alguma coisa no
+  // filtro atual pra selecionar.
+  const banner = document.getElementById('selectall-banner-' + module);
+  if (banner) {
+    const mostrar = todosMarcados && n < todos.length;
+    banner.style.display = mostrar ? 'flex' : 'none';
+    if (mostrar) {
+      banner.innerHTML = `<span><i class="ti ti-info-circle"></i> Todos os ${pagina.length} registros desta página estão selecionados.</span> <button type="button" class="fechmgr-selectall-link" onclick="selecionarTodosFiltrados('${module}')">Selecionar todos os ${todos.length.toLocaleString('pt-BR')} registros do filtro atual</button>`;
+    }
+  }
+}
+
+function excluirSelecionados(module) {
+  const selecionados = [...bulkSelected[module]];
+  if (!selecionados.length) return;
+  if (!confirm(`Excluir ${selecionados.length} registro(s) selecionado(s)? Esta ação não pode ser desfeita.`)) return;
+
+  const selSet = bulkSelected[module];
+  state[module] = state[module].filter(r => !selSet.has(r));
+
+  if (module === 'lancamentos') invalidateLancIndex();
+  else if (module === 'sap')    invalidateSapIndex();
+  else if (module === 'saidas') invalidateSaidasIndex();
+  else invalidateSearchIndex(module);
+
+  // Mesma regra de removerRegistro (decisão de 27/07): só sincroniza exclusão
+  // pra registros manuais OU editados — importados nunca-editados nunca
+  // subiram pro Supabase, então não há o que excluir lá. Um único DELETE
+  // ... IN (...) por módulo em vez de N chamadas individuais — o nome do
+  // módulo já é o nome da tabela (ver _entradasSyncDelete etc., import.js).
+  if (window.supabaseClient) {
+    const idsParaSync = selecionados.filter(r => r.id && (!r.importId || r.editado)).map(r => r.id);
+    if (idsParaSync.length) {
+      window.supabaseClient.from(module).delete().in('id', idsParaSync)
+        .then(({ error }) => { if (error) console.warn(`[Supabase] Falha ao excluir em massa (${module}):`, error); });
+    }
+  }
+
+  bulkSelected[module].clear();
+  persist();
+  renderModule(module);
+  updateDashboard();
+  toast(`${selecionados.length} registro(s) excluído(s) com sucesso`);
+
   if (typeof _cbUploadModulo === 'function' && typeof CLOUD_BACKUP_MODULOS !== 'undefined' && CLOUD_BACKUP_MODULOS.includes(module)) {
     _cbUploadModulo(module, { permitirReducao: true });
   }
@@ -6463,14 +6584,14 @@ async function restoreAndRender() {
     _lbarSet(75);
     await nextFrame();
 
-    // ── STEP 6.5: Pré-carregar Dashboard Analítico com o filtro "Mês atual"
+    // ── STEP 6.5: Pré-carregar Dashboard Analítico com o filtro "Até hoje"
     // ────────────────────────────────────────────────────────────────────
     // Roda a mesma lógica de cálculo usada pelo botão "Analisar" (Dashboard
     // Analítico), mas de forma síncrona e "silenciosa" (silent=true), sem
     // abrir um novo overlay — o overlay de boot já está aberto e cobre esta
-    // etapa. Assim, ao navegar para o Dashboard Analítico logo após a carga
-    // inicial, os dados do mês atual já estão prontos, sem precisar clicar
-    // em Analisar.
+    // etapa. Assim, como o Analítico é a home do sistema (navigate() logo
+    // abaixo), os dados de 1º do mês até hoje já estão prontos assim que a
+    // tela aparece, sem precisar clicar em Analisar.
     //
     // Decisão (Hugo, jul/2026): o Dashboard Gerencial NÃO é mais pré-
     // calculado aqui — seu motor (_renderDashboardConteudo) permanece
@@ -6478,20 +6599,15 @@ async function restoreAndRender() {
     // demanda. Isso reduz o tempo de boot, ao custo de exigir um clique
     // extra ao abrir o Gerencial pela primeira vez na sessão.
     _lstepSet('dash', 'running');
-    updateLoadingOverlay('Pré-carregando Dashboard Analítico do mês atual...', 'Inicializando o sistema');
+    updateLoadingOverlay('Pré-carregando Dashboard Analítico...', 'Inicializando o sistema');
     await yieldToUI();
     try {
-      // Define o período "Mês atual" nos dois seletores de calendário
-      // (mesma função usada pelo chip "Mês atual" da interface) — isso
-      // também deixa o chip já marcado como ativo quando o usuário abrir
-      // qualquer um dos dois dashboards. Operação leve (só preenche os
-      // campos de data), mantida para os dois mesmo com a pré-carga
-      // restrita ao Analítico — evita que o Gerencial abra sem período
-      // selecionado.
-      if (typeof calQuickMesAtual === 'function') {
-        calQuickMesAtual('an');
-        calQuickMesAtual('dg');
-      }
+      // Define o período "Até hoje" (1º do mês atual → hoje) no Analítico —
+      // mesma função usada pelo chip "Até hoje" da interface, que já marca
+      // o chip como ativo. O Gerencial recebe "Mês atual" (mês cheio) só
+      // pra não abrir sem período selecionado, mesmo não sendo pré-calculado.
+      if (typeof calQuickHoje === 'function') calQuickHoje('an');
+      if (typeof calQuickMesAtual === 'function') calQuickMesAtual('dg');
 
       // Dashboard Analítico — reaproveita o mesmo motor de cálculo do botão
       // "Analisar" (_rodarAnaliticoCore), chamando direto (sem passar pelo
@@ -6508,7 +6624,7 @@ async function restoreAndRender() {
     } catch (e) {
       // Falha na pré-carga não deve interromper o boot — o Dashboard
       // Analítico continua disponível manualmente via botão Analisar.
-      console.warn('[Boot] Pré-carga do Dashboard Analítico (mês atual):', e);
+      console.warn('[Boot] Pré-carga do Dashboard Analítico (até hoje):', e);
     }
     // Restaura o progresso do overlay de boot (a pré-carga acima mexe
     // internamente na barra de progresso para os próprios steps dela,
@@ -6528,8 +6644,10 @@ async function restoreAndRender() {
     renderFiliais();
     renderMateriais();
     await yieldToUI();
-    const activePage = document.querySelector('.page.active')?.id?.replace('page-', '') || 'importar';
-    renderPage(activePage);
+    // Home oficial do sistema: garante página + item do menu sincronizados
+    // via navigate() (única função que mantém esse par consistente), em vez
+    // de confiar num "page active" fixo no HTML sem aba correspondente.
+    navigate('analitico');
     await yieldToUI();
     initResizable();
     if (!Array.isArray(state.notifications)) state.notifications = [];

@@ -3875,6 +3875,19 @@ img { max-width: 100%; }
 .tab-list::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 4px; }
 
 /* ── Group labels ── */
+.tab-group-label {
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text3);
+  white-space: nowrap;
+  overflow: hidden;
+  padding: 12px 8px 4px 12px;
+}
+.tab-group-label:first-child { padding-top: 2px; }
+.sidebar:not(:hover) .tab-group-label { opacity: 0; }
 
 /* ── Tab item ── */
 .tab-item {
