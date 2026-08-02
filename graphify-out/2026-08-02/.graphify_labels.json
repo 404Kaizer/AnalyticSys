@@ -62,7 +62,7 @@
   "60": "relatorio-dais.test.mjs",
   "61": "openModal",
   "62": "openTool",
-  "63": "processImportedRows",
+  "63": "_criarRegistroSaida",
   "64": "cloud-backup.test.mjs",
   "65": "dai-anexos-storage.test.mjs",
   "66": "dai-sync-admin.test.mjs",
@@ -100,7 +100,5 @@
   "98": "calendar-oc.test.mjs",
   "99": "normalizeSearchKey",
   "100": "updateImportPrereqUI",
-  "101": "_supaDeleteOwned",
-  "102": "_producaoSyncUpsert",
-  "103": "_criarRegistroSAP"
+  "101": "_supaDeleteOwned"
 }

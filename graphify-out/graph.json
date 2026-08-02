@@ -5715,10 +5715,21 @@
       "norm_label": "_daiadicionaranexosposgeracao()"
     },
     {
+      "label": "_daiActionBarCss()",
+      "file_type": "code",
+      "source_file": "js/dai.js",
+      "source_location": "L1117",
+      "_origin": "ast",
+      "id": "js_dai_daiactionbarcss",
+      "community": 9,
+      "community_name": "dai.js",
+      "norm_label": "_daiactionbarcss()"
+    },
+    {
       "label": "_daiBuildDocumentoHtml()",
       "file_type": "code",
       "source_file": "js/dai.js",
-      "source_location": "L1114",
+      "source_location": "L1129",
       "_origin": "ast",
       "id": "js_dai_daibuilddocumentohtml",
       "community": 9,
@@ -5729,7 +5740,7 @@
       "label": "gerarTermoResponsabilidade()",
       "file_type": "code",
       "source_file": "js/dai.js",
-      "source_location": "L1282",
+      "source_location": "L1290",
       "_origin": "ast",
       "id": "js_dai_gerartermoresponsabilidade",
       "community": 9,
@@ -5740,7 +5751,7 @@
       "label": "_daiBuildTermoHtml()",
       "file_type": "code",
       "source_file": "js/dai.js",
-      "source_location": "L1289",
+      "source_location": "L1297",
       "_origin": "ast",
       "id": "js_dai_daibuildtermohtml",
       "community": 9,
@@ -5751,7 +5762,7 @@
       "label": "baixarZipDai()",
       "file_type": "code",
       "source_file": "js/dai.js",
-      "source_location": "L1437",
+      "source_location": "L1438",
       "_origin": "ast",
       "id": "js_dai_baixarzipdai",
       "community": 9,
@@ -5996,8 +6007,8 @@
       "source_location": "L511",
       "_origin": "ast",
       "id": "js_dashboard_dgvgbuildpares",
-      "community": 26,
-      "community_name": "renderDgConsumo",
+      "community": 21,
+      "community_name": "renderDgVisaoGeralPdf",
       "norm_label": "_dgvgbuildpares()"
     },
     {
@@ -6194,8 +6205,8 @@
       "source_location": "L881",
       "_origin": "ast",
       "id": "js_dashboard_dgvgdrawdonutsvg",
-      "community": 31,
-      "community_name": "macro.js",
+      "community": 21,
+      "community_name": "renderDgVisaoGeralPdf",
       "norm_label": "_dgvgdrawdonutsvg()"
     },
     {
@@ -6205,8 +6216,8 @@
       "source_location": "L1003",
       "_origin": "ast",
       "id": "js_dashboard_dgvghealthtiphtml",
-      "community": 47,
-      "community_name": "varSymbol",
+      "community": 21,
+      "community_name": "renderDgVisaoGeralPdf",
       "norm_label": "_dgvghealthtiphtml()"
     },
     {
@@ -6238,8 +6249,8 @@
       "source_location": "L1051",
       "_origin": "ast",
       "id": "js_dashboard_dgvgrenderhealthdonutsvg",
-      "community": 47,
-      "community_name": "varSymbol",
+      "community": 21,
+      "community_name": "renderDgVisaoGeralPdf",
       "norm_label": "_dgvgrenderhealthdonutsvg()"
     },
     {
@@ -7371,8 +7382,8 @@
       "source_location": "L4620",
       "_origin": "ast",
       "id": "js_dashboard_pagefrommodulo",
-      "community": 4,
-      "community_name": "dashboard.js",
+      "community": 63,
+      "community_name": "processImportedRows",
       "norm_label": "pagefrommodulo()"
     },
     {
@@ -7393,8 +7404,8 @@
       "source_location": "L4647",
       "_origin": "ast",
       "id": "js_dashboard_removerregistro",
-      "community": 0,
-      "community_name": "admin.js",
+      "community": 22,
+      "community_name": "renderModule",
       "norm_label": "removerregistro()"
     },
     {
@@ -7459,8 +7470,8 @@
       "source_location": "L4764",
       "_origin": "ast",
       "id": "js_dashboard_excluirselecionados",
-      "community": 22,
-      "community_name": "renderModule",
+      "community": 0,
+      "community_name": "admin.js",
       "norm_label": "excluirselecionados()"
     },
     {
@@ -7547,8 +7558,8 @@
       "source_location": "L4832",
       "_origin": "ast",
       "id": "js_dashboard_statearrays",
-      "community": 4,
-      "community_name": "dashboard.js",
+      "community": 63,
+      "community_name": "processImportedRows",
       "norm_label": "_statearrays()"
     },
     {
@@ -7558,8 +7569,8 @@
       "source_location": "L4837",
       "_origin": "ast",
       "id": "js_dashboard_detectconflicts",
-      "community": 4,
-      "community_name": "dashboard.js",
+      "community": 63,
+      "community_name": "processImportedRows",
       "norm_label": "_detectconflicts()"
     },
     {
@@ -7569,8 +7580,8 @@
       "source_location": "L4880",
       "_origin": "ast",
       "id": "js_dashboard_resolveconflicts",
-      "community": 4,
-      "community_name": "dashboard.js",
+      "community": 63,
+      "community_name": "processImportedRows",
       "norm_label": "_resolveconflicts()"
     },
     {
@@ -7580,8 +7591,8 @@
       "source_location": "L4935",
       "_origin": "ast",
       "id": "js_dashboard_showconflictmodal",
-      "community": 4,
-      "community_name": "dashboard.js",
+      "community": 63,
+      "community_name": "processImportedRows",
       "norm_label": "_showconflictmodal()"
     },
     {
@@ -7613,8 +7624,8 @@
       "source_location": "L5005",
       "_origin": "ast",
       "id": "js_dashboard_conflictconfirm",
-      "community": 4,
-      "community_name": "dashboard.js",
+      "community": 63,
+      "community_name": "processImportedRows",
       "norm_label": "conflictconfirm()"
     },
     {
@@ -7624,8 +7635,8 @@
       "source_location": "L5026",
       "_origin": "ast",
       "id": "js_dashboard_mergewithconflictcheck",
-      "community": 4,
-      "community_name": "dashboard.js",
+      "community": 63,
+      "community_name": "processImportedRows",
       "norm_label": "_mergewithconflictcheck()"
     },
     {
@@ -7635,8 +7646,8 @@
       "source_location": "L5086",
       "_origin": "ast",
       "id": "js_dashboard_fpentrada",
-      "community": 4,
-      "community_name": "dashboard.js",
+      "community": 63,
+      "community_name": "processImportedRows",
       "norm_label": "_fpentrada()"
     },
     {
@@ -7646,8 +7657,8 @@
       "source_location": "L5096",
       "_origin": "ast",
       "id": "js_dashboard_fpsaida",
-      "community": 4,
-      "community_name": "dashboard.js",
+      "community": 63,
+      "community_name": "processImportedRows",
       "norm_label": "_fpsaida()"
     },
     {
@@ -7657,8 +7668,8 @@
       "source_location": "L5106",
       "_origin": "ast",
       "id": "js_dashboard_fplancamento",
-      "community": 4,
-      "community_name": "dashboard.js",
+      "community": 63,
+      "community_name": "processImportedRows",
       "norm_label": "_fplancamento()"
     },
     {
@@ -7668,8 +7679,8 @@
       "source_location": "L5115",
       "_origin": "ast",
       "id": "js_dashboard_fpsap",
-      "community": 4,
-      "community_name": "dashboard.js",
+      "community": 63,
+      "community_name": "processImportedRows",
       "norm_label": "_fpsap()"
     },
     {
@@ -7679,8 +7690,8 @@
       "source_location": "L5126",
       "_origin": "ast",
       "id": "js_dashboard_fpproducao",
-      "community": 4,
-      "community_name": "dashboard.js",
+      "community": 63,
+      "community_name": "processImportedRows",
       "norm_label": "_fpproducao()"
     },
     {
@@ -7690,8 +7701,8 @@
       "source_location": "L5155",
       "_origin": "ast",
       "id": "js_dashboard_mergededup",
-      "community": 4,
-      "community_name": "dashboard.js",
+      "community": 63,
+      "community_name": "processImportedRows",
       "norm_label": "_mergededup()"
     },
     {
@@ -7712,8 +7723,8 @@
       "source_location": "L5230",
       "_origin": "ast",
       "id": "js_dashboard_processimportedrows",
-      "community": 4,
-      "community_name": "dashboard.js",
+      "community": 63,
+      "community_name": "processImportedRows",
       "norm_label": "processimportedrows()"
     },
     {
@@ -8119,8 +8130,8 @@
       "source_location": "L6769",
       "_origin": "ast",
       "id": "js_dashboard_normmov",
-      "community": 21,
-      "community_name": "renderDgVisaoGeralPdf",
+      "community": 36,
+      "community_name": "parseDate",
       "norm_label": "normmov()"
     },
     {
@@ -8130,8 +8141,8 @@
       "source_location": "L6773",
       "_origin": "ast",
       "id": "js_dashboard_codigos_entrada",
-      "community": 27,
-      "community_name": "escapeHtml",
+      "community": 21,
+      "community_name": "renderDgVisaoGeralPdf",
       "norm_label": "codigos_entrada"
     },
     {
@@ -9736,8 +9747,8 @@
       "source_location": "L15",
       "_origin": "ast",
       "id": "js_import_cascadedeletecloudbyimportid",
-      "community": 93,
-      "community_name": "excluirImportacao",
+      "community": 88,
+      "community_name": "import.js",
       "norm_label": "_cascadedeletecloudbyimportid()"
     },
     {
@@ -9758,8 +9769,8 @@
       "source_location": "L57",
       "_origin": "ast",
       "id": "js_import_cbreforcarbackupmodulos",
-      "community": 93,
-      "community_name": "excluirImportacao",
+      "community": 88,
+      "community_name": "import.js",
       "norm_label": "_cbreforcarbackupmodulos()"
     },
     {
@@ -9769,8 +9780,8 @@
       "source_location": "L64",
       "_origin": "ast",
       "id": "js_import_cascaderestorecloudbyimportid",
-      "community": 17,
-      "community_name": "_cascadeRestoreCloudByImportId",
+      "community": 88,
+      "community_name": "import.js",
       "norm_label": "_cascaderestorecloudbyimportid()"
     },
     {
@@ -9780,8 +9791,8 @@
       "source_location": "L80",
       "_origin": "ast",
       "id": "js_import_excluirimportacao",
-      "community": 93,
-      "community_name": "excluirImportacao",
+      "community": 88,
+      "community_name": "import.js",
       "norm_label": "excluirimportacao()"
     },
     {
@@ -9835,8 +9846,8 @@
       "source_location": "L304",
       "_origin": "ast",
       "id": "js_import_fmtdateinput",
-      "community": 17,
-      "community_name": "_cascadeRestoreCloudByImportId",
+      "community": 88,
+      "community_name": "import.js",
       "norm_label": "_fmtdateinput()"
     },
     {
@@ -9846,8 +9857,8 @@
       "source_location": "L314",
       "_origin": "ast",
       "id": "js_import_criarregistroentrada",
-      "community": 17,
-      "community_name": "_cascadeRestoreCloudByImportId",
+      "community": 88,
+      "community_name": "import.js",
       "norm_label": "_criarregistroentrada()"
     },
     {
@@ -9857,8 +9868,8 @@
       "source_location": "L364",
       "_origin": "ast",
       "id": "js_import_salvarentrada",
-      "community": 17,
-      "community_name": "_cascadeRestoreCloudByImportId",
+      "community": 88,
+      "community_name": "import.js",
       "norm_label": "salvarentrada()"
     },
     {
@@ -9868,8 +9879,8 @@
       "source_location": "L387",
       "_origin": "ast",
       "id": "js_import_criarregistrosaida",
-      "community": 63,
-      "community_name": "_criarRegistroSaida",
+      "community": 88,
+      "community_name": "import.js",
       "norm_label": "_criarregistrosaida()"
     },
     {
@@ -9879,8 +9890,8 @@
       "source_location": "L434",
       "_origin": "ast",
       "id": "js_import_salvarsaida",
-      "community": 63,
-      "community_name": "_criarRegistroSaida",
+      "community": 88,
+      "community_name": "import.js",
       "norm_label": "salvarsaida()"
     },
     {
@@ -9945,8 +9956,8 @@
       "source_location": "L600",
       "_origin": "ast",
       "id": "js_import_lancsyncupsertbatch",
-      "community": 17,
-      "community_name": "_cascadeRestoreCloudByImportId",
+      "community": 88,
+      "community_name": "import.js",
       "norm_label": "_lancsyncupsertbatch()"
     },
     {
@@ -9978,8 +9989,8 @@
       "source_location": "L652",
       "_origin": "ast",
       "id": "js_import_importstodbrow",
-      "community": 93,
-      "community_name": "excluirImportacao",
+      "community": 88,
+      "community_name": "import.js",
       "norm_label": "_importstodbrow()"
     },
     {
@@ -10000,8 +10011,8 @@
       "source_location": "L680",
       "_origin": "ast",
       "id": "js_import_importssyncupsert",
-      "community": 93,
-      "community_name": "excluirImportacao",
+      "community": 88,
+      "community_name": "import.js",
       "norm_label": "_importssyncupsert()"
     },
     {
@@ -10011,8 +10022,8 @@
       "source_location": "L686",
       "_origin": "ast",
       "id": "js_import_importssyncdelete",
-      "community": 93,
-      "community_name": "excluirImportacao",
+      "community": 88,
+      "community_name": "import.js",
       "norm_label": "_importssyncdelete()"
     },
     {
@@ -10099,8 +10110,8 @@
       "source_location": "L813",
       "_origin": "ast",
       "id": "js_import_entradastodbrow",
-      "community": 17,
-      "community_name": "_cascadeRestoreCloudByImportId",
+      "community": 88,
+      "community_name": "import.js",
       "norm_label": "_entradastodbrow()"
     },
     {
@@ -10121,8 +10132,8 @@
       "source_location": "L864",
       "_origin": "ast",
       "id": "js_import_entradassyncupsert",
-      "community": 17,
-      "community_name": "_cascadeRestoreCloudByImportId",
+      "community": 88,
+      "community_name": "import.js",
       "norm_label": "_entradassyncupsert()"
     },
     {
@@ -10132,8 +10143,8 @@
       "source_location": "L871",
       "_origin": "ast",
       "id": "js_import_entradassyncupsertbatch",
-      "community": 17,
-      "community_name": "_cascadeRestoreCloudByImportId",
+      "community": 88,
+      "community_name": "import.js",
       "norm_label": "_entradassyncupsertbatch()"
     },
     {
@@ -10165,8 +10176,8 @@
       "source_location": "L906",
       "_origin": "ast",
       "id": "js_import_saidastodbrow",
-      "community": 63,
-      "community_name": "_criarRegistroSaida",
+      "community": 88,
+      "community_name": "import.js",
       "norm_label": "_saidastodbrow()"
     },
     {
@@ -10187,8 +10198,8 @@
       "source_location": "L952",
       "_origin": "ast",
       "id": "js_import_saidassyncupsert",
-      "community": 63,
-      "community_name": "_criarRegistroSaida",
+      "community": 88,
+      "community_name": "import.js",
       "norm_label": "_saidassyncupsert()"
     },
     {
@@ -10198,8 +10209,8 @@
       "source_location": "L959",
       "_origin": "ast",
       "id": "js_import_saidassyncupsertbatch",
-      "community": 63,
-      "community_name": "_criarRegistroSaida",
+      "community": 88,
+      "community_name": "import.js",
       "norm_label": "_saidassyncupsertbatch()"
     },
     {
@@ -10231,8 +10242,8 @@
       "source_location": "L998",
       "_origin": "ast",
       "id": "js_import_saptodbrow",
-      "community": 17,
-      "community_name": "_cascadeRestoreCloudByImportId",
+      "community": 88,
+      "community_name": "import.js",
       "norm_label": "_saptodbrow()"
     },
     {
@@ -10253,8 +10264,8 @@
       "source_location": "L1048",
       "_origin": "ast",
       "id": "js_import_sapsyncupsert",
-      "community": 17,
-      "community_name": "_cascadeRestoreCloudByImportId",
+      "community": 88,
+      "community_name": "import.js",
       "norm_label": "_sapsyncupsert()"
     },
     {
@@ -10264,8 +10275,8 @@
       "source_location": "L1055",
       "_origin": "ast",
       "id": "js_import_sapsyncupsertbatch",
-      "community": 17,
-      "community_name": "_cascadeRestoreCloudByImportId",
+      "community": 88,
+      "community_name": "import.js",
       "norm_label": "_sapsyncupsertbatch()"
     },
     {
@@ -10297,8 +10308,8 @@
       "source_location": "L1084",
       "_origin": "ast",
       "id": "js_import_criarregistrosap",
-      "community": 17,
-      "community_name": "_cascadeRestoreCloudByImportId",
+      "community": 88,
+      "community_name": "import.js",
       "norm_label": "_criarregistrosap()"
     },
     {
@@ -10308,8 +10319,8 @@
       "source_location": "L1124",
       "_origin": "ast",
       "id": "js_import_salvarsap",
-      "community": 17,
-      "community_name": "_cascadeRestoreCloudByImportId",
+      "community": 88,
+      "community_name": "import.js",
       "norm_label": "salvarsap()"
     },
     {
@@ -14609,8 +14620,8 @@
       "source_location": "L65",
       "_origin": "ast",
       "id": "js_persist_reconcilependingdeletes",
-      "community": 93,
-      "community_name": "excluirImportacao",
+      "community": 23,
+      "community_name": "persist.js",
       "norm_label": "reconcilependingdeletes()"
     },
     {
@@ -16377,7 +16388,7 @@
       "label": "_setBtnEnviarLoading()",
       "file_type": "code",
       "source_file": "js/solicitacao.js",
-      "source_location": "L682",
+      "source_location": "L684",
       "_origin": "ast",
       "id": "js_solicitacao_setbtnenviarloading",
       "community": 34,
@@ -16388,7 +16399,7 @@
       "label": "enviarSolicitacao()",
       "file_type": "code",
       "source_file": "js/solicitacao.js",
-      "source_location": "L688",
+      "source_location": "L690",
       "_origin": "ast",
       "id": "js_solicitacao_enviarsolicitacao",
       "community": 34,
@@ -16399,7 +16410,7 @@
       "label": "_mostrarSucesso()",
       "file_type": "code",
       "source_file": "js/solicitacao.js",
-      "source_location": "L752",
+      "source_location": "L754",
       "_origin": "ast",
       "id": "js_solicitacao_mostrarsucesso",
       "community": 34,
@@ -16410,7 +16421,7 @@
       "label": "boot()",
       "file_type": "code",
       "source_file": "js/solicitacao.js",
-      "source_location": "L769",
+      "source_location": "L771",
       "_origin": "ast",
       "id": "js_solicitacao_boot",
       "community": 34,
@@ -17712,7 +17723,7 @@
       "_origin": "ast",
       "id": "js_ui_restaurarbackup",
       "community": 50,
-      "community_name": "lrcDelete",
+      "community_name": "_restaurarModulosConfirmar",
       "norm_label": "restaurarbackup()"
     },
     {
@@ -17767,7 +17778,7 @@
       "_origin": "ast",
       "id": "js_ui_invalidatesapdupcache",
       "community": 50,
-      "community_name": "lrcDelete",
+      "community_name": "_restaurarModulosConfirmar",
       "norm_label": "_invalidatesapdupcache()"
     },
     {
@@ -17799,8 +17810,8 @@
       "source_location": "L437",
       "_origin": "ast",
       "id": "js_ui_invalidatelancdupcache",
-      "community": 50,
-      "community_name": "lrcDelete",
+      "community": 27,
+      "community_name": "escapeHtml",
       "norm_label": "_invalidatelancdupcache()"
     },
     {
@@ -18427,7 +18438,7 @@
       "_origin": "ast",
       "id": "js_ui_invalidatetransferpaircache",
       "community": 50,
-      "community_name": "lrcDelete",
+      "community_name": "_restaurarModulosConfirmar",
       "norm_label": "_invalidatetransferpaircache()"
     },
     {
@@ -18460,7 +18471,7 @@
       "_origin": "ast",
       "id": "js_ui_invalidatemattransferpaircache",
       "community": 50,
-      "community_name": "lrcDelete",
+      "community_name": "_restaurarModulosConfirmar",
       "norm_label": "_invalidatemattransferpaircache()"
     },
     {
@@ -18580,8 +18591,8 @@
       "source_location": "L1754",
       "_origin": "ast",
       "id": "js_ui_calcpendentesintegracao",
-      "community": 27,
-      "community_name": "escapeHtml",
+      "community": 3,
+      "community_name": "ui.js",
       "norm_label": "calcpendentesintegracao()"
     },
     {
@@ -18591,8 +18602,8 @@
       "source_location": "L1882",
       "_origin": "ast",
       "id": "js_ui_buildpendintegsection",
-      "community": 27,
-      "community_name": "escapeHtml",
+      "community": 3,
+      "community_name": "ui.js",
       "norm_label": "buildpendintegsection()"
     },
     {
@@ -18602,8 +18613,8 @@
       "source_location": "L1962",
       "_origin": "ast",
       "id": "js_ui_pimnormnf",
-      "community": 33,
-      "community_name": "_pimRender",
+      "community": 3,
+      "community_name": "ui.js",
       "norm_label": "_pimnormnf()"
     },
     {
@@ -18613,8 +18624,8 @@
       "source_location": "L1967",
       "_origin": "ast",
       "id": "js_ui_pimnormos",
-      "community": 33,
-      "community_name": "_pimRender",
+      "community": 3,
+      "community_name": "ui.js",
       "norm_label": "_pimnormos()"
     },
     {
@@ -18624,8 +18635,8 @@
       "source_location": "L1968",
       "_origin": "ast",
       "id": "js_ui_pimnormsaprefos",
-      "community": 33,
-      "community_name": "_pimRender",
+      "community": 3,
+      "community_name": "ui.js",
       "norm_label": "_pimnormsaprefos()"
     },
     {
@@ -18635,8 +18646,8 @@
       "source_location": "L1979",
       "_origin": "ast",
       "id": "js_ui_pimgetsapcache",
-      "community": 33,
-      "community_name": "_pimRender",
+      "community": 3,
+      "community_name": "ui.js",
       "norm_label": "_pimgetsapcache()"
     },
     {
@@ -18789,8 +18800,8 @@
       "source_location": "L2318",
       "_origin": "ast",
       "id": "js_ui_openpendintegglobalmodal",
-      "community": 33,
-      "community_name": "_pimRender",
+      "community": 3,
+      "community_name": "ui.js",
       "norm_label": "openpendintegglobalmodal()"
     },
     {
@@ -18822,8 +18833,8 @@
       "source_location": "L2495",
       "_origin": "ast",
       "id": "js_ui_lrcfingerprint",
-      "community": 50,
-      "community_name": "lrcDelete",
+      "community": 27,
+      "community_name": "escapeHtml",
       "norm_label": "_lrcfingerprint()"
     },
     {
@@ -18833,8 +18844,8 @@
       "source_location": "L2499",
       "_origin": "ast",
       "id": "js_ui_lrcrefreshdetailmodal",
-      "community": 50,
-      "community_name": "lrcDelete",
+      "community": 27,
+      "community_name": "escapeHtml",
       "norm_label": "_lrcrefreshdetailmodal()"
     },
     {
@@ -18844,8 +18855,8 @@
       "source_location": "L2513",
       "_origin": "ast",
       "id": "js_ui_lrcrendercards",
-      "community": 50,
-      "community_name": "lrcDelete",
+      "community": 27,
+      "community_name": "escapeHtml",
       "norm_label": "_lrcrendercards()"
     },
     {
@@ -18855,8 +18866,8 @@
       "source_location": "L2562",
       "_origin": "ast",
       "id": "js_ui_openlancconflictmodal",
-      "community": 50,
-      "community_name": "lrcDelete",
+      "community": 27,
+      "community_name": "escapeHtml",
       "norm_label": "openlancconflictmodal()"
     },
     {
@@ -18866,8 +18877,8 @@
       "source_location": "L2581",
       "_origin": "ast",
       "id": "js_ui_closelancconflictmodal",
-      "community": 50,
-      "community_name": "lrcDelete",
+      "community": 27,
+      "community_name": "escapeHtml",
       "norm_label": "closelancconflictmodal()"
     },
     {
@@ -18877,8 +18888,8 @@
       "source_location": "L2590",
       "_origin": "ast",
       "id": "js_ui_lrctoggle",
-      "community": 50,
-      "community_name": "lrcDelete",
+      "community": 27,
+      "community_name": "escapeHtml",
       "norm_label": "lrctoggle()"
     },
     {
@@ -18888,8 +18899,8 @@
       "source_location": "L2596",
       "_origin": "ast",
       "id": "js_ui_lrcselect",
-      "community": 50,
-      "community_name": "lrcDelete",
+      "community": 27,
+      "community_name": "escapeHtml",
       "norm_label": "lrcselect()"
     },
     {
@@ -18899,8 +18910,8 @@
       "source_location": "L2598",
       "_origin": "ast",
       "id": "js_ui_lrcconfirm",
-      "community": 50,
-      "community_name": "lrcDelete",
+      "community": 27,
+      "community_name": "escapeHtml",
       "norm_label": "lrcconfirm()"
     },
     {
@@ -18910,8 +18921,8 @@
       "source_location": "L2635",
       "_origin": "ast",
       "id": "js_ui_lrcdelete",
-      "community": 50,
-      "community_name": "lrcDelete",
+      "community": 27,
+      "community_name": "escapeHtml",
       "norm_label": "lrcdelete()"
     },
     {
@@ -19075,8 +19086,8 @@
       "source_location": "L3231",
       "_origin": "ast",
       "id": "js_ui_buildlancindex",
-      "community": 3,
-      "community_name": "ui.js",
+      "community": 17,
+      "community_name": "buildHealthPanel",
       "norm_label": "_buildlancindex()"
     },
     {
@@ -19086,8 +19097,8 @@
       "source_location": "L3264",
       "_origin": "ast",
       "id": "js_ui_buildsapindex",
-      "community": 33,
-      "community_name": "_pimRender",
+      "community": 3,
+      "community_name": "ui.js",
       "norm_label": "_buildsapindex()"
     },
     {
@@ -19097,8 +19108,8 @@
       "source_location": "L3282",
       "_origin": "ast",
       "id": "js_ui_invalidatelancindex",
-      "community": 50,
-      "community_name": "lrcDelete",
+      "community": 27,
+      "community_name": "escapeHtml",
       "norm_label": "invalidatelancindex()"
     },
     {
@@ -19109,7 +19120,7 @@
       "_origin": "ast",
       "id": "js_ui_invalidatesapindex",
       "community": 50,
-      "community_name": "lrcDelete",
+      "community_name": "_restaurarModulosConfirmar",
       "norm_label": "invalidatesapindex()"
     },
     {
@@ -19130,8 +19141,8 @@
       "source_location": "L3306",
       "_origin": "ast",
       "id": "js_ui_buildsaidasindex",
-      "community": 27,
-      "community_name": "escapeHtml",
+      "community": 3,
+      "community_name": "ui.js",
       "norm_label": "_buildsaidasindex()"
     },
     {
@@ -19142,7 +19153,7 @@
       "_origin": "ast",
       "id": "js_ui_invalidatesaidasindex",
       "community": 50,
-      "community_name": "lrcDelete",
+      "community_name": "_restaurarModulosConfirmar",
       "norm_label": "invalidatesaidasindex()"
     },
     {
@@ -19152,8 +19163,8 @@
       "source_location": "L3324",
       "_origin": "ast",
       "id": "js_ui_ensuresaidasindex",
-      "community": 27,
-      "community_name": "escapeHtml",
+      "community": 3,
+      "community_name": "ui.js",
       "norm_label": "ensuresaidasindex()"
     },
     {
@@ -19163,8 +19174,8 @@
       "source_location": "L3328",
       "_origin": "ast",
       "id": "js_ui_getlancindex",
-      "community": 3,
-      "community_name": "ui.js",
+      "community": 17,
+      "community_name": "buildHealthPanel",
       "norm_label": "getlancindex()"
     },
     {
@@ -19174,8 +19185,8 @@
       "source_location": "L3333",
       "_origin": "ast",
       "id": "js_ui_getsapindex",
-      "community": 33,
-      "community_name": "_pimRender",
+      "community": 3,
+      "community_name": "ui.js",
       "norm_label": "getsapindex()"
     },
     {
@@ -19185,8 +19196,8 @@
       "source_location": "L3342",
       "_origin": "ast",
       "id": "js_ui_getlancsbycentralinperiod",
-      "community": 3,
-      "community_name": "ui.js",
+      "community": 17,
+      "community_name": "buildHealthPanel",
       "norm_label": "getlancsbycentralinperiod()"
     },
     {
@@ -19196,8 +19207,8 @@
       "source_location": "L3356",
       "_origin": "ast",
       "id": "js_ui_getsapbycentralinperiod",
-      "community": 33,
-      "community_name": "_pimRender",
+      "community": 3,
+      "community_name": "ui.js",
       "norm_label": "getsapbycentralinperiod()"
     },
     {
@@ -19251,8 +19262,8 @@
       "source_location": "L3456",
       "_origin": "ast",
       "id": "js_ui_invalidatefechoverridecache",
-      "community": 20,
-      "community_name": "_fechMgrRender",
+      "community": 50,
+      "community_name": "_restaurarModulosConfirmar",
       "norm_label": "invalidatefechoverridecache()"
     },
     {
@@ -19471,8 +19482,8 @@
       "source_location": "L3919",
       "_origin": "ast",
       "id": "js_ui_setsapfechoverrideemlote",
-      "community": 20,
-      "community_name": "_fechMgrRender",
+      "community": 50,
+      "community_name": "_restaurarModulosConfirmar",
       "norm_label": "setsapfechoverrideemlote()"
     },
     {
@@ -19482,8 +19493,8 @@
       "source_location": "L3941",
       "_origin": "ast",
       "id": "js_ui_syncsapfechamentooverridesfromsupabase",
-      "community": 20,
-      "community_name": "_fechMgrRender",
+      "community": 50,
+      "community_name": "_restaurarModulosConfirmar",
       "norm_label": "syncsapfechamentooverridesfromsupabase()"
     },
     {
@@ -19702,8 +19713,8 @@
       "source_location": "L4355",
       "_origin": "ast",
       "id": "js_ui_fechmgraplicarlote",
-      "community": 20,
-      "community_name": "_fechMgrRender",
+      "community": 50,
+      "community_name": "_restaurarModulosConfirmar",
       "norm_label": "_fechmgraplicarlote()"
     },
     {
@@ -19746,8 +19757,8 @@
       "source_location": "L4427",
       "_origin": "ast",
       "id": "js_ui_fecharfechimportmodal",
-      "community": 20,
-      "community_name": "_fechMgrRender",
+      "community": 50,
+      "community_name": "_restaurarModulosConfirmar",
       "norm_label": "fecharfechimportmodal()"
     },
     {
@@ -19757,8 +19768,8 @@
       "source_location": "L4439",
       "_origin": "ast",
       "id": "js_ui_fechimportprevisualizar",
-      "community": 37,
-      "community_name": "getFilteredData",
+      "community": 45,
+      "community_name": "_fechMgrGetTodosCandidatos",
       "norm_label": "_fechimportprevisualizar()"
     },
     {
@@ -19768,8 +19779,8 @@
       "source_location": "L4508",
       "_origin": "ast",
       "id": "js_ui_fechimportaplicar",
-      "community": 20,
-      "community_name": "_fechMgrRender",
+      "community": 50,
+      "community_name": "_restaurarModulosConfirmar",
       "norm_label": "_fechimportaplicar()"
     },
     {
@@ -19889,8 +19900,8 @@
       "source_location": "L4727",
       "_origin": "ast",
       "id": "js_ui_detectcatkey",
-      "community": 3,
-      "community_name": "ui.js",
+      "community": 17,
+      "community_name": "buildHealthPanel",
       "norm_label": "detectcatkey()"
     },
     {
@@ -19900,8 +19911,8 @@
       "source_location": "L4737",
       "_origin": "ast",
       "id": "js_ui_detectcatfrommat",
-      "community": 3,
-      "community_name": "ui.js",
+      "community": 17,
+      "community_name": "buildHealthPanel",
       "norm_label": "detectcatfrommat()"
     },
     {
@@ -19922,8 +19933,8 @@
       "source_location": "L4762",
       "_origin": "ast",
       "id": "js_ui_gethealththresholds",
-      "community": 3,
-      "community_name": "ui.js",
+      "community": 17,
+      "community_name": "buildHealthPanel",
       "norm_label": "gethealththresholds()"
     },
     {
@@ -19933,8 +19944,8 @@
       "source_location": "L4782",
       "_origin": "ast",
       "id": "js_ui_classifyvariation",
-      "community": 3,
-      "community_name": "ui.js",
+      "community": 17,
+      "community_name": "buildHealthPanel",
       "norm_label": "classifyvariation()"
     },
     {
@@ -19955,8 +19966,8 @@
       "source_location": "L4794",
       "_origin": "ast",
       "id": "js_ui_calchealthscore",
-      "community": 3,
-      "community_name": "ui.js",
+      "community": 17,
+      "community_name": "buildHealthPanel",
       "norm_label": "calchealthscore()"
     },
     {
@@ -19966,8 +19977,8 @@
       "source_location": "L4849",
       "_origin": "ast",
       "id": "js_ui_getnearestlancsforabsent",
-      "community": 3,
-      "community_name": "ui.js",
+      "community": 17,
+      "community_name": "buildHealthPanel",
       "norm_label": "getnearestlancsforabsent()"
     },
     {
@@ -19977,8 +19988,8 @@
       "source_location": "L4897",
       "_origin": "ast",
       "id": "js_ui_getprevdaylaunchstock",
-      "community": 3,
-      "community_name": "ui.js",
+      "community": 17,
+      "community_name": "buildHealthPanel",
       "norm_label": "getprevdaylaunchstock()"
     },
     {
@@ -19988,8 +19999,8 @@
       "source_location": "L4983",
       "_origin": "ast",
       "id": "js_ui_getpreperiodlaunchstock",
-      "community": 3,
-      "community_name": "ui.js",
+      "community": 17,
+      "community_name": "buildHealthPanel",
       "norm_label": "getpreperiodlaunchstock()"
     },
     {
@@ -19999,8 +20010,8 @@
       "source_location": "L5000",
       "_origin": "ast",
       "id": "js_ui_getlastperiodlaunchstockwithfallback",
-      "community": 3,
-      "community_name": "ui.js",
+      "community": 17,
+      "community_name": "buildHealthPanel",
       "norm_label": "getlastperiodlaunchstockwithfallback()"
     },
     {
@@ -20010,8 +20021,8 @@
       "source_location": "L5049",
       "_origin": "ast",
       "id": "js_ui_getlastperiodlaunchstock",
-      "community": 3,
-      "community_name": "ui.js",
+      "community": 17,
+      "community_name": "buildHealthPanel",
       "norm_label": "getlastperiodlaunchstock()"
     },
     {
@@ -20021,8 +20032,8 @@
       "source_location": "L5086",
       "_origin": "ast",
       "id": "js_ui_buildsnapshot",
-      "community": 3,
-      "community_name": "ui.js",
+      "community": 17,
+      "community_name": "buildHealthPanel",
       "norm_label": "buildsnapshot()"
     },
     {
@@ -20032,8 +20043,8 @@
       "source_location": "L5185",
       "_origin": "ast",
       "id": "js_ui_buildhealthpanel",
-      "community": 3,
-      "community_name": "ui.js",
+      "community": 17,
+      "community_name": "buildHealthPanel",
       "norm_label": "buildhealthpanel()"
     },
     {
@@ -20098,8 +20109,8 @@
       "source_location": "L5383",
       "_origin": "ast",
       "id": "js_ui_bkpparsestreaming",
-      "community": 50,
-      "community_name": "lrcDelete",
+      "community": 40,
+      "community_name": "_bkpCarregarArquivo",
       "norm_label": "_bkpparsestreaming()"
     },
     {
@@ -20165,7 +20176,7 @@
       "_origin": "ast",
       "id": "js_ui_bkpconfirmar",
       "community": 50,
-      "community_name": "lrcDelete",
+      "community_name": "_restaurarModulosConfirmar",
       "norm_label": "bkpconfirmar()"
     },
     {
@@ -20176,7 +20187,7 @@
       "_origin": "ast",
       "id": "js_ui_exportarmodulos",
       "community": 50,
-      "community_name": "lrcDelete",
+      "community_name": "_restaurarModulosConfirmar",
       "norm_label": "_exportarmodulos()"
     },
     {
@@ -20231,7 +20242,7 @@
       "_origin": "ast",
       "id": "js_ui_restaurarmodulosconfirmar",
       "community": 50,
-      "community_name": "lrcDelete",
+      "community_name": "_restaurarModulosConfirmar",
       "norm_label": "_restaurarmodulosconfirmar()"
     },
     {
@@ -35068,7 +35079,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "js/dai.js",
-      "source_location": "L1504",
+      "source_location": "L1505",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -35080,7 +35091,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "js/dai.js",
-      "source_location": "L1519",
+      "source_location": "L1520",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -35092,7 +35103,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "js/dai.js",
-      "source_location": "L1522",
+      "source_location": "L1523",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -35101,10 +35112,21 @@
       "confidence_score": 0.5
     },
     {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "js/dai.js",
+      "source_location": "L1117",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "js_dai",
+      "target": "js_dai_daiactionbarcss",
+      "confidence_score": 1.0
+    },
+    {
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "js/dai.js",
-      "source_location": "L1505",
+      "source_location": "L1506",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -35116,7 +35138,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "js/dai.js",
-      "source_location": "L1506",
+      "source_location": "L1507",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -35128,7 +35150,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "js/dai.js",
-      "source_location": "L1513",
+      "source_location": "L1514",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -35162,7 +35184,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "js/dai.js",
-      "source_location": "L1510",
+      "source_location": "L1511",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -35196,7 +35218,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "js/dai.js",
-      "source_location": "L1114",
+      "source_location": "L1129",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_dai",
@@ -35207,7 +35229,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "js/dai.js",
-      "source_location": "L1289",
+      "source_location": "L1297",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_dai",
@@ -35262,7 +35284,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "js/dai.js",
-      "source_location": "L1509",
+      "source_location": "L1510",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -35274,7 +35296,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "js/dai.js",
-      "source_location": "L1508",
+      "source_location": "L1509",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -35319,7 +35341,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "js/dai.js",
-      "source_location": "L1512",
+      "source_location": "L1513",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -35331,7 +35353,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "js/dai.js",
-      "source_location": "L1511",
+      "source_location": "L1512",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -35431,7 +35453,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "js/dai.js",
-      "source_location": "L1523",
+      "source_location": "L1524",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -35443,7 +35465,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "js/dai.js",
-      "source_location": "L1524",
+      "source_location": "L1525",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -35466,7 +35488,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "js/dai.js",
-      "source_location": "L1514",
+      "source_location": "L1515",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -35478,7 +35500,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "js/dai.js",
-      "source_location": "L1507",
+      "source_location": "L1508",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -35556,7 +35578,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "js/dai.js",
-      "source_location": "L1525",
+      "source_location": "L1526",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -35590,7 +35612,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "js/dai.js",
-      "source_location": "L1517",
+      "source_location": "L1518",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -35602,7 +35624,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "js/dai.js",
-      "source_location": "L1521",
+      "source_location": "L1522",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -35614,7 +35636,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "js/dai.js",
-      "source_location": "L1515",
+      "source_location": "L1516",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -35626,7 +35648,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "js/dai.js",
-      "source_location": "L1520",
+      "source_location": "L1521",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -35649,7 +35671,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "js/dai.js",
-      "source_location": "L1516",
+      "source_location": "L1517",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -35661,7 +35683,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "js/dai.js",
-      "source_location": "L1518",
+      "source_location": "L1519",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -35781,7 +35803,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/dai.js",
-      "source_location": "L1145",
+      "source_location": "L1160",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_dai_daibuilddocumentohtml",
@@ -35853,7 +35875,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/dai.js",
-      "source_location": "L1132",
+      "source_location": "L1147",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_dai_daibuilddocumentohtml",
@@ -35865,7 +35887,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/dai.js",
-      "source_location": "L1303",
+      "source_location": "L1311",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_dai_daibuildtermohtml",
@@ -36081,7 +36103,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/dai.js",
-      "source_location": "L1119",
+      "source_location": "L1134",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_dai_daibuilddocumentohtml",
@@ -36093,7 +36115,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/dai.js",
-      "source_location": "L1293",
+      "source_location": "L1301",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_dai_daibuildtermohtml",
@@ -36129,7 +36151,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/dai.js",
-      "source_location": "L1120",
+      "source_location": "L1135",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_dai_daibuilddocumentohtml",
@@ -36141,7 +36163,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/dai.js",
-      "source_location": "L1294",
+      "source_location": "L1302",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_dai_daibuildtermohtml",
@@ -36465,7 +36487,31 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/dai.js",
-      "source_location": "L1447",
+      "source_location": "L1183",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "js_dai_daibuilddocumentohtml",
+      "target": "js_dai_daiactionbarcss",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "js/dai.js",
+      "source_location": "L1342",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "js_dai_daibuildtermohtml",
+      "target": "js_dai_daiactionbarcss",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "js/dai.js",
+      "source_location": "L1448",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_dai_baixarzipdai",
@@ -36477,7 +36523,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/dai.js",
-      "source_location": "L1285",
+      "source_location": "L1293",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_dai_gerartermoresponsabilidade",
@@ -58093,7 +58139,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "js/solicitacao.js",
-      "source_location": "L806",
+      "source_location": "L808",
       "weight": 1.0,
       "_origin": "ast",
       "context": "argument",
@@ -58160,7 +58206,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "js/solicitacao.js",
-      "source_location": "L688",
+      "source_location": "L690",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_solicitacao",
@@ -58314,7 +58360,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "js/solicitacao.js",
-      "source_location": "L752",
+      "source_location": "L754",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_solicitacao",
@@ -58545,7 +58591,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "js/solicitacao.js",
-      "source_location": "L682",
+      "source_location": "L684",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_solicitacao",
@@ -58713,7 +58759,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/solicitacao.js",
-      "source_location": "L796",
+      "source_location": "L798",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_solicitacao_boot",
@@ -58797,7 +58843,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/solicitacao.js",
-      "source_location": "L692",
+      "source_location": "L694",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_solicitacao_enviarsolicitacao",
@@ -58845,7 +58891,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/solicitacao.js",
-      "source_location": "L693",
+      "source_location": "L695",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_solicitacao_enviarsolicitacao",
@@ -58881,7 +58927,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/solicitacao.js",
-      "source_location": "L694",
+      "source_location": "L696",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_solicitacao_enviarsolicitacao",
@@ -58965,7 +59011,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/solicitacao.js",
-      "source_location": "L757",
+      "source_location": "L759",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_solicitacao_mostrarsucesso",
@@ -59037,7 +59083,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/solicitacao.js",
-      "source_location": "L771",
+      "source_location": "L773",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_solicitacao_boot",
@@ -59049,7 +59095,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/solicitacao.js",
-      "source_location": "L696",
+      "source_location": "L698",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_solicitacao_enviarsolicitacao",
@@ -59121,7 +59167,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/solicitacao.js",
-      "source_location": "L802",
+      "source_location": "L804",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_solicitacao_boot",
@@ -59133,7 +59179,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/solicitacao.js",
-      "source_location": "L702",
+      "source_location": "L704",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_solicitacao_enviarsolicitacao",
@@ -59157,7 +59203,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/solicitacao.js",
-      "source_location": "L690",
+      "source_location": "L692",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_solicitacao_enviarsolicitacao",
@@ -59169,7 +59215,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/solicitacao.js",
-      "source_location": "L770",
+      "source_location": "L772",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_solicitacao_boot",
@@ -59181,7 +59227,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/solicitacao.js",
-      "source_location": "L707",
+      "source_location": "L709",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_solicitacao_enviarsolicitacao",
@@ -59193,7 +59239,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/solicitacao.js",
-      "source_location": "L738",
+      "source_location": "L740",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_solicitacao_enviarsolicitacao",
@@ -59205,7 +59251,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/solicitacao.js",
-      "source_location": "L792",
+      "source_location": "L794",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_solicitacao_boot",
@@ -59217,7 +59263,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/solicitacao.js",
-      "source_location": "L793",
+      "source_location": "L795",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_solicitacao_boot",
@@ -59265,7 +59311,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/solicitacao.js",
-      "source_location": "L777",
+      "source_location": "L779",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_solicitacao_boot",
@@ -59289,7 +59335,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/solicitacao.js",
-      "source_location": "L773",
+      "source_location": "L775",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_solicitacao_boot",
@@ -59445,7 +59491,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/solicitacao.js",
-      "source_location": "L794",
+      "source_location": "L796",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_solicitacao_boot",
@@ -59469,7 +59515,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/solicitacao.js",
-      "source_location": "L774",
+      "source_location": "L776",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_solicitacao_boot",
@@ -59505,7 +59551,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/solicitacao.js",
-      "source_location": "L795",
+      "source_location": "L797",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_solicitacao_boot",
@@ -59565,7 +59611,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/solicitacao.js",
-      "source_location": "L782",
+      "source_location": "L784",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_solicitacao_boot",
@@ -59577,7 +59623,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/solicitacao.js",
-      "source_location": "L710",
+      "source_location": "L712",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_solicitacao_enviarsolicitacao",
@@ -59589,7 +59635,7 @@
       "context": "argument",
       "confidence": "INFERRED",
       "source_file": "js/solicitacao.js",
-      "source_location": "L789",
+      "source_location": "L791",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_solicitacao_boot",
@@ -59601,7 +59647,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "js/solicitacao.js",
-      "source_location": "L743",
+      "source_location": "L745",
       "weight": 1.0,
       "_origin": "ast",
       "source": "js_solicitacao_enviarsolicitacao",
@@ -69654,5 +69700,5 @@
       "source_file": "index.html"
     }
   ],
-  "built_at_commit": "529a47543cb91fbbe0c0fffc9aca9cf179a7ac9d"
+  "built_at_commit": "c3eec2fe9307a8b2e88ef0f489a62faaaf17df59"
 }
