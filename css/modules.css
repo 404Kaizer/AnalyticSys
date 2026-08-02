@@ -10453,12 +10453,9 @@ td:has(.lanc-central-edit:focus) {
 }
 
 /* ── Botão filtro somente manuais ── */
+/* Tamanho/fonte vêm de .btn (já combinada no HTML: class="btn btn-manuais-filter")
+   — aqui só o que diferencia semanticamente: cor, borda, fundo transparente. */
 .btn-manuais-filter {
-  font-size: 11px;
-  font-family: var(--mono);
-  font-weight: 500;
-  padding: 4px 10px;
-  border-radius: var(--radius);
   border: 1px solid var(--amber-border);
   background: transparent;
   color: var(--amber);
@@ -10467,7 +10464,6 @@ td:has(.lanc-central-edit:focus) {
   align-items: center;
   gap: 5px;
   transition: background .15s, border-color .15s;
-  margin-left: 8px;
 }
 .btn-manuais-filter:hover {
   background: var(--amber-bg);
@@ -10484,11 +10480,6 @@ td:has(.lanc-central-edit:focus) {
 
 /* ── Botão e linhas de duplicatas SAP ── */
 .btn-duplicatas-filter {
-  font-size: 11px;
-  font-family: var(--mono);
-  font-weight: 500;
-  padding: 4px 10px;
-  border-radius: var(--radius);
   border: 1px solid rgba(239,68,68,.45);
   background: transparent;
   color: #ef4444;
@@ -10497,7 +10488,6 @@ td:has(.lanc-central-edit:focus) {
   align-items: center;
   gap: 5px;
   transition: background .15s, border-color .15s;
-  margin-left: 8px;
 }
 .btn-duplicatas-filter:hover {
   background: rgba(239,68,68,.08);
@@ -10555,11 +10545,6 @@ tr.lanc-duplicata td {
    overlay) — toda a seleção/ação acontece lá, a tabela SAP só mostra o
    destaque visual passivo (linha + badge) para dar contexto. */
 .btn-fechamento-filter {
-  font-size: 11px;
-  font-family: var(--mono);
-  font-weight: 500;
-  padding: 4px 10px;
-  border-radius: var(--radius);
   border: 1px solid var(--purple-border);
   background: transparent;
   color: var(--purple);
@@ -10568,7 +10553,6 @@ tr.lanc-duplicata td {
   align-items: center;
   gap: 5px;
   transition: background .15s, border-color .15s;
-  margin-left: 8px;
 }
 .btn-fechamento-filter:hover {
   background: var(--purple-bg);

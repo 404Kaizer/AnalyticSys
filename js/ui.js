@@ -3581,7 +3581,7 @@ window._toggleModSummaryExpand = _toggleModSummaryExpand;
 // pros cards de Total de Entradas/Total de Saídas (por sinal do peso).
 // Reaproveita o MESMO template dos cards de grupo (valor=peso, unit=custo
 // + contagem opcional), só que na área de destaque (.inv-kpi-card-featured).
-function _heroSubCardHtml({ icon, iconBg, iconColor, label, unitLabel, peso, custo, count, title }) {
+function _heroSubCardHtml({ icon, iconBg, iconColor, label, unitLabel, peso, custo, count, title, subtext }) {
   return `
       <div class="inv-kpi-card inv-kpi-card-featured"${title ? ` title="${escapeHtml(title)}"` : ''}>
         <div class="inv-kpi-icon" style="background:${iconBg};color:${iconColor}"><i class="ti ${icon}"></i></div>
@@ -3589,6 +3589,7 @@ function _heroSubCardHtml({ icon, iconBg, iconColor, label, unitLabel, peso, cus
           <div class="inv-kpi-label">${escapeHtml(label)}</div>
           <div class="inv-kpi-value">${fmtKg(peso)}</div>
           <div class="inv-kpi-unit">${money(custo)}${count !== undefined ? ` · ${count.toLocaleString('pt-BR')} registro(s)` : ''}</div>
+          ${subtext ? `<div class="inv-kpi-unit">${subtext}</div>` : ''}
         </div>
       </div>`;
 }
@@ -3602,23 +3603,23 @@ function _heroSubCardHtml({ icon, iconBg, iconColor, label, unitLabel, peso, cus
 // totalCount/g.count/extraHeroCards são OPCIONAIS — só aparecem quando o
 // chamador informa (Entradas e SAP usam totalCount/count; só SAP usa
 // extraHeroCards; Saídas não usa nenhum dos dois).
-function _buildResumoCardsHtml({ totalLabel, totalPeso, totalValor, totalCount, grupos, grupoNomePlural, topN, containerId, grupoLabelFn, extraHeroCards, pesoLabel, sortMode, modulo, grupoTituloFn }) {
+function _buildResumoCardsHtml({ totalLabel, totalPeso, totalValor, totalCount, grupos, grupoNomePlural, topN, containerId, grupoLabelFn, extraHeroCards, pesoLabel, modulo, grupoTituloFn, hidePesoTotal, countSubtext }) {
   if (!grupos.length) {
     return `<div class="mod-summary-empty">Nenhum registro no filtro atual.</div>`;
   }
 
   const expandido = !!_modSummaryExpandState[containerId];
-  // sortMode: 'alfabetica' (Entradas/Saídas/Lançamentos — cards de central)
-  // ordena pelo rótulo (A-Z, pt-BR). Padrão ('peso', usado pelo SAP — cards
-  // de código de movimento) mantém a ordenação por peso absoluto desc.
-  const ordenados = grupos.slice().sort((a, b) =>
-    sortMode === 'alfabetica'
-      ? String(a.label).localeCompare(String(b.label), 'pt-BR', { sensitivity: 'base' })
-      : Math.abs(b.peso) - Math.abs(a.peso)
-  );
-  const visiveis = expandido ? ordenados : ordenados.slice(0, topN);
-  const restantes = ordenados.length - visiveis.length;
+  // Sempre por peso absoluto desc, nos 4 módulos (Entradas/Saídas/
+  // Lançamentos/SAP) — quem move mais material aparece primeiro.
+  const ordenados = grupos.slice().sort((a, b) => Math.abs(b.peso) - Math.abs(a.peso));
+  // Top N sempre em cards (destaque); o resto só aparece expandido, e como
+  // tabela — não como mais cards (ver .mod-summary-table-wrap em components.css).
+  const topVisiveis = ordenados.slice(0, topN);
+  const extras = ordenados.slice(topN);
   const _pesoLabel = pesoLabel || 'Peso Total';
+  const clicavelAttrs = g => modulo
+    ? ` onclick="_abrirModalDetalheMaterialFromEl(this)" data-modulo="${escapeHtml(modulo)}" data-grupo="${escapeHtml(g.label)}" data-titulo="${escapeHtml(grupoTituloFn ? grupoTituloFn(g) : g.label)}" title="Ver detalhamento por material"`
+    : '';
 
   const countCardHtml = totalCount !== undefined ? `
       <div class="inv-kpi-card inv-kpi-card-featured">
@@ -3627,13 +3628,16 @@ function _buildResumoCardsHtml({ totalLabel, totalPeso, totalValor, totalCount, 
           <div class="inv-kpi-label">${escapeHtml(totalLabel)} · Registros</div>
           <div class="inv-kpi-value">${totalCount.toLocaleString('pt-BR')}</div>
           <div class="inv-kpi-unit">registro(s) no filtro atual</div>
+          ${countSubtext ? `<div class="inv-kpi-unit">${countSubtext}</div>` : ''}
         </div>
       </div>` : '';
 
   const extraHtml = (extraHeroCards || []).join('');
 
-  const heroHtml = `
-    <div class="mod-summary-hero">
+  // Peso Total é opcional (hidePesoTotal) — no SAP, entradas e saídas somadas
+  // com sinal dão um número líquido confuso; melhor mostrar só o par
+  // Entradas/Saídas (via extraHeroCards) no lugar dele.
+  const pesoCardHtml = hidePesoTotal ? '' : `
       <div class="inv-kpi-card inv-kpi-card-featured">
         <div class="inv-kpi-icon" style="background:var(--accent-dim);color:var(--accent)"><i class="ti ti-scale"></i></div>
         <div class="inv-kpi-body">
@@ -3641,7 +3645,11 @@ function _buildResumoCardsHtml({ totalLabel, totalPeso, totalValor, totalCount, 
           <div class="inv-kpi-value">${fmtKg(totalPeso)}</div>
           <div class="inv-kpi-unit">kg — soma do filtro atual</div>
         </div>
-      </div>
+      </div>`;
+
+  const heroHtml = `
+    <div class="mod-summary-hero">
+      ${pesoCardHtml}${extraHtml}
       <div class="inv-kpi-card inv-kpi-card-featured">
         <div class="inv-kpi-icon" style="background:var(--green-bg);color:var(--green)"><i class="ti ti-currency-dollar"></i></div>
         <div class="inv-kpi-body">
@@ -3649,7 +3657,7 @@ function _buildResumoCardsHtml({ totalLabel, totalPeso, totalValor, totalCount, 
           <div class="inv-kpi-value">${money(totalValor)}</div>
           <div class="inv-kpi-unit">soma do filtro atual</div>
         </div>
-      </div>${countCardHtml}${extraHtml}
+      </div>${countCardHtml}
     </div>`;
 
   // Cards de GRUPO (não os de total geral) são clicáveis quando `modulo` é
@@ -3660,28 +3668,49 @@ function _buildResumoCardsHtml({ totalLabel, totalPeso, totalValor, totalCount, 
   // seguro pra atributos, não pra dentro de uma string JS de onclick).
   const gridHtml = `
     <div class="mod-summary-grid">
-      ${visiveis.map(g => {
-        const clicavel = modulo ? ` onclick="_abrirModalDetalheMaterialFromEl(this)" data-modulo="${escapeHtml(modulo)}" data-grupo="${escapeHtml(g.label)}" data-titulo="${escapeHtml(grupoTituloFn ? grupoTituloFn(g) : g.label)}" title="Ver detalhamento por material"` : '';
-        return `
-        <div class="inv-kpi-card"${clicavel}>
+      ${topVisiveis.map(g => `
+        <div class="inv-kpi-card"${clicavelAttrs(g)}>
           <div class="inv-kpi-body">
             <div class="inv-kpi-label">${grupoLabelFn ? grupoLabelFn(g) : escapeHtml(g.label)}</div>
             <div class="inv-kpi-value">${fmtKg(g.peso)}</div>
             <div class="inv-kpi-unit">${money(g.valor)}</div>
             ${g.count !== undefined ? `<div class="inv-kpi-unit">${g.count.toLocaleString('pt-BR')} registro(s)</div>` : ''}
           </div>
-        </div>`;
-      }).join('')}
+        </div>`).join('')}
     </div>`;
 
-  const toggleHtml = ordenados.length > topN
+  const temContagem = extras.length && extras[0].count !== undefined;
+  const tableHtml = (expandido && extras.length) ? `
+    <div class="mod-summary-table-wrap">
+      <table class="mod-summary-table">
+        <thead>
+          <tr>
+            <th>${escapeHtml(grupoNomePlural)}</th>
+            <th style="text-align:right">${escapeHtml(_pesoLabel)}</th>
+            <th style="text-align:right">Custo</th>
+            ${temContagem ? '<th style="text-align:right">Registros</th>' : ''}
+          </tr>
+        </thead>
+        <tbody>
+          ${extras.map(g => `
+            <tr${clicavelAttrs(g)}>
+              <td>${grupoLabelFn ? grupoLabelFn(g) : escapeHtml(g.label)}</td>
+              <td class="td-mono" style="text-align:right">${fmtKg(g.peso)}</td>
+              <td class="td-mono" style="text-align:right">${money(g.valor)}</td>
+              ${temContagem ? `<td class="td-mono" style="text-align:right">${g.count.toLocaleString('pt-BR')}</td>` : ''}
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>` : '';
+
+  const toggleHtml = extras.length
     ? `<button class="mod-summary-toggle" onclick="_toggleModSummaryExpand('${containerId}')">
          <i class="ti ti-chevron-${expandido ? 'up' : 'down'}"></i>
-         ${expandido ? 'Ver menos' : `Ver todas as ${escapeHtml(grupoNomePlural)} (+${restantes})`}
+         ${expandido ? 'Ver menos' : `Ver todas as ${escapeHtml(grupoNomePlural)} (+${extras.length})`}
        </button>`
     : '';
 
-  return heroHtml + gridHtml + toggleHtml;
+  return heroHtml + gridHtml + tableHtml + toggleHtml;
 }
 
 // Agrupa um array de registros por uma chave (função ou nome de campo) e
@@ -3827,7 +3856,7 @@ function renderEntradasSummary() {
   });
   el.innerHTML = _buildResumoCardsHtml({
     totalLabel: 'Entradas', totalPeso, totalValor, totalCount: data.length, grupos,
-    grupoNomePlural: 'centrais', topN: 6, containerId: 'ent-summary-cards', sortMode: 'alfabetica', modulo: 'entradas'
+    grupoNomePlural: 'centrais', topN: 6, containerId: 'ent-summary-cards', modulo: 'entradas'
   });
 }
 window.renderEntradasSummary = renderEntradasSummary;
@@ -3844,7 +3873,7 @@ function renderSaidasSummary() {
   });
   el.innerHTML = _buildResumoCardsHtml({
     totalLabel: 'Saídas', totalPeso, totalValor, grupos,
-    grupoNomePlural: 'centrais', topN: 6, containerId: 'sai-summary-cards', sortMode: 'alfabetica', modulo: 'saidas'
+    grupoNomePlural: 'centrais', topN: 6, containerId: 'sai-summary-cards', modulo: 'saidas'
   });
 }
 window.renderSaidasSummary = renderSaidasSummary;
@@ -3869,21 +3898,34 @@ function renderSapSummary() {
   const { peso: pesoEnt, custo: custoEnt } = somarPesoCustoSap(recsEntrada);
   const { peso: pesoSai, custo: custoSai } = somarPesoCustoSap(recsSaida);
 
+  // 101/801 (entrada) e 201 (saída) são os códigos principais de
+  // movimentação no SAP — reaproveita o agrupamento por código (`grupos`,
+  // já calculado acima) em vez de refiltrar `data`.
+  const g101 = grupos.find(g => g.cod === '101');
+  const g801 = grupos.find(g => g.cod === '801');
+  const g201 = grupos.find(g => g.cod === '201');
+  const badgeKg = (g, cod) => `${movBadgeHtml(cod, 'sm')} ${g ? fmtKgShort(Math.abs(g.peso)) : '—'}`;
+  const badgeCount = (g, cod) => `${movBadgeHtml(cod, 'sm')} ${g ? g.count.toLocaleString('pt-BR') : 0}`;
+
   el.innerHTML = _buildResumoCardsHtml({
     totalLabel: 'SAP', totalPeso, totalValor, totalCount: data.length, grupos,
     grupoNomePlural: 'movimentações', topN: 8, containerId: 'sap-summary-cards',
     grupoLabelFn: g => movBadgeHtml(g.cod),
     modulo: 'sap', grupoTituloFn: g => 'Movimento ' + g.cod,
+    hidePesoTotal: true,
+    countSubtext: `${badgeCount(g101, '101')} · ${badgeCount(g801, '801')} · ${badgeCount(g201, '201')}`,
     extraHeroCards: [
       _heroSubCardHtml({
         icon: 'ti-package-import', iconBg: 'var(--green-bg)', iconColor: 'var(--green)',
         label: 'SAP · Total de Entradas', peso: pesoEnt, custo: custoEnt, count: recsEntrada.length,
-        title: 'Todos os registros com peso positivo no filtro atual'
+        title: 'Todos os registros com peso positivo no filtro atual',
+        subtext: `${badgeKg(g101, '101')} · ${badgeKg(g801, '801')}`
       }),
       _heroSubCardHtml({
         icon: 'ti-package-export', iconBg: 'var(--red-bg)', iconColor: 'var(--red)',
         label: 'SAP · Total de Saídas', peso: Math.abs(pesoSai), custo: Math.abs(custoSai), count: recsSaida.length,
-        title: 'Todos os registros com peso negativo no filtro atual'
+        title: 'Todos os registros com peso negativo no filtro atual',
+        subtext: badgeKg(g201, '201')
       })
     ]
   });
@@ -3908,7 +3950,7 @@ function renderLancamentosSummary() {
   el.innerHTML = _buildResumoCardsHtml({
     totalLabel: 'Lançamentos', totalPeso, totalValor, totalCount: data.length, grupos,
     grupoNomePlural: 'centrais', topN: 6, containerId: 'lanc-summary-cards',
-    pesoLabel: 'Est. Total', sortMode: 'alfabetica', modulo: 'lancamentos'
+    pesoLabel: 'Est. Total', modulo: 'lancamentos'
   });
 }
 window.renderLancamentosSummary = renderLancamentosSummary;
