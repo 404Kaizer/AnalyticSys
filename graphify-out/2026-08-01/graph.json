@@ -50,15 +50,37 @@
   },
   "nodes": [
     {
+      "label": "CLAUDE.md",
+      "file_type": "document",
+      "source_file": "CLAUDE.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "claude",
+      "community": 96,
+      "community_name": "CLAUDE.md",
+      "norm_label": "claude.md"
+    },
+    {
+      "label": "graphify",
+      "file_type": "document",
+      "source_file": "CLAUDE.md",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "claude_graphify",
+      "community": 96,
+      "community_name": "CLAUDE.md",
+      "norm_label": "graphify"
+    },
+    {
       "label": "calendar.js",
       "file_type": "code",
       "source_file": "js/calendar.js",
       "source_location": "L1",
       "_origin": "ast",
-      "id": "js_calendar",
       "community": 95,
       "community_name": "calendar.js",
-      "norm_label": "calendar.js"
+      "norm_label": "calendar.js",
+      "id": "js_calendar"
     },
     {
       "label": "getPicker()",
@@ -66,10 +88,10 @@
       "source_file": "js/calendar.js",
       "source_location": "L7",
       "_origin": "ast",
-      "id": "js_calendar_getpicker",
       "community": 95,
       "community_name": "calendar.js",
-      "norm_label": "getpicker()"
+      "norm_label": "getpicker()",
+      "id": "js_calendar_getpicker"
     },
     {
       "label": "toISO()",
@@ -77,10 +99,10 @@
       "source_file": "js/calendar.js",
       "source_location": "L24",
       "_origin": "ast",
-      "id": "js_calendar_toiso",
       "community": 95,
       "community_name": "calendar.js",
-      "norm_label": "toiso()"
+      "norm_label": "toiso()",
+      "id": "js_calendar_toiso"
     },
     {
       "label": "fmtDisplay()",
@@ -88,10 +110,10 @@
       "source_file": "js/calendar.js",
       "source_location": "L32",
       "_origin": "ast",
-      "id": "js_calendar_fmtdisplay",
       "community": 95,
       "community_name": "calendar.js",
-      "norm_label": "fmtdisplay()"
+      "norm_label": "fmtdisplay()",
+      "id": "js_calendar_fmtdisplay"
     },
     {
       "label": "sameDay()",
@@ -99,10 +121,10 @@
       "source_file": "js/calendar.js",
       "source_location": "L37",
       "_origin": "ast",
-      "id": "js_calendar_sameday",
       "community": 95,
       "community_name": "calendar.js",
-      "norm_label": "sameday()"
+      "norm_label": "sameday()",
+      "id": "js_calendar_sameday"
     },
     {
       "label": "stripTime()",
@@ -110,10 +132,10 @@
       "source_file": "js/calendar.js",
       "source_location": "L41",
       "_origin": "ast",
-      "id": "js_calendar_striptime",
       "community": 95,
       "community_name": "calendar.js",
-      "norm_label": "striptime()"
+      "norm_label": "striptime()",
+      "id": "js_calendar_striptime"
     },
     {
       "label": "syncInputs()",
@@ -121,10 +143,10 @@
       "source_file": "js/calendar.js",
       "source_location": "L47",
       "_origin": "ast",
-      "id": "js_calendar_syncinputs",
       "community": 95,
       "community_name": "calendar.js",
-      "norm_label": "syncinputs()"
+      "norm_label": "syncinputs()",
+      "id": "js_calendar_syncinputs"
     },
     {
       "label": "updateTriggerLabel()",
@@ -132,10 +154,10 @@
       "source_file": "js/calendar.js",
       "source_location": "L56",
       "_origin": "ast",
-      "id": "js_calendar_updatetriggerlabel",
       "community": 95,
       "community_name": "calendar.js",
-      "norm_label": "updatetriggerlabel()"
+      "norm_label": "updatetriggerlabel()",
+      "id": "js_calendar_updatetriggerlabel"
     },
     {
       "label": "renderCal()",
@@ -143,10 +165,10 @@
       "source_file": "js/calendar.js",
       "source_location": "L80",
       "_origin": "ast",
-      "id": "js_calendar_rendercal",
       "community": 95,
       "community_name": "calendar.js",
-      "norm_label": "rendercal()"
+      "norm_label": "rendercal()",
+      "id": "js_calendar_rendercal"
     },
     {
       "label": "renderDaysView()",
@@ -154,10 +176,10 @@
       "source_file": "js/calendar.js",
       "source_location": "L94",
       "_origin": "ast",
-      "id": "js_calendar_renderdaysview",
       "community": 95,
       "community_name": "calendar.js",
-      "norm_label": "renderdaysview()"
+      "norm_label": "renderdaysview()",
+      "id": "js_calendar_renderdaysview"
     },
     {
       "label": "applyRangeClass()",
@@ -165,10 +187,10 @@
       "source_file": "js/calendar.js",
       "source_location": "L248",
       "_origin": "ast",
-      "id": "js_calendar_applyrangeclass",
       "community": 95,
       "community_name": "calendar.js",
-      "norm_label": "applyrangeclass()"
+      "norm_label": "applyrangeclass()",
+      "id": "js_calendar_applyrangeclass"
     },
     {
       "label": "renderMonthGrid()",
@@ -176,10 +198,10 @@
       "source_file": "js/calendar.js",
       "source_location": "L266",
       "_origin": "ast",
-      "id": "js_calendar_rendermonthgrid",
       "community": 95,
       "community_name": "calendar.js",
-      "norm_label": "rendermonthgrid()"
+      "norm_label": "rendermonthgrid()",
+      "id": "js_calendar_rendermonthgrid"
     },
     {
       "label": "renderYearGrid()",
@@ -187,10 +209,10 @@
       "source_file": "js/calendar.js",
       "source_location": "L287",
       "_origin": "ast",
-      "id": "js_calendar_renderyeargrid",
       "community": 95,
       "community_name": "calendar.js",
-      "norm_label": "renderyeargrid()"
+      "norm_label": "renderyeargrid()",
+      "id": "js_calendar_renderyeargrid"
     },
     {
       "label": "setRange()",
@@ -198,10 +220,10 @@
       "source_file": "js/calendar.js",
       "source_location": "L428",
       "_origin": "ast",
-      "id": "js_calendar_setrange",
       "community": 95,
       "community_name": "calendar.js",
-      "norm_label": "setrange()"
+      "norm_label": "setrange()",
+      "id": "js_calendar_setrange"
     },
     {
       "label": "markOutsideChip()",
@@ -209,10 +231,10 @@
       "source_file": "js/calendar.js",
       "source_location": "L510",
       "_origin": "ast",
-      "id": "js_calendar_markoutsidechip",
       "community": 95,
       "community_name": "calendar.js",
-      "norm_label": "markoutsidechip()"
+      "norm_label": "markoutsidechip()",
+      "id": "js_calendar_markoutsidechip"
     },
     {
       "label": "ocorrencias.js",
@@ -220,10 +242,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L1",
       "_origin": "ast",
-      "id": "js_ocorrencias",
       "community": 1,
       "community_name": "ocorrencias.js",
-      "norm_label": "ocorrencias.js"
+      "norm_label": "ocorrencias.js",
+      "id": "js_ocorrencias"
     },
     {
       "label": "getOcorrencias()",
@@ -231,10 +253,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L8",
       "_origin": "ast",
-      "id": "js_ocorrencias_getocorrencias",
       "community": 1,
       "community_name": "ocorrencias.js",
-      "norm_label": "getocorrencias()"
+      "norm_label": "getocorrencias()",
+      "id": "js_ocorrencias_getocorrencias"
     },
     {
       "label": "_ocNomeAtor()",
@@ -242,10 +264,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L19",
       "_origin": "ast",
-      "id": "js_ocorrencias_ocnomeator",
       "community": 43,
       "community_name": "renderOcorrencias",
-      "norm_label": "_ocnomeator()"
+      "norm_label": "_ocnomeator()",
+      "id": "js_ocorrencias_ocnomeator"
     },
     {
       "label": "_ocUserToken()",
@@ -253,10 +275,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L30",
       "_origin": "ast",
-      "id": "js_ocorrencias_ocusertoken",
       "community": 1,
       "community_name": "ocorrencias.js",
-      "norm_label": "_ocusertoken()"
+      "norm_label": "_ocusertoken()",
+      "id": "js_ocorrencias_ocusertoken"
     },
     {
       "label": "_ocTokenFromUserId()",
@@ -264,10 +286,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L41",
       "_origin": "ast",
-      "id": "js_ocorrencias_octokenfromuserid",
       "community": 1,
       "community_name": "ocorrencias.js",
-      "norm_label": "_octokenfromuserid()"
+      "norm_label": "_octokenfromuserid()",
+      "id": "js_ocorrencias_octokenfromuserid"
     },
     {
       "label": "_nextOcId()",
@@ -275,10 +297,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L66",
       "_origin": "ast",
-      "id": "js_ocorrencias_nextocid",
       "community": 1,
       "community_name": "ocorrencias.js",
-      "norm_label": "_nextocid()"
+      "norm_label": "_nextocid()",
+      "id": "js_ocorrencias_nextocid"
     },
     {
       "label": "_ocGerarIdSeguro()",
@@ -286,10 +308,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L82",
       "_origin": "ast",
-      "id": "js_ocorrencias_ocgeraridseguro",
       "community": 1,
       "community_name": "ocorrencias.js",
-      "norm_label": "_ocgeraridseguro()"
+      "norm_label": "_ocgeraridseguro()",
+      "id": "js_ocorrencias_ocgeraridseguro"
     },
     {
       "label": "_ocToDbRow()",
@@ -297,10 +319,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L89",
       "_origin": "ast",
-      "id": "js_ocorrencias_octodbrow",
       "community": 43,
       "community_name": "renderOcorrencias",
-      "norm_label": "_octodbrow()"
+      "norm_label": "_octodbrow()",
+      "id": "js_ocorrencias_octodbrow"
     },
     {
       "label": "_ocFromDbRow()",
@@ -308,10 +330,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L131",
       "_origin": "ast",
-      "id": "js_ocorrencias_ocfromdbrow",
       "community": 90,
       "community_name": "_ocRealtimeInit",
-      "norm_label": "_ocfromdbrow()"
+      "norm_label": "_ocfromdbrow()",
+      "id": "js_ocorrencias_ocfromdbrow"
     },
     {
       "label": "syncOcorrenciasFromSupabase()",
@@ -319,10 +341,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L166",
       "_origin": "ast",
-      "id": "js_ocorrencias_syncocorrenciasfromsupabase",
       "community": 90,
       "community_name": "_ocRealtimeInit",
-      "norm_label": "syncocorrenciasfromsupabase()"
+      "norm_label": "syncocorrenciasfromsupabase()",
+      "id": "js_ocorrencias_syncocorrenciasfromsupabase"
     },
     {
       "label": "_ocMotivoRelevancia()",
@@ -330,10 +352,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L241",
       "_origin": "ast",
-      "id": "js_ocorrencias_ocmotivorelevancia",
       "community": 90,
       "community_name": "_ocRealtimeInit",
-      "norm_label": "_ocmotivorelevancia()"
+      "norm_label": "_ocmotivorelevancia()",
+      "id": "js_ocorrencias_ocmotivorelevancia"
     },
     {
       "label": "_ocEhRelevantePraMim()",
@@ -341,10 +363,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L249",
       "_origin": "ast",
-      "id": "js_ocorrencias_ocehrelevantepramim",
       "community": 90,
       "community_name": "_ocRealtimeInit",
-      "norm_label": "_ocehrelevantepramim()"
+      "norm_label": "_ocehrelevantepramim()",
+      "id": "js_ocorrencias_ocehrelevantepramim"
     },
     {
       "label": "_ocUpsertLocal()",
@@ -352,10 +374,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L252",
       "_origin": "ast",
-      "id": "js_ocorrencias_ocupsertlocal",
       "community": 90,
       "community_name": "_ocRealtimeInit",
-      "norm_label": "_ocupsertlocal()"
+      "norm_label": "_ocupsertlocal()",
+      "id": "js_ocorrencias_ocupsertlocal"
     },
     {
       "label": "_ocRemoveLocal()",
@@ -363,10 +385,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L265",
       "_origin": "ast",
-      "id": "js_ocorrencias_ocremovelocal",
       "community": 90,
       "community_name": "_ocRealtimeInit",
-      "norm_label": "_ocremovelocal()"
+      "norm_label": "_ocremovelocal()",
+      "id": "js_ocorrencias_ocremovelocal"
     },
     {
       "label": "_ocMontarTituloNotificacaoSupervisor()",
@@ -374,10 +396,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L277",
       "_origin": "ast",
-      "id": "js_ocorrencias_ocmontartitulonotificacaosupervisor",
       "community": 38,
       "community_name": "_buildOcHierarquiaBar",
-      "norm_label": "_ocmontartitulonotificacaosupervisor()"
+      "norm_label": "_ocmontartitulonotificacaosupervisor()",
+      "id": "js_ocorrencias_ocmontartitulonotificacaosupervisor"
     },
     {
       "label": "_ocRealtimeInit()",
@@ -385,10 +407,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L288",
       "_origin": "ast",
-      "id": "js_ocorrencias_ocrealtimeinit",
       "community": 90,
       "community_name": "_ocRealtimeInit",
-      "norm_label": "_ocrealtimeinit()"
+      "norm_label": "_ocrealtimeinit()",
+      "id": "js_ocorrencias_ocrealtimeinit"
     },
     {
       "label": "_ocRealtimeStop()",
@@ -396,10 +418,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L326",
       "_origin": "ast",
-      "id": "js_ocorrencias_ocrealtimestop",
       "community": 1,
       "community_name": "ocorrencias.js",
-      "norm_label": "_ocrealtimestop()"
+      "norm_label": "_ocrealtimestop()",
+      "id": "js_ocorrencias_ocrealtimestop"
     },
     {
       "label": "_ocSyncUpsert()",
@@ -407,10 +429,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L335",
       "_origin": "ast",
-      "id": "js_ocorrencias_ocsyncupsert",
       "community": 43,
       "community_name": "renderOcorrencias",
-      "norm_label": "_ocsyncupsert()"
+      "norm_label": "_ocsyncupsert()",
+      "id": "js_ocorrencias_ocsyncupsert"
     },
     {
       "label": "_ocSyncDelete()",
@@ -418,10 +440,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L348",
       "_origin": "ast",
-      "id": "js_ocorrencias_ocsyncdelete",
       "community": 43,
       "community_name": "renderOcorrencias",
-      "norm_label": "_ocsyncdelete()"
+      "norm_label": "_ocsyncdelete()",
+      "id": "js_ocorrencias_ocsyncdelete"
     },
     {
       "label": "_ocSyncReatribuir()",
@@ -429,10 +451,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L364",
       "_origin": "ast",
-      "id": "js_ocorrencias_ocsyncreatribuir",
       "community": 1,
       "community_name": "ocorrencias.js",
-      "norm_label": "_ocsyncreatribuir()"
+      "norm_label": "_ocsyncreatribuir()",
+      "id": "js_ocorrencias_ocsyncreatribuir"
     },
     {
       "label": "_ocUsuariosParaAtribuir()",
@@ -440,10 +462,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L381",
       "_origin": "ast",
-      "id": "js_ocorrencias_ocusuariosparaatribuir",
       "community": 1,
       "community_name": "ocorrencias.js",
-      "norm_label": "_ocusuariosparaatribuir()"
+      "norm_label": "_ocusuariosparaatribuir()",
+      "id": "js_ocorrencias_ocusuariosparaatribuir"
     },
     {
       "label": "reatribuirOcorrencia()",
@@ -451,10 +473,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L388",
       "_origin": "ast",
-      "id": "js_ocorrencias_reatribuirocorrencia",
       "community": 1,
       "community_name": "ocorrencias.js",
-      "norm_label": "reatribuirocorrencia()"
+      "norm_label": "reatribuirocorrencia()",
+      "id": "js_ocorrencias_reatribuirocorrencia"
     },
     {
       "label": "saveOcorrencia()",
@@ -462,10 +484,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L429",
       "_origin": "ast",
-      "id": "js_ocorrencias_saveocorrencia",
       "community": 43,
       "community_name": "renderOcorrencias",
-      "norm_label": "saveocorrencia()"
+      "norm_label": "saveocorrencia()",
+      "id": "js_ocorrencias_saveocorrencia"
     },
     {
       "label": "deleteOcorrencia()",
@@ -473,10 +495,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L439",
       "_origin": "ast",
-      "id": "js_ocorrencias_deleteocorrencia",
       "community": 43,
       "community_name": "renderOcorrencias",
-      "norm_label": "deleteocorrencia()"
+      "norm_label": "deleteocorrencia()",
+      "id": "js_ocorrencias_deleteocorrencia"
     },
     {
       "label": "ocDateStatus()",
@@ -484,10 +506,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L448",
       "_origin": "ast",
-      "id": "js_ocorrencias_ocdatestatus",
       "community": 68,
       "community_name": "renderOcKPIs",
-      "norm_label": "ocdatestatus()"
+      "norm_label": "ocdatestatus()",
+      "id": "js_ocorrencias_ocdatestatus"
     },
     {
       "label": "ocStatusLabel()",
@@ -495,10 +517,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L458",
       "_origin": "ast",
-      "id": "js_ocorrencias_ocstatuslabel",
       "community": 38,
       "community_name": "_buildOcHierarquiaBar",
-      "norm_label": "ocstatuslabel()"
+      "norm_label": "ocstatuslabel()",
+      "id": "js_ocorrencias_ocstatuslabel"
     },
     {
       "label": "fmtDateBR()",
@@ -506,10 +528,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L465",
       "_origin": "ast",
-      "id": "js_ocorrencias_fmtdatebr",
       "community": 38,
       "community_name": "_buildOcHierarquiaBar",
-      "norm_label": "fmtdatebr()"
+      "norm_label": "fmtdatebr()",
+      "id": "js_ocorrencias_fmtdatebr"
     },
     {
       "label": "buildWhatsAppLink()",
@@ -517,10 +539,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L471",
       "_origin": "ast",
-      "id": "js_ocorrencias_buildwhatsapplink",
       "community": 38,
       "community_name": "_buildOcHierarquiaBar",
-      "norm_label": "buildwhatsapplink()"
+      "norm_label": "buildwhatsapplink()",
+      "id": "js_ocorrencias_buildwhatsapplink"
     },
     {
       "label": "fmtPhoneDisplay()",
@@ -528,10 +550,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L488",
       "_origin": "ast",
-      "id": "js_ocorrencias_fmtphonedisplay",
       "community": 1,
       "community_name": "ocorrencias.js",
-      "norm_label": "fmtphonedisplay()"
+      "norm_label": "fmtphonedisplay()",
+      "id": "js_ocorrencias_fmtphonedisplay"
     },
     {
       "label": "applyPhoneMask()",
@@ -539,10 +561,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L497",
       "_origin": "ast",
-      "id": "js_ocorrencias_applyphonemask",
       "community": 1,
       "community_name": "ocorrencias.js",
-      "norm_label": "applyphonemask()"
+      "norm_label": "applyphonemask()",
+      "id": "js_ocorrencias_applyphonemask"
     },
     {
       "label": "initPhoneMasks()",
@@ -550,10 +572,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L508",
       "_origin": "ast",
-      "id": "js_ocorrencias_initphonemasks",
       "community": 1,
       "community_name": "ocorrencias.js",
-      "norm_label": "initphonemasks()"
+      "norm_label": "initphonemasks()",
+      "id": "js_ocorrencias_initphonemasks"
     },
     {
       "label": "OC_HIERARQUIA",
@@ -561,10 +583,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L520",
       "_origin": "ast",
-      "id": "js_ocorrencias_oc_hierarquia",
       "community": 1,
       "community_name": "ocorrencias.js",
-      "norm_label": "oc_hierarquia"
+      "norm_label": "oc_hierarquia",
+      "id": "js_ocorrencias_oc_hierarquia"
     },
     {
       "label": "ocNivelAtual()",
@@ -572,10 +594,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L527",
       "_origin": "ast",
-      "id": "js_ocorrencias_ocnivelatual",
       "community": 38,
       "community_name": "_buildOcHierarquiaBar",
-      "norm_label": "ocnivelatual()"
+      "norm_label": "ocnivelatual()",
+      "id": "js_ocorrencias_ocnivelatual"
     },
     {
       "label": "ocNivelInfo()",
@@ -583,10 +605,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L532",
       "_origin": "ast",
-      "id": "js_ocorrencias_ocnivelinfo",
       "community": 38,
       "community_name": "_buildOcHierarquiaBar",
-      "norm_label": "ocnivelinfo()"
+      "norm_label": "ocnivelinfo()",
+      "id": "js_ocorrencias_ocnivelinfo"
     },
     {
       "label": "ocApareceAutoParaSupervisor()",
@@ -594,10 +616,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L539",
       "_origin": "ast",
-      "id": "js_ocorrencias_ocapareceautoparasupervisor",
       "community": 90,
       "community_name": "_ocRealtimeInit",
-      "norm_label": "ocapareceautoparasupervisor()"
+      "norm_label": "ocapareceautoparasupervisor()",
+      "id": "js_ocorrencias_ocapareceautoparasupervisor"
     },
     {
       "label": "_ocDetectarMudancaPrioritaria()",
@@ -605,10 +627,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L551",
       "_origin": "ast",
-      "id": "js_ocorrencias_ocdetectarmudancaprioritaria",
       "community": 38,
       "community_name": "_buildOcHierarquiaBar",
-      "norm_label": "_ocdetectarmudancaprioritaria()"
+      "norm_label": "_ocdetectarmudancaprioritaria()",
+      "id": "js_ocorrencias_ocdetectarmudancaprioritaria"
     },
     {
       "label": "ocPodeEscalonar()",
@@ -616,10 +638,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L582",
       "_origin": "ast",
-      "id": "js_ocorrencias_ocpodeescalonar",
       "community": 38,
       "community_name": "_buildOcHierarquiaBar",
-      "norm_label": "ocpodeescalonar()"
+      "norm_label": "ocpodeescalonar()",
+      "id": "js_ocorrencias_ocpodeescalonar"
     },
     {
       "label": "ocPodeDescalonar()",
@@ -627,10 +649,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L632",
       "_origin": "ast",
-      "id": "js_ocorrencias_ocpodedescalonar",
       "community": 38,
       "community_name": "_buildOcHierarquiaBar",
-      "norm_label": "ocpodedescalonar()"
+      "norm_label": "ocpodedescalonar()",
+      "id": "js_ocorrencias_ocpodedescalonar"
     },
     {
       "label": "buildOcKPIs()",
@@ -638,10 +660,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L734",
       "_origin": "ast",
-      "id": "js_ocorrencias_buildockpis",
       "community": 68,
       "community_name": "renderOcKPIs",
-      "norm_label": "buildockpis()"
+      "norm_label": "buildockpis()",
+      "id": "js_ocorrencias_buildockpis"
     },
     {
       "label": "_destroyOcCharts()",
@@ -649,10 +671,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L850",
       "_origin": "ast",
-      "id": "js_ocorrencias_destroyoccharts",
       "community": 68,
       "community_name": "renderOcKPIs",
-      "norm_label": "_destroyoccharts()"
+      "norm_label": "_destroyoccharts()",
+      "id": "js_ocorrencias_destroyoccharts"
     },
     {
       "label": "OC_DONUT_META",
@@ -660,10 +682,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L861",
       "_origin": "ast",
-      "id": "js_ocorrencias_oc_donut_meta",
       "community": 1,
       "community_name": "ocorrencias.js",
-      "norm_label": "oc_donut_meta"
+      "norm_label": "oc_donut_meta",
+      "id": "js_ocorrencias_oc_donut_meta"
     },
     {
       "label": "_buildOcDonut()",
@@ -671,10 +693,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L868",
       "_origin": "ast",
-      "id": "js_ocorrencias_buildocdonut",
       "community": 68,
       "community_name": "renderOcKPIs",
-      "norm_label": "_buildocdonut()"
+      "norm_label": "_buildocdonut()",
+      "id": "js_ocorrencias_buildocdonut"
     },
     {
       "label": "_buildOcSublegenda()",
@@ -682,10 +704,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L927",
       "_origin": "ast",
-      "id": "js_ocorrencias_buildocsublegenda",
       "community": 68,
       "community_name": "renderOcKPIs",
-      "norm_label": "_buildocsublegenda()"
+      "norm_label": "_buildocsublegenda()",
+      "id": "js_ocorrencias_buildocsublegenda"
     },
     {
       "label": "_bindOcDonutHover()",
@@ -693,10 +715,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L946",
       "_origin": "ast",
-      "id": "js_ocorrencias_bindocdonuthover",
       "community": 68,
       "community_name": "renderOcKPIs",
-      "norm_label": "_bindocdonuthover()"
+      "norm_label": "_bindocdonuthover()",
+      "id": "js_ocorrencias_bindocdonuthover"
     },
     {
       "label": "renderOcKPIs()",
@@ -704,10 +726,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L967",
       "_origin": "ast",
-      "id": "js_ocorrencias_renderockpis",
       "community": 68,
       "community_name": "renderOcKPIs",
-      "norm_label": "renderockpis()"
+      "norm_label": "renderockpis()",
+      "id": "js_ocorrencias_renderockpis"
     },
     {
       "label": "_buildOcCharts()",
@@ -715,10 +737,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L1067",
       "_origin": "ast",
-      "id": "js_ocorrencias_buildoccharts",
       "community": 68,
       "community_name": "renderOcKPIs",
-      "norm_label": "_buildoccharts()"
+      "norm_label": "_buildoccharts()",
+      "id": "js_ocorrencias_buildoccharts"
     },
     {
       "label": "_ocHierMetaTexto()",
@@ -726,10 +748,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L1289",
       "_origin": "ast",
-      "id": "js_ocorrencias_ochiermetatexto",
       "community": 38,
       "community_name": "_buildOcHierarquiaBar",
-      "norm_label": "_ochiermetatexto()"
+      "norm_label": "_ochiermetatexto()",
+      "id": "js_ocorrencias_ochiermetatexto"
     },
     {
       "label": "_buildOcHierarquiaBar()",
@@ -737,10 +759,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L1297",
       "_origin": "ast",
-      "id": "js_ocorrencias_buildochierarquiabar",
       "community": 38,
       "community_name": "_buildOcHierarquiaBar",
-      "norm_label": "_buildochierarquiabar()"
+      "norm_label": "_buildochierarquiabar()",
+      "id": "js_ocorrencias_buildochierarquiabar"
     },
     {
       "label": "_buildOcHierarquiaDetail()",
@@ -748,10 +770,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L1369",
       "_origin": "ast",
-      "id": "js_ocorrencias_buildochierarquiadetail",
       "community": 38,
       "community_name": "_buildOcHierarquiaBar",
-      "norm_label": "_buildochierarquiadetail()"
+      "norm_label": "_buildochierarquiadetail()",
+      "id": "js_ocorrencias_buildochierarquiadetail"
     },
     {
       "label": "renderOcorrencias()",
@@ -759,10 +781,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L1416",
       "_origin": "ast",
-      "id": "js_ocorrencias_renderocorrencias",
       "community": 43,
       "community_name": "renderOcorrencias",
-      "norm_label": "renderocorrencias()"
+      "norm_label": "renderocorrencias()",
+      "id": "js_ocorrencias_renderocorrencias"
     },
     {
       "label": "OC_STATUS_OPTIONS",
@@ -770,10 +792,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L1440",
       "_origin": "ast",
-      "id": "js_ocorrencias_oc_status_options",
       "community": 1,
       "community_name": "ocorrencias.js",
-      "norm_label": "oc_status_options"
+      "norm_label": "oc_status_options",
+      "id": "js_ocorrencias_oc_status_options"
     },
     {
       "label": "_OC_FILTER_KEY_LABELS",
@@ -781,10 +803,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L1448",
       "_origin": "ast",
-      "id": "js_ocorrencias_oc_filter_key_labels",
       "community": 1,
       "community_name": "ocorrencias.js",
-      "norm_label": "_oc_filter_key_labels"
+      "norm_label": "_oc_filter_key_labels",
+      "id": "js_ocorrencias_oc_filter_key_labels"
     },
     {
       "label": "_ocMicroFilter",
@@ -792,10 +814,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L1449",
       "_origin": "ast",
-      "id": "js_ocorrencias_ocmicrofilter",
       "community": 1,
       "community_name": "ocorrencias.js",
-      "norm_label": "_ocmicrofilter"
+      "norm_label": "_ocmicrofilter",
+      "id": "js_ocorrencias_ocmicrofilter"
     },
     {
       "label": "_ocRegionalPorCentral()",
@@ -803,10 +825,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L1460",
       "_origin": "ast",
-      "id": "js_ocorrencias_ocregionalporcentral",
       "community": 49,
       "community_name": "populateOcFiltros",
-      "norm_label": "_ocregionalporcentral()"
+      "norm_label": "_ocregionalporcentral()",
+      "id": "js_ocorrencias_ocregionalporcentral"
     },
     {
       "label": "ocStatusMatches()",
@@ -814,10 +836,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L1472",
       "_origin": "ast",
-      "id": "js_ocorrencias_ocstatusmatches",
       "community": 49,
       "community_name": "populateOcFiltros",
-      "norm_label": "ocstatusmatches()"
+      "norm_label": "ocstatusmatches()",
+      "id": "js_ocorrencias_ocstatusmatches"
     },
     {
       "label": "_ocBuildOptionsList()",
@@ -825,10 +847,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L1484",
       "_origin": "ast",
-      "id": "js_ocorrencias_ocbuildoptionslist",
       "community": 49,
       "community_name": "populateOcFiltros",
-      "norm_label": "_ocbuildoptionslist()"
+      "norm_label": "_ocbuildoptionslist()",
+      "id": "js_ocorrencias_ocbuildoptionslist"
     },
     {
       "label": "_ocMicroFilterCheckChange()",
@@ -836,10 +858,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L1508",
       "_origin": "ast",
-      "id": "js_ocorrencias_ocmicrofiltercheckchange",
       "community": 1,
       "community_name": "ocorrencias.js",
-      "norm_label": "_ocmicrofiltercheckchange()"
+      "norm_label": "_ocmicrofiltercheckchange()",
+      "id": "js_ocorrencias_ocmicrofiltercheckchange"
     },
     {
       "label": "_ocCloseMicroFilterDropdown()",
@@ -847,10 +869,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L1513",
       "_origin": "ast",
-      "id": "js_ocorrencias_occlosemicrofilterdropdown",
       "community": 91,
       "community_name": "_ocCloseMicroFilterDropdown",
-      "norm_label": "_occlosemicrofilterdropdown()"
+      "norm_label": "_occlosemicrofilterdropdown()",
+      "id": "js_ocorrencias_occlosemicrofilterdropdown"
     },
     {
       "label": "ocToggleMicroFilter()",
@@ -858,10 +880,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L1518",
       "_origin": "ast",
-      "id": "js_ocorrencias_octogglemicrofilter",
       "community": 49,
       "community_name": "populateOcFiltros",
-      "norm_label": "octogglemicrofilter()"
+      "norm_label": "octogglemicrofilter()",
+      "id": "js_ocorrencias_octogglemicrofilter"
     },
     {
       "label": "ocFilterMicroOptions()",
@@ -869,10 +891,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L1543",
       "_origin": "ast",
-      "id": "js_ocorrencias_ocfiltermicrooptions",
       "community": 49,
       "community_name": "populateOcFiltros",
-      "norm_label": "ocfiltermicrooptions()"
+      "norm_label": "ocfiltermicrooptions()",
+      "id": "js_ocorrencias_ocfiltermicrooptions"
     },
     {
       "label": "ocApplyMicroFilter()",
@@ -880,10 +902,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L1547",
       "_origin": "ast",
-      "id": "js_ocorrencias_ocapplymicrofilter",
       "community": 91,
       "community_name": "_ocCloseMicroFilterDropdown",
-      "norm_label": "ocapplymicrofilter()"
+      "norm_label": "ocapplymicrofilter()",
+      "id": "js_ocorrencias_ocapplymicrofilter"
     },
     {
       "label": "ocCancelMicroFilter()",
@@ -891,10 +913,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L1555",
       "_origin": "ast",
-      "id": "js_ocorrencias_occancelmicrofilter",
       "community": 91,
       "community_name": "_ocCloseMicroFilterDropdown",
-      "norm_label": "occancelmicrofilter()"
+      "norm_label": "occancelmicrofilter()",
+      "id": "js_ocorrencias_occancelmicrofilter"
     },
     {
       "label": "ocClearMicroFilter()",
@@ -902,10 +924,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L1560",
       "_origin": "ast",
-      "id": "js_ocorrencias_occlearmicrofilter",
       "community": 91,
       "community_name": "_ocCloseMicroFilterDropdown",
-      "norm_label": "occlearmicrofilter()"
+      "norm_label": "occlearmicrofilter()",
+      "id": "js_ocorrencias_occlearmicrofilter"
     },
     {
       "label": "ocClearAllMicroFilters()",
@@ -913,10 +935,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L1569",
       "_origin": "ast",
-      "id": "js_ocorrencias_occlearallmicrofilters",
       "community": 91,
       "community_name": "_ocCloseMicroFilterDropdown",
-      "norm_label": "occlearallmicrofilters()"
+      "norm_label": "occlearallmicrofilters()",
+      "id": "js_ocorrencias_occlearallmicrofilters"
     },
     {
       "label": "_ocSyncTriggerLabel()",
@@ -924,10 +946,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L1580",
       "_origin": "ast",
-      "id": "js_ocorrencias_ocsynctriggerlabel",
       "community": 91,
       "community_name": "_ocCloseMicroFilterDropdown",
-      "norm_label": "_ocsynctriggerlabel()"
+      "norm_label": "_ocsynctriggerlabel()",
+      "id": "js_ocorrencias_ocsynctriggerlabel"
     },
     {
       "label": "_ocSyncClearBtn()",
@@ -935,10 +957,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L1601",
       "_origin": "ast",
-      "id": "js_ocorrencias_ocsyncclearbtn",
       "community": 91,
       "community_name": "_ocCloseMicroFilterDropdown",
-      "norm_label": "_ocsyncclearbtn()"
+      "norm_label": "_ocsyncclearbtn()",
+      "id": "js_ocorrencias_ocsyncclearbtn"
     },
     {
       "label": "OC_SORT_OPTIONS",
@@ -946,10 +968,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L1637",
       "_origin": "ast",
-      "id": "js_ocorrencias_oc_sort_options",
       "community": 49,
       "community_name": "populateOcFiltros",
-      "norm_label": "oc_sort_options"
+      "norm_label": "oc_sort_options",
+      "id": "js_ocorrencias_oc_sort_options"
     },
     {
       "label": "_ocSyncOrdenarBtn()",
@@ -957,10 +979,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L1649",
       "_origin": "ast",
-      "id": "js_ocorrencias_ocsyncordenarbtn",
       "community": 49,
       "community_name": "populateOcFiltros",
-      "norm_label": "_ocsyncordenarbtn()"
+      "norm_label": "_ocsyncordenarbtn()",
+      "id": "js_ocorrencias_ocsyncordenarbtn"
     },
     {
       "label": "_ocCloseOrdenarDropdown()",
@@ -968,10 +990,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L1662",
       "_origin": "ast",
-      "id": "js_ocorrencias_occloseordenardropdown",
       "community": 49,
       "community_name": "populateOcFiltros",
-      "norm_label": "_occloseordenardropdown()"
+      "norm_label": "_occloseordenardropdown()",
+      "id": "js_ocorrencias_occloseordenardropdown"
     },
     {
       "label": "ocToggleOrdenarDropdown()",
@@ -979,10 +1001,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L1667",
       "_origin": "ast",
-      "id": "js_ocorrencias_octoggleordenardropdown",
       "community": 91,
       "community_name": "_ocCloseMicroFilterDropdown",
-      "norm_label": "octoggleordenardropdown()"
+      "norm_label": "octoggleordenardropdown()",
+      "id": "js_ocorrencias_octoggleordenardropdown"
     },
     {
       "label": "ocSetOrdenar()",
@@ -990,10 +1012,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L1684",
       "_origin": "ast",
-      "id": "js_ocorrencias_ocsetordenar",
       "community": 49,
       "community_name": "populateOcFiltros",
-      "norm_label": "ocsetordenar()"
+      "norm_label": "ocsetordenar()",
+      "id": "js_ocorrencias_ocsetordenar"
     },
     {
       "label": "_ocCompararOrdenacao()",
@@ -1001,10 +1023,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L1691",
       "_origin": "ast",
-      "id": "js_ocorrencias_occompararordenacao",
       "community": 38,
       "community_name": "_buildOcHierarquiaBar",
-      "norm_label": "_occompararordenacao()"
+      "norm_label": "_occompararordenacao()",
+      "id": "js_ocorrencias_occompararordenacao"
     },
     {
       "label": "getOcorrenciasFiltradas()",
@@ -1012,10 +1034,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L1702",
       "_origin": "ast",
-      "id": "js_ocorrencias_getocorrenciasfiltradas",
       "community": 49,
       "community_name": "populateOcFiltros",
-      "norm_label": "getocorrenciasfiltradas()"
+      "norm_label": "getocorrenciasfiltradas()",
+      "id": "js_ocorrencias_getocorrenciasfiltradas"
     },
     {
       "label": "_ocAbrirMenuCard()",
@@ -1023,10 +1045,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L1743",
       "_origin": "ast",
-      "id": "js_ocorrencias_ocabrirmenucard",
       "community": 38,
       "community_name": "_buildOcHierarquiaBar",
-      "norm_label": "_ocabrirmenucard()"
+      "norm_label": "_ocabrirmenucard()",
+      "id": "js_ocorrencias_ocabrirmenucard"
     },
     {
       "label": "_ocFecharMenuCard()",
@@ -1034,10 +1056,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L1783",
       "_origin": "ast",
-      "id": "js_ocorrencias_ocfecharmenucard",
       "community": 38,
       "community_name": "_buildOcHierarquiaBar",
-      "norm_label": "_ocfecharmenucard()"
+      "norm_label": "_ocfecharmenucard()",
+      "id": "js_ocorrencias_ocfecharmenucard"
     },
     {
       "label": "_renderOcLista()",
@@ -1045,10 +1067,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L1787",
       "_origin": "ast",
-      "id": "js_ocorrencias_renderoclista",
       "community": 38,
       "community_name": "_buildOcHierarquiaBar",
-      "norm_label": "_renderoclista()"
+      "norm_label": "_renderoclista()",
+      "id": "js_ocorrencias_renderoclista"
     },
     {
       "label": "openOcDetailModal()",
@@ -1056,10 +1078,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L1878",
       "_origin": "ast",
-      "id": "js_ocorrencias_openocdetailmodal",
       "community": 38,
       "community_name": "_buildOcHierarquiaBar",
-      "norm_label": "openocdetailmodal()"
+      "norm_label": "openocdetailmodal()",
+      "id": "js_ocorrencias_openocdetailmodal"
     },
     {
       "label": "closeOcDetailModal()",
@@ -1067,10 +1089,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L2012",
       "_origin": "ast",
-      "id": "js_ocorrencias_closeocdetailmodal",
       "community": 1,
       "community_name": "ocorrencias.js",
-      "norm_label": "closeocdetailmodal()"
+      "norm_label": "closeocdetailmodal()",
+      "id": "js_ocorrencias_closeocdetailmodal"
     },
     {
       "label": "populateOcFiltros()",
@@ -1078,10 +1100,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L2017",
       "_origin": "ast",
-      "id": "js_ocorrencias_populateocfiltros",
       "community": 49,
       "community_name": "populateOcFiltros",
-      "norm_label": "populateocfiltros()"
+      "norm_label": "populateocfiltros()",
+      "id": "js_ocorrencias_populateocfiltros"
     },
     {
       "label": "openOcorrenciaModal()",
@@ -1089,10 +1111,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L2079",
       "_origin": "ast",
-      "id": "js_ocorrencias_openocorrenciamodal",
       "community": 1,
       "community_name": "ocorrencias.js",
-      "norm_label": "openocorrenciamodal()"
+      "norm_label": "openocorrenciamodal()",
+      "id": "js_ocorrencias_openocorrenciamodal"
     },
     {
       "label": "_ocFormEscBuildNiveis()",
@@ -1100,10 +1122,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L2123",
       "_origin": "ast",
-      "id": "js_ocorrencias_ocformescbuildniveis",
       "community": 1,
       "community_name": "ocorrencias.js",
-      "norm_label": "_ocformescbuildniveis()"
+      "norm_label": "_ocformescbuildniveis()",
+      "id": "js_ocorrencias_ocformescbuildniveis"
     },
     {
       "label": "closeOcorrenciaModal()",
@@ -1111,10 +1133,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L2152",
       "_origin": "ast",
-      "id": "js_ocorrencias_closeocorrenciamodal",
       "community": 1,
       "community_name": "ocorrencias.js",
-      "norm_label": "closeocorrenciamodal()"
+      "norm_label": "closeocorrenciamodal()",
+      "id": "js_ocorrencias_closeocorrenciamodal"
     },
     {
       "label": "submitOcorrenciaForm()",
@@ -1122,10 +1144,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L2156",
       "_origin": "ast",
-      "id": "js_ocorrencias_submitocorrenciaform",
       "community": 1,
       "community_name": "ocorrencias.js",
-      "norm_label": "submitocorrenciaform()"
+      "norm_label": "submitocorrenciaform()",
+      "id": "js_ocorrencias_submitocorrenciaform"
     },
     {
       "label": "openConcluirModal()",
@@ -1133,10 +1155,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L2232",
       "_origin": "ast",
-      "id": "js_ocorrencias_openconcluirmodal",
       "community": 1,
       "community_name": "ocorrencias.js",
-      "norm_label": "openconcluirmodal()"
+      "norm_label": "openconcluirmodal()",
+      "id": "js_ocorrencias_openconcluirmodal"
     },
     {
       "label": "closeConcluirModal()",
@@ -1144,10 +1166,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L2239",
       "_origin": "ast",
-      "id": "js_ocorrencias_closeconcluirmodal",
       "community": 43,
       "community_name": "renderOcorrencias",
-      "norm_label": "closeconcluirmodal()"
+      "norm_label": "closeconcluirmodal()",
+      "id": "js_ocorrencias_closeconcluirmodal"
     },
     {
       "label": "submitConcluir()",
@@ -1155,10 +1177,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L2243",
       "_origin": "ast",
-      "id": "js_ocorrencias_submitconcluir",
       "community": 43,
       "community_name": "renderOcorrencias",
-      "norm_label": "submitconcluir()"
+      "norm_label": "submitconcluir()",
+      "id": "js_ocorrencias_submitconcluir"
     },
     {
       "label": "openInconclusivaModal()",
@@ -1166,10 +1188,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L2263",
       "_origin": "ast",
-      "id": "js_ocorrencias_openinconclusivamodal",
       "community": 1,
       "community_name": "ocorrencias.js",
-      "norm_label": "openinconclusivamodal()"
+      "norm_label": "openinconclusivamodal()",
+      "id": "js_ocorrencias_openinconclusivamodal"
     },
     {
       "label": "closeInconclusivaModal()",
@@ -1177,10 +1199,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L2270",
       "_origin": "ast",
-      "id": "js_ocorrencias_closeinconclusivamodal",
       "community": 43,
       "community_name": "renderOcorrencias",
-      "norm_label": "closeinconclusivamodal()"
+      "norm_label": "closeinconclusivamodal()",
+      "id": "js_ocorrencias_closeinconclusivamodal"
     },
     {
       "label": "submitInconclusiva()",
@@ -1188,10 +1210,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L2274",
       "_origin": "ast",
-      "id": "js_ocorrencias_submitinconclusiva",
       "community": 43,
       "community_name": "renderOcorrencias",
-      "norm_label": "submitinconclusiva()"
+      "norm_label": "submitinconclusiva()",
+      "id": "js_ocorrencias_submitinconclusiva"
     },
     {
       "label": "reabrirOcorrencia()",
@@ -1199,10 +1221,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L2293",
       "_origin": "ast",
-      "id": "js_ocorrencias_reabrirocorrencia",
       "community": 43,
       "community_name": "renderOcorrencias",
-      "norm_label": "reabrirocorrencia()"
+      "norm_label": "reabrirocorrencia()",
+      "id": "js_ocorrencias_reabrirocorrencia"
     },
     {
       "label": "reabrirOcorrenciaConcluida()",
@@ -1210,10 +1232,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L2307",
       "_origin": "ast",
-      "id": "js_ocorrencias_reabrirocorrenciaconcluida",
       "community": 43,
       "community_name": "renderOcorrencias",
-      "norm_label": "reabrirocorrenciaconcluida()"
+      "norm_label": "reabrirocorrenciaconcluida()",
+      "id": "js_ocorrencias_reabrirocorrenciaconcluida"
     },
     {
       "label": "confirmarExcluirOcorrencia()",
@@ -1221,10 +1243,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L2326",
       "_origin": "ast",
-      "id": "js_ocorrencias_confirmarexcluirocorrencia",
       "community": 43,
       "community_name": "renderOcorrencias",
-      "norm_label": "confirmarexcluirocorrencia()"
+      "norm_label": "confirmarexcluirocorrencia()",
+      "id": "js_ocorrencias_confirmarexcluirocorrencia"
     },
     {
       "label": "confirmarExcluirAjusteSistemico()",
@@ -1232,10 +1254,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L2360",
       "_origin": "ast",
-      "id": "js_ocorrencias_confirmarexcluirajustesistemico",
       "community": 43,
       "community_name": "renderOcorrencias",
-      "norm_label": "confirmarexcluirajustesistemico()"
+      "norm_label": "confirmarexcluirajustesistemico()",
+      "id": "js_ocorrencias_confirmarexcluirajustesistemico"
     },
     {
       "label": "syncAjustesExcluidosFromSupabase()",
@@ -1243,10 +1265,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L2444",
       "_origin": "ast",
-      "id": "js_ocorrencias_syncajustesexcluidosfromsupabase",
       "community": 1,
       "community_name": "ocorrencias.js",
-      "norm_label": "syncajustesexcluidosfromsupabase()"
+      "norm_label": "syncajustesexcluidosfromsupabase()",
+      "id": "js_ocorrencias_syncajustesexcluidosfromsupabase"
     },
     {
       "label": "renderOcorrenciasPage()",
@@ -1254,10 +1276,10 @@
       "source_file": "js/ocorrencias.js",
       "source_location": "L2478",
       "_origin": "ast",
-      "id": "js_ocorrencias_renderocorrenciaspage",
       "community": 49,
       "community_name": "populateOcFiltros",
-      "norm_label": "renderocorrenciaspage()"
+      "norm_label": "renderocorrenciaspage()",
+      "id": "js_ocorrencias_renderocorrenciaspage"
     },
     {
       "label": "calendar-oc.test.mjs",
@@ -1265,10 +1287,10 @@
       "source_file": "tests/calendar-oc.test.mjs",
       "source_location": "L1",
       "_origin": "ast",
-      "id": "tests_calendar_oc_test",
       "community": 98,
       "community_name": "calendar-oc.test.mjs",
-      "norm_label": "calendar-oc.test.mjs"
+      "norm_label": "calendar-oc.test.mjs",
+      "id": "tests_calendar_oc_test"
     },
     {
       "label": "raiz",
@@ -1276,10 +1298,10 @@
       "source_file": "tests/calendar-oc.test.mjs",
       "source_location": "L19",
       "_origin": "ast",
-      "id": "tests_calendar_oc_test_raiz",
       "community": 98,
       "community_name": "calendar-oc.test.mjs",
-      "norm_label": "raiz"
+      "norm_label": "raiz",
+      "id": "tests_calendar_oc_test_raiz"
     },
     {
       "label": "fonteCalendar",
@@ -1287,10 +1309,10 @@
       "source_file": "tests/calendar-oc.test.mjs",
       "source_location": "L20",
       "_origin": "ast",
-      "id": "tests_calendar_oc_test_fontecalendar",
       "community": 98,
       "community_name": "calendar-oc.test.mjs",
-      "norm_label": "fontecalendar"
+      "norm_label": "fontecalendar",
+      "id": "tests_calendar_oc_test_fontecalendar"
     },
     {
       "label": "fakeEl()",
@@ -1298,10 +1320,10 @@
       "source_file": "tests/calendar-oc.test.mjs",
       "source_location": "L22",
       "_origin": "ast",
-      "id": "tests_calendar_oc_test_fakeel",
       "community": 98,
       "community_name": "calendar-oc.test.mjs",
-      "norm_label": "fakeel()"
+      "norm_label": "fakeel()",
+      "id": "tests_calendar_oc_test_fakeel"
     },
     {
       "label": "montar()",
@@ -1309,10 +1331,10 @@
       "source_file": "tests/calendar-oc.test.mjs",
       "source_location": "L26",
       "_origin": "ast",
-      "id": "tests_calendar_oc_test_montar",
       "community": 98,
       "community_name": "calendar-oc.test.mjs",
-      "norm_label": "montar()"
+      "norm_label": "montar()",
+      "id": "tests_calendar_oc_test_montar"
     },
     {
       "label": "casos",
@@ -1320,10 +1342,10 @@
       "source_file": "tests/calendar-oc.test.mjs",
       "source_location": "L49",
       "_origin": "ast",
-      "id": "tests_calendar_oc_test_casos",
       "community": 98,
       "community_name": "calendar-oc.test.mjs",
-      "norm_label": "casos"
+      "norm_label": "casos",
+      "id": "tests_calendar_oc_test_casos"
     },
     {
       "label": "teste()",
@@ -1331,10 +1353,10 @@
       "source_file": "tests/calendar-oc.test.mjs",
       "source_location": "L50",
       "_origin": "ast",
-      "id": "tests_calendar_oc_test_teste",
       "community": 98,
       "community_name": "calendar-oc.test.mjs",
-      "norm_label": "teste()"
+      "norm_label": "teste()",
+      "id": "tests_calendar_oc_test_teste"
     },
     {
       "label": "addEventListener()",
@@ -1342,10 +1364,10 @@
       "source_file": "tests/calendar-oc.test.mjs",
       "source_location": "L95",
       "_origin": "ast",
-      "id": "tests_calendar_oc_test_addeventlistener",
       "community": 98,
       "community_name": "calendar-oc.test.mjs",
-      "norm_label": "addeventlistener()"
+      "norm_label": "addeventlistener()",
+      "id": "tests_calendar_oc_test_addeventlistener"
     },
     {
       "label": "info()",
@@ -1353,10 +1375,10 @@
       "source_file": "tests/calendar-oc.test.mjs",
       "source_location": "L99",
       "_origin": "ast",
-      "id": "tests_calendar_oc_test_info",
       "community": 98,
       "community_name": "calendar-oc.test.mjs",
-      "norm_label": "info()"
+      "norm_label": "info()",
+      "id": "tests_calendar_oc_test_info"
     },
     {
       "label": "warn()",
@@ -1364,10 +1386,10 @@
       "source_file": "tests/calendar-oc.test.mjs",
       "source_location": "L99",
       "_origin": "ast",
-      "id": "tests_calendar_oc_test_warn",
       "community": 98,
       "community_name": "calendar-oc.test.mjs",
-      "norm_label": "warn()"
+      "norm_label": "warn()",
+      "id": "tests_calendar_oc_test_warn"
     },
     {
       "label": "error()",
@@ -1375,10 +1397,10 @@
       "source_file": "tests/calendar-oc.test.mjs",
       "source_location": "L99",
       "_origin": "ast",
-      "id": "tests_calendar_oc_test_error",
       "community": 98,
       "community_name": "calendar-oc.test.mjs",
-      "norm_label": "error()"
+      "norm_label": "error()",
+      "id": "tests_calendar_oc_test_error"
     },
     {
       "label": "getElementById()",
@@ -1386,10 +1408,10 @@
       "source_file": "tests/calendar-oc.test.mjs",
       "source_location": "L102",
       "_origin": "ast",
-      "id": "tests_calendar_oc_test_getelementbyid",
       "community": 98,
       "community_name": "calendar-oc.test.mjs",
-      "norm_label": "getelementbyid()"
+      "norm_label": "getelementbyid()",
+      "id": "tests_calendar_oc_test_getelementbyid"
     },
     {
       "label": "ocorrencias-supervisor.test.mjs",
@@ -1397,10 +1419,10 @@
       "source_file": "tests/ocorrencias-supervisor.test.mjs",
       "source_location": "L1",
       "_origin": "ast",
-      "id": "tests_ocorrencias_supervisor_test",
       "community": 53,
       "community_name": "ocorrencias-supervisor.test.mjs",
-      "norm_label": "ocorrencias-supervisor.test.mjs"
+      "norm_label": "ocorrencias-supervisor.test.mjs",
+      "id": "tests_ocorrencias_supervisor_test"
     },
     {
       "label": "raiz",
@@ -1408,10 +1430,10 @@
       "source_file": "tests/ocorrencias-supervisor.test.mjs",
       "source_location": "L23",
       "_origin": "ast",
-      "id": "tests_ocorrencias_supervisor_test_raiz",
       "community": 53,
       "community_name": "ocorrencias-supervisor.test.mjs",
-      "norm_label": "raiz"
+      "norm_label": "raiz",
+      "id": "tests_ocorrencias_supervisor_test_raiz"
     },
     {
       "label": "fonteOcorrencias",
@@ -1419,10 +1441,10 @@
       "source_file": "tests/ocorrencias-supervisor.test.mjs",
       "source_location": "L24",
       "_origin": "ast",
-      "id": "tests_ocorrencias_supervisor_test_fonteocorrencias",
       "community": 53,
       "community_name": "ocorrencias-supervisor.test.mjs",
-      "norm_label": "fonteocorrencias"
+      "norm_label": "fonteocorrencias",
+      "id": "tests_ocorrencias_supervisor_test_fonteocorrencias"
     },
     {
       "label": "montar()",
@@ -1430,10 +1452,10 @@
       "source_file": "tests/ocorrencias-supervisor.test.mjs",
       "source_location": "L26",
       "_origin": "ast",
-      "id": "tests_ocorrencias_supervisor_test_montar",
       "community": 53,
       "community_name": "ocorrencias-supervisor.test.mjs",
-      "norm_label": "montar()"
+      "norm_label": "montar()",
+      "id": "tests_ocorrencias_supervisor_test_montar"
     },
     {
       "label": "montarComSupabase()",
@@ -1441,10 +1463,10 @@
       "source_file": "tests/ocorrencias-supervisor.test.mjs",
       "source_location": "L56",
       "_origin": "ast",
-      "id": "tests_ocorrencias_supervisor_test_montarcomsupabase",
       "community": 53,
       "community_name": "ocorrencias-supervisor.test.mjs",
-      "norm_label": "montarcomsupabase()"
+      "norm_label": "montarcomsupabase()",
+      "id": "tests_ocorrencias_supervisor_test_montarcomsupabase"
     },
     {
       "label": "casos",
@@ -1452,10 +1474,10 @@
       "source_file": "tests/ocorrencias-supervisor.test.mjs",
       "source_location": "L82",
       "_origin": "ast",
-      "id": "tests_ocorrencias_supervisor_test_casos",
       "community": 53,
       "community_name": "ocorrencias-supervisor.test.mjs",
-      "norm_label": "casos"
+      "norm_label": "casos",
+      "id": "tests_ocorrencias_supervisor_test_casos"
     },
     {
       "label": "teste()",
@@ -1463,10 +1485,10 @@
       "source_file": "tests/ocorrencias-supervisor.test.mjs",
       "source_location": "L83",
       "_origin": "ast",
-      "id": "tests_ocorrencias_supervisor_test_teste",
       "community": 53,
       "community_name": "ocorrencias-supervisor.test.mjs",
-      "norm_label": "teste()"
+      "norm_label": "teste()",
+      "id": "tests_ocorrencias_supervisor_test_teste"
     },
     {
       "label": "rowBase",
@@ -1474,10 +1496,10 @@
       "source_file": "tests/ocorrencias-supervisor.test.mjs",
       "source_location": "L85",
       "_origin": "ast",
-      "id": "tests_ocorrencias_supervisor_test_rowbase",
       "community": 53,
       "community_name": "ocorrencias-supervisor.test.mjs",
-      "norm_label": "rowbase"
+      "norm_label": "rowbase",
+      "id": "tests_ocorrencias_supervisor_test_rowbase"
     },
     {
       "label": "daiBase",
@@ -1485,10 +1507,10 @@
       "source_file": "tests/ocorrencias-supervisor.test.mjs",
       "source_location": "L258",
       "_origin": "ast",
-      "id": "tests_ocorrencias_supervisor_test_daibase",
       "community": 53,
       "community_name": "ocorrencias-supervisor.test.mjs",
-      "norm_label": "daibase"
+      "norm_label": "daibase",
+      "id": "tests_ocorrencias_supervisor_test_daibase"
     },
     {
       "label": "amanha()",
@@ -1496,10 +1518,10 @@
       "source_file": "tests/ocorrencias-supervisor.test.mjs",
       "source_location": "L378",
       "_origin": "ast",
-      "id": "tests_ocorrencias_supervisor_test_amanha",
       "community": 53,
       "community_name": "ocorrencias-supervisor.test.mjs",
-      "norm_label": "amanha()"
+      "norm_label": "amanha()",
+      "id": "tests_ocorrencias_supervisor_test_amanha"
     },
     {
       "label": "comIniFim()",
@@ -1507,10 +1529,10 @@
       "source_file": "tests/ocorrencias-supervisor.test.mjs",
       "source_location": "L579",
       "_origin": "ast",
-      "id": "tests_ocorrencias_supervisor_test_cominifim",
       "community": 53,
       "community_name": "ocorrencias-supervisor.test.mjs",
-      "norm_label": "cominifim()"
+      "norm_label": "cominifim()",
+      "id": "tests_ocorrencias_supervisor_test_cominifim"
     },
     {
       "label": "oc-card-menu.test.mjs",
@@ -7062,9 +7084,9 @@
       "source_file": "js/cloud-backup.js",
       "source_location": "L50",
       "_origin": "ast",
-      "community": 28,
+      "community": 0,
       "norm_label": "cloud_backup_modulos",
-      "community_name": "cloud-backup.js",
+      "community_name": "admin.js",
       "id": "js_cloud_backup_cloud_backup_modulos"
     },
     {
@@ -8569,9 +8591,9 @@
       "source_file": "js/dashboard.js",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 21,
+      "community": 36,
       "norm_label": "builddashboardgerencialresults()",
-      "community_name": "renderDgVisaoGeralPdf",
+      "community_name": "parseDate",
       "id": "js_dashboard_builddashboardgerencialresults"
     },
     {
@@ -8580,9 +8602,9 @@
       "source_file": "js/dashboard.js",
       "source_location": "L232",
       "_origin": "ast",
-      "community": 21,
+      "community": 36,
       "norm_label": "rodardashboardgerencial()",
-      "community_name": "renderDgVisaoGeralPdf",
+      "community_name": "parseDate",
       "id": "js_dashboard_rodardashboardgerencial"
     },
     {
@@ -8679,9 +8701,9 @@
       "source_file": "js/dashboard.js",
       "source_location": "L394",
       "_origin": "ast",
-      "community": 21,
+      "community": 36,
       "norm_label": "_renderdashboardconteudo()",
-      "community_name": "renderDgVisaoGeralPdf",
+      "community_name": "parseDate",
       "id": "js_dashboard_renderdashboardconteudo"
     },
     {
@@ -8855,9 +8877,9 @@
       "source_file": "js/dashboard.js",
       "source_location": "L668",
       "_origin": "ast",
-      "community": 97,
+      "community": 21,
       "norm_label": "_dgvgscorefromcounts()",
-      "community_name": "_dgVgRenderChartGrupoMaterial",
+      "community_name": "renderDgVisaoGeralPdf",
       "id": "js_dashboard_dgvgscorefromcounts"
     },
     {
@@ -8866,9 +8888,9 @@
       "source_file": "js/dashboard.js",
       "source_location": "L682",
       "_origin": "ast",
-      "community": 97,
+      "community": 21,
       "norm_label": "_dgvgbuildcentralhealthdata()",
-      "community_name": "_dgVgRenderChartGrupoMaterial",
+      "community_name": "renderDgVisaoGeralPdf",
       "id": "js_dashboard_dgvgbuildcentralhealthdata"
     },
     {
@@ -8976,9 +8998,9 @@
       "source_file": "js/dashboard.js",
       "source_location": "L856",
       "_origin": "ast",
-      "community": 97,
+      "community": 21,
       "norm_label": "_dgvgshade()",
-      "community_name": "_dgVgRenderChartGrupoMaterial",
+      "community_name": "renderDgVisaoGeralPdf",
       "id": "js_dashboard_dgvgshade"
     },
     {
@@ -8987,9 +9009,9 @@
       "source_file": "js/dashboard.js",
       "source_location": "L881",
       "_origin": "ast",
-      "community": 97,
+      "community": 21,
       "norm_label": "_dgvgdrawdonutsvg()",
-      "community_name": "_dgVgRenderChartGrupoMaterial",
+      "community_name": "renderDgVisaoGeralPdf",
       "id": "js_dashboard_dgvgdrawdonutsvg"
     },
     {
@@ -8998,9 +9020,9 @@
       "source_file": "js/dashboard.js",
       "source_location": "L1003",
       "_origin": "ast",
-      "community": 97,
+      "community": 21,
       "norm_label": "_dgvghealthtiphtml()",
-      "community_name": "_dgVgRenderChartGrupoMaterial",
+      "community_name": "renderDgVisaoGeralPdf",
       "id": "js_dashboard_dgvghealthtiphtml"
     },
     {
@@ -9009,9 +9031,9 @@
       "source_file": "js/dashboard.js",
       "source_location": "L1026",
       "_origin": "ast",
-      "community": 97,
+      "community": 21,
       "norm_label": "_dgvgmaterialtiphtml()",
-      "community_name": "_dgVgRenderChartGrupoMaterial",
+      "community_name": "renderDgVisaoGeralPdf",
       "id": "js_dashboard_dgvgmaterialtiphtml"
     },
     {
@@ -9020,9 +9042,9 @@
       "source_file": "js/dashboard.js",
       "source_location": "L1038",
       "_origin": "ast",
-      "community": 97,
+      "community": 21,
       "norm_label": "_dgvgbuildhealthdonutdata()",
-      "community_name": "_dgVgRenderChartGrupoMaterial",
+      "community_name": "renderDgVisaoGeralPdf",
       "id": "js_dashboard_dgvgbuildhealthdonutdata"
     },
     {
@@ -9031,9 +9053,9 @@
       "source_file": "js/dashboard.js",
       "source_location": "L1051",
       "_origin": "ast",
-      "community": 97,
+      "community": 21,
       "norm_label": "_dgvgrenderhealthdonutsvg()",
-      "community_name": "_dgVgRenderChartGrupoMaterial",
+      "community_name": "renderDgVisaoGeralPdf",
       "id": "js_dashboard_dgvgrenderhealthdonutsvg"
     },
     {
@@ -9042,9 +9064,9 @@
       "source_file": "js/dashboard.js",
       "source_location": "L1126",
       "_origin": "ast",
-      "community": 97,
+      "community": 21,
       "norm_label": "_dgvgrendercustodonutsvg()",
-      "community_name": "_dgVgRenderChartGrupoMaterial",
+      "community_name": "renderDgVisaoGeralPdf",
       "id": "js_dashboard_dgvgrendercustodonutsvg"
     },
     {
@@ -9141,9 +9163,9 @@
       "source_file": "js/dashboard.js",
       "source_location": "L1518",
       "_origin": "ast",
-      "community": 97,
+      "community": 21,
       "norm_label": "_dgvgrenderhealthdonuts()",
-      "community_name": "_dgVgRenderChartGrupoMaterial",
+      "community_name": "renderDgVisaoGeralPdf",
       "id": "js_dashboard_dgvgrenderhealthdonuts"
     },
     {
@@ -9218,9 +9240,9 @@
       "source_file": "js/dashboard.js",
       "source_location": "L1767",
       "_origin": "ast",
-      "community": 97,
+      "community": 21,
       "norm_label": "_dgvgagruparoutros()",
-      "community_name": "_dgVgRenderChartGrupoMaterial",
+      "community_name": "renderDgVisaoGeralPdf",
       "id": "js_dashboard_dgvgagruparoutros"
     },
     {
@@ -9229,9 +9251,9 @@
       "source_file": "js/dashboard.js",
       "source_location": "L1780",
       "_origin": "ast",
-      "community": 97,
+      "community": 21,
       "norm_label": "_dgvgrenderchartgrupomaterial()",
-      "community_name": "_dgVgRenderChartGrupoMaterial",
+      "community_name": "renderDgVisaoGeralPdf",
       "id": "js_dashboard_dgvgrenderchartgrupomaterial"
     },
     {
@@ -9240,9 +9262,9 @@
       "source_file": "js/dashboard.js",
       "source_location": "L1817",
       "_origin": "ast",
-      "community": 97,
+      "community": 21,
       "norm_label": "_dgvgrenderdonutcategoria()",
-      "community_name": "_dgVgRenderChartGrupoMaterial",
+      "community_name": "renderDgVisaoGeralPdf",
       "id": "js_dashboard_dgvgrenderdonutcategoria"
     },
     {
@@ -9416,9 +9438,9 @@
       "source_file": "js/dashboard.js",
       "source_location": "L2715",
       "_origin": "ast",
-      "community": 21,
+      "community": 36,
       "norm_label": "getperiodoanteriorequivalente()",
-      "community_name": "renderDgVisaoGeralPdf",
+      "community_name": "parseDate",
       "id": "js_dashboard_getperiodoanteriorequivalente"
     },
     {
@@ -10186,9 +10208,9 @@
       "source_file": "js/dashboard.js",
       "source_location": "L4635",
       "_origin": "ast",
-      "community": 22,
+      "community": 0,
       "norm_label": "removerregistro()",
-      "community_name": "renderModule",
+      "community_name": "admin.js",
       "id": "js_dashboard_removerregistro"
     },
     {
@@ -10747,9 +10769,9 @@
       "source_file": "js/dashboard.js",
       "source_location": "L6596",
       "_origin": "ast",
-      "community": 21,
+      "community": 36,
       "norm_label": "datecmp()",
-      "community_name": "renderDgVisaoGeralPdf",
+      "community_name": "parseDate",
       "id": "js_dashboard_datecmp"
     },
     {
@@ -10846,9 +10868,9 @@
       "source_file": "js/dashboard.js",
       "source_location": "L6651",
       "_origin": "ast",
-      "community": 21,
+      "community": 36,
       "norm_label": "normmov()",
-      "community_name": "renderDgVisaoGeralPdf",
+      "community_name": "parseDate",
       "id": "js_dashboard_normmov"
     },
     {
@@ -10857,9 +10879,9 @@
       "source_file": "js/dashboard.js",
       "source_location": "L6655",
       "_origin": "ast",
-      "community": 27,
+      "community": 21,
       "norm_label": "codigos_entrada",
-      "community_name": "escapeHtml",
+      "community_name": "renderDgVisaoGeralPdf",
       "id": "js_dashboard_codigos_entrada"
     },
     {
@@ -17886,9 +17908,9 @@
       "source_file": "js/ui.js",
       "source_location": "L827",
       "_origin": "ast",
-      "community": 42,
+      "community": 24,
       "norm_label": "getcoluniquevalues()",
-      "community_name": "applyColFilter",
+      "community_name": "renderImports",
       "id": "js_ui_getcoluniquevalues"
     },
     {
@@ -17919,9 +17941,9 @@
       "source_file": "js/ui.js",
       "source_location": "L858",
       "_origin": "ast",
-      "community": 24,
+      "community": 42,
       "norm_label": "modulehascolfilter()",
-      "community_name": "renderImports",
+      "community_name": "applyColFilter",
       "id": "js_ui_modulehascolfilter"
     },
     {
@@ -18227,9 +18249,9 @@
       "source_file": "js/ui.js",
       "source_location": "L1349",
       "_origin": "ast",
-      "community": 45,
+      "community": 37,
       "norm_label": "_bdmfechexcluidoshtml()",
-      "community_name": "_fechMgrGetTodosCandidatos",
+      "community_name": "getFilteredData",
       "id": "js_ui_bdmfechexcluidoshtml"
     },
     {
@@ -18260,9 +18282,9 @@
       "source_file": "js/ui.js",
       "source_location": "L1583",
       "_origin": "ast",
-      "community": 45,
+      "community": 37,
       "norm_label": "openfechmodal()",
-      "community_name": "_fechMgrGetTodosCandidatos",
+      "community_name": "getFilteredData",
       "id": "js_ui_openfechmodal"
     },
     {
@@ -18304,9 +18326,9 @@
       "source_file": "js/ui.js",
       "source_location": "L1745",
       "_origin": "ast",
-      "community": 27,
+      "community": 3,
       "norm_label": "calcpendentesintegracao()",
-      "community_name": "escapeHtml",
+      "community_name": "ui.js",
       "id": "js_ui_calcpendentesintegracao"
     },
     {
@@ -18315,9 +18337,9 @@
       "source_file": "js/ui.js",
       "source_location": "L1873",
       "_origin": "ast",
-      "community": 27,
+      "community": 3,
       "norm_label": "buildpendintegsection()",
-      "community_name": "escapeHtml",
+      "community_name": "ui.js",
       "id": "js_ui_buildpendintegsection"
     },
     {
@@ -18326,9 +18348,9 @@
       "source_file": "js/ui.js",
       "source_location": "L1953",
       "_origin": "ast",
-      "community": 3,
+      "community": 33,
       "norm_label": "_pimnormnf()",
-      "community_name": "ui.js",
+      "community_name": "_pimRender",
       "id": "js_ui_pimnormnf"
     },
     {
@@ -18337,9 +18359,9 @@
       "source_file": "js/ui.js",
       "source_location": "L1958",
       "_origin": "ast",
-      "community": 3,
+      "community": 33,
       "norm_label": "_pimnormos()",
-      "community_name": "ui.js",
+      "community_name": "_pimRender",
       "id": "js_ui_pimnormos"
     },
     {
@@ -18348,9 +18370,9 @@
       "source_file": "js/ui.js",
       "source_location": "L1959",
       "_origin": "ast",
-      "community": 3,
+      "community": 33,
       "norm_label": "_pimnormsaprefos()",
-      "community_name": "ui.js",
+      "community_name": "_pimRender",
       "id": "js_ui_pimnormsaprefos"
     },
     {
@@ -18359,9 +18381,9 @@
       "source_file": "js/ui.js",
       "source_location": "L1970",
       "_origin": "ast",
-      "community": 3,
+      "community": 33,
       "norm_label": "_pimgetsapcache()",
-      "community_name": "ui.js",
+      "community_name": "_pimRender",
       "id": "js_ui_pimgetsapcache"
     },
     {
@@ -18513,9 +18535,9 @@
       "source_file": "js/ui.js",
       "source_location": "L2309",
       "_origin": "ast",
-      "community": 3,
+      "community": 33,
       "norm_label": "openpendintegglobalmodal()",
-      "community_name": "ui.js",
+      "community_name": "_pimRender",
       "id": "js_ui_openpendintegglobalmodal"
     },
     {
@@ -18557,9 +18579,9 @@
       "source_file": "js/ui.js",
       "source_location": "L2490",
       "_origin": "ast",
-      "community": 50,
+      "community": 27,
       "norm_label": "_lrcrefreshdetailmodal()",
-      "community_name": "lrcDelete",
+      "community_name": "escapeHtml",
       "id": "js_ui_lrcrefreshdetailmodal"
     },
     {
@@ -18799,9 +18821,9 @@
       "source_file": "js/ui.js",
       "source_location": "L3222",
       "_origin": "ast",
-      "community": 96,
+      "community": 3,
       "norm_label": "_buildlancindex()",
-      "community_name": "buildHealthPanel",
+      "community_name": "ui.js",
       "id": "js_ui_buildlancindex"
     },
     {
@@ -18810,9 +18832,9 @@
       "source_file": "js/ui.js",
       "source_location": "L3255",
       "_origin": "ast",
-      "community": 3,
+      "community": 33,
       "norm_label": "_buildsapindex()",
-      "community_name": "ui.js",
+      "community_name": "_pimRender",
       "id": "js_ui_buildsapindex"
     },
     {
@@ -18854,9 +18876,9 @@
       "source_file": "js/ui.js",
       "source_location": "L3297",
       "_origin": "ast",
-      "community": 27,
+      "community": 3,
       "norm_label": "_buildsaidasindex()",
-      "community_name": "escapeHtml",
+      "community_name": "ui.js",
       "id": "js_ui_buildsaidasindex"
     },
     {
@@ -18876,9 +18898,9 @@
       "source_file": "js/ui.js",
       "source_location": "L3315",
       "_origin": "ast",
-      "community": 27,
+      "community": 3,
       "norm_label": "ensuresaidasindex()",
-      "community_name": "escapeHtml",
+      "community_name": "ui.js",
       "id": "js_ui_ensuresaidasindex"
     },
     {
@@ -18887,9 +18909,9 @@
       "source_file": "js/ui.js",
       "source_location": "L3319",
       "_origin": "ast",
-      "community": 96,
+      "community": 3,
       "norm_label": "getlancindex()",
-      "community_name": "buildHealthPanel",
+      "community_name": "ui.js",
       "id": "js_ui_getlancindex"
     },
     {
@@ -18898,9 +18920,9 @@
       "source_file": "js/ui.js",
       "source_location": "L3324",
       "_origin": "ast",
-      "community": 3,
+      "community": 33,
       "norm_label": "getsapindex()",
-      "community_name": "ui.js",
+      "community_name": "_pimRender",
       "id": "js_ui_getsapindex"
     },
     {
@@ -18909,9 +18931,9 @@
       "source_file": "js/ui.js",
       "source_location": "L3333",
       "_origin": "ast",
-      "community": 96,
+      "community": 3,
       "norm_label": "getlancsbycentralinperiod()",
-      "community_name": "buildHealthPanel",
+      "community_name": "ui.js",
       "id": "js_ui_getlancsbycentralinperiod"
     },
     {
@@ -18920,9 +18942,9 @@
       "source_file": "js/ui.js",
       "source_location": "L3347",
       "_origin": "ast",
-      "community": 3,
+      "community": 33,
       "norm_label": "getsapbycentralinperiod()",
-      "community_name": "ui.js",
+      "community_name": "_pimRender",
       "id": "js_ui_getsapbycentralinperiod"
     },
     {
@@ -19019,9 +19041,9 @@
       "source_file": "js/ui.js",
       "source_location": "L3508",
       "_origin": "ast",
-      "community": 45,
+      "community": 37,
       "norm_label": "somarpesocustosap()",
-      "community_name": "_fechMgrGetTodosCandidatos",
+      "community_name": "getFilteredData",
       "id": "js_ui_somarpesocustosap"
     },
     {
@@ -19613,9 +19635,9 @@
       "source_file": "js/ui.js",
       "source_location": "L4714",
       "_origin": "ast",
-      "community": 96,
+      "community": 3,
       "norm_label": "detectcatkey()",
-      "community_name": "buildHealthPanel",
+      "community_name": "ui.js",
       "id": "js_ui_detectcatkey"
     },
     {
@@ -19624,9 +19646,9 @@
       "source_file": "js/ui.js",
       "source_location": "L4724",
       "_origin": "ast",
-      "community": 96,
+      "community": 3,
       "norm_label": "detectcatfrommat()",
-      "community_name": "buildHealthPanel",
+      "community_name": "ui.js",
       "id": "js_ui_detectcatfrommat"
     },
     {
@@ -19646,9 +19668,9 @@
       "source_file": "js/ui.js",
       "source_location": "L4749",
       "_origin": "ast",
-      "community": 96,
+      "community": 3,
       "norm_label": "gethealththresholds()",
-      "community_name": "buildHealthPanel",
+      "community_name": "ui.js",
       "id": "js_ui_gethealththresholds"
     },
     {
@@ -19657,9 +19679,9 @@
       "source_file": "js/ui.js",
       "source_location": "L4769",
       "_origin": "ast",
-      "community": 96,
+      "community": 3,
       "norm_label": "classifyvariation()",
-      "community_name": "buildHealthPanel",
+      "community_name": "ui.js",
       "id": "js_ui_classifyvariation"
     },
     {
@@ -19679,9 +19701,9 @@
       "source_file": "js/ui.js",
       "source_location": "L4781",
       "_origin": "ast",
-      "community": 96,
+      "community": 3,
       "norm_label": "calchealthscore()",
-      "community_name": "buildHealthPanel",
+      "community_name": "ui.js",
       "id": "js_ui_calchealthscore"
     },
     {
@@ -19690,9 +19712,9 @@
       "source_file": "js/ui.js",
       "source_location": "L4836",
       "_origin": "ast",
-      "community": 96,
+      "community": 3,
       "norm_label": "getnearestlancsforabsent()",
-      "community_name": "buildHealthPanel",
+      "community_name": "ui.js",
       "id": "js_ui_getnearestlancsforabsent"
     },
     {
@@ -19701,9 +19723,9 @@
       "source_file": "js/ui.js",
       "source_location": "L4884",
       "_origin": "ast",
-      "community": 96,
+      "community": 3,
       "norm_label": "getprevdaylaunchstock()",
-      "community_name": "buildHealthPanel",
+      "community_name": "ui.js",
       "id": "js_ui_getprevdaylaunchstock"
     },
     {
@@ -19712,9 +19734,9 @@
       "source_file": "js/ui.js",
       "source_location": "L4970",
       "_origin": "ast",
-      "community": 96,
+      "community": 3,
       "norm_label": "getpreperiodlaunchstock()",
-      "community_name": "buildHealthPanel",
+      "community_name": "ui.js",
       "id": "js_ui_getpreperiodlaunchstock"
     },
     {
@@ -19723,9 +19745,9 @@
       "source_file": "js/ui.js",
       "source_location": "L4987",
       "_origin": "ast",
-      "community": 96,
+      "community": 3,
       "norm_label": "getlastperiodlaunchstockwithfallback()",
-      "community_name": "buildHealthPanel",
+      "community_name": "ui.js",
       "id": "js_ui_getlastperiodlaunchstockwithfallback"
     },
     {
@@ -19734,9 +19756,9 @@
       "source_file": "js/ui.js",
       "source_location": "L5036",
       "_origin": "ast",
-      "community": 96,
+      "community": 3,
       "norm_label": "getlastperiodlaunchstock()",
-      "community_name": "buildHealthPanel",
+      "community_name": "ui.js",
       "id": "js_ui_getlastperiodlaunchstock"
     },
     {
@@ -19745,9 +19767,9 @@
       "source_file": "js/ui.js",
       "source_location": "L5073",
       "_origin": "ast",
-      "community": 96,
+      "community": 3,
       "norm_label": "buildsnapshot()",
-      "community_name": "buildHealthPanel",
+      "community_name": "ui.js",
       "id": "js_ui_buildsnapshot"
     },
     {
@@ -19756,9 +19778,9 @@
       "source_file": "js/ui.js",
       "source_location": "L5172",
       "_origin": "ast",
-      "community": 96,
+      "community": 3,
       "norm_label": "buildhealthpanel()",
-      "community_name": "buildHealthPanel",
+      "community_name": "ui.js",
       "id": "js_ui_buildhealthpanel"
     },
     {
@@ -19822,9 +19844,9 @@
       "source_file": "js/ui.js",
       "source_location": "L5370",
       "_origin": "ast",
-      "community": 50,
+      "community": 88,
       "norm_label": "_bkpparsestreaming()",
-      "community_name": "lrcDelete",
+      "community_name": "_bkpCarregarArquivo",
       "id": "js_ui_bkpparsestreaming"
     },
     {
@@ -21298,6 +21320,17 @@
   ],
   "links": [
     {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "CLAUDE.md",
+      "source_location": "L1",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "claude",
+      "target": "claude_graphify",
+      "confidence_score": 1.0
+    },
+    {
       "relation": "references",
       "confidence": "INFERRED",
       "confidence_score": 0.85,
@@ -21314,9 +21347,9 @@
       "source_location": "L248",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_calendar",
-      "target": "js_calendar_applyrangeclass",
-      "confidence_score": 1.0
+      "target": "js_calendar_applyrangeclass"
     },
     {
       "relation": "contains",
@@ -21325,9 +21358,9 @@
       "source_location": "L32",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_calendar",
-      "target": "js_calendar_fmtdisplay",
-      "confidence_score": 1.0
+      "target": "js_calendar_fmtdisplay"
     },
     {
       "relation": "contains",
@@ -21336,9 +21369,9 @@
       "source_location": "L7",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_calendar",
-      "target": "js_calendar_getpicker",
-      "confidence_score": 1.0
+      "target": "js_calendar_getpicker"
     },
     {
       "relation": "contains",
@@ -21347,9 +21380,9 @@
       "source_location": "L510",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_calendar",
-      "target": "js_calendar_markoutsidechip",
-      "confidence_score": 1.0
+      "target": "js_calendar_markoutsidechip"
     },
     {
       "relation": "contains",
@@ -21358,9 +21391,9 @@
       "source_location": "L80",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_calendar",
-      "target": "js_calendar_rendercal",
-      "confidence_score": 1.0
+      "target": "js_calendar_rendercal"
     },
     {
       "relation": "contains",
@@ -21369,9 +21402,9 @@
       "source_location": "L94",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_calendar",
-      "target": "js_calendar_renderdaysview",
-      "confidence_score": 1.0
+      "target": "js_calendar_renderdaysview"
     },
     {
       "relation": "contains",
@@ -21380,9 +21413,9 @@
       "source_location": "L266",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_calendar",
-      "target": "js_calendar_rendermonthgrid",
-      "confidence_score": 1.0
+      "target": "js_calendar_rendermonthgrid"
     },
     {
       "relation": "contains",
@@ -21391,9 +21424,9 @@
       "source_location": "L287",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_calendar",
-      "target": "js_calendar_renderyeargrid",
-      "confidence_score": 1.0
+      "target": "js_calendar_renderyeargrid"
     },
     {
       "relation": "contains",
@@ -21402,9 +21435,9 @@
       "source_location": "L37",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_calendar",
-      "target": "js_calendar_sameday",
-      "confidence_score": 1.0
+      "target": "js_calendar_sameday"
     },
     {
       "relation": "contains",
@@ -21413,9 +21446,9 @@
       "source_location": "L428",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_calendar",
-      "target": "js_calendar_setrange",
-      "confidence_score": 1.0
+      "target": "js_calendar_setrange"
     },
     {
       "relation": "contains",
@@ -21424,9 +21457,9 @@
       "source_location": "L41",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_calendar",
-      "target": "js_calendar_striptime",
-      "confidence_score": 1.0
+      "target": "js_calendar_striptime"
     },
     {
       "relation": "contains",
@@ -21435,9 +21468,9 @@
       "source_location": "L47",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_calendar",
-      "target": "js_calendar_syncinputs",
-      "confidence_score": 1.0
+      "target": "js_calendar_syncinputs"
     },
     {
       "relation": "contains",
@@ -21446,9 +21479,9 @@
       "source_location": "L24",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_calendar",
-      "target": "js_calendar_toiso",
-      "confidence_score": 1.0
+      "target": "js_calendar_toiso"
     },
     {
       "relation": "contains",
@@ -21457,9 +21490,9 @@
       "source_location": "L56",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_calendar",
-      "target": "js_calendar_updatetriggerlabel",
-      "confidence_score": 1.0
+      "target": "js_calendar_updatetriggerlabel"
     },
     {
       "relation": "calls",
@@ -21469,9 +21502,9 @@
       "source_location": "L81",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_calendar_rendercal",
-      "target": "js_calendar_getpicker",
-      "confidence_score": 1.0
+      "target": "js_calendar_getpicker"
     },
     {
       "relation": "calls",
@@ -21481,9 +21514,9 @@
       "source_location": "L95",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_calendar_renderdaysview",
-      "target": "js_calendar_getpicker",
-      "confidence_score": 1.0
+      "target": "js_calendar_getpicker"
     },
     {
       "relation": "calls",
@@ -21493,9 +21526,9 @@
       "source_location": "L267",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_calendar_rendermonthgrid",
-      "target": "js_calendar_getpicker",
-      "confidence_score": 1.0
+      "target": "js_calendar_getpicker"
     },
     {
       "relation": "calls",
@@ -21505,9 +21538,9 @@
       "source_location": "L288",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_calendar_renderyeargrid",
-      "target": "js_calendar_getpicker",
-      "confidence_score": 1.0
+      "target": "js_calendar_getpicker"
     },
     {
       "relation": "calls",
@@ -21517,9 +21550,9 @@
       "source_location": "L429",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_calendar_setrange",
-      "target": "js_calendar_getpicker",
-      "confidence_score": 1.0
+      "target": "js_calendar_getpicker"
     },
     {
       "relation": "calls",
@@ -21529,9 +21562,9 @@
       "source_location": "L48",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_calendar_syncinputs",
-      "target": "js_calendar_getpicker",
-      "confidence_score": 1.0
+      "target": "js_calendar_getpicker"
     },
     {
       "relation": "calls",
@@ -21541,9 +21574,9 @@
       "source_location": "L57",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_calendar_updatetriggerlabel",
-      "target": "js_calendar_getpicker",
-      "confidence_score": 1.0
+      "target": "js_calendar_getpicker"
     },
     {
       "relation": "calls",
@@ -21553,9 +21586,9 @@
       "source_location": "L51",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_calendar_syncinputs",
-      "target": "js_calendar_toiso",
-      "confidence_score": 1.0
+      "target": "js_calendar_toiso"
     },
     {
       "relation": "calls",
@@ -21565,9 +21598,9 @@
       "source_location": "L101",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_calendar_renderdaysview",
-      "target": "js_calendar_fmtdisplay",
-      "confidence_score": 1.0
+      "target": "js_calendar_fmtdisplay"
     },
     {
       "relation": "calls",
@@ -21577,9 +21610,9 @@
       "source_location": "L62",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_calendar_updatetriggerlabel",
-      "target": "js_calendar_fmtdisplay",
-      "confidence_score": 1.0
+      "target": "js_calendar_fmtdisplay"
     },
     {
       "relation": "calls",
@@ -21589,9 +21622,9 @@
       "source_location": "L253",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_calendar_applyrangeclass",
-      "target": "js_calendar_sameday",
-      "confidence_score": 1.0
+      "target": "js_calendar_sameday"
     },
     {
       "relation": "calls",
@@ -21601,9 +21634,9 @@
       "source_location": "L120",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_calendar_renderdaysview",
-      "target": "js_calendar_sameday",
-      "confidence_score": 1.0
+      "target": "js_calendar_sameday"
     },
     {
       "relation": "calls",
@@ -21613,9 +21646,9 @@
       "source_location": "L249",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_calendar_applyrangeclass",
-      "target": "js_calendar_striptime",
-      "confidence_score": 1.0
+      "target": "js_calendar_striptime"
     },
     {
       "relation": "calls",
@@ -21625,9 +21658,9 @@
       "source_location": "L96",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_calendar_renderdaysview",
-      "target": "js_calendar_striptime",
-      "confidence_score": 1.0
+      "target": "js_calendar_striptime"
     },
     {
       "relation": "calls",
@@ -21637,9 +21670,9 @@
       "source_location": "L436",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_calendar_setrange",
-      "target": "js_calendar_syncinputs",
-      "confidence_score": 1.0
+      "target": "js_calendar_syncinputs"
     },
     {
       "relation": "calls",
@@ -21649,9 +21682,9 @@
       "source_location": "L437",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_calendar_setrange",
-      "target": "js_calendar_updatetriggerlabel",
-      "confidence_score": 1.0
+      "target": "js_calendar_updatetriggerlabel"
     },
     {
       "relation": "calls",
@@ -21661,9 +21694,9 @@
       "source_location": "L90",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_calendar_rendercal",
-      "target": "js_calendar_renderdaysview",
-      "confidence_score": 1.0
+      "target": "js_calendar_renderdaysview"
     },
     {
       "relation": "calls",
@@ -21673,9 +21706,9 @@
       "source_location": "L86",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_calendar_rendercal",
-      "target": "js_calendar_rendermonthgrid",
-      "confidence_score": 1.0
+      "target": "js_calendar_rendermonthgrid"
     },
     {
       "relation": "calls",
@@ -21685,9 +21718,9 @@
       "source_location": "L88",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_calendar_rendercal",
-      "target": "js_calendar_renderyeargrid",
-      "confidence_score": 1.0
+      "target": "js_calendar_renderyeargrid"
     },
     {
       "relation": "calls",
@@ -21697,9 +21730,9 @@
       "source_location": "L438",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_calendar_setrange",
-      "target": "js_calendar_rendercal",
-      "confidence_score": 1.0
+      "target": "js_calendar_rendercal"
     },
     {
       "relation": "calls",
@@ -21709,9 +21742,9 @@
       "source_location": "L221",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_calendar_renderdaysview",
-      "target": "js_calendar_applyrangeclass",
-      "confidence_score": 1.0
+      "target": "js_calendar_applyrangeclass"
     },
     {
       "relation": "references",
@@ -21730,9 +21763,9 @@
       "source_location": "L497",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_applyphonemask",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_applyphonemask"
     },
     {
       "relation": "contains",
@@ -21741,9 +21774,9 @@
       "source_location": "L946",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_bindocdonuthover",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_bindocdonuthover"
     },
     {
       "relation": "contains",
@@ -21752,9 +21785,9 @@
       "source_location": "L1067",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_buildoccharts",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_buildoccharts"
     },
     {
       "relation": "contains",
@@ -21763,9 +21796,9 @@
       "source_location": "L868",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_buildocdonut",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_buildocdonut"
     },
     {
       "relation": "contains",
@@ -21774,9 +21807,9 @@
       "source_location": "L1297",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_buildochierarquiabar",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_buildochierarquiabar"
     },
     {
       "relation": "contains",
@@ -21785,9 +21818,9 @@
       "source_location": "L1369",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_buildochierarquiadetail",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_buildochierarquiadetail"
     },
     {
       "relation": "contains",
@@ -21796,9 +21829,9 @@
       "source_location": "L734",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_buildockpis",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_buildockpis"
     },
     {
       "relation": "contains",
@@ -21807,9 +21840,9 @@
       "source_location": "L927",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_buildocsublegenda",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_buildocsublegenda"
     },
     {
       "relation": "contains",
@@ -21818,9 +21851,9 @@
       "source_location": "L471",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_buildwhatsapplink",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_buildwhatsapplink"
     },
     {
       "relation": "indirect_call",
@@ -21830,9 +21863,9 @@
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
+      "confidence_score": 0.5,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_closeconcluirmodal",
-      "confidence_score": 0.5
+      "target": "js_ocorrencias_closeconcluirmodal"
     },
     {
       "relation": "indirect_call",
@@ -21842,9 +21875,9 @@
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
+      "confidence_score": 0.5,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_closeinconclusivamodal",
-      "confidence_score": 0.5
+      "target": "js_ocorrencias_closeinconclusivamodal"
     },
     {
       "relation": "indirect_call",
@@ -21854,9 +21887,9 @@
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
+      "confidence_score": 0.5,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_closeocdetailmodal",
-      "confidence_score": 0.5
+      "target": "js_ocorrencias_closeocdetailmodal"
     },
     {
       "relation": "indirect_call",
@@ -21866,9 +21899,9 @@
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
+      "confidence_score": 0.5,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_closeocorrenciamodal",
-      "confidence_score": 0.5
+      "target": "js_ocorrencias_closeocorrenciamodal"
     },
     {
       "relation": "indirect_call",
@@ -21878,9 +21911,9 @@
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
+      "confidence_score": 0.5,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_confirmarexcluirajustesistemico",
-      "confidence_score": 0.5
+      "target": "js_ocorrencias_confirmarexcluirajustesistemico"
     },
     {
       "relation": "indirect_call",
@@ -21890,9 +21923,9 @@
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
+      "confidence_score": 0.5,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_confirmarexcluirocorrencia",
-      "confidence_score": 0.5
+      "target": "js_ocorrencias_confirmarexcluirocorrencia"
     },
     {
       "relation": "contains",
@@ -21901,9 +21934,9 @@
       "source_location": "L439",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_deleteocorrencia",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_deleteocorrencia"
     },
     {
       "relation": "contains",
@@ -21912,9 +21945,9 @@
       "source_location": "L850",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_destroyoccharts",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_destroyoccharts"
     },
     {
       "relation": "contains",
@@ -21923,9 +21956,9 @@
       "source_location": "L465",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_fmtdatebr",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_fmtdatebr"
     },
     {
       "relation": "contains",
@@ -21934,9 +21967,9 @@
       "source_location": "L488",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_fmtphonedisplay",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_fmtphonedisplay"
     },
     {
       "relation": "contains",
@@ -21945,9 +21978,9 @@
       "source_location": "L8",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_getocorrencias",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_getocorrencias"
     },
     {
       "relation": "indirect_call",
@@ -21957,9 +21990,9 @@
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
+      "confidence_score": 0.5,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_getocorrenciasfiltradas",
-      "confidence_score": 0.5
+      "target": "js_ocorrencias_getocorrenciasfiltradas"
     },
     {
       "relation": "contains",
@@ -21968,9 +22001,9 @@
       "source_location": "L508",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_initphonemasks",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_initphonemasks"
     },
     {
       "relation": "contains",
@@ -21979,9 +22012,9 @@
       "source_location": "L66",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_nextocid",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_nextocid"
     },
     {
       "relation": "contains",
@@ -21990,9 +22023,9 @@
       "source_location": "L861",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_oc_donut_meta",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_oc_donut_meta"
     },
     {
       "relation": "contains",
@@ -22001,9 +22034,9 @@
       "source_location": "L1448",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_oc_filter_key_labels",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_oc_filter_key_labels"
     },
     {
       "relation": "contains",
@@ -22012,9 +22045,9 @@
       "source_location": "L520",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_oc_hierarquia",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_oc_hierarquia"
     },
     {
       "relation": "contains",
@@ -22023,9 +22056,9 @@
       "source_location": "L1637",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_oc_sort_options",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_oc_sort_options"
     },
     {
       "relation": "contains",
@@ -22034,9 +22067,9 @@
       "source_location": "L1440",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_oc_status_options",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_oc_status_options"
     },
     {
       "relation": "contains",
@@ -22045,9 +22078,9 @@
       "source_location": "L1743",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_ocabrirmenucard",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocabrirmenucard"
     },
     {
       "relation": "contains",
@@ -22056,9 +22089,9 @@
       "source_location": "L539",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_ocapareceautoparasupervisor",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocapareceautoparasupervisor"
     },
     {
       "relation": "indirect_call",
@@ -22068,9 +22101,9 @@
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
+      "confidence_score": 0.5,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_ocapplymicrofilter",
-      "confidence_score": 0.5
+      "target": "js_ocorrencias_ocapplymicrofilter"
     },
     {
       "relation": "contains",
@@ -22079,9 +22112,9 @@
       "source_location": "L1484",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_ocbuildoptionslist",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocbuildoptionslist"
     },
     {
       "relation": "indirect_call",
@@ -22091,9 +22124,9 @@
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
+      "confidence_score": 0.5,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_occancelmicrofilter",
-      "confidence_score": 0.5
+      "target": "js_ocorrencias_occancelmicrofilter"
     },
     {
       "relation": "indirect_call",
@@ -22103,9 +22136,9 @@
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
+      "confidence_score": 0.5,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_occlearallmicrofilters",
-      "confidence_score": 0.5
+      "target": "js_ocorrencias_occlearallmicrofilters"
     },
     {
       "relation": "indirect_call",
@@ -22115,9 +22148,9 @@
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
+      "confidence_score": 0.5,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_occlearmicrofilter",
-      "confidence_score": 0.5
+      "target": "js_ocorrencias_occlearmicrofilter"
     },
     {
       "relation": "contains",
@@ -22126,9 +22159,9 @@
       "source_location": "L1513",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_occlosemicrofilterdropdown",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_occlosemicrofilterdropdown"
     },
     {
       "relation": "contains",
@@ -22137,9 +22170,9 @@
       "source_location": "L1662",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_occloseordenardropdown",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_occloseordenardropdown"
     },
     {
       "relation": "contains",
@@ -22148,9 +22181,9 @@
       "source_location": "L1691",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_occompararordenacao",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_occompararordenacao"
     },
     {
       "relation": "contains",
@@ -22159,9 +22192,9 @@
       "source_location": "L448",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_ocdatestatus",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocdatestatus"
     },
     {
       "relation": "indirect_call",
@@ -22171,9 +22204,9 @@
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
+      "confidence_score": 0.5,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_ocdetectarmudancaprioritaria",
-      "confidence_score": 0.5
+      "target": "js_ocorrencias_ocdetectarmudancaprioritaria"
     },
     {
       "relation": "contains",
@@ -22182,9 +22215,9 @@
       "source_location": "L249",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_ocehrelevantepramim",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocehrelevantepramim"
     },
     {
       "relation": "contains",
@@ -22193,9 +22226,9 @@
       "source_location": "L1783",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_ocfecharmenucard",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocfecharmenucard"
     },
     {
       "relation": "indirect_call",
@@ -22205,9 +22238,9 @@
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
+      "confidence_score": 0.5,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_ocfiltermicrooptions",
-      "confidence_score": 0.5
+      "target": "js_ocorrencias_ocfiltermicrooptions"
     },
     {
       "relation": "contains",
@@ -22216,9 +22249,9 @@
       "source_location": "L2123",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_ocformescbuildniveis",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocformescbuildniveis"
     },
     {
       "relation": "contains",
@@ -22227,9 +22260,9 @@
       "source_location": "L131",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_ocfromdbrow",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocfromdbrow"
     },
     {
       "relation": "contains",
@@ -22238,9 +22271,9 @@
       "source_location": "L82",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_ocgeraridseguro",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocgeraridseguro"
     },
     {
       "relation": "contains",
@@ -22249,9 +22282,9 @@
       "source_location": "L1289",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_ochiermetatexto",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ochiermetatexto"
     },
     {
       "relation": "contains",
@@ -22260,9 +22293,9 @@
       "source_location": "L1449",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_ocmicrofilter",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocmicrofilter"
     },
     {
       "relation": "indirect_call",
@@ -22272,9 +22305,9 @@
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
+      "confidence_score": 0.5,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_ocmicrofiltercheckchange",
-      "confidence_score": 0.5
+      "target": "js_ocorrencias_ocmicrofiltercheckchange"
     },
     {
       "relation": "contains",
@@ -22283,9 +22316,9 @@
       "source_location": "L277",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_ocmontartitulonotificacaosupervisor",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocmontartitulonotificacaosupervisor"
     },
     {
       "relation": "contains",
@@ -22294,9 +22327,9 @@
       "source_location": "L241",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_ocmotivorelevancia",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocmotivorelevancia"
     },
     {
       "relation": "contains",
@@ -22305,9 +22338,9 @@
       "source_location": "L527",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_ocnivelatual",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocnivelatual"
     },
     {
       "relation": "contains",
@@ -22316,9 +22349,9 @@
       "source_location": "L532",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_ocnivelinfo",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocnivelinfo"
     },
     {
       "relation": "contains",
@@ -22327,9 +22360,9 @@
       "source_location": "L19",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_ocnomeator",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocnomeator"
     },
     {
       "relation": "contains",
@@ -22338,9 +22371,9 @@
       "source_location": "L632",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_ocpodedescalonar",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocpodedescalonar"
     },
     {
       "relation": "contains",
@@ -22349,9 +22382,9 @@
       "source_location": "L582",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_ocpodeescalonar",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocpodeescalonar"
     },
     {
       "relation": "indirect_call",
@@ -22361,9 +22394,9 @@
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
+      "confidence_score": 0.5,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_ocrealtimeinit",
-      "confidence_score": 0.5
+      "target": "js_ocorrencias_ocrealtimeinit"
     },
     {
       "relation": "indirect_call",
@@ -22373,9 +22406,9 @@
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
+      "confidence_score": 0.5,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_ocrealtimestop",
-      "confidence_score": 0.5
+      "target": "js_ocorrencias_ocrealtimestop"
     },
     {
       "relation": "contains",
@@ -22384,9 +22417,9 @@
       "source_location": "L1460",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_ocregionalporcentral",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocregionalporcentral"
     },
     {
       "relation": "contains",
@@ -22395,9 +22428,9 @@
       "source_location": "L265",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_ocremovelocal",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocremovelocal"
     },
     {
       "relation": "indirect_call",
@@ -22407,9 +22440,9 @@
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
+      "confidence_score": 0.5,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_ocsetordenar",
-      "confidence_score": 0.5
+      "target": "js_ocorrencias_ocsetordenar"
     },
     {
       "relation": "contains",
@@ -22418,9 +22451,9 @@
       "source_location": "L458",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_ocstatuslabel",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocstatuslabel"
     },
     {
       "relation": "indirect_call",
@@ -22430,9 +22463,9 @@
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
+      "confidence_score": 0.5,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_ocstatusmatches",
-      "confidence_score": 0.5
+      "target": "js_ocorrencias_ocstatusmatches"
     },
     {
       "relation": "contains",
@@ -22441,9 +22474,9 @@
       "source_location": "L1601",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_ocsyncclearbtn",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocsyncclearbtn"
     },
     {
       "relation": "contains",
@@ -22452,9 +22485,9 @@
       "source_location": "L348",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_ocsyncdelete",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocsyncdelete"
     },
     {
       "relation": "contains",
@@ -22463,9 +22496,9 @@
       "source_location": "L1649",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_ocsyncordenarbtn",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocsyncordenarbtn"
     },
     {
       "relation": "contains",
@@ -22474,9 +22507,9 @@
       "source_location": "L364",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_ocsyncreatribuir",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocsyncreatribuir"
     },
     {
       "relation": "contains",
@@ -22485,9 +22518,9 @@
       "source_location": "L1580",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_ocsynctriggerlabel",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocsynctriggerlabel"
     },
     {
       "relation": "contains",
@@ -22496,9 +22529,9 @@
       "source_location": "L335",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_ocsyncupsert",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocsyncupsert"
     },
     {
       "relation": "contains",
@@ -22507,9 +22540,9 @@
       "source_location": "L89",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_octodbrow",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_octodbrow"
     },
     {
       "relation": "indirect_call",
@@ -22519,9 +22552,9 @@
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
+      "confidence_score": 0.5,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_octogglemicrofilter",
-      "confidence_score": 0.5
+      "target": "js_ocorrencias_octogglemicrofilter"
     },
     {
       "relation": "indirect_call",
@@ -22531,9 +22564,9 @@
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
+      "confidence_score": 0.5,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_octoggleordenardropdown",
-      "confidence_score": 0.5
+      "target": "js_ocorrencias_octoggleordenardropdown"
     },
     {
       "relation": "contains",
@@ -22542,9 +22575,9 @@
       "source_location": "L41",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_octokenfromuserid",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_octokenfromuserid"
     },
     {
       "relation": "contains",
@@ -22553,9 +22586,9 @@
       "source_location": "L252",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_ocupsertlocal",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocupsertlocal"
     },
     {
       "relation": "contains",
@@ -22564,9 +22597,9 @@
       "source_location": "L30",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_ocusertoken",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocusertoken"
     },
     {
       "relation": "contains",
@@ -22575,9 +22608,9 @@
       "source_location": "L381",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_ocusuariosparaatribuir",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocusuariosparaatribuir"
     },
     {
       "relation": "indirect_call",
@@ -22587,9 +22620,9 @@
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
+      "confidence_score": 0.5,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_openconcluirmodal",
-      "confidence_score": 0.5
+      "target": "js_ocorrencias_openconcluirmodal"
     },
     {
       "relation": "indirect_call",
@@ -22599,9 +22632,9 @@
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
+      "confidence_score": 0.5,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_openinconclusivamodal",
-      "confidence_score": 0.5
+      "target": "js_ocorrencias_openinconclusivamodal"
     },
     {
       "relation": "indirect_call",
@@ -22611,9 +22644,9 @@
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
+      "confidence_score": 0.5,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_openocdetailmodal",
-      "confidence_score": 0.5
+      "target": "js_ocorrencias_openocdetailmodal"
     },
     {
       "relation": "indirect_call",
@@ -22623,9 +22656,9 @@
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
+      "confidence_score": 0.5,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_openocorrenciamodal",
-      "confidence_score": 0.5
+      "target": "js_ocorrencias_openocorrenciamodal"
     },
     {
       "relation": "contains",
@@ -22634,9 +22667,9 @@
       "source_location": "L2017",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_populateocfiltros",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_populateocfiltros"
     },
     {
       "relation": "indirect_call",
@@ -22646,9 +22679,9 @@
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
+      "confidence_score": 0.5,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_reabrirocorrencia",
-      "confidence_score": 0.5
+      "target": "js_ocorrencias_reabrirocorrencia"
     },
     {
       "relation": "indirect_call",
@@ -22658,9 +22691,9 @@
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
+      "confidence_score": 0.5,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_reabrirocorrenciaconcluida",
-      "confidence_score": 0.5
+      "target": "js_ocorrencias_reabrirocorrenciaconcluida"
     },
     {
       "relation": "indirect_call",
@@ -22670,9 +22703,9 @@
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
+      "confidence_score": 0.5,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_reatribuirocorrencia",
-      "confidence_score": 0.5
+      "target": "js_ocorrencias_reatribuirocorrencia"
     },
     {
       "relation": "contains",
@@ -22681,9 +22714,9 @@
       "source_location": "L967",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_renderockpis",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_renderockpis"
     },
     {
       "relation": "contains",
@@ -22692,9 +22725,9 @@
       "source_location": "L1787",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_renderoclista",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_renderoclista"
     },
     {
       "relation": "indirect_call",
@@ -22704,9 +22737,9 @@
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
+      "confidence_score": 0.5,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_renderocorrencias",
-      "confidence_score": 0.5
+      "target": "js_ocorrencias_renderocorrencias"
     },
     {
       "relation": "indirect_call",
@@ -22716,9 +22749,9 @@
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
+      "confidence_score": 0.5,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_renderocorrenciaspage",
-      "confidence_score": 0.5
+      "target": "js_ocorrencias_renderocorrenciaspage"
     },
     {
       "relation": "contains",
@@ -22727,9 +22760,9 @@
       "source_location": "L429",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_saveocorrencia",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_saveocorrencia"
     },
     {
       "relation": "indirect_call",
@@ -22739,9 +22772,9 @@
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
+      "confidence_score": 0.5,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_submitconcluir",
-      "confidence_score": 0.5
+      "target": "js_ocorrencias_submitconcluir"
     },
     {
       "relation": "indirect_call",
@@ -22751,9 +22784,9 @@
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
+      "confidence_score": 0.5,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_submitinconclusiva",
-      "confidence_score": 0.5
+      "target": "js_ocorrencias_submitinconclusiva"
     },
     {
       "relation": "indirect_call",
@@ -22763,9 +22796,9 @@
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
+      "confidence_score": 0.5,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_submitocorrenciaform",
-      "confidence_score": 0.5
+      "target": "js_ocorrencias_submitocorrenciaform"
     },
     {
       "relation": "contains",
@@ -22774,9 +22807,9 @@
       "source_location": "L2444",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_syncajustesexcluidosfromsupabase",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_syncajustesexcluidosfromsupabase"
     },
     {
       "relation": "contains",
@@ -22785,9 +22818,9 @@
       "source_location": "L166",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias",
-      "target": "js_ocorrencias_syncocorrenciasfromsupabase",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_syncocorrenciasfromsupabase"
     },
     {
       "relation": "calls",
@@ -22797,9 +22830,9 @@
       "source_location": "L69",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_nextocid",
-      "target": "js_ocorrencias_getocorrencias",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_getocorrencias"
     },
     {
       "relation": "calls",
@@ -22809,9 +22842,9 @@
       "source_location": "L2300",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_reabrirocorrencia",
-      "target": "js_ocorrencias_ocnomeator",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocnomeator"
     },
     {
       "relation": "calls",
@@ -22821,9 +22854,9 @@
       "source_location": "L2314",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_reabrirocorrenciaconcluida",
-      "target": "js_ocorrencias_ocnomeator",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocnomeator"
     },
     {
       "relation": "calls",
@@ -22833,9 +22866,9 @@
       "source_location": "L2254",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_submitconcluir",
-      "target": "js_ocorrencias_ocnomeator",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocnomeator"
     },
     {
       "relation": "calls",
@@ -22845,9 +22878,9 @@
       "source_location": "L2285",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_submitinconclusiva",
-      "target": "js_ocorrencias_ocnomeator",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocnomeator"
     },
     {
       "relation": "calls",
@@ -22857,9 +22890,9 @@
       "source_location": "L2186",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_submitocorrenciaform",
-      "target": "js_ocorrencias_ocnomeator",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocnomeator"
     },
     {
       "relation": "calls",
@@ -22869,9 +22902,9 @@
       "source_location": "L67",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_nextocid",
-      "target": "js_ocorrencias_ocusertoken",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocusertoken"
     },
     {
       "relation": "calls",
@@ -22881,9 +22914,9 @@
       "source_location": "L2192",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_submitocorrenciaform",
-      "target": "js_ocorrencias_nextocid",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_nextocid"
     },
     {
       "relation": "calls",
@@ -22893,9 +22926,9 @@
       "source_location": "L2194",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_submitocorrenciaform",
-      "target": "js_ocorrencias_ocgeraridseguro",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocgeraridseguro"
     },
     {
       "relation": "calls",
@@ -22905,9 +22938,9 @@
       "source_location": "L336",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_ocsyncupsert",
-      "target": "js_ocorrencias_octodbrow",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_octodbrow"
     },
     {
       "relation": "calls",
@@ -22917,9 +22950,9 @@
       "source_location": "L254",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_ocupsertlocal",
-      "target": "js_ocorrencias_ocfromdbrow",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocfromdbrow"
     },
     {
       "relation": "indirect_call",
@@ -22929,9 +22962,9 @@
       "source_location": "L215",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 0.5,
       "source": "js_ocorrencias_syncocorrenciasfromsupabase",
-      "target": "js_ocorrencias_ocfromdbrow",
-      "confidence_score": 0.5
+      "target": "js_ocorrencias_ocfromdbrow"
     },
     {
       "relation": "calls",
@@ -22941,9 +22974,9 @@
       "source_location": "L197",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_syncocorrenciasfromsupabase",
-      "target": "js_ocorrencias_ocapareceautoparasupervisor",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocapareceautoparasupervisor"
     },
     {
       "relation": "calls",
@@ -22953,9 +22986,9 @@
       "source_location": "L250",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_ocehrelevantepramim",
-      "target": "js_ocorrencias_ocmotivorelevancia",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocmotivorelevancia"
     },
     {
       "relation": "calls",
@@ -22965,9 +22998,9 @@
       "source_location": "L246",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_ocmotivorelevancia",
-      "target": "js_ocorrencias_ocapareceautoparasupervisor",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocapareceautoparasupervisor"
     },
     {
       "relation": "calls",
@@ -22977,9 +23010,9 @@
       "source_location": "L300",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_ocrealtimeinit",
-      "target": "js_ocorrencias_ocmotivorelevancia",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocmotivorelevancia"
     },
     {
       "relation": "calls",
@@ -22989,9 +23022,9 @@
       "source_location": "L302",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_ocrealtimeinit",
-      "target": "js_ocorrencias_ocupsertlocal",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocupsertlocal"
     },
     {
       "relation": "calls",
@@ -23001,9 +23034,9 @@
       "source_location": "L293",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_ocrealtimeinit",
-      "target": "js_ocorrencias_ocremovelocal",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocremovelocal"
     },
     {
       "relation": "calls",
@@ -23013,9 +23046,9 @@
       "source_location": "L284",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_ocmontartitulonotificacaosupervisor",
-      "target": "js_ocorrencias_ocnivelatual",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocnivelatual"
     },
     {
       "relation": "calls",
@@ -23025,9 +23058,9 @@
       "source_location": "L284",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_ocmontartitulonotificacaosupervisor",
-      "target": "js_ocorrencias_ocnivelinfo",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocnivelinfo"
     },
     {
       "relation": "calls",
@@ -23037,9 +23070,9 @@
       "source_location": "L307",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_ocrealtimeinit",
-      "target": "js_ocorrencias_ocmontartitulonotificacaosupervisor",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocmontartitulonotificacaosupervisor"
     },
     {
       "relation": "calls",
@@ -23049,9 +23082,9 @@
       "source_location": "L315",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_ocrealtimeinit",
-      "target": "js_ocorrencias_renderocorrencias",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_renderocorrencias"
     },
     {
       "relation": "calls",
@@ -23061,9 +23094,9 @@
       "source_location": "L2344",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_confirmarexcluirocorrencia",
-      "target": "js_ocorrencias_ocsyncupsert",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocsyncupsert"
     },
     {
       "relation": "calls",
@@ -23073,9 +23106,9 @@
       "source_location": "L2303",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_reabrirocorrencia",
-      "target": "js_ocorrencias_ocsyncupsert",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocsyncupsert"
     },
     {
       "relation": "calls",
@@ -23085,9 +23118,9 @@
       "source_location": "L2317",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_reabrirocorrenciaconcluida",
-      "target": "js_ocorrencias_ocsyncupsert",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocsyncupsert"
     },
     {
       "relation": "calls",
@@ -23097,9 +23130,9 @@
       "source_location": "L436",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_saveocorrencia",
-      "target": "js_ocorrencias_ocsyncupsert",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocsyncupsert"
     },
     {
       "relation": "calls",
@@ -23109,9 +23142,9 @@
       "source_location": "L2258",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_submitconcluir",
-      "target": "js_ocorrencias_ocsyncupsert",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocsyncupsert"
     },
     {
       "relation": "calls",
@@ -23121,9 +23154,9 @@
       "source_location": "L2289",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_submitinconclusiva",
-      "target": "js_ocorrencias_ocsyncupsert",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocsyncupsert"
     },
     {
       "relation": "calls",
@@ -23133,9 +23166,9 @@
       "source_location": "L2419",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_confirmarexcluirajustesistemico",
-      "target": "js_ocorrencias_ocsyncdelete",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocsyncdelete"
     },
     {
       "relation": "calls",
@@ -23145,9 +23178,9 @@
       "source_location": "L444",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_deleteocorrencia",
-      "target": "js_ocorrencias_ocsyncdelete",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocsyncdelete"
     },
     {
       "relation": "calls",
@@ -23157,9 +23190,9 @@
       "source_location": "L392",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_reatribuirocorrencia",
-      "target": "js_ocorrencias_ocsyncreatribuir",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocsyncreatribuir"
     },
     {
       "relation": "calls",
@@ -23169,9 +23202,9 @@
       "source_location": "L2113",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_openocorrenciamodal",
-      "target": "js_ocorrencias_ocusuariosparaatribuir",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocusuariosparaatribuir"
     },
     {
       "relation": "calls",
@@ -23181,9 +23214,9 @@
       "source_location": "L402",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_reatribuirocorrencia",
-      "target": "js_ocorrencias_renderocorrencias",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_renderocorrencias"
     },
     {
       "relation": "calls",
@@ -23193,9 +23226,9 @@
       "source_location": "L435",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_saveocorrencia",
-      "target": "js_ocorrencias_renderocorrencias",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_renderocorrencias"
     },
     {
       "relation": "calls",
@@ -23205,9 +23238,9 @@
       "source_location": "L2225",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_submitocorrenciaform",
-      "target": "js_ocorrencias_saveocorrencia",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_saveocorrencia"
     },
     {
       "relation": "calls",
@@ -23217,9 +23250,9 @@
       "source_location": "L2339",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_confirmarexcluirocorrencia",
-      "target": "js_ocorrencias_deleteocorrencia",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_deleteocorrencia"
     },
     {
       "relation": "calls",
@@ -23229,9 +23262,9 @@
       "source_location": "L443",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_deleteocorrencia",
-      "target": "js_ocorrencias_renderocorrencias",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_renderocorrencias"
     },
     {
       "relation": "calls",
@@ -23241,9 +23274,9 @@
       "source_location": "L745",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_buildockpis",
-      "target": "js_ocorrencias_ocdatestatus",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocdatestatus"
     },
     {
       "relation": "calls",
@@ -23253,9 +23286,9 @@
       "source_location": "L462",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_ocstatuslabel",
-      "target": "js_ocorrencias_ocdatestatus",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocdatestatus"
     },
     {
       "relation": "calls",
@@ -23265,9 +23298,9 @@
       "source_location": "L1477",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_ocstatusmatches",
-      "target": "js_ocorrencias_ocdatestatus",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocdatestatus"
     },
     {
       "relation": "calls",
@@ -23277,9 +23310,9 @@
       "source_location": "L1694",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_occompararordenacao",
-      "target": "js_ocorrencias_ocstatuslabel",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocstatuslabel"
     },
     {
       "relation": "calls",
@@ -23289,9 +23322,9 @@
       "source_location": "L1883",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_openocdetailmodal",
-      "target": "js_ocorrencias_ocstatuslabel",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocstatuslabel"
     },
     {
       "relation": "calls",
@@ -23301,9 +23334,9 @@
       "source_location": "L1796",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_renderoclista",
-      "target": "js_ocorrencias_ocstatuslabel",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocstatuslabel"
     },
     {
       "relation": "calls",
@@ -23313,9 +23346,9 @@
       "source_location": "L1319",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_buildochierarquiabar",
-      "target": "js_ocorrencias_fmtdatebr",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_fmtdatebr"
     },
     {
       "relation": "calls",
@@ -23325,9 +23358,9 @@
       "source_location": "L1405",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_buildochierarquiadetail",
-      "target": "js_ocorrencias_fmtdatebr",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_fmtdatebr"
     },
     {
       "relation": "calls",
@@ -23337,9 +23370,9 @@
       "source_location": "L477",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_buildwhatsapplink",
-      "target": "js_ocorrencias_fmtdatebr",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_fmtdatebr"
     },
     {
       "relation": "calls",
@@ -23349,9 +23382,9 @@
       "source_location": "L1901",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_openocdetailmodal",
-      "target": "js_ocorrencias_fmtdatebr",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_fmtdatebr"
     },
     {
       "relation": "calls",
@@ -23361,9 +23394,9 @@
       "source_location": "L1813",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_renderoclista",
-      "target": "js_ocorrencias_fmtdatebr",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_fmtdatebr"
     },
     {
       "relation": "calls",
@@ -23373,9 +23406,9 @@
       "source_location": "L1886",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_openocdetailmodal",
-      "target": "js_ocorrencias_buildwhatsapplink",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_buildwhatsapplink"
     },
     {
       "relation": "calls",
@@ -23385,9 +23418,9 @@
       "source_location": "L2089",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_openocorrenciamodal",
-      "target": "js_ocorrencias_fmtphonedisplay",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_fmtphonedisplay"
     },
     {
       "relation": "calls",
@@ -23397,9 +23430,9 @@
       "source_location": "L513",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_initphonemasks",
-      "target": "js_ocorrencias_applyphonemask",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_applyphonemask"
     },
     {
       "relation": "calls",
@@ -23409,9 +23442,9 @@
       "source_location": "L2120",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_openocorrenciamodal",
-      "target": "js_ocorrencias_initphonemasks",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_initphonemasks"
     },
     {
       "relation": "references",
@@ -23445,9 +23478,9 @@
       "source_location": "L1298",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_buildochierarquiabar",
-      "target": "js_ocorrencias_ocnivelatual",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocnivelatual"
     },
     {
       "relation": "calls",
@@ -23457,9 +23490,9 @@
       "source_location": "L1387",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_buildochierarquiadetail",
-      "target": "js_ocorrencias_ocnivelatual",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocnivelatual"
     },
     {
       "relation": "calls",
@@ -23469,9 +23502,9 @@
       "source_location": "L825",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_buildockpis",
-      "target": "js_ocorrencias_ocnivelatual",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocnivelatual"
     },
     {
       "relation": "calls",
@@ -23481,9 +23514,9 @@
       "source_location": "L540",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_ocapareceautoparasupervisor",
-      "target": "js_ocorrencias_ocnivelatual",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocnivelatual"
     },
     {
       "relation": "calls",
@@ -23493,9 +23526,9 @@
       "source_location": "L569",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_ocdetectarmudancaprioritaria",
-      "target": "js_ocorrencias_ocnivelatual",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocnivelatual"
     },
     {
       "relation": "calls",
@@ -23505,9 +23538,9 @@
       "source_location": "L584",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_ocpodeescalonar",
-      "target": "js_ocorrencias_ocnivelatual",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocnivelatual"
     },
     {
       "relation": "calls",
@@ -23517,9 +23550,9 @@
       "source_location": "L1301",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_buildochierarquiabar",
-      "target": "js_ocorrencias_ocnivelinfo",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocnivelinfo"
     },
     {
       "relation": "calls",
@@ -23529,9 +23562,9 @@
       "source_location": "L574",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_ocdetectarmudancaprioritaria",
-      "target": "js_ocorrencias_ocnivelinfo",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocnivelinfo"
     },
     {
       "relation": "calls",
@@ -23541,9 +23574,9 @@
       "source_location": "L1766",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_ocabrirmenucard",
-      "target": "js_ocorrencias_ocpodeescalonar",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocpodeescalonar"
     },
     {
       "relation": "calls",
@@ -23553,9 +23586,9 @@
       "source_location": "L1999",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_openocdetailmodal",
-      "target": "js_ocorrencias_ocpodeescalonar",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocpodeescalonar"
     },
     {
       "relation": "calls",
@@ -23565,9 +23598,9 @@
       "source_location": "L1302",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_buildochierarquiabar",
-      "target": "js_ocorrencias_ocpodedescalonar",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocpodedescalonar"
     },
     {
       "relation": "calls",
@@ -23577,9 +23610,9 @@
       "source_location": "L968",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_renderockpis",
-      "target": "js_ocorrencias_buildockpis",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_buildockpis"
     },
     {
       "relation": "calls",
@@ -23589,9 +23622,9 @@
       "source_location": "L971",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_renderockpis",
-      "target": "js_ocorrencias_destroyoccharts",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_destroyoccharts"
     },
     {
       "relation": "calls",
@@ -23601,9 +23634,9 @@
       "source_location": "L920",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_buildocdonut",
-      "target": "js_ocorrencias_buildocsublegenda",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_buildocsublegenda"
     },
     {
       "relation": "calls",
@@ -23613,9 +23646,9 @@
       "source_location": "L983",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_renderockpis",
-      "target": "js_ocorrencias_buildocdonut",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_buildocdonut"
     },
     {
       "relation": "calls",
@@ -23625,9 +23658,9 @@
       "source_location": "L1063",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_renderockpis",
-      "target": "js_ocorrencias_bindocdonuthover",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_bindocdonuthover"
     },
     {
       "relation": "calls",
@@ -23637,9 +23670,9 @@
       "source_location": "L1064",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_renderockpis",
-      "target": "js_ocorrencias_buildoccharts",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_buildoccharts"
     },
     {
       "relation": "calls",
@@ -23649,9 +23682,9 @@
       "source_location": "L1425",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_renderocorrencias",
-      "target": "js_ocorrencias_renderockpis",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_renderockpis"
     },
     {
       "relation": "calls",
@@ -23661,9 +23694,9 @@
       "source_location": "L1319",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_buildochierarquiabar",
-      "target": "js_ocorrencias_ochiermetatexto",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ochiermetatexto"
     },
     {
       "relation": "calls",
@@ -23673,9 +23706,9 @@
       "source_location": "L1405",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_buildochierarquiadetail",
-      "target": "js_ocorrencias_ochiermetatexto",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ochiermetatexto"
     },
     {
       "relation": "calls",
@@ -23685,9 +23718,9 @@
       "source_location": "L1837",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_renderoclista",
-      "target": "js_ocorrencias_buildochierarquiabar",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_buildochierarquiabar"
     },
     {
       "relation": "calls",
@@ -23697,9 +23730,9 @@
       "source_location": "L2006",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_openocdetailmodal",
-      "target": "js_ocorrencias_buildochierarquiadetail",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_buildochierarquiadetail"
     },
     {
       "relation": "calls",
@@ -23709,9 +23742,9 @@
       "source_location": "L2418",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_confirmarexcluirajustesistemico",
-      "target": "js_ocorrencias_renderocorrencias",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_renderocorrencias"
     },
     {
       "relation": "calls",
@@ -23721,9 +23754,9 @@
       "source_location": "L2343",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_confirmarexcluirocorrencia",
-      "target": "js_ocorrencias_renderocorrencias",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_renderocorrencias"
     },
     {
       "relation": "calls",
@@ -23733,9 +23766,9 @@
       "source_location": "L1552",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_ocapplymicrofilter",
-      "target": "js_ocorrencias_renderocorrencias",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_renderocorrencias"
     },
     {
       "relation": "calls",
@@ -23745,9 +23778,9 @@
       "source_location": "L1577",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_occlearallmicrofilters",
-      "target": "js_ocorrencias_renderocorrencias",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_renderocorrencias"
     },
     {
       "relation": "calls",
@@ -23757,9 +23790,9 @@
       "source_location": "L1566",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_occlearmicrofilter",
-      "target": "js_ocorrencias_renderocorrencias",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_renderocorrencias"
     },
     {
       "relation": "calls",
@@ -23769,9 +23802,9 @@
       "source_location": "L1688",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_ocsetordenar",
-      "target": "js_ocorrencias_renderocorrencias",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_renderocorrencias"
     },
     {
       "relation": "calls",
@@ -23781,9 +23814,9 @@
       "source_location": "L2302",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_reabrirocorrencia",
-      "target": "js_ocorrencias_renderocorrencias",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_renderocorrencias"
     },
     {
       "relation": "calls",
@@ -23793,9 +23826,9 @@
       "source_location": "L2316",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_reabrirocorrenciaconcluida",
-      "target": "js_ocorrencias_renderocorrencias",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_renderocorrencias"
     },
     {
       "relation": "calls",
@@ -23805,9 +23838,9 @@
       "source_location": "L1418",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_renderocorrencias",
-      "target": "js_ocorrencias_getocorrenciasfiltradas",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_getocorrenciasfiltradas"
     },
     {
       "relation": "calls",
@@ -23817,9 +23850,9 @@
       "source_location": "L1430",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_renderocorrencias",
-      "target": "js_ocorrencias_ocsyncclearbtn",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocsyncclearbtn"
     },
     {
       "relation": "calls",
@@ -23829,9 +23862,9 @@
       "source_location": "L1426",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_renderocorrencias",
-      "target": "js_ocorrencias_renderoclista",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_renderoclista"
     },
     {
       "relation": "calls",
@@ -23841,9 +23874,9 @@
       "source_location": "L2481",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_renderocorrenciaspage",
-      "target": "js_ocorrencias_renderocorrencias",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_renderocorrencias"
     },
     {
       "relation": "calls",
@@ -23853,9 +23886,9 @@
       "source_location": "L2256",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_submitconcluir",
-      "target": "js_ocorrencias_renderocorrencias",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_renderocorrencias"
     },
     {
       "relation": "calls",
@@ -23865,9 +23898,9 @@
       "source_location": "L2287",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_submitinconclusiva",
-      "target": "js_ocorrencias_renderocorrencias",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_renderocorrencias"
     },
     {
       "relation": "calls",
@@ -23877,9 +23910,9 @@
       "source_location": "L1716",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_getocorrenciasfiltradas",
-      "target": "js_ocorrencias_ocregionalporcentral",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocregionalporcentral"
     },
     {
       "relation": "calls",
@@ -23889,9 +23922,9 @@
       "source_location": "L2035",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_populateocfiltros",
-      "target": "js_ocorrencias_ocregionalporcentral",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocregionalporcentral"
     },
     {
       "relation": "calls",
@@ -23901,9 +23934,9 @@
       "source_location": "L1719",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_getocorrenciasfiltradas",
-      "target": "js_ocorrencias_ocstatusmatches",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocstatusmatches"
     },
     {
       "relation": "calls",
@@ -23913,9 +23946,9 @@
       "source_location": "L2029",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_populateocfiltros",
-      "target": "js_ocorrencias_ocstatusmatches",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocstatusmatches"
     },
     {
       "relation": "calls",
@@ -23925,9 +23958,9 @@
       "source_location": "L1544",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_ocfiltermicrooptions",
-      "target": "js_ocorrencias_ocbuildoptionslist",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocbuildoptionslist"
     },
     {
       "relation": "calls",
@@ -23937,9 +23970,9 @@
       "source_location": "L1538",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_octogglemicrofilter",
-      "target": "js_ocorrencias_ocbuildoptionslist",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocbuildoptionslist"
     },
     {
       "relation": "calls",
@@ -23949,9 +23982,9 @@
       "source_location": "L2041",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_populateocfiltros",
-      "target": "js_ocorrencias_ocbuildoptionslist",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocbuildoptionslist"
     },
     {
       "relation": "calls",
@@ -23961,9 +23994,9 @@
       "source_location": "L1549",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_ocapplymicrofilter",
-      "target": "js_ocorrencias_occlosemicrofilterdropdown",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_occlosemicrofilterdropdown"
     },
     {
       "relation": "calls",
@@ -23973,9 +24006,9 @@
       "source_location": "L1557",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_occancelmicrofilter",
-      "target": "js_ocorrencias_occlosemicrofilterdropdown",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_occlosemicrofilterdropdown"
     },
     {
       "relation": "calls",
@@ -23985,9 +24018,9 @@
       "source_location": "L1563",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_occlearmicrofilter",
-      "target": "js_ocorrencias_occlosemicrofilterdropdown",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_occlosemicrofilterdropdown"
     },
     {
       "relation": "calls",
@@ -23997,9 +24030,9 @@
       "source_location": "L1528",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_octogglemicrofilter",
-      "target": "js_ocorrencias_occlosemicrofilterdropdown",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_occlosemicrofilterdropdown"
     },
     {
       "relation": "calls",
@@ -24009,9 +24042,9 @@
       "source_location": "L1677",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_octoggleordenardropdown",
-      "target": "js_ocorrencias_occlosemicrofilterdropdown",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_occlosemicrofilterdropdown"
     },
     {
       "relation": "calls",
@@ -24021,9 +24054,9 @@
       "source_location": "L1531",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_octogglemicrofilter",
-      "target": "js_ocorrencias_occloseordenardropdown",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_occloseordenardropdown"
     },
     {
       "relation": "calls",
@@ -24033,9 +24066,9 @@
       "source_location": "L1551",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_ocapplymicrofilter",
-      "target": "js_ocorrencias_ocsyncclearbtn",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocsyncclearbtn"
     },
     {
       "relation": "calls",
@@ -24045,9 +24078,9 @@
       "source_location": "L1550",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_ocapplymicrofilter",
-      "target": "js_ocorrencias_ocsynctriggerlabel",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocsynctriggerlabel"
     },
     {
       "relation": "calls",
@@ -24057,9 +24090,9 @@
       "source_location": "L1565",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_occlearmicrofilter",
-      "target": "js_ocorrencias_ocsyncclearbtn",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocsyncclearbtn"
     },
     {
       "relation": "calls",
@@ -24069,9 +24102,9 @@
       "source_location": "L1564",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_occlearmicrofilter",
-      "target": "js_ocorrencias_ocsynctriggerlabel",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocsynctriggerlabel"
     },
     {
       "relation": "calls",
@@ -24081,9 +24114,9 @@
       "source_location": "L1576",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_occlearallmicrofilters",
-      "target": "js_ocorrencias_ocsyncclearbtn",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocsyncclearbtn"
     },
     {
       "relation": "calls",
@@ -24093,9 +24126,9 @@
       "source_location": "L1573",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_occlearallmicrofilters",
-      "target": "js_ocorrencias_ocsynctriggerlabel",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocsynctriggerlabel"
     },
     {
       "relation": "calls",
@@ -24105,9 +24138,9 @@
       "source_location": "L2042",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_populateocfiltros",
-      "target": "js_ocorrencias_ocsynctriggerlabel",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocsynctriggerlabel"
     },
     {
       "relation": "calls",
@@ -24117,9 +24150,9 @@
       "source_location": "L2044",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_populateocfiltros",
-      "target": "js_ocorrencias_ocsyncclearbtn",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocsyncclearbtn"
     },
     {
       "relation": "references",
@@ -24141,9 +24174,9 @@
       "source_location": "L1686",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_ocsetordenar",
-      "target": "js_ocorrencias_ocsyncordenarbtn",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocsyncordenarbtn"
     },
     {
       "relation": "calls",
@@ -24153,9 +24186,9 @@
       "source_location": "L2045",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_populateocfiltros",
-      "target": "js_ocorrencias_ocsyncordenarbtn",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocsyncordenarbtn"
     },
     {
       "relation": "calls",
@@ -24165,9 +24198,9 @@
       "source_location": "L1687",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_ocsetordenar",
-      "target": "js_ocorrencias_occloseordenardropdown",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_occloseordenardropdown"
     },
     {
       "relation": "calls",
@@ -24177,9 +24210,9 @@
       "source_location": "L1733",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_getocorrenciasfiltradas",
-      "target": "js_ocorrencias_occompararordenacao",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_occompararordenacao"
     },
     {
       "relation": "calls",
@@ -24189,9 +24222,9 @@
       "source_location": "L1752",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_ocabrirmenucard",
-      "target": "js_ocorrencias_ocfecharmenucard",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocfecharmenucard"
     },
     {
       "relation": "calls",
@@ -24201,9 +24234,9 @@
       "source_location": "L2081",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_openocorrenciamodal",
-      "target": "js_ocorrencias_populateocfiltros",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_populateocfiltros"
     },
     {
       "relation": "calls",
@@ -24213,9 +24246,9 @@
       "source_location": "L2480",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_renderocorrenciaspage",
-      "target": "js_ocorrencias_populateocfiltros",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_populateocfiltros"
     },
     {
       "relation": "calls",
@@ -24225,9 +24258,9 @@
       "source_location": "L2227",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_submitocorrenciaform",
-      "target": "js_ocorrencias_populateocfiltros",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_populateocfiltros"
     },
     {
       "relation": "calls",
@@ -24237,9 +24270,9 @@
       "source_location": "L2100",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_openocorrenciamodal",
-      "target": "js_ocorrencias_ocformescbuildniveis",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_ocformescbuildniveis"
     },
     {
       "relation": "calls",
@@ -24249,9 +24282,9 @@
       "source_location": "L2226",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_submitocorrenciaform",
-      "target": "js_ocorrencias_closeocorrenciamodal",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_closeocorrenciamodal"
     },
     {
       "relation": "calls",
@@ -24261,9 +24294,9 @@
       "source_location": "L2257",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_submitconcluir",
-      "target": "js_ocorrencias_closeconcluirmodal",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_closeconcluirmodal"
     },
     {
       "relation": "calls",
@@ -24273,9 +24306,9 @@
       "source_location": "L2288",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "js_ocorrencias_submitinconclusiva",
-      "target": "js_ocorrencias_closeinconclusivamodal",
-      "confidence_score": 1.0
+      "target": "js_ocorrencias_closeinconclusivamodal"
     },
     {
       "relation": "contains",
@@ -24284,9 +24317,9 @@
       "source_location": "L101",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "tests_calendar_oc_test",
-      "target": "tests_calendar_oc_test_addeventlistener",
-      "confidence_score": 1.0
+      "target": "tests_calendar_oc_test_addeventlistener"
     },
     {
       "relation": "contains",
@@ -24295,9 +24328,9 @@
       "source_location": "L49",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "tests_calendar_oc_test",
-      "target": "tests_calendar_oc_test_casos",
-      "confidence_score": 1.0
+      "target": "tests_calendar_oc_test_casos"
     },
     {
       "relation": "contains",
@@ -24306,9 +24339,9 @@
       "source_location": "L99",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "tests_calendar_oc_test",
-      "target": "tests_calendar_oc_test_error",
-      "confidence_score": 1.0
+      "target": "tests_calendar_oc_test_error"
     },
     {
       "relation": "contains",
@@ -24317,9 +24350,9 @@
       "source_location": "L22",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "tests_calendar_oc_test",
-      "target": "tests_calendar_oc_test_fakeel",
-      "confidence_score": 1.0
+      "target": "tests_calendar_oc_test_fakeel"
     },
     {
       "relation": "contains",
@@ -24328,9 +24361,9 @@
       "source_location": "L20",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "tests_calendar_oc_test",
-      "target": "tests_calendar_oc_test_fontecalendar",
-      "confidence_score": 1.0
+      "target": "tests_calendar_oc_test_fontecalendar"
     },
     {
       "relation": "contains",
@@ -24339,9 +24372,9 @@
       "source_location": "L102",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "tests_calendar_oc_test",
-      "target": "tests_calendar_oc_test_getelementbyid",
-      "confidence_score": 1.0
+      "target": "tests_calendar_oc_test_getelementbyid"
     },
     {
       "relation": "contains",
@@ -24350,9 +24383,9 @@
       "source_location": "L99",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "tests_calendar_oc_test",
-      "target": "tests_calendar_oc_test_info",
-      "confidence_score": 1.0
+      "target": "tests_calendar_oc_test_info"
     },
     {
       "relation": "contains",
@@ -24361,9 +24394,9 @@
       "source_location": "L26",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "tests_calendar_oc_test",
-      "target": "tests_calendar_oc_test_montar",
-      "confidence_score": 1.0
+      "target": "tests_calendar_oc_test_montar"
     },
     {
       "relation": "contains",
@@ -24372,9 +24405,9 @@
       "source_location": "L19",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "tests_calendar_oc_test",
-      "target": "tests_calendar_oc_test_raiz",
-      "confidence_score": 1.0
+      "target": "tests_calendar_oc_test_raiz"
     },
     {
       "relation": "contains",
@@ -24383,9 +24416,9 @@
       "source_location": "L50",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "tests_calendar_oc_test",
-      "target": "tests_calendar_oc_test_teste",
-      "confidence_score": 1.0
+      "target": "tests_calendar_oc_test_teste"
     },
     {
       "relation": "contains",
@@ -24394,9 +24427,9 @@
       "source_location": "L99",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "tests_calendar_oc_test",
-      "target": "tests_calendar_oc_test_warn",
-      "confidence_score": 1.0
+      "target": "tests_calendar_oc_test_warn"
     },
     {
       "relation": "calls",
@@ -24406,9 +24439,9 @@
       "source_location": "L28",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "tests_calendar_oc_test_montar",
-      "target": "tests_calendar_oc_test_fakeel",
-      "confidence_score": 1.0
+      "target": "tests_calendar_oc_test_fakeel"
     },
     {
       "relation": "contains",
@@ -24417,9 +24450,9 @@
       "source_location": "L378",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "tests_ocorrencias_supervisor_test",
-      "target": "tests_ocorrencias_supervisor_test_amanha",
-      "confidence_score": 1.0
+      "target": "tests_ocorrencias_supervisor_test_amanha"
     },
     {
       "relation": "contains",
@@ -24428,9 +24461,9 @@
       "source_location": "L82",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "tests_ocorrencias_supervisor_test",
-      "target": "tests_ocorrencias_supervisor_test_casos",
-      "confidence_score": 1.0
+      "target": "tests_ocorrencias_supervisor_test_casos"
     },
     {
       "relation": "contains",
@@ -24439,9 +24472,9 @@
       "source_location": "L579",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "tests_ocorrencias_supervisor_test",
-      "target": "tests_ocorrencias_supervisor_test_cominifim",
-      "confidence_score": 1.0
+      "target": "tests_ocorrencias_supervisor_test_cominifim"
     },
     {
       "relation": "contains",
@@ -24450,9 +24483,9 @@
       "source_location": "L258",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "tests_ocorrencias_supervisor_test",
-      "target": "tests_ocorrencias_supervisor_test_daibase",
-      "confidence_score": 1.0
+      "target": "tests_ocorrencias_supervisor_test_daibase"
     },
     {
       "relation": "contains",
@@ -24461,9 +24494,9 @@
       "source_location": "L24",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "tests_ocorrencias_supervisor_test",
-      "target": "tests_ocorrencias_supervisor_test_fonteocorrencias",
-      "confidence_score": 1.0
+      "target": "tests_ocorrencias_supervisor_test_fonteocorrencias"
     },
     {
       "relation": "contains",
@@ -24472,9 +24505,9 @@
       "source_location": "L26",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "tests_ocorrencias_supervisor_test",
-      "target": "tests_ocorrencias_supervisor_test_montar",
-      "confidence_score": 1.0
+      "target": "tests_ocorrencias_supervisor_test_montar"
     },
     {
       "relation": "contains",
@@ -24483,9 +24516,9 @@
       "source_location": "L56",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "tests_ocorrencias_supervisor_test",
-      "target": "tests_ocorrencias_supervisor_test_montarcomsupabase",
-      "confidence_score": 1.0
+      "target": "tests_ocorrencias_supervisor_test_montarcomsupabase"
     },
     {
       "relation": "contains",
@@ -24494,9 +24527,9 @@
       "source_location": "L23",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "tests_ocorrencias_supervisor_test",
-      "target": "tests_ocorrencias_supervisor_test_raiz",
-      "confidence_score": 1.0
+      "target": "tests_ocorrencias_supervisor_test_raiz"
     },
     {
       "relation": "contains",
@@ -24505,9 +24538,9 @@
       "source_location": "L85",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "tests_ocorrencias_supervisor_test",
-      "target": "tests_ocorrencias_supervisor_test_rowbase",
-      "confidence_score": 1.0
+      "target": "tests_ocorrencias_supervisor_test_rowbase"
     },
     {
       "relation": "contains",
@@ -24516,9 +24549,9 @@
       "source_location": "L83",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "tests_ocorrencias_supervisor_test",
-      "target": "tests_ocorrencias_supervisor_test_teste",
-      "confidence_score": 1.0
+      "target": "tests_ocorrencias_supervisor_test_teste"
     },
     {
       "relation": "calls",
@@ -24528,9 +24561,9 @@
       "source_location": "L57",
       "weight": 1.0,
       "_origin": "ast",
+      "confidence_score": 1.0,
       "source": "tests_ocorrencias_supervisor_test_montarcomsupabase",
-      "target": "tests_ocorrencias_supervisor_test_montar",
-      "confidence_score": 1.0
+      "target": "tests_ocorrencias_supervisor_test_montar"
     },
     {
       "relation": "contains",
@@ -67069,5 +67102,5 @@
       "source_file": "index.html"
     }
   ],
-  "built_at_commit": "55d0d7ec4215214b9977c7200cdb93f457f84f2e"
+  "built_at_commit": "87feab61a5a891164c7377ccdbed3738048cb6ae"
 }
