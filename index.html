@@ -150,6 +150,8 @@
     <!-- Tab list -->
     <nav class="tab-list" id="tab-list">
 
+      <div class="tab-group-label">Dashboards</div>
+
       <button class="tab-item" onclick="navigate('dashboard')" data-page="dashboard" data-label="Dashboard Gerencial">
         <span class="tab-icon" style="--tab-color: var(--accent)"><i class="ti ti-layout-dashboard"></i></span>
         <span class="tab-text">
@@ -162,9 +164,11 @@
         <span class="tab-icon" style="--tab-color: var(--teal)"><i class="ti ti-chart-area"></i></span>
         <span class="tab-text">
           <span class="tab-title">Dashboard Analítico</span>
-          <span class="tab-sub">análise por período e filial</span>
+          <span class="tab-sub">por período e filial</span>
         </span>
       </button>
+
+      <div class="tab-group-label">Movimentação</div>
 
       <button class="tab-item" onclick="navigate('entradas')" data-page="entradas" data-label="Entradas (NF)">
         <span class="tab-icon" style="--tab-color: var(--green)"><i class="ti ti-package-import"></i></span>
@@ -198,6 +202,8 @@
         </span>
       </button>
 
+      <div class="tab-group-label">Análise</div>
+
       <button class="tab-item" onclick="navigate('producao')" data-page="producao" data-label="Produção">
         <span class="tab-icon" style="--tab-color: var(--purple)"><i class="ti ti-chart-bar"></i></span>
         <span class="tab-text">
@@ -213,6 +219,8 @@
           <span class="tab-sub">gestão por central</span>
         </span>
       </button>
+
+      <div class="tab-group-label">Sistema</div>
 
       <button class="tab-item" onclick="navigate('importar')" data-page="importar" data-label="Importar Dados">
         <span class="tab-icon" style="--tab-color: var(--teal)"><i class="ti ti-file-upload"></i></span>
@@ -2203,10 +2211,19 @@
               <button class="btn btn-primary" onclick="openModal('modal-manual'); setModulo('Entrada')"><i class="ti ti-plus"></i> Adicionar</button>
             </div>
           </div>
+          <div class="admin-lote-bar" id="lote-bar-entradas" style="display:none">
+            <span id="lote-count-entradas" style="display:inline-flex;align-items:center;gap:6px;font-weight:600;color:var(--purple)"><i class="ti ti-checks"></i> 0 registros selecionados</span>
+            <div class="admin-lote-actions">
+              <button class="btn btn-sm admin-btn-danger" onclick="excluirSelecionados('entradas')"><i class="ti ti-trash"></i> Excluir selecionados</button>
+              <button class="btn btn-sm admin-btn-ghost" onclick="limparSelecaoLote('entradas')">Limpar seleção</button>
+            </div>
+          </div>
+          <div class="fechmgr-selectall-banner" id="selectall-banner-entradas" style="display:none"></div>
           <div class="table-scroll">
           <table>
             <thead>
               <tr>
+                <th class="th-checkbox"><input type="checkbox" id="chk-all-entradas" onchange="toggleSelecionarTudoPagina('entradas', this.checked)" title="Selecionar todos os registros desta página"></th>
                 <th data-sort-col="centralCompra"  onclick="moduleSortBy('entradas','centralCompra')">Central Compra <i class="ti ti-selector mod-sort-icon"></i></th>
                 <th data-sort-col="centralDestino" onclick="moduleSortBy('entradas','centralDestino')">Central Destino <i class="ti ti-selector mod-sort-icon"></i></th>
                 <th data-sort-col="nf"             onclick="moduleSortBy('entradas','nf')">Nº NF <i class="ti ti-selector mod-sort-icon"></i></th>
@@ -2223,7 +2240,7 @@
               </tr>
             </thead>
             <tbody id="tb-entradas">
-              <tr><td colspan="13"><div class="empty-state"><i class="ti ti-package"></i><p>Nenhuma entrada cadastrada.<br>Importe uma planilha ou adicione manualmente.</p></div></td></tr>
+              <tr><td colspan="14"><div class="empty-state"><i class="ti ti-package"></i><p>Nenhuma entrada cadastrada.<br>Importe uma planilha ou adicione manualmente.</p></div></td></tr>
             </tbody>
           </table>
           </div><!-- /table-scroll entradas -->
@@ -2259,10 +2276,19 @@
               <button class="btn btn-primary" onclick="openModal('modal-manual'); setModulo('Saída')"><i class="ti ti-plus"></i> Adicionar</button>
             </div>
           </div>
+          <div class="admin-lote-bar" id="lote-bar-saidas" style="display:none">
+            <span id="lote-count-saidas" style="display:inline-flex;align-items:center;gap:6px;font-weight:600;color:var(--purple)"><i class="ti ti-checks"></i> 0 registros selecionados</span>
+            <div class="admin-lote-actions">
+              <button class="btn btn-sm admin-btn-danger" onclick="excluirSelecionados('saidas')"><i class="ti ti-trash"></i> Excluir selecionados</button>
+              <button class="btn btn-sm admin-btn-ghost" onclick="limparSelecaoLote('saidas')">Limpar seleção</button>
+            </div>
+          </div>
+          <div class="fechmgr-selectall-banner" id="selectall-banner-saidas" style="display:none"></div>
           <div class="table-scroll">
           <table>
             <thead>
               <tr>
+                <th class="th-checkbox"><input type="checkbox" id="chk-all-saidas" onchange="toggleSelecionarTudoPagina('saidas', this.checked)" title="Selecionar todos os registros desta página"></th>
                 <th data-sort-col="central"    onclick="moduleSortBy('saidas','central')">Central Saída <i class="ti ti-selector mod-sort-icon"></i></th>
                 <th data-sort-col="dtEmissao"  onclick="moduleSortBy('saidas','dtEmissao')">Dt. Emissão <i class="ti ti-selector mod-sort-icon"></i></th>
                 <th data-sort-col="os"         onclick="moduleSortBy('saidas','os')">Nº OS <i class="ti ti-selector mod-sort-icon"></i></th>
@@ -2278,7 +2304,7 @@
               </tr>
             </thead>
             <tbody id="tb-saidas">
-              <tr><td colspan="12"><div class="empty-state"><i class="ti ti-truck"></i><p>Nenhuma saída cadastrada.</p></div></td></tr>
+              <tr><td colspan="13"><div class="empty-state"><i class="ti ti-truck"></i><p>Nenhuma saída cadastrada.</p></div></td></tr>
             </tbody>
           </table>
           </div><!-- /table-scroll saidas -->
@@ -2459,10 +2485,19 @@
               <button class="btn btn-primary" onclick="openModal('modal-manual'); setModulo('Lançamento')"><i class="ti ti-plus"></i> Adicionar</button>
             </div>
           </div>
+          <div class="admin-lote-bar" id="lote-bar-lancamentos" style="display:none">
+            <span id="lote-count-lancamentos" style="display:inline-flex;align-items:center;gap:6px;font-weight:600;color:var(--purple)"><i class="ti ti-checks"></i> 0 registros selecionados</span>
+            <div class="admin-lote-actions">
+              <button class="btn btn-sm admin-btn-danger" onclick="excluirSelecionados('lancamentos')"><i class="ti ti-trash"></i> Excluir selecionados</button>
+              <button class="btn btn-sm admin-btn-ghost" onclick="limparSelecaoLote('lancamentos')">Limpar seleção</button>
+            </div>
+          </div>
+          <div class="fechmgr-selectall-banner" id="selectall-banner-lancamentos" style="display:none"></div>
           <div class="table-scroll">
           <table>
             <thead>
               <tr>
+                <th class="th-checkbox"><input type="checkbox" id="chk-all-lancamentos" onchange="toggleSelecionarTudoPagina('lancamentos', this.checked)" title="Selecionar todos os registros desta página"></th>
                 <th data-sort-col="central"    onclick="moduleSortBy('lancamentos','central')">Central Estoque <i class="ti ti-selector mod-sort-icon"></i></th>
                 <th data-sort-col="dtLanc"     onclick="moduleSortBy('lancamentos','dtLanc')">Dt. Lançamento <i class="ti ti-selector mod-sort-icon"></i></th>
                 <th data-sort-col="fornecedor" onclick="moduleSortBy('lancamentos','fornecedor')">Fornecedor <i class="ti ti-selector mod-sort-icon"></i></th>
@@ -2476,7 +2511,7 @@
               </tr>
             </thead>
             <tbody id="tb-lancamentos">
-              <tr><td colspan="10"><div class="empty-state"><i class="ti ti-clipboard"></i><p>Nenhum lançamento de saldo real.</p></div></td></tr>
+              <tr><td colspan="11"><div class="empty-state"><i class="ti ti-clipboard"></i><p>Nenhum lançamento de saldo real.</p></div></td></tr>
             </tbody>
           </table>
           </div><!-- /table-scroll lancamentos -->
@@ -2506,10 +2541,19 @@
               <button class="btn btn-primary" onclick="openModal('modal-manual'); setModulo('SAP')"><i class="ti ti-plus"></i> Adicionar</button>
             </div>
           </div>
+          <div class="admin-lote-bar" id="lote-bar-sap" style="display:none">
+            <span id="lote-count-sap" style="display:inline-flex;align-items:center;gap:6px;font-weight:600;color:var(--purple)"><i class="ti ti-checks"></i> 0 registros selecionados</span>
+            <div class="admin-lote-actions">
+              <button class="btn btn-sm admin-btn-danger" onclick="excluirSelecionados('sap')"><i class="ti ti-trash"></i> Excluir selecionados</button>
+              <button class="btn btn-sm admin-btn-ghost" onclick="limparSelecaoLote('sap')">Limpar seleção</button>
+            </div>
+          </div>
+          <div class="fechmgr-selectall-banner" id="selectall-banner-sap" style="display:none"></div>
           <div class="table-scroll">
           <table>
             <thead>
               <tr>
+                <th class="th-checkbox"><input type="checkbox" id="chk-all-sap" onchange="toggleSelecionarTudoPagina('sap', this.checked)" title="Selecionar todos os registros desta página"></th>
                 <th data-sort-col="usuario"   onclick="moduleSortBy('sap','usuario')">Usuário <i class="ti ti-selector mod-sort-icon"></i></th>
                 <th data-sort-col="movimento" onclick="moduleSortBy('sap','movimento')">Movimento <i class="ti ti-selector mod-sort-icon"></i></th>
                 <th data-sort-col="ref"       onclick="moduleSortBy('sap','ref')">Ref. <i class="ti ti-selector mod-sort-icon"></i></th>
@@ -2528,7 +2572,7 @@
               </tr>
             </thead>
             <tbody id="tb-sap">
-              <tr><td colspan="15"><div class="empty-state"><i class="ti ti-database"></i><p>Nenhuma movimentação SAP importada.</p></div></td></tr>
+              <tr><td colspan="16"><div class="empty-state"><i class="ti ti-database"></i><p>Nenhuma movimentação SAP importada.</p></div></td></tr>
             </tbody>
           </table>
           </div><!-- /table-scroll sap -->
@@ -2657,7 +2701,7 @@
 
       <!-- IMPORTAR -->
 
-      <div class="page active" id="page-importar">
+      <div class="page" id="page-importar">
         <div class="import-prereq-banner" id="import-prereq-banner">
           <i class="ti ti-lock"></i>
           <div>
