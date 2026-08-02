@@ -6888,7 +6888,7 @@ mark.search-highlight {
 
 /* Display */
 .calc-display-wrap {
-  background: var(--bg1);
+  background: var(--bg2);
   padding: 10px 14px 8px;
   border-bottom: 1px solid var(--border);
   min-height: 64px;
@@ -8925,7 +8925,7 @@ mark.search-highlight {
 .agr-mat-table-wrap {
   display: none;
   overflow-x: auto;
-  background: var(--bg1);
+  background: var(--bg2);
   border-radius: 0 0 var(--radius-lg) var(--radius-lg);
 }
 .agr-mat-table-wrap.open { display: block; }
@@ -8957,7 +8957,7 @@ mark.search-highlight {
   color: var(--text);
   white-space: nowrap;
   font-size: 11.5px;
-  background: var(--bg1);
+  background: var(--bg2);
 }
 /* Material column: allow wrapping if very long, but cap width */
 .agr-mat-table td:first-child {
@@ -9185,7 +9185,7 @@ mark.search-highlight {
   margin: 16px 20px;
 }
 .agr-resumo-kpi-card {
-  background: var(--bg1);
+  background: var(--bg2);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   padding: 12px 14px;
@@ -10757,7 +10757,7 @@ tr.sap-fechamento td {
   gap: 10px;
   padding: 16px 20px;
   border-bottom: 1px solid var(--border);
-  background: var(--bg1);
+  background: var(--bg2);
 }
 @media (max-width: 900px) {
   .fechmgr-cards { grid-template-columns: repeat(2, 1fr); }
@@ -11187,10 +11187,10 @@ tr.sap-fechamento td {
   cursor: pointer;
   transition: all 0.15s;
 }
-.admin-health-toggle-btn:hover { color: var(--text); }
+.admin-health-toggle-btn:hover { color: var(--text); background: var(--bg3); }
 .admin-health-toggle-btn.active {
   color: var(--accent);
-  background: var(--bg1);
+  background: var(--bg2);
   box-shadow: 0 1px 2px rgba(0,0,0,0.08);
 }
 
@@ -11212,7 +11212,7 @@ tr.sap-fechamento td {
   cursor: pointer;
   transition: all 0.15s;
 }
-.admin-bool-btn:hover { color: var(--text2); }
+.admin-bool-btn:hover { color: var(--text2); background: var(--bg4); }
 .admin-bool-btn.admin-bool-active-sim { background: var(--green-bg); color: var(--green); border-color: var(--green-border); }
 .admin-bool-btn.admin-bool-active-nao { background: var(--red-bg); color: var(--red); border-color: var(--red-border); }
 
