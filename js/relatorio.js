@@ -1272,8 +1272,8 @@ ${opts.offlineCompleto ? _dgrFontesEmbutidas() : ''}
   .action-bar-title { color:var(--dgr-actionbar-text, #e2e8f0); font-size:13px; font-weight:500; }
   .action-bar-title span { color:var(--dgr-text-dim2, #64748b); font-size:12px; margin-left:10px; }
   .action-bar-btns { display:flex; gap:10px; }
-  .btn-print { background:#e8790a; color:#fff; border:none; border-radius:7px; padding:9px 13px; font-size:15px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:background .15s; }
-  .btn-print:hover { background:#c9670a; }
+  .btn-print { background:#ff6b35; color:#fff; border:none; border-radius:7px; padding:9px 13px; font-size:15px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:background .15s; }
+  .btn-print:hover { background:#e85a28; }
   .btn-tema { background:var(--dgr-btnclose-bg, #334155); color:var(--dgr-btnclose-text, #cbd5e1); border:none; border-radius:7px; padding:9px 13px; font-size:15px; cursor:pointer; transition:background .15s; display:flex; align-items:center; justify-content:center; }
   .btn-tema:hover { background:var(--dgr-btnclose-hover, #475569); }
 

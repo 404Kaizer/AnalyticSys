@@ -619,7 +619,9 @@ function imprimirTermo() {
   .action-bar { position: sticky; top:0; background:#1c1608; display:flex; align-items:center; justify-content:space-between; padding:12px 24px; }
   .action-bar-title { color:#f4f1e8; font-size:13px; }
   .btn-print { background:#ff6b35; color:#1c1608; border:none; border-radius:7px; padding:8px 18px; font-size:13px; font-weight:700; cursor:pointer; }
+  .btn-print:hover { background:#e85a28; }
   .btn-close { background:#3a2f14; color:#eee; border:none; border-radius:7px; padding:8px 14px; font-size:13px; cursor:pointer; margin-left:10px; }
+  .btn-close:hover { background:#4a3d1c; }
   .doc-wrap { max-width:760px; margin:28px auto 60px; background:#fff; color:#1c1608; padding:34px 40px 44px; box-shadow:0 6px 28px rgba(0,0,0,.18); }
   .doc-header { display:flex; align-items:flex-start; justify-content:space-between; gap:20px; border-bottom:3px solid #ff6b35; padding-bottom:16px; margin-bottom:18px; }
   .doc-title h1 { font-size:15.5px; letter-spacing:.04em; text-transform:uppercase; text-align:right; }

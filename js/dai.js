@@ -1111,6 +1111,21 @@ async function _daiAdicionarAnexosPosGeracao(dai, files) {
 // dos dashboards internos do sistema. Itera itens (tabela) e informantes
 // (lista) — cobre tanto DAIs novos quanto antigos, via _daiGetItens/
 // _daiGetInformantes.
+// Barra de ação (topo fixo com título + botões Imprimir/Fechar) — igual nos
+// dois documentos gerados por este arquivo (DAI e Termo de Responsabilidade),
+// antes copiada e colada em cada um.
+function _daiActionBarCss() {
+  return `
+  .action-bar { position: sticky; top: 0; z-index: 100; background: #1c1608; display: flex; align-items: center; justify-content: space-between; padding: 12px 24px; box-shadow: 0 2px 12px rgba(0,0,0,.3); }
+  .action-bar-title { color: #f4f1e8; font-size: 13px; font-weight: 500; }
+  .action-bar-title span { color: #c9a227; font-size: 12px; margin-left: 10px; font-family: monospace; }
+  .action-bar-btns { display: flex; gap: 10px; }
+  .btn-print { background: #c9a227; color: #1c1608; border: none; border-radius: 7px; padding: 8px 18px; font-size: 13px; font-weight: 700; cursor: pointer; }
+  .btn-print:hover { background: #b5911f; }
+  .btn-close { background: #3a2f14; color: #eee; border: none; border-radius: 7px; padding: 8px 14px; font-size: 13px; cursor: pointer; }
+  .btn-close:hover { background: #4a3d1c; }`;
+}
+
 function _daiBuildDocumentoHtml(dai) {
   const esc = (typeof escapeHtml === 'function') ? escapeHtml : (s => String(s ?? ''));
   const dataGeracaoFmt = dai.dataGeracao ? new Date(dai.dataGeracao).toLocaleString('pt-BR') : '—';
@@ -1165,14 +1180,7 @@ function _daiBuildDocumentoHtml(dai) {
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif; background: #ece6d5; color: #1c1608; font-size: 12.5px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
 
-  .action-bar { position: sticky; top: 0; z-index: 100; background: #1c1608; display: flex; align-items: center; justify-content: space-between; padding: 12px 24px; box-shadow: 0 2px 12px rgba(0,0,0,.3); }
-  .action-bar-title { color: #f4f1e8; font-size: 13px; font-weight: 500; }
-  .action-bar-title span { color: #c9a227; font-size: 12px; margin-left: 10px; font-family: monospace; }
-  .action-bar-btns { display: flex; gap: 10px; }
-  .btn-print { background: #c9a227; color: #1c1608; border: none; border-radius: 7px; padding: 8px 18px; font-size: 13px; font-weight: 700; cursor: pointer; }
-  .btn-print:hover { background: #b5911f; }
-  .btn-close { background: #3a2f14; color: #eee; border: none; border-radius: 7px; padding: 8px 14px; font-size: 13px; cursor: pointer; }
-  .btn-close:hover { background: #4a3d1c; }
+  ${_daiActionBarCss()}
 
   .doc-wrap { max-width: 760px; margin: 28px auto 60px; background: #fff; color: #1c1608; padding: 34px 40px 44px; box-shadow: 0 6px 28px rgba(0,0,0,.18); }
 
@@ -1331,14 +1339,7 @@ function _daiBuildTermoHtml(dai) {
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif; background: #ece6d5; color: #1c1608; font-size: 12.5px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
 
-  .action-bar { position: sticky; top: 0; z-index: 100; background: #1c1608; display: flex; align-items: center; justify-content: space-between; padding: 12px 24px; box-shadow: 0 2px 12px rgba(0,0,0,.3); }
-  .action-bar-title { color: #f4f1e8; font-size: 13px; font-weight: 500; }
-  .action-bar-title span { color: #c9a227; font-size: 12px; margin-left: 10px; font-family: monospace; }
-  .action-bar-btns { display: flex; gap: 10px; }
-  .btn-print { background: #c9a227; color: #1c1608; border: none; border-radius: 7px; padding: 8px 18px; font-size: 13px; font-weight: 700; cursor: pointer; }
-  .btn-print:hover { background: #b5911f; }
-  .btn-close { background: #3a2f14; color: #eee; border: none; border-radius: 7px; padding: 8px 14px; font-size: 13px; cursor: pointer; }
-  .btn-close:hover { background: #4a3d1c; }
+  ${_daiActionBarCss()}
 
   .doc-wrap { max-width: 760px; margin: 28px auto 60px; background: #fff; color: #1c1608; padding: 34px 40px 44px; box-shadow: 0 6px 28px rgba(0,0,0,.18); }
 
