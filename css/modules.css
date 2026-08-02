@@ -1761,13 +1761,15 @@ tr.pend-injetado-ambos {
   white-space: nowrap;
 }
 .pim-month-pill:hover {
-  border-color: var(--accent);
-  color: var(--accent);
+  border-color: var(--border3);
+  color: var(--text);
+  background: var(--bg4);
 }
 .pim-month-pill.active {
-  background: var(--accent);
+  background: var(--accent-dim);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--accent);
+  font-weight: 700;
 }
 
 /* ── Busca livre do modal de pendentes ───────────────────────────────── */
@@ -9052,7 +9054,7 @@ mark.search-highlight {
   color: var(--text);
 }
 .agr-month-nav-btn {
-  background: none;
+  background: var(--bg3);
   border: 1px solid var(--border2);
   border-radius: var(--radius);
   color: var(--text2);
@@ -9062,7 +9064,7 @@ mark.search-highlight {
   display: flex; align-items: center;
   transition: all .13s;
 }
-.agr-month-nav-btn:hover { background: var(--bg3); color: var(--text); }
+.agr-month-nav-btn:hover { border-color: var(--border3); color: var(--text); background: var(--bg4); }
 .agr-month-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
