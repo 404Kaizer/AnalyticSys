@@ -11235,7 +11235,7 @@ tr.sap-fechamento td {
   cursor: pointer;
   transition: all 0.15s;
 }
-.adminex-chip:hover { border-color: var(--accent); }
+.adminex-chip:hover { border-color: var(--border3); background: var(--bg4); }
 /* Checkbox real continua no DOM (estado/leitura em JS) mas some
    visualmente — o cartão inteiro vira o alvo clicável, sem o quadrado
    nu ao lado do texto. Clip em vez de display:none pra não perder o
