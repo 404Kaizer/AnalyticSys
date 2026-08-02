@@ -62,6 +62,7 @@
   "60": "relatorio-dais.test.mjs",
   "61": "openModal",
   "62": "openTool",
+  "63": "_criarRegistroSaida",
   "64": "cloud-backup.test.mjs",
   "65": "dai-anexos-storage.test.mjs",
   "66": "dai-sync-admin.test.mjs",
@@ -90,15 +91,14 @@
   "89": "Q: Why does CLOUD_BACKUP_MODULOS connect Cloud Backup Module to Admin Panel, Dashboard Conflict Detection, Dashboard Rendering & Cleanup, Import Deletion & Backup Sync?",
   "90": "_ocRealtimeInit",
   "91": "_ocCloseMicroFilterDropdown",
-  "92": "_criarRegistroSaida",
+  "92": "applyTheme",
   "93": "excluirImportacao",
   "94": "oc-card-menu.test.mjs",
   "95": "calendar.js",
   "96": "CLAUDE.md",
-  "97": "applyTheme",
+  "97": "toggleThemeSwitcher",
   "98": "calendar-oc.test.mjs",
-  "99": "toggleThemeSwitcher",
-  "100": "normalizeSearchKey",
-  "101": "updateImportPrereqUI",
-  "102": "_supaDeleteOwned"
+  "99": "normalizeSearchKey",
+  "100": "updateImportPrereqUI",
+  "101": "_supaDeleteOwned"
 }
