@@ -106,6 +106,7 @@
   -webkit-appearance: none;
   width: 100%;
 }
+.form-input:hover, .form-select:hover { border-color: var(--border3); }
 .form-input:focus, .form-select:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-dim);
@@ -2368,6 +2369,7 @@ td.var-cell-zero .ti-circle-check     { color: var(--text3); }
   outline: none;
   transition: border 0.15s;
 }
+.micro-filter-search:hover { border-color: var(--border3); }
 .micro-filter-search:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
 
 .micro-filter-options {
@@ -4454,6 +4456,7 @@ img { max-width: 100%; }
   cursor: pointer;
 }
 .topbar-search-input::placeholder { color: var(--text3); }
+.topbar-search-input:hover { border-color: var(--border2); }
 .topbar-search-input:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-dim);
@@ -5369,15 +5372,6 @@ mark.search-highlight {
   gap: 5px;
   margin-top: 3px;
 }
-.dg-risco-pill {
-  font-size: 9.5px;
-  font-family: var(--mono);
-  font-weight: 700;
-  letter-spacing: .05em;
-  padding: 2px 8px;
-  border-radius: 4px;
-  white-space: nowrap;
-}
 .dg-risco-news-num {
   font-family: var(--mono);
   font-size: 18px;
@@ -5940,29 +5934,6 @@ mark.search-highlight {
   border-top: 1px solid var(--border);
   flex-wrap: wrap;
 }
-.cal-footer-chip {
-  padding: 5px 12px;
-  border-radius: 999px;
-  font-size: 11.5px;
-  font-family: var(--font);
-  font-weight: 500;
-  border: 1px solid var(--border2);
-  background: var(--bg3);
-  color: var(--text2);
-  cursor: pointer;
-  transition: all 0.13s;
-}
-.cal-footer-chip:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: var(--accent-dim);
-}
-.cal-footer-chip.active {
-  background: var(--accent-dim);
-  border-color: var(--accent);
-  color: var(--accent);
-  font-weight: 600;
-}
 
 /* Quick chips outside the calendar */
 .cal-quick-chips {
@@ -6346,12 +6317,13 @@ mark.search-highlight {
 .oc-wa-btn:hover { background: rgba(37,211,102,.18); }
 .oc-wa-btn i { font-size: 14px; }
 
-.oc-btn-concluir {
-  background: rgba(16,185,129,.1);
-  border-color: rgba(16,185,129,.3);
+/* .oc-btn-reabrir-concluida é a mesma cor (verde) de concluir — mesma regra */
+.oc-btn-concluir, .oc-btn-reabrir-concluida {
+  background: var(--green-bg);
+  border-color: var(--green-border);
   color: var(--green);
 }
-.oc-btn-concluir:hover { background: rgba(16,185,129,.2); }
+.oc-btn-concluir:hover, .oc-btn-reabrir-concluida:hover { background: color-mix(in srgb, var(--green-bg) 60%, var(--green) 15%); }
 
 .oc-btn-inconclusiva {
   background: var(--purple-bg);
@@ -6367,27 +6339,22 @@ mark.search-highlight {
 }
 .oc-btn-reabrir:hover { background: color-mix(in srgb, var(--accent-dim) 60%, var(--accent) 15%); }
 
-.oc-btn-reabrir-concluida {
-  background: var(--green-bg);
-  border-color: var(--green-border);
-  color: var(--green);
-}
-.oc-btn-reabrir-concluida:hover { background: rgba(16,185,129,.2); }
-
 /* ── Botão escalonar ─────────────────────────────────── */
 .oc-btn-escalonar {
-  background: rgba(245,158,11,.1);
-  border-color: rgba(245,158,11,.3);
+  background: var(--amber-bg);
+  border-color: var(--amber-border);
   color: var(--amber);
 }
-.oc-btn-escalonar:hover { background: rgba(245,158,11,.2); }
+.oc-btn-escalonar:hover { background: color-mix(in srgb, var(--amber-bg) 60%, var(--amber) 15%); }
 
+/* Antes usava rgba(99,102,241,...) — um indigo que não batia com a cor do
+   texto (var(--purple)); ficava com fundo de uma cor e texto de outra. */
 .oc-btn-descalonar {
-  background: rgba(99,102,241,.1);
-  border-color: rgba(99,102,241,.3);
+  background: var(--purple-bg);
+  border-color: var(--purple-border);
   color: var(--purple);
 }
-.oc-btn-descalonar:hover { background: rgba(99,102,241,.2); }
+.oc-btn-descalonar:hover { background: color-mix(in srgb, var(--purple-bg) 60%, var(--purple) 15%); }
 
 .oc-hier-desc-btn {
   margin-left: 6px;
@@ -7785,7 +7752,9 @@ mark.search-highlight {
   font-family: var(--font);
 }
 .asst-input:focus { border-color: var(--accent); }
-.asst-send-btn {
+/* Mesmo botão circular de "enviar" do Assistente e do chat de Mensagens —
+   uma regra só serve os dois. */
+.asst-send-btn, .msgs-send-btn {
   background: var(--accent);
   border: none;
   color: #fff;
@@ -7799,7 +7768,8 @@ mark.search-highlight {
   transition: filter .15s;
   flex-shrink: 0;
 }
-.asst-send-btn:hover { filter: brightness(1.1); }
+.asst-send-btn:hover, .msgs-send-btn:hover { filter: brightness(1.1); }
+.asst-send-btn:disabled, .msgs-send-btn:disabled { opacity: .5; cursor: not-allowed; filter: none; }
 
 /* ══════════════════════════════════════════
    MENSAGENS — chat entre usuários (Etapa 1: casca visual)
@@ -8308,23 +8278,6 @@ mark.search-highlight {
 }
 .msgs-input:focus { border-color: var(--accent); }
 .msgs-input:disabled { opacity: .55; cursor: not-allowed; }
-.msgs-send-btn {
-  background: var(--accent);
-  border: none;
-  color: #fff;
-  width: 34px;
-  border-radius: 8px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 15px;
-  transition: filter .15s;
-  flex-shrink: 0;
-}
-.msgs-send-btn:hover { filter: brightness(1.1); }
-.msgs-send-btn:disabled { opacity: .5; cursor: not-allowed; filter: none; }
-
 @media (max-width: 640px) {
   .mensagens-popover { width: calc(100vw - 24px); }
   .msgs-conv-pane { width: 130px; }
@@ -10122,7 +10075,9 @@ td:has(.lanc-central-edit:focus) {
   margin-bottom: 20px;
   padding-bottom: 0;
 }
-.dg-tab-btn {
+/* Mesma aba underline usada no Dashboard Gerencial e na alternância
+   Visão Micro/Inventário do Analítico — visualmente idêntica, uma regra só. */
+.dg-tab-btn, .an-view-btn {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -10139,9 +10094,9 @@ td:has(.lanc-central-edit:focus) {
   border-bottom: 2px solid transparent;
   margin-bottom: -1px;
 }
-.dg-tab-btn:hover { color: var(--text2); background: var(--bg3); }
-.dg-tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); background: var(--accent-dim); }
-.dg-tab-btn i { font-size: 13px; }
+.dg-tab-btn:hover, .an-view-btn:hover { color: var(--text2); background: var(--bg3); }
+.dg-tab-btn.active, .an-view-btn.active { color: var(--accent); border-bottom-color: var(--accent); background: var(--accent-dim); }
+.dg-tab-btn i, .an-view-btn i { font-size: 13px; }
 .dg-tab-pane { display: none; }
 .dg-tab-pane.active { display: block; }
 
@@ -10153,26 +10108,6 @@ td:has(.lanc-central-edit:focus) {
   border-bottom: 1px solid var(--border2);
   margin: 4px 0 18px;
 }
-.an-view-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  font-family: var(--mono);
-  font-weight: 500;
-  padding: 8px 16px;
-  border-radius: var(--radius) var(--radius) 0 0;
-  border: none;
-  background: transparent;
-  color: var(--text3);
-  cursor: pointer;
-  transition: all .15s;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-}
-.an-view-btn:hover { color: var(--text2); background: var(--bg3); }
-.an-view-btn.active { color: var(--accent); border-bottom-color: var(--accent); background: var(--accent-dim); }
-.an-view-btn i { font-size: 13px; }
 .an-view-pane { display: block; }
 .an-view-caption {
   font-size: 11px;
@@ -10902,7 +10837,9 @@ tr.sap-fechamento td {
   color: var(--text2);
   text-align: center;
 }
-.fechmgr-selectall-link {
+/* Mesmo link "selecionar todos os N registros do filtro" do Fechamento e
+   do Admin — uma regra só. */
+.fechmgr-selectall-link, .admin-selectall-link {
   background: none;
   border: none;
   padding: 0;
@@ -10913,7 +10850,7 @@ tr.sap-fechamento td {
   text-decoration: underline;
   cursor: pointer;
 }
-.fechmgr-selectall-link:hover {
+.fechmgr-selectall-link:hover, .admin-selectall-link:hover {
   color: var(--accent-hover, var(--accent));
 }
 
@@ -11077,20 +11014,6 @@ tr.sap-fechamento td {
   font-size: 11.5px;
   color: var(--text2);
   text-align: center;
-}
-.admin-selectall-link {
-  background: none;
-  border: none;
-  padding: 0;
-  color: var(--accent);
-  font-family: var(--mono);
-  font-size: 11.5px;
-  font-weight: 600;
-  text-decoration: underline;
-  cursor: pointer;
-}
-.admin-selectall-link:hover {
-  color: var(--accent-hover, var(--accent));
 }
 
 /* Checkboxes na tabela "Dados por módulo" — mesmo tamanho/cor do padrão

@@ -37,29 +37,50 @@
   transform: translateY(-1px);
 }
 
-/* Botões de destaque dos relatórios (Ranking de Criticidade) — gradiente
-   sobre os tokens de tema em vez de hex fixo, pra acompanhar a troca de tema */
-.btn-gradient-purple {
-  background: linear-gradient(135deg, var(--purple), color-mix(in srgb, var(--purple) 70%, white));
+/* Modificadores de tamanho — .btn-sm já era usado em ocorrencias.js mas só
+   tinha efeito dentro de .fechmgr-lote-bar/.admin-lote-bar (escopo acidental);
+   .btn-xs não tinha CSS nenhum. Vira regra geral, os dois escopos antigos
+   continuam funcionando por especificidade. */
+.btn-sm { font-size: 12px; padding: 5px 12px; }
+.btn-xs { font-size: 11px; padding: 4px 8px; }
+
+/* Ação destrutiva discreta (excluir linha/registro) — outline vermelho, sem
+   fundo até o hover. Usada em ocorrencias.js sem nenhuma definição até agora. */
+.btn-danger-ghost {
+  background: transparent;
+  border-color: var(--red-border);
+  color: var(--red);
+}
+.btn-danger-ghost:hover { background: var(--red-bg); border-color: var(--red); }
+
+/* ══════════════════════════════════════════
+   BOTÕES DE AÇÃO EM DESTAQUE (relatórios, geração de documento)
+   Padrão único pra essa família: a base (.btn-gradient) define hover/transição
+   uma vez só; cada variante de cor só define o gradiente. Hover é
+   filter:brightness + leve elevação — nunca troca a cor de fundo, então não
+   tem risco de um :hover mais específico (.btn:hover/.btn-primary:hover)
+   "vencer" e substituir o gradiente por engano (foi exatamente esse bug que
+   apareceu nos 2 primeiros botões desta família).
+══════════════════════════════════════════ */
+.btn-gradient {
   border: none;
   color: #fff;
+  transition: filter 0.15s, transform 0.15s, box-shadow 0.15s;
 }
-/* :hover explícito — sem isso, .btn:hover (que tem +especificidade por causa
-   do pseudo-classe) vence e troca o gradiente por bg cinza genérico no hover */
-.btn-gradient-purple:hover {
-  background: linear-gradient(135deg, var(--purple), color-mix(in srgb, var(--purple) 70%, white));
-  border-color: transparent;
-  color: #fff;
+.btn-gradient:hover {
+  filter: brightness(1.12);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(0,0,0,0.28);
 }
-.btn-gradient-blue {
-  background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 70%, white));
-  border: none;
-}
-/* idem — sem isso, .btn-primary:hover vence e troca o gradiente por
-   color-mix sólido no hover */
-.btn-gradient-blue:hover {
-  background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 70%, white));
-  border-color: transparent;
+.btn-gradient:active { transform: translateY(0); filter: brightness(0.95); }
+
+.btn-gradient-purple  { background: linear-gradient(135deg, var(--purple),   color-mix(in srgb, var(--purple) 70%, white)); }
+.btn-gradient-blue    { background: linear-gradient(135deg, var(--accent),  color-mix(in srgb, var(--accent) 70%, white)); }
+.btn-gradient-teal    { background: linear-gradient(135deg, var(--teal),    color-mix(in srgb, var(--teal) 70%, white)); }
+.btn-gradient-urgente { background: linear-gradient(135deg, var(--urgente), color-mix(in srgb, var(--urgente) 70%, white)); }
+.btn-gradient-gold {
+  background: linear-gradient(135deg, var(--gold), color-mix(in srgb, var(--gold) 70%, white));
+  color: #1c1608;
 }
 
 .btn-icon {
@@ -750,6 +771,7 @@
   outline: none;
   transition: border-color 0.15s;
 }
+.inv-search-input:hover { border-color: var(--border3); }
 .inv-search-input:focus { border-color: var(--accent); }
 .inv-search-input::placeholder { color: var(--text3); }
 
@@ -766,18 +788,6 @@
   transition: border-color 0.15s;
 }
 .inv-filter-select:focus { border-color: var(--accent); }
-
-.inv-filter-toggle {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: var(--text2);
-  cursor: pointer;
-  white-space: nowrap;
-  user-select: none;
-}
-.inv-filter-toggle input[type=checkbox] { accent-color: var(--accent); width: 13px; height: 13px; cursor: pointer; }
 
 /* ══ TABLE ══ */
 /* .inv-table-wrap é o table-card inteiro (título + toolbar + tabela).
@@ -1227,6 +1237,7 @@ tbody td {
   width: 180px;
   transition: border 0.15s;
 }
+.search-input:hover { border-color: var(--border2); }
 .search-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
 .search-wrap { position: relative; }
 .search-wrap i {
@@ -1369,18 +1380,6 @@ tbody td {
   font-size: 11px;
   white-space: nowrap;
 }
-.pend-padr-toggle {
-  margin-top: 8px;
-  background: none;
-  border: none;
-  color: var(--amber);
-  font-size: 11.5px;
-  font-weight: 600;
-  cursor: pointer;
-  padding: 0;
-}
-.pend-padr-toggle:hover { text-decoration: underline; }
-
 /* ══════════════════════════════════════════
    CADASTROS DUPLICADOS/CONFLITANTES (Configurações → Materiais)
    Mesma origem apontando para aliases diferentes — um dos cadastros
@@ -1464,18 +1463,6 @@ tbody td {
 }
 .dup-cad-badge-venc  { background: var(--green-bg); color: var(--green); border: 1px solid var(--green-border); }
 .dup-cad-badge-morto { background: var(--red-bg); color: var(--red); border: 1px solid var(--red-border); }
-.dup-cad-toggle {
-  margin-top: 8px;
-  background: none;
-  border: none;
-  color: var(--red);
-  font-size: 11.5px;
-  font-weight: 600;
-  cursor: pointer;
-  padding: 0;
-}
-.dup-cad-toggle:hover { text-decoration: underline; }
-
 /* ══════════════════════════════════════════
    BOTÃO DE ALERTA — substitui os blocos expandidos de conflito de
    cadastro (Config. Materiais), materiais sem cadastro (Inventário) e
@@ -1628,6 +1615,8 @@ tbody td {
   flex-direction: column;
   gap: 10px;
 }
+/* Mesma família visual de .modal-close (modules.css) — nunca tinha
+   ganhado :hover próprio, então não reagia a nada até agora. */
 .alert-modal-close {
   background: none;
   border: none;
@@ -1635,4 +1624,7 @@ tbody td {
   cursor: pointer;
   font-size: 18px;
   flex-shrink: 0;
+  padding: 4px;
+  border-radius: 5px;
 }
+.alert-modal-close:hover { color: var(--text); background: var(--bg3); }

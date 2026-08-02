@@ -1485,11 +1485,11 @@
 
           <!-- Botões de relatório -->
           <div style="display:flex;justify-content:flex-end;gap:10px;margin-bottom:10px">
-            <button class="btn btn-gradient-purple" onclick="abrirModalCategoriasRelatorio('diretoria')" style="gap:7px;font-size:13px;padding:8px 18px;border-radius:8px;cursor:pointer;display:flex;align-items:center">
+            <button class="btn btn-gradient btn-gradient-purple" onclick="abrirModalCategoriasRelatorio('diretoria')" style="gap:7px;font-size:13px;padding:8px 18px;border-radius:8px;cursor:pointer;display:flex;align-items:center">
               <i class="ti ti-chart-pie" style="font-size:15px"></i>
               <span>Visão Diretoria</span>
             </button>
-            <button class="btn btn-primary btn-gradient-blue" onclick="abrirModalCategoriasRelatorio('detalhado')" style="gap:7px;font-size:13px;padding:8px 18px;border-radius:8px;cursor:pointer;display:flex;align-items:center">
+            <button class="btn btn-gradient btn-gradient-blue" onclick="abrirModalCategoriasRelatorio('detalhado')" style="gap:7px;font-size:13px;padding:8px 18px;border-radius:8px;cursor:pointer;display:flex;align-items:center">
               <i class="ti ti-file-report" style="font-size:15px"></i>
               <span>Relatório Detalhado</span>
             </button>
@@ -2847,16 +2847,16 @@
         <div style="display:flex;align-items:center;justify-content:space-between;margin:20px 0 14px;flex-wrap:wrap;gap:10px">
           <div class="section-title" style="margin:0"><i class="ti ti-building-factory-2" style="font-size:13px;margin-right:6px"></i>Visão Geral de Ocorrências Registradas</div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn" onclick="gerarRelatorioGeralOcorrencias()" title="Gerar relatório gerencial de ocorrências para diretoria" style="gap:7px;font-size:12px;padding:7px 14px;background:linear-gradient(135deg,#0f766e,#0d9488);border:none;border-radius:8px;cursor:pointer;display:flex;align-items:center;color:#fff;font-weight:600;white-space:nowrap">
+            <button class="btn btn-gradient btn-gradient-teal" onclick="gerarRelatorioGeralOcorrencias()" title="Gerar relatório gerencial de ocorrências para diretoria" style="gap:7px;font-size:12px;padding:7px 14px;border-radius:8px;cursor:pointer;display:flex;align-items:center;font-weight:600;white-space:nowrap">
               <i class="ti ti-file-analytics" style="font-size:14px"></i> Relatório Gerencial
             </button>
-            <button class="btn" onclick="abrirSeletorRegionalOcorrencias()" title="Gerar relatório de cobrança por regional" style="gap:7px;font-size:12px;padding:7px 14px;background:linear-gradient(135deg,#7c2d12,#c2410c);border:none;border-radius:8px;cursor:pointer;display:flex;align-items:center;color:#fff;font-weight:600;white-space:nowrap">
+            <button class="btn btn-gradient btn-gradient-urgente" onclick="abrirSeletorRegionalOcorrencias()" title="Gerar relatório de cobrança por regional" style="gap:7px;font-size:12px;padding:7px 14px;border-radius:8px;cursor:pointer;display:flex;align-items:center;font-weight:600;white-space:nowrap">
               <i class="ti ti-map-pin" style="font-size:14px"></i> Cobrança Regional
             </button>
-            <button class="btn" onclick="abrirSeletorCentralOcorrencias()" title="Gerar relatório de cobrança por central" style="gap:7px;font-size:12px;padding:7px 14px;background:linear-gradient(135deg,#3730a3,#4f46e5);border:none;border-radius:8px;cursor:pointer;display:flex;align-items:center;color:#fff;font-weight:600;white-space:nowrap">
+            <button class="btn btn-gradient btn-gradient-purple" onclick="abrirSeletorCentralOcorrencias()" title="Gerar relatório de cobrança por central" style="gap:7px;font-size:12px;padding:7px 14px;border-radius:8px;cursor:pointer;display:flex;align-items:center;font-weight:600;white-space:nowrap">
               <i class="ti ti-building-factory-2" style="font-size:14px"></i> Cobrança por Central
             </button>
-            <button class="btn" onclick="gerarRelatorioDAIs()" title="Gerar relatório gerencial de DAIs (Documentos de Ajuste de Inventário)" style="gap:7px;font-size:12px;padding:7px 14px;background:linear-gradient(135deg,#854d0e,#a16207);border:none;border-radius:8px;cursor:pointer;display:flex;align-items:center;color:#fff;font-weight:600;white-space:nowrap">
+            <button class="btn btn-gradient btn-gradient-gold" onclick="gerarRelatorioDAIs()" title="Gerar relatório gerencial de DAIs (Documentos de Ajuste de Inventário)" style="gap:7px;font-size:12px;padding:7px 14px;border-radius:8px;cursor:pointer;display:flex;align-items:center;font-weight:600;white-space:nowrap">
               <i class="ti ti-file-certificate" style="font-size:14px"></i> Relatório de DAIs
             </button>
           </div>
@@ -3012,7 +3012,7 @@
             </button>
           </div>
           <div style="display:flex;gap:8px">
-            <button class="btn" onclick="abrirModalDai()" title="Gerar Documento de Ajuste de Inventário (DAI)" style="gap:7px;font-size:12px;padding:8px 14px;background:linear-gradient(135deg,#8a6d1a,#c9a227);border:none;border-radius:8px;cursor:pointer;display:flex;align-items:center;color:#1c1608;font-weight:700;white-space:nowrap">
+            <button class="btn btn-gradient btn-gradient-gold" onclick="abrirModalDai()" title="Gerar Documento de Ajuste de Inventário (DAI)" style="gap:7px;font-size:12px;padding:8px 14px;border-radius:8px;cursor:pointer;display:flex;align-items:center;font-weight:700;white-space:nowrap">
               <i class="ti ti-rubber-stamp" style="font-size:14px"></i> Gerar Documento de Ajuste
             </button>
             <button class="btn btn-primary" onclick="openOcorrenciaModal()">
