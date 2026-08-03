@@ -2,6 +2,14 @@
 
 Never start a local dev server or open the Browser pane (`preview_start`, `preview_*`, embedded browser tools) for this project — it crashes the desktop app. The user always tests changes themselves in their own browser. Only use these tools if the user explicitly asks for them in that message.
 
+## ponytail
+
+Ponytail (lazy-senior-dev mode) must stay active for all coding work in this project: climb the ladder (YAGNI → reuse → stdlib → native → existing dep → one-liner → minimum code) before writing anything, keep diffs short, and mark deliberate corner-cuts with a `ponytail:` comment naming the ceiling and upgrade path.
+
+## headroom
+
+Use `headroom_compress` on large tool outputs (file reads, search results, logs, JSON) before reasoning over them, to keep context usage low. Use `headroom_retrieve` with the returned hash when the full original content is needed.
+
 ## graphify
 
 This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
