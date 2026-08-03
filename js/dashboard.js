@@ -759,18 +759,21 @@ function _dgVgAggKgPorChave(pares, keyFn) {
   return map;
 }
 
-function _dgVgExtremos(map, kgMap = null) {
+// map define o vencedor min/max (métrica principal). auxMap opcional:
+// anexa o valor auxiliar da MESMA chave vencedora — não recalcula o
+// extremo por ele, só decora o resultado já decidido por `map`. Chamado
+// com o mapa de kg como `map` (vencedor decidido pela variação física) e
+// o de custo como `auxMap` (decisão do Hugo: variação em evidência,
+// custo como complemento) — ver chamada em renderDgVisaoGeralPdf.
+function _dgVgExtremos(map, auxMap = null) {
   let min = null, max = null;
   map.forEach((v, k) => {
     if (!min || v < min.v) min = { k, v };
     if (!max || v > max.v) max = { k, v };
   });
-  // kgMap opcional: anexa o saldo da variação (kg) da MESMA chave
-  // vencedora (mesmo regional/central que já venceu por custo) — não
-  // recalcula o extremo por kg, só decora o resultado já decidido por custo.
-  if (kgMap) {
-    if (min) min.kg = kgMap.get(min.k) || 0;
-    if (max) max.kg = kgMap.get(max.k) || 0;
+  if (auxMap) {
+    if (min) min.aux = auxMap.get(min.k) || 0;
+    if (max) max.aux = auxMap.get(max.k) || 0;
   }
   return { min, max };
 }
@@ -1218,8 +1221,8 @@ function renderDgVisaoGeralPdf(results, thresholds, dtIni, dtFim) {
   const porCentral  = _dgVgAggPorChave(pares, p => p.central);
   const porRegionalKg = _dgVgAggKgPorChave(pares, p => p.regional);
   const porCentralKg  = _dgVgAggKgPorChave(pares, p => p.central);
-  const extRegional = _dgVgExtremos(porRegional, porRegionalKg);
-  const extCentral  = _dgVgExtremos(porCentral, porCentralKg);
+  const extRegional = _dgVgExtremos(porRegionalKg, porRegional);
+  const extCentral  = _dgVgExtremos(porCentralKg, porCentral);
 
   const custoVarMap    = _dgVgCustoVariacaoPorMaterial(pares);
   const custoAbsPorCat = _dgVgAgruparCustoVariacaoPorCategoria(custoVarMap);
@@ -1256,11 +1259,11 @@ function renderDgVisaoGeralPdf(results, thresholds, dtIni, dtFim) {
   _dgVgRenderHealthDonuts(pares, counts, scoreInfo, thresholds);
   _dgVgRenderChartCategoriaFisica(catFisicaPct);
   _dgVgRenderExtremos(extRegional, extCentral);
-  const entriesRegional = _dgVgTop8SobraDesfalque(porRegional);
-  const entriesCentral  = _dgVgTop8SobraDesfalque(porCentral);
+  const entriesRegional = _dgVgTop8SobraDesfalque(porRegionalKg);
+  const entriesCentral  = _dgVgTop8SobraDesfalque(porCentralKg);
 
-  _dgVgRenderChartCustoPorChave('dg-vg-chart-regional', entriesRegional, 'chartRegional');
-  _dgVgRenderChartCustoPorChave('dg-vg-chart-usina',    entriesCentral,  'chartUsina');
+  _dgVgRenderChartVariacaoPorChave('dg-vg-chart-regional', entriesRegional, 'chartRegional');
+  _dgVgRenderChartVariacaoPorChave('dg-vg-chart-usina',    entriesCentral,  'chartUsina');
   _dgVgRenderChartGrupoMaterial(custoAbsPorCat);
   DG_VG_CAT_ORDER.forEach(catKey => {
     _dgVgRenderDonutCategoria(`dg-vg-donut-${catKey}`, custoAbsPorCat[catKey] || [], catKey);
@@ -1571,8 +1574,8 @@ function _dgVgRenderExtremos(extRegional, extCentral) {
     const cls = ext.v < 0 ? 'dg-vg-extremo-neg' : 'dg-vg-extremo-pos';
     return `<div class="dg-vg-extremo-box ${cls}">
       <span class="dg-vg-extremo-label">${label}</span>
-      <span class="dg-vg-extremo-value">${varSymbol(ext.v)} ${money(Math.abs(ext.v))}</span>
-      <span class="dg-vg-extremo-kg">${varSymbol(ext.kg || 0)} ${fmtKg(Math.abs(ext.kg || 0))}</span>
+      <span class="dg-vg-extremo-value">${varSymbol(ext.v)} ${fmtKg(Math.abs(ext.v))}</span>
+      <span class="dg-vg-extremo-kg">${varSymbol(ext.aux || 0)} ${money(Math.abs(ext.aux || 0))}</span>
       <span class="dg-vg-extremo-name" title="${escapeHtml(ext.k)}">${escapeHtml(ext.k)}</span>
     </div>`;
   };
@@ -1751,8 +1754,10 @@ function _dgVgTop8SobraDesfalque(map) {
   return [...dedup.entries()].sort((a, b) => b[1] - a[1]);
 }
 
-// entries: array [ [label, valor], ... ] já ordenado como deve aparecer no eixo X.
-function _dgVgRenderChartCustoPorChave(canvasId, entries, chartKey) {
+// entries: array [ [label, valor], ... ] já ordenado como deve aparecer no
+// eixo X. valor em kg (variação física) — não mais custo, decisão do Hugo
+// pra deixar a variação em evidência nos cards/gráfico de Regional/Central.
+function _dgVgRenderChartVariacaoPorChave(canvasId, entries, chartKey) {
   const ctx = document.getElementById(canvasId);
   if (!ctx) return;
   _dgVgDestroyChart(chartKey);
@@ -1784,11 +1789,11 @@ function _dgVgRenderChartCustoPorChave(canvasId, entries, chartKey) {
       responsive: true, maintainAspectRatio: false,
       plugins: {
         legend: { display: false },
-        tooltip: { callbacks: { label: c => `${varLabel(c.raw)} · ${money(Math.abs(c.raw))}` } }
+        tooltip: { callbacks: { label: c => `${varLabel(c.raw)} · ${fmtKg(Math.abs(c.raw))}` } }
       },
       scales: {
         x: { grid: { display: false }, ticks: { color: textCol, font: { ...tickFont, size: 9.5 }, maxRotation: 55, minRotation: 35, autoSkip: false } },
-        y: { grid: { color: gridCol }, ticks: { color: textCol, font: tickFont, callback: v => moneyShort(v) } }
+        y: { grid: { color: gridCol }, ticks: { color: textCol, font: tickFont, callback: v => fmtKgShort(v) } }
       }
     }
   });
@@ -2862,7 +2867,7 @@ function _dgRankCardHtml(rows, opts = {}) {
 }
 
 // Gráfico de barras (Chart.js) — MESMO padrão visual/tema já usado nos
-// gráficos de custo da Visão Geral (_dgVgRenderChartCustoPorChave),
+// gráficos de variação da Visão Geral (_dgVgRenderChartVariacaoPorChave),
 // reaproveitando o registro global _dgVgCharts pra destruir/recriar sem
 // vazar instâncias antigas do Chart.js entre re-renderizações.
 function _dcRenderChartRanking(canvasId, chartKey, rows, color) {

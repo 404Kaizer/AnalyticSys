@@ -908,17 +908,19 @@
           </div>
         </div>
 
-        <!-- 4, 5 & 6. Custo por Regional/Central — destaques (extremos) e
-             distribuição completa (barras). Mesma base de dados
-             (porRegional/porCentral em dashboard.js) em duas visualizações:
-             card de destaque primeiro, gráfico completo logo abaixo. Um só
-             cabeçalho pros dois blocos, já que não são assuntos diferentes. -->
-        <div class="section-title" style="margin:28px 0 14px"><i class="ti ti-scale" style="font-size:13px;margin-right:6px"></i>Custo por Regional e Central</div>
+        <!-- 4, 5 & 6. Variação por Regional/Central — destaques (extremos) e
+             distribuição completa (barras), ranqueados pela variação física
+             (kg), custo como complemento — decisão do Hugo. Mesma base de
+             dados (porRegionalKg/porCentralKg em dashboard.js) em duas
+             visualizações: card de destaque primeiro, gráfico completo logo
+             abaixo. Um só cabeçalho pros dois blocos, já que não são
+             assuntos diferentes. -->
+        <div class="section-title" style="margin:28px 0 14px"><i class="ti ti-scale" style="font-size:13px;margin-right:6px"></i>Variação por Regional e Central</div>
         <div id="dg-vg-extremos" class="dg-vg-extremos-grid" style="margin-bottom:14px"></div>
 
         <div class="dg-giro-dual-grid">
           <div class="oc-chart-card">
-            <div class="oc-chart-title"><i class="ti ti-users" style="margin-right:5px"></i>Variação de Custo por Regional</div>
+            <div class="oc-chart-title"><i class="ti ti-users" style="margin-right:5px"></i>Variação por Regional</div>
             <div class="dg-vg-bar-wrap" style="height:260px">
               <div class="dg-vg-bar-inner">
                 <canvas id="dg-vg-chart-regional"></canvas>
@@ -926,7 +928,7 @@
             </div>
           </div>
           <div class="oc-chart-card">
-            <div class="oc-chart-title"><i class="ti ti-building-factory-2" style="margin-right:5px"></i>Variação de Custo por Central</div>
+            <div class="oc-chart-title"><i class="ti ti-building-factory-2" style="margin-right:5px"></i>Variação por Central</div>
             <div class="dg-vg-bar-wrap" style="height:260px">
               <div class="dg-vg-bar-inner">
                 <canvas id="dg-vg-chart-usina"></canvas>

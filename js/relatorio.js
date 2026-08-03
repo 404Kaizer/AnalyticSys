@@ -3234,8 +3234,8 @@ async function _dgrCapturarComTema(tema, d) {
 
   const redesenharGraficos = () => {
     _dgVgRenderChartCategoriaFisica(d.catFisicaPct);
-    _dgVgRenderChartCustoPorChave('dg-vg-chart-regional', d.entriesRegional, 'chartRegional');
-    _dgVgRenderChartCustoPorChave('dg-vg-chart-usina', d.entriesCentral, 'chartUsina');
+    _dgVgRenderChartVariacaoPorChave('dg-vg-chart-regional', d.entriesRegional, 'chartRegional');
+    _dgVgRenderChartVariacaoPorChave('dg-vg-chart-usina', d.entriesCentral, 'chartUsina');
   };
 
   try {
@@ -3378,7 +3378,7 @@ function _dgrBuildCategoriaHtml(imgCategoria) {
     </div>`;
 }
 
-// ── Seções 4/5/6: Custo por Regional e Central — 4 cards de destaque
+// ── Seções 4/5/6: Variação por Regional e Central — 4 cards de destaque
 //    (extremos, reconstruídos a partir de d.extRegional/d.extCentral já
 //    calculados — mesma lógica de _dgVgRenderExtremos em dashboard.js, só
 //    com cores literais em vez de var(--x)) + os 2 gráficos de barra
@@ -3395,8 +3395,8 @@ function _dgrBuildCustoRegionalCentralHtml(d, imgRegional, imgUsina) {
     return `
       <div class="dgr-extremo-box">
         <div class="dgr-extremo-label">${_rankEsc(label)}</div>
-        <div class="dgr-extremo-value" style="color:${col}">${_dgrNowrapNum(`${varSymbol(ext.v)} ${money(Math.abs(ext.v))}`)}</div>
-        <div class="dgr-extremo-kg">${_dgrNowrapNum(`${varSymbol(ext.kg || 0)} ${fmtKg(Math.abs(ext.kg || 0))}`)}</div>
+        <div class="dgr-extremo-value" style="color:${col}">${_dgrNowrapNum(`${varSymbol(ext.v)} ${fmtKg(Math.abs(ext.v))}`)}</div>
+        <div class="dgr-extremo-kg">${_dgrNowrapNum(`${varSymbol(ext.aux || 0)} ${money(Math.abs(ext.aux || 0))}`)}</div>
         <div class="dgr-extremo-name">${_rankEsc(ext.k)}</div>
       </div>`;
   };
@@ -3411,12 +3411,12 @@ function _dgrBuildCustoRegionalCentralHtml(d, imgRegional, imgUsina) {
     <div class="dgr-extremos-grid">${extremosHtml}</div>
     <div class="dgr-chart-grid">
       <div class="dgr-chart-card">
-        <div class="dgr-chart-title"><i class="ti ti-users"></i>Variação de Custo por Regional</div>
-        ${imgRegional ? `<img src="${imgRegional}" alt="Variação de Custo por Regional">` : '<div class="dgr-chart-empty">Gráfico indisponível</div>'}
+        <div class="dgr-chart-title"><i class="ti ti-users"></i>Variação por Regional</div>
+        ${imgRegional ? `<img src="${imgRegional}" alt="Variação por Regional">` : '<div class="dgr-chart-empty">Gráfico indisponível</div>'}
       </div>
       <div class="dgr-chart-card">
-        <div class="dgr-chart-title"><i class="ti ti-building-factory-2"></i>Variação de Custo por Central</div>
-        ${imgUsina ? `<img src="${imgUsina}" alt="Variação de Custo por Central">` : '<div class="dgr-chart-empty">Gráfico indisponível</div>'}
+        <div class="dgr-chart-title"><i class="ti ti-building-factory-2"></i>Variação por Central</div>
+        ${imgUsina ? `<img src="${imgUsina}" alt="Variação por Central">` : '<div class="dgr-chart-empty">Gráfico indisponível</div>'}
       </div>
     </div>`;
 }
@@ -3915,7 +3915,7 @@ window._RELATORIO_ABAS_REGISTRY = [
     secoes: [
       { id: 'resumo-periodo',  label: 'Resumo do Período — Estoque, Movimentação e Variação', natural: false,
         builder: (d) => _dgrBuildResumoPeriodoHtml(d) },
-      { id: 'custo-regional',  label: 'Custo por Regional e Central', natural: false,
+      { id: 'custo-regional',  label: 'Variação por Regional e Central', natural: false,
         builder: (d, imgs) => _dgrBuildCustoRegionalCentralHtml(d, imgs.imgRegional, imgs.imgUsina) },
       { id: 'saude-categoria', label: 'Saúde Geral + Categoria', natural: false,
         builder: (d, imgs) => _dgrBuildSaudeGeralHtml(imgs.imgGaugeCentral, imgs.imgGaugeMateriais) + _dgrBuildCategoriaHtml(imgs.imgCategoria) },
