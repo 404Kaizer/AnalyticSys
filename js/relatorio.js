@@ -3049,8 +3049,11 @@ function _dgrBuildResumoPeriodoHtml(d) {
   const custoEstTeorico = (d.estTotais.custoIni || 0) + (d.custoMovTotais.custoEnt || 0) - (d.custoMovTotais.custoSai || 0);
   const pctCusto = Math.abs(custoEstTeorico) > 0.0001 ? (d.custoTotal / custoEstTeorico) * 100 : null;
 
-  const kgEvolucao    = d.estTotais.totalFim - d.estTotais.totalIni;
-  const custoEvolucao = (d.estTotais.custoFim || 0) - (d.estTotais.custoIni || 0);
+  // Evolução = Est. Final Total (SAP) em relação ao Est. Inicial Total
+  // (SAP) — usa o teórico (totalEstTeorico/custoEstTeorico, calculado
+  // acima), não o medido (estTotais.totalFim/custoFim).
+  const kgEvolucao    = totalEstTeorico - d.estTotais.totalIni;
+  const custoEvolucao = custoEstTeorico - (d.estTotais.custoIni || 0);
   const pctEvolucao   = Math.abs(d.estTotais.totalIni) > 0.0001 ? (kgEvolucao / d.estTotais.totalIni) * 100 : null;
   const evoCol = colorFor(kgEvolucao);
 
@@ -3101,22 +3104,45 @@ function _dgrBuildResumoPeriodoHtml(d) {
       </div>
       ${pctVariacao === null ? '<div class="dgr-kpi-unit">—</div>' : `
       <div class="dgr-kpi-pct" style="color:${varCol}">${varSymbol(d.varTotalFisica)} ${pctStr(pctVariacao)}</div>
-      <div class="dgr-kpi-unit">Variação · do Est. Teórico</div>`}
+      <div class="dgr-kpi-unit">Variação · Est. Final Total (Medição) - Est. Final Total (SAP)</div>`}
       ${pctCusto === null ? '' : `
       <div class="dgr-kpi-divider-row">
-        <div class="dgr-kpi-pct" style="color:${cstCol}">${varSymbol(d.custoTotal)} ${pctStr(pctCusto)}</div>
+        <div class="dgr-kpi-pct-sub" style="color:${cstCol}">${varSymbol(d.custoTotal)} ${pctStr(pctCusto)}</div>
         <div class="dgr-kpi-pct-label">Custo Var. · do Custo Teórico</div>
       </div>`}
     </div>`;
 
+  // Parêntese com o mesmo saldo em toneladas, ao lado do valor em kg —
+  // mesma divisão por 1.000 do card hero (fmtTon), só que discreto (menor,
+  // cor dim) por ficar colado no valor grande em vez de ser ele.
+  const tonAoLado = kg => ` <span style="font-weight:400;font-size:.65em;color:var(--dgr-text-dim2, #64748b)">(${fmtTon(kg)})</span>`;
+
+  // Card "Est. Final Total - Medição" — Saldo Teórico SAP (Est. Inicial +
+  // Entradas - Saídas, já calculado acima em totalEstTeorico) em evidência,
+  // Saldo Real (o estoqueFim importado, ver _dgVgEstoqueTotais em
+  // dashboard.js) abaixo — os dois podem divergir quando há ajuste manual
+  // não refletido no SAP.
+  const cardEstFinal = `
+    <div class="dgr-kpi-card">
+      <div class="dgr-kpi-card-head">
+        <div class="dgr-kpi-label">Est. Final Total - SAP</div>
+        <div class="dgr-kpi-icon" style="background:#3b82f61f;color:#3b82f6"><i class="ti ti-circle-check"></i></div>
+      </div>
+      <div class="dgr-kpi-value">${fmtKg(totalEstTeorico)}${tonAoLado(totalEstTeorico)}</div>
+      <div class="dgr-kpi-unit">${money(custoEstTeorico)}</div>
+      <div class="dgr-kpi-divider-row" style="flex-direction:column;align-items:flex-start;gap:2px">
+        <div class="dgr-kpi-pct-label">Est. Final Total (Medição)</div>
+        <div class="dgr-kpi-pct-sub">${fmtKg(d.estTotais.totalFim)}${tonAoLado(d.estTotais.totalFim)}</div>
+      </div>
+    </div>`;
+
   return `
-    <div class="dgr-section-title"><i class="ti ti-report-money"></i>Resumo do Período — Estoque, Movimentação e Variação</div>
     <div class="dgr-kpi-secondary">
-      ${card2('Est. Inicial Total', 'ti-database', '#94a3b8', money(d.estTotais.custoIni || 0), fmtKg(d.estTotais.totalIni))}
-      ${card2('Entradas', 'ti-activity', '#10b981', money(d.custoMovTotais.custoEnt || 0), fmtKg(d.movTotais.totalEnt))}
-      ${card2('Saídas', 'ti-activity', '#f43f5e', money(d.custoMovTotais.custoSai || 0), fmtKg(d.movTotais.totalSai))}
-      ${card2('Est. Final Total', 'ti-circle-check', '#3b82f6', money(d.estTotais.custoFim || 0), fmtKg(d.estTotais.totalFim))}
-      ${card2('Evolução Estoque', 'ti-chart-line', '#8b5cf6', `<span style="color:${evoCol}">${pctEvolucao === null ? '—' : varSymbol(kgEvolucao) + ' ' + pctStr(pctEvolucao)}</span>`, `${varSymbol(kgEvolucao)} ${money(Math.abs(custoEvolucao))}`)}
+      ${card2('Est. Inicial Total - SAP', 'ti-database', '#94a3b8', fmtKg(d.estTotais.totalIni) + tonAoLado(d.estTotais.totalIni), money(d.estTotais.custoIni || 0))}
+      ${card2('Entradas - SAP', 'ti-activity', '#10b981', fmtKg(d.movTotais.totalEnt) + tonAoLado(d.movTotais.totalEnt), money(d.custoMovTotais.custoEnt || 0))}
+      ${card2('Saídas - SAP', 'ti-activity', '#f43f5e', fmtKg(d.movTotais.totalSai) + tonAoLado(d.movTotais.totalSai), money(d.custoMovTotais.custoSai || 0))}
+      ${cardEstFinal}
+      ${card2('Evolução Estoque', 'ti-chart-line', '#8b5cf6', `<span style="color:${evoCol}">${pctEvolucao === null ? '—' : varSymbol(kgEvolucao) + ' ' + pctStr(pctEvolucao)}</span>`, `Evolução · Est. Final Total (SAP) - Est. Inicial Total (SAP)<br>${varSymbol(kgEvolucao)} ${fmtKg(Math.abs(kgEvolucao))}<br>${varSymbol(kgEvolucao)} ${money(Math.abs(custoEvolucao))}`)}
       ${cardVariacaoAjustada}
     </div>
     <div class="dgr-kpi-hero" style="border-top-color:${cstCol}">
@@ -3124,12 +3150,12 @@ function _dgrBuildResumoPeriodoHtml(d) {
         <div class="dgr-kpi-label">Variação Estoque</div>
         <div class="dgr-kpi-icon" style="background:${cstCol}1f;color:${cstCol}"><i class="ti ti-currency-dollar"></i></div>
       </div>
-      <div class="dgr-kpi-hero-custo" style="color:${cstCol}">${varSymbol(d.custoTotal)} ${money(Math.abs(d.custoTotal))}</div>
-      <div class="dgr-kpi-unit">R$ bruto</div>
-      <div class="dgr-kpi-hero-saldo-row">
+      <div class="dgr-kpi-unit">Est. Final Total (Medição) - Est. Final Total (SAP)</div>
+      <div class="dgr-kpi-hero-saldo" style="color:${varCol}">${varSymbol(d.varTotalFisica)} ${fmtKg(Math.abs(d.varTotalFisica))}${tonAoLado(Math.abs(d.varTotalFisica))}</div>
+      <div class="dgr-kpi-hero-custo-row">
         <div>
-          <div class="dgr-kpi-hero-saldo" style="color:${varCol}">${varSymbol(d.varTotalFisica)} ${fmtTon(Math.abs(d.varTotalFisica))}</div>
-          <div class="dgr-kpi-unit">ton bruto</div>
+          <div class="dgr-kpi-hero-custo" style="color:${cstCol}">${varSymbol(d.custoTotal)} ${money(Math.abs(d.custoTotal))}</div>
+          <div class="dgr-kpi-unit">R$ bruto</div>
         </div>
         ${veiculosHtml}
       </div>
@@ -3155,7 +3181,6 @@ function _dgrBuildSaudeGeralHtml(imgCentral, imgMateriais) {
     </div>`;
 
   return `
-    <div class="dgr-section-title" style="margin-top:26px"><i class="ti ti-heart-rate-monitor"></i>Saúde Geral — Centrais e Materiais</div>
     <div class="dgr-health-grid">
       ${card('Saúde Geral — Centrais', 'ti-building-factory-2', subCentral, imgCentral, summaryCentral)}
       ${card('Saúde Geral — Materiais', 'ti-heartbeat', subMateriais, imgMateriais, summaryMateriais)}
@@ -3383,7 +3408,6 @@ function _dgrBuildCustoRegionalCentralHtml(d, imgRegional, imgUsina) {
     extremoBox('Central · Maior Sobra',      d.extCentral.max  && d.extCentral.max.v  > 0 ? d.extCentral.max  : null);
 
   return `
-    <div class="dgr-section-title" style="margin-top:26px"><i class="ti ti-scale"></i>Custo por Regional e Central</div>
     <div class="dgr-extremos-grid">${extremosHtml}</div>
     <div class="dgr-chart-grid">
       <div class="dgr-chart-card">
@@ -3690,7 +3714,6 @@ function _dgrBuildDetalhadoAnaliticoHtml(d) {
   );
 
   return `
-    <div class="dgr-section-title" style="margin-top:26px"><i class="ti ti-table"></i>Detalhado Analítico</div>
     ${_dgrTabelaMaterialHtml(tabelaMaterial)}
     ${_dgrRankingHtml('Ranking de Regionais', 'Regional', rankRegional)}
     ${_dgrRankingHtml('Ranking de Centrais', 'Central', rankCentral)}
@@ -3712,17 +3735,18 @@ function _dgrEstilos() {
     .dgr-kpi-unit { font-size:10.5px; color:var(--dgr-text-dim2, #64748b); margin-top:4px; font-family:'JetBrains Mono',monospace; }
     .dgr-kpi-divider-row { display:flex; align-items:baseline; gap:7px; margin-top:8px; padding-top:8px; border-top:1px solid var(--dgr-divider, rgba(255,255,255,.08)); }
     .dgr-kpi-pct { font-family:'JetBrains Mono',monospace; font-size:19px; font-weight:800; }
+    .dgr-kpi-pct-sub { font-family:'JetBrains Mono',monospace; font-size:13px; font-weight:600; }
     .dgr-kpi-pct-label { font-size:10px; color:var(--dgr-text-dim2, #64748b); }
-    /* Card hero "Variação Estoque" — custo em evidência (valor maior),
-       saldo em kg abaixo (menor), veículos em blocos grandes por baixo. */
+    /* Card hero "Variação Estoque" — saldo em evidência (valor maior),
+       custo em R$ abaixo (menor), veículos em blocos grandes por baixo. */
     .dgr-kpi-hero { background:var(--dgr-card-bg, rgba(255,255,255,.045)); border:1px solid var(--dgr-card-border, rgba(255,255,255,.09)); border-radius:12px; padding:19px 27px; border-top:3px solid transparent; page-break-inside:avoid; }
-    .dgr-kpi-hero-custo { font-family:'JetBrains Mono',monospace; font-size:32px; font-weight:800; }
-    .dgr-kpi-hero-saldo { font-family:'JetBrains Mono',monospace; font-size:23px; font-weight:700; }
-    /* Linha do saldo (agora em toneladas) + veículos lado a lado — sem
-       selo/ícone (só número + rótulo pequeno), discretos, ao lado do
-       saldo em vez de embaixo numa grade grande — pedido do Hugo pra
-       corrigir o desbalanceamento do card hero. */
-    .dgr-kpi-hero-saldo-row { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:20px; margin-top:12px; padding-top:12px; border-top:1px solid var(--dgr-divider, rgba(255,255,255,.08)); }
+    .dgr-kpi-hero-saldo { font-family:'JetBrains Mono',monospace; font-size:32px; font-weight:800; }
+    .dgr-kpi-hero-custo { font-family:'JetBrains Mono',monospace; font-size:23px; font-weight:700; }
+    /* Linha do custo (R$) + veículos lado a lado — sem selo/ícone (só
+       número + rótulo pequeno), discretos, ao lado do custo em vez de
+       embaixo numa grade grande — pedido do Hugo pra corrigir o
+       desbalanceamento do card hero. */
+    .dgr-kpi-hero-custo-row { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:20px; margin-top:12px; padding-top:12px; border-top:1px solid var(--dgr-divider, rgba(255,255,255,.08)); }
     .dgr-kpi-veiculos-simples { display:flex; gap:28px; flex-wrap:wrap; }
     .dgr-kpi-veiculo-simples { text-align:center; }
     .dgr-kpi-veiculo-simples-valor { font-family:'JetBrains Mono',monospace; font-size:15px; font-weight:800; }
@@ -4043,30 +4067,15 @@ window._dgrGerarComSelecao = function(tema) {
   window.gerarRelatorioGerencialDashboard(tema, selecao);
 };
 
-// ── Download do relatório como arquivo .html — Blob + <a download>, sem
-//    depender de servidor. Nome com carimbo de data/hora, sanitizado pra
-//    não quebrar ao salvar em Windows/Mac. Usado depois de gerar o corpo
-//    do relatório, junto com a abertura da janela de impressão de
-//    sempre — o mesmo conteúdo, pronto pra enviar por e-mail ou anexar em
-//    qualquer lugar, sem precisar de servidor. ─────────────────────────
+// ── Nome do arquivo do relatório — carimbo de data/hora, sanitizado pra
+//    não quebrar ao salvar em Windows/Mac. Usado pelo botão "Baixar HTML"
+//    embutido no próprio relatório (ver _dgrScriptDownload). ────────────
 function _dgrNomeArquivoRelatorio(prefixo) {
   const agora = new Date();
   const pad = n => String(n).padStart(2, '0');
   const carimbo = `${agora.getFullYear()}${pad(agora.getMonth() + 1)}${pad(agora.getDate())}-${pad(agora.getHours())}${pad(agora.getMinutes())}`;
   return `${prefixo}-${carimbo}.html`;
 }
-
-window._dgrBaixarRelHtml = function(html, nomeArquivo) {
-  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href     = url;
-  a.download = nomeArquivo;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-};
 
 window.gerarRelatorioGerencialDashboard = async function(tema = 'dark', selecao = null) {
   const d = window._dgVgLastData;
@@ -4174,13 +4183,10 @@ window.gerarRelatorioGerencialDashboard = async function(tema = 'dark', selecao 
       notaRodape: 'Variação e Custo Var. desconsideram Ajustes de Fechamento Mensal não reincluídos manualmente. Saúde Geral considera os limiares configurados em Configurações → Parâmetros.'
     });
 
-    // Abre pra conferência/impressão, como sempre, e já baixa o arquivo
-    // .html — o mesmo conteúdo, pronto pra enviar por e-mail ou anexar em
-    // qualquer lugar, sem precisar de servidor. O botão "Baixar HTML" que
-    // fica dentro do relatório (action-bar) baixa esse mesmo conteúdo de
-    // novo, caso precise depois de fechar essa janela.
+    // Abre pra conferência/impressão, como sempre. O download NÃO é mais
+    // automático — o botão "Baixar HTML" dentro do relatório (action-bar)
+    // baixa esse mesmo conteúdo quando o usuário efetivamente quiser.
     _openRelWindow(html);
-    window._dgrBaixarRelHtml(html, nomeArquivo);
   } catch (err) {
     console.error('[Relatório Gerencial - Dashboard] Falha ao gerar:', err);
     toast('Falha ao gerar o relatório. Veja o console para detalhes.', 'error');
