@@ -150,7 +150,7 @@
     <!-- Tab list -->
     <nav class="tab-list" id="tab-list">
 
-      <div class="tab-group-label">Dashboards</div>
+      <div class="tab-group-label">Analítico</div>
 
       <button class="tab-item" onclick="navigate('dashboard')" data-page="dashboard" data-label="Dashboard Gerencial">
         <span class="tab-icon" style="--tab-color: var(--accent)"><i class="ti ti-layout-dashboard"></i></span>
@@ -168,7 +168,15 @@
         </span>
       </button>
 
-      <div class="tab-group-label">Movimentação</div>
+      <button class="tab-item" onclick="navigate('ocorrencias')" data-page="ocorrencias" data-label="Ocorrências">
+        <span class="tab-icon" style="--tab-color: var(--amber)"><i class="ti ti-alert-triangle"></i></span>
+        <span class="tab-text">
+          <span class="tab-title">Ocorrências</span>
+          <span class="tab-sub">gestão por central</span>
+        </span>
+      </button>
+
+      <div class="tab-group-label">Movimentações</div>
 
       <button class="tab-item" onclick="navigate('entradas')" data-page="entradas" data-label="Entradas (NF)">
         <span class="tab-icon" style="--tab-color: var(--green)"><i class="ti ti-package-import"></i></span>
@@ -202,21 +210,11 @@
         </span>
       </button>
 
-      <div class="tab-group-label">Análise</div>
-
       <button class="tab-item" onclick="navigate('producao')" data-page="producao" data-label="Produção">
         <span class="tab-icon" style="--tab-color: var(--purple)"><i class="ti ti-chart-bar"></i></span>
         <span class="tab-text">
           <span class="tab-title">Produção</span>
           <span class="tab-sub">produção por central</span>
-        </span>
-      </button>
-
-      <button class="tab-item" onclick="navigate('ocorrencias')" data-page="ocorrencias" data-label="Ocorrências">
-        <span class="tab-icon" style="--tab-color: var(--amber)"><i class="ti ti-alert-triangle"></i></span>
-        <span class="tab-text">
-          <span class="tab-title">Ocorrências</span>
-          <span class="tab-sub">gestão por central</span>
         </span>
       </button>
 
