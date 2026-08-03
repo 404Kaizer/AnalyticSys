@@ -508,7 +508,13 @@ function _dgResolveCssColor(varName, fallback) {
 //    Est. Inicial/Final (com fallback retroativo) já usada nos cards de
 //    saúde do Dashboard Analítico, garantindo que os números batam com
 //    o "Saúde Geral" exibido no restante do sistema.
-function _dgVgBuildPares(results, thresholds, dtIni, dtFim) {
+//    precoMedioSapPorMaterial opcional (Map mat -> preço, ver
+//    _dgVgPrecoMedioSapPorChave): quando passado, vira a fonte do
+//    custoMed de cada par, no lugar de r.custoMedioPorMat (custo médio
+//    Saídas-primeiro/SAP-fallback) — usado só pela Visão Geral
+//    (renderDgVisaoGeralPdf); a Visão de Consumo (renderDgConsumo) chama
+//    sem esse argumento e mantém o custo médio antigo.
+function _dgVgBuildPares(results, thresholds, dtIni, dtFim, precoMedioSapPorMaterial = null) {
   const pares = [];
   const filIdx = getFilialLookupIndex();
 
@@ -572,7 +578,7 @@ function _dgVgBuildPares(results, thresholds, dtIni, dtFim) {
       // próxima de zero, não deve ser contado como 'bom' silenciosamente
       // (decisão: excluído do cálculo de saúde até ser cadastrado).
       const level    = !catKey ? 'sem_cadastro' : (neutro ? 'bom' : classifyVariation(Math.abs(diff), catKey, thresholds));
-      const custoMed = (r.custoMedioPorMat || {})[mat] || 0;
+      const custoMed = precoMedioSapPorMaterial ? (precoMedioSapPorMaterial.get(mat) || 0) : (r.custoMedioPorMat || {})[mat] || 0;
 
       // custoIni/custoFim: custo do SALDO de estoque (kg × custo médio do
       // material) — usados pelos cards "Est. Inicial/Final Total" do resumo
@@ -631,26 +637,44 @@ function _dgVgValorCustoSap(s) {
   return vt !== 0 ? Math.abs(vt) : (cu !== 0 ? Math.abs(cu) * p : 0);
 }
 
-// Preço médio SAP do período — Σ valor / Σ peso de TODOS os registros SAP
-// do período (entradas e saídas juntas, mesmo universo de
-// _dgVgMovimentacaoTotais, acima), ignorando registro com peso ou valor
+// Preço médio SAP agrupado por chave — Σ valor / Σ peso dos registros SAP
+// do período, agrupados pela chave que recordKeyFn(s, r) devolve pra cada
+// registro `s` (de r.sapNoPeriodo), ignorando registro com peso ou valor
 // zerados (mesmo critério de _dgVgValorCustoSap/getCustoMedioPorMat, em
-// analitico.js). Preço único usado pra calcular o custo de cada card do
-// Resumo do Período (kg × este preço) — decisão do Hugo, no lugar do
-// custo médio por material.
-function _dgVgPrecoMedioSap(results) {
-  let valor = 0, peso = 0;
+// analitico.js). recordKeyFn(s, r) => r.central dá preço médio por
+// Central; => regional da central (via lookup externo) dá preço médio
+// por Regional; => s.material dá preço médio por Material — usado pelo
+// custo dos extremos de Regional/Central e dos donuts de Custo Absoluto
+// (ver renderDgVisaoGeralPdf) — decisão do Hugo, no lugar do custo médio
+// por material vindo de Saídas/SAP (p.custoImplicado/p.custoMed).
+function _dgVgPrecoMedioSapPorChave(results, recordKeyFn) {
+  const acc = new Map(); // chave -> { valor, peso }
   results.forEach(r => {
     (r.sapNoPeriodo || []).forEach(s => {
+      const k = recordKeyFn(s, r);
+      if (!k || k === '—') return;
       const p = Math.abs(num(s.peso));
       if (!p) return;
       const v = _dgVgValorCustoSap(s);
       if (!v) return;
-      valor += v;
-      peso  += p;
+      if (!acc.has(k)) acc.set(k, { valor: 0, peso: 0 });
+      const a = acc.get(k);
+      a.valor += v;
+      a.peso  += p;
     });
   });
-  return peso > 0 ? valor / peso : 0;
+  const out = new Map();
+  acc.forEach((a, k) => out.set(k, a.peso > 0 ? a.valor / a.peso : 0));
+  return out;
+}
+
+// Preço médio SAP do período inteiro — mesma conta de
+// _dgVgPrecoMedioSapPorChave, só que com todo mundo numa chave só. Preço
+// único usado pra calcular o custo de cada card do Resumo do Período
+// (kg × este preço) — decisão do Hugo, no lugar do custo médio por
+// material.
+function _dgVgPrecoMedioSap(results) {
+  return _dgVgPrecoMedioSapPorChave(results, () => 'total').get('total') || 0;
 }
 
 // Custo de Entradas/Saídas — soma o custo de cada registro SAP do período,
@@ -732,29 +756,28 @@ function _dgVgBuildCentralHealthData(pares, thresholds) {
   return { counts, levelMeta, total: byCentral.size };
 }
 
-function _dgVgAggPorChave(pares, keyFn) {
-  const map = new Map();
-  pares.forEach(p => {
-    const k = keyFn(p);
-    if (!k || k === '—') return;
-    map.set(k, (map.get(k) || 0) + p.custoImplicado);
-  });
-  return map;
-}
-
-// Mesma agregação por chave (Regional/Central), mas somando o SALDO da
-// variação (kg, p.diff) em vez do custo implicado — usado só pra anexar
-// o kg correspondente ao vencedor de cada extremo (ver _dgVgExtremos).
-// Mantido separado de _dgVgAggPorChave porque esse mapa de custo também
-// alimenta os gráficos de barra (chart Regional/Usina) e o Top 8, que
-// esperam valor numérico simples — não dá pra misturar sem quebrar esses
-// outros usos.
+// Agregação por chave (Regional/Central) do SALDO da variação (kg,
+// p.diff) — usada pelo Top 8 do gráfico de barras e como vencedor dos
+// extremos (ver _dgVgExtremos/_dgVgTop8SobraDesfalque).
 function _dgVgAggKgPorChave(pares, keyFn) {
   const map = new Map();
   pares.forEach(p => {
     const k = keyFn(p);
     if (!k || k === '—') return;
     map.set(k, (map.get(k) || 0) + p.diff);
+  });
+  return map;
+}
+
+// Mesma agregação por chave, mas somando o custo implicado (diff ×
+// custoMed, já em preço médio SAP por material desde _dgVgBuildPares) —
+// soma aditiva, decorada no vencedor de cada extremo (ver _dgVgExtremos).
+function _dgVgAggPorChave(pares, keyFn) {
+  const map = new Map();
+  pares.forEach(p => {
+    const k = keyFn(p);
+    if (!k || k === '—') return;
+    map.set(k, (map.get(k) || 0) + p.custoImplicado);
   });
   return map;
 }
@@ -854,10 +877,10 @@ function _dgVgVariacaoFisicaPercentualPorCategoria(catFisicaSplit, volumePorCate
 }
 
 // ── Custo da variação (não o gasto efetivo) por material — soma do valor
-//    absoluto do custo implicado (diff × custo médio) de cada par
-//    Central×Material, agregado por material. Reflete o impacto
-//    financeiro do desfalque/sobra, não o quanto foi de fato gasto/
-//    consumido no período.
+//    absoluto do custo implicado (diff × custoMed, já em preço médio SAP
+//    desde _dgVgBuildPares) de cada par Central×Material, agregado por
+//    material. Reflete o impacto financeiro do desfalque/sobra, não o
+//    quanto foi de fato gasto/consumido no período.
 function _dgVgCustoVariacaoPorMaterial(pares) {
   const map = new Map(); // mat -> { catKey, total }
   pares.forEach(p => {
@@ -1207,7 +1230,18 @@ function renderDgVisaoGeralPdf(results, thresholds, dtIni, dtFim) {
     return;
   }
 
-  const pares       = _dgVgBuildPares(results, thresholds, dtIni, dtFim);
+  // Preço médio SAP por Material — soma os registros SAP de TODAS as
+  // centrais pra cada material (ignora zerados, mesmo critério de
+  // _dgVgValorCustoSap). Alimenta custoMed em _dgVgBuildPares (abaixo),
+  // então todo mundo que deriva de p.custoImplicado/p.custoMed (Saúde
+  // Geral, Detalhado Analítico, donuts de Custo Absoluto, extremos de
+  // Regional/Central) fica em SAP de uma vez só — no lugar do custo médio
+  // por material vindo de Saídas/SAP (r.custoMedioPorMat) — decisão do
+  // Hugo. Só a Visão Geral usa esse preço; a Visão de Consumo continua
+  // com o custo médio antigo (chama _dgVgBuildPares sem esse argumento).
+  const precoMedioSapPorMaterial = _dgVgPrecoMedioSapPorChave(results, s => s.material || '—');
+
+  const pares       = _dgVgBuildPares(results, thresholds, dtIni, dtFim, precoMedioSapPorMaterial);
   const counts      = _dgVgCounts(pares);
   const scoreInfo   = _dgVgScoreFromCounts(counts);
 
@@ -1217,22 +1251,31 @@ function renderDgVisaoGeralPdf(results, thresholds, dtIni, dtFim) {
   const catFisicaPct       = _dgVgVariacaoFisicaPercentualPorCategoria(catFisicaSplit, volumePorCategoria);
   const varTotalFisica = Object.values(catFisica).reduce((a, b) => a + b, 0);
 
-  const porRegional = _dgVgAggPorChave(pares, p => p.regional);
-  const porCentral  = _dgVgAggPorChave(pares, p => p.central);
+  // Custo Var. (hero + extremos de Regional/Central + rankings) = Σ
+  // p.custoImplicado (diff × custoMed, já em preço médio SAP por material
+  // desde _dgVgBuildPares) — soma literal, aditiva por construção: somar
+  // qualquer recorte (Regional/Central/Material/Categoria) sempre
+  // reproduz esse total. Voltou a ser assim (era kg × preço médio "blend"
+  // por Regional/Central/global) porque quebrava a conferência "soma das
+  // tabelas bate com o card" — Σ(kg_i × preço_i) ≠ (Σkg_i) × preço_blend
+  // quando os materiais têm preços diferentes entre si — decisão do Hugo.
+  const custoTotal = pares.reduce((s, p) => s + p.custoImplicado, 0);
+
   const porRegionalKg = _dgVgAggKgPorChave(pares, p => p.regional);
   const porCentralKg  = _dgVgAggKgPorChave(pares, p => p.central);
+  const porRegional   = _dgVgAggPorChave(pares, p => p.regional);
+  const porCentral    = _dgVgAggPorChave(pares, p => p.central);
   const extRegional = _dgVgExtremos(porRegionalKg, porRegional);
   const extCentral  = _dgVgExtremos(porCentralKg, porCentral);
 
   const custoVarMap    = _dgVgCustoVariacaoPorMaterial(pares);
   const custoAbsPorCat = _dgVgAgruparCustoVariacaoPorCategoria(custoVarMap);
 
-  // Preço médio SAP do período — usado como preço único pra recalcular o
-  // custo de TODOS os cards do Resumo do Período (Est. Inicial/Entradas/
-  // Saídas/Est. Final, Evolução, Custo Var.), no lugar do custo médio por
-  // material — decisão do Hugo. Ver _dgVgPrecoMedioSap.
+  // Preço médio SAP do período — usado só nos cards que não têm tabela
+  // pra conferir (Est. Inicial/Entradas/Saídas/Est. Final, Evolução): não
+  // existe "Est. Inicial por Regional" em ranking nenhum, então não há
+  // aditividade pra quebrar aqui.
   const precoMedioSap  = _dgVgPrecoMedioSap(results);
-  const custoTotal     = varTotalFisica * precoMedioSap;
   const movTotais      = _dgVgMovimentacaoTotais(results);
   const estTotais      = _dgVgEstoqueTotais(pares, precoMedioSap);
   const custoMovTotais = _dgVgCustoMovimentacaoPorPrecoMedio(movTotais, precoMedioSap);

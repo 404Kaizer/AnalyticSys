@@ -3763,7 +3763,7 @@ function _dgrEstilos() {
     .dgr-chart-grid { display:grid; grid-template-columns:1fr 1fr; gap:24px; margin-top:16px; }
     .dgr-extremos-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(125px,1fr)); gap:10px; margin-bottom:6px; }
     .dgr-extremo-box { background:var(--dgr-card-bg, rgba(255,255,255,.045)); border:1px solid var(--dgr-card-border, rgba(255,255,255,.09)); border-radius:12px; padding:13px 12px; page-break-inside:avoid; }
-    .dgr-extremo-label { font-size:7.6px; font-family:'JetBrains Mono',monospace; letter-spacing:.01em; text-transform:uppercase; color:var(--dgr-text-dim2, #64748b); margin-bottom:5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .dgr-extremo-label { font-size:10.5px; font-weight:700; font-family:'JetBrains Mono',monospace; letter-spacing:.06em; text-transform:uppercase; color:var(--dgr-text-dim, #94a3b8); margin-bottom:5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .dgr-extremo-value { font-size:19px; font-weight:700; font-family:'JetBrains Mono',monospace; letter-spacing:-.02em; margin-bottom:3px; }
     .dgr-extremo-kg { font-size:9.5px; font-family:'JetBrains Mono',monospace; color:var(--dgr-text-dim2, #64748b); margin-bottom:5px; }
     .dgr-extremo-name { font-size:11px; color:var(--dgr-brand-text, #cbd5e1); font-weight:600; }
