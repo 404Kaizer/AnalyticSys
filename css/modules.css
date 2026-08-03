@@ -2757,6 +2757,15 @@ td.var-cell-zero .ti-circle-check     { color: var(--text3); }
   overflow: hidden;
 }
 
+/* Modal de Entradas/Saídas (openBreakdownModal): com a coluna Documento
+   separada de Ref., a tabela ficou com 8 colunas — não cabia mais em
+   860px (nowrap cortava Dt. Lançamento/Saldo no limite do diálogo, ver
+   .bdm-body overflow-x abaixo). Mesmo padrão de largura dedicada já usado
+   em .fechmgr-dialog, só que mais estreito (menos colunas). */
+.bdm-dialog-wide {
+  max-width: min(1080px, 96vw);
+}
+
 .bdm-header {
   display: flex;
   align-items: center;
