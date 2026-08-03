@@ -4470,13 +4470,32 @@ function _pendPadronizacaoAbrirModal(tipo) {
           <div class="alert-modal-title is-amber"><i class="ti ti-alert-triangle"></i> Há ${plural} pendentes de padronização</div>
           <div class="alert-modal-sub">${total} ${total === 1 ? singular : plural} vist${isMaterial ? (total === 1 ? 'o' : 'os') : (total === 1 ? 'a' : 'as')} em ${fontes}, ${criterio}</div>
         </div>
-        <button class="alert-modal-close" onclick="document.getElementById('${modalId}').remove()"><i class="ti ti-x"></i></button>
+        <div style="display:flex; align-items:center; gap:8px">
+          <button type="button" class="btn btn-sm" onclick="_pendPadronizacaoCadastrarTodos('${tipo}')">
+            <i class="ti ti-list-check"></i> Cadastrar Todos
+          </button>
+          <button class="alert-modal-close" onclick="document.getElementById('${modalId}').remove()"><i class="ti ti-x"></i></button>
+        </div>
       </div>
       <div class="alert-modal-body"><div class="pend-padr-list">${lista.map(itemFn).join('')}</div></div>
     </div>`;
   document.body.appendChild(overlay);
 }
 window._pendPadronizacaoAbrirModal = _pendPadronizacaoAbrirModal;
+
+// Ação do botão "Cadastrar Todos" do modal de pendências: fecha o modal e
+// abre o Cadastro Individual (Centrais/Materiais) já com uma linha por
+// pendência, pra cadastrar tudo de uma vez em vez de item por item.
+function _pendPadronizacaoCadastrarTodos(tipo) {
+  if (typeof getPendenciasPadronizacao !== 'function') return;
+  const { materiais, centrais } = getPendenciasPadronizacao();
+  const lista = tipo === 'material' ? materiais : centrais;
+  if (!lista.length) return;
+  document.getElementById(`alert-modal-pend-${tipo}`)?.remove();
+  if (tipo === 'central') abrirCadastroFiliaisEmLote(lista.map(item => item.nome));
+  else abrirCadastroMateriaisEmLote(lista);
+}
+window._pendPadronizacaoCadastrarTodos = _pendPadronizacaoCadastrarTodos;
 
 // Renderiza o botão pulsante para materiais OU centrais, conforme total.
 function _pendPadronizacaoBtnHtml(tipo, total) {
