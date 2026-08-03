@@ -596,16 +596,17 @@ function _dgVgBuildPares(results, thresholds, dtIni, dtFim) {
 // getPrePeriodLaunchStock / getLastPeriodLaunchStockWithFallback, em
 // ui.js) — sem custo extra de performance, só captura um valor que já
 // era calculado e descartado. Ausente conta como 0, sem aviso (decisão
-// confirmada: diferente do Inventário, que mostra "X ausentes").
-function _dgVgEstoqueTotais(pares) {
-  let totalIni = 0, totalFim = 0, custoIni = 0, custoFim = 0;
+// confirmada: diferente do Inventário, que mostra "X ausentes"). Custo
+// = kg × precoMedioSap (ver _dgVgPrecoMedioSap, abaixo) — não mais o
+// custo médio por material (p.custoIni/p.custoFim), decisão do Hugo pra
+// unificar o preço usado em todos os cards do Resumo do Período.
+function _dgVgEstoqueTotais(pares, precoMedioSap) {
+  let totalIni = 0, totalFim = 0;
   pares.forEach(p => {
     totalIni += p.estoqueIni || 0;
     totalFim += p.estoqueFim || 0;
-    custoIni += p.custoIni || 0;
-    custoFim += p.custoFim || 0;
   });
-  return { totalIni, totalFim, custoIni, custoFim };
+  return { totalIni, totalFim, custoIni: totalIni * precoMedioSap, custoFim: totalFim * precoMedioSap };
 }
 
 // Entradas / Saídas Total — soma dos totais já calculados por central em
@@ -630,14 +631,33 @@ function _dgVgValorCustoSap(s) {
   return vt !== 0 ? Math.abs(vt) : (cu !== 0 ? Math.abs(cu) * p : 0);
 }
 
+// Preço médio SAP do período — Σ valor / Σ peso de TODOS os registros SAP
+// do período (entradas e saídas juntas, mesmo universo de
+// _dgVgMovimentacaoTotais, acima), ignorando registro com peso ou valor
+// zerados (mesmo critério de _dgVgValorCustoSap/getCustoMedioPorMat, em
+// analitico.js). Preço único usado pra calcular o custo de cada card do
+// Resumo do Período (kg × este preço) — decisão do Hugo, no lugar do
+// custo médio por material.
+function _dgVgPrecoMedioSap(results) {
+  let valor = 0, peso = 0;
+  results.forEach(r => {
+    (r.sapNoPeriodo || []).forEach(s => {
+      const p = Math.abs(num(s.peso));
+      if (!p) return;
+      const v = _dgVgValorCustoSap(s);
+      if (!v) return;
+      valor += v;
+      peso  += p;
+    });
+  });
+  return peso > 0 ? valor / peso : 0;
+}
+
 // Custo de Entradas/Saídas — soma o custo de cada registro SAP do período,
 // filtrando pelo SINAL do peso (positivo = entrada, negativo = saída),
-// MESMO critério do kg (_dgVgMovimentacaoTotais, acima) — decisão do Hugo:
-// captura todo registro positivo/negativo do SAP, independente do código
-// de movimento (101/801/201/Y11/Y12/etc.). Fonte é o próprio registro SAP
-// (valorTotal/custoUnit), não o custo médio por material. Ajustes de
-// Fechamento Mensal (Y11/Y12) continuam de fora: já são filtrados antes,
-// em sapNoPeriodo (ver isSapExcluidoPorFechamento, buildDashboardGerencialResults).
+// MESMO critério do kg (_dgVgMovimentacaoTotais, acima). Usada pela Visão
+// de Consumo (_dcRenderKpiStrip) — NÃO pelo Resumo do Período da Visão
+// Geral, que usa _dgVgCustoMovimentacaoPorPrecoMedio (abaixo).
 function _dgVgCustoMovimentacaoTotais(results) {
   let custoEnt = 0, custoSai = 0;
   results.forEach(r => {
@@ -648,6 +668,15 @@ function _dgVgCustoMovimentacaoTotais(results) {
     });
   });
   return { custoEnt, custoSai };
+}
+
+// Custo de Entradas/Saídas do Resumo do Período (Visão Geral) = kg
+// (movTotais.totalEnt/totalSai) × preço médio SAP do período — mesmo
+// preço único usado no resto do Resumo do Período (ver _dgVgPrecoMedioSap,
+// acima), não a soma do valorTotal/custoUnit de cada registro individual
+// (isso é _dgVgCustoMovimentacaoTotais, usada só pela Visão de Consumo).
+function _dgVgCustoMovimentacaoPorPrecoMedio(movTotais, precoMedioSap) {
+  return { custoEnt: movTotais.totalEnt * precoMedioSap, custoSai: movTotais.totalSai * precoMedioSap };
 }
 
 // Tally de pares Central×Material por nível — MESMO critério usado em
@@ -1184,7 +1213,6 @@ function renderDgVisaoGeralPdf(results, thresholds, dtIni, dtFim) {
   const volumePorCategoria = _dgVgVolumeMovimentadoPorCategoria(results);
   const catFisicaPct       = _dgVgVariacaoFisicaPercentualPorCategoria(catFisicaSplit, volumePorCategoria);
   const varTotalFisica = Object.values(catFisica).reduce((a, b) => a + b, 0);
-  const custoTotal     = pares.reduce((s, p) => s + p.custoImplicado, 0);
 
   const porRegional = _dgVgAggPorChave(pares, p => p.regional);
   const porCentral  = _dgVgAggPorChave(pares, p => p.central);
@@ -1196,9 +1224,15 @@ function renderDgVisaoGeralPdf(results, thresholds, dtIni, dtFim) {
   const custoVarMap    = _dgVgCustoVariacaoPorMaterial(pares);
   const custoAbsPorCat = _dgVgAgruparCustoVariacaoPorCategoria(custoVarMap);
 
-  const estTotais      = _dgVgEstoqueTotais(pares);
+  // Preço médio SAP do período — usado como preço único pra recalcular o
+  // custo de TODOS os cards do Resumo do Período (Est. Inicial/Entradas/
+  // Saídas/Est. Final, Evolução, Custo Var.), no lugar do custo médio por
+  // material — decisão do Hugo. Ver _dgVgPrecoMedioSap.
+  const precoMedioSap  = _dgVgPrecoMedioSap(results);
+  const custoTotal     = varTotalFisica * precoMedioSap;
   const movTotais      = _dgVgMovimentacaoTotais(results);
-  const custoMovTotais = _dgVgCustoMovimentacaoTotais(results);
+  const estTotais      = _dgVgEstoqueTotais(pares, precoMedioSap);
+  const custoMovTotais = _dgVgCustoMovimentacaoPorPrecoMedio(movTotais, precoMedioSap);
 
   // Est. Teórico total (mesma conta do card "Variação Total" do KPI hero) —
   // usado tanto como denominador comum da % Variação de cada linha dos 4
@@ -1246,7 +1280,7 @@ function renderDgVisaoGeralPdf(results, thresholds, dtIni, dtFim) {
   // limparDashboardGerencial() e quando o período não tem dados, acima.
   window._dgVgLastData = {
     dtIni, dtFim, results, pares, counts, scoreInfo, thresholds,
-    varTotalFisica, custoTotal, catFisicaPct,
+    varTotalFisica, custoTotal, catFisicaPct, precoMedioSap,
     estTotais, movTotais, custoMovTotais, totalEstTeoricoKpi,
     extRegional, extCentral, entriesRegional, entriesCentral,
     custoAbsPorCat, veiculosTotalKpi, fechExcluidos: sapFechExcluidosPeriodo
