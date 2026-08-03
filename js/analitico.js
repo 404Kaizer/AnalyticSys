@@ -831,16 +831,23 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
 
       const dCls = varClass(snapshot.diff);
               const toEntry = s => {
+        // ref "efetivo" (com fallback pra documento quando vem vazio do SAP)
+        // — usado só internamente pro pareamento de transferência 861/862
+        // (findTransferPairCentral, ui.js), que já indexa por esse mesmo
+        // fallback. NÃO é o que aparece na coluna Ref. (ver refRaw abaixo).
         const ref = (s.ref && String(s.ref).trim()) ? String(s.ref).trim()
                   : (s.documento && String(s.documento).trim()) ? String(s.documento).trim() : '';
-        // extra: campos crus usados só pro pareamento de transferência entre
-        // materiais (309) — ver findMaterialTransferPair (ui.js). Não entram
-        // na exibição normal da linha, só no lookup quando cod === '309'.
+        // extra: campos crus. refRaw/documento alimentam as colunas Ref./
+        // Documento (separadas) do modal; os demais são usados só pelo
+        // pareamento de transferência entre materiais (309, ver
+        // findMaterialTransferPair em ui.js).
         const extra = {
-          deposito: String(s.deposito || '').trim(),
-          dtDoc:    String(s.dtDoc    || '').trim(),
-          dtLanc:   String(s.dtLanc   || '').trim(),
-          dtReg:    String(s.dtReg    || '').trim()
+          deposito:  String(s.deposito  || '').trim(),
+          refRaw:    String(s.ref       || '').trim(),
+          documento: String(s.documento || '').trim(),
+          dtDoc:     String(s.dtDoc     || '').trim(),
+          dtLanc:    String(s.dtLanc    || '').trim(),
+          dtReg:     String(s.dtReg     || '').trim()
         };
         return [normMov(s.movimento), num(s.peso), ref, String(s.usuario || '').trim(), String(s.dtLanc || s.dtDoc || '').trim(), extra];
       };
@@ -911,16 +918,21 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
         const daySnap  = buildSnapshot({ lancs: dayLancs, sap: daySap });
 
         const toDayEntry = s => {
+          // ref efetivo (fallback pra documento) — mesmo papel de toEntry
+          // (linha ~833): só pro pareamento de transferência, não pra exibição.
           const ref = (s.ref && String(s.ref).trim()) ? String(s.ref).trim()
                     : (s.documento && String(s.documento).trim()) ? String(s.documento).trim() : '';
-          // extra: mesmos campos crus de toEntry (linha ~752) — depósito e as
-          // 3 datas cruas, usados pelas colunas Dt. Documento/Dt. Registro e
-          // pelo pareamento de transferências 861/862/309 no modal.
+          // extra: mesmos campos crus de toEntry — refRaw/documento pras
+          // colunas Ref./Documento (separadas), depósito e as 3 datas cruas
+          // pelas colunas Dt. Documento/Dt. Registro e pelo pareamento de
+          // transferências 861/862/309 no modal.
           const extra = {
-            deposito: String(s.deposito || '').trim(),
-            dtDoc:    String(s.dtDoc    || '').trim(),
-            dtLanc:   String(s.dtLanc   || '').trim(),
-            dtReg:    String(s.dtReg    || '').trim()
+            deposito:  String(s.deposito  || '').trim(),
+            refRaw:    String(s.ref       || '').trim(),
+            documento: String(s.documento || '').trim(),
+            dtDoc:     String(s.dtDoc     || '').trim(),
+            dtLanc:    String(s.dtLanc    || '').trim(),
+            dtReg:     String(s.dtReg    || '').trim()
           };
           return [normMov(s.movimento), num(s.peso), ref, String(s.usuario || '').trim(), String(s.dtLanc || s.dtDoc || '').trim(), extra];
         };
