@@ -3091,7 +3091,7 @@ function _dgrBuildResumoPeriodoHtml(d) {
         <div class="dgr-kpi-icon" style="background:${iconCol}1f;color:${iconCol}"><i class="ti ${iconCls}"></i></div>
       </div>
       <div class="dgr-kpi-value">${valor}</div>
-      <div class="dgr-kpi-unit">${sub}</div>
+      <div class="dgr-kpi-unit" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--dgr-divider, rgba(255,255,255,.08))">${sub}</div>
     </div>`;
 
   // Card "Variação Ajustada" — as % de Variação e de Custo Var. separadas
@@ -3142,7 +3142,7 @@ function _dgrBuildResumoPeriodoHtml(d) {
       ${card2('Entradas - SAP', 'ti-activity', '#10b981', fmtKg(d.movTotais.totalEnt) + tonAoLado(d.movTotais.totalEnt), money(d.custoMovTotais.custoEnt || 0))}
       ${card2('Saídas - SAP', 'ti-activity', '#f43f5e', fmtKg(d.movTotais.totalSai) + tonAoLado(d.movTotais.totalSai), money(d.custoMovTotais.custoSai || 0))}
       ${cardEstFinal}
-      ${card2('Evolução Estoque', 'ti-chart-line', '#8b5cf6', `<span style="color:${evoCol}">${pctEvolucao === null ? '—' : varSymbol(kgEvolucao) + ' ' + pctStr(pctEvolucao)}</span>`, `Evolução · Est. Final Total (SAP) - Est. Inicial Total (SAP)<br>${varSymbol(kgEvolucao)} ${fmtKg(Math.abs(kgEvolucao))}<br>${varSymbol(kgEvolucao)} ${money(Math.abs(custoEvolucao))}`)}
+      ${card2('Evolução Estoque', 'ti-chart-line', '#8b5cf6', `<span style="color:${evoCol}">${pctEvolucao === null ? '—' : varSymbol(kgEvolucao) + ' ' + pctStr(pctEvolucao)}</span><div class="dgr-kpi-unit" style="margin-top:4px">Evolução · Est. Final Total (SAP) - Est. Inicial Total (SAP)</div>`, `${varSymbol(kgEvolucao)} ${fmtKg(Math.abs(kgEvolucao))}<br>${varSymbol(kgEvolucao)} ${money(Math.abs(custoEvolucao))}`)}
       ${cardVariacaoAjustada}
     </div>
     <div class="dgr-kpi-hero" style="border-top-color:${cstCol}">
