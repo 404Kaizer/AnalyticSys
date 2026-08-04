@@ -293,6 +293,28 @@ function abrirCadastroMaterialIndividual(prefill) {
   }, 50);
 }
 
+// Mesmo modal, mas com uma linha por pendência (botão "Cadastrar Todos" do
+// alerta de padronização, dashboard.js) — poupa o analista de abrir/fechar
+// o modal um material de cada vez. "sem_categoria" entra com Original/Grupo
+// SAP já preenchidos (mesmo cadastro existente), faltando só a Categoria;
+// "não cadastrado" entra só com o Original, faltando Grupo SAP.
+function abrirCadastroMateriaisEmLote(itens) {
+  const container = document.getElementById('mat-indiv-rows');
+  if (!container || !itens?.length) return;
+  container.innerHTML = '';
+  _matIndivRowSeq = 0;
+  itens.forEach(item => {
+    _addMaterialIndivRow();
+    const row = container.lastElementChild;
+    const semCategoria = item.motivo === 'sem_categoria';
+    row.querySelector('[data-field="origem"]').value = semCategoria ? (item.origemCadastro || item.nome) : item.nome;
+    if (semCategoria) row.querySelector('[data-field="alias"]').value = item.aliasPadronizado || '';
+  });
+  openModal('modal-materiais-individual');
+  const focusField = itens[0]?.motivo === 'sem_categoria' ? 'categoria' : 'alias';
+  setTimeout(() => container.querySelector(`.reg-individual-row [data-field="${focusField}"]`)?.focus(), 50);
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 // CATÁLOGO DE GRUPOS SAP — usado no dropdown "Grupo SAP" do cadastro de
 // Materiais. Combina os grupos cadastrados manualmente (state.gruposMateriais,
@@ -856,6 +878,22 @@ function abrirCadastroFilialIndividual(prefill) {
     const focusField = prefill?.focus || 'origem';
     (row?.querySelector(`[data-field="${focusField}"]`) || container.querySelector('input'))?.focus();
   }, 50);
+}
+
+// Mesmo modal, mas com uma linha por pendência (botão "Cadastrar Todos" do
+// alerta de padronização, dashboard.js) — poupa o analista de abrir/fechar
+// o modal uma central de cada vez; só falta digitar a Sigla de cada linha.
+function abrirCadastroFiliaisEmLote(nomes) {
+  const container = document.getElementById('filial-indiv-rows');
+  if (!container || !nomes?.length) return;
+  container.innerHTML = '';
+  _filIndivRowSeq = 0;
+  nomes.forEach(nome => {
+    _addFilialIndivRow();
+    container.lastElementChild.querySelector('[data-field="origem"]').value = nome;
+  });
+  openModal('modal-filiais-individual');
+  setTimeout(() => container.querySelector('.reg-individual-row [data-field="alias"]')?.focus(), 50);
 }
 
 // ═══════════════════════════════════════════════════════════════════════

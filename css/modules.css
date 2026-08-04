@@ -1205,7 +1205,7 @@ td.pending-cell  { color: var(--text3) !important; font-style: italic; font-size
   padding: 8px 16px;
   border-bottom: 1px solid var(--border);
   transition: background 0.12s;
-  cursor: default;
+  cursor: pointer;
 }
 .crank-row:last-child { border-bottom: none; }
 .crank-row:hover { background: var(--bg3); }
@@ -2755,6 +2755,15 @@ td.var-cell-zero .ti-circle-check     { color: var(--text3); }
   flex-direction: column;
   animation: popIn 0.16s ease;
   overflow: hidden;
+}
+
+/* Modal de Entradas/Saídas (openBreakdownModal): com a coluna Documento
+   separada de Ref., a tabela ficou com 8 colunas — não cabia mais em
+   860px (nowrap cortava Dt. Lançamento/Saldo no limite do diálogo, ver
+   .bdm-body overflow-x abaixo). Mesmo padrão de largura dedicada já usado
+   em .fechmgr-dialog, só que mais estreito (menos colunas). */
+.bdm-dialog-wide {
+  max-width: min(1080px, 96vw);
 }
 
 .bdm-header {

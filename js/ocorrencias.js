@@ -1771,13 +1771,22 @@ function _ocAbrirMenuCard(event, id) {
   </button>`).join('') || `<div style="padding:8px 10px;font-size:11.5px;color:var(--text3)">Nenhuma ação extra.</div>`;
 
   const rect = event.currentTarget.getBoundingClientRect();
-  menu.style.top = `${rect.bottom + 6}px`;
   // Alinha a borda DIREITA do menu com a do botão (que fica no canto
   // direito do card) — evita estourar a borda direita da tela.
   menu.style.left = 'auto';
   menu.style.right = `${window.innerWidth - rect.right}px`;
   menu.dataset.ocId = id;
-  menu.classList.add('open');
+  menu.classList.add('open'); // precisa estar visível pra offsetHeight medir certo
+
+  // Abre pra cima quando não cabe embaixo (card perto do rodapé da tela):
+  // sendo position:fixed, o menu não acompanha o scroll da página, então um
+  // item que ultrapassasse o fim da viewport ficava inacessível — sem opção
+  // de rolar até ele.
+  const menuHeight = menu.offsetHeight || 0;
+  const cabeEmbaixo = rect.bottom + 6 + menuHeight <= window.innerHeight - 8;
+  menu.style.top = cabeEmbaixo
+    ? `${rect.bottom + 6}px`
+    : `${Math.max(8, rect.top - menuHeight - 6)}px`;
 }
 
 function _ocFecharMenuCard() {

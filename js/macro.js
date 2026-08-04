@@ -730,7 +730,7 @@ function _renderCrankPanel(levelKey, items) {
                     : Math.abs(item.custo) > maxCusto * 0.33 ? 'medio' : 'baixo';
     const varCls    = varClass(item.diff);
     return `
-      <div class="crank-row">
+      <div class="crank-row" data-central="${escapeHtml(item.central)}" data-mat="${escapeHtml(item.mat)}" onclick="_crankOpenDetail(this)">
         <div class="crank-row-left">
           <span class="crank-row-mat" title="${escapeHtml(item.mat)}">${escapeHtml(item.mat)}${_trendIcon(item.trend)}</span>
           <span class="crank-row-meta">
@@ -750,6 +750,24 @@ function _renderCrankPanel(levelKey, items) {
   }).join('');
 }
 
+// ── Clique na linha → abre o mesmo modal "Detalhamento do Material" da
+// Visão Micro (openAnaliticoDetailModal). A Visão Micro já roda antes dos
+// painéis de criticidade (renderAnaliticoMicro chama renderMacroPanels no
+// fim), então window.__analiticoDetailCache já tem uma entrada central+mat
+// para cada linha aqui — só precisa achar a chave correspondente. ─────────
+function _crankOpenDetail(row) {
+  const { central, mat } = row.dataset;
+  const cache = window.__analiticoDetailCache;
+  let key = null;
+  if (cache) {
+    for (const [k, payload] of cache) {
+      if (payload.central === central && payload.material === mat) { key = k; break; }
+    }
+  }
+  if (!key) { toast('Detalhamento não encontrado.', 'error'); return; }
+  openAnaliticoDetailModal(key);
+}
+
 // ── Clipboard ─────────────────────────────────────────────────────────
 function _crankCopy(levelKey) {
   const items = window._rankByLevel?.[levelKey];
@@ -764,4 +782,4 @@ function _crankCopy(levelKey) {
 }
 
 
-Object.assign(window, { renderMacroPanels, macroApplyFilter, _crankCopy });
+Object.assign(window, { renderMacroPanels, macroApplyFilter, _crankCopy, _crankOpenDetail });

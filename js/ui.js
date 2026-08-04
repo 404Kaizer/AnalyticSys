@@ -1555,6 +1555,11 @@ function openBreakdownModal(trigger) {
     const dtDoc     = (extra && extra.dtDoc)  || '';
     const dtLancRaw = (extra && extra.dtLanc) || dtLanc || '';
     const dtReg     = (extra && extra.dtReg)  || '';
+    // Ref./Documento exibidos como colunas separadas (valores crus do SAP)
+    // — `ref` (parâmetro acima) é o valor "efetivo" com fallback, usado só
+    // internamente pelo pareamento de transferência 861/862 logo abaixo.
+    const refCol      = (extra && extra.refRaw)    || '';
+    const documentoCol = (extra && extra.documento) || '';
 
     // Transferência entre centros (861/862): mostra na mesma linha qual é
     // o movimento relacionado (código complementar) e em qual central ele
@@ -1602,14 +1607,15 @@ function openBreakdownModal(trigger) {
     const html = `<tr>
       <td>${movBadgeHtml(cod)}</td>
       <td class="td-muted">${escapeHtml(usuario || '—')}</td>
-      <td class="td-muted">${escapeHtml(ref || '—')}${pairHtml}</td>
+      <td class="td-muted">${escapeHtml(refCol || '—')}${pairHtml}</td>
+      <td class="td-muted">${escapeHtml(documentoCol || '—')}</td>
       <td class="td-muted">${escapeHtml(dtDoc || '—')}</td>
       <td class="td-muted">${escapeHtml(dtLancRaw || '—')}</td>
       <td class="td-muted">${escapeHtml(dtReg || '—')}</td>
       <td class="td-mono" style="color:${colorVar};text-align:right;font-weight:600">${signIcon}${fmtKg(Math.abs(value))}</td>
     </tr>`;
 
-    const searchText = [cod, ref, usuario, dtDoc, dtLancRaw, dtReg, pairSearchText]
+    const searchText = [cod, refCol, documentoCol, usuario, dtDoc, dtLancRaw, dtReg, pairSearchText]
       .filter(Boolean).join(' ').toLowerCase();
 
     return { value, html, searchText };
@@ -1622,7 +1628,7 @@ function openBreakdownModal(trigger) {
 
     tbody.innerHTML = filtered.length
       ? filtered.map(r => r.html).join('')
-      : `<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:22px 16px">
+      : `<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:22px 16px">
            Nenhum registro encontrado${t ? ` para "${escapeHtml(term.trim())}"` : ''}
          </td></tr>`;
 
