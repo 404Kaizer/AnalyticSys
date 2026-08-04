@@ -128,7 +128,7 @@ function exportarDados() {
     });
 
     // Serialize each large array as a Blob chunk to avoid single-string limits
-    const fields = ['entradas','saidas','lancamentos','sap','producao','imports','configs','filiais','materiais','ocorrencias'];
+    const fields = ['entradas','saidas','lancamentos','sap','custosSap','imports','configs','filiais','materiais','ocorrencias'];
 
     // Build JSON manually in parts
     const parts = [];
@@ -214,7 +214,7 @@ function restaurarBackup(file) {
 
       // Restaura cada campo, com fallback para array vazio
       _lstepSet('bkp-restore', 'running'); _lbarSet(35);
-      const fields = ['entradas','saidas','lancamentos','sap','producao','imports','configs','filiais','materiais','ocorrencias'];
+      const fields = ['entradas','saidas','lancamentos','sap','custosSap','imports','configs','filiais','materiais','ocorrencias'];
       fields.forEach(f => {
         state[f] = Array.isArray(parsed[f]) ? parsed[f] : (state[f] || []);
       });
@@ -222,7 +222,7 @@ function restaurarBackup(file) {
       // antes desta atualização não tem id nos registros; sem isso, eles
       // ficariam sem sincronizar com a nuvem até o próximo reload da página
       // (o backfill normal só roda no boot, em applySavedState).
-      ['entradas', 'saidas', 'lancamentos', 'sap', 'producao'].forEach(key => {
+      ['entradas', 'saidas', 'lancamentos', 'sap', 'custosSap'].forEach(key => {
         if (!Array.isArray(state[key])) return;
         state[key] = state[key].map(item => (item && item.id) ? item : { ...item, id: gerarIdRegistro() });
       });
@@ -273,7 +273,7 @@ function restaurarBackup(file) {
 function updatePageInfo(module) {
   const data = getFilteredData(module);
   const total = data.length;
-  const page = module === 'producao' ? currentPageProducao : pages[module];
+  const page = module === 'custosSap' ? currentPageCustosSap : pages[module];
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const start = total === 0 ? 0 : (page * PAGE_SIZE) + 1;
   const end = Math.min((page + 1) * PAGE_SIZE, total);
@@ -692,10 +692,10 @@ const _lastFiltered = {};
 function pageSlice(module) {
   const data = getFilteredData(module);
   _lastFiltered[module] = data;
-  const page = module === 'producao' ? currentPageProducao : pages[module];
+  const page = module === 'custosSap' ? currentPageCustosSap : pages[module];
   const totalPages = Math.max(1, Math.ceil(data.length / PAGE_SIZE));
   const safePage = Math.min(Math.max(page, 0), totalPages - 1);
-  if (module === 'producao') currentPageProducao = safePage;
+  if (module === 'custosSap') currentPageCustosSap = safePage;
   else pages[module] = safePage;
   return data.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE);
 }
@@ -708,7 +708,7 @@ function getListFilteredData(scope) {
       ...state.saidas.map(r => ({ modulo: 'Saída', material: r.material, central: r.central, valor: money(r.valorTotal), data: r.createdAt || 0, status: 'badge-red' })),
       ...state.lancamentos.map(r => ({ modulo: 'Lançamento', material: r.material, central: r.central, valor: `${num(r.peso)} KG`, data: r.createdAt || 0, status: 'badge-amber' })),
       ...state.sap.map(r => ({ modulo: 'SAP', material: r.material, central: r.central, valor: money(r.valorTotal), data: r.createdAt || 0, status: 'badge-blue' })),
-      ...state.producao.map(r => ({ modulo: 'Produção', material: 'Produção', central: r.central, valor: `${num(r.producao)} m³`, data: r.createdAt || 0, status: 'badge-purple' }))
+      ...state.custosSap.map(r => ({ modulo: 'Custos SAP', material: r.material, central: r.central, valor: money(r.valorTotal), data: r.createdAt || 0, status: 'badge-purple' }))
     ].sort((a, b) => (b.data || 0) - (a.data || 0));
     // Feed do dashboard é recriado a cada chamada — não tem scope fixo para indexar
     data = filterRecords(feed, listFilters.dashboard, getSearchableFields('dashboard'));
@@ -748,7 +748,7 @@ function updateListPageInfo(scope) {
 }
 
 function renderScope(scope) {
-  if (scope in pages || scope === 'producao') return renderModule(scope);
+  if (scope in pages || scope === 'custosSap') return renderModule(scope);
 
   if (scope === 'imports') return renderImports();
   if (scope === 'configs') return renderConfigs();
@@ -807,16 +807,16 @@ function irParaUltima(module) {
   }
 }
 
-function primeiraPaginaProducao() { currentPageProducao = 0; renderProducao(); }
-function paginaAnteriorProducao() { currentPageProducao = Math.max(0, currentPageProducao - 1); renderProducao(); }
-function proximaPaginaProducao() {
-  const total = Math.ceil(getFilteredData('producao').length / PAGE_SIZE);
-  currentPageProducao = Math.min(Math.max(total - 1, 0), currentPageProducao + 1);
-  renderProducao();
+function primeiraPaginaCustosSap() { currentPageCustosSap = 0; renderCustosSap(); }
+function paginaAnteriorCustosSap() { currentPageCustosSap = Math.max(0, currentPageCustosSap - 1); renderCustosSap(); }
+function proximaPaginaCustosSap() {
+  const total = Math.ceil(getFilteredData('custosSap').length / PAGE_SIZE);
+  currentPageCustosSap = Math.min(Math.max(total - 1, 0), currentPageCustosSap + 1);
+  renderCustosSap();
 }
-function ultimaPaginaProducao() {
-  currentPageProducao = Math.max(Math.ceil(getFilteredData('producao').length / PAGE_SIZE) - 1, 0);
-  renderProducao();
+function ultimaPaginaCustosSap() {
+  currentPageCustosSap = Math.max(Math.ceil(getFilteredData('custosSap').length / PAGE_SIZE) - 1, 0);
+  renderCustosSap();
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -834,11 +834,11 @@ const colFilterMeta = {
   saidas:      { tbodyId: 'tb-saidas',      fields: [null,'central','dtEmissao','os','contrato','categoria','fornecedor','material','peso','um','custo','valorTotal',null] },
   lancamentos: { tbodyId: 'tb-lancamentos', fields: [null,'central','dtLanc','fornecedor','categoria','material','peso','um','custo','valorTotal',null] },
   sap:         { tbodyId: 'tb-sap',         fields: [null,'usuario','movimento','ref','documento','central','deposito','dtDoc','dtLanc','dtReg','material','peso','um','custoUnit','valorTotal',null] },
-  producao:    { tbodyId: 'tb-producao',    fields: ['mes','central','producao','um','precoMedio','custoMedio','margem','totalVendas',null] },
+  custosSap:   { tbodyId: 'tb-custos-sap',  fields: ['material','central','ano','mes','estoqueTotal','valorTotal','custo',null] },
   imports:     { tbodyId: 'tb-imports',     fields: ['arquivo','modulo','registros','dataHora','status',null] },
   configs:     { tbodyId: 'tb-configs',     fields: ['key','value','desc','created',null] },
-  filiais:     { tbodyId: 'tb-filiais',     fields: ['origem','alias','cnpj','regional','created',null] },
-  materiais:   { tbodyId: 'tb-materiais',   fields: ['origem','alias','categoria','created',null] },
+  filiais:     { tbodyId: 'tb-filiais',     fields: [null,'origem','alias','cnpj','regional',null,'created',null] },
+  materiais:   { tbodyId: 'tb-materiais',   fields: [null,'origem','alias','codSap','categoria',null,'created',null] },
 };
 
 // Returns true if a record passes ALL active column filters for a module
@@ -885,13 +885,13 @@ function _getModuleTextFilteredData(module) {
     const keys = getSap861862DuplicateKeys();
     data = data.filter(r => keys.has(getSapRecordKey(r)));
   }
-  const f = module === 'producao' ? filtroProducao : filters[module];
+  const f = module === 'custosSap' ? filtroCustosSap : filters[module];
   return filterRecords(data, f, getSearchableFields(module), module);
 }
 
 // Mesma ideia de _getModuleTextFilteredData, mas para os "scopes" de lista
 // (imports, configs, filiais, materiais), que usam listFilters em vez de
-// filters/filtroProducao.
+// filters/filtroCustosSap.
 function _getScopeTextFilteredData(scope) {
   if (scope === 'imports') {
     return filterRecords(
@@ -1151,7 +1151,7 @@ function closeColFilterPopover() {
 function resetPageForModule(module) {
   if (module in pages) pages[module] = 0;
   else if (module in listPages) listPages[module] = 0;
-  else if (module === 'producao') currentPageProducao = 0;
+  else if (module === 'custosSap') currentPageCustosSap = 0;
 }
 
 function renderModuleByName(module) {
@@ -1160,7 +1160,7 @@ function renderModuleByName(module) {
     saidas: renderSaidas,
     lancamentos: renderLancamentos,
     sap: renderSAP,
-    producao: renderProducao,
+    custosSap: renderCustosSap,
     imports: renderImports,
     configs: renderConfigs,
     filiais: renderFiliais,
@@ -3273,10 +3273,10 @@ function filtrarTabela(tbodyId, value) {
   debouncedFilter(module, value, () => renderModule(module));
 }
 
-function filtrarProducao(value) {
-  filtroProducao = String(value || '').trim();
-  currentPageProducao = 0;
-  debouncedFilter('producao', value, () => renderProducao());
+function filtrarCustosSap(value) {
+  filtroCustosSap = String(value || '').trim();
+  currentPageCustosSap = 0;
+  debouncedFilter('custosSap', value, () => renderCustosSap());
 }
 
 function filtrarLista(scope, value) {
@@ -5464,7 +5464,7 @@ const _BKP_MODULES = [
   { key: 'saidas',      label: 'Saídas (OS)',           icon: 'ti-package-export',  color: 'var(--red)'    },
   { key: 'lancamentos', label: 'Lançamentos',           icon: 'ti-clipboard-list',  color: 'var(--teal)'   },
   { key: 'sap',         label: 'SAP',                   icon: 'ti-database',        color: 'var(--purple)' },
-  { key: 'producao',    label: 'Produção',              icon: 'ti-building-factory',color: 'var(--amber)'  },
+  { key: 'custosSap',   label: 'Custos SAP',            icon: 'ti-building-factory',color: 'var(--amber)'  },
   { key: 'filiais',     label: 'Filiais / Centrais',   icon: 'ti-building',        color: 'var(--accent)' },
   { key: 'materiais',   label: 'Materiais',             icon: 'ti-box',             color: 'var(--blue)'   },
   { key: 'configs',     label: 'Configurações',         icon: 'ti-settings',        color: 'var(--text2)'  },
@@ -6114,7 +6114,7 @@ async function _restaurarModulosConfirmar() {
     // do fluxo de backup legado: um backup anterior a esta atualização não
     // tem id nos registros, e sem isso eles ficariam sem sincronizar com a
     // nuvem até o próximo reload da página.
-    ['entradas', 'saidas', 'lancamentos', 'sap', 'producao'].forEach(key => {
+    ['entradas', 'saidas', 'lancamentos', 'sap', 'custosSap'].forEach(key => {
       if (!Array.isArray(state[key])) return;
       state[key] = state[key].map(item => (item && item.id) ? item : { ...item, id: gerarIdRegistro() });
     });

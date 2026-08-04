@@ -4,7 +4,7 @@ const IDB_STORE = 'kv';
 const IDB_STATE_KEY = 'appState';
 const legacyStateKey = STORAGE_KEY;
 // 'sap' é excluído do snapshot unificado — salvo em chunks separados
-const saveSnapshotKeys = ['configs', 'filiais', 'materiais', 'gruposMateriais', 'regionaisCentrais', 'entradas', 'saidas', 'lancamentos', 'sap', 'producao', 'imports', 'ocorrencias', 'acoesRelatorio', 'notifications', 'invJustificativas', 'sapFechamentoOverrides', 'ajustesSistemicos', 'ajustesExcluidos', 'notasAjuste'];
+const saveSnapshotKeys = ['configs', 'filiais', 'materiais', 'gruposMateriais', 'regionaisCentrais', 'entradas', 'saidas', 'lancamentos', 'sap', 'custosSap', 'imports', 'ocorrencias', 'acoesRelatorio', 'notifications', 'invJustificativas', 'sapFechamentoOverrides', 'ajustesSistemicos', 'ajustesExcluidos', 'notasAjuste'];
 const SAP_CHUNK_SIZE  = 10000;  // registros por chunk
 const SAP_CHUNK_KEY   = 'sap_chunk_'; // prefixo das chaves: sap_chunk_0, sap_chunk_1...
 const SAP_META_KEY    = 'sap_meta';   // { totalChunks, totalRecords, savedAt }
@@ -74,7 +74,7 @@ async function reconcilePendingDeletes() {
 
   const removeByImport = arr => (arr || []).filter(r => r.fonte === 'manual' || !list.includes(r.importId));
   let touched = false;
-  ['entradas', 'saidas', 'lancamentos', 'sap', 'producao', 'filiais', 'materiais'].forEach(key => {
+  ['entradas', 'saidas', 'lancamentos', 'sap', 'custosSap', 'filiais', 'materiais'].forEach(key => {
     const before = (state[key] || []).length;
     state[key] = removeByImport(state[key]);
     if (state[key].length !== before) touched = true;
@@ -222,11 +222,17 @@ async function saveSapChunks(db, records) {
   console.info(`[Persist] SAP: ${compacted.length} registros salvos em ${totalChunks} chunk${totalChunks!==1?'s':''}`);
 }
 
+// Retorna array de registros quando já existe meta de chunks (mesmo que
+// vazio — 0 registros é uma resposta válida, ex.: SAP zerado por um wipe do
+// ADM). Retorna null só quando este dispositivo NUNCA gravou chunks SAP —
+// diferença crítica pro fallback da chave legada em loadState() (ver bug
+// real 04/08 lá).
 async function loadSapChunks(db) {
-  if (!db) return [];
+  if (!db) return null;
   try {
     const meta = await idbGet(db, SAP_META_KEY);
-    if (!meta || !meta.totalChunks) return [];
+    if (!meta) return null;
+    if (!meta.totalChunks) return [];
 
     const chunks = await Promise.all(
       Array.from({ length: meta.totalChunks }, (_, i) => idbGet(db, SAP_CHUNK_KEY + i))
@@ -396,7 +402,7 @@ function buildStateSnapshot() {
     saidas: state.saidas,
     lancamentos: state.lancamentos,
     sap: compactSapRecords(state.sap),
-    producao: state.producao,
+    custosSap: state.custosSap,
     imports: state.imports,
     ocorrencias: state.ocorrencias || [],
     acoesRelatorio: state.acoesRelatorio || [],
@@ -430,13 +436,13 @@ function applySavedState(saved) {
   }));
 
   // Backfill de id nos 5 módulos grandes (Entradas, Saídas, Lançamentos, SAP,
-  // Produção) — historicamente esses registros nunca tiveram id (só
+  // Custos SAP) — historicamente esses registros nunca tiveram id (só
   // fingerprint de deduplicação), o que impede sincronizar com o Supabase
   // (upsert/delete exigem chave primária estável). Roda uma vez por registro:
   // só cria objeto novo quando falta o id, preservando a referência original
   // nos demais casos para não pesar em bases grandes (SAP pode ter 600k+
   // registros) em todo boot.
-  ['entradas', 'saidas', 'lancamentos', 'sap', 'producao'].forEach(key => {
+  ['entradas', 'saidas', 'lancamentos', 'sap', 'custosSap'].forEach(key => {
     if (!Array.isArray(state[key])) return;
     state[key] = state[key].map(item => (item && item.id) ? item : { ...item, id: gerarIdRegistro() });
   });
@@ -522,7 +528,7 @@ function applySavedState(saved) {
 async function persistStateNow() {
   const hasData = state.entradas.length  || state.saidas.length     ||
                   state.lancamentos.length || state.sap.length       ||
-                  state.producao.length  || state.imports.length     ||
+                  state.custosSap.length  || state.imports.length     ||
                   state.configs.length   || state.filiais.length     ||
                   state.materiais.length || (state.ocorrencias || []).length ||
                   (state.invJustificativas || []).length;
@@ -648,9 +654,20 @@ async function loadState() {
         }
       }
 
-      // Carrega chunks SAP separadamente e injeta no saved antes de aplicar
+      // Carrega chunks SAP separadamente e injeta no saved antes de aplicar.
+      // BUG REAL (04/08): este dispositivo já tinha migrado pro esquema de
+      // chunks (SAP_META_KEY existe), mas um wipe do ADM zerando o SAP
+      // (checarWipePendente, normalize.js) sempre resulta em
+      // sapFromChunks.length === 0 — e a condição antiga não distinguia
+      // "zero de propósito" de "nunca migrou pra chunks", caindo sempre no
+      // fallback da chave individual legada 'sap', que o wipe nunca chega a
+      // tocar (persistStateNow exclui 'sap' das chaves individuais de
+      // propósito — ver keysParaSalvar). Resultado: o SAP "ressuscitava"
+      // sozinho a cada reload. Agora loadSapChunks() devolve null só quando
+      // não existe meta nenhuma (nunca migrou) — só nesse caso o fallback
+      // legado é usado.
       const sapFromChunks = await loadSapChunks(db);
-      if (sapFromChunks.length > 0) {
+      if (sapFromChunks !== null) {
         saved.sap = sapFromChunks;
       } else if (!Array.isArray(saved.sap) || saved.sap.length === 0) {
         // Fallback: tenta a chave legada 'sap' individual

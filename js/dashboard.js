@@ -4247,53 +4247,53 @@ function renderSAP() {
   atualizarBarraLote('sap');
 }
 
-function renderProducao() {
-  const tb = document.getElementById('tb-producao');
+function renderCustosSap() {
+  const tb = document.getElementById('tb-custos-sap');
   if (!tb) return;
 
-  const data = getFilteredData('producao');
+  const data = getFilteredData('custosSap');
   const totalPages = Math.max(1, Math.ceil(data.length / PAGE_SIZE));
-  if (currentPageProducao >= totalPages) currentPageProducao = totalPages - 1;
-  if (currentPageProducao < 0) currentPageProducao = 0;
+  if (currentPageCustosSap >= totalPages) currentPageCustosSap = totalPages - 1;
+  if (currentPageCustosSap < 0) currentPageCustosSap = 0;
 
-  const pageData = data.slice(currentPageProducao * PAGE_SIZE, (currentPageProducao + 1) * PAGE_SIZE);
-  updatePageInfo('producao');
+  const pageData = data.slice(currentPageCustosSap * PAGE_SIZE, (currentPageCustosSap + 1) * PAGE_SIZE);
+  updatePageInfo('custosSap');
 
-  const centrais = new Set(state.producao.map(r => r.central).filter(Boolean));
-  const prodTotal = state.producao.reduce((a, b) => a + num(b.producao), 0);
-  const vendasTotal = state.producao.reduce((a, b) => a + num(b.totalVendas), 0);
-  const custoMedio = state.producao.length ? state.producao.reduce((a, b) => a + num(b.custoMedio), 0) / state.producao.length : 0;
+  const centrais = new Set(state.custosSap.map(r => r.central).filter(Boolean));
+  const materiais = new Set(state.custosSap.map(r => r.material).filter(Boolean));
+  const estoqueTotal = state.custosSap.reduce((a, b) => a + num(b.estoqueTotal), 0);
+  const valorTotal = state.custosSap.reduce((a, b) => a + num(b.valorTotal), 0);
+  const custoMedio = state.custosSap.length ? state.custosSap.reduce((a, b) => a + num(b.custo), 0) / state.custosSap.length : 0;
 
   const set = (id, value) => {
     const el = document.getElementById(id);
     if (el) el.textContent = value;
   };
-  set('prod-centrais', centrais.size);
-  set('prod-total', prodTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
-  set('prod-vendas', money(vendasTotal));
-  set('prod-custo', money(custoMedio));
-  set('prod-margem', state.producao.length ? '—' : '—');
+  set('cs-centrais', centrais.size);
+  set('cs-materiais', materiais.size);
+  set('cs-estoque', estoqueTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+  set('cs-valor', money(valorTotal));
+  set('cs-custo', money(custoMedio));
 
   if (!data.length) {
-    tb.innerHTML = '<tr><td colspan="9"><div class="empty-state"><i class="ti ti-chart-bar"></i><p>Nenhum registro de produção importado.</p></div></td></tr>';
+    tb.innerHTML = '<tr><td colspan="8"><div class="empty-state"><i class="ti ti-chart-bar"></i><p>Nenhum registro de Custos SAP importado.</p></div></td></tr>';
     return;
   }
 
   tb.innerHTML = pageData.map((r, i) => `
     <tr>
-      <td class="td-mono">${r.fonte === 'manual' ? '<span class="badge-manual" title="Registro inserido manualmente"><i class="ti ti-pencil"></i></span>' : ''}${r.mes || '—'}</td>
+      <td class="td-mono">${r.fonte === 'manual' ? '<span class="badge-manual" title="Registro inserido manualmente"><i class="ti ti-pencil"></i></span>' : ''}${r.material || '—'}</td>
       <td class="td-mono">${r.central || '—'}</td>
-      <td class="td-mono" style="color:var(--teal)">${num(r.producao).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-      <td>${r.um || 'm³'}</td>
-      <td class="td-mono">${money(r.precoMedio)}</td>
-      <td class="td-mono">${money(r.custoMedio)}</td>
-      <td class="td-mono">${r.margem || '—'}</td>
-      <td class="td-mono" style="color:#f59e0b">${money(r.totalVendas)}</td>
-      <td><button class="btn-icon danger" onclick="excluirProducao(${currentPageProducao * PAGE_SIZE + i})"><i class="ti ti-trash"></i></button></td>
+      <td class="td-mono">${r.ano || '—'}</td>
+      <td class="td-mono">${r.mes || '—'}</td>
+      <td class="td-mono" style="color:var(--teal)">${num(r.estoqueTotal).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+      <td class="td-mono" style="color:#f59e0b">${money(r.valorTotal)}</td>
+      <td class="td-mono">${money(r.custo, 4)}</td>
+      <td><button class="btn-icon danger" onclick="excluirCustosSap(${currentPageCustosSap * PAGE_SIZE + i})"><i class="ti ti-trash"></i></button></td>
     </tr>
   `).join('');
   makeResizable(tb.closest('table'));
-  injectColFilterButtons(tb.closest('table'), 'producao');
+  injectColFilterButtons(tb.closest('table'), 'custosSap');
 }
 
 function renderConfigs() {
@@ -4450,7 +4450,7 @@ function _pendPadronizacaoAbrirModal(tipo) {
   const itemFn  = isMaterial ? _pendPadrItemMaterialHtml : _pendPadrItemCentralHtml;
   const singular = isMaterial ? 'material' : 'central';
   const plural   = isMaterial ? 'materiais' : 'centrais';
-  const fontes   = isMaterial ? 'Entradas/Saídas/Lançamentos/SAP' : 'Entradas/Saídas/Lançamentos/SAP/Produção';
+  const fontes   = isMaterial ? 'Entradas/Saídas/Lançamentos/SAP' : 'Entradas/Saídas/Lançamentos/SAP/Custos SAP';
   const criterio = isMaterial ? 'sem cadastro ou cadastrado sem categoria' : 'sem cadastro';
   if (!lista.length) return;
 
@@ -4624,24 +4624,67 @@ function renderFiliais() {
   const { data, pageData } = getListPageData('filiais');
   updateListPageInfo('filiais');
   if (!data.length) {
-    tb.innerHTML = '<tr><td colspan="5"><div class="empty-state"><i class="ti ti-map-pin"></i><p>Nenhuma filial cadastrada.</p></div></td></tr>';
+    tb.innerHTML = '<tr><td colspan="8"><div class="empty-state"><i class="ti ti-map-pin"></i><p>Nenhuma filial cadastrada.</p></div></td></tr>';
     renderPendenciasPadronizacao();
+    _renderNovosPendentesBox('filiais');
     return;
   }
   tb.innerHTML = pageData.map((f, i) => `
     <tr>
+      <td><input type="checkbox" class="chk-filiais-row" value="${escapeHtml(filialMatchKey(f))}"></td>
       <td class="td-mono">${f.origem}</td>
       <td class="td-mono">${f.alias}</td>
       <td class="td-muted">${f.cnpj || '—'}</td>
       <td class="td-muted">${f.regional || '—'}</td>
+      <td class="td-muted">${_donoDisplay(f)}</td>
       <td class="td-muted">${f.created || '—'}</td>
-      <td><button class="btn-icon danger" onclick="removerFilial(${listPages.filiais * PAGE_SIZE + i})"><i class="ti ti-trash"></i></button></td>
+      <td>
+        <button class="btn-icon" title="Editar" onclick="abrirEdicaoFilial(${listPages.filiais * PAGE_SIZE + i})"><i class="ti ti-pencil"></i></button>
+        <button class="btn-icon danger" title="Excluir" onclick="removerFilial(${listPages.filiais * PAGE_SIZE + i})"><i class="ti ti-trash"></i></button>
+      </td>
     </tr>
   `).join('');
   const _tbl_filiais = document.getElementById('tb-filiais')?.closest('table');
   if (_tbl_filiais) injectColFilterButtons(_tbl_filiais, 'filiais');
   updateImportPrereqUI();
   renderPendenciasPadronizacao();
+  _renderNovosPendentesBox('filiais');
+}
+
+// Coluna "Dono" (Materiais/Filiais) — mostra de qual usuário o registro foi
+// IMPORTADO (não o dono técnico atual, que depois de "Importar de" é
+// sempre o próprio ADM — ver abrirImportarDe/confirmarImportarDe,
+// config.js). Registro sem importadoDeId (criado pelo próprio dono, ou
+// qualquer registro pra usuário comum, já que ele só vê os dele) mostra
+// "—". _perfisCache é populado por _carregarPerfis() (config.js).
+function _donoDisplay(rec) {
+  if (!rec.importadoDeId) return '—';
+  const email = (typeof _perfisCache !== 'undefined' && _perfisCache?.[rec.importadoDeId]) || rec.importadoDeId;
+  return `<span title="Importado de ${escapeHtml(email)}"><i class="ti ti-arrow-down-circle" style="color:var(--accent)"></i> ${escapeHtml(email)}</span>`;
+}
+
+// Box de alerta (mesmo padrão visual de renderDuplicatasCadastroMateriais/
+// renderPendenciasPadronizacao) — só tem conteúdo pro ADM, já que
+// _checarNovosParaImportar (config.js) só roda pra admin; pra usuário
+// comum a lista fica sempre vazia e o box não aparece, sem precisar de
+// nenhuma checagem de papel aqui.
+function _renderNovosPendentesBox(tipo) {
+  const boxId = tipo === 'materiais' ? 'novos-materiais-box' : 'novos-filiais-box';
+  const el = document.getElementById(boxId);
+  if (!el) return;
+  const itens = tipo === 'materiais'
+    ? (typeof _materiaisNovosItens !== 'undefined' ? _materiaisNovosItens : [])
+    : (typeof _filiaisNovosItens !== 'undefined' ? _filiaisNovosItens : []);
+  if (!itens.length) { el.innerHTML = ''; return; }
+  const porEmail = new Map();
+  itens.forEach(it => porEmail.set(it.email, (porEmail.get(it.email) || 0) + 1));
+  const detalhe = [...porEmail.entries()].map(([email, n]) => `${n} de ${escapeHtml(email)}`).join(', ');
+  const label = tipo === 'materiais' ? (itens.length === 1 ? 'material novo' : 'materiais novos') : (itens.length === 1 ? 'central nova' : 'centrais novas');
+  el.innerHTML = `
+    <button type="button" class="alert-pulse-btn is-amber" onclick="abrirNovosPendentesDetalhe('${tipo}')" title="${detalhe}">
+      <i class="ti ti-bell"></i>
+      ${itens.length} ${label}
+    </button>`;
 }
 
 function renderMateriais() {
@@ -4653,18 +4696,25 @@ function renderMateriais() {
   const { data, pageData } = getListPageData('materiais');
   updateListPageInfo('materiais');
   if (!data.length) {
-    tb.innerHTML = '<tr><td colspan="5"><div class="empty-state"><i class="ti ti-stack-2"></i><p>Nenhum material cadastrado.</p></div></td></tr>';
+    tb.innerHTML = '<tr><td colspan="8"><div class="empty-state"><i class="ti ti-stack-2"></i><p>Nenhum material cadastrado.</p></div></td></tr>';
     renderDuplicatasCadastroMateriais();
     renderPendenciasPadronizacao();
+    _renderNovosPendentesBox('materiais');
     return;
   }
   tb.innerHTML = pageData.map((m, i) => `
     <tr>
+      <td><input type="checkbox" class="chk-materiais-row" value="${m.id}"></td>
       <td class="td-mono">${m.origem}</td>
       <td class="td-mono">${m.alias}</td>
+      <td class="td-mono">${m.codSap || '—'}</td>
       <td class="td-muted">${m.categoria ? `<span style="font-size:10px;background:var(--bg4);border:1px solid var(--border2);border-radius:20px;padding:2px 8px;color:var(--text2);white-space:nowrap">${escapeHtml(m.categoria)}</span>` : '—'}</td>
+      <td class="td-muted">${_donoDisplay(m)}</td>
       <td class="td-muted">${m.created || '—'}</td>
-      <td><button class="btn-icon danger" onclick="removerMaterial('${m.id}', this)"><i class="ti ti-trash"></i></button></td>
+      <td>
+        <button class="btn-icon" title="Editar" onclick="abrirEdicaoMaterial('${m.id}')"><i class="ti ti-pencil"></i></button>
+        <button class="btn-icon danger" title="Excluir" onclick="removerMaterial('${m.id}', this)"><i class="ti ti-trash"></i></button>
+      </td>
     </tr>
   `).join('');
   const _tbl_materiais = document.getElementById('tb-materiais')?.closest('table');
@@ -4672,6 +4722,7 @@ function renderMateriais() {
   updateImportPrereqUI();
   renderDuplicatasCadastroMateriais();
   renderPendenciasPadronizacao();
+  _renderNovosPendentesBox('materiais');
 }
 
 function renderAcoesRelatorio() {
@@ -4724,7 +4775,7 @@ function pageFromModulo(modulo) {
     'Saída': 'saidas',
     'Lançamento': 'lancamentos',
     'SAP': 'sap',
-    'Produção': 'producao'
+    'Custos SAP': 'custosSap'
   };
   return map[modulo] || 'dashboard';
 }
@@ -4736,7 +4787,7 @@ function renderModule(module) {
     case 'saidas': return renderSaidas();
     case 'lancamentos': return renderLancamentos();
     case 'sap': return renderSAP();
-    case 'producao': return renderProducao();
+    case 'custosSap': return renderCustosSap();
     case 'importar': return renderImports();
     case 'configuracoes': renderConfigs(); renderAcoesRelatorio(); loadHealthConfigInputs(); updateParamGerais(); return;
     case 'filiais': return renderFiliais();
@@ -4747,7 +4798,7 @@ function renderModule(module) {
 
 function removerRegistro(module, index) {
   const data = getFilteredData(module);
-  const actual = data[(module === 'producao' ? currentPageProducao : pages[module]) * PAGE_SIZE + index];
+  const actual = data[(module === 'custosSap' ? currentPageCustosSap : pages[module]) * PAGE_SIZE + index];
   if (!actual) return;
   if (!confirm('Deseja realmente excluir este registro?')) return;
 
@@ -4918,21 +4969,21 @@ function _fpBaseLancamento(r) {
 function _fpBaseSap(r) {
   return [normalizeText(r.central || ''), normalizeText(r.material || ''), r.documento || '', r.movimento || '', r.dtLanc || ''].join('|');
 }
-function _fpBaseProducao(r) {
-  return [normalizeText(r.central || ''), r.mes || ''].join('|');
+function _fpBaseCustosSap(r) {
+  return [normalizeText(r.central || ''), normalizeText(r.material || ''), r.ano || '', r.mes || ''].join('|');
 }
 
 const _fpBaseFns = {
   'Entrada': _fpBaseEntrada, 'Saída': _fpBaseSaida,
-  'Lançamento': _fpBaseLancamento, 'SAP': _fpBaseSap, 'Produção': _fpBaseProducao
+  'Lançamento': _fpBaseLancamento, 'SAP': _fpBaseSap, 'Custos SAP': _fpBaseCustosSap
 };
 const _fpFns = {
   'Entrada': _fpEntrada, 'Saída': _fpSaida,
-  'Lançamento': _fpLancamento, 'SAP': _fpSap, 'Produção': _fpProducao
+  'Lançamento': _fpLancamento, 'SAP': _fpSap, 'Custos SAP': _fpCustosSap
 };
 const _stateArrays = () => ({
   'Entrada': state.entradas, 'Saída': state.saidas,
-  'Lançamento': state.lancamentos, 'SAP': state.sap, 'Produção': state.producao
+  'Lançamento': state.lancamentos, 'SAP': state.sap, 'Custos SAP': state.custosSap
 });
 
 function _detectConflicts(modulo, incoming) {
@@ -5002,7 +5053,7 @@ function _resolveConflicts(decisions) {
   // Aplica remoções de manuais
   const arr = _stateArrays();
   if (toRemove.size) {
-    const stateKey = { 'Entrada': 'entradas', 'Saída': 'saidas', 'Lançamento': 'lancamentos', 'SAP': 'sap', 'Produção': 'producao' }[modulo];
+    const stateKey = { 'Entrada': 'entradas', 'Saída': 'saidas', 'Lançamento': 'lancamentos', 'SAP': 'sap', 'Custos SAP': 'custosSap' }[modulo];
     if (stateKey) {
       // Fase 4: registros já sincronizados com a nuvem precisam ser
       // removidos lá também — senão, no próximo boot, o sync mescla
@@ -5013,7 +5064,7 @@ function _resolveConflicts(decisions) {
       // sincronizados) simplesmente não entram no mapa.
       const syncDeleteByModulo = {
         'Lançamento': (typeof _lancSyncDelete === 'function') ? _lancSyncDelete : null,
-        'Produção':   (typeof _producaoSyncDelete === 'function') ? _producaoSyncDelete : null,
+        'Custos SAP': (typeof _custosSapSyncDelete === 'function') ? _custosSapSyncDelete : null,
         'Entrada':    (typeof _entradasSyncDelete === 'function') ? _entradasSyncDelete : null,
         'Saída':      (typeof _saidasSyncDelete === 'function') ? _saidasSyncDelete : null,
       };
@@ -5050,7 +5101,7 @@ function _showConflictModal(modulo, conflicts) {
     if (modulo === 'Lançamento' || modulo === 'SAP') return `${num(r.peso).toLocaleString('pt-BR')} kg · ${r.dtLanc || '—'}`;
     if (modulo === 'Entrada')  return `${num(r.peso).toLocaleString('pt-BR')} kg · NF ${r.nf || '—'} · ${r.dtEmissao || '—'}`;
     if (modulo === 'Saída')    return `${num(r.peso).toLocaleString('pt-BR')} kg · OS ${r.os || '—'} · ${r.dtEmissao || '—'}`;
-    if (modulo === 'Produção') return `${num(r.producao).toLocaleString('pt-BR')} m³ · ${r.mes || '—'}`;
+    if (modulo === 'Custos SAP') return `${num(r.estoqueTotal).toLocaleString('pt-BR')} · ${r.ano || '—'}/${r.mes || '—'}`;
     return JSON.stringify(r).slice(0, 80);
   };
 
@@ -5138,7 +5189,7 @@ async function _mergeWithConflictCheck(modulo, incoming) {
     });
   }
 
-  const stateKey = { 'Entrada': 'entradas', 'Saída': 'saidas', 'Lançamento': 'lancamentos', 'SAP': 'sap', 'Produção': 'producao' }[modulo];
+  const stateKey = { 'Entrada': 'entradas', 'Saída': 'saidas', 'Lançamento': 'lancamentos', 'SAP': 'sap', 'Custos SAP': 'custosSap' }[modulo];
   const existingCount = (state[stateKey] || []).length;
   const incomingCount = resolvedIncoming.length;
 
@@ -5224,9 +5275,11 @@ function _fpSap(r) {
   ].join('|');
 }
 
-function _fpProducao(r) {
+function _fpCustosSap(r) {
   return [
     normalizeText(r.central || ''),
+    normalizeText(r.material || ''),
+    r.ano || '',
     r.mes || ''
   ].join('|');
 }
@@ -5537,28 +5590,28 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
       });
     }
     _mergedResult = await _mergeWithConflictCheck('SAP', parsed.filter(r => r.material || r.documento));
-  } else if (modulo === 'Produção') {
-    const mes = extra.mes || prompt('Informe o mês da produção importada:');
-    if (!mes || !String(mes).trim()) {
-      toast('Importação cancelada: mês não informado', 'error');
-      return;
-    }
-
+  } else if (modulo === 'Custos SAP') {
+    // Layout fixo do export SAP (MB52-like): 0 Material, 1 Área de avaliação
+    // (Central), 3 Exerc.período atual (Ano), 4 Período atual (Mês),
+    // 5 Estoque total, 6 Valor total, 8 Preço médio móvel (Custo).
     for (let i = 0; i < total; i += batchSize) {
-      updateStep('Organizando produção importada...');
-      await processSlice(i, Math.min(i + batchSize, total), (r) => stamp(normalizarCentraisRecord({
-        importId,
-        mes: String(mes).trim(),
-        central: String(r[0] || ''),
-        producao: num(r[1]),
-        um: 'm³',
-        precoMedio: num(r[5]),
-        margem: String(r[6] || '').trim() || '—',
-        custoMedio: num(r[7]),
-        totalVendas: num(r[8])
-      }, ['central'])));
+      updateStep('Organizando Custos SAP importado...');
+      await processSlice(i, Math.min(i + batchSize, total), (r) => {
+        const materialOriginal = String(r[0] || '').trim();
+        return stamp(normalizarCentraisRecord({
+          importId,
+          materialOriginal,
+          material: normalizarMaterial(materialOriginal),
+          central: String(r[1] || ''),
+          ano: String(r[3] || '').trim(),
+          mes: String(r[4] || '').trim(),
+          estoqueTotal: num(r[5]),
+          valorTotal: num(r[6]),
+          custo: num(r[8])
+        }, ['central']));
+      });
     }
-    _mergedResult = await _mergeWithConflictCheck('Produção', parsed.filter(r => r.central || r.producao));
+    _mergedResult = await _mergeWithConflictCheck('Custos SAP', parsed.filter(r => r.central || r.material));
   }
 
   // Aplica o resultado do merge ao state somente aqui, após todos os batches
@@ -5570,12 +5623,12 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
       'Saída':      'saidas',
       'Lançamento': 'lancamentos',
       'SAP':        'sap',
-      'Produção':   'producao',
+      'Custos SAP': 'custosSap',
     };
     const stateKey = stateKeyMap[modulo];
     if (stateKey) state[stateKey] = _mergedResult;
 
-    // Decisão de 27/07: Entradas/Saídas/Lançamentos/SAP/Produção NÃO
+    // Decisão de 27/07: Entradas/Saídas/Lançamentos/SAP/Custos SAP NÃO
     // sincronizam importação em lote com a nuvem — só registros manuais.
     // Motivo: volume de importação é ordens de grandeza maior que manual
     // (ex.: 813k importados vs. 31 manuais em Lançamentos), o plano gratuito
@@ -5597,7 +5650,7 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
     'Saída':      _fpSaida,
     'Lançamento': _fpLancamento,
     'SAP':        _fpSap,
-    'Produção':   _fpProducao,
+    'Custos SAP': _fpCustosSap,
   };
   const fpFn = fpFnByModulo[modulo];
   const stateArrayByModulo = {
@@ -5605,7 +5658,7 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
     'Saída':      state.saidas,
     'Lançamento': state.lancamentos,
     'SAP':        state.sap,
-    'Produção':   state.producao,
+    'Custos SAP': state.custosSap,
   };
   // parsed contém os registros novos — contar quantos já existiam no state anterior
   // (state já foi atualizado, então comparamos com os parsed)
@@ -6387,7 +6440,7 @@ function renderAll() {
   renderSaidas();
   renderLancamentos();
   renderSAP();
-  renderProducao();
+  renderCustosSap();
   renderImports();
   renderConfigs();
   renderAcoesRelatorio();
@@ -6405,7 +6458,7 @@ const pageRenderers = {
   saidas: () => renderSaidas(),
   lancamentos: () => renderLancamentos(),
   sap: () => renderSAP(),
-  producao: () => renderProducao(),
+  custosSap: () => renderCustosSap(),
   importar: () => renderImports(),
   configuracoes: () => { renderConfigs(); renderAcoesRelatorio(); loadHealthConfigInputs(); updateParamGerais(); },
   filiais: () => renderFiliais(),
@@ -6487,7 +6540,7 @@ const SUPABASE_BOOT_SYNCS = [
   'syncNotasAjusteFromSupabase',
   'syncLancamentosFromSupabase', // Fase 4 — Etapa 1 (módulos grandes)
   'syncImportsFromSupabase', // Fase 4 — Etapa 3 (log de importações)
-  'syncProducaoFromSupabase', // Fase 4 — Etapa 4
+  'syncCustosSapFromSupabase', // Fase 4 — Etapa 4
   'syncEntradasFromSupabase', // Fase 4 — Etapa 5
   'syncSaidasFromSupabase', // Fase 4 — Etapa 6
   'syncSAPFromSupabase', // Fase 4 — Etapa 8

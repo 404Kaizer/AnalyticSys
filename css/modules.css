@@ -155,7 +155,7 @@
 }
 .reg-individual-row .form-group { margin: 0; }
 .reg-individual-row .oc-form-group { margin: 0; }
-.reg-row-materiais { grid-template-columns: 1.2fr 1.2fr 170px 34px; }
+.reg-row-materiais { grid-template-columns: 1.2fr 1.2fr 140px 170px 34px; }
 .reg-row-filiais   { grid-template-columns: 1.3fr 110px 190px 1fr 34px; }
 .reg-row-remove {
   height: 36px;

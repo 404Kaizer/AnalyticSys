@@ -24,6 +24,8 @@
 window.AuthGate = (function () {
   let wired = false;
   let appBooted = false;
+  // Segunda trava, além de appBooted — ver bootApp() pro motivo (BUG REAL 04/08).
+  let _bootAppPromise = null;
 
   // ── Logout por inatividade ────────────────────────────────────────────
   // 4h sem nenhuma atividade (mouse, teclado, clique, scroll, toque) →
@@ -284,6 +286,17 @@ window.AuthGate = (function () {
     const healthReadonlyNote = $('health-cfg-readonly-note');
     if (healthReadonlyNote) healthReadonlyNote.style.display = isAdmin ? 'none' : '';
 
+    // Decisão 04/08 — "Importar de" (Materiais/Filiais em Configurações) só
+    // pro ADM: Configurações mostra só o cadastro do próprio dono agora, e
+    // só o ADM tem RLS liberada pra ler o cadastro de outro usuário (ver
+    // syncMateriaisFromSupabase/abrirImportarDe, config.js). Usuário comum
+    // nem teria o que importar — a policy de SELECT já restringe ele ao
+    // próprio, então o botão só ofereceria uma ação vazia.
+    const importarDeMateriaisBtn = $('btn-importar-de-materiais');
+    if (importarDeMateriaisBtn) importarDeMateriaisBtn.style.display = isAdmin ? '' : 'none';
+    const importarDeFiliaisBtn = $('btn-importar-de-filiais');
+    if (importarDeFiliaisBtn) importarDeFiliaisBtn.style.display = isAdmin ? '' : 'none';
+
     // Avatar do ícone de Conta no topbar (29/07) — mesmo utilitário de
     // avatar de mensagens.js (círculo colorido + inicial).
     if (typeof _accountRenderAvatars === 'function') _accountRenderAvatars();
@@ -313,9 +326,35 @@ window.AuthGate = (function () {
     return null;
   }
 
+  // BUG REAL (04/08): bootApp() tem DOIS gatilhos independentes — a
+  // checagem inicial (ensureSession, chamada por init() no DOMContentLoaded)
+  // e o listener onAuthStateChange (INITIAL_SESSION/SIGNED_IN), que também
+  // chama bootApp() direto. O guard antigo (`if (appBooted) return`) é
+  // síncrono e marcava appBooted=true ANTES do `await fetchProfile(...)` —
+  // então se as duas chamadas corressem quase juntas, a segunda batia no
+  // guard e retornava na hora (Promise já resolvida), sem esperar a
+  // primeira terminar de popular window.currentUser. Quem chamou a segunda
+  // (ex.: init() direto do DOMContentLoaded) seguia adiante e chamava
+  // restoreAndRender()/SUPABASE_BOOT_SYNCS com window.currentUser ainda
+  // undefined — daí o erro "invalid input syntax for type uuid: undefined"
+  // nas queries de materiais/filiais, e a checagem de novos pendentes pra
+  // importar nunca rodava no boot. Fix: toda chamada de bootApp() aguarda
+  // a MESMA promise em vez de um guard que só olha se já começou.
   async function bootApp(session) {
-    if (appBooted) return;
+    // Só _bootAppPromise trava reentrância aqui — appBooted NÃO pode ser
+    // checado nesta função (era o bug: appBooted vira true de forma
+    // síncrona dentro de _bootAppRun, ANTES do await fetchProfile, então
+    // um guard "if (appBooted) return" aqui faria a segunda chamada
+    // concorrente retornar undefined na hora, sem esperar window.currentUser
+    // ficar pronto — voltando a reabrir a corrida que isto existe pra
+    // fechar). appBooted continua existindo só pros outros usos (idle
+    // timer, presença) que já toleram rodar antes do boot terminar.
+    if (_bootAppPromise) return _bootAppPromise;
+    _bootAppPromise = _bootAppRun(session);
+    return _bootAppPromise;
+  }
 
+  async function _bootAppRun(session) {
     // E-mail não confirmado não entra. O cadastro é feito pelo ADM e o
     // usuário chega por link de convite (que já confirma o e-mail ao ser
     // aberto) — chegar aqui sem confirmação significa que o fluxo foi
@@ -325,6 +364,7 @@ window.AuthGate = (function () {
       showGate();
       showLoginForm();
       showError('Confirme seu e-mail pelo link que enviamos antes de acessar o sistema.');
+      _bootAppPromise = null; // não booteou de verdade — permite tentar de novo
       return;
     }
 
@@ -521,6 +561,7 @@ window.AuthGate = (function () {
       }
       if (event === 'SIGNED_OUT') {
         appBooted = false;
+        _bootAppPromise = null;
         // Espelha o reset acima na trava de idempotência de init()
         // (analitico.js) — sem isso, se a sessão cair sem reload da
         // página (ex.: SIGNED_OUT vindo de outro dispositivo), um novo

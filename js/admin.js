@@ -27,7 +27,7 @@ const ADMIN_MODULOS = {
   // Cadastro / configuração
   configs:                  { label: 'Configurações',              cols: ['key', 'value', 'descricao', 'created_at'] },
   filiais:                  { label: 'Filiais',                    cols: ['origem', 'alias', 'cnpj', 'regional', 'import_id', 'created_at'] },
-  materiais:                { label: 'Materiais',                  cols: ['origem', 'alias', 'categoria', 'import_id', 'created_at'] },
+  materiais:                { label: 'Materiais',                  cols: ['origem', 'alias', 'cod_sap', 'categoria', 'import_id', 'created_at'] },
   grupos_materiais:         { label: 'Grupos de Materiais',        cols: ['nome', 'created_at'] },
   regionais_centrais:       { label: 'Regionais',                  cols: ['nome', 'created_at'] },
   imports:                  { label: 'Log de Importações',         cols: ['arquivo', 'modulo', 'registros', 'total_arquivo', 'data_hora', 'status', 'status_tip', 'created_at'] },
@@ -41,7 +41,7 @@ const ADMIN_MODULOS = {
   notas_ajuste:             { label: 'Notas de Crédito/Débito',    cols: ['numero', 'tipo', 'central', 'cnpj_central', 'data_key', 'data_geracao', 'valor_total', 'responsavel_nome', 'responsavel_cpf', 'responsavel_email', 'itens'], readOnly: true },
   // Módulos grandes (Fase 4)
   lancamentos:              { label: 'Lançamentos',                cols: ['fonte', 'central_original', 'central', 'dt_lanc', 'fornecedor', 'categoria_original', 'categoria', 'material_original', 'material', 'peso', 'um', 'custo', 'valor_total', 'import_id', 'created_at', 'criado_em', 'editado'] },
-  producao:                 { label: 'Produção',                   cols: ['fonte', 'mes', 'central_original', 'central', 'producao', 'um', 'preco_medio', 'custo_medio', 'margem', 'total_vendas', 'import_id', 'created_at'] },
+  custos_sap:               { label: 'Custos SAP',                 cols: ['fonte', 'material_original', 'material', 'central_original', 'central', 'ano', 'mes', 'estoque_total', 'valor_total', 'custo', 'import_id', 'created_at'] },
   entradas:                 { label: 'Entradas',                   cols: ['fonte', 'central_compra_original', 'central_compra', 'central_destino_original', 'central_destino', 'nf', 'dt_emissao', 'dt_descarga', 'fornecedor', 'categoria_original', 'categoria', 'material_original', 'material', 'peso', 'um', 'custo', 'valor_total', 'import_id', 'created_at'] },
   saidas:                   { label: 'Saídas',                     cols: ['fonte', 'central_original', 'central', 'dt_emissao', 'os', 'contrato', 'categoria_original', 'categoria', 'fornecedor', 'material_original', 'material', 'peso', 'um', 'custo', 'valor_total', 'import_id', 'created_at'] },
   sap:                      { label: 'SAP',                        cols: ['fonte', 'usuario', 'movimento', 'ref', 'documento', 'central_original', 'central', 'deposito', 'dt_doc', 'dt_lanc', 'dt_reg', 'material_original', 'material', 'peso', 'um', 'custo_unit', 'valor_total', 'import_id', 'created_at'] },
@@ -85,7 +85,7 @@ const _ADMIN_COL_TYPES = {
   ajustes_excluidos:        { data_geracao: 'number', excluido_em: 'number' },
   notas_ajuste:             { data_geracao: 'number', valor_total: 'number', itens: 'json' },
   lancamentos:              { peso: 'number', valor_total: 'number', custo: 'number', created_at: 'number', editado: 'boolean' },
-  producao:                 { producao: 'number', custo_medio: 'number', preco_medio: 'number', total_vendas: 'number', created_at: 'number' },
+  custos_sap:               { estoque_total: 'number', valor_total: 'number', custo: 'number', created_at: 'number' },
   entradas:                 { peso: 'number', valor_total: 'number', custo: 'number', created_at: 'number' },
   saidas:                   { peso: 'number', valor_total: 'number', custo: 'number', created_at: 'number' },
   sap:                      { peso: 'number', valor_total: 'number', custo_unit: 'number', created_at: 'number' },
@@ -326,7 +326,12 @@ async function _adminResetarDadosLocaisModulo(userId, modulo) {
   const { error: delErr } = await window.supabaseClient.from(modulo).delete().eq('user_id', userId);
   if (delErr) { toast('Falha ao excluir no banco: ' + _adminErroDetalhe(delErr), 'error'); return false; }
 
-  const paths = await _adminListStorageRecursivo('backups-condensados', `${userId}/${modulo}`);
+  // Storage e o tombstone de local_wipe_pendencias usam a CHAVE DE ESTADO
+  // (ver CLOUD_BACKUP_TABELA_PARA_MODULO, cloud-backup.js) — na maioria dos
+  // módulos é igual ao nome da tabela, mas não em Custos SAP.
+  const stateKey = (typeof CLOUD_BACKUP_TABELA_PARA_MODULO !== 'undefined' && CLOUD_BACKUP_TABELA_PARA_MODULO[modulo]) || modulo;
+
+  const paths = await _adminListStorageRecursivo('backups-condensados', `${userId}/${stateKey}`);
   if (paths.length) {
     const { error: storageError } = await window.supabaseClient.storage.from('backups-condensados').remove(paths);
     if (storageError) {
@@ -336,7 +341,7 @@ async function _adminResetarDadosLocaisModulo(userId, modulo) {
   }
 
   const { error: wipeErr } = await window.supabaseClient.from('local_wipe_pendencias')
-    .upsert({ user_id: userId, modulo, solicitado_em: new Date().toISOString(), solicitado_por: window.currentUser.id });
+    .upsert({ user_id: userId, modulo: stateKey, solicitado_em: new Date().toISOString(), solicitado_por: window.currentUser.id });
   if (wipeErr) { toast('Falha ao sinalizar a limpeza local: ' + _adminErroDetalhe(wipeErr), 'error'); return false; }
 
   return true;
@@ -422,7 +427,10 @@ function adminConfirmarExclusaoMassa() {
   // "Dados locais" só existe nos módulos híbridos (CLOUD_BACKUP_MODULOS) —
   // se algum módulo escolhido não é híbrido e só "local" está marcado, não
   // há nada a apagar ali (avisado no corpo da confirmação, não silenciado).
-  const semLocal = modulos.filter(m => !(typeof CLOUD_BACKUP_MODULOS !== 'undefined' && CLOUD_BACKUP_MODULOS.includes(m)));
+  const semLocal = modulos.filter(m => {
+    const stateKey = (typeof CLOUD_BACKUP_TABELA_PARA_MODULO !== 'undefined' && CLOUD_BACKUP_TABELA_PARA_MODULO[m]) || m;
+    return !(typeof CLOUD_BACKUP_MODULOS !== 'undefined' && CLOUD_BACKUP_MODULOS.includes(stateKey));
+  });
   const ignorados = acaoLocal && !acaoNuvem ? semLocal : [];
 
   const acaoTxt = acaoLocal && acaoNuvem ? 'os dados locais E os dados da nuvem' : acaoLocal ? 'os dados locais' : 'os dados da nuvem';
@@ -452,7 +460,8 @@ async function _adminExecutarExclusaoMassa(userIds, modulos, acaoLocal, acaoNuve
     for (const modulo of modulos) {
       const cfg = ADMIN_MODULOS[modulo];
       if (!cfg || cfg.readOnly) continue;
-      const hibrido = typeof CLOUD_BACKUP_MODULOS !== 'undefined' && CLOUD_BACKUP_MODULOS.includes(modulo);
+      const stateKeyHibrido = (typeof CLOUD_BACKUP_TABELA_PARA_MODULO !== 'undefined' && CLOUD_BACKUP_TABELA_PARA_MODULO[modulo]) || modulo;
+      const hibrido = typeof CLOUD_BACKUP_MODULOS !== 'undefined' && CLOUD_BACKUP_MODULOS.includes(stateKeyHibrido);
       let ok;
       if (acaoLocal && hibrido) {
         ok = await _adminResetarDadosLocaisModulo(userId, modulo);

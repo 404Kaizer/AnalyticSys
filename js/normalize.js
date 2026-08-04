@@ -1,5 +1,5 @@
 // Gera um id estável e único para registros dos módulos grandes (Entradas,
-// Saídas, Lançamentos, SAP, Produção) — necessário para sincronização com o
+// Saídas, Lançamentos, SAP, Custos SAP) — necessário para sincronização com o
 // Supabase (upsert/delete exigem uma chave primária inequívoca; o fingerprint
 // de deduplicação usado internamente NÃO serve pra isso, porque duplicatas
 // legítimas — mesma central/material/data/peso — são um caso suportado e
@@ -129,7 +129,7 @@ async function _supaDeleteOwned(table, matchEq, matchIn, ownerId) {
 // já restringe o usuário comum às dele (user_id OR co_owners OR is_admin),
 // então esta lista muda o comportamento apenas do ADM.
 const RECORD_INTEGRATION_TABLES = [
-  'lancamentos', 'entradas', 'saidas', 'sap', 'producao',
+  'lancamentos', 'entradas', 'saidas', 'sap', 'custos_sap',
   'ajustes_sistemicos', 'notas_ajuste', 'ajustes_excluidos',
   'inv_justificativas', 'sap_fechamento_overrides', 'imports',
   'ocorrencias',
@@ -240,7 +240,7 @@ const RECORD_INTEGRATION_RESYNC = {
   entradas: 'syncEntradasFromSupabase',
   saidas: 'syncSaidasFromSupabase',
   sap: 'syncSAPFromSupabase',
-  producao: 'syncProducaoFromSupabase',
+  custos_sap: 'syncCustosSapFromSupabase',
   ajustes_sistemicos: 'syncAjustesSistemicosFromSupabase',
   notas_ajuste: 'syncNotasAjusteFromSupabase',
   ajustes_excluidos: 'syncAjustesExcluidosFromSupabase',
@@ -458,7 +458,7 @@ const CENTRAL_FIELDS_BY_MODULO = {
   saidas: ['central'],
   lancamentos: ['central'],
   sap: ['central'],
-  producao: ['central']
+  custosSap: ['central']
 };
 
 function reaplicarPadronizacaoCentrais(modulos = Object.keys(CENTRAL_FIELDS_BY_MODULO)) {
@@ -846,7 +846,7 @@ function reaplicarPadronizacaoMateriais(modulos = ['entradas', 'saidas', 'lancam
 // ═══════════════════════════════════════════════════════════════════════
 // PENDÊNCIAS DE PADRONIZAÇÃO (Configurações → indicador acima das tabelas)
 // ═══════════════════════════════════════════════════════════════════════
-// Varre Entradas/Saídas/Lançamentos/SAP/Produção em busca de nomes ORIGINAIS
+// Varre Entradas/Saídas/Lançamentos/SAP/Custos SAP em busca de nomes ORIGINAIS
 // de material/central que precisam de atenção no cadastro. Consulta pura
 // (nunca muta o state) — mesma regra que o Assistente já usava em
 // _asstIntentConfigPendente, centralizada aqui para ter UMA fonte de
@@ -868,7 +868,7 @@ function getPendenciasPadronizacao() {
   const centraisPendentes  = new Map();
 
   if (typeof findMaterialMatch === 'function') {
-    ['entradas', 'saidas', 'lancamentos', 'sap'].forEach(mod => {
+    ['entradas', 'saidas', 'lancamentos', 'sap', 'custosSap'].forEach(mod => {
       (state[mod] || []).forEach(r => {
         const rawMat = String(r.materialOriginal ?? '').trim();
         if (!rawMat) return;
@@ -997,7 +997,7 @@ function getDuplicatasCadastroMateriais() {
 // ═══════════════════════════════════════════════════════════════════════
 // RESET REMOTO DE DADOS LOCAIS (módulos híbridos) — consumo do tombstone
 // ═══════════════════════════════════════════════════════════════════════
-// Os 5 módulos híbridos (lancamentos/entradas/saidas/producao/sap — Fase 4)
+// Os 5 módulos híbridos (lancamentos/entradas/saidas/custosSap/sap — Fase 4)
 // só sobem pro Postgres o registro manual/editado; o volume importado em
 // lote vive só no IndexedDB deste navegador + backup condensado no
 // Storage. O ADM (admin.js, "Resetar dados locais deste usuário") não
@@ -1031,12 +1031,14 @@ async function checarWipePendente() {
     const db = await openDb();
     const acked = (db && await idbGet(db, WIPE_ACK_KEY)) || {};
     let mudou = false;
+    const modulosLimpos = [];
 
     for (const row of data) {
       const jaProcessado = acked[row.modulo];
       if (jaProcessado && new Date(jaProcessado).getTime() >= new Date(row.solicitado_em).getTime()) continue;
       if (Array.isArray(state[row.modulo])) {
         state[row.modulo] = [];
+        modulosLimpos.push(row.modulo);
         console.info(`[WipeLocal] "${row.modulo}" resetado localmente por pedido do ADM (${row.solicitado_em}).`);
         if (typeof toast === 'function') {
           toast(`Seus dados locais de ${row.modulo} foram resetados por um administrador.`, 'error');
@@ -1054,6 +1056,14 @@ async function checarWipePendente() {
       if (typeof persistStateNow === 'function') await persistStateNow();
       ['invalidateSapIndex', 'invalidateSaidasIndex', 'invalidateLancIndex', 'invalidateSearchIndex']
         .forEach(fn => { if (typeof window[fn] === 'function') window[fn](); });
+      // BUG REAL (04/08): o state e o IndexedDB ficavam corretos (0
+      // registros), mas a tabela já renderizada na tela continuava
+      // mostrando os dados antigos até o próximo reload — nada aqui
+      // mandava a UI se atualizar. Isso é crítico quando o wipe chega via
+      // Realtime (wipeRealtimeInit) com a aba já aberta, sem reload
+      // nenhum no meio. Redesenha só os módulos que de fato mudaram.
+      if (typeof renderModuleByName === 'function') modulosLimpos.forEach(m => renderModuleByName(m));
+      if (typeof updateDashboard === 'function') updateDashboard();
     }
   } catch (err) {
     console.warn('[WipeLocal] Falha ao checar pedidos de limpeza local:', err);

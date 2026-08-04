@@ -19,7 +19,7 @@ const defaultState = () => ({
   saidas: [],
   lancamentos: [],
   sap: [],
-  producao: [],
+  custosSap: [],
   imports: [],
   configs: [],
   filiais: [],
@@ -188,15 +188,15 @@ const listPages = {
   acoesRelatorio: 0
 };
 
-let currentPageProducao = 0;
-let filtroProducao = '';
+let currentPageCustosSap = 0;
+let filtroCustosSap = '';
 
 const moduleMap = {
   'tb-entradas': 'entradas',
   'tb-saidas': 'saidas',
   'tb-lancamentos': 'lancamentos',
   'tb-sap': 'sap',
-  'tb-producao': 'producao'
+  'tb-custos-sap': 'custosSap'
 };
 
 const moduleTableMap = {
@@ -204,7 +204,7 @@ const moduleTableMap = {
   saidas: 'tb-saidas',
   lancamentos: 'tb-lancamentos',
   sap: 'tb-sap',
-  producao: 'tb-producao'
+  custosSap: 'tb-custos-sap'
 };
 
 const pageTitleMap = {
@@ -213,7 +213,7 @@ const pageTitleMap = {
   saidas: { title: 'Saídas (OS)', sub: 'ordens de serviço que consomem saldo' },
   lancamentos: { title: 'Lançamentos', sub: 'saldo real por material e central' },
   sap: { title: 'Movimentações SAP', sub: 'extrato consolidado de todas as movimentações' },
-  producao: { title: 'Produção', sub: 'produção consolidada por central' },
+  custosSap: { title: 'Custos SAP', sub: 'estoque e custo médio por material e central' },
   analitico: { title: 'Dashboard Analítico', sub: 'análise de estoque por período, filial e fechamento de inventário' },
   importar: { title: 'Importar Dados', sub: 'importe arquivos .xlsx ou .csv para cada módulo' },
   configuracoes: { title: 'Configurações', sub: 'parâmetros e informações de referência do sistema' },
@@ -348,7 +348,6 @@ const searchFieldAliases = {
   um: ['um'],
   custo: ['custo', 'custounit', 'customedio'],
   valortotal: ['valortotal', 'valor', 'totalvendas'],
-  producao: ['producao'],
   margem: ['margem']
 };
 
@@ -363,12 +362,12 @@ function getSearchableFields(scope) {
     saidas: ['central', 'dtEmissao', 'os', 'contrato', 'categoria', 'fornecedor', 'material', 'materialOriginal', 'peso', 'um', 'custo', 'valorTotal'],
     lancamentos: ['central', 'dtLanc', 'fornecedor', 'municipio', 'categoria', 'material', 'materialOriginal', 'peso', 'um', 'custo', 'valorTotal'],
     sap: ['usuario', 'movimento', 'ref', 'documento', 'central', 'deposito', 'dtDoc', 'dtLanc', 'dtReg', 'material', 'materialOriginal', 'peso', 'um', 'custoUnit', 'valorTotal'],
-    producao: ['mes', 'central', 'producao', 'um', 'precoMedio', 'custoMedio', 'margem', 'totalVendas'],
+    custosSap: ['material', 'central', 'ano', 'mes', 'estoqueTotal', 'valorTotal', 'custo'],
     dashboard: ['modulo', 'material', 'central', 'valor', 'data', 'status'],
     imports: ['arquivo', 'modulo', 'registros', 'dataHora', 'status'],
     configs: ['key', 'value', 'desc', 'created'],
     filiais: ['origem', 'alias', 'cnpj', 'regional', 'created'],
-    materiais: ['origem', 'alias', 'desc', 'created']
+    materiais: ['origem', 'alias', 'codSap', 'desc', 'created']
   };
   return map[scope] || [];
 }

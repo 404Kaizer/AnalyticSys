@@ -395,17 +395,6 @@ function _rodarAnaliticoCore(dtIni, dtFim, onDone, silent) {
       movBreakdown[cod] += num(r.peso);
     });
 
-    // ── Produção do período (match por mês dentro do range) ──
-    // Filtra apenas os registros desta central (produção é pequena, sem índice dedicado)
-    const prodNoPeriodo = state.producao.filter(r => {
-      if (r.central !== central) return false;
-      const mesMatch = r.mes ? parseMes(r.mes) : null;
-      if (!mesMatch) return false;
-      const firstDay = new Date(mesMatch.y, mesMatch.m - 1, 1);
-      const lastDay  = new Date(mesMatch.y, mesMatch.m, 0);
-      return firstDay <= dtFim && lastDay >= dtIni;
-    });
-
     // ── Saídas (módulo Saídas) desta central no período ──
     // Custo médio ponderado por material: R$/kg → usado no badge de custo da variação
     // Usa índice de saídas pré-computado se disponível, senão linear (saídas é menor)
@@ -502,7 +491,6 @@ function _rodarAnaliticoCore(dtIni, dtFim, onDone, silent) {
       materiaisLancUltimo,
       sapNoPeriodo,
       lancsNoPeriodo,
-      prodNoPeriodo,
       custoMedioPorMat,
       custoMedioFontePorMat,
       matsSemCadastro: [...matsSemCadastroSet].sort(),
@@ -662,19 +650,6 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
   };
 
   const dayList = buildDayList();
-
-    const prodHtml = r.prodNoPeriodo.length
-      ? r.prodNoPeriodo.map(p => `
-          <span class="prod-badge">
-            <i class="ti ti-building-factory"></i>
-            ${p.mes} · ${fmtKg(p.producao, 2)} m³ ·
-            Preço Médio: ${money(p.precoMedio)} ·
-            Custo Médio: ${money(p.custoMedio)} ·
-            Faturamento: ${money(p.totalVendas)}
-          </span>`).join('')
-      : `<span class="prod-badge" style="color:var(--text3);background:var(--bg3)">
-           <i class="ti ti-info-circle"></i> Sem produção no período
-         </span>`;
 
     const lancsByMat = new Map();
     const sapByMat = new Map();
@@ -2736,14 +2711,14 @@ Object.assign(window, {
   salvarSaida,
   salvarLancamento,
   salvarSAP,
-  salvarProducao,
+  salvarCustosSap,
   salvarConfig,
   renderConfigs,
   renderFiliais,
   renderMateriais,
   renderImports,
   excluirImportacao,
-  excluirProducao,
+  excluirCustosSap,
   removerConfig,
   editConfig,
   deleteConfig,
@@ -2753,16 +2728,16 @@ Object.assign(window, {
   clearColFilter,
   clearAllColFilters,
   filtrarTabela,
-  filtrarProducao,
+  filtrarCustosSap,
   filtrarLista,
   irParaPagina,
   paginaAnterior,
   proximaPagina,
   irParaUltima,
-  primeiraPaginaProducao,
-  paginaAnteriorProducao,
-  proximaPaginaProducao,
-  ultimaPaginaProducao,
+  primeiraPaginaCustosSap,
+  paginaAnteriorCustosSap,
+  proximaPaginaCustosSap,
+  ultimaPaginaCustosSap,
   removerRegistro,
   removerFilial,
   removerMaterial,
@@ -2957,7 +2932,7 @@ const moduleColors = {
   'Saída':      { bg: 'var(--red-bg)',     color: 'var(--red)',    icon: 'ti-package-export', nav: 'saidas'     },
   'Lançamento': { bg: 'var(--amber-bg)',   color: 'var(--amber)',  icon: 'ti-clipboard-list', nav: 'lancamentos'},
   'SAP':        { bg: 'var(--accent-dim)', color: 'var(--accent)', icon: 'ti-database',       nav: 'sap'        },
-  'Produção':   { bg: 'var(--purple-bg)',  color: 'var(--purple)', icon: 'ti-chart-bar',      nav: 'producao'   },
+  'Custos SAP': { bg: 'var(--purple-bg)',  color: 'var(--purple)', icon: 'ti-chart-bar',      nav: 'custosSap'  },
   'Central':    { bg: 'var(--teal-bg)',    color: 'var(--teal)',   icon: 'ti-building-warehouse', nav: 'filiais'},
   'Material':   { bg: 'var(--bg3)',        color: 'var(--text2)',  icon: 'ti-box',            nav: 'materiais'  },
 };
@@ -3015,7 +2990,7 @@ function _runGlobalSearch(q, dropdown) {
   searchMod('saidas',      'Saída',      r => r.material || r.os || '—',       r => [r.central, r.dtEmissao].filter(Boolean).join(' · '));
   searchMod('lancamentos', 'Lançamento', r => r.material || '—',               r => [r.central, r.dtLanc].filter(Boolean).join(' · '));
   searchMod('sap',         'SAP',        r => r.material || r.documento || '—',r => [r.central, r.movimento, r.dtLanc].filter(Boolean).join(' · '));
-  searchMod('producao',    'Produção',   r => r.central || '—',                r => r.mes || '');
+  searchMod('custosSap',   'Custos SAP', r => r.material || '—',               r => [r.central, r.ano, r.mes].filter(Boolean).join(' · '));
 
   // ── Filiais e Materiais (cadastros — sem índice necessário, são pequenos) ──
   (state.filiais || []).forEach(r => {
@@ -3107,15 +3082,15 @@ function _gsShowDetail(modKey, record) {
     'Saída':      [['Central','central'],['OS','os'],['Categoria','categoria'],['Fornecedor','fornecedor'],['Material','material'],['Peso','peso'],['UM','um'],['Custo Unit.','custo'],['Valor Total','valorTotal'],['Dt. Emissão','dtEmissao']],
     'Lançamento': [['Central','central'],['Dt. Lançamento','dtLanc'],['Fornecedor','fornecedor'],['Categoria','categoria'],['Material','material'],['Peso','peso'],['UM','um'],['Custo Unit.','custo'],['Valor Total','valorTotal']],
     'SAP':        [['Usuário','usuario'],['Movimento','movimento'],['Ref.','ref'],['Documento','documento'],['Central','central'],['Depósito','deposito'],['Material','material'],['Peso','peso'],['UM','um'],['Custo Unit.','custoUnit'],['Valor Total','valorTotal'],['Dt. Doc.','dtDoc'],['Dt. Lançamento','dtLanc'],['Dt. Registro','dtReg']],
-    'Produção':   [['Central','central'],['Mês','mes'],['Produção','producao'],['UM','um'],['Preço Médio','precoMedio'],['Custo Médio','custoMedio'],['Margem','margem'],['Total Vendas','totalVendas']],
+    'Custos SAP': [['Material','material'],['Central','central'],['Ano','ano'],['Mês','mes'],['Estoque Total','estoqueTotal'],['Valor Total','valorTotal'],['Custo','custo']],
     'Central':    [['Sigla','alias'],['Nome Original','origem'],['CNPJ','cnpj'],['Regional','regional'],['Cadastrado em','created']],
-    'Material':   [['Grupo SAP','alias'],['Material Original','origem'],['Descrição','desc'],['Cadastrado em','created']],
+    'Material':   [['Grupo SAP','alias'],['Cód SAP','codSap'],['Material Original','origem'],['Descrição','desc'],['Cadastrado em','created']],
   };
 
   const fields = fieldMap[modKey] || Object.keys(record).filter(k => !k.startsWith('_') && k !== 'importId').map(k => [k, k]);
 
   const _moneyFields = new Set(['custo','custoUnit','valorTotal','precoMedio','custoMedio','totalVendas','margem','valor']);
-  const _kgFields    = new Set(['peso','producao']);
+  const _kgFields    = new Set(['peso']);
 
   const _fmtVal = (key, val) => {
     const n = typeof val === 'number' ? val : parseFloat(String(val).replace(',','.'));
@@ -3216,7 +3191,7 @@ function setupKeyboardShortcuts() {
     if (isNavUp || isNavDown) {
       if (document.getElementById('modal-search-global')?.classList.contains('open')) return;
       e.preventDefault();
-      const pages  = ['dashboard','analitico','entradas','saidas','lancamentos','sap','producao','ocorrencias','importar','configuracoes'];
+      const pages  = ['dashboard','analitico','entradas','saidas','lancamentos','sap','custosSap','ocorrencias','importar','configuracoes'];
       const current = document.querySelector('.page.active')?.id?.replace('page-','') || pages[0];
       const idx     = pages.indexOf(current);
       const next    = isNavDown

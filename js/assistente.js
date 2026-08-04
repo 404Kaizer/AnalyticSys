@@ -103,7 +103,7 @@ function _asstAjudaHtml() {
 
     <div class="asst-section-title"><i class="ti ti-list-details"></i> Contextos disponíveis</div>
     <div class="asst-item"><b>Dashboard Analítico</b> — crítico/urgente, ranking de central ou material, saldo e tendência de um material, ausências, resumo geral. Precisa de análise rodada (peço o período aqui mesmo se faltar).</div>
-    <div class="asst-item"><b>Entradas, Saídas, Lançamentos, SAP, Produção</b> — contagem, total e ranking (por central, material, fornecedor ou movimento) de cada tabela.</div>
+    <div class="asst-item"><b>Entradas, Saídas, Lançamentos, SAP, Custos SAP</b> — contagem, total e ranking (por central, material, fornecedor ou movimento) de cada tabela.</div>
     <div class="asst-item"><b>Fluxo</b> — combina as tabelas que você citar na pergunta (ex.: "considerando SAP"); sem citar nenhuma, usa entradas + saídas.</div>
     <div class="asst-item"><b>Ocorrências</b> — abertas por padrão, ou análise por regional/motivo/central/tempo de retorno.</div>
     <div class="asst-item"><b>Configurações</b> — pendências de padronização, ou ações propostas pra um material crítico.</div>
@@ -902,18 +902,19 @@ const _ASST_MODULOS = {
     },
     singular: 'movimentação SAP', plural: 'movimentações SAP',
   },
-  producao: {
-    registros: () => state.producao || [],
-    data: r => { const [y, m] = String(r.mes || '').split('-').map(Number); return y && m ? new Date(y, m - 1, 1) : null; },
+  custosSap: {
+    registros: () => state.custosSap || [],
+    data: r => { const y = Number(r.ano), m = Number(r.mes); return y && m ? new Date(y, m - 1, 1) : null; },
     dimensoes: {
-      central: { get: r => r.central || '—', ambiguo: true, padrao: _ASST_PAD_CENTRAL, singular: _ASST_SING_CENTRAL },
+      central:  { get: r => r.central || '—', ambiguo: true, padrao: _ASST_PAD_CENTRAL, singular: _ASST_SING_CENTRAL },
+      material: { get: r => r.material || '—', ambiguo: true, padrao: _ASST_PAD_MATERIAL, singular: _ASST_SING_MATERIAL },
     },
     metricas: {
-      producao: { agg: 'soma',  get: r => Number(r.producao) || 0,    fmt: v => v.toLocaleString('pt-BR') + ' m³', gatilho: /PRODUCAO|\bM3\b/, default: true },
-      vendas:   { agg: 'soma',  get: r => Number(r.totalVendas) || 0, fmt: v => _asstFmtMoeda(v), gatilho: /VENDA|CUSTO|VALOR/ },
-      qtd:      { agg: 'conta', get: () => 1,                         fmt: v => v.toLocaleString('pt-BR'), gatilho: /QUANTIDADE|\bREGISTROS?\b/ },
+      estoque: { agg: 'soma',  get: r => Number(r.estoqueTotal) || 0, fmt: v => v.toLocaleString('pt-BR'), gatilho: /ESTOQUE/, default: true },
+      valor:   { agg: 'soma',  get: r => Number(r.valorTotal) || 0,   fmt: v => _asstFmtMoeda(v), gatilho: /VALOR|CUSTO/ },
+      qtd:     { agg: 'conta', get: () => 1,                          fmt: v => v.toLocaleString('pt-BR'), gatilho: /QUANTIDADE|\bREGISTROS?\b/ },
     },
-    singular: 'registro de produção', plural: 'registros de produção',
+    singular: 'registro de Custos SAP', plural: 'registros de Custos SAP',
   },
   // Composto: une Entradas + Saídas numa única visão de "fluxo" por
   // central/material — pergunta que nenhuma tabela isolada responde.
@@ -936,7 +937,7 @@ const _ASST_MODULOS = {
 
 const _ASST_DIM_LABEL     = { central: 'Centrais', material: 'Materiais', fornecedor: 'Fornecedores', movimento: 'Movimentos' };
 const _ASST_DIM_LABEL_SING = { central: 'Central', material: 'Material', fornecedor: 'Fornecedor', movimento: 'Movimento' };
-const _ASST_METRICA_LABEL = { peso: 'peso', valor: 'valor', qtd: 'quantidade', producao: 'produção', vendas: 'vendas' };
+const _ASST_METRICA_LABEL = { peso: 'peso', valor: 'valor', qtd: 'quantidade', estoque: 'estoque' };
 
 // Motor único: qualquer módulo do catálogo passa por aqui. Extrai
 // dimensão (agrupar por), métrica (ordenar por), limite (top N) e
@@ -1188,7 +1189,7 @@ const _ASST_INTENTS = [
   { id: 'saidas-consulta',      label: 'Saídas (OS)',              group: 'Consultar dados', icon: 'ti-package-export',   needs: [], requiresAnalise: false, handler: raw => _asstExecutarConsulta('saidas', raw) },
   { id: 'lancamentos-consulta', label: 'Lançamentos',              group: 'Consultar dados', icon: 'ti-clipboard-list',   needs: [], requiresAnalise: false, handler: raw => _asstExecutarConsulta('lancamentos', raw) },
   { id: 'sap-consulta',         label: 'SAP',                      group: 'Consultar dados', icon: 'ti-database',         needs: [], requiresAnalise: false, handler: raw => _asstExecutarConsulta('sap', raw) },
-  { id: 'producao-consulta',    label: 'Produção',                 group: 'Consultar dados', icon: 'ti-chart-bar',        needs: [], requiresAnalise: false, handler: raw => _asstExecutarConsulta('producao', raw) },
+  { id: 'custosSap-consulta',   label: 'Custos SAP',               group: 'Consultar dados', icon: 'ti-chart-bar',        needs: [], requiresAnalise: false, handler: raw => _asstExecutarConsulta('custosSap', raw) },
   {
     id: 'fluxo-consulta', label: 'Fluxo (entre tabelas)', group: 'Consultar dados', icon: 'ti-arrows-exchange',
     needs: [], requiresAnalise: false, handler: raw => _asstExecutarConsulta('fluxo', raw),
@@ -1218,7 +1219,7 @@ const _ASST_INTENTS = [
   { id: 'saida-registrar',      label: 'Registrar saída (OS)',          group: 'Registrar dado', icon: 'ti-circle-plus', needs: [], requiresAnalise: false, formKind: 'saida',      handler: () => _asstManualNoOpMsg() },
   { id: 'lancamento-registrar', label: 'Registrar lançamento',          group: 'Registrar dado', icon: 'ti-circle-plus', needs: [], requiresAnalise: false, formKind: 'lancamento', handler: () => _asstManualNoOpMsg() },
   { id: 'sap-registrar',        label: 'Registrar movimentação SAP',    group: 'Registrar dado', icon: 'ti-circle-plus', needs: [], requiresAnalise: false, formKind: 'sap',        handler: () => _asstManualNoOpMsg() },
-  { id: 'producao-registrar',   label: 'Registrar produção',            group: 'Registrar dado', icon: 'ti-circle-plus', needs: [], requiresAnalise: false, formKind: 'producao',   handler: () => _asstManualNoOpMsg() },
+  { id: 'custosSap-registrar',  label: 'Registrar Custos SAP',          group: 'Registrar dado', icon: 'ti-circle-plus', needs: [], requiresAnalise: false, formKind: 'custosSap',  handler: () => _asstManualNoOpMsg() },
 
   // ── Sistema: diagnóstico do próprio assistente, não é dado do negócio ─
   { id: 'log-nao-reconhecidas', label: 'Perguntas não reconhecidas', group: 'Sistema', icon: 'ti-help-circle', needs: [], requiresAnalise: false, handler: () => _asstIntentLogNaoReconhecidas() },
@@ -1473,15 +1474,16 @@ const _ASST_MANUAL_FORMS = {
       { key: 'dtLanc',    label: 'Data de lançamento', type: 'date' },
     ],
   },
-  producao: {
-    label: 'produção', create: dados => _criarRegistroProducao(dados),
+  custosSap: {
+    label: 'Custos SAP', create: dados => _criarRegistroCustosSap(dados),
     fields: [
-      { key: 'central',  label: 'Central',       type: 'text',   required: true },
-      { key: 'mes',      label: 'Mês (AAAA-MM)', type: 'text',   required: true },
-      { key: 'producao', label: 'Produção (m³)', type: 'number' },
-      { key: 'preco',    label: 'Preço médio',   type: 'number' },
-      { key: 'custo',    label: 'Custo médio',   type: 'number' },
-      { key: 'vendas',   label: 'Total vendas',  type: 'number' },
+      { key: 'material',     label: 'Material',      type: 'text',   required: true },
+      { key: 'central',      label: 'Central',       type: 'text',   required: true },
+      { key: 'ano',          label: 'Ano',            type: 'text',   required: true },
+      { key: 'mes',          label: 'Mês',            type: 'text',   required: true },
+      { key: 'estoqueTotal', label: 'Estoque total',  type: 'number' },
+      { key: 'valorTotal',   label: 'Valor total',    type: 'number' },
+      { key: 'custo',        label: 'Custo',          type: 'number' },
     ],
   },
 };
@@ -1491,7 +1493,7 @@ const _ASST_MANUAL_REFRESH = {
   saida:      () => { if (typeof renderSaidas      === 'function') renderSaidas(); },
   lancamento: () => { if (typeof renderLancamentos === 'function') renderLancamentos(); },
   sap:        () => { if (typeof renderSAP         === 'function') renderSAP(); },
-  producao:   () => { if (typeof renderProducao    === 'function') renderProducao(); },
+  custosSap:  () => { if (typeof renderCustosSap   === 'function') renderCustosSap(); },
 };
 
 function _asstManualNoOpMsg() {

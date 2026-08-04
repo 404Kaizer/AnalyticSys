@@ -2,15 +2,15 @@
 // CASCATA DE EXCLUSÃO NA NUVEM (Fase 4 — Etapa 7)
 // ═══════════════════════════════════════════════════════════
 // Escopo real: hoje só Filiais/Materiais sincronizam TODO o cadastro
-// (manual + importado) — Entradas/Saídas/Lançamentos/Produção só
+// (manual + importado) — Entradas/Saídas/Lançamentos/Custos SAP só
 // sincronizam manual OU editado (regra central de 27/07). Isso significa
 // que, na prática, só existe algo pra apagar na nuvem por causa de uma
 // importação em Filiais/Materiais, e em Lançamentos quando um registro
 // importado foi editado depois (aí ele foi sincronizado mesmo tendo
 // importId). Apagar por import_id nas outras tabelas é inofensivo — hoje
 // nunca vai encontrar nada lá, mas já deixa pronto pro dia que Entradas/
-// Saídas/Produção ganharem edição inline como Lançamentos já tem.
-const _CASCADE_TABELAS_NUVEM = ['filiais', 'materiais', 'lancamentos', 'entradas', 'saidas', 'producao', 'sap'];
+// Saídas/Custos SAP ganharem edição inline como Lançamentos já tem.
+const _CASCADE_TABELAS_NUVEM = ['filiais', 'materiais', 'lancamentos', 'entradas', 'saidas', 'custos_sap', 'sap'];
 
 function _cascadeDeleteCloudByImportId(importId) {
   if (!importId) return;
@@ -59,7 +59,7 @@ function _cbReforcarBackupModulos() {
   CLOUD_BACKUP_MODULOS.forEach(modulo => _cbUploadModulo(modulo, { permitirReducao: true }));
 }
 
-// snapshots: { filiais, materiais, lancamentos, entradas, saidas, producao }
+// snapshots: { filiais, materiais, lancamentos, entradas, saidas, custosSap }
 // — arrays do estado local ANTES da exclusão (pra saber o que restaurar).
 function _cascadeRestoreCloudByImportId(importId, snapshots) {
   if (!window.supabaseClient || !importId) return;
@@ -67,13 +67,13 @@ function _cascadeRestoreCloudByImportId(importId, snapshots) {
   // Filiais/Materiais: tudo que tinha esse importId sincronizava, restaura tudo.
   if (typeof _filiaisSyncUpsertBatch === 'function') _filiaisSyncUpsertBatch(porImport(snapshots.filiais));
   if (typeof _materiaisSyncUpsertBatch === 'function') _materiaisSyncUpsertBatch(porImport(snapshots.materiais));
-  // Lançamentos/Entradas/Saídas/Produção: só o que estava editado é que
+  // Lançamentos/Entradas/Saídas/Custos SAP: só o que estava editado é que
   // pode ter ido pra nuvem — restaura só esses (nos 3 últimos, hoje nunca
   // há nada aqui, já que não existe edição inline ainda).
   if (typeof _lancSyncUpsertBatch === 'function') _lancSyncUpsertBatch(porImport(snapshots.lancamentos).filter(r => r.editado));
   if (typeof _entradasSyncUpsertBatch === 'function') _entradasSyncUpsertBatch(porImport(snapshots.entradas).filter(r => r.editado));
   if (typeof _saidasSyncUpsertBatch === 'function') _saidasSyncUpsertBatch(porImport(snapshots.saidas).filter(r => r.editado));
-  if (typeof _producaoSyncUpsertBatch === 'function') _producaoSyncUpsertBatch(porImport(snapshots.producao).filter(r => r.editado));
+  if (typeof _custosSapSyncUpsertBatch === 'function') _custosSapSyncUpsertBatch(porImport(snapshots.custosSap).filter(r => r.editado));
   if (typeof _sapSyncUpsertBatch === 'function') _sapSyncUpsertBatch(porImport(snapshots.sap).filter(r => r.editado));
 }
 
@@ -112,7 +112,7 @@ function excluirImportacao(importId) {
       const snapshotSaidas      = [...state.saidas];
       const snapshotLancamentos = [...state.lancamentos];
       const snapshotSap         = [...state.sap];
-      const snapshotProducao    = [...state.producao];
+      const snapshotCustosSap   = [...state.custosSap];
       const snapshotFiliais     = [...state.filiais];
       const snapshotMateriais   = [...state.materiais];
       const snapshotImports     = [...state.imports];
@@ -134,7 +134,7 @@ function excluirImportacao(importId) {
           state.saidas      = removeByImport(state.saidas);
           state.lancamentos = removeByImport(state.lancamentos);
           state.sap         = removeByImport(state.sap);
-          state.producao    = removeByImport(state.producao);
+          state.custosSap   = removeByImport(state.custosSap);
           state.filiais     = removeByImport(state.filiais);
           state.materiais   = removeByImport(state.materiais);
           state.imports     = state.imports.filter(r => r.id !== importId);
@@ -169,7 +169,7 @@ function excluirImportacao(importId) {
           state.saidas      = snapshotSaidas;
           state.lancamentos = snapshotLancamentos;
           state.sap         = snapshotSap;
-          state.producao    = snapshotProducao;
+          state.custosSap   = snapshotCustosSap;
           state.filiais     = snapshotFiliais;
           state.materiais   = snapshotMateriais;
           state.imports     = snapshotImports;
@@ -193,7 +193,7 @@ function excluirImportacao(importId) {
           _cascadeRestoreCloudByImportId(importId, {
             filiais: snapshotFiliais, materiais: snapshotMateriais,
             lancamentos: snapshotLancamentos, entradas: snapshotEntradas,
-            saidas: snapshotSaidas, producao: snapshotProducao,
+            saidas: snapshotSaidas, custosSap: snapshotCustosSap,
             sap: snapshotSap,
           });
           _cbReforcarBackupModulos();
@@ -203,91 +203,92 @@ function excluirImportacao(importId) {
   });
 }
 
-function excluirProducao(absIndex) {
-  const filtered = getFilteredData('producao');
+function excluirCustosSap(absIndex) {
+  const filtered = getFilteredData('custosSap');
   const rec = filtered[absIndex];
   if (!rec) return;
 
-  const originalIndex = state.producao.indexOf(rec);
+  const originalIndex = state.custosSap.indexOf(rec);
   const snapshot = { ...rec };
 
   confirmarComUndo({
-    message: `Produção de "${rec.central}" excluída`,
+    message: `Custos SAP de "${rec.central}" excluído`,
 
     action: () => {
-      state.producao = state.producao.filter(r => r !== rec);
+      state.custosSap = state.custosSap.filter(r => r !== rec);
       persist();
-      renderProducao();
+      renderCustosSap();
       updateDashboard();
-      if (rec.id && !rec.importId && typeof _producaoSyncDelete === 'function') _producaoSyncDelete(rec.id);
+      if (rec.id && !rec.importId && typeof _custosSapSyncDelete === 'function') _custosSapSyncDelete(rec.id);
       // Reforça o backup condensado na hora (30/07) — ver removerRegistro
       // (dashboard.js) pro mesmo motivo: sem isso, um registro importado
       // excluído só some localmente até o próximo reforço periódico (até 3h).
       // permitirReducao: a contagem cair é o próprio objetivo da exclusão.
-      if (typeof _cbUploadModulo === 'function') _cbUploadModulo('producao', { permitirReducao: true });
+      if (typeof _cbUploadModulo === 'function') _cbUploadModulo('custosSap', { permitirReducao: true });
     },
 
     undo: () => {
-      const insertAt = originalIndex >= 0 && originalIndex <= state.producao.length
+      const insertAt = originalIndex >= 0 && originalIndex <= state.custosSap.length
         ? originalIndex
         : 0;
-      state.producao.splice(insertAt, 0, snapshot);
+      state.custosSap.splice(insertAt, 0, snapshot);
       persist();
-      renderProducao();
+      renderCustosSap();
       updateDashboard();
-      if (typeof _producaoSyncUpsert === 'function') _producaoSyncUpsert(snapshot);
-      if (typeof _cbUploadModulo === 'function') _cbUploadModulo('producao');
+      if (typeof _custosSapSyncUpsert === 'function') _custosSapSyncUpsert(snapshot);
+      if (typeof _cbUploadModulo === 'function') _cbUploadModulo('custosSap');
     },
   });
 }
 
-function _criarRegistroProducao(dados) {
+function _criarRegistroCustosSap(dados) {
   const central = dados.central;
+  const material = dados.material;
   const rec = stamp({
     fonte: 'manual',
-    mes: dados.mes,
+    materialOriginal: material,
+    material: normalizarMaterial(material),
     centralOriginal: central,
     central: normalizarCentral(central),
-    producao: num(dados.producao),
-    um: 'm³',
-    precoMedio: num(dados.preco),
-    custoMedio: num(dados.custo),
-    margem: dados.margem,
-    totalVendas: num(dados.vendas)
+    ano: dados.ano,
+    mes: dados.mes,
+    estoqueTotal: num(dados.estoqueTotal),
+    valorTotal: num(dados.valorTotal),
+    custo: num(dados.custo)
   });
 
-  if (!rec.mes || !rec.central) return { ok: false, erro: 'Preencha mês e central' };
+  if (!rec.material || !rec.central || !rec.ano || !rec.mes) return { ok: false, erro: 'Preencha material, central, ano e mês' };
 
   // Aviso de duplicata — mesmo padrão de Lançamentos/Entradas.
-  if (typeof _fpProducao === 'function') {
-    const fpNovo = _fpProducao(rec);
-    const jaExiste = (state.producao || []).some(r => _fpProducao(r) === fpNovo);
-    if (jaExiste && !confirm('Já existe um registro de produção para esta central neste mês. Deseja criar mesmo assim?')) {
-      return { ok: false, erro: 'Criação cancelada — produção duplicada' };
+  if (typeof _fpCustosSap === 'function') {
+    const fpNovo = _fpCustosSap(rec);
+    const jaExiste = (state.custosSap || []).some(r => _fpCustosSap(r) === fpNovo);
+    if (jaExiste && !confirm('Já existe um registro de Custos SAP para este material/central neste período. Deseja criar mesmo assim?')) {
+      return { ok: false, erro: 'Criação cancelada — registro duplicado' };
     }
   }
 
-  state.producao.unshift(rec);
+  state.custosSap.unshift(rec);
   persist();
-  if (typeof _producaoSyncUpsert === 'function') _producaoSyncUpsert(rec);
+  if (typeof _custosSapSyncUpsert === 'function') _custosSapSyncUpsert(rec);
   return { ok: true, rec };
 }
 
-function salvarProducao() {
-  const resultado = _criarRegistroProducao({
-    central:  val('p-central'),
-    mes:      val('p-mes'),
-    producao: val('p-producao'),
-    preco:    val('p-preco'),
-    custo:    val('p-custo'),
-    margem:   val('p-margem'),
-    vendas:   val('p-vendas'),
+function salvarCustosSap() {
+  const resultado = _criarRegistroCustosSap({
+    material:     val('cs-material'),
+    central:      val('cs-central'),
+    ano:          val('cs-ano'),
+    mes:          val('cs-mes'),
+    estoqueTotal: val('cs-estoque-total'),
+    valorTotal:   val('cs-valor-total'),
+    custo:        val('cs-custo'),
   });
   if (!resultado.ok) { toast(resultado.erro, 'error'); return; }
-  closeModal('modal-producao');
-  renderProducao();
+  closeModal('modal-custos-sap');
+  renderCustosSap();
   updateDashboard();
-  toast('Registro de produção adicionado com sucesso');
+  toast('Registro de Custos SAP adicionado com sucesso');
 }
 
 
@@ -415,7 +416,7 @@ function _criarRegistroSaida(dados) {
     valorTotal:     total
   });
 
-  // Aviso de duplicata — mesmo padrão de Lançamentos/Entradas/Produção.
+  // Aviso de duplicata — mesmo padrão de Lançamentos/Entradas/Custos SAP.
   if (typeof _fpSaida === 'function') {
     const fpNovo = _fpSaida(rec);
     const jaExiste = (state.saidas || []).some(r => _fpSaida(r) === fpNovo);
@@ -576,7 +577,7 @@ function _lancFromDbRow(row) {
 
 // Upsert de um único lançamento — manual/Assistente OU editado inline
 // (fonte='manual', OU sem importId, OU com editado=true). Decisão de
-// 27/07 (revisada): pra Entradas/Saídas/Lançamentos/SAP/Produção, a nuvem
+// 27/07 (revisada): pra Entradas/Saídas/Lançamentos/SAP/Custos SAP, a nuvem
 // guarda o que é digitado ou editado direto no sistema — importação em
 // lote em si fica só local (o arquivo original já é a cópia de
 // segurança). Mas uma EDIÇÃO feita depois, mesmo num registro importado,
@@ -720,84 +721,84 @@ async function syncImportsFromSupabase() {
 }
 
 // ═══════════════════════════════════════════════════════════
-// PRODUÇÃO — sincronização com o Supabase (Fase 4 — Etapa 4)
+// CUSTOS SAP — sincronização com o Supabase (Fase 4 — Etapa 4)
 // ═══════════════════════════════════════════════════════════
 // Já tem id estável desde a fundação da Etapa 1 (stamp() em normalize.js
 // cobre os 5 módulos grandes). Cobre: criação manual/Assistente
-// (_criarRegistroProducao), importação em lote (hook em
+// (_criarRegistroCustosSap), importação em lote (hook em
 // processImportedRows, dashboard.js), exclusão individual com undo
-// (excluirProducao) e resolução de conflito manual-vs-importado
-// (_resolveConflicts, dashboard.js — Produção já participava desse fluxo).
+// (excluirCustosSap) e resolução de conflito manual-vs-importado
+// (_resolveConflicts, dashboard.js — Custos SAP já participava desse fluxo).
 // Mesmo gap conhecido: excluirImportacao ainda não apaga da nuvem (Etapa 7).
 
-function _producaoToDbRow(r) {
+function _custosSapToDbRow(r) {
   return {
     id: r.id,
     fonte: r.fonte || null,
-    mes: r.mes || null,
+    material_original: r.materialOriginal || null,
+    material: r.material || null,
     central_original: r.centralOriginal || null,
     central: r.central || null,
-    producao: r.producao ?? null,
-    um: r.um || null,
-    preco_medio: r.precoMedio ?? null,
-    custo_medio: r.custoMedio ?? null,
-    margem: r.margem || null,
-    total_vendas: r.totalVendas ?? null,
+    ano: r.ano || null,
+    mes: r.mes || null,
+    estoque_total: r.estoqueTotal ?? null,
+    valor_total: r.valorTotal ?? null,
+    custo: r.custo ?? null,
     import_id: r.importId || null,
     created_at: r.createdAt || null,
   };
 }
 
-function _producaoFromDbRow(row) {
+function _custosSapFromDbRow(row) {
   return {
     id: row.id,
     fonte: row.fonte,
-    mes: row.mes,
+    materialOriginal: row.material_original,
+    material: row.material,
     centralOriginal: row.central_original,
     central: row.central,
-    producao: row.producao,
-    um: row.um,
-    precoMedio: row.preco_medio,
-    custoMedio: row.custo_medio,
-    margem: row.margem,
-    totalVendas: row.total_vendas,
+    ano: row.ano,
+    mes: row.mes,
+    estoqueTotal: row.estoque_total,
+    valorTotal: row.valor_total,
+    custo: row.custo,
     importId: row.import_id || undefined,
     createdAt: row.created_at,
   };
 }
 
 // Decisão de 27/07: mesma regra de Lançamentos — só sincroniza manual.
-function _producaoSyncUpsert(rec) {
+function _custosSapSyncUpsert(rec) {
   if (rec.importId || !window.supabaseClient) return;
-  window.supabaseClient.from('producao').upsert(_producaoToDbRow(rec))
-    .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao sincronizar produção:', error); });
+  window.supabaseClient.from('custos_sap').upsert(_custosSapToDbRow(rec))
+    .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao sincronizar Custos SAP:', error); });
 }
 
-const PRODUCAO_SYNC_BATCH_SIZE = 500;
-async function _producaoSyncUpsertBatch(records) {
+const CUSTOS_SAP_SYNC_BATCH_SIZE = 500;
+async function _custosSapSyncUpsertBatch(records) {
   if (!window.supabaseClient || !records || !records.length) return;
-  const rows = records.map(_producaoToDbRow);
-  for (let i = 0; i < rows.length; i += PRODUCAO_SYNC_BATCH_SIZE) {
-    const { error } = await window.supabaseClient.from('producao').upsert(rows.slice(i, i + PRODUCAO_SYNC_BATCH_SIZE));
-    if (error) { console.warn('[Supabase] Falha ao sincronizar lote de produção:', error); break; }
+  const rows = records.map(_custosSapToDbRow);
+  for (let i = 0; i < rows.length; i += CUSTOS_SAP_SYNC_BATCH_SIZE) {
+    const { error } = await window.supabaseClient.from('custos_sap').upsert(rows.slice(i, i + CUSTOS_SAP_SYNC_BATCH_SIZE));
+    if (error) { console.warn('[Supabase] Falha ao sincronizar lote de Custos SAP:', error); break; }
   }
 }
 
-function _producaoSyncDelete(id) {
+function _custosSapSyncDelete(id) {
   if (!window.supabaseClient || !id) return;
-  window.supabaseClient.from('producao').delete().eq('id', id)
-    .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao excluir produção na nuvem:', error); });
+  window.supabaseClient.from('custos_sap').delete().eq('id', id)
+    .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao excluir Custos SAP na nuvem:', error); });
 }
 
-async function syncProducaoFromSupabase() {
+async function syncCustosSapFromSupabase() {
   if (!window.supabaseClient) return;
   try {
-    const data = await fetchMineOrIntegrated('producao');
-    const remoto = (data || []).map(_producaoFromDbRow);
-    const local = Array.isArray(state.producao) ? state.producao : [];
-    state.producao = _mesclarGrandeComBanco(local, remoto);
+    const data = await fetchMineOrIntegrated('custos_sap');
+    const remoto = (data || []).map(_custosSapFromDbRow);
+    const local = Array.isArray(state.custosSap) ? state.custosSap : [];
+    state.custosSap = _mesclarGrandeComBanco(local, remoto);
   } catch (err) {
-    console.warn('[Supabase] Falha ao buscar produção — mantendo dados locais.', err);
+    console.warn('[Supabase] Falha ao buscar Custos SAP — mantendo dados locais.', err);
   }
 }
 
@@ -899,7 +900,7 @@ async function syncEntradasFromSupabase() {
 // ═══════════════════════════════════════════════════════════
 // SAÍDAS — sincronização com o Supabase (Fase 4 — Etapa 6)
 // ═══════════════════════════════════════════════════════════
-// Mesmo padrão de Entradas/Produção: só manual (regra central de 27/07),
+// Mesmo padrão de Entradas/Custos SAP: só manual (regra central de 27/07),
 // sem edição inline ainda (se for adicionada no futuro, replicar o
 // tratamento de `editado` que Lançamentos já tem).
 
@@ -988,7 +989,7 @@ async function syncSaidasFromSupabase() {
 // ═══════════════════════════════════════════════════════════
 // SAP — sincronização com o Supabase (Fase 4 — Etapa 8)
 // ═══════════════════════════════════════════════════════════
-// Último dos 5 módulos grandes. Mesmo padrão de Entradas/Produção/Saídas:
+// Último dos 5 módulos grandes. Mesmo padrão de Entradas/Custos SAP/Saídas:
 // só manual (regra central de 27/07), sem edição inline (se for adicionada
 // no futuro, replicar o tratamento de `editado` que Lançamentos já tem).
 // Importação em lote (handleImport → buildSapColumnMap) permanece só local,

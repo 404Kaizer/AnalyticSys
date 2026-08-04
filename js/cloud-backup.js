@@ -47,7 +47,16 @@
 const CLOUD_BACKUP_BUCKET = 'backups-condensados';
 const CLOUD_BACKUP_CHUNK_SIZE = 20000; // registros por chunk comprimido
 const CLOUD_BACKUP_VERSION = 1;
-const CLOUD_BACKUP_MODULOS = ['entradas', 'saidas', 'lancamentos', 'producao', 'sap'];
+const CLOUD_BACKUP_MODULOS = ['entradas', 'saidas', 'lancamentos', 'custosSap', 'sap'];
+
+// Para os outros 4 módulos híbridos, a tabela no Postgres (snake_case) e a
+// chave de estado no JS (camelCase) são a MESMA string, então o restante do
+// código (Supervisão) usa "modulo" indistintamente pras duas coisas. Custos
+// SAP é o primeiro módulo híbrido com nome composto e as duas convenções
+// divergem ('custos_sap' vs 'custosSap') — este mapa resolve tabela→estado
+// só onde as duas rotinas de Supervisão (reset local / exclusão em massa)
+// precisam da chave de estado, mas receberam o nome da tabela.
+const CLOUD_BACKUP_TABELA_PARA_MODULO = { custos_sap: 'custosSap' };
 
 // Throttle do reforço periódico — não repete o backup do mesmo módulo em
 // menos desse intervalo, mesmo que o timer de checagem rode com mais

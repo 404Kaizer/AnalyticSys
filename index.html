@@ -210,11 +210,11 @@
         </span>
       </button>
 
-      <button class="tab-item" onclick="navigate('producao')" data-page="producao" data-label="Produção">
+      <button class="tab-item" onclick="navigate('custosSap')" data-page="custosSap" data-label="Custos SAP">
         <span class="tab-icon" style="--tab-color: var(--purple)"><i class="ti ti-chart-bar"></i></span>
         <span class="tab-text">
-          <span class="tab-title">Produção</span>
-          <span class="tab-sub">produção por central</span>
+          <span class="tab-title">Custos SAP</span>
+          <span class="tab-sub">estoque e custo por material</span>
         </span>
       </button>
 
@@ -2591,42 +2591,42 @@
 
 
 
-      <!-- PRODUÇÃO -->
-      <div class="page" id="page-producao">
+      <!-- CUSTOS SAP -->
+      <div class="page" id="page-custosSap">
 
         <div class="metrics-grid">
           <div class="metric-card c-green">
             <div class="metric-label"><i class="ti ti-building-factory"></i>Centrais</div>
-            <div class="metric-value" id="prod-centrais">0</div>
-            <div class="metric-sub">centrais produtivas</div>
+            <div class="metric-value" id="cs-centrais">0</div>
+            <div class="metric-sub">centrais com estoque</div>
+            <div class="metric-bar"></div>
+          </div>
+
+          <div class="metric-card c-blue">
+            <div class="metric-label"><i class="ti ti-box"></i>Materiais</div>
+            <div class="metric-value" id="cs-materiais">0</div>
+            <div class="metric-sub">materiais distintos</div>
             <div class="metric-bar"></div>
           </div>
 
           <div class="metric-card c-purple">
-            <div class="metric-label"><i class="ti ti-chart-bar"></i>Produção Total</div>
-            <div class="metric-value" id="prod-total">0</div>
-            <div class="metric-sub">m³ produzidos</div>
+            <div class="metric-label"><i class="ti ti-chart-bar"></i>Estoque Total</div>
+            <div class="metric-value" id="cs-estoque">0</div>
+            <div class="metric-sub">unidades em estoque</div>
             <div class="metric-bar"></div>
           </div>
 
           <div class="metric-card c-teal">
-            <div class="metric-label"><i class="ti ti-cash"></i>Total Vendas</div>
-            <div class="metric-value" id="prod-vendas">R$ 0</div>
-            <div class="metric-sub">faturamento consolidado</div>
+            <div class="metric-label"><i class="ti ti-cash"></i>Valor Total</div>
+            <div class="metric-value" id="cs-valor">R$ 0</div>
+            <div class="metric-sub">valor consolidado</div>
             <div class="metric-bar"></div>
           </div>
 
           <div class="metric-card c-amber">
             <div class="metric-label"><i class="ti ti-coins"></i>Custo Médio</div>
-            <div class="metric-value" id="prod-custo">R$ 0</div>
-            <div class="metric-sub">custo médio consolidado</div>
-            <div class="metric-bar"></div>
-          </div>
-
-          <div class="metric-card c-red">
-            <div class="metric-label"><i class="ti ti-report-money"></i>Margem</div>
-            <div class="metric-value" id="prod-margem">—</div>
-            <div class="metric-sub">valor contábil</div>
+            <div class="metric-value" id="cs-custo">R$ 0</div>
+            <div class="metric-sub">preço médio móvel</div>
             <div class="metric-bar"></div>
           </div>
         </div>
@@ -2635,12 +2635,12 @@
           <div class="table-header">
             <span class="table-title">
               <i class="ti ti-chart-bar"></i>
-              Produção — Produção Real
+              Custos SAP — Estoque e Custo por Material
             </span>
 
             <div class="table-toolbar">
 
-              <button class="btn" onclick="openModal('modal-producao')">
+              <button class="btn" onclick="openModal('modal-custos-sap')">
                 <i class="ti ti-plus"></i>
                 Adicionar
               </button>
@@ -2651,24 +2651,23 @@
             <table>
               <thead>
                 <tr>
+                  <th>Material</th>
+                  <th>Central</th>
+                  <th>Ano</th>
                   <th>Mês</th>
-                  <th>Central Prod.</th>
-                  <th>Produção</th>
-                  <th>UM</th>
-                  <th>Preço Médio</th>
-                  <th>Custo Médio</th>
-                  <th>Margem</th>
-                  <th>Total Vendas</th>
+                  <th>Estoque Total</th>
+                  <th>Valor Total</th>
+                  <th>Custo</th>
                   <th></th>
                 </tr>
               </thead>
 
-              <tbody id="tb-producao">
+              <tbody id="tb-custos-sap">
                 <tr>
-                  <td colspan="9">
+                  <td colspan="8">
                     <div class="empty-state">
                       <i class="ti ti-chart-bar"></i>
-                      <p>Nenhum registro de produção importado.</p>
+                      <p>Nenhum registro de Custos SAP importado.</p>
                     </div>
                   </td>
                 </tr>
@@ -2677,22 +2676,22 @@
           </div>
 
           <div class="pagination">
-            <span class="page-info" id="pi-producao">0 registros</span>
+            <span class="page-info" id="pi-custosSap">0 registros</span>
 
             <div class="page-btns">
-              <button class="btn" onclick="primeiraPaginaProducao()">
+              <button class="btn" onclick="primeiraPaginaCustosSap()">
                 <i class="ti ti-chevrons-left"></i>
               </button>
 
-              <button class="btn" onclick="paginaAnteriorProducao()">
+              <button class="btn" onclick="paginaAnteriorCustosSap()">
                 <i class="ti ti-chevron-left"></i>
               </button>
 
-              <button class="btn" onclick="proximaPaginaProducao()">
+              <button class="btn" onclick="proximaPaginaCustosSap()">
                 <i class="ti ti-chevron-right"></i>
               </button>
 
-              <button class="btn" onclick="ultimaPaginaProducao()">
+              <button class="btn" onclick="ultimaPaginaCustosSap()">
                 <i class="ti ti-chevrons-right"></i>
               </button>
             </div>
@@ -2779,21 +2778,21 @@
             <input type="file" id="file-sap" class="file-input" accept=".xlsx,.csv" onchange="handleImport(event, 'SAP')">
           </div>
 
-          <!-- Produção -->
+          <!-- Custos SAP -->
           <div class="import-card">
             <div class="import-card-header">
               <div class="import-icon" style="background:var(--purple-bg);color:var(--purple)"><i class="ti ti-chart-bar"></i></div>
               <div>
-                <div class="import-card-title">Produção</div>
-                <div style="font-size:11px;color:var(--text3);font-family:var(--mono)">Produção por Central</div>
+                <div class="import-card-title">Custos SAP</div>
+                <div style="font-size:11px;color:var(--text3);font-family:var(--mono)">Estoque e Custo por Material</div>
               </div>
             </div>
-            <div class="import-card-desc">Importe o arquivo Excel exportado da PUZL (GERENCIAL - RESUMO GERAL) para extrair os dados de produção mensal.</div>
-            <div class="drop-zone" onclick="document.getElementById('file-producao').click()">
+            <div class="import-card-desc">Importe o relatório de estoque/custo exportado do SAP para extrair estoque total, valor total e custo médio por material e central.</div>
+            <div class="drop-zone" onclick="document.getElementById('file-custos-sap').click()">
               <i class="ti ti-upload"></i>
               Arraste ou clique para selecionar
             </div>
-            <input type="file" id="file-producao" class="file-input" accept=".xlsx,.csv" onchange="handleImport(event, 'Produção')">
+            <input type="file" id="file-custos-sap" class="file-input" accept=".xlsx,.csv" onchange="handleImport(event, 'Custos SAP')">
           </div>
 
 
@@ -3160,7 +3159,7 @@
                   </optgroup>
                   <optgroup label="Módulos grandes (Fase 4)">
                     <option value="lancamentos">Lançamentos</option>
-                    <option value="producao">Produção</option>
+                    <option value="custos_sap">Custos SAP</option>
                     <option value="entradas">Entradas</option>
                     <option value="saidas">Saídas</option>
                     <option value="sap">SAP</option>
@@ -3246,7 +3245,7 @@
                   <option value="entradas">Entradas</option>
                   <option value="saidas">Saídas</option>
                   <option value="sap">SAP</option>
-                  <option value="producao">Produção</option>
+                  <option value="custos_sap">Custos SAP</option>
                   <option value="ocorrencias">Ocorrências</option>
                   <option value="ajustes_sistemicos">DAI / Ajuste Sistêmico</option>
                   <option value="notas_ajuste">Notas de Crédito/Débito</option>
@@ -3430,7 +3429,10 @@
 
 
         <div class="section-title">Filiais / Aliases</div>
-        <div id="pend-centrais-box"></div>
+        <div class="alert-pulse-row">
+          <div id="pend-centrais-box"></div>
+          <div id="novos-filiais-box"></div>
+        </div>
         <div class="table-card" style="margin-bottom:24px">
           <div class="table-header">
             <span class="table-title"><i class="ti ti-map-pin"></i> Padronização de Centrais</span>
@@ -3442,11 +3444,17 @@
               <button class="btn" onclick="focusFilialImport()">
                 <i class="ti ti-file-upload"></i> Importar em lote
               </button>
+              <button class="btn" id="btn-importar-de-filiais" onclick="abrirImportarDe('filiais')" title="Importar cópia do cadastro de outro usuário">
+                <i class="ti ti-users"></i> Importar de
+              </button>
               <button class="btn" onclick="exportarFiliaisExcel()">
                 <i class="ti ti-file-spreadsheet"></i> Exportar Excel
               </button>
               <button class="btn js-atualizar-cadastros" onclick="atualizarCadastros()" title="Reaplica o cadastro atual de Centrais e Materiais sobre Entradas, Saídas, Lançamentos e SAP já importados, e atualiza todas as telas que dependem desses cadastros">
                 <i class="ti ti-refresh"></i> Atualizar Cadastros
+              </button>
+              <button class="btn" onclick="abrirEdicaoFiliaisSelecionados()" title="Editar as centrais marcadas na tabela">
+                <i class="ti ti-pencil"></i> Editar selecionados
               </button>
               <button class="btn" onclick="limparFiliais()">
                 <i class="ti ti-trash"></i> Excluir todas
@@ -3457,16 +3465,18 @@
             <table>
               <thead>
                 <tr>
+                  <th><input type="checkbox" onchange="toggleSelecionarTodosFiliais(this.checked)" title="Selecionar todas"></th>
                   <th>Original</th>
                   <th>Sigla</th>
                   <th>CNPJ</th>
                   <th>Regional</th>
+                  <th>Dono</th>
                   <th>Criado em</th>
                   <th></th>
                 </tr>
               </thead>
               <tbody id="tb-filiais">
-                <tr><td colspan="6"><div class="empty-state"><i class="ti ti-map-pin"></i><p>Nenhuma filial cadastrada.</p></div></td></tr>
+                <tr><td colspan="8"><div class="empty-state"><i class="ti ti-map-pin"></i><p>Nenhuma filial cadastrada.</p></div></td></tr>
               </tbody>
             </table>
           </div>
@@ -3485,6 +3495,7 @@
         <div class="alert-pulse-row">
           <div id="dup-materiais-box"></div>
           <div id="pend-materiais-box"></div>
+          <div id="novos-materiais-box"></div>
         </div>
         <div class="table-card" style="margin-bottom:24px">
           <div class="table-header">
@@ -3497,11 +3508,17 @@
               <button class="btn" onclick="focusMaterialImport()">
                 <i class="ti ti-file-upload"></i> Importar em lote
               </button>
+              <button class="btn" id="btn-importar-de-materiais" onclick="abrirImportarDe('materiais')" title="Importar cópia do cadastro de outro usuário">
+                <i class="ti ti-users"></i> Importar de
+              </button>
               <button class="btn" onclick="exportarMateriaisExcel()">
                 <i class="ti ti-file-spreadsheet"></i> Exportar Excel
               </button>
               <button class="btn js-atualizar-cadastros" onclick="atualizarCadastros()" title="Reaplica o cadastro atual de Centrais e Materiais sobre Entradas, Saídas, Lançamentos e SAP já importados, e atualiza todas as telas que dependem desses cadastros">
                 <i class="ti ti-refresh"></i> Atualizar Cadastros
+              </button>
+              <button class="btn" onclick="abrirEdicaoMateriaisSelecionados()" title="Editar os materiais marcados na tabela">
+                <i class="ti ti-pencil"></i> Editar selecionados
               </button>
               <button class="btn" onclick="limparMateriais()">
                 <i class="ti ti-trash"></i> Excluir todas
@@ -3512,15 +3529,18 @@
             <table>
               <thead>
                 <tr>
+                  <th><input type="checkbox" onchange="toggleSelecionarTodosMateriais(this.checked)" title="Selecionar todos"></th>
                   <th>Original</th>
                   <th>Grupo SAP</th>
+                  <th>Cód SAP</th>
                   <th>Categoria</th>
+                  <th>Dono</th>
                   <th>Criado em</th>
                   <th></th>
                 </tr>
               </thead>
               <tbody id="tb-materiais">
-                <tr><td colspan="5"><div class="empty-state"><i class="ti ti-stack-2"></i><p>Nenhum material cadastrado.</p></div></td></tr>
+                <tr><td colspan="8"><div class="empty-state"><i class="ti ti-stack-2"></i><p>Nenhum material cadastrado.</p></div></td></tr>
               </tbody>
             </table>
           </div>
@@ -4620,63 +4640,63 @@
 
 
 
-<!-- MODAL: Produção -->
-<div class="modal-overlay" id="modal-producao">
+<!-- MODAL: Custos SAP -->
+<div class="modal-overlay" id="modal-custos-sap">
   <div class="modal">
     <div class="modal-title">
       <i class="ti ti-chart-bar"></i>
-      Novo Registro de Produção
+      Novo Registro de Custos SAP
     </div>
 
     <div class="modal-sub">
-      adicione manualmente um registro de produção
+      adicione manualmente um registro de estoque/custo
     </div>
 
     <div class="form-grid">
       <div class="form-group">
-        <label class="form-label">Mês</label>
-        <input type="text" class="form-input" id="p-mes" placeholder="Ex: Janeiro/2026">
+        <label class="form-label">Material</label>
+        <input type="text" class="form-input" id="cs-material" placeholder="Ex: 12345">
       </div>
 
       <div class="form-group">
         <label class="form-label">Central</label>
-        <input type="text" class="form-input" id="p-central" placeholder="Ex: 70 | MARICÁ">
+        <input type="text" class="form-input" id="cs-central" placeholder="Ex: 70 | MARICÁ">
       </div>
 
       <div class="form-group">
-        <label class="form-label">Produção</label>
-        <input type="number" class="form-input" id="p-producao" placeholder="0">
+        <label class="form-label">Ano</label>
+        <input type="text" class="form-input" id="cs-ano" placeholder="Ex: 2026">
       </div>
 
       <div class="form-group">
-        <label class="form-label">Preço Médio</label>
-        <input type="number" class="form-input" id="p-preco" placeholder="0">
+        <label class="form-label">Mês</label>
+        <input type="text" class="form-input" id="cs-mes" placeholder="Ex: 6">
       </div>
 
       <div class="form-group">
-        <label class="form-label">Custo Médio</label>
-        <input type="number" class="form-input" id="p-custo" placeholder="0">
+        <label class="form-label">Estoque Total</label>
+        <input type="number" class="form-input" id="cs-estoque-total" placeholder="0">
       </div>
 
       <div class="form-group">
-        <label class="form-label">Margem</label>
-        <input type="text" class="form-input" id="p-margem" placeholder="Valor contábil">
+        <label class="form-label">Valor Total</label>
+        <input type="number" class="form-input" id="cs-valor-total" placeholder="0">
       </div>
 
       <div class="form-group">
-        <label class="form-label">Total Vendas</label>
-        <input type="number" class="form-input" id="p-vendas" placeholder="0">
+        <label class="form-label">Custo</label>
+        <input type="number" class="form-input" id="cs-custo" placeholder="0">
       </div>
     </div>
 
     <div class="form-actions">
-      <button class="btn" onclick="closeModal('modal-producao')">
+      <button class="btn" onclick="closeModal('modal-custos-sap')">
         Cancelar
       </button>
 
-      <button class="btn btn-primary" onclick="salvarProducao()">
+      <button class="btn btn-primary" onclick="salvarCustosSap()">
         <i class="ti ti-check"></i>
-        Salvar Produção
+        Salvar Custos SAP
       </button>
     </div>
   </div>
@@ -4749,6 +4769,20 @@
     <div class="form-actions">
       <button class="btn" onclick="closeModal('modal-novo-grupo-material')">Cancelar</button>
       <button class="btn btn-primary" id="btn-salvar-novo-grupo-material" onclick="salvarNovoGrupoMaterial(this)"><i class="ti ti-check"></i> Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Importar de outro usuário — só ADM. Compartilhado entre
+     Materiais e Filiais (abrirImportarDe(tipo), config.js) -->
+<div class="modal-overlay" id="modal-importar-de">
+  <div class="modal" style="width:460px">
+    <div class="modal-title"><i class="ti ti-users"></i> <span id="importar-de-title">Importar de outro usuário</span></div>
+    <div class="modal-sub" id="importar-de-sub">Cria uma cópia própria do cadastro selecionado — não altera nada do lado do usuário original.</div>
+    <div id="importar-de-usuarios" style="max-height:280px;overflow-y:auto;border:1px solid var(--border2);border-radius:var(--radius);padding:8px 10px;margin-bottom:10px"></div>
+    <div class="form-actions">
+      <button class="btn" onclick="closeModal('modal-importar-de')">Cancelar</button>
+      <button class="btn btn-primary" id="btn-confirmar-importar-de" onclick="confirmarImportarDe(this)"><i class="ti ti-check"></i> Importar</button>
     </div>
   </div>
 </div>

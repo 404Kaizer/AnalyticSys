@@ -197,7 +197,7 @@ function deleteConfig(key) {
 // ficaram desatualizadas.
 //
 // Depois de reaplicar, atualiza TODAS as telas que dependem desses
-// cadastros: as tabelas de Entradas/Saídas/Lançamentos/SAP/Produção e o
+// cadastros: as tabelas de Entradas/Saídas/Lançamentos/SAP/Custos SAP e o
 // Dashboard Gerencial (via renderAll), o Dashboard Analítico — Visão Micro/
 // Regional (via rodarAnalitico, que já se auto-protege se não houver
 // período selecionado) e o Inventário, se já tiver sido gerado na sessão.
@@ -230,7 +230,7 @@ async function atualizarCadastros() {
     if (typeof persistStateNow === 'function') await persistStateNow();
     else persist();
 
-    // 4) Tabelas/telas "de base": Entradas/Saídas/Lançamentos/SAP/Produção/
+    // 4) Tabelas/telas "de base": Entradas/Saídas/Lançamentos/SAP/Custos SAP/
     //    Imports/Configs/Ações/Filiais/Materiais + Dashboard Gerencial —
     //    o mesmo conjunto já usado após importar um cadastro novo.
     renderAll();
@@ -269,21 +269,244 @@ let _matIndivRowSeq = 0;
 // pré-preenchimento opcional — { origem, alias, categoria, focus } — usado
 // pelos atalhos de "material sem cadastro/categoria" espalhados pelo
 // sistema (Dashboard, Analítico, Inventário, duplicidade de cadastro).
+// Alterna título/botão do modal de cadastro entre "criar" e "editar" — o
+// mesmo modal (Materiais ou Filiais) é reaproveitado nos dois fluxos, então
+// só o texto muda, nunca a estrutura.
+function _setModalCadastroModo({ modalId, btnId, icone, singular, plural, editando, qtd }) {
+  const titleEl = document.querySelector(`#${modalId} .modal-title`);
+  if (titleEl) {
+    const label = editando ? (qtd > 1 ? `Editar ${qtd} ${plural}` : `Editar ${singular}`) : `Cadastro Individual de ${plural}`;
+    titleEl.innerHTML = `<i class="ti ${icone}"></i> ${label}`;
+  }
+  const btnEl = document.getElementById(btnId);
+  if (btnEl) btnEl.innerHTML = editando ? '<i class="ti ti-check"></i> Salvar Alterações' : '<i class="ti ti-check"></i> Cadastrar';
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// "IMPORTAR DE" — só ADM (04/08). Configurações agora mostra só o cadastro
+// do próprio dono (ver syncMateriaisFromSupabase/syncFiliaisFromSupabase);
+// pra ver o de outro usuário, o ADM importa explicitamente — cria uma
+// CÓPIA independente (dono = o próprio ADM), nunca visibilidade
+// automática, e nunca escreve na conta do usuário original (só SELECT lá).
+// Compartilhado entre Materiais e Filiais via _IMPORTAR_DE_CFG.
+// ═══════════════════════════════════════════════════════════════════════
+const _IMPORTAR_DE_CFG = {
+  materiais: {
+    table: 'materiais',
+    lista: () => state.materiais,
+    chave: materialMatchKey,
+    upsert: upsertMateriais,
+    campos: 'origem, alias, cod_sap, categoria, import_id',
+    normalizar: r => ({ origem: r.origem, alias: r.alias, codSap: r.cod_sap || '', categoria: r.categoria || '' }),
+    singular: 'material', plural: 'materiais',
+    boxId: 'novos-materiais-box',
+  },
+  filiais: {
+    table: 'filiais',
+    lista: () => state.filiais,
+    chave: filialMatchKey,
+    upsert: upsertFiliais,
+    campos: 'origem, alias, cnpj, regional, import_id',
+    normalizar: r => ({ origem: r.origem, alias: r.alias, cnpj: r.cnpj || '', regional: r.regional || '' }),
+    singular: 'central', plural: 'centrais',
+    boxId: 'novos-filiais-box',
+  },
+};
+
+// Cache leve de perfis (id -> email) pro seletor de usuários e pra resolver
+// a coluna "Dono" — buscado uma vez por sessão, RLS já libera admin ler
+// todos os profiles.
+let _perfisCache = null;
+async function _carregarPerfis() {
+  if (_perfisCache) return _perfisCache;
+  if (!window.supabaseClient) return {};
+  const { data, error } = await window.supabaseClient.from('profiles').select('id, email');
+  if (error) { console.warn('[ImportarDe] Falha ao buscar usuários:', error); return {}; }
+  _perfisCache = Object.fromEntries((data || []).map(p => [p.id, p.email]));
+  return _perfisCache;
+}
+
+let _importarDeTipoAtual = null;
+// 'registros' (sino — checkbox por registro individual, abrirNovosPendentesDetalhe)
+// ou 'usuarios' (toolbar "Importar de" — checkbox por usuário, abrirImportarDe).
+// confirmarImportarDe usa isto pra saber como interpretar os checkboxes marcados.
+let _importarDeModoAtual = null;
+// Lista achatada de registros pendentes (não os usuários) — cada item já
+// tem os dados completos do registro + de quem é, pra render revisável no
+// modal (04/08: antes importava tudo do usuário de uma vez sem o ADM ver
+// o que estava vindo; agora ele marca registro por registro).
+let _materiaisNovosItens = [];
+let _filiaisNovosItens = [];
+
+// Botão do toolbar "Importar de" — escolhe USUÁRIOS pra importar tudo que
+// eles têm pendente de uma vez (ver confirmarImportarDe). Diferente do
+// alerta do sino (abrirNovosPendentesDetalhe), que seleciona por REGISTRO
+// individual em vez de por usuário.
+async function abrirImportarDe(tipo) {
+  const cfg = _IMPORTAR_DE_CFG[tipo];
+  if (!cfg || window.currentUser?.role !== 'admin') return;
+  _importarDeTipoAtual = tipo;
+  _importarDeModoAtual = 'usuarios';
+  const wrap = document.getElementById('importar-de-usuarios');
+  const titleEl = document.getElementById('importar-de-title');
+  const subEl = document.getElementById('importar-de-sub');
+  const footerBtn = document.getElementById('btn-confirmar-importar-de');
+  if (titleEl) titleEl.textContent = `Importar ${cfg.plural} de outros usuários`;
+  if (subEl) subEl.textContent = 'Cria uma cópia própria do cadastro selecionado — não altera nada do lado do usuário original.';
+  if (footerBtn) footerBtn.style.display = '';
+  if (wrap) wrap.innerHTML = '<span style="font-size:12px;color:var(--text3)">Verificando registros disponíveis...</span>';
+  openModal('modal-importar-de');
+
+  // Reconsulta na hora de abrir — cobre tanto o clique no alerta (lista já
+  // pronta) quanto o botão do toolbar (pode ser a primeira vez, sem
+  // nenhuma checagem prévia nesta sessão).
+  await _checarNovosParaImportar(tipo);
+  const itens = tipo === 'materiais' ? _materiaisNovosItens : _filiaisNovosItens;
+  if (!wrap) return;
+  if (!itens.length) {
+    wrap.innerHTML = `<span style="font-size:12px;color:var(--text3);padding:4px 6px">Nenhum registro novo — todo o cadastro dos outros usuários já foi importado (ou não há outro usuário com cadastro).</span>`;
+    return;
+  }
+  const porUsuario = new Map(); // userId -> { email, count }
+  itens.forEach(it => {
+    const cur = porUsuario.get(it.userId) || { email: it.email, count: 0 };
+    cur.count++;
+    porUsuario.set(it.userId, cur);
+  });
+  const usuarios = [...porUsuario.entries()].sort((a, b) => a[1].email.localeCompare(b[1].email));
+  wrap.innerHTML = `
+    <label class="micro-filter-option" style="border-bottom:1px solid var(--border2);padding-bottom:6px;margin-bottom:4px">
+      <input type="checkbox" onchange="document.querySelectorAll('.chk-importar-de-item').forEach(c => c.checked = this.checked)">
+      <span class="micro-filter-option-label"><b>Selecionar todos (${usuarios.length})</b></span>
+    </label>` +
+    usuarios.map(([userId, u]) => `<label class="micro-filter-option">
+        <input type="checkbox" class="chk-importar-de-item" value="${escapeHtml(userId)}">
+        <span class="micro-filter-option-label">${escapeHtml(u.email)} <span style="font-size:10px;color:var(--text3)">— ${u.count} ${u.count === 1 ? cfg.singular : cfg.plural}</span></span>
+      </label>`).join('');
+}
+
+// Clique no alerta do sino (dashboard.js/_renderNovosPendentesBox) — lista
+// cada registro novo individualmente (qual central/material, de quem), com
+// checkbox por registro + "selecionar todos", pra importar um, vários ou
+// todos de uma vez. Diferente do modal do botão "Importar de" da toolbar
+// (abrirImportarDe), que seleciona por USUÁRIO em vez de por registro.
+async function abrirNovosPendentesDetalhe(tipo) {
+  const cfg = _IMPORTAR_DE_CFG[tipo];
+  if (!cfg || window.currentUser?.role !== 'admin') return;
+  _importarDeTipoAtual = tipo;
+  _importarDeModoAtual = 'registros';
+  const wrap = document.getElementById('importar-de-usuarios');
+  const titleEl = document.getElementById('importar-de-title');
+  const subEl = document.getElementById('importar-de-sub');
+  const footerBtn = document.getElementById('btn-confirmar-importar-de');
+  if (titleEl) titleEl.textContent = `${cfg.plural[0].toUpperCase()}${cfg.plural.slice(1)} novos para importar`;
+  if (subEl) subEl.textContent = 'Selecione os registros que quer importar — cria uma cópia própria, não altera nada do lado do usuário original.';
+  if (footerBtn) footerBtn.style.display = '';
+  if (wrap) wrap.innerHTML = '<span style="font-size:12px;color:var(--text3)">Verificando registros disponíveis...</span>';
+  openModal('modal-importar-de');
+
+  await _checarNovosParaImportar(tipo);
+  const itens = tipo === 'materiais' ? _materiaisNovosItens : _filiaisNovosItens;
+  if (!wrap) return;
+  if (!itens.length) {
+    wrap.innerHTML = `<span style="font-size:12px;color:var(--text3);padding:4px 6px">Nenhum registro novo — todo o cadastro dos outros usuários já foi importado (ou não há outro usuário com cadastro).</span>`;
+    return;
+  }
+  wrap.innerHTML = `
+    <label class="micro-filter-option" style="border-bottom:1px solid var(--border2);padding-bottom:6px;margin-bottom:4px">
+      <input type="checkbox" onchange="document.querySelectorAll('.chk-importar-de-item').forEach(c => c.checked = this.checked)">
+      <span class="micro-filter-option-label"><b>Selecionar todos (${itens.length})</b></span>
+    </label>` +
+    itens.map((it, i) => `<label class="micro-filter-option">
+        <input type="checkbox" class="chk-importar-de-item" value="${i}">
+        <span class="micro-filter-option-label">${escapeHtml(it.origem)} <span style="color:var(--text3)">— ${escapeHtml(it.alias)}</span> <span style="font-size:10px;color:var(--accent)">de ${escapeHtml(it.email)}</span></span>
+      </label>`).join('');
+}
+
+async function confirmarImportarDe(btn) {
+  const tipo = _importarDeTipoAtual;
+  const cfg = tipo && _IMPORTAR_DE_CFG[tipo];
+  if (!cfg) return;
+  const itens = tipo === 'materiais' ? _materiaisNovosItens : _filiaisNovosItens;
+  const checked = [...document.querySelectorAll('.chk-importar-de-item:checked')].map(el => el.value);
+  if (!checked.length) {
+    toast(_importarDeModoAtual === 'usuarios' ? 'Selecione ao menos um usuário' : 'Selecione ao menos um registro', 'error');
+    return;
+  }
+
+  _setBtnLoading(btn, true, 'Importando...');
+  const selecionados = _importarDeModoAtual === 'usuarios'
+    ? itens.filter(it => checked.includes(it.userId))
+    : checked.map(i => itens[Number(i)]).filter(Boolean);
+  const usuariosCount = new Set(selecionados.map(it => it.userId)).size;
+  const novos = selecionados.map(it => {
+    const { userId, email, ...campos } = it;
+    return { ...campos, importadoDeId: userId, created: new Date().toLocaleDateString('pt-BR') };
+  });
+  cfg.upsert(novos);
+
+  _setBtnLoading(btn, false);
+  closeModal('modal-importar-de');
+  if (tipo === 'materiais' && typeof reaplicarPadronizacaoMateriais === 'function') reaplicarPadronizacaoMateriais();
+  if (tipo === 'filiais' && typeof reaplicarPadronizacaoCentrais === 'function') reaplicarPadronizacaoCentrais();
+  await persistStateNow();
+  renderAll();
+  updateImportPrereqUI();
+  _checarNovosParaImportar(tipo);
+  toast(`${novos.length} ${cfg.plural} importado(s) de ${usuariosCount} usuário(s)`);
+}
+
+// Roda no boot (admin-only, chamado a partir de syncMateriaisFromSupabase/
+// syncFiliaisFromSupabase), depois de importar, e toda vez que o modal
+// "Importar de" abre — compara o que existe pra TODOS os usuários contra o
+// que o ADM já tem e guarda a lista achatada dos que ainda não foram
+// trazidos (não só a contagem). Alimenta o box de alerta E o modal de
+// revisão (renderMateriais/renderFiliais, dashboard.js).
+async function _checarNovosParaImportar(tipo) {
+  const cfg = _IMPORTAR_DE_CFG[tipo];
+  if (!cfg || !window.supabaseClient || window.currentUser?.role !== 'admin') return;
+  const meuId = window.currentUser?.id;
+  const { data, error } = await window.supabaseClient.from(cfg.table).select(`user_id, ${cfg.campos}`).neq('user_id', meuId);
+  if (error) { console.warn(`[ImportarDe] Falha ao checar novos ${cfg.table}:`, error); return; }
+
+  const chavesExistentes = new Set(cfg.lista().map(cfg.chave));
+  const pendentes = (data || []).filter(r => !chavesExistentes.has(cfg.chave(r)));
+
+  // _carregarPerfis SEMPRE (não só quando há pendente) — a coluna "Dono"
+  // (_donoDisplay, dashboard.js) depende de _perfisCache pra mostrar o
+  // e-mail de quem um registro já importado veio; se só rodasse aqui dentro
+  // do "if (pendentes.length)", um ADM que já importou tudo (0 pendentes)
+  // nunca populava o cache e a coluna ficava mostrando o UUID cru.
+  const perfis = await _carregarPerfis();
+  let itens = [];
+  if (pendentes.length) {
+    itens = pendentes
+      .map(r => ({ userId: r.user_id, email: perfis[r.user_id] || r.user_id, ...cfg.normalizar(r) }))
+      .sort((a, b) => a.email.localeCompare(b.email) || a.origem.localeCompare(b.origem));
+  }
+  if (tipo === 'materiais') _materiaisNovosItens = itens; else _filiaisNovosItens = itens;
+  if (tipo === 'materiais' && typeof renderMateriais === 'function') renderMateriais();
+  if (tipo === 'filiais' && typeof renderFiliais === 'function') renderFiliais();
+}
+
 function abrirCadastroMaterialIndividual(prefill) {
   const container = document.getElementById('mat-indiv-rows');
   if (!container) return;
   container.innerHTML = '';
   _matIndivRowSeq = 0;
   _addMaterialIndivRow();
+  _setModalCadastroModo({ modalId: 'modal-materiais-individual', btnId: 'btn-salvar-material-indiv', icone: 'ti-stack-2', singular: 'Material', plural: 'Materiais', editando: false });
   openModal('modal-materiais-individual');
 
   const row = container.querySelector('.reg-individual-row');
   if (prefill && row) {
     const origemInput = row.querySelector('[data-field="origem"]');
     const aliasInput = row.querySelector('[data-field="alias"]');
+    const codSapInput = row.querySelector('[data-field="codSap"]');
     const categoriaSelect = row.querySelector('[data-field="categoria"]');
     if (origemInput) origemInput.value = prefill.origem || '';
     if (aliasInput) aliasInput.value = prefill.alias || '';
+    if (codSapInput) codSapInput.value = prefill.codSap || '';
     if (categoriaSelect && prefill.categoria) categoriaSelect.value = prefill.categoria;
   }
 
@@ -310,9 +533,51 @@ function abrirCadastroMateriaisEmLote(itens) {
     row.querySelector('[data-field="origem"]').value = semCategoria ? (item.origemCadastro || item.nome) : item.nome;
     if (semCategoria) row.querySelector('[data-field="alias"]').value = item.aliasPadronizado || '';
   });
+  _setModalCadastroModo({ modalId: 'modal-materiais-individual', btnId: 'btn-salvar-material-indiv', icone: 'ti-stack-2', singular: 'Material', plural: 'Materiais', editando: false });
   openModal('modal-materiais-individual');
   const focusField = itens[0]?.motivo === 'sem_categoria' ? 'categoria' : 'alias';
   setTimeout(() => container.querySelector(`.reg-individual-row [data-field="${focusField}"]`)?.focus(), 50);
+}
+
+// ── Edição (individual e em massa) — reaproveita o mesmo modal de cadastro,
+// marcando cada linha com a chave original (origem+alias) do registro que
+// ela representa. salvarMateriaisIndividual() usa essa marca pra decidir
+// entre criar (sem marca) ou atualizar em vez de duplicar.
+function abrirEdicaoMaterial(id) {
+  const rec = state.materiais.find(m => m.id === id);
+  if (!rec) { toast('Material não encontrado', 'error'); return; }
+  abrirEdicaoMateriaisEmLote([rec]);
+}
+
+function abrirEdicaoMateriaisSelecionados() {
+  const ids = [...document.querySelectorAll('#tb-materiais .chk-materiais-row:checked')].map(el => el.value);
+  if (!ids.length) { toast('Selecione ao menos um material para editar', 'error'); return; }
+  const recs = state.materiais.filter(m => ids.includes(m.id));
+  abrirEdicaoMateriaisEmLote(recs);
+}
+
+function abrirEdicaoMateriaisEmLote(recs) {
+  const container = document.getElementById('mat-indiv-rows');
+  if (!container || !recs?.length) return;
+  container.innerHTML = '';
+  _matIndivRowSeq = 0;
+  recs.forEach(rec => {
+    _addMaterialIndivRow();
+    const row = container.lastElementChild;
+    row.dataset.editOrigemOrig = rec.origem || '';
+    row.dataset.editAliasOrig = rec.alias || '';
+    row.querySelector('[data-field="origem"]').value = rec.origem || '';
+    row.querySelector('[data-field="alias"]').value = rec.alias || '';
+    row.querySelector('[data-field="codSap"]').value = rec.codSap || '';
+    if (rec.categoria) row.querySelector('[data-field="categoria"]').value = rec.categoria;
+  });
+  _setModalCadastroModo({ modalId: 'modal-materiais-individual', btnId: 'btn-salvar-material-indiv', icone: 'ti-stack-2', singular: 'Material', plural: 'Materiais', editando: true, qtd: recs.length });
+  openModal('modal-materiais-individual');
+  setTimeout(() => container.querySelector('input')?.focus(), 50);
+}
+
+function toggleSelecionarTodosMateriais(checked) {
+  document.querySelectorAll('#tb-materiais .chk-materiais-row').forEach(el => { el.checked = checked; });
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -433,6 +698,10 @@ function _addMaterialIndivRow() {
       </div>
     </div>
     <div class="form-group">
+      <label class="form-label">Cód SAP</label>
+      <input type="text" class="form-input" data-field="codSap" placeholder="Ex: 1000123">
+    </div>
+    <div class="form-group">
       <label class="form-label">Categoria</label>
       <select class="form-select" data-field="categoria">
         <option value="">—</option>
@@ -462,23 +731,27 @@ async function salvarMateriaisIndividual(btn) {
   const container = document.getElementById('mat-indiv-rows');
   if (!container) return;
   const rows = [...container.querySelectorAll('.reg-individual-row')];
-  const imported = [];
+  const toCreate = [];
+  const toEdit = [];
   rows.forEach(row => {
     const origem = row.querySelector('[data-field="origem"]')?.value.trim() || '';
     const alias  = row.querySelector('[data-field="alias"]')?.value.trim()  || '';
+    const codSap = row.querySelector('[data-field="codSap"]')?.value.trim() || '';
     const categoriaRaw = row.querySelector('[data-field="categoria"]')?.value.trim() || '';
     if (!origem || !alias) return; // linha em branco ou incompleta — ignora silenciosamente
-    imported.push({
-      origem, alias,
-      categoria: normalizeCategoriaMaterial(categoriaRaw),
-      created: new Date().toLocaleDateString('pt-BR')
-    });
+    const categoria = normalizeCategoriaMaterial(categoriaRaw);
+    if (row.dataset.editOrigemOrig !== undefined) {
+      toEdit.push({ origem, alias, codSap, categoria, origemOriginal: row.dataset.editOrigemOrig, aliasOriginal: row.dataset.editAliasOrig });
+    } else {
+      toCreate.push({ origem, alias, codSap, categoria, created: new Date().toLocaleDateString('pt-BR') });
+    }
   });
 
-  if (!imported.length) { toast('Preencha ao menos um cadastro completo (Original + Grupo SAP)', 'error'); return; }
+  if (!toCreate.length && !toEdit.length) { toast('Preencha ao menos um cadastro completo (Original + Grupo SAP)', 'error'); return; }
 
-  _setBtnLoading(btn, true, 'Cadastrando...');
-  upsertMateriais(imported);
+  _setBtnLoading(btn, true, 'Salvando...');
+  if (toCreate.length) upsertMateriais(toCreate);
+  if (toEdit.length) editarMateriais(toEdit);
   listPages.materiais = 0;
   closeModal('modal-materiais-individual');
   _setBtnLoading(btn, false);
@@ -486,7 +759,50 @@ async function salvarMateriaisIndividual(btn) {
   await persistStateNow();
   renderAll();
   updateImportPrereqUI();
-  toast(`${imported.length} material(is) cadastrado(s)`);
+  const msg = toEdit.length && !toCreate.length ? `${toEdit.length} material(is) atualizado(s)`
+    : toCreate.length && !toEdit.length ? `${toCreate.length} material(is) cadastrado(s)`
+    : `${toCreate.length + toEdit.length} material(is) salvo(s)`;
+  toast(msg);
+}
+
+// Atualiza cadastros existentes EM PLACE (localiza pela chave original
+// origem+alias, preserva id/created/importId). Diferente de upsertMateriais:
+// aquele sempre trata a chave atual como identidade e criaria um registro
+// novo (duplicado) se Original ou Grupo SAP mudou — aqui a identidade é a
+// chave ANTES da edição.
+function editarMateriais(items) {
+  (items || []).forEach(item => {
+    const keyOrig = [normalizeText(item.origemOriginal), normalizeText(item.aliasOriginal)].join('||');
+    const idx = state.materiais.findIndex(m => materialMatchKey(m) === keyOrig);
+    if (idx < 0) return;
+    const rec = { ...state.materiais[idx], origem: item.origem, alias: item.alias, codSap: item.codSap, categoria: item.categoria };
+    state.materiais[idx] = rec;
+    registrarGrupoMaterial(rec.alias);
+    _materiaisSyncUpdate(item.origemOriginal, item.aliasOriginal, rec);
+  });
+  invalidateMaterialLookup();
+}
+
+// Sincroniza uma edição com o Supabase via UPDATE (não upsert). Dois
+// motivos pra não reaproveitar _materiaisSyncUpsert aqui:
+// 1) o onConflict do upsert usa a chave ATUAL (user_id,origem,alias) — se
+//    Original/Grupo SAP mudou, ela não bate mais com a linha antiga e cria
+//    um registro duplicado (linha velha órfã + linha nova).
+// 2) CRÍTICO pro Supervisor editando cadastro de outro usuário: a policy de
+//    INSERT de materiais/filiais exige user_id = auth.uid() SEM exceção
+//    pra is_admin() (só UPDATE tem esse bypass) — um upsert tentando
+//    inserir/conflitar uma linha com user_id de outro dono é rejeitado pela
+//    RLS. UPDATE não tem esse problema: dá pra mudar QUALQUER coluna,
+//    inclusive origem/alias, de uma linha que já existe, sem precisar
+//    inserir nada — só precisa ownerId correto no WHERE.
+function _materiaisSyncUpdate(oldOrigem, oldAlias, rec) {
+  if (!window.supabaseClient) return;
+  const ownerId = rec.donoId || window.currentUser?.id;
+  if (!ownerId) return;
+  window.supabaseClient.from('materiais')
+    .update({ origem: rec.origem, alias: rec.alias, cod_sap: rec.codSap || null, categoria: rec.categoria || null })
+    .eq('user_id', ownerId).eq('origem', oldOrigem).eq('alias', oldAlias)
+    .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao atualizar material:', error); });
 }
 
 function materialMatchKey(item) {
@@ -507,6 +823,7 @@ function normalizeImportedMaterial(item, importId) {
     id: src.id || makeMaterialId(),
     origem: String(src.origem || '').trim(),
     alias: String(src.alias || '').trim(),
+    codSap: String(src.codSap || '').trim(),
     categoria: normalizeCategoriaMaterial(src.categoria),
     created: src.created || new Date().toLocaleDateString('pt-BR'),
     importId
@@ -539,7 +856,7 @@ function normalizeImportedFilial(item, importId) {
 function _materiaisSyncUpsert(rec) {
   if (!window.supabaseClient) return;
   window.supabaseClient.from('materiais')
-    .upsert({ origem: rec.origem, alias: rec.alias, categoria: rec.categoria || null, import_id: rec.importId || null }, { onConflict: 'user_id,origem,alias' })
+    .upsert({ origem: rec.origem, alias: rec.alias, cod_sap: rec.codSap || null, categoria: rec.categoria || null, import_id: rec.importId || null, origem_usuario_id: rec.importadoDeId || null }, { onConflict: 'user_id,origem,alias' })
     .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao sincronizar material:', error); });
 }
 
@@ -550,7 +867,7 @@ function _materiaisSyncUpsert(rec) {
 const CADASTRO_SYNC_BATCH_SIZE = 500;
 async function _materiaisSyncUpsertBatch(recs) {
   if (!window.supabaseClient || !recs || !recs.length) return;
-  const rows = recs.map(rec => ({ origem: rec.origem, alias: rec.alias, categoria: rec.categoria || null, import_id: rec.importId || null }));
+  const rows = recs.map(rec => ({ origem: rec.origem, alias: rec.alias, cod_sap: rec.codSap || null, categoria: rec.categoria || null, import_id: rec.importId || null, origem_usuario_id: rec.importadoDeId || null }));
   for (let i = 0; i < rows.length; i += CADASTRO_SYNC_BATCH_SIZE) {
     const { error } = await window.supabaseClient.from('materiais').upsert(rows.slice(i, i + CADASTRO_SYNC_BATCH_SIZE), { onConflict: 'user_id,origem,alias' });
     if (error) { console.warn('[Supabase] Falha ao sincronizar lote de materiais:', error); break; }
@@ -567,7 +884,20 @@ async function _materiaisSyncUpsertBatch(recs) {
 // base já existente, mesmo padrão usado em Lançamentos).
 async function syncMateriaisFromSupabase() {
   try {
-    const data = await fetchAllRows('materiais', 'origem, alias, categoria, import_id, created_at');
+    // BUG REAL (04/08): antes buscava a tabela inteira (fetchAllRows, sem
+    // filtro) — pra usuário comum a RLS já restringia ao próprio, mas pro
+    // ADM (is_admin() libera SELECT de tudo) isso trazia o cadastro de
+    // TODOS os usuários pra tela de Configurações sem pedir. Decisão nova:
+    // Configurações mostra só o que é do próprio dono; ver o de outro
+    // usuário agora é opt-in via "Importar de" (abrirImportarDe) — cria uma
+    // CÓPIA independente, nunca visibilidade automática. Supervisão →
+    // Dados por módulo continua vendo tudo (consulta direto, não passa
+    // por aqui). Consulta simples (sem paginação por cursor): o total é
+    // sempre um catálogo de UM usuário, bem abaixo do teto de 1000 linhas.
+    const { data, error } = await window.supabaseClient.from('materiais')
+      .select('user_id, origem, alias, cod_sap, categoria, import_id, created_at, origem_usuario_id')
+      .eq('user_id', window.currentUser?.id);
+    if (error) throw error;
     // O BANCO MANDA (30/07): o self-heal que existia aqui reenviava todo
     // material local ausente da nuvem, o que desfazia qualquer exclusão
     // feita pelo painel de Supervisão no boot seguinte. A nuvem substitui.
@@ -580,12 +910,17 @@ async function syncMateriaisFromSupabase() {
       const existenteLocal = porChaveLocal.get(materialMatchKey(r));
       return {
         id: existenteLocal?.id || makeMaterialId(),
-        origem: r.origem, alias: r.alias, categoria: r.categoria,
+        donoId: r.user_id,
+        // Preenchido só quando o registro veio de "Importar de" — de qual
+        // usuário a cópia foi tirada (ver abrirImportarDe/confirmarImportarDe).
+        importadoDeId: r.origem_usuario_id || undefined,
+        origem: r.origem, alias: r.alias, codSap: r.cod_sap || '', categoria: r.categoria,
         importId: r.import_id || undefined,
         created: r.created_at ? new Date(r.created_at).toLocaleDateString('pt-BR') : (existenteLocal?.created || new Date().toLocaleDateString('pt-BR')),
       };
     });
     invalidateMaterialLookup();
+    if (window.currentUser?.role === 'admin') await _checarNovosParaImportar('materiais');
   } catch (err) {
     console.warn('[Supabase] Falha ao buscar materiais — mantendo dados locais.', err);
   }
@@ -596,6 +931,7 @@ function upsertMateriais(items) {
     const src = item && typeof item === 'object' ? item : {};
     const rec = {
       id: src.id || makeMaterialId(),
+      donoId: src.donoId || window.currentUser?.id,
       ...src,
       created: src.created || new Date().toLocaleDateString('pt-BR')
     };
@@ -635,12 +971,14 @@ function parseMateriaisRows(rows) {
   let startRow = 0;
   let origemIdx = 0;
   let aliasIdx = 1;
+  let codSapIdx = -1;
   let categoriaIdx = -1;
 
   if (headerLooksLikeMeta) {
     startRow = 1;
     origemIdx = findIdx('origem', 'original', 'material', 'material original', 'nome');
     aliasIdx = findIdx('grupo', 'grupo sap', 'sap', 'padronizada', 'padronizado', 'padronizacao', 'padronização');
+    codSapIdx = findIdx('cod sap', 'cod. sap', 'codigo sap', 'código sap', 'cod_sap');
     // "Descrição"/"Observação" entram como aliases de Categoria: essa era a
     // convenção usada para anotar a categoria antes de existir uma coluna
     // dedicada, e o cadastro de Materiais não tem mais um campo de descrição.
@@ -656,6 +994,7 @@ function parseMateriaisRows(rows) {
   return cleaned.slice(startRow).map(row => ({
     origem: String(row[origemIdx] || '').trim(),
     alias: String(row[aliasIdx] || '').trim(),
+    codSap: codSapIdx >= 0 ? String(row[codSapIdx] || '').trim() : '',
     categoria: categoriaIdx >= 0 ? normalizeCategoriaMaterial(row[categoriaIdx]) : '',
     created: new Date().toLocaleDateString('pt-BR')
   })).filter(r => r.origem && r.alias);
@@ -834,6 +1173,7 @@ function exportarMateriaisExcel() {
   const rows = state.materiais.map(m => ({
     'Origem': m.origem || '',
     'Grupo SAP': m.alias || '',
+    'Cód SAP': m.codSap || '',
     'Categoria': m.categoria || ''
   }));
 
@@ -860,6 +1200,7 @@ function abrirCadastroFilialIndividual(prefill) {
   container.innerHTML = '';
   _filIndivRowSeq = 0;
   _addFilialIndivRow();
+  _setModalCadastroModo({ modalId: 'modal-filiais-individual', btnId: 'btn-salvar-filial-indiv', icone: 'ti-map-pin', singular: 'Central', plural: 'Centrais', editando: false });
   openModal('modal-filiais-individual');
 
   const row = container.querySelector('.reg-individual-row');
@@ -892,8 +1233,50 @@ function abrirCadastroFiliaisEmLote(nomes) {
     _addFilialIndivRow();
     container.lastElementChild.querySelector('[data-field="origem"]').value = nome;
   });
+  _setModalCadastroModo({ modalId: 'modal-filiais-individual', btnId: 'btn-salvar-filial-indiv', icone: 'ti-map-pin', singular: 'Central', plural: 'Centrais', editando: false });
   openModal('modal-filiais-individual');
   setTimeout(() => container.querySelector('.reg-individual-row [data-field="alias"]')?.focus(), 50);
+}
+
+// ── Edição (individual e em massa) — mesmo padrão de abrirEdicaoMateriais*
+// (ver comentário lá). Filiais não têm id local estável, então a linha
+// carrega a chave original (origem+alias) direto do registro.
+function abrirEdicaoFilial(pagedIndex) {
+  const { data } = getListPageData('filiais');
+  const rec = data[pagedIndex];
+  if (!rec) { toast('Central não encontrada', 'error'); return; }
+  abrirEdicaoFiliaisEmLote([rec]);
+}
+
+function abrirEdicaoFiliaisSelecionados() {
+  const chaves = new Set([...document.querySelectorAll('#tb-filiais .chk-filiais-row:checked')].map(el => el.value));
+  if (!chaves.size) { toast('Selecione ao menos uma central para editar', 'error'); return; }
+  const recs = state.filiais.filter(f => chaves.has(filialMatchKey(f)));
+  abrirEdicaoFiliaisEmLote(recs);
+}
+
+function abrirEdicaoFiliaisEmLote(recs) {
+  const container = document.getElementById('filial-indiv-rows');
+  if (!container || !recs?.length) return;
+  container.innerHTML = '';
+  _filIndivRowSeq = 0;
+  recs.forEach(rec => {
+    _addFilialIndivRow();
+    const row = container.lastElementChild;
+    row.dataset.editOrigemOrig = rec.origem || '';
+    row.dataset.editAliasOrig = rec.alias || '';
+    row.querySelector('[data-field="origem"]').value = rec.origem || '';
+    row.querySelector('[data-field="alias"]').value = rec.alias || '';
+    row.querySelector('[data-field="cnpj"]').value = rec.cnpj || '';
+    if (rec.regional) row.querySelector('[data-field="regional"]').value = rec.regional;
+  });
+  _setModalCadastroModo({ modalId: 'modal-filiais-individual', btnId: 'btn-salvar-filial-indiv', icone: 'ti-map-pin', singular: 'Central', plural: 'Centrais', editando: true, qtd: recs.length });
+  openModal('modal-filiais-individual');
+  setTimeout(() => container.querySelector('input')?.focus(), 50);
+}
+
+function toggleSelecionarTodosFiliais(checked) {
+  document.querySelectorAll('#tb-filiais .chk-filiais-row').forEach(el => { el.checked = checked; });
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -1017,27 +1400,66 @@ async function salvarFiliaisIndividual(btn) {
   const container = document.getElementById('filial-indiv-rows');
   if (!container) return;
   const rows = [...container.querySelectorAll('.reg-individual-row')];
-  const imported = [];
+  const toCreate = [];
+  const toEdit = [];
   rows.forEach(row => {
     const origem   = row.querySelector('[data-field="origem"]')?.value.trim()   || '';
     const alias    = row.querySelector('[data-field="alias"]')?.value.trim()    || '';
     const cnpj     = row.querySelector('[data-field="cnpj"]')?.value.trim()     || '';
     const regional = row.querySelector('[data-field="regional"]')?.value.trim() || '';
     if (!origem || !alias) return; // linha em branco ou incompleta — ignora silenciosamente
-    imported.push({ origem, alias, cnpj, regional, created: new Date().toLocaleDateString('pt-BR') });
+    if (row.dataset.editOrigemOrig !== undefined) {
+      toEdit.push({ origem, alias, cnpj, regional, origemOriginal: row.dataset.editOrigemOrig, aliasOriginal: row.dataset.editAliasOrig });
+    } else {
+      toCreate.push({ origem, alias, cnpj, regional, created: new Date().toLocaleDateString('pt-BR') });
+    }
   });
 
-  if (!imported.length) { toast('Preencha ao menos um cadastro completo (Original + Sigla)', 'error'); return; }
+  if (!toCreate.length && !toEdit.length) { toast('Preencha ao menos um cadastro completo (Original + Sigla)', 'error'); return; }
 
-  _setBtnLoading(btn, true, 'Cadastrando...');
-  upsertFiliais(imported);
+  _setBtnLoading(btn, true, 'Salvando...');
+  if (toCreate.length) upsertFiliais(toCreate);
+  if (toEdit.length) editarFiliais(toEdit);
   closeModal('modal-filiais-individual');
   _setBtnLoading(btn, false);
   reaplicarPadronizacaoCentrais();
   await persistStateNow();
   renderAll();
   updateImportPrereqUI();
-  toast(`${imported.length} filial(is) cadastrada(s)`);
+  const msg = toEdit.length && !toCreate.length ? `${toEdit.length} filial(is) atualizada(s)`
+    : toCreate.length && !toEdit.length ? `${toCreate.length} filial(is) cadastrada(s)`
+    : `${toCreate.length + toEdit.length} filial(is) salva(s)`;
+  toast(msg);
+}
+
+// Atualiza cadastros existentes EM PLACE — mesmo motivo de editarMateriais:
+// upsertFiliais trata a chave ATUAL como identidade e duplicaria o registro
+// se Original ou Sigla mudou; aqui a identidade é a chave ANTES da edição.
+function editarFiliais(items) {
+  (items || []).forEach(item => {
+    const idx = state.filiais.findIndex(f => normalizeText(f.origem) === normalizeText(item.origemOriginal) && normalizeText(f.alias) === normalizeText(item.aliasOriginal));
+    if (idx < 0) return;
+    const rec = { ...state.filiais[idx], origem: item.origem, alias: item.alias, cnpj: item.cnpj, regional: item.regional };
+    state.filiais[idx] = rec;
+    registrarRegionalCentral(rec.regional);
+    _filiaisSyncUpdate(item.origemOriginal, item.aliasOriginal, rec);
+  });
+  invalidateFilialLookup();
+}
+
+// UPDATE em vez de upsert — mesmo motivo de _materiaisSyncUpdate: o
+// onConflict do upsert usa a chave ATUAL e cria duplicata se Original/Sigla
+// mudou, e a policy de INSERT de filiais exige user_id = auth.uid() sem
+// bypass de admin (só UPDATE tem), então um Supervisor editando a central
+// de outro usuário não conseguiria inserir/conflitar — só atualizar.
+function _filiaisSyncUpdate(oldOrigem, oldAlias, rec) {
+  if (!window.supabaseClient) return;
+  const ownerId = rec.donoId || window.currentUser?.id;
+  if (!ownerId) return;
+  window.supabaseClient.from('filiais')
+    .update({ origem: rec.origem, alias: rec.alias, cnpj: rec.cnpj || null, regional: rec.regional || null })
+    .eq('user_id', ownerId).eq('origem', oldOrigem).eq('alias', oldAlias)
+    .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao atualizar filial:', error); });
 }
 
 // Chave natural de filial — mesma composição do onConflict do Supabase
@@ -1054,7 +1476,7 @@ function filialMatchKey(item) {
 function _filiaisSyncUpsert(rec) {
   if (!window.supabaseClient) return;
   window.supabaseClient.from('filiais')
-    .upsert({ origem: rec.origem, alias: rec.alias, cnpj: rec.cnpj || null, regional: rec.regional || null, import_id: rec.importId || null }, { onConflict: 'user_id,origem,alias' })
+    .upsert({ origem: rec.origem, alias: rec.alias, cnpj: rec.cnpj || null, regional: rec.regional || null, import_id: rec.importId || null, origem_usuario_id: rec.importadoDeId || null }, { onConflict: 'user_id,origem,alias' })
     .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao sincronizar filial:', error); });
 }
 
@@ -1062,7 +1484,7 @@ function _filiaisSyncUpsert(rec) {
 // subiram pra nuvem. Mesmo padrão de _materiaisSyncUpsertBatch.
 async function _filiaisSyncUpsertBatch(recs) {
   if (!window.supabaseClient || !recs || !recs.length) return;
-  const rows = recs.map(rec => ({ origem: rec.origem, alias: rec.alias, cnpj: rec.cnpj || null, regional: rec.regional || null, import_id: rec.importId || null }));
+  const rows = recs.map(rec => ({ origem: rec.origem, alias: rec.alias, cnpj: rec.cnpj || null, regional: rec.regional || null, import_id: rec.importId || null, origem_usuario_id: rec.importadoDeId || null }));
   for (let i = 0; i < rows.length; i += CADASTRO_SYNC_BATCH_SIZE) {
     const { error } = await window.supabaseClient.from('filiais').upsert(rows.slice(i, i + CADASTRO_SYNC_BATCH_SIZE), { onConflict: 'user_id,origem,alias' });
     if (error) { console.warn('[Supabase] Falha ao sincronizar lote de filiais:', error); break; }
@@ -1080,7 +1502,14 @@ async function _filiaisSyncUpsertBatch(recs) {
 // created_at, não created (erro "column filiais.created does not exist").
 async function syncFiliaisFromSupabase() {
   try {
-    const data = await fetchAllRows('filiais', 'origem, alias, cnpj, regional, import_id, created_at');
+    // BUG REAL (04/08) — ver syncMateriaisFromSupabase pro mesmo motivo:
+    // Configurações agora mostra só o cadastro do próprio dono; ver o de
+    // outro usuário é opt-in via "Importar de". Supervisão continua
+    // irrestrita (não passa por aqui).
+    const { data, error } = await window.supabaseClient.from('filiais')
+      .select('user_id, origem, alias, cnpj, regional, import_id, created_at, origem_usuario_id')
+      .eq('user_id', window.currentUser?.id);
+    if (error) throw error;
     // O BANCO MANDA (30/07) — ver syncMateriaisFromSupabase pro mesmo motivo:
     // o self-heal daqui desfazia exclusão feita pelo painel de Supervisão.
     const local = Array.isArray(state.filiais) ? state.filiais : [];
@@ -1088,12 +1517,17 @@ async function syncFiliaisFromSupabase() {
     state.filiais = (data || []).map(r => {
       const existenteLocal = porChaveLocal.get(filialMatchKey(r));
       return {
+        // donoId: mesmo motivo de syncMateriaisFromSupabase — usado por
+        // _filiaisSyncUpdate() quando o Supervisor edita a central de outro.
+        donoId: r.user_id,
+        importadoDeId: r.origem_usuario_id || undefined,
         origem: r.origem, alias: r.alias, cnpj: r.cnpj, regional: r.regional,
         importId: r.import_id || undefined,
         created: r.created_at ? new Date(r.created_at).toLocaleDateString('pt-BR') : (existenteLocal?.created || new Date().toLocaleDateString('pt-BR')),
       };
     });
     invalidateFilialLookup();
+    if (window.currentUser?.role === 'admin') await _checarNovosParaImportar('filiais');
   } catch (err) {
     console.warn('[Supabase] Falha ao buscar filiais — mantendo dados locais.', err);
   }
@@ -1106,6 +1540,7 @@ function upsertFiliais(items) {
     const aliasKey = normalizeText(src.alias);
     const idx = state.filiais.findIndex(f => normalizeText(f.origem) === key || normalizeText(f.alias) === aliasKey);
     const rec = {
+      donoId: src.donoId || window.currentUser?.id,
       ...src,
       created: src.created || new Date().toLocaleDateString('pt-BR')
     };

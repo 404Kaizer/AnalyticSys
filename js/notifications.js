@@ -320,7 +320,7 @@ const _ACTIVITY_MODULE_COLOR = {
   saidas:      'var(--red)',
   lancamentos: 'var(--amber)',
   ocorrencias: 'var(--amber)',
-  producao:    'var(--purple)',
+  custos_sap:  'var(--purple)',
   sap:         'var(--accent)',
   imports:     'var(--teal)',
   profiles:    'var(--red)',
