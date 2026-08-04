@@ -300,6 +300,20 @@ function toggleSomenteDuplicatas() {
 }
 window.toggleSomenteDuplicatas = toggleSomenteDuplicatas;
 
+// ponytail: toggle irmão do de cima, provisório — ver getSap861862DuplicateKeys.
+let _somente861862 = false;
+
+function toggleSomente861862() {
+  _somente861862 = !_somente861862;
+  const btn = document.getElementById('btn-861862-sap');
+  if (btn) {
+    btn.classList.toggle('active', _somente861862);
+    btn.title = _somente861862 ? 'Exibindo somente transferência duplicada — clique para voltar' : 'Filtrar somente entrada (101/801) + transferência duplicada (dois 862)';
+  }
+  renderSAP?.() || renderModule?.('sap');
+}
+window.toggleSomente861862 = toggleSomente861862;
+
 const _SAP_REVERSE_MOVS = new Set(['102','864','863','552','802']);
 
 // ── Cache de duplicatas SAP ───────────────────────────────────────────────
@@ -413,6 +427,66 @@ function getSapDuplicateKeys() {
   return result;
 }
 window.getSapDuplicateKeys = getSapDuplicateKeys;
+
+// ── Filtro provisório: duplicidade 862 (transferência duplicada) ──────────
+// ponytail: feature provisória pedida pra caçar um bug específico: mercadoria
+// entra (101/801, QUALQUER data) e depois é transferida (862) duas vezes por
+// engano. O 862 (saída) e o 861 (entrada, se existir) são necessariamente do
+// mesmo dia — só esses comparam DT DOC+DT LANÇAMENTO+DT REGISTRO entre si. A
+// entrada 101/801 só precisa bater CENTRAL+DEPOSITO+MATERIAL+PESO, sem data
+// (pode ter chegado dias antes da transferência). Remover (botão, toggle e
+// esta função) quando o bug de origem no SAP for corrigido e não houver mais
+// dados legados pra auditar.
+let _sap861862Cache = null;
+let _sap861862CacheVersion = -1;
+
+function getSap861862DuplicateKeys() {
+  const currentVersion = (state.sap || []).length;
+  if (_sap861862Cache && _sap861862CacheVersion === currentVersion) {
+    return _sap861862Cache;
+  }
+
+  const normMov = m => String(m || '').trim().toUpperCase();
+  const semData = r => [
+    (r.central  || '').trim(),
+    (r.deposito || '').trim(),
+    (r.material || r.materialOriginal || '').trim(),
+    String(Math.abs(num(r.peso))) // entrada/861 vem positivo, 862 (saída) negativo — compara magnitude
+  ].join('||');
+  const comData = r => [
+    semData(r),
+    (r.dtDoc  || '').trim(),
+    (r.dtLanc || '').trim(),
+    (r.dtReg  || '').trim()
+  ].join('||');
+
+  const entradasPorChave = {}; // semData → registros 101/801 (data livre)
+  const transfPorChave = {};   // comData → registros 862/861 (mesmo dia)
+  (state.sap || []).forEach(r => {
+    const mv = normMov(r.movimento);
+    if (mv === '101' || mv === '801') {
+      (entradasPorChave[semData(r)] || (entradasPorChave[semData(r)] = [])).push(r);
+    } else if (mv === '862' || mv === '861') {
+      (transfPorChave[comData(r)] || (transfPorChave[comData(r)] = [])).push(r);
+    }
+  });
+
+  const flagged = new Set();
+  Object.entries(transfPorChave).forEach(([chave, entries]) => {
+    const m862 = entries.filter(r => normMov(r.movimento) === '862');
+    const m861 = entries.filter(r => normMov(r.movimento) === '861');
+    if (m862.length !== 2) return;
+    const chaveSemData = chave.split('||').slice(0, 4).join('||');
+    const entradas = entradasPorChave[chaveSemData];
+    if (!entradas || entradas.length === 0) return;
+    [...entradas, ...m862, ...m861].forEach(r => flagged.add(getSapRecordKey(r)));
+  });
+
+  _sap861862Cache = flagged;
+  _sap861862CacheVersion = currentVersion;
+  return flagged;
+}
+window.getSap861862DuplicateKeys = getSap861862DuplicateKeys;
 
 function getSapRecordKey(r) {
   return [
@@ -806,6 +880,10 @@ function _getModuleTextFilteredData(module) {
   if (module === 'lancamentos' && _somenteDuplicatasLanc) {
     const dupKeys = getLancamentoDuplicateKeys();
     data = data.filter(r => dupKeys.has(getLancamentoRecordKey(r)));
+  }
+  if (module === 'sap' && _somente861862) {
+    const keys = getSap861862DuplicateKeys();
+    data = data.filter(r => keys.has(getSapRecordKey(r)));
   }
   const f = module === 'producao' ? filtroProducao : filters[module];
   return filterRecords(data, f, getSearchableFields(module), module);
