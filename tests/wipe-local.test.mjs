@@ -90,7 +90,7 @@ function montar({ ajustesSistemicos = [], estadoInicial = {} } = {}) {
   // em si é substituída por um espião abaixo (não é o alvo deste teste).
   const base = {
     configs: [], filiais: [], materiais: [], entradas: [], saidas: [],
-    lancamentos: [], sap: [], producao: [], imports: [], ocorrencias: [],
+    lancamentos: [], sap: [], custosSap: [], imports: [], ocorrencias: [],
     invJustificativas: [],
   };
   const state = { ...base, ajustesSistemicos, ...estadoInicial };

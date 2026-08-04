@@ -1,3 +1,7 @@
+## Confirmar antes de implementar
+
+Se o pedido do usuário ficar ambíguo, suscetível a erro, mal explicado, ou você tiver qualquer dúvida sobre o que foi pedido, SEMPRE PERGUNTE ANTES DE IMPLEMENTAR QUALQUER COISA. Não presuma o entendimento correto e siga direto pro código — confirme primeiro.
+
 ## Preview / local server
 
 Never start a local dev server or open the Browser pane (`preview_start`, `preview_*`, embedded browser tools) for this project — it crashes the desktop app. The user always tests changes themselves in their own browser. Only use these tools if the user explicitly asks for them in that message.
