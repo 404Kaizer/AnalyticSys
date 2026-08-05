@@ -4247,6 +4247,51 @@ function renderSAP() {
   atualizarBarraLote('sap');
 }
 
+// Índice Cód SAP -> Grupo SAP (materiais.codSap -> materiais.alias),
+// cacheado igual ao padrão de getTransferPairIndex (ui.js): versão pelo
+// tamanho de state.materiais, recalcula só quando o cadastro muda.
+let _grupoSapPorCodigoCache = null;
+let _grupoSapPorCodigoCacheVersion = -1;
+function getGrupoSapPorCodigoIndex() {
+  const version = (state.materiais || []).length;
+  if (_grupoSapPorCodigoCache && _grupoSapPorCodigoCacheVersion === version) return _grupoSapPorCodigoCache;
+  const idx = new Map();
+  (state.materiais || []).forEach(m => {
+    const cod = String(m.codSap || '').trim();
+    if (cod && !idx.has(cod)) idx.set(cod, m.alias);
+  });
+  _grupoSapPorCodigoCache = idx;
+  _grupoSapPorCodigoCacheVersion = version;
+  return idx;
+}
+
+// O export SAP (MB52-like) chama a coluna de código de "Material" — daqui
+// vem r.material, que na verdade é o Cód SAP (ver comentário em
+// processImportedRows). Resolve o Grupo SAP de verdade batendo esse código
+// contra materiais.codSap (Configurações → Materiais). Usado tanto no
+// render da coluna quanto no filtro de coluna (colFilterMeta.custosSap,
+// ui.js) e no botão "Sem Cadastro" (toggleFiltroCustosSapSemCadastro).
+function _custosSapResolveMaterial(r) {
+  const codigo = String(r?.material || '').trim();
+  if (!codigo) return '';
+  return getGrupoSapPorCodigoIndex().get(codigo) || 'SEM CADASTRO';
+}
+
+// Botão "Sem Cadastro" do toolbar — alterna o filtro da coluna Material
+// (índice 0) pra mostrar só os códigos sem correspondência no cadastro,
+// reaproveitando o mesmo mecanismo do filtro de coluna (ui.js).
+function toggleFiltroCustosSapSemCadastro(btn) {
+  ensureColFilters('custosSap');
+  const atual = colFilters.custosSap[0];
+  const jaAtivo = atual && atual.size === 1 && atual.has('SEM CADASTRO');
+  colFilters.custosSap[0] = jaAtivo ? new Set() : new Set(['SEM CADASTRO']);
+  _invalidateColFilterPassCache('custosSap');
+  resetPageForModule('custosSap');
+  renderCustosSap();
+  updateAllColFilterIcons('custosSap');
+  if (btn) btn.classList.toggle('btn-primary', !jaAtivo);
+}
+
 function renderCustosSap() {
   const tb = document.getElementById('tb-custos-sap');
   if (!tb) return;
@@ -4275,14 +4320,26 @@ function renderCustosSap() {
   set('cs-valor', money(valorTotal));
   set('cs-custo', money(custoMedio));
 
+  const btnSemCad = document.getElementById('btn-custos-sap-sem-cadastro');
+  if (btnSemCad) {
+    const filtroAtivo = colFilters.custosSap?.[0];
+    btnSemCad.classList.toggle('btn-primary', !!(filtroAtivo && filtroAtivo.size === 1 && filtroAtivo.has('SEM CADASTRO')));
+  }
+
   if (!data.length) {
-    tb.innerHTML = '<tr><td colspan="8"><div class="empty-state"><i class="ti ti-chart-bar"></i><p>Nenhum registro de Custos SAP importado.</p></div></td></tr>';
+    tb.innerHTML = '<tr><td colspan="9"><div class="empty-state"><i class="ti ti-chart-bar"></i><p>Nenhum registro de Custos SAP importado.</p></div></td></tr>';
     return;
   }
 
-  tb.innerHTML = pageData.map((r, i) => `
+  tb.innerHTML = pageData.map((r, i) => {
+    const grupoSap = _custosSapResolveMaterial(r);
+    const materialCellHtml = grupoSap === 'SEM CADASTRO'
+      ? '<span class="badge badge-red"><i class="ti ti-alert-triangle" style="font-size:10px"></i> SEM CADASTRO</span>'
+      : (grupoSap ? escapeHtml(grupoSap) : '—');
+    return `
     <tr>
-      <td class="td-mono">${r.fonte === 'manual' ? '<span class="badge-manual" title="Registro inserido manualmente"><i class="ti ti-pencil"></i></span>' : ''}${r.material || '—'}</td>
+      <td class="td-mono">${r.fonte === 'manual' ? '<span class="badge-manual" title="Registro inserido manualmente"><i class="ti ti-pencil"></i></span>' : ''}${materialCellHtml}</td>
+      <td class="td-mono">${r.material || '—'}</td>
       <td class="td-mono">${r.central || '—'}</td>
       <td class="td-mono">${r.ano || '—'}</td>
       <td class="td-mono">${r.mes || '—'}</td>
@@ -4290,8 +4347,8 @@ function renderCustosSap() {
       <td class="td-mono" style="color:#f59e0b">${money(r.valorTotal)}</td>
       <td class="td-mono">${money(r.custo, 4)}</td>
       <td><button class="btn-icon danger" onclick="excluirCustosSap(${currentPageCustosSap * PAGE_SIZE + i})"><i class="ti ti-trash"></i></button></td>
-    </tr>
-  `).join('');
+    </tr>`;
+  }).join('');
   makeResizable(tb.closest('table'));
   injectColFilterButtons(tb.closest('table'), 'custosSap');
 }
@@ -6701,6 +6758,11 @@ async function restoreAndRender() {
     // se a aba já tiver um canal aberto (ex.: chamado duas vezes por
     // algum motivo), a própria função não faz nada na segunda vez.
     if (typeof _activityRealtimeInit === 'function') _activityRealtimeInit();
+    // Alerta broadcast do ADM — checa se há alerta pendente pra este
+    // usuário (cobre quem estava offline quando foi enviado) e abre o
+    // canal Realtime pra pegar novos alertas enviados com a sessão já aberta.
+    if (typeof adminAlertCheckPendente === 'function') adminAlertCheckPendente();
+    if (typeof adminAlertRealtimeInit === 'function') adminAlertRealtimeInit();
     // Reset remoto de dados locais (módulos híbridos) — aplica na hora se
     // o ADM agir enquanto esta sessão está aberta, em vez de só no próximo
     // boot. Ver checarWipePendente/wipeRealtimeInit (normalize.js).

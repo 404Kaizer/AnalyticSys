@@ -257,7 +257,7 @@ function _criarRegistroCustosSap(dados) {
     custo: num(dados.custo)
   });
 
-  if (!rec.material || !rec.central || !rec.ano || !rec.mes) return { ok: false, erro: 'Preencha material, central, ano e mês' };
+  if (!rec.material || !rec.central || !rec.ano || !rec.mes || !rec.custo) return { ok: false, erro: 'Preencha material, central, ano, mês e custo' };
 
   // Aviso de duplicata — mesmo padrão de Lançamentos/Entradas.
   if (typeof _fpCustosSap === 'function') {
@@ -291,6 +291,110 @@ function salvarCustosSap() {
   toast('Registro de Custos SAP adicionado com sucesso');
 }
 
+// Opções de <select> de Central por Sigla (filiais.alias) — usado por todas
+// as abas do modal "Novo Registro Manual" que têm campo Central (Entrada,
+// Saída, Lançamento, SAP, Custo SAP).
+function _buildCentralOptionsHtml(placeholder) {
+  const centrais = [...new Map((state.filiais || []).map(f => [f.alias, f.origem])).entries()]
+    .filter(([alias]) => alias)
+    .sort((a, b) => a[0].localeCompare(b[0], 'pt-BR'));
+  return `<option value="">${escapeHtml(placeholder)}</option>`
+    + centrais.map(([alias, origem]) => `<option value="${escapeHtml(alias)}">${escapeHtml(alias)}${origem ? ' — ' + escapeHtml(origem) : ''}</option>`).join('');
+}
+
+// Popula os selects de Material e Central da aba "Custo SAP" (modal-manual)
+// com o que já está cadastrado — chamado ao abrir a aba (ver o onclick do
+// botão em index.html), pra sempre refletir o cadastro atual. Reaproveita
+// getGrupoSapPorCodigoIndex (dashboard.js), o mesmo índice Cód SAP→Grupo
+// SAP usado pra resolver a coluna Material da tabela Custos SAP. Material
+// aqui é por CÓDIGO (não por nome) — diferente das outras abas — porque é
+// isso que o registro de Custos SAP guarda de verdade (ver dashboard.js).
+function _custosSapManualPopularSelects() {
+  const selMaterial = document.getElementById('csm-material');
+  if (selMaterial) {
+    const porCodigo = [...getGrupoSapPorCodigoIndex().entries()]
+      .sort((a, b) => a[0].localeCompare(b[0], 'pt-BR', { numeric: true }));
+    selMaterial.innerHTML = '<option value="">Selecione o material</option>'
+      + porCodigo.map(([cod, alias]) => `<option value="${escapeHtml(cod)}">${escapeHtml(cod)} — ${escapeHtml(alias)}</option>`).join('');
+  }
+  const selCentral = document.getElementById('csm-central');
+  if (selCentral) selCentral.innerHTML = _buildCentralOptionsHtml('Selecione a central');
+}
+
+// Popula os selects de Central/Material/Categoria das abas Entrada, Saída,
+// Lançamento e SAP do modal "Novo Registro Manual" (classes
+// manual-central-select/manual-material-select/manual-categoria-select,
+// ver index.html) — chamado sempre que setTab() troca de aba (ui.js), pra
+// sempre refletir o cadastro atual. Material/Categoria aqui são pelo nome
+// já padronizado (materiais.alias / CATEGORIAS_MATERIAL), diferente da aba
+// Custo SAP que usa código. Preserva a seleção atual de cada select ao
+// repopular — trocar de aba não deve perder o que já foi escolhido.
+function _manualModalPopularSelects() {
+  const materiais = [...new Set((state.materiais || []).map(m => m.alias).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  const materialOptionsHtml = '<option value="">Selecione o material</option>'
+    + materiais.map(a => `<option value="${escapeHtml(a)}">${escapeHtml(a)}</option>`).join('');
+
+  const categoriaOptionsHtml = '<option value="">Selecione a categoria</option>'
+    + (typeof CATEGORIAS_MATERIAL !== 'undefined' ? CATEGORIAS_MATERIAL : []).map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+
+  document.querySelectorAll('.manual-central-select').forEach(sel => {
+    const atual = sel.value;
+    sel.innerHTML = _buildCentralOptionsHtml(sel.dataset.optionalLabel || 'Selecione a central');
+    if (atual) sel.value = atual;
+  });
+  // Categoria é derivada do Material (ver _onManualMaterialChange, abaixo)
+  // — só popula as opções aqui; o valor é sincronizado logo depois, ao
+  // repopular os selects de Material.
+  document.querySelectorAll('.manual-categoria-select').forEach(sel => {
+    sel.innerHTML = categoriaOptionsHtml;
+  });
+  document.querySelectorAll('.manual-material-select').forEach(sel => {
+    const atual = sel.value;
+    sel.innerHTML = materialOptionsHtml;
+    if (atual) sel.value = atual;
+    _onManualMaterialChange(sel);
+  });
+}
+
+// Categoria (Entrada/Saída/Lançamento) é sempre derivada do Material
+// escolhido — o select fica disabled no HTML, nunca editável direto.
+// Reaproveita getCategoriaPorGrupo (normalize.js), o mesmo lookup que
+// resolve a categoria cadastrada pro Grupo SAP. Chamada pelo onchange do
+// select de Material e, para manter em sincronia, também de dentro de
+// _manualModalPopularSelects após repopular. Em abas sem campo Categoria
+// (SAP), o id "*-categoria" correspondente não existe — no-op seguro.
+function _onManualMaterialChange(materialSel) {
+  const categoriaSel = document.getElementById(materialSel.id.replace('-material', '-categoria'));
+  if (!categoriaSel) return;
+  categoriaSel.value = (typeof getCategoriaPorGrupo === 'function') ? (getCategoriaPorGrupo(materialSel.value) || '') : '';
+}
+
+// Mesma criação de registro do modal dedicado (salvarCustosSap, acima) —
+// só a origem dos campos muda: aba "Custo SAP" do modal genérico "Novo
+// Registro Manual" (modal-manual, compartilhado com Entrada/Saída/
+// Lançamento/SAP — ver index.html), ids prefixados "csm-" pra não colidir
+// com os "cs-" do modal-custos-sap (os dois convivem no mesmo DOM). Ano/Mês
+// vem de um único <input type="month"> nativo (csm-data, formato YYYY-MM
+// do próprio input — sem dia).
+function salvarCustosSapManual() {
+  const [ano, mesComZero] = val('csm-data').split('-');
+  const resultado = _criarRegistroCustosSap({
+    material:     val('csm-material'),
+    central:      val('csm-central'),
+    ano:          ano || '',
+    mes:          mesComZero ? String(Number(mesComZero)) : '',
+    estoqueTotal: val('csm-estoque-total'),
+    valorTotal:   val('csm-valor-total'),
+    custo:        val('csm-custo'),
+  });
+  if (!resultado.ok) { toast(resultado.erro, 'error'); return; }
+  closeModal('modal-manual');
+  renderCustosSap();
+  updateDashboard();
+  toast('Registro de Custos SAP adicionado com sucesso');
+}
+
 
 // ── Helpers para cálculo automático de valor total ──────────
 function _modalAutoCalcTotal(pesoId, custoId, totalId) {
@@ -298,7 +402,7 @@ function _modalAutoCalcTotal(pesoId, custoId, totalId) {
   const custo = num(val(custoId));
   if (peso && custo) {
     const el = document.getElementById(totalId);
-    if (el && !el.dataset.userEdited) el.value = (peso * custo).toFixed(2);
+    if (el) el.value = (peso * custo).toFixed(2);
   }
 }
 

@@ -268,6 +268,10 @@ window.AuthGate = (function () {
     const isAdmin = profile?.role === 'admin';
     if (supervisaoBtn) supervisaoBtn.style.display = isAdmin ? '' : 'none';
 
+    // Enviar alerta (broadcast) — mesmo critério de visibilidade da Supervisão.
+    const alertaBtn = $('account-switcher-alerta-btn');
+    if (alertaBtn) alertaBtn.style.display = isAdmin ? '' : 'none';
+
     // Decisão 28/07 — só o ADM gera Notas de Crédito/Débito. Botão some
     // pra quem não é admin (a policy de INSERT de notas_ajuste já bloqueia
     // no banco; isso é só pra não oferecer uma ação que vai falhar).
@@ -574,6 +578,7 @@ window.AuthGate = (function () {
         // dispositivo) deixaria o canal antigo aberto com credenciais
         // inválidas até a próxima navegação.
         if (typeof _activityRealtimeStop === 'function') _activityRealtimeStop();
+        if (typeof adminAlertRealtimeStop === 'function') adminAlertRealtimeStop();
         // Presença global (Mensagens) — mesmo cuidado: para o polling e
         // limpa a fileira de avatares antes de uma eventual troca de
         // usuário na mesma aba sem reload.

@@ -677,10 +677,14 @@ function _activityIsIntegrable(row, count) {
 
 async function _activityEmitNotification(row, count) {
   const isAuth      = row.table_name === 'auth';
+  const isAlertConf = row.table_name === 'admin_alert_confirmations';
   const actorLabel  = await _activityResolveActorLabel(row.actor_id);
 
   let title, body;
-  if (isAuth) {
+  if (isAlertConf) {
+    title = `${actorLabel} confirmou o alerta`;
+    body  = '';
+  } else if (isAuth) {
     title = `${actorLabel} ${_ACTIVITY_AUTH_LABEL[row.operation] || 'mexeu na conta'}`;
     body  = '';
   } else {
@@ -956,6 +960,152 @@ function _activityRealtimeStop() {
   _activityUserCache = null;
 }
 
+// ═══════════════════════════════════════════════════════════
+// ALERTA DO ADMINISTRADOR — broadcast pra todos os usuários
+// ═══════════════════════════════════════════════════════════
+// Sempre olha só o alerta mais recente (admin_alerts) — um novo alerta
+// "substitui" o pendente por decisão do Hugo (04/08): não empilha fila.
+// Quem confirma vira uma linha em admin_alert_confirmations, que já sai
+// notificada pro ADM de graça via trg_activity_log (mesmo pipeline de
+// activity_log usado pra qualquer outra tabela — ver _activityEmitNotification).
+// Modelos prontos — cada um com ícone e cor própria (tokens já existentes
+// em css/tokens.css, tema-aware). 'personalizado' é o padrão ao abrir o
+// modal: canvas em branco, sem cor, pro ADM escrever livremente.
+const ADMIN_ALERT_PRESETS = {
+  personalizado: { label: 'Personalizado', icon: 'ti-pencil', color: 'var(--text2)', bg: 'var(--bg3)', border: 'var(--border2)', text: '' },
+  reuniao: { label: 'Reunião', icon: 'ti-calendar-event', color: 'var(--accent)', bg: 'var(--accent-dim)', border: 'var(--accent)', text: 'Teremos uma reunião em breve. Fique atento ao horário e não deixe de participar.' },
+  metas_semanal: { label: 'Metas · Semanal', icon: 'ti-target-arrow', color: 'var(--amber)', bg: 'var(--amber-bg)', border: 'var(--amber)', text: 'Lembrete semanal: analistas, cobrem dos operadores dos seus grupos as aferições e o lançamento dos estoques das usinas no sistema.' },
+  metas_mensal: { label: 'Metas · Mensal', icon: 'ti-report-money', color: 'var(--red)', bg: 'var(--red-bg)', border: 'var(--red)', text: 'Fechamento mensal: analistas, cobrem dos operadores dos seus grupos as aferições e o lançamento dos estoques das usinas no sistema até o fechamento.' },
+  atualizacao: { label: 'Atualização do Sistema', icon: 'ti-refresh', color: 'var(--purple)', bg: 'var(--purple-bg)', border: 'var(--purple)', text: 'O sistema está em atualização agora. Salve o que estiver fazendo imediatamente e evite novos lançamentos até o aviso de conclusão.' },
+  comunicado: { label: 'Comunicado Geral', icon: 'ti-info-circle', color: 'var(--green)', bg: 'var(--green-bg)', border: 'var(--green)', text: 'Comunicado importante: ' },
+};
+
+let _adminAlertId = null;
+let _adminAlertCountdownInterval = null;
+let _adminAlertComposeCategoria = 'personalizado';
+
+async function adminAlertCheckPendente() {
+  if (!window.supabaseClient || !window.currentUser) return;
+  try {
+    const { data: alerta } = await window.supabaseClient
+      .from('admin_alerts').select('id, message, category, created_by')
+      .order('created_at', { ascending: false }).limit(1).maybeSingle();
+    if (!alerta || alerta.created_by === window.currentUser.id) return; // sem alerta, ou é o próprio ADM que enviou
+    const { data: conf } = await window.supabaseClient
+      .from('admin_alert_confirmations').select('id')
+      .eq('alert_id', alerta.id).eq('user_id', window.currentUser.id).maybeSingle();
+    if (!conf) _adminAlertShow(alerta);
+  } catch (e) { console.warn('[Alerta] Falha ao checar alerta pendente:', e); }
+}
+
+function _adminAlertShow(alerta) {
+  _adminAlertId = alerta.id;
+  const preset  = ADMIN_ALERT_PRESETS[alerta.category] || ADMIN_ALERT_PRESETS.personalizado;
+  const overlay = document.getElementById('admin-alert-overlay');
+  overlay?.style?.setProperty('--cat-color', preset.color);
+  overlay?.style?.setProperty('--cat-bg', preset.bg);
+  overlay?.style?.setProperty('--cat-border', preset.border);
+  const icon = document.getElementById('admin-alert-icon');
+  if (icon) icon.className = 'ti ' + preset.icon;
+  const titulo = document.getElementById('admin-alert-titulo');
+  if (titulo) titulo.textContent = preset === ADMIN_ALERT_PRESETS.personalizado ? 'Alerta do administrador' : preset.label;
+  const msgEl = document.getElementById('admin-alert-message');
+  if (msgEl) msgEl.textContent = alerta.message;
+  const btn = document.getElementById('admin-alert-confirm-btn');
+  if (btn) btn.disabled = true;
+  overlay?.classList.add('open');
+
+  const deadline = Date.now() + 5000;
+  clearInterval(_adminAlertCountdownInterval);
+  _adminAlertCountdownInterval = setInterval(() => {
+    const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+    const el = document.getElementById('admin-alert-countdown');
+    if (el) el.textContent = String(remaining);
+    if (remaining <= 0) {
+      clearInterval(_adminAlertCountdownInterval);
+      _adminAlertCountdownInterval = null;
+      if (btn) btn.disabled = false;
+    }
+  }, 250);
+}
+
+async function adminAlertConfirmar() {
+  const alertId = _adminAlertId;
+  if (!alertId || !window.supabaseClient || !window.currentUser) return;
+  try {
+    await window.supabaseClient.from('admin_alert_confirmations')
+      .insert({ alert_id: alertId, user_id: window.currentUser.id });
+  } catch (e) { console.warn('[Alerta] Falha ao registrar confirmação:', e); }
+  document.getElementById('admin-alert-overlay')?.classList.remove('open');
+  _adminAlertId = null;
+}
+
+// ADM abre o modal de composição — grade de modelos renderizada a partir
+// de ADMIN_ALERT_PRESETS, sempre começando em 'personalizado' (em branco).
+function adminAlertAbrirCompose() {
+  _adminAlertComposeCategoria = 'personalizado';
+  const grid = document.getElementById('admin-alert-preset-grid');
+  if (grid) {
+    grid.innerHTML = Object.entries(ADMIN_ALERT_PRESETS).map(([key, p]) => `
+      <button type="button" class="admin-alert-preset-chip${key === 'personalizado' ? ' active' : ''}" data-cat="${key}"
+        style="--cat-color:${p.color};--cat-bg:${p.bg};--cat-border:${p.border}"
+        onclick="adminAlertSelecionarPreset('${key}')">
+        <i class="ti ${p.icon}"></i> ${_notifEsc(p.label)}
+      </button>`).join('');
+  }
+  const text = document.getElementById('admin-alert-compose-text');
+  if (text) text.value = '';
+  document.getElementById('admin-alert-compose-overlay')?.classList.add('open');
+}
+
+function adminAlertSelecionarPreset(key) {
+  _adminAlertComposeCategoria = key;
+  document.querySelectorAll('#admin-alert-preset-grid .admin-alert-preset-chip')
+    .forEach(el => el.classList.toggle('active', el.dataset.cat === key));
+  const preset = ADMIN_ALERT_PRESETS[key];
+  const text = document.getElementById('admin-alert-compose-text');
+  if (text && preset?.text) text.value = preset.text;
+}
+
+function adminAlertFecharCompose() {
+  document.getElementById('admin-alert-compose-overlay')?.classList.remove('open');
+}
+
+async function adminAlertEnviar() {
+  if (!window.supabaseClient || !window.currentUser) return;
+  const text = document.getElementById('admin-alert-compose-text');
+  const msg  = (text?.value || '').trim();
+  if (!msg) { if (typeof toast === 'function') toast('Escreva uma mensagem antes de enviar.', 'error'); return; }
+  const btn = document.getElementById('admin-alert-compose-send-btn');
+  if (btn) btn.disabled = true;
+  try {
+    const { error } = await window.supabaseClient.from('admin_alerts')
+      .insert({ message: msg, category: _adminAlertComposeCategoria, created_by: window.currentUser.id });
+    if (error) throw error;
+    if (typeof toast === 'function') toast('Alerta enviado a todos os usuários.', 'success');
+    adminAlertFecharCompose();
+  } catch (e) {
+    console.warn('[Alerta] Falha ao enviar:', e);
+    if (typeof toast === 'function') toast('Falha ao enviar alerta.', 'error');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+let _adminAlertChannel = null;
+function adminAlertRealtimeInit() {
+  if (!window.supabaseClient || !window.currentUser || _adminAlertChannel) return;
+  _adminAlertChannel = window.supabaseClient
+    .channel('admin_alerts_realtime')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'admin_alerts' },
+      () => { adminAlertCheckPendente(); })
+    .subscribe();
+}
+function adminAlertRealtimeStop() {
+  if (_adminAlertChannel && window.supabaseClient) window.supabaseClient.removeChannel(_adminAlertChannel);
+  _adminAlertChannel = null;
+}
+
 Object.assign(window,{
   notifToggle,notifClose,notifOpen,
   notifMarkRead,notifMarkAllRead,notifNavigate,notifIntegrar,
@@ -964,4 +1114,7 @@ Object.assign(window,{
   notifAbrirDetalheAtividade,
   notifPushOcorrenciaSupervisor,notifAbrirOcorrenciaPrioritaria,notifPushMudancaOcorrencia,
   _activityRealtimeInit,_activityRealtimeStop,
+  adminAlertCheckPendente,adminAlertConfirmar,adminAlertEnviar,
+  adminAlertAbrirCompose,adminAlertSelecionarPreset,adminAlertFecharCompose,
+  adminAlertRealtimeInit,adminAlertRealtimeStop,
 });

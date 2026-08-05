@@ -356,6 +356,23 @@
 .modal-title i { color: var(--accent); }
 .modal-sub { font-size: 11.5px; color: var(--text3); margin-bottom: 22px; font-family: var(--mono); }
 
+/* Alerta broadcast do ADM (js/notifications.js) — modelos com cor própria
+   por categoria via custom property --cat-color/--cat-bg/--cat-border,
+   setada inline em cada chip (compor) e no overlay (recebido). */
+.admin-alert-preset-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+.admin-alert-preset-chip {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 12px; border-radius: var(--radius);
+  font-size: 12px; font-family: var(--font); font-weight: 500;
+  border: 1px solid var(--cat-border, var(--border2));
+  background: var(--bg3); color: var(--text2);
+  cursor: pointer; transition: all .13s;
+}
+.admin-alert-preset-chip:hover { background: var(--cat-bg, var(--bg4)); color: var(--cat-color, var(--text)); }
+.admin-alert-preset-chip.active { background: var(--cat-bg, var(--bg4)); color: var(--cat-color, var(--text)); font-weight: 600; }
+#admin-alert-overlay .modal { border-top: 3px solid var(--cat-color, var(--accent)); }
+#admin-alert-overlay .modal-title i { color: var(--cat-color, var(--accent)); }
+
 /* ══════════════════════════════════════════
    MODAL: GERENCIAR CONTA
 ══════════════════════════════════════════ */

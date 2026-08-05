@@ -113,6 +113,33 @@
   </div>
 </div>
 
+<!-- Alerta broadcast do ADM — bloqueante, sem botão de fechar, z-index acima de tudo no sistema (ver js/notifications.js) -->
+<div class="modal-overlay" id="admin-alert-overlay" style="z-index:999999">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-title"><i class="ti ti-alert-triangle" id="admin-alert-icon"></i> <span id="admin-alert-titulo">Alerta do administrador</span></div>
+    <div class="modal-sub" id="admin-alert-message" style="white-space:pre-wrap;font-family:inherit;font-size:13px"></div>
+    <div class="form-actions">
+      <button class="btn btn-primary" id="admin-alert-confirm-btn" type="button" onclick="adminAlertConfirmar()" disabled>
+        Confirmar (<span id="admin-alert-countdown">5</span>s)
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Compor alerta (ADM) — modelos prontos por categoria (ver ADMIN_ALERT_PRESETS em js/notifications.js) -->
+<div class="modal-overlay" id="admin-alert-compose-overlay" style="z-index:10050">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-title"><i class="ti ti-speakerphone"></i> Enviar alerta a todos</div>
+    <div class="modal-sub">Escolha um modelo ou escreva algo personalizado.</div>
+    <div class="admin-alert-preset-grid" id="admin-alert-preset-grid"></div>
+    <textarea class="form-input" id="admin-alert-compose-text" rows="4" placeholder="Mensagem do alerta..." style="width:100%;resize:vertical;margin-top:12px"></textarea>
+    <div class="form-actions">
+      <button class="btn" type="button" onclick="adminAlertFecharCompose()">Cancelar</button>
+      <button class="btn btn-primary" id="admin-alert-compose-send-btn" type="button" onclick="adminAlertEnviar()">Enviar a todos</button>
+    </div>
+  </div>
+</div>
+
 <div class="layout" hidden>
 
 <div class="mobile-nav-overlay" id="nav-overlay" onclick="closeSidebar()"></div>
@@ -472,6 +499,9 @@
                   <!-- Supervisão (31/07) — saiu da sidebar, virou botão aqui. Só admin (toggle em updateAccountUI, auth.js). -->
                   <button class="btn" id="account-switcher-supervisao-btn" style="display:none" onclick="navigate('admin'); closeAccountSwitcher()">
                     <i class="ti ti-shield-lock"></i> Supervisão
+                  </button>
+                  <button class="btn" id="account-switcher-alerta-btn" style="display:none" onclick="adminAlertAbrirCompose(); closeAccountSwitcher()">
+                    <i class="ti ti-speakerphone"></i> Enviar alerta
                   </button>
                   <button class="btn btn-primary" onclick="abrirModalGerenciarConta(); closeAccountSwitcher()">
                     <i class="ti ti-user-cog"></i> Gerenciar Conta
@@ -2640,6 +2670,10 @@
 
             <div class="table-toolbar">
 
+              <button class="btn" id="btn-custos-sap-sem-cadastro" onclick="toggleFiltroCustosSapSemCadastro(this)" title="Mostrar só os códigos sem material correspondente cadastrado">
+                <i class="ti ti-alert-triangle"></i>
+                Sem Cadastro
+              </button>
               <button class="btn" onclick="openModal('modal-custos-sap')">
                 <i class="ti ti-plus"></i>
                 Adicionar
@@ -2652,6 +2686,7 @@
               <thead>
                 <tr>
                   <th>Material</th>
+                  <th>Cód SAP</th>
                   <th>Central</th>
                   <th>Ano</th>
                   <th>Mês</th>
@@ -2664,7 +2699,7 @@
 
               <tbody id="tb-custos-sap">
                 <tr>
-                  <td colspan="8">
+                  <td colspan="9">
                     <div class="empty-state">
                       <i class="ti ti-chart-bar"></i>
                       <p>Nenhum registro de Custos SAP importado.</p>
@@ -4211,6 +4246,7 @@
       <button class="tab-btn" onclick="setTab('tab-saida', this)"><i class="ti ti-package-export"></i> Saída</button>
       <button class="tab-btn" onclick="setTab('tab-lancamento', this)"><i class="ti ti-clipboard-list"></i> Lançamento</button>
       <button class="tab-btn" onclick="setTab('tab-sap', this)"><i class="ti ti-database"></i> SAP</button>
+      <button class="tab-btn" onclick="setTab('tab-custo-sap', this); _custosSapManualPopularSelects()"><i class="ti ti-chart-bar"></i> Custo SAP</button>
     </div>
 
     <!-- Tab Entrada -->
@@ -4219,11 +4255,11 @@
       <div class="form-grid">
         <div class="form-group">
           <label class="form-label">Central Compra <span class="form-required">*</span></label>
-          <input type="text" class="form-input" id="e-central-compra" placeholder="Ex: SLZ1">
+          <select class="form-select manual-central-select" id="e-central-compra"></select>
         </div>
         <div class="form-group">
           <label class="form-label">Central Destino</label>
-          <input type="text" class="form-input" id="e-central-destino" placeholder="Igual à compra se vazio">
+          <select class="form-select manual-central-select" id="e-central-destino" data-optional-label="Igual à compra se vazio"></select>
         </div>
         <div class="form-group">
           <label class="form-label">Nº Nota Fiscal</label>
@@ -4235,11 +4271,11 @@
         </div>
         <div class="form-group">
           <label class="form-label">Categoria</label>
-          <input type="text" class="form-input" id="e-categoria" placeholder="Ex: AGLOMERANTE">
+          <select class="form-select manual-categoria-select" id="e-categoria" disabled></select>
         </div>
         <div class="form-group">
           <label class="form-label">Material <span class="form-required">*</span></label>
-          <input type="text" class="form-input" id="e-material" placeholder="Ex: CIMENTO CP II">
+          <select class="form-select manual-material-select" id="e-material" onchange="_onManualMaterialChange(this)"></select>
         </div>
         <div class="form-group">
           <label class="form-label">Peso (kg) <span class="form-required">*</span></label>
@@ -4255,7 +4291,7 @@
         </div>
         <div class="form-group">
           <label class="form-label">Valor Total (R$)</label>
-          <input type="number" class="form-input" id="e-valor-total" oninput="this.dataset.userEdited='1'" onfocus="this.dataset.userEdited=''" placeholder="calculado automaticamente" min="0" step="0.01">
+          <input type="number" class="form-input" id="e-valor-total" placeholder="calculado automaticamente" min="0" step="0.01" disabled>
         </div>
         <div class="form-group">
           <label class="form-label">Dt. Emissão <span class="form-required">*</span></label>
@@ -4278,7 +4314,7 @@
       <div class="form-grid">
         <div class="form-group">
           <label class="form-label">Central <span class="form-required">*</span></label>
-          <input type="text" class="form-input" id="s-central" placeholder="Ex: SLZ1">
+          <select class="form-select manual-central-select" id="s-central"></select>
         </div>
         <div class="form-group">
           <label class="form-label">Nº Ordem de Serviço</label>
@@ -4286,7 +4322,7 @@
         </div>
         <div class="form-group">
           <label class="form-label">Categoria</label>
-          <input type="text" class="form-input" id="s-categoria" placeholder="Ex: AGREGADO">
+          <select class="form-select manual-categoria-select" id="s-categoria" disabled></select>
         </div>
         <div class="form-group">
           <label class="form-label">Fornecedor</label>
@@ -4294,7 +4330,7 @@
         </div>
         <div class="form-group">
           <label class="form-label">Material <span class="form-required">*</span></label>
-          <input type="text" class="form-input" id="s-material" placeholder="Ex: AREIA NATURAL">
+          <select class="form-select manual-material-select" id="s-material" onchange="_onManualMaterialChange(this)"></select>
         </div>
         <div class="form-group">
           <label class="form-label">Peso (kg) <span class="form-required">*</span></label>
@@ -4310,7 +4346,7 @@
         </div>
         <div class="form-group">
           <label class="form-label">Valor Total (R$)</label>
-          <input type="number" class="form-input" id="s-valor-total" oninput="this.dataset.userEdited='1'" onfocus="this.dataset.userEdited=''" placeholder="calculado automaticamente" min="0" step="0.01">
+          <input type="number" class="form-input" id="s-valor-total" placeholder="calculado automaticamente" min="0" step="0.01" disabled>
         </div>
         <div class="form-group">
           <label class="form-label">Dt. Emissão <span class="form-required">*</span></label>
@@ -4329,7 +4365,7 @@
       <div class="form-grid">
         <div class="form-group">
           <label class="form-label">Central <span class="form-required">*</span></label>
-          <input type="text" class="form-input" id="l-central" placeholder="Ex: SLZ1">
+          <select class="form-select manual-central-select" id="l-central"></select>
         </div>
         <div class="form-group">
           <label class="form-label">Dt. Lançamento <span class="form-required">*</span></label>
@@ -4341,11 +4377,11 @@
         </div>
         <div class="form-group">
           <label class="form-label">Categoria</label>
-          <input type="text" class="form-input" id="l-categoria" placeholder="Ex: ADITIVO">
+          <select class="form-select manual-categoria-select" id="l-categoria" disabled></select>
         </div>
-        <div class="form-group" style="grid-column: span 2">
+        <div class="form-group">
           <label class="form-label">Material <span class="form-required">*</span></label>
-          <input type="text" class="form-input" id="l-material" placeholder="Ex: PLASTIFICANTE RA1">
+          <select class="form-select manual-material-select" id="l-material" onchange="_onManualMaterialChange(this)"></select>
         </div>
         <div class="form-group">
           <label class="form-label">Peso (kg) <span class="form-required">*</span></label>
@@ -4361,7 +4397,7 @@
         </div>
         <div class="form-group">
           <label class="form-label">Valor Total (R$)</label>
-          <input type="number" class="form-input" id="l-valor-total" oninput="this.dataset.userEdited='1'" onfocus="this.dataset.userEdited=''" placeholder="calculado automaticamente" min="0" step="0.01">
+          <input type="number" class="form-input" id="l-valor-total" placeholder="calculado automaticamente" min="0" step="0.01" disabled>
         </div>
       </div>
       <div class="form-actions">
@@ -4392,7 +4428,7 @@
         </div>
         <div class="form-group">
           <label class="form-label">Central <span class="form-required">*</span></label>
-          <input type="text" class="form-input" id="sap-central" placeholder="Ex: SLZ1">
+          <select class="form-select manual-central-select" id="sap-central"></select>
         </div>
         <div class="form-group">
           <label class="form-label">Depósito</label>
@@ -4400,7 +4436,7 @@
         </div>
         <div class="form-group">
           <label class="form-label">Material <span class="form-required">*</span></label>
-          <input type="text" class="form-input" id="sap-material" placeholder="Ex: CIMENTO CP II">
+          <select class="form-select manual-material-select" id="sap-material"></select>
         </div>
         <div class="form-group">
           <label class="form-label">Peso (kg) <span class="form-required">*</span></label>
@@ -4416,7 +4452,7 @@
         </div>
         <div class="form-group">
           <label class="form-label">Valor Total (R$)</label>
-          <input type="number" class="form-input" id="sap-valor-total" oninput="this.dataset.userEdited='1'" onfocus="this.dataset.userEdited=''" placeholder="calculado automaticamente" min="0" step="0.01">
+          <input type="number" class="form-input" id="sap-valor-total" placeholder="calculado automaticamente" min="0" step="0.01" disabled>
         </div>
         <div class="form-group">
           <label class="form-label">Dt. Documento</label>
@@ -4434,6 +4470,47 @@
       <div class="form-actions">
         <button class="btn" onclick="closeModal('modal-manual')">Cancelar</button>
         <button class="btn btn-primary" onclick="salvarSAP()"><i class="ti ti-check"></i> Salvar Movimentação</button>
+      </div>
+    </div>
+
+    <!-- Tab Custo SAP -->
+    <!-- Colunas: Material (Cód SAP), Central, Ano, Mês, Estoque Total, Valor Total, Custo -->
+    <div id="tab-custo-sap" style="display:none">
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">Material (Cód SAP) <span class="form-required">*</span></label>
+          <select class="form-select" id="csm-material">
+            <option value="">Selecione o material</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Central <span class="form-required">*</span></label>
+          <select class="form-select" id="csm-central">
+            <option value="">Selecione a central</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <!-- input type="month" nativo — picker só de ano/mês, sem dia
+               (ver salvarCustosSapManual, import.js). -->
+          <label class="form-label">Ano / Mês <span class="form-required">*</span></label>
+          <input type="month" class="form-input" id="csm-data">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Estoque Total</label>
+          <input type="number" class="form-input" id="csm-estoque-total" oninput="_modalAutoCalcTotal('csm-estoque-total','csm-custo','csm-valor-total')" placeholder="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Valor Total</label>
+          <input type="number" class="form-input" id="csm-valor-total" placeholder="calculado automaticamente" disabled>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Custo <span class="form-required">*</span></label>
+          <input type="number" class="form-input" id="csm-custo" oninput="_modalAutoCalcTotal('csm-custo','csm-estoque-total','csm-valor-total')" placeholder="0">
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn" onclick="closeModal('modal-manual')">Cancelar</button>
+        <button class="btn btn-primary" onclick="salvarCustosSapManual()"><i class="ti ti-check"></i> Salvar Custo SAP</button>
       </div>
     </div>
 
@@ -4684,7 +4761,7 @@
       </div>
 
       <div class="form-group">
-        <label class="form-label">Custo</label>
+        <label class="form-label">Custo <span class="form-required">*</span></label>
         <input type="number" class="form-input" id="cs-custo" placeholder="0">
       </div>
     </div>

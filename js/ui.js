@@ -86,7 +86,12 @@ function navigate(page) {
 }
 
 function setTab(tabId, btn) {
-  ['tab-entrada', 'tab-saida', 'tab-lancamento', 'tab-sap'].forEach(t => {
+  // Central/Material/Categoria dessas abas são <select> populados pelo
+  // cadastro atual (ver _manualModalPopularSelects, import.js) — repopula
+  // aqui, ponto único chamado em toda troca de aba do modal-manual, em vez
+  // de espalhar a chamada em cada onclick de aba/botão "Adicionar".
+  if (typeof _manualModalPopularSelects === 'function') _manualModalPopularSelects();
+  ['tab-entrada', 'tab-saida', 'tab-lancamento', 'tab-sap', 'tab-custo-sap'].forEach(t => {
     const el = document.getElementById(t);
     if (el) el.style.display = 'none';
   });
@@ -834,7 +839,10 @@ const colFilterMeta = {
   saidas:      { tbodyId: 'tb-saidas',      fields: [null,'central','dtEmissao','os','contrato','categoria','fornecedor','material','peso','um','custo','valorTotal',null] },
   lancamentos: { tbodyId: 'tb-lancamentos', fields: [null,'central','dtLanc','fornecedor','categoria','material','peso','um','custo','valorTotal',null] },
   sap:         { tbodyId: 'tb-sap',         fields: [null,'usuario','movimento','ref','documento','central','deposito','dtDoc','dtLanc','dtReg','material','peso','um','custoUnit','valorTotal',null] },
-  custosSap:   { tbodyId: 'tb-custos-sap',  fields: ['material','central','ano','mes','estoqueTotal','valorTotal','custo',null] },
+  // Coluna 0 (Material) é calculada, não existe como campo do registro —
+  // resolvida por _custosSapResolveMaterial (dashboard.js, carrega depois
+  // deste arquivo; daqui o wrapper com typeof em vez de referência direta).
+  custosSap:   { tbodyId: 'tb-custos-sap',  fields: [r => (typeof _custosSapResolveMaterial === 'function' ? _custosSapResolveMaterial(r) : ''),'material','central','ano','mes','estoqueTotal','valorTotal','custo',null] },
   imports:     { tbodyId: 'tb-imports',     fields: ['arquivo','modulo','registros','dataHora','status',null] },
   configs:     { tbodyId: 'tb-configs',     fields: ['key','value','desc','created',null] },
   filiais:     { tbodyId: 'tb-filiais',     fields: [null,'origem','alias','cnpj','regional',null,'created',null] },
@@ -844,6 +852,14 @@ const colFilterMeta = {
 // Returns true if a record passes ALL active column filters for a module
 function recordPassesColFilters(module, record) {
   return recordPassesColFiltersExcept(module, record, null);
+}
+
+// Um "field" de colFilterMeta normalmente é o nome de uma propriedade do
+// registro — mas pode ser uma função (record) => valor, pra colunas
+// calculadas na hora do render (ex: Grupo SAP resolvido em Custos SAP, que
+// não existe como campo próprio no registro).
+function _colFilterFieldValue(field, record) {
+  return typeof field === 'function' ? field(record) : record[field];
 }
 
 // Returns true if a record passes all active column filters for a module,
@@ -859,7 +875,7 @@ function recordPassesColFiltersExcept(module, record, excludeColIdx) {
     if (!activeSet || !activeSet.size) continue;
     const field = meta.fields[Number(colIdx)];
     if (!field) continue;
-    const cellVal = normalizeText(String(record[field] ?? '—'));
+    const cellVal = normalizeText(String(_colFilterFieldValue(field, record) ?? '—'));
     if (!activeSet.has(cellVal)) return false;
   }
   return true;
@@ -925,7 +941,7 @@ function getColUniqueValues(module, colIdx) {
 
   const seen = new Set();
   for (let i = 0; i < data.length; i++) {
-    seen.add(normalizeText(String(data[i][field] ?? '—')));
+    seen.add(normalizeText(String(_colFilterFieldValue(field, data[i]) ?? '—')));
   }
   return [...seen].sort((a, b) => a.localeCompare(b, 'pt-BR'));
 }
@@ -1195,8 +1211,14 @@ function updateAllColFilterIcons(module) {
         badge.className = 'cf-active-badge';
         badge.innerHTML = '<i class="ti ti-filter-off"></i> Limpar filtros';
         badge.onclick = () => clearAllColFilters(module);
-        const header = card.querySelector('.table-header');
-        if (header) header.appendChild(badge);
+        // BUG REAL (04/08): .cf-active-badge tem margin-left:auto pra ficar
+        // colado à direita DENTRO da toolbar — inserido direto no
+        // .table-header (que já é space-between entre título e toolbar),
+        // esse auto-margin consumia todo o espaço livre do cabeçalho antes
+        // do badge, empurrando título+toolbar juntos pra esquerda. Insere
+        // na toolbar (onde o margin-left:auto faz o que a regra prevê).
+        const toolbar = card.querySelector('.table-toolbar') || card.querySelector('.table-header');
+        if (toolbar) toolbar.appendChild(badge);
       }
     } else {
       badge?.remove();
