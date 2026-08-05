@@ -15,6 +15,16 @@ function buildDashboardGerencialResults(dtIni, dtFim) {
     ..._dgSapIdx.byCentral.keys()
   ]);
 
+  // Custo médio: SÓ Custos SAP (central + Cód SAP + ano/mês), sem cascata
+  // Saídas/SAP — mesma fonte única do Inventário e do Analítico (decisão
+  // do Hugo, ver getCustoMedioCustosSap/buildCustosSapIndex em
+  // normalize.js). ano/mes vêm de dtFim porque o período do Gerencial é
+  // sempre um mês fechado (_dgMonthState) — mesmo critério usado na Visão
+  // Micro do Analítico.
+  const _custosSapIdx = buildCustosSapIndex();
+  const _custosSapAno = dtFim ? dtFim.getFullYear()   : null;
+  const _custosSapMes = dtFim ? dtFim.getMonth() + 1  : null;
+
   const results = [];
 
   allCentrals.forEach(central => {
@@ -164,46 +174,17 @@ function buildDashboardGerencialResults(dtIni, dtFim) {
     const estoqueTeoricoMacro = somaPrimeiro + totalEntradas + totalSaidas;
     const variacaoEstoque     = somaUltimo - estoqueTeoricoMacro;
 
-    const saidasCentralRaw = _saidasByCentral.size > 0
-      ? (_saidasByCentral.get(central) || []).filter(s => {
-          if (!dtIni || !dtFim) return true;
-          const d = parseDate(s.dtEmissao);
-          return d && d >= dtIni && d <= dtFim;
-        })
-      : state.saidas.filter(s => s.central === central && inPeriod(s.dtEmissao));
-    // Mesma filtragem por materialOriginal — custo médio não deve incluir
-    // materiais sem cadastro.
-    const saidasCentral = saidasCentralRaw.filter(s => !!getCatKeyDoCadastro(s.materialOriginal));
-    const _custoPorMat  = {};
-    const _pesoPorMat   = {};
-    saidasCentral.forEach(s => {
-      const mat = s.material || '—';
-      _custoPorMat[mat] = (_custoPorMat[mat] || 0) + num(s.valorTotal);
-      _pesoPorMat[mat]  = (_pesoPorMat[mat]  || 0) + Math.abs(num(s.peso));
-    });
+    // Custo médio por material: SÓ Custos SAP (central + Cód SAP +
+    // ano/mês do período), sem cascata Saídas/SAP — ver _custosSapIdx
+    // acima. Sem Cód SAP cadastrado ou sem registro em Custos SAP pro
+    // central/mês, fica ausente (0) — mesmo padrão do Inventário/Analítico,
+    // nenhum fallback silencioso pro cálculo antigo.
     const custoMedioPorMat = {};
-    Object.keys(_custoPorMat).forEach(mat => {
-      custoMedioPorMat[mat] = _pesoPorMat[mat] > 0 ? _custoPorMat[mat] / _pesoPorMat[mat] : 0;
-    });
-    // Fallback: materiais sem custo nas Saídas usam custoUnit/valorTotal do SAP
-    sapNoPeriodo.forEach(s => {
-      const mat = s.material || '—';
-      if (custoMedioPorMat[mat]) return;
-      const p  = Math.abs(num(s.peso));
-      if (!p) return;
-      const vt = num(s.valorTotal);
-      const cu = num(s.custoUnit);
-      const valor = vt !== 0 ? Math.abs(vt) : (cu !== 0 ? Math.abs(cu) * p : 0);
-      if (!valor) return;
-      if (!_custoPorMat['_sap_' + mat]) { _custoPorMat['_sap_' + mat] = 0; _pesoPorMat['_sap_' + mat] = 0; }
-      _custoPorMat['_sap_' + mat] += valor;
-      _pesoPorMat['_sap_' + mat]  += p;
-    });
-    Object.keys(_custoPorMat).forEach(key => {
-      if (!key.startsWith('_sap_')) return;
-      const mat = key.slice(5);
-      if (custoMedioPorMat[mat]) return;
-      custoMedioPorMat[mat] = _pesoPorMat[key] > 0 ? _custoPorMat[key] / _pesoPorMat[key] : 0;
+    allMats.forEach(mat => {
+      const codSap = getCodSapPorGrupo(mat);
+      custoMedioPorMat[mat] = codSap
+        ? (getCustoMedioCustosSap(central, codSap, _custosSapAno, _custosSapMes, _custosSapIdx) ?? 0)
+        : 0;
     });
 
     results.push({
@@ -508,13 +489,11 @@ function _dgResolveCssColor(varName, fallback) {
 //    Est. Inicial/Final (com fallback retroativo) já usada nos cards de
 //    saúde do Dashboard Analítico, garantindo que os números batam com
 //    o "Saúde Geral" exibido no restante do sistema.
-//    precoMedioSapPorMaterial opcional (Map mat -> preço, ver
-//    _dgVgPrecoMedioSapPorChave): quando passado, vira a fonte do
-//    custoMed de cada par, no lugar de r.custoMedioPorMat (custo médio
-//    Saídas-primeiro/SAP-fallback) — usado só pela Visão Geral
-//    (renderDgVisaoGeralPdf); a Visão de Consumo (renderDgConsumo) chama
-//    sem esse argumento e mantém o custo médio antigo.
-function _dgVgBuildPares(results, thresholds, dtIni, dtFim, precoMedioSapPorMaterial = null) {
+//    custoMed de cada par vem de r.custoMedioPorMat (Custos SAP — central +
+//    Cód SAP + ano/mês, ver buildDashboardGerencialResults), única fonte
+//    de custo do Gerencial inteiro (Visão Geral, Visão de Consumo,
+//    Detalhamento por Material e Rankings todos herdam daqui).
+function _dgVgBuildPares(results, thresholds, dtIni, dtFim) {
   const pares = [];
   const filIdx = getFilialLookupIndex();
 
@@ -578,7 +557,7 @@ function _dgVgBuildPares(results, thresholds, dtIni, dtFim, precoMedioSapPorMate
       // próxima de zero, não deve ser contado como 'bom' silenciosamente
       // (decisão: excluído do cálculo de saúde até ser cadastrado).
       const level    = !catKey ? 'sem_cadastro' : (neutro ? 'bom' : classifyVariation(Math.abs(diff), catKey, thresholds));
-      const custoMed = precoMedioSapPorMaterial ? (precoMedioSapPorMaterial.get(mat) || 0) : (r.custoMedioPorMat || {})[mat] || 0;
+      const custoMed = (r.custoMedioPorMat || {})[mat] || 0;
 
       // custoIni/custoFim: custo do SALDO de estoque (kg × custo médio do
       // material) — usados pelos cards "Est. Inicial/Final Total" do resumo
@@ -603,16 +582,18 @@ function _dgVgBuildPares(results, thresholds, dtIni, dtFim, precoMedioSapPorMate
 // ui.js) — sem custo extra de performance, só captura um valor que já
 // era calculado e descartado. Ausente conta como 0, sem aviso (decisão
 // confirmada: diferente do Inventário, que mostra "X ausentes"). Custo
-// = kg × precoMedioSap (ver _dgVgPrecoMedioSap, abaixo) — não mais o
-// custo médio por material (p.custoIni/p.custoFim), decisão do Hugo pra
-// unificar o preço usado em todos os cards do Resumo do Período.
-function _dgVgEstoqueTotais(pares, precoMedioSap) {
-  let totalIni = 0, totalFim = 0;
+// = Σ p.custoIni/p.custoFim (kg × Custos SAP do material naquele par, já
+// resolvido em _dgVgBuildPares) — soma literal, aditiva por construção,
+// mesmo critério do Custo Var. (custoTotal, em renderDgVisaoGeralPdf).
+function _dgVgEstoqueTotais(pares) {
+  let totalIni = 0, totalFim = 0, custoIni = 0, custoFim = 0;
   pares.forEach(p => {
     totalIni += p.estoqueIni || 0;
     totalFim += p.estoqueFim || 0;
+    custoIni += p.custoIni || 0;
+    custoFim += p.custoFim || 0;
   });
-  return { totalIni, totalFim, custoIni: totalIni * precoMedioSap, custoFim: totalFim * precoMedioSap };
+  return { totalIni, totalFim, custoIni, custoFim };
 }
 
 // Entradas / Saídas Total — soma dos totais já calculados por central em
@@ -626,81 +607,27 @@ function _dgVgMovimentacaoTotais(results) {
   return { totalEnt, totalSai };
 }
 
-// Custo de uma movimentação SAP individual — valorTotal do registro, com
-// fallback custoUnit × peso (MESMO padrão já usado no cálculo de
-// custoMedioPorMat, em buildDashboardGerencialResults/getCustoMedioPorMat).
-function _dgVgValorCustoSap(s) {
-  const p = Math.abs(num(s.peso));
-  if (!p) return 0;
-  const vt = num(s.valorTotal);
-  const cu = num(s.custoUnit);
-  return vt !== 0 ? Math.abs(vt) : (cu !== 0 ? Math.abs(cu) * p : 0);
-}
-
-// Preço médio SAP agrupado por chave — Σ valor / Σ peso dos registros SAP
-// do período, agrupados pela chave que recordKeyFn(s, r) devolve pra cada
-// registro `s` (de r.sapNoPeriodo), ignorando registro com peso ou valor
-// zerados (mesmo critério de _dgVgValorCustoSap/getCustoMedioPorMat, em
-// analitico.js). recordKeyFn(s, r) => r.central dá preço médio por
-// Central; => regional da central (via lookup externo) dá preço médio
-// por Regional; => s.material dá preço médio por Material — usado pelo
-// custo dos extremos de Regional/Central e dos donuts de Custo Absoluto
-// (ver renderDgVisaoGeralPdf) — decisão do Hugo, no lugar do custo médio
-// por material vindo de Saídas/SAP (p.custoImplicado/p.custoMed).
-function _dgVgPrecoMedioSapPorChave(results, recordKeyFn) {
-  const acc = new Map(); // chave -> { valor, peso }
-  results.forEach(r => {
-    (r.sapNoPeriodo || []).forEach(s => {
-      const k = recordKeyFn(s, r);
-      if (!k || k === '—') return;
-      const p = Math.abs(num(s.peso));
-      if (!p) return;
-      const v = _dgVgValorCustoSap(s);
-      if (!v) return;
-      if (!acc.has(k)) acc.set(k, { valor: 0, peso: 0 });
-      const a = acc.get(k);
-      a.valor += v;
-      a.peso  += p;
-    });
-  });
-  const out = new Map();
-  acc.forEach((a, k) => out.set(k, a.peso > 0 ? a.valor / a.peso : 0));
-  return out;
-}
-
-// Preço médio SAP do período inteiro — mesma conta de
-// _dgVgPrecoMedioSapPorChave, só que com todo mundo numa chave só. Preço
-// único usado pra calcular o custo de cada card do Resumo do Período
-// (kg × este preço) — decisão do Hugo, no lugar do custo médio por
-// material.
-function _dgVgPrecoMedioSap(results) {
-  return _dgVgPrecoMedioSapPorChave(results, () => 'total').get('total') || 0;
-}
-
-// Custo de Entradas/Saídas — soma o custo de cada registro SAP do período,
-// filtrando pelo SINAL do peso (positivo = entrada, negativo = saída),
-// MESMO critério do kg (_dgVgMovimentacaoTotais, acima). Usada pela Visão
-// de Consumo (_dcRenderKpiStrip) — NÃO pelo Resumo do Período da Visão
-// Geral, que usa _dgVgCustoMovimentacaoPorPrecoMedio (abaixo).
+// Custo de Entradas/Saídas — kg de cada material (Σ peso SAP do período,
+// separado pelo SINAL: positivo = entrada, negativo = saída, MESMO
+// critério do kg em _dgVgMovimentacaoTotais) × custo médio daquele
+// material (r.custoMedioPorMat, Custos SAP) — única função de custo de
+// movimentação do Gerencial, reaproveitada tanto pelo Resumo do Período
+// da Visão Geral quanto pelo KPI "Custo Total de Saídas" da Visão de
+// Consumo (_dcRenderKpiStrip).
 function _dgVgCustoMovimentacaoTotais(results) {
   let custoEnt = 0, custoSai = 0;
   results.forEach(r => {
+    const pesoEntPorMat = {}, pesoSaiPorMat = {};
     (r.sapNoPeriodo || []).forEach(s => {
+      const mat = s.material || '—';
       const p = num(s.peso);
-      if (p > 0)      custoEnt += _dgVgValorCustoSap(s);
-      else if (p < 0) custoSai += _dgVgValorCustoSap(s);
+      if (p > 0)      pesoEntPorMat[mat] = (pesoEntPorMat[mat] || 0) + p;
+      else if (p < 0) pesoSaiPorMat[mat] = (pesoSaiPorMat[mat] || 0) + Math.abs(p);
     });
+    Object.keys(pesoEntPorMat).forEach(mat => { custoEnt += pesoEntPorMat[mat] * ((r.custoMedioPorMat || {})[mat] || 0); });
+    Object.keys(pesoSaiPorMat).forEach(mat => { custoSai += pesoSaiPorMat[mat] * ((r.custoMedioPorMat || {})[mat] || 0); });
   });
   return { custoEnt, custoSai };
-}
-
-// Custo de Entradas/Saídas do Resumo do Período (Visão Geral) = kg
-// (movTotais.totalEnt/totalSai) × preço médio SAP do período — mesmo
-// preço único usado no resto do Resumo do Período (ver _dgVgPrecoMedioSap,
-// acima), não a soma do valorTotal/custoUnit de cada registro individual
-// (isso é _dgVgCustoMovimentacaoTotais, usada só pela Visão de Consumo).
-function _dgVgCustoMovimentacaoPorPrecoMedio(movTotais, precoMedioSap) {
-  return { custoEnt: movTotais.totalEnt * precoMedioSap, custoSai: movTotais.totalSai * precoMedioSap };
 }
 
 // Tally de pares Central×Material por nível — MESMO critério usado em
@@ -1230,18 +1157,7 @@ function renderDgVisaoGeralPdf(results, thresholds, dtIni, dtFim) {
     return;
   }
 
-  // Preço médio SAP por Material — soma os registros SAP de TODAS as
-  // centrais pra cada material (ignora zerados, mesmo critério de
-  // _dgVgValorCustoSap). Alimenta custoMed em _dgVgBuildPares (abaixo),
-  // então todo mundo que deriva de p.custoImplicado/p.custoMed (Saúde
-  // Geral, Detalhado Analítico, donuts de Custo Absoluto, extremos de
-  // Regional/Central) fica em SAP de uma vez só — no lugar do custo médio
-  // por material vindo de Saídas/SAP (r.custoMedioPorMat) — decisão do
-  // Hugo. Só a Visão Geral usa esse preço; a Visão de Consumo continua
-  // com o custo médio antigo (chama _dgVgBuildPares sem esse argumento).
-  const precoMedioSapPorMaterial = _dgVgPrecoMedioSapPorChave(results, s => s.material || '—');
-
-  const pares       = _dgVgBuildPares(results, thresholds, dtIni, dtFim, precoMedioSapPorMaterial);
+  const pares       = _dgVgBuildPares(results, thresholds, dtIni, dtFim);
   const counts      = _dgVgCounts(pares);
   const scoreInfo   = _dgVgScoreFromCounts(counts);
 
@@ -1252,13 +1168,12 @@ function renderDgVisaoGeralPdf(results, thresholds, dtIni, dtFim) {
   const varTotalFisica = Object.values(catFisica).reduce((a, b) => a + b, 0);
 
   // Custo Var. (hero + extremos de Regional/Central + rankings) = Σ
-  // p.custoImplicado (diff × custoMed, já em preço médio SAP por material
-  // desde _dgVgBuildPares) — soma literal, aditiva por construção: somar
+  // p.custoImplicado (diff × custoMed, Custos SAP por material desde
+  // _dgVgBuildPares) — soma literal, aditiva por construção: somar
   // qualquer recorte (Regional/Central/Material/Categoria) sempre
-  // reproduz esse total. Voltou a ser assim (era kg × preço médio "blend"
-  // por Regional/Central/global) porque quebrava a conferência "soma das
-  // tabelas bate com o card" — Σ(kg_i × preço_i) ≠ (Σkg_i) × preço_blend
-  // quando os materiais têm preços diferentes entre si — decisão do Hugo.
+  // reproduz esse total — Σ(kg_i × preço_i) em vez de (Σkg_i) × preço
+  // "blend", que quebraria a conferência "soma das tabelas bate com o
+  // card" quando os materiais têm custos diferentes entre si.
   const custoTotal = pares.reduce((s, p) => s + p.custoImplicado, 0);
 
   const porRegionalKg = _dgVgAggKgPorChave(pares, p => p.regional);
@@ -1271,14 +1186,13 @@ function renderDgVisaoGeralPdf(results, thresholds, dtIni, dtFim) {
   const custoVarMap    = _dgVgCustoVariacaoPorMaterial(pares);
   const custoAbsPorCat = _dgVgAgruparCustoVariacaoPorCategoria(custoVarMap);
 
-  // Preço médio SAP do período — usado só nos cards que não têm tabela
-  // pra conferir (Est. Inicial/Entradas/Saídas/Est. Final, Evolução): não
-  // existe "Est. Inicial por Regional" em ranking nenhum, então não há
-  // aditividade pra quebrar aqui.
-  const precoMedioSap  = _dgVgPrecoMedioSap(results);
+  // Est. Inicial/Entradas/Saídas/Est. Final Total (cards do Resumo do
+  // Período) — mesma fonte única de custo (Custos SAP), somada por par/
+  // material em vez de um preço "blend" único: ver _dgVgEstoqueTotais e
+  // _dgVgCustoMovimentacaoTotais.
   const movTotais      = _dgVgMovimentacaoTotais(results);
-  const estTotais      = _dgVgEstoqueTotais(pares, precoMedioSap);
-  const custoMovTotais = _dgVgCustoMovimentacaoPorPrecoMedio(movTotais, precoMedioSap);
+  const estTotais      = _dgVgEstoqueTotais(pares);
+  const custoMovTotais = _dgVgCustoMovimentacaoTotais(results);
 
   // Est. Teórico total (mesma conta do card "Variação Total" do KPI hero) —
   // usado tanto como denominador comum da % Variação de cada linha dos 4
@@ -1326,7 +1240,7 @@ function renderDgVisaoGeralPdf(results, thresholds, dtIni, dtFim) {
   // limparDashboardGerencial() e quando o período não tem dados, acima.
   window._dgVgLastData = {
     dtIni, dtFim, results, pares, counts, scoreInfo, thresholds,
-    varTotalFisica, custoTotal, catFisicaPct, precoMedioSap,
+    varTotalFisica, custoTotal, catFisicaPct,
     estTotais, movTotais, custoMovTotais, totalEstTeoricoKpi,
     extRegional, extCentral, entriesRegional, entriesCentral,
     custoAbsPorCat, veiculosTotalKpi, fechExcluidos: sapFechExcluidosPeriodo
