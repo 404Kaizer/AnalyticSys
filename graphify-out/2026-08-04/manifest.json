@@ -1,7 +1,7 @@
 {
   ".claude/settings.local.json": {
-    "mtime": 1785880575.9625096,
-    "ast_hash": "317378359a4adf3d24139bb4fe5fca25",
+    "mtime": 1785881470.855611,
+    "ast_hash": "2d0a5e54a0a11699adf08f05be638b40",
     "semantic_hash": ""
   },
   "js/admin.js": {
@@ -25,8 +25,8 @@
     "semantic_hash": ""
   },
   "js/auth.js": {
-    "mtime": 1785875710.8800843,
-    "ast_hash": "e87cfb148cdc22f9283b2563be57ca73",
+    "mtime": 1785892777.632137,
+    "ast_hash": "99b308877212ec366fc5a339b4c137c7",
     "semantic_hash": ""
   },
   "js/calendar.js": {
@@ -50,8 +50,8 @@
     "semantic_hash": ""
   },
   "js/dashboard.js": {
-    "mtime": 1785874208.7630684,
-    "ast_hash": "3da625d1c0605ee410b47b7b99997685",
+    "mtime": 1785892820.3719003,
+    "ast_hash": "a74fdf149d85f71e7083ee89d3fe3597",
     "semantic_hash": ""
   },
   "js/format.js": {
@@ -65,8 +65,8 @@
     "semantic_hash": "799192edfc582339c60636de3d0ebca5"
   },
   "js/import.js": {
-    "mtime": 1785859357.955074,
-    "ast_hash": "28fe9a7769c3d79779850b5ed1597cad",
+    "mtime": 1785891883.6548593,
+    "ast_hash": "3324d7564016f1c83825e34697fcb7ad",
     "semantic_hash": ""
   },
   "js/inventario.js": {
@@ -100,8 +100,8 @@
     "semantic_hash": ""
   },
   "js/notifications.js": {
-    "mtime": 1785860284.8505988,
-    "ast_hash": "3b558cd4bd4c78bf0d7982b1ef748502",
+    "mtime": 1785893182.8420343,
+    "ast_hash": "301a2aa5588e1f4493dd284c271b7023",
     "semantic_hash": ""
   },
   "js/ocorrencias.js": {
@@ -145,13 +145,13 @@
     "semantic_hash": "26849b0d1fc5122d427a3acd9001947a"
   },
   "js/ui.js": {
-    "mtime": 1785870542.6970003,
-    "ast_hash": "e97e085f8c8e8478e619ca0b02ead3cb",
+    "mtime": 1785891525.6099663,
+    "ast_hash": "85aca354d5b4b2ab5e377858a9ef7280",
     "semantic_hash": ""
   },
   "index.html": {
-    "mtime": 1785874219.908178,
-    "ast_hash": "ac36f1d49077394374c06f627e63c0eb",
+    "mtime": 1785893122.5334342,
+    "ast_hash": "7c035952759f1f6a60f46cdb724a9c03",
     "semantic_hash": ""
   },
   "solicitacao.html": {
