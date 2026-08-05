@@ -372,6 +372,14 @@
 .admin-alert-preset-chip.active { background: var(--cat-bg, var(--bg4)); color: var(--cat-color, var(--text)); font-weight: 600; }
 #admin-alert-overlay .modal { border-top: 3px solid var(--cat-color, var(--accent)); }
 #admin-alert-overlay .modal-title i { color: var(--cat-color, var(--accent)); }
+/* Botão cinza (inativo) enquanto o timer de 5s roda — só vira azul quando libera. */
+#admin-alert-confirm-btn:disabled {
+  background: var(--bg4);
+  border-color: var(--border3);
+  color: var(--text3);
+  cursor: default;
+  opacity: 1;
+}
 
 /* ══════════════════════════════════════════
    MODAL: GERENCIAR CONTA

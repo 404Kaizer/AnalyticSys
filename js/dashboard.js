@@ -6758,11 +6758,6 @@ async function restoreAndRender() {
     // se a aba já tiver um canal aberto (ex.: chamado duas vezes por
     // algum motivo), a própria função não faz nada na segunda vez.
     if (typeof _activityRealtimeInit === 'function') _activityRealtimeInit();
-    // Alerta broadcast do ADM — checa se há alerta pendente pra este
-    // usuário (cobre quem estava offline quando foi enviado) e abre o
-    // canal Realtime pra pegar novos alertas enviados com a sessão já aberta.
-    if (typeof adminAlertCheckPendente === 'function') adminAlertCheckPendente();
-    if (typeof adminAlertRealtimeInit === 'function') adminAlertRealtimeInit();
     // Reset remoto de dados locais (módulos híbridos) — aplica na hora se
     // o ADM agir enquanto esta sessão está aberta, em vez de só no próximo
     // boot. Ver checarWipePendente/wipeRealtimeInit (normalize.js).
@@ -6895,6 +6890,14 @@ async function restoreAndRender() {
     }, 400);
   } finally {
     hideLoadingOverlay('Sistema pronto');
+    // Alerta broadcast do ADM — só depois do overlay de boot fechar de
+    // verdade (hideLoadingOverlay remove a classe 'open' num setTimeout
+    // próprio, não é síncrono), senão o modal nasceria por baixo/junto
+    // da tela de carregamento em vez de aparecer depois dela.
+    setTimeout(() => {
+      if (typeof adminAlertCheckPendente === 'function') adminAlertCheckPendente();
+      if (typeof adminAlertRealtimeInit === 'function') adminAlertRealtimeInit();
+    }, 300);
   }
 }
 
