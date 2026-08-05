@@ -5,12 +5,12 @@
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 2058 nodes · 4225 edges · 109 communities (100 shown, 9 thin omitted)
-- Extraction: 88% EXTRACTED · 12% INFERRED · 0% AMBIGUOUS · INFERRED: 500 edges (avg confidence: 0.56)
+- 2058 nodes · 4221 edges · 108 communities (99 shown, 9 thin omitted)
+- Extraction: 88% EXTRACTED · 12% INFERRED · 0% AMBIGUOUS · INFERRED: 499 edges (avg confidence: 0.56)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `c8f03634`
+- Built from commit: `5feb10da`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -55,7 +55,6 @@
 - getFilteredData
 - _buildOcHierarquiaBar
 - renderAnaliticoMicro
-- processImportedRows
 - buildCards
 - applyColFilter
 - renderOcorrencias
@@ -134,7 +133,7 @@
 7. `_fechMgrRender()` - 19 edges
 8. `renderModule()` - 18 edges
 9. `getFilteredData()` - 16 edges
-10. `_asstHasAnalise()` - 14 edges
+10. `renderAusencias()` - 14 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `safeJSONParse()` --indirect_call--> `error()`  [INFERRED]
@@ -145,8 +144,8 @@
   js/analitico.js → js/ui.js
 - `init()` --indirect_call--> `updateToolsTheme()`  [INFERRED]
   js/analitico.js → js/state.js
-- `_dgVgDrawDonutSvg()` --indirect_call--> `_moveTip()`  [INFERRED]
-  js/dashboard.js → js/macro.js
+- `reconcilePendingDeletes()` --indirect_call--> `_cascadeDeleteCloudByImportId()`  [INFERRED]
+  js/persist.js → js/import.js
 
 ## Import Cycles
 - None detected.
@@ -156,11 +155,11 @@
 - **Calculadora/Notas/Assistente/Mensagens all implement the same generic tool-popover open/close pattern (openTool/closeTool, .tool-popover)** — index_calc_popover, index_notes_popover, index_assistente_popover, index_mensagens_popover [EXTRACTED 1.00]
 - **DAI generation, Ocorrências, and the public-form/admin routing jointly form the inventory-adjustment reporting flow** — index_dai_modal, index_ocorrencias_page, index_admin_formpublico, solicitacao [INFERRED 0.75]
 
-## Communities (109 total, 9 thin omitted)
+## Communities (108 total, 9 thin omitted)
 
 ### Community 0 - "admin.js"
 Cohesion: 0.05
-Nodes (88): _ADMIN_COL_TYPES, ADMIN_MODAL_PROPRIO, ADMIN_MODULOS, adminAbrirEdicao(), adminAbrirEdicaoLote(), adminAbrirExclusaoMassa(), adminAceitarPendente(), adminAceitarTodosPendentes() (+80 more)
+Nodes (89): _ADMIN_COL_TYPES, ADMIN_MODAL_PROPRIO, ADMIN_MODULOS, adminAbrirEdicao(), adminAbrirEdicaoLote(), adminAbrirExclusaoMassa(), adminAceitarPendente(), adminAceitarTodosPendentes() (+81 more)
 
 ### Community 1 - "ocorrencias.js"
 Cohesion: 0.11
@@ -176,7 +175,7 @@ Nodes (56): analiticoDetailState, _BKP_BIG_KEYS, _BKP_MODULES, _bkpSelected, bui
 
 ### Community 4 - "dashboard.js"
 Cohesion: 0.03
-Nodes (45): abrirSemCadastroModuloModal(), _ausCollapsed, _ausFilter, buildEntradaColumnMap(), buildLancamentoColumnMap(), buildSaidaColumnMap(), buildSapColumnMap(), CODIGOS_SAIDA (+37 more)
+Nodes (57): abrirSemCadastroModuloModal(), _ausCollapsed, _ausFilter, buildEntradaColumnMap(), buildLancamentoColumnMap(), buildSaidaColumnMap(), buildSapColumnMap(), CODIGOS_SAIDA (+49 more)
 
 ### Community 5 - "trend.js"
 Cohesion: 0.07
@@ -247,8 +246,8 @@ Cohesion: 0.10
 Nodes (25): _daBuildEntradasFlat(), _daBuildRanking(), _daBuildTabelaMaterial(), _daPesoMedioPorTipo(), _daRenderDetalhadoAnalitico(), _daVarIrrelevante(), DG_VG_CAT_ORDER, _dgVgAggKgPorChave() (+17 more)
 
 ### Community 22 - "renderModule"
-Cohesion: 0.12
-Nodes (34): CLOUD_BACKUP_MODULOS, atualizarBarraLote(), _donoDisplay(), excluirSelecionados(), getMateriaisSemCadastroDoModulo(), initAusencias(), limparSelecaoLote(), _pendPadronizacaoBtnHtml() (+26 more)
+Cohesion: 0.11
+Nodes (35): atualizarBarraLote(), _custosSapResolveMaterial(), _donoDisplay(), excluirSelecionados(), getGrupoSapPorCodigoIndex(), getMateriaisSemCadastroDoModulo(), initAusencias(), limparSelecaoLote() (+27 more)
 
 ### Community 23 - "persist.js"
 Cohesion: 0.18
@@ -317,10 +316,6 @@ Nodes (17): _buildOcHierarquiaBar(), _buildOcHierarquiaDetail(), buildWhatsAppLi
 ### Community 39 - "renderAnaliticoMicro"
 Cohesion: 0.21
 Nodes (13): _anClearStockCache(), _anGetLastPeriodStockFallback(), _anGetPrePeriodStock(), _anGetPrevDayStock(), anSwitchView(), _applyGroupPendHighlight(), buildAbsentTooltip(), buildCentralCard() (+5 more)
-
-### Community 40 - "processImportedRows"
-Cohesion: 0.15
-Nodes (14): conflictConfirm(), _detectConflicts(), _fpCustosSap(), _fpEntrada(), _fpLancamento(), _fpSaida(), _fpSap(), _mergeDedup() (+6 more)
 
 ### Community 41 - "buildCards"
 Cohesion: 0.22
@@ -555,23 +550,23 @@ Cohesion: 0.29
 Nodes (7): abrirEdicaoFiliaisSelecionados(), abrirImportarDe(), abrirNovosPendentesDetalhe(), _carregarPerfis(), _checarNovosParaImportar(), filialMatchKey(), syncFiliaisFromSupabase()
 
 ## Knowledge Gaps
-- **245 isolated node(s):** `ADMIN_MODULOS`, `_adminProfiles`, `_adminAuthInfo`, `_adminCurrentRows`, `_adminSelectedIds` (+240 more)
+- **245 isolated node(s):** `MESES_ABREV_DG`, `MESES_NOME_DG`, `_dgMonthState`, `DG_VG_CAT_LABELS`, `DG_VG_CAT_COLORS` (+240 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **9 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `CLOUD_BACKUP_MODULOS` connect `renderModule` to `admin.js`, `import.js`, `processImportedRows`, `cloud-backup.js`?**
-  _High betweenness centrality (0.138) - this node is a cross-community bridge._
-- **Why does `removerRegistro()` connect `renderModule` to `analitico.js`, `dashboard.js`?**
-  _High betweenness centrality (0.105) - this node is a cross-community bridge._
-- **Why does `Admin / Supervisão Page` connect `mensagens.js` to `admin.js`?**
-  _High betweenness centrality (0.095) - this node is a cross-community bridge._
-- **What connects `ADMIN_MODULOS`, `_adminProfiles`, `_adminAuthInfo` to the rest of the system?**
+- **Why does `excluirImportacao()` connect `import.js` to `analitico.js`?**
+  _High betweenness centrality (0.159) - this node is a cross-community bridge._
+- **Why does `CLOUD_BACKUP_MODULOS` connect `admin.js` to `import.js`, `cloud-backup.js`?**
+  _High betweenness centrality (0.155) - this node is a cross-community bridge._
+- **Why does `_cbReforcarBackupModulos()` connect `import.js` to `admin.js`?**
+  _High betweenness centrality (0.151) - this node is a cross-community bridge._
+- **What connects `MESES_ABREV_DG`, `MESES_NOME_DG`, `_dgMonthState` to the rest of the system?**
   _245 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `admin.js` be split into smaller, more focused modules?**
-  _Cohesion score 0.05423094904160823 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.053534660260809885 - nodes in this community are weakly interconnected._
 - **Should `ocorrencias.js` be split into smaller, more focused modules?**
   _Cohesion score 0.10826210826210826 - nodes in this community are weakly interconnected._
 - **Should `assistente.js` be split into smaller, more focused modules?**

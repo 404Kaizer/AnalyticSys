@@ -1,7 +1,7 @@
 # Graph Report - AnalyticSys  (2026-08-05)
 
 ## Corpus Check
-- 50 files · ~299,074 words
+- 50 files · ~298,737 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
@@ -55,7 +55,7 @@
 - getFilteredData
 - _buildOcHierarquiaBar
 - renderAnaliticoMicro
-- _dgVgRenderHealthDonuts
+- processImportedRows
 - buildCards
 - applyColFilter
 - renderOcorrencias
@@ -114,10 +114,10 @@
 - normalizeSearchKey
 - updateImportPrereqUI
 - _supaDeleteOwned
-- upsertMateriais
+- _setBtnLoading
 - _buildOptionsList
 - handleFiliaisImport
-- _setBtnLoading
+- salvarNovoGrupoMaterial
 - getCodigosSapDisponiveis
 - _configEhChaveSaude
 - salvarNovoRegionalCentral
@@ -175,7 +175,7 @@ Nodes (63): analiticoDetailState, _BKP_BIG_KEYS, _BKP_MODULES, _bkpSelected, bui
 
 ### Community 4 - "dashboard.js"
 Cohesion: 0.03
-Nodes (59): abrirSemCadastroModuloModal(), _ausCollapsed, _ausFilter, buildEntradaColumnMap(), buildLancamentoColumnMap(), buildSaidaColumnMap(), buildSapColumnMap(), CODIGOS_SAIDA (+51 more)
+Nodes (50): abrirSemCadastroModuloModal(), _ausCollapsed, _ausFilter, _ausFilterBuildOptions(), buildEntradaColumnMap(), buildLancamentoColumnMap(), buildSaidaColumnMap(), buildSapColumnMap() (+42 more)
 
 ### Community 5 - "trend.js"
 Cohesion: 0.07
@@ -242,12 +242,12 @@ Cohesion: 0.10
 Nodes (26): abrirFechManager(), buildColFilterHTML(), fecharFechImportModal(), fecharFechManager(), _fechImportAplicar(), _fechMgrAplicarFiltros(), _fechMgrAplicarLote(), _fechMgrApplyColFilter() (+18 more)
 
 ### Community 21 - "renderDgVisaoGeralPdf"
-Cohesion: 0.09
-Nodes (31): _daBuildEntradasFlat(), _daBuildRanking(), _daBuildTabelaMaterial(), _daPesoMedioPorTipo(), _daRenderDetalhadoAnalitico(), _daVarIrrelevante(), DG_VG_CAT_ORDER, _dgVgAggKgPorChave() (+23 more)
+Cohesion: 0.08
+Nodes (35): _daBuildEntradasFlat(), _daBuildRanking(), _daBuildTabelaMaterial(), _daPesoMedioPorTipo(), _daRenderDetalhadoAnalitico(), _daVarIrrelevante(), DG_VG_CAT_ORDER, _dgVgAggKgPorChave() (+27 more)
 
 ### Community 22 - "renderModule"
-Cohesion: 0.11
-Nodes (35): atualizarBarraLote(), _custosSapResolveMaterial(), _donoDisplay(), excluirSelecionados(), getGrupoSapPorCodigoIndex(), getMateriaisSemCadastroDoModulo(), initAusencias(), limparSelecaoLote() (+27 more)
+Cohesion: 0.12
+Nodes (33): atualizarBarraLote(), _donoDisplay(), excluirSelecionados(), getMateriaisSemCadastroDoModulo(), initAusencias(), limparSelecaoLote(), _pendPadronizacaoBtnHtml(), removerRegistro() (+25 more)
 
 ### Community 23 - "persist.js"
 Cohesion: 0.18
@@ -278,8 +278,8 @@ Cohesion: 0.15
 Nodes (19): fechAddAlert(), fechAddItem(), fechamentoResetarTexto(), _fechDefaultFields(), _fechGetFields(), _fechLastWeekday(), _fechLastWorkdayOfMonth(), _fechLoadAllSaved() (+11 more)
 
 ### Community 30 - "renderAusencias"
-Cohesion: 0.15
-Nodes (20): applyAusFilter(), ausCollapseAll(), _ausDateStr(), ausExpandAll(), _ausFilterBuildOptions(), _ausFilterSyncClear(), _ausFilterSyncLabel(), ausToggleAllCentralis() (+12 more)
+Cohesion: 0.18
+Nodes (17): applyAusFilter(), ausCollapseAll(), _ausDateStr(), ausExpandAll(), _ausFilterSyncClear(), _ausFilterSyncLabel(), ausToggleAllCentralis(), ausToggleAllRegionais() (+9 more)
 
 ### Community 31 - "macro.js"
 Cohesion: 0.18
@@ -317,9 +317,9 @@ Nodes (17): _buildOcHierarquiaBar(), _buildOcHierarquiaDetail(), buildWhatsAppLi
 Cohesion: 0.21
 Nodes (13): _anClearStockCache(), _anGetLastPeriodStockFallback(), _anGetPrePeriodStock(), _anGetPrevDayStock(), anSwitchView(), _applyGroupPendHighlight(), buildAbsentTooltip(), buildCentralCard() (+5 more)
 
-### Community 40 - "_dgVgRenderHealthDonuts"
-Cohesion: 0.33
-Nodes (6): _dgVgBuildCentralHealthData(), _dgVgBuildHealthDonutData(), _dgVgHealthTipHtml(), _dgVgRenderHealthDonuts(), _dgVgRenderHealthDonutSvg(), _dgVgScoreFromCounts()
+### Community 40 - "processImportedRows"
+Cohesion: 0.15
+Nodes (14): conflictConfirm(), _detectConflicts(), _fpCustosSap(), _fpEntrada(), _fpLancamento(), _fpSaida(), _fpSap(), _mergeDedup() (+6 more)
 
 ### Community 41 - "buildCards"
 Cohesion: 0.22
@@ -346,8 +346,8 @@ Cohesion: 0.36
 Nodes (11): _buildHelpContent(), _getHelpTip(), HELP_DEFS, hideCustoMedTip(), _hideHelpTip(), initHelpBadges(), moveCustoMedTip(), _moveHelpTip() (+3 more)
 
 ### Community 47 - "varSymbol"
-Cohesion: 0.33
-Nodes (11): _daColorFor(), _daFmtCountSigned(), _daFmtMoneySigned(), _daFmtPctSigned(), _daMaiorImpacto(), _daRenderRanking(), _daRenderTabelaMaterial(), _dgVgRenderExtremos() (+3 more)
+Cohesion: 0.26
+Nodes (13): _daColorFor(), _daFmtCountSigned(), _daFmtMoneySigned(), _daFmtPctSigned(), _daMaiorImpacto(), _daRenderRanking(), _daRenderTabelaMaterial(), _dgVgHealthTipHtml() (+5 more)
 
 ### Community 48 - "toast"
 Cohesion: 0.24
@@ -517,9 +517,9 @@ Nodes (3): getFieldCandidates(), normalizeSearchKey(), normalizeText()
 Cohesion: 0.67
 Nodes (3): hasRequiredReferenceData(), showImportPrereqMessage(), updateImportPrereqUI()
 
-### Community 103 - "upsertMateriais"
-Cohesion: 0.23
-Nodes (12): editarMateriais(), handleMateriaisImport(), makeMaterialId(), _materiaisSyncUpdate(), _materiaisSyncUpsert(), materialMatchKey(), normalizeImportedMaterial(), parseMateriaisRows() (+4 more)
+### Community 103 - "_setBtnLoading"
+Cohesion: 0.19
+Nodes (14): editarMateriais(), handleMateriaisImport(), makeMaterialId(), _materiaisSyncUpdate(), _materiaisSyncUpsert(), materialMatchKey(), normalizeImportedMaterial(), parseMateriaisRows() (+6 more)
 
 ### Community 104 - "_buildOptionsList"
 Cohesion: 0.29
@@ -529,9 +529,9 @@ Nodes (7): _buildOptionsList(), _buildVariacaoOptions(), filterMicroOptions(), _
 Cohesion: 0.22
 Nodes (10): editarFiliais(), _filiaisSyncUpdate(), _filiaisSyncUpsert(), handleFiliaisImport(), normalizeImportedFilial(), parseFiliaisRows(), registrarRegionalCentral(), removerFilial() (+2 more)
 
-### Community 106 - "_setBtnLoading"
-Cohesion: 0.33
-Nodes (7): confirmarImportarDe(), getGruposMateriaisDisponiveis(), _rebuildGrupoMateriaisOptions(), _refreshGrupoMateriaisSelects(), removerMaterial(), salvarNovoGrupoMaterial(), _setBtnLoading()
+### Community 106 - "salvarNovoGrupoMaterial"
+Cohesion: 0.67
+Nodes (4): getGruposMateriaisDisponiveis(), _rebuildGrupoMateriaisOptions(), _refreshGrupoMateriaisSelects(), salvarNovoGrupoMaterial()
 
 ### Community 107 - "getCodigosSapDisponiveis"
 Cohesion: 0.67
@@ -546,8 +546,8 @@ Cohesion: 0.67
 Nodes (4): getRegionaisCentraisDisponiveis(), _rebuildRegionaisCentraisOptions(), _refreshRegionaisCentraisSelects(), salvarNovoRegionalCentral()
 
 ### Community 110 - "_checarNovosParaImportar"
-Cohesion: 0.29
-Nodes (7): abrirEdicaoFiliaisSelecionados(), abrirImportarDe(), abrirNovosPendentesDetalhe(), _carregarPerfis(), _checarNovosParaImportar(), filialMatchKey(), syncFiliaisFromSupabase()
+Cohesion: 0.25
+Nodes (8): abrirEdicaoFiliaisSelecionados(), abrirImportarDe(), abrirNovosPendentesDetalhe(), _carregarPerfis(), _checarNovosParaImportar(), confirmarImportarDe(), filialMatchKey(), syncFiliaisFromSupabase()
 
 ## Knowledge Gaps
 - **246 isolated node(s):** `ADMIN_MODULOS`, `_adminProfiles`, `_adminAuthInfo`, `_adminCurrentRows`, `_adminSelectedIds` (+241 more)
@@ -557,7 +557,7 @@ Nodes (7): abrirEdicaoFiliaisSelecionados(), abrirImportarDe(), abrirNovosPenden
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `CLOUD_BACKUP_MODULOS` connect `admin.js` to `import.js`, `cloud-backup.js`, `dashboard.js`, `renderModule`?**
+- **Why does `CLOUD_BACKUP_MODULOS` connect `admin.js` to `processImportedRows`, `import.js`, `cloud-backup.js`, `renderModule`?**
   _High betweenness centrality (0.121) - this node is a cross-community bridge._
 - **Why does `removerRegistro()` connect `renderModule` to `analitico.js`, `admin.js`, `dashboard.js`?**
   _High betweenness centrality (0.099) - this node is a cross-community bridge._
