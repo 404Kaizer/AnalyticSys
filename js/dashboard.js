@@ -4304,11 +4304,11 @@ function renderCustosSap() {
   const pageData = data.slice(currentPageCustosSap * PAGE_SIZE, (currentPageCustosSap + 1) * PAGE_SIZE);
   updatePageInfo('custosSap');
 
-  const centrais = new Set(state.custosSap.map(r => r.central).filter(Boolean));
-  const materiais = new Set(state.custosSap.map(r => r.material).filter(Boolean));
-  const estoqueTotal = state.custosSap.reduce((a, b) => a + num(b.estoqueTotal), 0);
-  const valorTotal = state.custosSap.reduce((a, b) => a + num(b.valorTotal), 0);
-  const custoMedio = state.custosSap.length ? state.custosSap.reduce((a, b) => a + num(b.custo), 0) / state.custosSap.length : 0;
+  const centrais = new Set(data.map(r => r.central).filter(Boolean));
+  const materiais = new Set(data.map(r => r.material).filter(Boolean));
+  const estoqueTotal = data.reduce((a, b) => a + num(b.estoqueTotal), 0);
+  const valorTotal = data.reduce((a, b) => a + num(b.valorTotal), 0);
+  const custoMedio = data.length ? data.reduce((a, b) => a + num(b.custo), 0) / data.length : 0;
 
   const set = (id, value) => {
     const el = document.getElementById(id);
