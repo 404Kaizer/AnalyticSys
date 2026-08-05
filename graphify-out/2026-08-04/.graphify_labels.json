@@ -39,7 +39,6 @@
   "37": "getFilteredData",
   "38": "_buildOcHierarquiaBar",
   "39": "renderAnaliticoMicro",
-  "40": "processImportedRows",
   "41": "buildCards",
   "42": "applyColFilter",
   "43": "renderOcorrencias",
@@ -86,8 +85,6 @@
   "84": "supabase-client.js",
   "85": "Categoria de Situação Select",
   "86": "Termo de Responsabilidade Step (sign + attach)",
-  "87": "_mesclarGrandeComBanco",
-  "88": "excluirImportacao",
   "89": "Q: Why does CLOUD_BACKUP_MODULOS connect Cloud Backup Module to Admin Panel, Dashboard Conflict Detection, Dashboard Rendering & Cleanup, Import Deletion & Backup Sync?",
   "90": "_ocRealtimeInit",
   "91": "_ocCloseMicroFilterDropdown",
@@ -109,6 +106,5 @@
   "107": "init",
   "108": "_configEhChaveSaude",
   "109": "salvarNovoRegionalCentral",
-  "110": "_checarNovosParaImportar",
-  "111": "_buildCentralOptionsHtml"
+  "110": "_checarNovosParaImportar"
 }

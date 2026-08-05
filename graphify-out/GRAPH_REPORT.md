@@ -1,16 +1,16 @@
 # Graph Report - AnalyticSys  (2026-08-04)
 
 ## Corpus Check
-- 50 files · ~298,201 words
+- 50 files · ~298,252 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 2058 nodes · 4217 edges · 108 communities (99 shown, 9 thin omitted)
+- 2058 nodes · 4219 edges · 108 communities (99 shown, 9 thin omitted)
 - Extraction: 88% EXTRACTED · 12% INFERRED · 0% AMBIGUOUS · INFERRED: 499 edges (avg confidence: 0.56)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `a4997059`
+- Built from commit: `c15bb555`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
