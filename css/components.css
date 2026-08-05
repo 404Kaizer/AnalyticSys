@@ -711,21 +711,26 @@
    isso só estende pro friso/valor pra dar mais peso visual. Os cards de
    grupo (.mod-summary-grid, um por central/código) ficam neutros de
    propósito: são muitos, colorir todos viraria ruído em vez de destaque.
-   .inv-kpi-card já é position:relative/overflow:hidden (linha ~600). */
+   .inv-kpi-card já é position:relative/overflow:hidden (linha ~600).
+   Prefixo "kpi-" (não "c-") de propósito: "c-green"/"c-red"/"c-purple" já
+   existem como classes soltas, não-escopadas, do sistema "METRIC CARDS V2"
+   (modules.css) — inclusive um `.c-green::after { background: var(--green) }`
+   que colidia direto com o overlay de hover do .inv-kpi-card (::after,
+   inset:0), pintando o card inteiro de sólido ao passar o mouse. */
 .mod-summary-hero .inv-kpi-card::before {
   content: '';
   position: absolute;
   top: 0; left: 0; right: 0;
   height: 2px;
 }
-.mod-summary-hero .inv-kpi-card.c-accent::before { background: var(--accent); }
-.mod-summary-hero .inv-kpi-card.c-accent .inv-kpi-value { color: var(--accent); }
-.mod-summary-hero .inv-kpi-card.c-green::before  { background: var(--green); }
-.mod-summary-hero .inv-kpi-card.c-green  .inv-kpi-value { color: var(--green); }
-.mod-summary-hero .inv-kpi-card.c-red::before    { background: var(--red); }
-.mod-summary-hero .inv-kpi-card.c-red    .inv-kpi-value { color: var(--red); }
-.mod-summary-hero .inv-kpi-card.c-purple::before { background: var(--purple); }
-.mod-summary-hero .inv-kpi-card.c-purple .inv-kpi-value { color: var(--purple); }
+.mod-summary-hero .inv-kpi-card.kpi-accent::before { background: var(--accent); }
+.mod-summary-hero .inv-kpi-card.kpi-accent .inv-kpi-value { color: var(--accent); }
+.mod-summary-hero .inv-kpi-card.kpi-green::before  { background: var(--green); }
+.mod-summary-hero .inv-kpi-card.kpi-green  .inv-kpi-value { color: var(--green); }
+.mod-summary-hero .inv-kpi-card.kpi-red::before    { background: var(--red); }
+.mod-summary-hero .inv-kpi-card.kpi-red    .inv-kpi-value { color: var(--red); }
+.mod-summary-hero .inv-kpi-card.kpi-purple::before { background: var(--purple); }
+.mod-summary-hero .inv-kpi-card.kpi-purple .inv-kpi-value { color: var(--purple); }
 
 .mod-summary-grid {
   display: grid;
