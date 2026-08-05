@@ -3658,7 +3658,7 @@ img { max-width: 100%; }
   .topbar-sub { display: none; }
   .topbar-divider { display: none; }
   .search-input { width: 140px; }
-  .metrics-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+  .metrics-grid { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
   .micro-filial-summary { gap: 12px; }
   .analitico-toolbar { flex-direction: column; align-items: stretch; }
 }

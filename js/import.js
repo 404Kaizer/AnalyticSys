@@ -42,7 +42,17 @@ function _cascadeDeleteCloudByImportId(importId) {
 // importado nunca é tocado por esta função.
 function _mesclarGrandeComBanco(local, remoto) {
   const soLocal = (local || []).filter(r => r.importId && !r.editado);
-  return [...soLocal, ...(remoto || [])];
+  // Dedupe por id (05/08): premissa original era "importado nunca existe na
+  // nuvem" (verdade pra Entradas/Saídas/Lançamentos/SAP), então concatenar
+  // soLocal+remoto era seguro. Custos SAP quebrou essa premissa (importação
+  // em lote agora sincroniza — cadastro compartilhado do time) — sem o
+  // dedupe, cada registro importado aparecia em soLocal E em remoto ao
+  // mesmo tempo, e o resultado inflado virava o "local" do próximo boot,
+  // dobrando a cada vez. Pros outros 4 módulos isto é sempre um no-op
+  // (nenhum id de soLocal nunca aparece em remoto).
+  const idsRemoto = new Set((remoto || []).map(r => r.id).filter(Boolean));
+  const soLocalSemDuplicata = soLocal.filter(r => !r.id || !idsRemoto.has(r.id));
+  return [...soLocalSemDuplicata, ...(remoto || [])];
 }
 
 // Reforça o backup condensado (cloud-backup.js) dos 5 módulos grandes de
@@ -64,16 +74,19 @@ function _cbReforcarBackupModulos() {
 function _cascadeRestoreCloudByImportId(importId, snapshots) {
   if (!window.supabaseClient || !importId) return;
   const porImport = arr => (arr || []).filter(r => r.importId === importId);
-  // Filiais/Materiais: tudo que tinha esse importId sincronizava, restaura tudo.
+  // Filiais/Materiais/Custos SAP: tudo que tinha esse importId sincronizava,
+  // restaura tudo. Custos SAP entrou nesse grupo em 05/08 (virou cadastro
+  // compartilhado — importação em lote passou a sincronizar por completo,
+  // não só o editado).
   if (typeof _filiaisSyncUpsertBatch === 'function') _filiaisSyncUpsertBatch(porImport(snapshots.filiais));
   if (typeof _materiaisSyncUpsertBatch === 'function') _materiaisSyncUpsertBatch(porImport(snapshots.materiais));
-  // Lançamentos/Entradas/Saídas/Custos SAP: só o que estava editado é que
-  // pode ter ido pra nuvem — restaura só esses (nos 3 últimos, hoje nunca
-  // há nada aqui, já que não existe edição inline ainda).
+  if (typeof _custosSapSyncUpsertBatch === 'function') _custosSapSyncUpsertBatch(porImport(snapshots.custosSap));
+  // Lançamentos/Entradas/Saídas: só o que estava editado é que pode ter ido
+  // pra nuvem — restaura só esses (hoje nunca há nada aqui, já que não
+  // existe edição inline ainda).
   if (typeof _lancSyncUpsertBatch === 'function') _lancSyncUpsertBatch(porImport(snapshots.lancamentos).filter(r => r.editado));
   if (typeof _entradasSyncUpsertBatch === 'function') _entradasSyncUpsertBatch(porImport(snapshots.entradas).filter(r => r.editado));
   if (typeof _saidasSyncUpsertBatch === 'function') _saidasSyncUpsertBatch(porImport(snapshots.saidas).filter(r => r.editado));
-  if (typeof _custosSapSyncUpsertBatch === 'function') _custosSapSyncUpsertBatch(porImport(snapshots.custosSap).filter(r => r.editado));
   if (typeof _sapSyncUpsertBatch === 'function') _sapSyncUpsertBatch(porImport(snapshots.sap).filter(r => r.editado));
 }
 
@@ -220,12 +233,10 @@ function excluirCustosSap(absIndex) {
       persist();
       renderCustosSap();
       updateDashboard();
-      if (rec.id && !rec.importId && typeof _custosSapSyncDelete === 'function') _custosSapSyncDelete(rec.id);
-      // Reforça o backup condensado na hora (30/07) — ver removerRegistro
-      // (dashboard.js) pro mesmo motivo: sem isso, um registro importado
-      // excluído só some localmente até o próximo reforço periódico (até 3h).
-      // permitirReducao: a contagem cair é o próprio objetivo da exclusão.
-      if (typeof _cbUploadModulo === 'function') _cbUploadModulo('custosSap', { permitirReducao: true });
+      // Sem checar importId (05/08) — todo registro de Custos SAP existe na
+      // nuvem agora, manual ou importado, então toda exclusão precisa
+      // apagar lá também.
+      if (rec.id && typeof _custosSapSyncDelete === 'function') _custosSapSyncDelete(rec.id);
     },
 
     undo: () => {
@@ -237,7 +248,6 @@ function excluirCustosSap(absIndex) {
       renderCustosSap();
       updateDashboard();
       if (typeof _custosSapSyncUpsert === 'function') _custosSapSyncUpsert(snapshot);
-      if (typeof _cbUploadModulo === 'function') _cbUploadModulo('custosSap');
     },
   });
 }
@@ -859,7 +869,11 @@ function _custosSapFromDbRow(row) {
 
 // Decisão de 27/07: mesma regra de Lançamentos — só sincroniza manual.
 function _custosSapSyncUpsert(rec) {
-  if (rec.importId || !window.supabaseClient) return;
+  // Sem guarda de importId (05/08) — diferente dos outros módulos híbridos,
+  // Custos SAP virou cadastro compartilhado: TODO registro sincroniza,
+  // manual ou importado (ver processImportedRows/_custosSapSyncUpsertBatch,
+  // dashboard.js).
+  if (!window.supabaseClient) return;
   window.supabaseClient.from('custos_sap').upsert(_custosSapToDbRow(rec))
     .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao sincronizar Custos SAP:', error); });
 }
@@ -884,13 +898,22 @@ function _custosSapSyncDelete(id) {
 // integrado" (fetchMineOrIntegrated), o RLS já libera SELECT de todos os
 // registros pra qualquer usuário autenticado (só INSERT/UPDATE/DELETE
 // seguem restritos ao ADM). fetchAllRows busca tudo, paginado.
+//
+// SUBSTITUIÇÃO PURA, sem _mesclarGrandeComBanco (05/08, mesmo bug e mesma
+// correção de syncAjustesSistemicosFromSupabase/DAI, 30/07): aquele merge
+// existe pra PRESERVAR importação local que nunca chega na nuvem (premissa
+// dos outros 4 módulos grandes) — mas Custos SAP agora sincroniza toda
+// importação, então "local tem, nuvem não tem" já não significa "ainda não
+// sincronizou", significa "foi excluído". Preservar esse registro local
+// desfazia toda exclusão no boot seguinte, mesmo o ADM apagando local+nuvem
+// pela tela de Supervisão. O BANCO MANDA: erro de rede cai no catch e
+// preserva o local (única exceção — sem isso, uma falha de conexão
+// esvaziaria a tela à toa).
 async function syncCustosSapFromSupabase() {
   if (!window.supabaseClient) return;
   try {
     const data = await fetchAllRows('custos_sap');
-    const remoto = (data || []).map(_custosSapFromDbRow);
-    const local = Array.isArray(state.custosSap) ? state.custosSap : [];
-    state.custosSap = _mesclarGrandeComBanco(local, remoto);
+    state.custosSap = (data || []).map(_custosSapFromDbRow);
   } catch (err) {
     console.warn('[Supabase] Falha ao buscar Custos SAP — mantendo dados locais.', err);
   }

@@ -47,16 +47,15 @@
 const CLOUD_BACKUP_BUCKET = 'backups-condensados';
 const CLOUD_BACKUP_CHUNK_SIZE = 20000; // registros por chunk comprimido
 const CLOUD_BACKUP_VERSION = 1;
-const CLOUD_BACKUP_MODULOS = ['entradas', 'saidas', 'lancamentos', 'custosSap', 'sap'];
-
-// Para os outros 4 módulos híbridos, a tabela no Postgres (snake_case) e a
-// chave de estado no JS (camelCase) são a MESMA string, então o restante do
-// código (Supervisão) usa "modulo" indistintamente pras duas coisas. Custos
-// SAP é o primeiro módulo híbrido com nome composto e as duas convenções
-// divergem ('custos_sap' vs 'custosSap') — este mapa resolve tabela→estado
-// só onde as duas rotinas de Supervisão (reset local / exclusão em massa)
-// precisam da chave de estado, mas receberam o nome da tabela.
-const CLOUD_BACKUP_TABELA_PARA_MODULO = { custos_sap: 'custosSap' };
+// Custos SAP SAIU deste grupo em 05/08: virou cadastro único e
+// compartilhado do time, com sincronização linha a linha de verdade (RLS +
+// Realtime, ver import.js) — não é mais "volume importado que só existe
+// local". Deixar aqui reintroduzia o próprio problema que esta camada
+// resolve pros outros 4: restaurarBackupCondensadoSeNecessario (abaixo)
+// restaurava um snapshot condensado velho toda vez que o local ficava
+// vazio — inclusive depois de uma exclusão de verdade, desfazendo-a no
+// boot seguinte (o SQL, fonte de verdade agora, nunca tinha essa noção).
+const CLOUD_BACKUP_MODULOS = ['entradas', 'saidas', 'lancamentos', 'sap'];
 
 // Throttle do reforço periódico — não repete o backup do mesmo módulo em
 // menos desse intervalo, mesmo que o timer de checagem rode com mais
