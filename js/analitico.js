@@ -220,6 +220,14 @@ function _rodarAnaliticoCore(dtIni, dtFim, onDone, silent) {
   // ── Per-central analysis ──────────────────────────────────
   const results = [];
 
+  // Custo médio da Visão Micro: SÓ Custos SAP (central+Cód SAP+mês final do
+  // período), sem cascata Saídas/Lançamentos/SAP (decisão do Hugo, 05/08) —
+  // ver getCustoMedioCustosSap/buildCustosSapIndex (normalize.js), mesma
+  // fonte usada pelo Inventário.
+  const _custosSapIdx = buildCustosSapIndex();
+  const _custosSapAno = dtFim.getFullYear();
+  const _custosSapMes = dtFim.getMonth() + 1;
+
   allCentrals.forEach(central => {
 
     // ── Lançamentos desta central dentro do período — via índice ──
@@ -395,83 +403,23 @@ function _rodarAnaliticoCore(dtIni, dtFim, onDone, silent) {
       movBreakdown[cod] += num(r.peso);
     });
 
-    // ── Saídas (módulo Saídas) desta central no período ──
-    // Custo médio ponderado por material: R$/kg → usado no badge de custo da variação
-    // Usa índice de saídas pré-computado se disponível, senão linear (saídas é menor)
-    const _saidasIdx = _saidasByCentral.size > 0 ? _saidasByCentral : null;
-    const saidasNoPeriodoRaw = _saidasIdx
-      ? (_saidasIdx.get(central) || []).filter(s => {
-          const d = parseDate(s.dtEmissao);
-          return d && d >= dtIni && d <= dtFim;
-        })
-      : state.saidas.filter(s => s.central === central && inPeriod(s.dtEmissao));
-    // Mesma filtragem por materialOriginal — custo médio não deve incluir
-    // materiais sem cadastro (também usados no custo implicado da variação).
-    const saidasNoPeriodo = saidasNoPeriodoRaw.filter(s => !!getCatKeyDoCadastro(s.materialOriginal));
-    const _custoPorMat = {};
-    const _pesoPorMat  = {};
-    saidasNoPeriodo.forEach(s => {
-      const mat = s.material || '—';
-      _custoPorMat[mat] = (_custoPorMat[mat] || 0) + num(s.valorTotal);
-      _pesoPorMat[mat]  = (_pesoPorMat[mat]  || 0) + Math.abs(num(s.peso));
-    });
+    // ── Custo médio por material: SÓ Custos SAP (central + Cód SAP + mês
+    // final do período), sem cascata — ver índice _custosSapIdx acima.
+    // 'sem_codigo': material sem Cód SAP cadastrado (nem dá pra buscar).
+    // 'ausente': tem Cód SAP, mas não achou registro em Custos SAP pro
+    // central/mês. Nenhum dos dois casos cai num valor silencioso — ambos
+    // ficam visíveis como badge na tabela (ver buildCentralCard).
     const custoMedioPorMat      = {};
-    const custoMedioFontePorMat  = {};  // 'saidas' | 'lancamentos' | 'sap'
-
-    // ── 1ª prioridade: Módulo Saídas ──────────────────────────────────
-    Object.keys(_custoPorMat).forEach(mat => {
-      if (_pesoPorMat[mat] > 0 && _custoPorMat[mat] > 0) {
-        custoMedioPorMat[mat]      = _custoPorMat[mat] / _pesoPorMat[mat];
-        custoMedioFontePorMat[mat] = 'saidas';
-      }
-    });
-
-    // ── 2ª prioridade: Módulo Lançamentos ─────────────────────────────
-    // Lançamentos da central no período com campo custo preenchido
-    const lancsNoPeriodoCusto = lancsNoPeriodo.filter(l => {
-      const c = num(l.custo); return c > 0;
-    });
-    const _lCusto = {}, _lPeso = {};
-    lancsNoPeriodoCusto.forEach(l => {
-      const mat = l.material || '—';
-      const p   = Math.abs(num(l.peso));
-      const vt  = num(l.valorTotal);
-      const c   = num(l.custo);
-      const valor = vt > 0 ? vt : c * p;
-      if (!valor || !p) return;
-      _lCusto[mat] = (_lCusto[mat] || 0) + valor;
-      _lPeso[mat]  = (_lPeso[mat]  || 0) + p;
-    });
-    Object.keys(_lCusto).forEach(mat => {
-      if (custoMedioPorMat[mat]) return;  // já tem pelas Saídas
-      if (_lPeso[mat] > 0 && _lCusto[mat] > 0) {
-        custoMedioPorMat[mat]      = _lCusto[mat] / _lPeso[mat];
-        custoMedioFontePorMat[mat] = 'lancamentos';
-      }
-    });
-
-    // ── 3ª prioridade: SAP ─────────────────────────────────────────────
-    sapNoPeriodo.forEach(s => {
-      const mat = s.material || '—';
-      if (custoMedioPorMat[mat]) return;  // já tem pelas Saídas ou Lançamentos
-      const p  = Math.abs(num(s.peso));
-      if (!p) return;
-      const vt = num(s.valorTotal);
-      const cu = num(s.custoUnit);
-      const valor = vt !== 0 ? Math.abs(vt) : (cu !== 0 ? Math.abs(cu) * p : 0);
-      if (!valor) return;
-      const key = '_sap_' + mat;
-      if (!_custoPorMat[key]) { _custoPorMat[key] = 0; _pesoPorMat[key] = 0; }
-      _custoPorMat[key] += valor;
-      _pesoPorMat[key]  += p;
-    });
-    Object.keys(_custoPorMat).forEach(key => {
-      if (!key.startsWith('_sap_')) return;
-      const mat = key.slice(5);
-      if (custoMedioPorMat[mat]) return;
-      if (_pesoPorMat[key] > 0 && _custoPorMat[key] > 0) {
-        custoMedioPorMat[mat]      = _custoPorMat[key] / _pesoPorMat[key];
-        custoMedioFontePorMat[mat] = 'sap';
+    const custoMedioFontePorMat = {};  // 'custos_sap' | 'sem_codigo' | 'ausente'
+    allMats.forEach(mat => {
+      const codSap = getCodSapPorGrupo(mat);
+      if (!codSap) { custoMedioFontePorMat[mat] = 'sem_codigo'; return; }
+      const custo = getCustoMedioCustosSap(central, codSap, _custosSapAno, _custosSapMes, _custosSapIdx);
+      if (custo !== null) {
+        custoMedioPorMat[mat]      = custo;
+        custoMedioFontePorMat[mat] = 'custos_sap';
+      } else {
+        custoMedioFontePorMat[mat] = 'ausente';
       }
     });
 
@@ -1094,13 +1042,15 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
         days: dailyRows
       });
 
+      const _matCodSap     = getCodSapPorGrupo(mat);
       const _rowCustoMed   = (r.custoMedioPorMat      || {})[mat] || 0;
       const _rowCustoFonte = (r.custoMedioFontePorMat || {})[mat] || null;
       const _rowCustoVar   = _rowCustoMed > 0 ? snapshot.diff * _rowCustoMed : null;
       const _rowVarCls     = _rowCustoVar === null ? '' : varClass(_rowCustoVar);
-      // Tooltip: custo médio + fonte
-      const _custoMedLabel  = _rowCustoMed > 0 ? escapeHtml(money(_rowCustoMed) + '/kg') : '—';
-      const _custoMedFonte  = _rowCustoFonte === 'saidas' ? 'Módulo Saídas' : _rowCustoFonte === 'lancamentos' ? 'Módulo Lançamentos' : _rowCustoFonte === 'sap' ? 'Fallback SAP' : '—';
+      // Tooltip: custo médio + fonte (só Custos SAP — central+Cód SAP+mês, sem cascata)
+      const _custoMedLabel = _rowCustoMed > 0 ? escapeHtml(money(_rowCustoMed) + '/kg') : '—';
+      const _custoMedMesAno = `${String(dtFim.getMonth() + 1).padStart(2, '0')}/${dtFim.getFullYear()}`;
+      const _custoMedFonte = `Custos SAP — ${_custoMedMesAno}`;
       const custoVarCell = _rowCustoVar !== null
         ? `<span
             class="td-mono ${_rowVarCls}"
@@ -1109,7 +1059,9 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
             onmousemove="moveCustoMedTip(event)"
             onmouseleave="hideCustoMedTip()"
           >${varSymbol(_rowCustoVar)} ${money(Math.abs(_rowCustoVar))}</span>`
-        : `<span style="color:var(--text3);font-size:11px">—</span>`;
+        : _rowCustoFonte === 'sem_codigo'
+          ? `<span class="absent-badge" style="background:var(--bg4);color:var(--text3);border-color:var(--border2)" title="Material sem Cód SAP cadastrado — não é possível buscar o custo em Custos SAP">SEM CÓD SAP</span>`
+          : `<span class="absent-badge" title="Nenhum custo cadastrado em Custos SAP para ${escapeHtml(r.central)} / Cód SAP ${escapeHtml(_matCodSap)} / ${_custoMedMesAno}">AUSENTE</span>`;
 
       const _matFechExcluidos = (r.sapFechExcluidosByMat && r.sapFechExcluidosByMat.get(mat)) || [];
       const _matFechExcluidosEnt = _matFechExcluidos.filter(x => num(x.peso) > 0);
@@ -1130,6 +1082,7 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
               ${escapeHtml(mat)}
             </span>
           </td>
+          <td class="td-mono" style="font-size:11px">${matSemCadastro ? '—' : (escapeHtml(_matCodSap) || '—')}</td>
           <td class="td-mono" style="color:var(--text2);font-size:11px">${
             matSemCadastro
               ? `<span class="absent-badge" style="background:var(--bg4);color:var(--text3);border-color:var(--border2)" title="Sem cadastro — não é possível determinar se segue a regra semanal de Agregados">SEM CADASTRO</span>`
@@ -1422,6 +1375,7 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
             <thead>
               <tr>
                 <th>Material</th>
+                <th>Cód SAP</th>
                 <th>Dt. Est. Inicial</th>
                 <th>Est. Inicial<br><span style="font-size:9px;font-weight:400;opacity:.7">(Saldo Anterior)</span></th>
                 <th>Entradas<br><span style="font-size:9px;font-weight:400;opacity:.7">(por código)</span></th>
@@ -1433,7 +1387,7 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
                 <th style="text-align:right">Custo Variação<br><span style="font-size:9px;font-weight:400;opacity:.7">(Var. × C. Médio)</span></th>
               </tr>
             </thead>
-            <tbody>${matRowsHtml || '<tr><td colspan="10"><div class="empty-state" style="padding:24px"><i class="ti ti-box-off"></i><p>Nenhum material encontrado.</p></div></td></tr>'}</tbody>
+            <tbody>${matRowsHtml || '<tr><td colspan="11"><div class="empty-state" style="padding:24px"><i class="ti ti-box-off"></i><p>Nenhum material encontrado.</p></div></td></tr>'}</tbody>
           </table>
         </div>
       </div>`;
@@ -2711,7 +2665,6 @@ Object.assign(window, {
   salvarSaida,
   salvarLancamento,
   salvarSAP,
-  salvarCustosSap,
   salvarConfig,
   renderConfigs,
   renderFiliais,
@@ -3387,6 +3340,9 @@ window._inv_helpers = {
   // nunca como uma categoria padrão silenciosa.
   getCategoriaPorGrupo,
   getCatKeyDoCadastro,
+  getCodSapPorGrupo,
+  getCustoMedioCustosSap,
+  buildCustosSapIndex,
 
   // Ajustes de Fechamento Mensal (Y11/Y12) — detecção/exclusão do cálculo
   // de variação (ver ui.js). Expostos aqui para o Inventário poder filtrar
@@ -3394,80 +3350,6 @@ window._inv_helpers = {
   // que Analítico/Dashboard Gerencial/Trend, e montar o badge por linha.
   isSapExcluidoPorFechamento,
   somarPesoCustoSap,
-
-  // Calcula custo médio ponderado por material para uma central/período,
-  // usando EXATAMENTE a mesma lógica do Analítico:
-  //   1ª fonte: Saídas (Σ valorTotal / Σ peso) no período, restrita a
-  //             materiais cadastrados (mesmo filtro por materialOriginal
-  //             usado em buildDashboardGerencialResults e no cálculo
-  //             interno de custo do Analítico — sem isso, saídas de
-  //             materiais sem cadastro podiam contaminar a média de um
-  //             material cadastrado com nome resolvido coincidente,
-  //             fazendo o Custo Var. do Inventário divergir do Dashboard
-  //             Gerencial mesmo com a mesma variação em kg)
-  //   fallback: SAP no período
-  // Retorna um objeto { [material]: custoMedio }
-  getCustoMedioPorMat(central, dtIni, dtFim) {
-    ensureSaidasIndex();
-    if (!_sapIndexBuilt) _buildSapIndex();
-    const parseD = window._inv_helpers.parseDate;
-    const toNum  = window._inv_helpers.num;
-
-    // ── 1. Saídas ──────────────────────────────────────────
-    const saidasDaCentral = (_saidasByCentral.get(central) || [])
-      .filter(s => { const d = parseD(s.dtEmissao); return d && d >= dtIni && d <= dtFim; })
-      .filter(s => !!getCatKeyDoCadastro(s.materialOriginal));
-
-    const _custoPorMat = {};
-    const _pesoPorMat  = {};
-    saidasDaCentral.forEach(s => {
-      const mat = s.material || '—';
-      _custoPorMat[mat] = (_custoPorMat[mat] || 0) + toNum(s.valorTotal);
-      _pesoPorMat[mat]  = (_pesoPorMat[mat]  || 0) + Math.abs(toNum(s.peso));
-    });
-
-    const custoMedioPorMat = {};
-    Object.keys(_custoPorMat).forEach(mat => {
-      custoMedioPorMat[mat] = _pesoPorMat[mat] > 0 ? _custoPorMat[mat] / _pesoPorMat[mat] : 0;
-    });
-
-    // ── 2. Fallback: SAP (materiais sem custo nas Saídas) ──────
-    // Mesmos dois filtros aplicados ao sapNoPeriodo usado internamente por
-    // buildDashboardGerencialResults (dashboard.js) antes de calcular seu
-    // custoMedioPorMat: (a) materialOriginal cadastrado — mesmo motivo do
-    // filtro das Saídas acima; (b) exclui Ajustes de Fechamento Mensal
-    // (Y11/Y12, ver isSapExcluidoPorFechamento em ui.js) — sem isso, um
-    // registro de ajuste de saldo (que pode trazer peso e custo unitário
-    // altos) entrava na média ponderada aqui mas não no Dashboard
-    // Gerencial, divergindo o Custo Var. mesmo com a mesma variação em kg.
-    const sapDaCentral = (_sapByCentral.get(central) || [])
-      .filter(r => { const d = parseD(r.dtLanc); return d && d >= dtIni && d <= dtFim; })
-      .filter(r => !!getCatKeyDoCadastro(r.materialOriginal))
-      .filter(r => !isSapExcluidoPorFechamento(r));
-
-    sapDaCentral.forEach(s => {
-      const mat = s.material || '—';
-      if (custoMedioPorMat[mat]) return; // já coberto pelas Saídas
-      const p  = Math.abs(toNum(s.peso));
-      if (!p) return;
-      const vt = toNum(s.valorTotal);
-      const cu = toNum(s.custoUnit);
-      const valor = vt !== 0 ? Math.abs(vt) : (cu !== 0 ? Math.abs(cu) * p : 0);
-      if (!valor) return;
-      const key = '_sap_' + mat;
-      if (!_custoPorMat[key]) { _custoPorMat[key] = 0; _pesoPorMat[key] = 0; }
-      _custoPorMat[key] += valor;
-      _pesoPorMat[key]  += p;
-    });
-    Object.keys(_custoPorMat).forEach(key => {
-      if (!key.startsWith('_sap_')) return;
-      const mat = key.slice(5);
-      if (custoMedioPorMat[mat]) return;
-      custoMedioPorMat[mat] = _pesoPorMat[key] > 0 ? _custoPorMat[key] / _pesoPorMat[key] : 0;
-    });
-
-    return custoMedioPorMat;
-  }
 };
 // Monta o texto do tooltip para badges AUSENTE na tabela de materiais
 function buildAbsentTooltip(nearest) {

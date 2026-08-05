@@ -204,6 +204,7 @@ function excluirImportacao(importId) {
 }
 
 function excluirCustosSap(absIndex) {
+  if (window.currentUser?.role !== 'admin') { toast('Só o administrador pode excluir Custos SAP', 'error'); return; }
   const filtered = getFilteredData('custosSap');
   const rec = filtered[absIndex];
   if (!rec) return;
@@ -242,6 +243,7 @@ function excluirCustosSap(absIndex) {
 }
 
 function _criarRegistroCustosSap(dados) {
+  if (window.currentUser?.role !== 'admin') return { ok: false, erro: 'Só o administrador pode cadastrar Custos SAP' };
   const central = dados.central;
   const material = dados.material;
   const rec = stamp({
@@ -274,23 +276,6 @@ function _criarRegistroCustosSap(dados) {
   return { ok: true, rec };
 }
 
-function salvarCustosSap() {
-  const resultado = _criarRegistroCustosSap({
-    material:     val('cs-material'),
-    central:      val('cs-central'),
-    ano:          val('cs-ano'),
-    mes:          val('cs-mes'),
-    estoqueTotal: val('cs-estoque-total'),
-    valorTotal:   val('cs-valor-total'),
-    custo:        val('cs-custo'),
-  });
-  if (!resultado.ok) { toast(resultado.erro, 'error'); return; }
-  closeModal('modal-custos-sap');
-  renderCustosSap();
-  updateDashboard();
-  toast('Registro de Custos SAP adicionado com sucesso');
-}
-
 // Opções de <select> de Central por Sigla (filiais.alias) — usado por todas
 // as abas do modal "Novo Registro Manual" que têm campo Central (Entrada,
 // Saída, Lançamento, SAP, Custo SAP).
@@ -303,8 +288,10 @@ function _buildCentralOptionsHtml(placeholder) {
 }
 
 // Popula os selects de Material e Central da aba "Custo SAP" (modal-manual)
-// com o que já está cadastrado — chamado ao abrir a aba (ver o onclick do
-// botão em index.html), pra sempre refletir o cadastro atual. Reaproveita
+// com o que já está cadastrado — chamado ao abrir a aba (setTab, ui.js,
+// tanto pelo clique direto na aba quanto pelo botão "Adicionar" da página
+// Custos SAP via setModulo('Custo SAP')), pra sempre refletir o cadastro
+// atual. Reaproveita
 // getGrupoSapPorCodigoIndex (dashboard.js), o mesmo índice Cód SAP→Grupo
 // SAP usado pra resolver a coluna Material da tabela Custos SAP. Material
 // aqui é por CÓDIGO (não por nome) — diferente das outras abas — porque é
@@ -370,13 +357,12 @@ function _onManualMaterialChange(materialSel) {
   categoriaSel.value = (typeof getCategoriaPorGrupo === 'function') ? (getCategoriaPorGrupo(materialSel.value) || '') : '';
 }
 
-// Mesma criação de registro do modal dedicado (salvarCustosSap, acima) —
-// só a origem dos campos muda: aba "Custo SAP" do modal genérico "Novo
-// Registro Manual" (modal-manual, compartilhado com Entrada/Saída/
-// Lançamento/SAP — ver index.html), ids prefixados "csm-" pra não colidir
-// com os "cs-" do modal-custos-sap (os dois convivem no mesmo DOM). Ano/Mês
-// vem de um único <input type="month"> nativo (csm-data, formato YYYY-MM
-// do próprio input — sem dia).
+// Cria o registro de Custos SAP a partir da aba "Custo SAP" do modal
+// genérico "Novo Registro Manual" (modal-manual, compartilhado com
+// Entrada/Saída/Lançamento/SAP — ver index.html), único ponto de entrada
+// pra registro manual de Custos SAP (ids prefixados "csm-"). Ano/Mês vem
+// de um único <input type="month"> nativo (csm-data, formato YYYY-MM do
+// próprio input — sem dia).
 function salvarCustosSapManual() {
   const [ano, mesComZero] = val('csm-data').split('-');
   const resultado = _criarRegistroCustosSap({
@@ -894,10 +880,14 @@ function _custosSapSyncDelete(id) {
     .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao excluir Custos SAP na nuvem:', error); });
 }
 
+// Cadastro único e compartilhado do time (05/08) — não é mais "meu ou
+// integrado" (fetchMineOrIntegrated), o RLS já libera SELECT de todos os
+// registros pra qualquer usuário autenticado (só INSERT/UPDATE/DELETE
+// seguem restritos ao ADM). fetchAllRows busca tudo, paginado.
 async function syncCustosSapFromSupabase() {
   if (!window.supabaseClient) return;
   try {
-    const data = await fetchMineOrIntegrated('custos_sap');
+    const data = await fetchAllRows('custos_sap');
     const remoto = (data || []).map(_custosSapFromDbRow);
     const local = Array.isArray(state.custosSap) ? state.custosSap : [];
     state.custosSap = _mesclarGrandeComBanco(local, remoto);

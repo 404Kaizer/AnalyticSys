@@ -138,7 +138,7 @@
   }
 
   // ── Sorting state ─────────────────────────────────────────
-  let invSortCol = 'custoVarBruto', invSortDir = 'desc';
+  let invSortCol = 'custoSap', invSortDir = 'desc';
 
   // ── Filtros — mesmo padrão visual/comportamental da Visão Micro
   //    do Dashboard Analítico (chips com dropdown multi-seleção,
@@ -967,8 +967,12 @@
     if (!h) { toast('Sistema não iniciado. Aguarde e tente novamente.', 'error'); return; }
     _invHydrateJustificativas();
 
-    const { getLancIndex, getSapIndex, getCustoMedioPorMat, getFilialLookupIndex, normalizeText, parseDate, localISODate, dateCmp, num, state: getState, getCategoriaPorGrupo, getCatKeyDoCadastro, isSapExcluidoPorFechamento, somarPesoCustoSap } = h;
+    const { getLancIndex, getSapIndex, getCustoMedioCustosSap, buildCustosSapIndex, getFilialLookupIndex, normalizeText, parseDate, localISODate, dateCmp, num, state: getState, getCategoriaPorGrupo, getCatKeyDoCadastro, getCodSapPorGrupo, isSapExcluidoPorFechamento, somarPesoCustoSap } = h;
     const state = getState();
+    // Custo médio: SÓ Custos SAP (central + Cód SAP + mês calendário do
+    // Inventário), sem cascata — mesma fonte/índice da Visão Micro (ver
+    // normalize.js). Construído uma vez por geração.
+    const _custosSapIdx = buildCustosSapIndex();
 
     // ── Fontes de "Divergências" (ver invAbrirDivergencias mais abaixo) ──
     // Duplicidade — mesmas funções/critério já usados nas páginas de
@@ -1062,10 +1066,6 @@
       const mats = new Set([...byMat.keys(), ...sapByMat.keys()]);
       const matsSemCadastro = new Set([...semCadLancByOriginal.keys(), ...semCadSapByOriginal.keys()]);
 
-      // Custo médio por material usando EXATAMENTE a mesma lógica do Analítico:
-      // Saídas primeiro (Σ valorTotal / Σ peso), fallback SAP.
-      // Calculado uma única vez por central para eficiência.
-      const custoMedioPorMat = getCustoMedioPorMat(central, dtIni, dtFim);
 
       // NFs/OS pendentes de integração SAP nesta central+período — mesma
       // função usada nos cards do Analítico (calcPendentesIntegracao, em
@@ -1091,6 +1091,7 @@
         // — categoria sempre existe, nunca 'Sem cadastro' neste ramo.
         const categoria = getCategoriaPorGrupo(mat) || '';
         const matCatKey = getCatKeyDoCadastro(mat) || null;
+        const codSap = getCodSapPorGrupo(mat) || '';
 
         // EST. INICIAL — MESMA LÓGICA da Visão Micro (getPrevDayLaunchStock,
         // via h.getPrePeriodLaunchStock): regra por categoria do material —
@@ -1221,8 +1222,17 @@
           }
         });
 
-        // Custo médio alinhado com o Analítico (Saídas → fallback SAP).
-        const custoMedio = custoMedioPorMat[mat] || 0;
+        // Custo médio: SÓ Custos SAP (central + Cód SAP + mês calendário do
+        // Inventário), sem cascata. 'sem_codigo': material sem Cód SAP
+        // cadastrado. 'ausente': tem Cód SAP, mas sem registro em Custos SAP
+        // pro central/mês — ambos ficam visíveis como badge (invRenderTabela).
+        let custoMedio = 0;
+        let custoMedioFonte = 'sem_codigo';
+        if (codSap) {
+          const _custo = getCustoMedioCustosSap(central, codSap, selYear, selMonth + 1, _custosSapIdx);
+          if (_custo !== null) { custoMedio = _custo; custoMedioFonte = 'custos_sap'; }
+          else { custoMedioFonte = 'ausente'; }
+        }
 
         // ── Divergências: possíveis causas da variação, agrupadas em 4
         // categorias (Registros manuais / Duplicidade / Pendência de
@@ -1270,13 +1280,13 @@
         };
 
         rowMap.set(k, {
-          k, mesKey, central, material: mat, categoria, semCadastro: false, regional,
+          k, mesKey, central, material: mat, codSap, categoria, semCadastro: false, regional,
           estoqueIni, estoqueIniMissing, estoqueIniLastKnown,
           entradasKg, saidasKg,
           estoqueFimReal, estoqueFimMissing, estoqueFimLastKnown,
           estoqueFimFallback, estoqueFimEsperado, estoqueFimUsadoLabel,
           pendEntAplicado, pendSaiAplicado,
-          custoMedio, entEntries, saiEntries, divergencias, divCount,
+          custoMedio, custoMedioFonte, entEntries, saiEntries, divergencias, divCount,
           sapFechExcluidos: sapFechExcluidosByMat.get(mat) || []
         });
       });
@@ -1290,13 +1300,13 @@
       matsSemCadastro.forEach(matOriginal => {
         const k = mesKey + '|||' + central + '|||__semcad__|||' + matOriginal;
         rowMap.set(k, {
-          k, mesKey, central, material: matOriginal, categoria: 'Sem cadastro', semCadastro: true, regional,
+          k, mesKey, central, material: matOriginal, codSap: '', categoria: 'Sem cadastro', semCadastro: true, regional,
           estoqueIni: 0, estoqueIniMissing: true, estoqueIniLastKnown: null,
           entradasKg: 0, saidasKg: 0,
           estoqueFimReal: 0, estoqueFimMissing: true, estoqueFimLastKnown: null,
           estoqueFimFallback: false, estoqueFimEsperado: null, estoqueFimUsadoLabel: null,
           pendEntAplicado: false, pendSaiAplicado: false,
-          custoMedio: 0, entEntries: [], saiEntries: [], divergencias: null, divCount: 0,
+          custoMedio: 0, custoMedioFonte: 'sem_codigo', entEntries: [], saiEntries: [], divergencias: null, divCount: 0,
           sapFechExcluidos: []
         });
       });
@@ -1310,14 +1320,28 @@
       const just      = invJustificativas[row.k] || {};
       const saldoJust = parseFloat(just.saldo || 0) || 0;
       const varAdj    = varKg - saldoJust;
-      const custo          = varAdj * row.custoMedio;   // Custo Just. (mantido: mesmo cálculo de sempre, agora com esse nome/coluna)
-      const custoVarBruto  = varKg * row.custoMedio;     // Custo Var. (NOVO: reflete a variação BRUTA, não mais a ajustada)
-      const custoMedioSap  = parseFloat(just.custoMedioSap || 0) || 0;
-      const custoSap       = varKg * custoMedioSap;      // Custo SAP (NOVO: variação bruta × custo médio informado manualmente)
-      invRows.push({ ...row, estTeor, varKg, varPct, saldoJust, varAdj, custo, custoVarBruto, custoMedioSap, custoSap });
+      // Custo médio SAP: valor salvo na justificativa (manual ou auto
+      // confirmado) se existir E for > 0; senão cai pro automático do
+      // Custos SAP (row.custoMedio) — é isso que faz a coluna já nascer
+      // preenchida mesmo antes de qualquer justificativa ser aberta/salva
+      // (decisão do Hugo, 05/08: padronizar o custo médio do sistema todo
+      // via Custos SAP). O ">0" é essencial: uma justificativa salva
+      // ANTES de existir custo cadastrado (campo destravado e vazio na
+      // hora do Salvar) grava custoMedioSap=0 — sem essa checagem, esse 0
+      // "gruda" na linha pra sempre, escondendo o valor automático mesmo
+      // depois do Custos SAP ser cadastrado (bug real: linha ficava
+      // AUSENTE na tabela enquanto o modal de justificativa já achava o
+      // custo certo, porque o modal usa custoMedioAuto/row.custoMedio pro
+      // texto, mas o campo em si usa este custoMedioSap travado em 0).
+      const custoMedioSap = (just.custoMedioSap !== undefined && just.custoMedioSap !== null && just.custoMedioSap !== '' && parseFloat(just.custoMedioSap) > 0)
+        ? parseFloat(just.custoMedioSap)
+        : row.custoMedio;
+      const custo    = varAdj * custoMedioSap;   // Custo Just. (varAdj × custo médio — mesma fonte de Custo Médio/Custo SAP)
+      const custoSap = varKg  * custoMedioSap;   // Custo SAP (varKg bruto × custo médio)
+      invRows.push({ ...row, estTeor, varKg, varPct, saldoJust, varAdj, custo, custoMedioSap, custoSap });
     });
 
-    invRows.sort((a,b) => Math.abs(b.custoVarBruto) - Math.abs(a.custoVarBruto));
+    invRows.sort((a,b) => Math.abs(b.custoSap) - Math.abs(a.custoSap));
 
     invPopulateMicroFilterOptions();
 
@@ -1597,33 +1621,34 @@
           ? `<span class="td-mono diff-zero">${_varSymbol(0)} ${_fmtKg(0)}</span>`
           : `<span class="td-mono ${dClsAdj}" style="white-space:nowrap">${_varSymbol(r.varAdj)} ${_fmtKg(Math.abs(r.varAdj))}</span>`;
 
-      // ── Custo Var. (R$): variação BRUTA × custo médio automático ──────
-      const _custoVarVal = r.custoMedio > 0 ? r.custoVarBruto : null;
-      const _custoVarCls = _custoVarVal !== null ? _varClass(_custoVarVal) : '';
-      const custoVarCell = _custoVarVal !== null
-        ? `<span class="td-mono ${_custoVarCls}" style="font-size:11.5px;white-space:nowrap">${_varSymbol(_custoVarVal)} ${_money(Math.abs(_custoVarVal))}</span>`
-        : `<span style="color:var(--text3);font-size:11px">—</span>`;
+      // ── Badge de custo ausente/sem código (Custos SAP) — mesmo padrão da
+      // Visão Micro (analitico.js): SEM CÓD SAP quando o material não tem
+      // Cód SAP cadastrado, AUSENTE quando tem código mas não achou custo
+      // em Custos SAP pro central/mês. Reaproveitado nas 3 colunas de custo.
+      const _custoAusenteBadge = r.custoMedioFonte === 'sem_codigo'
+        ? `<span class="absent-badge" style="background:var(--bg4);color:var(--text3);border-color:var(--border2)" title="Material sem Cód SAP cadastrado — não é possível buscar o custo em Custos SAP">SEM CÓD SAP</span>`
+        : `<span class="absent-badge" title="Nenhum custo cadastrado em Custos SAP para ${_escape(r.central)} / Cód SAP ${_escape(r.codSap)} / ${r.mesKey}">AUSENTE</span>`;
 
-      // ── Custo SAP (R$): variação BRUTA × custo médio SAP (informado no modal) ──
+      // ── Custo SAP (R$): variação BRUTA × custo médio (Custos SAP, auto ou sobrescrito) ──
       const _custoSapVal = r.custoMedioSap > 0 ? r.custoSap : null;
       const _custoSapCls = _custoSapVal !== null ? _varClass(_custoSapVal) : '';
       const custoSapCell = _custoSapVal !== null
         ? `<span class="td-mono ${_custoSapCls}" style="font-size:11.5px;white-space:nowrap">${_varSymbol(_custoSapVal)} ${_money(Math.abs(_custoSapVal))}</span>`
-        : `<span style="color:var(--text3);font-size:11px">—</span>`;
+        : _custoAusenteBadge;
 
-      // ── Custo Just. (R$): variação AJUSTADA × custo médio automático —
-      // só mostra valor quando há justificativa completa (hasJust), mesmo
+      // ── Custo Just. (R$): variação AJUSTADA × mesmo custo médio — só
+      // mostra valor quando há justificativa completa (hasJust), mesmo
       // motivo do Var. Just. acima. ──────────────────────────
-      const _custoJustVal = (hasJust && r.custoMedio > 0) ? r.custo : null;
+      const _custoJustVal = (hasJust && r.custoMedioSap > 0) ? r.custo : null;
       const _custoJustCls = _custoJustVal !== null ? _varClass(_custoJustVal) : '';
       const custoJustCell = _custoJustVal !== null
         ? `<span class="td-mono ${_custoJustCls}" style="font-size:11.5px;white-space:nowrap">${_varSymbol(_custoJustVal)} ${_money(Math.abs(_custoJustVal))}</span>`
-        : `<span style="color:var(--text3);font-size:11px">—</span>`;
+        : (hasJust ? _custoAusenteBadge : `<span style="color:var(--text3);font-size:11px">—</span>`);
 
-      // ── Custo Médio (R$/kg): agora é o valor MANUAL informado no modal (Custo Médio SAP) — não usa mais o cálculo automático do sistema ──
+      // ── Custo Médio (R$/kg): Custos SAP (central+Cód SAP+mês), auto — ou sobrescrito pelo usuário no modal de justificativa ──
       const custoMedCell = r.custoMedioSap > 0
         ? `<span class="td-mono" style="color:var(--text2);font-size:11.5px">${_money(r.custoMedioSap)}<span style="font-size:9.5px;opacity:.6">/kg</span></span>`
-        : `<span style="color:var(--text3);font-size:11px">—</span>`;
+        : _custoAusenteBadge;
 
       // ── Saldo justificado ──────────────────────────────────
       const saldoCell = j.saldo
@@ -1639,6 +1664,7 @@
         <td style="font-size:11px;color:var(--text2);white-space:nowrap">${r.regional}</td>
         <td style="font-family:var(--mono);font-size:11px;font-weight:600;white-space:nowrap">${r.central}</td>
         <td style="font-weight:600;max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${_escape(r.material)}">${alertBadge}${divBadge}${_escape(r.material)}</td>
+        <td class="td-mono" style="white-space:nowrap">${r.codSap ? _escape(r.codSap) : '<span style="color:var(--text3)">—</span>'}</td>
         <td>${r.semCadastro
             ? `<span class="dup-cad-badge dup-cad-badge-morto" style="cursor:pointer" title="Material sem cadastro ou sem categoria preenchida — clique para cadastrar" onclick="_invCadastrarMaterial('${_escape(r.material)}')"><i class="ti ti-alert-triangle" style="font-size:9px"></i> Sem cadastro</span>`
             : `<span style="font-size:10px;background:var(--bg4);border:1px solid var(--border2);border-radius:20px;padding:2px 8px;color:var(--text2);white-space:nowrap">${_escape(r.categoria)}</span>`
@@ -1649,7 +1675,6 @@
         <td style="text-align:right;white-space:nowrap">${finCell}</td>
         <td style="text-align:right;white-space:nowrap">${teorCell}</td>
         <td style="text-align:right;white-space:nowrap">${varCell}</td>
-        <td style="text-align:right;white-space:nowrap">${custoVarCell}</td>
         <td class="inv-col-adjust inv-col-adjust-start" style="text-align:right;white-space:nowrap">${custoMedCell}</td>
         <td class="inv-col-adjust" style="text-align:right;white-space:nowrap">${custoSapCell}</td>
         <td class="inv-col-adjust" style="text-align:right;white-space:nowrap">${saldoCell}</td>
@@ -1702,9 +1727,10 @@
     // Variação AJUSTADA: varAdj após descontar saldo justificado
     const totalVarAdj   = invRowsCadastrados.reduce((s,r)=>s+r.varAdj,0);
 
-    // Custo BRUTO: varKg × custoMedio (independente de justificativas)
-    const totalCstBruto = invRowsCadastrados.reduce((s,r)=>s+(r.varKg * r.custoMedio),0);
-    // Custo AJUSTADO: varAdj × custoMedio
+    // Custo BRUTO: mesma fonte da coluna Custo SAP (Custos SAP, central+Cód
+    // SAP+mês) — varKg × custo médio efetivo (auto ou sobrescrito)
+    const totalCstBruto = invRowsCadastrados.reduce((s,r)=>s+r.custoSap,0);
+    // Custo AJUSTADO: varAdj × mesmo custo médio (coluna Custo Just.)
     const totalCstAdj   = invRowsCadastrados.reduce((s,r)=>s+r.custo,0);
 
     const set = (id, val) => { const el = document.getElementById(id); if(el) el.textContent = val; };
@@ -2110,13 +2136,62 @@
     el.innerHTML = `${icon} ${_money(Math.abs(total))}`;
   };
 
+  // ── Trava do campo Custo Médio SAP: nasce travado com o valor automático
+  // do Custos SAP (custoMedioAuto); só destrava quando o usuário confirma
+  // via checkbox que quer sobrescrever o padrão. Quando não há valor
+  // automático (AUSENTE/SEM CÓD SAP — fonte !== 'custos_sap'), nasce livre
+  // pra digitação, sem trava (nada a proteger). Reaproveitado pelo modal
+  // individual e pelo de lote — só muda o id do campo/oninput.
+  function _invCustoSapCampoHtml({ inputId, valor, custoMedioAuto, fonte, oninput }) {
+    const h = window._inv_helpers;
+    const _money = h ? h.money : fmtR;
+    const travavel = fonte === 'custos_sap';
+    return `
+      <div style="display:flex;gap:6px;align-items:center">
+        <input id="${inputId}" type="number" step="0.01" class="oc-input" style="flex:1" placeholder="0,00"
+               value="${valor || ''}" data-auto-valor="${custoMedioAuto || ''}"
+               ${travavel ? 'disabled' : ''} oninput="${oninput}">
+        ${travavel ? `<button type="button" class="btn" id="${inputId}-unlock-btn" title="Alterar o valor padrão do Custos SAP" onclick="_invAbrirDesbloqueioCustoSap('${inputId}')" style="flex-shrink:0;padding:0 10px"><i class="ti ti-lock"></i></button>` : ''}
+      </div>
+      ${travavel ? `<label id="${inputId}-confirm-wrap" style="display:none;align-items:flex-start;gap:6px;margin-top:7px;font-size:10.5px;color:var(--text2);cursor:pointer;line-height:1.4;background:var(--amber-bg);border:1px solid var(--amber-border);border-radius:6px;padding:7px 9px">
+        <input type="checkbox" id="${inputId}-confirm" style="margin-top:2px;flex-shrink:0" onchange="_invConfirmarDesbloqueioCustoSap('${inputId}', this.checked)">
+        <span>Confirmo que quero sobrescrever o valor padrão do Custos SAP (${_money(custoMedioAuto)}/kg)</span>
+      </label>` : ''}`;
+  }
+
+  window._invAbrirDesbloqueioCustoSap = function(inputId) {
+    const btn = document.getElementById(`${inputId}-unlock-btn`);
+    if (btn) btn.style.display = 'none';
+    const wrap = document.getElementById(`${inputId}-confirm-wrap`);
+    if (wrap) wrap.style.display = 'flex';
+  };
+
+  window._invConfirmarDesbloqueioCustoSap = function(inputId, confirmado) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    input.disabled = !confirmado;
+    if (confirmado) {
+      input.focus();
+    } else {
+      // Desmarcou: descarta a edição, volta a travar com o valor automático
+      input.value = input.dataset.autoValor || '';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      const wrap = document.getElementById(`${inputId}-confirm-wrap`);
+      if (wrap) wrap.style.display = 'none';
+      const btn = document.getElementById(`${inputId}-unlock-btn`);
+      if (btn) btn.style.display = '';
+    }
+  };
+
   // Grava { op, fiscal, saldo, custoSap, docSap } no registro k, recalcula
   // os campos derivados da linha (saldoJust/varAdj/custo/custoMedioSap/
   // custoSap) e persiste. Extraído de _invSalvarJustCore pra ser reaproveitado
   // pelo modal individual E pelo modal "Justificar em lote" (invAbrirJustLote)
   // — a única diferença entre os dois é de ONDE os valores são lidos (um
   // formulário fixo vs. uma linha da grade em lote); a gravação/recálculo é
-  // exatamente a mesma.
+  // exatamente a mesma. custoSap aqui é sempre o que estava no campo Custo
+  // Médio SAP no momento do Salvar — auto (Custos SAP) se o campo continuou
+  // travado, ou o valor sobrescrito se o usuário desbloqueou.
   function _invApplyJustValues(k, { op, fiscal, saldo, custoSap, docSap }) {
     invJustificativas[k] = { op, fiscal, saldo, custoMedioSap: custoSap, documentoSap: docSap };
     const row = invRows.find(r => r.k === k);
@@ -2124,10 +2199,9 @@
       const saldoJust = parseFloat(saldo||0)||0;
       row.saldoJust = saldoJust;
       row.varAdj = row.varKg - saldoJust;
-      row.custo  = row.varAdj * row.custoMedio;          // Custo Just. (varAdj × custo médio automático)
-      row.custoVarBruto  = row.varKg * row.custoMedio;    // Custo Var. (varKg bruto × custo médio automático)
-      row.custoMedioSap  = parseFloat(custoSap||0)||0;
-      row.custoSap       = row.varKg * row.custoMedioSap; // Custo SAP (varKg bruto × custo médio SAP manual)
+      row.custoMedioSap = parseFloat(custoSap||0)||0;
+      row.custo    = row.varAdj * row.custoMedioSap; // Custo Just. (varAdj × custo médio)
+      row.custoSap = row.varKg  * row.custoMedioSap; // Custo SAP (varKg bruto × custo médio)
       // documentoSap não entra em nenhum cálculo — é só um campo de
       // referência (número do documento de ajuste no SAP), exportado/
       // importado no CSV mas sem coluna própria na tabela.
@@ -2238,11 +2312,8 @@
     const _varClass  = h ? h.varClass   : (v) => v < 0 ? 'diff-neg' : v > 0 ? 'diff-pos' : 'diff-zero';
     const _money     = h ? h.money      : fmtR;
     const _escape    = h ? h.escapeHtml : (s) => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    const vkCls  = _varClass(row.varKg);
-    const cstCls = _varClass(row.custoVarBruto);
-    const custoMedioSapInicial = parseFloat(j.custoMedioSap || 0) || 0;
-    const custoSapInicial = custoMedioSapInicial * row.varKg;
-    const cstSapCls = _varClass(custoSapInicial);
+    const vkCls    = _varClass(row.varKg);
+    const cstSapCls = _varClass(row.custoSap);
 
     const temFila   = _invNavQueue.length > 1;
     const podeAnt   = _invNavIdx > 0;
@@ -2278,7 +2349,7 @@
           </div>
         </div>
         <div class="modal-body" style="display:flex;flex-direction:column;gap:14px">
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
             <div style="background:var(--bg3);border:1px solid var(--border2);border-radius:10px;padding:12px 8px;text-align:center">
               <div class="oc-label" style="margin-bottom:7px">Variação (kg)</div>
               <div class="td-mono" style="font-size:10px;color:var(--text3);margin-bottom:4px;white-space:nowrap" title="Est. Final − Est. Teórico = Variação">
@@ -2289,15 +2360,9 @@
               </div>
             </div>
             <div style="background:var(--bg3);border:1px solid var(--border2);border-radius:10px;padding:12px 8px;text-align:center">
-              <div class="oc-label" style="margin-bottom:7px">Custo Var. (R$)</div>
-              <div class="td-mono ${cstCls}" style="font-size:16px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:5px;white-space:nowrap">
-                ${_heroIcon(row.custoVarBruto)} ${_money(Math.abs(row.custoVarBruto))}
-              </div>
-            </div>
-            <div style="background:var(--bg3);border:1px solid var(--border2);border-radius:10px;padding:12px 8px;text-align:center">
               <div class="oc-label" style="margin-bottom:7px">Custo Total SAP</div>
               <div class="td-mono ${cstSapCls}" id="inv-j-custo-sap-card" style="font-size:16px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:5px;white-space:nowrap">
-                ${custoMedioSapInicial ? _heroIcon(custoSapInicial) : ''} ${_money(Math.abs(custoSapInicial))}
+                ${row.custoMedioSap ? _heroIcon(row.custoSap) : ''} ${_money(Math.abs(row.custoSap))}
               </div>
             </div>
           </div>
@@ -2320,8 +2385,8 @@
             </div>
           </div>
           <div class="oc-form-group">
-            <label class="oc-label">Custo Médio SAP (R$/kg) <span class="oc-hint">opcional — buscado pelo usuário no SAP, alimenta a coluna Custo Médio e o card Custo Total SAP</span></label>
-            <input id="inv-j-custo-sap" type="number" step="0.01" class="oc-input" placeholder="0,00" value="${j.custoMedioSap||''}" oninput="_invAtualizarCustoSapCard(${row.varKg})">
+            <label class="oc-label">Custo Médio SAP (R$/kg) <span class="oc-hint">${row.custoMedioFonte === 'custos_sap' ? 'preenchido automaticamente pelo Custos SAP — clique no cadeado pra sobrescrever' : 'sem custo cadastrado em Custos SAP pra esse central/mês — digite manualmente'}</span></label>
+            ${_invCustoSapCampoHtml({ inputId: 'inv-j-custo-sap', valor: row.custoMedioSap, custoMedioAuto: row.custoMedio, fonte: row.custoMedioFonte, oninput: `_invAtualizarCustoSapCard(${row.varKg})` })}
           </div>
           <div class="oc-form-group">
             <label class="oc-label">Documento SAP <span class="oc-hint">nº do documento de ajuste no SAP (opcional, não aparece como coluna na tabela)</span></label>
@@ -2588,7 +2653,7 @@
             </div>
             <div>
               ${_campoLabel('Custo Médio SAP (R$/kg)', 'custosap', idx)}
-              <input id="lote-custosap-${idx}" type="number" step="0.01" class="oc-input" style="width:100%" placeholder="0,00" value="${j.custoMedioSap??''}" oninput="_invLoteOnInput('${k}')">
+              ${_invCustoSapCampoHtml({ inputId: `lote-custosap-${idx}`, valor: row.custoMedioSap, custoMedioAuto: row.custoMedio, fonte: row.custoMedioFonte, oninput: `_invLoteOnInput('${k}')` })}
             </div>
             <div>
               ${_campoLabel('Documento SAP', 'docsap', idx)}
@@ -2648,9 +2713,12 @@
   function _invResetJustRow(row) {
     row.saldoJust     = 0;
     row.varAdj        = row.varKg;
-    row.custo         = row.varAdj * row.custoMedio;
-    row.custoMedioSap = 0;
-    row.custoSap      = 0;
+    // custoMedioSap volta a ser o automático do Custos SAP (row.custoMedio)
+    // — excluir a justificativa não deve apagar o custo, só a narrativa/
+    // ajuste manual (decisão do Hugo, 05/08).
+    row.custoMedioSap = row.custoMedio;
+    row.custo         = row.varAdj * row.custoMedioSap;
+    row.custoSap      = row.varKg  * row.custoMedioSap;
   }
 
   window.invExcluirJust = function(k) {
@@ -2759,7 +2827,7 @@
     // permite à importação verificar se o CSV pertence ao mês certo antes
     // de aplicar qualquer coisa (ver _invHandleImportFile).
     const mesKeyExport = invGetMesKey();
-    const header = ['Mês','Regional','Filial','Material','Categoria','Est.Inicial(kg)','Entradas(kg)','Saídas(kg)','Est.Final(kg)','Est.Teórico(kg)','Var.(kg)','Custo Var. (R$)','Custo Médio (R$/kg)','Custo SAP (R$)','Saldo Justificado (kg)','Var.Justificada (kg)','Custo Just. (R$)','Just.Operacional','Just.Fiscal','Documento SAP'];
+    const header = ['Mês','Regional','Filial','Material','Cód SAP','Categoria','Est.Inicial(kg)','Entradas(kg)','Saídas(kg)','Est.Final(kg)','Est.Teórico(kg)','Var.(kg)','Custo Médio (R$/kg)','Custo SAP (R$)','Saldo Justificado (kg)','Var.Justificada (kg)','Custo Just. (R$)','Just.Operacional','Just.Fiscal','Documento SAP'];
     const rows = invRows.map(r => {
       const j = invJustificativas[r.k] || {};
       const hasJust = j.op && j.fiscal; // Var.Justificada/Custo Just. só preenchem com justificativa completa, mesma regra da tabela
@@ -2768,6 +2836,7 @@
         r.regional,
         r.central,
         r.material,
+        r.codSap,
         r.categoria,
         r.estoqueIniMissing ? '' : _n(r.estoqueIni),
         _n(r.entradasKg),
@@ -2775,12 +2844,11 @@
         r.estoqueFimMissing ? '' : _n(r.estoqueFimReal),
         _n(r.estTeor),
         _n(r.varKg),
-        r.custoMedio > 0 ? _n(r.custoVarBruto) : '',
         r.custoMedioSap > 0 ? _n(r.custoMedioSap) : '',
         r.custoMedioSap > 0 ? _n(r.custoSap) : '',
         j.saldo ? _n(parseFloat(j.saldo)) : '',
         hasJust ? _n(r.varAdj) : '',
-        (hasJust && r.custoMedio > 0) ? _n(r.custo) : '',
+        (hasJust && r.custoMedioSap > 0) ? _n(r.custo) : '',
         j.op || '',
         j.fiscal || '',
         j.documentoSap || ''
@@ -2999,7 +3067,7 @@
 
     document.getElementById('inv-import-categorias-modal')?.classList.remove('open');
     _invSyncJustificativasToState();
-    window.invGerar(); // recalcula custoVarBruto/custoSap/custo/varAdj com as justificativas novas
+    window.invGerar(); // recalcula custoSap/custo/varAdj com as justificativas novas
 
     const partes = [`${atualizados} atualizada${atualizados === 1 ? '' : 's'}`];
     if (naoEncontrados)     partes.push(`${naoEncontrados} não encontrada${naoEncontrados === 1 ? '' : 's'} no inventário deste mês`);
@@ -3011,7 +3079,7 @@
   let invIniciado = false;
   window.renderInventario = function() {
     if (!invIniciado) {
-      const defaultTh = document.querySelector('.inv-data-table th[data-col="custoVarBruto"]');
+      const defaultTh = document.querySelector('.inv-data-table th[data-col="custoSap"]');
       if (defaultTh) defaultTh.classList.add('sort-desc');
       invIniciado = true;
     }

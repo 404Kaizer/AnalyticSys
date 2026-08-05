@@ -405,7 +405,7 @@ function _ncdDesenharTabela(doc, grupo, y) {
 
   const body = grupo.itens.map((it, i) => {
     const r = it.row;
-    const valorTotalCell = r.custoMedio > 0 ? _ncdMoneySigned(r.custoVarBruto) : '—';
+    const valorTotalCell = r.custoMedioSap > 0 ? _ncdMoneySigned(r.custoSap) : '—';
     return [
       String(i + 1),
       _ncdCodigoMaterial(r.material) || '—',
@@ -556,7 +556,7 @@ function _ncdMontarPdf(grupos, resp) {
     doc.setFillColor(...cor.rgb);
     doc.rect(0, 0, 6, NCD_PAGE_H, 'F');
 
-    const valorTotal = grupo.itens.reduce((s, it) => s + (it.row.custoMedio > 0 ? it.row.custoVarBruto : 0), 0);
+    const valorTotal = grupo.itens.reduce((s, it) => s + (it.row.custoMedioSap > 0 ? it.row.custoSap : 0), 0);
 
     let y = _ncdDesenharCabecalho(doc, grupo, valorTotal, emissaoFmt);
     y = _ncdDesenharFilial(doc, grupo, resp.email, y);
@@ -607,7 +607,7 @@ function _ncdPersistirRegistros(grupos, resp) {
         material: it.row.material,
         codigoSap: _ncdCodigoMaterial(it.row.material) || null,
         qtdKg: it.row.varKg,
-        valorTotal: it.row.custoMedio > 0 ? it.row.custoVarBruto : null,
+        valorTotal: it.row.custoMedioSap > 0 ? it.row.custoSap : null,
         motivo: it.motivo,
       })),
     };

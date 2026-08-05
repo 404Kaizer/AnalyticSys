@@ -639,6 +639,65 @@ function _refreshGrupoMateriaisSelects() {
   document.querySelectorAll('#mat-indiv-rows [data-field="alias"]').forEach(sel => _rebuildGrupoMateriaisOptions(sel));
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+// CATÁLOGO DE CÓD SAP — usado no dropdown "Cód SAP" do cadastro de
+// Materiais. Ao contrário de Grupo SAP, não tem tabela própria no Supabase:
+// a lista é os códigos já em uso em state.materiais + os adicionados nesta
+// sessão via "+" (_codigosSapSessionExtras, some ao recarregar a página —
+// assim que o material com esse código é salvo, ele passa a vir de
+// state.materiais normalmente).
+// ═══════════════════════════════════════════════════════════════════════
+let _codigosSapSessionExtras = [];
+
+function getCodigosSapDisponiveis() {
+  const vistos = new Map();
+  const add = cod => {
+    const codigo = String(cod || '').trim();
+    if (!codigo) return;
+    if (!vistos.has(codigo)) vistos.set(codigo, codigo);
+  };
+  _codigosSapSessionExtras.forEach(add);
+  (state.materiais || []).forEach(m => add(m?.codSap));
+  return [...vistos.values()].sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true }));
+}
+
+function _rebuildCodigosSapOptions(selectEl, novoValor) {
+  if (!selectEl) return;
+  const valorAtual = novoValor !== undefined ? novoValor : selectEl.value;
+  const options = getCodigosSapDisponiveis()
+    .map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+  selectEl.innerHTML = `<option value="">—</option>${options}`;
+  selectEl.value = valorAtual;
+}
+
+function _refreshCodigosSapSelects() {
+  document.querySelectorAll('#mat-indiv-rows [data-field="codSap"]').forEach(sel => _rebuildCodigosSapOptions(sel));
+}
+
+// ── Mini modal "Novo Cód SAP" ───────────────────────────────────────────
+let _novoCodSapTarget = null; // <select> da linha que abriu o mini modal
+
+function abrirNovoCodSap(btn) {
+  const row = btn.closest('.reg-individual-row');
+  _novoCodSapTarget = row?.querySelector('[data-field="codSap"]') || null;
+  setVal('novo-cod-sap-valor', '');
+  openModal('modal-novo-cod-sap');
+  setTimeout(() => document.getElementById('novo-cod-sap-valor')?.focus(), 50);
+}
+
+function salvarNovoCodSap() {
+  const codigo = val('novo-cod-sap-valor').trim();
+  if (!codigo) { toast('Informe o Cód SAP', 'error'); return; }
+
+  const jaExiste = getCodigosSapDisponiveis().includes(codigo);
+  if (!jaExiste) _codigosSapSessionExtras.push(codigo);
+  _refreshCodigosSapSelects();
+  if (_novoCodSapTarget) _novoCodSapTarget.value = codigo;
+  _novoCodSapTarget = null;
+  closeModal('modal-novo-cod-sap');
+  toast(jaExiste ? `Cód SAP "${codigo}" já disponível — selecionado` : `Cód SAP "${codigo}" adicionado`);
+}
+
 // ── Mini modal "Novo Grupo SAP" ─────────────────────────────────────────
 let _novoGrupoMaterialTarget = null; // <select> da linha que abriu o mini modal
 
@@ -679,6 +738,8 @@ function _addMaterialIndivRow() {
     .map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
   const grupoOptions = getGruposMateriaisDisponiveis()
     .map(g => `<option value="${escapeHtml(g)}">${escapeHtml(g)}</option>`).join('');
+  const codSapOptions = getCodigosSapDisponiveis()
+    .map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
   const row = document.createElement('div');
   row.className = 'reg-individual-row reg-row-materiais';
   row.dataset.rowId = id;
@@ -699,7 +760,13 @@ function _addMaterialIndivRow() {
     </div>
     <div class="form-group">
       <label class="form-label">Cód SAP</label>
-      <input type="text" class="form-input" data-field="codSap" placeholder="Ex: 1000123">
+      <div style="display:flex; gap:6px">
+        <select class="form-select" data-field="codSap" style="flex:1; min-width:0">
+          <option value="">—</option>
+          ${codSapOptions}
+        </select>
+        <button type="button" class="btn" title="Cadastrar novo Cód SAP" onclick="abrirNovoCodSap(this)" style="flex:0 0 auto; padding:0 12px"><i class="ti ti-plus"></i></button>
+      </div>
     </div>
     <div class="form-group">
       <label class="form-label">Categoria</label>

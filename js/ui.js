@@ -91,6 +91,7 @@ function setTab(tabId, btn) {
   // aqui, ponto único chamado em toda troca de aba do modal-manual, em vez
   // de espalhar a chamada em cada onclick de aba/botão "Adicionar".
   if (typeof _manualModalPopularSelects === 'function') _manualModalPopularSelects();
+  if (tabId === 'tab-custo-sap' && typeof _custosSapManualPopularSelects === 'function') _custosSapManualPopularSelects();
   ['tab-entrada', 'tab-saida', 'tab-lancamento', 'tab-sap', 'tab-custo-sap'].forEach(t => {
     const el = document.getElementById(t);
     if (el) el.style.display = 'none';
@@ -106,7 +107,8 @@ function setModulo(mod) {
     'Entrada': 'tab-entrada',
     'Saída': 'tab-saida',
     'Lançamento': 'tab-lancamento',
-    'SAP': 'tab-sap'
+    'SAP': 'tab-sap',
+    'Custo SAP': 'tab-custo-sap'
   };
   const tabId = map[mod];
   if (!tabId) return;

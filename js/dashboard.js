@@ -4257,7 +4257,7 @@ function getGrupoSapPorCodigoIndex() {
   if (_grupoSapPorCodigoCache && _grupoSapPorCodigoCacheVersion === version) return _grupoSapPorCodigoCache;
   const idx = new Map();
   (state.materiais || []).forEach(m => {
-    const cod = String(m.codSap || '').trim();
+    const cod = normalizarCodSap(m.codSap);
     if (cod && !idx.has(cod)) idx.set(cod, m.alias);
   });
   _grupoSapPorCodigoCache = idx;
@@ -4272,7 +4272,7 @@ function getGrupoSapPorCodigoIndex() {
 // render da coluna quanto no filtro de coluna (colFilterMeta.custosSap,
 // ui.js) e no botão "Sem Cadastro" (toggleFiltroCustosSapSemCadastro).
 function _custosSapResolveMaterial(r) {
-  const codigo = String(r?.material || '').trim();
+  const codigo = normalizarCodSap(r?.material);
   if (!codigo) return '';
   return getGrupoSapPorCodigoIndex().get(codigo) || 'SEM CADASTRO';
 }
@@ -4346,7 +4346,7 @@ function renderCustosSap() {
       <td class="td-mono" style="color:var(--teal)">${num(r.estoqueTotal).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
       <td class="td-mono" style="color:#f59e0b">${money(r.valorTotal)}</td>
       <td class="td-mono">${money(r.custo, 4)}</td>
-      <td><button class="btn-icon danger" onclick="excluirCustosSap(${currentPageCustosSap * PAGE_SIZE + i})"><i class="ti ti-trash"></i></button></td>
+      <td>${window.currentUser?.role === 'admin' ? `<button class="btn-icon danger" onclick="excluirCustosSap(${currentPageCustosSap * PAGE_SIZE + i})"><i class="ti ti-trash"></i></button>` : ''}</td>
     </tr>`;
   }).join('');
   makeResizable(tb.closest('table'));
@@ -5439,6 +5439,14 @@ function abortImport() {
 window.abortImport = abortImport;
 
 async function processImportedRows(modulo, rows, fileName, extra = {}) {
+  // Custos SAP (05/08): cadastro único e compartilhado do time — só ADM
+  // importa. Defesa em profundidade: o botão/input já fica escondido pra
+  // quem não é ADM (ver auth.js), e o RLS do Supabase bloqueia o insert de
+  // qualquer jeito — isso aqui só evita processar tudo localmente à toa.
+  if (modulo === 'Custos SAP' && window.currentUser?.role !== 'admin') {
+    toast('Só o administrador pode importar Custos SAP', 'error');
+    return;
+  }
   // Ativa modo batch: desabilita fuzzy matching em normalizarMaterial
   // para evitar Maximum call stack size exceeded com arquivos grandes.
   _batchImportMode = true;
@@ -5685,15 +5693,25 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
     const stateKey = stateKeyMap[modulo];
     if (stateKey) state[stateKey] = _mergedResult;
 
-    // Decisão de 27/07: Entradas/Saídas/Lançamentos/SAP/Custos SAP NÃO
-    // sincronizam importação em lote com a nuvem — só registros manuais.
-    // Motivo: volume de importação é ordens de grandeza maior que manual
-    // (ex.: 813k importados vs. 31 manuais em Lançamentos), o plano gratuito
-    // do Supabase (500MB) não tem opção de upgrade, e os arquivos originais
-    // já são a cópia de segurança (o Hugo mantém localmente e reimporta se
-    // precisar). Por isso NÃO existe mais nenhum push pós-importação em
-    // lote aqui — a sincronização desses módulos acontece só na criação/
-    // edição/exclusão manual (ver import.js, funções _*SyncUpsert).
+    // Decisão de 27/07: Entradas/Saídas/Lançamentos/SAP NÃO sincronizam
+    // importação em lote com a nuvem — só registros manuais. Motivo: volume
+    // de importação é ordens de grandeza maior que manual (ex.: 813k
+    // importados vs. 31 manuais em Lançamentos), o plano gratuito do
+    // Supabase (500MB) não tem opção de upgrade, e os arquivos originais já
+    // são a cópia de segurança (o Hugo mantém localmente e reimporta se
+    // precisar). Por isso NÃO existe push pós-importação em lote pra esses
+    // 4 módulos — a sincronização acontece só na criação/edição/exclusão
+    // manual (ver import.js, funções _*SyncUpsert).
+    //
+    // Custos SAP é a EXCEÇÃO (05/08): virou cadastro único e compartilhado
+    // do time (só ADM importa/cadastra/exclui, todo mundo vê) — pra isso
+    // funcionar, a importação em lote também precisa chegar na nuvem. Volume
+    // é ordens de grandeza menor que os outros 4 módulos (custo por
+    // material/central/mês, não por lançamento), cabe tranquilo no limite
+    // gratuito.
+    if (modulo === 'Custos SAP' && typeof _custosSapSyncUpsertBatch === 'function') {
+      await _custosSapSyncUpsertBatch(parsed);
+    }
   }
 
   if (!parsed.length) {

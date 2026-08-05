@@ -301,6 +301,19 @@ window.AuthGate = (function () {
     const importarDeFiliaisBtn = $('btn-importar-de-filiais');
     if (importarDeFiliaisBtn) importarDeFiliaisBtn.style.display = isAdmin ? '' : 'none';
 
+    // Decisão 05/08 — Custos SAP virou cadastro único e compartilhado do
+    // time: todo mundo vê (RLS libera SELECT geral), mas só o ADM importa/
+    // cadastra/exclui (RLS restringe INSERT/UPDATE/DELETE a is_admin()).
+    // Esconde "Adicionar" (página Custos SAP) e o card de importação
+    // (página Importar Dados) pra quem não é admin — mesmo padrão: isto é
+    // só UI, a segurança de verdade está nas políticas de RLS.
+    const custosSapAdicionarBtn = $('btn-custos-sap-adicionar');
+    if (custosSapAdicionarBtn) custosSapAdicionarBtn.style.display = isAdmin ? '' : 'none';
+    const custosSapImportCard = $('import-card-custos-sap');
+    if (custosSapImportCard) custosSapImportCard.style.display = isAdmin ? '' : 'none';
+    const custosSapTabBtn = $('tab-btn-custo-sap');
+    if (custosSapTabBtn) custosSapTabBtn.style.display = isAdmin ? '' : 'none';
+
     // Avatar do ícone de Conta no topbar (29/07) — mesmo utilitário de
     // avatar de mensagens.js (círculo colorido + inicial).
     if (typeof _accountRenderAvatars === 'function') _accountRenderAvatars();

@@ -2193,6 +2193,7 @@
                 <th data-col="regional" data-align="left" onclick="invSortBy('regional')">Regional <i class="ti ti-selector inv-sort-icon"></i></th>
                 <th data-col="central" data-align="left" onclick="invSortBy('central')">Filial <i class="ti ti-selector inv-sort-icon"></i></th>
                 <th data-col="material" data-align="left" onclick="invSortBy('material')">Material <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="codSap" data-align="left" onclick="invSortBy('codSap')">Cód SAP <i class="ti ti-selector inv-sort-icon"></i></th>
                 <th data-col="categoria" data-align="left" onclick="invSortBy('categoria')">Cat. <i class="ti ti-selector inv-sort-icon"></i></th>
                 <th data-col="estoqueIni" data-align="right" onclick="invSortBy('estoqueIni')" title="Est. Inicial (1º lançamento)">Est. Inicial <i class="ti ti-selector inv-sort-icon"></i></th>
                 <th data-col="entradasKg" data-align="right" onclick="invSortBy('entradasKg')" title="Entradas (por código SAP)">Entradas <i class="ti ti-selector inv-sort-icon"></i></th>
@@ -2200,12 +2201,11 @@
                 <th data-col="estoqueFimReal" data-align="right" onclick="invSortBy('estoqueFimReal')" title="Est. Final (últ. lançamento)">Est. Final <i class="ti ti-selector inv-sort-icon"></i></th>
                 <th data-col="estTeor" data-align="right" onclick="invSortBy('estTeor')" title="Est. Teórico = Ini + Ent − Saí">Est. Teórico <i class="ti ti-selector inv-sort-icon"></i></th>
                 <th data-col="varKg" data-align="right" onclick="invSortBy('varKg')" title="Variação = Real − Teórico">Variação <i class="ti ti-selector inv-sort-icon"></i></th>
-                <th data-col="custoVarBruto" data-align="right" onclick="invSortBy('custoVarBruto')" title="Custo da variação BRUTA, com o custo médio automático (Saídas → fallback SAP)">Custo Var. <i class="ti ti-selector inv-sort-icon"></i></th>
-                <th data-col="custoMedioSap" data-align="right" onclick="invSortBy('custoMedioSap')" title="Custo médio informado manualmente pelo usuário, buscado no SAP" class="inv-col-adjust inv-col-adjust-start">Custo Médio <i class="ti ti-selector inv-sort-icon"></i></th>
-                <th data-col="custoSap" data-align="right" onclick="invSortBy('custoSap')" title="Custo da variação BRUTA, usando o Custo Médio SAP informado manualmente no modal de justificativa" class="inv-col-adjust">Custo SAP <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="custoMedioSap" data-align="right" onclick="invSortBy('custoMedioSap')" title="Custo médio do Custos SAP (central + Cód SAP + mês) — automático, ou sobrescrito no modal de justificativa" class="inv-col-adjust inv-col-adjust-start">Custo Médio <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="custoSap" data-align="right" onclick="invSortBy('custoSap')" title="Custo da variação BRUTA × Custo Médio (Custos SAP)" class="inv-col-adjust">Custo SAP <i class="ti ti-selector inv-sort-icon"></i></th>
                 <th data-col="saldoJust" data-align="right" onclick="invSortBy('saldoJust')" class="inv-col-adjust">Saldo Just. <i class="ti ti-selector inv-sort-icon"></i></th>
                 <th data-col="varAdj" data-align="right" onclick="invSortBy('varAdj')" class="inv-col-adjust" title="Só preenchido quando há justificativa completa">Var.Just. <i class="ti ti-selector inv-sort-icon"></i></th>
-                <th data-col="custo" data-align="right" onclick="invSortBy('custo')" title="Custo da variação JUSTIFICADA (pós-justificativa), com o custo médio automático — só preenchido quando há justificativa completa" class="inv-col-adjust">Custo Just. <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="custo" data-align="right" onclick="invSortBy('custo')" title="Custo da variação JUSTIFICADA (pós-justificativa) × Custo Médio (Custos SAP) — só preenchido quando há justificativa completa" class="inv-col-adjust">Custo Just. <i class="ti ti-selector inv-sort-icon"></i></th>
                 <th data-align="center" style="cursor:default" class="inv-col-adjust">Justificativa</th>
               </tr>
             </thead>
@@ -2674,7 +2674,7 @@
                 <i class="ti ti-alert-triangle"></i>
                 Sem Cadastro
               </button>
-              <button class="btn" onclick="openModal('modal-custos-sap')">
+              <button class="btn" id="btn-custos-sap-adicionar" onclick="openModal('modal-manual'); setModulo('Custo SAP')">
                 <i class="ti ti-plus"></i>
                 Adicionar
               </button>
@@ -2814,7 +2814,7 @@
           </div>
 
           <!-- Custos SAP -->
-          <div class="import-card">
+          <div class="import-card" id="import-card-custos-sap">
             <div class="import-card-header">
               <div class="import-icon" style="background:var(--purple-bg);color:var(--purple)"><i class="ti ti-chart-bar"></i></div>
               <div>
@@ -4246,7 +4246,7 @@
       <button class="tab-btn" onclick="setTab('tab-saida', this)"><i class="ti ti-package-export"></i> Saída</button>
       <button class="tab-btn" onclick="setTab('tab-lancamento', this)"><i class="ti ti-clipboard-list"></i> Lançamento</button>
       <button class="tab-btn" onclick="setTab('tab-sap', this)"><i class="ti ti-database"></i> SAP</button>
-      <button class="tab-btn" onclick="setTab('tab-custo-sap', this); _custosSapManualPopularSelects()"><i class="ti ti-chart-bar"></i> Custo SAP</button>
+      <button class="tab-btn" id="tab-btn-custo-sap" onclick="setTab('tab-custo-sap', this)"><i class="ti ti-chart-bar"></i> Custo SAP</button>
     </div>
 
     <!-- Tab Entrada -->
@@ -4717,68 +4717,6 @@
 
 
 
-<!-- MODAL: Custos SAP -->
-<div class="modal-overlay" id="modal-custos-sap">
-  <div class="modal">
-    <div class="modal-title">
-      <i class="ti ti-chart-bar"></i>
-      Novo Registro de Custos SAP
-    </div>
-
-    <div class="modal-sub">
-      adicione manualmente um registro de estoque/custo
-    </div>
-
-    <div class="form-grid">
-      <div class="form-group">
-        <label class="form-label">Material</label>
-        <input type="text" class="form-input" id="cs-material" placeholder="Ex: 12345">
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Central</label>
-        <input type="text" class="form-input" id="cs-central" placeholder="Ex: 70 | MARICÁ">
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Ano</label>
-        <input type="text" class="form-input" id="cs-ano" placeholder="Ex: 2026">
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Mês</label>
-        <input type="text" class="form-input" id="cs-mes" placeholder="Ex: 6">
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Estoque Total</label>
-        <input type="number" class="form-input" id="cs-estoque-total" placeholder="0">
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Valor Total</label>
-        <input type="number" class="form-input" id="cs-valor-total" placeholder="0">
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Custo <span class="form-required">*</span></label>
-        <input type="number" class="form-input" id="cs-custo" placeholder="0">
-      </div>
-    </div>
-
-    <div class="form-actions">
-      <button class="btn" onclick="closeModal('modal-custos-sap')">
-        Cancelar
-      </button>
-
-      <button class="btn btn-primary" onclick="salvarCustosSap()">
-        <i class="ti ti-check"></i>
-        Salvar Custos SAP
-      </button>
-    </div>
-  </div>
-</div>
-
 
 
 <!-- MODAL: Filiais / Aliases — CADASTRO INDIVIDUAL (campos guiados) -->
@@ -4846,6 +4784,24 @@
     <div class="form-actions">
       <button class="btn" onclick="closeModal('modal-novo-grupo-material')">Cancelar</button>
       <button class="btn btn-primary" id="btn-salvar-novo-grupo-material" onclick="salvarNovoGrupoMaterial(this)"><i class="ti ti-check"></i> Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MINI MODAL: Novo Cód SAP (cadastra um código que ainda não existe em nenhum material) -->
+<div class="modal-overlay" id="modal-novo-cod-sap">
+  <div class="modal" style="width:420px">
+    <div class="modal-title"><i class="ti ti-barcode"></i> Novo Cód SAP</div>
+    <div class="modal-sub">Disponibiliza o código na lista pra esta linha (e as demais desse cadastro).</div>
+    <div class="form-grid" style="grid-template-columns:1fr">
+      <div class="form-group">
+        <label class="form-label">Cód SAP</label>
+        <input type="text" class="form-input" id="novo-cod-sap-valor" placeholder="Ex: 1000123" onkeydown="if(event.key==='Enter'){event.preventDefault();salvarNovoCodSap();}">
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn" onclick="closeModal('modal-novo-cod-sap')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarNovoCodSap()"><i class="ti ti-check"></i> Salvar</button>
     </div>
   </div>
 </div>

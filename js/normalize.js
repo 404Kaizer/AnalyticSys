@@ -520,6 +520,59 @@ function getCategoriaPorGrupo(valor) {
   return (found && found.categoria) ? found.categoria : '';
 }
 
+// Idem, mas devolve o Cód SAP cadastrado pro grupo (mesmo índice de match).
+function getCodSapPorGrupo(valor) {
+  const raw = String(valor ?? '').trim();
+  if (!raw) return '';
+  const found = findMaterialMatch(raw);
+  return (found && found.codSap) ? found.codSap : '';
+}
+
+// Cód SAP cadastrado em Materiais e o "Material" do export Custos SAP (MB52
+// — a coluna se chama "Material" mas é o código, ver comentário em
+// dashboard.js/_custosSapResolveMaterial) vêm de arquivos diferentes lidos
+// pelo XLSX de formas diferentes: um pode preservar zeros à esquerda como
+// texto ("0012345"), o outro cair como célula numérica ("12345" ou até
+// "12345.0"). Comparação por igualdade de string pura (sem isso) faz o
+// mesmo código nunca bater entre os dois cadastros — AUSENTE mesmo com o
+// custo realmente cadastrado. Não mexe em código não-numérico (raro, mas
+// existe) — só remove zeros à esquerda/".0" de sobra do Excel.
+function normalizarCodSap(valor) {
+  const raw = String(valor ?? '').trim().replace(/\.0+$/, '');
+  if (!raw) return '';
+  return /^\d+$/.test(raw) ? raw.replace(/^0+(?=\d)/, '') : raw;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// CUSTO MÉDIO — fonte única: Custos SAP (central + Cód SAP + ano + mês)
+// ═══════════════════════════════════════════════════════════════════════
+// Decisão do Hugo (05/08): custo médio do sistema inteiro vem só daqui,
+// sem cascata Saídas/Lançamentos/SAP. Usado pela Visão Micro (mês final do
+// período) e pelo Inventário (mês calendário fechado do módulo).
+// Índice central|||cód SAP|||ano|||mês → registro. Ano/mês comparados como
+// número (evita "7" vs "07"), Cód SAP via normalizarCodSap (evita "0012345"
+// vs "12345"). Duplicata (mesmo central/código/mês): fica o primeiro do
+// array — registros novos entram no início (unshift, ver
+// _criarRegistroCustosSap em import.js), o que já favorece o mais recente.
+function buildCustosSapIndex() {
+  const idx = new Map();
+  (state.custosSap || []).forEach(rec => {
+    const key = String(rec.central || '').trim() + '|||' + normalizarCodSap(rec.material) + '|||' + (Number(rec.ano) || 0) + '|||' + (Number(rec.mes) || 0);
+    if (!idx.has(key)) idx.set(key, rec);
+  });
+  return idx;
+}
+
+// Lookup pontual — aceita o índice já construído (evita reconstruir a cada
+// chamada em loops) ou constrói na hora se omitido.
+function getCustoMedioCustosSap(central, codSap, ano, mes, idx) {
+  if (!codSap) return null;
+  const _idx = idx || buildCustosSapIndex();
+  const key = String(central || '').trim() + '|||' + normalizarCodSap(codSap) + '|||' + (Number(ano) || 0) + '|||' + (Number(mes) || 0);
+  const rec = _idx.get(key);
+  return (rec && num(rec.custo) > 0) ? num(rec.custo) : null;
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 // CLASSIFICAÇÃO POR CADASTRO — fonte única de verdade para catKey
 // ═══════════════════════════════════════════════════════════════════════

@@ -476,25 +476,17 @@ window.initHelpBadges = initHelpBadges;
 
 // ── Tooltip de custo médio (hover na célula Custo Variação) ───────────
 function showCustoMedTip(e, custoMedLabel, fonte) {
-  const isSaidas     = fonte === 'Módulo Saídas';
-  const isLanc       = fonte === 'Módulo Lançamentos';
-  const isFallback   = fonte === 'Fallback SAP';
-  const fonteColor   = isSaidas ? '#10b981' : isLanc ? '#3b82f6' : isFallback ? '#f59e0b' : 'var(--text3)';
-  const fonteIcon    = isSaidas ? 'ti-circle-check' : isLanc ? 'ti-notes' : isFallback ? 'ti-alert-triangle' : 'ti-minus';
-  const fonteNote    = isLanc
-    ? 'Não encontrado no módulo Saídas.<br>Usando custo dos Lançamentos.'
-    : isFallback
-    ? 'Não encontrado em Saídas nem Lançamentos.<br>Usando custo do SAP como fallback.'
-    : '';
+  // Fonte única desde 05/08 (Custos SAP — central+Cód SAP+mês, sem cascata
+  // Saídas/Lançamentos/SAP) — tooltip só confirma de onde veio o valor.
+  const fonteColor = '#10b981';
   const t = _getHelpTip();
   t.innerHTML = `
     <div style="font-size:9px;font-weight:700;color:var(--text3);font-family:var(--mono);letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px">Custo médio</div>
     <div style="font-size:15px;font-weight:700;color:var(--text);font-family:var(--mono);margin-bottom:8px">${custoMedLabel}</div>
     <div style="display:flex;align-items:center;gap:5px;font-size:10.5px;font-family:var(--mono);color:${fonteColor}">
-      <i class="ti ${fonteIcon}" style="font-size:12px"></i>
+      <i class="ti ti-circle-check" style="font-size:12px"></i>
       <span style="font-weight:600">${fonte || '—'}</span>
-    </div>
-    ${fonteNote ? `<div style="font-size:9.5px;color:var(--text3);font-family:var(--mono);margin-top:6px;line-height:1.6">${fonteNote}</div>` : ''}`;
+    </div>`;
   t.style.borderColor = fonteColor;
   t.style.display = 'block';
   _positionTip(t, e.clientX, e.clientY);
