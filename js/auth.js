@@ -410,6 +410,10 @@ window.AuthGate = (function () {
     turnstileWidgetId = turnstile.render('#turnstile-login-widget', {
       sitekey: TURNSTILE_SITEKEY,
       theme: 'dark',
+      // Sem isso, bloqueadores tipo Brave Shields deixam o widget travado em
+      // "Verificando..." pra sempre, sem checkbox e sem feedback nenhum.
+      'error-callback': () => showError('Não foi possível carregar a verificação de segurança. Desative bloqueadores de anúncio/rastreadores (ex: Brave Shields) para este site e recarregue a página.'),
+      'expired-callback': () => _turnstileReset(),
     });
   }
 
