@@ -3689,9 +3689,9 @@ window._toggleModSummaryExpand = _toggleModSummaryExpand;
 // pros cards de Total de Entradas/Total de Saídas (por sinal do peso).
 // Reaproveita o MESMO template dos cards de grupo (valor=peso, unit=custo
 // + contagem opcional), só que na área de destaque (.inv-kpi-card-featured).
-function _heroSubCardHtml({ icon, iconBg, iconColor, label, unitLabel, peso, custo, count, title, subtext }) {
+function _heroSubCardHtml({ icon, iconBg, iconColor, colorClass, label, unitLabel, peso, custo, count, title, subtext }) {
   return `
-      <div class="inv-kpi-card inv-kpi-card-featured"${title ? ` title="${escapeHtml(title)}"` : ''}>
+      <div class="inv-kpi-card inv-kpi-card-featured${colorClass ? ' ' + colorClass : ''}"${title ? ` title="${escapeHtml(title)}"` : ''}>
         <div class="inv-kpi-icon" style="background:${iconBg};color:${iconColor}"><i class="ti ${icon}"></i></div>
         <div class="inv-kpi-body">
           <div class="inv-kpi-label">${escapeHtml(label)}</div>
@@ -3730,8 +3730,8 @@ function _buildResumoCardsHtml({ totalLabel, totalPeso, totalValor, totalCount, 
     : '';
 
   const countCardHtml = totalCount !== undefined ? `
-      <div class="inv-kpi-card inv-kpi-card-featured">
-        <div class="inv-kpi-icon" style="background:var(--bg3);color:var(--text2)"><i class="ti ti-list-numbers"></i></div>
+      <div class="inv-kpi-card inv-kpi-card-featured c-purple">
+        <div class="inv-kpi-icon" style="background:var(--purple-bg);color:var(--purple)"><i class="ti ti-list-numbers"></i></div>
         <div class="inv-kpi-body">
           <div class="inv-kpi-label">${escapeHtml(totalLabel)} · Registros</div>
           <div class="inv-kpi-value">${totalCount.toLocaleString('pt-BR')}</div>
@@ -3746,7 +3746,7 @@ function _buildResumoCardsHtml({ totalLabel, totalPeso, totalValor, totalCount, 
   // com sinal dão um número líquido confuso; melhor mostrar só o par
   // Entradas/Saídas (via extraHeroCards) no lugar dele.
   const pesoCardHtml = hidePesoTotal ? '' : `
-      <div class="inv-kpi-card inv-kpi-card-featured">
+      <div class="inv-kpi-card inv-kpi-card-featured c-accent">
         <div class="inv-kpi-icon" style="background:var(--accent-dim);color:var(--accent)"><i class="ti ti-scale"></i></div>
         <div class="inv-kpi-body">
           <div class="inv-kpi-label">${escapeHtml(totalLabel)} · ${escapeHtml(_pesoLabel)}</div>
@@ -3758,7 +3758,7 @@ function _buildResumoCardsHtml({ totalLabel, totalPeso, totalValor, totalCount, 
   const heroHtml = `
     <div class="mod-summary-hero">
       ${pesoCardHtml}${extraHtml}
-      <div class="inv-kpi-card inv-kpi-card-featured">
+      <div class="inv-kpi-card inv-kpi-card-featured c-green">
         <div class="inv-kpi-icon" style="background:var(--green-bg);color:var(--green)"><i class="ti ti-currency-dollar"></i></div>
         <div class="inv-kpi-body">
           <div class="inv-kpi-label">${escapeHtml(totalLabel)} · Custo Total</div>
@@ -4024,13 +4024,13 @@ function renderSapSummary() {
     countSubtext: `${badgeCount(g101, '101')} · ${badgeCount(g801, '801')} · ${badgeCount(g201, '201')}`,
     extraHeroCards: [
       _heroSubCardHtml({
-        icon: 'ti-package-import', iconBg: 'var(--green-bg)', iconColor: 'var(--green)',
+        icon: 'ti-package-import', iconBg: 'var(--green-bg)', iconColor: 'var(--green)', colorClass: 'c-green',
         label: 'SAP · Total de Entradas', peso: pesoEnt, custo: custoEnt, count: recsEntrada.length,
         title: 'Todos os registros com peso positivo no filtro atual',
         subtext: `${badgeKg(g101, '101')} · ${badgeKg(g801, '801')}`
       }),
       _heroSubCardHtml({
-        icon: 'ti-package-export', iconBg: 'var(--red-bg)', iconColor: 'var(--red)',
+        icon: 'ti-package-export', iconBg: 'var(--red-bg)', iconColor: 'var(--red)', colorClass: 'c-red',
         label: 'SAP · Total de Saídas', peso: Math.abs(pesoSai), custo: Math.abs(custoSai), count: recsSaida.length,
         title: 'Todos os registros com peso negativo no filtro atual',
         subtext: badgeKg(g201, '201')

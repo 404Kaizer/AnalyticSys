@@ -703,6 +703,30 @@
   flex-wrap: wrap;
 }
 .mod-summary-hero .inv-kpi-card { flex: 1; min-width: 220px; }
+
+/* Friso colorido no topo + valor colorido (05/08) — mesmo tratamento dos
+   .metric-card de Custos SAP, aplicado só nos cards de DESTAQUE
+   (.mod-summary-hero) de Entradas/Saídas/Lançamentos/SAP. As cores
+   reaproveitam o que o ícone de cada card já usava (inline, no HTML) —
+   isso só estende pro friso/valor pra dar mais peso visual. Os cards de
+   grupo (.mod-summary-grid, um por central/código) ficam neutros de
+   propósito: são muitos, colorir todos viraria ruído em vez de destaque.
+   .inv-kpi-card já é position:relative/overflow:hidden (linha ~600). */
+.mod-summary-hero .inv-kpi-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+}
+.mod-summary-hero .inv-kpi-card.c-accent::before { background: var(--accent); }
+.mod-summary-hero .inv-kpi-card.c-accent .inv-kpi-value { color: var(--accent); }
+.mod-summary-hero .inv-kpi-card.c-green::before  { background: var(--green); }
+.mod-summary-hero .inv-kpi-card.c-green  .inv-kpi-value { color: var(--green); }
+.mod-summary-hero .inv-kpi-card.c-red::before    { background: var(--red); }
+.mod-summary-hero .inv-kpi-card.c-red    .inv-kpi-value { color: var(--red); }
+.mod-summary-hero .inv-kpi-card.c-purple::before { background: var(--purple); }
+.mod-summary-hero .inv-kpi-card.c-purple .inv-kpi-value { color: var(--purple); }
+
 .mod-summary-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
