@@ -139,6 +139,48 @@ teste('PERMITE contagem igual (nada mudou)', async () => {
   assert.equal(await ctx.window._cbUploadModulo('saidas'), true);
 });
 
+// ── F6: módulo esvaziado por completo ──────────────────────────────────
+
+teste('F6: exclusão deliberada que ESVAZIA o módulo APAGA o manifest da nuvem', async () => {
+  const { ctx, removidos, copiados } = montar({
+    registros: [],
+    manifestRemoto: { totalRecords: 3, totalChunks: 1, chunkHashes: ['a'], savedAt: Date.now() },
+  });
+  const ok = await ctx.window._cbUploadModulo('saidas', { permitirReducao: true });
+  assert.equal(ok, true, 'esvaziamento deliberado precisa passar');
+  assert.ok(removidos.includes('user-teste/saidas/manifest.json'), 'manifest velho tem que ser apagado');
+  assert.ok(removidos.includes('user-teste/saidas/chunk_0.json.gz'), 'chunk velho tem que ser apagado');
+  assert.ok(copiados.some(c => c.para.includes('anterior/manifest.json')), 'geração anterior ainda precisa ser guardada antes de apagar');
+});
+
+teste('F6: módulo vazio SEM permitirReducao não mexe na nuvem (reforço periódico/pós-import)', async () => {
+  const { ctx, removidos, enviados } = montar({
+    registros: [],
+    manifestRemoto: { totalRecords: 3, totalChunks: 1, chunkHashes: ['a'], savedAt: Date.now() },
+  });
+  const ok = await ctx.window._cbUploadModulo('saidas');
+  assert.equal(ok, false, 'sem permitirReducao não pode apagar nada');
+  assert.equal(removidos.length, 0);
+  assert.equal(enviados.length, 0);
+});
+
+teste('F6: módulo vazio sem backup nenhum na nuvem é um no-op', async () => {
+  const { ctx, removidos, enviados, toasts } = montar({ registros: [], manifestRemoto: null });
+  const ok = await ctx.window._cbUploadModulo('saidas', { permitirReducao: true });
+  assert.equal(ok, false);
+  assert.equal(removidos.length, 0);
+  assert.equal(enviados.length, 0);
+  assert.equal(toasts.length, 0, 'não há nada a avisar quando nunca existiu backup');
+});
+
+teste('F6: módulo esvaziado, restaurado do zero não ressuscita o que foi apagado', async () => {
+  // Reproduz o bug relatado: local esvaziou, o manifest velho foi apagado
+  // (F6 acima), e o boot seguinte não pode encontrar nada pra restaurar.
+  const { ctx } = montar({ registros: [], manifestRemoto: null });
+  await ctx.window.restaurarBackupCondensadoSeNecessario();
+  assert.equal(ctx.state.saidas.length, 0, 'nada deveria ter sido restaurado — o backup foi apagado junto com a exclusão');
+});
+
 // ── F5: trava entre abas ───────────────────────────────────────────────
 
 teste('usa navigator.locks quando disponível', async () => {

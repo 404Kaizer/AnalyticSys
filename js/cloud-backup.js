@@ -132,21 +132,58 @@ async function _cbUploadModuloInterno(modulo, opts = {}) {
   if (_cbUploadEmAndamento.has(modulo)) return false;
 
   const registros = Array.isArray(state[modulo]) ? state[modulo] : [];
-  if (!registros.length) return false; // nada pra fazer backup ainda
-
-  _cbUploadEmAndamento.add(modulo);
   const basePath = `${window.currentUser.id}/${modulo}`;
 
+  // Manifest antigo (se existir) — usado pela guarda de encolhimento abaixo,
+  // pra saber quantos chunks limpar no final, e (F6) pra decidir se há algo
+  // a apagar quando o módulo esvazia por completo.
+  let manifestAntigo = null;
   try {
-    // Manifest antigo (se existir) — usado pela guarda de encolhimento
-    // abaixo e pra saber quantos chunks limpar no final.
-    let manifestAntigo = null;
-    try {
-      const { data, error } = await window.supabaseClient.storage
-        .from(CLOUD_BACKUP_BUCKET).download(`${basePath}/manifest.json`);
-      if (!error && data) manifestAntigo = JSON.parse(await data.text());
-    } catch (_) { /* sem manifest antigo — primeira vez, normal */ }
+    const { data, error } = await window.supabaseClient.storage
+      .from(CLOUD_BACKUP_BUCKET).download(`${basePath}/manifest.json`);
+    if (!error && data) manifestAntigo = JSON.parse(await data.text());
+  } catch (_) { /* sem manifest antigo — primeira vez, normal */ }
 
+  if (!registros.length) {
+    // Nada a fazer se nunca existiu backup, ou se isto não é uma exclusão
+    // deliberada (reforço periódico/pós-importação apenas conferindo um
+    // módulo que já estava vazio) — não é o momento de decidir apagar nada.
+    if (!manifestAntigo || !opts.permitirReducao) return false;
+
+    // ── MÓDULO ESVAZIADO POR EXCLUSÃO DELIBERADA (F6, 05/08) ────────────
+    // Sem isto, o manifest antigo (com os registros já excluídos) ficava
+    // órfão na nuvem — o early-return acima nunca chegava a apagá-lo. No
+    // boot seguinte, o gatilho de restauração automática (dispositivo "cru"
+    // = nenhum registro local com importId, ver _cbTemVolumeImportado) via
+    // um módulo vazio + manifest antigo ainda de pé e RESTAURAVA — trazendo
+    // de volta exatamente o que acabou de ser apagado. Mesma classe de bug
+    // que F3 corrigiu pro caso de esvaziamento PARCIAL; aqui é o caso limite
+    // (esvaziamento TOTAL) que a guarda de encolhimento (F1) nunca cobria,
+    // porque o código nem chegava a ela — retornava antes, na linha acima.
+    _cbUploadEmAndamento.add(modulo);
+    try {
+      await _cbGuardarGeracaoAnterior(basePath, manifestAntigo, modulo);
+      const paths = [`${basePath}/manifest.json`];
+      for (let i = 0; i < manifestAntigo.totalChunks; i++) paths.push(`${basePath}/chunk_${i}.json.gz`);
+      const { error } = await window.supabaseClient.storage.from(CLOUD_BACKUP_BUCKET).remove(paths);
+      if (error) throw error;
+      _cbLastBackupAt[modulo] = Date.now();
+      console.info(`[CloudBackup] "${modulo}": backup condensado apagado da nuvem (módulo esvaziado por exclusão deliberada).`);
+      return true;
+    } catch (err) {
+      console.warn(`[CloudBackup] Falha ao apagar o backup condensado de "${modulo}" após esvaziamento:`, err);
+      if (typeof toast === 'function') {
+        toast(`Falha ao atualizar a cópia de segurança de ${modulo} na nuvem após a exclusão. Nova tentativa automática em até 30 min.`, 'error');
+      }
+      return false;
+    } finally {
+      _cbUploadEmAndamento.delete(modulo);
+    }
+  }
+
+  _cbUploadEmAndamento.add(modulo);
+
+  try {
     // ── GUARDA DE ENCOLHIMENTO (F1) ────────────────────────────────────
     // O backup é um slot único por usuário/módulo, gravado com upsert, e a
     // limpeza no fim APAGA os chunks excedentes. Sem esta guarda, um

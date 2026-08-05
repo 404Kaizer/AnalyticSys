@@ -1199,19 +1199,21 @@
           // extração IDÊNTICA à usada pelo Analítico (toEntry, analitico.js): cod
           // normalizado via normMov (mesma função usada pelos badges e pelo
           // pareamento de transferências 861/862/309), ref com fallback pra
-          // documento, e um objeto extra com depósito + as 3 datas cruas
-          // (documento/lançamento/registro) — usado pelas colunas de data e
-          // pelo pareamento de transferência no modal.
+          // documento (só uso interno de pareamento), e um objeto extra com
+          // depósito + refRaw/documento (colunas Ref./Documento separadas) +
+          // as 3 datas cruas (documento/lançamento/registro).
           const cod = normMov(r.movimento);
           const ref = (r.ref && String(r.ref).trim()) ? String(r.ref).trim()
                     : (r.documento && String(r.documento).trim()) ? String(r.documento).trim() : '';
           const usr = String(r.usuario || '').trim();
           const dtLancFmt = String(r.dtLanc || r.dtDoc || '').trim();
           const extra = {
-            deposito: String(r.deposito || '').trim(),
-            dtDoc:    String(r.dtDoc    || '').trim(),
-            dtLanc:   String(r.dtLanc   || '').trim(),
-            dtReg:    String(r.dtReg    || '').trim()
+            deposito:  String(r.deposito  || '').trim(),
+            refRaw:    String(r.ref       || '').trim(),
+            documento: String(r.documento || '').trim(),
+            dtDoc:     String(r.dtDoc     || '').trim(),
+            dtLanc:    String(r.dtLanc    || '').trim(),
+            dtReg:     String(r.dtReg     || '').trim()
           };
           if (p > 0) {
             entradasKg += p;

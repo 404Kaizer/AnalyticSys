@@ -55,18 +55,24 @@ function _mesclarGrandeComBanco(local, remoto) {
   return [...soLocalSemDuplicata, ...(remoto || [])];
 }
 
-// Reforça o backup condensado (cloud-backup.js) dos 5 módulos grandes de
-// uma vez — usado depois de excluirImportacao (e seu undo), que pode
-// mexer em qualquer um deles. _cbUploadModulo já ignora módulos vazios
-// e evita rodar duas vezes em paralelo, então chamar os 5 sempre é
-// barato mesmo quando só um mudou de verdade.
+// Reforça o backup condensado (cloud-backup.js) dos módulos híbridos
+// efetivamente afetados por excluirImportacao (e seu undo) — recebe a lista
+// já filtrada pelo chamador (só os que realmente mudaram de tamanho nesta
+// operação, ver excluirImportacao).
 // permitirReducao: true — só é chamada a partir de excluirImportacao (e do
 // seu undo), onde a queda na contagem é EXATAMENTE o que o usuário pediu.
 // Sem isso a guarda de encolhimento do cloud-backup bloquearia o envio e o
 // lote excluído voltaria na próxima restauração.
-function _cbReforcarBackupModulos() {
-  if (typeof _cbUploadModulo !== 'function' || typeof CLOUD_BACKUP_MODULOS === 'undefined') return;
-  CLOUD_BACKUP_MODULOS.forEach(modulo => _cbUploadModulo(modulo, { permitirReducao: true }));
+// NÃO varre CLOUD_BACKUP_MODULOS inteiro (05/08): desde que _cbUploadModulo
+// passou a apagar de vez o backup de um módulo esvaziado por exclusão
+// deliberada (F6, cloud-backup.js), chamar com permitirReducao:true num
+// módulo que só está vazio por coincidência — ex.: restauração automática
+// do boot falhou em silêncio pra ele nesta sessão — apagaria a única cópia
+// de um módulo que esta exclusão nunca tocou. Escopar pro que de fato mudou
+// evita esse risco.
+function _cbReforcarBackupModulos(modulos) {
+  if (typeof _cbUploadModulo !== 'function' || !Array.isArray(modulos) || !modulos.length) return;
+  modulos.forEach(modulo => _cbUploadModulo(modulo, { permitirReducao: true }));
 }
 
 // snapshots: { filiais, materiais, lancamentos, entradas, saidas, custosSap }
@@ -143,6 +149,9 @@ function excluirImportacao(importId) {
           // ser removidos por esta operação — a guarda explícita protege contra
           // casos futuros onde importId possa ser undefined por outro motivo.
           const removeByImport = arr => arr.filter(r => r.fonte === 'manual' || r.importId !== importId);
+          // Módulos híbridos ANTES da exclusão — usado logo abaixo pra saber
+          // quais de fato encolheram nesta operação (ver _cbReforcarBackupModulos).
+          const contagemHibridaAntes = { entradas: state.entradas.length, saidas: state.saidas.length, lancamentos: state.lancamentos.length, sap: state.sap.length };
           state.entradas    = removeByImport(state.entradas);
           state.saidas      = removeByImport(state.saidas);
           state.lancamentos = removeByImport(state.lancamentos);
@@ -168,15 +177,21 @@ function excluirImportacao(importId) {
           // ter algo lá (Fase 4 — Etapa 7).
           if (typeof _importsSyncDelete === 'function') _importsSyncDelete(importId);
           _cascadeDeleteCloudByImportId(importId);
-          // Reforça o backup condensado dos 5 módulos grandes na hora
-          // (30/07) — sem isso, excluir uma importação inteira só mudava
-          // localmente até o próximo reforço periódico (até 3h depois).
-          _cbReforcarBackupModulos();
+          // Reforça o backup condensado na hora (30/07) — sem isso, excluir
+          // uma importação inteira só mudava localmente até o próximo
+          // reforço periódico (até 3h depois). Só os módulos que de fato
+          // encolheram aqui (05/08 — ver comentário de _cbReforcarBackupModulos).
+          const modulosAlterados = Object.keys(contagemHibridaAntes).filter(m => state[m].length !== contagemHibridaAntes[m]);
+          _cbReforcarBackupModulos(modulosAlterados);
         },
         undo: () => {
           // A exclusão foi revertida — remove a marca para que um fechamento
           // logo em seguida não reaplique a exclusão no próximo boot.
           if (typeof unmarkImportPendingDelete === 'function') unmarkImportPendingDelete(importId);
+
+          // Módulos híbridos ANTES do undo (ou seja, no estado já excluído) —
+          // mesma lógica de escopo do lado da exclusão (ver _cbReforcarBackupModulos).
+          const contagemHibridaAntesUndo = { entradas: state.entradas.length, saidas: state.saidas.length, lancamentos: state.lancamentos.length, sap: state.sap.length };
 
           state.entradas    = snapshotEntradas;
           state.saidas      = snapshotSaidas;
@@ -209,7 +224,8 @@ function excluirImportacao(importId) {
             saidas: snapshotSaidas, custosSap: snapshotCustosSap,
             sap: snapshotSap,
           });
-          _cbReforcarBackupModulos();
+          const modulosAlteradosUndo = Object.keys(contagemHibridaAntesUndo).filter(m => state[m].length !== contagemHibridaAntesUndo[m]);
+          _cbReforcarBackupModulos(modulosAlteradosUndo);
         },
       });
     }
