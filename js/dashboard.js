@@ -6794,6 +6794,10 @@ async function restoreAndRender() {
     // ver ocorrencias.js/dai.js.
     if (typeof _ocRealtimeInit === 'function') _ocRealtimeInit();
     if (typeof _daiRealtimeInit === 'function') _daiRealtimeInit();
+    // Canal Realtime de Custos SAP (05/08) — cadastro compartilhado do
+    // time, RLS libera SELECT geral: todo mundo recebe INSERT/UPDATE/
+    // DELETE de qualquer usuário, sem filtro de relevância (ver import.js).
+    if (typeof _custosSapRealtimeInit === 'function') _custosSapRealtimeInit();
     // Backup condensado (27/07) — reforço periódico silencioso (Etapa 4),
     // cobre o que muda entre importações. Idempotente: seguro chamar de
     // novo em qualquer reboot da mesma aba.

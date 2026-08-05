@@ -896,6 +896,46 @@ async function syncCustosSapFromSupabase() {
   }
 }
 
+// ── Realtime (05/08) ─────────────────────────────────────────────────────
+// Sem filtro de relevância (diferente de Ocorrências/DAI): Custos SAP não
+// tem mais noção de "meu ou integrado" — é um cadastro só, e o RLS já
+// libera SELECT geral pra qualquer autenticado, então todo evento que
+// chega já é pra mostrar. Mesmo padrão de canal de _daiRealtimeInit (dai.js).
+function _custosSapUpsertLocal(row) {
+  if (!Array.isArray(state.custosSap)) state.custosSap = [];
+  const rec = _custosSapFromDbRow(row);
+  const idx = state.custosSap.findIndex(r => r.id === rec.id);
+  if (idx >= 0) state.custosSap[idx] = rec; else state.custosSap.unshift(rec);
+}
+function _custosSapRemoveLocal(rowId) {
+  if (!Array.isArray(state.custosSap)) return;
+  state.custosSap = state.custosSap.filter(r => r.id !== rowId);
+}
+
+let _custosSapChannel = null;
+function _custosSapRealtimeInit() {
+  if (!window.supabaseClient || !window.currentUser || _custosSapChannel) return;
+  const handle = (payload, tipo) => {
+    const row = tipo === 'DELETE' ? payload.old : payload.new;
+    if (!row) return;
+    if (tipo === 'DELETE') _custosSapRemoveLocal(row.id); else _custosSapUpsertLocal(row);
+    if (typeof renderCustosSap === 'function') renderCustosSap();
+    if (typeof updateDashboard === 'function') updateDashboard();
+  };
+  _custosSapChannel = window.supabaseClient
+    .channel('custos_sap_realtime')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'custos_sap' }, (p) => handle(p, 'INSERT'))
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'custos_sap' }, (p) => handle(p, 'UPDATE'))
+    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'custos_sap' }, (p) => handle(p, 'DELETE'))
+    .subscribe((status) => {
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') console.warn('[Custos SAP] Canal Realtime com problema:', status);
+    });
+}
+function _custosSapRealtimeStop() {
+  if (_custosSapChannel && window.supabaseClient) window.supabaseClient.removeChannel(_custosSapChannel);
+  _custosSapChannel = null;
+}
+
 // ═══════════════════════════════════════════════════════════
 // ENTRADAS — sincronização com o Supabase (Fase 4 — Etapa 5)
 // ═══════════════════════════════════════════════════════════

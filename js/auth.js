@@ -607,6 +607,7 @@ window.AuthGate = (function () {
         // Canais Realtime de Ocorrências e DAI — mesmo cuidado.
         if (typeof _ocRealtimeStop === 'function') _ocRealtimeStop();
         if (typeof _daiRealtimeStop === 'function') _daiRealtimeStop();
+        if (typeof _custosSapRealtimeStop === 'function') _custosSapRealtimeStop();
         // Canal Realtime de reset remoto de dados locais — mesmo cuidado.
         if (typeof wipeRealtimeStop === 'function') wipeRealtimeStop();
       }
