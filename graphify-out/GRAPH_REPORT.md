@@ -1,16 +1,16 @@
 # Graph Report - AnalyticSys  (2026-08-04)
 
 ## Corpus Check
-- 50 files · ~298,252 words
+- 50 files · ~298,264 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 2058 nodes · 4219 edges · 108 communities (99 shown, 9 thin omitted)
+- 2058 nodes · 4221 edges · 108 communities (99 shown, 9 thin omitted)
 - Extraction: 88% EXTRACTED · 12% INFERRED · 0% AMBIGUOUS · INFERRED: 499 edges (avg confidence: 0.56)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `c15bb555`
+- Built from commit: `5feb10da`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -127,25 +127,25 @@
 1. `renderDgVisaoGeralPdf()` - 33 edges
 2. `adminLoadModulo()` - 25 edges
 3. `_adminEsc()` - 22 edges
-4. `escapeHtml()` - 20 edges
-5. `renderOcorrencias()` - 20 edges
-6. `_fechMgrRender()` - 19 edges
-7. `_adminErroDetalhe()` - 19 edges
+4. `renderOcorrencias()` - 20 edges
+5. `escapeHtml()` - 20 edges
+6. `_adminErroDetalhe()` - 19 edges
+7. `_fechMgrRender()` - 19 edges
 8. `renderModule()` - 18 edges
 9. `getFilteredData()` - 16 edges
-10. `wireForm()` - 14 edges
+10. `renderAusencias()` - 14 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `safeJSONParse()` --indirect_call--> `error()`  [INFERRED]
   js/state.js → tests/calendar-oc.test.mjs
 - `Admin — Formulário Público Section (public link + analyst/category routing)` --shares_data_with--> `solicitacao.html — Public Stock Movement Request Form`  [INFERRED]
   index.html → solicitacao.html
-- `reconcilePendingDeletes()` --indirect_call--> `_cascadeDeleteCloudByImportId()`  [INFERRED]
-  js/persist.js → js/import.js
-- `reconcilePendingDeletes()` --indirect_call--> `_importsSyncDelete()`  [INFERRED]
-  js/persist.js → js/import.js
 - `buildCentralCard()` --indirect_call--> `makeResizable()`  [INFERRED]
   js/analitico.js → js/ui.js
+- `init()` --indirect_call--> `updateToolsTheme()`  [INFERRED]
+  js/analitico.js → js/state.js
+- `reconcilePendingDeletes()` --indirect_call--> `_cascadeDeleteCloudByImportId()`  [INFERRED]
+  js/persist.js → js/import.js
 
 ## Import Cycles
 - None detected.
@@ -191,7 +191,7 @@ Nodes (43): Ocorrências 'Ordenar' Micro-filter (31/07), fmt(), fmtR(), _invAppl
 
 ### Community 8 - "notifications.js"
 Cohesion: 0.06
-Nodes (61): _ACTIVITY_AUTH_LABEL, _ACTIVITY_EXTRA_COLS, _ACTIVITY_MODULE_COLOR, _ACTIVITY_OP_LABEL, _ACTIVITY_VERB, _activityBatchData, _activityBatchTimers, _activityDescribeRow() (+53 more)
+Nodes (62): RECORD_INTEGRATION_TABLES, _ACTIVITY_AUTH_LABEL, _ACTIVITY_EXTRA_COLS, _ACTIVITY_MODULE_COLOR, _ACTIVITY_OP_LABEL, _ACTIVITY_VERB, _activityBatchData, _activityBatchTimers (+54 more)
 
 ### Community 9 - "dai.js"
 Cohesion: 0.08
@@ -211,7 +211,7 @@ Nodes (36): _calc, calcAction(), _calcCompute(), _calcFmt(), _calcUpdateDisplay(
 
 ### Community 13 - "normalize.js"
 Cohesion: 0.07
-Nodes (48): buildFilialLookupIndex(), buildMaterialLookupIndex(), _carregarNomesOriginais(), CATEGORIA_MODULOS, CATEGORIAS_MATERIAL, CENTRAL_FIELDS_BY_MODULO, checarWipePendente(), _donosPorTabela (+40 more)
+Nodes (47): buildFilialLookupIndex(), buildMaterialLookupIndex(), _carregarNomesOriginais(), CATEGORIA_MODULOS, CATEGORIAS_MATERIAL, CENTRAL_FIELDS_BY_MODULO, checarWipePendente(), _donosPorTabela (+39 more)
 
 ### Community 14 - "auth.js"
 Cohesion: 0.10
@@ -550,7 +550,7 @@ Cohesion: 0.29
 Nodes (7): abrirEdicaoFiliaisSelecionados(), abrirImportarDe(), abrirNovosPendentesDetalhe(), _carregarPerfis(), _checarNovosParaImportar(), filialMatchKey(), syncFiliaisFromSupabase()
 
 ## Knowledge Gaps
-- **246 isolated node(s):** `AVATAR_EXT_POR_MIME`, `MESES_ABREV_DG`, `MESES_NOME_DG`, `_dgMonthState`, `DG_VG_CAT_LABELS` (+241 more)
+- **245 isolated node(s):** `MESES_ABREV_DG`, `MESES_NOME_DG`, `_dgMonthState`, `DG_VG_CAT_LABELS`, `DG_VG_CAT_COLORS` (+240 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **9 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
@@ -558,13 +558,13 @@ Nodes (7): abrirEdicaoFiliaisSelecionados(), abrirImportarDe(), abrirNovosPenden
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `excluirImportacao()` connect `import.js` to `analitico.js`?**
-  _High betweenness centrality (0.021) - this node is a cross-community bridge._
-- **Why does `renderModuleByName()` connect `renderModule` to `renderImports`, `applyColFilter`, `ui.js`?**
-  _High betweenness centrality (0.018) - this node is a cross-community bridge._
-- **Why does `getFilialLookupIndex()` connect `normalize.js` to `analitico.js`?**
-  _High betweenness centrality (0.012) - this node is a cross-community bridge._
-- **What connects `AVATAR_EXT_POR_MIME`, `MESES_ABREV_DG`, `MESES_NOME_DG` to the rest of the system?**
-  _246 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _High betweenness centrality (0.159) - this node is a cross-community bridge._
+- **Why does `CLOUD_BACKUP_MODULOS` connect `admin.js` to `import.js`, `cloud-backup.js`?**
+  _High betweenness centrality (0.155) - this node is a cross-community bridge._
+- **Why does `_cbReforcarBackupModulos()` connect `import.js` to `admin.js`?**
+  _High betweenness centrality (0.151) - this node is a cross-community bridge._
+- **What connects `MESES_ABREV_DG`, `MESES_NOME_DG`, `_dgMonthState` to the rest of the system?**
+  _245 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `admin.js` be split into smaller, more focused modules?**
   _Cohesion score 0.053534660260809885 - nodes in this community are weakly interconnected._
 - **Should `ocorrencias.js` be split into smaller, more focused modules?**
