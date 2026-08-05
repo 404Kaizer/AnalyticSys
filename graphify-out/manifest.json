@@ -35,8 +35,8 @@
     "semantic_hash": ""
   },
   "js/cloud-backup.js": {
-    "mtime": 1785859934.1666892,
-    "ast_hash": "2316c24f5a66a8b64d290715cc0653f6",
+    "mtime": 1785908212.729354,
+    "ast_hash": "2d77ed2af3f3e9532766eaa2e7808d4d",
     "semantic_hash": ""
   },
   "js/config.js": {
@@ -65,8 +65,8 @@
     "semantic_hash": ""
   },
   "js/import.js": {
-    "mtime": 1785907194.7239816,
-    "ast_hash": "bb17df2a435270b8fc24e9ac56d28fbe",
+    "mtime": 1785908580.8134098,
+    "ast_hash": "490da388cb25d68be965b9f3cb41894c",
     "semantic_hash": ""
   },
   "js/inventario.js": {
@@ -145,13 +145,13 @@
     "semantic_hash": "26849b0d1fc5122d427a3acd9001947a"
   },
   "js/ui.js": {
-    "mtime": 1785905977.7743547,
-    "ast_hash": "12a05bde34a6946853c9f0b6eeed5c06",
+    "mtime": 1785909468.182794,
+    "ast_hash": "789d7280716ddb4c96f6ffdd0ea43389",
     "semantic_hash": ""
   },
   "index.html": {
-    "mtime": 1785906745.8043637,
-    "ast_hash": "c3283a6b20149ad5584dc812a5223c6b",
+    "mtime": 1785907759.087373,
+    "ast_hash": "23fd981302e18def51a82e3cf3a32dd9",
     "semantic_hash": ""
   },
   "solicitacao.html": {
