@@ -1266,15 +1266,21 @@
           return d && d >= dtIni && d <= dtFim;
         }).reduce((sum, s) => sum + _invSafeCall('_convertNfPesoToKg', 0, s.peso, s.um, s.material), 0);
 
-        // Custo médio: SÓ Custos SAP (central + Cód SAP + mês calendário do
-        // Inventário), sem cascata. 'sem_codigo': material sem Cód SAP
-        // cadastrado. 'ausente': tem Cód SAP, mas sem registro em Custos SAP
-        // pro central/mês — ambos ficam visíveis como badge (invRenderTabela).
+        // Custo médio: Custos SAP (central + Cód SAP + mês calendário do
+        // Inventário), cascateando pra meses anteriores quando o mês não
+        // tem registro (getCustoMedioCustosSap, normalize.js — ausência
+        // geralmente só significa que não houve movimentação naquele mês).
+        // 'sem_codigo': material sem Cód SAP cadastrado. 'ausente': tem Cód
+        // SAP, mas não achou custo em NENHUM mês anterior — ambos ficam
+        // visíveis como badge (invRenderTabela). custoMedioMesesAtras > 0
+        // avisa que o valor veio de um mês anterior ao pedido (badge à
+        // parte, não junto de 'ausente' — aqui HÁ valor).
         let custoMedio = 0;
         let custoMedioFonte = 'sem_codigo';
+        let custoMedioMesesAtras = 0;
         if (codSap) {
           const _custo = getCustoMedioCustosSap(central, codSap, selYear, selMonth + 1, _custosSapIdx);
-          if (_custo !== null) { custoMedio = _custo; custoMedioFonte = 'custos_sap'; }
+          if (_custo) { custoMedio = _custo.valor; custoMedioFonte = 'custos_sap'; custoMedioMesesAtras = _custo.mesesAtras; }
           else { custoMedioFonte = 'ausente'; }
         }
 
@@ -1330,7 +1336,7 @@
           estoqueFimReal, estoqueFimMissing, estoqueFimLastKnown,
           estoqueFimFallback, estoqueFimEsperado, estoqueFimUsadoLabel,
           pendEntAplicado, pendSaiAplicado,
-          custoMedio, custoMedioFonte, entEntries, saiEntries, localEntTotal, localSaiTotal, divergencias, divCount,
+          custoMedio, custoMedioFonte, custoMedioMesesAtras, entEntries, saiEntries, localEntTotal, localSaiTotal, divergencias, divCount,
           sapFechExcluidos: sapFechExcluidosByMat.get(mat) || []
         });
       });
@@ -1674,11 +1680,27 @@
         ? `<span class="absent-badge" style="background:var(--bg4);color:var(--text3);border-color:var(--border2)" title="Material sem Cód SAP cadastrado — não é possível buscar o custo em Custos SAP">SEM CÓD SAP</span>`
         : `<span class="absent-badge" title="Nenhum custo cadastrado em Custos SAP para ${_escape(r.central)} / Cód SAP ${_escape(r.codSap)} / ${r.mesKey}">AUSENTE</span>`;
 
+      // ── Aviso de custo vindo de mês anterior (cascata em
+      // getCustoMedioCustosSap, normalize.js) — só enquanto o valor exibido
+      // for o AUTOMÁTICO (sem override manual na justificativa): se o
+      // usuário sobrescreveu, o número já não vem do cadastro, então não
+      // há "mês de origem" pra avisar. 1 mês atrás = aviso leve (âmbar,
+      // mesma cor padrão do .absent-badge); 2+ meses = alerta (vermelho).
+      const _custoSobrescrito = j.custoMedioSap !== undefined && j.custoMedioSap !== null && j.custoMedioSap !== '' && parseFloat(j.custoMedioSap) > 0;
+      const _custoFallbackBadge = (!_custoSobrescrito && r.custoMedioMesesAtras > 0) ? (() => {
+        const [_selY, _selM] = String(r.mesKey).split('-').map(Number);
+        const _mesRefDate = new Date(_selY, (_selM - 1) - r.custoMedioMesesAtras, 1);
+        const _mesRef = `${String(_mesRefDate.getMonth() + 1).padStart(2, '0')}/${_mesRefDate.getFullYear()}`;
+        return r.custoMedioMesesAtras === 1
+          ? `<span class="absent-badge" style="margin-left:4px" title="Sem cadastro em Custos SAP para ${r.mesKey} — usando o custo de ${_mesRef} (mês anterior)">MÊS ANT.</span>`
+          : `<span class="absent-badge" style="margin-left:4px;background:var(--red-bg);color:var(--red);border-color:var(--red-border)" title="Sem cadastro em Custos SAP há ${r.custoMedioMesesAtras} meses — usando o custo de ${_mesRef}">DESATUALIZADO</span>`;
+      })() : '';
+
       // ── Custo SAP (R$): variação BRUTA × custo médio (Custos SAP, auto ou sobrescrito) ──
       const _custoSapVal = r.custoMedioSap > 0 ? r.custoSap : null;
       const _custoSapCls = _custoSapVal !== null ? _varClass(_custoSapVal) : '';
       const custoSapCell = _custoSapVal !== null
-        ? `<span class="td-mono ${_custoSapCls}" style="font-size:11.5px;white-space:nowrap">${_varSymbol(_custoSapVal)} ${_money(Math.abs(_custoSapVal))}</span>`
+        ? `<span class="td-mono ${_custoSapCls}" style="font-size:11.5px;white-space:nowrap">${_varSymbol(_custoSapVal)} ${_money(Math.abs(_custoSapVal))}</span>${_custoFallbackBadge}`
         : _custoAusenteBadge;
 
       // ── Custo Just. (R$): variação AJUSTADA × mesmo custo médio — só
@@ -1687,12 +1709,12 @@
       const _custoJustVal = (hasJust && r.custoMedioSap > 0) ? r.custo : null;
       const _custoJustCls = _custoJustVal !== null ? _varClass(_custoJustVal) : '';
       const custoJustCell = _custoJustVal !== null
-        ? `<span class="td-mono ${_custoJustCls}" style="font-size:11.5px;white-space:nowrap">${_varSymbol(_custoJustVal)} ${_money(Math.abs(_custoJustVal))}</span>`
+        ? `<span class="td-mono ${_custoJustCls}" style="font-size:11.5px;white-space:nowrap">${_varSymbol(_custoJustVal)} ${_money(Math.abs(_custoJustVal))}</span>${_custoFallbackBadge}`
         : (hasJust ? _custoAusenteBadge : `<span style="color:var(--text3);font-size:11px">—</span>`);
 
       // ── Custo Médio (R$/kg): Custos SAP (central+Cód SAP+mês), auto — ou sobrescrito pelo usuário no modal de justificativa ──
       const custoMedCell = r.custoMedioSap > 0
-        ? `<span class="td-mono" style="color:var(--text2);font-size:11.5px">${_money(r.custoMedioSap)}<span style="font-size:9.5px;opacity:.6">/kg</span></span>`
+        ? `<span class="td-mono" style="color:var(--text2);font-size:11.5px">${_money(r.custoMedioSap)}<span style="font-size:9.5px;opacity:.6">/kg</span></span>${_custoFallbackBadge}`
         : _custoAusenteBadge;
 
       // ── Saldo justificado ──────────────────────────────────

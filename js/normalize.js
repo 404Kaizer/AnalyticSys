@@ -548,7 +548,8 @@ function normalizarCodSap(valor) {
 // ═══════════════════════════════════════════════════════════════════════
 // Decisão do Hugo (05/08): custo médio do sistema inteiro vem só daqui,
 // sem cascata Saídas/Lançamentos/SAP. Usado pela Visão Micro (mês final do
-// período) e pelo Inventário (mês calendário fechado do módulo).
+// período), pelo Inventário (mês calendário fechado do módulo) e pelo
+// Dashboard Gerencial (mês fechado selecionado).
 // Índice central|||cód SAP|||ano|||mês → registro. Ano/mês comparados como
 // número (evita "7" vs "07"), Cód SAP via normalizarCodSap (evita "0012345"
 // vs "12345"). Duplicata (mesmo central/código/mês): fica o primeiro do
@@ -564,13 +565,30 @@ function buildCustosSapIndex() {
 }
 
 // Lookup pontual — aceita o índice já construído (evita reconstruir a cada
-// chamada em loops) ou constrói na hora se omitido.
-function getCustoMedioCustosSap(central, codSap, ano, mes, idx) {
+// chamada em loops) ou constrói na hora se omitido. Cascateia pra meses
+// anteriores quando o mês pedido não tem registro (decisão do Hugo,
+// 06/08): a ausência de registro num mês normalmente só significa que não
+// houve movimentação de estoque naquele mês pro central/material — o
+// último custo cadastrado continua valendo até aparecer um novo. Retorna
+// null só se não achar NENHUM registro em até `maxMesesAtras` (60 = trava
+// de segurança contra loop indevido em dado corrompido, não é regra de
+// negócio — não deve ser atingida em uso normal). `mesesAtras` no retorno
+// diz de quantos meses atrás veio o valor (0 = mês exato pedido) — quem
+// chama usa isso pra decidir se avisa o usuário (ver badges no Inventário
+// e na Visão Micro do Analítico).
+function getCustoMedioCustosSap(central, codSap, ano, mes, idx, maxMesesAtras = 60) {
   if (!codSap) return null;
   const _idx = idx || buildCustosSapIndex();
-  const key = String(central || '').trim() + '|||' + normalizarCodSap(codSap) + '|||' + (Number(ano) || 0) + '|||' + (Number(mes) || 0);
-  const rec = _idx.get(key);
-  return (rec && num(rec.custo) > 0) ? num(rec.custo) : null;
+  const centralNorm = String(central || '').trim();
+  const codNorm = normalizarCodSap(codSap);
+  let a = Number(ano) || 0, m = Number(mes) || 0;
+  for (let mesesAtras = 0; mesesAtras <= maxMesesAtras; mesesAtras++) {
+    const key = centralNorm + '|||' + codNorm + '|||' + a + '|||' + m;
+    const rec = _idx.get(key);
+    if (rec && num(rec.custo) > 0) return { valor: num(rec.custo), ano: a, mes: m, mesesAtras };
+    m--; if (m < 1) { m = 12; a--; }
+  }
+  return null;
 }
 
 // ═══════════════════════════════════════════════════════════════════════

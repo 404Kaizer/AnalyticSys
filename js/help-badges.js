@@ -475,16 +475,26 @@ function initHelpBadges() {
 window.initHelpBadges = initHelpBadges;
 
 // ── Tooltip de custo médio (hover na célula Custo Variação) ───────────
-function showCustoMedTip(e, custoMedLabel, fonte) {
-  // Fonte única desde 05/08 (Custos SAP — central+Cód SAP+mês, sem cascata
-  // Saídas/Lançamentos/SAP) — tooltip só confirma de onde veio o valor.
-  const fonteColor = '#10b981';
+function showCustoMedTip(e, custoMedLabel, fonte, nivel) {
+  // Fonte única desde 05/08 (Custos SAP — central+Cód SAP+mês, cascateando
+  // pra mês anterior quando o mês pedido não tem registro, ver
+  // getCustoMedioCustosSap em normalize.js). `nivel` (opcional, default
+  // 'ok') troca cor/ícone quando o valor veio de um mês anterior:
+  // 'mes_anterior' (âmbar, aviso leve) ou 'desatualizado' (vermelho,
+  // alerta — 2+ meses sem cadastro). Omitido, comportamento idêntico ao
+  // de antes (verde + check).
+  const _nivelMeta = {
+    ok:            { cor: '#10b981',     icon: 'ti-circle-check' },
+    mes_anterior:  { cor: 'var(--amber)', icon: 'ti-alert-triangle' },
+    desatualizado: { cor: 'var(--red)',   icon: 'ti-alert-triangle' }
+  };
+  const { cor: fonteColor, icon } = _nivelMeta[nivel] || _nivelMeta.ok;
   const t = _getHelpTip();
   t.innerHTML = `
     <div style="font-size:9px;font-weight:700;color:var(--text3);font-family:var(--mono);letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px">Custo médio</div>
     <div style="font-size:15px;font-weight:700;color:var(--text);font-family:var(--mono);margin-bottom:8px">${custoMedLabel}</div>
     <div style="display:flex;align-items:center;gap:5px;font-size:10.5px;font-family:var(--mono);color:${fonteColor}">
-      <i class="ti ti-circle-check" style="font-size:12px"></i>
+      <i class="ti ${icon}" style="font-size:12px"></i>
       <span style="font-weight:600">${fonte || '—'}</span>
     </div>`;
   t.style.borderColor = fonteColor;

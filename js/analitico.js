@@ -409,15 +409,17 @@ function _rodarAnaliticoCore(dtIni, dtFim, onDone, silent) {
     // 'ausente': tem Cód SAP, mas não achou registro em Custos SAP pro
     // central/mês. Nenhum dos dois casos cai num valor silencioso — ambos
     // ficam visíveis como badge na tabela (ver buildCentralCard).
-    const custoMedioPorMat      = {};
-    const custoMedioFontePorMat = {};  // 'custos_sap' | 'sem_codigo' | 'ausente'
+    const custoMedioPorMat           = {};
+    const custoMedioFontePorMat      = {};  // 'custos_sap' | 'sem_codigo' | 'ausente'
+    const custoMedioMesesAtrasPorMat = {};  // 0 = mês exato; >0 = veio de cascata (getCustoMedioCustosSap, normalize.js)
     allMats.forEach(mat => {
       const codSap = getCodSapPorGrupo(mat);
       if (!codSap) { custoMedioFontePorMat[mat] = 'sem_codigo'; return; }
       const custo = getCustoMedioCustosSap(central, codSap, _custosSapAno, _custosSapMes, _custosSapIdx);
-      if (custo !== null) {
-        custoMedioPorMat[mat]      = custo;
-        custoMedioFontePorMat[mat] = 'custos_sap';
+      if (custo) {
+        custoMedioPorMat[mat]           = custo.valor;
+        custoMedioFontePorMat[mat]      = 'custos_sap';
+        custoMedioMesesAtrasPorMat[mat] = custo.mesesAtras;
       } else {
         custoMedioFontePorMat[mat] = 'ausente';
       }
@@ -441,6 +443,7 @@ function _rodarAnaliticoCore(dtIni, dtFim, onDone, silent) {
       lancsNoPeriodo,
       custoMedioPorMat,
       custoMedioFontePorMat,
+      custoMedioMesesAtrasPorMat,
       matsSemCadastro: [...matsSemCadastroSet].sort(),
       materialCatKeyMap,
       sapFechExcluidosByMat
@@ -1053,19 +1056,31 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
       });
 
       const _matCodSap     = getCodSapPorGrupo(mat);
-      const _rowCustoMed   = (r.custoMedioPorMat      || {})[mat] || 0;
-      const _rowCustoFonte = (r.custoMedioFontePorMat || {})[mat] || null;
+      const _rowCustoMed   = (r.custoMedioPorMat           || {})[mat] || 0;
+      const _rowCustoFonte = (r.custoMedioFontePorMat      || {})[mat] || null;
+      const _rowMesesAtras = (r.custoMedioMesesAtrasPorMat || {})[mat] || 0;
       const _rowCustoVar   = _rowCustoMed > 0 ? snapshot.diff * _rowCustoMed : null;
       const _rowVarCls     = _rowCustoVar === null ? '' : varClass(_rowCustoVar);
-      // Tooltip: custo médio + fonte (só Custos SAP — central+Cód SAP+mês, sem cascata)
+      // Tooltip: custo médio + fonte (Custos SAP — central+Cód SAP+mês, com
+      // cascata pra mês anterior quando o mês pedido não tem registro, ver
+      // getCustoMedioCustosSap em normalize.js). Mês de origem derivado
+      // aqui a partir de dtFim − mesesAtras (evita carregar mais um mapa
+      // "mês encontrado" pela função inteira só pra isso).
       const _custoMedLabel = _rowCustoMed > 0 ? escapeHtml(money(_rowCustoMed) + '/kg') : '—';
       const _custoMedMesAno = `${String(dtFim.getMonth() + 1).padStart(2, '0')}/${dtFim.getFullYear()}`;
-      const _custoMedFonte = `Custos SAP — ${_custoMedMesAno}`;
+      const _custoMedNivel = _rowMesesAtras === 0 ? 'ok' : _rowMesesAtras === 1 ? 'mes_anterior' : 'desatualizado';
+      const _custoMedFonte = _rowMesesAtras > 0
+        ? (() => {
+            const _d = new Date(dtFim.getFullYear(), dtFim.getMonth() - _rowMesesAtras, 1);
+            const _mesRef = `${String(_d.getMonth() + 1).padStart(2, '0')}/${_d.getFullYear()}`;
+            return `Custos SAP — ${_mesRef} (${_rowMesesAtras === 1 ? 'mês anterior' : 'desatualizado há ' + _rowMesesAtras + ' meses'})`;
+          })()
+        : `Custos SAP — ${_custoMedMesAno}`;
       const custoVarCell = _rowCustoVar !== null
         ? `<span
             class="td-mono ${_rowVarCls}"
             style="font-size:11.5px;white-space:nowrap;cursor:default;border-bottom:1px dashed currentColor"
-            onmouseenter="showCustoMedTip(event,'${_custoMedLabel}','${escapeHtml(_custoMedFonte)}')"
+            onmouseenter="showCustoMedTip(event,'${_custoMedLabel}','${escapeHtml(_custoMedFonte)}','${_custoMedNivel}')"
             onmousemove="moveCustoMedTip(event)"
             onmouseleave="hideCustoMedTip()"
           >${varSymbol(_rowCustoVar)} ${money(Math.abs(_rowCustoVar))}</span>`

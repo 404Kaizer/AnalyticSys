@@ -183,7 +183,7 @@ function buildDashboardGerencialResults(dtIni, dtFim) {
     allMats.forEach(mat => {
       const codSap = getCodSapPorGrupo(mat);
       custoMedioPorMat[mat] = codSap
-        ? (getCustoMedioCustosSap(central, codSap, _custosSapAno, _custosSapMes, _custosSapIdx) ?? 0)
+        ? (getCustoMedioCustosSap(central, codSap, _custosSapAno, _custosSapMes, _custosSapIdx)?.valor ?? 0)
         : 0;
     });
 
