@@ -2425,7 +2425,7 @@ window.gerarRelatorioGeralOcorrencias = function() {
   // ── mapeamento central → regional via state.filiais ──────────────────────────
   const centralParaRegional = {};
   (state.filiais || []).forEach(f => {
-    const key = (f.alias || f.origem || '').trim().toLowerCase();
+    const key = (f.origem || f.alias || '').trim().toLowerCase();
     if (key) centralParaRegional[key] = (f.regional || '').trim() || 'Sem Regional';
   });
   function getRegional(central) {
@@ -2727,7 +2727,7 @@ window.gerarRelatorioDAIs = function() {
 
   const centralParaRegional = {};
   (state.filiais || []).forEach(f => {
-    const key = (f.alias || f.origem || '').trim().toLowerCase();
+    const key = (f.origem || f.alias || '').trim().toLowerCase();
     if (key) centralParaRegional[key] = (f.regional || '').trim() || 'Sem Regional';
   });
   function getRegional(central) {
@@ -4228,7 +4228,7 @@ window.gerarRelatorioCobrancaRegional = function(regionalFiltro) {
   // ── mapeamento central → regional ────────────────────────────────────────────
   const centralParaRegional = {};
   (state.filiais || []).forEach(f => {
-    const key = (f.alias || f.origem || '').trim().toLowerCase();
+    const key = (f.origem || f.alias || '').trim().toLowerCase();
     if (key) centralParaRegional[key] = (f.regional || '').trim() || 'Sem Regional';
   });
   function getRegional(central) {
@@ -4496,7 +4496,7 @@ window.abrirSeletorRegionalOcorrencias = function() {
   const nowISO = new Date().toISOString().split('T')[0];
   const centralParaRegional = {};
   (state.filiais || []).forEach(f => {
-    const key = (f.alias || f.origem || '').trim().toLowerCase();
+    const key = (f.origem || f.alias || '').trim().toLowerCase();
     if (key) centralParaRegional[key] = (f.regional || '').trim() || 'Sem Regional';
   });
   function getRegional(central) {
@@ -4605,7 +4605,7 @@ window.gerarRelatorioCobrancaCentral = function(centralFiltro) {
   // ── mapeamento central → regional ────────────────────────────────────────────
   const centralParaRegional = {};
   (state.filiais || []).forEach(f => {
-    const key = (f.alias || f.origem || '').trim().toLowerCase();
+    const key = (f.origem || f.alias || '').trim().toLowerCase();
     if (key) centralParaRegional[key] = (f.regional || '').trim() || 'Sem Regional';
   });
   function getRegional(central) {

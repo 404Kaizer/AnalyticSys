@@ -793,7 +793,7 @@ function buildOcKPIs(lista) {
   // Mapeia central → regional via state.filiais
   const _centralToRegional = {};
   (state.filiais || []).forEach(f => {
-    const key = (f.alias || f.origem || '').trim().toLowerCase();
+    const key = (f.origem || f.alias || '').trim().toLowerCase();
     if (key) _centralToRegional[key] = (f.regional || '').trim() || 'Sem Regional';
   });
 
@@ -1460,7 +1460,7 @@ const _ocMicroFilter = {
 function _ocRegionalPorCentral() {
   const map = new Map();
   (state.filiais || []).forEach(f => {
-    const nome = (f.alias || f.origem || '').trim();
+    const nome = (f.origem || f.alias || '').trim();
     const regional = (f.regional || '').trim();
     if (nome && regional) map.set(nome, regional);
   });
