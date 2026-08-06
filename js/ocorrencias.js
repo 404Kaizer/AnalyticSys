@@ -1455,7 +1455,7 @@ const _ocMicroFilter = {
 // Central → Regional (state.filiais) — ocorrências não têm campo regional
 // próprio, só central; pra filtrar por regional precisa resolver via o
 // cadastro de filiais (mesma normalização usada no resto do arquivo:
-// alias || origem, trim). Central sem filial cadastrada (ou sem regional
+// origem || alias, trim). Central sem filial cadastrada (ou sem regional
 // preenchido) cai fora do filtro — não aparece em nenhuma opção.
 function _ocRegionalPorCentral() {
   const map = new Map();
