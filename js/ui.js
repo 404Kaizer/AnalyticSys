@@ -1299,7 +1299,7 @@ const analiticoDetailState = {
 
 window.__analiticoDetailCache = new Map();
 
-function buildAnaliticoDetailBreakdown(entries, total, colorVar, title, localCount = null, mat = '', central = '', fechExcluidos = []) {
+function buildAnaliticoDetailBreakdown(entries, total, colorVar, title, localCount = null, mat = '', central = '', fechExcluidos = [], localTotal = null) {
   if (!entries.length && !(fechExcluidos && fechExcluidos.length)) {
     return `<span class="analitico-detail-empty">—</span>`;
   }
@@ -1318,6 +1318,7 @@ function buildAnaliticoDetailBreakdown(entries, total, colorVar, title, localCou
       data-title="${escapeHtml(title)}"
       data-color="${escapeHtml(colorVar)}"
       data-local-count="${localCount === null ? '' : localCount}"
+      data-local-total="${localTotal === null ? '' : localTotal}"
       data-mat="${escapeHtml(mat)}"
       data-central="${escapeHtml(central)}"
       title="Clique para ver detalhes">
@@ -1569,6 +1570,32 @@ function openBreakdownModal(trigger) {
         <span class="bdm-summary-label">Registros</span>
         <span class="bdm-summary-compare">${registrosHtml}</span>
       </div>${_bdmFechExcluidosHtml(fechExcluidos)}`;
+  }
+
+  // ── Rodapé: comparação entre o TOTAL do SAP (mesmo escopo do modal) e o
+  //    total lançado na página Entradas/Saídas (mesmo material + central +
+  //    período) — dá ao analista uma base pra saber se o volume físico do
+  //    SAP condiz com o que foi de fato emitido/lançado em NF (Entradas) ou
+  //    OS (Saídas). Omitida quando o chamador não tem esse dado (mesmo
+  //    critério do "Registros" acima — ver localCount).
+  const footerCompareEl = document.getElementById('bdm-footer-compare');
+  if (footerCompareEl) {
+    const localTotalRaw = trigger.dataset.localTotal;
+    const localTotal = localTotalRaw === '' || localTotalRaw == null ? null : Number(localTotalRaw);
+    if (localTotal === null) {
+      footerCompareEl.style.display = 'none';
+      footerCompareEl.innerHTML = '';
+    } else {
+      const sapTotal = Math.abs(entries.reduce((sum, [, value]) => sum + value, 0));
+      const diff = sapTotal - localTotal;
+      const bateComLocal = Math.abs(diff) < 0.01;
+      const compareIcon = bateComLocal
+        ? '<i class="ti ti-circle-check" style="color:var(--green)" title="Valores batem"></i>'
+        : '<i class="ti ti-alert-triangle" style="color:var(--amber)" title="Valores divergem"></i>';
+      const diffSign = diff > 0 ? '+' : (diff < 0 ? '−' : '');
+      footerCompareEl.style.display = '';
+      footerCompareEl.innerHTML = `SAP: <b>${fmtKg(sapTotal)}</b> &nbsp;·&nbsp; ${escapeHtml(title)}: <b>${fmtKg(localTotal)}</b> &nbsp;·&nbsp; diferença: <b>${diffSign}${fmtKg(Math.abs(diff))}</b> ${compareIcon}`;
+    }
   }
 
   // ── Pré-computa HTML + texto de busca de cada linha, uma vez ─────────────

@@ -792,17 +792,24 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
       const _entradasDestaCentral = opts.entradasByCentral
         ? (opts.entradasByCentral.get(r.central) || [])
         : (state.entradas || []).filter(e => (e.centralCompra || e.centralDestino || '') === r.central);
-      const localEntCount = _entradasDestaCentral.filter(e => {
+      const _entradasFiltradas = _entradasDestaCentral.filter(e => {
         if (e.material !== mat) return false;
         const d = parseDate(e.dtDescarga || e.dtEmissao);
         return d && d >= start && d <= end;
-      }).length;
+      });
+      const localEntCount = _entradasFiltradas.length;
+      // Total em kg dos mesmos registros — usado na comparação SAP × página
+      // Entradas/Saídas no rodapé do modal de Movimentações (ver
+      // buildAnaliticoDetailBreakdown/openBreakdownModal em ui.js).
+      const localEntTotal = _entradasFiltradas.reduce((sum, e) => sum + num(e.peso), 0);
       const _saidasDestaCentral = _saidasByCentral.get(r.central) || [];
-      const localSaiCount = _saidasDestaCentral.filter(s => {
+      const _saidasFiltradas = _saidasDestaCentral.filter(s => {
         if (s.material !== mat) return false;
         const d = parseDate(s.dtEmissao);
         return d && d >= start && d <= end;
-      }).length;
+      });
+      const localSaiCount = _saidasFiltradas.length;
+      const localSaiTotal = _saidasFiltradas.reduce((sum, s) => sum + num(s.peso), 0);
 
       // Quando AUSENTE: busca os dois lançamentos mais próximos para tooltip informativo
       const absentNearest = preCarry ? null
@@ -1089,8 +1096,8 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
               : (snapshot.pesoIniAusente ? `<span class='absent-badge' data-absent-tooltip='${buildAbsentTooltip(absentNearest)}' style='cursor:help'>AUSENTE</span>` : snapshot.dtIniLabel)
           }</td>
           <td class="td-mono" style="color:${(matSemCadastro || snapshot.pesoIniAusente) ? 'var(--text3)' : 'var(--text)'}">${(matSemCadastro || snapshot.pesoIniAusente) ? '—' : fmtKg(snapshot.pesoIni)}</td>
-          <td>${buildAnaliticoDetailBreakdown(entEntries, snapshot.totalEnt, 'var(--green)', 'Entradas', localEntCount, mat, r.central, _matFechExcluidosEnt)}</td>
-          <td>${buildAnaliticoDetailBreakdown(saiEntries, snapshot.totalSai, 'var(--red)', 'Saídas', localSaiCount, mat, r.central, _matFechExcluidosSai)}</td>
+          <td>${buildAnaliticoDetailBreakdown(entEntries, snapshot.totalEnt, 'var(--green)', 'Entradas', localEntCount, mat, r.central, _matFechExcluidosEnt, localEntTotal)}</td>
+          <td>${buildAnaliticoDetailBreakdown(saiEntries, snapshot.totalSai, 'var(--red)', 'Saídas', localSaiCount, mat, r.central, _matFechExcluidosSai, localSaiTotal)}</td>
           <td class="td-mono" style="color:var(--text2);font-size:11px">${
             snapshot.pesoFimAusente
               ? `<span class='absent-badge' data-absent-tooltip='${buildAbsentTooltip(absentNearest)}' style='cursor:help'>AUSENTE</span>`

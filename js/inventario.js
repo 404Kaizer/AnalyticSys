@@ -967,7 +967,7 @@
     if (!h) { toast('Sistema não iniciado. Aguarde e tente novamente.', 'error'); return; }
     _invHydrateJustificativas();
 
-    const { getLancIndex, getSapIndex, getCustoMedioCustosSap, buildCustosSapIndex, getFilialLookupIndex, normalizeText, parseDate, localISODate, dateCmp, num, state: getState, getCategoriaPorGrupo, getCatKeyDoCadastro, getCodSapPorGrupo, isSapExcluidoPorFechamento, somarPesoCustoSap } = h;
+    const { getLancIndex, getSapIndex, getSaidasIndex, getCustoMedioCustosSap, buildCustosSapIndex, getFilialLookupIndex, normalizeText, parseDate, localISODate, dateCmp, num, state: getState, getCategoriaPorGrupo, getCatKeyDoCadastro, getCodSapPorGrupo, isSapExcluidoPorFechamento, somarPesoCustoSap } = h;
     const state = getState();
     // Custo médio: SÓ Custos SAP (central + Cód SAP + mês calendário do
     // Inventário), sem cascata — mesma fonte/índice da Visão Micro (ver
@@ -999,6 +999,7 @@
 
     const { byCentral: lancByCentral } = getLancIndex();
     const { byCentral: sapByCentral }  = getSapIndex();
+    const { byCentral: saiByCentral }  = getSaidasIndex();
     const fIdx = getFilialLookupIndex();
 
     const allCentrals = new Set([...lancByCentral.keys(), ...sapByCentral.keys()]);
@@ -1073,6 +1074,14 @@
       // do loop de materiais logo abaixo.
       const pendCentral = _invSafeCall('calcPendentesIntegracao', { pendNF: [], pendOS: [] }, { central, dtIni, dtFim, sapNoPeriodo: sapPer });
       const ocsCentral  = ocByCentralNorm.get(normalizeText(central)) || [];
+
+      // ── Entradas/Saídas da página (mesma central) — usadas na comparação
+      // SAP × página no rodapé do modal de Movimentações (ver localEntTotal/
+      // localSaiTotal abaixo e localEntCount/localSaiCount em analitico.js,
+      // mesmo critério). Filtrado por material+período dentro do loop de
+      // materiais logo abaixo.
+      const entradasDestaCentral = (state.entradas || []).filter(e => (e.centralCompra || e.centralDestino || '') === central);
+      const saidasDestaCentral = saiByCentral.get(central) || [];
 
       mats.forEach(mat => {
         const k = mesKey + '|||' + central + '|||' + mat;
@@ -1224,6 +1233,21 @@
           }
         });
 
+        // Totais lançados na página Entradas/Saídas para este material —
+        // mesmo escopo do modal (material + central + período) — usados na
+        // comparação SAP × página no rodapé do modal de Movimentações (ver
+        // localEntTotal/localSaiTotal, mesmo critério de analitico.js).
+        const localEntTotal = entradasDestaCentral.filter(e => {
+          if (e.material !== mat) return false;
+          const d = parseDate(e.dtDescarga || e.dtEmissao);
+          return d && d >= dtIni && d <= dtFim;
+        }).reduce((sum, e) => sum + num(e.peso), 0);
+        const localSaiTotal = saidasDestaCentral.filter(s => {
+          if (s.material !== mat) return false;
+          const d = parseDate(s.dtEmissao);
+          return d && d >= dtIni && d <= dtFim;
+        }).reduce((sum, s) => sum + num(s.peso), 0);
+
         // Custo médio: SÓ Custos SAP (central + Cód SAP + mês calendário do
         // Inventário), sem cascata. 'sem_codigo': material sem Cód SAP
         // cadastrado. 'ausente': tem Cód SAP, mas sem registro em Custos SAP
@@ -1288,7 +1312,7 @@
           estoqueFimReal, estoqueFimMissing, estoqueFimLastKnown,
           estoqueFimFallback, estoqueFimEsperado, estoqueFimUsadoLabel,
           pendEntAplicado, pendSaiAplicado,
-          custoMedio, custoMedioFonte, entEntries, saiEntries, divergencias, divCount,
+          custoMedio, custoMedioFonte, entEntries, saiEntries, localEntTotal, localSaiTotal, divergencias, divCount,
           sapFechExcluidos: sapFechExcluidosByMat.get(mat) || []
         });
       });
@@ -1575,10 +1599,10 @@
       const _rowFechExcluidosEnt = (r.sapFechExcluidos || []).filter(x => _num(x.peso) > 0);
       const _rowFechExcluidosSai = (r.sapFechExcluidos || []).filter(x => _num(x.peso) < 0);
       const entCell = (_bdm
-        ? _bdm(r.entEntries || [], r.entradasKg, 'var(--green)', 'Entradas', null, r.material, r.central, _rowFechExcluidosEnt)
+        ? _bdm(r.entEntries || [], r.entradasKg, 'var(--green)', 'Entradas', null, r.material, r.central, _rowFechExcluidosEnt, r.localEntTotal ?? null)
         : `<span class="td-mono" style="color:var(--green);font-weight:600">${_fmtKg(r.entradasKg)}</span>`) + (r.pendEntAplicado ? pendBadge('NF') : '');
       const saiCell = (_bdm
-        ? _bdm(r.saiEntries || [], r.saidasKg, 'var(--red)', 'Saídas', null, r.material, r.central, _rowFechExcluidosSai)
+        ? _bdm(r.saiEntries || [], r.saidasKg, 'var(--red)', 'Saídas', null, r.material, r.central, _rowFechExcluidosSai, r.localSaiTotal ?? null)
         : `<span class="td-mono" style="color:var(--red);font-weight:600">${_fmtKg(r.saidasKg)}</span>`) + (r.pendSaiAplicado ? pendBadge('OS') : '');
 
       // ── Est. Final: teal igual ao analítico. 3 estados possíveis:

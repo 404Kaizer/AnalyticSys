@@ -3059,6 +3059,11 @@ td.var-cell-zero .ti-circle-check     { color: var(--text3); }
   text-transform: uppercase;
   color: var(--text3);
 }
+.bdm-footer-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
 .bdm-footer-total {
   font-family: var(--mono);
   font-size: 14px;
