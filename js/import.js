@@ -302,6 +302,98 @@ function _criarRegistroCustosSap(dados) {
   return { ok: true, rec };
 }
 
+// Estado do modal "Novo Registro Manual" (aba Custo SAP) quando aberto pra
+// EDITAR um registro existente (ver editarCustosSap, dashboard.js:
+// botão "Editar" da tabela Custos SAP) em vez de criar um novo. Zerado em
+// _custosSapManualPopularSelects (roda toda vez que a aba é aberta, tanto
+// pelo clique direto quanto pelo botão "Adicionar" via setModulo), então
+// abrir o modal pra criar sempre limpa uma edição pendente anterior.
+let _custosSapEditRec = null;
+
+// Atualiza um registro de Custos SAP existente NO LUGAR (mesma referência
+// já presente em state.custosSap — preserva id/createdAt) em vez de criar
+// um novo. Mesma validação de _criarRegistroCustosSap. Marca fonte como
+// 'manual' (mesmo selo de lápis já usado na tabela) — uma vez corrigido à
+// mão, deixa de ser só um dado de importação, mesmo que a origem original
+// tenha sido um arquivo.
+function _atualizarRegistroCustosSap(rec, dados) {
+  if (window.currentUser?.role !== 'admin') return { ok: false, erro: 'Só o administrador pode editar Custos SAP' };
+  const central = dados.central;
+  const material = dados.material;
+  const novoMaterial = normalizarMaterial(material);
+  const novoCentral = normalizarCentral(central);
+  if (!novoMaterial || !novoCentral || !dados.ano || !dados.mes || !num(dados.custo)) {
+    return { ok: false, erro: 'Preencha material, central, ano, mês e custo' };
+  }
+
+  const candidato = {
+    materialOriginal: material, material: novoMaterial,
+    centralOriginal: central, central: novoCentral,
+    ano: dados.ano, mes: dados.mes
+  };
+  if (typeof _fpCustosSap === 'function') {
+    const fpNovo = _fpCustosSap(candidato);
+    const jaExiste = (state.custosSap || []).some(r => r !== rec && _fpCustosSap(r) === fpNovo);
+    if (jaExiste && !confirm('Já existe outro registro de Custos SAP para este material/central neste período. Deseja salvar mesmo assim?')) {
+      return { ok: false, erro: 'Edição cancelada — registro duplicado' };
+    }
+  }
+
+  rec.fonte = 'manual';
+  rec.materialOriginal = material;
+  rec.material = novoMaterial;
+  rec.centralOriginal = central;
+  rec.central = novoCentral;
+  rec.ano = dados.ano;
+  rec.mes = dados.mes;
+  rec.estoqueTotal = num(dados.estoqueTotal);
+  rec.valorTotal = num(dados.valorTotal);
+  rec.custo = num(dados.custo);
+
+  persist();
+  if (typeof _custosSapSyncUpsert === 'function') _custosSapSyncUpsert(rec);
+  return { ok: true, rec };
+}
+
+// Abre o modal "Novo Registro Manual" já na aba Custo SAP, preenchido com
+// os valores do registro `absIndex` (mesmo índice usado por
+// excluirCustosSap — posição em getFilteredData('custosSap'), não em
+// state.custosSap direto). Chamado pelo botão "Editar" da tabela Custos
+// SAP (dashboard.js, admin only).
+function editarCustosSap(absIndex) {
+  if (window.currentUser?.role !== 'admin') { toast('Só o administrador pode editar Custos SAP', 'error'); return; }
+  const filtered = getFilteredData('custosSap');
+  const rec = filtered[absIndex];
+  if (!rec) return;
+
+  openModal('modal-manual');
+  setModulo('Custo SAP'); // popula os selects e zera _custosSapEditRec
+
+  const materialSel = document.getElementById('csm-material');
+  // csm-material.value precisa do código LIMPO (normalizarCodSap), não de
+  // rec.material cru — rec.material foi gravado via normalizarMaterial()
+  // (normalizador de NOME, não de código) na criação manual, ou direto do
+  // Excel na importação; nenhum dos dois garante o mesmo formato limpo
+  // (sem zero à esquerda / sem ".0") que as <option value> do select usam
+  // (getGrupoSapPorCodigoIndex, chaveado por normalizarCodSap(m.codSap) —
+  // mesma normalização que _custosSapResolveMaterial já aplica em
+  // dashboard.js pra resolver esse campo em qualquer outro lugar da
+  // tabela). Sem isso, o select abriria sem nada selecionado.
+  if (materialSel) materialSel.value = normalizarCodSap(rec.material);
+  const centralSel = document.getElementById('csm-central');
+  if (centralSel) centralSel.value = rec.central || '';
+  const dataInput = document.getElementById('csm-data');
+  if (dataInput) dataInput.value = (rec.ano && rec.mes) ? `${rec.ano}-${String(rec.mes).padStart(2, '0')}` : '';
+  const estoqueInput = document.getElementById('csm-estoque-total');
+  if (estoqueInput) estoqueInput.value = rec.estoqueTotal ?? '';
+  const valorInput = document.getElementById('csm-valor-total');
+  if (valorInput) valorInput.value = rec.valorTotal ?? '';
+  const custoInput = document.getElementById('csm-custo');
+  if (custoInput) custoInput.value = rec.custo ?? '';
+
+  _custosSapEditRec = rec;
+}
+
 // Opções de <select> de Central por Sigla (filiais.alias) — usado por todas
 // as abas do modal "Novo Registro Manual" que têm campo Central (Entrada,
 // Saída, Lançamento, SAP, Custo SAP).
@@ -323,6 +415,12 @@ function _buildCentralOptionsHtml(placeholder) {
 // aqui é por CÓDIGO (não por nome) — diferente das outras abas — porque é
 // isso que o registro de Custos SAP guarda de verdade (ver dashboard.js).
 function _custosSapManualPopularSelects() {
+  // Roda toda vez que a aba Custo SAP é aberta — inclusive pelo botão
+  // "Adicionar" (setModulo('Custo SAP')) — então zera aqui qualquer edição
+  // pendente de uma abertura anterior via editarCustosSap. editarCustosSap
+  // seta _custosSapEditRec DEPOIS de chamar setModulo (que dispara esta
+  // função), então essa linha nunca apaga a edição que ele acabou de abrir.
+  _custosSapEditRec = null;
   const selMaterial = document.getElementById('csm-material');
   if (selMaterial) {
     const porCodigo = [...getGrupoSapPorCodigoIndex().entries()]
@@ -391,7 +489,7 @@ function _onManualMaterialChange(materialSel) {
 // próprio input — sem dia).
 function salvarCustosSapManual() {
   const [ano, mesComZero] = val('csm-data').split('-');
-  const resultado = _criarRegistroCustosSap({
+  const dados = {
     material:     val('csm-material'),
     central:      val('csm-central'),
     ano:          ano || '',
@@ -399,7 +497,22 @@ function salvarCustosSapManual() {
     estoqueTotal: val('csm-estoque-total'),
     valorTotal:   val('csm-valor-total'),
     custo:        val('csm-custo'),
-  });
+  };
+
+  // Editando um registro existente (aberto via editarCustosSap) em vez de
+  // criar um novo — mesmo formulário, ramo diferente.
+  if (_custosSapEditRec) {
+    const resultado = _atualizarRegistroCustosSap(_custosSapEditRec, dados);
+    if (!resultado.ok) { toast(resultado.erro, 'error'); return; }
+    _custosSapEditRec = null;
+    closeModal('modal-manual');
+    renderCustosSap();
+    updateDashboard();
+    toast('Registro de Custos SAP atualizado com sucesso');
+    return;
+  }
+
+  const resultado = _criarRegistroCustosSap(dados);
   if (!resultado.ok) { toast(resultado.erro, 'error'); return; }
   closeModal('modal-manual');
   renderCustosSap();

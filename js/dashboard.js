@@ -4206,6 +4206,36 @@ function toggleFiltroCustosSapSemCadastro(btn) {
   if (btn) btn.classList.toggle('btn-primary', !jaAtivo);
 }
 
+// Preço de referência por material (mediana de custo > 0 entre TODOS os
+// registros daquele material, todas as centrais/meses) — usado só pra
+// avisar "isso foge do padrão", sem tentar explicar a causa (estoque
+// final muito baixo distorce o Preço Médio Móvel do SAP — valorTotal/
+// estoqueTotal —, mas não é a única causa possível de um valor errado;
+// decisão do Hugo: comparar contra o padrão do material, sem modelar o
+// motivo). Agrupa por normalizarCodSap(r.material), mesma chave de
+// buildCustosSapIndex (normalize.js) — "material" aqui já é o Cód SAP,
+// não o nome (ver _custosSapResolveMaterial, acima).
+const CUSTOS_SAP_OUTLIER_MIN_AMOSTRAS = 4; // precisa de pelo menos isso pra confiar na mediana
+const CUSTOS_SAP_OUTLIER_LIMITE = 3;       // custo > 3x a mediana do material = alerta
+function _custosSapOutlierInfo(records) {
+  const porMat = new Map(); // codNorm -> [custos válidos]
+  records.forEach(r => {
+    const c = num(r.custo);
+    if (c <= 0) return;
+    const cod = normalizarCodSap(r.material);
+    if (!porMat.has(cod)) porMat.set(cod, []);
+    porMat.get(cod).push(c);
+  });
+  const medianas = new Map();
+  porMat.forEach((custos, cod) => {
+    if (custos.length < CUSTOS_SAP_OUTLIER_MIN_AMOSTRAS) return;
+    const ord = [...custos].sort((a, b) => a - b);
+    const mid = Math.floor(ord.length / 2);
+    medianas.set(cod, ord.length % 2 ? ord[mid] : (ord[mid - 1] + ord[mid]) / 2);
+  });
+  return medianas; // cod -> mediana (só materiais com amostra suficiente)
+}
+
 function renderCustosSap() {
   const tb = document.getElementById('tb-custos-sap');
   if (!tb) return;
@@ -4245,11 +4275,19 @@ function renderCustosSap() {
     return;
   }
 
+  const _medianas = _custosSapOutlierInfo(state.custosSap);
+
   tb.innerHTML = pageData.map((r, i) => {
     const grupoSap = _custosSapResolveMaterial(r);
     const materialCellHtml = grupoSap === 'SEM CADASTRO'
       ? '<span class="badge badge-red"><i class="ti ti-alert-triangle" style="font-size:10px"></i> SEM CADASTRO</span>'
       : (grupoSap ? escapeHtml(grupoSap) : '—');
+    const mediana = _medianas.get(normalizarCodSap(r.material));
+    const isOutlier = mediana && num(r.custo) > mediana * CUSTOS_SAP_OUTLIER_LIMITE;
+    const custoOutlierBadge = isOutlier
+      ? `<span class="badge badge-amber" style="margin-left:4px" title="Custo muito acima do padrão desse material (mediana entre outras centrais/meses: ${money(mediana, 4)}/kg) — considere revisar"><i class="ti ti-alert-triangle" style="font-size:10px"></i></span>`
+      : '';
+    const absIndex = currentPageCustosSap * PAGE_SIZE + i;
     return `
     <tr>
       <td class="td-mono">${r.fonte === 'manual' ? '<span class="badge-manual" title="Registro inserido manualmente"><i class="ti ti-pencil"></i></span>' : ''}${materialCellHtml}</td>
@@ -4259,8 +4297,8 @@ function renderCustosSap() {
       <td class="td-mono">${r.mes || '—'}</td>
       <td class="td-mono" style="color:var(--teal)">${num(r.estoqueTotal).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
       <td class="td-mono" style="color:#f59e0b">${money(r.valorTotal)}</td>
-      <td class="td-mono">${money(r.custo, 4)}</td>
-      <td>${window.currentUser?.role === 'admin' ? `<button class="btn-icon danger" onclick="excluirCustosSap(${currentPageCustosSap * PAGE_SIZE + i})"><i class="ti ti-trash"></i></button>` : ''}</td>
+      <td class="td-mono">${money(r.custo, 4)}${custoOutlierBadge}</td>
+      <td>${window.currentUser?.role === 'admin' ? `<button class="btn-icon" onclick="editarCustosSap(${absIndex})" title="Editar"><i class="ti ti-pencil"></i></button><button class="btn-icon danger" onclick="excluirCustosSap(${absIndex})"><i class="ti ti-trash"></i></button>` : ''}</td>
     </tr>`;
   }).join('');
   makeResizable(tb.closest('table'));
