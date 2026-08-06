@@ -1572,14 +1572,15 @@ function openBreakdownModal(trigger) {
       </div>${_bdmFechExcluidosHtml(fechExcluidos)}`;
   }
 
-  // ── Rodapé: comparação entre o TOTAL do SAP (já exibido à direita, rótulo
-  //    "Total SAP" abaixo) e o total lançado na página Entradas/Saídas
-  //    (mesmo material + central + período) — dá ao analista uma base pra
-  //    saber se o volume físico do SAP condiz com o que foi de fato
-  //    emitido/lançado em NF (Entradas) ou OS (Saídas). Omitida quando o
-  //    chamador não tem esse dado (mesmo critério do "Registros" acima —
-  //    ver localCount). Não repete o total do SAP aqui — ele já está no
-  //    valor à direita — só o total local e a diferença entre os dois.
+  // ── Rodapé: comparação entre o total lançado na página Entradas/Saídas
+  //    (mesmo material + central + período) e o TOTAL do SAP — dá ao
+  //    analista uma base pra saber se o volume físico do SAP condiz com o
+  //    que foi de fato emitido/lançado em NF (Entradas) ou OS (Saídas).
+  //    Ordem fixa: Entradas/Saídas → SAP → diferença. Quando presente,
+  //    substitui o par label+total padrão do rodapé (ver hasLocalTotal em
+  //    renderRows, abaixo) — mostra os 3 valores numa linha só, em vez de
+  //    repetir o total do SAP duas vezes. Omitida quando o chamador não tem
+  //    esse dado (mesmo critério do "Registros" acima — ver localCount).
   const footerCompareEl = document.getElementById('bdm-footer-compare');
   let hasLocalTotal = false;
   if (footerCompareEl) {
@@ -1605,7 +1606,10 @@ function openBreakdownModal(trigger) {
           : `<i class="ti ti-alert-circle" style="color:var(--red)" title="Divergência de ${diffPct.toFixed(1)}%"></i>`;
       const diffSign = diff > 0 ? '+' : (diff < 0 ? '−' : '');
       footerCompareEl.style.display = '';
-      footerCompareEl.innerHTML = `${escapeHtml(title)}: <b>${fmtKg(localTotal)}</b> &nbsp;·&nbsp; diferença: <b style="color:${diffColor}">${diffSign}${fmtKg(Math.abs(diff))}</b> ${compareIcon}`;
+      // Ordem pedida pelo Hugo (06/08): Entradas/Saídas (página) → SAP →
+      // diferença. Substitui o par label+total padrão do rodapé (ver
+      // renderRows abaixo) — evita repetir o total do SAP duas vezes.
+      footerCompareEl.innerHTML = `${escapeHtml(title)}: <b>${fmtKg(localTotal)}</b> &nbsp;·&nbsp; SAP: <b style="color:${colorVar}">${fmtKg(sapTotal)}</b> &nbsp;·&nbsp; diferença: <b style="color:${diffColor}">${diffSign}${fmtKg(Math.abs(diff))}</b> ${compareIcon}`;
     }
   }
 
@@ -1694,6 +1698,15 @@ function openBreakdownModal(trigger) {
            Nenhum registro encontrado${t ? ` para "${escapeHtml(term.trim())}"` : ''}
          </td></tr>`;
 
+    // Quando há comparação SAP × página (hasLocalTotal), o rodapé mostra só
+    // a linha organizada Entradas/Saídas → SAP → diferença (footerCompareEl,
+    // computada uma vez acima com o TOTAL cheio do período — não muda com a
+    // busca, mesmo critério do resumo "Registros"). O par label+total padrão
+    // fica escondido pra não repetir o total do SAP uma segunda vez.
+    totalEl.style.display = hasLocalTotal ? 'none' : '';
+    if (labelEl) labelEl.style.display = hasLocalTotal ? 'none' : '';
+    if (hasLocalTotal) return;
+
     const subtotal = filtered.reduce((sum, r) => sum + r.value, 0);
     const totalIcon = subtotal >= 0
       ? '<i class="ti ti-circle-arrow-up" title="Sobra" style="font-size:12px;vertical-align:middle;margin-right:3px"></i>'
@@ -1701,10 +1714,9 @@ function openBreakdownModal(trigger) {
     totalEl.innerHTML = totalIcon + fmtKg(Math.abs(subtotal));
     totalEl.style.color = colorVar;
     if (labelEl) {
-      const totalLabel = hasLocalTotal ? 'Total SAP' : 'Total';
       labelEl.textContent = t
-        ? `${totalLabel} (${filtered.length} filtrado${filtered.length === 1 ? '' : 's'})`
-        : totalLabel;
+        ? `Total (${filtered.length} filtrado${filtered.length === 1 ? '' : 's'})`
+        : 'Total';
     }
   }
 
