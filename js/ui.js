@@ -1572,13 +1572,16 @@ function openBreakdownModal(trigger) {
       </div>${_bdmFechExcluidosHtml(fechExcluidos)}`;
   }
 
-  // ── Rodapé: comparação entre o TOTAL do SAP (mesmo escopo do modal) e o
-  //    total lançado na página Entradas/Saídas (mesmo material + central +
-  //    período) — dá ao analista uma base pra saber se o volume físico do
-  //    SAP condiz com o que foi de fato emitido/lançado em NF (Entradas) ou
-  //    OS (Saídas). Omitida quando o chamador não tem esse dado (mesmo
-  //    critério do "Registros" acima — ver localCount).
+  // ── Rodapé: comparação entre o TOTAL do SAP (já exibido à direita, rótulo
+  //    "Total SAP" abaixo) e o total lançado na página Entradas/Saídas
+  //    (mesmo material + central + período) — dá ao analista uma base pra
+  //    saber se o volume físico do SAP condiz com o que foi de fato
+  //    emitido/lançado em NF (Entradas) ou OS (Saídas). Omitida quando o
+  //    chamador não tem esse dado (mesmo critério do "Registros" acima —
+  //    ver localCount). Não repete o total do SAP aqui — ele já está no
+  //    valor à direita — só o total local e a diferença entre os dois.
   const footerCompareEl = document.getElementById('bdm-footer-compare');
+  let hasLocalTotal = false;
   if (footerCompareEl) {
     const localTotalRaw = trigger.dataset.localTotal;
     const localTotal = localTotalRaw === '' || localTotalRaw == null ? null : Number(localTotalRaw);
@@ -1586,15 +1589,23 @@ function openBreakdownModal(trigger) {
       footerCompareEl.style.display = 'none';
       footerCompareEl.innerHTML = '';
     } else {
+      hasLocalTotal = true;
       const sapTotal = Math.abs(entries.reduce((sum, [, value]) => sum + value, 0));
       const diff = sapTotal - localTotal;
-      const bateComLocal = Math.abs(diff) < 0.01;
-      const compareIcon = bateComLocal
+      const diffPct = sapTotal !== 0 ? (Math.abs(diff) / sapTotal) * 100 : (localTotal !== 0 ? 100 : 0);
+      // Severidade da divergência: <1% bate (verde), <15% atenção (âmbar),
+      // demais é discrepância grande (vermelho) — mesma paleta de status
+      // usada em outros badges do sistema (ti-circle-check/alert-triangle/
+      // alert-circle em verde/âmbar/vermelho).
+      const diffColor = diffPct < 1 ? 'var(--green)' : (diffPct < 15 ? 'var(--amber)' : 'var(--red)');
+      const compareIcon = diffPct < 1
         ? '<i class="ti ti-circle-check" style="color:var(--green)" title="Valores batem"></i>'
-        : '<i class="ti ti-alert-triangle" style="color:var(--amber)" title="Valores divergem"></i>';
+        : diffPct < 15
+          ? `<i class="ti ti-alert-triangle" style="color:var(--amber)" title="Divergência de ${diffPct.toFixed(1)}%"></i>`
+          : `<i class="ti ti-alert-circle" style="color:var(--red)" title="Divergência de ${diffPct.toFixed(1)}%"></i>`;
       const diffSign = diff > 0 ? '+' : (diff < 0 ? '−' : '');
       footerCompareEl.style.display = '';
-      footerCompareEl.innerHTML = `SAP: <b>${fmtKg(sapTotal)}</b> &nbsp;·&nbsp; ${escapeHtml(title)}: <b>${fmtKg(localTotal)}</b> &nbsp;·&nbsp; diferença: <b>${diffSign}${fmtKg(Math.abs(diff))}</b> ${compareIcon}`;
+      footerCompareEl.innerHTML = `${escapeHtml(title)}: <b>${fmtKg(localTotal)}</b> &nbsp;·&nbsp; diferença: <b style="color:${diffColor}">${diffSign}${fmtKg(Math.abs(diff))}</b> ${compareIcon}`;
     }
   }
 
@@ -1690,9 +1701,10 @@ function openBreakdownModal(trigger) {
     totalEl.innerHTML = totalIcon + fmtKg(Math.abs(subtotal));
     totalEl.style.color = colorVar;
     if (labelEl) {
+      const totalLabel = hasLocalTotal ? 'Total SAP' : 'Total';
       labelEl.textContent = t
-        ? `Total (${filtered.length} filtrado${filtered.length === 1 ? '' : 's'})`
-        : 'Total';
+        ? `${totalLabel} (${filtered.length} filtrado${filtered.length === 1 ? '' : 's'})`
+        : totalLabel;
     }
   }
 
