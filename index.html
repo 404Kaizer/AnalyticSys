@@ -2026,13 +2026,16 @@
             </div>
           </div>
 
-          <!-- Filtro "Ausência de Estoque" — dropdown de seleção única
-               (Todos / Só Est. Inicial Ausente / Só Est. Final Ausente /
-               Sem Ausência). Substitui os antigos dois botões separados. -->
+          <!-- Filtro "Ausência" — dropdown de seleção única, sobre qualquer
+               tipo de ausência da linha (Todos / Só Est. Inicial Ausente /
+               Só Est. Final Ausente / Só Custo Médio Ausente / Sem
+               Ausência). Custo Médio Ausente cobre tanto material sem Cód
+               SAP cadastrado quanto Cód SAP sem custo em Custos SAP pro
+               central/mês (ver _invCustoAusente em inventario.js). -->
           <div class="micro-filter-group" id="imfg-ausencia">
-            <button class="micro-filter-trigger" id="imft-ausencia" onclick="invToggleAusenciaDropdown()" title="Filtra por ausência de Estoque Inicial/Final">
+            <button class="micro-filter-trigger" id="imft-ausencia" onclick="invToggleAusenciaDropdown()" title="Filtra por qualquer tipo de ausência da linha: Estoque Inicial, Estoque Final ou Custo Médio">
               <i class="ti ti-alert-triangle" id="imft-ausencia-icon"></i>
-              <span id="imft-ausencia-label">Ausência de Estoque</span>
+              <span id="imft-ausencia-label">Ausência</span>
               <i class="ti ti-chevron-down micro-filter-chev" id="imfc-ausencia"></i>
             </button>
             <div class="micro-filter-dropdown" id="imfd-ausencia">
@@ -2047,6 +2050,10 @@
                 </div>
                 <div class="micro-filter-option micro-filter-option--radio" data-val="fim" onclick="invSetAusencia('fim')">
                   <span class="micro-filter-option-label">Só Est. Final Ausente</span>
+                  <i class="ti ti-check micro-filter-option-check"></i>
+                </div>
+                <div class="micro-filter-option micro-filter-option--radio" data-val="custo" onclick="invSetAusencia('custo')">
+                  <span class="micro-filter-option-label">Só Custo Médio Ausente</span>
                   <i class="ti ti-check micro-filter-option-check"></i>
                 </div>
                 <div class="micro-filter-option micro-filter-option--radio" data-val="sem" onclick="invSetAusencia('sem')">

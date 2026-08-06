@@ -976,7 +976,7 @@ const ADMIN_ALERT_PRESETS = {
   reuniao: { label: 'Reunião', icon: 'ti-calendar-event', color: 'var(--accent)', bg: 'var(--accent-dim)', border: 'var(--accent)', text: 'Teremos uma reunião em breve. Fique atento ao horário e não deixe de participar.' },
   metas_semanal: { label: 'Metas · Semanal', icon: 'ti-target-arrow', color: 'var(--amber)', bg: 'var(--amber-bg)', border: 'var(--amber)', text: 'Lembrete semanal: analistas, cobrem dos operadores dos seus grupos as aferições e o lançamento dos estoques das usinas no sistema.' },
   metas_mensal: { label: 'Metas · Mensal', icon: 'ti-report-money', color: 'var(--red)', bg: 'var(--red-bg)', border: 'var(--red)', text: 'Fechamento mensal: analistas, cobrem dos operadores dos seus grupos as aferições e o lançamento dos estoques das usinas no sistema até o fechamento.' },
-  atualizacao: { label: 'Atualização do Sistema', icon: 'ti-refresh', color: 'var(--purple)', bg: 'var(--purple-bg)', border: 'var(--purple)', text: 'O sistema está em atualização agora. Salve o que estiver fazendo imediatamente e evite novos lançamentos até o aviso de conclusão.' },
+  atualizacao: { label: 'Atualização do Sistema', icon: 'ti-refresh', color: 'var(--purple)', bg: 'var(--purple-bg)', border: 'var(--purple)', text: 'O sistema está em atualização agora. Salve o que estiver fazendo imediatamente e evite novos lançamentos até o aviso de conclusão. ATUALIZE A PÁGINA COM: CTRL + SHIFT + R' },
   comunicado: { label: 'Comunicado Geral', icon: 'ti-info-circle', color: 'var(--green)', bg: 'var(--green-bg)', border: 'var(--green)', text: 'Comunicado importante: ' },
 };
 

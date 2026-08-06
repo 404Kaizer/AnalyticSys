@@ -158,12 +158,13 @@
     // _invMatchesMargem.
     margemMin: null,
     margemMax: null,
-    // Toggle único de 3 estados (um só botão, não dois): false (desligado)
-    // -> 'ini' (só linhas com Est. Inicial AUSENTE) -> 'fim' (só linhas com
-    // Est. Final AUSENTE) -> 'sem' (só linhas SEM nenhuma ausência — Inicial
-    // e Final ambos preenchidos) -> volta pra false. Mesmo flag usado nas
+    // Dropdown de seleção única sobre QUALQUER tipo de ausência da linha,
+    // não só Estoque: false (Todos) -> 'ini' (só Est. Inicial AUSENTE) ->
+    // 'fim' (só Est. Final AUSENTE) -> 'custo' (só Custo Médio AUSENTE —
+    // ver _invCustoAusente) -> 'sem' (só linhas SEM nenhuma ausência,
+    // nenhum dos três acima) -> volta pra false. Mesmos flags usados nas
     // células da tabela e nos badges dos cards (estoqueIniMissing/
-    // estoqueFimMissing).
+    // estoqueFimMissing/custoMedioSap).
     ausencia: false,
     // Filtro "Justificativa" — dropdown de seleção única com base no MESMO
     // estado do botão Justificar de cada linha (_invEstadoDaLinha): false
@@ -188,6 +189,15 @@
 
   const _invFilterKeyLabels = { regional: 'Regional', central: 'Central', categoria: 'Categoria', material: 'Material' };
 
+  // Custo Médio "ausente" pro filtro/dropdown de Ausência — MESMA condição
+  // que já decide o badge AUSENTE/SEM CÓD SAP nas colunas de custo da
+  // tabela (custoMedCell etc.): cobre tanto material sem Cód SAP cadastrado
+  // ('sem_codigo') quanto Cód SAP sem custo em Custos SAP pro central/mês
+  // ('ausente') — tratados como um só tipo de ausência, sem distinção.
+  function _invCustoAusente(r) {
+    return !(r.custoMedioSap > 0);
+  }
+
   // Linhas-base para calcular as opções de um filtro: considera TODOS os
   // demais filtros JÁ APLICADOS (dropdowns Regional/Central/Categoria/
   // Material, exceto o da própria chave, + os toggles Margem, Início/Fim
@@ -205,7 +215,8 @@
       if (!_invMatchesMargem(r)) return false;
       if (_invFilter.ausencia === 'ini' && !r.estoqueIniMissing) return false;
       if (_invFilter.ausencia === 'fim' && !r.estoqueFimMissing) return false;
-      if (_invFilter.ausencia === 'sem' && (r.estoqueIniMissing || r.estoqueFimMissing)) return false;
+      if (_invFilter.ausencia === 'custo' && !_invCustoAusente(r)) return false;
+      if (_invFilter.ausencia === 'sem' && (r.estoqueIniMissing || r.estoqueFimMissing || _invCustoAusente(r))) return false;
       if (!_invMatchesJustificativa(r)) return false;
       if (_invFilter.onlyDivergencias === 'com' && !(r.divCount > 0)) return false;
       if (_invFilter.onlyDivergencias === 'sem' && !(r.divCount === 0)) return false;
@@ -413,10 +424,11 @@
     invAtualizarAlertas();
   };
 
-  // Filtro "Ausência de Estoque" — dropdown com 4 opções (Todos / Só Est.
-  // Inicial Ausente / Só Est. Final Ausente / Sem Ausência). Substituiu o
-  // antigo botão de toggle alternado (cicla às cegas) por um dropdown, no
-  // mesmo padrão dos filtros Regional/Central/Categoria/Material.
+  // Filtro "Ausência" — dropdown com 5 opções (Todos / Só Est. Inicial
+  // Ausente / Só Est. Final Ausente / Só Custo Médio Ausente / Sem
+  // Ausência). Cobre qualquer tipo de ausência da linha, não só Estoque.
+  // Substituiu o antigo botão de toggle alternado (cicla às cegas) por um
+  // dropdown, no mesmo padrão dos filtros Regional/Central/Categoria/Material.
   window.invToggleAusenciaDropdown = function() {
     _invCloseOtherSimpleDropdowns('ausencia');
     const dd = document.getElementById('imfd-ausencia');
@@ -536,14 +548,15 @@
     btn.classList.toggle('active', st !== false);
     btn.classList.toggle('inv-div-sem', st === 'sem');
     const label = document.getElementById('imft-ausencia-label');
-    const shortLabels = { ini: 'Est. Inicial Ausente', fim: 'Est. Final Ausente', sem: 'Sem Ausência' };
-    if (label) label.textContent = st ? `Ausência: ${shortLabels[st]}` : 'Ausência de Estoque';
+    const shortLabels = { ini: 'Est. Inicial Ausente', fim: 'Est. Final Ausente', custo: 'Custo Médio Ausente', sem: 'Sem Ausência' };
+    if (label) label.textContent = st ? `Ausência: ${shortLabels[st]}` : 'Ausência';
     const titles = {
       ini: 'Mostra só linhas com Est. Inicial AUSENTE',
       fim: 'Mostra só linhas com Est. Final AUSENTE',
-      sem: 'Mostra só linhas SEM nenhuma ausência (Est. Inicial e Final preenchidos)'
+      custo: 'Mostra só linhas com Custo Médio AUSENTE (sem Cód SAP cadastrado ou sem custo em Custos SAP pro central/mês)',
+      sem: 'Mostra só linhas SEM nenhuma ausência (Est. Inicial, Est. Final e Custo Médio todos preenchidos)'
     };
-    btn.title = titles[st] || 'Filtra por ausência de Estoque Inicial/Final';
+    btn.title = titles[st] || 'Filtra por qualquer tipo de ausência da linha: Estoque Inicial, Estoque Final ou Custo Médio';
     const icon = document.getElementById('imft-ausencia-icon');
     if (icon) icon.style.color = st === 'sem' ? 'var(--green, #10b981)' : '';
     // Marca a opção ativa dentro do dropdown
@@ -1430,7 +1443,8 @@
     if (!_invMatchesMargem(r)) return false;
     if (_invFilter.ausencia === 'ini' && !r.estoqueIniMissing) return false;
     if (_invFilter.ausencia === 'fim' && !r.estoqueFimMissing) return false;
-    if (_invFilter.ausencia === 'sem' && (r.estoqueIniMissing || r.estoqueFimMissing)) return false;
+    if (_invFilter.ausencia === 'custo' && !_invCustoAusente(r)) return false;
+    if (_invFilter.ausencia === 'sem' && (r.estoqueIniMissing || r.estoqueFimMissing || _invCustoAusente(r))) return false;
     return true;
   }
 
