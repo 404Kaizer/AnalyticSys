@@ -781,17 +781,17 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
       // Mesmo escopo do modal de Movimentações SAP (este material + esta
       // central + este período) — permite comparar "quantos registros
       // existem no SAP" vs "quantos existem cadastrados localmente".
-      // Prioridade de central igual à de calcPendentesIntegracao (ui.js):
-      // centralCompra primeiro, fallback centralDestino — evita que NF de
-      // transferência conte na central errada.
-      // Reaproveita o pré-agrupamento por central já usado por
-      // buildPendIntegSection (opts.entradasByCentral, ver item 4 /
-      // renderAnaliticoMicro) e o índice _saidasByCentral já mantido em
-      // ui.js — em vez de varrer state.entradas/state.saidas inteiros a
-      // cada material de cada central.
-      const _entradasDestaCentral = opts.entradasByCentral
-        ? (opts.entradasByCentral.get(r.central) || [])
-        : (state.entradas || []).filter(e => (e.centralCompra || e.centralDestino || '') === r.central);
+      // Prioridade de central para Entradas: centralDestino primeiro,
+      // fallback centralCompra (a pedido do Hugo, 06/08) — INVERSA da usada
+      // por calcPendentesIntegracao/NFs Pendentes (ui.js), por isso usa o
+      // índice dedicado opts.entradasByCentralDestino em vez do
+      // opts.entradasByCentral compartilhado com aquela feature.
+      // Reaproveita o pré-agrupamento por central (ver renderAnaliticoMicro)
+      // e o índice _saidasByCentral já mantido em ui.js — em vez de varrer
+      // state.entradas/state.saidas inteiros a cada material de cada central.
+      const _entradasDestaCentral = opts.entradasByCentralDestino
+        ? (opts.entradasByCentralDestino.get(r.central) || [])
+        : (state.entradas || []).filter(e => (e.centralDestino || e.centralCompra || '') === r.central);
       const _entradasFiltradas = _entradasDestaCentral.filter(e => {
         if (e.material !== mat) return false;
         const d = parseDate(e.dtDescarga || e.dtEmissao);
@@ -1731,8 +1731,22 @@ function renderAnaliticoMicro(results, dtIni, dtFim, silent) {
     _entradasByCentralMicro.get(c).push(e);
   });
 
+  // Segundo agrupamento, SÓ para a comparação SAP × página no rodapé do
+  // modal de Movimentações (ver localEntTotal/localEntCount em
+  // buildCentralCard) — prioridade INVERSA da acima (centralDestino
+  // primeiro, fallback centralCompra), a pedido do Hugo (06/08). Não dá
+  // pra reaproveitar _entradasByCentralMicro porque aquele índice também
+  // alimenta buildPendIntegSection/NFs Pendentes, que continua usando a
+  // prioridade original.
+  const _entradasByCentralMicroDestino = new Map();
+  (state.entradas || []).forEach(e => {
+    const c = e.centralDestino || e.centralCompra || '';
+    if (!_entradasByCentralMicroDestino.has(c)) _entradasByCentralMicroDestino.set(c, []);
+    _entradasByCentralMicroDestino.get(c).push(e);
+  });
+
   results.forEach((r, idx) => {
-    _cardBuffer.push(buildCentralCard(r, idx, dtIni, dtFim, { entradasByCentral: _entradasByCentralMicro }));
+    _cardBuffer.push(buildCentralCard(r, idx, dtIni, dtFim, { entradasByCentral: _entradasByCentralMicro, entradasByCentralDestino: _entradasByCentralMicroDestino }));
   });
 
   // ── Group cards by regional ──────────────────────────────────────────────

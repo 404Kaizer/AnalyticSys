@@ -1079,8 +1079,11 @@
       // SAP × página no rodapé do modal de Movimentações (ver localEntTotal/
       // localSaiTotal abaixo e localEntCount/localSaiCount em analitico.js,
       // mesmo critério). Filtrado por material+período dentro do loop de
-      // materiais logo abaixo.
-      const entradasDestaCentral = (state.entradas || []).filter(e => (e.centralCompra || e.centralDestino || '') === central);
+      // materiais logo abaixo. Prioridade de central para Entradas:
+      // centralDestino primeiro, fallback centralCompra (a pedido do Hugo,
+      // 06/08) — INVERSA da usada por calcPendentesIntegracao/NFs Pendentes
+      // (pendCentral acima), que continua com a prioridade original.
+      const entradasDestaCentral = (state.entradas || []).filter(e => (e.centralDestino || e.centralCompra || '') === central);
       const saidasDestaCentral = saiByCentral.get(central) || [];
 
       mats.forEach(mat => {
