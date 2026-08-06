@@ -2053,11 +2053,12 @@ function populateOcFiltros() {
   _ocSyncClearBtn();
   _ocSyncOrdenarBtn();
 
-  // Centrais do cadastro: campo "origem" (código/nome da central) — só pro
+  // Centrais do cadastro: campo "origem" (nome original da central) — só pro
   // formulário de Nova Ocorrência (mCentral abaixo), que continua
   // oferecendo o cadastro completo, diferente do filtro da toolbar acima.
+  // Nome original tem prioridade sobre a sigla (mesmo padrão do DAI).
   const stCentrals  = (state.filiais  || [])
-    .map(f => (f.alias || f.origem || '').trim())
+    .map(f => (f.origem || f.alias || '').trim())
     .filter(Boolean)
     .sort();
   // Materiais do cadastro — 31/07: só o GRUPO (alias), não mais
