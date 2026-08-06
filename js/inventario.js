@@ -1236,17 +1236,19 @@
         // Totais lançados na página Entradas/Saídas para este material —
         // mesmo escopo do modal (material + central + período) — usados na
         // comparação SAP × página no rodapé do modal de Movimentações (ver
-        // localEntTotal/localSaiTotal, mesmo critério de analitico.js).
+        // localEntTotal/localSaiTotal, mesmo critério de analitico.js). Peso
+        // da NF/OS pode vir em TO/M³ (campo `um`) — mesma conversão já usada
+        // pelas pendências de integração SAP acima (_convertNfPesoToKg).
         const localEntTotal = entradasDestaCentral.filter(e => {
           if (e.material !== mat) return false;
           const d = parseDate(e.dtDescarga || e.dtEmissao);
           return d && d >= dtIni && d <= dtFim;
-        }).reduce((sum, e) => sum + num(e.peso), 0);
+        }).reduce((sum, e) => sum + _invSafeCall('_convertNfPesoToKg', 0, e.peso, e.um, e.material), 0);
         const localSaiTotal = saidasDestaCentral.filter(s => {
           if (s.material !== mat) return false;
           const d = parseDate(s.dtEmissao);
           return d && d >= dtIni && d <= dtFim;
-        }).reduce((sum, s) => sum + num(s.peso), 0);
+        }).reduce((sum, s) => sum + _invSafeCall('_convertNfPesoToKg', 0, s.peso, s.um, s.material), 0);
 
         // Custo médio: SÓ Custos SAP (central + Cód SAP + mês calendário do
         // Inventário), sem cascata. 'sem_codigo': material sem Cód SAP

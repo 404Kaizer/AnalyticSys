@@ -800,8 +800,11 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
       const localEntCount = _entradasFiltradas.length;
       // Total em kg dos mesmos registros — usado na comparação SAP × página
       // Entradas/Saídas no rodapé do modal de Movimentações (ver
-      // buildAnaliticoDetailBreakdown/openBreakdownModal em ui.js).
-      const localEntTotal = _entradasFiltradas.reduce((sum, e) => sum + num(e.peso), 0);
+      // buildAnaliticoDetailBreakdown/openBreakdownModal em ui.js). Peso da
+      // NF pode vir em TO/M³ (campo `um`) — mesma conversão usada por
+      // NFs Pendentes (_convertNfPesoToKg, ver ui.js), não é seguro somar
+      // e.peso bruto.
+      const localEntTotal = _entradasFiltradas.reduce((sum, e) => sum + _convertNfPesoToKg(e.peso, e.um, e.material), 0);
       const _saidasDestaCentral = _saidasByCentral.get(r.central) || [];
       const _saidasFiltradas = _saidasDestaCentral.filter(s => {
         if (s.material !== mat) return false;
@@ -809,7 +812,7 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
         return d && d >= start && d <= end;
       });
       const localSaiCount = _saidasFiltradas.length;
-      const localSaiTotal = _saidasFiltradas.reduce((sum, s) => sum + num(s.peso), 0);
+      const localSaiTotal = _saidasFiltradas.reduce((sum, s) => sum + _convertNfPesoToKg(s.peso, s.um, s.material), 0);
 
       // Quando AUSENTE: busca os dois lançamentos mais próximos para tooltip informativo
       const absentNearest = preCarry ? null
