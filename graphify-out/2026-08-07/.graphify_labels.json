@@ -39,10 +39,11 @@
   "37": "getFilteredData",
   "38": "_buildOcHierarquiaBar",
   "39": "renderAnaliticoMicro",
+  "40": "_rankEsc",
   "41": "buildCards",
   "42": "renderModuleByName",
   "43": "renderOcorrencias",
-  "44": "_rankEsc",
+  "44": "_dgrGiroListaHtml",
   "45": "_fechMgrGetTodosCandidatos",
   "46": "help-badges.js",
   "47": "varSymbol",
@@ -110,6 +111,7 @@
   "109": "salvarNovoRegionalCentral",
   "110": "_checarNovosParaImportar",
   "111": "_supaDeleteOwned",
+  "112": "_dgrCapturarComTema",
   "113": "_dgVgRenderChartGrupoMaterial",
   "114": "_custosSapSyncUpsert"
 }
