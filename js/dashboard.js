@@ -3273,6 +3273,16 @@ function _ausInvalidateCache() {
   _ausInvalidateEntSaiIdx();
 }
 
+// Último dia útil do mês (recua domingo → sábado) — mesma regra de
+// getLastPeriodLaunchStockWithFallback (ui.js) para o fechamento mensal.
+// Fim de mês é sempre esperado, mesmo para materiais semanais (Agregado):
+// é quando o estoque do mês precisa fechar, categoria à parte.
+function _ausUltimoDiaUtilMes(ano, mes1) {
+  const d = new Date(ano, mes1, 0); // mes1 (1-indexado) vira "dia 0" do mês seguinte
+  if (d.getDay() === 0) d.setDate(d.getDate() - 1);
+  return d;
+}
+
 // Chamada quando período muda — recalcula tudo e guarda no cache
 function _ausComputar(dtIni, dtFim) {
   _ausInvalidateEntSaiIdx(); // garante índices frescos
@@ -3323,6 +3333,19 @@ function _ausComputar(dtIni, dtFim) {
     while (cur <= fim) { diasPeriodoISO.push(localISODate(cur)); cur.setDate(cur.getDate()+1); }
   }
 
+  // ── Dias de fim de mês (último dia útil) cobertos pelo período — sempre
+  //    esperados, independente da categoria do material (ver _ausUltimoDiaUtilMes) ──
+  const fimDeMesISO = new Set();
+  { const vistos = new Set();
+    diasPeriodoISO.forEach(dk => {
+      const [y, m] = dk.split('-').map(Number);
+      const mk = y + '-' + m;
+      if (vistos.has(mk)) return;
+      vistos.add(mk);
+      fimDeMesISO.add(localISODate(_ausUltimoDiaUtilMes(y, m)));
+    });
+  }
+
   // ── SAP acumulado por dia: Map<normKey, Map<ISO, deltaSAP>> ───────────
   // delta = soma de todos os pesos SAP até e incluindo aquele dia
   // Construído uma única vez para todo o período
@@ -3353,8 +3376,8 @@ function _ausComputar(dtIni, dtFim) {
     const [y,m,d] = dk.split('-').map(Number);
     dowByISO.set(dk, new Date(y, m-1, d).getDay());
   });
-  const esperadosDiario  = diasPeriodoISO.filter(dk => dowByISO.get(dk) !== 0);
-  const esperadosSemanal = diasPeriodoISO.filter(dk => dowByISO.get(dk) === 2);
+  const esperadosDiario  = diasPeriodoISO.filter(dk => dowByISO.get(dk) !== 0 || fimDeMesISO.has(dk));
+  const esperadosSemanal = diasPeriodoISO.filter(dk => dowByISO.get(dk) === 2 || fimDeMesISO.has(dk));
 
   // ── Calcula ausências ─────────────────────────────────────────────────
   const limiteInatividade = new Date(dtIni);
@@ -3438,8 +3461,9 @@ function _ausComputar(dtIni, dtFim) {
       }
 
       // 3. Dia sem lançamento: verifica se é dia esperado (usa dow pré-computado)
+      //    Fim de mês (último dia útil) é sempre esperado, mesmo p/ Agregado.
       const dow = dowByISO.get(dk);
-      const ehEsperado = isSemanal ? dow === 2 : dow !== 0;
+      const ehEsperado = fimDeMesISO.has(dk) || (isSemanal ? dow === 2 : dow !== 0);
       if (!ehEsperado) continue;
 
       // 4. Teórico = base (último lançamento) + SAP acumulado desde então
