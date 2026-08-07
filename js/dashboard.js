@@ -4809,6 +4809,10 @@ function removerRegistro(module, index) {
   const data = getFilteredData(module);
   const actual = data[(module === 'custosSap' ? currentPageCustosSap : pages[module]) * PAGE_SIZE + index];
   if (!actual) return;
+  if (window.currentUser?.role !== 'admin' && typeof _periodoFechadoDoRegistro === 'function' && _periodoFechadoDoRegistro(module, actual)) {
+    toast('Período fechado pelo administrador — não é possível excluir.', 'error');
+    return;
+  }
   if (!confirm('Deseja realmente excluir este registro?')) return;
 
   state[module] = state[module].filter(r => r !== actual);
@@ -4923,8 +4927,18 @@ function atualizarBarraLote(module) {
 }
 
 function excluirSelecionados(module) {
-  const selecionados = [...bulkSelected[module]];
+  let selecionados = [...bulkSelected[module]];
   if (!selecionados.length) return;
+
+  if (window.currentUser?.role !== 'admin' && typeof _periodoFechadoDoRegistro === 'function') {
+    const bloqueados = selecionados.filter(r => _periodoFechadoDoRegistro(module, r));
+    if (bloqueados.length) {
+      bloqueados.forEach(r => bulkSelected[module].delete(r));
+      selecionados = selecionados.filter(r => !bloqueados.includes(r));
+      toast(`${bloqueados.length} registro(s) de período fechado foram ignorados.`, 'error');
+      if (!selecionados.length) return;
+    }
+  }
   if (!confirm(`Excluir ${selecionados.length} registro(s) selecionado(s)? Esta ação não pode ser desfeita.`)) return;
 
   const selSet = bulkSelected[module];

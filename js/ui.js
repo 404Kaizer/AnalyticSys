@@ -4242,6 +4242,23 @@ function isPeriodoFechadoDataBr(dataBr) {
   return m ? isPeriodoFechado(m[3], m[2]) : false;
 }
 
+// Mesma escolha de campo-data usada nas policies de RLS de cada tabela (ver
+// migração periodo_fechamento_inventario) — usada nos pontos de escrita
+// locais (_criarRegistro*, import.js; removerRegistro/excluirSelecionados,
+// dashboard.js) pra bloquear ANTES de mexer no estado local, em vez de só
+// depois de a nuvem já ter rejeitado (o registro ficava "preso" só local,
+// nunca sincronizando, dando falsa impressão de sucesso pro usuário comum).
+function _periodoFechadoDoRegistro(module, rec) {
+  if (!rec) return false;
+  switch (module) {
+    case 'lancamentos': return isPeriodoFechadoDataBr(rec.dtLanc);
+    case 'entradas':    return isPeriodoFechadoDataBr(rec.dtDescarga || rec.dtEmissao);
+    case 'saidas':      return isPeriodoFechadoDataBr(rec.dtEmissao);
+    case 'sap':         return isPeriodoFechadoDataBr(rec.dtLanc || rec.dtDoc);
+    default: return false;
+  }
+}
+
 async function periodoFecharMes(ano, mes) {
   const { error } = await window.supabaseClient.from('periodo_fechamentos')
     .upsert({ ano, mes, fechado: true, fechado_por: window.currentUser.id, fechado_em: new Date().toISOString() }, { onConflict: 'ano,mes' });

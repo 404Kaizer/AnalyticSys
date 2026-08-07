@@ -2374,6 +2374,14 @@ function confirmarExcluirAjusteSistemico(id) {
   const tag = dai?.tag || o.daiTag || dai?.numero || o.daiNumero || '—';
   const numero = dai?.numero || o.daiNumero || '—';
 
+  if (window.currentUser?.role !== 'admin' && typeof isPeriodoFechado === 'function') {
+    const m = /^(\d{4})-(\d{2})-\d{2}$/.exec(dai?.dataOcorrido || '');
+    if (m && isPeriodoFechado(m[1], m[2])) {
+      toast('Período fechado pelo administrador — não é possível excluir este ajuste.', 'error');
+      return;
+    }
+  }
+
   confirmarDestrutivo({
     title: 'Excluir ocorrência de Ajuste Sistêmico',
     sub: tag,
@@ -2409,6 +2417,7 @@ function confirmarExcluirAjusteSistemico(id) {
         daiNumero: numero,
         central: o.central || null,
         dataGeracao: dai?.dataGeracao || null,
+        dataOcorrido: dai?.dataOcorrido || null,
         excluidoPor: window.currentUser?.nome_completo || null,
         excluidoEm: Date.now(),
       };
@@ -2434,6 +2443,7 @@ function confirmarExcluirAjusteSistemico(id) {
           dai_numero: logExclusao.daiNumero,
           central: logExclusao.central,
           data_geracao: logExclusao.dataGeracao,
+          data_ocorrido: logExclusao.dataOcorrido,
           excluido_por: logExclusao.excluidoPor,
           excluido_em: logExclusao.excluidoEm,
         }).then(({ error }) => {
