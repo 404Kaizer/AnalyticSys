@@ -5154,7 +5154,7 @@
             <th>Dt. Registro</th>
             <th style="text-align:right">Peso</th>
             <th style="text-align:right">Custo Total</th>
-            <th title="Desconsiderado do cálculo × incluído manualmente">Status</th>
+            <th title="Padrão: incluído no cálculo. Desconsiderado só por trava do Inventário ou ação manual aqui.">Status</th>
           </tr>
         </thead>
         <tbody id="fechmgr-tbody"></tbody>
@@ -5193,9 +5193,10 @@
       <textarea id="fech-import-textarea" class="fechimp-textarea" rows="8"
         placeholder="Cole um número de documento por linha (ou separados por vírgula, ponto-e-vírgula ou tab)&#10;Ex.:&#10;1400012345&#10;1400012346"></textarea>
       <div class="fechimp-hint">
-        Só afeta registros que já batem no padrão automático de Ajuste de Fechamento Mensal (Y11/Y12) detectado nesta tela.
-        Documentos reincluídos manualmente (override) voltam ao comportamento padrão — desconsiderados do cálculo de variação
-        em Dashboard, Analítico, Inventário e Trend.
+        Só afeta registros que já batem no padrão de Ajuste de Fechamento Mensal (Y11/Y12) detectado nesta tela.
+        Por padrão esses registros já entram no cálculo — os documentos colados aqui são marcados como desconsiderados
+        manualmente do cálculo de variação em Dashboard, Analítico, Inventário e Trend (reversível a qualquer momento
+        via "Considerar Ajuste" no modal principal).
       </div>
       <button class="btn btn-primary" type="button" onclick="_fechImportPreVisualizar()">
         <i class="ti ti-search"></i> Pré-visualizar

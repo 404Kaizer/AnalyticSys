@@ -613,6 +613,12 @@ function _activityShouldNotify(row) {
   // O evento continua gravado no activity_log (auditoria intacta); só a
   // NOTIFICAÇÃO é cortada. LOGOUT/PASSWORD_CHANGE continuam normalmente.
   if (row.table_name === 'auth' && row.operation === 'LOGIN') return false;
+  // Justificativas de Inventário: "Justificar em lote" grava linha por
+  // linha, então uma sessão de trabalho normal já gera centenas de eventos
+  // — vira ruído tipo "editou 340 registros" no sino (achado do usuário,
+  // 07/08). O activity_log continua guardando cada linha pra auditoria;
+  // só a NOTIFICAÇÃO é cortada, igual ao corte de LOGIN acima.
+  if (row.table_name === 'inv_justificativas') return false;
   if (me.role === 'admin') return true;     // admin vê ação de qualquer outro
   return row.owner_id === me.id;            // dono vê quando o ADM mexeu no que é dele
 }

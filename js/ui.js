@@ -3531,12 +3531,12 @@ function getSapByCentralInPeriod(central, dtIni, dtFim) {
 // Contexto: todo fim de mês a central consolida estoque e faz ajustes de
 // saldo (movimentos SAP Y11 negativo / Y12 positivo) para bater o físico.
 // Esses ajustes são LANÇADOS NO SISTEMA e, se entrassem no cálculo de
-// variação (buildSnapshot), zerariam artificialmente a divergência que o
-// fechamento acabou de corrigir — mascarando o histórico de variação real
-// do mês. Precisam ser desconsiderados do cálculo em TODO o sistema
-// (Inventário, Dashboard Gerencial, Analítico, Trend, Macro, Assistente),
-// mas SEM alterar o dado bruto — a página SAP continua mostrando o
-// registro original, sempre, para auditoria.
+// variação (buildSnapshot) sem revisão, podem mascarar (ou, se
+// desconsiderados à toa, distorcer) o histórico de variação real do mês —
+// por isso ficam sinalizados como candidatos de Fechamento em TODO o
+// sistema (Inventário, Dashboard Gerencial, Analítico, Trend, Macro,
+// Assistente), mas SEM alterar o dado bruto — a página SAP continua
+// mostrando o registro original, sempre, para auditoria.
 //
 // Critério de detecção (definido com o usuário em 22/07/2026 — substitui a
 // versão anterior baseada em "último dia útil do mês" + janela de dias):
@@ -3544,11 +3544,14 @@ function getSapByCentralInPeriod(central, dtIni, dtFim) {
 // DT REGISTRO cai exatamente no mês/ano seguinte (o "mês atual"). Não
 // exige mais que DT DOCUMENTO === DT LANÇAMENTO no mesmo DIA, nem que a
 // DT LANÇAMENTO seja o último dia útil — só que ambas estejam no mesmo mês,
-// um mês antes do registro. Não existe nenhum outro campo no SAP (usuário,
-// texto, motivo) que diferencie um ajuste de fechamento de um ajuste feito
-// durante o mês — por isso a exclusão é automática por padrão de data, com
-// uma via de escape manual (override) para o caso raro de falso positivo,
-// controlada na própria página SAP (checkbox + ação em lote).
+// um mês antes do registro.
+//
+// Padrão de inclusão (Hugo, 07/08/2026 — inverte a regra anterior): um
+// candidato detectado entra no cálculo por padrão. Só é desconsiderado se
+// (a) o Documento SAP está justificado em alguma linha do Inventário
+// (trava incondicional) ou (b) o analista desconsiderou manualmente no
+// modal de Fechamento (checkbox + ação em lote na página SAP) — ver
+// isSapExcluidoPorFechamento.
 
 // Retorna um índice numérico crescente pro mês/ano de uma data, útil pra
 // comparar "mesmo mês" ou "mês seguinte" sem se importar com o dia.
@@ -3599,7 +3602,7 @@ function getSapFechKey(r) {
   ].join('||');
 }
 
-// ── Cache do Set de overrides (reincluídos manualmente no cálculo) ───────
+// ── Cache do Set de overrides (desconsiderados manualmente do cálculo) ───
 let _fechOverrideSetCache = null;
 let _fechOverrideSetSig = null;
 
@@ -3662,12 +3665,13 @@ function isSapDocJustificadoInventario(r) {
 //       trava incondicional, verificada ANTES do override manual, então
 //       nenhum "Considerar Ajuste" no modal de Fechamento consegue
 //       reincluir esse registro enquanto o campo continuar preenchido; OU
-//   (2) bate no padrão de fechamento E não foi reincluído manualmente
-//       pelo analista (comportamento original, automático por data).
+//   (2) bate no padrão de fechamento E foi desconsiderado manualmente pelo
+//       analista no modal de Fechamento — padrão é CONSIDERAR (Hugo,
+//       07/08), a exclusão automática por data foi removida.
 function isSapExcluidoPorFechamento(r) {
   if (!isSapFechamentoPattern(r)) return false;
   if (isSapDocJustificadoInventario(r)) return true;
-  return !_getFechOverrideSet().has(getSapFechKey(r));
+  return _getFechOverrideSet().has(getSapFechKey(r));
 }
 
 // Soma Peso (kg) e Custo Total (R$) de um conjunto de registros SAP —
@@ -4114,19 +4118,21 @@ function renderLancamentosSummary() {
 }
 window.renderLancamentosSummary = renderLancamentosSummary;
 
-// ── Override manual (reincluir/reexcluir do cálculo) ──────────────────────
-// incluir=true: registro passa a contar no cálculo mesmo batendo no padrão.
-// incluir=false: remove o override (volta ao comportamento automático).
+// ── Override manual (desconsiderar/reconsiderar no cálculo) ───────────────
+// Padrão agora é CONSIDERAR — o Set guarda as chaves DESCONSIDERADAS
+// manualmente pelo analista, não mais as reincluídas (ver
+// isSapExcluidoPorFechamento). incluir=true: sai do Set (volta a contar,
+// comportamento padrão). incluir=false: entra no Set (desconsiderado).
 function setSapFechOverrideEmLote(chaves, incluir) {
   if (!Array.isArray(chaves) || !chaves.length) return;
   const set = new Set(state.sapFechamentoOverrides || []);
-  chaves.forEach(k => { if (incluir) set.add(k); else set.delete(k); });
+  chaves.forEach(k => { if (incluir) set.delete(k); else set.add(k); });
   state.sapFechamentoOverrides = [...set];
   invalidateFechOverrideCache();
   if (typeof persist === 'function') persist();
 
   if (!window.supabaseClient) return;
-  if (incluir) {
+  if (!incluir) {
     const rows = chaves.map(chave => ({ chave }));
     window.supabaseClient.from('sap_fechamento_overrides').upsert(rows, { onConflict: 'user_id,chave' })
       .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao sincronizar override de fechamento:', error); });
@@ -4207,7 +4213,7 @@ let _fechMgrCandidatosRawCache = null;
 //
 // Otimização: como _fechMgrCandidatosRawCache já contém SÓ registros que
 // bateram isSapFechamentoPattern, não precisamos checar de novo aqui — só
-// precisamos saber se cada um está no Set de overrides (reincluído
+// precisamos saber se cada um está no Set de overrides (desconsiderado
 // manualmente). Chamar isSapExcluidoPorFechamento(r) de novo repetiria o
 // isSapFechamentoPattern (já sabido) E getSapFechKey (já calculado abaixo)
 // à toa — em 3-4 mil registros isso soma bastante trabalho redundante toda
@@ -4225,11 +4231,11 @@ function _fechMgrGetTodosCandidatos() {
     // reaplicada aqui pra exibir o motivo certo em vez de só o resultado).
     const docNorm = _fechImportNormDoc(r.documento);
     const travadoPorInventario = invDocMap.has(docNorm);
-    const excluido = travadoPorInventario ? true : !overrideSet.has(chave);
+    const excluido = travadoPorInventario ? true : overrideSet.has(chave);
     let statusLabel;
-    if (travadoPorInventario) statusLabel = 'Justificado no Inventário';
-    else if (excluido)        statusLabel = 'Desconsiderado';
-    else                      statusLabel = 'Incluído manualmente';
+    if (travadoPorInventario)      statusLabel = 'Justificado no Inventário';
+    else if (excluido)             statusLabel = 'Desconsiderado manualmente';
+    else                           statusLabel = 'Incluído';
     return {
       ...r,
       _chave: chave,
@@ -4312,11 +4318,11 @@ function _fechMgrRender() {
   // está sendo exibido. Sem filtro ativo, filtrados === todos e o
   // comportamento não muda.
   // Peso/Custo somam TODOS os registros filtrados, independente do status
-  // (desconsiderado ou incluído manualmente) — só as contagens abaixo
-  // (Desconsiderados/Incluídos manualmente) continuam segmentadas por
-  // status, já que é essa a razão de existir delas.
+  // (desconsiderado ou incluído) — só as contagens abaixo (Desconsiderados/
+  // Incluídos) continuam segmentadas por status, já que é essa a razão de
+  // existir delas.
   const desconsiderados = filtrados.filter(r => r._statusExcluido);
-  const incluidosManual = filtrados.filter(r => !r._statusExcluido);
+  const incluidos = filtrados.filter(r => !r._statusExcluido);
   const travadosPorInventario = filtrados.filter(r => r._travadoPorInventario).length;
   const { peso: pesoFiltro, custo: custoFiltro } = somarPesoCustoSap(filtrados);
   const filtroAtivo = filtrados.length !== todos.length;
@@ -4358,9 +4364,9 @@ function _fechMgrRender() {
       <div class="inv-kpi-card">
         <div class="inv-kpi-icon" style="background:var(--accent-dim);color:var(--accent)"><i class="ti ti-hand-click"></i></div>
         <div class="inv-kpi-body">
-          <div class="inv-kpi-label">Incluídos manualmente</div>
-          <div class="inv-kpi-value">${incluidosManual.length}</div>
-          <div class="inv-kpi-unit">reincluídos no cálculo</div>
+          <div class="inv-kpi-label">Incluídos</div>
+          <div class="inv-kpi-value">${incluidos.length}</div>
+          <div class="inv-kpi-unit">considerados no cálculo (padrão)</div>
         </div>
       </div>`;
   }
@@ -4396,8 +4402,8 @@ function _fechMgrRender() {
     const statusDot = r._travadoPorInventario
       ? `<i class="ti ti-lock fechmgr-status-icon fechmgr-status-icon--travado" title="Travado — Documento SAP desta linha: '${escapeHtml(r._travadoDocSap)}'. Encontrado na justificativa do Inventário como: '${escapeHtml(r._travadoDocInvOriginal)}'. Para reverter, apague o campo Documento SAP NAQUELA justificativa e verifique se não sobrou outra igual."></i>`
       : r._statusExcluido
-        ? `<i class="ti ti-circle-x fechmgr-status-icon fechmgr-status-icon--desc" title="Desconsiderado do cálculo de variação"></i>`
-        : `<i class="ti ti-circle-check fechmgr-status-icon fechmgr-status-icon--inc" title="Incluído manualmente no cálculo (considerado)"></i>`;
+        ? `<i class="ti ti-circle-x fechmgr-status-icon fechmgr-status-icon--desc" title="Desconsiderado manualmente do cálculo de variação"></i>`
+        : `<i class="ti ti-circle-check fechmgr-status-icon fechmgr-status-icon--inc" title="Incluído no cálculo (padrão)"></i>`;
     // Escapa uma vez e reaproveita no title + conteúdo visível — antes só o
     // title era escapado; o texto exibido ia direto sem escapeHtml, então
     // um material/usuário/documento com "<", ">" ou "&" (comum em specs
@@ -4594,10 +4600,11 @@ window._fechMgrLimparSelecao = _fechMgrLimparSelecao;
 // paralelo. O usuário cola uma lista de números de Documento SAP; o
 // sistema casa cada um contra os candidatos Y11/Y12 já detectados
 // (_fechMgrGetTodosCandidatos, mesmo universo do modal principal) e
-// aplica "voltar ao automático" (incluir=false) nos que baterem — único
-// sentido suportado, por decisão explícita (não existe importação pra
-// "considerar"). Pensado pra corrigir em massa registros reincluídos
-// manualmente por engano, sem precisar filtrar/selecionar linha a linha.
+// aplica "desconsiderar" (incluir=false) nos que baterem — único sentido
+// suportado, por decisão explícita (não existe importação pra
+// "considerar", já que considerar é o padrão). Pensado pra desconsiderar em
+// massa uma lista de documentos conhecidos, sem precisar filtrar/selecionar
+// linha a linha.
 
 // Normaliza um número de documento pra comparação: trim + maiúsculas +
 // remove zeros à esquerda — mesmo padrão de normNF/normOS
@@ -4663,8 +4670,8 @@ function _fechImportPreVisualizar() {
     porDocNorm.get(key).push(r);
   });
 
-  const encontrados = [];      // registros que serão desconsiderados (hoje incluídos manualmente)
-  const jaDesconsiderado = []; // registros encontrados mas já no padrão automático (no-op)
+  const encontrados = [];      // registros que serão desconsiderados (hoje incluídos, o padrão)
+  const jaDesconsiderado = []; // registros encontrados mas já desconsiderados manualmente (no-op)
   const naoEncontrados = [];   // documentos importados sem candidato correspondente (typo ou não é Y11/Y12)
 
   docsUnicos.forEach(doc => {
@@ -4717,7 +4724,7 @@ function _fechImportAplicar() {
     const chaves = encontrados.map(r => r._chave);
     setSapFechOverrideEmLote(chaves, false);
     fecharFechImportModal();
-    toast(`${chaves.length} registro(s) voltaram a ser desconsiderados do cálculo (${docsAfetados} documento(s)).`);
+    toast(`${chaves.length} registro(s) desconsiderado(s) do cálculo (${docsAfetados} documento(s)).`);
     _fechMgrRender();
     // Recalcula qualquer análise já aberta pra refletir a mudança imediatamente
     // — mesmo padrão de _fechMgrAplicarLote.

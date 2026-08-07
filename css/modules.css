@@ -11059,10 +11059,10 @@ tr.sap-fechamento td {
 /* Indicador de status compacto (bolinha + tooltip) em vez de badge de
    texto — a coluna Status virou só um sinalizador rápido, já que TODO
    registro do modal é, por definição, um Ajuste de Fechamento; o que
-   varia é só se está desconsiderado (padrão) ou incluído manualmente. */
+   varia é só se está incluído (padrão) ou desconsiderado manualmente. */
 /* Indicador de status como SÍMBOLO (ícone), não só cor — circle-x para
    Desconsiderado (excluído do cálculo) e circle-check para Incluído
-   manualmente/Considerado. Reforça a leitura pra quem não distingue bem
+   (padrão/Considerado). Reforça a leitura pra quem não distingue bem
    as duas cores (roxo × accent), já que a forma também muda. */
 .fechmgr-status-icon {
   font-size: 16px;

@@ -47,22 +47,25 @@
   // padrão dos outros dados persistidos) e dispara o autosave debounced
   // do sistema (persist(), em persist.js). Chamada depois de toda
   // mutação em invJustificativas (salvar no modal, importar CSV).
-  function _invSyncJustificativasToState() {
+  function _invSyncJustificativasToState(keys) {
     const h = window._inv_helpers;
     const st = h && h.state && h.state();
     if (!st) return;
     st.invJustificativas = Object.keys(invJustificativas).map(k => ({ k, ...invJustificativas[k] }));
     if (typeof window.persist === 'function') window.persist();
-    _invSyncToSupabase();
+    if (keys && keys.length) _invSyncToSupabase(keys);
   }
 
-  // Sincroniza TODO o mapa atual com o Supabase (upsert) — as exclusões
-  // (invExcluirJust/invExcluirJustLote) têm sua própria chamada de delete,
-  // já que esta função só vê o que EXISTE agora no mapa, não o que saiu
-  // dele. Falha não bloqueia a UI (já atualizada localmente).
-  function _invSyncToSupabase() {
+  // Sincroniza só as chaves TOCADAS com o Supabase (upsert) — nunca o mapa
+  // inteiro: upar tudo a cada salvamento gerava um UPDATE por linha no
+  // activity_log (centenas/milhares) e a notificação de atividade virava
+  // ruído tipo "editou 738 registros" pra uma edição de UM campo (achado
+  // do usuário, 07/08). Exclusões (invExcluirJust/invExcluirJustLote) têm
+  // sua própria chamada de delete, não passam por aqui. Falha não bloqueia
+  // a UI (já atualizada localmente).
+  function _invSyncToSupabase(keys) {
     if (!window.supabaseClient) return;
-    const rows = Object.keys(invJustificativas).map(k => {
+    const rows = keys.map(k => {
       const j = invJustificativas[k] || {};
       return {
         k,
@@ -2276,7 +2279,7 @@
     invFiltrar();
     invAtualizarKpis();
     invAtualizarAlertas();
-    _invSyncJustificativasToState();
+    _invSyncJustificativasToState([k]);
   }
 
   // Salva os dados do formulário atual (modal individual) no registro k.
@@ -3113,6 +3116,7 @@
     const rowByK = new Map(invRows.map(r => [r.k, r]));
 
     let atualizados = 0, naoEncontrados = 0, ignoradosCategoria = 0;
+    const chavesTocadas = [];
     _invImportParsedRows.forEach(imp => {
       if (!categoriasSelecionadas.has(imp.categoria)) { ignoradosCategoria++; return; }
       const k = mesKey + '|||' + imp.central + '|||' + imp.material;
@@ -3130,10 +3134,11 @@
         documentoSap:  imp.documentoSap || atual.documentoSap || '',
       };
       atualizados++;
+      chavesTocadas.push(k);
     });
 
     document.getElementById('inv-import-categorias-modal')?.classList.remove('open');
-    _invSyncJustificativasToState();
+    _invSyncJustificativasToState(chavesTocadas);
     window.invGerar(); // recalcula custoSap/custo/varAdj com as justificativas novas
 
     const partes = [`${atualizados} atualizada${atualizados === 1 ? '' : 's'}`];
