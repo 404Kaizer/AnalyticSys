@@ -49,6 +49,11 @@ const defaultState = () => ({
   // reincluiu manualmente no cálculo de variação, mesmo batendo no padrão
   // de fechamento. Controlado pela página SAP (checkbox + ação em lote).
   sapFechamentoOverrides: [],
+  // Fechamento de Período (mensal, ver periodo_fechamentos no Supabase) —
+  // array de chaves 'AAAA-MM' dos meses ATUALMENTE fechados pelo ADM.
+  // Só a camada de RLS garante o bloqueio de verdade; isto aqui é só cache
+  // pra UI (banner + desabilitar controles). Ver isPeriodoFechado (ui.js).
+  periodoFechamentos: [],
   // Documentos de Ajuste de Inventário (DAI) — gerados pelo módulo de
   // Ajuste Sistêmico (ver dai.js). Cada item: { id, numero, dataGeracao,
   // dataOcorrido, central, motivo, descricao, operador, analista,

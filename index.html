@@ -1808,6 +1808,7 @@
         <!-- ══ CONTEÚDO (visível após Gerar) ══ -->
         <div id="inv-content" style="display:none">
         <div id="inv-sem-cadastro-box"></div>
+        <div id="inv-periodo-fech-box"></div>
         <div class="inv-kpi-groups" id="inv-kpis">
           <!-- ══ BLOCO DE DESTAQUE — Variação e Custo Var. (dados mais
                importantes do resumo, separados e em maior evidência) ══ -->
@@ -3078,6 +3079,7 @@
           <button class="admin-subnav-btn" id="admin-subnav-pendentes" onclick="adminShowSection('pendentes')"><i class="ti ti-inbox"></i> Pendentes de integração</button>
           <button class="admin-subnav-btn" id="admin-subnav-formpublico" onclick="adminShowSection('formpublico')"><i class="ti ti-link"></i> Formulário Público</button>
           <button class="admin-subnav-btn" id="admin-subnav-servidor" onclick="adminShowSection('servidor')"><i class="ti ti-server"></i> Servidor</button>
+          <button class="admin-subnav-btn" id="admin-subnav-fechamento" onclick="adminShowSection('fechamento')"><i class="ti ti-lock"></i> Fechamento de Período</button>
         </div>
 
         <!-- Seção: Usuários -->
@@ -3334,6 +3336,28 @@
             <div id="admin-analistas-categoria-rows" style="padding:14px 18px 18px;display:flex;flex-direction:column;gap:10px">
               <div class="empty-state"><i class="ti ti-loader"></i><p>Carregando...</p></div>
             </div>
+          </div>
+        </div>
+
+        <!-- Seção: Fechamento de Período — trava lançamentos/entradas/saídas/
+             SAP/justificativas/ajustes sistêmicos de um mês pra quem não é
+             ADM. A garantia é a RLS (periodo_esta_fechado no Supabase); esta
+             tela só fecha/reabre. -->
+        <div id="admin-section-fechamento" style="display:none">
+          <div class="table-card">
+            <div class="table-header">
+              <span class="table-title"><i class="ti ti-lock"></i> Fechamento de Período</span>
+            </div>
+            <div style="font-size:11px;color:var(--text3);padding:10px 18px 0">
+              <i class="ti ti-info-circle"></i> Ao fechar um mês, nenhum analista consegue mais editar, excluir ou lançar Lançamentos, Entradas, Saídas, SAP, Justificativas do Inventário ou Ajustes Sistêmicos daquele mês. Só o ADM continua podendo editar, mesmo com o período fechado, e pode reabrir a qualquer momento.
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:14px 18px">
+              <select id="admin-periodo-fech-mes" class="form-input" style="width:auto" onchange="_adminPeriodoFechRender()"></select>
+              <select id="admin-periodo-fech-ano" class="form-input" style="width:auto" onchange="_adminPeriodoFechRender()"></select>
+              <button id="admin-periodo-fech-btn" class="btn" onclick="adminPeriodoToggle()">Fechar período</button>
+              <span id="admin-periodo-fech-status" style="font-size:12px"></span>
+            </div>
+            <div id="admin-periodo-fech-lista" style="padding:0 18px 18px"></div>
           </div>
         </div>
 

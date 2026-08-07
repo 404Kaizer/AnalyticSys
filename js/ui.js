@@ -4227,6 +4227,75 @@ function _fechRealtimeStop() {
 }
 
 // ═══════════════════════════════════════════════════════════
+// FECHAMENTO DE PERÍODO (mensal) — trava lançamentos/entradas/saídas/SAP/
+// justificativas/ajustes sistêmicos daquele mês pra quem não é ADM.
+// A garantia de verdade é a RLS (ver migração periodo_fechamento_inventario
+// no Supabase — policies de INSERT/UPDATE/DELETE checam
+// periodo_esta_fechado()); tudo aqui é só cache + UX (banner, toast cedo
+// em vez de esperar o erro do banco).
+// ═══════════════════════════════════════════════════════════
+async function syncPeriodoFechamentosFromSupabase() {
+  try {
+    const { data, error } = await window.supabaseClient
+      .from('periodo_fechamentos').select('ano, mes, fechado');
+    if (error) throw error;
+    state.periodoFechamentos = [...new Set(
+      (data || []).filter(r => r.fechado).map(r => `${r.ano}-${String(r.mes).padStart(2, '0')}`)
+    )];
+  } catch (err) {
+    console.warn('[Supabase] Falha ao buscar fechamentos de período — mantendo dados locais.', err);
+  }
+}
+
+function isPeriodoFechado(ano, mes) {
+  return (state.periodoFechamentos || []).includes(`${ano}-${String(mes).padStart(2, '0')}`);
+}
+// dataBr no formato 'DD/MM/YYYY' — mesmo parsing usado nas policies de RLS
+function isPeriodoFechadoDataBr(dataBr) {
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(String(dataBr || ''));
+  return m ? isPeriodoFechado(m[3], m[2]) : false;
+}
+
+async function periodoFecharMes(ano, mes) {
+  const { error } = await window.supabaseClient.from('periodo_fechamentos')
+    .upsert({ ano, mes, fechado: true, fechado_por: window.currentUser.id, fechado_em: new Date().toISOString() }, { onConflict: 'ano,mes' });
+  if (error) { toast('Falha ao fechar o período: ' + error.message, 'error'); return false; }
+  await syncPeriodoFechamentosFromSupabase();
+  toast(`Período ${String(mes).padStart(2, '0')}/${ano} fechado.`, 'success');
+  return true;
+}
+
+async function periodoReabrirMes(ano, mes) {
+  const { error } = await window.supabaseClient.from('periodo_fechamentos')
+    .update({ fechado: false, reaberto_por: window.currentUser.id, reaberto_em: new Date().toISOString() })
+    .eq('ano', ano).eq('mes', mes);
+  if (error) { toast('Falha ao reabrir o período: ' + error.message, 'error'); return false; }
+  await syncPeriodoFechamentosFromSupabase();
+  toast(`Período ${String(mes).padStart(2, '0')}/${ano} reaberto.`, 'success');
+  return true;
+}
+
+let _periodoFechChannel = null;
+function _periodoFechRealtimeInit() {
+  if (!window.supabaseClient || !window.currentUser || _periodoFechChannel) return;
+  const handle = async () => {
+    await syncPeriodoFechamentosFromSupabase();
+    if (typeof renderAll === 'function') renderAll();
+    if (typeof _adminPeriodoFechRender === 'function' && document.getElementById('admin-section-fechamento')?.style.display !== 'none') _adminPeriodoFechRender();
+  };
+  _periodoFechChannel = window.supabaseClient
+    .channel('periodo_fechamentos_realtime')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'periodo_fechamentos' }, handle)
+    .subscribe((status) => {
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') console.warn('[Fechamento de Período] Canal Realtime com problema:', status);
+    });
+}
+function _periodoFechRealtimeStop() {
+  if (_periodoFechChannel && window.supabaseClient) window.supabaseClient.removeChannel(_periodoFechChannel);
+  _periodoFechChannel = null;
+}
+
+// ═══════════════════════════════════════════════════════════
 // MODAL: GERENCIAR AJUSTES DE FECHAMENTO MENSAL (Y11/Y12)
 // ═══════════════════════════════════════════════════════════
 // Ferramenta de gestão GLOBAL (não escopada a central/período) dos Ajustes

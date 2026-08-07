@@ -6562,6 +6562,7 @@ const SUPABASE_BOOT_SYNCS = [
   'syncMateriaisFromSupabase',
   'syncInvJustificativasFromSupabase',
   'syncSapFechamentoOverridesFromSupabase',
+  'syncPeriodoFechamentosFromSupabase',
   'syncAjustesSistemicosFromSupabase',
   'syncAjustesExcluidosFromSupabase',
   'syncNotasAjusteFromSupabase',
@@ -6754,6 +6755,9 @@ async function restoreAndRender() {
     // avisa o dono do registro na hora quando o ADM considera/desconsidera
     // (ver _fechRealtimeInit, ui.js).
     if (typeof _fechRealtimeInit === 'function') _fechRealtimeInit();
+    // Canal Realtime de Fechamento de Período — mesmo padrão, avisa todo
+    // mundo na hora quando o ADM fecha/reabre um mês (ver _periodoFechRealtimeInit, ui.js).
+    if (typeof _periodoFechRealtimeInit === 'function') _periodoFechRealtimeInit();
     // Backup condensado (27/07) — reforço periódico silencioso (Etapa 4),
     // cobre o que muda entre importações. Idempotente: seguro chamar de
     // novo em qualquer reboot da mesma aba.

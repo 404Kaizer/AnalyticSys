@@ -1767,6 +1767,7 @@
   // ── KPIs ─────────────────────────────────────────────────
   function invAtualizarKpis() {
     invAtualizarSemCadastro();
+    _invAtualizarPeriodoFechado();
 
     // Usa invFiltered (mesmo recorte exibido na tabela) — os cards REAGEM
     // a todos os filtros ativos (Regional/Central/Categoria/Material/Margem/
@@ -1998,6 +1999,21 @@
   // Cache da última lista calculada — usado pelo modal, para não precisar
   // recalcular nem depender de invRows estar acessível fora deste escopo.
   let _invSemCadastroLista = [];
+
+  // Aviso de Fechamento de Período (mês selecionado no Inventário). A
+  // garantia de bloqueio é a RLS (periodo_esta_fechado no Supabase); isto
+  // é só o aviso visual — ver guarda em _invApplyJustValues abaixo.
+  function _invAtualizarPeriodoFechado() {
+    const el = document.getElementById('inv-periodo-fech-box');
+    if (!el || typeof isPeriodoFechado !== 'function') return;
+    const fechado = isPeriodoFechado(invGetSelectedYear(), invGetSelectedMonth() + 1);
+    el.innerHTML = fechado
+      ? `<button type="button" class="alert-pulse-btn is-red" disabled style="margin-bottom:14px">
+          <i class="ti ti-lock"></i>
+          Período fechado pelo administrador — ${window.currentUser?.role === 'admin' ? 'você ainda pode editar' : 'edições bloqueadas'}
+        </button>`
+      : '';
+  }
 
   // Auxiliar mínimo de escape — usa o helper compartilhado se disponível,
   // senão cai no fallback local (mesmo padrão já usado em invRenderTabela).
@@ -2263,6 +2279,15 @@
   // Médio SAP no momento do Salvar — auto (Custos SAP) se o campo continuou
   // travado, ou o valor sobrescrito se o usuário desbloqueou.
   function _invApplyJustValues(k, { op, fiscal, saldo, custoSap, docSap }) {
+    // Guarda de UX — a garantia de verdade é a RLS (periodo_esta_fechado no
+    // Supabase); isto só evita a mutação local + toast tardio de erro.
+    if (window.currentUser?.role !== 'admin' && typeof isPeriodoFechado === 'function') {
+      const m = /^(\d{4})-(\d{2})\|/.exec(k);
+      if (m && isPeriodoFechado(m[1], m[2])) {
+        if (typeof toast === 'function') toast('Período fechado pelo administrador — não é possível editar.', 'error');
+        return;
+      }
+    }
     invJustificativas[k] = { op, fiscal, saldo, custoMedioSap: custoSap, documentoSap: docSap };
     const row = invRows.find(r => r.k === k);
     if (row) {
