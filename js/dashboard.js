@@ -3138,6 +3138,16 @@ function lancEditSave(cell) {
   const r = window._lancPageData?.[idx];
   if (!r) return;
 
+  // Guarda de período fechado — única edição inline que existe hoje pros
+  // 4 módulos grandes (Entradas/Saídas/SAP só têm criar+excluir, sem
+  // contenteditable). Reverte a célula pro valor original: o navegador já
+  // exibe o que o usuário digitou antes do blur chegar aqui.
+  if (window.currentUser?.role !== 'admin' && typeof _periodoFechadoDoRegistro === 'function' && _periodoFechadoDoRegistro('lancamentos', r)) {
+    cell.textContent = _lancFieldDisplay(r, field);
+    toast('Período fechado pelo administrador — não é possível editar.', 'error');
+    return;
+  }
+
   const numericFields = ['peso', 'custo', 'valorTotal'];
 
   if (numericFields.includes(field)) {
