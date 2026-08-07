@@ -4141,63 +4141,49 @@ function setSapFechOverrideEmLote(chaves, incluir) {
   if (typeof persist === 'function') persist();
 
   if (!window.supabaseClient) return;
-  // Dono REAL de cada chave (não o ADM que clicou): a RLS de
-  // sap_fechamento_overrides só libera SELECT pro dono da linha ou pro
-  // admin, então gravar com user_id do ADM faria o override nunca aparecer
-  // pro analista dono da movimentação (caso comum: ADM agindo sobre
-  // registro integrado — ver RECORD_INTEGRATION_TABLES, normalize.js). O
-  // cache de candidatos do modal (_fechMgrCandidatosRawCache) já tem o
-  // userId de cada linha (ver _sapFromDbRow, import.js). Cai no próprio ADM
-  // só se a chave não bater em nenhum candidato carregado (não deveria
-  // acontecer no fluxo normal da UI).
-  const donoPorChave = new Map((_fechMgrCandidatosRawCache || []).map(r => [getSapFechKey(r), r.userId]));
+  // Global por chave (08/08) — não mais escopado por dono da linha (ver
+  // migração sap_fechamento_overrides_global_by_chave). user_id aqui é só
+  // metadado de auditoria ("aplicado por"), não afeta mais quem consegue
+  // ler: a RLS libera SELECT pra qualquer autenticado, então o mesmo ajuste
+  // (mesma chave) fica desconsiderado/considerado pra TODO usuário que tiver
+  // aquele registro, não só pro dono original da linha no SAP.
   if (!incluir) {
-    const rows = chaves.map(chave => ({ chave, user_id: donoPorChave.get(chave) || window.currentUser.id }));
-    window.supabaseClient.from('sap_fechamento_overrides').upsert(rows, { onConflict: 'user_id,chave' })
+    const rows = chaves.map(chave => ({ chave, user_id: window.currentUser.id }));
+    window.supabaseClient.from('sap_fechamento_overrides').upsert(rows, { onConflict: 'chave' })
       .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao sincronizar override de fechamento:', error); });
   } else {
-    // Agrupa por dono real — um lote pode misturar registros de vários
-    // donos (ADM com várias integrações aceitas). _supaDeleteOwned aceita
-    // ownerId explícito (normalize.js) — mesmo padrão de _ocSyncDelete
-    // (ocorrencias.js) pro mesmo problema (apagar registro de outro dono).
-    const porDono = new Map();
-    chaves.forEach(chave => {
-      const dono = donoPorChave.get(chave) || window.currentUser.id;
-      if (!porDono.has(dono)) porDono.set(dono, []);
-      porDono.get(dono).push(chave);
-    });
-    porDono.forEach((chvs, dono) => {
-      _supaDeleteOwned('sap_fechamento_overrides', null, { chave: chvs }, dono)
-        .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao remover override de fechamento na nuvem:', error); });
-    });
+    window.supabaseClient.from('sap_fechamento_overrides').delete().in('chave', chaves)
+      .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao remover override de fechamento na nuvem:', error); });
   }
 }
 
 async function syncSapFechamentoOverridesFromSupabase() {
   try {
-    // fetchMineOrIntegrated pagina por cursor (sem teto de 10k do PostgREST —
-    // esta tabela já passou de 4.000 linhas) e já aplica o filtro mine-or-
-    // integrated internamente.
-    const filtrado = await fetchMineOrIntegrated('sap_fechamento_overrides', 'id, user_id, chave');
+    // Global por chave (08/08) — sem noção de "meu ou integrado" (igual
+    // custos_sap, ver import.js): a RLS já libera SELECT geral pra qualquer
+    // autenticado, então busca a tabela inteira. fetchAllRows pagina por
+    // cursor (sem teto de 10k do PostgREST — esta tabela já passou de
+    // 4.000 linhas).
+    const todos = await fetchAllRows('sap_fechamento_overrides', 'id, chave');
     // O BANCO MANDA (30/07). Este era o caso mais exposto do sistema: o
     // estado local é só um conjunto de textos, sem id nem data, então unir
     // local ∪ nuvem e reenviar o que sobrasse tornava impossível distinguir
     // "removi este override de propósito" de "esta chave é nova aqui" — e
     // todo override desmarcado voltava sozinho. A nuvem substitui o
     // conjunto inteiro; erro de busca cai no catch e preserva o local.
-    state.sapFechamentoOverrides = [...new Set(filtrado.map(r => r.chave))];
+    state.sapFechamentoOverrides = [...new Set(todos.map(r => r.chave))];
     invalidateFechOverrideCache();
   } catch (err) {
     console.warn('[Supabase] Falha ao buscar overrides de fechamento — mantendo dados locais.', err);
   }
 }
 
-// ── Realtime (07/08) ────────────────────────────────────────────────────
-// Ajuste feito pelo ADM precisa refletir na hora pro dono do registro (e
-// pra qualquer outra sessão aberta), sem esperar o próximo boot — a RLS já
-// restringe o que cada sessão recebe (dono da linha ou admin, mesma regra
-// do SELECT), então cada handler só vê o que já podia ver. Mesmo padrão de
-// canal de _custosSapRealtimeInit (import.js).
+// ── Realtime (07/08, global por chave desde 08/08) ─────────────────────
+// Ajuste feito pelo ADM precisa refletir na hora pra QUALQUER sessão aberta
+// que tenha aquele registro (mesma chave), não só pro dono original da
+// linha no SAP — a RLS libera SELECT geral pra qualquer autenticado (igual
+// custos_sap), então todo evento que chega já é pra aplicar. Mesmo padrão
+// de canal de _custosSapRealtimeInit (import.js).
 let _fechChannel = null;
 function _fechRealtimeInit() {
   if (!window.supabaseClient || !window.currentUser || _fechChannel) return;
