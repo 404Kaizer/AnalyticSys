@@ -155,10 +155,18 @@ function _msgsAvatarComBadge(avatarHtml, count) {
 // _msgsAvatarComBadge sempre que a lista é redesenhada).
 function _msgsAtualizarBadges() {
   const geralDot = document.getElementById('msgs-conv-geral-badge');
-  if (!geralDot) return;
-  const count = _msgsContadoresPorConversa['geral'] || 0;
-  geralDot.textContent = count > 9 ? '9+' : String(count);
-  geralDot.style.display = count > 0 ? '' : 'none';
+  if (geralDot) {
+    const count = _msgsContadoresPorConversa['geral'] || 0;
+    geralDot.textContent = count > 9 ? '9+' : String(count);
+    geralDot.style.display = count > 0 ? '' : 'none';
+  }
+  // Badge total (Ferramentas ▸ Mensagens) só era recalculado ao abrir a
+  // ferramenta (_msgsBadgeZerar em format.js) — parado enquanto o popover
+  // ficava fechado, então não reagia a mensagem nova chegando nem sumia
+  // depois de marcar como lida em outra aba/dispositivo. Esta função já
+  // roda a cada tick de presença (30s) e ao carregar histórico, então é o
+  // ponto único por onde toda atualização de contagem passa.
+  _msgsBadgeRender();
 }
 
 async function _presenceGlobalTick() {
@@ -679,7 +687,16 @@ async function _msgsCarregarHistorico(convId) {
     ? query.is('destinatario_id', null)
     : query.or(`and(remetente_id.eq.${meuId},destinatario_id.eq.${convId}),and(remetente_id.eq.${convId},destinatario_id.eq.${meuId})`);
 
-  const { data, error } = await query.order('criado_em', { ascending: true }).limit(200);
+  // desc+limit pega as 200 mais RECENTES; reverse() devolve pra ordem
+  // cronológica de exibição. Bug anterior (asc+limit) pegava as 200 mais
+  // ANTIGAS — numa conversa com >200 mensagens, tudo que vinha depois
+  // disso nunca aparecia (nem em mensagens novas), e como o texto ficava
+  // de fora do array `data`, a marcação de "lido" logo abaixo nunca rodava
+  // pra essas mensagens: o dot de não-lida sumia na hora (zerado
+  // localmente) mas voltava no tick seguinte, porque no banco continuava
+  // não lida.
+  const { data: _msgsRows, error } = await query.order('criado_em', { ascending: false }).limit(200);
+  const data = _msgsRows ? _msgsRows.slice().reverse() : _msgsRows;
 
   // A conversa pode ter mudado enquanto a busca estava em andamento — não
   // pinta uma resposta desatualizada por cima da conversa atual.
