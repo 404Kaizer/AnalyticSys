@@ -6750,6 +6750,10 @@ async function restoreAndRender() {
     // time, RLS libera SELECT geral: todo mundo recebe INSERT/UPDATE/
     // DELETE de qualquer usuário, sem filtro de relevância (ver import.js).
     if (typeof _custosSapRealtimeInit === 'function') _custosSapRealtimeInit();
+    // Canal Realtime de Ajustes de Fechamento SAP (07/08) — mesmo padrão,
+    // avisa o dono do registro na hora quando o ADM considera/desconsidera
+    // (ver _fechRealtimeInit, ui.js).
+    if (typeof _fechRealtimeInit === 'function') _fechRealtimeInit();
     // Backup condensado (27/07) — reforço periódico silencioso (Etapa 4),
     // cobre o que muda entre importações. Idempotente: seguro chamar de
     // novo em qualquer reboot da mesma aba.

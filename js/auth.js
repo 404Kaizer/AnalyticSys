@@ -314,6 +314,19 @@ window.AuthGate = (function () {
     const custosSapTabBtn = $('tab-btn-custo-sap');
     if (custosSapTabBtn) custosSapTabBtn.style.display = isAdmin ? '' : 'none';
 
+    // Decisão 07/08 — Ajustes de Fechamento (Y11/Y12) é ferramenta GLOBAL
+    // (afeta o cálculo de estoque de todo mundo, ver setSapFechOverrideEmLote
+    // em ui.js), então só o ADM pode considerar/desconsiderar. Usuário comum
+    // continua podendo abrir o modal e navegar (visualização liberada) —
+    // só os botões que alteram dado somem. Mesmo padrão: isto é só UI, a
+    // trava de verdade fica em setSapFechOverrideEmLote.
+    const fechImportarBtn = $('btn-fechmgr-importar');
+    if (fechImportarBtn) fechImportarBtn.style.display = isAdmin ? '' : 'none';
+    const fechConsiderarBtn = $('btn-fechmgr-considerar');
+    if (fechConsiderarBtn) fechConsiderarBtn.style.display = isAdmin ? '' : 'none';
+    const fechDesconsiderarBtn = $('btn-fechmgr-desconsiderar');
+    if (fechDesconsiderarBtn) fechDesconsiderarBtn.style.display = isAdmin ? '' : 'none';
+
     // Avatar do ícone de Conta no topbar (29/07) — mesmo utilitário de
     // avatar de mensagens.js (círculo colorido + inicial).
     if (typeof _accountRenderAvatars === 'function') _accountRenderAvatars();
@@ -608,6 +621,7 @@ window.AuthGate = (function () {
         if (typeof _ocRealtimeStop === 'function') _ocRealtimeStop();
         if (typeof _daiRealtimeStop === 'function') _daiRealtimeStop();
         if (typeof _custosSapRealtimeStop === 'function') _custosSapRealtimeStop();
+        if (typeof _fechRealtimeStop === 'function') _fechRealtimeStop();
         // Canal Realtime de reset remoto de dados locais — mesmo cuidado.
         if (typeof wipeRealtimeStop === 'function') wipeRealtimeStop();
       }

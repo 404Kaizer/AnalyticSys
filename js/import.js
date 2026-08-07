@@ -1311,6 +1311,7 @@ function _sapFromDbRow(row) {
   return {
     id: row.id,
     fonte: row.fonte,
+    userId: row.user_id || null,
     usuario: row.usuario,
     movimento: row.movimento,
     ref: row.ref,

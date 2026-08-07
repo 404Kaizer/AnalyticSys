@@ -29,6 +29,11 @@ function montar(state) {
     parseDate: parseDateBr,
     normMov: (v) => String(v || '').trim().toUpperCase(),
     normalizeText: (v) => String(v || '').trim().toLowerCase(),
+    toast() {},
+    // setSapFechOverrideEmLote (07/08) só executa pra admin — ver guarda em
+    // js/ui.js. Os testes exercitam a mecânica de override, não a
+    // permissão, então o contexto já sobe como admin por padrão.
+    currentUser: { role: 'admin', id: 'test-admin' },
     state,
   };
   ctx.window = ctx;
@@ -90,6 +95,14 @@ teste('Documento SAP justificado no Inventário: trava mesmo com override manual
 teste('registro fora do padrão Y11/Y12 (movimento comum): sempre considerado', () => {
   const ctx = montar({ sap: [], sapFechamentoOverrides: [], invJustificativas: [] });
   assert.equal(ctx.isSapExcluidoPorFechamento(registroFechamento({ movimento: '101' })), false);
+});
+
+teste('usuário comum não consegue desconsiderar (só ADM altera)', () => {
+  const ctx = montar({ sap: [], sapFechamentoOverrides: [], invJustificativas: [] });
+  ctx.currentUser.role = 'user';
+  const r = registroFechamento();
+  ctx.setSapFechOverrideEmLote([ctx.getSapFechKey(r)], false);
+  assert.equal(ctx.isSapExcluidoPorFechamento(r), false);
 });
 
 let falhou = 0;

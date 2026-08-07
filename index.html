@@ -5096,7 +5096,7 @@
         <div class="fechmgr-sub" id="fechmgr-sub">—</div>
       </div>
       <div class="fechmgr-header-actions">
-        <button class="btn" type="button" onclick="abrirFechImportModal()" title="Colar uma lista de números de documento e desconsiderar em lote">
+        <button class="btn" type="button" id="btn-fechmgr-importar" onclick="abrirFechImportModal()" title="Colar uma lista de números de documento e desconsiderar em lote">
           <i class="ti ti-upload"></i> <span>Importar Documentos</span>
         </button>
         <button class="btn btn-primary" type="button" onclick="fecharFechManager()">
@@ -5110,8 +5110,8 @@
     <div class="fechmgr-lote-bar" id="fechmgr-lote-bar" style="display:none">
       <span id="fechmgr-lote-count"><i class="ti ti-checks"></i> 0 registros selecionados</span>
       <div class="fechmgr-lote-actions">
-        <button class="btn btn-sm" onclick="_fechMgrAplicarLote(true)" title="Considerar os registros selecionados no cálculo de estoque"><i class="ti ti-check"></i> Considerar Ajuste</button>
-        <button class="btn btn-sm" onclick="_fechMgrAplicarLote(false)" title="Desconsiderar os registros selecionados do cálculo de estoque"><i class="ti ti-x"></i> Desconsiderar Ajuste</button>
+        <button class="btn btn-sm" id="btn-fechmgr-considerar" onclick="_fechMgrAplicarLote(true)" title="Considerar os registros selecionados no cálculo de estoque"><i class="ti ti-check"></i> Considerar Ajuste</button>
+        <button class="btn btn-sm" id="btn-fechmgr-desconsiderar" onclick="_fechMgrAplicarLote(false)" title="Desconsiderar os registros selecionados do cálculo de estoque"><i class="ti ti-x"></i> Desconsiderar Ajuste</button>
         <button class="btn btn-sm fechmgr-btn-ghost" onclick="_fechMgrLimparSelecao()">Limpar seleção</button>
       </div>
     </div>

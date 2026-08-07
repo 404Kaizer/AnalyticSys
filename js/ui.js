@@ -4125,6 +4125,15 @@ window.renderLancamentosSummary = renderLancamentosSummary;
 // comportamento padrão). incluir=false: entra no Set (desconsiderado).
 function setSapFechOverrideEmLote(chaves, incluir) {
   if (!Array.isArray(chaves) || !chaves.length) return;
+  // Decisão 07/08 — só o ADM considera/desconsidera Ajustes de Fechamento
+  // (ferramenta GLOBAL, afeta o cálculo de estoque de todo mundo). Os
+  // botões já ficam escondidos pra quem não é admin (auth.js/
+  // updateAccountUI); esta guarda é só pra dar uma mensagem clara caso a
+  // função seja chamada por outro caminho (mesmo padrão de salvarHealthConfig).
+  if (window.currentUser?.role !== 'admin') {
+    toast('Somente o administrador pode alterar Ajustes de Fechamento.', 'error');
+    return;
+  }
   const set = new Set(state.sapFechamentoOverrides || []);
   chaves.forEach(k => { if (incluir) set.delete(k); else set.add(k); });
   state.sapFechamentoOverrides = [...set];
@@ -4132,16 +4141,35 @@ function setSapFechOverrideEmLote(chaves, incluir) {
   if (typeof persist === 'function') persist();
 
   if (!window.supabaseClient) return;
+  // Dono REAL de cada chave (não o ADM que clicou): a RLS de
+  // sap_fechamento_overrides só libera SELECT pro dono da linha ou pro
+  // admin, então gravar com user_id do ADM faria o override nunca aparecer
+  // pro analista dono da movimentação (caso comum: ADM agindo sobre
+  // registro integrado — ver RECORD_INTEGRATION_TABLES, normalize.js). O
+  // cache de candidatos do modal (_fechMgrCandidatosRawCache) já tem o
+  // userId de cada linha (ver _sapFromDbRow, import.js). Cai no próprio ADM
+  // só se a chave não bater em nenhum candidato carregado (não deveria
+  // acontecer no fluxo normal da UI).
+  const donoPorChave = new Map((_fechMgrCandidatosRawCache || []).map(r => [getSapFechKey(r), r.userId]));
   if (!incluir) {
-    const rows = chaves.map(chave => ({ chave }));
+    const rows = chaves.map(chave => ({ chave, user_id: donoPorChave.get(chave) || window.currentUser.id }));
     window.supabaseClient.from('sap_fechamento_overrides').upsert(rows, { onConflict: 'user_id,chave' })
       .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao sincronizar override de fechamento:', error); });
   } else {
-    // Escopado ao próprio user_id (ver _supaDeleteOwned, normalize.js):
-    // `chave` já é uma composta de negócio, mesma classe de risco de `k`
-    // em inv_justificativas.
-    _supaDeleteOwned('sap_fechamento_overrides', null, { chave: chaves })
-      .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao remover override de fechamento na nuvem:', error); });
+    // Agrupa por dono real — um lote pode misturar registros de vários
+    // donos (ADM com várias integrações aceitas). _supaDeleteOwned aceita
+    // ownerId explícito (normalize.js) — mesmo padrão de _ocSyncDelete
+    // (ocorrencias.js) pro mesmo problema (apagar registro de outro dono).
+    const porDono = new Map();
+    chaves.forEach(chave => {
+      const dono = donoPorChave.get(chave) || window.currentUser.id;
+      if (!porDono.has(dono)) porDono.set(dono, []);
+      porDono.get(dono).push(chave);
+    });
+    porDono.forEach((chvs, dono) => {
+      _supaDeleteOwned('sap_fechamento_overrides', null, { chave: chvs }, dono)
+        .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao remover override de fechamento na nuvem:', error); });
+    });
   }
 }
 
@@ -4162,6 +4190,40 @@ async function syncSapFechamentoOverridesFromSupabase() {
   } catch (err) {
     console.warn('[Supabase] Falha ao buscar overrides de fechamento — mantendo dados locais.', err);
   }
+}
+
+// ── Realtime (07/08) ────────────────────────────────────────────────────
+// Ajuste feito pelo ADM precisa refletir na hora pro dono do registro (e
+// pra qualquer outra sessão aberta), sem esperar o próximo boot — a RLS já
+// restringe o que cada sessão recebe (dono da linha ou admin, mesma regra
+// do SELECT), então cada handler só vê o que já podia ver. Mesmo padrão de
+// canal de _custosSapRealtimeInit (import.js).
+let _fechChannel = null;
+function _fechRealtimeInit() {
+  if (!window.supabaseClient || !window.currentUser || _fechChannel) return;
+  const handle = (payload, tipo) => {
+    const row = tipo === 'DELETE' ? payload.old : payload.new;
+    if (!row?.chave) return;
+    const set = new Set(state.sapFechamentoOverrides || []);
+    if (tipo === 'DELETE') set.delete(row.chave); else set.add(row.chave);
+    state.sapFechamentoOverrides = [...set];
+    invalidateFechOverrideCache();
+    if (typeof updateDashboard === 'function') updateDashboard();
+    if (typeof renderModule === 'function' && document.getElementById('page-sap')?.classList.contains('active')) renderModule('sap');
+    if (typeof _fechMgrRender === 'function' && document.getElementById('fech-manager-overlay')?.classList.contains('open')) _fechMgrRender();
+  };
+  _fechChannel = window.supabaseClient
+    .channel('sap_fechamento_overrides_realtime')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'sap_fechamento_overrides' }, (p) => handle(p, 'INSERT'))
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'sap_fechamento_overrides' }, (p) => handle(p, 'UPDATE'))
+    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'sap_fechamento_overrides' }, (p) => handle(p, 'DELETE'))
+    .subscribe((status) => {
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') console.warn('[Fechamento SAP] Canal Realtime com problema:', status);
+    });
+}
+function _fechRealtimeStop() {
+  if (_fechChannel && window.supabaseClient) window.supabaseClient.removeChannel(_fechChannel);
+  _fechChannel = null;
 }
 
 // ═══════════════════════════════════════════════════════════
