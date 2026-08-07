@@ -2285,7 +2285,7 @@
       const m = /^(\d{4})-(\d{2})\|/.exec(k);
       if (m && isPeriodoFechado(m[1], m[2])) {
         if (typeof toast === 'function') toast('Período fechado pelo administrador — não é possível editar.', 'error');
-        return;
+        return false;
       }
     }
     invJustificativas[k] = { op, fiscal, saldo, custoMedioSap: custoSap, documentoSap: docSap };
@@ -2305,16 +2305,20 @@
     invAtualizarKpis();
     invAtualizarAlertas();
     _invSyncJustificativasToState([k]);
+    return true;
   }
 
   // Salva os dados do formulário atual (modal individual) no registro k.
+  // Retorna true/false — chamadores usam isso pra decidir se fecham o
+  // modal e mostram "salvo com sucesso" (não faz sentido mostrar isso se
+  // a guarda de período fechado, em _invApplyJustValues, bloqueou a gravação).
   function _invSalvarJustCore(k) {
     const op         = document.getElementById('inv-j-op')?.value.trim();
     const fiscal     = document.getElementById('inv-j-fiscal')?.value.trim();
     const saldo      = document.getElementById('inv-j-saldo')?.value;
     const custoSap   = document.getElementById('inv-j-custo-sap')?.value;
     const docSap     = document.getElementById('inv-j-doc-sap')?.value;
-    _invApplyJustValues(k, { op, fiscal, saldo, custoSap, docSap });
+    return _invApplyJustValues(k, { op, fiscal, saldo, custoSap, docSap });
   }
 
   window.invAbrirJust = function(k) {
@@ -2506,7 +2510,7 @@
   }
 
   window.invSalvarJust = function(k) {
-    _invSalvarJustCore(k);
+    if (!_invSalvarJustCore(k)) return; // bloqueado (período fechado) — toast de erro já mostrado, modal continua aberto
     document.getElementById('inv-modal')?.remove();
     toast('Justificativa salva.', 'success');
   };
@@ -2613,7 +2617,7 @@
 
   window._invLoteRegistrar = function(k) {
     const vals = _invLoteLerValores(k);
-    _invApplyJustValues(k, vals);
+    if (!_invApplyJustValues(k, vals)) return; // bloqueado (período fechado) — toast de erro já mostrado
     _invLoteState[k] = { registrado: true, snapshot: vals };
     _invLoteAtualizarLinhaVisual(k);
     toast('Linha registrada.', 'success');
@@ -2627,7 +2631,7 @@
       const st = _invLoteState[k] || {};
       if (st.registrado) return;
       const vals = _invLoteLerValores(k);
-      _invApplyJustValues(k, vals);
+      if (!_invApplyJustValues(k, vals)) return; // bloqueado (período fechado)
       _invLoteState[k] = { registrado: true, snapshot: vals };
       registradas++;
     });
