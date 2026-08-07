@@ -61,7 +61,6 @@
   "60": "relatorio-dais.test.mjs",
   "61": "openModal",
   "62": "openTool",
-  "63": "_mesclarGrandeComBanco",
   "64": "cloud-backup.test.mjs",
   "65": "dai-anexos-storage.test.mjs",
   "66": "dai-sync-admin.test.mjs",
@@ -74,7 +73,6 @@
   "73": "rodarAnalitico",
   "74": "handleSearchModal",
   "75": "_getModuleTextFilteredData",
-  "76": "_custosSapFromDbRow",
   "77": "Cloudflare Turnstile (CAPTCHA / Bot Protection Widget)",
   "78": "vercel.json",
   "79": "Shared 'Add Manual Record' Modal (modal-manual)",
@@ -86,7 +84,6 @@
   "85": "Categoria de Situação Select",
   "86": "Termo de Responsabilidade Step (sign + attach)",
   "87": "init",
-  "88": "excluirImportacao",
   "89": "Q: Why does CLOUD_BACKUP_MODULOS connect Cloud Backup Module to Admin Panel, Dashboard Conflict Detection, Dashboard Rendering & Cleanup, Import Deletion & Backup Sync?",
   "90": "_ocRealtimeInit",
   "91": "_ocCloseMicroFilterDropdown",
@@ -110,7 +107,5 @@
   "109": "salvarNovoRegionalCentral",
   "110": "_checarNovosParaImportar",
   "111": "_supaDeleteOwned",
-  "112": "_buildCentralOptionsHtml",
-  "113": "_dgrCapturarComTema",
-  "114": "_custosSapSyncUpsert"
+  "113": "_dgrCapturarComTema"
 }
