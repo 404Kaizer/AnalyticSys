@@ -3017,22 +3017,27 @@
     const { data: matData, error: matError } = await window.supabaseClient.from('materiais')
       .select('user_id, alias, cod_sap').in('user_id', userIds);
     if (matError) { console.warn('[ImportarDe] Falha ao resolver Cód SAP dos usuários de origem:', matError); return; }
-    const codSapPorOrigem = new Map(); // userId|||alias -> codSap
-    (matData || []).forEach(m => codSapPorOrigem.set(m.user_id + '|||' + m.alias, m.cod_sap || ''));
+    // normalizeText (case/acento/espaço) e normalizarCodSap (zero à esquerda,
+    // ".0" de Excel) — sem isso, "GAR1"/"Gar1" ou "51"/"051"/"51.0" contam
+    // como divergentes mesmo sendo o mesmo central/código na prática (mesmo
+    // problema que normalizarCodSap já resolve entre Materiais e Custos SAP,
+    // ver normalize.js).
+    const codSapPorOrigem = new Map(); // userId|||NORMALIZETEXT(alias) -> normalizarCodSap(codSap)
+    (matData || []).forEach(m => codSapPorOrigem.set(m.user_id + '|||' + normalizeText(m.alias), normalizarCodSap(m.cod_sap)));
 
     // Índice das linhas do inventário do usuário logado (mês atual) por
     // Central+Cód SAP — já geradas em invRows, com Cód SAP do cadastro dele.
-    const localPorCentralCodSap = new Map(); // central|||codSap -> row.k
+    const localPorCentralCodSap = new Map(); // NORMALIZETEXT(central)|||normalizarCodSap(codSap) -> row.k
     invRows.forEach(row => {
       if (row.semCadastro || !row.codSap) return;
-      localPorCentralCodSap.set(row.central + '|||' + row.codSap, row.k);
+      localPorCentralCodSap.set(normalizeText(row.central) + '|||' + normalizarCodSap(row.codSap), row.k);
     });
 
     const perfis = (typeof _carregarPerfis === 'function') ? await _carregarPerfis() : {};
     const existentes = new Set(Object.keys(invJustificativas));
     porOrigem.forEach(r => {
-      const codSapOrigem = codSapPorOrigem.get(r.user_id + '|||' + r.material) || '';
-      const kDestino = codSapOrigem ? localPorCentralCodSap.get(r.central + '|||' + codSapOrigem) : null;
+      const codSapOrigem = codSapPorOrigem.get(r.user_id + '|||' + normalizeText(r.material)) || '';
+      const kDestino = codSapOrigem ? localPorCentralCodSap.get(normalizeText(r.central) + '|||' + codSapOrigem) : null;
       if (!kDestino) { _invImportarDeSemCorrespondencia++; return; }
       if (existentes.has(kDestino)) return; // já preenchida localmente
       _invNovosParaImportar.push({
