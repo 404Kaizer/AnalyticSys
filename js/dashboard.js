@@ -136,6 +136,24 @@ function buildDashboardGerencialResults(dtIni, dtFim) {
       ...sapNoPeriodo.map(r => r.material || '—')
     ]);
 
+    // Materiais SEM atividade no período (nenhum lançamento nem SAP), mas já
+    // lançados em algum mês anterior, continuam com saldo — o Inventário já
+    // inclui esses (mats vem de TODOS os lançamentos históricos da central,
+    // ver _invGerarCore em inventario.js), então o Dashboard Gerencial ficava
+    // sub-contando o Est. Inicial Total por deixá-los de fora do escopo
+    // (allMats vinha só de lancsNoPeriodo/sapNoPeriodo, ambos já filtrados
+    // pelo período). Alinhado ao Inventário (decisão do Hugo, 10/08): mesmo
+    // critério de escopo — qualquer material já lançado nessa central, com
+    // cadastro válido, entra no cálculo.
+    (_dgLancIdx.byCentral.get(central) || []).forEach(r => {
+      const catKey = getCatKeyDoCadastro(r.materialOriginal);
+      if (!catKey) return;
+      const mat = r.material || '—';
+      if (!materialCatKeyMap.has(mat)) materialCatKeyMap.set(mat, catKey);
+      if (!materialCatSubKeyMap.has(mat)) materialCatSubKeyMap.set(mat, getCatSubKeyDoCadastro(r.materialOriginal));
+      allMats.add(mat);
+    });
+
     // Agrupa por material usando o índice pré-construído — O(1) por material
     const _macroPesoFimSoma = {};
     allMats.forEach(mat => {
