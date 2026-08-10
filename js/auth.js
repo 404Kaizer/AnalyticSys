@@ -300,6 +300,8 @@ window.AuthGate = (function () {
     if (importarDeMateriaisBtn) importarDeMateriaisBtn.style.display = isAdmin ? '' : 'none';
     const importarDeFiliaisBtn = $('btn-importar-de-filiais');
     if (importarDeFiliaisBtn) importarDeFiliaisBtn.style.display = isAdmin ? '' : 'none';
+    const importarDeInventarioBtn = $('btn-importar-de-inventario');
+    if (importarDeInventarioBtn) importarDeInventarioBtn.style.display = isAdmin ? '' : 'none';
 
     // Decisão 05/08 — Custos SAP virou cadastro único e compartilhado do
     // time: todo mundo vê (RLS libera SELECT geral), mas só o ADM importa/

@@ -2963,6 +2963,92 @@
     a.click(); URL.revokeObjectURL(url);
   };
 
+  // ── Importar de outro usuário — traz justificativas do MÊS ATUAL que
+  // outros usuários já preencheram e o usuário logado ainda não tem.
+  // Mesma ideia do "Importar de" de Centrais/Materiais (config.js), mas
+  // escopada ao mês aberto: lá o cadastro não tem conceito de mês, aqui
+  // cada chave (k) já carrega o mês, então importar TUDO de uma vez
+  // misturaria meses sem necessidade. Só ADM — a RLS também só libera
+  // ler `user_id` de outro dono nessa tabela pra admin (ver
+  // btn-importar-de-inventario, auth.js). Cria cópia própria (dono = quem
+  // importa), nunca escreve na conta do usuário original.
+  let _invNovosParaImportar = []; // achatado: [{ userId, email, k, op, fiscal, saldo, custoMedioSap, documentoSap }]
+
+  async function _invCarregarNovosParaImportar() {
+    _invNovosParaImportar = [];
+    if (!window.supabaseClient || window.currentUser?.role !== 'admin') return;
+    const meuId = window.currentUser?.id;
+    const mesKey = invGetMesKey();
+    const { data, error } = await window.supabaseClient.from('inv_justificativas')
+      .select('user_id, k, op, fiscal, saldo, custo_medio_sap, documento_sap')
+      .neq('user_id', meuId)
+      .like('k', mesKey + '|||%');
+    if (error) { console.warn('[ImportarDe] Falha ao checar justificativas de outros usuários:', error); return; }
+    const perfis = (typeof _carregarPerfis === 'function') ? await _carregarPerfis() : {};
+    const existentes = new Set(Object.keys(invJustificativas));
+    _invNovosParaImportar = (data || [])
+      .filter(r => !existentes.has(r.k))
+      .map(r => ({
+        userId: r.user_id, email: perfis[r.user_id] || r.user_id, k: r.k,
+        op: r.op, fiscal: r.fiscal, saldo: r.saldo,
+        custoMedioSap: r.custo_medio_sap, documentoSap: r.documento_sap,
+      }))
+      .sort((a, b) => a.email.localeCompare(b.email) || a.k.localeCompare(b.k));
+  }
+
+  window.invAbrirImportarDe = async function() {
+    if (window.currentUser?.role !== 'admin') return;
+    if (!invRows.length) { toast('Gere o inventário antes de importar.', 'error'); return; }
+    const wrap = document.getElementById('importar-de-inv-usuarios');
+    if (wrap) wrap.innerHTML = '<span style="font-size:12px;color:var(--text3)">Verificando registros disponíveis...</span>';
+    openModal('modal-importar-de-inv');
+    await _invCarregarNovosParaImportar();
+    if (!wrap) return;
+    if (!_invNovosParaImportar.length) {
+      wrap.innerHTML = `<span style="font-size:12px;color:var(--text3);padding:4px 6px">Nenhuma justificativa nova de outro usuário para o mês ${invGetMesKey()} (ou ninguém mais preencheu ainda).</span>`;
+      return;
+    }
+    const porUsuario = new Map(); // userId -> { email, count }
+    _invNovosParaImportar.forEach(it => {
+      const cur = porUsuario.get(it.userId) || { email: it.email, count: 0 };
+      cur.count++;
+      porUsuario.set(it.userId, cur);
+    });
+    const usuarios = [...porUsuario.entries()].sort((a, b) => a[1].email.localeCompare(b[1].email));
+    wrap.innerHTML = `
+      <label class="micro-filter-option" style="border-bottom:1px solid var(--border2);padding-bottom:6px;margin-bottom:4px">
+        <input type="checkbox" onchange="document.querySelectorAll('.chk-importar-de-inv-item').forEach(c => c.checked = this.checked)">
+        <span class="micro-filter-option-label"><b>Selecionar todos (${usuarios.length})</b></span>
+      </label>` +
+      usuarios.map(([userId, u]) => `<label class="micro-filter-option">
+          <input type="checkbox" class="chk-importar-de-inv-item" value="${escapeHtml(userId)}">
+          <span class="micro-filter-option-label">${escapeHtml(u.email)} <span style="font-size:10px;color:var(--text3)">— ${u.count} ${u.count === 1 ? 'justificativa' : 'justificativas'}</span></span>
+        </label>`).join('');
+  };
+
+  window.invConfirmarImportarDe = function(btn) {
+    const checked = [...document.querySelectorAll('.chk-importar-de-inv-item:checked')].map(el => el.value);
+    if (!checked.length) { toast('Selecione ao menos um usuário', 'error'); return; }
+    _setBtnLoading(btn, true, 'Importando...');
+    const selecionados = _invNovosParaImportar.filter(it => checked.includes(it.userId));
+    const chavesTocadas = [];
+    selecionados.forEach(it => {
+      invJustificativas[it.k] = {
+        op: it.op || '', fiscal: it.fiscal || '',
+        saldo: it.saldo != null ? String(it.saldo) : '',
+        custoMedioSap: it.custoMedioSap != null ? String(it.custoMedioSap) : '',
+        documentoSap: it.documentoSap || '',
+      };
+      chavesTocadas.push(it.k);
+    });
+    const usuariosCount = new Set(selecionados.map(it => it.userId)).size;
+    _setBtnLoading(btn, false);
+    closeModal('modal-importar-de-inv');
+    _invSyncJustificativasToState(chavesTocadas);
+    window.invGerar();
+    toast(`${selecionados.length} justificativa(s) importada(s) de ${usuariosCount} usuário(s)`);
+  };
+
   // ── Importar CSV — preenche em massa as justificativas ──────
   // Lê exatamente o formato gerado por invExportar (';' + campos entre
   // aspas). Casa cada linha com um registro do inventário do mês

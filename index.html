@@ -2179,6 +2179,9 @@
               <button class="btn" type="button" id="inv-table-fullscreen-btn" onclick="toggleInvTableFullscreen()">
                 <i class="ti ti-maximize"></i> <span>Expandir</span>
               </button>
+              <button class="btn" id="btn-importar-de-inventario" onclick="invAbrirImportarDe()" title="Importar justificativas de outro usuário para o mês atual">
+                <i class="ti ti-users"></i> Importar de
+              </button>
               <button class="btn" onclick="invAbrirImportCSV()">
                 <i class="ti ti-file-upload"></i> Importar CSV
               </button>
@@ -4847,6 +4850,24 @@
     <div class="form-actions">
       <button class="btn" onclick="closeModal('modal-importar-de')">Cancelar</button>
       <button class="btn btn-primary" id="btn-confirmar-importar-de" onclick="confirmarImportarDe(this)"><i class="ti ti-check"></i> Importar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Importar de outro usuário — INVENTÁRIO, escopado ao mês aberto
+     (cada justificativa já carrega o mês na chave, diferente do cadastro de
+     Materiais/Filiais). Só ADM. Cria cópia própria, não altera nada do lado
+     do usuário original (ver invAbrirImportarDe/invConfirmarImportarDe,
+     inventario.js). Modal próprio (não reaproveita #modal-importar-de) pra
+     não arriscar o fluxo já existente de Materiais/Filiais. -->
+<div class="modal-overlay" id="modal-importar-de-inv">
+  <div class="modal" style="width:460px">
+    <div class="modal-title"><i class="ti ti-users"></i> Importar justificativas de outro usuário</div>
+    <div class="modal-sub">Traz as justificativas do mês atual que outros usuários já preencheram e você ainda não tem — cria uma cópia própria, não altera nada do lado do usuário original.</div>
+    <div id="importar-de-inv-usuarios" style="max-height:280px;overflow-y:auto;border:1px solid var(--border2);border-radius:var(--radius);padding:8px 10px;margin-bottom:10px"></div>
+    <div class="form-actions">
+      <button class="btn" onclick="closeModal('modal-importar-de-inv')">Cancelar</button>
+      <button class="btn btn-primary" id="btn-confirmar-importar-de-inv" onclick="invConfirmarImportarDe(this)"><i class="ti ti-check"></i> Importar</button>
     </div>
   </div>
 </div>
