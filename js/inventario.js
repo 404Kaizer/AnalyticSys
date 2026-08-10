@@ -3034,12 +3034,19 @@
     });
 
     const perfis = (typeof _carregarPerfis === 'function') ? await _carregarPerfis() : {};
-    const existentes = new Set(Object.keys(invJustificativas));
     porOrigem.forEach(r => {
       const codSapOrigem = codSapPorOrigem.get(r.user_id + '|||' + normalizeText(r.material)) || '';
       const kDestino = codSapOrigem ? localPorCentralCodSap.get(normalizeText(r.central) + '|||' + codSapOrigem) : null;
       if (!kDestino) { _invImportarDeSemCorrespondencia++; return; }
-      if (existentes.has(kDestino)) return; // já preenchida localmente
+      // NÃO pula quem já tem justificativa LOCAL parcial/salva (bug real:
+      // antes qualquer entrada existente em invJustificativas — mesmo só
+      // com Saldo preenchido e Operacional/Fiscal vazios, estado "Pendente"
+      // âmbar da tabela — descartava o registro em silêncio, sem contar em
+      // lugar nenhum; o match acontecia mas o item nunca chegava a
+      // aparecer na lista). Só pula se já estiver TOTALMENTE ajustada —
+      // nesse caso não há nada a ganhar importando por cima.
+      const jaExistente = invJustificativas[kDestino];
+      if (jaExistente && _invEstadoDaLinha(jaExistente) === 'ajustado') return;
       _invNovosParaImportar.push({
         userId: r.user_id, email: perfis[r.user_id] || r.user_id, kDestino,
         op: r.op, fiscal: r.fiscal, saldo: r.saldo,
@@ -3091,12 +3098,17 @@
     _setBtnLoading(btn, true, 'Importando...');
     const selecionados = _invNovosParaImportar.filter(it => checked.includes(it.userId));
     const chavesTocadas = [];
+    // Merge, não overwrite — mesmo critério do Importar CSV
+    // (_invConfirmarImportCSV): o que já está preenchido localmente NUNCA é
+    // apagado pelo import; só entra o que estava em branco.
     selecionados.forEach(it => {
+      const atual = invJustificativas[it.kDestino] || {};
       invJustificativas[it.kDestino] = {
-        op: it.op || '', fiscal: it.fiscal || '',
-        saldo: it.saldo != null ? String(it.saldo) : '',
-        custoMedioSap: it.custoMedioSap != null ? String(it.custoMedioSap) : '',
-        documentoSap: it.documentoSap || '',
+        op: atual.op || it.op || '',
+        fiscal: atual.fiscal || it.fiscal || '',
+        saldo: (atual.saldo != null && atual.saldo !== '') ? atual.saldo : (it.saldo != null ? String(it.saldo) : ''),
+        custoMedioSap: (atual.custoMedioSap != null && atual.custoMedioSap !== '') ? atual.custoMedioSap : (it.custoMedioSap != null ? String(it.custoMedioSap) : ''),
+        documentoSap: atual.documentoSap || it.documentoSap || '',
       };
       chavesTocadas.push(it.kDestino);
     });
