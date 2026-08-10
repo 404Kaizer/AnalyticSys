@@ -156,7 +156,11 @@ function buildDashboardGerencialResults(dtIni, dtFim) {
     let somaPrimeiro = 0, somaUltimo = 0;
     const missingIniMats = [], missingFimMats = [];
     allMats.forEach(mat => {
-      const prev = dtIni ? getPrePeriodLaunchStock({ central, material: mat, dtIni, dtFim }) : null;
+      // catKey necessário para que getPrePeriodLaunchStock aplique a regra de
+      // Agregado (recuar até a última terça) — mesmo motivo do fix já
+      // existente em analitico.js (somaPrimeiro da Visão Macro).
+      const catKey = materialCatKeyMap.get(mat) || null;
+      const prev = dtIni ? getPrePeriodLaunchStock({ central, material: mat, dtIni, dtFim, catKey }) : null;
       if (prev != null) {
         somaPrimeiro += prev.value;
       } else {
