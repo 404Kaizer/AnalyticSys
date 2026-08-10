@@ -276,6 +276,17 @@
 }
 .modal-overlay.open { display: flex; }
 
+/* Trava o scroll de fundo enquanto qualquer overlay estiver aberto. O scroll
+   real da página acontece em .page-content (não em body — ver .main em
+   layout.css), então precisa travar os dois. Pega qualquer overlay pelo
+   padrão de nome comum a todos (*-overlay + .open) em vez de listar cada
+   modal (pim-overlay, bdm-overlay, lrc-overlay, modal-overlay, etc.) —
+   nenhum overlay novo precisa ser adicionado aqui manualmente. */
+body:has([class*="-overlay"].open),
+body:has([class*="-overlay"].open) .page-content {
+  overflow: hidden;
+}
+
 /* confirmarDestrutivo() (format.js) é sempre a camada de confirmação MAIS
    acima do sistema — precisa ficar visível mesmo quando aberto por cima
    de um modal que já sobrescreveu seu próprio z-index inline (ex.:
@@ -11059,10 +11070,10 @@ tr.sap-fechamento td {
 /* Indicador de status compacto (bolinha + tooltip) em vez de badge de
    texto — a coluna Status virou só um sinalizador rápido, já que TODO
    registro do modal é, por definição, um Ajuste de Fechamento; o que
-   varia é só se está desconsiderado (padrão) ou incluído manualmente. */
+   varia é só se está incluído (padrão) ou desconsiderado manualmente. */
 /* Indicador de status como SÍMBOLO (ícone), não só cor — circle-x para
    Desconsiderado (excluído do cálculo) e circle-check para Incluído
-   manualmente/Considerado. Reforça a leitura pra quem não distingue bem
+   (padrão/Considerado). Reforça a leitura pra quem não distingue bem
    as duas cores (roxo × accent), já que a forma também muda. */
 .fechmgr-status-icon {
   font-size: 16px;

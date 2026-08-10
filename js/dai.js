@@ -675,6 +675,16 @@ async function gerarDocumentoAjuste() {
     if (!it.objetivo)                          return toast(`Item ${i + 1}: informe a função do movimento SAP.`, 'error');
   }
 
+  // Guarda de período fechado — usa dataOcorrido (quando o ajuste de fato
+  // aconteceu), não a data de hoje, senão um DAI novo sempre escaparia da
+  // trava (todo documento é "gerado hoje", nunca no mês fechado).
+  if (window.currentUser?.role !== 'admin' && typeof isPeriodoFechado === 'function') {
+    const m = /^(\d{4})-(\d{2})-\d{2}$/.exec(dataOcorrido);
+    if (m && isPeriodoFechado(m[1], m[2])) {
+      return toast('Período fechado pelo administrador — não é possível gerar um ajuste para essa data.', 'error');
+    }
+  }
+
   const cnpjCentral = _daiObterCnpjCentral(central);
   if (!cnpjCentral) return toast(`A central "${central}" não tem CNPJ cadastrado. Preencha em Configurações → Cadastros antes de gerar o documento.`, 'error');
   const regionalCentral = _daiObterRegionalCentral(central);
@@ -913,6 +923,14 @@ async function salvarSapDai() {
   const daiId = document.getElementById('dai-sap-modal-daiid')?.value;
   const dai = (state.ajustesSistemicos || []).find(d => d.id === daiId);
   if (!dai) { toast('Documento não encontrado — pode já ter sido excluído.', 'error'); return; }
+
+  if (window.currentUser?.role !== 'admin' && typeof isPeriodoFechado === 'function') {
+    const m = /^(\d{4})-(\d{2})-\d{2}$/.exec(dai.dataOcorrido || '');
+    if (m && isPeriodoFechado(m[1], m[2])) {
+      toast('Período fechado pelo administrador — não é possível editar este ajuste.', 'error');
+      return;
+    }
+  }
 
   const dataConclusao = document.getElementById('dai-sap-modal-data')?.value;
   const itens = _daiGetItens(dai);

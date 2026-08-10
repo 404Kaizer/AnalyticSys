@@ -3142,6 +3142,16 @@ function lancEditSave(cell) {
   const r = window._lancPageData?.[idx];
   if (!r) return;
 
+  // Guarda de período fechado — única edição inline que existe hoje pros
+  // 4 módulos grandes (Entradas/Saídas/SAP só têm criar+excluir, sem
+  // contenteditable). Reverte a célula pro valor original: o navegador já
+  // exibe o que o usuário digitou antes do blur chegar aqui.
+  if (window.currentUser?.role !== 'admin' && typeof _periodoFechadoDoRegistro === 'function' && _periodoFechadoDoRegistro('lancamentos', r)) {
+    cell.textContent = _lancFieldDisplay(r, field);
+    toast('Período fechado pelo administrador — não é possível editar.', 'error');
+    return;
+  }
+
   const numericFields = ['peso', 'custo', 'valorTotal'];
 
   if (numericFields.includes(field)) {
@@ -3267,6 +3277,16 @@ function _ausInvalidateCache() {
   _ausInvalidateEntSaiIdx();
 }
 
+// Último dia útil do mês (recua domingo → sábado) — mesma regra de
+// getLastPeriodLaunchStockWithFallback (ui.js) para o fechamento mensal.
+// Fim de mês é sempre esperado, mesmo para materiais semanais (Agregado):
+// é quando o estoque do mês precisa fechar, categoria à parte.
+function _ausUltimoDiaUtilMes(ano, mes1) {
+  const d = new Date(ano, mes1, 0); // mes1 (1-indexado) vira "dia 0" do mês seguinte
+  if (d.getDay() === 0) d.setDate(d.getDate() - 1);
+  return d;
+}
+
 // Chamada quando período muda — recalcula tudo e guarda no cache
 function _ausComputar(dtIni, dtFim) {
   _ausInvalidateEntSaiIdx(); // garante índices frescos
@@ -3317,6 +3337,19 @@ function _ausComputar(dtIni, dtFim) {
     while (cur <= fim) { diasPeriodoISO.push(localISODate(cur)); cur.setDate(cur.getDate()+1); }
   }
 
+  // ── Dias de fim de mês (último dia útil) cobertos pelo período — sempre
+  //    esperados, independente da categoria do material (ver _ausUltimoDiaUtilMes) ──
+  const fimDeMesISO = new Set();
+  { const vistos = new Set();
+    diasPeriodoISO.forEach(dk => {
+      const [y, m] = dk.split('-').map(Number);
+      const mk = y + '-' + m;
+      if (vistos.has(mk)) return;
+      vistos.add(mk);
+      fimDeMesISO.add(localISODate(_ausUltimoDiaUtilMes(y, m)));
+    });
+  }
+
   // ── SAP acumulado por dia: Map<normKey, Map<ISO, deltaSAP>> ───────────
   // delta = soma de todos os pesos SAP até e incluindo aquele dia
   // Construído uma única vez para todo o período
@@ -3347,8 +3380,8 @@ function _ausComputar(dtIni, dtFim) {
     const [y,m,d] = dk.split('-').map(Number);
     dowByISO.set(dk, new Date(y, m-1, d).getDay());
   });
-  const esperadosDiario  = diasPeriodoISO.filter(dk => dowByISO.get(dk) !== 0);
-  const esperadosSemanal = diasPeriodoISO.filter(dk => dowByISO.get(dk) === 2);
+  const esperadosDiario  = diasPeriodoISO.filter(dk => dowByISO.get(dk) !== 0 || fimDeMesISO.has(dk));
+  const esperadosSemanal = diasPeriodoISO.filter(dk => dowByISO.get(dk) === 2 || fimDeMesISO.has(dk));
 
   // ── Calcula ausências ─────────────────────────────────────────────────
   const limiteInatividade = new Date(dtIni);
@@ -3432,8 +3465,9 @@ function _ausComputar(dtIni, dtFim) {
       }
 
       // 3. Dia sem lançamento: verifica se é dia esperado (usa dow pré-computado)
+      //    Fim de mês (último dia útil) é sempre esperado, mesmo p/ Agregado.
       const dow = dowByISO.get(dk);
-      const ehEsperado = isSemanal ? dow === 2 : dow !== 0;
+      const ehEsperado = fimDeMesISO.has(dk) || (isSemanal ? dow === 2 : dow !== 0);
       if (!ehEsperado) continue;
 
       // 4. Teórico = base (último lançamento) + SAP acumulado desde então
@@ -4813,6 +4847,10 @@ function removerRegistro(module, index) {
   const data = getFilteredData(module);
   const actual = data[(module === 'custosSap' ? currentPageCustosSap : pages[module]) * PAGE_SIZE + index];
   if (!actual) return;
+  if (window.currentUser?.role !== 'admin' && typeof _periodoFechadoDoRegistro === 'function' && _periodoFechadoDoRegistro(module, actual)) {
+    toast('Período fechado pelo administrador — não é possível excluir.', 'error');
+    return;
+  }
   if (!confirm('Deseja realmente excluir este registro?')) return;
 
   state[module] = state[module].filter(r => r !== actual);
@@ -4927,8 +4965,18 @@ function atualizarBarraLote(module) {
 }
 
 function excluirSelecionados(module) {
-  const selecionados = [...bulkSelected[module]];
+  let selecionados = [...bulkSelected[module]];
   if (!selecionados.length) return;
+
+  if (window.currentUser?.role !== 'admin' && typeof _periodoFechadoDoRegistro === 'function') {
+    const bloqueados = selecionados.filter(r => _periodoFechadoDoRegistro(module, r));
+    if (bloqueados.length) {
+      bloqueados.forEach(r => bulkSelected[module].delete(r));
+      selecionados = selecionados.filter(r => !bloqueados.includes(r));
+      toast(`${bloqueados.length} registro(s) de período fechado foram ignorados.`, 'error');
+      if (!selecionados.length) return;
+    }
+  }
   if (!confirm(`Excluir ${selecionados.length} registro(s) selecionado(s)? Esta ação não pode ser desfeita.`)) return;
 
   const selSet = bulkSelected[module];
@@ -6566,6 +6614,7 @@ const SUPABASE_BOOT_SYNCS = [
   'syncMateriaisFromSupabase',
   'syncInvJustificativasFromSupabase',
   'syncSapFechamentoOverridesFromSupabase',
+  'syncPeriodoFechamentosFromSupabase',
   'syncAjustesSistemicosFromSupabase',
   'syncAjustesExcluidosFromSupabase',
   'syncNotasAjusteFromSupabase',
@@ -6754,6 +6803,13 @@ async function restoreAndRender() {
     // time, RLS libera SELECT geral: todo mundo recebe INSERT/UPDATE/
     // DELETE de qualquer usuário, sem filtro de relevância (ver import.js).
     if (typeof _custosSapRealtimeInit === 'function') _custosSapRealtimeInit();
+    // Canal Realtime de Ajustes de Fechamento SAP (07/08) — mesmo padrão,
+    // avisa o dono do registro na hora quando o ADM considera/desconsidera
+    // (ver _fechRealtimeInit, ui.js).
+    if (typeof _fechRealtimeInit === 'function') _fechRealtimeInit();
+    // Canal Realtime de Fechamento de Período — mesmo padrão, avisa todo
+    // mundo na hora quando o ADM fecha/reabre um mês (ver _periodoFechRealtimeInit, ui.js).
+    if (typeof _periodoFechRealtimeInit === 'function') _periodoFechRealtimeInit();
     // Backup condensado (27/07) — reforço periódico silencioso (Etapa 4),
     // cobre o que muda entre importações. Idempotente: seguro chamar de
     // novo em qualquer reboot da mesma aba.

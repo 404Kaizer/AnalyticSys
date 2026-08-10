@@ -3531,12 +3531,12 @@ function getSapByCentralInPeriod(central, dtIni, dtFim) {
 // Contexto: todo fim de mês a central consolida estoque e faz ajustes de
 // saldo (movimentos SAP Y11 negativo / Y12 positivo) para bater o físico.
 // Esses ajustes são LANÇADOS NO SISTEMA e, se entrassem no cálculo de
-// variação (buildSnapshot), zerariam artificialmente a divergência que o
-// fechamento acabou de corrigir — mascarando o histórico de variação real
-// do mês. Precisam ser desconsiderados do cálculo em TODO o sistema
-// (Inventário, Dashboard Gerencial, Analítico, Trend, Macro, Assistente),
-// mas SEM alterar o dado bruto — a página SAP continua mostrando o
-// registro original, sempre, para auditoria.
+// variação (buildSnapshot) sem revisão, podem mascarar (ou, se
+// desconsiderados à toa, distorcer) o histórico de variação real do mês —
+// por isso ficam sinalizados como candidatos de Fechamento em TODO o
+// sistema (Inventário, Dashboard Gerencial, Analítico, Trend, Macro,
+// Assistente), mas SEM alterar o dado bruto — a página SAP continua
+// mostrando o registro original, sempre, para auditoria.
 //
 // Critério de detecção (definido com o usuário em 22/07/2026 — substitui a
 // versão anterior baseada em "último dia útil do mês" + janela de dias):
@@ -3544,11 +3544,14 @@ function getSapByCentralInPeriod(central, dtIni, dtFim) {
 // DT REGISTRO cai exatamente no mês/ano seguinte (o "mês atual"). Não
 // exige mais que DT DOCUMENTO === DT LANÇAMENTO no mesmo DIA, nem que a
 // DT LANÇAMENTO seja o último dia útil — só que ambas estejam no mesmo mês,
-// um mês antes do registro. Não existe nenhum outro campo no SAP (usuário,
-// texto, motivo) que diferencie um ajuste de fechamento de um ajuste feito
-// durante o mês — por isso a exclusão é automática por padrão de data, com
-// uma via de escape manual (override) para o caso raro de falso positivo,
-// controlada na própria página SAP (checkbox + ação em lote).
+// um mês antes do registro.
+//
+// Padrão de inclusão (Hugo, 07/08/2026 — inverte a regra anterior): um
+// candidato detectado entra no cálculo por padrão. Só é desconsiderado se
+// (a) o Documento SAP está justificado em alguma linha do Inventário
+// (trava incondicional) ou (b) o analista desconsiderou manualmente no
+// modal de Fechamento (checkbox + ação em lote na página SAP) — ver
+// isSapExcluidoPorFechamento.
 
 // Retorna um índice numérico crescente pro mês/ano de uma data, útil pra
 // comparar "mesmo mês" ou "mês seguinte" sem se importar com o dia.
@@ -3599,7 +3602,7 @@ function getSapFechKey(r) {
   ].join('||');
 }
 
-// ── Cache do Set de overrides (reincluídos manualmente no cálculo) ───────
+// ── Cache do Set de overrides (desconsiderados manualmente do cálculo) ───
 let _fechOverrideSetCache = null;
 let _fechOverrideSetSig = null;
 
@@ -3662,12 +3665,13 @@ function isSapDocJustificadoInventario(r) {
 //       trava incondicional, verificada ANTES do override manual, então
 //       nenhum "Considerar Ajuste" no modal de Fechamento consegue
 //       reincluir esse registro enquanto o campo continuar preenchido; OU
-//   (2) bate no padrão de fechamento E não foi reincluído manualmente
-//       pelo analista (comportamento original, automático por data).
+//   (2) bate no padrão de fechamento E foi desconsiderado manualmente pelo
+//       analista no modal de Fechamento — padrão é CONSIDERAR (Hugo,
+//       07/08), a exclusão automática por data foi removida.
 function isSapExcluidoPorFechamento(r) {
   if (!isSapFechamentoPattern(r)) return false;
   if (isSapDocJustificadoInventario(r)) return true;
-  return !_getFechOverrideSet().has(getSapFechKey(r));
+  return _getFechOverrideSet().has(getSapFechKey(r));
 }
 
 // Soma Peso (kg) e Custo Total (R$) de um conjunto de registros SAP —
@@ -4114,48 +4118,184 @@ function renderLancamentosSummary() {
 }
 window.renderLancamentosSummary = renderLancamentosSummary;
 
-// ── Override manual (reincluir/reexcluir do cálculo) ──────────────────────
-// incluir=true: registro passa a contar no cálculo mesmo batendo no padrão.
-// incluir=false: remove o override (volta ao comportamento automático).
+// ── Override manual (desconsiderar/reconsiderar no cálculo) ───────────────
+// Padrão agora é CONSIDERAR — o Set guarda as chaves DESCONSIDERADAS
+// manualmente pelo analista, não mais as reincluídas (ver
+// isSapExcluidoPorFechamento). incluir=true: sai do Set (volta a contar,
+// comportamento padrão). incluir=false: entra no Set (desconsiderado).
 function setSapFechOverrideEmLote(chaves, incluir) {
   if (!Array.isArray(chaves) || !chaves.length) return;
+  // Decisão 07/08 — só o ADM considera/desconsidera Ajustes de Fechamento
+  // (ferramenta GLOBAL, afeta o cálculo de estoque de todo mundo). Os
+  // botões já ficam escondidos pra quem não é admin (auth.js/
+  // updateAccountUI); esta guarda é só pra dar uma mensagem clara caso a
+  // função seja chamada por outro caminho (mesmo padrão de salvarHealthConfig).
+  if (window.currentUser?.role !== 'admin') {
+    toast('Somente o administrador pode alterar Ajustes de Fechamento.', 'error');
+    return;
+  }
   const set = new Set(state.sapFechamentoOverrides || []);
-  chaves.forEach(k => { if (incluir) set.add(k); else set.delete(k); });
+  chaves.forEach(k => { if (incluir) set.delete(k); else set.add(k); });
   state.sapFechamentoOverrides = [...set];
   invalidateFechOverrideCache();
   if (typeof persist === 'function') persist();
 
   if (!window.supabaseClient) return;
-  if (incluir) {
-    const rows = chaves.map(chave => ({ chave }));
-    window.supabaseClient.from('sap_fechamento_overrides').upsert(rows, { onConflict: 'user_id,chave' })
+  // Global por chave (08/08) — não mais escopado por dono da linha (ver
+  // migração sap_fechamento_overrides_global_by_chave). user_id aqui é só
+  // metadado de auditoria ("aplicado por"), não afeta mais quem consegue
+  // ler: a RLS libera SELECT pra qualquer autenticado, então o mesmo ajuste
+  // (mesma chave) fica desconsiderado/considerado pra TODO usuário que tiver
+  // aquele registro, não só pro dono original da linha no SAP.
+  if (!incluir) {
+    const rows = chaves.map(chave => ({ chave, user_id: window.currentUser.id }));
+    window.supabaseClient.from('sap_fechamento_overrides').upsert(rows, { onConflict: 'chave' })
       .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao sincronizar override de fechamento:', error); });
   } else {
-    // Escopado ao próprio user_id (ver _supaDeleteOwned, normalize.js):
-    // `chave` já é uma composta de negócio, mesma classe de risco de `k`
-    // em inv_justificativas.
-    _supaDeleteOwned('sap_fechamento_overrides', null, { chave: chaves })
+    window.supabaseClient.from('sap_fechamento_overrides').delete().in('chave', chaves)
       .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao remover override de fechamento na nuvem:', error); });
   }
 }
 
 async function syncSapFechamentoOverridesFromSupabase() {
   try {
-    // fetchMineOrIntegrated pagina por cursor (sem teto de 10k do PostgREST —
-    // esta tabela já passou de 4.000 linhas) e já aplica o filtro mine-or-
-    // integrated internamente.
-    const filtrado = await fetchMineOrIntegrated('sap_fechamento_overrides', 'id, user_id, chave');
+    // Global por chave (08/08) — sem noção de "meu ou integrado" (igual
+    // custos_sap, ver import.js): a RLS já libera SELECT geral pra qualquer
+    // autenticado, então busca a tabela inteira. fetchAllRows pagina por
+    // cursor (sem teto de 10k do PostgREST — esta tabela já passou de
+    // 4.000 linhas).
+    const todos = await fetchAllRows('sap_fechamento_overrides', 'id, chave');
     // O BANCO MANDA (30/07). Este era o caso mais exposto do sistema: o
     // estado local é só um conjunto de textos, sem id nem data, então unir
     // local ∪ nuvem e reenviar o que sobrasse tornava impossível distinguir
     // "removi este override de propósito" de "esta chave é nova aqui" — e
     // todo override desmarcado voltava sozinho. A nuvem substitui o
     // conjunto inteiro; erro de busca cai no catch e preserva o local.
-    state.sapFechamentoOverrides = [...new Set(filtrado.map(r => r.chave))];
+    state.sapFechamentoOverrides = [...new Set(todos.map(r => r.chave))];
     invalidateFechOverrideCache();
   } catch (err) {
     console.warn('[Supabase] Falha ao buscar overrides de fechamento — mantendo dados locais.', err);
   }
+}
+
+// ── Realtime (07/08, global por chave desde 08/08) ─────────────────────
+// Ajuste feito pelo ADM precisa refletir na hora pra QUALQUER sessão aberta
+// que tenha aquele registro (mesma chave), não só pro dono original da
+// linha no SAP — a RLS libera SELECT geral pra qualquer autenticado (igual
+// custos_sap), então todo evento que chega já é pra aplicar. Mesmo padrão
+// de canal de _custosSapRealtimeInit (import.js).
+let _fechChannel = null;
+function _fechRealtimeInit() {
+  if (!window.supabaseClient || !window.currentUser || _fechChannel) return;
+  const handle = (payload, tipo) => {
+    const row = tipo === 'DELETE' ? payload.old : payload.new;
+    if (!row?.chave) return;
+    const set = new Set(state.sapFechamentoOverrides || []);
+    if (tipo === 'DELETE') set.delete(row.chave); else set.add(row.chave);
+    state.sapFechamentoOverrides = [...set];
+    invalidateFechOverrideCache();
+    if (typeof updateDashboard === 'function') updateDashboard();
+    if (typeof renderModule === 'function' && document.getElementById('page-sap')?.classList.contains('active')) renderModule('sap');
+    if (typeof _fechMgrRender === 'function' && document.getElementById('fech-manager-overlay')?.classList.contains('open')) _fechMgrRender();
+  };
+  _fechChannel = window.supabaseClient
+    .channel('sap_fechamento_overrides_realtime')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'sap_fechamento_overrides' }, (p) => handle(p, 'INSERT'))
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'sap_fechamento_overrides' }, (p) => handle(p, 'UPDATE'))
+    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'sap_fechamento_overrides' }, (p) => handle(p, 'DELETE'))
+    .subscribe((status) => {
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') console.warn('[Fechamento SAP] Canal Realtime com problema:', status);
+    });
+}
+function _fechRealtimeStop() {
+  if (_fechChannel && window.supabaseClient) window.supabaseClient.removeChannel(_fechChannel);
+  _fechChannel = null;
+}
+
+// ═══════════════════════════════════════════════════════════
+// FECHAMENTO DE PERÍODO (mensal) — trava lançamentos/entradas/saídas/SAP/
+// justificativas/ajustes sistêmicos daquele mês pra quem não é ADM.
+// A garantia de verdade é a RLS (ver migração periodo_fechamento_inventario
+// no Supabase — policies de INSERT/UPDATE/DELETE checam
+// periodo_esta_fechado()); tudo aqui é só cache + UX (banner, toast cedo
+// em vez de esperar o erro do banco).
+// ═══════════════════════════════════════════════════════════
+async function syncPeriodoFechamentosFromSupabase() {
+  try {
+    const { data, error } = await window.supabaseClient
+      .from('periodo_fechamentos').select('ano, mes, fechado');
+    if (error) throw error;
+    state.periodoFechamentos = [...new Set(
+      (data || []).filter(r => r.fechado).map(r => `${r.ano}-${String(r.mes).padStart(2, '0')}`)
+    )];
+  } catch (err) {
+    console.warn('[Supabase] Falha ao buscar fechamentos de período — mantendo dados locais.', err);
+  }
+}
+
+function isPeriodoFechado(ano, mes) {
+  return (state.periodoFechamentos || []).includes(`${ano}-${String(mes).padStart(2, '0')}`);
+}
+// dataBr no formato 'DD/MM/YYYY' — mesmo parsing usado nas policies de RLS
+function isPeriodoFechadoDataBr(dataBr) {
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(String(dataBr || ''));
+  return m ? isPeriodoFechado(m[3], m[2]) : false;
+}
+
+// Mesma escolha de campo-data usada nas policies de RLS de cada tabela (ver
+// migração periodo_fechamento_inventario) — usada nos pontos de escrita
+// locais (_criarRegistro*, import.js; removerRegistro/excluirSelecionados,
+// dashboard.js) pra bloquear ANTES de mexer no estado local, em vez de só
+// depois de a nuvem já ter rejeitado (o registro ficava "preso" só local,
+// nunca sincronizando, dando falsa impressão de sucesso pro usuário comum).
+function _periodoFechadoDoRegistro(module, rec) {
+  if (!rec) return false;
+  switch (module) {
+    case 'lancamentos': return isPeriodoFechadoDataBr(rec.dtLanc);
+    case 'entradas':    return isPeriodoFechadoDataBr(rec.dtDescarga || rec.dtEmissao);
+    case 'saidas':      return isPeriodoFechadoDataBr(rec.dtEmissao);
+    case 'sap':         return isPeriodoFechadoDataBr(rec.dtLanc || rec.dtDoc);
+    default: return false;
+  }
+}
+
+async function periodoFecharMes(ano, mes) {
+  const { error } = await window.supabaseClient.from('periodo_fechamentos')
+    .upsert({ ano, mes, fechado: true, fechado_por: window.currentUser.id, fechado_em: new Date().toISOString() }, { onConflict: 'ano,mes' });
+  if (error) { toast('Falha ao fechar o período: ' + error.message, 'error'); return false; }
+  await syncPeriodoFechamentosFromSupabase();
+  toast(`Período ${String(mes).padStart(2, '0')}/${ano} fechado.`, 'success');
+  return true;
+}
+
+async function periodoReabrirMes(ano, mes) {
+  const { error } = await window.supabaseClient.from('periodo_fechamentos')
+    .update({ fechado: false, reaberto_por: window.currentUser.id, reaberto_em: new Date().toISOString() })
+    .eq('ano', ano).eq('mes', mes);
+  if (error) { toast('Falha ao reabrir o período: ' + error.message, 'error'); return false; }
+  await syncPeriodoFechamentosFromSupabase();
+  toast(`Período ${String(mes).padStart(2, '0')}/${ano} reaberto.`, 'success');
+  return true;
+}
+
+let _periodoFechChannel = null;
+function _periodoFechRealtimeInit() {
+  if (!window.supabaseClient || !window.currentUser || _periodoFechChannel) return;
+  const handle = async () => {
+    await syncPeriodoFechamentosFromSupabase();
+    if (typeof renderAll === 'function') renderAll();
+    if (typeof _adminPeriodoFechRender === 'function' && document.getElementById('admin-section-fechamento')?.style.display !== 'none') _adminPeriodoFechRender();
+  };
+  _periodoFechChannel = window.supabaseClient
+    .channel('periodo_fechamentos_realtime')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'periodo_fechamentos' }, handle)
+    .subscribe((status) => {
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') console.warn('[Fechamento de Período] Canal Realtime com problema:', status);
+    });
+}
+function _periodoFechRealtimeStop() {
+  if (_periodoFechChannel && window.supabaseClient) window.supabaseClient.removeChannel(_periodoFechChannel);
+  _periodoFechChannel = null;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -4207,7 +4347,7 @@ let _fechMgrCandidatosRawCache = null;
 //
 // Otimização: como _fechMgrCandidatosRawCache já contém SÓ registros que
 // bateram isSapFechamentoPattern, não precisamos checar de novo aqui — só
-// precisamos saber se cada um está no Set de overrides (reincluído
+// precisamos saber se cada um está no Set de overrides (desconsiderado
 // manualmente). Chamar isSapExcluidoPorFechamento(r) de novo repetiria o
 // isSapFechamentoPattern (já sabido) E getSapFechKey (já calculado abaixo)
 // à toa — em 3-4 mil registros isso soma bastante trabalho redundante toda
@@ -4225,11 +4365,11 @@ function _fechMgrGetTodosCandidatos() {
     // reaplicada aqui pra exibir o motivo certo em vez de só o resultado).
     const docNorm = _fechImportNormDoc(r.documento);
     const travadoPorInventario = invDocMap.has(docNorm);
-    const excluido = travadoPorInventario ? true : !overrideSet.has(chave);
+    const excluido = travadoPorInventario ? true : overrideSet.has(chave);
     let statusLabel;
-    if (travadoPorInventario) statusLabel = 'Justificado no Inventário';
-    else if (excluido)        statusLabel = 'Desconsiderado';
-    else                      statusLabel = 'Incluído manualmente';
+    if (travadoPorInventario)      statusLabel = 'Justificado no Inventário';
+    else if (excluido)             statusLabel = 'Desconsiderado manualmente';
+    else                           statusLabel = 'Incluído';
     return {
       ...r,
       _chave: chave,
@@ -4312,11 +4452,11 @@ function _fechMgrRender() {
   // está sendo exibido. Sem filtro ativo, filtrados === todos e o
   // comportamento não muda.
   // Peso/Custo somam TODOS os registros filtrados, independente do status
-  // (desconsiderado ou incluído manualmente) — só as contagens abaixo
-  // (Desconsiderados/Incluídos manualmente) continuam segmentadas por
-  // status, já que é essa a razão de existir delas.
+  // (desconsiderado ou incluído) — só as contagens abaixo (Desconsiderados/
+  // Incluídos) continuam segmentadas por status, já que é essa a razão de
+  // existir delas.
   const desconsiderados = filtrados.filter(r => r._statusExcluido);
-  const incluidosManual = filtrados.filter(r => !r._statusExcluido);
+  const incluidos = filtrados.filter(r => !r._statusExcluido);
   const travadosPorInventario = filtrados.filter(r => r._travadoPorInventario).length;
   const { peso: pesoFiltro, custo: custoFiltro } = somarPesoCustoSap(filtrados);
   const filtroAtivo = filtrados.length !== todos.length;
@@ -4358,9 +4498,9 @@ function _fechMgrRender() {
       <div class="inv-kpi-card">
         <div class="inv-kpi-icon" style="background:var(--accent-dim);color:var(--accent)"><i class="ti ti-hand-click"></i></div>
         <div class="inv-kpi-body">
-          <div class="inv-kpi-label">Incluídos manualmente</div>
-          <div class="inv-kpi-value">${incluidosManual.length}</div>
-          <div class="inv-kpi-unit">reincluídos no cálculo</div>
+          <div class="inv-kpi-label">Incluídos</div>
+          <div class="inv-kpi-value">${incluidos.length}</div>
+          <div class="inv-kpi-unit">considerados no cálculo (padrão)</div>
         </div>
       </div>`;
   }
@@ -4396,8 +4536,8 @@ function _fechMgrRender() {
     const statusDot = r._travadoPorInventario
       ? `<i class="ti ti-lock fechmgr-status-icon fechmgr-status-icon--travado" title="Travado — Documento SAP desta linha: '${escapeHtml(r._travadoDocSap)}'. Encontrado na justificativa do Inventário como: '${escapeHtml(r._travadoDocInvOriginal)}'. Para reverter, apague o campo Documento SAP NAQUELA justificativa e verifique se não sobrou outra igual."></i>`
       : r._statusExcluido
-        ? `<i class="ti ti-circle-x fechmgr-status-icon fechmgr-status-icon--desc" title="Desconsiderado do cálculo de variação"></i>`
-        : `<i class="ti ti-circle-check fechmgr-status-icon fechmgr-status-icon--inc" title="Incluído manualmente no cálculo (considerado)"></i>`;
+        ? `<i class="ti ti-circle-x fechmgr-status-icon fechmgr-status-icon--desc" title="Desconsiderado manualmente do cálculo de variação"></i>`
+        : `<i class="ti ti-circle-check fechmgr-status-icon fechmgr-status-icon--inc" title="Incluído no cálculo (padrão)"></i>`;
     // Escapa uma vez e reaproveita no title + conteúdo visível — antes só o
     // title era escapado; o texto exibido ia direto sem escapeHtml, então
     // um material/usuário/documento com "<", ">" ou "&" (comum em specs
@@ -4594,10 +4734,11 @@ window._fechMgrLimparSelecao = _fechMgrLimparSelecao;
 // paralelo. O usuário cola uma lista de números de Documento SAP; o
 // sistema casa cada um contra os candidatos Y11/Y12 já detectados
 // (_fechMgrGetTodosCandidatos, mesmo universo do modal principal) e
-// aplica "voltar ao automático" (incluir=false) nos que baterem — único
-// sentido suportado, por decisão explícita (não existe importação pra
-// "considerar"). Pensado pra corrigir em massa registros reincluídos
-// manualmente por engano, sem precisar filtrar/selecionar linha a linha.
+// aplica "desconsiderar" (incluir=false) nos que baterem — único sentido
+// suportado, por decisão explícita (não existe importação pra
+// "considerar", já que considerar é o padrão). Pensado pra desconsiderar em
+// massa uma lista de documentos conhecidos, sem precisar filtrar/selecionar
+// linha a linha.
 
 // Normaliza um número de documento pra comparação: trim + maiúsculas +
 // remove zeros à esquerda — mesmo padrão de normNF/normOS
@@ -4663,8 +4804,8 @@ function _fechImportPreVisualizar() {
     porDocNorm.get(key).push(r);
   });
 
-  const encontrados = [];      // registros que serão desconsiderados (hoje incluídos manualmente)
-  const jaDesconsiderado = []; // registros encontrados mas já no padrão automático (no-op)
+  const encontrados = [];      // registros que serão desconsiderados (hoje incluídos, o padrão)
+  const jaDesconsiderado = []; // registros encontrados mas já desconsiderados manualmente (no-op)
   const naoEncontrados = [];   // documentos importados sem candidato correspondente (typo ou não é Y11/Y12)
 
   docsUnicos.forEach(doc => {
@@ -4717,7 +4858,7 @@ function _fechImportAplicar() {
     const chaves = encontrados.map(r => r._chave);
     setSapFechOverrideEmLote(chaves, false);
     fecharFechImportModal();
-    toast(`${chaves.length} registro(s) voltaram a ser desconsiderados do cálculo (${docsAfetados} documento(s)).`);
+    toast(`${chaves.length} registro(s) desconsiderado(s) do cálculo (${docsAfetados} documento(s)).`);
     _fechMgrRender();
     // Recalcula qualquer análise já aberta pra refletir a mudança imediatamente
     // — mesmo padrão de _fechMgrAplicarLote.

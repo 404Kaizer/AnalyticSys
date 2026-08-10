@@ -575,6 +575,11 @@ function _criarRegistroEntrada(dados) {
     valorTotal:     total
   });
 
+  // Guarda de período fechado — mesmo motivo de _criarRegistroLancamento.
+  if (window.currentUser?.role !== 'admin' && typeof _periodoFechadoDoRegistro === 'function' && _periodoFechadoDoRegistro('entradas', rec)) {
+    return { ok: false, erro: 'Período fechado pelo administrador — não é possível lançar nesse mês.' };
+  }
+
   // Aviso de duplicata — mesmo padrão de Lançamentos, não bloqueia.
   if (typeof _fpEntrada === 'function') {
     const fpNovo = _fpEntrada(rec);
@@ -645,6 +650,11 @@ function _criarRegistroSaida(dados) {
     valorTotal:     total
   });
 
+  // Guarda de período fechado — mesmo motivo de _criarRegistroLancamento.
+  if (window.currentUser?.role !== 'admin' && typeof _periodoFechadoDoRegistro === 'function' && _periodoFechadoDoRegistro('saidas', rec)) {
+    return { ok: false, erro: 'Período fechado pelo administrador — não é possível lançar nesse mês.' };
+  }
+
   // Aviso de duplicata — mesmo padrão de Lançamentos/Entradas/Custos SAP.
   if (typeof _fpSaida === 'function') {
     const fpNovo = _fpSaida(rec);
@@ -710,6 +720,13 @@ function _criarRegistroLancamento(dados) {
     custo,
     valorTotal:     total
   });
+
+  // Guarda de período fechado — checa ANTES de mexer no estado local. Sem
+  // isso, a RLS bloqueia só o upsert na nuvem (fire-and-forget) e o
+  // registro ficava "preso" só local pra sempre, parecendo salvo.
+  if (window.currentUser?.role !== 'admin' && typeof _periodoFechadoDoRegistro === 'function' && _periodoFechadoDoRegistro('lancamentos', rec)) {
+    return { ok: false, erro: 'Período fechado pelo administrador — não é possível lançar nesse mês.' };
+  }
 
   // Aviso de duplicata (não bloqueia — duplicata legítima é permitida por
   // design, ex.: dois eventos reais na mesma central/material/data). Só
@@ -1311,6 +1328,7 @@ function _sapFromDbRow(row) {
   return {
     id: row.id,
     fonte: row.fonte,
+    userId: row.user_id || null,
     usuario: row.usuario,
     movimento: row.movimento,
     ref: row.ref,
@@ -1400,6 +1418,11 @@ function _criarRegistroSAP(dados) {
     custoUnit,
     valorTotal:     total
   });
+
+  // Guarda de período fechado — mesmo motivo de _criarRegistroLancamento.
+  if (window.currentUser?.role !== 'admin' && typeof _periodoFechadoDoRegistro === 'function' && _periodoFechadoDoRegistro('sap', rec)) {
+    return { ok: false, erro: 'Período fechado pelo administrador — não é possível lançar nesse mês.' };
+  }
 
   state.sap.unshift(rec);
   invalidateSapIndex();

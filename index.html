@@ -1808,6 +1808,7 @@
         <!-- ══ CONTEÚDO (visível após Gerar) ══ -->
         <div id="inv-content" style="display:none">
         <div id="inv-sem-cadastro-box"></div>
+        <div id="inv-periodo-fech-box"></div>
         <div class="inv-kpi-groups" id="inv-kpis">
           <!-- ══ BLOCO DE DESTAQUE — Variação e Custo Var. (dados mais
                importantes do resumo, separados e em maior evidência) ══ -->
@@ -3078,6 +3079,7 @@
           <button class="admin-subnav-btn" id="admin-subnav-pendentes" onclick="adminShowSection('pendentes')"><i class="ti ti-inbox"></i> Pendentes de integração</button>
           <button class="admin-subnav-btn" id="admin-subnav-formpublico" onclick="adminShowSection('formpublico')"><i class="ti ti-link"></i> Formulário Público</button>
           <button class="admin-subnav-btn" id="admin-subnav-servidor" onclick="adminShowSection('servidor')"><i class="ti ti-server"></i> Servidor</button>
+          <button class="admin-subnav-btn" id="admin-subnav-fechamento" onclick="adminShowSection('fechamento')"><i class="ti ti-lock"></i> Fechamento de Período</button>
         </div>
 
         <!-- Seção: Usuários -->
@@ -3334,6 +3336,28 @@
             <div id="admin-analistas-categoria-rows" style="padding:14px 18px 18px;display:flex;flex-direction:column;gap:10px">
               <div class="empty-state"><i class="ti ti-loader"></i><p>Carregando...</p></div>
             </div>
+          </div>
+        </div>
+
+        <!-- Seção: Fechamento de Período — trava lançamentos/entradas/saídas/
+             SAP/justificativas/ajustes sistêmicos de um mês pra quem não é
+             ADM. A garantia é a RLS (periodo_esta_fechado no Supabase); esta
+             tela só fecha/reabre. -->
+        <div id="admin-section-fechamento" style="display:none">
+          <div class="table-card">
+            <div class="table-header">
+              <span class="table-title"><i class="ti ti-lock"></i> Fechamento de Período</span>
+            </div>
+            <div style="font-size:11px;color:var(--text3);padding:10px 18px 0">
+              <i class="ti ti-info-circle"></i> Ao fechar um mês, nenhum analista consegue mais editar, excluir ou lançar Lançamentos, Entradas, Saídas, SAP, Justificativas do Inventário ou Ajustes Sistêmicos daquele mês. Só o ADM continua podendo editar, mesmo com o período fechado, e pode reabrir a qualquer momento.
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:14px 18px">
+              <select id="admin-periodo-fech-mes" class="form-input" style="width:auto" onchange="_adminPeriodoFechRender()"></select>
+              <select id="admin-periodo-fech-ano" class="form-input" style="width:auto" onchange="_adminPeriodoFechRender()"></select>
+              <button id="admin-periodo-fech-btn" class="btn" onclick="adminPeriodoToggle()">Fechar período</button>
+              <span id="admin-periodo-fech-status" style="font-size:12px"></span>
+            </div>
+            <div id="admin-periodo-fech-lista" style="padding:0 18px 18px"></div>
           </div>
         </div>
 
@@ -5096,7 +5120,7 @@
         <div class="fechmgr-sub" id="fechmgr-sub">—</div>
       </div>
       <div class="fechmgr-header-actions">
-        <button class="btn" type="button" onclick="abrirFechImportModal()" title="Colar uma lista de números de documento e desconsiderar em lote">
+        <button class="btn" type="button" id="btn-fechmgr-importar" onclick="abrirFechImportModal()" title="Colar uma lista de números de documento e desconsiderar em lote">
           <i class="ti ti-upload"></i> <span>Importar Documentos</span>
         </button>
         <button class="btn btn-primary" type="button" onclick="fecharFechManager()">
@@ -5110,8 +5134,8 @@
     <div class="fechmgr-lote-bar" id="fechmgr-lote-bar" style="display:none">
       <span id="fechmgr-lote-count"><i class="ti ti-checks"></i> 0 registros selecionados</span>
       <div class="fechmgr-lote-actions">
-        <button class="btn btn-sm" onclick="_fechMgrAplicarLote(true)" title="Considerar os registros selecionados no cálculo de estoque"><i class="ti ti-check"></i> Considerar Ajuste</button>
-        <button class="btn btn-sm" onclick="_fechMgrAplicarLote(false)" title="Desconsiderar os registros selecionados do cálculo de estoque"><i class="ti ti-x"></i> Desconsiderar Ajuste</button>
+        <button class="btn btn-sm" id="btn-fechmgr-considerar" onclick="_fechMgrAplicarLote(true)" title="Considerar os registros selecionados no cálculo de estoque"><i class="ti ti-check"></i> Considerar Ajuste</button>
+        <button class="btn btn-sm" id="btn-fechmgr-desconsiderar" onclick="_fechMgrAplicarLote(false)" title="Desconsiderar os registros selecionados do cálculo de estoque"><i class="ti ti-x"></i> Desconsiderar Ajuste</button>
         <button class="btn btn-sm fechmgr-btn-ghost" onclick="_fechMgrLimparSelecao()">Limpar seleção</button>
       </div>
     </div>
@@ -5154,7 +5178,7 @@
             <th>Dt. Registro</th>
             <th style="text-align:right">Peso</th>
             <th style="text-align:right">Custo Total</th>
-            <th title="Desconsiderado do cálculo × incluído manualmente">Status</th>
+            <th title="Padrão: incluído no cálculo. Desconsiderado só por trava do Inventário ou ação manual aqui.">Status</th>
           </tr>
         </thead>
         <tbody id="fechmgr-tbody"></tbody>
@@ -5193,9 +5217,10 @@
       <textarea id="fech-import-textarea" class="fechimp-textarea" rows="8"
         placeholder="Cole um número de documento por linha (ou separados por vírgula, ponto-e-vírgula ou tab)&#10;Ex.:&#10;1400012345&#10;1400012346"></textarea>
       <div class="fechimp-hint">
-        Só afeta registros que já batem no padrão automático de Ajuste de Fechamento Mensal (Y11/Y12) detectado nesta tela.
-        Documentos reincluídos manualmente (override) voltam ao comportamento padrão — desconsiderados do cálculo de variação
-        em Dashboard, Analítico, Inventário e Trend.
+        Só afeta registros que já batem no padrão de Ajuste de Fechamento Mensal (Y11/Y12) detectado nesta tela.
+        Por padrão esses registros já entram no cálculo — os documentos colados aqui são marcados como desconsiderados
+        manualmente do cálculo de variação em Dashboard, Analítico, Inventário e Trend (reversível a qualquer momento
+        via "Considerar Ajuste" no modal principal).
       </div>
       <button class="btn btn-primary" type="button" onclick="_fechImportPreVisualizar()">
         <i class="ti ti-search"></i> Pré-visualizar

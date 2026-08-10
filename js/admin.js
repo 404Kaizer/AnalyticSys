@@ -802,22 +802,26 @@ function adminShowSection(section) {
   const elPendentes = document.getElementById('admin-section-pendentes');
   const elFormPublico = document.getElementById('admin-section-formpublico');
   const elServidor = document.getElementById('admin-section-servidor');
+  const elFechamento = document.getElementById('admin-section-fechamento');
   if (elUsuarios) elUsuarios.style.display = section === 'usuarios' ? '' : 'none';
   if (elDados)    elDados.style.display    = section === 'dados' ? '' : 'none';
   if (elPendentes) elPendentes.style.display = section === 'pendentes' ? '' : 'none';
   if (elFormPublico) elFormPublico.style.display = section === 'formpublico' ? '' : 'none';
   if (elServidor) elServidor.style.display = section === 'servidor' ? '' : 'none';
+  if (elFechamento) elFechamento.style.display = section === 'fechamento' ? '' : 'none';
   document.getElementById('admin-subnav-usuarios')?.classList.toggle('active', section === 'usuarios');
   document.getElementById('admin-subnav-dados')?.classList.toggle('active', section === 'dados');
   document.getElementById('admin-subnav-pendentes')?.classList.toggle('active', section === 'pendentes');
   document.getElementById('admin-subnav-formpublico')?.classList.toggle('active', section === 'formpublico');
   document.getElementById('admin-subnav-servidor')?.classList.toggle('active', section === 'servidor');
+  document.getElementById('admin-subnav-fechamento')?.classList.toggle('active', section === 'fechamento');
 
   if (section === 'usuarios') { adminLoadUsuarios(); adminLoadDbStats(); }
   if (section === 'dados') adminLoadModulo();
   if (section === 'pendentes') adminLoadPendentes();
   if (section === 'formpublico') adminLoadFormPublico();
   if (section === 'servidor') adminServidorListar();
+  if (section === 'fechamento') _adminPeriodoFechInit();
 
   // Só mantém o polling de presença rodando enquanto a seção Usuários
   // estiver de fato visível — evita chamadas desnecessárias em segundo plano.
@@ -832,6 +836,66 @@ function adminShowSection(section) {
 function renderAdminPage() {
   adminShowSection('usuarios');
 }
+
+// ── Seção: Fechamento de Período ────────────────────────────────
+// A garantia de bloqueio é a RLS (ver migração periodo_fechamento_inventario
+// no Supabase); esta tela só fecha/reabre e mostra o estado atual (cache em
+// state.periodoFechamentos, ver isPeriodoFechado/syncPeriodoFechamentosFromSupabase em ui.js).
+function _adminPeriodoFechInit() {
+  const selMes = document.getElementById('admin-periodo-fech-mes');
+  const selAno = document.getElementById('admin-periodo-fech-ano');
+  const agora = new Date();
+  if (selMes && !selMes.options.length) {
+    selMes.innerHTML = MESES_NOME_DG.map((nome, i) => `<option value="${i + 1}">${nome}</option>`).join('');
+    selMes.value = agora.getMonth() + 1;
+  }
+  if (selAno && !selAno.options.length) {
+    const anoAtual = agora.getFullYear();
+    selAno.innerHTML = [anoAtual - 1, anoAtual, anoAtual + 1].map(a => `<option value="${a}">${a}</option>`).join('');
+    selAno.value = anoAtual;
+  }
+  _adminPeriodoFechRender();
+}
+
+async function _adminPeriodoFechRender() {
+  const ano = Number(document.getElementById('admin-periodo-fech-ano')?.value);
+  const mes = Number(document.getElementById('admin-periodo-fech-mes')?.value);
+  if (!ano || !mes) return;
+  const fechado = isPeriodoFechado(ano, mes);
+
+  const statusEl = document.getElementById('admin-periodo-fech-status');
+  const btnEl = document.getElementById('admin-periodo-fech-btn');
+  if (statusEl) {
+    statusEl.innerHTML = fechado
+      ? '<i class="ti ti-lock" style="color:var(--danger,#e5484d)"></i> Período fechado'
+      : '<i class="ti ti-lock-open"></i> Período aberto';
+  }
+  if (btnEl) btnEl.innerHTML = fechado ? '<i class="ti ti-lock-open"></i> Reabrir período' : '<i class="ti ti-lock"></i> Fechar período';
+
+  const listEl = document.getElementById('admin-periodo-fech-lista');
+  if (!listEl) return;
+  const { data, error } = await window.supabaseClient
+    .from('periodo_fechamentos').select('ano, mes, fechado')
+    .order('ano', { ascending: false }).order('mes', { ascending: false });
+  if (error) { listEl.innerHTML = `<div class="empty-state"><p>${_adminErroDetalhe(error)}</p></div>`; return; }
+  listEl.innerHTML = (data || []).length
+    ? `<div style="font-size:11px;color:var(--text3);padding-top:10px">Histórico:</div>` + data.map(r => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
+        <span>${MESES_NOME_DG[r.mes - 1]}/${r.ano} — ${r.fechado ? '<i class="ti ti-lock" style="color:var(--danger,#e5484d)"></i> Fechado' : '<i class="ti ti-lock-open"></i> Aberto'}</span>
+        <button class="btn btn-sm" onclick="${r.fechado ? `adminPeriodoReabrirLinha(${r.ano},${r.mes})` : `adminPeriodoFecharLinha(${r.ano},${r.mes})`}">${r.fechado ? 'Reabrir' : 'Fechar de novo'}</button>
+      </div>`).join('')
+    : '<div class="empty-state"><p>Nenhum período fechado ainda.</p></div>';
+}
+
+async function adminPeriodoToggle() {
+  const ano = Number(document.getElementById('admin-periodo-fech-ano')?.value);
+  const mes = Number(document.getElementById('admin-periodo-fech-mes')?.value);
+  if (!ano || !mes) return;
+  const ok = isPeriodoFechado(ano, mes) ? await periodoReabrirMes(ano, mes) : await periodoFecharMes(ano, mes);
+  if (ok) _adminPeriodoFechRender();
+}
+async function adminPeriodoFecharLinha(ano, mes) { if (await periodoFecharMes(ano, mes)) _adminPeriodoFechRender(); }
+async function adminPeriodoReabrirLinha(ano, mes) { if (await periodoReabrirMes(ano, mes)) _adminPeriodoFechRender(); }
 
 // ── Seção: Usuários ─────────────────────────────────────────
 // silent=true é usado só pelo polling automático (a cada 30s) — evita
