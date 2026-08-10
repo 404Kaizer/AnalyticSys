@@ -2972,10 +2972,26 @@
   // ler `user_id` de outro dono nessa tabela pra admin (ver
   // btn-importar-de-inventario, auth.js). Cria cópia própria (dono = quem
   // importa), nunca escreve na conta do usuário original.
-  let _invNovosParaImportar = []; // achatado: [{ userId, email, k, op, fiscal, saldo, custoMedioSap, documentoSap }]
+  //
+  // MATCH por Central + Cód SAP, não por Central + Material: o "material"
+  // dentro de `k` é o ALIAS do cadastro de Materiais de quem preencheu —
+  // texto livre, que dois usuários podem grafar diferente pro mesmo
+  // material real (ex.: "Cimento CPV" vs "Cimento Portland V"), então
+  // bater `k` bruto contra `k` bruto deixa justificativa "órfã" (salva mas
+  // nunca aparece em nenhuma linha). Cód SAP é o código do ERP, mais
+  // estável entre cadastros diferentes. Por isso: resolve o Cód SAP de
+  // cada justificativa importada a partir do cadastro de Materiais do
+  // PRÓPRIO usuário de origem (o alias só faz sentido dentro do cadastro
+  // dele), depois casa contra as linhas do inventário do usuário logado
+  // (já geradas, com Cód SAP resolvido pelo cadastro dele) por
+  // Central+Cód SAP — e grava sob o `k` LOCAL (com o material do usuário
+  // logado), não sob o `k` de origem.
+  let _invNovosParaImportar = []; // achatado: [{ userId, email, kDestino, op, fiscal, saldo, custoMedioSap, documentoSap }]
+  let _invImportarDeSemCorrespondencia = 0; // registros de outros usuários sem Central+Cód SAP correspondente no inventário deste mês
 
   async function _invCarregarNovosParaImportar() {
     _invNovosParaImportar = [];
+    _invImportarDeSemCorrespondencia = 0;
     if (!window.supabaseClient || window.currentUser?.role !== 'admin') return;
     const meuId = window.currentUser?.id;
     const mesKey = invGetMesKey();
@@ -2984,16 +3000,48 @@
       .neq('user_id', meuId)
       .like('k', mesKey + '|||%');
     if (error) { console.warn('[ImportarDe] Falha ao checar justificativas de outros usuários:', error); return; }
+    const rows = data || [];
+    if (!rows.length) return;
+
+    // Central+material (alias de origem) embutidos no k — semCad usa um
+    // 4º segmento (__semcad__), mas semCad nunca tem Cód SAP mesmo, então
+    // não precisa de tratamento especial: só não vai achar correspondência.
+    const porOrigem = rows.map(r => {
+      const partes = r.k.split('|||');
+      return { ...r, central: partes[1] || '', material: partes.slice(2).join('|||') || '' };
+    });
+
+    // Cód SAP de cada material, resolvido pelo cadastro de Materiais do
+    // PRÓPRIO usuário de origem (não o do ADM que está importando).
+    const userIds = [...new Set(porOrigem.map(r => r.user_id))];
+    const { data: matData, error: matError } = await window.supabaseClient.from('materiais')
+      .select('user_id, alias, cod_sap').in('user_id', userIds);
+    if (matError) { console.warn('[ImportarDe] Falha ao resolver Cód SAP dos usuários de origem:', matError); return; }
+    const codSapPorOrigem = new Map(); // userId|||alias -> codSap
+    (matData || []).forEach(m => codSapPorOrigem.set(m.user_id + '|||' + m.alias, m.cod_sap || ''));
+
+    // Índice das linhas do inventário do usuário logado (mês atual) por
+    // Central+Cód SAP — já geradas em invRows, com Cód SAP do cadastro dele.
+    const localPorCentralCodSap = new Map(); // central|||codSap -> row.k
+    invRows.forEach(row => {
+      if (row.semCadastro || !row.codSap) return;
+      localPorCentralCodSap.set(row.central + '|||' + row.codSap, row.k);
+    });
+
     const perfis = (typeof _carregarPerfis === 'function') ? await _carregarPerfis() : {};
     const existentes = new Set(Object.keys(invJustificativas));
-    _invNovosParaImportar = (data || [])
-      .filter(r => !existentes.has(r.k))
-      .map(r => ({
-        userId: r.user_id, email: perfis[r.user_id] || r.user_id, k: r.k,
+    porOrigem.forEach(r => {
+      const codSapOrigem = codSapPorOrigem.get(r.user_id + '|||' + r.material) || '';
+      const kDestino = codSapOrigem ? localPorCentralCodSap.get(r.central + '|||' + codSapOrigem) : null;
+      if (!kDestino) { _invImportarDeSemCorrespondencia++; return; }
+      if (existentes.has(kDestino)) return; // já preenchida localmente
+      _invNovosParaImportar.push({
+        userId: r.user_id, email: perfis[r.user_id] || r.user_id, kDestino,
         op: r.op, fiscal: r.fiscal, saldo: r.saldo,
         custoMedioSap: r.custo_medio_sap, documentoSap: r.documento_sap,
-      }))
-      .sort((a, b) => a.email.localeCompare(b.email) || a.k.localeCompare(b.k));
+      });
+    });
+    _invNovosParaImportar.sort((a, b) => a.email.localeCompare(b.email) || a.kDestino.localeCompare(b.kDestino));
   }
 
   window.invAbrirImportarDe = async function() {
@@ -3005,7 +3053,10 @@
     await _invCarregarNovosParaImportar();
     if (!wrap) return;
     if (!_invNovosParaImportar.length) {
-      wrap.innerHTML = `<span style="font-size:12px;color:var(--text3);padding:4px 6px">Nenhuma justificativa nova de outro usuário para o mês ${invGetMesKey()} (ou ninguém mais preencheu ainda).</span>`;
+      const extra = _invImportarDeSemCorrespondencia
+        ? ` (${_invImportarDeSemCorrespondencia} encontrada(s) mas sem Central+Cód SAP correspondente no seu inventário deste mês)`
+        : ' (ou ninguém mais preencheu ainda)';
+      wrap.innerHTML = `<span style="font-size:12px;color:var(--text3);padding:4px 6px">Nenhuma justificativa nova de outro usuário para o mês ${invGetMesKey()}${extra}.</span>`;
       return;
     }
     const porUsuario = new Map(); // userId -> { email, count }
@@ -3015,7 +3066,10 @@
       porUsuario.set(it.userId, cur);
     });
     const usuarios = [...porUsuario.entries()].sort((a, b) => a[1].email.localeCompare(b[1].email));
-    wrap.innerHTML = `
+    const aviso = _invImportarDeSemCorrespondencia
+      ? `<div style="font-size:11px;color:var(--text3);margin-bottom:6px">${_invImportarDeSemCorrespondencia} registro(s) de outros usuários ignorado(s) — Central+Cód SAP sem correspondência no seu inventário deste mês.</div>`
+      : '';
+    wrap.innerHTML = aviso + `
       <label class="micro-filter-option" style="border-bottom:1px solid var(--border2);padding-bottom:6px;margin-bottom:4px">
         <input type="checkbox" onchange="document.querySelectorAll('.chk-importar-de-inv-item').forEach(c => c.checked = this.checked)">
         <span class="micro-filter-option-label"><b>Selecionar todos (${usuarios.length})</b></span>
@@ -3033,13 +3087,13 @@
     const selecionados = _invNovosParaImportar.filter(it => checked.includes(it.userId));
     const chavesTocadas = [];
     selecionados.forEach(it => {
-      invJustificativas[it.k] = {
+      invJustificativas[it.kDestino] = {
         op: it.op || '', fiscal: it.fiscal || '',
         saldo: it.saldo != null ? String(it.saldo) : '',
         custoMedioSap: it.custoMedioSap != null ? String(it.custoMedioSap) : '',
         documentoSap: it.documentoSap || '',
       };
-      chavesTocadas.push(it.k);
+      chavesTocadas.push(it.kDestino);
     });
     const usuariosCount = new Set(selecionados.map(it => it.userId)).size;
     _setBtnLoading(btn, false);
