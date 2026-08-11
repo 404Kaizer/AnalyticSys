@@ -105,6 +105,64 @@ teste('usuário comum não consegue desconsiderar (só ADM altera)', () => {
   assert.equal(ctx.isSapExcluidoPorFechamento(r), false);
 });
 
+// ── Desbloqueio manual da trava do Inventário (11/08) ─────────────────────
+
+teste('linha travada no Inventário, desbloqueada manualmente: volta a ser considerada (padrão)', () => {
+  const ctx = montar({
+    sap: [], sapFechamentoOverrides: [], sapFechInvUnlockOverrides: [],
+    invJustificativas: [{ documentoSap: '1400012345' }],
+  });
+  const r = registroFechamento();
+  const chave = ctx.getSapFechKey(r);
+  assert.equal(ctx.isSapExcluidoPorFechamento(r), true); // travada antes de desbloquear
+  ctx.setSapFechInvLockOverrideEmLote([chave], true);
+  assert.equal(ctx.isSapExcluidoPorFechamento(r), false);
+});
+
+teste('linha desbloqueada continua sujeita ao override normal de Considerar/Desconsiderar', () => {
+  const ctx = montar({
+    sap: [], sapFechamentoOverrides: [], sapFechInvUnlockOverrides: [],
+    invJustificativas: [{ documentoSap: '1400012345' }],
+  });
+  const r = registroFechamento();
+  const chave = ctx.getSapFechKey(r);
+  ctx.setSapFechInvLockOverrideEmLote([chave], true);
+  ctx.setSapFechOverrideEmLote([chave], false); // desconsiderar manualmente
+  assert.equal(ctx.isSapExcluidoPorFechamento(r), true);
+});
+
+teste('"Bloquear" desfaz o desbloqueio: trava do Inventário volta a valer', () => {
+  const ctx = montar({
+    sap: [], sapFechamentoOverrides: [], sapFechInvUnlockOverrides: [],
+    invJustificativas: [{ documentoSap: '1400012345' }],
+  });
+  const r = registroFechamento();
+  const chave = ctx.getSapFechKey(r);
+  ctx.setSapFechInvLockOverrideEmLote([chave], true);
+  assert.equal(ctx.isSapExcluidoPorFechamento(r), false);
+  ctx.setSapFechInvLockOverrideEmLote([chave], false); // bloquear de novo
+  assert.equal(ctx.isSapExcluidoPorFechamento(r), true);
+});
+
+teste('desbloqueio não afeta linhas sem justificativa no Inventário (nada a destravar)', () => {
+  const ctx = montar({ sap: [], sapFechamentoOverrides: [], sapFechInvUnlockOverrides: [], invJustificativas: [] });
+  const r = registroFechamento();
+  const chave = ctx.getSapFechKey(r);
+  ctx.setSapFechInvLockOverrideEmLote([chave], true);
+  assert.equal(ctx.isSapExcluidoPorFechamento(r), false); // já não estava travada
+});
+
+teste('usuário comum não consegue desbloquear a trava do Inventário (só ADM altera)', () => {
+  const ctx = montar({
+    sap: [], sapFechamentoOverrides: [], sapFechInvUnlockOverrides: [],
+    invJustificativas: [{ documentoSap: '1400012345' }],
+  });
+  ctx.currentUser.role = 'user';
+  const r = registroFechamento();
+  ctx.setSapFechInvLockOverrideEmLote([ctx.getSapFechKey(r)], true);
+  assert.equal(ctx.isSapExcluidoPorFechamento(r), true); // continua travada
+});
+
 let falhou = 0;
 for (const { nome, fn } of casos) {
   try {

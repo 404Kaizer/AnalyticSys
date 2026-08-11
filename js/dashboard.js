@@ -6632,6 +6632,7 @@ const SUPABASE_BOOT_SYNCS = [
   'syncMateriaisFromSupabase',
   'syncInvJustificativasFromSupabase',
   'syncSapFechamentoOverridesFromSupabase',
+  'syncSapFechInvUnlockOverridesFromSupabase',
   'syncPeriodoFechamentosFromSupabase',
   'syncAjustesSistemicosFromSupabase',
   'syncAjustesExcluidosFromSupabase',
@@ -6825,6 +6826,9 @@ async function restoreAndRender() {
     // avisa o dono do registro na hora quando o ADM considera/desconsidera
     // (ver _fechRealtimeInit, ui.js).
     if (typeof _fechRealtimeInit === 'function') _fechRealtimeInit();
+    // Canal Realtime de Desbloqueio de Fechamento via Inventário (11/08) —
+    // mesmo padrão do de cima, tabela separada (ver _fechInvUnlockRealtimeInit).
+    if (typeof _fechInvUnlockRealtimeInit === 'function') _fechInvUnlockRealtimeInit();
     // Canal Realtime de Fechamento de Período — mesmo padrão, avisa todo
     // mundo na hora quando o ADM fecha/reabre um mês (ver _periodoFechRealtimeInit, ui.js).
     if (typeof _periodoFechRealtimeInit === 'function') _periodoFechRealtimeInit();

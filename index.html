@@ -5157,6 +5157,8 @@
       <div class="fechmgr-lote-actions">
         <button class="btn btn-sm" id="btn-fechmgr-considerar" onclick="_fechMgrAplicarLote(true)" title="Considerar os registros selecionados no cálculo de estoque"><i class="ti ti-check"></i> Considerar Ajuste</button>
         <button class="btn btn-sm" id="btn-fechmgr-desconsiderar" onclick="_fechMgrAplicarLote(false)" title="Desconsiderar os registros selecionados do cálculo de estoque"><i class="ti ti-x"></i> Desconsiderar Ajuste</button>
+        <button class="btn btn-sm" id="btn-fechmgr-desbloquear" onclick="_fechMgrAplicarDesbloqueio(true)" title="Desbloquear os registros selecionados travados por justificativa do Inventário — volta ao comportamento padrão (Incluído, salvo desconsiderado manualmente)"><i class="ti ti-lock-open"></i> Desbloquear (Inventário)</button>
+        <button class="btn btn-sm" id="btn-fechmgr-bloquear" onclick="_fechMgrAplicarDesbloqueio(false)" title="Bloquear novamente os registros selecionados que foram desbloqueados manualmente"><i class="ti ti-lock"></i> Bloquear (Inventário)</button>
         <button class="btn btn-sm fechmgr-btn-ghost" onclick="_fechMgrLimparSelecao()">Limpar seleção</button>
       </div>
     </div>
@@ -5199,7 +5201,7 @@
             <th>Dt. Registro</th>
             <th style="text-align:right">Peso</th>
             <th style="text-align:right">Custo Total</th>
-            <th title="Padrão: incluído no cálculo. Desconsiderado só por trava do Inventário ou ação manual aqui.">Status</th>
+            <th title="Padrão: incluído no cálculo. Desconsiderado só por trava do Inventário (destravável em lote aqui) ou ação manual.">Status</th>
           </tr>
         </thead>
         <tbody id="fechmgr-tbody"></tbody>

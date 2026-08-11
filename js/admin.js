@@ -36,6 +36,7 @@ const ADMIN_MODULOS = {
   acoes_relatorio:          { label: 'Ações de Relatório',         cols: ['nivel', 'categorias', 'acoes', 'created'] },
   inv_justificativas:       { label: 'Justificativas de Inventário', cols: ['k', 'op', 'fiscal', 'saldo', 'custo_medio_sap', 'documento_sap'] },
   sap_fechamento_overrides: { label: 'Overrides de Fechamento SAP', cols: ['chave'] },
+  sap_fech_inv_unlock_overrides: { label: 'Desbloqueios de Fechamento (Inventário)', cols: ['chave'] },
   ajustes_sistemicos:       { label: 'DAI / Ajuste Sistêmico',     cols: ['tag', 'numero', 'data_geracao', 'data_geracao_key', 'data_ocorrido', 'central', 'cnpj_central', 'regional_central', 'descricao', 'informantes', 'itens', 'analista', 'atestado_manual', 'ocorrencia_por_item', 'ocorrencia_ids', 'anexos', 'material', 'tipo_movimento_sap', 'objetivo', 'operador', 'sap_documento', 'origem', 'categoria_situacao', 'filial_destino'] },
   ajustes_excluidos:        { label: 'Log de Exclusão de DAI',     cols: ['dai_tag', 'dai_numero', 'central', 'data_geracao', 'excluido_por', 'excluido_em'], readOnly: true },
   notas_ajuste:             { label: 'Notas de Crédito/Débito',    cols: ['numero', 'tipo', 'central', 'cnpj_central', 'data_key', 'data_geracao', 'valor_total', 'responsavel_nome', 'responsavel_cpf', 'responsavel_email', 'itens'], readOnly: true },

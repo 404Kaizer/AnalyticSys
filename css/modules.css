@@ -11090,6 +11090,14 @@ tr.sap-fechamento td {
   color: var(--teal);
   cursor: help;
 }
+/* Cadeado aberto (11/08) — linha desbloqueada manualmente da trava do
+   Inventário, mesma cor (teal) do cadeado fechado pra manter a associação
+   visual com "assunto = Inventário", só que sem preenchimento (ícone
+   "lock-open" já comunica a diferença de estado). */
+.fechmgr-status-icon--desbloqueado {
+  color: var(--teal);
+  cursor: help;
+}
 
 /* ── Novos gráficos de ocorrências ── */
 .oc-motivo-list { display: flex; flex-direction: column; gap: 7px; padding: 4px 0; }

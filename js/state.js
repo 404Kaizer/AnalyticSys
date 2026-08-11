@@ -49,6 +49,15 @@ const defaultState = () => ({
   // reincluiu manualmente no cálculo de variação, mesmo batendo no padrão
   // de fechamento. Controlado pela página SAP (checkbox + ação em lote).
   sapFechamentoOverrides: [],
+  // Overrides manuais de DESBLOQUEIO da trava de Fechamento por Documento
+  // SAP justificado no Inventário (Hugo, 11/08/2026 — ver
+  // isSapDocJustificadoInventario/setSapFechInvLockOverrideEmLote em
+  // ui.js). Array de chaves (getSapFechKey) desbloqueadas manualmente
+  // pelo ADM: a linha volta a se comportar como qualquer candidato Y11/Y12
+  // normal (padrão Incluído, ainda sujeito a sapFechamentoOverrides), em
+  // vez da trava incondicional padrão. "Bloquear" de novo é só remover a
+  // chave daqui.
+  sapFechInvUnlockOverrides: [],
   // Fechamento de Período (mensal, ver periodo_fechamentos no Supabase) —
   // array de chaves 'AAAA-MM' dos meses ATUALMENTE fechados pelo ADM.
   // Só a camada de RLS garante o bloqueio de verdade; isto aqui é só cache

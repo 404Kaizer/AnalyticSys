@@ -328,6 +328,12 @@ window.AuthGate = (function () {
     if (fechConsiderarBtn) fechConsiderarBtn.style.display = isAdmin ? '' : 'none';
     const fechDesconsiderarBtn = $('btn-fechmgr-desconsiderar');
     if (fechDesconsiderarBtn) fechDesconsiderarBtn.style.display = isAdmin ? '' : 'none';
+    // Desbloquear/Bloquear (11/08) — mesmo motivo: destrava a trava de
+    // Documento SAP justificado no Inventário, afeta todo mundo.
+    const fechDesbloquearBtn = $('btn-fechmgr-desbloquear');
+    if (fechDesbloquearBtn) fechDesbloquearBtn.style.display = isAdmin ? '' : 'none';
+    const fechBloquearBtn = $('btn-fechmgr-bloquear');
+    if (fechBloquearBtn) fechBloquearBtn.style.display = isAdmin ? '' : 'none';
 
     // Avatar do ícone de Conta no topbar (29/07) — mesmo utilitário de
     // avatar de mensagens.js (círculo colorido + inicial).
@@ -624,6 +630,7 @@ window.AuthGate = (function () {
         if (typeof _daiRealtimeStop === 'function') _daiRealtimeStop();
         if (typeof _custosSapRealtimeStop === 'function') _custosSapRealtimeStop();
         if (typeof _fechRealtimeStop === 'function') _fechRealtimeStop();
+        if (typeof _fechInvUnlockRealtimeStop === 'function') _fechInvUnlockRealtimeStop();
         if (typeof _periodoFechRealtimeStop === 'function') _periodoFechRealtimeStop();
         // Canal Realtime de reset remoto de dados locais — mesmo cuidado.
         if (typeof wipeRealtimeStop === 'function') wipeRealtimeStop();

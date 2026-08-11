@@ -3620,12 +3620,36 @@ function invalidateFechOverrideCache() {
   _fechOverrideSetSig = null;
 }
 
+// ── Cache do Set de DESBLOQUEIOS manuais da trava do Inventário (11/08) ──
+// Chaves (getSapFechKey) que o ADM destravou explicitamente no modal de
+// Fechamento — ver setSapFechInvLockOverrideEmLote. Mesmo padrão de cache
+// de _getFechOverrideSet (a lista pode crescer, mas nunca na escala do
+// state.sap inteiro).
+let _fechInvUnlockSetCache = null;
+let _fechInvUnlockSetSig = null;
+
+function _getFechInvUnlockSet() {
+  const list = state.sapFechInvUnlockOverrides || [];
+  const sig = list.length + '|' + (list.length ? list[list.length - 1] : '');
+  if (_fechInvUnlockSetCache && _fechInvUnlockSetSig === sig) return _fechInvUnlockSetCache;
+  _fechInvUnlockSetCache = new Set(list);
+  _fechInvUnlockSetSig = sig;
+  return _fechInvUnlockSetCache;
+}
+
+function invalidateFechInvUnlockCache() {
+  _fechInvUnlockSetCache = null;
+  _fechInvUnlockSetSig = null;
+}
+
 // Conjunto de números de Documento SAP preenchidos em QUALQUER justificativa
 // do Inventário (campo "Documento SAP" do fechamento de inventário — ver
 // invJustificativas em inventario.js/state.js). Documentos aqui são
-// SEMPRE desconsiderados do cálculo (ver isSapExcluidoPorFechamento
-// abaixo), mesmo que reincluídos manualmente via override no modal de
-// Fechamento — trava real, não um valor-padrão reversível por ali.
+// desconsiderados do cálculo por padrão (ver isSapExcluidoPorFechamento
+// abaixo), mesmo que reincluídos via "Considerar Ajuste" no modal de
+// Fechamento — só uma linha explicitamente desbloqueada pelo ADM (ver
+// isSapDocJustificadoInventario/setSapFechInvLockOverrideEmLote, 11/08)
+// escapa dessa trava.
 //
 // Propositalmente SEM CACHE (diferente de _getFechOverrideSet): a lista
 // de justificativas do Inventário é pequena (uma linha por central×
@@ -3650,22 +3674,26 @@ function _getInvJustDocSet() {
 
 // Um registro SAP tem seu Documento "justificado no Inventário" quando
 // (a) bate no padrão Y11/Y12 de fechamento E (b) o número do documento
-// aparece em alguma justificativa do Inventário. Escopo intencionalmente
-// restrito a (a) — por decisão do Hugo, isto NÃO é um mecanismo de
+// aparece em alguma justificativa do Inventário E (c) a LINHA (chave via
+// getSapFechKey, não o documento) não foi desbloqueada manualmente pelo
+// ADM (11/08 — ver setSapFechInvLockOverrideEmLote). Escopo intencional-
+// mente restrito a (a) — por decisão do Hugo, isto NÃO é um mecanismo de
 // exclusão genérico por documento, só uma trava adicional sobre o mesmo
 // universo de candidatos já coberto por isSapFechamentoPattern.
 function isSapDocJustificadoInventario(r) {
   if (!isSapFechamentoPattern(r)) return false;
+  if (_getFechInvUnlockSet().has(getSapFechKey(r))) return false;
   return _getInvJustDocSet().has(_fechImportNormDoc(r.documento));
 }
 
 // Verdadeira função de decisão usada por TODO o sistema: um registro deve
 // ser desconsiderado do cálculo de variação/entradas/saídas se:
-//   (1) o Documento SAP está justificado em alguma linha do Inventário —
-//       trava incondicional, verificada ANTES do override manual, então
-//       nenhum "Considerar Ajuste" no modal de Fechamento consegue
-//       reincluir esse registro enquanto o campo continuar preenchido; OU
-//   (2) bate no padrão de fechamento E foi desconsiderado manualmente pelo
+//   (1) o Documento SAP está justificado em alguma linha do Inventário e a
+//       linha não foi desbloqueada manualmente pelo ADM — trava verificada
+//       ANTES do override manual, então nenhum "Considerar Ajuste" no
+//       modal de Fechamento consegue reincluir esse registro enquanto
+//       travado (só "Desbloquear" no mesmo modal faz isso, 11/08); OU
+//   (2) bate no padrão de fechamento e foi desconsiderado manualmente pelo
 //       analista no modal de Fechamento — padrão é CONSIDERAR (Hugo,
 //       07/08), a exclusão automática por data foi removida.
 function isSapExcluidoPorFechamento(r) {
@@ -4212,6 +4240,81 @@ function _fechRealtimeStop() {
   _fechChannel = null;
 }
 
+// ── Desbloqueio manual da trava de Inventário (11/08) ────────────────────
+// Tabela própria (sap_fech_inv_unlock_overrides), separada de
+// sap_fechamento_overrides: são conceitos independentes — "considerar/
+// desconsiderar" (o override de cima) só importa quando a linha NÃO está
+// travada; "desbloquear/bloquear" (aqui) decide se a trava do Inventário
+// se aplica àquela linha. desbloquear=true: chave entra no Set (trava
+// deixa de valer, linha volta ao comportamento padrão de qualquer
+// candidato Y11/Y12). desbloquear=false ("Bloquear"): chave sai do Set
+// (trava do Inventário volta a valer, se ainda houver Documento SAP
+// justificado — ver isSapDocJustificadoInventario).
+function setSapFechInvLockOverrideEmLote(chaves, desbloquear) {
+  if (!Array.isArray(chaves) || !chaves.length) return;
+  // Mesma guarda de setSapFechOverrideEmLote — ferramenta GLOBAL, só ADM.
+  if (window.currentUser?.role !== 'admin') {
+    toast('Somente o administrador pode alterar o bloqueio do Inventário.', 'error');
+    return;
+  }
+  const set = new Set(state.sapFechInvUnlockOverrides || []);
+  chaves.forEach(k => { if (desbloquear) set.add(k); else set.delete(k); });
+  state.sapFechInvUnlockOverrides = [...set];
+  invalidateFechInvUnlockCache();
+  if (typeof persist === 'function') persist();
+
+  if (!window.supabaseClient) return;
+  // Mesmo padrão "global por chave" de setSapFechOverrideEmLote.
+  if (desbloquear) {
+    const rows = chaves.map(chave => ({ chave, user_id: window.currentUser.id }));
+    window.supabaseClient.from('sap_fech_inv_unlock_overrides').upsert(rows, { onConflict: 'chave' })
+      .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao sincronizar desbloqueio de Inventário:', error); });
+  } else {
+    window.supabaseClient.from('sap_fech_inv_unlock_overrides').delete().in('chave', chaves)
+      .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao remover desbloqueio de Inventário na nuvem:', error); });
+  }
+}
+
+async function syncSapFechInvUnlockOverridesFromSupabase() {
+  try {
+    // Mesmo padrão "o banco manda" de syncSapFechamentoOverridesFromSupabase.
+    const todos = await fetchAllRows('sap_fech_inv_unlock_overrides', 'id, chave');
+    state.sapFechInvUnlockOverrides = [...new Set(todos.map(r => r.chave))];
+    invalidateFechInvUnlockCache();
+  } catch (err) {
+    console.warn('[Supabase] Falha ao buscar desbloqueios de Inventário — mantendo dados locais.', err);
+  }
+}
+
+// ── Realtime (11/08) — mesmo padrão de _fechRealtimeInit/Stop, tabela própria.
+let _fechInvUnlockChannel = null;
+function _fechInvUnlockRealtimeInit() {
+  if (!window.supabaseClient || !window.currentUser || _fechInvUnlockChannel) return;
+  const handle = (payload, tipo) => {
+    const row = tipo === 'DELETE' ? payload.old : payload.new;
+    if (!row?.chave) return;
+    const set = new Set(state.sapFechInvUnlockOverrides || []);
+    if (tipo === 'DELETE') set.delete(row.chave); else set.add(row.chave);
+    state.sapFechInvUnlockOverrides = [...set];
+    invalidateFechInvUnlockCache();
+    if (typeof updateDashboard === 'function') updateDashboard();
+    if (typeof renderModule === 'function' && document.getElementById('page-sap')?.classList.contains('active')) renderModule('sap');
+    if (typeof _fechMgrRender === 'function' && document.getElementById('fech-manager-overlay')?.classList.contains('open')) _fechMgrRender();
+  };
+  _fechInvUnlockChannel = window.supabaseClient
+    .channel('sap_fech_inv_unlock_overrides_realtime')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'sap_fech_inv_unlock_overrides' }, (p) => handle(p, 'INSERT'))
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'sap_fech_inv_unlock_overrides' }, (p) => handle(p, 'UPDATE'))
+    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'sap_fech_inv_unlock_overrides' }, (p) => handle(p, 'DELETE'))
+    .subscribe((status) => {
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') console.warn('[Desbloqueio Inventário] Canal Realtime com problema:', status);
+    });
+}
+function _fechInvUnlockRealtimeStop() {
+  if (_fechInvUnlockChannel && window.supabaseClient) window.supabaseClient.removeChannel(_fechInvUnlockChannel);
+  _fechInvUnlockChannel = null;
+}
+
 // ═══════════════════════════════════════════════════════════
 // FECHAMENTO DE PERÍODO (mensal) — trava lançamentos/entradas/saídas/SAP/
 // justificativas/ajustes sistêmicos daquele mês pra quem não é ADM.
@@ -4357,19 +4460,26 @@ function _fechMgrGetTodosCandidatos() {
     _fechMgrCandidatosRawCache = (state.sap || []).filter(isSapFechamentoPattern);
   }
   const overrideSet = _getFechOverrideSet();
+  const unlockSet = _getFechInvUnlockSet();
   const invDocMap = _getInvJustDocSet(); // sem cache, de propósito — ver _getInvJustDocSet
   return _fechMgrCandidatosRawCache.map(r => {
     const chave = getSapFechKey(r);
-    // Documento justificado no Inventário tem prioridade: trava a exclusão
-    // independente do override manual (mesma regra de isSapExcluidoPorFechamento,
-    // reaplicada aqui pra exibir o motivo certo em vez de só o resultado).
+    // Documento justificado no Inventário é a trava BASE — mas o ADM pode
+    // desbloquear cada LINHA manualmente (11/08, ver
+    // setSapFechInvLockOverrideEmLote); a trava efetiva só vale enquanto a
+    // linha não tiver sido desbloqueada (mesma regra de
+    // isSapDocJustificadoInventario, reaplicada aqui pra exibir o motivo
+    // certo em vez de só o resultado).
     const docNorm = _fechImportNormDoc(r.documento);
-    const travadoPorInventario = invDocMap.has(docNorm);
+    const travadoBaseInventario = invDocMap.has(docNorm);
+    const desbloqueadoManualmente = travadoBaseInventario && unlockSet.has(chave);
+    const travadoPorInventario = travadoBaseInventario && !desbloqueadoManualmente;
     const excluido = travadoPorInventario ? true : overrideSet.has(chave);
     let statusLabel;
-    if (travadoPorInventario)      statusLabel = 'Justificado no Inventário';
-    else if (excluido)             statusLabel = 'Desconsiderado manualmente';
-    else                           statusLabel = 'Incluído';
+    if (travadoPorInventario)        statusLabel = 'Justificado no Inventário';
+    else if (desbloqueadoManualmente) statusLabel = 'Desbloqueado manualmente (Inventário)';
+    else if (excluido)                statusLabel = 'Desconsiderado manualmente';
+    else                              statusLabel = 'Incluído';
     return {
       ...r,
       _chave: chave,
@@ -4381,7 +4491,12 @@ function _fechMgrGetTodosCandidatos() {
       // escondido, formatação diferente, etc.).
       _travadoDocSap: r.documento,
       _travadoDocInvOriginal: invDocMap.get(docNorm) || '',
-      _travadoPorInventario: travadoPorInventario
+      _travadoPorInventario: travadoPorInventario,
+      // Trava BASE (antes de considerar desbloqueio manual) e flag de
+      // desbloqueio — usados pra decidir quando Desbloquear/Bloquear fazem
+      // sentido numa linha (ver _fechMgrAplicarDesbloqueio).
+      _travadoBaseInventario: travadoBaseInventario,
+      _desbloqueadoManualmente: desbloqueadoManualmente
     };
   });
 }
@@ -4531,13 +4646,17 @@ function _fechMgrRender() {
     const checked = _fechMgrSelecionados.has(r._chave);
     // Status como indicador compacto (bolinha colorida + tooltip) em vez de
     // badge de texto — libera espaço horizontal pra material/valores, que
-    // são as colunas que realmente importam pra decisão. Cadeado (teal) tem
-    // prioridade sobre os outros dois — trava real, não reversível aqui.
+    // são as colunas que realmente importam pra decisão. Cadeado fechado
+    // (teal) tem prioridade sobre os outros — trava real enquanto não
+    // desbloqueada aqui. Cadeado aberto (11/08) marca quem foi desbloqueado
+    // manualmente e voltou ao comportamento padrão (Incluído/Desconsiderado).
     const statusDot = r._travadoPorInventario
-      ? `<i class="ti ti-lock fechmgr-status-icon fechmgr-status-icon--travado" title="Travado — Documento SAP desta linha: '${escapeHtml(r._travadoDocSap)}'. Encontrado na justificativa do Inventário como: '${escapeHtml(r._travadoDocInvOriginal)}'. Para reverter, apague o campo Documento SAP NAQUELA justificativa e verifique se não sobrou outra igual."></i>`
-      : r._statusExcluido
-        ? `<i class="ti ti-circle-x fechmgr-status-icon fechmgr-status-icon--desc" title="Desconsiderado manualmente do cálculo de variação"></i>`
-        : `<i class="ti ti-circle-check fechmgr-status-icon fechmgr-status-icon--inc" title="Incluído no cálculo (padrão)"></i>`;
+      ? `<i class="ti ti-lock fechmgr-status-icon fechmgr-status-icon--travado" title="Travado — Documento SAP desta linha: '${escapeHtml(r._travadoDocSap)}'. Encontrado na justificativa do Inventário como: '${escapeHtml(r._travadoDocInvOriginal)}'. Selecione e use &quot;Desbloquear (Inventário)&quot; pra liberar, ou apague o campo Documento SAP naquela justificativa."></i>`
+      : r._desbloqueadoManualmente
+        ? `<i class="ti ti-lock-open fechmgr-status-icon fechmgr-status-icon--desbloqueado" title="Desbloqueado manualmente da trava do Inventário (Documento SAP: '${escapeHtml(r._travadoDocSap)}'). Volta ao comportamento padrão: ${r._statusExcluido ? 'Desconsiderado manualmente' : 'Incluído no cálculo'}. Use &quot;Bloquear (Inventário)&quot; pra travar de novo."></i>`
+        : r._statusExcluido
+          ? `<i class="ti ti-circle-x fechmgr-status-icon fechmgr-status-icon--desc" title="Desconsiderado manualmente do cálculo de variação"></i>`
+          : `<i class="ti ti-circle-check fechmgr-status-icon fechmgr-status-icon--inc" title="Incluído no cálculo (padrão)"></i>`;
     // Escapa uma vez e reaproveita no title + conteúdo visível — antes só o
     // title era escapado; o texto exibido ia direto sem escapeHtml, então
     // um material/usuário/documento com "<", ">" ou "&" (comum em specs
@@ -4551,9 +4670,11 @@ function _fechMgrRender() {
     const dtLancSafe    = escapeHtml(r.dtLanc || '—');
     const dtRegSafe     = escapeHtml(r.dtReg || '—');
     const rowClass = r._travadoPorInventario ? 'fechmgr-row-travado' : (r._statusExcluido ? '' : 'fechmgr-row-incluido');
-    const checkboxHtml = r._travadoPorInventario
-      ? `<input type="checkbox" disabled title="Travado — Documento justificado no Inventário, não pode ser incluído/excluído em lote aqui.">`
-      : `<input type="checkbox" ${checked ? 'checked' : ''} onchange="_fechMgrToggleSelecao('${r._chave.replace(/'/g,"\\'")}', this.checked)">`;
+    // Checkbox sempre habilitado (11/08) — mesmo travada, a linha pode ser
+    // selecionada pra "Desbloquear (Inventário)"; só Considerar/Desconsiderar
+    // não têm efeito prático enquanto a trava valer (isSapExcluidoPorFechamento
+    // checa o Inventário antes do override de qualquer forma).
+    const checkboxHtml = `<input type="checkbox" ${checked ? 'checked' : ''} onchange="_fechMgrToggleSelecao('${r._chave.replace(/'/g,"\\'")}', this.checked)">`;
     return `
     <tr class="${rowClass}">
       <td class="th-checkbox">${checkboxHtml}</td>
@@ -4626,8 +4747,9 @@ window._fechMgrToggleSelecao = _fechMgrToggleSelecao;
 function _fechMgrToggleSelecionarTudo(checked) {
   const inicio = _fechMgrPage * PAGE_SIZE;
   const pagina = _fechMgrLastFiltrados.slice(inicio, inicio + PAGE_SIZE);
+  // Checkbox nunca é desabilitado (11/08) — linhas travadas também entram
+  // na seleção, pra permitir "Desbloquear (Inventário)" em lote.
   pagina.forEach(r => {
-    if (r._travadoPorInventario) return; // checkbox desabilitado — nunca entra na seleção
     if (checked) _fechMgrSelecionados.add(r._chave);
     else _fechMgrSelecionados.delete(r._chave);
   });
@@ -4652,15 +4774,12 @@ function _fechMgrAtualizarBarraLote() {
   // inteiro só pra saber o estado do checkbox "selecionar tudo").
   const inicio = _fechMgrPage * PAGE_SIZE;
   const pagina = _fechMgrLastFiltrados.slice(inicio, inicio + PAGE_SIZE);
-  // Linhas travadas por Inventário nunca entram em _fechMgrSelecionados (o
-  // checkbox delas é disabled) — exclui do cálculo de "página inteira
-  // selecionada", senão uma página com pelo menos 1 linha travada nunca
-  // marcaria o checkbox de cabeçalho como completo.
-  const paginaSelecionavel = pagina.filter(r => !r._travadoPorInventario);
-  const todosPaginaSelecionados = paginaSelecionavel.length > 0 && paginaSelecionavel.every(r => _fechMgrSelecionados.has(r._chave));
+  // Todas as linhas são selecionáveis (11/08, inclusive travadas — ver
+  // _fechMgrToggleSelecionarTudo).
+  const todosPaginaSelecionados = pagina.length > 0 && pagina.every(r => _fechMgrSelecionados.has(r._chave));
   if (checkAllEl) {
     checkAllEl.checked = todosPaginaSelecionados;
-    checkAllEl.indeterminate = !todosPaginaSelecionados && paginaSelecionavel.some(r => _fechMgrSelecionados.has(r._chave));
+    checkAllEl.indeterminate = !todosPaginaSelecionados && pagina.some(r => _fechMgrSelecionados.has(r._chave));
   }
 
   // ── Banner "selecionar todos os N filtrados" (padrão Gmail) ────────────
@@ -4686,9 +4805,9 @@ function _fechMgrAtualizarBarraLote() {
 // página inteira já foi selecionada), evitando selecionar milhares de
 // registros sem querer.
 function _fechMgrSelecionarTodosFiltrados() {
-  _fechMgrLastFiltrados.forEach(r => { if (!r._travadoPorInventario) _fechMgrSelecionados.add(r._chave); });
+  _fechMgrLastFiltrados.forEach(r => { _fechMgrSelecionados.add(r._chave); });
   _fechMgrAtualizarBarraLote();
-  document.querySelectorAll('#fechmgr-tbody input[type="checkbox"]:not(:disabled)').forEach(cb => { cb.checked = true; });
+  document.querySelectorAll('#fechmgr-tbody input[type="checkbox"]').forEach(cb => { cb.checked = true; });
   toast(`${_fechMgrSelecionados.size.toLocaleString('pt-BR')} registro(s) selecionado(s).`);
 }
 window._fechMgrSelecionarTodosFiltrados = _fechMgrSelecionarTodosFiltrados;
@@ -4719,6 +4838,52 @@ function _fechMgrAplicarLote(incluir) {
   if (typeof renderModule === 'function' && document.getElementById('page-sap')?.classList.contains('active')) renderModule('sap');
 }
 window._fechMgrAplicarLote = _fechMgrAplicarLote;
+
+// Desbloqueia/bloqueia a trava do Inventário nas linhas selecionadas —
+// mecanismo independente de Considerar/Desconsiderar (ver
+// setSapFechInvLockOverrideEmLote). Filtra a seleção pelas linhas onde a
+// ação realmente se aplica: Desbloquear só faz sentido em quem está com a
+// trava BASE do Inventário ativa (_travadoBaseInventario) e ainda não foi
+// desbloqueado; Bloquear só em quem já foi desbloqueado manualmente —
+// aplicar nas demais seria um no-op silencioso, então nem entram na chamada
+// (e o usuário é avisado de quantas foram ignoradas).
+function _fechMgrAplicarDesbloqueio(desbloquear) {
+  if (!_fechMgrSelecionados.size) return;
+  const porChave = new Map(_fechMgrLastFiltrados.map(r => [r._chave, r]));
+  const selecionadas = [..._fechMgrSelecionados];
+  const relevantes = selecionadas.filter(chave => {
+    const r = porChave.get(chave);
+    if (!r || !r._travadoBaseInventario) return false;
+    return desbloquear ? !r._desbloqueadoManualmente : r._desbloqueadoManualmente;
+  });
+  if (!relevantes.length) {
+    toast(desbloquear
+      ? 'Nenhum dos registros selecionados está travado por justificativa do Inventário.'
+      : 'Nenhum dos registros selecionados foi desbloqueado manualmente.', 'error');
+    return;
+  }
+  // Mesmo freio de confirmação de _fechMgrAplicarLote pra lotes grandes.
+  const LIMITE_CONFIRMACAO_LOTE = 200;
+  if (relevantes.length > LIMITE_CONFIRMACAO_LOTE) {
+    const acao = desbloquear ? 'desbloquear' : 'bloquear novamente';
+    const msg = `Você está prestes a ${acao} ${relevantes.length.toLocaleString('pt-BR')} registros da trava do Inventário. Isso afeta Dashboard, Analítico, Inventário e Trend. Confirmar?`;
+    if (!confirm(msg)) return;
+  }
+  setSapFechInvLockOverrideEmLote(relevantes, desbloquear);
+  _fechMgrSelecionados.clear();
+  const ignorados = selecionadas.length - relevantes.length;
+  toast(
+    (desbloquear
+      ? `${relevantes.length} registro(s) desbloqueado(s) da trava do Inventário.`
+      : `${relevantes.length} registro(s) bloqueado(s) novamente pela trava do Inventário.`)
+    + (ignorados ? ` ${ignorados} ignorado(s) (ação não se aplicava).` : '')
+  );
+  _fechMgrRender();
+  // Recalcula qualquer análise já aberta pra refletir a mudança imediatamente
+  if (typeof updateDashboard === 'function') updateDashboard();
+  if (typeof renderModule === 'function' && document.getElementById('page-sap')?.classList.contains('active')) renderModule('sap');
+}
+window._fechMgrAplicarDesbloqueio = _fechMgrAplicarDesbloqueio;
 
 function _fechMgrLimparSelecao() {
   _fechMgrSelecionados.clear();
@@ -5688,6 +5853,7 @@ const _BKP_MODULES = [
   { key: 'imports',     label: 'Histórico de Importações', icon: 'ti-history',     color: 'var(--text3)'  },
   { key: 'invJustificativas', label: 'Inventário — Justificativas', icon: 'ti-clipboard-check', color: 'var(--amber)' },
   { key: 'sapFechamentoOverrides', label: 'SAP — Overrides de Fechamento', icon: 'ti-calendar-check', color: 'var(--purple)' },
+  { key: 'sapFechInvUnlockOverrides', label: 'SAP — Desbloqueios de Fechamento (Inventário)', icon: 'ti-lock-open', color: 'var(--purple)' },
   { key: 'ajustesSistemicos', label: 'Documentos de Ajuste (DAI)', icon: 'ti-rubber-stamp', color: 'var(--gold)' },
   { key: 'ajustesExcluidos', label: 'DAI — Log de Exclusões', icon: 'ti-history', color: 'var(--gold)' },
   { key: 'notasAjuste', label: 'Notas de Crédito/Débito', icon: 'ti-receipt', color: 'var(--teal)' },
