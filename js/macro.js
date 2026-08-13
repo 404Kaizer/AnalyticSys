@@ -41,7 +41,7 @@ function _trendIcon(trend) {
 function renderMacroPanels(results, thresholds, dtIni, dtFim) {
   if (!results || !results.length) return;
 
-  const byLevel    = { critico: [], urgente: [], atencao: [] };
+  const byLevel    = { critico: [], urgente: [], atencao: [], bom: [] };
   const centralMap = {};   // central → { level, counts, worstDiff, regional }
   const matItems   = [];   // { central, mat, level, totalDiff, catKey, regional }
 
@@ -144,11 +144,13 @@ function renderMacroPanels(results, thresholds, dtIni, dtFim) {
 
       matItems.push({ central: r.central, mat, level, totalDiff: diff, catKey, regional, custo, trend });
 
-      if (level === 'bom') return;
+      // 'bom' também entra em byLevel — os relatórios de Central/Regional
+      // permitem selecionar quais níveis exibir, inclusive o bom.
       const item     = { central: r.central, regional, mat, diff, custo, level, trend, categoria: rawCat, catKey, catSubKey: detectCatSubKey(rawCat, mat) };
       if (level === 'critico')      byLevel.critico.push(item);
       else if (level === 'urgente') byLevel.urgente.push(item);
-      else                          byLevel.atencao.push(item);
+      else if (level === 'atencao') byLevel.atencao.push(item);
+      else                          byLevel.bom.push(item);
     });
   });
 
@@ -156,6 +158,7 @@ function renderMacroPanels(results, thresholds, dtIni, dtFim) {
   sortByCusto(byLevel.critico);
   sortByCusto(byLevel.urgente);
   sortByCusto(byLevel.atencao);
+  sortByCusto(byLevel.bom);
   window._rankByLevel = byLevel;
 
   _renderCrankPanel('critico', byLevel.critico);

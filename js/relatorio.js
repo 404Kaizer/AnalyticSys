@@ -1796,20 +1796,113 @@ function _criticidadeMatTableStyles() {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// RELATÓRIO POR REGIONAL (Crítico + Urgente de todas as centrais)
+// SELEÇÃO DE NÍVEIS — compartilhada pelos relatórios de Central e Regional
+// (o analista escolhe quais níveis de criticidade aparecem no relatório)
+// ═══════════════════════════════════════════════════════════════════
+
+const _REL_NIVEIS = [
+  { key:'critico', label:'Crítico', color:'#f87171', plural:'críticos',     kpiColor:'#ef4444' },
+  { key:'urgente', label:'Urgente', color:'#fb923c', plural:'urgentes',     kpiColor:'#f97316' },
+  { key:'atencao', label:'Atenção', color:'#fbbf24', plural:'em atenção',   kpiColor:'#f59e0b' },
+  { key:'bom',     label:'Bom',     color:'#34d399', plural:'em nível bom', kpiColor:'#10b981' },
+];
+
+// Normaliza a seleção: só chaves válidas, sempre na ordem de severidade
+function _relNiveisNorm(niveis, fallback) {
+  const src = Array.isArray(niveis) && niveis.length ? niveis : fallback;
+  return _REL_NIVEIS.map(n => n.key).filter(k => src.includes(k));
+}
+
+// Texto corrido dos níveis ("críticos, urgentes e em atenção")
+function _relNiveisTexto(sel) {
+  const arr = sel.map(k => _REL_NIVEIS.find(n => n.key === k)?.plural).filter(Boolean);
+  if (arr.length <= 1) return arr[0] || '';
+  return arr.slice(0, -1).join(', ') + ' e ' + arr[arr.length - 1];
+}
+
+// Checkboxes de nível para os modais de relatório
+function _relNiveisPickerHTML(idPrefix, checked) {
+  const opts = _REL_NIVEIS.map(n => `
+    <label style="display:flex;align-items:center;gap:6px;padding:6px 11px;background:var(--bg2);border:1px solid var(--border);border-radius:7px;cursor:pointer;font-size:12px;font-weight:600;color:${n.color}">
+      <input type="checkbox" id="${idPrefix}-${n.key}" ${checked.includes(n.key) ? 'checked' : ''} style="accent-color:${n.color};cursor:pointer">
+      ${n.label}
+    </label>`).join('');
+  return `
+    <div style="margin-top:18px">
+      <div style="font-size:10.5px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;font-weight:700;margin-bottom:8px">Níveis exibidos</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">${opts}</div>
+    </div>`;
+}
+
+// Lê os checkboxes; null quando nenhum nível está marcado
+function _relNiveisSelecionados(idPrefix) {
+  const sel = _REL_NIVEIS
+    .filter(n => document.getElementById(`${idPrefix}-${n.key}`)?.checked)
+    .map(n => n.key);
+  return sel.length ? sel : null;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// MODAL DE SELEÇÃO — Relatório do Regional (níveis de criticidade)
+// ═══════════════════════════════════════════════════════════════════
+
+window.abrirModalRelatorioRegional = function(regionalName) {
+  let modal = document.getElementById('an-rel-regional-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'an-rel-regional-modal';
+    modal.className = 'modal-overlay';
+    modal.style.cssText = 'z-index:3200';
+    document.body.appendChild(modal);
+  }
+
+  const safe = regionalName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+
+  modal.innerHTML = `
+    <div class="modal" style="max-width:460px;width:94vw">
+      <div class="modal-title" style="display:flex;align-items:center;gap:10px">
+        <i class="ti ti-file-analytics" style="color:var(--accent)"></i>
+        Relatório Regional
+      </div>
+      <div class="modal-sub">${regionalName} · materiais agrupados por central</div>
+      ${_relNiveisPickerHTML('an-rel-regional-niv', ['critico','urgente'])}
+      <div class="form-actions" style="margin-top:22px">
+        <button class="btn" onclick="document.getElementById('an-rel-regional-modal').classList.remove('open')">Cancelar</button>
+        <button class="btn btn-primary" onclick="_relGerarRegional('${safe}')"><i class="ti ti-file-text"></i> Gerar Relatório</button>
+      </div>
+    </div>`;
+
+  modal.classList.add('open');
+  if (modal._escHandler) document.removeEventListener('keydown', modal._escHandler);
+  modal._escHandler = (e) => { if (e.key === 'Escape') { modal.classList.remove('open'); document.removeEventListener('keydown', modal._escHandler); } };
+  document.addEventListener('keydown', modal._escHandler);
+};
+
+window._relGerarRegional = function(regionalName) {
+  const niveis = _relNiveisSelecionados('an-rel-regional-niv');
+  if (!niveis) { alert('Selecione ao menos um nível de criticidade.'); return; }
+  document.getElementById('an-rel-regional-modal').classList.remove('open');
+  gerarRelatorioRegional(regionalName, niveis);
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// RELATÓRIO POR REGIONAL (níveis selecionados, de todas as centrais)
 // (mesmo shell escuro dos relatórios de Ranking/Ausência: _buildRankingShellHTML)
 // ═══════════════════════════════════════════════════════════════════
-window.gerarRelatorioRegional = function(regionalName) {
+window.gerarRelatorioRegional = function(regionalName, niveis) {
   const byLevel = window._rankByLevel;
   if (!byLevel) { alert('Nenhum dado de criticidade disponível. Execute a análise primeiro.'); return; }
 
-  // Filtra itens do regional
-  const filter = item => (item.regional || '—') === regionalName;
-  const criticos = (byLevel.critico || []).filter(filter);
-  const urgentes = (byLevel.urgente || []).filter(filter);
+  const sel = _relNiveisNorm(niveis, ['critico','urgente']);
 
-  if (!criticos.length && !urgentes.length) {
-    alert('Nenhum material crítico ou urgente para este regional.');
+  // Filtra itens do regional, por nível selecionado
+  const filter = item => (item.regional || '—') === regionalName;
+  const itensPorNivel = {};
+  sel.forEach(k => { itensPorNivel[k] = (byLevel[k] || []).filter(filter); });
+  const todosItens = sel.flatMap(k => itensPorNivel[k]);
+
+  if (!todosItens.length) {
+    alert('Nenhum material nos níveis selecionados para este regional.');
     return;
   }
 
@@ -1864,13 +1957,23 @@ window.gerarRelatorioRegional = function(regionalName) {
   }
 
   // Monta seções por nível
-  const levels = [
-    { key:'critico', items:criticos, color:'#f87171', badgeColor:'#dc2626', bg:'rgba(239,68,68,.08)', border:'rgba(239,68,68,.3)', icon:'🔴', sublabel:'Ação imediata — escalar à gerência' },
-    { key:'urgente', items:urgentes, color:'#fb923c', badgeColor:'#ea580c', bg:'rgba(249,115,22,.08)', border:'rgba(249,115,22,.3)', icon:'🟠', sublabel:'Atenção redobrada — repassar aos operadores' },
-  ].filter(l => l.items.length > 0);
+  const levelCfg = {
+    critico: { color:'#f87171', badgeColor:'#dc2626', bg:'rgba(239,68,68,.08)',  border:'rgba(239,68,68,.3)',  icon:'🔴', sublabel:'Ação imediata — escalar à gerência' },
+    urgente: { color:'#fb923c', badgeColor:'#ea580c', bg:'rgba(249,115,22,.08)', border:'rgba(249,115,22,.3)', icon:'🟠', sublabel:'Atenção redobrada — repassar aos operadores' },
+    atencao: { color:'#fbbf24', badgeColor:'#d97706', bg:'rgba(245,158,11,.08)', border:'rgba(245,158,11,.3)', icon:'⚠️', sublabel:'Monitorar — contatar operador' },
+    bom:     { color:'#34d399', badgeColor:'#059669', bg:'rgba(16,185,129,.08)', border:'rgba(16,185,129,.3)', icon:'🟢', sublabel:'Dentro do esperado — sem ação necessária' },
+  };
+  const levels = sel
+    .map(k => ({ key:k, items:itensPorNivel[k], ...levelCfg[k] }))
+    .filter(l => l.items.length > 0);
 
-  const levelBgGradient = { critico: 'linear-gradient(135deg,#7f1d1d 0%,#991b1b 60%,#b91c1c 100%)', urgente: 'linear-gradient(135deg,#7c2d12 0%,#9a3412 60%,#c2410c 100%)' };
-  const levelGlow      = { critico: 'rgba(239,68,68,0.35)', urgente: 'rgba(249,115,22,0.35)' };
+  const levelBgGradient = {
+    critico: 'linear-gradient(135deg,#7f1d1d 0%,#991b1b 60%,#b91c1c 100%)',
+    urgente: 'linear-gradient(135deg,#7c2d12 0%,#9a3412 60%,#c2410c 100%)',
+    atencao: 'linear-gradient(135deg,#78350f 0%,#92400e 60%,#b45309 100%)',
+    bom:     'linear-gradient(135deg,#064e3b 0%,#065f46 60%,#047857 100%)',
+  };
+  const levelGlow      = { critico: 'rgba(239,68,68,0.35)', urgente: 'rgba(249,115,22,0.35)', atencao: 'rgba(245,158,11,0.30)', bom: 'rgba(16,185,129,0.28)' };
 
   const sectionsHtml = levels.map(l => {
     const byCentral = groupByCentral(l.items);
@@ -1879,7 +1982,7 @@ window.gerarRelatorioRegional = function(regionalName) {
     ).join('');
     const grad = levelBgGradient[l.key] || ('linear-gradient(135deg,' + l.color + ' 0%,' + l.color + 'cc 100%)');
     const glow = levelGlow[l.key] || (l.color + '55');
-    const levelNameMap = { critico: 'CRÍTICO', urgente: 'URGENTE' };
+    const levelNameMap = { critico: 'CRÍTICO', urgente: 'URGENTE', atencao: 'ATENÇÃO', bom: 'BOM' };
     const levelName = levelNameMap[l.key] || l.key.toUpperCase();
     return '<div class="level-group" style="margin-bottom:36px">' +
       '<div style="background:' + grad + ';border-radius:12px 12px 0 0;padding:22px 28px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 4px 24px ' + glow + ';position:relative;overflow:hidden">' +
@@ -1904,17 +2007,21 @@ window.gerarRelatorioRegional = function(regionalName) {
   }).join('');
 
   // Sumário
-  const totalGeral = criticos.length + urgentes.length;
-  const centraisAfetadas = new Set([...criticos,...urgentes].map(i=>i.central)).size;
+  const totalGeral = todosItens.length;
+  const centraisAfetadas = new Set(todosItens.map(i=>i.central)).size;
 
   const bodyHtml = `<style>${_criticidadeMatTableStyles()}</style>${sectionsHtml}`;
+
+  const kpisNiveis = sel.map(k => {
+    const n = _REL_NIVEIS.find(x => x.key === k);
+    return { value: itensPorNivel[k].length, label: n.plural, color: n.kpiColor };
+  });
 
   const html = _buildRankingShellHTML({
     periodoBadge: periodo,
     periodo, now,
     kpis: [
-      { value: criticos.length,   label: 'críticos',            color: '#ef4444' },
-      { value: urgentes.length,   label: 'urgentes',            color: '#f97316' },
+      ...kpisNiveis,
       { value: centraisAfetadas,  label: 'centrais afetadas',   color: '#3b82f6' },
       { value: totalGeral,        label: 'total',               color: '#94a3b8' }
     ]
@@ -1922,9 +2029,9 @@ window.gerarRelatorioRegional = function(regionalName) {
     pageTitle:  `Relatório Regional — ${regionalName}`,
     badge:      'Alerta de Criticidade',
     title:      `Relatório Regional — ${regionalName}`,
-    subtitle:   'Materiais críticos e urgentes agrupados por central, para ação imediata ou monitoramento reforçado.',
+    subtitle:   `Materiais ${_relNiveisTexto(sel)} agrupados por central, por nível de prioridade.`,
     bodyHtml,
-    notaRodape: 'Crítico e urgente calculados a partir do desequilíbrio (desfalque/sobra) entre estoque físico e lançamentos no período selecionado.'
+    notaRodape: 'Níveis calculados a partir do desequilíbrio (desfalque/sobra) entre estoque físico e lançamentos no período selecionado.'
   });
 
   _openRelWindow(html);
@@ -1962,9 +2069,10 @@ window.abrirModalRelatorioCentral = function(centralName) {
         Relatório de Central
       </div>
       <div class="modal-sub">${centralName} · selecione o tipo de relatório</div>
+      ${_relNiveisPickerHTML('an-rel-central-niv', ['critico','urgente','atencao'])}
       <div style="display:flex;flex-direction:column;gap:10px;margin:20px 0">
 
-        <button onclick="document.getElementById('an-rel-central-modal').classList.remove('open');gerarRelatorioCentral('${safe}');"
+        <button onclick="_relGerarCentral('${safe}','padrao')"
           style="display:flex;align-items:flex-start;gap:14px;width:100%;padding:16px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;cursor:pointer;font-family:inherit;color:var(--text);text-align:left;transition:border-color .15s,background .15s"
           onmouseover="this.style.borderColor='var(--accent)';this.style.background='var(--bg3)'"
           onmouseout="this.style.borderColor='var(--border)';this.style.background='var(--bg2)'">
@@ -1973,11 +2081,11 @@ window.abrirModalRelatorioCentral = function(centralName) {
           </div>
           <div>
             <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:3px">Relatório Padrão</div>
-            <div style="font-size:12px;color:var(--text2);line-height:1.5">Criticidade de materiais por nível — crítico, urgente e atenção. Variação e tendência por material.</div>
+            <div style="font-size:12px;color:var(--text2);line-height:1.5">Materiais agrupados pelos níveis selecionados acima. Variação e tendência por material.</div>
           </div>
         </button>
 
-        <button onclick="document.getElementById('an-rel-central-modal').classList.remove('open');gerarRelatorioComAcoes('${safe}');"
+        <button onclick="_relGerarCentral('${safe}','acoes')"
           style="display:flex;align-items:flex-start;gap:14px;width:100%;padding:16px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;cursor:pointer;font-family:inherit;color:var(--text);text-align:left;transition:border-color .15s,background .15s"
           onmouseover="this.style.borderColor='var(--accent)';this.style.background='var(--bg3)'"
           onmouseout="this.style.borderColor='var(--border)';this.style.background='var(--bg2)'">
@@ -2000,6 +2108,14 @@ window.abrirModalRelatorioCentral = function(centralName) {
   if (modal._escHandler) document.removeEventListener('keydown', modal._escHandler);
   modal._escHandler = (e) => { if (e.key === 'Escape') { modal.classList.remove('open'); document.removeEventListener('keydown', modal._escHandler); } };
   document.addEventListener('keydown', modal._escHandler);
+};
+
+window._relGerarCentral = function(centralName, tipo) {
+  const niveis = _relNiveisSelecionados('an-rel-central-niv');
+  if (!niveis) { alert('Selecione ao menos um nível de criticidade.'); return; }
+  document.getElementById('an-rel-central-modal').classList.remove('open');
+  if (tipo === 'acoes') gerarRelatorioComAcoes(centralName, niveis);
+  else                  gerarRelatorioCentral(centralName, niveis);
 };
 
 // ═══════════════════════════════════════════════════════════════════
@@ -2083,21 +2199,22 @@ function _resolverAcoesParaMaterial(materialNome, variacao, categoriaItem, nivel
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// RELATÓRIO POR CENTRAL (Atenção + Urgente + Crítico) — Relatório Padrão
+// RELATÓRIO POR CENTRAL (níveis selecionados no modal) — Relatório Padrão
 // (mesmo shell escuro dos relatórios de Ranking/Ausência: _buildRankingShellHTML)
 // ═══════════════════════════════════════════════════════════════════
 
-window.gerarRelatorioCentral = function(centralName) {
+window.gerarRelatorioCentral = function(centralName, niveis) {
   const byLevel = window._rankByLevel;
   if (!byLevel) { alert('Nenhum dado de criticidade disponível. Execute a análise primeiro.'); return; }
 
+  const sel = _relNiveisNorm(niveis, ['critico','urgente','atencao']);
   const filter = item => item.central === centralName;
-  const criticos = (byLevel.critico || []).filter(filter);
-  const urgentes = (byLevel.urgente || []).filter(filter);
-  const atencoes = (byLevel.atencao || []).filter(filter);
+  const itensPorNivel = {};
+  sel.forEach(k => { itensPorNivel[k] = (byLevel[k] || []).filter(filter); });
+  const todosItens = sel.flatMap(k => itensPorNivel[k]);
 
-  if (!criticos.length && !urgentes.length && !atencoes.length) {
-    alert('Nenhum material crítico, urgente ou em atenção para esta central.');
+  if (!todosItens.length) {
+    alert('Nenhum material nos níveis selecionados para esta central.');
     return;
   }
 
@@ -2127,11 +2244,13 @@ window.gerarRelatorioCentral = function(centralName) {
     '#ef4444': 'linear-gradient(135deg,#7f1d1d 0%,#991b1b 60%,#b91c1c 100%)',
     '#f97316': 'linear-gradient(135deg,#7c2d12 0%,#9a3412 60%,#c2410c 100%)',
     '#f59e0b': 'linear-gradient(135deg,#78350f 0%,#92400e 60%,#b45309 100%)',
+    '#10b981': 'linear-gradient(135deg,#064e3b 0%,#065f46 60%,#047857 100%)',
   };
   const _lvlGlow = {
     '#ef4444': 'rgba(239,68,68,0.35)',
     '#f97316': 'rgba(249,115,22,0.35)',
     '#f59e0b': 'rgba(245,158,11,0.30)',
+    '#10b981': 'rgba(16,185,129,0.28)',
   };
 
   function buildLevelSection(items, color, icon, label, sublabel) {
@@ -2158,20 +2277,31 @@ window.gerarRelatorioCentral = function(centralName) {
     );
   }
 
-  const sectionsHtml = [
-    criticos.length && buildLevelSection(criticos,'#ef4444','🔴','CRÍTICO','Ação imediata — escalar à gerência'),
-    urgentes.length && buildLevelSection(urgentes,'#f97316','🟠','URGENTE','Atenção redobrada — repassar aos regionais'),
-    atencoes.length && buildLevelSection(atencoes,'#f59e0b','⚠️','ATENÇÃO','Monitorar — contatar operador'),
-  ].filter(Boolean).join('');
+  const secCfg = {
+    critico: { color:'#ef4444', icon:'🔴', label:'CRÍTICO', sub:'Ação imediata — escalar à gerência' },
+    urgente: { color:'#f97316', icon:'🟠', label:'URGENTE', sub:'Atenção redobrada — repassar aos regionais' },
+    atencao: { color:'#f59e0b', icon:'⚠️', label:'ATENÇÃO', sub:'Monitorar — contatar operador' },
+    bom:     { color:'#10b981', icon:'🟢', label:'BOM',     sub:'Dentro do esperado — sem ação necessária' },
+  };
 
-  const totalGeral = criticos.length + urgentes.length + atencoes.length;
-  const regional = [...criticos,...urgentes,...atencoes][0]?.regional || '—';
+  const sectionsHtml = sel.map(k => {
+    const items = itensPorNivel[k];
+    if (!items.length) return '';
+    const c = secCfg[k];
+    return buildLevelSection(items, c.color, c.icon, c.label, c.sub);
+  }).join('');
+
+  const totalGeral = todosItens.length;
+  const regional = todosItens[0]?.regional || '—';
+  const niveisLabel = sel.map(k => secCfg[k].label).join(' · ');
 
   const infoBar = `
     <div class="crit-info-bar">
       <div class="crit-info-item"><span class="crit-info-label">Central</span><span class="crit-info-value">${escC(centralName)}</span></div>
       <div style="width:1px;height:28px;background:rgba(255,255,255,.1)"></div>
       <div class="crit-info-item"><span class="crit-info-label">Regional</span><span class="crit-info-value">${escC(regional)}</span></div>
+      <div style="width:1px;height:28px;background:rgba(255,255,255,.1)"></div>
+      <div class="crit-info-item"><span class="crit-info-label">Níveis exibidos</span><span class="crit-info-value">${niveisLabel}</span></div>
       <div style="width:1px;height:28px;background:rgba(255,255,255,.1)"></div>
       <div class="crit-info-item"><span class="crit-info-label">Total de materiais</span><span class="crit-info-value">${totalGeral} ${totalGeral!==1?'materiais':'material'}</span></div>
     </div>`;
@@ -2191,18 +2321,19 @@ window.gerarRelatorioCentral = function(centralName) {
     periodoBadge: periodo,
     periodo, now,
     kpis: [
-      { value: criticos.length, label: 'críticos', color: '#ef4444' },
-      { value: urgentes.length, label: 'urgentes', color: '#f97316' },
-      { value: atencoes.length, label: 'atenção',  color: '#f59e0b' },
-      { value: totalGeral,      label: 'total',    color: '#94a3b8' }
+      ...sel.map(k => {
+        const n = _REL_NIVEIS.find(x => x.key === k);
+        return { value: itensPorNivel[k].length, label: n.plural, color: n.kpiColor };
+      }),
+      { value: totalGeral, label: 'total', color: '#94a3b8' }
     ]
   }, {
     pageTitle:  `Relatório Central — ${centralName}`,
     badge:      'Alerta de Criticidade',
     title:      `Relatório de Central — ${centralName}`,
-    subtitle:   `${escC(regional)} · materiais críticos, urgentes e em atenção, por nível de prioridade.`,
+    subtitle:   `${escC(regional)} · materiais ${_relNiveisTexto(sel)}, por nível de prioridade.`,
     bodyHtml,
-    notaRodape: 'Crítico, urgente e atenção calculados a partir do desequilíbrio (desfalque/sobra) entre estoque físico e lançamentos no período selecionado.'
+    notaRodape: 'Níveis calculados a partir do desequilíbrio (desfalque/sobra) entre estoque físico e lançamentos no período selecionado.'
   });
 
   _openRelWindow(html);
@@ -2213,17 +2344,17 @@ window.gerarRelatorioCentral = function(centralName) {
 // (mesmo shell escuro dos relatórios de Ranking/Ausência: _buildRankingShellHTML)
 // ═══════════════════════════════════════════════════════════════════
 
-window.gerarRelatorioComAcoes = function(centralName) {
+window.gerarRelatorioComAcoes = function(centralName, niveis) {
   const byLevel = window._rankByLevel;
   if (!byLevel) { alert('Nenhum dado de criticidade disponível. Execute a análise primeiro.'); return; }
 
+  const sel = _relNiveisNorm(niveis, ['critico','urgente','atencao']);
   const filter = item => item.central === centralName;
-  const criticos = (byLevel.critico || []).filter(filter);
-  const urgentes = (byLevel.urgente || []).filter(filter);
-  const atencoes = (byLevel.atencao || []).filter(filter);
+  const itensPorNivel = {};
+  sel.forEach(k => { itensPorNivel[k] = (byLevel[k] || []).filter(filter); });
 
-  if (!criticos.length && !urgentes.length && !atencoes.length) {
-    alert('Nenhum material crítico, urgente ou em atenção para esta central.');
+  if (!sel.some(k => itensPorNivel[k].length)) {
+    alert('Nenhum material nos níveis selecionados para esta central.');
     return;
   }
 
@@ -2309,6 +2440,7 @@ window.gerarRelatorioComAcoes = function(centralName) {
     critico: { color:'#f87171', bg:'rgba(239,68,68,.16)', grad:'linear-gradient(135deg,#7f1d1d 0%,#991b1b 60%,#b91c1c 100%)', glow:'rgba(239,68,68,0.30)', icon:'🔴', label:'CRÍTICO', sub:'Ação imediata — escalar à gerência' },
     urgente: { color:'#fb923c', bg:'rgba(249,115,22,.16)', grad:'linear-gradient(135deg,#7c2d12 0%,#9a3412 60%,#c2410c 100%)', glow:'rgba(249,115,22,0.28)', icon:'🟠', label:'URGENTE', sub:'Atenção redobrada — repassar aos regionais' },
     atencao: { color:'#fbbf24', bg:'rgba(245,158,11,.16)', grad:'linear-gradient(135deg,#78350f 0%,#92400e 60%,#b45309 100%)', glow:'rgba(245,158,11,0.25)', icon:'⚠️', label:'ATENÇÃO', sub:'Monitorar — contatar operador' },
+    bom:     { color:'#34d399', bg:'rgba(16,185,129,.16)', grad:'linear-gradient(135deg,#064e3b 0%,#065f46 60%,#047857 100%)', glow:'rgba(16,185,129,0.24)', icon:'🟢', label:'BOM',     sub:'Dentro do esperado — sem ação necessária' },
   };
 
   function buildLevelSection(items, cfg, levelKey) {
@@ -2332,22 +2464,22 @@ window.gerarRelatorioComAcoes = function(centralName) {
     '</div>';
   }
 
-  const allItems = [...criticos, ...urgentes, ...atencoes];
+  const allItems = sel.flatMap(k => itensPorNivel[k]);
   const totalGeral = allItems.length;
   const regional   = allItems[0]?.regional || '—';
   const comAcoes   = allItems.filter(i => _resolverAcoesParaMaterial(i.mat, i.diff, i.categoria, i.level, i.catKey, i.catSubKey) !== null).length;
   const semAcoes   = totalGeral - comAcoes;
 
-  const sectionsHtml =
-    buildLevelSection(criticos, lvlCfg.critico, 'critico') +
-    buildLevelSection(urgentes, lvlCfg.urgente, 'urgente') +
-    buildLevelSection(atencoes, lvlCfg.atencao, 'atencao');
+  const sectionsHtml = sel.map(k => buildLevelSection(itensPorNivel[k], lvlCfg[k], k)).join('');
+  const niveisLabel  = sel.map(k => lvlCfg[k].label).join(' · ');
 
   const infoBar = `
     <div class="crit-info-bar">
       <div class="crit-info-item"><span class="crit-info-label">Central</span><span class="crit-info-value">${escC(centralName)}</span></div>
       <div style="width:1px;height:28px;background:rgba(255,255,255,.1)"></div>
       <div class="crit-info-item"><span class="crit-info-label">Regional</span><span class="crit-info-value">${escC(regional)}</span></div>
+      <div style="width:1px;height:28px;background:rgba(255,255,255,.1)"></div>
+      <div class="crit-info-item"><span class="crit-info-label">Níveis exibidos</span><span class="crit-info-value">${niveisLabel}</span></div>
       <div style="width:1px;height:28px;background:rgba(255,255,255,.1)"></div>
       <div class="crit-info-item"><span class="crit-info-label">Total de materiais</span><span class="crit-info-value">${totalGeral}</span></div>
       <div style="width:1px;height:28px;background:rgba(255,255,255,.1)"></div>
@@ -2368,9 +2500,10 @@ window.gerarRelatorioComAcoes = function(centralName) {
     periodoBadge: periodo,
     periodo, now,
     kpis: [
-      { value: criticos.length, label: 'críticos',  color: '#ef4444' },
-      { value: urgentes.length, label: 'urgentes',  color: '#f97316' },
-      { value: atencoes.length, label: 'atenção',   color: '#f59e0b' },
+      ...sel.map(k => {
+        const n = _REL_NIVEIS.find(x => x.key === k);
+        return { value: itensPorNivel[k].length, label: n.plural, color: n.kpiColor };
+      }),
       { value: comAcoes,        label: 'com ação',  color: '#22c55e' },
       { value: semAcoes,        label: 'sem ação',  color: '#64748b' }
     ]
@@ -2378,7 +2511,7 @@ window.gerarRelatorioComAcoes = function(centralName) {
     pageTitle:  `Relatório com Ações — ${centralName}`,
     badge:      'Cobrança de Pendências',
     title:      `Relatório com Ações — ${centralName}`,
-    subtitle:   `${escC(regional)} · materiais críticos, urgentes e em atenção, com ações corretivas propostas por regra cadastrada.`,
+    subtitle:   `${escC(regional)} · materiais ${_relNiveisTexto(sel)}, com ações corretivas propostas por regra cadastrada.`,
     bodyHtml,
     notaRodape: 'Ações resolvidas a partir das regras cadastradas em Configurações → Ações de Relatório, pela combinação de material, categoria, nível e faixa de variação mais próxima.'
   });
