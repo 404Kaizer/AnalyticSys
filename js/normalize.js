@@ -591,6 +591,33 @@ function getCustoMedioCustosSap(central, codSap, ano, mes, idx, maxMesesAtras = 
   return null;
 }
 
+// Irmã de getCustoMedioCustosSap, mas para o ESTOQUE (LBKUM da MBEWH) em vez
+// do custo. Mesma chave, mesmo índice e mesma cascata pra trás — mas com um
+// critério de aceite diferente, e é por isso que são duas funções e não uma:
+// o custo só é aceito se for > 0 (custo zero é dado inválido), enquanto
+// estoque ZERO é um saldo perfeitamente válido. Aqui basta o registro existir.
+//
+// Por que a cascata é obrigatória e não um paliativo (Hugo, 13/08/2026): a
+// MBEWH é tabela de HISTÓRICO — o SAP só grava linha de um período quando
+// houve mudança de avaliação naquele período. Material que não movimentou no
+// mês simplesmente não tem linha, e isso não é dado faltando: significa
+// "saldo continua igual ao do último período que aparece". Nenhuma tabela do
+// SAP entrega a matriz completa material × central × mês; quem fecha o buraco
+// é a soma das movimentações SAP (ver _anGetSapTheoreticalStock, analitico.js).
+function getEstoqueSapCustosSap(central, codSap, ano, mes, idx, maxMesesAtras = 60) {
+  if (!codSap) return null;
+  const _idx = idx || buildCustosSapIndex();
+  const centralNorm = String(central || '').trim();
+  const codNorm = normalizarCodSap(codSap);
+  let a = Number(ano) || 0, m = Number(mes) || 0;
+  for (let mesesAtras = 0; mesesAtras <= maxMesesAtras; mesesAtras++) {
+    const rec = _idx.get(centralNorm + '|||' + codNorm + '|||' + a + '|||' + m);
+    if (rec) return { valor: num(rec.estoqueTotal), ano: a, mes: m, mesesAtras };
+    m--; if (m < 1) { m = 12; a--; }
+  }
+  return null;
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 // CLASSIFICAÇÃO POR CADASTRO — fonte única de verdade para catKey
 // ═══════════════════════════════════════════════════════════════════════

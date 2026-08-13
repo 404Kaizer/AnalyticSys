@@ -28,12 +28,104 @@
 // porque essa ação não altera lançamentos/cadastro, só um filtro de
 // exibição, então o cache da última análise continua válido.
 const _anStockCache = new Map();
-function _anClearStockCache() { _anStockCache.clear(); }
+let _anCustosSapIdx = null;
+function _anClearStockCache() { _anStockCache.clear(); _anCustosSapIdx = null; }
+function _anGetCustosSapIdx() {
+  if (!_anCustosSapIdx) _anCustosSapIdx = buildCustosSapIndex();
+  return _anCustosSapIdx;
+}
 
-function _anGetPrePeriodStock(args) {
-  const k = 'pre|' + args.central + '|' + args.material + '|' + String(args.dtIni) + '|' + String(args.dtFim) + '|' + (args.catKey || '');
+// ═══════════════════════════════════════════════════════════
+// EST. INICIAL DO MÊS — SALDO TEÓRICO DO SAP (Hugo, 13/08/2026)
+// ═══════════════════════════════════════════════════════════
+// Antes, o Est. Inicial da Visão Micro vinha de getPrePeriodLaunchStock —
+// ou seja, do LANÇAMENTO do operador no dia anterior ao período (saldo
+// REAL contado). Decisão do Hugo: como analista, a base de comparação tem
+// que ser o que o SAP diz, não o que o operador contou. Com a base real, se
+// o saldo do SAP divergir do físico a variação nasce medida contra o número
+// errado; com a base do SAP, a Variação da tela passa a ser exatamente
+// "quanto o físico está distante do livro do SAP".
+//
+// ATENÇÃO — isso muda o SIGNIFICADO da Variação: ela deixa de medir só a
+// divergência gerada DENTRO do período e passa a medir a divergência
+// ACUMULADA contra o SAP. Se o fechamento mensal ajusta o SAP (Y11/Y12), as
+// duas leituras convergem; se um mês não for ajustado, aquela diferença
+// reaparece nos meses seguintes até alguém ajustar. É o efeito desejado.
+//
+// COMO O SALDO É MONTADO (âncora + movimentações):
+//   1. Âncora  = registro de Custos SAP (MBEWH) mais recente que EXISTIR até
+//                o mês anterior a dtIni — cascateando pra trás, ver
+//                getEstoqueSapCustosSap (normalize.js).
+//   2. Delta   = soma de TODAS as movimentações SAP do par central+material
+//                entre o fechamento da âncora e dtIni−1.
+//
+// Isso torna o desenho imune aos buracos da MBEWH: onde não houve
+// movimentação, o delta dá zero e a âncora antiga já está certa por
+// construção; onde houve, o delta reconstrói a diferença. Nos dois casos
+// fecha — sem exigir nenhuma importação nova (usa Custos SAP e o módulo SAP,
+// ambos já alimentados hoje).
+//
+// PREMISSA A VALIDAR: o LBKUM da MBEWH do período N é o saldo no FECHAMENTO
+// do mês N (por isso o delta começa no 1º dia do mês N+1). Se na prática for
+// o saldo de ABERTURA, é só recuar `desde` um mês.
+//
+// Y11/Y12 ENTRAM SEMPRE aqui, de propósito — isSapExcluidoPorFechamento NÃO
+// é aplicado. Esses ajustes são justamente a reconciliação do fechamento
+// entre o SAP e o físico; deixá-los de fora faria o saldo acumulado nunca
+// bater com o SAP de verdade. O filtro de fechamento continua valendo
+// normalmente para as colunas Entradas/Saídas do período (ver sapNoPeriodo
+// em _rodarAnaliticoCore) — só o acumulado histórico ignora ele.
+//
+// Sem Cód SAP cadastrado, ou sem NENHUMA âncora em mês nenhum → retorna null
+// (a UI mostra AUSENTE, sem cair silenciosamente pro lançamento real).
+function _anGetSapTheoreticalStock({ central, material, dtIni }) {
+  const codSap = getCodSapPorGrupo(material);
+  if (!codSap) return null;
+
+  const d = dtIni instanceof Date ? new Date(dtIni) : new Date(dtIni);
+  if (isNaN(d)) return null;
+
+  // Mês anterior a dtIni em base 1 — getMonth() é 0-based, então ele já É o
+  // número do mês anterior (jan → 0, que vira dezembro do ano anterior).
+  const ancAno = d.getMonth() === 0 ? d.getFullYear() - 1 : d.getFullYear();
+  const ancMes = d.getMonth() === 0 ? 12 : d.getMonth();
+
+  const anc = getEstoqueSapCustosSap(central, codSap, ancAno, ancMes, _anGetCustosSapIdx());
+  if (!anc) return null;
+
+  // anc.mes é 1-based, então new Date(ano, anc.mes, 1) já é o 1º dia do mês
+  // SEGUINTE ao da âncora — o primeiro dia ainda não refletido no saldo dela.
+  const desde = new Date(anc.ano, anc.mes, 1);
+  desde.setHours(0, 0, 0, 0);
+  const ate = new Date(d);
+  ate.setDate(ate.getDate() - 1);
+  ate.setHours(23, 59, 59, 999);
+
+  let delta = 0;
+  const { byCentralMat } = getSapIndex();
+  const arr = byCentralMat.get(central)?.get(material || '—') || [];
+  for (const rec of arr) {
+    const dl = parseDate(rec.dtLanc);
+    if (!dl || dl < desde || dl > ate) continue;
+    delta += num(rec.peso);
+  }
+
+  const dtRef = new Date(d);
+  dtRef.setDate(dtRef.getDate() - 1);
+  return {
+    value:       anc.valor + delta,
+    dtLabel:     fmtPtDate(dtRef),
+    ancoraLabel: `${String(anc.mes).padStart(2, '0')}/${anc.ano}`,
+    ancoraValor: anc.valor,
+    mesesAtras:  anc.mesesAtras,
+    delta
+  };
+}
+
+function _anGetSapStock(args) {
+  const k = 'sapteo|' + args.central + '|' + args.material + '|' + String(args.dtIni);
   if (_anStockCache.has(k)) return _anStockCache.get(k);
-  const v = getPrePeriodLaunchStock(args);
+  const v = _anGetSapTheoreticalStock(args);
   _anStockCache.set(k, v);
   return v;
 }
@@ -366,21 +458,21 @@ function _rodarAnaliticoCore(dtIni, dtFim, onDone, silent) {
         _macroPesoFimSoma[mat] = (_macroPesoFimSoma[mat] || 0) + num(r.peso);
       }
     });
-    // ── Lookup de catKey por material (O(n), sem find() por material) ──
-    // Necessário para que getPrePeriodLaunchStock aplique a regra de Agregado
-    // (recuar até a última terça) também no total somaPrimeiro da central.
-    // Reaproveita materialCatKeyMap (construído acima a partir de
-    // materialOriginal, na filtragem de lancsNoPeriodo/sapNoPeriodo) — mat
-    // aqui já é garantidamente cadastrado, então a busca é só um lookup
-    // seguro, sem risco de re-derivar por um nome resolvido ambíguo.
-    const _matCatKeyLookup = {};
-    allMats.forEach(mat => {
-      _matCatKeyLookup[mat] = materialCatKeyMap.get(mat) || null;
-    });
-
+    // Est. Inicial do total da central: saldo teórico do SAP em dtIni−1, o
+    // mesmo de cada linha de material (ver _anGetSapTheoreticalStock). O
+    // lookup de catKey que existia aqui saiu junto: ele só servia pra regra
+    // de Agregado do getPrePeriodLaunchStock, que não é mais a fonte.
+    //
+    // ponytail: a cascata de fallback do somaPrimeiro abaixo (?? lançamento
+    // do 1º dia ?? peso do 1º lançamento) foi mantida como estava. Ela só
+    // dispara quando NÃO há âncora de Custos SAP, e nesse caso o total da
+    // central passa a misturar base do SAP com base de lançamento em
+    // silêncio. Teto aceito por ora pra não mudar o comportamento do card
+    // junto com a troca de fonte; upgrade = propagar o AUSENTE das linhas
+    // para o total (decidir o que o card mostra quando falta âncora).
     const _prePeriodoStockByMat = {};
     allMats.forEach(mat => {
-      const prev = _anGetPrePeriodStock({ central, material: mat, dtIni, dtFim, catKey: _matCatKeyLookup[mat] });
+      const prev = _anGetSapStock({ central, material: mat, dtIni });
       if (prev) _prePeriodoStockByMat[mat] = prev.value;
     });
 
@@ -701,7 +793,7 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
     // vez de recalcular a cada comparação do sort (o comparador antigo
     // rodava getPrePeriodLaunchStock + buildSnapshot O(m log m) vezes).
     const _matDiffScore = (mat) => {
-      const prev = _anGetPrePeriodStock({ central: r.central, material: mat, dtIni, dtFim, catKey: _sortCatKeyLookup.get(mat) });
+      const prev = _anGetSapStock({ central: r.central, material: mat, dtIni });
       return buildSnapshot({ lancs: lancsByMat.get(mat) || [], sap: sapByMat.get(mat) || [], initialStockOverride: prev?.value ?? null }).diff;
     };
     const allMatsSorted = r.allMats
@@ -726,13 +818,12 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
       const isSemanal       = matCatKey === 'agregado';
 
       // ── Est. Inicial do card de resumo ──────────────────────────────────
-      // getPrePeriodLaunchStock: busca o lançamento mais recente antes de dtIni.
-      // Passa matCatKey para que Agregados (lançamento semanal) recuem até a
-      // última terça com lançamento — mesma regra já usada no preCarry abaixo.
-      // (Correção: antes chamava sem catKey, o que fazia a busca considerar
-      // apenas o dia imediatamente anterior a dtIni, quase nunca uma terça,
-      // resultando em AUSENTE indevido para Agregados no card.)
-      const prev = _anGetPrePeriodStock({ central: r.central, material: mat, dtIni, dtFim, catKey: matCatKey });
+      // Saldo TEÓRICO do SAP em dtIni−1 (âncora Custos SAP + movimentações),
+      // não mais o lançamento do operador — ver _anGetSapTheoreticalStock no
+      // topo do arquivo. Sem catKey: a regra de Agregado (recuar até a última
+      // terça) era necessária quando a fonte era lançamento, que só existe em
+      // dias de conferência; o saldo do SAP existe em qualquer data.
+      const prev = _anGetSapStock({ central: r.central, material: mat, dtIni });
 
       // ── Est. Inicial do carry da tabela de dias ──────────────────────────
       // getPrevDayLaunchStock: busca usando regras por categoria
@@ -1088,6 +1179,35 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
           ? `<span class="absent-badge" style="background:var(--bg4);color:var(--text3);border-color:var(--border2)" title="Material sem Cód SAP cadastrado — não é possível buscar o custo em Custos SAP">SEM CÓD SAP</span>`
           : `<span class="absent-badge" title="Nenhum custo cadastrado em Custos SAP para ${escapeHtml(r.central)} / Cód SAP ${escapeHtml(_matCodSap)} / ${_custoMedMesAno}">AUSENTE</span>`;
 
+      // ── Coluna "Dt. Est. Inicial" ────────────────────────────────────────
+      // A causa de um AUSENTE aqui mudou junto com a fonte: não é mais "não
+      // achei lançamento do operador", e sim "não achei âncora de saldo em
+      // Custos SAP" (ou o material não tem Cód SAP cadastrado). Por isso o
+      // tooltip de lançamentos próximos (buildAbsentTooltip) saiu DESTA
+      // coluna — ele continua valendo na de Est. Final, que segue vindo de
+      // lançamento real. Quando há saldo, o tooltip abre a conta: de qual mês
+      // veio a âncora e quanto de movimentação SAP foi somado em cima dela.
+      const _iniCell = (() => {
+        if (matSemCadastro) {
+          return `<span class="absent-badge" style="background:var(--bg4);color:var(--text3);border-color:var(--border2)" title="Material sem cadastro — sem Cód SAP para buscar o saldo em Custos SAP">SEM CADASTRO</span>`;
+        }
+        if (snapshot.pesoIniAusente || !prev) {
+          const motivo = _matCodSap
+            ? `Nenhum registro em Custos SAP para ${r.central} / Cód SAP ${_matCodSap} em mês nenhum até o mês anterior ao período`
+            : 'Material sem Cód SAP cadastrado — não é possível buscar o saldo em Custos SAP';
+          return `<span class="absent-badge" style="cursor:help" title="${escapeHtml(motivo)}">AUSENTE</span>`;
+        }
+        const atraso = prev.mesesAtras > 0
+          ? ` (${prev.mesesAtras} ${prev.mesesAtras === 1 ? 'mês' : 'meses'} atrás)`
+          : '';
+        const tip = `Saldo teórico do SAP em ${snapshot.dtIniLabel}\n`
+                  + `Âncora: Custos SAP ${prev.ancoraLabel}${atraso} = ${fmtKg(prev.ancoraValor)}\n`
+                  + `Movimentações SAP desde então: ${prev.delta >= 0 ? '+' : '−'}${fmtKg(Math.abs(prev.delta))}`;
+        return `<span style="cursor:help;border-bottom:1px dashed currentColor" title="${escapeHtml(tip)}">${snapshot.dtIniLabel}${
+          prev.mesesAtras > 0 ? ` <i class="ti ti-clock-hour-4" style="font-size:9px;color:var(--amber)"></i>` : ''
+        }</span>`;
+      })();
+
       const _matFechExcluidos = (r.sapFechExcluidosByMat && r.sapFechExcluidosByMat.get(mat)) || [];
       const _matFechExcluidosEnt = _matFechExcluidos.filter(x => num(x.peso) > 0);
       const _matFechExcluidosSai = _matFechExcluidos.filter(x => num(x.peso) < 0);
@@ -1108,11 +1228,7 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
             </span>
           </td>
           <td class="td-mono" style="font-size:11px">${matSemCadastro ? '—' : (escapeHtml(_matCodSap) || '—')}</td>
-          <td class="td-mono" style="color:var(--text2);font-size:11px">${
-            matSemCadastro
-              ? `<span class="absent-badge" style="background:var(--bg4);color:var(--text3);border-color:var(--border2)" title="Sem cadastro — não é possível determinar se segue a regra semanal de Agregados">SEM CADASTRO</span>`
-              : (snapshot.pesoIniAusente ? `<span class='absent-badge' data-absent-tooltip='${buildAbsentTooltip(absentNearest)}' style='cursor:help'>AUSENTE</span>` : snapshot.dtIniLabel)
-          }</td>
+          <td class="td-mono" style="color:var(--text2);font-size:11px">${_iniCell}</td>
           <td class="td-mono" style="color:${(matSemCadastro || snapshot.pesoIniAusente) ? 'var(--text3)' : 'var(--text)'}">${(matSemCadastro || snapshot.pesoIniAusente) ? '—' : fmtKg(snapshot.pesoIni)}</td>
           <td>${buildAnaliticoDetailBreakdown(entEntries, snapshot.totalEnt, 'var(--green)', 'Entradas', localEntCount, mat, r.central, _matFechExcluidosEnt, localEntTotal)}</td>
           <td>${buildAnaliticoDetailBreakdown(saiEntries, snapshot.totalSai, 'var(--red)', 'Saídas', localSaiCount, mat, r.central, _matFechExcluidosSai, localSaiTotal)}</td>
@@ -1157,7 +1273,7 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
     // cadastrados, então este é um lookup seguro, não uma re-derivação.
     const matDiffs = allMatsSorted.map(mat => {
       const catKey = _sortCatKeyLookup.get(mat) || null;
-      const prev = _anGetPrePeriodStock({ central: r.central, material: mat, dtIni, dtFim, catKey });
+      const prev = _anGetSapStock({ central: r.central, material: mat, dtIni });
       const fim  = _anGetLastPeriodStockFallback({ central: r.central, material: mat, dtIni, dtFim });
       const snap = buildSnapshot({
         lancs: lancsByMat.get(mat) || [],
@@ -1402,7 +1518,7 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
                 <th>Material</th>
                 <th>Cód SAP</th>
                 <th>Dt. Est. Inicial</th>
-                <th>Est. Inicial<br><span style="font-size:9px;font-weight:400;opacity:.7">(Saldo Anterior)</span></th>
+                <th>Est. Inicial<br><span style="font-size:9px;font-weight:400;opacity:.7">(Saldo SAP)</span></th>
                 <th>Entradas<br><span style="font-size:9px;font-weight:400;opacity:.7">(por código)</span></th>
                 <th>Saídas<br><span style="font-size:9px;font-weight:400;opacity:.7">(por código)</span></th>
                 <th>Dt. Est. Final</th>
@@ -1707,8 +1823,7 @@ function renderAnaliticoMicro(results, dtIni, dtFim, silent) {
     return [...(r.allMats || [])].reduce((acc, mat) => {
       const lm = lancsByMat.get(mat) || [];
       const sm = sapByMat.get(mat)   || [];
-      const catKey = (r.materialCatKeyMap && r.materialCatKeyMap.get(mat)) || null;
-      const prev = _anGetPrePeriodStock({ central: r.central, material: mat, dtIni, dtFim, catKey });
+      const prev = _anGetSapStock({ central: r.central, material: mat, dtIni });
       return acc + buildSnapshot({
         lancs: lm,
         sap:   sm,
