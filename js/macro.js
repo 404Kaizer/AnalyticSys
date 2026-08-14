@@ -108,22 +108,24 @@ function renderMacroPanels(results, thresholds, dtIni, dtFim) {
       worstDiff: 0
     };
 
-    const preCache = new Map();
-    const getPreStock = (mat) => {
-      if (preCache.has(mat)) return preCache.get(mat);
-      const lm = lancsByMat.get(mat) || [];
-      const sm = sapByMat.get(mat)   || [];
-      const rawCat = (lm[0]?.categoria || sm[0]?.categoria || '').trim().toUpperCase();
-      const catKey = detectCatKey(rawCat) || detectCatFromMat(mat);
-      const s = (typeof getPrePeriodLaunchStock === 'function')
-        ? getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni, dtFim, catKey }) : null;
-      preCache.set(mat, s); return s;
-    };
-
+    // Est. Inicial: saldo TEÓRICO do SAP (âncora Custos SAP + movimentações),
+    // mesma fonte da Visão Micro — ver _anGetSapTheoreticalStock em
+    // analitico.js. Antes vinha do lançamento do operador, o que fazia a
+    // Macro/Regional mostrar variação diferente da Micro pro mesmo material.
+    //
+    // Sumiu o cache local (preCache) porque _anGetSapStock já cacheia, e o
+    // cache dele é limpo a cada _rodarAnaliticoCore — como a Macro roda
+    // depois da Micro na mesma análise, aqui ele chega quente.
+    //
+    // Sumiu também o catKey que era calculado só pra esta chamada: ele
+    // existia pela regra de Agregado do getPrePeriodLaunchStock (lançamento
+    // semanal), e o saldo do SAP existe em qualquer data. O catKey da
+    // classificação, logo abaixo, é outro e continua como estava.
     (r.allMats || []).forEach(mat => {
       const lancs = lancsByMat.get(mat) || [];
       const sap   = sapByMat.get(mat)   || [];
-      const prev  = getPreStock(mat);
+      const prev  = (typeof _anGetSapStock === 'function')
+        ? _anGetSapStock({ central: r.central, material: mat, dtIni }) : null;
       const snap  = buildSnapshot({
         lancs, sap,
         initialStockOverride:     prev?.value  ?? null,

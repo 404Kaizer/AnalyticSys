@@ -114,6 +114,10 @@ function _anGetSapTheoreticalStock({ central, material, dtIni }) {
   dtRef.setDate(dtRef.getDate() - 1);
   return {
     value:       anc.valor + delta,
+    // `date` = dtIni−1, a data A QUE o saldo se refere (não a data da âncora).
+    // O carry da tabela de dias usa ela como sapFrom−1: o saldo já embute
+    // tudo até dtIni−1, então a acumulação diária tem que começar em dtIni.
+    date:        dtRef,
     dtLabel:     fmtPtDate(dtRef),
     ancoraLabel: `${String(anc.mes).padStart(2, '0')}/${anc.ano}`,
     ancoraValor: anc.valor,
@@ -828,7 +832,24 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
       // ── Est. Inicial do carry da tabela de dias ──────────────────────────
       // getPrevDayLaunchStock: busca usando regras por categoria
       // (agregado → última terça, 1º do mês → último dia do mês anterior, demais → dia anterior).
-      const preCarry = _anGetPrevDayStock({ central: r.central, material: mat, dtIni, catKey: matCatKey });
+      const preCarryLanc = _anGetPrevDayStock({ central: r.central, material: mat, dtIni, catKey: matCatKey });
+
+      // Regra do Hugo (13/08/2026): o carry só arranca do saldo do SAP quando
+      // o período analisado COMEÇA NO DIA 1 — aí "Est. Inicial do carry" e
+      // "Est. Inicial do mês" são a mesma coisa, e não faz sentido a primeira
+      // linha da tabela discordar do card logo acima dela.
+      //
+      // Período no meio do mês (ex.: 11/08 a 20/08) continua puxando o
+      // LANÇAMENTO do dia anterior, como sempre: ali o analista está olhando
+      // uma janela dentro do mês, e o que interessa como ponto de partida é o
+      // que o operador contou na véspera, não o livro do SAP.
+      //
+      // prev.date = dtIni−1, então o sapFrom da primeira linha cai exatamente
+      // em dtIni — o saldo do SAP já embute tudo até a véspera, sem contar
+      // movimentação duas vezes.
+      const preCarry = (dtIni.getDate() === 1)
+        ? (prev ? { value: prev.value, date: prev.date } : null)
+        : preCarryLanc;
       const fim  = _anGetLastPeriodStockFallback({ central: r.central, material: mat, dtIni, dtFim });
       const snapshot = buildSnapshot({
         lancs: lancsMat,
@@ -908,8 +929,11 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
       const localSaiCount = _saidasFiltradas.length;
       const localSaiTotal = _saidasFiltradas.reduce((sum, s) => sum + _convertNfPesoToKg(s.peso, s.um, s.material), 0);
 
-      // Quando AUSENTE: busca os dois lançamentos mais próximos para tooltip informativo
-      const absentNearest = preCarry ? null
+      // Quando AUSENTE: busca os dois lançamentos mais próximos para tooltip
+      // informativo. Continua ancorado em preCarryLanc, NÃO em preCarry: o
+      // tooltip fala de lançamentos (alimenta o AUSENTE do Est. Final), então
+      // ele não pode sumir só porque o carry do dia 1 passou a vir do SAP.
+      const absentNearest = preCarryLanc ? null
         : getNearestLancsForAbsent({ central: r.central, material: mat, dtIni, dtFim });
 
       // ── Carry entre períodos (diário ou semanal) ─────────────────────
