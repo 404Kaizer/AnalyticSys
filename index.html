@@ -1755,6 +1755,39 @@
 
             <div class="micro-filter-divider"></div>
 
+            <!-- Capacidade: estoque lançado × capacidade e estoque de segurança -->
+            <div class="micro-filter-group" id="mfg-capacidade">
+              <button class="micro-filter-trigger" id="mft-capacidade" onclick="toggleMicroFilter('capacidade')">
+                <i class="ti ti-gauge"></i>
+                <span id="mft-capacidade-label">Capacidade</span>
+                <i class="ti ti-chevron-down micro-filter-chev" id="mfc-capacidade"></i>
+              </button>
+              <div class="micro-filter-dropdown micro-filter-dropdown--range" id="mfd-capacidade">
+                <div class="mfr-body">
+                  <div class="mfr-title"><i class="ti ti-gauge"></i> Estoque × capacidade</div>
+                  <div class="mfr-desc">Mostra as centrais que têm ao menos um material na situação marcada. As faixas saem da tabela de Capacidades em Configurações.</div>
+                  <div class="mfr-section-label" style="margin-top:8px">Situação</div>
+                  <div class="mfr-chips" id="mfr-cap-faixas">
+                    <label class="mfr-chip"><input type="checkbox" value="erro"     onchange="_capFilterChange()"> <i class="ti ti-alert-hexagon"  style="color:var(--red)"></i> Provável erro de lançamento</label>
+                    <label class="mfr-chip"><input type="checkbox" value="acima"    onchange="_capFilterChange()"> <i class="ti ti-alert-octagon"  style="color:var(--red)"></i> Acima da capacidade</label>
+                    <label class="mfr-chip"><input type="checkbox" value="limite"   onchange="_capFilterChange()"> <i class="ti ti-alert-triangle" style="color:var(--urgente)"></i> No limite</label>
+                    <label class="mfr-chip"><input type="checkbox" value="ruptura"  onchange="_capFilterChange()"> <i class="ti ti-flame"          style="color:var(--red)"></i> Ruptura</label>
+                    <label class="mfr-chip"><input type="checkbox" value="abaixo"   onchange="_capFilterChange()"> <i class="ti ti-arrow-down"     style="color:var(--amber)"></i> Abaixo do mínimo</label>
+                    <label class="mfr-chip"><input type="checkbox" value="normal"   onchange="_capFilterChange()"> <i class="ti ti-circle-check"   style="color:var(--green)"></i> Na faixa</label>
+                    <label class="mfr-chip"><input type="checkbox" value="sem_base" onchange="_capFilterChange()"> <i class="ti ti-help-circle"    style="color:var(--text3)"></i> Sem base</label>
+                  </div>
+                  <div class="mfr-hint" id="mfr-cap-hint"></div>
+                </div>
+                <div class="micro-filter-footer">
+                  <button class="btn btn-filter-clear" onclick="clearMicroFilter('capacidade')"><i class="ti ti-filter-off"></i> Limpar</button>
+                  <button class="btn" onclick="cancelMicroFilter('capacidade')"><i class="ti ti-x"></i> Cancelar</button>
+                  <button class="btn btn-primary" onclick="applyMicroFilter('capacidade')"><i class="ti ti-check"></i> Aplicar</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="micro-filter-divider"></div>
+
             <!-- Toggle Regionais -->
             <button class="btn" id="btn-toggle-regionais" onclick="toggleAllRegionais()" title="Expandir/Recolher regionais">
               <i class="ti ti-map-pin" id="icon-toggle-regionais"></i>

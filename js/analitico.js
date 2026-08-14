@@ -767,6 +767,10 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
     let matRowsHtml = '';
     let variacaoCentralMicro = 0;
     let custoVariacaoTotal = 0;  // R$ implicados pela variação de estoque
+    // Alimenta a seção "Capacidade e Estoque de Segurança" do card — usa o
+    // MESMO Est. Final da tabela (snapshot.pesoFim), pra os dois nunca
+    // divergirem. Ver buildCapacidadeSection em capacidades.js.
+    const capMatsInfo = [];
 
     // ── Criticidade por material (badge ao lado do nome) ─────────────────
     // Reaproveita os mesmos thresholds/classificação usados no painel de
@@ -1233,6 +1237,12 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
         }</span>`;
       })();
 
+      capMatsInfo.push({
+        mat,
+        estoque: snapshot.pesoFim,
+        ausente: !!(snapshot.pesoFimAusente || matSemCadastro)
+      });
+
       const _matFechExcluidos = (r.sapFechExcluidosByMat && r.sapFechExcluidosByMat.get(mat)) || [];
       const _matFechExcluidosEnt = _matFechExcluidos.filter(x => num(x.peso) > 0);
       const _matFechExcluidosSai = _matFechExcluidos.filter(x => num(x.peso) < 0);
@@ -1476,6 +1486,11 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
     card.dataset.diff = varCentralMicro;   // for tipo-var filter
     card.dataset.custoVariacao = custoVariacaoTotal;
     card.dataset.healthLevel = healthBadge ? (hLevel === 'sem_saude' ? 'none' : hLevel) : 'none';
+    // Faixas de capacidade presentes nesta central — alimenta o filtro
+    // "Capacidade" da barra (ver _cardPassesCapFilter).
+    card.dataset.capFaixas = (typeof capFaixasDaCentral === 'function')
+      ? capFaixasDaCentral(r.central, capMatsInfo).join(',')
+      : '';
     card.dataset.healthScore = healthBadge && hScore !== null ? hScore : '';
     // ── Badge de custo da variação ──────────────────────────────────────────
     let custoBadge = '';
@@ -1529,6 +1544,8 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
 
       <div class="micro-filial-body" id="micro-body-${idx}">
         ${divPanelHtml}
+
+        ${typeof buildCapacidadeSection === 'function' ? buildCapacidadeSection({ central: r.central, materiais: capMatsInfo }) : ''}
 
         ${buildPendIntegSection({ central: r.central, dtIni, dtFim, sapNoPeriodo: r.sapNoPeriodo || [], entradasDaCentral: opts.entradasByCentral ? (opts.entradasByCentral.get(r.central) || []) : undefined })}
 
@@ -2256,6 +2273,7 @@ function _microRecomputeOptions(key) {
         const cardLevel = card.dataset.healthLevel || 'none';
         if (!varState.levels.has(cardLevel)) return;
       }
+      if (!_cardPassesCapFilter(card, _capFilter.applied)) return;
       if (tipoActive) {
         const cardDiff = parseFloat(card.dataset.diff || '0');
         if (!passesTipo(cardDiff, 'central')) return;
@@ -2339,7 +2357,7 @@ function _microFilterCheckChange(key, checkbox) {
 function toggleMicroFilter(key) {
   const dd = document.getElementById(`mfd-${key}`);
   const chev = document.getElementById(`mfc-${key}`);
-  const allKeys = ['regional', 'central', 'categoria', 'material', 'variacao', 'tipo-var'];
+  const allKeys = ['regional', 'central', 'categoria', 'material', 'variacao', 'tipo-var', 'capacidade'];
   // Close all other dropdowns first
   allKeys.filter(k => k !== key).forEach(otherKey => {
     const otherDd = document.getElementById(`mfd-${otherKey}`);
@@ -2349,6 +2367,8 @@ function toggleMicroFilter(key) {
       otherChev?.classList.remove('open');
       if (otherKey === 'variacao') {
         _varFilter.pending.levels = new Set(_varFilter.applied.levels);
+      } else if (otherKey === 'capacidade') {
+        _capFilter.pending.faixas = new Set(_capFilter.applied.faixas);
       } else if (otherKey === 'tipo-var') {
         _tipoVarFilter.pending = new Set(_tipoVarFilter.applied);
       } else {
@@ -2363,6 +2383,9 @@ function toggleMicroFilter(key) {
     if (key === 'variacao') {
       _varFilter.pending.levels = new Set(_varFilter.applied.levels);
       _buildVariacaoOptions();
+    } else if (key === 'capacidade') {
+      _capFilter.pending.faixas = new Set(_capFilter.applied.faixas);
+      _buildCapacidadeOptions();
     } else {
       _microFilter.pending[key] = new Set(_microFilter.applied[key]);
       // Reset search
@@ -2395,6 +2418,9 @@ function applyMicroFilter(key) {
   if (key === 'variacao') {
     _readVarPending();
     _varFilter.applied.levels = new Set(_varFilter.pending.levels);
+  } else if (key === 'capacidade') {
+    _readCapPending();
+    _capFilter.applied.faixas = new Set(_capFilter.pending.faixas);
   } else {
     _microFilter.applied[key] = new Set(_microFilter.pending[key]);
   }
@@ -2416,6 +2442,9 @@ function cancelMicroFilter(key) {
   }
   if (key === 'variacao') {
     _varFilter.pending.levels = new Set(_varFilter.applied.levels);
+  } else if (key === 'capacidade') {
+    _capFilter.pending.faixas = new Set(_capFilter.applied.faixas);
+    _syncCapDropdownToState(_capFilter.pending);
   } else {
     _microFilter.pending[key] = new Set(_microFilter.applied[key]);
   }
@@ -2440,6 +2469,10 @@ function clearMicroFilter(key) {
   if (key === 'variacao') {
     _varFilter.pending.levels = new Set();
     _varFilter.applied.levels = new Set();
+  } else if (key === 'capacidade') {
+    _capFilter.pending.faixas = new Set();
+    _capFilter.applied.faixas = new Set();
+    _syncCapDropdownToState(_capFilter.pending);
   } else {
     _microFilter.pending[key] = new Set();
     _microFilter.applied[key] = new Set();
@@ -2459,8 +2492,25 @@ function _syncTriggerLabel(key) {
   const btn = document.getElementById(`mft-${key}`);
   const label = document.getElementById(`mft-${key}-label`);
   if (!label || !btn) return;
-  const keyLabels = { regional: 'Regional', central: 'Central', categoria: 'Categoria', material: 'Material', variacao: 'Saúde' };
+  const keyLabels = { regional: 'Regional', central: 'Central', categoria: 'Categoria', material: 'Material', variacao: 'Saúde', capacidade: 'Capacidade' };
   const keyLabel = keyLabels[key] || key;
+
+  if (key === 'capacidade') {
+    const st = _capFilter.applied;
+    if (!_capFilterIsActive(st)) {
+      label.innerHTML = keyLabel;
+      btn.classList.remove('active');
+    } else {
+      const labelMap = (typeof CAP_FAIXAS !== 'undefined')
+        ? Object.fromEntries(Object.entries(CAP_FAIXAS).map(([k, v]) => [k, v.label]))
+        : {};
+      label.innerHTML = st.faixas.size === 1
+        ? `${keyLabel}: <strong>${escapeHtml(labelMap[[...st.faixas][0]] || [...st.faixas][0])}</strong>`
+        : `${keyLabel} <span class="micro-filter-badge">${st.faixas.size}</span>`;
+      btn.classList.add('active');
+    }
+    return;
+  }
 
   if (key === 'variacao') {
     const st = _varFilter.applied;
@@ -2495,7 +2545,7 @@ function _syncTriggerLabel(key) {
 function _syncClearBtn() {
   const btn = document.getElementById('micro-filter-clear-btn');
   if (!btn) return;
-  const hasAny = _microFilter.applied.regional.size || _microFilter.applied.central.size || _microFilter.applied.categoria.size || _microFilter.applied.material.size || _varFilterIsActive(_varFilter.applied) || _tipoVarIsActive();
+  const hasAny = _microFilter.applied.regional.size || _microFilter.applied.central.size || _microFilter.applied.categoria.size || _microFilter.applied.material.size || _varFilterIsActive(_varFilter.applied) || _capFilterIsActive(_capFilter.applied) || _tipoVarIsActive();
   btn.style.display = hasAny ? '' : 'none';
 }
 
@@ -2510,11 +2560,15 @@ function clearAllMicroFilters() {
   _microFilter.pending.material  = new Set();
   _varFilter.applied  = { levels: new Set() };
   _varFilter.pending  = { levels: new Set() };
+  _capFilter.applied  = { faixas: new Set() };
+  _capFilter.pending  = { faixas: new Set() };
+  _syncCapDropdownToState(_capFilter.pending);
   _syncTriggerLabel('regional');
   _syncTriggerLabel('central');
   _syncTriggerLabel('categoria');
   _syncTriggerLabel('material');
   _syncTriggerLabel('variacao');
+  _syncTriggerLabel('capacidade');
   _syncClearBtn();
   _tipoVarFilter.applied      = new Set();
   _tipoVarFilter.pending      = new Set();
@@ -2537,6 +2591,71 @@ const _varFilter = {
   pending:  { levels: new Set() },
   applied:  { levels: new Set() },
 };
+
+// ── Filtro de capacidade (estoque × capacidade/estoque de segurança) ─────
+// Mesma mecânica do filtro de Saúde acima: um Set de faixas marcadas. A
+// central passa quando tem AO MENOS UM material na faixa marcada — o alvo é
+// "me mostre quem tem problema de capacidade", não "quem só tem isso".
+const _capFilter = {
+  pending: { faixas: new Set() },
+  applied: { faixas: new Set() },
+};
+
+function _capFilterChange() {
+  document.querySelectorAll('#mfr-cap-faixas .mfr-chip').forEach(chip => {
+    const cb = chip.querySelector('input[type="checkbox"]');
+    chip.classList.toggle('checked', cb.checked);
+  });
+  _updateCapHint();
+}
+
+function _updateCapHint() {
+  const hint = document.getElementById('mfr-cap-hint');
+  if (!hint) return;
+  const faixas = [...document.querySelectorAll('#mfr-cap-faixas input:checked')].map(i => i.value);
+  if (!faixas.length) {
+    hint.textContent = 'Nenhum filtro definido.';
+    hint.className = 'mfr-hint';
+    return;
+  }
+  const labelMap = (typeof CAP_FAIXAS !== 'undefined')
+    ? Object.fromEntries(Object.entries(CAP_FAIXAS).map(([k, v]) => [k, v.label]))
+    : {};
+  hint.textContent = 'Exibindo centrais com: ' + faixas.map(f => labelMap[f] || f).join(', ');
+  hint.className = 'mfr-hint active';
+}
+
+function _syncCapDropdownToState(state) {
+  document.querySelectorAll('#mfr-cap-faixas input[type="checkbox"]').forEach(cb => {
+    cb.checked = state.faixas.has(cb.value);
+    cb.closest('.mfr-chip').classList.toggle('checked', cb.checked);
+  });
+  _updateCapHint();
+}
+
+function _readCapPending() {
+  _capFilter.pending.faixas = new Set([...document.querySelectorAll('#mfr-cap-faixas input:checked')].map(i => i.value));
+}
+
+function _capFilterIsActive(state) {
+  return state.faixas.size > 0;
+}
+
+function _buildCapacidadeOptions() {
+  _syncCapDropdownToState(_capFilter.pending);
+}
+
+// Faixas presentes no card. Card sem nenhuma (central sem lançamento no
+// período) conta como "sem base", pra não sumir silenciosamente do filtro.
+function _cardCapFaixas(card) {
+  const raw = (card.dataset.capFaixas || '').split(',').map(s => s.trim()).filter(Boolean);
+  return raw.length ? raw : ['sem_base'];
+}
+
+function _cardPassesCapFilter(card, state) {
+  if (!_capFilterIsActive(state)) return true;
+  return _cardCapFaixas(card).some(f => state.faixas.has(f));
+}
 
 // ── Filtro de tipo de variação (desfalque/sobra) ─────────
 const _tipoVarFilter = {
@@ -2703,6 +2822,7 @@ function _applyMicroVisibility() {
           card.style.display = 'none'; return;
         }
       }
+      if (!_cardPassesCapFilter(card, _capFilter.applied)) { card.style.display = 'none'; return; }
       // Central tipo-var: check card's diff
       if (tipoActive) {
         const cardDiff = parseFloat(card.dataset.diff || '0');
@@ -2823,7 +2943,8 @@ document.addEventListener('click', e => {
 Object.assign(window, { _microFilterCheckChange, toggleMicroFilter, filterMicroOptions,
   applyMicroFilter, cancelMicroFilter, clearMicroFilter, clearAllMicroFilters,
   expandAllMicro, collapseAllMicro, toggleAllRegionais, toggleAllCentralis, populateMicroFilterOptions,
-  _buildVariacaoOptions, _varFilterChange, _tipoVarChange, _tipoVarSyncToState, _tipoVarIsActive });
+  _buildVariacaoOptions, _varFilterChange, _tipoVarChange, _tipoVarSyncToState, _tipoVarIsActive,
+  _buildCapacidadeOptions, _capFilterChange });
 
 // ═══════════════════════════════════════════════════════════
 

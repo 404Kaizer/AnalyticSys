@@ -383,9 +383,221 @@ function getCapacidadesRows() {
 
 // Consulta pública pra outras telas (Visão Micro) — devolve a capacidade e o
 // estoque de segurança vigentes (manual se houver, senão o automático).
+// Indexado: a Visão Micro chama isto uma vez por material de cada central,
+// o que com .find() viraria varredura quadrática sobre a tabela inteira.
+let _capRowsIndex = null;
+let _capIndexOf = null;   // array de referência que gerou o índice
+
 function getCapacidadeCentralMaterial(central, material) {
+  const rows = getCapacidadesRows();
+  if (_capIndexOf !== rows) {
+    _capRowsIndex = new Map(rows.map(r => [r.key, r]));
+    _capIndexOf = rows;
+  }
   const key = capRowKey(String(central || '').trim(), String(material || '').trim());
-  return getCapacidadesRows().find(r => r.key === key) || null;
+  return _capRowsIndex.get(key) || null;
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// CLASSIFICAÇÃO DE ESTOQUE × CAPACIDADE — motor consumido pela Visão Micro
+// ══════════════════════════════════════════════════════════════════════════
+// Compara o estoque de uma central+material (na Visão Micro, o Est. Final do
+// último lançamento) com a capacidade e o estoque de segurança da tabela de
+// Configurações. Só lógica — quem desenha badge, chip ou filtro é a tela.
+//
+// Os cortes são configuráveis (chaves cap_lim_*) para permitir calibrar sem
+// mexer em código; os defaults abaixo são o ponto de partida.
+// "ordem" é a gravidade — usada pra ordenar a seção da Visão Micro.
+const CAP_FAIXAS = {
+  sem_base: { label: 'SEM BASE',            icone: 'ti-help-circle',    cor: 'var(--text3)',   ordem: 0 },
+  normal:   { label: 'NORMAL',              icone: 'ti-circle-check',   cor: 'var(--green)',   ordem: 1 },
+  abaixo:   { label: 'ABAIXO DO MÍNIMO',    icone: 'ti-arrow-down',     cor: 'var(--amber)',   ordem: 2 },
+  limite:   { label: 'NO LIMITE',           icone: 'ti-alert-triangle', cor: 'var(--urgente)', ordem: 3 },
+  ruptura:  { label: 'RUPTURA',             icone: 'ti-flame',          cor: 'var(--red)',     ordem: 4 },
+  acima:    { label: 'ACIMA DA CAPACIDADE', icone: 'ti-alert-octagon',  cor: 'var(--red)',     ordem: 5 },
+  // Faixa mais alta: não é "silo cheio demais", é estoque que não caberia
+  // fisicamente na central. Na prática, quase sempre um zero a mais no
+  // lançamento — que era a dor original que motivou esta tabela.
+  erro:     { label: 'PROVÁVEL ERRO DE LANÇAMENTO', icone: 'ti-alert-hexagon', cor: 'var(--red)', ordem: 6 }
+};
+
+const CAP_LIMITES_PADRAO = {
+  ruptura: 50,   // % do estoque de segurança — abaixo disso é ruptura
+  limite:  90,   // % da capacidade — a partir daí a central está "no limite"
+  acima:  110,   // % da capacidade — acima disso não cabe fisicamente
+  erro:   150    // % da capacidade — acima disso é provável erro de digitação
+};
+
+// Abaixo deste número de lançamentos na janela, a estimativa (quando não há
+// estrutura declarada) é frágil demais pra gerar alerta — vira "sem base".
+const CAP_MIN_AMOSTRAS = 3;
+
+function capLimite(nome) {
+  const cfg = state.configs.find(c => normalizeText(c.key) === normalizeText(`cap_lim_${nome}`));
+  const n = cfg ? num(cfg.value) : NaN;
+  return (Number.isFinite(n) && n > 0) ? n : CAP_LIMITES_PADRAO[nome];
+}
+
+// estoque: peso/volume lançado a comparar. Devolve sempre um objeto — a tela
+// decide se desenha ou não a partir de .faixa.
+function classificarEstoqueCapacidade(central, material, estoque) {
+  const r = getCapacidadeCentralMaterial(central, material);
+  const semBase = motivo => ({ faixa: 'sem_base', motivo, ...CAP_FAIXAS.sem_base, row: r });
+
+  if (!r) return semBase('Central/material sem capacidade calculada — sem lançamentos na janela ou material sem categoria cadastrada.');
+  if (!(r.capacidade > 0)) return semBase('Capacidade zerada — declare a estrutura ou informe o valor manualmente.');
+  if (r.capAlertaUM) return semBase(`Baia declarada em m³ e lançamentos em ${r.um} — as unidades não são comparáveis.`);
+  if (r.fonte === 'lancamentos' && r.amostras < CAP_MIN_AMOSTRAS) {
+    return semBase(`Capacidade estimada com apenas ${r.amostras} lançamento(s) — declare a estrutura para liberar o alerta.`);
+  }
+
+  const est = num(estoque);
+  const C = r.capacidade;
+  const S = r.seguranca;
+  const pctCap = C > 0 ? (est / C) * 100 : 0;
+  const pctSeg = S > 0 ? (est / S) * 100 : null;
+
+  let faixa;
+  if (pctCap > capLimite('erro'))         faixa = 'erro';
+  else if (pctCap > capLimite('acima'))   faixa = 'acima';
+  else if (pctCap >= capLimite('limite')) faixa = 'limite';
+  else if (S > 0 && pctSeg < capLimite('ruptura')) faixa = 'ruptura';
+  else if (S > 0 && est < S)              faixa = 'abaixo';
+  else                                    faixa = 'normal';
+
+  // Quanto sobra acima da capacidade ou falta para o estoque de segurança —
+  // é o número que gera ação (comprar ou conferir o lançamento).
+  const delta = (faixa === 'acima' || faixa === 'erro' || faixa === 'limite')
+    ? est - C
+    : (S > 0 ? est - S : 0);
+
+  return { faixa, ...CAP_FAIXAS[faixa], row: r, estoque: est, capacidade: C, seguranca: S, pctCap, pctSeg, delta, um: r.umExibicao };
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// SEÇÃO "CAPACIDADE E ESTOQUE DE SEGURANÇA" DO CARD DA VISÃO MICRO
+// ══════════════════════════════════════════════════════════════════════════
+// Renderizada acima de "Integração SAP" no corpo do card (analitico.js).
+// Lista TODOS os materiais fora da faixa, ordenados por gravidade; os que
+// estão normais ou sem base viram contadores no título, pra não ocupar
+// espaço com o que não pede ação.
+//
+// A seção é SEMPRE renderizada — inclusive vazia — de propósito: sumir
+// quando está tudo bem faria os cards mudarem de altura entre si e
+// esconderia justamente o caso "capacidade não configurada", que também
+// precisa aparecer.
+//
+// materiais: [{ mat, estoque, ausente }] — estoque é o Est. Final do último
+// lançamento do período (o mesmo número da coluna da tabela de materiais).
+function buildCapacidadeSection({ central, materiais }) {
+  const avaliados = [];
+  let normais = 0, semBase = 0, ausentes = 0;
+
+  (materiais || []).forEach(({ mat, estoque, ausente }) => {
+    if (ausente) { ausentes++; return; }
+    const c = classificarEstoqueCapacidade(central, mat, estoque);
+    if (c.faixa === 'sem_base') { semBase++; return; }
+    if (c.faixa === 'normal')   { normais++; return; }
+    avaliados.push({ mat, c });
+  });
+
+  // Pior primeiro; dentro da mesma faixa, o maior desvio absoluto na frente.
+  avaliados.sort((a, b) => (b.c.ordem - a.c.ordem) || (Math.abs(b.c.delta) - Math.abs(a.c.delta)));
+
+  const contadores = [];
+  if (normais)  contadores.push(`<span class="capsec-count capsec-count-ok"><i class="ti ti-circle-check"></i> ${normais} na faixa</span>`);
+  if (semBase)  contadores.push(`<span class="capsec-count capsec-count-neutro" title="Sem capacidade confiável — declare a estrutura em Configurações"><i class="ti ti-help-circle"></i> ${semBase} sem base</span>`);
+  if (ausentes) contadores.push(`<span class="capsec-count capsec-count-neutro" title="Sem lançamento no período — não há estoque final para comparar"><i class="ti ti-calendar-off"></i> ${ausentes} sem lançamento</span>`);
+
+  let corpo;
+  if (avaliados.length) {
+    corpo = `
+      <div class="capsec-table-wrap">
+        <table class="capsec-table">
+          <thead>
+            <tr>
+              <th>Material</th>
+              <th>Situação</th>
+              <th style="text-align:right">Estoque</th>
+              <th style="text-align:right">Capacidade</th>
+              <th style="text-align:right">Est. Segurança</th>
+              <th style="text-align:right">Ocupação</th>
+              <th style="text-align:right">A mais / a menos</th>
+            </tr>
+          </thead>
+          <tbody>${avaliados.map(({ mat, c }) => {
+            const acima = c.delta > 0;
+            const refLabel = (c.faixa === 'acima' || c.faixa === 'erro' || c.faixa === 'limite')
+              ? 'da capacidade' : 'do estoque de segurança';
+            return `
+            <tr title="${escapeHtml(capExplicacaoFaixa(c))}">
+              <td class="td-mono capsec-mat">${escapeHtml(mat)}</td>
+              <td><span class="capsec-badge" style="color:${c.cor};border-color:${c.cor}"><i class="ti ${c.icone}"></i> ${escapeHtml(c.label)}</span></td>
+              <td class="td-mono capsec-val" style="color:${c.cor}">${_capNum(c.estoque)} ${escapeHtml(c.um)}</td>
+              <td class="td-mono capsec-val capsec-ref">${_capNum(c.capacidade)} ${escapeHtml(c.um)}</td>
+              <td class="td-mono capsec-val capsec-ref">${c.seguranca > 0 ? `${_capNum(c.seguranca)} ${escapeHtml(c.um)}` : '—'}</td>
+              <td class="td-mono capsec-val" style="color:${c.cor}">${_capNum(c.pctCap)}%</td>
+              <td class="td-mono capsec-val" style="color:${c.cor}" title="${escapeHtml(`${acima ? 'Excedente em relação' : 'Falta em relação'} ${refLabel}`)}">
+                ${acima ? '+' : '−'}${_capNum(Math.abs(c.delta))} ${escapeHtml(c.um)}
+              </td>
+            </tr>`;
+          }).join('')}</tbody>
+        </table>
+      </div>`;
+  } else if (normais) {
+    corpo = `<span class="capsec-empty capsec-empty-ok"><i class="ti ti-circle-check"></i> Todos os estoques dentro da faixa de capacidade</span>`;
+  } else if (semBase) {
+    // Há material pra avaliar, mas nenhum tem capacidade confiável.
+    corpo = `<span class="capsec-empty"><i class="ti ti-settings-exclamation"></i> Capacidade não configurada para os materiais desta central —
+      <a href="#" onclick="event.preventDefault();event.stopPropagation();irParaCapacidades()">declarar em Configurações</a></span>`;
+  } else {
+    corpo = `<span class="capsec-empty"><i class="ti ti-calendar-off"></i> Nenhum material com lançamento no período para comparar</span>`;
+  }
+
+  return `
+    <div class="capsec-section">
+      <div class="micro-section-title">
+        <i class="ti ti-gauge"></i>
+        Capacidade e Estoque de Segurança
+        <span class="capsec-counts">${contadores.join('')}</span>
+      </div>
+      ${corpo}
+    </div>`;
+}
+
+// Faixas distintas presentes numa central — usada pelo filtro "Capacidade"
+// da Visão Micro pra decidir se o card aparece.
+function capFaixasDaCentral(central, materiais) {
+  const set = new Set();
+  (materiais || []).forEach(({ mat, estoque, ausente }) => {
+    if (ausente) return;
+    set.add(classificarEstoqueCapacidade(central, mat, estoque).faixa);
+  });
+  return [...set];
+}
+
+// Atalho do estado vazio — leva pra tabela de Capacidades nas Configurações.
+function irParaCapacidades() {
+  if (typeof navigate === 'function') navigate('configuracoes');
+  setTimeout(() => {
+    document.getElementById('tb-capacidades')?.closest('.table-card')
+      ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 120);
+}
+
+// Texto pronto pro tooltip do badge — abre a conta em vez de só dar o rótulo.
+function capExplicacaoFaixa(c) {
+  if (!c) return '';
+  if (c.faixa === 'sem_base') return `Sem base para avaliar. ${c.motivo}`;
+  const linhas = [
+    `${c.label} — estoque ${_capNum(c.estoque)} ${c.um}`,
+    `Capacidade: ${_capNum(c.capacidade)} ${c.um} (${_capNum(c.pctCap)}% ocupado)`,
+  ];
+  if (c.seguranca > 0) linhas.push(`Estoque de segurança: ${_capNum(c.seguranca)} ${c.um}`);
+  if (c.row?.fonte === 'estrutura') linhas.push(`Capacidade vinda da estrutura declarada (${c.row.est.qtd} ${_capUnidadeLabel(c.row.catKey, c.row.est.qtd)}).`);
+  else if (c.row?.fonte === 'manual') linhas.push('Capacidade definida manualmente.');
+  else linhas.push(`Capacidade estimada pelos ${Math.min(CAP_TOP_N, c.row?.amostras || 0)} maiores lançamentos.`);
+  return linhas.join('\n');
 }
 
 // ── Render ────────────────────────────────────────────────────────────────
@@ -875,6 +1087,8 @@ Object.assign(window, {
   abrirEdicaoCapacidadesSelecionadas, salvarEdicaoCapacidadesEmMassa,
   restaurarCapacidadesSelecionadas, recalcularCapacidades,
   capInvalidarCache, getCapacidadesRows, getCapacidadeCentralMaterial,
+  classificarEstoqueCapacidade, capExplicacaoFaixa, capLimite, CAP_FAIXAS,
+  buildCapacidadeSection, irParaCapacidades, capFaixasDaCentral,
   abrirEstruturaCapacidade, salvarEstruturaCapacidade, adicionarUnidadeEstrutura,
   _capAddUnidadeRow, _capRemoverUnidadeRow, _capSituacaoChange, _capAtualizarTotalEstrutura
 });
