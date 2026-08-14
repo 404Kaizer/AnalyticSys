@@ -225,6 +225,7 @@ async function atualizarCadastros() {
     if (typeof invalidateSapIndex === 'function')         invalidateSapIndex();
     if (typeof invalidateSaidasIndex === 'function')      invalidateSaidasIndex();
     if (typeof invalidateAllSearchIndexes === 'function') invalidateAllSearchIndexes();
+    if (typeof capInvalidarCache === 'function')          capInvalidarCache();
 
     // 3) Salva o resultado.
     if (typeof persistStateNow === 'function') await persistStateNow();

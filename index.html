@@ -3634,6 +3634,71 @@
           </div>
         </div>
 
+        <div class="section-title">Capacidades e Estoque de Segurança</div>
+        <div class="table-card" style="margin-bottom:24px">
+          <div class="table-header">
+            <span class="table-title"><i class="ti ti-barrel"></i> Capacidade por Central e Material</span>
+            <div class="table-toolbar">
+              <input type="text" class="form-input" id="cap-busca" placeholder="Buscar central, grupo SAP, cód SAP…" style="width:250px;font-size:12px;padding:6px 10px" oninput="debouncedFilter('capacidades', this.value, capFiltrar)">
+              <button class="btn" onclick="recalcularCapacidades()" title="Recalcular a partir dos Lançamentos importados">
+                <i class="ti ti-refresh"></i> Recalcular
+              </button>
+              <button class="btn" onclick="abrirEdicaoCapacidadesSelecionadas()" title="Editar as linhas marcadas na tabela">
+                <i class="ti ti-pencil"></i> Editar selecionadas
+              </button>
+              <button class="btn" onclick="restaurarCapacidadesSelecionadas()" title="Descartar a edição manual das linhas marcadas e voltar ao cálculo automático">
+                <i class="ti ti-rotate"></i> Voltar ao automático
+              </button>
+            </div>
+          </div>
+          <div style="padding:14px 18px 4px">
+            <div style="font-size:11.5px;color:var(--text2);margin-bottom:12px;line-height:1.6">
+              A capacidade de cada <b>silo</b> (aglomerantes), <b>baia</b> (agregados miúdos e graúdos) e <b>IBC/tanque</b> (aditivos)
+              é estimada pela <b>média dos 5 maiores lançamentos</b> da central para aquele material nos <b>últimos 12 meses</b> —
+              serve de referência para detectar na Visão Micro um estoque lançado muito acima do que a central comporta.
+              O estoque de segurança sai de um percentual da capacidade, definido abaixo por categoria.
+              <b>Adições não entram</b> nesta tabela. Todos os valores são editáveis e ficam marcados como <span class="cap-badge-manual">manual</span> quando alterados.
+            </div>
+            <div class="cap-pct-bar">
+              <span class="health-cfg-label">Estoque de segurança — % da capacidade:</span>
+              <label class="cap-pct-item"><span>Aglomerantes</span><input type="number" step="1" min="1" max="100" class="health-cfg-input" id="cap-pct-aglomerante" style="width:70px"><span class="cap-um">%</span></label>
+              <label class="cap-pct-item"><span>Agregados</span><input type="number" step="1" min="1" max="100" class="health-cfg-input" id="cap-pct-agregado" style="width:70px"><span class="cap-um">%</span></label>
+              <label class="cap-pct-item"><span>Aditivos</span><input type="number" step="1" min="1" max="100" class="health-cfg-input" id="cap-pct-aditivo" style="width:70px"><span class="cap-um">%</span></label>
+              <button class="btn btn-primary" onclick="salvarPctSeguranca()"><i class="ti ti-device-floppy"></i> Salvar %</button>
+            </div>
+          </div>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th><input type="checkbox" onchange="capToggleSelecionarTodos(this.checked)" title="Selecionar todas"></th>
+                  <th>Central</th>
+                  <th>Grupo SAP</th>
+                  <th>Cód SAP</th>
+                  <th>Armazenagem</th>
+                  <th>Categoria</th>
+                  <th title="Lançamentos considerados na janela de 12 meses">Lançs.</th>
+                  <th>Capacidade</th>
+                  <th>Estoque de Segurança</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="tb-capacidades">
+                <tr><td colspan="10"><div class="empty-state"><i class="ti ti-barrel"></i><p>Nada a calcular ainda — importe Lançamentos e cadastre a categoria dos materiais.</p></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="pagination">
+            <span class="page-info" id="pi-capacidades">0 registros</span>
+            <div class="page-btns">
+              <button class="btn" title="Primeiro" onclick="capIrParaPagina(0)"><i class="ti ti-chevrons-left"></i></button>
+              <button class="btn" title="Anterior" onclick="capPaginaAnterior()"><i class="ti ti-chevron-left"></i></button>
+              <button class="btn" title="Próxima" onclick="capProximaPagina()"><i class="ti ti-chevron-right"></i></button>
+              <button class="btn" title="Último" onclick="capIrParaUltima()"><i class="ti ti-chevrons-right"></i></button>
+            </div>
+          </div>
+        </div>
+
         <div class="section-title">Configurações Personalizadas</div>
         <div class="table-card">
           <div class="table-header">
@@ -4613,6 +4678,28 @@
 </div>
 
 <!-- MODAL: Nova Configuração -->
+<!-- MODAL: edição em massa de Capacidades / Estoque de Segurança -->
+<div class="modal-overlay" id="modal-capacidades-massa">
+  <div class="modal" style="width:420px">
+    <div class="modal-title"><i class="ti ti-barrel"></i> Editar Capacidades em Massa</div>
+    <div class="modal-sub" id="cap-massa-info">nenhuma linha selecionada</div>
+    <div class="form-grid" style="grid-template-columns: 1fr">
+      <div class="form-group">
+        <label class="form-label">Capacidade</label>
+        <input type="number" step="0.01" min="0" class="form-input" id="cap-massa-capacidade" placeholder="Deixe em branco para não alterar">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Estoque de Segurança</label>
+        <input type="number" step="0.01" min="0" class="form-input" id="cap-massa-seguranca" placeholder="Deixe em branco para não alterar">
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn" onclick="closeModal('modal-capacidades-massa')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarEdicaoCapacidadesEmMassa()"><i class="ti ti-check"></i> Aplicar</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-config">
   <div class="modal" style="width:420px">
     <div class="modal-title"><i class="ti ti-adjustments"></i> Nova Configuração</div>
@@ -5317,6 +5404,7 @@
 <script defer src="js/ui.js"></script>
 <script defer src="js/import.js"></script>
 <script defer src="js/config.js"></script>
+<script defer src="js/capacidades.js"></script>
 <script defer src="js/dashboard.js"></script>
 <script defer src="js/analitico.js"></script>
 <script defer src="js/macro.js"></script>

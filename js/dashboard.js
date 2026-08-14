@@ -4863,7 +4863,7 @@ function renderModule(module) {
     case 'sap': return renderSAP();
     case 'custosSap': return renderCustosSap();
     case 'importar': return renderImports();
-    case 'configuracoes': renderConfigs(); renderAcoesRelatorio(); loadHealthConfigInputs(); updateParamGerais(); return;
+    case 'configuracoes': renderConfigs(); renderAcoesRelatorio(); loadHealthConfigInputs(); updateParamGerais(); renderCapacidades(); return;
     case 'filiais': return renderFiliais();
     case 'materiais': return renderMateriais();
     default: return;
@@ -6685,6 +6685,7 @@ function renderAll() {
   renderAcoesRelatorio();
   renderFiliais();
   renderMateriais();
+  renderCapacidades();
   updateImportPrereqUI();
   updateDashboard();
   initResizable();
@@ -6699,7 +6700,7 @@ const pageRenderers = {
   sap: () => renderSAP(),
   custosSap: () => renderCustosSap(),
   importar: () => renderImports(),
-  configuracoes: () => { renderConfigs(); renderAcoesRelatorio(); loadHealthConfigInputs(); updateParamGerais(); },
+  configuracoes: () => { renderConfigs(); renderAcoesRelatorio(); loadHealthConfigInputs(); updateParamGerais(); renderCapacidades(); },
   filiais: () => renderFiliais(),
   materiais: () => renderMateriais(),
   ocorrencias: () => renderOcorrenciasPage(),
