@@ -4343,6 +4343,15 @@ function renderCustosSap() {
     const custoOutlierBadge = isOutlier
       ? `<span class="badge badge-amber" style="margin-left:4px" title="Custo muito acima do padrão desse material (mediana entre outras centrais/meses: ${money(mediana, 4)}/kg) — considere revisar"><i class="ti ti-alert-triangle" style="font-size:10px"></i></span>`
       : '';
+    // ponytail: "sem custo" é inferido de custo === 0 em vez de um campo
+    // próprio no registro — evita migração na tabela custos_sap do Supabase
+    // (_custosSapToDbRow tem lista fixa de colunas). Teto: um custo
+    // legitimamente zerado também aparece marcado — o que, na prática, também
+    // merece revisão. Upgrade: coluna sem_custo no banco, se um dia precisar
+    // distinguir "não veio na MBEWH" de "veio zerado".
+    const semCustoBadge = num(r.custo) === 0
+      ? `<span class="badge badge-red" style="margin-left:4px" title="Sem custo correspondente na MBEWH para esta central/material/período — o valor total fica zerado até importar uma MBEWH que cubra este par ou cadastrar o custo manualmente"><i class="ti ti-alert-triangle" style="font-size:10px"></i> SEM CUSTO</span>`
+      : '';
     const absIndex = currentPageCustosSap * PAGE_SIZE + i;
     return `
     <tr>
@@ -4353,7 +4362,7 @@ function renderCustosSap() {
       <td class="td-mono">${r.mes || '—'}</td>
       <td class="td-mono" style="color:var(--teal)">${num(r.estoqueTotal).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
       <td class="td-mono" style="color:#f59e0b">${money(r.valorTotal)}</td>
-      <td class="td-mono">${money(r.custo, 4)}${custoOutlierBadge}</td>
+      <td class="td-mono">${money(r.custo, 4)}${custoOutlierBadge}${semCustoBadge}</td>
       <td>${window.currentUser?.role === 'admin' ? `<button class="btn-icon" onclick="editarCustosSap(${absIndex})" title="Editar"><i class="ti ti-pencil"></i></button><button class="btn-icon danger" onclick="excluirCustosSap(${absIndex})"><i class="ti ti-trash"></i></button>` : ''}</td>
     </tr>`;
   }).join('');
@@ -5678,26 +5687,85 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
     }
     _mergedResult = await _mergeWithConflictCheck('SAP', parsed.filter(r => r.material || r.documento));
   } else if (modulo === 'Custos SAP') {
-    // Layout fixo do export SAP (MB52-like): 0 Material, 1 Área de avaliação
-    // (Central), 3 Exerc.período atual (Ano), 4 Período atual (Mês),
-    // 5 Estoque total, 6 Valor total, 8 Preço médio móvel (Custo).
+    // Conciliação de dois arquivos (14/08). `rows` é a MARDH — ela define o
+    // universo (central × material × período) e o estoque; a MBEWH
+    // (extra.mbewhRows) entra SÓ com o custo. Layouts posicionais do SE16N:
+    //   MARDH: 0 Material, 1 Centro, 2 Depósito, 3 Exerc.período atual,
+    //          4 Período atual, 5 Utilização livre (LABST)
+    //   MBEWH: 0 Material, 1 Área de avaliação, 3 Exerc.período atual,
+    //          4 Período atual, 8 Preço médio móvel
+    // Posicional e não por nome de coluna porque a MARDH REPETE cabeçalhos —
+    // "Utilização livre" aparece no índice 5 e de novo no 13 (bloco do período
+    // anterior); casar por texto pegaria a coluna errada.
+    //
+    // A chave dos dois lados é a mesma de _fpBaseCustosSap, montada aqui pelas
+    // mesmas funções de normalização — sem isso o "BAU1" bruto da MARDH não
+    // encontraria a central já padronizada vinda da MBEWH.
+    const _chave = (central, material, ano, mes) => _fpBaseCustosSap(
+      normalizarCentraisRecord({
+        central:  String(central || ''),
+        material: normalizarMaterial(String(material || '').trim()),
+        ano:      String(ano || '').trim(),
+        mes:      String(mes || '').trim()
+      }, ['central'])
+    );
+
+    // numCsv e não num nos dois arquivos: para os números crus do XLSX os dois
+    // são idênticos (Number passa direto), mas num() lê "1.234,56" de um export
+    // CSV pt-BR como 1.234 — e o card aceita .csv.
+    const _n = numCsv;
+
+    const custoPorChave = new Map();
+    for (const r of (extra.mbewhRows || [])) {
+      if (!r || !String(r[0] || '').trim()) continue;
+      const k = _chave(r[1], r[0], r[3], r[4]);
+      if (!custoPorChave.has(k)) custoPorChave.set(k, _n(r[8]));
+    }
+
+    // Depósito não cabe na chave de Custos SAP (central|material|ano|mês). Se o
+    // export trouxer mais de um depósito do mesmo par — o Hugo filtra no SAP,
+    // mas nada garante que sobre um só — soma os LABST em vez de deixar uma
+    // linha sobrescrever a outra silenciosamente. O registro em porChave é a
+    // MESMA referência que foi pra parsed, então somar aqui já reflete lá.
+    const porChave = new Map();
     for (let i = 0; i < total; i += batchSize) {
-      updateStep('Organizando Custos SAP importado...');
+      updateStep('Lendo o estoque por depósito (MARDH)...');
       await processSlice(i, Math.min(i + batchSize, total), (r) => {
+        if (!r) return null;
         const materialOriginal = String(r[0] || '').trim();
-        return stamp(normalizarCentraisRecord({
+        if (!materialOriginal) return null;
+        const rec = stamp(normalizarCentraisRecord({
           importId,
           materialOriginal,
           material: normalizarMaterial(materialOriginal),
           central: String(r[1] || ''),
           ano: String(r[3] || '').trim(),
           mes: String(r[4] || '').trim(),
-          estoqueTotal: num(r[5]),
-          valorTotal: num(r[6]),
-          custo: num(r[8])
+          estoqueTotal: _n(r[5]),
+          valorTotal: 0,   // preenchidos no passe de conciliação abaixo
+          custo: 0
         }, ['central']));
+        const k = _fpBaseCustosSap(rec);
+        const jaVisto = porChave.get(k);
+        if (jaVisto) { jaVisto.estoqueTotal += rec.estoqueTotal; return null; }
+        porChave.set(k, rec);
+        return rec;
       });
     }
+
+    // Custo e valor só depois da soma dos depósitos fechar. valorTotal é
+    // recalculado (estoque × custo) em vez de usar o SALK3 da MBEWH: aquele é
+    // do centro inteiro e não bateria com um estoque filtrado por depósito.
+    let _semCusto = 0;
+    for (const rec of parsed) {
+      const c = custoPorChave.get(_fpBaseCustosSap(rec));
+      if (c === undefined) _semCusto++;
+      rec.custo = c || 0;
+      rec.valorTotal = rec.estoqueTotal * rec.custo;
+    }
+    extra._semCusto = _semCusto;
+    console.info('[Custos SAP Import] ✓ MARDH:', total, 'linhas →', parsed.length, 'pares | MBEWH:', custoPorChave.size, 'custos | sem custo:', _semCusto);
+
     _mergedResult = await _mergeWithConflictCheck('Custos SAP', parsed.filter(r => r.central || r.material));
   }
 
@@ -5731,8 +5799,19 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
     // é ordens de grandeza menor que os outros 4 módulos (custo por
     // material/central/mês, não por lançamento), cabe tranquilo no limite
     // gratuito.
+    //
+    // Sincroniza os registros COMO FICARAM no state, não os recém-parseados:
+    // _mergeDedup reaproveita o id do registro que já existia, então mandar
+    // `parsed` (ids novos em folha) criava uma SEGUNDA linha na nuvem pro mesmo
+    // central|material|ano|mês a cada reimportação. Como o boot substitui
+    // state.custosSap pelo que vem do banco (syncCustosSapFromSupabase, "o
+    // banco manda") e buildCustosSapIndex fica com o PRIMEIRO registro de cada
+    // chave, a linha velha podia vencer a nova no lookup de custo. Passou a
+    // importar de verdade em 14/08, quando a reimportação mensal do mesmo
+    // período virou o fluxo normal (conciliação MARDH + MBEWH).
     if (modulo === 'Custos SAP' && typeof _custosSapSyncUpsertBatch === 'function') {
-      await _custosSapSyncUpsertBatch(parsed);
+      const _fpsImportados = new Set(parsed.map(_fpCustosSap));
+      await _custosSapSyncUpsertBatch(_mergedResult.filter(r => _fpsImportados.has(_fpCustosSap(r))));
     }
   }
 
@@ -5805,6 +5884,12 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
     toast(`${novosAdicionados.toLocaleString('pt-BR')} novo${novosAdicionados !== 1 ? 's' : ''} registro${novosAdicionados !== 1 ? 's' : ''} importado${novosAdicionados !== 1 ? 's' : ''} de "${fileName}"`);
   } else {
     toast(`Nenhum registro novo encontrado em "${fileName}" — todos já estavam no sistema`, 'info');
+  }
+
+  // Pares que a MARDH trouxe e a MBEWH não cobriu: entram com custo zerado
+  // (decisão do Hugo, 14/08 — importar e sinalizar, não descartar estoque).
+  if (extra._semCusto > 0) {
+    toast(`${extra._semCusto.toLocaleString('pt-BR')} par(es) central × material sem custo na MBEWH — importados com custo zerado e sinalizados na tabela.`, 'info');
   }
 
   // Persiste em background e atualiza status sem bloquear a UI
@@ -6226,6 +6311,23 @@ function _csvCellValue(s) {
   return t;
 }
 
+// MARDH lida e aguardando a MBEWH ({ rows, fileName }) — ver handleImport.
+// Só em memória, de propósito: recarregar a página descarta e o analista
+// recomeça pelos dois arquivos, o que é preferível a persistir metade de uma
+// importação que ainda não foi conciliada.
+let _csMardhStage = null;
+
+function _csUpdateImportCard() {
+  const label = document.getElementById('dz-custos-sap-mardh-label');
+  const zone  = document.getElementById('dz-custos-sap-mbewh');
+  if (!label || !zone) return;
+  label.textContent = _csMardhStage
+    ? `1º — MARDH: ${_csMardhStage.fileName} (${_csMardhStage.rows.length.toLocaleString('pt-BR')} linhas)`
+    : '1º — MARDH (estoque)';
+  zone.style.opacity = _csMardhStage ? '' : '.45';
+  zone.style.pointerEvents = _csMardhStage ? '' : 'none';
+}
+
 async function handleImport(event, modulo) {
   const file = event.target.files?.[0];
   if (!file) return;
@@ -6330,6 +6432,7 @@ async function handleImport(event, modulo) {
 
       let data;
       let extra = {};
+      let fileLabel = file.name;
 
       if (modulo === 'SAP') {
         // Detecta automaticamente onde está a linha de cabeçalho real
@@ -6409,9 +6512,48 @@ async function handleImport(event, modulo) {
         data = rows.slice(1).filter(r => r.some(c => c !== '' && c !== null && c !== undefined));
       }
 
+      // Custos SAP virou importação de DOIS arquivos (14/08) — os dois caem no
+      // else genérico acima (cabeçalho na linha 1). A MARDH só fica em memória
+      // aqui: nada é gravado enquanto a MBEWH não chegar, senão uma desistência
+      // no meio deixaria estoque sem custo no banco. A MBEWH então reassume a
+      // identidade 'Custos SAP' e passa a MARDH como `rows` — ela é quem manda
+      // no universo de central × material × período, então é ela que dirige o
+      // loop de processImportedRows.
+      // Trocar os dois arquivos de lugar não geraria erro nenhum: os layouts
+      // são parecidos e a MBEWH também tem estoque na coluna 5 — a importação
+      // invertida gravaria custo e estoque errados EM SILÊNCIO. O que separa
+      // os dois é a coluna 2: Depósito na MARDH, Tipo de avaliação na MBEWH.
+      if (modulo === 'MARDH' || modulo === 'MBEWH') {
+        const temDeposito = normalizeText((rows[0] || [])[2]).includes('DEPOSITO');
+        if (modulo === 'MARDH' && !temDeposito) throw new Error('Este arquivo não parece ser a MARDH — a 3ª coluna deveria ser "Depósito".');
+        if (modulo === 'MBEWH' && temDeposito)  throw new Error('Este arquivo tem coluna "Depósito" — é a MARDH, não a MBEWH de custos.');
+      }
+
+      if (modulo === 'MARDH') {
+        _csMardhStage = { rows: data, fileName: file.name };
+        _csUpdateImportCard();
+        toast(`MARDH lida: ${data.length.toLocaleString('pt-BR')} linhas. Agora selecione a MBEWH para concluir.`, 'info');
+        event.target.value = '';
+        return;
+      }
+      if (modulo === 'MBEWH') {
+        if (!_csMardhStage) {
+          toast('Importe primeiro a MARDH — é ela que define centrais, materiais, período e estoque.', 'error');
+          event.target.value = '';
+          return;
+        }
+        extra = { mbewhRows: data };
+        fileLabel = `${_csMardhStage.fileName} + ${file.name}`;
+        data = _csMardhStage.rows;
+        modulo = 'Custos SAP';
+      }
+
       _lstepSet('imp-header', 'done'); _lstepSet('imp-convert', 'running'); _lbarSet(35);
       updateLoadingOverlay('Aplicando a importação no sistema...', `Importando ${modulo}`, 'Gravando dados no armazenamento local...');
-      await processImportedRows(modulo, data, file.name, extra);
+      await processImportedRows(modulo, data, fileLabel, extra);
+      // Só limpa depois de gravar: se a importação falhar ou for abortada, a
+      // MARDH continua em memória e basta reescolher a MBEWH.
+      if (modulo === 'Custos SAP') { _csMardhStage = null; _csUpdateImportCard(); }
       event.target.value = '';
     } catch (err) {
       if (err?.message === '__IMPORT_ABORTED__') {

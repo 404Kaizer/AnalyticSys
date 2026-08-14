@@ -2824,21 +2824,31 @@
             <input type="file" id="file-sap" class="file-input" accept=".xlsx,.csv" onchange="handleImport(event, 'SAP')">
           </div>
 
-          <!-- Custos SAP -->
+          <!-- Custos SAP — dois arquivos (14/08): a MBEWH não tem depósito
+               (avaliação no SAP para no centro), então o estoque passou a vir
+               da MARDH, que tem LGORT. MARDH manda no universo (central ×
+               material × período) e no estoque; MBEWH entra só com o custo.
+               Nada é gravado até os dois chegarem — ver _csMardhStage e o
+               ramo 'Custos SAP' de processImportedRows (dashboard.js). -->
           <div class="import-card" id="import-card-custos-sap">
             <div class="import-card-header">
               <div class="import-icon" style="background:var(--purple-bg);color:var(--purple)"><i class="ti ti-chart-bar"></i></div>
               <div>
                 <div class="import-card-title">Custos SAP</div>
-                <div style="font-size:11px;color:var(--text3);font-family:var(--mono)">Custo por Material</div>
+                <div style="font-size:11px;color:var(--text3);font-family:var(--mono)">Estoque + Custo</div>
               </div>
             </div>
-            <div class="import-card-desc">Importe o arquivo Excel exportado do SAP (TRANSAÇÃO SE16N) para extrair os dados de estoque e saldo móvel de materiais.</div>
-            <div class="drop-zone" onclick="document.getElementById('file-custos-sap').click()">
+            <div class="import-card-desc">Importe os dois arquivos exportados do SAP (TRANSAÇÃO SE16N), nesta ordem. A conciliação por central × material × período só roda depois do segundo — filtre o depósito no SAP antes de exportar a MARDH.</div>
+            <div class="drop-zone" onclick="document.getElementById('file-custos-sap-mardh').click()">
               <i class="ti ti-upload"></i>
-              Arraste ou clique para selecionar
+              <span id="dz-custos-sap-mardh-label">1º — MARDH (estoque)</span>
             </div>
-            <input type="file" id="file-custos-sap" class="file-input" accept=".xlsx,.csv" onchange="handleImport(event, 'Custos SAP')">
+            <input type="file" id="file-custos-sap-mardh" class="file-input" accept=".xlsx,.csv" onchange="handleImport(event, 'MARDH')">
+            <div class="drop-zone" id="dz-custos-sap-mbewh" style="opacity:.45;pointer-events:none" onclick="document.getElementById('file-custos-sap-mbewh').click()">
+              <i class="ti ti-upload"></i>
+              <span id="dz-custos-sap-mbewh-label">2º — MBEWH (custo)</span>
+            </div>
+            <input type="file" id="file-custos-sap-mbewh" class="file-input" accept=".xlsx,.csv" onchange="handleImport(event, 'MBEWH')">
           </div>
 
 

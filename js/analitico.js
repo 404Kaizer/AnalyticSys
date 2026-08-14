@@ -53,19 +53,20 @@ function _anGetCustosSapIdx() {
 // reaparece nos meses seguintes até alguém ajustar. É o efeito desejado.
 //
 // COMO O SALDO É MONTADO (âncora + movimentações):
-//   1. Âncora  = registro de Custos SAP (MBEWH) mais recente que EXISTIR até
+//   1. Âncora  = registro de Custos SAP (estoque da MARDH desde 14/08; antes,
+//                LBKUM da MBEWH) mais recente que EXISTIR até
 //                o mês anterior a dtIni — cascateando pra trás, ver
 //                getEstoqueSapCustosSap (normalize.js).
 //   2. Delta   = soma de TODAS as movimentações SAP do par central+material
 //                entre o fechamento da âncora e dtIni−1.
 //
-// Isso torna o desenho imune aos buracos da MBEWH: onde não houve
+// Isso torna o desenho imune aos buracos da tabela de histórico: onde não houve
 // movimentação, o delta dá zero e a âncora antiga já está certa por
 // construção; onde houve, o delta reconstrói a diferença. Nos dois casos
 // fecha — sem exigir nenhuma importação nova (usa Custos SAP e o módulo SAP,
 // ambos já alimentados hoje).
 //
-// PREMISSA A VALIDAR: o LBKUM da MBEWH do período N é o saldo no FECHAMENTO
+// PREMISSA A VALIDAR: o estoque da tabela de histórico do período N é o saldo no FECHAMENTO
 // do mês N (por isso o delta começa no 1º dia do mês N+1). Se na prática for
 // o saldo de ABERTURA, é só recuar `desde` um mês.
 //

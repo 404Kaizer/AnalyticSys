@@ -591,16 +591,17 @@ function getCustoMedioCustosSap(central, codSap, ano, mes, idx, maxMesesAtras = 
   return null;
 }
 
-// Irmã de getCustoMedioCustosSap, mas para o ESTOQUE (LBKUM da MBEWH) em vez
+// Irmã de getCustoMedioCustosSap, mas para o ESTOQUE (LABST da MARDH) em vez
 // do custo. Mesma chave, mesmo índice e mesma cascata pra trás — mas com um
 // critério de aceite diferente, e é por isso que são duas funções e não uma:
 // o custo só é aceito se for > 0 (custo zero é dado inválido), enquanto
 // estoque ZERO é um saldo perfeitamente válido. Aqui basta o registro existir.
 //
 // Por que a cascata é obrigatória e não um paliativo (Hugo, 13/08/2026): a
-// MBEWH é tabela de HISTÓRICO — o SAP só grava linha de um período quando
-// houve mudança de avaliação naquele período. Material que não movimentou no
-// mês simplesmente não tem linha, e isso não é dado faltando: significa
+// MARDH (e a MBEWH, de onde o estoque vinha até 14/08) é tabela de HISTÓRICO —
+// o SAP só grava linha de um período quando houve mudança naquele período.
+// Material que não movimentou no mês simplesmente não tem linha, e isso não é
+// dado faltando: significa
 // "saldo continua igual ao do último período que aparece". Nenhuma tabela do
 // SAP entrega a matriz completa material × central × mês; quem fecha o buraco
 // é a soma das movimentações SAP (ver _anGetSapTheoreticalStock, analitico.js).
