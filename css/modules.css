@@ -1624,6 +1624,22 @@ td.pending-cell  { color: var(--text3) !important; font-style: italic; font-size
   text-overflow: ellipsis;
 }
 .capsec-val { text-align: right; font-weight: 700; }
+/* Percentual que gerou o número ao lado (aproveitamento da baia, % do
+   estoque de segurança) — discreto, mas sempre visível. */
+.capsec-pct {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .03em;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--bg4);
+  border: 1px solid var(--border2);
+  color: var(--text3);
+  cursor: help;
+  white-space: nowrap;
+}
 .capsec-ref { color: var(--text2); font-weight: 400; }
 .capsec-badge {
   display: inline-flex;
@@ -2369,6 +2385,71 @@ tr.pend-injetado-ambos {
   align-self: stretch;
   background: var(--border2);
 }
+
+/* ── Regras do cálculo (topo da seção de Capacidades) ── */
+.cap-regras {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+  margin-bottom: 10px;
+}
+.cap-regras-col {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg3);
+  min-width: 0;
+}
+.cap-regras-titulo {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 9px;
+  font-family: var(--mono);
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--text3);
+  margin-bottom: 2px;
+}
+.cap-regras-linha {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  font-size: 11px;
+  color: var(--text2);
+  line-height: 1.5;
+}
+.cap-regras-linha b { color: var(--text); }
+.cap-regras-tag {
+  flex-shrink: 0;
+  font-size: 9px;
+  font-family: var(--mono);
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--text3);
+  min-width: 74px;
+}
+.cap-regras-exemplo {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 9px 12px;
+  margin-bottom: 12px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--bg2);
+  font-size: 11px;
+  color: var(--text2);
+  line-height: 1.6;
+}
+.cap-regras-exemplo b { color: var(--text); font-family: var(--mono); }
+.cap-regras-exemplo > i { color: var(--accent); font-size: 14px; flex-shrink: 0; margin-top: 1px; }
 
 /* Origem do valor: estrutura declarada (azul) vs. edição manual (âmbar) */
 .cap-badge-estrutura {

@@ -19,6 +19,12 @@
 // todo. A média dos CAP_TOP_N maiores aproxima o teto real sem ficar refém de
 // um único pico de digitação errada (o que aconteceria usando só o máximo).
 //
+// ARMAZENAMENTO: capacidade é dado GLOBAL da empresa (public.capacidades,
+// sem user_id) — a capacidade de um silo é a mesma para quem quer que esteja
+// olhando. Toda edição propaga por Realtime para o ADM e os demais usuários.
+// Ver o bloco "ARMAZENAMENTO" abaixo para o porquê de uma linha por
+// central+material em vez de um JSON único.
+//
 // UNIDADE: silo e tanque são declarados na mesma UM dos lançamentos (kg/L);
 // baia é declarada em DIMENSÕES e sai em m³ (decisão do Hugo: "o volume é da
 // baia, não do material" — sem massa específica no meio). Quando a UM dos
@@ -28,8 +34,8 @@
 // ADIÇÕES ficam de fora de propósito — não têm estrutura de armazenagem
 // própria mapeada.
 //
-// Só o que o usuário declara é persistido (overrides e estruturas); o resto
-// é recalculado a cada render.
+// Só o que o usuário declara é persistido (overrides e estrutura); o resto é
+// recalculado a cada render.
 // ══════════════════════════════════════════════════════════════════════════════
 
 const CAP_TOP_N = 5;            // quantos maiores lançamentos entram na média
@@ -37,8 +43,6 @@ const CAP_JANELA_MESES = 12;    // janela de histórico considerada
 const CAP_PCT_PADRAO = 25;      // % da capacidade usada como estoque de segurança
 const CAP_FATOR_BAIA_PADRAO = 85; // % de aproveitamento do volume da baia
 const CAP_FATOR_BAIA_KEY = 'cap_fator_aproveitamento_baia';
-const CAP_OVERRIDES_KEY = '__capacidades_overrides__';
-const CAP_ESTRUTURAS_KEY = '__capacidades_estruturas__';
 const CAP_PAGE_SIZE = PAGE_SIZE;
 
 // Situação de cada unidade declarada — a irregularidade é POR UNIDADE (silo 2
@@ -80,84 +84,182 @@ function capInvalidarCache() { _capRowsCache = null; _capCacheSig = ''; }
 // categoria de um material) são cobertas por atualizarCadastros(), que chama
 // capInvalidarCache explicitamente.
 function _capCacheSignature() {
-  return `${(state.lancamentos || []).length}|${(state.materiais || []).length}`;
+  return `${(state.lancamentos || []).length}|${(state.materiais || []).length}|${(state.capacidades || []).length}`;
 }
 
-// ── Overrides manuais ─────────────────────────────────────────────────────
-// Guardados como UMA linha de state.configs (JSON), não uma config por
-// célula: pega persistência local + sync na nuvem de graça (_configsSyncUpsert)
-// sem inundar a tabela "Configurações Personalizadas" com centenas de linhas.
-// Mesmo padrão de __responsavel_padrao__.
-// ponytail: teto ~algumas centenas de overrides num único campo texto. Se um
-// dia virar milhares, migra pra tabela própria no Supabase.
-function capGetOverrides() {
-  const cfg = state.configs.find(c => c.key === CAP_OVERRIDES_KEY);
-  if (!cfg || !cfg.value) return {};
-  try {
-    const obj = JSON.parse(cfg.value);
-    return (obj && typeof obj === 'object') ? obj : {};
-  } catch (err) {
-    console.warn('[Capacidades] Overrides ilegíveis — ignorando.', err);
-    return {};
+// ══════════════════════════════════════════════════════════════════════════
+// ARMAZENAMENTO — DADO GLOBAL, UMA LINHA POR CENTRAL+MATERIAL
+// ══════════════════════════════════════════════════════════════════════════
+// Capacidade de silo/baia/tanque é fato físico da central, não preferência de
+// usuário: mora em public.capacidades, SEM user_id, e vale para todo mundo.
+//
+// Por que uma linha por central+material e não um JSON só (como era antes):
+// com vários usuários editando ao mesmo tempo — que é justamente o ponto do
+// Realtime — um blob único causaria LOST UPDATE. Quem carregasse o mapa,
+// editasse e salvasse por último apagaria a edição do outro. Como cada
+// usuário cuida de uma categoria (agregados, aglomerantes, aditivos), isso
+// aconteceria o tempo todo entre categorias diferentes. Linha por linha,
+// cada edição toca só a sua e ninguém pisa em ninguém.
+//
+// IMPORTANTE — visibilidade por categoria: as LINHAS da tabela nascem dos
+// lançamentos e materiais LOCAIS de cada usuário (getCapacidadesRows), não
+// daqui. Quem só tem agregados no sistema continua vendo só agregados; as
+// linhas globais de cimento simplesmente não encontram par e ficam
+// invisíveis pra ele. O ADM, que tem tudo, vê tudo.
+
+// Índice por chave — evita varredura linear a cada leitura.
+let _capRegIndex = null;
+let _capRegIndexOf = null;
+
+function _capRegistros() {
+  if (!Array.isArray(state.capacidades)) state.capacidades = [];
+  return state.capacidades;
+}
+
+function capRegistroDe(key) {
+  const arr = _capRegistros();
+  if (_capRegIndexOf !== arr || !_capRegIndex) {
+    _capRegIndex = new Map(arr.map(r => [capRowKey(r.central, r.grupo), r]));
+    _capRegIndexOf = arr;
+  }
+  return _capRegIndex.get(key) || null;
+}
+
+function _capInvalidarRegIndex() { _capRegIndex = null; _capRegIndexOf = null; }
+
+// Uma linha sem override e sem estrutura não guarda informação nenhuma —
+// sai do banco em vez de virar lixo.
+function _capRegistroVazio(rec) {
+  return rec.capacidade == null && rec.seguranca == null
+      && !(Array.isArray(rec.unidades) && rec.unidades.length);
+}
+
+// Aplica um patch na linha de central+material: atualiza o estado local,
+// persiste offline e sincroniza com a nuvem. patch aceita capacidade,
+// seguranca e unidades — null/undefined em capacidade/seguranca significa
+// "volta ao automático".
+function capSalvarRegistro(central, grupo, patch) {
+  const arr = _capRegistros();
+  const key = capRowKey(central, grupo);
+  let rec = capRegistroDe(key);
+
+  if (!rec) {
+    rec = { central, grupo, capacidade: null, seguranca: null, unidades: null };
+    arr.push(rec);
+    _capInvalidarRegIndex();
+  }
+  Object.assign(rec, patch);
+
+  const vazio = _capRegistroVazio(rec);
+  if (vazio) {
+    const i = arr.indexOf(rec);
+    if (i >= 0) arr.splice(i, 1);
+    _capInvalidarRegIndex();
+  }
+
+  persist();
+  capInvalidarCache();
+
+  if (!window.supabaseClient) return;
+  if (vazio) _capSyncDelete(central, grupo);
+  else _capSyncUpsert(rec);
+}
+
+async function _capSyncUpsert(rec) {
+  const row = {
+    central: rec.central,
+    grupo: rec.grupo,
+    capacidade: rec.capacidade,
+    seguranca: rec.seguranca,
+    unidades: rec.unidades,
+    updated_by: window.currentUser?.id || null
+  };
+  const { error } = await window.supabaseClient
+    .from('capacidades')
+    .upsert(row, { onConflict: 'central,grupo' });
+  if (error) {
+    console.warn('[Capacidades] Falha ao sincronizar:', error);
+    toast('⚠ Salvo nesta sessão, mas não foi possível sincronizar com a nuvem.', 'error');
   }
 }
 
-function capSalvarOverrides(map) {
-  const rec = {
-    key: CAP_OVERRIDES_KEY,
-    value: JSON.stringify(map),
-    desc: 'Capacidades e estoques de segurança editados manualmente',
-    created: new Date().toLocaleDateString('pt-BR')
-  };
-  const i = state.configs.findIndex(c => c.key === CAP_OVERRIDES_KEY);
-  if (i >= 0) state.configs[i] = rec; else state.configs.unshift(rec);
-  persist();
-  if (window.supabaseClient && typeof _configsSyncUpsert === 'function') _configsSyncUpsert(rec);
+async function _capSyncDelete(central, grupo) {
+  const { error } = await window.supabaseClient
+    .from('capacidades')
+    .delete()
+    .eq('central', central)
+    .eq('grupo', grupo);
+  if (error) console.warn('[Capacidades] Falha ao remover na nuvem:', error);
+}
+
+async function syncCapacidadesFromSupabase() {
+  try {
+    const [rows, params] = await Promise.all([
+      fetchAllRows('capacidades', 'central, grupo, capacidade, seguranca, unidades, updated_by, updated_at'),
+      fetchAllRows('capacidades_params', 'key, value')
+    ]);
+    // A nuvem manda: é dado global, não há versão local legítima a preservar.
+    state.capacidades = (rows || []).map(r => ({
+      central: r.central, grupo: r.grupo,
+      capacidade: r.capacidade == null ? null : num(r.capacidade),
+      seguranca:  r.seguranca  == null ? null : num(r.seguranca),
+      unidades: Array.isArray(r.unidades) ? r.unidades : null,
+      updated_by: r.updated_by || null,
+      updated_at: r.updated_at || null
+    }));
+    state.capacidadesParams = Object.fromEntries((params || []).map(p => [p.key, p.value]));
+    _capInvalidarRegIndex();
+    capInvalidarCache();
+  } catch (err) {
+    console.warn('[Capacidades] Falha ao buscar — mantendo dados locais.', err);
+  }
 }
 
 // ── Estrutura física declarada ────────────────────────────────────────────
-// Mesmo esquema de armazenamento dos overrides: uma linha só de state.configs
-// com o JSON de todas as estruturas, chaveado por central|||grupo.
-//   { "CENTRAL|||GRUPO": [ unidade, unidade, ... ] }
+// Vive na coluna "unidades" (jsonb) da mesma linha de public.capacidades.
 // Unidade de silo/tanque: { cap, situacao, reducaoPct, obs }
-// Unidade de baia:        { larg, comp, prof, situacao, reducaoPct, obs }
-function capGetEstruturas() {
-  const cfg = state.configs.find(c => c.key === CAP_ESTRUTURAS_KEY);
-  if (!cfg || !cfg.value) return {};
-  try {
-    const obj = JSON.parse(cfg.value);
-    return (obj && typeof obj === 'object') ? obj : {};
-  } catch (err) {
-    console.warn('[Capacidades] Estruturas ilegíveis — ignorando.', err);
-    return {};
-  }
+// Unidade de baia:        { larg, comp, alt, situacao, reducaoPct, obs }
+function capGetUnidades(key) {
+  const rec = capRegistroDe(key);
+  return (rec && Array.isArray(rec.unidades)) ? rec.unidades : [];
 }
 
-function capSalvarEstruturas(map) {
-  const rec = {
-    key: CAP_ESTRUTURAS_KEY,
-    value: JSON.stringify(map),
-    desc: 'Silos, baias e tanques declarados por central e material',
-    created: new Date().toLocaleDateString('pt-BR')
-  };
-  const i = state.configs.findIndex(c => c.key === CAP_ESTRUTURAS_KEY);
-  if (i >= 0) state.configs[i] = rec; else state.configs.unshift(rec);
+// ── Parâmetros globais ────────────────────────────────────────────────────
+// public.capacidades_params — chave é a PK, uma linha por parâmetro, sem
+// dono. Não podem ficar em configs porque lá o unique é (user_id, key) e
+// cada usuário acabaria com a sua própria cópia do mesmo parâmetro.
+function capParam(key) {
+  const p = state.capacidadesParams;
+  return (p && typeof p === 'object') ? p[key] : undefined;
+}
+
+function capSalvarParam(key, valor) {
+  if (!state.capacidadesParams || typeof state.capacidadesParams !== 'object') state.capacidadesParams = {};
+  state.capacidadesParams[key] = String(valor);
   persist();
-  if (window.supabaseClient && typeof _configsSyncUpsert === 'function') _configsSyncUpsert(rec);
+  if (!window.supabaseClient) return;
+  window.supabaseClient
+    .from('capacidades_params')
+    .upsert({ key, value: String(valor), updated_by: window.currentUser?.id || null }, { onConflict: 'key' })
+    .then(({ error }) => {
+      if (error) {
+        console.warn('[Capacidades] Falha ao sincronizar parâmetro:', error);
+        toast('⚠ Salvo nesta sessão, mas não foi possível sincronizar com a nuvem.', 'error');
+      }
+    });
 }
 
 function capFatorBaia() {
-  const cfg = state.configs.find(c => normalizeText(c.key) === normalizeText(CAP_FATOR_BAIA_KEY));
-  const n = cfg ? num(cfg.value) : NaN;
+  const n = num(capParam(CAP_FATOR_BAIA_KEY));
   return (Number.isFinite(n) && n > 0) ? n : CAP_FATOR_BAIA_PADRAO;
 }
 
 // Capacidade NOMINAL de uma unidade, antes de descontar irregularidade.
-// Baia: largura × comprimento × profundidade × fator de aproveitamento
+// Baia: largura × comprimento × altura × fator de aproveitamento
 // (o agregado empilhado forma talude e não enche a baia como uma caixa).
 function capUnidadeNominal(u, ehAgregado, fator) {
   if (ehAgregado) {
-    const v = num(u.larg) * num(u.comp) * num(u.prof);
+    const v = num(u.larg) * num(u.comp) * num(u.alt);
     return v > 0 ? v * (fator / 100) : 0;
   }
   return Math.max(0, num(u.cap));
@@ -192,8 +294,7 @@ function capEstruturaTotal(unidades, ehAgregado) {
 
 // ── % de estoque de segurança por categoria ───────────────────────────────
 function capPctSeguranca(catKey) {
-  const cfg = state.configs.find(c => normalizeText(c.key) === normalizeText(`estsec_pct_${catKey}`));
-  const n = cfg ? num(cfg.value) : NaN;
+  const n = num(capParam(`cap_pct_${catKey}`));
   return (Number.isFinite(n) && n > 0) ? n : CAP_PCT_PADRAO;
 }
 
@@ -206,37 +307,28 @@ function loadCapPctInputs() {
   if (fator) fator.value = capFatorBaia();
 }
 
-function _capUpsertConfig(key, valor, desc) {
-  const rec = { key, value: String(valor), desc, created: new Date().toLocaleDateString('pt-BR') };
-  const i = state.configs.findIndex(c => normalizeText(c.key) === normalizeText(key));
-  if (i >= 0) state.configs[i] = rec; else state.configs.unshift(rec);
-  if (window.supabaseClient && typeof _configsSyncUpsert === 'function') _configsSyncUpsert(rec);
-}
-
 function salvarPctSeguranca() {
   let salvos = 0;
-  CAP_CATS_PCT.forEach(({ catKey, label }) => {
+  CAP_CATS_PCT.forEach(({ catKey }) => {
     const input = document.getElementById(`cap-pct-${catKey}`);
     if (!input) return;
     const n = num(input.value);
     if (!Number.isFinite(n) || n <= 0) return;
-    _capUpsertConfig(`estsec_pct_${catKey}`, n, `Estoque de segurança — % da capacidade para ${label}`);
+    capSalvarParam(`cap_pct_${catKey}`, n);
     salvos++;
   });
   const inFator = document.getElementById('cap-fator-baia');
   if (inFator) {
     const f = num(inFator.value);
     if (Number.isFinite(f) && f > 0 && f <= 100) {
-      _capUpsertConfig(CAP_FATOR_BAIA_KEY, f, 'Aproveitamento do volume da baia (%)');
+      capSalvarParam(CAP_FATOR_BAIA_KEY, f);
       salvos++;
     }
   }
   if (!salvos) { toast('Informe percentuais maiores que zero', 'error'); return; }
-  persist();
   capInvalidarCache();
   renderCapacidades();
-  if (typeof renderConfigs === 'function') renderConfigs();
-  toast(`${salvos} percentual(is) salvo(s)`);
+  toast(`${salvos} parâmetro(s) salvo(s) — vale para todos os usuários`);
 }
 
 // ── Cálculo ───────────────────────────────────────────────────────────────
@@ -302,8 +394,6 @@ function getCapacidadesRows() {
   const ref = new Date(maxT);
   const corte = new Date(ref.getFullYear(), ref.getMonth() - CAP_JANELA_MESES, ref.getDate()).getTime();
 
-  const overrides = capGetOverrides();
-  const estruturas = capGetEstruturas();
   const rows = [];
 
   buckets.forEach((b, key) => {
@@ -318,12 +408,11 @@ function getCapacidadesRows() {
     const ehAgregado = arm.catKey === 'agregado';
     const pct = capPctSeguranca(arm.catKey);
 
-    const unidades = Array.isArray(estruturas[key]) ? estruturas[key] : [];
-    const est = capEstruturaTotal(unidades, ehAgregado);
+    const reg = capRegistroDe(key);
+    const est = capEstruturaTotal(reg && Array.isArray(reg.unidades) ? reg.unidades : [], ehAgregado);
 
-    const ov = overrides[key] || {};
-    const capManual = Number.isFinite(ov.cap);
-    const segManual = Number.isFinite(ov.seg);
+    const capManual = !!reg && reg.capacidade != null && Number.isFinite(num(reg.capacidade));
+    const segManual = !!reg && reg.seguranca  != null && Number.isFinite(num(reg.seguranca));
 
     // Uma estrutura só "manda" no número se alguma unidade tiver medida. Quem
     // registrou apenas uma observação (sem capacidade/dimensões) continua com
@@ -335,7 +424,7 @@ function getCapacidadesRows() {
     // Precedência: manual > estrutura declarada > estimativa dos lançamentos.
     const fonte = capManual ? 'manual' : (temCapDeclarada ? 'estrutura' : 'lancamentos');
     const capAuto = temCapDeclarada ? est.total : capLanc;  // vale quando não há edição manual
-    const capacidade = capManual ? num(ov.cap) : capAuto;
+    const capacidade = capManual ? num(reg.capacidade) : capAuto;
     const segAuto = capacidade * pct / 100;
 
     // Baia é declarada em m³; o lançamento vem na UM do material. Quando a
@@ -367,9 +456,11 @@ function getCapacidadesRows() {
       capAuto,
       segAuto,
       capacidade,
-      seguranca: segManual ? num(ov.seg) : segAuto,
+      seguranca: segManual ? num(reg.seguranca) : segAuto,
       capManual,
-      segManual
+      segManual,
+      updatedBy: reg?.updated_by || null,
+      updatedAt: reg?.updated_at || null
     });
   });
 
@@ -433,8 +524,7 @@ const CAP_LIMITES_PADRAO = {
 const CAP_MIN_AMOSTRAS = 3;
 
 function capLimite(nome) {
-  const cfg = state.configs.find(c => normalizeText(c.key) === normalizeText(`cap_lim_${nome}`));
-  const n = cfg ? num(cfg.value) : NaN;
+  const n = num(capParam(`cap_lim_${nome}`));
   return (Number.isFinite(n) && n > 0) ? n : CAP_LIMITES_PADRAO[nome];
 }
 
@@ -529,13 +619,22 @@ function buildCapacidadeSection({ central, materiais }) {
             const acima = c.delta > 0;
             const refLabel = (c.faixa === 'acima' || c.faixa === 'erro' || c.faixa === 'limite')
               ? 'da capacidade' : 'do estoque de segurança';
+            // Os percentuais que produziram cada número ficam à vista: sem
+            // isso o analista vê 201,46 onde a conta geométrica dá 237,01 e
+            // acha que o sistema errou.
+            const aproveit = (c.row?.fonte === 'estrutura' && c.row?.ehAgregado)
+              ? `<span class="capsec-pct" title="Aproveitamento da baia aplicado sobre largura × comprimento × altura">× ${_capNum(capFatorBaia())}%</span>`
+              : '';
+            const pctSeg = c.seguranca > 0
+              ? `<span class="capsec-pct" title="Percentual da capacidade definido para esta categoria">${_capNum(c.row?.pct ?? 0)}% da cap.</span>`
+              : '';
             return `
             <tr title="${escapeHtml(capExplicacaoFaixa(c))}">
               <td class="td-mono capsec-mat">${escapeHtml(mat)}</td>
               <td><span class="capsec-badge" style="color:${c.cor};border-color:${c.cor}"><i class="ti ${c.icone}"></i> ${escapeHtml(c.label)}</span></td>
               <td class="td-mono capsec-val" style="color:${c.cor}">${_capNum(c.estoque)} ${escapeHtml(c.um)}</td>
-              <td class="td-mono capsec-val capsec-ref">${_capNum(c.capacidade)} ${escapeHtml(c.um)}</td>
-              <td class="td-mono capsec-val capsec-ref">${c.seguranca > 0 ? `${_capNum(c.seguranca)} ${escapeHtml(c.um)}` : '—'}</td>
+              <td class="td-mono capsec-val capsec-ref">${_capNum(c.capacidade)} ${escapeHtml(c.um)}${aproveit}</td>
+              <td class="td-mono capsec-val capsec-ref">${c.seguranca > 0 ? `${_capNum(c.seguranca)} ${escapeHtml(c.um)}${pctSeg}` : '—'}</td>
               <td class="td-mono capsec-val" style="color:${c.cor}">${_capNum(c.pctCap)}%</td>
               <td class="td-mono capsec-val" style="color:${c.cor}" title="${escapeHtml(`${acima ? 'Excedente em relação' : 'Falta em relação'} ${refLabel}`)}">
                 ${acima ? '+' : '−'}${_capNum(Math.abs(c.delta))} ${escapeHtml(c.um)}
@@ -559,6 +658,7 @@ function buildCapacidadeSection({ central, materiais }) {
       <div class="micro-section-title">
         <i class="ti ti-gauge"></i>
         Capacidade e Estoque de Segurança
+        <span class="macro-help-badge" data-help="capacidade-faixas">?</span>
         <span class="capsec-counts">${contadores.join('')}</span>
       </div>
       ${corpo}
@@ -689,10 +789,50 @@ function _capEstruturaCelula(r, k) {
   </div>`;
 }
 
+// Regras do cálculo, renderizadas com os valores CONFIGURADOS no momento.
+// Texto fixo no HTML viraria mentira no dia em que alguém mudasse o
+// aproveitamento ou um percentual — aqui os números vêm sempre do estado.
+function renderCapRegras() {
+  const box = document.getElementById('cap-regras');
+  if (!box) return;
+  const f = capFatorBaia();
+  const pct = k => capPctSeguranca(k);
+  const exemplo = (237.006 * f / 100);
+
+  box.innerHTML = `
+    <div class="cap-regras">
+      <div class="cap-regras-col">
+        <div class="cap-regras-titulo">Qual valor vale <span class="macro-help-badge" data-help="capacidade-calculo">?</span></div>
+        <div class="cap-regras-linha"><span class="cap-badge-manual">manual</span> <span>o que você digitar na célula vence tudo</span></div>
+        <div class="cap-regras-linha"><span class="cap-badge-estrutura">estrutura</span> <span>soma dos silos, baias e tanques declarados</span></div>
+        <div class="cap-regras-linha"><span class="cap-regras-tag">estimativa</span> <span>sem estrutura: média dos ${CAP_TOP_N} maiores lançamentos dos últimos ${CAP_JANELA_MESES} meses</span></div>
+      </div>
+      <div class="cap-regras-col">
+        <div class="cap-regras-titulo">Como cada tipo soma</div>
+        <div class="cap-regras-linha"><span class="cap-regras-tag" style="color:var(--amber)">silo · tanque</span> <span>soma da capacidade de cada unidade</span></div>
+        <div class="cap-regras-linha"><span class="cap-regras-tag" style="color:var(--teal)">baia</span> <span>largura × comprimento × altura × <b>${_capNum(f)}%</b> de aproveitamento</span></div>
+        <div class="cap-regras-linha"><span class="cap-regras-tag" style="color:var(--red)">irregular</span> <span><b>fora de operação</b> não soma; <b>capacidade reduzida</b> desconta o % daquela unidade</span></div>
+      </div>
+      <div class="cap-regras-col">
+        <div class="cap-regras-titulo">Estoque de segurança</div>
+        <div class="cap-regras-linha"><span class="cap-regras-tag" style="color:var(--amber)">aglomerantes</span> <span><b>${_capNum(pct('aglomerante'))}%</b> da capacidade</span></div>
+        <div class="cap-regras-linha"><span class="cap-regras-tag" style="color:var(--teal)">agregados</span> <span><b>${_capNum(pct('agregado'))}%</b> da capacidade</span></div>
+        <div class="cap-regras-linha"><span class="cap-regras-tag" style="color:var(--purple)">aditivos</span> <span><b>${_capNum(pct('aditivo'))}%</b> da capacidade</span></div>
+      </div>
+    </div>
+    <div class="cap-regras-exemplo">
+      <i class="ti ti-calculator"></i>
+      <span>Exemplo de baia — <b>13,3 × 8,1 × 2,2 = 237,01 m³</b>, e ${_capNum(f)}% de aproveitamento dá <b>${_capNum(exemplo)} m³</b> de capacidade.
+      Para usar o volume cheio, ajuste o aproveitamento para 100%. <b>Adições não entram</b> nesta tabela.</span>
+    </div>`;
+  if (typeof initHelpBadges === 'function') initHelpBadges();
+}
+
 function renderCapacidades() {
   const tb = document.getElementById('tb-capacidades');
   if (!tb) return;
   loadCapPctInputs();
+  renderCapRegras();
 
   const data = capDadosFiltrados();
   const totalPages = Math.max(1, Math.ceil(data.length / CAP_PAGE_SIZE));
@@ -778,32 +918,23 @@ function capEditarCelula(el) {
   const n = num(raw);
   if (raw && !(n >= 0)) { toast('Informe um valor numérico maior ou igual a zero', 'error'); renderCapacidades(); return; }
 
-  const overrides = capGetOverrides();
-  const atual = overrides[key] || {};
   const auto = campo === 'cap' ? row.capAuto : row.segAuto;
-
   // Campo apagado, ou digitado exatamente igual ao automático, não vira
   // "override" — volta pro calculado, em vez de gravar um zero fantasma ou
   // marcar como manual uma linha que o usuário só passou por cima.
-  if (!raw || Math.abs(n - auto) < 0.005) delete atual[campo];
-  else atual[campo] = n;
+  const valor = (!raw || Math.abs(n - auto) < 0.005) ? null : n;
 
-  if (Object.keys(atual).length) overrides[key] = atual;
-  else delete overrides[key];
-
-  capSalvarOverrides(overrides);
-  capInvalidarCache();
+  capSalvarRegistro(row.central, row.grupo, campo === 'cap' ? { capacidade: valor } : { seguranca: valor });
   renderCapacidades();
 }
 
 function capRestaurarAuto(el) {
   const key = el?.dataset?.key;
   if (!key) return;
-  const overrides = capGetOverrides();
-  if (!overrides[key]) return;
-  delete overrides[key];
-  capSalvarOverrides(overrides);
-  capInvalidarCache();
+  const rec = capRegistroDe(key);
+  if (!rec || (rec.capacidade == null && rec.seguranca == null)) return;
+  // Só descarta os overrides — a estrutura declarada continua valendo.
+  capSalvarRegistro(rec.central, rec.grupo, { capacidade: null, seguranca: null });
   renderCapacidades();
   toast('Valores recalculados automaticamente');
 }
@@ -844,26 +975,19 @@ function salvarEdicaoCapacidadesEmMassa() {
     return;
   }
 
-  const overrides = capGetOverrides();
   const porKey = new Map(getCapacidadesRows().map(r => [r.key, r]));
   let aplicados = 0;
 
   keys.forEach(key => {
     const row = porKey.get(key);
     if (!row) return;
-    const atual = overrides[key] || {};
-    if (nCap !== null) {
-      if (Math.abs(nCap - row.capAuto) < 0.005) delete atual.cap; else atual.cap = nCap;
-    }
-    if (nSeg !== null) {
-      if (Math.abs(nSeg - row.segAuto) < 0.005) delete atual.seg; else atual.seg = nSeg;
-    }
-    if (Object.keys(atual).length) overrides[key] = atual; else delete overrides[key];
+    const patch = {};
+    if (nCap !== null) patch.capacidade = Math.abs(nCap - row.capAuto) < 0.005 ? null : nCap;
+    if (nSeg !== null) patch.seguranca  = Math.abs(nSeg - row.segAuto) < 0.005 ? null : nSeg;
+    capSalvarRegistro(row.central, row.grupo, patch);
     aplicados++;
   });
 
-  capSalvarOverrides(overrides);
-  capInvalidarCache();
   renderCapacidades();
   closeModal('modal-capacidades-massa');
   toast(`${aplicados} linha(s) atualizada(s)`);
@@ -872,12 +996,14 @@ function salvarEdicaoCapacidadesEmMassa() {
 function restaurarCapacidadesSelecionadas() {
   const keys = capSelecionados();
   if (!keys.length) { toast('Selecione ao menos uma linha', 'error'); return; }
-  const overrides = capGetOverrides();
   let removidos = 0;
-  keys.forEach(key => { if (overrides[key]) { delete overrides[key]; removidos++; } });
+  keys.forEach(key => {
+    const rec = capRegistroDe(key);
+    if (!rec || (rec.capacidade == null && rec.seguranca == null)) return;
+    capSalvarRegistro(rec.central, rec.grupo, { capacidade: null, seguranca: null });
+    removidos++;
+  });
   if (!removidos) { toast('Nenhuma das linhas selecionadas tinha edição manual', 'error'); return; }
-  capSalvarOverrides(overrides);
-  capInvalidarCache();
   renderCapacidades();
   toast(`${removidos} linha(s) voltaram ao cálculo automático`);
 }
@@ -908,14 +1034,14 @@ function abrirEstruturaCapacidade(el) {
   const dica = document.getElementById('cap-estrutura-dica');
   if (dica) {
     dica.textContent = row.ehAgregado
-      ? `Volume = largura × comprimento × profundidade × ${capFatorBaia()}% de aproveitamento.`
+      ? `Volume = largura × comprimento × altura × ${capFatorBaia()}% de aproveitamento.`
       : 'A capacidade da linha é a soma das unidades, descontadas as irregularidades.';
   }
 
   const container = document.getElementById('cap-estrutura-rows');
   if (container) {
     container.innerHTML = '';
-    const unidades = capGetEstruturas()[key] || [];
+    const unidades = capGetUnidades(key);
     if (unidades.length) unidades.forEach(u => _capAddUnidadeRow(u));
     else _capAddUnidadeRow();
   }
@@ -933,7 +1059,7 @@ function _capAddUnidadeRow(u) {
   const camposMedida = row.ehAgregado
     ? `<label class="cap-un-campo"><span>Largura (m)</span><input type="number" step="0.01" min="0" class="health-cfg-input" data-campo="larg" value="${dados.larg ?? ''}" oninput="_capAtualizarTotalEstrutura()"></label>
        <label class="cap-un-campo"><span>Comprimento (m)</span><input type="number" step="0.01" min="0" class="health-cfg-input" data-campo="comp" value="${dados.comp ?? ''}" oninput="_capAtualizarTotalEstrutura()"></label>
-       <label class="cap-un-campo"><span>Profundidade (m)</span><input type="number" step="0.01" min="0" class="health-cfg-input" data-campo="prof" value="${dados.prof ?? ''}" oninput="_capAtualizarTotalEstrutura()"></label>`
+       <label class="cap-un-campo"><span>Altura (m)</span><input type="number" step="0.01" min="0" class="health-cfg-input" data-campo="alt" value="${dados.alt ?? ''}" oninput="_capAtualizarTotalEstrutura()"></label>`
     : `<label class="cap-un-campo"><span>Capacidade (${escapeHtml(row.um)})</span><input type="number" step="0.01" min="0" class="health-cfg-input" data-campo="cap" value="${dados.cap ?? ''}" oninput="_capAtualizarTotalEstrutura()"></label>`;
 
   const situacaoOpts = Object.entries(CAP_SITUACOES).map(([k, s]) =>
@@ -1001,9 +1127,9 @@ function _capLerUnidadesDoModal() {
     if (situacao === 'reduzida') u.reducaoPct = Math.min(100, Math.max(0, num(get('reducaoPct'))));
     let temMedida;
     if (ehAgregado) {
-      const larg = num(get('larg')), comp = num(get('comp')), prof = num(get('prof'));
-      temMedida = (larg > 0 || comp > 0 || prof > 0);
-      u.larg = larg; u.comp = comp; u.prof = prof;
+      const larg = num(get('larg')), comp = num(get('comp')), alt = num(get('alt'));
+      temMedida = (larg > 0 || comp > 0 || alt > 0);
+      u.larg = larg; u.comp = comp; u.alt = alt;
     } else {
       const cap = num(get('cap'));
       temMedida = cap > 0;
@@ -1032,18 +1158,27 @@ function _capAtualizarTotalEstrutura() {
     const get = campo => el.querySelector(`[data-campo="${campo}"]`)?.value ?? '';
     const situacao = el.querySelector('[data-campo="situacao"]')?.value || 'normal';
     const u = ehAgregado
-      ? { larg: num(get('larg')), comp: num(get('comp')), prof: num(get('prof')), situacao, reducaoPct: num(get('reducaoPct')) }
+      ? { larg: num(get('larg')), comp: num(get('comp')), alt: num(get('alt')), situacao, reducaoPct: num(get('reducaoPct')) }
       : { cap: num(get('cap')), situacao, reducaoPct: num(get('reducaoPct')) };
     const nominal = capUnidadeNominal(u, ehAgregado, fator);
     const efetiva = capUnidadeEfetiva(u, ehAgregado, fator);
     const calc = el.querySelector('[data-calc]');
     if (!calc) return;
     if (!(nominal > 0)) { calc.textContent = '—'; calc.className = 'cap-un-calc'; return; }
+
+    // Mostra a conta, não só o resultado: sem isso o 85% de aproveitamento
+    // some e o número parece errado (13,3 × 8,1 × 2,2 dá 237,01, mas a baia
+    // entra como 201,46). Só aparece quando o fator realmente muda o valor.
+    const bruto = ehAgregado ? num(u.larg) * num(u.comp) * num(u.alt) : 0;
+    const memoria = (ehAgregado && bruto > 0 && Math.abs(bruto - nominal) > 0.005)
+      ? ` = ${_capNum(bruto)} × ${_capNum(fator)}%`
+      : '';
+
     if (Math.abs(nominal - efetiva) < 0.005) {
-      calc.textContent = `${_capNum(efetiva)} ${umLabel}`;
+      calc.textContent = `${_capNum(efetiva)} ${umLabel}${memoria}`;
       calc.className = 'cap-un-calc';
     } else {
-      calc.textContent = `${_capNum(efetiva)} ${umLabel} (nominal ${_capNum(nominal)})`;
+      calc.textContent = `${_capNum(efetiva)} ${umLabel} (nominal ${_capNum(nominal)}${memoria})`;
       calc.className = 'cap-un-calc reduzido';
     }
   });
@@ -1051,18 +1186,18 @@ function _capAtualizarTotalEstrutura() {
   if (totalEl) {
     const est = capEstruturaTotal(_capLerUnidadesDoModal(), ehAgregado);
     totalEl.textContent = est ? `${_capNum(est.total)} ${umLabel}` : '—';
+    totalEl.title = (est && ehAgregado && fator < 100)
+      ? `Volume geométrico reduzido a ${_capNum(fator)}% pelo aproveitamento da baia. Para usar o volume cheio, ajuste "Aproveitamento da baia" para 100% na barra de parâmetros.`
+      : '';
   }
 }
 
 function salvarEstruturaCapacidade() {
-  if (!_capEstruturaKey) return;
+  if (!_capEstruturaKey || !_capEstruturaRow) return;
   const unidades = _capLerUnidadesDoModal();
-  const estruturas = capGetEstruturas();
-  if (unidades.length) estruturas[_capEstruturaKey] = unidades;
-  else delete estruturas[_capEstruturaKey];
 
-  capSalvarEstruturas(estruturas);
-  capInvalidarCache();
+  capSalvarRegistro(_capEstruturaRow.central, _capEstruturaRow.grupo,
+    { unidades: unidades.length ? unidades : null });
   renderCapacidades();
   closeModal('modal-capacidade-estrutura');
   toast(unidades.length
@@ -1080,6 +1215,94 @@ function recalcularCapacidades() {
   toast('Capacidades recalculadas a partir dos lançamentos');
 }
 
+// ══════════════════════════════════════════════════════════════════════════
+// REALTIME — a edição de um usuário chega nos outros (e no ADM) na hora
+// ══════════════════════════════════════════════════════════════════════════
+// Um canal só para as duas tabelas. Como o dado é global e sem dono, todo
+// mundo recebe tudo; o que cada um VÊ continua limitado às linhas que os
+// próprios lançamentos/materiais geram (ver getCapacidadesRows).
+let _capChannel = null;
+
+// Marca que a mudança veio de OUTRA pessoa — o valor mudando sozinho na
+// tela sem aviso confundiria ("eu não editei isso"). O eco da própria
+// escrita também volta pelo canal e não deve avisar nada.
+let _capMudouRemoto = false;
+
+function _capAplicarEventoLinha(payload, tipo) {
+  const row = tipo === 'DELETE' ? payload.old : payload.new;
+  if (!row?.central || !row?.grupo) return;
+  if (row.updated_by && row.updated_by !== window.currentUser?.id) _capMudouRemoto = true;
+  const arr = _capRegistros();
+  const key = capRowKey(row.central, row.grupo);
+  const i = arr.findIndex(r => capRowKey(r.central, r.grupo) === key);
+
+  if (tipo === 'DELETE') {
+    if (i >= 0) arr.splice(i, 1);
+  } else {
+    const rec = {
+      central: row.central, grupo: row.grupo,
+      capacidade: row.capacidade == null ? null : num(row.capacidade),
+      seguranca:  row.seguranca  == null ? null : num(row.seguranca),
+      unidades: Array.isArray(row.unidades) ? row.unidades : null,
+      updated_by: row.updated_by || null,
+      updated_at: row.updated_at || null
+    };
+    if (i >= 0) arr[i] = rec; else arr.push(rec);
+  }
+  _capInvalidarRegIndex();
+}
+
+// Re-render debounced: uma rajada de edições em massa de outro usuário vira
+// um render só, em vez de um por linha.
+let _capRerenderTimer = null;
+function _capAgendarRerender() {
+  clearTimeout(_capRerenderTimer);
+  _capRerenderTimer = setTimeout(() => {
+    capInvalidarCache();
+    persist();
+    if (document.getElementById('page-configuracoes')?.classList.contains('active')) renderCapacidades();
+    // Visão Micro: os badges de capacidade saem do mesmo dado, então só
+    // vale reprocessar se o painel já estiver montado na tela.
+    const microVisivel = document.getElementById('page-analitico')?.classList.contains('active')
+      && document.getElementById('an-view-pane-micro')?.style.display !== 'none'
+      && document.querySelector('#an-micro-container .micro-filial-card');
+    if (microVisivel && typeof rodarAnalitico === 'function') rodarAnalitico();
+
+    if (_capMudouRemoto) {
+      _capMudouRemoto = false;
+      toast('Capacidades atualizadas por outro usuário');
+    }
+  }, 600);
+}
+
+function capRealtimeStart() {
+  if (!window.supabaseClient || _capChannel) return;
+  _capChannel = window.supabaseClient
+    .channel('capacidades_realtime')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'capacidades' }, p => { _capAplicarEventoLinha(p, 'INSERT'); _capAgendarRerender(); })
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'capacidades' }, p => { _capAplicarEventoLinha(p, 'UPDATE'); _capAgendarRerender(); })
+    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'capacidades' }, p => { _capAplicarEventoLinha(p, 'DELETE'); _capAgendarRerender(); })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'capacidades_params' }, p => {
+      const row = p.eventType === 'DELETE' ? p.old : p.new;
+      if (!row?.key) return;
+      if (!state.capacidadesParams || typeof state.capacidadesParams !== 'object') state.capacidadesParams = {};
+      if (p.eventType === 'DELETE') delete state.capacidadesParams[row.key];
+      else state.capacidadesParams[row.key] = row.value;
+      _capAgendarRerender();
+    })
+    .subscribe((status) => {
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        console.warn('[Capacidades] Canal Realtime com problema:', status);
+      }
+    });
+}
+
+function capRealtimeStop() {
+  if (_capChannel && window.supabaseClient) window.supabaseClient.removeChannel(_capChannel);
+  _capChannel = null;
+  clearTimeout(_capRerenderTimer);
+}
+
 Object.assign(window, {
   renderCapacidades, loadCapPctInputs, salvarPctSeguranca, capFiltrar,
   capIrParaPagina, capPaginaAnterior, capProximaPagina, capIrParaUltima,
@@ -1087,6 +1310,7 @@ Object.assign(window, {
   abrirEdicaoCapacidadesSelecionadas, salvarEdicaoCapacidadesEmMassa,
   restaurarCapacidadesSelecionadas, recalcularCapacidades,
   capInvalidarCache, getCapacidadesRows, getCapacidadeCentralMaterial,
+  syncCapacidadesFromSupabase, capRealtimeStart, capRealtimeStop,
   classificarEstoqueCapacidade, capExplicacaoFaixa, capLimite, CAP_FAIXAS,
   buildCapacidadeSection, irParaCapacidades, capFaixasDaCentral,
   abrirEstruturaCapacidade, salvarEstruturaCapacidade, adicionarUnidadeEstrutura,

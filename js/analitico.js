@@ -1653,6 +1653,9 @@ function refreshCentralCard(central) {
 
   // Substitui o card antigo pelo novo na MESMA posição do DOM (sem reordenar)
   oldCard.replaceWith(newCard);
+  // O card novo traz badges "?" (ex.: faixas de capacidade) que precisam ser
+  // religados — o initHelpBadges do fim de rodarAnalitico não roda aqui.
+  if (typeof initHelpBadges === 'function') initHelpBadges();
 
   // Atualiza só o cabeçalho agregado do regional ao qual essa central pertence
   const group = newCard.closest('.regional-group');

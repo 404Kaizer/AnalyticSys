@@ -3689,21 +3689,14 @@
             </div>
           </div>
           <div style="padding:14px 18px 4px">
-            <div style="font-size:11.5px;color:var(--text2);margin-bottom:12px;line-height:1.6">
-              Clique em <b>Estrutura</b> para declarar os <b>silos</b> (aglomerantes), as <b>baias</b> (agregados miúdos e graúdos) e os
-              <b>IBCs/tanques</b> (aditivos) de cada central: silos e tanques por capacidade de cada unidade, baias por largura × comprimento × profundidade,
-              e em qualquer uma delas é possível registrar <b>irregularidade</b> — capacidade reduzida ou fora de operação — que já entra no somatório.
-              Enquanto a estrutura não for declarada, a capacidade é <b>estimada pela média dos 5 maiores lançamentos</b> dos últimos 12 meses.
-              A precedência é <span class="cap-badge-manual">manual</span> &gt; <span class="cap-badge-estrutura">estrutura</span> &gt; estimativa pelos lançamentos.
-              O estoque de segurança sai de um percentual da capacidade vigente. <b>Adições não entram</b> nesta tabela.
-            </div>
+            <div id="cap-regras"></div>
             <div class="cap-pct-bar">
               <span class="health-cfg-label">Estoque de segurança — % da capacidade:</span>
               <label class="cap-pct-item"><span>Aglomerantes</span><input type="number" step="1" min="1" max="100" class="health-cfg-input" id="cap-pct-aglomerante" style="width:70px"><span class="cap-um">%</span></label>
               <label class="cap-pct-item"><span>Agregados</span><input type="number" step="1" min="1" max="100" class="health-cfg-input" id="cap-pct-agregado" style="width:70px"><span class="cap-um">%</span></label>
               <label class="cap-pct-item"><span>Aditivos</span><input type="number" step="1" min="1" max="100" class="health-cfg-input" id="cap-pct-aditivo" style="width:70px"><span class="cap-um">%</span></label>
               <span class="cap-pct-sep"></span>
-              <label class="cap-pct-item" title="O agregado empilhado forma talude e não ocupa a baia como uma caixa perfeita — este percentual é aplicado sobre largura × comprimento × profundidade"><span>Aproveitamento da baia</span><input type="number" step="1" min="1" max="100" class="health-cfg-input" id="cap-fator-baia" style="width:70px"><span class="cap-um">%</span></label>
+              <label class="cap-pct-item" title="O agregado empilhado forma talude e não ocupa a baia como uma caixa perfeita — este percentual é aplicado sobre largura × comprimento × altura"><span>Aproveitamento da baia</span><input type="number" step="1" min="1" max="100" class="health-cfg-input" id="cap-fator-baia" style="width:70px"><span class="cap-um">%</span></label>
               <button class="btn btn-primary" onclick="salvarPctSeguranca()"><i class="ti ti-device-floppy"></i> Salvar</button>
             </div>
           </div>

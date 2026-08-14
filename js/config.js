@@ -56,10 +56,21 @@ async function _configsSyncDelete(key) {
 
 async function syncConfigsFromSupabase() {
   try {
-    const data = await fetchAllRows('configs', 'key, value, descricao, created_at');
+    const data = await fetchAllRows('configs', 'key, value, descricao, created_at, user_id');
+    // BUG (achado em 14/08/2026): a policy configs_select libera o ADM a ler
+    // as configs de TODO MUNDO (`... OR is_admin()`), e esta busca não
+    // filtrava por dono — então o ADM baixava as linhas dos outros usuários e
+    // o merge abaixo, que deduplica por chave, ficava com uma linha
+    // arbitrária. Na prática o "responsável padrão" do ADM já vinha sendo
+    // substituído pelo de outra pessoa (4 usuários têm essa chave).
+    // A leitura ampla continua valendo pro que é global de fato — hoje as
+    // chaves saude_*, que não têm dono útil.
+    const meuId = window.currentUser?.id || null;
+    const doDono = (data || []).filter(r =>
+      String(r.key || '').startsWith('saude_') || !meuId || r.user_id === meuId);
     // O BANCO MANDA (30/07) — o self-heal daqui reenviava config apagada.
     // Traduz de volta pro formato local (desc/created) esperado pela UI.
-    const remoto = (data || [])
+    const remoto = doDono
       .sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
       .map(r => ({
         key: r.key,

@@ -634,6 +634,7 @@ window.AuthGate = (function () {
         if (typeof _fechRealtimeStop === 'function') _fechRealtimeStop();
         if (typeof _fechInvUnlockRealtimeStop === 'function') _fechInvUnlockRealtimeStop();
         if (typeof _periodoFechRealtimeStop === 'function') _periodoFechRealtimeStop();
+        if (typeof capRealtimeStop === 'function') capRealtimeStop();
         // Canal Realtime de reset remoto de dados locais — mesmo cuidado.
         if (typeof wipeRealtimeStop === 'function') wipeRealtimeStop();
       }

@@ -370,6 +370,97 @@ const HELP_DEFS = {
     ],
   },
 
+  // ── Capacidade e estoque de segurança ────────────────────────────────
+  // Bodies são FUNÇÕES porque citam parâmetros que o usuário edita
+  // (aproveitamento da baia, percentuais, limites das faixas) — texto fixo
+  // aqui viraria mentira no dia em que alguém mudasse um número na tela.
+  'capacidade-calculo': {
+    title: 'Como a capacidade é calculada',
+    sections: [
+      {
+        heading: 'Ordem de precedência',
+        body: `<div style="display:grid;grid-template-columns:auto 1fr;gap:4px 10px;font-size:11px;line-height:1.5">
+          <span style="color:var(--amber);font-weight:700;font-family:var(--mono)">1º</span><span><strong>Valor manual</strong> — digitado na célula. Vence tudo.</span>
+          <span style="color:var(--accent);font-weight:700;font-family:var(--mono)">2º</span><span><strong>Estrutura declarada</strong> — soma dos silos, baias ou tanques cadastrados.</span>
+          <span style="color:var(--text3);font-weight:700;font-family:var(--mono)">3º</span><span><strong>Estimativa</strong> — média dos 5 maiores lançamentos dos últimos 12 meses, quando não há estrutura.</span>
+        </div>`,
+      },
+      {
+        heading: 'Fórmula por tipo de armazenagem',
+        body: () => {
+          const f = (typeof capFatorBaia === 'function') ? capFatorBaia() : 85;
+          return `<div style="display:grid;grid-template-columns:auto 1fr;gap:5px 10px;font-family:var(--mono);font-size:10.5px;line-height:1.5">
+            <span style="color:var(--amber);font-weight:700">SILO</span><span style="color:var(--text2)">soma da capacidade de cada silo</span>
+            <span style="color:var(--purple);font-weight:700">TANQUE</span><span style="color:var(--text2)">soma da capacidade de cada IBC/tanque</span>
+            <span style="color:var(--teal);font-weight:700">BAIA</span><span style="color:var(--text2)">largura × comprimento × altura × <strong style="color:var(--text)">${f}%</strong></span>
+          </div>
+          <div style="margin-top:8px;font-size:10.5px;color:var(--text3);line-height:1.6">
+            Os <strong>${f}%</strong> são o aproveitamento da baia: o agregado empilhado forma talude e não ocupa o volume como uma caixa perfeita.
+            Ex.: 13,3 × 8,1 × 2,2 = 237,01 m³ × ${f}% = <strong style="color:var(--text)">${(237.006 * f / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m³</strong>.
+            Para usar o volume cheio, ajuste o campo "Aproveitamento da baia" para 100%.
+          </div>`;
+        },
+      },
+      {
+        heading: 'Irregularidades',
+        body: `<div style="display:grid;grid-template-columns:auto 1fr;gap:5px 10px;font-size:11px;line-height:1.5">
+          <span style="color:var(--red);font-weight:700;font-family:var(--mono);white-space:nowrap">FORA DE OPERAÇÃO</span><span>a unidade <strong>não entra</strong> na soma.</span>
+          <span style="color:var(--amber);font-weight:700;font-family:var(--mono);white-space:nowrap">CAP. REDUZIDA</span><span>desconta o percentual informado <strong>naquela unidade</strong>, sem afetar as outras.</span>
+        </div>`,
+      },
+      {
+        heading: 'Estoque de segurança',
+        body: () => {
+          const p = k => (typeof capPctSeguranca === 'function') ? capPctSeguranca(k) : 25;
+          return `Percentual da capacidade <em>vigente</em> — se a capacidade for editada à mão, o estoque de segurança acompanha.
+          <div style="display:grid;grid-template-columns:auto 1fr;gap:5px 10px;font-family:var(--mono);font-size:10.5px;margin-top:6px">
+            <span style="color:var(--amber);font-weight:700">AGLOMERANTES</span><span style="color:var(--text)">${p('aglomerante')}% da capacidade</span>
+            <span style="color:var(--teal);font-weight:700">AGREGADOS</span><span style="color:var(--text)">${p('agregado')}% da capacidade</span>
+            <span style="color:var(--purple);font-weight:700">ADITIVOS</span><span style="color:var(--text)">${p('aditivo')}% da capacidade</span>
+          </div>`;
+        },
+      },
+      {
+        heading: 'O que não entra',
+        body: 'Adições não têm estrutura de armazenagem mapeada e ficam fora desta tabela. Material sem categoria cadastrada também não aparece — sem ela não dá para saber se é silo, baia ou tanque.',
+      },
+    ],
+  },
+
+  'capacidade-faixas': {
+    title: 'Faixas de alerta — estoque × capacidade',
+    sections: [
+      {
+        heading: 'Como o estoque é comparado',
+        body: 'O valor comparado é o <strong>Est. Final</strong> da central (o último lançamento do período, o mesmo da tabela de materiais abaixo). Ele é medido contra a capacidade (C) e o estoque de segurança (S) daquela central e material.',
+      },
+      {
+        heading: 'Faixas',
+        body: () => {
+          const L = n => (typeof capLimite === 'function') ? capLimite(n) : { ruptura: 50, limite: 90, acima: 110, erro: 150 }[n];
+          const linha = (cor, rot, regra) =>
+            `<span style="color:${cor};font-weight:700;white-space:nowrap">${rot}</span><span style="color:var(--text2)">${regra}</span>`;
+          return `<div style="display:grid;grid-template-columns:auto 1fr;gap:5px 10px;font-family:var(--mono);font-size:10.5px;line-height:1.5">
+            ${linha('var(--red)',     'ERRO DE LANÇ.', `estoque acima de <strong style="color:var(--text)">${L('erro')}%</strong> de C — não caberia fisicamente`)}
+            ${linha('var(--red)',     'ACIMA DA CAP.', `acima de <strong style="color:var(--text)">${L('acima')}%</strong> de C`)}
+            ${linha('var(--urgente)', 'NO LIMITE',     `entre <strong style="color:var(--text)">${L('limite')}%</strong> e ${L('acima')}% de C — sem espaço para receber`)}
+            ${linha('var(--green)',   'NORMAL',        `entre S e ${L('limite')}% de C`)}
+            ${linha('var(--amber)',   'ABAIXO DO MÍN.', 'abaixo de S — repor')}
+            ${linha('var(--red)',     'RUPTURA',       `abaixo de <strong style="color:var(--text)">${L('ruptura')}%</strong> de S — compra urgente`)}
+          </div>`;
+        },
+      },
+      {
+        heading: 'Quando o alerta não é emitido',
+        body: 'A linha fica marcada como <strong>SEM BASE</strong>, sem cor, quando a capacidade não é confiável: material sem estrutura declarada e com menos de 3 lançamentos na janela, capacidade zerada, ou baia declarada em m³ enquanto os lançamentos vêm em kg (unidades não comparáveis). Declarar a estrutura da central resolve os dois primeiros casos.',
+      },
+      {
+        heading: 'Relação com a Saúde da central',
+        body: 'São indicadores independentes. A Saúde mede divergência de inventário (real × teórico); a capacidade mede ocupação física. Um material pode estar com inventário perfeito e ainda assim acima da capacidade — e vice-versa.',
+      },
+    ],
+  },
+
 };
 
 // ── Renderiza seções de um help def ──────────────────────────────────
@@ -398,10 +489,13 @@ const _HEALTH_WEIGHTS_HTML = `
 function _buildHelpContent(key) {
   const def = HELP_DEFS[key];
   if (!def) return '';
+  // body pode ser função: usado onde o texto precisa citar valores que o
+  // usuário configura (percentuais, limites das faixas). Resolvido no hover,
+  // então o balão nunca mostra um número desatualizado.
   const sections = def.sections.map(s => `
     <div style="margin-bottom:12px">
       <div style="font-size:10px;font-weight:700;color:var(--accent);font-family:var(--mono);letter-spacing:.05em;text-transform:uppercase;margin-bottom:5px">${s.heading}</div>
-      <div style="font-size:11.5px;color:var(--text2);line-height:1.65">${s.body}</div>
+      <div style="font-size:11.5px;color:var(--text2);line-height:1.65">${typeof s.body === 'function' ? s.body() : s.body}</div>
       ${s.weights === 'health' ? _HEALTH_WEIGHTS_HTML : s.weights === 'macro' ? _MACRO_WEIGHTS_HTML : ''}
     </div>`).join('');
   return `

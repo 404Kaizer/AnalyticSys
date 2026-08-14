@@ -6770,6 +6770,7 @@ const SUPABASE_BOOT_SYNCS = [
   'syncAcoesRelatorioFromSupabase',
   'syncOcorrenciasFromSupabase',
   'syncConfigsFromSupabase',
+  'syncCapacidadesFromSupabase',
   'syncCatalogosFromSupabase',
   'syncFiliaisFromSupabase',
   'syncMateriaisFromSupabase',
@@ -6975,6 +6976,10 @@ async function restoreAndRender() {
     // Canal Realtime de Fechamento de Período — mesmo padrão, avisa todo
     // mundo na hora quando o ADM fecha/reabre um mês (ver _periodoFechRealtimeInit, ui.js).
     if (typeof _periodoFechRealtimeInit === 'function') _periodoFechRealtimeInit();
+    // Canal Realtime de Capacidades — capacidade/estoque de segurança são
+    // dado GLOBAL da empresa, então a edição de qualquer usuário precisa
+    // chegar no ADM (e nos demais) na hora (ver capRealtimeStart).
+    if (typeof capRealtimeStart === 'function') capRealtimeStart();
     // Backup condensado (27/07) — reforço periódico silencioso (Etapa 4),
     // cobre o que muda entre importações. Idempotente: seguro chamar de
     // novo em qualquer reboot da mesma aba.

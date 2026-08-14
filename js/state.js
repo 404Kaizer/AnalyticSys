@@ -35,6 +35,15 @@ const defaultState = () => ({
   regionaisCentrais: [],
   ocorrencias: [],
   acoesRelatorio: [],
+  // Capacidade/estoque de segurança por central+material. DADO GLOBAL da
+  // empresa (tabela public.capacidades, sem user_id): a capacidade de um
+  // silo é a mesma para quem quer que esteja olhando. Chega e sai por
+  // Realtime — ver capRealtimeStart em capacidades.js.
+  // Cada item: { central, grupo, capacidade, seguranca, unidades, updated_by, updated_at }
+  capacidades: [],
+  // Parâmetros globais da mesma seção (percentuais, fator da baia, limites
+  // das faixas) — tabela public.capacidades_params, mapa key → value.
+  capacidadesParams: {},
   notifications: [],  // { id, type, level, title, body, source, createdAt, read }
   // Justificativas do fechamento de Inventário — array de
   // {k, op, fiscal, saldo, custoMedioSap, documentoSap}. "k" já embute o
