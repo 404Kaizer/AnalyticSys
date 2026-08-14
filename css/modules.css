@@ -2262,6 +2262,118 @@ tr.pend-injetado-ambos {
   font-size: 11px;
   color: var(--text2);
 }
+.cap-pct-sep {
+  width: 1px;
+  align-self: stretch;
+  background: var(--border2);
+}
+
+/* Origem do valor: estrutura declarada (azul) vs. edição manual (âmbar) */
+.cap-badge-estrutura {
+  font-size: 9px;
+  font-weight: 700;
+  font-family: var(--mono);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--accent-dim);
+  color: var(--accent);
+  border: 1px solid var(--border2);
+  white-space: nowrap;
+}
+.cap-irregular-icon { color: var(--amber); font-size: 14px; cursor: help; }
+.cap-um-alerta { color: var(--text3); font-size: 14px; cursor: help; }
+
+/* Botão da coluna Estrutura — some quando não há nada declarado */
+.btn-link-cap {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: transparent;
+  border: 1px dashed var(--border2);
+  border-radius: var(--radius);
+  color: var(--text3);
+  font-size: 11px;
+  font-family: var(--mono);
+  padding: 3px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border 0.15s, color 0.15s;
+}
+.btn-link-cap:hover { border-color: var(--accent); color: var(--accent); }
+.btn-link-cap.definido {
+  border-style: solid;
+  border-color: var(--border2);
+  color: var(--text);
+  background: var(--bg3);
+}
+
+/* Modal de estrutura — uma unidade (silo / baia / tanque) por bloco */
+.cap-un-row {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  background: var(--bg3);
+}
+.cap-un-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.cap-un-num {
+  font-size: 11px;
+  font-weight: 700;
+  font-family: var(--mono);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text2);
+}
+.cap-un-calc {
+  flex: 1;
+  text-align: right;
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--text3);
+}
+.cap-un-calc.reduzido { color: var(--amber); }
+.cap-un-campos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.cap-un-campo {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 10px;
+  color: var(--text3);
+  font-family: var(--mono);
+}
+.cap-un-campo .health-cfg-input { width: 118px; text-align: left; }
+.cap-un-select { width: 150px !important; }
+.cap-un-obs { flex: 1; min-width: 220px; }
+.cap-un-obs .form-input { font-size: 12px; padding: 4px 8px; }
+.cap-estrutura-total-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  background: var(--bg2);
+}
+.cap-estrutura-total {
+  font-size: 15px;
+  font-weight: 700;
+  font-family: var(--mono);
+  color: var(--accent);
+}
 
 .prod-badge {
   display: inline-flex;

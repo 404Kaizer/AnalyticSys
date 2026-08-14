@@ -3657,18 +3657,21 @@
           </div>
           <div style="padding:14px 18px 4px">
             <div style="font-size:11.5px;color:var(--text2);margin-bottom:12px;line-height:1.6">
-              A capacidade de cada <b>silo</b> (aglomerantes), <b>baia</b> (agregados miúdos e graúdos) e <b>IBC/tanque</b> (aditivos)
-              é estimada pela <b>média dos 5 maiores lançamentos</b> da central para aquele material nos <b>últimos 12 meses</b> —
-              serve de referência para detectar na Visão Micro um estoque lançado muito acima do que a central comporta.
-              O estoque de segurança sai de um percentual da capacidade, definido abaixo por categoria.
-              <b>Adições não entram</b> nesta tabela. Todos os valores são editáveis e ficam marcados como <span class="cap-badge-manual">manual</span> quando alterados.
+              Clique em <b>Estrutura</b> para declarar os <b>silos</b> (aglomerantes), as <b>baias</b> (agregados miúdos e graúdos) e os
+              <b>IBCs/tanques</b> (aditivos) de cada central: silos e tanques por capacidade de cada unidade, baias por largura × comprimento × profundidade,
+              e em qualquer uma delas é possível registrar <b>irregularidade</b> — capacidade reduzida ou fora de operação — que já entra no somatório.
+              Enquanto a estrutura não for declarada, a capacidade é <b>estimada pela média dos 5 maiores lançamentos</b> dos últimos 12 meses.
+              A precedência é <span class="cap-badge-manual">manual</span> &gt; <span class="cap-badge-estrutura">estrutura</span> &gt; estimativa pelos lançamentos.
+              O estoque de segurança sai de um percentual da capacidade vigente. <b>Adições não entram</b> nesta tabela.
             </div>
             <div class="cap-pct-bar">
               <span class="health-cfg-label">Estoque de segurança — % da capacidade:</span>
               <label class="cap-pct-item"><span>Aglomerantes</span><input type="number" step="1" min="1" max="100" class="health-cfg-input" id="cap-pct-aglomerante" style="width:70px"><span class="cap-um">%</span></label>
               <label class="cap-pct-item"><span>Agregados</span><input type="number" step="1" min="1" max="100" class="health-cfg-input" id="cap-pct-agregado" style="width:70px"><span class="cap-um">%</span></label>
               <label class="cap-pct-item"><span>Aditivos</span><input type="number" step="1" min="1" max="100" class="health-cfg-input" id="cap-pct-aditivo" style="width:70px"><span class="cap-um">%</span></label>
-              <button class="btn btn-primary" onclick="salvarPctSeguranca()"><i class="ti ti-device-floppy"></i> Salvar %</button>
+              <span class="cap-pct-sep"></span>
+              <label class="cap-pct-item" title="O agregado empilhado forma talude e não ocupa a baia como uma caixa perfeita — este percentual é aplicado sobre largura × comprimento × profundidade"><span>Aproveitamento da baia</span><input type="number" step="1" min="1" max="100" class="health-cfg-input" id="cap-fator-baia" style="width:70px"><span class="cap-um">%</span></label>
+              <button class="btn btn-primary" onclick="salvarPctSeguranca()"><i class="ti ti-device-floppy"></i> Salvar</button>
             </div>
           </div>
           <div class="table-scroll">
@@ -3682,13 +3685,14 @@
                   <th>Armazenagem</th>
                   <th>Categoria</th>
                   <th title="Lançamentos considerados na janela de 12 meses">Lançs.</th>
+                  <th title="Silos, baias e tanques declarados desta central">Estrutura</th>
                   <th>Capacidade</th>
                   <th>Estoque de Segurança</th>
                   <th></th>
                 </tr>
               </thead>
               <tbody id="tb-capacidades">
-                <tr><td colspan="10"><div class="empty-state"><i class="ti ti-barrel"></i><p>Nada a calcular ainda — importe Lançamentos e cadastre a categoria dos materiais.</p></div></td></tr>
+                <tr><td colspan="11"><div class="empty-state"><i class="ti ti-barrel"></i><p>Nada a calcular ainda — importe Lançamentos e cadastre a categoria dos materiais.</p></div></td></tr>
               </tbody>
             </table>
           </div>
@@ -4682,6 +4686,27 @@
 </div>
 
 <!-- MODAL: Nova Configuração -->
+<!-- MODAL: estrutura física (silos / baias / IBCs e tanques) de uma central -->
+<div class="modal-overlay" id="modal-capacidade-estrutura">
+  <div class="modal" style="width:720px;max-width:94vw">
+    <div class="modal-title" id="cap-estrutura-titulo"><i class="ti ti-layout-grid-add"></i> Estrutura</div>
+    <div class="modal-sub" id="cap-estrutura-sub">—</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:10px" id="cap-estrutura-dica"></div>
+    <div id="cap-estrutura-rows" style="max-height:52vh;overflow-y:auto"></div>
+    <button class="btn" type="button" style="margin-top:10px" onclick="adicionarUnidadeEstrutura()">
+      <i class="ti ti-plus"></i> Adicionar unidade
+    </button>
+    <div class="cap-estrutura-total-bar">
+      <span class="health-cfg-label">Capacidade total</span>
+      <span class="cap-estrutura-total" id="cap-estrutura-total">—</span>
+    </div>
+    <div class="form-actions">
+      <button class="btn" onclick="closeModal('modal-capacidade-estrutura')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarEstruturaCapacidade()"><i class="ti ti-check"></i> Salvar Estrutura</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: edição em massa de Capacidades / Estoque de Segurança -->
 <div class="modal-overlay" id="modal-capacidades-massa">
   <div class="modal" style="width:420px">

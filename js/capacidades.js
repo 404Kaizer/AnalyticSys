@@ -3,9 +3,15 @@
 // ══════════════════════════════════════════════════════════════════════════════
 // CAPACIDADES E ESTOQUE DE SEGURANÇA (Configurações)
 // ══════════════════════════════════════════════════════════════════════════════
-// Estima a capacidade física de armazenagem de cada central por material —
-// SILO (aglomerantes), BAIA (agregados miúdos/graúdos) e IBC/TANQUE (aditivos)
-// — a partir dos LANÇAMENTOS já importados (saldo real contado na central).
+// Capacidade física de armazenagem de cada central por material —
+// SILO (aglomerantes), BAIA (agregados miúdos/graúdos) e IBC/TANQUE (aditivos).
+//
+// TRÊS FONTES, nesta ordem de precedência (decisão do Hugo, 14/08/2026):
+//   1. manual     — valor digitado direto na célula, vence tudo;
+//   2. estrutura  — soma das unidades declaradas (silos/baias/tanques), com
+//                   irregularidades já descontadas — ver capEstruturaTotal;
+//   3. lançamentos— estimativa: média dos CAP_TOP_N maiores lançamentos da
+//                   janela. É o fallback de quem ainda não declarou estrutura.
 //
 // Por que a MÉDIA DOS N MAIORES e não a média simples: o saldo lançado quase
 // nunca está no topo do silo/baia, então a média de todos os lançamentos fica
@@ -13,19 +19,35 @@
 // todo. A média dos CAP_TOP_N maiores aproxima o teto real sem ficar refém de
 // um único pico de digitação errada (o que aconteceria usando só o máximo).
 //
-// ADIÇÕES ficam de fora de propósito (decisão do Hugo, 14/08/2026) — não têm
-// estrutura de armazenagem própria mapeada.
+// UNIDADE: silo e tanque são declarados na mesma UM dos lançamentos (kg/L);
+// baia é declarada em DIMENSÕES e sai em m³ (decisão do Hugo: "o volume é da
+// baia, não do material" — sem massa específica no meio). Quando a UM dos
+// lançamentos daquela linha não é m³, a linha ganha um aviso de que a
+// comparação capacidade × estoque lançado não é direta — ver capAlertaUM.
 //
-// Os valores são recalculados automaticamente a cada render, mas podem ser
-// sobrescritos manualmente (individual ou em massa). Só os overrides são
-// persistidos — ver capGetOverrides.
+// ADIÇÕES ficam de fora de propósito — não têm estrutura de armazenagem
+// própria mapeada.
+//
+// Só o que o usuário declara é persistido (overrides e estruturas); o resto
+// é recalculado a cada render.
 // ══════════════════════════════════════════════════════════════════════════════
 
 const CAP_TOP_N = 5;            // quantos maiores lançamentos entram na média
 const CAP_JANELA_MESES = 12;    // janela de histórico considerada
 const CAP_PCT_PADRAO = 25;      // % da capacidade usada como estoque de segurança
+const CAP_FATOR_BAIA_PADRAO = 85; // % de aproveitamento do volume da baia
+const CAP_FATOR_BAIA_KEY = 'cap_fator_aproveitamento_baia';
 const CAP_OVERRIDES_KEY = '__capacidades_overrides__';
+const CAP_ESTRUTURAS_KEY = '__capacidades_estruturas__';
 const CAP_PAGE_SIZE = PAGE_SIZE;
+
+// Situação de cada unidade declarada — a irregularidade é POR UNIDADE (silo 2
+// com incrustação não afeta os outros silos da mesma central).
+const CAP_SITUACOES = {
+  normal:   { label: 'Normal',              icone: 'ti-circle-check',    cor: 'var(--green)' },
+  reduzida: { label: 'Capacidade reduzida', icone: 'ti-alert-triangle',  cor: 'var(--amber)' },
+  fora:     { label: 'Fora de operação',    icone: 'ti-circle-x',        cor: 'var(--red)'   }
+};
 
 // Categoria cadastrada (normalize.js/CATEGORIAS_MATERIAL) → estrutura física.
 // "Adição" não está aqui de propósito: material sem entrada neste mapa é
@@ -93,6 +115,81 @@ function capSalvarOverrides(map) {
   if (window.supabaseClient && typeof _configsSyncUpsert === 'function') _configsSyncUpsert(rec);
 }
 
+// ── Estrutura física declarada ────────────────────────────────────────────
+// Mesmo esquema de armazenamento dos overrides: uma linha só de state.configs
+// com o JSON de todas as estruturas, chaveado por central|||grupo.
+//   { "CENTRAL|||GRUPO": [ unidade, unidade, ... ] }
+// Unidade de silo/tanque: { cap, situacao, reducaoPct, obs }
+// Unidade de baia:        { larg, comp, prof, situacao, reducaoPct, obs }
+function capGetEstruturas() {
+  const cfg = state.configs.find(c => c.key === CAP_ESTRUTURAS_KEY);
+  if (!cfg || !cfg.value) return {};
+  try {
+    const obj = JSON.parse(cfg.value);
+    return (obj && typeof obj === 'object') ? obj : {};
+  } catch (err) {
+    console.warn('[Capacidades] Estruturas ilegíveis — ignorando.', err);
+    return {};
+  }
+}
+
+function capSalvarEstruturas(map) {
+  const rec = {
+    key: CAP_ESTRUTURAS_KEY,
+    value: JSON.stringify(map),
+    desc: 'Silos, baias e tanques declarados por central e material',
+    created: new Date().toLocaleDateString('pt-BR')
+  };
+  const i = state.configs.findIndex(c => c.key === CAP_ESTRUTURAS_KEY);
+  if (i >= 0) state.configs[i] = rec; else state.configs.unshift(rec);
+  persist();
+  if (window.supabaseClient && typeof _configsSyncUpsert === 'function') _configsSyncUpsert(rec);
+}
+
+function capFatorBaia() {
+  const cfg = state.configs.find(c => normalizeText(c.key) === normalizeText(CAP_FATOR_BAIA_KEY));
+  const n = cfg ? num(cfg.value) : NaN;
+  return (Number.isFinite(n) && n > 0) ? n : CAP_FATOR_BAIA_PADRAO;
+}
+
+// Capacidade NOMINAL de uma unidade, antes de descontar irregularidade.
+// Baia: largura × comprimento × profundidade × fator de aproveitamento
+// (o agregado empilhado forma talude e não enche a baia como uma caixa).
+function capUnidadeNominal(u, ehAgregado, fator) {
+  if (ehAgregado) {
+    const v = num(u.larg) * num(u.comp) * num(u.prof);
+    return v > 0 ? v * (fator / 100) : 0;
+  }
+  return Math.max(0, num(u.cap));
+}
+
+// Capacidade EFETIVA — nominal menos o impacto da irregularidade declarada.
+function capUnidadeEfetiva(u, ehAgregado, fator) {
+  const nominal = capUnidadeNominal(u, ehAgregado, fator);
+  if (u.situacao === 'fora') return 0;
+  if (u.situacao === 'reduzida') {
+    const pct = Math.min(100, Math.max(0, num(u.reducaoPct)));
+    return nominal * (1 - pct / 100);
+  }
+  return nominal;
+}
+
+// Soma da estrutura + o resumo usado na tabela. Devolve null quando não há
+// estrutura declarada, para o chamador cair no fallback dos lançamentos.
+function capEstruturaTotal(unidades, ehAgregado) {
+  if (!Array.isArray(unidades) || !unidades.length) return null;
+  const fator = capFatorBaia();
+  let total = 0, nominal = 0, fora = 0, reduzidas = 0, comObs = 0;
+  unidades.forEach(u => {
+    nominal += capUnidadeNominal(u, ehAgregado, fator);
+    total   += capUnidadeEfetiva(u, ehAgregado, fator);
+    if (u.situacao === 'fora') fora++;
+    else if (u.situacao === 'reduzida') reduzidas++;
+    if (u.obs) comObs++;
+  });
+  return { total, nominal, fora, reduzidas, comObs, qtd: unidades.length };
+}
+
 // ── % de estoque de segurança por categoria ───────────────────────────────
 function capPctSeguranca(catKey) {
   const cfg = state.configs.find(c => normalizeText(c.key) === normalizeText(`estsec_pct_${catKey}`));
@@ -105,6 +202,15 @@ function loadCapPctInputs() {
     const input = document.getElementById(`cap-pct-${catKey}`);
     if (input) input.value = capPctSeguranca(catKey);
   });
+  const fator = document.getElementById('cap-fator-baia');
+  if (fator) fator.value = capFatorBaia();
+}
+
+function _capUpsertConfig(key, valor, desc) {
+  const rec = { key, value: String(valor), desc, created: new Date().toLocaleDateString('pt-BR') };
+  const i = state.configs.findIndex(c => normalizeText(c.key) === normalizeText(key));
+  if (i >= 0) state.configs[i] = rec; else state.configs.unshift(rec);
+  if (window.supabaseClient && typeof _configsSyncUpsert === 'function') _configsSyncUpsert(rec);
 }
 
 function salvarPctSeguranca() {
@@ -114,18 +220,17 @@ function salvarPctSeguranca() {
     if (!input) return;
     const n = num(input.value);
     if (!Number.isFinite(n) || n <= 0) return;
-    const key = `estsec_pct_${catKey}`;
-    const rec = {
-      key,
-      value: String(n),
-      desc: `Estoque de segurança — % da capacidade para ${label}`,
-      created: new Date().toLocaleDateString('pt-BR')
-    };
-    const i = state.configs.findIndex(c => normalizeText(c.key) === normalizeText(key));
-    if (i >= 0) state.configs[i] = rec; else state.configs.unshift(rec);
-    if (window.supabaseClient && typeof _configsSyncUpsert === 'function') _configsSyncUpsert(rec);
+    _capUpsertConfig(`estsec_pct_${catKey}`, n, `Estoque de segurança — % da capacidade para ${label}`);
     salvos++;
   });
+  const inFator = document.getElementById('cap-fator-baia');
+  if (inFator) {
+    const f = num(inFator.value);
+    if (Number.isFinite(f) && f > 0 && f <= 100) {
+      _capUpsertConfig(CAP_FATOR_BAIA_KEY, f, 'Aproveitamento do volume da baia (%)');
+      salvos++;
+    }
+  }
   if (!salvos) { toast('Informe percentuais maiores que zero', 'error'); return; }
   persist();
   capInvalidarCache();
@@ -146,6 +251,13 @@ function _capCategoriaDe(grupo, cache) {
 }
 
 function capRowKey(central, grupo) { return `${central}|||${grupo}`; }
+
+// A UM dos lançamentos vem de planilha e não tem grafia única para metro
+// cúbico — M3, M³, MC, m3. Só vale avisar de divergência de unidade quando
+// realmente não for volume.
+function _capEhM3(um) {
+  return /^(M3|M³|MC|M\^3)$/i.test(String(um || '').trim());
+}
 
 function getCapacidadesRows() {
   const sig = _capCacheSignature();
@@ -191,6 +303,7 @@ function getCapacidadesRows() {
   const corte = new Date(ref.getFullYear(), ref.getMonth() - CAP_JANELA_MESES, ref.getDate()).getTime();
 
   const overrides = capGetOverrides();
+  const estruturas = capGetEstruturas();
   const rows = [];
 
   buckets.forEach((b, key) => {
@@ -199,15 +312,37 @@ function getCapacidadesRows() {
 
     naJanela.sort((a, z) => z - a);
     const topo = naJanela.slice(0, CAP_TOP_N);
-    const capAuto = topo.reduce((s, v) => s + v, 0) / topo.length;
+    const capLanc = topo.reduce((s, v) => s + v, 0) / topo.length;
 
     const arm = CAP_ARMAZENAGEM[b.categoria];
+    const ehAgregado = arm.catKey === 'agregado';
     const pct = capPctSeguranca(arm.catKey);
-    const segAuto = capAuto * pct / 100;
+
+    const unidades = Array.isArray(estruturas[key]) ? estruturas[key] : [];
+    const est = capEstruturaTotal(unidades, ehAgregado);
 
     const ov = overrides[key] || {};
     const capManual = Number.isFinite(ov.cap);
     const segManual = Number.isFinite(ov.seg);
+
+    // Uma estrutura só "manda" no número se alguma unidade tiver medida. Quem
+    // registrou apenas uma observação (sem capacidade/dimensões) continua com
+    // a estimativa dos lançamentos, mas a coluna Estrutura segue mostrando o
+    // que foi declarado. Total zero com nominal > 0 é caso legítimo: tudo
+    // fora de operação.
+    const temCapDeclarada = !!est && est.nominal > 0;
+
+    // Precedência: manual > estrutura declarada > estimativa dos lançamentos.
+    const fonte = capManual ? 'manual' : (temCapDeclarada ? 'estrutura' : 'lancamentos');
+    const capAuto = temCapDeclarada ? est.total : capLanc;  // vale quando não há edição manual
+    const capacidade = capManual ? num(ov.cap) : capAuto;
+    const segAuto = capacidade * pct / 100;
+
+    // Baia é declarada em m³; o lançamento vem na UM do material. Quando a
+    // estrutura manda e as unidades divergem, a comparação não é direta.
+    const um = b.um || 'KG';
+    const umExibicao = (ehAgregado && temCapDeclarada) ? 'm³' : um;
+    const capAlertaUM = ehAgregado && temCapDeclarada && !_capEhM3(um);
 
     rows.push({
       key,
@@ -219,13 +354,20 @@ function getCapacidadesRows() {
       icone: arm.icone,
       cor: arm.cor,
       catKey: arm.catKey,
+      ehAgregado,
       pct,
-      um: b.um || 'KG',
+      um,
+      umExibicao,
+      capAlertaUM,
+      temCapDeclarada,
       amostras: naJanela.length,
+      capLanc,
+      est,
+      fonte,
       capAuto,
       segAuto,
-      capacidade: capManual ? num(ov.cap) : capAuto,
-      seguranca:  segManual ? num(ov.seg) : segAuto,
+      capacidade,
+      seguranca: segManual ? num(ov.seg) : segAuto,
       capManual,
       segManual
     });
@@ -276,6 +418,65 @@ function _capNum(v) {
   return num(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+// Como "silo"/"baia"/"tanque" aparecem no singular e no plural na tabela.
+function _capUnidadeLabel(catKey, qtd) {
+  const l = { aglomerante: ['silo', 'silos'], agregado: ['baia', 'baias'], aditivo: ['tanque', 'tanques'] }[catKey]
+         || ['unidade', 'unidades'];
+  return qtd === 1 ? l[0] : l[1];
+}
+
+// Texto do tooltip da capacidade — deixa explícito de onde saiu o número e
+// quais eram as outras opções, pra o usuário não ter que adivinhar.
+function _capOrigemDescricao(r) {
+  const partes = [];
+  if (r.fonte === 'manual') partes.push('Valor editado manualmente.');
+  else if (r.fonte === 'estrutura') partes.push(`Soma de ${r.est.qtd} ${_capUnidadeLabel(r.catKey, r.est.qtd)} declarados.`);
+  else partes.push(`Estimado pela média dos ${Math.min(CAP_TOP_N, r.amostras)} maiores lançamentos da janela.`);
+
+  if (r.est) {
+    const umEst = r.ehAgregado ? 'm³' : r.um;
+    if (r.est.fora) partes.push(`${r.est.fora} fora de operação (não somam).`);
+    if (r.est.reduzidas) partes.push(`${r.est.reduzidas} com capacidade reduzida.`);
+    if (Math.abs(r.est.nominal - r.est.total) > 0.005) {
+      partes.push(`Nominal sem irregularidades: ${_capNum(r.est.nominal)} ${umEst}.`);
+    }
+    if (r.fonte === 'manual' && r.temCapDeclarada) partes.push(`Estrutura declarada: ${_capNum(r.est.total)} ${umEst}.`);
+    if (!r.temCapDeclarada) partes.push('Unidades declaradas sem medida — a capacidade segue estimada pelos lançamentos.');
+  }
+  if (r.fonte !== 'lancamentos') partes.push(`Estimativa pelos lançamentos: ${_capNum(r.capLanc)} ${r.um}.`);
+  return partes.join(' ');
+}
+
+function _capFonteChip(r) {
+  if (r.fonte === 'manual') return '<span class="cap-badge-manual" title="Valor alterado manualmente">manual</span>';
+  if (r.fonte === 'estrutura') return '<span class="cap-badge-estrutura" title="Calculado a partir da estrutura declarada">estrutura</span>';
+  return '';
+}
+
+function _capEstruturaCelula(r, k) {
+  const irregulares = r.est ? (r.est.fora + r.est.reduzidas + r.est.comObs) : 0;
+  const alerta = irregulares
+    ? `<i class="ti ti-alert-triangle cap-irregular-icon" title="${escapeHtml(
+        [r.est.fora ? `${r.est.fora} fora de operação` : '',
+         r.est.reduzidas ? `${r.est.reduzidas} com capacidade reduzida` : '',
+         r.est.comObs ? `${r.est.comObs} com observação registrada` : '']
+          .filter(Boolean).join(' · '))}"></i>`
+    : '';
+  const avisoUM = r.capAlertaUM
+    ? `<i class="ti ti-ruler-measure cap-um-alerta" title="${escapeHtml(
+        `Baia declarada em m³, mas os lançamentos desta linha estão em ${r.um} — a comparação capacidade × estoque lançado não é direta.`)}"></i>`
+    : '';
+  const label = r.est
+    ? `${r.est.qtd} ${_capUnidadeLabel(r.catKey, r.est.qtd)}`
+    : 'definir';
+  const cls = r.est ? 'btn-link-cap definido' : 'btn-link-cap';
+  return `<div class="cap-cell">
+    <button class="${cls}" data-key="${k}" onclick="abrirEstruturaCapacidade(this)" title="Declarar silos, baias e tanques desta central">
+      <i class="ti ti-layout-grid-add"></i> ${label}
+    </button>${alerta}${avisoUM}
+  </div>`;
+}
+
 function renderCapacidades() {
   const tb = document.getElementById('tb-capacidades');
   if (!tb) return;
@@ -294,7 +495,7 @@ function renderCapacidades() {
   }
 
   if (!data.length) {
-    tb.innerHTML = `<tr><td colspan="10"><div class="empty-state"><i class="ti ti-barrel"></i><p>${
+    tb.innerHTML = `<tr><td colspan="11"><div class="empty-state"><i class="ti ti-barrel"></i><p>${
       capFiltro
         ? 'Nenhum resultado para este filtro.'
         : 'Nada a calcular ainda — importe Lançamentos e cadastre a categoria dos materiais.'
@@ -308,14 +509,12 @@ function renderCapacidades() {
   // &#39; como ' antes do JS ser avaliado.
   tb.innerHTML = pageData.map(r => {
     const k = escapeHtml(r.key);
-    const um = escapeHtml(r.um);
+    const um = escapeHtml(r.umExibicao);
     const capCls = r.capManual ? ' cap-input-editado' : '';
     const segCls = r.segManual ? ' cap-input-editado' : '';
-    const capTitle = escapeHtml(r.capManual
-      ? `Editado manualmente — automático: ${_capNum(r.capAuto)} ${r.um}`
-      : `Média dos ${Math.min(CAP_TOP_N, r.amostras)} maiores lançamentos da janela`);
+    const capTitle = escapeHtml(_capOrigemDescricao(r));
     const segTitle = escapeHtml(r.segManual
-      ? `Editado manualmente — automático: ${_capNum(r.segAuto)} ${r.um}`
+      ? `Editado manualmente — automático: ${_capNum(r.segAuto)} ${r.umExibicao}`
       : `${r.pct}% da capacidade`);
     const editado = (r.capManual || r.segManual);
     return `
@@ -327,13 +526,14 @@ function renderCapacidades() {
       <td class="td-muted"><span class="cap-tipo-chip" style="color:${r.cor}"><i class="ti ${r.icone}"></i> ${escapeHtml(r.tipo)}</span></td>
       <td class="td-muted">${escapeHtml(r.categoria)}</td>
       <td class="td-mono td-muted" title="Lançamentos considerados nos últimos ${CAP_JANELA_MESES} meses">${r.amostras}</td>
+      <td>${_capEstruturaCelula(r, k)}</td>
       <td>
         <div class="cap-cell">
           <input type="number" step="0.01" min="0" class="health-cfg-input${capCls}" title="${capTitle}"
                  value="${num(r.capacidade).toFixed(2)}"
                  data-key="${k}" data-campo="cap" onchange="capEditarCelula(this)">
           <span class="cap-um">${um}</span>
-          ${r.capManual ? '<span class="cap-badge-manual" title="Valor alterado manualmente">manual</span>' : ''}
+          ${_capFonteChip(r)}
         </div>
       </td>
       <td>
@@ -470,6 +670,198 @@ function restaurarCapacidadesSelecionadas() {
   toast(`${removidos} linha(s) voltaram ao cálculo automático`);
 }
 
+// ══════════════════════════════════════════════════════════════════════════
+// ESTRUTURA FÍSICA — modal de silos / baias / tanques de uma central
+// ══════════════════════════════════════════════════════════════════════════
+let _capEstruturaKey = null;   // linha sendo editada
+let _capEstruturaRow = null;
+
+function abrirEstruturaCapacidade(el) {
+  const key = el?.dataset?.key;
+  if (!key) return;
+  const row = getCapacidadesRows().find(r => r.key === key);
+  if (!row) { toast('Linha não encontrada', 'error'); return; }
+
+  _capEstruturaKey = key;
+  _capEstruturaRow = row;
+
+  const titulo = document.getElementById('cap-estrutura-titulo');
+  if (titulo) titulo.innerHTML = `<i class="ti ${row.icone}"></i> ${escapeHtml(row.tipo)}s — ${escapeHtml(row.central)}`;
+  const sub = document.getElementById('cap-estrutura-sub');
+  if (sub) {
+    sub.textContent = row.ehAgregado
+      ? `${row.grupo} · dimensões em metros, capacidade resultante em m³`
+      : `${row.grupo} · capacidade de cada unidade em ${row.um}`;
+  }
+  const dica = document.getElementById('cap-estrutura-dica');
+  if (dica) {
+    dica.textContent = row.ehAgregado
+      ? `Volume = largura × comprimento × profundidade × ${capFatorBaia()}% de aproveitamento.`
+      : 'A capacidade da linha é a soma das unidades, descontadas as irregularidades.';
+  }
+
+  const container = document.getElementById('cap-estrutura-rows');
+  if (container) {
+    container.innerHTML = '';
+    const unidades = capGetEstruturas()[key] || [];
+    if (unidades.length) unidades.forEach(u => _capAddUnidadeRow(u));
+    else _capAddUnidadeRow();
+  }
+  _capAtualizarTotalEstrutura();
+  openModal('modal-capacidade-estrutura');
+}
+
+function _capAddUnidadeRow(u) {
+  const container = document.getElementById('cap-estrutura-rows');
+  if (!container || !_capEstruturaRow) return;
+  const row = _capEstruturaRow;
+  const dados = u || { situacao: 'normal' };
+  const idx = container.children.length + 1;
+
+  const camposMedida = row.ehAgregado
+    ? `<label class="cap-un-campo"><span>Largura (m)</span><input type="number" step="0.01" min="0" class="health-cfg-input" data-campo="larg" value="${dados.larg ?? ''}" oninput="_capAtualizarTotalEstrutura()"></label>
+       <label class="cap-un-campo"><span>Comprimento (m)</span><input type="number" step="0.01" min="0" class="health-cfg-input" data-campo="comp" value="${dados.comp ?? ''}" oninput="_capAtualizarTotalEstrutura()"></label>
+       <label class="cap-un-campo"><span>Profundidade (m)</span><input type="number" step="0.01" min="0" class="health-cfg-input" data-campo="prof" value="${dados.prof ?? ''}" oninput="_capAtualizarTotalEstrutura()"></label>`
+    : `<label class="cap-un-campo"><span>Capacidade (${escapeHtml(row.um)})</span><input type="number" step="0.01" min="0" class="health-cfg-input" data-campo="cap" value="${dados.cap ?? ''}" oninput="_capAtualizarTotalEstrutura()"></label>`;
+
+  const situacaoOpts = Object.entries(CAP_SITUACOES).map(([k, s]) =>
+    `<option value="${k}"${(dados.situacao || 'normal') === k ? ' selected' : ''}>${s.label}</option>`).join('');
+
+  const div = document.createElement('div');
+  div.className = 'cap-un-row';
+  div.innerHTML = `
+    <div class="cap-un-head">
+      <span class="cap-un-num">${escapeHtml(_capUnidadeLabel(row.catKey, 1))} ${idx}</span>
+      <span class="cap-un-calc" data-calc>—</span>
+      <button class="btn-icon danger" type="button" title="Remover" onclick="_capRemoverUnidadeRow(this)"><i class="ti ti-trash"></i></button>
+    </div>
+    <div class="cap-un-campos">${camposMedida}</div>
+    <div class="cap-un-campos">
+      <label class="cap-un-campo"><span>Situação</span>
+        <select class="health-cfg-input cap-un-select" data-campo="situacao" onchange="_capSituacaoChange(this)">${situacaoOpts}</select>
+      </label>
+      <label class="cap-un-campo cap-un-reducao"><span>Redução (%)</span>
+        <input type="number" step="1" min="0" max="100" class="health-cfg-input" data-campo="reducaoPct" value="${dados.reducaoPct ?? ''}" oninput="_capAtualizarTotalEstrutura()">
+      </label>
+      <label class="cap-un-campo cap-un-obs"><span>Irregularidade / observação</span>
+        <input type="text" class="form-input" data-campo="obs" placeholder="Ex.: incrustação na parede, aeração com defeito…" value="${escapeHtml(dados.obs || '')}">
+      </label>
+    </div>`;
+  container.appendChild(div);
+  _capSituacaoChange(div.querySelector('[data-campo="situacao"]'));
+}
+
+// "Redução (%)" só faz sentido em Capacidade reduzida — em Normal e Fora de
+// operação o campo some, pra não sugerir um número que não é usado.
+function _capSituacaoChange(sel) {
+  if (!sel) return;
+  const row = sel.closest('.cap-un-row');
+  const wrap = row?.querySelector('.cap-un-reducao');
+  if (wrap) wrap.style.display = sel.value === 'reduzida' ? '' : 'none';
+  _capAtualizarTotalEstrutura();
+}
+
+function _capRemoverUnidadeRow(btn) {
+  const row = btn.closest('.cap-un-row');
+  const container = document.getElementById('cap-estrutura-rows');
+  if (!row || !container) return;
+  row.remove();
+  // Renumera os rótulos para não ficar "silo 1, silo 3" depois de remover.
+  [...container.children].forEach((el, i) => {
+    const numEl = el.querySelector('.cap-un-num'); // não use "num": sombrearia o helper global
+    if (numEl && _capEstruturaRow) numEl.textContent = `${_capUnidadeLabel(_capEstruturaRow.catKey, 1)} ${i + 1}`;
+  });
+  _capAtualizarTotalEstrutura();
+}
+
+// Lê o modal e devolve as unidades declaradas.
+function _capLerUnidadesDoModal() {
+  const container = document.getElementById('cap-estrutura-rows');
+  if (!container || !_capEstruturaRow) return [];
+  const ehAgregado = _capEstruturaRow.ehAgregado;
+  const unidades = [];
+  [...container.children].forEach(el => {
+    const get = campo => el.querySelector(`[data-campo="${campo}"]`)?.value ?? '';
+    const situacao = CAP_SITUACOES[get('situacao')] ? get('situacao') : 'normal';
+    const obs = String(get('obs')).trim();
+    const u = { situacao };
+    if (obs) u.obs = obs;
+    if (situacao === 'reduzida') u.reducaoPct = Math.min(100, Math.max(0, num(get('reducaoPct'))));
+    let temMedida;
+    if (ehAgregado) {
+      const larg = num(get('larg')), comp = num(get('comp')), prof = num(get('prof'));
+      temMedida = (larg > 0 || comp > 0 || prof > 0);
+      u.larg = larg; u.comp = comp; u.prof = prof;
+    } else {
+      const cap = num(get('cap'));
+      temMedida = cap > 0;
+      u.cap = cap;
+    }
+    // Descarta só a linha REALMENTE vazia. Uma unidade sem medida mas com
+    // situação anormal ou observação é mantida de propósito: "silo 3 fora de
+    // operação" precisa continuar aparecendo na contagem mesmo sem alguém
+    // ter digitado a capacidade dele.
+    if (!temMedida && situacao === 'normal' && !obs) return;
+    unidades.push(u);
+  });
+  return unidades;
+}
+
+function _capAtualizarTotalEstrutura() {
+  const container = document.getElementById('cap-estrutura-rows');
+  const totalEl = document.getElementById('cap-estrutura-total');
+  if (!container || !_capEstruturaRow) return;
+  const ehAgregado = _capEstruturaRow.ehAgregado;
+  const umLabel = ehAgregado ? 'm³' : _capEstruturaRow.um;
+  const fator = capFatorBaia();
+
+  // Prévia por unidade — o usuário vê o volume da baia sair enquanto digita.
+  [...container.children].forEach(el => {
+    const get = campo => el.querySelector(`[data-campo="${campo}"]`)?.value ?? '';
+    const situacao = el.querySelector('[data-campo="situacao"]')?.value || 'normal';
+    const u = ehAgregado
+      ? { larg: num(get('larg')), comp: num(get('comp')), prof: num(get('prof')), situacao, reducaoPct: num(get('reducaoPct')) }
+      : { cap: num(get('cap')), situacao, reducaoPct: num(get('reducaoPct')) };
+    const nominal = capUnidadeNominal(u, ehAgregado, fator);
+    const efetiva = capUnidadeEfetiva(u, ehAgregado, fator);
+    const calc = el.querySelector('[data-calc]');
+    if (!calc) return;
+    if (!(nominal > 0)) { calc.textContent = '—'; calc.className = 'cap-un-calc'; return; }
+    if (Math.abs(nominal - efetiva) < 0.005) {
+      calc.textContent = `${_capNum(efetiva)} ${umLabel}`;
+      calc.className = 'cap-un-calc';
+    } else {
+      calc.textContent = `${_capNum(efetiva)} ${umLabel} (nominal ${_capNum(nominal)})`;
+      calc.className = 'cap-un-calc reduzido';
+    }
+  });
+
+  if (totalEl) {
+    const est = capEstruturaTotal(_capLerUnidadesDoModal(), ehAgregado);
+    totalEl.textContent = est ? `${_capNum(est.total)} ${umLabel}` : '—';
+  }
+}
+
+function salvarEstruturaCapacidade() {
+  if (!_capEstruturaKey) return;
+  const unidades = _capLerUnidadesDoModal();
+  const estruturas = capGetEstruturas();
+  if (unidades.length) estruturas[_capEstruturaKey] = unidades;
+  else delete estruturas[_capEstruturaKey];
+
+  capSalvarEstruturas(estruturas);
+  capInvalidarCache();
+  renderCapacidades();
+  closeModal('modal-capacidade-estrutura');
+  toast(unidades.length
+    ? `Estrutura salva — ${unidades.length} ${_capUnidadeLabel(_capEstruturaRow.catKey, unidades.length)}`
+    : 'Estrutura removida — a capacidade volta a ser estimada pelos lançamentos');
+  _capEstruturaKey = null;
+  _capEstruturaRow = null;
+}
+
+function adicionarUnidadeEstrutura() { _capAddUnidadeRow(); _capAtualizarTotalEstrutura(); }
+
 function recalcularCapacidades() {
   capInvalidarCache();
   renderCapacidades();
@@ -482,5 +874,7 @@ Object.assign(window, {
   capEditarCelula, capRestaurarAuto, capToggleSelecionarTodos,
   abrirEdicaoCapacidadesSelecionadas, salvarEdicaoCapacidadesEmMassa,
   restaurarCapacidadesSelecionadas, recalcularCapacidades,
-  capInvalidarCache, getCapacidadesRows, getCapacidadeCentralMaterial
+  capInvalidarCache, getCapacidadesRows, getCapacidadeCentralMaterial,
+  abrirEstruturaCapacidade, salvarEstruturaCapacidade, adicionarUnidadeEstrutura,
+  _capAddUnidadeRow, _capRemoverUnidadeRow, _capSituacaoChange, _capAtualizarTotalEstrutura
 });
