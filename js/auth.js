@@ -311,6 +311,8 @@ window.AuthGate = (function () {
     // só UI, a segurança de verdade está nas políticas de RLS.
     const custosSapAdicionarBtn = $('btn-custos-sap-adicionar');
     if (custosSapAdicionarBtn) custosSapAdicionarBtn.style.display = isAdmin ? '' : 'none';
+    const custosSapZerarBtn = $('btn-custos-sap-zerar');
+    if (custosSapZerarBtn) custosSapZerarBtn.style.display = isAdmin ? '' : 'none';
     const custosSapImportCard = $('import-card-custos-sap');
     if (custosSapImportCard) custosSapImportCard.style.display = isAdmin ? '' : 'none';
     const custosSapTabBtn = $('tab-btn-custo-sap');

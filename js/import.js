@@ -268,6 +268,54 @@ function excluirCustosSap(absIndex) {
   });
 }
 
+// Zera a base de Custos SAP IMPORTADA (local + nuvem), preservando o que foi
+// cadastrado à mão (qualquer registro com `fonte` preenchida — importação não
+// preenche esse campo).
+//
+// Existe por causa da virada de 14/08: até então o estoque vinha do LBKUM da
+// MBEWH, que é do CENTRO inteiro; agora vem do LABST da MARDH, já filtrado por
+// depósito. Os dois não convivem na mesma tabela — um registro velho que a
+// reimportação não cobrir continua afirmando estoque de centro, e
+// getEstoqueSapCustosSap (normalize.js) cascateia pra trás até achar ele. Daí
+// "zerar e reimportar" em vez de limpeza parcial (decisão do Hugo, 14/08).
+//
+// Sem undo de propósito, diferente de excluirCustosSap: apaga na nuvem em
+// lote, e o caminho de volta é reimportar MARDH + MBEWH.
+async function zerarCustosSapImportados() {
+  if (window.currentUser?.role !== 'admin') { toast('Só o administrador pode zerar Custos SAP', 'error'); return; }
+  const importados = (state.custosSap || []).filter(r => !r.fonte);
+  if (!importados.length) { toast('Não há Custos SAP importados para apagar', 'info'); return; }
+  const manuais = (state.custosSap || []).length - importados.length;
+
+  if (!confirm(
+    `Apagar ${importados.length.toLocaleString('pt-BR')} registro(s) de Custos SAP importados, aqui e na nuvem?\n\n` +
+    `${manuais.toLocaleString('pt-BR')} registro(s) cadastrados manualmente serão preservados.\n\n` +
+    'Não há como desfazer — a volta é reimportar MARDH + MBEWH.'
+  )) return;
+
+  state.custosSap = (state.custosSap || []).filter(r => !!r.fonte);
+  persist();
+  renderCustosSap();
+  updateDashboard();
+
+  // Uma requisição só, por predicado — apagar por lista de ids mandaria
+  // milhares de UUIDs na query string e estouraria o limite de URL.
+  // `fonte IS NULL` é o espelho exato do filtro local acima (_custosSapToDbRow
+  // grava `fonte: r.fonte || null`).
+  if (window.supabaseClient) {
+    let erro = null;
+    try {
+      ({ error: erro } = await window.supabaseClient.from('custos_sap').delete().is('fonte', null));
+    } catch (err) { erro = err; }
+    if (erro) {
+      console.warn('[Supabase] Falha ao zerar Custos SAP na nuvem:', erro);
+      toast('Apagado aqui, mas a nuvem falhou — os registros voltam no próximo boot. Tente de novo.', 'error');
+      return;
+    }
+  }
+  toast(`${importados.length.toLocaleString('pt-BR')} registro(s) de Custos SAP importados apagados`);
+}
+
 function _criarRegistroCustosSap(dados) {
   if (window.currentUser?.role !== 'admin') return { ok: false, erro: 'Só o administrador pode cadastrar Custos SAP' };
   const central = dados.central;
