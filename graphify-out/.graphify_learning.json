@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-08-07T17:50:11.948948+00:00",
+  "generated_at": "2026-08-19T14:51:17.171870+00:00",
   "nodes": {
     "js_cloud_backup_cloud_backup_modulos": {
       "code_fingerprint": "81faea21dc7720ec22507a798be321bb5b01deb976b106a4799703bdfee5893e",
@@ -12,7 +12,7 @@
           "q": "Why does CLOUD_BACKUP_MODULOS connect Cloud Backup Module to Admin Panel, Dashboard Conflict Detection, Dashboard Rendering & Cleanup, Import Deletion & Backup Sync?"
         }
       ],
-      "score": 0.852972339,
+      "score": 0.648290513,
       "source_file": "js/cloud-backup.js",
       "status": "tentative",
       "uses": 1

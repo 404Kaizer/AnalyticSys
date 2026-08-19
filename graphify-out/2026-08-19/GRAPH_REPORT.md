@@ -5,12 +5,12 @@
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 2248 nodes · 4609 edges · 122 communities (113 shown, 9 thin omitted)
-- Extraction: 88% EXTRACTED · 12% INFERRED · 0% AMBIGUOUS · INFERRED: 540 edges (avg confidence: 0.56)
+- 2248 nodes · 4613 edges · 123 communities (114 shown, 9 thin omitted)
+- Extraction: 88% EXTRACTED · 12% INFERRED · 0% AMBIGUOUS · INFERRED: 541 edges (avg confidence: 0.56)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `ad7acaf9`
+- Built from commit: `475b18e2`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -39,7 +39,7 @@
 - renderDgVisaoGeralPdf
 - renderModule
 - persist.js
-- getFilteredData
+- renderImports
 - notesRender
 - renderDgConsumo
 - lrcDelete
@@ -52,7 +52,7 @@
 - solicitacao.js
 - clearAllMicroFilters
 - parseDate
-- somarPesoCustoSap
+- getFilteredData
 - _buildOcHierarquiaBar
 - renderAnaliticoMicro
 - capacidades.js
@@ -117,14 +117,15 @@
 - aus-fim-de-mes.test.mjs
 - sap-fechamento-override.test.mjs
 - _buildRankingShellHTML
-- _setBtnLoading
+- upsertMateriais
 - toggleMicroFilter
 - handleFiliaisImport
-- salvarNovoGrupoMaterial
+- _setBtnLoading
 - getCodigosSapDisponiveis
 - _configEhChaveSaude
 - salvarNovoRegionalCentral
 - _checarNovosParaImportar
+- adminAplicarEdicaoLote
 - _adminEsc
 - _mesclarGrandeComBanco
 - AGENTS.md
@@ -145,8 +146,8 @@
 5. `_adminErroDetalhe()` - 20 edges
 6. `renderOcorrencias()` - 20 edges
 7. `escapeHtml()` - 20 edges
-8. `renderModule()` - 18 edges
-9. `renderCapacidades()` - 18 edges
+8. `renderCapacidades()` - 18 edges
+9. `renderModule()` - 18 edges
 10. `_rankEsc()` - 16 edges
 
 ## Surprising Connections (you probably didn't know these)
@@ -154,11 +155,11 @@
   js/state.js → tests/calendar-oc.test.mjs
 - `Admin — Formulário Público Section (public link + analyst/category routing)` --shares_data_with--> `solicitacao.html — Public Stock Movement Request Form`  [INFERRED]
   index.html → solicitacao.html
+- `buildCentralCard()` --indirect_call--> `makeResizable()`  [INFERRED]
+  js/analitico.js → js/ui.js
+- `init()` --indirect_call--> `updateToolsTheme()`  [INFERRED]
+  js/analitico.js → js/state.js
 - `renderModuleByName()` --indirect_call--> `renderEntradas()`  [INFERRED]
-  js/ui.js → js/dashboard.js
-- `renderModuleByName()` --indirect_call--> `renderSaidas()`  [INFERRED]
-  js/ui.js → js/dashboard.js
-- `renderModuleByName()` --indirect_call--> `renderLancamentos()`  [INFERRED]
   js/ui.js → js/dashboard.js
 
 ## Import Cycles
@@ -169,11 +170,11 @@
 - **Calculadora/Notas/Assistente/Mensagens all implement the same generic tool-popover open/close pattern (openTool/closeTool, .tool-popover)** — index_calc_popover, index_notes_popover, index_assistente_popover, index_mensagens_popover [EXTRACTED 1.00]
 - **DAI generation, Ocorrências, and the public-form/admin routing jointly form the inventory-adjustment reporting flow** — index_dai_modal, index_ocorrencias_page, index_admin_formpublico, solicitacao [INFERRED 0.75]
 
-## Communities (122 total, 9 thin omitted)
+## Communities (123 total, 9 thin omitted)
 
 ### Community 0 - "admin.js"
-Cohesion: 0.08
-Nodes (33): _ADMIN_COL_TYPES, ADMIN_MODAL_PROPRIO, ADMIN_MODULOS, adminAceitarPendente(), adminAceitarTodosPendentes(), _adminAuthInfo, _adminCategoriasFormPublico(), _adminCurrentRows (+25 more)
+Cohesion: 0.09
+Nodes (26): _ADMIN_COL_TYPES, ADMIN_MODAL_PROPRIO, ADMIN_MODULOS, adminAceitarPendente(), adminAceitarTodosPendentes(), _adminAuthInfo, _adminCategoriasFormPublico(), _adminCurrentRows (+18 more)
 
 ### Community 1 - "ocorrencias.js"
 Cohesion: 0.11
@@ -256,20 +257,20 @@ Cohesion: 0.09
 Nodes (30): abrirFechManager(), fecharFechImportModal(), fecharFechManager(), _fechImportAplicar(), _fechInvUnlockRealtimeInit(), _fechMgrAplicarDesbloqueio(), _fechMgrAplicarFiltros(), _fechMgrAplicarLote() (+22 more)
 
 ### Community 21 - "renderDgVisaoGeralPdf"
-Cohesion: 0.08
-Nodes (34): _daBuildEntradasFlat(), _daBuildRanking(), _daBuildTabelaMaterial(), _daPesoMedioPorTipo(), _daRenderDetalhadoAnalitico(), _daVarIrrelevante(), DG_VG_CAT_ORDER, _dgVgAggKgPorChave() (+26 more)
+Cohesion: 0.09
+Nodes (31): _daBuildEntradasFlat(), _daBuildRanking(), _daBuildTabelaMaterial(), _daPesoMedioPorTipo(), _daRenderDetalhadoAnalitico(), _daVarIrrelevante(), DG_VG_CAT_ORDER, _dgVgAggKgPorChave() (+23 more)
 
 ### Community 22 - "renderModule"
-Cohesion: 0.10
-Nodes (35): atualizarBarraLote(), _custosSapOutlierInfo(), _custosSapResolveMaterial(), _donoDisplay(), excluirSelecionados(), getGrupoSapPorCodigoIndex(), getMateriaisSemCadastroDoModulo(), initAusencias() (+27 more)
+Cohesion: 0.11
+Nodes (34): atualizarBarraLote(), _custosSapOutlierInfo(), _custosSapResolveMaterial(), _donoDisplay(), getGrupoSapPorCodigoIndex(), getMateriaisSemCadastroDoModulo(), initAusencias(), limparSelecaoLote() (+26 more)
 
 ### Community 23 - "persist.js"
 Cohesion: 0.18
 Nodes (19): applySavedState(), buildStateSnapshot(), compactSapRecords(), daiAnexoKey(), flushPersistQueue(), idbDeleteAnexosDai(), idbGet(), idbGetAnexoDai() (+11 more)
 
-### Community 24 - "getFilteredData"
-Cohesion: 0.11
-Nodes (25): _applyModuleSort(), _colFilterFieldValue(), filtrarLista(), getColUniqueValues(), getFilteredData(), getListFilteredData(), getListPageData(), _getScopeTextFilteredData() (+17 more)
+### Community 24 - "renderImports"
+Cohesion: 0.13
+Nodes (19): _colFilterFieldValue(), filtrarLista(), getColUniqueValues(), getListFilteredData(), getListPageData(), _getScopeTextFilteredData(), _importStatusBadge(), initResizable() (+11 more)
 
 ### Community 25 - "notesRender"
 Cohesion: 0.16
@@ -284,8 +285,8 @@ Cohesion: 0.13
 Nodes (20): bkpConfirmar(), closeLancConflictModal(), _exportarModulos(), _invalidateLancDupCache(), invalidateLancIndex(), _invalidateMatTransferPairCache(), invalidateSaidasIndex(), _invalidateSapDupCache() (+12 more)
 
 ### Community 28 - "cloud-backup.js"
-Cohesion: 0.18
-Nodes (21): Admin Health — Storage Tab (28/07), adminConfirmarExclusaoMassa(), _adminExecutarExclusaoMassa(), _cbBackupTodosModulos(), _cbGuardarGeracaoAnterior(), _cbGunzipBlob(), _cbGzipString(), _cbLastBackupAt (+13 more)
+Cohesion: 0.19
+Nodes (20): Admin Health — Storage Tab (28/07), _cbBackupTodosModulos(), _cbGuardarGeracaoAnterior(), _cbGunzipBlob(), _cbGzipString(), _cbLastBackupAt, _cbLerGeracao(), _cbRestaurarModulo() (+12 more)
 
 ### Community 29 - "fechRenderFromForm"
 Cohesion: 0.15
@@ -296,8 +297,8 @@ Cohesion: 0.15
 Nodes (20): applyAusFilter(), ausCollapseAll(), _ausDateStr(), ausExpandAll(), _ausFilterBuildOptions(), _ausFilterSyncClear(), _ausFilterSyncLabel(), ausToggleAllCentralis() (+12 more)
 
 ### Community 31 - "macro.js"
-Cohesion: 0.19
-Nodes (16): _calcTrend(), _getTip(), _hideTip(), _levelColor, _levelFromScore(), _levelLabel, _levelSev, macroApplyFilter() (+8 more)
+Cohesion: 0.18
+Nodes (17): _dgVgDrawDonutSvg(), _calcTrend(), _getTip(), _hideTip(), _levelColor, _levelFromScore(), _levelLabel, _levelSev (+9 more)
 
 ### Community 32 - "escR"
 Cohesion: 0.18
@@ -319,9 +320,9 @@ Nodes (23): applyMicroFilter(), _applyMicroVisibility(), cancelMicroFilter(), _c
 Cohesion: 0.11
 Nodes (22): _ausComputar(), _ausContextoMaterial(), _ausEnsureEntSaiIdx(), _ausInvalidateCache(), _ausInvalidateEntSaiIdx(), ausQuickOntem(), ausQuickTercaAnterior(), _ausUltimoDiaUtilMes() (+14 more)
 
-### Community 37 - "somarPesoCustoSap"
-Cohesion: 0.18
-Nodes (18): _abrirModalDetalheMaterial(), _abrirModalDetalheMaterialFromEl(), _agruparRegistros(), _bdmFechExcluidosHtml(), _buildResumoCardsHtml(), _convertNfPesoToKg(), _fecharModalDetalheMaterial(), _heroSubCardHtml() (+10 more)
+### Community 37 - "getFilteredData"
+Cohesion: 0.13
+Nodes (24): _abrirModalDetalheMaterial(), _abrirModalDetalheMaterialFromEl(), _agruparRegistros(), _applyModuleSort(), _bdmFechExcluidosHtml(), _buildResumoCardsHtml(), _convertNfPesoToKg(), _fecharModalDetalheMaterial() (+16 more)
 
 ### Community 38 - "_buildOcHierarquiaBar"
 Cohesion: 0.18
@@ -360,8 +361,8 @@ Cohesion: 0.36
 Nodes (11): _buildHelpContent(), _getHelpTip(), HELP_DEFS, hideCustoMedTip(), _hideHelpTip(), initHelpBadges(), moveCustoMedTip(), _moveHelpTip() (+3 more)
 
 ### Community 47 - "varSymbol"
-Cohesion: 0.33
-Nodes (11): _daColorFor(), _daFmtCountSigned(), _daFmtMoneySigned(), _daFmtPctSigned(), _daMaiorImpacto(), _daRenderRanking(), _daRenderTabelaMaterial(), _dgVgRenderExtremos() (+3 more)
+Cohesion: 0.26
+Nodes (13): _daColorFor(), _daFmtCountSigned(), _daFmtMoneySigned(), _daFmtPctSigned(), _daMaiorImpacto(), _daRenderRanking(), _daRenderTabelaMaterial(), _dgVgHealthTipHtml() (+5 more)
 
 ### Community 48 - "toast"
 Cohesion: 0.24
@@ -543,9 +544,9 @@ Nodes (5): casos, fonteUi, montar(), parseDateBr(), raiz
 Cohesion: 0.20
 Nodes (10): _ausGetPeriodo(), _buildAusenciasRelHTML(), _buildRankingShellHTML(), _dgrFonteIconesEmbutida(), _dgrFontesEmbutidas(), _dgrScriptAbas(), _dgrScriptCollapse(), _dgrScriptDownload() (+2 more)
 
-### Community 103 - "_setBtnLoading"
-Cohesion: 0.19
-Nodes (14): editarMateriais(), handleMateriaisImport(), makeMaterialId(), _materiaisSyncUpdate(), _materiaisSyncUpsert(), materialMatchKey(), normalizeImportedMaterial(), parseMateriaisRows() (+6 more)
+### Community 103 - "upsertMateriais"
+Cohesion: 0.23
+Nodes (12): editarMateriais(), handleMateriaisImport(), makeMaterialId(), _materiaisSyncUpdate(), _materiaisSyncUpsert(), materialMatchKey(), normalizeImportedMaterial(), parseMateriaisRows() (+4 more)
 
 ### Community 104 - "toggleMicroFilter"
 Cohesion: 0.25
@@ -555,9 +556,9 @@ Nodes (8): _buildCapacidadeOptions(), _buildOptionsList(), _buildVariacaoOptions
 Cohesion: 0.22
 Nodes (10): editarFiliais(), _filiaisSyncUpdate(), _filiaisSyncUpsert(), handleFiliaisImport(), normalizeImportedFilial(), parseFiliaisRows(), registrarRegionalCentral(), removerFilial() (+2 more)
 
-### Community 106 - "salvarNovoGrupoMaterial"
-Cohesion: 0.67
-Nodes (4): getGruposMateriaisDisponiveis(), _rebuildGrupoMateriaisOptions(), _refreshGrupoMateriaisSelects(), salvarNovoGrupoMaterial()
+### Community 106 - "_setBtnLoading"
+Cohesion: 0.33
+Nodes (7): confirmarImportarDe(), getGruposMateriaisDisponiveis(), _rebuildGrupoMateriaisOptions(), _refreshGrupoMateriaisSelects(), removerMaterial(), salvarNovoGrupoMaterial(), _setBtnLoading()
 
 ### Community 107 - "getCodigosSapDisponiveis"
 Cohesion: 0.67
@@ -572,12 +573,16 @@ Cohesion: 0.67
 Nodes (4): getRegionaisCentraisDisponiveis(), _rebuildRegionaisCentraisOptions(), _refreshRegionaisCentraisSelects(), salvarNovoRegionalCentral()
 
 ### Community 110 - "_checarNovosParaImportar"
+Cohesion: 0.29
+Nodes (7): abrirEdicaoFiliaisSelecionados(), abrirImportarDe(), abrirNovosPendentesDetalhe(), _carregarPerfis(), _checarNovosParaImportar(), filialMatchKey(), syncFiliaisFromSupabase()
+
+### Community 111 - "adminAplicarEdicaoLote"
 Cohesion: 0.25
-Nodes (8): abrirEdicaoFiliaisSelecionados(), abrirImportarDe(), abrirNovosPendentesDetalhe(), _carregarPerfis(), _checarNovosParaImportar(), confirmarImportarDe(), filialMatchKey(), syncFiliaisFromSupabase()
+Nodes (11): adminAbrirEdicao(), adminAbrirEdicaoLote(), adminAplicarEdicaoLote(), _adminContagemSelecionada(), _adminDescricaoFiltroAtivo(), adminExcluirLote(), _adminFieldType(), _adminLoteEditRenderCampo() (+3 more)
 
 ### Community 112 - "_adminEsc"
-Cohesion: 0.20
-Nodes (18): adminAbrirExclusaoMassa(), adminAlterarPapel(), _adminErroDetalhe(), _adminEsc(), _adminExecutarResetUsuario(), adminHealthShowTab(), _adminListStorageRecursivo(), adminLoadDbStats() (+10 more)
+Cohesion: 0.14
+Nodes (25): adminAbrirExclusaoMassa(), adminAlterarPapel(), _adminErroDetalhe(), _adminEsc(), _adminExecutarResetUsuario(), adminHealthShowTab(), _adminListStorageRecursivo(), adminLoadDbStats() (+17 more)
 
 ### Community 113 - "_mesclarGrandeComBanco"
 Cohesion: 0.22
@@ -608,8 +613,8 @@ Cohesion: 0.29
 Nodes (8): _atualizarRegistroCustosSap(), _criarRegistroCustosSap(), _custosSapSyncDelete(), _custosSapSyncUpsert(), _custosSapSyncUpsertBatch(), _custosSapToDbRow(), excluirCustosSap(), salvarCustosSapManual()
 
 ### Community 120 - "_adminAtualizarBarraLote"
-Cohesion: 0.13
-Nodes (23): adminAbrirEdicao(), adminAbrirEdicaoLote(), adminAplicarEdicaoLote(), _adminAplicarFiltros(), _adminAtualizarBarraLote(), _adminBuildSearchOr(), _adminContagemSelecionada(), _adminDescricaoFiltroAtivo() (+15 more)
+Cohesion: 0.21
+Nodes (14): _adminAplicarFiltros(), _adminAtualizarBarraLote(), _adminBuildSearchOr(), adminConfirmarExclusaoMassa(), _adminExcluirDaiDoLote(), _adminExcluirNuvemModulo(), _adminExecutarEdicaoLote(), _adminExecutarExclusaoLote() (+6 more)
 
 ### Community 121 - "_buildCentralOptionsHtml"
 Cohesion: 0.50
@@ -620,24 +625,24 @@ Cohesion: 0.40
 Nodes (5): _custosSapFromDbRow(), _custosSapRealtimeInit(), _custosSapRemoveLocal(), _custosSapUpsertLocal(), syncCustosSapFromSupabase()
 
 ## Knowledge Gaps
-- **279 isolated node(s):** `MESES_ABREV_DG`, `MESES_NOME_DG`, `_dgMonthState`, `DG_VG_CAT_LABELS`, `DG_VG_CAT_COLORS` (+274 more)
+- **279 isolated node(s):** `ADMIN_MODULOS`, `_adminProfiles`, `_adminAuthInfo`, `_adminCurrentRows`, `_adminSelectedIds` (+274 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **9 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `RECORD_INTEGRATION_TABLES` connect `notifications.js` to `normalize.js`?**
-  _High betweenness centrality (0.031) - this node is a cross-community bridge._
-- **Why does `toast()` connect `toast` to `format.js`, `analitico.js`, `notesRender`, `fechRenderFromForm`, `shortcutRemapSave`?**
-  _High betweenness centrality (0.014) - this node is a cross-community bridge._
-- **What connects `MESES_ABREV_DG`, `MESES_NOME_DG`, `_dgMonthState` to the rest of the system?**
+- **Why does `CLOUD_BACKUP_MODULOS` connect `cloud-backup.js` to `_adminAtualizarBarraLote`, `processImportedRows`, `renderModule`?**
+  _High betweenness centrality (0.079) - this node is a cross-community bridge._
+- **Why does `removerRegistro()` connect `renderModule` to `analitico.js`, `dashboard.js`, `cloud-backup.js`?**
+  _High betweenness centrality (0.070) - this node is a cross-community bridge._
+- **Why does `Admin / Supervisão Page` connect `mensagens.js` to `admin.js`?**
+  _High betweenness centrality (0.052) - this node is a cross-community bridge._
+- **What connects `ADMIN_MODULOS`, `_adminProfiles`, `_adminAuthInfo` to the rest of the system?**
   _279 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `admin.js` be split into smaller, more focused modules?**
-  _Cohesion score 0.08392603129445235 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.09462365591397849 - nodes in this community are weakly interconnected._
 - **Should `ocorrencias.js` be split into smaller, more focused modules?**
   _Cohesion score 0.10826210826210826 - nodes in this community are weakly interconnected._
 - **Should `assistente.js` be split into smaller, more focused modules?**
   _Cohesion score 0.056179775280898875 - nodes in this community are weakly interconnected._
-- **Should `ui.js` be split into smaller, more focused modules?**
-  _Cohesion score 0.03263157894736842 - nodes in this community are weakly interconnected._

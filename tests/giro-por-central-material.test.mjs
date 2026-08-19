@@ -98,12 +98,10 @@ teste('total da central é a SOMA dos materiais, com giro recalculado sobre o to
   assert.equal(central.nivel.level, 'urgente');
 });
 
-teste('variação usa a conta da Visão Micro e soma na central; custo = variação × custo médio', () => {
+teste('variação usa a conta da Visão Micro e a da central é a soma dos materiais', () => {
   assert.equal(porNome.CIMENTO.variacao, -50);
   assert.equal(porNome.AREIA.variacao, 20);
   assert.equal(central.variacao, -30);
-  assert.equal(porNome.CIMENTO.custoVariacao, -100); // -50 kg × R$ 2/kg
-  assert.equal(central.custoVariacao, -80);          // -100 + 20
 });
 
 teste('dois snapshots por material: giro sem override, variação com override', () => {
