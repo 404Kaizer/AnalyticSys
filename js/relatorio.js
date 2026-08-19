@@ -431,16 +431,59 @@ function _criticidadeDarkStyles() {
 // ── Abre o relatório (HTML pronto) em nova janela — usado por todos os
 //    relatórios do sistema (Ausências, Ranking, Ocorrências, Criticidade). ──
 //
-// Chamada SEMPRE com o HTML já pronto: o navegador só libera window.open
-// enquanto o clique do usuário ainda está na pilha, então quem gera o
-// relatório tem que gerar tudo de forma síncrona e só então chamar aqui.
-// Um await/setTimeout no meio do caminho = popup bloqueado.
-function _openRelWindow(html) {
-  const w = window.open('', '_blank', 'width=1200,height=900,scrollbars=yes,resizable=yes');
-  if (!w) { alert('Popups bloqueados! Permita pop-ups para gerar o relatório.'); return; }
+// `janela` é opcional, pra quem NÃO consegue montar o HTML dentro do orçamento
+// de tempo do clique — ver _abrirJanelaRelatorio abaixo. Quem monta rápido
+// continua chamando só com o html, como sempre.
+function _openRelWindow(html, janela) {
+  const w = janela || _abrirJanelaRelatorio();
+  if (!w) return;
+  // Só quem veio pré-aberto tem conteúdo a descartar (a tela de progresso);
+  // pra aba recém-criada o caminho segue exatamente o de sempre.
+  if (janela) w.document.open();
   w.document.write(html);
   w.document.close();
   w.focus();
+}
+
+// ── Abertura da aba do relatório ───────────────────────────────────────────
+// O navegador só libera window.open enquanto a ATIVAÇÃO TRANSITÓRIA do clique
+// está viva (~5s no Chrome) — e esse relógio não pausa enquanto a thread
+// trabalha. Relatório que leva mais que isso pra montar TEM que abrir a aba
+// antes de começar, senão cai no bloqueador de popup.
+//
+// Não dá pra decidir isso na hora certa medindo o tempo: se o primeiro pedaço
+// já estourar os 5s, quando o código for checar a ativação já morreu. Por isso
+// quem é pesado abre no começo e passa `mensagem`, o que pinta uma tela de
+// progresso no lugar da aba em branco.
+function _abrirJanelaRelatorio(mensagem) {
+  const w = window.open('', '_blank', 'width=1200,height=900,scrollbars=yes,resizable=yes');
+  if (!w) { alert('Popups bloqueados! Permita pop-ups para gerar o relatório.'); return null; }
+  if (mensagem) {
+    // Sem CDN nem fonte externa: é uma tela de poucos segundos, não pode
+    // depender de rede pra aparecer.
+    w.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Gerando relatório…</title><style>
+      html,body { height:100%; margin:0; }
+      body { background:#0f172a; color:#94a3b8; font:500 13.5px/1.6 Inter,system-ui,-apple-system,sans-serif;
+             display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; }
+      .rel-sp { width:36px; height:36px; border:3px solid rgba(255,255,255,.12); border-top-color:#f87171;
+                border-radius:50%; animation:rel-spin .8s linear infinite; }
+      @keyframes rel-spin { to { transform:rotate(360deg); } }
+      strong { color:#e2e8f0; font-size:15.5px; font-weight:700; }
+      #rel-progresso { font-family:ui-monospace,'JetBrains Mono',monospace; font-size:12px; color:#64748b; }
+    </style></head><body>
+      <div class="rel-sp"></div>
+      <strong>Gerando relatório…</strong>
+      <span id="rel-progresso">${_rankEsc(mensagem)}</span>
+    </body></html>`);
+    w.document.close();
+  }
+  return w;
+}
+
+// Atualiza a linha de progresso da aba já aberta. Silencioso se o usuário
+// fechou a aba no meio do caminho.
+function _janelaRelatorioProgresso(w, texto) {
+  try { w.document.getElementById('rel-progresso').textContent = texto; } catch (_) {}
 }
 
 // ── Botão "Visão Diretoria" — Resumo Executivo isolado (narrativa + gráficos) ──
@@ -5409,29 +5452,65 @@ function _dgmMesPaneHtml(mes, dados, ativa) {
   </div>`;
 }
 
-// Geração SÍNCRONA de ponta a ponta, de propósito: a aba só é aberta depois
-// que o HTML está pronto (pedido do Hugo — nada de aba em branco esperando).
-// Isso amarra as duas pontas: sem ceder a thread, o window.open do fim ainda
-// está dentro da mesma tarefa iniciada pelo clique, então o navegador não
-// trata como popup. Qualquer await/setTimeout aqui dentro derruba a "ativação
-// transitória" (~5s no Chrome) e o popup volta a ser bloqueado.
+// A aba abre ANTES do cálculo, já mostrando progresso — não por preferência,
+// por imposição do navegador: window.open só é liberado enquanto a ativação
+// transitória do clique está viva (~5s), e esse relógio corre mesmo com a
+// thread ocupada. Este relatório varre o state inteiro por mês, com dois
+// buildSnapshot por material, e passa fácil desse orçamento com dados reais —
+// tentar abrir no fim dava "Popups bloqueados". Ver _abrirJanelaRelatorio.
 //
-// ponytail: o preço é a página travar durante a geração, sem barra de
-// progresso (overlay nenhum consegue repintar com a thread ocupada). Aceitável
-// pra poucos meses; se ficar insuportável, o upgrade é mover o cálculo pra um
-// Web Worker e só então voltar a ter progresso E abertura no fim.
-window.gerarRelatorioGiroUsina = function() {
+// Com a aba já aberta, dá pra ceder a thread entre os meses de novo, então o
+// progresso aparece de verdade — na aba e no overlay da página.
+window.gerarRelatorioGiroUsina = async function() {
   const meses = _dgmMesesOrdenados();
   if (!meses.length) { toast('Selecione ao menos um mês.', 'error'); return; }
 
   const nMeses = meses.length;
+  const rotulo = m => `${MESES_NOME_DG[m.mes]} de ${m.ano}`;
+
+  const janela = _abrirJanelaRelatorio(`0 de ${nMeses} — ${rotulo(meses[0])}`);
+  if (!janela) return;
+
   document.getElementById('rel-giro-usina-modal')?.classList.remove('open');
 
+  const stepId = m => `giro-usina-${m.ano}-${m.mes}`;
+  const step   = (id, st) => { if (typeof _lstepSet === 'function') _lstepSet(id, st); };
+  const barra  = pct => { if (typeof _lbarSet === 'function') _lbarSet(pct); };
+
+  if (typeof showLoadingOverlay === 'function') {
+    showLoadingOverlay('Gerando relatório', `Giro por usina — ${nMeses} ${nMeses !== 1 ? 'meses' : 'mês'}`);
+  }
+  // Etapas próprias: sem isso o overlay reaproveita as que ficaram penduradas
+  // no DOM da última vez que alguém as usou (o boot do sistema), e o usuário vê
+  // "Restaurando sessão anterior" ao gerar um relatório.
+  if (typeof loadingShowSteps === 'function') {
+    loadingShowSteps([
+      ...meses.map(m => ({ id: stepId(m), icon: 'ti-calendar-month', label: rotulo(m) })),
+      { id: 'giro-usina-montar', icon: 'ti-file-analytics', label: 'Montando o relatório' }
+    ]);
+  }
+
   try {
-    const porMes = meses.map(mes => ({
-      mes,
-      dados: buildGiroPorCentralMaterial(new Date(mes.ano, mes.mes, 1), new Date(mes.ano, mes.mes + 1, 0, 23, 59, 59))
-    }));
+    const porMes = [];
+    for (let i = 0; i < nMeses; i++) {
+      const mes = meses[i];
+      step(stepId(mes), 'running');
+      barra(Math.round((i / (nMeses + 1)) * 100));
+      _janelaRelatorioProgresso(janela, `${i} de ${nMeses} — ${rotulo(mes)}`);
+      // Cede a thread pro overlay e pra aba repintarem antes do mês travá-la.
+      await new Promise(r => setTimeout(r, 0));
+
+      porMes.push({
+        mes,
+        dados: buildGiroPorCentralMaterial(new Date(mes.ano, mes.mes, 1), new Date(mes.ano, mes.mes + 1, 0, 23, 59, 59))
+      });
+      step(stepId(mes), 'done');
+    }
+
+    step('giro-usina-montar', 'running');
+    barra(Math.round((nMeses / (nMeses + 1)) * 100));
+    _janelaRelatorioProgresso(janela, 'Montando o relatório…');
+
     const panes = porMes.map(({ mes, dados }, i) => _dgmMesPaneHtml(mes, dados, i === 0)).join('');
 
     // Opções dos filtros: união de TODOS os meses (o filtro é geral), pra que
@@ -5603,10 +5682,16 @@ window.gerarRelatorioGiroUsina = function() {
       notaRodape: 'Giro e Cobertura seguem a mesma metodologia do modal "Giro & Cobertura" do Dashboard Gerencial. Variação = Est. Final real − Est. Teórico, com Est. Inicial no saldo teórico do SAP — mesma conta da Visão Micro do Analítico.'
     });
 
-    // Só agora, com o HTML inteiro pronto na mão.
-    _openRelWindow(html);
+    step('giro-usina-montar', 'done');
+    barra(100);
+    // Substitui a tela de progresso pelo relatório pronto.
+    _openRelWindow(html, janela);
   } catch (err) {
     console.error('[Relatório Giro por Usina] Falha ao gerar:', err);
     toast('Falha ao gerar o relatório. Veja o console para detalhes.', 'error');
+    try { janela.close(); } catch (_) {} // não deixa a aba de progresso órfã
+  } finally {
+    if (typeof hideLoadingOverlay === 'function') hideLoadingOverlay();
+    if (typeof loadingHideSteps === 'function') loadingHideSteps();
   }
 };
