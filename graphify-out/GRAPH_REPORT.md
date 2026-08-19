@@ -10,7 +10,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `05fb52b7`
+- Built from commit: `320b8180`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -144,9 +144,9 @@
 2. `adminLoadModulo()` - 25 edges
 3. `_adminEsc()` - 22 edges
 4. `_fechMgrRender()` - 22 edges
-5. `_adminErroDetalhe()` - 20 edges
-6. `renderOcorrencias()` - 20 edges
-7. `_rankEsc()` - 20 edges
+5. `_rankEsc()` - 20 edges
+6. `_adminErroDetalhe()` - 20 edges
+7. `renderOcorrencias()` - 20 edges
 8. `escapeHtml()` - 20 edges
 9. `renderCapacidades()` - 18 edges
 10. `renderModule()` - 18 edges
@@ -630,7 +630,7 @@ Cohesion: 0.40
 Nodes (5): _custosSapFromDbRow(), _custosSapRealtimeInit(), _custosSapRemoveLocal(), _custosSapUpsertLocal(), syncCustosSapFromSupabase()
 
 ## Knowledge Gaps
-- **287 isolated node(s):** `raiz`, `erros`, `intervalos`, `escritas`, `progresso` (+282 more)
+- **287 isolated node(s):** `_REL_NIVEIS`, `_dgmState`, `_DGM_COLUNAS`, `_DGM_NIVEL_ICONE`, `raiz` (+282 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **9 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
@@ -638,12 +638,12 @@ Nodes (5): _custosSapFromDbRow(), _custosSapRealtimeInit(), _custosSapRemoveLoca
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `CLOUD_BACKUP_MODULOS` connect `cloud-backup.js` to `_adminAtualizarBarraLote`, `processImportedRows`, `renderModule`?**
-  _High betweenness centrality (0.102) - this node is a cross-community bridge._
+  _High betweenness centrality (0.108) - this node is a cross-community bridge._
 - **Why does `removerRegistro()` connect `renderModule` to `analitico.js`, `dashboard.js`, `cloud-backup.js`?**
-  _High betweenness centrality (0.091) - this node is a cross-community bridge._
+  _High betweenness centrality (0.096) - this node is a cross-community bridge._
 - **Why does `Admin / Supervisão Page` connect `mensagens.js` to `admin.js`?**
-  _High betweenness centrality (0.055) - this node is a cross-community bridge._
-- **What connects `raiz`, `erros`, `intervalos` to the rest of the system?**
+  _High betweenness centrality (0.061) - this node is a cross-community bridge._
+- **What connects `_REL_NIVEIS`, `_dgmState`, `_DGM_COLUNAS` to the rest of the system?**
   _287 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `admin.js` be split into smaller, more focused modules?**
   _Cohesion score 0.09462365591397849 - nodes in this community are weakly interconnected._
