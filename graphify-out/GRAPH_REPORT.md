@@ -1,16 +1,16 @@
 # Graph Report - AnalyticSys  (2026-08-19)
 
 ## Corpus Check
-- 56 files · ~328,657 words
+- 56 files · ~330,507 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 2254 nodes · 4621 edges · 124 communities (115 shown, 9 thin omitted)
+- 2259 nodes · 4630 edges · 124 communities (115 shown, 9 thin omitted)
 - Extraction: 88% EXTRACTED · 12% INFERRED · 0% AMBIGUOUS · INFERRED: 541 edges (avg confidence: 0.56)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `c497ccab`
+- Built from commit: `3d971b06`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -59,7 +59,7 @@
 - buildCards
 - applyColFilter
 - renderOcorrencias
-- _rankEsc
+- _dgmLinhaHtml
 - _fechMgrGetTodosCandidatos
 - help-badges.js
 - varSymbol
@@ -130,26 +130,26 @@
 - _mesclarGrandeComBanco
 - AGENTS.md
 - excluirImportacao
-- _buildRankingCentraisBody
+- _rankEsc
 - relatorio-giro-usina.test.mjs
 - adminLoadModulo
 - _custosSapSyncUpsert
 - _adminAtualizarBarraLote
 - _buildCentralOptionsHtml
-- _custosSapFromDbRow
 - _dgVgRenderHealthDonuts
+- _custosSapFromDbRow
 
 ## God Nodes (most connected - your core abstractions)
 1. `renderDgVisaoGeralPdf()` - 31 edges
 2. `adminLoadModulo()` - 25 edges
 3. `_adminEsc()` - 22 edges
 4. `_fechMgrRender()` - 22 edges
-5. `_adminErroDetalhe()` - 20 edges
-6. `renderOcorrencias()` - 20 edges
-7. `escapeHtml()` - 20 edges
-8. `renderCapacidades()` - 18 edges
-9. `renderModule()` - 18 edges
-10. `_rankEsc()` - 17 edges
+5. `_rankEsc()` - 20 edges
+6. `_adminErroDetalhe()` - 20 edges
+7. `renderOcorrencias()` - 20 edges
+8. `escapeHtml()` - 20 edges
+9. `renderCapacidades()` - 18 edges
+10. `renderModule()` - 18 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `safeJSONParse()` --indirect_call--> `error()`  [INFERRED]
@@ -250,8 +250,8 @@ Cohesion: 0.13
 Nodes (30): NCD_COR, NCD_SAP_CODIGOS, ncdAbrirModal(), _ncdAplicarCnpj(), _ncdCodigoMap, _ncdCodigoMaterial(), _ncdColetarGrupos(), _ncdCpfValido() (+22 more)
 
 ### Community 19 - "relatorio.js"
-Cohesion: 0.06
-Nodes (15): _abrirJanelaRelatorio(), _buildRankingRegionaisTableBlock(), _DGM_NIVEL_ICONE, _dgmMesesOrdenados(), _dgmMesKey(), _dgmMesLabel(), _dgmRenderPicker(), _dgmState (+7 more)
+Cohesion: 0.07
+Nodes (12): _DGM_COLUNAS, _DGM_NIVEL_ICONE, _dgmMesesOrdenados(), _dgmMesKey(), _dgmMesLabel(), _dgmRenderPicker(), _dgmState, _dgrCanvasParaPngDataUrl() (+4 more)
 
 ### Community 20 - "_fechMgrRender"
 Cohesion: 0.09
@@ -349,9 +349,9 @@ Nodes (14): applyColFilter(), buildColFilterHTML(), clearAllColFilters(), clearC
 Cohesion: 0.23
 Nodes (15): closeConcluirModal(), closeInconclusivaModal(), confirmarExcluirAjusteSistemico(), confirmarExcluirOcorrencia(), deleteOcorrencia(), _ocNomeAtor(), _ocSyncDelete(), _ocSyncUpsert() (+7 more)
 
-### Community 44 - "_rankEsc"
-Cohesion: 0.15
-Nodes (23): _dgmCentralHeaderHtml(), _dgmCentralTabelaHtml(), _dgmChip(), _dgmCoberturaInfo(), _dgmFiltrosHtml(), _dgmLinhaHtml(), _dgmMesPaneHtml(), _dgrAbastInfo() (+15 more)
+### Community 44 - "_dgmLinhaHtml"
+Cohesion: 0.19
+Nodes (17): _dgmCentralHeaderHtml(), _dgmChip(), _dgmCoberturaInfo(), _dgmLinhaHtml(), _dgrAbastInfo(), _dgrBuildCustoRegionalCentralHtml(), _dgrBuildDetalhadoAnaliticoHtml(), _dgrBuildGiroCoberturaHtml() (+9 more)
 
 ### Community 45 - "_fechMgrGetTodosCandidatos"
 Cohesion: 0.35
@@ -597,13 +597,13 @@ Nodes (5): Confirmar antes de implementar, graphify, headroom, ponytail, Preview
 Cohesion: 0.33
 Nodes (7): _cascadeDeleteCloudByImportId(), _cbReforcarBackupModulos(), excluirImportacao(), _importsSyncDelete(), _importsSyncUpsert(), _importsToDbRow(), reconcilePendingDeletes()
 
-### Community 116 - "_buildRankingCentraisBody"
-Cohesion: 0.50
-Nodes (4): _buildRankingCentraisBody(), _buildRankSideCard(), _rankCompactarDias(), _rankSeverityDias()
+### Community 116 - "_rankEsc"
+Cohesion: 0.15
+Nodes (16): _abrirJanelaRelatorio(), _buildRankingCentraisBody(), _buildRankingRegionaisTableBlock(), _buildRankSideCard(), _dgmAjudaTexto(), _dgmCentralTabelaHtml(), _dgmFiltrosHtml(), _dgmLegendaHtml() (+8 more)
 
 ### Community 117 - "relatorio-giro-usina.test.mjs"
-Cohesion: 0.10
-Nodes (14): casos, centralFalsa(), ctx, ctxF, erros, escritas, etapas, nivel() (+6 more)
+Cohesion: 0.09
+Nodes (16): botaoTudo, cabecalhos, casos, centralFalsa(), ctx, ctxF, erros, escritas (+8 more)
 
 ### Community 118 - "adminLoadModulo"
 Cohesion: 0.15
@@ -621,16 +621,16 @@ Nodes (14): _adminAplicarFiltros(), _adminAtualizarBarraLote(), _adminBuildSearc
 Cohesion: 0.50
 Nodes (4): _buildCentralOptionsHtml(), _custosSapManualPopularSelects(), _manualModalPopularSelects(), _onManualMaterialChange()
 
-### Community 122 - "_custosSapFromDbRow"
-Cohesion: 0.40
-Nodes (5): _custosSapFromDbRow(), _custosSapRealtimeInit(), _custosSapRemoveLocal(), _custosSapUpsertLocal(), syncCustosSapFromSupabase()
-
-### Community 123 - "_dgVgRenderHealthDonuts"
+### Community 122 - "_dgVgRenderHealthDonuts"
 Cohesion: 0.33
 Nodes (6): _dgVgBuildCentralHealthData(), _dgVgBuildHealthDonutData(), _dgVgHealthTipHtml(), _dgVgRenderHealthDonuts(), _dgVgRenderHealthDonutSvg(), _dgVgScoreFromCounts()
 
+### Community 123 - "_custosSapFromDbRow"
+Cohesion: 0.40
+Nodes (5): _custosSapFromDbRow(), _custosSapRealtimeInit(), _custosSapRemoveLocal(), _custosSapUpsertLocal(), syncCustosSapFromSupabase()
+
 ## Knowledge Gaps
-- **283 isolated node(s):** `raiz`, `erros`, `escritas`, `progresso`, `etapas` (+278 more)
+- **286 isolated node(s):** `_REL_NIVEIS`, `_dgmState`, `_DGM_COLUNAS`, `_DGM_NIVEL_ICONE`, `ADMIN_MODULOS` (+281 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **9 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
@@ -638,13 +638,13 @@ Nodes (6): _dgVgBuildCentralHealthData(), _dgVgBuildHealthDonutData(), _dgVgHeal
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `CLOUD_BACKUP_MODULOS` connect `cloud-backup.js` to `_adminAtualizarBarraLote`, `processImportedRows`, `renderModule`?**
-  _High betweenness centrality (0.116) - this node is a cross-community bridge._
+  _High betweenness centrality (0.123) - this node is a cross-community bridge._
 - **Why does `removerRegistro()` connect `renderModule` to `analitico.js`, `dashboard.js`, `cloud-backup.js`?**
-  _High betweenness centrality (0.101) - this node is a cross-community bridge._
+  _High betweenness centrality (0.105) - this node is a cross-community bridge._
 - **Why does `Admin / Supervisão Page` connect `mensagens.js` to `admin.js`?**
-  _High betweenness centrality (0.066) - this node is a cross-community bridge._
-- **What connects `raiz`, `erros`, `escritas` to the rest of the system?**
-  _283 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _High betweenness centrality (0.068) - this node is a cross-community bridge._
+- **What connects `_REL_NIVEIS`, `_dgmState`, `_DGM_COLUNAS` to the rest of the system?**
+  _286 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `admin.js` be split into smaller, more focused modules?**
   _Cohesion score 0.09462365591397849 - nodes in this community are weakly interconnected._
 - **Should `ocorrencias.js` be split into smaller, more focused modules?**

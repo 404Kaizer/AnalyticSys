@@ -82,6 +82,12 @@ vm.runInContext("_dgmState.selecionados.add('2026-6'); _dgmState.selecionados.ad
 await ctx.gerarRelatorioGiroUsina();
 htmlGerado = escritas[escritas.length - 1];
 
+// Pra olhar o resultado no navegador: DUMP=caminho.html node tests/relatorio-giro-usina.test.mjs
+if (process.env.DUMP) {
+  const { writeFileSync } = await import('node:fs');
+  writeFileSync(process.env.DUMP, htmlGerado);
+}
+
 const casos = [];
 const teste = (nome, fn) => casos.push({ nome, fn });
 
@@ -150,6 +156,13 @@ teste('cabeçalho traz os chips no padrão da Visão Micro', () => {
   assert.ok(htmlGerado.includes('data-zero="1"'), 'chip zerado precisa ficar esmaecido, não sumir');
 });
 
+teste('sem vão herdado entre as centrais', () => {
+  // .dgr-page-section-natural traz padding-top:24px pra separar seções sem
+  // moldura; com o card próprio de cada central isso só somava espaço vazio,
+  // e ficava gritante com todas recolhidas.
+  assert.ok(htmlGerado.includes('.dgm-secao { padding-top:0; margin-bottom:10px; }'));
+});
+
 teste('central é um bloco só, envolvendo os materiais dela', () => {
   // Cabeçalho colado no corpo (arredondado só nas pontas de fora) e a tabela
   // de dentro sem visual de card próprio — senão vira card dentro de card.
@@ -167,6 +180,46 @@ teste('ao recolher, só a seta gira — os ícones dos chips ficam parados', () 
   assert.ok(htmlGerado.indexOf('[aria-expanded="false"] i { transform:none; }')
           < htmlGerado.indexOf('[aria-expanded="false"] .dgm-chev'));
   assert.ok(htmlGerado.includes('dgm-chev'), 'a seta precisa da classe pra ser alvo');
+});
+
+teste('cada coluna tem "?" explicando o cálculo e o significado', () => {
+  const cabecalho = htmlGerado.match(/<thead><tr>[\s\S]*?<\/tr><\/thead>/)[0];
+  assert.equal((cabecalho.match(/class="dgm-help"/g) || []).length, 9, 'um "?" por coluna');
+  // O title tem que trazer a conta E o que os valores significam.
+  assert.ok(cabecalho.includes('Saídas ÷ Est. Médio'), 'fórmula do giro no tooltip');
+  assert.ok(cabecalho.includes('Est. Final real − Est. Teórico'), 'fórmula da variação');
+  assert.ok(cabecalho.includes('O que cada valor significa:'));
+  // Multi-linha via &#10; — title nativo não quebra linha com \n cru.
+  assert.ok(cabecalho.includes('&#10;'), 'tooltip precisa quebrar linha');
+  const titles = [...cabecalho.matchAll(/title="([^"]*)"/g)].map(m => m[1]);
+  assert.equal(titles.length, 9);
+  titles.forEach(t => assert.ok(!t.includes('\n'), 'newline cru vazou pro atributo title'));
+});
+
+teste('legenda sai da MESMA fonte do "?" e imprime', () => {
+  // Descrever a conta em dois lugares garantiria que um deles envelhece.
+  assert.ok(htmlGerado.includes('class="dgm-legenda"'));
+  assert.equal((htmlGerado.match(/class="dgm-leg-item"/g) || []).length, 9, 'uma entrada por coluna');
+  // Glossário, não grade de cards: em grade todos herdavam a altura do maior
+  // (o "Abast." tem 8 faixas, o "Material" tem uma frase) e sobrava vão.
+  assert.ok(!htmlGerado.includes('dgm-leg-grid'), 'não pode voltar pra grade de cards');
+  assert.ok(htmlGerado.includes('grid-template-columns:88px 1fr'), 'rótulo à esquerda, texto à direita');
+  // Faixas em linha, separadas por · via ::before — não em lista com marcador.
+  assert.ok(htmlGerado.includes(".dgm-leg-faixa + .dgm-leg-faixa::before { content:' · '"));
+  assert.ok(!/<ul class="dgm-leg/.test(htmlGerado));
+  assert.ok(htmlGerado.includes('Saídas ÷ Est. Médio'));
+  // Recolhida por padrão na tela...
+  assert.ok(htmlGerado.includes('dgm-legenda-head" aria-expanded="false"'));
+  // ...mas o "?" é que não imprime; a legenda tem que sair no papel.
+  assert.ok(htmlGerado.includes('@media print { .dgm-help { display:none; } }'));
+  assert.ok(htmlGerado.includes('.dgr-collapse-body.dgr-collapsed { display:block !important; }'));
+});
+
+teste('regra do nível explicada: pior eixo + reforço', () => {
+  assert.ok(htmlGerado.includes('parte do PIOR dos três'));
+  assert.ok(htmlGerado.includes('sobe um degrau quando dois ou mais eixos'));
+  ['Bom', 'Atenção', 'Urgente', 'Crítico'].forEach(n =>
+    assert.ok(htmlGerado.includes(`<b>${n}</b>`), n));
 });
 
 teste('as 4 colunas qualitativas saem como badge', () => {
@@ -224,7 +277,7 @@ teste('tabela só tem material — a central não vira linha', () => {
   assert.ok(!htmlGerado.includes('Total da central'));
   assert.ok(!htmlGerado.includes('dgm-row-central'));
   assert.ok(!htmlGerado.includes('title="CENTRAL 6">'), 'central não pode ter célula de nome');
-  assert.match(htmlGerado, /<th style="width:\d+%">Material<\/th>/);
+  assert.match(htmlGerado, /<th style="width:\d+%">Material<span class="dgm-help"/);
 });
 
 teste('sem undefined/NaN vazando no corpo', () => {
@@ -263,10 +316,25 @@ const secoes = secoesHtml.map(bloco => {
 
 const selects = { 'dgm-f-central': { value: '' }, 'dgm-f-material': { value: '' }, 'dgm-f-nivel': { value: '' } };
 const resumo = { textContent: '' };
+// Cabeçalho de cada central, com o corpo como irmão seguinte — mesmo contrato
+// de DOM que _dgrToggleSecao/_dgmAlternarTudo esperam.
+const cabecalhos = secoes.map(() => {
+  const corpo = { classList: { _col: false, toggle(c, v) { this._col = v === undefined ? !this._col : v; } } };
+  let expandido = 'true';
+  return {
+    nextElementSibling: corpo,
+    getAttribute: () => expandido,
+    setAttribute: (_, v) => { expandido = v; },
+    get _aberto() { return expandido === 'true'; },
+    get _corpoRecolhido() { return corpo.classList._col; },
+  };
+});
+const botaoTudo = { innerHTML: '<i class="ti ti-chevrons-up"></i> Recolher tudo' };
+
 const ctxF = {
   document: {
     getElementById: id => (id === 'dgm-f-resumo' ? resumo : selects[id]),
-    querySelectorAll: sel => (sel === '.dgm-secao' ? secoes : []),
+    querySelectorAll: sel => (sel === '.dgm-secao' ? secoes : sel === '.dgm-central-head' ? cabecalhos : []),
   },
 };
 ctxF.window = ctxF;
@@ -320,6 +388,29 @@ teste('central + nível se combinam com E, não OU', () => {
 teste('resumo conta centrais e materiais visíveis', () => {
   aplicar('', 'CIMENTO CP II');
   assert.equal(resumo.textContent, '2 centrais · 2 materiais');
+});
+
+teste('alternar tudo recolhe todas e o rótulo vira "Expandir tudo"', () => {
+  ctxF._dgmAlternarTudo(botaoTudo);
+  assert.ok(cabecalhos.every(c => !c._aberto));
+  assert.ok(cabecalhos.every(c => c._corpoRecolhido));
+  assert.ok(botaoTudo.innerHTML.includes('Expandir tudo'), botaoTudo.innerHTML);
+  assert.ok(botaoTudo.innerHTML.includes('ti-chevrons-down'));
+});
+
+teste('alternar de novo expande todas', () => {
+  ctxF._dgmAlternarTudo(botaoTudo);
+  assert.ok(cabecalhos.every(c => c._aberto));
+  assert.ok(cabecalhos.every(c => !c._corpoRecolhido));
+  assert.ok(botaoTudo.innerHTML.includes('Recolher tudo'));
+});
+
+teste('com estado misturado, alternar RECOLHE (não inverte uma a uma)', () => {
+  // Usuário abriu/fechou centrais no dedo: o botão tem que fazer o que promete.
+  cabecalhos[0].setAttribute('aria-expanded', 'false');
+  ctxF._dgmAlternarTudo(botaoTudo);
+  assert.ok(cabecalhos.every(c => !c._aberto), 'sobrou central expandida');
+  ctxF._dgmAlternarTudo(botaoTudo); // devolve o estado pros testes seguintes
 });
 
 teste('limpar devolve tudo', () => {
