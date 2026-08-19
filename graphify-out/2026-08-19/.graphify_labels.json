@@ -121,6 +121,5 @@
   "119": "_custosSapSyncUpsert",
   "120": "_adminAtualizarBarraLote",
   "121": "_buildCentralOptionsHtml",
-  "122": "_dgVgRenderHealthDonuts",
   "123": "_custosSapFromDbRow"
 }

@@ -1,16 +1,16 @@
 # Graph Report - AnalyticSys  (2026-08-19)
 
 ## Corpus Check
-- 56 files · ~330,507 words
+- 56 files · ~330,652 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 2259 nodes · 4630 edges · 124 communities (115 shown, 9 thin omitted)
+- 2259 nodes · 4630 edges · 123 communities (114 shown, 9 thin omitted)
 - Extraction: 88% EXTRACTED · 12% INFERRED · 0% AMBIGUOUS · INFERRED: 541 edges (avg confidence: 0.56)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `3d971b06`
+- Built from commit: `d4e823f9`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -136,7 +136,6 @@
 - _custosSapSyncUpsert
 - _adminAtualizarBarraLote
 - _buildCentralOptionsHtml
-- _dgVgRenderHealthDonuts
 - _custosSapFromDbRow
 
 ## God Nodes (most connected - your core abstractions)
@@ -144,9 +143,9 @@
 2. `adminLoadModulo()` - 25 edges
 3. `_adminEsc()` - 22 edges
 4. `_fechMgrRender()` - 22 edges
-5. `_rankEsc()` - 20 edges
-6. `_adminErroDetalhe()` - 20 edges
-7. `renderOcorrencias()` - 20 edges
+5. `_adminErroDetalhe()` - 20 edges
+6. `renderOcorrencias()` - 20 edges
+7. `_rankEsc()` - 20 edges
 8. `escapeHtml()` - 20 edges
 9. `renderCapacidades()` - 18 edges
 10. `renderModule()` - 18 edges
@@ -171,7 +170,7 @@
 - **Calculadora/Notas/Assistente/Mensagens all implement the same generic tool-popover open/close pattern (openTool/closeTool, .tool-popover)** — index_calc_popover, index_notes_popover, index_assistente_popover, index_mensagens_popover [EXTRACTED 1.00]
 - **DAI generation, Ocorrências, and the public-form/admin routing jointly form the inventory-adjustment reporting flow** — index_dai_modal, index_ocorrencias_page, index_admin_formpublico, solicitacao [INFERRED 0.75]
 
-## Communities (124 total, 9 thin omitted)
+## Communities (123 total, 9 thin omitted)
 
 ### Community 0 - "admin.js"
 Cohesion: 0.09
@@ -258,8 +257,8 @@ Cohesion: 0.09
 Nodes (30): abrirFechManager(), fecharFechImportModal(), fecharFechManager(), _fechImportAplicar(), _fechInvUnlockRealtimeInit(), _fechMgrAplicarDesbloqueio(), _fechMgrAplicarFiltros(), _fechMgrAplicarLote() (+22 more)
 
 ### Community 21 - "renderDgVisaoGeralPdf"
-Cohesion: 0.10
-Nodes (27): _daBuildEntradasFlat(), _daBuildRanking(), _daBuildTabelaMaterial(), _daPesoMedioPorTipo(), _daRenderDetalhadoAnalitico(), _daVarIrrelevante(), DG_VG_CAT_ORDER, _dgVgAggKgPorChave() (+19 more)
+Cohesion: 0.09
+Nodes (31): _daBuildEntradasFlat(), _daBuildRanking(), _daBuildTabelaMaterial(), _daPesoMedioPorTipo(), _daRenderDetalhadoAnalitico(), _daVarIrrelevante(), DG_VG_CAT_ORDER, _dgVgAggKgPorChave() (+23 more)
 
 ### Community 22 - "renderModule"
 Cohesion: 0.12
@@ -362,8 +361,8 @@ Cohesion: 0.36
 Nodes (11): _buildHelpContent(), _getHelpTip(), HELP_DEFS, hideCustoMedTip(), _hideHelpTip(), initHelpBadges(), moveCustoMedTip(), _moveHelpTip() (+3 more)
 
 ### Community 47 - "varSymbol"
-Cohesion: 0.33
-Nodes (11): _daColorFor(), _daFmtCountSigned(), _daFmtMoneySigned(), _daFmtPctSigned(), _daMaiorImpacto(), _daRenderRanking(), _daRenderTabelaMaterial(), _dgVgRenderExtremos() (+3 more)
+Cohesion: 0.26
+Nodes (13): _daColorFor(), _daFmtCountSigned(), _daFmtMoneySigned(), _daFmtPctSigned(), _daMaiorImpacto(), _daRenderRanking(), _daRenderTabelaMaterial(), _dgVgHealthTipHtml() (+5 more)
 
 ### Community 48 - "toast"
 Cohesion: 0.24
@@ -621,16 +620,12 @@ Nodes (14): _adminAplicarFiltros(), _adminAtualizarBarraLote(), _adminBuildSearc
 Cohesion: 0.50
 Nodes (4): _buildCentralOptionsHtml(), _custosSapManualPopularSelects(), _manualModalPopularSelects(), _onManualMaterialChange()
 
-### Community 122 - "_dgVgRenderHealthDonuts"
-Cohesion: 0.33
-Nodes (6): _dgVgBuildCentralHealthData(), _dgVgBuildHealthDonutData(), _dgVgHealthTipHtml(), _dgVgRenderHealthDonuts(), _dgVgRenderHealthDonutSvg(), _dgVgScoreFromCounts()
-
 ### Community 123 - "_custosSapFromDbRow"
 Cohesion: 0.40
 Nodes (5): _custosSapFromDbRow(), _custosSapRealtimeInit(), _custosSapRemoveLocal(), _custosSapUpsertLocal(), syncCustosSapFromSupabase()
 
 ## Knowledge Gaps
-- **286 isolated node(s):** `_REL_NIVEIS`, `_dgmState`, `_DGM_COLUNAS`, `_DGM_NIVEL_ICONE`, `ADMIN_MODULOS` (+281 more)
+- **286 isolated node(s):** `ADMIN_MODULOS`, `_adminProfiles`, `_adminAuthInfo`, `_adminCurrentRows`, `_adminSelectedIds` (+281 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **9 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
@@ -638,12 +633,12 @@ Nodes (5): _custosSapFromDbRow(), _custosSapRealtimeInit(), _custosSapRemoveLoca
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `CLOUD_BACKUP_MODULOS` connect `cloud-backup.js` to `_adminAtualizarBarraLote`, `processImportedRows`, `renderModule`?**
-  _High betweenness centrality (0.123) - this node is a cross-community bridge._
+  _High betweenness centrality (0.075) - this node is a cross-community bridge._
 - **Why does `removerRegistro()` connect `renderModule` to `analitico.js`, `dashboard.js`, `cloud-backup.js`?**
-  _High betweenness centrality (0.105) - this node is a cross-community bridge._
-- **Why does `Admin / Supervisão Page` connect `mensagens.js` to `admin.js`?**
   _High betweenness centrality (0.068) - this node is a cross-community bridge._
-- **What connects `_REL_NIVEIS`, `_dgmState`, `_DGM_COLUNAS` to the rest of the system?**
+- **Why does `Admin / Supervisão Page` connect `mensagens.js` to `admin.js`?**
+  _High betweenness centrality (0.053) - this node is a cross-community bridge._
+- **What connects `ADMIN_MODULOS`, `_adminProfiles`, `_adminAuthInfo` to the rest of the system?**
   _286 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `admin.js` be split into smaller, more focused modules?**
   _Cohesion score 0.09462365591397849 - nodes in this community are weakly interconnected._

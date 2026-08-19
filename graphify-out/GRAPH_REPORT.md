@@ -1,7 +1,7 @@
 # Graph Report - AnalyticSys  (2026-08-19)
 
 ## Corpus Check
-- 56 files · ~330,507 words
+- 56 files · ~330,652 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
@@ -10,7 +10,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `11efce30`
+- Built from commit: `6c6791e5`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -630,7 +630,7 @@ Cohesion: 0.40
 Nodes (5): _custosSapFromDbRow(), _custosSapRealtimeInit(), _custosSapRemoveLocal(), _custosSapUpsertLocal(), syncCustosSapFromSupabase()
 
 ## Knowledge Gaps
-- **286 isolated node(s):** `raiz`, `erros`, `escritas`, `progresso`, `etapas` (+281 more)
+- **286 isolated node(s):** `_REL_NIVEIS`, `_dgmState`, `_DGM_COLUNAS`, `_DGM_NIVEL_ICONE`, `ADMIN_MODULOS` (+281 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **9 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
@@ -638,12 +638,12 @@ Nodes (5): _custosSapFromDbRow(), _custosSapRealtimeInit(), _custosSapRemoveLoca
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `CLOUD_BACKUP_MODULOS` connect `cloud-backup.js` to `_adminAtualizarBarraLote`, `processImportedRows`, `renderModule`?**
-  _High betweenness centrality (0.098) - this node is a cross-community bridge._
+  _High betweenness centrality (0.123) - this node is a cross-community bridge._
 - **Why does `removerRegistro()` connect `renderModule` to `analitico.js`, `dashboard.js`, `cloud-backup.js`?**
-  _High betweenness centrality (0.087) - this node is a cross-community bridge._
+  _High betweenness centrality (0.105) - this node is a cross-community bridge._
 - **Why does `Admin / Supervisão Page` connect `mensagens.js` to `admin.js`?**
-  _High betweenness centrality (0.049) - this node is a cross-community bridge._
-- **What connects `raiz`, `erros`, `escritas` to the rest of the system?**
+  _High betweenness centrality (0.068) - this node is a cross-community bridge._
+- **What connects `_REL_NIVEIS`, `_dgmState`, `_DGM_COLUNAS` to the rest of the system?**
   _286 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `admin.js` be split into smaller, more focused modules?**
   _Cohesion score 0.09462365591397849 - nodes in this community are weakly interconnected._

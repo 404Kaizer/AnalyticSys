@@ -50,279 +50,15 @@
   },
   "nodes": [
     {
-      "label": "relatorio-giro-usina.test.mjs",
-      "file_type": "code",
-      "source_file": "tests/relatorio-giro-usina.test.mjs",
-      "source_location": "L1",
-      "_origin": "ast",
-      "id": "tests_relatorio_giro_usina_test",
-      "community": 117,
-      "community_name": "relatorio-giro-usina.test.mjs",
-      "norm_label": "relatorio-giro-usina.test.mjs"
-    },
-    {
-      "label": "raiz",
-      "file_type": "code",
-      "source_file": "tests/relatorio-giro-usina.test.mjs",
-      "source_location": "L20",
-      "_origin": "ast",
-      "id": "tests_relatorio_giro_usina_test_raiz",
-      "community": 117,
-      "community_name": "relatorio-giro-usina.test.mjs",
-      "norm_label": "raiz"
-    },
-    {
-      "label": "nivel()",
-      "file_type": "code",
-      "source_file": "tests/relatorio-giro-usina.test.mjs",
-      "source_location": "L23",
-      "_origin": "ast",
-      "id": "tests_relatorio_giro_usina_test_nivel",
-      "community": 117,
-      "community_name": "relatorio-giro-usina.test.mjs",
-      "norm_label": "nivel()"
-    },
-    {
-      "label": "centralFalsa()",
-      "file_type": "code",
-      "source_file": "tests/relatorio-giro-usina.test.mjs",
-      "source_location": "L24",
-      "_origin": "ast",
-      "id": "tests_relatorio_giro_usina_test_centralfalsa",
-      "community": 117,
-      "community_name": "relatorio-giro-usina.test.mjs",
-      "norm_label": "centralfalsa()"
-    },
-    {
-      "label": "erros",
-      "file_type": "code",
-      "source_file": "tests/relatorio-giro-usina.test.mjs",
-      "source_location": "L35",
-      "_origin": "ast",
-      "id": "tests_relatorio_giro_usina_test_erros",
-      "community": 117,
-      "community_name": "relatorio-giro-usina.test.mjs",
-      "norm_label": "erros"
-    },
-    {
-      "label": "escritas",
-      "file_type": "code",
-      "source_file": "tests/relatorio-giro-usina.test.mjs",
-      "source_location": "L36",
-      "_origin": "ast",
-      "id": "tests_relatorio_giro_usina_test_escritas",
-      "community": 117,
-      "community_name": "relatorio-giro-usina.test.mjs",
-      "norm_label": "escritas"
-    },
-    {
-      "label": "progresso",
-      "file_type": "code",
-      "source_file": "tests/relatorio-giro-usina.test.mjs",
-      "source_location": "L37",
-      "_origin": "ast",
-      "id": "tests_relatorio_giro_usina_test_progresso",
-      "community": 117,
-      "community_name": "relatorio-giro-usina.test.mjs",
-      "norm_label": "progresso"
-    },
-    {
-      "label": "etapas",
-      "file_type": "code",
-      "source_file": "tests/relatorio-giro-usina.test.mjs",
-      "source_location": "L38",
-      "_origin": "ast",
-      "id": "tests_relatorio_giro_usina_test_etapas",
-      "community": 117,
-      "community_name": "relatorio-giro-usina.test.mjs",
-      "norm_label": "etapas"
-    },
-    {
-      "label": "ctx",
-      "file_type": "code",
-      "source_file": "tests/relatorio-giro-usina.test.mjs",
-      "source_location": "L40",
-      "_origin": "ast",
-      "id": "tests_relatorio_giro_usina_test_ctx",
-      "community": 117,
-      "community_name": "relatorio-giro-usina.test.mjs",
-      "norm_label": "ctx"
-    },
-    {
-      "label": "add()",
-      "file_type": "code",
-      "source_file": "tests/relatorio-giro-usina.test.mjs",
-      "source_location": "L74",
-      "_origin": "ast",
-      "id": "tests_relatorio_giro_usina_test_add",
-      "community": 117,
-      "community_name": "relatorio-giro-usina.test.mjs",
-      "norm_label": "add()"
-    },
-    {
-      "label": "remove()",
-      "file_type": "code",
-      "source_file": "tests/relatorio-giro-usina.test.mjs",
-      "source_location": "L74",
-      "_origin": "ast",
-      "id": "tests_relatorio_giro_usina_test_remove",
-      "community": 117,
-      "community_name": "relatorio-giro-usina.test.mjs",
-      "norm_label": "remove()"
-    },
-    {
-      "label": "addEventListener()",
-      "file_type": "code",
-      "source_file": "tests/relatorio-giro-usina.test.mjs",
-      "source_location": "L74",
-      "_origin": "ast",
-      "id": "tests_relatorio_giro_usina_test_addeventlistener",
-      "community": 117,
-      "community_name": "relatorio-giro-usina.test.mjs",
-      "norm_label": "addeventlistener()"
-    },
-    {
-      "label": "appendChild()",
-      "file_type": "code",
-      "source_file": "tests/relatorio-giro-usina.test.mjs",
-      "source_location": "L75",
-      "_origin": "ast",
-      "id": "tests_relatorio_giro_usina_test_appendchild",
-      "community": 117,
-      "community_name": "relatorio-giro-usina.test.mjs",
-      "norm_label": "appendchild()"
-    },
-    {
-      "label": "casos",
-      "file_type": "code",
-      "source_file": "tests/relatorio-giro-usina.test.mjs",
-      "source_location": "L91",
-      "_origin": "ast",
-      "id": "tests_relatorio_giro_usina_test_casos",
-      "community": 117,
-      "community_name": "relatorio-giro-usina.test.mjs",
-      "norm_label": "casos"
-    },
-    {
-      "label": "teste()",
-      "file_type": "code",
-      "source_file": "tests/relatorio-giro-usina.test.mjs",
-      "source_location": "L92",
-      "_origin": "ast",
-      "id": "tests_relatorio_giro_usina_test_teste",
-      "community": 117,
-      "community_name": "relatorio-giro-usina.test.mjs",
-      "norm_label": "teste()"
-    },
-    {
-      "label": "secoesHtml",
-      "file_type": "code",
-      "source_file": "tests/relatorio-giro-usina.test.mjs",
-      "source_location": "L290",
-      "_origin": "ast",
-      "id": "tests_relatorio_giro_usina_test_secoeshtml",
-      "community": 117,
-      "community_name": "relatorio-giro-usina.test.mjs",
-      "norm_label": "secoeshtml"
-    },
-    {
-      "label": "secoes",
-      "file_type": "code",
-      "source_file": "tests/relatorio-giro-usina.test.mjs",
-      "source_location": "L311",
-      "_origin": "ast",
-      "id": "tests_relatorio_giro_usina_test_secoes",
-      "community": 117,
-      "community_name": "relatorio-giro-usina.test.mjs",
-      "norm_label": "secoes"
-    },
-    {
-      "label": "selects",
-      "file_type": "code",
-      "source_file": "tests/relatorio-giro-usina.test.mjs",
-      "source_location": "L317",
-      "_origin": "ast",
-      "id": "tests_relatorio_giro_usina_test_selects",
-      "community": 117,
-      "community_name": "relatorio-giro-usina.test.mjs",
-      "norm_label": "selects"
-    },
-    {
-      "label": "resumo",
-      "file_type": "code",
-      "source_file": "tests/relatorio-giro-usina.test.mjs",
-      "source_location": "L318",
-      "_origin": "ast",
-      "id": "tests_relatorio_giro_usina_test_resumo",
-      "community": 117,
-      "community_name": "relatorio-giro-usina.test.mjs",
-      "norm_label": "resumo"
-    },
-    {
-      "label": "cabecalhos",
-      "file_type": "code",
-      "source_file": "tests/relatorio-giro-usina.test.mjs",
-      "source_location": "L321",
-      "_origin": "ast",
-      "id": "tests_relatorio_giro_usina_test_cabecalhos",
-      "community": 117,
-      "community_name": "relatorio-giro-usina.test.mjs",
-      "norm_label": "cabecalhos"
-    },
-    {
-      "label": "botaoTudo",
-      "file_type": "code",
-      "source_file": "tests/relatorio-giro-usina.test.mjs",
-      "source_location": "L332",
-      "_origin": "ast",
-      "id": "tests_relatorio_giro_usina_test_botaotudo",
-      "community": 117,
-      "community_name": "relatorio-giro-usina.test.mjs",
-      "norm_label": "botaotudo"
-    },
-    {
-      "label": "ctxF",
-      "file_type": "code",
-      "source_file": "tests/relatorio-giro-usina.test.mjs",
-      "source_location": "L334",
-      "_origin": "ast",
-      "id": "tests_relatorio_giro_usina_test_ctxf",
-      "community": 117,
-      "community_name": "relatorio-giro-usina.test.mjs",
-      "norm_label": "ctxf"
-    },
-    {
-      "label": "visivel()",
-      "file_type": "code",
-      "source_file": "tests/relatorio-giro-usina.test.mjs",
-      "source_location": "L344",
-      "_origin": "ast",
-      "id": "tests_relatorio_giro_usina_test_visivel",
-      "community": 117,
-      "community_name": "relatorio-giro-usina.test.mjs",
-      "norm_label": "visivel()"
-    },
-    {
-      "label": "aplicar()",
-      "file_type": "code",
-      "source_file": "tests/relatorio-giro-usina.test.mjs",
-      "source_location": "L345",
-      "_origin": "ast",
-      "id": "tests_relatorio_giro_usina_test_aplicar",
-      "community": 117,
-      "community_name": "relatorio-giro-usina.test.mjs",
-      "norm_label": "aplicar()"
-    },
-    {
       "label": "relatorio.js",
       "file_type": "code",
       "source_file": "js/relatorio.js",
       "source_location": "L1",
       "_origin": "ast",
+      "id": "js_relatorio",
       "community": 19,
       "community_name": "relatorio.js",
-      "norm_label": "relatorio.js",
-      "id": "js_relatorio"
+      "norm_label": "relatorio.js"
     },
     {
       "label": "_buildCriticidadeData()",
@@ -330,10 +66,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L1",
       "_origin": "ast",
+      "id": "js_relatorio_buildcriticidadedata",
       "community": 41,
       "community_name": "buildCards",
-      "norm_label": "_buildcriticidadedata()",
-      "id": "js_relatorio_buildcriticidadedata"
+      "norm_label": "_buildcriticidadedata()"
     },
     {
       "label": "_criticidadeDarkStyles()",
@@ -341,10 +77,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L334",
       "_origin": "ast",
+      "id": "js_relatorio_criticidadedarkstyles",
       "community": 19,
       "community_name": "relatorio.js",
-      "norm_label": "_criticidadedarkstyles()",
-      "id": "js_relatorio_criticidadedarkstyles"
+      "norm_label": "_criticidadedarkstyles()"
     },
     {
       "label": "_openRelWindow()",
@@ -352,10 +88,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L437",
       "_origin": "ast",
+      "id": "js_relatorio_openrelwindow",
       "community": 116,
       "community_name": "_rankEsc",
-      "norm_label": "_openrelwindow()",
-      "id": "js_relatorio_openrelwindow"
+      "norm_label": "_openrelwindow()"
     },
     {
       "label": "_abrirJanelaRelatorio()",
@@ -363,10 +99,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L458",
       "_origin": "ast",
+      "id": "js_relatorio_abrirjanelarelatorio",
       "community": 116,
       "community_name": "_rankEsc",
-      "norm_label": "_abrirjanelarelatorio()",
-      "id": "js_relatorio_abrirjanelarelatorio"
+      "norm_label": "_abrirjanelarelatorio()"
     },
     {
       "label": "_janelaRelatorioProgresso()",
@@ -374,10 +110,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L485",
       "_origin": "ast",
+      "id": "js_relatorio_janelarelatorioprogresso",
       "community": 19,
       "community_name": "relatorio.js",
-      "norm_label": "_janelarelatorioprogresso()",
-      "id": "js_relatorio_janelarelatorioprogresso"
+      "norm_label": "_janelarelatorioprogresso()"
     },
     {
       "label": "_buildAusenciasRelHTML()",
@@ -385,10 +121,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L656",
       "_origin": "ast",
+      "id": "js_relatorio_buildausenciasrelhtml",
       "community": 102,
       "community_name": "_buildRankingShellHTML",
-      "norm_label": "_buildausenciasrelhtml()",
-      "id": "js_relatorio_buildausenciasrelhtml"
+      "norm_label": "_buildausenciasrelhtml()"
     },
     {
       "label": "_ausenciasParaRegionaisData()",
@@ -396,10 +132,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L798",
       "_origin": "ast",
+      "id": "js_relatorio_ausenciaspararegionaisdata",
       "community": 19,
       "community_name": "relatorio.js",
-      "norm_label": "_ausenciaspararegionaisdata()",
-      "id": "js_relatorio_ausenciaspararegionaisdata"
+      "norm_label": "_ausenciaspararegionaisdata()"
     },
     {
       "label": "_ausGetPeriodo()",
@@ -407,10 +143,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L848",
       "_origin": "ast",
+      "id": "js_relatorio_ausgetperiodo",
       "community": 102,
       "community_name": "_buildRankingShellHTML",
-      "norm_label": "_ausgetperiodo()",
-      "id": "js_relatorio_ausgetperiodo"
+      "norm_label": "_ausgetperiodo()"
     },
     {
       "label": "_rankEsc()",
@@ -418,10 +154,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L1043",
       "_origin": "ast",
+      "id": "js_relatorio_rankesc",
       "community": 116,
       "community_name": "_rankEsc",
-      "norm_label": "_rankesc()",
-      "id": "js_relatorio_rankesc"
+      "norm_label": "_rankesc()"
     },
     {
       "label": "_rankCompactarDias()",
@@ -429,10 +165,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L1047",
       "_origin": "ast",
+      "id": "js_relatorio_rankcompactardias",
       "community": 116,
       "community_name": "_rankEsc",
-      "norm_label": "_rankcompactardias()",
-      "id": "js_relatorio_rankcompactardias"
+      "norm_label": "_rankcompactardias()"
     },
     {
       "label": "_rankAgruparPorCentral()",
@@ -440,10 +176,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L1078",
       "_origin": "ast",
+      "id": "js_relatorio_rankagruparporcentral",
       "community": 19,
       "community_name": "relatorio.js",
-      "norm_label": "_rankagruparporcentral()",
-      "id": "js_relatorio_rankagruparporcentral"
+      "norm_label": "_rankagruparporcentral()"
     },
     {
       "label": "_rankAgruparPorRegional()",
@@ -451,10 +187,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L1105",
       "_origin": "ast",
+      "id": "js_relatorio_rankagruparporregional",
       "community": 19,
       "community_name": "relatorio.js",
-      "norm_label": "_rankagruparporregional()",
-      "id": "js_relatorio_rankagruparporregional"
+      "norm_label": "_rankagruparporregional()"
     },
     {
       "label": "_rankCentraisDesconsideradas()",
@@ -462,10 +198,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L1129",
       "_origin": "ast",
+      "id": "js_relatorio_rankcentraisdesconsideradas",
       "community": 19,
       "community_name": "relatorio.js",
-      "norm_label": "_rankcentraisdesconsideradas()",
-      "id": "js_relatorio_rankcentraisdesconsideradas"
+      "norm_label": "_rankcentraisdesconsideradas()"
     },
     {
       "label": "_rankMesAnoLabel()",
@@ -473,10 +209,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L1141",
       "_origin": "ast",
+      "id": "js_relatorio_rankmesanolabel",
       "community": 19,
       "community_name": "relatorio.js",
-      "norm_label": "_rankmesanolabel()",
-      "id": "js_relatorio_rankmesanolabel"
+      "norm_label": "_rankmesanolabel()"
     },
     {
       "label": "_rankPeriodoBadgeLabel()",
@@ -484,10 +220,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L1155",
       "_origin": "ast",
+      "id": "js_relatorio_rankperiodobadgelabel",
       "community": 102,
       "community_name": "_buildRankingShellHTML",
-      "norm_label": "_rankperiodobadgelabel()",
-      "id": "js_relatorio_rankperiodobadgelabel"
+      "norm_label": "_rankperiodobadgelabel()"
     },
     {
       "label": "_rankSeverityDias()",
@@ -495,10 +231,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L1173",
       "_origin": "ast",
+      "id": "js_relatorio_rankseveritydias",
       "community": 116,
       "community_name": "_rankEsc",
-      "norm_label": "_rankseveritydias()",
-      "id": "js_relatorio_rankseveritydias"
+      "norm_label": "_rankseveritydias()"
     },
     {
       "label": "_rankSeverityCentrais()",
@@ -506,10 +242,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L1181",
       "_origin": "ast",
+      "id": "js_relatorio_rankseveritycentrais",
       "community": 116,
       "community_name": "_rankEsc",
-      "norm_label": "_rankseveritycentrais()",
-      "id": "js_relatorio_rankseveritycentrais"
+      "norm_label": "_rankseveritycentrais()"
     },
     {
       "label": "_buildRankingShellHTML()",
@@ -517,10 +253,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L1191",
       "_origin": "ast",
+      "id": "js_relatorio_buildrankingshellhtml",
       "community": 102,
       "community_name": "_buildRankingShellHTML",
-      "norm_label": "_buildrankingshellhtml()",
-      "id": "js_relatorio_buildrankingshellhtml"
+      "norm_label": "_buildrankingshellhtml()"
     },
     {
       "label": "_dgrScriptTema()",
@@ -528,10 +264,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L1528",
       "_origin": "ast",
+      "id": "js_relatorio_dgrscripttema",
       "community": 102,
       "community_name": "_buildRankingShellHTML",
-      "norm_label": "_dgrscripttema()",
-      "id": "js_relatorio_dgrscripttema"
+      "norm_label": "_dgrscripttema()"
     },
     {
       "label": "_dgrScriptDownload()",
@@ -539,10 +275,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L1547",
       "_origin": "ast",
+      "id": "js_relatorio_dgrscriptdownload",
       "community": 102,
       "community_name": "_buildRankingShellHTML",
-      "norm_label": "_dgrscriptdownload()",
-      "id": "js_relatorio_dgrscriptdownload"
+      "norm_label": "_dgrscriptdownload()"
     },
     {
       "label": "_dgrScriptCollapse()",
@@ -550,10 +286,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L1568",
       "_origin": "ast",
+      "id": "js_relatorio_dgrscriptcollapse",
       "community": 102,
       "community_name": "_buildRankingShellHTML",
-      "norm_label": "_dgrscriptcollapse()",
-      "id": "js_relatorio_dgrscriptcollapse"
+      "norm_label": "_dgrscriptcollapse()"
     },
     {
       "label": "_dgrScriptAbas()",
@@ -561,10 +297,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L1583",
       "_origin": "ast",
+      "id": "js_relatorio_dgrscriptabas",
       "community": 102,
       "community_name": "_buildRankingShellHTML",
-      "norm_label": "_dgrscriptabas()",
-      "id": "js_relatorio_dgrscriptabas"
+      "norm_label": "_dgrscriptabas()"
     },
     {
       "label": "_dgrFontesEmbutidas()",
@@ -572,10 +308,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L1603",
       "_origin": "ast",
+      "id": "js_relatorio_dgrfontesembutidas",
       "community": 102,
       "community_name": "_buildRankingShellHTML",
-      "norm_label": "_dgrfontesembutidas()",
-      "id": "js_relatorio_dgrfontesembutidas"
+      "norm_label": "_dgrfontesembutidas()"
     },
     {
       "label": "_dgrFonteIconesEmbutida()",
@@ -583,10 +319,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L1607",
       "_origin": "ast",
+      "id": "js_relatorio_dgrfonteiconesembutida",
       "community": 102,
       "community_name": "_buildRankingShellHTML",
-      "norm_label": "_dgrfonteiconesembutida()",
-      "id": "js_relatorio_dgrfonteiconesembutida"
+      "norm_label": "_dgrfonteiconesembutida()"
     },
     {
       "label": "_buildRankSideCard()",
@@ -594,10 +330,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L1616",
       "_origin": "ast",
+      "id": "js_relatorio_buildranksidecard",
       "community": 116,
       "community_name": "_rankEsc",
-      "norm_label": "_buildranksidecard()",
-      "id": "js_relatorio_buildranksidecard"
+      "norm_label": "_buildranksidecard()"
     },
     {
       "label": "_buildRankingCentraisBody()",
@@ -605,10 +341,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L1632",
       "_origin": "ast",
+      "id": "js_relatorio_buildrankingcentraisbody",
       "community": 116,
       "community_name": "_rankEsc",
-      "norm_label": "_buildrankingcentraisbody()",
-      "id": "js_relatorio_buildrankingcentraisbody"
+      "norm_label": "_buildrankingcentraisbody()"
     },
     {
       "label": "_buildRankingRegionaisTableBlock()",
@@ -616,10 +352,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L1729",
       "_origin": "ast",
+      "id": "js_relatorio_buildrankingregionaistableblock",
       "community": 116,
       "community_name": "_rankEsc",
-      "norm_label": "_buildrankingregionaistableblock()",
-      "id": "js_relatorio_buildrankingregionaistableblock"
+      "norm_label": "_buildrankingregionaistableblock()"
     },
     {
       "label": "_criticidadeMatTableStyles()",
@@ -627,10 +363,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L1834",
       "_origin": "ast",
+      "id": "js_relatorio_criticidademattablestyles",
       "community": 19,
       "community_name": "relatorio.js",
-      "norm_label": "_criticidademattablestyles()",
-      "id": "js_relatorio_criticidademattablestyles"
+      "norm_label": "_criticidademattablestyles()"
     },
     {
       "label": "_REL_NIVEIS",
@@ -638,10 +374,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L1851",
       "_origin": "ast",
+      "id": "js_relatorio_rel_niveis",
       "community": 19,
       "community_name": "relatorio.js",
-      "norm_label": "_rel_niveis",
-      "id": "js_relatorio_rel_niveis"
+      "norm_label": "_rel_niveis"
     },
     {
       "label": "_relNiveisNorm()",
@@ -649,10 +385,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L1859",
       "_origin": "ast",
+      "id": "js_relatorio_relniveisnorm",
       "community": 19,
       "community_name": "relatorio.js",
-      "norm_label": "_relniveisnorm()",
-      "id": "js_relatorio_relniveisnorm"
+      "norm_label": "_relniveisnorm()"
     },
     {
       "label": "_relNiveisTexto()",
@@ -660,10 +396,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L1865",
       "_origin": "ast",
+      "id": "js_relatorio_relniveistexto",
       "community": 19,
       "community_name": "relatorio.js",
-      "norm_label": "_relniveistexto()",
-      "id": "js_relatorio_relniveistexto"
+      "norm_label": "_relniveistexto()"
     },
     {
       "label": "_relNiveisPickerHTML()",
@@ -671,10 +407,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L1872",
       "_origin": "ast",
+      "id": "js_relatorio_relniveispickerhtml",
       "community": 19,
       "community_name": "relatorio.js",
-      "norm_label": "_relniveispickerhtml()",
-      "id": "js_relatorio_relniveispickerhtml"
+      "norm_label": "_relniveispickerhtml()"
     },
     {
       "label": "_relNiveisSelecionados()",
@@ -682,10 +418,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L1886",
       "_origin": "ast",
+      "id": "js_relatorio_relniveisselecionados",
       "community": 19,
       "community_name": "relatorio.js",
-      "norm_label": "_relniveisselecionados()",
-      "id": "js_relatorio_relniveisselecionados"
+      "norm_label": "_relniveisselecionados()"
     },
     {
       "label": "fmtKgR()",
@@ -693,10 +429,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L1961",
       "_origin": "ast",
+      "id": "js_relatorio_fmtkgr",
       "community": 41,
       "community_name": "buildCards",
-      "norm_label": "fmtkgr()",
-      "id": "js_relatorio_fmtkgr"
+      "norm_label": "fmtkgr()"
     },
     {
       "label": "varDir()",
@@ -704,10 +440,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L1962",
       "_origin": "ast",
+      "id": "js_relatorio_vardir",
       "community": 41,
       "community_name": "buildCards",
-      "norm_label": "vardir()",
-      "id": "js_relatorio_vardir"
+      "norm_label": "vardir()"
     },
     {
       "label": "varDirColor()",
@@ -715,10 +451,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L1963",
       "_origin": "ast",
+      "id": "js_relatorio_vardircolor",
       "community": 41,
       "community_name": "buildCards",
-      "norm_label": "vardircolor()",
-      "id": "js_relatorio_vardircolor"
+      "norm_label": "vardircolor()"
     },
     {
       "label": "trendLabel()",
@@ -726,10 +462,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L1964",
       "_origin": "ast",
+      "id": "js_relatorio_trendlabel",
       "community": 41,
       "community_name": "buildCards",
-      "norm_label": "trendlabel()",
-      "id": "js_relatorio_trendlabel"
+      "norm_label": "trendlabel()"
     },
     {
       "label": "trendColor()",
@@ -737,10 +473,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L1965",
       "_origin": "ast",
+      "id": "js_relatorio_trendcolor",
       "community": 41,
       "community_name": "buildCards",
-      "norm_label": "trendcolor()",
-      "id": "js_relatorio_trendcolor"
+      "norm_label": "trendcolor()"
     },
     {
       "label": "escR()",
@@ -748,10 +484,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L1966",
       "_origin": "ast",
+      "id": "js_relatorio_escr",
       "community": 32,
       "community_name": "escR",
-      "norm_label": "escr()",
-      "id": "js_relatorio_escr"
+      "norm_label": "escr()"
     },
     {
       "label": "groupByCentral()",
@@ -759,10 +495,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L1969",
       "_origin": "ast",
+      "id": "js_relatorio_groupbycentral",
       "community": 19,
       "community_name": "relatorio.js",
-      "norm_label": "groupbycentral()",
-      "id": "js_relatorio_groupbycentral"
+      "norm_label": "groupbycentral()"
     },
     {
       "label": "buildMatRows()",
@@ -770,10 +506,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L1975",
       "_origin": "ast",
+      "id": "js_relatorio_buildmatrows",
       "community": 41,
       "community_name": "buildCards",
-      "norm_label": "buildmatrows()",
-      "id": "js_relatorio_buildmatrows"
+      "norm_label": "buildmatrows()"
     },
     {
       "label": "buildCentralBlock()",
@@ -781,10 +517,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L1987",
       "_origin": "ast",
+      "id": "js_relatorio_buildcentralblock",
       "community": 41,
       "community_name": "buildCards",
-      "norm_label": "buildcentralblock()",
-      "id": "js_relatorio_buildcentralblock"
+      "norm_label": "buildcentralblock()"
     },
     {
       "label": "_getAnPeriodo()",
@@ -792,10 +528,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L2088",
       "_origin": "ast",
+      "id": "js_relatorio_getanperiodo",
       "community": 19,
       "community_name": "relatorio.js",
-      "norm_label": "_getanperiodo()",
-      "id": "js_relatorio_getanperiodo"
+      "norm_label": "_getanperiodo()"
     },
     {
       "label": "_resolverAcoesParaMaterial()",
@@ -803,10 +539,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L2174",
       "_origin": "ast",
+      "id": "js_relatorio_resolveracoesparamaterial",
       "community": 41,
       "community_name": "buildCards",
-      "norm_label": "_resolveracoesparamaterial()",
-      "id": "js_relatorio_resolveracoesparamaterial"
+      "norm_label": "_resolveracoesparamaterial()"
     },
     {
       "label": "fmtKgC()",
@@ -814,10 +550,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L2272",
       "_origin": "ast",
+      "id": "js_relatorio_fmtkgc",
       "community": 41,
       "community_name": "buildCards",
-      "norm_label": "fmtkgc()",
-      "id": "js_relatorio_fmtkgc"
+      "norm_label": "fmtkgc()"
     },
     {
       "label": "escC()",
@@ -825,10 +561,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L2277",
       "_origin": "ast",
+      "id": "js_relatorio_escc",
       "community": 41,
       "community_name": "buildCards",
-      "norm_label": "escc()",
-      "id": "js_relatorio_escc"
+      "norm_label": "escc()"
     },
     {
       "label": "buildRows()",
@@ -836,10 +572,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L2279",
       "_origin": "ast",
+      "id": "js_relatorio_buildrows",
       "community": 41,
       "community_name": "buildCards",
-      "norm_label": "buildrows()",
-      "id": "js_relatorio_buildrows"
+      "norm_label": "buildrows()"
     },
     {
       "label": "buildLevelSection()",
@@ -847,10 +583,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L2304",
       "_origin": "ast",
+      "id": "js_relatorio_buildlevelsection",
       "community": 41,
       "community_name": "buildCards",
-      "norm_label": "buildlevelsection()",
-      "id": "js_relatorio_buildlevelsection"
+      "norm_label": "buildlevelsection()"
     },
     {
       "label": "varColor()",
@@ -858,10 +594,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L2419",
       "_origin": "ast",
+      "id": "js_relatorio_varcolor",
       "community": 41,
       "community_name": "buildCards",
-      "norm_label": "varcolor()",
-      "id": "js_relatorio_varcolor"
+      "norm_label": "varcolor()"
     },
     {
       "label": "buildCards()",
@@ -869,10 +605,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L2425",
       "_origin": "ast",
+      "id": "js_relatorio_buildcards",
       "community": 41,
       "community_name": "buildCards",
-      "norm_label": "buildcards()",
-      "id": "js_relatorio_buildcards"
+      "norm_label": "buildcards()"
     },
     {
       "label": "diffDays()",
@@ -880,10 +616,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L2590",
       "_origin": "ast",
+      "id": "js_relatorio_diffdays",
       "community": 32,
       "community_name": "escR",
-      "norm_label": "diffdays()",
-      "id": "js_relatorio_diffdays"
+      "norm_label": "diffdays()"
     },
     {
       "label": "ocStatus()",
@@ -891,10 +627,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L2597",
       "_origin": "ast",
+      "id": "js_relatorio_ocstatus",
       "community": 32,
       "community_name": "escR",
-      "norm_label": "ocstatus()",
-      "id": "js_relatorio_ocstatus"
+      "norm_label": "ocstatus()"
     },
     {
       "label": "getRegional()",
@@ -902,10 +638,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L2612",
       "_origin": "ast",
+      "id": "js_relatorio_getregional",
       "community": 32,
       "community_name": "escR",
-      "norm_label": "getregional()",
-      "id": "js_relatorio_getregional"
+      "norm_label": "getregional()"
     },
     {
       "label": "buildRegionalRow()",
@@ -913,10 +649,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L2701",
       "_origin": "ast",
+      "id": "js_relatorio_buildregionalrow",
       "community": 32,
       "community_name": "escR",
-      "norm_label": "buildregionalrow()",
-      "id": "js_relatorio_buildregionalrow"
+      "norm_label": "buildregionalrow()"
     },
     {
       "label": "buildMotivoRow()",
@@ -924,10 +660,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L2725",
       "_origin": "ast",
+      "id": "js_relatorio_buildmotivorow",
       "community": 32,
       "community_name": "escR",
-      "norm_label": "buildmotivorow()",
-      "id": "js_relatorio_buildmotivorow"
+      "norm_label": "buildmotivorow()"
     },
     {
       "label": "buildCentralRow()",
@@ -935,10 +671,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L2743",
       "_origin": "ast",
+      "id": "js_relatorio_buildcentralrow",
       "community": 32,
       "community_name": "escR",
-      "norm_label": "buildcentralrow()",
-      "id": "js_relatorio_buildcentralrow"
+      "norm_label": "buildcentralrow()"
     },
     {
       "label": "daiItens()",
@@ -946,10 +682,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L2920",
       "_origin": "ast",
+      "id": "js_relatorio_daiitens",
       "community": 32,
       "community_name": "escR",
-      "norm_label": "daiitens()",
-      "id": "js_relatorio_daiitens"
+      "norm_label": "daiitens()"
     },
     {
       "label": "daiPendente()",
@@ -957,10 +693,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L2921",
       "_origin": "ast",
+      "id": "js_relatorio_daipendente",
       "community": 32,
       "community_name": "escR",
-      "norm_label": "daipendente()",
-      "id": "js_relatorio_daipendente"
+      "norm_label": "daipendente()"
     },
     {
       "label": "daiDataGeracaoISO()",
@@ -968,10 +704,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L2922",
       "_origin": "ast",
+      "id": "js_relatorio_daidatageracaoiso",
       "community": 19,
       "community_name": "relatorio.js",
-      "norm_label": "daidatageracaoiso()",
-      "id": "js_relatorio_daidatageracaoiso"
+      "norm_label": "daidatageracaoiso()"
     },
     {
       "label": "daiDataConclusaoISO()",
@@ -979,10 +715,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L2925",
       "_origin": "ast",
+      "id": "js_relatorio_daidataconclusaoiso",
       "community": 19,
       "community_name": "relatorio.js",
-      "norm_label": "daidataconclusaoiso()",
-      "id": "js_relatorio_daidataconclusaoiso"
+      "norm_label": "daidataconclusaoiso()"
     },
     {
       "label": "buildDaiRow()",
@@ -990,10 +726,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L3017",
       "_origin": "ast",
+      "id": "js_relatorio_builddairow",
       "community": 32,
       "community_name": "escR",
-      "norm_label": "builddairow()",
-      "id": "js_relatorio_builddairow"
+      "norm_label": "builddairow()"
     },
     {
       "label": "_dgrSvgParaPngDataUrl()",
@@ -1001,10 +737,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L3166",
       "_origin": "ast",
+      "id": "js_relatorio_dgrsvgparapngdataurl",
       "community": 19,
       "community_name": "relatorio.js",
-      "norm_label": "_dgrsvgparapngdataurl()",
-      "id": "js_relatorio_dgrsvgparapngdataurl"
+      "norm_label": "_dgrsvgparapngdataurl()"
     },
     {
       "label": "_dgrCanvasParaPngDataUrl()",
@@ -1012,10 +748,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L3214",
       "_origin": "ast",
+      "id": "js_relatorio_dgrcanvasparapngdataurl",
       "community": 19,
       "community_name": "relatorio.js",
-      "norm_label": "_dgrcanvasparapngdataurl()",
-      "id": "js_relatorio_dgrcanvasparapngdataurl"
+      "norm_label": "_dgrcanvasparapngdataurl()"
     },
     {
       "label": "_dgrBuildResumoPeriodoHtml()",
@@ -1023,10 +759,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L3223",
       "_origin": "ast",
+      "id": "js_relatorio_dgrbuildresumoperiodohtml",
       "community": 44,
       "community_name": "_dgmLinhaHtml",
-      "norm_label": "_dgrbuildresumoperiodohtml()",
-      "id": "js_relatorio_dgrbuildresumoperiodohtml"
+      "norm_label": "_dgrbuildresumoperiodohtml()"
     },
     {
       "label": "_dgrBuildSaudeGeralHtml()",
@@ -1034,10 +770,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L3350",
       "_origin": "ast",
+      "id": "js_relatorio_dgrbuildsaudegeralhtml",
       "community": 116,
       "community_name": "_rankEsc",
-      "norm_label": "_dgrbuildsaudegeralhtml()",
-      "id": "js_relatorio_dgrbuildsaudegeralhtml"
+      "norm_label": "_dgrbuildsaudegeralhtml()"
     },
     {
       "label": "_dgrCapturarComTema()",
@@ -1045,10 +781,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L3402",
       "_origin": "ast",
+      "id": "js_relatorio_dgrcapturarcomtema",
       "community": 19,
       "community_name": "relatorio.js",
-      "norm_label": "_dgrcapturarcomtema()",
-      "id": "js_relatorio_dgrcapturarcomtema"
+      "norm_label": "_dgrcapturarcomtema()"
     },
     {
       "label": "_dgrCapturarCategoriaAmpliada()",
@@ -1056,10 +792,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L3451",
       "_origin": "ast",
+      "id": "js_relatorio_dgrcapturarcategoriaampliada",
       "community": 19,
       "community_name": "relatorio.js",
-      "norm_label": "_dgrcapturarcategoriaampliada()",
-      "id": "js_relatorio_dgrcapturarcategoriaampliada"
+      "norm_label": "_dgrcapturarcategoriaampliada()"
     },
     {
       "label": "_dgrBuildCategoriaHtml()",
@@ -1067,10 +803,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L3554",
       "_origin": "ast",
+      "id": "js_relatorio_dgrbuildcategoriahtml",
       "community": 19,
       "community_name": "relatorio.js",
-      "norm_label": "_dgrbuildcategoriahtml()",
-      "id": "js_relatorio_dgrbuildcategoriahtml"
+      "norm_label": "_dgrbuildcategoriahtml()"
     },
     {
       "label": "_dgrBuildCustoRegionalCentralHtml()",
@@ -1078,10 +814,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L3567",
       "_origin": "ast",
+      "id": "js_relatorio_dgrbuildcustoregionalcentralhtml",
       "community": 44,
       "community_name": "_dgmLinhaHtml",
-      "norm_label": "_dgrbuildcustoregionalcentralhtml()",
-      "id": "js_relatorio_dgrbuildcustoregionalcentralhtml"
+      "norm_label": "_dgrbuildcustoregionalcentralhtml()"
     },
     {
       "label": "_dgrBuildCustoAbsolutoHtml()",
@@ -1089,10 +825,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L3614",
       "_origin": "ast",
+      "id": "js_relatorio_dgrbuildcustoabsolutohtml",
       "community": 116,
       "community_name": "_rankEsc",
-      "norm_label": "_dgrbuildcustoabsolutohtml()",
-      "id": "js_relatorio_dgrbuildcustoabsolutohtml"
+      "norm_label": "_dgrbuildcustoabsolutohtml()"
     },
     {
       "label": "_dgrNivelCor()",
@@ -1100,10 +836,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L3651",
       "_origin": "ast",
+      "id": "js_relatorio_dgrnivelcor",
       "community": 44,
       "community_name": "_dgmLinhaHtml",
-      "norm_label": "_dgrnivelcor()",
-      "id": "js_relatorio_dgrnivelcor"
+      "norm_label": "_dgrnivelcor()"
     },
     {
       "label": "_dgrGiroCor()",
@@ -1111,10 +847,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L3654",
       "_origin": "ast",
+      "id": "js_relatorio_dgrgirocor",
       "community": 44,
       "community_name": "_dgmLinhaHtml",
-      "norm_label": "_dgrgirocor()",
-      "id": "js_relatorio_dgrgirocor"
+      "norm_label": "_dgrgirocor()"
     },
     {
       "label": "_dgrTruncNome()",
@@ -1122,10 +858,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L3662",
       "_origin": "ast",
+      "id": "js_relatorio_dgrtruncnome",
       "community": 44,
       "community_name": "_dgmLinhaHtml",
-      "norm_label": "_dgrtruncnome()",
-      "id": "js_relatorio_dgrtruncnome"
+      "norm_label": "_dgrtruncnome()"
     },
     {
       "label": "_dgrAbastInfo()",
@@ -1133,10 +869,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L3673",
       "_origin": "ast",
+      "id": "js_relatorio_dgrabastinfo",
       "community": 44,
       "community_name": "_dgmLinhaHtml",
-      "norm_label": "_dgrabastinfo()",
-      "id": "js_relatorio_dgrabastinfo"
+      "norm_label": "_dgrabastinfo()"
     },
     {
       "label": "_dgrGiroListaHtml()",
@@ -1144,10 +880,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L3688",
       "_origin": "ast",
+      "id": "js_relatorio_dgrgirolistahtml",
       "community": 44,
       "community_name": "_dgmLinhaHtml",
-      "norm_label": "_dgrgirolistahtml()",
-      "id": "js_relatorio_dgrgirolistahtml"
+      "norm_label": "_dgrgirolistahtml()"
     },
     {
       "label": "_dgrBuildGiroCoberturaHtml()",
@@ -1155,10 +891,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L3742",
       "_origin": "ast",
+      "id": "js_relatorio_dgrbuildgirocoberturahtml",
       "community": 44,
       "community_name": "_dgmLinhaHtml",
-      "norm_label": "_dgrbuildgirocoberturahtml()",
-      "id": "js_relatorio_dgrbuildgirocoberturahtml"
+      "norm_label": "_dgrbuildgirocoberturahtml()"
     },
     {
       "label": "_dgrValCor()",
@@ -1166,10 +902,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L3767",
       "_origin": "ast",
+      "id": "js_relatorio_dgrvalcor",
       "community": 44,
       "community_name": "_dgmLinhaHtml",
-      "norm_label": "_dgrvalcor()",
-      "id": "js_relatorio_dgrvalcor"
+      "norm_label": "_dgrvalcor()"
     },
     {
       "label": "_dgrNowrapNum()",
@@ -1177,10 +913,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L3778",
       "_origin": "ast",
+      "id": "js_relatorio_dgrnowrapnum",
       "community": 44,
       "community_name": "_dgmLinhaHtml",
-      "norm_label": "_dgrnowrapnum()",
-      "id": "js_relatorio_dgrnowrapnum"
+      "norm_label": "_dgrnowrapnum()"
     },
     {
       "label": "_dgrTabelaMaterialHtml()",
@@ -1188,10 +924,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L3791",
       "_origin": "ast",
+      "id": "js_relatorio_dgrtabelamaterialhtml",
       "community": 44,
       "community_name": "_dgmLinhaHtml",
-      "norm_label": "_dgrtabelamaterialhtml()",
-      "id": "js_relatorio_dgrtabelamaterialhtml"
+      "norm_label": "_dgrtabelamaterialhtml()"
     },
     {
       "label": "_dgrRankingHtml()",
@@ -1199,10 +935,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L3841",
       "_origin": "ast",
+      "id": "js_relatorio_dgrrankinghtml",
       "community": 44,
       "community_name": "_dgmLinhaHtml",
-      "norm_label": "_dgrrankinghtml()",
-      "id": "js_relatorio_dgrrankinghtml"
+      "norm_label": "_dgrrankinghtml()"
     },
     {
       "label": "_dgrBuildDetalhadoAnaliticoHtml()",
@@ -1210,10 +946,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L3883",
       "_origin": "ast",
+      "id": "js_relatorio_dgrbuilddetalhadoanaliticohtml",
       "community": 44,
       "community_name": "_dgmLinhaHtml",
-      "norm_label": "_dgrbuilddetalhadoanaliticohtml()",
-      "id": "js_relatorio_dgrbuilddetalhadoanaliticohtml"
+      "norm_label": "_dgrbuilddetalhadoanaliticohtml()"
     },
     {
       "label": "_dgrEstilos()",
@@ -1221,10 +957,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L3905",
       "_origin": "ast",
+      "id": "js_relatorio_dgrestilos",
       "community": 19,
       "community_name": "relatorio.js",
-      "norm_label": "_dgrestilos()",
-      "id": "js_relatorio_dgrestilos"
+      "norm_label": "_dgrestilos()"
     },
     {
       "label": "_dgrSelecaoCompleta()",
@@ -1232,10 +968,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L4115",
       "_origin": "ast",
+      "id": "js_relatorio_dgrselecaocompleta",
       "community": 19,
       "community_name": "relatorio.js",
-      "norm_label": "_dgrselecaocompleta()",
-      "id": "js_relatorio_dgrselecaocompleta"
+      "norm_label": "_dgrselecaocompleta()"
     },
     {
       "label": "_dgrInjetarEstiloModalSelecao()",
@@ -1243,10 +979,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L4126",
       "_origin": "ast",
+      "id": "js_relatorio_dgrinjetarestilomodalselecao",
       "community": 19,
       "community_name": "relatorio.js",
-      "norm_label": "_dgrinjetarestilomodalselecao()",
-      "id": "js_relatorio_dgrinjetarestilomodalselecao"
+      "norm_label": "_dgrinjetarestilomodalselecao()"
     },
     {
       "label": "_dgrNomeArquivoRelatorio()",
@@ -1254,10 +990,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L4254",
       "_origin": "ast",
+      "id": "js_relatorio_dgrnomearquivorelatorio",
       "community": 19,
       "community_name": "relatorio.js",
-      "norm_label": "_dgrnomearquivorelatorio()",
-      "id": "js_relatorio_dgrnomearquivorelatorio"
+      "norm_label": "_dgrnomearquivorelatorio()"
     },
     {
       "label": "fmtBR()",
@@ -1265,10 +1001,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L4391",
       "_origin": "ast",
+      "id": "js_relatorio_fmtbr",
       "community": 32,
       "community_name": "escR",
-      "norm_label": "fmtbr()",
-      "id": "js_relatorio_fmtbr"
+      "norm_label": "fmtbr()"
     },
     {
       "label": "buildTempoCell()",
@@ -1276,10 +1012,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L4470",
       "_origin": "ast",
+      "id": "js_relatorio_buildtempocell",
       "community": 32,
       "community_name": "escR",
-      "norm_label": "buildtempocell()",
-      "id": "js_relatorio_buildtempocell"
+      "norm_label": "buildtempocell()"
     },
     {
       "label": "buildStatusBadge()",
@@ -1287,10 +1023,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L4489",
       "_origin": "ast",
+      "id": "js_relatorio_buildstatusbadge",
       "community": 32,
       "community_name": "escR",
-      "norm_label": "buildstatusbadge()",
-      "id": "js_relatorio_buildstatusbadge"
+      "norm_label": "buildstatusbadge()"
     },
     {
       "label": "buildOcorrenciaRow()",
@@ -1298,10 +1034,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L4499",
       "_origin": "ast",
+      "id": "js_relatorio_buildocorrenciarow",
       "community": 32,
       "community_name": "escR",
-      "norm_label": "buildocorrenciarow()",
-      "id": "js_relatorio_buildocorrenciarow"
+      "norm_label": "buildocorrenciarow()"
     },
     {
       "label": "buildCentralSection()",
@@ -1309,10 +1045,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L4529",
       "_origin": "ast",
+      "id": "js_relatorio_buildcentralsection",
       "community": 32,
       "community_name": "escR",
-      "norm_label": "buildcentralsection()",
-      "id": "js_relatorio_buildcentralsection"
+      "norm_label": "buildcentralsection()"
     },
     {
       "label": "buildRegionalSection()",
@@ -1320,10 +1056,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L4564",
       "_origin": "ast",
+      "id": "js_relatorio_buildregionalsection",
       "community": 32,
       "community_name": "escR",
-      "norm_label": "buildregionalsection()",
-      "id": "js_relatorio_buildregionalsection"
+      "norm_label": "buildregionalsection()"
     },
     {
       "label": "buildSumario()",
@@ -1331,10 +1067,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L4942",
       "_origin": "ast",
+      "id": "js_relatorio_buildsumario",
       "community": 32,
       "community_name": "escR",
-      "norm_label": "buildsumario()",
-      "id": "js_relatorio_buildsumario"
+      "norm_label": "buildsumario()"
     },
     {
       "label": "_dgmState",
@@ -1342,10 +1078,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L5142",
       "_origin": "ast",
+      "id": "js_relatorio_dgmstate",
       "community": 19,
       "community_name": "relatorio.js",
-      "norm_label": "_dgmstate",
-      "id": "js_relatorio_dgmstate"
+      "norm_label": "_dgmstate"
     },
     {
       "label": "_dgmMesKey()",
@@ -1353,10 +1089,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L5149",
       "_origin": "ast",
+      "id": "js_relatorio_dgmmeskey",
       "community": 19,
       "community_name": "relatorio.js",
-      "norm_label": "_dgmmeskey()",
-      "id": "js_relatorio_dgmmeskey"
+      "norm_label": "_dgmmeskey()"
     },
     {
       "label": "_dgmMesLabel()",
@@ -1364,10 +1100,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L5150",
       "_origin": "ast",
+      "id": "js_relatorio_dgmmeslabel",
       "community": 19,
       "community_name": "relatorio.js",
-      "norm_label": "_dgmmeslabel()",
-      "id": "js_relatorio_dgmmeslabel"
+      "norm_label": "_dgmmeslabel()"
     },
     {
       "label": "_dgmMesesOrdenados()",
@@ -1375,10 +1111,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L5151",
       "_origin": "ast",
+      "id": "js_relatorio_dgmmesesordenados",
       "community": 19,
       "community_name": "relatorio.js",
-      "norm_label": "_dgmmesesordenados()",
-      "id": "js_relatorio_dgmmesesordenados"
+      "norm_label": "_dgmmesesordenados()"
     },
     {
       "label": "_dgmInjetarEstilo()",
@@ -1386,10 +1122,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L5158",
       "_origin": "ast",
+      "id": "js_relatorio_dgminjetarestilo",
       "community": 19,
       "community_name": "relatorio.js",
-      "norm_label": "_dgminjetarestilo()",
-      "id": "js_relatorio_dgminjetarestilo"
+      "norm_label": "_dgminjetarestilo()"
     },
     {
       "label": "_dgmRenderPicker()",
@@ -1397,10 +1133,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L5212",
       "_origin": "ast",
+      "id": "js_relatorio_dgmrenderpicker",
       "community": 19,
       "community_name": "relatorio.js",
-      "norm_label": "_dgmrenderpicker()",
-      "id": "js_relatorio_dgmrenderpicker"
+      "norm_label": "_dgmrenderpicker()"
     },
     {
       "label": "_dgmCoberturaInfo()",
@@ -1408,10 +1144,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L5249",
       "_origin": "ast",
+      "id": "js_relatorio_dgmcoberturainfo",
       "community": 44,
       "community_name": "_dgmLinhaHtml",
-      "norm_label": "_dgmcoberturainfo()",
-      "id": "js_relatorio_dgmcoberturainfo"
+      "norm_label": "_dgmcoberturainfo()"
     },
     {
       "label": "_dgmLinhaHtml()",
@@ -1419,10 +1155,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L5266",
       "_origin": "ast",
+      "id": "js_relatorio_dgmlinhahtml",
       "community": 44,
       "community_name": "_dgmLinhaHtml",
-      "norm_label": "_dgmlinhahtml()",
-      "id": "js_relatorio_dgmlinhahtml"
+      "norm_label": "_dgmlinhahtml()"
     },
     {
       "label": "_DGM_COLUNAS",
@@ -1430,10 +1166,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L5295",
       "_origin": "ast",
+      "id": "js_relatorio_dgm_colunas",
       "community": 19,
       "community_name": "relatorio.js",
-      "norm_label": "_dgm_colunas",
-      "id": "js_relatorio_dgm_colunas"
+      "norm_label": "_dgm_colunas"
     },
     {
       "label": "_dgmAjudaTexto()",
@@ -1441,10 +1177,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L5364",
       "_origin": "ast",
+      "id": "js_relatorio_dgmajudatexto",
       "community": 116,
       "community_name": "_rankEsc",
-      "norm_label": "_dgmajudatexto()",
-      "id": "js_relatorio_dgmajudatexto"
+      "norm_label": "_dgmajudatexto()"
     },
     {
       "label": "_dgmCentralTabelaHtml()",
@@ -1452,10 +1188,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L5373",
       "_origin": "ast",
+      "id": "js_relatorio_dgmcentraltabelahtml",
       "community": 116,
       "community_name": "_rankEsc",
-      "norm_label": "_dgmcentraltabelahtml()",
-      "id": "js_relatorio_dgmcentraltabelahtml"
+      "norm_label": "_dgmcentraltabelahtml()"
     },
     {
       "label": "_dgmLegendaHtml()",
@@ -1463,10 +1199,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L5393",
       "_origin": "ast",
+      "id": "js_relatorio_dgmlegendahtml",
       "community": 116,
       "community_name": "_rankEsc",
-      "norm_label": "_dgmlegendahtml()",
-      "id": "js_relatorio_dgmlegendahtml"
+      "norm_label": "_dgmlegendahtml()"
     },
     {
       "label": "_DGM_NIVEL_ICONE",
@@ -1474,10 +1210,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L5429",
       "_origin": "ast",
+      "id": "js_relatorio_dgm_nivel_icone",
       "community": 19,
       "community_name": "relatorio.js",
-      "norm_label": "_dgm_nivel_icone",
-      "id": "js_relatorio_dgm_nivel_icone"
+      "norm_label": "_dgm_nivel_icone"
     },
     {
       "label": "_dgmChip()",
@@ -1485,10 +1221,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L5436",
       "_origin": "ast",
+      "id": "js_relatorio_dgmchip",
       "community": 44,
       "community_name": "_dgmLinhaHtml",
-      "norm_label": "_dgmchip()",
-      "id": "js_relatorio_dgmchip"
+      "norm_label": "_dgmchip()"
     },
     {
       "label": "_dgmCentralHeaderHtml()",
@@ -1496,10 +1232,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L5440",
       "_origin": "ast",
+      "id": "js_relatorio_dgmcentralheaderhtml",
       "community": 44,
       "community_name": "_dgmLinhaHtml",
-      "norm_label": "_dgmcentralheaderhtml()",
-      "id": "js_relatorio_dgmcentralheaderhtml"
+      "norm_label": "_dgmcentralheaderhtml()"
     },
     {
       "label": "_dgmFiltrosHtml()",
@@ -1507,10 +1243,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L5468",
       "_origin": "ast",
+      "id": "js_relatorio_dgmfiltroshtml",
       "community": 116,
       "community_name": "_rankEsc",
-      "norm_label": "_dgmfiltroshtml()",
-      "id": "js_relatorio_dgmfiltroshtml"
+      "norm_label": "_dgmfiltroshtml()"
     },
     {
       "label": "_dgmScriptFiltros()",
@@ -1518,10 +1254,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L5505",
       "_origin": "ast",
+      "id": "js_relatorio_dgmscriptfiltros",
       "community": 19,
       "community_name": "relatorio.js",
-      "norm_label": "_dgmscriptfiltros()",
-      "id": "js_relatorio_dgmscriptfiltros"
+      "norm_label": "_dgmscriptfiltros()"
     },
     {
       "label": "_dgmMesPaneHtml()",
@@ -1529,10 +1265,10 @@
       "source_file": "js/relatorio.js",
       "source_location": "L5563",
       "_origin": "ast",
+      "id": "js_relatorio_dgmmespanehtml",
       "community": 116,
       "community_name": "_rankEsc",
-      "norm_label": "_dgmmespanehtml()",
-      "id": "js_relatorio_dgmmespanehtml"
+      "norm_label": "_dgmmespanehtml()"
     },
     {
       "label": "admin.js",
@@ -25864,6 +25600,279 @@
       "id": "tests_relatorio_dais_test_itemconcluido"
     },
     {
+      "label": "relatorio-giro-usina.test.mjs",
+      "file_type": "code",
+      "source_file": "tests/relatorio-giro-usina.test.mjs",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 117,
+      "community_name": "relatorio-giro-usina.test.mjs",
+      "norm_label": "relatorio-giro-usina.test.mjs",
+      "id": "tests_relatorio_giro_usina_test"
+    },
+    {
+      "label": "raiz",
+      "file_type": "code",
+      "source_file": "tests/relatorio-giro-usina.test.mjs",
+      "source_location": "L20",
+      "_origin": "ast",
+      "community": 117,
+      "community_name": "relatorio-giro-usina.test.mjs",
+      "norm_label": "raiz",
+      "id": "tests_relatorio_giro_usina_test_raiz"
+    },
+    {
+      "label": "nivel()",
+      "file_type": "code",
+      "source_file": "tests/relatorio-giro-usina.test.mjs",
+      "source_location": "L23",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 117,
+      "community_name": "relatorio-giro-usina.test.mjs",
+      "norm_label": "nivel()",
+      "id": "tests_relatorio_giro_usina_test_nivel"
+    },
+    {
+      "label": "centralFalsa()",
+      "file_type": "code",
+      "source_file": "tests/relatorio-giro-usina.test.mjs",
+      "source_location": "L24",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 117,
+      "community_name": "relatorio-giro-usina.test.mjs",
+      "norm_label": "centralfalsa()",
+      "id": "tests_relatorio_giro_usina_test_centralfalsa"
+    },
+    {
+      "label": "erros",
+      "file_type": "code",
+      "source_file": "tests/relatorio-giro-usina.test.mjs",
+      "source_location": "L35",
+      "_origin": "ast",
+      "community": 117,
+      "community_name": "relatorio-giro-usina.test.mjs",
+      "norm_label": "erros",
+      "id": "tests_relatorio_giro_usina_test_erros"
+    },
+    {
+      "label": "escritas",
+      "file_type": "code",
+      "source_file": "tests/relatorio-giro-usina.test.mjs",
+      "source_location": "L36",
+      "_origin": "ast",
+      "community": 117,
+      "community_name": "relatorio-giro-usina.test.mjs",
+      "norm_label": "escritas",
+      "id": "tests_relatorio_giro_usina_test_escritas"
+    },
+    {
+      "label": "progresso",
+      "file_type": "code",
+      "source_file": "tests/relatorio-giro-usina.test.mjs",
+      "source_location": "L37",
+      "_origin": "ast",
+      "community": 117,
+      "community_name": "relatorio-giro-usina.test.mjs",
+      "norm_label": "progresso",
+      "id": "tests_relatorio_giro_usina_test_progresso"
+    },
+    {
+      "label": "etapas",
+      "file_type": "code",
+      "source_file": "tests/relatorio-giro-usina.test.mjs",
+      "source_location": "L38",
+      "_origin": "ast",
+      "community": 117,
+      "community_name": "relatorio-giro-usina.test.mjs",
+      "norm_label": "etapas",
+      "id": "tests_relatorio_giro_usina_test_etapas"
+    },
+    {
+      "label": "ctx",
+      "file_type": "code",
+      "source_file": "tests/relatorio-giro-usina.test.mjs",
+      "source_location": "L40",
+      "_origin": "ast",
+      "community": 117,
+      "community_name": "relatorio-giro-usina.test.mjs",
+      "norm_label": "ctx",
+      "id": "tests_relatorio_giro_usina_test_ctx"
+    },
+    {
+      "label": "add()",
+      "file_type": "code",
+      "source_file": "tests/relatorio-giro-usina.test.mjs",
+      "source_location": "L74",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 117,
+      "community_name": "relatorio-giro-usina.test.mjs",
+      "norm_label": "add()",
+      "id": "tests_relatorio_giro_usina_test_add"
+    },
+    {
+      "label": "remove()",
+      "file_type": "code",
+      "source_file": "tests/relatorio-giro-usina.test.mjs",
+      "source_location": "L74",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 117,
+      "community_name": "relatorio-giro-usina.test.mjs",
+      "norm_label": "remove()",
+      "id": "tests_relatorio_giro_usina_test_remove"
+    },
+    {
+      "label": "addEventListener()",
+      "file_type": "code",
+      "source_file": "tests/relatorio-giro-usina.test.mjs",
+      "source_location": "L74",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 117,
+      "community_name": "relatorio-giro-usina.test.mjs",
+      "norm_label": "addeventlistener()",
+      "id": "tests_relatorio_giro_usina_test_addeventlistener"
+    },
+    {
+      "label": "appendChild()",
+      "file_type": "code",
+      "source_file": "tests/relatorio-giro-usina.test.mjs",
+      "source_location": "L75",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 117,
+      "community_name": "relatorio-giro-usina.test.mjs",
+      "norm_label": "appendchild()",
+      "id": "tests_relatorio_giro_usina_test_appendchild"
+    },
+    {
+      "label": "casos",
+      "file_type": "code",
+      "source_file": "tests/relatorio-giro-usina.test.mjs",
+      "source_location": "L91",
+      "_origin": "ast",
+      "community": 117,
+      "community_name": "relatorio-giro-usina.test.mjs",
+      "norm_label": "casos",
+      "id": "tests_relatorio_giro_usina_test_casos"
+    },
+    {
+      "label": "teste()",
+      "file_type": "code",
+      "source_file": "tests/relatorio-giro-usina.test.mjs",
+      "source_location": "L92",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 117,
+      "community_name": "relatorio-giro-usina.test.mjs",
+      "norm_label": "teste()",
+      "id": "tests_relatorio_giro_usina_test_teste"
+    },
+    {
+      "label": "secoesHtml",
+      "file_type": "code",
+      "source_file": "tests/relatorio-giro-usina.test.mjs",
+      "source_location": "L302",
+      "_origin": "ast",
+      "community": 117,
+      "community_name": "relatorio-giro-usina.test.mjs",
+      "norm_label": "secoeshtml",
+      "id": "tests_relatorio_giro_usina_test_secoeshtml"
+    },
+    {
+      "label": "secoes",
+      "file_type": "code",
+      "source_file": "tests/relatorio-giro-usina.test.mjs",
+      "source_location": "L323",
+      "_origin": "ast",
+      "community": 117,
+      "community_name": "relatorio-giro-usina.test.mjs",
+      "norm_label": "secoes",
+      "id": "tests_relatorio_giro_usina_test_secoes"
+    },
+    {
+      "label": "selects",
+      "file_type": "code",
+      "source_file": "tests/relatorio-giro-usina.test.mjs",
+      "source_location": "L329",
+      "_origin": "ast",
+      "community": 117,
+      "community_name": "relatorio-giro-usina.test.mjs",
+      "norm_label": "selects",
+      "id": "tests_relatorio_giro_usina_test_selects"
+    },
+    {
+      "label": "resumo",
+      "file_type": "code",
+      "source_file": "tests/relatorio-giro-usina.test.mjs",
+      "source_location": "L330",
+      "_origin": "ast",
+      "community": 117,
+      "community_name": "relatorio-giro-usina.test.mjs",
+      "norm_label": "resumo",
+      "id": "tests_relatorio_giro_usina_test_resumo"
+    },
+    {
+      "label": "cabecalhos",
+      "file_type": "code",
+      "source_file": "tests/relatorio-giro-usina.test.mjs",
+      "source_location": "L333",
+      "_origin": "ast",
+      "community": 117,
+      "community_name": "relatorio-giro-usina.test.mjs",
+      "norm_label": "cabecalhos",
+      "id": "tests_relatorio_giro_usina_test_cabecalhos"
+    },
+    {
+      "label": "botaoTudo",
+      "file_type": "code",
+      "source_file": "tests/relatorio-giro-usina.test.mjs",
+      "source_location": "L344",
+      "_origin": "ast",
+      "community": 117,
+      "community_name": "relatorio-giro-usina.test.mjs",
+      "norm_label": "botaotudo",
+      "id": "tests_relatorio_giro_usina_test_botaotudo"
+    },
+    {
+      "label": "ctxF",
+      "file_type": "code",
+      "source_file": "tests/relatorio-giro-usina.test.mjs",
+      "source_location": "L346",
+      "_origin": "ast",
+      "community": 117,
+      "community_name": "relatorio-giro-usina.test.mjs",
+      "norm_label": "ctxf",
+      "id": "tests_relatorio_giro_usina_test_ctxf"
+    },
+    {
+      "label": "visivel()",
+      "file_type": "code",
+      "source_file": "tests/relatorio-giro-usina.test.mjs",
+      "source_location": "L356",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 117,
+      "community_name": "relatorio-giro-usina.test.mjs",
+      "norm_label": "visivel()",
+      "id": "tests_relatorio_giro_usina_test_visivel"
+    },
+    {
+      "label": "aplicar()",
+      "file_type": "code",
+      "source_file": "tests/relatorio-giro-usina.test.mjs",
+      "source_location": "L357",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 117,
+      "community_name": "relatorio-giro-usina.test.mjs",
+      "norm_label": "aplicar()",
+      "id": "tests_relatorio_giro_usina_test_aplicar"
+    },
+    {
       "label": "sap-861862-dup.test.mjs",
       "file_type": "code",
       "source_file": "tests/sap-861862-dup.test.mjs",
@@ -26816,271 +26825,6 @@
   ],
   "links": [
     {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/relatorio-giro-usina.test.mjs",
-      "source_location": "L74",
-      "weight": 1.0,
-      "_origin": "ast",
-      "source": "tests_relatorio_giro_usina_test",
-      "target": "tests_relatorio_giro_usina_test_add",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/relatorio-giro-usina.test.mjs",
-      "source_location": "L74",
-      "weight": 1.0,
-      "_origin": "ast",
-      "source": "tests_relatorio_giro_usina_test",
-      "target": "tests_relatorio_giro_usina_test_addeventlistener",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/relatorio-giro-usina.test.mjs",
-      "source_location": "L345",
-      "weight": 1.0,
-      "_origin": "ast",
-      "source": "tests_relatorio_giro_usina_test",
-      "target": "tests_relatorio_giro_usina_test_aplicar",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/relatorio-giro-usina.test.mjs",
-      "source_location": "L75",
-      "weight": 1.0,
-      "_origin": "ast",
-      "source": "tests_relatorio_giro_usina_test",
-      "target": "tests_relatorio_giro_usina_test_appendchild",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/relatorio-giro-usina.test.mjs",
-      "source_location": "L332",
-      "weight": 1.0,
-      "_origin": "ast",
-      "source": "tests_relatorio_giro_usina_test",
-      "target": "tests_relatorio_giro_usina_test_botaotudo",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/relatorio-giro-usina.test.mjs",
-      "source_location": "L321",
-      "weight": 1.0,
-      "_origin": "ast",
-      "source": "tests_relatorio_giro_usina_test",
-      "target": "tests_relatorio_giro_usina_test_cabecalhos",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/relatorio-giro-usina.test.mjs",
-      "source_location": "L91",
-      "weight": 1.0,
-      "_origin": "ast",
-      "source": "tests_relatorio_giro_usina_test",
-      "target": "tests_relatorio_giro_usina_test_casos",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/relatorio-giro-usina.test.mjs",
-      "source_location": "L24",
-      "weight": 1.0,
-      "_origin": "ast",
-      "source": "tests_relatorio_giro_usina_test",
-      "target": "tests_relatorio_giro_usina_test_centralfalsa",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/relatorio-giro-usina.test.mjs",
-      "source_location": "L40",
-      "weight": 1.0,
-      "_origin": "ast",
-      "source": "tests_relatorio_giro_usina_test",
-      "target": "tests_relatorio_giro_usina_test_ctx",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/relatorio-giro-usina.test.mjs",
-      "source_location": "L334",
-      "weight": 1.0,
-      "_origin": "ast",
-      "source": "tests_relatorio_giro_usina_test",
-      "target": "tests_relatorio_giro_usina_test_ctxf",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/relatorio-giro-usina.test.mjs",
-      "source_location": "L35",
-      "weight": 1.0,
-      "_origin": "ast",
-      "source": "tests_relatorio_giro_usina_test",
-      "target": "tests_relatorio_giro_usina_test_erros",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/relatorio-giro-usina.test.mjs",
-      "source_location": "L36",
-      "weight": 1.0,
-      "_origin": "ast",
-      "source": "tests_relatorio_giro_usina_test",
-      "target": "tests_relatorio_giro_usina_test_escritas",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/relatorio-giro-usina.test.mjs",
-      "source_location": "L38",
-      "weight": 1.0,
-      "_origin": "ast",
-      "source": "tests_relatorio_giro_usina_test",
-      "target": "tests_relatorio_giro_usina_test_etapas",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/relatorio-giro-usina.test.mjs",
-      "source_location": "L23",
-      "weight": 1.0,
-      "_origin": "ast",
-      "source": "tests_relatorio_giro_usina_test",
-      "target": "tests_relatorio_giro_usina_test_nivel",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/relatorio-giro-usina.test.mjs",
-      "source_location": "L37",
-      "weight": 1.0,
-      "_origin": "ast",
-      "source": "tests_relatorio_giro_usina_test",
-      "target": "tests_relatorio_giro_usina_test_progresso",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/relatorio-giro-usina.test.mjs",
-      "source_location": "L20",
-      "weight": 1.0,
-      "_origin": "ast",
-      "source": "tests_relatorio_giro_usina_test",
-      "target": "tests_relatorio_giro_usina_test_raiz",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/relatorio-giro-usina.test.mjs",
-      "source_location": "L74",
-      "weight": 1.0,
-      "_origin": "ast",
-      "source": "tests_relatorio_giro_usina_test",
-      "target": "tests_relatorio_giro_usina_test_remove",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/relatorio-giro-usina.test.mjs",
-      "source_location": "L318",
-      "weight": 1.0,
-      "_origin": "ast",
-      "source": "tests_relatorio_giro_usina_test",
-      "target": "tests_relatorio_giro_usina_test_resumo",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/relatorio-giro-usina.test.mjs",
-      "source_location": "L311",
-      "weight": 1.0,
-      "_origin": "ast",
-      "source": "tests_relatorio_giro_usina_test",
-      "target": "tests_relatorio_giro_usina_test_secoes",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/relatorio-giro-usina.test.mjs",
-      "source_location": "L290",
-      "weight": 1.0,
-      "_origin": "ast",
-      "source": "tests_relatorio_giro_usina_test",
-      "target": "tests_relatorio_giro_usina_test_secoeshtml",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/relatorio-giro-usina.test.mjs",
-      "source_location": "L317",
-      "weight": 1.0,
-      "_origin": "ast",
-      "source": "tests_relatorio_giro_usina_test",
-      "target": "tests_relatorio_giro_usina_test_selects",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/relatorio-giro-usina.test.mjs",
-      "source_location": "L92",
-      "weight": 1.0,
-      "_origin": "ast",
-      "source": "tests_relatorio_giro_usina_test",
-      "target": "tests_relatorio_giro_usina_test_teste",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/relatorio-giro-usina.test.mjs",
-      "source_location": "L344",
-      "weight": 1.0,
-      "_origin": "ast",
-      "source": "tests_relatorio_giro_usina_test",
-      "target": "tests_relatorio_giro_usina_test_visivel",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "tests/relatorio-giro-usina.test.mjs",
-      "source_location": "L26",
-      "weight": 1.0,
-      "_origin": "ast",
-      "source": "tests_relatorio_giro_usina_test_centralfalsa",
-      "target": "tests_relatorio_giro_usina_test_nivel",
-      "confidence_score": 1.0
-    },
-    {
       "relation": "references",
       "confidence": "INFERRED",
       "confidence_score": 0.85,
@@ -27109,9 +26853,9 @@
       "source_location": "L458",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_abrirjanelarelatorio"
+      "target": "js_relatorio_abrirjanelarelatorio",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27120,9 +26864,9 @@
       "source_location": "L798",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_ausenciaspararegionaisdata"
+      "target": "js_relatorio_ausenciaspararegionaisdata",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27131,9 +26875,9 @@
       "source_location": "L848",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_ausgetperiodo"
+      "target": "js_relatorio_ausgetperiodo",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27142,9 +26886,9 @@
       "source_location": "L656",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_buildausenciasrelhtml"
+      "target": "js_relatorio_buildausenciasrelhtml",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27153,9 +26897,9 @@
       "source_location": "L2425",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_buildcards"
+      "target": "js_relatorio_buildcards",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27164,9 +26908,9 @@
       "source_location": "L1987",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_buildcentralblock"
+      "target": "js_relatorio_buildcentralblock",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27175,9 +26919,9 @@
       "source_location": "L2998",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_buildcentralrow"
+      "target": "js_relatorio_buildcentralrow",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27186,9 +26930,9 @@
       "source_location": "L4899",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_buildcentralsection"
+      "target": "js_relatorio_buildcentralsection",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27197,9 +26941,9 @@
       "source_location": "L1",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_buildcriticidadedata"
+      "target": "js_relatorio_buildcriticidadedata",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27208,9 +26952,9 @@
       "source_location": "L3017",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_builddairow"
+      "target": "js_relatorio_builddairow",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27219,9 +26963,9 @@
       "source_location": "L2494",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_buildlevelsection"
+      "target": "js_relatorio_buildlevelsection",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27230,9 +26974,9 @@
       "source_location": "L1975",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_buildmatrows"
+      "target": "js_relatorio_buildmatrows",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27241,9 +26985,9 @@
       "source_location": "L2725",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_buildmotivorow"
+      "target": "js_relatorio_buildmotivorow",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27252,9 +26996,9 @@
       "source_location": "L4870",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_buildocorrenciarow"
+      "target": "js_relatorio_buildocorrenciarow",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27263,9 +27007,9 @@
       "source_location": "L1632",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_buildrankingcentraisbody"
+      "target": "js_relatorio_buildrankingcentraisbody",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27274,9 +27018,9 @@
       "source_location": "L1729",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_buildrankingregionaistableblock"
+      "target": "js_relatorio_buildrankingregionaistableblock",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27285,9 +27029,9 @@
       "source_location": "L1191",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_buildrankingshellhtml"
+      "target": "js_relatorio_buildrankingshellhtml",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27296,9 +27040,9 @@
       "source_location": "L1616",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_buildranksidecard"
+      "target": "js_relatorio_buildranksidecard",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27307,9 +27051,9 @@
       "source_location": "L2980",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_buildregionalrow"
+      "target": "js_relatorio_buildregionalrow",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27318,9 +27062,9 @@
       "source_location": "L4564",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_buildregionalsection"
+      "target": "js_relatorio_buildregionalsection",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27329,9 +27073,9 @@
       "source_location": "L2279",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_buildrows"
+      "target": "js_relatorio_buildrows",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27340,9 +27084,9 @@
       "source_location": "L4860",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_buildstatusbadge"
+      "target": "js_relatorio_buildstatusbadge",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27351,9 +27095,9 @@
       "source_location": "L4942",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_buildsumario"
+      "target": "js_relatorio_buildsumario",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27362,9 +27106,9 @@
       "source_location": "L4841",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_buildtempocell"
+      "target": "js_relatorio_buildtempocell",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27373,9 +27117,9 @@
       "source_location": "L334",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_criticidadedarkstyles"
+      "target": "js_relatorio_criticidadedarkstyles",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27384,9 +27128,9 @@
       "source_location": "L1834",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_criticidademattablestyles"
+      "target": "js_relatorio_criticidademattablestyles",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27395,9 +27139,9 @@
       "source_location": "L2925",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_daidataconclusaoiso"
+      "target": "js_relatorio_daidataconclusaoiso",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27406,9 +27150,9 @@
       "source_location": "L2922",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_daidatageracaoiso"
+      "target": "js_relatorio_daidatageracaoiso",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27417,9 +27161,9 @@
       "source_location": "L2920",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_daiitens"
+      "target": "js_relatorio_daiitens",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27428,9 +27172,9 @@
       "source_location": "L2921",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_daipendente"
+      "target": "js_relatorio_daipendente",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27439,9 +27183,9 @@
       "source_location": "L5295",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_dgm_colunas"
+      "target": "js_relatorio_dgm_colunas",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27450,9 +27194,9 @@
       "source_location": "L5429",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_dgm_nivel_icone"
+      "target": "js_relatorio_dgm_nivel_icone",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27461,9 +27205,9 @@
       "source_location": "L5364",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_dgmajudatexto"
+      "target": "js_relatorio_dgmajudatexto",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27472,9 +27216,9 @@
       "source_location": "L5440",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_dgmcentralheaderhtml"
+      "target": "js_relatorio_dgmcentralheaderhtml",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27483,9 +27227,9 @@
       "source_location": "L5373",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_dgmcentraltabelahtml"
+      "target": "js_relatorio_dgmcentraltabelahtml",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27494,9 +27238,9 @@
       "source_location": "L5436",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_dgmchip"
+      "target": "js_relatorio_dgmchip",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27505,9 +27249,9 @@
       "source_location": "L5249",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_dgmcoberturainfo"
+      "target": "js_relatorio_dgmcoberturainfo",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27516,9 +27260,9 @@
       "source_location": "L5468",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_dgmfiltroshtml"
+      "target": "js_relatorio_dgmfiltroshtml",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27527,9 +27271,9 @@
       "source_location": "L5158",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_dgminjetarestilo"
+      "target": "js_relatorio_dgminjetarestilo",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27538,9 +27282,9 @@
       "source_location": "L5393",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_dgmlegendahtml"
+      "target": "js_relatorio_dgmlegendahtml",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27549,9 +27293,9 @@
       "source_location": "L5266",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_dgmlinhahtml"
+      "target": "js_relatorio_dgmlinhahtml",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27560,9 +27304,9 @@
       "source_location": "L5151",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_dgmmesesordenados"
+      "target": "js_relatorio_dgmmesesordenados",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27571,9 +27315,9 @@
       "source_location": "L5149",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_dgmmeskey"
+      "target": "js_relatorio_dgmmeskey",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27582,9 +27326,9 @@
       "source_location": "L5150",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_dgmmeslabel"
+      "target": "js_relatorio_dgmmeslabel",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27593,9 +27337,9 @@
       "source_location": "L5563",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_dgmmespanehtml"
+      "target": "js_relatorio_dgmmespanehtml",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27604,9 +27348,9 @@
       "source_location": "L5212",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_dgmrenderpicker"
+      "target": "js_relatorio_dgmrenderpicker",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27615,9 +27359,9 @@
       "source_location": "L5505",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_dgmscriptfiltros"
+      "target": "js_relatorio_dgmscriptfiltros",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27626,9 +27370,9 @@
       "source_location": "L5142",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_dgmstate"
+      "target": "js_relatorio_dgmstate",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27637,9 +27381,9 @@
       "source_location": "L3673",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_dgrabastinfo"
+      "target": "js_relatorio_dgrabastinfo",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27648,9 +27392,9 @@
       "source_location": "L3554",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_dgrbuildcategoriahtml"
+      "target": "js_relatorio_dgrbuildcategoriahtml",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27659,9 +27403,9 @@
       "source_location": "L3614",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_dgrbuildcustoabsolutohtml"
+      "target": "js_relatorio_dgrbuildcustoabsolutohtml",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27670,9 +27414,9 @@
       "source_location": "L3567",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_dgrbuildcustoregionalcentralhtml"
+      "target": "js_relatorio_dgrbuildcustoregionalcentralhtml",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27681,9 +27425,9 @@
       "source_location": "L3883",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_dgrbuilddetalhadoanaliticohtml"
+      "target": "js_relatorio_dgrbuilddetalhadoanaliticohtml",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27692,9 +27436,9 @@
       "source_location": "L3742",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_dgrbuildgirocoberturahtml"
+      "target": "js_relatorio_dgrbuildgirocoberturahtml",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27703,9 +27447,9 @@
       "source_location": "L3223",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_dgrbuildresumoperiodohtml"
+      "target": "js_relatorio_dgrbuildresumoperiodohtml",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27714,9 +27458,9 @@
       "source_location": "L3350",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_dgrbuildsaudegeralhtml"
+      "target": "js_relatorio_dgrbuildsaudegeralhtml",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27725,9 +27469,9 @@
       "source_location": "L3214",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_dgrcanvasparapngdataurl"
+      "target": "js_relatorio_dgrcanvasparapngdataurl",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27736,9 +27480,9 @@
       "source_location": "L3451",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_dgrcapturarcategoriaampliada"
+      "target": "js_relatorio_dgrcapturarcategoriaampliada",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27747,9 +27491,9 @@
       "source_location": "L3402",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_dgrcapturarcomtema"
+      "target": "js_relatorio_dgrcapturarcomtema",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27758,9 +27502,9 @@
       "source_location": "L3905",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_dgrestilos"
+      "target": "js_relatorio_dgrestilos",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27769,9 +27513,9 @@
       "source_location": "L1607",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_dgrfonteiconesembutida"
+      "target": "js_relatorio_dgrfonteiconesembutida",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27780,9 +27524,9 @@
       "source_location": "L1603",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_dgrfontesembutidas"
+      "target": "js_relatorio_dgrfontesembutidas",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27791,9 +27535,9 @@
       "source_location": "L3654",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_dgrgirocor"
+      "target": "js_relatorio_dgrgirocor",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27802,9 +27546,9 @@
       "source_location": "L3688",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_dgrgirolistahtml"
+      "target": "js_relatorio_dgrgirolistahtml",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27813,9 +27557,9 @@
       "source_location": "L4126",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_dgrinjetarestilomodalselecao"
+      "target": "js_relatorio_dgrinjetarestilomodalselecao",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27824,9 +27568,9 @@
       "source_location": "L3651",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_dgrnivelcor"
+      "target": "js_relatorio_dgrnivelcor",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27835,9 +27579,9 @@
       "source_location": "L4254",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_dgrnomearquivorelatorio"
+      "target": "js_relatorio_dgrnomearquivorelatorio",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27846,9 +27590,9 @@
       "source_location": "L3778",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_dgrnowrapnum"
+      "target": "js_relatorio_dgrnowrapnum",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27857,9 +27601,9 @@
       "source_location": "L3841",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_dgrrankinghtml"
+      "target": "js_relatorio_dgrrankinghtml",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27868,9 +27612,9 @@
       "source_location": "L1583",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_dgrscriptabas"
+      "target": "js_relatorio_dgrscriptabas",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27879,9 +27623,9 @@
       "source_location": "L1568",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_dgrscriptcollapse"
+      "target": "js_relatorio_dgrscriptcollapse",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27890,9 +27634,9 @@
       "source_location": "L1547",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_dgrscriptdownload"
+      "target": "js_relatorio_dgrscriptdownload",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27901,9 +27645,9 @@
       "source_location": "L1528",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_dgrscripttema"
+      "target": "js_relatorio_dgrscripttema",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27912,9 +27656,9 @@
       "source_location": "L4115",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_dgrselecaocompleta"
+      "target": "js_relatorio_dgrselecaocompleta",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27923,9 +27667,9 @@
       "source_location": "L3166",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_dgrsvgparapngdataurl"
+      "target": "js_relatorio_dgrsvgparapngdataurl",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27934,9 +27678,9 @@
       "source_location": "L3791",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_dgrtabelamaterialhtml"
+      "target": "js_relatorio_dgrtabelamaterialhtml",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27945,9 +27689,9 @@
       "source_location": "L3662",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_dgrtruncnome"
+      "target": "js_relatorio_dgrtruncnome",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27956,9 +27700,9 @@
       "source_location": "L3767",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_dgrvalcor"
+      "target": "js_relatorio_dgrvalcor",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27967,9 +27711,9 @@
       "source_location": "L4770",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_diffdays"
+      "target": "js_relatorio_diffdays",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27978,9 +27722,9 @@
       "source_location": "L2422",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_escc"
+      "target": "js_relatorio_escc",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -27989,9 +27733,9 @@
       "source_location": "L4768",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_escr"
+      "target": "js_relatorio_escr",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -28000,9 +27744,9 @@
       "source_location": "L4769",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_fmtbr"
+      "target": "js_relatorio_fmtbr",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -28011,9 +27755,9 @@
       "source_location": "L2417",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_fmtkgc"
+      "target": "js_relatorio_fmtkgc",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -28022,9 +27766,9 @@
       "source_location": "L1961",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_fmtkgr"
+      "target": "js_relatorio_fmtkgr",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -28033,9 +27777,9 @@
       "source_location": "L2088",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_getanperiodo"
+      "target": "js_relatorio_getanperiodo",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -28044,9 +27788,9 @@
       "source_location": "L4792",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_getregional"
+      "target": "js_relatorio_getregional",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -28055,9 +27799,9 @@
       "source_location": "L1969",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_groupbycentral"
+      "target": "js_relatorio_groupbycentral",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -28066,9 +27810,9 @@
       "source_location": "L485",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_janelarelatorioprogresso"
+      "target": "js_relatorio_janelarelatorioprogresso",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -28077,9 +27821,9 @@
       "source_location": "L4776",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_ocstatus"
+      "target": "js_relatorio_ocstatus",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -28088,9 +27832,9 @@
       "source_location": "L437",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_openrelwindow"
+      "target": "js_relatorio_openrelwindow",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -28099,9 +27843,9 @@
       "source_location": "L1078",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_rankagruparporcentral"
+      "target": "js_relatorio_rankagruparporcentral",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -28110,9 +27854,9 @@
       "source_location": "L1105",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_rankagruparporregional"
+      "target": "js_relatorio_rankagruparporregional",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -28121,9 +27865,9 @@
       "source_location": "L1129",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_rankcentraisdesconsideradas"
+      "target": "js_relatorio_rankcentraisdesconsideradas",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -28132,9 +27876,9 @@
       "source_location": "L1047",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_rankcompactardias"
+      "target": "js_relatorio_rankcompactardias",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -28143,9 +27887,9 @@
       "source_location": "L1043",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_rankesc"
+      "target": "js_relatorio_rankesc",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -28154,9 +27898,9 @@
       "source_location": "L1141",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_rankmesanolabel"
+      "target": "js_relatorio_rankmesanolabel",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -28165,9 +27909,9 @@
       "source_location": "L1155",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_rankperiodobadgelabel"
+      "target": "js_relatorio_rankperiodobadgelabel",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -28176,9 +27920,9 @@
       "source_location": "L1181",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_rankseveritycentrais"
+      "target": "js_relatorio_rankseveritycentrais",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -28187,9 +27931,9 @@
       "source_location": "L1173",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_rankseveritydias"
+      "target": "js_relatorio_rankseveritydias",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -28198,9 +27942,9 @@
       "source_location": "L1851",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_rel_niveis"
+      "target": "js_relatorio_rel_niveis",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -28209,9 +27953,9 @@
       "source_location": "L1859",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_relniveisnorm"
+      "target": "js_relatorio_relniveisnorm",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -28220,9 +27964,9 @@
       "source_location": "L1872",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_relniveispickerhtml"
+      "target": "js_relatorio_relniveispickerhtml",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -28231,9 +27975,9 @@
       "source_location": "L1886",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_relniveisselecionados"
+      "target": "js_relatorio_relniveisselecionados",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -28242,9 +27986,9 @@
       "source_location": "L1865",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_relniveistexto"
+      "target": "js_relatorio_relniveistexto",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -28253,9 +27997,9 @@
       "source_location": "L2174",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_resolveracoesparamaterial"
+      "target": "js_relatorio_resolveracoesparamaterial",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -28264,9 +28008,9 @@
       "source_location": "L2421",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_trendcolor"
+      "target": "js_relatorio_trendcolor",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -28275,9 +28019,9 @@
       "source_location": "L2420",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_trendlabel"
+      "target": "js_relatorio_trendlabel",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -28286,9 +28030,9 @@
       "source_location": "L2419",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_varcolor"
+      "target": "js_relatorio_varcolor",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -28297,9 +28041,9 @@
       "source_location": "L2418",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_vardir"
+      "target": "js_relatorio_vardir",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -28308,9 +28052,9 @@
       "source_location": "L2274",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio",
-      "target": "js_relatorio_vardircolor"
+      "target": "js_relatorio_vardircolor",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28320,9 +28064,9 @@
       "source_location": "L170",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildcriticidadedata",
-      "target": "js_relatorio_vardir"
+      "target": "js_relatorio_vardir",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28332,9 +28076,9 @@
       "source_location": "L171",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildcriticidadedata",
-      "target": "js_relatorio_vardircolor"
+      "target": "js_relatorio_vardircolor",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28344,9 +28088,9 @@
       "source_location": "L438",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_openrelwindow",
-      "target": "js_relatorio_abrirjanelarelatorio"
+      "target": "js_relatorio_abrirjanelarelatorio",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28356,9 +28100,9 @@
       "source_location": "L476",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_abrirjanelarelatorio",
-      "target": "js_relatorio_rankesc"
+      "target": "js_relatorio_rankesc",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28368,9 +28112,9 @@
       "source_location": "L786",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildausenciasrelhtml",
-      "target": "js_relatorio_buildrankingshellhtml"
+      "target": "js_relatorio_buildrankingshellhtml",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28380,9 +28124,9 @@
       "source_location": "L691",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildausenciasrelhtml",
-      "target": "js_relatorio_rankesc"
+      "target": "js_relatorio_rankesc",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28392,9 +28136,9 @@
       "source_location": "L775",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildausenciasrelhtml",
-      "target": "js_relatorio_rankperiodobadgelabel"
+      "target": "js_relatorio_rankperiodobadgelabel",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28404,9 +28148,9 @@
       "source_location": "L1159",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_rankperiodobadgelabel",
-      "target": "js_relatorio_ausgetperiodo"
+      "target": "js_relatorio_ausgetperiodo",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28416,9 +28160,9 @@
       "source_location": "L1638",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildrankingcentraisbody",
-      "target": "js_relatorio_rankesc"
+      "target": "js_relatorio_rankesc",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28428,9 +28172,9 @@
       "source_location": "L1732",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildrankingregionaistableblock",
-      "target": "js_relatorio_rankesc"
+      "target": "js_relatorio_rankesc",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28440,9 +28184,9 @@
       "source_location": "L1203",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildrankingshellhtml",
-      "target": "js_relatorio_rankesc"
+      "target": "js_relatorio_rankesc",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28452,9 +28196,9 @@
       "source_location": "L1621",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildranksidecard",
-      "target": "js_relatorio_rankesc"
+      "target": "js_relatorio_rankesc",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28464,9 +28208,9 @@
       "source_location": "L5370",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_dgmajudatexto",
-      "target": "js_relatorio_rankesc"
+      "target": "js_relatorio_rankesc",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28476,9 +28220,9 @@
       "source_location": "L5452",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_dgmcentralheaderhtml",
-      "target": "js_relatorio_rankesc"
+      "target": "js_relatorio_rankesc",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28488,9 +28232,9 @@
       "source_location": "L5378",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_dgmcentraltabelahtml",
-      "target": "js_relatorio_rankesc"
+      "target": "js_relatorio_rankesc",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28500,9 +28244,9 @@
       "source_location": "L5469",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_dgmfiltroshtml",
-      "target": "js_relatorio_rankesc"
+      "target": "js_relatorio_rankesc",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28512,9 +28256,9 @@
       "source_location": "L5401",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_dgmlegendahtml",
-      "target": "js_relatorio_rankesc"
+      "target": "js_relatorio_rankesc",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28524,9 +28268,9 @@
       "source_location": "L5272",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_dgmlinhahtml",
-      "target": "js_relatorio_rankesc"
+      "target": "js_relatorio_rankesc",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28536,9 +28280,9 @@
       "source_location": "L5569",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_dgmmespanehtml",
-      "target": "js_relatorio_rankesc"
+      "target": "js_relatorio_rankesc",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28548,9 +28292,9 @@
       "source_location": "L3628",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_dgrbuildcustoabsolutohtml",
-      "target": "js_relatorio_rankesc"
+      "target": "js_relatorio_rankesc",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28560,9 +28304,9 @@
       "source_location": "L3571",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_dgrbuildcustoregionalcentralhtml",
-      "target": "js_relatorio_rankesc"
+      "target": "js_relatorio_rankesc",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28572,9 +28316,9 @@
       "source_location": "L3359",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_dgrbuildsaudegeralhtml",
-      "target": "js_relatorio_rankesc"
+      "target": "js_relatorio_rankesc",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28584,9 +28328,9 @@
       "source_location": "L3690",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_dgrgirolistahtml",
-      "target": "js_relatorio_rankesc"
+      "target": "js_relatorio_rankesc",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28596,9 +28340,9 @@
       "source_location": "L3848",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_dgrrankinghtml",
-      "target": "js_relatorio_rankesc"
+      "target": "js_relatorio_rankesc",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28608,9 +28352,9 @@
       "source_location": "L3797",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_dgrtabelamaterialhtml",
-      "target": "js_relatorio_rankesc"
+      "target": "js_relatorio_rankesc",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28620,9 +28364,9 @@
       "source_location": "L1642",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildrankingcentraisbody",
-      "target": "js_relatorio_rankcompactardias"
+      "target": "js_relatorio_rankcompactardias",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28632,9 +28376,9 @@
       "source_location": "L1634",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildrankingcentraisbody",
-      "target": "js_relatorio_rankseveritydias"
+      "target": "js_relatorio_rankseveritydias",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28644,9 +28388,9 @@
       "source_location": "L1731",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildrankingregionaistableblock",
-      "target": "js_relatorio_rankseveritycentrais"
+      "target": "js_relatorio_rankseveritycentrais",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28656,9 +28400,9 @@
       "source_location": "L1220",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildrankingshellhtml",
-      "target": "js_relatorio_dgrfonteiconesembutida"
+      "target": "js_relatorio_dgrfonteiconesembutida",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28668,9 +28412,9 @@
       "source_location": "L1221",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildrankingshellhtml",
-      "target": "js_relatorio_dgrfontesembutidas"
+      "target": "js_relatorio_dgrfontesembutidas",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28680,9 +28424,9 @@
       "source_location": "L1515",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildrankingshellhtml",
-      "target": "js_relatorio_dgrscriptabas"
+      "target": "js_relatorio_dgrscriptabas",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28692,9 +28436,9 @@
       "source_location": "L1514",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildrankingshellhtml",
-      "target": "js_relatorio_dgrscriptcollapse"
+      "target": "js_relatorio_dgrscriptcollapse",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28704,9 +28448,9 @@
       "source_location": "L1513",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildrankingshellhtml",
-      "target": "js_relatorio_dgrscriptdownload"
+      "target": "js_relatorio_dgrscriptdownload",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28716,9 +28460,9 @@
       "source_location": "L1512",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildrankingshellhtml",
-      "target": "js_relatorio_dgrscripttema"
+      "target": "js_relatorio_dgrscripttema",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28728,9 +28472,9 @@
       "source_location": "L1670",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildrankingcentraisbody",
-      "target": "js_relatorio_buildranksidecard"
+      "target": "js_relatorio_buildranksidecard",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28740,9 +28484,9 @@
       "source_location": "L1981",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildmatrows",
-      "target": "js_relatorio_fmtkgr"
+      "target": "js_relatorio_fmtkgr",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28752,9 +28496,9 @@
       "source_location": "L2470",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildcards",
-      "target": "js_relatorio_vardir"
+      "target": "js_relatorio_vardir",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28764,9 +28508,9 @@
       "source_location": "L1981",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildmatrows",
-      "target": "js_relatorio_vardir"
+      "target": "js_relatorio_vardir",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28776,9 +28520,9 @@
       "source_location": "L2285",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildrows",
-      "target": "js_relatorio_vardir"
+      "target": "js_relatorio_vardir",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28788,9 +28532,9 @@
       "source_location": "L1977",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildmatrows",
-      "target": "js_relatorio_vardircolor"
+      "target": "js_relatorio_vardircolor",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28800,9 +28544,9 @@
       "source_location": "L2281",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildrows",
-      "target": "js_relatorio_vardircolor"
+      "target": "js_relatorio_vardircolor",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28812,9 +28556,9 @@
       "source_location": "L2477",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildcards",
-      "target": "js_relatorio_trendlabel"
+      "target": "js_relatorio_trendlabel",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28824,9 +28568,9 @@
       "source_location": "L1982",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildmatrows",
-      "target": "js_relatorio_trendlabel"
+      "target": "js_relatorio_trendlabel",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28836,9 +28580,9 @@
       "source_location": "L2286",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildrows",
-      "target": "js_relatorio_trendlabel"
+      "target": "js_relatorio_trendlabel",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28848,9 +28592,9 @@
       "source_location": "L2429",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildcards",
-      "target": "js_relatorio_trendcolor"
+      "target": "js_relatorio_trendcolor",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28860,9 +28604,9 @@
       "source_location": "L1977",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildmatrows",
-      "target": "js_relatorio_trendcolor"
+      "target": "js_relatorio_trendcolor",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28872,9 +28616,9 @@
       "source_location": "L2281",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildrows",
-      "target": "js_relatorio_trendcolor"
+      "target": "js_relatorio_trendcolor",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28884,9 +28628,9 @@
       "source_location": "L1994",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildcentralblock",
-      "target": "js_relatorio_escr"
+      "target": "js_relatorio_escr",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28896,9 +28640,9 @@
       "source_location": "L2752",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildcentralrow",
-      "target": "js_relatorio_escr"
+      "target": "js_relatorio_escr",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28908,9 +28652,9 @@
       "source_location": "L4547",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildcentralsection",
-      "target": "js_relatorio_escr"
+      "target": "js_relatorio_escr",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28920,9 +28664,9 @@
       "source_location": "L3022",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_builddairow",
-      "target": "js_relatorio_escr"
+      "target": "js_relatorio_escr",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28932,9 +28676,9 @@
       "source_location": "L1980",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildmatrows",
-      "target": "js_relatorio_escr"
+      "target": "js_relatorio_escr",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28944,9 +28688,9 @@
       "source_location": "L2731",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildmotivorow",
-      "target": "js_relatorio_escr"
+      "target": "js_relatorio_escr",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28956,9 +28700,9 @@
       "source_location": "L4509",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildocorrenciarow",
-      "target": "js_relatorio_escr"
+      "target": "js_relatorio_escr",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28968,9 +28712,9 @@
       "source_location": "L2710",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildregionalrow",
-      "target": "js_relatorio_escr"
+      "target": "js_relatorio_escr",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28980,9 +28724,9 @@
       "source_location": "L4589",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildregionalsection",
-      "target": "js_relatorio_escr"
+      "target": "js_relatorio_escr",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -28992,9 +28736,9 @@
       "source_location": "L4953",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildsumario",
-      "target": "js_relatorio_escr"
+      "target": "js_relatorio_escr",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29004,9 +28748,9 @@
       "source_location": "L2002",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildcentralblock",
-      "target": "js_relatorio_buildmatrows"
+      "target": "js_relatorio_buildmatrows",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29016,9 +28760,9 @@
       "source_location": "L2427",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildcards",
-      "target": "js_relatorio_resolveracoesparamaterial"
+      "target": "js_relatorio_resolveracoesparamaterial",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29028,9 +28772,9 @@
       "source_location": "L2471",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildcards",
-      "target": "js_relatorio_fmtkgc"
+      "target": "js_relatorio_fmtkgc",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29040,9 +28784,9 @@
       "source_location": "L2285",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildrows",
-      "target": "js_relatorio_fmtkgc"
+      "target": "js_relatorio_fmtkgc",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29052,9 +28796,9 @@
       "source_location": "L2437",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildcards",
-      "target": "js_relatorio_escc"
+      "target": "js_relatorio_escc",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29064,9 +28808,9 @@
       "source_location": "L2284",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildrows",
-      "target": "js_relatorio_escc"
+      "target": "js_relatorio_escc",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29076,9 +28820,9 @@
       "source_location": "L2322",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildlevelsection",
-      "target": "js_relatorio_buildrows"
+      "target": "js_relatorio_buildrows",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29088,9 +28832,9 @@
       "source_location": "L2496",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildlevelsection",
-      "target": "js_relatorio_buildcards"
+      "target": "js_relatorio_buildcards",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29100,9 +28844,9 @@
       "source_location": "L2428",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildcards",
-      "target": "js_relatorio_varcolor"
+      "target": "js_relatorio_varcolor",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29112,9 +28856,9 @@
       "source_location": "L4472",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildtempocell",
-      "target": "js_relatorio_diffdays"
+      "target": "js_relatorio_diffdays",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29124,9 +28868,9 @@
       "source_location": "L2600",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_ocstatus",
-      "target": "js_relatorio_diffdays"
+      "target": "js_relatorio_diffdays",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29136,9 +28880,9 @@
       "source_location": "L4530",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildcentralsection",
-      "target": "js_relatorio_ocstatus"
+      "target": "js_relatorio_ocstatus",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29148,9 +28892,9 @@
       "source_location": "L4500",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildocorrenciarow",
-      "target": "js_relatorio_ocstatus"
+      "target": "js_relatorio_ocstatus",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29160,9 +28904,9 @@
       "source_location": "L4566",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildregionalsection",
-      "target": "js_relatorio_ocstatus"
+      "target": "js_relatorio_ocstatus",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29172,9 +28916,9 @@
       "source_location": "L4944",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildsumario",
-      "target": "js_relatorio_ocstatus"
+      "target": "js_relatorio_ocstatus",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29184,9 +28928,9 @@
       "source_location": "L4471",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildtempocell",
-      "target": "js_relatorio_ocstatus"
+      "target": "js_relatorio_ocstatus",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29196,9 +28940,9 @@
       "source_location": "L2745",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildcentralrow",
-      "target": "js_relatorio_getregional"
+      "target": "js_relatorio_getregional",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29208,9 +28952,9 @@
       "source_location": "L4903",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildcentralsection",
-      "target": "js_relatorio_getregional"
+      "target": "js_relatorio_getregional",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29220,9 +28964,9 @@
       "source_location": "L3019",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_builddairow",
-      "target": "js_relatorio_getregional"
+      "target": "js_relatorio_getregional",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29232,9 +28976,9 @@
       "source_location": "L2921",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_daipendente",
-      "target": "js_relatorio_daiitens"
+      "target": "js_relatorio_daiitens",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29244,9 +28988,9 @@
       "source_location": "L3018",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_builddairow",
-      "target": "js_relatorio_daipendente"
+      "target": "js_relatorio_daipendente",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29256,9 +29000,9 @@
       "source_location": "L3428",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_dgrcapturarcomtema",
-      "target": "js_relatorio_dgrsvgparapngdataurl"
+      "target": "js_relatorio_dgrsvgparapngdataurl",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29268,9 +29012,9 @@
       "source_location": "L3463",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_dgrcapturarcategoriaampliada",
-      "target": "js_relatorio_dgrcanvasparapngdataurl"
+      "target": "js_relatorio_dgrcanvasparapngdataurl",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29280,9 +29024,9 @@
       "source_location": "L3432",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_dgrcapturarcomtema",
-      "target": "js_relatorio_dgrcanvasparapngdataurl"
+      "target": "js_relatorio_dgrcanvasparapngdataurl",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29292,9 +29036,9 @@
       "source_location": "L3256",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_dgrbuildresumoperiodohtml",
-      "target": "js_relatorio_dgrvalcor"
+      "target": "js_relatorio_dgrvalcor",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29304,9 +29048,9 @@
       "source_location": "L3431",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_dgrcapturarcomtema",
-      "target": "js_relatorio_dgrcapturarcategoriaampliada"
+      "target": "js_relatorio_dgrcapturarcategoriaampliada",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29316,9 +29060,9 @@
       "source_location": "L3579",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_dgrbuildcustoregionalcentralhtml",
-      "target": "js_relatorio_dgrnowrapnum"
+      "target": "js_relatorio_dgrnowrapnum",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29328,9 +29072,9 @@
       "source_location": "L5448",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_dgmcentralheaderhtml",
-      "target": "js_relatorio_dgrnivelcor"
+      "target": "js_relatorio_dgrnivelcor",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29340,9 +29084,9 @@
       "source_location": "L5267",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_dgmlinhahtml",
-      "target": "js_relatorio_dgrnivelcor"
+      "target": "js_relatorio_dgrnivelcor",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29352,9 +29096,9 @@
       "source_location": "L3693",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_dgrgirolistahtml",
-      "target": "js_relatorio_dgrnivelcor"
+      "target": "js_relatorio_dgrnivelcor",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29364,9 +29108,9 @@
       "source_location": "L5281",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_dgmlinhahtml",
-      "target": "js_relatorio_dgrgirocor"
+      "target": "js_relatorio_dgrgirocor",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29376,9 +29120,9 @@
       "source_location": "L3703",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_dgrgirolistahtml",
-      "target": "js_relatorio_dgrgirocor"
+      "target": "js_relatorio_dgrgirocor",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29388,9 +29132,9 @@
       "source_location": "L5274",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_dgmlinhahtml",
-      "target": "js_relatorio_dgrtruncnome"
+      "target": "js_relatorio_dgrtruncnome",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29400,9 +29144,9 @@
       "source_location": "L3697",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_dgrgirolistahtml",
-      "target": "js_relatorio_dgrtruncnome"
+      "target": "js_relatorio_dgrtruncnome",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29412,9 +29156,9 @@
       "source_location": "L3797",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_dgrtabelamaterialhtml",
-      "target": "js_relatorio_dgrtruncnome"
+      "target": "js_relatorio_dgrtruncnome",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29424,9 +29168,9 @@
       "source_location": "L5268",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_dgmlinhahtml",
-      "target": "js_relatorio_dgrabastinfo"
+      "target": "js_relatorio_dgrabastinfo",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29436,9 +29180,9 @@
       "source_location": "L3694",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_dgrgirolistahtml",
-      "target": "js_relatorio_dgrabastinfo"
+      "target": "js_relatorio_dgrabastinfo",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29448,9 +29192,9 @@
       "source_location": "L3748",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_dgrbuildgirocoberturahtml",
-      "target": "js_relatorio_dgrgirolistahtml"
+      "target": "js_relatorio_dgrgirolistahtml",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29460,9 +29204,9 @@
       "source_location": "L3699",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_dgrgirolistahtml",
-      "target": "js_relatorio_dgrnowrapnum"
+      "target": "js_relatorio_dgrnowrapnum",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29472,9 +29216,9 @@
       "source_location": "L5444",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_dgmcentralheaderhtml",
-      "target": "js_relatorio_dgrvalcor"
+      "target": "js_relatorio_dgrvalcor",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29484,9 +29228,9 @@
       "source_location": "L5270",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_dgmlinhahtml",
-      "target": "js_relatorio_dgrvalcor"
+      "target": "js_relatorio_dgrvalcor",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29496,9 +29240,9 @@
       "source_location": "L3849",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_dgrrankinghtml",
-      "target": "js_relatorio_dgrvalcor"
+      "target": "js_relatorio_dgrvalcor",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29508,9 +29252,9 @@
       "source_location": "L3803",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_dgrtabelamaterialhtml",
-      "target": "js_relatorio_dgrvalcor"
+      "target": "js_relatorio_dgrvalcor",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29520,9 +29264,9 @@
       "source_location": "L5277",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_dgmlinhahtml",
-      "target": "js_relatorio_dgrnowrapnum"
+      "target": "js_relatorio_dgrnowrapnum",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29532,9 +29276,9 @@
       "source_location": "L3845",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_dgrrankinghtml",
-      "target": "js_relatorio_dgrnowrapnum"
+      "target": "js_relatorio_dgrnowrapnum",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29544,9 +29288,9 @@
       "source_location": "L3798",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_dgrtabelamaterialhtml",
-      "target": "js_relatorio_dgrnowrapnum"
+      "target": "js_relatorio_dgrnowrapnum",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29556,9 +29300,9 @@
       "source_location": "L3898",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_dgrbuilddetalhadoanaliticohtml",
-      "target": "js_relatorio_dgrtabelamaterialhtml"
+      "target": "js_relatorio_dgrtabelamaterialhtml",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29568,9 +29312,9 @@
       "source_location": "L3899",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_dgrbuilddetalhadoanaliticohtml",
-      "target": "js_relatorio_dgrrankinghtml"
+      "target": "js_relatorio_dgrrankinghtml",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29580,9 +29324,9 @@
       "source_location": "L4515",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildocorrenciarow",
-      "target": "js_relatorio_fmtbr"
+      "target": "js_relatorio_fmtbr",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29592,9 +29336,9 @@
       "source_location": "L4518",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildocorrenciarow",
-      "target": "js_relatorio_buildtempocell"
+      "target": "js_relatorio_buildtempocell",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29604,9 +29348,9 @@
       "source_location": "L4507",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildocorrenciarow",
-      "target": "js_relatorio_buildstatusbadge"
+      "target": "js_relatorio_buildstatusbadge",
+      "confidence_score": 1.0
     },
     {
       "relation": "indirect_call",
@@ -29616,9 +29360,9 @@
       "source_location": "L4559",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 0.5,
       "source": "js_relatorio_buildcentralsection",
-      "target": "js_relatorio_buildocorrenciarow"
+      "target": "js_relatorio_buildocorrenciarow",
+      "confidence_score": 0.5
     },
     {
       "relation": "calls",
@@ -29628,9 +29372,9 @@
       "source_location": "L4602",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_buildregionalsection",
-      "target": "js_relatorio_buildcentralsection"
+      "target": "js_relatorio_buildcentralsection",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29640,9 +29384,9 @@
       "source_location": "L5217",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_dgmrenderpicker",
-      "target": "js_relatorio_dgmmeskey"
+      "target": "js_relatorio_dgmmeskey",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29652,9 +29396,9 @@
       "source_location": "L5229",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_dgmrenderpicker",
-      "target": "js_relatorio_dgmmeslabel"
+      "target": "js_relatorio_dgmmeslabel",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29664,9 +29408,9 @@
       "source_location": "L5220",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_dgmrenderpicker",
-      "target": "js_relatorio_dgmmesesordenados"
+      "target": "js_relatorio_dgmmesesordenados",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29676,9 +29420,9 @@
       "source_location": "L5269",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_dgmlinhahtml",
-      "target": "js_relatorio_dgmcoberturainfo"
+      "target": "js_relatorio_dgmcoberturainfo",
+      "confidence_score": 1.0
     },
     {
       "relation": "indirect_call",
@@ -29688,9 +29432,9 @@
       "source_location": "L5374",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 0.5,
       "source": "js_relatorio_dgmcentraltabelahtml",
-      "target": "js_relatorio_dgmlinhahtml"
+      "target": "js_relatorio_dgmlinhahtml",
+      "confidence_score": 0.5
     },
     {
       "relation": "calls",
@@ -29700,9 +29444,9 @@
       "source_location": "L5276",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_dgmlinhahtml",
-      "target": "js_relatorio_dgmchip"
+      "target": "js_relatorio_dgmchip",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29712,9 +29456,9 @@
       "source_location": "L5378",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_dgmcentraltabelahtml",
-      "target": "js_relatorio_dgmajudatexto"
+      "target": "js_relatorio_dgmajudatexto",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29724,9 +29468,9 @@
       "source_location": "L5573",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_dgmmespanehtml",
-      "target": "js_relatorio_dgmcentraltabelahtml"
+      "target": "js_relatorio_dgmcentraltabelahtml",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29736,9 +29480,9 @@
       "source_location": "L5453",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_dgmcentralheaderhtml",
-      "target": "js_relatorio_dgmchip"
+      "target": "js_relatorio_dgmchip",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -29748,9 +29492,9 @@
       "source_location": "L5571",
       "weight": 1.0,
       "_origin": "ast",
-      "confidence_score": 1.0,
       "source": "js_relatorio_dgmmespanehtml",
-      "target": "js_relatorio_dgmcentralheaderhtml"
+      "target": "js_relatorio_dgmcentralheaderhtml",
+      "confidence_score": 1.0
     },
     {
       "relation": "references",
@@ -79932,6 +79676,271 @@
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
+      "source_file": "tests/relatorio-giro-usina.test.mjs",
+      "source_location": "L74",
+      "weight": 1.0,
+      "_origin": "ast",
+      "confidence_score": 1.0,
+      "source": "tests_relatorio_giro_usina_test",
+      "target": "tests_relatorio_giro_usina_test_add"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/relatorio-giro-usina.test.mjs",
+      "source_location": "L74",
+      "weight": 1.0,
+      "_origin": "ast",
+      "confidence_score": 1.0,
+      "source": "tests_relatorio_giro_usina_test",
+      "target": "tests_relatorio_giro_usina_test_addeventlistener"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/relatorio-giro-usina.test.mjs",
+      "source_location": "L357",
+      "weight": 1.0,
+      "_origin": "ast",
+      "confidence_score": 1.0,
+      "source": "tests_relatorio_giro_usina_test",
+      "target": "tests_relatorio_giro_usina_test_aplicar"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/relatorio-giro-usina.test.mjs",
+      "source_location": "L75",
+      "weight": 1.0,
+      "_origin": "ast",
+      "confidence_score": 1.0,
+      "source": "tests_relatorio_giro_usina_test",
+      "target": "tests_relatorio_giro_usina_test_appendchild"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/relatorio-giro-usina.test.mjs",
+      "source_location": "L344",
+      "weight": 1.0,
+      "_origin": "ast",
+      "confidence_score": 1.0,
+      "source": "tests_relatorio_giro_usina_test",
+      "target": "tests_relatorio_giro_usina_test_botaotudo"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/relatorio-giro-usina.test.mjs",
+      "source_location": "L333",
+      "weight": 1.0,
+      "_origin": "ast",
+      "confidence_score": 1.0,
+      "source": "tests_relatorio_giro_usina_test",
+      "target": "tests_relatorio_giro_usina_test_cabecalhos"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/relatorio-giro-usina.test.mjs",
+      "source_location": "L91",
+      "weight": 1.0,
+      "_origin": "ast",
+      "confidence_score": 1.0,
+      "source": "tests_relatorio_giro_usina_test",
+      "target": "tests_relatorio_giro_usina_test_casos"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/relatorio-giro-usina.test.mjs",
+      "source_location": "L24",
+      "weight": 1.0,
+      "_origin": "ast",
+      "confidence_score": 1.0,
+      "source": "tests_relatorio_giro_usina_test",
+      "target": "tests_relatorio_giro_usina_test_centralfalsa"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/relatorio-giro-usina.test.mjs",
+      "source_location": "L40",
+      "weight": 1.0,
+      "_origin": "ast",
+      "confidence_score": 1.0,
+      "source": "tests_relatorio_giro_usina_test",
+      "target": "tests_relatorio_giro_usina_test_ctx"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/relatorio-giro-usina.test.mjs",
+      "source_location": "L346",
+      "weight": 1.0,
+      "_origin": "ast",
+      "confidence_score": 1.0,
+      "source": "tests_relatorio_giro_usina_test",
+      "target": "tests_relatorio_giro_usina_test_ctxf"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/relatorio-giro-usina.test.mjs",
+      "source_location": "L35",
+      "weight": 1.0,
+      "_origin": "ast",
+      "confidence_score": 1.0,
+      "source": "tests_relatorio_giro_usina_test",
+      "target": "tests_relatorio_giro_usina_test_erros"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/relatorio-giro-usina.test.mjs",
+      "source_location": "L36",
+      "weight": 1.0,
+      "_origin": "ast",
+      "confidence_score": 1.0,
+      "source": "tests_relatorio_giro_usina_test",
+      "target": "tests_relatorio_giro_usina_test_escritas"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/relatorio-giro-usina.test.mjs",
+      "source_location": "L38",
+      "weight": 1.0,
+      "_origin": "ast",
+      "confidence_score": 1.0,
+      "source": "tests_relatorio_giro_usina_test",
+      "target": "tests_relatorio_giro_usina_test_etapas"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/relatorio-giro-usina.test.mjs",
+      "source_location": "L23",
+      "weight": 1.0,
+      "_origin": "ast",
+      "confidence_score": 1.0,
+      "source": "tests_relatorio_giro_usina_test",
+      "target": "tests_relatorio_giro_usina_test_nivel"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/relatorio-giro-usina.test.mjs",
+      "source_location": "L37",
+      "weight": 1.0,
+      "_origin": "ast",
+      "confidence_score": 1.0,
+      "source": "tests_relatorio_giro_usina_test",
+      "target": "tests_relatorio_giro_usina_test_progresso"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/relatorio-giro-usina.test.mjs",
+      "source_location": "L20",
+      "weight": 1.0,
+      "_origin": "ast",
+      "confidence_score": 1.0,
+      "source": "tests_relatorio_giro_usina_test",
+      "target": "tests_relatorio_giro_usina_test_raiz"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/relatorio-giro-usina.test.mjs",
+      "source_location": "L74",
+      "weight": 1.0,
+      "_origin": "ast",
+      "confidence_score": 1.0,
+      "source": "tests_relatorio_giro_usina_test",
+      "target": "tests_relatorio_giro_usina_test_remove"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/relatorio-giro-usina.test.mjs",
+      "source_location": "L330",
+      "weight": 1.0,
+      "_origin": "ast",
+      "confidence_score": 1.0,
+      "source": "tests_relatorio_giro_usina_test",
+      "target": "tests_relatorio_giro_usina_test_resumo"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/relatorio-giro-usina.test.mjs",
+      "source_location": "L323",
+      "weight": 1.0,
+      "_origin": "ast",
+      "confidence_score": 1.0,
+      "source": "tests_relatorio_giro_usina_test",
+      "target": "tests_relatorio_giro_usina_test_secoes"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/relatorio-giro-usina.test.mjs",
+      "source_location": "L302",
+      "weight": 1.0,
+      "_origin": "ast",
+      "confidence_score": 1.0,
+      "source": "tests_relatorio_giro_usina_test",
+      "target": "tests_relatorio_giro_usina_test_secoeshtml"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/relatorio-giro-usina.test.mjs",
+      "source_location": "L329",
+      "weight": 1.0,
+      "_origin": "ast",
+      "confidence_score": 1.0,
+      "source": "tests_relatorio_giro_usina_test",
+      "target": "tests_relatorio_giro_usina_test_selects"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/relatorio-giro-usina.test.mjs",
+      "source_location": "L92",
+      "weight": 1.0,
+      "_origin": "ast",
+      "confidence_score": 1.0,
+      "source": "tests_relatorio_giro_usina_test",
+      "target": "tests_relatorio_giro_usina_test_teste"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/relatorio-giro-usina.test.mjs",
+      "source_location": "L356",
+      "weight": 1.0,
+      "_origin": "ast",
+      "confidence_score": 1.0,
+      "source": "tests_relatorio_giro_usina_test",
+      "target": "tests_relatorio_giro_usina_test_visivel"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/relatorio-giro-usina.test.mjs",
+      "source_location": "L26",
+      "weight": 1.0,
+      "_origin": "ast",
+      "confidence_score": 1.0,
+      "source": "tests_relatorio_giro_usina_test_centralfalsa",
+      "target": "tests_relatorio_giro_usina_test_nivel"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
       "source_file": "tests/sap-861862-dup.test.mjs",
       "source_location": "L35",
       "weight": 1.0,
@@ -80618,5 +80627,5 @@
       "source_file": "index.html"
     }
   ],
-  "built_at_commit": "11efce304aa162048862656bba5ed98ea3eea8b9"
+  "built_at_commit": "6c6791e55efa6dfa548bbc44d882150a48f15f33"
 }

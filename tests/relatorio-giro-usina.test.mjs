@@ -207,6 +207,18 @@ teste('legenda sai da MESMA fonte do "?" e imprime', () => {
   // Faixas em linha, separadas por · via ::before — não em lista com marcador.
   assert.ok(htmlGerado.includes(".dgm-leg-faixa + .dgm-leg-faixa::before { content:' · '"));
   assert.ok(!/<ul class="dgm-leg/.test(htmlGerado));
+});
+
+teste('legenda não estoura a largura da tela', () => {
+  // Duas causas somadas já vazaram a página pra fora: faixas nowrap coladas
+  // sem espaço (nenhum ponto de quebra) e item de grid sem min-width:0
+  // (não encolhe abaixo do conteúdo, empurra a coluna 1fr pra fora).
+  assert.ok(htmlGerado.includes('.dgm-leg-corpo { min-width:0; }'));
+  assert.ok(!/\.dgm-leg-faixa \{[^}]*white-space:nowrap/.test(htmlGerado),
+    'a faixa inteira não pode ser nowrap — só o rótulo dela');
+  assert.ok(/\.dgm-leg-faixa b \{[^}]*white-space:nowrap/.test(htmlGerado));
+  assert.ok(htmlGerado.includes('</span> <span class="dgm-leg-faixa">'),
+    'faixas precisam de espaço entre si pra existir ponto de quebra');
   assert.ok(htmlGerado.includes('Saídas ÷ Est. Médio'));
   // Recolhida por padrão na tela...
   assert.ok(htmlGerado.includes('dgm-legenda-head" aria-expanded="false"'));
