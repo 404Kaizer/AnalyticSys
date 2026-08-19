@@ -5284,31 +5284,138 @@ function _dgmLinhaHtml(item) {
     </tr>`;
 }
 
+// ── Colunas da tabela: rótulo, largura e a explicação ─────────────────────
+// FONTE ÚNICA — daqui saem o <thead>, o "?" de cada coluna e a legenda do
+// rodapé. Descrever a conta em dois lugares diferentes era garantia de que um
+// dos dois ficaria desatualizado.
+//
+// Larguras dimensionadas pros kg POR EXTENSO ("1.234.567,00 kg"): as colunas
+// de peso ficam mais largas que o nome, que tem ellipsis e aguenta o aperto.
+// Precisam somar 100.
+const _DGM_COLUNAS = [
+  { label: 'Material', largura: 19,
+    calculo: 'Material cadastrado com movimentação ou saldo na central, no mês da aba.' },
+
+  { label: 'Nível', largura: 8,
+    calculo: 'Combina Cobertura, Giro e Abastecimento. Cada eixo vira um peso de 0 a 3; o nível parte do PIOR dos três (o elo mais fraco decide) e sobe um degrau quando dois ou mais eixos já estão em 2 ou mais — problema correlacionado pesa mais que problema isolado.',
+    faixas: [
+      ['Bom',     'os três eixos equilibrados'],
+      ['Atenção', 'um eixo levemente fora da faixa saudável'],
+      ['Urgente', 'um eixo ruim, ou dois em alerta ao mesmo tempo'],
+      ['Crítico', 'pior caso de algum eixo, ou mais de um eixo ruim junto'],
+    ] },
+
+  { label: 'Entradas', largura: 12,
+    calculo: 'Soma dos lançamentos SAP positivos do material no mês. É o que entrou de fato na central.' },
+
+  { label: 'Saídas', largura: 12,
+    calculo: 'Soma dos lançamentos SAP negativos do material no mês, em módulo. É o consumo do período.' },
+
+  { label: 'Abast.', largura: 10,
+    calculo: 'Entradas ÷ Saídas × 100 — o abastecimento acompanhou o consumo? A MESMA porcentagem é lida de forma diferente conforme o giro: com giro ≥ 1 (consumo alto) o risco é ruptura, então repor menos que o consumo é grave; com giro < 1 (consumo baixo) o risco é acúmulo, então repor muito acima do consumo é que preocupa.',
+    faixas: [
+      ['Giro ≥ 1 · 100% ou mais',   'abastecimento cobre o consumo'],
+      ['Giro ≥ 1 · 80% a 100%',     'no limite'],
+      ['Giro ≥ 1 · abaixo de 80%',  'risco de ruptura'],
+      ['Giro < 1 · acima de 150%',  'excesso — capital imobilizado'],
+      ['Giro < 1 · 100% a 150%',    'abastecimento acima do consumo'],
+      ['Giro < 1 · 80% a 100%',     'equilibrado'],
+      ['Giro < 1 · abaixo de 80%',  'consumo supera o abastecimento'],
+      ['Entradas sem consumo',      'acúmulo — entrou e não saiu nada'],
+      ['Sem movimentação',          'eixo ignorado no cálculo do nível'],
+    ] },
+
+  { label: 'Est.Médio', largura: 12,
+    calculo: '(Est. Inicial + Est. Final) ÷ 2 — o estoque médio mantido no mês. É o divisor do Giro e o dividendo da Cobertura.' },
+
+  { label: 'Giro', largura: 6,
+    calculo: 'Saídas ÷ Est. Médio — quantas vezes o estoque se renovou no mês. Alto demais indica operação no limite (risco de ruptura); baixo demais, capital parado.',
+    faixas: [
+      ['acima de 4,00×',    'muito alto — risco de ruptura'],
+      ['2,00× a 4,00×',     'alto — operação enxuta'],
+      ['1,00× a 2,00×',     'saudável'],
+      ['0,50× a 1,00×',     'baixo — atenção com excesso'],
+      ['0,20× a 0,50×',     'muito baixo — estoque elevado'],
+      ['abaixo de 0,20×',   'parado — capital imobilizado'],
+    ] },
+
+  { label: 'Cobertura', largura: 9,
+    calculo: 'Est. Médio ÷ Saídas × dias do período — para quantos dias o estoque médio daria, mantido o consumo do mês. Os dias do período são medidos entre o primeiro e o último lançamento encontrado, não pelo calendário.',
+    faixas: [
+      ['menos de 5 dias',   'crítico'],
+      ['5 a 10 dias',       'urgente'],
+      ['10 a 20 dias',      'saudável'],
+      ['20 a 40 dias',      'atenção — possível excesso'],
+      ['mais de 40 dias',   'excesso — estoque parado'],
+      ['sem consumo',       'não calculável; tratado como sinal máximo no nível'],
+    ] },
+
+  { label: 'Variação', largura: 12,
+    calculo: 'Est. Final real − Est. Teórico, sendo o Teórico = Est. Inicial + Entradas + Saídas. O Est. Inicial vem do saldo TEÓRICO do SAP (âncora de Custos SAP + movimentações), então a variação mede o quanto o físico está distante do livro do SAP — mesma conta da Visão Micro do Analítico.',
+    faixas: [
+      ['Negativa (desfalque)', 'falta estoque em relação ao que o SAP diz'],
+      ['Positiva (sobra)',     'sobra estoque em relação ao que o SAP diz'],
+    ] },
+];
+
+// Texto do "?" — title nativo, multi-linha via &#10; (mesmo recurso que a
+// tabela de giro do dashboard já usa). Sem JS, funciona offline e não some se
+// o arquivo for aberto de um pendrive.
+function _dgmAjudaTexto(col) {
+  const linhas = [`${col.label} — como é calculado`, '', col.calculo];
+  if (col.faixas) {
+    linhas.push('', 'O que cada valor significa:');
+    col.faixas.forEach(([faixa, significado]) => linhas.push(`  • ${faixa}: ${significado}`));
+  }
+  return _rankEsc(linhas.join('\n')).replace(/\n/g, '&#10;');
+}
+
 function _dgmCentralTabelaHtml(c) {
   const linhas = c.mats.map(_dgmLinhaHtml).join('');
+  // Cabeçalhos à ESQUERDA (padrão do .rk-table th do shell, só não
+  // sobrescrever) com valores centralizados — mesmo desenho da Visão Micro.
+  const cabecalho = _DGM_COLUNAS.map(col => `
+    <th style="width:${col.largura}%">${_rankEsc(col.label)}<span class="dgm-help" title="${_dgmAjudaTexto(col)}">?</span></th>`
+  ).join('');
   return `
     <div class="dgr-table-wrap">
       <table class="rk-table dgm-tabela">
-        <!-- Larguras dimensionadas pros kg POR EXTENSO ("1.234.567,00 kg"): as
-             três colunas de peso ficam mais largas que o nome, que tem
-             ellipsis (.dgr-nome-trunc-inner) e aguenta o aperto.
-             Cabeçalhos à ESQUERDA (padrão do .rk-table th do shell, só não
-             sobrescrever) com valores à direita — mesmo desenho da tabela de
-             materiais da Visão Micro. -->
-        <thead><tr>
-          <th style="width:19%">Material</th>
-          <th style="width:8%">Nível</th>
-          <th style="width:12%">Entradas</th>
-          <th style="width:12%">Saídas</th>
-          <th style="width:10%">Abast.</th>
-          <th style="width:12%">Est.Médio</th>
-          <th style="width:6%">Giro</th>
-          <th style="width:9%">Cobertura</th>
-          <th style="width:12%">Variação</th>
-        </tr></thead>
+        <thead><tr>${cabecalho}</tr></thead>
         <tbody>${linhas}</tbody>
       </table>
     </div>`;
+}
+
+// ── Legenda ────────────────────────────────────────────────────────────────
+// Mesma fonte do "?" (_DGM_COLUNAS), em bloco recolhível: o "?" serve pra tirar
+// a dúvida pontual na hora, a legenda serve pra quem vai ler o relatório
+// inteiro — e é ela que sai no papel, já que tooltip não imprime.
+function _dgmLegendaHtml() {
+  // Glossário, não cards: rótulo à esquerda, explicação à direita, cada
+  // entrada com a altura do próprio conteúdo. Em grade de cards o "Material"
+  // (uma frase) herdava a altura do "Abast." (oito faixas) e sobrava vão.
+  // As faixas vão em linha, separadas por ·, em vez de lista com marcador —
+  // oito itens viram duas linhas em vez de oito.
+  const itens = _DGM_COLUNAS.map(col => `
+    <div class="dgm-leg-item">
+      <div class="dgm-leg-titulo">${_rankEsc(col.label)}</div>
+      <div class="dgm-leg-corpo">
+        <span class="dgm-leg-calculo">${_rankEsc(col.calculo)}</span>
+        ${col.faixas ? `<span class="dgm-leg-faixas">${col.faixas.map(([f, sig]) =>
+          `<span class="dgm-leg-faixa"><b>${_rankEsc(f)}</b> ${_rankEsc(sig)}</span>`).join('')}</span>` : ''}
+      </div>
+    </div>`).join('');
+
+  return `
+    <section class="dgm-legenda">
+      <button type="button" class="dgr-collapse-toggle dgm-legenda-head" aria-expanded="false" onclick="_dgrToggleSecao(this)">
+        <i class="ti ti-chevron-down"></i>
+        <span>Legenda — como cada coluna é calculada e o que os níveis significam</span>
+      </button>
+      <div class="dgr-collapse-body dgr-collapsed">
+        <div class="dgm-leg-lista">${itens}</div>
+      </div>
+    </section>`;
 }
 
 // ── Cabeçalho da central — mesmo desenho do card da Visão Micro: nome em
@@ -5378,7 +5485,12 @@ function _dgmFiltrosHtml(centrais, materiais) {
           <option value="">Todos</option>${niveis.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}
         </select>
       </label>
-      <button type="button" class="dgm-f-limpar" onclick="_dgmLimparFiltros()">Limpar</button>
+      <button type="button" class="dgm-f-btn" onclick="_dgmLimparFiltros()">
+        <i class="ti ti-filter-off"></i> Limpar
+      </button>
+      <button type="button" class="dgm-f-btn" id="dgm-toggle-tudo" onclick="_dgmAlternarTudo(this)">
+        <i class="ti ti-chevrons-up"></i> Recolher tudo
+      </button>
       <span class="dgm-f-resumo" id="dgm-f-resumo"></span>
     </div>`;
 }
@@ -5428,6 +5540,22 @@ function _dgmLimparFiltros() {
     if (el) el.value = '';
   });
   _dgmAplicarFiltros();
+}
+// Alterna TODAS as centrais de uma vez. O alvo é decidido pelo estado atual —
+// se sobrou alguma expandida, recolhe todas; senão expande. Assim o botão faz
+// o que promete mesmo depois do usuário abrir/fechar centrais no dedo.
+// Mesmo contrato de DOM do _dgrToggleSecao (corpo = irmão seguinte).
+function _dgmAlternarTudo(btn) {
+  var cabecalhos = [].slice.call(document.querySelectorAll('.dgm-central-head'));
+  if (!cabecalhos.length) return;
+  var recolher = cabecalhos.some(function(b) { return b.getAttribute('aria-expanded') === 'true'; });
+  cabecalhos.forEach(function(b) {
+    b.setAttribute('aria-expanded', recolher ? 'false' : 'true');
+    if (b.nextElementSibling) b.nextElementSibling.classList.toggle('dgr-collapsed', recolher);
+  });
+  btn.innerHTML = recolher
+    ? '<i class="ti ti-chevrons-down"><\/i> Expandir tudo'
+    : '<i class="ti ti-chevrons-up"><\/i> Recolher tudo';
 }
 <\/script>`;
 }
@@ -5543,7 +5671,7 @@ window.gerarRelatorioGiroUsina = async function() {
         font-size:9px; font-weight:800; text-transform:uppercase; letter-spacing:.06em;
         color:var(--dgr-text-dim2, #64748b);
       }
-      .dgm-filtros select, .dgm-f-limpar {
+      .dgm-filtros select, .dgm-f-btn {
         background:var(--dgr-card-bg, rgba(255,255,255,.06));
         border:1px solid var(--dgr-card-border, rgba(255,255,255,.14));
         color:var(--dgr-text, #e2e8f0);
@@ -5551,7 +5679,8 @@ window.gerarRelatorioGiroUsina = async function() {
         font-family:'JetBrains Mono',monospace; font-size:10.5px; font-weight:600;
       }
       .dgm-filtros select { min-width:170px; max-width:280px; }
-      .dgm-f-limpar { cursor:pointer; font-weight:700; }
+      .dgm-f-btn { display:inline-flex; align-items:center; gap:5px; cursor:pointer; font-weight:700; }
+      .dgm-f-btn i { font-size:12px; }
       .dgm-f-resumo {
         font-family:'JetBrains Mono',monospace; font-size:10px;
         color:var(--dgr-text-dim, #94a3b8); margin-left:auto;
@@ -5577,6 +5706,56 @@ window.gerarRelatorioGiroUsina = async function() {
          no tamanho da célula (o do cabeçalho tem regra própria, menor). */
       .dgm-tabela .dgm-chip i { font-size:11px; }
 
+      /* "?" de cada coluna: title nativo, sem JS. Não imprime — no papel quem
+         explica é a legenda. */
+      .dgm-help {
+        display:inline-flex; align-items:center; justify-content:center;
+        width:12px; height:12px; margin-left:5px; border-radius:50%;
+        border:1px solid var(--dgr-card-border, rgba(255,255,255,.22));
+        color:var(--dgr-text-dim2, #64748b);
+        font-size:8px; font-weight:800; line-height:1; cursor:help;
+        vertical-align:middle;
+      }
+      .dgm-help:hover { color:var(--dgr-text, #e2e8f0); }
+
+      /* Legenda — recolhida por padrão pra não empurrar os dados pra baixo. Na
+         impressão o shell força .dgr-collapsed a aparecer, então ela sai no
+         papel de qualquer jeito (é lá que ela mais importa: tooltip não
+         imprime). */
+      .dgm-legenda { margin:0 0 18px; }
+      .dgm-legenda-head { margin-bottom:0; }
+      .dgm-legenda .dgr-collapse-body {
+        padding:14px 16px;
+        background:var(--dgr-card-bg, rgba(255,255,255,.045));
+        border:1px solid var(--dgr-card-border, rgba(255,255,255,.09));
+        border-top:none; border-radius:0 0 10px 10px;
+      }
+      /* Uma entrada por linha: rótulo à esquerda, explicação à direita. Cada
+         linha ocupa a altura do próprio conteúdo — em grade de cards todos
+         herdavam a altura do maior e sobrava vão. */
+      .dgm-leg-item {
+        display:grid; grid-template-columns:88px 1fr; gap:0 14px;
+        padding:8px 0; border-bottom:1px solid var(--dgr-divider, rgba(255,255,255,.07));
+        page-break-inside:avoid;
+      }
+      .dgm-leg-item:last-child { border-bottom:none; padding-bottom:0; }
+      .dgm-leg-item:first-child { padding-top:0; }
+      .dgm-leg-titulo {
+        font-size:9.5px; font-weight:800; text-transform:uppercase; letter-spacing:.05em;
+        color:var(--dgr-accent-text, #f87171); padding-top:1px;
+      }
+      .dgm-leg-calculo { font-size:10.5px; line-height:1.5; color:var(--dgr-text, #e2e8f0); }
+      /* Faixas em linha, separadas por ·: oito itens viram duas linhas em vez
+         de uma lista de oito. */
+      .dgm-leg-faixas { display:block; margin-top:5px; }
+      .dgm-leg-faixa {
+        font-size:9.5px; font-family:'JetBrains Mono',monospace;
+        color:var(--dgr-text-dim, #94a3b8); white-space:nowrap;
+      }
+      .dgm-leg-faixa + .dgm-leg-faixa::before { content:' · '; color:var(--dgr-text-dim2, #64748b); }
+      .dgm-leg-faixa b { color:var(--dgr-text, #e2e8f0); font-weight:700; }
+      @media print { .dgm-help { display:none; } }
+
       /* Zebra do shell DESLIGADA aqui, por dois motivos: ela pinta o <tr>
          enquanto o destaque da central pinta o <td>, e com o fundo do bloco
          por baixo davam três tons diferentes; e sendo :nth-child, alternava
@@ -5590,7 +5769,11 @@ window.gerarRelatorioGiroUsina = async function() {
          desenho do .regional-group da Visão Micro (cabeçalho colado no corpo,
          cantos arredondados só nas pontas de fora). A tabela de dentro perde o
          visual de card próprio pra não virar card dentro de card. */
-      .dgm-secao { margin-bottom:20px; }
+      /* O padding-top de 24px que vem de .dgr-page-section-natural existia pra
+         separar seções sem moldura; aqui cada central já é um card com margem
+         própria, então ele só somava vão — atrapalhava bastante com todas
+         recolhidas. Na impressão a margem de @page é que dá o respiro. */
+      .dgm-secao { padding-top:0; margin-bottom:10px; }
       .dgm-central-head {
         padding:11px 14px; margin-bottom:0;
         background:var(--dgr-card-bg, rgba(255,255,255,.045));
@@ -5676,9 +5859,9 @@ window.gerarRelatorioGiroUsina = async function() {
       badge:     'Relatório de Fornecimento',
       title:     'Giro & Cobertura por Usina',
       subtitle:  'Giro, cobertura e variação de cada central e de cada material dentro dela, mês a mês.',
-      // Filtros ANTES da barra de abas (valem pro relatório inteiro) e o
-      // script no fim, com o DOM que ele consulta já parseado.
-      bodyHtml:  `<style>${_dgrEstilos()}${estilos}</style>${filtros}${abasBar}${panes}${_dgmScriptFiltros()}`,
+      // Filtros e legenda ANTES da barra de abas (valem pro relatório inteiro)
+      // e o script no fim, com o DOM que ele consulta já parseado.
+      bodyHtml:  `<style>${_dgrEstilos()}${estilos}</style>${filtros}${_dgmLegendaHtml()}${abasBar}${panes}${_dgmScriptFiltros()}`,
       notaRodape: 'Giro e Cobertura seguem a mesma metodologia do modal "Giro & Cobertura" do Dashboard Gerencial. Variação = Est. Final real − Est. Teórico, com Est. Inicial no saldo teórico do SAP — mesma conta da Visão Micro do Analítico.'
     });
 
