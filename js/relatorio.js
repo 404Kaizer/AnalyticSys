@@ -5263,7 +5263,7 @@ function _dgmCoberturaInfo(dias) {
 // Nível, Abast., Giro e Cobertura saem como badge — as quatro colunas
 // qualitativas, todas no mesmo _dgmChip dos chips do cabeçalho. Entradas,
 // Saídas, Est.Médio e Variação seguem número puro: são grandeza, não estado.
-function _dgmLinhaHtml(item) {
+function _dgmLinhaHtml(item, dias) {
   const cor    = _dgrNivelCor(item.nivel.level);
   const abast  = _dgrAbastInfo(item.entradas, item.saidas, item.giro >= 1 ? 'alto' : 'baixo');
   const cob    = _dgmCoberturaInfo(item.cobertura);
@@ -5273,13 +5273,13 @@ function _dgmLinhaHtml(item) {
       <td class="rk-name" title="${_rankEsc(item.name)}">
         <span class="dgr-nome-trunc-inner"><i class="ti ${_DGM_NIVEL_ICONE[item.nivel.level]} dgm-nome-icone" style="color:${cor}"></i>${_rankEsc(_dgrTruncNome(item.name, 30))}</span>
       </td>
-      <td>${_dgmChip(_rankEsc(item.nivel.label), cor)}</td>
+      <td>${_dgmChip(_rankEsc(item.nivel.label), cor, null, false, _dgmAjudaNivel(item))}</td>
       <td class="rk-num" style="color:#94a3b8">${_dgrNowrapNum(fmtKg(item.entradas))}</td>
       <td class="rk-num" style="color:#94a3b8">${_dgrNowrapNum(fmtKg(item.saidas))}</td>
-      <td>${_dgmChip(abast.texto, abast.cor, abast.icone)}</td>
+      <td>${_dgmChip(abast.texto, abast.cor, abast.icone, false, _dgmAjudaAbast(item))}</td>
       <td class="rk-num" style="color:#94a3b8">${_dgrNowrapNum(fmtKg(item.estMedio))}</td>
-      <td>${_dgmChip(item.giro.toFixed(2) + '×', _dgrGiroCor(item.giro))}</td>
-      <td>${_dgmChip(cob.texto, cob.cor, cob.icone)}</td>
+      <td>${_dgmChip(item.giro.toFixed(2) + '×', _dgrGiroCor(item.giro), null, false, _dgmAjudaGiro(item))}</td>
+      <td>${_dgmChip(cob.texto, cob.cor, cob.icone, false, _dgmAjudaCobertura(item, dias))}</td>
       <td class="rk-num" style="color:${corVar}">${varSymbol(item.variacao)} ${_dgrNowrapNum(fmtKg(Math.abs(item.variacao)))}</td>
     </tr>`;
 }
@@ -5367,15 +5367,87 @@ function _dgmAjudaTexto(col) {
     linhas.push('', 'O que cada valor significa:');
     col.faixas.forEach(([faixa, significado]) => linhas.push(`  • ${faixa}: ${significado}`));
   }
-  return _rankEsc(linhas.join('\n')).replace(/\n/g, '&#10;');
+  return _dgmTitle(linhas);
 }
 
-function _dgmCentralTabelaHtml(c) {
-  const linhas = c.mats.map(_dgmLinhaHtml).join('');
+// ── A conta de cada célula, com os números da própria linha ────────────────
+// Complementa o "?" do cabeçalho: lá está a fórmula genérica, aqui está ela
+// resolvida — "7.150,90 kg ÷ 4.128,00 kg = 1,73×".
+const _DGM_PESO_EIXO = ['0 (saudável)', '1 (alerta)', '2 (ruim)', '3 (pior caso)'];
+
+function _dgmAjudaGiro(item) {
+  return [
+    'Giro = Saídas ÷ Est. Médio',
+    `${fmtKg(item.saidas)} ÷ ${fmtKg(item.estMedio)} = ${item.giro.toFixed(2)}×`,
+    '',
+    'O estoque médio se renovou ' + item.giro.toFixed(2) + ' vez(es) no período.',
+  ];
+}
+
+function _dgmAjudaCobertura(item, dias) {
+  if (item.cobertura === null) {
+    return ['Cobertura = Est. Médio ÷ Saídas × dias do período',
+            'Sem saídas no período: não há consumo pra dividir, então a cobertura não é calculável.',
+            'No cálculo do Nível isso conta como sinal máximo (peso 3) — estoque sem giro nenhum.'];
+  }
+  return [
+    'Cobertura = Est. Médio ÷ Saídas × dias do período',
+    `${fmtKg(item.estMedio)} ÷ ${fmtKg(item.saidas)} × ${dias} dias = ${item.cobertura.toFixed(1)} dias`,
+    '',
+    `Mantido o consumo do período, o estoque médio duraria ${item.cobertura.toFixed(1)} dias.`,
+  ];
+}
+
+function _dgmAjudaAbast(item) {
+  if (item.saidas < 0.001 && item.entradas < 0.001) {
+    return ['Abastecimento = Entradas ÷ Saídas × 100', 'Sem movimentação no período — eixo ignorado no cálculo do Nível.'];
+  }
+  if (item.saidas < 0.001) {
+    return ['Abastecimento = Entradas ÷ Saídas × 100',
+            `Entrou ${fmtKg(item.entradas)} e não saiu nada: sem divisor, a razão não existe.`,
+            'Tratado como acúmulo (peso 2 no Nível).'];
+  }
+  const ratio = (item.entradas / item.saidas) * 100;
+  const alto  = item.giro >= 1;
+  return [
+    'Abastecimento = Entradas ÷ Saídas × 100',
+    `${fmtKg(item.entradas)} ÷ ${fmtKg(item.saidas)} × 100 = ${ratio.toFixed(0)}%`,
+    '',
+    alto
+      ? `Giro ${item.giro.toFixed(2)}× (≥ 1, consumo alto): o risco aqui é ruptura, então repor abaixo do consumo é grave.`
+      : `Giro ${item.giro.toFixed(2)}× (< 1, consumo baixo): o risco aqui é acúmulo, então repor muito acima do consumo é que pesa.`,
+  ];
+}
+
+function _dgmAjudaNivel(item) {
+  const nv = item.nivel;
+  // Nível montado fora do _giroNivelInfo não traz a decomposição por eixo;
+  // melhor explicar por alto do que imprimir "undefined" no tooltip.
+  if (!Number.isFinite(nv.pior)) {
+    return ['Nível = pior dos três eixos (Cobertura, Giro e Abastecimento), +1 se dois ou mais estiverem em 2 ou mais.',
+            `Resultado: ${nv.label}`];
+  }
+  const peso = p => (p === null || p === undefined ? 'ignorado (sem movimentação)' : _DGM_PESO_EIXO[p]);
+  return [
+    'Nível = pior dos três eixos, +1 se dois ou mais estiverem em 2 ou mais',
+    '',
+    `Cobertura:      peso ${peso(nv.pCob)}`,
+    `Giro:           peso ${peso(nv.pGiro)}`,
+    `Abastecimento:  peso ${peso(nv.pAbast)}`,
+    '',
+    `Pior eixo: ${nv.pior}` + (nv.reforco
+      ? ` · ${nv.ruins} eixos em 2 ou mais, então +1 = ${nv.pontos}`
+      : ` · nenhum reforço aplicado (${nv.ruins} eixo(s) em 2 ou mais)`),
+    `Resultado: ${nv.label}`,
+  ];
+}
+
+function _dgmCentralTabelaHtml(c, dias) {
+  const linhas = c.mats.map(m => _dgmLinhaHtml(m, dias)).join('');
   // Cabeçalhos à ESQUERDA (padrão do .rk-table th do shell, só não
   // sobrescrever) com valores centralizados — mesmo desenho da Visão Micro.
   const cabecalho = _DGM_COLUNAS.map(col => `
-    <th style="width:${col.largura}%">${_rankEsc(col.label)}<span class="dgm-help" title="${_dgmAjudaTexto(col)}">?</span></th>`
+    <th style="width:${col.largura}%">${_rankEsc(col.label)}<span class="dgm-help" data-tip="${_dgmAjudaTexto(col)}">?</span></th>`
   ).join('');
   return `
     <div class="dgr-table-wrap">
@@ -5433,8 +5505,88 @@ const _DGM_NIVEL_ICONE = {
   bom:     'ti-circle-check',
 };
 
-function _dgmChip(texto, cor, icone, zero) {
-  return `<span class="dgm-chip"${zero ? ' data-zero="1"' : ''} style="background:${cor}1f;color:${cor};border-color:${cor}4d">${icone ? `<i class="ti ${icone}"></i>` : ''}${texto}</span>`;
+// `ajuda` (opcional) vira um "?" dentro do badge, com a conta daquela célula
+// — números reais da linha, não a explicação genérica da coluna (essa fica no
+// "?" do cabeçalho e na legenda).
+function _dgmChip(texto, cor, icone, zero, ajuda) {
+  return `<span class="dgm-chip"${zero ? ' data-zero="1"' : ''} style="background:${cor}1f;color:${cor};border-color:${cor}4d">`
+    + `${icone ? `<i class="ti ${icone}"></i>` : ''}${texto}`
+    + `${ajuda ? `<span class="dgm-chip-help" data-tip="${_dgmTitle(ajuda)}">?</span>` : ''}`
+    + `</span>`;
+}
+
+// Conteúdo do tooltip, num atributo data-tip. &#10; porque o atributo não
+// aceita \n cru — o dataset devolve a quebra de volta na leitura, e o script
+// do tooltip (ver _dgmScriptTooltip) reparte por linha.
+//
+// NÃO usa title: o tooltip nativo é feio, demora ~1s pra abrir e não estiliza.
+// Este segue o padrão dos badges "?" dos gráficos do dashboard (_getHelpTip em
+// help-badges.js) — mesma caixa, mesma sombra, seguindo o cursor.
+function _dgmTitle(linhas) {
+  return _rankEsc([].concat(linhas).join('\n')).replace(/\n/g, '&#10;');
+}
+
+// Tooltip singleton, portado do _getHelpTip/_positionTip do help-badges.js
+// pro HTML exportado (que não tem o JS nem o CSS do app). Primeira linha do
+// data-tip vira o título; o resto vai em monoespaçada com pre-wrap, pra
+// preservar o alinhamento das contas.
+function _dgmScriptTooltip() {
+  return `<script>
+(function() {
+  var tip = null;
+  function caixa() {
+    if (tip) return tip;
+    tip = document.createElement('div');
+    tip.id = 'dgm-tip';
+    document.body.appendChild(tip);
+    return tip;
+  }
+  function posicionar(t, cx, cy) {
+    var PAD = 10, W = window.innerWidth, H = window.innerHeight;
+    var r = t.getBoundingClientRect();
+    var tw = r.width || 360, th = r.height || 160;
+    var lx = cx + 14, ly = cy + 14;
+    if (lx + tw + PAD > W) lx = cx - tw - 10;
+    if (ly + th + PAD > H) ly = cy - th - 10;
+    t.style.left = Math.max(PAD, Math.min(lx, W - tw - PAD)) + 'px';
+    t.style.top  = Math.max(PAD, Math.min(ly, H - th - PAD)) + 'px';
+  }
+  function mostrar(e, texto) {
+    var linhas = String(texto).split('\\n');
+    var t = caixa();
+    t.innerHTML = '';
+    var titulo = document.createElement('div');
+    titulo.className = 'dgm-tip-titulo';
+    titulo.textContent = linhas[0];
+    var corpo = document.createElement('div');
+    corpo.className = 'dgm-tip-corpo';
+    corpo.textContent = linhas.slice(1).join('\\n').replace(/^\\n+/, '');
+    t.appendChild(titulo);
+    if (corpo.textContent) t.appendChild(corpo);
+    t.style.display = 'block';
+    posicionar(t, e.clientX, e.clientY);
+  }
+  function esconder() { if (tip) tip.style.display = 'none'; }
+
+  // Delegado no document: os "?" são muitos (um por coluna e quatro por
+  // linha) e nascem todos com a página — um listener resolve todos.
+  document.addEventListener('mouseover', function(e) {
+    var alvo = e.target.closest ? e.target.closest('[data-tip]') : null;
+    if (alvo) mostrar(e, alvo.getAttribute('data-tip'));
+  });
+  document.addEventListener('mousemove', function(e) {
+    if (!tip || tip.style.display === 'none') return;
+    var alvo = e.target.closest ? e.target.closest('[data-tip]') : null;
+    if (alvo) posicionar(tip, e.clientX, e.clientY); else esconder();
+  });
+  document.addEventListener('mouseout', function(e) {
+    var alvo = e.target.closest ? e.target.closest('[data-tip]') : null;
+    if (alvo) esconder();
+  });
+  // Rolar com o tooltip aberto deixaria ele solto no meio da tela.
+  window.addEventListener('scroll', esconder, true);
+})();
+<\/script>`;
 }
 
 function _dgmCentralHeaderHtml(c) {
@@ -5610,7 +5762,7 @@ function _dgmPaneHtml(aba, dados, ativa) {
       <button type="button" class="dgr-collapse-toggle dgm-central-head" aria-expanded="true" onclick="_dgrToggleSecao(this)">
         ${_dgmCentralHeaderHtml(c)}
       </button>
-      <div class="dgr-collapse-body">${_dgmCentralTabelaHtml(c)}</div>
+      <div class="dgr-collapse-body">${_dgmCentralTabelaHtml(c, dados.periodoEstimado)}</div>
     </section>`).join('');
 
   const nCent = dados.centrais.length;
@@ -5760,6 +5912,40 @@ window.gerarRelatorioGiroUsina = async function() {
       }
       .dgm-help:hover { color:var(--dgr-text, #e2e8f0); }
 
+      /* "?" dentro do badge — traz a conta com os números da própria linha.
+         Herda a cor do badge com opacidade menor pra não competir com o valor,
+         que é o que se lê primeiro. Também não imprime. */
+      .dgm-chip-help {
+        margin-left:4px; padding-left:4px; font-size:8px; font-weight:800;
+        opacity:.55; cursor:help;
+        border-left:1px solid currentColor;
+      }
+      .dgm-chip-help:hover { opacity:1; }
+
+      /* Tooltip dos "?" — mesma caixa dos badges de ajuda dos gráficos do
+         dashboard (ver _getHelpTip em help-badges.js), redesenhada com as
+         vars do relatório pra funcionar nos dois temas. */
+      #dgm-tip {
+        position:fixed; z-index:9999; display:none; pointer-events:none;
+        min-width:240px; max-width:420px; padding:13px 15px; border-radius:10px;
+        /* Fundo OPACO e literal: --dgr-card-bg é translúcido no tema escuro
+           (rgba branco a 4,5%) e o conteúdo da página apareceria por baixo. */
+        background:#111a2e;
+        border:1px solid var(--dgr-accent-text, #f87171);
+        box-shadow:0 8px 32px rgba(0,0,0,.5);
+      }
+      body.dgr-tema-claro #dgm-tip { background:#ffffff; box-shadow:0 8px 32px rgba(15,23,60,.18); }
+      .dgm-tip-titulo {
+        font-size:11.5px; font-weight:700; color:var(--dgr-text-strong, #fff);
+        padding-bottom:9px; margin-bottom:9px;
+        border-bottom:1px solid var(--dgr-card-border, rgba(255,255,255,.14));
+      }
+      .dgm-tip-corpo {
+        font-family:'JetBrains Mono',monospace; font-size:10.5px; line-height:1.65;
+        color:var(--dgr-text-dim, #94a3b8); white-space:pre-wrap;
+      }
+      @media print { .dgm-chip-help, #dgm-tip { display:none !important; } }
+
       /* Legenda — recolhida por padrão pra não empurrar os dados pra baixo. Na
          impressão o shell força .dgr-collapsed a aparecer, então ela sai no
          papel de qualquer jeito (é lá que ela mais importa: tooltip não
@@ -5908,7 +6094,7 @@ window.gerarRelatorioGiroUsina = async function() {
       subtitle:  'Giro, cobertura e variação de cada central e de cada material dentro dela, mês a mês.',
       // Filtros e legenda ANTES da barra de abas (valem pro relatório inteiro)
       // e o script no fim, com o DOM que ele consulta já parseado.
-      bodyHtml:  `<style>${_dgrEstilos()}${estilos}</style>${filtros}${_dgmLegendaHtml()}${abasBar}${panes}${_dgmScriptFiltros()}`,
+      bodyHtml:  `<style>${_dgrEstilos()}${estilos}</style>${filtros}${_dgmLegendaHtml()}${abasBar}${panes}${_dgmScriptFiltros()}${_dgmScriptTooltip()}`,
       notaRodape: 'Giro e Cobertura seguem a mesma metodologia do modal "Giro & Cobertura" do Dashboard Gerencial. Variação = Est. Final real − Est. Teórico, com Est. Inicial no saldo teórico do SAP — mesma conta da Visão Micro do Analítico.'
     });
 

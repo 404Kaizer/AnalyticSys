@@ -2360,7 +2360,11 @@ function _giroNivelPontos(item) {
   const eixos = [pCob, pGiro, pAbast].filter(p => p !== null);
   const pior  = Math.max(...eixos);
   const ruins = eixos.filter(p => p >= 2).length;
-  return Math.min(3, pior + (ruins >= 2 ? 1 : 0));
+  const reforco = ruins >= 2 ? 1 : 0;
+  // Devolve a decomposição junto, não só o total: é ela que o relatório usa
+  // pra explicar, célula a célula, POR QUE aquele nível saiu — sem precisar
+  // reescrever os limiares acima num segundo lugar.
+  return { pontos: Math.min(3, pior + reforco), pCob, pGiro, pAbast, pior, ruins, reforco };
 }
 
 const _NIVEL_DEFS = [
@@ -2370,8 +2374,8 @@ const _NIVEL_DEFS = [
   { level: 'critico', label: 'Crítico', style: 'background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)' },
 ];
 function _giroNivelInfo(item) {
-  const pontos = _giroNivelPontos(item);
-  return { pontos, ..._NIVEL_DEFS[pontos] };
+  const detalhe = _giroNivelPontos(item);
+  return { ...detalhe, ..._NIVEL_DEFS[detalhe.pontos] };
 }
 
 // ── Giro & Cobertura por Central × Material (Relatório por Usina) ──────

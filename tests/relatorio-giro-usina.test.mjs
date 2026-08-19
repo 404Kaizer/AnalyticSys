@@ -20,15 +20,22 @@ import assert from 'node:assert/strict';
 const raiz = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 // ── 1. Gera o relatório num sandbox ────────────────────────────────────────
-const nivel = (level, label, pontos) => ({ level, label, pontos });
+// Nível como o _giroNivelInfo real devolve: total + decomposição por eixo,
+// que é o que o "?" de cada célula usa pra explicar o status.
+const nivel = (level, label, pontos, pCob, pGiro, pAbast) => ({
+  level, label, pontos, pCob, pGiro, pAbast,
+  pior: Math.max(pCob, pGiro, pAbast ?? 0),
+  ruins: [pCob, pGiro, pAbast].filter(p => p >= 2).length,
+  reforco: [pCob, pGiro, pAbast].filter(p => p >= 2).length >= 2 ? 1 : 0,
+});
 const centralFalsa = (nome) => ({
   name: nome, entradas: 1200, saidas: 800, estMedio: 250,
-  giro: 3.2, cobertura: 9.375, variacao: -30, nivel: nivel('urgente', 'Urgente', 2),
+  giro: 3.2, cobertura: 9.375, variacao: -30, nivel: nivel('urgente', 'Urgente', 2, 2, 1, 0),
   mats: [
     { name: 'AREIA MEDIA LAVADA <script>', entradas: 200, saidas: 0, estMedio: 50,
-      giro: 0, cobertura: null, variacao: 20, nivel: nivel('critico', 'Crítico', 3) },
+      giro: 0, cobertura: null, variacao: 20, nivel: nivel('critico', 'Crítico', 3, 3, 3, 2) },
     { name: 'CIMENTO CP II', entradas: 1000, saidas: 800, estMedio: 200,
-      giro: 4, cobertura: 7.5, variacao: -50, nivel: nivel('urgente', 'Urgente', 2) },
+      giro: 4, cobertura: 7.5, variacao: -50, nivel: nivel('urgente', 'Urgente', 2, 2, 1, 0) },
   ],
 });
 
@@ -218,9 +225,11 @@ teste('cada coluna tem "?" explicando o cálculo e o significado', () => {
   assert.ok(cabecalho.includes('O que cada valor significa:'));
   // Multi-linha via &#10; — title nativo não quebra linha com \n cru.
   assert.ok(cabecalho.includes('&#10;'), 'tooltip precisa quebrar linha');
-  const titles = [...cabecalho.matchAll(/title="([^"]*)"/g)].map(m => m[1]);
-  assert.equal(titles.length, 9);
-  titles.forEach(t => assert.ok(!t.includes('\n'), 'newline cru vazou pro atributo title'));
+  const tips = [...cabecalho.matchAll(/data-tip="([^"]*)"/g)].map(m => m[1]);
+  assert.equal(tips.length, 9);
+  tips.forEach(t => assert.ok(!t.includes('\n'), 'newline cru vazou pro atributo data-tip'));
+  // Nada de title: o tooltip nativo abriria junto com o estilizado.
+  assert.ok(!cabecalho.includes('title="'), 'title nativo competindo com o tooltip');
 });
 
 teste('legenda sai da MESMA fonte do "?" e imprime', () => {
@@ -259,6 +268,48 @@ teste('regra do nível explicada: pior eixo + reforço', () => {
   assert.ok(htmlGerado.includes('sobe um degrau quando dois ou mais eixos'));
   ['Bom', 'Atenção', 'Urgente', 'Crítico'].forEach(n =>
     assert.ok(htmlGerado.includes(`<b>${n}</b>`), n));
+});
+
+teste('cada indicador traz "?" com a conta resolvida daquela linha', () => {
+  const linha = htmlGerado.match(/<tr data-material="CIMENTO CP II"[\s\S]*?<\/tr>/)[0];
+  assert.equal((linha.match(/class="dgm-chip-help"/g) || []).length, 4, 'um "?" por indicador');
+  // Números REAIS da linha, não a fórmula genérica do cabeçalho.
+  assert.ok(linha.includes('800,00 kg ÷ 200,00 kg = 4.00×'), 'giro resolvido');
+  // Os dias da fórmula vêm do período da ABA, não de um valor fixo: a linha
+  // acima é a da Geral (62 dias); a mesma do mês usa 30.
+  assert.ok(linha.includes('200,00 kg ÷ 800,00 kg × 62 dias'), 'cobertura resolvida com os dias da Geral');
+  const linhaMes = htmlGerado.slice(htmlGerado.indexOf('class="rel-aba-pane" data-aba-id="mes-2026-6"'))
+    .match(/<tr data-material="CIMENTO CP II"[\s\S]*?<\/tr>/)[0];
+  assert.ok(linhaMes.includes('200,00 kg ÷ 800,00 kg × 30 dias'), 'cobertura resolvida com os dias do mês');
+  assert.ok(linha.includes('1.000,00 kg ÷ 800,00 kg × 100 = 125%'), 'abastecimento resolvido');
+  // Nível: peso de cada eixo e como eles viraram o resultado.
+  assert.ok(linha.includes('Cobertura:      peso 2 (ruim)'));
+  assert.ok(linha.includes('Giro:           peso 1 (alerta)'));
+  assert.ok(linha.includes('Abastecimento:  peso 0 (saudável)'));
+  assert.ok(linha.includes('Resultado: Urgente'));
+});
+
+teste('"?" do indicador degrada sem quebrar quando falta a decomposição', () => {
+  // Material sem saída: o eixo de abastecimento não existe e a cobertura não
+  // é calculável — nenhum dos dois pode virar "undefined" no tooltip.
+  const linha = htmlGerado.match(/<tr data-material="AREIA[\s\S]*?<\/tr>/)[0];
+  assert.ok(linha.includes('não há consumo pra dividir'));
+  assert.ok(!linha.includes('undefined') && !linha.includes('NaN'));
+});
+
+teste('tooltip estilizado, no padrão dos badges do dashboard', () => {
+  // title nativo é feio, demora ~1s pra abrir e não estiliza — o relatório traz
+  // o mesmo singleton do _getHelpTip (help-badges.js), seguindo o cursor.
+  assert.ok(htmlGerado.includes("tip.id = 'dgm-tip'"));
+  assert.ok(htmlGerado.includes('#dgm-tip {'));
+  assert.ok(htmlGerado.includes('.dgm-tip-titulo'), '1ª linha do data-tip vira título');
+  assert.ok(htmlGerado.includes('white-space:pre-wrap'), 'preserva o alinhamento das contas');
+  // Fundo opaco: --dgr-card-bg é translúcido no escuro e vazaria a página.
+  assert.ok(htmlGerado.includes('background:#111a2e'));
+  assert.ok(htmlGerado.includes('body.dgr-tema-claro #dgm-tip'), 'precisa do par no tema claro');
+  // Um listener delegado dá conta dos muitos "?" (1 por coluna + 4 por linha).
+  assert.ok(htmlGerado.includes("document.addEventListener('mouseover'"));
+  assert.ok(htmlGerado.includes('@media print { .dgm-chip-help, #dgm-tip { display:none !important; } }'));
 });
 
 teste('as 4 colunas qualitativas saem como badge', () => {
