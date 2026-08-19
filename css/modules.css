@@ -5622,7 +5622,7 @@ mark.search-highlight {
 .dg-giro-mat-body { padding: 10px 14px 14px; overflow-x: auto; }
 .dg-giro-mat-head-row {
   display: grid;
-  grid-template-columns: minmax(0,1fr) 68px 80px 52px 72px 72px 72px 70px;
+  grid-template-columns: minmax(0,1fr) 68px 72px 72px 70px 72px 52px 80px;
   gap: 6px;
   align-items: center;
   margin-bottom: 6px;
@@ -5636,7 +5636,7 @@ mark.search-highlight {
 }
 .dg-giro-mat-row {
   display: grid;
-  grid-template-columns: minmax(0,1fr) 68px 80px 52px 72px 72px 72px 70px;
+  grid-template-columns: minmax(0,1fr) 68px 72px 72px 70px 72px 52px 80px;
   gap: 6px;
   align-items: center;
   padding: 5px 0;
@@ -5653,9 +5653,53 @@ mark.search-highlight {
   /* +1 coluna vs. os cards da página ("Situação" só existe aqui no modal) e
      as colunas de kg mais largas, já que aqui o valor vai por extenso
      ("2.900.000 kg" em vez de "2,9 M kg"). */
-  grid-template-columns: minmax(140px,1fr) 68px 80px 52px 108px 108px 108px 70px 470px;
+  grid-template-columns: minmax(140px,1fr) 68px 108px 108px 70px 108px 52px 80px 470px;
   min-width: max-content;
 }
+
+/* Legenda de fluxo do modal — trilha "como ler a tabela", na mesma ordem
+   das colunas. A seta é gerada no ::after, menos no último passo. */
+.dg-giro-fluxo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 6px 4px;
+  padding: 8px 10px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+.dg-giro-fluxo-step {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--bg3);
+  font-size: 10.5px;
+  color: var(--text2);
+  line-height: 1.3;
+}
+.dg-giro-fluxo-step em {
+  font-style: normal;
+  font-family: var(--mono);
+  font-size: 8.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text3);
+}
+.dg-giro-fluxo-step::after {
+  content: '→';
+  position: absolute;
+  right: -13px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 10px;
+  color: var(--text3);
+}
+.dg-giro-fluxo-step:not(:last-child) { margin-right: 14px; }
+.dg-giro-fluxo-step:last-child::after { content: none; }
 
 /* Situação — frase explicando o nível da linha, sempre em uma linha só
    (a coluna é larga o bastante pro texto inteiro; o modal já tem scroll

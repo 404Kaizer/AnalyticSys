@@ -6055,6 +6055,20 @@
           placeholder="Buscar central..." oninput="dgGiroModalFilter(this.value)">
       </div>
 
+      <!-- Legenda de fluxo — a ordem das colunas conta uma história da esquerda
+           pra direita (cru → derivado → veredito); isso aqui é a mesma frase
+           em forma de trilha, cada passo nomeando a coluna correspondente. -->
+      <div class="dg-giro-fluxo" style="flex-shrink:0" aria-label="Como ler a tabela">
+        <span class="dg-giro-fluxo-step"><em id="dg-giro-fluxo-nome">Central</em>quem é</span>
+        <span class="dg-giro-fluxo-step"><em>Nível</em>em que estado está</span>
+        <span class="dg-giro-fluxo-step"><em>Entradas · Saídas</em>quanto entrou, quanto saiu</span>
+        <span class="dg-giro-fluxo-step"><em>Abast.</em>o abastecimento acompanhou o consumo?</span>
+        <span class="dg-giro-fluxo-step"><em>Est.Médio</em>quanto ficou parado em média</span>
+        <span class="dg-giro-fluxo-step"><em>Giro×</em>quantas vezes esse estoque girou</span>
+        <span class="dg-giro-fluxo-step"><em>Cobertura</em>dá pra quantos dias</span>
+        <span class="dg-giro-fluxo-step"><em>Situação</em>e a explicação em uma linha</span>
+      </div>
+
       <!-- Única região com scroll real (vertical E horizontal) — os dois painéis
            compartilham o mesmo shell, só um fica visível por vez. -->
       <div class="analitico-detail-table-shell">

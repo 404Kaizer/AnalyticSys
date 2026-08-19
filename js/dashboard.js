@@ -2613,16 +2613,20 @@ function renderDgGiro(results, dtIni, dtFim) {
       <span style="text-align:${align};display:inline-flex;align-items:center;gap:3px;${align === 'right' ? 'justify-content:flex-end' : align === 'center' ? 'justify-content:center' : ''}">
         ${label}<span class="macro-help-badge" data-help="${helpKey}" style="width:12px;height:12px;font-size:8px">?</span>
       </span>`;
+    // Ordem = fluxo de leitura: quem é → em que estado está → o que entrou e
+    // saiu → o abastecimento acompanhou → quanto ficou parado → quantas vezes
+    // girou → dá pra quantos dias → a explicação. Cru antes de derivado, e
+    // cada derivada encostada nos seus insumos.
     return `
     <div class="dg-giro-mat-head-row">
       <span>${nameLabel}</span>
       ${withBadge('Nível', 'giro-tabela-nivel', 'center')}
-      ${withBadge('Cobertura', 'giro-tabela-cobertura', 'center')}
-      ${withBadge('Giro×', 'giro-tabela-giro', 'right')}
       <span style="text-align:right">Entradas</span>
       <span style="text-align:right">Saídas</span>
-      <span style="text-align:right">Est.Médio</span>
       ${withBadge('Abast.', 'giro-tabela-abast', 'center')}
+      <span style="text-align:right">Est.Médio</span>
+      ${withBadge('Giro×', 'giro-tabela-giro', 'right')}
+      ${withBadge('Cobertura', 'giro-tabela-cobertura', 'center')}
       ${sitLabel ? '<span>Situação</span>' : ''}
     </div>`;
   }
@@ -2638,12 +2642,12 @@ function renderDgGiro(results, dtIni, dtFim) {
     return `<div class="dg-giro-mat-row" title="Nível: ${nv.label} — correlaciona Cobertura, Giro e Abastecimento&#10;Cobertura: ${item.cobertura !== null ? item.cobertura.toFixed(1)+'d' : '—'}&#10;Giro: ${item.giro.toFixed(4)}× — ${tag.label}&#10;Entradas: ${fmtKg(item.entradas)}&#10;Saídas: ${fmtKg(item.saidas)}&#10;Est.Médio: ${fmtKg(item.estMedio)}">
       <span class="dg-giro-mat-name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</span>
       <span class="dg-giro-abast" style="${nv.style}">${nv.label}</span>
-      ${buildCoberturaCell(item.cobertura)}
-      <span class="dg-giro-mat-num" style="color:${col};text-align:right">${item.giro.toFixed(2)}×</span>
       <span class="dg-giro-mat-num" style="color:var(--green)" title="${fmtKg(item.entradas)}">${kg(item.entradas)}</span>
       <span class="dg-giro-mat-num" style="color:var(--red)" title="${fmtKg(item.saidas)}">${kg(item.saidas)}</span>
-      <span class="dg-giro-mat-num" style="color:var(--text2)" title="${fmtKg(item.estMedio)}">${kg(item.estMedio)}</span>
       ${buildAbastCell(item.entradas, item.saidas, panel)}
+      <span class="dg-giro-mat-num" style="color:var(--text2)" title="${fmtKg(item.estMedio)}">${kg(item.estMedio)}</span>
+      <span class="dg-giro-mat-num" style="color:${col};text-align:right">${item.giro.toFixed(2)}×</span>
+      ${buildCoberturaCell(item.cobertura)}
       ${sitLabel ? buildSituacaoCell(item, sitLabel) : ''}
     </div>`;
   }
@@ -6679,6 +6683,9 @@ function dgGiroModalSwitchTab(tab) {
     searchEl.value = '';
     searchEl.placeholder = isCentrais ? 'Buscar central...' : 'Buscar material...';
   }
+  // Primeiro passo da legenda de fluxo acompanha a aba (a coluna muda de nome)
+  const fluxoNomeEl = document.getElementById('dg-giro-fluxo-nome');
+  if (fluxoNomeEl) fluxoNomeEl.textContent = isCentrais ? 'Central' : 'Material';
   dgGiroModalFilter('');
 }
 window.dgGiroModalSwitchTab = dgGiroModalSwitchTab;

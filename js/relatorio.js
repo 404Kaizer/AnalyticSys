@@ -3648,12 +3648,12 @@ function _dgrGiroListaHtml(titulo, iconCls, items, panel, footerArr) {
     <tr>
       <td class="rk-name" style="font-size:10.5px" title="${_rankEsc(item.name)}"><span class="dgr-nome-trunc-inner">${_rankEsc(_dgrTruncNome(item.name))}</span></td>
       <td><span style="display:inline-block;padding:1px 5px;border-radius:5px;font-size:8.5px;font-weight:700;white-space:nowrap;background:${cor}22;color:${cor};border:1px solid ${cor}55">${_rankEsc(item.nivel.label)}</span></td>
-      <td class="rk-num" style="font-size:9px">${item.cobertura === null ? 'sem consumo' : _dgrNowrapNum(item.cobertura.toFixed(1) + 'd')}</td>
-      <td class="rk-num" style="font-size:9px;color:${_dgrGiroCor(item.giro)}">${_dgrNowrapNum(item.giro.toFixed(2) + '×')}</td>
       <td class="rk-num" style="font-size:8.5px;color:#94a3b8">${_dgrNowrapNum(fmtKgShort(item.entradas))}</td>
       <td class="rk-num" style="font-size:8.5px;color:#94a3b8">${_dgrNowrapNum(fmtKgShort(item.saidas))}</td>
-      <td class="rk-num" style="font-size:8.5px;color:#94a3b8">${_dgrNowrapNum(fmtKgShort(item.estMedio || 0))}</td>
       <td style="text-align:right"><span style="display:inline-flex;align-items:center;gap:3px;padding:1px 5px;border-radius:5px;font-size:8px;font-weight:700;white-space:nowrap;background:${abast.cor}22;color:${abast.cor};border:1px solid ${abast.cor}55">${abast.icone ? `<i class="ti ${abast.icone}" style="font-size:9px"></i>` : ''}${abast.texto}</span></td>
+      <td class="rk-num" style="font-size:8.5px;color:#94a3b8">${_dgrNowrapNum(fmtKgShort(item.estMedio || 0))}</td>
+      <td class="rk-num" style="font-size:9px;color:${_dgrGiroCor(item.giro)}">${_dgrNowrapNum(item.giro.toFixed(2) + '×')}</td>
+      <td class="rk-num" style="font-size:9px">${item.cobertura === null ? 'sem consumo' : _dgrNowrapNum(item.cobertura.toFixed(1) + 'd')}</td>
     </tr>`;
   }).join('');
 
@@ -3679,12 +3679,12 @@ function _dgrGiroListaHtml(titulo, iconCls, items, panel, footerArr) {
         <thead><tr>
           <th style="width:19%">Nome</th>
           <th style="width:11%">Nível</th>
-          <th style="width:10%;text-align:right">Cobertura</th>
-          <th style="width:8%;text-align:right">Giro</th>
           <th style="width:12%;text-align:right">Entradas</th>
           <th style="width:12%;text-align:right">Saídas</th>
-          <th style="width:12%;text-align:right">Est.Médio</th>
           <th style="width:16%;text-align:right">Abast.</th>
+          <th style="width:12%;text-align:right">Est.Médio</th>
+          <th style="width:8%;text-align:right">Giro</th>
+          <th style="width:10%;text-align:right">Cobertura</th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
