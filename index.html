@@ -869,6 +869,14 @@
             <button class="btn" id="dg-btn-relatorio-gerencial" onclick="abrirModalSelecaoRelatorioGerencial('dark')" title="Gerar Relatório Gerencial em HTML da Visão Geral" disabled>
               <i class="ti ti-file-analytics"></i> <span>Relatório Gerencial</span>
             </button>
+            <!-- Relatório TEMPORÁRIO (ago/2026): Giro & Cobertura por central com
+                 os materiais de cada uma, uma aba por mês. Botão separado do
+                 Relatório Gerencial de propósito, e SEM disabled: ele escolhe os
+                 próprios meses no modal, não depende de haver análise na tela
+                 (ver abrirModalRelatorioGiroUsina em relatorio.js). -->
+            <button class="btn" id="dg-btn-relatorio-giro-usina" onclick="abrirModalRelatorioGiroUsina()" title="Giro & Cobertura por usina e material, com uma aba por mês">
+              <i class="ti ti-building-factory-2"></i> <span>Giro por Usina</span>
+            </button>
           </div>
         </div>
 

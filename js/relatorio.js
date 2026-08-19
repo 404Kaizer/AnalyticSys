@@ -5071,3 +5071,259 @@ window.abrirSeletorCentralOcorrencias = function() {
 
   modal.classList.add('open');
 };
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// RELATÓRIO GIRO POR USINA — Giro & Cobertura de cada central, e DENTRO de cada
+// central cada material dela (mesmo detalhamento da Visão Micro do Analítico),
+// com uma aba por mês selecionado.
+//
+// TEMPORÁRIO (ago/2026): pedido do Hugo como relatório provisório, com botão
+// próprio no cabeçalho do Dashboard Gerencial — separado do "Relatório
+// Gerencial", que continua sendo o da Visão Geral. Se virar permanente, o
+// caminho natural é entrar como uma aba do _RELATORIO_ABAS_REGISTRY.
+//
+// Números: TUDO vem de buildGiroPorCentralMaterial (dashboard.js) — giro,
+// cobertura, nível e variação nunca são recalculados aqui, só reformatados com
+// cores literais (o HTML exportado não tem as CSS vars do app).
+//
+// ponytail: cada mês roda buildDashboardGerencialResults do zero (varredura
+// completa do state). Com muitos meses × muitas centrais a geração fica lenta;
+// upgrade = cachear o resultado por mês se alguém reclamar.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const _dgmState = {
+  viewYear: new Date().getFullYear(),
+  // Chaves "ano-mes" (mes 0-based). As abas saem sempre ordenadas por data,
+  // independente da ordem em que o usuário clicou.
+  selecionados: new Set()
+};
+
+function _dgmMesKey(ano, mes)   { return `${ano}-${mes}`; }
+function _dgmMesLabel(ano, mes) { return `${MESES_ABREV_DG[mes]}/${ano}`; }
+function _dgmMesesOrdenados() {
+  return [..._dgmState.selecionados]
+    .map(k => { const [a, m] = k.split('-').map(Number); return { ano: a, mes: m }; })
+    .sort((x, y) => x.ano - y.ano || x.mes - y.mes);
+}
+
+// ── Modal de seleção de meses ──────────────────────────────────────────────
+function _dgmInjetarEstilo() {
+  if (document.getElementById('rel-giro-usina-style')) return;
+  const style = document.createElement('style');
+  style.id = 'rel-giro-usina-style';
+  style.textContent = `
+    .dgm-mes-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; }
+    .dgm-mes-btn { padding:8px 0; border:1px solid var(--border); border-radius:8px; background:var(--bg2);
+                   color:var(--text2); font-size:12px; font-weight:600; cursor:pointer; }
+    .dgm-mes-btn.sel { background:var(--accent); border-color:var(--accent); color:#fff; }
+    .dgm-nav { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+    .dgm-nav strong { font-size:13px; }
+  `;
+  document.head.appendChild(style);
+}
+
+window.abrirModalRelatorioGiroUsina = function() {
+  _dgmInjetarEstilo();
+
+  let modal = document.getElementById('rel-giro-usina-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'rel-giro-usina-modal';
+    modal.className = 'modal-overlay';
+    modal.style.cssText = 'z-index:3200';
+    document.body.appendChild(modal);
+  }
+
+  // Abre já com o mês do Dashboard marcado — é o caso comum ("este mês e mais
+  // alguns anteriores") e evita abrir sem nada selecionado.
+  if (!_dgmState.selecionados.size && typeof _dgMonthState === 'object') {
+    _dgmState.viewYear = _dgMonthState.selectedYear;
+    _dgmState.selecionados.add(_dgmMesKey(_dgMonthState.selectedYear, _dgMonthState.selectedMonth));
+  }
+
+  modal.innerHTML = `
+    <div class="modal" style="max-width:400px;width:92vw">
+      <div class="modal-title" style="display:flex;align-items:center;gap:10px">
+        <i class="ti ti-building-factory-2" style="color:var(--accent)"></i>
+        Giro por Usina
+      </div>
+      <div class="modal-sub">Escolha os meses. Cada mês vira uma aba do relatório, com todas as centrais e os materiais de cada uma.</div>
+      <div id="dgm-mes-picker" style="margin:14px 0"></div>
+      <div style="display:flex;justify-content:space-between;gap:10px">
+        <button class="btn" onclick="document.getElementById('rel-giro-usina-modal').classList.remove('open')">Cancelar</button>
+        <button class="btn btn-primary" onclick="gerarRelatorioGiroUsina()">
+          <i class="ti ti-file-analytics"></i> Gerar Relatório
+        </button>
+      </div>
+    </div>`;
+
+  _dgmRenderPicker();
+  modal.classList.add('open');
+};
+
+function _dgmRenderPicker() {
+  const el = document.getElementById('dgm-mes-picker');
+  if (!el) return;
+  const y = _dgmState.viewYear;
+  const botoes = MESES_ABREV_DG.map((nome, i) => {
+    const sel = _dgmState.selecionados.has(_dgmMesKey(y, i)) ? ' sel' : '';
+    return `<button type="button" class="dgm-mes-btn${sel}" onclick="_dgmToggleMes(${i})">${nome}</button>`;
+  }).join('');
+  const escolhidos = _dgmMesesOrdenados();
+  el.innerHTML = `
+    <div class="dgm-nav">
+      <button class="btn" style="padding:4px 8px" onclick="_dgmNavAno(-1)"><i class="ti ti-chevron-left"></i></button>
+      <strong>${y}</strong>
+      <button class="btn" style="padding:4px 8px" onclick="_dgmNavAno(1)"><i class="ti ti-chevron-right"></i></button>
+    </div>
+    <div class="dgm-mes-grid">${botoes}</div>
+    <div style="margin-top:10px;font-size:11.5px;color:var(--text3)">
+      ${escolhidos.length ? escolhidos.map(m => _dgmMesLabel(m.ano, m.mes)).join(' · ') : 'Nenhum mês selecionado'}
+    </div>`;
+}
+
+window._dgmNavAno = function(dir) { _dgmState.viewYear += dir; _dgmRenderPicker(); };
+window._dgmToggleMes = function(mes) {
+  const k = _dgmMesKey(_dgmState.viewYear, mes);
+  if (!_dgmState.selecionados.delete(k)) _dgmState.selecionados.add(k);
+  _dgmRenderPicker();
+};
+
+// ── Montagem do HTML ───────────────────────────────────────────────────────
+// Uma linha serve tanto pro total da central (em destaque) quanto pros
+// materiais dela. O painel de leitura do abastecimento (alto giro = risco de
+// ruptura, baixo giro = capital parado) é decidido pelo próprio giro da linha,
+// mesma regra de buildGiroRow na tela.
+function _dgmLinhaHtml(item, tipo) {
+  const cor    = _dgrNivelCor(item.nivel.level);
+  const abast  = _dgrAbastInfo(item.entradas, item.saidas, item.giro >= 1 ? 'alto' : 'baixo');
+  const corVar = _dgrValCor(item.variacao);
+  const ehCentral = tipo === 'central';
+  return `
+    <tr class="${ehCentral ? 'dgm-row-central' : ''}">
+      <td class="rk-name" title="${_rankEsc(item.name)}">
+        <span class="dgr-nome-trunc-inner">${ehCentral ? '<i class="ti ti-building-factory-2" style="font-size:9px"></i> ' : ''}${_rankEsc(_dgrTruncNome(item.name, 34))}</span>
+      </td>
+      <td><span style="display:inline-block;padding:1px 5px;border-radius:5px;font-size:8px;font-weight:700;white-space:nowrap;background:${cor}22;color:${cor};border:1px solid ${cor}55">${_rankEsc(item.nivel.label)}</span></td>
+      <td class="rk-num" style="color:#94a3b8">${_dgrNowrapNum(fmtKgShort(item.entradas))}</td>
+      <td class="rk-num" style="color:#94a3b8">${_dgrNowrapNum(fmtKgShort(item.saidas))}</td>
+      <td style="text-align:right"><span style="display:inline-flex;align-items:center;gap:3px;padding:1px 5px;border-radius:5px;font-size:8px;font-weight:700;white-space:nowrap;background:${abast.cor}22;color:${abast.cor};border:1px solid ${abast.cor}55">${abast.icone ? `<i class="ti ${abast.icone}" style="font-size:9px"></i>` : ''}${abast.texto}</span></td>
+      <td class="rk-num" style="color:#94a3b8">${_dgrNowrapNum(fmtKgShort(item.estMedio))}</td>
+      <td class="rk-num" style="color:${_dgrGiroCor(item.giro)}">${_dgrNowrapNum(item.giro.toFixed(2) + '×')}</td>
+      <td class="rk-num">${item.cobertura === null ? 'sem consumo' : _dgrNowrapNum(item.cobertura.toFixed(1) + 'd')}</td>
+      <td class="rk-num" style="color:${corVar}">
+        ${varSymbol(item.variacao)} ${_dgrNowrapNum(fmtKg(Math.abs(item.variacao)))}
+        <div class="rk-sub" style="color:${corVar}">${_dgrNowrapNum(money(Math.abs(item.custoVariacao)))}</div>
+      </td>
+    </tr>`;
+}
+
+function _dgmCentralTabelaHtml(c) {
+  const linhas = _dgmLinhaHtml(c, 'central') + c.mats.map(m => _dgmLinhaHtml(m, 'material')).join('');
+  return `
+    <div class="dgr-table-wrap">
+      <table class="rk-table">
+        <thead><tr>
+          <th style="width:21%">Central / Material</th>
+          <th style="width:9%">Nível</th>
+          <th style="width:10%;text-align:right">Entradas</th>
+          <th style="width:10%;text-align:right">Saídas</th>
+          <th style="width:11%;text-align:right">Abast.</th>
+          <th style="width:10%;text-align:right">Est.Médio</th>
+          <th style="width:7%;text-align:right">Giro</th>
+          <th style="width:10%;text-align:right">Cobertura</th>
+          <th style="width:12%;text-align:right">Variação</th>
+        </tr></thead>
+        <tbody>${linhas}</tbody>
+      </table>
+    </div>`;
+}
+
+function _dgmMesPaneHtml(mes, dados, ativa) {
+  const abaId = `mes-${mes.ano}-${mes.mes}`;
+  // Uma seção por central: recolhível na tela e página nova na impressão
+  // (dgr-page-section-natural = quebra antes, mas pagina livre por dentro —
+  // uma central com muitos materiais não cabe numa página só).
+  const secoes = dados.centrais.map((c, i) => {
+    const cor = _dgrNivelCor(c.nivel.level);
+    return `<section class="dgr-page-section-natural" data-secao-id="${abaId}-${i}">
+      <button type="button" class="dgr-collapse-toggle" aria-expanded="true" onclick="_dgrToggleSecao(this)">
+        <i class="ti ti-chevron-down"></i>
+        <span>${_rankEsc(c.name)} — ${c.mats.length} ${c.mats.length !== 1 ? 'materiais' : 'material'} · giro ${c.giro.toFixed(2)}× · <span style="color:${cor}">${_rankEsc(c.nivel.label)}</span></span>
+      </button>
+      <div class="dgr-collapse-body">${_dgmCentralTabelaHtml(c)}</div>
+    </section>`;
+  }).join('');
+
+  const nCent = dados.centrais.length;
+  return `<div class="rel-aba-pane${ativa ? ' rel-aba-ativa' : ''}" data-aba-id="${abaId}">
+    <div class="dgr-section-title"><i class="ti ti-calendar-month"></i>${MESES_NOME_DG[mes.mes]} de ${mes.ano} — ${nCent} ${nCent !== 1 ? 'centrais' : 'central'} · ${dados.periodoEstimado} ${dados.periodoEstimado !== 1 ? 'dias' : 'dia'} de movimentação</div>
+    ${secoes || '<div class="dgr-chart-empty">Sem dados neste mês.</div>'}
+  </div>`;
+}
+
+window.gerarRelatorioGiroUsina = function() {
+  const meses = _dgmMesesOrdenados();
+  if (!meses.length) { toast('Selecione ao menos um mês.', 'error'); return; }
+
+  document.getElementById('rel-giro-usina-modal')?.classList.remove('open');
+  if (typeof showLoadingOverlay === 'function') showLoadingOverlay('Gerando relatório', 'Calculando giro por central e material...');
+
+  // setTimeout: um frame pro overlay pintar antes do cálculo travar a thread
+  // (mesmo padrão de rodarDashboardGerencial).
+  setTimeout(() => {
+    try {
+      const panes = meses.map((mes, i) => {
+        const dtIni = new Date(mes.ano, mes.mes, 1);
+        const dtFim = new Date(mes.ano, mes.mes + 1, 0, 23, 59, 59);
+        return _dgmMesPaneHtml(mes, buildGiroPorCentralMaterial(dtIni, dtFim), i === 0);
+      }).join('');
+
+      const abasBar = meses.length > 1
+        ? `<div class="rel-aba-bar">${meses.map((m, i) => `
+            <button type="button" class="rel-aba-btn${i === 0 ? ' active' : ''}" data-aba-id="mes-${m.ano}-${m.mes}" onclick="_dgrSwitchAba('mes-${m.ano}-${m.mes}', this)">
+              <i class="ti ti-calendar-month"></i> ${_dgmMesLabel(m.ano, m.mes)}
+            </button>`).join('')}</div>`
+        : '';
+
+      const estilos = `
+        .dgm-row-central td { background:var(--dgr-card-bg, rgba(255,255,255,.06)); font-weight:800; }
+        .dgm-row-central .rk-name { font-size:8.8px !important; }`;
+
+      const ultimo  = meses[meses.length - 1];
+      const periodo = meses.length === 1
+        ? `${MESES_NOME_DG[meses[0].mes]} de ${meses[0].ano}`
+        : `${_dgmMesLabel(meses[0].ano, meses[0].mes)} a ${_dgmMesLabel(ultimo.ano, ultimo.mes)}`;
+
+      const html = _buildRankingShellHTML({
+        periodoBadge: periodo,
+        periodo,
+        now: new Date().toLocaleString('pt-BR'),
+        kpis: []
+      }, {
+        // Paisagem: 9 colunas não cabem em retrato sem espremer o nome do material.
+        pageOrientation: 'paisagem',
+        temaAlternavel: true,
+        temaInicial: 'dark',
+        permitirDownload: true,
+        nomeArquivoDownload: _dgrNomeArquivoRelatorio('relatorio-giro-usina'),
+        secoesRecolhiveis: true,
+        abasNavegaveis: meses.length > 1,
+        offlineCompleto: true,
+        pageTitle: 'Giro por Usina — Dashboard Gerencial',
+        badge:     'Relatório Temporário',
+        title:     'Giro & Cobertura por Usina',
+        subtitle:  'Giro, cobertura e variação de cada central e de cada material dentro dela, mês a mês.',
+        bodyHtml:  `<style>${_dgrEstilos()}${estilos}</style>${abasBar}${panes}`,
+        notaRodape: 'Giro e Cobertura seguem a mesma metodologia do modal "Giro & Cobertura" do Dashboard Gerencial. Variação = Est. Final real − Est. Teórico, com Est. Inicial no saldo teórico do SAP — mesma conta da Visão Micro do Analítico.'
+      });
+
+      _openRelWindow(html);
+    } catch (err) {
+      console.error('[Relatório Giro por Usina] Falha ao gerar:', err);
+      toast('Falha ao gerar o relatório. Veja o console para detalhes.', 'error');
+    } finally {
+      if (typeof hideLoadingOverlay === 'function') hideLoadingOverlay();
+    }
+  }, 0);
+};

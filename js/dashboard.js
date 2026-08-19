@@ -379,6 +379,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 Object.assign(window, {
   rodarDashboardGerencial, limparDashboardGerencial,
+  buildGiroPorCentralMaterial,
   dgToggleMonthPicker: window.dgToggleMonthPicker,
   dgSelectMonth: window.dgSelectMonth,
   dgNavMonthYear: window.dgNavMonthYear
@@ -2271,6 +2272,147 @@ function _daRenderDetalhadoAnalitico(results, pares, totalEstTeoricoKpi) {
 // ────────────────────────────────────────────
 // 5 & 6. GIRO DE ESTOQUE
 // ────────────────────────────────────────────
+// Duração efetiva do período, em dias — medida pelo intervalo entre o
+// PRIMEIRO e o ÚLTIMO lançamento encontrado (não pelo dtIni/dtFim pedido):
+// é ela que divide o giro pra virar cobertura em dias. Sem lançamento
+// nenhum, cai em 30 (mês comercial).
+function _dgGiroPeriodoEstimado(results) {
+  if (!results || !results.length) return 30;
+  let minDate = null, maxDate = null;
+  results.forEach(r => {
+    (r.lancsNoPeriodo || []).forEach(l => {
+      const d = parseDate(l.dtLanc);
+      if (!d) return;
+      if (!minDate || d < minDate) minDate = d;
+      if (!maxDate || d > maxDate) maxDate = d;
+    });
+  });
+  if (!minDate || !maxDate) return 30;
+  return Math.max(1, Math.round((maxDate - minDate) / 86400000) + 1);
+}
+
+// ── Nível de criticidade combinado — correlaciona Cobertura + Giro +
+//    Abastecimento num único nível (bom/atenção/urgente/crítico). Usa o
+//    PIOR dos 3 eixos como base (o elo mais fraco decide o risco geral),
+//    com reforço de +1 quando 2 ou mais eixos já estão ruins ao mesmo
+//    tempo (problema correlacionado, não isolado num único indicador).
+function _giroNivelPontos(item) {
+  let pCob;
+  if (item.cobertura === null)   pCob = 3; // sem consumo — pode ser capital parado, tratado como sinal máximo
+  else if (item.cobertura < 5)   pCob = 3;
+  else if (item.cobertura < 10)  pCob = 2;
+  else if (item.cobertura < 20)  pCob = 0;
+  else if (item.cobertura <= 40) pCob = 1;
+  else                            pCob = 2; // excesso — capital parado
+
+  let pGiro;
+  if (item.giro > 4.0)       pGiro = 3;
+  else if (item.giro >= 2.0) pGiro = 1;
+  else if (item.giro >= 1.0) pGiro = 0;
+  else if (item.giro >= 0.5) pGiro = 1;
+  else if (item.giro >= 0.2) pGiro = 2;
+  else                        pGiro = 3;
+
+  let pAbast = null;
+  if (!(item.saidas < 0.001 && item.entradas < 0.001)) {
+    if (item.saidas < 0.001) {
+      pAbast = 2; // entradas sem consumo — acúmulo
+    } else {
+      const ratio = (item.entradas / item.saidas) * 100;
+      pAbast = item.giro >= 1
+        ? (ratio >= 100 ? 0 : ratio >= 80 ? 1 : 3)
+        : (ratio > 150 ? 2 : ratio >= 100 ? 1 : ratio >= 80 ? 0 : 2);
+    }
+  }
+
+  const eixos = [pCob, pGiro, pAbast].filter(p => p !== null);
+  const pior  = Math.max(...eixos);
+  const ruins = eixos.filter(p => p >= 2).length;
+  return Math.min(3, pior + (ruins >= 2 ? 1 : 0));
+}
+
+const _NIVEL_DEFS = [
+  { level: 'bom',     label: 'Bom',     style: 'background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)' },
+  { level: 'atencao', label: 'Atenção', style: 'background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border)' },
+  { level: 'urgente', label: 'Urgente', style: 'background:var(--urgente-bg);color:var(--urgente);border:1px solid var(--urgente-border)' },
+  { level: 'critico', label: 'Crítico', style: 'background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)' },
+];
+function _giroNivelInfo(item) {
+  const pontos = _giroNivelPontos(item);
+  return { pontos, ..._NIVEL_DEFS[pontos] };
+}
+
+// ── Giro & Cobertura por Central × Material (Relatório por Usina) ──────
+// Mesma matemática do modal "Giro & Cobertura" (renderDgGiro), só que
+// descendo um nível: além do agregado da central, devolve cada material
+// DELA com os mesmos indicadores. Reaproveita _dgGiroPeriodoEstimado e
+// _giroNivelInfo — a classificação de nível nunca é reescrita.
+//
+// A coluna Variação usa a conta da VISÃO MICRO (analitico.js), não a do
+// giro: Est.Final real − Est.Teórico, com Est.Inicial vindo do saldo
+// teórico do SAP (_anGetSapStock) e Est.Final do último lançamento do
+// período (_anGetLastPeriodStockFallback). Por isso são DOIS buildSnapshot
+// por material: o do giro é sem override (pesoIni = 0, como sempre foi na
+// tela de giro) e mudar isso alteraria giro/cobertura de todo o sistema.
+// Variação da central = soma da variação dos materiais, igual ao card da
+// Micro (ver variacaoCentralMicro em analitico.js).
+function buildGiroPorCentralMaterial(dtIni, dtFim, results) {
+  results = results || buildDashboardGerencialResults(dtIni, dtFim);
+  const periodoEstimado = _dgGiroPeriodoEstimado(results);
+
+  const metricas = (entradas, saidas, estMedio) => {
+    const giro = estMedio > 0 ? saidas / estMedio : 0;
+    return {
+      entradas, saidas, estMedio, giro,
+      cobertura: saidas > 0 ? (estMedio / saidas) * periodoEstimado : null
+    };
+  };
+
+  const centrais = results.map(r => {
+    const lancsByMat = new Map();
+    const sapByMat   = new Map();
+    (r.lancsNoPeriodo || []).forEach(l => { const m = l.material || '—'; if (!lancsByMat.has(m)) lancsByMat.set(m, []); lancsByMat.get(m).push(l); });
+    (r.sapNoPeriodo   || []).forEach(x => { const m = x.material || '—'; if (!sapByMat.has(m))   sapByMat.set(m, []);   sapByMat.get(m).push(x); });
+
+    let entTot = 0, saiTot = 0, estTot = 0, varTot = 0;
+
+    const mats = (r.allMats || []).map(mat => {
+      const lancs = lancsByMat.get(mat) || [];
+      const sap   = sapByMat.get(mat)   || [];
+
+      const snapGiro = buildSnapshot({ lancs, sap });
+      const m = metricas(snapGiro.totalEnt, Math.abs(snapGiro.totalSai), (snapGiro.pesoIni + snapGiro.pesoFim) / 2);
+
+      const prev = (typeof _anGetSapStock === 'function') ? _anGetSapStock({ central: r.central, material: mat, dtIni }) : null;
+      const fim  = (typeof _anGetLastPeriodStockFallback === 'function') ? _anGetLastPeriodStockFallback({ central: r.central, material: mat, dtIni, dtFim }) : null;
+      const variacao = buildSnapshot({
+        lancs, sap,
+        initialStockOverride:     prev?.value   ?? null,
+        initialDateLabelOverride: prev?.dtLabel ?? null,
+        finalStockOverride:       fim && !fim.missing ? fim.value   : null,
+        finalDateLabelOverride:   fim && !fim.missing ? fim.dtLabel : null
+      }).diff;
+
+      entTot += m.entradas; saiTot += m.saidas; estTot += m.estMedio; varTot += variacao;
+
+      const custoMedio = (r.custoMedioPorMat || {})[mat] || 0;
+      const item = { name: mat, ...m, variacao, custoVariacao: variacao * custoMedio };
+      item.nivel = _giroNivelInfo(item);
+      return item;
+    });
+
+    const c = { name: r.central, ...metricas(entTot, saiTot, estTot), variacao: varTot };
+    c.custoVariacao = mats.reduce((s, m) => s + m.custoVariacao, 0);
+    c.nivel = _giroNivelInfo(c);
+    // Pior nível primeiro (giro como desempate) — mesma ordenação das listas
+    // do modal de Giro & Cobertura.
+    c.mats = mats.sort((a, b) => b.nivel.pontos - a.nivel.pontos || a.giro - b.giro);
+    return c;
+  }).sort((a, b) => b.nivel.pontos - a.nivel.pontos || a.giro - b.giro);
+
+  return { periodoEstimado, centrais };
+}
+
 function renderDgGiro(results, dtIni, dtFim) {
   const kpiEl = document.getElementById('dg-giro-kpi-inner');
   if (!kpiEl) return;
@@ -2345,20 +2487,7 @@ function renderDgGiro(results, dtIni, dtFim) {
 
   const giroGeral = totalEstMedioKg > 0 ? totalSaidasKg / totalEstMedioKg : 0;
   const giro30    = totalEstMedio30  > 0 ? totalSaidas30  / totalEstMedio30  : 0;
-  // Estimate period length from data
-  const periodoEstimado = results.length > 0 ? (() => {
-    let minDate = null, maxDate = null;
-    results.forEach(r => {
-      r.lancsNoPeriodo.forEach(l => {
-        const d = parseDate(l.dtLanc);
-        if (!d) return;
-        if (!minDate || d < minDate) minDate = d;
-        if (!maxDate || d > maxDate) maxDate = d;
-      });
-    });
-    if (!minDate || !maxDate) return 30;
-    return Math.max(1, Math.round((maxDate-minDate)/86400000) + 1);
-  })() : 30;
+  const periodoEstimado = _dgGiroPeriodoEstimado(results);
   const giroDia = periodoEstimado > 0 ? giroGeral / periodoEstimado : 0;
 
   // ── Thresholds calibrados para concreteira ──────────────
@@ -2452,56 +2581,6 @@ function renderDgGiro(results, dtIni, dtFim) {
     cobertura: d.saidas > 0 ? (d.estMedio / d.saidas) * periodoEstimado : null,
   })).filter(m => m.estMedio > 0); // só materiais com estoque real
 
-  // ── Nível de criticidade combinado — correlaciona Cobertura + Giro +
-  //    Abastecimento num único nível (bom/atenção/urgente/crítico). Usa o
-  //    PIOR dos 3 eixos como base (o elo mais fraco decide o risco geral),
-  //    com reforço de +1 quando 2 ou mais eixos já estão ruins ao mesmo
-  //    tempo (problema correlacionado, não isolado num único indicador).
-  function _giroNivelPontos(item) {
-    let pCob;
-    if (item.cobertura === null)   pCob = 3; // sem consumo — pode ser capital parado, tratado como sinal máximo
-    else if (item.cobertura < 5)   pCob = 3;
-    else if (item.cobertura < 10)  pCob = 2;
-    else if (item.cobertura < 20)  pCob = 0;
-    else if (item.cobertura <= 40) pCob = 1;
-    else                            pCob = 2; // excesso — capital parado
-
-    let pGiro;
-    if (item.giro > 4.0)       pGiro = 3;
-    else if (item.giro >= 2.0) pGiro = 1;
-    else if (item.giro >= 1.0) pGiro = 0;
-    else if (item.giro >= 0.5) pGiro = 1;
-    else if (item.giro >= 0.2) pGiro = 2;
-    else                        pGiro = 3;
-
-    let pAbast = null;
-    if (!(item.saidas < 0.001 && item.entradas < 0.001)) {
-      if (item.saidas < 0.001) {
-        pAbast = 2; // entradas sem consumo — acúmulo
-      } else {
-        const ratio = (item.entradas / item.saidas) * 100;
-        pAbast = item.giro >= 1
-          ? (ratio >= 100 ? 0 : ratio >= 80 ? 1 : 3)
-          : (ratio > 150 ? 2 : ratio >= 100 ? 1 : ratio >= 80 ? 0 : 2);
-      }
-    }
-
-    const eixos = [pCob, pGiro, pAbast].filter(p => p !== null);
-    const pior  = Math.max(...eixos);
-    const ruins = eixos.filter(p => p >= 2).length;
-    return Math.min(3, pior + (ruins >= 2 ? 1 : 0));
-  }
-
-  const _NIVEL_DEFS = [
-    { level: 'bom',     label: 'Bom',     style: 'background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)' },
-    { level: 'atencao', label: 'Atenção', style: 'background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border)' },
-    { level: 'urgente', label: 'Urgente', style: 'background:var(--urgente-bg);color:var(--urgente);border:1px solid var(--urgente-border)' },
-    { level: 'critico', label: 'Crítico', style: 'background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)' },
-  ];
-  function _giroNivelInfo(item) {
-    const pontos = _giroNivelPontos(item);
-    return { pontos, ..._NIVEL_DEFS[pontos] };
-  }
   centralArr.forEach(c => { c.nivel = _giroNivelInfo(c); });
   matArr.forEach(m => { m.nivel = _giroNivelInfo(m); });
 
