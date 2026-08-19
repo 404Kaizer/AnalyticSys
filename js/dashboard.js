@@ -2558,7 +2558,57 @@ function renderDgGiro(results, dtIni, dtFim) {
     }
   }
 
-  function buildGiroHead(nameLabel) {
+  // ── Coluna "Situação" (só no modal de detalhe) — resume em poucas palavras
+  //    por que a central/material está naquele nível: parte da cobertura e
+  //    aponta o(s) eixo(s) que puxaram o risco (giro e/ou abastecimento).
+  //    Texto curto na célula (2 linhas no máximo), frase completa no title.
+  const _NIVEL_COLOR = { bom:'var(--green)', atencao:'var(--amber)', urgente:'var(--urgente)', critico:'var(--red)' };
+
+  function _situacaoCausas(item, ratio) {
+    const causas = [];
+    if (item.giro > 4.0)       causas.push('giro muito alto');
+    else if (item.giro < 0.2)  causas.push('giro parado');
+    else if (item.giro < 0.5)  causas.push('giro muito baixo');
+    else if (item.giro < 1.0)  causas.push('giro baixo');
+    if (ratio !== null) {
+      if (ratio < 80)       causas.push('abast. abaixo do consumo');
+      else if (ratio > 150) causas.push('abast. acima do consumo');
+    }
+    return causas.slice(0, 2);
+  }
+
+  function buildSituacaoCell(item, sitLabel) {
+    const cob      = item.cobertura;
+    const semSaida = item.saidas < 0.001;
+    const semEnt   = item.entradas < 0.001;
+    const ratio    = semSaida ? null : (item.entradas / item.saidas) * 100;
+    const nv       = item.nivel || _giroNivelInfo(item);
+    // Sem saída no período o próprio texto-base já diz tudo ("acúmulo" /
+    // "sem movimentação") — listar "giro parado" ali só repetiria o mesmo fato.
+    const causas   = semSaida ? [] : _situacaoCausas(item, ratio);
+
+    let base;
+    if (semSaida && semEnt) base = 'Sem movimentação no período';
+    else if (semSaida)      base = 'Entradas sem consumo — acúmulo';
+    else if (cob === null)  base = 'Sem cobertura calculável';
+    else if (cob < 5)       base = `Só ${cob.toFixed(1)}d de cobertura`;
+    else if (cob < 10)      base = `Cobertura curta — ${cob.toFixed(1)}d`;
+    else if (cob < 20)      base = `Cobertura saudável — ${cob.toFixed(1)}d`;
+    else if (cob <= 40)     base = `Cobertura folgada — ${cob.toFixed(1)}d`;
+    else                    base = `Estoque parado — ${cob.toFixed(0)}d de cobertura`;
+
+    const curto = causas.length ? `${base}, por ${causas.join(' e ')}` : base;
+
+    const frase = [
+      `${sitLabel} ${item.name} ${cob !== null ? `possui cobertura para ${cob.toFixed(1)} dias` : 'não tem cobertura calculável (sem consumo no período)'}.`,
+      `Giro ${item.giro.toFixed(2)}× (${giroTag(item.giro).label})${ratio !== null ? ` e abastecimento em ${ratio.toFixed(0)}% do consumo` : ''}.`,
+      `Nível ${nv.label}${causas.length ? ` por ${causas.join(' e ')}` : semSaida ? ' — sem consumo registrado no período' : ' — eixos equilibrados'}.`
+    ].join(' ');
+
+    return `<span class="dg-giro-situacao" style="color:${_NIVEL_COLOR[nv.level] || 'var(--text2)'}" title="${escapeHtml(frase)}">${escapeHtml(curto)}</span>`;
+  }
+
+  function buildGiroHead(nameLabel, sitLabel) {
     const withBadge = (label, helpKey, align) => `
       <span style="text-align:${align};display:inline-flex;align-items:center;gap:3px;${align === 'right' ? 'justify-content:flex-end' : align === 'center' ? 'justify-content:center' : ''}">
         ${label}<span class="macro-help-badge" data-help="${helpKey}" style="width:12px;height:12px;font-size:8px">?</span>
@@ -2573,10 +2623,11 @@ function renderDgGiro(results, dtIni, dtFim) {
       <span style="text-align:right">Saídas</span>
       <span style="text-align:right">Est.Médio</span>
       ${withBadge('Abast.', 'giro-tabela-abast', 'center')}
+      ${sitLabel ? '<span>Situação</span>' : ''}
     </div>`;
   }
 
-  function buildGiroRow(item, panel) {
+  function buildGiroRow(item, panel, sitLabel) {
     const col = giroColor(item.giro);
     const tag = giroTag(item.giro);
     const nv  = item.nivel || _giroNivelInfo(item);
@@ -2589,6 +2640,7 @@ function renderDgGiro(results, dtIni, dtFim) {
       <span class="dg-giro-mat-num" style="color:var(--red)" title="${fmtKg(item.saidas)}">${fmtKgShort(item.saidas)}</span>
       <span class="dg-giro-mat-num" style="color:var(--text2)" title="${fmtKg(item.estMedio)}">${fmtKgShort(item.estMedio)}</span>
       ${buildAbastCell(item.entradas, item.saidas, panel)}
+      ${sitLabel ? buildSituacaoCell(item, sitLabel) : ''}
     </div>`;
   }
 
@@ -2636,7 +2688,7 @@ function renderDgGiro(results, dtIni, dtFim) {
     if (!matPorGiro.length) {
       matModalEl.innerHTML = '<div class="dg-empty-riscos"><i class="ti ti-database-off"></i><span>Sem dados de giro.</span></div>';
     } else {
-      matModalEl.innerHTML = buildGiroHead('Material') + matPorGiro.map(m => buildGiroRow(m, m.giro >= 1 ? 'alto' : 'baixo')).join('');
+      matModalEl.innerHTML = buildGiroHead('Material', 'Material') + matPorGiro.map(m => buildGiroRow(m, m.giro >= 1 ? 'alto' : 'baixo', 'Material')).join('');
     }
   }
 
@@ -2653,7 +2705,7 @@ function renderDgGiro(results, dtIni, dtFim) {
     } else {
       // Lista única, sem corte — classificação de painel (alto/baixo) decidida por linha
       // conforme o próprio giro da central, já que aqui não há separação melhor/pior.
-      centralModalEl.innerHTML = buildGiroHead('Central') + centralPorGiro.map(c => buildGiroRow(c, c.giro >= 1 ? 'alto' : 'baixo')).join('');
+      centralModalEl.innerHTML = buildGiroHead('Central', 'Central') + centralPorGiro.map(c => buildGiroRow(c, c.giro >= 1 ? 'alto' : 'baixo', 'Central')).join('');
     }
   }
   renderPanel('dg-vg-giro-central-alto-body',  top5CentralAlto,  'alto',  'Central', false);

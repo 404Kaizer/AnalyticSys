@@ -5650,8 +5650,22 @@ mark.search-highlight {
    colunas permanece sempre visível e alinhado. */
 #modal-giro-detalhe .dg-giro-mat-head-row,
 #modal-giro-detalhe .dg-giro-mat-row {
-  grid-template-columns: minmax(140px,1fr) 68px 80px 52px 72px 72px 72px 70px;
+  /* +1 coluna vs. os cards da página: "Situação" só existe aqui no modal */
+  grid-template-columns: minmax(140px,1fr) 68px 80px 52px 72px 72px 72px 70px 230px;
   min-width: max-content;
+}
+
+/* Situação — frase curta (máx. 2 linhas) explicando o nível da linha;
+   texto completo fica no title. */
+.dg-giro-situacao {
+  font-size: 10.5px;
+  font-family: var(--mono);
+  line-height: 1.35;
+  font-weight: 600;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 /* Abast. ratio badge */
