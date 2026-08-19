@@ -430,12 +430,26 @@ function _criticidadeDarkStyles() {
 
 // ── Abre o relatório (HTML pronto) em nova janela — usado por todos os
 //    relatórios do sistema (Ausências, Ranking, Ocorrências, Criticidade). ──
-function _openRelWindow(html) {
-  const w = window.open('', '_blank', 'width=1200,height=900,scrollbars=yes,resizable=yes');
-  if (!w) { alert('Popups bloqueados! Permita pop-ups para gerar o relatório.'); return; }
+//
+// `janela` é opcional e serve pra quem NÃO consegue montar o HTML de forma
+// síncrona: o navegador só libera window.open enquanto o clique do usuário
+// ainda está na pilha, então qualquer await/setTimeout antes dele faz a aba
+// nova ser tratada como popup e bloqueada. Nesse caso o chamador abre a
+// janela em branco no início do handler (_abrirJanelaRelatorio) e passa ela
+// aqui pra ser preenchida no fim. Quem monta tudo síncrono continua chamando
+// só com o html, como sempre.
+function _openRelWindow(html, janela) {
+  const w = janela || _abrirJanelaRelatorio();
+  if (!w) return;
   w.document.write(html);
   w.document.close();
   w.focus();
+}
+
+function _abrirJanelaRelatorio() {
+  const w = window.open('', '_blank', 'width=1200,height=900,scrollbars=yes,resizable=yes');
+  if (!w) { alert('Popups bloqueados! Permita pop-ups para gerar o relatório.'); return null; }
+  return w;
 }
 
 // ── Botão "Visão Diretoria" — Resumo Executivo isolado (narrativa + gráficos) ──
@@ -5262,68 +5276,104 @@ function _dgmMesPaneHtml(mes, dados, ativa) {
   </div>`;
 }
 
-window.gerarRelatorioGiroUsina = function() {
+window.gerarRelatorioGiroUsina = async function() {
   const meses = _dgmMesesOrdenados();
   if (!meses.length) { toast('Selecione ao menos um mês.', 'error'); return; }
 
+  // A janela TEM que ser aberta aqui, ainda dentro do clique: o navegador só
+  // libera window.open enquanto o gesto do usuário está na pilha, e este
+  // relatório precisa ceder a thread entre os meses (await abaixo) pro overlay
+  // conseguir repintar. Abrir depois do primeiro await = popup bloqueado.
+  const janela = _abrirJanelaRelatorio();
+  if (!janela) return;
+
   document.getElementById('rel-giro-usina-modal')?.classList.remove('open');
-  if (typeof showLoadingOverlay === 'function') showLoadingOverlay('Gerando relatório', 'Calculando giro por central e material...');
 
-  // setTimeout: um frame pro overlay pintar antes do cálculo travar a thread
-  // (mesmo padrão de rodarDashboardGerencial).
-  setTimeout(() => {
-    try {
-      const panes = meses.map((mes, i) => {
-        const dtIni = new Date(mes.ano, mes.mes, 1);
-        const dtFim = new Date(mes.ano, mes.mes + 1, 0, 23, 59, 59);
-        return _dgmMesPaneHtml(mes, buildGiroPorCentralMaterial(dtIni, dtFim), i === 0);
-      }).join('');
+  const nMeses = meses.length;
+  const stepId = m => `giro-usina-${m.ano}-${m.mes}`;
+  const step   = (id, st) => { if (typeof _lstepSet === 'function') _lstepSet(id, st); };
+  const barra  = pct => { if (typeof _lbarSet === 'function') _lbarSet(pct); };
 
-      const abasBar = meses.length > 1
-        ? `<div class="rel-aba-bar">${meses.map((m, i) => `
-            <button type="button" class="rel-aba-btn${i === 0 ? ' active' : ''}" data-aba-id="mes-${m.ano}-${m.mes}" onclick="_dgrSwitchAba('mes-${m.ano}-${m.mes}', this)">
-              <i class="ti ti-calendar-month"></i> ${_dgmMesLabel(m.ano, m.mes)}
-            </button>`).join('')}</div>`
-        : '';
+  if (typeof showLoadingOverlay === 'function') {
+    showLoadingOverlay('Gerando relatório', `Giro por usina — ${nMeses} ${nMeses !== 1 ? 'meses' : 'mês'}`);
+  }
+  // Etapas próprias: sem isso o overlay reaproveita as etapas que ficaram
+  // penduradas no DOM da última vez que alguém as usou (o boot do sistema),
+  // e o usuário vê "Restaurando sessão anterior" ao gerar um relatório.
+  if (typeof loadingShowSteps === 'function') {
+    loadingShowSteps([
+      ...meses.map(m => ({ id: stepId(m), icon: 'ti-calendar-month', label: `${MESES_NOME_DG[m.mes]} de ${m.ano}` })),
+      { id: 'giro-usina-montar', icon: 'ti-file-analytics', label: 'Montando o relatório' }
+    ]);
+  }
 
-      const estilos = `
-        .dgm-row-central td { background:var(--dgr-card-bg, rgba(255,255,255,.06)); font-weight:800; }
-        .dgm-row-central .rk-name { font-size:8.8px !important; }`;
+  try {
+    const partes = [];
+    for (let i = 0; i < nMeses; i++) {
+      const mes = meses[i];
+      step(stepId(mes), 'running');
+      barra(Math.round((i / (nMeses + 1)) * 100));
+      // Cede a thread pro overlay repintar antes do cálculo do mês travá-la.
+      await new Promise(r => setTimeout(r, 0));
 
-      const ultimo  = meses[meses.length - 1];
-      const periodo = meses.length === 1
-        ? `${MESES_NOME_DG[meses[0].mes]} de ${meses[0].ano}`
-        : `${_dgmMesLabel(meses[0].ano, meses[0].mes)} a ${_dgmMesLabel(ultimo.ano, ultimo.mes)}`;
-
-      const html = _buildRankingShellHTML({
-        periodoBadge: periodo,
-        periodo,
-        now: new Date().toLocaleString('pt-BR'),
-        kpis: []
-      }, {
-        // Paisagem: 9 colunas não cabem em retrato sem espremer o nome do material.
-        pageOrientation: 'paisagem',
-        temaAlternavel: true,
-        temaInicial: 'dark',
-        permitirDownload: true,
-        nomeArquivoDownload: _dgrNomeArquivoRelatorio('relatorio-giro-usina'),
-        secoesRecolhiveis: true,
-        abasNavegaveis: meses.length > 1,
-        offlineCompleto: true,
-        pageTitle: 'Giro por Usina — Dashboard Gerencial',
-        badge:     'Relatório Temporário',
-        title:     'Giro & Cobertura por Usina',
-        subtitle:  'Giro, cobertura e variação de cada central e de cada material dentro dela, mês a mês.',
-        bodyHtml:  `<style>${_dgrEstilos()}${estilos}</style>${abasBar}${panes}`,
-        notaRodape: 'Giro e Cobertura seguem a mesma metodologia do modal "Giro & Cobertura" do Dashboard Gerencial. Variação = Est. Final real − Est. Teórico, com Est. Inicial no saldo teórico do SAP — mesma conta da Visão Micro do Analítico.'
-      });
-
-      _openRelWindow(html);
-    } catch (err) {
-      console.error('[Relatório Giro por Usina] Falha ao gerar:', err);
-      toast('Falha ao gerar o relatório. Veja o console para detalhes.', 'error');
-    } finally {
-      if (typeof hideLoadingOverlay === 'function') hideLoadingOverlay();
+      const dtIni = new Date(mes.ano, mes.mes, 1);
+      const dtFim = new Date(mes.ano, mes.mes + 1, 0, 23, 59, 59);
+      partes.push(_dgmMesPaneHtml(mes, buildGiroPorCentralMaterial(dtIni, dtFim), i === 0));
+      step(stepId(mes), 'done');
     }
-  }, 0);
+    const panes = partes.join('');
+
+    step('giro-usina-montar', 'running');
+    barra(Math.round((nMeses / (nMeses + 1)) * 100));
+
+    const abasBar = nMeses > 1
+      ? `<div class="rel-aba-bar">${meses.map((m, i) => `
+          <button type="button" class="rel-aba-btn${i === 0 ? ' active' : ''}" data-aba-id="mes-${m.ano}-${m.mes}" onclick="_dgrSwitchAba('mes-${m.ano}-${m.mes}', this)">
+            <i class="ti ti-calendar-month"></i> ${_dgmMesLabel(m.ano, m.mes)}
+          </button>`).join('')}</div>`
+      : '';
+
+    const estilos = `
+      .dgm-row-central td { background:var(--dgr-card-bg, rgba(255,255,255,.06)); font-weight:800; }
+      .dgm-row-central .rk-name { font-size:8.8px !important; }`;
+
+    const ultimo  = meses[nMeses - 1];
+    const periodo = nMeses === 1
+      ? `${MESES_NOME_DG[meses[0].mes]} de ${meses[0].ano}`
+      : `${_dgmMesLabel(meses[0].ano, meses[0].mes)} a ${_dgmMesLabel(ultimo.ano, ultimo.mes)}`;
+
+    const html = _buildRankingShellHTML({
+      periodoBadge: periodo,
+      periodo,
+      now: new Date().toLocaleString('pt-BR'),
+      kpis: []
+    }, {
+      // Paisagem: 9 colunas não cabem em retrato sem espremer o nome do material.
+      pageOrientation: 'paisagem',
+      temaAlternavel: true,
+      temaInicial: 'dark',
+      permitirDownload: true,
+      nomeArquivoDownload: _dgrNomeArquivoRelatorio('relatorio-giro-usina'),
+      secoesRecolhiveis: true,
+      abasNavegaveis: nMeses > 1,
+      offlineCompleto: true,
+      pageTitle: 'Giro por Usina — Dashboard Gerencial',
+      badge:     'Relatório Temporário',
+      title:     'Giro & Cobertura por Usina',
+      subtitle:  'Giro, cobertura e variação de cada central e de cada material dentro dela, mês a mês.',
+      bodyHtml:  `<style>${_dgrEstilos()}${estilos}</style>${abasBar}${panes}`,
+      notaRodape: 'Giro e Cobertura seguem a mesma metodologia do modal "Giro & Cobertura" do Dashboard Gerencial. Variação = Est. Final real − Est. Teórico, com Est. Inicial no saldo teórico do SAP — mesma conta da Visão Micro do Analítico.'
+    });
+
+    step('giro-usina-montar', 'done');
+    barra(100);
+    _openRelWindow(html, janela);
+  } catch (err) {
+    console.error('[Relatório Giro por Usina] Falha ao gerar:', err);
+    toast('Falha ao gerar o relatório. Veja o console para detalhes.', 'error');
+    janela.close(); // não deixa a aba em branco órfã
+  } finally {
+    if (typeof hideLoadingOverlay === 'function') hideLoadingOverlay();
+    if (typeof loadingHideSteps === 'function') loadingHideSteps();
+  }
 };
