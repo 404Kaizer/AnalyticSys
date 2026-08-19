@@ -5402,7 +5402,7 @@ function _dgmLegendaHtml() {
       <div class="dgm-leg-corpo">
         <span class="dgm-leg-calculo">${_rankEsc(col.calculo)}</span>
         ${col.faixas ? `<span class="dgm-leg-faixas">${col.faixas.map(([f, sig]) =>
-          `<span class="dgm-leg-faixa"><b>${_rankEsc(f)}</b> ${_rankEsc(sig)}</span>`).join('')}</span>` : ''}
+          `<span class="dgm-leg-faixa"><b>${_rankEsc(f)}</b> ${_rankEsc(sig)}</span>`).join(' ')}</span>` : ''}
       </div>
     </div>`).join('');
 
@@ -5744,16 +5744,21 @@ window.gerarRelatorioGiroUsina = async function() {
         font-size:9.5px; font-weight:800; text-transform:uppercase; letter-spacing:.05em;
         color:var(--dgr-accent-text, #f87171); padding-top:1px;
       }
+      /* min-width:0 — sem isso o item de grid não encolhe abaixo do conteúdo
+         (o padrão é min-width:auto) e uma linha longa empurra a coluna 1fr
+         pra fora da tela, levando a página junto. */
+      .dgm-leg-corpo { min-width:0; }
       .dgm-leg-calculo { font-size:10.5px; line-height:1.5; color:var(--dgr-text, #e2e8f0); }
       /* Faixas em linha, separadas por ·: oito itens viram duas linhas em vez
-         de uma lista de oito. */
+         de uma lista de oito. Só o rótulo da faixa é nowrap ("acima de 4,00×"
+         não pode partir no meio); a descrição quebra à vontade. */
       .dgm-leg-faixas { display:block; margin-top:5px; }
       .dgm-leg-faixa {
         font-size:9.5px; font-family:'JetBrains Mono',monospace;
-        color:var(--dgr-text-dim, #94a3b8); white-space:nowrap;
+        color:var(--dgr-text-dim, #94a3b8); line-height:1.75;
       }
       .dgm-leg-faixa + .dgm-leg-faixa::before { content:' · '; color:var(--dgr-text-dim2, #64748b); }
-      .dgm-leg-faixa b { color:var(--dgr-text, #e2e8f0); font-weight:700; }
+      .dgm-leg-faixa b { color:var(--dgr-text, #e2e8f0); font-weight:700; white-space:nowrap; }
       @media print { .dgm-help { display:none; } }
 
       /* Zebra do shell DESLIGADA aqui, por dois motivos: ela pinta o <tr>
