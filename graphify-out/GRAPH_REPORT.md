@@ -5,12 +5,12 @@
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 2261 nodes · 4633 edges · 123 communities (114 shown, 9 thin omitted)
+- 2261 nodes · 4633 edges · 124 communities (115 shown, 9 thin omitted)
 - Extraction: 88% EXTRACTED · 12% INFERRED · 0% AMBIGUOUS · INFERRED: 541 edges (avg confidence: 0.56)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `5d106e69`
+- Built from commit: `05fb52b7`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -137,6 +137,7 @@
 - _adminAtualizarBarraLote
 - _buildCentralOptionsHtml
 - _dgVgRenderHealthDonuts
+- _custosSapFromDbRow
 
 ## God Nodes (most connected - your core abstractions)
 1. `renderDgVisaoGeralPdf()` - 31 edges
@@ -170,7 +171,7 @@
 - **Calculadora/Notas/Assistente/Mensagens all implement the same generic tool-popover open/close pattern (openTool/closeTool, .tool-popover)** — index_calc_popover, index_notes_popover, index_assistente_popover, index_mensagens_popover [EXTRACTED 1.00]
 - **DAI generation, Ocorrências, and the public-form/admin routing jointly form the inventory-adjustment reporting flow** — index_dai_modal, index_ocorrencias_page, index_admin_formpublico, solicitacao [INFERRED 0.75]
 
-## Communities (123 total, 9 thin omitted)
+## Communities (124 total, 9 thin omitted)
 
 ### Community 0 - "admin.js"
 Cohesion: 0.09
@@ -241,8 +242,8 @@ Cohesion: 0.06
 Nodes (28): _anStockCache, _capFilter, _capFilterChange(), _closeBdPortal(), _ensureBdPortal(), _gsHighlight(), handleGlobalSearch(), _microFilter (+20 more)
 
 ### Community 17 - "import.js"
-Cohesion: 0.09
-Nodes (32): _CASCADE_TABELAS_NUVEM, _cascadeRestoreCloudByImportId(), _criarRegistroEntrada(), _criarRegistroLancamento(), _criarRegistroSaida(), _criarRegistroSAP(), _custosSapFromDbRow(), _custosSapRealtimeInit() (+24 more)
+Cohesion: 0.10
+Nodes (25): _CASCADE_TABELAS_NUVEM, _cascadeRestoreCloudByImportId(), _criarRegistroEntrada(), _criarRegistroLancamento(), _criarRegistroSaida(), _criarRegistroSAP(), _entradasSyncUpsert(), _entradasSyncUpsertBatch() (+17 more)
 
 ### Community 18 - "ncd.js"
 Cohesion: 0.13
@@ -609,8 +610,8 @@ Cohesion: 0.15
 Nodes (17): _adminAtualizarBannerDono(), adminBuscarModulo(), adminExcluirRegistro(), adminExcluirRegistroModal(), adminFiltrarPorDono(), adminLimparBuscaModulo(), adminLimparFiltroDono(), _adminLimparSelecaoInterno() (+9 more)
 
 ### Community 119 - "_custosSapSyncUpsert"
-Cohesion: 0.40
-Nodes (6): _atualizarRegistroCustosSap(), _criarRegistroCustosSap(), _custosSapSyncDelete(), _custosSapSyncUpsert(), excluirCustosSap(), salvarCustosSapManual()
+Cohesion: 0.29
+Nodes (8): _atualizarRegistroCustosSap(), _criarRegistroCustosSap(), _custosSapSyncDelete(), _custosSapSyncUpsert(), _custosSapSyncUpsertBatch(), _custosSapToDbRow(), excluirCustosSap(), salvarCustosSapManual()
 
 ### Community 120 - "_adminAtualizarBarraLote"
 Cohesion: 0.21
@@ -624,8 +625,12 @@ Nodes (4): _buildCentralOptionsHtml(), _custosSapManualPopularSelects(), _manual
 Cohesion: 0.33
 Nodes (6): _dgVgBuildCentralHealthData(), _dgVgBuildHealthDonutData(), _dgVgHealthTipHtml(), _dgVgRenderHealthDonuts(), _dgVgRenderHealthDonutSvg(), _dgVgScoreFromCounts()
 
+### Community 123 - "_custosSapFromDbRow"
+Cohesion: 0.40
+Nodes (5): _custosSapFromDbRow(), _custosSapRealtimeInit(), _custosSapRemoveLocal(), _custosSapUpsertLocal(), syncCustosSapFromSupabase()
+
 ## Knowledge Gaps
-- **287 isolated node(s):** `ADMIN_MODULOS`, `_adminProfiles`, `_adminAuthInfo`, `_adminCurrentRows`, `_adminSelectedIds` (+282 more)
+- **287 isolated node(s):** `raiz`, `erros`, `intervalos`, `escritas`, `progresso` (+282 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **9 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
@@ -633,12 +638,12 @@ Nodes (6): _dgVgBuildCentralHealthData(), _dgVgBuildHealthDonutData(), _dgVgHeal
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `CLOUD_BACKUP_MODULOS` connect `cloud-backup.js` to `_adminAtualizarBarraLote`, `processImportedRows`, `renderModule`?**
-  _High betweenness centrality (0.085) - this node is a cross-community bridge._
+  _High betweenness centrality (0.102) - this node is a cross-community bridge._
 - **Why does `removerRegistro()` connect `renderModule` to `analitico.js`, `dashboard.js`, `cloud-backup.js`?**
-  _High betweenness centrality (0.076) - this node is a cross-community bridge._
+  _High betweenness centrality (0.091) - this node is a cross-community bridge._
 - **Why does `Admin / Supervisão Page` connect `mensagens.js` to `admin.js`?**
-  _High betweenness centrality (0.064) - this node is a cross-community bridge._
-- **What connects `ADMIN_MODULOS`, `_adminProfiles`, `_adminAuthInfo` to the rest of the system?**
+  _High betweenness centrality (0.055) - this node is a cross-community bridge._
+- **What connects `raiz`, `erros`, `intervalos` to the rest of the system?**
   _287 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `admin.js` be split into smaller, more focused modules?**
   _Cohesion score 0.09462365591397849 - nodes in this community are weakly interconnected._
