@@ -33,6 +33,7 @@ const centralFalsa = (nome) => ({
 });
 
 const erros = [];
+const intervalos = [];
 const escritas = [];
 const progresso = { textContent: '' };
 let etapas = [];
@@ -52,8 +53,13 @@ const ctx = {
   money: (v) => 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 }),
   varSymbol: () => '<i class="ti ti-circle-arrow-up"></i>',
   toast: () => {},
-  // Uma central diferente por mês — dá pra testar o filtro de central de verdade.
-  buildGiroPorCentralMaterial: (dtIni) => ({ periodoEstimado: 30, centrais: [centralFalsa('CENTRAL ' + dtIni.getMonth())] }),
+  // Uma central diferente por aba — dá pra testar o filtro de central de
+  // verdade e distinguir a Geral (que abrange mais de um mês) das mensais.
+  buildGiroPorCentralMaterial: (dtIni, dtFim) => {
+    intervalos.push({ dtIni, dtFim });
+    const geral = dtIni.getMonth() !== dtFim.getMonth();
+    return { periodoEstimado: geral ? 62 : 30, centrais: [centralFalsa(geral ? 'CENTRAL GERAL' : 'CENTRAL ' + dtIni.getMonth())] };
+  },
   // Guarda TUDO que foi escrito na aba: a 1ª escrita é a tela de progresso,
   // a última é o relatório.
   open: () => ({
@@ -102,7 +108,7 @@ teste('abre a aba ANTES do cálculo, com tela de progresso', () => {
   assert.ok(!escritas[0].includes('http'), 'tela de progresso não pode buscar nada na rede');
   // E o progresso realmente andou durante a geração.
   assert.equal(progresso.textContent, 'Montando o relatório…');
-  assert.equal(etapas.join(','), 'giro-usina-2026-6,giro-usina-2026-7,giro-usina-montar');
+  assert.equal(etapas.join(','), 'giro-usina-geral,giro-usina-mes-2026-6,giro-usina-mes-2026-7,giro-usina-montar');
 });
 
 teste('geração não engoliu nenhum erro', () => {
@@ -115,11 +121,32 @@ teste('a última escrita na aba é o relatório pronto', () => {
   assert.ok(htmlGerado.includes('Relatório de Fornecimento'));
 });
 
-teste('uma aba por mês, a primeira já ativa', () => {
-  assert.equal((htmlGerado.match(/class="rel-aba-pane/g) || []).length, 2);
+teste('uma aba por mês, mais a Geral, com a Geral ativa', () => {
+  assert.equal((htmlGerado.match(/class="rel-aba-pane/g) || []).length, 3);
   assert.equal((htmlGerado.match(/class="rel-aba-pane rel-aba-ativa/g) || []).length, 1);
+  assert.ok(htmlGerado.includes('data-aba-id="geral"'));
   assert.ok(htmlGerado.includes('Jul/2026') && htmlGerado.includes('Ago/2026'));
   assert.ok(htmlGerado.includes('_dgrSwitchAba'));
+  // Geral primeiro na barra e no conteúdo — é a leitura de entrada.
+  assert.ok(htmlGerado.indexOf('data-aba-id="geral"') < htmlGerado.indexOf('data-aba-id="mes-2026-6"'));
+  assert.ok(htmlGerado.includes('class="rel-aba-pane rel-aba-ativa" data-aba-id="geral"'));
+});
+
+teste('Geral RECALCULA o período inteiro, não soma os meses', () => {
+  // Somar erraria: Est.Médio é nível de estoque (não acumulado) e a Variação
+  // mede divergência acumulada contra o SAP, que reaparece mês a mês.
+  assert.equal(intervalos.length, 3, 'geral + 2 meses');
+  const geral = intervalos[0];
+  assert.equal(geral.dtIni.getMonth(), 6, 'começa no 1º dia do mês mais antigo');
+  assert.equal(geral.dtIni.getDate(), 1);
+  assert.equal(geral.dtFim.getMonth(), 7, 'termina no último dia do mês mais novo');
+  assert.equal(geral.dtFim.getDate(), 31);
+  // Título com as datas por extenso: com meses não contíguos a Geral cobre
+  // também os do meio, então o intervalo precisa estar visível.
+  assert.ok(htmlGerado.includes('Geral — 01/07/2026 a 31/08/2026'), 'intervalo no título');
+  assert.ok(htmlGerado.includes('ti-sum'));
+  // Os dias vêm do cálculo da própria aba, não do mês.
+  assert.ok(htmlGerado.includes('62 dias de movimentação'));
 });
 
 teste('nome de material é escapado (não vira tag)', () => {
@@ -302,9 +329,9 @@ teste('sem undefined/NaN vazando no corpo', () => {
 const secoesHtml = htmlGerado.split('<section ').slice(1).filter(b => b.includes('dgm-secao'));
 
 teste('cada seção declara sua central; toda linha é material filtrável', () => {
-  assert.equal(secoesHtml.length, 2);
+  assert.equal(secoesHtml.length, 3); // geral + 2 meses
   secoesHtml.forEach(b => {
-    assert.match(b, /data-central="CENTRAL [67]"/);
+    assert.match(b, /data-central="CENTRAL (GERAL|[67])"/);
     // 2 materiais, 2 linhas — nenhuma linha extra sem marcação de filtro
     assert.equal((b.match(/data-material="/g) || []).length, 2);
     assert.equal((b.match(/<tr /g) || []).length, 2);
@@ -316,6 +343,7 @@ teste('filtros gerais existem com as opções dos dois meses', () => {
   assert.ok(htmlGerado.includes('id="dgm-f-material"'));
   assert.ok(htmlGerado.includes('id="dgm-f-nivel"'));
   assert.ok(htmlGerado.includes('<option value="CENTRAL 6">') && htmlGerado.includes('<option value="CENTRAL 7">'));
+  assert.ok(htmlGerado.includes('<option value="CENTRAL GERAL">'), 'a Geral também entra nas opções');
   assert.ok(htmlGerado.includes('<option value="CIMENTO CP II">'));
 });
 
@@ -399,7 +427,7 @@ teste('central + nível se combinam com E, não OU', () => {
 
 teste('resumo conta centrais e materiais visíveis', () => {
   aplicar('', 'CIMENTO CP II');
-  assert.equal(resumo.textContent, '2 centrais · 2 materiais');
+  assert.equal(resumo.textContent, '3 centrais · 3 materiais'); // geral + 2 meses
 });
 
 teste('alternar tudo recolhe todas e o rótulo vira "Expandir tudo"', () => {

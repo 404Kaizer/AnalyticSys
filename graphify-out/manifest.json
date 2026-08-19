@@ -120,8 +120,8 @@
     "semantic_hash": ""
   },
   "js/relatorio.js": {
-    "mtime": 1787153612.18325,
-    "ast_hash": "35bcfb4e09df46c9782b30f5a56ae125",
+    "mtime": 1787153993.7655888,
+    "ast_hash": "122837521b0065bc486e598fcc0c09ba",
     "semantic_hash": ""
   },
   "js/solicitacao.js": {
@@ -290,8 +290,8 @@
     "semantic_hash": ""
   },
   "tests/relatorio-giro-usina.test.mjs": {
-    "mtime": 1787153623.1566308,
-    "ast_hash": "c4ef51cf1f84b41839b18dfbaa7c57eb",
+    "mtime": 1787154092.4926462,
+    "ast_hash": "eeaf9b89130c100ba0e6ea90457bded5",
     "semantic_hash": ""
   }
 }
