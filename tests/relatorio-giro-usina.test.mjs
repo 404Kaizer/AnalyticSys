@@ -32,9 +32,18 @@ const centralFalsa = (nome) => ({
   ],
 });
 
+const erros = [];
+const escritas = [];
+const progresso = { textContent: '' };
+let etapas = [];
 let htmlGerado = null;
 const ctx = {
-  console: { info() {}, warn() {}, error() {} },
+  // console.error capturado, não silenciado: sem isso uma falha na geração
+  // some e o teste quebra lá na frente com erro sem relação.
+  console: { info() {}, warn() {}, error: (...a) => erros.push(a.join(' ')) },
+  // O laço de meses cede a thread entre um mês e outro; sem setTimeout no
+  // sandbox a geração estoura e nada é escrito na aba.
+  setTimeout: (fn, ms) => setTimeout(fn, ms),
   MESES_ABREV_DG: ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'],
   MESES_NOME_DG: ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'],
   _dgMonthState: { selectedYear: 2026, selectedMonth: 7 },
@@ -45,7 +54,18 @@ const ctx = {
   toast: () => {},
   // Uma central diferente por mês — dá pra testar o filtro de central de verdade.
   buildGiroPorCentralMaterial: (dtIni) => ({ periodoEstimado: 30, centrais: [centralFalsa('CENTRAL ' + dtIni.getMonth())] }),
-  open: () => ({ document: { write(h) { htmlGerado = h; }, close() {} }, focus() {} }),
+  // Guarda TUDO que foi escrito na aba: a 1ª escrita é a tela de progresso,
+  // a última é o relatório.
+  open: () => ({
+    document: {
+      write(h) { escritas.push(h); }, open() {}, close() {},
+      getElementById: () => progresso,
+    },
+    focus() {}, close() {},
+  }),
+  showLoadingOverlay: () => {}, hideLoadingOverlay: () => {},
+  loadingShowSteps: (st) => { etapas = st.map(x => x.id); }, loadingHideSteps: () => {},
+  _lstepSet: () => {}, _lbarSet: () => {},
 };
 ctx.window = ctx;
 ctx.globalThis = ctx;
@@ -59,12 +79,31 @@ vm.runInContext(readFileSync(join(raiz, 'js', 'relatorio.js'), 'utf8'), ctx);
 
 // Dois meses selecionados → barra de abas + filtros cobrindo os dois.
 vm.runInContext("_dgmState.selecionados.add('2026-6'); _dgmState.selecionados.add('2026-7');", ctx);
-ctx.gerarRelatorioGiroUsina();
+await ctx.gerarRelatorioGiroUsina();
+htmlGerado = escritas[escritas.length - 1];
 
 const casos = [];
 const teste = (nome, fn) => casos.push({ nome, fn });
 
-teste('gera o HTML e abre a janela só com ele pronto', () => {
+teste('abre a aba ANTES do cálculo, com tela de progresso', () => {
+  // window.open só é liberado dentro dos ~5s de ativação transitória do
+  // clique, e esse relógio corre mesmo com a thread ocupada: abrir a aba no
+  // fim dava "Popups bloqueados" assim que a geração passava desse orçamento.
+  assert.ok(escritas.length >= 2, 'esperava a tela de progresso e depois o relatório');
+  assert.ok(escritas[0].includes('Gerando relatório'), escritas[0].slice(0, 200));
+  assert.ok(escritas[0].includes('id="rel-progresso"'));
+  // Nenhuma dependência de rede na tela de progresso — ela tem que aparecer já.
+  assert.ok(!escritas[0].includes('http'), 'tela de progresso não pode buscar nada na rede');
+  // E o progresso realmente andou durante a geração.
+  assert.equal(progresso.textContent, 'Montando o relatório…');
+  assert.equal(etapas.join(','), 'giro-usina-2026-6,giro-usina-2026-7,giro-usina-montar');
+});
+
+teste('geração não engoliu nenhum erro', () => {
+  assert.deepEqual([...erros], [], 'console.error durante a geração');
+});
+
+teste('a última escrita na aba é o relatório pronto', () => {
   assert.ok(htmlGerado && htmlGerado.length > 1000);
   assert.ok(htmlGerado.includes('Giro &amp; Cobertura por Usina') || htmlGerado.includes('Giro & Cobertura por Usina'));
   assert.ok(htmlGerado.includes('Relatório de Fornecimento'));
