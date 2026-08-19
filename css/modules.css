@@ -5642,20 +5642,27 @@ mark.search-highlight {
   padding: 5px 0;
   border-bottom: 1px solid var(--border);
 }
-/* Dentro do modal de detalhe, o nome ganha uma largura mínima real (em vez
-   de só encolher até sumir) — como há uma região de scroll horizontal
-   dedicada ali (.analitico-detail-table-shell), vale mostrar o nome
-   completo rolando a tabela. Nos cards de resumo da página (mais estreitos,
-   sem esse scroll shell), o nome trunca com reticências e o resto das
-   colunas permanece sempre visível e alinhado. */
+/* Dentro do modal de detalhe a coluna do nome é FIXA, nunca 1fr: cada linha
+   é um grid próprio e, combinada com o min-width:max-content abaixo, uma
+   coluna elástica faz cada linha se dimensionar pelo próprio nome — aí nada
+   alinha entre as linhas. Com largura fixa o nome longo trunca com "…" (o
+   nome inteiro segue no title da célula e a busca continua achando ele). */
 #modal-giro-detalhe .dg-giro-mat-head-row,
 #modal-giro-detalhe .dg-giro-mat-row {
   /* +1 coluna vs. os cards da página ("Situação" só existe aqui no modal) e
      as colunas de kg mais largas, já que aqui o valor vai por extenso
      ("2.900.000 kg" em vez de "2,9 M kg"). */
-  grid-template-columns: minmax(140px,1fr) 68px 108px 108px 70px 108px 52px 80px 470px;
+  grid-template-columns: 150px 68px 108px 108px 70px 108px 52px 80px 470px;
   min-width: max-content;
 }
+/* Materiais têm nomes bem mais longos que os códigos de central (MAT1) —
+   só essa aba ganha a coluna de nome mais larga. */
+#dg-giro-modal-panel-materiais .dg-giro-mat-head-row,
+#dg-giro-modal-panel-materiais .dg-giro-mat-row {
+  grid-template-columns: 250px 68px 108px 108px 70px 108px 52px 80px 470px;
+}
+/* display:block (em vez do flex da classe base) pra valer o text-overflow */
+#modal-giro-detalhe .dg-giro-mat-name { display: block; }
 
 /* Legenda de fluxo do modal — trilha "como ler a tabela", na mesma ordem
    das colunas. A seta é gerada no ::after, menos no último passo. */
