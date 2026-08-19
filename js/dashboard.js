@@ -2631,14 +2631,18 @@ function renderDgGiro(results, dtIni, dtFim) {
     const col = giroColor(item.giro);
     const tag = giroTag(item.giro);
     const nv  = item.nivel || _giroNivelInfo(item);
+    // sitLabel só é passado pelo modal de detalhe: lá há scroll horizontal
+    // próprio, então os kg vão por extenso ("2.900.000 kg"). Nos cards
+    // estreitos da página, segue abreviado ("2,9 M kg").
+    const kg  = sitLabel ? (v) => fmtKg(v, 0) : fmtKgShort;
     return `<div class="dg-giro-mat-row" title="Nível: ${nv.label} — correlaciona Cobertura, Giro e Abastecimento&#10;Cobertura: ${item.cobertura !== null ? item.cobertura.toFixed(1)+'d' : '—'}&#10;Giro: ${item.giro.toFixed(4)}× — ${tag.label}&#10;Entradas: ${fmtKg(item.entradas)}&#10;Saídas: ${fmtKg(item.saidas)}&#10;Est.Médio: ${fmtKg(item.estMedio)}">
       <span class="dg-giro-mat-name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</span>
       <span class="dg-giro-abast" style="${nv.style}">${nv.label}</span>
       ${buildCoberturaCell(item.cobertura)}
       <span class="dg-giro-mat-num" style="color:${col};text-align:right">${item.giro.toFixed(2)}×</span>
-      <span class="dg-giro-mat-num" style="color:var(--green)" title="${fmtKg(item.entradas)}">${fmtKgShort(item.entradas)}</span>
-      <span class="dg-giro-mat-num" style="color:var(--red)" title="${fmtKg(item.saidas)}">${fmtKgShort(item.saidas)}</span>
-      <span class="dg-giro-mat-num" style="color:var(--text2)" title="${fmtKg(item.estMedio)}">${fmtKgShort(item.estMedio)}</span>
+      <span class="dg-giro-mat-num" style="color:var(--green)" title="${fmtKg(item.entradas)}">${kg(item.entradas)}</span>
+      <span class="dg-giro-mat-num" style="color:var(--red)" title="${fmtKg(item.saidas)}">${kg(item.saidas)}</span>
+      <span class="dg-giro-mat-num" style="color:var(--text2)" title="${fmtKg(item.estMedio)}">${kg(item.estMedio)}</span>
       ${buildAbastCell(item.entradas, item.saidas, panel)}
       ${sitLabel ? buildSituacaoCell(item, sitLabel) : ''}
     </div>`;

@@ -5650,22 +5650,21 @@ mark.search-highlight {
    colunas permanece sempre visível e alinhado. */
 #modal-giro-detalhe .dg-giro-mat-head-row,
 #modal-giro-detalhe .dg-giro-mat-row {
-  /* +1 coluna vs. os cards da página: "Situação" só existe aqui no modal */
-  grid-template-columns: minmax(140px,1fr) 68px 80px 52px 72px 72px 72px 70px 230px;
+  /* +1 coluna vs. os cards da página ("Situação" só existe aqui no modal) e
+     as colunas de kg mais largas, já que aqui o valor vai por extenso
+     ("2.900.000 kg" em vez de "2,9 M kg"). */
+  grid-template-columns: minmax(140px,1fr) 68px 80px 52px 108px 108px 108px 70px 470px;
   min-width: max-content;
 }
 
-/* Situação — frase curta (máx. 2 linhas) explicando o nível da linha;
-   texto completo fica no title. */
+/* Situação — frase explicando o nível da linha, sempre em uma linha só
+   (a coluna é larga o bastante pro texto inteiro; o modal já tem scroll
+   horizontal próprio). O title traz a frase completa com os números. */
 .dg-giro-situacao {
-  font-size: 10.5px;
-  font-family: var(--mono);
+  font-size: 11px;
   line-height: 1.35;
   font-weight: 600;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  white-space: nowrap;
 }
 
 /* Abast. ratio badge */
