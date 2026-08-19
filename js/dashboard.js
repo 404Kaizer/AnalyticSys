@@ -2395,14 +2395,12 @@ function buildGiroPorCentralMaterial(dtIni, dtFim, results) {
 
       entTot += m.entradas; saiTot += m.saidas; estTot += m.estMedio; varTot += variacao;
 
-      const custoMedio = (r.custoMedioPorMat || {})[mat] || 0;
-      const item = { name: mat, ...m, variacao, custoVariacao: variacao * custoMedio };
+      const item = { name: mat, ...m, variacao };
       item.nivel = _giroNivelInfo(item);
       return item;
     });
 
     const c = { name: r.central, ...metricas(entTot, saiTot, estTot), variacao: varTot };
-    c.custoVariacao = mats.reduce((s, m) => s + m.custoVariacao, 0);
     c.nivel = _giroNivelInfo(c);
     // Pior nível primeiro (giro como desempate) — mesma ordenação das listas
     // do modal de Giro & Cobertura.

@@ -431,25 +431,16 @@ function _criticidadeDarkStyles() {
 // ── Abre o relatório (HTML pronto) em nova janela — usado por todos os
 //    relatórios do sistema (Ausências, Ranking, Ocorrências, Criticidade). ──
 //
-// `janela` é opcional e serve pra quem NÃO consegue montar o HTML de forma
-// síncrona: o navegador só libera window.open enquanto o clique do usuário
-// ainda está na pilha, então qualquer await/setTimeout antes dele faz a aba
-// nova ser tratada como popup e bloqueada. Nesse caso o chamador abre a
-// janela em branco no início do handler (_abrirJanelaRelatorio) e passa ela
-// aqui pra ser preenchida no fim. Quem monta tudo síncrono continua chamando
-// só com o html, como sempre.
-function _openRelWindow(html, janela) {
-  const w = janela || _abrirJanelaRelatorio();
-  if (!w) return;
+// Chamada SEMPRE com o HTML já pronto: o navegador só libera window.open
+// enquanto o clique do usuário ainda está na pilha, então quem gera o
+// relatório tem que gerar tudo de forma síncrona e só então chamar aqui.
+// Um await/setTimeout no meio do caminho = popup bloqueado.
+function _openRelWindow(html) {
+  const w = window.open('', '_blank', 'width=1200,height=900,scrollbars=yes,resizable=yes');
+  if (!w) { alert('Popups bloqueados! Permita pop-ups para gerar o relatório.'); return; }
   w.document.write(html);
   w.document.close();
   w.focus();
-}
-
-function _abrirJanelaRelatorio() {
-  const w = window.open('', '_blank', 'width=1200,height=900,scrollbars=yes,resizable=yes');
-  if (!w) { alert('Popups bloqueados! Permita pop-ups para gerar o relatório.'); return null; }
-  return w;
 }
 
 // ── Botão "Visão Diretoria" — Resumo Executivo isolado (narrativa + gráficos) ──
@@ -5208,49 +5199,194 @@ window._dgmToggleMes = function(mes) {
 // materiais dela. O painel de leitura do abastecimento (alto giro = risco de
 // ruptura, baixo giro = capital parado) é decidido pelo próprio giro da linha,
 // mesma regra de buildGiroRow na tela.
-function _dgmLinhaHtml(item, tipo) {
+// Cobertura em dias → cor + ícone. MESMOS limiares e ícones de
+// buildCoberturaCell (função interna de renderDgGiro, dashboard.js, não
+// acessível globalmente), só com cores literais em vez de var(--x) — mesmo
+// arranjo que _dgrAbastInfo já usa pro abastecimento.
+function _dgmCoberturaInfo(dias) {
+  if (dias === null || dias === undefined) return { texto: 'sem consumo', cor: '#64748b', icone: null };
+  const d = dias.toFixed(1) + 'd';
+  if (dias < 5)   return { texto: d, cor: '#f43f5e', icone: 'ti-flame' };           // crítico
+  if (dias < 10)  return { texto: d, cor: '#f59e0b', icone: 'ti-alert-triangle' };  // urgente
+  if (dias < 20)  return { texto: d, cor: '#10b981', icone: 'ti-circle-check' };    // saudável
+  if (dias <= 40) return { texto: d, cor: '#f59e0b', icone: 'ti-clock' };           // atenção
+  return { texto: d, cor: '#8b5cf6', icone: 'ti-lock' };                            // excesso
+}
+
+// Uma linha por MATERIAL. A central não tem linha própria: o cabeçalho do
+// bloco já carrega o retrato dela (variação, contagem por nível, giro).
+// data-material/data-nivel são o que os filtros consomem.
+//
+// Nível, Abast., Giro e Cobertura saem como badge — as quatro colunas
+// qualitativas, todas no mesmo _dgmChip dos chips do cabeçalho. Entradas,
+// Saídas, Est.Médio e Variação seguem número puro: são grandeza, não estado.
+function _dgmLinhaHtml(item) {
   const cor    = _dgrNivelCor(item.nivel.level);
   const abast  = _dgrAbastInfo(item.entradas, item.saidas, item.giro >= 1 ? 'alto' : 'baixo');
+  const cob    = _dgmCoberturaInfo(item.cobertura);
   const corVar = _dgrValCor(item.variacao);
-  const ehCentral = tipo === 'central';
   return `
-    <tr class="${ehCentral ? 'dgm-row-central' : ''}">
+    <tr data-material="${_rankEsc(item.name)}" data-nivel="${item.nivel.level}">
       <td class="rk-name" title="${_rankEsc(item.name)}">
-        <span class="dgr-nome-trunc-inner">${ehCentral ? '<i class="ti ti-building-factory-2" style="font-size:9px"></i> ' : ''}${_rankEsc(_dgrTruncNome(item.name, 34))}</span>
+        <span class="dgr-nome-trunc-inner"><i class="ti ${_DGM_NIVEL_ICONE[item.nivel.level]} dgm-nome-icone" style="color:${cor}"></i>${_rankEsc(_dgrTruncNome(item.name, 30))}</span>
       </td>
-      <td><span style="display:inline-block;padding:1px 5px;border-radius:5px;font-size:8px;font-weight:700;white-space:nowrap;background:${cor}22;color:${cor};border:1px solid ${cor}55">${_rankEsc(item.nivel.label)}</span></td>
-      <td class="rk-num" style="color:#94a3b8">${_dgrNowrapNum(fmtKgShort(item.entradas))}</td>
-      <td class="rk-num" style="color:#94a3b8">${_dgrNowrapNum(fmtKgShort(item.saidas))}</td>
-      <td style="text-align:right"><span style="display:inline-flex;align-items:center;gap:3px;padding:1px 5px;border-radius:5px;font-size:8px;font-weight:700;white-space:nowrap;background:${abast.cor}22;color:${abast.cor};border:1px solid ${abast.cor}55">${abast.icone ? `<i class="ti ${abast.icone}" style="font-size:9px"></i>` : ''}${abast.texto}</span></td>
-      <td class="rk-num" style="color:#94a3b8">${_dgrNowrapNum(fmtKgShort(item.estMedio))}</td>
-      <td class="rk-num" style="color:${_dgrGiroCor(item.giro)}">${_dgrNowrapNum(item.giro.toFixed(2) + '×')}</td>
-      <td class="rk-num">${item.cobertura === null ? 'sem consumo' : _dgrNowrapNum(item.cobertura.toFixed(1) + 'd')}</td>
-      <td class="rk-num" style="color:${corVar}">
-        ${varSymbol(item.variacao)} ${_dgrNowrapNum(fmtKg(Math.abs(item.variacao)))}
-        <div class="rk-sub" style="color:${corVar}">${_dgrNowrapNum(money(Math.abs(item.custoVariacao)))}</div>
-      </td>
+      <td>${_dgmChip(_rankEsc(item.nivel.label), cor)}</td>
+      <td class="rk-num" style="color:#94a3b8">${_dgrNowrapNum(fmtKg(item.entradas))}</td>
+      <td class="rk-num" style="color:#94a3b8">${_dgrNowrapNum(fmtKg(item.saidas))}</td>
+      <td>${_dgmChip(abast.texto, abast.cor, abast.icone)}</td>
+      <td class="rk-num" style="color:#94a3b8">${_dgrNowrapNum(fmtKg(item.estMedio))}</td>
+      <td>${_dgmChip(item.giro.toFixed(2) + '×', _dgrGiroCor(item.giro))}</td>
+      <td>${_dgmChip(cob.texto, cob.cor, cob.icone)}</td>
+      <td class="rk-num" style="color:${corVar}">${varSymbol(item.variacao)} ${_dgrNowrapNum(fmtKg(Math.abs(item.variacao)))}</td>
     </tr>`;
 }
 
 function _dgmCentralTabelaHtml(c) {
-  const linhas = _dgmLinhaHtml(c, 'central') + c.mats.map(m => _dgmLinhaHtml(m, 'material')).join('');
+  const linhas = c.mats.map(_dgmLinhaHtml).join('');
   return `
     <div class="dgr-table-wrap">
-      <table class="rk-table">
+      <table class="rk-table dgm-tabela">
+        <!-- Larguras dimensionadas pros kg POR EXTENSO ("1.234.567,00 kg"): as
+             três colunas de peso ficam mais largas que o nome, que tem
+             ellipsis (.dgr-nome-trunc-inner) e aguenta o aperto.
+             Cabeçalhos à ESQUERDA (padrão do .rk-table th do shell, só não
+             sobrescrever) com valores à direita — mesmo desenho da tabela de
+             materiais da Visão Micro. -->
         <thead><tr>
-          <th style="width:21%">Central / Material</th>
-          <th style="width:9%">Nível</th>
-          <th style="width:10%;text-align:right">Entradas</th>
-          <th style="width:10%;text-align:right">Saídas</th>
-          <th style="width:11%;text-align:right">Abast.</th>
-          <th style="width:10%;text-align:right">Est.Médio</th>
-          <th style="width:7%;text-align:right">Giro</th>
-          <th style="width:10%;text-align:right">Cobertura</th>
-          <th style="width:12%;text-align:right">Variação</th>
+          <th style="width:19%">Material</th>
+          <th style="width:8%">Nível</th>
+          <th style="width:12%">Entradas</th>
+          <th style="width:12%">Saídas</th>
+          <th style="width:10%">Abast.</th>
+          <th style="width:12%">Est.Médio</th>
+          <th style="width:6%">Giro</th>
+          <th style="width:9%">Cobertura</th>
+          <th style="width:12%">Variação</th>
         </tr></thead>
         <tbody>${linhas}</tbody>
       </table>
     </div>`;
+}
+
+// ── Cabeçalho da central — mesmo desenho do card da Visão Micro: nome em
+//    destaque seguido de chips coloridos (variação, custo, contagem de
+//    materiais por nível, giro). Chips zerados ficam esmaecidos em vez de
+//    sumirem, igual ao .hcc-zero da Micro: "0 urgente" é informação, não
+//    ausência de informação.
+// Um ícone por nível, usado nos chips do cabeçalho E na frente do nome do
+// material (mesmo par ícone+cor da Visão Micro, então bate a leitura entre as
+// duas telas).
+const _DGM_NIVEL_ICONE = {
+  critico: 'ti-flame',
+  urgente: 'ti-alert-circle',
+  atencao: 'ti-alert-triangle',
+  bom:     'ti-circle-check',
+};
+
+function _dgmChip(texto, cor, icone, zero) {
+  return `<span class="dgm-chip"${zero ? ' data-zero="1"' : ''} style="background:${cor}1f;color:${cor};border-color:${cor}4d">${icone ? `<i class="ti ${icone}"></i>` : ''}${texto}</span>`;
+}
+
+function _dgmCentralHeaderHtml(c) {
+  const cont = { critico: 0, urgente: 0, atencao: 0, bom: 0 };
+  c.mats.forEach(m => { cont[m.nivel.level]++; });
+
+  const corVar   = _dgrValCor(c.variacao);
+  const neutro   = Math.abs(c.variacao) <= 0.0001;
+  const rotuloVar = neutro ? 'Equilibrado' : (c.variacao < 0 ? 'Desfalque' : 'Sobra');
+  const iconeVar  = neutro ? 'ti-equal' : (c.variacao < 0 ? 'ti-trending-down' : 'ti-trending-up');
+  const corNivel  = _dgrNivelCor(c.nivel.level);
+
+  return `
+    <i class="ti ti-chevron-down dgm-chev"></i>
+    <span class="dgm-central-nome"><i class="ti ti-building-factory-2"></i>${_rankEsc(c.name)}</span>
+    ${_dgmChip(`${rotuloVar}: ${fmtKg(Math.abs(c.variacao))}`, corVar, iconeVar)}
+    <span class="dgm-chip-sep"></span>
+    ${_dgmChip(`${cont.critico} crítico`, _dgrNivelCor('critico'), _DGM_NIVEL_ICONE.critico, !cont.critico)}
+    ${_dgmChip(`${cont.urgente} urgente`, _dgrNivelCor('urgente'), _DGM_NIVEL_ICONE.urgente, !cont.urgente)}
+    ${_dgmChip(`${cont.atencao} atenção`, _dgrNivelCor('atencao'), _DGM_NIVEL_ICONE.atencao, !cont.atencao)}
+    ${_dgmChip(`${cont.bom} bom`,         _dgrNivelCor('bom'),     _DGM_NIVEL_ICONE.bom,     !cont.bom)}
+    <span class="dgm-chip-sep"></span>
+    ${_dgmChip(`Giro ${c.giro.toFixed(2)}× · ${c.nivel.label.toUpperCase()}`, corNivel, 'ti-arrows-exchange')}`;
+}
+
+// ── Filtros gerais (central / material / nível) ────────────────────────────
+// Valem pro relatório inteiro, todas as abas de mês — por isso ficam ACIMA da
+// barra de abas. <select> nativo de propósito: o HTML exportado roda offline,
+// sem framework nenhum, e a lista é curta o bastante pra não precisar de
+// busca. Some na impressão (o papel já sai filtrado).
+function _dgmFiltrosHtml(centrais, materiais) {
+  const opcoes = (arr) => arr.map(v => `<option value="${_rankEsc(v)}">${_rankEsc(v)}</option>`).join('');
+  const niveis = [['critico','Crítico'], ['urgente','Urgente'], ['atencao','Atenção'], ['bom','Bom']];
+  return `
+    <div class="dgm-filtros">
+      <label>Central
+        <select id="dgm-f-central" onchange="_dgmAplicarFiltros()">
+          <option value="">Todas</option>${opcoes(centrais)}
+        </select>
+      </label>
+      <label>Material
+        <select id="dgm-f-material" onchange="_dgmAplicarFiltros()">
+          <option value="">Todos</option>${opcoes(materiais)}
+        </select>
+      </label>
+      <label>Nível
+        <select id="dgm-f-nivel" onchange="_dgmAplicarFiltros()">
+          <option value="">Todos</option>${niveis.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}
+        </select>
+      </label>
+      <button type="button" class="dgm-f-limpar" onclick="_dgmLimparFiltros()">Limpar</button>
+      <span class="dgm-f-resumo" id="dgm-f-resumo"></span>
+    </div>`;
+}
+
+// Script embutido no relatório. Vai no FIM do bodyHtml, com o DOM que ele
+// consulta já parseado.
+//
+// O filtro de material/nível esconde LINHA de material; a linha de total da
+// central e os chips do cabeçalho continuam mostrando a central inteira, de
+// propósito — são o retrato do conjunto, não do recorte. Uma central sem
+// nenhum material visível some por completo.
+function _dgmScriptFiltros() {
+  return `<script>
+function _dgmAplicarFiltros() {
+  var fc = document.getElementById('dgm-f-central').value;
+  var fm = document.getElementById('dgm-f-material').value;
+  var fn = document.getElementById('dgm-f-nivel').value;
+  var filtraLinha = !!(fm || fn);
+  var centraisVisiveis = 0, linhasVisiveis = 0;
+
+  document.querySelectorAll('.dgm-secao').forEach(function(sec) {
+    var okCentral = !fc || sec.dataset.central === fc;
+    var visiveis = 0;
+    sec.querySelectorAll('tr[data-material]').forEach(function(tr) {
+      var ok = okCentral
+        && (!fm || tr.dataset.material === fm)
+        && (!fn || tr.dataset.nivel === fn);
+      tr.style.display = ok ? '' : 'none';
+      if (ok) visiveis++;
+    });
+    // Sem filtro de linha, uma central sem materiais ainda deve aparecer.
+    var mostra = okCentral && (visiveis > 0 || !filtraLinha);
+    sec.style.display = mostra ? '' : 'none';
+    if (mostra) { centraisVisiveis++; linhasVisiveis += visiveis; }
+  });
+
+  var resumo = document.getElementById('dgm-f-resumo');
+  if (resumo) {
+    resumo.textContent = (fc || fm || fn)
+      ? centraisVisiveis + (centraisVisiveis === 1 ? ' central' : ' centrais') + ' · ' + linhasVisiveis + (linhasVisiveis === 1 ? ' material' : ' materiais')
+      : '';
+  }
+}
+function _dgmLimparFiltros() {
+  ['dgm-f-central', 'dgm-f-material', 'dgm-f-nivel'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  _dgmAplicarFiltros();
+}
+<\/script>`;
 }
 
 function _dgmMesPaneHtml(mes, dados, ativa) {
@@ -5258,16 +5394,13 @@ function _dgmMesPaneHtml(mes, dados, ativa) {
   // Uma seção por central: recolhível na tela e página nova na impressão
   // (dgr-page-section-natural = quebra antes, mas pagina livre por dentro —
   // uma central com muitos materiais não cabe numa página só).
-  const secoes = dados.centrais.map((c, i) => {
-    const cor = _dgrNivelCor(c.nivel.level);
-    return `<section class="dgr-page-section-natural" data-secao-id="${abaId}-${i}">
-      <button type="button" class="dgr-collapse-toggle" aria-expanded="true" onclick="_dgrToggleSecao(this)">
-        <i class="ti ti-chevron-down"></i>
-        <span>${_rankEsc(c.name)} — ${c.mats.length} ${c.mats.length !== 1 ? 'materiais' : 'material'} · giro ${c.giro.toFixed(2)}× · <span style="color:${cor}">${_rankEsc(c.nivel.label)}</span></span>
+  const secoes = dados.centrais.map((c, i) => `
+    <section class="dgr-page-section-natural dgm-secao" data-secao-id="${abaId}-${i}" data-central="${_rankEsc(c.name)}">
+      <button type="button" class="dgr-collapse-toggle dgm-central-head" aria-expanded="true" onclick="_dgrToggleSecao(this)">
+        ${_dgmCentralHeaderHtml(c)}
       </button>
       <div class="dgr-collapse-body">${_dgmCentralTabelaHtml(c)}</div>
-    </section>`;
-  }).join('');
+    </section>`).join('');
 
   const nCent = dados.centrais.length;
   return `<div class="rel-aba-pane${ativa ? ' rel-aba-ativa' : ''}" data-aba-id="${abaId}">
@@ -5276,55 +5409,40 @@ function _dgmMesPaneHtml(mes, dados, ativa) {
   </div>`;
 }
 
-window.gerarRelatorioGiroUsina = async function() {
+// Geração SÍNCRONA de ponta a ponta, de propósito: a aba só é aberta depois
+// que o HTML está pronto (pedido do Hugo — nada de aba em branco esperando).
+// Isso amarra as duas pontas: sem ceder a thread, o window.open do fim ainda
+// está dentro da mesma tarefa iniciada pelo clique, então o navegador não
+// trata como popup. Qualquer await/setTimeout aqui dentro derruba a "ativação
+// transitória" (~5s no Chrome) e o popup volta a ser bloqueado.
+//
+// ponytail: o preço é a página travar durante a geração, sem barra de
+// progresso (overlay nenhum consegue repintar com a thread ocupada). Aceitável
+// pra poucos meses; se ficar insuportável, o upgrade é mover o cálculo pra um
+// Web Worker e só então voltar a ter progresso E abertura no fim.
+window.gerarRelatorioGiroUsina = function() {
   const meses = _dgmMesesOrdenados();
   if (!meses.length) { toast('Selecione ao menos um mês.', 'error'); return; }
 
-  // A janela TEM que ser aberta aqui, ainda dentro do clique: o navegador só
-  // libera window.open enquanto o gesto do usuário está na pilha, e este
-  // relatório precisa ceder a thread entre os meses (await abaixo) pro overlay
-  // conseguir repintar. Abrir depois do primeiro await = popup bloqueado.
-  const janela = _abrirJanelaRelatorio();
-  if (!janela) return;
-
+  const nMeses = meses.length;
   document.getElementById('rel-giro-usina-modal')?.classList.remove('open');
 
-  const nMeses = meses.length;
-  const stepId = m => `giro-usina-${m.ano}-${m.mes}`;
-  const step   = (id, st) => { if (typeof _lstepSet === 'function') _lstepSet(id, st); };
-  const barra  = pct => { if (typeof _lbarSet === 'function') _lbarSet(pct); };
-
-  if (typeof showLoadingOverlay === 'function') {
-    showLoadingOverlay('Gerando relatório', `Giro por usina — ${nMeses} ${nMeses !== 1 ? 'meses' : 'mês'}`);
-  }
-  // Etapas próprias: sem isso o overlay reaproveita as etapas que ficaram
-  // penduradas no DOM da última vez que alguém as usou (o boot do sistema),
-  // e o usuário vê "Restaurando sessão anterior" ao gerar um relatório.
-  if (typeof loadingShowSteps === 'function') {
-    loadingShowSteps([
-      ...meses.map(m => ({ id: stepId(m), icon: 'ti-calendar-month', label: `${MESES_NOME_DG[m.mes]} de ${m.ano}` })),
-      { id: 'giro-usina-montar', icon: 'ti-file-analytics', label: 'Montando o relatório' }
-    ]);
-  }
-
   try {
-    const partes = [];
-    for (let i = 0; i < nMeses; i++) {
-      const mes = meses[i];
-      step(stepId(mes), 'running');
-      barra(Math.round((i / (nMeses + 1)) * 100));
-      // Cede a thread pro overlay repintar antes do cálculo do mês travá-la.
-      await new Promise(r => setTimeout(r, 0));
+    const porMes = meses.map(mes => ({
+      mes,
+      dados: buildGiroPorCentralMaterial(new Date(mes.ano, mes.mes, 1), new Date(mes.ano, mes.mes + 1, 0, 23, 59, 59))
+    }));
+    const panes = porMes.map(({ mes, dados }, i) => _dgmMesPaneHtml(mes, dados, i === 0)).join('');
 
-      const dtIni = new Date(mes.ano, mes.mes, 1);
-      const dtFim = new Date(mes.ano, mes.mes + 1, 0, 23, 59, 59);
-      partes.push(_dgmMesPaneHtml(mes, buildGiroPorCentralMaterial(dtIni, dtFim), i === 0));
-      step(stepId(mes), 'done');
-    }
-    const panes = partes.join('');
-
-    step('giro-usina-montar', 'running');
-    barra(Math.round((nMeses / (nMeses + 1)) * 100));
+    // Opções dos filtros: união de TODOS os meses (o filtro é geral), pra que
+    // uma central que só aparece em um mês continue selecionável nos outros.
+    const setCentrais = new Set(), setMateriais = new Set();
+    porMes.forEach(({ dados }) => dados.centrais.forEach(c => {
+      setCentrais.add(c.name);
+      c.mats.forEach(m => setMateriais.add(m.name));
+    }));
+    const cmp = (a, b) => a.localeCompare(b, 'pt-BR');
+    const filtros = _dgmFiltrosHtml([...setCentrais].sort(cmp), [...setMateriais].sort(cmp));
 
     const abasBar = nMeses > 1
       ? `<div class="rel-aba-bar">${meses.map((m, i) => `
@@ -5334,8 +5452,126 @@ window.gerarRelatorioGiroUsina = async function() {
       : '';
 
     const estilos = `
-      .dgm-row-central td { background:var(--dgr-card-bg, rgba(255,255,255,.06)); font-weight:800; }
-      .dgm-row-central .rk-name { font-size:8.8px !important; }`;
+      /* Filtros gerais — somem na impressão: o papel já sai filtrado. */
+      .dgm-filtros {
+        display:flex; flex-wrap:wrap; align-items:flex-end; gap:12px; margin-bottom:16px;
+        padding:12px 14px; border-radius:10px;
+        background:var(--dgr-card-bg, rgba(255,255,255,.045));
+        border:1px solid var(--dgr-card-border, rgba(255,255,255,.09));
+      }
+      .dgm-filtros label {
+        display:flex; flex-direction:column; gap:5px;
+        font-size:9px; font-weight:800; text-transform:uppercase; letter-spacing:.06em;
+        color:var(--dgr-text-dim2, #64748b);
+      }
+      .dgm-filtros select, .dgm-f-limpar {
+        background:var(--dgr-card-bg, rgba(255,255,255,.06));
+        border:1px solid var(--dgr-card-border, rgba(255,255,255,.14));
+        color:var(--dgr-text, #e2e8f0);
+        border-radius:6px; padding:6px 9px;
+        font-family:'JetBrains Mono',monospace; font-size:10.5px; font-weight:600;
+      }
+      .dgm-filtros select { min-width:170px; max-width:280px; }
+      .dgm-f-limpar { cursor:pointer; font-weight:700; }
+      .dgm-f-resumo {
+        font-family:'JetBrains Mono',monospace; font-size:10px;
+        color:var(--dgr-text-dim, #94a3b8); margin-left:auto;
+      }
+      @media print { .dgm-filtros { display:none; } }
+
+      /* Tudo centralizado; só a coluna de nome (a 1ª) fica à esquerda —
+         cabeçalho e valor sempre no mesmo eixo. */
+      .dgm-tabela th, .dgm-tabela td { text-align:center; }
+      .dgm-tabela th:first-child, .dgm-tabela td:first-child { text-align:left; }
+
+      /* Corpo maior que o padrão de _dgrEstilos (7,5px), que foi calibrado pro
+         Relatório Gerencial — lá são 4 tabelas espremidas na mesma página.
+         Aqui é UMA tabela por central, em paisagem: sobra largura. nowrap nas
+         células numéricas pra "1.234.567,00 kg" nunca largar o "kg" na linha
+         de baixo; o nome fica com ellipsis, que é o único texto que pode
+         faltar espaço. */
+      .dgm-secao .dgm-tabela th { font-size:9.5px; padding:10px 6px; }
+      .dgm-secao .dgm-tabela td { font-size:11px; padding:11px 6px; }
+      .dgm-secao .dgm-tabela .rk-name { font-size:11.5px !important; font-weight:700; }
+      .dgm-secao .dgm-tabela .rk-num { white-space:nowrap; }
+      /* Badges dentro da tabela — mesmo .dgm-chip do cabeçalho, só com o ícone
+         no tamanho da célula (o do cabeçalho tem regra própria, menor). */
+      .dgm-tabela .dgm-chip i { font-size:11px; }
+
+      /* Zebra do shell DESLIGADA aqui, por dois motivos: ela pinta o <tr>
+         enquanto o destaque da central pinta o <td>, e com o fundo do bloco
+         por baixo davam três tons diferentes; e sendo :nth-child, alternava
+         errado assim que um filtro escondia linha. Separação vira borda, que
+         não depende de índice nem briga por camada. */
+      .dgm-secao tbody tr:nth-child(even) { background:none; }
+      .dgm-secao tbody td { background:none; }
+      .dgm-secao tbody tr:last-child td { border-bottom:none; }
+
+      /* A central é um bloco único envolvendo os materiais dela — mesmo
+         desenho do .regional-group da Visão Micro (cabeçalho colado no corpo,
+         cantos arredondados só nas pontas de fora). A tabela de dentro perde o
+         visual de card próprio pra não virar card dentro de card. */
+      .dgm-secao { margin-bottom:20px; }
+      .dgm-central-head {
+        padding:11px 14px; margin-bottom:0;
+        background:var(--dgr-card-bg, rgba(255,255,255,.045));
+        border:1px solid var(--dgr-card-border, rgba(255,255,255,.09));
+        border-bottom:none; border-radius:12px 12px 0 0;
+      }
+      .dgm-central-head[aria-expanded="false"] {
+        border-bottom:1px solid var(--dgr-card-border, rgba(255,255,255,.09));
+        border-radius:12px;
+      }
+      /* Mesmo --dgr-card-bg do cabeçalho: os dois viram um card contínuo. Era
+         daqui que vinha a inversão no tema claro — o corpo usava --dgr-row-alt
+         (cinza) e a linha da central --dgr-card-bg (branco puro), então o
+         "destaque" saía mais claro que o fundo em volta. */
+      .dgm-secao .dgr-collapse-body {
+        border:1px solid var(--dgr-card-border, rgba(255,255,255,.09));
+        border-top:none; border-radius:0 0 12px 12px;
+        padding:4px 10px 8px;
+        background:var(--dgr-card-bg, rgba(255,255,255,.045));
+      }
+      .dgm-secao .dgr-table-wrap {
+        margin-bottom:0; padding:0; background:none; border:none; border-radius:0;
+      }
+
+      /* Cabeçalho da central — chips no padrão da Visão Micro. Sobrescreve o
+         uppercase/letter-spacing herdado de .dgr-collapse-toggle, que deixaria
+         os chips com cara de título em vez de etiqueta. */
+      .dgm-central-head { flex-wrap:wrap; gap:7px; text-transform:none; letter-spacing:0; }
+      .dgm-nome-icone { font-size:12px !important; margin-right:6px; vertical-align:-1.5px; }
+
+      /* O shell gira QUALQUER <i> dentro de .dgr-collapse-toggle ao recolher
+         (a regra foi escrita quando o botão só tinha a seta). Como aqui o
+         cabeçalho leva os chips dentro do botão, os ícones deles giravam
+         junto: a rotação passa a valer só pra seta. */
+      .dgm-central-head[aria-expanded="false"] i { transform:none; }
+      .dgm-central-head[aria-expanded="false"] .dgm-chev { transform:rotate(-90deg); }
+      .dgm-central-nome {
+        display:inline-flex; align-items:center; gap:6px; margin-right:4px;
+        font-size:12px; font-weight:800; letter-spacing:.04em; text-transform:uppercase;
+        color:var(--dgr-text-strong, #fff);
+      }
+      .dgm-central-nome i { font-size:13px; opacity:.7; }
+      .dgm-chip {
+        display:inline-flex; align-items:center; gap:5px;
+        padding:2px 8px; border-radius:6px; border:1px solid transparent;
+        font-family:'JetBrains Mono',monospace; font-size:9.5px; font-weight:700;
+        white-space:nowrap; letter-spacing:0;
+      }
+      .dgm-chip[data-zero="1"] { opacity:.4; }
+      /* .dgr-collapse-toggle i vale 14px pra seta; os ícones dos chips são menores. */
+      .dgm-central-head .dgm-chip i { font-size:10px; }
+      .dgm-chip-sep { width:1px; height:14px; background:var(--dgr-divider, rgba(255,255,255,.14)); margin:0 3px; }
+      @media print {
+        /* O shell esconde .dgr-collapse-toggle na impressão (botão não faz
+           sentido no papel), mas aqui o cabeçalho É a identificação da central
+           — sem ele a tabela vira uma lista de materiais sem dono. Fica
+           visível; só a seta de recolher some. */
+        .dgm-central-head { display:flex !important; }
+        .dgm-central-head .dgm-chev { display:none; }
+      }`;
 
     const ultimo  = meses[nMeses - 1];
     const periodo = nMeses === 1
@@ -5358,22 +5594,19 @@ window.gerarRelatorioGiroUsina = async function() {
       abasNavegaveis: nMeses > 1,
       offlineCompleto: true,
       pageTitle: 'Giro por Usina — Dashboard Gerencial',
-      badge:     'Relatório Temporário',
+      badge:     'Relatório de Fornecimento',
       title:     'Giro & Cobertura por Usina',
       subtitle:  'Giro, cobertura e variação de cada central e de cada material dentro dela, mês a mês.',
-      bodyHtml:  `<style>${_dgrEstilos()}${estilos}</style>${abasBar}${panes}`,
+      // Filtros ANTES da barra de abas (valem pro relatório inteiro) e o
+      // script no fim, com o DOM que ele consulta já parseado.
+      bodyHtml:  `<style>${_dgrEstilos()}${estilos}</style>${filtros}${abasBar}${panes}${_dgmScriptFiltros()}`,
       notaRodape: 'Giro e Cobertura seguem a mesma metodologia do modal "Giro & Cobertura" do Dashboard Gerencial. Variação = Est. Final real − Est. Teórico, com Est. Inicial no saldo teórico do SAP — mesma conta da Visão Micro do Analítico.'
     });
 
-    step('giro-usina-montar', 'done');
-    barra(100);
-    _openRelWindow(html, janela);
+    // Só agora, com o HTML inteiro pronto na mão.
+    _openRelWindow(html);
   } catch (err) {
     console.error('[Relatório Giro por Usina] Falha ao gerar:', err);
     toast('Falha ao gerar o relatório. Veja o console para detalhes.', 'error');
-    janela.close(); // não deixa a aba em branco órfã
-  } finally {
-    if (typeof hideLoadingOverlay === 'function') hideLoadingOverlay();
-    if (typeof loadingHideSteps === 'function') loadingHideSteps();
   }
 };
