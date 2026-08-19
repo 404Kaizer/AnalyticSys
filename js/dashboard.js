@@ -2276,6 +2276,38 @@ function _daRenderDetalhadoAnalitico(results, pares, totalEstTeoricoKpi) {
 // PRIMEIRO e o ÚLTIMO lançamento encontrado (não pelo dtIni/dtFim pedido):
 // é ela que divide o giro pra virar cobertura em dias. Sem lançamento
 // nenhum, cai em 30 (mês comercial).
+// ── Snapshot de um material pro cálculo de giro ────────────────────────────
+// Est. Inicial e Est. Final vêm da MESMA fonte da Visão Micro do Analítico:
+// inicial = saldo teórico do SAP em dtIni−1 (âncora de Custos SAP +
+// movimentações, ver _anGetSapTheoreticalStock em analitico.js), final =
+// último lançamento do período com fallback.
+//
+// Sem o Est. Inicial, buildSnapshot assume pesoIni = 0 e o Est. Médio vira
+// METADE do estoque final — o que inflava o giro e derrubava a cobertura de
+// qualquer material que já começasse o mês com estoque. Exemplo real (Hugo,
+// ago/2026): inicial 100, entrou 50, saiu 100 (a central consumiu exatamente
+// o que tinha mais o que recebeu) dava Est.Médio 25 → giro 4,00× "muito alto,
+// risco de ruptura"; com o inicial correto dá Est.Médio 75 → giro 1,33×,
+// saudável. Os dois eixos alimentam o Nível, então o diagnóstico inteiro
+// saía errado.
+//
+// Guardas de typeof: analitico.js pode não estar carregado em alguns
+// contextos (testes, telas isoladas) — ali degrada pro comportamento antigo
+// em vez de quebrar.
+function _giroSnapshotMaterial({ central, mat, lancs, sap, dtIni, dtFim }) {
+  const prev = (typeof _anGetSapStock === 'function')
+    ? _anGetSapStock({ central, material: mat, dtIni }) : null;
+  const fim = (typeof _anGetLastPeriodStockFallback === 'function')
+    ? _anGetLastPeriodStockFallback({ central, material: mat, dtIni, dtFim }) : null;
+  return buildSnapshot({
+    lancs, sap,
+    initialStockOverride:     prev?.value   ?? null,
+    initialDateLabelOverride: prev?.dtLabel ?? null,
+    finalStockOverride:       fim && !fim.missing ? fim.value   : null,
+    finalDateLabelOverride:   fim && !fim.missing ? fim.dtLabel : null
+  });
+}
+
 function _dgGiroPeriodoEstimado(results) {
   if (!results || !results.length) return 30;
   let minDate = null, maxDate = null;
@@ -2380,18 +2412,12 @@ function buildGiroPorCentralMaterial(dtIni, dtFim, results) {
       const lancs = lancsByMat.get(mat) || [];
       const sap   = sapByMat.get(mat)   || [];
 
-      const snapGiro = buildSnapshot({ lancs, sap });
-      const m = metricas(snapGiro.totalEnt, Math.abs(snapGiro.totalSai), (snapGiro.pesoIni + snapGiro.pesoFim) / 2);
-
-      const prev = (typeof _anGetSapStock === 'function') ? _anGetSapStock({ central: r.central, material: mat, dtIni }) : null;
-      const fim  = (typeof _anGetLastPeriodStockFallback === 'function') ? _anGetLastPeriodStockFallback({ central: r.central, material: mat, dtIni, dtFim }) : null;
-      const variacao = buildSnapshot({
-        lancs, sap,
-        initialStockOverride:     prev?.value   ?? null,
-        initialDateLabelOverride: prev?.dtLabel ?? null,
-        finalStockOverride:       fim && !fim.missing ? fim.value   : null,
-        finalDateLabelOverride:   fim && !fim.missing ? fim.dtLabel : null
-      }).diff;
+      // Um snapshot só: giro/cobertura e variação saem da mesma base, então
+      // Est.Médio é de fato (Est. Inicial + Est. Final) ÷ 2 e não pode
+      // divergir da Variação exibida ao lado.
+      const snap = _giroSnapshotMaterial({ central: r.central, mat, lancs, sap, dtIni, dtFim });
+      const m = metricas(snap.totalEnt, Math.abs(snap.totalSai), (snap.pesoIni + snap.pesoFim) / 2);
+      const variacao = snap.diff;
 
       entTot += m.entradas; saiTot += m.saidas; estTot += m.estMedio; varTot += variacao;
 
@@ -2457,7 +2483,8 @@ function renderDgGiro(results, dtIni, dtFim) {
     r.allMats.forEach(mat => {
       const lancs = lancsByMat.get(mat)||[];
       const sap   = sapByMat.get(mat)||[];
-      const snap  = buildSnapshot({ lancs, sap });
+      // Est. Inicial do SAP incluído — ver _giroSnapshotMaterial.
+      const snap  = _giroSnapshotMaterial({ central: r.central, mat, lancs, sap, dtIni, dtFim });
 
       const saidas    = Math.abs(snap.totalSai);
       const estMedio  = (snap.pesoIni + snap.pesoFim) / 2;
@@ -2558,7 +2585,7 @@ function renderDgGiro(results, dtIni, dtFim) {
 
     let saidasTotal = 0, estMedioTotal = 0, entradasTotal = 0;
     r.allMats.forEach(mat => {
-      const snap = buildSnapshot({ lancs: lancsByMat.get(mat)||[], sap: sapByMat.get(mat)||[] });
+      const snap = _giroSnapshotMaterial({ central: r.central, mat, lancs: lancsByMat.get(mat)||[], sap: sapByMat.get(mat)||[], dtIni, dtFim });
       saidasTotal   += Math.abs(snap.totalSai);
       estMedioTotal += (snap.pesoIni + snap.pesoFim) / 2;
       entradasTotal += snap.totalEnt;

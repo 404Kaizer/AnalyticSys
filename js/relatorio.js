@@ -5326,7 +5326,7 @@ const _DGM_COLUNAS = [
     ] },
 
   { label: 'Est.Médio', largura: 12,
-    calculo: '(Est. Inicial + Est. Final) ÷ 2 — o estoque médio mantido no mês. É o divisor do Giro e o dividendo da Cobertura.' },
+    calculo: '(Est. Inicial + Est. Final) ÷ 2 — o estoque médio mantido no mês. O Est. Inicial é o saldo TEÓRICO do SAP em véspera do período (âncora de Custos SAP + movimentações) e o Est. Final é o último lançamento do período, exatamente as duas pontas que a Visão Micro do Analítico mostra. É o divisor do Giro e o dividendo da Cobertura, então material que começa o mês com estoque não infla mais esses dois.' },
 
   { label: 'Giro', largura: 6,
     calculo: 'Saídas ÷ Est. Médio — quantas vezes o estoque se renovou no mês. Alto demais indica operação no limite (risco de ruptura); baixo demais, capital parado.',
