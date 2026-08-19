@@ -5560,13 +5560,53 @@ function _dgmAlternarTudo(btn) {
 <\/script>`;
 }
 
-function _dgmMesPaneHtml(mes, dados, ativa) {
-  const abaId = `mes-${mes.ano}-${mes.mes}`;
+// ── Abas do relatório ──────────────────────────────────────────────────────
+// Uma por mês selecionado, mais a "Geral" na frente quando há mais de um mês.
+//
+// A Geral NÃO soma as abas de mês — ela roda o MESMO cálculo sobre o período
+// inteiro, de uma vez. Somar mês a mês erraria em dois pontos: Est.Médio é um
+// nível de estoque, não um acumulado (somar 3 meses de 200 kg daria 600 kg de
+// "estoque médio"), e a Variação mede divergência ACUMULADA contra o SAP —
+// uma diferença não ajustada reaparece nos meses seguintes (ver
+// _anGetSapTheoreticalStock em analitico.js), então somá-la contaria a mesma
+// diferença física várias vezes. Recalculando sobre o intervalo todo, giro,
+// cobertura e variação saem pelo mesmo caminho de sempre, sem heurística.
+//
+// Atenção: o intervalo é do 1º dia do mês mais antigo ao último do mais novo.
+// Com meses não contíguos selecionados (ex.: Jan e Jun), a Geral cobre TAMBÉM
+// os meses do meio — por isso o subtítulo dela traz as datas por extenso.
+function _dgmAbasDoRelatorio(meses) {
+  const abas = meses.map(m => ({
+    id: `mes-${m.ano}-${m.mes}`,
+    rotulo: _dgmMesLabel(m.ano, m.mes),
+    icone: 'ti-calendar-month',
+    titulo: `${MESES_NOME_DG[m.mes]} de ${m.ano}`,
+    dtIni: new Date(m.ano, m.mes, 1),
+    dtFim: new Date(m.ano, m.mes + 1, 0, 23, 59, 59),
+    vazio: 'Sem dados neste mês.',
+  }));
+
+  if (abas.length > 1) {
+    const dtIni = abas[0].dtIni;
+    const dtFim = abas[abas.length - 1].dtFim;
+    abas.unshift({
+      id: 'geral',
+      rotulo: 'Geral',
+      icone: 'ti-sum',
+      titulo: `Geral — ${dtIni.toLocaleDateString('pt-BR')} a ${dtFim.toLocaleDateString('pt-BR')}`,
+      dtIni, dtFim,
+      vazio: 'Sem dados no período.',
+    });
+  }
+  return abas;
+}
+
+function _dgmPaneHtml(aba, dados, ativa) {
   // Uma seção por central: recolhível na tela e página nova na impressão
   // (dgr-page-section-natural = quebra antes, mas pagina livre por dentro —
   // uma central com muitos materiais não cabe numa página só).
   const secoes = dados.centrais.map((c, i) => `
-    <section class="dgr-page-section-natural dgm-secao" data-secao-id="${abaId}-${i}" data-central="${_rankEsc(c.name)}">
+    <section class="dgr-page-section-natural dgm-secao" data-secao-id="${aba.id}-${i}" data-central="${_rankEsc(c.name)}">
       <button type="button" class="dgr-collapse-toggle dgm-central-head" aria-expanded="true" onclick="_dgrToggleSecao(this)">
         ${_dgmCentralHeaderHtml(c)}
       </button>
@@ -5574,9 +5614,10 @@ function _dgmMesPaneHtml(mes, dados, ativa) {
     </section>`).join('');
 
   const nCent = dados.centrais.length;
-  return `<div class="rel-aba-pane${ativa ? ' rel-aba-ativa' : ''}" data-aba-id="${abaId}">
-    <div class="dgr-section-title"><i class="ti ti-calendar-month"></i>${MESES_NOME_DG[mes.mes]} de ${mes.ano} — ${nCent} ${nCent !== 1 ? 'centrais' : 'central'} · ${dados.periodoEstimado} ${dados.periodoEstimado !== 1 ? 'dias' : 'dia'} de movimentação</div>
-    ${secoes || '<div class="dgr-chart-empty">Sem dados neste mês.</div>'}
+  const nDias = dados.periodoEstimado;
+  return `<div class="rel-aba-pane${ativa ? ' rel-aba-ativa' : ''}" data-aba-id="${aba.id}">
+    <div class="dgr-section-title"><i class="ti ${aba.icone}"></i>${_rankEsc(aba.titulo)} — ${nCent} ${nCent !== 1 ? 'centrais' : 'central'} · ${nDias} ${nDias !== 1 ? 'dias' : 'dia'} de movimentação</div>
+    ${secoes || `<div class="dgr-chart-empty">${_rankEsc(aba.vazio)}</div>`}
   </div>`;
 }
 
@@ -5594,16 +5635,16 @@ window.gerarRelatorioGiroUsina = async function() {
   if (!meses.length) { toast('Selecione ao menos um mês.', 'error'); return; }
 
   const nMeses = meses.length;
-  const rotulo = m => `${MESES_NOME_DG[m.mes]} de ${m.ano}`;
+  const abas   = _dgmAbasDoRelatorio(meses);
+  const nAbas  = abas.length;
 
-  const janela = _abrirJanelaRelatorio(`0 de ${nMeses} — ${rotulo(meses[0])}`);
+  const janela = _abrirJanelaRelatorio(`0 de ${nAbas} — ${abas[0].titulo}`);
   if (!janela) return;
 
   document.getElementById('rel-giro-usina-modal')?.classList.remove('open');
 
-  const stepId = m => `giro-usina-${m.ano}-${m.mes}`;
-  const step   = (id, st) => { if (typeof _lstepSet === 'function') _lstepSet(id, st); };
-  const barra  = pct => { if (typeof _lbarSet === 'function') _lbarSet(pct); };
+  const step  = (id, st) => { if (typeof _lstepSet === 'function') _lstepSet(id, st); };
+  const barra = pct => { if (typeof _lbarSet === 'function') _lbarSet(pct); };
 
   if (typeof showLoadingOverlay === 'function') {
     showLoadingOverlay('Gerando relatório', `Giro por usina — ${nMeses} ${nMeses !== 1 ? 'meses' : 'mês'}`);
@@ -5613,48 +5654,45 @@ window.gerarRelatorioGiroUsina = async function() {
   // "Restaurando sessão anterior" ao gerar um relatório.
   if (typeof loadingShowSteps === 'function') {
     loadingShowSteps([
-      ...meses.map(m => ({ id: stepId(m), icon: 'ti-calendar-month', label: rotulo(m) })),
+      ...abas.map(a => ({ id: `giro-usina-${a.id}`, icon: a.icone, label: a.titulo })),
       { id: 'giro-usina-montar', icon: 'ti-file-analytics', label: 'Montando o relatório' }
     ]);
   }
 
   try {
-    const porMes = [];
-    for (let i = 0; i < nMeses; i++) {
-      const mes = meses[i];
-      step(stepId(mes), 'running');
-      barra(Math.round((i / (nMeses + 1)) * 100));
-      _janelaRelatorioProgresso(janela, `${i} de ${nMeses} — ${rotulo(mes)}`);
-      // Cede a thread pro overlay e pra aba repintarem antes do mês travá-la.
+    const porAba = [];
+    for (let i = 0; i < nAbas; i++) {
+      const aba = abas[i];
+      step(`giro-usina-${aba.id}`, 'running');
+      barra(Math.round((i / (nAbas + 1)) * 100));
+      _janelaRelatorioProgresso(janela, `${i} de ${nAbas} — ${aba.titulo}`);
+      // Cede a thread pro overlay e pra aba repintarem antes do cálculo travá-la.
       await new Promise(r => setTimeout(r, 0));
 
-      porMes.push({
-        mes,
-        dados: buildGiroPorCentralMaterial(new Date(mes.ano, mes.mes, 1), new Date(mes.ano, mes.mes + 1, 0, 23, 59, 59))
-      });
-      step(stepId(mes), 'done');
+      porAba.push({ aba, dados: buildGiroPorCentralMaterial(aba.dtIni, aba.dtFim) });
+      step(`giro-usina-${aba.id}`, 'done');
     }
 
     step('giro-usina-montar', 'running');
-    barra(Math.round((nMeses / (nMeses + 1)) * 100));
+    barra(Math.round((nAbas / (nAbas + 1)) * 100));
     _janelaRelatorioProgresso(janela, 'Montando o relatório…');
 
-    const panes = porMes.map(({ mes, dados }, i) => _dgmMesPaneHtml(mes, dados, i === 0)).join('');
+    const panes = porAba.map(({ aba, dados }, i) => _dgmPaneHtml(aba, dados, i === 0)).join('');
 
-    // Opções dos filtros: união de TODOS os meses (o filtro é geral), pra que
+    // Opções dos filtros: união de TODAS as abas (o filtro é geral), pra que
     // uma central que só aparece em um mês continue selecionável nos outros.
     const setCentrais = new Set(), setMateriais = new Set();
-    porMes.forEach(({ dados }) => dados.centrais.forEach(c => {
+    porAba.forEach(({ dados }) => dados.centrais.forEach(c => {
       setCentrais.add(c.name);
       c.mats.forEach(m => setMateriais.add(m.name));
     }));
     const cmp = (a, b) => a.localeCompare(b, 'pt-BR');
     const filtros = _dgmFiltrosHtml([...setCentrais].sort(cmp), [...setMateriais].sort(cmp));
 
-    const abasBar = nMeses > 1
-      ? `<div class="rel-aba-bar">${meses.map((m, i) => `
-          <button type="button" class="rel-aba-btn${i === 0 ? ' active' : ''}" data-aba-id="mes-${m.ano}-${m.mes}" onclick="_dgrSwitchAba('mes-${m.ano}-${m.mes}', this)">
-            <i class="ti ti-calendar-month"></i> ${_dgmMesLabel(m.ano, m.mes)}
+    const abasBar = nAbas > 1
+      ? `<div class="rel-aba-bar">${abas.map((a, i) => `
+          <button type="button" class="rel-aba-btn${i === 0 ? ' active' : ''}${a.id === 'geral' ? ' rel-aba-geral' : ''}" data-aba-id="${a.id}" onclick="_dgrSwitchAba('${a.id}', this)" title="${_rankEsc(a.titulo)}">
+            <i class="ti ${a.icone}"></i> ${_rankEsc(a.rotulo)}
           </button>`).join('')}</div>`
       : '';
 
@@ -5685,6 +5723,10 @@ window.gerarRelatorioGiroUsina = async function() {
         font-family:'JetBrains Mono',monospace; font-size:10px;
         color:var(--dgr-text-dim, #94a3b8); margin-left:auto;
       }
+
+      /* A Geral não é "mais um mês": separa ela do resto da barra de abas. */
+      .rel-aba-geral { font-weight:800; }
+      .rel-aba-geral + .rel-aba-btn { margin-left:10px; }
       @media print { .dgm-filtros { display:none; } }
 
       /* Tudo centralizado; só a coluna de nome (a 1ª) fica à esquerda —
