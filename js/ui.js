@@ -2460,8 +2460,8 @@ function closePendIntegModal() {
 }
 
 /**
- * Exibe TODAS as NFs ou OS pendentes de integração SAP, sem filtro de
- * período ou central. Chamado pelos botões globais nas páginas Entradas/Saídas.
+ * Monta a lista de TODAS as NFs ou OS pendentes de integração SAP, sem filtro
+ * de período ou central.
  *
  * Lógica:
  *  • NFs: varre state.entradas inteiro; considera pendente qualquer registro
@@ -2471,6 +2471,74 @@ function closePendIntegModal() {
  *  • OS: varre state.saidas inteiro; considera pendente qualquer registro com
  *    campo `os` que não tenha correspondência no SAP (mov 201) da central,
  *    usando toda a história SAP.
+ *
+ * Extraída de openPendIntegGlobalModal para ser reaproveitada pela Visão
+ * Pendências do Analítico (pendencias.js), que precisa dos MESMOS itens mas
+ * com recorte de período/central próprio.
+ *
+ * @param {'NF'|'OS'} tipo
+ * @returns {object[]} itens pendentes, ordenados por central + data + doc
+ */
+function buildPendIntegGlobalItems(tipo) {
+  const { nfRefs, osRefs } = _pimGetSapCache(); // cache SAP — O(1) após primeira chamada
+  const items = [];
+
+  if (tipo === 'NF') {
+    (state.entradas || []).forEach(r => {
+      if (!r.nf) return;
+      // Mesma prioridade de calcPendentesIntegracao: centralCompra primeiro,
+      // fallback centralDestino — evita falso-positivo em NF de
+      // transferência (REF. gerada pelo SAP na central de destino não bate
+      // com a REF. da NF original).
+      const central = r.centralCompra || r.centralDestino || '';
+      if (!central) return;
+      const centralNFRefs = nfRefs.get(central) || new Set();
+      if (!centralNFRefs.has(_pimNormNF(r.nf))) {
+        items.push({
+          central, nf: r.nf,
+          material:  r.material   || '—',
+          fornecedor:r.fornecedor  || '—',
+          dtEmissao: r.dtEmissao  || '—',
+          dtDescarga:r.dtDescarga || '—',
+          peso: r.peso || 0, um: r.um || 'kg'
+        });
+      }
+    });
+    items.sort((a, b) =>
+      a.central.localeCompare(b.central, 'pt-BR') ||
+      (a.dtDescarga || a.dtEmissao).localeCompare(b.dtDescarga || b.dtEmissao) ||
+      String(a.nf).localeCompare(String(b.nf), 'pt-BR')
+    );
+  } else {
+    (state.saidas || []).forEach(r => {
+      if (!r.os) return;
+      if (!num(r.peso)) return; // peso 0 — ignorar
+      const central = r.central || '';
+      if (!central) return;
+      const centralOSRefs = osRefs.get(central) || new Set();
+      if (!centralOSRefs.has(_pimNormOS(r.os))) {
+        items.push({
+          central, os: r.os,
+          material:  r.material   || '—',
+          fornecedor:r.fornecedor  || '—',
+          dtEmissao: r.dtEmissao  || '—',
+          peso: r.peso || 0, um: r.um || 'kg'
+        });
+      }
+    });
+    items.sort((a, b) =>
+      a.central.localeCompare(b.central, 'pt-BR') ||
+      a.dtEmissao.localeCompare(b.dtEmissao) ||
+      String(a.os).localeCompare(String(b.os), 'pt-BR')
+    );
+  }
+
+  return items;
+}
+
+/**
+ * Exibe TODAS as NFs ou OS pendentes de integração SAP, sem filtro de
+ * período ou central. Chamado pelos botões globais nas páginas Entradas/Saídas.
  *
  * @param {'NF'|'OS'} tipo
  */
@@ -2507,58 +2575,7 @@ function openPendIntegGlobalModal(tipo) {
 
   // ── Computa após o browser pintar o spinner ──────────────────────────────
   setTimeout(() => {
-    const { nfRefs, osRefs } = _pimGetSapCache(); // cache SAP — O(1) após primeira chamada
-    let items = [];
-
-    if (tipo === 'NF') {
-      (state.entradas || []).forEach(r => {
-        if (!r.nf) return;
-        // Mesma prioridade de calcPendentesIntegracao: centralCompra primeiro,
-        // fallback centralDestino — evita falso-positivo em NF de
-        // transferência (REF. gerada pelo SAP na central de destino não bate
-        // com a REF. da NF original).
-        const central = r.centralCompra || r.centralDestino || '';
-        if (!central) return;
-        const centralNFRefs = nfRefs.get(central) || new Set();
-        if (!centralNFRefs.has(_pimNormNF(r.nf))) {
-          items.push({
-            central, nf: r.nf,
-            material:  r.material   || '—',
-            fornecedor:r.fornecedor  || '—',
-            dtEmissao: r.dtEmissao  || '—',
-            dtDescarga:r.dtDescarga || '—',
-            peso: r.peso || 0, um: r.um || 'kg'
-          });
-        }
-      });
-      items.sort((a, b) =>
-        a.central.localeCompare(b.central, 'pt-BR') ||
-        (a.dtDescarga || a.dtEmissao).localeCompare(b.dtDescarga || b.dtEmissao) ||
-        String(a.nf).localeCompare(String(b.nf), 'pt-BR')
-      );
-    } else {
-      (state.saidas || []).forEach(r => {
-        if (!r.os) return;
-        if (!num(r.peso)) return; // peso 0 — ignorar
-        const central = r.central || '';
-        if (!central) return;
-        const centralOSRefs = osRefs.get(central) || new Set();
-        if (!centralOSRefs.has(_pimNormOS(r.os))) {
-          items.push({
-            central, os: r.os,
-            material:  r.material   || '—',
-            fornecedor:r.fornecedor  || '—',
-            dtEmissao: r.dtEmissao  || '—',
-            peso: r.peso || 0, um: r.um || 'kg'
-          });
-        }
-      });
-      items.sort((a, b) =>
-        a.central.localeCompare(b.central, 'pt-BR') ||
-        a.dtEmissao.localeCompare(b.dtEmissao) ||
-        String(a.os).localeCompare(String(b.os), 'pt-BR')
-      );
-    }
+    const items = buildPendIntegGlobalItems(tipo);
 
     // Atualiza contadores nos botões globais
     const nfCountEl = document.getElementById('pend-global-nf-count');
@@ -2645,7 +2662,7 @@ function togglePendConsiderados(central, tipo) {
   }
 }
 
-Object.assign(window, { openBreakdownModal, closeBreakdownModal, openPendIntegModal, closePendIntegModal, openPendIntegGlobalModal, pimSetMonth, pimGoToPage, _pimClearSapCache, togglePendConsiderados });
+Object.assign(window, { openBreakdownModal, closeBreakdownModal, openPendIntegModal, closePendIntegModal, openPendIntegGlobalModal, buildPendIntegGlobalItems, pimSetMonth, pimGoToPage, _pimClearSapCache, togglePendConsiderados });
 
 // ── Conflict Resolution Modal ───────────────────────────────
 let _lrcDetailKey = null;

@@ -11831,3 +11831,275 @@ tr.sap-fechamento td {
   padding-top: 10px;
   margin-top: 4px;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   VISÃO PENDÊNCIAS — Dashboard Analítico (js/pendencias.js)
+   ═══════════════════════════════════════════════════════════ */
+
+/* Contador na própria aba, ao lado do rótulo */
+.an-view-btn-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: var(--amber-bg);
+  color: var(--amber);
+  font-size: 10px;
+  font-weight: 700;
+  font-family: var(--mono);
+  line-height: 1;
+}
+
+/* ── Barra de ações da visão ── */
+.pv-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.pv-toolbar-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-family: var(--mono);
+  color: var(--text3);
+}
+.pv-toolbar-info i { font-size: 13px; }
+.pv-toolbar-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* Botões "Considerar todas" — ligados usam a mesma cor de destaque dos
+   chips de pendente considerado nos cards da Visão Micro */
+.pv-consider-all.is-on {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+  color: var(--accent);
+  font-weight: 600;
+}
+.pv-consider-all:disabled { opacity: .45; cursor: not-allowed; }
+
+/* ── As 3 tabelas ── */
+.pv-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(480px, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+.pv-card { display: flex; flex-direction: column; overflow: hidden; }
+/* Sem border-bottom aqui: quem fecha o cabeçalho é a .pv-card-sub logo abaixo
+   (senão ficam duas linhas coladas em volta do subtítulo). */
+.pv-card-header { display: flex; align-items: center; gap: 8px; border-bottom: none; padding-bottom: 8px; }
+.pv-card-count {
+  margin-left: auto;
+  font-size: 10.5px;
+  font-family: var(--mono);
+  font-weight: 700;
+  padding: 2px 9px;
+  border-radius: 10px;
+  background: var(--bg3);
+  color: var(--text2);
+  white-space: nowrap;
+}
+.pv-card-os  .pv-card-count { background: var(--red-bg);   color: var(--red); }
+.pv-card-nf  .pv-card-count { background: var(--green-bg); color: var(--green); }
+.pv-card-est .pv-card-count { background: var(--amber-bg); color: var(--amber); }
+.pv-card-sub {
+  padding: 0 18px 11px;
+  font-size: 10.5px;
+  color: var(--text3);
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+}
+.pv-card-body { max-height: 460px; overflow: auto; }
+
+.pv-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.pv-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border2);
+  padding: 8px 12px;
+  text-align: left;
+  font-size: 9.5px;
+  font-family: var(--mono);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--text3);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.pv-table tbody td {
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text2);
+  vertical-align: middle;
+}
+.pv-table tbody tr:last-child td { border-bottom: none; }
+.pv-table tbody tr:hover td { background: var(--bg3); }
+
+.pv-central-cell {
+  border-right: 1px solid var(--border);
+  vertical-align: top !important;
+  white-space: nowrap;
+}
+.pv-central-name { display: block; font-weight: 600; color: var(--text); font-size: 12px; }
+.pv-central-reg  { display: block; font-size: 10px; color: var(--text3); margin-top: 1px; }
+.pv-mat-cell { color: var(--text); }
+.pv-badge-cell, .pv-consider-cell { text-align: center; white-space: nowrap; }
+.pv-consider-cell { border-left: 1px solid var(--border); vertical-align: top !important; }
+
+/* O badge da coluna Pendências — único elemento clicável da linha */
+.pv-badge {
+  min-width: 34px;
+  padding: 3px 10px;
+  border-radius: 11px;
+  border: 1px solid transparent;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: filter .12s, box-shadow .12s;
+}
+.pv-badge:hover { filter: brightness(1.08); box-shadow: 0 2px 8px rgba(0,0,0,.14); }
+.pv-badge-os  { background: var(--red-bg);   color: var(--red);   border-color: var(--red-border); }
+.pv-badge-nf  { background: var(--green-bg); color: var(--green); border-color: var(--green-border); }
+.pv-badge-est { background: var(--amber-bg); color: var(--amber); border-color: var(--border2); }
+
+.pv-consider-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border2);
+  background: var(--bg3);
+  color: var(--text3);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all .12s;
+}
+.pv-consider-btn:hover { color: var(--text); border-color: var(--border3); }
+.pv-consider-btn.is-on {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 700;
+}
+.pv-consider-btn i { font-size: 13px; }
+
+.pv-tag-warn {
+  font-size: 9px;
+  font-family: var(--mono);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--amber-bg);
+  color: var(--amber);
+  vertical-align: middle;
+}
+
+.pv-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 34px 16px;
+  color: var(--text3);
+  font-size: 12px;
+}
+.pv-empty i { font-size: 24px; color: var(--green); opacity: .7; }
+
+/* Chips de data — modal de datas sem lançamento + coluna Datas do GERAL */
+.pv-date-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+.pv-date-chip {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 5px 10px;
+  border-radius: 7px;
+  border: 1px solid var(--border2);
+  background: var(--amber-bg);
+  color: var(--amber);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+.pv-date-chip span { font-size: 9px; opacity: .75; text-transform: uppercase; letter-spacing: .06em; }
+.pv-date-chip-sm { display: inline-block; padding: 1px 6px; font-size: 10px; border-radius: 5px; margin: 1px 2px 1px 0; }
+
+/* ── Modal GERAL ── */
+.pgm-dialog { width: min(1280px, 96vw); }
+.pgm-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 20px 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg2);
+  flex-shrink: 0;
+}
+.pgm-tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  padding: 0 5px;
+  margin-left: 6px;
+  border-radius: 8px;
+  background: var(--bg3);
+  color: var(--text3);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+}
+.pim-tab.active .pgm-tab-count { background: var(--accent-dim); color: var(--accent); }
+.pgm-body { padding: 0; display: block; }
+.pgm-section { padding: 14px 20px 18px; border-bottom: 1px solid var(--border); }
+.pgm-section:last-child { border-bottom: none; }
+.pgm-section-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 10px;
+  font-size: 10px;
+  font-family: var(--mono);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--text2);
+  font-weight: 700;
+}
+.pgm-section-hint {
+  margin-left: auto;
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 500;
+  color: var(--text3);
+  font-size: 10.5px;
+}
+.pgm-table thead th { background: var(--bg3); }
+.pgm-dates-cell { max-width: 460px; line-height: 1.9; }
+
+.pgm-date-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 6px;
+}
+.pgm-date-cell {
+  padding: 7px 9px;
+  border-radius: 8px;
+  border: 1px solid var(--border2);
+  background: var(--bg3);
+}
+.pgm-date-cell-day { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--text); }
+.pgm-date-cell-dow { font-size: 9.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--text3); }
+.pgm-date-cell-qty { font-size: 10px; color: var(--amber); margin-top: 3px; font-family: var(--mono); }

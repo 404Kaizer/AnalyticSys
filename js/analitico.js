@@ -183,16 +183,26 @@ function anSwitchView(view) {
   const caption   = document.getElementById('an-view-caption');
   if (!btnMicro || !btnInv || !paneMicro || !paneInv) return;
 
-  const isInv = view === 'inventario';
-  btnMicro.classList.toggle('active', !isInv);
+  // Terceira visão (Pendências) é opcional no DOM — se o pane não existir,
+  // o switch continua funcionando exatamente como antes (micro/inventário).
+  const btnPend  = document.getElementById('an-view-btn-pendencias');
+  const panePend = document.getElementById('an-view-pane-pendencias');
+
+  const isInv  = view === 'inventario';
+  const isPend = view === 'pendencias' && !!panePend;
+  const isMicro = !isInv && !isPend;
+
+  btnMicro.classList.toggle('active', isMicro);
   btnInv.classList.toggle('active', isInv);
-  paneMicro.style.display = isInv ? 'none' : '';
-  paneInv.style.display   = isInv ? '' : 'none';
+  if (btnPend) btnPend.classList.toggle('active', isPend);
+  paneMicro.style.display = isMicro ? '' : 'none';
+  paneInv.style.display   = isInv   ? '' : 'none';
+  if (panePend) panePend.style.display = isPend ? '' : 'none';
 
   // Ao voltar para a Visão Micro, garante que o piso de altura esteja
   // correto — cobre o caso em que uma análise rodou enquanto esta aba
   // estava oculta (offsetHeight 0 na hora da travinha original).
-  if (!isInv) _updateMicroContainerHeightLock(false);
+  if (isMicro) _updateMicroContainerHeightLock(false);
 
   // Legenda ao lado das abas substitui o título repetido que existia em
   // cada visão (ex.: "Visão Micro — Por Filial e Material"), já que a
@@ -200,8 +210,15 @@ function anSwitchView(view) {
   if (caption) {
     caption.textContent = isInv
       ? 'Fechamento de estoque por central e material'
-      : 'Saúde e criticidade por filial e material';
+      : isPend
+        ? 'OS, NFs e lançamentos pendentes por central e material'
+        : 'Saúde e criticidade por filial e material';
   }
+
+  // Visão Pendências: renderiza sob demanda (o cálculo de ausências de
+  // lançamento é pesado e a aba não é aberta em toda análise) — mesma
+  // filosofia do Inventário logo abaixo.
+  if (isPend && typeof renderPendenciasView === 'function') renderPendenciasView();
 
   // Ao entrar na Visão Inventário pela primeira vez na sessão, gera
   // automaticamente o inventário do mês já selecionado por padrão no
@@ -283,6 +300,8 @@ function _rodarAnaliticoCore(dtIni, dtFim, onDone, silent) {
   // Limpa estado de pendentes considerados — cada nova análise começa do zero
   if (window._pendConsiderados) window._pendConsiderados = {};
   if (window._pendCache)        window._pendCache        = {};
+  // Visão Pendências: derruba o cache dela também (período novo = dados novos)
+  if (typeof _pendViewInvalidate === 'function') _pendViewInvalidate();
 
   // ── Build date-bound helpers ──────────────────────────────
   function inPeriod(dateStr) {
@@ -1616,11 +1635,17 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
  * precisam estar populados (preenchidos ao fim de _rodarAnaliticoCore).
  *
  * @param {string} central - nome da central a atualizar
+ * @param {object} [opts]
+ * @param {boolean} [opts.skipMacro] - não re-renderiza os painéis Macro
+ *        (donuts + rankings). Usado pelo "Considerar todas" da Visão
+ *        Pendências, que atualiza N centrais em sequência e chama
+ *        renderMacroPanels UMA vez no fim — sem isso o donut seria
+ *        redesenhado uma vez por central.
  * @returns {boolean} true se conseguiu atualizar cirurgicamente; false se
  *          algum pré-requisito não foi encontrado (o chamador deve então
  *          cair para o render completo como fallback de segurança).
  */
-function refreshCentralCard(central) {
+function refreshCentralCard(central, opts = {}) {
   if (!window.__analiticoResults || !window.__analiticoDtIni || !window.__analiticoDtFim) return false;
 
   const r = window.__analiticoResults.find(item => item.central === central);
@@ -1671,7 +1696,7 @@ function refreshCentralCard(central) {
   // Recalcula window._rankByLevel (e demais dados consumidos pelos relatórios)
   // com o estado atualizado de pendentes considerados — sem isso, os
   // relatórios continuariam exibindo os valores anteriores ao toggle.
-  if (typeof renderMacroPanels === 'function') {
+  if (!opts.skipMacro && typeof renderMacroPanels === 'function') {
     const th = typeof getHealthThresholds === 'function' ? getHealthThresholds() : {};
     renderMacroPanels(window.__analiticoResults, th, window.__analiticoDtIni, window.__analiticoDtFim);
   }
@@ -2035,6 +2060,20 @@ function renderAnaliticoMicro(results, dtIni, dtFim, silent) {
   // análise — inclusive na pré-carga silenciosa do boot.
   if (typeof window.invSyncMonthFromPeriod === 'function') {
     window.invSyncMonthFromPeriod(dtIni);
+  }
+
+  // Visão Pendências. O contador da aba é atualizado SEMPRE: ele conta só
+  // OS+NF, que já estão prontas em _pendCache (populado logo acima, por
+  // buildPendIntegSection em cada card) — custo desprezível.
+  // A visão inteira, essa sim, só é re-renderizada se a aba estiver ABERTA
+  // agora: o levantamento de dias sem lançamento é pesado e não deve rodar em
+  // toda análise para uma aba que ninguém está olhando. Fechada, ela se monta
+  // sozinha na próxima vez que o usuário entrar (ver anSwitchView).
+  const _panePend = document.getElementById('an-view-pane-pendencias');
+  if (_panePend && _panePend.style.display !== 'none' && typeof renderPendenciasView === 'function') {
+    renderPendenciasView();
+  } else if (typeof pendAtualizarContadorAba === 'function') {
+    pendAtualizarContadorAba();
   }
   if (typeof _lstepSet === 'function') { _lstepSet('an-render', 'done'); }
   if (typeof _lbarSet === 'function') { _lbarSet(100); }

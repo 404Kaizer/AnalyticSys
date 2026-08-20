@@ -1599,6 +1599,10 @@
             <button class="an-view-btn" id="an-view-btn-inventario" onclick="anSwitchView('inventario')">
               <i class="ti ti-clipboard-check"></i> Visão Inventário
             </button>
+            <button class="an-view-btn" id="an-view-btn-pendencias" onclick="anSwitchView('pendencias')">
+              <i class="ti ti-alert-square-rounded"></i> Visão Pendências
+              <span class="an-view-btn-count" id="an-view-btn-pend-count" style="display:none">0</span>
+            </button>
             <span class="an-view-caption" id="an-view-caption">Saúde e criticidade por filial e material</span>
           </div>
 
@@ -1827,6 +1831,74 @@
           <div id="an-micro-container"></div>
 
           </div><!-- /an-view-pane-micro -->
+
+          <!-- ═══ VISÃO PENDÊNCIAS ═══ -->
+          <div class="an-view-pane" id="an-view-pane-pendencias" style="display:none">
+
+            <div class="pv-toolbar">
+              <div class="pv-toolbar-info">
+                <i class="ti ti-calendar-event"></i>
+                <span id="pv-periodo-label">—</span>
+              </div>
+              <div class="pv-toolbar-actions">
+                <button class="btn pv-consider-all" id="pv-consider-all-nf" type="button"
+                        onclick="pendConsiderarTodas('nf')"
+                        title="Considerar as NFs pendentes de TODAS as centrais no cálculo do Analítico">
+                  <i class="ti ti-file-invoice"></i> <span id="pv-consider-all-nf-label">Considerar todas as NFs</span>
+                </button>
+                <button class="btn pv-consider-all" id="pv-consider-all-os" type="button"
+                        onclick="pendConsiderarTodas('os')"
+                        title="Considerar as OS pendentes de TODAS as centrais no cálculo do Analítico">
+                  <i class="ti ti-file-text"></i> <span id="pv-consider-all-os-label">Considerar todas as OS</span>
+                </button>
+                <button class="btn btn-primary" type="button" onclick="pendOpenGeral()">
+                  <i class="ti ti-report-analytics"></i> <span>Ver GERAL</span>
+                </button>
+              </div>
+            </div>
+
+            <div id="pv-empty" class="empty-state" style="padding:48px 20px">
+              <i class="ti ti-alert-square-rounded" style="font-size:36px;margin-bottom:10px;display:block"></i>
+              <p>Rode uma análise no período desejado para levantar as pendências das centrais.</p>
+            </div>
+
+            <div id="pv-content" style="display:none">
+              <div class="pv-grid">
+
+                <!-- ── OS (Saídas) ── -->
+                <div class="table-card pv-card pv-card-os">
+                  <div class="table-header pv-card-header">
+                    <span class="table-title"><i class="ti ti-file-text"></i> OS — Saídas</span>
+                    <span class="pv-card-count" id="pv-count-os">—</span>
+                  </div>
+                  <div class="pv-card-sub">Saídas com OS que não aparecem no SAP (mov. 201)</div>
+                  <div class="pv-card-body" id="pv-body-os"></div>
+                </div>
+
+                <!-- ── NF (Entradas) ── -->
+                <div class="table-card pv-card pv-card-nf">
+                  <div class="table-header pv-card-header">
+                    <span class="table-title"><i class="ti ti-file-invoice"></i> NF — Entradas</span>
+                    <span class="pv-card-count" id="pv-count-nf">—</span>
+                  </div>
+                  <div class="pv-card-sub">Entradas com NF que não aparecem no SAP (mov. 101/801)</div>
+                  <div class="pv-card-body" id="pv-body-nf"></div>
+                </div>
+
+                <!-- ── ESTOQUE (Lançamentos) ── -->
+                <div class="table-card pv-card pv-card-est">
+                  <div class="table-header pv-card-header">
+                    <span class="table-title"><i class="ti ti-clipboard-off"></i> Estoque — Lançamentos</span>
+                    <span class="pv-card-count" id="pv-count-est">—</span>
+                  </div>
+                  <div class="pv-card-sub">Dias esperados sem lançamento de estoque no período</div>
+                  <div class="pv-card-body" id="pv-body-est"></div>
+                </div>
+
+              </div>
+            </div>
+
+          </div><!-- /an-view-pane-pendencias -->
 
           <!-- ═══ VISÃO INVENTÁRIO ═══ -->
           <div class="an-view-pane" id="an-view-pane-inventario" style="display:none">
@@ -5271,6 +5343,38 @@
 
 <!-- MODAL: Breakdown de Movimentações (Micro) -->
 <!-- MODAL: Pendentes de Integração SAP -->
+<!-- ═══ MODAL GERAL DE PENDÊNCIAS (Visão Pendências do Analítico) ═══ -->
+<div class="pim-overlay" id="pgm-overlay" aria-hidden="true">
+  <div class="pim-dialog pgm-dialog" role="dialog" aria-modal="true" aria-labelledby="pgm-title">
+    <div class="pim-header">
+      <div class="pim-header-text">
+        <div class="pim-kicker"><i class="ti ti-alert-square-rounded"></i> Pendências das Centrais</div>
+        <div class="pim-title" id="pgm-title">Visão Geral</div>
+        <div class="pim-sub" id="pgm-sub">—</div>
+      </div>
+      <button class="btn btn-primary" type="button" onclick="pendCloseGeral()">
+        <i class="ti ti-x"></i> <span>Fechar</span>
+      </button>
+    </div>
+    <div class="pgm-tabs">
+      <button class="pim-tab active" id="pgm-tab-OS"  type="button" onclick="pendGeralSetTab('OS')">OS — Saídas <span class="pgm-tab-count" id="pgm-tab-OS-count">0</span></button>
+      <button class="pim-tab"        id="pgm-tab-NF"  type="button" onclick="pendGeralSetTab('NF')">NFs — Entradas <span class="pgm-tab-count" id="pgm-tab-NF-count">0</span></button>
+      <button class="pim-tab"        id="pgm-tab-EST" type="button" onclick="pendGeralSetTab('EST')">Estoque — Lançamentos <span class="pgm-tab-count" id="pgm-tab-EST-count">0</span></button>
+    </div>
+    <div class="pim-search-row">
+      <i class="ti ti-search"></i>
+      <input type="text" id="pgm-search" class="micro-filter-search" style="padding-left:30px"
+        placeholder="Buscar por central, material, NF/OS ou data…" oninput="pendGeralSetSearch(this.value)">
+    </div>
+    <div class="pim-filter-bar" id="pgm-filter-bar" style="display:none"></div>
+    <div class="pim-body pgm-body" id="pgm-body"></div>
+    <div class="pim-footer">
+      <span class="pim-footer-count" id="pgm-count">—</span>
+      <span style="font-size:11px;color:var(--text3)" id="pgm-footer-note">—</span>
+    </div>
+  </div>
+</div>
+
 <div class="pim-overlay" id="pim-overlay" aria-hidden="true">
   <div class="pim-dialog" role="dialog" aria-modal="true" aria-labelledby="pim-title">
     <div class="pim-header">
@@ -5577,6 +5681,7 @@
 <script defer src="js/capacidades.js"></script>
 <script defer src="js/dashboard.js"></script>
 <script defer src="js/analitico.js"></script>
+<script defer src="js/pendencias.js"></script>
 <script defer src="js/macro.js"></script>
 <script defer src="js/help-badges.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
