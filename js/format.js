@@ -2750,7 +2750,6 @@ function _cubDefaults() {
   _CUB_FAIXAS.forEach(f => { fatores[f.key] = f.def; });
   return {
     regional: '',
-    analista: '',
     weekOffset: 0,
     params: { pct: 25, teto: 6, minCarretas: 1, fatores },
     overrides: {},
@@ -2780,9 +2779,6 @@ function _cubGet() {
       }
     : d;
   _cubState.weekOffset = 0; // a semana sempre reabre na atual
-  if (!_cubState.analista) {
-    _cubState.analista = window.currentUser?.nome_exibicao || window.currentUser?.nome_completo || '';
-  }
   return _cubState;
 }
 
@@ -2963,7 +2959,6 @@ function cubRenderTudo() {
   }
 
   const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
-  setVal('cub-f-analista',   st.analista);
   setVal('cub-f-orientacao', st.orientacao);
   setVal('cub-f-alerta',     st.alerta);
   ['pct', 'teto', 'minCarretas'].forEach(k => setVal('cub-p-' + k, st.params[k]));
@@ -2986,11 +2981,11 @@ function cubRenderCartao(rebuildAjustes) {
   const elBadge = document.getElementById('cub-c-badge');
   if (elBadge) elBadge.innerHTML = '<span class="fech-card-badge-icon">' + _FECH_ICON_TARGET + '</span><span>Meta semanal</span>';
 
-  const elAnalista = document.getElementById('cub-c-analista');
-  if (elAnalista) {
-    const nome = (st.analista || '').trim();
-    elAnalista.innerHTML = nome ? '<i class="ti ti-user-circle"></i>' + escapeHtml(nome) : '';
-    elAnalista.style.display = nome ? 'inline-flex' : 'none';
+  const elRegional = document.getElementById('cub-c-regional');
+  if (elRegional) {
+    const nome = (st.regional || '').trim();
+    elRegional.innerHTML = nome ? '<i class="ti ti-map-pin"></i>' + escapeHtml(nome) : '';
+    elRegional.style.display = nome ? 'inline-flex' : 'none';
   }
 
   const elSemana = document.getElementById('cub-c-semana');
@@ -3147,10 +3142,7 @@ function _cubPlainText() {
   const p = st.params;
   const partes = [];
   partes.push('META SEMANAL DE CUBAGEM DAS CARRETAS');
-  const cab = [];
-  if (st.regional) cab.push('Regional: ' + st.regional);
-  if ((st.analista || '').trim()) cab.push('Analista: ' + st.analista.trim());
-  if (cab.length) partes.push(cab.join(' · '));
+  if (st.regional) partes.push('Regional: ' + st.regional);
   partes.push('Semana: ' + _fechFmtDate(semana.ini) + ' a ' + _fechFmtDate(semana.fim));
   partes.push('QUANTIDADE MÍNIMA POR FILIAL:');
   linhas.forEach(l => {
@@ -3192,7 +3184,7 @@ function _cubAbrirPrint() {
     '.head{padding:22px 28px 20px;text-align:center;background:linear-gradient(180deg,#1c1608 0%,#0e0b04 100%)}' +
     '.badge{display:inline-block;padding:10px 20px;border-radius:8px;background:linear-gradient(135deg,#f5c542 0%,#b8860b 100%);color:#1a1305;font-family:Archivo,sans-serif;font-size:12px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;margin-bottom:16px}' +
     '.title{font-family:"Archivo Black",Archivo,sans-serif;font-size:19px;color:#fff;line-height:1.25;text-transform:uppercase}' +
-    '.analista{margin-top:10px;font-family:Archivo,sans-serif;font-size:11.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#fcd34d}' +
+    '.regional{margin-top:10px;font-family:Archivo,sans-serif;font-size:11.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#fcd34d}' +
     '.meta{font-family:Archivo,sans-serif;font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;text-align:center;padding:9px 28px;color:#fcd34d;background:rgba(212,175,55,.14);border-top:1px solid rgba(212,175,55,.3);border-bottom:1px solid rgba(212,175,55,.3)}' +
     '.body{padding:22px 28px 24px;color:#e8dfc4}' +
     'table{width:100%;border-collapse:collapse;font-family:Archivo,sans-serif}' +
@@ -3215,10 +3207,9 @@ function _cubAbrirPrint() {
     '<div class="logo"><img src="' + logoUrl + '" alt="Concrelagos"></div>' +
     '<div class="head"><div class="badge">Meta semanal</div>' +
     '<div class="title">Cubagem mínima das carretas</div>' +
-    ((st.analista || '').trim() ? '<div class="analista">' + escapeHtml(st.analista.trim()) + '</div>' : '') +
+    (st.regional ? '<div class="regional">' + escapeHtml(st.regional) + '</div>' : '') +
     '</div>' +
-    '<div class="meta">Semana: ' + _fechFmtDate(semana.ini) + ' a ' + _fechFmtDate(semana.fim) +
-    (st.regional ? ' · ' + escapeHtml(st.regional) : '') + '</div>' +
+    '<div class="meta">Semana: ' + _fechFmtDate(semana.ini) + ' a ' + _fechFmtDate(semana.fim) + '</div>' +
     '<div class="body"><table><thead><tr><th>Filial</th>' +
     _CUB_SUBS.map(s => '<th>' + escapeHtml(s.label) + '</th>').join('') +
     '</tr></thead><tbody>' + rows + '</tbody></table>' +
