@@ -1864,6 +1864,7 @@ const _fechConfig = {
   semanal: { badgeIcon: _FECH_ICON_CALENDAR, priority: 'Rotina obrigatória' },
   mensal:  { badgeIcon: _FECH_ICON_BOX,      priority: 'Prioridade máxima' },
   metas:   { badgeIcon: _FECH_ICON_TARGET,   priority: 'Acompanhamento mensal' },
+  cubagens:{ badgeIcon: _FECH_ICON_TARGET,   priority: 'Acompanhamento semanal' },
 };
 
 // ── Campos padrão por tipo — recalculados com a data atual a cada chamada ──
@@ -1988,6 +1989,14 @@ function fechamentoSwitchTipo(tipo) {
 
   const card = document.getElementById('fech-card');
   if (card) card.className = 'fech-card fech-theme-' + tipo;
+
+  // Painéis: os três tipos de texto dividem o mesmo builder; Cubagens tem o seu.
+  const ehCub     = tipo === 'cubagens';
+  const paneTexto = document.getElementById('fech-pane-texto');
+  const paneCub   = document.getElementById('fech-pane-cubagens');
+  if (paneTexto) paneTexto.style.display = ehCub ? 'none' : '';
+  if (paneCub)   paneCub.style.display   = ehCub ? ''     : 'none';
+  if (ehCub) { cubRenderTudo(); return; }
 
   _fechLoadFormFromState();
   fechRenderFromForm(true); // true = não reagenda salvamento ao só trocar de aba
@@ -2152,6 +2161,7 @@ function _fechRenderCard() {
 
 // ── Reconstrói texto plano a partir dos campos (WhatsApp / imagem) ──
 function _fechGetPlainText() {
+  if (_fechTipo === 'cubagens') return _cubPlainText();
   const f = _fechState[_fechTipo];
   if (!f) return '';
   const parts = [];
@@ -2257,6 +2267,17 @@ function _fechGerarImagemCanvas(text, cfg) {
       badgeBg: '#6d28d9', badgeFg: '#ffffff',
       bodyFg: '#d9d2e8',
       footerFg: '#4c2f73',
+      titleFg: '#ffffff',
+    },
+    cubagens: {
+      bg1: '#0e0b04', bg2: '#1c1608',
+      accent: '#b8860b', accentLight: '#f5c542',
+      accentGlow: 'rgba(245,197,66,0.18)',
+      stripe: '#3a2d0d',
+      badgeText: 'META SEMANAL DE CUBAGEM',
+      badgeBg: '#b8860b', badgeFg: '#1a1305',
+      bodyFg: '#e8dfc4',
+      footerFg: '#7c6420',
       titleFg: '#ffffff',
     },
   };
@@ -2452,6 +2473,8 @@ function _fechRoundRect(ctx, x, y, w, h, r) {
 
 // ── Abrir janela de print ────────────────────────────────
 function fechamentoAbrirPrint() {
+  // Cubagens tem card próprio (tabela por central) — página de impressão dedicada.
+  if (_fechTipo === 'cubagens') { _cubAbrirPrint(); return; }
   const f = _fechState[_fechTipo];
   if (!f) return;
   const cfg = _fechConfig[_fechTipo];
@@ -2676,4 +2699,549 @@ Object.assign(window, {
   fechUpdateItem, fechRemoveItem, fechAddItem,
   fechUpdateAlert, fechRemoveAlert, fechAddAlert,
   fechRenderFromForm, fechamentoCopiarWhatsapp, fechamentoGerarImagem, fechamentoAbrirPrint
+});
+
+// ═══════════════════════════════════════════════════════════
+// CUBAGENS — meta semanal de cubagem de carretas por central
+// (4ª aba do modal de Fechamento)
+//
+// Quantidade a cubar = ABASTECIMENTO modulado pelo GIRO:
+//   • base   = carretas recebidas por semana (NFs distintas de agregado
+//              na janela das 4 semanas anteriores à semana da meta);
+//   • fator  = faixa de giro do material NAQUELA central — giro alto
+//              significa material girando bem, exige menos conferência;
+//              giro baixo/parado puxa a amostragem pra cima;
+//   • piso/teto = 1 a N cubagens; central que praticamente não recebe
+//              o material fica com meta 0 (não há carreta pra cubar).
+//
+// O giro NÃO é recalculado aqui: vem de buildGiroPorCentralMaterial
+// (dashboard.js), a mesma fonte do modal Giro & Cobertura, agregado
+// por subcategoria (Σ saídas ÷ Σ estoque médio). Assim a meta nunca
+// diverge do que o analista vê na tela de giro.
+// ═══════════════════════════════════════════════════════════
+
+const _CUB_KEY = 'analyticsys_cubagens_v1';
+
+// Colunas do cartão. "Areia/pó" = agregado miúdo, "britas" = graúdo —
+// a subcategoria sai do CADASTRO do material (getCatSubKeyDoCadastro), não
+// do nome: "PÓ DE BRITA" cadastrado como Agregado Miúdo tem que cair em
+// Areias, e a heurística por nome jogaria em Britas.
+const _CUB_SUBS = [
+  { key: 'agregado_miudo',  label: 'Areias', plain: 'areias' },
+  { key: 'agregado_graudo', label: 'Britas', plain: 'britas' },
+];
+
+// Faixas de giro em ordem decrescente. Os limiares são os MESMOS já usados
+// por _giroNivelPontos (dashboard.js) — não existe uma segunda régua de
+// giro no sistema, só um fator de amostragem por faixa.
+const _CUB_FAIXAS = [
+  { key: 'muitoAlto',  min: 4.0, label: 'muito alto',  def: 0.6 },
+  { key: 'alto',       min: 2.0, label: 'alto',        def: 0.8 },
+  { key: 'saudavel',   min: 1.0, label: 'saudável',    def: 1.0 },
+  { key: 'baixo',      min: 0.5, label: 'baixo',       def: 1.2 },
+  { key: 'muitoBaixo', min: 0.2, label: 'muito baixo', def: 1.4 },
+  { key: 'parado',     min: -1,  label: 'parado',      def: 1.6 },
+];
+
+const _CUB_SEMANAS_JANELA = 4;
+
+function _cubDefaults() {
+  const fatores = {};
+  _CUB_FAIXAS.forEach(f => { fatores[f.key] = f.def; });
+  return {
+    regional: '',
+    analista: '',
+    weekOffset: 0,
+    params: { pct: 25, teto: 6, minCarretas: 1, fatores },
+    overrides: {},
+    orientacao: 'Realize no mínimo a quantidade de cubagens indicadas para cada filial em areias e britas durante o período da semana.',
+    alerta: 'A META É MÍNIMA E OBRIGATÓRIA. Não deixe nenhuma filial abaixo da meta.',
+  };
+}
+
+let _cubState     = null;
+let _cubSaveTimer = null;
+let _cubCache     = null; // { chave, carretas, giro } — evita refazer o giro a cada tecla
+let _cubLast      = null; // último cálculo renderizado (índice usado pelos inputs de ajuste)
+
+function _cubGet() {
+  if (_cubState) return _cubState;
+  const d = _cubDefaults();
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(_CUB_KEY) || 'null'); } catch (e) {}
+  _cubState = (saved && typeof saved === 'object')
+    ? {
+        ...d, ...saved,
+        params: {
+          ...d.params, ...(saved.params || {}),
+          fatores: { ...d.params.fatores, ...((saved.params || {}).fatores || {}) }
+        },
+        overrides: (saved.overrides && typeof saved.overrides === 'object') ? saved.overrides : {}
+      }
+    : d;
+  _cubState.weekOffset = 0; // a semana sempre reabre na atual
+  if (!_cubState.analista) {
+    _cubState.analista = window.currentUser?.nome_exibicao || window.currentUser?.nome_completo || '';
+  }
+  return _cubState;
+}
+
+function _cubSave() {
+  clearTimeout(_cubSaveTimer);
+  _cubSaveTimer = setTimeout(() => {
+    try {
+      localStorage.setItem(_CUB_KEY, JSON.stringify(_cubState));
+      const ind = document.getElementById('cub-saved-indicator');
+      if (ind) { ind.style.opacity = '1'; setTimeout(() => ind.style.opacity = '0', 1500); }
+    } catch (e) {}
+  }, 500);
+}
+
+// ── Semana da meta (segunda a domingo) e janela de dados ──────────────
+function _cubSemana(offset) {
+  const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+  const dow  = hoje.getDay();                 // 0 = domingo
+  const ini  = new Date(hoje);
+  ini.setDate(hoje.getDate() + (dow === 0 ? -6 : 1 - dow) + (offset || 0) * 7);
+  const fim = new Date(ini); fim.setDate(ini.getDate() + 6);
+  return { ini, fim };
+}
+
+// Janela de apuração: as 4 semanas COMPLETAS que antecedem a semana da meta.
+// Andar de semana no cartão anda a janela junto — a meta de uma semana
+// sempre olha pro ritmo imediatamente anterior a ela.
+function _cubJanela(semana) {
+  const dtFim = new Date(semana.ini); dtFim.setDate(dtFim.getDate() - 1); dtFim.setHours(23, 59, 59, 999);
+  const dtIni = new Date(dtFim);      dtIni.setDate(dtIni.getDate() - (_CUB_SEMANAS_JANELA * 7 - 1)); dtIni.setHours(0, 0, 0, 0);
+  return { dtIni, dtFim, semanas: _CUB_SEMANAS_JANELA };
+}
+
+function _cubN(v, d) { return (Number(v) || 0).toFixed(d).replace('.', ','); }
+
+function _cubSubDoMaterial(mat, catRaw) {
+  const cad = (typeof getCatSubKeyDoCadastro === 'function') ? getCatSubKeyDoCadastro(mat) : null;
+  if (cad) return cad;
+  return (typeof detectCatSubKey === 'function') ? detectCatSubKey(catRaw || '', mat || '') : null;
+}
+
+// ── Coleta bruta da janela: carretas (abastecimento) + giro ───────────
+function _cubDados(dtIni, dtFim) {
+  const chave = dtIni.getTime() + '|' + dtFim.getTime() + '|' +
+                (state.entradas || []).length + '|' + (state.lancamentos || []).length + '|' + (state.sap || []).length;
+  if (_cubCache && _cubCache.chave === chave) return _cubCache;
+
+  // Carretas = NFs distintas de agregado recebidas pela central. Mesma
+  // contagem de "pedidos" do Controle de Agregados: várias linhas de
+  // material na mesma nota são UMA carreta.
+  const carretas = new Map();
+  (state.entradas || []).forEach((e, idx) => {
+    const d = parseDate(e.dtDescarga || e.dtEmissao || '');
+    if (!d || d < dtIni || d > dtFim) return;
+    const sub = _cubSubDoMaterial(e.material, e.categoria);
+    if (!sub) return;
+    const central = normalizeText(e.centralDestino || e.centralCompra || '');
+    if (!central) return;
+    const k = central + '|||' + sub;
+    if (!carretas.has(k)) carretas.set(k, new Set());
+    const nf = String(e.nf || '').trim();
+    // Nota em branco não agrupa: cada linha vale por uma carreta.
+    carretas.get(k).add((nf && nf !== '—') ? nf : '#' + idx);
+  });
+
+  // Giro por central × subcategoria — Σ saídas ÷ Σ estoque médio dos
+  // materiais daquela subcategoria (mesma base do modal Giro & Cobertura).
+  const giro = new Map();
+  if (typeof buildGiroPorCentralMaterial === 'function') {
+    let res = null;
+    try { res = buildGiroPorCentralMaterial(dtIni, dtFim); }
+    catch (err) { console.warn('[Cubagens] giro indisponível — metas caem só no abastecimento.', err); }
+    ((res && res.centrais) || []).forEach(c => {
+      const central = normalizeText(c.name || '');
+      (c.mats || []).forEach(m => {
+        const sub = _cubSubDoMaterial(m.name, '');
+        if (!sub) return;
+        const k   = central + '|||' + sub;
+        const acc = giro.get(k) || { saidas: 0, estMedio: 0 };
+        acc.saidas   += m.saidas   || 0;
+        acc.estMedio += m.estMedio || 0;
+        giro.set(k, acc);
+      });
+    });
+  }
+
+  _cubCache = { chave, carretas, giro };
+  return _cubCache;
+}
+
+function _cubFaixa(giro) {
+  return _CUB_FAIXAS.find(f => giro >= f.min) || _CUB_FAIXAS[_CUB_FAIXAS.length - 1];
+}
+
+// Conta de uma célula (uma central × uma subcategoria). Devolve todos os
+// passos intermediários — é isso que o tooltip mostra célula a célula.
+function _cubCalcCelula(carretas, giro, semanas, p) {
+  const carretasSem = semanas > 0 ? carretas / semanas : 0;
+  const faixa = _cubFaixa(giro);
+  const fator = num(p.fatores[faixa.key]) || 1;
+  const bruto = carretasSem * (num(p.pct) / 100) * fator;
+  const semAbastecimento = carretasSem < num(p.minCarretas);
+  const meta = semAbastecimento
+    ? 0
+    : Math.min(Math.max(1, Math.round(num(p.teto))), Math.max(1, Math.round(bruto)));
+  return { carretas, carretasSem, giro, faixa, fator, bruto, meta, auto: meta, semAbastecimento, override: null };
+}
+
+function _cubOvKey(regional, central, subKey) {
+  return regional + '|||' + central + '|||' + subKey;
+}
+
+// ── Cálculo completo do cartão ────────────────────────────────────────
+function cubCalcular() {
+  const st     = _cubGet();
+  const semana = _cubSemana(st.weekOffset);
+  const janela = _cubJanela(semana);
+  const dados  = _cubDados(janela.dtIni, janela.dtFim);
+
+  const vistas = new Set();
+  const centrais = (state.filiais || [])
+    .filter(f => (((f.regional || '').trim()) || 'Sem Regional') === st.regional)
+    .map(f => (f.alias || f.origem || '').trim())
+    .filter(nome => {
+      if (!nome || vistas.has(normalizeText(nome))) return false;
+      vistas.add(normalizeText(nome));
+      return true;
+    })
+    .sort((a, b) => a.localeCompare(b, 'pt-BR'));
+
+  const linhas = centrais.map(central => {
+    const nk    = normalizeText(central);
+    const cells = {};
+    _CUB_SUBS.forEach(s => {
+      const set = dados.carretas.get(nk + '|||' + s.key);
+      const g   = dados.giro.get(nk + '|||' + s.key);
+      const cel = _cubCalcCelula(set ? set.size : 0, (g && g.estMedio > 0) ? g.saidas / g.estMedio : 0, janela.semanas, st.params);
+      const ov  = st.overrides[_cubOvKey(st.regional, central, s.key)];
+      if (Number.isFinite(ov)) { cel.override = ov; cel.meta = ov; }
+      cells[s.key] = cel;
+    });
+    return { central, cells };
+  });
+
+  _cubLast = { st, semana, janela, linhas };
+  return _cubLast;
+}
+
+// ── Memória de cálculo (tooltip personalizado, "|" = quebra de linha) ──
+function _cubTooltip(central, sub, cel, janela, p) {
+  const L = [];
+  L.push(sub.label.toUpperCase() + ' · ' + central);
+  L.push('Janela: ' + _fechFmtDate(janela.dtIni) + ' a ' + _fechFmtDate(janela.dtFim) + ' (' + janela.semanas + ' semanas)');
+  L.push('Carretas recebidas: ' + cel.carretas + ' → ' + _cubN(cel.carretasSem, 1) + '/semana');
+  L.push('Giro no período: ' + _cubN(cel.giro, 2) + '× (' + cel.faixa.label + ') → fator ' + _cubN(cel.fator, 2));
+  L.push('Conta: ' + _cubN(cel.carretasSem, 1) + ' × ' + _cubN(num(p.pct), 0) + '% × ' + _cubN(cel.fator, 2) + ' = ' + _cubN(cel.bruto, 2));
+  if (cel.semAbastecimento) {
+    L.push('Meta 0 — abastecimento abaixo de ' + _cubN(num(p.minCarretas), 1) + ' carreta(s)/semana');
+  } else {
+    L.push('Meta: arredonda(' + _cubN(cel.bruto, 2) + ') = ' + Math.round(cel.bruto) + ', com piso 1 e teto ' + Math.round(num(p.teto)) + ' → ' + cel.auto);
+  }
+  if (cel.override !== null) L.push('Ajuste manual: ' + cel.override + ' (calculado: ' + cel.auto + ')');
+  return L.join('|');
+}
+
+// ── Render: painel de parâmetros + cartão ─────────────────────────────
+function cubRenderTudo() {
+  const st = _cubGet();
+
+  const sel = document.getElementById('cub-f-regional');
+  if (sel) {
+    const regionais = [...new Set((state.filiais || []).map(f => ((f.regional || '').trim()) || 'Sem Regional'))]
+      .sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    if (!regionais.includes(st.regional)) st.regional = regionais[0] || '';
+    sel.innerHTML = regionais.length
+      ? regionais.map(r => '<option value="' + escapeHtml(r) + '"' + (r === st.regional ? ' selected' : '') + '>' + escapeHtml(r) + '</option>').join('')
+      : '<option value="">— nenhuma central cadastrada —</option>';
+  }
+
+  const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+  setVal('cub-f-analista',   st.analista);
+  setVal('cub-f-orientacao', st.orientacao);
+  setVal('cub-f-alerta',     st.alerta);
+  ['pct', 'teto', 'minCarretas'].forEach(k => setVal('cub-p-' + k, st.params[k]));
+
+  const fw = document.getElementById('cub-p-fatores');
+  if (fw) {
+    fw.innerHTML = _CUB_FAIXAS.map(f =>
+      '<label class="cub-param"><span>' + escapeHtml(f.label) + (f.min >= 0 ? ' (≥' + _cubN(f.min, 1) + '×)' : '') + '</span>' +
+      '<input type="number" min="0" max="5" step="0.1" value="' + st.params.fatores[f.key] + '" oninput="cubSetFator(\'' + f.key + '\', this.value)"></label>'
+    ).join('');
+  }
+
+  cubRenderCartao(true);
+}
+
+function cubRenderCartao(rebuildAjustes) {
+  const calc = cubCalcular();
+  const { st, semana, janela, linhas } = calc;
+
+  const elBadge = document.getElementById('cub-c-badge');
+  if (elBadge) elBadge.innerHTML = '<span class="fech-card-badge-icon">' + _FECH_ICON_TARGET + '</span><span>Meta semanal</span>';
+
+  const elAnalista = document.getElementById('cub-c-analista');
+  if (elAnalista) {
+    const nome = (st.analista || '').trim();
+    elAnalista.innerHTML = nome ? '<i class="ti ti-user-circle"></i>' + escapeHtml(nome) : '';
+    elAnalista.style.display = nome ? 'inline-flex' : 'none';
+  }
+
+  const elSemana = document.getElementById('cub-c-semana');
+  if (elSemana) elSemana.textContent = 'Semana: ' + _fechFmtDate(semana.ini) + ' a ' + _fechFmtDate(semana.fim);
+
+  const elJanela = document.getElementById('cub-f-janela');
+  if (elJanela) elJanela.textContent = 'Base de cálculo: ' + _fechFmtDate(janela.dtIni) + ' a ' + _fechFmtDate(janela.dtFim) + ' (' + janela.semanas + ' semanas antes da meta).';
+
+  const elSemanaForm = document.getElementById('cub-f-semana');
+  if (elSemanaForm) elSemanaForm.textContent = _fechFmtDate(semana.ini) + ' a ' + _fechFmtDate(semana.fim);
+
+  const elDate = document.getElementById('cub-c-date');
+  if (elDate) elDate.textContent = _fechFmtDate(new Date());
+
+  const elTable = document.getElementById('cub-c-table');
+  if (elTable) {
+    if (!linhas.length) {
+      elTable.innerHTML = '<div class="cub-table-empty">Nenhuma central cadastrada neste regional.<br>Cadastre as filiais em Configurações → Centrais.</div>';
+    } else {
+      const head = '<tr><th>Filial</th>' + _CUB_SUBS.map(s => '<th>' + escapeHtml(s.label) + '</th>').join('') + '</tr>';
+      const body = linhas.map(l => {
+        const tds = _CUB_SUBS.map(s => {
+          const cel = l.cells[s.key];
+          const cls = 'cub-td-num' + (cel.meta === 0 ? ' is-zero' : '') + (cel.override !== null ? ' is-manual' : '');
+          return '<td class="' + cls + '" data-absent-tooltip="' + escapeHtml(_cubTooltip(l.central, s, cel, janela, st.params)) + '">' + cel.meta + '</td>';
+        }).join('');
+        return '<tr><td>' + escapeHtml(l.central) + '</td>' + tds + '</tr>';
+      }).join('');
+      elTable.innerHTML = '<table class="cub-table"><thead>' + head + '</thead><tbody>' + body + '</tbody></table>';
+      if (typeof initAbsentTooltips === 'function') initAbsentTooltips(elTable);
+    }
+  }
+
+  const elOri = document.getElementById('cub-c-orientacao');
+  if (elOri) {
+    const t = (st.orientacao || '').trim();
+    elOri.innerHTML = t ? '<div class="cub-info-box"><i class="ti ti-info-circle"></i><span><b>Orientações</b>' + escapeHtml(t) + '</span></div>' : '';
+  }
+
+  const elAlerta = document.getElementById('cub-c-alerta');
+  if (elAlerta) {
+    const t = (st.alerta || '').trim();
+    elAlerta.innerHTML = t ? '<div class="stop-box">' + _FECH_ICON_ALERT + '<span>' + escapeHtml(t) + '</span></div>' : '';
+  }
+
+  _cubRenderAjustes(calc, rebuildAjustes);
+}
+
+// Lista de ajuste manual. Só é reconstruída quando muda o regional/aba —
+// digitar num input repinta apenas o cartão, senão o campo perde o foco.
+function _cubRenderAjustes(calc, rebuild) {
+  const wrap = document.getElementById('cub-f-ajustes');
+  if (!wrap) return;
+  const { st, janela, linhas } = calc;
+
+  if (rebuild || wrap.dataset.regional !== st.regional) {
+    wrap.dataset.regional = st.regional;
+    if (!linhas.length) { wrap.innerHTML = '<div class="fech-field-hint">Nenhuma central neste regional.</div>'; return; }
+    const head = '<div class="cub-ajuste-head"><span>Central</span>' +
+      _CUB_SUBS.map(s => '<span>' + escapeHtml(s.label) + '</span>').join('') +
+      '<span class="cub-ajuste-spacer"></span></div>';
+    wrap.innerHTML = head + linhas.map((l, i) => {
+      const inputs = _CUB_SUBS.map(s => {
+        const cel = l.cells[s.key];
+        return '<input type="number" min="0" max="99" step="1" data-cub-idx="' + i + '" data-cub-sub="' + s.key + '"' +
+               ' value="' + (cel.override !== null ? cel.override : '') + '" placeholder="' + cel.auto + '"' +
+               ' oninput="cubSetOverride(' + i + ', \'' + s.key + '\', this.value)">';
+      }).join('');
+      return '<div class="cub-ajuste-row">' +
+        '<span class="cub-ajuste-nome" data-absent-tooltip="' + escapeHtml(_CUB_SUBS.map(s => _cubTooltip(l.central, s, l.cells[s.key], janela, st.params)).join("| |")) + '">' + escapeHtml(l.central) + '</span>' +
+        inputs +
+        '<button class="fech-icon-btn" onclick="cubLimparOverride(' + i + ')" title="Voltar ao valor calculado"><i class="ti ti-refresh"></i></button>' +
+        '</div>';
+    }).join('');
+    if (typeof initAbsentTooltips === 'function') initAbsentTooltips(wrap);
+    return;
+  }
+
+  // Sem rebuild: só atualiza o placeholder (valor calculado) de cada input.
+  wrap.querySelectorAll('[data-cub-idx]').forEach(inp => {
+    const l = linhas[Number(inp.dataset.cubIdx)];
+    const cel = l && l.cells[inp.dataset.cubSub];
+    if (cel) inp.placeholder = cel.auto;
+  });
+}
+
+// ── Handlers do formulário ────────────────────────────────────────────
+function cubSetCampo(campo, valor) {
+  const st = _cubGet();
+  st[campo] = valor;
+  _cubSave();
+  if (campo === 'regional') cubRenderTudo();
+  else cubRenderCartao();
+}
+
+function cubSetParam(campo, valor) {
+  const st = _cubGet();
+  st.params[campo] = num(valor);
+  _cubSave();
+  cubRenderCartao();
+}
+
+function cubSetFator(faixaKey, valor) {
+  const st = _cubGet();
+  st.params.fatores[faixaKey] = num(valor);
+  _cubSave();
+  cubRenderCartao();
+}
+
+function cubShiftSemana(delta) {
+  const st = _cubGet();
+  st.weekOffset += delta;
+  cubRenderCartao();
+}
+
+function cubSetOverride(idx, subKey, valor) {
+  const st = _cubGet();
+  const l  = _cubLast && _cubLast.linhas[idx];
+  if (!l) return;
+  const k = _cubOvKey(st.regional, l.central, subKey);
+  const v = String(valor).trim();
+  if (v === '') delete st.overrides[k];
+  else st.overrides[k] = Math.max(0, Math.round(num(v)));
+  _cubSave();
+  cubRenderCartao();
+}
+
+function cubLimparOverride(idx) {
+  const st = _cubGet();
+  const l  = _cubLast && _cubLast.linhas[idx];
+  if (!l) return;
+  _CUB_SUBS.forEach(s => { delete st.overrides[_cubOvKey(st.regional, l.central, s.key)]; });
+  _cubSave();
+  cubRenderTudo();
+}
+
+function cubResetar() {
+  if (!confirm('Restaurar os parâmetros padrão e apagar todos os ajustes manuais deste regional?')) return;
+  const st = _cubGet();
+  const d  = _cubDefaults();
+  st.params     = d.params;
+  st.overrides  = {};
+  st.orientacao = d.orientacao;
+  st.alerta     = d.alerta;
+  _cubSave();
+  cubRenderTudo();
+  toast('Parâmetros restaurados e ajustes limpos.');
+}
+
+// ── Texto plano (WhatsApp / imagem PNG) ───────────────────────────────
+function _cubPlainText() {
+  const { st, semana, linhas, janela } = cubCalcular();
+  if (!linhas.length) return '';
+  const p = st.params;
+  const partes = [];
+  partes.push('META SEMANAL DE CUBAGEM DAS CARRETAS');
+  const cab = [];
+  if (st.regional) cab.push('Regional: ' + st.regional);
+  if ((st.analista || '').trim()) cab.push('Analista: ' + st.analista.trim());
+  if (cab.length) partes.push(cab.join(' · '));
+  partes.push('Semana: ' + _fechFmtDate(semana.ini) + ' a ' + _fechFmtDate(semana.fim));
+  partes.push('QUANTIDADE MÍNIMA POR FILIAL:');
+  linhas.forEach(l => {
+    partes.push('• ' + l.central + ' — ' + _CUB_SUBS.map(s => l.cells[s.key].meta + ' ' + s.plain).join(' / '));
+  });
+  if ((st.orientacao || '').trim()) partes.push(st.orientacao.trim());
+  if ((st.alerta || '').trim())     partes.push('⚠️ ' + st.alerta.trim());
+  partes.push('Cálculo: carretas recebidas por semana entre ' + _fechFmtDate(janela.dtIni) + ' e ' + _fechFmtDate(janela.dtFim) +
+              ', × ' + _cubN(num(p.pct), 0) + '% de amostragem, ajustado pelo giro do material na central.');
+  return partes.join('\n\n');
+}
+
+// ── Página de impressão dedicada (mantém o layout do cartão) ──────────
+function _cubAbrirPrint() {
+  const { st, semana, janela, linhas } = cubCalcular();
+  if (!linhas.length) { toast('Nenhuma central neste regional.', 'error'); return; }
+  const logoUrl = 'https://concrelagos.com.br/wp-content/uploads/2021/10/Ativo-3.svg';
+
+  const rows = linhas.map(l => {
+    const tds = _CUB_SUBS.map(s => {
+      const cel = l.cells[s.key];
+      return '<td class="num' + (cel.meta === 0 ? ' zero' : '') + '" title="' + escapeHtml(_cubTooltip(l.central, s, cel, janela, st.params).split('|').join(' • ')) + '">' + cel.meta + '</td>';
+    }).join('');
+    return '<tr><td class="filial">' + escapeHtml(l.central) + '</td>' + tds + '</tr>';
+  }).join('');
+
+  const html = '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">' +
+    '<meta name="viewport" content="width=device-width, initial-scale=1.0">' +
+    '<title>Cubagens — ' + escapeHtml(st.regional || '') + '</title>' +
+    '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' +
+    '<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Archivo:wght@500;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">' +
+    '<style>' +
+    '*{box-sizing:border-box;margin:0;padding:0}' +
+    'body{background:#0d0d0d;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px 12px;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}' +
+    '.card{width:100%;max-width:460px;background:#0e0b04;border-radius:14px;overflow:hidden;box-shadow:0 18px 40px rgba(0,0,0,.45)}' +
+    '.stripe{height:6px;background:linear-gradient(90deg,#8a6510 0%,#f5c542 50%,#8a6510 100%)}' +
+    '.logo{display:flex;align-items:center;justify-content:center;padding:16px 28px;border-bottom:1px solid rgba(255,255,255,.06)}' +
+    '.logo img{height:52px;filter:invert(1) hue-rotate(178deg);opacity:.96}' +
+    '.head{padding:22px 28px 20px;text-align:center;background:linear-gradient(180deg,#1c1608 0%,#0e0b04 100%)}' +
+    '.badge{display:inline-block;padding:10px 20px;border-radius:8px;background:linear-gradient(135deg,#f5c542 0%,#b8860b 100%);color:#1a1305;font-family:Archivo,sans-serif;font-size:12px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;margin-bottom:16px}' +
+    '.title{font-family:"Archivo Black",Archivo,sans-serif;font-size:19px;color:#fff;line-height:1.25;text-transform:uppercase}' +
+    '.analista{margin-top:10px;font-family:Archivo,sans-serif;font-size:11.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#fcd34d}' +
+    '.meta{font-family:Archivo,sans-serif;font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;text-align:center;padding:9px 28px;color:#fcd34d;background:rgba(212,175,55,.14);border-top:1px solid rgba(212,175,55,.3);border-bottom:1px solid rgba(212,175,55,.3)}' +
+    '.body{padding:22px 28px 24px;color:#e8dfc4}' +
+    'table{width:100%;border-collapse:collapse;font-family:Archivo,sans-serif}' +
+    'th{font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#fcd34d;padding:9px 10px;text-align:center;background:rgba(212,175,55,.12);border-bottom:1.5px solid rgba(212,175,55,.35)}' +
+    'th:first-child{text-align:left}' +
+    'td{padding:8px 10px;text-align:center;border-bottom:1px solid rgba(212,175,55,.12)}' +
+    'td.filial{text-align:left;font-weight:700;font-size:11.5px;text-transform:uppercase;color:#e8dfc4}' +
+    'td.num{font-family:"Courier New",monospace;font-weight:800;font-size:14px;color:#fff}' +
+    'td.num.zero{color:#7c7259}' +
+    '.info{display:flex;gap:10px;margin-top:16px;font-size:12px;line-height:1.55;padding:12px 14px;border-radius:8px;background:rgba(212,175,55,.07);border:1px solid rgba(212,175,55,.28)}' +
+    '.info b{display:block;font-family:Archivo,sans-serif;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#fcd34d;margin-bottom:3px}' +
+    '.stop{display:flex;gap:10px;margin-top:10px;font-size:12.5px;font-weight:800;line-height:1.55;padding:12px 14px;border-radius:8px;background:rgba(0,0,0,.45);border:1.5px solid rgba(251,191,36,.55);color:#fcd34d}' +
+    '.foot{padding:14px 28px;display:flex;justify-content:space-between;border-top:1px solid rgba(255,255,255,.06);font-family:Archivo,sans-serif;font-size:9px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:#b8860b}' +
+    '.foot .dt{font-family:"Courier New",monospace;letter-spacing:0;color:#d6c68a}' +
+    '.calc{margin-top:14px;font-size:10px;line-height:1.6;color:#9a8d68;font-family:"Courier New",monospace}' +
+    '.action-bar{position:fixed;bottom:16px;right:16px}' +
+    '.action-bar button{padding:10px 16px;border-radius:8px;border:none;background:#b8860b;color:#1a1305;font-weight:700;cursor:pointer}' +
+    '@media print{body{background:#fff;padding:0}.no-print{display:none}.card{box-shadow:none}}' +
+    '</style></head><body><div class="card">' +
+    '<div class="stripe"></div>' +
+    '<div class="logo"><img src="' + logoUrl + '" alt="Concrelagos"></div>' +
+    '<div class="head"><div class="badge">Meta semanal</div>' +
+    '<div class="title">Cubagem mínima das carretas</div>' +
+    ((st.analista || '').trim() ? '<div class="analista">' + escapeHtml(st.analista.trim()) + '</div>' : '') +
+    '</div>' +
+    '<div class="meta">Semana: ' + _fechFmtDate(semana.ini) + ' a ' + _fechFmtDate(semana.fim) +
+    (st.regional ? ' · ' + escapeHtml(st.regional) : '') + '</div>' +
+    '<div class="body"><table><thead><tr><th>Filial</th>' +
+    _CUB_SUBS.map(s => '<th>' + escapeHtml(s.label) + '</th>').join('') +
+    '</tr></thead><tbody>' + rows + '</tbody></table>' +
+    ((st.orientacao || '').trim() ? '<div class="info"><span><b>Orientações</b>' + escapeHtml(st.orientacao.trim()) + '</span></div>' : '') +
+    ((st.alerta || '').trim() ? '<div class="stop"><span>' + escapeHtml(st.alerta.trim()) + '</span></div>' : '') +
+    '<div class="calc">Cálculo: carretas/semana recebidas entre ' + _fechFmtDate(janela.dtIni) + ' e ' + _fechFmtDate(janela.dtFim) +
+    ' × ' + _cubN(num(st.params.pct), 0) + '% de amostragem × fator do giro (piso 1, teto ' + Math.round(num(st.params.teto)) + ').</div>' +
+    '</div>' +
+    '<div class="foot"><span>Acompanhamento semanal</span><span class="dt">' + _fechFmtDate(new Date()) + '</span></div>' +
+    '</div>' +
+    '<div class="action-bar no-print"><button onclick="window.print()">Imprimir / Salvar PDF</button></div>' +
+    '</body></html>';
+
+  const win = window.open('', '_blank', 'width=560,height=800,scrollbars=yes,resizable=yes');
+  if (!win) { toast('Popup bloqueado — permita popups para este site.', 'error'); return; }
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+}
+
+Object.assign(window, {
+  cubCalcular, cubRenderTudo, cubRenderCartao,
+  cubSetCampo, cubSetParam, cubSetFator, cubShiftSemana,
+  cubSetOverride, cubLimparOverride, cubResetar
 });

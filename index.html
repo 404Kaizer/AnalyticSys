@@ -437,6 +437,14 @@
               </div>
               <i class="ti ti-chevron-right tools-item-arrow"></i>
             </button>
+            <button class="tools-item" onclick="abrirFechamento('cubagens')">
+              <div class="tools-item-icon" style="background:var(--amber-bg);color:var(--amber)"><i class="ti ti-cube"></i></div>
+              <div class="tools-item-body">
+                <div class="tools-item-label">Cubagens</div>
+                <div class="tools-item-sub">Meta semanal de cubagem por central</div>
+              </div>
+              <i class="ti ti-chevron-right tools-item-arrow"></i>
+            </button>
 
             <div class="tools-dropdown-section-label">Dados</div>
             <button class="tools-item" onclick="sincronizarDadosLocaisAgora(); closeToolsMenu()">
@@ -3995,12 +4003,16 @@
       <button class="fech-tab" data-tipo="metas" onclick="fechamentoSwitchTipo('metas')">
         <i class="ti ti-target-arrow"></i> Metas
       </button>
+      <button class="fech-tab" data-tipo="cubagens" onclick="fechamentoSwitchTipo('cubagens')">
+        <i class="ti ti-cube"></i> Cubagens
+      </button>
     </div>
 
     <!-- Corpo com scroll (única área rolável do modal) -->
     <div class="fech-scroll-body">
 
       <!-- Builder: formulário + preview ao vivo -->
+      <div id="fech-pane-texto">
       <div class="fech-builder">
 
       <!-- Painel de formulário -->
@@ -4082,6 +4094,105 @@
 
     </div>
     <!-- fim fech-builder -->
+      </div><!-- fim #fech-pane-texto -->
+
+      <!-- Builder: Cubagens — meta semanal calculada por abastecimento × giro -->
+      <div class="fech-builder" id="fech-pane-cubagens" style="display:none">
+
+      <!-- Painel de parâmetros -->
+      <div class="fech-form-panel">
+        <div class="fech-field">
+          <label>Regional</label>
+          <select id="cub-f-regional" class="cub-select" onchange="cubSetCampo('regional', this.value)"></select>
+        </div>
+        <div class="fech-field">
+          <label>Analista responsável</label>
+          <input type="text" id="cub-f-analista" oninput="cubSetCampo('analista', this.value)">
+        </div>
+        <div class="fech-field">
+          <label>Semana da meta</label>
+          <div class="cub-week-nav">
+            <button class="fech-icon-btn" onclick="cubShiftSemana(-1)" title="Semana anterior"><i class="ti ti-chevron-left"></i></button>
+            <span id="cub-f-semana"></span>
+            <button class="fech-icon-btn" onclick="cubShiftSemana(1)" title="Próxima semana"><i class="ti ti-chevron-right"></i></button>
+          </div>
+          <div class="fech-field-hint" id="cub-f-janela"></div>
+        </div>
+
+        <div class="fech-field-divider"></div>
+
+        <div class="fech-field">
+          <label>Parâmetros do cálculo</label>
+          <div class="cub-param-grid">
+            <label class="cub-param"><span>% amostragem</span><input type="number" min="1" max="100" step="1" id="cub-p-pct" oninput="cubSetParam('pct', this.value)"></label>
+            <label class="cub-param"><span>Teto (máx.)</span><input type="number" min="1" max="20" step="1" id="cub-p-teto" oninput="cubSetParam('teto', this.value)"></label>
+            <label class="cub-param"><span>Mín. carretas/sem</span><input type="number" min="0" step="0.5" id="cub-p-minCarretas" oninput="cubSetParam('minCarretas', this.value)"></label>
+          </div>
+          <div class="fech-field-hint">Meta = carretas/semana × % amostragem × fator do giro — arredondada, com piso 1 e limitada ao teto. Abaixo do mínimo de carretas por semana a meta é zero.</div>
+        </div>
+
+        <div class="fech-field">
+          <label>Fator por faixa de giro</label>
+          <div class="cub-param-grid" id="cub-p-fatores"></div>
+          <div class="fech-field-hint">Giro alto → menos carretas para cubar. Giro baixo → mais.</div>
+        </div>
+
+        <div class="fech-field">
+          <label>Orientações</label>
+          <textarea id="cub-f-orientacao" oninput="cubSetCampo('orientacao', this.value)"></textarea>
+        </div>
+        <div class="fech-field">
+          <label>Alerta</label>
+          <textarea id="cub-f-alerta" oninput="cubSetCampo('alerta', this.value)"></textarea>
+        </div>
+
+        <div class="fech-field-divider"></div>
+
+        <div class="fech-field">
+          <label>Ajuste manual por central</label>
+          <div class="cub-ajustes" id="cub-f-ajustes"></div>
+          <div class="fech-field-hint">Em branco = valor calculado (mostrado em cinza). Ao digitar, a célula aparece marcada como ajuste manual no cartão.</div>
+        </div>
+
+        <button class="fech-reset-btn" onclick="cubResetar()">
+          <i class="ti ti-refresh"></i> Restaurar parâmetros e limpar ajustes
+        </button>
+        <div class="fech-saved-row">
+          <span id="cub-saved-indicator"><i class="ti ti-device-floppy"></i> salvo</span>
+        </div>
+      </div>
+
+      <!-- Preview ao vivo -->
+      <div class="fech-preview-side">
+        <div class="fech-card fech-theme-cubagens" id="cub-card">
+          <div class="fech-card-stripe"></div>
+          <div class="fech-card-logo-strip">
+            <img src="https://concrelagos.com.br/wp-content/uploads/2021/10/Ativo-3.svg" alt="Concrelagos Concreto" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+            <div class="fech-card-logo-fallback">CONCRELAGOS <span>CONCRETO</span></div>
+          </div>
+          <div class="fech-card-head">
+            <div class="fech-card-badge" id="cub-c-badge"></div>
+            <div class="fech-card-title">Cubagem mínima das carretas</div>
+            <div class="cub-card-analista" id="cub-c-analista"></div>
+          </div>
+          <div class="fech-card-meta" id="cub-c-semana"></div>
+          <div class="fech-card-divider"></div>
+          <div class="fech-card-body">
+            <div id="cub-c-table"></div>
+            <div class="spacer"></div>
+            <div id="cub-c-orientacao"></div>
+            <div class="spacer"></div>
+            <div id="cub-c-alerta"></div>
+          </div>
+          <div class="fech-card-foot">
+            <span class="fech-foot-label">Acompanhamento semanal</span>
+            <span class="fech-foot-date" id="cub-c-date"></span>
+          </div>
+        </div>
+      </div>
+
+      </div>
+      <!-- fim #fech-pane-cubagens -->
     </div>
     <!-- fim fech-scroll-body -->
 
