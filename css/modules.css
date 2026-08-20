@@ -11934,14 +11934,33 @@ tr.sap-fechamento td {
   font-weight: 600;
   white-space: nowrap;
 }
+/* max-width/overflow/text-overflow são RESET aqui de propósito: existe um
+   `tbody td` solto em components.css que impõe max-width:240px + ellipsis em
+   toda célula do sistema. Sem este reset, a coluna de datas e os nomes de
+   material longos apareciam cortados com "…". Quem quiser truncar, trunca
+   explicitamente na sua própria classe (ver td.pv-mat-cell abaixo). */
 .pv-table tbody td {
   padding: 7px 12px;
   border-bottom: 1px solid var(--border);
   color: var(--text2);
   vertical-align: middle;
+  max-width: none;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: nowrap;
 }
+.pv-table tbody tr { cursor: default; }
 .pv-table tbody tr:last-child td { border-bottom: none; }
 .pv-table tbody tr:hover td { background: var(--bg3); }
+
+/* Único truncamento intencional: nome de material. O texto completo fica no
+   title da célula. Seletor com td na frente pra ganhar do reset acima. */
+.pv-table tbody td.pv-mat-cell,
+.pv-table tbody td.pgm-mat-cell {
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 .pv-central-cell {
   border-right: 1px solid var(--border);
@@ -12063,21 +12082,81 @@ tr.sap-fechamento td {
   font-weight: 700;
 }
 .pim-tab.active .pgm-tab-count { background: var(--accent-dim); color: var(--accent); }
+
+/* ── Faixa de TOTAIS (abaixo das abas) ────────────────────────────────
+   Sempre no recorte ativo (mês + busca), não no histórico inteiro. */
+.pgm-total {
+  display: flex;
+  align-items: stretch;
+  flex-wrap: wrap;
+  gap: 22px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  flex-shrink: 0;
+}
+.pgm-total:empty { display: none; }
+.pgm-total-item { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.pgm-total-label {
+  font-size: 9px;
+  font-family: var(--mono);
+  letter-spacing: .11em;
+  text-transform: uppercase;
+  color: var(--text3);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.pgm-total-value {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+}
+.pgm-total-value small { font-size: 10px; font-weight: 500; color: var(--text3); }
+.pgm-total-item--main {
+  padding-right: 22px;
+  border-right: 1px solid var(--border2);
+}
+.pgm-total-item--main .pgm-total-value { font-size: 19px; letter-spacing: -.01em; }
+.pgm-total-item--main .pgm-total-value small { font-size: 11px; }
+.pgm-total-sep { margin: 0 7px; color: var(--text3); font-weight: 400; }
 .pgm-body { padding: 0; display: block; }
 .pgm-section { padding: 14px 20px 18px; border-bottom: 1px solid var(--border); }
 .pgm-section:last-child { border-bottom: none; }
+/* Cabeçalho da seção é um <button> (recolhe/expande), então precisa zerar a
+   aparência nativa antes de virar a faixa de título. */
 .pgm-section-title {
   display: flex;
   align-items: center;
   gap: 7px;
+  width: 100%;
   margin-bottom: 10px;
+  padding: 4px 6px;
+  margin-left: -6px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
   font-size: 10px;
   font-family: var(--mono);
   letter-spacing: .1em;
   text-transform: uppercase;
   color: var(--text2);
   font-weight: 700;
+  transition: background .12s, color .12s;
 }
+.pgm-section-title:hover { background: var(--bg3); color: var(--text); }
+.pgm-section-chev {
+  font-size: 13px;
+  color: var(--text3);
+  transition: transform .15s;
+}
+.pgm-section.is-collapsed .pgm-section-chev { transform: rotate(-90deg); }
+.pgm-section.is-collapsed { padding-bottom: 12px; }
+.pgm-section.is-collapsed .pgm-section-title { margin-bottom: 0; }
+.pgm-section.is-collapsed .pgm-section-body { display: none; }
 .pgm-section-hint {
   margin-left: auto;
   text-transform: none;
@@ -12087,7 +12166,62 @@ tr.sap-fechamento td {
   font-size: 10.5px;
 }
 .pgm-table thead th { background: var(--bg3); }
-.pgm-dates-cell { max-width: 460px; line-height: 1.9; }
+
+/* ── Coluna "Datas sem lançamento" (aba Estoque do GERAL) ──────────────
+   Até 5 chips em linha + botão "+N" com o resto no tooltip. Largura mínima
+   dimensionada para os 5 chips + o botão caberem sem quebrar. */
+.pv-table tbody td.pgm-dates-cell {
+  min-width: 430px;
+  white-space: nowrap;
+  line-height: 1.9;
+}
+.pgm-dates-more {
+  display: inline-block;
+  margin-left: 3px;
+  padding: 1px 7px;
+  border-radius: 5px;
+  border: 1px solid var(--border2);
+  background: var(--bg3);
+  color: var(--text2);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  vertical-align: middle;
+  transition: background .12s, color .12s, border-color .12s;
+}
+.pgm-dates-more:hover {
+  background: var(--amber-bg);
+  border-color: var(--amber);
+  color: var(--amber);
+}
+
+/* Tooltip com a lista completa de datas — position:fixed e preso ao body
+   para não ser cortado pelo overflow do corpo do modal. */
+.pgm-dates-tip {
+  position: fixed;
+  z-index: 1200;
+  display: none;
+  pointer-events: none;
+  max-width: 420px;
+  max-height: 60vh;
+  padding: 11px 13px;
+  border-radius: 10px;
+  border: 1px solid var(--border3);
+  background: var(--bg2);
+  box-shadow: 0 10px 34px rgba(0,0,0,.45);
+}
+.pgm-dates-tip-head {
+  margin-bottom: 8px;
+  font-size: 10px;
+  font-family: var(--mono);
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--text3);
+  font-weight: 700;
+}
+.pgm-dates-tip-grid { display: flex; flex-wrap: wrap; gap: 4px; }
+.pgm-dates-tip-grid b { font-weight: 600; opacity: .7; }
 
 .pgm-date-grid {
   display: grid;

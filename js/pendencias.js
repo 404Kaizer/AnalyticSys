@@ -47,6 +47,8 @@ const _pgmState = {
   month:  { OS: 'periodo', NF: 'periodo' },
   search: '',
   items:  { OS: null, NF: null },  // histórico completo, lazy
+  collapsed: {},                   // 'ABA:bloco' → true quando recolhido
+  estLinhas: [],                   // linhas da aba Estoque, p/ o tooltip do "+N"
 };
 
 function _pendViewInvalidate() {
@@ -247,7 +249,7 @@ function _pendTabelaInteg(grupos, tipo) {
   const rows = grupos.map((g, gi) => g.materiais.map((m, mi) => `
     <tr>
       ${mi === 0 ? _pendCelulaCentral(g) : ''}
-      <td class="pv-mat-cell">${escapeHtml(m.material)}</td>
+      <td class="pv-mat-cell" title="${escapeHtml(m.material)}">${escapeHtml(m.material)}</td>
       <td class="pv-badge-cell">
         <button class="pv-badge ${cls}" type="button"
           onclick="pendOpenDetalhe('${tipo}',${gi},${mi})"
@@ -274,7 +276,7 @@ function _pendTabelaEstoque(grupos) {
   const rows = grupos.map((g, gi) => g.materiais.map((m, mi) => `
     <tr>
       ${mi === 0 ? _pendCelulaCentral(g) : ''}
-      <td class="pv-mat-cell">${escapeHtml(m.material)}${m.semCadastro ? ' <span class="pv-tag-warn" title="Material sem cadastro — regra diária aplicada por padrão">sem cadastro</span>' : ''}</td>
+      <td class="pv-mat-cell" title="${escapeHtml(m.material)}">${escapeHtml(m.material)}${m.semCadastro ? ' <span class="pv-tag-warn" title="Material sem cadastro — regra diária aplicada por padrão">sem cadastro</span>' : ''}</td>
       <td class="pv-badge-cell">
         <button class="pv-badge pv-badge-est" type="button"
           onclick="pendOpenDetalhe('est',${gi},${mi})"
@@ -519,6 +521,8 @@ const _PGM_MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out',
 // depende da busca/pills pra afunilar. Upgrade: reaproveitar a paginação de
 // _pimRender (ui.js) se alguém reclamar do corte.
 const _PGM_MAX_ROWS = 800;
+// Chips de data exibidos em linha na aba Estoque; o excedente vai pro "+N".
+const _PGM_MAX_CHIPS = 5;
 
 /** 'YYYY-MM' de uma data DD/MM/AAAA ou YYYY-MM-DD. */
 function _pgmMonthKey(dateStr) {
@@ -565,6 +569,123 @@ function _pgmFiltrar(tab) {
 const _pgmFmt = n => Number.isFinite(n)
   ? Math.abs(n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   : '—';
+const _pgmInt = n => (Number.isFinite(n) ? n : 0).toLocaleString('pt-BR');
+
+/**
+ * Faixa de TOTAIS no topo do modal, logo abaixo das abas. Reflete o recorte
+ * ativo (mês + busca), não o histórico inteiro — é o total do que está em tela.
+ *
+ * A quantidade das abas OS/NF é somada POR UNIDADE DE MEDIDA, nunca num número
+ * só: NF já chega convertida pra KG, mas OS carrega a UM da saída, e juntar
+ * kg com m³ sob um "total" seria um número falso. Cada UM vira seu próprio
+ * valor na faixa.
+ *
+ * @param {'OS'|'NF'|'EST'} tab
+ * @param {object[]} [itens] - itens já filtrados (só OS/NF)
+ */
+function _pgmRenderTotal(tab, itens) {
+  const el = document.getElementById('pgm-total');
+  if (!el) return;
+
+  const celula = (label, valor, principal) =>
+    `<div class="pgm-total-item${principal ? ' pgm-total-item--main' : ''}">
+      <div class="pgm-total-label">${label}</div>
+      <div class="pgm-total-value">${valor}</div>
+    </div>`;
+
+  if (tab === 'EST') {
+    const linhas = _pgmState.estLinhas || [];
+    const dias     = linhas.reduce((a, l) => a + l.dias.length, 0);
+    const datas    = new Set();
+    const centrais = new Set();
+    linhas.forEach(l => { centrais.add(l.central); l.dias.forEach(d => datas.add(localISODate(d))); });
+
+    el.innerHTML =
+      celula('Total de dias sem lançamento', `${_pgmInt(dias)} <small>dia${dias === 1 ? '' : 's'}</small>`, true) +
+      celula('Datas distintas',   _pgmInt(datas.size)) +
+      celula('Pares central×material', _pgmInt(linhas.length)) +
+      celula('Centrais envolvidas',    _pgmInt(centrais.size));
+    return;
+  }
+
+  const lista = itens || [];
+  const porUM    = new Map();
+  const centrais = new Set();
+  const materiais = new Set();
+  lista.forEach(it => {
+    const um = tab === 'NF' ? 'KG' : String(it.um || 'kg').toUpperCase();
+    const q  = tab === 'NF'
+      ? _convertNfPesoToKg(it.peso, it.um, it.material)
+      : Math.abs(num(it.peso));
+    porUM.set(um, (porUM.get(um) || 0) + q);
+    if (it.central) centrais.add(it.central);
+    materiais.add(it.material || '—');
+  });
+
+  const cor = tab === 'NF' ? 'var(--green)' : 'var(--red)';
+  const qtdHtml = porUM.size
+    ? [...porUM.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .map(([um, v]) => `<span style="color:${cor}">${_pgmFmt(v)} <small>${escapeHtml(um)}</small></span>`)
+        .join('<span class="pgm-total-sep">·</span>')
+    : '—';
+
+  el.innerHTML =
+    celula(`Total de ${tab} pendentes`, `${_pgmInt(lista.length)} <small>registro${lista.length === 1 ? '' : 's'}</small>`, true) +
+    celula('Quantidade total', qtdHtml) +
+    celula('Centrais envolvidas', _pgmInt(centrais.size)) +
+    celula('Materiais', _pgmInt(materiais.size));
+}
+
+/**
+ * Envelopa um bloco do modal numa seção recolhível.
+ *
+ * O estado fica em _pgmState.collapsed, chaveado por aba+bloco, e NÃO no DOM:
+ * digitar na busca recria o corpo inteiro via innerHTML, então uma seção
+ * recolhida reabriria sozinha a cada tecla se o estado morasse na marcação.
+ * Chave por aba (e não só por bloco) porque o "Resumo" da aba Estoque é outra
+ * coisa que o das abas OS/NF — recolher um não deveria recolher o outro.
+ *
+ * @param {'resumo'|'detalhe'} kind
+ * @param {string} icone   - classe do ícone Tabler
+ * @param {string} titulo  - texto do cabeçalho
+ * @param {string} hint    - contagem exibida à direita
+ * @param {string} conteudo- HTML do corpo
+ */
+function _pgmSection(kind, icone, titulo, hint, conteudo) {
+  const aberto = _pgmState.collapsed[`${_pgmState.tab}:${kind}`] !== true;
+  return `<div class="pgm-section${aberto ? '' : ' is-collapsed'}" data-kind="${kind}">
+    <button class="pgm-section-title" type="button" aria-expanded="${aberto}"
+            onclick="pendGeralToggleSection('${kind}')"
+            title="${aberto ? 'Recolher' : 'Expandir'} esta seção">
+      <i class="ti ti-chevron-down pgm-section-chev"></i>
+      <i class="ti ${icone}"></i> ${titulo}
+      <span class="pgm-section-hint">${hint}</span>
+    </button>
+    <div class="pgm-section-body">${conteudo}</div>
+  </div>`;
+}
+
+/**
+ * Recolhe/expande uma seção da aba atual. Só mexe na classe do elemento — não
+ * re-renderiza a tabela inteira, que pode ter centenas de linhas.
+ */
+function pendGeralToggleSection(kind) {
+  pendDatasTipHide(); // o "+N" pode sumir junto com a seção
+  const key = `${_pgmState.tab}:${kind}`;
+  const recolher = !_pgmState.collapsed[key];
+  _pgmState.collapsed[key] = recolher;
+
+  const el = document.querySelector(`#pgm-body .pgm-section[data-kind="${kind}"]`);
+  if (!el) return;
+  el.classList.toggle('is-collapsed', recolher);
+  const head = el.querySelector('.pgm-section-title');
+  if (head) {
+    head.setAttribute('aria-expanded', String(!recolher));
+    head.title = recolher ? 'Expandir esta seção' : 'Recolher esta seção';
+  }
+}
+window.pendGeralToggleSection = pendGeralToggleSection;
 
 /** Resumo de OS/NF: total por central × material. */
 function _pgmResumoInteg(itens, tab) {
@@ -583,18 +704,17 @@ function _pgmResumoInteg(itens, tab) {
     b.qtd - a.qtd || a.central.localeCompare(b.central, 'pt-BR') || a.material.localeCompare(b.material, 'pt-BR'));
   const cor = tab === 'NF' ? 'var(--green)' : 'var(--red)';
 
-  return `<div class="pgm-section">
-    <div class="pgm-section-title"><i class="ti ti-sum"></i> Resumo — total por central × material <span class="pgm-section-hint">${linhas.length} combinaç${linhas.length === 1 ? 'ão' : 'ões'}</span></div>
-    <table class="pv-table pgm-table">
+  return _pgmSection('resumo', 'ti-sum', 'Resumo — total por central × material',
+    `${linhas.length} combinaç${linhas.length === 1 ? 'ão' : 'ões'}`,
+    `<table class="pv-table pgm-table">
       <thead><tr><th>Central</th><th>Material</th><th style="text-align:right">Pendências</th><th style="text-align:right">Quantidade</th></tr></thead>
       <tbody>${linhas.map(l => `<tr>
         <td>${escapeHtml(l.central)}</td>
-        <td>${escapeHtml(l.material)}</td>
+        <td class="pgm-mat-cell" title="${escapeHtml(l.material)}">${escapeHtml(l.material)}</td>
         <td class="td-mono" style="text-align:right;font-weight:700">${l.qtd}</td>
         <td class="td-mono" style="text-align:right;color:${cor}">${_pgmFmt(l.peso)} ${escapeHtml(l.um)}</td>
       </tr>`).join('')}</tbody>
-    </table>
-  </div>`;
+    </table>`);
 }
 
 /** Detalhamento completo de OS/NF. */
@@ -609,7 +729,7 @@ function _pgmDetalheInteg(itens, tab) {
   const body = linhas.map(it => tab === 'NF' ? `<tr>
       <td class="td-muted">${escapeHtml(it.central || '—')}</td>
       <td class="td-mono" style="font-weight:600;color:${cor}">${escapeHtml(String(it.nf || '—'))}</td>
-      <td>${escapeHtml(String(it.material || '—'))}</td>
+      <td class="pgm-mat-cell" title="${escapeHtml(String(it.material || '—'))}">${escapeHtml(String(it.material || '—'))}</td>
       <td class="td-muted">${escapeHtml(String(it.fornecedor || '—'))}</td>
       <td class="td-muted">${escapeHtml(String(it.dtEmissao || '—'))}</td>
       <td class="td-muted">${escapeHtml(String(it.dtDescarga || '—'))}</td>
@@ -617,7 +737,7 @@ function _pgmDetalheInteg(itens, tab) {
     </tr>` : `<tr>
       <td class="td-muted">${escapeHtml(it.central || '—')}</td>
       <td class="td-mono" style="font-weight:600;color:${cor}">${escapeHtml(String(it.os || '—'))}</td>
-      <td>${escapeHtml(String(it.material || '—'))}</td>
+      <td class="pgm-mat-cell" title="${escapeHtml(String(it.material || '—'))}">${escapeHtml(String(it.material || '—'))}</td>
       <td class="td-muted">${escapeHtml(String(it.fornecedor || '—'))}</td>
       <td class="td-muted">${escapeHtml(String(it.dtEmissao || '—'))}</td>
       <td class="td-mono" style="text-align:right;color:${cor}">${_pgmFmt(num(it.peso))} ${escapeHtml(String(it.um || 'kg'))}</td>
@@ -627,12 +747,9 @@ function _pgmDetalheInteg(itens, tab) {
     ? '<tr><th>Central</th><th>NF</th><th>Material</th><th>Fornecedor</th><th>Dt. Emissão</th><th>Dt. Descarga</th><th style="text-align:right">Quantidade</th></tr>'
     : '<tr><th>Central</th><th>OS</th><th>Material</th><th>Fornecedor</th><th>Dt. Emissão</th><th style="text-align:right">Quantidade</th></tr>';
 
-  return `<div class="pgm-section">
-    <div class="pgm-section-title"><i class="ti ti-list-details"></i> Detalhamento completo
-      <span class="pgm-section-hint">${itens.length} registro${itens.length === 1 ? '' : 's'}${cortado ? ` · exibindo os ${_PGM_MAX_ROWS} primeiros — use a busca ou os meses para afunilar` : ''}</span>
-    </div>
-    <table class="pv-table pgm-table"><thead>${head}</thead><tbody>${body}</tbody></table>
-  </div>`;
+  return _pgmSection('detalhe', 'ti-list-details', 'Detalhamento completo',
+    `${itens.length} registro${itens.length === 1 ? '' : 's'}${cortado ? ` · exibindo os ${_PGM_MAX_ROWS} primeiros — use a busca ou os meses para afunilar` : ''}`,
+    `<table class="pv-table pgm-table"><thead>${head}</thead><tbody>${body}</tbody></table>`);
 }
 
 /** Aba ESTOQUE: resumo por data ausente + detalhamento por central × material. */
@@ -650,6 +767,10 @@ function _pgmEstoque() {
     linhas.push({ central: g.central, regional: g.regional, material: m.material, dias: m.dias, semCadastro: m.semCadastro });
   }));
 
+  // Publicado ANTES do early-return: a faixa de totais lê daqui e precisa
+  // zerar corretamente quando a busca não devolve nada.
+  _pgmState.estLinhas = linhas;
+
   if (!linhas.length) {
     return `<div class="pv-empty"><i class="ti ti-circle-check"></i><span>Nenhum dia sem lançamento neste recorte</span></div>`;
   }
@@ -666,36 +787,91 @@ function _pgmEstoque() {
   const datas = [...porData.values()].sort((a, b) => a.d - b.d);
   const dowNome = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
 
-  const resumo = `<div class="pgm-section">
-    <div class="pgm-section-title"><i class="ti ti-calendar-x"></i> Resumo — datas com estoque ausente <span class="pgm-section-hint">${datas.length} data${datas.length === 1 ? '' : 's'}</span></div>
-    <div class="pgm-date-grid">${datas.map(e => `
+  const resumo = _pgmSection('resumo', 'ti-calendar-x', 'Resumo — datas com estoque ausente',
+    `${datas.length} data${datas.length === 1 ? '' : 's'}`,
+    `<div class="pgm-date-grid">${datas.map(e => `
       <div class="pgm-date-cell" title="${e.centrais.size} ${e.centrais.size === 1 ? 'central' : 'centrais'} · ${e.pares} par${e.pares === 1 ? '' : 'es'} central×material">
         <div class="pgm-date-cell-day">${fmtPtDate(e.d)}</div>
         <div class="pgm-date-cell-dow">${dowNome[e.d.getDay()]}</div>
         <div class="pgm-date-cell-qty">${e.centrais.size} ${e.centrais.size === 1 ? 'central' : 'centrais'} · ${e.pares} mat.</div>
-      </div>`).join('')}</div>
-  </div>`;
+      </div>`).join('')}</div>`);
 
-  const detalhe = `<div class="pgm-section">
-    <div class="pgm-section-title"><i class="ti ti-list-details"></i> Detalhamento completo
-      <span class="pgm-section-hint">${linhas.length} par${linhas.length === 1 ? '' : 'es'} central×material</span>
-    </div>
-    <table class="pv-table pgm-table">
+  // Ordena in-place: _pgmState.estLinhas aponta pro MESMO array, e é por ele
+  // que o botão "+N" recupera as datas da linha pelo índice (nome de central/
+  // material num atributo onclick quebraria com qualquer aspa no cadastro).
+  linhas.sort((a, b) => b.dias.length - a.dias.length || a.central.localeCompare(b.central, 'pt-BR'));
+
+  const detalhe = _pgmSection('detalhe', 'ti-list-details', 'Detalhamento completo',
+    `${linhas.length} par${linhas.length === 1 ? '' : 'es'} central×material`,
+    `<table class="pv-table pgm-table">
       <thead><tr><th>Central</th><th>Regional</th><th>Material</th><th style="text-align:right">Dias</th><th>Datas sem lançamento</th></tr></thead>
-      <tbody>${linhas
-        .sort((a, b) => b.dias.length - a.dias.length || a.central.localeCompare(b.central, 'pt-BR'))
-        .map(l => `<tr>
+      <tbody>${linhas.map((l, i) => {
+        const visiveis = l.dias.slice(0, _PGM_MAX_CHIPS);
+        const resto    = l.dias.length - visiveis.length;
+        const chips    = visiveis.map(d => `<span class="pv-date-chip pv-date-chip-sm">${fmtPtDate(d)}</span>`).join('');
+        const maisBtn  = resto > 0
+          ? `<button class="pgm-dates-more" type="button"
+               onmouseenter="pendDatasTip(event,${i})" onmouseleave="pendDatasTipHide()"
+               onfocus="pendDatasTip(event,${i})" onblur="pendDatasTipHide()"
+               title="Ver todas as ${l.dias.length} datas">+${resto}</button>`
+          : '';
+        return `<tr>
           <td>${escapeHtml(l.central)}</td>
           <td class="td-muted">${escapeHtml(l.regional)}</td>
-          <td>${escapeHtml(l.material)}${l.semCadastro ? ' <span class="pv-tag-warn">sem cadastro</span>' : ''}</td>
+          <td class="pgm-mat-cell" title="${escapeHtml(l.material)}">${escapeHtml(l.material)}${l.semCadastro ? ' <span class="pv-tag-warn">sem cadastro</span>' : ''}</td>
           <td class="td-mono" style="text-align:right;font-weight:700;color:var(--amber)">${l.dias.length}</td>
-          <td class="pgm-dates-cell">${l.dias.map(d => `<span class="pv-date-chip pv-date-chip-sm">${fmtPtDate(d)}</span>`).join('')}</td>
-        </tr>`).join('')}</tbody>
-    </table>
-  </div>`;
+          <td class="pgm-dates-cell">${chips}${maisBtn}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>`);
 
   return resumo + detalhe;
 }
+
+// ── Tooltip do "+N" da coluna de datas ───────────────────────────────────
+// position:fixed preso ao <body> porque o corpo do modal tem overflow:auto —
+// um popover absoluto dentro da célula seria recortado.
+let _pgmTipEl = null;
+
+function _pgmGetTip() {
+  if (_pgmTipEl && document.body.contains(_pgmTipEl)) return _pgmTipEl;
+  _pgmTipEl = document.createElement('div');
+  _pgmTipEl.className = 'pgm-dates-tip';
+  document.body.appendChild(_pgmTipEl);
+  return _pgmTipEl;
+}
+
+function pendDatasTip(ev, idx) {
+  const l = _pgmState.estLinhas?.[idx];
+  const alvo = ev?.currentTarget;
+  if (!l || !alvo) return;
+
+  const dow = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+  const t = _pgmGetTip();
+  t.innerHTML = `
+    <div class="pgm-dates-tip-head">${escapeHtml(l.central)} · ${escapeHtml(l.material)} — ${l.dias.length} datas</div>
+    <div class="pgm-dates-tip-grid">${l.dias.map(d =>
+      `<span class="pv-date-chip pv-date-chip-sm">${fmtPtDate(d)} <b>${dow[d.getDay()]}</b></span>`).join('')}</div>`;
+  t.style.display = 'block';
+
+  // Ancorado no botão: abaixo por padrão, acima quando não couber; sempre
+  // dentro da viewport nas duas direções.
+  const PAD = 10;
+  const r  = alvo.getBoundingClientRect();
+  const tw = t.offsetWidth;
+  const th = t.offsetHeight;
+  let left = Math.min(r.left, window.innerWidth  - tw - PAD);
+  let top  = r.bottom + 8;
+  if (top + th + PAD > window.innerHeight) top = r.top - th - 8;
+  t.style.left = Math.max(PAD, left) + 'px';
+  t.style.top  = Math.max(PAD, top)  + 'px';
+}
+window.pendDatasTip = pendDatasTip;
+
+function pendDatasTipHide() {
+  if (_pgmTipEl) _pgmTipEl.style.display = 'none';
+}
+window.pendDatasTipHide = pendDatasTipHide;
 
 /** Pills de mês (só OS/NF). */
 function _pgmRenderPills(tab) {
@@ -719,6 +895,9 @@ function _pgmRenderPills(tab) {
 }
 
 function _pgmRender() {
+  // Qualquer re-render descarta o botão "+N" que abriu o tooltip; sem isto ele
+  // ficaria órfão na tela (o mouseleave nunca chega num elemento removido).
+  pendDatasTipHide();
   const tab = _pgmState.tab;
   const per = _pendPeriodo();
 
@@ -741,7 +920,10 @@ function _pgmRender() {
   const note = document.getElementById('pgm-footer-note');
 
   if (tab === 'EST') {
+    // _pgmEstoque popula _pgmState.estLinhas, de onde a faixa de totais lê —
+    // por isso o innerHTML vem primeiro.
     if (body) body.innerHTML = _pgmEstoque();
+    _pgmRenderTotal('EST');
     if (sub)  sub.textContent = per ? `Estoque · período ${fmtPtDate(per.dtIni)} — ${fmtPtDate(per.dtFim)}` : 'Estoque';
     if (cnt)  cnt.textContent = `${nEST} dia${nEST === 1 ? '' : 's'} sem lançamento`;
     if (note) note.textContent = 'Dias esperados sem lançamento — sempre no período do cabeçalho';
@@ -750,6 +932,7 @@ function _pgmRender() {
 
   const itens = _pgmFiltrar(tab);
   if (body) body.innerHTML = _pgmResumoInteg(itens, tab) + _pgmDetalheInteg(itens, tab);
+  _pgmRenderTotal(tab, itens);
 
   const mes = _pgmState.month[tab];
   const escopo = mes === 'periodo'
@@ -783,6 +966,10 @@ function pendOpenGeral() {
 
   // Pinta o spinner antes do cálculo pesado (varredura completa do histórico
   // de Entradas/Saídas na primeira abertura) — mesmo padrão de openPendIntegGlobalModal.
+  // A faixa de totais é esvaziada junto: números da abertura anterior em tela
+  // durante o cálculo seriam lidos como se fossem os novos.
+  const totalEl = document.getElementById('pgm-total');
+  if (totalEl) totalEl.innerHTML = '';
   const body = document.getElementById('pgm-body');
   if (body) body.innerHTML = `<div style="text-align:center;padding:48px;color:var(--text3)">
     <i class="ti ti-loader-2" style="font-size:22px;display:block;margin:0 auto 10px;animation:spin 1s linear infinite"></i>
@@ -795,6 +982,7 @@ window.pendOpenGeral = pendOpenGeral;
 function pendCloseGeral() {
   const overlay = document.getElementById('pgm-overlay');
   if (!overlay) return;
+  pendDatasTipHide();
   overlay.classList.remove('open');
   overlay.setAttribute('aria-hidden', 'true');
 }
@@ -831,3 +1019,8 @@ document.addEventListener('keydown', e => {
 document.addEventListener('click', e => {
   if (e.target?.id === 'pgm-overlay') pendCloseGeral();
 });
+
+// Tooltip de datas é position:fixed; rolar o corpo do modal move o botão que
+// o ancorava, então ele é fechado no scroll. #pgm-body é estático no HTML
+// (só o innerHTML troca), por isso o listener é registrado uma vez só.
+document.getElementById('pgm-body')?.addEventListener('scroll', pendDatasTipHide, { passive: true });
