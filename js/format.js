@@ -3165,14 +3165,14 @@ function _cubPlainText() {
 
 // ── Página de impressão dedicada (mantém o layout do cartão) ──────────
 function _cubAbrirPrint() {
-  const { st, semana, janela, linhas } = cubCalcular();
+  const { st, semana, linhas } = cubCalcular();
   if (!linhas.length) { toast('Nenhuma central neste regional.', 'error'); return; }
   const logoUrl = 'https://concrelagos.com.br/wp-content/uploads/2021/10/Ativo-3.svg';
 
   const rows = linhas.map(l => {
     const tds = _CUB_SUBS.map(s => {
       const cel = l.cells[s.key];
-      return '<td class="num' + (cel.meta === 0 ? ' zero' : '') + '" title="' + escapeHtml(_cubTooltip(l.central, s, cel, janela, st.params).split('|').join(' • ')) + '">' + cel.meta + '</td>';
+      return '<td class="num' + (cel.meta === 0 ? ' zero' : '') + '">' + cel.meta + '</td>';
     }).join('');
     return '<tr><td class="filial">' + escapeHtml(l.central) + '</td>' + tds + '</tr>';
   }).join('');
@@ -3207,7 +3207,6 @@ function _cubAbrirPrint() {
     '.stop{display:flex;gap:10px;margin-top:10px;font-size:12.5px;font-weight:800;line-height:1.55;padding:12px 14px;border-radius:8px;background:rgba(0,0,0,.45);border:1.5px solid rgba(251,191,36,.55);color:#fcd34d}' +
     '.foot{padding:14px 28px;display:flex;justify-content:space-between;border-top:1px solid rgba(255,255,255,.06);font-family:Archivo,sans-serif;font-size:9px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:#b8860b}' +
     '.foot .dt{font-family:"Courier New",monospace;letter-spacing:0;color:#d6c68a}' +
-    '.calc{margin-top:14px;font-size:10px;line-height:1.6;color:#9a8d68;font-family:"Courier New",monospace}' +
     '.action-bar{position:fixed;bottom:16px;right:16px}' +
     '.action-bar button{padding:10px 16px;border-radius:8px;border:none;background:#b8860b;color:#1a1305;font-weight:700;cursor:pointer}' +
     '@media print{body{background:#fff;padding:0}.no-print{display:none}.card{box-shadow:none}}' +
@@ -3225,8 +3224,6 @@ function _cubAbrirPrint() {
     '</tr></thead><tbody>' + rows + '</tbody></table>' +
     ((st.orientacao || '').trim() ? '<div class="info"><span><b>Orientações</b>' + escapeHtml(st.orientacao.trim()) + '</span></div>' : '') +
     ((st.alerta || '').trim() ? '<div class="stop"><span>' + escapeHtml(st.alerta.trim()) + '</span></div>' : '') +
-    '<div class="calc">Cálculo: carretas/semana recebidas entre ' + _fechFmtDate(janela.dtIni) + ' e ' + _fechFmtDate(janela.dtFim) +
-    ' × ' + _cubN(num(st.params.pct), 0) + '% de amostragem × fator do giro (piso 1, teto ' + Math.round(num(st.params.teto)) + ').</div>' +
     '</div>' +
     '<div class="foot"><span>Acompanhamento semanal</span><span class="dt">' + _fechFmtDate(new Date()) + '</span></div>' +
     '</div>' +
