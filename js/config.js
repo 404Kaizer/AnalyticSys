@@ -324,6 +324,13 @@ const _IMPORTAR_DE_CFG = {
     rotulo: it => `${escapeHtml(it.origem)} <span style="color:var(--text3)">— ${escapeHtml(it.alias)}</span>`,
     ordenar: (a, b) => String(a.origem).localeCompare(String(b.origem)),
     render: () => { if (typeof renderMateriais === 'function') renderMateriais(); },
+    // Cadastro importado só passa a valer depois que os registros já
+    // existentes são reprocessados com ele. Capacidades não tem equivalente
+    // (a tabela é derivada dos lançamentos na hora do render), então lá a
+    // chave é ausente e o passo some do overlay.
+    reaplicar: () => { if (typeof reaplicarPadronizacaoMateriais === 'function') reaplicarPadronizacaoMateriais(); },
+    reaplicarLabel: 'Repadronizando materiais já lançados',
+    concluidoLabel: 'Materiais importados',
     boxId: 'novos-materiais-box',
   },
   filiais: {
@@ -338,6 +345,9 @@ const _IMPORTAR_DE_CFG = {
     rotulo: it => `${escapeHtml(it.origem)} <span style="color:var(--text3)">— ${escapeHtml(it.alias)}</span>`,
     ordenar: (a, b) => String(a.origem).localeCompare(String(b.origem)),
     render: () => { if (typeof renderFiliais === 'function') renderFiliais(); },
+    reaplicar: () => { if (typeof reaplicarPadronizacaoCentrais === 'function') reaplicarPadronizacaoCentrais(); },
+    reaplicarLabel: 'Repadronizando centrais já lançadas',
+    concluidoLabel: 'Centrais importadas',
     boxId: 'novos-filiais-box',
   },
   capacidades: {
@@ -356,6 +366,7 @@ const _IMPORTAR_DE_CFG = {
     rotulo: it => `${escapeHtml(it.central)} <span style="color:var(--text3)">— ${escapeHtml(it.grupo)}</span>`,
     ordenar: (a, b) => String(a.central).localeCompare(String(b.central)) || String(a.grupo).localeCompare(String(b.grupo)),
     render: () => { if (typeof renderCapacidades === 'function') renderCapacidades(); },
+    concluidoLabel: 'Capacidades importadas',
     boxId: 'novos-capacidades-box',
   },
 };
@@ -494,17 +505,77 @@ async function confirmarImportarDe(btn) {
     const { userId, email, ...campos } = it;
     return { ...campos, importadoDeId: userId, created: new Date().toLocaleDateString('pt-BR') };
   });
-  cfg.upsert(novos);
 
-  _setBtnLoading(btn, false);
+  // Overlay antes de qualquer trabalho pesado: importar o cadastro inteiro de
+  // um usuário reprocessa a base toda (repadronização + persistStateNow +
+  // renderAll) e trava a interface por segundos. Sem ele o clique parecia não
+  // ter feito nada. Fecha o modal primeiro pra não empilhar duas camadas.
   closeModal('modal-importar-de');
-  if (tipo === 'materiais' && typeof reaplicarPadronizacaoMateriais === 'function') reaplicarPadronizacaoMateriais();
-  if (tipo === 'filiais' && typeof reaplicarPadronizacaoCentrais === 'function') reaplicarPadronizacaoCentrais();
-  await persistStateNow();
-  renderAll();
-  updateImportPrereqUI();
-  _checarNovosParaImportar(tipo);
-  toast(`${novos.length} ${cfg.plural} importado(s) de ${usuariosCount} usuário(s)`);
+  _setBtnLoading(btn, false);
+
+  showLoadingOverlay(`Importando ${cfg.plural}`, `Trazendo ${novos.length} cadastro(s) de ${usuariosCount} usuário(s)...`);
+  if (typeof loadingShowSteps === 'function') loadingShowSteps([
+    { id: 'impde-copiar', icon: 'ti-copy',          label: `Copiando ${novos.length} ${novos.length === 1 ? cfg.singular : cfg.plural}` },
+    ...(cfg.reaplicar ? [{ id: 'impde-reaplicar', icon: 'ti-adjustments', label: cfg.reaplicarLabel }] : []),
+    { id: 'impde-salvar', icon: 'ti-device-floppy', label: 'Salvando no banco local' },
+    { id: 'impde-telas',  icon: 'ti-refresh',       label: 'Atualizando as telas' },
+  ]);
+
+  try {
+    // nextFrame entre os passos: sem ceder o thread, tudo rodaria num bloco
+    // síncrono e o overlay só apareceria pintado no fim, já pronto pra sumir.
+    _lstepSet('impde-copiar', 'running'); _lbarSet(10);
+    await nextFrame();
+    cfg.upsert(novos);
+    _lstepSet('impde-copiar', 'done'); _lbarSet(35);
+
+    if (cfg.reaplicar) {
+      _lstepSet('impde-reaplicar', 'running');
+      updateLoadingOverlay(cfg.reaplicarLabel + '...');
+      await nextFrame();
+      cfg.reaplicar();
+      _lstepSet('impde-reaplicar', 'done');
+    }
+    _lbarSet(60);
+
+    _lstepSet('impde-salvar', 'running');
+    updateLoadingOverlay('Salvando no banco local...');
+    await nextFrame();
+    await persistStateNow();
+    _lstepSet('impde-salvar', 'done'); _lbarSet(85);
+
+    _lstepSet('impde-telas', 'running');
+    updateLoadingOverlay('Atualizando as telas...');
+    await nextFrame();
+    // Poda local dos pendentes ANTES do render: o que acabou de ser copiado
+    // já está em cfg.lista(). Sem isto o alerta continuaria anunciando os
+    // mesmos registros até a recontagem no servidor responder — o usuário
+    // importa 75 capacidades e o sino segue dizendo "75 capacidades novas".
+    const chavesAgora = new Set(cfg.lista().map(cfg.chave));
+    _NOVOS_PENDENTES[tipo] = _itensNovosDe(tipo).filter(it => !chavesAgora.has(cfg.chave(it)));
+    renderAll();
+    updateImportPrereqUI();
+    _lstepSet('impde-telas', 'done'); _lbarSet(100);
+
+    hideLoadingOverlay(cfg.concluidoLabel);
+    toast(`${novos.length} ${cfg.plural} importado(s) de ${usuariosCount} usuário(s)`);
+  } catch (err) {
+    console.error(`[ImportarDe] Falha ao importar ${cfg.plural}:`, err);
+    ['impde-copiar', 'impde-reaplicar', 'impde-salvar', 'impde-telas'].forEach(id => {
+      const el = document.getElementById('lstep-' + id);
+      if (el?.querySelector('.lstep-running')) _lstepSet(id, 'error');
+    });
+    hideLoadingOverlay('Falha na importação');
+    toast('Falha ao importar: ' + (err?.message || 'erro desconhecido'), 'error');
+  } finally {
+    // Limpeza dos steps DEPOIS do fade do overlay (hideLoadingOverlay só
+    // fecha 220ms depois): limpar na hora apagaria os ✓ com o card ainda
+    // na tela.
+    setTimeout(() => { if (typeof loadingHideSteps === 'function') loadingHideSteps(); }, 300);
+    // Recontagem dos pendentes fora do overlay: é uma ida ao servidor e não
+    // deve segurar a tela — o alerta se atualiza sozinho quando responder.
+    _checarNovosParaImportar(tipo);
+  }
 }
 
 // Roda no boot (admin-only, chamado a partir de syncMateriaisFromSupabase/
