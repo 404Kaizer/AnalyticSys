@@ -2701,6 +2701,28 @@
               <button id="btn-861862-sap" class="btn btn-duplicatas-filter" onclick="toggleSomente861862()" title="Filtrar somente entrada (101/801) + transferência duplicada (dois 862)"><i class="ti ti-arrows-exchange"></i> Transf. duplicada</button>
               <button id="btn-fechamento-sap" class="btn btn-fechamento-filter" onclick="abrirFechManager()" title="Gerenciar Ajustes de Fechamento Mensal (Y11/Y12)"><i class="ti ti-calendar-check"></i> Fechamento</button>
               <div id="pend-cad-sap-box"></div>
+              <!-- Exportar: gera a planilha só com os registros que estão
+                   passando pelos filtros atuais (todas as páginas, não só
+                   a visível) — ver exportarSapExcel/exportarSapCsv em
+                   dashboard.js. Reaproveita o visual de .micro-filter-dropdown. -->
+              <div class="micro-filter-group" id="sap-export-wrap">
+                <button class="btn" id="btn-export-sap" onclick="toggleSapExportMenu()" title="Exporta a tabela com os filtros atuais aplicados (todas as páginas)">
+                  <i class="ti ti-file-export"></i> Exportar
+                  <i class="ti ti-chevron-down micro-filter-chev" id="sap-export-chev"></i>
+                </button>
+                <div class="micro-filter-dropdown" id="sap-export-dropdown" style="left:auto;right:0;min-width:190px">
+                  <div class="micro-filter-options">
+                    <div class="micro-filter-option" onclick="exportarSapExcel()">
+                      <i class="ti ti-file-spreadsheet" style="color:var(--green)"></i>
+                      <span class="micro-filter-option-label">Excel (.xlsx)</span>
+                    </div>
+                    <div class="micro-filter-option" onclick="exportarSapCsv()">
+                      <i class="ti ti-file-text" style="color:var(--accent)"></i>
+                      <span class="micro-filter-option-label">CSV (.csv)</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
               <button class="btn btn-primary" onclick="openModal('modal-manual'); setModulo('SAP')"><i class="ti ti-plus"></i> Adicionar</button>
             </div>
           </div>
@@ -3760,11 +3782,17 @@
         </div>
 
         <div class="section-title">Capacidades e Estoque de Segurança</div>
+        <div class="alert-pulse-row">
+          <div id="novos-capacidades-box"></div>
+        </div>
         <div class="table-card" style="margin-bottom:24px">
           <div class="table-header">
             <span class="table-title"><i class="ti ti-barrel"></i> Capacidade por Central e Material</span>
             <div class="table-toolbar">
               <input type="text" class="form-input" id="cap-busca" placeholder="Buscar central, grupo SAP, cód SAP…" style="width:250px;font-size:12px;padding:6px 10px" oninput="debouncedFilter('capacidades', this.value, capFiltrar)">
+              <button class="btn" id="btn-importar-de-capacidades" onclick="abrirImportarDe('capacidades')" title="Trazer o cadastro de capacidade de outro usuário para a sua tela (cria uma cópia sua)">
+                <i class="ti ti-users"></i> Importar de
+              </button>
               <button class="btn" onclick="recalcularCapacidades()" title="Recalcular a partir dos Lançamentos importados">
                 <i class="ti ti-refresh"></i> Recalcular
               </button>

@@ -4385,6 +4385,102 @@ function renderSAP() {
   atualizarBarraLote('sap');
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+// EXPORTAR MOVIMENTAÇÕES SAP (.xlsx / .csv)
+// Exporta exatamente o que está filtrado na tela — getFilteredData('sap')
+// é a mesma fonte do render (busca, filtros de coluna e ordenação já
+// aplicados), só que sem o recorte de página do pageSlice.
+// ═══════════════════════════════════════════════════════════════════════
+const SAP_EXPORT_COLS = [
+  ['Usuário',        r => r.usuario || ''],
+  ['Movimento',      r => r.movimento || ''],
+  ['Ref.',           r => r.ref || ''],
+  ['Documento',      r => r.documento || ''],
+  ['Central',        r => r.central || ''],
+  ['Depósito',       r => r.deposito || ''],
+  ['Dt. Doc.',       r => r.dtDoc || ''],
+  ['Dt. Lançamento', r => r.dtLanc || ''],
+  ['Dt. Registro',   r => r.dtReg || ''],
+  ['Material',       r => r.material || r.materialOriginal || ''],
+  ['Peso',           r => num(r.peso)],
+  ['UM',             r => r.um || ''],
+  ['Custo Unit.',    r => num(r.custoUnit)],
+  ['Custo Total',    r => num(r.valorTotal)],
+  ['Origem',         r => r.fonte === 'manual' ? 'Manual' : 'Importado']
+];
+
+function _sapExportRows() {
+  // _lastFiltered.sap é o resultado já resolvido pelo render (mesmo atalho
+  // do renderSapSummary, ui.js) — evita refazer filtro+sort em bases grandes.
+  const data = _lastFiltered.sap || getFilteredData('sap');
+  if (!data.length) { toast('Nenhum registro filtrado para exportar', 'error'); return null; }
+  return data.map(r => Object.fromEntries(SAP_EXPORT_COLS.map(([h, get]) => [h, get(r)])));
+}
+
+function _sapExportFilename(ext) {
+  return `movimentacoes_sap_${new Date().toISOString().slice(0, 10)}.${ext}`;
+}
+
+function toggleSapExportMenu() {
+  const dd   = document.getElementById('sap-export-dropdown');
+  const chev = document.getElementById('sap-export-chev');
+  const open = dd?.classList.toggle('open');
+  chev?.classList.toggle('open', !!open);
+}
+
+function _closeSapExportMenu() {
+  document.getElementById('sap-export-dropdown')?.classList.remove('open');
+  document.getElementById('sap-export-chev')?.classList.remove('open');
+}
+
+function exportarSapExcel() {
+  _closeSapExportMenu();
+  if (typeof XLSX === 'undefined') { toast('Biblioteca XLSX não carregada.', 'error'); return; }
+  const rows = _sapExportRows();
+  if (!rows) return;
+  const ws = XLSX.utils.json_to_sheet(rows, { header: SAP_EXPORT_COLS.map(c => c[0]) });
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Movimentacoes SAP');
+  XLSX.writeFile(wb, _sapExportFilename('xlsx'));
+  toast(`${rows.length} registro(s) exportado(s)`);
+}
+
+// CSV em padrão pt-BR: separador ";", decimal com vírgula e BOM UTF-8,
+// pra abrir direto no Excel brasileiro sem passar pelo assistente de texto.
+function _sapCsvCell(v) {
+  const s = typeof v === 'number'
+    ? v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 })
+    : String(v ?? '');
+  return /[";\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+function exportarSapCsv() {
+  _closeSapExportMenu();
+  const rows = _sapExportRows();
+  if (!rows) return;
+  const headers = SAP_EXPORT_COLS.map(c => c[0]);
+  const csv = '\ufeff' + [
+    headers.join(';'),
+    ...rows.map(r => headers.map(h => _sapCsvCell(r[h])).join(';'))
+  ].join('\r\n');
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = _sapExportFilename('csv');
+  a.click();
+  URL.revokeObjectURL(url);
+  toast(`${rows.length} registro(s) exportado(s)`);
+}
+
+// Fecha ao clicar fora (mesmo padrão do dg-month-dropdown, acima)
+document.addEventListener('click', e => {
+  const wrap = document.getElementById('sap-export-wrap');
+  const dd   = document.getElementById('sap-export-dropdown');
+  if (wrap && dd?.classList.contains('open') && !wrap.contains(e.target)) _closeSapExportMenu();
+});
+
+Object.assign(window, { toggleSapExportMenu, exportarSapExcel, exportarSapCsv });
+
 // Índice Cód SAP -> Grupo SAP (materiais.codSap -> materiais.alias),
 // cacheado igual ao padrão de getTransferPairIndex (ui.js): versão pelo
 // tamanho de state.materiais, recalcula só quando o cadastro muda.
@@ -4911,17 +5007,16 @@ function _donoDisplay(rec) {
 // comum a lista fica sempre vazia e o box não aparece, sem precisar de
 // nenhuma checagem de papel aqui.
 function _renderNovosPendentesBox(tipo) {
-  const boxId = tipo === 'materiais' ? 'novos-materiais-box' : 'novos-filiais-box';
-  const el = document.getElementById(boxId);
+  const cfg = (typeof _IMPORTAR_DE_CFG !== 'undefined') ? _IMPORTAR_DE_CFG[tipo] : null;
+  if (!cfg) return;
+  const el = document.getElementById(cfg.boxId);
   if (!el) return;
-  const itens = tipo === 'materiais'
-    ? (typeof _materiaisNovosItens !== 'undefined' ? _materiaisNovosItens : [])
-    : (typeof _filiaisNovosItens !== 'undefined' ? _filiaisNovosItens : []);
+  const itens = (typeof _itensNovosDe === 'function') ? _itensNovosDe(tipo) : [];
   if (!itens.length) { el.innerHTML = ''; return; }
   const porEmail = new Map();
   itens.forEach(it => porEmail.set(it.email, (porEmail.get(it.email) || 0) + 1));
   const detalhe = [...porEmail.entries()].map(([email, n]) => `${n} de ${escapeHtml(email)}`).join(', ');
-  const label = tipo === 'materiais' ? (itens.length === 1 ? 'material novo' : 'materiais novos') : (itens.length === 1 ? 'central nova' : 'centrais novas');
+  const label = cfg.novosLabel(itens.length);
   el.innerHTML = `
     <button type="button" class="alert-pulse-btn is-amber" onclick="abrirNovosPendentesDetalhe('${tipo}')" title="${detalhe}">
       <i class="ti ti-bell"></i>
@@ -7147,9 +7242,10 @@ async function restoreAndRender() {
     // Canal Realtime de Fechamento de Período — mesmo padrão, avisa todo
     // mundo na hora quando o ADM fecha/reabre um mês (ver _periodoFechRealtimeInit, ui.js).
     if (typeof _periodoFechRealtimeInit === 'function') _periodoFechRealtimeInit();
-    // Canal Realtime de Capacidades — capacidade/estoque de segurança são
-    // dado GLOBAL da empresa, então a edição de qualquer usuário precisa
-    // chegar no ADM (e nos demais) na hora (ver capRealtimeStart).
+    // Canal Realtime de Capacidades — desde 25/08/2026 o canal é FILTRADO
+    // por user_id: sincroniza as abas/dispositivos do próprio usuário e nada
+    // mais. O cadastro de outra pessoa só chega no ADM por "Importar de"
+    // (ver capRealtimeStart e o bloco ARMAZENAMENTO em capacidades.js).
     if (typeof capRealtimeStart === 'function') capRealtimeStart();
     // Backup condensado (27/07) — reforço periódico silencioso (Etapa 4),
     // cobre o que muda entre importações. Idempotente: seguro chamar de

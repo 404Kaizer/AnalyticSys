@@ -300,7 +300,16 @@ function _setModalCadastroModo({ modalId, btnId, icone, singular, plural, editan
 // pra ver o de outro usuário, o ADM importa explicitamente — cria uma
 // CÓPIA independente (dono = o próprio ADM), nunca visibilidade
 // automática, e nunca escreve na conta do usuário original (só SELECT lá).
-// Compartilhado entre Materiais e Filiais via _IMPORTAR_DE_CFG.
+// Compartilhado entre Materiais, Filiais e Capacidades via _IMPORTAR_DE_CFG.
+//
+// Capacidades entrou aqui em 25/08/2026, quando a tabela deixou de ser
+// global e passou a ter dono (ver o bloco ARMAZENAMENTO em capacidades.js):
+// o ADM precisava continuar enxergando o cadastro dos outros, mas SEM que
+// cada edição alheia reescrevesse a tela dele por Realtime.
+//
+// `upsert` e `chave` vão embrulhados em arrow: config.js carrega ANTES de
+// capacidades.js (ver a ordem dos <script> em index.html), então referenciar
+// upsertCapacidades/capRowKey direto aqui quebraria no load.
 // ═══════════════════════════════════════════════════════════════════════
 const _IMPORTAR_DE_CFG = {
   materiais: {
@@ -311,6 +320,10 @@ const _IMPORTAR_DE_CFG = {
     campos: 'origem, alias, cod_sap, categoria, import_id',
     normalizar: r => ({ origem: r.origem, alias: r.alias, codSap: r.cod_sap || '', categoria: r.categoria || '' }),
     singular: 'material', plural: 'materiais',
+    novosLabel: n => n === 1 ? 'material novo' : 'materiais novos',
+    rotulo: it => `${escapeHtml(it.origem)} <span style="color:var(--text3)">— ${escapeHtml(it.alias)}</span>`,
+    ordenar: (a, b) => String(a.origem).localeCompare(String(b.origem)),
+    render: () => { if (typeof renderMateriais === 'function') renderMateriais(); },
     boxId: 'novos-materiais-box',
   },
   filiais: {
@@ -321,9 +334,37 @@ const _IMPORTAR_DE_CFG = {
     campos: 'origem, alias, cnpj, regional, import_id',
     normalizar: r => ({ origem: r.origem, alias: r.alias, cnpj: r.cnpj || '', regional: r.regional || '' }),
     singular: 'central', plural: 'centrais',
+    novosLabel: n => n === 1 ? 'central nova' : 'centrais novas',
+    rotulo: it => `${escapeHtml(it.origem)} <span style="color:var(--text3)">— ${escapeHtml(it.alias)}</span>`,
+    ordenar: (a, b) => String(a.origem).localeCompare(String(b.origem)),
+    render: () => { if (typeof renderFiliais === 'function') renderFiliais(); },
     boxId: 'novos-filiais-box',
   },
+  capacidades: {
+    table: 'capacidades',
+    lista: () => state.capacidades || [],
+    chave: r => `${String(r.central || '').trim()}|||${String(r.grupo || '').trim()}`,
+    upsert: novos => upsertCapacidades(novos),
+    campos: 'central, grupo, capacidade, seguranca, unidades',
+    normalizar: r => ({
+      central: r.central, grupo: r.grupo,
+      capacidade: r.capacidade, seguranca: r.seguranca,
+      unidades: Array.isArray(r.unidades) ? r.unidades : null
+    }),
+    singular: 'capacidade', plural: 'capacidades',
+    novosLabel: n => n === 1 ? 'capacidade nova' : 'capacidades novas',
+    rotulo: it => `${escapeHtml(it.central)} <span style="color:var(--text3)">— ${escapeHtml(it.grupo)}</span>`,
+    ordenar: (a, b) => String(a.central).localeCompare(String(b.central)) || String(a.grupo).localeCompare(String(b.grupo)),
+    render: () => { if (typeof renderCapacidades === 'function') renderCapacidades(); },
+    boxId: 'novos-capacidades-box',
+  },
 };
+
+// Lista achatada de pendentes por tipo — preenchida por
+// _checarNovosParaImportar, lida pelo modal e pelo box de alerta
+// (_renderNovosPendentesBox, dashboard.js).
+const _NOVOS_PENDENTES = { materiais: [], filiais: [], capacidades: [] };
+function _itensNovosDe(tipo) { return _NOVOS_PENDENTES[tipo] || []; }
 
 // Cache leve de perfis (id -> email) pro seletor de usuários e pra resolver
 // a coluna "Dono" — buscado uma vez por sessão, RLS já libera admin ler
@@ -343,12 +384,10 @@ let _importarDeTipoAtual = null;
 // ou 'usuarios' (toolbar "Importar de" — checkbox por usuário, abrirImportarDe).
 // confirmarImportarDe usa isto pra saber como interpretar os checkboxes marcados.
 let _importarDeModoAtual = null;
-// Lista achatada de registros pendentes (não os usuários) — cada item já
-// tem os dados completos do registro + de quem é, pra render revisável no
-// modal (04/08: antes importava tudo do usuário de uma vez sem o ADM ver
-// o que estava vindo; agora ele marca registro por registro).
-let _materiaisNovosItens = [];
-let _filiaisNovosItens = [];
+// Os itens pendentes (não os usuários) vivem em _NOVOS_PENDENTES, acima —
+// cada item já tem os dados completos do registro + de quem é, pra render
+// revisável no modal (04/08: antes importava tudo do usuário de uma vez sem
+// o ADM ver o que estava vindo; agora ele marca registro por registro).
 
 // Botão do toolbar "Importar de" — escolhe USUÁRIOS pra importar tudo que
 // eles têm pendente de uma vez (ver confirmarImportarDe). Diferente do
@@ -373,7 +412,7 @@ async function abrirImportarDe(tipo) {
   // pronta) quanto o botão do toolbar (pode ser a primeira vez, sem
   // nenhuma checagem prévia nesta sessão).
   await _checarNovosParaImportar(tipo);
-  const itens = tipo === 'materiais' ? _materiaisNovosItens : _filiaisNovosItens;
+  const itens = _itensNovosDe(tipo);
   if (!wrap) return;
   if (!itens.length) {
     wrap.innerHTML = `<span style="font-size:12px;color:var(--text3);padding:4px 6px">Nenhum registro novo — todo o cadastro dos outros usuários já foi importado (ou não há outro usuário com cadastro).</span>`;
@@ -418,7 +457,7 @@ async function abrirNovosPendentesDetalhe(tipo) {
   openModal('modal-importar-de');
 
   await _checarNovosParaImportar(tipo);
-  const itens = tipo === 'materiais' ? _materiaisNovosItens : _filiaisNovosItens;
+  const itens = _itensNovosDe(tipo);
   if (!wrap) return;
   if (!itens.length) {
     wrap.innerHTML = `<span style="font-size:12px;color:var(--text3);padding:4px 6px">Nenhum registro novo — todo o cadastro dos outros usuários já foi importado (ou não há outro usuário com cadastro).</span>`;
@@ -431,7 +470,7 @@ async function abrirNovosPendentesDetalhe(tipo) {
     </label>` +
     itens.map((it, i) => `<label class="micro-filter-option">
         <input type="checkbox" class="chk-importar-de-item" value="${i}">
-        <span class="micro-filter-option-label">${escapeHtml(it.origem)} <span style="color:var(--text3)">— ${escapeHtml(it.alias)}</span> <span style="font-size:10px;color:var(--accent)">de ${escapeHtml(it.email)}</span></span>
+        <span class="micro-filter-option-label">${cfg.rotulo(it)} <span style="font-size:10px;color:var(--accent)">de ${escapeHtml(it.email)}</span></span>
       </label>`).join('');
 }
 
@@ -439,7 +478,7 @@ async function confirmarImportarDe(btn) {
   const tipo = _importarDeTipoAtual;
   const cfg = tipo && _IMPORTAR_DE_CFG[tipo];
   if (!cfg) return;
-  const itens = tipo === 'materiais' ? _materiaisNovosItens : _filiaisNovosItens;
+  const itens = _itensNovosDe(tipo);
   const checked = [...document.querySelectorAll('.chk-importar-de-item:checked')].map(el => el.value);
   if (!checked.length) {
     toast(_importarDeModoAtual === 'usuarios' ? 'Selecione ao menos um usuário' : 'Selecione ao menos um registro', 'error');
@@ -469,11 +508,11 @@ async function confirmarImportarDe(btn) {
 }
 
 // Roda no boot (admin-only, chamado a partir de syncMateriaisFromSupabase/
-// syncFiliaisFromSupabase), depois de importar, e toda vez que o modal
-// "Importar de" abre — compara o que existe pra TODOS os usuários contra o
-// que o ADM já tem e guarda a lista achatada dos que ainda não foram
-// trazidos (não só a contagem). Alimenta o box de alerta E o modal de
-// revisão (renderMateriais/renderFiliais, dashboard.js).
+// syncFiliaisFromSupabase/syncCapacidadesFromSupabase), depois de importar,
+// e toda vez que o modal "Importar de" abre — compara o que existe pra TODOS
+// os usuários contra o que o ADM já tem e guarda a lista achatada dos que
+// ainda não foram trazidos (não só a contagem). Alimenta o box de alerta E o
+// modal de revisão (renderMateriais/renderFiliais/renderCapacidades).
 async function _checarNovosParaImportar(tipo) {
   const cfg = _IMPORTAR_DE_CFG[tipo];
   if (!cfg || !window.supabaseClient || window.currentUser?.role !== 'admin') return;
@@ -494,11 +533,10 @@ async function _checarNovosParaImportar(tipo) {
   if (pendentes.length) {
     itens = pendentes
       .map(r => ({ userId: r.user_id, email: perfis[r.user_id] || r.user_id, ...cfg.normalizar(r) }))
-      .sort((a, b) => a.email.localeCompare(b.email) || a.origem.localeCompare(b.origem));
+      .sort((a, b) => a.email.localeCompare(b.email) || cfg.ordenar(a, b));
   }
-  if (tipo === 'materiais') _materiaisNovosItens = itens; else _filiaisNovosItens = itens;
-  if (tipo === 'materiais' && typeof renderMateriais === 'function') renderMateriais();
-  if (tipo === 'filiais' && typeof renderFiliais === 'function') renderFiliais();
+  _NOVOS_PENDENTES[tipo] = itens;
+  cfg.render();
 }
 
 function abrirCadastroMaterialIndividual(prefill) {

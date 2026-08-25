@@ -19,11 +19,12 @@
 // todo. A média dos CAP_TOP_N maiores aproxima o teto real sem ficar refém de
 // um único pico de digitação errada (o que aconteceria usando só o máximo).
 //
-// ARMAZENAMENTO: capacidade é dado GLOBAL da empresa (public.capacidades,
-// sem user_id) — a capacidade de um silo é a mesma para quem quer que esteja
-// olhando. Toda edição propaga por Realtime para o ADM e os demais usuários.
-// Ver o bloco "ARMAZENAMENTO" abaixo para o porquê de uma linha por
-// central+material em vez de um JSON único.
+// ARMAZENAMENTO: capacidade é dado DO USUÁRIO (public.capacidades, com
+// user_id) — cada um cadastra a sua e nada do que ele digita aparece na tela
+// de outra pessoa. O ADM traz o cadastro alheio por opt-in, no botão
+// "Importar de" (ver _IMPORTAR_DE_CFG.capacidades em config.js). Ver o bloco
+// "ARMAZENAMENTO" abaixo para o porquê da mudança e para o porquê de uma
+// linha por central+material em vez de um JSON único.
 //
 // UNIDADE: silo e tanque são declarados na mesma UM dos lançamentos (kg/L);
 // baia é declarada em DIMENSÕES e sai em m³ (decisão do Hugo: "o volume é da
@@ -88,24 +89,34 @@ function _capCacheSignature() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-// ARMAZENAMENTO — DADO GLOBAL, UMA LINHA POR CENTRAL+MATERIAL
+// ARMAZENAMENTO — DADO DO USUÁRIO, UMA LINHA POR CENTRAL+MATERIAL
 // ══════════════════════════════════════════════════════════════════════════
-// Capacidade de silo/baia/tanque é fato físico da central, não preferência de
-// usuário: mora em public.capacidades, SEM user_id, e vale para todo mundo.
+// public.capacidades tem user_id, e o unique é (user_id, central, grupo):
+// cada usuário tem a sua linha para a mesma central+material.
+//
+// MUDANÇA (25/08/2026). Até então a tabela era global (sem user_id) com a
+// justificativa de que "capacidade de silo é fato físico da central". Na
+// prática o efeito colateral era pior que o ganho: qualquer cadastro de um
+// usuário reescrevia na hora, por Realtime, a tela de TODO MUNDO — inclusive
+// a do ADM, que ficava com os números mudando embaixo do cursor enquanto
+// editava. Agora cada um só vê e só altera o que ele mesmo cadastrou.
+//
+// O ADM continua conseguindo enxergar o cadastro alheio, mas por OPT-IN e
+// nunca automaticamente: botão "Importar de" + alerta de novos cadastros,
+// exatamente como em Materiais e Filiais (_IMPORTAR_DE_CFG, config.js). A
+// importação cria uma CÓPIA com dono = o próprio ADM; a linha do usuário de
+// origem não é tocada (a RLS de UPDATE/DELETE só permite user_id = auth.uid()).
 //
 // Por que uma linha por central+material e não um JSON só (como era antes):
-// com vários usuários editando ao mesmo tempo — que é justamente o ponto do
-// Realtime — um blob único causaria LOST UPDATE. Quem carregasse o mapa,
-// editasse e salvasse por último apagaria a edição do outro. Como cada
-// usuário cuida de uma categoria (agregados, aglomerantes, aditivos), isso
-// aconteceria o tempo todo entre categorias diferentes. Linha por linha,
-// cada edição toca só a sua e ninguém pisa em ninguém.
+// um blob único por usuário causaria LOST UPDATE entre as abas/dispositivos
+// do mesmo usuário — quem carregasse o mapa, editasse e salvasse por último
+// apagaria a edição da outra aba. Linha por linha, cada edição toca só a sua.
 //
 // IMPORTANTE — visibilidade por categoria: as LINHAS da tabela nascem dos
 // lançamentos e materiais LOCAIS de cada usuário (getCapacidadesRows), não
-// daqui. Quem só tem agregados no sistema continua vendo só agregados; as
-// linhas globais de cimento simplesmente não encontram par e ficam
-// invisíveis pra ele. O ADM, que tem tudo, vê tudo.
+// daqui. Quem só tem agregados no sistema continua vendo só agregados; uma
+// linha importada de cimento simplesmente não encontra par e fica invisível
+// pra ele. O ADM, que tem tudo, vê tudo o que importou.
 
 // Índice por chave — evita varredura linear a cada leitura.
 let _capRegIndex = null;
@@ -166,39 +177,86 @@ function capSalvarRegistro(central, grupo, patch) {
 }
 
 async function _capSyncUpsert(rec) {
+  const uid = window.currentUser?.id;
+  if (!uid) return;
   const row = {
+    user_id: uid,
     central: rec.central,
     grupo: rec.grupo,
     capacidade: rec.capacidade,
     seguranca: rec.seguranca,
     unidades: rec.unidades,
-    updated_by: window.currentUser?.id || null
+    updated_by: uid
   };
   const { error } = await window.supabaseClient
     .from('capacidades')
-    .upsert(row, { onConflict: 'central,grupo' });
+    .upsert(row, { onConflict: 'user_id,central,grupo' });
   if (error) {
     console.warn('[Capacidades] Falha ao sincronizar:', error);
     toast('⚠ Salvo nesta sessão, mas não foi possível sincronizar com a nuvem.', 'error');
   }
 }
 
+// O .eq('user_id') não é redundante com a RLS: a policy de DELETE já barra
+// linha de terceiro, mas sem o filtro o ADM apagaria em cascata toda linha
+// da MESMA central+material — ver _supaDeleteOwned (normalize.js) e o bug
+// real que originou aquela função.
 async function _capSyncDelete(central, grupo) {
+  const uid = window.currentUser?.id;
+  if (!uid) return;
   const { error } = await window.supabaseClient
     .from('capacidades')
     .delete()
+    .eq('user_id', uid)
     .eq('central', central)
     .eq('grupo', grupo);
   if (error) console.warn('[Capacidades] Falha ao remover na nuvem:', error);
 }
 
+// Busca SÓ as linhas do dono da sessão. O filtro explícito é obrigatório:
+// a RLS de SELECT libera a tabela inteira pro ADM (é o que alimenta o
+// "Importar de"), então sem ele o ADM voltaria a carregar o cadastro dos
+// outros na tela — exatamente o que esta mudança elimina.
+//
+// Não usa fetchAllRows (normalize.js) de propósito: aquela função pagina por
+// cursor de `id` e injeta a coluna `id` no select. capacidades_params NÃO tem
+// coluna id (a PK é (user_id, key)), então a chamada antiga falhava com
+// "column capacidades_params.id does not exist", derrubava o Promise.all
+// inteiro e caía no catch — na prática syncCapacidadesFromSupabase nunca
+// trouxe nada da nuvem, e o estado vinha só do cache local + Realtime. Passou
+// despercebido porque os 4 parâmetros estavam todos no valor padrão.
+// Aqui a paginação é por .range(), que não exige coluna nenhuma.
+// `ordem` precisa ser ÚNICA dentro do usuário (aqui, as próprias colunas do
+// unique/PK): com .range() sobre ordenação ambígua, linhas empatadas podem
+// repetir numa página e sumir na seguinte.
+const CAP_PAGE_FETCH = 1000;
+async function _capFetchMinhasLinhas(table, columns, ordem) {
+  const uid = window.currentUser?.id;
+  if (!window.supabaseClient || !uid) return [];
+  const todas = [];
+  for (let inicio = 0; ; inicio += CAP_PAGE_FETCH) {
+    let q = window.supabaseClient.from(table).select(columns).eq('user_id', uid);
+    for (const col of ordem) q = q.order(col, { ascending: true });
+    const { data, error } = await q.range(inicio, inicio + CAP_PAGE_FETCH - 1);
+    if (error) throw error;
+    if (!data || !data.length) break;
+    todas.push(...data);
+    if (data.length < CAP_PAGE_FETCH) break;
+  }
+  return todas;
+}
+
 async function syncCapacidadesFromSupabase() {
+  // Sem sessão resolvida não dá pra saber de quem são as linhas — sair aqui
+  // preserva o cache local em vez de zerar state.capacidades com um [] vazio.
+  if (!window.supabaseClient || !window.currentUser?.id) return;
   try {
     const [rows, params] = await Promise.all([
-      fetchAllRows('capacidades', 'central, grupo, capacidade, seguranca, unidades, updated_by, updated_at'),
-      fetchAllRows('capacidades_params', 'key, value')
+      _capFetchMinhasLinhas('capacidades', 'central, grupo, capacidade, seguranca, unidades, updated_by, updated_at', ['central', 'grupo']),
+      _capFetchMinhasLinhas('capacidades_params', 'key, value', ['key'])
     ]);
-    // A nuvem manda: é dado global, não há versão local legítima a preservar.
+    // A nuvem manda: são as linhas do próprio usuário, não há versão local
+    // legítima a preservar.
     state.capacidades = (rows || []).map(r => ({
       central: r.central, grupo: r.grupo,
       capacidade: r.capacidade == null ? null : num(r.capacidade),
@@ -210,9 +268,75 @@ async function syncCapacidadesFromSupabase() {
     state.capacidadesParams = Object.fromEntries((params || []).map(p => [p.key, p.value]));
     _capInvalidarRegIndex();
     capInvalidarCache();
+    // Só o ADM tem SELECT na tabela inteira — a função sai sozinha pros
+    // demais. Sem await: alimenta o alerta de novos cadastros em segundo
+    // plano, não pode atrasar o boot (mesmo padrão de materiais/filiais).
+    if (window.currentUser?.role === 'admin' && typeof _checarNovosParaImportar === 'function') {
+      _checarNovosParaImportar('capacidades');
+    }
   } catch (err) {
     console.warn('[Capacidades] Falha ao buscar — mantendo dados locais.', err);
   }
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// "IMPORTAR DE" — o ADM traz o cadastro de outro usuário para DENTRO do seu
+// ══════════════════════════════════════════════════════════════════════════
+// Chamado por confirmarImportarDe (config.js) com uma lista já normalizada
+// ({ central, grupo, capacidade, seguranca, unidades, ... }). Cria uma CÓPIA
+// com dono = o próprio ADM; a linha do usuário de origem não é tocada — a RLS
+// de UPDATE só permite user_id = auth.uid().
+//
+// O importadoDeId que confirmarImportarDe injeta é ignorado de propósito:
+// aqui não existe coluna "Dono" na tabela (ao contrário de Materiais/Filiais,
+// ver _donoDisplay em dashboard.js), e guardar um campo que ninguém lê e que
+// o próximo boot descartaria só criaria estado enganoso.
+//
+// Um upsert em LOTE, não capSalvarRegistro linha a linha: importar 70+
+// centrais viraria 70+ requisições sequenciais, com a tela travada no meio.
+function upsertCapacidades(novos) {
+  if (!Array.isArray(novos) || !novos.length) return;
+  const arr = _capRegistros();
+  const importados = [];
+
+  for (const n of novos) {
+    const central = String(n.central || '').trim();
+    const grupo   = String(n.grupo || '').trim();
+    if (!central || !grupo) continue;
+
+    const rec = {
+      central, grupo,
+      capacidade: n.capacidade == null ? null : num(n.capacidade),
+      seguranca:  n.seguranca  == null ? null : num(n.seguranca),
+      unidades: Array.isArray(n.unidades) && n.unidades.length ? n.unidades : null
+    };
+    // Linha que não carrega nenhuma informação não vale a cópia.
+    if (_capRegistroVazio(rec)) continue;
+
+    const i = arr.findIndex(r => capRowKey(r.central, r.grupo) === capRowKey(central, grupo));
+    if (i >= 0) arr[i] = { ...arr[i], ...rec }; else arr.push(rec);
+    importados.push(rec);
+  }
+
+  _capInvalidarRegIndex();
+  capInvalidarCache();
+  if (!importados.length) return;
+
+  const uid = window.currentUser?.id;
+  if (!window.supabaseClient || !uid) return;
+  window.supabaseClient
+    .from('capacidades')
+    .upsert(importados.map(r => ({
+      user_id: uid, central: r.central, grupo: r.grupo,
+      capacidade: r.capacidade, seguranca: r.seguranca, unidades: r.unidades,
+      updated_by: uid
+    })), { onConflict: 'user_id,central,grupo' })
+    .then(({ error }) => {
+      if (error) {
+        console.warn('[Capacidades] Falha ao sincronizar importação:', error);
+        toast('⚠ Importado nesta sessão, mas não foi possível sincronizar com a nuvem.', 'error');
+      }
+    });
 }
 
 // ── Estrutura física declarada ────────────────────────────────────────────
@@ -224,10 +348,12 @@ function capGetUnidades(key) {
   return (rec && Array.isArray(rec.unidades)) ? rec.unidades : [];
 }
 
-// ── Parâmetros globais ────────────────────────────────────────────────────
-// public.capacidades_params — chave é a PK, uma linha por parâmetro, sem
-// dono. Não podem ficar em configs porque lá o unique é (user_id, key) e
-// cada usuário acabaria com a sua própria cópia do mesmo parâmetro.
+// ── Parâmetros por usuário ────────────────────────────────────────────────
+// public.capacidades_params — PK (user_id, key), uma linha por parâmetro POR
+// USUÁRIO (25/08/2026, mesma mudança da tabela de capacidades acima): o % de
+// estoque de segurança e o aproveitamento da baia são critério de análise de
+// quem está olhando, e mexer neles não pode reescrever a régua dos outros.
+// Quem não tem linha própria cai nos padrões (CAP_PCT_PADRAO / CAP_FATOR_BAIA_PADRAO).
 function capParam(key) {
   const p = state.capacidadesParams;
   return (p && typeof p === 'object') ? p[key] : undefined;
@@ -237,10 +363,11 @@ function capSalvarParam(key, valor) {
   if (!state.capacidadesParams || typeof state.capacidadesParams !== 'object') state.capacidadesParams = {};
   state.capacidadesParams[key] = String(valor);
   persist();
-  if (!window.supabaseClient) return;
+  const uid = window.currentUser?.id;
+  if (!window.supabaseClient || !uid) return;
   window.supabaseClient
     .from('capacidades_params')
-    .upsert({ key, value: String(valor), updated_by: window.currentUser?.id || null }, { onConflict: 'key' })
+    .upsert({ user_id: uid, key, value: String(valor), updated_by: uid }, { onConflict: 'user_id,key' })
     .then(({ error }) => {
       if (error) {
         console.warn('[Capacidades] Falha ao sincronizar parâmetro:', error);
@@ -328,7 +455,7 @@ function salvarPctSeguranca() {
   if (!salvos) { toast('Informe percentuais maiores que zero', 'error'); return; }
   capInvalidarCache();
   renderCapacidades();
-  toast(`${salvos} parâmetro(s) salvo(s) — vale para todos os usuários`);
+  toast(`${salvos} parâmetro(s) salvo(s) — vale só para o seu usuário`);
 }
 
 // ── Cálculo ───────────────────────────────────────────────────────────────
@@ -833,6 +960,10 @@ function renderCapacidades() {
   if (!tb) return;
   loadCapPctInputs();
   renderCapRegras();
+  // Antes do early-return de tabela vazia: o alerta de "há cadastro de outro
+  // usuário pra importar" é justamente o que o ADM precisa ver quando a
+  // própria tabela dele ainda está vazia.
+  if (typeof _renderNovosPendentesBox === 'function') _renderNovosPendentesBox('capacidades');
 
   const data = capDadosFiltrados();
   const totalPages = Math.max(1, Math.ceil(data.length / CAP_PAGE_SIZE));
@@ -1216,22 +1347,26 @@ function recalcularCapacidades() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-// REALTIME — a edição de um usuário chega nos outros (e no ADM) na hora
+// REALTIME — só entre as abas/dispositivos DO PRÓPRIO USUÁRIO
 // ══════════════════════════════════════════════════════════════════════════
-// Um canal só para as duas tabelas. Como o dado é global e sem dono, todo
-// mundo recebe tudo; o que cada um VÊ continua limitado às linhas que os
-// próprios lançamentos/materiais geram (ver getCapacidadesRows).
+// Um canal só para as duas tabelas, com filtro user_id=eq.<meu id> nas duas.
+//
+// O filtro é o coração da mudança de 25/08/2026: antes o canal era aberto
+// sem filtro e a edição de qualquer pessoa reescrevia a tela de todas as
+// outras. Ele TAMBÉM não é dispensável no caso do ADM — a RLS de SELECT
+// libera a tabela inteira pra ele (pro "Importar de" funcionar), e o
+// Realtime respeita a RLS, então sem o filtro o ADM continuaria recebendo
+// evento de todo mundo. Pro ADM, o cadastro alheio chega só por opt-in
+// ("Importar de" / alerta de novos cadastros), nunca sozinho na tela.
 let _capChannel = null;
-
-// Marca que a mudança veio de OUTRA pessoa — o valor mudando sozinho na
-// tela sem aviso confundiria ("eu não editei isso"). O eco da própria
-// escrita também volta pelo canal e não deve avisar nada.
-let _capMudouRemoto = false;
 
 function _capAplicarEventoLinha(payload, tipo) {
   const row = tipo === 'DELETE' ? payload.old : payload.new;
   if (!row?.central || !row?.grupo) return;
-  if (row.updated_by && row.updated_by !== window.currentUser?.id) _capMudouRemoto = true;
+  // Cinto de segurança caso o filtro do canal não pegue (DELETE com replica
+  // identity incompleta, por exemplo): nunca aplicar linha de outro dono.
+  const uid = window.currentUser?.id;
+  if (row.user_id && uid && row.user_id !== uid) return;
   const arr = _capRegistros();
   const key = capRowKey(row.central, row.grupo);
   const i = arr.findIndex(r => capRowKey(r.central, r.grupo) === key);
@@ -1252,8 +1387,8 @@ function _capAplicarEventoLinha(payload, tipo) {
   _capInvalidarRegIndex();
 }
 
-// Re-render debounced: uma rajada de edições em massa de outro usuário vira
-// um render só, em vez de um por linha.
+// Re-render debounced: uma rajada de edições em massa vinda de outra aba
+// vira um render só, em vez de um por linha.
 let _capRerenderTimer = null;
 function _capAgendarRerender() {
   clearTimeout(_capRerenderTimer);
@@ -1267,24 +1402,22 @@ function _capAgendarRerender() {
       && document.getElementById('an-view-pane-micro')?.style.display !== 'none'
       && document.querySelector('#an-micro-container .micro-filial-card');
     if (microVisivel && typeof rodarAnalitico === 'function') rodarAnalitico();
-
-    if (_capMudouRemoto) {
-      _capMudouRemoto = false;
-      toast('Capacidades atualizadas por outro usuário');
-    }
   }, 600);
 }
 
 function capRealtimeStart() {
-  if (!window.supabaseClient || _capChannel) return;
+  const uid = window.currentUser?.id;
+  if (!window.supabaseClient || !uid || _capChannel) return;
+  const meu = `user_id=eq.${uid}`;
   _capChannel = window.supabaseClient
     .channel('capacidades_realtime')
-    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'capacidades' }, p => { _capAplicarEventoLinha(p, 'INSERT'); _capAgendarRerender(); })
-    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'capacidades' }, p => { _capAplicarEventoLinha(p, 'UPDATE'); _capAgendarRerender(); })
-    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'capacidades' }, p => { _capAplicarEventoLinha(p, 'DELETE'); _capAgendarRerender(); })
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'capacidades_params' }, p => {
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'capacidades', filter: meu }, p => { _capAplicarEventoLinha(p, 'INSERT'); _capAgendarRerender(); })
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'capacidades', filter: meu }, p => { _capAplicarEventoLinha(p, 'UPDATE'); _capAgendarRerender(); })
+    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'capacidades', filter: meu }, p => { _capAplicarEventoLinha(p, 'DELETE'); _capAgendarRerender(); })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'capacidades_params', filter: meu }, p => {
       const row = p.eventType === 'DELETE' ? p.old : p.new;
       if (!row?.key) return;
+      if (row.user_id && row.user_id !== window.currentUser?.id) return;
       if (!state.capacidadesParams || typeof state.capacidadesParams !== 'object') state.capacidadesParams = {};
       if (p.eventType === 'DELETE') delete state.capacidadesParams[row.key];
       else state.capacidadesParams[row.key] = row.value;
@@ -1310,7 +1443,7 @@ Object.assign(window, {
   abrirEdicaoCapacidadesSelecionadas, salvarEdicaoCapacidadesEmMassa,
   restaurarCapacidadesSelecionadas, recalcularCapacidades,
   capInvalidarCache, getCapacidadesRows, getCapacidadeCentralMaterial,
-  syncCapacidadesFromSupabase, capRealtimeStart, capRealtimeStop,
+  syncCapacidadesFromSupabase, capRealtimeStart, capRealtimeStop, upsertCapacidades,
   classificarEstoqueCapacidade, capExplicacaoFaixa, capLimite, CAP_FAIXAS,
   buildCapacidadeSection, irParaCapacidades, capFaixasDaCentral,
   abrirEstruturaCapacidade, salvarEstruturaCapacidade, adicionarUnidadeEstrutura,

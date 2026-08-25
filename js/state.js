@@ -35,14 +35,15 @@ const defaultState = () => ({
   regionaisCentrais: [],
   ocorrencias: [],
   acoesRelatorio: [],
-  // Capacidade/estoque de segurança por central+material. DADO GLOBAL da
-  // empresa (tabela public.capacidades, sem user_id): a capacidade de um
-  // silo é a mesma para quem quer que esteja olhando. Chega e sai por
-  // Realtime — ver capRealtimeStart em capacidades.js.
+  // Capacidade/estoque de segurança por central+material. DADO DO USUÁRIO
+  // (tabela public.capacidades, unique por user_id+central+grupo): cada um
+  // cadastra o seu e não enxerga o dos outros. O ADM traz o cadastro alheio
+  // por opt-in ("Importar de") — ver o bloco ARMAZENAMENTO em capacidades.js.
+  // O Realtime é filtrado por user_id, só sincroniza as abas do próprio dono.
   // Cada item: { central, grupo, capacidade, seguranca, unidades, updated_by, updated_at }
   capacidades: [],
-  // Parâmetros globais da mesma seção (percentuais, fator da baia, limites
-  // das faixas) — tabela public.capacidades_params, mapa key → value.
+  // Parâmetros da mesma seção, também por usuário (percentuais de segurança e
+  // fator da baia) — tabela public.capacidades_params, mapa key → value.
   capacidadesParams: {},
   notifications: [],  // { id, type, level, title, body, source, createdAt, read }
   // Justificativas do fechamento de Inventário — array de
