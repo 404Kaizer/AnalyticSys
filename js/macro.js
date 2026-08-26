@@ -680,6 +680,13 @@ function _renderDonut(type, counts, top5, levelMeta, healthScore, totalCount, it
 
   const maxVal = Math.max(...top5.map(i => Math.abs(i.diff ?? i.worstDiff ?? 0)), 0.001);
 
+  // Cada linha do ranking é clicável: filtra a Visão Micro pela central /
+  // material da linha e leva a tela até lá (ver _macroFocusMicro).
+  const focusKey = type === 'centrais' ? 'central' : 'material';
+  const focusHint = focusKey === 'central'
+    ? 'Ver esta central na Visão Micro'
+    : 'Ver este material na Visão Micro';
+
   impEl.innerHTML = top5.map(item => {
     const col    = _levelColor[item.level];
     const dv     = item.diff ?? item.worstDiff ?? 0;
@@ -700,9 +707,13 @@ function _renderDonut(type, counts, top5, levelMeta, healthScore, totalCount, it
       ? `<span style="font-size:9px;margin-left:4px;color:${item.trend==='worsening'?'#f43f5e':'#10b981'}">${item.trend==='worsening'?'▲':'▼'}</span>`
       : '';
 
-    return `<div class="macro-bar-row">
+    return `<div class="macro-bar-row macro-bar-row-clickable" role="button" tabindex="0"
+      title="${escapeHtml(item.name||'')} — ${focusHint}"
+      data-focus-value="${escapeHtml(item.name||'')}"
+      onclick="_macroFocusMicro('${focusKey}', this)"
+      onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();_macroFocusMicro('${focusKey}', this)}">
       <div style="min-width:130px;max-width:155px;overflow:hidden">
-        <div class="macro-bar-label" title="${escapeHtml(item.name||'')}">${escapeHtml(name)}${trendHtml}</div>
+        <div class="macro-bar-label">${escapeHtml(name)}${trendHtml}</div>
         ${sub ? `<div class="macro-bar-label-sub">${escapeHtml(sub)}</div>` : ''}
         ${countsTip ? `<div class="macro-bar-label-sub">${countsTip}</div>` : ''}
       </div>
@@ -713,6 +724,16 @@ function _renderDonut(type, counts, top5, levelMeta, healthScore, totalCount, it
       <span class="macro-bar-level" style="background:${lvlCol}18;color:${lvlCol};border:1px solid ${lvlCol}35">${lvlLbl}</span>
     </div>`;
   }).join('');
+}
+
+// ── Clique numa linha do ranking → foca a Visão Micro ─────────────────
+// O valor vem do data-attribute (e não inline no onclick) para não quebrar
+// com aspas/apóstrofos no nome da central ou do material.
+function _macroFocusMicro(key, el) {
+  const value = el?.dataset?.focusValue || '';
+  if (!value) return;
+  if (typeof microFocusFromMacro !== 'function') return;
+  microFocusFromMacro(key, value);
 }
 
 // ── Crank panel ───────────────────────────────────────────────────────
@@ -787,4 +808,4 @@ function _crankCopy(levelKey) {
 }
 
 
-Object.assign(window, { renderMacroPanels, macroApplyFilter, _crankCopy, _crankOpenDetail });
+Object.assign(window, { renderMacroPanels, macroApplyFilter, _crankCopy, _crankOpenDetail, _macroFocusMicro });

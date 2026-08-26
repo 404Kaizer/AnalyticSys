@@ -1089,6 +1089,14 @@ td.pending-cell  { color: var(--text3) !important; font-style: italic; font-size
   cursor: default;
 }
 .macro-bar-row:hover { background: var(--bg3); }
+/* Linha do ranking que leva à Visão Micro filtrada (ver _macroFocusMicro) */
+.macro-bar-row-clickable { cursor: pointer; }
+.macro-bar-row-clickable:hover .macro-bar-label { color: var(--accent); }
+.macro-bar-row-clickable:focus-visible {
+  background: var(--bg3);
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
 .macro-bar-label {
   width: 155px;
   flex-shrink: 0;

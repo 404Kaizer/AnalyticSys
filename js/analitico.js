@@ -2628,6 +2628,80 @@ function clearAllMicroFilters() {
   _updateMicroContainerHeightLock(false);
 }
 
+// ── Foco vindo da Visão Macro ────────────────────────────────────────────
+// Clique numa linha dos rankings "Piores centrais/materiais por criticidade"
+// (macro.js) → aplica na Visão Micro o filtro da dimensão clicada, garante
+// que a aba Micro esteja ativa e rola até ela.
+//
+// Zera os demais filtros de propósito: se um filtro anterior (Regional,
+// Saúde, Capacidade…) continuasse valendo, o item clicado poderia
+// simplesmente não passar por ele e o clique pareceria não ter funcionado.
+function microFocusFromMacro(key, value) {
+  if (key !== 'central' && key !== 'material') return;
+  const val = (value || '').trim();
+  if (!val) return;
+
+  clearAllMicroFilters();
+  _microFilter.applied[key] = new Set([val]);
+  _microFilter.pending[key] = new Set([val]);
+  _syncTriggerLabel(key);
+  _syncClearBtn();
+  _applyMicroVisibility();
+
+  if (typeof anSwitchView === 'function') anSwitchView('micro');
+  _expandMicroAfterFocus();
+
+  _updateMicroContainerHeightLock(false);
+  requestAnimationFrame(_scrollToMicroView);
+}
+
+// Toda análise deixa regionais e centrais recolhidos (ver fim de
+// _rodarAnaliticoCore). Depois de um foco vindo da Macro isso deixaria a
+// tela rolar até um bloco fechado, então aqui abrimos o que sobrou visível:
+// todos os regionais, e os cards de central só quando são poucos — clicar
+// num material pode deixar dezenas de centrais em pé, e abrir todas de uma
+// vez trava a rolagem sem ajudar ninguém.
+const _FOCUS_MAX_CARDS_EXPAND = 15;
+
+function _expandMicroAfterFocus() {
+  const groups = [...document.querySelectorAll('#an-micro-container .regional-group')]
+    .filter(g => g.style.display !== 'none');
+  groups.forEach(group => {
+    const body = group.querySelector('.regional-group-body');
+    const chev = group.querySelector('.regional-group-chev');
+    if (body) body.classList.add('open');
+    group.classList.remove('collapsed');
+    if (chev) chev.style.transform = '';
+  });
+  if (groups.length) {
+    _regionaisExpanded = true;
+    _updateToggleRegionaisBtn();
+    _updateRegionalFocus();
+  }
+
+  const cards = [...document.querySelectorAll('#an-micro-container .micro-filial-card')]
+    .filter(c => c.style.display !== 'none');
+  if (!cards.length || cards.length > _FOCUS_MAX_CARDS_EXPAND) return;
+  cards.forEach(card => {
+    const body = card.querySelector('.micro-filial-body');
+    const wrap = card.querySelector('.micro-filial-header-wrap');
+    if (body && wrap && !body.classList.contains('open')) toggleMicro(wrap);
+  });
+  _centraisExpanded = true;
+  _updateToggleCentralisBtn();
+}
+
+// Rola suavemente até o seletor de visões, descontando a topbar fixa para
+// que as abas e a barra de filtros não fiquem escondidas embaixo dela.
+function _scrollToMicroView() {
+  const anchor = document.querySelector('#an-content .an-view-switch')
+              || document.getElementById('an-view-pane-micro');
+  if (!anchor) return;
+  const topbarH = document.querySelector('.topbar')?.offsetHeight || 0;
+  const y = anchor.getBoundingClientRect().top + window.pageYOffset - topbarH - 12;
+  window.scrollTo({ top: Math.max(0, y), behavior: 'smooth' });
+}
+
 // ── Saúde filter state (replaces old variação % filter) ──
 const _varFilter = {
   pending:  { levels: new Set() },
@@ -2986,7 +3060,7 @@ Object.assign(window, { _microFilterCheckChange, toggleMicroFilter, filterMicroO
   applyMicroFilter, cancelMicroFilter, clearMicroFilter, clearAllMicroFilters,
   expandAllMicro, collapseAllMicro, toggleAllRegionais, toggleAllCentralis, populateMicroFilterOptions,
   _buildVariacaoOptions, _varFilterChange, _tipoVarChange, _tipoVarSyncToState, _tipoVarIsActive,
-  _buildCapacidadeOptions, _capFilterChange });
+  _buildCapacidadeOptions, _capFilterChange, microFocusFromMacro });
 
 // ═══════════════════════════════════════════════════════════
 
