@@ -3299,8 +3299,9 @@ function openAnaliticoDetailModal(detailKey) {
   if (!overlay || !title || !sub || !body || !fullBtn) return;
 
   analiticoDetailState.key = String(detailKey);
-  analiticoDetailState.fullscreen = false;
-  overlay.classList.remove('is-fullscreen');
+  // Abre sempre expandido (tela cheia); o botão segue disponível pra recolher.
+  analiticoDetailState.fullscreen = true;
+  overlay.classList.add('is-fullscreen');
   title.textContent = `${payload.material}`;
   sub.textContent = `${payload.central} · ${payload.periodLabel}`;
   body.innerHTML = buildAnaliticoDetailHtml(payload);
@@ -3309,7 +3310,7 @@ function openAnaliticoDetailModal(detailKey) {
   overlay.classList.add('open');
   overlay.setAttribute('aria-hidden', 'false');
   document.body.classList.add('analitico-modal-open');
-  fullBtn.innerHTML = '<i class="ti ti-maximize"></i> <span>Expandir</span>';
+  fullBtn.innerHTML = '<i class="ti ti-minimize"></i> <span>Recolher</span>';
 }
 
 function closeAnaliticoDetailModal() {
