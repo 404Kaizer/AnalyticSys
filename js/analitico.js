@@ -822,28 +822,26 @@ document.addEventListener('click', e => {
 
 
 // ═══════════════════════════════════════════════════════════
-// ORDENAÇÃO DAS TABELAS DO CARD (Análise por Material / por Central)
+// ORDENAÇÃO DAS TABELAS DOS CARDS DA VISÃO MICRO
 // ═══════════════════════════════════════════════════════════
-// A tabela é a MESMA nos dois agrupamentos (só a 1ª coluna troca de papel),
-// então uma configuração só atende os dois.
+// Serve as DUAS tabelas do card, nos dois agrupamentos:
+//   • Análise por Material / por Central  (aqui, buildCentralCard)
+//   • Capacidade e Estoque de Segurança   (buildCapacidadeSection, capacidades.js)
 //
-// A ordenação é feita no DOM, reordenando os <tr> — não re-renderiza o card.
+// Contrato do markup — nada é fixo no JS, tudo vem da própria tabela:
+//   <th data-sort-col="N" data-sort-type="text|date|num|abs" onclick="sortMicroTable(this,event)">
+//   <tr data-sort-0="..." data-sort-1="..." ...>   ← valor CRU de cada coluna
+// Linhas sem data-sort-0 (ex.: a linha de estado vazio com colspan) ficam
+// paradas onde estão.
+//
+// A ordenação é feita no DOM, reordenando os <tr> — não re-renderiza nada.
 // Isso mantém intactos o breakdown de Entradas/Saídas/Ajustes, os tooltips
-// e o estado de filtro de cada linha (linhas escondidas por filtro seguem
-// escondidas no lugar novo).
+// e o estado de filtro de cada linha (linha escondida por filtro segue
+// escondida no lugar novo).
 //
 // Ícone/estilo vêm do padrão já usado nas tabelas de módulo
 // (th[data-sort-col] + .mod-sort-icon, ver components.css) — nada de CSS novo.
 const _SORT_ICO = '<i class="ti ti-selector mod-sort-icon"></i>';
-
-// Tipo por coluna, na mesma ordem do <thead>:
-//   'text' → alfabético (numeric:true resolve "10" vs "9" em Cód SAP)
-//   'date' → chave AAAA-MM-DD, comparada como texto
-//   'num'  → numérico com sinal
-//   'abs'  → numérico pelo MÓDULO (pedido do Hugo): num ranking de variação,
-//            desfalque de 500 kg e sobra de 500 kg são o mesmo tamanho de
-//            problema, e ordenar pelo sinal jogaria metade deles pro fim.
-const _MICRO_SORT_TYPES = ['text','text','date','num','num','num','num','date','num','num','abs','abs'];
 
 // "31/07/2026" → "2026-07-31" (ordenável como texto). Deriva do MESMO rótulo
 // que a célula exibe, então nunca diverge do que está na tela.
@@ -863,10 +861,15 @@ function sortMicroTable(th, event) {
   const tbody = table?.querySelector('tbody');
   if (isNaN(col) || !tbody) return;
 
-  const rows = [...tbody.querySelectorAll('tr.material-row')];
+  const rows = [...tbody.querySelectorAll('tr')].filter(r => r.hasAttribute('data-sort-0'));
   if (rows.length < 2) return;
 
-  const tipo    = _MICRO_SORT_TYPES[col] || 'text';
+  // Tipos: 'text' alfabético (numeric:true resolve "10" vs "9" em Cód SAP),
+  // 'date' chave AAAA-MM-DD comparada como texto, 'num' numérico com sinal,
+  // 'abs' numérico pelo MÓDULO (pedido do Hugo) — num ranking de variação,
+  // desfalque de 500 kg e sobra de 500 kg são o mesmo tamanho de problema, e
+  // ordenar pelo sinal jogaria metade deles pro fim.
+  const tipo    = th.dataset.sortType || 'text';
   const isTexto = tipo === 'text' || tipo === 'date';
   // 1º clique: crescente em texto/data, DECRESCENTE em número — quem abre
   // uma coluna de variação ou estoque quer o maior no topo, não o zero.
@@ -1107,19 +1110,31 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
     if (!window.__analiticoSemCadastroCache) window.__analiticoSemCadastroCache = new Map();
     if (!isMat) window.__analiticoSemCadastroCache.set(idx, { central: r.central, materiais: _matsSemCadastroCentral });
 
-    // Ordena materiais: maior desfalque (diff mais negativo) → maior sobra (diff mais positivo)
-    // Calcula o "score" (diff) uma única vez por material — transformada de
-    // Schwartzian, mesmo padrão já usado na ordenação das centrais (ver
-    // getVariacaoCentral/variacaoCentralCache em renderAnaliticoMicro) — em
-    // vez de recalcular a cada comparação do sort (o comparador antigo
-    // rodava getPrePeriodLaunchStock + buildSnapshot O(m log m) vezes).
-    const _itemDiffScore = (item) => {
-      const prev = _anGetSapStock({ central: centralOf(item), material: matOf(item), dtIni });
-      return buildSnapshot({ lancs: lancsByItem.get(item) || [], sap: sapByItem.get(item) || [], initialStockOverride: prev?.value ?? null }).diff;
+    // Ordem padrão das linhas: PIOR SAÚDE primeiro (decisão do Hugo) —
+    // crítico → urgente → atenção → bom, o mesmo nível do ícone de
+    // criticidade que a linha exibe. Empate dentro do nível cai para a
+    // MAGNITUDE da variação (maior primeiro): dentro de "crítico", quem
+    // está 5 t fora vem antes de quem está 1 t fora, seja desfalque ou
+    // sobra. Antes a ordem era pelo diff com sinal, o que empurrava as
+    // maiores sobras para o fim da tabela mesmo sendo tão graves quanto os
+    // maiores desfalques.
+    //
+    // A chave é calculada uma única vez por item (transformada de
+    // Schwartzian, mesmo padrão da ordenação dos cards em
+    // renderAnaliticoMicro) — o comparador antigo rodava
+    // getPrePeriodLaunchStock + buildSnapshot O(n log n) vezes.
+    const _NIVEL_ORDEM = { critico: 0, urgente: 1, atencao: 2, bom: 3, sem_cadastro: 4 };
+    const _itemSortKey = (item) => {
+      const itemCentral = centralOf(item);
+      const itemMat     = matOf(item);
+      const prev = _anGetSapStock({ central: itemCentral, material: itemMat, dtIni });
+      const diff = buildSnapshot({ lancs: lancsByItem.get(item) || [], sap: sapByItem.get(item) || [], initialStockOverride: prev?.value ?? null }).diff;
+      const nivel = classifyVariation(Math.abs(diff), _catKeyOf(resOf(itemCentral) || {}, itemMat), thresholds);
+      return { ordem: _NIVEL_ORDEM[nivel] ?? 9, magnitude: Math.abs(diff) };
     };
     const allItemsSorted = (isMat ? (r.centrais || []) : r.allMats)
-      .map(item => ({ item, score: _itemDiffScore(item) }))
-      .sort((a, b) => a.score - b.score)
+      .map(item => ({ item, k: _itemSortKey(item) }))
+      .sort((a, b) => (a.k.ordem - b.k.ordem) || (b.k.magnitude - a.k.magnitude))
       .map(entry => entry.item);
 
     allItemsSorted.forEach((item, matIdx) => {
@@ -1947,18 +1962,18 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
           <table>
             <thead>
               <tr>
-                <th data-sort-col="0" onclick="sortMicroTable(this,event)">${itemLabel} ${_SORT_ICO}</th>
-                <th data-sort-col="1" onclick="sortMicroTable(this,event)">Cód SAP ${_SORT_ICO}</th>
-                <th data-sort-col="2" onclick="sortMicroTable(this,event)">Dt. Est. Inicial ${_SORT_ICO}</th>
-                <th data-sort-col="3" onclick="sortMicroTable(this,event)">Est. Inicial ${_SORT_ICO}<br><span style="font-size:9px;font-weight:400;opacity:.7">(Saldo SAP)</span></th>
-                <th data-sort-col="4" onclick="sortMicroTable(this,event)" title="Compra/recebimento e transferência entre centros (101, 801, 861/862, 301–306) — LÍQUIDO: estornos e transferências para fora entram como negativo e anulam o positivo que os originou">Entradas ${_SORT_ICO}<br><span style="font-size:9px;font-weight:400;opacity:.7">(líq. por código)</span></th>
-                <th data-sort-col="5" onclick="sortMicroTable(this,event)" title="Consumo e seu estorno (201, 202)">Saídas ${_SORT_ICO}<br><span style="font-size:9px;font-weight:400;opacity:.7">(por código)</span></th>
-                <th data-sort-col="6" onclick="sortMicroTable(this,event)" title="Fechamento mensal (Y11/Y12), sucateamento (551/552), transferência entre materiais/depósitos (309/310, 311/312) e qualquer código não classificado">Ajustes ${_SORT_ICO}<br><span style="font-size:9px;font-weight:400;opacity:.7">(líq. por código)</span></th>
-                <th data-sort-col="7" onclick="sortMicroTable(this,event)">Dt. Est. Final ${_SORT_ICO}</th>
-                <th data-sort-col="8" onclick="sortMicroTable(this,event)">Est. Final ${_SORT_ICO}<br><span style="font-size:9px;font-weight:400;opacity:.7">(Últ. Lançamento)</span></th>
-                <th data-sort-col="9" onclick="sortMicroTable(this,event)">Est. Teórico ${_SORT_ICO}<br><span style="font-size:9px;font-weight:400;opacity:.7">(Ini+Ent+Sai+Aju)</span></th>
-                <th data-sort-col="10" onclick="sortMicroTable(this,event)" title="Ordena pelo valor ABSOLUTO: um desfalque e uma sobra do mesmo tamanho pesam igual">Variação ${_SORT_ICO}<br><span style="font-size:9px;font-weight:400;opacity:.7">(Real − Teórico)</span></th>
-                <th data-sort-col="11" onclick="sortMicroTable(this,event)" style="text-align:right" title="Ordena pelo valor ABSOLUTO: um desfalque e uma sobra do mesmo tamanho pesam igual">Custo Variação ${_SORT_ICO}<br><span style="font-size:9px;font-weight:400;opacity:.7">(Var. × C. Médio)</span></th>
+                <th data-sort-col="0" data-sort-type="text" onclick="sortMicroTable(this,event)">${itemLabel} ${_SORT_ICO}</th>
+                <th data-sort-col="1" data-sort-type="text" onclick="sortMicroTable(this,event)">Cód SAP ${_SORT_ICO}</th>
+                <th data-sort-col="2" data-sort-type="date" onclick="sortMicroTable(this,event)">Dt. Est. Inicial ${_SORT_ICO}</th>
+                <th data-sort-col="3" data-sort-type="num" onclick="sortMicroTable(this,event)">Est. Inicial ${_SORT_ICO}<br><span style="font-size:9px;font-weight:400;opacity:.7">(Saldo SAP)</span></th>
+                <th data-sort-col="4" data-sort-type="num" onclick="sortMicroTable(this,event)" title="Compra/recebimento e transferência entre centros (101, 801, 861/862, 301–306) — LÍQUIDO: estornos e transferências para fora entram como negativo e anulam o positivo que os originou">Entradas ${_SORT_ICO}<br><span style="font-size:9px;font-weight:400;opacity:.7">(líq. por código)</span></th>
+                <th data-sort-col="5" data-sort-type="num" onclick="sortMicroTable(this,event)" title="Consumo e seu estorno (201, 202)">Saídas ${_SORT_ICO}<br><span style="font-size:9px;font-weight:400;opacity:.7">(por código)</span></th>
+                <th data-sort-col="6" data-sort-type="num" onclick="sortMicroTable(this,event)" title="Fechamento mensal (Y11/Y12), sucateamento (551/552), transferência entre materiais/depósitos (309/310, 311/312) e qualquer código não classificado">Ajustes ${_SORT_ICO}<br><span style="font-size:9px;font-weight:400;opacity:.7">(líq. por código)</span></th>
+                <th data-sort-col="7" data-sort-type="date" onclick="sortMicroTable(this,event)">Dt. Est. Final ${_SORT_ICO}</th>
+                <th data-sort-col="8" data-sort-type="num" onclick="sortMicroTable(this,event)">Est. Final ${_SORT_ICO}<br><span style="font-size:9px;font-weight:400;opacity:.7">(Últ. Lançamento)</span></th>
+                <th data-sort-col="9" data-sort-type="num" onclick="sortMicroTable(this,event)">Est. Teórico ${_SORT_ICO}<br><span style="font-size:9px;font-weight:400;opacity:.7">(Ini+Ent+Sai+Aju)</span></th>
+                <th data-sort-col="10" data-sort-type="abs" onclick="sortMicroTable(this,event)" title="Ordena pelo valor ABSOLUTO: um desfalque e uma sobra do mesmo tamanho pesam igual">Variação ${_SORT_ICO}<br><span style="font-size:9px;font-weight:400;opacity:.7">(Real − Teórico)</span></th>
+                <th data-sort-col="11" data-sort-type="abs" onclick="sortMicroTable(this,event)" style="text-align:right" title="Ordena pelo valor ABSOLUTO: um desfalque e uma sobra do mesmo tamanho pesam igual">Custo Variação ${_SORT_ICO}<br><span style="font-size:9px;font-weight:400;opacity:.7">(Var. × C. Médio)</span></th>
               </tr>
             </thead>
             <tbody>${matRowsHtml || `<tr><td colspan="12"><div class="empty-state" style="padding:24px"><i class="ti ti-box-off"></i><p>Nenhum${isMat ? 'a central' : ' material'} encontrad${isMat ? 'a' : 'o'}.</p></div></td></tr>`}</tbody>
@@ -2318,6 +2333,26 @@ function _matGroupDiff(g, dtIni) {
   }, 0);
 }
 
+// ── Ordem padrão dos cards: PIOR SAÚDE primeiro ──────────────────────────
+// Decisão do Hugo: a leitura de abertura da Visão Micro é "quem está pior de
+// saúde", não "quem tem a maior variação em kg" — uma central pode ter uma
+// variação enorme concentrada num material só e ainda estar saudável no
+// conjunto, e o contrário também acontece.
+//
+// A nota (0 = pior, 100 = melhor) sai do dataset do card já montado, então
+// não há cálculo novo: é exatamente o número que o próprio card exibe no
+// badge de saúde. Card sem saúde calculada (dataset vazio) vai para o FIM —
+// "sem informação" não é "saudável".
+//
+// Empate mantém a ordem de chegada dos cards (Array.sort é estável), que é a
+// de maior desfalque → maior sobra: duas centrais com a mesma nota continuam
+// saindo da pior variação para a melhor.
+const _cardSaude = (card) => {
+  const s = parseFloat(card.dataset.healthScore);
+  return Number.isFinite(s) ? s : Infinity;
+};
+const _ordenarCardsPorSaude = (cards) => cards.sort((a, b) => _cardSaude(a) - _cardSaude(b));
+
 // silent (opcional): ver _rodarAnaliticoCore acima — quando true, não
 // fecha o overlay/steps de loading ao final (quem chamou está no controle).
 // Outros chamadores (ex.: re-render em ui.js) não passam esse parâmetro e
@@ -2338,7 +2373,9 @@ function renderAnaliticoMicro(results, dtIni, dtFim, silent, opts = {}) {
   window.__analiticoSemCadastroCache = new Map();
 
 
-  // Ordena centrais: maior desfalque (variação mais negativa) → maior sobra (mais positiva)
+  // Pré-ordena as centrais por variação (maior desfalque → maior sobra). Isso
+  // NÃO é mais a ordem final: serve de DESEMPATE estável para a ordenação por
+  // saúde aplicada aos cards já montados (ver _ordenarCardsPorSaude).
   const calcVariacaoCentral = (r) => {
     const lancsByMat = new Map();
     const sapByMat = new Map();
@@ -2427,20 +2464,24 @@ function renderAnaliticoMicro(results, dtIni, dtFim, silent, opts = {}) {
     });
 
     const grupos = _buildMatGroups(results);
-    // Mesma regra de ordenação das centrais: maior desfalque primeiro.
+    // Pré-ordena por variação só para servir de DESEMPATE estável na
+    // ordenação por saúde logo abaixo (mesmo papel do sort de `results` no
+    // agrupamento por regional).
     const _gScore = new Map();
     grupos.forEach(g => _gScore.set(g, _matGroupDiff(g, dtIni)));
     grupos.sort((a, b) => _gScore.get(a) - _gScore.get(b));
 
     grupos.forEach((g, idx) => {
-      const card = buildCentralCard(g, idx, dtIni, dtFim, {
+      _cardBuffer.push(buildCentralCard(g, idx, dtIni, dtFim, {
         mode: 'material',
         entradasByCentral: _entradasByCentralMicro,
         entradasByCentralDestino: _entradasByCentralMicroDestino
-      });
-      _cardBuffer.push(card);
-      container.appendChild(card);
+      }));
     });
+
+    // Só dá para ordenar por saúde depois de montar: a nota é calculada
+    // dentro do card (ver _cardSaude).
+    _ordenarCardsPorSaude(_cardBuffer).forEach(card => container.appendChild(card));
 
     // ponytail: window._anResumoCentraisData (widget "Saúde geral" da
     // topbar) NÃO é recalculado aqui — ele é por central e este render não
@@ -2455,7 +2496,8 @@ function renderAnaliticoMicro(results, dtIni, dtFim, silent, opts = {}) {
   });
 
   // ── Group cards by regional ──────────────────────────────────────────────
-  // Preserve the sorted order within each group (by worst variação first)
+  // O agrupamento só distribui os cards; a ordem final — dos grupos e das
+  // centrais dentro de cada um — é por saúde, aplicada logo abaixo.
   const groupOrder = [];
   const groupMap   = new Map(); // regional → { cards: [], hCounts: aggregate }
 
@@ -2468,19 +2510,24 @@ function renderAnaliticoMicro(results, dtIni, dtFim, silent, opts = {}) {
     groupMap.get(reg).push(card);
   });
 
-  // Sort groups: maior desfalque (diff mais negativo) primeiro → maior sobra por último; sem regional sempre no fim
-  const groupDiff = new Map();
+  // Ordena os regionais pela MÉDIA de saúde das suas centrais — pior média
+  // primeiro. É a mesma conta que o cabeçalho do grupo já exibe no badge
+  // "Saúde: N%" (ver scoreSum/scoreCount em buildRegionalSummaryHtml), pra
+  // ordem e rótulo nunca discordarem. Regional sem nenhuma central com saúde
+  // calculada vai pro fim, e "sem regional" continua sempre por último.
+  const groupSaude = new Map();
   groupOrder.forEach(reg => {
-    const diff = groupMap.get(reg).reduce((s, c) => s + parseFloat(c.dataset.centralDiff || 0), 0);
-    groupDiff.set(reg, diff);
+    const notas = groupMap.get(reg).map(_cardSaude).filter(Number.isFinite);
+    groupSaude.set(reg, notas.length ? notas.reduce((s, v) => s + v, 0) / notas.length : Infinity);
   });
   groupOrder.sort((a, b) => {
     if (!a && b)  return 1;   // sem regional sempre no fim
     if (a && !b)  return -1;
-    return groupDiff.get(a) - groupDiff.get(b); // mais negativo (desfalque) primeiro
+    return groupSaude.get(a) - groupSaude.get(b); // pior saúde primeiro
   });
   groupOrder.forEach(regional => {
-    const cards = groupMap.get(regional);
+    // Dentro do regional, as centrais também saem da pior saúde para a melhor.
+    const cards = _ordenarCardsPorSaude(groupMap.get(regional));
 
 
     const isSemRegional = !regional;

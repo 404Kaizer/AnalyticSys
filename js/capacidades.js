@@ -691,6 +691,12 @@ function classificarEstoqueCapacidade(central, material, estoque) {
   return { faixa, ...CAP_FAIXAS[faixa], row: r, estoque: est, capacidade: C, seguranca: S, pctCap, pctSeg, delta, um: r.umExibicao };
 }
 
+// Ícone das colunas ordenáveis da tabela de capacidade — mesmo markup do
+// padrão compartilhado (th[data-sort-col] + .mod-sort-icon, ver
+// components.css). Declarado aqui, e não importado de analitico.js, para esta
+// seção não depender da ordem de carga dos scripts por causa de uma string.
+const _CAP_SORT_ICO = '<i class="ti ti-selector mod-sort-icon"></i>';
+
 // ══════════════════════════════════════════════════════════════════════════
 // SEÇÃO "CAPACIDADE E ESTOQUE DE SEGURANÇA" DO CARD DA VISÃO MICRO
 // ══════════════════════════════════════════════════════════════════════════
@@ -706,6 +712,7 @@ function classificarEstoqueCapacidade(central, material, estoque) {
 //
 // materiais: [{ mat, estoque, ausente }] — estoque é o Est. Final do último
 // lançamento do período (o mesmo número da coluna da tabela de materiais).
+//
 // `pares`/`colLabel` (opcionais) generalizam a seção para o card de MATERIAL
 // da Visão Micro agrupada por material (ver analitico.js): ali cada linha é
 // uma CENTRAL do mesmo material, então cada item traz sua própria central e a
@@ -740,13 +747,13 @@ function buildCapacidadeSection({ central, materiais, pares, colLabel }) {
         <table class="capsec-table">
           <thead>
             <tr>
-              <th>${escapeHtml(coluna)}</th>
-              <th>Situação</th>
-              <th style="text-align:right">Estoque</th>
-              <th style="text-align:right">Capacidade</th>
-              <th style="text-align:right">Est. Segurança</th>
-              <th style="text-align:right">Ocupação</th>
-              <th style="text-align:right">A mais / a menos</th>
+              <th data-sort-col="0" data-sort-type="text" onclick="sortMicroTable(this,event)">${escapeHtml(coluna)} ${_CAP_SORT_ICO}</th>
+              <th data-sort-col="1" data-sort-type="num"  onclick="sortMicroTable(this,event)" title="Ordena por gravidade da faixa, não por ordem alfabética">Situação ${_CAP_SORT_ICO}</th>
+              <th data-sort-col="2" data-sort-type="num"  onclick="sortMicroTable(this,event)" style="text-align:right">Estoque ${_CAP_SORT_ICO}</th>
+              <th data-sort-col="3" data-sort-type="num"  onclick="sortMicroTable(this,event)" style="text-align:right">Capacidade ${_CAP_SORT_ICO}</th>
+              <th data-sort-col="4" data-sort-type="num"  onclick="sortMicroTable(this,event)" style="text-align:right">Est. Segurança ${_CAP_SORT_ICO}</th>
+              <th data-sort-col="5" data-sort-type="num"  onclick="sortMicroTable(this,event)" style="text-align:right">Ocupação ${_CAP_SORT_ICO}</th>
+              <th data-sort-col="6" data-sort-type="abs"  onclick="sortMicroTable(this,event)" style="text-align:right" title="Ordena pelo valor ABSOLUTO: estar 10 t acima ou 10 t abaixo é o mesmo tamanho de desvio">A mais / a menos ${_CAP_SORT_ICO}</th>
             </tr>
           </thead>
           <tbody>${avaliados.map(({ mat, c }) => {
@@ -762,8 +769,22 @@ function buildCapacidadeSection({ central, materiais, pares, colLabel }) {
             const pctSeg = c.seguranca > 0
               ? `<span class="capsec-pct" title="Percentual da capacidade definido para esta categoria">${_capNum(c.row?.pct ?? 0)}% da cap.</span>`
               : '';
+            // Chaves de ordenação por coluna (contrato de sortMicroTable, em
+            // analitico.js): valor CRU, já que a célula traz número
+            // formatado, unidade, badge e percentual auxiliar. Situação
+            // ordena por c.ordem — a GRAVIDADE da faixa, não o alfabeto do
+            // rótulo. Vazio = sem valor, cai pro fim da ordenação.
+            const sortAttrs = [
+              mat,                                //  0 Material/Central
+              c.ordem ?? 0,                       //  1 Situação (gravidade)
+              c.estoque,                          //  2 Estoque
+              c.capacidade,                       //  3 Capacidade
+              c.seguranca > 0 ? c.seguranca : '', //  4 Est. Segurança ('—' quando não há)
+              c.pctCap,                           //  5 Ocupação
+              c.delta                             //  6 A mais / a menos
+            ].map((v, i) => `data-sort-${i}="${escapeHtml(String(v))}"`).join(' ');
             return `
-            <tr title="${escapeHtml(capExplicacaoFaixa(c))}">
+            <tr title="${escapeHtml(capExplicacaoFaixa(c))}" ${sortAttrs}>
               <td class="td-mono capsec-mat">${escapeHtml(mat)}</td>
               <td><span class="capsec-badge" style="color:${c.cor};border-color:${c.cor}"><i class="ti ${c.icone}"></i> ${escapeHtml(c.label)}</span></td>
               <td class="td-mono capsec-val" style="color:${c.cor}">${_capNum(c.estoque)} ${escapeHtml(c.um)}</td>
