@@ -2217,11 +2217,15 @@ window.closeFechModal = closeFechModal;
  *       leading zeros), so "I004-6047" → "6047" matches os "6047".
  */
 // ── Estado global: pendentes considerados no analítico ──────────────────
-// _pendConsiderados: { [central]: { nf: bool, os: bool } }
-// _pendCache:        { [central]: { pendNF: [...], pendOS: [...] } }
+// _pendConsiderados:    { [central]:  { nf: bool, os: bool } }
+// _pendConsideradosMat: { [material]: { nf: bool, os: bool } }
+// _pendCache:           { [central]:  { pendNF: [...], pendOS: [...] } }
 // Populados por buildPendIntegSection; consumidos por renderAnaliticoMicro.
-window._pendConsiderados = window._pendConsiderados || {};
-window._pendCache        = window._pendCache        || {};
+// A variante ...Mat é o mesmo toggle no escopo MATERIAL, usado pela Visão
+// Micro agrupada por material (ver togglePendConsideradosMat).
+window._pendConsiderados    = window._pendConsiderados    || {};
+window._pendConsideradosMat = window._pendConsideradosMat || {};
+window._pendCache           = window._pendCache           || {};
 
 /**
  * Converte o peso de uma NF para KG, aplicando o fator de conversão
@@ -2498,6 +2502,86 @@ function buildPendIntegSection({ central, dtIni, dtFim, sapNoPeriodo, entradasDa
     </div>`;
 }
 
+/**
+ * Mesma seção "Integração SAP", mas para o card de MATERIAL da Visão Micro
+ * agrupada por material: as pendências são as daquele material em TODAS as
+ * centrais, e o "Considerar" passa a ser por material (não por central).
+ *
+ * Não recalcula nada — recebe pronto o que renderAnaliticoMicro já apurou
+ * chamando calcPendentesIntegracao uma vez por central (mesma passada que
+ * alimenta window._pendCache).
+ *
+ * @param {string}   material
+ * @param {object[]} pendNF - itens { e, central } (e = registro de Entradas)
+ * @param {object[]} pendOS - itens { e, central } (e = registro de Saídas)
+ */
+function buildPendIntegSectionMaterial({ material, pendNF, pendOS }) {
+  const nfCount = pendNF.length;
+  const osCount = pendOS.length;
+  const pendState = (window._pendConsideradosMat || {})[material] || {};
+
+  let chipsHtml = '';
+
+  if (nfCount === 0 && osCount === 0) {
+    chipsHtml = `<span class="pend-integ-chip pend-integ-chip-ok">
+      <i class="ti ti-circle-check" style="font-size:13px"></i>
+      Todas NFs e OS deste material integradas
+    </span>`;
+  } else {
+    if (nfCount > 0) {
+      const encoded = encodeURIComponent(JSON.stringify(pendNF.map(({ e, central }) => ({
+        central, nf: e.nf, material: e.material || '—', peso: e.peso || 0,
+        um: e.um || 'kg', dtEmissao: e.dtEmissao || '—', dtDescarga: e.dtDescarga || '—', fornecedor: e.fornecedor || '—'
+      }))));
+      const nfAtivo = !!pendState.nf;
+      chipsHtml += `<button class="pend-integ-chip pend-integ-chip-nf"
+        onclick="event.stopPropagation(); openPendIntegModal(event.currentTarget)"
+        data-tipo="NF" data-escopo="material" data-material="${escapeHtml(material)}" data-central="—" data-items="${encoded}"
+        title="Ver NFs deste material não integradas no SAP">
+        <i class="ti ti-file-invoice" style="font-size:13px"></i>
+        NFs pendentes SAP
+        <span class="pend-count-badge">${nfCount}</span>
+      </button>
+      <button class="pend-integ-chip pend-integ-chip-nf pend-considerar-btn${nfAtivo ? ' pend-considerar-ativo' : ''}"
+        onclick="event.stopPropagation(); togglePendConsideradosMat('${escapeHtml(material)}','nf')"
+        title="${nfAtivo ? 'Clique para desconsiderar as NFs pendentes deste material do cálculo' : 'Clique para incluir as NFs pendentes deste material no cálculo'}">
+        <i class="ti ${nfAtivo ? 'ti-eye-off' : 'ti-eye-plus'}" style="font-size:13px"></i>
+        ${nfAtivo ? 'Desconsiderar NFs' : 'Considerar NFs'}
+      </button>`;
+    }
+    if (osCount > 0) {
+      const encoded = encodeURIComponent(JSON.stringify(pendOS.map(({ e, central }) => ({
+        central, os: e.os, material: e.material || '—', peso: e.peso || 0,
+        um: e.um || 'kg', dtEmissao: e.dtEmissao || '—', fornecedor: e.fornecedor || '—'
+      }))));
+      const osAtivo = !!pendState.os;
+      chipsHtml += `<button class="pend-integ-chip pend-integ-chip-os"
+        onclick="event.stopPropagation(); openPendIntegModal(event.currentTarget)"
+        data-tipo="OS" data-escopo="material" data-material="${escapeHtml(material)}" data-central="—" data-items="${encoded}"
+        title="Ver OS deste material não integradas no SAP">
+        <i class="ti ti-clipboard-list" style="font-size:13px"></i>
+        OS pendentes SAP
+        <span class="pend-count-badge">${osCount}</span>
+      </button>
+      <button class="pend-integ-chip pend-integ-chip-os pend-considerar-btn${osAtivo ? ' pend-considerar-ativo' : ''}"
+        onclick="event.stopPropagation(); togglePendConsideradosMat('${escapeHtml(material)}','os')"
+        title="${osAtivo ? 'Clique para desconsiderar as OS pendentes deste material do cálculo' : 'Clique para incluir as OS pendentes deste material no cálculo'}">
+        <i class="ti ${osAtivo ? 'ti-eye-off' : 'ti-eye-plus'}" style="font-size:13px"></i>
+        ${osAtivo ? 'Desconsiderar OS' : 'Considerar OS'}
+      </button>`;
+    }
+  }
+
+  return `
+    <div class="pend-integ-section">
+      <div class="micro-section-title">
+        <i class="ti ti-cloud-off"></i>
+        Integração SAP
+      </div>
+      <div class="pend-integ-chips">${chipsHtml}</div>
+    </div>`;
+}
+
 // ── Estado compartilhado do modal de pendentes ───────────────────────────
 // Permite que o filtro de mês funcione tanto no modal por central quanto
 // no modal global, sem duplicar a lógica de renderização da tabela.
@@ -2558,9 +2642,12 @@ const _pimState = {
   filtered:    [],     // itens após filtro de mês + busca
   tipo:        'NF',   // 'NF' | 'OS'
   isGlobal:    false,  // true = exibe coluna Central
+  showCentral: false,  // true = exibe coluna Central sem ser o modal global
+                       // (modal por MATERIAL: itens de várias centrais)
+  scopePrefix: 'Central', // rótulo do recorte no sub-título ('Central'|'Material')
   activeMonth: 'all',  // 'all' | 'YYYY-MM'
   search:      '',     // texto de busca livre (Material, Fornecedor, NF/OS, Datas)
-  centralLabel:'',     // texto exibido no sub-título (modal por central)
+  centralLabel:'',     // texto exibido no sub-título (modal por central/material)
   page:        0,      // página atual (0-indexed)
   totalPages:  1,      // calculado em _pimRender
   PAGE_SIZE:   100,    // linhas por página
@@ -2619,6 +2706,10 @@ function _pimApplyFilters() {
 /** Renderiza thead + tbody + count + pills + paginação com o estado atual. */
 function _pimRender() {
   const { filtered, tipo, isGlobal, allItems, activeMonth, PAGE_SIZE } = _pimState;
+  // Coluna "Central": sempre no modal global e também no modal por MATERIAL
+  // (Visão Micro agrupada por material — ali os pendentes vêm de várias
+  // centrais, então sem essa coluna a lista fica ambígua).
+  const showCentral = isGlobal || !!_pimState.showCentral;
   const _num = v => { const n = parseFloat(String(v ?? 0).replace(',','.')); return Number.isFinite(n) ? n : 0; };
   const _fmt = n => isNaN(n) ? '—' : Math.abs(n).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
 
@@ -2636,7 +2727,7 @@ function _pimRender() {
   if (subEl) {
     subEl.textContent = isGlobal
       ? `${subSuffix} em todas as centrais`
-      : `Central: ${_pimState.centralLabel} · ${subSuffix}`;
+      : `${_pimState.scopePrefix || 'Central'}: ${_pimState.centralLabel} · ${subSuffix}`;
   }
 
   // ── Resumo por material (topo do modal) ─────────────────────────────────
@@ -2711,14 +2802,14 @@ function _pimRender() {
   const thead = document.getElementById('pim-thead');
   if (thead) {
     thead.innerHTML = tipo === 'NF'
-      ? `<tr>${isGlobal ? '<th>Central</th>' : ''}<th>NF</th><th>Material</th><th>Fornecedor</th><th>Dt. Emissão</th><th>Dt. Descarga</th><th style="text-align:right">Quantidade</th></tr>`
-      : `<tr>${isGlobal ? '<th>Central</th>' : ''}<th>OS</th><th>Material</th><th>Fornecedor</th><th>Dt. Emissão</th><th style="text-align:right">Quantidade</th></tr>`;
+      ? `<tr>${showCentral ? '<th>Central</th>' : ''}<th>NF</th><th>Material</th><th>Fornecedor</th><th>Dt. Emissão</th><th>Dt. Descarga</th><th style="text-align:right">Quantidade</th></tr>`
+      : `<tr>${showCentral ? '<th>Central</th>' : ''}<th>OS</th><th>Material</th><th>Fornecedor</th><th>Dt. Emissão</th><th style="text-align:right">Quantidade</th></tr>`;
   }
 
   // ── Tbody (apenas a página atual) ─────────────────────────────────────────
   const tbody = document.getElementById('pim-tbody');
   if (tbody) {
-    const colSpan = tipo === 'NF' ? (isGlobal ? 7 : 6) : (isGlobal ? 6 : 5);
+    const colSpan = tipo === 'NF' ? (showCentral ? 7 : 6) : (showCentral ? 6 : 5);
     if (!pageItems.length) {
       tbody.innerHTML = `<tr><td colspan="${colSpan}" style="text-align:center;color:var(--text3);padding:24px">Nenhum registro pendente encontrado</td></tr>`;
     } else if (tipo === 'NF') {
@@ -2731,7 +2822,7 @@ function _pimRender() {
              </td>`
           : `<td class="td-mono" style="text-align:right;color:var(--green)">${_fmt(convertedPeso)} KG</td>`;
         return `<tr${noConv ? ' class="pim-row-no-conv"' : ''}>
-          ${isGlobal ? `<td class="td-muted">${escapeHtml(it.central||'—')}</td>` : ''}
+          ${showCentral ? `<td class="td-muted">${escapeHtml(it.central||'—')}</td>` : ''}
           <td class="td-mono" style="font-weight:600;color:var(--green)">${escapeHtml(String(it.nf||'—'))}</td>
           <td>${escapeHtml(String(it.material||'—'))}</td>
           <td class="td-muted">${escapeHtml(String(it.fornecedor||'—'))}</td>
@@ -2742,7 +2833,7 @@ function _pimRender() {
       }).join('');
     } else {
       tbody.innerHTML = pageItems.map(it => `<tr>
-        ${isGlobal ? `<td class="td-muted">${escapeHtml(it.central||'—')}</td>` : ''}
+        ${showCentral ? `<td class="td-muted">${escapeHtml(it.central||'—')}</td>` : ''}
         <td class="td-mono" style="font-weight:600;color:var(--red)">${escapeHtml(String(it.os||'—'))}</td>
         <td>${escapeHtml(String(it.material||'—'))}</td>
         <td class="td-muted">${escapeHtml(String(it.fornecedor||'—'))}</td>
@@ -2819,6 +2910,10 @@ function openPendIntegModal(trigger) {
 
   const tipo    = trigger.dataset.tipo || '?';
   const central = trigger.dataset.central || '—';
+  // escopo 'material': chip aberto a partir de um card de MATERIAL (Visão
+  // Micro agrupada por material) — os itens vêm de várias centrais, então o
+  // recorte do sub-título é o material e a coluna Central passa a aparecer.
+  const isMaterial = trigger.dataset.escopo === 'material';
   let items = [];
   try { items = JSON.parse(decodeURIComponent(trigger.dataset.items || '[]')); } catch(e) {}
 
@@ -2830,9 +2925,11 @@ function openPendIntegModal(trigger) {
   _pimState.filtered    = items;
   _pimState.tipo        = tipo;
   _pimState.isGlobal    = false;
+  _pimState.showCentral = isMaterial;
+  _pimState.scopePrefix = isMaterial ? 'Material' : 'Central';
   _pimState.activeMonth = 'all';
   _pimState.search      = '';
-  _pimState.centralLabel = central;
+  _pimState.centralLabel = isMaterial ? (trigger.dataset.material || '—') : central;
   const pimSearchEl = document.getElementById('pim-search');
   if (pimSearchEl) pimSearchEl.value = '';
 
@@ -2992,6 +3089,34 @@ function openPendIntegGlobalModal(tipo) {
  * @param {string} central - Nome da central
  * @param {'nf'|'os'} tipo - Tipo de pendente a alternar
  */
+/**
+ * Mesmo toggle, no escopo MATERIAL — usado pelo card da Visão Micro
+ * agrupada por material: liga/desliga as NFs (ou OS) pendentes daquele
+ * material em TODAS as centrais.
+ *
+ * ponytail: o estado por material e o estado por central são independentes
+ * de propósito. Considerar uma NF no card do material NÃO deixa ela
+ * considerada no card da central (e vice-versa). Teto aceito: o toggle é um
+ * paliativo de análise, não um dado persistido, e um estado só levaria a
+ * decidir o que fazer quando o usuário liga "central X" e "material Y" ao
+ * mesmo tempo. Upgrade = estado único por par (central, material).
+ */
+function togglePendConsideradosMat(material, tipo) {
+  if (!window._pendConsideradosMat) window._pendConsideradosMat = {};
+  if (!window._pendConsideradosMat[material]) {
+    window._pendConsideradosMat[material] = { nf: false, os: false };
+  }
+  window._pendConsideradosMat[material][tipo] = !window._pendConsideradosMat[material][tipo];
+
+  // Refresh cirúrgico do card daquele material (mesma filosofia de
+  // refreshCentralCard). Se não for possível, cai pro render completo.
+  if (typeof refreshMaterialCard === 'function' && refreshMaterialCard(material)) return;
+
+  if (window.__analiticoResults && window.__analiticoDtIni && window.__analiticoDtFim) {
+    renderAnaliticoMicro(window.__analiticoResults, window.__analiticoDtIni, window.__analiticoDtFim, true);
+  }
+}
+
 function togglePendConsiderados(central, tipo) {
   if (!window._pendConsiderados[central]) {
     window._pendConsiderados[central] = { nf: false, os: false };

@@ -706,16 +706,23 @@ function classificarEstoqueCapacidade(central, material, estoque) {
 //
 // materiais: [{ mat, estoque, ausente }] — estoque é o Est. Final do último
 // lançamento do período (o mesmo número da coluna da tabela de materiais).
-function buildCapacidadeSection({ central, materiais }) {
+// `pares`/`colLabel` (opcionais) generalizam a seção para o card de MATERIAL
+// da Visão Micro agrupada por material (ver analitico.js): ali cada linha é
+// uma CENTRAL do mesmo material, então cada item traz sua própria central e a
+// primeira coluna muda de nome. Sem eles, comportamento idêntico ao original
+// (card de central: uma central fixa, uma linha por material).
+function buildCapacidadeSection({ central, materiais, pares, colLabel }) {
+  const itens = pares || (materiais || []).map(m => ({ ...m, central }));
+  const coluna = colLabel || 'Material';
   const avaliados = [];
   let normais = 0, semBase = 0, ausentes = 0;
 
-  (materiais || []).forEach(({ mat, estoque, ausente }) => {
+  itens.forEach(({ central: itemCentral, mat, estoque, ausente, label }) => {
     if (ausente) { ausentes++; return; }
-    const c = classificarEstoqueCapacidade(central, mat, estoque);
+    const c = classificarEstoqueCapacidade(itemCentral, mat, estoque);
     if (c.faixa === 'sem_base') { semBase++; return; }
     if (c.faixa === 'normal')   { normais++; return; }
-    avaliados.push({ mat, c });
+    avaliados.push({ mat: label || mat, c });
   });
 
   // Pior primeiro; dentro da mesma faixa, o maior desvio absoluto na frente.
@@ -733,7 +740,7 @@ function buildCapacidadeSection({ central, materiais }) {
         <table class="capsec-table">
           <thead>
             <tr>
-              <th>Material</th>
+              <th>${escapeHtml(coluna)}</th>
               <th>Situação</th>
               <th style="text-align:right">Estoque</th>
               <th style="text-align:right">Capacidade</th>
@@ -774,7 +781,7 @@ function buildCapacidadeSection({ central, materiais }) {
     corpo = `<span class="capsec-empty capsec-empty-ok"><i class="ti ti-circle-check"></i> Todos os estoques dentro da faixa de capacidade</span>`;
   } else if (semBase) {
     // Há material pra avaliar, mas nenhum tem capacidade confiável.
-    corpo = `<span class="capsec-empty"><i class="ti ti-settings-exclamation"></i> Capacidade não configurada para os materiais desta central —
+    corpo = `<span class="capsec-empty"><i class="ti ti-settings-exclamation"></i> Capacidade não configurada para ${pares ? 'as centrais deste material' : 'os materiais desta central'} —
       <a href="#" onclick="event.preventDefault();event.stopPropagation();irParaCapacidades()">declarar em Configurações</a></span>`;
   } else {
     corpo = `<span class="capsec-empty"><i class="ti ti-calendar-off"></i> Nenhum material com lançamento no período para comparar</span>`;

@@ -1611,6 +1611,20 @@
 
           <!-- Barra de filtros da Visão Micro -->
           <div class="micro-filter-bar" id="micro-filter-bar" style="display:none">
+
+            <!-- Agrupamento dos cards: por Regional (regional → central →
+                 material) ou por Material (material → central) -->
+            <div class="micro-group-mode" id="micro-group-mode">
+              <button class="active" id="mgm-btn-regional" onclick="anSetGroupMode('regional')" title="Cards por central, agrupados por regional">
+                <i class="ti ti-users-group"></i> Por Regional
+              </button>
+              <button id="mgm-btn-material" onclick="anSetGroupMode('material')" title="Cards por material, com as centrais dentro">
+                <i class="ti ti-box"></i> Por Material
+              </button>
+            </div>
+
+            <div class="micro-filter-divider"></div>
+
           <div class="micro-filter-group" id="mfg-regional">
               <button class="micro-filter-trigger" id="mft-regional" onclick="toggleMicroFilter('regional')">
                 <i class="ti ti-users-group"></i>

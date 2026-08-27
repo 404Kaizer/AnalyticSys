@@ -2666,6 +2666,38 @@ td.var-cell-zero .ti-circle-check     { color: var(--text3); }
   flex-shrink: 0;
 }
 
+/* ── Visão Micro — alternador de agrupamento (Por Regional × Por Material) ──
+   Segmentado compacto: mora na própria barra de filtros, então não pode ter
+   o peso visual das abas de visão (.an-view-btn), que ficam acima. */
+.micro-group-mode {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+  padding: 2px;
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+}
+.micro-group-mode button {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border: none;
+  border-radius: calc(var(--radius) - 2px);
+  background: transparent;
+  color: var(--text3);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all .15s;
+}
+.micro-group-mode button i { font-size: 13px; }
+.micro-group-mode button:hover { color: var(--text2); background: var(--bg4); }
+.micro-group-mode button.active { color: var(--accent); background: var(--accent-dim); }
+
 .micro-filter-group {
   position: relative;
 }

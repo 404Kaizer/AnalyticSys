@@ -175,6 +175,74 @@ function _updateMicroContainerHeightLock(reset) {
   });
 }
 
+// ═══════════════════════════════════════════════════════════
+// AGRUPAMENTO DA VISÃO MICRO — Por Regional × Por Material
+// ═══════════════════════════════════════════════════════════
+// 'regional' (padrão): regionais → cards de central → linhas de material.
+// 'material':          cards de material → linhas de central. Mesma
+//                      anatomia de card (donut, maiores variações,
+//                      capacidade, integração SAP, tabela) — o que muda é
+//                      qual dos dois lados do par (central, material) é
+//                      fixo no card. Ver buildCentralCard.
+//
+// Não é persistido: toda análise nova (ou reload) volta pro agrupamento por
+// regional, que é a leitura padrão do analista.
+let _anGroupMode = 'regional';
+
+function anSetGroupMode(mode) {
+  const novo = mode === 'material' ? 'material' : 'regional';
+  if (novo === _anGroupMode) return;
+  _anGroupMode = novo;
+  _anSyncGroupModeUI();
+  if (window.__analiticoResults && window.__analiticoDtIni && window.__analiticoDtFim) {
+    // silent: não mexe no overlay de loading — a troca de agrupamento não é
+    // uma análise nova, só um re-render do que já foi calculado.
+    renderAnaliticoMicro(window.__analiticoResults, window.__analiticoDtIni, window.__analiticoDtFim, true);
+  }
+}
+window.anSetGroupMode = anSetGroupMode;
+
+// Sincroniza a barra de filtros com o agrupamento ativo: botões, legenda e
+// os controles que perdem o sentido em um dos modos.
+function _anSyncGroupModeUI() {
+  const isMat = _anGroupMode === 'material';
+  document.getElementById('mgm-btn-regional')?.classList.toggle('active', !isMat);
+  document.getElementById('mgm-btn-material')?.classList.toggle('active',  isMat);
+
+  // Capacidade filtra por situação de estoque × capacidade da CENTRAL —
+  // no agrupamento por material o card não é uma central, então o filtro
+  // perde o alvo e sai de cena (a seção de Capacidade dentro do card
+  // continua, por central).
+  const capGrp = document.getElementById('mfg-capacidade');
+  if (capGrp) capGrp.style.display = isMat ? 'none' : '';
+  // Sem grupos de regional em tela, o botão de expandir/recolher regionais
+  // não tem o que abrir — e o nível "Regionais" do filtro de tipo de
+  // variação fica sem alvo (ver _applyMicroVisibility).
+  const regBtn = document.getElementById('btn-toggle-regionais');
+  if (regBtn) regBtn.style.display = isMat ? 'none' : '';
+  const nivelReg = document.querySelector('#mfo-tipo-var-nivel input[value="regional"]')?.closest('.micro-filter-option');
+  if (nivelReg) nivelReg.style.display = isMat ? 'none' : '';
+
+  // O filtro de Saúde continua valendo, mas o que ele filtra troca de nome:
+  // no agrupamento por material o nível é o do CARD do material (calculado
+  // sobre as centrais dele).
+  const saudeTitle = document.querySelector('#mfd-variacao .mfr-title');
+  const saudeDesc  = document.querySelector('#mfd-variacao .mfr-desc');
+  if (saudeTitle) saudeTitle.innerHTML = `<i class="ti ti-heartbeat"></i> Nível de saúde ${isMat ? 'do material' : 'da central'}`;
+  if (saudeDesc)  saudeDesc.textContent = isMat
+    ? 'Filtra materiais pelo nível calculado no painel de saúde do card (criticidade das centrais daquele material).'
+    : 'Filtra centrais pelo nível calculado no painel de saúde (requer ≥ 5 materiais).';
+
+  const caption = document.getElementById('an-view-caption');
+  const paneMicro = document.getElementById('an-view-pane-micro');
+  if (caption && paneMicro && paneMicro.style.display !== 'none') {
+    caption.textContent = isMat
+      ? 'Saúde e criticidade por material e central'
+      : 'Saúde e criticidade por filial e material';
+  }
+  _updateToggleCentralisBtn();
+}
+
 function anSwitchView(view) {
   const btnMicro  = document.getElementById('an-view-btn-micro');
   const btnInv    = document.getElementById('an-view-btn-inventario');
@@ -212,7 +280,9 @@ function anSwitchView(view) {
       ? 'Fechamento de estoque por central e material'
       : isPend
         ? 'OS, NFs e lançamentos pendentes por central e material'
-        : 'Saúde e criticidade por filial e material';
+        : _anGroupMode === 'material'
+          ? 'Saúde e criticidade por material e central'
+          : 'Saúde e criticidade por filial e material';
   }
 
   // Visão Pendências: renderiza sob demanda (o cálculo de ausências de
@@ -672,19 +742,32 @@ document.addEventListener('click', e => {
 
 
 /**
- * Monta o card de uma unica central (header + cpanel + tabela de materiais).
- * Extraida de renderAnaliticoMicro para ser reaproveitavel tanto no render
- * completo quanto no refresh cirurgico de uma central isolada (ver
- * refreshCentralCard, chamada por togglePendConsiderados em ui.js).
+ * Monta UM card da Visão Micro (header + cpanel + tabela). Extraida de
+ * renderAnaliticoMicro para ser reaproveitavel tanto no render completo
+ * quanto no refresh cirurgico de um card isolado (ver refreshCentralCard /
+ * refreshMaterialCard, chamadas pelos toggles de pendentes em ui.js).
  *
- * @param {object} r       - item de window.__analiticoResults para esta central
- * @param {number} idx     - indice estavel usado nos ids de DOM (spark-N, cpanel-kpi-*-N etc.)
+ * Dois modos, mesma anatomia (donut de saúde, maiores variações,
+ * capacidade, integração SAP e a tabela de linhas):
+ *
+ *   opts.mode = 'central' (padrão) → card = uma CENTRAL, linhas = materiais.
+ *       `r` é um resultado de _rodarAnaliticoCore.
+ *   opts.mode = 'material'         → card = um MATERIAL, linhas = centrais.
+ *       `r` é { material, centrais: [...], byCentral: Map<central, resultado> },
+ *       montado por _buildMatGroups (ver renderAnaliticoMicro).
+ *
+ * Em ambos os modos cada LINHA continua sendo o par (central, material) — o
+ * que muda é qual dos dois é fixo no card e qual varia nas linhas. Por isso
+ * todo o miolo (Est. Inicial/Final, snapshot, breakdown diário, custo médio,
+ * modal de detalhamento) é literalmente o mesmo código: só a resolução de
+ * `central`/`mat` a partir do item da linha é que difere.
+ *
+ * @param {object} r       - resultado da central, ou grupo do material
+ * @param {number} idx     - indice estavel usado nos ids de DOM (chev-N, micro-body-N etc.)
  * @param {Date}   dtIni
  * @param {Date}   dtFim
  * @param {object} [opts]
- * @param {boolean} [opts.skipSparklineQueue] - se true, nao registra o sparkline
- *        para recalculo assincrono (usado no refresh cirurgico, onde o sparkline
- *        e transplantado do card antigo em vez de recalculado).
+ * @param {'central'|'material'} [opts.mode='central']
  * @returns {HTMLElement} o elemento .micro-filial-card pronto para inserir no DOM
  */
 function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
@@ -694,6 +777,18 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
   // Custo desprezível quando já construído (ensureSaidasIndex só reconstrói
   // se necessário).
   if (typeof ensureSaidasIndex === 'function') ensureSaidasIndex();
+
+  const isMat = opts.mode === 'material';
+  // Nome/ícone do card e resolução de (central, material) por item da linha.
+  const cardName  = isMat ? (r.material || '—') : (r.central || '—');
+  const itemLabel = isMat ? 'Central' : 'Material';
+  const _itemSing = isMat ? 'central'  : 'material';
+  const _itemPlur = isMat ? 'centrais' : 'materiais';
+  const centralOf = (item) => isMat ? item : r.central;
+  const matOf     = (item) => isMat ? r.material : item;
+  // Resultado (_rodarAnaliticoCore) da central de uma linha — no modo
+  // central é sempre o mesmo `r`; no modo material vem do índice do grupo.
+  const resOf     = (central) => isMat ? r.byCentral.get(central) : r;
 
   const start = new Date(dtIni);
   start.setHours(0, 0, 0, 0);
@@ -718,20 +813,26 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
 
   const dayList = buildDayList();
 
-    const lancsByMat = new Map();
-    const sapByMat = new Map();
+    // Chave dos dois mapas = o ITEM da linha (material no modo central,
+    // central no modo material) — ver o cabeçalho da função.
+    const lancsByItem = new Map();
+    const sapByItem   = new Map();
+    const _pushItem = (map, item, rec) => {
+      if (!map.has(item)) map.set(item, []);
+      map.get(item).push(rec);
+    };
 
-    (r.lancsNoPeriodo || []).forEach(rec => {
-      const mat = rec.material || '—';
-      if (!lancsByMat.has(mat)) lancsByMat.set(mat, []);
-      lancsByMat.get(mat).push(rec);
-    });
-
-    (r.sapNoPeriodo || []).forEach(rec => {
-      const mat = rec.material || '—';
-      if (!sapByMat.has(mat)) sapByMat.set(mat, []);
-      sapByMat.get(mat).push(rec);
-    });
+    if (isMat) {
+      (r.centrais || []).forEach(central => {
+        const rc = r.byCentral.get(central);
+        if (!rc) return;
+        (rc.lancsNoPeriodo || []).forEach(rec => { if ((rec.material || '—') === r.material) _pushItem(lancsByItem, central, rec); });
+        (rc.sapNoPeriodo   || []).forEach(rec => { if ((rec.material || '—') === r.material) _pushItem(sapByItem,   central, rec); });
+      });
+    } else {
+      (r.lancsNoPeriodo || []).forEach(rec => _pushItem(lancsByItem, rec.material || '—', rec));
+      (r.sapNoPeriodo   || []).forEach(rec => _pushItem(sapByItem,   rec.material || '—', rec));
+    }
 
     // ── Injeção de pendentes considerados ────────────────────────────────
     // Quando o analista ativa "Considerar NFs/OS pendentes", registros SAP
@@ -746,15 +847,40 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
     // essa separação foi removida a pedido — agora um único sapByMat (já
     // com os sintéticos, quando o toggle está ativo) alimenta tanto o
     // resumo quanto o breakdown diário.
-    const _pendStateCentral = (window._pendConsiderados || {})[r.central] || {};
-    const _pendCacheCentral = (window._pendCache        || {})[r.central] || {};
-    const _matsComPendNF    = new Set();
-    const _matsComPendOS    = new Set();
-    if (_pendStateCentral.nf && _pendCacheCentral.pendNF) {
-      (_pendCacheCentral.pendNF || []).forEach(e => {
-        const mat = e.material || '—';
-        if (!sapByMat.has(mat)) sapByMat.set(mat, []);
-        sapByMat.get(mat).push({
+    //
+    // No modo material o escopo do toggle muda: o estado é por MATERIAL
+    // (_pendConsideradosMat, ver togglePendConsideradosMat em ui.js) e as
+    // pendentes injetadas são as daquele material em todas as centrais.
+    // Os pendentes em si saem do mesmo _pendCache (por central) nos dois
+    // modos — só o recorte e a chave do item mudam.
+    const _pendState = isMat
+      ? ((window._pendConsideradosMat || {})[r.material] || {})
+      : ((window._pendConsiderados    || {})[r.central]  || {});
+    // Pendentes deste card, já com a central de origem de cada um.
+    const _pendListas = (() => {
+      const cache = window._pendCache || {};
+      if (!isMat) {
+        const c = cache[r.central] || {};
+        return {
+          nf: (c.pendNF || []).map(e => ({ e, central: r.central })),
+          os: (c.pendOS || []).map(e => ({ e, central: r.central }))
+        };
+      }
+      const nf = [], os = [];
+      (r.centrais || []).forEach(central => {
+        const c = cache[central] || {};
+        (c.pendNF || []).forEach(e => { if ((e.material || '—') === r.material) nf.push({ e, central }); });
+        (c.pendOS || []).forEach(e => { if ((e.material || '—') === r.material) os.push({ e, central }); });
+      });
+      return { nf, os };
+    })();
+    const _itensComPendNF = new Set();
+    const _itensComPendOS = new Set();
+    if (_pendState.nf) {
+      _pendListas.nf.forEach(({ e, central }) => {
+        const mat  = e.material || '—';
+        const item = isMat ? central : mat;
+        _pushItem(sapByItem, item, {
           movimento: '101',
           peso:      _convertNfPesoToKg(e.peso, e.um, e.material),
           ref:       String(e.nf || ''),
@@ -763,14 +889,14 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
           dtLanc:    e.dtDescarga || e.dtEmissao || '',
           _sintetico: true
         });
-        _matsComPendNF.add(mat);
+        _itensComPendNF.add(item);
       });
     }
-    if (_pendStateCentral.os && _pendCacheCentral.pendOS) {
-      (_pendCacheCentral.pendOS || []).forEach(e => {
-        const mat = e.material || '—';
-        if (!sapByMat.has(mat)) sapByMat.set(mat, []);
-        sapByMat.get(mat).push({
+    if (_pendState.os) {
+      _pendListas.os.forEach(({ e, central }) => {
+        const mat  = e.material || '—';
+        const item = isMat ? central : mat;
+        _pushItem(sapByItem, item, {
           movimento: '201',
           peso:      -Math.abs(num(e.peso)),
           ref:       String(e.os || ''),
@@ -779,7 +905,7 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
           dtLanc:    e.dtEmissao || '',
           _sintetico: true
         });
-        _matsComPendOS.add(mat);
+        _itensComPendOS.add(item);
       });
     }
 
@@ -804,15 +930,18 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
     // (construído a partir de materialOriginal na filtragem de origem em
     // _rodarAnaliticoCore). r.allMats já só contém materiais cadastrados
     // — este é um lookup seguro, não uma re-derivação por nome resolvido.
-    const _sortCatKeyLookup = r.materialCatKeyMap || new Map();
+    const _catKeyOf = (rc, mat) => (rc?.materialCatKeyMap || new Map()).get(mat) || null;
 
     // Lista de materiais sem cadastro nesta central — vem direto de
     // r.matsSemCadastro (materialOriginal dos registros já excluídos na
     // filtragem de origem), não de r.allMats (que não os contém mais).
     // Alimenta o chip "sem cadastro" do painel de saúde.
-    const _matsSemCadastroCentral = r.matsSemCadastro || [];
+    //
+    // No modo material o chip não faz sentido (o card É um material, e só
+    // materiais cadastrados viram card) — fica vazio.
+    const _matsSemCadastroCentral = isMat ? [] : (r.matsSemCadastro || []);
     if (!window.__analiticoSemCadastroCache) window.__analiticoSemCadastroCache = new Map();
-    window.__analiticoSemCadastroCache.set(idx, { central: r.central, materiais: _matsSemCadastroCentral });
+    if (!isMat) window.__analiticoSemCadastroCache.set(idx, { central: r.central, materiais: _matsSemCadastroCentral });
 
     // Ordena materiais: maior desfalque (diff mais negativo) → maior sobra (diff mais positivo)
     // Calcula o "score" (diff) uma única vez por material — transformada de
@@ -820,28 +949,31 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
     // getVariacaoCentral/variacaoCentralCache em renderAnaliticoMicro) — em
     // vez de recalcular a cada comparação do sort (o comparador antigo
     // rodava getPrePeriodLaunchStock + buildSnapshot O(m log m) vezes).
-    const _matDiffScore = (mat) => {
-      const prev = _anGetSapStock({ central: r.central, material: mat, dtIni });
-      return buildSnapshot({ lancs: lancsByMat.get(mat) || [], sap: sapByMat.get(mat) || [], initialStockOverride: prev?.value ?? null }).diff;
+    const _itemDiffScore = (item) => {
+      const prev = _anGetSapStock({ central: centralOf(item), material: matOf(item), dtIni });
+      return buildSnapshot({ lancs: lancsByItem.get(item) || [], sap: sapByItem.get(item) || [], initialStockOverride: prev?.value ?? null }).diff;
     };
-    const allMatsSorted = r.allMats
-      .map(mat => ({ mat, score: _matDiffScore(mat) }))
+    const allItemsSorted = (isMat ? (r.centrais || []) : r.allMats)
+      .map(item => ({ item, score: _itemDiffScore(item) }))
       .sort((a, b) => a.score - b.score)
-      .map(entry => entry.mat);
+      .map(entry => entry.item);
 
-    allMatsSorted.forEach((mat, matIdx) => {
-      const lancsMat = lancsByMat.get(mat) || [];
-      const sapMat = sapByMat.get(mat) || [];
+    allItemsSorted.forEach((item, matIdx) => {
+      const central  = centralOf(item);
+      const mat      = matOf(item);
+      const rc       = resOf(central) || {};
+      const lancsMat = lancsByItem.get(item) || [];
+      const sapMat   = sapByItem.get(item)   || [];
 
       // ── Classificação de categoria do material ──────────────────────────
       // Calculado antes do buildSnapshot para poder usar matCatKey no preCarry.
-      // mat aqui já é garantidamente cadastrado — allMatsSorted vem de
+      // mat aqui já é garantidamente cadastrado — allItemsSorted vem de
       // r.allMats, pré-filtrado na origem (_rodarAnaliticoCore) via
       // materialOriginal. catKey vem do materialCatKeyMap já validado, sem
       // re-derivação por nome resolvido. matSemCadastro fica só como
       // segurança defensiva (não deve mais disparar na prática).
       const matCategoria    = getCategoriaPorGrupo(mat);
-      const matCatKey       = _sortCatKeyLookup.get(mat) || null;
+      const matCatKey       = _catKeyOf(rc, mat);
       const matSemCadastro  = !matCatKey;
       const isSemanal       = matCatKey === 'agregado';
 
@@ -851,12 +983,12 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
       // topo do arquivo. Sem catKey: a regra de Agregado (recuar até a última
       // terça) era necessária quando a fonte era lançamento, que só existe em
       // dias de conferência; o saldo do SAP existe em qualquer data.
-      const prev = _anGetSapStock({ central: r.central, material: mat, dtIni });
+      const prev = _anGetSapStock({ central, material: mat, dtIni });
 
       // ── Est. Inicial do carry da tabela de dias ──────────────────────────
       // getPrevDayLaunchStock: busca usando regras por categoria
       // (agregado → última terça, 1º do mês → último dia do mês anterior, demais → dia anterior).
-      const preCarryLanc = _anGetPrevDayStock({ central: r.central, material: mat, dtIni, catKey: matCatKey });
+      const preCarryLanc = _anGetPrevDayStock({ central, material: mat, dtIni, catKey: matCatKey });
 
       // Regra do Hugo (13/08/2026): o carry só arranca do saldo do SAP quando
       // o período analisado COMEÇA NO DIA 1 — aí "Est. Inicial do carry" e
@@ -874,7 +1006,7 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
       const preCarry = (dtIni.getDate() === 1)
         ? (prev ? { value: prev.value, date: prev.date } : null)
         : preCarryLanc;
-      const fim  = _anGetLastPeriodStockFallback({ central: r.central, material: mat, dtIni, dtFim });
+      const fim  = _anGetLastPeriodStockFallback({ central, material: mat, dtIni, dtFim });
       const snapshot = buildSnapshot({
         lancs: lancsMat,
         sap: sapMat,
@@ -885,7 +1017,7 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
       });
       variacaoCentralMicro += snapshot.diff;
       // acumula custo implicado: diff (kg) × custo médio do material (R$/kg)
-      const custoMedMat = (r.custoMedioPorMat || {})[mat] || 0;
+      const custoMedMat = (rc.custoMedioPorMat || {})[mat] || 0;
       if (custoMedMat > 0) custoVariacaoTotal += snapshot.diff * custoMedMat;
 
       // Nível de criticidade do material (mesma regra do painel de saúde)
@@ -936,8 +1068,8 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
       // e o índice _saidasByCentral já mantido em ui.js — em vez de varrer
       // state.entradas/state.saidas inteiros a cada material de cada central.
       const _entradasDestaCentral = opts.entradasByCentralDestino
-        ? (opts.entradasByCentralDestino.get(r.central) || [])
-        : (state.entradas || []).filter(e => (e.centralDestino || e.centralCompra || '') === r.central);
+        ? (opts.entradasByCentralDestino.get(central) || [])
+        : (state.entradas || []).filter(e => (e.centralDestino || e.centralCompra || '') === central);
       const _entradasFiltradas = _entradasDestaCentral.filter(e => {
         if (e.material !== mat) return false;
         const d = parseDate(e.dtDescarga || e.dtEmissao);
@@ -951,7 +1083,7 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
       // NFs Pendentes (_convertNfPesoToKg, ver ui.js), não é seguro somar
       // e.peso bruto.
       const localEntTotal = _entradasFiltradas.reduce((sum, e) => sum + _convertNfPesoToKg(e.peso, e.um, e.material), 0);
-      const _saidasDestaCentral = _saidasByCentral.get(r.central) || [];
+      const _saidasDestaCentral = _saidasByCentral.get(central) || [];
       const _saidasFiltradas = _saidasDestaCentral.filter(s => {
         if (s.material !== mat) return false;
         const d = parseDate(s.dtEmissao);
@@ -965,7 +1097,7 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
       // tooltip fala de lançamentos (alimenta o AUSENTE do Est. Final), então
       // ele não pode sumir só porque o carry do dia 1 passou a vir do SAP.
       const absentNearest = preCarryLanc ? null
-        : getNearestLancsForAbsent({ central: r.central, material: mat, dtIni, dtFim });
+        : getNearestLancsForAbsent({ central, material: mat, dtIni, dtFim });
 
       // ── Carry entre períodos (diário ou semanal) ─────────────────────
       // carry.date = data do último lançamento real, usada para delimitar o SAP
@@ -1190,7 +1322,7 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
       const detailKey = `${idx}-${matIdx}-${String(mat).replace(/[^a-zA-Z0-9_-]+/g, '_')}`;
       window.__analiticoDetailCache.set(detailKey, {
         key: detailKey,
-        central: r.central,
+        central,
         material: mat,
         periodLabel: `${fmtPtDate(dtIni)} a ${fmtPtDate(dtFim)}`,
         isSemanal,
@@ -1216,9 +1348,9 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
       });
 
       const _matCodSap     = getCodSapPorGrupo(mat);
-      const _rowCustoMed   = (r.custoMedioPorMat           || {})[mat] || 0;
-      const _rowCustoFonte = (r.custoMedioFontePorMat      || {})[mat] || null;
-      const _rowMesesAtras = (r.custoMedioMesesAtrasPorMat || {})[mat] || 0;
+      const _rowCustoMed   = (rc.custoMedioPorMat           || {})[mat] || 0;
+      const _rowCustoFonte = (rc.custoMedioFontePorMat      || {})[mat] || null;
+      const _rowMesesAtras = (rc.custoMedioMesesAtrasPorMat || {})[mat] || 0;
       const _rowCustoVar   = _rowCustoMed > 0 ? snapshot.diff * _rowCustoMed : null;
       const _rowVarCls     = _rowCustoVar === null ? '' : varClass(_rowCustoVar);
       // Tooltip: custo médio + fonte (Custos SAP — central+Cód SAP+mês, com
@@ -1246,7 +1378,7 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
           >${varSymbol(_rowCustoVar)} ${money(Math.abs(_rowCustoVar))}</span>`
         : _rowCustoFonte === 'sem_codigo'
           ? `<span class="absent-badge" style="background:var(--bg4);color:var(--text3);border-color:var(--border2)" title="Material sem Cód SAP cadastrado — não é possível buscar o custo em Custos SAP">SEM CÓD SAP</span>`
-          : `<span class="absent-badge" title="Nenhum custo cadastrado em Custos SAP para ${escapeHtml(r.central)} / Cód SAP ${escapeHtml(_matCodSap)} / ${_custoMedMesAno}">AUSENTE</span>`;
+          : `<span class="absent-badge" title="Nenhum custo cadastrado em Custos SAP para ${escapeHtml(central)} / Cód SAP ${escapeHtml(_matCodSap)} / ${_custoMedMesAno}">AUSENTE</span>`;
 
       // ── Coluna "Dt. Est. Inicial" ────────────────────────────────────────
       // A causa de um AUSENTE aqui mudou junto com a fonte: não é mais "não
@@ -1262,7 +1394,7 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
         }
         if (snapshot.pesoIniAusente || !prev) {
           const motivo = _matCodSap
-            ? `Nenhum registro em Custos SAP para ${r.central} / Cód SAP ${_matCodSap} em mês nenhum até o mês anterior ao período`
+            ? `Nenhum registro em Custos SAP para ${central} / Cód SAP ${_matCodSap} em mês nenhum até o mês anterior ao período`
             : 'Material sem Cód SAP cadastrado — não é possível buscar o saldo em Custos SAP';
           return `<span class="absent-badge" style="cursor:help" title="${escapeHtml(motivo)}">AUSENTE</span>`;
         }
@@ -1278,7 +1410,10 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
       })();
 
       capMatsInfo.push({
+        central,
         mat,
+        // No modo material a coluna da seção de capacidade é a CENTRAL.
+        label: isMat ? central : mat,
         estoque: snapshot.pesoFim,
         ausente: !!(snapshot.pesoFimAusente || matSemCadastro)
       });
@@ -1287,29 +1422,36 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
       // por sinal entre as colunas Entradas e Saídas. Y11/Y12 são AJUSTES por
       // natureza, então agora vão inteiros para a coluna Ajustes — é lá que o
       // analista procura por eles.
-      const _matFechExcluidos = (r.sapFechExcluidosByMat && r.sapFechExcluidosByMat.get(mat)) || [];
+      const _matFechExcluidos = (rc.sapFechExcluidosByMat && rc.sapFechExcluidosByMat.get(mat)) || [];
+
+      // Regional da linha — só é usado no modo material (lá a linha é uma
+      // central e o filtro de Regional atua sobre as linhas). No modo
+      // central o regional já vive no dataset do card.
+      const _rowRegional = isMat
+        ? ((getFilialLookupIndex().exact.get(normalizeText(central))?.regional || '').trim())
+        : '';
 
       matRowsHtml += `
         <tr class="material-row${
-          (_matsComPendNF.has(mat) && _matsComPendOS.has(mat)) ? ' pend-injetado-ambos'
-          : _matsComPendNF.has(mat) ? ' pend-injetado-nf'
-          : _matsComPendOS.has(mat) ? ' pend-injetado-os'
+          (_itensComPendNF.has(item) && _itensComPendOS.has(item)) ? ' pend-injetado-ambos'
+          : _itensComPendNF.has(item) ? ' pend-injetado-nf'
+          : _itensComPendOS.has(item) ? ' pend-injetado-os'
           : ''
-        }" data-detail-key="${detailKey}" data-diff="${snapshot.diff}" data-peso-fim="${snapshot.pesoFim}" data-categoria="${escapeHtml(matCategoria)}" onclick="toggleMaterialDetail(this, event)">
+        }" data-detail-key="${detailKey}" data-diff="${snapshot.diff}" data-peso-fim="${snapshot.pesoFim}" data-categoria="${escapeHtml(matCategoria)}" data-central="${escapeHtml(central)}" data-regional="${escapeHtml(_rowRegional)}" data-material="${escapeHtml(mat)}" onclick="toggleMaterialDetail(this, event)">
           <td class="td-mono" style="font-weight:600">
             <span class="material-row-title">
-              <i class="ti ${MAT_LEVEL_ICON[matLevel]} material-row-crit-icon" style="color:${MAT_LEVEL_COLOR[matLevel]}${matSemCadastro ? ';cursor:pointer' : ''}"
-                title="${matSemCadastro ? 'Material sem cadastro — clique para cadastrar' : `Criticidade: ${MAT_LEVEL_LABEL[matLevel]}`}"
-                ${matSemCadastro ? `onclick="analiticoCadastrarMaterial('${escapeHtml(mat)}', event)"` : ''}></i>
-              ${escapeHtml(mat)}
+              <i class="ti ${MAT_LEVEL_ICON[matLevel]} material-row-crit-icon" style="color:${MAT_LEVEL_COLOR[matLevel]}${(matSemCadastro && !isMat) ? ';cursor:pointer' : ''}"
+                title="${(matSemCadastro && !isMat) ? 'Material sem cadastro — clique para cadastrar' : `Criticidade: ${MAT_LEVEL_LABEL[matLevel]}`}"
+                ${(matSemCadastro && !isMat) ? `onclick="analiticoCadastrarMaterial('${escapeHtml(mat)}', event)"` : ''}></i>
+              ${escapeHtml(isMat ? central : mat)}
             </span>
           </td>
           <td class="td-mono" style="font-size:11px">${matSemCadastro ? '—' : (escapeHtml(_matCodSap) || '—')}</td>
           <td class="td-mono" style="color:var(--text2);font-size:11px">${_iniCell}</td>
           <td class="td-mono" style="color:${(matSemCadastro || snapshot.pesoIniAusente) ? 'var(--text3)' : 'var(--text)'}">${(matSemCadastro || snapshot.pesoIniAusente) ? '—' : fmtKg(snapshot.pesoIni)}</td>
-          <td>${buildAnaliticoDetailBreakdown(entEntries, natureza.totalEnt, 'var(--green)', 'Entradas', localEntCount, mat, r.central, [], localEntTotal)}</td>
-          <td>${buildAnaliticoDetailBreakdown(saiEntries, natureza.totalSai, 'var(--red)', 'Saídas', localSaiCount, mat, r.central, [], localSaiTotal)}</td>
-          <td>${buildAnaliticoDetailBreakdown(ajuEntries, natureza.totalAju, movValorCor(natureza.totalAju, 'var(--amber)'), 'Ajustes', null, mat, r.central, _matFechExcluidos)}</td>
+          <td>${buildAnaliticoDetailBreakdown(entEntries, natureza.totalEnt, 'var(--green)', 'Entradas', localEntCount, mat, central, [], localEntTotal)}</td>
+          <td>${buildAnaliticoDetailBreakdown(saiEntries, natureza.totalSai, 'var(--red)', 'Saídas', localSaiCount, mat, central, [], localSaiTotal)}</td>
+          <td>${buildAnaliticoDetailBreakdown(ajuEntries, natureza.totalAju, movValorCor(natureza.totalAju, 'var(--amber)'), 'Ajustes', null, mat, central, _matFechExcluidos)}</td>
           <td class="td-mono" style="color:var(--text2);font-size:11px">${
             snapshot.pesoFimAusente
               ? `<span class='absent-badge' data-absent-tooltip='${buildAbsentTooltip(absentNearest)}' style='cursor:help'>AUSENTE</span>`
@@ -1334,7 +1476,7 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
     let divPanelHtml = '';
     let healthBadge  = '';
     let healthCountsHtml = '';
-    const totalMats = allMatsSorted.length;
+    const totalMats = allItemsSorted.length;
 
     // Health score + counts for the header badges
     // Usa getLastPeriodLaunchStockWithFallback — mesma lógica do painel interno
@@ -1347,23 +1489,29 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
     // cadastro (catKey null) são excluídos do cálculo de saúde por
     // calcHealthScore (contados à parte em counts.sem_cadastro).
     // catKey vem de r.materialCatKeyMap (validado via materialOriginal na
-    // filtragem de origem) — allMatsSorted já só contém materiais
+    // filtragem de origem) — allItemsSorted já só contém materiais
     // cadastrados, então este é um lookup seguro, não uma re-derivação.
-    const matDiffs = allMatsSorted.map(mat => {
-      const catKey = _sortCatKeyLookup.get(mat) || null;
-      const prev = _anGetSapStock({ central: r.central, material: mat, dtIni });
-      const fim  = _anGetLastPeriodStockFallback({ central: r.central, material: mat, dtIni, dtFim });
+    //
+    // No modo material cada entrada de matDiffs é uma CENTRAL (com o catKey
+    // do material do card, que é o mesmo em todas): o donut passa a mostrar
+    // criticidade por central, sem mudar uma linha da regra de saúde.
+    const matDiffs = allItemsSorted.map(item => {
+      const central = centralOf(item);
+      const mat     = matOf(item);
+      const catKey  = _catKeyOf(resOf(central) || {}, mat);
+      const prev = _anGetSapStock({ central, material: mat, dtIni });
+      const fim  = _anGetLastPeriodStockFallback({ central, material: mat, dtIni, dtFim });
       const snap = buildSnapshot({
-        lancs: lancsByMat.get(mat) || [],
-        sap:   sapByMat.get(mat) || [],
+        lancs: lancsByItem.get(item) || [],
+        sap:   sapByItem.get(item) || [],
         initialStockOverride:     prev?.value  ?? null,
         initialDateLabelOverride: prev?.dtLabel ?? null,
         finalStockOverride:       fim && !fim.missing ? fim.value : null,
         finalDateLabelOverride:   fim && !fim.missing ? fim.dtLabel : null
       });
-      return { mat, diff: snap.diff, catKey };
+      return { mat: item, diff: snap.diff, catKey };
     });
-    const healthResult = calcHealthScore(matDiffs, lancsByMat, sapByMat, thresholds);
+    const healthResult = calcHealthScore(matDiffs, lancsByItem, sapByItem, thresholds);
     // allNeutral considera só materiais COM cadastro — consistente com o
     // escopo de calcHealthScore, que já exclui sem_cadastro do cálculo.
     const _matDiffsComCadastro = matDiffs.filter(m => m.catKey);
@@ -1479,9 +1627,9 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
       const _scoreDash = _scorePct * _SCIRC;
 
       divPanelHtml = `
-        <div class="cpanel" data-central="${escapeHtml(r.central)}" data-idx="${idx}">
+        <div class="cpanel" data-${isMat ? 'material' : 'central'}="${escapeHtml(cardName)}" data-idx="${idx}">
           <div class="cpanel-health">
-            <svg width="128" height="128" viewBox="0 0 92 92" class="cpanel-donut" role="img" aria-label="Saúde da central: ${escapeHtml(donutScoreLabel)}, ${escapeHtml(donutLevelLabel)}">
+            <svg width="128" height="128" viewBox="0 0 92 92" class="cpanel-donut" role="img" aria-label="Saúde ${isMat ? 'do material' : 'da central'}: ${escapeHtml(donutScoreLabel)}, ${escapeHtml(donutLevelLabel)}">
               <circle cx="46" cy="46" r="${(_R + _RI) / 2}" fill="none" stroke="var(--border)" stroke-width="${_R - _RI}" opacity="0.4"/>
               ${donutSlices}
               <circle cx="46" cy="46" r="${_SR}" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="3"/>
@@ -1496,19 +1644,19 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
           <div class="cpanel-health-counts">
             <div class="cpanel-health-count">
               <span class="cpanel-health-count-label" style="color:${_donutColors.critico}">CRÍTICO</span>
-              <span class="cpanel-health-count-val" style="color:${_donutColors.critico}"><span class="cpanel-health-count-num">${hCounts.critico || 0}</span> ${(hCounts.critico || 0) === 1 ? 'material' : 'materiais'}</span>
+              <span class="cpanel-health-count-val" style="color:${_donutColors.critico}"><span class="cpanel-health-count-num">${hCounts.critico || 0}</span> ${(hCounts.critico || 0) === 1 ? _itemSing : _itemPlur}</span>
             </div>
             <div class="cpanel-health-count">
               <span class="cpanel-health-count-label" style="color:${_donutColors.urgente}">URGENTE</span>
-              <span class="cpanel-health-count-val" style="color:${_donutColors.urgente}"><span class="cpanel-health-count-num">${hCounts.urgente || 0}</span> ${(hCounts.urgente || 0) === 1 ? 'material' : 'materiais'}</span>
+              <span class="cpanel-health-count-val" style="color:${_donutColors.urgente}"><span class="cpanel-health-count-num">${hCounts.urgente || 0}</span> ${(hCounts.urgente || 0) === 1 ? _itemSing : _itemPlur}</span>
             </div>
             <div class="cpanel-health-count">
               <span class="cpanel-health-count-label" style="color:${_donutColors.atencao}">ATENÇÃO</span>
-              <span class="cpanel-health-count-val" style="color:${_donutColors.atencao}"><span class="cpanel-health-count-num">${hCounts.atencao || 0}</span> ${(hCounts.atencao || 0) === 1 ? 'material' : 'materiais'}</span>
+              <span class="cpanel-health-count-val" style="color:${_donutColors.atencao}"><span class="cpanel-health-count-num">${hCounts.atencao || 0}</span> ${(hCounts.atencao || 0) === 1 ? _itemSing : _itemPlur}</span>
             </div>
             <div class="cpanel-health-count">
               <span class="cpanel-health-count-label" style="color:${_donutColors.bom}">BOM</span>
-              <span class="cpanel-health-count-val" style="color:${_donutColors.bom}"><span class="cpanel-health-count-num">${hCounts.bom || 0}</span> ${(hCounts.bom || 0) === 1 ? 'material' : 'materiais'}</span>
+              <span class="cpanel-health-count-val" style="color:${_donutColors.bom}"><span class="cpanel-health-count-num">${hCounts.bom || 0}</span> ${(hCounts.bom || 0) === 1 ? _itemSing : _itemPlur}</span>
             </div>
           </div>
           <div class="cpanel-mats">
@@ -1519,26 +1667,34 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
     }
 
     const card = document.createElement('div');
-    const _pendCardClass = (_pendStateCentral.nf && _pendStateCentral.os) ? ' pend-considerado-ambos'
-                         : _pendStateCentral.nf ? ' pend-considerado-nf'
-                         : _pendStateCentral.os ? ' pend-considerado-os'
+    const _pendCardClass = (_pendState.nf && _pendState.os) ? ' pend-considerado-ambos'
+                         : _pendState.nf ? ' pend-considerado-nf'
+                         : _pendState.os ? ' pend-considerado-os'
                          : '';
-    card.className = 'micro-filial-card' + _pendCardClass;
-    card.dataset.central = r.central || '';
+    card.className = 'micro-filial-card' + (isMat ? ' micro-material-card' : '') + _pendCardClass;
+    if (isMat) {
+      card.dataset.material  = r.material || '';
+      card.dataset.categoria = String(getCategoriaPorGrupo(r.material) || '').toUpperCase();
+    } else {
+      card.dataset.central = r.central || '';
+    }
     card.dataset.centralDiff = varCentralMicro;
     card.dataset.diff = varCentralMicro;   // for tipo-var filter
     card.dataset.custoVariacao = custoVariacaoTotal;
     card.dataset.healthLevel = healthBadge ? (hLevel === 'sem_saude' ? 'none' : hLevel) : 'none';
-    // Faixas de capacidade presentes nesta central — alimenta o filtro
-    // "Capacidade" da barra (ver _cardPassesCapFilter).
+    // Faixas de capacidade presentes no card — alimenta o filtro
+    // "Capacidade" da barra (ver _cardPassesCapFilter). Cada item já carrega
+    // sua própria central, então a união funciona nos dois modos.
     card.dataset.capFaixas = (typeof capFaixasDaCentral === 'function')
-      ? capFaixasDaCentral(r.central, capMatsInfo).join(',')
+      ? [...new Set(capMatsInfo.flatMap(m => capFaixasDaCentral(m.central, [m])))].join(',')
       : '';
     card.dataset.healthScore = healthBadge && hScore !== null ? hScore : '';
     // ── Badge de custo da variação ──────────────────────────────────────────
     let custoBadge = '';
     if (custoVariacaoTotal !== 0) {
-      const hasCustos = Object.keys(r.custoMedioPorMat || {}).length > 0;
+      const hasCustos = isMat
+        ? (r.centrais || []).some(c => Object.keys(r.byCentral.get(c)?.custoMedioPorMat || {}).length > 0)
+        : Object.keys(r.custoMedioPorMat || {}).length > 0;
       if (hasCustos) {
         const isNeg = custoVariacaoTotal < 0;
         const isPos = custoVariacaoTotal > 0;
@@ -1559,8 +1715,8 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
       <div class="micro-filial-header-wrap">
         <div class="micro-filial-header" onclick="toggleMicro(this.closest('.micro-filial-header-wrap'))">
           <div class="micro-filial-name">
-            <i class="ti ti-building-warehouse"></i>
-            ${escapeHtml(r.central)}
+            <i class="ti ${isMat ? 'ti-box' : 'ti-building-warehouse'}"></i>
+            ${escapeHtml(cardName)}
           </div>
           <div class="micro-filial-summary">
             <span style="display:inline-flex;align-items:center;gap:5px;${varCentralMicro < 0 ? 'background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)' : varCentralMicro > 0 ? 'background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-border)' : 'background:var(--bg3);color:var(--text3);border:1px solid var(--border)'};border-radius:6px;padding:2px 9px;font-family:var(--mono);font-size:10.5px;font-weight:700;white-space:nowrap">
@@ -1575,12 +1731,12 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
           </div>
         </div>
         <div class="micro-filial-actions">
-          <button class="trend-btn" onclick="event.stopPropagation();openTrendModal('central','${escapeHtml(r.central)}')" title="Ver tendência de variação">
+          ${isMat ? '' : `<button class="trend-btn" onclick="event.stopPropagation();openTrendModal('central','${escapeHtml(r.central)}')" title="Ver tendência de variação">
             <i class="ti ti-chart-line"></i>
           </button>
           <button class="trend-btn" onclick="event.stopPropagation();abrirModalRelatorioCentral('${escapeHtml(r.central)}')" title="Gerar relatório desta central" style="background:linear-gradient(135deg,rgba(29,78,216,0.18),rgba(37,99,235,0.12));border:1px solid rgba(37,99,235,0.3);color:#60a5fa">
             <i class="ti ti-file-analytics"></i>
-          </button>
+          </button>`}
           <i class="ti ti-chevron-down micro-filial-chev" style="color:var(--text3);font-size:16px;flex-shrink:0;transition:transform 0.2s;cursor:pointer" id="chev-${idx}" onclick="event.stopPropagation();toggleMicro(this.closest('.micro-filial-header-wrap'))"></i>
         </div>
       </div>
@@ -1588,19 +1744,25 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
       <div class="micro-filial-body" id="micro-body-${idx}">
         ${divPanelHtml}
 
-        ${typeof buildCapacidadeSection === 'function' ? buildCapacidadeSection({ central: r.central, materiais: capMatsInfo }) : ''}
+        ${typeof buildCapacidadeSection === 'function'
+          ? (isMat
+              ? buildCapacidadeSection({ pares: capMatsInfo, colLabel: 'Central' })
+              : buildCapacidadeSection({ central: r.central, materiais: capMatsInfo }))
+          : ''}
 
-        ${buildPendIntegSection({ central: r.central, dtIni, dtFim, sapNoPeriodo: r.sapNoPeriodo || [], entradasDaCentral: opts.entradasByCentral ? (opts.entradasByCentral.get(r.central) || []) : undefined })}
+        ${isMat
+          ? buildPendIntegSectionMaterial({ material: r.material, pendNF: _pendListas.nf, pendOS: _pendListas.os })
+          : buildPendIntegSection({ central: r.central, dtIni, dtFim, sapNoPeriodo: r.sapNoPeriodo || [], entradasDaCentral: opts.entradasByCentral ? (opts.entradasByCentral.get(r.central) || []) : undefined })}
 
         <div class="micro-body-section">
-          <div class="micro-section-title"><i class="ti ti-box"></i> Análise por Material</div>
+          <div class="micro-section-title"><i class="ti ${isMat ? 'ti-building-warehouse' : 'ti-box'}"></i> Análise por ${itemLabel}</div>
         </div>
 
         <div class="micro-table-wrap">
           <table>
             <thead>
               <tr>
-                <th>Material</th>
+                <th>${itemLabel}</th>
                 <th>Cód SAP</th>
                 <th>Dt. Est. Inicial</th>
                 <th>Est. Inicial<br><span style="font-size:9px;font-weight:400;opacity:.7">(Saldo SAP)</span></th>
@@ -1614,7 +1776,7 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
                 <th style="text-align:right">Custo Variação<br><span style="font-size:9px;font-weight:400;opacity:.7">(Var. × C. Médio)</span></th>
               </tr>
             </thead>
-            <tbody>${matRowsHtml || '<tr><td colspan="12"><div class="empty-state" style="padding:24px"><i class="ti ti-box-off"></i><p>Nenhum material encontrado.</p></div></td></tr>'}</tbody>
+            <tbody>${matRowsHtml || `<tr><td colspan="12"><div class="empty-state" style="padding:24px"><i class="ti ti-box-off"></i><p>Nenhum${isMat ? 'a central' : ' material'} encontrad${isMat ? 'a' : 'o'}.</p></div></td></tr>`}</tbody>
           </table>
         </div>
       </div>`;
@@ -1622,9 +1784,12 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
     // ── Badge de pendentes SAP no header (preenchido após buildPendIntegSection popular _pendCache) ──
     const _phBadge = card.querySelector(`#pend-header-badge-${idx}`);
     if (_phBadge) {
-      const _pc = window._pendCache[r.central] || {};
-      const _nfC = (_pc.pendNF || []).length;
-      const _osC = (_pc.pendOS || []).length;
+      // No modo material as contagens já vêm recortadas pelo material
+      // (_pendListas); no modo central, do cache da própria central — que
+      // buildPendIntegSection acabou de popular no innerHTML acima.
+      const _pc  = isMat ? {} : (window._pendCache[r.central] || {});
+      const _nfC = isMat ? _pendListas.nf.length : (_pc.pendNF || []).length;
+      const _osC = isMat ? _pendListas.os.length : (_pc.pendOS || []).length;
       let _badgeHtml = '';
       _badgeHtml = `<span class="summary-sep"></span>` +
         `<span class="pend-header-pill pend-header-pill-nf${_nfC === 0 ? ' pend-header-pill-zero' : ''}" title="${_nfC === 0 ? 'Nenhuma NF pendente' : `${_nfC} NF${_nfC > 1 ? 's' : ''} pendente${_nfC > 1 ? 's' : ''} de integração SAP`}">
@@ -1636,10 +1801,13 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
       _phBadge.innerHTML = _badgeHtml;
     }
 
-    // Lookup regional for this central
-    const filialIdx = getFilialLookupIndex();
-    const filialRec = filialIdx.exact.get(normalizeText(r.central));
-    card.dataset.regional = (filialRec?.regional || '').trim();
+    // Lookup regional for this central (só no modo central — no modo
+    // material o regional vive em cada LINHA, ver _rowRegional).
+    if (!isMat) {
+      const filialIdx = getFilialLookupIndex();
+      const filialRec = filialIdx.exact.get(normalizeText(r.central));
+      card.dataset.regional = (filialRec?.regional || '').trim();
+    }
 
     card.querySelectorAll('.micro-table-wrap table').forEach(makeResizable);
     if (typeof initAbsentTooltips === 'function') initAbsentTooltips(card);
@@ -1728,6 +1896,49 @@ function refreshCentralCard(central, opts = {}) {
 
   return true;
 }
+
+/**
+ * Equivalente de refreshCentralCard para o agrupamento por MATERIAL: troca
+ * cirurgicamente o card de um material após o toggle "Considerar NFs/OS"
+ * daquele material (ver togglePendConsideradosMat em ui.js), sem reconstruir
+ * a visão inteira nem reordenar os cards.
+ *
+ * @param {string} material
+ * @returns {boolean} false se algum pré-requisito faltar (o chamador cai
+ *          para o render completo).
+ */
+function refreshMaterialCard(material) {
+  if (_anGroupMode !== 'material') return false;
+  if (!window.__analiticoResults || !window.__analiticoDtIni || !window.__analiticoDtFim) return false;
+
+  const oldCard = Array.from(document.querySelectorAll('#an-micro-container .micro-filial-card'))
+    .find(c => c.dataset.material === material);
+  if (!oldCard) return false;
+
+  const oldCpanel = oldCard.querySelector('.cpanel');
+  const idx = oldCpanel ? parseInt(oldCpanel.dataset.idx, 10) : NaN;
+  if (isNaN(idx)) return false;
+
+  const g = _buildMatGroups(window.__analiticoResults).find(x => x.material === material);
+  if (!g) return false;
+
+  const wasOpen = oldCard.querySelector('.micro-filial-body')?.classList.contains('open') || false;
+  const newCard = buildCentralCard(g, idx, window.__analiticoDtIni, window.__analiticoDtFim, { mode: 'material' });
+
+  if (wasOpen) {
+    const newBody = newCard.querySelector('.micro-filial-body');
+    const newChev = newCard.querySelector(`#chev-${idx}`);
+    if (newBody) newBody.classList.add('open');
+    if (newChev) newChev.style.transform = 'rotate(180deg)';
+  }
+
+  oldCard.replaceWith(newCard);
+  if (typeof initHelpBadges === 'function') initHelpBadges();
+  // Reaplica os filtros ativos ao card recém-criado (linhas/visibilidade).
+  _applyMicroVisibility();
+  return true;
+}
+window.refreshMaterialCard = refreshMaterialCard;
 
 /**
  * Aplica o highlight de borda do grupo regional a partir do estado de
@@ -1887,6 +2098,41 @@ function buildRegionalSummaryHtml(cards) {
   `;
 }
 
+/**
+ * Transpõe os resultados por central em grupos por material — a estrutura
+ * que buildCentralCard consome no modo 'material'.
+ *
+ * Não recalcula nada: cada grupo só guarda quais centrais têm aquele
+ * material e uma referência ao resultado original de cada uma (de onde o
+ * card puxa lançamentos, SAP, custo médio e catKey daquele par).
+ *
+ * @returns {{material:string, centrais:string[], byCentral:Map}[]}
+ */
+function _buildMatGroups(results) {
+  const map = new Map();
+  results.forEach(r => {
+    (r.allMats || []).forEach(mat => {
+      let g = map.get(mat);
+      if (!g) { g = { material: mat, centrais: [], byCentral: new Map() }; map.set(mat, g); }
+      if (!g.byCentral.has(r.central)) { g.centrais.push(r.central); g.byCentral.set(r.central, r); }
+    });
+  });
+  return [...map.values()];
+}
+
+/** Variação total (kg) de um material somando todas as suas centrais —
+ *  usada só para ordenar os cards (pior desfalque primeiro), espelhando
+ *  calcVariacaoCentral do agrupamento por regional. */
+function _matGroupDiff(g, dtIni) {
+  return g.centrais.reduce((acc, central) => {
+    const rc = g.byCentral.get(central) || {};
+    const lancs = (rc.lancsNoPeriodo || []).filter(x => (x.material || '—') === g.material);
+    const sap   = (rc.sapNoPeriodo   || []).filter(x => (x.material || '—') === g.material);
+    const prev  = _anGetSapStock({ central, material: g.material, dtIni });
+    return acc + buildSnapshot({ lancs, sap, initialStockOverride: prev?.value ?? null }).diff;
+  }, 0);
+}
+
 // silent (opcional): ver _rodarAnaliticoCore acima — quando true, não
 // fecha o overlay/steps de loading ao final (quem chamou está no controle).
 // Outros chamadores (ex.: re-render em ui.js) não passam esse parâmetro e
@@ -1970,6 +2216,49 @@ function renderAnaliticoMicro(results, dtIni, dtFim, silent) {
     _entradasByCentralMicroDestino.get(c).push(e);
   });
 
+  if (_anGroupMode === 'material') {
+    // ═══ AGRUPAMENTO POR MATERIAL ═══════════════════════════════════════
+    // Um card por material, sem regional nem central acima — as centrais
+    // viram as LINHAS da tabela de cada card (ver buildCentralCard).
+    //
+    // Pré-passada de pendências: no agrupamento por regional quem popula
+    // window._pendCache é o próprio buildPendIntegSection, card a card
+    // (card = central). Aqui o card é um material e precisa recortar as
+    // pendências de VÁRIAS centrais, então elas têm que estar prontas
+    // antes. É a mesma conta, feita uma vez por central — não é trabalho a
+    // mais, só antecipado.
+    results.forEach(r => {
+      window._pendCache[r.central] = calcPendentesIntegracao({
+        central: r.central, dtIni, dtFim,
+        sapNoPeriodo: r.sapNoPeriodo || [],
+        entradasDaCentral: _entradasByCentralMicro.get(r.central) || []
+      });
+    });
+
+    const grupos = _buildMatGroups(results);
+    // Mesma regra de ordenação das centrais: maior desfalque primeiro.
+    const _gScore = new Map();
+    grupos.forEach(g => _gScore.set(g, _matGroupDiff(g, dtIni)));
+    grupos.sort((a, b) => _gScore.get(a) - _gScore.get(b));
+
+    grupos.forEach((g, idx) => {
+      const card = buildCentralCard(g, idx, dtIni, dtFim, {
+        mode: 'material',
+        entradasByCentral: _entradasByCentralMicro,
+        entradasByCentralDestino: _entradasByCentralMicroDestino
+      });
+      _cardBuffer.push(card);
+      container.appendChild(card);
+    });
+
+    // ponytail: window._anResumoCentraisData (widget "Saúde geral" da
+    // topbar) NÃO é recalculado aqui — ele é por central e este render não
+    // monta cards de central. Continua valendo o da última análise
+    // agrupada por regional. Teto aceito: é indicador de topo, não muda
+    // nenhuma decisão dentro da visão. Upgrade = extrair o cálculo de saúde
+    // por central de buildCentralCard e alimentá-lo nos dois modos.
+  } else {
+
   results.forEach((r, idx) => {
     _cardBuffer.push(buildCentralCard(r, idx, dtIni, dtFim, { entradasByCentral: _entradasByCentralMicro, entradasByCentralDestino: _entradasByCentralMicroDestino }));
   });
@@ -2050,6 +2339,8 @@ function renderAnaliticoMicro(results, dtIni, dtFim, silent) {
     healthLevel:  card.dataset.healthLevel || 'none',
     healthScore:  card.dataset.healthScore || ''
   }));
+
+  }  // fim do agrupamento por regional
 
 
   // Populate filter dropdowns with available centrais e materiais
@@ -2250,8 +2541,11 @@ function _updateRegionalFocus() {
  * recebem opacidade reduzida. Escopo limitado ao regional em questão.
  */
 function _updateCentralFocus(group) {
-  if (!group) return;
-  const cards = group.querySelectorAll('.micro-filial-card');
+  // Sem grupo (agrupamento por material): o escopo é o container inteiro,
+  // que ali já é a lista plana de cards.
+  const scope = group || document.getElementById('an-micro-container');
+  if (!scope) return;
+  const cards = scope.querySelectorAll('.micro-filial-card');
   const anyOpen = Array.from(cards).some(c => c.querySelector('.micro-filial-body')?.classList.contains('open'));
   cards.forEach(c => {
     const isOpen = c.querySelector('.micro-filial-body')?.classList.contains('open');
@@ -2322,6 +2616,38 @@ function _microRecomputeOptions(key) {
   const centrais   = new Set();
   const categorias = new Set();
   const materiais  = new Set();
+
+  // ── Agrupamento por MATERIAL ──────────────────────────────────────────
+  // Mesma varredura, um nível a menos (não há grupo de regional) e com os
+  // papéis invertidos: o CARD é o material (filtros Material/Categoria/
+  // Saúde) e a LINHA é a central (filtros Central/Regional).
+  if (_anGroupMode === 'material') {
+    document.querySelectorAll('#an-micro-container .micro-filial-card').forEach(card => {
+      const matName = card.dataset.material || '';
+      const matCat  = (card.dataset.categoria || '').trim().toUpperCase();
+      if (appliedMaterials.size  && !appliedMaterials.has(matName)) return;
+      if (appliedCategorias.size && !appliedCategorias.has(matCat))  return;
+      if (varActive && !varState.levels.has(card.dataset.healthLevel || 'none')) return;
+      if (tipoActive && !passesTipo(parseFloat(card.dataset.diff || '0'), 'material')) return;
+
+      let anyRowMatches = false;
+      card.querySelectorAll('tbody tr.material-row').forEach(row => {
+        const centralName  = row.dataset.central  || '';
+        const regionalName = row.dataset.regional || '';
+        if (appliedCentrals.size  && !appliedCentrals.has(centralName))   return;
+        if (appliedRegionals.size && !appliedRegionals.has(regionalName)) return;
+        if (!passesTipo(parseFloat(row.dataset.diff || '0'), 'central'))  return;
+        if (centralName)  centrais.add(centralName);
+        if (regionalName) regionais.add(regionalName);
+        anyRowMatches = true;
+      });
+      if (!anyRowMatches) return;
+      if (matName) materiais.add(matName);
+      if (matCat)  categorias.add(matCat);
+    });
+    _microFilter.options[key] = [...({ regional: regionais, central: centrais, categoria: categorias, material: materiais }[key])].sort();
+    return;
+  }
 
   document.querySelectorAll('#an-micro-container .regional-group').forEach(group => {
     const groupRegional = group.dataset.regional || '';
@@ -2934,6 +3260,33 @@ function _applyMicroVisibility() {
     return true;
   };
 
+  // ── Agrupamento por MATERIAL ──────────────────────────────────────────
+  // Card = material (Material/Categoria/Saúde e o nível "material" do
+  // filtro de tipo de variação); linha = central (Central/Regional e o
+  // nível "central"). O nível "regional" fica sem alvo aqui — a opção é
+  // escondida da barra por _anSyncGroupModeUI.
+  if (_anGroupMode === 'material') {
+    document.querySelectorAll('#an-micro-container .micro-filial-card').forEach(card => {
+      const matName = card.dataset.material || '';
+      const matCat  = (card.dataset.categoria || '').trim().toUpperCase();
+      if (appliedMaterials.size  && !appliedMaterials.has(matName)) { card.style.display = 'none'; return; }
+      if (appliedCategorias.size && !appliedCategorias.has(matCat))  { card.style.display = 'none'; return; }
+      if (varActive && !varState.levels.has(card.dataset.healthLevel || 'none')) { card.style.display = 'none'; return; }
+      if (tipoActive && !passesTipo(parseFloat(card.dataset.diff || '0'), 'material')) { card.style.display = 'none'; return; }
+
+      let visibleRows = 0;
+      card.querySelectorAll('tbody tr.material-row').forEach(row => {
+        const show = (!appliedCentrals.size  || appliedCentrals.has(row.dataset.central  || ''))
+                  && (!appliedRegionals.size || appliedRegionals.has(row.dataset.regional || ''))
+                  && passesTipo(parseFloat(row.dataset.diff || '0'), 'central');
+        row.style.display = show ? '' : 'none';
+        if (show) visibleRows++;
+      });
+      card.style.display = visibleRows === 0 ? 'none' : '';
+    });
+    return;
+  }
+
   // Handle regional groups
   document.querySelectorAll('#an-micro-container .regional-group').forEach(group => {
     const groupRegional = group.dataset.regional || '';
@@ -3046,7 +3399,8 @@ function toggleAllCentralis() {
     }
   });
   _updateToggleCentralisBtn();
-  document.querySelectorAll('#an-micro-container .regional-group').forEach(_updateCentralFocus);
+  if (_anGroupMode === 'material') _updateCentralFocus(null);
+  else document.querySelectorAll('#an-micro-container .regional-group').forEach(_updateCentralFocus);
 }
 
 function _updateToggleCentralisBtn() {
@@ -3055,7 +3409,10 @@ function _updateToggleCentralisBtn() {
   const lbl  = document.getElementById('label-toggle-centrais');
   if (chev) chev.style.transform = _centraisExpanded ? '' : 'rotate(-90deg)';
   if (btn)  btn.classList.toggle('active', !_centraisExpanded);
-  if (lbl)  lbl.textContent = _centraisExpanded ? 'Recolher Centrais' : 'Expandir Centrais';
+  // Este botão sempre abre/fecha os CARDS — que são centrais no agrupamento
+  // por regional e materiais no agrupamento por material.
+  const alvo = _anGroupMode === 'material' ? 'Materiais' : 'Centrais';
+  if (lbl)  lbl.textContent = (_centraisExpanded ? 'Recolher ' : 'Expandir ') + alvo;
 }
 
 // Mantém compatibilidade com chamadas legadas
