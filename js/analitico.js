@@ -2333,26 +2333,6 @@ function _matGroupDiff(g, dtIni) {
   }, 0);
 }
 
-// ── Ordem padrão dos cards: PIOR SAÚDE primeiro ──────────────────────────
-// Decisão do Hugo: a leitura de abertura da Visão Micro é "quem está pior de
-// saúde", não "quem tem a maior variação em kg" — uma central pode ter uma
-// variação enorme concentrada num material só e ainda estar saudável no
-// conjunto, e o contrário também acontece.
-//
-// A nota (0 = pior, 100 = melhor) sai do dataset do card já montado, então
-// não há cálculo novo: é exatamente o número que o próprio card exibe no
-// badge de saúde. Card sem saúde calculada (dataset vazio) vai para o FIM —
-// "sem informação" não é "saudável".
-//
-// Empate mantém a ordem de chegada dos cards (Array.sort é estável), que é a
-// de maior desfalque → maior sobra: duas centrais com a mesma nota continuam
-// saindo da pior variação para a melhor.
-const _cardSaude = (card) => {
-  const s = parseFloat(card.dataset.healthScore);
-  return Number.isFinite(s) ? s : Infinity;
-};
-const _ordenarCardsPorSaude = (cards) => cards.sort((a, b) => _cardSaude(a) - _cardSaude(b));
-
 // silent (opcional): ver _rodarAnaliticoCore acima — quando true, não
 // fecha o overlay/steps de loading ao final (quem chamou está no controle).
 // Outros chamadores (ex.: re-render em ui.js) não passam esse parâmetro e
@@ -2373,9 +2353,7 @@ function renderAnaliticoMicro(results, dtIni, dtFim, silent, opts = {}) {
   window.__analiticoSemCadastroCache = new Map();
 
 
-  // Pré-ordena as centrais por variação (maior desfalque → maior sobra). Isso
-  // NÃO é mais a ordem final: serve de DESEMPATE estável para a ordenação por
-  // saúde aplicada aos cards já montados (ver _ordenarCardsPorSaude).
+  // Ordena centrais: maior desfalque (variação mais negativa) → maior sobra (mais positiva)
   const calcVariacaoCentral = (r) => {
     const lancsByMat = new Map();
     const sapByMat = new Map();
@@ -2464,24 +2442,20 @@ function renderAnaliticoMicro(results, dtIni, dtFim, silent, opts = {}) {
     });
 
     const grupos = _buildMatGroups(results);
-    // Pré-ordena por variação só para servir de DESEMPATE estável na
-    // ordenação por saúde logo abaixo (mesmo papel do sort de `results` no
-    // agrupamento por regional).
+    // Mesma regra de ordenação das centrais: maior desfalque primeiro.
     const _gScore = new Map();
     grupos.forEach(g => _gScore.set(g, _matGroupDiff(g, dtIni)));
     grupos.sort((a, b) => _gScore.get(a) - _gScore.get(b));
 
     grupos.forEach((g, idx) => {
-      _cardBuffer.push(buildCentralCard(g, idx, dtIni, dtFim, {
+      const card = buildCentralCard(g, idx, dtIni, dtFim, {
         mode: 'material',
         entradasByCentral: _entradasByCentralMicro,
         entradasByCentralDestino: _entradasByCentralMicroDestino
-      }));
+      });
+      _cardBuffer.push(card);
+      container.appendChild(card);
     });
-
-    // Só dá para ordenar por saúde depois de montar: a nota é calculada
-    // dentro do card (ver _cardSaude).
-    _ordenarCardsPorSaude(_cardBuffer).forEach(card => container.appendChild(card));
 
     // ponytail: window._anResumoCentraisData (widget "Saúde geral" da
     // topbar) NÃO é recalculado aqui — ele é por central e este render não
@@ -2496,8 +2470,7 @@ function renderAnaliticoMicro(results, dtIni, dtFim, silent, opts = {}) {
   });
 
   // ── Group cards by regional ──────────────────────────────────────────────
-  // O agrupamento só distribui os cards; a ordem final — dos grupos e das
-  // centrais dentro de cada um — é por saúde, aplicada logo abaixo.
+  // Preserve the sorted order within each group (by worst variação first)
   const groupOrder = [];
   const groupMap   = new Map(); // regional → { cards: [], hCounts: aggregate }
 
@@ -2510,24 +2483,19 @@ function renderAnaliticoMicro(results, dtIni, dtFim, silent, opts = {}) {
     groupMap.get(reg).push(card);
   });
 
-  // Ordena os regionais pela MÉDIA de saúde das suas centrais — pior média
-  // primeiro. É a mesma conta que o cabeçalho do grupo já exibe no badge
-  // "Saúde: N%" (ver scoreSum/scoreCount em buildRegionalSummaryHtml), pra
-  // ordem e rótulo nunca discordarem. Regional sem nenhuma central com saúde
-  // calculada vai pro fim, e "sem regional" continua sempre por último.
-  const groupSaude = new Map();
+  // Sort groups: maior desfalque (diff mais negativo) primeiro → maior sobra por último; sem regional sempre no fim
+  const groupDiff = new Map();
   groupOrder.forEach(reg => {
-    const notas = groupMap.get(reg).map(_cardSaude).filter(Number.isFinite);
-    groupSaude.set(reg, notas.length ? notas.reduce((s, v) => s + v, 0) / notas.length : Infinity);
+    const diff = groupMap.get(reg).reduce((s, c) => s + parseFloat(c.dataset.centralDiff || 0), 0);
+    groupDiff.set(reg, diff);
   });
   groupOrder.sort((a, b) => {
     if (!a && b)  return 1;   // sem regional sempre no fim
     if (a && !b)  return -1;
-    return groupSaude.get(a) - groupSaude.get(b); // pior saúde primeiro
+    return groupDiff.get(a) - groupDiff.get(b); // mais negativo (desfalque) primeiro
   });
   groupOrder.forEach(regional => {
-    // Dentro do regional, as centrais também saem da pior saúde para a melhor.
-    const cards = _ordenarCardsPorSaude(groupMap.get(regional));
+    const cards = groupMap.get(regional);
 
 
     const isSemRegional = !regional;
