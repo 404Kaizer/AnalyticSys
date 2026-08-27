@@ -189,20 +189,60 @@ function _updateMicroContainerHeightLock(reset) {
 // regional, que é a leitura padrão do analista.
 let _anGroupMode = 'regional';
 
-function anSetGroupMode(mode) {
+// Roda um trabalho de re-render pesado e SÍNCRONO atrás do overlay de
+// carregamento. O par requestAnimationFrame+setTimeout não é firula: sem
+// ceder um frame ao navegador, o overlay só seria pintado DEPOIS que a
+// tarefa já tivesse terminado — é o mesmo padrão de rodarAnalitico.
+// try/finally garante que uma exceção na tarefa não deixe a tela travada
+// atrás do overlay.
+function _anComOverlay(titulo, status, tarefa, fim = 'Concluído') {
+  if (typeof showLoadingOverlay === 'function') showLoadingOverlay(titulo, status);
+  requestAnimationFrame(() => setTimeout(() => {
+    try { tarefa(); }
+    finally { if (typeof hideLoadingOverlay === 'function') hideLoadingOverlay(fim); }
+  }, 0));
+}
+
+/**
+ * Troca o agrupamento da Visão Micro.
+ *
+ * @param {'regional'|'material'} mode
+ * @param {function} [onDone] - roda DEPOIS do re-render (e ainda atrás do
+ *        overlay). Necessário porque o render é assíncrono agora: quem
+ *        precisa mexer no DOM recém-criado — como microFocusFromMacro, que
+ *        aplica um filtro logo em seguida — não pode simplesmente continuar
+ *        na linha de baixo. Chamado mesmo quando não há re-render (modo já
+ *        ativo ou sem análise carregada).
+ */
+function anSetGroupMode(mode, onDone) {
   const novo = mode === 'material' ? 'material' : 'regional';
-  if (novo === _anGroupMode) return;
+  const temDados = !!(window.__analiticoResults && window.__analiticoDtIni && window.__analiticoDtFim);
+
+  if (novo === _anGroupMode || !temDados) {
+    if (novo !== _anGroupMode) { _anGroupMode = novo; _anSyncGroupModeUI(); }
+    if (typeof onDone === 'function') onDone();
+    return;
+  }
+
   _anGroupMode = novo;
   _anSyncGroupModeUI();
-  if (window.__analiticoResults && window.__analiticoDtIni && window.__analiticoDtFim) {
-    // silent: não mexe no overlay de loading — a troca de agrupamento não é
-    // uma análise nova, só um re-render do que já foi calculado.
-    // skipMacro: os donuts da Visão Macro NÃO podem se mexer aqui. Eles são
-    // sempre por central × material (independem do agrupamento da Micro) e
-    // têm filtros próprios de regional/categoria — redesenhá-los zeraria
-    // esses filtros e reanimaria os gráficos sem nenhum dado ter mudado.
-    renderAnaliticoMicro(window.__analiticoResults, window.__analiticoDtIni, window.__analiticoDtFim, true, { skipMacro: true });
-  }
+
+  const isMat = novo === 'material';
+  _anComOverlay(
+    isMat ? 'Agrupando por material' : 'Agrupando por regional',
+    isMat ? 'Montando os cards de material e suas centrais...'
+          : 'Remontando os cards de central por regional...',
+    () => {
+      // silent: quem controla o overlay aqui é _anComOverlay.
+      // skipMacro: os donuts da Visão Macro NÃO podem se mexer aqui. Eles são
+      // sempre por central × material (independem do agrupamento da Micro) e
+      // têm filtros próprios de regional/categoria — redesenhá-los zeraria
+      // esses filtros e reanimaria os gráficos sem nenhum dado ter mudado.
+      renderAnaliticoMicro(window.__analiticoResults, window.__analiticoDtIni, window.__analiticoDtFim, true, { skipMacro: true });
+      if (typeof onDone === 'function') onDone();
+    },
+    'Visão atualizada'
+  );
 }
 window.anSetGroupMode = anSetGroupMode;
 
@@ -292,7 +332,19 @@ function anSwitchView(view) {
   // Visão Pendências: renderiza sob demanda (o cálculo de ausências de
   // lançamento é pesado e a aba não é aberta em toda análise) — mesma
   // filosofia do Inventário logo abaixo.
-  if (isPend && typeof renderPendenciasView === 'function') renderPendenciasView();
+  // Overlay: o levantamento de dias sem lançamento é a parte cara daqui, e
+  // sem ele a aba fica em branco por alguns segundos sem explicação.
+  // (A Visão Inventário logo abaixo não ganha overlay porque renderInventario
+  // é idempotente e não recalcula nada — o cálculo pesado de lá só roda no
+  // botão "Atualizar" do próprio módulo, que já tem o seu.)
+  if (isPend && typeof renderPendenciasView === 'function') {
+    _anComOverlay(
+      'Carregando pendências',
+      'Levantando OS, NFs e lançamentos em falta...',
+      () => renderPendenciasView(),
+      'Pendências atualizadas'
+    );
+  }
 
   // Ao entrar na Visão Inventário pela primeira vez na sessão, gera
   // automaticamente o inventário do mês já selecionado por padrão no
@@ -3003,28 +3055,34 @@ function microFocusFromMacro(key, value) {
   const val = (value || '').trim();
   if (!val) return;
 
+  const aplicarFoco = () => {
+    clearAllMicroFilters();
+    _microFilter.applied[key] = new Set([val]);
+    _microFilter.pending[key] = new Set([val]);
+    _syncTriggerLabel(key);
+    _syncClearBtn();
+    _applyMicroVisibility();
+
+    if (typeof anSwitchView === 'function') anSwitchView('micro');
+    _expandMicroAfterFocus();
+
+    _updateMicroContainerHeightLock(false);
+    requestAnimationFrame(_scrollToMicroView);
+  };
+
   // Cada ranking leva ao agrupamento que responde a pergunta dele:
   //   "Piores materiais"  → agrupamento por MATERIAL (o card já é o material
   //                         clicado, com as centrais dele dentro).
   //   "Piores centrais"   → agrupamento por regional, como sempre.
-  // anSetGroupMode re-renderiza a visão (e zera filtros no caminho), então
-  // roda ANTES de aplicar o filtro abaixo. É no-op quando o modo já é o certo.
+  // Quando o agrupamento muda, anSetGroupMode reconstrói a visão inteira
+  // atrás do overlay — por isso o foco vai como callback, e não na linha de
+  // baixo: ele precisa do DOM novo. Se o modo já for o certo, o callback
+  // roda na hora e nada disso aparece pro usuário.
   if (typeof anSetGroupMode === 'function') {
-    anSetGroupMode(key === 'material' ? 'material' : 'regional');
+    anSetGroupMode(key === 'material' ? 'material' : 'regional', aplicarFoco);
+  } else {
+    aplicarFoco();
   }
-
-  clearAllMicroFilters();
-  _microFilter.applied[key] = new Set([val]);
-  _microFilter.pending[key] = new Set([val]);
-  _syncTriggerLabel(key);
-  _syncClearBtn();
-  _applyMicroVisibility();
-
-  if (typeof anSwitchView === 'function') anSwitchView('micro');
-  _expandMicroAfterFocus();
-
-  _updateMicroContainerHeightLock(false);
-  requestAnimationFrame(_scrollToMicroView);
 }
 
 // Toda análise deixa regionais e centrais recolhidos (ver fim de
