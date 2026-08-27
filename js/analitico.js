@@ -204,6 +204,8 @@ function _anShowViewLoading(titulo, status) {
   if (s) s.textContent = status;
   ov.classList.add('open');
   ov.setAttribute('aria-hidden', 'false');
+  // Trava scroll/clique/teclado enquanto o re-render acontece (format.js).
+  if (typeof travarInteracao === 'function') travarInteracao('view-loading');
 }
 
 function _anHideViewLoading() {
@@ -211,6 +213,7 @@ function _anHideViewLoading() {
   if (!ov) return;
   ov.classList.remove('open');
   ov.setAttribute('aria-hidden', 'true');
+  if (typeof destravarInteracao === 'function') destravarInteracao('view-loading');
 }
 
 // Roda um trabalho de re-render pesado e SÍNCRONO atrás desse overlay. O par

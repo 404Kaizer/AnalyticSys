@@ -291,6 +291,106 @@ function confirmarDestrutivo({ title = 'Confirmar exclusão', sub = '', body = '
 
 Object.assign(window, { confirmarDestrutivo });
 
+// ── Trava de interação dos overlays de loading ──────────────────────────────
+// Enquanto um overlay de loading está na tela, o sistema atrás dele fica
+// inerte: sem scroll (roda do mouse, toque, teclas de rolagem), sem clique e
+// sem atalho de teclado. Cobrir a tela não bastava — a roda do mouse sobre o
+// véu ainda rolava a .page-content de trás, as teclas continuavam chegando
+// nos handlers (atalhos Ctrl+1..6, ESC fechando modais) e o Tab passeava
+// pelos campos escondidos atrás do véu.
+//
+// Três liberações, todas necessárias:
+//  1. Eventos SINTÉTICOS (e.isTrusted === false) passam sempre. O sistema
+//     dispara clique programático por trás do overlay o tempo todo — o
+//     a.click() que baixa o arquivo exportado, o dispatchEvent('input').
+//     Barrar isso quebraria download/importação, não interação de usuário.
+//  2. Eventos nascidos DENTRO do overlay passam. O #loading-overlay tem um
+//     controle próprio: o botão "Abortar importação" (#loading-abort-btn).
+//  3. Se nenhum overlay registrado está de fato na tela (.open), a trava
+//     fica inerte. Isso cobre o modal de conflitos da importação, que tira o
+//     .open do overlay para perguntar algo ao usuário no meio do processo e
+//     o devolve depois (ver _showConflictModal/conflictConfirm em
+//     dashboard.js) — sem essa regra, o modal abriria intocável.
+//
+// Contagem por dono porque os dois overlays (#loading-overlay do boot e
+// #view-loading das trocas de visão) podem se sobrepor: os listeners só saem
+// quando o último solta.
+const _travaDonos = new Set();
+
+// Ponteiro/toque + área de transferência: barrados por completo.
+const _TRAVA_EVENTOS_PONTEIRO = [
+  'wheel', 'touchstart', 'touchmove', 'touchend',
+  'pointerdown', 'pointerup', 'mousedown', 'mouseup',
+  'click', 'dblclick', 'contextmenu', 'submit',
+  'paste', 'cut', 'dragstart', 'dragover', 'drop'
+];
+const _TRAVA_EVENTOS_TECLADO = ['keydown', 'keypress', 'keyup'];
+
+function _travaOverlaysNaTela() {
+  const abertos = [];
+  _travaDonos.forEach(id => {
+    const el = document.getElementById(id);
+    if (el && el.classList.contains('open')) abertos.push(el);
+  });
+  return abertos;
+}
+
+function _travaDeixaPassar(e) {
+  if (!e.isTrusted) return true;
+  const abertos = _travaOverlaysNaTela();
+  if (!abertos.length) return true;
+  const alvo = e.target instanceof Node ? e.target : null;
+  return !!alvo && abertos.some(ov => ov.contains(alvo));
+}
+
+function _travaBarraEvento(e) {
+  if (_travaDeixaPassar(e)) return;
+  e.stopPropagation();
+  e.stopImmediatePropagation();
+  if (e.cancelable) e.preventDefault();
+}
+
+function _travaBarraTecla(e) {
+  if (_travaDeixaPassar(e)) return;
+  // stopImmediatePropagation sempre: nenhum atalho do sistema roda com o
+  // overlay na tela. preventDefault só no que é tecla de página — os atalhos
+  // do NAVEGADOR (F5, F12, Ctrl+R, Ctrl+W) continuam valendo de propósito:
+  // a trava é do sistema, não da janela, e prender o usuário sem conseguir
+  // recarregar se algo travar no meio do carregamento seria pior que o mal
+  // que ela evita.
+  e.stopPropagation();
+  e.stopImmediatePropagation();
+  const doNavegador = e.ctrlKey || e.metaKey || e.altKey || /^F\d{1,2}$/.test(e.key);
+  if (!doNavegador && e.cancelable) e.preventDefault();
+}
+
+/** Trava a interação em nome de um overlay (id do elemento). */
+function travarInteracao(donoId) {
+  if (_travaDonos.has(donoId)) return;
+  const primeiro = _travaDonos.size === 0;
+  _travaDonos.add(donoId);
+  if (!primeiro) return;
+  // capture + passive:false: capture para chegar antes de qualquer handler do
+  // sistema; passive:false porque wheel/touchmove são passivos por padrão em
+  // listeners de window e passivo não deixa dar preventDefault.
+  _TRAVA_EVENTOS_PONTEIRO.forEach(tipo =>
+    window.addEventListener(tipo, _travaBarraEvento, { capture: true, passive: false }));
+  _TRAVA_EVENTOS_TECLADO.forEach(tipo =>
+    window.addEventListener(tipo, _travaBarraTecla, { capture: true, passive: false }));
+}
+
+/** Solta a trava em nome de um overlay; só destrava quando o último sai. */
+function destravarInteracao(donoId) {
+  if (!_travaDonos.delete(donoId)) return;
+  if (_travaDonos.size > 0) return;
+  _TRAVA_EVENTOS_PONTEIRO.forEach(tipo =>
+    window.removeEventListener(tipo, _travaBarraEvento, { capture: true }));
+  _TRAVA_EVENTOS_TECLADO.forEach(tipo =>
+    window.removeEventListener(tipo, _travaBarraTecla, { capture: true }));
+}
+
+Object.assign(window, { travarInteracao, destravarInteracao });
+
 const loadingOverlayState = {
   visible: false,
   startedAt: 0,
@@ -362,6 +462,7 @@ function showLoadingOverlay(title = 'Carregando', status = 'Processando dados...
   document.body.classList.add('loading-active');
   overlay.classList.add('open');
   overlay.setAttribute('aria-hidden', 'false');
+  travarInteracao('loading-overlay');
 
   titleEl.textContent = title;
   statusEl.textContent = status;
@@ -482,6 +583,7 @@ function hideLoadingOverlay(status = 'Concluído', delay = 220) {
     overlay.classList.remove('open');
     overlay.setAttribute('aria-hidden', 'true');
     document.body.classList.remove('loading-active');
+    destravarInteracao('loading-overlay');
     loadingOverlayState.visible = false;
   }, delay);
 }

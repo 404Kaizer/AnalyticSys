@@ -568,6 +568,23 @@ body:has([class*="-overlay"].open) .page-content {
 }
 .view-loading.open { display: flex; }
 
+/* Trava de scroll enquanto o overlay está na tela. O scroll real da página
+   mora em .page-content (ver .main em layout.css), então travar só o body não
+   segurava nada. O seletor genérico dos modais (body:has([class*="-overlay"]
+   .open), lá em cima) já cobre o #loading-overlay do boot, mas não este —
+   o nome da classe daqui não termina em "-overlay".
+   A parte de clique/teclado é feita no JS (travarInteracao, em format.js). */
+body:has(.view-loading.open),
+body:has(.view-loading.open) .page-content {
+  overflow: hidden;
+}
+/* Impede que o toque sobre o véu role o que está atrás (scroll chaining). */
+.view-loading.open,
+.loading-overlay.open {
+  touch-action: none;
+  overscroll-behavior: contain;
+}
+
 .view-loading-card {
   display: flex;
   align-items: center;
