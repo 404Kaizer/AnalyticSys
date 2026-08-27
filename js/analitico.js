@@ -821,6 +821,90 @@ document.addEventListener('click', e => {
 
 
 
+// ═══════════════════════════════════════════════════════════
+// ORDENAÇÃO DAS TABELAS DO CARD (Análise por Material / por Central)
+// ═══════════════════════════════════════════════════════════
+// A tabela é a MESMA nos dois agrupamentos (só a 1ª coluna troca de papel),
+// então uma configuração só atende os dois.
+//
+// A ordenação é feita no DOM, reordenando os <tr> — não re-renderiza o card.
+// Isso mantém intactos o breakdown de Entradas/Saídas/Ajustes, os tooltips
+// e o estado de filtro de cada linha (linhas escondidas por filtro seguem
+// escondidas no lugar novo).
+//
+// Ícone/estilo vêm do padrão já usado nas tabelas de módulo
+// (th[data-sort-col] + .mod-sort-icon, ver components.css) — nada de CSS novo.
+const _SORT_ICO = '<i class="ti ti-selector mod-sort-icon"></i>';
+
+// Tipo por coluna, na mesma ordem do <thead>:
+//   'text' → alfabético (numeric:true resolve "10" vs "9" em Cód SAP)
+//   'date' → chave AAAA-MM-DD, comparada como texto
+//   'num'  → numérico com sinal
+//   'abs'  → numérico pelo MÓDULO (pedido do Hugo): num ranking de variação,
+//            desfalque de 500 kg e sobra de 500 kg são o mesmo tamanho de
+//            problema, e ordenar pelo sinal jogaria metade deles pro fim.
+const _MICRO_SORT_TYPES = ['text','text','date','num','num','num','num','date','num','num','abs','abs'];
+
+// "31/07/2026" → "2026-07-31" (ordenável como texto). Deriva do MESMO rótulo
+// que a célula exibe, então nunca diverge do que está na tela.
+function _sortDateKey(label) {
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})/.exec(String(label || ''));
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : '';
+}
+
+function sortMicroTable(th, event) {
+  // Clique no punho de redimensionar coluna (ou logo depois de arrastá-lo)
+  // não pode virar ordenação — ver makeResizable em ui.js.
+  if (event && event.target.closest && event.target.closest('.col-resizer')) return;
+  if (th.dataset.justResized) return;
+
+  const col   = parseInt(th.dataset.sortCol, 10);
+  const table = th.closest('table');
+  const tbody = table?.querySelector('tbody');
+  if (isNaN(col) || !tbody) return;
+
+  const rows = [...tbody.querySelectorAll('tr.material-row')];
+  if (rows.length < 2) return;
+
+  const tipo    = _MICRO_SORT_TYPES[col] || 'text';
+  const isTexto = tipo === 'text' || tipo === 'date';
+  // 1º clique: crescente em texto/data, DECRESCENTE em número — quem abre
+  // uma coluna de variação ou estoque quer o maior no topo, não o zero.
+  const dir = th.classList.contains('sort-asc')  ? 'desc'
+            : th.classList.contains('sort-desc') ? 'asc'
+            : isTexto ? 'asc' : 'desc';
+
+  const chave = (row) => {
+    // getAttribute, e não dataset: em "data-sort-0" o traço NÃO é convertido
+    // (a regra do dataset só junta o que vem depois de "-" quando é letra),
+    // então a chave em dataset seria "sort-0" e "row.dataset.sort0" leria
+    // undefined em toda coluna.
+    const raw = row.getAttribute('data-sort-' + col) ?? '';
+    if (raw === '') return null;              // AUSENTE / sem cadastro
+    if (isTexto) return raw;
+    const n = parseFloat(raw);
+    if (!Number.isFinite(n)) return null;
+    return tipo === 'abs' ? Math.abs(n) : n;
+  };
+
+  const mult = dir === 'asc' ? 1 : -1;
+  rows.sort((a, b) => {
+    const va = chave(a), vb = chave(b);
+    // Sem valor sempre no fim, nas duas direções.
+    if (va === null && vb === null) return 0;
+    if (va === null) return 1;
+    if (vb === null) return -1;
+    return (isTexto ? String(va).localeCompare(String(vb), 'pt-BR', { numeric: true }) : va - vb) * mult;
+  });
+  rows.forEach(row => tbody.appendChild(row));
+
+  // Uma coluna ordenada por tabela — o estado visual vive nas classes
+  // sort-asc/sort-desc, que também trocam o glifo do ícone via CSS.
+  table.querySelectorAll('thead th').forEach(h => h.classList.remove('sort-asc', 'sort-desc'));
+  th.classList.add(dir === 'asc' ? 'sort-asc' : 'sort-desc');
+}
+window.sortMicroTable = sortMicroTable;
+
 /**
  * Monta UM card da Visão Micro (header + cpanel + tabela). Extraida de
  * renderAnaliticoMicro para ser reaproveitavel tanto no render completo
@@ -1511,13 +1595,34 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
         ? ((getFilialLookupIndex().exact.get(normalizeText(central))?.regional || '').trim())
         : '';
 
+      // ── Chaves de ordenação das colunas (data-sort-N) ────────────────────
+      // Uma por coluna, na MESMA ordem do <thead>. Guardamos o valor CRU
+      // porque a célula renderizada não serve para comparar: ela traz número
+      // formatado ("1,2 M kg"), badge de AUSENTE, tooltip e popover de
+      // breakdown. Vazio ('') = sem valor → sempre no fim da ordenação,
+      // independente da direção (ver sortMicroTable).
+      const _sortVals = [
+        isMat ? central : mat,                                                    //  0 Central/Material
+        matSemCadastro ? '' : (_matCodSap || ''),                                 //  1 Cód SAP
+        (matSemCadastro || snapshot.pesoIniAusente || !prev) ? '' : _sortDateKey(snapshot.dtIniLabel), //  2 Dt. Est. Inicial
+        (matSemCadastro || snapshot.pesoIniAusente) ? '' : snapshot.pesoIni,      //  3 Est. Inicial
+        natureza.totalEnt,                                                        //  4 Entradas
+        natureza.totalSai,                                                        //  5 Saídas
+        natureza.totalAju,                                                        //  6 Ajustes
+        snapshot.pesoFimAusente ? '' : _sortDateKey(snapshot.dtFimLabel),         //  7 Dt. Est. Final
+        snapshot.pesoFimAusente ? '' : snapshot.pesoFim,                          //  8 Est. Final
+        snapshot.estTeorico,                                                      //  9 Est. Teórico
+        snapshot.diff,                                                            // 10 Variação
+        _rowCustoVar === null ? '' : _rowCustoVar                                 // 11 Custo Variação
+      ].map((v, i) => `data-sort-${i}="${escapeHtml(String(v))}"`).join(' ');
+
       matRowsHtml += `
         <tr class="material-row${
           (_itensComPendNF.has(item) && _itensComPendOS.has(item)) ? ' pend-injetado-ambos'
           : _itensComPendNF.has(item) ? ' pend-injetado-nf'
           : _itensComPendOS.has(item) ? ' pend-injetado-os'
           : ''
-        }" data-detail-key="${detailKey}" data-diff="${snapshot.diff}" data-peso-fim="${snapshot.pesoFim}" data-categoria="${escapeHtml(matCategoria)}" data-central="${escapeHtml(central)}" data-regional="${escapeHtml(_rowRegional)}" data-material="${escapeHtml(mat)}" onclick="toggleMaterialDetail(this, event)">
+        }" data-detail-key="${detailKey}" data-diff="${snapshot.diff}" data-peso-fim="${snapshot.pesoFim}" data-categoria="${escapeHtml(matCategoria)}" data-central="${escapeHtml(central)}" data-regional="${escapeHtml(_rowRegional)}" data-material="${escapeHtml(mat)}" ${_sortVals} onclick="toggleMaterialDetail(this, event)">
           <td class="td-mono" style="font-weight:600">
             <span class="material-row-title">
               <i class="ti ${MAT_LEVEL_ICON[matLevel]} material-row-crit-icon" style="color:${MAT_LEVEL_COLOR[matLevel]}${(matSemCadastro && !isMat) ? ';cursor:pointer' : ''}"
@@ -1842,18 +1947,18 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
           <table>
             <thead>
               <tr>
-                <th>${itemLabel}</th>
-                <th>Cód SAP</th>
-                <th>Dt. Est. Inicial</th>
-                <th>Est. Inicial<br><span style="font-size:9px;font-weight:400;opacity:.7">(Saldo SAP)</span></th>
-                <th title="Compra/recebimento e transferência entre centros (101, 801, 861/862, 301–306) — LÍQUIDO: estornos e transferências para fora entram como negativo e anulam o positivo que os originou">Entradas<br><span style="font-size:9px;font-weight:400;opacity:.7">(líq. por código)</span></th>
-                <th title="Consumo e seu estorno (201, 202)">Saídas<br><span style="font-size:9px;font-weight:400;opacity:.7">(por código)</span></th>
-                <th title="Fechamento mensal (Y11/Y12), sucateamento (551/552), transferência entre materiais/depósitos (309/310, 311/312) e qualquer código não classificado">Ajustes<br><span style="font-size:9px;font-weight:400;opacity:.7">(líq. por código)</span></th>
-                <th>Dt. Est. Final</th>
-                <th>Est. Final<br><span style="font-size:9px;font-weight:400;opacity:.7">(Últ. Lançamento)</span></th>
-                <th>Est. Teórico<br><span style="font-size:9px;font-weight:400;opacity:.7">(Ini+Ent+Sai+Aju)</span></th>
-                <th>Variação<br><span style="font-size:9px;font-weight:400;opacity:.7">(Real − Teórico)</span></th>
-                <th style="text-align:right">Custo Variação<br><span style="font-size:9px;font-weight:400;opacity:.7">(Var. × C. Médio)</span></th>
+                <th data-sort-col="0" onclick="sortMicroTable(this,event)">${itemLabel} ${_SORT_ICO}</th>
+                <th data-sort-col="1" onclick="sortMicroTable(this,event)">Cód SAP ${_SORT_ICO}</th>
+                <th data-sort-col="2" onclick="sortMicroTable(this,event)">Dt. Est. Inicial ${_SORT_ICO}</th>
+                <th data-sort-col="3" onclick="sortMicroTable(this,event)">Est. Inicial ${_SORT_ICO}<br><span style="font-size:9px;font-weight:400;opacity:.7">(Saldo SAP)</span></th>
+                <th data-sort-col="4" onclick="sortMicroTable(this,event)" title="Compra/recebimento e transferência entre centros (101, 801, 861/862, 301–306) — LÍQUIDO: estornos e transferências para fora entram como negativo e anulam o positivo que os originou">Entradas ${_SORT_ICO}<br><span style="font-size:9px;font-weight:400;opacity:.7">(líq. por código)</span></th>
+                <th data-sort-col="5" onclick="sortMicroTable(this,event)" title="Consumo e seu estorno (201, 202)">Saídas ${_SORT_ICO}<br><span style="font-size:9px;font-weight:400;opacity:.7">(por código)</span></th>
+                <th data-sort-col="6" onclick="sortMicroTable(this,event)" title="Fechamento mensal (Y11/Y12), sucateamento (551/552), transferência entre materiais/depósitos (309/310, 311/312) e qualquer código não classificado">Ajustes ${_SORT_ICO}<br><span style="font-size:9px;font-weight:400;opacity:.7">(líq. por código)</span></th>
+                <th data-sort-col="7" onclick="sortMicroTable(this,event)">Dt. Est. Final ${_SORT_ICO}</th>
+                <th data-sort-col="8" onclick="sortMicroTable(this,event)">Est. Final ${_SORT_ICO}<br><span style="font-size:9px;font-weight:400;opacity:.7">(Últ. Lançamento)</span></th>
+                <th data-sort-col="9" onclick="sortMicroTable(this,event)">Est. Teórico ${_SORT_ICO}<br><span style="font-size:9px;font-weight:400;opacity:.7">(Ini+Ent+Sai+Aju)</span></th>
+                <th data-sort-col="10" onclick="sortMicroTable(this,event)" title="Ordena pelo valor ABSOLUTO: um desfalque e uma sobra do mesmo tamanho pesam igual">Variação ${_SORT_ICO}<br><span style="font-size:9px;font-weight:400;opacity:.7">(Real − Teórico)</span></th>
+                <th data-sort-col="11" onclick="sortMicroTable(this,event)" style="text-align:right" title="Ordena pelo valor ABSOLUTO: um desfalque e uma sobra do mesmo tamanho pesam igual">Custo Variação ${_SORT_ICO}<br><span style="font-size:9px;font-weight:400;opacity:.7">(Var. × C. Médio)</span></th>
               </tr>
             </thead>
             <tbody>${matRowsHtml || `<tr><td colspan="12"><div class="empty-state" style="padding:24px"><i class="ti ti-box-off"></i><p>Nenhum${isMat ? 'a central' : ' material'} encontrad${isMat ? 'a' : 'o'}.</p></div></td></tr>`}</tbody>

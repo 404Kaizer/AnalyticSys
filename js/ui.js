@@ -7147,6 +7147,12 @@ Object.assign(window, {
         document.body.style.userSelect = '';
         document.removeEventListener('mousemove', onMove);
         document.removeEventListener('mouseup', onUp);
+        // O click do mouseup ainda vai borbulhar até o <th>. Em cabeçalhos
+        // ordenáveis isso reordenaria a tabela no fim de todo arraste de
+        // largura — a marca abaixo é lida (e só existe até o click passar)
+        // por quem trata a ordenação, ex.: sortMicroTable em analitico.js.
+        th.dataset.justResized = '1';
+        setTimeout(() => { delete th.dataset.justResized; }, 0);
       }
       document.addEventListener('mousemove', onMove);
       document.addEventListener('mouseup', onUp);
