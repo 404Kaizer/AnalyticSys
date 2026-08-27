@@ -5262,6 +5262,22 @@
 
 
 <!-- Modal: Restaurar dados salvos? -->
+<!-- Overlay das trocas de visão do Analítico (agrupamento da Visão Micro,
+     aba Visão Pendências). É PRÓPRIO, e não o #loading-overlay do boot logo
+     abaixo, de propósito: aqui não há etapas a reportar nem sessão sendo
+     inicializada — é um único re-render de poucos segundos. Reaproveitar o
+     do boot trazia junto a lista de steps e a barra de progresso da
+     inicialização, que não têm nada a ver com esta ação. -->
+<div class="view-loading" id="view-loading" aria-live="polite" aria-hidden="true">
+  <div class="view-loading-card" role="status">
+    <div class="view-loading-spinner" aria-hidden="true"></div>
+    <div class="view-loading-copy">
+      <div class="view-loading-title" id="view-loading-title">Carregando</div>
+      <div class="view-loading-sub" id="view-loading-sub">Montando a visão...</div>
+    </div>
+  </div>
+</div>
+
 <!-- Loading Overlay -->
 <div class="loading-overlay" id="loading-overlay" aria-live="polite" aria-busy="true" aria-hidden="true">
   <div class="loading-card" role="status" aria-label="Processando dados">

@@ -189,17 +189,40 @@ function _updateMicroContainerHeightLock(reset) {
 // regional, que é a leitura padrão do analista.
 let _anGroupMode = 'regional';
 
-// Roda um trabalho de re-render pesado e SÍNCRONO atrás do overlay de
-// carregamento. O par requestAnimationFrame+setTimeout não é firula: sem
-// ceder um frame ao navegador, o overlay só seria pintado DEPOIS que a
-// tarefa já tivesse terminado — é o mesmo padrão de rodarAnalitico.
-// try/finally garante que uma exceção na tarefa não deixe a tela travada
-// atrás do overlay.
-function _anComOverlay(titulo, status, tarefa, fim = 'Concluído') {
-  if (typeof showLoadingOverlay === 'function') showLoadingOverlay(titulo, status);
+// ── Overlay das trocas de visão (#view-loading) ──────────────────────────
+// Overlay PRÓPRIO, separado do #loading-overlay do boot (showLoadingOverlay/
+// hideLoadingOverlay, em format.js). Trocar de visão não tem etapas, não
+// inicializa sessão nenhuma e dura segundos — reaproveitar o do boot fazia
+// a tela mostrar a lista de steps e a barra de progresso da inicialização,
+// que não têm relação com esta ação.
+function _anShowViewLoading(titulo, status) {
+  const ov = document.getElementById('view-loading');
+  if (!ov) return;
+  const t = document.getElementById('view-loading-title');
+  const s = document.getElementById('view-loading-sub');
+  if (t) t.textContent = titulo;
+  if (s) s.textContent = status;
+  ov.classList.add('open');
+  ov.setAttribute('aria-hidden', 'false');
+}
+
+function _anHideViewLoading() {
+  const ov = document.getElementById('view-loading');
+  if (!ov) return;
+  ov.classList.remove('open');
+  ov.setAttribute('aria-hidden', 'true');
+}
+
+// Roda um trabalho de re-render pesado e SÍNCRONO atrás desse overlay. O par
+// requestAnimationFrame+setTimeout não é firula: sem ceder um frame ao
+// navegador, o overlay só seria pintado DEPOIS que a tarefa já tivesse
+// terminado. try/finally garante que uma exceção na tarefa não deixe a tela
+// travada atrás dele.
+function _anComOverlay(titulo, status, tarefa) {
+  _anShowViewLoading(titulo, status);
   requestAnimationFrame(() => setTimeout(() => {
     try { tarefa(); }
-    finally { if (typeof hideLoadingOverlay === 'function') hideLoadingOverlay(fim); }
+    finally { _anHideViewLoading(); }
   }, 0));
 }
 
@@ -240,8 +263,7 @@ function anSetGroupMode(mode, onDone) {
       // esses filtros e reanimaria os gráficos sem nenhum dado ter mudado.
       renderAnaliticoMicro(window.__analiticoResults, window.__analiticoDtIni, window.__analiticoDtFim, true, { skipMacro: true });
       if (typeof onDone === 'function') onDone();
-    },
-    'Visão atualizada'
+    }
   );
 }
 window.anSetGroupMode = anSetGroupMode;
@@ -341,8 +363,7 @@ function anSwitchView(view) {
     _anComOverlay(
       'Carregando pendências',
       'Levantando OS, NFs e lançamentos em falta...',
-      () => renderPendenciasView(),
-      'Pendências atualizadas'
+      () => renderPendenciasView()
     );
   }
 
