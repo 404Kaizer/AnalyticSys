@@ -3126,6 +3126,35 @@ td.var-cell-zero .ti-circle-check     { color: var(--text3); }
   pointer-events: all;
 }
 
+/* Modal aberto POR CIMA do de Movimentações (z 600) — hoje só o detalhe da
+   ocorrência da DAI, aberto pelo link da coluna Documento (ver
+   abrirDaiPorDocumentoSap em ui.js). Sobe a família .modal-overlay inteira
+   (a ordem ENTRE eles continua sendo a do DOM, então o dai-sap-modal aberto
+   a partir do detalhe segue por cima dele), menos o overlay do
+   Detalhamento Analítico — esse é justamente quem está ATRÁS do bdm.
+   ponytail: elevação por classe no body em vez de uma pilha de z-index de
+   verdade; se um dia mais de um modal precisar empilhar sobre o bdm, o
+   caminho é um gerenciador de camadas, não mais uma classe dessas. */
+body.bdm-modal-acima .modal-overlay:not(.analitico-detail-overlay) { z-index: 700; }
+
+/* Documento SAP que tem DAI correspondente: vira link para a ocorrência da
+   DAI. Dourado = mesma cor do status "Ajuste Sistêmico" (ver tokens.css). */
+.bdm-dai-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--gold);
+  font-weight: 600;
+  cursor: pointer;
+  border-bottom: 1px dashed var(--gold-border);
+}
+.bdm-dai-link:hover { border-bottom-style: solid; }
+.bdm-dai-link i { font-size: 13px; opacity: .85; }
+
 /* Dialog box */
 .bdm-dialog {
   background: var(--bg2);

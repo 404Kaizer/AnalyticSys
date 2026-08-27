@@ -1593,6 +1593,66 @@ function findMaterialTransferPair(central, usuario, extra, peso) {
   return material ? { material } : null;
 }
 
+// ── DAI (Documento de Ajuste de Inventário) pelo documento SAP ───────────
+// Todo AJUSTE manual (nivelar estoque por perda, balança, coleta, etc.)
+// nasce de uma DAI: o analista gera a DAI nas Ocorrências e preenche nela o
+// MESMO nº de documento que o SAP devolveu — o mesmo que aparece na coluna
+// Documento deste modal. Quando os dois batem, a célula vira um link para o
+// detalhe da ocorrência da DAI (ver abrirDaiPorDocumentoSap).
+//
+// Só dígitos e sem zeros à esquerda dos dois lados: o SAP ora exporta o
+// documento cru, ora zero-padded, e o campo da DAI só aceita dígitos
+// (_daiSomenteDigitos em dai.js).
+function _normDocSap(doc) {
+  return String(doc || '').replace(/\D/g, '').replace(/^0+/, '');
+}
+
+// documento SAP normalizado → { daiId, itemId, rotulo }.
+// Sem cache de propósito: o caso comum é o analista preencher/corrigir o nº
+// SAP de uma DAI existente (editarSapDai), o que não muda a quantidade de
+// DAIs — qualquer cache versionado por length nasceria velho. A lista de
+// DAIs é pequena (dezenas), então reconstruir na abertura do modal e no
+// clique custa menos que manter invalidação.
+function _daiIndexPorDocumentoSap() {
+  const idx = new Map();
+  (state.ajustesSistemicos || []).forEach(dai => {
+    const itens = (typeof _daiGetItens === 'function') ? _daiGetItens(dai) : (dai.itens || []);
+    itens.forEach(it => {
+      if (!it || it.sapDocumento === 'PENDENTE') return;
+      const doc = _normDocSap(it.sapDocumento);
+      if (!doc) return;
+      // Primeiro vence: o mesmo documento em duas DAIs é erro de
+      // preenchimento, não caso de uso — abrir a primeira é melhor que
+      // não abrir nenhuma.
+      if (!idx.has(doc)) idx.set(doc, { daiId: dai.id, itemId: it.id || null, rotulo: dai.tag || dai.numero || '' });
+    });
+  });
+  return idx;
+}
+
+// Abre o detalhe da ocorrência da DAI que registrou este documento SAP.
+// A DAI em si não tem modal próprio — ela é exibida dentro do modal de
+// detalhe da ocorrência vinculada (seção .oc-detail-dai, ocorrencias.js),
+// que já destaca o item correspondente quando a ocorrência é por item.
+function abrirDaiPorDocumentoSap(doc) {
+  const hit = _daiIndexPorDocumentoSap().get(_normDocSap(doc));
+  if (!hit) { toast('Nenhuma DAI encontrada para o documento ' + doc, 'error'); return; }
+  const ocs = (state.ocorrencias || []).filter(o => o.daiId === hit.daiId);
+  // DAI com uma ocorrência por item: abre a do item que tem ESTE documento.
+  // DAI com ocorrência única: cai na primeira, que cobre o DAI inteiro.
+  const oc = (hit.itemId && ocs.find(o => o.daiItemId === hit.itemId)) || ocs[0];
+  if (!oc || typeof openOcDetailModal !== 'function') {
+    toast('DAI localizada, mas a ocorrência vinculada não está carregada.', 'error');
+    return;
+  }
+  // O modal de Movimentações (.bdm-overlay, z 600) continua ABERTO por
+  // baixo — fechar tiraria o analista do lugar em que ele estava
+  // conferindo. A classe sobe a família .modal-overlay acima dele (ver
+  // css/modules.css); closeOcDetailModal a remove.
+  document.body.classList.add('bdm-modal-acima');
+  openOcDetailModal(oc.id);
+}
+
 // Renderiza o bloco de "Ajustes de Fechamento Mensal desconsiderados" no
 // resumo do modal de breakdown (Entradas/Saídas por material) — mostra a
 // soma de Peso e Custo Total, e uma lista expansível com cada registro
@@ -1804,6 +1864,11 @@ function openBreakdownModal(trigger) {
     </span>`;
   };
 
+  // Índice documento SAP → DAI, montado uma vez por abertura do modal (ver
+  // _daiIndexPorDocumentoSap): a coluna Documento vira link nas linhas cujo
+  // documento foi registrado numa DAI.
+  const daiPorDoc = _daiIndexPorDocumentoSap();
+
   // ── Pré-computa HTML + texto de busca de cada linha, uma vez ─────────────
   // (inclui o par 861/862/309 relacionado no texto de busca, já que ele
   // aparece visualmente na linha — buscar "AAA1" deve achar a linha cujo
@@ -1863,6 +1928,16 @@ function openBreakdownModal(trigger) {
       }
     }
 
+    // Documento com DAI correspondente vira link para o detalhe da
+    // ocorrência dela. O parâmetro do onclick é o documento JÁ normalizado
+    // (só dígitos) — nunca texto cru dentro do atributo.
+    const daiHit = daiPorDoc.get(_normDocSap(documentoCol));
+    const documentoCell = daiHit
+      ? `<button type="button" class="bdm-dai-link" onclick="event.stopPropagation();abrirDaiPorDocumentoSap('${_normDocSap(documentoCol)}')"
+           title="Ajuste registrado na DAI ${escapeHtml(daiHit.rotulo || '—')} — clique para abrir"
+           ><i class="ti ti-file-text"></i>${escapeHtml(documentoCol)}</button>`
+      : escapeHtml(documentoCol || '—');
+
     // Sinal +/− em vez do ícone indicador (antes: circle-arrow-up "Sobra" /
     // circle-arrow-down "Desfalque"). O indicador é vocabulário de VARIAÇÃO e
     // não cabe aqui — uma saída 201 é uma saída normal, não um "Desfalque".
@@ -1871,7 +1946,7 @@ function openBreakdownModal(trigger) {
       <td>${movBadgeHtml(cod)}</td>
       <td class="td-muted">${escapeHtml(usuario || '—')}</td>
       <td class="td-muted">${escapeHtml(refCol || '—')}${pairHtml}</td>
-      <td class="td-muted">${escapeHtml(documentoCol || '—')}</td>
+      <td class="td-muted">${documentoCell}</td>
       <td class="td-muted">${escapeHtml(dtDoc || '—')}</td>
       <td class="td-muted">${escapeHtml(dtLancRaw || '—')}</td>
       <td class="td-muted">${escapeHtml(dtReg || '—')}</td>

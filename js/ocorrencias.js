@@ -2020,6 +2020,10 @@ function openOcDetailModal(id) {
 
 function closeOcDetailModal() {
   document.getElementById('oc-detail-modal')?.classList.remove('open');
+  // Desfaz a elevação usada quando o detalhe foi aberto POR CIMA do modal
+  // de Movimentações (ver abrirDaiPorDocumentoSap em ui.js). Sem isso, a
+  // família .modal-overlay continuaria acima do .bdm-overlay na próxima vez.
+  document.body.classList.remove('bdm-modal-acima');
 }
 
 // ── Populares opções de filtro ────────────────────────────
