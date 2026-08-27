@@ -1336,17 +1336,70 @@ function repartirSapPorNatureza(sap) {
 // Usado no modal "Movimentações SAP" (openBreakdownModal): cada código tem
 // sempre a mesma cor em qualquer lugar do sistema, pra o usuário bater o
 // olho e já reconhecer o código sem precisar ler o resumo toda vez.
-// 101/801 (entrada) e 201 (saída) têm cor semântica fixa; qualquer outro
-// código (estorno, ajuste, etc.) cai numa cor da paleta reserva, escolhida
-// por hash do próprio código — sempre a mesma cor pro mesmo código.
-const MOV_BADGE_CLASS = { '101': 'mv-badge-green', '801': 'mv-badge-teal', '201': 'mv-badge-red' };
-const MOV_BADGE_FALLBACK_CLASSES = ['mv-badge-purple', 'mv-badge-amber'];
+// ── ATRIBUIÇÃO DE COR (revisão do Hugo, 27/08/2026) ──────────────────────
+// O esquema anterior fixava só 101/801/201 e jogava TODO o resto num pool de
+// apenas 2 cores (purple/amber) escolhidas por hash. Com 20+ códigos em 2
+// cores, colisão não era acidente e sim regra: 862 e 864 saíam idênticos,
+// que é exatamente o par que o analista mais precisa distinguir (uma
+// transferência e o estorno dela).
+//
+// O esquema agora tem DOIS eixos, e é isso que torna os códigos distintos
+// "logicamente" e não por sorte de hash:
+//
+//   MATIZ    = família da operação  (101/102 verde, 801/802 teal, …)
+//   VARIANTE = normal x estorno     (sólido x contorno, .mv-badge-estorno)
+//
+// Ou seja: 862 e 864 continuam roxos — são a mesma operação — mas 864 vem
+// em CONTORNO por ser o estorno. Distingue à primeira vista e ainda informa
+// o parentesco entre os dois, coisa que duas cores aleatórias não fariam.
+//
+// A paleta tem 7 matizes utilizáveis (--gold é reservado ao status "Ajuste
+// Sistêmico" do DAI, ver tokens.css). 7 matizes x 2 variantes = 14 badges
+// distinguíveis — exatamente o tamanho do maior balde (ENTRADAS tem 14
+// códigos), então DENTRO DE CADA BALDE não existe cor repetida.
+//
+// Matiz SE REPETE entre baldes diferentes de propósito (ex.: vermelho é
+// 305/306 em ENTRADAS, 201/202 em SAÍDAS e 551/552 em AJUSTES): cada modal
+// e cada coluna mostra um balde só, então esses códigos nunca aparecem lado
+// a lado. Cada código continua com UMA cor fixa em todo o sistema.
+//
+// A matiz identifica QUAL código é — não a direção do valor. Quem mostra
+// direção é o número ao lado, que já sai verde/vermelho pelo sinal (ver
+// movValorCor). Por isso não estranhe um 305 vermelho dentro de Entradas.
+const MOV_BADGE_CLASS = {
+  // ── ENTRADAS ──
+  '101': 'mv-badge-green',  '102': 'mv-badge-green mv-badge-estorno',   // compra/recebimento
+  '801': 'mv-badge-teal',   '802': 'mv-badge-teal mv-badge-estorno',    // entrada especial
+  // Transferência entre centros: 861 (recebe) e 862 (envia) são os DOIS
+  // LADOS, não um o estorno do outro — por isso matizes diferentes. Quem
+  // estorna é o +2: 863 estorna 861 e 864 estorna 862 (confirmado pelo
+  // Hugo, 27/08/2026). Não inverter esse par ao mexer aqui.
+  '861': 'mv-badge-blue',   '863': 'mv-badge-blue mv-badge-estorno',
+  '862': 'mv-badge-purple', '864': 'mv-badge-purple mv-badge-estorno',
+  '301': 'mv-badge-amber',  '302': 'mv-badge-amber mv-badge-estorno',   // transf. entre centros, 1 passo
+  '303': 'mv-badge-orange', '304': 'mv-badge-orange mv-badge-estorno',  // transf. 2 passos — retirada
+  '305': 'mv-badge-red',    '306': 'mv-badge-red mv-badge-estorno',     // transf. 2 passos — colocação
+  // ── SAÍDAS ──
+  '201': 'mv-badge-red',    '202': 'mv-badge-red mv-badge-estorno',     // consumo
+  // ── AJUSTES ──
+  'Y11': 'mv-badge-purple', 'Y12': 'mv-badge-purple mv-badge-estorno',  // fechamento mensal
+  '551': 'mv-badge-red',    '552': 'mv-badge-red mv-badge-estorno',     // sucateamento
+  '309': 'mv-badge-teal',   '310': 'mv-badge-teal mv-badge-estorno',    // transf. entre materiais
+  '311': 'mv-badge-blue',   '312': 'mv-badge-blue mv-badge-estorno',    // transf. entre depósitos
+};
+
+// Código NOVO/desconhecido nunca colide com os de cima porque não disputa a
+// mesma paleta: sai em CINZA TRACEJADO, que nenhum código mapeado usa. É a
+// contrapartida visual do balde de fallback (ver classificarMovSap) e do
+// ícone "?" no chip — o código aparece marcado como "ainda não classificado"
+// em vez de se disfarçar de categoria conhecida. Ao mapeá-lo aqui, ele
+// ganha matiz e some do cinza.
+const MOV_BADGE_NAO_MAPEADO = 'mv-badge-slate';
+
 function movBadgeClass(cod) {
-  const c = String(cod || '').trim();
-  if (MOV_BADGE_CLASS[c]) return MOV_BADGE_CLASS[c];
-  let h = 0;
-  for (let i = 0; i < c.length; i++) h = (h * 31 + c.charCodeAt(i)) >>> 0;
-  return MOV_BADGE_FALLBACK_CLASSES[h % MOV_BADGE_FALLBACK_CLASSES.length];
+  // normMov e não só trim(): o mapa é indexado pelo código normalizado, e
+  // sem isso um " 0101 " vindo cru do SAP cairia no cinza de não-mapeado.
+  return MOV_BADGE_CLASS[normMov(cod)] || MOV_BADGE_NAO_MAPEADO;
 }
 function movBadgeHtml(cod, size) {
   const sizeClass = size === 'sm' ? ' mv-badge-sm' : '';

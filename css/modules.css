@@ -3338,11 +3338,36 @@ td.var-cell-zero .ti-circle-check     { color: var(--text3); }
   padding: 1px 6px;
   font-size: 9.5px;
 }
-.mv-badge-green  { background: var(--green-bg);  color: var(--green);  border-color: var(--green-border); }
-.mv-badge-teal   { background: var(--teal-bg);   color: var(--teal);   border-color: var(--teal-border); }
-.mv-badge-red    { background: var(--red-bg);    color: var(--red);    border-color: var(--red-border); }
-.mv-badge-purple { background: var(--purple-bg); color: var(--purple); border-color: var(--purple-border); }
-.mv-badge-amber  { background: var(--amber-bg);  color: var(--amber);  border-color: var(--amber-border); }
+/* Matizes do badge de código de movimento — 7 no total (--gold fica fora,
+   reservado ao status "Ajuste Sistêmico" do DAI). Cada matiz identifica uma
+   FAMÍLIA de operação; o estorno da família usa o mesmo matiz na variante
+   de contorno (.mv-badge-estorno, abaixo). Ver MOV_BADGE_CLASS em ui.js. */
+.mv-badge-green  { background: var(--green-bg);   color: var(--green);   border-color: var(--green-border); }
+.mv-badge-teal   { background: var(--teal-bg);    color: var(--teal);    border-color: var(--teal-border); }
+.mv-badge-red    { background: var(--red-bg);     color: var(--red);     border-color: var(--red-border); }
+.mv-badge-purple { background: var(--purple-bg);  color: var(--purple);  border-color: var(--purple-border); }
+.mv-badge-amber  { background: var(--amber-bg);   color: var(--amber);   border-color: var(--amber-border); }
+.mv-badge-blue   { background: var(--accent-dim); color: var(--accent);  border-color: var(--accent-glow); }
+.mv-badge-orange { background: var(--urgente-bg); color: var(--urgente); border-color: var(--urgente-border); }
+
+/* Código não mapeado: cinza tracejado. Nenhum código conhecido usa esta
+   combinação, então um código NOVO do SAP nunca sai com a cara de um já
+   existente — e o tracejado já denuncia "ainda não classificado". */
+.mv-badge-slate {
+  background: transparent;
+  color: var(--text2);
+  border-color: var(--border3);
+  border-style: dashed;
+}
+
+/* Variante ESTORNO — mesmo matiz da operação original, em contorno. Precisa
+   vir DEPOIS das matizes: mesma especificidade (uma classe), então quem
+   define background/border por último vence. `currentColor` faz a borda
+   seguir automaticamente o matiz de cada família, sem uma regra por cor. */
+.mv-badge-estorno {
+  background: transparent;
+  border-color: currentColor;
+}
 
 /* ── Chip do resumo como BOTÃO de filtro por código ──────────────────────
    Ver movSummaryChipHtml / openBreakdownModal. Toda a cor vem das classes
