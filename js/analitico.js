@@ -197,7 +197,11 @@ function anSetGroupMode(mode) {
   if (window.__analiticoResults && window.__analiticoDtIni && window.__analiticoDtFim) {
     // silent: não mexe no overlay de loading — a troca de agrupamento não é
     // uma análise nova, só um re-render do que já foi calculado.
-    renderAnaliticoMicro(window.__analiticoResults, window.__analiticoDtIni, window.__analiticoDtFim, true);
+    // skipMacro: os donuts da Visão Macro NÃO podem se mexer aqui. Eles são
+    // sempre por central × material (independem do agrupamento da Micro) e
+    // têm filtros próprios de regional/categoria — redesenhá-los zeraria
+    // esses filtros e reanimaria os gráficos sem nenhum dado ter mudado.
+    renderAnaliticoMicro(window.__analiticoResults, window.__analiticoDtIni, window.__analiticoDtFim, true, { skipMacro: true });
   }
 }
 window.anSetGroupMode = anSetGroupMode;
@@ -2137,7 +2141,13 @@ function _matGroupDiff(g, dtIni) {
 // fecha o overlay/steps de loading ao final (quem chamou está no controle).
 // Outros chamadores (ex.: re-render em ui.js) não passam esse parâmetro e
 // mantêm o comportamento original.
-function renderAnaliticoMicro(results, dtIni, dtFim, silent) {
+//
+// opts.skipMacro (opcional): não redesenha os painéis da Visão Macro. Usado
+// pelos re-renders que NÃO mudam dado nenhum (troca do agrupamento da Micro,
+// toggle de pendentes no escopo material) — a Macro é sempre por central ×
+// material e tem filtros próprios, então redesenhá-la ali só zeraria esses
+// filtros e reanimaria os donuts à toa.
+function renderAnaliticoMicro(results, dtIni, dtFim, silent, opts = {}) {
   const container = document.getElementById('an-micro-container');
   if (!container) return;
   container.innerHTML = '';
@@ -2351,8 +2361,9 @@ function renderAnaliticoMicro(results, dtIni, dtFim, silent) {
   clearAllMicroFilters();
   if (typeof initHelpBadges === 'function') initHelpBadges();
 
-  // Renderiza painéis Macro (crank + donut) — macro.js
-  if (typeof renderMacroPanels === 'function') {
+  // Renderiza painéis Macro (crank + donut) — macro.js. Ver opts.skipMacro
+  // no cabeçalho: re-renders que não mudam dado não podem mexer neles.
+  if (!opts.skipMacro && typeof renderMacroPanels === 'function') {
     const th = typeof getHealthThresholds === 'function' ? getHealthThresholds() : {};
     renderMacroPanels(results, th, dtIni, dtFim);
   }
@@ -2991,6 +3002,16 @@ function microFocusFromMacro(key, value) {
   if (key !== 'central' && key !== 'material') return;
   const val = (value || '').trim();
   if (!val) return;
+
+  // Cada ranking leva ao agrupamento que responde a pergunta dele:
+  //   "Piores materiais"  → agrupamento por MATERIAL (o card já é o material
+  //                         clicado, com as centrais dele dentro).
+  //   "Piores centrais"   → agrupamento por regional, como sempre.
+  // anSetGroupMode re-renderiza a visão (e zera filtros no caminho), então
+  // roda ANTES de aplicar o filtro abaixo. É no-op quando o modo já é o certo.
+  if (typeof anSetGroupMode === 'function') {
+    anSetGroupMode(key === 'material' ? 'material' : 'regional');
+  }
 
   clearAllMicroFilters();
   _microFilter.applied[key] = new Set([val]);

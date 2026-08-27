@@ -3112,8 +3112,11 @@ function togglePendConsideradosMat(material, tipo) {
   // refreshCentralCard). Se não for possível, cai pro render completo.
   if (typeof refreshMaterialCard === 'function' && refreshMaterialCard(material)) return;
 
+  // skipMacro: a Visão Macro injeta pendentes pelo estado POR CENTRAL
+  // (_pendConsiderados), que este toggle não altera — redesenhá-la só
+  // reanimaria os donuts e zeraria os filtros próprios dela à toa.
   if (window.__analiticoResults && window.__analiticoDtIni && window.__analiticoDtFim) {
-    renderAnaliticoMicro(window.__analiticoResults, window.__analiticoDtIni, window.__analiticoDtFim, true);
+    renderAnaliticoMicro(window.__analiticoResults, window.__analiticoDtIni, window.__analiticoDtFim, true, { skipMacro: true });
   }
 }
 
