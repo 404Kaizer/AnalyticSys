@@ -7266,14 +7266,14 @@ async function restoreAndRender() {
     _lbarSet(75);
     await nextFrame();
 
-    // ── STEP 6.5: Pré-carregar Dashboard Analítico com o filtro "Até hoje"
+    // ── STEP 6.5: Pré-carregar Dashboard Analítico com "Última terça"
     // ────────────────────────────────────────────────────────────────────
     // Roda a mesma lógica de cálculo usada pelo botão "Analisar" (Dashboard
     // Analítico), mas de forma síncrona e "silenciosa" (silent=true), sem
     // abrir um novo overlay — o overlay de boot já está aberto e cobre esta
     // etapa. Assim, como o Analítico é a home do sistema (navigate() logo
-    // abaixo), os dados de 1º do mês até hoje já estão prontos assim que a
-    // tela aparece, sem precisar clicar em Analisar.
+    // abaixo), os dados de 1º do mês até a última terça já estão prontos
+    // assim que a tela aparece, sem precisar clicar em Analisar.
     //
     // Decisão (Hugo, jul/2026): o Dashboard Gerencial NÃO é mais pré-
     // calculado aqui — seu motor (_renderDashboardConteudo) permanece
@@ -7284,11 +7284,14 @@ async function restoreAndRender() {
     updateLoadingOverlay('Pré-carregando Dashboard Analítico...', 'Inicializando o sistema');
     await yieldToUI();
     try {
-      // Define o período "Até hoje" (1º do mês atual → hoje) no Analítico —
-      // mesma função usada pelo chip "Até hoje" da interface, que já marca
-      // o chip como ativo. O Gerencial recebe "Mês atual" (mês cheio) só
-      // pra não abrir sem período selecionado, mesmo não sendo pré-calculado.
-      if (typeof calQuickHoje === 'function') calQuickHoje('an');
+      // Define o período "Última terça" (1º do mês atual → última terça-feira
+      // antes de hoje) no Analítico — mesma função usada pelo chip "Última
+      // terça" da interface, que já marca o chip como ativo. É o corte que o
+      // Hugo usa no dia a dia (o Agregado só tem lançamento semanal, na
+      // terça), então é ele que abre por padrão. O Gerencial recebe "Mês
+      // atual" (mês cheio) só pra não abrir sem período selecionado, mesmo
+      // não sendo pré-calculado.
+      if (typeof calQuickUltimaTerca === 'function') calQuickUltimaTerca('an');
       if (typeof calQuickMesAtual === 'function') calQuickMesAtual('dg');
 
       // Dashboard Analítico — reaproveita o mesmo motor de cálculo do botão
@@ -7306,7 +7309,7 @@ async function restoreAndRender() {
     } catch (e) {
       // Falha na pré-carga não deve interromper o boot — o Dashboard
       // Analítico continua disponível manualmente via botão Analisar.
-      console.warn('[Boot] Pré-carga do Dashboard Analítico (até hoje):', e);
+      console.warn('[Boot] Pré-carga do Dashboard Analítico (última terça):', e);
     }
     // Restaura o progresso do overlay de boot (a pré-carga acima mexe
     // internamente na barra de progresso para os próprios steps dela,
