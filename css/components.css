@@ -501,25 +501,10 @@
   flex-shrink: 0;
 }
 
-/* Símbolo padrão de sobra/desfalque (varSymbol, ícone ti-circle-arrow-*)
-   — a função tem font-size fixo em 11px, pensado pra linhas de tabela
-   (11-13px de texto). Nos cards do Resumo do Período o texto ao lado é
-   bem maior (25px no valor principal, 19-20px no %), e o ícone de 11px
-   ficava minúsculo perto dele. Sobrescrevemos com !important (única forma
-   de vencer o font-size inline) só aqui, sem tocar o padrão usado no
-   resto do sistema (tabelas do Analítico/Inventário/Macro etc.). */
-#dg-vg-kpis-hero .inv-kpi-card-featured .inv-kpi-value i.ti {
-  font-size: 20px !important;
-}
-#dg-vg-kpis-hero .inv-kpi-card-featured .da-pct-value i.ti {
-  font-size: 16px !important;
-}
-#dg-vg-kpis-hero .inv-kpi-secondary .inv-kpi-value i.ti {
-  font-size: 17px !important;
-}
-#dg-vg-kpis-hero .inv-kpi-secondary .inv-kpi-unit i.ti {
-  font-size: 13px !important;
-}
+/* Os 4 overrides de font-size do varSymbol que existiam aqui (ícone
+   ti-circle-arrow-* com !important, 20/16/17/13px) saíram: o varSymbol
+   passou a emitir font-size:1em e o ícone já herda o tamanho do texto do
+   card. Ver dashboard.js. */
 
 /* Zona de percentual com barra de magnitude, à direita dos cards Variação/
    Custo Var. — substitui o % que antes ficava empilhado dentro do corpo do

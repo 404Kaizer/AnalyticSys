@@ -3344,6 +3344,43 @@ td.var-cell-zero .ti-circle-check     { color: var(--text3); }
 .mv-badge-purple { background: var(--purple-bg); color: var(--purple); border-color: var(--purple-border); }
 .mv-badge-amber  { background: var(--amber-bg);  color: var(--amber);  border-color: var(--amber-border); }
 
+/* ── Chip do resumo como BOTÃO de filtro por código ──────────────────────
+   Ver movSummaryChipHtml / openBreakdownModal. Toda a cor vem das classes
+   .mv-badge-* acima; aqui só entram interação e estado de seleção.
+
+   Este bloco fica DEPOIS das classes de cor de propósito: `.mv-badge-chip-on`
+   e `.mv-badge-green` têm a mesma especificidade (uma classe), então quem
+   vier por último vence o `border-color` — invertido, a borda do chip
+   selecionado seria sobrescrita pela cor normal e a seleção sumiria.
+
+   Sem `font-family` aqui, também de propósito: .mv-badge já define
+   var(--mono), e estilo de autor vence a folha do navegador — um `inherit`
+   neste bloco derrubaria o mono do <button>. */
+.mv-badge-btn {
+  cursor: pointer;
+  transition: opacity .12s, box-shadow .12s, transform .12s;
+}
+.mv-badge-btn:hover  { filter: brightness(1.2); }
+.mv-badge-btn:active { transform: translateY(1px); }
+.mv-badge-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+/* Selecionado: anel na própria cor do código (currentColor), pra funcionar
+   com qualquer uma das 5 paletas de .mv-badge-*. */
+.mv-badge-chip-on {
+  border-color: currentColor;
+  box-shadow: 0 0 0 1px currentColor;
+}
+/* Com filtro ativo, os códigos de fora ficam apagados — deixa óbvio, sem
+   ler a tabela, que ela está restrita. */
+.bdm-summary-codes.has-filter .mv-badge-btn:not(.mv-badge-chip-on) {
+  opacity: .4;
+}
+.bdm-summary-codes.has-filter .mv-badge-btn:not(.mv-badge-chip-on):hover {
+  opacity: .75;
+}
+
 /* ── Nota de movimento relacionado (transferência entre centros 861/862) ── */
 .mv-pair-note {
   display: flex;
@@ -10765,16 +10802,9 @@ td:has(.lanc-central-edit:focus) {
 .dg-vg-extremo-pos .dg-vg-extremo-value { color: var(--amber); }
 .dg-vg-extremo-empty .dg-vg-extremo-value { color: var(--text3); }
 
-/* Símbolo padrão de sobra/desfalque (varSymbol) — mesmo motivo do Resumo
-   do Período: o ícone tem font-size fixo em 11px (pensado pra tabelas),
-   pequeno demais perto do valor agora em clamp(22-28px). !important pra
-   vencer o inline style; escopado só a estes 2 elementos. */
-.dg-vg-extremo-value i.ti {
-  font-size: 18px !important;
-}
-.dg-vg-extremo-kg i.ti {
-  font-size: 13px !important;
-}
+/* Os 2 overrides de font-size do varSymbol que existiam aqui (18px/13px com
+   !important) saíram: o varSymbol passou a emitir font-size:1em e o ícone já
+   herda o tamanho do texto destes elementos. Ver dashboard.js. */
 
 /* ── Detalhado Analítico — tabela de Detalhamento por Material + os 4
    rankings (Regional/Central/Material/Categoria). Classe própria

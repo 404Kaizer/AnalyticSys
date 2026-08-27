@@ -5459,21 +5459,22 @@
       <div class="bdm-search-wrap">
         <i class="ti ti-search"></i>
         <input type="text" class="bdm-search-input" id="bdm-search-input"
-          placeholder="Buscar por movimento, referência, usuário ou data…" autocomplete="off">
+          placeholder="Buscar em qualquer coluna — movimento, usuário, ref., documento, data ou saldo…" autocomplete="off">
       </div>
     </div>
     <div class="bdm-body">
       <table class="bdm-table">
-        <thead>
+        <thead id="bdm-thead">
           <tr>
-            <th>Movimento</th>
-            <th>Usuário</th>
-            <th>Ref.</th>
-            <th>Documento</th>
-            <th>Dt. Documento</th>
-            <th>Dt. Lançamento</th>
-            <th>Dt. Registro</th>
-            <th style="text-align:right">Saldo</th>
+            <th data-sort-col="cod">Movimento <i class="ti ti-selector mod-sort-icon"></i></th>
+            <th data-sort-col="usuario">Usuário <i class="ti ti-selector mod-sort-icon"></i></th>
+            <th data-sort-col="ref">Ref. <i class="ti ti-selector mod-sort-icon"></i></th>
+            <th data-sort-col="documento">Documento <i class="ti ti-selector mod-sort-icon"></i></th>
+            <th data-sort-col="dtDoc">Dt. Documento <i class="ti ti-selector mod-sort-icon"></i></th>
+            <th data-sort-col="dtLanc">Dt. Lançamento <i class="ti ti-selector mod-sort-icon"></i></th>
+            <th data-sort-col="dtReg">Dt. Registro <i class="ti ti-selector mod-sort-icon"></i></th>
+            <th data-sort-col="saldo" style="text-align:right"
+                title="Ordena pelo valor ABSOLUTO — +198.900 e −198.900 ficam lado a lado, pra o estorno aparecer junto do lançamento que ele anula">Saldo <i class="ti ti-selector mod-sort-icon"></i></th>
           </tr>
         </thead>
         <tbody id="bdm-tbody"></tbody>

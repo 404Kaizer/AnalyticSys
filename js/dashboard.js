@@ -7419,6 +7419,44 @@ function fmtKg(v, decimals = 2) {
   return n.toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }) + ' kg';
 }
 
+// Mesma formatação do fmtKg, mas com o sinal SEMPRE explícito (+/−).
+// Decisão do Hugo (27/08/2026): o INDICADOR (varSymbol — as setas ▲/▼/✓)
+// fica reservado aos campos que indicam VARIAÇÃO. Colunas de MOVIMENTO
+// (Entradas/Saídas/Ajustes) mostram uma quantidade com direção, não uma
+// variação, então usam sinal em vez de ícone. Sem isso o "+"/"−" ficaria
+// implícito (positivo sem sinal, negativo com hífen) e a leitura de uma
+// coluna LÍQUIDA — que pode virar negativa por estorno ou transferência —
+// ficaria ambígua.
+//
+// Usa o sinal de menos tipográfico (−, U+2212) em vez do hífen, igual ao
+// resto da interface ("Real − Teórico"). Zero sai sem sinal.
+function fmtKgSigned(v, decimals = 2) {
+  const n = num(v);
+  if (Math.abs(n) < 0.0001) return fmtKg(0, decimals);
+  return (n > 0 ? '+' : '−') + fmtKg(Math.abs(n), decimals);
+}
+
+// Cor de um valor de MOVIMENTO pelo SINAL: positivo verde, negativo vermelho.
+// Decisão do Hugo (27/08/2026). Antes, no modal de Movimentações, a coluna
+// inteira usava a cor do BALDE (verde em Entradas, vermelho em Saídas) — com
+// o rateio por natureza, um 862 (transferência saindo) ou um 102 (estorno)
+// aparecia VERDE dentro de Entradas só por estar naquela coluna, apesar de
+// ser um valor negativo. Cor por sinal remove a leitura errada.
+//
+// NÃO confundir com varClass (Variação), onde positivo é ÂMBAR: lá positivo
+// significa SOBRA, que é um alerta a investigar, não algo bom. Aqui é
+// quantidade com direção — entrou (verde) ou saiu (vermelho).
+// `corZero` existe por causa da coluna AJUSTES (Hugo, 27/08/2026): lá o zero
+// é informação, não ausência — significa que os ajustes do período se
+// anularam (ex.: um 551 e o 552 que o estorna), e sai ÂMBAR pra sinalizar
+// "teve ajuste aqui, olhe". Nas demais colunas zero é só neutro (text3).
+function movValorCor(v, corZero = 'var(--text3)') {
+  const n = num(v);
+  if (n > 0.0001)  return 'var(--green)';
+  if (n < -0.0001) return 'var(--red)';
+  return corZero;
+}
+
 // Compact kg formatter for tight table cells — e.g. 33.5 M kg / 1,2 K kg
 function fmtKgShort(v) {
   const n = num(v);
@@ -7441,10 +7479,19 @@ function varIcon(v) {
   if (v < -0.0001) return '<i class="ti ti-trending-down" style="color:var(--red)"></i>';
   return '<i class="ti ti-minus" style="color:var(--text3)"></i>';
 }
+// O indicador acompanha o TAMANHO DO TEXTO ao lado dele (font-size:1em, que
+// herda do contexto) — antes era 11px fixo, calibrado pra linha de tabela.
+// Nos cards de valor grande (Variação do modal de detalhe = 20px, Resumo do
+// Período = 25px, extremos do DG = clamp(22-28px)) o ícone de 11px virava um
+// ponto minúsculo ao lado do número e comprometia a leitura. Já tinha sido
+// remendado duas vezes com `!important` no CSS, escopado a cada tela — os
+// dois blocos de override saíram junto com esta mudança (ver components.css
+// e modules.css). Não recolocar tamanho fixo aqui: quem precisar de outra
+// proporção deve mudar o font-size do PRÓPRIO contêiner.
 function varSymbol(v) {
-  if (v > 0.0001)  return '<i class="ti ti-circle-arrow-up" title="Sobra" style="font-size:11px;vertical-align:middle"></i>';
-  if (v < -0.0001) return '<i class="ti ti-circle-arrow-down" title="Desfalque" style="font-size:11px;vertical-align:middle"></i>';
-  return '<i class="ti ti-circle-check" title="Equilibrado" style="font-size:11px;vertical-align:middle"></i>';
+  if (v > 0.0001)  return '<i class="ti ti-circle-arrow-up" title="Sobra" style="font-size:1em;vertical-align:middle"></i>';
+  if (v < -0.0001) return '<i class="ti ti-circle-arrow-down" title="Desfalque" style="font-size:1em;vertical-align:middle"></i>';
+  return '<i class="ti ti-circle-check" title="Equilibrado" style="font-size:1em;vertical-align:middle"></i>';
 }
 function varLabel(v) {
   if (v > 0.0001)  return 'Sobra';

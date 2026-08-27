@@ -913,8 +913,15 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
         };
         return [normMov(s.movimento), num(s.peso), ref, String(s.usuario || '').trim(), String(s.dtLanc || s.dtDoc || '').trim(), extra];
       };
-      const entEntries = snapshot.entRecords.map(toEntry);
-      const saiEntries = snapshot.saiRecords.map(toEntry);
+      // Rateio por NATUREZA do código (ENTRADAS/SAÍDAS/AJUSTES) em vez do
+      // sinal do peso — ver repartirSapPorNatureza em ui.js. Reparte o MESMO
+      // conjunto que alimentou o buildSnapshot, então a soma dos três baldes
+      // é idêntica a snapshot.totalEnt + snapshot.totalSai: Est. Teórico e
+      // Variação seguem vindo do snapshot, intactos. Muda só a apresentação.
+      const natureza   = repartirSapPorNatureza(sapMat);
+      const entEntries = natureza.entRecords.map(toEntry);
+      const saiEntries = natureza.saiRecords.map(toEntry);
+      const ajuEntries = natureza.ajuRecords.map(toEntry);
 
       // ── Contagem de registros locais (páginas Entradas/Saídas) ──────────
       // Mesmo escopo do modal de Movimentações SAP (este material + esta
@@ -1011,8 +1018,14 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
           };
           return [normMov(s.movimento), num(s.peso), ref, String(s.usuario || '').trim(), String(s.dtLanc || s.dtDoc || '').trim(), extra];
         };
-        const dayEntEntries = daySnap.entRecords.map(toDayEntry);
-        const daySaiEntries = daySnap.saiRecords.map(toDayEntry);
+        // Mesmo rateio por natureza da linha do material (ver natureza acima),
+        // aplicado ao SAP deste dia — sem isso o modal contradiria a tabela
+        // que o abriu. Os totais de estoque continuam vindo do daySnap/
+        // snapSemana (soma idêntica), só a exibição muda de balde.
+        const dayNat        = repartirSapPorNatureza(daySap);
+        const dayEntEntries = dayNat.entRecords.map(toDayEntry);
+        const daySaiEntries = dayNat.saiRecords.map(toDayEntry);
+        const dayAjuEntries = dayNat.ajuRecords.map(toDayEntry);
 
         const hasLanc = dayLancs.length > 0;
         const isTerca = day.getDay() === 2; // 2 = terça-feira
@@ -1049,8 +1062,10 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
               initialIsEstimated,
               entEntries: dayEntEntries,
               saiEntries: daySaiEntries,
-              totalEnt: daySnap.totalEnt,
-              totalSai: daySnap.totalSai,
+              ajuEntries: dayAjuEntries,
+              totalEnt: dayNat.totalEnt,
+              totalSai: dayNat.totalSai,
+              totalAju: dayNat.totalAju,
               theoreticalStock: estTeorico,
               finalStock: estTeorico,
               finalIsEstimated: true,
@@ -1108,8 +1123,10 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
             initialIsEstimated,
             entEntries: dayEntEntries,
             saiEntries: daySaiEntries,
-            totalEnt: daySnap.totalEnt,
-            totalSai: daySnap.totalSai,
+            ajuEntries: dayAjuEntries,
+            totalEnt: dayNat.totalEnt,
+            totalSai: dayNat.totalSai,
+            totalAju: dayNat.totalAju,
             theoreticalStock: estTeorico,
             finalStock,
             finalIsEstimated,
@@ -1155,8 +1172,10 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
             initialIsEstimated,
             entEntries: dayEntEntries,
             saiEntries: daySaiEntries,
-            totalEnt: daySnap.totalEnt,
-            totalSai: daySnap.totalSai,
+            ajuEntries: dayAjuEntries,
+            totalEnt: dayNat.totalEnt,
+            totalSai: dayNat.totalSai,
+            totalAju: dayNat.totalAju,
             theoreticalStock: estTeorico,
             finalStock,
             finalIsEstimated,
@@ -1180,10 +1199,12 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
         summary: {
           pesoIni: snapshot.pesoIni,
           dtIniLabel: snapshot.dtIniLabel,
-          totalEnt: snapshot.totalEnt,
-          entLabel: (() => { const uCods = [...new Set(entEntries.map(([cod]) => cod))]; return uCods.length ? `${uCods.length} código${uCods.length !== 1 ? 's' : ''} · ${uCods.join(', ')}` : 'Sem entradas no período'; })(),
-          totalSai: snapshot.totalSai,
-          saiLabel: (() => { const uCods = [...new Set(saiEntries.map(([cod]) => cod))]; return uCods.length ? `${uCods.length} código${uCods.length !== 1 ? 's' : ''} · ${uCods.join(', ')}` : 'Sem saídas no período'; })(),
+          totalEnt: natureza.totalEnt,
+          entLabel: _codsLabel(entEntries, 'Sem entradas no período'),
+          totalSai: natureza.totalSai,
+          saiLabel: _codsLabel(saiEntries, 'Sem saídas no período'),
+          totalAju: natureza.totalAju,
+          ajuLabel: _codsLabel(ajuEntries, 'Sem ajustes no período'),
           estTeorico: snapshot.estTeorico,
           pesoFim: snapshot.pesoFim,
           dtFimLabel: snapshot.dtFimLabel,
@@ -1262,9 +1283,11 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
         ausente: !!(snapshot.pesoFimAusente || matSemCadastro)
       });
 
+      // Ajustes de Fechamento desconsiderados (Y11/Y12): antes eram partidos
+      // por sinal entre as colunas Entradas e Saídas. Y11/Y12 são AJUSTES por
+      // natureza, então agora vão inteiros para a coluna Ajustes — é lá que o
+      // analista procura por eles.
       const _matFechExcluidos = (r.sapFechExcluidosByMat && r.sapFechExcluidosByMat.get(mat)) || [];
-      const _matFechExcluidosEnt = _matFechExcluidos.filter(x => num(x.peso) > 0);
-      const _matFechExcluidosSai = _matFechExcluidos.filter(x => num(x.peso) < 0);
 
       matRowsHtml += `
         <tr class="material-row${
@@ -1284,8 +1307,9 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
           <td class="td-mono" style="font-size:11px">${matSemCadastro ? '—' : (escapeHtml(_matCodSap) || '—')}</td>
           <td class="td-mono" style="color:var(--text2);font-size:11px">${_iniCell}</td>
           <td class="td-mono" style="color:${(matSemCadastro || snapshot.pesoIniAusente) ? 'var(--text3)' : 'var(--text)'}">${(matSemCadastro || snapshot.pesoIniAusente) ? '—' : fmtKg(snapshot.pesoIni)}</td>
-          <td>${buildAnaliticoDetailBreakdown(entEntries, snapshot.totalEnt, 'var(--green)', 'Entradas', localEntCount, mat, r.central, _matFechExcluidosEnt, localEntTotal)}</td>
-          <td>${buildAnaliticoDetailBreakdown(saiEntries, snapshot.totalSai, 'var(--red)', 'Saídas', localSaiCount, mat, r.central, _matFechExcluidosSai, localSaiTotal)}</td>
+          <td>${buildAnaliticoDetailBreakdown(entEntries, natureza.totalEnt, 'var(--green)', 'Entradas', localEntCount, mat, r.central, [], localEntTotal)}</td>
+          <td>${buildAnaliticoDetailBreakdown(saiEntries, natureza.totalSai, 'var(--red)', 'Saídas', localSaiCount, mat, r.central, [], localSaiTotal)}</td>
+          <td>${buildAnaliticoDetailBreakdown(ajuEntries, natureza.totalAju, movValorCor(natureza.totalAju, 'var(--amber)'), 'Ajustes', null, mat, r.central, _matFechExcluidos)}</td>
           <td class="td-mono" style="color:var(--text2);font-size:11px">${
             snapshot.pesoFimAusente
               ? `<span class='absent-badge' data-absent-tooltip='${buildAbsentTooltip(absentNearest)}' style='cursor:help'>AUSENTE</span>`
@@ -1580,16 +1604,17 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
                 <th>Cód SAP</th>
                 <th>Dt. Est. Inicial</th>
                 <th>Est. Inicial<br><span style="font-size:9px;font-weight:400;opacity:.7">(Saldo SAP)</span></th>
-                <th>Entradas<br><span style="font-size:9px;font-weight:400;opacity:.7">(por código)</span></th>
-                <th>Saídas<br><span style="font-size:9px;font-weight:400;opacity:.7">(por código)</span></th>
+                <th title="Compra/recebimento e transferência entre centros (101, 801, 861/862, 301–306) — LÍQUIDO: estornos e transferências para fora entram como negativo e anulam o positivo que os originou">Entradas<br><span style="font-size:9px;font-weight:400;opacity:.7">(líq. por código)</span></th>
+                <th title="Consumo e seu estorno (201, 202)">Saídas<br><span style="font-size:9px;font-weight:400;opacity:.7">(por código)</span></th>
+                <th title="Fechamento mensal (Y11/Y12), sucateamento (551/552), transferência entre materiais/depósitos (309/310, 311/312) e qualquer código não classificado">Ajustes<br><span style="font-size:9px;font-weight:400;opacity:.7">(líq. por código)</span></th>
                 <th>Dt. Est. Final</th>
                 <th>Est. Final<br><span style="font-size:9px;font-weight:400;opacity:.7">(Últ. Lançamento)</span></th>
-                <th>Est. Teórico<br><span style="font-size:9px;font-weight:400;opacity:.7">(Ini+Ent+Sai)</span></th>
+                <th>Est. Teórico<br><span style="font-size:9px;font-weight:400;opacity:.7">(Ini+Ent+Sai+Aju)</span></th>
                 <th>Variação<br><span style="font-size:9px;font-weight:400;opacity:.7">(Real − Teórico)</span></th>
                 <th style="text-align:right">Custo Variação<br><span style="font-size:9px;font-weight:400;opacity:.7">(Var. × C. Médio)</span></th>
               </tr>
             </thead>
-            <tbody>${matRowsHtml || '<tr><td colspan="11"><div class="empty-state" style="padding:24px"><i class="ti ti-box-off"></i><p>Nenhum material encontrado.</p></div></td></tr>'}</tbody>
+            <tbody>${matRowsHtml || '<tr><td colspan="12"><div class="empty-state" style="padding:24px"><i class="ti ti-box-off"></i><p>Nenhum material encontrado.</p></div></td></tr>'}</tbody>
           </table>
         </div>
       </div>`;
@@ -3767,6 +3792,14 @@ window._inv_helpers = {
   isSapExcluidoPorFechamento,
   somarPesoCustoSap,
 };
+// Subtítulo dos cards do modal de detalhe: "N códigos · 101, 862, ...".
+// Recebe as entries já no formato do toEntry (cod na posição 0).
+function _codsLabel(entries, vazio) {
+  const uCods = [...new Set((entries || []).map(([cod]) => cod))];
+  if (!uCods.length) return vazio;
+  return `${uCods.length} código${uCods.length !== 1 ? 's' : ''} · ${uCods.join(', ')}`;
+}
+
 // Monta o texto do tooltip para badges AUSENTE na tabela de materiais
 function buildAbsentTooltip(nearest) {
   const before = nearest?.before

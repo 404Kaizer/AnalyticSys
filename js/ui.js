@@ -1268,6 +1268,70 @@ function escapeHtml(str) {
   return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
+// ── NATUREZA DO MOVIMENTO SAP — ENTRADAS / SAÍDAS / AJUSTES ──────────────
+// Decisão do Hugo (27/08/2026). Antes o rateio era pelo SINAL do peso:
+// positivo → Entradas, negativo → Saídas (ver buildSnapshot). Isso mistura
+// NATUREZA com DIREÇÃO — um 862 (transferência saindo), um 102 (estorno de
+// compra) e um Y11 negativo caíam todos na mesma coluna vermelha, apesar de
+// serem três coisas completamente diferentes para o analista.
+//
+// Passa a ratear pelo CÓDIGO, em três baldes:
+//   ENTRADAS — compra/recebimento e transferência entre centros. Inclui os
+//              estornos (102, 802, 863/864) e o lado NEGATIVO da
+//              transferência (862, 303): o valor tem que SAIR da coluna de
+//              Entradas, então entra ali como negativo e se anula com o
+//              positivo que o originou. Por isso a coluna é LÍQUIDA e pode
+//              ficar negativa (central que só transferiu para fora).
+//   SAÍDAS   — consumo (201) e seu estorno (202).
+//   AJUSTES  — fechamento mensal (Y11/Y12), sucateamento (551/552) e
+//              transferência entre materiais/depósitos (309/310, 311/312).
+//
+// AJUSTES é também o balde de FALLBACK: qualquer código fora das listas cai
+// aqui (ver classificarMovSap). Sem isso, um código novo do SAP — ou um
+// campo em branco — sumiria das três colunas e o Est. Teórico deixaria de
+// fechar em silêncio. Com o fallback, esquecer um código vira imprecisão
+// VISÍVEL (badge "não classificado", ver movNaoClassificado) em vez de bug
+// de fechamento.
+//
+// A soma dos três baldes é idêntica à soma antiga (ENT+SAÍ por sinal) — é
+// reparticionamento puro, o Est. Teórico e a Variação não mudam.
+const MOV_NAT_ENTRADA = new Set(['101','102','801','802','861','862','863','864','301','302','303','304','305','306']);
+const MOV_NAT_SAIDA   = new Set(['201','202']);
+const MOV_NAT_AJUSTE  = new Set(['Y11','Y12','551','552','309','310','311','312']);
+
+// 'ent' | 'sai' | 'aju' — recebe o código JÁ normalizado (normMov).
+function classificarMovSap(cod) {
+  if (MOV_NAT_ENTRADA.has(cod)) return 'ent';
+  if (MOV_NAT_SAIDA.has(cod))   return 'sai';
+  return 'aju';
+}
+
+// true quando o código caiu em AJUSTES por FALLBACK (não está em lista
+// nenhuma) — usado para marcar o badge no modal de Movimentações.
+function movNaoClassificado(cod) {
+  return !MOV_NAT_ENTRADA.has(cod) && !MOV_NAT_SAIDA.has(cod) && !MOV_NAT_AJUSTE.has(cod);
+}
+
+// Reparte um conjunto de registros SAP nos três baldes, já com os totais
+// (peso COM sinal — a coluna é líquida). Registros de peso 0 são ignorados,
+// como sempre foram em buildSnapshot. A ordenação de cada balde é por |peso|
+// decrescente: agora que um balde tem os dois sinais, ordenar pelo valor cru
+// jogaria os estornos grandes para o fim da lista.
+function repartirSapPorNatureza(sap) {
+  const rec = { ent: [], sai: [], aju: [] };
+  const tot = { ent: 0,  sai: 0,  aju: 0  };
+  (sap || []).forEach(s => {
+    const p = num(s.peso);
+    if (!p) return;
+    const nat = classificarMovSap(normMov(s.movimento));
+    rec[nat].push(s);
+    tot[nat] += p;
+  });
+  Object.values(rec).forEach(arr => arr.sort((a, b) => Math.abs(num(b.peso)) - Math.abs(num(a.peso))));
+  return { entRecords: rec.ent, saiRecords: rec.sai, ajuRecords: rec.aju,
+           totalEnt: tot.ent,   totalSai: tot.sai,   totalAju: tot.aju };
+}
+
 // ── Badge colorido por código de MOVIMENTO ───────────────────────────────
 // Usado no modal "Movimentações SAP" (openBreakdownModal): cada código tem
 // sempre a mesma cor em qualquer lugar do sistema, pra o usuário bater o
@@ -1288,8 +1352,22 @@ function movBadgeHtml(cod, size) {
   const sizeClass = size === 'sm' ? ' mv-badge-sm' : '';
   return `<span class="mv-badge ${movBadgeClass(cod)}${sizeClass}">${escapeHtml(cod || '—')}</span>`;
 }
-function movSummaryChipHtml(cod, count) {
-  return `<span class="mv-badge mv-badge-chip ${movBadgeClass(cod)}">${escapeHtml(cod || '—')} <b>${count}</b></span>`;
+// Chip do resumo "Movimentos considerados" do modal de Movimentações — é um
+// BOTÃO de filtro: clicar liga/desliga o código na tabela abaixo (ver
+// openBreakdownModal). Multi-seleção de propósito: ver 861+862 juntos é a
+// leitura natural dos dois lados de uma transferência.
+function movSummaryChipHtml(cod, count, ativo = false) {
+  // Código fora das três listas de natureza caiu em AJUSTES por fallback —
+  // sinaliza aqui para o analista descobrir o código novo em vez de ele
+  // passar despercebido dentro do balde (ver classificarMovSap acima).
+  const naoClass = movNaoClassificado(normMov(cod))
+    ? ` <i class="ti ti-help-circle" style="font-size:9px;opacity:.85" title="Código não classificado — contabilizado em Ajustes por fallback"></i>`
+    : '';
+  const codTxt = escapeHtml(cod || '—');
+  return `<button type="button" class="mv-badge mv-badge-chip mv-badge-btn ${movBadgeClass(cod)}${ativo ? ' mv-badge-chip-on' : ''}"
+    data-cod="${codTxt}" aria-pressed="${ativo ? 'true' : 'false'}"
+    title="${ativo ? 'Filtrando por' : 'Clique para filtrar por'} ${codTxt} — clique de novo para remover"
+    >${codTxt} <b>${count}</b>${naoClass}</button>`;
 }
 
 const analiticoDetailState = {
@@ -1298,6 +1376,14 @@ const analiticoDetailState = {
 };
 
 window.__analiticoDetailCache = new Map();
+
+// Normalização da busca do modal de Movimentações — aplicada NOS DOIS LADOS
+// (texto indexado de cada linha e termo digitado). Sem isso, o menos
+// tipográfico (−, U+2212) que o fmtKgSigned imprime nunca casaria com o
+// hífen que o teclado produz: buscar "-10.210" não acharia "−10.210,00 kg".
+function _normBuscaMov(s) {
+  return String(s || '').toLowerCase().replace(/−/g, '-');
+}
 
 function buildAnaliticoDetailBreakdown(entries, total, colorVar, title, localCount = null, mat = '', central = '', fechExcluidos = [], localTotal = null) {
   if (!entries.length && !(fechExcluidos && fechExcluidos.length)) {
@@ -1322,7 +1408,7 @@ function buildAnaliticoDetailBreakdown(entries, total, colorVar, title, localCou
       data-mat="${escapeHtml(mat)}"
       data-central="${escapeHtml(central)}"
       title="Clique para ver detalhes">
-      <span class="bdm-total">${fmtKg(total)}</span>
+      <span class="bdm-total">${fmtKgSigned(total)}</span>
       <i class="ti ti-table-options bdm-icon"></i>
     </button>`;
 }
@@ -1530,6 +1616,13 @@ function openBreakdownModal(trigger) {
     return dtB - dtA;
   });
 
+  // Códigos de movimento selecionados nos chips do resumo. Set VAZIO = sem
+  // filtro (mostra tudo), não "esconde tudo" — é o estado inicial de toda
+  // abertura do modal. Multi-seleção: ver 861+862 juntos (os dois lados de
+  // uma transferência) é leitura corriqueira, então clicar num segundo chip
+  // SOMA ao filtro em vez de trocar a seleção.
+  const codsFiltro = new Set();
+
   // ── Resumo fixo (sempre visível, abaixo do título) ───────────────────────
   // 1) Quais códigos de MOVIMENTO compõem o total e quantos registros cada
   //    um contribui — visão rápida do que está sendo contabilizado.
@@ -1544,10 +1637,7 @@ function openBreakdownModal(trigger) {
   if (summaryEl) {
     const codCounts = new Map();
     entries.forEach(([cod]) => codCounts.set(cod, (codCounts.get(cod) || 0) + 1));
-    const codeChips = [...codCounts.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .map(([cod, n]) => movSummaryChipHtml(cod, n))
-      .join('');
+    const codsOrdenados = [...codCounts.entries()].sort((a, b) => b[1] - a[1]);
 
     const sapCount = entries.length;
     const localLabel = title === 'Saídas' ? 'registro(s) na página Saídas' : 'registro(s) na página Entradas';
@@ -1564,12 +1654,43 @@ function openBreakdownModal(trigger) {
     summaryEl.innerHTML = `
       <div class="bdm-summary-row">
         <span class="bdm-summary-label">Movimentos considerados</span>
-        <div class="bdm-summary-codes">${codeChips || '<span style="color:var(--text3);font-size:11.5px">—</span>'}</div>
+        <div class="bdm-summary-codes"></div>
       </div>
       <div class="bdm-summary-row">
         <span class="bdm-summary-label">Registros</span>
         <span class="bdm-summary-compare">${registrosHtml}</span>
       </div>${_bdmFechExcluidosHtml(fechExcluidos)}`;
+
+    // Chips = filtro por código. Só o container dos chips é re-renderizado a
+    // cada clique; o resto do resumo ("Registros") continua mostrando o total
+    // REAL do período, sem reagir a filtro nenhum — mesmo critério já usado
+    // pra busca (ver comentário do bloco acima).
+    const codesBox = summaryEl.querySelector('.bdm-summary-codes');
+    const _renderChips = () => {
+      if (!codesBox) return;
+      codesBox.innerHTML = codsOrdenados.length
+        ? codsOrdenados.map(([cod, n]) => movSummaryChipHtml(cod, n, codsFiltro.has(cod))).join('')
+        : '<span style="color:var(--text3);font-size:11.5px">—</span>';
+      // Marca o container quando há filtro ativo — o CSS apaga os chips não
+      // selecionados, deixando óbvio que a tabela está restrita.
+      codesBox.classList.toggle('has-filter', codsFiltro.size > 0);
+    };
+    _renderChips();
+
+    // Atribuição (não addEventListener): o modal reabre várias vezes na
+    // mesma sessão e `onclick` substitui o handler anterior em vez de
+    // empilhar um novo a cada abertura.
+    summaryEl.onclick = (ev) => {
+      const chip = ev.target.closest('.mv-badge-btn');
+      if (!chip || !summaryEl.contains(chip)) return;
+      const cod = chip.dataset.cod || '';
+      if (codsFiltro.has(cod)) codsFiltro.delete(cod);
+      else                     codsFiltro.add(cod);
+      _renderChips();
+      // Lê o campo pelo id: o listener de busca substitui o nó do input
+      // (clone) mais abaixo, então guardar a referência aqui daria stale.
+      renderRows(document.getElementById('bdm-search-input')?.value || '');
+    };
   }
 
   // ── Rodapé: comparação entre o total lançado na página Entradas/Saídas
@@ -1577,41 +1698,58 @@ function openBreakdownModal(trigger) {
   //    analista uma base pra saber se o volume físico do SAP condiz com o
   //    que foi de fato emitido/lançado em NF (Entradas) ou OS (Saídas).
   //    Ordem fixa: Entradas/Saídas → SAP → diferença. Quando presente,
-  //    substitui o par label+total padrão do rodapé (ver hasLocalTotal em
+  //    substitui o par label+total padrão do rodapé (ver usaCompare em
   //    renderRows, abaixo) — mostra os 3 valores numa linha só, em vez de
   //    repetir o total do SAP duas vezes. Omitida quando o chamador não tem
   //    esse dado (mesmo critério do "Registros" acima — ver localCount).
   const footerCompareEl = document.getElementById('bdm-footer-compare');
-  let hasLocalTotal = false;
-  if (footerCompareEl) {
-    const localTotalRaw = trigger.dataset.localTotal;
-    const localTotal = localTotalRaw === '' || localTotalRaw == null ? null : Number(localTotalRaw);
-    if (localTotal === null) {
-      footerCompareEl.style.display = 'none';
-      footerCompareEl.innerHTML = '';
-    } else {
-      hasLocalTotal = true;
-      const sapTotal = Math.abs(entries.reduce((sum, [, value]) => sum + value, 0));
-      const diff = sapTotal - localTotal;
-      const diffPct = sapTotal !== 0 ? (Math.abs(diff) / sapTotal) * 100 : (localTotal !== 0 ? 100 : 0);
-      // Severidade da divergência: <1% bate (verde), <15% atenção (âmbar),
-      // demais é discrepância grande (vermelho) — mesma paleta de status
-      // usada em outros badges do sistema (ti-circle-check/alert-triangle/
-      // alert-circle em verde/âmbar/vermelho).
-      const diffColor = diffPct < 1 ? 'var(--green)' : (diffPct < 15 ? 'var(--amber)' : 'var(--red)');
-      const compareIcon = diffPct < 1
-        ? '<i class="ti ti-circle-check" style="color:var(--green)" title="Valores batem"></i>'
-        : diffPct < 15
-          ? `<i class="ti ti-alert-triangle" style="color:var(--amber)" title="Divergência de ${diffPct.toFixed(1)}%"></i>`
-          : `<i class="ti ti-alert-circle" style="color:var(--red)" title="Divergência de ${diffPct.toFixed(1)}%"></i>`;
-      const diffSign = diff > 0 ? '+' : (diff < 0 ? '−' : '');
-      footerCompareEl.style.display = '';
-      // Ordem pedida pelo Hugo (06/08): Entradas/Saídas (página) → SAP →
-      // diferença. Substitui o par label+total padrão do rodapé (ver
-      // renderRows abaixo) — evita repetir o total do SAP duas vezes.
-      footerCompareEl.innerHTML = `${escapeHtml(title)}: <b>${fmtKg(localTotal)}</b> &nbsp;·&nbsp; SAP: <b style="color:${colorVar}">${fmtKg(sapTotal)}</b> &nbsp;·&nbsp; diferença: <b style="color:${diffColor}">${diffSign}${fmtKg(Math.abs(diff))}</b> ${compareIcon}`;
-    }
-  }
+  const _localTotalRaw = trigger.dataset.localTotal;
+  const localTotal = _localTotalRaw === '' || _localTotalRaw == null ? null : Number(_localTotalRaw);
+
+  // Monta a linha de comparação sobre um conjunto de linhas. Chamada pelo
+  // renderRows a cada filtro — o rodapé acompanha o que está na tela.
+  //
+  // A comparação usa MAGNITUDE dos dois lados (Math.abs): os registros da
+  // página Entradas/Saídas têm peso sempre positivo, então num modal de
+  // Saídas — cuja soma do SAP é negativa — confrontar os valores com sinal
+  // daria uma "diferença" que é na verdade a soma dos dois. Por isso o total
+  // do SAP aqui sai com fmtKg (grandeza), não fmtKgSigned: quem tem direção
+  // é a DIFERENÇA (SAP acima/abaixo da página), e essa sim leva sinal.
+  const _compareHtml = (linhas) => {
+    const sapTotal = Math.abs(linhas.reduce((sum, r) => sum + r.value, 0));
+    const diff = sapTotal - localTotal;
+    const diffPct = sapTotal !== 0 ? (Math.abs(diff) / sapTotal) * 100 : (localTotal !== 0 ? 100 : 0);
+    // Severidade da divergência: <1% bate (verde), <15% atenção (âmbar),
+    // demais é discrepância grande (vermelho) — mesma paleta de status
+    // usada em outros badges do sistema (ti-circle-check/alert-triangle/
+    // alert-circle em verde/âmbar/vermelho).
+    const diffColor = diffPct < 1 ? 'var(--green)' : (diffPct < 15 ? 'var(--amber)' : 'var(--red)');
+    const compareIcon = diffPct < 1
+      ? '<i class="ti ti-circle-check" style="color:var(--green)" title="Valores batem"></i>'
+      : diffPct < 15
+        ? `<i class="ti ti-alert-triangle" style="color:var(--amber)" title="Divergência de ${diffPct.toFixed(1)}%"></i>`
+        : `<i class="ti ti-alert-circle" style="color:var(--red)" title="Divergência de ${diffPct.toFixed(1)}%"></i>`;
+    // Ordem pedida pelo Hugo (06/08): Entradas/Saídas (página) → SAP →
+    // diferença. Substitui o par label+total padrão do rodapé (ver
+    // renderRows abaixo) — evita repetir o total do SAP duas vezes.
+    return `${escapeHtml(title)}: <b>${fmtKg(localTotal)}</b> &nbsp;·&nbsp; SAP: <b style="color:${colorVar}">${fmtKg(sapTotal)}</b> &nbsp;·&nbsp; diferença: <b style="color:${diffColor}">${fmtKgSigned(diff)}</b> ${compareIcon}`;
+  };
+
+  // Linha do rodapé quando há filtro ativo. A comparação com a página é
+  // SUSPENSA de propósito: os registros de Entradas/Saídas não carregam
+  // código de movimento, então confrontar um subconjunto de códigos do SAP
+  // contra o total cheio da página produziria uma "diferença" sem
+  // significado — pior que não mostrar, porque parece um alerta real.
+  // Mostra o subtotal do que está na tela e diz por que a comparação sumiu.
+  const _compareFiltradoHtml = (linhas, totalLinhas) => {
+    const sub = linhas.reduce((sum, r) => sum + r.value, 0);
+    return `
+    <span title="A página ${escapeHtml(title)} não registra código de movimento, então não dá pra recortá-la pelos mesmos códigos — a comparação volta ao limpar o filtro">
+      SAP (filtrado): <b style="color:${movValorCor(sub)}">${fmtKgSigned(sub)}</b>
+      &nbsp;·&nbsp; <b>${linhas.length}</b> de <b>${totalLinhas}</b> registro(s)
+      &nbsp;·&nbsp; <span style="color:var(--text3)">comparação com ${escapeHtml(title)} suspensa no subconjunto <i class="ti ti-info-circle" style="font-size:1em;vertical-align:middle"></i></span>
+    </span>`;
+  };
 
   // ── Pré-computa HTML + texto de busca de cada linha, uma vez ─────────────
   // (inclui o par 861/862/309 relacionado no texto de busca, já que ele
@@ -1649,6 +1787,9 @@ function openBreakdownModal(trigger) {
         pairHtml = `<div class="mv-pair-note mv-pair-note-missing" title="Nenhum movimento complementar encontrado no SAP importado">
           <i class="ti ti-help-circle"></i> sem par encontrado
         </div>`;
+        // Indexa a própria nota: "sem par" é um filtro de auditoria útil —
+        // achar de uma vez todas as transferências órfãs do período.
+        pairSearchText = 'sem par encontrado';
       }
     } else if (cod === '309') {
       const pair = findMaterialTransferPair(central, usuario, extra, value);
@@ -1663,13 +1804,16 @@ function openBreakdownModal(trigger) {
         pairHtml = `<div class="mv-pair-note mv-pair-note-missing" title="Nenhum material complementar encontrado no SAP importado">
           <i class="ti ti-help-circle"></i> sem par encontrado
         </div>`;
+        // Indexa a própria nota: "sem par" é um filtro de auditoria útil —
+        // achar de uma vez todas as transferências órfãs do período.
+        pairSearchText = 'sem par encontrado';
       }
     }
 
-    const signIcon = value >= 0
-      ? '<i class="ti ti-circle-arrow-up" title="Sobra" style="font-size:11px;vertical-align:middle;margin-right:2px"></i>'
-      : '<i class="ti ti-circle-arrow-down" title="Desfalque" style="font-size:11px;vertical-align:middle;margin-right:2px"></i>';
-
+    // Sinal +/− em vez do ícone indicador (antes: circle-arrow-up "Sobra" /
+    // circle-arrow-down "Desfalque"). O indicador é vocabulário de VARIAÇÃO e
+    // não cabe aqui — uma saída 201 é uma saída normal, não um "Desfalque".
+    // Ver fmtKgSigned em dashboard.js.
     const html = `<tr>
       <td>${movBadgeHtml(cod)}</td>
       <td class="td-muted">${escapeHtml(usuario || '—')}</td>
@@ -1678,43 +1822,160 @@ function openBreakdownModal(trigger) {
       <td class="td-muted">${escapeHtml(dtDoc || '—')}</td>
       <td class="td-muted">${escapeHtml(dtLancRaw || '—')}</td>
       <td class="td-muted">${escapeHtml(dtReg || '—')}</td>
-      <td class="td-mono" style="color:${colorVar};text-align:right;font-weight:600">${signIcon}${fmtKg(Math.abs(value))}</td>
+      <td class="td-mono" style="color:${movValorCor(value)};text-align:right;font-weight:600">${fmtKgSigned(value)}</td>
     </tr>`;
 
-    const searchText = [cod, refCol, documentoCol, usuario, dtDoc, dtLancRaw, dtReg, pairSearchText]
-      .filter(Boolean).join(' ').toLowerCase();
+    // SALDO era a ÚNICA coluna visível fora da busca — buscar "198900" não
+    // achava nada. Indexa em três formas porque o que aparece na tela
+    // ("+198.900,00 kg") não é o que o analista digita: com separador de
+    // milhar, sem separador, e com/sem casas decimais. O valor absoluto
+    // entra junto pra "198900" achar tanto o lançamento quanto o estorno.
+    const _valAbs = Math.abs(num(value));
+    const valorFormas = [
+      fmtKgSigned(value),                    // "+198.900,00 kg" / "−10.210,00 kg"
+      _valAbs.toFixed(2).replace('.', ','),  // "198900,00"
+      String(Math.round(_valAbs))            // "198900"
+    ];
 
-    return { value, html, searchText };
+    // Só entra aqui o que está VISÍVEL na linha. Campo oculto casando com a
+    // busca faz a linha aparecer sem motivo aparente na tela — pior que não
+    // achar (por isso `deposito`, que vem no extra mas não é coluna, fica de
+    // fora; se virar coluna um dia, entra junto).
+    const searchText = _normBuscaMov(
+      [cod, refCol, documentoCol, usuario, dtDoc, dtLancRaw, dtReg, pairSearchText, ...valorFormas]
+        .filter(Boolean).join(' ')
+    );
+
+    // Chaves de ordenação, pré-calculadas junto com o HTML (o sort roda a
+    // cada clique de cabeçalho; reparsear data em toda comparação seria
+    // O(n log n) parses). Datas viram timestamp; vazio/inválido vira null e
+    // é tratado como "sempre no fim" pelo comparador.
+    const _ts = (s) => { const d = parseDate(s); return d ? d.getTime() : null; };
+    const sort = {
+      cod,
+      usuario:    usuario || '',
+      ref:        refCol || '',
+      documento:  documentoCol || '',
+      dtDoc:      _ts(dtDoc),
+      dtLanc:     _ts(dtLancRaw),
+      dtReg:      _ts(dtReg),
+      // SALDO ordena por valor ABSOLUTO (pedido do Hugo, 27/08/2026): um
+      // estorno de −198.900 pertence ao lado do lançamento de +198.900 que
+      // ele anula, não no extremo oposto da tabela. Ordenar pelo valor cru
+      // separaria justamente o par que o analista quer conferir junto.
+      saldo:      Math.abs(num(value))
+    };
+
+    return { cod, value, html, searchText, sort };
   });
 
-  // ── Renderiza a tabela + total, filtrando pela busca (se houver) ─────────
+  // ── Ordenação por coluna ────────────────────────────────────────────────
+  // Estado local do modal (não o _moduleSortState global das páginas): o
+  // modal é transitório e cada abertura recomeça em Dt. Lançamento
+  // decrescente — a mesma ordem que ele já usava antes das colunas virarem
+  // clicáveis, então quem não clicar em nada não vê diferença.
+  let sortCol = 'dtLanc';
+  let sortDir = 'desc';
+
+  const _ordenar = (linhas) => {
+    const mul = sortDir === 'asc' ? 1 : -1;
+    return [...linhas].sort((a, b) => {
+      const av = a.sort[sortCol], bv = b.sort[sortCol];
+      // Vazio/data inválida sempre no FIM, nas duas direções — registro com
+      // campo incompleto disputando o topo só atrapalha a conferência.
+      const aVazio = av === null || av === undefined || av === '';
+      const bVazio = bv === null || bv === undefined || bv === '';
+      if (aVazio || bVazio) return (aVazio && bVazio) ? 0 : (aVazio ? 1 : -1);
+      if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * mul;
+      // numeric:true faz "460291-5" vir depois de "460170-5" (e não antes,
+      // como no comparador puramente lexicográfico).
+      return String(av).localeCompare(String(bv), 'pt-BR', { numeric: true, sensitivity: 'base' }) * mul;
+    });
+  };
+
+  // Colunas numéricas/de data começam DESC (maior/mais recente primeiro, que
+  // é o que se procura); as de texto começam ASC.
+  const _SORT_DESC_PRIMEIRO = new Set(['saldo', 'dtDoc', 'dtLanc', 'dtReg']);
+
+  const theadEl = document.getElementById('bdm-thead');
+  const _syncSortHeaders = () => {
+    if (!theadEl) return;
+    theadEl.querySelectorAll('th[data-sort-col]').forEach(th => {
+      th.classList.remove('sort-asc', 'sort-desc');
+      if (th.dataset.sortCol === sortCol) th.classList.add(sortDir === 'asc' ? 'sort-asc' : 'sort-desc');
+    });
+  };
+  if (theadEl) {
+    // Atribuição, não addEventListener — mesmo motivo dos chips: o modal
+    // reabre várias vezes e o handler tem que ser substituído, não empilhado.
+    theadEl.onclick = (ev) => {
+      const th = ev.target.closest('th[data-sort-col]');
+      if (!th || !theadEl.contains(th)) return;
+      const col = th.dataset.sortCol;
+      if (sortCol === col) sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+      else { sortCol = col; sortDir = _SORT_DESC_PRIMEIRO.has(col) ? 'desc' : 'asc'; }
+      _syncSortHeaders();
+      renderRows(document.getElementById('bdm-search-input')?.value || '');
+    };
+  }
+  _syncSortHeaders();
+
+  // ── Renderiza a tabela + total, aplicando os dois filtros ────────────────
+  // Chips (código) e busca (texto) se COMBINAM — os dois ativos ao mesmo
+  // tempo restringem juntos, em vez de um sobrescrever o outro.
   function renderRows(term) {
-    const t = (term || '').trim().toLowerCase();
-    const filtered = t ? rows.filter(r => r.searchText.includes(t)) : rows;
+    const t = _normBuscaMov(term).trim();
+    const filtered = _ordenar(rows.filter(r =>
+      (codsFiltro.size === 0 || codsFiltro.has(r.cod)) &&
+      (t === '' || r.searchText.includes(t))
+    ));
+
+    // Mensagem do vazio diz QUAL filtro está restringindo — sem isso o
+    // analista vê "nenhum registro" num modal que ele sabe ter 117 linhas e
+    // não relaciona com o chip que deixou ligado.
+    const motivos = [];
+    if (codsFiltro.size) motivos.push(`código ${[...codsFiltro].join(', ')}`);
+    if (t) motivos.push(`"${escapeHtml(term.trim())}"`);
 
     tbody.innerHTML = filtered.length
       ? filtered.map(r => r.html).join('')
       : `<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:22px 16px">
-           Nenhum registro encontrado${t ? ` para "${escapeHtml(term.trim())}"` : ''}
+           Nenhum registro encontrado${motivos.length ? ` para ${motivos.join(' + ')}` : ''}
          </td></tr>`;
 
-    // Quando há comparação SAP × página (hasLocalTotal), o rodapé mostra só
-    // a linha organizada Entradas/Saídas → SAP → diferença (footerCompareEl,
-    // computada uma vez acima com o TOTAL cheio do período — não muda com a
-    // busca, mesmo critério do resumo "Registros"). O par label+total padrão
-    // fica escondido pra não repetir o total do SAP uma segunda vez.
-    totalEl.style.display = hasLocalTotal ? 'none' : '';
-    if (labelEl) labelEl.style.display = hasLocalTotal ? 'none' : '';
-    if (hasLocalTotal) return;
+    // ── Rodapé — acompanha o filtro ─────────────────────────────────────
+    // Três estados:
+    //   sem localTotal (Inventário, detalhamento por dia) → par label+total;
+    //   com localTotal e SEM filtro                       → comparação cheia;
+    //   com localTotal e COM filtro                       → subtotal + aviso
+    //                                                       (ver _compareFiltradoHtml).
+    // Nos dois últimos o par label+total padrão fica escondido pra não
+    // repetir o total do SAP uma segunda vez na mesma linha.
+    const temFiltro = codsFiltro.size > 0 || t !== '';
+    const usaCompare = !!footerCompareEl && localTotal !== null;
+
+    if (footerCompareEl) {
+      footerCompareEl.style.display = usaCompare ? '' : 'none';
+      footerCompareEl.innerHTML = !usaCompare ? ''
+        : temFiltro ? _compareFiltradoHtml(filtered, rows.length)
+        : _compareHtml(filtered);
+    }
+
+    totalEl.style.display = usaCompare ? 'none' : '';
+    if (labelEl) labelEl.style.display = usaCompare ? 'none' : '';
+    if (usaCompare) return;
 
     const subtotal = filtered.reduce((sum, r) => sum + r.value, 0);
-    const totalIcon = subtotal >= 0
-      ? '<i class="ti ti-circle-arrow-up" title="Sobra" style="font-size:12px;vertical-align:middle;margin-right:3px"></i>'
-      : '<i class="ti ti-circle-arrow-down" title="Desfalque" style="font-size:12px;vertical-align:middle;margin-right:3px"></i>';
-    totalEl.innerHTML = totalIcon + fmtKg(Math.abs(subtotal));
-    totalEl.style.color = colorVar;
+    // Mesmo motivo das linhas acima: sinal, não indicador de variação.
+    totalEl.textContent = fmtKgSigned(subtotal);
+    // Mesma regra das linhas: cor pelo SINAL do subtotal, não pela cor do
+    // balde — um subtotal negativo em Entradas (só estornos/transferências
+    // no filtro) tem que sair vermelho. Ver movValorCor em dashboard.js.
+    totalEl.style.color = movValorCor(subtotal);
     if (labelEl) {
-      labelEl.textContent = t
+      // Conta como "filtrado" também quando a restrição veio dos chips, não
+      // só da busca — senão o rodapé diz "Total" para um subtotal parcial.
+      labelEl.textContent = temFiltro
         ? `Total (${filtered.length} filtrado${filtered.length === 1 ? '' : 's'})`
         : 'Total';
     }
@@ -2949,7 +3210,9 @@ function buildAnaliticoDetailHtml(payload) {
     // Dias não-terça de agregados: fundo apagado (opacity reduzida) para focar o analista
     // nas terças que são os dias de conferência real. Exibe SAP + variação/acumulada normalmente.
     if (day.isSemanalNaoConferencia) {
-      const temSap = day.totalEnt !== 0 || day.totalSai !== 0;
+      // (day.totalAju || 0): payload vindo de outro módulo pode não ter a
+      // coluna Ajustes — sem o || 0, `undefined !== 0` daria true sempre.
+      const temSap = day.totalEnt !== 0 || day.totalSai !== 0 || (day.totalAju || 0) !== 0;
       const dClsSem = varClass(day.diff);
       const varCellSem = `<span class="td-mono ${dClsSem}" style="white-space:nowrap">${varSymbol(day.diff)} ${fmtKg(Math.abs(day.diff))}</span>`;
       return `
@@ -2959,6 +3222,7 @@ function buildAnaliticoDetailHtml(payload) {
           <td>${saldoCell(day.initialStock, day.initialIsEstimated, 'Est. Inicial', 'Est. Inicial estimado')}</td>
           <td data-col="ent">${temSap ? buildAnaliticoDetailBreakdown(day.entEntries, day.totalEnt, 'var(--green)', 'Entradas', null, payload.material, payload.central) : emptyCell()}</td>
           <td data-col="sai">${temSap ? buildAnaliticoDetailBreakdown(day.saiEntries, day.totalSai, 'var(--red)', 'Saídas', null, payload.material, payload.central) : emptyCell()}</td>
+          <td data-col="aju">${temSap ? buildAnaliticoDetailBreakdown(day.ajuEntries || [], day.totalAju || 0, movValorCor(day.totalAju || 0, 'var(--amber)'), 'Ajustes', null, payload.material, payload.central) : emptyCell()}</td>
           <td>${saldoCell(day.finalStock, day.finalIsEstimated, 'Est. Final', 'Est. Final estimado')}</td>
           <td><span class="td-mono" style="color:var(--purple)">${fmtKg(day.theoreticalStock ?? 0)}</span></td>
           <td>${varCellSem}</td>
@@ -3025,6 +3289,7 @@ function buildAnaliticoDetailHtml(payload) {
         <td>${iniCell}</td>
         <td data-col="ent">${buildAnaliticoDetailBreakdown(day.entEntries, day.totalEnt, 'var(--green)', 'Entradas', null, payload.material, payload.central)}</td>
         <td data-col="sai">${buildAnaliticoDetailBreakdown(day.saiEntries, day.totalSai, 'var(--red)', 'Saídas', null, payload.material, payload.central)}</td>
+        <td data-col="aju">${buildAnaliticoDetailBreakdown(day.ajuEntries || [], day.totalAju || 0, movValorCor(day.totalAju || 0, 'var(--amber)'), 'Ajustes', null, payload.material, payload.central)}</td>
         <td>${realCell}</td>
         <td>${teoCell}</td>
         <td>${varCell}</td>
@@ -3049,13 +3314,24 @@ function buildAnaliticoDetailHtml(payload) {
       </div>
       <div class="analitico-detail-card">
         <div class="analitico-detail-card-label">Entradas SAP</div>
-        <div class="analitico-detail-card-value c-green">${fmtKg(s.totalEnt)}</div>
+        <div class="analitico-detail-card-value c-green">${fmtKgSigned(s.totalEnt)}</div>
         <div class="analitico-detail-card-sub">${escapeHtml(s.entLabel)}</div>
       </div>
       <div class="analitico-detail-card">
         <div class="analitico-detail-card-label">Saídas SAP</div>
-        <div class="analitico-detail-card-value c-red">${fmtKg(s.totalSai)}</div>
+        <div class="analitico-detail-card-value c-red">${fmtKgSigned(s.totalSai)}</div>
         <div class="analitico-detail-card-sub">${escapeHtml(s.saiLabel)}</div>
+      </div>
+      <div class="analitico-detail-card">
+        <div class="analitico-detail-card-label">Ajustes SAP</div>
+        <div class="analitico-detail-card-value ${(() => {
+          // Mesma regra da coluna Ajustes (ver movValorCor): sinal manda, e
+          // zero é âmbar porque significa "houve ajuste, mas se anulou".
+          // Deixar o card sempre âmbar contradiria a célula logo abaixo.
+          const n = num(s.totalAju || 0);
+          return n > 0.0001 ? 'c-green' : n < -0.0001 ? 'c-red' : 'c-amber';
+        })()}">${fmtKgSigned(s.totalAju || 0)}</div>
+        <div class="analitico-detail-card-sub">${escapeHtml(s.ajuLabel || 'Sem ajustes no período')}</div>
       </div>
       <div class="analitico-detail-card${s.pesoFimAusente ? ' detail-card-absent' : ''}">
         <div class="analitico-detail-card-label">Est. Final${
@@ -3069,7 +3345,7 @@ function buildAnaliticoDetailHtml(payload) {
       <div class="analitico-detail-card">
         <div class="analitico-detail-card-label">Est. Teórico</div>
         <div class="analitico-detail-card-value c-blue">${fmtKg(s.estTeorico)}</div>
-        <div class="analitico-detail-card-sub">Ini + Entradas + Saídas</div>
+        <div class="analitico-detail-card-sub">Ini + Entradas + Saídas + Ajustes</div>
       </div>
       <div class="analitico-detail-card">
         <div class="analitico-detail-card-label">Variação</div>
@@ -3094,16 +3370,17 @@ function buildAnaliticoDetailHtml(payload) {
             <th>Data</th>
             <th>Lançamentos</th>
             <th>Est. Inicial<br><span style="font-size:9px;font-weight:400;opacity:.7">(Saldo Anterior)</span></th>
-            <th>Entradas<br><span style="font-size:9px;font-weight:400;opacity:.7">(por código)</span></th>
+            <th>Entradas<br><span style="font-size:9px;font-weight:400;opacity:.7">(líq. por código)</span></th>
             <th>Saídas<br><span style="font-size:9px;font-weight:400;opacity:.7">(por código)</span></th>
+            <th>Ajustes<br><span style="font-size:9px;font-weight:400;opacity:.7">(líq. por código)</span></th>
             <th>Est. Final<br><span style="font-size:9px;font-weight:400;opacity:.7">(Últ. Lançamento)</span></th>
-            <th>Est. Teórico<br><span style="font-size:9px;font-weight:400;opacity:.7">(Ini+Ent+Sai)</span></th>
+            <th>Est. Teórico<br><span style="font-size:9px;font-weight:400;opacity:.7">(Ini+Ent+Sai+Aju)</span></th>
             <th>Variação<br><span style="font-size:9px;font-weight:400;opacity:.7">(Real − Teórico)</span></th>
             <th>Var. Acumulada<br><span style="font-size:9px;font-weight:400;opacity:.7">(Σ diffs diários)</span></th>
           </tr>
         </thead>
         <tbody>
-          ${rows || '<tr><td colspan="9"><div class="analitico-detail-empty"><i class="ti ti-calendar-off"></i> Sem dados para o período.</div></td></tr>'}
+          ${rows || '<tr><td colspan="10"><div class="analitico-detail-empty"><i class="ti ti-calendar-off"></i> Sem dados para o período.</div></td></tr>'}
         </tbody>
       </table>
     </div>`;
@@ -3120,38 +3397,37 @@ function toggleDetailFilter(btn) {
   const allRows = Array.from(body.querySelectorAll('tbody tr'));
 
   if (newActive) {
-    // ── OCULTAR: acumula entradas/saídas dos dias ocultos no próximo visível ──
-    let pendingEntEnt = [];   // entries de entrada acumuladas
-    let pendingEntSai = [];   // entries de saída acumuladas
-    let pendingTotalEnt = 0;
-    let pendingTotalSai = 0;
+    // ── OCULTAR: acumula os movimentos dos dias ocultos no próximo visível ──
+    // Uma entrada por coluna de natureza (ver classificarMovSap). Ajustes
+    // entrou junto com Entradas/Saídas: sem isso, os ajustes dos dias ocultos
+    // sumiriam da tela ao ligar o filtro em vez de serem acumulados.
+    const MERGE_COLS = [
+      { col: 'ent', color: 'var(--green)', title: 'Entradas (+ dias anteriores)' },
+      { col: 'sai', color: 'var(--red)',   title: 'Saídas (+ dias anteriores)'   },
+      { col: 'aju', color: 'var(--amber)', title: 'Ajustes (+ dias anteriores)'  }
+    ];
+    const pending = {};
+    const _resetPending = () => MERGE_COLS.forEach(({ col }) => { pending[col] = { entries: [], total: 0 }; });
+    const _temPendente = () => MERGE_COLS.some(({ col }) => pending[col].entries.length || pending[col].total);
+    _resetPending();
 
     allRows.forEach(tr => {
       const isHidden = tr.dataset.noLanc === '1';
 
       if (isHidden) {
-        // Coleta entradas/saídas usando data-col para seleção robusta
-        const entTd = tr.querySelector('td[data-col="ent"]');
-        const saiTd = tr.querySelector('td[data-col="sai"]');
-        const entBtn = entTd?.querySelector('.bdm-trigger');
-        const saiBtn = saiTd?.querySelector('.bdm-trigger');
-        if (entBtn) {
+        // Coleta os movimentos usando data-col para seleção robusta
+        MERGE_COLS.forEach(({ col }) => {
+          const trigger = tr.querySelector(`td[data-col="${col}"] .bdm-trigger`);
+          if (!trigger) return;
           try {
-            const e = JSON.parse(decodeURIComponent(entBtn.dataset.entries || '[]'));
-            pendingEntEnt.push(...e);
-            pendingTotalEnt += e.reduce((s, [,v]) => s + v, 0);
+            const e = JSON.parse(decodeURIComponent(trigger.dataset.entries || '[]'));
+            pending[col].entries.push(...e);
+            pending[col].total += e.reduce((s, [,v]) => s + v, 0);
           } catch(_) {}
-        }
-        if (saiBtn) {
-          try {
-            const e = JSON.parse(decodeURIComponent(saiBtn.dataset.entries || '[]'));
-            pendingEntSai.push(...e);
-            pendingTotalSai += e.reduce((s, [,v]) => s + v, 0);
-          } catch(_) {}
-        }
+        });
         tr.style.display = 'none';
 
-      } else if (pendingEntEnt.length || pendingEntSai.length || pendingTotalEnt || pendingTotalSai) {
+      } else if (_temPendente()) {
         // Primeiro dia visível após dias ocultos: mescla os pendentes
 
         const _mergeTd = (col, pendingEntries, pendingTotal, color, title) => {
@@ -3173,7 +3449,7 @@ function toggleDetailFilter(btn) {
             existing.dataset.merged  = '1';
             existing.classList.add('merged-from-hidden');  // borda tracejada
             const totalEl = existing.querySelector('.bdm-total');
-            if (totalEl) totalEl.textContent = fmtKg(mergedTotal);
+            if (totalEl) totalEl.textContent = fmtKgSigned(mergedTotal);
           } else {
             // Cria botão novo onde havia —
             const enc = encodeURIComponent(JSON.stringify(pendingEntries));
@@ -3183,19 +3459,17 @@ function toggleDetailFilter(btn) {
               data-entries="${enc}" data-title="${title}"
               data-color="${color}" data-merged="1"
               title="Acumulado dos dias anteriores ocultos">
-              <span class="bdm-total">${fmtKg(pendingTotal)}</span>
+              <span class="bdm-total">${fmtKgSigned(pendingTotal)}</span>
               <i class="ti ti-table-options bdm-icon"></i>
               <i class="ti ti-stack-2" style="font-size:9px;opacity:.65;margin-left:3px"></i>
             </button>`;
           }
         };
 
-        _mergeTd('ent', pendingEntEnt, pendingTotalEnt, 'var(--green)', 'Entradas (+ dias anteriores)');
-        _mergeTd('sai', pendingEntSai, pendingTotalSai, 'var(--red)',   'Saídas (+ dias anteriores)');
+        MERGE_COLS.forEach(({ col, color, title }) =>
+          _mergeTd(col, pending[col].entries, pending[col].total, color, title));
 
-        // Reset pending
-        pendingEntEnt = []; pendingEntSai = [];
-        pendingTotalEnt = 0; pendingTotalSai = 0;
+        _resetPending();
       }
     });
 
@@ -3221,8 +3495,10 @@ function toggleDetailFilter(btn) {
           delete b.dataset.origTitle;
         }
       });
-      // Restaura células que tiveram HTML substituído
-      [tr.cells[3], tr.cells[4]].forEach(td => {
+      // Restaura células que tiveram HTML substituído. Seleciona por
+      // data-col em vez de índice fixo — a tabela ganhou a coluna Ajustes e
+      // os índices literais [3],[4] já apontavam para a célula errada.
+      tr.querySelectorAll('td[data-col]').forEach(td => {
         if (td?.dataset.origHtml !== undefined) {
           td.innerHTML = td.dataset.origHtml;
           delete td.dataset.origHtml;
