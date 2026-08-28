@@ -1472,21 +1472,27 @@ function buildAnaliticoDetailBreakdown(entries, total, colorVar, title, localCou
 // gerados juntos pelo SAP, com a MESMA referência (a NF de transferência
 // gerada pelo 862), mesmo usuário, mesma data de lançamento e mesmo peso —
 // só mudam a central e o sinal do peso. Dado um registro 861 ou 862,
-// localizamos o registro do código complementar com a mesma referência +
-// material, pra exibir "qual é o movimento relacionado" na mesma linha do
-// modal de Movimentações SAP.
+// localizamos o registro do código complementar com o mesmo pedido +
+// material + referência + peso, pra exibir "qual é o movimento relacionado"
+// na mesma linha do modal de Movimentações SAP.
 //
 // state.sap pode ter 600k+ registros (ver getSapDuplicateKeys) — nada de
 // .find() linear a cada linha do modal. Constrói uma vez um Map de
-// "código-alvo|material|referência|dt. lançamento|peso" → central, com cache
+// "código-alvo|pedido|material|referência|peso" → central, com cache
 // invalidado junto com o resto do índice SAP (invalidateSapIndex, abaixo).
 //
-// Data de lançamento e peso entram na chave a pedido do Hugo (28/08/2026):
-// os dois lados nascem do MESMO evento, então também têm de bater em data e
-// em quantidade — se não batem, não é o par, é outra transferência que por
-// acaso reaproveitou a referência. Peso entra em valor ABSOLUTO porque o
-// sinal é justamente o que difere os dois lados (861 entra positivo, 862 sai
-// negativo); casar o peso cru nunca daria par nenhum.
+// PEDIDO entra na chave e a DT. LANÇAMENTO sai dela (Hugo, 28/08/2026):
+// o pedido de compra é o mesmo nos dois lados e é o identificador mais
+// forte da transferência, enquanto a data de lançamento pode divergir
+// quando o centro destino lança o 861 num dia posterior ao 862 — prendê-la
+// na chave transformaria par legítimo em órfão. Peso entra em valor
+// ABSOLUTO porque o sinal é justamente o que difere os dois lados (861
+// entra positivo, 862 sai negativo); casar o peso cru nunca daria par.
+//
+// Pedido VAZIO não invalida o pareamento: a coluna só existe nos arquivos
+// MB51 que trazem o cabeçalho "Pedido" (ver COL_DEFS.pedido em
+// buildSapColumnMap, dashboard.js), então em base importada antes dela os
+// dois lados ficam vazios e continuam casando pelos demais campos.
 let _transferPairCache = null;
 let _transferPairCacheVersion = -1;
 
@@ -1497,12 +1503,12 @@ function _invalidateTransferPairCache() {
 
 // Chave única dos dois lados. Usada na construção do índice e na busca —
 // mesma função nos dois lugares, pra normalização não divergir.
-function _transferPairKey(cod, mat, ref, dtLanc, absPeso) {
+function _transferPairKey(cod, pedido, mat, ref, absPeso) {
   return [
     cod,
+    String(pedido || '').trim().toUpperCase(),
     mat || '',
     String(ref).trim().toUpperCase(),
-    String(dtLanc || '').trim(),
     absPeso.toFixed(3)
   ].join('|');
 }
@@ -1518,7 +1524,7 @@ function getTransferPairIndex() {
     if (cod !== '861' && cod !== '862') return;
     const ref = (s.ref && String(s.ref).trim()) ? String(s.ref).trim() : String(s.documento || '').trim();
     if (!ref) return;
-    const key = _transferPairKey(cod, s.material, ref, s.dtLanc, Math.abs(num(s.peso)));
+    const key = _transferPairKey(cod, s.pedido, s.material, ref, Math.abs(num(s.peso)));
     // Referência de transferência é única — em tese só existe 1 registro
     // por chave. Mantém o primeiro em caso de dado inesperado.
     if (!idx.has(key)) idx.set(key, s.central || '—');
@@ -1529,20 +1535,19 @@ function getTransferPairIndex() {
 }
 
 /**
- * Dado um registro 861 ou 862 (código + referência + material + dt. de
- * lançamento + peso), retorna o código complementar e a central onde ele foi
- * lançado — ou null se não houver correspondência (dado incompleto/fora do
- * que foi importado, ou algum dos campos não batendo com o outro lado).
+ * Dado um registro 861 ou 862 (código + pedido + material + referência +
+ * peso), retorna o código complementar e a central onde ele foi lançado —
+ * ou null se não houver correspondência (dado incompleto/fora do que foi
+ * importado, ou algum dos campos não batendo com o outro lado).
  *
- * dtLanc vem do `extra` do toEntry (valor CRU de s.dtLanc), nunca do
- * fallback pra dtDoc exibido na coluna: o índice indexa s.dtLanc cru, e um
- * fallback só de um lado furaria a comparação.
+ * O pedido vem do `extra` do toEntry (valor cru de s.pedido, ver
+ * analitico.js/inventario.js) — mesmo campo que o índice indexa.
  */
 function findTransferPairCentral(cod, ref, mat, extra, peso) {
   const targetCod = cod === '861' ? '862' : cod === '862' ? '861' : null;
   if (!targetCod || !ref) return null;
   const idx = getTransferPairIndex();
-  const key = _transferPairKey(targetCod, mat, ref, extra && extra.dtLanc, Math.abs(num(peso)));
+  const key = _transferPairKey(targetCod, extra && extra.pedido, mat, ref, Math.abs(num(peso)));
   const central = idx.get(key);
   return central ? { cod: targetCod, central } : null;
 }
@@ -1905,8 +1910,7 @@ function openBreakdownModal(trigger) {
     // Ref./Pedido/Doc MIGO exibidos como colunas separadas (valores crus do SAP)
     // — `ref` (parâmetro acima) é o valor "efetivo" com fallback, usado só
     // internamente pelo pareamento de transferência 861/862 logo abaixo
-    // (junto com extra.dtLanc CRU e o peso — nunca dtLancRaw, que já tem
-    // fallback pra dtDoc só deste lado).
+    // (junto com extra.pedido e o peso).
     const refCol      = (extra && extra.refRaw)    || '';
     const pedidoCol   = (extra && extra.pedido)   || '';
     const documentoCol = (extra && extra.documento) || '';
@@ -1930,7 +1934,7 @@ function openBreakdownModal(trigger) {
         </div>`;
         pairSearchText = `${pair.cod} ${pair.central}`;
       } else {
-        pairHtml = `<div class="mv-pair-note mv-pair-note-missing" title="Nenhum movimento complementar com a mesma referência, material, data de lançamento e peso no SAP importado">
+        pairHtml = `<div class="mv-pair-note mv-pair-note-missing" title="Nenhum movimento complementar com o mesmo pedido, material, referência e peso no SAP importado">
           <i class="ti ti-help-circle"></i> sem par encontrado
         </div>`;
         // Indexa a própria nota: "sem par" é um filtro de auditoria útil —

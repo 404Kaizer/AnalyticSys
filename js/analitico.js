@@ -1210,12 +1210,13 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
         // fallback. NÃO é o que aparece na coluna Ref. (ver refRaw abaixo).
         const ref = (s.ref && String(s.ref).trim()) ? String(s.ref).trim()
                   : (s.documento && String(s.documento).trim()) ? String(s.documento).trim() : '';
-        // extra: campos crus. refRaw/documento alimentam as colunas Ref./
-        // Documento (separadas) do modal; dtDoc/dtLanc/dtReg alimentam as
-        // colunas de data E o pareamento das transferências — 861/862 casa
-        // por ref + material + dtLanc + |peso| (findTransferPairCentral) e
-        // 309 casa por central + depósito + usuário + as 3 datas + |peso|
-        // (findMaterialTransferPair), ambos em ui.js.
+        // extra: campos crus. refRaw/pedido/documento alimentam as colunas
+        // Ref./Pedido/Doc MIGO (separadas) do modal e dtDoc/dtLanc/dtReg as
+        // colunas de data. Os mesmos campos servem ao pareamento das
+        // transferências, cada uma com sua chave (ambas em ui.js): 861/862
+        // casa por pedido + material + ref + |peso| (findTransferPairCentral);
+        // 309, que não tem ref compartilhada, casa por central + depósito +
+        // usuário + as 3 datas + |peso| (findMaterialTransferPair).
         const extra = {
           deposito:  String(s.deposito  || '').trim(),
           refRaw:    String(s.ref       || '').trim(),
