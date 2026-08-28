@@ -290,18 +290,29 @@
         </div>
         <div class="topbar-divider"></div>
         <div class="topbar-search">
-          <i class="ti ti-search topbar-search-icon"></i>
-          <input
-            type="text"
-            class="topbar-search-input"
-            id="global-search-input"
-            placeholder="Buscar registros..."
-            autocomplete="off"
-            onInput="handleGlobalSearch(this.value)"
-            onFocus="openGlobalSearch()"
-          >
-          <span class="topbar-search-kbd" id="topbar-search-kbd">Ctrl+3</span>
-          <div class="search-results-dropdown" id="global-search-dropdown"></div>
+          <select class="topbar-search-scope" id="global-search-scope"
+                  title="Módulo onde buscar" onchange="_gsSyncPlaceholder()">
+            <option value="todos">Todos</option>
+            <option value="entradas">Entradas</option>
+            <option value="saidas">Saídas</option>
+            <option value="lancamentos">Lançamentos</option>
+            <option value="sap">SAP</option>
+            <option value="custosSap">Custos SAP</option>
+            <option value="filiais">Centrais</option>
+            <option value="materiais">Materiais</option>
+          </select>
+          <div class="topbar-search-field">
+            <i class="ti ti-search topbar-search-icon"></i>
+            <input
+              type="text"
+              class="topbar-search-input"
+              id="global-search-input"
+              placeholder="Buscar em Todos + Enter…"
+              autocomplete="off"
+              onkeydown="if(event.key==='Enter'){event.preventDefault();runGlobalSearch();}"
+            >
+            <span class="topbar-search-kbd" id="topbar-search-kbd">Ctrl+3</span>
+          </div>
         </div>
       </div>
       <div class="topbar-actions">
@@ -4894,21 +4905,44 @@
   </div>
 </div>
 
-<!-- MODAL: Busca Global (Ctrl+Q) -->
-<div class="modal-overlay" id="modal-search-global" style="display:none;align-items:flex-start;padding-top:80px">
-  <div class="search-modal-wrap">
-    <div class="search-modal-input-row">
-      <i class="ti ti-search search-modal-icon"></i>
-      <input type="text" id="search-modal-input" class="search-modal-input"
-        placeholder="Buscar materiais, centrais, documentos..."
-        autocomplete="off" oninput="handleSearchModal(this.value)">
-      <kbd class="search-modal-esc" onclick="closeSearchModal()">Esc</kbd>
+<!-- MODAL: Resultados da Busca Global (campo da topbar / Ctrl+3) —
+     lista TODAS as ocorrências do termo no módulo escolhido, no mesmo
+     padrão visual do modal de Movimentações SAP (.bdm-*). Ver
+     runGlobalSearch/_gsrRender em js/analitico.js. -->
+<div class="bdm-overlay" id="gsr-overlay" aria-hidden="true">
+  <div class="bdm-dialog bdm-dialog-wide" role="dialog" aria-modal="true" aria-labelledby="gsr-title">
+    <div class="bdm-header">
+      <div class="bdm-header-text">
+        <div class="bdm-kicker"><i class="ti ti-search"></i> Busca no sistema</div>
+        <div class="bdm-title" id="gsr-title">Resultados</div>
+      </div>
+      <button class="btn btn-primary" type="button" onclick="closeGlobalResults()">
+        <i class="ti ti-x"></i> <span>Fechar</span>
+      </button>
     </div>
-    <div id="search-modal-results"></div>
-    <div class="search-modal-footer">
-      <span><kbd>↑↓</kbd> navegar</span>
-      <span><kbd>Enter</kbd> abrir</span>
-      <span><kbd>Esc</kbd> fechar</span>
+    <div class="pim-filter-bar" id="gsr-mods" style="display:none"></div>
+    <div class="bdm-search">
+      <div class="bdm-search-wrap">
+        <i class="ti ti-search"></i>
+        <input type="text" class="bdm-search-input" id="gsr-refine"
+          placeholder="Refinar dentro dos resultados…" autocomplete="off"
+          oninput="gsrRefine(this.value)">
+      </div>
+    </div>
+    <div class="bdm-body">
+      <table class="bdm-table">
+        <thead id="gsr-thead"></thead>
+        <tbody id="gsr-tbody"></tbody>
+      </table>
+    </div>
+    <div class="bdm-footer">
+      <span class="bdm-footer-label" id="gsr-footer-label">Ocorrências</span>
+      <div class="bdm-footer-right">
+        <button class="btn" id="gsr-more" type="button" style="display:none" onclick="gsrMostrarMais()">
+          <i class="ti ti-chevron-down"></i> Mostrar mais
+        </button>
+        <span class="bdm-footer-total" id="gsr-total">—</span>
+      </div>
     </div>
   </div>
 </div>
@@ -4920,7 +4954,7 @@
     <div class="modal-sub" id="msd-sub"></div>
     <div id="msd-body" style="margin:16px 0"></div>
     <div class="form-actions">
-      <button class="btn" onclick="closeModal('modal-search-detail')">Fechar</button>
+      <button class="btn" onclick="_gsCloseDetail()">Fechar</button>
       <button class="btn btn-primary" id="msd-nav-btn" style="display:none">
         <i class="ti ti-arrow-right"></i> Ir para a aba
       </button>

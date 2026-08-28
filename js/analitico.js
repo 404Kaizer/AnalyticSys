@@ -3916,110 +3916,288 @@ const moduleColors = {
   'Material':   { bg: 'var(--bg3)',        color: 'var(--text2)',  icon: 'ti-box',            nav: 'materiais'  },
 };
 
-// Debounce para não buscar a cada tecla
-let _gsTimer = null;
+// Escopo do state → rótulo do módulo (chave de moduleColors e do fieldMap
+// de _gsShowDetail). A ordem aqui é a ordem dos chips no modal.
+const _GS_SCOPES = [
+  { scope: 'entradas',    modKey: 'Entrada'    },
+  { scope: 'saidas',      modKey: 'Saída'      },
+  { scope: 'lancamentos', modKey: 'Lançamento' },
+  { scope: 'sap',         modKey: 'SAP'        },
+  { scope: 'custosSap',   modKey: 'Custos SAP' },
+  { scope: 'filiais',     modKey: 'Central'    },
+  { scope: 'materiais',   modKey: 'Material'   },
+];
 
-function handleGlobalSearch(query) {
-  clearTimeout(_gsTimer);
-  const dropdown = document.getElementById('global-search-dropdown');
-  if (!dropdown) return;
-  const q = query.trim();
-  if (!q || q.length < 2) { dropdown.classList.remove('open'); return; }
+// Colunas da tabela de resultados por módulo: [rótulo, campo, tipo?].
+// tipo 'num' formata em kg, 'money' em R$; sem tipo é texto (e leva o
+// destaque do termo buscado).
+const _GS_COLS = {
+  'Entrada':    [['Central Compra','centralCompra'],['Central Destino','centralDestino'],['NF','nf'],['Fornecedor','fornecedor'],['Categoria','categoria'],['Material','material'],['Dt. Emissão','dtEmissao'],['Peso','peso','num'],['Valor Total','valorTotal','money']],
+  'Saída':      [['Central','central'],['OS','os'],['Fornecedor','fornecedor'],['Categoria','categoria'],['Material','material'],['Dt. Emissão','dtEmissao'],['Peso','peso','num'],['Valor Total','valorTotal','money']],
+  'Lançamento': [['Central','central'],['Dt. Lançamento','dtLanc'],['Fornecedor','fornecedor'],['Categoria','categoria'],['Material','material'],['Peso','peso','num'],['Valor Total','valorTotal','money']],
+  'SAP':        [['Movimento','movimento'],['Usuário','usuario'],['Ref.','ref'],['Pedido','pedido'],['Doc MIGO','documento'],['Central','central'],['Material','material'],['Dt. Lançamento','dtLanc'],['Peso','peso','num'],['Valor Total','valorTotal','money']],
+  'Custos SAP': [['Material','material'],['Central','central'],['Ano','ano'],['Mês','mes'],['Estoque Total','estoqueTotal','num'],['Custo','custo','money'],['Valor Total','valorTotal','money']],
+  'Central':    [['Sigla','alias'],['Nome Original','origem'],['CNPJ','cnpj'],['Regional','regional'],['Cadastrado em','created']],
+  'Material':   [['Grupo SAP','alias'],['Cód SAP','codSap'],['Material Original','origem'],['Descrição','desc'],['Cadastrado em','created']],
+};
 
-  // Mostrar spinner imediatamente
-  dropdown.innerHTML = `<div class="search-no-results"><i class="ti ti-loader" style="margin-right:6px"></i>Buscando...</div>`;
-  dropdown.classList.add('open');
+// Visão "Todos": os módulos têm colunas diferentes demais para uma tabela
+// só, então essa visão usa um denominador comum derivado de cada registro
+// (ver _gsUnificado). Para ver as colunas completas de um módulo, basta
+// clicar no chip dele no topo do modal.
+const _GS_COLS_TODOS = [['Módulo','_mod'],['Central','_central'],['Material','_material'],['Documento','_doc'],['Data','_data'],['Peso','_peso','num'],['Valor','_valor','money']];
 
-  _gsTimer = setTimeout(() => _runGlobalSearch(q, dropdown), 120);
+function _gsUnificado(modKey, r) {
+  return {
+    _mod:      modKey,
+    _central:  r.central || r.centralCompra || r.alias || '',
+    _material: r.material || r.origem || '',
+    _doc:      r.documento || r.nf || r.os || r.codSap || r.cnpj || '',
+    _data:     r.dtLanc || r.dtEmissao || r.dtDoc || r.created || '',
+    _peso:     r.peso != null && r.peso !== '' ? r.peso : (r.estoqueTotal ?? ''),
+    _valor:    r.valorTotal != null && r.valorTotal !== '' ? r.valorTotal : (r.custo ?? ''),
+  };
 }
 
-function _runGlobalSearch(q, dropdown) {
-  const ql = q.toLowerCase();
-  const tokens = ql.split(/\s+/).filter(Boolean);
+// Estado do modal de resultados. `hits` guarda TODAS as ocorrências (sem
+// teto); `limite` é só quanto disso já foi pintado na tela — a busca
+// devolve tudo, o DOM é que cresce sob demanda (ver gsrMostrarMais).
+const _GSR_PAGINA = 300;
+const _gsr = {
+  termo: '', escopo: 'todos', tokens: [], hits: [],
+  view: 'todos', sortCol: null, sortDir: 'asc', refine: '', limite: _GSR_PAGINA,
+};
 
-  // Agrupa resultados por módulo: { label, sub, secondary, navKey, modKey }
-  const groups = {};
-  const addGroup = (modKey, label, sub, record=null) => {
-    if (!groups[modKey]) groups[modKey] = { items: [], modKey };
-    if (groups[modKey].items.length < 5) {
-      const idx = groups[modKey].items.length;
-      if (!window._gsRecords) window._gsRecords = {};
-      const key = modKey + '_' + Object.keys(groups).length + '_' + idx;
-      window._gsRecords[key] = record;
-      groups[modKey].items.push({ label, sub, recordKey: key });
-    }
-  };
+function _gsScopeModKey(scope) {
+  return (_GS_SCOPES.find(s => s.scope === scope) || {}).modKey || 'todos';
+}
 
-  // ── Usa índice invertido para módulos com muitos registros ──────────
-  const searchMod = (scope, modKey, getLabel, getSub) => {
+// Placeholder acompanha o módulo escolhido — deixa explícito onde o Enter
+// vai buscar, sem precisar olhar o select de novo.
+function _gsSyncPlaceholder() {
+  const sel   = document.getElementById('global-search-scope');
+  const input = document.getElementById('global-search-input');
+  if (!sel || !input) return;
+  const nome = sel.options[sel.selectedIndex]?.text || 'Todos';
+  input.placeholder = `Buscar em ${nome} + Enter…`;
+}
+
+function runGlobalSearch() {
+  const input = document.getElementById('global-search-input');
+  const sel   = document.getElementById('global-search-scope');
+  const q     = (input?.value || '').trim();
+  if (q.length < 2) { toast('Digite ao menos 2 caracteres para buscar', 'error'); return; }
+  _gsrBuscar(q, sel?.value || 'todos');
+}
+
+function _gsrBuscar(q, escopo) {
+  const tokens = q.toLowerCase().split(/\s+/).filter(Boolean);
+  const alvos  = escopo === 'todos' ? _GS_SCOPES : _GS_SCOPES.filter(s => s.scope === escopo);
+
+  // Índice invertido por módulo (lookup.js) — uma string lowercase por
+  // registro com todos os campos buscáveis concatenados. Sem teto de
+  // resultados: o modal existe justamente para mostrar tudo.
+  const hits = [];
+  alvos.forEach(({ scope, modKey }) => {
     const records = state[scope] || [];
     if (!records.length) return;
-    const fields  = getSearchableFields(scope);
-    const index   = _getOrBuildIndex(scope, records, fields);
-    for (let i = 0; i < index.length; i++) {
-      const s = index[i];
-      if (tokens.every(t => s.includes(t))) {
-        addGroup(modKey, getLabel(records[i]), getSub(records[i]), records[i]);
-        if ((groups[modKey]?.items.length || 0) >= 5) break;
-      }
+    const index = _getOrBuildIndex(scope, records, getSearchableFields(scope));
+    for (let i = 0; i < records.length; i++) {
+      const s = index[i] || '';
+      if (tokens.every(t => s.includes(t))) hits.push({ modKey, r: records[i], txt: s });
     }
-  };
-
-  searchMod('entradas',    'Entrada',    r => r.material || r.nf || '—',       r => [r.centralCompra, r.dtEmissao].filter(Boolean).join(' · '));
-  searchMod('saidas',      'Saída',      r => r.material || r.os || '—',       r => [r.central, r.dtEmissao].filter(Boolean).join(' · '));
-  searchMod('lancamentos', 'Lançamento', r => r.material || '—',               r => [r.central, r.dtLanc].filter(Boolean).join(' · '));
-  searchMod('sap',         'SAP',        r => r.material || r.documento || '—',r => [r.central, r.movimento, r.dtLanc].filter(Boolean).join(' · '));
-  searchMod('custosSap',   'Custos SAP', r => r.material || '—',               r => [r.central, r.ano, r.mes].filter(Boolean).join(' · '));
-
-  // ── Filiais e Materiais (cadastros — sem índice necessário, são pequenos) ──
-  (state.filiais || []).forEach(r => {
-    const s = [r.origem, r.alias, r.regional, r.cnpj].join(' ').toLowerCase();
-    if (tokens.every(t => s.includes(t))) addGroup('Central', r.alias || r.origem || '—', r.regional || '', r);
-  });
-  (state.materiais || []).forEach(r => {
-    const s = [r.origem, r.alias, r.categoria].join(' ').toLowerCase();
-    if (tokens.every(t => s.includes(t))) addGroup('Material', r.alias || r.origem || '—', r.categoria || '', r);
   });
 
-  // ── Render ──────────────────────────────────────────────────────────
-  const totalGroups = Object.keys(groups).length;
-  const totalItems  = Object.values(groups).reduce((s, g) => s + g.items.length, 0);
+  Object.assign(_gsr, {
+    termo: q, escopo, tokens, hits,
+    view: escopo === 'todos' ? 'todos' : _gsScopeModKey(escopo),
+    sortCol: null, sortDir: 'asc', refine: '', limite: _GSR_PAGINA,
+  });
 
-  if (!totalItems) {
-    dropdown.innerHTML = `
-      <div class="search-no-results">
-        <i class="ti ti-search-off"></i>
-        Nenhum resultado para <strong>"${escapeHtml(q)}"</strong>
-      </div>`;
-    return;
+  const overlay = document.getElementById('gsr-overlay');
+  const refine  = document.getElementById('gsr-refine');
+  if (refine) refine.value = '';
+  if (overlay) {
+    overlay.classList.add('open');
+    overlay.setAttribute('aria-hidden', 'false');
+  }
+  _gsrRender();
+}
+
+function closeGlobalResults() {
+  const overlay = document.getElementById('gsr-overlay');
+  if (!overlay) return;
+  overlay.classList.remove('open');
+  overlay.setAttribute('aria-hidden', 'true');
+}
+
+function gsrRefine(v)     { _gsr.refine = v || ''; _gsr.limite = _GSR_PAGINA; _gsrRenderTabela(); }
+function gsrSetView(view) { _gsr.view = view; _gsr.sortCol = null; _gsr.limite = _GSR_PAGINA; _gsrRender(); }
+function gsrMostrarMais() { _gsr.limite += _GSR_PAGINA; _gsrRenderTabela(); }
+
+function _gsrCols() {
+  return _gsr.view === 'todos' ? _GS_COLS_TODOS : (_GS_COLS[_gsr.view] || _GS_COLS_TODOS);
+}
+
+function _gsrVal(hit, key) {
+  return key.charAt(0) === '_' ? _gsUnificado(hit.modKey, hit.r)[key] : hit.r[key];
+}
+
+function _gsrFmt(val, tipo) {
+  if (val == null || val === '') return '—';
+  const n = num(val);
+  if (tipo === 'money') return Number.isFinite(n) ? money(n) : String(val);
+  if (tipo === 'num')   return Number.isFinite(n) ? fmtKg(n)  : String(val);
+  return String(val);
+}
+
+// Cabeçalho + chips por módulo. A tabela em si sai em _gsrRenderTabela,
+// que é o que reage a refino/ordenação/"mostrar mais".
+function _gsrRender() {
+  const titleEl = document.getElementById('gsr-title');
+  const modsEl  = document.getElementById('gsr-mods');
+
+  const porMod = new Map();
+  _gsr.hits.forEach(h => porMod.set(h.modKey, (porMod.get(h.modKey) || 0) + 1));
+
+  if (titleEl) {
+    const escopoNome = _gsr.escopo === 'todos' ? 'todos os módulos' : _gsr.view;
+    titleEl.innerHTML = `&ldquo;${escapeHtml(_gsr.termo)}&rdquo; <span style="color:var(--text3);font-weight:500">em ${escapeHtml(escopoNome)}</span>`;
   }
 
-  const html = Object.entries(groups).map(([modKey, group]) => {
-    const cfg = moduleColors[modKey] || {};
-    const rows = group.items.map(item => `
-      <div class="search-result-item" onclick="closeGlobalSearch();_gsShowDetail('${modKey}', window._gsRecords && window._gsRecords['${item.recordKey}'])">
-        <div class="search-result-main">${_gsHighlight(escapeHtml(item.label), tokens)}</div>
-        <div class="search-result-sub">${escapeHtml(item.sub)}</div>
-      </div>`).join('');
+  // Chips só quando há mais de um módulo com resultado — com um só, a
+  // barra seria uma linha decorativa sem função.
+  if (modsEl) {
+    const comHits = _GS_SCOPES.filter(s => porMod.has(s.modKey));
+    if (comHits.length > 1) {
+      modsEl.style.display = '';
+      modsEl.innerHTML = [
+        `<button class="pim-month-pill${_gsr.view === 'todos' ? ' active' : ''}" type="button" onclick="gsrSetView('todos')">Todos <b>${_gsr.hits.length}</b></button>`,
+        ...comHits.map(({ modKey }) => {
+          const cfg = moduleColors[modKey] || {};
+          return `<button class="pim-month-pill${_gsr.view === modKey ? ' active' : ''}" type="button" onclick="gsrSetView(&quot;${modKey}&quot;)"><i class="ti ${cfg.icon || 'ti-circle'}" style="font-size:11px"></i> ${escapeHtml(modKey)} <b>${porMod.get(modKey)}</b></button>`;
+        }),
+      ].join('');
+    } else {
+      modsEl.style.display = 'none';
+      modsEl.innerHTML = '';
+    }
+  }
 
-    const count = group.items.length;
-    return `
-      <div class="search-group">
-        <div class="search-group-header" style="color:${cfg.color||'var(--text3)'}">
-          <i class="ti ${cfg.icon||'ti-circle'}" style="font-size:11px"></i>
-          ${modKey}
-          <span class="search-group-count">${count}${count >= 5 ? '+' : ''}</span>
-        </div>
-        ${rows}
-      </div>`;
-  }).join('');
+  // Cabeçalho da tabela (clicável para ordenar) — refeito a cada troca de
+  // visão porque as colunas mudam com o módulo.
+  const theadEl = document.getElementById('gsr-thead');
+  if (theadEl) {
+    theadEl.innerHTML = `<tr>${_gsrCols().map(([rot, key, tipo]) =>
+      `<th data-sort-col="${key}" style="text-align:${tipo ? 'right' : 'left'}">${escapeHtml(rot)} <i class="ti ti-selector mod-sort-icon"></i></th>`).join('')}</tr>`;
+    // Atribuição em vez de addEventListener: o modal reabre várias vezes na
+    // mesma sessão e o handler tem que ser substituído, não empilhado.
+    theadEl.onclick = (ev) => {
+      const th = ev.target.closest('th[data-sort-col]');
+      if (!th || !theadEl.contains(th)) return;
+      const col = th.dataset.sortCol;
+      if (_gsr.sortCol === col) _gsr.sortDir = _gsr.sortDir === 'asc' ? 'desc' : 'asc';
+      else { _gsr.sortCol = col; _gsr.sortDir = 'asc'; }
+      _gsrSyncSortHeaders();
+      _gsrRenderTabela();
+    };
+    _gsrSyncSortHeaders();
+  }
 
-  dropdown.innerHTML = `
-    ${html}
-    <div class="search-footer">
-      <span>${totalItems}${totalItems >= Object.keys(groups).length * 5 ? '+' : ''} resultado${totalItems !== 1 ? 's' : ''}</span>
-      <span>Clique para ver detalhes completos</span>
-    </div>`;
+  _gsrRenderTabela();
+}
+
+function _gsrSyncSortHeaders() {
+  const theadEl = document.getElementById('gsr-thead');
+  if (!theadEl) return;
+  theadEl.querySelectorAll('th[data-sort-col]').forEach(th => {
+    th.classList.remove('sort-asc', 'sort-desc');
+    if (th.dataset.sortCol === _gsr.sortCol) th.classList.add(_gsr.sortDir === 'asc' ? 'sort-asc' : 'sort-desc');
+  });
+}
+
+function _gsrLinhas() {
+  let base = _gsr.view === 'todos' ? _gsr.hits : _gsr.hits.filter(h => h.modKey === _gsr.view);
+
+  const t = _gsr.refine.trim().toLowerCase();
+  if (t) {
+    const ws = t.split(/\s+/).filter(Boolean);
+    base = base.filter(h => ws.every(w => h.txt.includes(w)));
+  }
+
+  if (_gsr.sortCol) {
+    const mul = _gsr.sortDir === 'asc' ? 1 : -1;
+    const soNumero = v => /^-?[\d.,\s]+$/.test(String(v).trim());
+    base = [...base].sort((a, b) => {
+      const av = _gsrVal(a, _gsr.sortCol), bv = _gsrVal(b, _gsr.sortCol);
+      // Vazio sempre no FIM, nas duas direções — mesmo critério do modal de
+      // Movimentações (registro incompleto disputando o topo só atrapalha).
+      const aVazio = av == null || av === '', bVazio = bv == null || bv === '';
+      if (aVazio || bVazio) return (aVazio && bVazio) ? 0 : (aVazio ? 1 : -1);
+      if (soNumero(av) && soNumero(bv)) {
+        const an = num(av), bn = num(bv);
+        if (Number.isFinite(an) && Number.isFinite(bn)) return (an - bn) * mul;
+      }
+      return String(av).localeCompare(String(bv), 'pt-BR', { numeric: true, sensitivity: 'base' }) * mul;
+    });
+  }
+  return base;
+}
+
+function _gsrRenderTabela() {
+  const tbody   = document.getElementById('gsr-tbody');
+  const totalEl = document.getElementById('gsr-total');
+  const labelEl = document.getElementById('gsr-footer-label');
+  const moreEl  = document.getElementById('gsr-more');
+  if (!tbody) return;
+
+  const cols    = _gsrCols();
+  const linhas  = _gsrLinhas();
+  const visivel = linhas.slice(0, _gsr.limite);
+
+  if (!linhas.length) {
+    tbody.innerHTML = `<tr><td colspan="${cols.length}">
+      <div class="empty-state"><i class="ti ti-search-off"></i>
+        <p>Nenhuma ocorrência${_gsr.refine.trim() ? ` para o refino &ldquo;${escapeHtml(_gsr.refine.trim())}&rdquo;` : ''}.</p>
+      </div></td></tr>`;
+  } else {
+    // Guarda os registros visíveis para o clique abrir o detalhe
+    // sem serializar o objeto inteiro no atributo onclick.
+    window._gsrVisiveis = visivel;
+    tbody.innerHTML = visivel.map((h, i) => {
+      const tds = cols.map(([, key, tipo]) => {
+        const val = _gsrVal(h, key);
+        const txt = escapeHtml(_gsrFmt(val, tipo));
+        return tipo
+          ? `<td class="td-mono" style="text-align:right">${txt}</td>`
+          : `<td>${_gsHighlight(txt, _gsr.tokens)}</td>`;
+      }).join('');
+      return `<tr style="cursor:pointer" onclick="_gsrAbrirDetalhe(${i})">${tds}</tr>`;
+    }).join('');
+  }
+
+  if (labelEl) labelEl.textContent = linhas.length === 1 ? 'Ocorrência' : 'Ocorrências';
+  if (totalEl) {
+    totalEl.textContent = visivel.length < linhas.length
+      ? `${visivel.length} de ${linhas.length}`
+      : String(linhas.length);
+  }
+  if (moreEl) moreEl.style.display = visivel.length < linhas.length ? '' : 'none';
+}
+
+function _gsrAbrirDetalhe(i) {
+  const hit = (window._gsrVisiveis || [])[i];
+  if (!hit) return;
+  // O detalhe é .modal-overlay (z 200) e o de resultados é .bdm-overlay
+  // (z 600) — a classe sobe a família do detalhe por cima, mesmo truque já
+  // usado pelo modal de Movimentações (ver css/modules.css).
+  document.body.classList.add('bdm-modal-acima');
+  _gsShowDetail(hit.modKey, hit.r);
+}
+
+function _gsCloseDetail() {
+  closeModal('modal-search-detail');
+  document.body.classList.remove('bdm-modal-acima');
 }
 
 function _gsHighlight(text, tokens) {
@@ -4102,7 +4280,11 @@ function _gsShowDetail(modKey, record) {
     const newBtn = navBtn.cloneNode(true);
     navBtn.parentNode.replaceChild(newBtn, navBtn);
     newBtn.addEventListener('click', () => {
-      closeModal('modal-search-detail');
+      // Ir para a aba fecha os DOIS modais — o detalhe e o de resultados
+      // por baixo; ficar com a busca aberta em cima da aba de destino
+      // esconderia justamente o que o analista quis olhar.
+      _gsCloseDetail();
+      closeGlobalResults();
       if (typeof navigate === 'function') navigate(cfg.nav);
     });
   }
@@ -4110,33 +4292,24 @@ function _gsShowDetail(modKey, record) {
   openModal('modal-search-detail');
 }
 
-function openGlobalSearch() {
+// Atalho de busca (Ctrl+3): leva o foco pro campo da topbar. Com texto
+// selecionado na tela, já busca por ele direto — o resultado é o mesmo
+// modal do Enter, não existe mais um segundo caminho de busca no sistema.
+function openSearchModal(prefill = '') {
   const input = document.getElementById('global-search-input');
-  if (input && input.value.trim().length >= 2) handleGlobalSearch(input.value);
-}
-
-function closeGlobalSearch() {
-  const dropdown = document.getElementById('global-search-dropdown');
-  if (dropdown) dropdown.classList.remove('open');
-  clearTimeout(_gsTimer);
-}
-
-// Fechar ao clicar fora
-document.addEventListener('click', e => {
-  const wrap = document.querySelector('.topbar-search');
-  if (wrap && !wrap.contains(e.target)) closeGlobalSearch();
-});
-
-// Enter para confirmar o primeiro resultado
-document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') closeGlobalSearch();
-  if (e.key === 'Enter') {
-    const first = document.querySelector('#global-search-dropdown .search-result-item');
-    if (first) first.click();
+  if (!input) return;
+  input.focus();
+  if (prefill) {
+    input.value = prefill;
+    runGlobalSearch();
   }
-});
+  input.select();
+}
 
-Object.assign(window, { handleGlobalSearch, openGlobalSearch, closeGlobalSearch, _gsShowDetail });
+Object.assign(window, {
+  runGlobalSearch, closeGlobalResults, gsrRefine, gsrSetView, gsrMostrarMais,
+  _gsSyncPlaceholder, _gsrAbrirDetalhe, _gsCloseDetail, _gsShowDetail, openSearchModal,
+});
 
 // ═══════════════════════════════════════════════════════════
 // KEYBOARD SHORTCUTS
@@ -4145,10 +4318,11 @@ function setupKeyboardShortcuts() {
   document.addEventListener('keydown', (e) => {
     // Dynamic shortcuts from registry
     if (e.key === 'Escape') {
-      if (document.getElementById('modal-search-global')?.classList.contains('open')) {
-        closeSearchModal(); return;
+      // O modal de resultados da busca tem ESC próprio e sai antes dos
+      // demais — fechá-lo não deve fechar o que estava aberto por baixo.
+      if (document.getElementById('gsr-overlay')?.classList.contains('open')) {
+        closeGlobalResults(); return;
       }
-      closeGlobalSearch();
       closeBreakdownModal();
       closeAnaliticoDetailModal();
     }
@@ -4168,7 +4342,7 @@ function setupKeyboardShortcuts() {
     const isNavUp   = scNavUp   && _shortcutMatch(e, scNavUp);
     const isNavDown = scNavDown && _shortcutMatch(e, scNavDown);
     if (isNavUp || isNavDown) {
-      if (document.getElementById('modal-search-global')?.classList.contains('open')) return;
+      if (document.getElementById('gsr-overlay')?.classList.contains('open')) return;
       e.preventDefault();
       const pages  = ['dashboard','analitico','entradas','saidas','lancamentos','sap','custosSap','ocorrencias','importar','configuracoes'];
       const current = document.querySelector('.page.active')?.id?.replace('page-','') || pages[0];
@@ -4221,11 +4395,6 @@ function setupKeyboardShortcuts() {
     }
   });
 
-  // Close dropdown when clicking outside
-  document.addEventListener('click', (e) => {
-    const search = document.querySelector('.topbar-search');
-    if (search && !search.contains(e.target)) closeGlobalSearch();
-  });
 }
 
 // IDs de modais que já têm tratamento de ESC próprio e dedicado em
@@ -4234,7 +4403,6 @@ function setupKeyboardShortcuts() {
 // não duplicar lógica.
 const _MODAL_ESC_JA_TRATADO = new Set([
   'analitico-detail-overlay', // fechado via closeAnaliticoDetailModal() no listener de Escape logo abaixo
-  'modal-search-global',      // fechado via closeSearchModal() em setupKeyboardShortcuts()
 ]);
 
 // Fecha modais (.modal-overlay) apenas via ESC — clique fora foi
@@ -4252,6 +4420,10 @@ function setupModalCloseOnEscape() {
       if (z >= topZ) { topZ = z; top = m; }
     });
     top.classList.remove('open');
+    // O detalhe da busca pode ter sido aberto POR CIMA do modal de
+    // resultados (.bdm-overlay) — desfaz a elevação ao sair pelo ESC,
+    // senão a classe fica grudada no body e eleva modais alheios.
+    if (top.id === 'modal-search-detail') document.body.classList.remove('bdm-modal-acima');
   });
 }
 

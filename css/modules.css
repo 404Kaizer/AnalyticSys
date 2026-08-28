@@ -5038,10 +5038,36 @@ img { max-width: 100%; }
 /* Topbar search bar (global) */
 .topbar-search {
   flex: 1;
-  max-width: 280px;
+  max-width: 400px;
   position: relative;
   display: flex;
   align-items: center;
+  gap: 6px;
+}
+/* Seletor do módulo onde buscar — a busca não varre mais tudo por padrão,
+   o analista escolhe o escopo antes de dar Enter (ver runGlobalSearch). */
+.topbar-search-scope {
+  flex-shrink: 0;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 6px 6px 6px 9px;
+  font-size: 11.5px;
+  font-family: var(--mono);
+  color: var(--text2);
+  outline: none;
+  cursor: pointer;
+  max-width: 108px;
+  transition: border 0.15s, color 0.15s;
+}
+.topbar-search-scope:hover  { border-color: var(--border2); color: var(--text); }
+.topbar-search-scope:focus  { border-color: var(--accent); }
+.topbar-search-field {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  min-width: 0;
 }
 .topbar-search-input {
   width: 100%;
