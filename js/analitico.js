@@ -1211,9 +1211,11 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
         const ref = (s.ref && String(s.ref).trim()) ? String(s.ref).trim()
                   : (s.documento && String(s.documento).trim()) ? String(s.documento).trim() : '';
         // extra: campos crus. refRaw/documento alimentam as colunas Ref./
-        // Documento (separadas) do modal; os demais são usados só pelo
-        // pareamento de transferência entre materiais (309, ver
-        // findMaterialTransferPair em ui.js).
+        // Documento (separadas) do modal; dtDoc/dtLanc/dtReg alimentam as
+        // colunas de data E o pareamento das transferências — 861/862 casa
+        // por ref + material + dtLanc + |peso| (findTransferPairCentral) e
+        // 309 casa por central + depósito + usuário + as 3 datas + |peso|
+        // (findMaterialTransferPair), ambos em ui.js.
         const extra = {
           deposito:  String(s.deposito  || '').trim(),
           refRaw:    String(s.ref       || '').trim(),

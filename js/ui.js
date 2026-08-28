@@ -1478,14 +1478,33 @@ function buildAnaliticoDetailBreakdown(entries, total, colorVar, title, localCou
 //
 // state.sap pode ter 600k+ registros (ver getSapDuplicateKeys) — nada de
 // .find() linear a cada linha do modal. Constrói uma vez um Map de
-// "código-alvo|material|referência" → central, com cache invalidado junto
-// com o resto do índice SAP (invalidateSapIndex, abaixo).
+// "código-alvo|material|referência|dt. lançamento|peso" → central, com cache
+// invalidado junto com o resto do índice SAP (invalidateSapIndex, abaixo).
+//
+// Data de lançamento e peso entram na chave a pedido do Hugo (28/08/2026):
+// os dois lados nascem do MESMO evento, então também têm de bater em data e
+// em quantidade — se não batem, não é o par, é outra transferência que por
+// acaso reaproveitou a referência. Peso entra em valor ABSOLUTO porque o
+// sinal é justamente o que difere os dois lados (861 entra positivo, 862 sai
+// negativo); casar o peso cru nunca daria par nenhum.
 let _transferPairCache = null;
 let _transferPairCacheVersion = -1;
 
 function _invalidateTransferPairCache() {
   _transferPairCache = null;
   _transferPairCacheVersion = -1;
+}
+
+// Chave única dos dois lados. Usada na construção do índice e na busca —
+// mesma função nos dois lugares, pra normalização não divergir.
+function _transferPairKey(cod, mat, ref, dtLanc, absPeso) {
+  return [
+    cod,
+    mat || '',
+    String(ref).trim().toUpperCase(),
+    String(dtLanc || '').trim(),
+    absPeso.toFixed(3)
+  ].join('|');
 }
 
 function getTransferPairIndex() {
@@ -1499,7 +1518,7 @@ function getTransferPairIndex() {
     if (cod !== '861' && cod !== '862') return;
     const ref = (s.ref && String(s.ref).trim()) ? String(s.ref).trim() : String(s.documento || '').trim();
     if (!ref) return;
-    const key = `${cod}|${s.material || ''}|${ref.toUpperCase()}`;
+    const key = _transferPairKey(cod, s.material, ref, s.dtLanc, Math.abs(num(s.peso)));
     // Referência de transferência é única — em tese só existe 1 registro
     // por chave. Mantém o primeiro em caso de dado inesperado.
     if (!idx.has(key)) idx.set(key, s.central || '—');
@@ -1510,15 +1529,20 @@ function getTransferPairIndex() {
 }
 
 /**
- * Dado um registro 861 ou 862 (código + referência + material), retorna o
- * código complementar e a central onde ele foi lançado — ou null se não
- * houver correspondência (dado incompleto/fora do que foi importado).
+ * Dado um registro 861 ou 862 (código + referência + material + dt. de
+ * lançamento + peso), retorna o código complementar e a central onde ele foi
+ * lançado — ou null se não houver correspondência (dado incompleto/fora do
+ * que foi importado, ou algum dos campos não batendo com o outro lado).
+ *
+ * dtLanc vem do `extra` do toEntry (valor CRU de s.dtLanc), nunca do
+ * fallback pra dtDoc exibido na coluna: o índice indexa s.dtLanc cru, e um
+ * fallback só de um lado furaria a comparação.
  */
-function findTransferPairCentral(cod, ref, mat) {
+function findTransferPairCentral(cod, ref, mat, extra, peso) {
   const targetCod = cod === '861' ? '862' : cod === '862' ? '861' : null;
   if (!targetCod || !ref) return null;
   const idx = getTransferPairIndex();
-  const key = `${targetCod}|${mat || ''}|${String(ref).trim().toUpperCase()}`;
+  const key = _transferPairKey(targetCod, mat, ref, extra && extra.dtLanc, Math.abs(num(peso)));
   const central = idx.get(key);
   return central ? { cod: targetCod, central } : null;
 }
@@ -1879,7 +1903,9 @@ function openBreakdownModal(trigger) {
     const dtReg     = (extra && extra.dtReg)  || '';
     // Ref./Documento exibidos como colunas separadas (valores crus do SAP)
     // — `ref` (parâmetro acima) é o valor "efetivo" com fallback, usado só
-    // internamente pelo pareamento de transferência 861/862 logo abaixo.
+    // internamente pelo pareamento de transferência 861/862 logo abaixo
+    // (junto com extra.dtLanc CRU e o peso — nunca dtLancRaw, que já tem
+    // fallback pra dtDoc só deste lado).
     const refCol      = (extra && extra.refRaw)    || '';
     const documentoCol = (extra && extra.documento) || '';
 
@@ -1892,7 +1918,7 @@ function openBreakdownModal(trigger) {
     let pairHtml = '';
     let pairSearchText = '';
     if (cod === '861' || cod === '862') {
-      const pair = findTransferPairCentral(cod, ref, mat);
+      const pair = findTransferPairCentral(cod, ref, mat, extra, value);
       if (pair) {
         const direcao = cod === '861' ? 'de' : 'para';
         pairHtml = `<div class="mv-pair-note" title="Movimento relacionado desta transferência">
@@ -1902,7 +1928,7 @@ function openBreakdownModal(trigger) {
         </div>`;
         pairSearchText = `${pair.cod} ${pair.central}`;
       } else {
-        pairHtml = `<div class="mv-pair-note mv-pair-note-missing" title="Nenhum movimento complementar encontrado no SAP importado">
+        pairHtml = `<div class="mv-pair-note mv-pair-note-missing" title="Nenhum movimento complementar com a mesma referência, material, data de lançamento e peso no SAP importado">
           <i class="ti ti-help-circle"></i> sem par encontrado
         </div>`;
         // Indexa a própria nota: "sem par" é um filtro de auditoria útil —
