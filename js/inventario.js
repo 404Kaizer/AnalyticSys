@@ -1238,6 +1238,7 @@
           const extra = {
             deposito:  String(r.deposito  || '').trim(),
             refRaw:    String(r.ref       || '').trim(),
+            pedido:    String(r.pedido    || '').trim(),
             documento: String(r.documento || '').trim(),
             dtDoc:     String(r.dtDoc     || '').trim(),
             dtLanc:    String(r.dtLanc    || '').trim(),

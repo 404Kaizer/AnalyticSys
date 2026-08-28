@@ -267,7 +267,7 @@ const SAP_PERSIST_FIELDS = [
   // 295.200 linhas duplicadas na nuvem (e inflaram activity_log junto, via
   // trigger). Limpo em 27/07 (ver "Bugs corrigidos" no resumo do projeto).
   'movimento','peso','material','central','dtLanc','dtDoc','ref',
-  'documento','usuario','deposito','dtReg','valorTotal','custoUnit',
+  'pedido','documento','usuario','deposito','dtReg','valorTotal','custoUnit',
   'categoria','um','importId','fonte',
   // Adicionados: sem esses campos, todo reload perdia materialOriginal/
   // centralOriginal (quebrando lookups de cadastro e reversão) e createdAt/

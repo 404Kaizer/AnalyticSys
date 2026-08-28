@@ -840,7 +840,7 @@ const colFilterMeta = {
   entradas:    { tbodyId: 'tb-entradas',    fields: [null,'centralCompra','centralDestino','nf','dtEmissao','dtDescarga','fornecedor','categoria','material','peso','um','custo','valorTotal',null] },
   saidas:      { tbodyId: 'tb-saidas',      fields: [null,'central','dtEmissao','os','contrato','categoria','fornecedor','material','peso','um','custo','valorTotal',null] },
   lancamentos: { tbodyId: 'tb-lancamentos', fields: [null,'central','dtLanc','fornecedor','categoria','material','peso','um','custo','valorTotal',null] },
-  sap:         { tbodyId: 'tb-sap',         fields: [null,'usuario','movimento','ref','documento','central','deposito','dtDoc','dtLanc','dtReg','material','peso','um','custoUnit','valorTotal',null] },
+  sap:         { tbodyId: 'tb-sap',         fields: [null,'usuario','movimento','ref','pedido','documento','central','deposito','dtDoc','dtLanc','dtReg','material','peso','um','custoUnit','valorTotal',null] },
   // Coluna 0 (Material) é calculada, não existe como campo do registro —
   // resolvida por _custosSapResolveMaterial (dashboard.js, carrega depois
   // deste arquivo; daqui o wrapper com typeof em vez de referência direta).
@@ -1689,6 +1689,7 @@ function _bdmFechExcluidosHtml(fechExcluidos) {
   const itensHtml = fechExcluidos.map(r => `
     <div class="bdm-fech-item">
       <span class="td-mono" style="color:${num(r.peso) < 0 ? '#ef4444' : '#22c55e'}">${r.movimento || '—'}</span>
+      <span class="td-muted">${r.pedido || '—'}</span>
       <span class="td-muted">${r.documento || '—'}</span>
       <span class="td-muted">${r.dtLanc || '—'}</span>
       <span class="td-mono">${fmtKg(num(r.peso))}</span>
@@ -1711,7 +1712,7 @@ function _bdmFechExcluidosHtml(fechExcluidos) {
       <summary>Ver registros desconsiderados</summary>
       <div class="bdm-fech-list">
         <div class="bdm-fech-item bdm-fech-item--head">
-          <span>Mov.</span><span>Documento</span><span>Dt. Lanç.</span><span>Peso</span><span>Custo Total</span>
+          <span>Mov.</span><span>Pedido</span><span>Doc MIGO</span><span>Dt. Lanç.</span><span>Peso</span><span>Custo Total</span>
         </div>
         ${itensHtml}
       </div>
@@ -1901,12 +1902,13 @@ function openBreakdownModal(trigger) {
     const dtDoc     = (extra && extra.dtDoc)  || '';
     const dtLancRaw = (extra && extra.dtLanc) || dtLanc || '';
     const dtReg     = (extra && extra.dtReg)  || '';
-    // Ref./Documento exibidos como colunas separadas (valores crus do SAP)
+    // Ref./Pedido/Doc MIGO exibidos como colunas separadas (valores crus do SAP)
     // — `ref` (parâmetro acima) é o valor "efetivo" com fallback, usado só
     // internamente pelo pareamento de transferência 861/862 logo abaixo
     // (junto com extra.dtLanc CRU e o peso — nunca dtLancRaw, que já tem
     // fallback pra dtDoc só deste lado).
     const refCol      = (extra && extra.refRaw)    || '';
+    const pedidoCol   = (extra && extra.pedido)   || '';
     const documentoCol = (extra && extra.documento) || '';
 
     // Transferência entre centros (861/862): mostra na mesma linha qual é
@@ -1972,6 +1974,7 @@ function openBreakdownModal(trigger) {
       <td>${movBadgeHtml(cod)}</td>
       <td class="td-muted">${escapeHtml(usuario || '—')}</td>
       <td class="td-muted">${escapeHtml(refCol || '—')}${pairHtml}</td>
+      <td class="td-muted">${escapeHtml(pedidoCol || '—')}</td>
       <td class="td-muted">${documentoCell}</td>
       <td class="td-muted">${escapeHtml(dtDoc || '—')}</td>
       <td class="td-muted">${escapeHtml(dtLancRaw || '—')}</td>
@@ -1996,7 +1999,7 @@ function openBreakdownModal(trigger) {
     // achar (por isso `deposito`, que vem no extra mas não é coluna, fica de
     // fora; se virar coluna um dia, entra junto).
     const searchText = _normBuscaMov(
-      [cod, refCol, documentoCol, usuario, dtDoc, dtLancRaw, dtReg, pairSearchText, ...valorFormas]
+      [cod, refCol, pedidoCol, documentoCol, usuario, dtDoc, dtLancRaw, dtReg, pairSearchText, ...valorFormas]
         .filter(Boolean).join(' ')
     );
 
@@ -2009,6 +2012,7 @@ function openBreakdownModal(trigger) {
       cod,
       usuario:    usuario || '',
       ref:        refCol || '',
+      pedido:     pedidoCol || '',
       documento:  documentoCol || '',
       dtDoc:      _ts(dtDoc),
       dtLanc:     _ts(dtLancRaw),
@@ -2093,7 +2097,7 @@ function openBreakdownModal(trigger) {
 
     tbody.innerHTML = filtered.length
       ? filtered.map(r => r.html).join('')
-      : `<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:22px 16px">
+      : `<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:22px 16px">
            Nenhum registro encontrado${motivos.length ? ` para ${motivos.join(' + ')}` : ''}
          </td></tr>`;
 
@@ -2201,13 +2205,14 @@ function openFechModal(records, contextLabel) {
       <td class="td-mono" style="color:${neg ? '#ef4444' : '#22c55e'}">${r.movimento || '—'}</td>
       <td class="td-mono">${r.central || '—'}</td>
       <td class="td-mono">${r.material || r.materialOriginal || '—'}</td>
+      <td class="td-mono">${r.pedido || '—'}</td>
       <td class="td-mono">${r.documento || '—'}</td>
       <td class="td-muted">${r.dtLanc || '—'}</td>
       <td class="td-muted">${r.dtReg || '—'}</td>
       <td class="td-mono" style="text-align:right">${fmtKg(num(r.peso))}</td>
       <td class="td-mono" style="text-align:right">${money(custoLinha)}</td>
     </tr>`;
-  }).join('') : '<tr><td colspan="8"><div class="empty-state"><i class="ti ti-calendar-check"></i><p>Nenhum registro.</p></div></td></tr>';
+  }).join('') : '<tr><td colspan="9"><div class="empty-state"><i class="ti ti-calendar-check"></i><p>Nenhum registro.</p></div></td></tr>';
 
   if (pesoEl)  pesoEl.textContent  = 'Peso: ' + fmtKg(peso);
   if (custoEl) custoEl.textContent = 'Custo Total: ' + money(custo);
@@ -5010,7 +5015,7 @@ let _fechMgrLastFiltrados = [];  // cache do resultado filtrado+ordenado do últ
 // filtro discreto nessa coluna (checkbox, Peso e Custo Total são valores
 // contínuos — não fazem sentido como lista de valores únicos, mesmo padrão
 // já usado nas colunas de valor das outras tabelas do sistema).
-const _FECHMGR_COLS = [null, 'usuario', 'movimento', 'central', 'deposito', 'material', 'documento', 'dtLanc', 'dtReg', null, null, '_statusLabel'];
+const _FECHMGR_COLS = [null, 'usuario', 'movimento', 'central', 'deposito', 'material', 'pedido', 'documento', 'dtLanc', 'dtReg', null, null, '_statusLabel'];
 
 // Cache dos registros SAP BRUTOS que batem no padrão de fechamento — a
 // varredura de isSapFechamentoPattern acontece sobre TODO o state.sap
@@ -5202,7 +5207,7 @@ function _fechMgrRender() {
   _fechMgrLastFiltrados = ordenados;
 
   if (!ordenados.length) {
-    tbody.innerHTML = `<tr><td colspan="12"><div class="empty-state"><i class="ti ti-calendar-check"></i><p>${todos.length ? 'Nenhum registro corresponde ao filtro.' : 'Nenhum Ajuste de Fechamento Mensal detectado.'}</p></div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="13"><div class="empty-state"><i class="ti ti-calendar-check"></i><p>${todos.length ? 'Nenhum registro corresponde ao filtro.' : 'Nenhum Ajuste de Fechamento Mensal detectado.'}</p></div></td></tr>`;
     _fechMgrRenderPaginacao(0, 0);
     _fechMgrAtualizarBarraLote();
     _fechMgrUpdateColFilterIcons();
@@ -5242,6 +5247,7 @@ function _fechMgrRender() {
     const centralSafe   = escapeHtml(r.central || '—');
     const depositoSafe  = escapeHtml(r.deposito || '—');
     const materialSafe  = escapeHtml(r.material || r.materialOriginal || '—');
+    const pedidoSafe    = escapeHtml(r.pedido || '—');
     const documentoSafe = escapeHtml(r.documento || '—');
     const dtLancSafe    = escapeHtml(r.dtLanc || '—');
     const dtRegSafe     = escapeHtml(r.dtReg || '—');
@@ -5259,6 +5265,7 @@ function _fechMgrRender() {
       <td class="td-mono" title="${centralSafe}">${centralSafe}</td>
       <td class="td-muted" title="${depositoSafe}">${depositoSafe}</td>
       <td class="td-mono fechmgr-td-material" title="${materialSafe}">${materialSafe}</td>
+      <td class="td-mono" title="${pedidoSafe}">${pedidoSafe}</td>
       <td class="td-mono" title="${documentoSafe}">${documentoSafe}</td>
       <td class="td-muted" title="${dtLancSafe}">${dtLancSafe}</td>
       <td class="td-muted" title="${dtRegSafe}">${dtRegSafe}</td>

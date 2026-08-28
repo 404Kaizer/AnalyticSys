@@ -2756,7 +2756,8 @@
                 <th data-sort-col="usuario"   onclick="moduleSortBy('sap','usuario')">Usuário <i class="ti ti-selector mod-sort-icon"></i></th>
                 <th data-sort-col="movimento" onclick="moduleSortBy('sap','movimento')">Movimento <i class="ti ti-selector mod-sort-icon"></i></th>
                 <th data-sort-col="ref"       onclick="moduleSortBy('sap','ref')">Ref. <i class="ti ti-selector mod-sort-icon"></i></th>
-                <th data-sort-col="documento" onclick="moduleSortBy('sap','documento')">Documento <i class="ti ti-selector mod-sort-icon"></i></th>
+                <th data-sort-col="pedido"    onclick="moduleSortBy('sap','pedido')">Pedido <i class="ti ti-selector mod-sort-icon"></i></th>
+                <th data-sort-col="documento" onclick="moduleSortBy('sap','documento')">Doc MIGO <i class="ti ti-selector mod-sort-icon"></i></th>
                 <th data-sort-col="central"   onclick="moduleSortBy('sap','central')">Central <i class="ti ti-selector mod-sort-icon"></i></th>
                 <th data-sort-col="deposito"  onclick="moduleSortBy('sap','deposito')">Depósito <i class="ti ti-selector mod-sort-icon"></i></th>
                 <th data-sort-col="dtDoc"     onclick="moduleSortBy('sap','dtDoc')">Dt. Doc. <i class="ti ti-selector mod-sort-icon"></i></th>
@@ -2771,7 +2772,7 @@
               </tr>
             </thead>
             <tbody id="tb-sap">
-              <tr><td colspan="16"><div class="empty-state"><i class="ti ti-database"></i><p>Nenhuma movimentação SAP importada.</p></div></td></tr>
+              <tr><td colspan="17"><div class="empty-state"><i class="ti ti-database"></i><p>Nenhuma movimentação SAP importada.</p></div></td></tr>
             </tbody>
           </table>
           </div><!-- /table-scroll sap -->
@@ -4779,7 +4780,7 @@
     </div>
 
     <!-- Tab SAP -->
-    <!-- Colunas: Usuário, Movimento, Ref., Documento, Central, Depósito, Dt. Doc., Dt. Lançamento, Dt. Registro, Material, Peso, UM, Custo Unit., Valor Total -->
+    <!-- Colunas: Usuário, Movimento, Ref., Pedido, Doc MIGO, Central, Depósito, Dt. Doc., Dt. Lançamento, Dt. Registro, Material, Peso, UM, Custo Unit., Valor Total -->
     <div id="tab-sap" style="display:none">
       <div class="form-grid">
         <div class="form-group">
@@ -4795,7 +4796,11 @@
           <input type="text" class="form-input" id="sap-ref" placeholder="Ex: REF-0001">
         </div>
         <div class="form-group">
-          <label class="form-label">Documento SAP</label>
+          <label class="form-label">Pedido</label>
+          <input type="text" class="form-input" id="sap-pedido" placeholder="Ex: 4500123456">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Doc MIGO</label>
           <input type="text" class="form-input" id="sap-doc" placeholder="Ex: 4900012345">
         </div>
         <div class="form-group">
@@ -5489,7 +5494,7 @@
       <div class="bdm-search-wrap">
         <i class="ti ti-search"></i>
         <input type="text" class="bdm-search-input" id="bdm-search-input"
-          placeholder="Buscar em qualquer coluna — movimento, usuário, ref., documento, data ou saldo…" autocomplete="off">
+          placeholder="Buscar em qualquer coluna — movimento, usuário, ref., pedido, doc MIGO, data ou saldo…" autocomplete="off">
       </div>
     </div>
     <div class="bdm-body">
@@ -5499,7 +5504,8 @@
             <th data-sort-col="cod">Movimento <i class="ti ti-selector mod-sort-icon"></i></th>
             <th data-sort-col="usuario">Usuário <i class="ti ti-selector mod-sort-icon"></i></th>
             <th data-sort-col="ref">Ref. <i class="ti ti-selector mod-sort-icon"></i></th>
-            <th data-sort-col="documento">Documento <i class="ti ti-selector mod-sort-icon"></i></th>
+            <th data-sort-col="pedido">Pedido <i class="ti ti-selector mod-sort-icon"></i></th>
+            <th data-sort-col="documento">Doc MIGO <i class="ti ti-selector mod-sort-icon"></i></th>
             <th data-sort-col="dtDoc">Dt. Documento <i class="ti ti-selector mod-sort-icon"></i></th>
             <th data-sort-col="dtLanc">Dt. Lançamento <i class="ti ti-selector mod-sort-icon"></i></th>
             <th data-sort-col="dtReg">Dt. Registro <i class="ti ti-selector mod-sort-icon"></i></th>
@@ -5541,7 +5547,8 @@
             <th>Movimento</th>
             <th>Central</th>
             <th>Material</th>
-            <th>Documento</th>
+            <th>Pedido</th>
+            <th>Doc MIGO</th>
             <th>Dt. Lançamento</th>
             <th>Dt. Registro</th>
             <th style="text-align:right">Peso</th>
@@ -5611,12 +5618,13 @@
           <col style="width:5.5%">
           <col style="width:8%">
           <col style="width:7%">
-          <col style="width:13.5%">
-          <col style="width:9%">
+          <col style="width:11%">
+          <col style="width:8%">
+          <col style="width:8%">
           <col style="width:8.5%">
           <col style="width:8.5%">
-          <col style="width:11%">
-          <col style="width:11%">
+          <col style="width:10%">
+          <col style="width:10%">
           <col style="width:6.5%">
         </colgroup>
         <thead>
@@ -5627,7 +5635,8 @@
             <th>Central</th>
             <th>Depósito</th>
             <th>Material</th>
-            <th>Documento</th>
+            <th>Pedido</th>
+            <th>Doc MIGO</th>
             <th>Dt. Lanç.</th>
             <th>Dt. Registro</th>
             <th style="text-align:right">Peso</th>

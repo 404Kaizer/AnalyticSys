@@ -4328,7 +4328,7 @@ function renderSAP() {
   if (typeof renderSapSummary === 'function') renderSapSummary();
 
   if (!_lastFiltered.sap.length) {
-    tb.innerHTML = '<tr><td colspan="16"><div class="empty-state"><i class="ti ti-database"></i><p>Nenhuma movimentação SAP importada.</p></div></td></tr>';
+    tb.innerHTML = '<tr><td colspan="17"><div class="empty-state"><i class="ti ti-database"></i><p>Nenhuma movimentação SAP importada.</p></div></td></tr>';
     atualizarBarraLote('sap');
     return;
   }
@@ -4366,6 +4366,7 @@ function renderSAP() {
       <td class="td-mono">${r.fonte === 'manual' ? '<span class="badge-manual" title="Registro inserido manualmente"><i class="ti ti-pencil"></i></span>' : ''}${r.usuario || '—'}</td>
       <td class="td-mono" style="color:${neg ? red : green}">${r.movimento || '—'}${fechBadgeHtml}</td>
       <td class="td-muted">${r.ref || '—'}</td>
+      <td class="td-mono">${r.pedido || '—'}</td>
       <td class="td-mono">${r.documento || '—'}</td>
       <td class="td-mono">${r.central || '—'}</td>
       <td class="td-muted">${r.deposito || '—'}</td>
@@ -4395,7 +4396,8 @@ const SAP_EXPORT_COLS = [
   ['Usuário',        r => r.usuario || ''],
   ['Movimento',      r => r.movimento || ''],
   ['Ref.',           r => r.ref || ''],
-  ['Documento',      r => r.documento || ''],
+  ['Pedido',         r => r.pedido || ''],
+  ['Doc MIGO',       r => r.documento || ''],
   ['Central',        r => r.central || ''],
   ['Depósito',       r => r.deposito || ''],
   ['Dt. Doc.',       r => r.dtDoc || ''],
@@ -5933,6 +5935,10 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
           movimento:  movRaw,
           txtMov:     String(r[ci('txtMov',     2)] || ''),
           ref:        String(r[ci('ref',         3)] || ''),
+          // Sem fallback posicional: o layout MB51 padrão não tinha coluna
+          // Pedido, então só vem preenchido quando o cabeçalho do arquivo
+          // realmente traz "Pedido" (ver COL_DEFS.pedido em buildSapColumnMap).
+          pedido:     String(r[ci('pedido',     -1)] ?? '').trim(),
           documento:  docRaw,
           central:    String(r[ci('central',    5)] || ''),
           deposito:   String(r[ci('deposito',   6)] || ''),
@@ -6326,8 +6332,19 @@ function buildSapColumnMap(headerRow) {
     },
     documento: {
       exact:  ['doc.material', 'doc. material', 'documento', 'doc.mat.', 'doc. mat.',
-               'num.doc.mat.', 'num doc mat', 'doc material'],
-      starts: ['doc.mat', 'doc. mat', 'num.doc.mat', 'doc material']
+               'num.doc.mat.', 'num doc mat', 'doc material', 'doc migo', 'doc.migo'],
+      starts: ['doc.mat', 'doc. mat', 'num.doc.mat', 'doc material', 'doc migo', 'doc.migo']
+    },
+    // Pedido de compra (EBELN) — coluna "Pedido" do MB51. Fica ANTES de
+    // `documento` na tabela, mas a ordem aqui não importa: o mapa é por nome
+    // de cabeçalho. Os aliases não colidem com `documento` porque este casa
+    // por "doc.*" e nunca por "pedido".
+    pedido:    {
+      exact:  ['pedido', 'no.pedido', 'nro.pedido', 'nro. pedido', 'num.pedido', 'num pedido',
+               'n.pedido', 'nº pedido', 'no pedido', 'pedido de compra', 'documento de compras',
+               'doc.compras', 'doc. compras', 'purchase order'],
+      starts: ['pedido', 'nro.pedido', 'nro. pedido', 'num.pedido', 'num pedido',
+               'documento de compra', 'doc.compras', 'doc. compras', 'purchase order']
     },
     central:   {
       exact:  ['centro', 'central', 'plant', 'filial', 'unidade'],

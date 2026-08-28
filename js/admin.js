@@ -45,7 +45,7 @@ const ADMIN_MODULOS = {
   custos_sap:               { label: 'Custos SAP',                 cols: ['fonte', 'material_original', 'material', 'central_original', 'central', 'ano', 'mes', 'estoque_total', 'valor_total', 'custo', 'import_id', 'created_at'] },
   entradas:                 { label: 'Entradas',                   cols: ['fonte', 'central_compra_original', 'central_compra', 'central_destino_original', 'central_destino', 'nf', 'dt_emissao', 'dt_descarga', 'fornecedor', 'categoria_original', 'categoria', 'material_original', 'material', 'peso', 'um', 'custo', 'valor_total', 'import_id', 'created_at'] },
   saidas:                   { label: 'Saídas',                     cols: ['fonte', 'central_original', 'central', 'dt_emissao', 'os', 'contrato', 'categoria_original', 'categoria', 'fornecedor', 'material_original', 'material', 'peso', 'um', 'custo', 'valor_total', 'import_id', 'created_at'] },
-  sap:                      { label: 'SAP',                        cols: ['fonte', 'usuario', 'movimento', 'ref', 'documento', 'central_original', 'central', 'deposito', 'dt_doc', 'dt_lanc', 'dt_reg', 'material_original', 'material', 'peso', 'um', 'custo_unit', 'valor_total', 'import_id', 'created_at'] },
+  sap:                      { label: 'SAP',                        cols: ['fonte', 'usuario', 'movimento', 'ref', 'pedido', 'documento', 'central_original', 'central', 'deposito', 'dt_doc', 'dt_lanc', 'dt_reg', 'material_original', 'material', 'peso', 'um', 'custo_unit', 'valor_total', 'import_id', 'created_at'] },
 };
 
 let _adminProfiles = [];        // cache do último fetch de profiles (email por user_id)

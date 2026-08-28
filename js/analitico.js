@@ -1219,6 +1219,7 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
         const extra = {
           deposito:  String(s.deposito  || '').trim(),
           refRaw:    String(s.ref       || '').trim(),
+          pedido:    String(s.pedido    || '').trim(),
           documento: String(s.documento || '').trim(),
           dtDoc:     String(s.dtDoc     || '').trim(),
           dtLanc:    String(s.dtLanc    || '').trim(),
@@ -1324,6 +1325,7 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
           const extra = {
             deposito:  String(s.deposito  || '').trim(),
             refRaw:    String(s.ref       || '').trim(),
+            pedido:    String(s.pedido    || '').trim(),
             documento: String(s.documento || '').trim(),
             dtDoc:     String(s.dtDoc     || '').trim(),
             dtLanc:    String(s.dtLanc    || '').trim(),
@@ -4057,7 +4059,7 @@ function _gsShowDetail(modKey, record) {
     'Entrada':    [['Central Compra','centralCompra'],['Central Destino','centralDestino'],['NF','nf'],['Fornecedor','fornecedor'],['Categoria','categoria'],['Material','material'],['Peso','peso'],['UM','um'],['Custo Unit.','custo'],['Valor Total','valorTotal'],['Dt. Emissão','dtEmissao'],['Dt. Descarga','dtDescarga']],
     'Saída':      [['Central','central'],['OS','os'],['Categoria','categoria'],['Fornecedor','fornecedor'],['Material','material'],['Peso','peso'],['UM','um'],['Custo Unit.','custo'],['Valor Total','valorTotal'],['Dt. Emissão','dtEmissao']],
     'Lançamento': [['Central','central'],['Dt. Lançamento','dtLanc'],['Fornecedor','fornecedor'],['Categoria','categoria'],['Material','material'],['Peso','peso'],['UM','um'],['Custo Unit.','custo'],['Valor Total','valorTotal']],
-    'SAP':        [['Usuário','usuario'],['Movimento','movimento'],['Ref.','ref'],['Documento','documento'],['Central','central'],['Depósito','deposito'],['Material','material'],['Peso','peso'],['UM','um'],['Custo Unit.','custoUnit'],['Valor Total','valorTotal'],['Dt. Doc.','dtDoc'],['Dt. Lançamento','dtLanc'],['Dt. Registro','dtReg']],
+    'SAP':        [['Usuário','usuario'],['Movimento','movimento'],['Ref.','ref'],['Pedido','pedido'],['Doc MIGO','documento'],['Central','central'],['Depósito','deposito'],['Material','material'],['Peso','peso'],['UM','um'],['Custo Unit.','custoUnit'],['Valor Total','valorTotal'],['Dt. Doc.','dtDoc'],['Dt. Lançamento','dtLanc'],['Dt. Registro','dtReg']],
     'Custos SAP': [['Material','material'],['Central','central'],['Ano','ano'],['Mês','mes'],['Estoque Total','estoqueTotal'],['Valor Total','valorTotal'],['Custo','custo']],
     'Central':    [['Sigla','alias'],['Nome Original','origem'],['CNPJ','cnpj'],['Regional','regional'],['Cadastrado em','created']],
     'Material':   [['Grupo SAP','alias'],['Cód SAP','codSap'],['Material Original','origem'],['Descrição','desc'],['Cadastrado em','created']],

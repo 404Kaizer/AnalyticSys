@@ -3439,7 +3439,7 @@ body.bdm-modal-acima .modal-overlay:not(.analitico-detail-overlay) { z-index: 70
 }
 .bdm-fech-item {
   display: grid;
-  grid-template-columns: 50px 100px 90px 1fr 1fr;
+  grid-template-columns: 50px 100px 100px 90px 1fr 1fr;
   gap: 8px;
   font-size: 11px;
   padding: 2px 0;
