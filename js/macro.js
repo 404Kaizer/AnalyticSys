@@ -97,16 +97,28 @@ function renderMacroPanels(results, thresholds, dtIni, dtFim) {
       });
     }
 
+    // Saúde e regional da central saem do card já montado na Visão Micro —
+    // assim o donut nunca discorda do que o card exibe.
+    //
+    // ATENÇÃO: esse card só existe no agrupamento por REGIONAL. No
+    // agrupamento por material os cards são de MATERIAL (data-material), e
+    // este querySelector volta null (ver _anGroupMode em analitico.js). Sem
+    // os fallbacks abaixo, TODA central caía no 'bom' do _mapCardLevel e o
+    // donut mostrava 100% saudável, com o ranking de piores vazio.
     const card     = document.querySelector(`.micro-filial-card[data-central="${CSS.escape(r.central)}"]`);
-    const regional = card?.dataset.regional || '—';
+    const regional = (card?.dataset.regional
+      || (typeof getFilialLookupIndex === 'function'
+            ? (getFilialLookupIndex().exact.get(normalizeText(r.central))?.regional || '')
+            : '')).trim() || '—';
     const _mapCardLevel = l => (!l || l === 'none' || l === 'ok') ? 'bom' : l;
-    const cardLevel = _mapCardLevel(card?.dataset.healthLevel);
 
     centralMap[r.central] = {
-      level: cardLevel, regional,
+      level: _mapCardLevel(card?.dataset.healthLevel), regional,
       counts: { critico:0, urgente:0, atencao:0, bom:0 },
       worstDiff: 0
     };
+    // Alimenta o cálculo de saúde de fallback (logo após o laço de materiais).
+    const _matDiffsCentral = [];
 
     // Est. Inicial: saldo TEÓRICO do SAP (âncora Custos SAP + movimentações),
     // mesma fonte da Visão Micro — ver _anGetSapTheoreticalStock em
@@ -137,6 +149,7 @@ function renderMacroPanels(results, thresholds, dtIni, dtFim) {
       const level  = classifyVariation(Math.abs(diff), catKey, thresholds);
 
       centralMap[r.central].counts[level]++;
+      _matDiffsCentral.push({ mat, diff, catKey });
       if (Math.abs(diff) > centralMap[r.central].worstDiff)
         centralMap[r.central].worstDiff = Math.abs(diff);
 
@@ -154,6 +167,19 @@ function renderMacroPanels(results, thresholds, dtIni, dtFim) {
       else if (level === 'atencao') byLevel.atencao.push(item);
       else                          byLevel.bom.push(item);
     });
+
+    // Sem card de central em tela (Visão Micro agrupada por material): a
+    // saúde é calculada aqui, com a MESMA função do card (calcHealthScore)
+    // sobre os diffs que este laço acabou de apurar — inclusive a regra de
+    // "sem saúde" (nenhum material, ou todos neutros), que no card vira
+    // healthLevel 'none' e aqui, como lá, é lido como bom.
+    if (!card) {
+      const _comCadastro = _matDiffsCentral.filter(m => m.catKey);
+      const _allNeutral  = _comCadastro.length > 0 && _comCadastro.every(m => Math.abs(m.diff) <= 0.0001);
+      centralMap[r.central].level = (!_matDiffsCentral.length || _allNeutral)
+        ? 'bom'
+        : _mapCardLevel(calcHealthScore(_matDiffsCentral, lancsByMat, sapByMat, thresholds).level);
+    }
   });
 
   const sortByCusto = arr => arr.sort((a, b) => Math.abs(b.custo) - Math.abs(a.custo));
