@@ -1714,6 +1714,44 @@ function diagnosticarDivergenciaSapPuzl({ sapRecords = [], puzlRecords = [], lad
     if (detalhe && m.detalhes.length < 40) m.detalhes.push(detalhe);
   };
 
+  // ── Detalhe de um registro, com as MESMAS colunas da tabela do modal ────
+  // Só código/ref/peso não bastava para agir sobre a linha: sem data e sem
+  // pedido, achar aquele registro na tabela abaixo virava caça manual
+  // (Hugo, 01/09/2026).
+  //
+  // Lado SAP: pedido, doc MIGO e dt. lançamento (com fallback para a de
+  // documento, que é a ordem que a própria tabela usa).
+  const _detSap = r => ({
+    cod:     normMov(r.movimento),
+    ref:     String(r.ref || r.documento || '—'),
+    pedido:  String(r.pedido || ''),
+    doc:     String(r.documento || ''),
+    dt:      String(r.dtLanc || r.dtDoc || ''),
+    usuario: String(r.usuario || ''),
+    kg:      contrib(r)
+  });
+
+  // Lado PUZL: a nota não tem código de movimento nem doc MIGO. No lugar do
+  // pedido vai o FORNECEDOR, e a data é a de DESCARGA (com fallback para a
+  // de emissão) — que é a data pela qual o período filtra as entradas.
+  // A central de destino entra como nota quando difere da de compra: é ela
+  // que denuncia a nota que na verdade foi transferida.
+  const _detPuzl = p => {
+    const r = p.rec;
+    const destino = !ehSaida && r.centralDestino && r.centralDestino !== r.centralCompra
+      ? `destino ${r.centralDestino}` : '';
+    return {
+      cod:     '',
+      ref:     String(p.doc || '—'),
+      pedido:  String(r.fornecedor && r.fornecedor !== '—' ? r.fornecedor : ''),
+      doc:     '',
+      dt:      String((ehSaida ? r.dtEmissao : (r.dtDescarga || r.dtEmissao)) || ''),
+      usuario: '',
+      kg:      -p.kg,
+      nota:    destino
+    };
+  };
+
   // ── 1. Duplicatas de integração ─────────────────────────────────────────
   // Reaproveita o detector que o módulo SAP já usa para pintar a linha
   // duplicada de vermelho (getSapDuplicateKeys) em vez de inventar outro
@@ -1733,7 +1771,7 @@ function diagnosticarDivergenciaSapPuzl({ sapRecords = [], puzlRecords = [], lad
       // reconciliação; da segunda em diante é o que infla o SAP.
       if (n > 1) {
         add('duplicada', 'Integração duplicada no SAP', 'erro', contrib(r), 1,
-            { ref: r.ref || r.documento || '—', cod: normMov(r.movimento), kg: contrib(r) });
+            { ..._detSap(r), nota: `${n}ª cópia` });
         return;
       }
     }
@@ -1782,7 +1820,7 @@ function diagnosticarDivergenciaSapPuzl({ sapRecords = [], puzlRecords = [], lad
       // da PUZL e não casa com nada. Vira motivo próprio para não
       // contaminar outro grupo como "peso divergente" fantasma.
       add('sem-ref-puzl', `Registro da PUZL sem ${docLabel} cadastrada`, 'alerta', -kg, 1,
-          { ref: '—', cod: '', kg: -kg });
+          _detPuzl({ rec: r, kg, doc: '—' }));
       return;
     }
     // Peso da PUZL em m³ sem fator cadastrado entra BRUTO na conta (ver
@@ -1790,7 +1828,7 @@ function diagnosticarDivergenciaSapPuzl({ sapRecords = [], puzlRecords = [], lad
     // desconhecido. Entra como aviso de kg 0 para não fingir precisão.
     if (!ehSaida && typeof _nfNeedsConversionWarning === 'function' && _nfNeedsConversionWarning(r.um, r.material)) {
       add('fator-volumetrico', 'NF em unidade volumétrica sem fator de conversão cadastrado', 'alerta', 0, 1,
-          { ref: String(doc), cod: '', kg: 0 });
+          { ..._detPuzl({ rec: r, kg: 0, doc: String(doc) }), nota: `unidade ${r.um || '—'}` });
     }
     const k = chavePuzl(r);
     if (!puzlPorChave.has(k)) puzlPorChave.set(k, []);
@@ -1819,7 +1857,7 @@ function diagnosticarDivergenciaSapPuzl({ sapRecords = [], puzlRecords = [], lad
     sapUteis.map(r => ({ cod: r.movimento, pedido: r.pedido, peso: num(r.peso), rec: r }))
   );
   const puzlConsumidos = new Set();
-  pares.forEach(({ orig }) => {
+  pares.forEach(({ orig, estorno }) => {
     const lista = puzlPorChave.get(chaveSap(orig.rec)) || [];
     const alvo  = lista.find(p => !puzlConsumidos.has(p));
     // Sem contrapartida na PUZL o par é irrelevante: o SAP lançou e desfez
@@ -1828,8 +1866,8 @@ function diagnosticarDivergenciaSapPuzl({ sapRecords = [], puzlRecords = [], lad
     if (!alvo) return;
     puzlConsumidos.add(alvo);
     add('estornada', `${docLabel} anulada por estorno no SAP, ainda ativa na PUZL`, 'erro', -alvo.kg, 1,
-        { ref: orig.rec.ref || orig.rec.documento || '—', cod: normMov(orig.rec.movimento), kg: -alvo.kg,
-          nota: orig.rec.pedido ? `pedido ${orig.rec.pedido}` : '' });
+        { ..._detSap(orig.rec), kg: -alvo.kg,
+          nota: `estornado por ${normMov(estorno.rec.movimento)}` });
   });
 
   // ── 5. Transferência entre centros: FORA DA COMPARAÇÃO ──────────────────
@@ -1870,7 +1908,7 @@ function diagnosticarDivergenciaSapPuzl({ sapRecords = [], puzlRecords = [], lad
     const ref = (r.ref && String(r.ref).trim())
       ? String(r.ref).trim()
       : String(r.documento || '').trim();
-    const det = { ref: ref || '—', cod, kg: contrib(r) };
+    const det = _detSap(r);
     if (cod === '861' || cod === '862') {
       const par = findTransferPairCentral(cod, ref, r.material || material, { pedido: r.pedido }, num(r.peso));
       if (par) det.nota = `${cod === '861' ? 'de' : 'para'} ${par.central}`;
@@ -1923,17 +1961,20 @@ function diagnosticarDivergenciaSapPuzl({ sapRecords = [], puzlRecords = [], lad
   const grupos = new Map();
   const grupo  = k => {
     let g = grupos.get(k);
-    if (!g) { g = { sapKg: 0, sapN: 0, puzlKg: 0, puzlN: 0, cods: new Set(), ref: '' }; grupos.set(k, g); }
+    if (!g) { g = { sapKg: 0, sapN: 0, puzlKg: 0, puzlN: 0, sapRecs: [], puzlRecs: [], ref: '' }; grupos.set(k, g); }
     return g;
   };
 
   // sapDoc, não `sobra`: as transferências já saíram no passo 5 com motivo
-  // próprio e não podem entrar aqui de novo.
+  // próprio e não podem entrar aqui de novo. Os registros ficam guardados
+  // no grupo para o detalhe sair um por linha, com as mesmas colunas da
+  // tabela do modal — um detalhe por GRUPO esconderia os demais quando a
+  // mesma referência tem mais de um movimento.
   sapDoc.forEach(r => {
     const g = grupo(chaveSap(r));
     g.sapKg += contrib(r);
     g.sapN++;
-    g.cods.add(normMov(r.movimento));
+    g.sapRecs.push(r);
     g.ref = g.ref || String(r.ref || r.documento || '');
   });
 
@@ -1943,15 +1984,15 @@ function diagnosticarDivergenciaSapPuzl({ sapRecords = [], puzlRecords = [], lad
       const g = grupo(k);
       g.puzlKg += p.kg;
       g.puzlN++;
+      g.puzlRecs.push(p);
       g.ref = g.ref || p.doc;
     });
   });
 
-  grupos.forEach((g, k) => {
-    const base = { ref: g.ref || k, cod: [...g.cods].join('/'), kg: 0 };
+  grupos.forEach(g => {
     if (g.puzlN > 0 && g.sapN === 0) {
-      add('pendente', `${docLabel} lançada na PUZL e ausente no SAP`, 'erro', -g.puzlKg, g.puzlN,
-          { ...base, kg: -g.puzlKg });
+      g.puzlRecs.forEach(p => add('pendente', `${docLabel} lançada na PUZL e ausente no SAP`,
+        'erro', -p.kg, 1, _detPuzl(p)));
       return;
     }
     if (g.sapN > 0 && g.puzlN === 0) {
@@ -1960,11 +2001,11 @@ function diagnosticarDivergenciaSapPuzl({ sapRecords = [], puzlRecords = [], lad
         // pedido + peso do passo 4 já teria casado qualquer estorno com o
         // lançamento dele. Sobrar negativo significa que o lançamento
         // anulado não está no período (ou não está na base importada).
-        add('estorno-orfao', 'Estorno sem o lançamento correspondente no período', 'erro', g.sapKg, g.sapN,
-            { ...base, kg: g.sapKg });
+        g.sapRecs.forEach(r => add('estorno-orfao', 'Estorno sem o lançamento correspondente no período',
+          'erro', contrib(r), 1, _detSap(r)));
       } else {
-        add('sem-ref-sap', `Movimento no SAP sem ${docLabel} correspondente na PUZL`, 'erro', g.sapKg, g.sapN,
-            { ...base, kg: g.sapKg });
+        g.sapRecs.forEach(r => add('sem-ref-sap', `Movimento no SAP sem ${docLabel} correspondente na PUZL`,
+          'erro', contrib(r), 1, _detSap(r)));
       }
       return;
     }
@@ -1972,7 +2013,11 @@ function diagnosticarDivergenciaSapPuzl({ sapRecords = [], puzlRecords = [], lad
     // mais aqui — sai antes, no passo 4, pareado por pedido.
     const delta = g.sapKg - g.puzlKg;
     if (Math.abs(delta) >= 0.001) {
-      add('peso', `Peso divergente entre ${docLabel} e SAP`, 'erro', delta, 1, { ...base, kg: delta });
+      // Detalhe do lado SAP, com os dois valores na nota: é a comparação
+      // que interessa aqui, e ela não cabe numa coluna só.
+      add('peso', `Peso divergente entre ${docLabel} e SAP`, 'erro', delta, 1,
+          { ..._detSap(g.sapRecs[0]), kg: delta,
+            nota: `PUZL ${fmtKg(g.puzlKg)} · SAP ${fmtKg(g.sapKg)}` });
     }
   });
 
@@ -2406,10 +2451,17 @@ function _bdmDiagnosticoHtml(diag) {
       ? `<details class="bdm-diag-details">
           <summary>Ver ${m.detalhes.length}${m.count > m.detalhes.length ? ` de ${m.count}` : ''} registro(s)</summary>
           <div class="bdm-diag-list">
+            <div class="bdm-diag-item bdm-diag-item--head">
+              <span>Mov.</span><span>Ref.</span><span>Pedido / Forn.</span>
+              <span>Doc MIGO</span><span>Data</span><span>Peso</span><span>Obs.</span>
+            </div>
             ${m.detalhes.map(d => `
               <div class="bdm-diag-item">
                 <span>${d.cod ? movBadgeHtml(d.cod, 'sm') : ''}</span>
                 <span class="td-mono">${escapeHtml(String(d.ref || '—'))}</span>
+                <span class="td-mono td-muted">${escapeHtml(String(d.pedido || '—'))}</span>
+                <span class="td-mono td-muted">${escapeHtml(String(d.doc || '—'))}</span>
+                <span class="td-mono td-muted">${escapeHtml(String(d.dt || '—'))}</span>
                 <span class="td-mono" style="text-align:right;color:${movValorCor(d.kg)}">${fmtKgSigned(d.kg)}</span>
                 <span class="td-muted">${escapeHtml(String(d.nota || ''))}</span>
               </div>`).join('')}
@@ -2623,11 +2675,9 @@ function openBreakdownModal(trigger) {
 
     summaryEl.innerHTML = `
       <div class="bdm-summary-row">
-        <span class="bdm-summary-label">Movimentos considerados</span>
         <div class="bdm-summary-codes"></div>
       </div>
       <div class="bdm-summary-row">
-        <span class="bdm-summary-label">Registros</span>
         <span class="bdm-summary-compare">${registrosHtml}</span>
       </div>${_bdmDiagnosticoHtml(diag)}${_bdmFechExcluidosHtml(fechExcluidos)}`;
 
@@ -2647,21 +2697,29 @@ function openBreakdownModal(trigger) {
 
     // Segmentado do 862. Só existe quando há 862 no conjunto — num material
     // que nunca teve transferência, o controle seria ruído permanente.
+    // DROPDOWN, não segmentado à mostra: fechado ele é um botão só, e o
+    // cabeçalho do modal já estava espremendo a tabela — que é o conteúdo
+    // principal (Hugo, 01/09/2026). O rótulo do gatilho carrega a seleção
+    // corrente, então o filtro ativo continua visível sem o menu aberto.
+    const _LABEL862 = { todos: 'destino', com: 'c/ destino', sem: 's/ destino' };
     const _render862 = () => {
       if (!_r862.length) return '';
       const opt = (val, label, n) => `<button type="button" class="bdm-862-opt${destino862 === val ? ' on' : ''}"
         data-destino="${val}" aria-pressed="${destino862 === val ? 'true' : 'false'}"
-        title="${val === 'sem' ? 'Transferências cujo 861 correspondente não está no SAP importado' : val === 'com' ? 'Transferências com o 861 correspondente localizado' : 'Não filtra por destino'}"
         >${label} <b>${n}</b></button>`;
-      // Inline, na mesma linha dos chips: como bloco próprio ele custava
-      // uma faixa inteira do cabeçalho (rótulo + borda + margem) para três
-      // botões — e o cabeçalho já estava espremendo a tabela.
-      return `<span class="bdm-862-filtro" title="Filtra apenas as linhas 862 — os demais códigos seguem pelos chips">
-        <span class="bdm-862-sep"></span>
-        ${movBadgeHtml('862', 'sm')}
-        ${opt('todos', 'todos', _r862.length)}
-        ${opt('com',   'c/ destino', _com862)}
-        ${opt('sem',   's/ destino', _sem862)}
+      const ativo = destino862 !== 'todos';
+      return `<span class="bdm-862-drop">
+        <button type="button" class="bdm-862-trigger${ativo ? ' on' : ''}"
+          title="Filtra apenas as linhas 862 pelo destino da transferência — os demais códigos seguem pelos chips">
+          ${movBadgeHtml('862', 'sm')}
+          <span>${_LABEL862[destino862]}</span>
+          <i class="ti ti-chevron-down"></i>
+        </button>
+        <span class="bdm-862-menu">
+          ${opt('todos', 'Todos', _r862.length)}
+          ${opt('com',   'Com destino', _com862)}
+          ${opt('sem',   'Sem destino', _sem862)}
+        </span>
       </span>`;
     };
 
@@ -2684,6 +2742,15 @@ function openBreakdownModal(trigger) {
       // (clone) mais abaixo, então guardar a referência aqui daria stale.
       const _busca = () => document.getElementById('bdm-search-input')?.value || '';
 
+      // Abre/fecha o menu do 862. O estado de aberto vive só no DOM: todo
+      // caminho que muda um filtro re-renderiza os chips e já fecha o menu
+      // junto, então não há o que preservar entre renders.
+      const trg862 = ev.target.closest('.bdm-862-trigger');
+      if (trg862 && summaryEl.contains(trg862)) {
+        trg862.closest('.bdm-862-drop')?.classList.toggle('open');
+        return;
+      }
+
       const opt862 = ev.target.closest('.bdm-862-opt');
       if (opt862 && summaryEl.contains(opt862)) {
         destino862 = opt862.dataset.destino || 'todos';
@@ -2691,6 +2758,9 @@ function openBreakdownModal(trigger) {
         renderRows(_busca());
         return;
       }
+
+      // Clique em qualquer outro ponto do resumo fecha o menu aberto.
+      summaryEl.querySelectorAll('.bdm-862-drop.open').forEach(d => d.classList.remove('open'));
 
       const chip = ev.target.closest('.mv-badge-btn');
       if (!chip || !summaryEl.contains(chip)) return;
@@ -4863,6 +4933,14 @@ document.addEventListener('mousedown', e => {
   if (_cfPopover && !_cfPopover.contains(e.target)) {
     closeColFilterPopover();
   }
+});
+
+// Fecha o menu de destino do 862 (modal de Movimentações) ao clicar fora
+// dele. Cliques DENTRO do resumo já são tratados pelo onclick de lá; este
+// aqui cobre o resto da tela — a tabela, o campo de busca, o overlay.
+document.addEventListener('mousedown', e => {
+  if (e.target.closest?.('.bdm-862-drop')) return;
+  document.querySelectorAll('.bdm-862-drop.open').forEach(d => d.classList.remove('open'));
 });
 
 // Close popover on scroll OUTSIDE it (not inside .cf-list)

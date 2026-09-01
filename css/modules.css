@@ -3389,7 +3389,6 @@ body.bdm-modal-acima .modal-overlay:not(.analitico-detail-overlay) { z-index: 70
   text-transform: uppercase;
   color: var(--text3);
   flex: 0 0 auto;
-  min-width: 150px;
   white-space: nowrap;
 }
 .bdm-summary-codes {
@@ -3400,21 +3399,17 @@ body.bdm-modal-acima .modal-overlay:not(.analitico-detail-overlay) { z-index: 70
   flex: 1 1 auto;
   min-width: 0;
 }
-/* ── Sub-filtro de destino do 862 ── Inline, na mesma linha dos chips de
-   código, separado deles por um traço vertical. Como bloco próprio ele
-   custava uma faixa inteira do cabeçalho para três botões. */
-.bdm-862-filtro {
+/* ── Sub-filtro de destino do 862 ── Dropdown: fechado é um botão só. Como
+   segmentado à mostra ele ocupava permanentemente uma faixa do cabeçalho
+   para um filtro de uso ocasional. */
+.bdm-862-drop {
+  position: relative;
+  display: inline-flex;
+}
+.bdm-862-trigger {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-}
-.bdm-862-sep {
-  width: 1px;
-  height: 14px;
-  background: var(--border2);
-  margin: 0 4px;
-}
-.bdm-862-opt {
+  gap: 5px;
   background: none;
   border: 1px solid var(--border2);
   border-radius: 5px;
@@ -3425,13 +3420,51 @@ body.bdm-modal-acima .modal-overlay:not(.analitico-detail-overlay) { z-index: 70
   cursor: pointer;
   transition: background .12s, border-color .12s, color .12s;
 }
-.bdm-862-opt b { font-family: var(--mono); font-size: 10px; }
-.bdm-862-opt:hover { color: var(--text); border-color: var(--text3); }
-.bdm-862-opt.on {
-  background: var(--accent-dim, rgba(99,102,241,.15));
+.bdm-862-trigger:hover { color: var(--text); border-color: var(--text3); }
+.bdm-862-trigger i { font-size: 12px; transition: transform .15s; }
+.bdm-862-drop.open .bdm-862-trigger i { transform: rotate(180deg); }
+/* Filtro ativo continua visível com o menu fechado — senão a tabela fica
+   restrita sem nada na tela dizendo por quê. */
+.bdm-862-trigger.on {
   border-color: var(--accent);
   color: var(--accent);
+  background: var(--accent-dim, rgba(99,102,241,.15));
 }
+.bdm-862-menu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 30;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px;
+  min-width: 150px;
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  box-shadow: 0 6px 20px rgba(0,0,0,.45);
+}
+.bdm-862-drop.open .bdm-862-menu { display: flex; }
+.bdm-862-opt {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  padding: 4px 7px;
+  font-size: 11px;
+  font-family: var(--font);
+  color: var(--text2);
+  cursor: pointer;
+  text-align: left;
+  transition: background .12s, color .12s;
+}
+.bdm-862-opt b { font-family: var(--mono); font-size: 10px; color: var(--text3); }
+.bdm-862-opt:hover { background: var(--bg3); color: var(--text); }
+.bdm-862-opt.on { color: var(--accent); }
+.bdm-862-opt.on b { color: var(--accent); }
 .bdm-summary-compare {
   font-size: 12px;
   color: var(--text2);
@@ -3535,18 +3568,36 @@ body.bdm-modal-acima .modal-overlay:not(.analitico-detail-overlay) { z-index: 70
   max-height: 260px;
   overflow-y: auto;
 }
+/* Mesmas colunas da tabela do modal: sem data e sem pedido, achar o
+   registro correspondente lá embaixo virava caça manual. */
 .bdm-diag-item {
   display: grid;
-  grid-template-columns: 46px 1fr 110px 1fr;
+  grid-template-columns: 46px 108px 110px 100px 92px 108px 1fr;
   gap: 8px;
   align-items: center;
   font-size: 11px;
   padding: 2px 0;
 }
+.bdm-diag-item--head {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text3);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 4px;
+  margin-bottom: 2px;
+  position: sticky;
+  top: 0;
+  background: var(--bg2);
+}
 
 /* ── Ajustes de Fechamento Mensal desconsiderados (dentro do modal de
    breakdown de Entradas/Saídas) ── */
 .bdm-fech-row {
+  /* Segue em coluna: além do rótulo, esta seção tem um <details> abaixo —
+     em linha os três disputariam a mesma faixa. */
+  flex-direction: column;
   padding-top: 8px;
   border-top: 1px dashed var(--purple-border);
 }
