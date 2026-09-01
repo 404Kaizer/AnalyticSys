@@ -1514,12 +1514,17 @@ function _bdmDivergencia(sapTotal, localTotal, diag = null) {
 //
 // @param {{cod, pedido, peso, rec}[]} itens
 // @returns {{pares: {orig, estorno}[], sobra: object[]}}
-// Códigos de ESTORNO — o lado que DESFAZ. No SAP o estorno é o código par
-// imediatamente acima do original: 101→102, 201→202, 301→302, 303→304,
-// 305→306, 309→310, 311→312, 551→552, 801→802, 863→864.
+// Códigos de ESTORNO — o lado que DESFAZ. No SAP o estorno é o original
+// +2: 101→102, 201→202, 301→302, 303→304, 305→306, 309→310, 311→312,
+// 551→552, 801→802, 861→863, 862→864 (mesma regra já anotada em
+// MOV_BADGE_CLASS, acima).
 //
-// 862 NÃO entra: ele não desfaz nada. É a saída de uma transferência, cujo
-// par é o 861 do outro centro — quem desfaz o 862 é o 864.
+// Os DOIS lados da transferência têm estorno próprio, e os dois entram
+// aqui: 863 desfaz o 861 (a chegada) e 864 desfaz o 862 (a saída).
+//
+// 861 e 862 NÃO entram: nenhum dos dois desfaz nada. Eles são as duas
+// pontas de uma transferência — um par entre si, não um par
+// lançamento/estorno.
 //
 // Parte de _SAP_REVERSE_MOVS (102, 863, 864, 552, 802), que já existia para
 // o detector de duplicatas do módulo SAP, e ACRESCENTA os que faltavam lá:

@@ -3628,11 +3628,23 @@ body.bdm-modal-acima .modal-overlay:not(.analitico-detail-overlay) { z-index: 70
    vale. Fundo estático, sem a animação pulsante das duplicatas do módulo
    SAP — lá o pulso chama para um problema; aqui o par é escrituração
    normal e só precisa ser lido junto. */
+/* Cor SÓLIDA, não translúcida. As linhas da tabela alternam claro/escuro
+   (zebra, ver "tbody tr:nth-child(even)"), e um vermelho com alpha se
+   compunha diferente em cada faixa: o par saía com duas tonalidades e
+   deixava de se ler como um bloco só. Compondo o vermelho com a superfície
+   via color-mix o resultado é opaco e idêntico em toda linha do par,
+   independente de ela ser par ou ímpar. Sai do tom certo em cada tema,
+   porque as duas pontas são tokens. */
 .bdm-row-estorno > td {
-  background: var(--red-bg);
+  background: color-mix(in srgb, var(--red) 13%, var(--bg2));
+}
+/* O hover precisa ser redefinido aqui: o fundo do <td> cobre o do <tr>, e
+   sem isto a linha do par ficaria inerte ao mouse, ao contrário das demais. */
+.bdm-table tbody tr.bdm-row-estorno:hover > td {
+  background: color-mix(in srgb, var(--red) 22%, var(--bg2));
 }
 .bdm-row-estorno > td:first-child {
-  box-shadow: inset 2px 0 0 var(--red);
+  box-shadow: inset 3px 0 0 var(--red);
 }
 
 /* ── Ajustes de Fechamento Mensal desconsiderados (dentro do modal de
