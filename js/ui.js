@@ -1438,8 +1438,53 @@ function _normBuscaMov(s) {
   return String(s || '').toLowerCase().replace(/−/g, '-');
 }
 
+// ── Conferência PUZL × SAP ───────────────────────────────────────────────
+// Severidade da divergência entre o total lançado na PUZL (páginas
+// Entradas/Saídas) e o total do SAP, compartilhada por DOIS lugares que
+// olham para o MESMO par de números e por isso precisam concordar sempre:
+//   1) o ícone das células Entradas/Saídas da VISÃO MICRO
+//      (buildAnaliticoDetailBreakdown, logo abaixo);
+//   2) o rodapé do modal de Movimentações (_compareHtml em
+//      openBreakdownModal).
+// Régua: <1% bate (verde), <15% atenção (âmbar), acima disso discrepância
+// grande (vermelho) — mesma paleta de status dos demais badges do sistema.
+//
+// Compara MAGNITUDES (Math.abs) dos dois lados: os registros da PUZL têm
+// peso sempre positivo, enquanto a soma do SAP em Saídas é negativa —
+// confrontar com sinal daria uma "diferença" que é na verdade a soma dos
+// dois. Quem tem direção é a DIFERENÇA (SAP acima/abaixo da PUZL).
+function _bdmDivergencia(sapTotal, localTotal) {
+  const sapAbs = Math.abs(num(sapTotal));
+  const local  = Math.abs(num(localTotal));
+  const diff   = sapAbs - local;
+  const pct    = sapAbs !== 0 ? (Math.abs(diff) / sapAbs) * 100 : (local !== 0 ? 100 : 0);
+  const nivel  = pct < 1 ? 'ok' : (pct < 15 ? 'atencao' : 'critico');
+  return {
+    diff, pct, nivel,
+    color: nivel === 'ok' ? 'var(--green)' : (nivel === 'atencao' ? 'var(--amber)' : 'var(--red)'),
+    icon:  nivel === 'ok' ? 'ti-circle-check' : (nivel === 'atencao' ? 'ti-alert-triangle' : 'ti-alert-circle')
+  };
+}
+
+// Texto do tooltip do indicador — os dois valores confrontados por extenso,
+// pra conferir sem precisar abrir o modal.
+function _bdmDivergenciaTitle(dv, sapTotal, localTotal) {
+  const base = `PUZL: ${fmtKg(Math.abs(num(localTotal)))} · SAP: ${fmtKg(Math.abs(num(sapTotal)))}`;
+  return dv.nivel === 'ok'
+    ? `${base} — valores batem`
+    : `${base} — divergência de ${dv.pct.toFixed(1)}% (${fmtKgSigned(dv.diff)})`;
+}
+
 function buildAnaliticoDetailBreakdown(entries, total, colorVar, title, localCount = null, mat = '', central = '', fechExcluidos = [], localTotal = null) {
   if (!entries.length && !(fechExcluidos && fechExcluidos.length)) {
+    // Sem movimento no SAP mas COM lançamento na PUZL, o "—" sozinho
+    // esconderia justamente a divergência que o indicador existe para
+    // mostrar. Marca o alerta ao lado — sem botão, porque não há
+    // movimentação nenhuma para detalhar no modal.
+    if (localTotal !== null && Math.abs(num(localTotal)) > 0) {
+      const dv = _bdmDivergencia(0, localTotal);
+      return `<span class="analitico-detail-empty">—</span> <i class="ti ${dv.icon} bdm-icon bdm-icon-cmp" style="color:${dv.color}" title="${escapeHtml(_bdmDivergenciaTitle(dv, 0, localTotal))}"></i>`;
+    }
     return `<span class="analitico-detail-empty">—</span>`;
   }
 
@@ -1448,6 +1493,20 @@ function buildAnaliticoDetailBreakdown(entries, total, colorVar, title, localCou
   const encodedFech = (fechExcluidos && fechExcluidos.length)
     ? encodeURIComponent(JSON.stringify(fechExcluidos))
     : '';
+
+  // Ícone do botão: quando existe total da PUZL para confrontar (colunas
+  // Entradas e Saídas da VISÃO MICRO), ele deixa de ser um enfeite de
+  // "abrir detalhes" e vira o INDICADOR de conferência — bate com o SAP
+  // (check verde) ou diverge (triângulo âmbar / círculo vermelho), mesma
+  // régua do rodapé do modal (ver _bdmDivergencia). Sem esse dado — coluna
+  // Ajustes, breakdown diário — segue o ícone neutro de antes.
+  let iconHtml  = '<i class="ti ti-table-options bdm-icon"></i>';
+  let btnTitle  = 'Clique para ver detalhes';
+  if (localTotal !== null) {
+    const dv = _bdmDivergencia(total, localTotal);
+    iconHtml = `<i class="ti ${dv.icon} bdm-icon bdm-icon-cmp" style="color:${dv.color}"></i>`;
+    btnTitle = `${_bdmDivergenciaTitle(dv, total, localTotal)}. Clique para ver detalhes`;
+  }
 
   return `
     <button class="bdm-trigger" style="color:${colorVar}"
@@ -1460,9 +1519,9 @@ function buildAnaliticoDetailBreakdown(entries, total, colorVar, title, localCou
       data-local-total="${localTotal === null ? '' : localTotal}"
       data-mat="${escapeHtml(mat)}"
       data-central="${escapeHtml(central)}"
-      title="Clique para ver detalhes">
+      title="${escapeHtml(btnTitle)}">
       <span class="bdm-total">${fmtKgSigned(total)}</span>
-      <i class="ti ti-table-options bdm-icon"></i>
+      ${iconHtml}
     </button>`;
 }
 
@@ -1783,7 +1842,11 @@ function openBreakdownModal(trigger) {
     const codsOrdenados = [...codCounts.entries()].sort((a, b) => b[1] - a[1]);
 
     const sapCount = entries.length;
-    const localLabel = title === 'Saídas' ? 'registro(s) na página Saídas' : 'registro(s) na página Entradas';
+    // Lado local identificado pelo SISTEMA de origem (PUZL), não pela página
+    // — é assim que o contraponto ao SAP é chamado no resto do app (ver
+    // "Registros PUZL sem correspondência no SAP", em Pendências). Diz de
+    // qual página vieram logo em seguida, para não perder a referência.
+    const localLabel = title === 'Saídas' ? 'na PUZL (página Saídas)' : 'na PUZL (página Entradas)';
     const registrosHtml = localCount === null
       ? `<b>${sapCount}</b> no SAP`
       : (() => {
@@ -1852,45 +1915,43 @@ function openBreakdownModal(trigger) {
   // Monta a linha de comparação sobre um conjunto de linhas. Chamada pelo
   // renderRows a cada filtro — o rodapé acompanha o que está na tela.
   //
-  // A comparação usa MAGNITUDE dos dois lados (Math.abs): os registros da
-  // página Entradas/Saídas têm peso sempre positivo, então num modal de
-  // Saídas — cuja soma do SAP é negativa — confrontar os valores com sinal
-  // daria uma "diferença" que é na verdade a soma dos dois. Por isso o total
-  // do SAP aqui sai com fmtKg (grandeza), não fmtKgSigned: quem tem direção
-  // é a DIFERENÇA (SAP acima/abaixo da página), e essa sim leva sinal.
+  // A comparação usa MAGNITUDE dos dois lados (Math.abs, dentro de
+  // _bdmDivergencia): os registros da PUZL têm peso sempre positivo, então
+  // num modal de Saídas — cuja soma do SAP é negativa — confrontar os
+  // valores com sinal daria uma "diferença" que é na verdade a soma dos
+  // dois. Por isso o total do SAP aqui sai com fmtKg (grandeza), não
+  // fmtKgSigned: quem tem direção é a DIFERENÇA (SAP acima/abaixo da PUZL),
+  // e essa sim leva sinal.
   const _compareHtml = (linhas) => {
     const sapTotal = Math.abs(linhas.reduce((sum, r) => sum + r.value, 0));
-    const diff = sapTotal - localTotal;
-    const diffPct = sapTotal !== 0 ? (Math.abs(diff) / sapTotal) * 100 : (localTotal !== 0 ? 100 : 0);
-    // Severidade da divergência: <1% bate (verde), <15% atenção (âmbar),
-    // demais é discrepância grande (vermelho) — mesma paleta de status
-    // usada em outros badges do sistema (ti-circle-check/alert-triangle/
-    // alert-circle em verde/âmbar/vermelho).
-    const diffColor = diffPct < 1 ? 'var(--green)' : (diffPct < 15 ? 'var(--amber)' : 'var(--red)');
-    const compareIcon = diffPct < 1
+    // Mesma régua do indicador da célula da VISÃO MICRO (ver
+    // _bdmDivergencia): os dois confrontam o mesmo par de números, e ver
+    // check verde na tabela e alerta aqui dentro seria contradição pura.
+    const dv = _bdmDivergencia(sapTotal, localTotal);
+    const compareIcon = dv.nivel === 'ok'
       ? '<i class="ti ti-circle-check" style="color:var(--green)" title="Valores batem"></i>'
-      : diffPct < 15
-        ? `<i class="ti ti-alert-triangle" style="color:var(--amber)" title="Divergência de ${diffPct.toFixed(1)}%"></i>`
-        : `<i class="ti ti-alert-circle" style="color:var(--red)" title="Divergência de ${diffPct.toFixed(1)}%"></i>`;
-    // Ordem pedida pelo Hugo (06/08): Entradas/Saídas (página) → SAP →
-    // diferença. Substitui o par label+total padrão do rodapé (ver
-    // renderRows abaixo) — evita repetir o total do SAP duas vezes.
-    return `${escapeHtml(title)}: <b>${fmtKg(localTotal)}</b> &nbsp;·&nbsp; SAP: <b style="color:${colorVar}">${fmtKg(sapTotal)}</b> &nbsp;·&nbsp; diferença: <b style="color:${diffColor}">${fmtKgSigned(diff)}</b> ${compareIcon}`;
+      : `<i class="ti ${dv.icon}" style="color:${dv.color}" title="Divergência de ${dv.pct.toFixed(1)}%"></i>`;
+    // Ordem pedida pelo Hugo (06/08): lado local → SAP → diferença.
+    // Substitui o par label+total padrão do rodapé (ver renderRows abaixo)
+    // — evita repetir o total do SAP duas vezes. O lado local se chama PUZL
+    // (Hugo, 01/09/2026): a linha confronta dois SISTEMAS, e repetir
+    // "Entradas" ao lado de "SAP" fazia parecer categoria, não origem.
+    return `PUZL: <b>${fmtKg(localTotal)}</b> &nbsp;·&nbsp; SAP: <b style="color:${colorVar}">${fmtKg(sapTotal)}</b> &nbsp;·&nbsp; diferença: <b style="color:${dv.color}">${fmtKgSigned(dv.diff)}</b> ${compareIcon}`;
   };
 
-  // Linha do rodapé quando há filtro ativo. A comparação com a página é
+  // Linha do rodapé quando há filtro ativo. A comparação com a PUZL é
   // SUSPENSA de propósito: os registros de Entradas/Saídas não carregam
   // código de movimento, então confrontar um subconjunto de códigos do SAP
-  // contra o total cheio da página produziria uma "diferença" sem
+  // contra o total cheio da PUZL produziria uma "diferença" sem
   // significado — pior que não mostrar, porque parece um alerta real.
   // Mostra o subtotal do que está na tela e diz por que a comparação sumiu.
   const _compareFiltradoHtml = (linhas, totalLinhas) => {
     const sub = linhas.reduce((sum, r) => sum + r.value, 0);
     return `
-    <span title="A página ${escapeHtml(title)} não registra código de movimento, então não dá pra recortá-la pelos mesmos códigos — a comparação volta ao limpar o filtro">
+    <span title="A PUZL (página ${escapeHtml(title)}) não registra código de movimento, então não dá pra recortá-la pelos mesmos códigos — a comparação volta ao limpar o filtro">
       SAP (filtrado): <b style="color:${movValorCor(sub)}">${fmtKgSigned(sub)}</b>
       &nbsp;·&nbsp; <b>${linhas.length}</b> de <b>${totalLinhas}</b> registro(s)
-      &nbsp;·&nbsp; <span style="color:var(--text3)">comparação com ${escapeHtml(title)} suspensa no subconjunto <i class="ti ti-info-circle" style="font-size:1em;vertical-align:middle"></i></span>
+      &nbsp;·&nbsp; <span style="color:var(--text3)">comparação com a PUZL suspensa no subconjunto <i class="ti ti-info-circle" style="font-size:1em;vertical-align:middle"></i></span>
     </span>`;
   };
 

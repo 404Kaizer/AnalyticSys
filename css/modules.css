@@ -3214,6 +3214,12 @@ td.var-cell-zero .ti-circle-check     { color: var(--text3); }
   transition: color 0.13s;
 }
 .bdm-trigger:hover .bdm-icon { color: var(--text2); }
+/* Indicador de conferência PUZL × SAP (colunas Entradas/Saídas da VISÃO
+   MICRO). Substitui o ícone neutro de "abrir detalhes" quando há total da
+   PUZL para confrontar. A cor de status vem inline (ver _bdmDivergencia em
+   ui.js) e por isso vence a regra de hover acima — o indicador não some nem
+   muda de cor quando o mouse passa. */
+.bdm-icon-cmp { font-size: 13px; }
 .bdm-total { }
 
 /* Overlay */
