@@ -3561,7 +3561,12 @@ body.bdm-modal-acima .modal-overlay:not(.analitico-detail-overlay) { z-index: 70
   flex-direction: column;
   gap: 3px;
   margin-top: 6px;
-  padding: 8px;
+  /* SEM padding-top: `top: 0` do cabeçalho gruda na borda interna deste
+     container, então qualquer respiro aqui em cima vira uma faixa
+     transparente por onde as linhas aparecem ACIMA do cabeçalho ao rolar.
+     Esse respiro passou para o padding-top do próprio cabeçalho, que o
+     cobre com o fundo dele. */
+  padding: 0 8px 8px;
   background: var(--bg2);
   border-radius: var(--radius);
   border: 1px solid var(--border);
@@ -3603,15 +3608,18 @@ body.bdm-modal-acima .modal-overlay:not(.analitico-detail-overlay) { z-index: 70
   text-transform: uppercase;
   color: var(--text3);
   border-bottom: 1px solid var(--border);
+  /* Absorve o respiro que era padding-top do container (ver .bdm-diag-list):
+     assim a faixa inteira do topo é pintada pelo cabeçalho, e não sobra
+     transparência por onde as linhas apareçam acima dele. */
+  padding-top: 8px;
   padding-bottom: 4px;
-  margin-bottom: 2px;
   position: sticky;
   top: 0;
   background: var(--bg2);
   /* position:sticky cria contexto de empilhamento, mas sem z-index os
      irmãos seguintes ainda pintam POR CIMA — era isso que fazia o texto
      das linhas atravessar o cabeçalho ao rolar. */
-  z-index: 1;
+  z-index: 2;
 }
 
 /* ── Ajustes de Fechamento Mensal desconsiderados (dentro do modal de
