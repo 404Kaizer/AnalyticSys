@@ -3390,6 +3390,44 @@ body.bdm-modal-acima .modal-overlay:not(.analitico-detail-overlay) { z-index: 70
   flex-wrap: wrap;
   gap: 6px;
 }
+/* ── Sub-filtro de destino do 862 ── Vive dentro de .bdm-summary-codes,
+   junto dos chips de código, mas ocupa a linha inteira (flex-basis 100%):
+   é um controle de outra natureza — segmentado, exclusivo — e alinhá-lo
+   com os chips faria parecer mais um chip de código. */
+.bdm-862-filtro {
+  flex-basis: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+  padding-top: 7px;
+  border-top: 1px dashed var(--border);
+}
+.bdm-862-filtro-label {
+  font-size: 9.5px;
+  font-family: var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text3);
+}
+.bdm-862-opt {
+  background: none;
+  border: 1px solid var(--border2);
+  border-radius: 5px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-family: var(--font);
+  color: var(--text3);
+  cursor: pointer;
+  transition: background .12s, border-color .12s, color .12s;
+}
+.bdm-862-opt b { font-family: var(--mono); font-size: 10.5px; }
+.bdm-862-opt:hover { color: var(--text); border-color: var(--text3); }
+.bdm-862-opt.on {
+  background: var(--accent-dim, rgba(99,102,241,.15));
+  border-color: var(--accent);
+  color: var(--accent);
+}
 .bdm-summary-compare {
   font-size: 12px;
   color: var(--text2);
@@ -3401,6 +3439,84 @@ body.bdm-modal-acima .modal-overlay:not(.analitico-detail-overlay) { z-index: 70
 .bdm-summary-compare b {
   color: var(--text);
   font-family: var(--mono);
+}
+
+/* ── Diagnóstico da divergência PUZL × SAP (dentro do modal de breakdown
+   de Entradas/Saídas) ── Espelha a estrutura do bloco de Fechamento logo
+   abaixo, com acento na cor de destaque em vez do roxo: são duas seções
+   irmãs do mesmo resumo e devem se ler como tal. */
+.bdm-diag-row {
+  padding-top: 8px;
+  border-top: 1px dashed var(--border2);
+}
+.bdm-diag-row .bdm-summary-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--accent);
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: 11.5px;
+  font-family: var(--font);
+  font-weight: 600;
+}
+.bdm-diag-motivos {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.bdm-diag-head {
+  display: grid;
+  grid-template-columns: 16px 1fr auto auto;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text2);
+}
+.bdm-diag-kg {
+  font-family: var(--mono);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.bdm-diag-count {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--text3);
+  white-space: nowrap;
+  min-width: 52px;
+  text-align: right;
+}
+/* Saldo sem explicação: apagado de propósito — é ausência de diagnóstico,
+   não um motivo a mais, e não deve competir com os motivos reais. */
+.bdm-diag-sobra .bdm-diag-head { color: var(--text3); font-style: italic; }
+.bdm-diag-details { margin: 2px 0 0 24px; }
+.bdm-diag-details summary {
+  font-size: 11px;
+  color: var(--text2);
+  cursor: pointer;
+  user-select: none;
+  padding: 2px 0;
+}
+.bdm-diag-details summary:hover { color: var(--text); }
+.bdm-diag-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 6px;
+  padding: 8px;
+  background: var(--bg2);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  max-height: 260px;
+  overflow-y: auto;
+}
+.bdm-diag-item {
+  display: grid;
+  grid-template-columns: 46px 1fr 110px 1fr;
+  gap: 8px;
+  align-items: center;
+  font-size: 11px;
+  padding: 2px 0;
 }
 
 /* ── Ajustes de Fechamento Mensal desconsiderados (dentro do modal de

@@ -1275,6 +1275,20 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
       const localSaiCount = _saidasFiltradas.length;
       const localSaiTotal = _saidasFiltradas.reduce((sum, s) => sum + _convertNfPesoToKg(s.peso, s.um, s.material), 0);
 
+      // ── Diagnóstico da divergência PUZL × SAP ───────────────────────────
+      // Calculado AQUI, e não dentro de buildAnaliticoDetailBreakdown, porque
+      // é só neste ponto que os dois lados existem crus: os registros SAP do
+      // balde (natureza.*Records, objetos originais — o `entries` que desce
+      // para o modal já é array serializado e perdeu campos) e os registros
+      // da PUZL do mesmo material + central + período. Ver
+      // diagnosticarDivergenciaSapPuzl em ui.js.
+      const diagEnt = diagnosticarDivergenciaSapPuzl({
+        sapRecords: natureza.entRecords, puzlRecords: _entradasFiltradas, lado: 'ent', material: mat
+      });
+      const diagSai = diagnosticarDivergenciaSapPuzl({
+        sapRecords: natureza.saiRecords, puzlRecords: _saidasFiltradas, lado: 'sai', material: mat
+      });
+
       // Quando AUSENTE: busca os dois lançamentos mais próximos para tooltip
       // informativo. Continua ancorado em preCarryLanc, NÃO em preCarry: o
       // tooltip fala de lançamentos (alimenta o AUSENTE do Est. Final), então
@@ -1654,8 +1668,8 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
           <td class="td-mono" style="font-size:11px">${matSemCadastro ? '—' : (escapeHtml(_matCodSap) || '—')}</td>
           <td class="td-mono" style="color:var(--text2);font-size:11px">${_iniCell}</td>
           <td class="td-mono" style="color:${(matSemCadastro || snapshot.pesoIniAusente) ? 'var(--text3)' : 'var(--text)'}">${(matSemCadastro || snapshot.pesoIniAusente) ? '—' : fmtKg(snapshot.pesoIni)}</td>
-          <td>${buildAnaliticoDetailBreakdown(entEntries, natureza.totalEnt, 'var(--green)', 'Entradas', localEntCount, mat, central, [], localEntTotal)}</td>
-          <td>${buildAnaliticoDetailBreakdown(saiEntries, natureza.totalSai, 'var(--red)', 'Saídas', localSaiCount, mat, central, [], localSaiTotal)}</td>
+          <td>${buildAnaliticoDetailBreakdown(entEntries, natureza.totalEnt, 'var(--green)', 'Entradas', localEntCount, mat, central, [], localEntTotal, diagEnt)}</td>
+          <td>${buildAnaliticoDetailBreakdown(saiEntries, natureza.totalSai, 'var(--red)', 'Saídas', localSaiCount, mat, central, [], localSaiTotal, diagSai)}</td>
           <td>${buildAnaliticoDetailBreakdown(ajuEntries, natureza.totalAju, movValorCor(natureza.totalAju, 'var(--amber)'), 'Ajustes', null, mat, central, _matFechExcluidos)}</td>
           <td class="td-mono" style="color:var(--text2);font-size:11px">${
             snapshot.pesoFimAusente
