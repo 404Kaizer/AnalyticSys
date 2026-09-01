@@ -3570,13 +3570,31 @@ body.bdm-modal-acima .modal-overlay:not(.analitico-detail-overlay) { z-index: 70
 }
 /* Mesmas colunas da tabela do modal: sem data e sem pedido, achar o
    registro correspondente lá embaixo virava caça manual. */
+/* Colunas: as de conteúdo previsível ficam FIXAS na largura máxima real do
+   dado (ref até 11 caracteres, doc e pedido com 10 dígitos, data com 10,
+   peso até "−1.516.470,00 kg"); as duas de texto livre — Pedido/Forn. e
+   Obs. — dividem o que sobra em fr. Peso é a única que não pode encolher:
+   número truncado por ellipsis vira número errado. */
 .bdm-diag-item {
   display: grid;
-  grid-template-columns: 46px 108px 110px 100px 92px 108px 1fr;
+  grid-template-columns: 44px 96px minmax(0, 1fr) 84px 78px 116px minmax(0, 1.3fr);
   gap: 8px;
   align-items: center;
   font-size: 11px;
   padding: 2px 0;
+}
+/* Peso alinhado à direita nos dados E no cabeçalho — separados, os dois
+   davam a impressão de colunas diferentes. */
+.bdm-diag-item > span:nth-child(6) { text-align: right; }
+/* Uma linha por registro, sempre. A coluna Pedido/Forn. recebe tanto um
+   número de pedido quanto razão social inteira ("PEDREIRA DOVALLE COMERCIO
+   DE PEDRAS EM GERAL LTDA") — sem isso a razão social quebrava em cinco
+   linhas e desalinhava a lista toda. O valor completo fica no title. */
+.bdm-diag-item > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 .bdm-diag-item--head {
   font-family: var(--mono);
@@ -3590,6 +3608,10 @@ body.bdm-modal-acima .modal-overlay:not(.analitico-detail-overlay) { z-index: 70
   position: sticky;
   top: 0;
   background: var(--bg2);
+  /* position:sticky cria contexto de empilhamento, mas sem z-index os
+     irmãos seguintes ainda pintam POR CIMA — era isso que fazia o texto
+     das linhas atravessar o cabeçalho ao rolar. */
+  z-index: 1;
 }
 
 /* ── Ajustes de Fechamento Mensal desconsiderados (dentro do modal de

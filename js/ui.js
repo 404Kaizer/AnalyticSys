@@ -2455,16 +2455,25 @@ function _bdmDiagnosticoHtml(diag) {
               <span>Mov.</span><span>Ref.</span><span>Pedido / Forn.</span>
               <span>Doc MIGO</span><span>Data</span><span>Peso</span><span>Obs.</span>
             </div>
-            ${m.detalhes.map(d => `
+            ${m.detalhes.map(d => {
+              // Célula cortada por ellipsis (ver .bdm-diag-item > span) leva
+              // o valor inteiro no title — razão social de fornecedor não
+              // cabe em coluna nenhuma e não pode ficar inalcançável.
+              const cel = (v, cls) => {
+                const txt = String(v || '—');
+                return `<span class="${cls}" title="${escapeHtml(txt)}">${escapeHtml(txt)}</span>`;
+              };
+              return `
               <div class="bdm-diag-item">
                 <span>${d.cod ? movBadgeHtml(d.cod, 'sm') : ''}</span>
-                <span class="td-mono">${escapeHtml(String(d.ref || '—'))}</span>
-                <span class="td-mono td-muted">${escapeHtml(String(d.pedido || '—'))}</span>
-                <span class="td-mono td-muted">${escapeHtml(String(d.doc || '—'))}</span>
-                <span class="td-mono td-muted">${escapeHtml(String(d.dt || '—'))}</span>
-                <span class="td-mono" style="text-align:right;color:${movValorCor(d.kg)}">${fmtKgSigned(d.kg)}</span>
-                <span class="td-muted">${escapeHtml(String(d.nota || ''))}</span>
-              </div>`).join('')}
+                ${cel(d.ref,    'td-mono')}
+                ${cel(d.pedido, 'td-mono td-muted')}
+                ${cel(d.doc,    'td-mono td-muted')}
+                ${cel(d.dt,     'td-mono td-muted')}
+                <span class="td-mono" style="color:${movValorCor(d.kg)}">${fmtKgSigned(d.kg)}</span>
+                ${cel(d.nota,   'td-muted')}
+              </div>`;
+            }).join('')}
           </div>
         </details>`
       : '';
