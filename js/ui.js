@@ -1466,13 +1466,29 @@ function _bdmDivergencia(sapTotal, localTotal) {
   };
 }
 
-// Texto do tooltip do indicador — os dois valores confrontados por extenso,
-// pra conferir sem precisar abrir o modal.
-function _bdmDivergenciaTitle(dv, sapTotal, localTotal) {
-  const base = `PUZL: ${fmtKg(Math.abs(num(localTotal)))} · SAP: ${fmtKg(Math.abs(num(sapTotal)))}`;
-  return dv.nivel === 'ok'
-    ? `${base} — valores batem`
-    : `${base} — divergência de ${dv.pct.toFixed(1)}% (${fmtKgSigned(dv.diff)})`;
+// Conteúdo do tooltip flutuante do indicador (ver data-diff-tip-html e
+// _ensureFloatTip): três linhas — os dois lados confrontados e a diferença,
+// esta acompanhada do MESMO ícone de status que aparece na célula, para o
+// balão e a coluna nunca contarem histórias diferentes.
+//
+// Os dois lados saem com o SINAL DA COLUNA — ambos positivos em Entradas,
+// ambos negativos em Saídas — e não com o sinal cru de cada origem: a PUZL
+// guarda peso sempre positivo e o SAP devolve saída negativa, então
+// imprimir os valores como vêm mostraria "+1.227.298 / −1.227.298" para um
+// par que bate exatamente. A DIFERENÇA é calculada sobre magnitudes (ver
+// _bdmDivergencia) e leva o único sinal com significado aqui: positivo =
+// SAP acima da PUZL.
+//
+// Volta HTML, não texto: o ícone precisa da cor de status. Quem consome
+// escapa isto UMA vez ao gravar no atributo e devolve ao innerHTML na
+// leitura — os números vêm de Number, não de entrada de usuário.
+function _bdmDivergenciaTipHtml(dv, sapTotal, localTotal) {
+  const sinal = num(sapTotal) < 0 ? -1 : 1;
+  return [
+    `PUZL: ${fmtKgSigned(sinal * Math.abs(num(localTotal)))}`,
+    `SAP: ${fmtKgSigned(sinal * Math.abs(num(sapTotal)))}`,
+    `DIFF.: ${fmtKgSigned(dv.diff)} <i class="ti ${dv.icon}" style="color:${dv.color};font-size:1em;vertical-align:middle"></i>`
+  ].join('<br>');
 }
 
 function buildAnaliticoDetailBreakdown(entries, total, colorVar, title, localCount = null, mat = '', central = '', fechExcluidos = [], localTotal = null) {
@@ -1483,7 +1499,7 @@ function buildAnaliticoDetailBreakdown(entries, total, colorVar, title, localCou
     // movimentação nenhuma para detalhar no modal.
     if (localTotal !== null && Math.abs(num(localTotal)) > 0) {
       const dv = _bdmDivergencia(0, localTotal);
-      return `<span class="analitico-detail-empty">—</span> <i class="ti ${dv.icon} bdm-icon bdm-icon-cmp" style="color:${dv.color}" title="${escapeHtml(_bdmDivergenciaTitle(dv, 0, localTotal))}"></i>`;
+      return `<span class="analitico-detail-empty">—</span> <i class="ti ${dv.icon} bdm-icon bdm-icon-cmp" style="color:${dv.color}" data-diff-tip-html="${escapeHtml(_bdmDivergenciaTipHtml(dv, 0, localTotal))}"></i>`;
     }
     return `<span class="analitico-detail-empty">—</span>`;
   }
@@ -1501,11 +1517,24 @@ function buildAnaliticoDetailBreakdown(entries, total, colorVar, title, localCou
   // régua do rodapé do modal (ver _bdmDivergencia). Sem esse dado — coluna
   // Ajustes, breakdown diário — segue o ícone neutro de antes.
   let iconHtml  = '<i class="ti ti-table-options bdm-icon"></i>';
-  let btnTitle  = 'Clique para ver detalhes';
+  // O botão segue com a dica nativa de sempre: a conferência inteira mora
+  // no balão do número, e repeti-la aqui daria dois tooltips dizendo o
+  // mesmo por cima do outro.
+  const btnTitle = 'Clique para ver detalhes';
+  // Tooltip do NÚMERO: PUZL, SAP e a diferença com o indicador, no balão
+  // flutuante do sistema (data-diff-tip-html, ver _ensureFloatTip) — o
+  // mesmo visual dos badges AUSENTE, não o `title` nativo, que não
+  // aceitaria nem quebra de linha nem o ícone colorido.
+  //
+  // O `title=""` vazio junto é proposital e NÃO é sobra: sem ele o
+  // navegador subiria até o botão e mostraria o title dele por cima do
+  // balão — dois tooltips na mesma passada de mouse. Vazio, o span declara
+  // "não tenho dica nativa" e a herança para aqui.
+  let totalTipAttr = '';
   if (localTotal !== null) {
     const dv = _bdmDivergencia(total, localTotal);
     iconHtml = `<i class="ti ${dv.icon} bdm-icon bdm-icon-cmp" style="color:${dv.color}"></i>`;
-    btnTitle = `${_bdmDivergenciaTitle(dv, total, localTotal)}. Clique para ver detalhes`;
+    totalTipAttr = ` title="" data-diff-tip-html="${escapeHtml(_bdmDivergenciaTipHtml(dv, total, localTotal))}"`;
   }
 
   return `
@@ -1520,7 +1549,7 @@ function buildAnaliticoDetailBreakdown(entries, total, colorVar, title, localCou
       data-mat="${escapeHtml(mat)}"
       data-central="${escapeHtml(central)}"
       title="${escapeHtml(btnTitle)}">
-      <span class="bdm-total">${fmtKgSigned(total)}</span>
+      <span class="bdm-total"${totalTipAttr}>${fmtKgSigned(total)}</span>
       ${iconHtml}
     </button>`;
 }
@@ -3864,30 +3893,80 @@ function toggleDetailFilter(btn) {
 }
 window.toggleDetailFilter = toggleDetailFilter;
 
+// Nó único do tooltip flutuante do sistema, criado sob demanda no body.
+// Compartilhado pelos badges AUSENTE (initAbsentTooltips, abaixo) e pelo
+// tooltip de diferença PUZL × SAP das colunas Entradas/Saídas
+// (data-diff-tip-html) — duas definições do mesmo balão envelheceriam
+// desalinhadas na primeira vez que alguém mexesse numa delas.
+function _ensureFloatTip() {
+  let tip = document.getElementById('absent-tip');
+  if (tip) return tip;
+  tip = document.createElement('div');
+  tip.id = 'absent-tip';
+  tip.style.cssText = [
+    'position:fixed',
+    'z-index:99999',
+    'background:var(--bg2,#1e2130)',
+    'border:1px solid var(--border,#2e3347)',
+    'border-radius:6px',
+    'padding:8px 12px',
+    'font-size:12px',
+    'color:var(--text,#e2e8f0)',
+    'line-height:1.6',
+    'pointer-events:none',
+    'white-space:pre',
+    'box-shadow:0 4px 16px rgba(0,0,0,.4)',
+    'display:none',
+    'max-width:320px',
+  ].join(';');
+  document.body.appendChild(tip);
+  return tip;
+}
+
+// ── Tooltip da conferência PUZL × SAP (data-diff-tip-html) ──────────────
+// DELEGADO no document, ao contrário do initAbsentTooltips logo abaixo que
+// amarra três listeners por elemento. Aqui o alvo é toda célula de
+// Entradas/Saídas: uma central com 200 materiais rende 400 desses num card
+// só, e a VISÃO MICRO desenha vários cards — prender listener em cada um
+// daria milhares de handlers vivos para mostrar uma linha de texto.
+// Delegado é um par só, e vale para qualquer tela que use
+// buildAnaliticoDetailBreakdown (VISÃO MICRO, Inventário, breakdown diário)
+// sem precisar de chamada de init depois de renderizar.
+//
+// mouseover/mouseout (e não mouseenter/mouseleave) porque só esses sobem na
+// árvore — sem bolha não há delegação.
+//
+// innerHTML e não textContent: o conteúdo traz <br> e o ícone colorido de
+// status (ver _bdmDivergenciaTipHtml). O que entra aqui é montado a partir
+// de Number pelo próprio sistema — nada de texto digitado por usuário.
+let _diffTipAlvo = null;
+document.addEventListener('mouseover', e => {
+  const alvo = e.target.closest?.('[data-diff-tip-html]');
+  if (!alvo || alvo === _diffTipAlvo) return;
+  _diffTipAlvo = alvo;
+  const tip = _ensureFloatTip();
+  tip.innerHTML = alvo.dataset.diffTipHtml || '';
+  tip.style.display = 'block';
+  positionAbsentTip(tip, e);
+});
+document.addEventListener('mousemove', e => {
+  if (!_diffTipAlvo) return;
+  positionAbsentTip(_ensureFloatTip(), e);
+});
+document.addEventListener('mouseout', e => {
+  if (!_diffTipAlvo) return;
+  // Ignora a saída para um filho do próprio alvo — o mouseout dispara ao
+  // cruzar fronteira interna e esconderia o balão com o cursor ainda em
+  // cima.
+  if (e.relatedTarget && _diffTipAlvo.contains(e.relatedTarget)) return;
+  _diffTipAlvo = null;
+  const tip = document.getElementById('absent-tip');
+  if (tip) tip.style.display = 'none';
+});
+
 // Tooltip flutuante para badges AUSENTE
 function initAbsentTooltips(container) {
-  let tip = document.getElementById('absent-tip');
-  if (!tip) {
-    tip = document.createElement('div');
-    tip.id = 'absent-tip';
-    tip.style.cssText = [
-      'position:fixed',
-      'z-index:99999',
-      'background:var(--bg2,#1e2130)',
-      'border:1px solid var(--border,#2e3347)',
-      'border-radius:6px',
-      'padding:8px 12px',
-      'font-size:12px',
-      'color:var(--text,#e2e8f0)',
-      'line-height:1.6',
-      'pointer-events:none',
-      'white-space:pre',
-      'box-shadow:0 4px 16px rgba(0,0,0,.4)',
-      'display:none',
-      'max-width:320px',
-    ].join(';');
-    document.body.appendChild(tip);
-  }
+  const tip = _ensureFloatTip();
 
   container.querySelectorAll('[data-absent-tooltip]').forEach(el => {
     el.addEventListener('mouseenter', e => {
