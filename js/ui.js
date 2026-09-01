@@ -1466,6 +1466,44 @@ function _bdmDivergencia(sapTotal, localTotal) {
   };
 }
 
+// ── Contagem LÍQUIDA de registros do SAP ────────────────────────────────
+// A PUZL registra literalmente uma linha por nota fiscal. O SAP registra
+// tudo: o lançamento, o estorno que o anula, os dois lados de uma
+// transferência entre centros. Contar `entries.length` cru e confrontar com
+// a PUZL acusaria divergência em todo material que teve um estorno no
+// período — ruído, não informação (pedido do Hugo, 01/09/2026).
+//
+// Aqui um positivo e um negativo de MESMA MAGNITUDE se anulam e saem os
+// dois da conta, sobrando só o que de fato representa movimento novo. É a
+// mesma leitura que a coluna já faz no VALOR ("LÍQUIDO: estornos e
+// transferências para fora entram como negativo e anulam o positivo que os
+// originou") — contagem e valor passam a contar a mesma história.
+//
+// Agrupa por magnitude e NÃO por código: um par 861/862 tem códigos
+// diferentes e se anula igual, e é justamente ele que mais infla a conta.
+// toFixed(3) é a mesma precisão de casamento usada em _transferPairKey.
+function _bdmContagemLiquida(entries) {
+  const porPeso = new Map();
+  (entries || []).forEach(([, value]) => {
+    const v = num(value);
+    const k = Math.abs(v).toFixed(3);
+    const g = porPeso.get(k) || { pos: 0, neg: 0 };
+    if (v < 0) g.neg++; else g.pos++;
+    porPeso.set(k, g);
+  });
+  let n = 0;
+  porPeso.forEach(g => { n += Math.abs(g.pos - g.neg); });
+  return n;
+}
+
+// Inteiro com sinal explícito, para a diferença de contagem. Mesmo menos
+// tipográfico (−, U+2212) do fmtKgSigned, para os dois sinais do balão
+// saírem idênticos.
+function _fmtIntSigned(n) {
+  const v = Math.round(num(n));
+  return v === 0 ? '0' : (v > 0 ? '+' : '−') + Math.abs(v);
+}
+
 // Conteúdo do tooltip flutuante do indicador (ver data-diff-tip-html e
 // _ensureFloatTip): três linhas — os dois lados confrontados e a diferença,
 // esta acompanhada do MESMO ícone de status que aparece na célula, para o
@@ -1479,15 +1517,26 @@ function _bdmDivergencia(sapTotal, localTotal) {
 // _bdmDivergencia) e leva o único sinal com significado aqui: positivo =
 // SAP acima da PUZL.
 //
+// Cada linha leva também a CONTAGEM de registros daquele lado, e a de DIFF.
+// a diferença entre elas. A do SAP é a líquida (ver _bdmContagemLiquida) —
+// sem isso ela contaria estornos e os dois lados de cada transferência
+// contra uma PUZL que só tem notas fiscais, e acusaria divergência de
+// quantidade em quase toda linha. Os contadores só aparecem quando o
+// chamador sabe quantos registros a PUZL tem (localCount); no Inventário e
+// no breakdown diário esse dado não existe e o balão fica só com os pesos.
+//
 // Volta HTML, não texto: o ícone precisa da cor de status. Quem consome
 // escapa isto UMA vez ao gravar no atributo e devolve ao innerHTML na
 // leitura — os números vêm de Number, não de entrada de usuário.
-function _bdmDivergenciaTipHtml(dv, sapTotal, localTotal) {
+function _bdmDivergenciaTipHtml(dv, sapTotal, localTotal, entries = null, localCount = null) {
   const sinal = num(sapTotal) < 0 ? -1 : 1;
+  const temCont = localCount !== null && localCount !== undefined;
+  const sapCount = temCont ? _bdmContagemLiquida(entries) : 0;
+  const reg = (n, sufixo = '') => temCont ? ` · ${n} reg.${sufixo}` : '';
   return [
-    `PUZL: ${fmtKgSigned(sinal * Math.abs(num(localTotal)))}`,
-    `SAP: ${fmtKgSigned(sinal * Math.abs(num(sapTotal)))}`,
-    `DIFF.: ${fmtKgSigned(dv.diff)} <i class="ti ${dv.icon}" style="color:${dv.color};font-size:1em;vertical-align:middle"></i>`
+    `PUZL: ${fmtKgSigned(sinal * Math.abs(num(localTotal)))}${reg(localCount)}`,
+    `SAP: ${fmtKgSigned(sinal * Math.abs(num(sapTotal)))}${reg(sapCount, ' (líq.)')}`,
+    `DIFF.: ${fmtKgSigned(dv.diff)} <i class="ti ${dv.icon}" style="color:${dv.color};font-size:1em;vertical-align:middle"></i>${temCont ? ` · ${_fmtIntSigned(sapCount - localCount)} reg.` : ''}`
   ].join('<br>');
 }
 
@@ -1499,7 +1548,7 @@ function buildAnaliticoDetailBreakdown(entries, total, colorVar, title, localCou
     // movimentação nenhuma para detalhar no modal.
     if (localTotal !== null && Math.abs(num(localTotal)) > 0) {
       const dv = _bdmDivergencia(0, localTotal);
-      return `<span class="analitico-detail-empty">—</span> <i class="ti ${dv.icon} bdm-icon bdm-icon-cmp" style="color:${dv.color}" data-diff-tip-html="${escapeHtml(_bdmDivergenciaTipHtml(dv, 0, localTotal))}"></i>`;
+      return `<span class="analitico-detail-empty">—</span> <i class="ti ${dv.icon} bdm-icon bdm-icon-cmp" style="color:${dv.color}" data-diff-tip-html="${escapeHtml(_bdmDivergenciaTipHtml(dv, 0, localTotal, entries, localCount))}"></i>`;
     }
     return `<span class="analitico-detail-empty">—</span>`;
   }
@@ -1534,7 +1583,7 @@ function buildAnaliticoDetailBreakdown(entries, total, colorVar, title, localCou
   if (localTotal !== null) {
     const dv = _bdmDivergencia(total, localTotal);
     iconHtml = `<i class="ti ${dv.icon} bdm-icon bdm-icon-cmp" style="color:${dv.color}"></i>`;
-    totalTipAttr = ` title="" data-diff-tip-html="${escapeHtml(_bdmDivergenciaTipHtml(dv, total, localTotal))}"`;
+    totalTipAttr = ` title="" data-diff-tip-html="${escapeHtml(_bdmDivergenciaTipHtml(dv, total, localTotal, entries, localCount))}"`;
   }
 
   return `
@@ -1876,14 +1925,25 @@ function openBreakdownModal(trigger) {
     // "Registros PUZL sem correspondência no SAP", em Pendências). Diz de
     // qual página vieram logo em seguida, para não perder a referência.
     const localLabel = title === 'Saídas' ? 'na PUZL (página Saídas)' : 'na PUZL (página Entradas)';
+    // O confronto com a PUZL usa a contagem LÍQUIDA do SAP, não a bruta
+    // (ver _bdmContagemLiquida): a bruta inclui estorno e os dois lados de
+    // cada transferência, que a PUZL — só notas fiscais — nunca teria, e
+    // acusaria divergência em quase todo material com estorno no período.
+    // A bruta continua à vista, entre parênteses, porque é ela que explica
+    // o número de linhas da tabela logo abaixo; some quando as duas são
+    // iguais, que é o caso comum e não merece parêntese.
+    const sapCountLiq = _bdmContagemLiquida(entries);
     const registrosHtml = localCount === null
       ? `<b>${sapCount}</b> no SAP`
       : (() => {
-          const bateComLocal = sapCount === localCount;
+          const bateComLocal = sapCountLiq === localCount;
           const compareIcon  = bateComLocal
             ? '<i class="ti ti-circle-check" style="color:var(--green)" title="Contagens batem"></i>'
-            : '<i class="ti ti-alert-triangle" style="color:var(--amber)" title="Contagens divergem"></i>';
-          return `<b>${sapCount}</b> no SAP &nbsp;·&nbsp; <b>${localCount}</b> ${localLabel} ${compareIcon}`;
+            : `<i class="ti ti-alert-triangle" style="color:var(--amber)" title="Contagens divergem em ${_fmtIntSigned(sapCountLiq - localCount)} registro(s)"></i>`;
+          const bruto = sapCountLiq === sapCount
+            ? ''
+            : ` <span style="color:var(--text3)" title="${sapCount} linhas na tabela abaixo; ${sapCount - sapCountLiq} se anulam entre positivo e negativo">(${sapCount} c/ estornos e transferências)</span>`;
+          return `<b>${sapCountLiq}</b> no SAP${bruto} &nbsp;·&nbsp; <b>${localCount}</b> ${localLabel} ${compareIcon}`;
         })();
 
     summaryEl.innerHTML = `
