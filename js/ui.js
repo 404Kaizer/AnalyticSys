@@ -1549,13 +1549,70 @@ function _parearEstornos(itens) {
 // mesma leitura que a coluna já faz no VALOR ("LÍQUIDO: estornos e
 // transferências para fora entram como negativo e anulam o positivo que os
 // originou"), então contagem e valor contam a mesma história.
+// ── O que fica FORA da comparação PUZL × SAP ────────────────────────────
+// Duas coisas, e as duas pelo mesmo motivo: a PUZL não tem como ter aquele
+// registro nesta central.
+//
+//   1. A TRANSFERÊNCIA em si (861/862 e a família 30x). A PUZL não registra
+//      transferência, só nota fiscal de compra — confrontá-la seria comparar
+//      coisa com nada.
+//
+//   2. A ENTRADA QUE FOI TRANSFERIDA PARA OUTRA CENTRAL. O SAP contabiliza a
+//      NF PRIMEIRO na central de compra e só depois a transfere para o
+//      destino (Hugo, 01/09/2026, com o caso da NF 120657-1: 101 de +8.950
+//      na central de compra, seguido de um 862 de −8.950 para ITQ). A PUZL
+//      registra aquela nota na central de DESTINO, não nesta — então essa
+//      101 não tem, e nunca vai ter, contrapartida local aqui. Sem esta
+//      regra ela caía em "Movimento no SAP sem NF correspondente na PUZL":
+//      um erro que não existe, e que apareceria em toda central de compra.
+//
+// O VÍNCULO entre a 101 e o 862 que a levou embora não é pedido nem
+// referência — naquele caso os pedidos eram 4500241551 e 4500241568, e as
+// refs 120657-1 e 000000244-2. O que resta é depósito + material + |peso|,
+// exatamente o critério que getSap861862DuplicateKeys já usa para ligar
+// entrada e transferência. Material e central são fixos no balde, então a
+// chave aqui é depósito + |peso|.
+//
+// Recebe itens normalizados ({cod, deposito, peso}) e devolve o Set dos
+// PRÓPRIOS objetos a excluir — a identidade é do chamador, que sabe mapear
+// de volta para o registro dele.
+function _foraDaComparacao(itens) {
+  const fora  = new Set();
+  const chave = it => `${String(it.deposito || '').trim().toUpperCase()}|${Math.abs(num(it.peso)).toFixed(3)}`;
+
+  const entradasPorChave = new Map();
+  (itens || []).forEach(it => {
+    if (!CODIGOS_ENTRADA.has(normMov(it.cod))) return;
+    const k = chave(it);
+    if (!entradasPorChave.has(k)) entradasPorChave.set(k, []);
+    entradasPorChave.get(k).push(it);
+  });
+
+  (itens || []).forEach(it => {
+    const cod = normMov(it.cod);
+    if (!MOV_TRANSF_CENTRO.has(cod)) return;
+    fora.add(it);
+    // Só a SAÍDA de transferência (862) leva uma entrada junto: ela é que
+    // tira daqui o material que a 101 tinha trazido.
+    if (cod !== '862') return;
+    const alvo = (entradasPorChave.get(chave(it)) || []).find(e => !fora.has(e));
+    if (alvo) fora.add(alvo);
+  });
+
+  return fora;
+}
+
+// Contagem líquida do SAP sobre o MESMO conjunto que a soma usa (ver
+// _foraDaComparacao): conta e peso não podem olhar universos diferentes.
 function _bdmContagemLiquida(entries) {
   const itens = (entries || []).map(([cod, value, , , , extra]) => ({
     cod,
-    pedido: extra && extra.pedido,
-    peso:   value
+    deposito: extra && extra.deposito,
+    pedido:   extra && extra.pedido,
+    peso:     value
   }));
-  return _parearEstornos(itens).sobra.length;
+  const fora = _foraDaComparacao(itens);
+  return _parearEstornos(itens.filter(it => !fora.has(it))).sobra.length;
 }
 
 // Inteiro com sinal explícito, para a diferença de contagem. Mesmo menos
@@ -1601,6 +1658,25 @@ const DIAG_TOM_ICONE = {
   estrutural: { icon: 'ti-arrows-right-left', cor: 'var(--text3)' },
   alerta:     { icon: 'ti-alert-triangle',    cor: 'var(--amber)' },
   erro:       { icon: 'ti-alert-circle',      cor: 'var(--red)'   }
+};
+
+// Rótulo curto de cada motivo, para o BALÃO. O rótulo longo continua no
+// modal, onde há largura para explicar. No balão a frase inteira
+// ("Transferência entre centros (não existe na PUZL)") quebrava em duas
+// linhas por motivo e deixava a caixa alta demais para se ler de relance.
+// {doc} vira NF ou OS conforme o balde. Chave sem entrada aqui cai no
+// rótulo longo — nada quebra se um motivo novo esquecer de se cadastrar.
+const DIAG_CURTO = {
+  'duplicada':         'Integração duplicada',
+  'transf-duplicada':  'Transferência duplicada (862)',
+  'transf-incompleta': 'Transferência sem par no SAP',
+  'pendente':          '{doc} ausente no SAP',
+  'estornada':         '{doc} anulada por estorno',
+  'estorno-orfao':     'Estorno órfão',
+  'sem-ref-sap':       'Movimento sem {doc} na PUZL',
+  'peso':              'Peso divergente',
+  'sem-ref-puzl':      'Sem {doc} cadastrada na PUZL',
+  'fator-volumetrico': 'Sem fator de conversão (m³)'
 };
 
 /**
@@ -1756,31 +1832,91 @@ function diagnosticarDivergenciaSapPuzl({ sapRecords = [], puzlRecords = [], lad
           nota: orig.rec.pedido ? `pedido ${orig.rec.pedido}` : '' });
   });
 
-  // ── 5. Transferência entre centros ──────────────────────────────────────
-  // Só existe no SAP (ver premissa acima). Separa as que têm o movimento
-  // complementar no SAP importado das que não têm: a primeira é rotina, a
-  // segunda é transferência incompleta — o outro centro não lançou, ou o
-  // arquivo importado não cobre o período dele. Opera sobre o que SOBROU do
-  // pareamento: transferência já desfeita por estorno não chega aqui.
+  // ── 5. Transferência entre centros: FORA DA COMPARAÇÃO ──────────────────
+  // A PUZL não registra transferência — só nota fiscal de compra. Então
+  // não existe divergência a explicar aqui: é dimensão que só um dos lados
+  // tem, e confrontá-la seria comparar coisa com nada (Hugo, 01/09/2026).
+  //
+  // Por isso a transferência NÃO vira motivo: ela sai da base da comparação
+  // inteira (ver sapComparavel, no passo 7) e é apenas REPORTADA à parte,
+  // para o analista saber o que ficou de fora e conferir o total da coluna.
+  // Antes ela entrava como motivo "estrutural" que explicava kg da
+  // diferença — o que, no fundo, era maquiar uma comparação errada em vez
+  // de corrigi-la.
+  //
+  // O que continua sendo problema DO SAP segue sinalizado, com kg 0 (não
+  // participa da conta, porque a conta não inclui transferência): uma 861/
+  // 862 sem o movimento complementar é transferência incompleta — o outro
+  // centro não lançou, ou o arquivo importado não cobre o período dele.
+  //
+  // Junto com a transferência sai a ENTRADA que ela levou para outra
+  // central — a NF que o SAP lançou aqui só de passagem e que a PUZL
+  // registrou no destino (ver _foraDaComparacao, que decide os dois casos
+  // com o mesmo critério que a contagem do balão usa).
+  //
+  // Opera sobre o que SOBROU do pareamento: transferência já desfeita por
+  // estorno não chega aqui.
+  const foraItens = sobra.map(({ rec }) => ({
+    cod: rec.movimento, deposito: rec.deposito, peso: rec.peso, rec
+  }));
+  const foraSet = _foraDaComparacao(foraItens);
+  const foraRecs = new Set([...foraSet].map(it => it.rec));
+
   const sapDoc = [];
+  const transfExcluidas = { kg: 0, count: 0, detalhes: [] };
   sobra.forEach(({ rec: r }) => {
+    if (!foraRecs.has(r)) { sapDoc.push(r); return; }
     const cod = normMov(r.movimento);
-    if (!MOV_TRANSF_CENTRO.has(cod)) { sapDoc.push(r); return; }
     const ref = (r.ref && String(r.ref).trim())
       ? String(r.ref).trim()
       : String(r.documento || '').trim();
     const det = { ref: ref || '—', cod, kg: contrib(r) };
     if (cod === '861' || cod === '862') {
       const par = findTransferPairCentral(cod, ref, r.material || material, { pedido: r.pedido }, num(r.peso));
-      if (par) {
-        det.nota = `${cod === '861' ? 'de' : 'para'} ${par.central}`;
-        add('transf', 'Transferência entre centros (não existe na PUZL)', 'estrutural', contrib(r), 1, det);
-      } else {
-        add('transf-incompleta', 'Transferência sem o movimento complementar no SAP', 'erro', contrib(r), 1, det);
-      }
-    } else {
-      add('transf', 'Transferência entre centros (não existe na PUZL)', 'estrutural', contrib(r), 1, det);
+      if (par) det.nota = `${cod === '861' ? 'de' : 'para'} ${par.central}`;
+      else add('transf-incompleta', 'Transferência sem o movimento complementar no SAP', 'erro', 0, 1, det);
+    } else if (!MOV_TRANSF_CENTRO.has(cod)) {
+      // Entrada que saiu daqui por transferência — o que a distingue de um
+      // erro é justamente esta nota.
+      det.nota = 'transferida para outra central';
     }
+    transfExcluidas.kg += contrib(r);
+    transfExcluidas.count++;
+    if (transfExcluidas.detalhes.length < 40) transfExcluidas.detalhes.push(det);
+  });
+
+  // ── 5b. Entrada que CHEGOU por transferência ────────────────────────────
+  // O espelho do caso acima (Hugo, 01/09/2026, com as NFs 120640 e 120641):
+  // a nota entrou pela central de compra e chegou AQUI como 861. A PUZL
+  // registra a nota na central de DESTINO — esta —, mas o SAP não tem 101
+  // aqui: tem o 861, cuja referência é a da transferência (000000997-2) e
+  // não a da nota (120640). Por referência eles nunca casam, e o resultado
+  // era o pior dos dois mundos: a NF virava "pendente no SAP" e o 861
+  // virava "movimento sem NF na PUZL" — dois erros falsos que, somados, se
+  // anulavam em kg, provando que eram o mesmo movimento contado duas vezes.
+  //
+  // Casa por |peso|, o único vínculo disponível, e o par sai da
+  // reconciliação SEM virar motivo: o 861 é a contrapartida real daquela
+  // nota nesta central, então os dois PERMANECEM nos totais e se anulam
+  // sozinhos na diferença. Um 861 que não acha nota fica de fora da
+  // comparação, como qualquer transferência.
+  sobra.forEach(({ rec: r }) => {
+    if (normMov(r.movimento) !== '861' || !foraRecs.has(r)) return;
+    const alvoPeso = Math.abs(num(r.peso)).toFixed(3);
+    let alvo = null;
+    puzlPorChave.forEach(lista => {
+      if (alvo) return;
+      alvo = lista.find(p => !puzlConsumidos.has(p) && Math.abs(num(p.kg)).toFixed(3) === alvoPeso) || null;
+    });
+    if (!alvo) return;
+    puzlConsumidos.add(alvo);
+    // Volta para a base comparável: ele tem contrapartida na PUZL, logo é
+    // comparável — e o peso dos dois se cancela na diferença.
+    foraRecs.delete(r);
+    transfExcluidas.kg -= contrib(r);
+    transfExcluidas.count--;
+    const _i = transfExcluidas.detalhes.findIndex(d => d.cod === '861' && Math.abs(num(d.kg)).toFixed(3) === alvoPeso);
+    if (_i >= 0) transfExcluidas.detalhes.splice(_i, 1);
   });
 
   // ── 6. Reconciliação por referência do que sobrou ───────────────────────
@@ -1840,20 +1976,44 @@ function diagnosticarDivergenciaSapPuzl({ sapRecords = [], puzlRecords = [], lad
     }
   });
 
-  // ── 4. Fecha a conta ────────────────────────────────────────────────────
-  const sapTotal  = sapRecords.reduce((s, r) => s + contrib(r), 0);
+  // ── 7. Fecha a conta ────────────────────────────────────────────────────
+  // O lado SAP da comparação é o COMPARÁVEL: fora dele ficam a
+  // transferência e a entrada que ela levou embora (passo 5) — mas NÃO o
+  // 861 que já achou a nota dele na PUZL (passo 5b), que é contrapartida
+  // legítima e volta para a base. É este número, e não o total cheio da
+  // coluna, que vai ao confronto e ao indicador.
+  //
+  // A checagem é só `foraRecs`: ele já contém todas as transferências, e
+  // testar o código de novo aqui reexcluiria justamente os 861 resgatados.
+  //
+  // Os pares lançamento+estorno CONTINUAM na base: eles somam zero e não
+  // distorcem nada, e tirá-los faria a conta deixar de fechar com o motivo
+  // 'estornada', que é quem explica a nota que a PUZL ainda tem.
+  const comparaveis  = sapRecords.filter(r => !foraRecs.has(r));
+  const sapComparavel = comparaveis.reduce((s, r) => s + contrib(r), 0);
+  // Contagem sobre EXATAMENTE o mesmo conjunto do peso — conta e soma não
+  // podem olhar universos diferentes. Vai pronta para o balão, que assim
+  // não precisa reproduzir estas regras a partir dos `entries` serializados
+  // (ver _bdmContagemLiquida, que segue como fallback de quem não tem
+  // diagnóstico).
+  const sapCount = _parearEstornos(comparaveis.map(r => ({
+    cod: r.movimento, deposito: r.deposito, pedido: r.pedido, peso: num(r.peso)
+  }))).sobra.length;
   const puzlTotal = puzlRecords.reduce((s, r) => s + _convertNfPesoToKg(r.peso, r.um, r.material), 0);
-  const diff      = sapTotal - puzlTotal;
+  const diff      = sapComparavel - puzlTotal;
   const lista     = [...motivos.values()].sort((a, b) => Math.abs(b.kg) - Math.abs(a.kg));
   const explicado = lista.reduce((s, m) => s + m.kg, 0);
   const naoExplicado = diff - explicado;
 
   return {
     diff, explicado, naoExplicado, motivos: lista,
-    // "Explicado e em paz": a diferença inteira sai de causa estrutural
-    // conhecida e nada na lista é erro. É o caso da central que só recebe
-    // transferência — hoje ela acende alerta todo mês sem ter problema
-    // nenhum, e é justamente esse ruído que esconde a divergência real.
+    // Base real da comparação e o que ficou de fora dela.
+    sapComparavel, sapCount, transfExcluidas,
+    // "Explicado e em paz": a diferença inteira sai de causa conhecida e
+    // nada na lista é erro. Ficou raro depois que a transferência saiu da
+    // base — que é o certo: a central que só recebe transferência agora
+    // simplesmente BATE (verde), em vez de precisar de um estado especial
+    // para justificar um alerta que nunca deveria ter existido.
     tudoExplicado: lista.length > 0
       && !lista.some(m => m.tom === 'erro')
       && Math.abs(naoExplicado) < 0.01
@@ -1887,7 +2047,11 @@ function diagnosticarDivergenciaSapPuzl({ sapRecords = [], puzlRecords = [], lad
 function _bdmDivergenciaTipHtml(dv, sapTotal, localTotal, entries = null, localCount = null, diag = null) {
   const sinal = num(sapTotal) < 0 ? -1 : 1;
   const temCont = localCount !== null && localCount !== undefined;
-  const sapCount = temCont ? _bdmContagemLiquida(entries) : 0;
+  // Contagem vinda do diagnóstico quando existe: ela já aplica as mesmas
+  // exclusões do peso (transferência, entrada transferida, 861 resgatado).
+  // _bdmContagemLiquida é o fallback de quem não tem diagnóstico.
+  const sapCount = !temCont ? 0
+    : (diag && diag.sapCount != null ? diag.sapCount : _bdmContagemLiquida(entries));
   const reg = (n, sufixo = '') => temCont ? ` · ${n} reg.${sufixo}` : '';
   const linhas = [
     `PUZL: ${fmtKgSigned(sinal * Math.abs(num(localTotal)))}${reg(localCount)}`,
@@ -1895,16 +2059,27 @@ function _bdmDivergenciaTipHtml(dv, sapTotal, localTotal, entries = null, localC
     `DIFF.: ${fmtKgSigned(dv.diff)} <i class="ti ${dv.icon}" style="color:${dv.color};font-size:1em;vertical-align:middle"></i>${temCont ? ` · ${_fmtIntSigned(sapCount - localCount)} reg.` : ''}`
   ];
 
+  // Transferência entre centros não entra na comparação — a PUZL não tem
+  // esse tipo de registro. Aparece à parte justamente para explicar por que
+  // o SAP acima não fecha com o número da coluna, que é o total cheio.
+  // "registro(s)" e não "transferência(s)": o conjunto inclui também a
+  // entrada que a transferência levou para outra central.
+  const tx = diag && diag.transfExcluidas;
+  if (tx && tx.count) {
+    linhas.push(`<span style="color:var(--text3)">fora da comparação: ${tx.count} reg., ${fmtKgSigned(tx.kg)}</span>`);
+  }
+
   // ── Diagnóstico: por que diverge ─────────────────────────────────────
   // Só os DOIS motivos de maior peso, e um contador para o resto. O balão
   // não tem rolagem e uma lista de dez linhas em hover não se lê — a lista
   // completa, com o rastro registro a registro, fica na seção Diagnóstico
-  // do modal (decisão do Hugo, 01/09/2026).
+  // do modal (decisão do Hugo, 01/09/2026). Rótulo CURTO aqui (ver
+  // DIAG_CURTO): a frase inteira quebrava em duas linhas por motivo.
   if (diag && diag.motivos && diag.motivos.length) {
     linhas.push('');
     diag.motivos.slice(0, 2).forEach(m => {
       const est = DIAG_TOM_ICONE[m.tom] || DIAG_TOM_ICONE.alerta;
-      linhas.push(`<i class="ti ${est.icon}" style="color:${est.cor};font-size:1em;vertical-align:middle"></i> ${escapeHtml(m.label)}: ${fmtKgSigned(m.kg)} (${m.count})`);
+      linhas.push(`<i class="ti ${est.icon}" style="color:${est.cor};font-size:1em;vertical-align:middle"></i> ${escapeHtml(m.curto || m.label)}: ${fmtKgSigned(m.kg)} (${m.count})`);
     });
     const resto = diag.motivos.length - 2;
     if (resto > 0) linhas.push(`+ ${resto} outro(s) motivo(s) — clique para ver`);
@@ -1958,9 +2133,15 @@ function buildAnaliticoDetailBreakdown(entries, total, colorVar, title, localCou
   // "não tenho dica nativa" e a herança para aqui.
   let totalTipAttr = '';
   if (localTotal !== null) {
-    const dv = _bdmDivergencia(total, localTotal, diag);
+    // Confronta o SAP COMPARÁVEL, não o total cheio da coluna: a coluna
+    // mostra o movimento líquido de estoque (transferência incluída, que é
+    // o certo para o saldo), mas a PUZL não tem transferência nenhuma — ver
+    // diagnosticarDivergenciaSapPuzl. Sem diagnóstico, cai no total cheio,
+    // que é o comportamento de antes.
+    const sapCmp = (diag && diag.sapComparavel != null) ? diag.sapComparavel : total;
+    const dv = _bdmDivergencia(sapCmp, localTotal, diag);
     iconHtml = `<i class="ti ${dv.icon} bdm-icon bdm-icon-cmp" style="color:${dv.color}"></i>`;
-    totalTipAttr = ` title="" data-diff-tip-html="${escapeHtml(_bdmDivergenciaTipHtml(dv, total, localTotal, entries, localCount, diag))}"`;
+    totalTipAttr = ` title="" data-diff-tip-html="${escapeHtml(_bdmDivergenciaTipHtml(dv, sapCmp, localTotal, entries, localCount, diag))}"`;
   }
 
   // O diagnóstico viaja para o modal pelo dataset, como o resto. Só os
@@ -2260,14 +2441,41 @@ function _bdmDiagnosticoHtml(diag) {
       </div>`
     : '';
 
+  // Transferência e a entrada que ela levou embora não são motivo — ficaram
+  // FORA da comparação (ver diagnosticarDivergenciaSapPuzl). Aparecem no
+  // rodapé da seção só para o analista fechar a conta com o total cheio da
+  // coluna, que continua incluindo tudo.
+  const tx = diag.transfExcluidas;
+  const foraHtml = (tx && tx.count)
+    ? `<div class="bdm-diag-motivo bdm-diag-sobra">
+        <div class="bdm-diag-head">
+          <i class="ti ti-arrows-right-left" style="color:var(--text3)"></i>
+          <span class="bdm-diag-label">Fora da comparação — a PUZL não registra transferência</span>
+          <span class="bdm-diag-kg" style="color:var(--text3)">${fmtKgSigned(tx.kg)}</span>
+          <span class="bdm-diag-count">${tx.count} reg.</span>
+        </div>
+      </div>`
+    : '';
+
+  // COLAPSADO por padrão, numa linha só. O diagnóstico é consulta
+  // ocasional; aberto sempre, ele empurrava a tabela — que é o conteúdo
+  // principal do modal — para três linhas visíveis (Hugo, 01/09/2026).
+  // O resumo do <summary> diz o essencial sem precisar abrir: quantos
+  // motivos e qual o maior deles.
+  const n = diag.motivos.length;
+  const maior = diag.motivos[0];
+  const resumo = `${n} motivo${n === 1 ? '' : 's'} · maior: ${escapeHtml(maior.curto || maior.label)} ${fmtKgSigned(maior.kg)}`;
+
   return `
-    <div class="bdm-summary-row bdm-diag-row">
-      <span class="bdm-summary-label">
+    <details class="bdm-diag-box">
+      <summary class="bdm-diag-summary">
         <i class="ti ti-info-circle" style="color:var(--accent)"></i>
-        Diagnóstico
-      </span>
-      <div class="bdm-diag-motivos">${linhas}${sobra}</div>
-    </div>`;
+        <span class="bdm-diag-titulo">Diagnóstico</span>
+        <span class="bdm-diag-resumo">${resumo}</span>
+        <i class="ti ti-chevron-down bdm-diag-chev"></i>
+      </summary>
+      <div class="bdm-diag-motivos">${linhas}${sobra}${foraHtml}</div>
+    </details>`;
 }
 
 // Renderiza o bloco de "Ajustes de Fechamento Mensal desconsiderados" no
@@ -2397,7 +2605,9 @@ function openBreakdownModal(trigger) {
     // A bruta continua à vista, entre parênteses, porque é ela que explica
     // o número de linhas da tabela logo abaixo; some quando as duas são
     // iguais, que é o caso comum e não merece parêntese.
-    const sapCountLiq = _bdmContagemLiquida(entries);
+    // Mesma contagem comparável do balão — vinda do diagnóstico quando ele
+    // existe, porque só ele sabe quais 861 acharam nota na PUZL.
+    const sapCountLiq = (diag && diag.sapCount != null) ? diag.sapCount : _bdmContagemLiquida(entries);
     const registrosHtml = localCount === null
       ? `<b>${sapCount}</b> no SAP`
       : (() => {
@@ -2443,13 +2653,16 @@ function openBreakdownModal(trigger) {
         data-destino="${val}" aria-pressed="${destino862 === val ? 'true' : 'false'}"
         title="${val === 'sem' ? 'Transferências cujo 861 correspondente não está no SAP importado' : val === 'com' ? 'Transferências com o 861 correspondente localizado' : 'Não filtra por destino'}"
         >${label} <b>${n}</b></button>`;
-      return `<div class="bdm-862-filtro" title="Filtra apenas as linhas 862 — os demais códigos seguem pelos chips">
+      // Inline, na mesma linha dos chips: como bloco próprio ele custava
+      // uma faixa inteira do cabeçalho (rótulo + borda + margem) para três
+      // botões — e o cabeçalho já estava espremendo a tabela.
+      return `<span class="bdm-862-filtro" title="Filtra apenas as linhas 862 — os demais códigos seguem pelos chips">
+        <span class="bdm-862-sep"></span>
         ${movBadgeHtml('862', 'sm')}
-        <span class="bdm-862-filtro-label">destino:</span>
-        ${opt('todos', 'Todos', _r862.length)}
-        ${opt('com',   'Com destino', _com862)}
-        ${opt('sem',   'Sem destino', _sem862)}
-      </div>`;
+        ${opt('todos', 'todos', _r862.length)}
+        ${opt('com',   'c/ destino', _com862)}
+        ${opt('sem',   's/ destino', _sem862)}
+      </span>`;
     };
 
     const _renderChips = () => {
@@ -2513,7 +2726,14 @@ function openBreakdownModal(trigger) {
   // fmtKgSigned: quem tem direção é a DIFERENÇA (SAP acima/abaixo da PUZL),
   // e essa sim leva sinal.
   const _compareHtml = (linhas) => {
-    const sapTotal = Math.abs(linhas.reduce((sum, r) => sum + r.value, 0));
+    // Sem filtro ativo, o lado SAP é o COMPARÁVEL do diagnóstico (sem
+    // transferência nem a entrada que ela levou) — o mesmo número que o
+    // indicador da coluna usa, senão rodapé e célula diriam coisas
+    // diferentes sobre o mesmo par. Sem diagnóstico, soma as linhas como
+    // sempre fez.
+    const sapTotal = (diag && diag.sapComparavel != null)
+      ? Math.abs(diag.sapComparavel)
+      : Math.abs(linhas.reduce((sum, r) => sum + r.value, 0));
     // Mesma régua do indicador da célula da VISÃO MICRO (ver
     // _bdmDivergencia): os dois confrontam o mesmo par de números, e ver
     // check verde na tabela e alerta aqui dentro seria contradição pura.
@@ -4500,6 +4720,23 @@ function _ensureFloatTip() {
   return tip;
 }
 
+// Os dois consumidores do balão querem formatações diferentes, e um default
+// global serviria mal aos dois:
+//   'estreito' — badges AUSENTE: linhas curtas, alinhadas em colunas, que
+//                não podem quebrar (por isso white-space:pre).
+//   'largo'    — conferência PUZL × SAP: frases inteiras ("Transferência
+//                entre centros (não existe na PUZL): +28.580,00 kg"), que
+//                com `pre` não quebram e VAZAM para fora da caixa de 320px
+//                em vez de ocupar mais linhas.
+// Por isso cada consumidor declara seu modo na hora de mostrar. Precisa ser
+// via style (e não classe CSS) porque o nó já carrega essas duas
+// propriedades inline, e inline vence regra de folha.
+function _floatTipModo(tip, modo) {
+  const largo = modo === 'largo';
+  tip.style.whiteSpace = largo ? 'pre-wrap' : 'pre';
+  tip.style.maxWidth   = largo ? '440px'    : '320px';
+}
+
 // ── Tooltip da conferência PUZL × SAP (data-diff-tip-html) ──────────────
 // DELEGADO no document, ao contrário do initAbsentTooltips logo abaixo que
 // amarra três listeners por elemento. Aqui o alvo é toda célula de
@@ -4522,6 +4759,7 @@ document.addEventListener('mouseover', e => {
   if (!alvo || alvo === _diffTipAlvo) return;
   _diffTipAlvo = alvo;
   const tip = _ensureFloatTip();
+  _floatTipModo(tip, 'largo');
   tip.innerHTML = alvo.dataset.diffTipHtml || '';
   tip.style.display = 'block';
   positionAbsentTip(tip, e);
@@ -4547,6 +4785,7 @@ function initAbsentTooltips(container) {
 
   container.querySelectorAll('[data-absent-tooltip]').forEach(el => {
     el.addEventListener('mouseenter', e => {
+      _floatTipModo(tip, 'estreito');
       tip.textContent = el.dataset.absentTooltip.split('|').join('\n');
       tip.style.display = 'block';
       positionAbsentTip(tip, e);

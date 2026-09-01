@@ -3373,10 +3373,14 @@ body.bdm-modal-acima .modal-overlay:not(.analitico-detail-overlay) { z-index: 70
   background: var(--bg3);
   flex-shrink: 0;
 }
+/* Rótulo à ESQUERDA do conteúdo, não acima dele: em coluna, cada seção do
+   resumo custava duas linhas, e somadas elas espremiam a tabela do modal —
+   que é o conteúdo principal — para três linhas visíveis. */
 .bdm-summary-row {
   display: flex;
-  flex-direction: column;
-  gap: 5px;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 10px;
 }
 .bdm-summary-label {
   font-size: 9.5px;
@@ -3384,44 +3388,44 @@ body.bdm-modal-acima .modal-overlay:not(.analitico-detail-overlay) { z-index: 70
   letter-spacing: 0.10em;
   text-transform: uppercase;
   color: var(--text3);
+  flex: 0 0 auto;
+  min-width: 150px;
+  white-space: nowrap;
 }
 .bdm-summary-codes {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-}
-/* ── Sub-filtro de destino do 862 ── Vive dentro de .bdm-summary-codes,
-   junto dos chips de código, mas ocupa a linha inteira (flex-basis 100%):
-   é um controle de outra natureza — segmentado, exclusivo — e alinhá-lo
-   com os chips faria parecer mais um chip de código. */
-.bdm-862-filtro {
-  flex-basis: 100%;
-  display: flex;
   align-items: center;
   gap: 6px;
-  margin-top: 2px;
-  padding-top: 7px;
-  border-top: 1px dashed var(--border);
+  flex: 1 1 auto;
+  min-width: 0;
 }
-.bdm-862-filtro-label {
-  font-size: 9.5px;
-  font-family: var(--mono);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text3);
+/* ── Sub-filtro de destino do 862 ── Inline, na mesma linha dos chips de
+   código, separado deles por um traço vertical. Como bloco próprio ele
+   custava uma faixa inteira do cabeçalho para três botões. */
+.bdm-862-filtro {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.bdm-862-sep {
+  width: 1px;
+  height: 14px;
+  background: var(--border2);
+  margin: 0 4px;
 }
 .bdm-862-opt {
   background: none;
   border: 1px solid var(--border2);
   border-radius: 5px;
-  padding: 2px 8px;
-  font-size: 11px;
+  padding: 1px 6px;
+  font-size: 10.5px;
   font-family: var(--font);
   color: var(--text3);
   cursor: pointer;
   transition: background .12s, border-color .12s, color .12s;
 }
-.bdm-862-opt b { font-family: var(--mono); font-size: 10.5px; }
+.bdm-862-opt b { font-family: var(--mono); font-size: 10px; }
 .bdm-862-opt:hover { color: var(--text); border-color: var(--text3); }
 .bdm-862-opt.on {
   background: var(--accent-dim, rgba(99,102,241,.15));
@@ -3445,25 +3449,46 @@ body.bdm-modal-acima .modal-overlay:not(.analitico-detail-overlay) { z-index: 70
    de Entradas/Saídas) ── Espelha a estrutura do bloco de Fechamento logo
    abaixo, com acento na cor de destaque em vez do roxo: são duas seções
    irmãs do mesmo resumo e devem se ler como tal. */
-.bdm-diag-row {
+/* Colapsado por padrão: uma linha só até alguém pedir para ver. */
+.bdm-diag-box {
   padding-top: 8px;
   border-top: 1px dashed var(--border2);
 }
-.bdm-diag-row .bdm-summary-label {
+.bdm-diag-summary {
   display: flex;
   align-items: center;
-  gap: 5px;
-  color: var(--accent);
-  text-transform: none;
-  letter-spacing: normal;
+  gap: 7px;
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
   font-size: 11.5px;
-  font-family: var(--font);
-  font-weight: 600;
 }
+.bdm-diag-summary::-webkit-details-marker { display: none; }
+.bdm-diag-titulo { color: var(--accent); font-weight: 600; }
+.bdm-diag-resumo {
+  color: var(--text3);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1 1 auto;
+}
+.bdm-diag-chev {
+  color: var(--text3);
+  font-size: 13px;
+  transition: transform .15s;
+  flex: 0 0 auto;
+}
+.bdm-diag-box[open] .bdm-diag-chev { transform: rotate(180deg); }
 .bdm-diag-motivos {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  margin-top: 7px;
+  /* Teto de altura: aberto, um material com muitos motivos voltaria a
+     empurrar a tabela para fora da tela. */
+  max-height: 190px;
+  overflow-y: auto;
 }
 .bdm-diag-head {
   display: grid;
