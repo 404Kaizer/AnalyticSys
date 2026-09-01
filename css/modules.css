@@ -3622,6 +3622,19 @@ body.bdm-modal-acima .modal-overlay:not(.analitico-detail-overlay) { z-index: 70
   z-index: 2;
 }
 
+/* ── Par lançamento + estorno (tabela do modal de Movimentações) ──
+   As DUAS linhas do par pintadas juntas: sozinha, uma linha negativa não
+   diz de quem é o estorno, e a que foi anulada não dá sinal de que já não
+   vale. Fundo estático, sem a animação pulsante das duplicatas do módulo
+   SAP — lá o pulso chama para um problema; aqui o par é escrituração
+   normal e só precisa ser lido junto. */
+.bdm-row-estorno > td {
+  background: var(--red-bg);
+}
+.bdm-row-estorno > td:first-child {
+  box-shadow: inset 2px 0 0 var(--red);
+}
+
 /* ── Ajustes de Fechamento Mensal desconsiderados (dentro do modal de
    breakdown de Entradas/Saídas) ── */
 .bdm-fech-row {

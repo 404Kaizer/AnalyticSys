@@ -1494,8 +1494,8 @@ function _bdmDivergencia(sapTotal, localTotal, diag = null) {
 // casando só pelo peso, como antes. toFixed(3) é a mesma precisão de
 // casamento usada lá.
 //
-// QUEM É O ESTORNO é decidido pelo CÓDIGO (_SAP_REVERSE_MOVS: 102, 864,
-// 863, 552, 802), nunca pelo sinal. Duas razões:
+// QUEM É O ESTORNO é decidido pelo CÓDIGO (ver MOV_ESTORNO), nunca pelo
+// sinal. Duas razões:
 //
 //   1. O sinal não identifica o papel de forma uniforme. Num par 101/102 o
 //      estorno é o negativo; num par 862/864 — transferência para fora
@@ -1514,13 +1514,37 @@ function _bdmDivergencia(sapTotal, localTotal, diag = null) {
 //
 // @param {{cod, pedido, peso, rec}[]} itens
 // @returns {{pares: {orig, estorno}[], sobra: object[]}}
+// Códigos de ESTORNO — o lado que DESFAZ. No SAP o estorno é o código par
+// imediatamente acima do original: 101→102, 201→202, 301→302, 303→304,
+// 305→306, 309→310, 311→312, 551→552, 801→802, 863→864.
+//
+// 862 NÃO entra: ele não desfaz nada. É a saída de uma transferência, cujo
+// par é o 861 do outro centro — quem desfaz o 862 é o 864.
+//
+// Parte de _SAP_REVERSE_MOVS (102, 863, 864, 552, 802), que já existia para
+// o detector de duplicatas do módulo SAP, e ACRESCENTA os que faltavam lá:
+// sem o 202, um consumo estornado nunca pareava e a coluna Saídas tratava
+// os dois lançamentos como movimento novo.
+//
+// Não mexo em _SAP_REVERSE_MOVS no lugar dele porque aquele conjunto
+// alimenta getSapDuplicateKeys, com regras próprias (lá o estorno precisa
+// ser o lado NEGATIVO): ampliá-lo mudaria o que a tela de SAP pinta como
+// duplicata anulada, que não é o que se pediu aqui.
+const MOV_ESTORNO = new Set([
+  ..._SAP_REVERSE_MOVS,  // 102, 863, 864, 552, 802
+  '202',                 // estorno de consumo (201)
+  '302', '304', '306',   // estornos das transferências 301 / 303 / 305
+  '310',                 // estorno da transferência entre materiais (309)
+  '312'                  // estorno da transferência entre depósitos (311)
+]);
+
 function _parearEstornos(itens) {
   const grupos = new Map();
   (itens || []).forEach(it => {
     const k = `${String(it.pedido || '').trim().toUpperCase()}|${Math.abs(num(it.peso)).toFixed(3)}`;
     let g = grupos.get(k);
     if (!g) { g = { orig: [], estorno: [] }; grupos.set(k, g); }
-    (_SAP_REVERSE_MOVS.has(normMov(it.cod)) ? g.estorno : g.orig).push(it);
+    (MOV_ESTORNO.has(normMov(it.cod)) ? g.estorno : g.orig).push(it);
   });
   const pares = [];
   const sobra = [];
@@ -1840,7 +1864,7 @@ function diagnosticarDivergenciaSapPuzl({ sapRecords = [], puzlRecords = [], lad
   // 01/09/2026), sobre o conjunto INTEIRO: assim um 862 desfeito pelo 864
   // some pareado, em vez de os dois seguirem para a lista de transferências
   // como dois movimentos que por acaso somam zero. O que a trava de
-  // _SAP_REVERSE_MOVS garante é que passar aqui primeiro não faz um 101
+  // MOV_ESTORNO garante é que passar aqui primeiro não faz um 101
   // engolir um 862 do mesmo pedido — ver o cabeçalho de _parearEstornos.
   //
   // Pareado por PEDIDO + |peso|, e não pela referência: o estorno gera
@@ -2855,7 +2879,26 @@ function openBreakdownModal(trigger) {
   // (inclui o par 861/862/309 relacionado no texto de busca, já que ele
   // aparece visualmente na linha — buscar "AAA1" deve achar a linha cujo
   // par de transferência está lançado lá, por exemplo)
-  const rows = entries.map(([cod, value, ref, usuario, dtLanc, extra]) => {
+  // ── Pares lançamento + estorno ──────────────────────────────────────────
+  // As duas linhas de um par que se anula saem pintadas de vermelho, juntas
+  // (pedido do Hugo, 01/09/2026). Sozinha no meio da tabela, uma linha
+  // negativa não diz de QUEM ela é o estorno — e a que ela anulou não dá
+  // nenhum sinal de que já não vale mais.
+  //
+  // Usa o MESMO _parearEstornos do diagnóstico de propósito: o que a
+  // tabela pinta como par é exatamente o que a conta trata como anulado.
+  // Se um par não acender aqui, é porque a chave (pedido + |peso|, com um
+  // dos lados em código de estorno) não casou — e aí o problema é de dado,
+  // não de pintura.
+  const _idxEstornados = new Set();
+  _parearEstornos(entries.map(([cod, value, , , , extra], i) => ({
+    cod, pedido: extra && extra.pedido, peso: value, i
+  }))).pares.forEach(({ orig, estorno }) => {
+    _idxEstornados.add(orig.i);
+    _idxEstornados.add(estorno.i);
+  });
+
+  const rows = entries.map(([cod, value, ref, usuario, dtLanc, extra], _idx) => {
     const dtDoc     = (extra && extra.dtDoc)  || '';
     const dtLancRaw = (extra && extra.dtLanc) || dtLanc || '';
     const dtReg     = (extra && extra.dtReg)  || '';
@@ -2890,6 +2933,16 @@ function openBreakdownModal(trigger) {
           <span class="mv-pair-value">${direcao} ${escapeHtml(pair.central)}</span>
         </div>`;
         pairSearchText = `${pair.cod} ${pair.central}`;
+      } else if (_idxEstornados.has(_idx)) {
+        // Transferência ANULADA por estorno (o 864 do mesmo pedido e peso,
+        // ver _idxEstornados): cobrar dela um 861 correspondente não faz
+        // sentido — ela foi desfeita, o outro centro nunca recebeu nada.
+        // Sem esta exceção a linha saía pintada como estornada E acusada de
+        // "sem par encontrado" ao mesmo tempo, duas leituras contraditórias.
+        pairHtml = `<div class="mv-pair-note" title="Transferência anulada pelo estorno de mesmo pedido e peso — não há 861 a procurar">
+          <i class="ti ti-arrow-back-up"></i> anulada por estorno
+        </div>`;
+        pairSearchText = 'anulada por estorno';
       } else {
         pairHtml = `<div class="mv-pair-note mv-pair-note-missing" title="Nenhum movimento complementar com o mesmo pedido, material, referência e peso no SAP importado">
           <i class="ti ti-help-circle"></i> sem par encontrado
@@ -2931,7 +2984,7 @@ function openBreakdownModal(trigger) {
     // circle-arrow-down "Desfalque"). O indicador é vocabulário de VARIAÇÃO e
     // não cabe aqui — uma saída 201 é uma saída normal, não um "Desfalque".
     // Ver fmtKgSigned em dashboard.js.
-    const html = `<tr>
+    const html = `<tr${_idxEstornados.has(_idx) ? ' class="bdm-row-estorno"' : ''}>
       <td>${movBadgeHtml(cod)}</td>
       <td class="td-muted">${escapeHtml(usuario || '—')}</td>
       <td class="td-muted">${escapeHtml(refCol || '—')}${pairHtml}</td>
