@@ -919,15 +919,26 @@
     _invUpdateMonthTriggerLabel();
   });
 
-  // ── Est. Inicial / Est. Final do Inventário agora usam EXATAMENTE a mesma
-  // lógica da Visão Micro (h.getPrePeriodLaunchStock / h.getLastPeriodLaunchStockWithFallback,
-  // ambas em ui.js) — regra por categoria no Est. Inicial e fallback retroativo
-  // (dentro do próprio período) no Est. Final. Ver chamadas dentro de
-  // window.invGerar, mais abaixo.
+  // ── Est. Inicial / Est. Final do Inventário usam EXATAMENTE a mesma fonte
+  // da Visão Micro. São fontes DIFERENTES entre si, de propósito:
+  //   • Est. Inicial → _anGetSapStock (analitico.js): saldo TEÓRICO do SAP,
+  //     âncora do Custos SAP + movimentações até a véspera.
+  //   • Est. Final   → h.getLastPeriodLaunchStockWithFallback (ui.js):
+  //     lançamento REAL do operador, com fallback retroativo dentro do
+  //     próprio período.
+  // É essa assimetria que faz a Variação medir "o físico contado contra o
+  // livro do SAP". Ver as chamadas dentro de window.invGerar, mais abaixo.
+  //
+  // ATENÇÃO — esta observação já esteve ERRADA no passado: dizia que o Est.
+  // Inicial vinha de h.getPrePeriodLaunchStock "igual à Micro", o que deixou
+  // de valer quando a Micro trocou de fonte em 13/08/2026 e ninguém atualizou
+  // os dois lados juntos. Se mexer na fonte de um, mexa no outro.
   //
   // invFindLastKnownDate abaixo continua existindo só para alimentar o
-  // tooltip de "AUSENTE" (busca retroativa sem limite, ignorando domingos) —
-  // esse valor nunca entra no cálculo da linha, é só informativo.
+  // tooltip de "AUSENTE" do Est. FINAL (busca retroativa sem limite,
+  // ignorando domingos) — esse valor nunca entra no cálculo da linha, é só
+  // informativo. O Est. Inicial não usa mais: com a fonte no Custos SAP, o
+  // motivo da ausência passou a ser "sem âncora / sem Cód SAP".
 
   // Busca retroativa sem limite (ignorando domingos), só para preencher o
   // tooltip com a última data conhecida com lançamento — não usada no cálculo.
@@ -1130,22 +1141,52 @@
         const matCatKey = getCatKeyDoCadastro(mat) || null;
         const codSap = getCodSapPorGrupo(mat) || '';
 
-        // EST. INICIAL — MESMA LÓGICA da Visão Micro (getPrevDayLaunchStock,
-        // via h.getPrePeriodLaunchStock): regra por categoria do material —
-        //   • Agregado (lançamento semanal): última terça-feira antes do
-        //     início do período (com fallback pro lançamento mais recente
-        //     entre essa terça e o início, se houver).
-        //   • Material do 1º dia do mês: último dia do mês anterior.
-        //   • Demais materiais: dia anterior ao início (dom→sáb).
-        // Sem fallback de VALOR em nenhum dos casos — se não achar na
-        // data-alvo da regra, fica AUSENTE (tratado como 0 no cálculo).
-        const iniRes = h.getPrePeriodLaunchStock({ central, material: mat, dtIni, dtFim, catKey: matCatKey });
-        const estoqueIni = iniRes ? iniRes.value : 0;
-        const estoqueIniMissing = !iniRes;
-        // Tooltip: só quando ausente, busca retroativa sem limite (não usada no cálculo)
-        const estoqueIniLastKnown = estoqueIniMissing
-          ? invFindLastKnownDate(lancArr, dtIni, parseDate, localISODate, num)
+        // EST. INICIAL — SALDO TEÓRICO DO SAP, mesma fonte da Visão Micro.
+        //
+        // Até aqui o Inventário usava getPrePeriodLaunchStock (o LANÇAMENTO
+        // do operador na véspera). A Micro trocou pra âncora de Custos SAP em
+        // 13/08/2026 (ver o bloco em analitico.js) e o Inventário ficou pra
+        // trás — o comentário antigo daqui ainda afirmava "mesma lógica da
+        // Visão Micro", o que deixou de ser verdade naquele dia. Resultado:
+        // o mesmo material/filial/período podia mostrar Est. Inicial (e,
+        // portanto, Variação) diferente nas duas telas.
+        //
+        // Agora vem de _anGetSapStock: âncora do Custos SAP (central + Cód
+        // SAP + mês anterior) + movimentações SAP até a véspera. A Variação
+        // passa a medir "o quanto o físico está distante do LIVRO DO SAP",
+        // não "distante do que o operador contou ontem".
+        //
+        // Sem Cód SAP cadastrado, ou sem âncora em mês nenhum → null, e a
+        // linha fica AUSENTE (0 no cálculo), sem cair silenciosamente pro
+        // lançamento real. catKey saiu da chamada de propósito: a regra
+        // especial de Agregado só existia pro getPrePeriodLaunchStock, que
+        // não é mais a fonte (mesma decisão tomada na Micro).
+        const iniSap = (typeof _anGetSapStock === 'function')
+          ? _anGetSapStock({ central, material: mat, dtIni })
           : null;
+        const estoqueIni = iniSap ? iniSap.value : 0;
+        const estoqueIniMissing = !iniSap;
+        // Dados da âncora pro tooltip da célula (de qual mês do Custos SAP
+        // veio o saldo e quanto de movimentação SAP entrou em cima dele) —
+        // mesma abertura de conta que a Visão Micro mostra.
+        const estoqueIniAncora = iniSap ? {
+          dtLabel:    iniSap.dtLabel,
+          ancoraLabel: iniSap.ancoraLabel,
+          ancoraValor: iniSap.ancoraValor,
+          mesesAtras:  iniSap.mesesAtras,
+          delta:       iniSap.delta
+        } : null;
+        // Motivo da ausência: mudou junto com a fonte. Não é mais "não achei
+        // lançamento do operador", e sim "não achei âncora em Custos SAP"
+        // (ou o material nem tem Cód SAP pra procurar).
+        const estoqueIniMotivo = !estoqueIniMissing ? null
+          : (codSap
+              ? `Nenhum registro em Custos SAP para ${central} / Cód SAP ${codSap} em mês nenhum até o mês anterior ao período`
+              : 'Material sem Cód SAP cadastrado — não é possível buscar o saldo em Custos SAP');
+        // Lançamento da véspera: NÃO alimenta mais o Est. Inicial. Continua
+        // sendo buscado só pelos `records`, que o detector de Divergências
+        // usa pra sinalizar lançamento manual/duplicado (ver iniRecs abaixo).
+        const iniRes = h.getPrePeriodLaunchStock({ central, material: mat, dtIni, dtFim, catKey: matCatKey });
 
         // EST. FINAL — MESMA LÓGICA da Visão Micro
         // (h.getLastPeriodLaunchStockWithFallback): tenta a data exata (último
@@ -1350,7 +1391,7 @@
 
         rowMap.set(k, {
           k, mesKey, central, material: mat, codSap, categoria, semCadastro: false, regional,
-          estoqueIni, estoqueIniMissing, estoqueIniLastKnown,
+          estoqueIni, estoqueIniMissing, estoqueIniAncora, estoqueIniMotivo,
           entradasKg, saidasKg, ajustesKg,
           estoqueFimReal, estoqueFimMissing, estoqueFimLastKnown,
           estoqueFimFallback, estoqueFimEsperado, estoqueFimUsadoLabel,
@@ -1370,7 +1411,8 @@
         const k = mesKey + '|||' + central + '|||__semcad__|||' + matOriginal;
         rowMap.set(k, {
           k, mesKey, central, material: matOriginal, codSap: '', categoria: 'Sem cadastro', semCadastro: true, regional,
-          estoqueIni: 0, estoqueIniMissing: true, estoqueIniLastKnown: null,
+          estoqueIni: 0, estoqueIniMissing: true, estoqueIniAncora: null,
+          estoqueIniMotivo: 'Material sem cadastro — sem Cód SAP para buscar o saldo em Custos SAP',
           entradasKg: 0, saidasKg: 0, ajustesKg: 0,
           estoqueFimReal: 0, estoqueFimMissing: true, estoqueFimLastKnown: null,
           estoqueFimFallback: false, estoqueFimEsperado: null, estoqueFimUsadoLabel: null,
@@ -1634,15 +1676,26 @@
            </button>`
         : '';
 
-      // ── Est. Inicial: teal igual ao analítico; tooltip com última data conhecida ──
+      // ── Est. Inicial: saldo teórico do SAP, igual à Visão Micro ──────────
+      // Quando presente, o tooltip abre a conta (de qual mês do Custos SAP
+      // veio a âncora e quanta movimentação SAP entrou em cima dela) e o
+      // ícone de relógio marca âncora de mês anterior ao ideal — mesma
+      // sinalização da Micro. Quando ausente, o motivo já vem pronto da
+      // linha (sem Cód SAP × sem âncora), porque não é mais "não achei
+      // lançamento".
+      const _a = r.estoqueIniAncora;
       const iniTooltip = r.estoqueIniMissing
-        ? (r.estoqueIniLastKnown
-            ? `AUSENTE — último lançamento encontrado em ${r.estoqueIniLastKnown.dtLabel} (${_fmtKg(r.estoqueIniLastKnown.value)})`
-            : 'AUSENTE — nenhum lançamento anterior encontrado')
-        : '';
+        ? `AUSENTE — ${r.estoqueIniMotivo || 'saldo não encontrado em Custos SAP'}`
+        : (_a
+            ? `Saldo teórico do SAP em ${_a.dtLabel}\n`
+              + `Âncora: Custos SAP ${_a.ancoraLabel}${_a.mesesAtras > 0 ? ` (${_a.mesesAtras} ${_a.mesesAtras === 1 ? 'mês' : 'meses'} atrás)` : ''} = ${_fmtKg(_a.ancoraValor)}\n`
+              + `Movimentações SAP desde então: ${_a.delta >= 0 ? '+' : '−'}${_fmtKg(Math.abs(_a.delta))}`
+            : '');
       const iniCell = r.estoqueIniMissing
         ? `<span class="td-mono" style="color:var(--text3);font-style:italic" title="${_escape(iniTooltip)}">—</span>`
-        : `<span class="td-mono" style="color:var(--teal)">${_fmtKg(r.estoqueIni)}</span>`;
+        : `<span class="td-mono" style="color:var(--teal);cursor:help" title="${_escape(iniTooltip)}">${_fmtKg(r.estoqueIni)}${
+            (_a && _a.mesesAtras > 0) ? ` <i class="ti ti-clock-hour-4" style="font-size:9px;color:var(--amber)"></i>` : ''
+          }</span>`;
 
       // ── Entradas / Saídas: bdm-trigger igual ao analítico. Selo "pendente"
       // aparece só quando o toggle "Considerar NFs/OS pendentes" está ligado

@@ -425,7 +425,12 @@ function _asstIntentSaldoMaterial(query) {
 
   const rawCat = (lancsAll[0]?.categoria || sapAll[0]?.categoria || '').trim().toUpperCase();
   const catKey = detectCatKey(rawCat) || detectCatFromMat(matAlias);
-  const prev   = getPrePeriodLaunchStock({ central, material: matAlias, dtIni, dtFim, catKey });
+  // Est. Inicial: saldo TEÓRICO do SAP (âncora de Custos SAP + movimentações),
+  // mesma fonte da Visão Micro / Inventário / Dashboard — senão o Assistente
+  // responderia um Est. Inicial e uma Variação diferentes dos das telas.
+  const prev   = (typeof _anGetSapStock === 'function')
+    ? _anGetSapStock({ central, material: matAlias, dtIni })
+    : getPrePeriodLaunchStock({ central, material: matAlias, dtIni, dtFim, catKey });
   const snap   = buildSnapshot({
     lancs: lancsAll, sap: sapAll,
     initialStockOverride:     prev?.value  ?? null,

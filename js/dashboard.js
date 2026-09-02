@@ -183,11 +183,22 @@ function buildDashboardGerencialResults(dtIni, dtFim) {
     let somaPrimeiro = 0, somaUltimo = 0;
     const missingIniMats = [], missingFimMats = [];
     allMats.forEach(mat => {
-      // catKey necessário para que getPrePeriodLaunchStock aplique a regra de
-      // Agregado (recuar até a última terça) — mesmo motivo do fix já
-      // existente em analitico.js (somaPrimeiro da Visão Macro).
+      // EST. INICIAL da central — saldo TEÓRICO do SAP (_anGetSapStock), a
+      // mesma fonte da Visão Micro e do Inventário. Antes vinha de
+      // getPrePeriodLaunchStock (lançamento do operador na véspera), o que
+      // deixava o total da central discordando dos pares Central×Material
+      // calculados em _dgVgBuildPares logo adiante — dois Est. Iniciais
+      // diferentes dentro da mesma Visão Geral.
+      //
+      // catKey saiu junto: só servia pra regra de Agregado do
+      // getPrePeriodLaunchStock, que não é mais a fonte (mesma limpeza feita
+      // na Micro). Fallback pro método antigo se analitico.js não tiver
+      // carregado — mesmo guard usado nos outros pontos.
       const catKey = materialCatKeyMap.get(mat) || null;
-      const prev = dtIni ? getPrePeriodLaunchStock({ central, material: mat, dtIni, dtFim, catKey }) : null;
+      const prev = !dtIni ? null
+        : (typeof _anGetSapStock === 'function')
+          ? _anGetSapStock({ central, material: mat, dtIni })
+          : getPrePeriodLaunchStock({ central, material: mat, dtIni, dtFim, catKey });
       if (prev != null) {
         somaPrimeiro += prev.value;
       } else {
@@ -561,7 +572,20 @@ function _dgVgBuildPares(results, thresholds, dtIni, dtFim) {
       // negativo), então o Est. Teórico do Detalhado soma os três.
       const _nat = repartirSapPorNatureza(sap);
       if (dtIni && dtFim) {
-        const prev = getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni, dtFim, catKey });
+        // EST. INICIAL — saldo TEÓRICO do SAP (_anGetSapStock), a mesma fonte
+        // da Visão Micro desde 13/08/2026 e agora também do Inventário. Até
+        // aqui a Visão Geral usava getPrePeriodLaunchStock (o LANÇAMENTO do
+        // operador na véspera), o que fazia o Resumo do Período e o Detalhado
+        // Analítico discordarem da Micro para o mesmo material/período.
+        // catKey saiu da chamada: a regra especial de Agregado só existia pro
+        // getPrePeriodLaunchStock, que não é mais a fonte.
+        //
+        // O guard de typeof segue o padrão já usado em _giroSnapshotMaterial
+        // e em macro.js — analitico.js carrega depois deste arquivo, então a
+        // função só existe em tempo de execução, nunca no parse.
+        const prev = (typeof _anGetSapStock === 'function')
+          ? _anGetSapStock({ central: r.central, material: mat, dtIni })
+          : getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni, dtFim, catKey });
         const fim  = getLastPeriodLaunchStockWithFallback({ central: r.central, material: mat, dtIni, dtFim });
         // Captura os mesmos valores já resolvidos pra calcular o diff —
         // usados pelos cards "Est. Inicial/Final Total" do resumo do

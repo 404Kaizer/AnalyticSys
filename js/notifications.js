@@ -226,8 +226,13 @@ async function notifSilentHealthCheck() {
           const sap   = sapByMat.get(mat)||[];
           const rawCat = ((lancs[0]||sap[0])?.categoria||'').trim().toUpperCase();
           const catKey = detectCatKey(rawCat)||(typeof detectCatFromMat==='function'?detectCatFromMat(mat):null);
-          const prev  = typeof getPrePeriodLaunchStock==='function'
-            ? getPrePeriodLaunchStock({central:r.central,material:mat,dtIni,dtFim,catKey}) : null;
+          // Est. Inicial: saldo TEÓRICO do SAP, mesma fonte da Visão Micro /
+          // Inventário / Dashboard. Sem isso a criticidade notificada sairia
+          // de uma variação calculada sobre outra base que a das telas.
+          const prev  = typeof _anGetSapStock==='function'
+            ? _anGetSapStock({central:r.central,material:mat,dtIni})
+            : (typeof getPrePeriodLaunchStock==='function'
+                ? getPrePeriodLaunchStock({central:r.central,material:mat,dtIni,dtFim,catKey}) : null);
           const snap  = buildSnapshot({lancs,sap,initialStockOverride:prev?.value??null});
           const level  = classifyVariation(Math.abs(snap.diff), catKey, thresholds);
           matCounts[level]++;
