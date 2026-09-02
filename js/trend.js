@@ -186,7 +186,7 @@ function _tCompute(type, name, dtIni, dtFim, selMats, custoMedioOverride) {
   return weeks.map(({ start, end }) => {
     const sk = _tDK(start);   // terça anterior — pesoIni
     const ek = _tDK(end);     // terça atual    — pesoFim
-    let totalDiff = 0, totalCusto = 0, totalRealKg = 0, totalTeoricoKg = 0, totalEstIni = 0, totalEnt = 0, totalSai = 0;
+    let totalDiff = 0, totalCusto = 0, totalRealKg = 0, totalTeoricoKg = 0, totalEstIni = 0, totalEnt = 0, totalSai = 0, totalAju = 0;
 
     centrals.forEach(central => {
       const lancMatMap = lancIdx.get(central);
@@ -236,8 +236,14 @@ function _tCompute(type, name, dtIni, dtFim, selMats, custoMedioOverride) {
         totalRealKg    += snap.pesoFim;
         totalTeoricoKg += snap.estTeorico;
         totalEstIni    += snap.pesoIni;
-        totalEnt       += snap.totalEnt;
-        totalSai       += snap.totalSai;
+        // Rateio por NATUREZA (ENTRADAS/SAÍDAS/AJUSTES), igual à Visão Micro —
+        // o buildSnapshot separa por sinal e não conhece o balde AJUSTES.
+        // Só alimenta as tooltips; a série do gráfico é a variação, que não
+        // muda de valor com o reparticionamento.
+        const _natW = repartirSapPorNatureza(sapWeek);
+        totalEnt       += _natW.totalEnt;
+        totalSai       += _natW.totalSai;
+        totalAju       += _natW.totalAju;
         const cm = custoMedio[material];
         if (cm && Number.isFinite(snap.diff)) totalCusto += snap.diff * cm;
       });
@@ -254,6 +260,7 @@ function _tCompute(type, name, dtIni, dtFim, selMats, custoMedioOverride) {
       estIni:     totalEstIni,
       totalEnt:   totalEnt,
       totalSai:   totalSai,
+      totalAju:   totalAju,
       custo:      totalCusto,
     };
   });
@@ -931,6 +938,7 @@ function _tShowTooltip(e, idx) {
   const _ov_sym = (typeof varSymbol === 'function') ? varSymbol(w.variation) : (w.variation >= 0 ? '▲' : '▼');
   const _ov_sai = w.totalSai ?? 0;
   const _ov_ent = w.totalEnt ?? 0;
+  const _ov_aju = w.totalAju ?? 0;
   tip.innerHTML = `
     <div style="font-weight:700;color:var(--text);margin-bottom:7px;font-size:12px;border-bottom:1px solid var(--border);padding-bottom:6px">${w.label}</div>
     <div style="display:flex;flex-direction:column;gap:3px;margin-bottom:7px">
@@ -945,6 +953,10 @@ function _tShowTooltip(e, idx) {
       <div style="display:flex;justify-content:space-between;gap:16px">
         <span style="color:var(--text3)">Saídas SAP</span>
         <strong style="color:var(--red)">${_tFmtFull(_ov_sai)} kg</strong>
+      </div>
+      <div style="display:flex;justify-content:space-between;gap:16px">
+        <span style="color:var(--text3)">Ajustes SAP</span>
+        <strong style="color:${typeof movValorCor === 'function' ? movValorCor(_ov_aju, 'var(--amber)') : 'var(--amber)'}">${_tFmtFull(_ov_aju)} kg</strong>
       </div>
     </div>
     <div style="border-top:1px solid var(--border);padding-top:6px;display:flex;flex-direction:column;gap:3px;margin-bottom:7px">
@@ -1500,6 +1512,7 @@ function _tHeatTooltip(e) {
     const _ht_sym = (typeof varSymbol === 'function') ? varSymbol(match.variation) : (match.variation >= 0 ? '▲' : '▼');
     const _ht_sai = match.totalSai ?? 0;
     const _ht_ent = match.totalEnt ?? 0;
+    const _ht_aju = match.totalAju ?? 0;
     tip.innerHTML = `
       <div style="font-weight:700;color:var(--text);margin-bottom:4px;font-size:12px">${escapeHtml(sub)}</div>
       <div style="color:var(--text3);margin-bottom:7px;font-size:10.5px;border-bottom:1px solid var(--border);padding-bottom:6px">${lbl}</div>
@@ -1515,6 +1528,10 @@ function _tHeatTooltip(e) {
         <div style="display:flex;justify-content:space-between;gap:14px">
           <span style="color:var(--text3)">Saídas SAP</span>
           <strong style="color:var(--red)">${_tFmtFull(_ht_sai)} kg</strong>
+        </div>
+        <div style="display:flex;justify-content:space-between;gap:14px">
+          <span style="color:var(--text3)">Ajustes SAP</span>
+          <strong style="color:${typeof movValorCor === 'function' ? movValorCor(_ht_aju, 'var(--amber)') : 'var(--amber)'}">${_tFmtFull(_ht_aju)} kg</strong>
         </div>
       </div>
       <div style="border-top:1px solid var(--border);padding-top:6px;display:flex;flex-direction:column;gap:3px;margin-bottom:7px">

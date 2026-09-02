@@ -729,9 +729,18 @@
       th.classList.remove('sort-asc','sort-desc');
       if (th.dataset.col === col) th.classList.add(invSortDir === 'asc' ? 'sort-asc' : 'sort-desc');
     });
+    // Colunas de MOVIMENTO ordenam por valor ABSOLUTO (mesmo critério da
+    // coluna Saldo no modal de Movimentações): agora que são líquidas e com
+    // sinal, ordenar pelo valor cru colocaria a maior saída (mais negativa)
+    // no fim da lista em vez de no topo. O que o analista procura aqui é
+    // "quem movimentou mais", independente da direção.
+    const _COLS_ABS = new Set(['entradasKg', 'saidasKg', 'ajustesKg']);
+    const _abs = _COLS_ABS.has(col);
     invFiltered.sort((a,b) => {
       const av = a[col] ?? '', bv = b[col] ?? '';
-      const cmp = typeof av === 'string' ? av.localeCompare(bv,'pt-BR') : (Number(av)||0)-(Number(bv)||0);
+      const cmp = typeof av === 'string'
+        ? av.localeCompare(bv,'pt-BR')
+        : (_abs ? Math.abs(Number(av)||0) - Math.abs(Number(bv)||0) : (Number(av)||0)-(Number(bv)||0));
       return invSortDir === 'asc' ? cmp : -cmp;
     });
     invRenderTabela();
@@ -1215,12 +1224,19 @@
           }
         }
 
-        // Volumes de entradas/saídas vêm do SAP (movimentos físicos) — MESMA
-        // separação por sinal da Visão Micro (buildSnapshot): peso > 0 entra
-        // em Entradas, peso < 0 entra em Saídas, peso === 0 não conta em
-        // nenhuma das duas (antes: peso >= 0 jogava o zero pra Entradas).
-        let entradasKg = 0, saidasKg = 0;
-        const entEntries = [], saiEntries = [];
+        // Volumes vêm do SAP (movimentos físicos) rateados por NATUREZA do
+        // código — MESMO critério da Visão Micro (classificarMovSap, ui.js),
+        // não mais pelo sinal do peso. Três baldes: ENTRADAS, SAÍDAS e
+        // AJUSTES, este último também servindo de fallback pra código não
+        // mapeado, pra nenhum registro sumir da conta.
+        //
+        // ATENÇÃO — os três totais são LÍQUIDOS e COM SINAL (saidasKg agora
+        // é negativo; antes era magnitude via Math.abs). É o que permite um
+        // estorno anular o lançamento dentro da própria coluna. Quem depende
+        // disso: estTeor (passou de "ini + ent − sai" para "ini + ent + sai
+        // + aju"), os KPIs e o CSV.
+        let entradasKg = 0, saidasKg = 0, ajustesKg = 0;
+        const entEntries = [], saiEntries = [], ajuEntries = [];
         sapArrCalc.forEach(r => {
           const p = num(r.peso);
           // openBreakdownModal (ui.js) espera [cod, value, ref, usuario, dtLanc, extra] —
@@ -1244,13 +1260,12 @@
             dtLanc:    String(r.dtLanc    || '').trim(),
             dtReg:     String(r.dtReg     || '').trim()
           };
-          if (p > 0) {
-            entradasKg += p;
-            entEntries.push([cod, p, ref, usr, dtLancFmt, extra]);
-          } else if (p < 0) {
-            saidasKg += Math.abs(p);
-            saiEntries.push([cod, p, ref, usr, dtLancFmt, extra]);
-          }
+          if (!p) return;   // peso zero não conta em balde nenhum
+          const tupla = [cod, p, ref, usr, dtLancFmt, extra];
+          const nat = _invSafeCall('classificarMovSap', 'aju', cod);
+          if (nat === 'ent')      { entradasKg += p; entEntries.push(tupla); }
+          else if (nat === 'sai') { saidasKg   += p; saiEntries.push(tupla); }
+          else                    { ajustesKg  += p; ajuEntries.push(tupla); }
         });
 
         // Totais lançados na página Entradas/Saídas para este material —
@@ -1336,11 +1351,11 @@
         rowMap.set(k, {
           k, mesKey, central, material: mat, codSap, categoria, semCadastro: false, regional,
           estoqueIni, estoqueIniMissing, estoqueIniLastKnown,
-          entradasKg, saidasKg,
+          entradasKg, saidasKg, ajustesKg,
           estoqueFimReal, estoqueFimMissing, estoqueFimLastKnown,
           estoqueFimFallback, estoqueFimEsperado, estoqueFimUsadoLabel,
           pendEntAplicado, pendSaiAplicado,
-          custoMedio, custoMedioFonte, custoMedioMesesAtras, entEntries, saiEntries, localEntTotal, localSaiTotal, divergencias, divCount,
+          custoMedio, custoMedioFonte, custoMedioMesesAtras, entEntries, saiEntries, ajuEntries, localEntTotal, localSaiTotal, divergencias, divCount,
           sapFechExcluidos: sapFechExcluidosByMat.get(mat) || []
         });
       });
@@ -1356,11 +1371,11 @@
         rowMap.set(k, {
           k, mesKey, central, material: matOriginal, codSap: '', categoria: 'Sem cadastro', semCadastro: true, regional,
           estoqueIni: 0, estoqueIniMissing: true, estoqueIniLastKnown: null,
-          entradasKg: 0, saidasKg: 0,
+          entradasKg: 0, saidasKg: 0, ajustesKg: 0,
           estoqueFimReal: 0, estoqueFimMissing: true, estoqueFimLastKnown: null,
           estoqueFimFallback: false, estoqueFimEsperado: null, estoqueFimUsadoLabel: null,
           pendEntAplicado: false, pendSaiAplicado: false,
-          custoMedio: 0, custoMedioFonte: 'sem_codigo', entEntries: [], saiEntries: [], divergencias: null, divCount: 0,
+          custoMedio: 0, custoMedioFonte: 'sem_codigo', entEntries: [], saiEntries: [], ajuEntries: [], divergencias: null, divCount: 0,
           sapFechExcluidos: []
         });
       });
@@ -1368,7 +1383,10 @@
 
     invRows = [];
     rowMap.forEach(row => {
-      const estTeor   = row.estoqueIni + row.entradasKg - row.saidasKg;
+      // Os três baldes são LÍQUIDOS e com sinal, então somam (antes saidasKg
+      // era magnitude e entrava subtraindo). Resultado idêntico ao anterior:
+      // ent+sai+aju continua sendo a soma de TODO o SAP do período.
+      const estTeor   = row.estoqueIni + row.entradasKg + row.saidasKg + row.ajustesKg;
       const varKg     = row.estoqueFimReal - estTeor;
       const varPct    = estTeor !== 0 ? (varKg / Math.abs(estTeor)) * 100 : 0;
       const just      = invJustificativas[row.k] || {};
@@ -1575,6 +1593,12 @@
     const _escape    = h ? h.escapeHtml: (s) => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     const _bdm       = h ? h.buildAnaliticoDetailBreakdown : null;
     const _num       = h ? h.num : (v) => parseFloat(v) || 0;
+    // Formatação com sinal explícito e cor por sinal — mesmo padrão da Visão
+    // Micro nas colunas Entradas/Saídas/Ajustes (ver fmtKgSigned/movValorCor
+    // em dashboard.js). Fallbacks só pro caso de _inv_helpers não ter subido.
+    const _fmtKgSigned = h && h.fmtKgSigned ? h.fmtKgSigned : (v) => _fmtKg(v);
+    const _movValorCor = h && h.movValorCor ? h.movValorCor
+      : (v, z = 'var(--text3)') => (_num(v) > 0.0001 ? 'var(--green)' : _num(v) < -0.0001 ? 'var(--red)' : z);
 
     tbody.innerHTML = invFiltered.map(r => {
       const j = just[r.k] || {};
@@ -1625,14 +1649,23 @@
       // E este material teve NF (Entradas) e/ou OS (Saídas) pendente
       // efetivamente somada ao valor — deixa explícito o que foi afetado. ──
       const pendBadge = (label) => `<span class="absent-badge" style="background:var(--accent-dim,rgba(99,102,241,.15));color:var(--accent);border-color:var(--accent);margin-left:5px" title="Inclui volume de ${label} pendente de integração SAP (toggle 'Considerar NFs/OS pendentes' ligado)">pendente</span>`;
-      const _rowFechExcluidosEnt = (r.sapFechExcluidos || []).filter(x => _num(x.peso) > 0);
-      const _rowFechExcluidosSai = (r.sapFechExcluidos || []).filter(x => _num(x.peso) < 0);
+      // Ajustes de Fechamento desconsiderados (Y11/Y12) vão INTEIROS pra
+      // coluna Ajustes — antes eram partidos por sinal entre Entradas e
+      // Saídas. Y11/Y12 são ajuste por natureza; é em Ajustes que o analista
+      // procura por eles (mesma mudança feita na Visão Micro).
+      const _rowFechExcluidos = r.sapFechExcluidos || [];
       const entCell = (_bdm
-        ? _bdm(r.entEntries || [], r.entradasKg, 'var(--green)', 'Entradas', null, r.material, r.central, _rowFechExcluidosEnt, r.localEntTotal ?? null)
-        : `<span class="td-mono" style="color:var(--green);font-weight:600">${_fmtKg(r.entradasKg)}</span>`) + (r.pendEntAplicado ? pendBadge('NF') : '');
+        ? _bdm(r.entEntries || [], r.entradasKg, 'var(--green)', 'Entradas', null, r.material, r.central, [], r.localEntTotal ?? null)
+        : `<span class="td-mono" style="color:var(--green);font-weight:600">${_fmtKgSigned(r.entradasKg)}</span>`) + (r.pendEntAplicado ? pendBadge('NF') : '');
       const saiCell = (_bdm
-        ? _bdm(r.saiEntries || [], r.saidasKg, 'var(--red)', 'Saídas', null, r.material, r.central, _rowFechExcluidosSai, r.localSaiTotal ?? null)
-        : `<span class="td-mono" style="color:var(--red);font-weight:600">${_fmtKg(r.saidasKg)}</span>`) + (r.pendSaiAplicado ? pendBadge('OS') : '');
+        ? _bdm(r.saiEntries || [], r.saidasKg, 'var(--red)', 'Saídas', null, r.material, r.central, [], r.localSaiTotal ?? null)
+        : `<span class="td-mono" style="color:var(--red);font-weight:600">${_fmtKgSigned(r.saidasKg)}</span>`) + (r.pendSaiAplicado ? pendBadge('OS') : '');
+      // Ajustes: cor pelo SINAL, âmbar no zero (zero aqui é informação — os
+      // ajustes do período se anularam). Mesmo critério da Visão Micro.
+      const _ajuCor = _movValorCor(r.ajustesKg, 'var(--amber)');
+      const ajuCell = _bdm
+        ? _bdm(r.ajuEntries || [], r.ajustesKg, _ajuCor, 'Ajustes', null, r.material, r.central, _rowFechExcluidos)
+        : `<span class="td-mono" style="color:${_ajuCor};font-weight:600">${_fmtKgSigned(r.ajustesKg)}</span>`;
 
       // ── Est. Final: teal igual ao analítico. 3 estados possíveis:
       //   • normal — achou lançamento exatamente no dia de fechamento esperado.
@@ -1743,6 +1776,7 @@
         <td style="text-align:right;white-space:nowrap">${iniCell}</td>
         <td style="text-align:right;white-space:nowrap">${entCell}</td>
         <td style="text-align:right;white-space:nowrap">${saiCell}</td>
+        <td style="text-align:right;white-space:nowrap">${ajuCell}</td>
         <td style="text-align:right;white-space:nowrap">${finCell}</td>
         <td style="text-align:right;white-space:nowrap">${teorCell}</td>
         <td style="text-align:right;white-space:nowrap">${varCell}</td>
@@ -1792,6 +1826,7 @@
     const totalIni = invRowsCadastrados.reduce((s,r)=>s+r.estoqueIni,0);
     const totalEnt = invRowsCadastrados.reduce((s,r)=>s+r.entradasKg,0);
     const totalSai = invRowsCadastrados.reduce((s,r)=>s+r.saidasKg,0);
+    const totalAju = invRowsCadastrados.reduce((s,r)=>s+r.ajustesKg,0);
     const totalFin = invRowsCadastrados.reduce((s,r)=>s+r.estoqueFimReal,0);
 
     // Variação BRUTA: varKg sem desconto de justificativas
@@ -1807,8 +1842,14 @@
 
     const set = (id, val) => { const el = document.getElementById(id); if(el) el.textContent = val; };
     set('inv-kpi-ini-v', fmt(totalIni));
-    set('inv-kpi-ent-v', fmt(totalEnt));
-    set('inv-kpi-sai-v', fmt(totalSai));
+    // Ent/Saí/Aju são LÍQUIDOS com sinal (ver o rateio por natureza acima):
+    // o sinal explícito evita ler "Saídas 832.410" como grandeza positiva
+    // quando o número é −832.410. Est. Inicial/Final continuam sem sinal —
+    // são níveis de estoque, não movimento com direção.
+    const _fmtSig = (v) => (Math.abs(num(v)) < 0.0001 ? fmt(0) : (v > 0 ? '+' : '−') + fmt(Math.abs(v)));
+    set('inv-kpi-ent-v', _fmtSig(totalEnt));
+    set('inv-kpi-sai-v', _fmtSig(totalSai));
+    set('inv-kpi-aju-v', _fmtSig(totalAju));
     set('inv-kpi-fin-v', fmt(totalFin));
 
     // Badges de ausentes nos KPIs
@@ -2927,7 +2968,7 @@
     // permite à importação verificar se o CSV pertence ao mês certo antes
     // de aplicar qualquer coisa (ver _invHandleImportFile).
     const mesKeyExport = invGetMesKey();
-    const header = ['Mês','Regional','Filial','Material','Cód SAP','Categoria','Est.Inicial(kg)','Entradas(kg)','Saídas(kg)','Est.Final(kg)','Est.Teórico(kg)','Var.(kg)','Custo Médio (R$/kg)','Custo SAP (R$)','Saldo Justificado (kg)','Var.Justificada (kg)','Custo Just. (R$)','Just.Operacional','Just.Fiscal','Documento SAP'];
+    const header = ['Mês','Regional','Filial','Material','Cód SAP','Categoria','Est.Inicial(kg)','Entradas(kg)','Saídas(kg)','Ajustes(kg)','Est.Final(kg)','Est.Teórico(kg)','Var.(kg)','Custo Médio (R$/kg)','Custo SAP (R$)','Saldo Justificado (kg)','Var.Justificada (kg)','Custo Just. (R$)','Just.Operacional','Just.Fiscal','Documento SAP'];
     const rows = invRows.map(r => {
       const j = invJustificativas[r.k] || {};
       const hasJust = j.op && j.fiscal; // Var.Justificada/Custo Just. só preenchem com justificativa completa, mesma regra da tabela
@@ -2941,6 +2982,7 @@
         r.estoqueIniMissing ? '' : _n(r.estoqueIni),
         _n(r.entradasKg),
         _n(r.saidasKg),
+        _n(r.ajustesKg),
         r.estoqueFimMissing ? '' : _n(r.estoqueFimReal),
         _n(r.estTeor),
         _n(r.varKg),

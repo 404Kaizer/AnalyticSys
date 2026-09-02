@@ -3225,7 +3225,9 @@ function _dgrBuildResumoPeriodoHtml(d) {
   const varCol = colorFor(d.varTotalFisica);
   const cstCol = colorFor(d.custoTotal);
 
-  const totalEstTeorico = d.estTotais.totalIni + d.movTotais.totalEnt - d.movTotais.totalSai;
+  // movTotais vem do Dashboard Gerencial com os três baldes LÍQUIDOS e com
+  // sinal (ver _dgVgMovimentacaoTotais) — soma, não subtrai.
+  const totalEstTeorico = d.estTotais.totalIni + d.movTotais.totalEnt + d.movTotais.totalSai + (d.movTotais.totalAju || 0);
   const pctVariacao = Math.abs(totalEstTeorico) > 0.0001 ? (d.varTotalFisica / totalEstTeorico) * 100 : null;
   const custoEstTeorico = (d.estTotais.custoIni || 0) + (d.custoMovTotais.custoEnt || 0) - (d.custoMovTotais.custoSai || 0);
   const pctCusto = Math.abs(custoEstTeorico) > 0.0001 ? (d.custoTotal / custoEstTeorico) * 100 : null;
@@ -3299,7 +3301,7 @@ function _dgrBuildResumoPeriodoHtml(d) {
   const tonAoLado = kg => ` <span style="font-weight:400;font-size:.65em;color:var(--dgr-text-dim2, #64748b)">(${fmtTon(kg)})</span>`;
 
   // Card "Est. Final Total - Medição" — Saldo Teórico SAP (Est. Inicial +
-  // Entradas - Saídas, já calculado acima em totalEstTeorico) em evidência,
+  // Entradas + Saídas + Ajustes, já calculado acima em totalEstTeorico) em evidência,
   // Saldo Real (o estoqueFim importado, ver _dgVgEstoqueTotais em
   // dashboard.js) abaixo — os dois podem divergir quando há ajuste manual
   // não refletido no SAP.
@@ -3320,8 +3322,9 @@ function _dgrBuildResumoPeriodoHtml(d) {
   return `
     <div class="dgr-kpi-secondary">
       ${card2('Est. Inicial Total - SAP', 'ti-database', '#94a3b8', fmtKg(d.estTotais.totalIni) + tonAoLado(d.estTotais.totalIni), money(d.estTotais.custoIni || 0))}
-      ${card2('Entradas - SAP', 'ti-activity', '#10b981', fmtKg(d.movTotais.totalEnt) + tonAoLado(d.movTotais.totalEnt), money(d.custoMovTotais.custoEnt || 0))}
-      ${card2('Saídas - SAP', 'ti-activity', '#f43f5e', fmtKg(d.movTotais.totalSai) + tonAoLado(d.movTotais.totalSai), money(d.custoMovTotais.custoSai || 0))}
+      ${card2('Entradas - SAP', 'ti-activity', '#10b981', fmtKgSigned(d.movTotais.totalEnt) + tonAoLado(d.movTotais.totalEnt), money(d.custoMovTotais.custoEnt || 0))}
+      ${card2('Saídas - SAP', 'ti-activity', '#f43f5e', fmtKgSigned(d.movTotais.totalSai) + tonAoLado(d.movTotais.totalSai), money(d.custoMovTotais.custoSai || 0))}
+      ${card2('Ajustes - SAP', 'ti-adjustments-alt', '#f59e0b', fmtKgSigned(d.movTotais.totalAju || 0) + tonAoLado(d.movTotais.totalAju || 0), money(d.custoMovTotais.custoAju || 0))}
       ${cardEstFinal}
       ${card2('Evolução Estoque', 'ti-chart-line', '#8b5cf6', `<span style="color:${evoCol}">${pctEvolucao === null ? '—' : varSymbol(kgEvolucao) + ' ' + pctStr(pctEvolucao)}</span><div class="dgr-kpi-unit" style="margin-top:4px">Evolução · Est. Final Total (SAP) - Est. Inicial Total (SAP)</div>`, `${varSymbol(kgEvolucao)} ${fmtKg(Math.abs(kgEvolucao))}<br>${varSymbol(kgEvolucao)} ${money(Math.abs(custoEvolucao))}`)}
       ${cardVariacaoAjustada}
@@ -5309,7 +5312,7 @@ const _DGM_COLUNAS = [
     calculo: 'Soma dos lançamentos SAP positivos do material no mês. É o que entrou de fato na central.' },
 
   { label: 'Saídas', largura: 12,
-    calculo: 'Soma dos lançamentos SAP negativos do material no mês, em módulo. É o consumo do período.' },
+    calculo: 'Soma dos movimentos SAP de SAÍDA do material no mês (códigos 201/202), em módulo. É o consumo do período. Transferência entre filiais (861/862), sucateamento (551/552) e ajuste de fechamento (Y11/Y12) NÃO entram — saíram do estoque, mas não foram consumidos aqui.' },
 
   { label: 'Abast.', largura: 10,
     calculo: 'Entradas ÷ Saídas × 100 — o abastecimento acompanhou o consumo? A MESMA porcentagem é lida de forma diferente conforme o giro: com giro ≥ 1 (consumo alto) o risco é ruptura, então repor menos que o consumo é grave; com giro < 1 (consumo baixo) o risco é acúmulo, então repor muito acima do consumo é que preocupa.',
@@ -5351,7 +5354,7 @@ const _DGM_COLUNAS = [
     ] },
 
   { label: 'Variação', largura: 12,
-    calculo: 'Est. Final real − Est. Teórico, sendo o Teórico = Est. Inicial + Entradas + Saídas. O Est. Inicial vem do saldo TEÓRICO do SAP (âncora de Custos SAP + movimentações), então a variação mede o quanto o físico está distante do livro do SAP — mesma conta da Visão Micro do Analítico.',
+    calculo: 'Est. Final real − Est. Teórico, sendo o Teórico = Est. Inicial + Entradas + Saídas + Ajustes (os três baldes de movimento do SAP, rateados por natureza do código). O Est. Inicial vem do saldo TEÓRICO do SAP (âncora de Custos SAP + movimentações), então a variação mede o quanto o físico está distante do livro do SAP — mesma conta da Visão Micro do Analítico.',
     faixas: [
       ['Negativa (desfalque)', 'falta estoque em relação ao que o SAP diz'],
       ['Positiva (sobra)',     'sobra estoque em relação ao que o SAP diz'],

@@ -4544,6 +4544,15 @@ window._inv_helpers = {
   escapeHtml,
   buildAnaliticoDetailBreakdown,
 
+  // Formatação que anda junto com o rateio por natureza — o Inventário usa
+  // o mesmo padrão da Visão Micro nas colunas Entradas/Saídas/Ajustes.
+  // (A classificação em si, classificarMovSap, o Inventário pega via
+  // _invSafeCall no escopo onde monta as linhas — mesma função global,
+  // mesmas listas de código: duplicá-las lá faria os dois módulos
+  // divergirem no primeiro código novo.)
+  fmtKgSigned,
+  movValorCor,
+
   // Fonte única de verdade para categoria/classificação de material —
   // busca sempre no cadastro atual de Materiais (normalize.js), nunca em
   // registro bruto nem por heurística de nome. getCatKeyDoCadastro retorna

@@ -442,7 +442,11 @@ function _asstIntentSaldoMaterial(query) {
 
   let html = `<b>${escapeHtml(matAlias)}</b> — <b>${escapeHtml(central)}</b> · período ${_asstPeriodoLabel()}`;
   html += `<div class="asst-item">Est. Inicial: ${snap.pesoIniAusente ? '—' : fmtKg(snap.pesoIni)} (${snap.dtIniLabel})</div>`;
-  html += `<div class="asst-item">Entradas: ${fmtKg(snap.totalEnt)} &nbsp; Saídas: ${fmtKg(Math.abs(snap.totalSai))}</div>`;
+  // Rateio por NATUREZA (ENTRADAS/SAÍDAS/AJUSTES), igual à Visão Micro — o
+  // buildSnapshot acima separa por sinal e não conhece o balde AJUSTES, e
+  // sem ele um estorno ou uma transferência apareceria como "Saída" aqui.
+  const _natA = repartirSapPorNatureza(sapAll);
+  html += `<div class="asst-item">Entradas: ${fmtKgSigned(_natA.totalEnt)} &nbsp; Saídas: ${fmtKgSigned(_natA.totalSai)} &nbsp; Ajustes: ${fmtKgSigned(_natA.totalAju)}</div>`;
   html += `<div class="asst-item">Est. Teórico: ${fmtKg(snap.estTeorico)}</div>`;
   html += `<div class="asst-item">Est. Final (real): ${snap.pesoFimAusente ? '—' : fmtKg(snap.pesoFim)} (${snap.dtFimLabel})</div>`;
   html += `<div class="asst-item"><b>Variação: ${signedKg(snap.diff)}</b> — ${levelLabel}</div>`;

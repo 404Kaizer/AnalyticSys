@@ -76,17 +76,26 @@ function buildDashboardGerencialResults(dtIni, dtFim) {
       return true;
     });
 
+    // Rateio por NATUREZA do código (classificarMovSap, ui.js), não pelo
+    // sinal do peso — mesmo critério da Visão Micro e do Inventário. Os três
+    // totais são LÍQUIDOS e COM SINAL: totalSaidas é negativo, e é por isso
+    // que estoqueTeoricoMacro abaixo SOMA os três em vez de subtrair saídas.
     const entradasPorCod = {};
     const saidasPorCod   = {};
+    const ajustesPorCod  = {};
     sapNoPeriodo.forEach(r => {
       const cod = normMov(r.movimento);
       const p   = num(r.peso);
-      if (p > 0) entradasPorCod[cod] = (entradasPorCod[cod] || 0) + p;
-      else if (p < 0) saidasPorCod[cod] = (saidasPorCod[cod] || 0) + p;
+      if (!p) return;
+      const nat = classificarMovSap(cod);
+      if (nat === 'ent')      entradasPorCod[cod] = (entradasPorCod[cod] || 0) + p;
+      else if (nat === 'sai') saidasPorCod[cod]   = (saidasPorCod[cod]   || 0) + p;
+      else                    ajustesPorCod[cod]  = (ajustesPorCod[cod]  || 0) + p;
     });
 
     const totalEntradas = Object.values(entradasPorCod).reduce((s, v) => s + v, 0);
     const totalSaidas   = Object.values(saidasPorCod).reduce((s, v) => s + v, 0);
+    const totalAjustes  = Object.values(ajustesPorCod).reduce((s, v) => s + v, 0);
 
     // Pré-agrupa lançamentos por material — elimina O(n×m) filter por material
     const lancsByMat = new Map();
@@ -193,7 +202,9 @@ function buildDashboardGerencialResults(dtIni, dtFim) {
       }
     });
 
-    const estoqueTeoricoMacro = somaPrimeiro + totalEntradas + totalSaidas;
+    // Soma os TRÊS baldes (todos líquidos e com sinal) — resultado idêntico
+    // ao anterior: é a soma de todo o SAP do período sobre o Est. Inicial.
+    const estoqueTeoricoMacro = somaPrimeiro + totalEntradas + totalSaidas + totalAjustes;
     const variacaoEstoque     = somaUltimo - estoqueTeoricoMacro;
 
     // Custo médio por material: SÓ Custos SAP (central + Cód SAP +
@@ -210,7 +221,7 @@ function buildDashboardGerencialResults(dtIni, dtFim) {
     });
 
     results.push({
-      central, totalEntradas, totalSaidas,
+      central, totalEntradas, totalSaidas, totalAjustes,
       estoqueTeoricoMacro, somaPrimeiro, somaUltimo, variacaoEstoque,
       missingIniMats, missingFimMats,
       allMats: [...allMats].sort(),
@@ -544,7 +555,11 @@ function _dgVgBuildPares(results, thresholds, dtIni, dtFim) {
       // Agregado (Aglomerante/Aditivo/Adição não têm subcategoria).
       const catSubKey = (r.materialCatSubKeyMap && r.materialCatSubKeyMap.get(mat)) || null;
 
-      let diff, estoqueIni = 0, estoqueFim = 0, entKg = 0, saiKg = 0;
+      let diff, estoqueIni = 0, estoqueFim = 0, entKg = 0, saiKg = 0, ajuKg = 0;
+      // Rateio por NATUREZA do código, não pelo sinal — mesmo critério da
+      // Visão Micro/Inventário. Os três saem LÍQUIDOS e COM SINAL (saiKg
+      // negativo), então o Est. Teórico do Detalhado soma os três.
+      const _nat = repartirSapPorNatureza(sap);
       if (dtIni && dtFim) {
         const prev = getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni, dtFim, catKey });
         const fim  = getLastPeriodLaunchStockWithFallback({ central: r.central, material: mat, dtIni, dtFim });
@@ -560,19 +575,14 @@ function _dgVgBuildPares(results, thresholds, dtIni, dtFim) {
           finalStockOverride:   (fim && !fim.missing) ? fim.value : null
         });
         diff  = snap.diff;
-        // totalEnt/totalSai já vêm calculados pelo buildSnapshot (saiKg
-        // sai negativo de lá — normalizamos aqui pra magnitude positiva,
-        // mesma convenção usada em _dgVgMovimentacaoTotais/movTotais.totalSai
-        // no resto da Visão Geral) — usados pela tabela de Detalhamento
-        // por Material (Detalhado Analítico), sem custo extra: só passamos
-        // a guardar um valor que antes era descartado.
-        entKg = snap.totalEnt || 0;
-        saiKg = Math.abs(snap.totalSai || 0);
+        // Alimentam a tabela de Detalhamento por Material (Detalhado
+        // Analítico). Vêm do rateio por natureza (_nat), não do buildSnapshot:
+        // o snapshot separa por sinal e não conhece o balde AJUSTES.
+        entKg = _nat.totalEnt; saiKg = _nat.totalSai; ajuKg = _nat.totalAju;
       } else {
         const snap = buildSnapshot({ lancs, sap });
         diff  = snap.diff;
-        entKg = snap.totalEnt || 0;
-        saiKg = Math.abs(snap.totalSai || 0);
+        entKg = _nat.totalEnt; saiKg = _nat.totalSai; ajuKg = _nat.totalAju;
       }
 
       const neutro = Math.abs(diff) <= 0.0001;
@@ -591,7 +601,7 @@ function _dgVgBuildPares(results, thresholds, dtIni, dtFim) {
         central: r.central, regional, mat, catKey, catSubKey, diff, level, neutro,
         custoImplicado: diff * custoMed, estoqueIni, estoqueFim,
         custoIni: estoqueIni * custoMed, custoFim: estoqueFim * custoMed,
-        entKg, saiKg, custoMed
+        entKg, saiKg, ajuKg, custoMed
       });
     });
   });
@@ -619,15 +629,22 @@ function _dgVgEstoqueTotais(pares) {
   return { totalIni, totalFim, custoIni, custoFim };
 }
 
-// Entradas / Saídas Total — soma dos totais já calculados por central em
-// buildDashboardGerencialResults (mesma exclusão de "sem cadastro" já
-// aplicada na origem, antes mesmo de chegar em pares). Saídas vira
-// positivo pra bater com a convenção do Inventário (lá soma Math.abs(p);
-// aqui totalSaidas por central já vem negativo).
+// Entradas / Saídas / Ajustes Total — soma dos totais já rateados por
+// NATUREZA em buildDashboardGerencialResults (mesma exclusão de "sem
+// cadastro" já aplicada na origem, antes mesmo de chegar em pares).
+//
+// ATENÇÃO — os três voltam LÍQUIDOS e COM SINAL (totalSai negativo). Antes
+// totalSai vinha em magnitude positiva via Math.abs e os chamadores
+// SUBTRAÍAM; agora somam, igual ao Inventário e à Visão Micro. Quem depende
+// disso: os Est. Teórico de _dgVgKpis/_dgVgRenderKpisHero e o do relatorio.js.
 function _dgVgMovimentacaoTotais(results) {
-  let totalEnt = 0, totalSai = 0;
-  results.forEach(r => { totalEnt += r.totalEntradas || 0; totalSai += Math.abs(r.totalSaidas || 0); });
-  return { totalEnt, totalSai };
+  let totalEnt = 0, totalSai = 0, totalAju = 0;
+  results.forEach(r => {
+    totalEnt += r.totalEntradas || 0;
+    totalSai += r.totalSaidas   || 0;
+    totalAju += r.totalAjustes  || 0;
+  });
+  return { totalEnt, totalSai, totalAju };
 }
 
 // Custo de Entradas/Saídas — kg de cada material (Σ peso SAP do período,
@@ -638,19 +655,27 @@ function _dgVgMovimentacaoTotais(results) {
 // da Visão Geral quanto pelo KPI "Custo Total de Saídas" da Visão de
 // Consumo (_dcRenderKpiStrip).
 function _dgVgCustoMovimentacaoTotais(results) {
-  let custoEnt = 0, custoSai = 0;
+  let custoEnt = 0, custoSai = 0, custoAju = 0;
   results.forEach(r => {
-    const pesoEntPorMat = {}, pesoSaiPorMat = {};
+    const pesoPorNat = { ent: {}, sai: {}, aju: {} };
     (r.sapNoPeriodo || []).forEach(s => {
       const mat = s.material || '—';
       const p = num(s.peso);
-      if (p > 0)      pesoEntPorMat[mat] = (pesoEntPorMat[mat] || 0) + p;
-      else if (p < 0) pesoSaiPorMat[mat] = (pesoSaiPorMat[mat] || 0) + Math.abs(p);
+      if (!p) return;
+      // Peso em MAGNITUDE aqui, não líquido: o custo de movimentação é
+      // "quanto dinheiro passou", e um estorno movimentou dinheiro tanto
+      // quanto o lançamento que ele anula. Quem precisa do líquido é o kg
+      // (ver _dgVgMovimentacaoTotais), que alimenta o Est. Teórico.
+      const nat = classificarMovSap(normMov(s.movimento));
+      pesoPorNat[nat][mat] = (pesoPorNat[nat][mat] || 0) + Math.abs(p);
     });
-    Object.keys(pesoEntPorMat).forEach(mat => { custoEnt += pesoEntPorMat[mat] * ((r.custoMedioPorMat || {})[mat] || 0); });
-    Object.keys(pesoSaiPorMat).forEach(mat => { custoSai += pesoSaiPorMat[mat] * ((r.custoMedioPorMat || {})[mat] || 0); });
+    const _somar = (bucket) => Object.keys(bucket)
+      .reduce((acc, mat) => acc + bucket[mat] * ((r.custoMedioPorMat || {})[mat] || 0), 0);
+    custoEnt += _somar(pesoPorNat.ent);
+    custoSai += _somar(pesoPorNat.sai);
+    custoAju += _somar(pesoPorNat.aju);
   });
-  return { custoEnt, custoSai };
+  return { custoEnt, custoSai, custoAju };
 }
 
 // Tally de pares Central×Material por nível — MESMO critério usado em
@@ -1221,7 +1246,9 @@ function renderDgVisaoGeralPdf(results, thresholds, dtIni, dtFim) {
   // usado tanto como denominador comum da % Variação de cada linha dos 4
   // rankings (_daBuildRanking) quanto, aqui, só como argumento formal pro
   // cálculo abaixo (que só precisa de Caminhões/Carretas/IBCs, não da %).
-  const totalEstTeoricoKpi = estTotais.totalIni + movTotais.totalEnt - movTotais.totalSai;
+  // Ent/Saí/Aju são líquidos com sinal (ver _dgVgMovimentacaoTotais) — SOMA
+  // os três. Valor idêntico ao da fórmula antiga, que subtraía a magnitude.
+  const totalEstTeoricoKpi = estTotais.totalIni + movTotais.totalEnt + movTotais.totalSai + (movTotais.totalAju || 0);
 
   // Caminhões/Carretas/IBCs da empresa inteira, pro card "Variação" do KPI
   // hero — mesma metodologia (e mesmas funções) já usadas nos 4 rankings
@@ -1293,12 +1320,12 @@ function _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais, f
   const cstIcon = custoTotal     < -0.0001 ? 'ti-coin'    : custoTotal     > 0.0001 ? 'ti-coins' : 'ti-currency-dollar';
   const featTopStyle = col => `border-top:3px solid ${col};border-top-left-radius:var(--radius-lg);border-top-right-radius:var(--radius-lg)`;
 
-  // % da Variação sobre o Est. Teórico Total (Ini + Ent − Saí) — "o real
-  // contra o esperado". Saídas aqui é movTotais.totalSai, que já vem em
-  // magnitude positiva (ver _dgVgMovimentacaoTotais), por isso subtrai em
-  // vez de somar. Base 0 → '—' em vez de dividir por zero (decisão: uma
+  // % da Variação sobre o Est. Teórico Total (Ini + Ent + Saí + Aju) — "o
+  // real contra o esperado". Os três baldes vêm LÍQUIDOS e com sinal de
+  // _dgVgMovimentacaoTotais (totalSai negativo), por isso somam em vez de
+  // subtrair. Base 0 → '—' em vez de dividir por zero (decisão: uma
   // "porcentagem sobre nada" não tem significado, não é 0%).
-  const totalEstTeorico = estTotais.totalIni + movTotais.totalEnt - movTotais.totalSai;
+  const totalEstTeorico = estTotais.totalIni + movTotais.totalEnt + movTotais.totalSai + (movTotais.totalAju || 0);
   const pctVariacao = Math.abs(totalEstTeorico) > 0.0001 ? (varTotalFisica / totalEstTeorico) * 100 : null;
 
   // % do Custo Var. sobre o Custo Teórico Total — mesma convenção da %
@@ -1398,14 +1425,21 @@ function _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais, f
         <div class="inv-kpi-body">
           <div class="inv-kpi-label"><i class="ti ti-arrow-bar-to-down" style="color:var(--green)"></i>Entradas</div>
           <div class="inv-kpi-value">${money(custoMovTotais.custoEnt || 0)}</div>
-          <div class="inv-kpi-unit">${fmtKg(movTotais.totalEnt)}</div>
+          <div class="inv-kpi-unit">${fmtKgSigned(movTotais.totalEnt)}</div>
         </div>
       </div>
       <div class="inv-kpi-card">
         <div class="inv-kpi-body">
           <div class="inv-kpi-label"><i class="ti ti-arrow-bar-up" style="color:var(--red)"></i>Saídas</div>
           <div class="inv-kpi-value">${money(custoMovTotais.custoSai || 0)}</div>
-          <div class="inv-kpi-unit">${fmtKg(movTotais.totalSai)}</div>
+          <div class="inv-kpi-unit">${fmtKgSigned(movTotais.totalSai)}</div>
+        </div>
+      </div>
+      <div class="inv-kpi-card">
+        <div class="inv-kpi-body">
+          <div class="inv-kpi-label"><i class="ti ti-adjustments-alt" style="color:var(--amber)"></i>Ajustes</div>
+          <div class="inv-kpi-value">${money(custoMovTotais.custoAju || 0)}</div>
+          <div class="inv-kpi-unit" style="color:${movValorCor(movTotais.totalAju || 0, 'var(--amber)')}">${fmtKgSigned(movTotais.totalAju || 0)}</div>
         </div>
       </div>
       <div class="inv-kpi-card">
@@ -1942,25 +1976,28 @@ function _daBuildTabelaMaterial(pares) {
   pares.forEach(p => {
     if (!map.has(p.mat)) map.set(p.mat, {
       mat: p.mat, catKey: p.catKey, catSubKey: p.catSubKey,
-      estIni: 0, entKg: 0, saiKg: 0, estFim: 0, custoAjuste: 0,
+      estIni: 0, entKg: 0, saiKg: 0, ajuKg: 0, estFim: 0, custoAjuste: 0,
       somaValorPond: 0, somaPesoPond: 0
     });
     const m = map.get(p.mat);
     m.estIni      += p.estoqueIni || 0;
     m.entKg       += p.entKg || 0;
     m.saiKg       += p.saiKg || 0;
+    m.ajuKg       += p.ajuKg || 0;
     m.estFim      += p.estoqueFim || 0;
     m.custoAjuste += p.custoImplicado || 0;
-    // Custo médio ponderado — pondera pelo peso de Saídas SAP do material naquela central,
+    // Custo médio ponderado — pondera pela MAGNITUDE das Saídas SAP do
+    // material naquela central (saiKg agora é negativo, ver o rateio por
+    // natureza; sem Math.abs o peso ficaria negativo e inverteria a média),
     // fallback 1 quando não há saída (evita descartar o custo médio de
     // materiais sem consumo no período).
-    const peso = p.saiKg || 1;
+    const peso = Math.abs(p.saiKg) || 1;
     m.somaValorPond += (p.custoMed || 0) * peso;
     m.somaPesoPond  += peso;
   });
 
   const linhas = [...map.values()].map(m => {
-    const estTeorico  = m.estIni + m.entKg - m.saiKg;
+    const estTeorico  = m.estIni + m.entKg + m.saiKg + m.ajuKg;
     const custoMedio  = m.somaPesoPond > 0 ? m.somaValorPond / m.somaPesoPond : 0;
     const diffTotal   = m.estFim - estTeorico;
     const pctVariacao = _daVarIrrelevante(diffTotal) ? 0
@@ -1968,18 +2005,20 @@ function _daBuildTabelaMaterial(pares) {
     return { ...m, estTeorico, custoMedio, pctVariacao };
   }).sort((a, b) => a.custoAjuste - b.custoAjuste); // maior desfalque (mais negativo) primeiro
 
-  // Linha de total — Est Inicial/Entradas/Saídas/Est Final são SOMADOS
-  // normalmente (são aditivos de verdade). Est Teórico do Total é
-  // RECALCULADO a partir dessas somas (Ini+Ent-Sai), e a % Variação do
+  // Linha de total — Est Inicial/Entradas/Saídas/Ajustes/Est Final são
+  // SOMADOS normalmente (são aditivos de verdade). Est Teórico do Total é
+  // RECALCULADO a partir dessas somas (Ini+Ent+Sai+Aju — os três baldes são
+  // líquidos e com sinal, por isso somam), e a % Variação do
   // Total é recalculada em cima do Est Teórico e Est Final somados — nunca
   // é a soma nem a média das % de cada linha (percentual não é aditivo).
   // Custo Médio também é recalculado (ponderado), pelo mesmo motivo.
   const totEstIni = linhas.reduce((s, l) => s + l.estIni, 0);
   const totEntKg  = linhas.reduce((s, l) => s + l.entKg, 0);
   const totSaiKg  = linhas.reduce((s, l) => s + l.saiKg, 0);
+  const totAjuKg  = linhas.reduce((s, l) => s + l.ajuKg, 0);
   const totEstFim = linhas.reduce((s, l) => s + l.estFim, 0);
   const totAjuste = linhas.reduce((s, l) => s + l.custoAjuste, 0);
-  const totEstTeorico    = totEstIni + totEntKg - totSaiKg;
+  const totEstTeorico    = totEstIni + totEntKg + totSaiKg + totAjuKg;
   const totDiff           = totEstFim - totEstTeorico;
   const totPctVariacao    = _daVarIrrelevante(totDiff) ? 0
                            : (Math.abs(totEstTeorico) > 0.0001 ? (totDiff / totEstTeorico) * 100 : null);
@@ -1990,7 +2029,7 @@ function _daBuildTabelaMaterial(pares) {
   return {
     linhas,
     total: {
-      estIni: totEstIni, entKg: totEntKg, saiKg: totSaiKg,
+      estIni: totEstIni, entKg: totEntKg, saiKg: totSaiKg, ajuKg: totAjuKg,
       estTeorico: totEstTeorico, estFim: totEstFim,
       pctVariacao: totPctVariacao, custoMedio: totCustoMedio, custoAjuste: totAjuste
     }
@@ -2031,13 +2070,14 @@ function _daBuildRanking(pares, pesoMedio, keyFn, totalEstTeoricoKpi, labelFn) {
     const k = keyFn(p);
     if (k === null || k === undefined || k === '') return;
     if (!map.has(k)) map.set(k, {
-      key: k, estIni: 0, entKg: 0, saiKg: 0, estFim: 0, custoTotal: 0,
+      key: k, estIni: 0, entKg: 0, saiKg: 0, ajuKg: 0, estFim: 0, custoTotal: 0,
       caminhoesDiffKg: 0, carretasDiffKg: 0, ibcsDiffKg: 0
     });
     const m = map.get(k);
     m.estIni     += p.estoqueIni || 0;
     m.entKg      += p.entKg || 0;
     m.saiKg      += p.saiKg || 0;
+    m.ajuKg      += p.ajuKg || 0;
     m.estFim     += p.estoqueFim || 0;
     m.custoTotal += p.custoImplicado || 0;
 
@@ -2049,7 +2089,7 @@ function _daBuildRanking(pares, pesoMedio, keyFn, totalEstTeoricoKpi, labelFn) {
   });
 
   const linhas = [...map.values()].map(m => {
-    const estTeorico = m.estIni + m.entKg - m.saiKg; // teórico DO ESCOPO — só pra achar o diff do escopo
+    const estTeorico = m.estIni + m.entKg + m.saiKg + m.ajuKg; // teórico DO ESCOPO — só pra achar o diff do escopo
     const diff        = m.estFim - estTeorico;         // desfalque/sobra em kg DO ESCOPO
     return {
       nome: labelFn ? labelFn(m.key) : m.key,
@@ -2112,8 +2152,9 @@ function _daRenderTabelaMaterial(containerId, dados) {
         ${l.catKey ? `<span class="da-mat-cat">${escapeHtml(DG_VG_CATSUB_LABELS[l.catSubKey] || DG_VG_CAT_LABELS[l.catKey] || l.catKey)}</span>` : ''}
       </td>
       <td class="da-num" style="color:var(--teal)">${fmtKg(l.estIni)}</td>
-      <td class="da-num" style="color:var(--green)">${fmtKg(l.entKg)}</td>
-      <td class="da-num" style="color:var(--red)">${fmtKg(l.saiKg)}</td>
+      <td class="da-num" style="color:var(--green)">${fmtKgSigned(l.entKg)}</td>
+      <td class="da-num" style="color:var(--red)">${fmtKgSigned(l.saiKg)}</td>
+      <td class="da-num" style="color:${movValorCor(l.ajuKg, 'var(--amber)')}">${fmtKgSigned(l.ajuKg)}</td>
       <td class="da-num" style="color:var(--teal)">${fmtKg(l.estTeorico)}</td>
       <td class="da-num" style="color:var(--teal)">${fmtKg(l.estFim)}</td>
       <td class="da-num" style="color:${_daColorFor(l.pctVariacao)}">${_daFmtPctSigned(l.pctVariacao)}</td>
@@ -2126,8 +2167,9 @@ function _daRenderTabelaMaterial(containerId, dados) {
     <tr class="da-total-row">
       <td>Total</td>
       <td class="da-num" style="color:var(--teal)">${fmtKg(t.estIni)}</td>
-      <td class="da-num" style="color:var(--green)">${fmtKg(t.entKg)}</td>
-      <td class="da-num" style="color:var(--red)">${fmtKg(t.saiKg)}</td>
+      <td class="da-num" style="color:var(--green)">${fmtKgSigned(t.entKg)}</td>
+      <td class="da-num" style="color:var(--red)">${fmtKgSigned(t.saiKg)}</td>
+      <td class="da-num" style="color:${movValorCor(t.ajuKg, 'var(--amber)')}">${fmtKgSigned(t.ajuKg)}</td>
       <td class="da-num" style="color:var(--teal)">${fmtKg(t.estTeorico)}</td>
       <td class="da-num" style="color:var(--teal)">${fmtKg(t.estFim)}</td>
       <td class="da-num" style="color:${_daColorFor(t.pctVariacao)}">${_daFmtPctSigned(t.pctVariacao)}</td>
@@ -2144,6 +2186,7 @@ function _daRenderTabelaMaterial(containerId, dados) {
             <th class="da-num">Est. Inicial</th>
             <th class="da-num">Entradas</th>
             <th class="da-num">Saídas</th>
+            <th class="da-num">Ajustes</th>
             <th class="da-num">Est. Teórico</th>
             <th class="da-num">Est. Final</th>
             <th class="da-num">% Variação</th>
@@ -2294,6 +2337,31 @@ function _daRenderDetalhadoAnalitico(results, pares, totalEstTeoricoKpi) {
 // Guardas de typeof: analitico.js pode não estar carregado em alguns
 // contextos (testes, telas isoladas) — ali degrada pro comportamento antigo
 // em vez de quebrar.
+// ── CONSUMO do período em kg — base do Giro e da Cobertura ───────────────
+// Antes era "tudo que tem peso negativo" (Math.abs(snap.totalSai), com o
+// buildSnapshot separando por sinal). Isso contava como consumo coisas que
+// não são consumo: transferência para outra filial (862), sucateamento
+// (551), ajuste de fechamento (Y11/Y12) e estorno de entrada (102). O efeito
+// era INFLAR o giro de filiais que transferem muito, como se o material
+// tivesse sido usado ali.
+//
+// Passa a somar só o balde SAÍDAS (201/202) — consumo de verdade. O estorno
+// 202 entra com sinal oposto e reduz o consumo, que é o correto.
+//
+// ATENÇÃO — isto MUDA o valor de Giro e Cobertura em relação ao que era
+// divulgado antes (decisão do Hugo, 27/08/2026): giro CAI e cobertura SOBE
+// onde havia transferência. Devolve magnitude positiva, que é a convenção
+// esperada pelas fórmulas de giro/cobertura.
+function _consumoKgSaidas(sapRecords) {
+  let total = 0;
+  (sapRecords || []).forEach(s => {
+    const p = num(s.peso);
+    if (!p) return;
+    if (classificarMovSap(normMov(s.movimento)) === 'sai') total += p;
+  });
+  return Math.abs(total);
+}
+
 function _giroSnapshotMaterial({ central, mat, lancs, sap, dtIni, dtFim }) {
   const prev = (typeof _anGetSapStock === 'function')
     ? _anGetSapStock({ central, material: mat, dtIni }) : null;
@@ -2420,7 +2488,7 @@ function buildGiroPorCentralMaterial(dtIni, dtFim, results) {
       // Est.Médio é de fato (Est. Inicial + Est. Final) ÷ 2 e não pode
       // divergir da Variação exibida ao lado.
       const snap = _giroSnapshotMaterial({ central: r.central, mat, lancs, sap, dtIni, dtFim });
-      const m = metricas(snap.totalEnt, Math.abs(snap.totalSai), (snap.pesoIni + snap.pesoFim) / 2);
+      const m = metricas(snap.totalEnt, _consumoKgSaidas(sap), (snap.pesoIni + snap.pesoFim) / 2);
       const variacao = snap.diff;
 
       entTot += m.entradas; saiTot += m.saidas; estTot += m.estMedio; varTot += variacao;
@@ -2490,7 +2558,7 @@ function renderDgGiro(results, dtIni, dtFim) {
       // Est. Inicial do SAP incluído — ver _giroSnapshotMaterial.
       const snap  = _giroSnapshotMaterial({ central: r.central, mat, lancs, sap, dtIni, dtFim });
 
-      const saidas    = Math.abs(snap.totalSai);
+      const saidas    = _consumoKgSaidas(sap);
       const estMedio  = (snap.pesoIni + snap.pesoFim) / 2;
 
       totalSaidasKg  += saidas;
@@ -2501,7 +2569,7 @@ function renderDgGiro(results, dtIni, dtFim) {
         const d = parseDate(s.dtLanc);
         return d && d >= cutoff30;
       });
-      const saidas30 = sap30.filter(s=>num(s.peso)<0).reduce((a,s)=>a+Math.abs(num(s.peso)),0);
+      const saidas30 = _consumoKgSaidas(sap30);
       totalSaidas30  += saidas30;
       totalEstMedio30 += estMedio;
 
@@ -2589,8 +2657,9 @@ function renderDgGiro(results, dtIni, dtFim) {
 
     let saidasTotal = 0, estMedioTotal = 0, entradasTotal = 0;
     r.allMats.forEach(mat => {
-      const snap = _giroSnapshotMaterial({ central: r.central, mat, lancs: lancsByMat.get(mat)||[], sap: sapByMat.get(mat)||[], dtIni, dtFim });
-      saidasTotal   += Math.abs(snap.totalSai);
+      const _sapMat = sapByMat.get(mat) || [];
+      const snap = _giroSnapshotMaterial({ central: r.central, mat, lancs: lancsByMat.get(mat)||[], sap: _sapMat, dtIni, dtFim });
+      saidasTotal   += _consumoKgSaidas(_sapMat);
       estMedioTotal += (snap.pesoIni + snap.pesoFim) / 2;
       entradasTotal += snap.totalEnt;
     });
@@ -2937,8 +3006,9 @@ function _dcCalcGiroCoberturaGeral(results) {
     r.lancsNoPeriodo.forEach(l => { const m = l.material || '—'; if (!lancsByMat.has(m)) lancsByMat.set(m, []); lancsByMat.get(m).push(l); });
     r.sapNoPeriodo.forEach(s   => { const m = s.material  || '—'; if (!sapByMat.has(m))   sapByMat.set(m, []);   sapByMat.get(m).push(s); });
     (r.allMats || []).forEach(mat => {
-      const snap = buildSnapshot({ lancs: lancsByMat.get(mat) || [], sap: sapByMat.get(mat) || [] });
-      totalSaidasKg   += Math.abs(snap.totalSai);
+      const _sapMat = sapByMat.get(mat) || [];
+      const snap = buildSnapshot({ lancs: lancsByMat.get(mat) || [], sap: _sapMat });
+      totalSaidasKg   += _consumoKgSaidas(_sapMat);
       totalEstMedioKg += (snap.pesoIni + snap.pesoFim) / 2;
     });
   });
@@ -3073,10 +3143,10 @@ function _dcRenderKpiStrip(results, resultsAnt, ranking) {
   el.innerHTML = `
     <div class="macro-kpi-card kc-blue">
       <div class="macro-kpi-label"><i class="ti ti-scale"></i> Volume Consumido</div>
-      <div class="macro-kpi-cost">${fmtKgShort(movAtual.totalSai)} kg</div>
+      <div class="macro-kpi-cost">${fmtKgShort(Math.abs(movAtual.totalSai))} kg</div>
       <div class="macro-kpi-delta-row">
         <span class="macro-kpi-delta-label">vs. período anterior</span>
-        ${_dgDeltaBadgeHtml(movAtual.totalSai, movAnt.totalSai)}
+        ${_dgDeltaBadgeHtml(Math.abs(movAtual.totalSai), Math.abs(movAnt.totalSai || 0))}
       </div>
     </div>
     <div class="macro-kpi-card kc-amber">

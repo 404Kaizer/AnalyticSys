@@ -2015,6 +2015,14 @@
                 <div class="inv-kpi-unit">kg</div>
               </div>
             </div>
+            <div class="inv-kpi-card" id="inv-kpi-aju">
+              <div class="inv-kpi-icon" style="background:var(--amber-bg);color:var(--amber)"><i class="ti ti-adjustments-alt"></i></div>
+              <div class="inv-kpi-body">
+                <div class="inv-kpi-label">Ajustes</div>
+                <div class="inv-kpi-value" id="inv-kpi-aju-v">—</div>
+                <div class="inv-kpi-unit">kg</div>
+              </div>
+            </div>
             <div class="inv-kpi-card" id="inv-kpi-fin">
               <div class="inv-kpi-icon" style="background:var(--purple-bg);color:var(--purple)"><i class="ti ti-box"></i></div>
               <div class="inv-kpi-body">
@@ -2353,10 +2361,11 @@
                 <th data-col="codSap" data-align="left" onclick="invSortBy('codSap')">Cód SAP <i class="ti ti-selector inv-sort-icon"></i></th>
                 <th data-col="categoria" data-align="left" onclick="invSortBy('categoria')">Cat. <i class="ti ti-selector inv-sort-icon"></i></th>
                 <th data-col="estoqueIni" data-align="right" onclick="invSortBy('estoqueIni')" title="Est. Inicial (1º lançamento)">Est. Inicial <i class="ti ti-selector inv-sort-icon"></i></th>
-                <th data-col="entradasKg" data-align="right" onclick="invSortBy('entradasKg')" title="Entradas (por código SAP)">Entradas <i class="ti ti-selector inv-sort-icon"></i></th>
-                <th data-col="saidasKg" data-align="right" onclick="invSortBy('saidasKg')" title="Saídas (por código SAP)">Saídas <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="entradasKg" data-align="right" onclick="invSortBy('entradasKg')" title="Compra/recebimento e transferência entre centros (101, 801, 861/862, 301–306) — LÍQUIDO: estornos e transferências para fora entram como negativo">Entradas <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="saidasKg" data-align="right" onclick="invSortBy('saidasKg')" title="Consumo e seu estorno (201, 202)">Saídas <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="ajustesKg" data-align="right" onclick="invSortBy('ajustesKg')" title="Fechamento mensal (Y11/Y12), sucateamento (551/552), transferência entre materiais/depósitos (309/310, 311/312) e qualquer código não classificado">Ajustes <i class="ti ti-selector inv-sort-icon"></i></th>
                 <th data-col="estoqueFimReal" data-align="right" onclick="invSortBy('estoqueFimReal')" title="Est. Final (últ. lançamento)">Est. Final <i class="ti ti-selector inv-sort-icon"></i></th>
-                <th data-col="estTeor" data-align="right" onclick="invSortBy('estTeor')" title="Est. Teórico = Ini + Ent − Saí">Est. Teórico <i class="ti ti-selector inv-sort-icon"></i></th>
+                <th data-col="estTeor" data-align="right" onclick="invSortBy('estTeor')" title="Est. Teórico = Ini + Ent + Saí + Aju">Est. Teórico <i class="ti ti-selector inv-sort-icon"></i></th>
                 <th data-col="varKg" data-align="right" onclick="invSortBy('varKg')" title="Variação = Real − Teórico">Variação <i class="ti ti-selector inv-sort-icon"></i></th>
                 <th data-col="custoMedioSap" data-align="right" onclick="invSortBy('custoMedioSap')" title="Custo médio do Custos SAP (central + Cód SAP + mês) — automático, ou sobrescrito no modal de justificativa" class="inv-col-adjust inv-col-adjust-start">Custo Médio <i class="ti ti-selector inv-sort-icon"></i></th>
                 <th data-col="custoSap" data-align="right" onclick="invSortBy('custoSap')" title="Custo da variação BRUTA × Custo Médio (Custos SAP)" class="inv-col-adjust">Custo SAP <i class="ti ti-selector inv-sort-icon"></i></th>
