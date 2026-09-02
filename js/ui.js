@@ -1696,7 +1696,8 @@ const DIAG_TOM_ICONE = {
 // {doc} vira NF ou OS conforme o balde. Chave sem entrada aqui cai no
 // rótulo longo — nada quebra se um motivo novo esquecer de se cadastrar.
 const DIAG_CURTO = {
-  'duplicada':         'Integração duplicada',
+  'duplicada':           'Duplicada em aberto',
+  'duplicada-estornada': 'Duplicada, já estornada',
   'transf-duplicada':  'Transferência duplicada (862)',
   'transf-incompleta': 'Transferência sem par no SAP',
   'pendente':          '{doc} ausente no SAP',
@@ -1791,6 +1792,7 @@ function diagnosticarDivergenciaSapPuzl({ sapRecords = [], puzlRecords = [], lad
     : { real: new Set(), cancelled: new Set() };
   const vistosDup = new Map();
   const sapUteis  = [];
+  const dupExtras = [];
   sapRecords.forEach(r => {
     const k = (typeof getSapRecordKey === 'function') ? getSapRecordKey(r) : '';
     if (k && dup.real.has(k)) {
@@ -1798,11 +1800,7 @@ function diagnosticarDivergenciaSapPuzl({ sapRecords = [], puzlRecords = [], lad
       vistosDup.set(k, n);
       // A PRIMEIRA cópia é o lançamento legítimo e segue para a
       // reconciliação; da segunda em diante é o que infla o SAP.
-      if (n > 1) {
-        add('duplicada', 'Integração duplicada no SAP', 'erro', contrib(r), 1,
-            { ..._detSap(r), nota: `${n}ª cópia` });
-        return;
-      }
+      if (n > 1) { dupExtras.push({ rec: r, n }); return; }
     }
     // dup.cancelled (par lançamento+estorno que se anula) NÃO vira motivo:
     // ele não move peso, e a contagem do balão já é líquida — os dois lados
@@ -1812,6 +1810,28 @@ function diagnosticarDivergenciaSapPuzl({ sapRecords = [], puzlRecords = [], lad
     // quem conta a história é o motivo 'estornada', com o peso junto.
     sapUteis.push(r);
   });
+
+  // ── 1b. Duplicata já estornada × duplicata em aberto ────────────────────
+  // Um motivo só, somando tudo, escondia a informação que importa: dez
+  // duplicatas somando 0 kg podem ser cinco lançamentos duplicados que
+  // alguém já estornou (resolvido) ou dez erros que por acaso se anulam
+  // (nada resolvido). Pareando as cópias extras entre si — mesmo
+  // _parearEstornos do resto, então o critério não diverge — o que casa é
+  // duplicata já corrigida e o que sobra é o que ainda precisa de ação.
+  //
+  // A conta não muda: o par soma zero e a sobra carrega o peso, exatamente
+  // como o motivo único carregava antes.
+  if (dupExtras.length) {
+    const _dp = _parearEstornos(dupExtras.map(d => ({
+      cod: d.rec.movimento, pedido: d.rec.pedido, peso: num(d.rec.peso), rec: d.rec, n: d.n
+    })));
+    _dp.pares.forEach(({ orig, estorno }) => [orig, estorno].forEach(it =>
+      add('duplicada-estornada', 'Integração duplicada, já estornada no SAP', 'alerta',
+          contrib(it.rec), 1, { ..._detSap(it.rec), nota: `${it.n}ª cópia · já estornada` })));
+    _dp.sobra.forEach(it =>
+      add('duplicada', 'Integração duplicada no SAP — em aberto', 'erro',
+          contrib(it.rec), 1, { ..._detSap(it.rec), nota: `${it.n}ª cópia` }));
+  }
 
   // ── 2. Padrão de transferência duplicada (862 em duplicidade) ───────────
   // Reaproveita o detector dedicado que o módulo SAP já tem
@@ -2127,21 +2147,32 @@ function _bdmDivergenciaTipHtml(dv, sapTotal, localTotal, entries = null, localC
   const sapCount = !temCont ? 0
     : (diag && diag.sapCount != null ? diag.sapCount : _bdmContagemLiquida(entries));
   const reg = (n, sufixo = '') => temCont ? ` · ${n} reg.${sufixo}` : '';
+
+  // A linha "SAP" mostra o TOTAL CHEIO — o mesmo número que está na coluna.
+  // Chamar o comparável de "SAP" fazia o balão contradizer a célula que o
+  // abriu (Hugo, 02/09/2026): eram dois valores diferentes sob o mesmo
+  // nome. Quando há exclusão, a dedução e o comparável saem em linhas
+  // próprias, e aí todo número da conta é rastreável até o de cima.
+  const tx = diag && diag.transfExcluidas;
+  const temExclusao = !!(tx && tx.count);
+  const sapCheio = sinal * Math.abs(num(sapTotal));
+  const sapCmp   = (diag && diag.sapComparavel != null) ? diag.sapComparavel : num(sapTotal);
+
   const linhas = [
     `PUZL: ${fmtKgSigned(sinal * Math.abs(num(localTotal)))}${reg(localCount)}`,
-    `SAP: ${fmtKgSigned(sinal * Math.abs(num(sapTotal)))}${reg(sapCount, ' (líq.)')}`,
-    `DIFF.: ${fmtKgSigned(dv.diff)} <i class="ti ${dv.icon}" style="color:${dv.color};font-size:1em;vertical-align:middle"></i>${temCont ? ` · ${_fmtIntSigned(sapCount - localCount)} reg.` : ''}`
+    `SAP: ${fmtKgSigned(sapCheio)}`
   ];
-
-  // Transferência entre centros não entra na comparação — a PUZL não tem
-  // esse tipo de registro. Aparece à parte justamente para explicar por que
-  // o SAP acima não fecha com o número da coluna, que é o total cheio.
-  // "registro(s)" e não "transferência(s)": o conjunto inclui também a
-  // entrada que a transferência levou para outra central.
-  const tx = diag && diag.transfExcluidas;
-  if (tx && tx.count) {
-    linhas.push(`<span style="color:var(--text3)">fora da comparação: ${tx.count} reg., ${fmtKgSigned(tx.kg)}</span>`);
+  if (temExclusao) {
+    // "registro(s)" e não "transferência(s)": o conjunto inclui também a
+    // entrada que a transferência levou para outra central.
+    linhas.push(`<span style="color:var(--text3)">fora da comparação: ${fmtKgSigned(sinal * tx.kg)} · ${tx.count} reg.</span>`);
+    linhas.push(`SAP comparável: ${fmtKgSigned(sinal * Math.abs(sapCmp))}${reg(sapCount, ' (líq.)')}`);
+  } else {
+    // Sem exclusão os dois são o mesmo número — repetir a linha só ocuparia
+    // espaço. A contagem líquida volta para a linha do SAP.
+    linhas[1] += reg(sapCount, ' (líq.)');
   }
+  linhas.push(`DIFF.: ${fmtKgSigned(dv.diff)} <i class="ti ${dv.icon}" style="color:${dv.color};font-size:1em;vertical-align:middle"></i>${temCont ? ` · ${_fmtIntSigned(sapCount - localCount)} reg.` : ''}`);
 
   // ── Diagnóstico: por que diverge ─────────────────────────────────────
   // Só os DOIS motivos de maior peso, e um contador para o resto. O balão
@@ -2215,17 +2246,27 @@ function buildAnaliticoDetailBreakdown(entries, total, colorVar, title, localCou
     const sapCmp = (diag && diag.sapComparavel != null) ? diag.sapComparavel : total;
     const dv = _bdmDivergencia(sapCmp, localTotal, diag);
     iconHtml = `<i class="ti ${dv.icon} bdm-icon bdm-icon-cmp" style="color:${dv.color}"></i>`;
-    totalTipAttr = ` title="" data-diff-tip-html="${escapeHtml(_bdmDivergenciaTipHtml(dv, sapCmp, localTotal, entries, localCount, diag))}"`;
+    // Passa o total CHEIO: o balão mostra o número da coluna na linha "SAP"
+    // e deriva o comparável do próprio diag — ver _bdmDivergenciaTipHtml.
+    totalTipAttr = ` title="" data-diff-tip-html="${escapeHtml(_bdmDivergenciaTipHtml(dv, total, localTotal, entries, localCount, diag))}"`;
   }
 
   // O diagnóstico viaja para o modal pelo dataset, como o resto. Só os
   // campos que a seção Diagnóstico usa — o objeto inteiro carregaria os
   // registros crus de volta, que o modal já tem em data-entries.
-  const encodedDiag = (diag && diag.motivos && diag.motivos.length)
+  // sapComparavel / sapCount / transfExcluidas viajam junto: o rodapé e a
+  // linha "Registros" do modal decidem por eles qual é a base da
+  // comparação. Sem esses campos o modal caía no fallback (somar as linhas
+  // exibidas, que inclui transferência) e mostrava um SAP diferente do que
+  // o balão da mesma célula mostrava — dois números para a mesma coisa.
+  const encodedDiag = (diag && diag.motivos)
     ? encodeURIComponent(JSON.stringify({
         motivos: diag.motivos,
         naoExplicado: diag.naoExplicado,
-        tudoExplicado: diag.tudoExplicado
+        tudoExplicado: diag.tudoExplicado,
+        sapComparavel: diag.sapComparavel,
+        sapCount: diag.sapCount,
+        transfExcluidas: diag.transfExcluidas
       }))
     : '';
 
@@ -2856,7 +2897,16 @@ function openBreakdownModal(trigger) {
     // — evita repetir o total do SAP duas vezes. O lado local se chama PUZL
     // (Hugo, 01/09/2026): a linha confronta dois SISTEMAS, e repetir
     // "Entradas" ao lado de "SAP" fazia parecer categoria, não origem.
-    return `PUZL: <b>${fmtKg(localTotal)}</b> &nbsp;·&nbsp; SAP: <b style="color:${colorVar}">${fmtKg(sapTotal)}</b> &nbsp;·&nbsp; diferença: <b style="color:${dv.color}">${fmtKgSigned(dv.diff)}</b> ${compareIcon}`;
+    //
+    // O rótulo do SAP vira "SAP comparável" quando houve exclusão: sob o
+    // nome "SAP" o analista compara com o total da coluna e vê dois valores
+    // conflitantes (Hugo, 02/09/2026). O quanto foi deduzido fica no title,
+    // que é onde cabe sem estourar a linha do rodapé.
+    const tx = diag && diag.transfExcluidas;
+    const sapLabel = (tx && tx.count)
+      ? `<span title="Total do SAP menos ${tx.count} registro(s) de transferência (${fmtKgSigned(tx.kg)}), que a PUZL não tem como ter — ver Diagnóstico acima" style="border-bottom:1px dotted var(--text3);cursor:help">SAP comparável</span>`
+      : 'SAP';
+    return `PUZL: <b>${fmtKg(localTotal)}</b> &nbsp;·&nbsp; ${sapLabel}: <b style="color:${colorVar}">${fmtKg(sapTotal)}</b> &nbsp;·&nbsp; diferença: <b style="color:${dv.color}">${fmtKgSigned(dv.diff)}</b> ${compareIcon}`;
   };
 
   // Linha do rodapé quando há filtro ativo. A comparação com a PUZL é
