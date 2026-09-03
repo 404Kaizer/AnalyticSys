@@ -1237,7 +1237,7 @@
             nfPendMat.forEach(e => {
               sapArrCalc.push({
                 movimento: '101',
-                peso:      _invSafeCall('_convertNfPesoToKg', 0, e.peso, e.um, e.material),
+                peso:      _invSafeCall('_convertNfPesoToKg', 0, e.peso, e.um, e.material, e.fornecedor),
                 ref:       String(e.nf || ''),
                 documento: '',
                 material:  mat,
@@ -1319,12 +1319,12 @@
           if (e.material !== mat) return false;
           const d = parseDate(e.dtDescarga || e.dtEmissao);
           return d && d >= dtIni && d <= dtFim;
-        }).reduce((sum, e) => sum + _invSafeCall('_convertNfPesoToKg', 0, e.peso, e.um, e.material), 0);
+        }).reduce((sum, e) => sum + _invSafeCall('_convertNfPesoToKg', 0, e.peso, e.um, e.material, e.fornecedor), 0);
         const localSaiTotal = saidasDestaCentral.filter(s => {
           if (s.material !== mat) return false;
           const d = parseDate(s.dtEmissao);
           return d && d >= dtIni && d <= dtFim;
-        }).reduce((sum, s) => sum + _invSafeCall('_convertNfPesoToKg', 0, s.peso, s.um, s.material), 0);
+        }).reduce((sum, s) => sum + _invSafeCall('_convertNfPesoToKg', 0, s.peso, s.um, s.material, s.fornecedor), 0);
 
         // Custo médio: Custos SAP (central + Cód SAP + mês calendário do
         // Inventário), cascateando pra meses anteriores quando o mês não
@@ -2228,7 +2228,7 @@
     const pendLinhas = [];
     d.nfPendentes.forEach(r => {
       const semFator = _invSafeCall('_nfNeedsConversionWarning', false, r.um, r.material);
-      const pesoConv = _invSafeCall('_convertNfPesoToKg', Math.abs(_num(r.peso)), r.peso, r.um, r.material);
+      const pesoConv = _invSafeCall('_convertNfPesoToKg', Math.abs(_num(r.peso)), r.peso, r.um, r.material, r.fornecedor);
       const pesoTxt = semFator
         ? `${fmt(pesoConv, 2)} ${_invEscape(String(r.um || 'kg'))} <i class="ti ti-alert-triangle" style="color:var(--amber);font-size:10px" title="Sem fator de conversão cadastrado para ${_invEscape(String(r.um||''))} — valor exibido sem conversão"></i>`
         : `${_fmtKg(pesoConv)}`;

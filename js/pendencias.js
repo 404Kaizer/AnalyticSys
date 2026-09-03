@@ -615,7 +615,7 @@ function _pgmRenderTotal(tab, itens) {
   lista.forEach(it => {
     const um = tab === 'NF' ? 'KG' : String(it.um || 'kg').toUpperCase();
     const q  = tab === 'NF'
-      ? _convertNfPesoToKg(it.peso, it.um, it.material)
+      ? _convertNfPesoToKg(it.peso, it.um, it.material, it.fornecedor)
       : Math.abs(num(it.peso));
     porUM.set(um, (porUM.get(um) || 0) + q);
     if (it.central) centrais.add(it.central);
@@ -696,7 +696,7 @@ function _pgmResumoInteg(itens, tab) {
     const key = `${it.central}|${it.material || '—'}|${um}`;
     const cur = porPar.get(key) || { central: it.central, material: it.material || '—', um, qtd: 0, peso: 0 };
     cur.qtd  += 1;
-    cur.peso += tab === 'NF' ? _convertNfPesoToKg(it.peso, it.um, it.material) : Math.abs(num(it.peso));
+    cur.peso += tab === 'NF' ? _convertNfPesoToKg(it.peso, it.um, it.material, it.fornecedor) : Math.abs(num(it.peso));
     porPar.set(key, cur);
   });
 
@@ -733,7 +733,7 @@ function _pgmDetalheInteg(itens, tab) {
       <td class="td-muted">${escapeHtml(String(it.fornecedor || '—'))}</td>
       <td class="td-muted">${escapeHtml(String(it.dtEmissao || '—'))}</td>
       <td class="td-muted">${escapeHtml(String(it.dtDescarga || '—'))}</td>
-      <td class="td-mono" style="text-align:right;color:${cor}">${_pgmFmt(_convertNfPesoToKg(it.peso, it.um, it.material))} KG</td>
+      <td class="td-mono" style="text-align:right;color:${cor}">${_pgmFmt(_convertNfPesoToKg(it.peso, it.um, it.material, it.fornecedor))} KG</td>
     </tr>` : `<tr>
       <td class="td-muted">${escapeHtml(it.central || '—')}</td>
       <td class="td-mono" style="font-weight:600;color:${cor}">${escapeHtml(String(it.os || '—'))}</td>

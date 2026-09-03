@@ -1049,7 +1049,7 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
         const item = isMat ? central : mat;
         _pushItem(sapByItem, item, {
           movimento: '101',
-          peso:      _convertNfPesoToKg(e.peso, e.um, e.material),
+          peso:      _convertNfPesoToKg(e.peso, e.um, e.material, e.fornecedor),
           ref:       String(e.nf || ''),
           documento: '',
           material:  mat,
@@ -1265,7 +1265,7 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
       // NF pode vir em TO/M³ (campo `um`) — mesma conversão usada por
       // NFs Pendentes (_convertNfPesoToKg, ver ui.js), não é seguro somar
       // e.peso bruto.
-      const localEntTotal = _entradasFiltradas.reduce((sum, e) => sum + _convertNfPesoToKg(e.peso, e.um, e.material), 0);
+      const localEntTotal = _entradasFiltradas.reduce((sum, e) => sum + _convertNfPesoToKg(e.peso, e.um, e.material, e.fornecedor), 0);
       const _saidasDestaCentral = _saidasByCentral.get(central) || [];
       const _saidasFiltradas = _saidasDestaCentral.filter(s => {
         if (s.material !== mat) return false;
@@ -1273,7 +1273,7 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
         return d && d >= start && d <= end;
       });
       const localSaiCount = _saidasFiltradas.length;
-      const localSaiTotal = _saidasFiltradas.reduce((sum, s) => sum + _convertNfPesoToKg(s.peso, s.um, s.material), 0);
+      const localSaiTotal = _saidasFiltradas.reduce((sum, s) => sum + _convertNfPesoToKg(s.peso, s.um, s.material, s.fornecedor), 0);
 
       // ── Diagnóstico da divergência PUZL × SAP ───────────────────────────
       // Calculado AQUI, e não dentro de buildAnaliticoDetailBreakdown, porque
@@ -4256,13 +4256,38 @@ function _gsShowDetail(modKey, record) {
   const _moneyFields = new Set(['custo','custoUnit','valorTotal','precoMedio','custoMedio','totalVendas','margem','valor']);
   const _kgFields    = new Set(['peso']);
 
+  const _num2 = n => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  // Peso: o registro NÃO está necessariamente em kg — Entrada e Lançamento
+  // guardam a unidade original (M3, TO) num campo à parte, e o fator
+  // depende do material E do fornecedor (ver _convertNfPesoToKg em ui.js).
+  // Antes o valor bruto saía daqui rotulado "kg", então uma NF de 30 m³
+  // aparecia como "30,00 kg" (Hugo, 02/09/2026).
+  //
+  // Mostra a grandeza convertida e, entre parênteses, o que está de fato
+  // cadastrado — que é o que o analista confere contra a nota. Quando a
+  // unidade é volumétrica sem fator conhecido, _convertNfPesoToKg devolve o
+  // bruto: aí exibe na unidade original, sem fingir conversão, seguindo o
+  // modal canônico de Pendentes de Integração.
+  //
+  // SAP não passa por aqui: o peso dele já vem em kg da origem.
+  const _fmtPeso = (n) => {
+    const um  = String(record.um || '').trim();
+    const cru = `${_num2(n)} ${um || 'kg'}`;
+    if (modKey === 'SAP' || !um || /^(KG|K)$/i.test(um)) return `${_num2(n)} kg`;
+    if (typeof _convertNfPesoToKg !== 'function') return cru;
+    if (typeof _nfNeedsConversionWarning === 'function'
+        && _nfNeedsConversionWarning(um, record.material)) return `${cru} (sem fator de conversão)`;
+    return `${_num2(_convertNfPesoToKg(n, um, record.material, record.fornecedor))} kg (${cru})`;
+  };
+
   const _fmtVal = (key, val) => {
     const n = typeof val === 'number' ? val : parseFloat(String(val).replace(',','.'));
     if (_moneyFields.has(key) && Number.isFinite(n)) {
-      return 'R$ ' + n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      return 'R$ ' + _num2(n);
     }
     if (_kgFields.has(key) && Number.isFinite(n)) {
-      return n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' kg';
+      return _fmtPeso(n);
     }
     return String(val);
   };

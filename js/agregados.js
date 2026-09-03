@@ -381,7 +381,7 @@ function _agrBuildResumo(entradasFiltradas, cutoff, firstDay, lastDay) {
     // como pedidos separados.
     const nf = String(e.nf || '—').trim() || '—';
     const pesoKg = typeof _convertNfPesoToKg === 'function'
-      ? _convertNfPesoToKg(e.peso, e.um, e.material)
+      ? _convertNfPesoToKg(e.peso, e.um, e.material, e.fornecedor)
       : num(e.peso); // fallback defensivo, não deveria disparar (ui.js sempre carregado antes)
 
     if (!porCentral.has(central)) {

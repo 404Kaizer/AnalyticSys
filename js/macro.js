@@ -72,7 +72,7 @@ function renderMacroPanels(results, thresholds, dtIni, dtFim) {
         if (!sapByMat.has(m)) sapByMat.set(m, []);
         sapByMat.get(m).push({
           movimento: '101',
-          peso:      _convertNfPesoToKg(e.peso, e.um, e.material),
+          peso:      _convertNfPesoToKg(e.peso, e.um, e.material, e.fornecedor),
           ref:       String(e.nf || ''),
           documento: '',
           material:  m,
