@@ -3510,6 +3510,42 @@
           </div>
         </div>
 
+        <div class="section-title">Fatores de Conversão</div>
+        <div class="table-card" style="margin-bottom:24px">
+          <div class="table-header">
+            <span class="table-title"><i class="ti ti-scale"></i> Fatores de Conversão de Unidade → KG</span>
+            <div class="table-toolbar">
+              <input type="text" class="form-input" style="width:220px" placeholder="Buscar grupo, fornecedor..." oninput="fcFiltrar(this.value)">
+              <button class="btn btn-primary" onclick="abrirFatorConversao('')">
+                <i class="ti ti-plus"></i> Novo Fator
+              </button>
+            </div>
+          </div>
+          <div class="modal-sub" style="padding:0 20px 12px">
+            Densidade/fator de conversão por Grupo SAP (padrão) e, opcionalmente, por Fornecedor × Grupo (exceção ao padrão) — usado para converter NFs lançadas em M³ ou L para KG. Sem uma linha aqui, a NF entra no cálculo com o peso bruto na unidade original.
+          </div>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Grupo SAP</th>
+                  <th>Fornecedor</th>
+                  <th style="text-align:center">Unidade</th>
+                  <th style="text-align:right">Fator</th>
+                  <th>Criado em</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="tb-fatores-conversao">
+                <tr><td colspan="6"><div class="empty-state"><i class="ti ti-scale"></i><p>Nenhum fator de conversão cadastrado.</p></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="pagination">
+            <span class="page-info" id="pi-fatores-conversao">0 registros</span>
+          </div>
+        </div>
+
         <div class="section-title">Capacidades e Estoque de Segurança</div>
         <div class="alert-pulse-row">
           <div id="novos-capacidades-box"></div>
@@ -5072,6 +5108,55 @@
     </div>
   </div>
 </div>
+
+<!-- MODAL: Fator de Conversão (Configurações → Fatores de Conversão) -->
+<div class="modal-overlay" id="modal-fator-conversao">
+  <div class="modal" style="width:460px">
+    <div class="modal-title" id="fc-modal-title"><i class="ti ti-scale"></i> Novo Fator de Conversão</div>
+    <div class="modal-sub">Deixe Fornecedor em branco para cadastrar o fator PADRÃO do grupo — preencha só quando este fornecedor específico tiver uma densidade diferente do padrão.</div>
+    <input type="hidden" id="fc-edit-id">
+    <div class="form-grid" style="grid-template-columns:1fr">
+      <div class="form-group">
+        <label class="form-label">Grupo SAP</label>
+        <div style="display:flex; gap:6px">
+          <select class="form-select" id="fc-grupo" style="flex:1; min-width:0" onchange="_fcAoTrocarGrupo()">
+            <option value="">—</option>
+          </select>
+          <button type="button" class="btn" title="Cadastrar novo Grupo SAP" onclick="abrirNovoGrupoMaterialParaFator()" style="flex:0 0 auto; padding:0 12px"><i class="ti ti-plus"></i></button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Fornecedor <span style="color:var(--text3);font-weight:400">(opcional — em branco = padrão do grupo)</span></label>
+        <input type="text" class="form-input" id="fc-fornecedor" placeholder="Ex: MINERAJIL MINERACAO LTDA">
+      </div>
+      <div class="form-grid" style="grid-template-columns:1fr 1fr 1fr; gap:12px">
+        <div class="form-group">
+          <label class="form-label">De</label>
+          <select class="form-select" id="fc-um-origem">
+            <option value="">—</option>
+            <option value="M3">M³ (m³)</option>
+            <option value="L">L (litro)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Para</label>
+          <select class="form-select" id="fc-um-destino" title="Hoje só KG é consumido pelo restante do sistema — os totais de estoque são todos em kg">
+            <option value="KG">KG</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Fator</label>
+          <input type="number" class="form-input" id="fc-fator" placeholder="Ex: 1440" min="0" step="0.001">
+        </div>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn" onclick="closeModal('modal-fator-conversao')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarFatorConversao(this)"><i class="ti ti-check"></i> Salvar</button>
+    </div>
+  </div>
+</div>
+
 
 <!-- MODAL: Gerenciar Conta — Etapa 1 (interface). Salvar/upload real
      ficam pra próxima etapa; combinado com o Hugo em 29/07. -->

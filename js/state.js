@@ -96,7 +96,28 @@ const defaultState = () => ({
   // fly e baixado direto, nunca guardado em disco). Existe pra manter a
   // numeração sequencial (NC/ND-<CENTRAL>-<DATA>-<seq>) coerente entre
   // sessões e permitir auditoria do que já foi emitido.
-  notasAjuste: []
+  notasAjuste: [],
+  // Fatores de conversão de unidade → kg — Configurações → Fatores de
+  // Conversão (Hugo, 02/09/2026). Substitui densidades que antes viviam
+  // fixas no código (_DENSIDADE_AREIA_NATURAL etc., ui.js): mudar um valor
+  // agora é editar uma linha aqui, não mexer em código.
+  // Cada item: { id, grupo, fornecedor, umOrigem, umDestino, fator, created }
+  //   grupo:      Grupo SAP / alias do material (ex.: "AREIA NATURAL") —
+  //               casa por SUBSTRING contra o .material do registro, mesmo
+  //               critério das densidades legadas que este cadastro
+  //               substitui (ver _lookupFatorConversao, ui.js). Substring
+  //               (não igualdade exata) de propósito: assim "BRITA" cobre
+  //               "BRITA 0"/"BRITA 1"/qualquer variante futura numa linha
+  //               só, sem o analista precisar cadastrar cada uma.
+  //   fornecedor: razão social — vazio = fator PADRÃO do grupo; preenchido
+  //               = override específico daquele fornecedor (substring
+  //               também — não existe cadastro de fornecedor no sistema).
+  //   umOrigem/umDestino: códigos canônicos (KG/TO/M3/L — ver
+  //               _normalizarUM, ui.js). Hoje só fatores com umDestino=KG
+  //               são de fato aplicados no cálculo (é a unidade que todo o
+  //               resto do sistema consome) — outros ficam salvos, mas
+  //               sem efeito, até o sistema saber fazer algo com eles.
+  fatoresConversao: []
 });
 
 

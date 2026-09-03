@@ -4118,7 +4118,7 @@ function _gsrFmtPeso(hit, val) {
     const um = String(r.um || '').trim();
     if (um && !/^(KG|K)$/i.test(um)
         && typeof _nfNeedsConversionWarning === 'function'
-        && _nfNeedsConversionWarning(um, r.material)) {
+        && _nfNeedsConversionWarning(um, r.material, r.fornecedor)) {
       return `${n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${um}`;
     }
   }
@@ -4358,7 +4358,7 @@ function _gsShowDetail(modKey, record) {
     if (modKey !== 'Entrada' || !um || /^(KG|K)$/i.test(um)) return `${_num2(n)} kg`;
     if (typeof _convertNfPesoToKg !== 'function') return cru;
     if (typeof _nfNeedsConversionWarning === 'function'
-        && _nfNeedsConversionWarning(um, record.material)) return `${cru} (sem fator de conversão)`;
+        && _nfNeedsConversionWarning(um, record.material, record.fornecedor)) return `${cru} (sem fator de conversão)`;
     return `${_num2(_convertNfPesoToKg(n, um, record.material, record.fornecedor))} kg (${cru})`;
   };
 

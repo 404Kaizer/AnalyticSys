@@ -761,6 +761,263 @@ function _refreshGrupoMateriaisSelects() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+// FATORES DE CONVERSÃO — Configurações → Fatores de Conversão (Hugo,
+// 02/09/2026). Cadastro do analista para densidades/fatores de conversão
+// de unidade → kg, por Grupo SAP (padrão) e opcionalmente por Fornecedor ×
+// Grupo (override) — ver o motor que CONSOME esta tabela em ui.js
+// (_lookupFatorConversao/_convertNfPesoToKg/_nfNeedsConversionWarning).
+// Modelo de dados e o CRITÉRIO DE CASAMENTO (substring, mais específico
+// vence) estão documentados no comentário de state.fatoresConversao,
+// state.js — não duplicado aqui.
+//
+// Padrão de CRUD: modal de UMA linha por vez (como "Nova Configuração",
+// modal-config), não o formulário multi-linha de Materiais — o volume
+// esperado aqui é dezenas de linhas, não centenas, e editar uma densidade
+// de cada vez é o caso de uso real (corrigir UM fornecedor errado).
+// ═══════════════════════════════════════════════════════════════════════
+
+// Abre o modal em modo CRIAR (id vazio) ou EDITAR (id preenchido).
+function abrirFatorConversao(id) {
+  const item = id ? (state.fatoresConversao || []).find(f => f.id === id) : null;
+  document.getElementById('fc-modal-title').textContent = item ? 'Editar Fator de Conversão' : 'Novo Fator de Conversão';
+  setVal('fc-edit-id', item ? item.id : '');
+  _rebuildGrupoMateriaisOptions(document.getElementById('fc-grupo'), item ? item.grupo : '');
+  setVal('fc-fornecedor', item ? (item.fornecedor || '') : '');
+  setVal('fc-um-origem', item ? item.umOrigem : '');
+  setVal('fc-um-destino', item ? (item.umDestino || 'KG') : 'KG');
+  setVal('fc-fator', item ? item.fator : '');
+  openModal('modal-fator-conversao');
+  setTimeout(() => document.getElementById('fc-grupo')?.focus(), 50);
+}
+
+// Abre o mini modal "Novo Grupo SAP" apontando para O SELECT DESTE
+// cadastro — ver o comentário de _novoGrupoMaterialTarget, mais acima
+// neste arquivo, sobre por que isto é seguro reaproveitar.
+function abrirNovoGrupoMaterialParaFator() {
+  _novoGrupoMaterialTarget = document.getElementById('fc-grupo');
+  setVal('novo-grupo-material-nome', '');
+  openModal('modal-novo-grupo-material');
+  setTimeout(() => document.getElementById('novo-grupo-material-nome')?.focus(), 50);
+}
+
+// Pré-preenche Unidade de Origem ao trocar o Grupo — ATALHO de digitação,
+// não regra imposta (o analista pode trocar à vontade depois). Só age
+// quando o campo de origem ainda está vazio: reabrir para EDITAR uma linha
+// já preenchida não deve pisar no valor cadastrado. Ver UM_PADRAO_POR_
+// CATEGORIA (ui.js) — agregados → M3, aditivos/adições → L.
+function _fcAoTrocarGrupo() {
+  const grupo = val('fc-grupo');
+  const umAtual = val('fc-um-origem');
+  if (!grupo || umAtual) return;
+  const categoria = typeof getCategoriaPorGrupo === 'function' ? getCategoriaPorGrupo(grupo) : '';
+  const padrao = (typeof UM_PADRAO_POR_CATEGORIA !== 'undefined' && UM_PADRAO_POR_CATEGORIA[categoria]) || '';
+  if (padrao) setVal('fc-um-origem', padrao);
+}
+
+async function salvarFatorConversao(btn) {
+  const id = val('fc-edit-id');
+  const grupo = val('fc-grupo').trim();
+  const fornecedor = val('fc-fornecedor').trim();
+  const umOrigem = val('fc-um-origem');
+  const umDestino = val('fc-um-destino') || 'KG';
+  const fator = parseFloat(String(val('fc-fator')).replace(',', '.'));
+
+  if (!grupo)     { toast('Selecione o Grupo SAP', 'error'); return; }
+  if (!umOrigem)  { toast('Selecione a unidade de origem', 'error'); return; }
+  if (!Number.isFinite(fator) || fator <= 0) { toast('Informe um fator válido (maior que zero)', 'error'); return; }
+
+  if (!Array.isArray(state.fatoresConversao)) state.fatoresConversao = [];
+
+  // Duplicata: mesma combinação grupo+fornecedor+umOrigem já cadastrada.
+  // Duas linhas para o MESMO caso (ex.: duas linhas "AREIA NATURAL" sem
+  // fornecedor, ambas M3) tornariam _lookupFatorConversao ambíguo — ele
+  // pegaria uma das duas por ordem de array, escondendo a outra em
+  // silêncio. Bloqueia na entrada em vez de deixar essa ambiguidade se
+  // formar. Chave normalizada do mesmo jeito que o motor de busca compara
+  // (maiúsculas), pra "Areia Natural" e "AREIA NATURAL" contarem como o
+  // mesmo grupo aqui também.
+  const chave = r => `${String(r.grupo).trim().toUpperCase()}|${String(r.fornecedor || '').trim().toUpperCase()}|${r.umOrigem}`;
+  const novaChave = chave({ grupo, fornecedor, umOrigem });
+  const conflito = state.fatoresConversao.find(f => f.id !== id && chave(f) === novaChave);
+  if (conflito) {
+    toast(`Já existe um fator para "${grupo}"${fornecedor ? ` · ${fornecedor}` : ' (padrão)'} em ${umOrigem} — edite aquele em vez de duplicar`, 'error');
+    return;
+  }
+
+  _setBtnLoading(btn, true, 'Salvando...');
+
+  const idx = id ? state.fatoresConversao.findIndex(f => f.id === id) : -1;
+  const rec = {
+    // gerarIdRegistro() (normalize.js), não um id ad-hoc: precisa ser um
+    // UUID de verdade para casar com a coluna `id uuid` do Supabase e
+    // permitir upsert direto por id (ver _fatoresConversaoSyncUpsert) — o
+    // mesmo motivo pelo qual Entradas/Saídas/Lançamentos/SAP usam esta
+    // função em vez de um id caseiro.
+    id: id || gerarIdRegistro(),
+    grupo, fornecedor, umOrigem, umDestino, fator,
+    created: idx >= 0 ? state.fatoresConversao[idx].created : new Date().toLocaleDateString('pt-BR')
+  };
+  if (idx >= 0) state.fatoresConversao[idx] = rec; else state.fatoresConversao.unshift(rec);
+
+  await persistStateNow();
+  renderFatoresConversao();
+  // Reaplica o cadastro sobre os registros já importados: um fator novo
+  // (ou corrigido) muda o peso convertido de NFs que já existem no
+  // sistema, e as telas que dependem disso (Analítico, Pendências) só
+  // refletem a mudança depois de um novo render — mesmo botão que
+  // "Atualizar Cadastros" aciona manualmente pra Central/Material.
+  if (typeof renderAll === 'function') renderAll();
+  _setBtnLoading(btn, false);
+  closeModal('modal-fator-conversao');
+  toast(idx >= 0 ? 'Fator de conversão atualizado' : 'Fator de conversão cadastrado');
+  _fatoresConversaoSyncUpsert(rec);
+}
+
+async function removerFatorConversao(id) {
+  const idx = (state.fatoresConversao || []).findIndex(f => f.id === id);
+  if (idx < 0) return;
+  const item = state.fatoresConversao[idx];
+  if (!confirm(`Excluir o fator de "${item.grupo}"${item.fornecedor ? ` · ${item.fornecedor}` : ' (padrão)'}?`)) return;
+  state.fatoresConversao.splice(idx, 1);
+  await persistStateNow();
+  renderFatoresConversao();
+  if (typeof renderAll === 'function') renderAll();
+  toast('Fator de conversão excluído', 'error');
+  _fatoresConversaoSyncDelete(id);
+}
+
+// ── Sincronização com o Supabase ─────────────────────────────────────────
+// Tabela public.fatores_conversao (migração criada em 03/09/2026): mesma
+// estrutura de RLS de materiais/grupos_materiais/filiais (dono OU
+// is_admin()), mas SEM a visibilidade cruzada por padrão — cada usuário só
+// enxerga/gerencia o PRÓPRIO cadastro aqui (mesmo motivo de
+// syncMateriaisFromSupabase: two-of-us-have-the-same-Grupo-with-different-
+// fator não deve se resolver sozinho). ADM pode ver todos os fatores via a
+// policy de SELECT, mas esta tela não pede isso — se um dia quiser um fluxo
+// "Importar de" como Materiais tem, é aditivo a partir daqui.
+//
+// id gerado localmente via gerarIdRegistro() (ver salvarFatorConversao) é
+// um UUID de verdade, então o upsert usa a PRÓPRIA coluna id como chave de
+// conflito — mais simples que a chave natural usada por materiais (que
+// precisa suportar renomear origem/alias), e este cadastro não tem esse
+// caso: editar um fator não muda a identidade da linha.
+function _fatoresConversaoSyncUpsert(rec) {
+  if (!window.supabaseClient) return;
+  window.supabaseClient.from('fatores_conversao')
+    .upsert({
+      id: rec.id, grupo: rec.grupo, fornecedor: rec.fornecedor || '',
+      um_origem: rec.umOrigem, um_destino: rec.umDestino || 'KG', fator: rec.fator
+    }, { onConflict: 'id' })
+    .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao sincronizar fator de conversão:', error); });
+}
+
+function _fatoresConversaoSyncDelete(id) {
+  if (!window.supabaseClient) return;
+  window.supabaseClient.from('fatores_conversao')
+    .delete()
+    .eq('id', id)
+    .eq('user_id', window.currentUser?.id)
+    .then(({ error }) => {
+      if (error) {
+        console.warn('[Supabase] Falha ao excluir fator de conversão na nuvem:', error);
+        toast('⚠ Removido nesta sessão, mas não foi possível sincronizar com a nuvem.', 'error');
+      }
+    });
+}
+
+// Busca no boot — registrado em SUPABASE_BOOT_SYNCS (dashboard.js). Mesmo
+// "O BANCO MANDA" de syncMateriaisFromSupabase para o CONTEÚDO das linhas
+// que já existem nos dois lados (uma exclusão feita em outro dispositivo
+// não pode "ressuscitar" aqui). A diferença é o AUTO-UPLOAD do que só
+// existe localmente: materiais removeu esse self-heal porque tinha um
+// painel de Supervisão apagando linhas por fora — aqui não existe nada
+// assim, o único jeito de uma linha sumir é removerFatorConversao (que já
+// apaga na nuvem também), então subir o que falta é seguro e necessário —
+// é o que faz o cadastro migrado de _seedFatoresConversaoLegado (a
+// primeira vez que este dispositivo carrega com o recurso) chegar na
+// nuvem, em vez de morrer aqui no próximo boot só porque ele ainda não
+// tinha sido enviado.
+async function syncFatoresConversaoFromSupabase() {
+  if (!window.supabaseClient) return;
+  try {
+    const { data, error } = await window.supabaseClient.from('fatores_conversao')
+      .select('id, grupo, fornecedor, um_origem, um_destino, fator, created_at')
+      .eq('user_id', window.currentUser?.id);
+    if (error) throw error;
+
+    const remoto = (data || []).map(r => ({
+      id: r.id, grupo: r.grupo, fornecedor: r.fornecedor || '',
+      umOrigem: r.um_origem, umDestino: r.um_destino || 'KG', fator: Number(r.fator),
+      created: r.created_at ? new Date(r.created_at).toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR')
+    }));
+
+    const idsRemotos = new Set(remoto.map(r => r.id));
+    const local = Array.isArray(state.fatoresConversao) ? state.fatoresConversao : [];
+    const faltamNaNuvem = local.filter(f => f && f.id && !idsRemotos.has(f.id));
+
+    state.fatoresConversao = [...remoto, ...faltamNaNuvem];
+    faltamNaNuvem.forEach(f => _fatoresConversaoSyncUpsert(f));
+
+    if (typeof renderFatoresConversao === 'function') renderFatoresConversao();
+  } catch (err) {
+    console.warn('[Supabase] Falha ao buscar fatores de conversão — mantendo dados locais.', err);
+  }
+}
+
+// ── Render ────────────────────────────────────────────────────────────
+// Sem paginação/listPages, ao contrário de Materiais/Filiais/Configs: o
+// volume esperado (grupos × fornecedores com fator próprio) fica na casa
+// de dezenas, não milhares — a maquinaria de paginação genérica existe
+// pros módulos de importação em massa, não pra este cadastro. Um campo de
+// busca simples já resolve.
+let _fcFiltro = '';
+function fcFiltrar(termo) { _fcFiltro = String(termo || ''); renderFatoresConversao(); }
+
+function renderFatoresConversao() {
+  const tb = document.getElementById('tb-fatores-conversao');
+  if (!tb) return;
+  const termo = normalizeText(_fcFiltro.trim());
+  const linhas = (state.fatoresConversao || []).filter(f => !termo ||
+    normalizeText(`${f.grupo} ${f.fornecedor || ''} ${f.umOrigem} ${f.fator}`).includes(termo)
+  );
+  // Ordena por Grupo, e dentro do grupo o PADRÃO (fornecedor vazio)
+  // primeiro — é a leitura natural: "eis a regra geral, e as exceções
+  // dela logo abaixo".
+  linhas.sort((a, b) =>
+    String(a.grupo).localeCompare(String(b.grupo), 'pt-BR') ||
+    String(a.fornecedor || '').localeCompare(String(b.fornecedor || ''), 'pt-BR')
+  );
+
+  const info = document.getElementById('pi-fatores-conversao');
+  if (info) info.textContent = `${linhas.length} registro${linhas.length === 1 ? '' : 's'}`;
+
+  if (!linhas.length) {
+    tb.innerHTML = `<tr><td colspan="6"><div class="empty-state"><i class="ti ti-scale"></i><p>${
+      _fcFiltro ? 'Nenhum resultado para este filtro.' : 'Nenhum fator de conversão cadastrado — os fatores legados (areia/brita) foram migrados automaticamente na primeira vez que este dispositivo carregou com este recurso.'
+    }</p></div></td></tr>`;
+    return;
+  }
+
+  const umLabel = cod => ((typeof UM_CANONICAS !== 'undefined' ? UM_CANONICAS : []).find(u => u.cod === cod) || {}).label || cod;
+
+  tb.innerHTML = linhas.map(f => `
+    <tr>
+      <td class="td-mono" style="font-weight:600">${escapeHtml(f.grupo)}</td>
+      <td class="td-muted">${f.fornecedor ? escapeHtml(f.fornecedor) : '<span style="color:var(--text3);font-style:italic">padrão do grupo</span>'}</td>
+      <td class="td-mono" style="text-align:center" title="${escapeHtml(umLabel(f.umOrigem))} → ${escapeHtml(umLabel(f.umDestino || 'KG'))}">${escapeHtml(f.umOrigem)} → ${escapeHtml(f.umDestino || 'KG')}</td>
+      <td class="td-mono" style="text-align:right">${Number(f.fator).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 3 })}</td>
+      <td class="td-muted">${f.created || '—'}</td>
+      <td>
+        <div style="display:flex;gap:6px">
+          <button class="btn-icon" onclick="abrirFatorConversao('${escapeHtml(f.id)}')" title="Editar"><i class="ti ti-pencil"></i></button>
+          <button class="btn-icon danger" onclick="removerFatorConversao('${escapeHtml(f.id)}')" title="Excluir"><i class="ti ti-trash"></i></button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════════════
 // CATÁLOGO DE CÓD SAP — usado no dropdown "Cód SAP" do cadastro de
 // Materiais. Ao contrário de Grupo SAP, não tem tabela própria no Supabase:
 // a lista é os códigos já em uso em state.materiais + os adicionados nesta
@@ -820,7 +1077,13 @@ function salvarNovoCodSap() {
 }
 
 // ── Mini modal "Novo Grupo SAP" ─────────────────────────────────────────
-let _novoGrupoMaterialTarget = null; // <select> da linha que abriu o mini modal
+// Compartilhado por QUALQUER select de Grupo SAP no sistema — não só as
+// linhas do cadastro de Materiais. `_novoGrupoMaterialTarget` é o único
+// select que este mini modal preenche ao salvar; quem abre o modal decide
+// qual é (abrirNovoGrupoMaterial para as linhas de Materiais,
+// abrirNovoGrupoMaterialParaFator para o cadastro de Fatores de Conversão
+// — config.js, mais abaixo — ambos só apontam o alvo e abrem o mesmo modal).
+let _novoGrupoMaterialTarget = null; // <select> que abriu o mini modal
 
 function abrirNovoGrupoMaterial(btn) {
   const row = btn.closest('.reg-individual-row');
@@ -844,7 +1107,14 @@ async function salvarNovoGrupoMaterial(btn) {
     await persistStateNow();
   }
   _refreshGrupoMateriaisSelects();
-  if (_novoGrupoMaterialTarget) _novoGrupoMaterialTarget.value = nomeFinal;
+  // _rebuildGrupoMateriaisOptions, não só `.value =`: um select de FORA de
+  // #mat-indiv-rows (ex.: o de Fatores de Conversão) não foi tocado pelo
+  // _refreshGrupoMateriaisSelects() acima, então ainda não tem a <option>
+  // do grupo recém-criado — setar .value sem essa option deixaria o select
+  // em branco. Para o caso ORIGINAL (select dentro de #mat-indiv-rows,
+  // já reconstruído na linha de cima) isto é só um segundo rebuild
+  // idempotente — mesmo resultado, sem custo real.
+  if (_novoGrupoMaterialTarget) _rebuildGrupoMateriaisOptions(_novoGrupoMaterialTarget, nomeFinal);
   _novoGrupoMaterialTarget = null;
   _setBtnLoading(btn, false);
   closeModal('modal-novo-grupo-material');

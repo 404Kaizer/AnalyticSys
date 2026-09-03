@@ -1786,7 +1786,7 @@ function diagnosticarDivergenciaSapPuzl({ sapRecords = [], puzlRecords = [], lad
     // Inventário — mostra o número na unidade ORIGINAL, com aviso, em vez
     // de converter no chute.
     const semFator = !ehSaida && typeof _nfNeedsConversionWarning === 'function'
-      && _nfNeedsConversionWarning(r.um, r.material);
+      && _nfNeedsConversionWarning(r.um, r.material, r.fornecedor);
     return {
       cod:     '',
       ref:     String(p.doc || '—'),
@@ -1894,7 +1894,7 @@ function diagnosticarDivergenciaSapPuzl({ sapRecords = [], puzlRecords = [], lad
     // Peso da PUZL em m³ sem fator cadastrado entra BRUTO na conta (ver
     // _convertNfPesoToKg) — a diferença que ele gera é real, mas de tamanho
     // desconhecido. Entra como aviso de kg 0 para não fingir precisão.
-    if (!ehSaida && typeof _nfNeedsConversionWarning === 'function' && _nfNeedsConversionWarning(r.um, r.material)) {
+    if (!ehSaida && typeof _nfNeedsConversionWarning === 'function' && _nfNeedsConversionWarning(r.um, r.material, r.fornecedor)) {
       add('fator-volumetrico', 'NF em unidade volumétrica sem fator de conversão cadastrado', 'alerta', 0, 1,
           { ..._detPuzl({ rec: r, kg: 0, doc: String(doc) }), nota: `unidade ${r.um || '—'}` });
     }
@@ -3357,144 +3357,188 @@ window._pendConsiderados    = window._pendConsiderados    || {};
 window._pendConsideradosMat = window._pendConsideradosMat || {};
 window._pendCache           = window._pendCache           || {};
 
-// ── Densidade da AREIA (natural e fina) por FORNECEDOR (kg/m³) ──────────
+// ═══════════════════════════════════════════════════════════════════════
+// FATORES DE CONVERSÃO DE UNIDADE → KG — cadastro do analista
+// ═══════════════════════════════════════════════════════════════════════
+// Até 02/09/2026 estas densidades viviam FIXAS no código (constantes
+// _DENSIDADE_AREIA_NATURAL etc.) — mudar um valor, ou cadastrar um
+// fornecedor novo, exigia mexer em JS. Agora o analista cadastra em
+// Configurações → Fatores de Conversão (ver abrirFatorConversao/
+// salvarFatorConversao, config.js), e este bloco só CONSULTA
+// state.fatoresConversao — nenhum valor de densidade mora mais aqui.
+//
 // A areia não tem densidade única: varia com a jazida, e cada fornecedor
-// entrega a sua (Hugo, 01–02/09/2026). Sem tabela, toda NF em m³ era
-// convertida por um fator único por material, e a diferença contra o SAP
-// aparecia como "peso divergente" em TODA nota daquele fornecedor — foi
-// assim que o caso da AREIA NATURAL se revelou: 8 notas do mesmo material
-// com exatamente o mesmo gap de 4.200 kg cada.
-//
-// Casam por SUBSTRING no nome já normalizado (maiúsculas, sem acento): o
-// cadastro traz razão social inteira ("MINERAJIL MINERACAO LTDA"), não a
-// marca isolada. É por isso que ITAGUACU entra sem cedilha e AREAL SANTA
-// ROSA entra sem acento — a normalização tira o acento dos dois lados da
-// comparação.
-//
-// Fornecedor fora da lista cai no padrão de cada material, que é o fator
-// único usado antes desta tabela existir. Acrescentar um novo fornecedor é
-// somar uma linha na lista correspondente.
-const _DENSIDADE_AREIA_NATURAL = [
-  ['MINERAJIL', 1440],
-  ['GATTO',     1450],
-  ['GMB',       1450],
-  ['ITAGUACU',  1400]
-];
-const _DENSIDADE_AREIA_NATURAL_PADRAO = 1300;
+// entrega a sua. Sem fator por fornecedor, toda NF em m3 era convertida
+// por um fator único do material, e a diferença contra o SAP aparecia
+// como "peso divergente" em TODA nota daquele fornecedor — foi assim que
+// o primeiro caso se revelou: 8 notas do mesmo material com exatamente o
+// mesmo gap de 4.200 kg cada.
 
-// AREIA NATURAL FINA tem sua PRÓPRIA tabela — mesmo fornecedor pode ter
-// densidade diferente entre a fina e a comum, e os dois materiais não
-// compartilham fator (Hugo, 02/09/2026): GATTO/GMB são 1450 na comum mas
-// 1500 na fina; AREAL SANTA ROSA só fornece a fina, e nela usa o mesmo
-// 1400 que era o padrão antigo do material.
-const _DENSIDADE_AREIA_FINA = [
-  ['GMB',              1500],
-  ['GATTO',            1500],
-  ['AREAL SANTA ROSA', 1300]
+// Vocabulário canônico de unidade — a PRIMEIRA lista de unidades real do
+// sistema (antes cada função reconhecia sua própria regex solta). Serve
+// tanto o motor de conversão quanto os dropdowns "de/para" do cadastro em
+// Configurações (ver UM_CANONICAS, config.js) — os dois usam esta MESMA
+// lista de propósito, pra nunca divergir no que é uma unidade válida.
+const UM_CANONICAS = [
+  { cod: 'KG', label: 'KG — quilograma' },
+  { cod: 'TO', label: 'TO — tonelada' },
+  { cod: 'M3', label: 'M³ — metro cúbico' },
+  { cod: 'L',  label: 'L — litro' }
 ];
-const _DENSIDADE_AREIA_FINA_PADRAO = 1400;
 
-// Motor comum às duas tabelas — mesma normalização e mesmo critério de
-// casamento (substring), pra AREIA NATURAL e AREIA NATURAL FINA nunca
-// divergirem em COMO acham o fornecedor, só no QUE ele vale em cada uma.
-function _densidadePorFornecedor(fornecedor, tabela, padrao) {
-  const f = String(fornecedor || '').trim().toUpperCase()
+// Normaliza qualquer grafia de unidade (como vem digitada em Entradas/
+// Saídas/Lançamentos/SAP) para um dos códigos canônicos acima, ou null se
+// não reconhecida. TO/T são conversão de peso (1 tonelada = 1000 kg,
+// constante física universal) — não entram no cadastro de densidades
+// porque não SÃO densidade, são só troca de escala de peso; ficam
+// tratadas à parte em _convertNfPesoToKg, antes de consultar o cadastro.
+function _normalizarUM(um) {
+  const u = String(um || '').trim().toUpperCase();
+  if (!u) return null;
+  if (/^(KG|K|QUILOGRAMAS?|KGS)$/.test(u)) return 'KG';
+  if (/^(T|TO|TON|TL|TN|TONELADAS?)$/.test(u)) return 'TO';
+  if (/^(M|M3|MT|CBM|METROS?|METROS?\s*C[UÚ]BICOS?)$/.test(u) || u === 'M³') return 'M3';
+  if (/^(L|LT|LITROS?)$/.test(u)) return 'L';
+  return null;
+}
+
+// Mapeamento CATEGORIA → unidade de origem padrão, usado só para PRÉ-
+// PREENCHER o formulário de "novo fator" em Configurações (o analista
+// pode trocar à vontade — não é regra imposta pelo sistema, é atalho de
+// digitação). Pedido explícito do Hugo, 02/09/2026: agregados nascem
+// pensados em M3→KG, aditivos e adições em L→KG. Aglomerante fica de fora
+// — cimento normalmente é vendido por peso/saco, não por volume, então
+// não há um padrão óbvio a sugerir.
+const UM_PADRAO_POR_CATEGORIA = {
+  'Agregado Graúdo': 'M3',
+  'Agregado Miúdo':  'M3',
+  'Aditivo':         'L',
+  'Adição':          'L'
+};
+
+// ── Busca o fator aplicável a um material + unidade + fornecedor ────────
+// Contrato de casamento (preserva o comportamento das densidades legadas
+// que este cadastro substituiu):
+//   1. `grupo` casa por SUBSTRING contra o material do registro — "BRITA"
+//      cobre "BRITA 0"/"BRITA 1"/qualquer variante numa linha só. Entre
+//      vários grupos que casam (ex.: "AREIA NATURAL" e "AREIA NATURAL
+//      FINA" contra o material "AREIA NATURAL FINA"), vence o MAIS
+//      ESPECÍFICO — o grupo de nome mais longo — em vez de depender da
+//      ordem de cadastro (que o analista não controla/enxerga na tabela).
+//   2. Entre os que casam, um fator com FORNECEDOR que bate (substring na
+//      razão social, sem acento) tem prioridade sobre o fator padrão do
+//      grupo (fornecedor vazio).
+//   3. Só fatores com umDestino='KG' entram na disputa — é a única
+//      unidade que o resto do sistema sabe consumir hoje (ver o
+//      comentário de fatoresConversao em state.js).
+// Retorna a LINHA do cadastro (não só o número), pra quem chama poder
+// citar o fator/fonte em mensagens de erro/tooltip se precisar.
+function _lookupFatorConversao(material, umCanonico, fornecedor) {
+  if (!umCanonico || umCanonico === 'KG') return null;
+  const m = String(material || '').trim().toUpperCase();
+  if (!m) return null;
+  const fNorm = String(fornecedor || '').trim().toUpperCase()
     .normalize('NFD').replace(/[̀-ͯ]/g, '');
-  if (!f) return padrao;
-  const hit = tabela.find(([nome]) => f.includes(nome));
-  return hit ? hit[1] : padrao;
-}
-function _densidadeAreiaNatural(fornecedor) {
-  return _densidadePorFornecedor(fornecedor, _DENSIDADE_AREIA_NATURAL, _DENSIDADE_AREIA_NATURAL_PADRAO);
-}
-function _densidadeAreiaNaturalFina(fornecedor) {
-  return _densidadePorFornecedor(fornecedor, _DENSIDADE_AREIA_FINA, _DENSIDADE_AREIA_FINA_PADRAO);
+
+  const candidatos = (state.fatoresConversao || []).filter(r =>
+    r && r.grupo && r.umOrigem === umCanonico && (r.umDestino || 'KG') === 'KG' &&
+    m.includes(String(r.grupo).trim().toUpperCase())
+  );
+  if (!candidatos.length) return null;
+
+  const especificos = fNorm
+    ? candidatos.filter(r => r.fornecedor &&
+        fNorm.includes(String(r.fornecedor).trim().toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '')))
+    : [];
+  const pool = especificos.length ? especificos : candidatos.filter(r => !r.fornecedor);
+  if (!pool.length) return null;
+
+  // Mais específico (grupo mais longo) primeiro — desempate determinístico
+  // que não depende da ordem de inserção na tabela.
+  return [...pool].sort((a, b) => String(b.grupo).length - String(a.grupo).length)[0];
 }
 
 /**
  * Converte o peso de uma NF para KG, aplicando o fator de conversão
- * correto conforme a unidade de medida, o material e o FORNECEDOR.
+ * correto conforme a unidade de medida, o material e o FORNECEDOR —
+ * consultando o cadastro de Configurações → Fatores de Conversão.
  *
  * Regras:
- *  TO / T        → × 1000
- *  M3 / M³ / M   → fator por material:
- *    AREIA NATURAL FINA   → densidade do fornecedor (1500 GATTO/GMB,
- *                           1300 AREAL SANTA ROSA, 1400 demais)
- *    AREIA NATURAL        → densidade do fornecedor (1440 MINERAJIL,
- *                           1450 GATTO/GMB, 1400 ITAGUACU, 1300 demais)
- *    BRITA 0 / BRITA 1    → × 1400
- *    AREIA ARTIFICIAL*    → × 1500
- *    (outros)             → sem conversão (retorna peso bruto)
- *  KG / outros   → sem conversão
+ *  TO → × 1000 (constante física universal, não é densidade — não passa
+ *       pelo cadastro).
+ *  M3 / L → busca em state.fatoresConversao (ver _lookupFatorConversao):
+ *       achou fator → aplica; não achou → retorna peso BRUTO (mesmo
+ *       contrato de sempre: nunca inventa fator).
+ *  KG / unidade não reconhecida → sem conversão.
  *
  * @param {number|string} peso
  * @param {string} um - unidade de medida do registro
  * @param {string} material - nome do material
- * @param {string} [fornecedor] - razão social; só pesa na AREIA NATURAL.
- *        Omitir mantém o fator genérico, então call site que ainda não
- *        passa o campo continua se comportando como antes.
+ * @param {string} [fornecedor] - razão social; só pesa quando há fator
+ *        específico cadastrado para ele. Omitir usa só o fator padrão do
+ *        grupo (mesmo comportamento de quando o parâmetro não existia).
  * @returns {number} peso em KG
  */
 function _convertNfPesoToKg(peso, um, material, fornecedor) {
   const p = Math.abs(num(peso));
-  const u = String(um       || '').trim().toUpperCase();
-  const m = String(material || '').trim().toUpperCase();
-
-  // ── Toneladas: T, TO, TON, TL, TN ────────────────────────────────────
-  if (/^(T|TO|TON|TL|TN)$/.test(u)) return p * 1000;
-
-  // ── Volumétrico: M, M3, MT, M³, METRO, CBM ───────────────────────────
-  if (/^(M|M3|MT|M3|CBM|METRO)$/.test(u) || u === 'M\u00B3') {
-    // FINA antes de NATURAL: "AREIA NATURAL FINA" contém "AREIA NATURAL",
-    // e inverter a ordem faria a fina cair na regra da comum. As duas têm
-    // tabela de fornecedor PRÓPRIA (ver _DENSIDADE_AREIA_FINA) — não é a
-    // mesma tabela usada duas vezes, porque o mesmo fornecedor pode valer
-    // fatores diferentes em cada material.
-    if (m.includes('AREIA NATURAL FINA'))  return p * _densidadeAreiaNaturalFina(fornecedor);
-    if (m.includes('AREIA NATURAL'))       return p * _densidadeAreiaNatural(fornecedor);
-    if (m.includes('BRITA'))               return p * 1400;
-    if (m.includes('AREIA ARTIFICIAL'))    return p * 1500;
-    return p; // unidade volumétrica sem fator conhecido — retorna bruto
-  }
-
-  return p; // KG ou unidade não reconhecida
+  const canon = _normalizarUM(um);
+  if (canon === 'TO') return p * 1000;
+  if (!canon || canon === 'KG') return p;
+  const fator = _lookupFatorConversao(material, canon, fornecedor);
+  return fator ? p * num(fator.fator) : p; // sem fator cadastrado — retorna bruto
 }
 
 /**
  * Retorna true se uma NF precisa de fator de conversão volumétrico mas
- * nenhum está cadastrado para o material informado — sinaliza que o peso
- * injetado no cálculo está bruto e pode estar errado.
- *
- * Exceções: adições e aditivos são excluídos do aviso (tipicamente
- * comercializados em unidades pequenas, sem fator volumétrico).
+ * nenhum está cadastrado (nem padrão do grupo, nem específico do
+ * fornecedor) — sinaliza que o peso injetado no cálculo está bruto e pode
+ * estar errado.
  *
  * @param {string} um       - unidade de medida
  * @param {string} material - nome do material
+ * @param {string} [fornecedor] - razão social. Sem ela, a checagem só
+ *        enxerga o fator PADRÃO do grupo — um material com fator só
+ *        específico-por-fornecedor (sem padrão) dispararia aviso falso
+ *        pra quem não passar este parâmetro. Call sites que têm o dado à
+ *        mão devem passá-lo (ver os 5 call sites em ui.js/analitico.js).
  * @returns {boolean}
  */
-function _nfNeedsConversionWarning(um, material) {
-  const u = String(um       || '').trim().toUpperCase();
-  const m = String(material || '').trim().toUpperCase()
-              .normalize('NFD').replace(/[\u0300-\u036f]/g, ''); // strip acentos
+function _nfNeedsConversionWarning(um, material, fornecedor) {
+  const canon = _normalizarUM(um);
+  if (canon !== 'M3' && canon !== 'L') return false; // só unidades volumétricas avisam
+  return !_lookupFatorConversao(material, canon, fornecedor);
+}
 
-  // Só unidades volumétricas disparam o aviso
-  if (!/^(M|M3|MT|CBM|METRO)$/.test(u) && u !== 'M\u00B3') return false;
-
-  // Materiais com fator conhecido → sem aviso
-  if (m.includes('AREIA NATURAL FINA')) return false;
-  if (m.includes('AREIA NATURAL'))      return false;
-  if (m.includes('BRITA'))              return false;
-  if (m.includes('AREIA ARTIFICIAL'))   return false;
-
-  // Adições e aditivos → excluídos do aviso (pedido explícito)
-  if (/ADITIV/.test(m))          return false;
-  if (/ADIC[AO]O?/.test(m))      return false;
-  if (m.includes('CINZA'))       return false;
-  if (m.includes('SILICA'))      return false;
-  if (m.includes('METACAOLIN'))  return false;
-
-  // Unidade volumétrica sem fator → aviso
-  return true;
+// ── Migração única (ver applySavedState, persist.js) ────────────────────
+// Os 11 fatores que antes viviam fixos no código, agora como linhas do
+// cadastro — roda UMA VEZ, só em snapshots salvos antes desta
+// funcionalidade existir (nunca de novo depois, mesmo que o analista
+// apague tudo — ver o comentário no chamador). BRITA e AREIA ARTIFICIAL
+// entram como fator PADRÃO do grupo (sem fornecedor): não tinham tabela de
+// fornecedor no código legado, e não é este migrador que deveria inventar
+// uma.
+function _seedFatoresConversaoLegado() {
+  const agora = new Date().toLocaleDateString('pt-BR');
+  // gerarIdRegistro() (normalize.js) — precisa ser UUID de verdade pra
+  // sincronizar com a coluna `id uuid` do Supabase, mesmo motivo do id
+  // gerado em salvarFatorConversao (config.js).
+  const linha = (grupo, fornecedor, fator) => ({
+    id: gerarIdRegistro(),
+    grupo, fornecedor, umOrigem: 'M3', umDestino: 'KG', fator, created: agora
+  });
+  return [
+    linha('AREIA NATURAL FINA', '',                  1400),
+    linha('AREIA NATURAL FINA', 'GMB',                1500),
+    linha('AREIA NATURAL FINA', 'GATTO',              1500),
+    linha('AREIA NATURAL FINA', 'AREAL SANTA ROSA',   1300),
+    linha('AREIA NATURAL',      '',                   1300),
+    linha('AREIA NATURAL',      'MINERAJIL',          1440),
+    linha('AREIA NATURAL',      'GATTO',              1450),
+    linha('AREIA NATURAL',      'GMB',                1450),
+    linha('AREIA NATURAL',      'ITAGUACU',           1400),
+    linha('BRITA',              '',                   1400),
+    linha('AREIA ARTIFICIAL',   '',                   1500)
+  ];
 }
 
 function calcPendentesIntegracao({ central, dtIni, dtFim, sapNoPeriodo, entradasDaCentral }) {
@@ -4008,7 +4052,7 @@ function _pimRender() {
       tbody.innerHTML = `<tr><td colspan="${colSpan}" style="text-align:center;color:var(--text3);padding:24px">Nenhum registro pendente encontrado</td></tr>`;
     } else if (tipo === 'NF') {
       tbody.innerHTML = pageItems.map(it => {
-        const noConv = _nfNeedsConversionWarning(it.um, it.material);
+        const noConv = _nfNeedsConversionWarning(it.um, it.material, it.fornecedor);
         const convertedPeso = _convertNfPesoToKg(it.peso, it.um, it.material, it.fornecedor);
         const qtdCell = noConv
           ? `<td class="td-mono" style="text-align:right;color:var(--amber)" title="Sem fator de conversão cadastrado para ${escapeHtml(String(it.um||''))} — valor exibido sem conversão">

@@ -5222,7 +5222,7 @@ function renderModule(module) {
     case 'sap': return renderSAP();
     case 'custosSap': return renderCustosSap();
     case 'importar': return renderImports();
-    case 'configuracoes': renderConfigs(); renderAcoesRelatorio(); loadHealthConfigInputs(); updateParamGerais(); renderCapacidades(); return;
+    case 'configuracoes': renderConfigs(); renderAcoesRelatorio(); loadHealthConfigInputs(); updateParamGerais(); renderCapacidades(); if (typeof renderFatoresConversao === 'function') renderFatoresConversao(); return;
     case 'filiais': return renderFiliais();
     case 'materiais': return renderMateriais();
     default: return;
@@ -7063,6 +7063,7 @@ function renderAll() {
   renderFiliais();
   renderMateriais();
   renderCapacidades();
+  if (typeof renderFatoresConversao === 'function') renderFatoresConversao();
   updateImportPrereqUI();
   updateDashboard();
   initResizable();
@@ -7077,7 +7078,7 @@ const pageRenderers = {
   sap: () => renderSAP(),
   custosSap: () => renderCustosSap(),
   importar: () => renderImports(),
-  configuracoes: () => { renderConfigs(); renderAcoesRelatorio(); loadHealthConfigInputs(); updateParamGerais(); renderCapacidades(); },
+  configuracoes: () => { renderConfigs(); renderAcoesRelatorio(); loadHealthConfigInputs(); updateParamGerais(); renderCapacidades(); if (typeof renderFatoresConversao === 'function') renderFatoresConversao(); },
   filiais: () => renderFiliais(),
   materiais: () => renderMateriais(),
   ocorrencias: () => renderOcorrenciasPage(),
@@ -7151,6 +7152,7 @@ const SUPABASE_BOOT_SYNCS = [
   'syncCatalogosFromSupabase',
   'syncFiliaisFromSupabase',
   'syncMateriaisFromSupabase',
+  'syncFatoresConversaoFromSupabase',
   'syncInvJustificativasFromSupabase',
   'syncSapFechamentoOverridesFromSupabase',
   'syncSapFechInvUnlockOverridesFromSupabase',

@@ -4,7 +4,7 @@ const IDB_STORE = 'kv';
 const IDB_STATE_KEY = 'appState';
 const legacyStateKey = STORAGE_KEY;
 // 'sap' é excluído do snapshot unificado — salvo em chunks separados
-const saveSnapshotKeys = ['configs', 'filiais', 'materiais', 'gruposMateriais', 'regionaisCentrais', 'entradas', 'saidas', 'lancamentos', 'sap', 'custosSap', 'imports', 'ocorrencias', 'acoesRelatorio', 'notifications', 'invJustificativas', 'sapFechamentoOverrides', 'sapFechInvUnlockOverrides', 'ajustesSistemicos', 'ajustesExcluidos', 'notasAjuste', 'capacidades', 'capacidadesParams'];
+const saveSnapshotKeys = ['configs', 'filiais', 'materiais', 'gruposMateriais', 'regionaisCentrais', 'entradas', 'saidas', 'lancamentos', 'sap', 'custosSap', 'imports', 'ocorrencias', 'acoesRelatorio', 'notifications', 'invJustificativas', 'sapFechamentoOverrides', 'sapFechInvUnlockOverrides', 'ajustesSistemicos', 'ajustesExcluidos', 'notasAjuste', 'capacidades', 'capacidadesParams', 'fatoresConversao'];
 const SAP_CHUNK_SIZE  = 10000;  // registros por chunk
 const SAP_CHUNK_KEY   = 'sap_chunk_'; // prefixo das chaves: sap_chunk_0, sap_chunk_1...
 const SAP_META_KEY    = 'sap_meta';   // { totalChunks, totalRecords, savedAt }
@@ -412,7 +412,8 @@ function buildStateSnapshot() {
     sapFechInvUnlockOverrides: state.sapFechInvUnlockOverrides || [],
     ajustesSistemicos: state.ajustesSistemicos || [],
     ajustesExcluidos: state.ajustesExcluidos || [],
-    notasAjuste: state.notasAjuste || []
+    notasAjuste: state.notasAjuste || [],
+    fatoresConversao: state.fatoresConversao || []
   };
 }
 
@@ -429,6 +430,20 @@ function applySavedState(saved) {
     if (key === 'sap' && saved._skipSap) continue;
     if (!Array.isArray(saved[key])) continue;
     state[key] = saved[key];
+  }
+
+  // ── Migração única: semeia os fatores de conversão legados ──────────────
+  // 'fatoresConversao' AUSENTE do snapshot (nem `[]`) só acontece num
+  // snapshot salvo ANTES desta funcionalidade existir — é o único sinal
+  // confiável de "primeira vez que este dispositivo carrega com o recurso
+  // habilitado". Um array VAZIO já presente no snapshot é outra coisa: o
+  // analista tinha a tabela e apagou tudo de propósito — reencher sozinho
+  // a cada boot desfaria a limpeza dele. Por isso o teste é `in`, não
+  // `!length`. Roda uma vez por dispositivo: depois que os fatores legados
+  // entram aqui e o snapshot é salvo de novo, a chave passa a existir
+  // sempre (mesmo que vazia), e este bloco nunca mais dispara.
+  if (!('fatoresConversao' in saved) && typeof _seedFatoresConversaoLegado === 'function') {
+    state.fatoresConversao = _seedFatoresConversaoLegado();
   }
 
   state.materiais = (state.materiais || []).map(item => ({
