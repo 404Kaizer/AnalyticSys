@@ -1644,6 +1644,14 @@ function _bdmContagemLiquida(entries) {
   return _parearEstornos(itens.filter(it => !fora.has(it))).sobra.length;
 }
 
+// Número com 2 casas, SEM unidade — para o peso que não pôde ser convertido
+// e sai acompanhado da unidade original (M3, TO...). Mesma formatação do
+// modal canônico de Pendentes de Integração.
+function _fmtNum2(n) {
+  const v = num(n);
+  return isNaN(v) ? '—' : Math.abs(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 // Inteiro com sinal explícito, para a diferença de contagem. Mesmo menos
 // tipográfico (−, U+2212) do fmtKgSigned, para os dois sinais do balão
 // saírem idênticos.
@@ -1770,6 +1778,15 @@ function diagnosticarDivergenciaSapPuzl({ sapRecords = [], puzlRecords = [], lad
     const r = p.rec;
     const destino = !ehSaida && r.centralDestino && r.centralDestino !== r.centralCompra
       ? `destino ${r.centralDestino}` : '';
+    // O peso da NF não vem necessariamente em kg — pode ser TO ou M³, e o
+    // fator depende do MATERIAL. Quando não há fator cadastrado,
+    // _convertNfPesoToKg devolve o valor BRUTO: rotulá-lo "kg" seria
+    // mentira. Mesmo tratamento do modal canônico de Pendentes de
+    // Integração (ver o tbody de _pimRender, adiante neste arquivo) e do
+    // Inventário — mostra o número na unidade ORIGINAL, com aviso, em vez
+    // de converter no chute.
+    const semFator = !ehSaida && typeof _nfNeedsConversionWarning === 'function'
+      && _nfNeedsConversionWarning(r.um, r.material);
     return {
       cod:     '',
       ref:     String(p.doc || '—'),
@@ -1778,6 +1795,8 @@ function diagnosticarDivergenciaSapPuzl({ sapRecords = [], puzlRecords = [], lad
       dt:      String((ehSaida ? r.dtEmissao : (r.dtDescarga || r.dtEmissao)) || ''),
       usuario: '',
       kg:      -p.kg,
+      semFator,
+      um:      String(r.um || ''),
       nota:    destino
     };
   };
@@ -2540,7 +2559,9 @@ function _bdmDiagnosticoHtml(diag) {
                 ${cel(d.pedido, 'td-mono td-muted')}
                 ${cel(d.doc,    'td-mono td-muted')}
                 ${cel(d.dt,     'td-mono td-muted')}
-                <span class="td-mono" style="color:${movValorCor(d.kg)}">${fmtKgSigned(d.kg)}</span>
+                ${d.semFator
+                  ? `<span class="td-mono" style="color:var(--amber)" title="Sem fator de conversão cadastrado para ${escapeHtml(String(d.um || ''))} — valor exibido na unidade original, sem conversão"><i class="ti ti-alert-triangle" style="font-size:10px;margin-right:2px;vertical-align:middle"></i>${_fmtNum2(d.kg)} ${escapeHtml(String(d.um || ''))}</span>`
+                  : `<span class="td-mono" style="color:${movValorCor(d.kg)}">${fmtKgSigned(d.kg)}</span>`}
                 ${cel(d.nota,   'td-muted')}
               </div>`;
             }).join('')}
