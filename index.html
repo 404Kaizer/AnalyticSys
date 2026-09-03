@@ -103,7 +103,7 @@
 </div>
 
 <!-- Aviso de logout por inatividade (Fase 1) — ver js/auth.js -->
-<div class="modal-overlay" id="idle-warning-overlay" style="z-index:10000">
+<div class="modal-overlay" id="idle-warning-overlay">
   <div class="modal" style="max-width:380px">
     <div class="modal-title"><i class="ti ti-clock-exclamation"></i> Sessão prestes a expirar</div>
     <div class="modal-sub">Por inatividade, você será desconectado em <strong id="idle-warning-countdown">60</strong> segundos.</div>
@@ -536,312 +536,6 @@
           </div><!-- /.topbar-people-group -->
 
         </div><!-- /.topbar-status-bar -->
-
-        <!-- Calculadora (popover) -->
-
-        <div class="tool-popover" id="tool-calc" style="display:none">
-          <div class="tool-popover-header">
-            <span class="tool-popover-title"><i class="ti ti-calculator"></i> Calculadora</span>
-            <button class="tool-popover-close" onclick="closeTool('calc')"><i class="ti ti-x"></i></button>
-          </div>
-          <div class="calc-tabs">
-            <button class="calc-tab active" id="calct-basica" onclick="setCalcTab('basica')">Básica</button>
-            <button class="calc-tab" id="calct-analitica" onclick="setCalcTab('analitica')">Analítica</button>
-          </div>
-          <div id="calc-tab-basica">
-            <div class="calc-display-wrap">
-              <div class="calc-history" id="calc-history"></div>
-              <div class="calc-display" id="calc-display">0</div>
-            </div>
-            <div class="calc-grid">
-              <button class="calc-btn calc-btn-fn" onclick="calcAction('clear')">C</button>
-              <button class="calc-btn calc-btn-fn" onclick="calcAction('sign')">+/−</button>
-              <button class="calc-btn calc-btn-fn" onclick="calcAction('pct')">%</button>
-              <button class="calc-btn calc-btn-op" onclick="calcAction('op','/')">÷</button>
-              <button class="calc-btn" onclick="calcAction('num','7')">7</button>
-              <button class="calc-btn" onclick="calcAction('num','8')">8</button>
-              <button class="calc-btn" onclick="calcAction('num','9')">9</button>
-              <button class="calc-btn calc-btn-op" onclick="calcAction('op','*')">×</button>
-              <button class="calc-btn" onclick="calcAction('num','4')">4</button>
-              <button class="calc-btn" onclick="calcAction('num','5')">5</button>
-              <button class="calc-btn" onclick="calcAction('num','6')">6</button>
-              <button class="calc-btn calc-btn-op" onclick="calcAction('op','-')">−</button>
-              <button class="calc-btn" onclick="calcAction('num','1')">1</button>
-              <button class="calc-btn" onclick="calcAction('num','2')">2</button>
-              <button class="calc-btn" onclick="calcAction('num','3')">3</button>
-              <button class="calc-btn calc-btn-op calc-btn-op-tall" onclick="calcAction('op','+')">+</button>
-              <button class="calc-btn calc-btn-zero" onclick="calcAction('num','0')">0</button>
-              <button class="calc-btn" onclick="calcAction('dot')">.</button>
-              <button class="calc-btn calc-btn-eq" onclick="calcAction('eq')">=</button>
-            </div>
-          </div>
-          <div id="calc-tab-analitica" style="display:none">
-            <div class="calc-analytic">
-              <div class="calc-card">
-                <div class="calc-card-title"><i class="ti ti-trending-up"></i> Variação de Estoque</div>
-                <div class="calc-card-row"><label>Real (kg)</label><input type="number" class="calc-input" id="ca-real" placeholder="0" oninput="calcAnalitica()"></div>
-                <div class="calc-card-row"><label>Teórico (kg)</label><input type="number" class="calc-input" id="ca-teorico" placeholder="0" oninput="calcAnalitica()"></div>
-                <div class="calc-card-result"><span class="calc-result-label">Variação</span><span class="calc-result-val" id="ca-var-val">—</span><button class="calc-copy-btn" onclick="calcCopy('ca-var-val')"><i class="ti ti-copy"></i></button></div>
-                <div class="calc-card-result"><span class="calc-result-label">Variação %</span><span class="calc-result-val" id="ca-varpct-val">—</span><button class="calc-copy-btn" onclick="calcCopy('ca-varpct-val')"><i class="ti ti-copy"></i></button></div>
-              </div>
-              <div class="calc-card">
-                <div class="calc-card-title"><i class="ti ti-currency-dollar"></i> Custo Implicado</div>
-                <div class="calc-card-row"><label>Variação (kg)</label><input type="number" class="calc-input" id="ca-varkg" placeholder="0" oninput="calcAnalitica()"></div>
-                <div class="calc-card-row"><label>Custo médio (R$/kg)</label><input type="number" class="calc-input" id="ca-custo" placeholder="0,00" oninput="calcAnalitica()"></div>
-                <div class="calc-card-result"><span class="calc-result-label">Custo</span><span class="calc-result-val" id="ca-custo-val">—</span><button class="calc-copy-btn" onclick="calcCopy('ca-custo-val')"><i class="ti ti-copy"></i></button></div>
-              </div>
-              <div class="calc-card">
-                <div class="calc-card-title"><i class="ti ti-box"></i> Estoque Teórico</div>
-                <div class="calc-card-row"><label>Est. Inicial (kg)</label><input type="number" class="calc-input" id="ca-ini" placeholder="0" oninput="calcAnalitica()"></div>
-                <div class="calc-card-row"><label>Entradas (kg)</label><input type="number" class="calc-input" id="ca-ent" placeholder="0" oninput="calcAnalitica()"></div>
-                <div class="calc-card-row"><label>Saídas (kg)</label><input type="number" class="calc-input" id="ca-sai" placeholder="0" oninput="calcAnalitica()"></div>
-                <div class="calc-card-result"><span class="calc-result-label">Teórico</span><span class="calc-result-val" id="ca-teorico-val">—</span><button class="calc-copy-btn" onclick="calcCopy('ca-teorico-val')"><i class="ti ti-copy"></i></button></div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Bloco de Notas (popover) -->
-        <!-- Bloco de Notas (popover) -->
-        <div class="tool-popover notes-popover" id="tool-notes" style="display:none">
-          <div class="tool-popover-header">
-            <span class="tool-popover-title"><i class="ti ti-notebook"></i> Bloco de Notas</span>
-            <div style="display:flex;gap:6px;align-items:center">
-              <span class="notes-saved-indicator" id="notes-saved-indicator"></span>
-              <button class="tool-popover-close" onclick="closeTool('notes')"><i class="ti ti-x"></i></button>
-            </div>
-          </div>
-          <div class="notes-layout" id="notes-layout">
-
-            <!-- Lista de cards -->
-            <div class="notes-list-pane" id="notes-list-pane">
-              <div class="notes-list-toolbar">
-                <button class="btn btn-primary" style="font-size:11px;padding:5px 10px" onclick="notesNewCard()">
-                  <i class="ti ti-plus"></i> Nova nota
-                </button>
-                <select class="notes-sort-select" id="notes-sort-select" onchange="notesRender()">
-                  <option value="priority" selected>Prioridade</option>
-                  <option value="modified">Recentes</option>
-                  <option value="title">Título</option>
-                </select>
-              </div>
-              <div class="notes-cards-list" id="notes-cards-list">
-                <div class="notes-empty-state">
-                  <i class="ti ti-notebook" style="font-size:28px;opacity:.3"></i>
-                  <span>Nenhuma nota ainda.<br>Crie sua primeira nota.</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- Editor (oculto até selecionar card) -->
-            <div class="notes-editor-pane" id="notes-editor-pane" style="display:none">
-              <div class="notes-editor-header">
-                <button class="notes-back-btn" onclick="notesCloseEditor()"><i class="ti ti-arrow-left"></i></button>
-                <input class="notes-title-input" id="notes-title-input" placeholder="Título da nota..."
-                  oninput="notesAutoSave()">
-                <div class="notes-editor-actions">
-                  <!-- Prioridade -->
-                  <select class="notes-priority-select" id="notes-priority-select" onchange="notesAutoSave()" title="Prioridade">
-                    <option value="none">— Sem prioridade</option>
-                    <option value="low">↓ Baixa</option>
-                    <option value="medium">→ Média</option>
-                    <option value="high">↑ Alta</option>
-                  </select>
-                  <!-- Cor -->
-                  <div class="notes-color-picker" id="notes-color-picker">
-                    <button class="notes-color-btn" id="notes-color-btn" onclick="notesToggleColors()" title="Cor da nota">
-                      <span class="notes-color-dot" id="notes-color-dot"></span>
-                    </button>
-                    <div class="notes-color-menu" id="notes-color-menu">
-                      <button onclick="notesSetColor('none')"   class="nc-swatch nc-none"  title="Padrão"></button>
-                      <button onclick="notesSetColor('blue')"   class="nc-swatch nc-blue"  title="Azul"></button>
-                      <button onclick="notesSetColor('green')"  class="nc-swatch nc-green" title="Verde"></button>
-                      <button onclick="notesSetColor('amber')"  class="nc-swatch nc-amber" title="Âmbar"></button>
-                      <button onclick="notesSetColor('red')"    class="nc-swatch nc-red"   title="Vermelho"></button>
-                      <button onclick="notesSetColor('purple')" class="nc-swatch nc-purple"title="Roxo"></button>
-                      <button onclick="notesSetColor('teal')"   class="nc-swatch nc-teal"  title="Teal"></button>
-                    </div>
-                  </div>
-                  <button class="notes-toolbar-btn" onclick="notesDeleteCurrent()" title="Excluir nota" style="color:var(--red)">
-                    <i class="ti ti-trash"></i>
-                  </button>
-                </div>
-              </div>
-
-              <!-- Barra de formatação inline -->
-              <div class="notes-md-bar">
-                <!-- Histórico -->
-                <button class="notes-md-btn" onclick="document.execCommand('undo')" title="Desfazer (Ctrl+Z)"><i class="ti ti-arrow-back-up"></i></button>
-                <button class="notes-md-btn" onclick="document.execCommand('redo')" title="Refazer (Ctrl+Y)"><i class="ti ti-arrow-forward-up"></i></button>
-                <div class="notes-md-sep"></div>
-                <!-- Formatação -->
-                <button class="notes-md-btn" id="notes-tb-bold"   onclick="notesExec('bold')"          title="Negrito (Ctrl+B)"><b>B</b></button>
-                <button class="notes-md-btn" id="notes-tb-italic" onclick="notesExec('italic')"        title="Itálico (Ctrl+I)"><i>I</i></button>
-                <button class="notes-md-btn" id="notes-tb-under"  onclick="notesExec('underline')"     title="Sublinhado (Ctrl+U)"><u>U</u></button>
-                <button class="notes-md-btn" id="notes-tb-strike" onclick="notesExec('strikeThrough')" title="Tachado"><s>S</s></button>
-                <div class="notes-md-sep"></div>
-                <!-- Tamanho da fonte -->
-                <select class="notes-tb-select" id="notes-font-size" onchange="notesSetFontSize(this.value)" title="Tamanho da fonte">
-                  <option value="">Tam.</option>
-                  <option value="1">8px</option>
-                  <option value="2">10px</option>
-                  <option value="3">12px</option>
-                  <option value="4">14px</option>
-                  <option value="5">18px</option>
-                  <option value="6">24px</option>
-                  <option value="7">36px</option>
-                </select>
-                <!-- Cor do texto -->
-                <div class="notes-tb-color-wrap" title="Cor do texto">
-                  <span class="notes-tb-color-icon"><i class="ti ti-letter-a"></i></span>
-                  <input type="color" id="notes-color-input" value="#ffffff" oninput="notesExec('foreColor', this.value)" title="Cor do texto">
-                </div>
-                <div class="notes-md-sep"></div>
-                <!-- Listas e checklist -->
-                <button class="notes-md-btn" onclick="notesExec('insertUnorderedList')" title="Lista com marcadores"><i class="ti ti-list"></i></button>
-                <button class="notes-md-btn" onclick="notesInsertChecklist()"           title="Inserir checklist"><i class="ti ti-checkbox"></i></button>
-                <div class="notes-md-sep"></div>
-                <!-- Limpar formatação -->
-                <button class="notes-md-btn" onclick="notesExec('removeFormat')" title="Limpar formatação"><i class="ti ti-clear-formatting"></i></button>
-              </div>
-
-              <!-- Área editável inline -->
-              <div class="notes-editor-body">
-                <div class="notes-inline-editor" id="notes-inline-editor"
-                  contenteditable="true" spellcheck="false"
-                  data-placeholder="Escreva aqui..."
-                  oninput="notesEditorUpdate()"
-                  onkeyup="notesUpdateToolbarState()"
-                  onmouseup="notesUpdateToolbarState()"></div>
-              </div>
-            </div>
-
-          </div>
-        </div>
-
-        <!-- Assistente (popover) -->
-        <div class="tool-popover assistente-popover" id="tool-assistente" style="display:none">
-          <div class="tool-popover-header">
-            <span class="tool-popover-title"><i class="ti ti-message-chatbot"></i> Assistente</span>
-            <div style="display:flex;gap:6px;align-items:center">
-              <button class="tool-popover-close" onclick="asstClearChat()" title="Limpar conversa"><i class="ti ti-trash"></i></button>
-              <button class="tool-popover-close" onclick="closeTool('assistente')"><i class="ti ti-x"></i></button>
-            </div>
-          </div>
-          <div class="asst-chat-body" id="asst-chat-body">
-            <div class="asst-msg asst-msg-bot">
-              Oi! Sou seu analista auxiliar de estoque. Digite <code>/</code> e escolha um contexto pra começar.
-              <div class="asst-suggestions">
-                <button class="asst-chip" onclick="asstQuickStart('ocorrencias')">Ocorrências abertas</button>
-                <button class="asst-chip" onclick="asstQuickStart('dashboard-analitico')">Dashboard Analítico</button>
-                <button class="asst-chip" onclick="asstQuickStart('entradas-consulta')">Entradas</button>
-                <button class="asst-chip" onclick="_asstMostrarAjuda()"><i class="ti ti-help-circle"></i> Ajuda</button>
-              </div>
-            </div>
-          </div>
-          <div class="asst-pill-row" id="asst-pill-row" style="display:none">
-            <span class="asst-pill asst-pill-context" id="asst-context-pill" style="display:none">
-              <i class="ti ti-folder" id="asst-context-pill-icon"></i>
-              <span id="asst-context-pill-label">Contexto</span>
-              <button onclick="_asstClearIntent()" title="Remover contexto"><i class="ti ti-x"></i></button>
-            </span>
-            <span class="asst-pill asst-pill-period" id="asst-period-pill" style="display:none">
-              <i class="ti ti-calendar"></i>
-              <span id="asst-period-pill-label">período</span>
-              <button onclick="_asstEditPeriod()" title="Trocar período"><i class="ti ti-pencil"></i></button>
-            </span>
-          </div>
-          <div class="asst-input-row">
-            <div class="asst-dropdown" id="asst-dropdown" style="display:none"></div>
-            <input type="text" class="asst-input" id="asst-input" placeholder="Digite / para escolher um contexto" autocomplete="off" oninput="_asstInputChanged(this)" onkeydown="_asstInputKeydown(event)">
-            <button class="asst-send-btn" onclick="asstSend()" title="Enviar"><i class="ti ti-send"></i></button>
-          </div>
-        </div>
-
-        <!-- Mensagens (popover) — ETAPA 1: só casca visual, sem lógica de
-             dados ainda (ver js/mensagens.js). Lista de conversas 1:1 é
-             preenchida nas próximas etapas, a partir de profiles + presença;
-             "Geral" já vem fixo porque não depende de nenhum dado dinâmico. -->
-        <div class="tool-popover mensagens-popover" id="tool-mensagens" style="display:none">
-          <div class="tool-popover-header">
-            <span class="tool-popover-title"><i class="ti ti-messages"></i> Mensagens</span>
-            <div style="display:flex;align-items:center;gap:4px">
-              <button class="btn-icon" title="Pesquisar em todas as conversas" onclick="_msgsAbrirBusca('todas')"><i class="ti ti-search"></i></button>
-              <button class="tool-popover-close" onclick="closeTool('mensagens')"><i class="ti ti-x"></i></button>
-            </div>
-          </div>
-          <div class="msgs-search-overlay" id="msgs-search-overlay" style="display:none">
-            <div class="msgs-search-header">
-              <select id="msgs-search-escopo" class="msgs-search-select">
-                <option value="atual">Esta conversa</option>
-                <option value="todas">Todas as conversas</option>
-              </select>
-              <input type="text" id="msgs-search-texto" class="msgs-search-input" placeholder="Buscar por texto..." onkeydown="if(event.key==='Enter') _msgsBuscar()">
-              <button class="btn-icon" title="Fechar busca" onclick="_msgsFecharBusca()"><i class="ti ti-x"></i></button>
-            </div>
-            <div class="msgs-search-filtros">
-              <label class="msgs-search-check"><input type="checkbox" id="msgs-search-so-anexo"> Somente com anexo</label>
-              <input type="date" id="msgs-search-data-de" class="msgs-search-date" title="De">
-              <span style="color:var(--text3);font-size:11px">até</span>
-              <input type="date" id="msgs-search-data-ate" class="msgs-search-date" title="Até">
-              <button class="btn btn-primary" style="margin-left:auto" onclick="_msgsBuscar()"><i class="ti ti-search"></i> Buscar</button>
-            </div>
-            <div class="msgs-search-results" id="msgs-search-results">
-              <div class="msgs-empty-state"><i class="ti ti-search"></i><p>Digite um termo, escolha um período ou filtre por anexo.</p></div>
-            </div>
-          </div>
-          <div class="msgs-layout">
-            <!-- Lista de conversas -->
-            <div class="msgs-conv-pane">
-              <div class="msgs-conv-list" id="msgs-conv-list">
-                <button class="msgs-conv-item active" data-conv="geral" onclick="msgsAbrirConversa('geral')">
-                  <span class="msgs-avatar-badge-wrap">
-                    <div class="msgs-conv-avatar msgs-conv-avatar-geral"><i class="ti ti-users"></i></div>
-                    <span class="msgs-unread-dot" id="msgs-conv-geral-badge" style="display:none">0</span>
-                  </span>
-                  <div class="msgs-conv-body">
-                    <div class="msgs-conv-name">Geral</div>
-                    <div class="msgs-conv-preview">Todos os usuários</div>
-                  </div>
-                </button>
-                <!-- Conversas 1:1 injetadas aqui via JS (msgsRenderConversas), uma por usuário online -->
-              </div>
-              <div class="msgs-conv-empty-hint" id="msgs-conv-empty-hint">
-                <i class="ti ti-user-circle"></i> Nenhum outro usuário cadastrado ainda.
-              </div>
-            </div>
-            <!-- Área da conversa -->
-            <div class="msgs-chat-pane">
-              <div class="msgs-chat-header" id="msgs-chat-header">
-                <div class="msgs-conv-avatar msgs-conv-avatar-geral" id="msgs-chat-header-avatar"><i class="ti ti-users"></i></div>
-                <div class="msgs-chat-header-body">
-                  <div class="msgs-chat-header-name" id="msgs-chat-header-name">Geral</div>
-                  <div class="msgs-chat-header-sub" id="msgs-chat-header-sub">Todos os usuários</div>
-                </div>
-                <button class="btn-icon" id="msgs-limpar-conversa-btn" title="Limpar conversa (admin)" style="display:none" onclick="_msgsLimparConversa()"><i class="ti ti-trash-x"></i></button>
-              </div>
-              <div class="msgs-chat-body" id="msgs-chat-body">
-                <div class="msgs-empty-state">
-                  <i class="ti ti-loader-2" style="animation:spin .7s linear infinite"></i>
-                  <p>Carregando...</p>
-                </div>
-              </div>
-              <div class="msgs-reply-bar" id="msgs-reply-bar" style="display:none">
-                <div class="msgs-reply-bar-body">
-                  <div class="msgs-reply-bar-nome" id="msgs-reply-bar-nome"></div>
-                  <div class="msgs-reply-bar-snippet" id="msgs-reply-bar-snippet"></div>
-                </div>
-                <button class="btn-icon" title="Cancelar resposta" onclick="_msgsCancelarResposta()"><i class="ti ti-x"></i></button>
-              </div>
-              <div class="msgs-input-row">
-                <button class="btn-icon" id="msgs-attach-btn" title="Anexar arquivo" disabled onclick="_msgsAbrirSeletorAnexo()"><i class="ti ti-paperclip"></i></button>
-                <input type="file" id="msgs-anexo-input" style="display:none" onchange="_msgsEnviarAnexo(this.files[0]); this.value=''">
-                <input type="text" class="msgs-input" id="msgs-input" placeholder="Escreva uma mensagem..." autocomplete="off" disabled onkeydown="_msgsInputKeydown(event)" oninput="_msgsInputOnInput()">
-                <button class="msgs-send-btn" id="msgs-send-btn" title="Enviar" disabled onclick="msgsEnviar()"><i class="ti ti-send"></i></button>
-              </div>
-            </div>
-          </div>
-        </div>
 
         <input type="file" id="restore-file-input" accept=".json" style="display:none" onchange="restaurarBackupModular(this.files[0]);this.value=''">
 
@@ -3979,6 +3673,328 @@
 
       </div>
 
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     JANELAS FLUTUANTES — Calculadora, Bloco de Notas, Assistente
+     e Mensagens.
+
+     Ficam AQUI, filhas diretas do body, e não dentro da .topbar de onde
+     são abertas: a topbar é `position: sticky; z-index: 200`, o que cria
+     um contexto de empilhamento próprio e prendia as quatro nele — por
+     mais alto que fosse o z-index delas, contra qualquer coisa fora da
+     topbar valia o 200 e elas iam parar embaixo dos modais. São
+     `position: fixed` com left/top calculados em JS (ver openTool em
+     js/format.js), então sair da topbar no DOM não muda onde aparecem.
+
+     Camada: --z-flutuantes (css/tokens.css), a mesma do Novo Registro
+     Manual (#modal-manual).
+═══════════════════════════════════════════════════════════ -->
+
+<!-- Calculadora (popover) -->
+
+<div class="tool-popover" id="tool-calc" style="display:none">
+  <div class="tool-popover-header">
+    <span class="tool-popover-title"><i class="ti ti-calculator"></i> Calculadora</span>
+    <button class="tool-popover-close" onclick="closeTool('calc')"><i class="ti ti-x"></i></button>
+  </div>
+  <div class="calc-tabs">
+    <button class="calc-tab active" id="calct-basica" onclick="setCalcTab('basica')">Básica</button>
+    <button class="calc-tab" id="calct-analitica" onclick="setCalcTab('analitica')">Analítica</button>
+  </div>
+  <div id="calc-tab-basica">
+    <div class="calc-display-wrap">
+      <div class="calc-history" id="calc-history"></div>
+      <div class="calc-display" id="calc-display">0</div>
+    </div>
+    <div class="calc-grid">
+      <button class="calc-btn calc-btn-fn" onclick="calcAction('clear')">C</button>
+      <button class="calc-btn calc-btn-fn" onclick="calcAction('sign')">+/−</button>
+      <button class="calc-btn calc-btn-fn" onclick="calcAction('pct')">%</button>
+      <button class="calc-btn calc-btn-op" onclick="calcAction('op','/')">÷</button>
+      <button class="calc-btn" onclick="calcAction('num','7')">7</button>
+      <button class="calc-btn" onclick="calcAction('num','8')">8</button>
+      <button class="calc-btn" onclick="calcAction('num','9')">9</button>
+      <button class="calc-btn calc-btn-op" onclick="calcAction('op','*')">×</button>
+      <button class="calc-btn" onclick="calcAction('num','4')">4</button>
+      <button class="calc-btn" onclick="calcAction('num','5')">5</button>
+      <button class="calc-btn" onclick="calcAction('num','6')">6</button>
+      <button class="calc-btn calc-btn-op" onclick="calcAction('op','-')">−</button>
+      <button class="calc-btn" onclick="calcAction('num','1')">1</button>
+      <button class="calc-btn" onclick="calcAction('num','2')">2</button>
+      <button class="calc-btn" onclick="calcAction('num','3')">3</button>
+      <button class="calc-btn calc-btn-op calc-btn-op-tall" onclick="calcAction('op','+')">+</button>
+      <button class="calc-btn calc-btn-zero" onclick="calcAction('num','0')">0</button>
+      <button class="calc-btn" onclick="calcAction('dot')">.</button>
+      <button class="calc-btn calc-btn-eq" onclick="calcAction('eq')">=</button>
+    </div>
+  </div>
+  <div id="calc-tab-analitica" style="display:none">
+    <div class="calc-analytic">
+      <div class="calc-card">
+        <div class="calc-card-title"><i class="ti ti-trending-up"></i> Variação de Estoque</div>
+        <div class="calc-card-row"><label>Real (kg)</label><input type="number" class="calc-input" id="ca-real" placeholder="0" oninput="calcAnalitica()"></div>
+        <div class="calc-card-row"><label>Teórico (kg)</label><input type="number" class="calc-input" id="ca-teorico" placeholder="0" oninput="calcAnalitica()"></div>
+        <div class="calc-card-result"><span class="calc-result-label">Variação</span><span class="calc-result-val" id="ca-var-val">—</span><button class="calc-copy-btn" onclick="calcCopy('ca-var-val')"><i class="ti ti-copy"></i></button></div>
+        <div class="calc-card-result"><span class="calc-result-label">Variação %</span><span class="calc-result-val" id="ca-varpct-val">—</span><button class="calc-copy-btn" onclick="calcCopy('ca-varpct-val')"><i class="ti ti-copy"></i></button></div>
+      </div>
+      <div class="calc-card">
+        <div class="calc-card-title"><i class="ti ti-currency-dollar"></i> Custo Implicado</div>
+        <div class="calc-card-row"><label>Variação (kg)</label><input type="number" class="calc-input" id="ca-varkg" placeholder="0" oninput="calcAnalitica()"></div>
+        <div class="calc-card-row"><label>Custo médio (R$/kg)</label><input type="number" class="calc-input" id="ca-custo" placeholder="0,00" oninput="calcAnalitica()"></div>
+        <div class="calc-card-result"><span class="calc-result-label">Custo</span><span class="calc-result-val" id="ca-custo-val">—</span><button class="calc-copy-btn" onclick="calcCopy('ca-custo-val')"><i class="ti ti-copy"></i></button></div>
+      </div>
+      <div class="calc-card">
+        <div class="calc-card-title"><i class="ti ti-box"></i> Estoque Teórico</div>
+        <div class="calc-card-row"><label>Est. Inicial (kg)</label><input type="number" class="calc-input" id="ca-ini" placeholder="0" oninput="calcAnalitica()"></div>
+        <div class="calc-card-row"><label>Entradas (kg)</label><input type="number" class="calc-input" id="ca-ent" placeholder="0" oninput="calcAnalitica()"></div>
+        <div class="calc-card-row"><label>Saídas (kg)</label><input type="number" class="calc-input" id="ca-sai" placeholder="0" oninput="calcAnalitica()"></div>
+        <div class="calc-card-result"><span class="calc-result-label">Teórico</span><span class="calc-result-val" id="ca-teorico-val">—</span><button class="calc-copy-btn" onclick="calcCopy('ca-teorico-val')"><i class="ti ti-copy"></i></button></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Bloco de Notas (popover) -->
+<!-- Bloco de Notas (popover) -->
+<div class="tool-popover notes-popover" id="tool-notes" style="display:none">
+  <div class="tool-popover-header">
+    <span class="tool-popover-title"><i class="ti ti-notebook"></i> Bloco de Notas</span>
+    <div style="display:flex;gap:6px;align-items:center">
+      <span class="notes-saved-indicator" id="notes-saved-indicator"></span>
+      <button class="tool-popover-close" onclick="closeTool('notes')"><i class="ti ti-x"></i></button>
+    </div>
+  </div>
+  <div class="notes-layout" id="notes-layout">
+
+    <!-- Lista de cards -->
+    <div class="notes-list-pane" id="notes-list-pane">
+      <div class="notes-list-toolbar">
+        <button class="btn btn-primary" style="font-size:11px;padding:5px 10px" onclick="notesNewCard()">
+          <i class="ti ti-plus"></i> Nova nota
+        </button>
+        <select class="notes-sort-select" id="notes-sort-select" onchange="notesRender()">
+          <option value="priority" selected>Prioridade</option>
+          <option value="modified">Recentes</option>
+          <option value="title">Título</option>
+        </select>
+      </div>
+      <div class="notes-cards-list" id="notes-cards-list">
+        <div class="notes-empty-state">
+          <i class="ti ti-notebook" style="font-size:28px;opacity:.3"></i>
+          <span>Nenhuma nota ainda.<br>Crie sua primeira nota.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Editor (oculto até selecionar card) -->
+    <div class="notes-editor-pane" id="notes-editor-pane" style="display:none">
+      <div class="notes-editor-header">
+        <button class="notes-back-btn" onclick="notesCloseEditor()"><i class="ti ti-arrow-left"></i></button>
+        <input class="notes-title-input" id="notes-title-input" placeholder="Título da nota..."
+          oninput="notesAutoSave()">
+        <div class="notes-editor-actions">
+          <!-- Prioridade -->
+          <select class="notes-priority-select" id="notes-priority-select" onchange="notesAutoSave()" title="Prioridade">
+            <option value="none">— Sem prioridade</option>
+            <option value="low">↓ Baixa</option>
+            <option value="medium">→ Média</option>
+            <option value="high">↑ Alta</option>
+          </select>
+          <!-- Cor -->
+          <div class="notes-color-picker" id="notes-color-picker">
+            <button class="notes-color-btn" id="notes-color-btn" onclick="notesToggleColors()" title="Cor da nota">
+              <span class="notes-color-dot" id="notes-color-dot"></span>
+            </button>
+            <div class="notes-color-menu" id="notes-color-menu">
+              <button onclick="notesSetColor('none')"   class="nc-swatch nc-none"  title="Padrão"></button>
+              <button onclick="notesSetColor('blue')"   class="nc-swatch nc-blue"  title="Azul"></button>
+              <button onclick="notesSetColor('green')"  class="nc-swatch nc-green" title="Verde"></button>
+              <button onclick="notesSetColor('amber')"  class="nc-swatch nc-amber" title="Âmbar"></button>
+              <button onclick="notesSetColor('red')"    class="nc-swatch nc-red"   title="Vermelho"></button>
+              <button onclick="notesSetColor('purple')" class="nc-swatch nc-purple"title="Roxo"></button>
+              <button onclick="notesSetColor('teal')"   class="nc-swatch nc-teal"  title="Teal"></button>
+            </div>
+          </div>
+          <button class="notes-toolbar-btn" onclick="notesDeleteCurrent()" title="Excluir nota" style="color:var(--red)">
+            <i class="ti ti-trash"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Barra de formatação inline -->
+      <div class="notes-md-bar">
+        <!-- Histórico -->
+        <button class="notes-md-btn" onclick="document.execCommand('undo')" title="Desfazer (Ctrl+Z)"><i class="ti ti-arrow-back-up"></i></button>
+        <button class="notes-md-btn" onclick="document.execCommand('redo')" title="Refazer (Ctrl+Y)"><i class="ti ti-arrow-forward-up"></i></button>
+        <div class="notes-md-sep"></div>
+        <!-- Formatação -->
+        <button class="notes-md-btn" id="notes-tb-bold"   onclick="notesExec('bold')"          title="Negrito (Ctrl+B)"><b>B</b></button>
+        <button class="notes-md-btn" id="notes-tb-italic" onclick="notesExec('italic')"        title="Itálico (Ctrl+I)"><i>I</i></button>
+        <button class="notes-md-btn" id="notes-tb-under"  onclick="notesExec('underline')"     title="Sublinhado (Ctrl+U)"><u>U</u></button>
+        <button class="notes-md-btn" id="notes-tb-strike" onclick="notesExec('strikeThrough')" title="Tachado"><s>S</s></button>
+        <div class="notes-md-sep"></div>
+        <!-- Tamanho da fonte -->
+        <select class="notes-tb-select" id="notes-font-size" onchange="notesSetFontSize(this.value)" title="Tamanho da fonte">
+          <option value="">Tam.</option>
+          <option value="1">8px</option>
+          <option value="2">10px</option>
+          <option value="3">12px</option>
+          <option value="4">14px</option>
+          <option value="5">18px</option>
+          <option value="6">24px</option>
+          <option value="7">36px</option>
+        </select>
+        <!-- Cor do texto -->
+        <div class="notes-tb-color-wrap" title="Cor do texto">
+          <span class="notes-tb-color-icon"><i class="ti ti-letter-a"></i></span>
+          <input type="color" id="notes-color-input" value="#ffffff" oninput="notesExec('foreColor', this.value)" title="Cor do texto">
+        </div>
+        <div class="notes-md-sep"></div>
+        <!-- Listas e checklist -->
+        <button class="notes-md-btn" onclick="notesExec('insertUnorderedList')" title="Lista com marcadores"><i class="ti ti-list"></i></button>
+        <button class="notes-md-btn" onclick="notesInsertChecklist()"           title="Inserir checklist"><i class="ti ti-checkbox"></i></button>
+        <div class="notes-md-sep"></div>
+        <!-- Limpar formatação -->
+        <button class="notes-md-btn" onclick="notesExec('removeFormat')" title="Limpar formatação"><i class="ti ti-clear-formatting"></i></button>
+      </div>
+
+      <!-- Área editável inline -->
+      <div class="notes-editor-body">
+        <div class="notes-inline-editor" id="notes-inline-editor"
+          contenteditable="true" spellcheck="false"
+          data-placeholder="Escreva aqui..."
+          oninput="notesEditorUpdate()"
+          onkeyup="notesUpdateToolbarState()"
+          onmouseup="notesUpdateToolbarState()"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Assistente (popover) -->
+<div class="tool-popover assistente-popover" id="tool-assistente" style="display:none">
+  <div class="tool-popover-header">
+    <span class="tool-popover-title"><i class="ti ti-message-chatbot"></i> Assistente</span>
+    <div style="display:flex;gap:6px;align-items:center">
+      <button class="tool-popover-close" onclick="asstClearChat()" title="Limpar conversa"><i class="ti ti-trash"></i></button>
+      <button class="tool-popover-close" onclick="closeTool('assistente')"><i class="ti ti-x"></i></button>
+    </div>
+  </div>
+  <div class="asst-chat-body" id="asst-chat-body">
+    <div class="asst-msg asst-msg-bot">
+      Oi! Sou seu analista auxiliar de estoque. Digite <code>/</code> e escolha um contexto pra começar.
+      <div class="asst-suggestions">
+        <button class="asst-chip" onclick="asstQuickStart('ocorrencias')">Ocorrências abertas</button>
+        <button class="asst-chip" onclick="asstQuickStart('dashboard-analitico')">Dashboard Analítico</button>
+        <button class="asst-chip" onclick="asstQuickStart('entradas-consulta')">Entradas</button>
+        <button class="asst-chip" onclick="_asstMostrarAjuda()"><i class="ti ti-help-circle"></i> Ajuda</button>
+      </div>
+    </div>
+  </div>
+  <div class="asst-pill-row" id="asst-pill-row" style="display:none">
+    <span class="asst-pill asst-pill-context" id="asst-context-pill" style="display:none">
+      <i class="ti ti-folder" id="asst-context-pill-icon"></i>
+      <span id="asst-context-pill-label">Contexto</span>
+      <button onclick="_asstClearIntent()" title="Remover contexto"><i class="ti ti-x"></i></button>
+    </span>
+    <span class="asst-pill asst-pill-period" id="asst-period-pill" style="display:none">
+      <i class="ti ti-calendar"></i>
+      <span id="asst-period-pill-label">período</span>
+      <button onclick="_asstEditPeriod()" title="Trocar período"><i class="ti ti-pencil"></i></button>
+    </span>
+  </div>
+  <div class="asst-input-row">
+    <div class="asst-dropdown" id="asst-dropdown" style="display:none"></div>
+    <input type="text" class="asst-input" id="asst-input" placeholder="Digite / para escolher um contexto" autocomplete="off" oninput="_asstInputChanged(this)" onkeydown="_asstInputKeydown(event)">
+    <button class="asst-send-btn" onclick="asstSend()" title="Enviar"><i class="ti ti-send"></i></button>
+  </div>
+</div>
+
+<!-- Mensagens (popover) — ETAPA 1: só casca visual, sem lógica de
+     dados ainda (ver js/mensagens.js). Lista de conversas 1:1 é
+     preenchida nas próximas etapas, a partir de profiles + presença;
+     "Geral" já vem fixo porque não depende de nenhum dado dinâmico. -->
+<div class="tool-popover mensagens-popover" id="tool-mensagens" style="display:none">
+  <div class="tool-popover-header">
+    <span class="tool-popover-title"><i class="ti ti-messages"></i> Mensagens</span>
+    <div style="display:flex;align-items:center;gap:4px">
+      <button class="btn-icon" title="Pesquisar em todas as conversas" onclick="_msgsAbrirBusca('todas')"><i class="ti ti-search"></i></button>
+      <button class="tool-popover-close" onclick="closeTool('mensagens')"><i class="ti ti-x"></i></button>
+    </div>
+  </div>
+  <div class="msgs-search-overlay" id="msgs-search-overlay" style="display:none">
+    <div class="msgs-search-header">
+      <select id="msgs-search-escopo" class="msgs-search-select">
+        <option value="atual">Esta conversa</option>
+        <option value="todas">Todas as conversas</option>
+      </select>
+      <input type="text" id="msgs-search-texto" class="msgs-search-input" placeholder="Buscar por texto..." onkeydown="if(event.key==='Enter') _msgsBuscar()">
+      <button class="btn-icon" title="Fechar busca" onclick="_msgsFecharBusca()"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="msgs-search-filtros">
+      <label class="msgs-search-check"><input type="checkbox" id="msgs-search-so-anexo"> Somente com anexo</label>
+      <input type="date" id="msgs-search-data-de" class="msgs-search-date" title="De">
+      <span style="color:var(--text3);font-size:11px">até</span>
+      <input type="date" id="msgs-search-data-ate" class="msgs-search-date" title="Até">
+      <button class="btn btn-primary" style="margin-left:auto" onclick="_msgsBuscar()"><i class="ti ti-search"></i> Buscar</button>
+    </div>
+    <div class="msgs-search-results" id="msgs-search-results">
+      <div class="msgs-empty-state"><i class="ti ti-search"></i><p>Digite um termo, escolha um período ou filtre por anexo.</p></div>
+    </div>
+  </div>
+  <div class="msgs-layout">
+    <!-- Lista de conversas -->
+    <div class="msgs-conv-pane">
+      <div class="msgs-conv-list" id="msgs-conv-list">
+        <button class="msgs-conv-item active" data-conv="geral" onclick="msgsAbrirConversa('geral')">
+          <span class="msgs-avatar-badge-wrap">
+            <div class="msgs-conv-avatar msgs-conv-avatar-geral"><i class="ti ti-users"></i></div>
+            <span class="msgs-unread-dot" id="msgs-conv-geral-badge" style="display:none">0</span>
+          </span>
+          <div class="msgs-conv-body">
+            <div class="msgs-conv-name">Geral</div>
+            <div class="msgs-conv-preview">Todos os usuários</div>
+          </div>
+        </button>
+        <!-- Conversas 1:1 injetadas aqui via JS (msgsRenderConversas), uma por usuário online -->
+      </div>
+      <div class="msgs-conv-empty-hint" id="msgs-conv-empty-hint">
+        <i class="ti ti-user-circle"></i> Nenhum outro usuário cadastrado ainda.
+      </div>
+    </div>
+    <!-- Área da conversa -->
+    <div class="msgs-chat-pane">
+      <div class="msgs-chat-header" id="msgs-chat-header">
+        <div class="msgs-conv-avatar msgs-conv-avatar-geral" id="msgs-chat-header-avatar"><i class="ti ti-users"></i></div>
+        <div class="msgs-chat-header-body">
+          <div class="msgs-chat-header-name" id="msgs-chat-header-name">Geral</div>
+          <div class="msgs-chat-header-sub" id="msgs-chat-header-sub">Todos os usuários</div>
+        </div>
+        <button class="btn-icon" id="msgs-limpar-conversa-btn" title="Limpar conversa (admin)" style="display:none" onclick="_msgsLimparConversa()"><i class="ti ti-trash-x"></i></button>
+      </div>
+      <div class="msgs-chat-body" id="msgs-chat-body">
+        <div class="msgs-empty-state">
+          <i class="ti ti-loader-2" style="animation:spin .7s linear infinite"></i>
+          <p>Carregando...</p>
+        </div>
+      </div>
+      <div class="msgs-reply-bar" id="msgs-reply-bar" style="display:none">
+        <div class="msgs-reply-bar-body">
+          <div class="msgs-reply-bar-nome" id="msgs-reply-bar-nome"></div>
+          <div class="msgs-reply-bar-snippet" id="msgs-reply-bar-snippet"></div>
+        </div>
+        <button class="btn-icon" title="Cancelar resposta" onclick="_msgsCancelarResposta()"><i class="ti ti-x"></i></button>
+      </div>
+      <div class="msgs-input-row">
+        <button class="btn-icon" id="msgs-attach-btn" title="Anexar arquivo" disabled onclick="_msgsAbrirSeletorAnexo()"><i class="ti ti-paperclip"></i></button>
+        <input type="file" id="msgs-anexo-input" style="display:none" onchange="_msgsEnviarAnexo(this.files[0]); this.value=''">
+        <input type="text" class="msgs-input" id="msgs-input" placeholder="Escreva uma mensagem..." autocomplete="off" disabled onkeydown="_msgsInputKeydown(event)" oninput="_msgsInputOnInput()">
+        <button class="msgs-send-btn" id="msgs-send-btn" title="Enviar" disabled onclick="msgsEnviar()"><i class="ti ti-send"></i></button>
+      </div>
     </div>
   </div>
 </div>

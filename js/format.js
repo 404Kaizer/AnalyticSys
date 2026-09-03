@@ -715,8 +715,31 @@ function closeTool(name) {
   _openTools.delete(name);
 }
 
-let _toolZBase = 5000;
-function _nextToolZ() { return ++_toolZBase; }
+// Fecha todas as janelas flutuantes abertas de uma vez. Existe por causa
+// do logout: elas moraram dentro da .topbar até 03/09/2026 e sumiam junto
+// com .layout; agora vivem soltas no body (ver o comentário do bloco no
+// index.html), então esconder o layout não as tira mais da tela — quem
+// fecha é o showGate() em js/auth.js.
+function closeAllTools() {
+  // Cópia do Set: closeTool remove de _openTools durante a iteração.
+  [..._openTools].forEach(closeTool);
+}
+
+// Base da camada das cinco janelas flutuantes — lida do token CSS
+// (--z-flutuantes em css/tokens.css) pra não existir o mesmo número em
+// dois lugares se um dia ele mudar. Cada abertura/clique soma +1, o que
+// traz a janela pra frente das outras sem tirar o grupo da camada:
+// a folga até o alerta do ADM (999999) dá ~99 mil aberturas na sessão.
+// ponytail: teto suficiente na prática; se um dia estourar, o caminho é
+// renumerar as abertas a partir da base em vez de aumentar o teto.
+let _toolZBase = null;
+function _nextToolZ() {
+  if (_toolZBase === null) {
+    const v = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--z-flutuantes'), 10);
+    _toolZBase = Number.isFinite(v) ? v : 900010;
+  }
+  return ++_toolZBase;
+}
 
 // ESC fecha o popover "de cima" (maior z-index), se houver mais de um
 // aberto — mesmo padrão de setupModalCloseOnEscape() (analitico.js), só
@@ -1455,7 +1478,7 @@ function notesInsertChecklist() {
 }
 
 Object.assign(window, {
-  toggleToolsMenu, closeToolsMenu, openTool, closeTool, toggleCalc,
+  toggleToolsMenu, closeToolsMenu, openTool, closeTool, closeAllTools, toggleCalc,
   notesNewCard, notesDeleteCurrent, notesDeleteCard, notesRender,
   notesOpenEditor, notesCloseEditor, notesAutoSave,
   notesToggleColors, notesSetColor,

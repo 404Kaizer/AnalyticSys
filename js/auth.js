@@ -183,11 +183,14 @@ window.AuthGate = (function () {
   function showGate() {
     $('auth-gate').removeAttribute('hidden');
     document.querySelector('.layout')?.setAttribute('hidden', '');
-    // O modal de resultados da busca vive FORA de .layout e fica acima de
-    // tudo (z 900000, ver css/modules.css) — esconder o layout não o tira
-    // da tela. Se a sessão cair com ele aberto, ele ficaria por cima da
-    // tela de login; fecha explicitamente.
+    // Modal de busca, janelas flutuantes e Novo Registro vivem FORA de
+    // .layout e ficam acima da tela de login (900000/900010, ver
+    // css/tokens.css) — esconder o layout não tira nenhum deles da tela.
+    // Se a sessão cair com qualquer um aberto, ele ficaria por cima do
+    // login; fecha todos explicitamente.
     if (typeof closeGlobalResults === 'function') closeGlobalResults();
+    if (typeof closeAllTools     === 'function') closeAllTools();
+    if (typeof closeModal        === 'function') closeModal('modal-manual');
   }
 
   function hideGate() {

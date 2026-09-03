@@ -287,12 +287,22 @@ body:has([class*="-overlay"].open) .page-content {
   overflow: hidden;
 }
 
-/* confirmarDestrutivo() (format.js) é sempre a camada de confirmação MAIS
-   acima do sistema — precisa ficar visível mesmo quando aberto por cima
+/* ── As duas camadas críticas do sistema (--z-criticos) ──────────────────
+   confirmarDestrutivo() (format.js) é sempre a camada de confirmação MAIS
+   acima do sistema — precisa ficar visível mesmo quando aberta por cima
    de um modal que já sobrescreveu seu próprio z-index inline (ex.:
    inv-modal, inv-modal-lote usam z-index:9999). Sem isso, a confirmação
-   abre "atrás" do modal que a disparou. */
-#modal-confirm-destrutivo.modal-overlay { z-index: 10000; }
+   abre "atrás" do modal que a disparou.
+
+   O aviso de sessão prestes a expirar (js/auth.js) entra na mesma camada
+   pelo mesmo motivo: é um prazo correndo, e ficar coberto custa a sessão
+   do usuário.
+
+   As duas são a exceção à camada --z-flutuantes: ficam acima da
+   Calculadora, do Bloco de Notas, do Assistente, do Mensagens e do Novo
+   Registro Manual (Hugo, 03/09/2026). */
+#modal-confirm-destrutivo.modal-overlay { z-index: var(--z-criticos); }
+#idle-warning-overlay.modal-overlay     { z-index: var(--z-criticos); }
 
 .modal {
   background: var(--bg2);
@@ -8356,7 +8366,11 @@ mark.search-highlight {
   flex-shrink: 0;
 }
 
-/* Tool popovers (calc + notes) */
+/* Janelas flutuantes: Calculadora, Bloco de Notas, Assistente e Mensagens.
+   Compartilham a camada --z-flutuantes com o Novo Registro Manual
+   (#modal-manual, logo abaixo) — os cinco ficam empatados em relação a
+   qualquer outro elemento do sistema. _nextToolZ() (js/format.js) soma +1
+   a partir dessa base pra trazer pra frente a janela clicada. */
 .tool-popover {
   position: fixed;
   top: calc(var(--topbar-h) + 10px);
@@ -8366,13 +8380,22 @@ mark.search-highlight {
   border: 1px solid var(--border2);
   border-radius: var(--radius-lg);
   box-shadow: 0 20px 60px rgba(0,0,0,.45);
-  z-index: 10000;
+  z-index: var(--z-flutuantes);
   overflow: hidden;
   animation: popIn .15s ease;
   display: flex;
   flex-direction: column;
   max-height: calc(100vh - var(--topbar-h) - 30px);
 }
+
+/* Novo Registro Manual — quinta janela da mesma família. É um
+   .modal-overlay de verdade (backdrop de tela cheia, z 300 no padrão),
+   mas o Hugo pediu (03/09/2026) que os cinco ficassem na mesma camada,
+   então ele sobe para --z-flutuantes junto com os quatro popovers.
+   Consequência deliberada: uma ferramenta já aberta (base+1 ou mais) fica
+   POR CIMA do backdrop dele — dá pra consultar a calculadora enquanto
+   preenche o registro, que é justamente o motivo de estarem juntos. */
+#modal-manual.modal-overlay { z-index: var(--z-flutuantes); }
 .tool-popover-header {
   display: flex;
   align-items: center;

@@ -67,6 +67,24 @@
   --sidebar-w: 228px;
   --topbar-h: 56px;
 
+  /* Camada das janelas flutuantes — Calculadora, Bloco de Notas,
+     Assistente, Mensagens e Novo Registro Manual. Os cinco compartilham
+     ESTE valor: por fora, ficam empatados em relação a qualquer outro
+     elemento do sistema. Entre eles, _nextToolZ() (js/format.js) soma +1
+     a partir daqui para trazer pra frente a janela clicada.
+     Fica acima do modal de resultados da busca (900000) e abaixo do
+     alerta do ADM (999999) e do toast (1000000). */
+  --z-flutuantes: 900010;
+
+  /* Duas exceções que ficam ACIMA das janelas flutuantes: o aviso de
+     sessão prestes a expirar (#idle-warning-overlay) e a confirmação de
+     exclusão (#modal-confirm-destrutivo). São decisões que o usuário
+     PRECISA ver e responder — uma calculadora aberta por cima delas faria
+     ele perder a sessão ou não entender por que nada acontece.
+     A folga até aqui (~99 mil aberturas de janela na mesma sessão, ver
+     _nextToolZ em js/format.js) é grande o bastante na prática. */
+  --z-criticos: 999998;
+
   --logo-filter: invert(1) hue-rotate(178deg);
 
   color-scheme: dark;
