@@ -311,9 +311,12 @@ window.AuthGate = (function () {
     const importarDeInventarioBtn = $('btn-importar-de-inventario');
     if (importarDeInventarioBtn) importarDeInventarioBtn.style.display = isAdmin ? '' : 'none';
     // Capacidades entrou no mesmo regime em 25/08 — ver o bloco ARMAZENAMENTO
-    // em capacidades.js.
+    // em capacidades.js. Fatores de Conversão entrou em 03/09, mesmo dia em
+    // que o cadastro em si foi criado — mesma razão.
     const importarDeCapacidadesBtn = $('btn-importar-de-capacidades');
     if (importarDeCapacidadesBtn) importarDeCapacidadesBtn.style.display = isAdmin ? '' : 'none';
+    const importarDeFatoresConversaoBtn = $('btn-importar-de-fatores-conversao');
+    if (importarDeFatoresConversaoBtn) importarDeFatoresConversaoBtn.style.display = isAdmin ? '' : 'none';
 
     // Decisão 05/08 — Custos SAP virou cadastro único e compartilhado do
     // time: todo mundo vê (RLS libera SELECT geral), mas só o ADM importa/

@@ -3511,11 +3511,17 @@
         </div>
 
         <div class="section-title">Fatores de Conversão</div>
+        <div class="alert-pulse-row">
+          <div id="novos-fatores-conversao-box"></div>
+        </div>
         <div class="table-card" style="margin-bottom:24px">
           <div class="table-header">
             <span class="table-title"><i class="ti ti-scale"></i> Fatores de Conversão de Unidade → KG</span>
             <div class="table-toolbar">
               <input type="text" class="form-input" style="width:220px" placeholder="Buscar grupo, fornecedor..." oninput="fcFiltrar(this.value)">
+              <button class="btn" id="btn-importar-de-fatores-conversao" onclick="abrirImportarDe('fatoresConversao')" title="Importar cópia do cadastro de outro usuário">
+                <i class="ti ti-users"></i> Importar de
+              </button>
               <button class="btn btn-primary" onclick="abrirFatorConversao('')">
                 <i class="ti ti-plus"></i> Novo Fator
               </button>
@@ -3532,12 +3538,13 @@
                   <th>Fornecedor</th>
                   <th style="text-align:center">Unidade</th>
                   <th style="text-align:right">Fator</th>
+                  <th>Equivalência</th>
                   <th>Criado em</th>
                   <th></th>
                 </tr>
               </thead>
               <tbody id="tb-fatores-conversao">
-                <tr><td colspan="6"><div class="empty-state"><i class="ti ti-scale"></i><p>Nenhum fator de conversão cadastrado.</p></div></td></tr>
+                <tr><td colspan="7"><div class="empty-state"><i class="ti ti-scale"></i><p>Nenhum fator de conversão cadastrado.</p></div></td></tr>
               </tbody>
             </table>
           </div>
@@ -5127,7 +5134,9 @@
       </div>
       <div class="form-group">
         <label class="form-label">Fornecedor <span style="color:var(--text3);font-weight:400">(opcional — em branco = padrão do grupo)</span></label>
-        <input type="text" class="form-input" id="fc-fornecedor" placeholder="Ex: MINERAJIL MINERACAO LTDA">
+        <select class="form-select" id="fc-fornecedor">
+          <option value="">— padrão do grupo —</option>
+        </select>
       </div>
       <div class="form-grid" style="grid-template-columns:1fr 1fr 1fr; gap:12px">
         <div class="form-group">

@@ -369,12 +369,48 @@ const _IMPORTAR_DE_CFG = {
     concluidoLabel: 'Capacidades importadas',
     boxId: 'novos-capacidades-box',
   },
+  // Fatores de Conversão entrou aqui em 03/09/2026, mesmo dia em que o
+  // cadastro em si foi criado — mesma razão de Capacidades ter entrado em
+  // 25/08: a tabela tem dono (RLS por user_id), então o ADM precisa deste
+  // fluxo pra enxergar densidade cadastrada por outro analista.
+  //
+  // `chave`/`upsert` referenciam funções DESTE MESMO arquivo (config.js),
+  // então dispensam o embrulho em arrow que upsertCapacidades precisa (essa
+  // vive em capacidades.js, carregado DEPOIS — ver o comentário no topo
+  // deste objeto).
+  fatoresConversao: {
+    table: 'fatores_conversao',
+    lista: () => state.fatoresConversao || [],
+    chave: _fatorConversaoMatchKey,
+    upsert: upsertFatoresConversao,
+    // SEM `id` de propósito — mesmo motivo de materiais/filiais omitirem:
+    // upsertFatoresConversao precisa gerar um id NOVO pra cada cópia (ver o
+    // comentário lá), e um `id` vazando aqui criaria a tentação de reusá-lo.
+    campos: 'grupo, fornecedor, um_origem, um_destino, fator',
+    normalizar: r => ({
+      grupo: r.grupo, fornecedor: r.fornecedor || '',
+      umOrigem: r.um_origem, umDestino: r.um_destino || 'KG',
+      fator: Number(r.fator)
+    }),
+    singular: 'fator', plural: 'fatores de conversão',
+    novosLabel: n => n === 1 ? 'fator de conversão novo' : 'fatores de conversão novos',
+    rotulo: it => `${escapeHtml(it.grupo)}${it.fornecedor ? ` <span style="color:var(--text3)">— ${escapeHtml(it.fornecedor)}</span>` : ' <span style="color:var(--text3)">(padrão do grupo)</span>'} <span style="color:var(--text3)">— 1 ${escapeHtml(it.umOrigem)} = ${escapeHtml(String(it.fator))} ${escapeHtml(it.umDestino || 'KG')}</span>`,
+    ordenar: (a, b) => String(a.grupo).localeCompare(String(b.grupo)) || String(a.fornecedor || '').localeCompare(String(b.fornecedor || '')),
+    render: () => { if (typeof renderFatoresConversao === 'function') renderFatoresConversao(); },
+    // Sem `reaplicar`: ao contrário de Materiais/Filiais, não existe um
+    // "reprocessar lançamentos antigos" aqui — um fator importado passa a
+    // valer no próximo cálculo naturalmente (_lookupFatorConversao consulta
+    // state.fatoresConversao a cada chamada, não guarda resultado velho pra
+    // reprocessar). Mesmo motivo de Capacidades não ter.
+    concluidoLabel: 'Fatores de conversão importados',
+    boxId: 'novos-fatores-conversao-box',
+  },
 };
 
 // Lista achatada de pendentes por tipo — preenchida por
 // _checarNovosParaImportar, lida pelo modal e pelo box de alerta
 // (_renderNovosPendentesBox, dashboard.js).
-const _NOVOS_PENDENTES = { materiais: [], filiais: [], capacidades: [] };
+const _NOVOS_PENDENTES = { materiais: [], filiais: [], capacidades: [], fatoresConversao: [] };
 function _itensNovosDe(tipo) { return _NOVOS_PENDENTES[tipo] || []; }
 
 // Cache leve de perfis (id -> email) pro seletor de usuários e pra resolver
@@ -776,13 +812,51 @@ function _refreshGrupoMateriaisSelects() {
 // de cada vez é o caso de uso real (corrigir UM fornecedor errado).
 // ═══════════════════════════════════════════════════════════════════════
 
+// Lista de fornecedores únicos vistos em Entradas — pedido do Hugo,
+// 03/09/2026 (o campo Fornecedor deixou de ser texto livre e virou
+// dropdown). Só Entradas, não Saídas/Lançamentos: é lá que o campo
+// Fornecedor tem sentido de fato (quem vendeu a NF), e é o fornecedor da NF
+// que _lookupFatorConversao (ui.js) casa contra este cadastro.
+function getFornecedoresDisponiveis() {
+  const vistos = new Map(); // normalizado -> primeira grafia encontrada
+  (state.entradas || []).forEach(e => {
+    const f = String(e?.fornecedor || '').trim();
+    if (!f) return;
+    const key = normalizeText(f);
+    if (!vistos.has(key)) vistos.set(key, f);
+  });
+  return [...vistos.values()].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+}
+
+// Reconstrói as <option> do <select> de Fornecedor, preservando (ou
+// aplicando) o valor selecionado — mesmo formato de
+// _rebuildGrupoMateriaisOptions, com UMA diferença: Grupo SAP garante que
+// todo valor já cadastrado está no catálogo (registrarGrupoMaterial roda
+// em todo save); Fornecedor não tem esse registro — um fator antigo pode
+// citar um fornecedor cuja grafia não bate 100% com nada em Entradas hoje
+// (ou que nunca teve NF importada). Sem tratar isso, abrir pra EDITAR
+// aquele fator mostraria o <select> em branco (nenhuma <option> bate) e
+// salvar de novo apagaria o fornecedor sem o analista perceber — por isso
+// o valor atual é inserido como opção extra quando não está na lista.
+function _rebuildFornecedorOptions(selectEl, novoValor) {
+  if (!selectEl) return;
+  const valorAtual = novoValor !== undefined ? novoValor : selectEl.value;
+  let lista = getFornecedoresDisponiveis();
+  if (valorAtual && !lista.some(f => normalizeText(f) === normalizeText(valorAtual))) {
+    lista = [valorAtual, ...lista];
+  }
+  const options = lista.map(f => `<option value="${escapeHtml(f)}">${escapeHtml(f)}</option>`).join('');
+  selectEl.innerHTML = `<option value="">— padrão do grupo —</option>${options}`;
+  selectEl.value = valorAtual || '';
+}
+
 // Abre o modal em modo CRIAR (id vazio) ou EDITAR (id preenchido).
 function abrirFatorConversao(id) {
   const item = id ? (state.fatoresConversao || []).find(f => f.id === id) : null;
   document.getElementById('fc-modal-title').textContent = item ? 'Editar Fator de Conversão' : 'Novo Fator de Conversão';
   setVal('fc-edit-id', item ? item.id : '');
   _rebuildGrupoMateriaisOptions(document.getElementById('fc-grupo'), item ? item.grupo : '');
-  setVal('fc-fornecedor', item ? (item.fornecedor || '') : '');
+  _rebuildFornecedorOptions(document.getElementById('fc-fornecedor'), item ? (item.fornecedor || '') : '');
   setVal('fc-um-origem', item ? item.umOrigem : '');
   setVal('fc-um-destino', item ? (item.umDestino || 'KG') : 'KG');
   setVal('fc-fator', item ? item.fator : '');
@@ -814,6 +888,26 @@ function _fcAoTrocarGrupo() {
   if (padrao) setVal('fc-um-origem', padrao);
 }
 
+// Chave de negócio de um Fator de Conversão — grupo+fornecedor+unidade de
+// origem, normalizados. Usada em TRÊS lugares que precisam concordar sobre
+// "é o mesmo caso": a checagem de duplicata em salvarFatorConversao, o
+// "chave" de _IMPORTAR_DE_CFG.fatoresConversao (o que decide se um fator de
+// outro usuário já existe aqui) e upsertFatoresConversao (o merge do
+// próprio import). Uma cópia inline em cada um divergiria cedo ou tarde —
+// mesmo raciocínio de materialMatchKey (compartilhada por Materiais).
+//
+// Aceita as DUAS grafias de unidade de origem: `umOrigem` (formato local,
+// como state.fatoresConversao guarda) e `um_origem` (formato cru vindo do
+// Supabase em _checarNovosParaImportar, ANTES de cfg.normalizar rodar) —
+// diferente de materialMatchKey, que não precisa disso porque as colunas
+// de materiais têm o MESMO nome dos dois lados (origem/alias).
+function _fatorConversaoMatchKey(r) {
+  const grupo = String(r?.grupo || '').trim().toUpperCase();
+  const fornecedor = String(r?.fornecedor || '').trim().toUpperCase();
+  const umOrigem = r?.umOrigem || r?.um_origem || '';
+  return `${grupo}|${fornecedor}|${umOrigem}`;
+}
+
 async function salvarFatorConversao(btn) {
   const id = val('fc-edit-id');
   const grupo = val('fc-grupo').trim();
@@ -833,12 +927,10 @@ async function salvarFatorConversao(btn) {
   // fornecedor, ambas M3) tornariam _lookupFatorConversao ambíguo — ele
   // pegaria uma das duas por ordem de array, escondendo a outra em
   // silêncio. Bloqueia na entrada em vez de deixar essa ambiguidade se
-  // formar. Chave normalizada do mesmo jeito que o motor de busca compara
-  // (maiúsculas), pra "Areia Natural" e "AREIA NATURAL" contarem como o
-  // mesmo grupo aqui também.
-  const chave = r => `${String(r.grupo).trim().toUpperCase()}|${String(r.fornecedor || '').trim().toUpperCase()}|${r.umOrigem}`;
-  const novaChave = chave({ grupo, fornecedor, umOrigem });
-  const conflito = state.fatoresConversao.find(f => f.id !== id && chave(f) === novaChave);
+  // formar. Ver _fatorConversaoMatchKey pra por que a chave é uma função
+  // compartilhada, não inline.
+  const novaChave = _fatorConversaoMatchKey({ grupo, fornecedor, umOrigem });
+  const conflito = state.fatoresConversao.find(f => f.id !== id && _fatorConversaoMatchKey(f) === novaChave);
   if (conflito) {
     toast(`Já existe um fator para "${grupo}"${fornecedor ? ` · ${fornecedor}` : ' (padrão)'} em ${umOrigem} — edite aquele em vez de duplicar`, 'error');
     return;
@@ -884,6 +976,52 @@ async function removerFatorConversao(id) {
   if (typeof renderAll === 'function') renderAll();
   toast('Fator de conversão excluído', 'error');
   _fatoresConversaoSyncDelete(id);
+}
+
+// ── "Importar de" — o ADM traz o cadastro de outro usuário para dentro
+// do seu — chamado por confirmarImportarDe (via _IMPORTAR_DE_CFG.
+// fatoresConversao.upsert, mais abaixo) com uma lista já normalizada
+// ({ grupo, fornecedor, umOrigem, umDestino, fator, importadoDeId,
+// created }). Cria uma CÓPIA com dono = o próprio ADM; a linha do usuário
+// de origem não é tocada (a RLS de UPDATE só permite user_id = auth.uid()).
+//
+// id SEMPRE novo (nunca o da origem, que nem chega até aqui — ver
+// _IMPORTAR_DE_CFG.fatoresConversao.campos, que omite `id` de propósito):
+// _fatoresConversaoSyncUpsert faz upsert por `onConflict: 'id'`, e reusar o
+// id de origem faria esse upsert COLIDIR com a linha do usuário original —
+// que a RLS de UPDATE permite pro ADM — sobrescrevendo o cadastro alheio
+// em vez de criar uma cópia independente. Mesmo raciocínio de
+// upsertMateriais (makeMaterialId sempre novo pra item sem id).
+//
+// importadoDeId chega no objeto mas não é listado abaixo de propósito —
+// esta tabela não tem coluna "Dono" (ao contrário de Materiais/Filiais, ver
+// _donoDisplay em dashboard.js); guardar um campo que ninguém lê e que o
+// próximo boot descartaria (syncFatoresConversaoFromSupabase não o busca)
+// só criaria estado enganoso. Mesma decisão de upsertCapacidades.
+function upsertFatoresConversao(items) {
+  if (!Array.isArray(state.fatoresConversao)) state.fatoresConversao = [];
+  (items || []).forEach(item => {
+    const src = item && typeof item === 'object' ? item : {};
+    if (!src.grupo || !src.umOrigem) return; // linha sem os dois campos-chave não é um fator válido
+    const rec = {
+      id: src.id || gerarIdRegistro(),
+      grupo: src.grupo, fornecedor: src.fornecedor || '',
+      umOrigem: src.umOrigem, umDestino: src.umDestino || 'KG',
+      fator: Number(src.fator),
+      created: src.created || new Date().toLocaleDateString('pt-BR')
+    };
+    if (!Number.isFinite(rec.fator) || rec.fator <= 0) return; // mesma validação de salvarFatorConversao
+
+    const key = _fatorConversaoMatchKey(rec);
+    const idx = state.fatoresConversao.findIndex(f => _fatorConversaoMatchKey(f) === key);
+    if (idx >= 0) state.fatoresConversao[idx] = { ...state.fatoresConversao[idx], ...rec };
+    else state.fatoresConversao.unshift(rec);
+    _fatoresConversaoSyncUpsert(rec);
+  });
+  // Sem cache/índice a invalidar aqui: _lookupFatorConversao (ui.js)
+  // filtra state.fatoresConversao direto a cada chamada — a lista é
+  // pequena (dezenas de linhas), não precisa da otimização de índice que
+  // materiais/filiais têm pros milhares de registros deles.
 }
 
 // ── Sincronização com o Supabase ─────────────────────────────────────────
@@ -959,6 +1097,10 @@ async function syncFatoresConversaoFromSupabase() {
     faltamNaNuvem.forEach(f => _fatoresConversaoSyncUpsert(f));
 
     if (typeof renderFatoresConversao === 'function') renderFatoresConversao();
+    // Só ADM, e só depois que este fetch já tem os dados atuais — mesmo
+    // ponto de disparo de syncMateriaisFromSupabase/syncFiliaisFromSupabase
+    // (alimenta o box de alerta + o modal "Importar de").
+    if (window.currentUser?.role === 'admin') await _checarNovosParaImportar('fatoresConversao');
   } catch (err) {
     console.warn('[Supabase] Falha ao buscar fatores de conversão — mantendo dados locais.', err);
   }
@@ -992,13 +1134,24 @@ function renderFatoresConversao() {
   if (info) info.textContent = `${linhas.length} registro${linhas.length === 1 ? '' : 's'}`;
 
   if (!linhas.length) {
-    tb.innerHTML = `<tr><td colspan="6"><div class="empty-state"><i class="ti ti-scale"></i><p>${
+    tb.innerHTML = `<tr><td colspan="7"><div class="empty-state"><i class="ti ti-scale"></i><p>${
       _fcFiltro ? 'Nenhum resultado para este filtro.' : 'Nenhum fator de conversão cadastrado — os fatores legados (areia/brita) foram migrados automaticamente na primeira vez que este dispositivo carregou com este recurso.'
     }</p></div></td></tr>`;
+    // O box de "N fatores novos pra importar" não depende da tabela local
+    // ter linhas — cadastro vazio é justamente quando importar de outro
+    // usuário é mais útil. Chamado nos dois caminhos de saída (aqui e no
+    // fim da função), não só no "tem linhas".
+    if (typeof _renderNovosPendentesBox === 'function') _renderNovosPendentesBox('fatoresConversao');
     return;
   }
 
   const umLabel = cod => ((typeof UM_CANONICAS !== 'undefined' ? UM_CANONICAS : []).find(u => u.cod === cod) || {}).label || cod;
+  // "1 M3 = X KG" / "1 L = X KG" — o FATOR já É essa equivalência (é
+  // literalmente quantos kg cabem numa unidade de origem), mas exibido cru
+  // ("1.440") o analista precisa lembrar de cabeça o que aquele número
+  // significa. Escrito por extenso a linha se lê sozinha, sem precisar
+  // olhar a coluna Unidade ao lado pra saber de qual lado da conta é o 1.
+  const equivalencia = f => `1 ${escapeHtml(f.umOrigem)} = ${Number(f.fator).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 3 })} ${escapeHtml(f.umDestino || 'KG')}`;
 
   tb.innerHTML = linhas.map(f => `
     <tr>
@@ -1006,6 +1159,7 @@ function renderFatoresConversao() {
       <td class="td-muted">${f.fornecedor ? escapeHtml(f.fornecedor) : '<span style="color:var(--text3);font-style:italic">padrão do grupo</span>'}</td>
       <td class="td-mono" style="text-align:center" title="${escapeHtml(umLabel(f.umOrigem))} → ${escapeHtml(umLabel(f.umDestino || 'KG'))}">${escapeHtml(f.umOrigem)} → ${escapeHtml(f.umDestino || 'KG')}</td>
       <td class="td-mono" style="text-align:right">${Number(f.fator).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 3 })}</td>
+      <td class="td-mono" style="color:var(--text2)">${equivalencia(f)}</td>
       <td class="td-muted">${f.created || '—'}</td>
       <td>
         <div style="display:flex;gap:6px">
@@ -1015,6 +1169,7 @@ function renderFatoresConversao() {
       </td>
     </tr>
   `).join('');
+  if (typeof _renderNovosPendentesBox === 'function') _renderNovosPendentesBox('fatoresConversao');
 }
 
 // ═══════════════════════════════════════════════════════════════════════
