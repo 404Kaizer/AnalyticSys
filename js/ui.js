@@ -3357,35 +3357,58 @@ window._pendConsiderados    = window._pendConsiderados    || {};
 window._pendConsideradosMat = window._pendConsideradosMat || {};
 window._pendCache           = window._pendCache           || {};
 
-// ── Densidade da AREIA NATURAL por FORNECEDOR (kg/m³) ────────────────────
+// ── Densidade da AREIA (natural e fina) por FORNECEDOR (kg/m³) ──────────
 // A areia não tem densidade única: varia com a jazida, e cada fornecedor
-// entrega a sua (Hugo, 02/09/2026). Sem esta tabela toda NF em m³ era
-// convertida pelo 1300 genérico, e a diferença contra o SAP aparecia como
-// "peso divergente" em TODA nota daquele fornecedor — foi assim que ela
-// se revelou: 8 notas do mesmo material com exatamente o mesmo gap de
-// 4.200 kg cada.
+// entrega a sua (Hugo, 01–02/09/2026). Sem tabela, toda NF em m³ era
+// convertida por um fator único por material, e a diferença contra o SAP
+// aparecia como "peso divergente" em TODA nota daquele fornecedor — foi
+// assim que o caso da AREIA NATURAL se revelou: 8 notas do mesmo material
+// com exatamente o mesmo gap de 4.200 kg cada.
 //
-// Casa por SUBSTRING no nome já normalizado (maiúsculas, sem acento): o
+// Casam por SUBSTRING no nome já normalizado (maiúsculas, sem acento): o
 // cadastro traz razão social inteira ("MINERAJIL MINERACAO LTDA"), não a
-// marca isolada. Por isso ITAGUACU entra sem cedilha — a normalização tira
-// o acento dos dois lados da comparação.
+// marca isolada. É por isso que ITAGUACU entra sem cedilha e AREAL SANTA
+// ROSA entra sem acento — a normalização tira o acento dos dois lados da
+// comparação.
 //
-// Fornecedor fora desta lista cai no padrão, que é o comportamento
-// anterior. Acrescentar um novo é somar uma linha.
+// Fornecedor fora da lista cai no padrão de cada material, que é o fator
+// único usado antes desta tabela existir. Acrescentar um novo fornecedor é
+// somar uma linha na lista correspondente.
 const _DENSIDADE_AREIA_NATURAL = [
   ['MINERAJIL', 1440],
   ['GATTO',     1450],
   ['GMB',       1450],
   ['ITAGUACU',  1400]
 ];
-const _DENSIDADE_AREIA_PADRAO = 1300;
+const _DENSIDADE_AREIA_NATURAL_PADRAO = 1300;
 
-function _densidadeAreiaNatural(fornecedor) {
+// AREIA NATURAL FINA tem sua PRÓPRIA tabela — mesmo fornecedor pode ter
+// densidade diferente entre a fina e a comum, e os dois materiais não
+// compartilham fator (Hugo, 02/09/2026): GATTO/GMB são 1450 na comum mas
+// 1500 na fina; AREAL SANTA ROSA só fornece a fina, e nela usa o mesmo
+// 1400 que era o padrão antigo do material.
+const _DENSIDADE_AREIA_FINA = [
+  ['GMB',              1500],
+  ['GATTO',            1500],
+  ['AREAL SANTA ROSA', 1300]
+];
+const _DENSIDADE_AREIA_FINA_PADRAO = 1400;
+
+// Motor comum às duas tabelas — mesma normalização e mesmo critério de
+// casamento (substring), pra AREIA NATURAL e AREIA NATURAL FINA nunca
+// divergirem em COMO acham o fornecedor, só no QUE ele vale em cada uma.
+function _densidadePorFornecedor(fornecedor, tabela, padrao) {
   const f = String(fornecedor || '').trim().toUpperCase()
     .normalize('NFD').replace(/[̀-ͯ]/g, '');
-  if (!f) return _DENSIDADE_AREIA_PADRAO;
-  const hit = _DENSIDADE_AREIA_NATURAL.find(([nome]) => f.includes(nome));
-  return hit ? hit[1] : _DENSIDADE_AREIA_PADRAO;
+  if (!f) return padrao;
+  const hit = tabela.find(([nome]) => f.includes(nome));
+  return hit ? hit[1] : padrao;
+}
+function _densidadeAreiaNatural(fornecedor) {
+  return _densidadePorFornecedor(fornecedor, _DENSIDADE_AREIA_NATURAL, _DENSIDADE_AREIA_NATURAL_PADRAO);
+}
+function _densidadeAreiaNaturalFina(fornecedor) {
+  return _densidadePorFornecedor(fornecedor, _DENSIDADE_AREIA_FINA, _DENSIDADE_AREIA_FINA_PADRAO);
 }
 
 /**
@@ -3395,7 +3418,8 @@ function _densidadeAreiaNatural(fornecedor) {
  * Regras:
  *  TO / T        → × 1000
  *  M3 / M³ / M   → fator por material:
- *    AREIA NATURAL FINA   → × 1400
+ *    AREIA NATURAL FINA   → densidade do fornecedor (1500 GATTO/GMB,
+ *                           1300 AREAL SANTA ROSA, 1400 demais)
  *    AREIA NATURAL        → densidade do fornecedor (1440 MINERAJIL,
  *                           1450 GATTO/GMB, 1400 ITAGUACU, 1300 demais)
  *    BRITA 0 / BRITA 1    → × 1400
@@ -3422,10 +3446,11 @@ function _convertNfPesoToKg(peso, um, material, fornecedor) {
   // ── Volumétrico: M, M3, MT, M³, METRO, CBM ───────────────────────────
   if (/^(M|M3|MT|M3|CBM|METRO)$/.test(u) || u === 'M\u00B3') {
     // FINA antes de NATURAL: "AREIA NATURAL FINA" contém "AREIA NATURAL",
-    // e inverter a ordem faria a fina cair na regra da comum. A variação
-    // por fornecedor foi informada para a AREIA NATURAL — a fina segue com
-    // fator único enquanto não houver instrução em contrário.
-    if (m.includes('AREIA NATURAL FINA'))  return p * 1400;
+    // e inverter a ordem faria a fina cair na regra da comum. As duas têm
+    // tabela de fornecedor PRÓPRIA (ver _DENSIDADE_AREIA_FINA) — não é a
+    // mesma tabela usada duas vezes, porque o mesmo fornecedor pode valer
+    // fatores diferentes em cada material.
+    if (m.includes('AREIA NATURAL FINA'))  return p * _densidadeAreiaNaturalFina(fornecedor);
     if (m.includes('AREIA NATURAL'))       return p * _densidadeAreiaNatural(fornecedor);
     if (m.includes('BRITA'))               return p * 1400;
     if (m.includes('AREIA ARTIFICIAL'))    return p * 1500;

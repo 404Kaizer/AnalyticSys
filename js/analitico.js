@@ -3945,8 +3945,14 @@ const _GS_SCOPES = [
 // Colunas da tabela de resultados por módulo: [rótulo, campo, tipo?].
 // tipo 'num' formata em kg, 'money' em R$; sem tipo é texto (e leva o
 // destaque do termo buscado).
+// O 'peso' na coluna Peso da Entrada NÃO é o mesmo tipo de 'num' das
+// demais — ele exige conversão de unidade (M3/TO → kg, por material E
+// fornecedor, ver _convertNfPesoToKg em ui.js). Distinguir o tipo aqui é o
+// que permite _gsrFmtPeso saber quando converter e quando não (Saída,
+// Lançamento e SAP mostram peso bruto de propósito — ver o comentário de
+// _gsrFmtPeso, mais abaixo, sobre por que eles NÃO convertem).
 const _GS_COLS = {
-  'Entrada':    [['Central Compra','centralCompra'],['Central Destino','centralDestino'],['NF','nf'],['Fornecedor','fornecedor'],['Categoria','categoria'],['Material','material'],['Dt. Emissão','dtEmissao'],['Peso','peso','num'],['Valor Total','valorTotal','money']],
+  'Entrada':    [['Central Compra','centralCompra'],['Central Destino','centralDestino'],['NF','nf'],['Fornecedor','fornecedor'],['Categoria','categoria'],['Material','material'],['Dt. Emissão','dtEmissao'],['Peso','peso','peso'],['Valor Total','valorTotal','money']],
   'Saída':      [['Central','central'],['OS','os'],['Fornecedor','fornecedor'],['Categoria','categoria'],['Material','material'],['Dt. Emissão','dtEmissao'],['Peso','peso','num'],['Valor Total','valorTotal','money']],
   'Lançamento': [['Central','central'],['Dt. Lançamento','dtLanc'],['Fornecedor','fornecedor'],['Categoria','categoria'],['Material','material'],['Peso','peso','num'],['Valor Total','valorTotal','money']],
   'SAP':        [['Movimento','movimento'],['Usuário','usuario'],['Ref.','ref'],['Pedido','pedido'],['Doc MIGO','documento'],['Central','central'],['Material','material'],['Dt. Lançamento','dtLanc'],['Peso','peso','num'],['Valor Total','valorTotal','money']],
@@ -3959,7 +3965,7 @@ const _GS_COLS = {
 // só, então essa visão usa um denominador comum derivado de cada registro
 // (ver _gsUnificado). Para ver as colunas completas de um módulo, basta
 // clicar no chip dele no topo do modal.
-const _GS_COLS_TODOS = [['Módulo','_mod'],['Central','_central'],['Material','_material'],['Documento','_doc'],['Data','_data'],['Peso','_peso','num'],['Valor','_valor','money']];
+const _GS_COLS_TODOS = [['Módulo','_mod'],['Central','_central'],['Material','_material'],['Documento','_doc'],['Data','_data'],['Peso','_peso','peso'],['Valor','_valor','money']];
 
 function _gsUnificado(modKey, r) {
   return {
@@ -4065,6 +4071,60 @@ function _gsrFmt(val, tipo) {
   return String(val);
 }
 
+// Peso de um HIT em kg, aplicando a MESMA conversão da tabela do módulo
+// (ver somarPesoValorEntradas/_convertNfPesoToKg em ui.js) — não o peso
+// bruto do registro.
+//
+// Só ENTRADA converte. Os demais módulos guardam peso que já é o número a
+// mostrar, sem unidade variável:
+//   • SAP           → peso já vem em kg da origem.
+//   • Lançamento    → é uma LEITURA DE ESTOQUE, não uma movimentação com
+//                     unidade de compra. O formulário rotula o campo
+//                     "Peso (kg)" (ver id="l-peso" no index.html) e
+//                     buildSnapshot usa lanc.peso cru, sem NENHUMA
+//                     conversão, em todo o sistema — converter aqui
+//                     divergiria do que o resto do app já faz com o mesmo
+//                     dado.
+//   • Saída         → o próprio _convertNfPesoToKg documenta que Saída
+//                     nunca passa por ele: o sistema trata OS de propósito
+//                     com peso bruto (ver comentário da função, ui.js).
+//   • Custos SAP    → estoqueTotal é agregado já em kg.
+//
+// Retorna NÚMERO (não string) porque serve tanto para EXIBIR (_gsrFmtPeso)
+// quanto para ORDENAR (_gsrLinhas) — as duas precisam do mesmo valor, ou
+// clicar no cabeçalho "Peso" ordenaria por um número diferente do que está
+// escrito na tela.
+function _gsrPesoKg(hit, val) {
+  const n = num(val);
+  if (!Number.isFinite(n)) return null;
+  if (hit.modKey !== 'Entrada') return n;
+  const r  = hit.r || {};
+  const um = String(r.um || '').trim();
+  if (!um || /^(KG|K)$/i.test(um)) return n;
+  if (typeof _convertNfPesoToKg !== 'function') return n;
+  return _convertNfPesoToKg(n, um, r.material, r.fornecedor);
+}
+
+// Texto da coluna Peso. Unidade volumétrica SEM fator conhecido para o
+// material mostra o valor BRUTO com a unidade original — nunca "kg"
+// mentiroso — mesma régua do modal de detalhe (_fmtPeso, em
+// _gsShowDetail) e do modal canônico de Pendentes de Integração.
+function _gsrFmtPeso(hit, val) {
+  if (val == null || val === '') return '—';
+  const n = num(val);
+  if (!Number.isFinite(n)) return String(val);
+  if (hit.modKey === 'Entrada') {
+    const r  = hit.r || {};
+    const um = String(r.um || '').trim();
+    if (um && !/^(KG|K)$/i.test(um)
+        && typeof _nfNeedsConversionWarning === 'function'
+        && _nfNeedsConversionWarning(um, r.material)) {
+      return `${n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${um}`;
+    }
+  }
+  return fmtKg(_gsrPesoKg(hit, val));
+}
+
 // Cabeçalho + chips por módulo. A tabela em si sai em _gsrRenderTabela,
 // que é o que reage a refino/ordenação/"mostrar mais".
 function _gsrRender() {
@@ -4142,12 +4202,20 @@ function _gsrLinhas() {
   if (_gsr.sortCol) {
     const mul = _gsr.sortDir === 'asc' ? 1 : -1;
     const soNumero = v => /^-?[\d.,\s]+$/.test(String(v).trim());
+    // Coluna Peso ordena pelo valor CONVERTIDO (_gsrPesoKg), não pelo bruto
+    // do registro — senão clicar em "Peso" ordenaria por um número
+    // diferente do que a coluna mostra: uma Entrada de 30 m³ (43.200 kg
+    // exibido) ficaria fora de ordem entre linhas já em kg.
+    const colDef = _gsrCols().find(c => c[1] === _gsr.sortCol);
+    const ehPeso = colDef && colDef[2] === 'peso';
     base = [...base].sort((a, b) => {
-      const av = _gsrVal(a, _gsr.sortCol), bv = _gsrVal(b, _gsr.sortCol);
+      const av = ehPeso ? _gsrPesoKg(a, _gsrVal(a, _gsr.sortCol)) : _gsrVal(a, _gsr.sortCol);
+      const bv = ehPeso ? _gsrPesoKg(b, _gsrVal(b, _gsr.sortCol)) : _gsrVal(b, _gsr.sortCol);
       // Vazio sempre no FIM, nas duas direções — mesmo critério do modal de
       // Movimentações (registro incompleto disputando o topo só atrapalha).
       const aVazio = av == null || av === '', bVazio = bv == null || bv === '';
       if (aVazio || bVazio) return (aVazio && bVazio) ? 0 : (aVazio ? 1 : -1);
+      if (ehPeso) return (Number(av) - Number(bv)) * mul;
       if (soNumero(av) && soNumero(bv)) {
         const an = num(av), bn = num(bv);
         if (Number.isFinite(an) && Number.isFinite(bn)) return (an - bn) * mul;
@@ -4181,7 +4249,10 @@ function _gsrRenderTabela() {
     tbody.innerHTML = visivel.map((h, i) => {
       const tds = cols.map(([, key, tipo]) => {
         const val = _gsrVal(h, key);
-        const txt = escapeHtml(_gsrFmt(val, tipo));
+        // 'peso' é o único tipo que precisa do HIT inteiro (para achar UM/
+        // material/fornecedor no registro cru) — os demais formatam só a
+        // partir do valor da célula.
+        const txt = escapeHtml(tipo === 'peso' ? _gsrFmtPeso(h, val) : _gsrFmt(val, tipo));
         return tipo
           ? `<td class="td-mono" style="text-align:right">${txt}</td>`
           : `<td>${_gsHighlight(txt, _gsr.tokens)}</td>`;
@@ -4271,10 +4342,20 @@ function _gsShowDetail(modKey, record) {
   // modal canônico de Pendentes de Integração.
   //
   // SAP não passa por aqui: o peso dele já vem em kg da origem.
+  // Só ENTRADA converte. Um "modKey === 'SAP'" sozinho não bastava: SAP
+  // já vem em kg, mas LANÇAMENTO também precisa ficar de fora e não estava
+  // — ele é uma LEITURA DE ESTOQUE (o formulário rotula "Peso (kg)", ver
+  // id="l-peso" no index.html), e buildSnapshot usa lanc.peso cru em todo
+  // o sistema, sem NENHUMA conversão. Converter aqui faria este modal
+  // mostrar um número que diverge do que a Visão Micro usa para o mesmo
+  // registro. Saída segue o mesmo raciocínio (ver _convertNfPesoToKg,
+  // ui.js: "Saídas NÃO usa esta função"). Restringir a lista ao positivo
+  // ("é Entrada") em vez de negar os dois é o que faz um módulo novo,
+  // amanhã, cair no lado seguro (peso bruto) por padrão.
   const _fmtPeso = (n) => {
     const um  = String(record.um || '').trim();
     const cru = `${_num2(n)} ${um || 'kg'}`;
-    if (modKey === 'SAP' || !um || /^(KG|K)$/i.test(um)) return `${_num2(n)} kg`;
+    if (modKey !== 'Entrada' || !um || /^(KG|K)$/i.test(um)) return `${_num2(n)} kg`;
     if (typeof _convertNfPesoToKg !== 'function') return cru;
     if (typeof _nfNeedsConversionWarning === 'function'
         && _nfNeedsConversionWarning(um, record.material)) return `${cru} (sem fator de conversão)`;
