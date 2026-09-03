@@ -8010,18 +8010,25 @@ mark.search-highlight {
 .calc-copy-btn:hover { color: var(--accent); }
 
 /* ══════════════════════════════════════════
-   MODAL DE BUSCA GLOBAL (Ctrl+K)
+   MODAL DE BUSCA (campo da topbar / Ctrl+3)
 ══════════════════════════════════════════ */
-#modal-search-global {
-  display: none;
-  z-index: 2000;
-}
-#modal-search-detail {
-  z-index: 2001; /* acima do próprio modal de busca */
-}
-#modal-search-global.open {
-  display: flex !important;
-}
+/* A busca é disparada de QUALQUER lugar do sistema, inclusive com coisas
+   já abertas por cima da página — popover da calculadora/notas (10000),
+   dropdown de ferramentas (9999), modal de alerta (9999), confirmação
+   destrutiva (10000), filtro de coluna (2500). Por isso o modal de
+   resultados sobe acima de todos eles, em vez de herdar o 600 padrão de
+   .bdm-overlay: o pedido é que ele apareça sempre na frente.
+
+   A ÚNICA coisa deliberadamente acima é o toast (1000000) — é o único
+   canal de confirmação/erro das ações e nunca pode ficar coberto (ver o
+   comentário dele no topo deste arquivo). Ele é uma barra no rodapé, não
+   atrapalha a leitura do modal. */
+#gsr-overlay { z-index: 900000; }
+
+/* Detalhe do registro, aberto clicando numa linha do modal de resultados —
+   um degrau acima dele. Não depende mais da classe body.bdm-modal-acima:
+   com z-index próprio por ID, a ordem já sai certa sozinha. */
+#modal-search-detail { z-index: 900001; }
 .search-modal-wrap {
   width: 100%;
   max-width: 620px;

@@ -4202,16 +4202,9 @@ function _gsrRenderTabela() {
 function _gsrAbrirDetalhe(i) {
   const hit = (window._gsrVisiveis || [])[i];
   if (!hit) return;
-  // O detalhe é .modal-overlay (z 200) e o de resultados é .bdm-overlay
-  // (z 600) — a classe sobe a família do detalhe por cima, mesmo truque já
-  // usado pelo modal de Movimentações (ver css/modules.css).
-  document.body.classList.add('bdm-modal-acima');
+  // O detalhe tem z-index próprio por ID, um degrau acima do modal de
+  // resultados (ver css/modules.css) — não precisa elevar nada aqui.
   _gsShowDetail(hit.modKey, hit.r);
-}
-
-function _gsCloseDetail() {
-  closeModal('modal-search-detail');
-  document.body.classList.remove('bdm-modal-acima');
 }
 
 function _gsHighlight(text, tokens) {
@@ -4297,7 +4290,7 @@ function _gsShowDetail(modKey, record) {
       // Ir para a aba fecha os DOIS modais — o detalhe e o de resultados
       // por baixo; ficar com a busca aberta em cima da aba de destino
       // esconderia justamente o que o analista quis olhar.
-      _gsCloseDetail();
+      closeModal('modal-search-detail');
       closeGlobalResults();
       if (typeof navigate === 'function') navigate(cfg.nav);
     });
@@ -4322,7 +4315,7 @@ function openSearchModal(prefill = '') {
 
 Object.assign(window, {
   runGlobalSearch, closeGlobalResults, gsrRefine, gsrSetView, gsrMostrarMais,
-  _gsSyncPlaceholder, _gsrAbrirDetalhe, _gsCloseDetail, _gsShowDetail, openSearchModal,
+  _gsSyncPlaceholder, _gsrAbrirDetalhe, _gsShowDetail, openSearchModal,
 });
 
 // ═══════════════════════════════════════════════════════════
@@ -4434,10 +4427,6 @@ function setupModalCloseOnEscape() {
       if (z >= topZ) { topZ = z; top = m; }
     });
     top.classList.remove('open');
-    // O detalhe da busca pode ter sido aberto POR CIMA do modal de
-    // resultados (.bdm-overlay) — desfaz a elevação ao sair pelo ESC,
-    // senão a classe fica grudada no body e eleva modais alheios.
-    if (top.id === 'modal-search-detail') document.body.classList.remove('bdm-modal-acima');
   });
 }
 
