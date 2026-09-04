@@ -1976,6 +1976,29 @@ function diagnosticarDivergenciaSapPuzl({ sapRecords = [], puzlRecords = [], lad
   const foraSet = _foraDaComparacao(foraItens);
   const foraRecs = new Set([...foraSet].map(it => it.rec));
 
+  // ── 5c. Resgate: entrada que "parece" ter ido embora mas tem NF batendo
+  // aqui mesmo ─────────────────────────────────────────────────────────────
+  // _foraDaComparacao liga 101/801 a 862 só por depósito + |peso| — o único
+  // vínculo disponível, porque pedido e ref DIVERGEM entre a entrada e a
+  // transferência que a levou (ver o comentário do passo 5, caso da NF
+  // 120657-1). Essa chave é fraca: quando duas NFs desta central têm o
+  // MESMO peso — rotina, porque capacidade de caminhão é padronizada —, o
+  // pareamento pode agarrar a entrada errada e escondê-la como "foi
+  // transferida", quando na verdade ela tem NF própria batendo aqui (Hugo,
+  // 04/09/2026 — NFs 1437/1438 da MKM, 27.300 kg cada, cada uma sumindo
+  // como pendente apesar de estarem íntegras no SAP com a mesma referência).
+  //
+  // O desempate é a própria definição do que o passo 5 existe para cobrir:
+  // "essa 101 não tem, e nunca vai ter, contrapartida local aqui" — se TEM
+  // (achou NF com a mesma referência em puzlPorChave, ainda não consumida),
+  // não é o caso, e ela volta para a comparação normal. Só a entrada é
+  // resgatada — o 861/862 em si continua fora sempre, regra 1 não muda.
+  sobra.forEach(({ rec: r }) => {
+    if (!foraRecs.has(r) || !CODIGOS_ENTRADA.has(normMov(r.movimento))) return;
+    const lista = puzlPorChave.get(chaveSap(r)) || [];
+    if (lista.some(p => !puzlConsumidos.has(p))) foraRecs.delete(r);
+  });
+
   const sapDoc = [];
   const transfExcluidas = { kg: 0, count: 0, detalhes: [] };
   sobra.forEach(({ rec: r }) => {
@@ -4565,8 +4588,12 @@ async function lrcConfirm() {
   const key = _lrcDetailKey;
   closeLancConflictModal();
 
-  rodarAnalitico();
-  _lrcRefreshDetailModal(key);
+  // rodarAnalitico agenda o recálculo real via rAF+setTimeout — não é
+  // síncrono. Chamar _lrcRefreshDetailModal logo em seguida lia o cache
+  // ainda com os dados antigos (pré-exclusão), fazendo o modal parecer que
+  // nada tinha mudado. onDone dispara só depois que renderAnaliticoMicro
+  // já repovoou window.__analiticoDetailCache.
+  rodarAnalitico(undefined, undefined, () => _lrcRefreshDetailModal(key));
 
   if (toRemove.length) toast(toRemove.length + ' lançamento(s) excluído(s) — conflito resolvido');
 }
@@ -4646,9 +4673,10 @@ async function lrcDelete(idx) {
 
   toast(removed + ' lançamento(s) excluído(s) permanentemente');
 
-  // Sempre recalcular e atualizar o modal do material
-  rodarAnalitico();
-  _lrcRefreshDetailModal(key);
+  // Sempre recalcular e atualizar o modal do material — rodarAnalitico
+  // agenda o recálculo via rAF+setTimeout, então o refresh do modal só
+  // pode acontecer no onDone (ver mesmo ajuste em lrcConfirm).
+  rodarAnalitico(undefined, undefined, () => _lrcRefreshDetailModal(key));
 
   if (newLancs.length <= 1) {
     closeLancConflictModal();

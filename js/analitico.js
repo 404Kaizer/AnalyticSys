@@ -1427,9 +1427,12 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
           const hasConflict = dayLancs.length > 1;
           let finalStock, finalIsEstimated;
           if (hasLanc) {
-            // Com conflito: usa o maior peso como estimativa conservadora até o usuário resolver
+            // Com conflito: soma todos os lançamentos do dia — cada um é um
+            // saldo físico contado à parte (silo/pilha diferente), não uma
+            // duplicata do mesmo estoque (mesma regra da lógica diária abaixo
+            // e do fallback de buildSnapshot, que já soma por data).
             finalStock = hasConflict
-              ? Math.max(...dayLancs.map(l => num(l.peso)))
+              ? dayLancs.reduce((acc, l) => acc + num(l.peso), 0)
               : daySnap.pesoFim;
             finalIsEstimated = false;
             carry = { value: finalStock, isEstimated: false, date: day };
