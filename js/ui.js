@@ -4877,9 +4877,11 @@ function buildAnaliticoDetailHtml(payload) {
         <div class="analitico-detail-card-value c-blue">${fmtKg(s.estTeorico)}</div>
         <div class="analitico-detail-card-sub">Ini + Entradas + Saídas + Ajustes</div>
       </div>
-      <div class="analitico-detail-card">
-        <div class="analitico-detail-card-label">Variação</div>
-        <div class="analitico-detail-card-value ${varClass(s.diff)}">${varSymbol(s.diff)} ${fmtKg(Math.abs(s.diff))}</div>
+      <div class="analitico-detail-card${s.pesoFimAusente ? ' detail-card-absent' : ''}">
+        <div class="analitico-detail-card-label">Variação${
+          s.pesoFimAusente ? ' <span class="absent-badge" title="Sem lançamento no período — Est. Final ausente, variação não pode ser calculada">ausente</span>' : ''
+        }</div>
+        <div class="analitico-detail-card-value ${s.pesoFimAusente ? 'c-absent' : varClass(s.diff)}">${s.pesoFimAusente ? '—' : `${varSymbol(s.diff)} ${fmtKg(Math.abs(s.diff))}`}</div>
         <div class="analitico-detail-card-sub">Últ. lançamento − Teórico total</div>
       </div>
     </div>
