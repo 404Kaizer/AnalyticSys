@@ -1446,8 +1446,13 @@ function _normBuscaMov(s) {
 //      (buildAnaliticoDetailBreakdown, logo abaixo);
 //   2) o rodapé do modal de Movimentações (_compareHtml em
 //      openBreakdownModal).
-// Régua: <1% bate (verde), <15% atenção (âmbar), acima disso discrepância
-// grande (vermelho) — mesma paleta de status dos demais badges do sistema.
+// Régua: só bate (verde) quando a diferença é ZERO — tolerância só para o
+// resíduo de ponto flutuante (<0,01 kg), nunca para diferença real, por
+// menor que seja em % (Hugo, 04/09/2026: um "OK" verde numa diferença de
+// milhares de kg escondia o problema só porque o total do SAP era grande).
+// A partir daí a régua de % de antes decide a gravidade: <15% atenção
+// (âmbar), acima disso discrepância grande (vermelho) — mesma paleta de
+// status dos demais badges do sistema.
 //
 // Compara MAGNITUDES (Math.abs) dos dois lados: os registros da PUZL têm
 // peso sempre positivo, enquanto a soma do SAP em Saídas é negativa —
@@ -1465,13 +1470,16 @@ function _bdmDivergencia(sapTotal, localTotal, diag = null) {
   const local  = Math.abs(num(localTotal));
   const diff   = sapAbs - local;
   const pct    = sapAbs !== 0 ? (Math.abs(diff) / sapAbs) * 100 : (local !== 0 ? 100 : 0);
-  let nivel    = pct < 1 ? 'ok' : (pct < 15 ? 'atencao' : 'critico');
+  // Zero tolerância: só "ok" com diferença abaixo do resíduo de ponto
+  // flutuante. Qualquer diferença real, mesmo pequena em %, é pelo menos
+  // "atencao" — o corte de <1% que dava OK aqui foi removido de propósito.
+  let nivel    = Math.abs(diff) < 0.01 ? 'ok' : (pct < 15 ? 'atencao' : 'critico');
   // Diferença inteiramente explicada por causa estrutural conhecida deixa de
   // ser alerta e ganha estado próprio (decisão do Hugo, 01/09/2026):
   // "diverge e eu sei por quê" não pode se parecer com "diverge e ninguém
   // sabe" — é o segundo que precisa de atenção, e hoje ele se perde no meio
-  // do primeiro. Só rebaixa o que SERIA alerta: o que já bate (<1%)
-  // continua verde, sem promoção a azul.
+  // do primeiro. Só rebaixa o que SERIA alerta: o que já bate (diferença
+  // zero) continua verde, sem promoção a azul.
   if (nivel !== 'ok' && diag && diag.tudoExplicado) nivel = 'explicado';
   const estilo = _BDM_NIVEL_ESTILO[nivel];
   return { diff, pct, nivel, color: estilo.color, icon: estilo.icon };
