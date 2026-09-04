@@ -1540,9 +1540,11 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
           ajuLabel: _codsLabel(ajuEntries, 'Sem ajustes no período'),
           estTeorico: snapshot.estTeorico,
           pesoFim: snapshot.pesoFim,
+          pesoFimAusente: snapshot.pesoFimAusente,
           dtFimLabel: snapshot.dtFimLabel,
           fimFallback: fim?.fallback ?? false,
           diff: snapshot.diff,
+          pesoIniAusente: snapshot.pesoIniAusente,
           absentNearest
         },
         days: dailyRows
