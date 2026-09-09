@@ -3351,8 +3351,11 @@ const _DGR_NOMES = {
              '_dgVgTheme', '_dgVgDestroyChart',
              '_dgVgBarValueLabelsPlugin', '_dgVgCategoryTotalsPlugin',
              '_dgVgRenderChartCategoriaFisica', '_dgVgRenderChartVariacaoPorChave'],
-  evolucao:  ['DG_TON_THRESHOLD_KG', 'num', 'fmtKg', 'dgFmtPeso', 'dgFmtPesoSigned', 'money', 'varLabel',
-              '_dgVgTheme', '_dgVgDestroyChart', '_dgVgRenderChartVariacaoPorChave'],
+  evolucao:  ['DG_TON_THRESHOLD_KG', 'DG_VG_CAT_LABELS', 'DG_VG_CAT_ORDER',
+              'num', 'fmtKg', 'dgFmtPeso', 'dgFmtPesoSigned', 'money', 'varLabel',
+              '_dgVgTheme', '_dgVgDestroyChart',
+              '_dgVgBarValueLabelsPlugin', '_dgVgCategoryTotalsPlugin',
+              '_dgVgRenderChartCategoriaFisica', '_dgVgRenderChartVariacaoPorChave'],
   detalhado: ['DG_VG_CAT_LABELS', 'DG_VG_CATSUB_LABELS', 'DG_TON_THRESHOLD_KG',
               'num', 'fmtKg', 'money', 'escapeHtml', 'varSymbol', 'movValorCor',
               'dgFmtPeso', 'dgFmtPesoSigned',
@@ -3504,12 +3507,16 @@ function _dgrCalcularPeriodo(p, thresholds) {
   const totalEstTeorico = estTotais.totalIni + movTotais.totalEnt + movTotais.totalSai + (movTotais.totalAju || 0);
 
   const varTotalFisica = Object.values(_dgVgVariacaoFisicaPorCategoria(pares)).reduce((a, b) => a + b, 0);
+  // Desfalque/Sobra por categoria do mês — mesma cadeia da tela
+  // (_dgVgRenderDashboardGerencial); depende de `results`, que só existe aqui.
+  const catFisicaPct = _dgVgVariacaoFisicaPercentualPorCategoria(
+    _dgVgVariacaoFisicaPorCategoriaSplit(pares), _dgVgVolumeMovimentadoPorCategoria(results));
   const custoTotal     = pares.reduce((s, x) => s + x.custoImplicado, 0);
   const scoreInfo      = _dgVgScoreFromCounts(_dgVgCounts(pares));
 
   return {
     id: p.id, rotulo: p.rotulo, titulo: p.titulo, geral: p.geral,
-    pares, pesoMedio, totalEstTeorico,
+    pares, pesoMedio, totalEstTeorico, catFisicaPct,
     kpi: {
       varTotalFisica, custoTotal,
       estIni: estTotais.totalIni, estFim: estTotais.totalFim,
@@ -3635,9 +3642,9 @@ function _dgrEvolucaoTabelaHtml(periodos) {
 
   const corpo = linhas.map(l => {
     const v = l.veredito ? vered[l.veredito] : null;
-    return `<tr>
+    return `<tr class="dgr-evo-mes-row" onclick="_dgrEvoToggle(this, '${l.id}')" title="Ver Saúde Geral e Variação por Regional/Central deste mês">
       <td style="font-weight:700">
-        <button type="button" class="dgr-evo-expand-btn" onclick="_dgrEvoToggle(this, '${l.id}')" title="Ver Saúde Geral e Variação por Regional/Central deste mês">
+        <button type="button" class="dgr-evo-expand-btn" tabindex="0">
           <i class="ti ti-chevron-right"></i>
         </button>
         ${_rankEsc(l.rotulo)}
@@ -3790,6 +3797,9 @@ function _dgrEvoDetalheCardHtml(l) {
   const gaugeMatSvg = `evo-gm-${l.id}`, gaugeMatSub = `evo-gms-${l.id}`, gaugeMatSum = `evo-gmr-${l.id}`;
   const gaugeCenSvg = `evo-gc-${l.id}`, gaugeCenSub = `evo-gcs-${l.id}`, gaugeCenSum = `evo-gcr-${l.id}`;
   const extremosEl  = `evo-ext-${l.id}`;
+  // Canvas vivo (Chart.js) — atravessa a "fotografia" intacto, ninguém
+  // desenha nele offscreen; quem pinta é _dgrScriptEvoDetalhe, no arquivo.
+  const canvasCategoria = `evo-cat-${l.id}`;
 
   const innerHtml = `
     <div class="section-title" style="margin:0 0 12px"><i class="ti ti-heart-rate-monitor" style="font-size:13px;margin-right:6px"></i>Saúde Geral — Centrais e Materiais</div>
@@ -3818,6 +3828,10 @@ function _dgrEvoDetalheCardHtml(l) {
         </div>
         <div id="${gaugeMatSum}" style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-start;margin-top:10px"></div>
       </div>
+    </div>
+    <div class="oc-chart-card" style="margin-bottom:18px">
+      <div class="oc-chart-title"><i class="ti ti-chart-bar" style="margin-right:5px"></i>Desfalque e Sobra por Categoria — Maior Variação Primeiro</div>
+      <div style="position:relative;height:180px"><canvas id="${canvasCategoria}"></canvas></div>
     </div>
     <div class="section-title" style="margin:0 0 12px"><i class="ti ti-scale" style="font-size:13px;margin-right:6px"></i>Variação por Regional e Central</div>
     <div id="${extremosEl}" class="dg-vg-extremos-grid" style="margin-bottom:14px"></div>
@@ -3860,7 +3874,8 @@ function _dgrEvoDetalheCardHtml(l) {
     </div>`;
 
   return {
-    id: l.id, html, canvasRegional, canvasCentral,
+    id: l.id, html, canvasRegional, canvasCentral, canvasCategoria,
+    catFisicaPct: l.catFisicaPct || {},
     entriesRegional: _dgVgTop8SobraDesfalque(porRegionalKg),
     entriesCentral:  _dgVgTop8SobraDesfalque(porCentralKg)
   };
@@ -3877,21 +3892,36 @@ function _dgrScriptEvoDetalhe(cards) {
   if (!cards.length) return '';
   const dados = cards.map(c => ({
     id: c.id, canvasRegional: c.canvasRegional, canvasCentral: c.canvasCentral,
+    canvasCategoria: c.canvasCategoria, catFisicaPct: c.catFisicaPct,
     entriesRegional: c.entriesRegional, entriesCentral: c.entriesCentral
   }));
   return `<script>
-function _dgrEvoToggle(btn, id) {
+function _dgrEvoToggle(linha, id) {
   var row = document.querySelector('.dgr-evo-detalhe-row[data-mes="' + id + '"]');
   if (!row) return;
   var abrir = row.hasAttribute('hidden');
   row.toggleAttribute('hidden', !abrir);
-  btn.classList.toggle('dgr-evo-expand-open', abrir);
+  var btn = linha.querySelector('.dgr-evo-expand-btn');
+  if (btn) btn.classList.toggle('dgr-evo-expand-open', abrir);
+  _dgrEvoFoco(row.closest('table'));
   if (abrir && window._dgrRedesenharEvoDetalhe) window._dgrRedesenharEvoDetalhe();
+}
+// Foco: com 1+ mês aberto, os meses fechados perdem destaque — mesma ideia
+// de _updateCentralFocus/_updateRegionalFocus (Visão Micro do Analítico).
+function _dgrEvoFoco(tabela) {
+  if (!tabela) return;
+  var det = tabela.querySelectorAll('.dgr-evo-detalhe-row');
+  var algumAberto = Array.prototype.some.call(det, function(r) { return !r.hasAttribute('hidden'); });
+  Array.prototype.forEach.call(det, function(r) {
+    var mes = r.previousElementSibling;
+    if (mes) mes.classList.toggle('dgr-evo-mes-dimmed', algumAberto && r.hasAttribute('hidden'));
+  });
 }
 (function() {
   var CARDS = ${JSON.stringify(dados)};
   function redesenhar() {
     CARDS.forEach(function(c) {
+      _dgVgRenderChartCategoriaFisica(c.catFisicaPct, c.canvasCategoria, 'evoCat-' + c.id);
       _dgVgRenderChartVariacaoPorChave(c.canvasRegional, c.entriesRegional, 'evoReg-' + c.id);
       _dgVgRenderChartVariacaoPorChave(c.canvasCentral,  c.entriesCentral,  'evoCen-' + c.id);
     });
@@ -4920,6 +4950,7 @@ window.gerarRelatorioGerencialDashboard = async function(tema = 'dark', selecao 
       .dgr-evo-tabela th:first-child, .dgr-evo-tabela td:first-child { padding-left:10px; }
       .dgr-evo-tabela th:last-child,  .dgr-evo-tabela td:last-child  { padding-right:10px; }
       .dgr-evo-nota { font-size:10px; color:var(--dgr-text-dim2, #64748b); margin-top:8px; line-height:1.6; }
+      .dgr-evo-mes-row { cursor:pointer; }
       .dgr-evo-expand-btn { background:none; border:none; cursor:pointer; padding:2px 4px 2px 0;
                              color:var(--dgr-text-dim, #94a3b8); vertical-align:middle; line-height:1; }
       .dgr-evo-expand-btn i { display:inline-block; transition:transform .15s; }
@@ -4934,11 +4965,17 @@ window.gerarRelatorioGerencialDashboard = async function(tema = 'dark', selecao 
       .dgr-evo-detalhe-box { position:sticky; left:0; width:100cqw; box-sizing:border-box;
                              padding:16px 10px 22px; }
       .dgr-evo-detalhe-box .oc-chart-card { min-width:0; }
+      /* Mesma convenção de foco dos cards de Regional/Central da Visão Micro
+         (.regional-dimmed/.central-dimmed): 0.35, 0.7 no hover. */
+      .dgr-evo-tabela tbody tr { transition:opacity .2s ease; }
+      .dgr-evo-tabela tbody tr.dgr-evo-mes-dimmed { opacity:.35; }
+      .dgr-evo-tabela tbody tr.dgr-evo-mes-dimmed:hover { opacity:.7; }
       .dgr-evo-detalhe-row[hidden] { display:none; }
       @media print {
         .dgr-per-bar { display:none; }
         .dgr-per-pane { display:block !important; }
         .dgr-evo-detalhe-row[hidden] { display:table-row !important; }
+        .dgr-evo-tabela tbody tr.dgr-evo-mes-dimmed { opacity:1; }
         .dgr-evo-expand-btn { display:none; }
       }
     `;

@@ -1799,10 +1799,14 @@ const _dgVgCategoryTotalsPlugin = {
   }
 };
 
-function _dgVgRenderChartCategoriaFisica(catFisicaPct) {
-  const ctx = document.getElementById('dg-vg-chart-categoria');
+// canvasId/chartKey opcionais — default é o gráfico FIXO da tela; o detalhe
+// mensal da Evolução (relatorio.js) desenha o mesmo gráfico por mês, cada um
+// no seu canvas. Mesmo padrão de _dgVgRenderChartVariacaoPorChave.
+function _dgVgRenderChartCategoriaFisica(catFisicaPct, canvasId, chartKey) {
+  const ctx = document.getElementById(canvasId || 'dg-vg-chart-categoria');
   if (!ctx) return;
-  _dgVgDestroyChart('categoria');
+  chartKey = chartKey || 'categoria';
+  _dgVgDestroyChart(chartKey);
   const { textCol, gridCol, tickFont } = _dgVgTheme();
 
   // Reordena as categorias da maior pra menor variação líquida — Δ =
@@ -1844,7 +1848,7 @@ function _dgVgRenderChartCategoriaFisica(catFisicaPct) {
   const desfalquesBar = desfalquesKg.map(barLen);
   const sobrasBar     = sobrasKg.map(barLen);
 
-  _dgVgCharts.categoria = new Chart(ctx, {
+  _dgVgCharts[chartKey] = new Chart(ctx, {
     type: 'bar',
     plugins: [_dgVgBarValueLabelsPlugin, _dgVgCategoryTotalsPlugin],
     data: {
