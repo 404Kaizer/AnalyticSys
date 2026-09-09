@@ -1441,36 +1441,36 @@ function _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais, f
       <div class="inv-kpi-card">
         <div class="inv-kpi-body">
           <div class="inv-kpi-label"><i class="ti ti-archive" style="color:var(--accent)"></i>Est. Inicial Total</div>
-          <div class="inv-kpi-value">${money(estTotais.custoIni || 0)}</div>
-          <div class="inv-kpi-unit">${fmtKg(estTotais.totalIni)}</div>
+          <div class="inv-kpi-value">${fmtKg(estTotais.totalIni)}</div>
+          <div class="inv-kpi-unit">${money(estTotais.custoIni || 0)}</div>
         </div>
       </div>
       <div class="inv-kpi-card">
         <div class="inv-kpi-body">
           <div class="inv-kpi-label"><i class="ti ti-arrow-bar-to-down" style="color:var(--green)"></i>Entradas</div>
-          <div class="inv-kpi-value">${money(custoMovTotais.custoEnt || 0)}</div>
-          <div class="inv-kpi-unit">${fmtKgSigned(movTotais.totalEnt)}</div>
+          <div class="inv-kpi-value">${fmtKgSigned(movTotais.totalEnt)}</div>
+          <div class="inv-kpi-unit">${money(custoMovTotais.custoEnt || 0)}</div>
         </div>
       </div>
       <div class="inv-kpi-card">
         <div class="inv-kpi-body">
           <div class="inv-kpi-label"><i class="ti ti-arrow-bar-up" style="color:var(--red)"></i>Saídas</div>
-          <div class="inv-kpi-value">${money(custoMovTotais.custoSai || 0)}</div>
-          <div class="inv-kpi-unit">${fmtKgSigned(movTotais.totalSai)}</div>
+          <div class="inv-kpi-value">${fmtKgSigned(movTotais.totalSai)}</div>
+          <div class="inv-kpi-unit">${money(custoMovTotais.custoSai || 0)}</div>
         </div>
       </div>
       <div class="inv-kpi-card">
         <div class="inv-kpi-body">
           <div class="inv-kpi-label"><i class="ti ti-adjustments-alt" style="color:var(--amber)"></i>Ajustes</div>
-          <div class="inv-kpi-value">${money(custoMovTotais.custoAju || 0)}</div>
-          <div class="inv-kpi-unit" style="color:${movValorCor(movTotais.totalAju || 0, 'var(--amber)')}">${fmtKgSigned(movTotais.totalAju || 0)}</div>
+          <div class="inv-kpi-value" style="color:${movValorCor(movTotais.totalAju || 0, 'var(--amber)')}">${fmtKgSigned(movTotais.totalAju || 0)}</div>
+          <div class="inv-kpi-unit">${money(custoMovTotais.custoAju || 0)}</div>
         </div>
       </div>
       <div class="inv-kpi-card">
         <div class="inv-kpi-body">
           <div class="inv-kpi-label"><i class="ti ti-box" style="color:var(--purple)"></i>Est. Final Total</div>
-          <div class="inv-kpi-value">${money(estTotais.custoFim || 0)}</div>
-          <div class="inv-kpi-unit">${fmtKg(estTotais.totalFim)}</div>
+          <div class="inv-kpi-value">${fmtKg(estTotais.totalFim)}</div>
+          <div class="inv-kpi-unit">${money(estTotais.custoFim || 0)}</div>
         </div>
       </div>
       <div class="inv-kpi-card">
@@ -1719,25 +1719,26 @@ function _dgVgRenderChartCategoriaFisica(catFisicaPct) {
   _dgVgDestroyChart('categoria');
   const { textCol, gridCol, tickFont } = _dgVgTheme();
 
-  // Reordena as categorias da pior pra melhor — "pior" = maior desvio
-  // percentual total (|desfalque%| + |sobra%|, somados) sobre o volume
-  // da própria categoria. A categoria com o problema proporcionalmente
-  // mais grave sempre aparece no topo do gráfico, não importa a ordem
-  // fixa de DG_VG_CAT_ORDER.
-  const catOrdenadaPorSeveridade = [...DG_VG_CAT_ORDER].sort((a, b) => {
-    const sevA = Math.abs(catFisicaPct[a]?.desfalquePct || 0) + Math.abs(catFisicaPct[a]?.sobraPct || 0);
-    const sevB = Math.abs(catFisicaPct[b]?.desfalquePct || 0) + Math.abs(catFisicaPct[b]?.sobraPct || 0);
-    return sevB - sevA;
+  // Reordena as categorias da maior pra menor variação líquida — Δ =
+  // desfalqueKg + sobraKg, em kg (mesma conta da coluna "Δ" à direita do
+  // gráfico). A categoria com o maior desvio em peso sempre aparece no
+  // topo do gráfico, não importa a ordem fixa de DG_VG_CAT_ORDER. Antes
+  // era ordenado por severidade percentual (|desfalque%| + |sobra%|);
+  // decisão do Hugo (09/09/2026) de priorizar o peso em vez do %.
+  const catOrdenadaPorVariacao = [...DG_VG_CAT_ORDER].sort((a, b) => {
+    const totA = Math.abs((catFisicaPct[a]?.desfalqueKg || 0) + (catFisicaPct[a]?.sobraKg || 0));
+    const totB = Math.abs((catFisicaPct[b]?.desfalqueKg || 0) + (catFisicaPct[b]?.sobraKg || 0));
+    return totB - totA;
   });
 
-  const labels        = catOrdenadaPorSeveridade.map(k => DG_VG_CAT_LABELS[k]);
-  const desfalquesPct = catOrdenadaPorSeveridade.map(k => catFisicaPct[k]?.desfalquePct || 0);
-  const sobrasPct     = catOrdenadaPorSeveridade.map(k => catFisicaPct[k]?.sobraPct || 0);
-  const desfalquesKg  = catOrdenadaPorSeveridade.map(k => catFisicaPct[k]?.desfalqueKg || 0);
-  const sobrasKg      = catOrdenadaPorSeveridade.map(k => catFisicaPct[k]?.sobraKg || 0);
+  const labels        = catOrdenadaPorVariacao.map(k => DG_VG_CAT_LABELS[k]);
+  const desfalquesPct = catOrdenadaPorVariacao.map(k => catFisicaPct[k]?.desfalquePct || 0);
+  const sobrasPct     = catOrdenadaPorVariacao.map(k => catFisicaPct[k]?.sobraPct || 0);
+  const desfalquesKg  = catOrdenadaPorVariacao.map(k => catFisicaPct[k]?.desfalqueKg || 0);
+  const sobrasKg      = catOrdenadaPorVariacao.map(k => catFisicaPct[k]?.sobraKg || 0);
   // Total líquido por categoria (desfalque + sobra, em kg) — vira a
   // coluna fixa "Δ" à direita do gráfico (ver _dgVgCategoryTotalsPlugin).
-  const totaisKg      = catOrdenadaPorSeveridade.map((_, i) => desfalquesKg[i] + sobrasKg[i]);
+  const totaisKg      = catOrdenadaPorVariacao.map((_, i) => desfalquesKg[i] + sobrasKg[i]);
   const fmtPct        = v => Math.abs(v).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%';
 
   _dgVgCharts.categoria = new Chart(ctx, {

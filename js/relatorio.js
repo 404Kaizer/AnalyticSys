@@ -3557,7 +3557,7 @@ function _dgrCapturarCategoriaAmpliada() {
 function _dgrBuildCategoriaHtml(imgCategoria) {
   return `
     <div class="dgr-chart-card" style="margin-top:26px">
-      <div class="dgr-chart-title"><i class="ti ti-chart-bar"></i>Desfalque e Sobra por Categoria — % do Volume Movimentado</div>
+      <div class="dgr-chart-title"><i class="ti ti-chart-bar"></i>Desfalque e Sobra por Categoria — Maior Variação Primeiro</div>
       ${imgCategoria ? `<img src="${imgCategoria}" alt="Desfalque e Sobra por Categoria">` : '<div class="dgr-chart-empty">Gráfico indisponível</div>'}
     </div>`;
 }
