@@ -3349,7 +3349,7 @@ const _DGR_NOMES = {
              '_dgVgTheme', '_dgVgDestroyChart',
              '_dgVgBarValueLabelsPlugin', '_dgVgCategoryTotalsPlugin',
              '_dgVgRenderChartCategoriaFisica', '_dgVgRenderChartVariacaoPorChave'],
-  evolucao:  ['DG_TON_THRESHOLD_KG', 'num', 'fmtKg', 'money', '_dgVgTheme'],
+  evolucao:  ['DG_TON_THRESHOLD_KG', 'num', 'fmtKg', 'dgFmtPeso', 'dgFmtPesoSigned', 'money', '_dgVgTheme'],
   detalhado: ['DG_VG_CAT_LABELS', 'DG_VG_CATSUB_LABELS', 'DG_TON_THRESHOLD_KG',
               'num', 'fmtKg', 'money', 'escapeHtml', 'varSymbol', 'movValorCor',
               'dgFmtPeso', 'dgFmtPesoSigned',
@@ -3510,6 +3510,7 @@ function _dgrCalcularPeriodo(p, thresholds) {
     kpi: {
       varTotalFisica, custoTotal,
       estIni: estTotais.totalIni, estFim: estTotais.totalFim,
+      compras: movTotais.totalEnt, consumo: movTotais.totalSai,
       score: scoreInfo.score, level: scoreInfo.level,
       pctVariacao: Math.abs(totalEstTeorico) > 0.0001 ? (varTotalFisica / totalEstTeorico) * 100 : null
     },
@@ -3610,17 +3611,25 @@ function _dgrEvolucaoTabelaHtml(periodos) {
     const sinal = v > 0.0001 ? '+' : '';
     return `<span style="color:${cor};font-weight:700">${sinal}${fmt(v)}</span>`;
   };
+  // Cor de MOVIMENTO pelo sinal (entrou/saiu) — não confundir com _dgrValCor
+  // (Variação/Custo, onde positivo é ÂMBAR porque é sobra a investigar).
+  // Mesma regra de movValorCor (dashboard.js), mas em hex: o relatório é um
+  // HTML standalone e não declara var(--green)/var(--red).
+  const corMov = v => v > 0.0001 ? '#10b981' : v < -0.0001 ? '#f43f5e' : '#64748b';
 
   const corpo = linhas.map(l => {
     const v = l.veredito ? vered[l.veredito] : null;
     return `<tr>
       <td style="font-weight:700">${_rankEsc(l.rotulo)}</td>
+      <td class="da-num" style="color:#94a3b8">${dgFmtPeso(l.kpi.estIni, 1)}</td>
+      <td class="da-num" style="color:${corMov(l.kpi.compras)}">${dgFmtPesoSigned(l.kpi.compras, 1)}</td>
+      <td class="da-num" style="color:${corMov(l.kpi.consumo)}">${dgFmtPesoSigned(l.kpi.consumo, 1)}</td>
+      <td class="da-num" style="color:#94a3b8">${dgFmtPeso(l.kpi.estFim, 1)}</td>
       <td class="da-num" style="color:${_dgrValCor(l.kpi.varTotalFisica)}">${dgFmtPesoSigned(l.kpi.varTotalFisica, 1)}</td>
       <td class="da-num">${delta(l.dCusto, x => money(Math.abs(x)), true)}</td>
       <td class="da-num" style="color:${_dgrValCor(l.kpi.custoTotal)}">${money(l.kpi.custoTotal)}</td>
       <td class="da-num" style="color:${corNivel[l.kpi.level] || '#94a3b8'};font-weight:700">${l.kpi.score}%</td>
       <td class="da-num">${delta(l.dScore, x => Math.abs(x).toFixed(0) + ' p.p.', false)}</td>
-      <td class="da-num" style="color:#94a3b8">${dgFmtPeso(l.kpi.estFim, 1)}</td>
       <td class="da-num">${v
         ? `<span style="color:${v.cor};font-weight:800;font-size:10px;letter-spacing:.05em"><i class="ti ${v.ic}"></i> ${v.txt}</span>`
         : '<span style="color:#64748b;font-size:10px">base</span>'}</td>
@@ -3631,12 +3640,15 @@ function _dgrEvolucaoTabelaHtml(periodos) {
     <table class="da-table dgr-evo-tabela">
       <thead><tr>
         <th>Mês</th>
+        <th class="da-num">Est. Inicial</th>
+        <th class="da-num">Compras</th>
+        <th class="da-num">Consumo</th>
+        <th class="da-num">Est. Final</th>
         <th class="da-num">Variação</th>
         <th class="da-num">Δ Custo vs. mês ant.</th>
         <th class="da-num">Custo da Variação</th>
         <th class="da-num">Saúde</th>
         <th class="da-num">Δ Saúde</th>
-        <th class="da-num">Est. Final</th>
         <th class="da-num">Leitura</th>
       </tr></thead>
       <tbody>${corpo}</tbody>
@@ -3648,26 +3660,29 @@ function _dgrEvolucaoTabelaHtml(periodos) {
   </div>`;
 }
 
-// Gráfico da série temporal: barra = |Custo da Variação| (eixo esquerdo),
-// linha = Saúde (eixo direito, 0–100). São grandezas diferentes de propósito
-// em eixos diferentes — a leitura que interessa é se as barras encolhem
-// enquanto a linha sobe.
+// Gráfico da série temporal: barra = Variação Física, assinada (sobra pra
+// cima em âmbar, desfalque pra baixo em vermelho — mesma convenção de cor de
+// _dgrValCor/varSymbol), eixo esquerdo em kg/TON. Linha = Saúde (eixo
+// direito, 0–100). O Custo da Variação (R$) é só contexto: aparece no
+// tooltip, nunca definiu a altura da barra (decisão do Hugo, set/2026 — a
+// leitura física é a que importa pro gráfico, o custo é derivado dela).
 function _dgrEvolucaoChartHtml() {
   return `<div class="oc-chart-card">
-    <div class="oc-chart-title"><i class="ti ti-chart-line" style="margin-right:5px"></i>Custo da Variação e Saúde, mês a mês</div>
+    <div class="oc-chart-title"><i class="ti ti-chart-line" style="margin-right:5px"></i>Variação Física e Saúde, mês a mês</div>
     <div style="position:relative;height:260px"><canvas id="dgr-evo-chart"></canvas></div>
   </div>`;
 }
 
 function _dgrScriptEvolucao(periodos) {
   const serie = _dgrEvolucaoLinhas(periodos).map(l => ({
-    rotulo: l.rotulo, custo: Math.abs(l.kpi.custoTotal), score: l.kpi.score
+    rotulo: l.rotulo, fisica: l.kpi.varTotalFisica, custo: l.kpi.custoTotal, score: l.kpi.score
   }));
   return `<script>
 (function() {
   var cv = document.getElementById('dgr-evo-chart');
   if (!cv || typeof Chart === 'undefined') return;
   var SERIE = ${JSON.stringify(serie)};
+  function corFisica(v) { return v < -0.0001 ? '#f43f5e' : v > 0.0001 ? '#f59e0b' : '#64748b'; }
   var grafico = null;
   function desenhar() {
     var t = _dgVgTheme();
@@ -3676,9 +3691,10 @@ function _dgrScriptEvolucao(periodos) {
       data: {
         labels: SERIE.map(function(p) { return p.rotulo; }),
         datasets: [
-          { type: 'bar', label: 'Custo da Variação', yAxisID: 'y',
-            data: SERIE.map(function(p) { return p.custo; }),
-            backgroundColor: '#f43f5e', borderRadius: 3, order: 2 },
+          { type: 'bar', label: 'Variação Física', yAxisID: 'y',
+            data: SERIE.map(function(p) { return p.fisica; }),
+            backgroundColor: SERIE.map(function(p) { return corFisica(p.fisica); }),
+            borderRadius: 3, order: 2 },
           { type: 'line', label: 'Saúde', yAxisID: 'y2',
             data: SERIE.map(function(p) { return p.score; }),
             borderColor: '#10b981', backgroundColor: '#10b981',
@@ -3690,15 +3706,15 @@ function _dgrScriptEvolucao(periodos) {
         plugins: {
           legend: { labels: { color: t.textCol, font: t.tickFont, usePointStyle: true, boxWidth: 10 } },
           tooltip: { callbacks: { label: function(c) {
-            return c.dataset.yAxisID === 'y2'
-              ? 'Saúde · ' + c.raw + '%'
-              : 'Custo da Variação · ' + money(c.raw);
+            if (c.dataset.yAxisID === 'y2') return 'Saúde · ' + c.raw + '%';
+            var p = SERIE[c.dataIndex];
+            return ['Variação Física · ' + dgFmtPesoSigned(p.fisica, 1), 'Custo da Variação · ' + money(p.custo)];
           } } }
         },
         scales: {
           x:  { grid: { display: false }, ticks: { color: t.textCol, font: t.tickFont } },
-          y:  { position: 'left',  grid: { color: t.gridCol },
-                ticks: { color: t.textCol, font: t.tickFont, callback: function(v) { return money(v); } } },
+          y:  { position: 'left',  grid: { color: t.gridCol }, beginAtZero: true,
+                ticks: { color: t.textCol, font: t.tickFont, callback: function(v) { return dgFmtPeso(v, 1); } } },
           y2: { position: 'right', min: 0, max: 100, grid: { display: false },
                 ticks: { color: t.textCol, font: t.tickFont, callback: function(v) { return v + '%'; } } }
         }
@@ -4244,12 +4260,12 @@ window._RELATORIO_ABAS_REGISTRY = [
     disponivel: () => !!window._dgVgLastData,
     secoes: [
       { id: 'evo-tabela',  label: 'Indicadores mês a mês', natural: true },
-      { id: 'evo-grafico', label: 'Custo da Variação e Saúde, mês a mês' }
+      { id: 'evo-grafico', label: 'Variação Física e Saúde, mês a mês' }
     ],
     // Sem barra de período: a aba INTEIRA é a comparação entre os meses.
     render: (ctx, ids) => ids.map(id => _dgrSecaoHtml(
       id,
-      id === 'evo-tabela' ? 'Indicadores mês a mês' : 'Custo da Variação e Saúde, mês a mês',
+      id === 'evo-tabela' ? 'Indicadores mês a mês' : 'Variação Física e Saúde, mês a mês',
       id === 'evo-tabela' ? _dgrEvolucaoTabelaHtml(ctx.periodos) : _dgrEvolucaoChartHtml(),
       id === 'evo-tabela'
     )).join('')
