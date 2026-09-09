@@ -1219,6 +1219,7 @@ function _buildRankingShellHTML(d, opts) {
 <title>${_rankEsc(opts.pageTitle)}</title>
 ${opts.offlineCompleto ? _dgrFonteIconesEmbutida() : '<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.44.0/dist/tabler-icons.min.css">'}
 ${opts.offlineCompleto ? _dgrFontesEmbutidas() : ''}
+${opts.cssApp ? `<style>${opts.cssApp}</style>` : ''}
 <style>
   ${opts.offlineCompleto ? '' : "@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700;800&display=swap');"}
   /* Orientação de página configurável por relatório — a maioria continua
@@ -1450,7 +1451,7 @@ ${opts.offlineCompleto ? _dgrFontesEmbutidas() : ''}
   }
 </style>
 </head>
-<body${opts.temaInicial === 'light' ? ' class="dgr-tema-claro"' : ''}>
+<body${opts.temaInicial === 'light' ? ' class="dgr-tema-claro" data-theme="light"' : ''}>
 
 <div class="action-bar">
   <div class="action-bar-title">
@@ -1529,6 +1530,10 @@ function _dgrScriptTema() {
   return `<script>
 function _dgrAlternarTema(btn) {
   var claro = document.body.classList.toggle('dgr-tema-claro');
+  // data-theme é o que o CSS do app (tokens.css) lê — sem isso o conteúdo
+  // clonado do Dashboard continuaria escuro no tema claro do relatório.
+  if (claro) document.body.setAttribute('data-theme', 'light');
+  else document.body.removeAttribute('data-theme');
   if (btn) {
     btn.innerHTML = claro ? '<i class="ti ti-moon"></i>' : '<i class="ti ti-sun"></i>';
     btn.title = claro ? 'Tema Escuro' : 'Tema Claro';
@@ -3158,261 +3163,169 @@ window.gerarRelatorioDAIs = function() {
 // completo — todas as 10 seções da Visão Geral.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// ── Rasteriza um <svg> vivo da tela em PNG (data URL), resolvendo as
-//    variáveis CSS (var(--text)/var(--text3)/var(--mono)) usadas nesses
-//    SVGs para valores literais do tema escuro — o relatório abre numa
-//    janela/documento própria, sem acesso às custom properties do app.
-//    scale:2 pra ficar nítido tanto na tela quanto impresso. ──────────────
-function _dgrSvgParaPngDataUrl(svgEl, scale = 2) {
-  return new Promise((resolve) => {
-    if (!svgEl) { resolve(null); return; }
-    try {
-      // Lê o valor JÁ COMPUTADO de --text/--text3 no body ATUAL — antes
-      // isso era hardcoded pros hex do tema escuro (sempre), o que fazia
-      // os gauges saírem sempre escuros no PDF mesmo com o Dashboard em
-      // tema claro. Lendo ao vivo, respeita seja o tema real da tela, seja
-      // o tema temporariamente forçado pra captura (ver _dgrCapturarComTema).
-      const cs = getComputedStyle(document.body);
-      const corText  = (cs.getPropertyValue('--text')  || '').trim()  || '#dde3f0';
-      const corText3 = (cs.getPropertyValue('--text3') || '').trim()  || '#404a60';
-      let svgStr = new XMLSerializer().serializeToString(svgEl);
-      svgStr = svgStr
-        .replace(/var\(--text3\)/g, corText3)
-        .replace(/var\(--text\)/g, corText)
-        .replace(/var\(--mono\)/g, "'JetBrains Mono',monospace");
-      if (!svgStr.includes('xmlns=')) {
-        svgStr = svgStr.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
-      }
-      const vb = svgEl.viewBox && svgEl.viewBox.baseVal;
-      const rect = svgEl.getBoundingClientRect();
-      const w = (vb && vb.width)  || rect.width  || 300;
-      const h = (vb && vb.height) || rect.height || 220;
-      const blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = w * scale;
-        canvas.height = h * scale;
-        const ctx = canvas.getContext('2d');
-        ctx.scale(scale, scale);
-        ctx.drawImage(img, 0, 0, w, h);
-        URL.revokeObjectURL(url);
-        resolve(canvas.toDataURL('image/png'));
-      };
-      img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
-      img.src = url;
-    } catch (err) {
-      console.error('[Relatório Gerencial - Dashboard] Falha ao capturar SVG:', err);
-      resolve(null);
-    }
+
+
+
+
+// ── Clona uma seção VIVA do Dashboard Gerencial pro relatório ─────
+//    O relatório não remonta mais nada à mão: pega o próprio HTML que está
+//    na tela (marcado com data-rel-secao no index.html) e leva junto —
+//    cards, badges, tabelas, SVGs, atributos title e os data-tip dos
+//    donuts. O CSS do app vai embutido (_dgrCssApp) e os tooltips são
+//    religados por delegação no arquivo gerado (_dgrScriptTooltipApp),
+//    então o resultado é a mesma interface, não uma réplica.
+//    Única exceção: <canvas> (Chart.js) não sobrevive a cloneNode — vira
+//    <img> do pixel atual, no MESMO tamanho que tinha na tela.
+// ponytail: canvas vira PNG (perde o tooltip do Chart.js). Reinstanciar o
+// Chart no relatório exigiria serializar options com callbacks + carregar
+// a lib — só vale se pedirem tooltip nas barras.
+function _dgrClonarSecaoDom(secaoId) {
+  const src = document.querySelector(`[data-rel-secao="${secaoId}"]`);
+  if (!src) return '<div class="dgr-nota">Seção indisponível na tela.</div>';
+
+  const clone = src.cloneNode(true);
+  const canvasVivos = src.querySelectorAll('canvas');
+  clone.querySelectorAll('canvas').forEach((c, i) => {
+    const vivo = canvasVivos[i];
+    const img  = document.createElement('img');
+    try { img.src = vivo.toDataURL('image/png'); }
+    catch (err) { console.error('[Relatório Gerencial] Falha ao capturar canvas:', err); }
+    const r = vivo.getBoundingClientRect();
+    img.style.cssText = `width:${Math.round(r.width)}px;height:${Math.round(r.height)}px;max-width:100%;display:block`;
+    c.replaceWith(img);
   });
+  return clone.innerHTML;
 }
 
-// ── Captura um <canvas> (Chart.js) já desenhado na tela em PNG — cores
-//    já vêm "assadas" nos pixels do canvas, sem depender de CSS var. ─────
-function _dgrCanvasParaPngDataUrl(canvasId) {
-  const c = document.getElementById(canvasId);
-  if (!c) return null;
-  try { return c.toDataURL('image/png'); }
-  catch (err) { console.error('[Relatório Gerencial - Dashboard] Falha ao capturar canvas', canvasId, err); return null; }
+// ── CSS do próprio app, embutido no relatório ──────────────────
+//    Sem isso o HTML clonado chega sem estilo nenhum. Só as folhas locais
+//    (as de CDN são ignoradas — fontes e ícones já vão embutidos em base64
+//    por _dgrFontesEmbutidas/_dgrFonteIconesEmbutida). O único url() do
+//    css/ é um data: URI, então nada quebra fora da origem do app.
+async function _dgrCssApp() {
+  const hrefs = [...document.querySelectorAll('link[rel="stylesheet"]')]
+    .map(l => l.getAttribute('href'))
+    .filter(h => h && !/^https?:/i.test(h));
+  const partes = await Promise.all(hrefs.map(h =>
+    fetch(h).then(r => r.ok ? r.text() : '').catch(() => '')
+  ));
+  return partes.join('\n');
 }
 
-// ── Seção 1: Resumo do Período (réplica dos cards de KPI da tela, com
-//    cores literais do tema escuro em vez de var(--x) — ver nota acima). ──
-function _dgrBuildResumoPeriodoHtml(d) {
-  const colorFor = v => v < -0.0001 ? '#f43f5e' : v > 0.0001 ? '#f59e0b' : '#06b6d4';
-  const varCol = colorFor(d.varTotalFisica);
-  const cstCol = colorFor(d.custoTotal);
-
-  // movTotais vem do Dashboard Gerencial com os três baldes LÍQUIDOS e com
-  // sinal (ver _dgVgMovimentacaoTotais) — soma, não subtrai.
-  const totalEstTeorico = d.estTotais.totalIni + d.movTotais.totalEnt + d.movTotais.totalSai + (d.movTotais.totalAju || 0);
-  const pctVariacao = Math.abs(totalEstTeorico) > 0.0001 ? (d.varTotalFisica / totalEstTeorico) * 100 : null;
-  const custoEstTeorico = (d.estTotais.custoIni || 0) + (d.custoMovTotais.custoEnt || 0) - (d.custoMovTotais.custoSai || 0);
-  const pctCusto = Math.abs(custoEstTeorico) > 0.0001 ? (d.custoTotal / custoEstTeorico) * 100 : null;
-
-  // Evolução = Est. Final Total (SAP) em relação ao Est. Inicial Total
-  // (SAP) — usa o teórico (totalEstTeorico/custoEstTeorico, calculado
-  // acima), não o medido (estTotais.totalFim/custoFim).
-  const kgEvolucao    = totalEstTeorico - d.estTotais.totalIni;
-  const custoEvolucao = custoEstTeorico - (d.estTotais.custoIni || 0);
-  const pctEvolucao   = Math.abs(d.estTotais.totalIni) > 0.0001 ? (kgEvolucao / d.estTotais.totalIni) * 100 : null;
-  const evoCol = colorFor(kgEvolucao);
-
-  const pctStr = p => p === null ? '—' : Math.abs(p).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%';
-
-  // Saldo físico do card hero em toneladas (kg ÷ 1.000) — só essa linha,
-  // a pedido do Hugo; o resto do relatório (cards secundários, tabela de
-  // Detalhamento) continua em kg, que é o grão certo pra aquele nível de
-  // detalhe.
-  const fmtTon = kg => (kg / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ton';
-
-  // Caminhões/Carretas/IBCs (equivalente em veículos da variação física —
-  // mesma metodologia da tela, ver veiculosRowHtml em _dgVgRenderKpisHero,
-  // dashboard.js) — versão discreta, sem ícone/selo, pra ficar ao lado do
-  // saldo em vez de ocupar uma grade grande embaixo (ficava desbalanceado).
-  const v = d.veiculosTotalKpi || {};
-  const veiculoStat = (label, valor) => `
-    <div class="dgr-kpi-veiculo-simples">
-      <div class="dgr-kpi-veiculo-simples-valor" style="color:${_dgrValCor(valor)}">${_daFmtCountSigned(valor)}</div>
-      <div class="dgr-kpi-veiculo-simples-label">${label}</div>
-    </div>`;
-  const veiculosHtml = (v.caminhoes || v.carretas || v.ibcs) ? `
-    <div class="dgr-kpi-veiculos-simples">
-      ${veiculoStat('Caminhões', v.caminhoes)}
-      ${veiculoStat('Carretas', v.carretas)}
-      ${veiculoStat('IBCs', v.ibcs)}
-    </div>` : '';
-
-  // Card secundário padrão (rótulo + selo de ícone colorido no topo, valor
-  // grande, subvalor menor).
-  const card2 = (label, iconCls, iconCol, valor, sub) => `
-    <div class="dgr-kpi-card">
-      <div class="dgr-kpi-card-head">
-        <div class="dgr-kpi-label">${label}</div>
-        <div class="dgr-kpi-icon" style="background:${iconCol}1f;color:${iconCol}"><i class="ti ${iconCls}"></i></div>
-      </div>
-      <div class="dgr-kpi-value">${valor}</div>
-      <div class="dgr-kpi-unit" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--dgr-divider, rgba(255,255,255,.08))">${sub}</div>
-    </div>`;
-
-  // Card "Variação Ajustada" — as % de Variação e de Custo Var. separadas
-  // do card hero, cada uma com seu mini-rótulo, uma acima da outra.
-  const cardVariacaoAjustada = `
-    <div class="dgr-kpi-card">
-      <div class="dgr-kpi-card-head">
-        <div class="dgr-kpi-label">Variação Ajustada</div>
-        <div class="dgr-kpi-icon" style="background:${varCol}1f;color:${varCol}"><i class="ti ti-adjustments"></i></div>
-      </div>
-      ${pctVariacao === null ? '<div class="dgr-kpi-unit">—</div>' : `
-      <div class="dgr-kpi-pct" style="color:${varCol}">${varSymbol(d.varTotalFisica)} ${pctStr(pctVariacao)}</div>
-      <div class="dgr-kpi-unit">Variação · Est. Final Total (Medição) - Est. Final Total (SAP)</div>`}
-      ${pctCusto === null ? '' : `
-      <div class="dgr-kpi-divider-row">
-        <div class="dgr-kpi-pct-sub" style="color:${cstCol}">${varSymbol(d.custoTotal)} ${pctStr(pctCusto)}</div>
-        <div class="dgr-kpi-pct-label">Custo Var. · do Custo Teórico</div>
-      </div>`}
-    </div>`;
-
-  // Parêntese com o mesmo saldo em toneladas, ao lado do valor em kg —
-  // mesma divisão por 1.000 do card hero (fmtTon), só que discreto (menor,
-  // cor dim) por ficar colado no valor grande em vez de ser ele.
-  const tonAoLado = kg => ` <span style="font-weight:400;font-size:.65em;color:var(--dgr-text-dim2, #64748b)">(${fmtTon(kg)})</span>`;
-
-  // Card "Est. Final Total - Medição" — Saldo Teórico SAP (Est. Inicial +
-  // Entradas + Saídas + Ajustes, já calculado acima em totalEstTeorico) em evidência,
-  // Saldo Real (o estoqueFim importado, ver _dgVgEstoqueTotais em
-  // dashboard.js) abaixo — os dois podem divergir quando há ajuste manual
-  // não refletido no SAP.
-  const cardEstFinal = `
-    <div class="dgr-kpi-card">
-      <div class="dgr-kpi-card-head">
-        <div class="dgr-kpi-label">Est. Final Total - SAP</div>
-        <div class="dgr-kpi-icon" style="background:#3b82f61f;color:#3b82f6"><i class="ti ti-circle-check"></i></div>
-      </div>
-      <div class="dgr-kpi-value">${fmtKg(totalEstTeorico)}${tonAoLado(totalEstTeorico)}</div>
-      <div class="dgr-kpi-unit">${money(custoEstTeorico)}</div>
-      <div class="dgr-kpi-divider-row" style="flex-direction:column;align-items:flex-start;gap:2px">
-        <div class="dgr-kpi-pct-label">Est. Final Total (Medição)</div>
-        <div class="dgr-kpi-pct-sub">${fmtKg(d.estTotais.totalFim)}${tonAoLado(d.estTotais.totalFim)}</div>
-      </div>
-    </div>`;
-
-  return `
-    <div class="dgr-kpi-secondary">
-      ${card2('Est. Inicial Total - SAP', 'ti-database', '#94a3b8', fmtKg(d.estTotais.totalIni) + tonAoLado(d.estTotais.totalIni), money(d.estTotais.custoIni || 0))}
-      ${card2('Entradas - SAP', 'ti-activity', '#10b981', fmtKgSigned(d.movTotais.totalEnt) + tonAoLado(d.movTotais.totalEnt), money(d.custoMovTotais.custoEnt || 0))}
-      ${card2('Saídas - SAP', 'ti-activity', '#f43f5e', fmtKgSigned(d.movTotais.totalSai) + tonAoLado(d.movTotais.totalSai), money(d.custoMovTotais.custoSai || 0))}
-      ${card2('Ajustes - SAP', 'ti-adjustments-alt', '#f59e0b', fmtKgSigned(d.movTotais.totalAju || 0) + tonAoLado(d.movTotais.totalAju || 0), money(d.custoMovTotais.custoAju || 0))}
-      ${cardEstFinal}
-      ${card2('Evolução Estoque', 'ti-chart-line', '#8b5cf6', `<span style="color:${evoCol}">${pctEvolucao === null ? '—' : varSymbol(kgEvolucao) + ' ' + pctStr(pctEvolucao)}</span><div class="dgr-kpi-unit" style="margin-top:4px">Evolução · Est. Final Total (SAP) - Est. Inicial Total (SAP)</div>`, `${varSymbol(kgEvolucao)} ${fmtKg(Math.abs(kgEvolucao))}<br>${varSymbol(kgEvolucao)} ${money(Math.abs(custoEvolucao))}`)}
-      ${cardVariacaoAjustada}
-    </div>
-    <div class="dgr-kpi-hero" style="border-top-color:${cstCol}">
-      <div class="dgr-kpi-card-head">
-        <div class="dgr-kpi-label">Variação Estoque</div>
-        <div class="dgr-kpi-icon" style="background:${cstCol}1f;color:${cstCol}"><i class="ti ti-currency-dollar"></i></div>
-      </div>
-      <div class="dgr-kpi-unit">Est. Final Total (Medição) - Est. Final Total (SAP)</div>
-      <div class="dgr-kpi-hero-saldo" style="color:${varCol}">${varSymbol(d.varTotalFisica)} ${fmtKg(Math.abs(d.varTotalFisica))}${tonAoLado(Math.abs(d.varTotalFisica))}</div>
-      <div class="dgr-kpi-hero-custo-row">
-        <div>
-          <div class="dgr-kpi-hero-custo" style="color:${cstCol}">${varSymbol(d.custoTotal)} ${money(Math.abs(d.custoTotal))}</div>
-          <div class="dgr-kpi-unit">R$ bruto</div>
-        </div>
-        ${veiculosHtml}
-      </div>
-    </div>`;
+// ── Tooltips dos donuts, religados no arquivo gerado ─────────────
+//    Os handlers de _dgVgDrawDonutSvg são addEventListener — morrem no
+//    clone. Os DADOS (data-tip/data-col/data-idx e as classes dvslice-*/
+//    dvcallout-*) sobrevivem, então dá pra reproduzir o mesmo
+//    comportamento (tooltip + dimming dos irmãos) por delegação, sem
+//    carregar macro.js nenhum. Mesmo visual de _getTip (macro.js).
+function _dgrScriptTooltipApp() {
+  return `<script>
+(function() {
+  var tip = null;
+  function getTip() {
+    if (tip) return tip;
+    tip = document.createElement('div');
+    tip.style.cssText = 'position:fixed;z-index:9999;pointer-events:none;display:none;'
+      + 'background:var(--bg2);border:1px solid var(--border3);border-radius:10px;'
+      + 'padding:12px 15px;min-width:200px;max-width:260px;'
+      + 'box-shadow:0 8px 32px rgba(0,0,0,.5);font-family:var(--font);font-size:12px';
+    document.body.appendChild(tip);
+    return tip;
+  }
+  function pos(t, cx, cy) {
+    var PAD = 10, W = window.innerWidth, H = window.innerHeight;
+    var r = t.getBoundingClientRect();
+    var tw = r.width || 260, th = r.height || 160;
+    var lx = cx + 14, ly = cy + 14;
+    if (lx + tw + PAD > W) lx = cx - tw - 10;
+    if (ly + th + PAD > H) ly = cy - th - 10;
+    t.style.left = Math.max(PAD, Math.min(lx, W - tw - PAD)) + 'px';
+    t.style.top  = Math.max(PAD, Math.min(ly, H - th - PAD)) + 'px';
+  }
+  function uidDe(el) {
+    for (var i = 0; i < el.classList.length; i++) {
+      if (el.classList[i].indexOf('dvslice-') === 0) return el.classList[i].slice(8);
+    }
+    return null;
+  }
+  function dim(el, ligado) {
+    var uid = el && uidDe(el);
+    if (!uid) return;
+    document.querySelectorAll('.dvslice-' + uid).forEach(function(s) {
+      s.classList.toggle('m-dimmed', ligado && s !== el);
+    });
+    document.querySelectorAll('.dvcallout-' + uid).forEach(function(c) {
+      c.classList.toggle('m-dimmed', ligado && c.dataset.calloutIdx !== el.dataset.idx);
+    });
+  }
+  document.addEventListener('mouseover', function(e) {
+    var el = e.target.closest && e.target.closest('[data-tip]');
+    if (!el) return;
+    var t = getTip();
+    t.innerHTML = decodeURIComponent(el.dataset.tip);
+    t.style.borderColor = (el.dataset.col || '#3b82f6') + '55';
+    t.style.display = 'block';
+    pos(t, e.clientX, e.clientY);
+    dim(el, true);
+  });
+  document.addEventListener('mousemove', function(e) {
+    if (!tip || tip.style.display === 'none') return;
+    pos(tip, e.clientX, e.clientY);
+  });
+  document.addEventListener('mouseout', function(e) {
+    var el = e.target.closest && e.target.closest('[data-tip]');
+    if (!el) return;
+    if (tip) tip.style.display = 'none';
+    dim(el, false);
+  });
+})();
+<\/script>`;
 }
 
-// ── Seção 2: Saúde Geral — Centrais e Materiais (gauges capturados como
-//    imagem + badges de contagem por nível, reaproveitados direto do DOM
-//    já renderizado — já usam cores literais, só o font-family precisa de
-//    resolução). ────────────────────────────────────────────────────────
-function _dgrBuildSaudeGeralHtml(imgCentral, imgMateriais) {
-  const resolveMono = html => (html || '').replace(/var\(--mono\)/g, "'JetBrains Mono',monospace");
-  const summaryCentral   = resolveMono(document.getElementById('dg-vg-health-central-summary')?.innerHTML);
-  const summaryMateriais = resolveMono(document.getElementById('dg-vg-health-materiais-summary')?.innerHTML);
-  const subCentral    = document.getElementById('dg-vg-health-central-subtitle')?.textContent || '';
-  const subMateriais  = document.getElementById('dg-vg-health-materiais-subtitle')?.textContent || '';
-
-  const card = (titulo, iconCls, sub, img, summary) => `
-    <div class="dgr-health-card">
-      <div class="dgr-health-title"><i class="ti ${iconCls}"></i><span>${_rankEsc(titulo)}</span><span style="margin-left:auto;font-weight:400;color:#64748b;font-size:10px">${_rankEsc(sub)}</span></div>
-      ${img ? `<img src="${img}" alt="${_rankEsc(titulo)}">` : '<div style="padding:40px 0;color:#64748b;font-size:11px;text-align:center">Gráfico indisponível</div>'}
-      <div class="dgr-health-summary">${summary}</div>
-    </div>`;
-
-  return `
-    <div class="dgr-health-grid">
-      ${card('Saúde Geral — Centrais', 'ti-building-factory-2', subCentral, imgCentral, summaryCentral)}
-      ${card('Saúde Geral — Materiais', 'ti-heartbeat', subMateriais, imgMateriais, summaryMateriais)}
-    </div>`;
+// ── Modal "Registros desconsiderados" (Ajustes de Fechamento) ──────
+//    O botão .dg-fech-badge-compact vem junto no clone do Resumo do
+//    Período chamando openFechModal(...). Em vez de reimplementar o modal
+//    no relatório, pré-preenche o modal REAL do app (openFechModal +
+//    closeFechModal, ui.js) e clona o overlay já montado; no arquivo
+//    gerado, openFechModal vira só "abre o que já está aqui".
+function _dgrClonarFechModal(periodo) {
+  const overlay = document.getElementById('fech-modal-overlay');
+  const recs = window._dgVgFechExcluidosAtual || [];
+  if (!overlay || !recs.length || typeof openFechModal !== 'function') return '';
+  const estavaAberto = overlay.classList.contains('open');
+  openFechModal(recs, periodo);
+  if (!estavaAberto && typeof closeFechModal === 'function') closeFechModal();
+  const clone = overlay.cloneNode(true);
+  clone.classList.remove('open');
+  clone.setAttribute('aria-hidden', 'true');
+  return clone.outerHTML + `<script>
+function openFechModal() {
+  var o = document.getElementById('fech-modal-overlay');
+  if (o) { o.classList.add('open'); o.setAttribute('aria-hidden', 'false'); }
+}
+function closeFechModal() {
+  var o = document.getElementById('fech-modal-overlay');
+  if (o) { o.classList.remove('open'); o.setAttribute('aria-hidden', 'true'); }
+}
+<\/script>`;
 }
 
-// ── Captura do gráfico "Desfalque e Sobra por Categoria" ampliado só pra
-//    o relatório: na tela (Visão Geral) esse canvas vive num container de
-//    180px de altura, adequado ao card compacto do dashboard, mas que
-//    fica espremido quando reaproveitado 1:1 no PDF (poucas linhas de
-//    respiro entre as 4 categorias + legenda + eixo). Em vez de mudar a
-//    altura fixa da tela (afetaria o dashboard ao vivo), redimensiona o
-//    <canvas> e reforça as fontes dos dois plugins/eixos SÓ durante a
-//    captura, e devolve tudo ao estado original logo depois — a tela
-//    nunca fica visivelmente diferente pro usuário (a troca acontece com
-//    o overlay "Gerando relatório..." por cima). chart.update('none') é
-//    usado pra pular a animação e desenhar de forma síncrona antes do
-//    toDataURL(). ─────────────────────────────────────────────────────
-// ── Captura TODOS os gráficos/gauges do Relatório Gerencial já na cor do
-//    parâmetro `tema` recebido (fixo, sem modal de escolha — ver
-//    abrirModalSelecaoRelatorioGerencial). Duas famílias de gráfico, dois
-//    mecanismos diferentes:
-//    - Chart.js (categoria/regional/usina): a cor é "assada" em pixel no
-//      canvas no momento do render — só trocar o atributo data-theme NÃO
-//      redesenha um canvas já pintado. Preciso re-chamar as funções de
-//      render (com os dados já cacheados em window._dgVgLastData, sem
-//      recalcular nada) DEPOIS de trocar o tema, pra elas lerem a cor
-//      nova via _dgVgTheme().
-//    - Gauges SVG (Saúde Geral): usam fill="var(--text)" AO VIVO no
-//      próprio elemento — o navegador já repinta sozinho assim que
-//      data-theme muda, sem precisar re-render explícito. Só a CAPTURA
-//      (_dgrSvgParaPngDataUrl) precisa ler o valor computado atual, o que
-//      já foi corrigido lá.
-//    Tudo isso acontece com o overlay "Gerando relatório..." (z-index
-//    9100, cobre a tela inteira incl. sidebar) por cima, então a troca
-//    de tema "piscando" pra capturar nunca fica visível pro usuário — a
-//    tela volta exatamente como estava antes de o overlay fechar. ───────
-async function _dgrCapturarComTema(tema, d) {
+// ── Roda `fn` com o Dashboard forçado no tema do relatório ───────
+//    Os SVGs/cards clonados seguem o tema do PRÓPRIO relatório (usam
+//    var(--x) ao vivo), mas os <canvas> do Chart.js têm a cor assada em
+//    pixel: precisam ser redesenhados no tema certo ANTES da clonagem —
+//    por isso a clonagem inteira roda aqui dentro. Tudo acontece atrás do
+//    overlay "Gerando relatório...", então a troca de tema nunca fica
+//    visível; o finally devolve a tela exatamente como estava.
+function _dgrCapturarComTema(tema, d, fn) {
   const temaOriginal = document.body.dataset.theme; // undefined = escuro (padrão)
 
   // Desliga a animação de entrada do Chart.js (globalmente, só durante
   // essa captura) — redesenharGraficos() DESTRÓI e RECRIA os 3 gráficos
-  // do zero (_dgVgDestroyChart + new Chart), e por padrão o Chart.js anima
-  // as barras crescendo de 0 até o valor final em ~1000ms. Como a captura
-  // do canvas (toDataURL) acontece na MESMA sincronia, sem isso ela pega
-  // um frame no meio dessa animação — barras minúsculas/cortadas, coladas
-  // no zero, exatamente o bug relatado. Restaurado no finally, então o uso
-  // normal do Dashboard (botão "Atualizar") continua animando como sempre.
+  // do zero, e por padrão o Chart.js anima as barras crescendo de 0 até o
+  // valor final em ~1000ms. Como o toDataURL do clone acontece na MESMA
+  // sincronia, sem isso ele pega um frame no meio da animação — barras
+  // minúsculas/cortadas, coladas no zero. Restaurado no finally.
   const animOriginal = (typeof Chart !== 'undefined') ? Chart.defaults.animation : undefined;
   if (typeof Chart !== 'undefined') Chart.defaults.animation = false;
 
@@ -3426,24 +3339,8 @@ async function _dgrCapturarComTema(tema, d) {
     if (tema === 'light') document.body.setAttribute('data-theme', 'light');
     else document.body.removeAttribute('data-theme'); // 'dark' = tema raiz do tokens.css
     redesenharGraficos();
-
-    const [imgGaugeCentral, imgGaugeMateriais] = await Promise.all([
-      _dgrSvgParaPngDataUrl(document.getElementById('dg-vg-gauge-central-svg')),
-      _dgrSvgParaPngDataUrl(document.getElementById('dg-vg-gauge-chart-svg'))
-    ]);
-    const imgCategoria = _dgrCapturarCategoriaAmpliada();
-    const imgRegional  = _dgrCanvasParaPngDataUrl('dg-vg-chart-regional');
-    const imgUsina     = _dgrCanvasParaPngDataUrl('dg-vg-chart-usina');
-
-    return { imgGaugeCentral, imgGaugeMateriais, imgCategoria, imgRegional, imgUsina };
+    return fn();
   } finally {
-    // Restaura o tema original da TELA (não do relatório) e redesenha os
-    // 3 gráficos de novo com a cor de volta — sem isso, o Dashboard ao
-    // vivo ficaria preso no tema usado só pra captura. Anima normalmente
-    // de novo (ainda com animação desligada, restaurada logo abaixo) —
-    // como está tudo atrás do overlay, não faz diferença visual, e evita
-    // qualquer chance de o usuário ver o redraw "crescendo" quando o
-    // overlay fechar.
     if (temaOriginal) document.body.setAttribute('data-theme', temaOriginal);
     else document.body.removeAttribute('data-theme');
     redesenharGraficos();
@@ -3451,200 +3348,9 @@ async function _dgrCapturarComTema(tema, d) {
   }
 }
 
-function _dgrCapturarCategoriaAmpliada() {
-  const canvas = document.getElementById('dg-vg-chart-categoria');
-  // _dgVgCharts é `let` no topo de dashboard.js — NÃO vira propriedade de
-  // window (só `var`/funções top-level viram). Como os dois arquivos são
-  // <script> clássicos na mesma página, a referência solta (sem "window.")
-  // enxerga a mesma variável, porque let/const de nível superior entram
-  // num escopo léxico global compartilhado entre scripts, só não em
-  // window. window._dgVgCharts (versão anterior) dava sempre undefined,
-  // então isso SEMPRE caía no fallback abaixo (canvas cru, 180px, largura
-  // total da tela) — o ajuste de altura nunca chegava a rodar de verdade.
-  const chart  = (typeof _dgVgCharts !== 'undefined' ? _dgVgCharts : window._dgVgCharts)?.categoria;
-  const wrap   = canvas?.parentElement;
-  if (!canvas || !chart || !wrap) return _dgrCanvasParaPngDataUrl('dg-vg-chart-categoria');
 
-  // Controla LARGURA e ALTURA da captura — não só a altura. Na tela, esse
-  // card é largura cheia do Dashboard (bem mais largo que a coluna do
-  // relatório em retrato, ~590px de conteúdo dentro do card). Só mudar a
-  // altura (versão anterior) deixava a imagem com proporção larga/rasa
-  // (ex.: 1200×460), e ao ser exibida no card mais estreito do relatório
-  // via max-width:100%;height:auto, a altura EFETIVA encolhia nessa mesma
-  // proporção — voltando a parecer espremida mesmo com 460px "de verdade"
-  // na captura. Fixando os dois valores aqui, a proporção da imagem final
-  // fica sempre previsível, não importa a largura da tela de quem gerou.
-  const LARGURA_RELATORIO = '680px';
-  const ALTURA_RELATORIO  = '320px'; // proporção ~0,47 — peso visual parecido com os cards de gauge vizinhos (Saúde Geral), que ficam bem mais compactos
-  const larguraOriginal = wrap.style.width;
-  const alturaOriginal  = wrap.style.height;
 
-  // Snapshot das fontes/opções originais (todas nascem com os mesmos
-  // valores hoje, mas cada uma é restaurada da sua própria referência por
-  // segurança caso algum dia divirjam).
-  const opts = chart.options;
-  const scaleXFontOriginal   = { ...opts.scales.x.ticks.font };
-  const scaleYFontOriginal   = { ...opts.scales.y.ticks.font };
-  const legendFontOriginal   = { ...opts.plugins.legend.labels.font };
-  const totalsFontSizeOriginal = opts.plugins.dgVgCategoryTotals.fontSize;
-  const barLabelsFontSizeOriginal = opts.plugins.dgVgBarValueLabels.fontSize;
-  const graceOriginal = opts.scales.x.grace;
-  const categoryPercentageOriginal = opts.scales.y.categoryPercentage;
-  const barPercentageOriginal = opts.scales.y.barPercentage;
-  const paddingLeftOriginal  = opts.layout.padding.left;
-  const paddingRightOriginal = opts.layout.padding.right;
 
-  let dataUrl = null;
-  try {
-    wrap.style.width  = LARGURA_RELATORIO;
-    wrap.style.height = ALTURA_RELATORIO;
-
-    opts.scales.x.ticks.font = { ...scaleXFontOriginal, size: 13 };
-    opts.scales.y.ticks.font = { ...scaleYFontOriginal, size: 14 };
-    opts.plugins.legend.labels.font = { ...legendFontOriginal, size: 13 };
-    opts.plugins.dgVgCategoryTotals.fontSize = 13;
-    opts.plugins.dgVgBarValueLabels.fontSize = 13;
-
-    // Sobreposição "Adição"/"459,5 kg" e "11,0 K kg"/"Δ -5,1 K kg" das
-    // capturas anteriores corrigidas na raiz: _dgVgBarValueLabelsPlugin
-    // (dashboard.js) agora SEMPRE desenha dentro da barra quando ela tem
-    // espaço, ficando contido nos próprios limites dela — não depende
-    // mais de calcular o espaço "fora" (frágil, variava com os dados).
-    // Esse grace um pouco maior aqui é só respiro visual extra.
-    opts.scales.x.grace = '25%';
-    // Barras mais finas — pedido do usuário. categoryPercentage controla
-    // quanto da "fatia" de cada categoria a barra ocupa (0.8 = padrão do
-    // Chart.js); reduzindo, sobra mais respiro vertical entre as linhas
-    // e a barra fica visualmente mais fina, sem mudar o comprimento (%).
-    opts.scales.y.categoryPercentage = 0.5;
-    opts.scales.y.barPercentage = 0.85;
-    // Δ (dashboard.js) agora ancora pela borda direita do canvas — nunca
-    // mais corta, seja qual for o tamanho do texto. Esse padding.right
-    // ainda importa: é o espaço reservado pra essa coluna existir sem
-    // "empurrar"/sobrepor a área dos gráficos. Valor generoso de propósito.
-    opts.layout.padding.left  = 35;
-    opts.layout.padding.right = 125;
-
-    chart.resize();
-    chart.update('none'); // sem animação — desenha na hora, síncrono
-
-    dataUrl = _dgrCanvasParaPngDataUrl('dg-vg-chart-categoria');
-  } catch (err) {
-    console.error('[Relatório Gerencial - Dashboard] Falha ao ampliar gráfico Categoria para captura:', err);
-  } finally {
-    // Restaura a tela ao estado original, mudando ou não.
-    wrap.style.width  = larguraOriginal;
-    wrap.style.height = alturaOriginal;
-    opts.scales.x.ticks.font = scaleXFontOriginal;
-    opts.scales.y.ticks.font = scaleYFontOriginal;
-    opts.plugins.legend.labels.font = legendFontOriginal;
-    opts.plugins.dgVgCategoryTotals.fontSize = totalsFontSizeOriginal;
-    opts.plugins.dgVgBarValueLabels.fontSize = barLabelsFontSizeOriginal;
-    opts.scales.x.grace = graceOriginal;
-    opts.scales.y.categoryPercentage = categoryPercentageOriginal;
-    opts.scales.y.barPercentage = barPercentageOriginal;
-    opts.layout.padding.left  = paddingLeftOriginal;
-    opts.layout.padding.right = paddingRightOriginal;
-    try { chart.resize(); chart.update('none'); } catch (e) { /* noop */ }
-  }
-
-  return dataUrl;
-}
-
-// ── Seção 3: Desfalque e Sobra por Categoria — gráfico de barra (Chart.js)
-//    capturado como imagem; cores já vêm "assadas" nos pixels do canvas,
-//    sem depender de CSS var (ver _dgrCanvasParaPngDataUrl). ─────────────
-function _dgrBuildCategoriaHtml(imgCategoria) {
-  return `
-    <div class="dgr-chart-card" style="margin-top:26px">
-      <div class="dgr-chart-title"><i class="ti ti-chart-bar"></i>Desfalque e Sobra por Categoria — Maior Variação Primeiro</div>
-      ${imgCategoria ? `<img src="${imgCategoria}" alt="Desfalque e Sobra por Categoria">` : '<div class="dgr-chart-empty">Gráfico indisponível</div>'}
-    </div>`;
-}
-
-// ── Seções 4/5/6: Variação por Regional e Central — 4 cards de destaque
-//    (extremos, reconstruídos a partir de d.extRegional/d.extCentral já
-//    calculados — mesma lógica de _dgVgRenderExtremos em dashboard.js, só
-//    com cores literais em vez de var(--x)) + os 2 gráficos de barra
-//    (Regional/Central) capturados como imagem. ──────────────────────────
-function _dgrBuildCustoRegionalCentralHtml(d, imgRegional, imgUsina) {
-  const extremoBox = (label, ext) => {
-    if (!ext) return `
-      <div class="dgr-extremo-box">
-        <div class="dgr-extremo-label">${_rankEsc(label)}</div>
-        <div class="dgr-extremo-value" style="color:#64748b">—</div>
-        <div class="dgr-extremo-name">Sem dados no período</div>
-      </div>`;
-    const col = ext.v < 0 ? '#f43f5e' : '#f59e0b';
-    return `
-      <div class="dgr-extremo-box">
-        <div class="dgr-extremo-label">${_rankEsc(label)}</div>
-        <div class="dgr-extremo-value" style="color:${col}">${_dgrNowrapNum(`${varSymbol(ext.v)} ${fmtKg(Math.abs(ext.v))}`)}</div>
-        <div class="dgr-extremo-kg">${_dgrNowrapNum(`${varSymbol(ext.aux || 0)} ${money(Math.abs(ext.aux || 0))}`)}</div>
-        <div class="dgr-extremo-name">${_rankEsc(ext.k)}</div>
-      </div>`;
-  };
-
-  const extremosHtml =
-    extremoBox('Regional · Maior Desfalque', d.extRegional.min && d.extRegional.min.v < 0 ? d.extRegional.min : null) +
-    extremoBox('Regional · Maior Sobra',     d.extRegional.max && d.extRegional.max.v > 0 ? d.extRegional.max : null) +
-    extremoBox('Central · Maior Desfalque',  d.extCentral.min  && d.extCentral.min.v  < 0 ? d.extCentral.min  : null) +
-    extremoBox('Central · Maior Sobra',      d.extCentral.max  && d.extCentral.max.v  > 0 ? d.extCentral.max  : null);
-
-  return `
-    <div class="dgr-extremos-grid">${extremosHtml}</div>
-    <div class="dgr-chart-grid">
-      <div class="dgr-chart-card">
-        <div class="dgr-chart-title"><i class="ti ti-users"></i>Variação por Regional</div>
-        ${imgRegional ? `<img src="${imgRegional}" alt="Variação por Regional">` : '<div class="dgr-chart-empty">Gráfico indisponível</div>'}
-      </div>
-      <div class="dgr-chart-card">
-        <div class="dgr-chart-title"><i class="ti ti-building-factory-2"></i>Variação por Central</div>
-        ${imgUsina ? `<img src="${imgUsina}" alt="Variação por Central">` : '<div class="dgr-chart-empty">Gráfico indisponível</div>'}
-      </div>
-    </div>`;
-}
-
-// ── Seções 7/8: Custo Absoluto — 1 donut combinado (Grupo de Material,
-//    em destaque) + 4 donuts de categoria (Agregado/Aglomerante/Aditivo/
-//    Adição), todos gerados por _dgVgRenderCustoDonutSvg (mesma função dos
-//    gauges de Saúde Geral) e capturados com a mesma técnica de resolução
-//    de var(--x) já validada na Fase 1.
-//    NÃO CHAMADA ATUALMENTE — removida do corpo do relatório a pedido do
-//    Hugo (jul/2026). Função mantida (não deletada) pra reativar rápido
-//    caso ele queira essa seção de volta; a captura das imagens
-//    correspondentes também foi removida do fluxo principal.
-function _dgrBuildCustoAbsolutoHtml(imgGrupo, imgsCat) {
-  const subGrupo = document.getElementById('dg-vg-grupo-subtitle')?.textContent || '';
-  const catTitulos = {
-    agregado: 'Custo Absoluto por Agregado',
-    aglomerante: 'Custo Absoluto por Aglomerante',
-    aditivo: 'Custo Absoluto por Aditivo',
-    adicao: 'Custo Absoluto por Adição'
-  };
-
-  const smallCard = catKey => {
-    const sub = document.getElementById(`dg-vg-donut-${catKey}-subtitle`)?.textContent || '';
-    const img = imgsCat[catKey];
-    return `
-      <div class="dgr-chart-card dgr-donut-small">
-        <div class="dgr-chart-title"><span>${_rankEsc(catTitulos[catKey])}</span><span style="margin-left:auto;font-weight:400;color:#64748b;font-size:10px">${_rankEsc(sub)}</span></div>
-        ${img ? `<img src="${img}" alt="${_rankEsc(catTitulos[catKey])}">` : '<div class="dgr-chart-empty">Gráfico indisponível</div>'}
-      </div>`;
-  };
-
-  return `
-    <div class="dgr-section-title" style="margin-top:26px"><i class="ti ti-chart-pie"></i>Custo Absoluto — Por Grupo e Categoria de Material</div>
-    <div class="dgr-grupo-layout">
-      <div class="dgr-chart-card dgr-donut-grande">
-        <div class="dgr-chart-title"><span><i class="ti ti-chart-donut"></i>Custo Absoluto por Grupo de Material</span><span style="margin-left:auto;font-weight:400;color:#64748b;font-size:10px">${_rankEsc(subGrupo)}</span></div>
-        ${imgGrupo ? `<img src="${imgGrupo}" alt="Custo Absoluto por Grupo de Material">` : '<div class="dgr-chart-empty">Gráfico indisponível</div>'}
-      </div>
-      <div class="dgr-donut-sub-grid">
-        ${smallCard('agregado')}${smallCard('aglomerante')}${smallCard('aditivo')}${smallCard('adicao')}
-      </div>
-    </div>`;
-}
 
 // ── Seção 9: Giro & Cobertura — Top 5 Centrais/Materiais mais saudáveis e
 //    mais críticos. Lê d.giro (cache populado no fim de renderDgGiro, em
@@ -3790,119 +3496,6 @@ function _dgrNowrapNum(str) {
   const m = s.match(/(?:R\$\s*)?[\d.,]+(?!.*[\d.,])/);
   if (!m) return s;
   return s.slice(0, m.index) + `<span style="white-space:nowrap">${m[0]}</span>` + s.slice(m.index + m[0].length);
-}
-function _dgrTabelaMaterialHtml(dados) {
-  if (!dados.linhas.length) return '';
-  const rows = dados.linhas.map(l => {
-    const catLabel = l.catKey ? (DG_VG_CATSUB_LABELS[l.catSubKey] || DG_VG_CAT_LABELS[l.catKey] || l.catKey) : '';
-    return `
-    <tr>
-      <td class="rk-name" style="font-size:10.5px" title="${_rankEsc(l.mat)}"><span class="dgr-nome-trunc-inner">${_rankEsc(_dgrTruncNome(l.mat, 20))}</span>${catLabel ? `<div class="rk-sub dgr-nome-trunc-inner" title="${_rankEsc(catLabel)}">${_rankEsc(_dgrTruncNome(catLabel, 20))}</div>` : ''}</td>
-      <td class="rk-num" style="color:#06b6d4">${_dgrNowrapNum(fmtKg(l.estIni))}</td>
-      <td class="rk-num" style="color:#10b981">${_dgrNowrapNum(fmtKg(l.entKg))}</td>
-      <td class="rk-num" style="color:#f43f5e">${_dgrNowrapNum(fmtKg(l.saiKg))}</td>
-      <td class="rk-num" style="color:#06b6d4">${_dgrNowrapNum(fmtKg(l.estTeorico))}</td>
-      <td class="rk-num" style="color:#06b6d4">${_dgrNowrapNum(fmtKg(l.estFim))}</td>
-      <td class="rk-num" style="color:${_dgrValCor(l.pctVariacao)}">${_dgrNowrapNum(_daFmtPctSigned(l.pctVariacao))}</td>
-      <td class="rk-num">${_dgrNowrapNum(money(l.custoMedio) + '/kg')}</td>
-      <td class="rk-num" style="color:${_dgrValCor(l.custoAjuste)}">${_dgrNowrapNum(_daFmtMoneySigned(l.custoAjuste))}</td>
-    </tr>`;
-  }).join('');
-  const t = dados.total;
-  const totalRow = `
-    <tr style="font-weight:800;background:rgba(255,255,255,.05)">
-      <td class="rk-name">Total</td>
-      <td class="rk-num" style="color:#06b6d4">${_dgrNowrapNum(fmtKg(t.estIni))}</td>
-      <td class="rk-num" style="color:#10b981">${_dgrNowrapNum(fmtKg(t.entKg))}</td>
-      <td class="rk-num" style="color:#f43f5e">${_dgrNowrapNum(fmtKg(t.saiKg))}</td>
-      <td class="rk-num" style="color:#06b6d4">${_dgrNowrapNum(fmtKg(t.estTeorico))}</td>
-      <td class="rk-num" style="color:#06b6d4">${_dgrNowrapNum(fmtKg(t.estFim))}</td>
-      <td class="rk-num" style="color:${_dgrValCor(t.pctVariacao)}">${_dgrNowrapNum(_daFmtPctSigned(t.pctVariacao))}</td>
-      <td class="rk-num">${_dgrNowrapNum(money(t.custoMedio) + '/kg')}</td>
-      <td class="rk-num" style="color:${_dgrValCor(t.custoAjuste)}">${_dgrNowrapNum(_daFmtMoneySigned(t.custoAjuste))}</td>
-    </tr>`;
-  return `
-    <div class="dgr-table-wrap">
-      <div class="rk-table-head"><div class="rk-table-head-title">Detalhamento por Material (Grupo SAP)</div><div class="rk-table-head-cap">${dados.linhas.length} materia${dados.linhas.length !== 1 ? 'is' : 'l'}</div></div>
-      <table class="rk-table dgr-material-table">
-        <thead><tr>
-          <th style="width:9%">Grupo SAP</th>
-          <th style="width:12%;text-align:right">Est. Inicial</th>
-          <th style="width:12%;text-align:right">Entradas</th>
-          <th style="width:12%;text-align:right">Saídas</th>
-          <th style="width:12%;text-align:right">Est. Teórico</th>
-          <th style="width:12%;text-align:right">Est. Final</th>
-          <th style="width:9%;text-align:right">% Variação</th>
-          <th style="width:11%;text-align:right">Custo Médio</th>
-          <th style="width:11%;text-align:right">Custo Ajuste</th>
-        </tr></thead>
-        <tbody>${rows}</tbody>
-        <tfoot>${totalRow}</tfoot>
-      </table>
-    </div>`;
-}
-function _dgrRankingHtml(titulo, colLabel, dados) {
-  if (!dados.linhas.length) return '';
-  const rows = dados.linhas.map(l => {
-    const imp = _daMaiorImpacto(l);
-    const cell = (campo, valor) => imp === campo ? `<strong>${_dgrNowrapNum(_daFmtCountSigned(valor))}</strong>` : _dgrNowrapNum(_daFmtCountSigned(valor));
-    return `
-    <tr>
-      <td class="rk-name" style="font-size:11px">${_rankEsc(l.nome)}</td>
-      <td class="rk-num" style="color:${_dgrValCor(l.caminhoes)}">${cell('caminhoes', l.caminhoes)}</td>
-      <td class="rk-num" style="color:${_dgrValCor(l.carretas)}">${cell('carretas', l.carretas)}</td>
-      <td class="rk-num" style="color:${_dgrValCor(l.ibcs)}">${cell('ibcs', l.ibcs)}</td>
-      <td class="rk-num" style="color:${_dgrValCor(l.pctVariacao)}">${_dgrNowrapNum(_daFmtPctSigned(l.pctVariacao))}</td>
-      <td class="rk-num" style="color:${_dgrValCor(l.custoTotal)}">${_dgrNowrapNum(_daFmtMoneySigned(l.custoTotal))}</td>
-    </tr>`;
-  }).join('');
-  const t = dados.total;
-  const totalRow = `
-    <tr style="font-weight:800;background:rgba(255,255,255,.05)">
-      <td class="rk-name">Total</td>
-      <td class="rk-num" style="color:${_dgrValCor(t.caminhoes)}">${_dgrNowrapNum(_daFmtCountSigned(t.caminhoes))}</td>
-      <td class="rk-num" style="color:${_dgrValCor(t.carretas)}">${_dgrNowrapNum(_daFmtCountSigned(t.carretas))}</td>
-      <td class="rk-num" style="color:${_dgrValCor(t.ibcs)}">${_dgrNowrapNum(_daFmtCountSigned(t.ibcs))}</td>
-      <td class="rk-num" style="color:${_dgrValCor(t.pctVariacao)}">${_dgrNowrapNum(_daFmtPctSigned(t.pctVariacao))}</td>
-      <td class="rk-num" style="color:${_dgrValCor(t.custoTotal)}">${_dgrNowrapNum(_daFmtMoneySigned(t.custoTotal))}</td>
-    </tr>`;
-  return `
-    <div class="dgr-table-wrap">
-      <div class="rk-table-head"><div class="rk-table-head-title">${_rankEsc(titulo)}</div><div class="rk-table-head-cap">${dados.linhas.length} ${dados.linhas.length !== 1 ? 'itens' : 'item'}</div></div>
-      <table class="rk-table dgr-ranking-table">
-        <thead><tr>
-          <th style="width:26%">${_rankEsc(colLabel)}</th>
-          <th style="width:13%;text-align:right">Caminhões</th>
-          <th style="width:13%;text-align:right">Carretas</th>
-          <th style="width:13%;text-align:right">IBCs</th>
-          <th style="width:13%;text-align:right">Variação</th>
-          <th style="width:22%;text-align:right">Custo Total</th>
-        </tr></thead>
-        <tbody>${rows}</tbody>
-        <tfoot>${totalRow}</tfoot>
-      </table>
-    </div>`;
-}
-function _dgrBuildDetalhadoAnaliticoHtml(d) {
-  const entradasFlat = _daBuildEntradasFlat(d.results);
-  const pesoMedio     = _daPesoMedioPorTipo(entradasFlat);
-  const tabelaMaterial = _daBuildTabelaMaterial(d.pares);
-  const rankRegional  = _daBuildRanking(d.pares, pesoMedio, p => p.regional, d.totalEstTeoricoKpi, k => k === '—' ? 'Sem regional' : k);
-  const rankCentral   = _daBuildRanking(d.pares, pesoMedio, p => p.central,  d.totalEstTeoricoKpi);
-  const rankMaterial  = _daBuildRanking(d.pares, pesoMedio, p => p.mat,      d.totalEstTeoricoKpi);
-  const rankCategoria = _daBuildRanking(
-    d.pares, pesoMedio,
-    p => p.catKey === 'agregado' ? (p.catSubKey || 'agregado_sem_subcategoria') : p.catKey,
-    d.totalEstTeoricoKpi,
-    k => DG_VG_CATSUB_LABELS[k] || DG_VG_CAT_LABELS[k] || (k === 'agregado_sem_subcategoria' ? 'Agregado (sem subcategoria)' : k)
-  );
-
-  return `
-    ${_dgrTabelaMaterialHtml(tabelaMaterial)}
-    ${_dgrRankingHtml('Ranking de Regionais', 'Regional', rankRegional)}
-    ${_dgrRankingHtml('Ranking de Centrais', 'Central', rankCentral)}
-    ${_dgrRankingHtml('Ranking de Materiais', 'Material', rankMaterial)}
-    ${_dgrRankingHtml('Ranking de Categoria', 'Categoria', rankCategoria)}`;
 }
 
 function _dgrEstilos() {
@@ -4092,38 +3685,48 @@ function _dgrEstilos() {
 // ═══════════════════════════════════════════════════════════════════════════════
 window._RELATORIO_ABAS_REGISTRY = [
   {
-    id: 'visao-geral',
-    label: 'Visão Geral',
+    id: 'dashboard',
+    label: 'Dashboard',
     icon: 'ti-layout-dashboard',
     disponivel: () => !!window._dgVgLastData,
     secoes: [
-      { id: 'resumo-periodo',  label: 'Resumo do Período — Estoque, Movimentação e Variação', natural: false,
-        builder: (d) => _dgrBuildResumoPeriodoHtml(d) },
-      { id: 'custo-regional',  label: 'Variação por Regional e Central', natural: false,
-        builder: (d, imgs) => _dgrBuildCustoRegionalCentralHtml(d, imgs.imgRegional, imgs.imgUsina) },
-      { id: 'saude-categoria', label: 'Saúde Geral + Categoria', natural: false,
-        builder: (d, imgs) => _dgrBuildSaudeGeralHtml(imgs.imgGaugeCentral, imgs.imgGaugeMateriais) + _dgrBuildCategoriaHtml(imgs.imgCategoria) },
-      { id: 'detalhado',       label: 'Detalhado Analítico — Tabela de Material', natural: true,
-        builder: (d) => _dgrBuildDetalhadoAnaliticoHtml(d) }
+      { id: 'resumo-periodo',       label: 'Resumo do Período — Estoque, Movimentação e Variação' },
+      { id: 'saude-geral',          label: 'Saúde Geral — Centrais e Materiais' },
+      { id: 'variacao-reg-central', label: 'Variação por Regional e Central' },
+      { id: 'custo-absoluto',       label: 'Custo Absoluto — Por Grupo e Categoria de Material' }
+    ]
+  },
+  {
+    id: 'detalhado',
+    label: 'Detalhado Analítico',
+    icon: 'ti-table',
+    disponivel: () => !!window._dgVgLastData,
+    // Tabelas paginam livremente (natural) — travar cada uma numa página só
+    // cortaria ranking grande no meio.
+    secoes: [
+      { id: 'det-material',      label: 'Detalhamento por Material (Grupo SAP)', natural: true },
+      { id: 'det-rank-regional', label: 'Ranking de Regionais',                  natural: true },
+      { id: 'det-rank-central',  label: 'Ranking de Centrais',                   natural: true },
+      { id: 'det-rank-material', label: 'Ranking de Materiais',                  natural: true },
+      { id: 'det-rank-categoria', label: 'Ranking de Categoria',                 natural: true }
     ]
   }
-  // Consumo e Controle de Corte entram aqui em etapas futuras, cada um
-  // com seu próprio cache de dados (_dgConsLastData / _dgCorteLastData ou
-  // nomes equivalentes) e builders de seção próprios.
+  // Consumo e Controle de Corte entram aqui em etapas futuras: marcar as
+  // seções da aba no index.html com data-rel-secao e listá-las aqui — não
+  // existe mais builder de HTML nenhum pra escrever.
 ];
 
-// Seleção "tudo marcado" — usada quando o relatório é gerado sem passar
-// por seleção nenhuma (chamada direta/antiga) e como estado inicial dos
-// checkboxes no modal (nunca abre com nada desmarcado).
+// Seleção "tudo marcado", na ordem do registro — usada quando o relatório é
+// gerado sem passar por seleção nenhuma (chamada direta/antiga) e como
+// estado inicial do modal. Array (não objeto) porque a ORDEM das abas e das
+// seções agora é conteúdo: é ela que define a estrutura do relatório.
 function _dgrSelecaoCompleta() {
-  const sel = {};
-  window._RELATORIO_ABAS_REGISTRY.forEach(aba => {
-    if (aba.disponivel()) sel[aba.id] = aba.secoes.map(s => s.id);
-  });
-  return sel;
+  return window._RELATORIO_ABAS_REGISTRY
+    .filter(aba => aba.disponivel())
+    .map(aba => ({ aba: aba.id, secoes: aba.secoes.map(s => s.id) }));
 }
 
-// ── Modal de seleção: abas e seções que entram no HTML exportado ───────────
+// ── Modal de seleção: abas e seções que entram no HTML exportado ───────
 // Injeta o CSS uma única vez (guard por id, mesmo padrão do próprio modal
 // — evita empilhar <style> repetido toda vez que o modal reabre).
 function _dgrInjetarEstiloModalSelecao() {
@@ -4131,25 +3734,55 @@ function _dgrInjetarEstiloModalSelecao() {
   const style = document.createElement('style');
   style.id = 'rel-sel-modal-style';
   style.textContent = `
-    .rel-sel-aba { border:1px solid var(--border); border-radius:10px; padding:10px 12px; }
+    .rel-sel-aba { border:1px solid var(--border); border-radius:10px; padding:10px 12px; background:var(--bg2); }
     .rel-sel-aba.rel-sel-disabled { opacity:.5; }
-    .rel-sel-aba-header { display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; }
-    .rel-sel-aba-header input { margin:0; }
-    .rel-sel-badge { margin-left:auto; font-size:10.5px; color:var(--text3); font-weight:400; }
+    .rel-sel-aba-header { display:flex; align-items:center; gap:8px; font-size:13px; }
+    .rel-sel-aba-header input { margin:0; cursor:pointer; }
+    .rel-sel-aba-header > label { display:flex; align-items:center; gap:8px; cursor:pointer; flex:1; min-width:0; }
+    .rel-sel-badge { font-size:10.5px; color:var(--text3); font-weight:400; }
     .rel-sel-secoes { display:flex; flex-direction:column; gap:6px; margin:8px 0 0 26px; }
-    .rel-sel-secao { display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--text2); cursor:pointer; }
-    .rel-sel-secao input { margin:0; }
+    .rel-sel-secao { display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--text2); }
+    .rel-sel-secao > label { display:flex; align-items:center; gap:8px; cursor:pointer; flex:1; min-width:0; }
+    .rel-sel-secao input { margin:0; cursor:pointer; }
+    .rel-sel-mover { display:flex; gap:2px; flex-shrink:0; margin-left:auto; }
+    .rel-sel-mover button {
+      background:none; border:1px solid var(--border2); color:var(--text3);
+      border-radius:5px; width:22px; height:20px; line-height:1;
+      display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:12px;
+    }
+    .rel-sel-mover button:hover { color:var(--text); border-color:var(--accent); }
   `;
   document.head.appendChild(style);
+}
+
+// Sobe/desce um item (aba ou seção) uma posição entre os irmãos de mesma
+// classe. É a ordem do DOM aqui que vira a ordem do relatório — nenhum
+// índice guardado à parte pra sair de sincronia.
+// ponytail: setinhas em vez de drag-and-drop — acessível por teclado, zero
+// edge case de touch. Trocar por DnD se pedirem arrastar.
+window._dgrMoverItem = function(btn, dir) {
+  const item = btn.closest('.rel-sel-mov');
+  if (!item) return;
+  const irmao = dir < 0 ? item.previousElementSibling : item.nextElementSibling;
+  if (!irmao || !irmao.classList.contains('rel-sel-mov')) return;
+  if (dir < 0) item.parentNode.insertBefore(item, irmao);
+  else item.parentNode.insertBefore(irmao, item);
+};
+
+function _dgrBotoesMover() {
+  return `<span class="rel-sel-mover">
+      <button type="button" onclick="_dgrMoverItem(this,-1)" title="Subir"><i class="ti ti-chevron-up"></i></button>
+      <button type="button" onclick="_dgrMoverItem(this,1)" title="Descer"><i class="ti ti-chevron-down"></i></button>
+    </span>`;
 }
 
 // Ponto de entrada direto do botão "Relatório Gerencial" (index.html) —
 // sem modal de tema intermediário: o HTML gerado já tem seu próprio botão
 // de troca de tema embutido (ver _dgrScriptTema), então escolher o tema
 // antes de gerar virou redundante (decisão de jul/2026). O tema aqui só
-// define a cor em que os gráficos/gauges são capturados (rasterizados em
-// PNG — não mudam de cor junto com o toggle do HTML gerado, só o restante
-// da página muda; ver nota em _dgrCapturarComTema).
+// define a cor em que os gráficos de barra são capturados (rasterizados em
+// PNG — não mudam de cor junto com o toggle do HTML gerado; o resto do
+// relatório, clonado ao vivo, muda — ver nota em _dgrCapturarComTema).
 window.abrirModalSelecaoRelatorioGerencial = function(tema = 'dark') {
   const algumaDisponivel = window._RELATORIO_ABAS_REGISTRY.some(aba => aba.disponivel());
   if (!algumaDisponivel) {
@@ -4171,32 +3804,38 @@ window.abrirModalSelecaoRelatorioGerencial = function(tema = 'dark') {
   const abasHtml = window._RELATORIO_ABAS_REGISTRY.map(aba => {
     const disponivel = aba.disponivel();
     const secoesHtml = aba.secoes.map(sec => `
-      <label class="rel-sel-secao">
-        <input type="checkbox" data-aba="${aba.id}" data-secao="${sec.id}" ${disponivel ? 'checked' : 'disabled'}>
-        <span>${_rankEsc(sec.label)}</span>
-      </label>`
+      <div class="rel-sel-secao rel-sel-mov">
+        <label>
+          <input type="checkbox" data-aba="${aba.id}" data-secao="${sec.id}" ${disponivel ? 'checked' : 'disabled'}>
+          <span>${_rankEsc(sec.label)}</span>
+        </label>
+        ${_dgrBotoesMover()}
+      </div>`
     ).join('');
 
     return `
-      <div class="rel-sel-aba ${disponivel ? '' : 'rel-sel-disabled'}">
-        <label class="rel-sel-aba-header">
-          <input type="checkbox" class="rel-sel-aba-toggle" data-aba="${aba.id}" ${disponivel ? 'checked' : 'disabled'}>
-          <i class="ti ${aba.icon}"></i>
-          <strong>${_rankEsc(aba.label)}</strong>
-          ${disponivel ? '' : '<span class="rel-sel-badge">analise essa aba antes</span>'}
-        </label>
+      <div class="rel-sel-aba rel-sel-mov ${disponivel ? '' : 'rel-sel-disabled'}" data-aba="${aba.id}">
+        <div class="rel-sel-aba-header">
+          <label>
+            <input type="checkbox" class="rel-sel-aba-toggle" data-aba="${aba.id}" ${disponivel ? 'checked' : 'disabled'}>
+            <i class="ti ${aba.icon}"></i>
+            <strong>${_rankEsc(aba.label)}</strong>
+            ${disponivel ? '' : '<span class="rel-sel-badge">analise essa aba antes</span>'}
+          </label>
+          ${_dgrBotoesMover()}
+        </div>
         <div class="rel-sel-secoes">${secoesHtml}</div>
       </div>`;
   }).join('');
 
   modal.innerHTML = `
-    <div class="modal" style="max-width:460px;width:92vw;max-height:82vh;display:flex;flex-direction:column">
+    <div class="modal" style="max-width:520px;width:92vw;max-height:82vh;display:flex;flex-direction:column">
       <div class="modal-title" style="display:flex;align-items:center;gap:10px">
         <i class="ti ti-list-check" style="color:var(--accent)"></i>
         O que incluir no relatório?
       </div>
-      <div class="modal-sub">Marque as abas e seções que devem entrar no arquivo. Desmarcar a aba desmarca todas as seções dela.</div>
-      <div style="overflow-y:auto;flex:1;margin:12px 0 14px;display:flex;flex-direction:column;gap:10px">
+      <div class="modal-sub">Marque as abas e seções que devem entrar no arquivo e use as setas para ordenar — a ordem daqui é a ordem do relatório. Desmarcar a aba desmarca todas as seções dela.</div>
+      <div id="rel-sel-lista" style="overflow-y:auto;flex:1;margin:12px 0 14px;display:flex;flex-direction:column;gap:10px">
         ${abasHtml}
       </div>
       <div style="display:flex;justify-content:space-between;gap:10px">
@@ -4230,20 +3869,19 @@ window.abrirModalSelecaoRelatorioGerencial = function(tema = 'dark') {
   modal.classList.add('open');
 };
 
-// Lê os checkboxes marcados no modal de seleção e dispara a geração
-// filtrada — se sobrar alguma aba sem nenhuma seção marcada, ela
-// simplesmente não entra no objeto de seleção (gerarRelatorioGerencial
-// Dashboard já ignora abas ausentes da seleção).
+// Lê o modal NA ORDEM DO DOM (que o usuário pode ter reorganizado com as
+// setas) e dispara a geração filtrada — aba sem nenhuma seção marcada
+// simplesmente não entra na seleção.
 window._dgrGerarComSelecao = function(tema) {
   const modal = document.getElementById('rel-selecao-modal');
-  const selecao = {};
-  modal.querySelectorAll('input[data-secao]:checked').forEach(cb => {
-    const abaId = cb.dataset.aba;
-    (selecao[abaId] = selecao[abaId] || []).push(cb.dataset.secao);
+  const selecao = [];
+  modal.querySelectorAll('.rel-sel-aba').forEach(abaEl => {
+    const secoes = [...abaEl.querySelectorAll('input[data-secao]:checked')].map(cb => cb.dataset.secao);
+    if (secoes.length) selecao.push({ aba: abaEl.dataset.aba, secoes });
   });
   modal.classList.remove('open');
 
-  if (!Object.keys(selecao).length) {
+  if (!selecao.length) {
     toast('Selecione ao menos uma seção para gerar o relatório.', 'error');
     return;
   }
@@ -4253,7 +3891,7 @@ window._dgrGerarComSelecao = function(tema) {
 
 // ── Nome do arquivo do relatório — carimbo de data/hora, sanitizado pra
 //    não quebrar ao salvar em Windows/Mac. Usado pelo botão "Baixar HTML"
-//    embutido no próprio relatório (ver _dgrScriptDownload). ────────────
+//    embutido no próprio relatório (ver _dgrScriptDownload). ───────────
 function _dgrNomeArquivoRelatorio(prefixo) {
   const agora = new Date();
   const pad = n => String(n).padStart(2, '0');
@@ -4268,15 +3906,14 @@ window.gerarRelatorioGerencialDashboard = async function(tema = 'dark', selecao 
     return;
   }
 
-  // Sem seleção explícita (ex.: chamada direta/antiga, fora do fluxo dos
-  // modais) — inclui tudo que estiver disponível, mesmo comportamento de
-  // antes dessa mudança (menos Giro & Cobertura, ver nota no registro).
+  // Sem seleção explícita (ex.: chamada direta/antiga, fora do fluxo do
+  // modal) — inclui tudo que estiver disponível, na ordem do registro.
   const secoesSelecionadas = selecao || _dgrSelecaoCompleta();
 
   const btn = document.getElementById('dg-btn-relatorio-gerencial');
   if (btn?.disabled) return;
   if (typeof _setBtnLoading === 'function') _setBtnLoading(btn, true, 'Gerando...');
-  if (typeof showLoadingOverlay === 'function') showLoadingOverlay('Gerando relatório', 'Capturando gráficos e montando o relatório...');
+  if (typeof showLoadingOverlay === 'function') showLoadingOverlay('Gerando relatório', 'Capturando a tela e montando o relatório...');
 
   try {
     const now = new Date().toLocaleString('pt-BR');
@@ -4284,51 +3921,49 @@ window.gerarRelatorioGerencialDashboard = async function(tema = 'dark', selecao 
       ? `${d.dtIni.toLocaleDateString('pt-BR')} a ${d.dtFim.toLocaleDateString('pt-BR')}`
       : 'Período completo';
 
-    // Captura tudo já na cor de `tema` (fixo, sem modal de escolha — ver
-    // nota acima abrirModalSelecaoRelatorioGerencial) — troca o tema do
-    // Dashboard só durante a captura (escondida atrás do loading overlay)
-    // e devolve a tela exatamente como estava (ver _dgrCapturarComTema).
-    // Continua capturando as imagens mesmo que a seção correspondente não
-    // tenha sido selecionada — condicionar a captura por seção fica pra
-    // uma etapa futura, o custo da captura extra hoje é pequeno.
-    const imgs = await _dgrCapturarComTema(tema, d);
+    // O CSS do app precisa ir junto do HTML clonado, senão o relatório
+    // chega sem estilo nenhum. Buscado antes da clonagem (é I/O, e a
+    // clonagem tem que rodar síncrona dentro do tema forçado).
+    const cssApp = await _dgrCssApp();
 
-    // Monta o corpo 100% a partir do registro (window._RELATORIO_ABAS_
-    // REGISTRY) e da seleção do usuário — nenhuma seção fica hardcoded
-    // aqui. Cada aba incluída vira um painel (.rel-aba-pane); dentro dele,
-    // cada seção "compacta" vira uma página só (dgr-page-section) e a
-    // marcada como "natural" (Detalhado Analítico) pagina livremente
-    // (dgr-page-section-natural) — mesma regra de sempre, só que agora
-    // lida pelo campo `natural` de cada seção no registro.
-    let panesHtml = '';
-    const abasIncluidas = [];
-    window._RELATORIO_ABAS_REGISTRY.forEach(aba => {
-      const secoesIds = secoesSelecionadas[aba.id];
-      if (!secoesIds || !secoesIds.length || !aba.disponivel()) return;
+    // Monta o corpo 100% a partir da SELEÇÃO do usuário (ordem inclusa) —
+    // cada seção é o HTML vivo da tela, clonado com o Dashboard forçado no
+    // tema do relatório (ver _dgrCapturarComTema). Cada aba selecionada
+    // vira um painel (.rel-aba-pane); dentro dele, seção "compacta" ocupa
+    // uma página só (dgr-page-section) e seção "natural" pagina livremente
+    // (dgr-page-section-natural), pelo campo `natural` do registro.
+    const { panesHtml, abasIncluidas, fechModalHtml } = _dgrCapturarComTema(tema, d, () => {
+      let panesHtml = '';
+      const abasIncluidas = [];
+      secoesSelecionadas.forEach(({ aba: abaId, secoes: secoesIds }) => {
+        const aba = window._RELATORIO_ABAS_REGISTRY.find(a => a.id === abaId);
+        if (!aba || !secoesIds || !secoesIds.length || !aba.disponivel()) return;
 
-      let secoesHtml = '';
-      aba.secoes.forEach(sec => {
-        if (!secoesIds.includes(sec.id)) return;
-        const classe = sec.natural ? 'dgr-page-section-natural' : 'dgr-page-section';
-        secoesHtml += `<section class="${classe}" data-secao-id="${sec.id}">`
-          + `<button type="button" class="dgr-collapse-toggle" aria-expanded="true" onclick="_dgrToggleSecao(this)">`
-          + `<i class="ti ti-chevron-down"></i><span>${_rankEsc(sec.label)}</span>`
-          + `</button>`
-          + `<div class="dgr-collapse-body">${sec.builder(d, imgs)}</div>`
-          + `</section>`;
+        let secoesHtml = '';
+        secoesIds.forEach(secId => {
+          const sec = aba.secoes.find(s => s.id === secId);
+          if (!sec) return;
+          const classe = sec.natural ? 'dgr-page-section-natural' : 'dgr-page-section';
+          secoesHtml += `<section class="${classe}" data-secao-id="${sec.id}">`
+            + `<button type="button" class="dgr-collapse-toggle" aria-expanded="true" onclick="_dgrToggleSecao(this)">`
+            + `<i class="ti ti-chevron-down"></i><span>${_rankEsc(sec.label)}</span>`
+            + `</button>`
+            + `<div class="dgr-collapse-body">${_dgrClonarSecaoDom(sec.id)}</div>`
+            + `</section>`;
+        });
+        if (!secoesHtml) return;
+
+        // O primeiro painel incluído já nasce ativo (.rel-aba-ativa) — o
+        // relatório precisa mostrar algo mesmo se o JS da barra não rodar.
+        const ativa = abasIncluidas.length === 0 ? ' rel-aba-ativa' : '';
+        panesHtml += `<div class="rel-aba-pane${ativa}" data-aba-id="${aba.id}">${secoesHtml}</div>`;
+        abasIncluidas.push(aba);
       });
-
-      // O primeiro painel incluído já nasce ativo (.rel-aba-ativa) — o
-      // relatório precisa mostrar algo mesmo se o JS da barra não
-      // rodar por algum motivo, e é o comportamento certo pro caso de
-      // hoje (1 aba só, sem barra nenhuma pra clicar).
-      const ativa = abasIncluidas.length === 0 ? ' rel-aba-ativa' : '';
-      panesHtml += `<div class="rel-aba-pane${ativa}" data-aba-id="${aba.id}">${secoesHtml}</div>`;
-      abasIncluidas.push(aba);
+      return { panesHtml, abasIncluidas, fechModalHtml: _dgrClonarFechModal(periodo) };
     });
 
-    // A barra só aparece com 2+ abas na seleção — com 1 só (hoje, sempre
-    // Visão Geral) ela ficaria vazia de sentido (nada pra alternar).
+    // A barra só aparece com 2+ abas na seleção — com 1 só ela ficaria
+    // vazia de sentido (nada pra alternar).
     const abasBarHtml = abasIncluidas.length > 1
       ? `<div class="rel-aba-bar">${abasIncluidas.map((aba, i) => `
           <button type="button" class="rel-aba-btn${i === 0 ? ' active' : ''}" data-aba-id="${aba.id}" onclick="_dgrSwitchAba('${aba.id}', this)">
@@ -4336,12 +3971,18 @@ window.gerarRelatorioGerencialDashboard = async function(tema = 'dark', selecao 
           </button>`).join('')}</div>`
       : '';
 
-    const bodyHtml = `<style>${_dgrEstilos()}</style>${abasBarHtml}${panesHtml}`;
+    // Correções pontuais do CSS do app dentro do relatório: tokens.css trava
+    // html/body em 100% de altura (faz sentido no app, que rola por dentro;
+    // aqui cortaria o documento) e a sidebar/topbar do app não existe aqui.
+    const ajustesCss = `
+      html, body { height:auto; min-height:0; overflow-x:visible; }
+    `;
+
+    const bodyHtml = `<style>${_dgrEstilos()}${ajustesCss}</style>`
+      + abasBarHtml + panesHtml + fechModalHtml + _dgrScriptTooltipApp();
 
     // Mesmo nome usado nos dois caminhos de download: o automático (ao
-    // gerar) e o botão "Baixar HTML" embutido dentro do próprio arquivo
-    // (útil pra quem reabre o arquivo depois, ou pra quem recebeu por
-    // e-mail e quer salvar a cópia que está vendo).
+    // gerar) e o botão "Baixar HTML" embutido dentro do próprio arquivo.
     const nomeArquivo = _dgrNomeArquivoRelatorio('relatorio-gerencial');
 
     const html = _buildRankingShellHTML({
@@ -4359,6 +4000,7 @@ window.gerarRelatorioGerencialDashboard = async function(tema = 'dark', selecao 
       secoesRecolhiveis: true,
       abasNavegaveis: true,
       offlineCompleto: true,
+      cssApp,
       pageTitle:  'Relatório Gerencial — Dashboard Gerencial',
       badge:      'Relatório Gerencial',
       title:      'Visão Geral — Dashboard Gerencial',
@@ -4367,7 +4009,7 @@ window.gerarRelatorioGerencialDashboard = async function(tema = 'dark', selecao 
       notaRodape: 'Variação e Custo Var. desconsideram Ajustes de Fechamento Mensal não reincluídos manualmente. Saúde Geral considera os limiares configurados em Configurações → Parâmetros.'
     });
 
-    // Abre pra conferência/impressão, como sempre. O download NÃO é mais
+    // Abre pra conferência/impressão, como sempre. O download NÃO é
     // automático — o botão "Baixar HTML" dentro do relatório (action-bar)
     // baixa esse mesmo conteúdo quando o usuário efetivamente quiser.
     _openRelWindow(html);

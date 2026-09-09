@@ -628,10 +628,13 @@
 
         <!-- 1. Hero: Variação Total + Custo Total — os KPIs mais importantes, em evidência -->
         <div class="section-title" style="margin:28px 0 14px"><i class="ti ti-report-money" style="font-size:13px;margin-right:6px"></i>Resumo do Período — Estoque, Movimentação e Variação</div>
+        <div data-rel-secao="resumo-periodo">
         <div id="dg-vg-kpis-hero" class="inv-kpi-groups" style="margin-bottom:14px"></div>
+        </div><!-- /rel-secao resumo-periodo -->
 
         <!-- 2b. Os dois donuts de Saúde Geral (Centrais e Materiais), grandes e em evidência -->
         <div class="section-title" style="margin:28px 0 14px"><i class="ti ti-heart-rate-monitor" style="font-size:13px;margin-right:6px"></i>Saúde Geral — Centrais e Materiais</div>
+        <div data-rel-secao="saude-geral">
         <div class="dg-giro-dual-grid" style="margin-bottom:14px">
           <div class="oc-chart-card">
             <div class="oc-chart-title dg-vg-donut-title-row">
@@ -666,6 +669,7 @@
             <canvas id="dg-vg-chart-categoria"></canvas>
           </div>
         </div>
+        </div><!-- /rel-secao saude-geral -->
 
         <!-- 4, 5 & 6. Variação por Regional/Central — destaques (extremos) e
              distribuição completa (barras), ranqueados pela variação física
@@ -675,6 +679,7 @@
              abaixo. Um só cabeçalho pros dois blocos, já que não são
              assuntos diferentes. -->
         <div class="section-title" style="margin:28px 0 14px"><i class="ti ti-scale" style="font-size:13px;margin-right:6px"></i>Variação por Regional e Central</div>
+        <div data-rel-secao="variacao-reg-central">
         <div id="dg-vg-extremos" class="dg-vg-extremos-grid" style="margin-bottom:14px"></div>
 
         <div class="dg-giro-dual-grid">
@@ -695,11 +700,13 @@
             </div>
           </div>
         </div>
+        </div><!-- /rel-secao variacao-reg-central -->
 
         <!-- 7 & 8. Custo Absoluto: Grupo de Material (combinado, em destaque à
              esquerda) + 4 donuts de categoria (Agregado/Aglomerante/Aditivo/
              Adição), menores, em grade 2×2 à direita, complementando o principal. -->
         <div class="section-title" style="margin:28px 0 14px"><i class="ti ti-chart-pie" style="font-size:13px;margin-right:6px"></i>Custo Absoluto — Por Grupo e Categoria de Material</div>
+        <div data-rel-secao="custo-absoluto">
         <div class="dg-vg-grupo-layout" style="margin:14px 0">
           <div class="oc-chart-card" style="display:flex;flex-direction:column">
             <div class="oc-chart-title dg-vg-donut-title-row">
@@ -749,36 +756,47 @@
             </div>
           </div>
         </div>
+        </div><!-- /rel-secao custo-absoluto -->
 
         <!-- 9. Detalhado Analítico — tabela de detalhamento por material
              (Grupo SAP) + 4 rankings (Regional/Central/Material/
              Categoria). Última seção da Visão Geral. -->
         <div class="section-title" style="margin:28px 0 14px"><i class="ti ti-table" style="font-size:13px;margin-right:6px"></i>Detalhado Analítico</div>
 
+        <div data-rel-secao="det-material">
         <div class="oc-chart-card" style="margin-bottom:14px">
           <div class="oc-chart-title"><i class="ti ti-list-details" style="margin-right:5px"></i>Detalhamento por Material (Grupo SAP)</div>
           <div id="dg-da-material"></div>
         </div>
+        </div><!-- /rel-secao det-material -->
 
+        <div data-rel-secao="det-rank-regional">
         <div class="oc-chart-card" style="margin-bottom:14px">
           <div class="oc-chart-title"><i class="ti ti-map-pin" style="margin-right:5px"></i>Ranking de Regionais</div>
           <div id="dg-da-rank-regional"></div>
         </div>
+        </div><!-- /rel-secao det-rank-regional -->
 
+        <div data-rel-secao="det-rank-central">
         <div class="oc-chart-card" style="margin-bottom:14px">
           <div class="oc-chart-title"><i class="ti ti-building-factory-2" style="margin-right:5px"></i>Ranking de Centrais</div>
           <div id="dg-da-rank-central"></div>
         </div>
+        </div><!-- /rel-secao det-rank-central -->
 
+        <div data-rel-secao="det-rank-material">
         <div class="oc-chart-card" style="margin-bottom:14px">
           <div class="oc-chart-title"><i class="ti ti-box" style="margin-right:5px"></i>Ranking de Materiais</div>
           <div id="dg-da-rank-material"></div>
         </div>
+        </div><!-- /rel-secao det-rank-material -->
 
+        <div data-rel-secao="det-rank-categoria">
         <div class="oc-chart-card" style="margin-bottom:14px">
           <div class="oc-chart-title"><i class="ti ti-category-2" style="margin-right:5px"></i>Ranking de Categoria</div>
           <div id="dg-da-rank-categoria"></div>
         </div>
+        </div><!-- /rel-secao det-rank-categoria -->
 
         </div><!-- /dg-pane-visao -->
 
