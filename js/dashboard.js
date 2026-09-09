@@ -2,17 +2,55 @@
 // 'sap'  = IMPORTADO — saldo TEÓRICO do SAP em dtIni (_anGetSapStock), o
 //          padrão desde 13/08/2026 (ver comentários em
 //          buildDashboardGerencialResults/_dgVgBuildPares abaixo).
-// 'lanc' = CALCULADO — lançamento do operador no último dia do mês
-//          anterior (dia 31, recuando pro sábado se cair domingo — mesma
-//          regra de getPrevDayLaunchStock/getPrePeriodLaunchStock, ui.js).
-//          Era a fonte usada antes da troca pro SAP; agora fica disponível
-//          de novo como alternativa via toggle no toolbar (dgSetEstIniMode).
+// 'lanc' = CALCULADO — soma dos LANÇAMENTOS (módulo Lançamentos, mesmo
+//          getLancIndex usado no resto do sistema) do dia 31 do mês anterior
+//          a dtIni — ou dia 30 (ou o que for o último dia do mês), recuando
+//          pro sábado se cair domingo. Pedido explícito do Hugo: SEMPRE essa
+//          regra, pra TODOS os materiais — ver _dgGetEstIniFromLancamentos
+//          abaixo, que por isso NÃO reaproveita getPrePeriodLaunchStock
+//          (ui.js): aquela função tem uma exceção pra Agregado (usa a
+//          última TERÇA-feira, não o dia 31/30), regra de outras telas que
+//          não se aplica aqui.
 // Persistido em localStorage — a escolha do usuário sobrevive a reload.
 let _dgEstIniMode = 'sap';
 try {
   const _dgEstIniSaved = localStorage.getItem('dgEstIniMode');
   if (_dgEstIniSaved === 'lanc' || _dgEstIniSaved === 'sap') _dgEstIniMode = _dgEstIniSaved;
 } catch (e) { /* noop — localStorage indisponível */ }
+
+// Data-alvo do EST. INICIAL "Calculado": último dia do mês anterior a dtIni
+// (dia 0 do mês de dtIni = dia 31, 30, 29 ou 28, o que existir), recuando 1
+// dia pro sábado se cair domingo. dtIni no Dashboard Gerencial é sempre o
+// dia 1º do mês selecionado (ver rodarDashboardGerencial), então esta conta
+// sempre aponta pro fechamento do mês anterior.
+function _dgEstIniLancDate(dtIni) {
+  const d = dtIni instanceof Date ? dtIni : new Date(dtIni);
+  const targetDate = new Date(d.getFullYear(), d.getMonth(), 0);
+  targetDate.setHours(0, 0, 0, 0);
+  if (targetDate.getDay() === 0) targetDate.setDate(targetDate.getDate() - 1);
+  return targetDate;
+}
+
+// EST. INICIAL "Calculado" — soma literal dos LANÇAMENTOS do central+material
+// na data-alvo (ver _dgEstIniLancDate acima). Busca SOMENTE nessa data exata
+// — sem cascata pra outro dia se faltar lançamento (mesmo critério "AUSENTE"
+// de getLastPeriodLaunchStock/WithFallback, ui.js) — e sem a exceção semanal
+// de Agregado: aqui é sempre dia 31/30 do mês anterior, pra qualquer material.
+function _dgGetEstIniFromLancamentos({ central, material, dtIni }) {
+  const targetDate = _dgEstIniLancDate(dtIni);
+  const targetISO  = localISODate(targetDate);
+  const { byCentralMat } = getLancIndex();
+  const arr = byCentralMat.get(central)?.get(material || '—') || [];
+  if (!arr.length) return null;
+
+  let total = 0, found = false;
+  for (const rec of arr) {
+    const d = parseDate(rec.dtLanc);
+    if (d && localISODate(d) === targetISO) { total += num(rec.peso); found = true; }
+  }
+  if (!found) return null;
+  return { value: total, dtLabel: fmtPtDate(targetDate), date: targetDate };
+}
 
 // Fonte ÚNICA do EST. INICIAL pro Dashboard Gerencial inteiro (Visão Geral,
 // Visão de Consumo/Giro) — os três call sites (buildDashboardGerencialResults,
@@ -21,7 +59,7 @@ try {
 // Visão Geral" que a migração pro SAP corrigiu (ver _dgVgBuildPares).
 function _dgGetEstIniStock({ central, material, dtIni, dtFim, catKey }) {
   if (_dgEstIniMode === 'lanc') {
-    return getPrePeriodLaunchStock({ central, material, dtIni, dtFim, catKey });
+    return _dgGetEstIniFromLancamentos({ central, material, dtIni });
   }
   return (typeof _anGetSapStock === 'function')
     ? _anGetSapStock({ central, material, dtIni })
