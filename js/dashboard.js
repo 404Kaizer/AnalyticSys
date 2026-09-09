@@ -1069,7 +1069,7 @@ function _dgVgHealthTipHtml(lvl, n, total, meta) {
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;font-family:var(--mono);font-size:10.5px">
       <div style="color:var(--text3)">Variação total</div>
-      <div style="font-weight:600">${varSymbol(diff)} ${fmtKgShort(Math.abs(diff))}</div>
+      <div style="font-weight:600">${varSymbol(diff)} ${dgFmtPeso(Math.abs(diff), 1)}</div>
       ${custo > 0 ? `<div style="color:var(--text3)">${custoLabel}</div><div style="color:${custoColor};font-weight:600">${money(custo)}</div>` : ''}
       <div style="color:var(--text3)">% do total</div>
       <div style="color:var(--text)">${pct}%</div>
@@ -1414,8 +1414,8 @@ function _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais, f
       <div class="inv-kpi-card inv-kpi-card-featured" style="${featTopStyle(varCol)}">
         <div class="inv-kpi-body">
           <div class="inv-kpi-label"><i class="ti ${varIcon}" style="color:${varCol}"></i>Variação${fechBadgeCompactHtml}</div>
-          <div class="inv-kpi-value" style="color:${varCol}">${varSymbol(varTotalFisica)} ${fmtKg(Math.abs(varTotalFisica))}</div>
-          <div class="inv-kpi-unit">kg bruto</div>
+          <div class="inv-kpi-value" style="color:${varCol}">${varSymbol(varTotalFisica)} ${dgFmtPeso(Math.abs(varTotalFisica))}</div>
+          <div class="inv-kpi-unit">${dgPesoUnit(varTotalFisica)} bruto</div>
           ${veiculosRowHtml}
         </div>
         <div class="da-pct-zone">
@@ -1441,35 +1441,35 @@ function _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais, f
       <div class="inv-kpi-card">
         <div class="inv-kpi-body">
           <div class="inv-kpi-label"><i class="ti ti-archive" style="color:var(--accent)"></i>Est. Inicial Total</div>
-          <div class="inv-kpi-value">${fmtKg(estTotais.totalIni)}</div>
+          <div class="inv-kpi-value">${dgFmtPeso(estTotais.totalIni)}</div>
           <div class="inv-kpi-unit">${money(estTotais.custoIni || 0)}</div>
         </div>
       </div>
       <div class="inv-kpi-card">
         <div class="inv-kpi-body">
           <div class="inv-kpi-label"><i class="ti ti-arrow-bar-to-down" style="color:var(--green)"></i>Entradas</div>
-          <div class="inv-kpi-value">${fmtKgSigned(movTotais.totalEnt)}</div>
+          <div class="inv-kpi-value">${dgFmtPesoSigned(movTotais.totalEnt)}</div>
           <div class="inv-kpi-unit">${money(custoMovTotais.custoEnt || 0)}</div>
         </div>
       </div>
       <div class="inv-kpi-card">
         <div class="inv-kpi-body">
           <div class="inv-kpi-label"><i class="ti ti-arrow-bar-up" style="color:var(--red)"></i>Saídas</div>
-          <div class="inv-kpi-value">${fmtKgSigned(movTotais.totalSai)}</div>
+          <div class="inv-kpi-value">${dgFmtPesoSigned(movTotais.totalSai)}</div>
           <div class="inv-kpi-unit">${money(custoMovTotais.custoSai || 0)}</div>
         </div>
       </div>
       <div class="inv-kpi-card">
         <div class="inv-kpi-body">
           <div class="inv-kpi-label"><i class="ti ti-adjustments-alt" style="color:var(--amber)"></i>Ajustes</div>
-          <div class="inv-kpi-value" style="color:${movValorCor(movTotais.totalAju || 0, 'var(--amber)')}">${fmtKgSigned(movTotais.totalAju || 0)}</div>
+          <div class="inv-kpi-value" style="color:${movValorCor(movTotais.totalAju || 0, 'var(--amber)')}">${dgFmtPesoSigned(movTotais.totalAju || 0)}</div>
           <div class="inv-kpi-unit">${money(custoMovTotais.custoAju || 0)}</div>
         </div>
       </div>
       <div class="inv-kpi-card">
         <div class="inv-kpi-body">
           <div class="inv-kpi-label"><i class="ti ti-box" style="color:var(--purple)"></i>Est. Final Total</div>
-          <div class="inv-kpi-value">${fmtKg(estTotais.totalFim)}</div>
+          <div class="inv-kpi-value">${dgFmtPeso(estTotais.totalFim)}</div>
           <div class="inv-kpi-unit">${money(estTotais.custoFim || 0)}</div>
         </div>
       </div>
@@ -1478,7 +1478,7 @@ function _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais, f
           <div class="inv-kpi-label"><i class="ti ${evoIconCls}" style="color:${evoCol}"></i>Evolução Estoque</div>
           <div class="inv-kpi-value" style="color:${evoCol}">${pctEvolucao === null ? '—' : varSymbol(kgEvolucao) + ' ' + pctAbsStr(pctEvolucao)}</div>
           <div class="inv-kpi-unit">${varSymbol(kgEvolucao)} ${money(Math.abs(custoEvolucao))}</div>
-          <div class="inv-kpi-unit">${varSymbol(kgEvolucao)} ${fmtKg(Math.abs(kgEvolucao))}</div>
+          <div class="inv-kpi-unit">${varSymbol(kgEvolucao)} ${dgFmtPeso(Math.abs(kgEvolucao))}</div>
         </div>
       </div>
     </div>`;
@@ -1612,7 +1612,7 @@ function _dgVgRenderExtremos(extRegional, extCentral) {
     const cls = ext.v < 0 ? 'dg-vg-extremo-neg' : 'dg-vg-extremo-pos';
     return `<div class="dg-vg-extremo-box ${cls}">
       <span class="dg-vg-extremo-label">${label}</span>
-      <span class="dg-vg-extremo-value">${varSymbol(ext.v)} ${fmtKg(Math.abs(ext.v))}</span>
+      <span class="dg-vg-extremo-value">${varSymbol(ext.v)} ${dgFmtPeso(Math.abs(ext.v))}</span>
       <span class="dg-vg-extremo-kg">${varSymbol(ext.aux || 0)} ${money(Math.abs(ext.aux || 0))}</span>
       <span class="dg-vg-extremo-name" title="${escapeHtml(ext.k)}">${escapeHtml(ext.k)}</span>
     </div>`;
@@ -1645,7 +1645,7 @@ const _dgVgBarValueLabelsPlugin = {
         if (!pctValue || !kgValue) return; // sem barra, sem rótulo
         const { x, y, base } = bar.getProps(['x', 'y', 'base'], true);
         const negative = pctValue < 0;
-        const texto = fmtKgShort(Math.abs(kgValue));
+        const texto = dgFmtPeso(Math.abs(kgValue), 1);
         ctx.save();
         ctx.font = `600 ${fontSize}px 'DM Mono', monospace`;
         ctx.textBaseline = 'middle';
@@ -1700,14 +1700,13 @@ const _dgVgCategoryTotalsPlugin = {
     // Ancorado pela BORDA DIREITA do canvas (textAlign:'right', x fixo
     // perto do fim), não por um X fixo à esquerda crescendo pra direita
     // (versão anterior) — dessa forma o texto NUNCA passa da borda do
-    // canvas, não importa o tamanho (ex.: "Δ +123,6 K kg" cortado com
-    // fonte maior). O texto cresce "pra dentro" a partir da borda.
+    // canvas, não importa o tamanho (ex.: "Δ +123,6 t" cortado com fonte
+    // maior). O texto cresce "pra dentro" a partir da borda.
     ctx.textAlign = 'right';
     totals.forEach((totalKg, i) => {
       const y = chart.scales.y.getPixelForTick(i);
       if (y == null) return;
-      const sign = totalKg > 0.0001 ? '+' : '';
-      ctx.fillText(`Δ ${sign}${fmtKgShort(totalKg)}`, width - 8, y);
+      ctx.fillText(`Δ ${dgFmtPesoSigned(totalKg, 1)}`, width - 8, y);
     });
     ctx.restore();
   }
@@ -1763,7 +1762,7 @@ function _dgVgRenderChartCategoriaFisica(catFisicaPct) {
           callbacks: {
             label: c => {
               const kgValue = (c.dataset.kgValues && c.dataset.kgValues[c.dataIndex]) || 0;
-              return `${c.dataset.label} · ${fmtPct(c.raw)} do volume movimentado · ${fmtKgShort(Math.abs(kgValue))}`;
+              return `${c.dataset.label} · ${fmtPct(c.raw)} do volume movimentado · ${dgFmtPeso(Math.abs(kgValue), 1)}`;
             }
           }
         },
@@ -1828,11 +1827,11 @@ function _dgVgRenderChartVariacaoPorChave(canvasId, entries, chartKey) {
       responsive: true, maintainAspectRatio: false,
       plugins: {
         legend: { display: false },
-        tooltip: { callbacks: { label: c => `${varLabel(c.raw)} · ${fmtKg(Math.abs(c.raw))}` } }
+        tooltip: { callbacks: { label: c => `${varLabel(c.raw)} · ${dgFmtPeso(Math.abs(c.raw))}` } }
       },
       scales: {
         x: { grid: { display: false }, ticks: { color: textCol, font: { ...tickFont, size: 9.5 }, maxRotation: 55, minRotation: 35, autoSkip: false } },
-        y: { grid: { color: gridCol }, ticks: { color: textCol, font: tickFont, callback: v => fmtKgShort(v) } }
+        y: { grid: { color: gridCol }, ticks: { color: textCol, font: tickFont, callback: v => dgFmtPeso(v, 1) } }
       }
     }
   });
@@ -2176,12 +2175,12 @@ function _daRenderTabelaMaterial(containerId, dados) {
         <span class="da-mat-name">${escapeHtml(l.mat)}</span>
         ${l.catKey ? `<span class="da-mat-cat">${escapeHtml(DG_VG_CATSUB_LABELS[l.catSubKey] || DG_VG_CAT_LABELS[l.catKey] || l.catKey)}</span>` : ''}
       </td>
-      <td class="da-num" style="color:var(--teal)">${fmtKg(l.estIni)}</td>
-      <td class="da-num" style="color:var(--green)">${fmtKgSigned(l.entKg)}</td>
-      <td class="da-num" style="color:var(--red)">${fmtKgSigned(l.saiKg)}</td>
-      <td class="da-num" style="color:${movValorCor(l.ajuKg, 'var(--amber)')}">${fmtKgSigned(l.ajuKg)}</td>
-      <td class="da-num" style="color:var(--teal)">${fmtKg(l.estTeorico)}</td>
-      <td class="da-num" style="color:var(--teal)">${fmtKg(l.estFim)}</td>
+      <td class="da-num" style="color:var(--teal)">${dgFmtPeso(l.estIni)}</td>
+      <td class="da-num" style="color:var(--green)">${dgFmtPesoSigned(l.entKg)}</td>
+      <td class="da-num" style="color:var(--red)">${dgFmtPesoSigned(l.saiKg)}</td>
+      <td class="da-num" style="color:${movValorCor(l.ajuKg, 'var(--amber)')}">${dgFmtPesoSigned(l.ajuKg)}</td>
+      <td class="da-num" style="color:var(--teal)">${dgFmtPeso(l.estTeorico)}</td>
+      <td class="da-num" style="color:var(--teal)">${dgFmtPeso(l.estFim)}</td>
       <td class="da-num" style="color:${_daColorFor(l.pctVariacao)}">${_daFmtPctSigned(l.pctVariacao)}</td>
       <td class="da-num">${money(l.custoMedio)}/kg</td>
       <td class="da-num" style="color:${_daColorFor(l.custoAjuste)}">${_daFmtMoneySigned(l.custoAjuste)}</td>
@@ -2191,12 +2190,12 @@ function _daRenderTabelaMaterial(containerId, dados) {
   const totalHtml = `
     <tr class="da-total-row">
       <td>Total</td>
-      <td class="da-num" style="color:var(--teal)">${fmtKg(t.estIni)}</td>
-      <td class="da-num" style="color:var(--green)">${fmtKgSigned(t.entKg)}</td>
-      <td class="da-num" style="color:var(--red)">${fmtKgSigned(t.saiKg)}</td>
-      <td class="da-num" style="color:${movValorCor(t.ajuKg, 'var(--amber)')}">${fmtKgSigned(t.ajuKg)}</td>
-      <td class="da-num" style="color:var(--teal)">${fmtKg(t.estTeorico)}</td>
-      <td class="da-num" style="color:var(--teal)">${fmtKg(t.estFim)}</td>
+      <td class="da-num" style="color:var(--teal)">${dgFmtPeso(t.estIni)}</td>
+      <td class="da-num" style="color:var(--green)">${dgFmtPesoSigned(t.entKg)}</td>
+      <td class="da-num" style="color:var(--red)">${dgFmtPesoSigned(t.saiKg)}</td>
+      <td class="da-num" style="color:${movValorCor(t.ajuKg, 'var(--amber)')}">${dgFmtPesoSigned(t.ajuKg)}</td>
+      <td class="da-num" style="color:var(--teal)">${dgFmtPeso(t.estTeorico)}</td>
+      <td class="da-num" style="color:var(--teal)">${dgFmtPeso(t.estFim)}</td>
       <td class="da-num" style="color:${_daColorFor(t.pctVariacao)}">${_daFmtPctSigned(t.pctVariacao)}</td>
       <td class="da-num">${money(t.custoMedio)}/kg</td>
       <td class="da-num" style="color:${_daColorFor(t.custoAjuste)}">${_daFmtMoneySigned(t.custoAjuste)}</td>
@@ -2664,11 +2663,11 @@ function renderDgGiro(results, dtIni, dtFim) {
       <div class="analitico-detail-card">
         <div class="analitico-detail-card-label">Giro 30 dias <span class="macro-help-badge" data-help="giro-30dias">?</span></div>
         <div class="analitico-detail-card-value">${giro30.toFixed(2)}×</div>
-        <div class="analitico-detail-card-sub">Est. Médio: ${fmtKgShort(totalEstMedioKg)}</div>
+        <div class="analitico-detail-card-sub">Est. Médio: ${dgFmtPeso(totalEstMedioKg, 1)}</div>
       </div>
       <div class="analitico-detail-card">
         <div class="analitico-detail-card-label">Período · Saídas Totais <span class="macro-help-badge" data-help="giro-periodo-saidas">?</span></div>
-        <div class="analitico-detail-card-value" style="font-size:16px">${periodoEstimado}d <span style="font-size:12.5px;color:var(--text2);font-weight:600">${fmtKgShort(totalSaidasKg)}</span></div>
+        <div class="analitico-detail-card-value" style="font-size:16px">${periodoEstimado}d <span style="font-size:12.5px;color:var(--text2);font-weight:600">${dgFmtPeso(totalSaidasKg, 1)}</span></div>
         <div class="analitico-detail-card-sub">dias analisados · consumo total</div>
       </div>
     </div>`;
@@ -2837,17 +2836,17 @@ function renderDgGiro(results, dtIni, dtFim) {
     const col = giroColor(item.giro);
     const tag = giroTag(item.giro);
     const nv  = item.nivel || _giroNivelInfo(item);
-    // sitLabel só é passado pelo modal de detalhe: lá há scroll horizontal
-    // próprio, então os kg vão por extenso ("2.900.000 kg"). Nos cards
-    // estreitos da página, segue abreviado ("2,9 M kg").
-    const kg  = sitLabel ? (v) => fmtKg(v, 0) : fmtKgShort;
-    return `<div class="dg-giro-mat-row" title="Nível: ${nv.label} — correlaciona Cobertura, Giro e Abastecimento&#10;Cobertura: ${item.cobertura !== null ? item.cobertura.toFixed(1)+'d' : '—'}&#10;Giro: ${item.giro.toFixed(4)}× — ${tag.label}&#10;Entradas: ${fmtKg(item.entradas)}&#10;Saídas: ${fmtKg(item.saidas)}&#10;Est.Médio: ${fmtKg(item.estMedio)}">
+    // A tonelada é curta o bastante pra caber por extenso mesmo nos cards
+    // estreitos da página — não precisa mais alternar pra uma versão
+    // abreviada como no antigo kg (K/M) só pro modal de detalhe.
+    const kg  = v => dgFmtPeso(v);
+    return `<div class="dg-giro-mat-row" title="Nível: ${nv.label} — correlaciona Cobertura, Giro e Abastecimento&#10;Cobertura: ${item.cobertura !== null ? item.cobertura.toFixed(1)+'d' : '—'}&#10;Giro: ${item.giro.toFixed(4)}× — ${tag.label}&#10;Entradas: ${dgFmtPeso(item.entradas)}&#10;Saídas: ${dgFmtPeso(item.saidas)}&#10;Est.Médio: ${dgFmtPeso(item.estMedio)}">
       <span class="dg-giro-mat-name" title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</span>
       <span class="dg-giro-abast" style="${nv.style}">${nv.label}</span>
-      <span class="dg-giro-mat-num" style="color:var(--green)" title="${fmtKg(item.entradas)}">${kg(item.entradas)}</span>
-      <span class="dg-giro-mat-num" style="color:var(--red)" title="${fmtKg(item.saidas)}">${kg(item.saidas)}</span>
+      <span class="dg-giro-mat-num" style="color:var(--green)" title="${dgFmtPeso(item.entradas)}">${kg(item.entradas)}</span>
+      <span class="dg-giro-mat-num" style="color:var(--red)" title="${dgFmtPeso(item.saidas)}">${kg(item.saidas)}</span>
       ${buildAbastCell(item.entradas, item.saidas, panel)}
-      <span class="dg-giro-mat-num" style="color:var(--text2)" title="${fmtKg(item.estMedio)}">${kg(item.estMedio)}</span>
+      <span class="dg-giro-mat-num" style="color:var(--text2)" title="${dgFmtPeso(item.estMedio)}">${kg(item.estMedio)}</span>
       <span class="dg-giro-mat-num" style="color:${col};text-align:right">${item.giro.toFixed(2)}×</span>
       ${buildCoberturaCell(item.cobertura)}
       ${sitLabel ? buildSituacaoCell(item, sitLabel) : ''}
@@ -2866,8 +2865,8 @@ function renderDgGiro(results, dtIni, dtFim) {
         <span style="font-size:10.5px;font-family:var(--mono);color:var(--amber);display:flex;align-items:center;gap:5px">
           <i class="ti ti-alert-triangle" style="font-size:12px"></i> ${baixoGiro} baixo giro
         </span>
-        <span style="font-size:10.5px;font-family:var(--mono);color:var(--text3);margin-left:auto" title="${fmtKg(estTotal)}">
-          Est. total parado: ${fmtKgShort(estTotal)}
+        <span style="font-size:10.5px;font-family:var(--mono);color:var(--text3);margin-left:auto" title="${dgFmtPeso(estTotal)}">
+          Est. total parado: ${dgFmtPeso(estTotal, 1)}
         </span>
       </div>`;
   }
@@ -3091,7 +3090,7 @@ function _dgRankCardHtml(rows, opts = {}) {
   const subLabel  = opts.subLabel  || '';
   const valLabel  = opts.valLabel  || 'Valor';
   const color     = opts.color     || 'var(--accent)';
-  const valFmt    = opts.valFmt    || (r => fmtKgShort(r.saiKg));
+  const valFmt    = opts.valFmt    || (r => dgFmtPeso(r.saiKg, 1));
   const subFmt    = opts.subFmt    || (r => escapeHtml(r.sub || '—'));
   const max = Math.max(...rows.map(r => r.saiKg), 0.0001);
   const head = `<div class="dg-rank-head2"><span>${nameLabel}${subLabel ? ' · ' + subLabel : ''}</span><span>${valLabel}</span></div>`;
@@ -3141,11 +3140,11 @@ function _dcRenderChartRanking(canvasId, chartKey, rows, color) {
       responsive: true, maintainAspectRatio: false,
       plugins: {
         legend: { display: false },
-        tooltip: { callbacks: { label: c => fmtKg(c.raw) + ' kg' } }
+        tooltip: { callbacks: { label: c => dgFmtPeso(c.raw) } }
       },
       scales: {
         x: { grid: { display: false }, ticks: { color: textCol, font: { ...tickFont, size: 9.5 }, maxRotation: 55, minRotation: 35, autoSkip: false } },
-        y: { grid: { color: gridCol }, ticks: { color: textCol, font: tickFont, callback: v => fmtKgShort(v) } }
+        y: { grid: { color: gridCol }, ticks: { color: textCol, font: tickFont, callback: v => dgFmtPeso(v, 1) } }
       }
     }
   });
@@ -3168,7 +3167,7 @@ function _dcRenderKpiStrip(results, resultsAnt, ranking) {
   el.innerHTML = `
     <div class="macro-kpi-card kc-blue">
       <div class="macro-kpi-label"><i class="ti ti-scale"></i> Volume Consumido</div>
-      <div class="macro-kpi-cost">${fmtKgShort(Math.abs(movAtual.totalSai))} kg</div>
+      <div class="macro-kpi-cost">${dgFmtPeso(Math.abs(movAtual.totalSai), 1)}</div>
       <div class="macro-kpi-delta-row">
         <span class="macro-kpi-delta-label">vs. período anterior</span>
         ${_dgDeltaBadgeHtml(Math.abs(movAtual.totalSai), Math.abs(movAnt.totalSai || 0))}
@@ -3201,7 +3200,7 @@ function _dcRenderKpiStrip(results, resultsAnt, ranking) {
     <div class="macro-kpi-card kc-green">
       <div class="macro-kpi-label"><i class="ti ti-building-factory-2"></i> Central com Maior Consumo</div>
       <div class="macro-kpi-cost" style="font-size:clamp(13px,1.6vw,17px)">${destaque ? escapeHtml(destaque.nome) : '—'}</div>
-      <div class="macro-kpi-sub">${destaque ? fmtKgShort(destaque.saiKg) + ' kg no período' : 'Sem dados'}</div>
+      <div class="macro-kpi-sub">${destaque ? dgFmtPeso(destaque.saiKg, 1) + ' no período' : 'Sem dados'}</div>
     </div>`;
 }
 
@@ -3237,17 +3236,17 @@ function renderDgConsumo(results, resultsAnt, dtIni, dtFim) {
 
   if (rankCentraisEl) {
     rankCentraisEl.innerHTML = _dgRankCardHtml(rankingCentrais, {
-      nameLabel: 'Central', subLabel: 'Regional', valLabel: 'Consumo (kg)',
+      nameLabel: 'Central', subLabel: 'Regional', valLabel: 'Consumo (t)',
       color: 'var(--accent)',
-      valFmt: r => fmtKgShort(r.saiKg),
+      valFmt: r => dgFmtPeso(r.saiKg, 1),
       subFmt: r => escapeHtml(r.sub)
     });
   }
   if (rankMateriaisEl) {
     rankMateriaisEl.innerHTML = _dgRankCardHtml(rankingMateriais, {
-      nameLabel: 'Material', subLabel: 'Categoria', valLabel: 'Consumo (kg)',
+      nameLabel: 'Material', subLabel: 'Categoria', valLabel: 'Consumo (t)',
       color: 'var(--purple)',
-      valFmt: r => fmtKgShort(r.saiKg),
+      valFmt: r => dgFmtPeso(r.saiKg, 1),
       subFmt: r => escapeHtml(r.sub)
     });
   }
@@ -7584,6 +7583,38 @@ function fmtKgShort(v) {
   if (abs >= 1e6) return sign + (abs / 1e6).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' M kg';
   if (abs >= 1e3) return sign + (abs / 1e3).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' K kg';
   return sign + abs.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 1 }) + ' kg';
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// FORMATAÇÃO EM TONELADA — só do Dashboard Gerencial (Visão Geral, Visão
+// de Consumo/Giro, Controle de Corte). Decisão do Hugo (09/09/2026): ali
+// os pesos somados (central/regional/empresa inteira) já são grandes o
+// bastante pra tonelada ficar mais legível que kg — e sem as abreviações
+// K/M/G do fmtKgShort (que misturavam "K kg" com escala numérica).
+// Só cai pra kg (via fmtKg) quando o valor for pequeno demais pra ter
+// alguma casa decimal relevante em tonelada (< 1.000 kg = < 1 t): nesse
+// caso "0,32 t" perde a precisão que "315,60 kg" mantém. O resto do
+// sistema (Inventário, Materiais, Analítico...) continua em kg — por
+// isso isto NÃO substitui fmtKg/fmtKgShort, que continuam globais.
+const DG_TON_THRESHOLD_KG = 1000;
+
+function dgFmtPeso(v, decimals = 2) {
+  const n = num(v);
+  if (Math.abs(n) < DG_TON_THRESHOLD_KG) return fmtKg(n, decimals);
+  return (n / 1000).toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }) + ' t';
+}
+
+// Mesma regra do fmtKgSigned, em tonelada (ver dgFmtPeso).
+function dgFmtPesoSigned(v, decimals = 2) {
+  const n = num(v);
+  if (Math.abs(n) < 0.0001) return dgFmtPeso(0, decimals);
+  return (n > 0 ? '+' : '−') + dgFmtPeso(Math.abs(n), decimals);
+}
+
+// Unidade que dgFmtPeso realmente usou pra este valor — pra rótulos
+// estáticos ("kg bruto"/"t bruto") concordarem com o número ao lado.
+function dgPesoUnit(v) {
+  return Math.abs(num(v)) < DG_TON_THRESHOLD_KG ? 'kg' : 't';
 }
 
 function varClass(v) {

@@ -71,12 +71,15 @@ function _agrSmartFmt(val) {
   return val.toLocaleString('pt-BR', { minimumFractionDigits: d, maximumFractionDigits: d });
 }
 
-// Format a weight+UM for display
+// Format a weight+UM for display. KG segue a mesma regra do resto do
+// Dashboard Gerencial (ver dgFmtPeso em dashboard.js): converte pra
+// tonelada, só ficando em kg quando o valor for pequeno demais pra ter
+// alguma casa decimal relevante em tonelada (< 1.000 kg = < 1 t).
 function _agrFmtWeight(val, um) {
   if (val == null || !Number.isFinite(val)) return '—';
   if (um === 'M3')  return _agrSmartFmt(val) + ' m³';
   if (um === 'TON') return _agrSmartFmt(val) + ' t';
-  if (um === 'KG')  return _agrSmartFmt(val) + ' kg';
+  if (um === 'KG')  return Math.abs(val) >= 1000 ? _agrSmartFmt(val / 1000) + ' t' : _agrSmartFmt(val) + ' kg';
   return _agrSmartFmt(val) + ' ' + um;
 }
 
