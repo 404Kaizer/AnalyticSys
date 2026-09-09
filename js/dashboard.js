@@ -1447,21 +1447,21 @@ function _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais, f
       </div>
       <div class="inv-kpi-card">
         <div class="inv-kpi-body">
-          <div class="inv-kpi-label"><i class="ti ti-arrow-bar-to-down" style="color:var(--green)"></i>Entradas</div>
+          <div class="inv-kpi-label"><i class="ti ti-arrow-bar-to-down" style="color:var(--green)"></i>Compras</div>
           <div class="inv-kpi-value">${dgFmtPesoSigned(movTotais.totalEnt)}</div>
           <div class="inv-kpi-unit">${money(custoMovTotais.custoEnt || 0)}</div>
         </div>
       </div>
       <div class="inv-kpi-card">
         <div class="inv-kpi-body">
-          <div class="inv-kpi-label"><i class="ti ti-arrow-bar-up" style="color:var(--red)"></i>Saídas</div>
+          <div class="inv-kpi-label"><i class="ti ti-arrow-bar-up" style="color:var(--red)"></i>Consumo</div>
           <div class="inv-kpi-value">${dgFmtPesoSigned(movTotais.totalSai)}</div>
           <div class="inv-kpi-unit">${money(custoMovTotais.custoSai || 0)}</div>
         </div>
       </div>
       <div class="inv-kpi-card">
         <div class="inv-kpi-body">
-          <div class="inv-kpi-label"><i class="ti ti-adjustments-alt" style="color:var(--amber)"></i>Ajustes</div>
+          <div class="inv-kpi-label"><i class="ti ti-adjustments-alt" style="color:var(--amber)"></i>Ajustes dentro do Mês</div>
           <div class="inv-kpi-value" style="color:${movValorCor(movTotais.totalAju || 0, 'var(--amber)')}">${dgFmtPesoSigned(movTotais.totalAju || 0)}</div>
           <div class="inv-kpi-unit">${money(custoMovTotais.custoAju || 0)}</div>
         </div>
