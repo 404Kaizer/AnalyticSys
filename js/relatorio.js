@@ -3609,7 +3609,7 @@ function _dgrEvolucaoTabelaHtml(periodos) {
     const bom = melhorQuandoCai ? v < -0.0001 : v > 0.0001;
     const neutro = Math.abs(v) < 0.0001;
     const cor = neutro ? '#64748b' : (bom ? '#10b981' : '#f43f5e');
-    const sinal = v > 0.0001 ? '+' : '';
+    const sinal = v > 0.0001 ? '+' : v < -0.0001 ? '−' : '';
     return `<span style="color:${cor};font-weight:700">${sinal}${fmt(v)}</span>`;
   };
   // Cor de MOVIMENTO pelo sinal (entrou/saiu) — não confundir com _dgrValCor
@@ -3618,17 +3618,38 @@ function _dgrEvolucaoTabelaHtml(periodos) {
   // HTML standalone e não declara var(--green)/var(--red).
   const corMov = v => v > 0.0001 ? '#10b981' : v < -0.0001 ? '#f43f5e' : '#64748b';
 
-  const corpo = linhas.map(l => {
+  // Indicador de tendência por valor — aumento/diminuição/estável vs. o mês
+  // ANTERIOR (mesmo par de meses que os Δ já comparam). Reaproveita os
+  // ícones de LEITURA (ti-trending-up/down); "estável" ganha ti-minus, que
+  // Leitura não precisa (lá "misto" é sobre DOIS indicadores discordando,
+  // não sobre um valor parado). Fica ANTES do número — mesmo padrão de
+  // varSymbol()/varIcon() (dashboard.js) em todo o resto do app. `magnitude`
+  // compara |valor| em vez do valor bruto: pra Consumo/Variação/Custo, onde
+  // o sinal indica DIREÇÃO (desfalque/sobra) e não é a grandeza em si,
+  // "aumentou" tem que significar "o desvio ficou maior", não "o número
+  // algébrico subiu" (que inverteria a leitura pra Consumo, sempre negativo).
+  const tendIcon = (atual, anterior, magnitude) => {
+    if (anterior === null || anterior === undefined) return '';
+    const a = magnitude ? Math.abs(atual) : atual;
+    const b = magnitude ? Math.abs(anterior) : anterior;
+    const d = a - b;
+    const ic = d > 0.0001 ? 'ti-trending-up' : d < -0.0001 ? 'ti-trending-down' : 'ti-minus';
+    return `<i class="ti ${ic}" style="margin-right:4px;font-size:.9em;opacity:.85"></i>`;
+  };
+
+  const corpo = linhas.map((l, i) => {
+    const ant = i > 0 ? linhas[i - 1] : null;
     const v = l.veredito ? vered[l.veredito] : null;
     return `<tr>
       <td style="font-weight:700">${_rankEsc(l.rotulo)}</td>
-      <td class="da-num" style="color:#94a3b8">${dgFmtPeso(l.kpi.estIni, 1)}</td>
-      <td class="da-num" style="color:${corMov(l.kpi.compras)}">${dgFmtPesoSigned(l.kpi.compras, 1)}</td>
-      <td class="da-num" style="color:${corMov(l.kpi.consumo)}">${dgFmtPesoSigned(l.kpi.consumo, 1)}</td>
-      <td class="da-num" style="color:#94a3b8">${dgFmtPeso(l.kpi.estFim, 1)}</td>
-      <td class="da-num" style="color:${_dgrValCor(l.kpi.varTotalFisica)}">${dgFmtPesoSigned(l.kpi.varTotalFisica, 1)}</td>
-      <td class="da-num" style="color:${_dgrValCor(l.kpi.custoTotal)}">${money(l.kpi.custoTotal)}</td>
-      <td class="da-num" style="color:${corNivel[l.kpi.level] || '#94a3b8'};font-weight:700">${l.kpi.score}%</td>
+      <td class="da-num" style="color:#94a3b8">${tendIcon(l.kpi.estIni, ant?.kpi.estIni)}${dgFmtPeso(l.kpi.estIni, 1)}</td>
+      <td class="da-num" style="color:${corMov(l.kpi.compras)}">${tendIcon(l.kpi.compras, ant?.kpi.compras)}${dgFmtPesoSigned(l.kpi.compras, 1)}</td>
+      <td class="da-num" style="color:${corMov(l.kpi.consumo)}">${tendIcon(l.kpi.consumo, ant?.kpi.consumo, true)}${dgFmtPesoSigned(l.kpi.consumo, 1)}</td>
+      <td class="da-num" style="color:#94a3b8">${tendIcon(l.totalEstTeorico, ant?.totalEstTeorico)}${dgFmtPeso(l.totalEstTeorico, 1)}</td>
+      <td class="da-num" style="color:#94a3b8">${tendIcon(l.kpi.estFim, ant?.kpi.estFim)}${dgFmtPeso(l.kpi.estFim, 1)}</td>
+      <td class="da-num" style="color:${_dgrValCor(l.kpi.varTotalFisica)}">${tendIcon(l.kpi.varTotalFisica, ant?.kpi.varTotalFisica, true)}${dgFmtPesoSigned(l.kpi.varTotalFisica, 1)}</td>
+      <td class="da-num" style="color:${_dgrValCor(l.kpi.custoTotal)}">${tendIcon(l.kpi.custoTotal, ant?.kpi.custoTotal, true)}${money(l.kpi.custoTotal)}</td>
+      <td class="da-num" style="color:${corNivel[l.kpi.level] || '#94a3b8'};font-weight:700">${tendIcon(l.kpi.score, ant?.kpi.score)}${l.kpi.score}%</td>
       <td class="da-num">${delta(l.dScore, x => Math.abs(x).toFixed(0) + ' p.p.', false)}</td>
       <td class="da-num">${v
         ? `<span style="color:${v.cor};font-weight:800;font-size:10px;letter-spacing:.05em"><i class="ti ${v.ic}"></i> ${v.txt}</span>`
@@ -3643,7 +3664,8 @@ function _dgrEvolucaoTabelaHtml(periodos) {
         <th class="da-num">Est. Inicial</th>
         <th class="da-num">Compras</th>
         <th class="da-num">Consumo</th>
-        <th class="da-num">Est. Final</th>
+        <th class="da-num">Est. Final (Teórico)</th>
+        <th class="da-num">Est. Final (Real)</th>
         <th class="da-num">Variação</th>
         <th class="da-num">Custo da Variação</th>
         <th class="da-num">Saúde</th>
