@@ -1666,17 +1666,28 @@ function dgAbrirSemCadastroModalGenerico(modalId, lista, subtitulo) {
 
 // ── 3. Os dois donuts de saúde — réplica dos donuts "Materiais" e
 //    "Centrais" do Dashboard Analítico, com o mesmo cálculo de percentual.
-function _dgVgRenderHealthDonuts(pares, countsMat, scoreMat, thresholds) {
+// `ids` é opcional — default é o par de gauges FIXO da tela (Visão Geral);
+// passar um objeto próprio permite desenhar o MESMO par contra outro
+// conjunto de elementos (ex.: o detalhe por mês da aba Evolução do
+// Relatório Gerencial, um conjunto de svg/legenda por mês, ver
+// _dgrEvoDetalheCardHtml em relatorio.js).
+function _dgVgRenderHealthDonuts(pares, countsMat, scoreMat, thresholds, ids) {
+  ids = ids || {
+    matSvg: 'dg-vg-gauge-chart-svg',  matSub: 'dg-vg-health-materiais-subtitle', matSum: 'dg-vg-health-materiais-summary',
+    cenSvg: 'dg-vg-gauge-central-svg', cenSub: 'dg-vg-health-central-subtitle',   cenSum: 'dg-vg-health-central-summary'
+  };
   const { levelMeta: levelMetaMat } = _dgVgBuildHealthDonutData(pares);
-  _dgVgRenderHealthDonutSvg('dg-vg-gauge-chart-svg', countsMat, scoreMat, levelMetaMat, 'pares Central × Material', 'dg-vg-health-materiais-subtitle', 'dg-vg-health-materiais-summary');
+  _dgVgRenderHealthDonutSvg(ids.matSvg, countsMat, scoreMat, levelMetaMat, 'pares Central × Material', ids.matSub, ids.matSum);
 
   const { counts: countsCen, levelMeta: levelMetaCen, total: totalCen } = _dgVgBuildCentralHealthData(pares, thresholds);
   const scoreCen = _dgVgScoreFromCounts(countsCen);
-  _dgVgRenderHealthDonutSvg('dg-vg-gauge-central-svg', countsCen, scoreCen, levelMetaCen, totalCen === 1 ? 'central analisada' : 'centrais analisadas', 'dg-vg-health-central-subtitle', 'dg-vg-health-central-summary');
+  _dgVgRenderHealthDonutSvg(ids.cenSvg, countsCen, scoreCen, levelMetaCen, totalCen === 1 ? 'central analisada' : 'centrais analisadas', ids.cenSub, ids.cenSum);
 }
 
-function _dgVgRenderExtremos(extRegional, extCentral) {
-  const el = document.getElementById('dg-vg-extremos');
+// `elId` opcional — default é o container FIXO da tela; ver nota de
+// _dgVgRenderHealthDonuts acima (mesmo motivo/mesmo uso pelo detalhe mensal).
+function _dgVgRenderExtremos(extRegional, extCentral, elId) {
+  const el = document.getElementById(elId || 'dg-vg-extremos');
   if (!el) return;
 
   const box = (label, ext) => {

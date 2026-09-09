@@ -1537,6 +1537,7 @@ function _dgrAlternarTema(btn) {
   // Chart.js pinta em bitmap: SVG e CSS viram sozinhos, o gráfico não.
   if (window._dgrRedesenharGraficos) window._dgrRedesenharGraficos();
   if (window._dgrRedesenharEvolucao) window._dgrRedesenharEvolucao();
+  if (window._dgrRedesenharEvoDetalhe) window._dgrRedesenharEvoDetalhe();
   if (btn) {
     btn.innerHTML = claro ? '<i class="ti ti-moon"></i>' : '<i class="ti ti-sun"></i>';
     btn.title = claro ? 'Tema Escuro' : 'Tema Claro';
@@ -1601,6 +1602,7 @@ function _dgrSwitchAba(abaId, btn) {
   // que acabou de aparecer precisam ser redesenhados agora que têm tamanho.
   if (window._dgrRedesenharGraficos) window._dgrRedesenharGraficos();
   if (window._dgrRedesenharEvolucao) window._dgrRedesenharEvolucao();
+  if (window._dgrRedesenharEvoDetalhe) window._dgrRedesenharEvoDetalhe();
 }
 <\/script>`;
 }
@@ -3349,7 +3351,8 @@ const _DGR_NOMES = {
              '_dgVgTheme', '_dgVgDestroyChart',
              '_dgVgBarValueLabelsPlugin', '_dgVgCategoryTotalsPlugin',
              '_dgVgRenderChartCategoriaFisica', '_dgVgRenderChartVariacaoPorChave'],
-  evolucao:  ['DG_TON_THRESHOLD_KG', 'num', 'fmtKg', 'dgFmtPeso', 'dgFmtPesoSigned', 'money', '_dgVgTheme'],
+  evolucao:  ['DG_TON_THRESHOLD_KG', 'num', 'fmtKg', 'dgFmtPeso', 'dgFmtPesoSigned', 'money', 'varLabel',
+              '_dgVgTheme', '_dgVgDestroyChart', '_dgVgRenderChartVariacaoPorChave'],
   detalhado: ['DG_VG_CAT_LABELS', 'DG_VG_CATSUB_LABELS', 'DG_TON_THRESHOLD_KG',
               'num', 'fmtKg', 'money', 'escapeHtml', 'varSymbol', 'movValorCor',
               'dgFmtPeso', 'dgFmtPesoSigned',
@@ -3596,7 +3599,7 @@ function _dgrEvolucaoLinhas(periodos) {
 
 function _dgrEvolucaoTabelaHtml(periodos) {
   const linhas = _dgrEvolucaoLinhas(periodos);
-  if (!linhas.length) return '<div class="dgr-chart-empty">Sem meses no relatório.</div>';
+  if (!linhas.length) return { html: '<div class="dgr-chart-empty">Sem meses no relatório.</div>', cards: [] };
 
   const corNivel = { bom: '#10b981', atencao: '#f59e0b', urgente: '#f97316', critico: '#f43f5e' };
   const vered = {
@@ -3618,46 +3621,44 @@ function _dgrEvolucaoTabelaHtml(periodos) {
   // HTML standalone e não declara var(--green)/var(--red).
   const corMov = v => v > 0.0001 ? '#10b981' : v < -0.0001 ? '#f43f5e' : '#64748b';
 
-  // Indicador de tendência por valor — aumento/diminuição/estável vs. o mês
-  // ANTERIOR (mesmo par de meses que os Δ já comparam). Reaproveita os
-  // ícones de LEITURA (ti-trending-up/down); "estável" ganha ti-minus, que
-  // Leitura não precisa (lá "misto" é sobre DOIS indicadores discordando,
-  // não sobre um valor parado). Fica ANTES do número — mesmo padrão de
-  // varSymbol()/varIcon() (dashboard.js) em todo o resto do app. `magnitude`
-  // compara |valor| em vez do valor bruto: pra Consumo/Variação/Custo, onde
-  // o sinal indica DIREÇÃO (desfalque/sobra) e não é a grandeza em si,
-  // "aumentou" tem que significar "o desvio ficou maior", não "o número
-  // algébrico subiu" (que inverteria a leitura pra Consumo, sempre negativo).
-  const tendIcon = (atual, anterior, magnitude) => {
-    if (anterior === null || anterior === undefined) return '';
-    const a = magnitude ? Math.abs(atual) : atual;
-    const b = magnitude ? Math.abs(anterior) : anterior;
-    const d = a - b;
-    const ic = d > 0.0001 ? 'ti-trending-up' : d < -0.0001 ? 'ti-trending-down' : 'ti-minus';
-    return `<i class="ti ${ic}" style="margin-right:4px;font-size:.9em;opacity:.85"></i>`;
-  };
+  // Card de detalhe (Saúde Geral + Variação por Regional/Central) de CADA
+  // mês, atrás do botão de expansão da linha — ver _dgrEvoDetalheCardHtml.
+  // Construído aqui (não sob demanda no clique) porque os donuts/extremos
+  // são "fotografados" contra a página REAL, enquanto ela ainda existe
+  // (a janela do relatório já pode estar aberta quando isso roda); `cards`
+  // sai junto pro chamador poder embutir o script dos 2 gráficos de barra
+  // de cada mês (ver _dgrScriptEvoDetalhe — script fica de fora daqui de
+  // propósito, tem que entrar DEPOIS do prelúdio que declara as funções que
+  // ele chama, ver nota em _dgrScriptPrelude).
+  const cards = linhas.map(l => _dgrEvoDetalheCardHtml(l));
+  const cardPorId = new Map(cards.map(c => [c.id, c]));
 
-  const corpo = linhas.map((l, i) => {
-    const ant = i > 0 ? linhas[i - 1] : null;
+  const corpo = linhas.map(l => {
     const v = l.veredito ? vered[l.veredito] : null;
     return `<tr>
-      <td style="font-weight:700">${_rankEsc(l.rotulo)}</td>
-      <td class="da-num" style="color:#94a3b8">${tendIcon(l.kpi.estIni, ant?.kpi.estIni)}${dgFmtPeso(l.kpi.estIni, 1)}</td>
-      <td class="da-num" style="color:${corMov(l.kpi.compras)}">${tendIcon(l.kpi.compras, ant?.kpi.compras)}${dgFmtPesoSigned(l.kpi.compras, 1)}</td>
-      <td class="da-num" style="color:${corMov(l.kpi.consumo)}">${tendIcon(l.kpi.consumo, ant?.kpi.consumo, true)}${dgFmtPesoSigned(l.kpi.consumo, 1)}</td>
-      <td class="da-num" style="color:#94a3b8">${tendIcon(l.totalEstTeorico, ant?.totalEstTeorico)}${dgFmtPeso(l.totalEstTeorico, 1)}</td>
-      <td class="da-num" style="color:#94a3b8">${tendIcon(l.kpi.estFim, ant?.kpi.estFim)}${dgFmtPeso(l.kpi.estFim, 1)}</td>
-      <td class="da-num" style="color:${_dgrValCor(l.kpi.varTotalFisica)}">${tendIcon(l.kpi.varTotalFisica, ant?.kpi.varTotalFisica, true)}${dgFmtPesoSigned(l.kpi.varTotalFisica, 1)}</td>
-      <td class="da-num" style="color:${_dgrValCor(l.kpi.custoTotal)}">${tendIcon(l.kpi.custoTotal, ant?.kpi.custoTotal, true)}${money(l.kpi.custoTotal)}</td>
-      <td class="da-num" style="color:${corNivel[l.kpi.level] || '#94a3b8'};font-weight:700">${tendIcon(l.kpi.score, ant?.kpi.score)}${l.kpi.score}%</td>
+      <td style="font-weight:700">
+        <button type="button" class="dgr-evo-expand-btn" onclick="_dgrEvoToggle(this, '${l.id}')" title="Ver Saúde Geral e Variação por Regional/Central deste mês">
+          <i class="ti ti-chevron-right"></i>
+        </button>
+        ${_rankEsc(l.rotulo)}
+      </td>
+      <td class="da-num" style="color:#94a3b8">${dgFmtPeso(l.kpi.estIni, 1)}</td>
+      <td class="da-num" style="color:${corMov(l.kpi.compras)}">${dgFmtPesoSigned(l.kpi.compras, 1)}</td>
+      <td class="da-num" style="color:${corMov(l.kpi.consumo)}">${dgFmtPesoSigned(l.kpi.consumo, 1)}</td>
+      <td class="da-num" style="color:#94a3b8">${dgFmtPeso(l.totalEstTeorico, 1)}</td>
+      <td class="da-num" style="color:#94a3b8">${dgFmtPeso(l.kpi.estFim, 1)}</td>
+      <td class="da-num" style="color:${_dgrValCor(l.kpi.varTotalFisica)}">${dgFmtPesoSigned(l.kpi.varTotalFisica, 1)}</td>
+      <td class="da-num" style="color:${_dgrValCor(l.kpi.custoTotal)}">${money(l.kpi.custoTotal)}</td>
+      <td class="da-num" style="color:${corNivel[l.kpi.level] || '#94a3b8'};font-weight:700">${l.kpi.score}%</td>
       <td class="da-num">${delta(l.dScore, x => Math.abs(x).toFixed(0) + ' p.p.', false)}</td>
       <td class="da-num">${v
         ? `<span style="color:${v.cor};font-weight:800;font-size:10px;letter-spacing:.05em"><i class="ti ${v.ic}"></i> ${v.txt}</span>`
         : '<span style="color:#64748b;font-size:10px">base</span>'}</td>
-    </tr>`;
+    </tr>
+    <tr class="dgr-evo-detalhe-row" data-mes="${l.id}" hidden><td colspan="11">${cardPorId.get(l.id).html}</td></tr>`;
   }).join('');
 
-  return `<div class="da-table-wrap">
+  const html = `<div class="da-table-wrap">
     <table class="da-table dgr-evo-tabela">
       <thead><tr>
         <th>Mês</th>
@@ -3678,7 +3679,10 @@ function _dgrEvolucaoTabelaHtml(periodos) {
   <div class="dgr-evo-nota">
     Δ compara sempre com o mês anterior da série. "Leitura" combina Saúde (subir é melhor)
     e Variação Física em módulo (cair é melhor); sinais discordantes aparecem como MISTO.
+    <i class="ti ti-chevron-right"></i> em cada mês abre a Saúde Geral e a Variação por Regional/Central daquele mês.
   </div>`;
+
+  return { html, cards };
 }
 
 // Gráfico da série temporal: barra = Variação Física, assinada (sobra pra
@@ -3744,6 +3748,157 @@ function _dgrScriptEvolucao(periodos) {
   }
   window._dgrRedesenharEvolucao = desenhar;
   desenhar();
+})();
+<\/script>`;
+}
+
+// ── Detalhe por mês (dentro da Evolução) — Saúde Geral + Variação por
+//    Regional/Central de UM mês específico, atrás do botão de expansão da
+//    linha. Só essas duas seções por enquanto (decisão do Hugo, set/2026);
+//    Resumo do Período e Custo Absoluto ficam de fora — quem quer o período
+//    inteiro já tem a aba Dashboard.
+//
+//    Donuts de Saúde e cards de Extremos são "fotografados": desenhados com
+//    as MESMAS funções da tela contra um host FORA da tela (nunca inserido
+//    visível), e o HTML resultante (já com os círculos/callouts prontos) é
+//    congelado na página. Isso funciona pra esses dois porque a cor deles
+//    é sempre fixa (hex) ou var(--...) — o CSS resolve sozinho no tema
+//    certo, sem precisar de JS redesenhando nada, exatamente como a aba
+//    Dashboard (clonada) já se vira sem redesenhar seus próprios donuts.
+//    Os 2 gráficos de barra (Variação por Regional/Central) são a exceção:
+//    Chart.js pinta em bitmap, então esses SIM continuam vivos (canvas +
+//    _dgVgRenderChartVariacaoPorChave de verdade, ver _dgrScriptEvoDetalhe),
+//    redesenhados ao abrir a linha, trocar tema/aba e antes de imprimir —
+//    mesmo motivo/mesmo padrão dos outros gráficos do relatório.
+function _dgrCapturarOffscreen(innerHtml, renderFn) {
+  const host = document.createElement('div');
+  // Fora da viewport, mas com largura real (não display:none) — os donuts
+  // medem texto de verdade (getComputedTextLength) pra auto-ajustar fonte;
+  // um host sem layout mediria tudo como zero.
+  host.style.cssText = 'position:fixed;left:-99999px;top:0;width:900px';
+  host.innerHTML = innerHtml;
+  document.body.appendChild(host);
+  try {
+    renderFn();
+    return host.innerHTML;
+  } finally {
+    host.remove();
+  }
+}
+
+function _dgrEvoDetalheCardHtml(l) {
+  const gaugeMatSvg = `evo-gm-${l.id}`, gaugeMatSub = `evo-gms-${l.id}`, gaugeMatSum = `evo-gmr-${l.id}`;
+  const gaugeCenSvg = `evo-gc-${l.id}`, gaugeCenSub = `evo-gcs-${l.id}`, gaugeCenSum = `evo-gcr-${l.id}`;
+  const extremosEl  = `evo-ext-${l.id}`;
+
+  const innerHtml = `
+    <div class="section-title" style="margin:0 0 12px"><i class="ti ti-heart-rate-monitor" style="font-size:13px;margin-right:6px"></i>Saúde Geral — Centrais e Materiais</div>
+    <div class="dg-giro-dual-grid" style="margin-bottom:18px">
+      <div class="oc-chart-card">
+        <div class="oc-chart-title dg-vg-donut-title-row">
+          <span><i class="ti ti-building-factory-2" style="margin-right:5px"></i>Saúde Geral — Centrais</span>
+          <span id="${gaugeCenSub}" class="dg-vg-donut-subtitle"></span>
+        </div>
+        <div style="display:flex;justify-content:center">
+          <div style="width:420px;max-width:96%">
+            <svg id="${gaugeCenSvg}" viewBox="0 0 300 220" style="width:100%;height:auto;display:block"></svg>
+          </div>
+        </div>
+        <div id="${gaugeCenSum}" style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-start;margin-top:10px"></div>
+      </div>
+      <div class="oc-chart-card">
+        <div class="oc-chart-title dg-vg-donut-title-row">
+          <span><i class="ti ti-heartbeat" style="margin-right:5px"></i>Saúde Geral — Materiais</span>
+          <span id="${gaugeMatSub}" class="dg-vg-donut-subtitle"></span>
+        </div>
+        <div style="display:flex;justify-content:center">
+          <div style="width:420px;max-width:96%">
+            <svg id="${gaugeMatSvg}" viewBox="0 0 300 220" style="width:100%;height:auto;display:block"></svg>
+          </div>
+        </div>
+        <div id="${gaugeMatSum}" style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-start;margin-top:10px"></div>
+      </div>
+    </div>
+    <div class="section-title" style="margin:0 0 12px"><i class="ti ti-scale" style="font-size:13px;margin-right:6px"></i>Variação por Regional e Central</div>
+    <div id="${extremosEl}" class="dg-vg-extremos-grid" style="margin-bottom:14px"></div>
+  `;
+
+  const thresholds = getHealthThresholds();
+  const counts     = _dgVgCounts(l.pares);
+  const scoreInfo  = _dgVgScoreFromCounts(counts);
+
+  const porRegionalKg = _dgVgAggKgPorChave(l.pares, p => p.regional);
+  const porCentralKg  = _dgVgAggKgPorChave(l.pares, p => p.central);
+  const porRegional   = _dgVgAggPorChave(l.pares, p => p.regional);
+  const porCentral    = _dgVgAggPorChave(l.pares, p => p.central);
+  const extRegional   = _dgVgExtremos(porRegionalKg, porRegional);
+  const extCentral    = _dgVgExtremos(porCentralKg, porCentral);
+
+  const congelado = _dgrCapturarOffscreen(innerHtml, () => {
+    _dgVgRenderHealthDonuts(l.pares, counts, scoreInfo, thresholds, {
+      matSvg: gaugeMatSvg, matSub: gaugeMatSub, matSum: gaugeMatSum,
+      cenSvg: gaugeCenSvg, cenSub: gaugeCenSub, cenSum: gaugeCenSum
+    });
+    _dgVgRenderExtremos(extRegional, extCentral, extremosEl);
+  });
+
+  const canvasRegional = `evo-cr-${l.id}`, canvasCentral = `evo-cc-${l.id}`;
+  const html = `${congelado}
+    <div class="dg-giro-dual-grid">
+      <div class="oc-chart-card">
+        <div class="oc-chart-title"><i class="ti ti-users" style="margin-right:5px"></i>Variação por Regional</div>
+        <div class="dg-vg-bar-wrap" style="height:260px">
+          <div class="dg-vg-bar-inner"><canvas id="${canvasRegional}"></canvas></div>
+        </div>
+      </div>
+      <div class="oc-chart-card">
+        <div class="oc-chart-title"><i class="ti ti-building-factory-2" style="margin-right:5px"></i>Variação por Central</div>
+        <div class="dg-vg-bar-wrap" style="height:260px">
+          <div class="dg-vg-bar-inner"><canvas id="${canvasCentral}"></canvas></div>
+        </div>
+      </div>
+    </div>`;
+
+  return {
+    id: l.id, html, canvasRegional, canvasCentral,
+    entriesRegional: _dgVgTop8SobraDesfalque(porRegionalKg),
+    entriesCentral:  _dgVgTop8SobraDesfalque(porCentralKg)
+  };
+}
+
+// Script do toggle + redesenho dos 2 gráficos de barra de CADA mês — os
+// únicos pedaços do detalhe que ainda são JS vivo (ver nota acima). Redesenha
+// TODOS os meses de uma vez a cada gatilho (abrir uma linha, trocar tema,
+// trocar de aba, imprimir), mesmo padrão "força tudo de novo" já usado por
+// _dgrScriptGraficos/_dgrScriptEvolucao — canvas escondido nasce com
+// dimensão zero, então quem já estava fechado só acerta o tamanho na
+// próxima chamada, sem precisar de um cache de "o que já foi desenhado".
+function _dgrScriptEvoDetalhe(cards) {
+  if (!cards.length) return '';
+  const dados = cards.map(c => ({
+    id: c.id, canvasRegional: c.canvasRegional, canvasCentral: c.canvasCentral,
+    entriesRegional: c.entriesRegional, entriesCentral: c.entriesCentral
+  }));
+  return `<script>
+function _dgrEvoToggle(btn, id) {
+  var row = document.querySelector('.dgr-evo-detalhe-row[data-mes="' + id + '"]');
+  if (!row) return;
+  var abrir = row.hasAttribute('hidden');
+  row.toggleAttribute('hidden', !abrir);
+  btn.classList.toggle('dgr-evo-expand-open', abrir);
+  if (abrir && window._dgrRedesenharEvoDetalhe) window._dgrRedesenharEvoDetalhe();
+}
+(function() {
+  var CARDS = ${JSON.stringify(dados)};
+  function redesenhar() {
+    CARDS.forEach(function(c) {
+      _dgVgRenderChartVariacaoPorChave(c.canvasRegional, c.entriesRegional, 'evoReg-' + c.id);
+      _dgVgRenderChartVariacaoPorChave(c.canvasCentral,  c.entriesCentral,  'evoCen-' + c.id);
+    });
+  }
+  window._dgrRedesenharEvoDetalhe = redesenhar;
+  window.addEventListener('beforeprint', redesenhar);
+  redesenhar();
 })();
 <\/script>`;
 }
@@ -4284,12 +4439,19 @@ window._RELATORIO_ABAS_REGISTRY = [
       { id: 'evo-grafico', label: 'Variação Física e Saúde, mês a mês' }
     ],
     // Sem barra de período: a aba INTEIRA é a comparação entre os meses.
-    render: (ctx, ids) => ids.map(id => _dgrSecaoHtml(
-      id,
-      id === 'evo-tabela' ? 'Indicadores mês a mês' : 'Variação Física e Saúde, mês a mês',
-      id === 'evo-tabela' ? _dgrEvolucaoTabelaHtml(ctx.periodos) : _dgrEvolucaoChartHtml(),
-      id === 'evo-tabela'
-    )).join('')
+    // A tabela devolve { html, cards } — cards (os 2 gráficos de barra de
+    // Variação por Regional/Central de CADA mês, atrás do botão de
+    // expansão) fica pendurado no ctx pro script correspondente
+    // (_dgrScriptEvoDetalhe) ser embutido lá na frente, junto do resto dos
+    // scripts, DEPOIS do prelúdio que declara as funções que ele chama.
+    render: (ctx, ids) => ids.map(id => {
+      if (id === 'evo-tabela') {
+        const { html, cards } = _dgrEvolucaoTabelaHtml(ctx.periodos);
+        ctx._evoDetalheCards = cards;
+        return _dgrSecaoHtml(id, 'Indicadores mês a mês', html, true);
+      }
+      return _dgrSecaoHtml(id, 'Variação Física e Saúde, mês a mês', _dgrEvolucaoChartHtml(), false);
+    }).join('')
   },
   {
     id: 'detalhado',
@@ -4744,14 +4906,29 @@ window.gerarRelatorioGerencialDashboard = async function(tema = 'dark', selecao 
                            color:var(--dgr-text-dim, #94a3b8); background:var(--dgr-card-bg, rgba(255,255,255,.03));
                            border:1px solid var(--dgr-card-border, rgba(255,255,255,.09));
                            border-radius:8px; padding:9px 12px; margin-bottom:6px; }
+      .dgr-evo-tabela {
+        width:auto; /* .da-table trava width:100% — 11 colunas espremidas
+        nisso é o que cortava os cabeçalhos; auto deixa crescer conforme o
+        conteúdo e o overflow-x:auto do .da-table-wrap assume a rolagem. */
+      }
       .dgr-evo-tabela th, .dgr-evo-tabela td {
         white-space:nowrap; max-width:none; overflow:visible; text-overflow:clip;
       }
-      .dgr-evo-tabela td, .dgr-evo-tabela th { padding-left:10px; padding-right:10px; }
+      .dgr-evo-tabela td, .dgr-evo-tabela th { padding-left:20px; padding-right:20px; }
+      .dgr-evo-tabela th:first-child, .dgr-evo-tabela td:first-child { padding-left:14px; }
+      .dgr-evo-tabela th:last-child,  .dgr-evo-tabela td:last-child  { padding-right:14px; }
       .dgr-evo-nota { font-size:10px; color:var(--dgr-text-dim2, #64748b); margin-top:8px; line-height:1.6; }
+      .dgr-evo-expand-btn { background:none; border:none; cursor:pointer; padding:2px 4px 2px 0;
+                             color:var(--dgr-text-dim, #94a3b8); vertical-align:middle; line-height:1; }
+      .dgr-evo-expand-btn i { display:inline-block; transition:transform .15s; }
+      .dgr-evo-expand-btn.dgr-evo-expand-open i { transform:rotate(90deg); }
+      .dgr-evo-detalhe-row td { padding:16px 10px 22px; background:var(--dgr-card-bg, rgba(255,255,255,.02)); }
+      .dgr-evo-detalhe-row[hidden] { display:none; }
       @media print {
         .dgr-per-bar { display:none; }
         .dgr-per-pane { display:block !important; }
+        .dgr-evo-detalhe-row[hidden] { display:table-row !important; }
+        .dgr-evo-expand-btn { display:none; }
       }
     `;
 
@@ -4765,7 +4942,7 @@ window.gerarRelatorioGerencialDashboard = async function(tema = 'dark', selecao 
         ].filter(Boolean))
       + (incluiu('dashboard') ? _dgrScriptGraficos(d) : '')
       + _dgrScriptPeriodos()
-      + (incluiu('evolucao')  ? _dgrScriptEvolucao(periodos) : '')
+      + (incluiu('evolucao')  ? _dgrScriptEvolucao(periodos) + _dgrScriptEvoDetalhe(ctx._evoDetalheCards || []) : '')
       + (incluiu('detalhado') ? _dgrScriptDetalhado(periodos) : '')
       + (incluiu('giro')      ? _dgmScriptTooltip() + _dgmScriptFiltros() + _dgrScriptGiro() : '');
 
