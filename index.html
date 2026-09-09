@@ -568,6 +568,14 @@
                 <div class="cal-picker-inner" id="dg-month-inner"></div>
               </div>
             </div>
+            <!-- Alternância do método de cálculo do EST. INICIAL — IMPORTADO
+                 (saldo teórico do SAP, padrão) ou CALCULADO (lançamento do
+                 operador no último dia do mês anterior). Ver
+                 _dgGetEstIniStock/dgSetEstIniMode em dashboard.js. -->
+            <div class="dg-esti-toggle" title="Método de cálculo do Est. Inicial">
+              <button class="dg-esti-toggle-btn active" id="dg-esti-btn-sap" onclick="dgSetEstIniMode('sap')" type="button">Importado</button>
+              <button class="dg-esti-toggle-btn" id="dg-esti-btn-lanc" onclick="dgSetEstIniMode('lanc')" type="button">Calculado</button>
+            </div>
           </div>
           <div class="analitico-actions">
             <button class="btn btn-primary" onclick="rodarDashboardGerencial()">

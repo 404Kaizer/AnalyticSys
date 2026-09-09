@@ -1,3 +1,51 @@
+// ── Modo de cálculo do EST. INICIAL do Dashboard Gerencial ──────────────
+// 'sap'  = IMPORTADO — saldo TEÓRICO do SAP em dtIni (_anGetSapStock), o
+//          padrão desde 13/08/2026 (ver comentários em
+//          buildDashboardGerencialResults/_dgVgBuildPares abaixo).
+// 'lanc' = CALCULADO — lançamento do operador no último dia do mês
+//          anterior (dia 31, recuando pro sábado se cair domingo — mesma
+//          regra de getPrevDayLaunchStock/getPrePeriodLaunchStock, ui.js).
+//          Era a fonte usada antes da troca pro SAP; agora fica disponível
+//          de novo como alternativa via toggle no toolbar (dgSetEstIniMode).
+// Persistido em localStorage — a escolha do usuário sobrevive a reload.
+let _dgEstIniMode = 'sap';
+try {
+  const _dgEstIniSaved = localStorage.getItem('dgEstIniMode');
+  if (_dgEstIniSaved === 'lanc' || _dgEstIniSaved === 'sap') _dgEstIniMode = _dgEstIniSaved;
+} catch (e) { /* noop — localStorage indisponível */ }
+
+// Fonte ÚNICA do EST. INICIAL pro Dashboard Gerencial inteiro (Visão Geral,
+// Visão de Consumo/Giro) — os três call sites (buildDashboardGerencialResults,
+// _dgVgBuildPares, _giroSnapshotMaterial) passam por aqui, senão a troca de
+// modo reintroduz o bug de "dois Est. Iniciais diferentes dentro da mesma
+// Visão Geral" que a migração pro SAP corrigiu (ver _dgVgBuildPares).
+function _dgGetEstIniStock({ central, material, dtIni, dtFim, catKey }) {
+  if (_dgEstIniMode === 'lanc') {
+    return getPrePeriodLaunchStock({ central, material, dtIni, dtFim, catKey });
+  }
+  return (typeof _anGetSapStock === 'function')
+    ? _anGetSapStock({ central, material, dtIni })
+    : getPrePeriodLaunchStock({ central, material, dtIni, dtFim, catKey });
+}
+
+function _dgUpdateEstIniToggleUI() {
+  document.getElementById('dg-esti-btn-sap')?.classList.toggle('active', _dgEstIniMode === 'sap');
+  document.getElementById('dg-esti-btn-lanc')?.classList.toggle('active', _dgEstIniMode === 'lanc');
+}
+
+window.dgSetEstIniMode = function (mode) {
+  if (mode !== 'sap' && mode !== 'lanc') return;
+  if (_dgEstIniMode === mode) return;
+  _dgEstIniMode = mode;
+  try { localStorage.setItem('dgEstIniMode', mode); } catch (e) { /* noop */ }
+  _dgUpdateEstIniToggleUI();
+  // Só recalcula se já existir uma análise na tela (mesmo padrão de
+  // dgSelectMonth, que também dispara rodarDashboardGerencial direto).
+  if (document.getElementById('dg-content')?.style.display !== 'none') {
+    rodarDashboardGerencial();
+  }
+};
+
 function buildDashboardGerencialResults(dtIni, dtFim) {
   // Se dtIni/dtFim fornecidos, filtra por período; caso contrário usa todos os dados
   function inPeriod(dateStr) {
@@ -183,22 +231,16 @@ function buildDashboardGerencialResults(dtIni, dtFim) {
     let somaPrimeiro = 0, somaUltimo = 0;
     const missingIniMats = [], missingFimMats = [];
     allMats.forEach(mat => {
-      // EST. INICIAL da central — saldo TEÓRICO do SAP (_anGetSapStock), a
-      // mesma fonte da Visão Micro e do Inventário. Antes vinha de
-      // getPrePeriodLaunchStock (lançamento do operador na véspera), o que
-      // deixava o total da central discordando dos pares Central×Material
-      // calculados em _dgVgBuildPares logo adiante — dois Est. Iniciais
-      // diferentes dentro da mesma Visão Geral.
-      //
-      // catKey saiu junto: só servia pra regra de Agregado do
-      // getPrePeriodLaunchStock, que não é mais a fonte (mesma limpeza feita
-      // na Micro). Fallback pro método antigo se analitico.js não tiver
-      // carregado — mesmo guard usado nos outros pontos.
+      // EST. INICIAL da central — por padrão, saldo TEÓRICO do SAP
+      // (_anGetSapStock), a mesma fonte da Visão Micro e do Inventário; ou,
+      // no modo CALCULADO (toggle dgSetEstIniMode), o lançamento do operador
+      // no último dia do mês anterior (getPrePeriodLaunchStock) — ver
+      // _dgGetEstIniStock acima. Os dois modos usam a MESMA fonte aqui e em
+      // _dgVgBuildPares, senão o total da central discorda dos pares
+      // Central×Material — dois Est. Iniciais diferentes dentro da mesma
+      // Visão Geral.
       const catKey = materialCatKeyMap.get(mat) || null;
-      const prev = !dtIni ? null
-        : (typeof _anGetSapStock === 'function')
-          ? _anGetSapStock({ central, material: mat, dtIni })
-          : getPrePeriodLaunchStock({ central, material: mat, dtIni, dtFim, catKey });
+      const prev = !dtIni ? null : _dgGetEstIniStock({ central, material: mat, dtIni, dtFim, catKey });
       if (prev != null) {
         somaPrimeiro += prev.value;
       } else {
@@ -397,6 +439,7 @@ document.addEventListener('click', e => {
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('dg-month-dropdown')?.addEventListener('click', e => e.stopPropagation());
   _dgUpdateMonthTriggerLabel();
+  _dgUpdateEstIniToggleUI();
 });
 
 Object.assign(window, {
@@ -404,7 +447,8 @@ Object.assign(window, {
   buildGiroPorCentralMaterial,
   dgToggleMonthPicker: window.dgToggleMonthPicker,
   dgSelectMonth: window.dgSelectMonth,
-  dgNavMonthYear: window.dgNavMonthYear
+  dgNavMonthYear: window.dgNavMonthYear,
+  dgSetEstIniMode: window.dgSetEstIniMode
 });
 
 function updateDashboard() {
@@ -572,20 +616,14 @@ function _dgVgBuildPares(results, thresholds, dtIni, dtFim) {
       // negativo), então o Est. Teórico do Detalhado soma os três.
       const _nat = repartirSapPorNatureza(sap);
       if (dtIni && dtFim) {
-        // EST. INICIAL — saldo TEÓRICO do SAP (_anGetSapStock), a mesma fonte
-        // da Visão Micro desde 13/08/2026 e agora também do Inventário. Até
-        // aqui a Visão Geral usava getPrePeriodLaunchStock (o LANÇAMENTO do
-        // operador na véspera), o que fazia o Resumo do Período e o Detalhado
-        // Analítico discordarem da Micro para o mesmo material/período.
-        // catKey saiu da chamada: a regra especial de Agregado só existia pro
-        // getPrePeriodLaunchStock, que não é mais a fonte.
-        //
-        // O guard de typeof segue o padrão já usado em _giroSnapshotMaterial
-        // e em macro.js — analitico.js carrega depois deste arquivo, então a
-        // função só existe em tempo de execução, nunca no parse.
-        const prev = (typeof _anGetSapStock === 'function')
-          ? _anGetSapStock({ central: r.central, material: mat, dtIni })
-          : getPrePeriodLaunchStock({ central: r.central, material: mat, dtIni, dtFim, catKey });
+        // EST. INICIAL — por padrão, saldo TEÓRICO do SAP (_anGetSapStock),
+        // a mesma fonte da Visão Micro desde 13/08/2026 e do Inventário; ou,
+        // no modo CALCULADO (toggle dgSetEstIniMode), o LANÇAMENTO do
+        // operador no último dia do mês anterior — ver _dgGetEstIniStock
+        // acima. MESMA fonte usada em buildDashboardGerencialResults, senão
+        // o Resumo do Período discorda deste Detalhado para o mesmo
+        // material/período.
+        const prev = _dgGetEstIniStock({ central: r.central, material: mat, dtIni, dtFim, catKey });
         const fim  = getLastPeriodLaunchStockWithFallback({ central: r.central, material: mat, dtIni, dtFim });
         // Captura os mesmos valores já resolvidos pra calcular o diff —
         // usados pelos cards "Est. Inicial/Final Total" do resumo do
@@ -2386,9 +2424,8 @@ function _consumoKgSaidas(sapRecords) {
   return Math.abs(total);
 }
 
-function _giroSnapshotMaterial({ central, mat, lancs, sap, dtIni, dtFim }) {
-  const prev = (typeof _anGetSapStock === 'function')
-    ? _anGetSapStock({ central, material: mat, dtIni }) : null;
+function _giroSnapshotMaterial({ central, mat, lancs, sap, dtIni, dtFim, catKey }) {
+  const prev = _dgGetEstIniStock({ central, material: mat, dtIni, dtFim, catKey });
   const fim = (typeof _anGetLastPeriodStockFallback === 'function')
     ? _anGetLastPeriodStockFallback({ central, material: mat, dtIni, dtFim }) : null;
   return buildSnapshot({
@@ -2511,7 +2548,8 @@ function buildGiroPorCentralMaterial(dtIni, dtFim, results) {
       // Um snapshot só: giro/cobertura e variação saem da mesma base, então
       // Est.Médio é de fato (Est. Inicial + Est. Final) ÷ 2 e não pode
       // divergir da Variação exibida ao lado.
-      const snap = _giroSnapshotMaterial({ central: r.central, mat, lancs, sap, dtIni, dtFim });
+      const catKey = (r.materialCatKeyMap && r.materialCatKeyMap.get(mat)) || null;
+      const snap = _giroSnapshotMaterial({ central: r.central, mat, lancs, sap, dtIni, dtFim, catKey });
       const m = metricas(snap.totalEnt, _consumoKgSaidas(sap), (snap.pesoIni + snap.pesoFim) / 2);
       const variacao = snap.diff;
 
@@ -2580,7 +2618,8 @@ function renderDgGiro(results, dtIni, dtFim) {
       const lancs = lancsByMat.get(mat)||[];
       const sap   = sapByMat.get(mat)||[];
       // Est. Inicial do SAP incluído — ver _giroSnapshotMaterial.
-      const snap  = _giroSnapshotMaterial({ central: r.central, mat, lancs, sap, dtIni, dtFim });
+      const catKey = (r.materialCatKeyMap && r.materialCatKeyMap.get(mat)) || null;
+      const snap  = _giroSnapshotMaterial({ central: r.central, mat, lancs, sap, dtIni, dtFim, catKey });
 
       const saidas    = _consumoKgSaidas(sap);
       const estMedio  = (snap.pesoIni + snap.pesoFim) / 2;
@@ -2682,7 +2721,8 @@ function renderDgGiro(results, dtIni, dtFim) {
     let saidasTotal = 0, estMedioTotal = 0, entradasTotal = 0;
     r.allMats.forEach(mat => {
       const _sapMat = sapByMat.get(mat) || [];
-      const snap = _giroSnapshotMaterial({ central: r.central, mat, lancs: lancsByMat.get(mat)||[], sap: _sapMat, dtIni, dtFim });
+      const catKey = (r.materialCatKeyMap && r.materialCatKeyMap.get(mat)) || null;
+      const snap = _giroSnapshotMaterial({ central: r.central, mat, lancs: lancsByMat.get(mat)||[], sap: _sapMat, dtIni, dtFim, catKey });
       saidasTotal   += _consumoKgSaidas(_sapMat);
       estMedioTotal += (snap.pesoIni + snap.pesoFim) / 2;
       entradasTotal += snap.totalEnt;

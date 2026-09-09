@@ -11173,6 +11173,34 @@ td:has(.lanc-central-edit:focus) {
 .dg-tab-pane { display: none; }
 .dg-tab-pane.active { display: block; }
 
+/* Alternância IMPORTADO/CALCULADO do Est. Inicial (toolbar) — mesma
+   linguagem visual do .admin-health-toggle (pill compacta de 2 opções). */
+.dg-esti-toggle {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border-radius: var(--radius);
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+}
+.dg-esti-toggle-btn {
+  padding: 5px 12px;
+  border-radius: calc(var(--radius) - 2px);
+  border: none;
+  background: transparent;
+  color: var(--text2);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.dg-esti-toggle-btn:hover { color: var(--text); background: var(--bg3); }
+.dg-esti-toggle-btn.active {
+  color: var(--accent);
+  background: var(--bg2);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+}
+
 /* ── Dashboard Analítico — alternância Visão Micro / Visão Inventário ── */
 .an-view-switch {
   display: flex;
