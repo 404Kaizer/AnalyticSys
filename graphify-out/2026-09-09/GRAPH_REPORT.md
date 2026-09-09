@@ -1,11 +1,11 @@
 # Graph Report - AnalyticSys  (2026-09-09)
 
 ## Corpus Check
-- 57 files · ~380,097 words
+- 57 files · ~380,085 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 2477 nodes · 5152 edges · 121 communities (112 shown, 9 thin omitted)
+- 2477 nodes · 5152 edges · 122 communities (113 shown, 9 thin omitted)
 - Extraction: 88% EXTRACTED · 12% INFERRED · 0% AMBIGUOUS · INFERRED: 595 edges (avg confidence: 0.56)
 - Token cost: 0 input · 0 output
 
@@ -41,7 +41,7 @@
 - persist.js
 - applyColFilter
 - notesRender
-- _dgrExportaveis
+- dgFmtPeso
 - lrcDelete
 - cloud-backup.js
 - fechRenderFromForm
@@ -62,6 +62,7 @@
 - _dgmLinhaHtml
 - _fechMgrGetTodosCandidatos
 - help-badges.js
+- _dgrExportaveis
 - toast
 - populateOcFiltros
 - _cubGet
@@ -157,7 +158,7 @@
   js/analitico.js → js/ui.js
 - `init()` --indirect_call--> `updateToolsTheme()`  [INFERRED]
   js/analitico.js → js/state.js
-- `_dgrExportaveis()` --indirect_call--> `_daVarIrrelevante()`  [INFERRED]
+- `_dgrExportaveis()` --indirect_call--> `_dgVgDestroyChart()`  [INFERRED]
   js/relatorio.js → js/dashboard.js
 
 ## Import Cycles
@@ -168,7 +169,7 @@
 - **Calculadora/Notas/Assistente/Mensagens all implement the same generic tool-popover open/close pattern (openTool/closeTool, .tool-popover)** — index_calc_popover, index_notes_popover, index_assistente_popover, index_mensagens_popover [EXTRACTED 1.00]
 - **DAI generation, Ocorrências, and the public-form/admin routing jointly form the inventory-adjustment reporting flow** — index_dai_modal, index_ocorrencias_page, index_admin_formpublico, solicitacao [INFERRED 0.75]
 
-## Communities (121 total, 9 thin omitted)
+## Communities (122 total, 9 thin omitted)
 
 ### Community 0 - "admin.js"
 Cohesion: 0.05
@@ -255,8 +256,8 @@ Cohesion: 0.08
 Nodes (32): abrirFechManager(), buildColFilterHTML(), fecharFechImportModal(), fecharFechManager(), _fechImportAplicar(), _fechInvUnlockRealtimeInit(), _fechMgrAplicarDesbloqueio(), _fechMgrAplicarFiltros() (+24 more)
 
 ### Community 21 - "renderDgVisaoGeralPdf"
-Cohesion: 0.07
-Nodes (38): _consumoKgSaidas(), _daBuildEntradasFlat(), _daBuildRanking(), _daBuildTabelaMaterial(), _daPesoMedioPorTipo(), _daRenderDetalhadoAnalitico(), _daVarIrrelevante(), _dcCalcGiroCoberturaGeral() (+30 more)
+Cohesion: 0.08
+Nodes (30): _daBuildEntradasFlat(), DG_VG_CAT_ORDER, _dgVgAggKgPorChave(), _dgVgAggPorChave(), _dgVgAgruparCustoVariacaoPorCategoria(), _dgVgAgruparOutros(), _dgVgBuildCentralHealthData(), _dgVgBuildHealthDonutData() (+22 more)
 
 ### Community 22 - "renderModule"
 Cohesion: 0.11
@@ -274,9 +275,9 @@ Nodes (32): applyColFilter(), clearAllColFilters(), clearColFilter(), closeColFi
 Cohesion: 0.16
 Nodes (22): notesAutoSave(), notesCloseEditor(), notesDeleteCard(), notesDeleteCurrent(), notesEditorUpdate(), notesExec(), _notesFromDbRow(), notesInsertChecklist() (+14 more)
 
-### Community 26 - "_dgrExportaveis"
-Cohesion: 0.15
-Nodes (30): _daColorFor(), _daFmtCountSigned(), _daFmtMoneySigned(), _daFmtPctSigned(), _daMaiorImpacto(), _daRenderRanking(), _daRenderTabelaMaterial(), _dcBuildRankingCentrais() (+22 more)
+### Community 26 - "dgFmtPeso"
+Cohesion: 0.09
+Nodes (32): buildDashboardGerencialResults(), buildGiroPorCentralMaterial(), _consumoKgSaidas(), dateCmp(), _dcBuildRankingCentrais(), _dcBuildRankingMateriais(), _dcCalcGiroCoberturaGeral(), _dcRenderChartRanking() (+24 more)
 
 ### Community 27 - "lrcDelete"
 Cohesion: 0.09
@@ -315,8 +316,8 @@ Cohesion: 0.15
 Nodes (27): applyMicroFilter(), _applyMicroVisibility(), _buildCapacidadeOptions(), _buildOptionsList(), cancelMicroFilter(), _capFilterIsActive(), _cardCapFaixas(), _cardPassesCapFilter() (+19 more)
 
 ### Community 36 - "parseDate"
-Cohesion: 0.10
-Nodes (26): _ausComputar(), _ausContextoMaterial(), _ausEnsureEntSaiIdx(), _ausInvalidateCache(), _ausInvalidateEntSaiIdx(), ausQuickOntem(), ausQuickTercaAnterior(), _ausUltimoDiaUtilMes() (+18 more)
+Cohesion: 0.18
+Nodes (14): _ausComputar(), _ausContextoMaterial(), _ausEnsureEntSaiIdx(), _ausInvalidateCache(), _ausInvalidateEntSaiIdx(), ausQuickOntem(), ausQuickTercaAnterior(), _ausUltimoDiaUtilMes() (+6 more)
 
 ### Community 37 - "getFilteredData"
 Cohesion: 0.14
@@ -357,6 +358,10 @@ Nodes (11): _fechImportNormDoc(), _fechImportPreVisualizar(), _fechMesIndice(), 
 ### Community 46 - "help-badges.js"
 Cohesion: 0.36
 Nodes (11): _buildHelpContent(), _getHelpTip(), HELP_DEFS, hideCustoMedTip(), _hideHelpTip(), initHelpBadges(), moveCustoMedTip(), _moveHelpTip() (+3 more)
+
+### Community 47 - "_dgrExportaveis"
+Cohesion: 0.25
+Nodes (18): _daBuildRanking(), _daBuildTabelaMaterial(), _daColorFor(), _daFmtCountSigned(), _daFmtMoneySigned(), _daFmtPctSigned(), _daMaiorImpacto(), _daPesoMedioPorTipo() (+10 more)
 
 ### Community 48 - "toast"
 Cohesion: 0.27
@@ -622,7 +627,7 @@ Nodes (4): _buildCentralOptionsHtml(), _custosSapManualPopularSelects(), _manual
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `_dgrExportaveis()` connect `_dgrExportaveis` to `_cubGet`, `relatorio.js`, `format.js`, `renderDgVisaoGeralPdf`?**
+- **Why does `_dgrExportaveis()` connect `_dgrExportaveis` to `dgFmtPeso`, `relatorio.js`, `format.js`, `_cubGet`?**
   _High betweenness centrality (0.171) - this node is a cross-community bridge._
 - **Why does `Ocorrências Page` connect `dai.js` to `ocorrencias.js`, `relatorio.js`?**
   _High betweenness centrality (0.107) - this node is a cross-community bridge._
