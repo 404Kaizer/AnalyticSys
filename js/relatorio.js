@@ -3568,28 +3568,29 @@ function _dgrSwitchPeriodo(btn) {
 //    com o mês ANTERIOR da série (a "Geral" fica de fora — é o agregado do
 //    intervalo, não um ponto no tempo).
 //
-//    Veredito: Saúde subindo e |Custo da Variação| caindo = melhora; o
-//    inverso = piora; sinais discordantes = misto. Deliberadamente NÃO é uma
-//    nota única ponderada — inventar um peso entre "saúde" e "dinheiro" seria
-//    esconder a decisão dentro de uma fórmula; mostrar os dois deixa a
-//    leitura com quem decide.
+//    Veredito: Saúde subindo e |Variação Física| caindo = melhora; o
+//    inverso = piora; sinais discordantes = misto. Base física, não
+//    monetária (decisão do Hugo, set/2026 — o custo é derivado da física,
+//    não o contrário). Deliberadamente NÃO é uma nota única ponderada —
+//    inventar um peso entre "saúde" e "física" seria esconder a decisão
+//    dentro de uma fórmula; mostrar os dois deixa a leitura com quem decide.
 function _dgrEvolucaoLinhas(periodos) {
   const serie = periodos.filter(p => !p.geral);
   return serie.map((p, i) => {
     const ant = i > 0 ? serie[i - 1] : null;
-    const dScore = ant ? p.kpi.score - ant.kpi.score : null;
-    const dCusto = ant ? Math.abs(p.kpi.custoTotal) - Math.abs(ant.kpi.custoTotal) : null;
+    const dScore  = ant ? p.kpi.score - ant.kpi.score : null;
+    const dFisica = ant ? Math.abs(p.kpi.varTotalFisica) - Math.abs(ant.kpi.varTotalFisica) : null;
     let veredito = null;
     if (ant) {
-      const melhorSaude = dScore > 0.0001, piorSaude = dScore < -0.0001;
-      const melhorCusto = dCusto < -0.0001, piorCusto = dCusto > 0.0001;
-      if (melhorSaude && !piorCusto) veredito = 'melhora';
-      else if (piorSaude && !melhorCusto) veredito = 'piora';
-      else if (melhorCusto && !piorSaude) veredito = 'melhora';
-      else if (piorCusto && !melhorSaude) veredito = 'piora';
+      const melhorSaude  = dScore > 0.0001,  piorSaude  = dScore < -0.0001;
+      const melhorFisica = dFisica < -0.0001, piorFisica = dFisica > 0.0001;
+      if (melhorSaude && !piorFisica) veredito = 'melhora';
+      else if (piorSaude && !melhorFisica) veredito = 'piora';
+      else if (melhorFisica && !piorSaude) veredito = 'melhora';
+      else if (piorFisica && !melhorSaude) veredito = 'piora';
       else veredito = 'misto';
     }
-    return { ...p, dScore, dCusto, veredito };
+    return { ...p, dScore, dFisica, veredito };
   });
 }
 
@@ -3626,7 +3627,6 @@ function _dgrEvolucaoTabelaHtml(periodos) {
       <td class="da-num" style="color:${corMov(l.kpi.consumo)}">${dgFmtPesoSigned(l.kpi.consumo, 1)}</td>
       <td class="da-num" style="color:#94a3b8">${dgFmtPeso(l.kpi.estFim, 1)}</td>
       <td class="da-num" style="color:${_dgrValCor(l.kpi.varTotalFisica)}">${dgFmtPesoSigned(l.kpi.varTotalFisica, 1)}</td>
-      <td class="da-num">${delta(l.dCusto, x => money(Math.abs(x)), true)}</td>
       <td class="da-num" style="color:${_dgrValCor(l.kpi.custoTotal)}">${money(l.kpi.custoTotal)}</td>
       <td class="da-num" style="color:${corNivel[l.kpi.level] || '#94a3b8'};font-weight:700">${l.kpi.score}%</td>
       <td class="da-num">${delta(l.dScore, x => Math.abs(x).toFixed(0) + ' p.p.', false)}</td>
@@ -3645,7 +3645,6 @@ function _dgrEvolucaoTabelaHtml(periodos) {
         <th class="da-num">Consumo</th>
         <th class="da-num">Est. Final</th>
         <th class="da-num">Variação</th>
-        <th class="da-num">Δ Custo vs. mês ant.</th>
         <th class="da-num">Custo da Variação</th>
         <th class="da-num">Saúde</th>
         <th class="da-num">Δ Saúde</th>
@@ -3656,7 +3655,7 @@ function _dgrEvolucaoTabelaHtml(periodos) {
   </div>
   <div class="dgr-evo-nota">
     Δ compara sempre com o mês anterior da série. "Leitura" combina Saúde (subir é melhor)
-    e Custo da Variação em módulo (cair é melhor); sinais discordantes aparecem como MISTO.
+    e Variação Física em módulo (cair é melhor); sinais discordantes aparecem como MISTO.
   </div>`;
 }
 
