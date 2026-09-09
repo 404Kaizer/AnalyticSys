@@ -3655,10 +3655,10 @@ function _dgrEvolucaoTabelaHtml(periodos) {
         ? `<span style="color:${v.cor};font-weight:800;font-size:10px;letter-spacing:.05em"><i class="ti ${v.ic}"></i> ${v.txt}</span>`
         : '<span style="color:#64748b;font-size:10px">base</span>'}</td>
     </tr>
-    <tr class="dgr-evo-detalhe-row" data-mes="${l.id}" hidden><td colspan="11">${cardPorId.get(l.id).html}</td></tr>`;
+    <tr class="dgr-evo-detalhe-row" data-mes="${l.id}" hidden><td colspan="11"><div class="dgr-evo-detalhe-box">${cardPorId.get(l.id).html}</div></td></tr>`;
   }).join('');
 
-  const html = `<div class="da-table-wrap">
+  const html = `<div class="da-table-wrap dgr-evo-wrap">
     <table class="da-table dgr-evo-tabela">
       <thead><tr>
         <th>Mês</th>
@@ -3800,7 +3800,7 @@ function _dgrEvoDetalheCardHtml(l) {
           <span id="${gaugeCenSub}" class="dg-vg-donut-subtitle"></span>
         </div>
         <div style="display:flex;justify-content:center">
-          <div style="width:420px;max-width:96%">
+          <div style="width:100%;max-width:420px">
             <svg id="${gaugeCenSvg}" viewBox="0 0 300 220" style="width:100%;height:auto;display:block"></svg>
           </div>
         </div>
@@ -3812,7 +3812,7 @@ function _dgrEvoDetalheCardHtml(l) {
           <span id="${gaugeMatSub}" class="dg-vg-donut-subtitle"></span>
         </div>
         <div style="display:flex;justify-content:center">
-          <div style="width:420px;max-width:96%">
+          <div style="width:100%;max-width:420px">
             <svg id="${gaugeMatSvg}" viewBox="0 0 300 220" style="width:100%;height:auto;display:block"></svg>
           </div>
         </div>
@@ -4922,7 +4922,16 @@ window.gerarRelatorioGerencialDashboard = async function(tema = 'dark', selecao 
                              color:var(--dgr-text-dim, #94a3b8); vertical-align:middle; line-height:1; }
       .dgr-evo-expand-btn i { display:inline-block; transition:transform .15s; }
       .dgr-evo-expand-btn.dgr-evo-expand-open i { transform:rotate(90deg); }
-      .dgr-evo-detalhe-row td { padding:16px 10px 22px; background:var(--dgr-card-bg, rgba(255,255,255,.02)); }
+      .dgr-evo-detalhe-row td { padding:0; background:var(--dgr-card-bg, rgba(255,255,255,.02)); }
+      /* A tabela é larga (11 colunas nowrap) e rola dentro do .da-table-wrap;
+         o detalhe do mês NÃO deve herdar essa largura. 100cqw = largura
+         visível do wrapper (container query), e sticky prende o bloco na
+         borda esquerda enquanto a tabela rola — o detalhe sempre cabe na
+         tela, sem scroll horizontal próprio. */
+      .dgr-evo-wrap { container-type: inline-size; }
+      .dgr-evo-detalhe-box { position:sticky; left:0; width:100cqw; box-sizing:border-box;
+                             padding:16px 10px 22px; }
+      .dgr-evo-detalhe-box .oc-chart-card { min-width:0; }
       .dgr-evo-detalhe-row[hidden] { display:none; }
       @media print {
         .dgr-per-bar { display:none; }
