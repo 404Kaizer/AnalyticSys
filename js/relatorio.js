@@ -1534,6 +1534,8 @@ function _dgrAlternarTema(btn) {
   // clonado do Dashboard continuaria escuro no tema claro do relatório.
   if (claro) document.body.setAttribute('data-theme', 'light');
   else document.body.removeAttribute('data-theme');
+  // Chart.js pinta em bitmap: SVG e CSS viram sozinhos, o gráfico não.
+  if (window._dgrRedesenharGraficos) window._dgrRedesenharGraficos();
   if (btn) {
     btn.innerHTML = claro ? '<i class="ti ti-moon"></i>' : '<i class="ti ti-sun"></i>';
     btn.title = claro ? 'Tema Escuro' : 'Tema Claro';
@@ -1594,6 +1596,9 @@ function _dgrSwitchAba(abaId, btn) {
   document.querySelectorAll('.rel-aba-btn').forEach(function(b) {
     b.classList.toggle('active', b === btn);
   });
+  // Canvas em painel escondido reporta dimensão zero — o gráfico do painel
+  // que acabou de aparecer precisa ser redesenhado agora que tem tamanho.
+  if (window._dgrRedesenharGraficos) window._dgrRedesenharGraficos();
 }
 <\/script>`;
 }
@@ -3168,33 +3173,21 @@ window.gerarRelatorioDAIs = function() {
 
 
 // ── Clona uma seção VIVA do Dashboard Gerencial pro relatório ─────
-//    O relatório não remonta mais nada à mão: pega o próprio HTML que está
-//    na tela (marcado com data-rel-secao no index.html) e leva junto —
-//    cards, badges, tabelas, SVGs, atributos title e os data-tip dos
-//    donuts. O CSS do app vai embutido (_dgrCssApp) e os tooltips são
-//    religados por delegação no arquivo gerado (_dgrScriptTooltipApp),
-//    então o resultado é a mesma interface, não uma réplica.
-//    Única exceção: <canvas> (Chart.js) não sobrevive a cloneNode — vira
-//    <img> do pixel atual, no MESMO tamanho que tinha na tela.
-// ponytail: canvas vira PNG (perde o tooltip do Chart.js). Reinstanciar o
-// Chart no relatório exigiria serializar options com callbacks + carregar
-// a lib — só vale se pedirem tooltip nas barras.
+//    O relatório não remonta nada à mão: pega o próprio HTML que está na
+//    tela (marcado com data-rel-secao no index.html) e leva junto — cards,
+//    badges, tabelas, SVGs, atributos title e os data-tip dos donuts. O CSS
+//    do app vai embutido (_dgrCssApp), os tooltips são religados por
+//    delegação (_dgrScriptTooltipApp) e os <canvas> do Chart.js são
+//    redesenhados como gráficos DE VERDADE no arquivo gerado
+//    (_dgrScriptGraficos) — nada de imagem estática. O resultado é a mesma
+//    interface, não uma réplica.
 function _dgrClonarSecaoDom(secaoId) {
   const src = document.querySelector(`[data-rel-secao="${secaoId}"]`);
   if (!src) return '<div class="dgr-nota">Seção indisponível na tela.</div>';
-
-  const clone = src.cloneNode(true);
-  const canvasVivos = src.querySelectorAll('canvas');
-  clone.querySelectorAll('canvas').forEach((c, i) => {
-    const vivo = canvasVivos[i];
-    const img  = document.createElement('img');
-    try { img.src = vivo.toDataURL('image/png'); }
-    catch (err) { console.error('[Relatório Gerencial] Falha ao capturar canvas:', err); }
-    const r = vivo.getBoundingClientRect();
-    img.style.cssText = `width:${Math.round(r.width)}px;height:${Math.round(r.height)}px;max-width:100%;display:block`;
-    c.replaceWith(img);
-  });
-  return clone.innerHTML;
+  // O <canvas> vem em branco no clone (bitmap não sobrevive a cloneNode) —
+  // e é justamente isso que se quer: o id vem junto, e o script embutido
+  // instancia o Chart.js em cima dele no relatório.
+  return src.cloneNode(true).innerHTML;
 }
 
 // ── CSS do próprio app, embutido no relatório ──────────────────
@@ -3310,47 +3303,94 @@ function closeFechModal() {
 <\/script>`;
 }
 
-// ── Roda `fn` com o Dashboard forçado no tema do relatório ───────
-//    Os SVGs/cards clonados seguem o tema do PRÓPRIO relatório (usam
-//    var(--x) ao vivo), mas os <canvas> do Chart.js têm a cor assada em
-//    pixel: precisam ser redesenhados no tema certo ANTES da clonagem —
-//    por isso a clonagem inteira roda aqui dentro. Tudo acontece atrás do
-//    overlay "Gerando relatório...", então a troca de tema nunca fica
-//    visível; o finally devolve a tela exatamente como estava.
-function _dgrCapturarComTema(tema, d, fn) {
-  const temaOriginal = document.body.dataset.theme; // undefined = escuro (padrão)
-
-  // Desliga a animação de entrada do Chart.js (globalmente, só durante
-  // essa captura) — redesenharGraficos() DESTRÓI e RECRIA os 3 gráficos
-  // do zero, e por padrão o Chart.js anima as barras crescendo de 0 até o
-  // valor final em ~1000ms. Como o toDataURL do clone acontece na MESMA
-  // sincronia, sem isso ele pega um frame no meio da animação — barras
-  // minúsculas/cortadas, coladas no zero. Restaurado no finally.
-  const animOriginal = (typeof Chart !== 'undefined') ? Chart.defaults.animation : undefined;
-  if (typeof Chart !== 'undefined') Chart.defaults.animation = false;
-
-  const redesenharGraficos = () => {
-    _dgVgRenderChartCategoriaFisica(d.catFisicaPct);
-    _dgVgRenderChartVariacaoPorChave('dg-vg-chart-regional', d.entriesRegional, 'chartRegional');
-    _dgVgRenderChartVariacaoPorChave('dg-vg-chart-usina', d.entriesCentral, 'chartUsina');
-  };
-
+// ── Chart.js embutido no relatório ────────────────────────────────
+//    Mesma versão que o app usa (lida do próprio <script> do index.html,
+//    então subir a versão lá vale aqui também). Inlined pra o arquivo
+//    continuar 100% offline; se o fetch falhar (sem rede na hora de gerar),
+//    cai pro <script src> do CDN em vez de ficar sem gráfico.
+async function _dgrChartJsEmbutido() {
+  const url = [...document.querySelectorAll('script[src]')]
+    .map(t => t.src).find(u => /chart\.umd/i.test(u));
+  if (!url) return '';
   try {
-    if (tema === 'light') document.body.setAttribute('data-theme', 'light');
-    else document.body.removeAttribute('data-theme'); // 'dark' = tema raiz do tokens.css
-    redesenharGraficos();
-    return fn();
-  } finally {
-    if (temaOriginal) document.body.setAttribute('data-theme', temaOriginal);
-    else document.body.removeAttribute('data-theme');
-    redesenharGraficos();
-    if (typeof Chart !== 'undefined') Chart.defaults.animation = animOriginal;
+    const fonte = await fetch(url).then(r => r.ok ? r.text() : Promise.reject(r.status));
+    return `<script>${_dgrEscaparScript(fonte)}<\/script>`;
+  } catch (err) {
+    console.warn('[Relatório Gerencial] Chart.js não pôde ser embutido, usando CDN:', err);
+    return `<script src="${url}"><\/script>`;
   }
 }
 
+// Impede que qualquer "</script>" dentro do código embutido feche cedo a
+// tag <script> que o envolve no HTML gerado.
+function _dgrEscaparScript(fonte) {
+  return String(fonte).replace(/<\/script/gi, '<\\/script');
+}
 
+// Objeto com métodos (os plugins do Chart.js) → literal equivalente em
+// texto. JSON.stringify sozinho descarta função; toString() de um método
+// abreviado já sai no formato que um literal aceita.
+function _dgrSerializarObjeto(obj) {
+  return '{' + Object.entries(obj).map(([k, v]) =>
+    typeof v === 'function' ? v.toString() : `${JSON.stringify(k)}: ${JSON.stringify(v)}`
+  ).join(',\n') + '}';
+}
 
+// ── Os 3 gráficos da Visão Geral, vivos no relatório ──────────────
+//    Em vez de reescrever os gráficos aqui (que sairiam de sincronia com a
+//    tela no primeiro ajuste), o relatório leva o CÓDIGO REAL do dashboard
+//    via toString(): os mesmos plugins, os mesmos tooltips, os mesmos
+//    formatadores. Só os DADOS são serializados (já são JSON puro).
+//    _dgVgTheme lê document.body.dataset.theme, que o botão de tema do
+//    relatório troca — então os gráficos acompanham claro/escuro junto com
+//    o resto da página, coisa que a versão em PNG nunca fez.
+function _dgrScriptGraficos(d) {
+  const dados = {
+    catFisicaPct:    d.catFisicaPct    || {},
+    entriesRegional: d.entriesRegional || [],
+    entriesCentral:  d.entriesCentral  || []
+  };
 
+  const codigo = [
+    `const DG_TON_THRESHOLD_KG = ${JSON.stringify(DG_TON_THRESHOLD_KG)};`,
+    `const DG_VG_CAT_LABELS = ${JSON.stringify(DG_VG_CAT_LABELS)};`,
+    `const DG_VG_CAT_ORDER = ${JSON.stringify(DG_VG_CAT_ORDER)};`,
+    num.toString(),
+    fmtKg.toString(),
+    dgFmtPeso.toString(),
+    dgFmtPesoSigned.toString(),
+    varLabel.toString(),
+    _dgVgTheme.toString(),
+    'let _dgVgCharts = {};',
+    _dgVgDestroyChart.toString(),
+    `const _dgVgBarValueLabelsPlugin = ${_dgrSerializarObjeto(_dgVgBarValueLabelsPlugin)};`,
+    `const _dgVgCategoryTotalsPlugin = ${_dgrSerializarObjeto(_dgVgCategoryTotalsPlugin)};`,
+    _dgVgRenderChartCategoriaFisica.toString(),
+    _dgVgRenderChartVariacaoPorChave.toString()
+  ].join('\n\n');
+
+  return `<script>
+(function() {
+  if (typeof Chart === 'undefined') { console.error('[Relatório] Chart.js indisponível.'); return; }
+  const DADOS = ${JSON.stringify(dados)};
+
+${_dgrEscaparScript(codigo)}
+
+  // Redesenha os 3 gráficos. Chamado ao abrir, ao trocar de aba (canvas em
+  // painel escondido nasce com dimensão zero), ao trocar o tema (a cor do
+  // Chart.js é pixel, não CSS) e antes de imprimir (a impressão mostra
+  // TODOS os painéis, inclusive os que estavam escondidos).
+  function redesenhar() {
+    _dgVgRenderChartCategoriaFisica(DADOS.catFisicaPct);
+    _dgVgRenderChartVariacaoPorChave('dg-vg-chart-regional', DADOS.entriesRegional, 'chartRegional');
+    _dgVgRenderChartVariacaoPorChave('dg-vg-chart-usina', DADOS.entriesCentral, 'chartUsina');
+  }
+  window._dgrRedesenharGraficos = redesenhar;
+  window.addEventListener('beforeprint', redesenhar);
+  redesenhar();
+})();
+<\/script>`;
+}
 
 // ── Seção 9: Giro & Cobertura — Top 5 Centrais/Materiais mais saudáveis e
 //    mais críticos. Lê d.giro (cache populado no fim de renderDgGiro, em
@@ -3779,10 +3819,9 @@ function _dgrBotoesMover() {
 // Ponto de entrada direto do botão "Relatório Gerencial" (index.html) —
 // sem modal de tema intermediário: o HTML gerado já tem seu próprio botão
 // de troca de tema embutido (ver _dgrScriptTema), então escolher o tema
-// antes de gerar virou redundante (decisão de jul/2026). O tema aqui só
-// define a cor em que os gráficos de barra são capturados (rasterizados em
-// PNG — não mudam de cor junto com o toggle do HTML gerado; o resto do
-// relatório, clonado ao vivo, muda — ver nota em _dgrCapturarComTema).
+// antes de gerar virou redundante (decisão de jul/2026). O tema aqui é só
+// o tema INICIAL do arquivo: o relatório inteiro (inclusive os gráficos do
+// Chart.js, redesenhados pelo próprio arquivo) acompanha o toggle.
 window.abrirModalSelecaoRelatorioGerencial = function(tema = 'dark') {
   const algumaDisponivel = window._RELATORIO_ABAS_REGISTRY.some(aba => aba.disponivel());
   if (!algumaDisponivel) {
@@ -3921,46 +3960,43 @@ window.gerarRelatorioGerencialDashboard = async function(tema = 'dark', selecao 
       ? `${d.dtIni.toLocaleDateString('pt-BR')} a ${d.dtFim.toLocaleDateString('pt-BR')}`
       : 'Período completo';
 
-    // O CSS do app precisa ir junto do HTML clonado, senão o relatório
-    // chega sem estilo nenhum. Buscado antes da clonagem (é I/O, e a
-    // clonagem tem que rodar síncrona dentro do tema forçado).
-    const cssApp = await _dgrCssApp();
+    // Os dois I/O do relatório: o CSS do app (senão o HTML clonado chega
+    // sem estilo nenhum) e o Chart.js (pra os gráficos serem gráficos de
+    // verdade dentro do arquivo, não imagem).
+    const [cssApp, chartJs] = await Promise.all([_dgrCssApp(), _dgrChartJsEmbutido()]);
 
     // Monta o corpo 100% a partir da SELEÇÃO do usuário (ordem inclusa) —
-    // cada seção é o HTML vivo da tela, clonado com o Dashboard forçado no
-    // tema do relatório (ver _dgrCapturarComTema). Cada aba selecionada
-    // vira um painel (.rel-aba-pane); dentro dele, seção "compacta" ocupa
-    // uma página só (dgr-page-section) e seção "natural" pagina livremente
+    // cada seção é o HTML vivo da tela. Cada aba selecionada vira um painel
+    // (.rel-aba-pane); dentro dele, seção "compacta" ocupa uma página só
+    // (dgr-page-section) e seção "natural" pagina livremente
     // (dgr-page-section-natural), pelo campo `natural` do registro.
-    const { panesHtml, abasIncluidas, fechModalHtml } = _dgrCapturarComTema(tema, d, () => {
-      let panesHtml = '';
-      const abasIncluidas = [];
-      secoesSelecionadas.forEach(({ aba: abaId, secoes: secoesIds }) => {
-        const aba = window._RELATORIO_ABAS_REGISTRY.find(a => a.id === abaId);
-        if (!aba || !secoesIds || !secoesIds.length || !aba.disponivel()) return;
+    let panesHtml = '';
+    const abasIncluidas = [];
+    secoesSelecionadas.forEach(({ aba: abaId, secoes: secoesIds }) => {
+      const aba = window._RELATORIO_ABAS_REGISTRY.find(a => a.id === abaId);
+      if (!aba || !secoesIds || !secoesIds.length || !aba.disponivel()) return;
 
-        let secoesHtml = '';
-        secoesIds.forEach(secId => {
-          const sec = aba.secoes.find(s => s.id === secId);
-          if (!sec) return;
-          const classe = sec.natural ? 'dgr-page-section-natural' : 'dgr-page-section';
-          secoesHtml += `<section class="${classe}" data-secao-id="${sec.id}">`
-            + `<button type="button" class="dgr-collapse-toggle" aria-expanded="true" onclick="_dgrToggleSecao(this)">`
-            + `<i class="ti ti-chevron-down"></i><span>${_rankEsc(sec.label)}</span>`
-            + `</button>`
-            + `<div class="dgr-collapse-body">${_dgrClonarSecaoDom(sec.id)}</div>`
-            + `</section>`;
-        });
-        if (!secoesHtml) return;
-
-        // O primeiro painel incluído já nasce ativo (.rel-aba-ativa) — o
-        // relatório precisa mostrar algo mesmo se o JS da barra não rodar.
-        const ativa = abasIncluidas.length === 0 ? ' rel-aba-ativa' : '';
-        panesHtml += `<div class="rel-aba-pane${ativa}" data-aba-id="${aba.id}">${secoesHtml}</div>`;
-        abasIncluidas.push(aba);
+      let secoesHtml = '';
+      secoesIds.forEach(secId => {
+        const sec = aba.secoes.find(s => s.id === secId);
+        if (!sec) return;
+        const classe = sec.natural ? 'dgr-page-section-natural' : 'dgr-page-section';
+        secoesHtml += `<section class="${classe}" data-secao-id="${sec.id}">`
+          + `<button type="button" class="dgr-collapse-toggle" aria-expanded="true" onclick="_dgrToggleSecao(this)">`
+          + `<i class="ti ti-chevron-down"></i><span>${_rankEsc(sec.label)}</span>`
+          + `</button>`
+          + `<div class="dgr-collapse-body">${_dgrClonarSecaoDom(sec.id)}</div>`
+          + `</section>`;
       });
-      return { panesHtml, abasIncluidas, fechModalHtml: _dgrClonarFechModal(periodo) };
+      if (!secoesHtml) return;
+
+      // O primeiro painel incluído já nasce ativo (.rel-aba-ativa) — o
+      // relatório precisa mostrar algo mesmo se o JS da barra não rodar.
+      const ativa = abasIncluidas.length === 0 ? ' rel-aba-ativa' : '';
+      panesHtml += `<div class="rel-aba-pane${ativa}" data-aba-id="${aba.id}">${secoesHtml}</div>`;
+      abasIncluidas.push(aba);
     });
+    const fechModalHtml = _dgrClonarFechModal(periodo);
 
     // A barra só aparece com 2+ abas na seleção — com 1 só ela ficaria
     // vazia de sentido (nada pra alternar).
@@ -3979,7 +4015,8 @@ window.gerarRelatorioGerencialDashboard = async function(tema = 'dark', selecao 
     `;
 
     const bodyHtml = `<style>${_dgrEstilos()}${ajustesCss}</style>`
-      + abasBarHtml + panesHtml + fechModalHtml + _dgrScriptTooltipApp();
+      + abasBarHtml + panesHtml + fechModalHtml
+      + _dgrScriptTooltipApp() + chartJs + _dgrScriptGraficos(d);
 
     // Mesmo nome usado nos dois caminhos de download: o automático (ao
     // gerar) e o botão "Baixar HTML" embutido dentro do próprio arquivo.
