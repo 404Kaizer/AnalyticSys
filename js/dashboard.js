@@ -1816,14 +1816,31 @@ function _dgVgRenderChartCategoriaFisica(catFisicaPct) {
   const totaisKg      = catOrdenadaPorVariacao.map((_, i) => desfalquesKg[i] + sobrasKg[i]);
   const fmtPct        = v => Math.abs(v).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%';
 
+  // Comprimento da barra: 0-100% do MAIOR valor do gráfico, derivado do
+  // mesmo kg que define a ordenação — assim a pirâmide (maior no topo)
+  // nunca contradiz o desenho. Antes o tamanho vinha do % do volume da
+  // própria categoria, o que invertia tudo: Adição movimenta pouco, então
+  // 1,3 TON viravam 12% e a barra mais longa do gráfico, acima de um
+  // Agregado de 9.354 TON.
+  // A raiz cúbica achata a escala: entre a maior e a menor categoria a
+  // razão em kg é de ~7.000x, que em escala linear deixaria Aditivo e
+  // Adição com meio pixel. Comprimento vira ranking legível, o número
+  // exato está no rótulo da barra e na coluna Δ.
+  // ponytail: cbrt fixo; se um dia a dispersão mudar de ordem de grandeza,
+  // trocar por escala log com piso.
+  const maxKg   = Math.max(...desfalquesKg.map(Math.abs), ...sobrasKg.map(Math.abs), 0);
+  const barLen  = kg => maxKg > 0 ? Math.sign(kg) * Math.cbrt(Math.abs(kg) / maxKg) * 100 : 0;
+  const desfalquesBar = desfalquesKg.map(barLen);
+  const sobrasBar     = sobrasKg.map(barLen);
+
   _dgVgCharts.categoria = new Chart(ctx, {
     type: 'bar',
     plugins: [_dgVgBarValueLabelsPlugin, _dgVgCategoryTotalsPlugin],
     data: {
       labels,
       datasets: [
-        { label: 'Desfalque', data: desfalquesPct, kgValues: desfalquesKg, backgroundColor: '#f43f5e', borderRadius: 3, borderSkipped: false, stack: 'variacao' },
-        { label: 'Sobra',     data: sobrasPct,     kgValues: sobrasKg,     backgroundColor: '#f59e0b', borderRadius: 3, borderSkipped: false, stack: 'variacao' }
+        { label: 'Desfalque', data: desfalquesBar, kgValues: desfalquesKg, pctValues: desfalquesPct, backgroundColor: '#f43f5e', borderRadius: 3, borderSkipped: false, stack: 'variacao' },
+        { label: 'Sobra',     data: sobrasBar,     kgValues: sobrasKg,     pctValues: sobrasPct,     backgroundColor: '#f59e0b', borderRadius: 3, borderSkipped: false, stack: 'variacao' }
       ]
     },
     options: {
@@ -1837,8 +1854,9 @@ function _dgVgRenderChartCategoriaFisica(catFisicaPct) {
         tooltip: {
           callbacks: {
             label: c => {
-              const kgValue = (c.dataset.kgValues && c.dataset.kgValues[c.dataIndex]) || 0;
-              return `${c.dataset.label} · ${fmtPct(c.raw)} do volume movimentado · ${dgFmtPeso(Math.abs(kgValue), 1)}`;
+              const kgValue  = (c.dataset.kgValues  && c.dataset.kgValues[c.dataIndex])  || 0;
+              const pctValue = (c.dataset.pctValues && c.dataset.pctValues[c.dataIndex]) || 0;
+              return `${c.dataset.label} · ${fmtPct(pctValue)} do volume movimentado · ${dgFmtPeso(Math.abs(kgValue), 1)}`;
             }
           }
         },
@@ -1846,7 +1864,7 @@ function _dgVgRenderChartCategoriaFisica(catFisicaPct) {
         dgVgBarValueLabels: { fontSize: 10 }
       },
       scales: {
-        x: { stacked: true, grace: '15%', grid: { color: gridCol }, ticks: { color: textCol, font: tickFont, callback: v => fmtPct(v) } },
+        x: { stacked: true, grace: '15%', grid: { color: gridCol }, ticks: { display: false } },
         y: {
           stacked: true, grid: { display: false },
           ticks: { color: textCol, font: { ...tickFont, size: 11.5 } }
