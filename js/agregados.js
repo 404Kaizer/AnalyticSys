@@ -74,19 +74,19 @@ function _agrSmartFmt(val) {
 // Format a weight+UM for display. KG segue a mesma regra do resto do
 // Dashboard Gerencial (ver dgFmtPeso em dashboard.js): converte pra
 // tonelada, só ficando em kg quando o valor for pequeno demais pra ter
-// alguma casa decimal relevante em tonelada (< 1.000 kg = < 1 t).
+// alguma casa decimal relevante em tonelada (< 1.000 kg = < 1 TON).
 function _agrFmtWeight(val, um) {
   if (val == null || !Number.isFinite(val)) return '—';
   if (um === 'M3')  return _agrSmartFmt(val) + ' m³';
-  if (um === 'TON') return _agrSmartFmt(val) + ' t';
-  if (um === 'KG')  return Math.abs(val) >= 1000 ? _agrSmartFmt(val / 1000) + ' t' : _agrSmartFmt(val) + ' kg';
+  if (um === 'TON') return _agrSmartFmt(val) + ' TON';
+  if (um === 'KG')  return Math.abs(val) >= 1000 ? _agrSmartFmt(val / 1000) + ' TON' : _agrSmartFmt(val) + ' kg';
   return _agrSmartFmt(val) + ' ' + um;
 }
 
 // Format lançamento stock: KG → TON
 function _agrFmtStock(kg) {
   if (kg == null) return '—';
-  return _agrSmartFmt(kg / 1000) + ' t';
+  return _agrSmartFmt(kg / 1000) + ' TON';
 }
 
 // ── Main compute ─────────────────────────────────────────
@@ -595,7 +595,7 @@ function _agrRenderFull_UNUSED(centrais) { return centrais.map((c, ci) => {
           <div class="agr-central-summary">
             <span style="color:var(--text2)"><i class="ti ti-arrow-down-right" style="font-size:11px;opacity:.6"></i> Pré: <strong style="color:var(--text)">${_agrSmartFmt(c.centralPreKg)}</strong></span>
             <span style="color:${pctClass === 'alert' ? 'var(--red)' : pctClass === 'warn' ? 'var(--amber)' : 'var(--text2)'}"><i class="ti ti-arrow-up-right" style="font-size:11px"></i> Pós: <strong>${_agrSmartFmt(c.centralPosKg)}</strong> <span style="opacity:.7">(${isFinite(c.pctPosCentral) ? c.pctPosCentral.toFixed(1)+'%' : '∞'})</span></span>
-            ${c.totalConsumoPosKg > 0 ? `<span style="color:var(--text3)"><i class="ti ti-forklift" style="font-size:11px"></i> Consumo pós: <strong style="color:var(--text)">${_agrSmartFmt(c.totalConsumoPosKg / 1000)} t</strong></span>` : ''}
+            ${c.totalConsumoPosKg > 0 ? `<span style="color:var(--text3)"><i class="ti ti-forklift" style="font-size:11px"></i> Consumo pós: <strong style="color:var(--text)">${_agrSmartFmt(c.totalConsumoPosKg / 1000)} TON</strong></span>` : ''}
             <span class="agr-justif ${c.justificados > 0 ? 'agr-justif-ok' : 'agr-justif-zero'}" style="font-size:10px"><i class="ti ti-check"></i> ${c.justificados} just.</span>
             <span class="agr-justif ${c.parciais > 0 ? 'agr-justif-parcial' : 'agr-justif-zero'}" style="font-size:10px"><i class="ti ti-alert-triangle"></i> ${c.parciais} parc.</span>
             <span class="agr-justif ${c.injustificados > 0 ? 'agr-justif-nao' : 'agr-justif-zero'}" style="font-size:10px"><i class="ti ti-x"></i> ${c.injustificados} injust.</span>
@@ -674,7 +674,7 @@ function _agrResumoKpiStripHtml(mediaPedidosPre, mediaPedidosPos, mediaPesoPreKg
   const varClass = situacao === 'aumentou' ? 'aumentou' : situacao === 'reduziu' ? 'reduziu' : '';
   const varLabel = !isFinite(variacao) ? '—' : `${variacao > 0 ? '+' : ''}${variacao.toFixed(1)}%`;
   const varSit   = situacao === 'aumentou' ? 'Aumentou pedidos' : situacao === 'reduziu' ? 'Reduziu pedidos' : 'Estável';
-  const pesoSub  = kg => `${_agrSmartFmt(kg / 1000)} t/dia`;
+  const pesoSub  = kg => `${_agrSmartFmt(kg / 1000)} TON/dia`;
   return `
     <div class="agr-resumo-kpi-card">
       <span class="agr-resumo-kpi-label">Pedidos/dia · Pré</span>
@@ -706,7 +706,7 @@ function _agrResumoTableHtml(usinas) {
     const badgeLabel = u.situacao === 'aumentou' ? 'Aumentou' : u.situacao === 'reduziu' ? 'Reduziu' : 'Estável';
     const varLabel = !isFinite(u.variacao) ? '—' : `${u.variacao > 0 ? '+' : ''}${u.variacao.toFixed(1)}%`;
     const centralAttr = escapeHtml(u.central).replace(/'/g, '&#39;');
-    const pesoSub = kg => `<div class="td-muted" style="font-size:9.5px;font-weight:400">${_agrSmartFmt(kg / 1000)} t/dia</div>`;
+    const pesoSub = kg => `<div class="td-muted" style="font-size:9.5px;font-weight:400">${_agrSmartFmt(kg / 1000)} TON/dia</div>`;
     return `
       <tr class="agr-resumo-row" onclick="_agrResumoRowClick('${centralAttr}')">
         <td class="td-mono">
@@ -1190,7 +1190,7 @@ function agrApplyFilters() {
           <div class="agr-central-summary">
             <span style="color:var(--text2)"><i class="ti ti-arrow-down-right" style="font-size:11px;opacity:.6"></i> Pré: <strong style="color:var(--text)">${_agrSmartFmt(c.centralPreKg)}</strong></span>
             <span style="color:${pctClass === 'alert' ? 'var(--red)' : pctClass === 'warn' ? 'var(--amber)' : 'var(--text2)'}"><i class="ti ti-arrow-up-right" style="font-size:11px"></i> Pós: <strong>${_agrSmartFmt(c.centralPosKg)}</strong> <span style="opacity:.7">(${isFinite(c.pctPosCentral) ? c.pctPosCentral.toFixed(1)+'%' : '∞'})</span></span>
-            ${c.totalConsumoPosKg > 0 ? `<span style="color:var(--text3)"><i class="ti ti-forklift" style="font-size:11px"></i> Consumo pós: <strong style="color:var(--text)">${_agrSmartFmt(c.totalConsumoPosKg / 1000)} t</strong></span>` : ''}
+            ${c.totalConsumoPosKg > 0 ? `<span style="color:var(--text3)"><i class="ti ti-forklift" style="font-size:11px"></i> Consumo pós: <strong style="color:var(--text)">${_agrSmartFmt(c.totalConsumoPosKg / 1000)} TON</strong></span>` : ''}
             <span class="agr-justif ${c.justificados > 0 ? 'agr-justif-ok' : 'agr-justif-zero'}" style="font-size:10px"><i class="ti ti-check"></i> ${c.justificados} just.</span>
             <span class="agr-justif ${c.parciais > 0 ? 'agr-justif-parcial' : 'agr-justif-zero'}" style="font-size:10px"><i class="ti ti-alert-triangle"></i> ${c.parciais} parc.</span>
             <span class="agr-justif ${c.injustificados > 0 ? 'agr-justif-nao' : 'agr-justif-zero'}" style="font-size:10px"><i class="ti ti-x"></i> ${c.injustificados} injust.</span>
@@ -1273,8 +1273,8 @@ function _agrRenderMatsTable(mats) {
         <td><div class="agr-pct-bar-wrap"><div class="agr-pct-bar-track"><div class="agr-pct-bar-fill" style="width:${pctFill}%;background:${pctColor}"></div></div><span class="agr-pct-label ${pctClass2}">${pctLabel}</span></div></td>
         <td class="td-mono agr-td-multi td-muted">${fmtCarCol('pre')}</td>
         <td class="td-mono agr-td-multi">${fmtCarCol('pos')}</td>
-        <td class="td-mono ${m.consumoPreKg > 0 ? '' : 'td-muted'}">${m.consumoPreKg > 0 ? _agrSmartFmt(m.consumoPreKg / 1000) + ' t' + (m.consumoPreCount ? '<br><span class=\"td-muted\" style=\"font-size:9.5px\">' + m.consumoPreCount + ' OS</span>' : '') : '—'}</td>
-        <td class="td-mono ${m.consumoPosKg > 0 ? 'td-warn' : 'td-muted'}">${m.consumoPosKg > 0 ? _agrSmartFmt(m.consumoPosKg / 1000) + ' t' + (m.consumoPosCount ? '<br><span class=\"td-muted\" style=\"font-size:9.5px\">' + m.consumoPosCount + ' OS</span>' : '') : '—'}</td>
+        <td class="td-mono ${m.consumoPreKg > 0 ? '' : 'td-muted'}">${m.consumoPreKg > 0 ? _agrSmartFmt(m.consumoPreKg / 1000) + ' TON' + (m.consumoPreCount ? '<br><span class=\"td-muted\" style=\"font-size:9.5px\">' + m.consumoPreCount + ' OS</span>' : '') : '—'}</td>
+        <td class="td-mono ${m.consumoPosKg > 0 ? 'td-warn' : 'td-muted'}">${m.consumoPosKg > 0 ? _agrSmartFmt(m.consumoPosKg / 1000) + ' TON' + (m.consumoPosCount ? '<br><span class=\"td-muted\" style=\"font-size:9.5px\">' + m.consumoPosCount + ' OS</span>' : '') : '—'}</td>
         <td>${_agrJustifBadge(m.posRaw, m.consumoPosKg)}</td>
         <td class="td-mono">${stockPre}</td>
         <td class="td-mono">${stockPos}</td>

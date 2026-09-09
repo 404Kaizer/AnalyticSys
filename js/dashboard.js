@@ -1700,8 +1700,8 @@ const _dgVgCategoryTotalsPlugin = {
     // Ancorado pela BORDA DIREITA do canvas (textAlign:'right', x fixo
     // perto do fim), não por um X fixo à esquerda crescendo pra direita
     // (versão anterior) — dessa forma o texto NUNCA passa da borda do
-    // canvas, não importa o tamanho (ex.: "Δ +123,6 t" cortado com fonte
-    // maior). O texto cresce "pra dentro" a partir da borda.
+    // canvas, não importa o tamanho (ex.: "Δ +123,6 TON" cortado com
+    // fonte maior). O texto cresce "pra dentro" a partir da borda.
     ctx.textAlign = 'right';
     totals.forEach((totalKg, i) => {
       const y = chart.scales.y.getPixelForTick(i);
@@ -3236,7 +3236,7 @@ function renderDgConsumo(results, resultsAnt, dtIni, dtFim) {
 
   if (rankCentraisEl) {
     rankCentraisEl.innerHTML = _dgRankCardHtml(rankingCentrais, {
-      nameLabel: 'Central', subLabel: 'Regional', valLabel: 'Consumo (t)',
+      nameLabel: 'Central', subLabel: 'Regional', valLabel: 'Consumo (TON)',
       color: 'var(--accent)',
       valFmt: r => dgFmtPeso(r.saiKg, 1),
       subFmt: r => escapeHtml(r.sub)
@@ -3244,7 +3244,7 @@ function renderDgConsumo(results, resultsAnt, dtIni, dtFim) {
   }
   if (rankMateriaisEl) {
     rankMateriaisEl.innerHTML = _dgRankCardHtml(rankingMateriais, {
-      nameLabel: 'Material', subLabel: 'Categoria', valLabel: 'Consumo (t)',
+      nameLabel: 'Material', subLabel: 'Categoria', valLabel: 'Consumo (TON)',
       color: 'var(--purple)',
       valFmt: r => dgFmtPeso(r.saiKg, 1),
       subFmt: r => escapeHtml(r.sub)
@@ -7590,10 +7590,11 @@ function fmtKgShort(v) {
 // de Consumo/Giro, Controle de Corte). Decisão do Hugo (09/09/2026): ali
 // os pesos somados (central/regional/empresa inteira) já são grandes o
 // bastante pra tonelada ficar mais legível que kg — e sem as abreviações
-// K/M/G do fmtKgShort (que misturavam "K kg" com escala numérica).
+// K/M/G do fmtKgShort (que misturavam "K kg" com escala numérica). Sigla
+// "TON" (não "t") por pedido do Hugo, mesma sigla já usada em UM.
 // Só cai pra kg (via fmtKg) quando o valor for pequeno demais pra ter
-// alguma casa decimal relevante em tonelada (< 1.000 kg = < 1 t): nesse
-// caso "0,32 t" perde a precisão que "315,60 kg" mantém. O resto do
+// alguma casa decimal relevante em tonelada (< 1.000 kg = < 1 TON): nesse
+// caso "0,32 TON" perde a precisão que "315,60 kg" mantém. O resto do
 // sistema (Inventário, Materiais, Analítico...) continua em kg — por
 // isso isto NÃO substitui fmtKg/fmtKgShort, que continuam globais.
 const DG_TON_THRESHOLD_KG = 1000;
@@ -7601,7 +7602,7 @@ const DG_TON_THRESHOLD_KG = 1000;
 function dgFmtPeso(v, decimals = 2) {
   const n = num(v);
   if (Math.abs(n) < DG_TON_THRESHOLD_KG) return fmtKg(n, decimals);
-  return (n / 1000).toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }) + ' t';
+  return (n / 1000).toLocaleString('pt-BR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }) + ' TON';
 }
 
 // Mesma regra do fmtKgSigned, em tonelada (ver dgFmtPeso).
@@ -7612,9 +7613,9 @@ function dgFmtPesoSigned(v, decimals = 2) {
 }
 
 // Unidade que dgFmtPeso realmente usou pra este valor — pra rótulos
-// estáticos ("kg bruto"/"t bruto") concordarem com o número ao lado.
+// estáticos ("kg bruto"/"TON bruto") concordarem com o número ao lado.
 function dgPesoUnit(v) {
-  return Math.abs(num(v)) < DG_TON_THRESHOLD_KG ? 'kg' : 't';
+  return Math.abs(num(v)) < DG_TON_THRESHOLD_KG ? 'kg' : 'TON';
 }
 
 function varClass(v) {
