@@ -1536,6 +1536,7 @@ function _dgrAlternarTema(btn) {
   else document.body.removeAttribute('data-theme');
   // Chart.js pinta em bitmap: SVG e CSS viram sozinhos, o gráfico não.
   if (window._dgrRedesenharGraficos) window._dgrRedesenharGraficos();
+  if (window._dgrRedesenharEvolucao) window._dgrRedesenharEvolucao();
   if (btn) {
     btn.innerHTML = claro ? '<i class="ti ti-moon"></i>' : '<i class="ti ti-sun"></i>';
     btn.title = claro ? 'Tema Escuro' : 'Tema Claro';
@@ -1596,9 +1597,10 @@ function _dgrSwitchAba(abaId, btn) {
   document.querySelectorAll('.rel-aba-btn').forEach(function(b) {
     b.classList.toggle('active', b === btn);
   });
-  // Canvas em painel escondido reporta dimensão zero — o gráfico do painel
-  // que acabou de aparecer precisa ser redesenhado agora que tem tamanho.
+  // Canvas em painel escondido reporta dimensão zero — os gráficos do painel
+  // que acabou de aparecer precisam ser redesenhados agora que têm tamanho.
   if (window._dgrRedesenharGraficos) window._dgrRedesenharGraficos();
+  if (window._dgrRedesenharEvolucao) window._dgrRedesenharEvolucao();
 }
 <\/script>`;
 }
@@ -3336,6 +3338,37 @@ function _dgrSerializarObjeto(obj) {
   ).join(',\n') + '}';
 }
 
+// ── Prelúdio: o código do app que o arquivo precisa, emitido UMA vez ──
+//    Cada aba gerada declara o que usa; aqui sai a UNIÃO, no escopo global do
+//    relatório. Emitir por aba seria pior de dois jeitos: `const` repetido no
+//    topo é SyntaxError, e código emitido dentro do IIFE de uma aba fica
+//    invisível para as outras (foi assim que a Evolução perdeu _dgVgTheme).
+const _DGR_NOMES = {
+  graficos: ['DG_TON_THRESHOLD_KG', 'DG_VG_CAT_LABELS', 'DG_VG_CAT_ORDER',
+             'num', 'fmtKg', 'dgFmtPeso', 'dgFmtPesoSigned', 'varLabel',
+             '_dgVgTheme', '_dgVgDestroyChart',
+             '_dgVgBarValueLabelsPlugin', '_dgVgCategoryTotalsPlugin',
+             '_dgVgRenderChartCategoriaFisica', '_dgVgRenderChartVariacaoPorChave'],
+  evolucao:  ['DG_TON_THRESHOLD_KG', 'num', 'fmtKg', 'money', '_dgVgTheme'],
+  detalhado: ['DG_VG_CAT_LABELS', 'DG_VG_CATSUB_LABELS', 'DG_TON_THRESHOLD_KG',
+              'num', 'fmtKg', 'money', 'escapeHtml', 'varSymbol', 'movValorCor',
+              'dgFmtPeso', 'dgFmtPesoSigned',
+              '_daVarIrrelevante', '_daColorFor', '_daFmtPctSigned', '_daFmtMoneySigned',
+              '_daFmtCountSigned', '_daMaiorImpacto',
+              '_daBuildTabelaMaterial', '_daBuildRanking',
+              '_daRenderTabelaMaterial', '_daRenderRanking']
+};
+
+function _dgrScriptPrelude(chaves) {
+  const nomes = [...new Set(chaves.flatMap(k => _DGR_NOMES[k] || []))];
+  if (!nomes.length) return '';
+  return `<script>
+${_dgrEscaparScript(_dgrEmitirCodigo(nomes))}
+// Registro dos gráficos vivos — _dgVgDestroyChart escreve aqui.
+var _dgVgCharts = {};
+<\/script>`;
+}
+
 // ── Os 3 gráficos da Visão Geral, vivos no relatório ──────────────
 //    Em vez de reescrever os gráficos aqui (que sairiam de sincronia com a
 //    tela no primeiro ajuste), o relatório leva o CÓDIGO REAL do dashboard
@@ -3351,30 +3384,11 @@ function _dgrScriptGraficos(d) {
     entriesCentral:  d.entriesCentral  || []
   };
 
-  const codigo = [
-    `const DG_TON_THRESHOLD_KG = ${JSON.stringify(DG_TON_THRESHOLD_KG)};`,
-    `const DG_VG_CAT_LABELS = ${JSON.stringify(DG_VG_CAT_LABELS)};`,
-    `const DG_VG_CAT_ORDER = ${JSON.stringify(DG_VG_CAT_ORDER)};`,
-    num.toString(),
-    fmtKg.toString(),
-    dgFmtPeso.toString(),
-    dgFmtPesoSigned.toString(),
-    varLabel.toString(),
-    _dgVgTheme.toString(),
-    'let _dgVgCharts = {};',
-    _dgVgDestroyChart.toString(),
-    `const _dgVgBarValueLabelsPlugin = ${_dgrSerializarObjeto(_dgVgBarValueLabelsPlugin)};`,
-    `const _dgVgCategoryTotalsPlugin = ${_dgrSerializarObjeto(_dgVgCategoryTotalsPlugin)};`,
-    _dgVgRenderChartCategoriaFisica.toString(),
-    _dgVgRenderChartVariacaoPorChave.toString()
-  ].join('\n\n');
-
+  // As funções de render dos gráficos vêm do prelúdio (_DGR_NOMES.graficos).
   return `<script>
 (function() {
   if (typeof Chart === 'undefined') { console.error('[Relatório] Chart.js indisponível.'); return; }
-  const DADOS = ${JSON.stringify(dados)};
-
-${_dgrEscaparScript(codigo)}
+  var DADOS = ${JSON.stringify(dados)};
 
   // Redesenha os 3 gráficos. Chamado ao abrir, ao trocar de aba (canvas em
   // painel escondido nasce com dimensão zero), ao trocar o tema (a cor do
@@ -3388,6 +3402,484 @@ ${_dgrEscaparScript(codigo)}
   window._dgrRedesenharGraficos = redesenhar;
   window.addEventListener('beforeprint', redesenhar);
   redesenhar();
+})();
+<\/script>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RELATÓRIO GERENCIAL MULTI-MÊS — cálculo por período, código exportado pro
+// arquivo e as abas geradas (Evolução, Detalhado Analítico, Giro por Usina).
+//
+// A aba "Dashboard" continua sendo o DOM clonado do período analisado na tela
+// (ver _dgrClonarSecaoDom). As outras três são CALCULADAS aqui, mês a mês, e
+// ganham filtros que rodam dentro do próprio arquivo — por isso o relatório
+// leva junto o código real do app (_dgrEmitirCodigo) em vez de uma cópia.
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ── O que o relatório pode levar do app ───────────────────────────────
+//    Mapa explícito porque `const`/`function` de topo NÃO entram em window:
+//    não dá pra resolver por nome dinamicamente, só citando o identificador.
+//    Quem precisar de um símbolo novo no arquivo gerado, acrescenta aqui.
+function _dgrExportaveis() {
+  return {
+    DG_TON_THRESHOLD_KG, DG_VG_CAT_LABELS, DG_VG_CAT_ORDER, DG_VG_CATSUB_LABELS,
+    num, fmtKg, money, escapeHtml, varLabel, varSymbol, movValorCor,
+    dgFmtPeso, dgFmtPesoSigned,
+    _dgVgTheme, _dgVgDestroyChart,
+    _dgVgBarValueLabelsPlugin, _dgVgCategoryTotalsPlugin,
+    _dgVgRenderChartCategoriaFisica, _dgVgRenderChartVariacaoPorChave,
+    _daVarIrrelevante, _daColorFor, _daFmtPctSigned, _daFmtMoneySigned, _daFmtCountSigned,
+    _daMaiorImpacto, _daBuildTabelaMaterial, _daBuildRanking,
+    _daRenderTabelaMaterial, _daRenderRanking
+  };
+}
+
+function _dgrSerializarValor(v) {
+  if (typeof v === 'function') return v.toString();
+  // Objeto com métodos (os plugins do Chart.js) precisa de literal montado à
+  // mão; JSON.stringify descartaria a função silenciosamente.
+  if (v && typeof v === 'object' && !Array.isArray(v) && Object.values(v).some(x => typeof x === 'function')) {
+    return _dgrSerializarObjeto(v);
+  }
+  return JSON.stringify(v);
+}
+
+// `function foo(){}` sai como DECLARAÇÃO (hoisted, ordem não importa).
+// Qualquer outra coisa — arrow, function expression, objeto, constante —
+// precisa virar `const nome = ...`: emitir o toString() de uma arrow solta
+// produz uma expressão sem efeito, o símbolo nunca passa a existir dentro do
+// relatório e a quebra só aparece no clique do usuário. Nome desconhecido
+// estoura AQUI, na geração, não lá.
+function _dgrEmitirCodigo(nomes) {
+  const mapa = _dgrExportaveis();
+  return nomes.map(n => {
+    if (!(n in mapa)) throw new Error('[Relatório Gerencial] símbolo não exportável: ' + n);
+    const fonte = _dgrSerializarValor(mapa[n]);
+    return /^\s*(async\s+)?function\s/.test(fonte) ? fonte : `const ${n} = ${fonte};`;
+  }).join('\n\n');
+}
+
+// ── Períodos do relatório ─────────────────────────────────────────────
+//    Um por mês escolhido, mais a "Geral" na frente quando há mais de um.
+//    A Geral NÃO soma os meses — roda o MESMO cálculo sobre o intervalo
+//    inteiro, de uma vez (mesma decisão do relatório de Giro por Usina, ver
+//    _dgmAbasDoRelatorio: Est. Médio é nível, não acumulado, e a variação é
+//    divergência ACUMULADA contra o SAP — somar mês a mês contaria a mesma
+//    diferença física várias vezes).
+function _dgrPeriodosDoRelatorio(meses) {
+  const periodos = meses.map(m => ({
+    id: `mes-${m.ano}-${m.mes}`,
+    rotulo: _dgmMesLabel(m.ano, m.mes),
+    titulo: `${MESES_NOME_DG[m.mes]} de ${m.ano}`,
+    dtIni: new Date(m.ano, m.mes, 1),
+    dtFim: new Date(m.ano, m.mes + 1, 0, 23, 59, 59),
+    geral: false
+  }));
+  if (periodos.length > 1) {
+    const dtIni = periodos[0].dtIni;
+    const dtFim = periodos[periodos.length - 1].dtFim;
+    periodos.unshift({
+      id: 'geral', rotulo: 'Geral', geral: true,
+      titulo: `Geral — ${dtIni.toLocaleDateString('pt-BR')} a ${dtFim.toLocaleDateString('pt-BR')}`,
+      dtIni, dtFim
+    });
+  }
+  return periodos;
+}
+
+// Roda o pipeline do Dashboard Gerencial para um período — as MESMAS funções
+// da tela (buildDashboardGerencialResults → _dgVgBuildPares → ...), nenhuma
+// conta duplicada aqui. `pares` é o que alimenta o Detalhado dentro do
+// arquivo (é sobre ele que os filtros recalculam).
+function _dgrCalcularPeriodo(p, thresholds) {
+  const results = buildDashboardGerencialResults(p.dtIni, p.dtFim);
+  const pares   = _dgVgBuildPares(results, thresholds, p.dtIni, p.dtFim);
+
+  const pesoMedio = _daPesoMedioPorTipo(_daBuildEntradasFlat(results));
+  const estTotais = _dgVgEstoqueTotais(pares);
+  const movTotais = _dgVgMovimentacaoTotais(results);
+  const totalEstTeorico = estTotais.totalIni + movTotais.totalEnt + movTotais.totalSai + (movTotais.totalAju || 0);
+
+  const varTotalFisica = Object.values(_dgVgVariacaoFisicaPorCategoria(pares)).reduce((a, b) => a + b, 0);
+  const custoTotal     = pares.reduce((s, x) => s + x.custoImplicado, 0);
+  const scoreInfo      = _dgVgScoreFromCounts(_dgVgCounts(pares));
+
+  return {
+    id: p.id, rotulo: p.rotulo, titulo: p.titulo, geral: p.geral,
+    pares, pesoMedio, totalEstTeorico,
+    kpi: {
+      varTotalFisica, custoTotal,
+      estIni: estTotais.totalIni, estFim: estTotais.totalFim,
+      score: scoreInfo.score, level: scoreInfo.level,
+      pctVariacao: Math.abs(totalEstTeorico) > 0.0001 ? (varTotalFisica / totalEstTeorico) * 100 : null
+    },
+    giro: buildGiroPorCentralMaterial(p.dtIni, p.dtFim, results)
+  };
+}
+
+// Central → Regional, pra o filtro de Regional funcionar na aba de Giro (os
+// dados de giro são por central; a regional vem do cadastro de filiais, mesmo
+// mapeamento de gerarRelatorioCobrancaRegional).
+function _dgrMapaRegionalPorCentral() {
+  const mapa = {};
+  (state.filiais || []).forEach(f => {
+    const chave = (f.origem || f.alias || '').trim().toLowerCase();
+    if (chave) mapa[chave] = (f.regional || '').trim() || '—';
+  });
+  return mapa;
+}
+
+// ── Barra de período (dentro de uma aba) ──────────────────────────────
+//    Não confundir com a barra de ABAS (.rel-aba-bar): esta troca o MÊS
+//    dentro da aba, aquela troca a aba. Classes próprias pra os dois
+//    mecanismos não se atropelarem.
+function _dgrBarraPeriodos(periodos, abaId) {
+  if (periodos.length < 2) return '';
+  return `<div class="dgr-per-bar" data-para="${abaId}">
+    <span class="dgr-per-label"><i class="ti ti-calendar-stats"></i> Período</span>
+    ${periodos.map((p, i) => `
+      <button type="button" class="dgr-per-btn${i === 0 ? ' active' : ''}${p.geral ? ' dgr-per-geral' : ''}"
+              data-aba="${abaId}" data-periodo="${p.id}" onclick="_dgrSwitchPeriodo(this)">
+        ${_rankEsc(p.rotulo)}
+      </button>`).join('')}
+  </div>`;
+}
+
+function _dgrScriptPeriodos() {
+  return `<script>
+function _dgrSwitchPeriodo(btn) {
+  var aba = btn.dataset.aba, per = btn.dataset.periodo;
+  document.querySelectorAll('.dgr-per-btn[data-aba="' + aba + '"]').forEach(function(b) {
+    b.classList.toggle('active', b === btn);
+  });
+  document.querySelectorAll('.dgr-per-pane[data-aba="' + aba + '"]').forEach(function(p) {
+    p.classList.toggle('dgr-per-ativo', p.dataset.periodo === per);
+  });
+  if (aba === 'detalhado' && window._dgrDetAplicar) window._dgrDetAplicar();
+  if (window._dgrRedesenharGraficos) window._dgrRedesenharGraficos();
+}
+<\/script>`;
+}
+
+// ── ABA EVOLUÇÃO — a leitura temporal ────────────────────────────────
+//    A pergunta que a diretoria faz é "melhorou ou piorou?", e ela não se
+//    responde com um mês isolado. Cada linha é um mês; as colunas Δ comparam
+//    com o mês ANTERIOR da série (a "Geral" fica de fora — é o agregado do
+//    intervalo, não um ponto no tempo).
+//
+//    Veredito: Saúde subindo e |Custo da Variação| caindo = melhora; o
+//    inverso = piora; sinais discordantes = misto. Deliberadamente NÃO é uma
+//    nota única ponderada — inventar um peso entre "saúde" e "dinheiro" seria
+//    esconder a decisão dentro de uma fórmula; mostrar os dois deixa a
+//    leitura com quem decide.
+function _dgrEvolucaoLinhas(periodos) {
+  const serie = periodos.filter(p => !p.geral);
+  return serie.map((p, i) => {
+    const ant = i > 0 ? serie[i - 1] : null;
+    const dScore = ant ? p.kpi.score - ant.kpi.score : null;
+    const dCusto = ant ? Math.abs(p.kpi.custoTotal) - Math.abs(ant.kpi.custoTotal) : null;
+    let veredito = null;
+    if (ant) {
+      const melhorSaude = dScore > 0.0001, piorSaude = dScore < -0.0001;
+      const melhorCusto = dCusto < -0.0001, piorCusto = dCusto > 0.0001;
+      if (melhorSaude && !piorCusto) veredito = 'melhora';
+      else if (piorSaude && !melhorCusto) veredito = 'piora';
+      else if (melhorCusto && !piorSaude) veredito = 'melhora';
+      else if (piorCusto && !melhorSaude) veredito = 'piora';
+      else veredito = 'misto';
+    }
+    return { ...p, dScore, dCusto, veredito };
+  });
+}
+
+function _dgrEvolucaoTabelaHtml(periodos) {
+  const linhas = _dgrEvolucaoLinhas(periodos);
+  if (!linhas.length) return '<div class="dgr-chart-empty">Sem meses no relatório.</div>';
+
+  const corNivel = { bom: '#10b981', atencao: '#f59e0b', urgente: '#f97316', critico: '#f43f5e' };
+  const vered = {
+    melhora: { txt: 'MELHORA', cor: '#10b981', ic: 'ti-trending-up' },
+    piora:   { txt: 'PIORA',   cor: '#f43f5e', ic: 'ti-trending-down' },
+    misto:   { txt: 'MISTO',   cor: '#f59e0b', ic: 'ti-arrows-up-down' }
+  };
+  const delta = (v, fmt, melhorQuandoCai) => {
+    if (v === null) return '<span style="color:#64748b">—</span>';
+    const bom = melhorQuandoCai ? v < -0.0001 : v > 0.0001;
+    const neutro = Math.abs(v) < 0.0001;
+    const cor = neutro ? '#64748b' : (bom ? '#10b981' : '#f43f5e');
+    const sinal = v > 0.0001 ? '+' : '';
+    return `<span style="color:${cor};font-weight:700">${sinal}${fmt(v)}</span>`;
+  };
+
+  const corpo = linhas.map(l => {
+    const v = l.veredito ? vered[l.veredito] : null;
+    return `<tr>
+      <td style="font-weight:700">${_rankEsc(l.rotulo)}</td>
+      <td class="da-num" style="color:${_dgrValCor(l.kpi.varTotalFisica)}">${dgFmtPesoSigned(l.kpi.varTotalFisica, 1)}</td>
+      <td class="da-num">${delta(l.dCusto, x => money(Math.abs(x)), true)}</td>
+      <td class="da-num" style="color:${_dgrValCor(l.kpi.custoTotal)}">${money(l.kpi.custoTotal)}</td>
+      <td class="da-num" style="color:${corNivel[l.kpi.level] || '#94a3b8'};font-weight:700">${l.kpi.score}%</td>
+      <td class="da-num">${delta(l.dScore, x => Math.abs(x).toFixed(0) + ' p.p.', false)}</td>
+      <td class="da-num" style="color:#94a3b8">${dgFmtPeso(l.kpi.estFim, 1)}</td>
+      <td class="da-num">${v
+        ? `<span style="color:${v.cor};font-weight:800;font-size:10px;letter-spacing:.05em"><i class="ti ${v.ic}"></i> ${v.txt}</span>`
+        : '<span style="color:#64748b;font-size:10px">base</span>'}</td>
+    </tr>`;
+  }).join('');
+
+  return `<div class="da-table-wrap">
+    <table class="da-table dgr-evo-tabela">
+      <thead><tr>
+        <th>Mês</th>
+        <th class="da-num">Variação</th>
+        <th class="da-num">Δ Custo vs. mês ant.</th>
+        <th class="da-num">Custo da Variação</th>
+        <th class="da-num">Saúde</th>
+        <th class="da-num">Δ Saúde</th>
+        <th class="da-num">Est. Final</th>
+        <th class="da-num">Leitura</th>
+      </tr></thead>
+      <tbody>${corpo}</tbody>
+    </table>
+  </div>
+  <div class="dgr-evo-nota">
+    Δ compara sempre com o mês anterior da série. "Leitura" combina Saúde (subir é melhor)
+    e Custo da Variação em módulo (cair é melhor); sinais discordantes aparecem como MISTO.
+  </div>`;
+}
+
+// Gráfico da série temporal: barra = |Custo da Variação| (eixo esquerdo),
+// linha = Saúde (eixo direito, 0–100). São grandezas diferentes de propósito
+// em eixos diferentes — a leitura que interessa é se as barras encolhem
+// enquanto a linha sobe.
+function _dgrEvolucaoChartHtml() {
+  return `<div class="oc-chart-card">
+    <div class="oc-chart-title"><i class="ti ti-chart-line" style="margin-right:5px"></i>Custo da Variação e Saúde, mês a mês</div>
+    <div style="position:relative;height:260px"><canvas id="dgr-evo-chart"></canvas></div>
+  </div>`;
+}
+
+function _dgrScriptEvolucao(periodos) {
+  const serie = _dgrEvolucaoLinhas(periodos).map(l => ({
+    rotulo: l.rotulo, custo: Math.abs(l.kpi.custoTotal), score: l.kpi.score
+  }));
+  return `<script>
+(function() {
+  var cv = document.getElementById('dgr-evo-chart');
+  if (!cv || typeof Chart === 'undefined') return;
+  var SERIE = ${JSON.stringify(serie)};
+  var grafico = null;
+  function desenhar() {
+    var t = _dgVgTheme();
+    if (grafico) { try { grafico.destroy(); } catch (e) {} }
+    grafico = new Chart(cv, {
+      data: {
+        labels: SERIE.map(function(p) { return p.rotulo; }),
+        datasets: [
+          { type: 'bar', label: 'Custo da Variação', yAxisID: 'y',
+            data: SERIE.map(function(p) { return p.custo; }),
+            backgroundColor: '#f43f5e', borderRadius: 3, order: 2 },
+          { type: 'line', label: 'Saúde', yAxisID: 'y2',
+            data: SERIE.map(function(p) { return p.score; }),
+            borderColor: '#10b981', backgroundColor: '#10b981',
+            borderWidth: 2, pointRadius: 4, tension: .3, order: 1 }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { labels: { color: t.textCol, font: t.tickFont, usePointStyle: true, boxWidth: 10 } },
+          tooltip: { callbacks: { label: function(c) {
+            return c.dataset.yAxisID === 'y2'
+              ? 'Saúde · ' + c.raw + '%'
+              : 'Custo da Variação · ' + money(c.raw);
+          } } }
+        },
+        scales: {
+          x:  { grid: { display: false }, ticks: { color: t.textCol, font: t.tickFont } },
+          y:  { position: 'left',  grid: { color: t.gridCol },
+                ticks: { color: t.textCol, font: t.tickFont, callback: function(v) { return money(v); } } },
+          y2: { position: 'right', min: 0, max: 100, grid: { display: false },
+                ticks: { color: t.textCol, font: t.tickFont, callback: function(v) { return v + '%'; } } }
+        }
+      }
+    });
+  }
+  window._dgrRedesenharEvolucao = desenhar;
+  desenhar();
+})();
+<\/script>`;
+}
+
+// ── ABA DETALHADO ANALÍTICO — filtros que RECALCULAM ─────────────────
+//    Esconder linha não serve aqui: filtrar por Regional tem que refazer o
+//    Ranking de Materiais só com os pares daquela regional, senão a tabela
+//    mostra número do período inteiro com cara de recorte. Por isso o
+//    arquivo leva os `pares` de cada mês e as MESMAS funções de agregação e
+//    render da tela (_daBuildTabelaMaterial/_daBuildRanking/_daRender*).
+//
+//    O denominador da % Variação continua sendo o Est. Teórico TOTAL do
+//    período (não o do recorte) — é o que dá o sentido de "fatia da variação
+//    do período", mesma semântica da tela (ver _daBuildRanking).
+function _dgrDetalhadoFiltrosHtml(opcoes) {
+  const sel = (id, rotulo, itens, primeiro) => `
+    <label>${rotulo}
+      <select id="${id}" onchange="_dgrDetAplicar()">
+        <option value="">${primeiro}</option>
+        ${itens.map(([v, l]) => `<option value="${_rankEsc(v)}">${_rankEsc(l)}</option>`).join('')}
+      </select>
+    </label>`;
+  return `<div class="dgm-filtros dgr-det-filtros">
+    ${sel('dgr-det-f-regional', 'Regional', opcoes.regionais.map(v => [v, v]), 'Todas')}
+    ${sel('dgr-det-f-central',  'Central',  opcoes.centrais.map(v => [v, v]),  'Todas')}
+    ${sel('dgr-det-f-material', 'Material', opcoes.materiais.map(v => [v, v]), 'Todos')}
+    ${sel('dgr-det-f-categoria','Categoria', opcoes.categorias, 'Todas')}
+    <button type="button" class="dgm-f-btn" onclick="_dgrDetLimpar()"><i class="ti ti-filter-off"></i> Limpar</button>
+    <span class="dgm-f-resumo" id="dgr-det-resumo"></span>
+  </div>`;
+}
+
+function _dgrScriptDetalhado(periodos) {
+  // Só o que as funções de agregação leem — `pares` cru carrega campos que o
+  // Detalhado não usa e o arquivo não precisa carregar.
+  const dados = {};
+  periodos.forEach(p => {
+    dados[p.id] = {
+      pesoMedio: p.pesoMedio,
+      totalEstTeorico: p.totalEstTeorico,
+      pares: p.pares.map(x => ({
+        regional: x.regional, central: x.central, mat: x.mat,
+        catKey: x.catKey, catSubKey: x.catSubKey,
+        estoqueIni: x.estoqueIni, estoqueFim: x.estoqueFim,
+        entKg: x.entKg, saiKg: x.saiKg, ajuKg: x.ajuKg,
+        custoMed: x.custoMed, custoImplicado: x.custoImplicado, diff: x.diff
+      }))
+    };
+  });
+
+  // As funções de agregação/render vêm do prelúdio (_DGR_NOMES.detalhado).
+  return `<script>
+(function() {
+  var DADOS = ${JSON.stringify(dados)};
+  var IDS = ['dgr-det-f-regional', 'dgr-det-f-central', 'dgr-det-f-material', 'dgr-det-f-categoria'];
+
+  function periodoAtivo() {
+    var btn = document.querySelector('.dgr-per-btn[data-aba="detalhado"].active');
+    return btn ? btn.dataset.periodo : Object.keys(DADOS)[0];
+  }
+
+  function aplicar() {
+    var d = DADOS[periodoAtivo()];
+    if (!d) return;
+    var v = {};
+    IDS.forEach(function(id) { var el = document.getElementById(id); v[id] = el ? el.value : ''; });
+
+    var pares = d.pares.filter(function(p) {
+      return (!v['dgr-det-f-regional']  || p.regional === v['dgr-det-f-regional'])
+          && (!v['dgr-det-f-central']   || p.central  === v['dgr-det-f-central'])
+          && (!v['dgr-det-f-material']  || p.mat      === v['dgr-det-f-material'])
+          && (!v['dgr-det-f-categoria'] || (p.catKey === 'agregado' ? (p.catSubKey || 'agregado_sem_subcategoria') : p.catKey) === v['dgr-det-f-categoria']);
+    });
+
+    _daRenderTabelaMaterial('dg-da-material', _daBuildTabelaMaterial(pares));
+    _daRenderRanking('dg-da-rank-regional', _daBuildRanking(pares, d.pesoMedio, function(p) { return p.regional; },
+      d.totalEstTeorico, function(k) { return k === '—' ? 'Sem regional' : k; }), 'Regional');
+    _daRenderRanking('dg-da-rank-central', _daBuildRanking(pares, d.pesoMedio, function(p) { return p.central; },
+      d.totalEstTeorico), 'Central');
+    _daRenderRanking('dg-da-rank-material', _daBuildRanking(pares, d.pesoMedio, function(p) { return p.mat; },
+      d.totalEstTeorico), 'Material');
+    _daRenderRanking('dg-da-rank-categoria', _daBuildRanking(pares, d.pesoMedio, function(p) {
+      return p.catKey === 'agregado' ? (p.catSubKey || 'agregado_sem_subcategoria') : p.catKey;
+    }, d.totalEstTeorico, function(k) {
+      return DG_VG_CATSUB_LABELS[k] || DG_VG_CAT_LABELS[k] || (k === 'agregado_sem_subcategoria' ? 'Agregado (sem subcategoria)' : k);
+    }), 'Categoria');
+
+    var resumo = document.getElementById('dgr-det-resumo');
+    if (resumo) {
+      var filtrando = IDS.some(function(id) { return v[id]; });
+      resumo.textContent = filtrando
+        ? pares.length + (pares.length === 1 ? ' par central×material' : ' pares central×material')
+        : '';
+    }
+  }
+
+  window._dgrDetAplicar = aplicar;
+  window._dgrDetLimpar = function() {
+    IDS.forEach(function(id) { var el = document.getElementById(id); if (el) el.value = ''; });
+    aplicar();
+  };
+  aplicar();
+})();
+<\/script>`;
+}
+
+// ── ABA GIRO POR USINA ───────────────────────────────────────────────
+//    Reaproveita inteiro o relatório de Giro por Usina que já existe
+//    (_dgmSecoesHtml + _dgmCentralTabelaHtml + a legenda e os tooltips), só
+//    que como aba dentro do Gerencial e com um pane por período. Aqui o
+//    filtro por linha É correto: cada linha é uma central×material, não um
+//    agregado — nada a recalcular (o total da central segue mostrando a
+//    central inteira, de propósito, mesma decisão de _dgmScriptFiltros).
+function _dgrGiroFiltrosHtml(opcoes) {
+  const sel = (id, rotulo, itens, primeiro) => `
+    <label>${rotulo}
+      <select id="${id}" onchange="_dgrGiroAplicar()">
+        <option value="">${primeiro}</option>
+        ${itens.map(([v, l]) => `<option value="${_rankEsc(v)}">${_rankEsc(l)}</option>`).join('')}
+      </select>
+    </label>`;
+  const niveis = [['critico', 'Crítico'], ['urgente', 'Urgente'], ['atencao', 'Atenção'], ['bom', 'Bom']];
+  return `<div class="dgm-filtros">
+    ${sel('dgr-giro-f-regional', 'Regional', opcoes.regionais.map(v => [v, v]), 'Todas')}
+    ${sel('dgr-giro-f-central',  'Central',  opcoes.centrais.map(v => [v, v]),  'Todas')}
+    ${sel('dgr-giro-f-material', 'Material', opcoes.materiais.map(v => [v, v]), 'Todos')}
+    ${sel('dgr-giro-f-nivel',    'Nível',    niveis, 'Todos')}
+    <button type="button" class="dgm-f-btn" onclick="_dgrGiroLimpar()"><i class="ti ti-filter-off"></i> Limpar</button>
+    <button type="button" class="dgm-f-btn" id="dgm-toggle-tudo" onclick="_dgmAlternarTudo(this)"><i class="ti ti-chevrons-up"></i> Recolher tudo</button>
+    <span class="dgm-f-resumo" id="dgr-giro-resumo"></span>
+  </div>`;
+}
+
+function _dgrScriptGiro() {
+  return `<script>
+(function() {
+  var IDS = ['dgr-giro-f-regional', 'dgr-giro-f-central', 'dgr-giro-f-material', 'dgr-giro-f-nivel'];
+  function aplicar() {
+    var v = {};
+    IDS.forEach(function(id) { var el = document.getElementById(id); v[id] = el ? el.value : ''; });
+    var fr = v['dgr-giro-f-regional'], fc = v['dgr-giro-f-central'];
+    var fm = v['dgr-giro-f-material'], fn = v['dgr-giro-f-nivel'];
+    var filtraLinha = !!(fm || fn);
+    var centrais = 0, linhas = 0;
+
+    // Só o pane do período visível entra na contagem — o resumo tem que
+    // falar do que está na tela, não da soma de todos os meses.
+    var pane = document.querySelector('.dgr-per-pane[data-aba="giro"].dgr-per-ativo') || document;
+    pane.querySelectorAll('.dgm-secao').forEach(function(sec) {
+      var ok = (!fr || sec.dataset.regional === fr) && (!fc || sec.dataset.central === fc);
+      var visiveis = 0;
+      sec.querySelectorAll('tr[data-material]').forEach(function(tr) {
+        var okLinha = ok && (!fm || tr.dataset.material === fm) && (!fn || tr.dataset.nivel === fn);
+        tr.style.display = okLinha ? '' : 'none';
+        if (okLinha) visiveis++;
+      });
+      var mostra = ok && (visiveis > 0 || !filtraLinha);
+      sec.style.display = mostra ? '' : 'none';
+      if (mostra) { centrais++; linhas += visiveis; }
+    });
+
+    var resumo = document.getElementById('dgr-giro-resumo');
+    if (resumo) {
+      resumo.textContent = (fr || fc || fm || fn)
+        ? centrais + (centrais === 1 ? ' central' : ' centrais') + ' · ' + linhas + (linhas === 1 ? ' material' : ' materiais')
+        : '';
+    }
+  }
+  window._dgrGiroAplicar = aplicar;
+  window._dgrGiroLimpar = function() {
+    IDS.forEach(function(id) { var el = document.getElementById(id); if (el) el.value = ''; });
+    aplicar();
+  };
 })();
 <\/script>`;
 }
@@ -3723,11 +4215,19 @@ function _dgrEstilos() {
 // arquivo, só não é chamada daqui por enquanto (decisão de jul/2026,
 // confirmada com o usuário).
 // ═══════════════════════════════════════════════════════════════════════════════
+// Uma aba é de um de dois tipos:
+//  - 'clone'  : as seções são HTML VIVO da tela (data-rel-secao no
+//               index.html). Mostra o período analisado no Dashboard, um só.
+//  - 'gerado' : a aba é calculada na hora da geração, mês a mês, e monta o
+//               próprio corpo (filtros + panes de período) via render().
+// O modal de seleção e a montagem do relatório continuam 100% orientados por
+// este registro: aba nova é uma entrada nova aqui, sem tocar no núcleo.
 window._RELATORIO_ABAS_REGISTRY = [
   {
     id: 'dashboard',
     label: 'Dashboard',
     icon: 'ti-layout-dashboard',
+    tipo: 'clone',
     disponivel: () => !!window._dgVgLastData,
     secoes: [
       { id: 'resumo-periodo',       label: 'Resumo do Período — Estoque, Movimentação e Variação' },
@@ -3737,24 +4237,79 @@ window._RELATORIO_ABAS_REGISTRY = [
     ]
   },
   {
+    id: 'evolucao',
+    label: 'Evolução',
+    icon: 'ti-timeline',
+    tipo: 'gerado',
+    disponivel: () => !!window._dgVgLastData,
+    secoes: [
+      { id: 'evo-tabela',  label: 'Indicadores mês a mês', natural: true },
+      { id: 'evo-grafico', label: 'Custo da Variação e Saúde, mês a mês' }
+    ],
+    // Sem barra de período: a aba INTEIRA é a comparação entre os meses.
+    render: (ctx, ids) => ids.map(id => _dgrSecaoHtml(
+      id,
+      id === 'evo-tabela' ? 'Indicadores mês a mês' : 'Custo da Variação e Saúde, mês a mês',
+      id === 'evo-tabela' ? _dgrEvolucaoTabelaHtml(ctx.periodos) : _dgrEvolucaoChartHtml(),
+      id === 'evo-tabela'
+    )).join('')
+  },
+  {
     id: 'detalhado',
     label: 'Detalhado Analítico',
     icon: 'ti-table',
+    tipo: 'gerado',
     disponivel: () => !!window._dgVgLastData,
     // Tabelas paginam livremente (natural) — travar cada uma numa página só
     // cortaria ranking grande no meio.
     secoes: [
-      { id: 'det-material',      label: 'Detalhamento por Material (Grupo SAP)', natural: true },
-      { id: 'det-rank-regional', label: 'Ranking de Regionais',                  natural: true },
-      { id: 'det-rank-central',  label: 'Ranking de Centrais',                   natural: true },
-      { id: 'det-rank-material', label: 'Ranking de Materiais',                  natural: true },
-      { id: 'det-rank-categoria', label: 'Ranking de Categoria',                 natural: true }
-    ]
+      { id: 'det-material',       label: 'Detalhamento por Material (Grupo SAP)', natural: true, alvo: 'dg-da-material' },
+      { id: 'det-rank-regional',  label: 'Ranking de Regionais',                  natural: true, alvo: 'dg-da-rank-regional' },
+      { id: 'det-rank-central',   label: 'Ranking de Centrais',                   natural: true, alvo: 'dg-da-rank-central' },
+      { id: 'det-rank-material',  label: 'Ranking de Materiais',                  natural: true, alvo: 'dg-da-rank-material' },
+      { id: 'det-rank-categoria', label: 'Ranking de Categoria',                  natural: true, alvo: 'dg-da-rank-categoria' }
+    ],
+    // As tabelas são preenchidas pelo script embutido (_dgrScriptDetalhado) —
+    // aqui só vão os contêineres vazios, com os MESMOS ids da tela, pra as
+    // funções de render do app rodarem sem adaptação nenhuma.
+    render: (ctx, ids, aba) => _dgrDetalhadoFiltrosHtml(ctx.opcoesDet)
+      + _dgrBarraPeriodos(ctx.periodos, 'detalhado')
+      + `<div class="dgr-per-alvo">` + ids.map(id => {
+          const sec = aba.secoes.find(s => s.id === id);
+          return _dgrSecaoHtml(id, sec.label, `<div class="oc-chart-card"><div id="${sec.alvo}"></div></div>`, true);
+        }).join('') + `</div>`
+  },
+  {
+    id: 'giro',
+    label: 'Giro por Usina',
+    icon: 'ti-rotate-clockwise-2',
+    tipo: 'gerado',
+    disponivel: () => !!window._dgVgLastData,
+    secoes: [
+      { id: 'giro-centrais', label: 'Giro & Cobertura por Central e Material', natural: true }
+    ],
+    render: (ctx) => _dgrGiroFiltrosHtml(ctx.opcoesGiro)
+      + _dgmLegendaHtml()
+      + _dgrBarraPeriodos(ctx.periodos, 'giro')
+      + ctx.periodos.map((p, i) => `
+        <div class="dgr-per-pane${i === 0 ? ' dgr-per-ativo' : ''}" data-aba="giro" data-periodo="${p.id}">
+          <div class="dgr-section-title"><i class="ti ti-calendar-month"></i>${_rankEsc(p.titulo)} — ${p.giro.centrais.length} ${p.giro.centrais.length !== 1 ? 'centrais' : 'central'}</div>
+          ${_dgmSecoesHtml({ id: `giro-${p.id}` }, p.giro, ctx.mapaRegional)
+            || `<div class="dgr-chart-empty">Sem dados neste período.</div>`}
+        </div>`).join('')
   }
-  // Consumo e Controle de Corte entram aqui em etapas futuras: marcar as
-  // seções da aba no index.html com data-rel-secao e listá-las aqui — não
-  // existe mais builder de HTML nenhum pra escrever.
 ];
+
+// Cabeçalho recolhível + corpo — mesmo formato das seções clonadas, pra a
+// aparência não mudar entre aba clonada e aba gerada.
+function _dgrSecaoHtml(id, label, corpo, natural) {
+  return `<section class="${natural ? 'dgr-page-section-natural' : 'dgr-page-section'}" data-secao-id="${id}">`
+    + `<button type="button" class="dgr-collapse-toggle" aria-expanded="true" onclick="_dgrToggleSecao(this)">`
+    + `<i class="ti ti-chevron-down"></i><span>${_rankEsc(label)}</span>`
+    + `</button>`
+    + `<div class="dgr-collapse-body">${corpo}</div>`
+    + `</section>`;
+}
 
 // Seleção "tudo marcado", na ordem do registro — usada quando o relatório é
 // gerado sem passar por seleção nenhuma (chamada direta/antiga) e como
@@ -3766,7 +4321,54 @@ function _dgrSelecaoCompleta() {
     .map(aba => ({ aba: aba.id, secoes: aba.secoes.map(s => s.id) }));
 }
 
-// ── Modal de seleção: abas e seções que entram no HTML exportado ───────
+// ── Meses do relatório ────────────────────────────────────────────────
+//    Estado PRÓPRIO (não compartilha com o picker do relatório de Giro por
+//    Usina, _dgmState): dois modais mexendo no mesmo Set faria a escolha de
+//    um vazar no outro. Abre com o mês analisado no Dashboard marcado.
+const _dgrMesesState = { viewYear: new Date().getFullYear(), selecionados: new Set() };
+
+function _dgrMesesOrdenados() {
+  return [..._dgrMesesState.selecionados]
+    .map(k => { const [a, m] = k.split('-').map(Number); return { ano: a, mes: m }; })
+    .sort((x, y) => x.ano - y.ano || x.mes - y.mes);
+}
+
+function _dgrSincronizarMesPadrao() {
+  if (_dgrMesesState.selecionados.size || typeof _dgMonthState !== 'object') return;
+  _dgrMesesState.viewYear = _dgMonthState.selectedYear;
+  _dgrMesesState.selecionados.add(`${_dgMonthState.selectedYear}-${_dgMonthState.selectedMonth}`);
+}
+
+window._dgrNavAnoMes = function(dir) { _dgrMesesState.viewYear += dir; _dgrRenderPickerMeses(); };
+window._dgrToggleMes = function(mes) {
+  const k = `${_dgrMesesState.viewYear}-${mes}`;
+  if (!_dgrMesesState.selecionados.delete(k)) _dgrMesesState.selecionados.add(k);
+  _dgrRenderPickerMeses();
+};
+
+function _dgrRenderPickerMeses() {
+  const el = document.getElementById('dgr-mes-picker');
+  if (!el) return;
+  const y = _dgrMesesState.viewYear;
+  const botoes = MESES_ABREV_DG.map((nome, i) =>
+    `<button type="button" class="dgm-mes-btn${_dgrMesesState.selecionados.has(`${y}-${i}`) ? ' sel' : ''}" onclick="_dgrToggleMes(${i})">${nome}</button>`
+  ).join('');
+  const escolhidos = _dgrMesesOrdenados();
+  el.innerHTML = `
+    <div class="dgm-nav">
+      <button class="btn" style="padding:4px 8px" onclick="_dgrNavAnoMes(-1)"><i class="ti ti-chevron-left"></i></button>
+      <strong>${y}</strong>
+      <button class="btn" style="padding:4px 8px" onclick="_dgrNavAnoMes(1)"><i class="ti ti-chevron-right"></i></button>
+    </div>
+    <div class="dgm-mes-grid">${botoes}</div>
+    <div style="margin-top:8px;font-size:11.5px;color:var(--text3)">
+      ${escolhidos.length
+        ? escolhidos.map(m => _dgmMesLabel(m.ano, m.mes)).join(' · ') + (escolhidos.length > 1 ? ' · + Geral' : '')
+        : 'Nenhum mês selecionado'}
+    </div>`;
+}
+
+// ── Modal de seleção: abas, seções e meses que entram no HTML exportado ──
 // Injeta o CSS uma única vez (guard por id, mesmo padrão do próprio modal
 // — evita empilhar <style> repetido toda vez que o modal reabre).
 function _dgrInjetarEstiloModalSelecao() {
@@ -3791,6 +4393,15 @@ function _dgrInjetarEstiloModalSelecao() {
       display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:12px;
     }
     .rel-sel-mover button:hover { color:var(--text); border-color:var(--accent); }
+    .rel-sel-bloco-meses { border:1px solid var(--border); border-radius:10px; padding:10px 12px; background:var(--bg2); }
+    .rel-sel-bloco-titulo { display:flex; align-items:center; gap:8px; font-size:13px; font-weight:700; margin-bottom:4px; }
+    .rel-sel-bloco-sub { font-size:11px; color:var(--text3); margin-bottom:10px; line-height:1.5; }
+    .dgm-mes-grid { display:grid; grid-template-columns:repeat(6,1fr); gap:6px; }
+    .dgm-mes-btn { padding:7px 0; border:1px solid var(--border); border-radius:8px; background:var(--bg3);
+                   color:var(--text2); font-size:11.5px; font-weight:600; cursor:pointer; }
+    .dgm-mes-btn.sel { background:var(--accent); border-color:var(--accent); color:#fff; }
+    .dgm-nav { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+    .dgm-nav strong { font-size:13px; }
   `;
   document.head.appendChild(style);
 }
@@ -3830,6 +4441,7 @@ window.abrirModalSelecaoRelatorioGerencial = function(tema = 'dark') {
   }
 
   _dgrInjetarEstiloModalSelecao();
+  _dgrSincronizarMesPadrao();
 
   let modal = document.getElementById('rel-selecao-modal');
   if (!modal) {
@@ -3859,6 +4471,7 @@ window.abrirModalSelecaoRelatorioGerencial = function(tema = 'dark') {
             <input type="checkbox" class="rel-sel-aba-toggle" data-aba="${aba.id}" ${disponivel ? 'checked' : 'disabled'}>
             <i class="ti ${aba.icon}"></i>
             <strong>${_rankEsc(aba.label)}</strong>
+            ${aba.tipo === 'clone' ? '<span class="rel-sel-badge">período do Dashboard</span>' : ''}
             ${disponivel ? '' : '<span class="rel-sel-badge">analise essa aba antes</span>'}
           </label>
           ${_dgrBotoesMover()}
@@ -3868,13 +4481,18 @@ window.abrirModalSelecaoRelatorioGerencial = function(tema = 'dark') {
   }).join('');
 
   modal.innerHTML = `
-    <div class="modal" style="max-width:520px;width:92vw;max-height:82vh;display:flex;flex-direction:column">
+    <div class="modal" style="max-width:540px;width:92vw;max-height:86vh;display:flex;flex-direction:column">
       <div class="modal-title" style="display:flex;align-items:center;gap:10px">
         <i class="ti ti-list-check" style="color:var(--accent)"></i>
         O que incluir no relatório?
       </div>
-      <div class="modal-sub">Marque as abas e seções que devem entrar no arquivo e use as setas para ordenar — a ordem daqui é a ordem do relatório. Desmarcar a aba desmarca todas as seções dela.</div>
+      <div class="modal-sub">Marque as abas e seções, use as setas para ordenar — a ordem daqui é a ordem do relatório. Desmarcar a aba desmarca todas as seções dela.</div>
       <div id="rel-sel-lista" style="overflow-y:auto;flex:1;margin:12px 0 14px;display:flex;flex-direction:column;gap:10px">
+        <div class="rel-sel-bloco-meses">
+          <div class="rel-sel-bloco-titulo"><i class="ti ti-calendar-stats" style="color:var(--accent)"></i>Meses do relatório</div>
+          <div class="rel-sel-bloco-sub">Evolução, Detalhado Analítico e Giro por Usina são calculados para cada mês marcado. Com dois ou mais, entra também uma visão <strong>Geral</strong> do intervalo inteiro. A aba Dashboard mostra sempre o período analisado na tela.</div>
+          <div id="dgr-mes-picker"></div>
+        </div>
         ${abasHtml}
       </div>
       <div style="display:flex;justify-content:space-between;gap:10px">
@@ -3905,6 +4523,7 @@ window.abrirModalSelecaoRelatorioGerencial = function(tema = 'dark') {
     });
   });
 
+  _dgrRenderPickerMeses();
   modal.classList.add('open');
 };
 
@@ -3918,14 +4537,23 @@ window._dgrGerarComSelecao = function(tema) {
     const secoes = [...abaEl.querySelectorAll('input[data-secao]:checked')].map(cb => cb.dataset.secao);
     if (secoes.length) selecao.push({ aba: abaEl.dataset.aba, secoes });
   });
-  modal.classList.remove('open');
 
   if (!selecao.length) {
     toast('Selecione ao menos uma seção para gerar o relatório.', 'error');
     return;
   }
+  const meses = _dgrMesesOrdenados();
+  const precisaMes = selecao.some(s => {
+    const aba = window._RELATORIO_ABAS_REGISTRY.find(a => a.id === s.aba);
+    return aba && aba.tipo === 'gerado';
+  });
+  if (precisaMes && !meses.length) {
+    toast('Selecione ao menos um mês — Evolução, Detalhado e Giro são calculados por mês.', 'error');
+    return;
+  }
 
-  window.gerarRelatorioGerencialDashboard(tema, selecao);
+  modal.classList.remove('open');
+  window.gerarRelatorioGerencialDashboard(tema, selecao, meses);
 };
 
 // ── Nome do arquivo do relatório — carimbo de data/hora, sanitizado pra
@@ -3938,7 +4566,7 @@ function _dgrNomeArquivoRelatorio(prefixo) {
   return `${prefixo}-${carimbo}.html`;
 }
 
-window.gerarRelatorioGerencialDashboard = async function(tema = 'dark', selecao = null) {
+window.gerarRelatorioGerencialDashboard = async function(tema = 'dark', selecao = null, meses = null) {
   const d = window._dgVgLastData;
   if (!d) {
     toast('Analise um período no Dashboard Gerencial antes de gerar o relatório.', 'error');
@@ -3946,57 +4574,109 @@ window.gerarRelatorioGerencialDashboard = async function(tema = 'dark', selecao 
   }
 
   // Sem seleção explícita (ex.: chamada direta/antiga, fora do fluxo do
-  // modal) — inclui tudo que estiver disponível, na ordem do registro.
+  // modal) — inclui tudo que estiver disponível, na ordem do registro, e
+  // usa o mês do próprio Dashboard como período único.
   const secoesSelecionadas = selecao || _dgrSelecaoCompleta();
+  const mesesEscolhidos = (meses && meses.length)
+    ? meses
+    : [{ ano: d.dtIni.getFullYear(), mes: d.dtIni.getMonth() }];
 
   const btn = document.getElementById('dg-btn-relatorio-gerencial');
   if (btn?.disabled) return;
   if (typeof _setBtnLoading === 'function') _setBtnLoading(btn, true, 'Gerando...');
-  if (typeof showLoadingOverlay === 'function') showLoadingOverlay('Gerando relatório', 'Capturando a tela e montando o relatório...');
+  if (typeof showLoadingOverlay === 'function') showLoadingOverlay('Gerando relatório', 'Calculando os meses e montando o relatório...');
 
   try {
     const now = new Date().toLocaleString('pt-BR');
-    const periodo = (d.dtIni && d.dtFim)
+    const periodoDash = (d.dtIni && d.dtFim)
       ? `${d.dtIni.toLocaleDateString('pt-BR')} a ${d.dtFim.toLocaleDateString('pt-BR')}`
       : 'Período completo';
+
+    const usaGerado = secoesSelecionadas.some(s => {
+      const aba = window._RELATORIO_ABAS_REGISTRY.find(a => a.id === s.aba);
+      return aba && aba.tipo === 'gerado';
+    });
+
+    // Cálculo mês a mês — o pesado do relatório. Cede a thread entre os
+    // períodos pra o overlay repintar (mesmo motivo do relatório de Giro).
+    const thresholds = getHealthThresholds();
+    const periodos = [];
+    if (usaGerado) {
+      const descritores = _dgrPeriodosDoRelatorio(mesesEscolhidos);
+      for (let i = 0; i < descritores.length; i++) {
+        if (typeof showLoadingOverlay === 'function') {
+          showLoadingOverlay('Gerando relatório', `Calculando ${descritores[i].rotulo} (${i + 1} de ${descritores.length})...`);
+        }
+        await new Promise(r => setTimeout(r, 0));
+        periodos.push(_dgrCalcularPeriodo(descritores[i], thresholds));
+      }
+    }
+
+    // Opções dos filtros: união de TODOS os períodos, pra uma central que só
+    // aparece num mês continuar selecionável nos outros.
+    const cmp = (a, b) => String(a).localeCompare(String(b), 'pt-BR');
+    const uniao = (fn) => [...new Set(periodos.flatMap(fn))].filter(Boolean).sort(cmp);
+    const mapaRegional = _dgrMapaRegionalPorCentral();
+    const catsVistas = new Set(periodos.flatMap(p => p.pares.map(x =>
+      x.catKey === 'agregado' ? (x.catSubKey || 'agregado_sem_subcategoria') : x.catKey)));
+    const ctx = {
+      periodos,
+      mapaRegional,
+      opcoesDet: {
+        regionais: uniao(p => p.pares.map(x => x.regional)),
+        centrais:  uniao(p => p.pares.map(x => x.central)),
+        materiais: uniao(p => p.pares.map(x => x.mat)),
+        categorias: [...catsVistas].filter(Boolean).map(k => [k,
+          DG_VG_CATSUB_LABELS[k] || DG_VG_CAT_LABELS[k] || (k === 'agregado_sem_subcategoria' ? 'Agregado (sem subcategoria)' : k)
+        ]).sort((a, b) => cmp(a[1], b[1]))
+      },
+      opcoesGiro: {
+        regionais: uniao(p => p.giro.centrais.map(c => mapaRegional[(c.name || '').trim().toLowerCase()] || '—')),
+        centrais:  uniao(p => p.giro.centrais.map(c => c.name)),
+        materiais: uniao(p => p.giro.centrais.flatMap(c => c.mats.map(m => m.name)))
+      }
+    };
+
+    if (typeof showLoadingOverlay === 'function') showLoadingOverlay('Gerando relatório', 'Capturando a tela e montando o relatório...');
 
     // Os dois I/O do relatório: o CSS do app (senão o HTML clonado chega
     // sem estilo nenhum) e o Chart.js (pra os gráficos serem gráficos de
     // verdade dentro do arquivo, não imagem).
     const [cssApp, chartJs] = await Promise.all([_dgrCssApp(), _dgrChartJsEmbutido()]);
 
-    // Monta o corpo 100% a partir da SELEÇÃO do usuário (ordem inclusa) —
-    // cada seção é o HTML vivo da tela. Cada aba selecionada vira um painel
-    // (.rel-aba-pane); dentro dele, seção "compacta" ocupa uma página só
-    // (dgr-page-section) e seção "natural" pagina livremente
-    // (dgr-page-section-natural), pelo campo `natural` do registro.
+    // Monta o corpo 100% a partir da SELEÇÃO do usuário (ordem inclusa).
     let panesHtml = '';
     const abasIncluidas = [];
     secoesSelecionadas.forEach(({ aba: abaId, secoes: secoesIds }) => {
       const aba = window._RELATORIO_ABAS_REGISTRY.find(a => a.id === abaId);
       if (!aba || !secoesIds || !secoesIds.length || !aba.disponivel()) return;
 
-      let secoesHtml = '';
-      secoesIds.forEach(secId => {
-        const sec = aba.secoes.find(s => s.id === secId);
-        if (!sec) return;
-        const classe = sec.natural ? 'dgr-page-section-natural' : 'dgr-page-section';
-        secoesHtml += `<section class="${classe}" data-secao-id="${sec.id}">`
-          + `<button type="button" class="dgr-collapse-toggle" aria-expanded="true" onclick="_dgrToggleSecao(this)">`
-          + `<i class="ti ti-chevron-down"></i><span>${_rankEsc(sec.label)}</span>`
-          + `</button>`
-          + `<div class="dgr-collapse-body">${_dgrClonarSecaoDom(sec.id)}</div>`
-          + `</section>`;
-      });
-      if (!secoesHtml) return;
+      let corpo = '';
+      if (aba.tipo === 'gerado') {
+        const ids = secoesIds.filter(id => aba.secoes.some(s => s.id === id));
+        if (ids.length) corpo = aba.render(ctx, ids, aba);
+      } else {
+        // Seção "compacta" ocupa uma página só (dgr-page-section); "natural"
+        // pagina livremente (dgr-page-section-natural), pelo campo do registro.
+        secoesIds.forEach(secId => {
+          const sec = aba.secoes.find(s => s.id === secId);
+          if (!sec) return;
+          corpo += _dgrSecaoHtml(sec.id, sec.label, _dgrClonarSecaoDom(sec.id), !!sec.natural);
+        });
+        if (corpo) {
+          corpo = `<div class="dgr-aviso-periodo"><i class="ti ti-info-circle"></i> Esta aba mostra o período analisado no Dashboard: <strong>${_rankEsc(periodoDash)}</strong>. Para a leitura mês a mês, veja a aba Evolução.</div>` + corpo;
+        }
+      }
+      if (!corpo) return;
 
       // O primeiro painel incluído já nasce ativo (.rel-aba-ativa) — o
       // relatório precisa mostrar algo mesmo se o JS da barra não rodar.
       const ativa = abasIncluidas.length === 0 ? ' rel-aba-ativa' : '';
-      panesHtml += `<div class="rel-aba-pane${ativa}" data-aba-id="${aba.id}">${secoesHtml}</div>`;
+      panesHtml += `<div class="rel-aba-pane${ativa}" data-aba-id="${aba.id}">${corpo}</div>`;
       abasIncluidas.push(aba);
     });
-    const fechModalHtml = _dgrClonarFechModal(periodo);
+
+    const incluiu = id => abasIncluidas.some(a => a.id === id);
 
     // A barra só aparece com 2+ abas na seleção — com 1 só ela ficaria
     // vazia de sentido (nada pra alternar).
@@ -4009,24 +4689,58 @@ window.gerarRelatorioGerencialDashboard = async function(tema = 'dark', selecao 
 
     // Correções pontuais do CSS do app dentro do relatório: tokens.css trava
     // html/body em 100% de altura (faz sentido no app, que rola por dentro;
-    // aqui cortaria o documento) e a sidebar/topbar do app não existe aqui.
+    // aqui cortaria o documento).
     const ajustesCss = `
       html, body { height:auto; min-height:0; overflow-x:visible; }
+      .dgr-per-bar { display:flex; flex-wrap:wrap; align-items:center; gap:7px; margin:0 0 16px; }
+      .dgr-per-label { font-size:9px; font-weight:800; text-transform:uppercase; letter-spacing:.06em;
+                       color:var(--dgr-text-dim2, #64748b); display:inline-flex; align-items:center; gap:5px; margin-right:4px; }
+      .dgr-per-btn { padding:6px 12px; border-radius:7px; cursor:pointer; font-family:'JetBrains Mono',monospace;
+                     font-size:10.5px; font-weight:700;
+                     border:1px solid var(--dgr-card-border, rgba(255,255,255,.09));
+                     background:var(--dgr-card-bg, rgba(255,255,255,.03)); color:var(--dgr-text-dim, #94a3b8); }
+      .dgr-per-btn.active { color:var(--dgr-text, #e2e8f0); border-color:var(--dgr-accent-text, #f87171); }
+      .dgr-per-geral { font-weight:800; margin-right:6px; }
+      .dgr-per-pane { display:none; }
+      .dgr-per-pane.dgr-per-ativo { display:block; }
+      .dgr-aviso-periodo { display:flex; align-items:center; gap:8px; font-size:11px; line-height:1.5;
+                           color:var(--dgr-text-dim, #94a3b8); background:var(--dgr-card-bg, rgba(255,255,255,.03));
+                           border:1px solid var(--dgr-card-border, rgba(255,255,255,.09));
+                           border-radius:8px; padding:9px 12px; margin-bottom:6px; }
+      .dgr-evo-tabela th, .dgr-evo-tabela td {
+        white-space:nowrap; max-width:none; overflow:visible; text-overflow:clip;
+      }
+      .dgr-evo-tabela td, .dgr-evo-tabela th { padding-left:10px; padding-right:10px; }
+      .dgr-evo-nota { font-size:10px; color:var(--dgr-text-dim2, #64748b); margin-top:8px; line-height:1.6; }
+      @media print {
+        .dgr-per-bar { display:none; }
+        .dgr-per-pane { display:block !important; }
+      }
     `;
 
     const bodyHtml = `<style>${_dgrEstilos()}${ajustesCss}</style>`
-      + abasBarHtml + panesHtml + fechModalHtml
-      + _dgrScriptTooltipApp() + chartJs + _dgrScriptGraficos(d);
+      + abasBarHtml + panesHtml + _dgrClonarFechModal(periodoDash)
+      + _dgrScriptTooltipApp() + chartJs
+      + _dgrScriptPrelude([
+          incluiu('dashboard') && 'graficos',
+          incluiu('evolucao')  && 'evolucao',
+          incluiu('detalhado') && 'detalhado'
+        ].filter(Boolean))
+      + (incluiu('dashboard') ? _dgrScriptGraficos(d) : '')
+      + _dgrScriptPeriodos()
+      + (incluiu('evolucao')  ? _dgrScriptEvolucao(periodos) : '')
+      + (incluiu('detalhado') ? _dgrScriptDetalhado(periodos) : '')
+      + (incluiu('giro')      ? _dgmScriptTooltip() + _dgmScriptFiltros() + _dgrScriptGiro() : '');
 
     // Mesmo nome usado nos dois caminhos de download: o automático (ao
     // gerar) e o botão "Baixar HTML" embutido dentro do próprio arquivo.
     const nomeArquivo = _dgrNomeArquivoRelatorio('relatorio-gerencial');
 
+    const rotulos = periodos.filter(p => !p.geral).map(p => p.rotulo);
+    const periodoBadge = rotulos.length > 1 ? `${rotulos[0]} — ${rotulos[rotulos.length - 1]}` : periodoDash;
+
     const html = _buildRankingShellHTML({
-      periodoBadge: periodo,
-      periodo,
-      now,
-      kpis: []
+      periodoBadge, periodo: periodoBadge, now, kpis: []
     }, {
       pageOrientation: 'retrato',
       paginarSecoes: true,
@@ -4040,8 +4754,10 @@ window.gerarRelatorioGerencialDashboard = async function(tema = 'dark', selecao 
       cssApp,
       pageTitle:  'Relatório Gerencial — Dashboard Gerencial',
       badge:      'Relatório Gerencial',
-      title:      'Visão Geral — Dashboard Gerencial',
-      subtitle:   'Resumo executivo de estoque, movimentação, variação e saúde geral do período selecionado.',
+      title:      rotulos.length > 1 ? 'Evolução do Estoque — Dashboard Gerencial' : 'Visão Geral — Dashboard Gerencial',
+      subtitle:   rotulos.length > 1
+        ? `Leitura mês a mês de estoque, movimentação, variação e saúde geral — ${rotulos.join(' · ')}.`
+        : 'Resumo executivo de estoque, movimentação, variação e saúde geral do período selecionado.',
       bodyHtml,
       notaRodape: 'Variação e Custo Var. desconsideram Ajustes de Fechamento Mensal não reincluídos manualmente. Saúde Geral considera os limiares configurados em Configurações → Parâmetros.'
     });
@@ -5435,17 +6151,31 @@ function _dgmAbasDoRelatorio(meses) {
   return abas;
 }
 
-function _dgmPaneHtml(aba, dados, ativa) {
+// As seções (uma por central) separadas do pane que as embrulha — o
+// Relatório Gerencial reaproveita SÓ as seções, dentro do pane de período
+// dele (ver _dgrGiroPaneHtml); o relatório de Giro standalone continua
+// usando _dgmPaneHtml como sempre.
+//
+// mapaRegional (opcional): carimba data-regional na seção pra o filtro de
+// Regional do Gerencial. O standalone não passa nada e nada muda pra ele.
+function _dgmSecoesHtml(aba, dados, mapaRegional) {
   // Uma seção por central: recolhível na tela e página nova na impressão
   // (dgr-page-section-natural = quebra antes, mas pagina livre por dentro —
   // uma central com muitos materiais não cabe numa página só).
-  const secoes = dados.centrais.map((c, i) => `
-    <section class="dgr-page-section-natural dgm-secao" data-secao-id="${aba.id}-${i}" data-central="${_rankEsc(c.name)}">
+  return dados.centrais.map((c, i) => {
+    const reg = mapaRegional ? (mapaRegional[(c.name || '').trim().toLowerCase()] || '—') : null;
+    return `
+    <section class="dgr-page-section-natural dgm-secao" data-secao-id="${aba.id}-${i}" data-central="${_rankEsc(c.name)}"${reg !== null ? ` data-regional="${_rankEsc(reg)}"` : ''}>
       <button type="button" class="dgr-collapse-toggle dgm-central-head" aria-expanded="true" onclick="_dgrToggleSecao(this)">
         ${_dgmCentralHeaderHtml(c)}
       </button>
       <div class="dgr-collapse-body">${_dgmCentralTabelaHtml(c, dados.periodoEstimado)}</div>
-    </section>`).join('');
+    </section>`;
+  }).join('');
+}
+
+function _dgmPaneHtml(aba, dados, ativa) {
+  const secoes = _dgmSecoesHtml(aba, dados);
 
   const nCent = dados.centrais.length;
   const nDias = dados.periodoEstimado;
