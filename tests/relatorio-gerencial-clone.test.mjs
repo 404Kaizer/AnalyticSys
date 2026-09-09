@@ -163,13 +163,13 @@ teste('a Geral entra na frente e só quando há mais de um mês', () => {
 });
 
 teste('a leitura melhora/piora compara com o mês anterior, e a Geral fica fora', () => {
-  const p = (id, score, custo, geral) => ({ id, rotulo: id, geral, kpi: { score, custoTotal: custo } });
+  const p = (id, score, fisica, geral) => ({ id, rotulo: id, geral, kpi: { score, varTotalFisica: fisica } });
   const linhas = ctx._dgrEvolucaoLinhas([
     p('geral', 50, -1000, true),
     p('jul', 60, -900, false),   // base
-    p('ago', 70, -500, false),   // saúde sobe, |custo| cai  → melhora
-    p('set', 55, -800, false),   // saúde cai, |custo| sobe  → piora
-    p('out', 80, -1200, false)   // saúde sobe, |custo| sobe → misto
+    p('ago', 70, -500, false),   // saúde sobe, |física| cai  → melhora
+    p('set', 55, -800, false),   // saúde cai, |física| sobe  → piora
+    p('out', 80, -1200, false)   // saúde sobe, |física| sobe → misto
   ]);
   assert.equal(linhas.length, 4, 'a Geral não é ponto da série temporal');
   assert.equal(linhas.map(l => l.veredito).join(','), ',melhora,piora,misto');
