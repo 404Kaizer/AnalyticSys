@@ -11201,6 +11201,17 @@ td:has(.lanc-central-edit:focus) {
   box-shadow: 0 1px 2px rgba(0,0,0,0.08);
 }
 
+/* Botão "Ocultar Ajustes" (ver dgToggleOcultarAjustes, dashboard.js) —
+   discreto por padrão, só destaca (âmbar) quando ativo, pra ficar claro
+   que algo está escondido. */
+#dg-btn-ocultar-ajustes.active { color: var(--amber); }
+/* .dg-ocultar-ajustes fica no <body> — esconde o card "Ajustes dentro do
+   Mês" (Resumo do Período) e as colunas Ajustes/Custo Ajuste do
+   Detalhamento por Material (Detalhado Analítico), onde quer que apareçam
+   na página (grid/tabela reflui sozinho, sem precisar recalcular nada). */
+body.dg-ocultar-ajustes #dg-vg-kpi-ajustes,
+body.dg-ocultar-ajustes .dg-col-ajustes { display: none; }
+
 /* ── Dashboard Analítico — alternância Visão Micro / Visão Inventário ── */
 .an-view-switch {
   display: flex;

@@ -576,6 +576,12 @@
               <button class="dg-esti-toggle-btn active" id="dg-esti-btn-sap" onclick="dgSetEstIniMode('sap')" type="button">Importado</button>
               <button class="dg-esti-toggle-btn" id="dg-esti-btn-lanc" onclick="dgSetEstIniMode('lanc')" type="button">Calculado</button>
             </div>
+            <!-- Botão discreto: esconde o card "Ajustes dentro do Mês" e as
+                 colunas Ajustes/Custo Ajuste do Detalhado Analítico — só CSS,
+                 ver _dgAplicarOcultarAjustesUI/.dg-ocultar-ajustes. -->
+            <button class="btn-icon" id="dg-btn-ocultar-ajustes" onclick="dgToggleOcultarAjustes()" type="button" title="Ocultar Ajustes (card e colunas do Detalhado)">
+              <i class="ti ti-eye-off"></i>
+            </button>
           </div>
           <div class="analitico-actions">
             <button class="btn btn-primary" onclick="rodarDashboardGerencial()">
@@ -651,7 +657,7 @@
             </div>
             <div style="display:flex;justify-content:center">
               <div style="width:420px;max-width:96%">
-                <svg id="dg-vg-gauge-central-svg" viewBox="0 0 300 220" style="width:100%;height:auto;display:block"></svg>
+                <svg id="dg-vg-gauge-central-svg" viewBox="0 0 300 220" style="overflow:visible;width:100%;height:auto;display:block"></svg>
               </div>
             </div>
             <div id="dg-vg-health-central-summary" style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-start;margin-top:10px"></div>
@@ -671,7 +677,7 @@
             </div>
             <div style="display:flex;justify-content:center">
               <div style="width:420px;max-width:96%">
-                <svg id="dg-vg-gauge-chart-svg" viewBox="0 0 300 220" style="width:100%;height:auto;display:block"></svg>
+                <svg id="dg-vg-gauge-chart-svg" viewBox="0 0 300 220" style="overflow:visible;width:100%;height:auto;display:block"></svg>
               </div>
             </div>
             <div id="dg-vg-health-materiais-summary" style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-start;margin-top:10px"></div>

@@ -84,6 +84,32 @@ window.dgSetEstIniMode = function (mode) {
   }
 };
 
+// ── Ocultar Ajustes — botão discreto que esconde o card "Ajustes dentro
+// do Mês" (Resumo do Período) e a coluna Ajustes/Custo Ajuste da tabela
+// Detalhamento por Material (Detalhado Analítico). Puramente visual (CSS,
+// ver .dg-ocultar-ajustes em modules.css) — não recalcula nada, os dados
+// continuam existindo, só saem da vista de quem não quer olhar ajuste
+// agora. Persistido em localStorage, mesmo padrão de _dgEstIniMode.
+let _dgOcultarAjustes = false;
+try {
+  _dgOcultarAjustes = localStorage.getItem('dgOcultarAjustes') === '1';
+} catch (e) { /* noop — localStorage indisponível */ }
+
+function _dgAplicarOcultarAjustesUI() {
+  document.body.classList.toggle('dg-ocultar-ajustes', _dgOcultarAjustes);
+  const btn = document.getElementById('dg-btn-ocultar-ajustes');
+  if (!btn) return;
+  btn.classList.toggle('active', _dgOcultarAjustes);
+  btn.innerHTML = `<i class="ti ${_dgOcultarAjustes ? 'ti-eye' : 'ti-eye-off'}"></i>`;
+  btn.title = _dgOcultarAjustes ? 'Mostrar Ajustes' : 'Ocultar Ajustes (card e colunas do Detalhado)';
+}
+
+window.dgToggleOcultarAjustes = function () {
+  _dgOcultarAjustes = !_dgOcultarAjustes;
+  try { localStorage.setItem('dgOcultarAjustes', _dgOcultarAjustes ? '1' : '0'); } catch (e) { /* noop */ }
+  _dgAplicarOcultarAjustesUI();
+};
+
 function buildDashboardGerencialResults(dtIni, dtFim) {
   // Se dtIni/dtFim fornecidos, filtra por período; caso contrário usa todos os dados
   function inPeriod(dateStr) {
@@ -478,6 +504,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('dg-month-dropdown')?.addEventListener('click', e => e.stopPropagation());
   _dgUpdateMonthTriggerLabel();
   _dgUpdateEstIniToggleUI();
+  _dgAplicarOcultarAjustesUI();
 });
 
 Object.assign(window, {
@@ -1589,7 +1616,7 @@ function _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais, f
           <div class="inv-kpi-unit">${money(custoMovTotais.custoSai || 0)}</div>
         </div>
       </div>
-      <div class="inv-kpi-card">
+      <div class="inv-kpi-card" id="dg-vg-kpi-ajustes">
         <div class="inv-kpi-body">
           <div class="inv-kpi-label"><i class="ti ti-adjustments-alt" style="color:var(--amber)"></i>Ajustes dentro do Mês</div>
           <div class="inv-kpi-value" style="color:${movValorCor(movTotais.totalAju || 0, 'var(--amber)')}">${dgFmtPesoSigned(movTotais.totalAju || 0)}</div>
@@ -2400,12 +2427,12 @@ function _daRenderTabelaMaterial(containerId, dados) {
       <td class="da-num" style="color:var(--teal)">${dgFmtPeso(l.estIni)}</td>
       <td class="da-num" style="color:var(--green)">${dgFmtPesoSigned(l.entKg)}</td>
       <td class="da-num" style="color:var(--red)">${dgFmtPesoSigned(l.saiKg)}</td>
-      <td class="da-num" style="color:${movValorCor(l.ajuKg, 'var(--amber)')}">${dgFmtPesoSigned(l.ajuKg)}</td>
+      <td class="da-num dg-col-ajustes" style="color:${movValorCor(l.ajuKg, 'var(--amber)')}">${dgFmtPesoSigned(l.ajuKg)}</td>
       <td class="da-num" style="color:var(--teal)">${dgFmtPeso(l.estTeorico)}</td>
       <td class="da-num" style="color:var(--teal)">${dgFmtPeso(l.estFim)}</td>
       <td class="da-num" style="color:${_daColorFor(l.pctVariacao)}">${_daFmtPctSigned(l.pctVariacao)}</td>
       <td class="da-num">${money(l.custoMedio)}/kg</td>
-      <td class="da-num" style="color:${_daColorFor(l.custoAjuste)}">${_daFmtMoneySigned(l.custoAjuste)}</td>
+      <td class="da-num dg-col-ajustes" style="color:${_daColorFor(l.custoAjuste)}">${_daFmtMoneySigned(l.custoAjuste)}</td>
     </tr>`).join('');
 
   const t = dados.total;
@@ -2415,12 +2442,12 @@ function _daRenderTabelaMaterial(containerId, dados) {
       <td class="da-num" style="color:var(--teal)">${dgFmtPeso(t.estIni)}</td>
       <td class="da-num" style="color:var(--green)">${dgFmtPesoSigned(t.entKg)}</td>
       <td class="da-num" style="color:var(--red)">${dgFmtPesoSigned(t.saiKg)}</td>
-      <td class="da-num" style="color:${movValorCor(t.ajuKg, 'var(--amber)')}">${dgFmtPesoSigned(t.ajuKg)}</td>
+      <td class="da-num dg-col-ajustes" style="color:${movValorCor(t.ajuKg, 'var(--amber)')}">${dgFmtPesoSigned(t.ajuKg)}</td>
       <td class="da-num" style="color:var(--teal)">${dgFmtPeso(t.estTeorico)}</td>
       <td class="da-num" style="color:var(--teal)">${dgFmtPeso(t.estFim)}</td>
       <td class="da-num" style="color:${_daColorFor(t.pctVariacao)}">${_daFmtPctSigned(t.pctVariacao)}</td>
       <td class="da-num">${money(t.custoMedio)}/kg</td>
-      <td class="da-num" style="color:${_daColorFor(t.custoAjuste)}">${_daFmtMoneySigned(t.custoAjuste)}</td>
+      <td class="da-num dg-col-ajustes" style="color:${_daColorFor(t.custoAjuste)}">${_daFmtMoneySigned(t.custoAjuste)}</td>
     </tr>`;
 
   el.innerHTML = `
@@ -2432,12 +2459,12 @@ function _daRenderTabelaMaterial(containerId, dados) {
             <th class="da-num">Est. Inicial</th>
             <th class="da-num">Entradas</th>
             <th class="da-num">Saídas</th>
-            <th class="da-num">Ajustes</th>
+            <th class="da-num dg-col-ajustes">Ajustes</th>
             <th class="da-num">Est. Teórico</th>
             <th class="da-num">Est. Final</th>
             <th class="da-num">% Variação</th>
             <th class="da-num">Custo Médio</th>
-            <th class="da-num">Custo Ajuste</th>
+            <th class="da-num dg-col-ajustes">Custo Ajuste</th>
           </tr>
         </thead>
         <tbody>${rowsHtml}</tbody>
