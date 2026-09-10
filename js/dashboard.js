@@ -875,11 +875,17 @@ function _dgVgScoreFromCounts(counts) {
 // Dashboard Gerencial ficou com menos centrais que o de "Centrais mais
 // críticas" da Visão Macro (macro.js: renderMacroPanels semeia centralMap
 // por TODO r de results, sem essa lacuna — donuts têm que bater).
+// Aceita tanto array de objetos (resultado bruto de
+// buildDashboardGerencialResults, cada item com .central) quanto array de
+// nomes de central já prontos (string) — usado pelo filtro de Saúde Geral
+// (_dgVgAplicarFiltroSaude), que semeia direto a partir de pares filtrados
+// em vez de cruzar com resultados por um Map à parte.
 function _dgVgBuildCentralHealthData(pares, thresholds, results) {
   const byCentral = new Map(); // central -> { matDiffs:[], custo:0, diff:0 }
   if (results) {
     results.forEach(r => {
-      if (!byCentral.has(r.central)) byCentral.set(r.central, { matDiffs: [], custo: 0, diff: 0 });
+      const c = typeof r === 'string' ? r : r.central;
+      if (!byCentral.has(c)) byCentral.set(c, { matDiffs: [], custo: 0, diff: 0 });
     });
   }
   pares.forEach(p => {
@@ -1906,14 +1912,23 @@ function _dgVgAplicarFiltroSaude() {
   const { levelMeta: levelMetaMat } = _dgVgBuildHealthDonutData(pares);
   _dgVgRenderHealthDonutSvg('dg-vg-gauge-chart-svg', countsMat, scoreMat, levelMetaMat, 'pares Central × Material', 'dg-vg-health-materiais-subtitle', 'dg-vg-health-materiais-summary');
 
-  let resultsCentrais = null;
+  // Universo de centrais do donut de Centrais: direto de d.pares (mesma
+  // fonte que o donut de Materiais acima já usa, e que prova reagir ao
+  // filtro) — não cruza mais com d.results por um Map à parte. Sem filtro
+  // de Categoria, toda central com PELO MENOS UM par no período (ou na
+  // regional filtrada) entra; central com histórico só via SAP no mês (zero
+  // lançamento, portanto zero par — ver _dgVgBuildCentralHealthData) fica de
+  // fora aqui, diferente da carga inicial da tela (_dgVgRenderHealthDonuts),
+  // que ainda semeia com o results completo — troca aceita porque o donut
+  // reagir de verdade ao filtro importa mais que essa central isolada.
+  let centraisUniverso = null;
   if (!selCat) {
-    const regionalPorCentral = new Map();
-    d.pares.forEach(p => { if (!regionalPorCentral.has(p.central)) regionalPorCentral.set(p.central, p.regional); });
-    resultsCentrais = selReg ? d.results.filter(r => regionalPorCentral.get(r.central) === selReg) : d.results;
+    centraisUniverso = [...new Set(
+      d.pares.filter(p => !selReg || p.regional === selReg).map(p => p.central)
+    )];
   }
 
-  const { counts: countsCen, levelMeta: levelMetaCen, total: totalCen } = _dgVgBuildCentralHealthData(pares, d.thresholds, resultsCentrais);
+  const { counts: countsCen, levelMeta: levelMetaCen, total: totalCen } = _dgVgBuildCentralHealthData(pares, d.thresholds, centraisUniverso);
   const scoreCen = _dgVgScoreFromCounts(countsCen);
   _dgVgRenderHealthDonutSvg('dg-vg-gauge-central-svg', countsCen, scoreCen, levelMetaCen, totalCen === 1 ? 'central analisada' : 'centrais analisadas', 'dg-vg-health-central-subtitle', 'dg-vg-health-central-summary');
 }
