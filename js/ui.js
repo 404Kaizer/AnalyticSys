@@ -2748,7 +2748,9 @@ function openBreakdownModal(trigger) {
   if (theadRow) {
     theadRow.querySelectorAll('.bdm-th-extra').forEach(th => th.remove());
     if (mostrarCentralMaterial) {
-      theadRow.insertAdjacentHTML('afterbegin', '<th class="bdm-th-extra">Central</th><th class="bdm-th-extra">Material</th>');
+      theadRow.insertAdjacentHTML('afterbegin',
+        '<th class="bdm-th-extra" data-sort-col="central">Central <i class="ti ti-selector mod-sort-icon"></i></th>'
+        + '<th class="bdm-th-extra" data-sort-col="material">Material <i class="ti ti-selector mod-sort-icon"></i></th>');
     }
     // Usuário/Pedido/Doc MIGO/Dt. Registro somem no modo agregado (pedido
     // do Hugo) — fazem sentido no par (central, material) fixo do
@@ -3188,6 +3190,11 @@ function openBreakdownModal(trigger) {
     const _ts = (s) => { const d = parseDate(s); return d ? d.getTime() : null; };
     const sort = {
       cod,
+      // Só preenchidas/ordenáveis no modo agregado (colunas escondidas
+      // fora dele, ver mostrarCentralMaterial) — inofensivo deixar aqui
+      // sempre, só não tem `th` clicável pra chegar nelas fora desse modo.
+      central:    centralCol || '',
+      material:   materialCol || '',
       usuario:    usuario || '',
       ref:        refCol || '',
       pedido:     pedidoCol || '',
