@@ -648,7 +648,7 @@ function _dgVgBuildPares(results, thresholds, dtIni, dtFim) {
       // Agregado (Aglomerante/Aditivo/Adição não têm subcategoria).
       const catSubKey = (r.materialCatSubKeyMap && r.materialCatSubKeyMap.get(mat)) || null;
 
-      let diff, estoqueIni = 0, estoqueFim = 0, entKg = 0, saiKg = 0, ajuKg = 0;
+      let diff, estoqueIni = 0, estoqueFim = 0, entKg = 0, saiKg = 0, ajuKg = 0, diffSaude;
       // Rateio por NATUREZA do código, não pelo sinal — mesmo critério da
       // Visão Micro/Inventário. Os três saem LÍQUIDOS e COM SINAL (saiKg
       // negativo), então o Est. Teórico do Detalhado soma os três.
@@ -679,17 +679,40 @@ function _dgVgBuildPares(results, thresholds, dtIni, dtFim) {
         // Analítico). Vêm do rateio por natureza (_nat), não do buildSnapshot:
         // o snapshot separa por sinal e não conhece o balde AJUSTES.
         entKg = _nat.totalEnt; saiKg = _nat.totalSai; ajuKg = _nat.totalAju;
+
+        // SAÚDE sempre pelo saldo TEÓRICO do SAP, nunca pelo modo Calculado
+        // do toggle acima — Saúde Geral é réplica dos donuts do Dashboard
+        // Analítico (_dgVgRenderHealthDonuts, "mesmo cálculo de percentual"),
+        // que nunca usa esse toggle (exclusivo do Gerencial, controla só a
+        // EXIBIÇÃO de Est. Inicial/Variação). Sem isso, trocar o toggle pra
+        // Calculado fazia os dois painéis classificarem central/material
+        // diferente, com percentuais de saúde divergentes pro mesmo período
+        // (decisão: consistência entre os dois painéis prevalece sobre o
+        // toggle). No modo padrão (SAP) é o MESMO diff, sem custo extra; só
+        // no modo Calculado recalcula com a fonte SAP à parte, só pra
+        // classificar — result e level "de exibição" (abaixo) continuam
+        // seguindo o toggle normalmente.
+        diffSaude = (_dgEstIniMode === 'lanc')
+          ? buildSnapshot({
+              lancs, sap,
+              initialStockOverride: (typeof _anGetSapStock === 'function' ? _anGetSapStock({ central: r.central, material: mat, dtIni })?.value : null) ?? null,
+              finalStockOverride:   (fim && !fim.missing) ? fim.value : null
+            }).diff
+          : diff;
       } else {
         const snap = buildSnapshot({ lancs, sap });
         diff  = snap.diff;
+        diffSaude = diff;
         entKg = _nat.totalEnt; saiKg = _nat.totalSai; ajuKg = _nat.totalAju;
       }
 
-      const neutro = Math.abs(diff) <= 0.0001;
+      const neutro      = Math.abs(diff)      <= 0.0001;
+      const neutroSaude = Math.abs(diffSaude) <= 0.0001;
       // Sem cadastro tem prioridade sobre "neutro" — mesmo com variação
       // próxima de zero, não deve ser contado como 'bom' silenciosamente
       // (decisão: excluído do cálculo de saúde até ser cadastrado).
-      const level    = !catKey ? 'sem_cadastro' : (neutro ? 'bom' : classifyVariation(Math.abs(diff), catKey, thresholds));
+      const level      = !catKey ? 'sem_cadastro' : (neutro      ? 'bom' : classifyVariation(Math.abs(diff),      catKey, thresholds));
+      const levelSaude = !catKey ? 'sem_cadastro' : (neutroSaude ? 'bom' : classifyVariation(Math.abs(diffSaude), catKey, thresholds));
       const custoMed = (r.custoMedioPorMat || {})[mat] || 0;
 
       // custoIni/custoFim: custo do SALDO de estoque (kg × custo médio do
@@ -699,6 +722,7 @@ function _dgVgBuildPares(results, thresholds, dtIni, dtFim) {
       // si, não da diferença. Decisão confirmada com o Hugo.
       pares.push({
         central: r.central, regional, mat, catKey, catSubKey, diff, level, neutro,
+        diffSaude, levelSaude,
         custoImplicado: diff * custoMed, estoqueIni, estoqueFim,
         custoIni: estoqueIni * custoMed, custoFim: estoqueFim * custoMed,
         entKg, saiKg, ajuKg, custoMed
@@ -781,11 +805,16 @@ function _dgVgCustoMovimentacaoTotais(results) {
 // Tally de pares Central×Material por nível — MESMO critério usado em
 // macro.js (matItems/matCounts): todos os materiais entram, inclusive os
 // com variação zero (classificados 'bom'), sem exclusão de "neutros".
+// Usa levelSaude (não level): todo chamador desta função alimenta Saúde
+// (donut/score), que tem que bater com o Dashboard Analítico sempre pelo
+// saldo SAP, independente do toggle de Est. Inicial — ver nota em
+// _dgVgBuildPares/levelSaude. Quem precisa do nível "de exibição" (que
+// segue o toggle) usa p.level direto, não esta função.
 function _dgVgCounts(pares) {
   // sem_cadastro rastreado à parte — nunca soma em critico/urgente/atencao/bom
   // (excluído do cálculo de saúde, decisão já aplicada em calcHealthScore).
   const counts = { critico: 0, urgente: 0, atencao: 0, bom: 0, sem_cadastro: 0 };
-  pares.forEach(p => { counts[p.level] = (counts[p.level] || 0) + 1; });
+  pares.forEach(p => { counts[p.levelSaude] = (counts[p.levelSaude] || 0) + 1; });
   return counts;
 }
 
@@ -829,9 +858,12 @@ function _dgVgBuildCentralHealthData(pares, thresholds, results) {
   pares.forEach(p => {
     if (!byCentral.has(p.central)) byCentral.set(p.central, { matDiffs: [], custo: 0, diff: 0 });
     const rec = byCentral.get(p.central);
-    rec.matDiffs.push({ mat: p.mat, diff: p.diff, catKey: p.catKey });
+    // diffSaude (não diff) classifica a central — mesmo motivo de
+    // _dgVgCounts/_dgVgBuildHealthDonutData: sempre pelo saldo SAP,
+    // independente do toggle de Est. Inicial.
+    rec.matDiffs.push({ mat: p.mat, diff: p.diffSaude, catKey: p.catKey });
     rec.custo += Math.abs(p.custoImplicado);
-    rec.diff  += p.diff;
+    rec.diff  += p.diffSaude;
   });
 
   const counts      = { critico: 0, urgente: 0, atencao: 0, bom: 0 };
@@ -1182,14 +1214,17 @@ function _dgVgMaterialTipHtml(label, value, pct, color) {
 
 // Agrupa pares (não-neutros) por nível para alimentar o tooltip do gauge:
 // itemsByLevel (lista "mat — central") e levelMeta (diff/custo agregados).
+// levelSaude/diffSaude (não level/diff) — mesmo motivo de _dgVgCounts: esta
+// função só alimenta o tooltip do donut de Saúde, que tem que bater com o
+// Dashboard Analítico sempre pelo saldo SAP.
 function _dgVgBuildHealthDonutData(pares) {
   const levelMeta = { critico: { diff: 0, custo: 0 }, urgente: { diff: 0, custo: 0 }, atencao: { diff: 0, custo: 0 }, bom: { diff: 0, custo: 0 } };
   pares.forEach(p => {
     // Sem cadastro é excluído do donut de saúde (mesma exclusão do score) —
     // sem essa guarda, levelMeta['sem_cadastro'] é undefined e quebra aqui.
-    if (!levelMeta[p.level]) return;
-    levelMeta[p.level].diff  += p.diff;
-    levelMeta[p.level].custo += Math.abs(p.custoImplicado);
+    if (!levelMeta[p.levelSaude]) return;
+    levelMeta[p.levelSaude].diff  += p.diffSaude;
+    levelMeta[p.levelSaude].custo += Math.abs(p.custoImplicado);
   });
   return { levelMeta };
 }
@@ -1318,6 +1353,7 @@ function renderDgVisaoGeralPdf(results, thresholds, dtIni, dtFim) {
       .forEach(id => { const svgEl = document.getElementById(id); if (svgEl) svgEl.innerHTML = ''; });
     ['dg-vg-health-central-summary', 'dg-vg-health-materiais-summary']
       .forEach(id => { const e = document.getElementById(id); if (e) e.innerHTML = ''; });
+    _dgVgPopularFiltroSaude([]);
     window._dgVgLastData = null;
     return;
   }
@@ -1381,6 +1417,7 @@ function renderDgVisaoGeralPdf(results, thresholds, dtIni, dtFim) {
 
   _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais, sapFechExcluidosPeriodo, custoMovTotais, veiculosTotalKpi);
   _dgVgRenderHealthDonuts(pares, counts, scoreInfo, thresholds, null, results);
+  _dgVgPopularFiltroSaude(pares);
   _dgVgRenderChartCategoriaFisica(catFisicaPct);
   _dgVgRenderExtremos(extRegional, extCentral);
   const entriesRegional = _dgVgTop8SobraDesfalque(porRegionalKg);
@@ -1703,6 +1740,61 @@ function _dgVgRenderHealthDonuts(pares, countsMat, scoreMat, thresholds, ids, re
   const { counts: countsCen, levelMeta: levelMetaCen, total: totalCen } = _dgVgBuildCentralHealthData(pares, thresholds, results);
   const scoreCen = _dgVgScoreFromCounts(countsCen);
   _dgVgRenderHealthDonutSvg(ids.cenSvg, countsCen, scoreCen, levelMetaCen, totalCen === 1 ? 'central analisada' : 'centrais analisadas', ids.cenSub, ids.cenSum);
+}
+
+// ── Filtros de Saúde Geral (Regional pra Centrais, Categoria pra
+//    Materiais) — mesmo padrão visual/UX do painel Macro do Dashboard
+//    Analítico (macro.js: _populateFilters/macroApplyFilter). Os dois
+//    filtros são INDEPENDENTES um do outro, igual lá: o de Regional só
+//    afeta o donut de Centrais, o de Categoria só afeta o de Materiais.
+//    Opções vêm do que REALMENTE está presente em pares (não da lista fixa
+//    de categorias/regionais cadastradas) — se uma regional não tem
+//    nenhuma central no período, ela nem aparece no dropdown.
+function _dgVgPopularFiltroSaude(pares) {
+  const selReg = document.getElementById('dg-vg-saude-f-regional');
+  const selCat = document.getElementById('dg-vg-saude-f-categoria');
+  if (!selReg || !selCat) return;
+
+  const cmp = (a, b) => String(a).localeCompare(String(b), 'pt-BR');
+  const regionais  = [...new Set(pares.map(p => p.regional).filter(v => v && v !== '—'))].sort(cmp);
+  const categorias = [...new Set(pares.map(p => p.catKey).filter(Boolean))].sort(cmp);
+
+  // Reseta pra "Todas" a cada análise nova — o período mudou, um filtro
+  // herdado do período anterior pode não fazer sentido mais (ou nem existir).
+  selReg.innerHTML = '<option value="">Todas as regionais</option>'
+    + regionais.map(r => `<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`).join('');
+  selCat.innerHTML = '<option value="">Todas as categorias</option>'
+    + categorias.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(DG_VG_CAT_LABELS[c] || c)}</option>`).join('');
+}
+
+// Refiltra e redesenha SÓ os 2 donuts de Saúde Geral — nada mais na tela
+// recalcula (mesmo pares/thresholds/results já em window._dgVgLastData,
+// ver renderDgVisaoGeralPdf). Central sem central nenhuma do lado filtrado
+// ainda assim entra como 'bom' na semeadura (resultsCentrais), mesmo
+// motivo de _dgVgBuildCentralHealthData — só que aqui restrita à Regional
+// selecionada via o mapa regionalPorCentral (results não carrega regional
+// por linha, só pares).
+function _dgVgAplicarFiltroSaude() {
+  const d = window._dgVgLastData;
+  if (!d) return;
+  const selReg = document.getElementById('dg-vg-saude-f-regional')?.value || '';
+  const selCat = document.getElementById('dg-vg-saude-f-categoria')?.value || '';
+
+  const paresCentrais  = selReg ? d.pares.filter(p => p.regional === selReg) : d.pares;
+  const paresMateriais = selCat ? d.pares.filter(p => p.catKey  === selCat) : d.pares;
+
+  const countsMat = _dgVgCounts(paresMateriais);
+  const scoreMat  = _dgVgScoreFromCounts(countsMat);
+  const { levelMeta: levelMetaMat } = _dgVgBuildHealthDonutData(paresMateriais);
+  _dgVgRenderHealthDonutSvg('dg-vg-gauge-chart-svg', countsMat, scoreMat, levelMetaMat, 'pares Central × Material', 'dg-vg-health-materiais-subtitle', 'dg-vg-health-materiais-summary');
+
+  const regionalPorCentral = new Map();
+  d.pares.forEach(p => { if (!regionalPorCentral.has(p.central)) regionalPorCentral.set(p.central, p.regional); });
+  const resultsCentrais = selReg ? d.results.filter(r => regionalPorCentral.get(r.central) === selReg) : d.results;
+
+  const { counts: countsCen, levelMeta: levelMetaCen, total: totalCen } = _dgVgBuildCentralHealthData(paresCentrais, d.thresholds, resultsCentrais);
+  const scoreCen = _dgVgScoreFromCounts(countsCen);
+  _dgVgRenderHealthDonutSvg('dg-vg-gauge-central-svg', countsCen, scoreCen, levelMetaCen, totalCen === 1 ? 'central analisada' : 'centrais analisadas', 'dg-vg-health-central-subtitle', 'dg-vg-health-central-summary');
 }
 
 // `elId` opcional — default é o container FIXO da tela; ver nota de

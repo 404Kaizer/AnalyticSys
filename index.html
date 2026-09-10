@@ -639,7 +639,15 @@
           <div class="oc-chart-card">
             <div class="oc-chart-title dg-vg-donut-title-row">
               <span><i class="ti ti-building-factory-2" style="margin-right:5px"></i>Saúde Geral — Centrais</span>
-              <span id="dg-vg-health-central-subtitle" class="dg-vg-donut-subtitle"></span>
+              <div style="display:flex;align-items:center;gap:10px">
+                <span id="dg-vg-health-central-subtitle" class="dg-vg-donut-subtitle"></span>
+                <div class="macro-card-filter">
+                  <i class="ti ti-map-pin" style="font-size:11px;color:var(--text3)"></i>
+                  <select id="dg-vg-saude-f-regional" class="macro-select" onchange="_dgVgAplicarFiltroSaude()">
+                    <option value="">Todas as regionais</option>
+                  </select>
+                </div>
+              </div>
             </div>
             <div style="display:flex;justify-content:center">
               <div style="width:420px;max-width:96%">
@@ -651,7 +659,15 @@
           <div class="oc-chart-card">
             <div class="oc-chart-title dg-vg-donut-title-row">
               <span><i class="ti ti-heartbeat" style="margin-right:5px"></i>Saúde Geral — Materiais</span>
-              <span id="dg-vg-health-materiais-subtitle" class="dg-vg-donut-subtitle"></span>
+              <div style="display:flex;align-items:center;gap:10px">
+                <span id="dg-vg-health-materiais-subtitle" class="dg-vg-donut-subtitle"></span>
+                <div class="macro-card-filter">
+                  <i class="ti ti-category" style="font-size:11px;color:var(--text3)"></i>
+                  <select id="dg-vg-saude-f-categoria" class="macro-select" onchange="_dgVgAplicarFiltroSaude()">
+                    <option value="">Todas as categorias</option>
+                  </select>
+                </div>
+              </div>
             </div>
             <div style="display:flex;justify-content:center">
               <div style="width:420px;max-width:96%">
