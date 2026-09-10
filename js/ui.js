@@ -2750,6 +2750,15 @@ function openBreakdownModal(trigger) {
     if (mostrarCentralMaterial) {
       theadRow.insertAdjacentHTML('afterbegin', '<th class="bdm-th-extra">Central</th><th class="bdm-th-extra">Material</th>');
     }
+    // Usuário/Pedido/Doc MIGO/Dt. Registro somem no modo agregado (pedido
+    // do Hugo) — fazem sentido no par (central, material) fixo do
+    // Analítico/Inventário, mas viram ruído numa lista de milhares de
+    // linhas cobrindo o período inteiro. As colunas continuam lá pra quem
+    // abre o modal do jeito normal (mostrarCentralMaterial=false).
+    ['usuario', 'pedido', 'documento', 'dtReg'].forEach(col => {
+      const th = theadRow.querySelector(`th[data-sort-col="${col}"]`);
+      if (th) th.style.display = mostrarCentralMaterial ? 'none' : '';
+    });
   }
 
   titleEl.textContent = title + ' — Movimentações';
@@ -3122,16 +3131,22 @@ function openBreakdownModal(trigger) {
     const centralMaterialCols = mostrarCentralMaterial
       ? `<td class="td-muted">${escapeHtml(centralCol || '—')}</td><td class="td-muted">${escapeHtml(materialCol || '—')}</td>`
       : '';
+    // Usuário/Pedido/Doc MIGO/Dt. Registro somem no modo agregado — mesmo
+    // motivo do thead acima (ver mostrarCentralMaterial ali).
+    const usuarioCol   = mostrarCentralMaterial ? '' : `<td class="td-muted">${escapeHtml(usuario || '—')}</td>`;
+    const pedidoColHtml = mostrarCentralMaterial ? '' : `<td class="td-muted">${escapeHtml(pedidoCol || '—')}</td>`;
+    const documentoColHtml = mostrarCentralMaterial ? '' : `<td class="td-muted">${documentoCell}</td>`;
+    const dtRegColHtml = mostrarCentralMaterial ? '' : `<td class="td-muted">${escapeHtml(dtReg || '—')}</td>`;
     const html = `<tr${_idxEstornados.has(_idx) ? ' class="bdm-row-estorno"' : ''}>
       ${centralMaterialCols}
       <td>${movBadgeHtml(cod)}</td>
-      <td class="td-muted">${escapeHtml(usuario || '—')}</td>
+      ${usuarioCol}
       <td class="td-muted">${escapeHtml(refCol || '—')}${pairHtml}</td>
-      <td class="td-muted">${escapeHtml(pedidoCol || '—')}</td>
-      <td class="td-muted">${documentoCell}</td>
+      ${pedidoColHtml}
+      ${documentoColHtml}
       <td class="td-muted">${escapeHtml(dtDoc || '—')}</td>
       <td class="td-muted">${escapeHtml(dtLancRaw || '—')}</td>
-      <td class="td-muted">${escapeHtml(dtReg || '—')}</td>
+      ${dtRegColHtml}
       <td class="td-mono" style="color:${movValorCor(value)};text-align:right;font-weight:600">${fmtKgSigned(value)}</td>
     </tr>`;
 
@@ -3151,9 +3166,18 @@ function openBreakdownModal(trigger) {
     // busca faz a linha aparecer sem motivo aparente na tela — pior que não
     // achar (por isso `deposito`, que vem no extra mas não é coluna, fica de
     // fora; se virar coluna um dia, entra junto).
+    // Usuário/Pedido/Doc MIGO/Dt. Registro saem da busca no modo agregado
+    // junto com a coluna (mesmo motivo de "só o que está VISÍVEL" logo
+    // abaixo) — Central/Material entram no lugar delas.
     const searchText = _normBuscaMov(
-      [cod, refCol, pedidoCol, documentoCol, usuario, dtDoc, dtLancRaw, dtReg, pairSearchText,
-       mostrarCentralMaterial ? centralCol : '', mostrarCentralMaterial ? materialCol : '', ...valorFormas]
+      [cod, refCol, dtDoc, dtLancRaw, pairSearchText,
+       mostrarCentralMaterial ? centralCol  : '',
+       mostrarCentralMaterial ? materialCol : '',
+       mostrarCentralMaterial ? '' : pedidoCol,
+       mostrarCentralMaterial ? '' : documentoCol,
+       mostrarCentralMaterial ? '' : usuario,
+       mostrarCentralMaterial ? '' : dtReg,
+       ...valorFormas]
         .filter(Boolean).join(' ')
     );
 
@@ -3280,7 +3304,7 @@ function openBreakdownModal(trigger) {
 
     tbody.innerHTML = filtered.length
       ? pageItems.map(r => r.html).join('')
-      : `<tr><td colspan="${mostrarCentralMaterial ? 11 : 9}" style="text-align:center;color:var(--text3);padding:22px 16px">
+      : `<tr><td colspan="${mostrarCentralMaterial ? 7 : 9}" style="text-align:center;color:var(--text3);padding:22px 16px">
            Nenhum registro encontrado${motivos.length ? ` para ${motivos.join(' + ')}` : ''}
          </td></tr>`;
 
