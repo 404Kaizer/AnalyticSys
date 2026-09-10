@@ -1128,11 +1128,16 @@ function _dgVgDrawDonutSvg(svgEl, slices, centerSvgFn, maxCallouts = 6, sizeOver
   slices.forEach((sl, i) => {
     const pct   = sl.value / total;
     // Teto em "quase 360°", nunca 360° exatos: quando sobra 1 única fatia
-    // (100% — ex.: filtro deixou só centrais "Atenção"), sweep bateria
-    // 2π certinho, início e fim do arco SVG caem no MESMO ponto, e o
-    // círculo inteiro some (path degenerado, sem erro nenhum no console).
-    // Épsilon aqui é imperceptível (~0,006°) e não afeta nenhum outro caso.
-    const sweep = Math.min(Math.max(pct * 2 * Math.PI - gap, 0.01), 2 * Math.PI - 0.0001);
+    // (100% — ex.: filtro deixou só centrais "Atenção"), sweep bateria 2π
+    // certinho, início e fim do arco SVG caem no MESMO ponto, e o círculo
+    // inteiro some (path degenerado, sem erro nenhum no console). PRIMEIRA
+    // tentativa usou 0,0001 rad de épsilon — matemática correta no papel,
+    // mas isso é só ~0,01px de distância entre os dois pontos (R≈104),
+    // pequeno demais pro rasterizador não colapsar os dois num pixel só:
+    // o sumiço continuava. Reusa o MESMO gap de 0,022 rad já usado (e já
+    // comprovadamente visível) entre fatias normais — ordem de grandeza
+    // segura que não depende de arredondamento de sub-pixel.
+    const sweep = Math.min(Math.max(pct * 2 * Math.PI - gap, 0.01), 2 * Math.PI - 0.022);
     const a0 = angle + gap / 2, ae = a0 + sweep, midA = a0 + sweep / 2;
 
     const x1 = CX + R * Math.cos(a0),  y1 = CY + R * Math.sin(a0);
@@ -1447,7 +1452,7 @@ function renderDgVisaoGeralPdf(results, thresholds, dtIni, dtFim) {
   // centrais do período selecionado, para o badge/modal do card Variação.
   const sapFechExcluidosPeriodo = results.reduce((acc, r) => acc.concat(r.sapFechExcluidos || []), []);
 
-  _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais, sapFechExcluidosPeriodo, custoMovTotais, veiculosTotalKpi);
+  _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais, sapFechExcluidosPeriodo, custoMovTotais, veiculosTotalKpi, results);
   _dgVgRenderHealthDonuts(pares, counts, scoreInfo, thresholds, null, results);
   _dgVgPopularFiltroSaude(pares);
   _dgVgRenderChartCategoriaFisica(catFisicaPct);
@@ -1483,15 +1488,78 @@ function renderDgVisaoGeralPdf(results, thresholds, dtIni, dtFim) {
   };
 }
 
+// Registros SAP crus por trás de Compras/Consumo (KPI cards do Resumo do
+// Período) — MESMA classificação que produz movTotais.totalEnt/totalSai
+// (buildDashboardGerencialResults → classificarMovSap sobre r.sapNoPeriodo,
+// que já exclui "sem cadastro" na origem), senão a lista do modal não
+// reconciliaria com o número do card. Formato de tupla IDÊNTICO ao toEntry
+// de buildCentralCard (analitico.js) — mesmo modal (openBreakdownModal),
+// mesmas colunas — só que `extra` carrega central/material A MAIS: o
+// modal aqui abre pro PERÍODO INTEIRO, todas as centrais, não um par fixo
+// (ver mostrarCentralMaterial em openBreakdownModal/_dgVgBotaoDetalhado).
+function _dgVgColetarSapPorNatureza(results, natureza) {
+  const out = [];
+  (results || []).forEach(r => {
+    (r.sapNoPeriodo || []).forEach(s => {
+      const p = num(s.peso);
+      if (!p || classificarMovSap(normMov(s.movimento)) !== natureza) return;
+      const ref = (s.ref && String(s.ref).trim()) ? String(s.ref).trim()
+                : (s.documento && String(s.documento).trim()) ? String(s.documento).trim() : '';
+      out.push([normMov(s.movimento), p, ref, String(s.usuario || '').trim(), String(s.dtLanc || s.dtDoc || '').trim(), {
+        deposito: String(s.deposito || '').trim(), refRaw: String(s.ref || '').trim(),
+        pedido: String(s.pedido || '').trim(), documento: String(s.documento || '').trim(),
+        dtDoc: String(s.dtDoc || '').trim(), dtLanc: String(s.dtLanc || '').trim(), dtReg: String(s.dtReg || '').trim(),
+        central: r.central, material: s.material || '—'
+      }]);
+    });
+  });
+  out.sort((a, b) => Math.abs(num(b[1])) - Math.abs(num(a[1])));
+  return out;
+}
+
+// Botão "Detalhado" — mesmo modal de Movimentações SAP do Dashboard
+// Analítico (openBreakdownModal, ui.js), só que sem passar pelo HTML de
+// buildAnaliticoDetailBreakdown: aquele já vem com o VALOR formatado
+// embutido no botão (em kg puro, fmtKgSigned) — o card do Gerencial já
+// mostra o valor certo ao lado (TON/kg, dgFmtPesoSigned), então repeti-lo
+// no botão seria redundante e inconsistente. Ícone pequeno e discreto,
+// mesmo padrão de .btn-icon usado no resto do app (ex.: Ocultar Ajustes).
+function _dgVgBotaoDetalhado(entries, title, colorVar) {
+  if (!entries.length) return '';
+  const encoded = encodeURIComponent(JSON.stringify(entries));
+  return ` <button type="button" class="btn-icon" style="padding:2px 4px;font-size:12px;vertical-align:middle"
+    onclick="event.stopPropagation();openBreakdownModal(event.currentTarget)"
+    data-entries="${encoded}" data-fech-excluidos="" data-diag=""
+    data-title="${escapeHtml(title)}" data-color="${escapeHtml(colorVar)}"
+    data-local-count="" data-local-total="" data-mat="" data-central=""
+    data-mostrar-central-material="1"
+    title="Ver detalhamento — ${escapeHtml(title)}"><i class="ti ti-list-search"></i></button>`;
+}
+
 // ── 1. Resumo do Período: DOIS níveis — Variação Total + Custo Total
 //    maiores, em cima (.inv-kpi-featured-row); Est. Inicial/Entradas/
 //    Saídas/Est. Final Total menores, embaixo (.inv-kpi-secondary). Sem
 //    o wrapper "Destaque do Período" (removido — não fazia sentido), mas
 //    MANTENDO os 2 níveis de tamanho/agrupamento. Valores por extenso,
 //    sem abreviação M/K (fmtKg/money em vez de fmtKgShort/moneyShort).
-function _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais, fechExcluidos = [], custoMovTotais = {}, veiculos = {}) {
+function _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais, fechExcluidos = [], custoMovTotais = {}, veiculos = {}, results = []) {
   const el = document.getElementById('dg-vg-kpis-hero');
   if (!el) return;
+
+  // Botão "Detalhado" dos cards de Compras/Consumo — abre o MESMO modal de
+  // Movimentações SAP do Dashboard Analítico (openBreakdownModal), só que
+  // aqui a lista cobre o PERÍODO INTEIRO, todas as centrais (por isso
+  // mostrarCentralMaterial:true — o modal ganha colunas extras de Central/
+  // Material pra dar pra distinguir as linhas). Reconcilia com o número do
+  // card por construção: mesma classificação (classificarMovSap) sobre o
+  // mesmo sapNoPeriodo que já alimenta movTotais.totalEnt/totalSai. Não usa
+  // buildAnaliticoDetailBreakdown pra montar o botão em si — aquele mostra
+  // o valor formatado em kg puro (fmtKgSigned), e o card já mostra o valor
+  // certo (TON/kg, dgFmtPesoSigned); o botão daqui só abre o modal.
+  const comprasEntries = _dgVgColetarSapPorNatureza(results, 'ent');
+  const consumoEntries = _dgVgColetarSapPorNatureza(results, 'sai');
+  const btnCompras = _dgVgBotaoDetalhado(comprasEntries, 'Compras', 'var(--green)');
+  const btnConsumo = _dgVgBotaoDetalhado(consumoEntries, 'Consumo', 'var(--red)');
 
   const colorFor = v => v < -0.0001 ? 'var(--red)'    : v > 0.0001 ? 'var(--amber)'    : 'var(--teal)';
   const varCol = colorFor(varTotalFisica);
@@ -1609,14 +1677,14 @@ function _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais, f
       </div>
       <div class="inv-kpi-card">
         <div class="inv-kpi-body">
-          <div class="inv-kpi-label"><i class="ti ti-arrow-bar-to-down" style="color:var(--green)"></i>Compras</div>
+          <div class="inv-kpi-label"><i class="ti ti-arrow-bar-to-down" style="color:var(--green)"></i>Compras${btnCompras}</div>
           <div class="inv-kpi-value">${dgFmtPesoSigned(movTotais.totalEnt)}</div>
           <div class="inv-kpi-unit">${money(custoMovTotais.custoEnt || 0)}</div>
         </div>
       </div>
       <div class="inv-kpi-card">
         <div class="inv-kpi-body">
-          <div class="inv-kpi-label"><i class="ti ti-arrow-bar-up" style="color:var(--red)"></i>Consumo</div>
+          <div class="inv-kpi-label"><i class="ti ti-arrow-bar-up" style="color:var(--red)"></i>Consumo${btnConsumo}</div>
           <div class="inv-kpi-value">${dgFmtPesoSigned(movTotais.totalSai)}</div>
           <div class="inv-kpi-unit">${money(custoMovTotais.custoSai || 0)}</div>
         </div>

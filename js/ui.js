@@ -2727,6 +2727,30 @@ function openBreakdownModal(trigger) {
   const localCount = localCountRaw === '' || localCountRaw == null ? null : Number(localCountRaw);
   const mat        = trigger.dataset.mat    || '';
   const central    = trigger.dataset.central || '';
+  // Ativado pelos cards de KPI do Dashboard Gerencial (Compras/Consumo, ver
+  // _dgVgBotaoDetalhado em dashboard.js): a lista cobre o PERÍODO INTEIRO,
+  // todas as centrais e materiais de uma vez — sem essas duas colunas a
+  // mais não daria pra saber de quem é cada linha (o resto do modal foi
+  // desenhado pra um par (central, material) já fixo, mostrado só no
+  // título/contexto de fora). O pareamento de transferência 861/862/309
+  // (findTransferPairCentral/findMaterialTransferPair) usa o `mat`/`central`
+  // ÚNICOS do modal pra casar o complementar — aqui eles vêm vazios de
+  // propósito, então uma transferência pode aparecer "sem par encontrado"
+  // mesmo quando o par existe (limitação aceita: o valor de ver TODAS as
+  // centrais numa lista só supera a precisão do pareamento neste modo).
+  const mostrarCentralMaterial = trigger.dataset.mostrarCentralMaterial === '1';
+
+  // Cabeçalho ganha (ou perde) as 2 colunas extras a cada abertura — o
+  // modal é um único overlay fixo reaproveitado entre chamadas (ver
+  // index.html), então sem remover antes de inserir, abrir uma vez no modo
+  // agregado e depois no modo normal deixaria as colunas "grudadas".
+  const theadRow = document.querySelector('#bdm-thead tr');
+  if (theadRow) {
+    theadRow.querySelectorAll('.bdm-th-extra').forEach(th => th.remove());
+    if (mostrarCentralMaterial) {
+      theadRow.insertAdjacentHTML('afterbegin', '<th class="bdm-th-extra">Central</th><th class="bdm-th-extra">Material</th>');
+    }
+  }
 
   titleEl.textContent = title + ' — Movimentações';
 
@@ -3016,6 +3040,10 @@ function openBreakdownModal(trigger) {
     const refCol      = (extra && extra.refRaw)    || '';
     const pedidoCol   = (extra && extra.pedido)   || '';
     const documentoCol = (extra && extra.documento) || '';
+    // Só presentes (e só viram coluna) no modo agregado — ver
+    // mostrarCentralMaterial acima.
+    const centralCol  = (extra && extra.central)  || '';
+    const materialCol = (extra && extra.material) || '';
 
     // Transferência entre centros (861/862): mostra na mesma linha qual é
     // o movimento relacionado (código complementar) e em qual central ele
@@ -3091,7 +3119,11 @@ function openBreakdownModal(trigger) {
     // circle-arrow-down "Desfalque"). O indicador é vocabulário de VARIAÇÃO e
     // não cabe aqui — uma saída 201 é uma saída normal, não um "Desfalque".
     // Ver fmtKgSigned em dashboard.js.
+    const centralMaterialCols = mostrarCentralMaterial
+      ? `<td class="td-muted">${escapeHtml(centralCol || '—')}</td><td class="td-muted">${escapeHtml(materialCol || '—')}</td>`
+      : '';
     const html = `<tr${_idxEstornados.has(_idx) ? ' class="bdm-row-estorno"' : ''}>
+      ${centralMaterialCols}
       <td>${movBadgeHtml(cod)}</td>
       <td class="td-muted">${escapeHtml(usuario || '—')}</td>
       <td class="td-muted">${escapeHtml(refCol || '—')}${pairHtml}</td>
@@ -3120,7 +3152,8 @@ function openBreakdownModal(trigger) {
     // achar (por isso `deposito`, que vem no extra mas não é coluna, fica de
     // fora; se virar coluna um dia, entra junto).
     const searchText = _normBuscaMov(
-      [cod, refCol, pedidoCol, documentoCol, usuario, dtDoc, dtLancRaw, dtReg, pairSearchText, ...valorFormas]
+      [cod, refCol, pedidoCol, documentoCol, usuario, dtDoc, dtLancRaw, dtReg, pairSearchText,
+       mostrarCentralMaterial ? centralCol : '', mostrarCentralMaterial ? materialCol : '', ...valorFormas]
         .filter(Boolean).join(' ')
     );
 
@@ -3227,7 +3260,7 @@ function openBreakdownModal(trigger) {
 
     tbody.innerHTML = filtered.length
       ? filtered.map(r => r.html).join('')
-      : `<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:22px 16px">
+      : `<tr><td colspan="${mostrarCentralMaterial ? 11 : 9}" style="text-align:center;color:var(--text3);padding:22px 16px">
            Nenhum registro encontrado${motivos.length ? ` para ${motivos.join(' + ')}` : ''}
          </td></tr>`;
 
