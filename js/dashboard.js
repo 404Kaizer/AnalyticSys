@@ -1774,14 +1774,15 @@ function _dgVgRenderHealthDonuts(pares, countsMat, scoreMat, thresholds, ids, re
   _dgVgRenderHealthDonutSvg(ids.cenSvg, countsCen, scoreCen, levelMetaCen, totalCen === 1 ? 'central analisada' : 'centrais analisadas', ids.cenSub, ids.cenSum);
 }
 
-// ── Filtros de Saúde Geral (Regional pra Centrais, Categoria pra
-//    Materiais) — mesmo padrão visual/UX do painel Macro do Dashboard
-//    Analítico (macro.js: _populateFilters/macroApplyFilter). Os dois
-//    filtros são INDEPENDENTES um do outro, igual lá: o de Regional só
-//    afeta o donut de Centrais, o de Categoria só afeta o de Materiais.
-//    Opções vêm do que REALMENTE está presente em pares (não da lista fixa
-//    de categorias/regionais cadastradas) — se uma regional não tem
-//    nenhuma central no período, ela nem aparece no dropdown.
+// ── Filtros de Saúde Geral (Regional + Categoria) — mesmo padrão visual
+//    do painel Macro do Dashboard Analítico (macro.js: _populateFilters),
+//    mas CRUZADOS nos dois donuts (decisão do Hugo, set/2026): diferente
+//    de lá, onde Regional só afeta Centrais e Categoria só afeta Materiais,
+//    aqui os dois filtros juntos restringem os MESMOS pares usados pelos
+//    dois donuts — ver _dgVgAplicarFiltroSaude. Opções vêm do que
+//    REALMENTE está presente em pares (não da lista fixa de categorias/
+//    regionais cadastradas) — se uma regional não tem nenhuma central no
+//    período, ela nem aparece no dropdown.
 function _dgVgPopularFiltroSaude(pares) {
   const selReg = document.getElementById('dg-vg-saude-f-regional');
   const selCat = document.getElementById('dg-vg-saude-f-categoria');
@@ -1799,32 +1800,43 @@ function _dgVgPopularFiltroSaude(pares) {
     + categorias.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(DG_VG_CAT_LABELS[c] || c)}</option>`).join('');
 }
 
-// Refiltra e redesenha SÓ os 2 donuts de Saúde Geral — nada mais na tela
+// Refiltra e redesenha os 2 donuts de Saúde Geral — nada mais na tela
 // recalcula (mesmo pares/thresholds/results já em window._dgVgLastData,
-// ver renderDgVisaoGeralPdf). Central sem central nenhuma do lado filtrado
-// ainda assim entra como 'bom' na semeadura (resultsCentrais), mesmo
-// motivo de _dgVgBuildCentralHealthData — só que aqui restrita à Regional
-// selecionada via o mapa regionalPorCentral (results não carrega regional
-// por linha, só pares).
+// ver renderDgVisaoGeralPdf). Os DOIS filtros afetam os DOIS donuts
+// (decisão do Hugo, set/2026 — cruzados, não mais independentes como o
+// painel Macro do Analítico): Regional também restringe Materiais (só os
+// pares daquela regional), Categoria também restringe Centrais (só as
+// centrais que TÊM material daquela categoria).
+//
+// Semeadura de central "sem par nenhum" como 'bom' (ver
+// _dgVgBuildCentralHealthData) só faz sentido SEM filtro de Categoria: aí
+// sim toda central da(s) regional(is) filtrada(s) conta, mesmo sem nenhum
+// problema. Com Categoria ativo, uma central sem par NAQUELA categoria
+// significa "não tem esse material" — motivo pra ficar de fora da leitura,
+// não pra virar 'bom' (que sugeriria "tem e está saudável").
 function _dgVgAplicarFiltroSaude() {
   const d = window._dgVgLastData;
   if (!d) return;
   const selReg = document.getElementById('dg-vg-saude-f-regional')?.value || '';
   const selCat = document.getElementById('dg-vg-saude-f-categoria')?.value || '';
 
-  const paresCentrais  = selReg ? d.pares.filter(p => p.regional === selReg) : d.pares;
-  const paresMateriais = selCat ? d.pares.filter(p => p.catKey  === selCat) : d.pares;
+  const pares = d.pares.filter(p =>
+    (!selReg || p.regional === selReg) && (!selCat || p.catKey === selCat)
+  );
 
-  const countsMat = _dgVgCounts(paresMateriais);
+  const countsMat = _dgVgCounts(pares);
   const scoreMat  = _dgVgScoreFromCounts(countsMat);
-  const { levelMeta: levelMetaMat } = _dgVgBuildHealthDonutData(paresMateriais);
+  const { levelMeta: levelMetaMat } = _dgVgBuildHealthDonutData(pares);
   _dgVgRenderHealthDonutSvg('dg-vg-gauge-chart-svg', countsMat, scoreMat, levelMetaMat, 'pares Central × Material', 'dg-vg-health-materiais-subtitle', 'dg-vg-health-materiais-summary');
 
-  const regionalPorCentral = new Map();
-  d.pares.forEach(p => { if (!regionalPorCentral.has(p.central)) regionalPorCentral.set(p.central, p.regional); });
-  const resultsCentrais = selReg ? d.results.filter(r => regionalPorCentral.get(r.central) === selReg) : d.results;
+  let resultsCentrais = null;
+  if (!selCat) {
+    const regionalPorCentral = new Map();
+    d.pares.forEach(p => { if (!regionalPorCentral.has(p.central)) regionalPorCentral.set(p.central, p.regional); });
+    resultsCentrais = selReg ? d.results.filter(r => regionalPorCentral.get(r.central) === selReg) : d.results;
+  }
 
-  const { counts: countsCen, levelMeta: levelMetaCen, total: totalCen } = _dgVgBuildCentralHealthData(paresCentrais, d.thresholds, resultsCentrais);
+  const { counts: countsCen, levelMeta: levelMetaCen, total: totalCen } = _dgVgBuildCentralHealthData(pares, d.thresholds, resultsCentrais);
   const scoreCen = _dgVgScoreFromCounts(countsCen);
   _dgVgRenderHealthDonutSvg('dg-vg-gauge-central-svg', countsCen, scoreCen, levelMetaCen, totalCen === 1 ? 'central analisada' : 'centrais analisadas', 'dg-vg-health-central-subtitle', 'dg-vg-health-central-summary');
 }
