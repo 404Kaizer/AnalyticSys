@@ -807,8 +807,25 @@ function _dgVgScoreFromCounts(counts) {
 // Analítico, buildCentralCard), agregando os materiais daquela central.
 // O resultado (nível por central) alimenta o segundo donut, réplica do
 // donut "Centrais" do painel macro.
-function _dgVgBuildCentralHealthData(pares, thresholds) {
+//
+// `results` é opcional mas importante: semeia byCentral com TODA central do
+// período (mesmo universo allCentrals de buildDashboardGerencialResults),
+// antes de dobrar os pares pra dentro. Sem isso, uma central cujo allMats
+// saiu vazio neste mês (ex.: só tem histórico via SAP, sem lançamento
+// nenhum, e não movimentou nada agora — allMats não tem o fallback
+// histórico que lançamentos já ganharam, ver buildDashboardGerencialResults)
+// não gera NENHUM par, e desaparecia do donut inteiro em vez de contar como
+// 'bom' (sem problema conhecido) — foi assim que o donut de Centrais do
+// Dashboard Gerencial ficou com menos centrais que o de "Centrais mais
+// críticas" da Visão Macro (macro.js: renderMacroPanels semeia centralMap
+// por TODO r de results, sem essa lacuna — donuts têm que bater).
+function _dgVgBuildCentralHealthData(pares, thresholds, results) {
   const byCentral = new Map(); // central -> { matDiffs:[], custo:0, diff:0 }
+  if (results) {
+    results.forEach(r => {
+      if (!byCentral.has(r.central)) byCentral.set(r.central, { matDiffs: [], custo: 0, diff: 0 });
+    });
+  }
   pares.forEach(p => {
     if (!byCentral.has(p.central)) byCentral.set(p.central, { matDiffs: [], custo: 0, diff: 0 });
     const rec = byCentral.get(p.central);
@@ -1363,7 +1380,7 @@ function renderDgVisaoGeralPdf(results, thresholds, dtIni, dtFim) {
   const sapFechExcluidosPeriodo = results.reduce((acc, r) => acc.concat(r.sapFechExcluidos || []), []);
 
   _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais, sapFechExcluidosPeriodo, custoMovTotais, veiculosTotalKpi);
-  _dgVgRenderHealthDonuts(pares, counts, scoreInfo, thresholds);
+  _dgVgRenderHealthDonuts(pares, counts, scoreInfo, thresholds, null, results);
   _dgVgRenderChartCategoriaFisica(catFisicaPct);
   _dgVgRenderExtremos(extRegional, extCentral);
   const entriesRegional = _dgVgTop8SobraDesfalque(porRegionalKg);
@@ -1671,7 +1688,11 @@ function dgAbrirSemCadastroModalGenerico(modalId, lista, subtitulo) {
 // conjunto de elementos (ex.: o detalhe por mês da aba Evolução do
 // Relatório Gerencial, um conjunto de svg/legenda por mês, ver
 // _dgrEvoDetalheCardHtml em relatorio.js).
-function _dgVgRenderHealthDonuts(pares, countsMat, scoreMat, thresholds, ids) {
+// `results` opcional — repassado pra _dgVgBuildCentralHealthData semear o
+// donut de Centrais com TODA central do período, não só as que sobraram
+// pares (ver nota lá). Quem chama sem period-scoped results (nenhum
+// chamador hoje) só perde essa semeadura, sem quebrar nada.
+function _dgVgRenderHealthDonuts(pares, countsMat, scoreMat, thresholds, ids, results) {
   ids = ids || {
     matSvg: 'dg-vg-gauge-chart-svg',  matSub: 'dg-vg-health-materiais-subtitle', matSum: 'dg-vg-health-materiais-summary',
     cenSvg: 'dg-vg-gauge-central-svg', cenSub: 'dg-vg-health-central-subtitle',   cenSum: 'dg-vg-health-central-summary'
@@ -1679,7 +1700,7 @@ function _dgVgRenderHealthDonuts(pares, countsMat, scoreMat, thresholds, ids) {
   const { levelMeta: levelMetaMat } = _dgVgBuildHealthDonutData(pares);
   _dgVgRenderHealthDonutSvg(ids.matSvg, countsMat, scoreMat, levelMetaMat, 'pares Central × Material', ids.matSub, ids.matSum);
 
-  const { counts: countsCen, levelMeta: levelMetaCen, total: totalCen } = _dgVgBuildCentralHealthData(pares, thresholds);
+  const { counts: countsCen, levelMeta: levelMetaCen, total: totalCen } = _dgVgBuildCentralHealthData(pares, thresholds, results);
   const scoreCen = _dgVgScoreFromCounts(countsCen);
   _dgVgRenderHealthDonutSvg(ids.cenSvg, countsCen, scoreCen, levelMetaCen, totalCen === 1 ? 'central analisada' : 'centrais analisadas', ids.cenSub, ids.cenSum);
 }

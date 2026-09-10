@@ -3516,7 +3516,7 @@ function _dgrCalcularPeriodo(p, thresholds) {
 
   return {
     id: p.id, rotulo: p.rotulo, titulo: p.titulo, geral: p.geral,
-    pares, pesoMedio, totalEstTeorico, catFisicaPct,
+    pares, results, pesoMedio, totalEstTeorico, catFisicaPct,
     kpi: {
       varTotalFisica, custoTotal,
       estIni: estTotais.totalIni, estFim: estTotais.totalFim,
@@ -3852,7 +3852,7 @@ function _dgrEvoDetalheCardHtml(l) {
     _dgVgRenderHealthDonuts(l.pares, counts, scoreInfo, thresholds, {
       matSvg: gaugeMatSvg, matSub: gaugeMatSub, matSum: gaugeMatSum,
       cenSvg: gaugeCenSvg, cenSub: gaugeCenSub, cenSum: gaugeCenSum
-    });
+    }, l.results);
     _dgVgRenderExtremos(extRegional, extCentral, extremosEl);
   });
 
