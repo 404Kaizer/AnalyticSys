@@ -1127,7 +1127,12 @@ function _dgVgDrawDonutSvg(svgEl, slices, centerSvgFn, maxCallouts = 6, sizeOver
   const built = [];
   slices.forEach((sl, i) => {
     const pct   = sl.value / total;
-    const sweep = Math.max(pct * 2 * Math.PI - gap, 0.01);
+    // Teto em "quase 360°", nunca 360° exatos: quando sobra 1 única fatia
+    // (100% — ex.: filtro deixou só centrais "Atenção"), sweep bateria
+    // 2π certinho, início e fim do arco SVG caem no MESMO ponto, e o
+    // círculo inteiro some (path degenerado, sem erro nenhum no console).
+    // Épsilon aqui é imperceptível (~0,006°) e não afeta nenhum outro caso.
+    const sweep = Math.min(Math.max(pct * 2 * Math.PI - gap, 0.01), 2 * Math.PI - 0.0001);
     const a0 = angle + gap / 2, ae = a0 + sweep, midA = a0 + sweep / 2;
 
     const x1 = CX + R * Math.cos(a0),  y1 = CY + R * Math.sin(a0);
