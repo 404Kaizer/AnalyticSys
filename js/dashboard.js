@@ -1522,12 +1522,19 @@ function _dgVgColetarSapPorNatureza(results, natureza) {
 // buildAnaliticoDetailBreakdown: aquele já vem com o VALOR formatado
 // embutido no botão (em kg puro, fmtKgSigned) — o card do Gerencial já
 // mostra o valor certo ao lado (TON/kg, dgFmtPesoSigned), então repeti-lo
-// no botão seria redundante e inconsistente. Ícone pequeno e discreto,
-// mesmo padrão de .btn-icon usado no resto do app (ex.: Ocultar Ajustes).
+// no botão seria redundante e inconsistente.
+//
+// Posicionado como um "dente" no canto superior direito do CARD (não do
+// label) — por isso é irmão de .inv-kpi-body, não filho dele: dentro do
+// label ele herdava o layout flex/gap da linha de texto e ficava
+// minúsculo e difícil de acertar o clique. .dg-kpi-detalhe-btn (ver
+// components.css) é position:absolute ancorado no .inv-kpi-card (que já é
+// position:relative), então funciona em qualquer card sem precisar de
+// ajuste extra.
 function _dgVgBotaoDetalhado(entries, title, colorVar) {
   if (!entries.length) return '';
   const encoded = encodeURIComponent(JSON.stringify(entries));
-  return ` <button type="button" class="btn-icon" style="padding:2px 4px;font-size:12px;vertical-align:middle"
+  return `<button type="button" class="dg-kpi-detalhe-btn"
     onclick="event.stopPropagation();openBreakdownModal(event.currentTarget)"
     data-entries="${encoded}" data-fech-excluidos="" data-diag=""
     data-title="${escapeHtml(title)}" data-color="${escapeHtml(colorVar)}"
@@ -1676,15 +1683,17 @@ function _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais, f
         </div>
       </div>
       <div class="inv-kpi-card">
+        ${btnCompras}
         <div class="inv-kpi-body">
-          <div class="inv-kpi-label"><i class="ti ti-arrow-bar-to-down" style="color:var(--green)"></i>Compras${btnCompras}</div>
+          <div class="inv-kpi-label"><i class="ti ti-arrow-bar-to-down" style="color:var(--green)"></i>Compras</div>
           <div class="inv-kpi-value">${dgFmtPesoSigned(movTotais.totalEnt)}</div>
           <div class="inv-kpi-unit">${money(custoMovTotais.custoEnt || 0)}</div>
         </div>
       </div>
       <div class="inv-kpi-card">
+        ${btnConsumo}
         <div class="inv-kpi-body">
-          <div class="inv-kpi-label"><i class="ti ti-arrow-bar-up" style="color:var(--red)"></i>Consumo${btnConsumo}</div>
+          <div class="inv-kpi-label"><i class="ti ti-arrow-bar-up" style="color:var(--red)"></i>Consumo</div>
           <div class="inv-kpi-value">${dgFmtPesoSigned(movTotais.totalSai)}</div>
           <div class="inv-kpi-unit">${money(custoMovTotais.custoSai || 0)}</div>
         </div>

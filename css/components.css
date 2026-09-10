@@ -606,6 +606,35 @@
 .inv-kpi-card:hover { transform: translateY(-2px); border-color: var(--border2); box-shadow: 0 8px 24px rgba(0,0,0,0.18); }
 .inv-kpi-card:hover::after { opacity: 1; }
 
+/* Botão "Detalhado" (ver _dgVgBotaoDetalhado, dashboard.js) — encaixado no
+   canto superior direito do card como se fosse parte da própria borda: um
+   "dente" que nasce grudado no topo/direita (sem borda ali, herda a do
+   card) e arredonda só pra fora (top-right, acompanhando o raio do card) e
+   pra dentro (bottom-left, criando o entalhe). .inv-kpi-card é
+   position:relative e overflow:hidden — não precisa de ajuste nenhum no
+   card em si, o overflow:hidden dele já apara qualquer sobra do dente sem
+   deixar quina esquisita pra fora do arredondado. Fica FORA de
+   .inv-kpi-body de propósito (ver comentário no JS) — dentro do label ele
+   herdava overflow:hidden/flex da linha de texto e virava minúsculo/
+   difícil de acertar o clique. */
+.dg-kpi-detalhe-btn {
+  position: absolute;
+  top: 0; right: 0;
+  width: 28px; height: 22px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-top: none; border-right: none;
+  border-top-right-radius: calc(var(--radius-lg) - 1px);
+  border-bottom-left-radius: 9px;
+  color: var(--text3);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  z-index: 2;
+}
+.dg-kpi-detalhe-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+
 .inv-kpi-icon {
   width: 40px; height: 40px;
   border-radius: 10px;
