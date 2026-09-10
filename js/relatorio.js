@@ -3463,7 +3463,7 @@ function _dgrScriptGraficos(d) {
   // Mesma variável global que a tela usa pro filtro de Saúde Geral —
   // _dgVgAplicarFiltroSaude lê window._dgVgLastData.pares/thresholds/
   // results direto, sem saber (nem precisar saber) que está dentro do
-  // relatório exportado. `results` aqui é a versão ENXUTA (só .central por
+  // relatório exportado. "results" aqui é a versão ENXUTA (só .central por
   // item, ver DADOS.resultsCentrais acima) — suficiente pro filtro, que só
   // usa essa lista pra semear central sem par nenhum como 'bom'.
   window._dgVgLastData = { pares: DADOS.pares, thresholds: DADOS.thresholds, results: DADOS.resultsCentrais };
