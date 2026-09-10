@@ -3188,6 +3188,16 @@ function openBreakdownModal(trigger) {
   // clicáveis, então quem não clicar em nada não vê diferença.
   let sortCol = 'dtLanc';
   let sortDir = 'desc';
+  // Paginação (50 em 50, mesmo PAGE_SIZE global do resto do sistema — ver
+  // state.js) — sem isso, um card de KPI do Gerencial que abre o modo
+  // agregado (Compras/Consumo, todas as centrais do período) pode jogar
+  // dezenas de milhares de <tr> na tbody de uma vez só. bdmPage é local a
+  // esta abertura do modal, igual sortCol/sortDir/codsFiltro acima —
+  // reseta sozinho a cada `renderRows` chamado por filtro/busca/ordenação
+  // nova (resetPage=true, o padrão), mas NÃO quando quem chamou foi um
+  // botão de navegação de página (resetPage=false, ver _bdmIrParaPagina
+  // etc. abaixo).
+  let bdmPage = 0;
 
   const _ordenar = (linhas) => {
     const mul = sortDir === 'asc' ? 1 : -1;
@@ -3235,7 +3245,8 @@ function openBreakdownModal(trigger) {
   // ── Renderiza a tabela + total, aplicando os dois filtros ────────────────
   // Chips (código) e busca (texto) se COMBINAM — os dois ativos ao mesmo
   // tempo restringem juntos, em vez de um sobrescrever o outro.
-  function renderRows(term) {
+  function renderRows(term, resetPage = true) {
+    if (resetPage) bdmPage = 0;
     const t = _normBuscaMov(term).trim();
     // O sub-filtro de destino só julga linhas 862; qualquer outro código
     // passa direto por ele (ver destino862). Assim "sem destino" isola os
@@ -3250,6 +3261,15 @@ function openBreakdownModal(trigger) {
       (t === '' || r.searchText.includes(t))
     ));
 
+    // Página atual, sempre válida pro tamanho ATUAL do filtro — sem o
+    // clamp, trocar de filtro numa página alta (ex.: pág. 5) pra um
+    // resultado menor (ex.: 2 páginas) deixaria a tabela "vazia" até o
+    // usuário notar e voltar manualmente.
+    const totalPaginas = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+    bdmPage = Math.min(Math.max(0, bdmPage), totalPaginas - 1);
+    const pageItems = filtered.slice(bdmPage * PAGE_SIZE, (bdmPage + 1) * PAGE_SIZE);
+    _bdmRenderPaginacao(filtered.length, totalPaginas);
+
     // Mensagem do vazio diz QUAL filtro está restringindo — sem isso o
     // analista vê "nenhum registro" num modal que ele sabe ter 117 linhas e
     // não relaciona com o chip que deixou ligado.
@@ -3259,7 +3279,7 @@ function openBreakdownModal(trigger) {
     if (t) motivos.push(`"${escapeHtml(term.trim())}"`);
 
     tbody.innerHTML = filtered.length
-      ? filtered.map(r => r.html).join('')
+      ? pageItems.map(r => r.html).join('')
       : `<tr><td colspan="${mostrarCentralMaterial ? 11 : 9}" style="text-align:center;color:var(--text3);padding:22px 16px">
            Nenhum registro encontrado${motivos.length ? ` para ${motivos.join(' + ')}` : ''}
          </td></tr>`;
@@ -3301,6 +3321,30 @@ function openBreakdownModal(trigger) {
         : 'Total';
     }
   }
+
+  // Mesmo texto/formato de _fechMgrRenderPaginacao (Ajustes de Fechamento
+  // Mensal) — único outro modal do sistema com paginação nesse estilo.
+  function _bdmRenderPaginacao(total, totalPaginas) {
+    const infoEl = document.getElementById('bdm-page-info');
+    if (!infoEl) return;
+    if (!total) {
+      infoEl.textContent = '0 registros';
+    } else {
+      const inicio = bdmPage * PAGE_SIZE + 1;
+      const fim = Math.min((bdmPage + 1) * PAGE_SIZE, total);
+      infoEl.textContent = `${inicio}-${fim} de ${total} registro(s) (pág. ${bdmPage + 1}/${totalPaginas})`;
+    }
+  }
+
+  // Globais, não addEventListener — mesmo motivo de theadEl.onclick/
+  // summaryEl.onclick acima: o modal reabre várias vezes na mesma sessão,
+  // e a atribuição em window substitui o handler da abertura anterior em
+  // vez de empilhar (os botões no HTML — index.html — chamam por nome
+  // global, já que vivem fora do fechamento desta função).
+  window._bdmIrParaPagina = (p) => { bdmPage = Math.max(0, p); renderRows(document.getElementById('bdm-search-input')?.value || '', false); };
+  window._bdmPaginaAnterior = () => { bdmPage = Math.max(0, bdmPage - 1); renderRows(document.getElementById('bdm-search-input')?.value || '', false); };
+  window._bdmProximaPagina  = () => { bdmPage = bdmPage + 1; renderRows(document.getElementById('bdm-search-input')?.value || '', false); };
+  window._bdmIrParaUltima   = () => { bdmPage = Number.MAX_SAFE_INTEGER; renderRows(document.getElementById('bdm-search-input')?.value || '', false); };
 
   renderRows('');
 

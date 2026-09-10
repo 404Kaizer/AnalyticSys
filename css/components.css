@@ -622,18 +622,23 @@
   top: 0; right: 0;
   width: 28px; height: 22px;
   display: flex; align-items: center; justify-content: center;
-  background: var(--bg3);
-  border: 1px solid var(--border);
+  /* --dg-kpi-detalhe-cor vem inline (ver _dgVgBotaoDetalhado) — verde pra
+     Compras, vermelho pro Consumo: fundo sólido na cor do próprio card, não
+     um cinza quase igual ao fundo (versão anterior, "quase invisível" —
+     feedback do Hugo). */
+  background: var(--dg-kpi-detalhe-cor, var(--accent));
+  border: 1px solid var(--dg-kpi-detalhe-cor, var(--accent));
   border-top: none; border-right: none;
   border-top-right-radius: calc(var(--radius-lg) - 1px);
   border-bottom-left-radius: 9px;
-  color: var(--text3);
+  color: #fff;
   font-size: 13px;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  opacity: 0.85;
+  transition: opacity 0.15s;
   z-index: 2;
 }
-.dg-kpi-detalhe-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+.dg-kpi-detalhe-btn:hover { opacity: 1; }
 
 .inv-kpi-icon {
   width: 40px; height: 40px;

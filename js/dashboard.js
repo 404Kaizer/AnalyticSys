@@ -1534,7 +1534,7 @@ function _dgVgColetarSapPorNatureza(results, natureza) {
 function _dgVgBotaoDetalhado(entries, title, colorVar) {
   if (!entries.length) return '';
   const encoded = encodeURIComponent(JSON.stringify(entries));
-  return `<button type="button" class="dg-kpi-detalhe-btn"
+  return `<button type="button" class="dg-kpi-detalhe-btn" style="--dg-kpi-detalhe-cor:${escapeHtml(colorVar)}"
     onclick="event.stopPropagation();openBreakdownModal(event.currentTarget)"
     data-entries="${encoded}" data-fech-excluidos="" data-diag=""
     data-title="${escapeHtml(title)}" data-color="${escapeHtml(colorVar)}"
