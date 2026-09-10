@@ -4416,7 +4416,39 @@ function _dgrEstilos() {
     @media print {
       .rel-aba-bar { display:none; }
       .rel-aba-pane { display:block !important; }
-    }`;
+    }
+
+    /* ── Filtros de tabela (Regional/Central/Material/Categoria etc.) —
+       padrão único do relatório, usado tanto pelo Detalhado Analítico
+       (_dgrDetalhadoFiltrosHtml) quanto pelo Giro & Cobertura, aqui dentro
+       e no relatório standalone de Giro por Usina. Somem na impressão: o
+       papel já sai filtrado, o controle não faz sentido no papel. ────── */
+    .dgm-filtros {
+      display:flex; flex-wrap:wrap; align-items:flex-end; gap:12px; margin-bottom:16px;
+      padding:12px 14px; border-radius:10px;
+      background:var(--dgr-card-bg, rgba(255,255,255,.045));
+      border:1px solid var(--dgr-card-border, rgba(255,255,255,.09));
+    }
+    .dgm-filtros label {
+      display:flex; flex-direction:column; gap:5px;
+      font-size:9px; font-weight:800; text-transform:uppercase; letter-spacing:.06em;
+      color:var(--dgr-text-dim2, #64748b);
+    }
+    .dgm-filtros select, .dgm-f-btn {
+      background:var(--dgr-card-bg, rgba(255,255,255,.06));
+      border:1px solid var(--dgr-card-border, rgba(255,255,255,.14));
+      color:var(--dgr-text, #e2e8f0);
+      border-radius:6px; padding:6px 9px;
+      font-family:'JetBrains Mono',monospace; font-size:10.5px; font-weight:600;
+    }
+    .dgm-filtros select { min-width:170px; max-width:280px; }
+    .dgm-f-btn { display:inline-flex; align-items:center; gap:5px; cursor:pointer; font-weight:700; }
+    .dgm-f-btn i { font-size:12px; }
+    .dgm-f-resumo {
+      font-family:'JetBrains Mono',monospace; font-size:10px;
+      color:var(--dgr-text-dim, #94a3b8); margin-left:auto;
+    }
+    @media print { .dgm-filtros { display:none; } }`;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -6523,37 +6555,13 @@ window.gerarRelatorioGiroUsina = async function() {
       : '';
 
     const estilos = `
-      /* Filtros gerais — somem na impressão: o papel já sai filtrado. */
-      .dgm-filtros {
-        display:flex; flex-wrap:wrap; align-items:flex-end; gap:12px; margin-bottom:16px;
-        padding:12px 14px; border-radius:10px;
-        background:var(--dgr-card-bg, rgba(255,255,255,.045));
-        border:1px solid var(--dgr-card-border, rgba(255,255,255,.09));
-      }
-      .dgm-filtros label {
-        display:flex; flex-direction:column; gap:5px;
-        font-size:9px; font-weight:800; text-transform:uppercase; letter-spacing:.06em;
-        color:var(--dgr-text-dim2, #64748b);
-      }
-      .dgm-filtros select, .dgm-f-btn {
-        background:var(--dgr-card-bg, rgba(255,255,255,.06));
-        border:1px solid var(--dgr-card-border, rgba(255,255,255,.14));
-        color:var(--dgr-text, #e2e8f0);
-        border-radius:6px; padding:6px 9px;
-        font-family:'JetBrains Mono',monospace; font-size:10.5px; font-weight:600;
-      }
-      .dgm-filtros select { min-width:170px; max-width:280px; }
-      .dgm-f-btn { display:inline-flex; align-items:center; gap:5px; cursor:pointer; font-weight:700; }
-      .dgm-f-btn i { font-size:12px; }
-      .dgm-f-resumo {
-        font-family:'JetBrains Mono',monospace; font-size:10px;
-        color:var(--dgr-text-dim, #94a3b8); margin-left:auto;
-      }
+      /* .dgm-filtros/.dgm-f-btn/.dgm-f-resumo (filtros de tabela) já vêm
+         de _dgrEstilos() — compartilhado com o Relatório Gerencial
+         combinado (Detalhado Analítico e a aba Giro aqui dentro). */
 
       /* A Geral não é "mais um mês": separa ela do resto da barra de abas. */
       .rel-aba-geral { font-weight:800; }
       .rel-aba-geral + .rel-aba-btn { margin-left:10px; }
-      @media print { .dgm-filtros { display:none; } }
 
       /* Tudo centralizado; só a coluna de nome (a 1ª) fica à esquerda —
          cabeçalho e valor sempre no mesmo eixo. */
