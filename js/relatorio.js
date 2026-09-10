@@ -3380,7 +3380,18 @@ const _DGR_NOMES = {
              'num', 'fmtKg', 'dgFmtPeso', 'dgFmtPesoSigned', 'varLabel',
              '_dgVgTheme', '_dgVgDestroyChart',
              '_dgVgBarValueLabelsPlugin', '_dgVgCategoryTotalsPlugin',
-             '_dgVgRenderChartCategoriaFisica', '_dgVgRenderChartVariacaoPorChave'],
+             '_dgVgRenderChartCategoriaFisica', '_dgVgRenderChartVariacaoPorChave',
+             // Filtro Regional/Categoria dos donuts de Saúde Geral (aba
+             // Dashboard, clonada) — a aba em si é DOM clonado, sem JS
+             // nenhum atrás por padrão; sem esses nomes, os dois <select>
+             // clonados (com onchange="_dgVgAplicarFiltroSaude()") ficam
+             // mudos no arquivo exportado. Ver DADOS.pares/thresholds/
+             // results em _dgrScriptGraficos, que alimenta
+             // window._dgVgLastData pro filtro ler.
+             '_dgVgCounts', '_dgVgBuildHealthDonutData', '_dgVgBuildCentralHealthData',
+             '_dgVgScoreFromCounts', '_dgVgRenderHealthDonutSvg', '_dgVgHealthTipHtml',
+             '_dgVgDrawDonutSvg', '_dgVgAplicarFiltroSaude',
+             'calcHealthScore', 'classifyVariation', 'HEALTH_PENALTIES'],
   evolucao:  ['DG_TON_THRESHOLD_KG', 'DG_VG_CAT_LABELS', 'DG_VG_CAT_ORDER',
               'num', 'fmtKg', 'dgFmtPeso', 'dgFmtPesoSigned', 'money', 'varLabel',
               '_dgVgTheme', '_dgVgDestroyChart',
@@ -3402,6 +3413,12 @@ function _dgrScriptPrelude(chaves) {
 ${_dgrEscaparScript(_dgrEmitirCodigo(nomes))}
 // Registro dos gráficos vivos — _dgVgDestroyChart escreve aqui.
 var _dgVgCharts = {};
+// Contador de uid dos donuts (_dgVgDrawDonutSvg incrementa a cada desenho,
+// pra svg#id/classe não colidir entre dois donuts na mesma página) — MUTÁVEL
+// de propósito, por isso escrito à mão aqui em vez de ir pelo mecanismo de
+// exportação (_dgrEmitirCodigo só sabe emitir função ou const, e um
+// contador que a própria função embutida incrementa quebraria como const).
+var _dgVgDonutUid = 0;
 <\/script>`;
 }
 
@@ -3417,7 +3434,15 @@ function _dgrScriptGraficos(d) {
   const dados = {
     catFisicaPct:    d.catFisicaPct    || {},
     entriesRegional: d.entriesRegional || [],
-    entriesCentral:  d.entriesCentral  || []
+    entriesCentral:  d.entriesCentral  || [],
+    // Filtro Regional/Categoria dos donuts de Saúde Geral (clonados da
+    // tela junto com o resto da aba Dashboard) — mesmos pares/thresholds/
+    // results que a tela guarda em window._dgVgLastData, só pra
+    // _dgVgAplicarFiltroSaude (embutido via toString, ver
+    // _DGR_NOMES.graficos) rodar aqui sem adaptação nenhuma.
+    pares:      d.pares      || [],
+    thresholds: d.thresholds || {},
+    results:    d.results    || []
   };
 
   // As funções de render dos gráficos vêm do prelúdio (_DGR_NOMES.graficos).
@@ -3425,6 +3450,12 @@ function _dgrScriptGraficos(d) {
 (function() {
   if (typeof Chart === 'undefined') { console.error('[Relatório] Chart.js indisponível.'); return; }
   var DADOS = ${JSON.stringify(dados)};
+
+  // Mesma variável global que a tela usa pro filtro de Saúde Geral —
+  // _dgVgAplicarFiltroSaude lê window._dgVgLastData.pares/thresholds/
+  // results direto, sem saber (nem precisar saber) que está dentro do
+  // relatório exportado.
+  window._dgVgLastData = { pares: DADOS.pares, thresholds: DADOS.thresholds, results: DADOS.results };
 
   // Redesenha os 3 gráficos. Chamado ao abrir, ao trocar de aba (canvas em
   // painel escondido nasce com dimensão zero), ao trocar o tema (a cor do
@@ -3464,6 +3495,9 @@ function _dgrExportaveis() {
     _dgVgTheme, _dgVgDestroyChart,
     _dgVgBarValueLabelsPlugin, _dgVgCategoryTotalsPlugin,
     _dgVgRenderChartCategoriaFisica, _dgVgRenderChartVariacaoPorChave,
+    _dgVgCounts, _dgVgBuildHealthDonutData, _dgVgBuildCentralHealthData, _dgVgScoreFromCounts,
+    _dgVgRenderHealthDonutSvg, _dgVgHealthTipHtml, _dgVgDrawDonutSvg, _dgVgAplicarFiltroSaude,
+    calcHealthScore, classifyVariation, HEALTH_PENALTIES,
     _daVarIrrelevante, _daColorFor, _daFmtPctSigned, _daFmtMoneySigned, _daFmtCountSigned,
     _daMaiorImpacto, _daBuildTabelaMaterial, _daBuildRanking,
     _daRenderTabelaMaterial, _daRenderRanking
