@@ -3484,6 +3484,219 @@ function _dgrScriptGraficos(d) {
 <\/script>`;
 }
 
+// ── Modal "Detalhado" dos cards Compras/Consumo (aba Dashboard) ──────────
+//    Na tela, o botão .dg-kpi-detalhe-btn chama o modal REAL do app
+//    (openBreakdownModal, ui.js) — mas esse modal é grande (~700 linhas) e
+//    puxa outras ~20 funções (link pra DAI, pareamento de transferência
+//    861/862/309, comparação SAP × PUZL), a maioria dependente de contexto
+//    vivo do app (registros DAI, cadastro de filiais) que não existe num
+//    arquivo exportado. Em vez de portar tudo isso, o relatório define sua
+//    PRÓPRIA versão simplificada de window.openBreakdownModal — mesma
+//    assinatura, mesmo botão clonado da tela chama ela sem saber a
+//    diferença — com só o essencial: tabela paginada/ordenável/buscável
+//    com Central, Material, Movimento, Ref., Datas e Saldo (decisão do
+//    Hugo, set/2026). Os campos que o botão do Gerencial nunca preenche
+//    (fechExcluidos/diag/localCount/localTotal) nem são lidos aqui.
+function _dgrDetalheBotaoModalHtml() {
+  return `<div class="bdm-overlay" id="dgr-bdm-overlay" aria-hidden="true">
+  <div class="bdm-dialog bdm-dialog-wide" role="dialog" aria-modal="true" aria-labelledby="dgr-bdm-title">
+    <div class="bdm-header">
+      <div class="bdm-header-text">
+        <div class="bdm-kicker">Movimentações SAP</div>
+        <div class="bdm-title" id="dgr-bdm-title">Detalhamento</div>
+      </div>
+      <button class="btn btn-primary" type="button" onclick="closeBreakdownModal()">
+        <i class="ti ti-x"></i> <span>Fechar</span>
+      </button>
+    </div>
+    <div class="bdm-summary" id="dgr-bdm-summary"></div>
+    <div class="bdm-search">
+      <div class="bdm-search-wrap">
+        <i class="ti ti-search"></i>
+        <input type="text" class="bdm-search-input" id="dgr-bdm-search-input"
+          placeholder="Buscar em qualquer coluna — central, material, movimento, ref., data ou saldo…" autocomplete="off">
+      </div>
+    </div>
+    <div class="bdm-body">
+      <table class="bdm-table">
+        <thead id="dgr-bdm-thead">
+          <tr>
+            <th data-sort-col="central">Central <i class="ti ti-selector mod-sort-icon"></i></th>
+            <th data-sort-col="material">Material <i class="ti ti-selector mod-sort-icon"></i></th>
+            <th data-sort-col="cod">Movimento <i class="ti ti-selector mod-sort-icon"></i></th>
+            <th data-sort-col="ref">Ref. <i class="ti ti-selector mod-sort-icon"></i></th>
+            <th data-sort-col="dtDoc">Dt. Documento <i class="ti ti-selector mod-sort-icon"></i></th>
+            <th data-sort-col="dtLanc">Dt. Lançamento <i class="ti ti-selector mod-sort-icon"></i></th>
+            <th data-sort-col="saldo" style="text-align:right">Saldo <i class="ti ti-selector mod-sort-icon"></i></th>
+          </tr>
+        </thead>
+        <tbody id="dgr-bdm-tbody"></tbody>
+      </table>
+    </div>
+    <div class="pagination">
+      <span class="page-info" id="dgr-bdm-page-info">0 registros</span>
+      <div class="page-btns">
+        <button class="btn" title="Primeira" onclick="_dgrBdmIrParaPagina(0)"><i class="ti ti-chevrons-left"></i></button>
+        <button class="btn" title="Anterior" onclick="_dgrBdmPaginaAnterior()"><i class="ti ti-chevron-left"></i></button>
+        <button class="btn" title="Próxima" onclick="_dgrBdmProximaPagina()"><i class="ti ti-chevron-right"></i></button>
+        <button class="btn" title="Última" onclick="_dgrBdmIrParaUltima()"><i class="ti ti-chevrons-right"></i></button>
+      </div>
+    </div>
+    <div class="bdm-footer">
+      <span class="bdm-footer-label" id="dgr-bdm-footer-label">Total</span>
+      <div class="bdm-footer-right">
+        <span class="bdm-footer-total" id="dgr-bdm-total-val">—</span>
+      </div>
+    </div>
+  </div>
+</div>`;
+}
+
+function _dgrScriptDetalheBotao() {
+  return `<script>
+(function() {
+  var PAGE_SIZE_BDM = 50;
+  var _bdmRows = [], _bdmPage = 0, _bdmSortCol = 'dtLanc', _bdmSortDir = 'desc';
+
+  function _bdmEsc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function _bdmCor(v) { return v < -0.0001 ? '#f43f5e' : v > 0.0001 ? '#10b981' : '#94a3b8'; }
+  // Datas do SAP vêm em DD/MM/AAAA — parser mínimo só pra ordenação, sem
+  // pretender cobrir os outros formatos que o parseDate real do app trata.
+  function _bdmData(s) {
+    var m = /^(\\d{2})\\/(\\d{2})\\/(\\d{4})/.exec(String(s || ''));
+    if (!m) return null;
+    var d = new Date(+m[3], +m[2] - 1, +m[1]);
+    return isNaN(d.getTime()) ? null : d.getTime();
+  }
+
+  function _bdmOrdenar(linhas) {
+    var mul = _bdmSortDir === 'asc' ? 1 : -1;
+    return linhas.slice().sort(function(a, b) {
+      var av = a.sort[_bdmSortCol], bv = b.sort[_bdmSortCol];
+      var aVazio = av === null || av === undefined || av === '';
+      var bVazio = bv === null || bv === undefined || bv === '';
+      if (aVazio || bVazio) return (aVazio && bVazio) ? 0 : (aVazio ? 1 : -1);
+      if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * mul;
+      return String(av).localeCompare(String(bv), 'pt-BR', { numeric: true, sensitivity: 'base' }) * mul;
+    });
+  }
+
+  function _bdmSyncSortHeaders() {
+    var theadEl = document.getElementById('dgr-bdm-thead');
+    if (!theadEl) return;
+    var ths = theadEl.querySelectorAll('th[data-sort-col]');
+    for (var i = 0; i < ths.length; i++) {
+      ths[i].classList.remove('sort-asc', 'sort-desc');
+      if (ths[i].dataset.sortCol === _bdmSortCol) ths[i].classList.add(_bdmSortDir === 'asc' ? 'sort-asc' : 'sort-desc');
+    }
+  }
+
+  function _bdmRenderRows(term) {
+    var tbody = document.getElementById('dgr-bdm-tbody');
+    var totalEl = document.getElementById('dgr-bdm-total-val');
+    var labelEl = document.getElementById('dgr-bdm-footer-label');
+    var infoEl = document.getElementById('dgr-bdm-page-info');
+    if (!tbody) return;
+    var t = String(term || '').trim().toLowerCase();
+    var filtrado = _bdmOrdenar(_bdmRows.filter(function(r) { return !t || r.searchText.indexOf(t) !== -1; }));
+
+    var totalPaginas = Math.max(1, Math.ceil(filtrado.length / PAGE_SIZE_BDM));
+    _bdmPage = Math.min(Math.max(0, _bdmPage), totalPaginas - 1);
+    var pageItems = filtrado.slice(_bdmPage * PAGE_SIZE_BDM, (_bdmPage + 1) * PAGE_SIZE_BDM);
+
+    tbody.innerHTML = filtrado.length
+      ? pageItems.map(function(r) { return r.html; }).join('')
+      : '<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:22px 16px">Nenhum registro encontrado' + (t ? ' para "' + _bdmEsc(term.trim()) + '"' : '') + '</td></tr>';
+
+    if (infoEl) {
+      infoEl.textContent = !filtrado.length ? '0 registros'
+        : (_bdmPage * PAGE_SIZE_BDM + 1) + '-' + Math.min((_bdmPage + 1) * PAGE_SIZE_BDM, filtrado.length) + ' de ' + filtrado.length + ' registro(s) (pág. ' + (_bdmPage + 1) + '/' + totalPaginas + ')';
+    }
+
+    var subtotal = filtrado.reduce(function(s, r) { return s + r.value; }, 0);
+    if (totalEl) { totalEl.textContent = dgFmtPesoSigned(subtotal, 1); totalEl.style.color = _bdmCor(subtotal); }
+    if (labelEl) labelEl.textContent = t ? ('Total (' + filtrado.length + ' filtrado' + (filtrado.length === 1 ? '' : 's') + ')') : 'Total';
+  }
+
+  window.openBreakdownModal = function(trigger) {
+    var overlay = document.getElementById('dgr-bdm-overlay');
+    var titleEl = document.getElementById('dgr-bdm-title');
+    var summaryEl = document.getElementById('dgr-bdm-summary');
+    var searchEl = document.getElementById('dgr-bdm-search-input');
+    if (!overlay) return;
+
+    var entries = [];
+    try { entries = JSON.parse(decodeURIComponent(trigger.dataset.entries || '[]')); } catch (e) {}
+    var title = trigger.dataset.title || '';
+    if (titleEl) titleEl.textContent = title + ' — Movimentações';
+    if (summaryEl) summaryEl.innerHTML = '<b>' + entries.length + '</b> registro(s) no SAP';
+
+    _bdmRows = entries.map(function(e) {
+      var cod = e[0], value = e[1], ref = e[2], extra = e[5] || {};
+      var central = extra.central || '', material = extra.material || '';
+      var refRaw = extra.refRaw || ref || '', dtDoc = extra.dtDoc || '', dtLanc = extra.dtLanc || e[4] || '';
+      var html = '<tr>'
+        + '<td class="td-muted">' + _bdmEsc(central || '—') + '</td>'
+        + '<td class="td-muted">' + _bdmEsc(material || '—') + '</td>'
+        + '<td class="td-mono">' + _bdmEsc(cod || '—') + '</td>'
+        + '<td class="td-muted">' + _bdmEsc(refRaw || '—') + '</td>'
+        + '<td class="td-muted">' + _bdmEsc(dtDoc || '—') + '</td>'
+        + '<td class="td-muted">' + _bdmEsc(dtLanc || '—') + '</td>'
+        + '<td class="td-mono" style="text-align:right;font-weight:600;color:' + _bdmCor(value) + '">' + dgFmtPesoSigned(value, 1) + '</td>'
+        + '</tr>';
+      return {
+        html: html, value: value,
+        searchText: [central, material, cod, refRaw, dtDoc, dtLanc].join(' ').toLowerCase(),
+        sort: { central: central, material: material, cod: cod, ref: refRaw, dtDoc: _bdmData(dtDoc), dtLanc: _bdmData(dtLanc), saldo: Math.abs(value) }
+      };
+    });
+
+    _bdmPage = 0; _bdmSortCol = 'dtLanc'; _bdmSortDir = 'desc';
+    _bdmSyncSortHeaders();
+    _bdmRenderRows('');
+
+    if (searchEl) {
+      searchEl.value = '';
+      var fresh = searchEl.cloneNode(true);
+      searchEl.parentNode.replaceChild(fresh, searchEl);
+      fresh.addEventListener('input', function() { _bdmRenderRows(fresh.value); });
+    }
+    var theadEl = document.getElementById('dgr-bdm-thead');
+    if (theadEl) {
+      theadEl.onclick = function(ev) {
+        var th = ev.target.closest('th[data-sort-col]');
+        if (!th || !theadEl.contains(th)) return;
+        var col = th.dataset.sortCol;
+        if (_bdmSortCol === col) _bdmSortDir = _bdmSortDir === 'asc' ? 'desc' : 'asc';
+        else { _bdmSortCol = col; _bdmSortDir = col === 'saldo' || col === 'dtDoc' || col === 'dtLanc' ? 'desc' : 'asc'; }
+        _bdmSyncSortHeaders();
+        _bdmRenderRows(document.getElementById('dgr-bdm-search-input') ? document.getElementById('dgr-bdm-search-input').value : '');
+      };
+    }
+
+    overlay.classList.add('open');
+    overlay.setAttribute('aria-hidden', 'false');
+  };
+
+  window.closeBreakdownModal = function() {
+    var overlay = document.getElementById('dgr-bdm-overlay');
+    if (!overlay) return;
+    overlay.classList.remove('open');
+    overlay.setAttribute('aria-hidden', 'true');
+  };
+
+  window._dgrBdmIrParaPagina   = function(p) { _bdmPage = Math.max(0, p); _bdmRenderRows(document.getElementById('dgr-bdm-search-input') ? document.getElementById('dgr-bdm-search-input').value : ''); };
+  window._dgrBdmPaginaAnterior = function() { _bdmPage = Math.max(0, _bdmPage - 1); _bdmRenderRows(document.getElementById('dgr-bdm-search-input') ? document.getElementById('dgr-bdm-search-input').value : ''); };
+  window._dgrBdmProximaPagina  = function() { _bdmPage = _bdmPage + 1; _bdmRenderRows(document.getElementById('dgr-bdm-search-input') ? document.getElementById('dgr-bdm-search-input').value : ''); };
+  window._dgrBdmIrParaUltima   = function() { _bdmPage = Number.MAX_SAFE_INTEGER; _bdmRenderRows(document.getElementById('dgr-bdm-search-input') ? document.getElementById('dgr-bdm-search-input').value : ''); };
+})();
+<\/script>`;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // RELATÓRIO GERENCIAL MULTI-MÊS — cálculo por período, código exportado pro
 // arquivo e as abas geradas (Evolução, Detalhado Analítico, Giro por Usina).
@@ -5089,13 +5302,14 @@ window.gerarRelatorioGerencialDashboard = async function(tema = 'dark', selecao 
 
     const bodyHtml = `<style>${_dgrEstilos()}${ajustesCss}</style>`
       + abasBarHtml + panesHtml + _dgrClonarFechModal(periodoDash)
+      + (incluiu('dashboard') ? _dgrDetalheBotaoModalHtml() : '')
       + _dgrScriptTooltipApp() + chartJs
       + _dgrScriptPrelude([
           incluiu('dashboard') && 'graficos',
           incluiu('evolucao')  && 'evolucao',
           incluiu('detalhado') && 'detalhado'
         ].filter(Boolean))
-      + (incluiu('dashboard') ? _dgrScriptGraficos(d) : '')
+      + (incluiu('dashboard') ? _dgrScriptGraficos(d) + _dgrScriptDetalheBotao() : '')
       + _dgrScriptPeriodos()
       + (incluiu('evolucao')  ? _dgrScriptEvolucao(periodos) + _dgrScriptEvoDetalhe(ctx._evoDetalheCards || []) : '')
       + (incluiu('detalhado') ? _dgrScriptDetalhado(periodos) : '')
