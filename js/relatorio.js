@@ -3436,13 +3436,22 @@ function _dgrScriptGraficos(d) {
     entriesRegional: d.entriesRegional || [],
     entriesCentral:  d.entriesCentral  || [],
     // Filtro Regional/Categoria dos donuts de Saúde Geral (clonados da
-    // tela junto com o resto da aba Dashboard) — mesmos pares/thresholds/
-    // results que a tela guarda em window._dgVgLastData, só pra
+    // tela junto com o resto da aba Dashboard) — mesmos pares/thresholds
+    // que a tela guarda em window._dgVgLastData, só pra
     // _dgVgAplicarFiltroSaude (embutido via toString, ver
     // _DGR_NOMES.graficos) rodar aqui sem adaptação nenhuma.
     pares:      d.pares      || [],
     thresholds: d.thresholds || {},
-    results:    d.results    || []
+    // _dgVgBuildCentralHealthData só lê `.central` de cada item de
+    // `results` (semeia a central como 'bom' quando ela não tem par
+    // nenhum — ver a função). d.results de verdade carrega, POR central,
+    // todo lançamento e registro SAP cru do período — o MESMO volume que
+    // vira milhares de linhas no modal de Compras/Consumo. Embutir esse
+    // objeto inteiro só pra pegar uma string deixava o relatório gigante
+    // (JSON.stringify pesado o bastante pra travar bem no meio do
+    // filtro) — daí o donut de Centrais nunca reagia, enquanto o de
+    // Materiais (que só usa `pares`, bem mais leve) reagia normal.
+    resultsCentrais: (d.results || []).map(r => ({ central: r.central }))
   };
 
   // As funções de render dos gráficos vêm do prelúdio (_DGR_NOMES.graficos).
@@ -3454,8 +3463,10 @@ function _dgrScriptGraficos(d) {
   // Mesma variável global que a tela usa pro filtro de Saúde Geral —
   // _dgVgAplicarFiltroSaude lê window._dgVgLastData.pares/thresholds/
   // results direto, sem saber (nem precisar saber) que está dentro do
-  // relatório exportado.
-  window._dgVgLastData = { pares: DADOS.pares, thresholds: DADOS.thresholds, results: DADOS.results };
+  // relatório exportado. `results` aqui é a versão ENXUTA (só .central por
+  // item, ver DADOS.resultsCentrais acima) — suficiente pro filtro, que só
+  // usa essa lista pra semear central sem par nenhum como 'bom'.
+  window._dgVgLastData = { pares: DADOS.pares, thresholds: DADOS.thresholds, results: DADOS.resultsCentrais };
 
   // Redesenha os 3 gráficos. Chamado ao abrir, ao trocar de aba (canvas em
   // painel escondido nasce com dimensão zero), ao trocar o tema (a cor do
