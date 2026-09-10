@@ -1451,7 +1451,11 @@ ${opts.cssApp ? `<style>${opts.cssApp}</style>` : ''}
   }
 </style>
 </head>
-<body${opts.temaInicial === 'light' ? ' class="dgr-tema-claro" data-theme="light"' : ''}>
+<body${(() => {
+  const cls = [opts.temaInicial === 'light' ? 'dgr-tema-claro' : '', opts.ocultarAjustesInicial ? 'dg-ocultar-ajustes' : ''].filter(Boolean).join(' ');
+  const attrs = (cls ? ` class="${cls}"` : '') + (opts.temaInicial === 'light' ? ' data-theme="light"' : '');
+  return attrs;
+})()}>
 
 <div class="action-bar">
   <div class="action-bar-title">
@@ -1460,6 +1464,7 @@ ${opts.cssApp ? `<style>${opts.cssApp}</style>` : ''}
   </div>
   <div class="action-bar-btns">
     ${opts.temaAlternavel ? `<button class="btn-tema" id="dgr-btn-tema" onclick="_dgrAlternarTema(this)" title="${opts.temaInicial === 'light' ? 'Tema Escuro' : 'Tema Claro'}"><i class="ti ${opts.temaInicial === 'light' ? 'ti-moon' : 'ti-sun'}"></i></button>` : ''}
+    ${opts.ocultarAjustesToggle ? `<button class="btn-tema" id="dgr-btn-ocultar-ajustes" onclick="_dgrAlternarOcultarAjustes(this)" title="${opts.ocultarAjustesInicial ? 'Mostrar Ajustes' : 'Ocultar Ajustes'}"><i class="ti ${opts.ocultarAjustesInicial ? 'ti-eye' : 'ti-eye-off'}"></i></button>` : ''}
     ${opts.permitirDownload ? `<button class="btn-tema" id="dgr-btn-baixar" onclick="_dgrBaixarEsteHtml()" title="Baixar HTML"><i class="ti ti-download"></i></button>` : ''}
     <button class="btn-print" onclick="window.print()" title="Imprimir / Salvar PDF"><i class="ti ti-printer"></i></button>
   </div>
@@ -1511,6 +1516,7 @@ ${opts.cssApp ? `<style>${opts.cssApp}</style>` : ''}
 </div>
 
 ${opts.temaAlternavel ? _dgrScriptTema() : ''}
+${opts.ocultarAjustesToggle ? _dgrScriptOcultarAjustes() : ''}
 ${opts.permitirDownload ? _dgrScriptDownload(opts.nomeArquivoDownload || 'relatorio.html') : ''}
 ${opts.secoesRecolhiveis ? _dgrScriptCollapse() : ''}
 ${opts.abasNavegaveis ? _dgrScriptAbas() : ''}
@@ -1541,6 +1547,30 @@ function _dgrAlternarTema(btn) {
   if (btn) {
     btn.innerHTML = claro ? '<i class="ti ti-moon"></i>' : '<i class="ti ti-sun"></i>';
     btn.title = claro ? 'Tema Escuro' : 'Tema Claro';
+  }
+}
+<\/script>`;
+}
+
+// ── Botão "Ocultar Ajustes" do relatório — mesmo toggle da tela
+//    (dgToggleOcultarAjustes, dashboard.js), só que aqui não recalcula
+//    nada: o card "Ajustes dentro do Mês" e as colunas Ajustes/Custo
+//    Ajuste do Detalhado Analítico já nascem com as MESMAS classes da tela
+//    (dg-vg-kpi-ajustes/dg-col-ajustes — o card vem clonado, a tabela vem
+//    da MESMA _daRenderTabelaMaterial via toString(), ver _DGR_NOMES), e a
+//    regra CSS (.dg-ocultar-ajustes, modules.css) já chega embutida junto
+//    com o resto do cssApp — só falta alternar a classe no <body> deste
+//    arquivo. Não fica sincronizado com a tela depois de aberto (é um
+//    arquivo estático, pode até ter sido salvo/reaberto offline) — o
+//    estado inicial vem de opts.ocultarAjustesInicial (o que a tela tinha
+//    na hora da geração), daí em diante é independente.
+function _dgrScriptOcultarAjustes() {
+  return `<script>
+function _dgrAlternarOcultarAjustes(btn) {
+  var oculto = document.body.classList.toggle('dg-ocultar-ajustes');
+  if (btn) {
+    btn.innerHTML = oculto ? '<i class="ti ti-eye"></i>' : '<i class="ti ti-eye-off"></i>';
+    btn.title = oculto ? 'Mostrar Ajustes' : 'Ocultar Ajustes';
   }
 }
 <\/script>`;
@@ -5046,6 +5076,14 @@ window.gerarRelatorioGerencialDashboard = async function(tema = 'dark', selecao 
       abasNavegaveis: true,
       offlineCompleto: true,
       cssApp,
+      // Leva o estado ATUAL do botão "Ocultar Ajustes" da tela (dashboard.js)
+      // pro relatório já nascer no mesmo estado — card e colunas de Ajustes
+      // usam as MESMAS classes (dg-vg-kpi-ajustes/dg-col-ajustes) da tela,
+      // então a mesma regra CSS (já embutida via cssApp) já resolve sozinha;
+      // só falta a classe no <body> certo. Botão próprio no relatório (ver
+      // ocultarAjustesToggle) deixa alternar depois de gerado também.
+      ocultarAjustesToggle: true,
+      ocultarAjustesInicial: (typeof _dgOcultarAjustes !== 'undefined') && _dgOcultarAjustes,
       pageTitle:  'Relatório Gerencial — Dashboard Gerencial',
       badge:      'Relatório Gerencial',
       title:      rotulos.length > 1 ? 'Evolução do Estoque — Dashboard Gerencial' : 'Visão Geral — Dashboard Gerencial',
