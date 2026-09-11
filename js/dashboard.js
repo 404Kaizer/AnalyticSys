@@ -902,15 +902,21 @@ function _dgVgBuildCentralHealthData(pares, thresholds, results) {
   const counts      = { critico: 0, urgente: 0, atencao: 0, bom: 0 };
   const levelMeta    = { critico: { diff: 0, custo: 0 }, urgente: { diff: 0, custo: 0 }, atencao: { diff: 0, custo: 0 }, bom: { diff: 0, custo: 0 } };
 
-  byCentral.forEach(rec => {
+  // linhas: o mesmo byCentral já classificado, mas por CENTRAL (não por
+  // nível agregado) — alimenta a lista de detalhamento do botão Detalhado
+  // do donut (ver abrirDetalheSaude), sem duplicar o agrupamento/
+  // classificação acima pra montar essa lista à parte.
+  const linhas = [];
+  byCentral.forEach((rec, central) => {
     const { level: rawLevel } = calcHealthScore(rec.matDiffs, null, null, thresholds);
     const level = (!rawLevel || rawLevel === 'none' || rawLevel === 'ok') ? 'bom' : rawLevel;
     counts[level]++;
     levelMeta[level].diff  += rec.diff;
     levelMeta[level].custo += rec.custo;
+    linhas.push({ central, level, diff: rec.diff, custo: rec.custo, materiais: rec.matDiffs.length });
   });
 
-  return { counts, levelMeta, total: byCentral.size };
+  return { counts, levelMeta, total: byCentral.size, linhas };
 }
 
 // Agregação por chave (Regional/Central) do SALDO da variação (kg,
@@ -1931,6 +1937,124 @@ function _dgVgAplicarFiltroSaude() {
   const { counts: countsCen, levelMeta: levelMetaCen, total: totalCen } = _dgVgBuildCentralHealthData(pares, d.thresholds, centraisUniverso);
   const scoreCen = _dgVgScoreFromCounts(countsCen);
   _dgVgRenderHealthDonutSvg('dg-vg-gauge-central-svg', countsCen, scoreCen, levelMetaCen, totalCen === 1 ? 'central analisada' : 'centrais analisadas', 'dg-vg-health-central-subtitle', 'dg-vg-health-central-summary');
+}
+
+// ── Modal "Detalhado" dos donuts de Saúde Geral ────────────────────────
+//    O donut só mostra a CONTAGEM por nível; este modal lista quem é cada
+//    fatia — uma linha por central (donut de Centrais) ou por par
+//    central×material (donut de Materiais), com o nível individual. Abre
+//    já recortado pelo filtro de Regional/Categoria ativo nos donuts
+//    (mesma leitura de _dgVgAplicarFiltroSaude), pra bater com o que está
+//    na tela no momento do clique.
+const _DG_VG_NIVEL_COR   = { critico: '#f43f5e', urgente: '#f97316', atencao: '#f59e0b', bom: '#10b981' };
+const _DG_VG_NIVEL_LABEL = { critico: 'CRÍTICO', urgente: 'URGENTE', atencao: 'ATENÇÃO', bom: 'BOM' };
+const _DG_VG_NIVEL_ORDEM = { critico: 0, urgente: 1, atencao: 2, bom: 3 };
+
+function _dgVgNivelBadgeHtml(lvl) {
+  const col = _DG_VG_NIVEL_COR[lvl] || '#94a3b8';
+  return `<span style="display:inline-flex;align-items:center;gap:5px;background:${col}18;color:${col};border:1px solid ${col}35;padding:3px 9px;border-radius:5px;font-size:10px;font-weight:700;font-family:var(--mono);letter-spacing:.04em;white-space:nowrap">
+    <span style="width:6px;height:6px;border-radius:50%;background:${col};display:inline-block;flex-shrink:0"></span>${_DG_VG_NIVEL_LABEL[lvl] || lvl}
+  </span>`;
+}
+
+// Sobra pra cima (âmbar) / desfalque pra baixo (vermelho) — mesma
+// convenção de cor já usada no resto da Visão Geral (ver _dgrValCor,
+// corMov). Direto pelo sinal do kg, não por varSymbol (que devolve um
+// ícone, não um sinal — não dá pra comparar string com aquilo).
+function _dgVgSaudeDiffCor(v) {
+  return v > 0.0001 ? '#f59e0b' : v < -0.0001 ? '#f43f5e' : 'var(--text3)';
+}
+
+// Linhas cruas (não o HTML já montado) guardadas à parte pra busca re-
+// filtrar/re-renderizar sem recalcular saúde de novo a cada tecla digitada.
+let _dgVgSaudeListaAtual = [];
+
+function abrirDetalheSaude(tipo) {
+  const d = window._dgVgLastData;
+  const overlay = document.getElementById('dg-var-saude-overlay');
+  const titleEl = document.getElementById('dg-var-saude-title');
+  const searchEl = document.getElementById('dg-var-saude-search');
+  if (!d || !overlay) return;
+
+  const selReg = document.getElementById('dg-vg-saude-f-regional')?.value || '';
+  const selCat = document.getElementById('dg-vg-saude-f-categoria')?.value || '';
+  const pares = d.pares.filter(p =>
+    (!selReg || p.regional === selReg) && (!selCat || p.catKey === selCat)
+  );
+
+  if (tipo === 'centrais') {
+    let centraisUniverso = null;
+    if (!selCat) centraisUniverso = [...new Set(d.pares.filter(p => !selReg || p.regional === selReg).map(p => p.central))];
+    const { linhas } = _dgVgBuildCentralHealthData(pares, d.thresholds, centraisUniverso);
+    _dgVgSaudeListaAtual = linhas
+      .sort((a, b) => _DG_VG_NIVEL_ORDEM[a.level] - _DG_VG_NIVEL_ORDEM[b.level] || Math.abs(b.diff) - Math.abs(a.diff))
+      .map(l => ({
+        searchText: l.central.toLowerCase(),
+        html: `<tr>
+          <td>${escapeHtml(l.central)}</td>
+          <td>${_dgVgNivelBadgeHtml(l.level)}</td>
+          <td class="da-num" style="color:${_dgVgSaudeDiffCor(l.diff)}">${dgFmtPesoSigned(l.diff, 1)}</td>
+          <td class="da-num" style="color:${_dgVgSaudeDiffCor(l.diff)}">${money(l.custo)}</td>
+          <td class="da-num">${l.materiais}</td>
+        </tr>`
+      }));
+    if (titleEl) titleEl.textContent = 'Saúde Geral — Centrais' + (selReg ? ` · ${selReg}` : '');
+    _dgVgRenderSaudeTabela([
+      { label: 'Central' }, { label: 'Nível' },
+      { label: 'Variação', num: true }, { label: 'Custo', num: true }, { label: 'Materiais', num: true }
+    ]);
+  } else {
+    _dgVgSaudeListaAtual = pares
+      .slice()
+      .sort((a, b) => _DG_VG_NIVEL_ORDEM[a.levelSaude] - _DG_VG_NIVEL_ORDEM[b.levelSaude] || Math.abs(b.diffSaude) - Math.abs(a.diffSaude))
+      .map(p => ({
+        searchText: (p.central + ' ' + p.mat).toLowerCase(),
+        html: `<tr>
+          <td>${escapeHtml(p.central)}</td>
+          <td>${escapeHtml(p.mat)}</td>
+          <td>${_dgVgNivelBadgeHtml(p.levelSaude)}</td>
+          <td class="da-num" style="color:${_dgVgSaudeDiffCor(p.diffSaude)}">${dgFmtPesoSigned(p.diffSaude, 1)}</td>
+          <td class="da-num" style="color:${_dgVgSaudeDiffCor(p.diffSaude)}">${money(Math.abs(p.custoImplicado))}</td>
+        </tr>`
+      }));
+    if (titleEl) titleEl.textContent = 'Saúde Geral — Materiais' + (selCat ? ` · ${DG_VG_CAT_LABELS[selCat] || selCat}` : '');
+    _dgVgRenderSaudeTabela([
+      { label: 'Central' }, { label: 'Material' }, { label: 'Nível' },
+      { label: 'Variação', num: true }, { label: 'Custo', num: true }
+    ]);
+  }
+
+  if (searchEl) searchEl.value = '';
+  overlay.classList.add('open');
+  overlay.setAttribute('aria-hidden', 'false');
+}
+
+function _dgVgRenderSaudeTabela(colunas) {
+  const el = document.getElementById('dg-var-saude-body');
+  if (!el) return;
+  const theadHtml = `<tr>${colunas.map(c => `<th${c.num ? ' class="da-num"' : ''}>${c.label}</th>`).join('')}</tr>`;
+  el.innerHTML = `<div class="da-table-wrap"><table class="da-table">
+    <thead>${theadHtml}</thead>
+    <tbody id="dg-var-saude-tbody" data-cols="${colunas.length}"></tbody>
+  </table></div>`;
+  _dgVgFiltrarSaudeLista('');
+}
+
+function _dgVgFiltrarSaudeLista(term) {
+  const tbody = document.getElementById('dg-var-saude-tbody');
+  if (!tbody) return;
+  const t = String(term || '').trim().toLowerCase();
+  const filtradas = t ? _dgVgSaudeListaAtual.filter(l => l.searchText.includes(t)) : _dgVgSaudeListaAtual;
+  tbody.innerHTML = filtradas.length
+    ? filtradas.map(l => l.html).join('')
+    : `<tr><td colspan="${tbody.dataset.cols || 5}" style="text-align:center;color:var(--text3);padding:22px 16px">Nenhum registro encontrado</td></tr>`;
+}
+
+function fecharDetalheSaude() {
+  const overlay = document.getElementById('dg-var-saude-overlay');
+  if (!overlay) return;
+  overlay.classList.remove('open');
+  overlay.setAttribute('aria-hidden', 'true');
 }
 
 // `elId` opcional — default é o container FIXO da tela; ver nota de

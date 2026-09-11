@@ -653,6 +653,10 @@
                     <option value="">Todas as regionais</option>
                   </select>
                 </div>
+                <button type="button" class="dg-kpi-detalhe-btn dg-kpi-detalhe-btn-inline" style="--dg-kpi-detalhe-cor:var(--accent)"
+                  onclick="abrirDetalheSaude('centrais')" title="Ver detalhamento — Saúde Geral por Central">
+                  <i class="ti ti-list-search"></i>
+                </button>
               </div>
             </div>
             <div style="display:flex;justify-content:center">
@@ -673,6 +677,10 @@
                     <option value="">Todas as categorias</option>
                   </select>
                 </div>
+                <button type="button" class="dg-kpi-detalhe-btn dg-kpi-detalhe-btn-inline" style="--dg-kpi-detalhe-cor:var(--accent)"
+                  onclick="abrirDetalheSaude('materiais')" title="Ver detalhamento — Saúde Geral por Material">
+                  <i class="ti ti-list-search"></i>
+                </button>
               </div>
             </div>
             <div style="display:flex;justify-content:center">
@@ -5794,6 +5802,37 @@
     </div>
     <div class="bdm-body">
       <div id="dg-var-detalhe-body"></div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Detalhado — Saúde Geral (Centrais e Materiais). Abre pelo botão
+     nos 2 donuts (ver dashboard.js: abrirDetalheSaude). Lista, uma linha
+     por central (ou por par central×material), com o nível individual
+     (crítico/urgente/atenção/bom) que compõe a porcentagem do donut — o
+     donut só mostra a contagem agregada, esta lista mostra QUEM é cada
+     fatia. Respeita o filtro de Regional/Categoria ativo nos donuts (abre
+     já recortado pro que está sendo exibido). -->
+<div class="bdm-overlay" id="dg-var-saude-overlay" aria-hidden="true">
+  <div class="bdm-dialog bdm-dialog-wide" role="dialog" aria-modal="true" aria-labelledby="dg-var-saude-title">
+    <div class="bdm-header">
+      <div class="bdm-header-text">
+        <div class="bdm-kicker">Saúde Geral</div>
+        <div class="bdm-title" id="dg-var-saude-title">Detalhamento</div>
+      </div>
+      <button class="btn btn-primary" type="button" onclick="fecharDetalheSaude()">
+        <i class="ti ti-x"></i> <span>Fechar</span>
+      </button>
+    </div>
+    <div class="bdm-search">
+      <div class="bdm-search-wrap">
+        <i class="ti ti-search"></i>
+        <input type="text" class="bdm-search-input" id="dg-var-saude-search"
+          placeholder="Buscar central ou material…" autocomplete="off" oninput="_dgVgFiltrarSaudeLista(this.value)">
+      </div>
+    </div>
+    <div class="bdm-body">
+      <div id="dg-var-saude-body"></div>
     </div>
   </div>
 </div>

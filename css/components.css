@@ -606,39 +606,50 @@
 .inv-kpi-card:hover { transform: translateY(-2px); border-color: var(--border2); box-shadow: 0 8px 24px rgba(0,0,0,0.18); }
 .inv-kpi-card:hover::after { opacity: 1; }
 
-/* Botão "Detalhado" (ver _dgVgBotaoDetalhado, dashboard.js) — encaixado no
-   canto superior direito do card como se fosse parte da própria borda: um
-   "dente" que nasce grudado no topo/direita (sem borda ali, herda a do
-   card) e arredonda só pra fora (top-right, acompanhando o raio do card) e
-   pra dentro (bottom-left, criando o entalhe). .inv-kpi-card é
-   position:relative e overflow:hidden — não precisa de ajuste nenhum no
-   card em si, o overflow:hidden dele já apara qualquer sobra do dente sem
-   deixar quina esquisita pra fora do arredondado. Fica FORA de
-   .inv-kpi-body de propósito (ver comentário no JS) — dentro do label ele
-   herdava overflow:hidden/flex da linha de texto e virava minúsculo/
-   difícil de acertar o clique. */
+/* Botão "Detalhado" (ver _dgVgBotaoDetalhado, dashboard.js) — círculo
+   colorido flutuando no canto superior direito do card, com um "halo" na
+   cor de fundo do próprio card (box-shadow, não borda) separando ele do
+   conteúdo por baixo sem precisar cortar a borda arredondada do card
+   (versão anterior: um "dente" entalhado no canto, que ficava com jeito de
+   lasca — feedback do Hugo, set/2026). --dg-kpi-detalhe-cor vem inline por
+   card (verde pra Compras, vermelho pro Consumo, accent nos demais) —
+   fundo sólido na cor do próprio card, não um cinza quase igual ao fundo
+   (versão ainda mais antiga, "quase invisível" — outro feedback do Hugo).
+   .inv-kpi-card/.oc-chart-card/.dg-vg-extremo-box são todos
+   position:relative — não precisa de ajuste no card em si. */
 .dg-kpi-detalhe-btn {
   position: absolute;
-  top: 0; right: 0;
-  width: 28px; height: 22px;
+  top: 9px; right: 9px;
+  width: 26px; height: 26px;
+  border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  /* --dg-kpi-detalhe-cor vem inline (ver _dgVgBotaoDetalhado) — verde pra
-     Compras, vermelho pro Consumo: fundo sólido na cor do próprio card, não
-     um cinza quase igual ao fundo (versão anterior, "quase invisível" —
-     feedback do Hugo). */
   background: var(--dg-kpi-detalhe-cor, var(--accent));
-  border: 1px solid var(--dg-kpi-detalhe-cor, var(--accent));
-  border-top: none; border-right: none;
-  border-top-right-radius: calc(var(--radius-lg) - 1px);
-  border-bottom-left-radius: 9px;
+  border: none;
+  box-shadow: 0 0 0 3px var(--bg2), 0 2px 8px rgba(0,0,0,0.28);
   color: #fff;
-  font-size: 13px;
+  font-size: 12px;
   cursor: pointer;
-  opacity: 0.85;
-  transition: opacity 0.15s;
+  opacity: 0.92;
+  transition: opacity 0.15s, transform 0.15s, box-shadow 0.15s;
   z-index: 2;
 }
-.dg-kpi-detalhe-btn:hover { opacity: 1; }
+.dg-kpi-detalhe-btn:hover {
+  opacity: 1;
+  transform: scale(1.08);
+  box-shadow: 0 0 0 3px var(--bg2), 0 3px 12px rgba(0,0,0,0.35);
+}
+
+/* Variante pra cards cujo canto superior direito já está ocupado (ex.: os
+   donuts de Saúde Geral, que têm um dropdown de filtro ali) — mesmo
+   círculo colorido, só que como item normal da própria linha do título
+   (flex), não flutuando por cima de nada. */
+.dg-kpi-detalhe-btn-inline {
+  position: static;
+  width: 24px; height: 24px;
+  box-shadow: none;
+  flex-shrink: 0;
+}
+.dg-kpi-detalhe-btn-inline:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
 
 .inv-kpi-icon {
   width: 40px; height: 40px;
