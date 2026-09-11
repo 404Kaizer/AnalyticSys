@@ -1939,14 +1939,31 @@ function _dgVgRenderExtremos(extRegional, extCentral, elId) {
   const el = document.getElementById(elId || 'dg-vg-extremos');
   if (!el) return;
 
-  const box = (label, ext) => {
+  // Botão "Detalhado" só nos boxes com vencedor real (o vazio não tem o que
+  // detalhar) — chama abrirDetalheVariacao(tipo, ext.k), que filtra pares
+  // por aquela regional/central e mostra o ranking da dimensão de baixo
+  // (regional→central, central→material). Não existe fora da tela ao vivo
+  // (abrirDetalheVariacao é só do dashboard.js): nos cards "fotografados"
+  // do detalhe mensal do relatório (ver _dgrEvoDetalheCardHtml), o botão
+  // fica inerte — mesma categoria de limitação já aceita pro tooltip dos
+  // donuts nesses cards.
+  const box = (label, ext, tipo) => {
     if (!ext) return `<div class="dg-vg-extremo-box dg-vg-extremo-empty">
       <span class="dg-vg-extremo-label">${label}</span>
       <span class="dg-vg-extremo-value">—</span>
       <span class="dg-vg-extremo-name">Sem dados no período</span>
     </div>`;
     const cls = ext.v < 0 ? 'dg-vg-extremo-neg' : 'dg-vg-extremo-pos';
+    // Escapa pra dentro de string JS de ASPAS SIMPLES (não é escapeHtml —
+    // isso é conteúdo de ATRIBUTO onclick, o navegador decodifica entidade
+    // HTML antes do parser JS ver o valor; `&#39;` viraria `'` de novo e
+    // quebraria a string na mesma hora, igual ao motivo da crase quebrando
+    // o relatório).
+    const chaveJs = String(ext.k).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     return `<div class="dg-vg-extremo-box ${cls}">
+      <button type="button" class="dg-kpi-detalhe-btn" style="--dg-kpi-detalhe-cor:var(--accent)"
+        onclick="abrirDetalheVariacao('${tipo}', '${chaveJs}')"
+        title="Ver detalhamento — ${escapeHtml(ext.k)}"><i class="ti ti-list-search"></i></button>
       <span class="dg-vg-extremo-label">${label}</span>
       <span class="dg-vg-extremo-value">${varSymbol(ext.v)} ${dgFmtPeso(Math.abs(ext.v))}</span>
       <span class="dg-vg-extremo-kg">${varSymbol(ext.aux || 0)} ${money(Math.abs(ext.aux || 0))}</span>
@@ -1955,10 +1972,64 @@ function _dgVgRenderExtremos(extRegional, extCentral, elId) {
   };
 
   el.innerHTML =
-    box('Regional · Maior Desfalque', extRegional.min && extRegional.min.v < 0 ? extRegional.min : null) +
-    box('Regional · Maior Sobra',     extRegional.max && extRegional.max.v > 0 ? extRegional.max : null) +
-    box('Central · Maior Desfalque',  extCentral.min  && extCentral.min.v  < 0 ? extCentral.min  : null) +
-    box('Central · Maior Sobra',      extCentral.max  && extCentral.max.v  > 0 ? extCentral.max  : null);
+    box('Regional · Maior Desfalque', extRegional.min && extRegional.min.v < 0 ? extRegional.min : null, 'regional') +
+    box('Regional · Maior Sobra',     extRegional.max && extRegional.max.v > 0 ? extRegional.max : null, 'regional') +
+    box('Central · Maior Desfalque',  extCentral.min  && extCentral.min.v  < 0 ? extCentral.min  : null, 'central') +
+    box('Central · Maior Sobra',      extCentral.max  && extCentral.max.v  > 0 ? extCentral.max  : null, 'central');
+}
+
+// ── Modal "Detalhado" — Variação por Regional e Central ───────────────
+//    Reaproveita _daBuildRanking/_daRenderRanking (mesma tabela do
+//    Detalhado Analítico, colunas Caminhões/Carretas/IBCs/Variação/Custo),
+//    só que dentro de um modal em vez de rolar até a seção lá embaixo.
+//
+//    Dois modos, pelo 2º argumento:
+//    - chave preenchida (vem de um card de extremo, ver _dgVgRenderExtremos):
+//      recorta pares por aquela regional/central primeiro, e detalha na
+//      dimensão de baixo — regional abre ranking de Central, central abre
+//      ranking de Material. Responde "quais centrais/materiais compõem
+//      esse número".
+//    - chave null (vem do botão dos 2 gráficos de barra): sem recorte,
+//      ranking cheio na própria dimensão (Regional ou Central) — mesmo
+//      dado que os gráficos mostram só o Top 8, aqui vem a lista inteira.
+function abrirDetalheVariacao(tipo, chave) {
+  const d = window._dgVgLastData;
+  const overlay = document.getElementById('dg-var-detalhe-overlay');
+  const titleEl = document.getElementById('dg-var-detalhe-title');
+  if (!d || !overlay) return;
+
+  const pesoMedio = _daPesoMedioPorTipo(_daBuildEntradasFlat(d.results));
+
+  let paresEscopo = d.pares, keyFn, colLabel, labelFn;
+  if (chave) {
+    paresEscopo = d.pares.filter(p => p[tipo] === chave);
+    if (tipo === 'regional') { keyFn = p => p.central; colLabel = 'Central'; }
+    else                     { keyFn = p => p.mat;     colLabel = 'Material'; }
+  } else if (tipo === 'regional') {
+    keyFn = p => p.regional; colLabel = 'Regional';
+    labelFn = k => k === '—' ? 'Sem regional' : k;
+  } else {
+    keyFn = p => p.central; colLabel = 'Central';
+  }
+
+  if (titleEl) {
+    titleEl.textContent = chave
+      ? `${tipo === 'regional' ? 'Regional' : 'Central'} ${chave} — Detalhamento por ${colLabel}`
+      : `Ranking de ${colLabel === 'Regional' ? 'Regionais' : 'Centrais'} — Variação Física`;
+  }
+
+  const dados = _daBuildRanking(paresEscopo, pesoMedio, keyFn, d.totalEstTeoricoKpi, labelFn);
+  _daRenderRanking('dg-var-detalhe-body', dados, colLabel);
+
+  overlay.classList.add('open');
+  overlay.setAttribute('aria-hidden', 'false');
+}
+
+function fecharDetalheVariacao() {
+  const overlay = document.getElementById('dg-var-detalhe-overlay');
+  if (!overlay) return;
+  overlay.classList.remove('open');
+  overlay.setAttribute('aria-hidden', 'true');
 }
 
 // Plugin customizado (sem dependência externa — mantém o app 100%

@@ -7015,6 +7015,7 @@ mark.search-highlight {
   border-radius: 12px;
   padding: 16px 20px;
   overflow: hidden;
+  position: relative;
 }
 .oc-chart-donut-card {
   padding: 16px 14px 14px;
@@ -11277,6 +11278,8 @@ body.dg-ocultar-ajustes .dg-col-ajustes { display: none; }
   flex-direction: column;
   gap: 7px;
   min-width: 0;
+  position: relative;
+  overflow: hidden;
   transition: border-color 0.15s, box-shadow 0.2s, transform 0.18s;
 }
 .dg-vg-extremo-box:hover {

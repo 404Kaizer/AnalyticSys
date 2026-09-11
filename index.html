@@ -706,6 +706,10 @@
 
         <div class="dg-giro-dual-grid">
           <div class="oc-chart-card">
+            <button type="button" class="dg-kpi-detalhe-btn" style="--dg-kpi-detalhe-cor:var(--accent)"
+              onclick="abrirDetalheVariacao('regional', null)" title="Ver detalhamento — Variação por Regional">
+              <i class="ti ti-list-search"></i>
+            </button>
             <div class="oc-chart-title"><i class="ti ti-users" style="margin-right:5px"></i>Variação por Regional</div>
             <div class="dg-vg-bar-wrap" style="height:260px">
               <div class="dg-vg-bar-inner">
@@ -714,6 +718,10 @@
             </div>
           </div>
           <div class="oc-chart-card">
+            <button type="button" class="dg-kpi-detalhe-btn" style="--dg-kpi-detalhe-cor:var(--accent)"
+              onclick="abrirDetalheVariacao('central', null)" title="Ver detalhamento — Variação por Central">
+              <i class="ti ti-list-search"></i>
+            </button>
             <div class="oc-chart-title"><i class="ti ti-building-factory-2" style="margin-right:5px"></i>Variação por Central</div>
             <div class="dg-vg-bar-wrap" style="height:260px">
               <div class="dg-vg-bar-inner">
@@ -5762,6 +5770,30 @@
       <span class="bdm-footer-label">Soma</span>
       <span class="bdm-footer-total" id="fech-modal-total-peso">—</span>
       <span class="bdm-footer-total" id="fech-modal-total-custo">—</span>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Detalhado — Variação por Regional e Central (Dashboard Gerencial,
+     Visão Geral). Botão nos 4 cards de extremo (mostra o ranking da
+     dimensão de baixo — regional→central, central→material — recortado
+     pro vencedor daquele card) e nos 2 gráficos de barra (mostra o ranking
+     cheio da dimensão, mesmo dado do Detalhado Analítico, só que sem
+     precisar rolar até lá). Reaproveita _daBuildRanking/_daRenderRanking —
+     mesma tabela, mesmas colunas (Caminhões/Carretas/IBCs/Variação/Custo). -->
+<div class="bdm-overlay" id="dg-var-detalhe-overlay" aria-hidden="true">
+  <div class="bdm-dialog bdm-dialog-wide" role="dialog" aria-modal="true" aria-labelledby="dg-var-detalhe-title">
+    <div class="bdm-header">
+      <div class="bdm-header-text">
+        <div class="bdm-kicker">Variação por Regional e Central</div>
+        <div class="bdm-title" id="dg-var-detalhe-title">Detalhamento</div>
+      </div>
+      <button class="btn btn-primary" type="button" onclick="fecharDetalheVariacao()">
+        <i class="ti ti-x"></i> <span>Fechar</span>
+      </button>
+    </div>
+    <div class="bdm-body">
+      <div id="dg-var-detalhe-body"></div>
     </div>
   </div>
 </div>
