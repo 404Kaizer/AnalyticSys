@@ -5383,72 +5383,154 @@ function excluirSelecionadosCustosSap() {
   });
 }
 
-// ── Edição em massa (Custos SAP) — um campo por vez ──────────────────────
-// Mesmo padrão de adminAbrirEdicaoLote/adminAplicarEdicaoLote (admin.js),
-// mas operando sobre state.custosSap em vez de ir direto no Supabase —
-// mesma via da edição individual (editarCustosSap/_atualizarRegistroCustosSap,
-// import.js). Só os 5 campos numéricos entram — material/central mudam a
-// IDENTIDADE do registro (fingerprint _fpCustosSap), então não fazem sentido
-// numa edição em lote que reaproveita os mesmos registros.
-const CUSTOS_SAP_LOTE_EDIT_LABELS = { ano: 'Ano', mes: 'Mês', estoqueTotal: 'Estoque Total', valorTotal: 'Valor Total', custo: 'Custo' };
-
+// ── Edição em massa (Custos SAP) — uma linha por registro ────────────────
+// Mesmo padrão da Edição em massa de Materiais (Configurações →
+// abrirEdicaoMateriaisEmLote/salvarMateriaisIndividual, config.js): abre uma
+// LINHA por registro selecionado, já preenchida com os valores reais dele
+// (mesmos campos da edição individual — editarCustosSap/modal-manual, aba
+// Custo SAP), edita linha a linha e salva tudo de uma vez. Material fica de
+// fora da edição (é a identidade do registro, só exibido como rótulo) —
+// mudar o material de um lote de registros que hoje têm materiais
+// diferentes não faz sentido; quem precisar disso usa a edição individual.
 function abrirEdicaoLoteCustosSap() {
   if (window.currentUser?.role !== 'admin') { toast('Só o administrador pode editar Custos SAP', 'error'); return; }
-  const n = bulkSelected.custosSap.size;
-  if (!n) return;
+  const selecionados = [...bulkSelected.custosSap];
+  if (!selecionados.length) return;
 
   const subEl = document.getElementById('csle-sub');
-  if (subEl) subEl.textContent = `${n.toLocaleString('pt-BR')} registro(s) selecionado(s)`;
-  const campoSel = document.getElementById('csle-campo');
-  if (campoSel) campoSel.value = 'custo';
-  const valorInput = document.getElementById('csle-valor');
-  if (valorInput) valorInput.value = '';
+  if (subEl) subEl.textContent = `${selecionados.length.toLocaleString('pt-BR')} registro(s) selecionado(s) — ajuste linha a linha e salve tudo de uma vez`;
+  const container = document.getElementById('csle-rows');
+  if (container) {
+    container.innerHTML = '';
+    selecionados.forEach(rec => _addCustosSapLoteEditRow(rec));
+  }
   const errEl = document.getElementById('csle-error');
   if (errEl) errEl.style.display = 'none';
   openModal('modal-custos-sap-lote-edit');
 }
 
-function aplicarEdicaoLoteCustosSap() {
+function _addCustosSapLoteEditRow(rec) {
+  const container = document.getElementById('csle-rows');
+  if (!container) return;
+  const grupoSap = _custosSapResolveMaterial(rec);
+  const materialLabelHtml = grupoSap === 'SEM CADASTRO'
+    ? '<span class="badge badge-red" title="Sem material correspondente cadastrado"><i class="ti ti-alert-triangle" style="font-size:10px"></i> SEM CADASTRO</span>'
+    : escapeHtml(grupoSap || '—');
+  const row = document.createElement('div');
+  row.className = 'reg-individual-row reg-row-custos-sap';
+  row.dataset.recId = rec.id;
+  row.innerHTML = `
+    <div class="form-group">
+      <label class="form-label">Material</label>
+      <div style="padding:8px 0;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${materialLabelHtml} <span class="td-muted" style="font-size:11px">(${escapeHtml(rec.material || '—')})</span></div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Central</label>
+      <select class="form-select" data-field="central">${_buildCentralOptionsHtml('Selecione')}</select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Ano / Mês</label>
+      <input type="month" class="form-input" data-field="data">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Estoque Total</label>
+      <input type="number" class="form-input" data-field="estoqueTotal" oninput="_custosSapLoteEditRecalcTotal(this)">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Valor Total</label>
+      <input type="number" class="form-input" data-field="valorTotal" placeholder="calculado" disabled>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Custo</label>
+      <input type="number" class="form-input" data-field="custo" oninput="_custosSapLoteEditRecalcTotal(this)">
+    </div>
+    <div class="reg-row-remove" title="Remover esta linha da edição (não exclui o registro)" onclick="this.closest('.reg-individual-row').remove()"><i class="ti ti-x"></i></div>
+  `;
+  container.appendChild(row);
+  row.querySelector('[data-field="central"]').value = rec.central || '';
+  row.querySelector('[data-field="data"]').value = (rec.ano && rec.mes) ? `${rec.ano}-${String(rec.mes).padStart(2, '0')}` : '';
+  row.querySelector('[data-field="estoqueTotal"]').value = rec.estoqueTotal ?? '';
+  row.querySelector('[data-field="valorTotal"]').value = rec.valorTotal ?? '';
+  row.querySelector('[data-field="custo"]').value = rec.custo ?? '';
+}
+
+// Mesmo cálculo automático da edição individual (_modalAutoCalcTotal,
+// import.js), mas escopado à linha (várias linhas abertas ao mesmo tempo
+// no mesmo modal, cada uma com seu próprio Estoque/Custo/Total).
+function _custosSapLoteEditRecalcTotal(inputEl) {
+  const row = inputEl.closest('.reg-individual-row');
+  if (!row) return;
+  const estoque = num(row.querySelector('[data-field="estoqueTotal"]')?.value);
+  const custo = num(row.querySelector('[data-field="custo"]')?.value);
+  if (estoque && custo) {
+    const totalEl = row.querySelector('[data-field="valorTotal"]');
+    if (totalEl) totalEl.value = (estoque * custo).toFixed(2);
+  }
+}
+
+function aplicarEdicaoLoteCustosSap(btn) {
   if (window.currentUser?.role !== 'admin') { toast('Só o administrador pode editar Custos SAP', 'error'); return; }
   const errEl = document.getElementById('csle-error');
   if (errEl) errEl.style.display = 'none';
 
-  const campo = document.getElementById('csle-campo')?.value;
-  const valorStr = (document.getElementById('csle-valor')?.value || '').trim();
-  if (!campo || !valorStr) {
-    if (errEl) { errEl.textContent = 'Informe um valor numérico válido.'; errEl.style.display = 'block'; }
-    return;
-  }
-  const valor = num(valorStr);
-  if (campo === 'mes' && (valor < 1 || valor > 12)) {
-    if (errEl) { errEl.textContent = 'Mês deve estar entre 1 e 12.'; errEl.style.display = 'block'; }
+  const rows = [...document.querySelectorAll('#csle-rows .reg-individual-row')];
+  if (!rows.length) {
+    if (errEl) { errEl.textContent = 'Nenhuma linha para salvar — todas foram removidas da edição.'; errEl.style.display = 'block'; }
     return;
   }
 
-  const selecionados = [...bulkSelected.custosSap];
-  if (!selecionados.length) return;
+  const patches = [];
+  for (const row of rows) {
+    const rec = state.custosSap.find(r => r.id === row.dataset.recId);
+    if (!rec) continue; // registro pode ter sido excluído por outra aba/usuário nesse meio-tempo
+    const central = row.querySelector('[data-field="central"]')?.value.trim() || '';
+    const [ano, mesComZero] = (row.querySelector('[data-field="data"]')?.value || '').split('-');
+    const mes = mesComZero ? String(Number(mesComZero)) : '';
+    const custoStr = row.querySelector('[data-field="custo"]')?.value || '';
+    if (!central || !ano || !mes || !num(custoStr)) {
+      if (errEl) { errEl.textContent = `Preencha Central, Ano/Mês e Custo em todas as linhas (falta em "${rec.central || rec.material}").`; errEl.style.display = 'block'; }
+      return;
+    }
+    patches.push({
+      rec, central,
+      ano, mes,
+      estoqueTotal: num(row.querySelector('[data-field="estoqueTotal"]')?.value),
+      valorTotal: num(row.querySelector('[data-field="valorTotal"]')?.value),
+      custo: num(custoStr),
+    });
+  }
+  if (!patches.length) return;
 
   closeModal('modal-custos-sap-lote-edit');
 
-  const label = CUSTOS_SAP_LOTE_EDIT_LABELS[campo] || campo;
   confirmarDestrutivo({
     title: 'Confirmar edição em massa',
-    sub: `Custos SAP — campo "${label}"`,
-    body: `Você está prestes a alterar o campo <strong>${label}</strong> para <strong>${valor}</strong> em <strong>${selecionados.length.toLocaleString('pt-BR')}</strong> registro(s) de Custos SAP. Esta ação não pode ser desfeita.`,
-    confirmLabel: 'Aplicar em massa',
+    sub: 'Custos SAP',
+    body: `Você está prestes a atualizar <strong>${patches.length.toLocaleString('pt-BR')}</strong> registro(s) de Custos SAP com os valores informados nas linhas. Esta ação não pode ser desfeita.`,
+    confirmLabel: 'Salvar Alterações',
     requireConsent: true,
-    consentLabel: `Entendo que isso altera ${selecionados.length.toLocaleString('pt-BR')} registro(s) permanentemente.`,
+    consentLabel: `Entendo que isso altera ${patches.length.toLocaleString('pt-BR')} registro(s) permanentemente.`,
     onConfirm: () => {
-      // Mesmo selo de "corrigido à mão" da edição individual
-      // (_atualizarRegistroCustosSap, import.js) — uma vez editado, deixa de
-      // ser só um dado de importação, mesmo que a origem original não fosse manual.
-      selecionados.forEach(r => { r[campo] = valor; r.fonte = 'manual'; });
+      patches.forEach(({ rec, central, ano, mes, estoqueTotal, valorTotal, custo }) => {
+        // Mesmo selo de "corrigido à mão" da edição individual
+        // (_atualizarRegistroCustosSap, import.js) — uma vez editado, deixa
+        // de ser só um dado de importação, mesmo que a origem original não
+        // fosse manual.
+        rec.fonte = 'manual';
+        rec.centralOriginal = central;
+        rec.central = normalizarCentral(central);
+        rec.ano = ano;
+        rec.mes = mes;
+        rec.estoqueTotal = estoqueTotal;
+        rec.valorTotal = valorTotal;
+        rec.custo = custo;
+      });
       persist();
-      if (typeof _custosSapSyncUpsertBatch === 'function') _custosSapSyncUpsertBatch(selecionados);
+      if (typeof _custosSapSyncUpsertBatch === 'function') _custosSapSyncUpsertBatch(patches.map(p => p.rec));
       bulkSelected.custosSap.clear();
       renderCustosSap();
       updateDashboard();
-      toast(`${selecionados.length.toLocaleString('pt-BR')} registro(s) atualizado(s) com sucesso`);
+      toast(`${patches.length.toLocaleString('pt-BR')} registro(s) atualizado(s) com sucesso`);
     },
   });
 }

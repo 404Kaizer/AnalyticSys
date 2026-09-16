@@ -4171,35 +4171,25 @@
   </div>
 </div>
 
-<!-- Modal de edição EM MASSA da página Custos SAP — mesmo padrão do
-     admin-lote-edit-modal acima (um campo por vez, aplicado a todos os
-     registros selecionados via checkbox), mas operando sobre state.custosSap
-     em vez de ir direto no Supabase — mesma via da edição individual
-     (editarCustosSap/_atualizarRegistroCustosSap, import.js). -->
+<!-- Modal de edição EM MASSA da página Custos SAP — mesmo padrão da
+     Edição em massa de Materiais (Configurações → modal-materiais-individual,
+     abrirEdicaoMateriaisEmLote/salvarMateriaisIndividual, config.js): uma
+     LINHA por registro selecionado, com os campos reais dele já preenchidos
+     (mesmos campos da edição individual — editarCustosSap/modal-manual,
+     aba Custo SAP), editável linha a linha e salvo tudo de uma vez. Nada de
+     "um campo, um valor pra todo mundo" — cada registro pode ter um valor
+     diferente. -->
 <div class="modal-overlay" id="modal-custos-sap-lote-edit">
-  <div class="modal" style="max-width:460px">
+  <div class="modal" style="max-width:900px">
     <div class="modal-title"><i class="ti ti-edit"></i> Editar em massa — Custos SAP</div>
     <div class="modal-sub" id="csle-sub"></div>
-    <div style="display:flex;flex-direction:column;gap:12px;margin-top:12px">
-      <div class="form-group" style="margin-bottom:0">
-        <label class="form-label">Campo a alterar</label>
-        <select class="form-select" id="csle-campo">
-          <option value="ano">Ano</option>
-          <option value="mes">Mês</option>
-          <option value="estoqueTotal">Estoque Total</option>
-          <option value="valorTotal">Valor Total</option>
-          <option value="custo">Custo</option>
-        </select>
-      </div>
-      <div class="form-group" style="margin-bottom:0">
-        <label class="form-label">Novo valor</label>
-        <input type="number" class="form-input" id="csle-valor" step="any">
-      </div>
-    </div>
+
+    <div class="reg-individual-rows" id="csle-rows"></div>
+
     <div id="csle-error" style="display:none;color:var(--red);font-size:12px;margin-top:10px"></div>
     <div class="form-actions">
       <button class="btn" onclick="closeModal('modal-custos-sap-lote-edit')">Cancelar</button>
-      <button class="btn btn-primary" onclick="aplicarEdicaoLoteCustosSap()"><i class="ti ti-check"></i> Pré-visualizar e aplicar</button>
+      <button class="btn btn-primary" id="btn-csle-salvar" onclick="aplicarEdicaoLoteCustosSap(this)"><i class="ti ti-check"></i> Salvar Alterações</button>
     </div>
   </div>
 </div>

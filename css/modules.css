@@ -157,6 +157,11 @@
 .reg-individual-row .oc-form-group { margin: 0; }
 .reg-row-materiais { grid-template-columns: 1.2fr 1.2fr 140px 170px 34px; }
 .reg-row-filiais   { grid-template-columns: 1.3fr 110px 190px 1fr 34px; }
+/* Edição em massa de Custos SAP (Hugo, pedido de 16/09) — Material fica de
+   fora (é a identidade do registro, mostrada como rótulo fixo na 1ª
+   coluna); os demais campos espelham a aba Custo SAP do modal-manual
+   (editarCustosSap, import.js). */
+.reg-row-custos-sap { grid-template-columns: 1fr 130px 120px 120px 120px 100px 34px; }
 .reg-row-remove {
   height: 36px;
   width: 34px;
@@ -184,7 +189,7 @@
 }
 .link-btn:hover { color: var(--accent-hover, var(--accent)); }
 @media (max-width: 720px) {
-  .reg-row-materiais, .reg-row-filiais { grid-template-columns: 1fr; }
+  .reg-row-materiais, .reg-row-filiais, .reg-row-custos-sap { grid-template-columns: 1fr; }
   .reg-row-remove { justify-self: end; }
 }
 
