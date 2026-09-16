@@ -971,6 +971,10 @@ let _cfPopover      = null;   // current open popover element
 let _cfModule       = null;
 let _cfColIdx       = null;
 let _cfSearchQuery  = '';
+// Seleções acumuladas na sessão atual do popover — independente do que está
+// visível na lista filtrada pela busca, para não perder marcações ao
+// pesquisar por outro valor (ver refreshColFilterList/applyColFilter).
+let _cfPendingChecked = new Set();
 
 function openColFilterPopover(thEl, module, colIdx) {
   closeColFilterPopover();
@@ -980,6 +984,7 @@ function openColFilterPopover(thEl, module, colIdx) {
 
   ensureColFilters(module);
   const activeSet = colFilters[module][colIdx] || new Set();
+  _cfPendingChecked = new Set(activeSet);
   const allVals   = getColUniqueValues(module, colIdx);
 
   if (!allVals.length) return;
@@ -987,7 +992,7 @@ function openColFilterPopover(thEl, module, colIdx) {
   const pop = document.createElement('div');
   pop.className = 'cf-popover';
   pop.setAttribute('role', 'dialog');
-  pop.innerHTML = buildColFilterHTML(allVals, activeSet, '');
+  pop.innerHTML = buildColFilterHTML(allVals, _cfPendingChecked, '');
   document.body.appendChild(pop);
   _cfPopover = pop;
 
@@ -1063,9 +1068,23 @@ function positionColFilterPopover(thEl, pop) {
   if (checkAll) {
     checkAll.indeterminate = checkAll.dataset.indeterminate === 'true';
     checkAll.addEventListener('change', () => {
-      pop.querySelectorAll('.cf-check').forEach(c => { c.checked = checkAll.checked; });
+      pop.querySelectorAll('.cf-check').forEach(c => {
+        c.checked = checkAll.checked;
+        if (checkAll.checked) _cfPendingChecked.add(c.value);
+        else _cfPendingChecked.delete(c.value);
+      });
     });
   }
+
+  // Delegado: toggling .checked via JS (select-all acima) não dispara
+  // 'change', então essa marcação individual cobre o clique manual do
+  // usuário em cada checkbox da lista.
+  pop.addEventListener('change', e => {
+    const cb = e.target.closest('.cf-check');
+    if (!cb) return;
+    if (cb.checked) _cfPendingChecked.add(cb.value);
+    else _cfPendingChecked.delete(cb.value);
+  });
 
   pop.querySelector('[data-cf-action="apply"]')?.addEventListener('click', e => {
     e.stopPropagation();
@@ -1081,19 +1100,11 @@ function refreshColFilterList() {
   if (!_cfPopover || _cfModule === null || _cfColIdx === null) return;
   ensureColFilters(_cfModule);
 
-  // Save current checked state
-  const currentChecked = new Set();
-  _cfPopover.querySelectorAll('.cf-check:checked').forEach(c => currentChecked.add(c.value));
-
-  // Merge with saved active set
-  const saved = colFilters[_cfModule][_cfColIdx] || new Set();
-  const merged = new Set([...saved, ...currentChecked]);
-
   const allVals = getColUniqueValues(_cfModule, _cfColIdx);
   const q = normalizeText(_cfSearchQuery);
   const filtered = q ? allVals.filter(v => v.includes(q)) : allVals;
-  const allChecked = filtered.length > 0 && filtered.every(v => merged.has(v));
-  const someChecked = filtered.some(v => merged.has(v));
+  const allChecked = filtered.length > 0 && filtered.every(v => _cfPendingChecked.has(v));
+  const someChecked = filtered.some(v => _cfPendingChecked.has(v));
 
   const list = _cfPopover.querySelector('.cf-list');
   const checkAll = _cfPopover.querySelector('.cf-check-all');
@@ -1104,7 +1115,7 @@ function refreshColFilterList() {
 
   if (list) {
     list.innerHTML = filtered.length ? filtered.map(v => {
-      const checked = merged.has(v) ? 'checked' : '';
+      const checked = _cfPendingChecked.has(v) ? 'checked' : '';
       const label = v === '' || v === '—' ? '<em style="opacity:.5">vazio</em>' : escapeHtml(v);
       return `<label class="cf-row">
         <input type="checkbox" class="cf-check" value="${escapeHtml(v)}" ${checked}>
@@ -1118,9 +1129,7 @@ function applyColFilter() {
   if (!_cfPopover || _cfModule === null || _cfColIdx === null) return;
   ensureColFilters(_cfModule);
 
-  const checked = new Set();
-  _cfPopover.querySelectorAll('.cf-check:checked').forEach(c => checked.add(c.value));
-  colFilters[_cfModule][_cfColIdx] = checked;
+  colFilters[_cfModule][_cfColIdx] = new Set(_cfPendingChecked);
 
   // Capture before closeColFilterPopover() nulls them
   const module = _cfModule;
@@ -1164,6 +1173,7 @@ function closeColFilterPopover() {
   _cfModule = null;
   _cfColIdx = null;
   _cfSearchQuery = '';
+  _cfPendingChecked = new Set();
 }
 
 function resetPageForModule(module) {
@@ -6437,6 +6447,9 @@ const _fechMgrColFilters   = {};        // { colIdx: Set<string valor normalizad
 const _fechMgrSelecionados = new Set(); // Set<chave (getSapFechKey)>
 let _fechMgrPopover     = null;
 let _fechMgrPopColIdx   = null;
+// Seleções acumuladas na sessão atual do popover — independente do que está
+// visível na lista filtrada pela busca (ver _cfPendingChecked, mesmo padrão).
+let _fechMgrPendingChecked = new Set();
 let _fechMgrPage        = 0;    // página atual (0-based) — evita renderizar milhares de linhas de uma vez
 let _fechMgrLastFiltrados = [];  // cache do resultado filtrado+ordenado do último render — reaproveitado
                                   // pra não recalcular tudo de novo a cada clique de checkbox individual
@@ -7133,6 +7146,7 @@ function _fechMgrOpenColFilterPopover(thEl, colIdx) {
   _fechMgrPopColIdx = colIdx;
 
   const activeSet = _fechMgrColFilters[colIdx] || new Set();
+  _fechMgrPendingChecked = new Set(activeSet);
   const allVals = _fechMgrGetColUniqueValues(colIdx);
   _fechMgrPopoverAllVals = allVals;
   if (!allVals.length) return;
@@ -7140,7 +7154,7 @@ function _fechMgrOpenColFilterPopover(thEl, colIdx) {
   const pop = document.createElement('div');
   pop.className = 'cf-popover';
   pop.setAttribute('role', 'dialog');
-  pop.innerHTML = buildColFilterHTML(allVals, activeSet, '');
+  pop.innerHTML = buildColFilterHTML(allVals, _fechMgrPendingChecked, '');
   document.body.appendChild(pop);
   _fechMgrPopover = pop;
 
@@ -7163,9 +7177,22 @@ function _fechMgrOpenColFilterPopover(thEl, colIdx) {
   const checkAll = pop.querySelector('.cf-check-all');
   if (checkAll) {
     checkAll.addEventListener('change', () => {
-      pop.querySelectorAll('.cf-check').forEach(c => { c.checked = checkAll.checked; });
+      pop.querySelectorAll('.cf-check').forEach(c => {
+        c.checked = checkAll.checked;
+        if (checkAll.checked) _fechMgrPendingChecked.add(c.value);
+        else _fechMgrPendingChecked.delete(c.value);
+      });
     });
   }
+  // Delegado: toggling .checked via JS (select-all acima) não dispara
+  // 'change', então essa marcação individual cobre o clique manual do
+  // usuário em cada checkbox da lista.
+  pop.addEventListener('change', e => {
+    const cb = e.target.closest('.cf-check');
+    if (!cb) return;
+    if (cb.checked) _fechMgrPendingChecked.add(cb.value);
+    else _fechMgrPendingChecked.delete(cb.value);
+  });
   pop.querySelector('[data-cf-action="apply"]')?.addEventListener('click', e => { e.stopPropagation(); _fechMgrApplyColFilter(); });
   pop.querySelector('[data-cf-action="clear"]')?.addEventListener('click', e => { e.stopPropagation(); _fechMgrClearColFilter(); });
 
@@ -7175,23 +7202,19 @@ function _fechMgrOpenColFilterPopover(thEl, colIdx) {
 
 function _fechMgrRefreshPopoverList(query) {
   if (!_fechMgrPopover || _fechMgrPopColIdx === null) return;
-  const currentChecked = new Set();
-  _fechMgrPopover.querySelectorAll('.cf-check:checked').forEach(c => currentChecked.add(c.value));
-  const saved = _fechMgrColFilters[_fechMgrPopColIdx] || new Set();
-  const merged = new Set([...saved, ...currentChecked]);
 
   const allVals = _fechMgrPopoverAllVals;
   const q = normalizeText(query || '');
   const filtered = q ? allVals.filter(v => v.includes(q)) : allVals;
-  const allChecked = filtered.length > 0 && filtered.every(v => merged.has(v));
-  const someChecked = filtered.some(v => merged.has(v));
+  const allChecked = filtered.length > 0 && filtered.every(v => _fechMgrPendingChecked.has(v));
+  const someChecked = filtered.some(v => _fechMgrPendingChecked.has(v));
 
   const list = _fechMgrPopover.querySelector('.cf-list');
   const checkAll = _fechMgrPopover.querySelector('.cf-check-all');
   if (checkAll) { checkAll.checked = allChecked; checkAll.indeterminate = !allChecked && someChecked; }
   if (list) {
     list.innerHTML = filtered.length ? filtered.map(v => {
-      const checked = merged.has(v) ? 'checked' : '';
+      const checked = _fechMgrPendingChecked.has(v) ? 'checked' : '';
       const label = v === '' || v === '—' ? '<em style="opacity:.5">vazio</em>' : escapeHtml(v);
       return `<label class="cf-row"><input type="checkbox" class="cf-check" value="${escapeHtml(v)}" ${checked}><span class="cf-label">${label}</span></label>`;
     }).join('') : `<div class="cf-empty">Nenhum valor encontrado</div>`;
@@ -7200,9 +7223,7 @@ function _fechMgrRefreshPopoverList(query) {
 
 function _fechMgrApplyColFilter() {
   if (!_fechMgrPopover || _fechMgrPopColIdx === null) return;
-  const checked = new Set();
-  _fechMgrPopover.querySelectorAll('.cf-check:checked').forEach(c => checked.add(c.value));
-  _fechMgrColFilters[_fechMgrPopColIdx] = checked;
+  _fechMgrColFilters[_fechMgrPopColIdx] = new Set(_fechMgrPendingChecked);
   _fechMgrClosePopover();
   _fechMgrPage = 0;
   _fechMgrRender();
@@ -7221,6 +7242,7 @@ function _fechMgrClosePopover() {
   _fechMgrPopover = null;
   _fechMgrPopColIdx = null;
   _fechMgrPopoverAllVals = [];
+  _fechMgrPendingChecked = new Set();
 }
 
 document.addEventListener('mousedown', e => {
