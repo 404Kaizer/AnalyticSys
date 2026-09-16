@@ -246,6 +246,7 @@ function excluirCustosSap(absIndex) {
 
     action: () => {
       state.custosSap = state.custosSap.filter(r => r !== rec);
+      bulkSelected.custosSap.delete(rec); // pode estar marcado na seleção em massa
       persist();
       renderCustosSap();
       updateDashboard();
@@ -294,6 +295,7 @@ async function zerarCustosSapImportados() {
   )) return;
 
   state.custosSap = (state.custosSap || []).filter(r => !!r.fonte);
+  bulkSelected.custosSap.clear(); // pode ter apagado registro(s) que estavam marcados na seleção em massa
   persist();
   renderCustosSap();
   updateDashboard();
@@ -1086,6 +1088,19 @@ function _custosSapSyncDelete(id) {
   if (!window.supabaseClient || !id) return;
   window.supabaseClient.from('custos_sap').delete().eq('id', id)
     .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao excluir Custos SAP na nuvem:', error); });
+}
+
+// Exclusão em massa (excluirSelecionadosCustosSap, dashboard.js) — um único
+// DELETE ... IN (...) por lote em vez de N chamadas individuais, mesmo
+// padrão de excluirSelecionados (dashboard.js) pros outros 4 módulos.
+// Quebrado em lotes pra não estourar o limite de URL do DELETE (mesmo motivo
+// documentado em zerarCustosSapImportados, acima, que evita ids por lista).
+async function _custosSapSyncDeleteBatch(ids) {
+  if (!window.supabaseClient || !ids || !ids.length) return;
+  for (let i = 0; i < ids.length; i += CUSTOS_SAP_SYNC_BATCH_SIZE) {
+    const { error } = await window.supabaseClient.from('custos_sap').delete().in('id', ids.slice(i, i + CUSTOS_SAP_SYNC_BATCH_SIZE));
+    if (error) { console.warn('[Supabase] Falha ao excluir lote de Custos SAP:', error); break; }
+  }
 }
 
 // Cadastro único e compartilhado do time (05/08) — não é mais "meu ou

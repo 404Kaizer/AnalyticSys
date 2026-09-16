@@ -844,7 +844,7 @@ const colFilterMeta = {
   // Coluna 0 (Material) é calculada, não existe como campo do registro —
   // resolvida por _custosSapResolveMaterial (dashboard.js, carrega depois
   // deste arquivo; daqui o wrapper com typeof em vez de referência direta).
-  custosSap:   { tbodyId: 'tb-custos-sap',  fields: [r => (typeof _custosSapResolveMaterial === 'function' ? _custosSapResolveMaterial(r) : ''),'material','central','ano','mes','estoqueTotal','valorTotal','custo',null] },
+  custosSap:   { tbodyId: 'tb-custos-sap',  fields: [null, r => (typeof _custosSapResolveMaterial === 'function' ? _custosSapResolveMaterial(r) : ''),'material','central','ano','mes','estoqueTotal','valorTotal','custo',null] },
   imports:     { tbodyId: 'tb-imports',     fields: ['arquivo','modulo','registros','dataHora','status',null] },
   configs:     { tbodyId: 'tb-configs',     fields: ['key','value','desc','created',null] },
   filiais:     { tbodyId: 'tb-filiais',     fields: [null,'origem','alias','cnpj','regional',null,'created',null] },

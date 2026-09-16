@@ -5163,13 +5163,15 @@ function _custosSapResolveMaterial(r) {
 }
 
 // Botão "Sem Cadastro" do toolbar — alterna o filtro da coluna Material
-// (índice 0) pra mostrar só os códigos sem correspondência no cadastro,
-// reaproveitando o mesmo mecanismo do filtro de coluna (ui.js).
+// (índice 1 — índice 0 é a coluna de checkbox da seleção em massa, ver
+// colFilterMeta.custosSap acima) pra mostrar só os códigos sem
+// correspondência no cadastro, reaproveitando o mesmo mecanismo do filtro
+// de coluna (ui.js).
 function toggleFiltroCustosSapSemCadastro(btn) {
   ensureColFilters('custosSap');
-  const atual = colFilters.custosSap[0];
+  const atual = colFilters.custosSap[1];
   const jaAtivo = atual && atual.size === 1 && atual.has('SEM CADASTRO');
-  colFilters.custosSap[0] = jaAtivo ? new Set() : new Set(['SEM CADASTRO']);
+  colFilters.custosSap[1] = jaAtivo ? new Set() : new Set(['SEM CADASTRO']);
   _invalidateColFilterPassCache('custosSap');
   resetPageForModule('custosSap');
   renderCustosSap();
@@ -5212,6 +5214,7 @@ function renderCustosSap() {
   if (!tb) return;
 
   const data = getFilteredData('custosSap');
+  _lastFiltered.custosSap = data; // cache pra toggleSelecaoCustosSap resolver por índice sem re-filtrar/re-ordenar a cada clique (mesmo padrão de _lastFiltered, ui.js)
   const totalPages = Math.max(1, Math.ceil(data.length / PAGE_SIZE));
   if (currentPageCustosSap >= totalPages) currentPageCustosSap = totalPages - 1;
   if (currentPageCustosSap < 0) currentPageCustosSap = 0;
@@ -5237,12 +5240,13 @@ function renderCustosSap() {
 
   const btnSemCad = document.getElementById('btn-custos-sap-sem-cadastro');
   if (btnSemCad) {
-    const filtroAtivo = colFilters.custosSap?.[0];
+    const filtroAtivo = colFilters.custosSap?.[1];
     btnSemCad.classList.toggle('btn-primary', !!(filtroAtivo && filtroAtivo.size === 1 && filtroAtivo.has('SEM CADASTRO')));
   }
 
   if (!data.length) {
-    tb.innerHTML = '<tr><td colspan="9"><div class="empty-state"><i class="ti ti-chart-bar"></i><p>Nenhum registro de Custos SAP importado.</p></div></td></tr>';
+    tb.innerHTML = '<tr><td colspan="10"><div class="empty-state"><i class="ti ti-chart-bar"></i><p>Nenhum registro de Custos SAP importado.</p></div></td></tr>';
+    atualizarBarraLoteCustosSap();
     return;
   }
 
@@ -5268,8 +5272,10 @@ function renderCustosSap() {
       ? `<span class="badge badge-red" style="margin-left:4px" title="Sem custo correspondente na MBEWH para esta central/material/período — o valor total fica zerado até importar uma MBEWH que cubra este par ou cadastrar o custo manualmente"><i class="ti ti-alert-triangle" style="font-size:10px"></i> SEM CUSTO</span>`
       : '';
     const absIndex = currentPageCustosSap * PAGE_SIZE + i;
+    const isAdmin = window.currentUser?.role === 'admin';
     return `
     <tr>
+      <td class="th-checkbox">${isAdmin ? `<input type="checkbox" ${bulkSelected.custosSap.has(r) ? 'checked' : ''} onchange="toggleSelecaoCustosSap(${absIndex}, this.checked)">` : ''}</td>
       <td class="td-mono">${r.fonte === 'manual' ? '<span class="badge-manual" title="Registro inserido manualmente"><i class="ti ti-pencil"></i></span>' : ''}${materialCellHtml}</td>
       <td class="td-mono">${r.material || '—'}</td>
       <td class="td-mono">${r.central || '—'}</td>
@@ -5278,11 +5284,173 @@ function renderCustosSap() {
       <td class="td-mono" style="color:var(--teal)">${num(r.estoqueTotal).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
       <td class="td-mono" style="color:#f59e0b">${money(r.valorTotal)}</td>
       <td class="td-mono">${money(r.custo, 4)}${custoOutlierBadge}${semCustoBadge}</td>
-      <td>${window.currentUser?.role === 'admin' ? `<button class="btn-icon" onclick="editarCustosSap(${absIndex})" title="Editar"><i class="ti ti-pencil"></i></button><button class="btn-icon danger" onclick="excluirCustosSap(${absIndex})"><i class="ti ti-trash"></i></button>` : ''}</td>
+      <td>${isAdmin ? `<button class="btn-icon" onclick="editarCustosSap(${absIndex})" title="Editar"><i class="ti ti-pencil"></i></button><button class="btn-icon danger" onclick="excluirCustosSap(${absIndex})"><i class="ti ti-trash"></i></button>` : ''}</td>
     </tr>`;
   }).join('');
   makeResizable(tb.closest('table'));
   injectColFilterButtons(tb.closest('table'), 'custosSap');
+  atualizarBarraLoteCustosSap();
+}
+
+// ── Seleção em massa (Custos SAP) ────────────────────────────────────────
+// Mesmo padrão de bulkSelected/toggleSelecaoRegistro/excluirSelecionados
+// (Entradas/Saídas/Lançamentos/SAP, acima), mas dedicado: Custos SAP pagina
+// por currentPageCustosSap (não pages[module]) e as ações em massa são
+// admin-only (RLS restringe INSERT/UPDATE/DELETE de custos_sap a
+// is_admin(), ver auth.js) — os checkboxes só renderizam pro admin
+// (renderCustosSap, acima) e cada ação revalida a role por segurança em
+// profundidade (mesmo padrão de excluirCustosSap/editarCustosSap, import.js).
+function toggleSelecaoCustosSap(absIndex, checked) {
+  const r = (_lastFiltered.custosSap || [])[absIndex];
+  if (!r) return;
+  if (checked) bulkSelected.custosSap.add(r);
+  else bulkSelected.custosSap.delete(r);
+  atualizarBarraLoteCustosSap();
+}
+
+function toggleSelecionarTudoPaginaCustosSap(checked) {
+  const pagina = (_lastFiltered.custosSap || []).slice(currentPageCustosSap * PAGE_SIZE, (currentPageCustosSap + 1) * PAGE_SIZE);
+  pagina.forEach(r => checked ? bulkSelected.custosSap.add(r) : bulkSelected.custosSap.delete(r));
+  renderCustosSap();
+}
+
+function selecionarTodosFiltradosCustosSap() {
+  getFilteredData('custosSap').forEach(r => bulkSelected.custosSap.add(r));
+  renderCustosSap();
+  toast(`${bulkSelected.custosSap.size.toLocaleString('pt-BR')} registro(s) selecionado(s).`);
+}
+
+function limparSelecaoLoteCustosSap() {
+  bulkSelected.custosSap.clear();
+  renderCustosSap();
+}
+
+function atualizarBarraLoteCustosSap() {
+  const bar = document.getElementById('lote-bar-custosSap');
+  const countEl = document.getElementById('lote-count-custosSap');
+  const n = bulkSelected.custosSap.size;
+  if (bar) bar.style.display = n > 0 ? 'flex' : 'none';
+  if (countEl) countEl.innerHTML = `<i class="ti ti-checks"></i> ${n === 1 ? '1 registro selecionado' : n.toLocaleString('pt-BR') + ' registros selecionados'}`;
+
+  const todos = _lastFiltered.custosSap || [];
+  const pagina = todos.slice(currentPageCustosSap * PAGE_SIZE, (currentPageCustosSap + 1) * PAGE_SIZE);
+  const todosMarcados = pagina.length > 0 && pagina.every(r => bulkSelected.custosSap.has(r));
+
+  const chkAll = document.getElementById('chk-all-custosSap');
+  if (chkAll) {
+    chkAll.checked = todosMarcados;
+    chkAll.indeterminate = !todosMarcados && pagina.some(r => bulkSelected.custosSap.has(r));
+  }
+
+  const banner = document.getElementById('selectall-banner-custosSap');
+  if (banner) {
+    const mostrar = todosMarcados && n < todos.length;
+    banner.style.display = mostrar ? 'flex' : 'none';
+    if (mostrar) {
+      banner.innerHTML = `<span><i class="ti ti-info-circle"></i> Todos os ${pagina.length} registros desta página estão selecionados.</span> <button type="button" class="fechmgr-selectall-link" onclick="selecionarTodosFiltradosCustosSap()">Selecionar todos os ${todos.length.toLocaleString('pt-BR')} registros do filtro atual</button>`;
+    }
+  }
+}
+
+function excluirSelecionadosCustosSap() {
+  if (window.currentUser?.role !== 'admin') { toast('Só o administrador pode excluir Custos SAP', 'error'); return; }
+  const selecionados = [...bulkSelected.custosSap];
+  if (!selecionados.length) return;
+
+  confirmarDestrutivo({
+    title: 'Confirmar exclusão em massa',
+    sub: 'Custos SAP',
+    body: `Você está prestes a excluir definitivamente <strong>${selecionados.length.toLocaleString('pt-BR')}</strong> registro(s) de Custos SAP, aqui e na nuvem. Esta ação não pode ser desfeita.`,
+    confirmLabel: 'Excluir em massa',
+    requireConsent: true,
+    consentLabel: `Entendo que isso exclui ${selecionados.length.toLocaleString('pt-BR')} registro(s) permanentemente.`,
+    onConfirm: () => {
+      const selSet = bulkSelected.custosSap;
+      state.custosSap = state.custosSap.filter(r => !selSet.has(r));
+      persist();
+
+      // Todo registro de Custos SAP sincroniza, manual ou importado (ver
+      // _custosSapSyncUpsert acima) — sem o filtro por importId/editado que
+      // excluirSelecionados aplica pros outros 4 módulos.
+      const ids = selecionados.filter(r => r.id).map(r => r.id);
+      if (typeof _custosSapSyncDeleteBatch === 'function') _custosSapSyncDeleteBatch(ids);
+
+      bulkSelected.custosSap.clear();
+      renderCustosSap();
+      updateDashboard();
+      toast(`${selecionados.length.toLocaleString('pt-BR')} registro(s) excluído(s) com sucesso`);
+    },
+  });
+}
+
+// ── Edição em massa (Custos SAP) — um campo por vez ──────────────────────
+// Mesmo padrão de adminAbrirEdicaoLote/adminAplicarEdicaoLote (admin.js),
+// mas operando sobre state.custosSap em vez de ir direto no Supabase —
+// mesma via da edição individual (editarCustosSap/_atualizarRegistroCustosSap,
+// import.js). Só os 5 campos numéricos entram — material/central mudam a
+// IDENTIDADE do registro (fingerprint _fpCustosSap), então não fazem sentido
+// numa edição em lote que reaproveita os mesmos registros.
+const CUSTOS_SAP_LOTE_EDIT_LABELS = { ano: 'Ano', mes: 'Mês', estoqueTotal: 'Estoque Total', valorTotal: 'Valor Total', custo: 'Custo' };
+
+function abrirEdicaoLoteCustosSap() {
+  if (window.currentUser?.role !== 'admin') { toast('Só o administrador pode editar Custos SAP', 'error'); return; }
+  const n = bulkSelected.custosSap.size;
+  if (!n) return;
+
+  const subEl = document.getElementById('csle-sub');
+  if (subEl) subEl.textContent = `${n.toLocaleString('pt-BR')} registro(s) selecionado(s)`;
+  const campoSel = document.getElementById('csle-campo');
+  if (campoSel) campoSel.value = 'custo';
+  const valorInput = document.getElementById('csle-valor');
+  if (valorInput) valorInput.value = '';
+  const errEl = document.getElementById('csle-error');
+  if (errEl) errEl.style.display = 'none';
+  openModal('modal-custos-sap-lote-edit');
+}
+
+function aplicarEdicaoLoteCustosSap() {
+  if (window.currentUser?.role !== 'admin') { toast('Só o administrador pode editar Custos SAP', 'error'); return; }
+  const errEl = document.getElementById('csle-error');
+  if (errEl) errEl.style.display = 'none';
+
+  const campo = document.getElementById('csle-campo')?.value;
+  const valorStr = (document.getElementById('csle-valor')?.value || '').trim();
+  if (!campo || !valorStr) {
+    if (errEl) { errEl.textContent = 'Informe um valor numérico válido.'; errEl.style.display = 'block'; }
+    return;
+  }
+  const valor = num(valorStr);
+  if (campo === 'mes' && (valor < 1 || valor > 12)) {
+    if (errEl) { errEl.textContent = 'Mês deve estar entre 1 e 12.'; errEl.style.display = 'block'; }
+    return;
+  }
+
+  const selecionados = [...bulkSelected.custosSap];
+  if (!selecionados.length) return;
+
+  closeModal('modal-custos-sap-lote-edit');
+
+  const label = CUSTOS_SAP_LOTE_EDIT_LABELS[campo] || campo;
+  confirmarDestrutivo({
+    title: 'Confirmar edição em massa',
+    sub: `Custos SAP — campo "${label}"`,
+    body: `Você está prestes a alterar o campo <strong>${label}</strong> para <strong>${valor}</strong> em <strong>${selecionados.length.toLocaleString('pt-BR')}</strong> registro(s) de Custos SAP. Esta ação não pode ser desfeita.`,
+    confirmLabel: 'Aplicar em massa',
+    requireConsent: true,
+    consentLabel: `Entendo que isso altera ${selecionados.length.toLocaleString('pt-BR')} registro(s) permanentemente.`,
+    onConfirm: () => {
+      // Mesmo selo de "corrigido à mão" da edição individual
+      // (_atualizarRegistroCustosSap, import.js) — uma vez editado, deixa de
+      // ser só um dado de importação, mesmo que a origem original não fosse manual.
+      selecionados.forEach(r => { r[campo] = valor; r.fonte = 'manual'; });
+      persist();
+      if (typeof _custosSapSyncUpsertBatch === 'function') _custosSapSyncUpsertBatch(selecionados);
+      bulkSelected.custosSap.clear();
+      renderCustosSap();
+      updateDashboard();
+      toast(`${selecionados.length.toLocaleString('pt-BR')} registro(s) atualizado(s) com sucesso`);
+    },
+  });
 }
 
 function renderConfigs() {

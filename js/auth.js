@@ -332,6 +332,12 @@ window.AuthGate = (function () {
     if (custosSapImportCard) custosSapImportCard.style.display = isAdmin ? '' : 'none';
     const custosSapTabBtn = $('tab-btn-custo-sap');
     if (custosSapTabBtn) custosSapTabBtn.style.display = isAdmin ? '' : 'none';
+    // Mesmo motivo: seleção em massa (checkbox da tabela) só faz sentido pra
+    // quem pode de fato excluir/editar — sem isso o não-admin marcaria linhas
+    // à toa (renderCustosSap já nem desenha os checkboxes de linha pra ele,
+    // ver dashboard.js; isto só esconde o "selecionar tudo" do cabeçalho).
+    const custosSapChkAllTh = $('th-chk-all-custosSap');
+    if (custosSapChkAllTh) custosSapChkAllTh.style.display = isAdmin ? '' : 'none';
 
     // Decisão 07/08 — Ajustes de Fechamento (Y11/Y12) é ferramenta GLOBAL
     // (afeta o cálculo de estoque de todo mundo, ver setSapFechOverrideEmLote

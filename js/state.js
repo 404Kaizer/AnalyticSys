@@ -205,7 +205,8 @@ const bulkSelected = {
   entradas: new Set(),
   saidas: new Set(),
   lancamentos: new Set(),
-  sap: new Set()
+  sap: new Set(),
+  custosSap: new Set()
 };
 
 const filters = {
