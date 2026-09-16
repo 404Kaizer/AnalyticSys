@@ -5413,35 +5413,34 @@ function _addCustosSapLoteEditRow(rec) {
   const container = document.getElementById('csle-rows');
   if (!container) return;
   const grupoSap = _custosSapResolveMaterial(rec);
+  const materialTitle = `${grupoSap || '—'} (Cód. SAP ${rec.material || '—'})`;
   const materialLabelHtml = grupoSap === 'SEM CADASTRO'
     ? '<span class="badge badge-red" title="Sem material correspondente cadastrado"><i class="ti ti-alert-triangle" style="font-size:10px"></i> SEM CADASTRO</span>'
     : escapeHtml(grupoSap || '—');
   const row = document.createElement('div');
   row.className = 'reg-individual-row reg-row-custos-sap';
   row.dataset.recId = rec.id;
+  // Rótulos de cada campo (Material/Central/Ano-Mês/...) não repetem aqui —
+  // aparecem uma vez só no cabeçalho .reg-row-head acima da lista. No
+  // mobile o cabeçalho some e data-label reaparece como rótulo por campo
+  // (ver @media 720px, modules.css).
   row.innerHTML = `
-    <div class="form-group">
-      <label class="form-label">Material</label>
-      <div style="padding:8px 0;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${materialLabelHtml} <span class="td-muted" style="font-size:11px">(${escapeHtml(rec.material || '—')})</span></div>
+    <div class="form-group" data-label="Material">
+      <div style="padding:8px 0;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(materialTitle)}">${materialLabelHtml} <span class="td-muted" style="font-size:11px">(${escapeHtml(rec.material || '—')})</span></div>
     </div>
-    <div class="form-group">
-      <label class="form-label">Central</label>
+    <div class="form-group" data-label="Central">
       <select class="form-select" data-field="central">${_buildCentralOptionsHtml('Selecione')}</select>
     </div>
-    <div class="form-group">
-      <label class="form-label">Ano / Mês</label>
+    <div class="form-group" data-label="Ano / Mês">
       <input type="month" class="form-input" data-field="data">
     </div>
-    <div class="form-group">
-      <label class="form-label">Estoque Total</label>
+    <div class="form-group" data-label="Estoque Total">
       <input type="number" class="form-input" data-field="estoqueTotal" oninput="_custosSapLoteEditRecalcTotal(this)">
     </div>
-    <div class="form-group">
-      <label class="form-label">Valor Total</label>
+    <div class="form-group" data-label="Valor Total">
       <input type="number" class="form-input" data-field="valorTotal" placeholder="calculado" disabled>
     </div>
-    <div class="form-group">
-      <label class="form-label">Custo</label>
+    <div class="form-group" data-label="Custo">
       <input type="number" class="form-input" data-field="custo" oninput="_custosSapLoteEditRecalcTotal(this)">
     </div>
     <div class="reg-row-remove" title="Remover esta linha da edição (não exclui o registro)" onclick="this.closest('.reg-individual-row').remove()"><i class="ti ti-x"></i></div>

@@ -153,15 +153,37 @@
   gap: 8px;
   align-items: end;
 }
-.reg-individual-row .form-group { margin: 0; }
-.reg-individual-row .oc-form-group { margin: 0; }
+/* min-width:0 é o que permite a coluna 1fr (Material) realmente encolher e
+   truncar com "…" (ver white-space:nowrap no rótulo) em vez de forçar a
+   linha inteira a ficar mais larga que o modal — sem isso, texto longo de
+   material fazia a linha (e a barra de rolagem horizontal que aparece
+   quando .reg-individual-rows só define overflow-y) cortar as últimas
+   colunas (Custo, remover) da tela, dando exatamente a impressão de "layout
+   quebrado" reportada pelo Hugo em 16/09. */
+.reg-individual-row .form-group { margin: 0; min-width: 0; }
+.reg-individual-row .oc-form-group { margin: 0; min-width: 0; }
 .reg-row-materiais { grid-template-columns: 1.2fr 1.2fr 140px 170px 34px; }
 .reg-row-filiais   { grid-template-columns: 1.3fr 110px 190px 1fr 34px; }
 /* Edição em massa de Custos SAP (Hugo, pedido de 16/09) — Material fica de
    fora (é a identidade do registro, mostrada como rótulo fixo na 1ª
    coluna); os demais campos espelham a aba Custo SAP do modal-manual
-   (editarCustosSap, import.js). */
-.reg-row-custos-sap { grid-template-columns: 1fr 130px 120px 120px 120px 100px 34px; }
+   (editarCustosSap, import.js). Cabeçalho de coluna (.reg-row-head) mostrado
+   uma vez só, acima das linhas, em vez de repetir os 6 rótulos em cada
+   linha — muitas colunas com rótulo próprio ficava poluído/confuso quando
+   várias linhas eram editadas ao mesmo tempo (feedback do Hugo, 16/09). No
+   mobile o cabeçalho some e os rótulos voltam via [data-label] (abaixo). */
+.reg-row-custos-sap { grid-template-columns: 1fr 150px 110px 110px 110px 90px 34px; }
+.reg-row-head {
+  padding: 0 2px 2px;
+}
+.reg-row-head > div {
+  font-size: 10.5px;
+  font-family: var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text3);
+  font-weight: 500;
+}
 .reg-row-remove {
   height: 36px;
   width: 34px;
@@ -191,6 +213,21 @@
 @media (max-width: 720px) {
   .reg-row-materiais, .reg-row-filiais, .reg-row-custos-sap { grid-template-columns: 1fr; }
   .reg-row-remove { justify-self: end; }
+  /* Empilhado, o cabeçalho único não fica ao lado do campo certo — some, e
+     cada campo volta a levar seu próprio rótulo (via data-label, já que o
+     <label class="form-label"> foi removido do HTML para não duplicar no
+     desktop — ver _addCustosSapLoteEditRow, dashboard.js). */
+  .reg-row-head { display: none; }
+  .reg-row-custos-sap .form-group[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    font-size: 10.5px;
+    font-family: var(--mono);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text3);
+    font-weight: 500;
+  }
 }
 
 /* ══════════════════════════════════════════
