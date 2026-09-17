@@ -1498,6 +1498,7 @@ ${opts.cssApp ? `<style>${opts.cssApp}</style>` : ''}
       </div>
     </div>
     ${kpiRowHtml}
+    ${opts.heroExtraHtml || ''}
   </div>
 </div>
 
@@ -1955,7 +1956,7 @@ function _saudeFmtKg(v) {
 
 function _saudePanelStyles() {
   return `
-    .saude-panel { background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.09); border-radius:12px; padding:20px 22px; margin-bottom:24px; }
+    .saude-panel { background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.12); border-radius:12px; padding:18px 22px; margin-top:20px; }
     .saude-panel-top { display:flex; gap:28px; align-items:flex-start; flex-wrap:wrap; }
     .saude-donut-block { display:flex; flex-direction:column; align-items:center; gap:9px; flex-shrink:0; }
     .saude-donut-label { font-size:9.5px; color:#64748b; text-transform:uppercase; letter-spacing:.06em; font-weight:700; text-align:center; }
@@ -2331,33 +2332,19 @@ window.gerarRelatorioRegional = function(regionalName, niveis) {
     '</div>';
   }).join('');
 
-  // Sumário
-  const totalGeral = todosItens.length;
-  const centraisAfetadas = new Set(todosItens.map(i=>i.central)).size;
-
   const bodyHtml = `
     <style>${_criticidadeMatTableStyles()}${_saudePanelStyles()}</style>
-    ${_relPainelSaudeRegionalHtml(regionalName)}
     ${sectionsHtml}`;
-
-  const kpisNiveis = sel.map(k => {
-    const n = _REL_NIVEIS.find(x => x.key === k);
-    return { value: itensPorNivel[k].length, label: n.plural, color: n.kpiColor };
-  });
 
   const html = _buildRankingShellHTML({
     periodoBadge: periodo,
-    periodo, now,
-    kpis: [
-      ...kpisNiveis,
-      { value: centraisAfetadas,  label: 'centrais afetadas',   color: '#3b82f6' },
-      { value: totalGeral,        label: 'total',               color: '#94a3b8' }
-    ]
+    periodo, now
   }, {
     pageTitle:  `Relatório Regional — ${regionalName}`,
     badge:      'Alerta de Criticidade',
     title:      `Relatório Regional — ${regionalName}`,
     subtitle:   `Materiais ${_relNiveisTexto(sel)} agrupados por central, por nível de prioridade.`,
+    heroExtraHtml: _relPainelSaudeRegionalHtml(regionalName),
     bodyHtml,
     notaRodape: 'Níveis calculados a partir do desequilíbrio (desfalque/sobra) entre estoque físico e lançamentos no período selecionado.'
   });
@@ -2619,49 +2606,24 @@ window.gerarRelatorioCentral = function(centralName, niveis) {
     return buildLevelSection(items, c.color, c.icon, c.label, c.sub);
   }).join('');
 
-  const totalGeral = todosItens.length;
   const regional = todosItens[0]?.regional || '—';
-  const niveisLabel = sel.map(k => secCfg[k].label).join(' · ');
-
-  const infoBar = `
-    <div class="crit-info-bar">
-      <div class="crit-info-item"><span class="crit-info-label">Central</span><span class="crit-info-value">${escC(centralName)}</span></div>
-      <div style="width:1px;height:28px;background:rgba(255,255,255,.1)"></div>
-      <div class="crit-info-item"><span class="crit-info-label">Regional</span><span class="crit-info-value">${escC(regional)}</span></div>
-      <div style="width:1px;height:28px;background:rgba(255,255,255,.1)"></div>
-      <div class="crit-info-item"><span class="crit-info-label">Níveis exibidos</span><span class="crit-info-value">${niveisLabel}</span></div>
-      <div style="width:1px;height:28px;background:rgba(255,255,255,.1)"></div>
-      <div class="crit-info-item"><span class="crit-info-label">Total de materiais</span><span class="crit-info-value">${totalGeral} ${totalGeral!==1?'materiais':'material'}</span></div>
-    </div>`;
 
   const bodyHtml = `
     <style>
       ${_criticidadeMatTableStyles()}
       ${_saudePanelStyles()}
-      .crit-info-bar { display:flex; align-items:center; gap:16px; background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.09); border-radius:10px; padding:12px 16px; margin-bottom:22px; flex-wrap:wrap; }
-      .crit-info-item { display:flex; flex-direction:column; gap:2px; }
-      .crit-info-label { font-size:9.5px; color:#64748b; text-transform:uppercase; letter-spacing:.06em; }
-      .crit-info-value { font-size:12.5px; color:#e2e8f0; font-weight:600; }
     </style>
-    ${infoBar}
-    ${_relPainelSaudeCentralHtml(centralName)}
     ${sectionsHtml}`;
 
   const html = _buildRankingShellHTML({
     periodoBadge: periodo,
-    periodo, now,
-    kpis: [
-      ...sel.map(k => {
-        const n = _REL_NIVEIS.find(x => x.key === k);
-        return { value: itensPorNivel[k].length, label: n.plural, color: n.kpiColor };
-      }),
-      { value: totalGeral, label: 'total', color: '#94a3b8' }
-    ]
+    periodo, now
   }, {
     pageTitle:  `Relatório Central — ${centralName}`,
     badge:      'Alerta de Criticidade',
     title:      `Relatório de Central — ${centralName}`,
     subtitle:   `${escC(regional)} · materiais ${_relNiveisTexto(sel)}, por nível de prioridade.`,
+    heroExtraHtml: _relPainelSaudeCentralHtml(centralName),
     bodyHtml,
     notaRodape: 'Níveis calculados a partir do desequilíbrio (desfalque/sobra) entre estoque físico e lançamentos no período selecionado.'
   });
@@ -2795,55 +2757,23 @@ window.gerarRelatorioComAcoes = function(centralName, niveis) {
   }
 
   const allItems = sel.flatMap(k => itensPorNivel[k]);
-  const totalGeral = allItems.length;
-  const regional   = allItems[0]?.regional || '—';
-  const comAcoes   = allItems.filter(i => _resolverAcoesParaMaterial(i.mat, i.diff, i.categoria, i.level, i.catKey, i.catSubKey) !== null).length;
-  const semAcoes   = totalGeral - comAcoes;
+  const regional = allItems[0]?.regional || '—';
 
   const sectionsHtml = sel.map(k => buildLevelSection(itensPorNivel[k], lvlCfg[k], k)).join('');
-  const niveisLabel  = sel.map(k => lvlCfg[k].label).join(' · ');
-
-  const infoBar = `
-    <div class="crit-info-bar">
-      <div class="crit-info-item"><span class="crit-info-label">Central</span><span class="crit-info-value">${escC(centralName)}</span></div>
-      <div style="width:1px;height:28px;background:rgba(255,255,255,.1)"></div>
-      <div class="crit-info-item"><span class="crit-info-label">Regional</span><span class="crit-info-value">${escC(regional)}</span></div>
-      <div style="width:1px;height:28px;background:rgba(255,255,255,.1)"></div>
-      <div class="crit-info-item"><span class="crit-info-label">Níveis exibidos</span><span class="crit-info-value">${niveisLabel}</span></div>
-      <div style="width:1px;height:28px;background:rgba(255,255,255,.1)"></div>
-      <div class="crit-info-item"><span class="crit-info-label">Total de materiais</span><span class="crit-info-value">${totalGeral}</span></div>
-      <div style="width:1px;height:28px;background:rgba(255,255,255,.1)"></div>
-      <div class="crit-info-item"><span class="crit-info-label">Regras cadastradas</span><span class="crit-info-value">${totalRegras}</span></div>
-    </div>`;
 
   const bodyHtml = `
-    <style>
-      ${_saudePanelStyles()}
-      .crit-info-bar { display:flex; align-items:center; gap:16px; background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.09); border-radius:10px; padding:12px 16px; margin-bottom:22px; flex-wrap:wrap; }
-      .crit-info-item { display:flex; flex-direction:column; gap:2px; }
-      .crit-info-label { font-size:9.5px; color:#64748b; text-transform:uppercase; letter-spacing:.06em; }
-      .crit-info-value { font-size:12.5px; color:#e2e8f0; font-weight:600; }
-    </style>
-    ${infoBar}
-    ${_relPainelSaudeCentralHtml(centralName)}
+    <style>${_saudePanelStyles()}</style>
     ${sectionsHtml}`;
 
   const html = _buildRankingShellHTML({
     periodoBadge: periodo,
-    periodo, now,
-    kpis: [
-      ...sel.map(k => {
-        const n = _REL_NIVEIS.find(x => x.key === k);
-        return { value: itensPorNivel[k].length, label: n.plural, color: n.kpiColor };
-      }),
-      { value: comAcoes,        label: 'com ação',  color: '#22c55e' },
-      { value: semAcoes,        label: 'sem ação',  color: '#64748b' }
-    ]
+    periodo, now
   }, {
     pageTitle:  `Relatório com Ações — ${centralName}`,
     badge:      'Cobrança de Pendências',
     title:      `Relatório com Ações — ${centralName}`,
     subtitle:   `${escC(regional)} · materiais ${_relNiveisTexto(sel)}, com ações corretivas propostas por regra cadastrada.`,
+    heroExtraHtml: _relPainelSaudeCentralHtml(centralName),
     bodyHtml,
     notaRodape: 'Ações resolvidas a partir das regras cadastradas em Configurações → Ações de Relatório, pela combinação de material, categoria, nível e faixa de variação mais próxima.'
   });
