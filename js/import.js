@@ -472,12 +472,7 @@ function _custosSapManualPopularSelects() {
   // função), então essa linha nunca apaga a edição que ele acabou de abrir.
   _custosSapEditRec = null;
   const selMaterial = document.getElementById('csm-material');
-  if (selMaterial) {
-    const porCodigo = [...getGrupoSapPorCodigoIndex().entries()]
-      .sort((a, b) => a[0].localeCompare(b[0], 'pt-BR', { numeric: true }));
-    selMaterial.innerHTML = '<option value="">Selecione o material</option>'
-      + porCodigo.map(([cod, alias]) => `<option value="${escapeHtml(cod)}">${escapeHtml(cod)} — ${escapeHtml(alias)}</option>`).join('');
-  }
+  if (selMaterial) selMaterial.innerHTML = _custosSapMaterialOptionsHtml('Selecione o material');
   const selCentral = document.getElementById('csm-central');
   if (selCentral) selCentral.innerHTML = _buildCentralOptionsHtml('Selecione a central');
 }

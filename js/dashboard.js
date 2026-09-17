@@ -5162,6 +5162,18 @@ function _custosSapResolveMaterial(r) {
   return getGrupoSapPorCodigoIndex().get(codigo) || 'SEM CADASTRO';
 }
 
+// Opções de <select> de Material por Cód SAP, formato "código — grupo" —
+// mesma fonte (getGrupoSapPorCodigoIndex) e mesmo formato usados em
+// _custosSapManualPopularSelects (import.js, aba Custo SAP do modal-manual)
+// e na edição em massa (_addCustosSapLoteEditRow, abaixo), pra manter as
+// duas telas sempre em sincronia com o cadastro atual.
+function _custosSapMaterialOptionsHtml(placeholder) {
+  const porCodigo = [...getGrupoSapPorCodigoIndex().entries()]
+    .sort((a, b) => a[0].localeCompare(b[0], 'pt-BR', { numeric: true }));
+  return `<option value="">${escapeHtml(placeholder)}</option>`
+    + porCodigo.map(([cod, alias]) => `<option value="${escapeHtml(cod)}">${escapeHtml(cod)} — ${escapeHtml(alias)}</option>`).join('');
+}
+
 // Botão "Sem Cadastro" do toolbar — alterna o filtro da coluna Material
 // (índice 1 — índice 0 é a coluna de checkbox da seleção em massa, ver
 // colFilterMeta.custosSap acima) pra mostrar só os códigos sem
@@ -5388,10 +5400,11 @@ function excluirSelecionadosCustosSap() {
 // abrirEdicaoMateriaisEmLote/salvarMateriaisIndividual, config.js): abre uma
 // LINHA por registro selecionado, já preenchida com os valores reais dele
 // (mesmos campos da edição individual — editarCustosSap/modal-manual, aba
-// Custo SAP), edita linha a linha e salva tudo de uma vez. Material fica de
-// fora da edição (é a identidade do registro, só exibido como rótulo) —
-// mudar o material de um lote de registros que hoje têm materiais
-// diferentes não faz sentido; quem precisar disso usa a edição individual.
+// Custo SAP), edita linha a linha e salva tudo de uma vez. Material é
+// editável como select por Cód SAP (mesmas opções "código — grupo" do
+// modal-manual, ver _custosSapMaterialOptionsHtml) — pedido do Hugo (17/09)
+// pra corrigir em lote registros importados com o código errado (ex.: caiu
+// em "SEM CADASTRO").
 function abrirEdicaoLoteCustosSap() {
   if (window.currentUser?.role !== 'admin') { toast('Só o administrador pode editar Custos SAP', 'error'); return; }
   const selecionados = [...bulkSelected.custosSap];
@@ -5412,11 +5425,6 @@ function abrirEdicaoLoteCustosSap() {
 function _addCustosSapLoteEditRow(rec) {
   const container = document.getElementById('csle-rows');
   if (!container) return;
-  const grupoSap = _custosSapResolveMaterial(rec);
-  const materialTitle = `${grupoSap || '—'} (Cód. SAP ${rec.material || '—'})`;
-  const materialLabelHtml = grupoSap === 'SEM CADASTRO'
-    ? '<span class="badge badge-red" title="Sem material correspondente cadastrado"><i class="ti ti-alert-triangle" style="font-size:10px"></i> SEM CADASTRO</span>'
-    : escapeHtml(grupoSap || '—');
   const row = document.createElement('div');
   row.className = 'reg-individual-row reg-row-custos-sap';
   row.dataset.recId = rec.id;
@@ -5426,7 +5434,10 @@ function _addCustosSapLoteEditRow(rec) {
   // (ver @media 720px, modules.css).
   row.innerHTML = `
     <div class="form-group" data-label="Material">
-      <div style="padding:8px 0;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(materialTitle)}">${materialLabelHtml} <span class="td-muted" style="font-size:11px">(${escapeHtml(rec.material || '—')})</span></div>
+      <div style="display:flex; gap:6px">
+        <select class="form-select" data-field="material" style="flex:1; min-width:0">${_custosSapMaterialOptionsHtml('Selecione')}</select>
+        <button type="button" class="btn-icon" title="Copiar este material para todas as outras linhas" onclick="_custosSapLoteEditReplicarMaterial(this)"><i class="ti ti-copy"></i></button>
+      </div>
     </div>
     <div class="form-group" data-label="Central">
       <select class="form-select" data-field="central">${_buildCentralOptionsHtml('Selecione')}</select>
@@ -5446,11 +5457,34 @@ function _addCustosSapLoteEditRow(rec) {
     <div class="reg-row-remove" title="Remover esta linha da edição (não exclui o registro)" onclick="this.closest('.reg-individual-row').remove()"><i class="ti ti-x"></i></div>
   `;
   container.appendChild(row);
+  row.querySelector('[data-field="material"]').value = normalizarCodSap(rec.material);
   row.querySelector('[data-field="central"]').value = rec.central || '';
   row.querySelector('[data-field="data"]').value = (rec.ano && rec.mes) ? `${rec.ano}-${String(rec.mes).padStart(2, '0')}` : '';
   row.querySelector('[data-field="estoqueTotal"]').value = rec.estoqueTotal ?? '';
   row.querySelector('[data-field="valorTotal"]').value = rec.valorTotal ?? '';
   row.querySelector('[data-field="custo"]').value = rec.custo ?? '';
+}
+
+// Botão "copiar" ao lado do select de Material (ver _addCustosSapLoteEditRow
+// acima) — pedido do Hugo (17/09) pra não precisar escolher o mesmo
+// material manualmente em cada uma das N linhas quando o lote inteiro é do
+// mesmo material (ex.: 17 registros de CIMENTO importados com código
+// errado). Mesma ideia do ícone de replicar do lote de Justificativas do
+// Inventário (_invLoteReplicar, inventario.js), mas aqui SOBRESCREVE as
+// outras linhas em vez de só preencher as vazias — o material aqui nunca
+// fica vazio de verdade (sempre carrega o código atual do registro, mesmo
+// que sem cadastro), então "só preencher vazio" nunca copiaria nada.
+function _custosSapLoteEditReplicarMaterial(btn) {
+  const rowOrigem = btn.closest('.reg-individual-row');
+  const valor = rowOrigem?.querySelector('[data-field="material"]')?.value || '';
+  if (!valor) { toast('Selecione um material antes de replicar.', 'error'); return; }
+  let aplicados = 0;
+  document.querySelectorAll('#csle-rows .reg-individual-row').forEach(row => {
+    if (row === rowOrigem) return;
+    const sel = row.querySelector('[data-field="material"]');
+    if (sel && sel.value !== valor) { sel.value = valor; aplicados++; }
+  });
+  toast(aplicados > 0 ? `Material copiado para ${aplicados} linha(s).` : 'Todas as outras linhas já tinham esse material.', aplicados > 0 ? 'success' : 'error');
 }
 
 // Mesmo cálculo automático da edição individual (_modalAutoCalcTotal,
@@ -5482,16 +5516,17 @@ function aplicarEdicaoLoteCustosSap(btn) {
   for (const row of rows) {
     const rec = state.custosSap.find(r => r.id === row.dataset.recId);
     if (!rec) continue; // registro pode ter sido excluído por outra aba/usuário nesse meio-tempo
+    const material = row.querySelector('[data-field="material"]')?.value.trim() || '';
     const central = row.querySelector('[data-field="central"]')?.value.trim() || '';
     const [ano, mesComZero] = (row.querySelector('[data-field="data"]')?.value || '').split('-');
     const mes = mesComZero ? String(Number(mesComZero)) : '';
     const custoStr = row.querySelector('[data-field="custo"]')?.value || '';
-    if (!central || !ano || !mes || !num(custoStr)) {
-      if (errEl) { errEl.textContent = `Preencha Central, Ano/Mês e Custo em todas as linhas (falta em "${rec.central || rec.material}").`; errEl.style.display = 'block'; }
+    if (!material || !central || !ano || !mes || !num(custoStr)) {
+      if (errEl) { errEl.textContent = `Preencha Material, Central, Ano/Mês e Custo em todas as linhas (falta em "${rec.central || rec.material}").`; errEl.style.display = 'block'; }
       return;
     }
     patches.push({
-      rec, central,
+      rec, material, central,
       ano, mes,
       estoqueTotal: num(row.querySelector('[data-field="estoqueTotal"]')?.value),
       valorTotal: num(row.querySelector('[data-field="valorTotal"]')?.value),
@@ -5510,12 +5545,14 @@ function aplicarEdicaoLoteCustosSap(btn) {
     requireConsent: true,
     consentLabel: `Entendo que isso altera ${patches.length.toLocaleString('pt-BR')} registro(s) permanentemente.`,
     onConfirm: () => {
-      patches.forEach(({ rec, central, ano, mes, estoqueTotal, valorTotal, custo }) => {
+      patches.forEach(({ rec, material, central, ano, mes, estoqueTotal, valorTotal, custo }) => {
         // Mesmo selo de "corrigido à mão" da edição individual
         // (_atualizarRegistroCustosSap, import.js) — uma vez editado, deixa
         // de ser só um dado de importação, mesmo que a origem original não
         // fosse manual.
         rec.fonte = 'manual';
+        rec.materialOriginal = material;
+        rec.material = normalizarMaterial(material);
         rec.centralOriginal = central;
         rec.central = normalizarCentral(central);
         rec.ano = ano;
