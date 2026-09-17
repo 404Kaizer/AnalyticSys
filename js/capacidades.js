@@ -735,6 +735,16 @@ function buildCapacidadeSection({ central, materiais, pares, colLabel }) {
   // Pior primeiro; dentro da mesma faixa, o maior desvio absoluto na frente.
   avaliados.sort((a, b) => (b.c.ordem - a.c.ordem) || (Math.abs(b.c.delta) - Math.abs(a.c.delta)));
 
+  // Expõe as situações fora da faixa para o Relatório de Central
+  // (relatorio.js) reaproveitar sem recalcular nada — só no modo central
+  // (não no card de material, que chama esta função com `pares`).
+  if (central) {
+    window._anCapRuimPorCentral = window._anCapRuimPorCentral || {};
+    window._anCapRuimPorCentral[central] = avaliados.map(({ mat, c }) => ({
+      mat, faixa: c.faixa, situacao: c.label, ocupacaoPct: c.pctCap
+    }));
+  }
+
   const contadores = [];
   if (normais)  contadores.push(`<span class="capsec-count capsec-count-ok"><i class="ti ti-circle-check"></i> ${normais} na faixa</span>`);
   if (semBase)  contadores.push(`<span class="capsec-count capsec-count-neutro" title="Sem capacidade confiável — declare a estrutura em Configurações"><i class="ti ti-help-circle"></i> ${semBase} sem base</span>`);

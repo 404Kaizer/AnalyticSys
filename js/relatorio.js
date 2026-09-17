@@ -1935,6 +1935,239 @@ function _relNiveisSelecionados(idPrefix) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
+// PAINEL DE SAÚDE — cabeçalho reaproveitado pelos relatórios de Central e
+// Regional. Nenhum número é recalculado aqui: tudo vem do que o Dashboard
+// Analítico já apurou ao "Analisar" —
+//   window._anResumoCentraisData → score/nível de saúde por central
+//   _macroState.centralMap       → contagem de materiais por criticidade
+//   window._rankByLevel          → itens (central/material/variação) por nível
+//   window._anCapRuimPorCentral  → materiais fora da faixa de capacidade
+// ═══════════════════════════════════════════════════════════════════
+
+const _SAUDE_ANEL_COR   = { critico:'#f43f5e', urgente:'#f97316', atencao:'#f59e0b', bom:'#10b981' };
+const _SAUDE_ANEL_ORDEM = ['critico','urgente','atencao','bom'];
+const _SAUDE_FAIXA_COR  = { abaixo:'#f59e0b', limite:'#f97316', ruptura:'#ef4444', acima:'#ef4444', erro:'#dc2626' };
+
+function _saudeFmtKg(v) {
+  const n = Math.abs(Number(v) || 0);
+  return n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' kg';
+}
+
+function _saudePanelStyles() {
+  return `
+    .saude-panel { background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.09); border-radius:12px; padding:20px 22px; margin-bottom:24px; }
+    .saude-panel-top { display:flex; gap:28px; align-items:flex-start; flex-wrap:wrap; }
+    .saude-donut-block { display:flex; flex-direction:column; align-items:center; gap:9px; flex-shrink:0; }
+    .saude-donut-label { font-size:9.5px; color:#64748b; text-transform:uppercase; letter-spacing:.06em; font-weight:700; text-align:center; }
+    .saude-counts-block { display:grid; grid-template-columns:repeat(2,auto); gap:8px 22px; flex-shrink:0; align-content:center; }
+    .saude-count-row { display:flex; align-items:baseline; gap:6px; font-size:11.5px; white-space:nowrap; }
+    .saude-count-row b { font-family:'JetBrains Mono',monospace; font-size:14px; }
+    .saude-var-block { flex:1; min-width:280px; }
+    .saude-block-title { font-size:10.5px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:#94a3b8; margin-bottom:10px; display:flex; align-items:center; gap:6px; }
+    .saude-var-row { display:flex; align-items:center; gap:10px; margin-bottom:7px; font-size:11px; }
+    .saude-var-name { width:170px; flex-shrink:0; color:#e2e8f0; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .saude-var-bar-wrap { flex:1; height:7px; background:rgba(255,255,255,.06); border-radius:4px; overflow:hidden; }
+    .saude-var-bar { height:100%; border-radius:4px; opacity:.75; }
+    .saude-var-val { width:120px; flex-shrink:0; text-align:right; font-family:'JetBrains Mono',monospace; font-weight:700; font-size:10.5px; }
+    .saude-empty { color:#64748b; font-size:11px; font-style:italic; }
+    .saude-cap-block, .saude-ranking-block { margin-top:20px; padding-top:18px; border-top:1px solid rgba(255,255,255,.08); }
+    .saude-cap-table { width:100%; border-collapse:collapse; font-size:11.5px; }
+    .saude-cap-table th { text-align:left; padding:7px 10px; font-size:9.5px; color:#64748b; text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid rgba(255,255,255,.1); }
+    .saude-cap-table td { padding:7px 10px; border-bottom:1px solid rgba(255,255,255,.06); color:#e2e8f0; }
+    .saude-cap-table tbody tr:last-child td { border-bottom:none; }
+    .saude-cap-badge { display:inline-flex; align-items:center; gap:5px; border:1px solid; border-radius:5px; padding:2px 8px; font-size:10px; font-weight:700; }
+    .saude-rank-row { display:flex; align-items:center; gap:10px; margin-bottom:7px; font-size:11.5px; }
+    .saude-rank-pos { width:20px; height:20px; border-radius:5px; background:rgba(255,255,255,.08); color:#94a3b8; font-family:'JetBrains Mono',monospace; font-weight:800; font-size:10px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .saude-rank-name { flex:1; color:#fff; font-weight:700; }
+    .saude-rank-val { font-family:'JetBrains Mono',monospace; font-weight:700; font-size:11px; }`;
+}
+
+// SVG do anel de saúde — mesma anatomia visual do card da Visão Micro
+// (ver analitico.js), redesenhada aqui de forma autônoma porque o relatório
+// é um documento HTML estático, sem as variáveis CSS do app.
+function _saudeDonutSVG(counts, score, level) {
+  const total = _SAUDE_ANEL_ORDEM.reduce((s, k) => s + ((counts && counts[k]) || 0), 0);
+  const R = 44, RI = 29, GAP = 0.06;
+  let angle = -Math.PI / 2;
+  const slices = total === 0 ? '' : _SAUDE_ANEL_ORDEM.map(lvl => {
+    const n = (counts && counts[lvl]) || 0;
+    if (!n) return '';
+    const pct = n / total;
+    const sweep = Math.max(pct * 2 * Math.PI - GAP, 0.01);
+    const col = _SAUDE_ANEL_COR[lvl];
+    const a0 = angle + GAP / 2, ae = a0 + sweep;
+    const x1 = 46 + R * Math.cos(a0),  y1 = 46 + R * Math.sin(a0);
+    const x2 = 46 + R * Math.cos(ae),  y2 = 46 + R * Math.sin(ae);
+    const x3 = 46 + RI * Math.cos(ae), y3 = 46 + RI * Math.sin(ae);
+    const x4 = 46 + RI * Math.cos(a0), y4 = 46 + RI * Math.sin(a0);
+    const large = sweep > Math.PI ? 1 : 0;
+    angle += pct * 2 * Math.PI;
+    return `<path d="M ${x1.toFixed(2)} ${y1.toFixed(2)} A ${R} ${R} 0 ${large} 1 ${x2.toFixed(2)} ${y2.toFixed(2)} L ${x3.toFixed(2)} ${y3.toFixed(2)} A ${RI} ${RI} 0 ${large} 0 ${x4.toFixed(2)} ${y4.toFixed(2)} Z" fill="${col}"/>`;
+  }).join('');
+
+  const hasScore   = Number.isFinite(score);
+  const scoreColor = hasScore ? (_REL_NIVEIS.find(n => n.key === level)?.color || '#94a3b8') : '#64748b';
+  const scoreLabel = hasScore ? `${score}%` : '—';
+  const levelLabel = hasScore ? (level === 'bom' ? 'SAUDÁVEL' : (_REL_NIVEIS.find(n => n.key === level)?.label.toUpperCase() || '—')) : 'SEM SAÚDE';
+
+  const SR = RI - 6, SCIRC = 2 * Math.PI * SR;
+  const scoreDash = (hasScore ? score / 100 : 0) * SCIRC;
+
+  return `
+    <svg width="118" height="118" viewBox="0 0 92 92">
+      <circle cx="46" cy="46" r="${(R + RI) / 2}" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="${R - RI}"/>
+      ${slices}
+      <circle cx="46" cy="46" r="${SR}" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="3"/>
+      <circle cx="46" cy="46" r="${SR}" fill="none" stroke="${scoreColor}" stroke-width="3"
+        stroke-dasharray="${scoreDash.toFixed(1)} ${SCIRC.toFixed(1)}"
+        stroke-dashoffset="${(SCIRC / 4).toFixed(1)}" stroke-linecap="round" opacity="0.7"/>
+      <text x="46" y="42" text-anchor="middle" font-size="17" font-weight="700" fill="${scoreColor}" font-family="'JetBrains Mono',monospace">${scoreLabel}</text>
+      <text x="46" y="52" text-anchor="middle" font-size="7" font-weight="700" fill="${scoreColor}" font-family="'JetBrains Mono',monospace" letter-spacing="0.06em" opacity="0.85">${levelLabel}</text>
+    </svg>`;
+}
+
+function _saudeCountsChipsHtml(counts) {
+  return _SAUDE_ANEL_ORDEM.map(lvl => {
+    const n = (counts && counts[lvl]) || 0;
+    const meta = _REL_NIVEIS.find(x => x.key === lvl);
+    return `<div class="saude-count-row" style="color:${meta.color}"><b>${n}</b> ${_rankEsc(meta.plural)}</div>`;
+  }).join('');
+}
+
+function _saudeTopVariacoesHtml(items, { showCentral = false } = {}) {
+  if (!items.length) return `<div class="saude-empty">Sem variações no período.</div>`;
+  const maxAbs = Math.max(...items.map(i => Math.abs(i.diff)), 1);
+  return items.map(i => {
+    const pct = Math.round(Math.abs(i.diff) / maxAbs * 100);
+    const neg = i.diff < 0;
+    const col = neg ? '#f87171' : '#fbbf24';
+    const nome = showCentral ? `${i.central} · ${i.mat}` : i.mat;
+    return `<div class="saude-var-row">
+      <span class="saude-var-name" title="${_rankEsc(nome)}">${_rankEsc(nome)}</span>
+      <div class="saude-var-bar-wrap"><div class="saude-var-bar" style="width:${pct}%;background:${col}"></div></div>
+      <span class="saude-var-val" style="color:${col}">${neg ? '↓' : '↑'} ${_saudeFmtKg(i.diff)}</span>
+    </div>`;
+  }).join('');
+}
+
+function _saudeCapacidadeTableHtml(rows) {
+  if (!rows || !rows.length) {
+    return `<div class="saude-empty"><i class="ti ti-circle-check" style="color:#34d399"></i> Nenhum material fora da faixa de capacidade/estoque de segurança.</div>`;
+  }
+  const body = rows.map(r => {
+    const cor = _SAUDE_FAIXA_COR[r.faixa] || '#94a3b8';
+    return `<tr>
+      <td>${_rankEsc(r.mat)}</td>
+      <td><span class="saude-cap-badge" style="color:${cor};border-color:${cor}">${_rankEsc(r.situacao)}</span></td>
+      <td style="color:${cor};font-family:'JetBrains Mono',monospace;font-weight:700">${_capNum(r.ocupacaoPct)}%</td>
+    </tr>`;
+  }).join('');
+  return `
+    <table class="saude-cap-table">
+      <thead><tr><th>Material</th><th>Situação</th><th>Ocupação</th></tr></thead>
+      <tbody>${body}</tbody>
+    </table>`;
+}
+
+// Painel completo do Relatório de Central: saúde da central selecionada.
+function _relPainelSaudeCentralHtml(centralName) {
+  const resumo   = (window._anResumoCentraisData || []).find(c => c.central === centralName) || null;
+  const scoreNum = resumo ? parseFloat(resumo.healthScore) : NaN;
+  const score    = Number.isFinite(scoreNum) ? scoreNum : null;
+  // card.dataset.healthLevel usa 'ok' pro nível saudável (ver analitico.js);
+  // _REL_NIVEIS e o anel do donut usam 'bom' — normaliza aqui.
+  const levelRaw = (resumo && resumo.healthLevel && resumo.healthLevel !== 'none') ? resumo.healthLevel : null;
+  const level    = levelRaw === 'ok' ? 'bom' : levelRaw;
+  const counts   = (typeof _macroState !== 'undefined' ? _macroState?.centralMap?.[centralName]?.counts : null) || null;
+
+  const maioresVar = _SAUDE_ANEL_ORDEM
+    .flatMap(k => (window._rankByLevel?.[k] || []).filter(i => i.central === centralName))
+    .filter(i => Math.abs(i.diff) > 0.0001)
+    .sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff))
+    .slice(0, 5);
+
+  const capRows = (window._anCapRuimPorCentral || {})[centralName] || [];
+
+  return `
+    <div class="saude-panel">
+      <div class="saude-panel-top">
+        <div class="saude-donut-block">
+          ${_saudeDonutSVG(counts, score, level)}
+          <div class="saude-donut-label">Saúde da central</div>
+        </div>
+        <div class="saude-counts-block">${_saudeCountsChipsHtml(counts)}</div>
+        <div class="saude-var-block">
+          <div class="saude-block-title"><i class="ti ti-arrow-narrow-down"></i> Maiores variações</div>
+          ${_saudeTopVariacoesHtml(maioresVar)}
+        </div>
+      </div>
+      <div class="saude-cap-block">
+        <div class="saude-block-title"><i class="ti ti-gauge"></i> Capacidade e estoque de segurança — fora da faixa</div>
+        ${_saudeCapacidadeTableHtml(capRows)}
+      </div>
+    </div>`;
+}
+
+// Painel completo do Relatório Regional: saúde agregada das centrais da
+// regional selecionada, piores variações central×material e ranking das
+// piores centrais (por magnitude da variação total, maior primeiro).
+function _relPainelSaudeRegionalHtml(regionalName) {
+  const resumoRegional = (window._anResumoCentraisData || []).filter(c => c.regional === regionalName);
+  const scores = resumoRegional.map(c => parseFloat(c.healthScore)).filter(Number.isFinite);
+  const score  = scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null;
+  const level  = score === null ? null : _levelFromScore(score);
+
+  const counts = { critico: 0, urgente: 0, atencao: 0, bom: 0 };
+  resumoRegional.forEach(c => {
+    const cm = (typeof _macroState !== 'undefined' ? _macroState?.centralMap?.[c.central]?.counts : null) || null;
+    if (cm) _SAUDE_ANEL_ORDEM.forEach(k => { counts[k] += (cm[k] || 0); });
+  });
+
+  const maioresVar = _SAUDE_ANEL_ORDEM
+    .flatMap(k => (window._rankByLevel?.[k] || []).filter(i => i.regional === regionalName))
+    .filter(i => Math.abs(i.diff) > 0.0001)
+    .sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff))
+    .slice(0, 5);
+
+  const rankingCentrais = resumoRegional
+    .map(c => ({ central: c.central, variacaoKg: parseFloat(c.variacaoKg) || 0 }))
+    .filter(c => Math.abs(c.variacaoKg) > 0.0001)
+    .sort((a, b) => Math.abs(b.variacaoKg) - Math.abs(a.variacaoKg))
+    .slice(0, 5);
+
+  const rankingHtml = rankingCentrais.length
+    ? rankingCentrais.map((c, idx) => {
+        const neg = c.variacaoKg < 0;
+        const col = neg ? '#f87171' : '#fbbf24';
+        return `<div class="saude-rank-row">
+          <span class="saude-rank-pos">${String(idx + 1).padStart(2, '0')}</span>
+          <span class="saude-rank-name">${_rankEsc(c.central)}</span>
+          <span class="saude-rank-val" style="color:${col}">${neg ? 'Desfalque' : 'Sobra'}: ${_saudeFmtKg(c.variacaoKg)}</span>
+        </div>`;
+      }).join('')
+    : `<div class="saude-empty">Sem variações no período.</div>`;
+
+  return `
+    <div class="saude-panel">
+      <div class="saude-panel-top">
+        <div class="saude-donut-block">
+          ${_saudeDonutSVG(counts, score, level)}
+          <div class="saude-donut-label">Saúde da regional</div>
+        </div>
+        <div class="saude-counts-block">${_saudeCountsChipsHtml(counts)}</div>
+        <div class="saude-var-block">
+          <div class="saude-block-title"><i class="ti ti-arrow-narrow-down"></i> Piores variações — central × material</div>
+          ${_saudeTopVariacoesHtml(maioresVar, { showCentral: true })}
+        </div>
+      </div>
+      <div class="saude-ranking-block">
+        <div class="saude-block-title"><i class="ti ti-building-warehouse"></i> Piores centrais</div>
+        ${rankingHtml}
+      </div>
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════
 // MODAL DE SELEÇÃO — Relatório do Regional (níveis de criticidade)
 // ═══════════════════════════════════════════════════════════════════
 
@@ -2102,7 +2335,10 @@ window.gerarRelatorioRegional = function(regionalName, niveis) {
   const totalGeral = todosItens.length;
   const centraisAfetadas = new Set(todosItens.map(i=>i.central)).size;
 
-  const bodyHtml = `<style>${_criticidadeMatTableStyles()}</style>${sectionsHtml}`;
+  const bodyHtml = `
+    <style>${_criticidadeMatTableStyles()}${_saudePanelStyles()}</style>
+    ${_relPainelSaudeRegionalHtml(regionalName)}
+    ${sectionsHtml}`;
 
   const kpisNiveis = sel.map(k => {
     const n = _REL_NIVEIS.find(x => x.key === k);
@@ -2401,12 +2637,14 @@ window.gerarRelatorioCentral = function(centralName, niveis) {
   const bodyHtml = `
     <style>
       ${_criticidadeMatTableStyles()}
+      ${_saudePanelStyles()}
       .crit-info-bar { display:flex; align-items:center; gap:16px; background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.09); border-radius:10px; padding:12px 16px; margin-bottom:22px; flex-wrap:wrap; }
       .crit-info-item { display:flex; flex-direction:column; gap:2px; }
       .crit-info-label { font-size:9.5px; color:#64748b; text-transform:uppercase; letter-spacing:.06em; }
       .crit-info-value { font-size:12.5px; color:#e2e8f0; font-weight:600; }
     </style>
     ${infoBar}
+    ${_relPainelSaudeCentralHtml(centralName)}
     ${sectionsHtml}`;
 
   const html = _buildRankingShellHTML({
@@ -2580,12 +2818,14 @@ window.gerarRelatorioComAcoes = function(centralName, niveis) {
 
   const bodyHtml = `
     <style>
+      ${_saudePanelStyles()}
       .crit-info-bar { display:flex; align-items:center; gap:16px; background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.09); border-radius:10px; padding:12px 16px; margin-bottom:22px; flex-wrap:wrap; }
       .crit-info-item { display:flex; flex-direction:column; gap:2px; }
       .crit-info-label { font-size:9.5px; color:#64748b; text-transform:uppercase; letter-spacing:.06em; }
       .crit-info-value { font-size:12.5px; color:#e2e8f0; font-weight:600; }
     </style>
     ${infoBar}
+    ${_relPainelSaudeCentralHtml(centralName)}
     ${sectionsHtml}`;
 
   const html = _buildRankingShellHTML({
