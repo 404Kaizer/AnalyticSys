@@ -746,7 +746,7 @@ function _renderDonut(type, counts, top5, levelMeta, healthScore, totalCount, it
       <div class="macro-bar-track">
         <div class="macro-bar-fill" style="width:${pct}%;background:${col}"></div>
       </div>
-      <span class="macro-bar-val td-mono ${varClass(dv)}">${varSymbol(dv)} ${fmtKgShort(Math.abs(dv))}</span>
+      <span class="macro-bar-val td-mono ${varClass(dv)}">${varSymbol(dv)} ${fmtKg(Math.abs(dv))}</span>
       <span class="macro-bar-level" style="background:${lvlCol}18;color:${lvlCol};border:1px solid ${lvlCol}35">${lvlLbl}</span>
     </div>`;
   }).join('');
