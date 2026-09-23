@@ -2728,17 +2728,16 @@ window.gerarRelatorioComAcoes = function(centralName, niveis) {
   function buildSectionBody(items, cfg, levelKey) {
     if (levelKey === 'bom') return _relBomChipsHtml(items);
 
-    const grupos = new Map(); // texto das ações → { letra, cats:Set, mats:[], acoes:[] }
+    const grupos = new Map(); // texto das ações → { letra, cats:Set, acoes:[] }
     const grupoDe = items.map(item => {
       const acoes = _resolverAcoesParaMaterial(item.mat, item.diff, item.categoria, levelKey || item.level, item.catKey, item.catSubKey);
       if (acoes === null) return null;
       if (!grupos.has(acoes)) grupos.set(acoes, {
-        letra: String.fromCharCode(65 + grupos.size), cats: new Set(), mats: [],
+        letra: String.fromCharCode(65 + grupos.size), cats: new Set(),
         acoes: acoes.split(/[;|\n]/).map(a => a.trim().replace(/^[-•–]\s*/, '')).filter(Boolean),
       });
       const g = grupos.get(acoes);
       g.cats.add(_relCatNome(item));
-      g.mats.push(item.mat);
       return g;
     });
     // Coluna "Ação" só existe se ao menos um material da seção tem regra
@@ -2756,7 +2755,6 @@ window.gerarRelatorioComAcoes = function(centralName, niveis) {
         '<div class="acm-grupo-head">' +
           '<span class="acm-tag" style="color:' + cfg.color + ';background:' + cfg.bg + '">' + g.letra + '</span>' +
           '<span class="acm-grupo-cat">' + escC([...g.cats].join(' · ')) + '</span>' +
-          '<span class="acm-grupo-mats">' + g.mats.map(m => '<span>' + escC(m) + '</span>').join('') + '</span>' +
         '</div>' +
         '<ol class="acm-acoes">' + g.acoes.map(a => '<li>' + escC(a) + '</li>').join('') + '</ol>' +
       '</div>'
@@ -2811,8 +2809,6 @@ window.gerarRelatorioComAcoes = function(centralName, niveis) {
       .acm-grupo { background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.08); border-left:3px solid; border-radius:8px; padding:12px 16px; page-break-inside:avoid; }
       .acm-grupo-head { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:8px; }
       .acm-grupo-cat { font-size:12px; font-weight:700; color:#fff; }
-      .acm-grupo-mats { display:flex; gap:5px; flex-wrap:wrap; }
-      .acm-grupo-mats span { font-size:10px; font-weight:600; color:#cbd5e1; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.1); border-radius:12px; padding:2px 8px; }
       .acm-acoes { margin:0; padding-left:20px; font-size:12.5px; color:#e2e8f0; line-height:1.7; }
     </style>
     ${_relSplitHtml(_relPainelSaudeCentralHtml(centralName), sectionsHtml)}`;
