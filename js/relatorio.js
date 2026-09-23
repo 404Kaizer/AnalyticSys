@@ -2002,7 +2002,7 @@ function _saudePanelStyles() {
       .rel-split { display:grid; grid-template-columns:400px minmax(0,1fr); gap:24px; align-items:start; }
       .rel-split-side { position:sticky; top:66px; max-height:calc(100vh - 82px); overflow-y:auto; }
       .rel-split-side .saude-panel { margin:0; }
-      .rel-split-side .saude-var-block { min-width:0; flex-basis:100%; }
+      .rel-split-side .saude-var-block, .rel-split-side .saude-donut-block { min-width:0; flex-basis:100%; }
       .rel-split-side .saude-var-name { width:130px; }
       .rel-split-side .saude-var-val { width:105px; }
     }
@@ -2065,15 +2065,15 @@ function _saudeDonutSVG(counts, score, level) {
   const scoreDash = (hasScore ? score / 100 : 0) * SCIRC;
 
   return `
-    <svg width="150" height="150" viewBox="0 0 92 92">
+    <svg width="190" height="190" viewBox="0 0 92 92">
       <circle cx="46" cy="46" r="${(R + RI) / 2}" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="${R - RI}"/>
       ${slices}
       <circle cx="46" cy="46" r="${SR}" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="3"/>
       <circle cx="46" cy="46" r="${SR}" fill="none" stroke="${scoreColor}" stroke-width="3"
         stroke-dasharray="${scoreDash.toFixed(1)} ${SCIRC.toFixed(1)}"
         stroke-dashoffset="${(SCIRC / 4).toFixed(1)}" stroke-linecap="round" opacity="0.7"/>
-      <text x="46" y="42" text-anchor="middle" font-size="17" font-weight="700" fill="${scoreColor}" font-family="'JetBrains Mono',monospace">${scoreLabel}</text>
-      <text x="46" y="52" text-anchor="middle" font-size="7" font-weight="700" fill="${scoreColor}" font-family="'JetBrains Mono',monospace" letter-spacing="0.06em" opacity="0.85">${levelLabel}</text>
+      <text x="46" y="47.5" text-anchor="middle" font-size="17" font-weight="700" fill="${scoreColor}" font-family="'JetBrains Mono',monospace">${scoreLabel}</text>
+      <text x="46" y="56.5" text-anchor="middle" font-size="7" font-weight="700" fill="${scoreColor}" font-family="'JetBrains Mono',monospace" letter-spacing="0.06em" opacity="0.85">${levelLabel}</text>
     </svg>`;
 }
 
@@ -2146,8 +2146,8 @@ function _relPainelSaudeCentralHtml(centralName) {
         <div class="saude-donut-block">
           <div class="saude-donut-label">Saúde da central</div>
           ${_saudeDonutSVG(counts, score, level)}
+          <div class="saude-counts-block">${_saudeCountsChipsHtml(counts)}</div>
         </div>
-        <div class="saude-counts-block">${_saudeCountsChipsHtml(counts)}</div>
         <div class="saude-var-block">
           <div class="saude-block-title"><i class="ti ti-arrow-narrow-down"></i> Maiores variações</div>
           ${_saudeTopVariacoesHtml(maioresVar)}
@@ -2205,8 +2205,8 @@ function _relPainelSaudeRegionalHtml(regionalName) {
         <div class="saude-donut-block">
           <div class="saude-donut-label">Saúde da regional</div>
           ${_saudeDonutSVG(counts, score, level)}
+          <div class="saude-counts-block">${_saudeCountsChipsHtml(counts)}</div>
         </div>
-        <div class="saude-counts-block">${_saudeCountsChipsHtml(counts)}</div>
         <div class="saude-var-block">
           <div class="saude-block-title"><i class="ti ti-arrow-narrow-down"></i> Piores variações — central × material</div>
           ${_saudeTopVariacoesHtml(maioresVar, { showCentral: true })}
@@ -2311,7 +2311,7 @@ window.gerarRelatorioRegional = function(regionalName, niveis) {
     <div class="central-section" style="margin-bottom:16px;border:1px solid ${levelBorder};border-left:4px solid ${levelColor};border-radius:8px;overflow:hidden;page-break-inside:avoid">
       <div style="background:${levelBg};padding:12px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid ${levelBorder}">
         <div style="display:flex;align-items:center;gap:10px">
-          <span style="font-size:16px">${levelIcon}</span>
+          <span style="font-size:16px;color:${levelColor}">${levelIcon}</span>
           <div>
             <div style="font-size:13px;font-weight:700;color:${levelColor}">${escR(getFilialLookupIndex().exact.get(normalizeText(centralName))?.origem || centralName)}</div>
             <div style="font-size:11px;color:#94a3b8;margin-top:2px">${levelLabel}</div>
@@ -2328,10 +2328,10 @@ window.gerarRelatorioRegional = function(regionalName, niveis) {
 
   // Monta seções por nível
   const levelCfg = {
-    critico: { color:'#f87171', badgeColor:'#dc2626', bg:'rgba(239,68,68,.08)',  border:'rgba(239,68,68,.3)',  icon:'🔴', sublabel:'Ação imediata — escalar à gerência' },
-    urgente: { color:'#fb923c', badgeColor:'#ea580c', bg:'rgba(249,115,22,.08)', border:'rgba(249,115,22,.3)', icon:'🟠', sublabel:'Atenção redobrada — repassar aos operadores' },
-    atencao: { color:'#fbbf24', badgeColor:'#d97706', bg:'rgba(245,158,11,.08)', border:'rgba(245,158,11,.3)', icon:'⚠️', sublabel:'Monitorar — contatar operador' },
-    bom:     { color:'#34d399', badgeColor:'#059669', bg:'rgba(16,185,129,.08)', border:'rgba(16,185,129,.3)', icon:'🟢', sublabel:'Dentro do esperado — sem ação necessária' },
+    critico: { color:'#f87171', badgeColor:'#dc2626', bg:'rgba(239,68,68,.08)',  border:'rgba(239,68,68,.3)',  icon:'<i class="ti ti-flame"></i>', sublabel:'Ação imediata — escalar à gerência' },
+    urgente: { color:'#fb923c', badgeColor:'#ea580c', bg:'rgba(249,115,22,.08)', border:'rgba(249,115,22,.3)', icon:'<i class="ti ti-alert-circle"></i>', sublabel:'Atenção redobrada — repassar aos operadores' },
+    atencao: { color:'#fbbf24', badgeColor:'#d97706', bg:'rgba(245,158,11,.08)', border:'rgba(245,158,11,.3)', icon:'<i class="ti ti-alert-triangle"></i>', sublabel:'Monitorar — contatar operador' },
+    bom:     { color:'#34d399', badgeColor:'#059669', bg:'rgba(16,185,129,.08)', border:'rgba(16,185,129,.3)', icon:'<i class="ti ti-circle-check"></i>', sublabel:'Dentro do esperado — sem ação necessária' },
   };
   const levels = sel
     .map(k => ({ key:k, items:itensPorNivel[k], ...levelCfg[k] }))
@@ -2359,7 +2359,7 @@ window.gerarRelatorioRegional = function(regionalName, niveis) {
         '<div style="position:absolute;right:-24px;top:-24px;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,0.06);pointer-events:none"></div>' +
         '<div style="position:absolute;right:60px;bottom:-40px;width:80px;height:80px;border-radius:50%;background:rgba(255,255,255,0.04);pointer-events:none"></div>' +
         '<div style="display:flex;align-items:center;gap:18px;position:relative">' +
-          '<div style="width:56px;height:56px;border-radius:14px;background:rgba(255,255,255,0.12);border:1.5px solid rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0">' + l.icon + '</div>' +
+          '<div style="width:56px;height:56px;border-radius:14px;background:rgba(255,255,255,0.12);border:1.5px solid rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;font-size:26px;color:#fff;flex-shrink:0">' + l.icon + '</div>' +
           '<div>' +
             '<div style="font-size:22px;font-weight:900;color:#fff;letter-spacing:.06em;line-height:1;text-transform:uppercase">' + levelName + '</div>' +
             '<div style="font-size:12px;color:rgba(255,255,255,0.65);margin-top:5px;font-weight:500;letter-spacing:.02em">' + l.sublabel + '</div>' +
@@ -2614,7 +2614,7 @@ window.gerarRelatorioCentral = function(centralName, niveis) {
           '<div style="position:absolute;right:-20px;top:-20px;width:100px;height:100px;border-radius:50%;background:rgba(255,255,255,0.06);pointer-events:none"></div>' +
           '<div style="position:absolute;right:50px;bottom:-32px;width:64px;height:64px;border-radius:50%;background:rgba(255,255,255,0.04);pointer-events:none"></div>' +
           '<div style="display:flex;align-items:center;gap:16px;position:relative">' +
-            '<div style="width:52px;height:52px;border-radius:13px;background:rgba(255,255,255,0.13);border:1.5px solid rgba(255,255,255,0.22);display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0">' + icon + '</div>' +
+            '<div style="width:52px;height:52px;border-radius:13px;background:rgba(255,255,255,0.13);border:1.5px solid rgba(255,255,255,0.22);display:flex;align-items:center;justify-content:center;font-size:24px;color:#fff;flex-shrink:0">' + icon + '</div>' +
             '<div>' +
               '<div style="font-size:20px;font-weight:900;color:#fff;letter-spacing:.07em;line-height:1;text-transform:uppercase">' + label + '</div>' +
               '<div style="font-size:12px;color:rgba(255,255,255,0.62);margin-top:5px;font-weight:500">' + sublabel + '</div>' +
@@ -2630,10 +2630,10 @@ window.gerarRelatorioCentral = function(centralName, niveis) {
   }
 
   const secCfg = {
-    critico: { color:'#ef4444', icon:'🔴', label:'CRÍTICO', sub:'Ação imediata — escalar à gerência' },
-    urgente: { color:'#f97316', icon:'🟠', label:'URGENTE', sub:'Atenção redobrada — repassar aos regionais' },
-    atencao: { color:'#f59e0b', icon:'⚠️', label:'ATENÇÃO', sub:'Monitorar — contatar operador' },
-    bom:     { color:'#10b981', icon:'🟢', label:'BOM',     sub:'Dentro do esperado — sem ação necessária' },
+    critico: { color:'#ef4444', icon:'<i class="ti ti-flame"></i>', label:'CRÍTICO', sub:'Ação imediata — escalar à gerência' },
+    urgente: { color:'#f97316', icon:'<i class="ti ti-alert-circle"></i>', label:'URGENTE', sub:'Atenção redobrada — repassar aos regionais' },
+    atencao: { color:'#f59e0b', icon:'<i class="ti ti-alert-triangle"></i>', label:'ATENÇÃO', sub:'Monitorar — contatar operador' },
+    bom:     { color:'#10b981', icon:'<i class="ti ti-circle-check"></i>', label:'BOM',     sub:'Dentro do esperado — sem ação necessária' },
   };
 
   const sectionsHtml = sel.map(k => {
@@ -2742,10 +2742,10 @@ window.gerarRelatorioComAcoes = function(centralName, niveis) {
   }
 
   const lvlCfg = {
-    critico: { color:'#f87171', bg:'rgba(239,68,68,.16)', grad:'linear-gradient(135deg,#7f1d1d 0%,#991b1b 60%,#b91c1c 100%)', glow:'rgba(239,68,68,0.30)', icon:'🔴', label:'CRÍTICO', sub:'Ação imediata — escalar à gerência' },
-    urgente: { color:'#fb923c', bg:'rgba(249,115,22,.16)', grad:'linear-gradient(135deg,#7c2d12 0%,#9a3412 60%,#c2410c 100%)', glow:'rgba(249,115,22,0.28)', icon:'🟠', label:'URGENTE', sub:'Atenção redobrada — repassar aos regionais' },
-    atencao: { color:'#fbbf24', bg:'rgba(245,158,11,.16)', grad:'linear-gradient(135deg,#78350f 0%,#92400e 60%,#b45309 100%)', glow:'rgba(245,158,11,0.25)', icon:'⚠️', label:'ATENÇÃO', sub:'Monitorar — contatar operador' },
-    bom:     { color:'#34d399', bg:'rgba(16,185,129,.16)', grad:'linear-gradient(135deg,#064e3b 0%,#065f46 60%,#047857 100%)', glow:'rgba(16,185,129,0.24)', icon:'🟢', label:'BOM',     sub:'Dentro do esperado — sem ação necessária' },
+    critico: { color:'#f87171', bg:'rgba(239,68,68,.16)', grad:'linear-gradient(135deg,#7f1d1d 0%,#991b1b 60%,#b91c1c 100%)', glow:'rgba(239,68,68,0.30)', icon:'<i class="ti ti-flame"></i>', label:'CRÍTICO', sub:'Ação imediata — escalar à gerência' },
+    urgente: { color:'#fb923c', bg:'rgba(249,115,22,.16)', grad:'linear-gradient(135deg,#7c2d12 0%,#9a3412 60%,#c2410c 100%)', glow:'rgba(249,115,22,0.28)', icon:'<i class="ti ti-alert-circle"></i>', label:'URGENTE', sub:'Atenção redobrada — repassar aos regionais' },
+    atencao: { color:'#fbbf24', bg:'rgba(245,158,11,.16)', grad:'linear-gradient(135deg,#78350f 0%,#92400e 60%,#b45309 100%)', glow:'rgba(245,158,11,0.25)', icon:'<i class="ti ti-alert-triangle"></i>', label:'ATENÇÃO', sub:'Monitorar — contatar operador' },
+    bom:     { color:'#34d399', bg:'rgba(16,185,129,.16)', grad:'linear-gradient(135deg,#064e3b 0%,#065f46 60%,#047857 100%)', glow:'rgba(16,185,129,0.24)', icon:'<i class="ti ti-circle-check"></i>', label:'BOM',     sub:'Dentro do esperado — sem ação necessária' },
   };
 
   function buildLevelSection(items, cfg, levelKey) {
@@ -2755,7 +2755,7 @@ window.gerarRelatorioComAcoes = function(centralName, niveis) {
       '<div style="background:' + cfg.grad + ';padding:20px 28px;display:flex;align-items:center;justify-content:space-between;position:relative;overflow:hidden">' +
         '<div style="position:absolute;right:-20px;top:-20px;width:110px;height:110px;border-radius:50%;background:rgba(255,255,255,0.06);pointer-events:none"></div>' +
         '<div style="display:flex;align-items:center;gap:16px;position:relative">' +
-          '<div style="width:52px;height:52px;border-radius:13px;background:rgba(255,255,255,0.13);border:1.5px solid rgba(255,255,255,0.22);display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0">' + cfg.icon + '</div>' +
+          '<div style="width:52px;height:52px;border-radius:13px;background:rgba(255,255,255,0.13);border:1.5px solid rgba(255,255,255,0.22);display:flex;align-items:center;justify-content:center;font-size:24px;color:#fff;flex-shrink:0">' + cfg.icon + '</div>' +
           '<div>' +
             '<div style="font-size:20px;font-weight:900;color:#fff;letter-spacing:.06em;line-height:1;text-transform:uppercase">' + cfg.label + '</div>' +
             '<div style="font-size:12px;color:rgba(255,255,255,0.65);margin-top:5px;font-weight:500">' + cfg.sub + '</div>' +
