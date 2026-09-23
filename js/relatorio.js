@@ -2010,9 +2010,9 @@ function _saudePanelStyles() {
     .saude-panel-top { display:flex; gap:28px; align-items:flex-start; flex-wrap:wrap; }
     .saude-donut-block { display:flex; flex-direction:column; align-items:center; gap:9px; flex-shrink:0; }
     .saude-donut-label { font-size:9.5px; color:#64748b; text-transform:uppercase; letter-spacing:.06em; font-weight:700; text-align:center; }
-    .saude-counts-block { display:flex; flex-direction:column; gap:8px; flex-shrink:0; align-self:center; }
-    .saude-count-row { display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border:1px solid; border-radius:5px; font-size:10.5px; font-weight:700; font-family:'JetBrains Mono',monospace; letter-spacing:.04em; white-space:nowrap; }
-    .saude-count-row i { font-size:13px; }
+    .saude-counts-block { display:flex; flex-wrap:wrap; justify-content:center; gap:5px; max-width:360px; }
+    .saude-count-row { display:inline-flex; align-items:center; gap:5px; padding:3px 8px; border:1px solid; border-radius:5px; font-size:10px; font-weight:700; font-family:'JetBrains Mono',monospace; letter-spacing:.04em; white-space:nowrap; }
+    .saude-count-row i { font-size:12px; }
     .saude-var-block { flex:1; min-width:280px; }
     .saude-block-title { font-size:10.5px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:#94a3b8; margin-bottom:10px; display:flex; align-items:center; gap:6px; }
     .saude-var-row { display:flex; align-items:center; gap:10px; margin-bottom:7px; font-size:11px; }
