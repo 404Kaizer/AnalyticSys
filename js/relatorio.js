@@ -1910,7 +1910,7 @@ function _relMatRowHtml(item, idx, maxAbs, extraTd = '') {
   const tl = t === 'worsening' ? '▲ Piorando' : t === 'improving' ? '▼ Melhorando' : '→ Estável';
   const tc = t === 'worsening' ? '#f87171' : t === 'improving' ? '#4ade80' : '#94a3b8';
   const tb = t === 'worsening' ? 'rgba(248,113,113,.12)' : t === 'improving' ? 'rgba(74,222,128,.12)' : 'rgba(148,163,184,.10)';
-  const pct = Math.max(3, Math.round(Math.abs(d) / (maxAbs || 1) * 100));
+  const pct = Math.abs(d) < 0.001 ? 0 : Math.max(3, Math.round(Math.abs(d) / (maxAbs || 1) * 100));
   return `<tr class="data-row">
     <td class="rank-cell">${idx + 1}</td>
     <td><span class="mat-name">${_rankEsc(item.mat)}</span><div class="acm-cat">${_rankEsc(_relCatNome(item))}</div></td>
@@ -2707,23 +2707,35 @@ window.gerarRelatorioComAcoes = function(centralName, niveis) {
   const maxAbsDiff = Math.max(1, ...sel.flatMap(k => itensPorNivel[k]).map(i => Math.abs(i.diff)));
 
   function buildSectionBody(items, cfg, levelKey) {
+    // BOM não pede ação: só os nomes em badges, com a seta da tendência
+    if (levelKey === 'bom') {
+      return '<div class="acm-bom">' + items.map(item =>
+        '<span class="acm-bom-chip">' + escC(item.mat) +
+          ' <b style="color:' + trendColor(item.trend) + '">' + trendLabel(item.trend).split(' ')[0] + '</b></span>'
+      ).join('') + '</div>';
+    }
+
     const grupos = new Map(); // texto das ações → { letra, cats:Set, mats:[], acoes:[] }
-    const rows = items.map((item, idx) => {
+    const grupoDe = items.map(item => {
       const acoes = _resolverAcoesParaMaterial(item.mat, item.diff, item.categoria, levelKey || item.level, item.catKey, item.catSubKey);
-      let g = null;
-      if (acoes !== null) {
-        if (!grupos.has(acoes)) grupos.set(acoes, {
-          letra: String.fromCharCode(65 + grupos.size), cats: new Set(), mats: [],
-          acoes: acoes.split(/[;|\n]/).map(a => a.trim().replace(/^[-•–]\s*/, '')).filter(Boolean),
-        });
-        g = grupos.get(acoes);
-        g.cats.add(_relCatNome(item));
-        g.mats.push(item.mat);
-      }
-      return _relMatRowHtml(item, idx, maxAbsDiff,
+      if (acoes === null) return null;
+      if (!grupos.has(acoes)) grupos.set(acoes, {
+        letra: String.fromCharCode(65 + grupos.size), cats: new Set(), mats: [],
+        acoes: acoes.split(/[;|\n]/).map(a => a.trim().replace(/^[-•–]\s*/, '')).filter(Boolean),
+      });
+      const g = grupos.get(acoes);
+      g.cats.add(_relCatNome(item));
+      g.mats.push(item.mat);
+      return g;
+    });
+    // Coluna "Ação" só existe se ao menos um material da seção tem regra
+    const temAcao = grupos.size > 0;
+    const rows = items.map((item, idx) => {
+      const g = grupoDe[idx];
+      return _relMatRowHtml(item, idx, maxAbsDiff, !temAcao ? '' :
         '<td style="text-align:center">' + (g
           ? '<span class="acm-tag" style="color:' + cfg.color + ';background:' + cfg.bg + '">' + g.letra + '</span>'
-          : '<span class="acm-sem">sem regra</span>') + '</td>');
+          : '<span class="acm-sem">—</span>') + '</td>');
     }).join('');
 
     const gruposHtml = [...grupos.values()].map(g =>
@@ -2737,7 +2749,7 @@ window.gerarRelatorioComAcoes = function(centralName, niveis) {
       '</div>'
     ).join('');
 
-    return '<table class="data-table"><thead><tr><th style="width:32px">#</th><th>Material</th><th>Variação</th><th>Tendência</th><th style="width:70px;text-align:center">Ação</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+    return '<table class="data-table"><thead><tr><th style="width:32px">#</th><th>Material</th><th>Variação</th><th>Tendência</th>' + (temAcao ? '<th style="width:70px;text-align:center">Ação</th>' : '') + '</tr></thead><tbody>' + rows + '</tbody></table>' +
       (gruposHtml ? '<div class="acm-grupos"><div class="acm-grupos-title">✓ O que fazer</div><div class="acm-grupos-grid">' + gruposHtml + '</div></div>' : '');
   }
 
@@ -2780,6 +2792,9 @@ window.gerarRelatorioComAcoes = function(centralName, niveis) {
       ${_saudePanelStyles()}
       .acm-tag { display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; border-radius:6px; font-size:11px; font-weight:800; font-family:'JetBrains Mono',monospace; flex-shrink:0; }
       .acm-sem { font-size:10px; color:#64748b; font-style:italic; }
+      .acm-bom { display:flex; flex-wrap:wrap; gap:6px; }
+      .acm-bom-chip { font-size:11px; font-weight:600; color:#e2e8f0; background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.1); border-radius:14px; padding:4px 11px; white-space:nowrap; }
+      .acm-bom-chip b { font-size:10px; margin-left:2px; }
       .acm-grupos { margin-top:16px; padding-top:14px; border-top:1px solid rgba(255,255,255,.08); }
       .acm-grupos-title { font-size:10.5px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:#4ade80; margin-bottom:10px; }
       .acm-grupos-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:10px; }
@@ -2800,7 +2815,7 @@ window.gerarRelatorioComAcoes = function(centralName, niveis) {
     badge:      'Cobrança de Pendências',
     title:      `Relatório com Ações — ${centralCompleto}`,
     bodyHtml,
-    notaRodape: 'Ações resolvidas a partir das regras cadastradas em Configurações → Ações de Relatório, pela combinação de material, categoria, nível e faixa de variação mais próxima.'
+    notaRodape: 'Ações resolvidas a partir das regras cadastradas em Configurações → Ações de Relatório, pela categoria do material e nível de criticidade — havendo mais de uma regra para a mesma combinação, vale a cadastrada mais recentemente.'
   });
 
   _openRelWindow(html);
