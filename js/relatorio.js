@@ -2103,7 +2103,7 @@ function _relPainelSaudeCentralHtml(centralName) {
         </div>
       </div>
       <div class="saude-cap-block">
-        <div class="saude-block-title"><i class="ti ti-gauge"></i> Capacidade e estoque de segurança — fora da faixa</div>
+        <div class="saude-block-title"><i class="ti ti-gauge"></i> Capacidade e Ocupação — fora da faixa</div>
         ${_saudeCapacidadeTableHtml(capRows)}
       </div>
     </div>`;
@@ -2665,67 +2665,58 @@ window.gerarRelatorioComAcoes = function(centralName, niveis) {
   function trendColor(t){ return t==='worsening' ? '#f87171' : t==='improving' ? '#4ade80' : '#94a3b8'; }
   function escC(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-  // Monta cards de material — layout vertical, sem tabela
-  function buildCards(items, levelColor, levelBg, levelKey) {
-    return items.map((item, idx) => {
-      const acoes  = _resolverAcoesParaMaterial(item.mat, item.diff, item.categoria, levelKey || item.level, item.catKey, item.catSubKey);
-      const vc     = varColor(item.diff);
-      const tc     = trendColor(item.trend);
-      const hasAcao = acoes !== null;
+  // As regras de ação são por categoria + nível: materiais da mesma seção que
+  // caem na mesma regra compartilham a lista, então ela aparece uma vez só
+  // (grupo A, B…) e a tabela só aponta a letra do grupo.
+  const CAT_NOMES = {
+    agregado_miudo: 'Agregados miúdos', agregado_graudo: 'Agregados graúdos',
+    aglomerante: 'Aglomerantes', aditivo: 'Aditivos e adições', adicao: 'Aditivos e adições',
+  };
+  const catNome = item => CAT_NOMES[item.catSubKey] || CAT_NOMES[item.catKey] || item.categoria || 'Outros';
+  const trendBg = t => t==='worsening' ? 'rgba(248,113,113,.12)' : t==='improving' ? 'rgba(74,222,128,.12)' : 'rgba(148,163,184,.10)';
+  const maxAbsDiff = Math.max(1, ...sel.flatMap(k => itensPorNivel[k]).map(i => Math.abs(i.diff)));
 
-      const acoesItems = hasAcao
-        ? acoes.split(/[;|\n]/).map(a => a.trim()).filter(Boolean)
-        : [];
-
-      const acoesBullets = acoesItems.map(a =>
-        '<li style="margin-bottom:5px;padding-left:4px;word-break:break-word;overflow-wrap:break-word">' + escC(a) + '</li>'
-      ).join('');
-
-      const acoesBlock = hasAcao
-        ? '<div style="margin-top:14px;padding-top:14px;border-top:1px solid rgba(255,255,255,.08)">' +
-            '<div style="display:flex;align-items:center;gap:7px;margin-bottom:10px">' +
-              '<span style="width:20px;height:20px;border-radius:50%;background:rgba(34,197,94,.15);border:1.5px solid rgba(34,197,94,.4);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px;color:#4ade80">✓</span>' +
-              '<span style="font-size:11px;font-weight:700;color:#4ade80;text-transform:uppercase;letter-spacing:.06em">Ações propostas</span>' +
-            '</div>' +
-            '<ul style="margin:0;padding-left:18px;font-size:13px;color:#e2e8f0;line-height:1.7;word-break:break-word;overflow-wrap:break-word">' + acoesBullets + '</ul>' +
-          '</div>'
-        : '<div style="margin-top:14px;padding-top:14px;border-top:1px solid rgba(255,255,255,.06);display:flex;align-items:center;gap:7px">' +
-            '<span style="width:20px;height:20px;border-radius:50%;background:rgba(255,255,255,.04);border:1.5px solid rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px;color:#64748b">—</span>' +
-            '<span style="font-size:12px;color:#64748b;font-style:italic">Sem regra cadastrada para esta variação</span>' +
-          '</div>';
-
-      return '<div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.09);border-left:4px solid ' + levelColor + ';border-radius:10px;padding:18px 20px;margin-bottom:12px;page-break-inside:avoid;overflow:hidden;word-break:break-word">' +
-
-        '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px">' +
-          '<div style="display:flex;align-items:center;gap:10px">' +
-            '<span style="width:26px;height:26px;border-radius:7px;background:' + levelBg + ';color:' + levelColor + ';font-size:11px;font-weight:800;font-family:\'JetBrains Mono\',monospace;display:flex;align-items:center;justify-content:center;flex-shrink:0">' + (idx+1) + '</span>' +
-            '<span style="font-size:15px;font-weight:700;color:#fff">' + escC(item.mat) + '</span>' +
-          '</div>' +
-          (hasAcao
-            ? '<span style="padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;background:rgba(34,197,94,.15);color:#4ade80;border:1px solid rgba(34,197,94,.4);white-space:nowrap;flex-shrink:0">✓ Com ação</span>'
-            : '<span style="padding:3px 10px;border-radius:20px;font-size:10px;font-weight:600;background:rgba(255,255,255,.04);color:#64748b;border:1px solid rgba(255,255,255,.12);white-space:nowrap;flex-shrink:0">Sem ação</span>'
-          ) +
-        '</div>' +
-
-        '<div style="display:flex;gap:10px;flex-wrap:wrap">' +
-          '<div style="display:flex;align-items:center;gap:7px;padding:7px 12px;border-radius:8px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);min-width:160px">' +
-            '<div>' +
-              '<div style="font-size:10px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px">Variação</div>' +
-              '<div style="font-size:14px;font-weight:800;color:' + vc + ';font-family:\'JetBrains Mono\',monospace">' + varDir(item.diff) + '</div>' +
-              '<div style="font-size:12px;font-weight:500;color:' + vc + ';font-family:\'JetBrains Mono\',monospace">' + fmtKgC(item.diff) + '</div>' +
-            '</div>' +
-          '</div>' +
-          '<div style="display:flex;align-items:center;gap:7px;padding:7px 12px;border-radius:8px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);min-width:140px">' +
-            '<div>' +
-              '<div style="font-size:10px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px">Tendência</div>' +
-              '<div style="font-size:13px;font-weight:700;color:' + tc + '">' + trendLabel(item.trend) + '</div>' +
-            '</div>' +
-          '</div>' +
-        '</div>' +
-
-        acoesBlock +
-      '</div>';
+  function buildSectionBody(items, cfg, levelKey) {
+    const grupos = new Map(); // texto das ações → { letra, cats:Set, mats:[], acoes:[] }
+    const rows = items.map((item, idx) => {
+      const acoes = _resolverAcoesParaMaterial(item.mat, item.diff, item.categoria, levelKey || item.level, item.catKey, item.catSubKey);
+      let g = null;
+      if (acoes !== null) {
+        if (!grupos.has(acoes)) grupos.set(acoes, {
+          letra: String.fromCharCode(65 + grupos.size), cats: new Set(), mats: [],
+          acoes: acoes.split(/[;|\n]/).map(a => a.trim().replace(/^[-•–]\s*/, '')).filter(Boolean),
+        });
+        g = grupos.get(acoes);
+        g.cats.add(catNome(item));
+        g.mats.push(item.mat);
+      }
+      const vc  = varColor(item.diff);
+      const pct = Math.max(3, Math.round(Math.abs(item.diff) / maxAbsDiff * 100));
+      return '<tr class="data-row">' +
+        '<td class="rank-cell">' + (idx+1) + '</td>' +
+        '<td><span class="mat-name">' + escC(item.mat) + '</span><div class="acm-cat">' + escC(catNome(item)) + '</div></td>' +
+        '<td class="acm-var"><div style="color:' + vc + '"><strong>' + varDir(item.diff) + '</strong> <span>' + fmtKgC(item.diff) + '</span></div>' +
+          '<div class="acm-bar"><i style="width:' + pct + '%;background:' + vc + '"></i></div></td>' +
+        '<td><span class="acm-pill" style="color:' + trendColor(item.trend) + ';background:' + trendBg(item.trend) + '">' + trendLabel(item.trend) + '</span></td>' +
+        '<td style="text-align:center">' + (g
+          ? '<span class="acm-tag" style="color:' + cfg.color + ';background:' + cfg.bg + '">' + g.letra + '</span>'
+          : '<span class="acm-sem">sem regra</span>') + '</td>' +
+      '</tr>';
     }).join('');
+
+    const gruposHtml = [...grupos.values()].map(g =>
+      '<div class="acm-grupo" style="border-left-color:' + cfg.color + '">' +
+        '<div class="acm-grupo-head">' +
+          '<span class="acm-tag" style="color:' + cfg.color + ';background:' + cfg.bg + '">' + g.letra + '</span>' +
+          '<span class="acm-grupo-cat">' + escC([...g.cats].join(' · ')) + '</span>' +
+          '<span class="acm-grupo-mats">' + g.mats.map(m => '<span>' + escC(m) + '</span>').join('') + '</span>' +
+        '</div>' +
+        '<ol class="acm-acoes">' + g.acoes.map(a => '<li>' + escC(a) + '</li>').join('') + '</ol>' +
+      '</div>'
+    ).join('');
+
+    return '<table class="data-table"><thead><tr><th style="width:32px">#</th><th>Material</th><th>Variação</th><th>Tendência</th><th style="width:70px;text-align:center">Ação</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+      (gruposHtml ? '<div class="acm-grupos"><div class="acm-grupos-title">✓ O que fazer</div>' + gruposHtml + '</div>' : '');
   }
 
   const lvlCfg = {
@@ -2737,7 +2728,7 @@ window.gerarRelatorioComAcoes = function(centralName, niveis) {
 
   function buildLevelSection(items, cfg, levelKey) {
     if (!items.length) return '';
-    const cards = buildCards(items, cfg.color, cfg.bg, levelKey);
+    const cards = buildSectionBody(items, cfg, levelKey);
     return '<div style="margin-bottom:32px;border-radius:14px;overflow:hidden;box-shadow:0 4px 24px ' + cfg.glow + ';page-break-inside:avoid">' +
       '<div style="background:' + cfg.grad + ';padding:20px 28px;display:flex;align-items:center;justify-content:space-between;position:relative;overflow:hidden">' +
         '<div style="position:absolute;right:-20px;top:-20px;width:110px;height:110px;border-radius:50%;background:rgba(255,255,255,0.06);pointer-events:none"></div>' +
@@ -2762,7 +2753,27 @@ window.gerarRelatorioComAcoes = function(centralName, niveis) {
   const sectionsHtml = sel.map(k => buildLevelSection(itensPorNivel[k], lvlCfg[k], k)).join('');
 
   const bodyHtml = `
-    <style>${_saudePanelStyles()}</style>
+    <style>
+      ${_criticidadeMatTableStyles()}
+      ${_saudePanelStyles()}
+      .data-table td { vertical-align:middle; }
+      .acm-cat { font-size:10px; color:#64748b; margin-top:2px; }
+      .acm-var { min-width:190px; font-family:'JetBrains Mono',monospace; font-size:11px; }
+      .acm-var strong { font-size:12px; margin-right:4px; }
+      .acm-bar { height:5px; background:rgba(255,255,255,.06); border-radius:3px; margin-top:6px; overflow:hidden; }
+      .acm-bar i { display:block; height:100%; border-radius:3px; opacity:.75; }
+      .acm-pill { display:inline-block; padding:3px 10px; border-radius:20px; font-size:11px; font-weight:700; white-space:nowrap; }
+      .acm-tag { display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; border-radius:6px; font-size:11px; font-weight:800; font-family:'JetBrains Mono',monospace; flex-shrink:0; }
+      .acm-sem { font-size:10px; color:#64748b; font-style:italic; }
+      .acm-grupos { margin-top:16px; padding-top:14px; border-top:1px solid rgba(255,255,255,.08); }
+      .acm-grupos-title { font-size:10.5px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:#4ade80; margin-bottom:10px; }
+      .acm-grupo { background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.08); border-left:3px solid; border-radius:8px; padding:12px 16px; margin-bottom:10px; page-break-inside:avoid; }
+      .acm-grupo-head { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:8px; }
+      .acm-grupo-cat { font-size:12px; font-weight:700; color:#fff; }
+      .acm-grupo-mats { display:flex; gap:5px; flex-wrap:wrap; }
+      .acm-grupo-mats span { font-size:10px; font-weight:600; color:#cbd5e1; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.1); border-radius:12px; padding:2px 8px; }
+      .acm-acoes { margin:0; padding-left:20px; font-size:12.5px; color:#e2e8f0; line-height:1.7; }
+    </style>
     ${sectionsHtml}`;
 
   const html = _buildRankingShellHTML({
