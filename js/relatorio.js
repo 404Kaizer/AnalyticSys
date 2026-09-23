@@ -1960,7 +1960,7 @@ function _saudePanelStyles() {
     .saude-panel-top { display:flex; gap:28px; align-items:flex-start; flex-wrap:wrap; }
     .saude-donut-block { display:flex; flex-direction:column; align-items:center; gap:9px; flex-shrink:0; }
     .saude-donut-label { font-size:9.5px; color:#64748b; text-transform:uppercase; letter-spacing:.06em; font-weight:700; text-align:center; }
-    .saude-counts-block { display:grid; grid-template-columns:repeat(2,auto); gap:8px 22px; flex-shrink:0; align-content:center; }
+    .saude-counts-block { display:flex; flex-direction:column; gap:8px; flex-shrink:0; align-self:center; }
     .saude-count-row { display:flex; align-items:baseline; gap:6px; font-size:11.5px; white-space:nowrap; }
     .saude-count-row b { font-family:'JetBrains Mono',monospace; font-size:14px; }
     .saude-var-block { flex:1; min-width:280px; }
@@ -2093,8 +2093,8 @@ function _relPainelSaudeCentralHtml(centralName) {
     <div class="saude-panel">
       <div class="saude-panel-top">
         <div class="saude-donut-block">
-          ${_saudeDonutSVG(counts, score, level)}
           <div class="saude-donut-label">Saúde da central</div>
+          ${_saudeDonutSVG(counts, score, level)}
         </div>
         <div class="saude-counts-block">${_saudeCountsChipsHtml(counts)}</div>
         <div class="saude-var-block">
