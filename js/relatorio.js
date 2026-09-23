@@ -1885,7 +1885,39 @@ function _criticidadeMatTableStyles() {
     .data-row:hover { background:rgba(255,255,255,.02); }
     .rank-cell { color:#64748b; font-weight:700; font-family:'JetBrains Mono',monospace; font-size:11px; }
     .mat-name { font-weight:700; color:#fff; }
-    .var-cell strong { font-family:'JetBrains Mono',monospace; }`;
+    .var-cell strong { font-family:'JetBrains Mono',monospace; }
+    .data-table td { vertical-align:middle; }
+    .acm-cat { font-size:10px; color:#64748b; margin-top:2px; }
+    .acm-var { min-width:190px; font-family:'JetBrains Mono',monospace; font-size:11px; }
+    .acm-var strong { font-size:12px; margin-right:4px; }
+    .acm-bar { height:5px; background:rgba(255,255,255,.06); border-radius:3px; margin-top:6px; overflow:hidden; }
+    .acm-bar i { display:block; height:100%; border-radius:3px; opacity:.75; }
+    .acm-pill { display:inline-block; padding:3px 10px; border-radius:20px; font-size:11px; font-weight:700; white-space:nowrap; }`;
+}
+
+const _REL_CAT_NOMES = { agregado:'Agregados', aglomerante:'Aglomerantes', aditivo:'Aditivos e adições', adicao:'Aditivos e adições' };
+function _relCatNome(item) { return _REL_CAT_NOMES[item.catKey] || item.categoria || 'Outros'; }
+
+// Linha compacta de material dos relatórios de Central/Regional: nome +
+// categoria, variação com barra proporcional a maxAbs, tendência em badge.
+// extraTd: colunas adicionais (ex.: "Ação" do Relatório com Ações).
+function _relMatRowHtml(item, idx, maxAbs, extraTd = '') {
+  const d  = Number(item.diff) || 0;
+  const vc = d < -0.001 ? '#f87171' : d > 0.001 ? '#fbbf24' : '#94a3b8';
+  const vd = d < -0.001 ? 'Desfalque' : d > 0.001 ? 'Sobra' : 'Equilibrado';
+  const kg = Math.abs(d).toLocaleString('pt-BR', { minimumFractionDigits:2, maximumFractionDigits:2 }) + ' kg';
+  const t  = item.trend;
+  const tl = t === 'worsening' ? '▲ Piorando' : t === 'improving' ? '▼ Melhorando' : '→ Estável';
+  const tc = t === 'worsening' ? '#f87171' : t === 'improving' ? '#4ade80' : '#94a3b8';
+  const tb = t === 'worsening' ? 'rgba(248,113,113,.12)' : t === 'improving' ? 'rgba(74,222,128,.12)' : 'rgba(148,163,184,.10)';
+  const pct = Math.max(3, Math.round(Math.abs(d) / (maxAbs || 1) * 100));
+  return `<tr class="data-row">
+    <td class="rank-cell">${idx + 1}</td>
+    <td><span class="mat-name">${_rankEsc(item.mat)}</span><div class="acm-cat">${_rankEsc(_relCatNome(item))}</div></td>
+    <td class="acm-var"><div style="color:${vc}"><strong>${vd}</strong> <span>${kg}</span></div><div class="acm-bar"><i style="width:${pct}%;background:${vc}"></i></div></td>
+    <td><span class="acm-pill" style="color:${tc};background:${tb}">${tl}</span></td>
+    ${extraTd}
+  </tr>`;
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1947,6 +1979,8 @@ function _relNiveisSelecionados(idPrefix) {
 
 const _SAUDE_ANEL_COR   = { critico:'#f43f5e', urgente:'#f97316', atencao:'#f59e0b', bom:'#10b981' };
 const _SAUDE_ANEL_ORDEM = ['critico','urgente','atencao','bom'];
+// Mesmos ícones de nível do filtro de saúde da Visão Micro (index.html #mfr-health-levels)
+const _SAUDE_NIVEL_ICON = { critico:'ti-flame', urgente:'ti-alert-circle', atencao:'ti-alert-triangle', bom:'ti-circle-check' };
 const _SAUDE_FAIXA_COR  = { abaixo:'#f59e0b', limite:'#f97316', ruptura:'#ef4444', acima:'#ef4444', erro:'#dc2626' };
 
 function _saudeFmtKg(v) {
@@ -1977,8 +2011,8 @@ function _saudePanelStyles() {
     .saude-donut-block { display:flex; flex-direction:column; align-items:center; gap:9px; flex-shrink:0; }
     .saude-donut-label { font-size:9.5px; color:#64748b; text-transform:uppercase; letter-spacing:.06em; font-weight:700; text-align:center; }
     .saude-counts-block { display:flex; flex-direction:column; gap:8px; flex-shrink:0; align-self:center; }
-    .saude-count-row { display:flex; align-items:baseline; gap:6px; font-size:11.5px; white-space:nowrap; }
-    .saude-count-row b { font-family:'JetBrains Mono',monospace; font-size:14px; }
+    .saude-count-row { display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border:1px solid; border-radius:5px; font-size:10.5px; font-weight:700; font-family:'JetBrains Mono',monospace; letter-spacing:.04em; white-space:nowrap; }
+    .saude-count-row i { font-size:13px; }
     .saude-var-block { flex:1; min-width:280px; }
     .saude-block-title { font-size:10.5px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:#94a3b8; margin-bottom:10px; display:flex; align-items:center; gap:6px; }
     .saude-var-row { display:flex; align-items:center; gap:10px; margin-bottom:7px; font-size:11px; }
@@ -1992,7 +2026,7 @@ function _saudePanelStyles() {
     .saude-cap-table th { text-align:left; padding:7px 10px; font-size:9.5px; color:#64748b; text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid rgba(255,255,255,.1); }
     .saude-cap-table td { padding:7px 10px; border-bottom:1px solid rgba(255,255,255,.06); color:#e2e8f0; }
     .saude-cap-table tbody tr:last-child td { border-bottom:none; }
-    .saude-cap-badge { display:inline-flex; align-items:center; gap:5px; border:1px solid; border-radius:5px; padding:2px 8px; font-size:10px; font-weight:700; }
+    .saude-cap-badge { display:inline-flex; align-items:center; gap:5px; border:1px solid; border-radius:5px; padding:2px 8px; font-size:10px; font-weight:700; white-space:nowrap; }
     .saude-rank-row { display:flex; align-items:center; gap:10px; margin-bottom:7px; font-size:11.5px; }
     .saude-rank-pos { width:20px; height:20px; border-radius:5px; background:rgba(255,255,255,.08); color:#94a3b8; font-family:'JetBrains Mono',monospace; font-weight:800; font-size:10px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
     .saude-rank-name { flex:1; color:#fff; font-weight:700; }
@@ -2031,7 +2065,7 @@ function _saudeDonutSVG(counts, score, level) {
   const scoreDash = (hasScore ? score / 100 : 0) * SCIRC;
 
   return `
-    <svg width="118" height="118" viewBox="0 0 92 92">
+    <svg width="150" height="150" viewBox="0 0 92 92">
       <circle cx="46" cy="46" r="${(R + RI) / 2}" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="${R - RI}"/>
       ${slices}
       <circle cx="46" cy="46" r="${SR}" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="3"/>
@@ -2046,8 +2080,9 @@ function _saudeDonutSVG(counts, score, level) {
 function _saudeCountsChipsHtml(counts) {
   return _SAUDE_ANEL_ORDEM.map(lvl => {
     const n = (counts && counts[lvl]) || 0;
+    if (!n) return '';
     const meta = _REL_NIVEIS.find(x => x.key === lvl);
-    return `<div class="saude-count-row" style="color:${meta.color}"><b>${n}</b> ${_rankEsc(meta.plural)}</div>`;
+    return `<div class="saude-count-row" style="color:${meta.color};background:${meta.color}18;border-color:${meta.color}35"><i class="ti ${_SAUDE_NIVEL_ICON[lvl]}"></i>${n} ${meta.label.toUpperCase()}</div>`;
   }).join('');
 }
 
@@ -2168,8 +2203,8 @@ function _relPainelSaudeRegionalHtml(regionalName) {
     <div class="saude-panel">
       <div class="saude-panel-top">
         <div class="saude-donut-block">
-          ${_saudeDonutSVG(counts, score, level)}
           <div class="saude-donut-label">Saúde da regional</div>
+          ${_saudeDonutSVG(counts, score, level)}
         </div>
         <div class="saude-counts-block">${_saudeCountsChipsHtml(counts)}</div>
         <div class="saude-var-block">
@@ -2266,16 +2301,9 @@ window.gerarRelatorioRegional = function(regionalName, niveis) {
     return Object.entries(m).sort((a,b) => b[1].length - a[1].length);
   }
 
+  const maxAbsDiff = Math.max(1, ...todosItens.map(i => Math.abs(i.diff)));
   function buildMatRows(items) {
-    return items.map((item,idx) => {
-      const dc = varDirColor(item.diff); const tc = trendColor(item.trend);
-      return `<tr class="data-row">
-        <td class="rank-cell">${idx+1}</td>
-        <td class="mat-cell"><span class="mat-name">${escR(item.mat)}</span></td>
-        <td class="var-cell" style="color:${dc}"><strong>${varDir(item.diff)}</strong><br><span style="font-size:11px">${fmtKgR(item.diff)}</span></td>
-        <td class="trend-cell" style="color:${tc}">${trendLabel(item.trend)}</td>
-      </tr>`;
-    }).join('');
+    return items.map((item, idx) => _relMatRowHtml(item, idx, maxAbsDiff)).join('');
   }
 
   function buildCentralBlock(centralName, items, levelColor, levelBg, levelBorder, levelIcon, levelLabel, badgeColor) {
@@ -2559,16 +2587,9 @@ window.gerarRelatorioCentral = function(centralName, niveis) {
   function trendColor(t) { return t==='worsening'?'#f87171':t==='improving'?'#4ade80':'#94a3b8'; }
   function escC(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
+  const maxAbsDiff = Math.max(1, ...todosItens.map(i => Math.abs(i.diff)));
   function buildRows(items) {
-    return items.map((item,idx) => {
-      const dc=varDirColor(item.diff); const tc=trendColor(item.trend);
-      return `<tr class="data-row">
-        <td class="rank-cell">${idx+1}</td>
-        <td class="mat-cell"><span class="mat-name">${escC(item.mat)}</span></td>
-        <td class="var-cell" style="color:${dc}"><strong>${varDir(item.diff)}</strong><br><span style="font-size:11px">${fmtKgC(item.diff)}</span></td>
-        <td class="trend-cell" style="color:${tc}">${trendLabel(item.trend)}</td>
-      </tr>`;
-    }).join('');
+    return items.map((item, idx) => _relMatRowHtml(item, idx, maxAbsDiff)).join('');
   }
 
   const _lvlGrad = {
@@ -2683,11 +2704,6 @@ window.gerarRelatorioComAcoes = function(centralName, niveis) {
   // As regras de ação são por categoria + nível: materiais da mesma seção que
   // caem na mesma regra compartilham a lista, então ela aparece uma vez só
   // (grupo A, B…) e a tabela só aponta a letra do grupo.
-  const CAT_NOMES = {
-    agregado: 'Agregados', aglomerante: 'Aglomerantes', aditivo: 'Aditivos e adições', adicao: 'Aditivos e adições',
-  };
-  const catNome = item => CAT_NOMES[item.catKey] || item.categoria || 'Outros';
-  const trendBg = t => t==='worsening' ? 'rgba(248,113,113,.12)' : t==='improving' ? 'rgba(74,222,128,.12)' : 'rgba(148,163,184,.10)';
   const maxAbsDiff = Math.max(1, ...sel.flatMap(k => itensPorNivel[k]).map(i => Math.abs(i.diff)));
 
   function buildSectionBody(items, cfg, levelKey) {
@@ -2701,21 +2717,13 @@ window.gerarRelatorioComAcoes = function(centralName, niveis) {
           acoes: acoes.split(/[;|\n]/).map(a => a.trim().replace(/^[-•–]\s*/, '')).filter(Boolean),
         });
         g = grupos.get(acoes);
-        g.cats.add(catNome(item));
+        g.cats.add(_relCatNome(item));
         g.mats.push(item.mat);
       }
-      const vc  = varColor(item.diff);
-      const pct = Math.max(3, Math.round(Math.abs(item.diff) / maxAbsDiff * 100));
-      return '<tr class="data-row">' +
-        '<td class="rank-cell">' + (idx+1) + '</td>' +
-        '<td><span class="mat-name">' + escC(item.mat) + '</span><div class="acm-cat">' + escC(catNome(item)) + '</div></td>' +
-        '<td class="acm-var"><div style="color:' + vc + '"><strong>' + varDir(item.diff) + '</strong> <span>' + fmtKgC(item.diff) + '</span></div>' +
-          '<div class="acm-bar"><i style="width:' + pct + '%;background:' + vc + '"></i></div></td>' +
-        '<td><span class="acm-pill" style="color:' + trendColor(item.trend) + ';background:' + trendBg(item.trend) + '">' + trendLabel(item.trend) + '</span></td>' +
+      return _relMatRowHtml(item, idx, maxAbsDiff,
         '<td style="text-align:center">' + (g
           ? '<span class="acm-tag" style="color:' + cfg.color + ';background:' + cfg.bg + '">' + g.letra + '</span>'
-          : '<span class="acm-sem">sem regra</span>') + '</td>' +
-      '</tr>';
+          : '<span class="acm-sem">sem regra</span>') + '</td>');
     }).join('');
 
     const gruposHtml = [...grupos.values()].map(g =>
@@ -2770,13 +2778,6 @@ window.gerarRelatorioComAcoes = function(centralName, niveis) {
     <style>
       ${_criticidadeMatTableStyles()}
       ${_saudePanelStyles()}
-      .data-table td { vertical-align:middle; }
-      .acm-cat { font-size:10px; color:#64748b; margin-top:2px; }
-      .acm-var { min-width:190px; font-family:'JetBrains Mono',monospace; font-size:11px; }
-      .acm-var strong { font-size:12px; margin-right:4px; }
-      .acm-bar { height:5px; background:rgba(255,255,255,.06); border-radius:3px; margin-top:6px; overflow:hidden; }
-      .acm-bar i { display:block; height:100%; border-radius:3px; opacity:.75; }
-      .acm-pill { display:inline-block; padding:3px 10px; border-radius:20px; font-size:11px; font-weight:700; white-space:nowrap; }
       .acm-tag { display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; border-radius:6px; font-size:11px; font-weight:800; font-family:'JetBrains Mono',monospace; flex-shrink:0; }
       .acm-sem { font-size:10px; color:#64748b; font-style:italic; }
       .acm-grupos { margin-top:16px; padding-top:14px; border-top:1px solid rgba(255,255,255,.08); }
