@@ -6015,14 +6015,15 @@ function renderAcoesRelatorio() {
     'critico': '<span style="color:#ef4444;font-weight:700">🔴 CRÍTICO</span>',
   };
   const catLabel = {
-    'AGREGADOS MIUDOS':   'Agr. Miúdos',
-    'AGREGADOS GRAUDOS':  'Agr. Graúdos',
+    'AGREGADOS':          'Agregados',
+    'AGREGADOS MIUDOS':   'Agregados',  // legado (unificado)
+    'AGREGADOS GRAUDOS':  'Agregados',  // legado (unificado)
     'AGLOMERANTES':       'Aglomerantes',
     'ADITIVOS E ADICOES': 'Aditivos e Adições',
   };
   tb.innerHTML = pageData.map((a, i) => {
     const cats = (Array.isArray(a.categorias) ? a.categorias : (a.material ? [a.material] : []));
-    const catsHtml = cats.map(c => `<span style="display:inline-block;padding:1px 7px;border-radius:10px;font-size:10px;background:var(--bg3);border:1px solid var(--border);color:var(--text2);margin:1px 2px 1px 0">${escapeHtml(catLabel[c] || c)}</span>`).join('');
+    const catsHtml = [...new Set(cats.map(c => catLabel[c] || c))].map(c => `<span style="display:inline-block;padding:1px 7px;border-radius:10px;font-size:10px;background:var(--bg3);border:1px solid var(--border);color:var(--text2);margin:1px 2px 1px 0">${escapeHtml(c)}</span>`).join('');
     const nivel = a.nivel || (a.operador ? 'legado' : '');
     return `
     <tr>

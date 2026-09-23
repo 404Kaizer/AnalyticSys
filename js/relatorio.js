@@ -2448,8 +2448,10 @@ function _resolverAcoesParaMaterial(materialNome, variacao, categoriaItem, nivel
   // Mapeamento: valor do checkbox → catKey(s) ou catSubKey(s) usados pelo sistema
   // Prioridade: catSubKey (distingue miúdo/graúdo) > catKey (agregado genérico)
   const CHECKBOX_TO_KEYS = {
-    'agregados miudos':   { subKeys: ['agregado_miudo'],  fallbackKey: null },
-    'agregados graudos':  { subKeys: ['agregado_graudo'], fallbackKey: null },
+    'agregados':          { subKeys: [],                  fallbackKey: 'agregado' },
+    // Legado: miúdo/graúdo foram unificados em "Agregados" — regras antigas valem pra ambos
+    'agregados miudos':   { subKeys: [],                  fallbackKey: 'agregado' },
+    'agregados graudos':  { subKeys: [],                  fallbackKey: 'agregado' },
     'aglomerantes':       { subKeys: [],                  fallbackKey: 'aglomerante' },
     'aditivos e adicoes': { subKeys: [],                  fallbackKey: ['aditivo', 'adicao'] },
   };
@@ -2669,10 +2671,9 @@ window.gerarRelatorioComAcoes = function(centralName, niveis) {
   // caem na mesma regra compartilham a lista, então ela aparece uma vez só
   // (grupo A, B…) e a tabela só aponta a letra do grupo.
   const CAT_NOMES = {
-    agregado_miudo: 'Agregados miúdos', agregado_graudo: 'Agregados graúdos',
-    aglomerante: 'Aglomerantes', aditivo: 'Aditivos e adições', adicao: 'Aditivos e adições',
+    agregado: 'Agregados', aglomerante: 'Aglomerantes', aditivo: 'Aditivos e adições', adicao: 'Aditivos e adições',
   };
-  const catNome = item => CAT_NOMES[item.catSubKey] || CAT_NOMES[item.catKey] || item.categoria || 'Outros';
+  const catNome = item => CAT_NOMES[item.catKey] || item.categoria || 'Outros';
   const trendBg = t => t==='worsening' ? 'rgba(248,113,113,.12)' : t==='improving' ? 'rgba(74,222,128,.12)' : 'rgba(148,163,184,.10)';
   const maxAbsDiff = Math.max(1, ...sel.flatMap(k => itensPorNivel[k]).map(i => Math.abs(i.diff)));
 
@@ -2716,7 +2717,7 @@ window.gerarRelatorioComAcoes = function(centralName, niveis) {
     ).join('');
 
     return '<table class="data-table"><thead><tr><th style="width:32px">#</th><th>Material</th><th>Variação</th><th>Tendência</th><th style="width:70px;text-align:center">Ação</th></tr></thead><tbody>' + rows + '</tbody></table>' +
-      (gruposHtml ? '<div class="acm-grupos"><div class="acm-grupos-title">✓ O que fazer</div>' + gruposHtml + '</div>' : '');
+      (gruposHtml ? '<div class="acm-grupos"><div class="acm-grupos-title">✓ O que fazer</div><div class="acm-grupos-grid">' + gruposHtml + '</div></div>' : '');
   }
 
   const lvlCfg = {
@@ -2767,7 +2768,8 @@ window.gerarRelatorioComAcoes = function(centralName, niveis) {
       .acm-sem { font-size:10px; color:#64748b; font-style:italic; }
       .acm-grupos { margin-top:16px; padding-top:14px; border-top:1px solid rgba(255,255,255,.08); }
       .acm-grupos-title { font-size:10.5px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:#4ade80; margin-bottom:10px; }
-      .acm-grupo { background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.08); border-left:3px solid; border-radius:8px; padding:12px 16px; margin-bottom:10px; page-break-inside:avoid; }
+      .acm-grupos-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:10px; }
+      .acm-grupo { background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.08); border-left:3px solid; border-radius:8px; padding:12px 16px; page-break-inside:avoid; }
       .acm-grupo-head { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:8px; }
       .acm-grupo-cat { font-size:12px; font-weight:700; color:#fff; }
       .acm-grupo-mats { display:flex; gap:5px; flex-wrap:wrap; }

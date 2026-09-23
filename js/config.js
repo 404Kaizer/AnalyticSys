@@ -2434,6 +2434,8 @@ function abrirModalAcaoRelatorio(id) {
   // Marca categorias salvas
   if (item?.categorias && Array.isArray(item.categorias)) {
     item.categorias.forEach(cat => {
+      // Legado: miúdos/graúdos foram unificados em AGREGADOS
+      if (/^AGREGADOS (MIUDOS|GRAUDOS)$/.test(cat)) cat = 'AGREGADOS';
       const cb = modal.querySelector(`.ar-cat-cb[value="${cat}"]`);
       if (cb) cb.checked = true;
     });
