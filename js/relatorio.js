@@ -1892,7 +1892,20 @@ function _criticidadeMatTableStyles() {
     .acm-var strong { font-size:12px; margin-right:4px; }
     .acm-bar { height:5px; background:rgba(255,255,255,.06); border-radius:3px; margin-top:6px; overflow:hidden; }
     .acm-bar i { display:block; height:100%; border-radius:3px; opacity:.75; }
-    .acm-pill { display:inline-block; padding:3px 10px; border-radius:20px; font-size:11px; font-weight:700; white-space:nowrap; }`;
+    .acm-pill { display:inline-block; padding:3px 10px; border-radius:20px; font-size:11px; font-weight:700; white-space:nowrap; }
+    .acm-bom { display:flex; flex-wrap:wrap; gap:6px; padding:14px 16px; }
+    .acm-bom-chip { font-size:11px; font-weight:600; color:#e2e8f0; background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.1); border-radius:14px; padding:4px 11px; white-space:nowrap; }
+    .acm-bom-chip b { font-size:10px; margin-left:2px; }`;
+}
+
+// Nível BOM não pede ação: só os nomes em badges, com a seta da tendência
+function _relBomChipsHtml(items) {
+  return '<div class="acm-bom">' + items.map(item => {
+    const t = item.trend;
+    const c = t === 'worsening' ? '#f87171' : t === 'improving' ? '#4ade80' : '#94a3b8';
+    const s = t === 'worsening' ? '▲' : t === 'improving' ? '▼' : '→';
+    return `<span class="acm-bom-chip">${_rankEsc(item.mat)} <b style="color:${c}">${s}</b></span>`;
+  }).join('') + '</div>';
 }
 
 const _REL_CAT_NOMES = { agregado:'Agregados', aglomerante:'Aglomerantes', aditivo:'Aditivos e adições', adicao:'Aditivos e adições' };
@@ -2306,7 +2319,7 @@ window.gerarRelatorioRegional = function(regionalName, niveis) {
     return items.map((item, idx) => _relMatRowHtml(item, idx, maxAbsDiff)).join('');
   }
 
-  function buildCentralBlock(centralName, items, levelColor, levelBg, levelBorder, levelIcon, levelLabel, badgeColor) {
+  function buildCentralBlock(centralName, items, levelColor, levelBg, levelBorder, levelIcon, levelLabel, badgeColor, isBom) {
     return `
     <div class="central-section" style="margin-bottom:16px;border:1px solid ${levelBorder};border-left:4px solid ${levelColor};border-radius:8px;overflow:hidden;page-break-inside:avoid">
       <div style="background:${levelBg};padding:12px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid ${levelBorder}">
@@ -2319,10 +2332,10 @@ window.gerarRelatorioRegional = function(regionalName, niveis) {
         </div>
         <span style="background:${badgeColor};color:#fff;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700">${items.length} ${items.length>1?'materiais':'material'}</span>
       </div>
-      <table class="data-table">
+      ${isBom ? _relBomChipsHtml(items) : `<table class="data-table">
         <thead><tr><th style="width:36px">#</th><th>Material</th><th>Variação</th><th>Tendência</th></tr></thead>
         <tbody>${buildMatRows(items)}</tbody>
-      </table>
+      </table>`}
     </div>`;
   }
 
@@ -2348,7 +2361,7 @@ window.gerarRelatorioRegional = function(regionalName, niveis) {
   const sectionsHtml = levels.map(l => {
     const byCentral = groupByCentral(l.items);
     const centraisHtml = byCentral.map(([cn, items]) =>
-      buildCentralBlock(cn, items, l.color, l.bg, l.border, l.icon, l.sublabel, l.badgeColor)
+      buildCentralBlock(cn, items, l.color, l.bg, l.border, l.icon, l.sublabel, l.badgeColor, l.key === 'bom')
     ).join('');
     const grad = levelBgGradient[l.key] || ('linear-gradient(135deg,' + l.color + ' 0%,' + l.color + 'cc 100%)');
     const glow = levelGlow[l.key] || (l.color + '55');
@@ -2623,7 +2636,8 @@ window.gerarRelatorioCentral = function(centralName, niveis) {
           '<span style="background:rgba(255,255,255,0.15);border:1.5px solid rgba(255,255,255,0.25);color:#fff;padding:6px 16px;border-radius:24px;font-size:13px;font-weight:800;letter-spacing:.03em;position:relative">' + items.length + ' ' + (items.length>1?'materiais':'material') + '</span>' +
         '</div>' +
         '<div style="background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.09);border-top:none">' +
-          '<table class="data-table"><thead><tr><th style="width:36px">#</th><th>Material</th><th>Variação</th><th>Tendência</th></tr></thead><tbody>' + buildRows(items) + '</tbody></table>' +
+          (label === 'BOM' ? _relBomChipsHtml(items) :
+          '<table class="data-table"><thead><tr><th style="width:36px">#</th><th>Material</th><th>Variação</th><th>Tendência</th></tr></thead><tbody>' + buildRows(items) + '</tbody></table>') +
         '</div>' +
       '</div>'
     );
@@ -2707,13 +2721,7 @@ window.gerarRelatorioComAcoes = function(centralName, niveis) {
   const maxAbsDiff = Math.max(1, ...sel.flatMap(k => itensPorNivel[k]).map(i => Math.abs(i.diff)));
 
   function buildSectionBody(items, cfg, levelKey) {
-    // BOM não pede ação: só os nomes em badges, com a seta da tendência
-    if (levelKey === 'bom') {
-      return '<div class="acm-bom">' + items.map(item =>
-        '<span class="acm-bom-chip">' + escC(item.mat) +
-          ' <b style="color:' + trendColor(item.trend) + '">' + trendLabel(item.trend).split(' ')[0] + '</b></span>'
-      ).join('') + '</div>';
-    }
+    if (levelKey === 'bom') return _relBomChipsHtml(items);
 
     const grupos = new Map(); // texto das ações → { letra, cats:Set, mats:[], acoes:[] }
     const grupoDe = items.map(item => {
@@ -2792,9 +2800,6 @@ window.gerarRelatorioComAcoes = function(centralName, niveis) {
       ${_saudePanelStyles()}
       .acm-tag { display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; border-radius:6px; font-size:11px; font-weight:800; font-family:'JetBrains Mono',monospace; flex-shrink:0; }
       .acm-sem { font-size:10px; color:#64748b; font-style:italic; }
-      .acm-bom { display:flex; flex-wrap:wrap; gap:6px; }
-      .acm-bom-chip { font-size:11px; font-weight:600; color:#e2e8f0; background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.1); border-radius:14px; padding:4px 11px; white-space:nowrap; }
-      .acm-bom-chip b { font-size:10px; margin-left:2px; }
       .acm-grupos { margin-top:16px; padding-top:14px; border-top:1px solid rgba(255,255,255,.08); }
       .acm-grupos-title { font-size:10.5px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:#4ade80; margin-bottom:10px; }
       .acm-grupos-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:10px; }
