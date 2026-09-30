@@ -134,6 +134,33 @@ function _anGetSapStock(args) {
   _anStockCache.set(k, v);
   return v;
 }
+// Variação (Real − Teórico) do MÊS CIVIL anterior ao mês de dtIni, mesma
+// regra da linha da Visão Micro: saldo SAP em (1º dia)−1 + movimentações SAP
+// do mês (sem Y11/Y12 e sem materiais sem cadastro) vs. último lançamento.
+// Ignora o toggle de NFs/OS pendentes. null = sem Est. Final no mês (a
+// coluna mostra "—", igual ao modal de detalhe).
+function _anGetVarMesAnterior(central, material, dtIni) {
+  const ini = new Date(dtIni.getFullYear(), dtIni.getMonth() - 1, 1);
+  const fim = new Date(dtIni.getFullYear(), dtIni.getMonth(), 0);
+  const k = 'varant|' + central + '|' + material + '|' + String(ini);
+  if (_anStockCache.has(k)) return _anStockCache.get(k);
+  const fimStock = _anGetLastPeriodStockFallback({ central, material, dtIni: ini, dtFim: fim });
+  let v = null;
+  if (fimStock && !fimStock.missing) {
+    const prev = _anGetSapStock({ central, material, dtIni: ini });
+    const ate = new Date(fim); ate.setHours(23, 59, 59, 999);
+    let mov = 0;
+    for (const rec of getSapIndex().byCentralMat.get(central)?.get(material) || []) {
+      const dl = parseDate(rec.dtLanc);
+      if (!dl || dl < ini || dl > ate) continue;
+      if (!getCatKeyDoCadastro(rec.materialOriginal) || isSapExcluidoPorFechamento(rec)) continue;
+      mov += num(rec.peso);
+    }
+    v = { diff: fimStock.value - ((prev?.value ?? 0) + mov), label: `${String(ini.getMonth() + 1).padStart(2, '0')}/${ini.getFullYear()}` };
+  }
+  _anStockCache.set(k, v);
+  return v;
+}
 function _anGetPrevDayStock(args) {
   const k = 'day|' + args.central + '|' + args.material + '|' + String(args.dtIni) + '|' + (args.catKey || '');
   if (_anStockCache.has(k)) return _anStockCache.get(k);
@@ -1640,6 +1667,7 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
       // formatado ("1,2 M kg"), badge de AUSENTE, tooltip e popover de
       // breakdown. Vazio ('') = sem valor → sempre no fim da ordenação,
       // independente da direção (ver sortMicroTable).
+      const _varAnt = _anGetVarMesAnterior(central, mat, dtIni);
       const _sortVals = [
         isMat ? central : mat,                                                    //  0 Central/Material
         matSemCadastro ? '' : (_matCodSap || ''),                                 //  1 Cód SAP
@@ -1652,7 +1680,8 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
         snapshot.pesoFimAusente ? '' : snapshot.pesoFim,                          //  8 Est. Final
         snapshot.estTeorico,                                                      //  9 Est. Teórico
         snapshot.diff,                                                            // 10 Variação
-        _rowCustoVar === null ? '' : _rowCustoVar                                 // 11 Custo Variação
+        _varAnt ? _varAnt.diff : '',                                              // 11 Var. Mês Anterior
+        _rowCustoVar === null ? '' : _rowCustoVar                                 // 12 Custo Variação
       ].map((v, i) => `data-sort-${i}="${escapeHtml(String(v))}"`).join(' ');
 
       matRowsHtml += `
@@ -1686,6 +1715,7 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
           <td class="td-mono" style="color:${snapshot.pesoFimAusente ? 'var(--text3)' : 'var(--text)'}">${snapshot.pesoFimAusente ? '—' : fmtKg(snapshot.pesoFim)}</td>
           <td class="td-mono" style="color:var(--purple)">${fmtKg(snapshot.estTeorico)}</td>
           <td class="td-mono ${dCls}" style="white-space:nowrap">${varSymbol(snapshot.diff)} ${fmtKg(Math.abs(snapshot.diff))}</td>
+          <td class="td-mono ${_varAnt ? varClass(_varAnt.diff) : ''}" style="white-space:nowrap;opacity:.75${_varAnt ? '' : ';color:var(--text3)'}" title="${_varAnt ? `Variação de ${_varAnt.label} (Real − Teórico)` : 'Sem Est. Final no mês anterior'}">${_varAnt ? `${varSymbol(_varAnt.diff)} ${fmtKg(Math.abs(_varAnt.diff))}` : '—'}</td>
           <td style="text-align:right">${custoVarCell}</td>
         </tr>`;
     });
@@ -1890,6 +1920,9 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
         </div>`;
     }
 
+    const _varAntD   = new Date(dtIni.getFullYear(), dtIni.getMonth() - 1, 1);
+    const _varAntHdr = `${String(_varAntD.getMonth() + 1).padStart(2, '0')}/${_varAntD.getFullYear()}`;
+
     const card = document.createElement('div');
     const _pendCardClass = (_pendState.nf && _pendState.os) ? ' pend-considerado-ambos'
                          : _pendState.nf ? ' pend-considerado-nf'
@@ -1997,10 +2030,11 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
                 <th data-sort-col="8" data-sort-type="num" onclick="sortMicroTable(this,event)">Est. Final ${_SORT_ICO}<br><span style="font-size:9px;font-weight:400;opacity:.7">(Últ. Lançamento)</span></th>
                 <th data-sort-col="9" data-sort-type="num" onclick="sortMicroTable(this,event)">Est. Teórico ${_SORT_ICO}<br><span style="font-size:9px;font-weight:400;opacity:.7">(Ini+Ent+Sai+Aju)</span></th>
                 <th data-sort-col="10" data-sort-type="abs" onclick="sortMicroTable(this,event)" title="Ordena pelo valor ABSOLUTO: um desfalque e uma sobra do mesmo tamanho pesam igual">Variação ${_SORT_ICO}<br><span style="font-size:9px;font-weight:400;opacity:.7">(Real − Teórico)</span></th>
-                <th data-sort-col="11" data-sort-type="abs" onclick="sortMicroTable(this,event)" style="text-align:right" title="Ordena pelo valor ABSOLUTO: um desfalque e uma sobra do mesmo tamanho pesam igual">Custo Variação ${_SORT_ICO}<br><span style="font-size:9px;font-weight:400;opacity:.7">(Var. × C. Médio)</span></th>
+                <th data-sort-col="11" data-sort-type="abs" onclick="sortMicroTable(this,event)" title="Variação do mês civil anterior ao período, mesma regra (Real − Teórico). Ordena pelo valor ABSOLUTO">Var. Mês Ant. ${_SORT_ICO}<br><span style="font-size:9px;font-weight:400;opacity:.7">(${escapeHtml(_varAntHdr)})</span></th>
+                <th data-sort-col="12" data-sort-type="abs" onclick="sortMicroTable(this,event)" style="text-align:right" title="Ordena pelo valor ABSOLUTO: um desfalque e uma sobra do mesmo tamanho pesam igual">Custo Variação ${_SORT_ICO}<br><span style="font-size:9px;font-weight:400;opacity:.7">(Var. × C. Médio)</span></th>
               </tr>
             </thead>
-            <tbody>${matRowsHtml || `<tr><td colspan="12"><div class="empty-state" style="padding:24px"><i class="ti ti-box-off"></i><p>Nenhum${isMat ? 'a central' : ' material'} encontrad${isMat ? 'a' : 'o'}.</p></div></td></tr>`}</tbody>
+            <tbody>${matRowsHtml || `<tr><td colspan="13"><div class="empty-state" style="padding:24px"><i class="ti ti-box-off"></i><p>Nenhum${isMat ? 'a central' : ' material'} encontrad${isMat ? 'a' : 'o'}.</p></div></td></tr>`}</tbody>
           </table>
         </div>
       </div>`;
