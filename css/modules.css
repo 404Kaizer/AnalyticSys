@@ -12832,3 +12832,94 @@ tr.sap-fechamento td {
 .pgm-date-cell-day { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--text); }
 .pgm-date-cell-dow { font-size: 9.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--text3); }
 .pgm-date-cell-qty { font-size: 10px; color: var(--amber); margin-top: 3px; font-family: var(--mono); }
+
+/* ═══ Construtor de Informativos (js/informativos.js) ═══
+   Cartão: reaproveita .fech-card; as cores vêm de --inf-accent/--inf-bg/--inf-fg/--inf-alert. */
+.inf-toolbar { align-items: center; gap: 8px; padding: 10px 16px; color: var(--text2); flex-wrap: wrap; }
+.inf-toolbar .cub-select { width: auto; max-width: 260px; padding: 7px 10px; font-size: 12.5px; }
+#inf-saved-indicator {
+  margin-left: auto; font-size: 10px; font-family: var(--mono); color: var(--green);
+  opacity: 0; transition: opacity .3s; display: flex; align-items: center; gap: 4px;
+}
+.inf-sec-title {
+  display: flex; align-items: center; justify-content: space-between; gap: 6px;
+  font-size: 12.5px; font-weight: 700; color: var(--text); margin-bottom: 12px;
+}
+.inf-field-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.inf-field-head label { margin-bottom: 0 !important; }
+.fech-field label.inf-chk, .inf-chk {
+  display: inline-flex; align-items: center; gap: 6px; margin: 0;
+  text-transform: none; letter-spacing: 0; font-family: var(--font);
+  font-size: 12px; font-weight: 500; color: var(--text2); cursor: pointer;
+}
+.inf-paletas { display: flex; flex-wrap: wrap; gap: 6px; }
+.inf-paleta {
+  width: 30px; height: 30px; border-radius: 8px; border: 2px solid; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; padding: 0;
+}
+.inf-paleta span { width: 11px; height: 11px; border-radius: 50%; }
+.inf-cores { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.fech-field label.inf-cor { display: flex; margin: 0; text-transform: none; letter-spacing: 0; font-family: var(--font); font-weight: 500; align-items: center; gap: 8px; font-size: 12px; color: var(--text2); cursor: pointer; }
+.inf-cor input[type="color"] { width: 34px; height: 26px; border: 1px solid var(--border2); border-radius: 6px; background: none; padding: 1px; cursor: pointer; }
+.inf-icones { display: flex; flex-wrap: wrap; gap: 5px; margin: 8px 0; }
+.fech-icon-btn.is-on { border-color: var(--accent); color: var(--accent); }
+.fech-icon-btn:disabled { opacity: .35; cursor: default; }
+
+.inf-bloco { border: 1px solid var(--border2); border-radius: 8px; background: var(--bg2); margin-bottom: 8px; }
+.inf-bloco-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 6px;
+  padding: 6px 6px 6px 10px; font-size: 11.5px; font-weight: 700; color: var(--text2);
+}
+.inf-bloco-acoes { display: flex; gap: 4px; }
+.inf-bloco-acoes .fech-icon-btn { width: 24px; height: 24px; font-size: 13px; }
+.inf-bloco-body { padding: 0 8px 8px; display: flex; flex-direction: column; gap: 6px; }
+.inf-bloco-body > input[type="text"], .inf-bloco-body textarea {
+  width: 100%; background: var(--bg3); border: 1px solid var(--border2); border-radius: 7px;
+  padding: 8px 10px; font-size: 12.5px; color: var(--text); font-family: var(--font); outline: none; resize: vertical;
+}
+.inf-bloco-body textarea { min-height: 54px; line-height: 1.5; }
+.inf-bloco-body input:focus, .inf-bloco-body textarea:focus { border-color: var(--accent); }
+.inf-bloco-body .cub-select { padding: 6px 9px; font-size: 12px; }
+.inf-add-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 4px 0 8px; }
+.inf-preview-side { position: sticky; top: 0; }
+
+.inf-card { background: var(--inf-bg); }
+.inf-card .fech-card-stripe { background: var(--inf-accent); }
+.inf-card .fech-card-stripe.is-listrada { background: repeating-linear-gradient(135deg, var(--inf-accent) 0 10px, color-mix(in srgb, var(--inf-accent) 75%, #000) 10px 20px); }
+.inf-card .fech-card-stripe.is-gradiente { background: linear-gradient(90deg, color-mix(in srgb, var(--inf-accent) 55%, #000), var(--inf-accent), color-mix(in srgb, var(--inf-accent) 55%, #000)); }
+.inf-card .fech-card-logo-strip { border-bottom-color: color-mix(in srgb, var(--inf-fg) 10%, transparent); }
+.inf-card.is-claro .fech-card-logo-strip img { filter: none; }
+.inf-card .fech-card-head { background: linear-gradient(180deg, color-mix(in srgb, var(--inf-accent) 12%, var(--inf-bg)) 0%, var(--inf-bg) 100%); }
+.inf-card .fech-card-badge { background: linear-gradient(135deg, var(--inf-accent) 0%, color-mix(in srgb, var(--inf-accent) 70%, #000) 100%); color: var(--inf-on-accent); }
+.inf-card .fech-card-badge-icon i { font-size: 20px; }
+.inf-card .inf-emoji { font-size: 17px; line-height: 1; }
+.inf-card .fech-card-title { color: #fff; }
+.inf-card.is-claro .fech-card-title { color: #111827; }
+.inf-card .fech-card-meta {
+  color: color-mix(in srgb, var(--inf-accent) 60%, var(--inf-fg)); background: color-mix(in srgb, var(--inf-accent) 14%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--inf-accent) 30%, transparent); border-bottom: 1px solid color-mix(in srgb, var(--inf-accent) 30%, transparent);
+}
+.inf-card .fech-card-divider { background: color-mix(in srgb, var(--inf-accent) 20%, transparent); }
+.inf-card .inf-body { color: var(--inf-fg); display: flex; flex-direction: column; gap: 8px; }
+.inf-card .inf-body .spacer { height: 8px; }
+.inf-card .ln { background: color-mix(in srgb, var(--inf-accent) 9%, transparent); color: var(--inf-fg); border-left-color: var(--inf-accent); }
+.inf-card .inf-p { font-size: 13px; line-height: 1.7; white-space: pre-wrap; word-wrap: break-word; }
+.inf-card .caps { color: var(--inf-accent); border-bottom-color: color-mix(in srgb, var(--inf-accent) 40%, transparent); }
+.inf-card .bullet { background: color-mix(in srgb, var(--inf-fg) 5%, transparent); }
+.inf-card .dot { background: color-mix(in srgb, var(--inf-accent) 18%, transparent); color: var(--inf-accent); border: 1px solid color-mix(in srgb, var(--inf-accent) 35%, transparent); }
+.inf-card .dot i { font-size: 12px; }
+.inf-card .stop-box.inf-alert {
+  color: var(--inf-tone); background: color-mix(in srgb, var(--inf-tone) 12%, var(--inf-bg));
+  border-color: color-mix(in srgb, var(--inf-tone) 55%, transparent); white-space: pre-wrap;
+}
+.inf-card .inf-alert i { font-size: 17px; flex-shrink: 0; }
+.inf-card .inf-destaque {
+  text-align: center; padding: 14px; border-radius: 10px;
+  background: color-mix(in srgb, var(--inf-accent) 10%, transparent); border: 1px solid color-mix(in srgb, var(--inf-accent) 35%, transparent);
+}
+.inf-card .inf-destaque-valor { font-family: 'Archivo Black', 'Archivo', sans-serif; font-size: 34px; line-height: 1.1; color: var(--inf-accent); word-wrap: break-word; }
+.inf-card .inf-destaque-legenda { margin-top: 4px; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.inf-card .inf-hr { height: 1px; background: color-mix(in srgb, var(--inf-fg) 15%, transparent); margin: 6px 0; }
+.inf-card .fech-card-foot { border-top-color: color-mix(in srgb, var(--inf-fg) 10%, transparent); }
+.inf-card .fech-foot-label, .inf-card .fech-foot-priority { color: var(--inf-accent); }
+.inf-card .fech-foot-date { color: var(--inf-fg); }

@@ -403,6 +403,14 @@
               </div>
               <i class="ti ti-chevron-right tools-item-arrow"></i>
             </button>
+            <button class="tools-item" onclick="abrirInformativos()">
+              <div class="tools-item-icon" style="background:var(--green-bg);color:var(--green)"><i class="ti ti-speakerphone"></i></div>
+              <div class="tools-item-body">
+                <div class="tools-item-label">Informativos</div>
+                <div class="tools-item-sub">Monte cartões e diretrizes do seu jeito</div>
+              </div>
+              <i class="ti ti-chevron-right tools-item-arrow"></i>
+            </button>
             <button class="tools-item" onclick="openTool('assistente'); closeToolsMenu()">
               <div class="tools-item-icon" style="background:var(--purple-bg);color:var(--purple)"><i class="ti ti-message-chatbot"></i></div>
               <div class="tools-item-body">
@@ -4284,6 +4292,43 @@
   </div>
 </div>
 
+<!-- MODAL: Construtor de Informativos (js/informativos.js) — reaproveita o layout do modal de Fechamento -->
+<div class="modal-overlay" id="modal-informativo">
+  <div class="modal fech-modal-shell" style="max-width:980px;width:96vw">
+    <div class="fech-tabs inf-toolbar">
+      <i class="ti ti-speakerphone"></i>
+      <select id="inf-modelo-sel" class="cub-select" onchange="infSelecionarModelo(this.value)" title="Informativo em edição"></select>
+      <select class="cub-select" onchange="if(this.value){infNovoModelo(this.value);this.value=''}" title="Criar novo informativo">
+        <option value="">+ Novo…</option>
+        <option value="branco">Em branco</option>
+        <option value="semanal">A partir do Semanal</option>
+        <option value="mensal">A partir do Mensal</option>
+        <option value="metas">A partir de Metas</option>
+      </select>
+      <button class="fech-icon-btn" onclick="infDuplicarModelo()" title="Duplicar"><i class="ti ti-copy"></i></button>
+      <button class="fech-icon-btn" onclick="infRenomearModelo()" title="Renomear"><i class="ti ti-pencil"></i></button>
+      <button class="fech-icon-btn" onclick="infExcluirModelo()" title="Excluir"><i class="ti ti-trash"></i></button>
+      <span id="inf-saved-indicator"><i class="ti ti-device-floppy"></i> salvo</span>
+    </div>
+
+    <div class="fech-scroll-body">
+      <div class="fech-builder">
+        <div class="fech-form-panel" id="inf-form"></div>
+        <div class="fech-preview-side inf-preview-side" id="inf-preview"></div>
+      </div>
+    </div>
+
+    <div class="form-actions fech-footer-actions" style="justify-content:space-between;flex-wrap:wrap;gap:8px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn" onclick="infCopiarWhatsapp()"><i class="ti ti-brand-whatsapp"></i> Copiar WhatsApp</button>
+        <button class="btn" onclick="infImprimir()"><i class="ti ti-printer"></i> Visualizar / Imprimir</button>
+        <button class="btn" onclick="infGerarImagem()"><i class="ti ti-photo"></i> Gerar Imagem</button>
+      </div>
+      <button class="btn" onclick="closeModal('modal-informativo')">Fechar</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-fechamento">
   <div class="modal fech-modal-shell" style="max-width:920px;width:96vw">
 
@@ -6057,6 +6102,7 @@
 <script defer src="js/persist.js"></script>
 <script defer src="js/normalize.js"></script>
 <script defer src="js/format.js"></script>
+<script defer src="js/informativos.js"></script>
 <script defer src="js/cloud-backup.js"></script>
 <script defer src="js/ui.js"></script>
 <script defer src="js/import.js"></script>
