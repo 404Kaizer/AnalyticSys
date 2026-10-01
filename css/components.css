@@ -606,36 +606,46 @@
 .inv-kpi-card:hover { transform: translateY(-2px); border-color: var(--border2); box-shadow: 0 8px 24px rgba(0,0,0,0.18); }
 .inv-kpi-card:hover::after { opacity: 1; }
 
-/* Botão "Detalhado" (ver _dgVgBotaoDetalhado, dashboard.js) — link de
-   texto "Ver detalhes →" no rodapé do card, separado por um filete, na cor
-   neutra do texto secundário (opção C escolhida pelo Hugo, out/2026; antes
-   era um círculo colorido flutuando no canto, que destoava do card).
-   margin-top:auto empurra o rodapé pro fim quando o card é flex-column
-   (.dg-vg-extremo-box), alinhando os rodapés de cards vizinhos. */
+/* Botão "Detalhado" (ver _dgVgBotaoDetalhado, dashboard.js) — faixa de
+   rodapé "Ver detalhes →" de ponta a ponta do card, num fundo levemente
+   diferente do card (pedido do Hugo, out/2026; antes era um círculo
+   colorido flutuando no canto, que destoava do card). O rodapé "sangra"
+   até a borda com margem negativa igual ao padding de cada tipo de card;
+   o overflow:hidden + border-radius do card arredonda os cantos de baixo. */
 .dg-kpi-detalhe-btn {
   display: flex; align-items: center; gap: 4px;
-  width: 100%;
-  margin-top: auto;
-  padding: 8px 0 0;
+  flex-shrink: 0;
+  padding: 9px 20px;
   border: none;
   border-top: 1px solid var(--border);
   border-radius: 0;
-  background: none;
+  background: color-mix(in srgb, var(--bg3) 55%, var(--bg2));
   color: var(--text3);
   font-family: inherit;
   font-size: 11.5px;
   font-weight: 600;
   text-align: left;
   cursor: pointer;
-  transition: color 0.15s;
+  transition: color 0.15s, background 0.15s;
 }
 .dg-kpi-detalhe-btn i { font-size: 13px; transition: transform 0.15s; }
-.dg-kpi-detalhe-btn:hover { color: var(--text); }
+.dg-kpi-detalhe-btn:hover { color: var(--text); background: var(--bg3); }
 .dg-kpi-detalhe-btn:hover i { transform: translateX(2px); }
-/* Nos cards em bloco (gráficos/donuts) o margin-top:auto não age — espaço fixo. */
-.oc-chart-card > .dg-kpi-detalhe-btn { margin-top: 12px; }
-.inv-kpi-body > .dg-kpi-detalhe-btn { margin-top: 10px; }
-@media print { .dg-kpi-detalhe-btn { display: none; } }
+
+/* Gráficos e donuts (.oc-chart-card, padding 16px 20px). */
+.oc-chart-card > .dg-kpi-detalhe-btn { width: calc(100% + 40px); margin: 14px -20px -16px; }
+/* Cards de extremo (flex-column, padding 20px 20px 18px) — margin-top:auto
+   alinha os rodapés dos 4 cards na mesma altura. */
+.dg-vg-extremo-box > .dg-kpi-detalhe-btn { width: calc(100% + 40px); margin: auto -20px -18px; }
+/* Compras/Consumo (.inv-kpi-secondary, padding 20px 22px) — o card é flex
+   em linha, então quebra linha e zera o padding de baixo pro rodapé. */
+.inv-kpi-card.dg-kpi-card-rodape { flex-wrap: wrap; row-gap: 14px; padding-bottom: 0; }
+.dg-kpi-card-rodape > .dg-kpi-detalhe-btn { width: calc(100% + 44px); margin: 0 -22px; padding-left: 22px; padding-right: 22px; }
+
+@media print {
+  .dg-kpi-detalhe-btn { display: none; }
+  .inv-kpi-card.dg-kpi-card-rodape { padding-bottom: 20px; }
+}
 
 .inv-kpi-icon {
   width: 40px; height: 40px;

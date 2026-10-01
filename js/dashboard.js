@@ -1536,9 +1536,9 @@ function _dgVgColetarSapPorNatureza(results, natureza) {
 // mostra o valor certo ao lado (TON/kg, dgFmtPesoSigned), então repeti-lo
 // no botão seria redundante e inconsistente.
 //
-// Vai no fim de .inv-kpi-body, como link "Ver detalhes →" de rodapé (ver
-// .dg-kpi-detalhe-btn em components.css) — não dentro do label, que tem
-// layout flex de linha de texto.
+// Vai como último filho do .inv-kpi-card, que ganha .dg-kpi-card-rodape:
+// vira uma faixa de rodapé "Ver detalhes →" de ponta a ponta do card (ver
+// .dg-kpi-detalhe-btn em components.css).
 function _dgVgBotaoDetalhado(entries, title, colorVar) {
   if (!entries.length) return '';
   const encoded = encodeURIComponent(JSON.stringify(entries));
@@ -1690,21 +1690,21 @@ function _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais, f
           <div class="inv-kpi-unit">${money(estTotais.custoIni || 0)}</div>
         </div>
       </div>
-      <div class="inv-kpi-card">
+      <div class="inv-kpi-card${btnCompras ? ' dg-kpi-card-rodape' : ''}">
         <div class="inv-kpi-body">
           <div class="inv-kpi-label"><i class="ti ti-arrow-bar-to-down" style="color:var(--green)"></i>Compras</div>
           <div class="inv-kpi-value">${dgFmtPesoSigned(movTotais.totalEnt)}</div>
           <div class="inv-kpi-unit">${money(custoMovTotais.custoEnt || 0)}</div>
-          ${btnCompras}
         </div>
+        ${btnCompras}
       </div>
-      <div class="inv-kpi-card">
+      <div class="inv-kpi-card${btnConsumo ? ' dg-kpi-card-rodape' : ''}">
         <div class="inv-kpi-body">
           <div class="inv-kpi-label"><i class="ti ti-arrow-bar-up" style="color:var(--red)"></i>Consumo</div>
           <div class="inv-kpi-value">${dgFmtPesoSigned(movTotais.totalSai)}</div>
           <div class="inv-kpi-unit">${money(custoMovTotais.custoSai || 0)}</div>
-          ${btnConsumo}
         </div>
+        ${btnConsumo}
       </div>
       <div class="inv-kpi-card" id="dg-vg-kpi-ajustes">
         <div class="inv-kpi-body">
