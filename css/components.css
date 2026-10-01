@@ -615,6 +615,9 @@
 .dg-kpi-detalhe-btn {
   display: flex; align-items: center; gap: 4px;
   flex-shrink: 0;
+  /* Acima do brilho de hover do .inv-kpi-card (::after, inset:0), que
+     senão cobre o rodapé e engole o clique. */
+  position: relative; z-index: 1;
   padding: 9px 20px;
   border: none;
   border-top: 1px solid var(--border);
