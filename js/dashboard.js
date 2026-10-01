@@ -2116,10 +2116,10 @@ function _dgVgRenderExtremos(extRegional, extCentral, elId, dadosJs) {
 //    - chave null (vem do botão dos 2 gráficos de barra): sem recorte,
 //      ranking cheio na própria dimensão (Regional ou Central) — mesmo
 //      dado que os gráficos mostram só o Top 8, aqui vem a lista inteira.
-// `dados` opcional, mesmo papel de abrirDetalheSaude: { pares, pesoMedio,
-// totalEstTeoricoKpi } de um mês da aba Evolução do relatório.
-function abrirDetalheVariacao(tipo, chave, dados) {
-  const d = dados || window._dgVgLastData;
+// `periodo` opcional, mesmo papel do `dados` de abrirDetalheSaude: { pares,
+// pesoMedio, totalEstTeoricoKpi } de um mês da aba Evolução do relatório.
+function abrirDetalheVariacao(tipo, chave, periodo) {
+  const d = periodo || window._dgVgLastData;
   const overlay = document.getElementById('dg-var-detalhe-overlay');
   const titleEl = document.getElementById('dg-var-detalhe-title');
   if (!d || !overlay) return;
