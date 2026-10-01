@@ -1494,7 +1494,7 @@ function renderDgVisaoGeralPdf(results, thresholds, dtIni, dtFim) {
   window._dgVgLastData = {
     dtIni, dtFim, results, pares, counts, scoreInfo, thresholds,
     varTotalFisica, custoTotal, catFisicaPct,
-    estTotais, movTotais, custoMovTotais, totalEstTeoricoKpi,
+    estTotais, movTotais, custoMovTotais, totalEstTeoricoKpi, pesoMedio: pesoMedioKpi,
     extRegional, extCentral, entriesRegional, entriesCentral,
     custoAbsPorCat, veiculosTotalKpi, fechExcluidos: sapFechExcluidosPeriodo
   };
@@ -2066,11 +2066,10 @@ function _dgVgRenderExtremos(extRegional, extCentral, elId) {
   // Botão "Detalhado" só nos boxes com vencedor real (o vazio não tem o que
   // detalhar) — chama abrirDetalheVariacao(tipo, ext.k), que filtra pares
   // por aquela regional/central e mostra o ranking da dimensão de baixo
-  // (regional→central, central→material). Não existe fora da tela ao vivo
-  // (abrirDetalheVariacao é só do dashboard.js): nos cards "fotografados"
-  // do detalhe mensal do relatório (ver _dgrEvoDetalheCardHtml), o botão
-  // fica inerte — mesma categoria de limitação já aceita pro tooltip dos
-  // donuts nesses cards.
+  // (regional→central, central→material). No relatório, a aba Dashboard
+  // leva abrirDetalheVariacao embutida (_DGR_NOMES.detalheDash); nos cards
+  // "fotografados" do detalhe mensal (_dgrEvoDetalheCardHtml) o botão é
+  // removido, porque abriria os pares do período do Dashboard, não do mês.
   const box = (label, ext, tipo) => {
     if (!ext) return `<div class="dg-vg-extremo-box dg-vg-extremo-empty">
       <span class="dg-vg-extremo-label">${label}</span>
@@ -2122,7 +2121,8 @@ function abrirDetalheVariacao(tipo, chave) {
   const titleEl = document.getElementById('dg-var-detalhe-title');
   if (!d || !overlay) return;
 
-  const pesoMedio = _daPesoMedioPorTipo(_daBuildEntradasFlat(d.results));
+  // Do cache (já calculado no render) — o relatório não carrega d.results cru.
+  const pesoMedio = d.pesoMedio || {};
 
   let paresEscopo = d.pares, keyFn, colLabel, labelFn;
   if (chave) {

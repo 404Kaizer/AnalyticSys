@@ -3619,7 +3619,19 @@ const _DGR_NOMES = {
               '_daVarIrrelevante', '_daColorFor', '_daFmtPctSigned', '_daFmtMoneySigned',
               '_daFmtCountSigned', '_daMaiorImpacto',
               '_daBuildTabelaMaterial', '_daBuildRanking',
-              '_daRenderTabelaMaterial', '_daRenderRanking']
+              '_daRenderTabelaMaterial', '_daRenderRanking'],
+  // Botões de detalhamento dos donuts de Saúde Geral, dos 4 cards de extremo
+  // e dos 2 gráficos de Variação (aba Dashboard, clonada) — as MESMAS funções
+  // da tela; os modais vêm clonados por _dgrClonarModaisDetalhe.
+  detalheDash: ['DG_VG_CAT_LABELS', 'DG_TON_THRESHOLD_KG',
+                'num', 'fmtKg', 'money', 'escapeHtml', 'varSymbol', 'movValorCor',
+                'dgFmtPeso', 'dgFmtPesoSigned',
+                '_daVarIrrelevante', '_daColorFor', '_daFmtPctSigned', '_daFmtMoneySigned',
+                '_daFmtCountSigned', '_daMaiorImpacto', '_daBuildRanking', '_daRenderRanking',
+                'calcHealthScore', 'classifyVariation', 'HEALTH_PENALTIES', '_dgVgBuildCentralHealthData',
+                '_DG_VG_NIVEL_COR', '_DG_VG_NIVEL_LABEL', '_DG_VG_NIVEL_ORDEM',
+                '_dgVgNivelBadgeHtml', '_dgVgSaudeDiffCor', 'abrirDetalheSaude', '_dgVgRenderSaudeTabela',
+                '_dgVgFiltrarSaudeLista', 'fecharDetalheSaude', 'abrirDetalheVariacao', 'fecharDetalheVariacao']
 };
 
 function _dgrScriptPrelude(chaves) {
@@ -3635,7 +3647,20 @@ var _dgVgCharts = {};
 // exportação (_dgrEmitirCodigo só sabe emitir função ou const, e um
 // contador que a própria função embutida incrementa quebraria como const).
 var _dgVgDonutUid = 0;
+// Lista do modal de Saúde Geral — abrirDetalheSaude reatribui (era \`let\`).
+var _dgVgSaudeListaAtual = [];
 <\/script>`;
+}
+
+// Os 2 modais de detalhamento da aba Dashboard (Variação e Saúde Geral) —
+// overlays vazios do index.html, preenchidos no clique pelas funções reais
+// embutidas (_DGR_NOMES.detalheDash).
+function _dgrClonarModaisDetalhe() {
+  return ['dg-var-detalhe-overlay', 'dg-var-saude-overlay']
+    .map(id => document.getElementById(id))
+    .filter(Boolean)
+    .map(el => { const c = el.cloneNode(true); c.classList.remove('open'); c.setAttribute('aria-hidden', 'true'); return c.outerHTML; })
+    .join('');
 }
 
 // ── Os 3 gráficos da Visão Geral, vivos no relatório ──────────────
@@ -3667,7 +3692,10 @@ function _dgrScriptGraficos(d) {
     // (JSON.stringify pesado o bastante pra travar bem no meio do
     // filtro) — daí o donut de Centrais nunca reagia, enquanto o de
     // Materiais (que só usa `pares`, bem mais leve) reagia normal.
-    resultsCentrais: (d.results || []).map(r => ({ central: r.central }))
+    resultsCentrais: (d.results || []).map(r => ({ central: r.central })),
+    // Modal de Variação por Regional/Central (abrirDetalheVariacao).
+    pesoMedio:          d.pesoMedio || {},
+    totalEstTeoricoKpi: d.totalEstTeoricoKpi || 0
   };
 
   // As funções de render dos gráficos vêm do prelúdio (_DGR_NOMES.graficos).
@@ -3682,7 +3710,8 @@ function _dgrScriptGraficos(d) {
   // relatório exportado. "results" aqui é a versão ENXUTA (só .central por
   // item, ver DADOS.resultsCentrais acima) — suficiente pro filtro, que só
   // usa essa lista pra semear central sem par nenhum como 'bom'.
-  window._dgVgLastData = { pares: DADOS.pares, thresholds: DADOS.thresholds, results: DADOS.resultsCentrais };
+  window._dgVgLastData = { pares: DADOS.pares, thresholds: DADOS.thresholds, results: DADOS.resultsCentrais,
+                           pesoMedio: DADOS.pesoMedio, totalEstTeoricoKpi: DADOS.totalEstTeoricoKpi };
 
   // Redesenha os 3 gráficos. Chamado ao abrir, ao trocar de aba (canvas em
   // painel escondido nasce com dimensão zero), ao trocar o tema (a cor do
@@ -3949,7 +3978,10 @@ function _dgrExportaveis() {
     calcHealthScore, classifyVariation, HEALTH_PENALTIES,
     _daVarIrrelevante, _daColorFor, _daFmtPctSigned, _daFmtMoneySigned, _daFmtCountSigned,
     _daMaiorImpacto, _daBuildTabelaMaterial, _daBuildRanking,
-    _daRenderTabelaMaterial, _daRenderRanking
+    _daRenderTabelaMaterial, _daRenderRanking,
+    _DG_VG_NIVEL_COR, _DG_VG_NIVEL_LABEL, _DG_VG_NIVEL_ORDEM,
+    _dgVgNivelBadgeHtml, _dgVgSaudeDiffCor, abrirDetalheSaude, _dgVgRenderSaudeTabela,
+    _dgVgFiltrarSaudeLista, fecharDetalheSaude, abrirDetalheVariacao, fecharDetalheVariacao
   };
 }
 
@@ -4367,6 +4399,10 @@ function _dgrEvoDetalheCardHtml(l) {
       cenSvg: gaugeCenSvg, cenSub: gaugeCenSub, cenSum: gaugeCenSum
     }, l.results);
     _dgVgRenderExtremos(extRegional, extCentral, extremosEl);
+    // abrirDetalheVariacao existe no arquivo (aba Dashboard), mas lê os pares
+    // do período do Dashboard — aqui abriria o mês errado. Sai o botão.
+    // ponytail: sem detalhamento por mês; dar a cada card seus pares se pedirem.
+    document.querySelectorAll(`#${extremosEl} .dg-kpi-detalhe-btn`).forEach(b => b.remove());
   });
 
   const canvasRegional = `evo-cr-${l.id}`, canvasCentral = `evo-cc-${l.id}`;
@@ -5533,10 +5569,11 @@ window.gerarRelatorioGerencialDashboard = async function(tema = 'dark', selecao 
 
     const bodyHtml = `<style>${_dgrEstilos()}${ajustesCss}</style>`
       + abasBarHtml + panesHtml + _dgrClonarFechModal(periodoDash)
-      + (incluiu('dashboard') ? _dgrDetalheBotaoModalHtml() : '')
+      + (incluiu('dashboard') ? _dgrDetalheBotaoModalHtml() + _dgrClonarModaisDetalhe() : '')
       + _dgrScriptTooltipApp() + chartJs
       + _dgrScriptPrelude([
           incluiu('dashboard') && 'graficos',
+          incluiu('dashboard') && 'detalheDash',
           incluiu('evolucao')  && 'evolucao',
           incluiu('detalhado') && 'detalhado'
         ].filter(Boolean))
