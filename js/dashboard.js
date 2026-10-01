@@ -1557,8 +1557,10 @@ function _dgVgBotaoDetalhado(entries, title, colorVar) {
 //    o wrapper "Destaque do Período" (removido — não fazia sentido), mas
 //    MANTENDO os 2 níveis de tamanho/agrupamento. Valores por extenso,
 //    sem abreviação M/K (fmtKg/money em vez de fmtKgShort/moneyShort).
-function _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais, fechExcluidos = [], custoMovTotais = {}, veiculos = {}, results = []) {
-  const el = document.getElementById('dg-vg-kpis-hero');
+// `elId` opcional — default é o container FIXO da tela; o detalhe mensal da
+// Evolução (relatório) desenha num container próprio de cada mês.
+function _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais, fechExcluidos = [], custoMovTotais = {}, veiculos = {}, results = [], elId) {
+  const el = document.getElementById(elId || 'dg-vg-kpis-hero');
   if (!el) return;
 
   // Botão "Detalhado" dos cards de Compras/Consumo — abre o MESMO modal de
@@ -1575,6 +1577,7 @@ function _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais, f
   const consumoEntries = _dgVgColetarSapPorNatureza(results, 'sai');
   const btnCompras = _dgVgBotaoDetalhado(comprasEntries, 'Compras', 'var(--green)');
   const btnConsumo = _dgVgBotaoDetalhado(consumoEntries, 'Consumo', 'var(--red)');
+  const btnAjustes = _dgVgBotaoDetalhado(_dgVgColetarSapPorNatureza(results, 'aju'), 'Ajustes dentro do Mês', 'var(--amber)');
 
   const colorFor = v => v < -0.0001 ? 'var(--red)'    : v > 0.0001 ? 'var(--amber)'    : 'var(--teal)';
   const varCol = colorFor(varTotalFisica);
@@ -1706,12 +1709,13 @@ function _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais, f
         </div>
         ${btnConsumo}
       </div>
-      <div class="inv-kpi-card" id="dg-vg-kpi-ajustes">
+      <div class="inv-kpi-card${btnAjustes ? ' dg-kpi-card-rodape' : ''}" id="dg-vg-kpi-ajustes">
         <div class="inv-kpi-body">
           <div class="inv-kpi-label"><i class="ti ti-adjustments-alt" style="color:var(--amber)"></i>Ajustes dentro do Mês</div>
           <div class="inv-kpi-value" style="color:${movValorCor(movTotais.totalAju || 0, 'var(--amber)')}">${dgFmtPesoSigned(movTotais.totalAju || 0)}</div>
           <div class="inv-kpi-unit">${money(custoMovTotais.custoAju || 0)}</div>
         </div>
+        ${btnAjustes}
       </div>
       <div class="inv-kpi-card">
         <div class="inv-kpi-body">
@@ -2411,7 +2415,8 @@ function _dgVgAgruparOutros(items, threshold = 0.05) {
     .sort((a, b) => b.total - a.total);
 }
 
-function _dgVgRenderChartGrupoMaterial(custoAbsPorCat) {
+// svgId/subtitleId opcionais — mesmo motivo de _dgVgRenderKpisHero (elId).
+function _dgVgRenderChartGrupoMaterial(custoAbsPorCat, svgId = 'dg-vg-chart-grupo', subtitleId = 'dg-vg-grupo-subtitle') {
   const flatRaw = [];
   DG_VG_CAT_ORDER.forEach(catKey => {
     const arr = custoAbsPorCat[catKey] || [];
@@ -2438,14 +2443,14 @@ function _dgVgRenderChartGrupoMaterial(custoAbsPorCat) {
   };
 
   if (!flatRaw.length) {
-    _dgVgRenderCustoDonutSvg('dg-vg-chart-grupo', [], null, null, 6, 'dg-vg-grupo-subtitle', sizeOverrideGrupo);
+    _dgVgRenderCustoDonutSvg(svgId, [], null, null, 6, subtitleId, sizeOverrideGrupo);
     return;
   }
 
   // Materiais com menos de 5% de participação no total viram uma única
   // fatia "Outros" — evita poluir o anel com dezenas de fatias minúsculas.
   const flat = _dgVgAgruparOutros(flatRaw);
-  _dgVgRenderCustoDonutSvg('dg-vg-chart-grupo', flat, 'CUSTO VARIAÇÃO', `${flatRaw.length} materiais`, 6, 'dg-vg-grupo-subtitle', sizeOverrideGrupo);
+  _dgVgRenderCustoDonutSvg(svgId, flat, 'CUSTO VARIAÇÃO', `${flatRaw.length} materiais`, 6, subtitleId, sizeOverrideGrupo);
 }
 
 function _dgVgRenderDonutCategoria(svgId, items, catKey) {

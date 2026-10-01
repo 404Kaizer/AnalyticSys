@@ -1,13 +1,10 @@
-// O Relatório Gerencial não remonta mais o HTML à mão. Ele tem dois tipos de
-// aba, e este teste trava o que quebra em SILÊNCIO em cada um:
-//
-//  - aba clonada (Dashboard): pega o HTML vivo da tela, marcado com
-//    data-rel-secao no index.html. Renomear/mover uma seção lá deixa o
-//    relatório com "Seção indisponível" e ninguém vê até gerar.
-//  - abas geradas (Evolução, Detalhado, Giro): calculadas mês a mês e
-//    embarcam o CÓDIGO REAL do app (toString) pra filtrar/recalcular dentro
-//    do arquivo. Um símbolo que deixa de existir, uma arrow emitida solta ou
-//    um `const` duplicado só aparecem no clique do usuário final.
+// O Relatório Gerencial não remonta o HTML à mão. Todas as abas (Evolução,
+// Detalhado, Giro) são calculadas mês a mês e embarcam o CÓDIGO REAL do app
+// (toString) pra filtrar/recalcular dentro do arquivo. Um símbolo que deixa
+// de existir, uma arrow emitida solta ou um `const` duplicado só aparecem no
+// clique do usuário final — é isso que este teste trava. (A antiga aba
+// Dashboard, clonada da tela, saiu em out/2026: o conteúdo dela vive agora no
+// detalhe de cada mês da Evolução.)
 //
 // Também fixa a ordem das abas/seções e a leitura melhora/piora.
 //
@@ -64,37 +61,21 @@ vm.runInContext(fonte, ctx);
 const casos = [];
 const teste = (nome, fn) => casos.push({ nome, fn });
 
-teste('o relatório tem quatro abas, na ordem de leitura', () => {
-  assert.equal(ctx._RELATORIO_ABAS_REGISTRY.map(a => a.id).join(','), 'dashboard,evolucao,detalhado,giro');
+teste('o relatório tem três abas, na ordem de leitura', () => {
+  assert.equal(ctx._RELATORIO_ABAS_REGISTRY.map(a => a.id).join(','), 'evolucao,detalhado,giro');
   assert.equal(ctx._RELATORIO_ABAS_REGISTRY.map(a => a.label).join(' | '),
-               'Dashboard | Evolução | Detalhado Analítico | Giro por Usina');
+               'Evolução | Detalhado Analítico | Giro por Usina');
 });
 
-teste('só a aba clonada depende do DOM; as outras são calculadas mês a mês', () => {
-  const tipos = ctx._RELATORIO_ABAS_REGISTRY.map(a => a.id + ':' + a.tipo).join(',');
-  assert.equal(tipos, 'dashboard:clone,evolucao:gerado,detalhado:gerado,giro:gerado');
-  // toda aba gerada precisa de um render(); nenhuma aba clonada tem um
+teste('toda aba é calculada mês a mês e tem render()', () => {
   ctx._RELATORIO_ABAS_REGISTRY.forEach(a => {
-    assert.equal(typeof a.render === 'function', a.tipo === 'gerado', 'render() errado em ' + a.id);
+    assert.equal(a.tipo, 'gerado', 'aba não gerada: ' + a.id);
+    assert.equal(typeof a.render, 'function', 'render() faltando em ' + a.id);
   });
 });
 
-teste('cada seção CLONADA está marcada com data-rel-secao no index.html', () => {
-  const marcados  = [...html.matchAll(/data-rel-secao="([^"]+)"/g)].map(m => m[1]);
-  const registro  = ctx._RELATORIO_ABAS_REGISTRY
-    .filter(a => a.tipo === 'clone')
-    .flatMap(a => a.secoes.map(s => s.id));
-  const faltando  = registro.filter(id => !marcados.includes(id));
-  const orfaos    = marcados.filter(id => !registro.includes(id));
-  assert.equal(faltando.join(','), '', 'seções do registro sem marcação no index.html: ' + faltando);
-  assert.equal(orfaos.join(','), '',   'marcações no index.html fora do registro: ' + orfaos);
-  // e cada marcação aparece UMA vez só (querySelector pega a primeira)
-  assert.equal(new Set(marcados).size, marcados.length, 'data-rel-secao duplicado');
-});
-
-teste('as tabelas do Detalhado paginam livremente; o Dashboard, uma por página', () => {
+teste('as tabelas do Detalhado paginam livremente', () => {
   const aba = id => ctx._RELATORIO_ABAS_REGISTRY.find(a => a.id === id);
-  assert.ok(aba('dashboard').secoes.every(s => !s.natural), 'seção do Dashboard não deveria ser natural');
   assert.ok(aba('detalhado').secoes.every(s => s.natural),  'tabela do Detalhado precisa ser natural');
   // cada seção do Detalhado aponta pro contêiner que as funções de render do
   // app preenchem — id errado aqui = tabela vazia no relatório, em silêncio
@@ -106,9 +87,9 @@ teste('seleção padrão é um array ordenado (a ordem é o que vira o relatóri
   ctx._dgVgLastData = {};
   const sel = ctx._dgrSelecaoCompleta();
   assert.ok(Array.isArray(sel));
-  assert.equal(sel.map(s => s.aba).join(','), 'dashboard,evolucao,detalhado,giro');
-  assert.equal(sel[0].secoes[0], 'resumo-periodo');
-  assert.equal(sel[2].secoes.length, 5);
+  assert.equal(sel.map(s => s.aba).join(','), 'evolucao,detalhado,giro');
+  assert.equal(sel[0].secoes[0], 'evo-tabela');
+  assert.equal(sel[1].secoes.length, 5);
 });
 
 teste('seção sem cache de dados não entra na seleção', () => {
@@ -117,22 +98,9 @@ teste('seção sem cache de dados não entra na seleção', () => {
   ctx._dgVgLastData = {};
 });
 
-teste('clonar traz o HTML vivo da seção', () => {
-  ctx.document._secoes['resumo-periodo'] = noFalso('<div class="kpi">42</div>');
-  assert.equal(ctx._dgrClonarSecaoDom('resumo-periodo'), '<div class="kpi">42</div>');
-});
-
-teste('o <canvas> vai inteiro pro relatório — o gráfico é redesenhado lá, não virou PNG', () => {
-  const marcado = '<div style="height:180px"><canvas id="dg-vg-chart-categoria"></canvas></div>';
-  ctx.document._secoes['saude-geral'] = noFalso(marcado);
-  const out = ctx._dgrClonarSecaoDom('saude-geral');
-  assert.match(out, /<canvas id="dg-vg-chart-categoria">/);
-  assert.doesNotMatch(out, /data:image\/png/, 'canvas não pode virar imagem estática');
-});
-
 teste('o relatório leva o código REAL dos gráficos, não uma reescrita', () => {
-  // _dgrScriptGraficos serializa via toString() as funções do dashboard.js —
-  // é isso que impede o gráfico do relatório de sair de sincronia com a tela.
+  // o prelúdio serializa via toString() as funções do dashboard.js — é isso
+  // que impede o gráfico do relatório de sair de sincronia com a tela.
   const fonteRel = readFileSync(join(raiz, 'js', 'relatorio.js'), 'utf8');
   for (const nome of ['_dgVgRenderChartCategoriaFisica', '_dgVgRenderChartVariacaoPorChave',
                       '_dgVgTheme', '_dgVgBarValueLabelsPlugin', '_dgVgCategoryTotalsPlugin',
@@ -216,7 +184,7 @@ teste('cada símbolo sai UMA vez, no escopo global do arquivo', () => {
   // Emitir por aba duplicaria `const` no topo (SyntaxError) e prenderia o
   // símbolo no IIFE de quem emitiu — foi o bug que deixou a Evolução sem
   // _dgVgTheme. O prelúdio é a união, emitida uma vez.
-  const emitido = ctx._dgrScriptPrelude(['graficos', 'evolucao', 'detalhado']);
+  const emitido = ctx._dgrScriptPrelude(['detalheDash', 'evolucao', 'detalhado']);
   ['function num(', 'function fmtKg(', 'function _dgVgTheme(', 'function money('].forEach(dec => {
     assert.equal(emitido.split(dec).length - 1, 1, dec + ' emitido mais de uma vez');
   });
@@ -235,13 +203,8 @@ teste('os gráficos são redesenhados ao trocar aba, tema e ao imprimir', () => 
   const fonteRel = readFileSync(join(raiz, 'js', 'relatorio.js'), 'utf8');
   // canvas em painel escondido nasce com dimensão zero; Chart.js pinta em
   // bitmap (não segue CSS); a impressão revela todos os painéis.
-  assert.equal((fonteRel.match(/_dgrRedesenharGraficos/g) || []).length >= 4, true);
+  assert.equal((fonteRel.match(/_dgrRedesenharEvoDetalhe/g) || []).length >= 4, true);
   assert.ok(fonteRel.includes("addEventListener('beforeprint'"));
-});
-
-teste('seção ausente na tela vira aviso, não quebra o relatório', () => {
-  const out = ctx._dgrClonarSecaoDom('secao-que-nao-existe');
-  assert.match(out, /indispon/i);
 });
 
 let falhas = 0;

@@ -1542,7 +1542,6 @@ function _dgrAlternarTema(btn) {
   if (claro) document.body.setAttribute('data-theme', 'light');
   else document.body.removeAttribute('data-theme');
   // Chart.js pinta em bitmap: SVG e CSS viram sozinhos, o gráfico não.
-  if (window._dgrRedesenharGraficos) window._dgrRedesenharGraficos();
   if (window._dgrRedesenharEvolucao) window._dgrRedesenharEvolucao();
   if (window._dgrRedesenharEvoDetalhe) window._dgrRedesenharEvoDetalhe();
   if (btn) {
@@ -1631,7 +1630,6 @@ function _dgrSwitchAba(abaId, btn) {
   });
   // Canvas em painel escondido reporta dimensão zero — os gráficos do painel
   // que acabou de aparecer precisam ser redesenhados agora que têm tamanho.
-  if (window._dgrRedesenharGraficos) window._dgrRedesenharGraficos();
   if (window._dgrRedesenharEvolucao) window._dgrRedesenharEvolucao();
   if (window._dgrRedesenharEvoDetalhe) window._dgrRedesenharEvoDetalhe();
 }
@@ -3422,26 +3420,8 @@ window.gerarRelatorioDAIs = function() {
 
 
 
-// ── Clona uma seção VIVA do Dashboard Gerencial pro relatório ─────
-//    O relatório não remonta nada à mão: pega o próprio HTML que está na
-//    tela (marcado com data-rel-secao no index.html) e leva junto — cards,
-//    badges, tabelas, SVGs, atributos title e os data-tip dos donuts. O CSS
-//    do app vai embutido (_dgrCssApp), os tooltips são religados por
-//    delegação (_dgrScriptTooltipApp) e os <canvas> do Chart.js são
-//    redesenhados como gráficos DE VERDADE no arquivo gerado
-//    (_dgrScriptGraficos) — nada de imagem estática. O resultado é a mesma
-//    interface, não uma réplica.
-function _dgrClonarSecaoDom(secaoId) {
-  const src = document.querySelector(`[data-rel-secao="${secaoId}"]`);
-  if (!src) return '<div class="dgr-nota">Seção indisponível na tela.</div>';
-  // O <canvas> vem em branco no clone (bitmap não sobrevive a cloneNode) —
-  // e é justamente isso que se quer: o id vem junto, e o script embutido
-  // instancia o Chart.js em cima dele no relatório.
-  return src.cloneNode(true).innerHTML;
-}
-
 // ── CSS do próprio app, embutido no relatório ──────────────────
-//    Sem isso o HTML clonado chega sem estilo nenhum. Só as folhas locais
+//    Sem isso o HTML (fotografado com as classes do app) chega sem estilo. Só as folhas locais
 //    (as de CDN são ignoradas — fontes e ícones já vão embutidos em base64
 //    por _dgrFontesEmbutidas/_dgrFonteIconesEmbutida). O único url() do
 //    css/ é um data: URI, então nada quebra fora da origem do app.
@@ -3526,25 +3506,26 @@ function _dgrScriptTooltipApp() {
 }
 
 // ── Modal "Registros desconsiderados" (Ajustes de Fechamento) ──────
-//    O botão .dg-fech-badge-compact vem junto no clone do Resumo do
-//    Período chamando openFechModal(...). Em vez de reimplementar o modal
-//    no relatório, pré-preenche o modal REAL do app (openFechModal +
-//    closeFechModal, ui.js) e clona o overlay já montado; no arquivo
-//    gerado, openFechModal vira só "abre o que já está aqui".
-function _dgrClonarFechModal(periodo) {
+//    O badge .dg-fech-badge-compact do Resumo de cada mês (Evolução) chama
+//    openFechModal('<id do mês>'). Um overlay só (vazio, clonado do app) +
+//    um <template> por mês com o miolo já pré-preenchido pelo modal REAL
+//    (ver _dgrFechModalConteudo); openFechModal troca o miolo e abre.
+function _dgrFechModaisHtml(cards) {
   const overlay = document.getElementById('fech-modal-overlay');
-  const recs = window._dgVgFechExcluidosAtual || [];
-  if (!overlay || !recs.length || typeof openFechModal !== 'function') return '';
-  const estavaAberto = overlay.classList.contains('open');
-  openFechModal(recs, periodo);
-  if (!estavaAberto && typeof closeFechModal === 'function') closeFechModal();
-  const clone = overlay.cloneNode(true);
+  const comFech = cards.filter(c => c.fechHtml);
+  if (!overlay || !comFech.length) return '';
+  const clone = overlay.cloneNode(false);
   clone.classList.remove('open');
   clone.setAttribute('aria-hidden', 'true');
-  return clone.outerHTML + `<script>
-function openFechModal() {
+  return clone.outerHTML
+    + comFech.map(c => `<template id="dgr-fech-${c.id}">${c.fechHtml}</template>`).join('')
+    + `<script>
+function openFechModal(id) {
   var o = document.getElementById('fech-modal-overlay');
-  if (o) { o.classList.add('open'); o.setAttribute('aria-hidden', 'false'); }
+  var t = document.getElementById('dgr-fech-' + id);
+  if (!o || !t) return;
+  o.innerHTML = t.innerHTML;
+  o.classList.add('open'); o.setAttribute('aria-hidden', 'false');
 }
 function closeFechModal() {
   var o = document.getElementById('fech-modal-overlay');
@@ -3592,22 +3573,6 @@ function _dgrSerializarObjeto(obj) {
 //    topo é SyntaxError, e código emitido dentro do IIFE de uma aba fica
 //    invisível para as outras (foi assim que a Evolução perdeu _dgVgTheme).
 const _DGR_NOMES = {
-  graficos: ['DG_TON_THRESHOLD_KG', 'DG_VG_CAT_LABELS', 'DG_VG_CAT_ORDER',
-             'num', 'fmtKg', 'dgFmtPeso', 'dgFmtPesoSigned', 'varLabel',
-             '_dgVgTheme', '_dgVgDestroyChart',
-             '_dgVgBarValueLabelsPlugin', '_dgVgCategoryTotalsPlugin',
-             '_dgVgRenderChartCategoriaFisica', '_dgVgRenderChartVariacaoPorChave',
-             // Filtro Regional/Categoria dos donuts de Saúde Geral (aba
-             // Dashboard, clonada) — a aba em si é DOM clonado, sem JS
-             // nenhum atrás por padrão; sem esses nomes, os dois <select>
-             // clonados (com onchange="_dgVgAplicarFiltroSaude()") ficam
-             // mudos no arquivo exportado. Ver DADOS.pares/thresholds/
-             // results em _dgrScriptGraficos, que alimenta
-             // window._dgVgLastData pro filtro ler.
-             '_dgVgCounts', '_dgVgBuildHealthDonutData', '_dgVgBuildCentralHealthData',
-             '_dgVgScoreFromCounts', '_dgVgRenderHealthDonutSvg', '_dgVgHealthTipHtml',
-             '_dgVgDrawDonutSvg', '_dgVgAplicarFiltroSaude',
-             'calcHealthScore', 'classifyVariation', 'HEALTH_PENALTIES'],
   evolucao:  ['DG_TON_THRESHOLD_KG', 'DG_VG_CAT_LABELS', 'DG_VG_CAT_ORDER',
               'num', 'fmtKg', 'dgFmtPeso', 'dgFmtPesoSigned', 'money', 'varLabel',
               '_dgVgTheme', '_dgVgDestroyChart',
@@ -3621,8 +3586,8 @@ const _DGR_NOMES = {
               '_daBuildTabelaMaterial', '_daBuildRanking',
               '_daRenderTabelaMaterial', '_daRenderRanking'],
   // Botões de detalhamento dos donuts de Saúde Geral, dos 4 cards de extremo
-  // e dos 2 gráficos de Variação (aba Dashboard, clonada) — as MESMAS funções
-  // da tela; os modais vêm clonados por _dgrClonarModaisDetalhe.
+  // e dos 2 gráficos de Variação (detalhe de cada mês da Evolução) — as
+  // MESMAS funções da tela; os modais vêm clonados por _dgrClonarModaisDetalhe.
   detalheDash: ['DG_VG_CAT_LABELS', 'DG_TON_THRESHOLD_KG',
                 'num', 'fmtKg', 'money', 'escapeHtml', 'varSymbol', 'movValorCor',
                 'dgFmtPeso', 'dgFmtPesoSigned',
@@ -3652,7 +3617,7 @@ var _dgVgSaudeListaAtual = [];
 <\/script>`;
 }
 
-// Os 2 modais de detalhamento da aba Dashboard (Variação e Saúde Geral) —
+// Os 2 modais de detalhamento (Variação e Saúde Geral) —
 // overlays vazios do index.html, preenchidos no clique pelas funções reais
 // embutidas (_DGR_NOMES.detalheDash).
 function _dgrClonarModaisDetalhe() {
@@ -3663,82 +3628,7 @@ function _dgrClonarModaisDetalhe() {
     .join('');
 }
 
-// ── Os 3 gráficos da Visão Geral, vivos no relatório ──────────────
-//    Em vez de reescrever os gráficos aqui (que sairiam de sincronia com a
-//    tela no primeiro ajuste), o relatório leva o CÓDIGO REAL do dashboard
-//    via toString(): os mesmos plugins, os mesmos tooltips, os mesmos
-//    formatadores. Só os DADOS são serializados (já são JSON puro).
-//    _dgVgTheme lê document.body.dataset.theme, que o botão de tema do
-//    relatório troca — então os gráficos acompanham claro/escuro junto com
-//    o resto da página, coisa que a versão em PNG nunca fez.
-function _dgrScriptGraficos(d) {
-  const dados = {
-    catFisicaPct:    d.catFisicaPct    || {},
-    entriesRegional: d.entriesRegional || [],
-    entriesCentral:  d.entriesCentral  || [],
-    // Filtro Regional/Categoria dos donuts de Saúde Geral (clonados da
-    // tela junto com o resto da aba Dashboard) — mesmos pares/thresholds
-    // que a tela guarda em window._dgVgLastData, só pra
-    // _dgVgAplicarFiltroSaude (embutido via toString, ver
-    // _DGR_NOMES.graficos) rodar aqui sem adaptação nenhuma.
-    pares:      d.pares      || [],
-    thresholds: d.thresholds || {},
-    // _dgVgBuildCentralHealthData só lê `.central` de cada item de
-    // `results` (semeia a central como 'bom' quando ela não tem par
-    // nenhum — ver a função). d.results de verdade carrega, POR central,
-    // todo lançamento e registro SAP cru do período — o MESMO volume que
-    // vira milhares de linhas no modal de Compras/Consumo. Embutir esse
-    // objeto inteiro só pra pegar uma string deixava o relatório gigante
-    // (JSON.stringify pesado o bastante pra travar bem no meio do
-    // filtro) — daí o donut de Centrais nunca reagia, enquanto o de
-    // Materiais (que só usa `pares`, bem mais leve) reagia normal.
-    resultsCentrais: (d.results || []).map(r => ({ central: r.central })),
-    // Modal de Variação por Regional/Central (abrirDetalheVariacao).
-    pesoMedio:          d.pesoMedio || {},
-    totalEstTeoricoKpi: d.totalEstTeoricoKpi || 0
-  };
-
-  // As funções de render dos gráficos vêm do prelúdio (_DGR_NOMES.graficos).
-  return `<script>
-(function() {
-  if (typeof Chart === 'undefined') { console.error('[Relatório] Chart.js indisponível.'); return; }
-  var DADOS = ${JSON.stringify(dados)};
-
-  // Mesma variável global que a tela usa pro filtro de Saúde Geral —
-  // _dgVgAplicarFiltroSaude lê window._dgVgLastData.pares/thresholds/
-  // results direto, sem saber (nem precisar saber) que está dentro do
-  // relatório exportado. "results" aqui é a versão ENXUTA (só .central por
-  // item, ver DADOS.resultsCentrais acima) — suficiente pro filtro, que só
-  // usa essa lista pra semear central sem par nenhum como 'bom'.
-  window._dgVgLastData = { pares: DADOS.pares, thresholds: DADOS.thresholds, results: DADOS.resultsCentrais,
-                           pesoMedio: DADOS.pesoMedio, totalEstTeoricoKpi: DADOS.totalEstTeoricoKpi };
-
-  // Redesenha os 3 gráficos. Chamado ao abrir, ao trocar de aba (canvas em
-  // painel escondido nasce com dimensão zero), ao trocar o tema (a cor do
-  // Chart.js é pixel, não CSS) e antes de imprimir (a impressão mostra
-  // TODOS os painéis, inclusive os que estavam escondidos).
-  function redesenhar() {
-    _dgVgRenderChartCategoriaFisica(DADOS.catFisicaPct);
-    _dgVgRenderChartVariacaoPorChave('dg-vg-chart-regional', DADOS.entriesRegional, 'chartRegional');
-    _dgVgRenderChartVariacaoPorChave('dg-vg-chart-usina', DADOS.entriesCentral, 'chartUsina');
-  }
-  window._dgrRedesenharGraficos = redesenhar;
-  // Com animação ligada o Chart.js não desenha nada na hora — o 1º quadro
-  // espera um requestAnimationFrame, que não roda antes do snapshot da
-  // impressão, e o canvas recriado ia em branco pro PDF. Na impressão,
-  // desliga a animação (render síncrono) e devolve depois.
-  var animTela = Chart.defaults.animation;
-  window.addEventListener('beforeprint', function() {
-    Chart.defaults.animation = false;
-    redesenhar();
-  });
-  window.addEventListener('afterprint', function() { Chart.defaults.animation = animTela; });
-  redesenhar();
-})();
-<\/script>`;
-}
-
-// ── Modal "Detalhado" dos cards Compras/Consumo (aba Dashboard) ──────────
+// ── Modal "Detalhado" dos cards Compras/Consumo/Ajustes (Resumo de cada mês) ──
 //    Na tela, o botão .dg-kpi-detalhe-btn chama o modal REAL do app
 //    (openBreakdownModal, ui.js) — mas esse modal é grande (~700 linhas) e
 //    puxa outras ~20 funções (link pra DAI, pareamento de transferência
@@ -3955,8 +3845,8 @@ function _dgrScriptDetalheBotao() {
 // RELATÓRIO GERENCIAL MULTI-MÊS — cálculo por período, código exportado pro
 // arquivo e as abas geradas (Evolução, Detalhado Analítico, Giro por Usina).
 //
-// A aba "Dashboard" continua sendo o DOM clonado do período analisado na tela
-// (ver _dgrClonarSecaoDom). As outras três são CALCULADAS aqui, mês a mês, e
+// Todas as abas (Evolução, Detalhado Analítico, Giro por Usina) são
+// CALCULADAS aqui, mês a mês, e
 // ganham filtros que rodam dentro do próprio arquivo — por isso o relatório
 // leva junto o código real do app (_dgrEmitirCodigo) em vez de uma cópia.
 // ═══════════════════════════════════════════════════════════════════════════
@@ -4112,7 +4002,6 @@ function _dgrSwitchPeriodo(btn) {
     p.classList.toggle('dgr-per-ativo', p.dataset.periodo === per);
   });
   if (aba === 'detalhado' && window._dgrDetAplicar) window._dgrDetAplicar();
-  if (window._dgrRedesenharGraficos) window._dgrRedesenharGraficos();
 }
 <\/script>`;
 }
@@ -4304,19 +4193,17 @@ function _dgrScriptEvolucao(periodos) {
 <\/script>`;
 }
 
-// ── Detalhe por mês (dentro da Evolução) — Saúde Geral + Variação por
-//    Regional/Central de UM mês específico, atrás do botão de expansão da
-//    linha. Só essas duas seções por enquanto (decisão do Hugo, set/2026);
-//    Resumo do Período e Custo Absoluto ficam de fora — quem quer o período
-//    inteiro já tem a aba Dashboard.
+// ── Detalhe por mês (dentro da Evolução) — Resumo do Período, Saúde Geral,
+//    Categoria, Variação por Regional/Central e Custo Absoluto de UM mês,
+//    atrás do botão de expansão da linha. É a antiga aba Dashboard, só que
+//    por mês (a aba saiu em out/2026, decisão do Hugo).
 //
-//    Donuts de Saúde e cards de Extremos são "fotografados": desenhados com
+//    Resumo, donuts e cards de Extremos são "fotografados": desenhados com
 //    as MESMAS funções da tela contra um host FORA da tela (nunca inserido
 //    visível), e o HTML resultante (já com os círculos/callouts prontos) é
-//    congelado na página. Isso funciona pra esses dois porque a cor deles
-//    é sempre fixa (hex) ou var(--...) — o CSS resolve sozinho no tema
-//    certo, sem precisar de JS redesenhando nada, exatamente como a aba
-//    Dashboard (clonada) já se vira sem redesenhar seus próprios donuts.
+//    congelado na página. Isso funciona porque a cor deles é sempre fixa
+//    (hex) ou var(--...) — o CSS resolve sozinho no tema certo, sem
+//    precisar de JS redesenhando nada.
 //    Os 2 gráficos de barra (Variação por Regional/Central) são a exceção:
 //    Chart.js pinta em bitmap, então esses SIM continuam vivos (canvas +
 //    _dgVgRenderChartVariacaoPorChave de verdade, ver _dgrScriptEvoDetalhe),
@@ -4338,6 +4225,54 @@ function _dgrCapturarOffscreen(innerHtml, renderFn) {
   }
 }
 
+// Custo Absoluto do mês — donut por Grupo + 4 donuts por categoria, mesmo
+// markup da tela (index.html) com ids por mês, "fotografado" como os demais.
+function _dgrEvoCustoAbsolutoHtml(l) {
+  const custoAbsPorCat = _dgVgAgruparCustoVariacaoPorCategoria(_dgVgCustoVariacaoPorMaterial(l.pares));
+  const id = suf => `evo-ca-${suf}-${l.id}`;
+  const donutCat = cat => `
+    <div class="oc-chart-card">
+      <div class="oc-chart-title dg-vg-donut-title-row">
+        <span>Custo Absoluto por ${_rankEsc(DG_VG_CAT_LABELS[cat] || cat)}</span>
+        <span id="${id(cat)}-subtitle" class="dg-vg-donut-subtitle"></span>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:center;flex:1">
+        <svg id="${id(cat)}" viewBox="0 0 340 220" style="overflow:visible;width:100%;height:auto;display:block"></svg>
+      </div>
+    </div>`;
+  const markup = `
+    <div class="section-title" style="margin:18px 0 12px"><i class="ti ti-chart-pie" style="font-size:13px;margin-right:6px"></i>Custo Absoluto — Por Grupo e Categoria de Material</div>
+    <div class="dg-vg-grupo-layout">
+      <div class="oc-chart-card" style="display:flex;flex-direction:column">
+        <div class="oc-chart-title dg-vg-donut-title-row">
+          <span><i class="ti ti-chart-donut" style="margin-right:5px"></i>Custo Absoluto por Grupo de Material</span>
+          <span id="${id('grupo')}-subtitle" class="dg-vg-donut-subtitle"></span>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:center;flex:1;min-height:0">
+          <svg id="${id('grupo')}" viewBox="0 0 340 220" style="overflow:visible;width:100%;height:100%;display:block"></svg>
+        </div>
+      </div>
+      <div class="dg-vg-grupo-sub-grid">${DG_VG_CAT_ORDER.map(donutCat).join('')}</div>
+    </div>`;
+  return _dgrCapturarOffscreen(markup, () => {
+    _dgVgRenderChartGrupoMaterial(custoAbsPorCat, id('grupo'), `${id('grupo')}-subtitle`);
+    DG_VG_CAT_ORDER.forEach(cat => _dgVgRenderDonutCategoria(id(cat), custoAbsPorCat[cat] || [], cat));
+  });
+}
+
+// Conteúdo do modal "Registros desconsiderados" (Ajustes de Fechamento) de
+// UM mês: pré-preenche o modal REAL do app (openFechModal, ui.js) e copia o
+// miolo. No arquivo, cada mês vira um <template> e o openFechModal do
+// relatório troca o miolo do overlay pelo do mês (ver _dgrFechModaisHtml).
+function _dgrFechModalConteudo(recs, rotulo) {
+  const overlay = document.getElementById('fech-modal-overlay');
+  if (!overlay || !recs.length || typeof openFechModal !== 'function') return '';
+  const estavaAberto = overlay.classList.contains('open');
+  openFechModal(recs, rotulo);
+  if (!estavaAberto && typeof closeFechModal === 'function') closeFechModal();
+  return overlay.innerHTML;
+}
+
 function _dgrEvoDetalheCardHtml(l) {
   const gaugeMatSvg = `evo-gm-${l.id}`, gaugeMatSub = `evo-gms-${l.id}`, gaugeMatSum = `evo-gmr-${l.id}`;
   const gaugeCenSvg = `evo-gc-${l.id}`, gaugeCenSub = `evo-gcs-${l.id}`, gaugeCenSum = `evo-gcr-${l.id}`;
@@ -4351,7 +4286,11 @@ function _dgrEvoDetalheCardHtml(l) {
   const verDetalhes = (fn, args, titulo) =>
     `<button type="button" class="dg-kpi-detalhe-btn" onclick="${fn}(${args}, ${dadosJs})" title="Ver detalhamento — ${titulo}">Ver detalhes <i class="ti ti-arrow-right"></i></button>`;
 
+  const heroEl = `evo-hero-${l.id}`;
+
   const innerHtml = `
+    <div class="section-title" style="margin:0 0 12px"><i class="ti ti-report-money" style="font-size:13px;margin-right:6px"></i>Resumo do Período — Estoque, Movimentação e Variação</div>
+    <div id="${heroEl}" class="inv-kpi-groups" style="margin-bottom:18px"></div>
     <div class="section-title" style="margin:0 0 12px"><i class="ti ti-heart-rate-monitor" style="font-size:13px;margin-right:6px"></i>Saúde Geral — Centrais e Materiais</div>
     <div class="dg-giro-dual-grid" style="margin-bottom:18px">
       <div class="oc-chart-card">
@@ -4400,7 +4339,22 @@ function _dgrEvoDetalheCardHtml(l) {
   const extRegional   = _dgVgExtremos(porRegionalKg, porRegional);
   const extCentral    = _dgVgExtremos(porCentralKg, porCentral);
 
+  // Resumo do Período do mês — mesmas contas de renderDgVisaoGeralPdf.
+  const estTotais      = _dgVgEstoqueTotais(l.pares);
+  const movTotais      = _dgVgMovimentacaoTotais(l.results);
+  const custoMovTotais = _dgVgCustoMovimentacaoTotais(l.results);
+  const veiculos       = _daBuildRanking(l.pares, l.pesoMedio || {}, () => 'total', l.totalEstTeorico).total;
+  const fechRecs       = l.results.reduce((acc, r) => acc.concat(r.sapFechExcluidos || []), []);
+
   const congelado = _dgrCapturarOffscreen(innerHtml, () => {
+    // _dgVgRenderKpisHero grava o global da tela pro badge de fechamento —
+    // preserva o da tela; o badge do mês abre o modal DO MÊS (_dgrFechModaisHtml).
+    const fechTela = window._dgVgFechExcluidosAtual;
+    _dgVgRenderKpisHero(l.kpi.varTotalFisica, l.kpi.custoTotal, estTotais, movTotais, fechRecs,
+                        custoMovTotais, veiculos, l.results, heroEl);
+    window._dgVgFechExcluidosAtual = fechTela;
+    document.querySelector(`#${heroEl} .dg-fech-badge-compact`)?.setAttribute('onclick', `openFechModal('${l.id}')`);
+
     _dgVgRenderHealthDonuts(l.pares, counts, scoreInfo, thresholds, {
       matSvg: gaugeMatSvg, matSub: gaugeMatSub, matSum: gaugeMatSum,
       cenSvg: gaugeCenSvg, cenSub: gaugeCenSub, cenSum: gaugeCenSum
@@ -4425,10 +4379,12 @@ function _dgrEvoDetalheCardHtml(l) {
         </div>
         ${verDetalhes('abrirDetalheVariacao', "'central', null", 'Variação por Central')}
       </div>
-    </div>`;
+    </div>
+    ${_dgrEvoCustoAbsolutoHtml(l)}`;
 
   return {
     id: l.id, html, canvasRegional, canvasCentral, canvasCategoria,
+    fechHtml: _dgrFechModalConteudo(fechRecs, l.rotulo),
     // O que abrirDetalheSaude/abrirDetalheVariacao leem, só deste mês.
     // ponytail: pares do mês embutidos de novo (a aba Detalhado tem os
     // seus); se o arquivo pesar, compartilhar um só objeto por período.
@@ -4446,7 +4402,7 @@ function _dgrEvoDetalheCardHtml(l) {
 // únicos pedaços do detalhe que ainda são JS vivo (ver nota acima). Redesenha
 // TODOS os meses de uma vez a cada gatilho (abrir uma linha, trocar tema,
 // trocar de aba, imprimir), mesmo padrão "força tudo de novo" já usado por
-// _dgrScriptGraficos/_dgrScriptEvolucao — canvas escondido nasce com
+// _dgrScriptEvolucao — canvas escondido nasce com
 // dimensão zero, então quem já estava fechado só acerta o tamanho na
 // próxima chamada, sem precisar de um cache de "o que já foi desenhado".
 function _dgrScriptEvoDetalhe(cards) {
@@ -4491,7 +4447,9 @@ function _dgrEvoFoco(tabela) {
     });
   }
   window._dgrRedesenharEvoDetalhe = redesenhar;
-  // Mesmo motivo de _dgrScriptGraficos: sem animação na impressão.
+  // Com animação ligada o Chart.js só desenha no próximo requestAnimationFrame,
+  // que não roda antes do snapshot da impressão (canvas ia em branco pro PDF):
+  // na impressão, desliga a animação e devolve depois.
   var animTela = Chart.defaults.animation;
   window.addEventListener('beforeprint', function() {
     Chart.defaults.animation = false;
@@ -5039,27 +4997,14 @@ function _dgrEstilos() {
 // arquivo, só não é chamada daqui por enquanto (decisão de jul/2026,
 // confirmada com o usuário).
 // ═══════════════════════════════════════════════════════════════════════════════
-// Uma aba é de um de dois tipos:
-//  - 'clone'  : as seções são HTML VIVO da tela (data-rel-secao no
-//               index.html). Mostra o período analisado no Dashboard, um só.
-//  - 'gerado' : a aba é calculada na hora da geração, mês a mês, e monta o
-//               próprio corpo (filtros + panes de período) via render().
+// Toda aba é calculada na hora da geração, mês a mês, e monta o próprio
+// corpo (filtros + panes de período) via render(). A antiga aba "Dashboard"
+// (HTML clonado da tela, um período só) saiu em out/2026 — o Resumo do
+// Período, Saúde, Variação e Custo Absoluto agora vivem no detalhe de cada
+// mês da Evolução, sem redundância (decisão do Hugo).
 // O modal de seleção e a montagem do relatório continuam 100% orientados por
 // este registro: aba nova é uma entrada nova aqui, sem tocar no núcleo.
 window._RELATORIO_ABAS_REGISTRY = [
-  {
-    id: 'dashboard',
-    label: 'Dashboard',
-    icon: 'ti-layout-dashboard',
-    tipo: 'clone',
-    disponivel: () => !!window._dgVgLastData,
-    secoes: [
-      { id: 'resumo-periodo',       label: 'Resumo do Período — Estoque, Movimentação e Variação' },
-      { id: 'saude-geral',          label: 'Saúde Geral — Centrais e Materiais' },
-      { id: 'variacao-reg-central', label: 'Variação por Regional e Central' },
-      { id: 'custo-absoluto',       label: 'Custo Absoluto — Por Grupo e Categoria de Material' }
-    ]
-  },
   {
     id: 'evolucao',
     label: 'Evolução',
@@ -5302,7 +5247,6 @@ window.abrirModalSelecaoRelatorioGerencial = function(tema = 'dark') {
             <input type="checkbox" class="rel-sel-aba-toggle" data-aba="${aba.id}" ${disponivel ? 'checked' : 'disabled'}>
             <i class="ti ${aba.icon}"></i>
             <strong>${_rankEsc(aba.label)}</strong>
-            ${aba.tipo === 'clone' ? '<span class="rel-sel-badge">período do Dashboard</span>' : ''}
             ${disponivel ? '' : '<span class="rel-sel-badge">analise essa aba antes</span>'}
           </label>
           ${_dgrBotoesMover()}
@@ -5321,7 +5265,7 @@ window.abrirModalSelecaoRelatorioGerencial = function(tema = 'dark') {
       <div id="rel-sel-lista" style="overflow-y:auto;flex:1;margin:12px 0 14px;display:flex;flex-direction:column;gap:10px">
         <div class="rel-sel-bloco-meses">
           <div class="rel-sel-bloco-titulo"><i class="ti ti-calendar-stats" style="color:var(--accent)"></i>Meses do relatório</div>
-          <div class="rel-sel-bloco-sub">Evolução, Detalhado Analítico e Giro por Usina são calculados para cada mês marcado. Com dois ou mais, entra também uma visão <strong>Geral</strong> do intervalo inteiro. A aba Dashboard mostra sempre o período analisado na tela.</div>
+          <div class="rel-sel-bloco-sub">Evolução, Detalhado Analítico e Giro por Usina são calculados para cada mês marcado. Com dois ou mais, Detalhado e Giro ganham também uma visão <strong>Geral</strong> do intervalo inteiro. Na Evolução, cada mês abre o detalhamento completo (Resumo, Saúde, Variação e Custo Absoluto).</div>
           <div id="dgr-mes-picker"></div>
         </div>
         ${abasHtml}
@@ -5482,22 +5426,8 @@ window.gerarRelatorioGerencialDashboard = async function(tema = 'dark', selecao 
       const aba = window._RELATORIO_ABAS_REGISTRY.find(a => a.id === abaId);
       if (!aba || !secoesIds || !secoesIds.length || !aba.disponivel()) return;
 
-      let corpo = '';
-      if (aba.tipo === 'gerado') {
-        const ids = secoesIds.filter(id => aba.secoes.some(s => s.id === id));
-        if (ids.length) corpo = aba.render(ctx, ids, aba);
-      } else {
-        // Seção "compacta" ocupa uma página só (dgr-page-section); "natural"
-        // pagina livremente (dgr-page-section-natural), pelo campo do registro.
-        secoesIds.forEach(secId => {
-          const sec = aba.secoes.find(s => s.id === secId);
-          if (!sec) return;
-          corpo += _dgrSecaoHtml(sec.id, sec.label, _dgrClonarSecaoDom(sec.id), !!sec.natural);
-        });
-        if (corpo) {
-          corpo = `<div class="dgr-aviso-periodo"><i class="ti ti-info-circle"></i> Esta aba mostra o período analisado no Dashboard: <strong>${_rankEsc(periodoDash)}</strong>. Para a leitura mês a mês, veja a aba Evolução.</div>` + corpo;
-        }
-      }
+      const ids = secoesIds.filter(id => aba.secoes.some(s => s.id === id));
+      const corpo = ids.length ? aba.render(ctx, ids, aba) : '';
       if (!corpo) return;
 
       // O primeiro painel incluído já nasce ativo (.rel-aba-ativa) — o
@@ -5582,20 +5512,21 @@ window.gerarRelatorioGerencialDashboard = async function(tema = 'dark', selecao 
       }
     `;
 
+    // Detalhe de cada mês da Evolução: modais de detalhamento (Movimentações
+    // SAP, Variação, Saúde) e de Ajustes de Fechamento, com o código real.
+    const evoCards = ctx._evoDetalheCards || [];
     const bodyHtml = `<style>${_dgrEstilos()}${ajustesCss}</style>`
-      + abasBarHtml + panesHtml + _dgrClonarFechModal(periodoDash)
-      + (incluiu('dashboard') ? _dgrDetalheBotaoModalHtml() : '')
-      + (incluiu('dashboard') || incluiu('evolucao') ? _dgrClonarModaisDetalhe() : '')
+      + abasBarHtml + panesHtml
+      + (incluiu('evolucao') ? _dgrDetalheBotaoModalHtml() + _dgrClonarModaisDetalhe() + _dgrFechModaisHtml(evoCards) : '')
       + _dgrScriptTooltipApp() + chartJs
       + _dgrScriptPrelude([
-          incluiu('dashboard') && 'graficos',
-          (incluiu('dashboard') || incluiu('evolucao')) && 'detalheDash',
+          incluiu('evolucao')  && 'detalheDash',
           incluiu('evolucao')  && 'evolucao',
           incluiu('detalhado') && 'detalhado'
         ].filter(Boolean))
-      + (incluiu('dashboard') ? _dgrScriptGraficos(d) + _dgrScriptDetalheBotao() : '')
+      + (incluiu('evolucao') ? _dgrScriptDetalheBotao() : '')
       + _dgrScriptPeriodos()
-      + (incluiu('evolucao')  ? _dgrScriptEvolucao(periodos) + _dgrScriptEvoDetalhe(ctx._evoDetalheCards || []) : '')
+      + (incluiu('evolucao')  ? _dgrScriptEvolucao(periodos) + _dgrScriptEvoDetalhe(evoCards) : '')
       + (incluiu('detalhado') ? _dgrScriptDetalhado(periodos) : '')
       + (incluiu('giro')      ? _dgmScriptTooltip() + _dgmScriptFiltros() + _dgrScriptGiro() : '');
 
