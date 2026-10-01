@@ -3694,7 +3694,16 @@ function _dgrScriptGraficos(d) {
     _dgVgRenderChartVariacaoPorChave('dg-vg-chart-usina', DADOS.entriesCentral, 'chartUsina');
   }
   window._dgrRedesenharGraficos = redesenhar;
-  window.addEventListener('beforeprint', redesenhar);
+  // Com animação ligada o Chart.js não desenha nada na hora — o 1º quadro
+  // espera um requestAnimationFrame, que não roda antes do snapshot da
+  // impressão, e o canvas recriado ia em branco pro PDF. Na impressão,
+  // desliga a animação (render síncrono) e devolve depois.
+  var animTela = Chart.defaults.animation;
+  window.addEventListener('beforeprint', function() {
+    Chart.defaults.animation = false;
+    redesenhar();
+  });
+  window.addEventListener('afterprint', function() { Chart.defaults.animation = animTela; });
   redesenhar();
 })();
 <\/script>`;
@@ -4431,7 +4440,13 @@ function _dgrEvoFoco(tabela) {
     });
   }
   window._dgrRedesenharEvoDetalhe = redesenhar;
-  window.addEventListener('beforeprint', redesenhar);
+  // Mesmo motivo de _dgrScriptGraficos: sem animação na impressão.
+  var animTela = Chart.defaults.animation;
+  window.addEventListener('beforeprint', function() {
+    Chart.defaults.animation = false;
+    redesenhar();
+  });
+  window.addEventListener('afterprint', function() { Chart.defaults.animation = animTela; });
   redesenhar();
 })();
 <\/script>`;
