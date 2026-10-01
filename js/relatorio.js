@@ -4033,7 +4033,7 @@ function _dgrCalcularPeriodo(p, thresholds) {
     kpi: {
       varTotalFisica, custoTotal,
       estIni: estTotais.totalIni, estFim: estTotais.totalFim,
-      compras: movTotais.totalEnt, consumo: movTotais.totalSai,
+      compras: movTotais.totalCompras, consumo: movTotais.totalSai,
       score: scoreInfo.score, level: scoreInfo.level,
       pctVariacao: Math.abs(totalEstTeorico) > 0.0001 ? (varTotalFisica / totalEstTeorico) * 100 : null
     },

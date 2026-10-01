@@ -789,14 +789,22 @@ function _dgVgEstoqueTotais(pares) {
 // SUBTRAÍAM; agora somam, igual ao Inventário e à Visão Micro. Quem depende
 // disso: os Est. Teórico de _dgVgKpis/_dgVgRenderKpisHero e o do relatorio.js.
 function _dgVgMovimentacaoTotais(results) {
-  let totalEnt = 0, totalSai = 0, totalAju = 0;
+  let totalEnt = 0, totalSai = 0, totalAju = 0, totalCompras = 0;
   results.forEach(r => {
     totalEnt += r.totalEntradas || 0;
     totalSai += r.totalSaidas   || 0;
     totalAju += r.totalAjustes  || 0;
+    (r.sapNoPeriodo || []).forEach(s => {
+      if (DG_MOV_COMPRAS.has(normMov(s.movimento))) totalCompras += num(s.peso) || 0;
+    });
   });
-  return { totalEnt, totalSai, totalAju };
+  return { totalEnt, totalSai, totalAju, totalCompras };
 }
+
+// Card "Compras" (Gerencial + relatório) — só compra e seu estorno (101/102,
+// 801/802), decisão do Hugo (01/10/2026). As transferências (86x/30x)
+// continuam no balde Entradas e no Est. Teórico; só saem do CARD.
+const DG_MOV_COMPRAS = new Set(['101', '102', '801', '802']);
 
 // Custo de Entradas/Saídas — kg de cada material (Σ peso SAP do período,
 // separado pelo SINAL: positivo = entrada, negativo = saída, MESMO
@@ -806,9 +814,9 @@ function _dgVgMovimentacaoTotais(results) {
 // da Visão Geral quanto pelo KPI "Custo Total de Saídas" da Visão de
 // Consumo (_dcRenderKpiStrip).
 function _dgVgCustoMovimentacaoTotais(results) {
-  let custoEnt = 0, custoSai = 0, custoAju = 0;
+  let custoEnt = 0, custoSai = 0, custoAju = 0, custoCompras = 0;
   results.forEach(r => {
-    const pesoPorNat = { ent: {}, sai: {}, aju: {} };
+    const pesoPorNat = { ent: {}, sai: {}, aju: {}, compras: {} };
     (r.sapNoPeriodo || []).forEach(s => {
       const mat = s.material || '—';
       const p = num(s.peso);
@@ -819,14 +827,16 @@ function _dgVgCustoMovimentacaoTotais(results) {
       // (ver _dgVgMovimentacaoTotais), que alimenta o Est. Teórico.
       const nat = classificarMovSap(normMov(s.movimento));
       pesoPorNat[nat][mat] = (pesoPorNat[nat][mat] || 0) + Math.abs(p);
+      if (DG_MOV_COMPRAS.has(normMov(s.movimento))) pesoPorNat.compras[mat] = (pesoPorNat.compras[mat] || 0) + Math.abs(p);
     });
     const _somar = (bucket) => Object.keys(bucket)
       .reduce((acc, mat) => acc + bucket[mat] * ((r.custoMedioPorMat || {})[mat] || 0), 0);
     custoEnt += _somar(pesoPorNat.ent);
     custoSai += _somar(pesoPorNat.sai);
     custoAju += _somar(pesoPorNat.aju);
+    custoCompras += _somar(pesoPorNat.compras);
   });
-  return { custoEnt, custoSai, custoAju };
+  return { custoEnt, custoSai, custoAju, custoCompras };
 }
 
 // Tally de pares Central×Material por nível — MESMO critério usado em
@@ -1514,7 +1524,9 @@ function _dgVgColetarSapPorNatureza(results, natureza) {
   (results || []).forEach(r => {
     (r.sapNoPeriodo || []).forEach(s => {
       const p = num(s.peso);
-      if (!p || classificarMovSap(normMov(s.movimento)) !== natureza) return;
+      const cod = normMov(s.movimento);
+      // 'compras' = só DG_MOV_COMPRAS, igual ao número do card.
+      if (!p || (natureza === 'compras' ? !DG_MOV_COMPRAS.has(cod) : classificarMovSap(cod) !== natureza)) return;
       const ref = (s.ref && String(s.ref).trim()) ? String(s.ref).trim()
                 : (s.documento && String(s.documento).trim()) ? String(s.documento).trim() : '';
       out.push([normMov(s.movimento), p, ref, String(s.usuario || '').trim(), String(s.dtLanc || s.dtDoc || '').trim(), {
@@ -1575,7 +1587,7 @@ function _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais, f
   // buildAnaliticoDetailBreakdown pra montar o botão em si — aquele mostra
   // o valor formatado em kg puro (fmtKgSigned), e o card já mostra o valor
   // certo (TON/kg, dgFmtPesoSigned); o botão daqui só abre o modal.
-  const comprasEntries = _dgVgColetarSapPorNatureza(results, 'ent');
+  const comprasEntries = _dgVgColetarSapPorNatureza(results, 'compras');
   const consumoEntries = _dgVgColetarSapPorNatureza(results, 'sai');
   const btnCompras = _dgVgBotaoDetalhado(comprasEntries, 'Compras', 'var(--green)');
   const btnConsumo = _dgVgBotaoDetalhado(consumoEntries, 'Consumo', 'var(--red)');
@@ -1698,8 +1710,8 @@ function _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais, f
         ${btnCompras}
         <div class="inv-kpi-body">
           <div class="inv-kpi-label"><i class="ti ti-arrow-bar-to-down" style="color:var(--green)"></i>Compras</div>
-          <div class="inv-kpi-value">${dgFmtPesoSigned(movTotais.totalEnt)}</div>
-          <div class="inv-kpi-unit">${money(custoMovTotais.custoEnt || 0)}</div>
+          <div class="inv-kpi-value">${dgFmtPesoSigned(movTotais.totalCompras)}</div>
+          <div class="inv-kpi-unit">${money(custoMovTotais.custoCompras || 0)}</div>
         </div>
       </div>
       <div class="inv-kpi-card">
