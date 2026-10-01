@@ -1965,15 +1965,19 @@ function _dgVgSaudeDiffCor(v) {
 // filtrar/re-renderizar sem recalcular saúde de novo a cada tecla digitada.
 let _dgVgSaudeListaAtual = [];
 
-function abrirDetalheSaude(tipo) {
-  const d = window._dgVgLastData;
+// `dados` opcional: um período específico ({ pares, thresholds }) em vez do
+// período da tela — usado pelo detalhe de cada mês na aba Evolução do
+// relatório, que não tem filtro de Regional/Categoria (por isso ignora os
+// <select> da aba Dashboard nesse caso).
+function abrirDetalheSaude(tipo, dados) {
+  const d = dados || window._dgVgLastData;
   const overlay = document.getElementById('dg-var-saude-overlay');
   const titleEl = document.getElementById('dg-var-saude-title');
   const searchEl = document.getElementById('dg-var-saude-search');
   if (!d || !overlay) return;
 
-  const selReg = document.getElementById('dg-vg-saude-f-regional')?.value || '';
-  const selCat = document.getElementById('dg-vg-saude-f-categoria')?.value || '';
+  const selReg = dados ? '' : (document.getElementById('dg-vg-saude-f-regional')?.value || '');
+  const selCat = dados ? '' : (document.getElementById('dg-vg-saude-f-categoria')?.value || '');
   const pares = d.pares.filter(p =>
     (!selReg || p.regional === selReg) && (!selCat || p.catKey === selCat)
   );
@@ -1994,7 +1998,7 @@ function abrirDetalheSaude(tipo) {
           <td class="da-num">${l.materiais}</td>
         </tr>`
       }));
-    if (titleEl) titleEl.textContent = 'Saúde Geral — Centrais' + (selReg ? ` · ${selReg}` : '');
+    if (titleEl) titleEl.textContent = 'Saúde Geral — Centrais' + (selReg ? ` · ${selReg}` : '') + (d.rotulo ? ` · ${d.rotulo}` : '');
     _dgVgRenderSaudeTabela([
       { label: 'Central' }, { label: 'Nível' },
       { label: 'Variação', num: true }, { label: 'Custo', num: true }, { label: 'Materiais', num: true }
@@ -2013,7 +2017,7 @@ function abrirDetalheSaude(tipo) {
           <td class="da-num" style="color:${_dgVgSaudeDiffCor(p.diffSaude)}">${money(Math.abs(p.custoImplicado))}</td>
         </tr>`
       }));
-    if (titleEl) titleEl.textContent = 'Saúde Geral — Materiais' + (selCat ? ` · ${DG_VG_CAT_LABELS[selCat] || selCat}` : '');
+    if (titleEl) titleEl.textContent = 'Saúde Geral — Materiais' + (selCat ? ` · ${DG_VG_CAT_LABELS[selCat] || selCat}` : '') + (d.rotulo ? ` · ${d.rotulo}` : '');
     _dgVgRenderSaudeTabela([
       { label: 'Central' }, { label: 'Material' }, { label: 'Nível' },
       { label: 'Variação', num: true }, { label: 'Custo', num: true }
@@ -2055,17 +2059,18 @@ function fecharDetalheSaude() {
 
 // `elId` opcional — default é o container FIXO da tela; ver nota de
 // _dgVgRenderHealthDonuts acima (mesmo motivo/mesmo uso pelo detalhe mensal).
-function _dgVgRenderExtremos(extRegional, extCentral, elId) {
+// `dadosJs` opcional — expressão JS passada como 3º argumento de
+// abrirDetalheVariacao (os dados do mês, no detalhe mensal do relatório).
+function _dgVgRenderExtremos(extRegional, extCentral, elId, dadosJs) {
   const el = document.getElementById(elId || 'dg-vg-extremos');
   if (!el) return;
 
   // Botão "Detalhado" só nos boxes com vencedor real (o vazio não tem o que
   // detalhar) — chama abrirDetalheVariacao(tipo, ext.k), que filtra pares
   // por aquela regional/central e mostra o ranking da dimensão de baixo
-  // (regional→central, central→material). No relatório, a aba Dashboard
-  // leva abrirDetalheVariacao embutida (_DGR_NOMES.detalheDash); nos cards
-  // "fotografados" do detalhe mensal (_dgrEvoDetalheCardHtml) o botão é
-  // removido, porque abriria os pares do período do Dashboard, não do mês.
+  // (regional→central, central→material). No relatório a função vai
+  // embutida (_DGR_NOMES.detalheDash); no detalhe mensal da Evolução,
+  // dadosJs aponta pros pares daquele mês (ver _dgrEvoDetalheCardHtml).
   const box = (label, ext, tipo) => {
     if (!ext) return `<div class="dg-vg-extremo-box dg-vg-extremo-empty">
       <span class="dg-vg-extremo-label">${label}</span>
@@ -2085,7 +2090,7 @@ function _dgVgRenderExtremos(extRegional, extCentral, elId) {
       <span class="dg-vg-extremo-kg">${varSymbol(ext.aux || 0)} ${money(Math.abs(ext.aux || 0))}</span>
       <span class="dg-vg-extremo-name" title="${escapeHtml(ext.k)}">${escapeHtml(ext.k)}</span>
       <button type="button" class="dg-kpi-detalhe-btn"
-        onclick="abrirDetalheVariacao('${tipo}', '${chaveJs}')"
+        onclick="abrirDetalheVariacao('${tipo}', '${chaveJs}'${dadosJs ? ', ' + dadosJs : ''})"
         title="Ver detalhamento — ${escapeHtml(ext.k)}">Ver detalhes <i class="ti ti-arrow-right"></i></button>
     </div>`;
   };
@@ -2111,8 +2116,10 @@ function _dgVgRenderExtremos(extRegional, extCentral, elId) {
 //    - chave null (vem do botão dos 2 gráficos de barra): sem recorte,
 //      ranking cheio na própria dimensão (Regional ou Central) — mesmo
 //      dado que os gráficos mostram só o Top 8, aqui vem a lista inteira.
-function abrirDetalheVariacao(tipo, chave) {
-  const d = window._dgVgLastData;
+// `dados` opcional, mesmo papel de abrirDetalheSaude: { pares, pesoMedio,
+// totalEstTeoricoKpi } de um mês da aba Evolução do relatório.
+function abrirDetalheVariacao(tipo, chave, dados) {
+  const d = dados || window._dgVgLastData;
   const overlay = document.getElementById('dg-var-detalhe-overlay');
   const titleEl = document.getElementById('dg-var-detalhe-title');
   if (!d || !overlay) return;
@@ -2136,6 +2143,7 @@ function abrirDetalheVariacao(tipo, chave) {
     titleEl.textContent = chave
       ? `${tipo === 'regional' ? 'Regional' : 'Central'} ${chave} — Detalhamento por ${colLabel}`
       : `Ranking de ${colLabel === 'Regional' ? 'Regionais' : 'Centrais'} — Variação Física`;
+    if (d.rotulo) titleEl.textContent += ` · ${d.rotulo}`;
   }
 
   const dados = _daBuildRanking(paresEscopo, pesoMedio, keyFn, d.totalEstTeoricoKpi, labelFn);

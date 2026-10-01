@@ -4345,6 +4345,11 @@ function _dgrEvoDetalheCardHtml(l) {
   // Canvas vivo (Chart.js) — atravessa a "fotografia" intacto, ninguém
   // desenha nele offscreen; quem pinta é _dgrScriptEvoDetalhe, no arquivo.
   const canvasCategoria = `evo-cat-${l.id}`;
+  // Dados DESTE mês pros botões "Ver detalhes" — window._DGR_EVO_DET[id] é
+  // preenchido por _dgrScriptEvoDetalhe (ver `detalhe` no retorno abaixo).
+  const dadosJs = `_DGR_EVO_DET['${l.id}']`;
+  const verDetalhes = (fn, args, titulo) =>
+    `<button type="button" class="dg-kpi-detalhe-btn" onclick="${fn}(${args}, ${dadosJs})" title="Ver detalhamento — ${titulo}">Ver detalhes <i class="ti ti-arrow-right"></i></button>`;
 
   const innerHtml = `
     <div class="section-title" style="margin:0 0 12px"><i class="ti ti-heart-rate-monitor" style="font-size:13px;margin-right:6px"></i>Saúde Geral — Centrais e Materiais</div>
@@ -4360,6 +4365,7 @@ function _dgrEvoDetalheCardHtml(l) {
           </div>
         </div>
         <div id="${gaugeCenSum}" style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-start;margin-top:10px"></div>
+        ${verDetalhes('abrirDetalheSaude', "'centrais'", 'Saúde Geral por Central')}
       </div>
       <div class="oc-chart-card">
         <div class="oc-chart-title dg-vg-donut-title-row">
@@ -4372,6 +4378,7 @@ function _dgrEvoDetalheCardHtml(l) {
           </div>
         </div>
         <div id="${gaugeMatSum}" style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-start;margin-top:10px"></div>
+        ${verDetalhes('abrirDetalheSaude', "'materiais'", 'Saúde Geral por Material')}
       </div>
     </div>
     <div class="oc-chart-card" style="margin-bottom:18px">
@@ -4398,11 +4405,7 @@ function _dgrEvoDetalheCardHtml(l) {
       matSvg: gaugeMatSvg, matSub: gaugeMatSub, matSum: gaugeMatSum,
       cenSvg: gaugeCenSvg, cenSub: gaugeCenSub, cenSum: gaugeCenSum
     }, l.results);
-    _dgVgRenderExtremos(extRegional, extCentral, extremosEl);
-    // abrirDetalheVariacao existe no arquivo (aba Dashboard), mas lê os pares
-    // do período do Dashboard — aqui abriria o mês errado. Sai o botão.
-    // ponytail: sem detalhamento por mês; dar a cada card seus pares se pedirem.
-    document.querySelectorAll(`#${extremosEl} .dg-kpi-detalhe-btn`).forEach(b => b.remove());
+    _dgVgRenderExtremos(extRegional, extCentral, extremosEl, dadosJs);
   });
 
   const canvasRegional = `evo-cr-${l.id}`, canvasCentral = `evo-cc-${l.id}`;
@@ -4413,17 +4416,26 @@ function _dgrEvoDetalheCardHtml(l) {
         <div class="dg-vg-bar-wrap" style="height:260px">
           <div class="dg-vg-bar-inner"><canvas id="${canvasRegional}"></canvas></div>
         </div>
+        ${verDetalhes('abrirDetalheVariacao', "'regional', null", 'Variação por Regional')}
       </div>
       <div class="oc-chart-card">
         <div class="oc-chart-title"><i class="ti ti-building-factory-2" style="margin-right:5px"></i>Variação por Central</div>
         <div class="dg-vg-bar-wrap" style="height:260px">
           <div class="dg-vg-bar-inner"><canvas id="${canvasCentral}"></canvas></div>
         </div>
+        ${verDetalhes('abrirDetalheVariacao', "'central', null", 'Variação por Central')}
       </div>
     </div>`;
 
   return {
     id: l.id, html, canvasRegional, canvasCentral, canvasCategoria,
+    // O que abrirDetalheSaude/abrirDetalheVariacao leem, só deste mês.
+    // ponytail: pares do mês embutidos de novo (a aba Detalhado tem os
+    // seus); se o arquivo pesar, compartilhar um só objeto por período.
+    detalhe: {
+      rotulo: l.rotulo, pares: l.pares, thresholds,
+      pesoMedio: l.pesoMedio || {}, totalEstTeoricoKpi: l.totalEstTeorico || 0
+    },
     catFisicaPct: l.catFisicaPct || {},
     entriesRegional: _dgVgTop8SobraDesfalque(porRegionalKg),
     entriesCentral:  _dgVgTop8SobraDesfalque(porCentralKg)
@@ -4444,7 +4456,10 @@ function _dgrScriptEvoDetalhe(cards) {
     canvasCategoria: c.canvasCategoria, catFisicaPct: c.catFisicaPct,
     entriesRegional: c.entriesRegional, entriesCentral: c.entriesCentral
   }));
+  // Dados de cada mês pros botões "Ver detalhes" (ver _dgrEvoDetalheCardHtml).
+  const detalhes = Object.fromEntries(cards.map(c => [c.id, c.detalhe]));
   return `<script>
+window._DGR_EVO_DET = ${_dgrEscaparScript(JSON.stringify(detalhes))};
 function _dgrEvoToggle(linha, id) {
   var row = document.querySelector('.dgr-evo-detalhe-row[data-mes="' + id + '"]');
   if (!row) return;
@@ -5569,11 +5584,12 @@ window.gerarRelatorioGerencialDashboard = async function(tema = 'dark', selecao 
 
     const bodyHtml = `<style>${_dgrEstilos()}${ajustesCss}</style>`
       + abasBarHtml + panesHtml + _dgrClonarFechModal(periodoDash)
-      + (incluiu('dashboard') ? _dgrDetalheBotaoModalHtml() + _dgrClonarModaisDetalhe() : '')
+      + (incluiu('dashboard') ? _dgrDetalheBotaoModalHtml() : '')
+      + (incluiu('dashboard') || incluiu('evolucao') ? _dgrClonarModaisDetalhe() : '')
       + _dgrScriptTooltipApp() + chartJs
       + _dgrScriptPrelude([
           incluiu('dashboard') && 'graficos',
-          incluiu('dashboard') && 'detalheDash',
+          (incluiu('dashboard') || incluiu('evolucao')) && 'detalheDash',
           incluiu('evolucao')  && 'evolucao',
           incluiu('detalhado') && 'detalhado'
         ].filter(Boolean))
