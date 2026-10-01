@@ -1536,23 +1536,19 @@ function _dgVgColetarSapPorNatureza(results, natureza) {
 // mostra o valor certo ao lado (TON/kg, dgFmtPesoSigned), então repeti-lo
 // no botão seria redundante e inconsistente.
 //
-// Posicionado como um "dente" no canto superior direito do CARD (não do
-// label) — por isso é irmão de .inv-kpi-body, não filho dele: dentro do
-// label ele herdava o layout flex/gap da linha de texto e ficava
-// minúsculo e difícil de acertar o clique. .dg-kpi-detalhe-btn (ver
-// components.css) é position:absolute ancorado no .inv-kpi-card (que já é
-// position:relative), então funciona em qualquer card sem precisar de
-// ajuste extra.
+// Vai no fim de .inv-kpi-body, como link "Ver detalhes →" de rodapé (ver
+// .dg-kpi-detalhe-btn em components.css) — não dentro do label, que tem
+// layout flex de linha de texto.
 function _dgVgBotaoDetalhado(entries, title, colorVar) {
   if (!entries.length) return '';
   const encoded = encodeURIComponent(JSON.stringify(entries));
-  return `<button type="button" class="dg-kpi-detalhe-btn" style="--dg-kpi-detalhe-cor:${escapeHtml(colorVar)}"
+  return `<button type="button" class="dg-kpi-detalhe-btn"
     onclick="event.stopPropagation();openBreakdownModal(event.currentTarget)"
     data-entries="${encoded}" data-fech-excluidos="" data-diag=""
     data-title="${escapeHtml(title)}" data-color="${escapeHtml(colorVar)}"
     data-local-count="" data-local-total="" data-mat="" data-central=""
     data-mostrar-central-material="1"
-    title="Ver detalhamento — ${escapeHtml(title)}"><i class="ti ti-list-search"></i></button>`;
+    title="Ver detalhamento — ${escapeHtml(title)}">Ver detalhes <i class="ti ti-arrow-right"></i></button>`;
 }
 
 // ── 1. Resumo do Período: DOIS níveis — Variação Total + Custo Total
@@ -1695,19 +1691,19 @@ function _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais, f
         </div>
       </div>
       <div class="inv-kpi-card">
-        ${btnCompras}
         <div class="inv-kpi-body">
           <div class="inv-kpi-label"><i class="ti ti-arrow-bar-to-down" style="color:var(--green)"></i>Compras</div>
           <div class="inv-kpi-value">${dgFmtPesoSigned(movTotais.totalEnt)}</div>
           <div class="inv-kpi-unit">${money(custoMovTotais.custoEnt || 0)}</div>
+          ${btnCompras}
         </div>
       </div>
       <div class="inv-kpi-card">
-        ${btnConsumo}
         <div class="inv-kpi-body">
           <div class="inv-kpi-label"><i class="ti ti-arrow-bar-up" style="color:var(--red)"></i>Consumo</div>
           <div class="inv-kpi-value">${dgFmtPesoSigned(movTotais.totalSai)}</div>
           <div class="inv-kpi-unit">${money(custoMovTotais.custoSai || 0)}</div>
+          ${btnConsumo}
         </div>
       </div>
       <div class="inv-kpi-card" id="dg-vg-kpi-ajustes">
@@ -2084,13 +2080,13 @@ function _dgVgRenderExtremos(extRegional, extCentral, elId) {
     // o relatório).
     const chaveJs = String(ext.k).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     return `<div class="dg-vg-extremo-box ${cls}">
-      <button type="button" class="dg-kpi-detalhe-btn" style="--dg-kpi-detalhe-cor:var(--accent)"
-        onclick="abrirDetalheVariacao('${tipo}', '${chaveJs}')"
-        title="Ver detalhamento — ${escapeHtml(ext.k)}"><i class="ti ti-list-search"></i></button>
       <span class="dg-vg-extremo-label">${label}</span>
       <span class="dg-vg-extremo-value">${varSymbol(ext.v)} ${dgFmtPeso(Math.abs(ext.v))}</span>
       <span class="dg-vg-extremo-kg">${varSymbol(ext.aux || 0)} ${money(Math.abs(ext.aux || 0))}</span>
       <span class="dg-vg-extremo-name" title="${escapeHtml(ext.k)}">${escapeHtml(ext.k)}</span>
+      <button type="button" class="dg-kpi-detalhe-btn"
+        onclick="abrirDetalheVariacao('${tipo}', '${chaveJs}')"
+        title="Ver detalhamento — ${escapeHtml(ext.k)}">Ver detalhes <i class="ti ti-arrow-right"></i></button>
     </div>`;
   };
 

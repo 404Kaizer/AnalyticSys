@@ -661,10 +661,6 @@
                     <option value="">Todas as regionais</option>
                   </select>
                 </div>
-                <button type="button" class="dg-kpi-detalhe-btn dg-kpi-detalhe-btn-inline" style="--dg-kpi-detalhe-cor:var(--accent)"
-                  onclick="abrirDetalheSaude('centrais')" title="Ver detalhamento — Saúde Geral por Central">
-                  <i class="ti ti-list-search"></i>
-                </button>
               </div>
             </div>
             <div style="display:flex;justify-content:center">
@@ -673,6 +669,9 @@
               </div>
             </div>
             <div id="dg-vg-health-central-summary" style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-start;margin-top:10px"></div>
+            <button type="button" class="dg-kpi-detalhe-btn" onclick="abrirDetalheSaude('centrais')" title="Ver detalhamento — Saúde Geral por Central">
+              Ver detalhes <i class="ti ti-arrow-right"></i>
+            </button>
           </div>
           <div class="oc-chart-card">
             <div class="oc-chart-title dg-vg-donut-title-row">
@@ -685,10 +684,6 @@
                     <option value="">Todas as categorias</option>
                   </select>
                 </div>
-                <button type="button" class="dg-kpi-detalhe-btn dg-kpi-detalhe-btn-inline" style="--dg-kpi-detalhe-cor:var(--accent)"
-                  onclick="abrirDetalheSaude('materiais')" title="Ver detalhamento — Saúde Geral por Material">
-                  <i class="ti ti-list-search"></i>
-                </button>
               </div>
             </div>
             <div style="display:flex;justify-content:center">
@@ -697,6 +692,9 @@
               </div>
             </div>
             <div id="dg-vg-health-materiais-summary" style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-start;margin-top:10px"></div>
+            <button type="button" class="dg-kpi-detalhe-btn" onclick="abrirDetalheSaude('materiais')" title="Ver detalhamento — Saúde Geral por Material">
+              Ver detalhes <i class="ti ti-arrow-right"></i>
+            </button>
           </div>
         </div>
 
@@ -722,28 +720,26 @@
 
         <div class="dg-giro-dual-grid">
           <div class="oc-chart-card">
-            <button type="button" class="dg-kpi-detalhe-btn" style="--dg-kpi-detalhe-cor:var(--accent)"
-              onclick="abrirDetalheVariacao('regional', null)" title="Ver detalhamento — Variação por Regional">
-              <i class="ti ti-list-search"></i>
-            </button>
             <div class="oc-chart-title"><i class="ti ti-users" style="margin-right:5px"></i>Variação por Regional</div>
             <div class="dg-vg-bar-wrap" style="height:260px">
               <div class="dg-vg-bar-inner">
                 <canvas id="dg-vg-chart-regional"></canvas>
               </div>
             </div>
+            <button type="button" class="dg-kpi-detalhe-btn" onclick="abrirDetalheVariacao('regional', null)" title="Ver detalhamento — Variação por Regional">
+              Ver detalhes <i class="ti ti-arrow-right"></i>
+            </button>
           </div>
           <div class="oc-chart-card">
-            <button type="button" class="dg-kpi-detalhe-btn" style="--dg-kpi-detalhe-cor:var(--accent)"
-              onclick="abrirDetalheVariacao('central', null)" title="Ver detalhamento — Variação por Central">
-              <i class="ti ti-list-search"></i>
-            </button>
             <div class="oc-chart-title"><i class="ti ti-building-factory-2" style="margin-right:5px"></i>Variação por Central</div>
             <div class="dg-vg-bar-wrap" style="height:260px">
               <div class="dg-vg-bar-inner">
                 <canvas id="dg-vg-chart-usina"></canvas>
               </div>
             </div>
+            <button type="button" class="dg-kpi-detalhe-btn" onclick="abrirDetalheVariacao('central', null)" title="Ver detalhamento — Variação por Central">
+              Ver detalhes <i class="ti ti-arrow-right"></i>
+            </button>
           </div>
         </div>
         </div><!-- /rel-secao variacao-reg-central -->
