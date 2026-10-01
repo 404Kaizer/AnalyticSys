@@ -2096,6 +2096,21 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
  *          algum pré-requisito não foi encontrado (o chamador deve então
  *          cair para o render completo como fallback de segurança).
  */
+// Linha de window._anResumoCentraisData a partir dos data-* de um card de central.
+function _anResumoFromCard(card) {
+  return {
+    central:      card.dataset.central     || '—',
+    regional:     card.dataset.regional    || '—',
+    variacaoKg:   card.dataset.centralDiff || '0',
+    custoVar:     card.dataset.custoVariacao || '0',
+    saude:        card.dataset.healthScore != null && card.dataset.healthScore !== ''
+                    ? card.dataset.healthScore + '% · ' + (card.dataset.healthLevel || '—').toUpperCase()
+                    : '—',
+    healthLevel:  card.dataset.healthLevel || 'none',
+    healthScore:  card.dataset.healthScore || ''
+  };
+}
+
 function refreshCentralCard(central, opts = {}) {
   if (!window.__analiticoResults || !window.__analiticoDtIni || !window.__analiticoDtFim) return false;
 
@@ -2143,6 +2158,13 @@ function refreshCentralCard(central, opts = {}) {
     // Atualiza o highlight de borda do regional (verde/vermelho/azul)
     _applyGroupPendHighlight(group, groupCards);
   }
+
+  // Atualiza a entrada desta central no resumo — o painel de saúde dos
+  // relatórios lê o score daqui; sem isso ele ficava com o valor anterior
+  // ao toggle enquanto os chips (via _macroState) já vinham atualizados.
+  const _resumo = window._anResumoCentraisData;
+  const _ri = _resumo ? _resumo.findIndex(c => c.central === central) : -1;
+  if (_ri >= 0) _resumo[_ri] = _anResumoFromCard(newCard);
 
   // Recalcula window._rankByLevel (e demais dados consumidos pelos relatórios)
   // com o estado atualizado de pendentes considerados — sem isso, os
@@ -2592,17 +2614,7 @@ function renderAnaliticoMicro(results, dtIni, dtFim, silent, opts = {}) {
   });
 
   // ─── RESUMO POR CENTRAL (dados do card) ─────────────────────────────
-  window._anResumoCentraisData = _cardBuffer.map(card => ({
-    central:      card.dataset.central     || '—',
-    regional:     card.dataset.regional    || '—',
-    variacaoKg:   card.dataset.centralDiff || '0',
-    custoVar:     card.dataset.custoVariacao || '0',
-    saude:        card.dataset.healthScore != null && card.dataset.healthScore !== ''
-                    ? card.dataset.healthScore + '% · ' + (card.dataset.healthLevel || '—').toUpperCase()
-                    : '—',
-    healthLevel:  card.dataset.healthLevel || 'none',
-    healthScore:  card.dataset.healthScore || ''
-  }));
+  window._anResumoCentraisData = _cardBuffer.map(_anResumoFromCard);
 
   }  // fim do agrupamento por regional
 
