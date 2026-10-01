@@ -4038,7 +4038,9 @@ function _dgrEvolucaoLinhas(periodos) {
   });
 }
 
-function _dgrEvolucaoTabelaHtml(periodos) {
+// `blocos`: o que entra no detalhe de cada mês (DGR_EVO_BLOCOS marcados no
+// modal). Vazio = sem detalhe: a linha não expande.
+function _dgrEvolucaoTabelaHtml(periodos, blocos = DGR_EVO_BLOCOS) {
   const linhas = _dgrEvolucaoLinhas(periodos);
   if (!linhas.length) return { html: '<div class="dgr-chart-empty">Sem meses no relatório.</div>', cards: [] };
 
@@ -4071,16 +4073,17 @@ function _dgrEvolucaoTabelaHtml(periodos) {
   // de cada mês (ver _dgrScriptEvoDetalhe — script fica de fora daqui de
   // propósito, tem que entrar DEPOIS do prelúdio que declara as funções que
   // ele chama, ver nota em _dgrScriptPrelude).
-  const cards = linhas.map(l => _dgrEvoDetalheCardHtml(l));
+  const cards = blocos.length ? linhas.map(l => _dgrEvoDetalheCardHtml(l, blocos)) : [];
   const cardPorId = new Map(cards.map(c => [c.id, c]));
 
   const corpo = linhas.map(l => {
     const v = l.veredito ? vered[l.veredito] : null;
-    return `<tr class="dgr-evo-mes-row" onclick="_dgrEvoToggle(this, '${l.id}')" title="Ver Saúde Geral e Variação por Regional/Central deste mês">
+    const card = cardPorId.get(l.id);
+    return `<tr class="dgr-evo-mes-row"${card ? ` onclick="_dgrEvoToggle(this, '${l.id}')" title="Ver o detalhamento deste mês"` : ''}>
       <td style="font-weight:700">
-        <button type="button" class="dgr-evo-expand-btn" tabindex="0">
+        ${card ? `<button type="button" class="dgr-evo-expand-btn" tabindex="0">
           <i class="ti ti-chevron-right"></i>
-        </button>
+        </button>` : ''}
         ${_rankEsc(l.rotulo)}
       </td>
       <td class="da-num" style="color:#94a3b8">${dgFmtPeso(l.kpi.estIni, 1)}</td>
@@ -4095,8 +4098,8 @@ function _dgrEvolucaoTabelaHtml(periodos) {
       <td class="da-num">${v
         ? `<span style="color:${v.cor};font-weight:800;font-size:10px;letter-spacing:.05em"><i class="ti ${v.ic}"></i> ${v.txt}</span>`
         : '<span style="color:#64748b;font-size:10px">base</span>'}</td>
-    </tr>
-    <tr class="dgr-evo-detalhe-row" data-mes="${l.id}" hidden><td colspan="11"><div class="dgr-evo-detalhe-box">${cardPorId.get(l.id).html}</div></td></tr>`;
+    </tr>${card ? `
+    <tr class="dgr-evo-detalhe-row" data-mes="${l.id}" hidden><td colspan="11"><div class="dgr-evo-detalhe-box">${card.html}</div></td></tr>` : ''}`;
   }).join('');
 
   const html = `<div class="da-table-wrap dgr-evo-wrap">
@@ -4273,118 +4276,115 @@ function _dgrFechModalConteudo(recs, rotulo) {
   return overlay.innerHTML;
 }
 
-function _dgrEvoDetalheCardHtml(l) {
+// Blocos do detalhe de cada mês — viram seções marcáveis da aba Evolução no
+// modal de seleção (ids do registro) e saem NA ORDEM em que estão lá.
+const DGR_EVO_BLOCOS = ['evo-resumo', 'evo-saude', 'evo-variacao', 'evo-custo-abs'];
+
+function _dgrEvoDetalheCardHtml(l, blocos = DGR_EVO_BLOCOS) {
   const gaugeMatSvg = `evo-gm-${l.id}`, gaugeMatSub = `evo-gms-${l.id}`, gaugeMatSum = `evo-gmr-${l.id}`;
   const gaugeCenSvg = `evo-gc-${l.id}`, gaugeCenSub = `evo-gcs-${l.id}`, gaugeCenSum = `evo-gcr-${l.id}`;
   const extremosEl  = `evo-ext-${l.id}`;
+  const heroEl      = `evo-hero-${l.id}`;
   // Canvas vivo (Chart.js) — atravessa a "fotografia" intacto, ninguém
-  // desenha nele offscreen; quem pinta é _dgrScriptEvoDetalhe, no arquivo.
+  // desenha nele offscreen; quem pinta é _dgrScriptEvoDetalhe, no arquivo
+  // (canvas de bloco desmarcado simplesmente não existe e é pulado lá).
   const canvasCategoria = `evo-cat-${l.id}`;
+  const canvasRegional  = `evo-cr-${l.id}`, canvasCentral = `evo-cc-${l.id}`;
   // Dados DESTE mês pros botões "Ver detalhes" — window._DGR_EVO_DET[id] é
   // preenchido por _dgrScriptEvoDetalhe (ver `detalhe` no retorno abaixo).
   const dadosJs = `_DGR_EVO_DET['${l.id}']`;
   const verDetalhes = (fn, args, titulo) =>
     `<button type="button" class="dg-kpi-detalhe-btn" onclick="${fn}(${args}, ${dadosJs})" title="Ver detalhamento — ${titulo}">Ver detalhes <i class="ti ti-arrow-right"></i></button>`;
-
-  const heroEl = `evo-hero-${l.id}`;
-
-  const innerHtml = `
-    <div class="section-title" style="margin:0 0 12px"><i class="ti ti-report-money" style="font-size:13px;margin-right:6px"></i>Resumo do Período — Estoque, Movimentação e Variação</div>
-    <div id="${heroEl}" class="inv-kpi-groups" style="margin-bottom:18px"></div>
-    <div class="section-title" style="margin:0 0 12px"><i class="ti ti-heart-rate-monitor" style="font-size:13px;margin-right:6px"></i>Saúde Geral — Centrais e Materiais</div>
-    <div class="dg-giro-dual-grid" style="margin-bottom:18px">
-      <div class="oc-chart-card">
-        <div class="oc-chart-title dg-vg-donut-title-row">
-          <span><i class="ti ti-building-factory-2" style="margin-right:5px"></i>Saúde Geral — Centrais</span>
-          <span id="${gaugeCenSub}" class="dg-vg-donut-subtitle"></span>
-        </div>
-        <div style="display:flex;justify-content:center">
-          <div style="width:100%;max-width:420px">
-            <svg id="${gaugeCenSvg}" viewBox="0 0 300 220" style="width:100%;height:auto;display:block"></svg>
-          </div>
-        </div>
-        <div id="${gaugeCenSum}" style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-start;margin-top:10px"></div>
-        ${verDetalhes('abrirDetalheSaude', "'centrais'", 'Saúde Geral por Central')}
-      </div>
-      <div class="oc-chart-card">
-        <div class="oc-chart-title dg-vg-donut-title-row">
-          <span><i class="ti ti-heartbeat" style="margin-right:5px"></i>Saúde Geral — Materiais</span>
-          <span id="${gaugeMatSub}" class="dg-vg-donut-subtitle"></span>
-        </div>
-        <div style="display:flex;justify-content:center">
-          <div style="width:100%;max-width:420px">
-            <svg id="${gaugeMatSvg}" viewBox="0 0 300 220" style="width:100%;height:auto;display:block"></svg>
-          </div>
-        </div>
-        <div id="${gaugeMatSum}" style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-start;margin-top:10px"></div>
-        ${verDetalhes('abrirDetalheSaude', "'materiais'", 'Saúde Geral por Material')}
-      </div>
-    </div>
-    <div class="oc-chart-card" style="margin-bottom:18px">
-      <div class="oc-chart-title"><i class="ti ti-chart-bar" style="margin-right:5px"></i>Desfalque e Sobra por Categoria — Maior Variação Primeiro</div>
-      <div style="position:relative;height:180px"><canvas id="${canvasCategoria}"></canvas></div>
-    </div>
-    <div class="section-title" style="margin:0 0 12px"><i class="ti ti-scale" style="font-size:13px;margin-right:6px"></i>Variação por Regional e Central</div>
-    <div id="${extremosEl}" class="dg-vg-extremos-grid" style="margin-bottom:14px"></div>
-  `;
+  const titulo = (icone, texto) =>
+    `<div class="section-title" style="margin:0 0 12px"><i class="ti ${icone}" style="font-size:13px;margin-right:6px"></i>${texto}</div>`;
 
   const thresholds = getHealthThresholds();
-  const counts     = _dgVgCounts(l.pares);
-  const scoreInfo  = _dgVgScoreFromCounts(counts);
-
   const porRegionalKg = _dgVgAggKgPorChave(l.pares, p => p.regional);
   const porCentralKg  = _dgVgAggKgPorChave(l.pares, p => p.central);
-  const porRegional   = _dgVgAggPorChave(l.pares, p => p.regional);
-  const porCentral    = _dgVgAggPorChave(l.pares, p => p.central);
-  const extRegional   = _dgVgExtremos(porRegionalKg, porRegional);
-  const extCentral    = _dgVgExtremos(porCentralKg, porCentral);
+  const fechRecs      = l.results.reduce((acc, r) => acc.concat(r.sapFechExcluidos || []), []);
 
-  // Resumo do Período do mês — mesmas contas de renderDgVisaoGeralPdf.
-  const estTotais      = _dgVgEstoqueTotais(l.pares);
-  const movTotais      = _dgVgMovimentacaoTotais(l.results);
-  const custoMovTotais = _dgVgCustoMovimentacaoTotais(l.results);
-  const veiculos       = _daBuildRanking(l.pares, l.pesoMedio || {}, () => 'total', l.totalEstTeorico).total;
-  const fechRecs       = l.results.reduce((acc, r) => acc.concat(r.sapFechExcluidos || []), []);
-
-  const congelado = _dgrCapturarOffscreen(innerHtml, () => {
-    // _dgVgRenderKpisHero grava o global da tela pro badge de fechamento —
-    // preserva o da tela; o badge do mês abre o modal DO MÊS (_dgrFechModaisHtml).
-    const fechTela = window._dgVgFechExcluidosAtual;
-    _dgVgRenderKpisHero(l.kpi.varTotalFisica, l.kpi.custoTotal, estTotais, movTotais, fechRecs,
-                        custoMovTotais, veiculos, l.results, heroEl);
-    window._dgVgFechExcluidosAtual = fechTela;
-    document.querySelector(`#${heroEl} .dg-fech-badge-compact`)?.setAttribute('onclick', `openFechModal('${l.id}')`);
-
-    _dgVgRenderHealthDonuts(l.pares, counts, scoreInfo, thresholds, {
-      matSvg: gaugeMatSvg, matSub: gaugeMatSub, matSum: gaugeMatSum,
-      cenSvg: gaugeCenSvg, cenSub: gaugeCenSub, cenSum: gaugeCenSum
-    }, l.results);
-    _dgVgRenderExtremos(extRegional, extCentral, extremosEl, dadosJs);
-  });
-
-  const canvasRegional = `evo-cr-${l.id}`, canvasCentral = `evo-cc-${l.id}`;
-  const html = `${congelado}
-    <div class="dg-giro-dual-grid">
-      <div class="oc-chart-card">
-        <div class="oc-chart-title"><i class="ti ti-users" style="margin-right:5px"></i>Variação por Regional</div>
-        <div class="dg-vg-bar-wrap" style="height:260px">
-          <div class="dg-vg-bar-inner"><canvas id="${canvasRegional}"></canvas></div>
+  const montar = {
+    // Resumo do Período do mês — mesmas contas de renderDgVisaoGeralPdf.
+    'evo-resumo': () => {
+      const estTotais      = _dgVgEstoqueTotais(l.pares);
+      const movTotais      = _dgVgMovimentacaoTotais(l.results);
+      const custoMovTotais = _dgVgCustoMovimentacaoTotais(l.results);
+      const veiculos       = _daBuildRanking(l.pares, l.pesoMedio || {}, () => 'total', l.totalEstTeorico).total;
+      return _dgrCapturarOffscreen(`
+        ${titulo('ti-report-money', 'Resumo do Período — Estoque, Movimentação e Variação')}
+        <div id="${heroEl}" class="inv-kpi-groups" style="margin-bottom:18px"></div>`, () => {
+        // _dgVgRenderKpisHero grava o global da tela pro badge de fechamento —
+        // preserva o da tela; o badge do mês abre o modal DO MÊS (_dgrFechModaisHtml).
+        const fechTela = window._dgVgFechExcluidosAtual;
+        _dgVgRenderKpisHero(l.kpi.varTotalFisica, l.kpi.custoTotal, estTotais, movTotais, fechRecs,
+                            custoMovTotais, veiculos, l.results, heroEl);
+        window._dgVgFechExcluidosAtual = fechTela;
+        document.querySelector(`#${heroEl} .dg-fech-badge-compact`)?.setAttribute('onclick', `openFechModal('${l.id}')`);
+      });
+    },
+    'evo-saude': () => {
+      const counts    = _dgVgCounts(l.pares);
+      const scoreInfo = _dgVgScoreFromCounts(counts);
+      const donut = (icone, texto, svg, sub, sum, tipo, tituloBtn) => `
+        <div class="oc-chart-card">
+          <div class="oc-chart-title dg-vg-donut-title-row">
+            <span><i class="ti ${icone}" style="margin-right:5px"></i>${texto}</span>
+            <span id="${sub}" class="dg-vg-donut-subtitle"></span>
+          </div>
+          <div style="display:flex;justify-content:center">
+            <div style="width:100%;max-width:420px">
+              <svg id="${svg}" viewBox="0 0 300 220" style="width:100%;height:auto;display:block"></svg>
+            </div>
+          </div>
+          <div id="${sum}" style="display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-start;margin-top:10px"></div>
+          ${verDetalhes('abrirDetalheSaude', `'${tipo}'`, tituloBtn)}
+        </div>`;
+      return _dgrCapturarOffscreen(`
+        ${titulo('ti-heart-rate-monitor', 'Saúde Geral — Centrais e Materiais')}
+        <div class="dg-giro-dual-grid" style="margin-bottom:18px">
+          ${donut('ti-building-factory-2', 'Saúde Geral — Centrais', gaugeCenSvg, gaugeCenSub, gaugeCenSum, 'centrais', 'Saúde Geral por Central')}
+          ${donut('ti-heartbeat', 'Saúde Geral — Materiais', gaugeMatSvg, gaugeMatSub, gaugeMatSum, 'materiais', 'Saúde Geral por Material')}
         </div>
-        ${verDetalhes('abrirDetalheVariacao', "'regional', null", 'Variação por Regional')}
-      </div>
-      <div class="oc-chart-card">
-        <div class="oc-chart-title"><i class="ti ti-building-factory-2" style="margin-right:5px"></i>Variação por Central</div>
-        <div class="dg-vg-bar-wrap" style="height:260px">
-          <div class="dg-vg-bar-inner"><canvas id="${canvasCentral}"></canvas></div>
-        </div>
-        ${verDetalhes('abrirDetalheVariacao', "'central', null", 'Variação por Central')}
-      </div>
-    </div>
-    ${_dgrEvoCustoAbsolutoHtml(l)}`;
+        <div class="oc-chart-card" style="margin-bottom:18px">
+          <div class="oc-chart-title"><i class="ti ti-chart-bar" style="margin-right:5px"></i>Desfalque e Sobra por Categoria — Maior Variação Primeiro</div>
+          <div style="position:relative;height:180px"><canvas id="${canvasCategoria}"></canvas></div>
+        </div>`, () => {
+        _dgVgRenderHealthDonuts(l.pares, counts, scoreInfo, thresholds, {
+          matSvg: gaugeMatSvg, matSub: gaugeMatSub, matSum: gaugeMatSum,
+          cenSvg: gaugeCenSvg, cenSub: gaugeCenSub, cenSum: gaugeCenSum
+        }, l.results);
+      });
+    },
+    'evo-variacao': () => {
+      const extRegional = _dgVgExtremos(porRegionalKg, _dgVgAggPorChave(l.pares, p => p.regional));
+      const extCentral  = _dgVgExtremos(porCentralKg,  _dgVgAggPorChave(l.pares, p => p.central));
+      const barras = (icone, texto, canvas, tipo) => `
+        <div class="oc-chart-card">
+          <div class="oc-chart-title"><i class="ti ${icone}" style="margin-right:5px"></i>${texto}</div>
+          <div class="dg-vg-bar-wrap" style="height:260px">
+            <div class="dg-vg-bar-inner"><canvas id="${canvas}"></canvas></div>
+          </div>
+          ${verDetalhes('abrirDetalheVariacao', `'${tipo}', null`, texto)}
+        </div>`;
+      return _dgrCapturarOffscreen(`
+        ${titulo('ti-scale', 'Variação por Regional e Central')}
+        <div id="${extremosEl}" class="dg-vg-extremos-grid" style="margin-bottom:14px"></div>`, () => {
+        _dgVgRenderExtremos(extRegional, extCentral, extremosEl, dadosJs);
+      }) + `
+        <div class="dg-giro-dual-grid" style="margin-bottom:18px">
+          ${barras('ti-users', 'Variação por Regional', canvasRegional, 'regional')}
+          ${barras('ti-building-factory-2', 'Variação por Central', canvasCentral, 'central')}
+        </div>`;
+    },
+    'evo-custo-abs': () => _dgrEvoCustoAbsolutoHtml(l)
+  };
+
+  const html = blocos.filter(b => montar[b]).map(b => montar[b]()).join('');
 
   return {
     id: l.id, html, canvasRegional, canvasCentral, canvasCategoria,
-    fechHtml: _dgrFechModalConteudo(fechRecs, l.rotulo),
+    // Badge de fechamento só existe no Resumo — sem ele, nem embute o modal.
+    fechHtml: blocos.includes('evo-resumo') ? _dgrFechModalConteudo(fechRecs, l.rotulo) : '',
     // O que abrirDetalheSaude/abrirDetalheVariacao leem, só deste mês.
     // ponytail: pares do mês embutidos de novo (a aba Detalhado tem os
     // seus); se o arquivo pesar, compartilhar um só objeto por período.
@@ -5011,9 +5011,17 @@ window._RELATORIO_ABAS_REGISTRY = [
     icon: 'ti-timeline',
     tipo: 'gerado',
     disponivel: () => !!window._dgVgLastData,
+    // As 4 do meio (DGR_EVO_BLOCOS) não são seções soltas: são os blocos do
+    // detalhe de cada mês, dentro da tabela — marcam o que aparece ao
+    // expandir um mês (sem a tabela, não aparecem). Entre si, saem na ordem
+    // daqui; a posição em relação à tabela/gráfico não muda nada.
     secoes: [
-      { id: 'evo-tabela',  label: 'Indicadores mês a mês', natural: true },
-      { id: 'evo-grafico', label: 'Variação Física e Saúde, mês a mês' }
+      { id: 'evo-tabela',    label: 'Indicadores mês a mês', natural: true },
+      { id: 'evo-resumo',    label: 'Detalhe do mês: Resumo do Período — Estoque, Movimentação e Variação' },
+      { id: 'evo-saude',     label: 'Detalhe do mês: Saúde Geral — Centrais e Materiais' },
+      { id: 'evo-variacao',  label: 'Detalhe do mês: Variação por Regional e Central' },
+      { id: 'evo-custo-abs', label: 'Detalhe do mês: Custo Absoluto — Por Grupo e Categoria de Material' },
+      { id: 'evo-grafico',   label: 'Variação Física e Saúde, mês a mês' }
     ],
     // Sem barra de período: a aba INTEIRA é a comparação entre os meses.
     // A tabela devolve { html, cards } — cards (os 2 gráficos de barra de
@@ -5021,14 +5029,20 @@ window._RELATORIO_ABAS_REGISTRY = [
     // expansão) fica pendurado no ctx pro script correspondente
     // (_dgrScriptEvoDetalhe) ser embutido lá na frente, junto do resto dos
     // scripts, DEPOIS do prelúdio que declara as funções que ele chama.
-    render: (ctx, ids) => ids.map(id => {
-      if (id === 'evo-tabela') {
-        const { html, cards } = _dgrEvolucaoTabelaHtml(ctx.periodos);
-        ctx._evoDetalheCards = cards;
-        return _dgrSecaoHtml(id, 'Indicadores mês a mês', html, true);
-      }
-      return _dgrSecaoHtml(id, 'Variação Física e Saúde, mês a mês', _dgrEvolucaoChartHtml(), false);
-    }).join('')
+    render: (ctx, ids) => {
+      const blocos = ids.filter(id => DGR_EVO_BLOCOS.includes(id));
+      return ids.map(id => {
+        if (id === 'evo-tabela') {
+          const { html, cards } = _dgrEvolucaoTabelaHtml(ctx.periodos, blocos);
+          ctx._evoDetalheCards = cards;
+          return _dgrSecaoHtml(id, 'Indicadores mês a mês', html, true);
+        }
+        if (id === 'evo-grafico') {
+          return _dgrSecaoHtml(id, 'Variação Física e Saúde, mês a mês', _dgrEvolucaoChartHtml(), false);
+        }
+        return '';   // bloco do detalhe — já foi pra dentro da tabela
+      }).join('');
+    }
   },
   {
     id: 'detalhado',

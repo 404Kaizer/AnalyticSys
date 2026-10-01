@@ -19,10 +19,6 @@ import assert from 'node:assert/strict';
 const raiz  = join(dirname(fileURLToPath(import.meta.url)), '..');
 const ler   = (...p) => readFileSync(join(raiz, ...p), 'utf8');
 const fonte = ler('js', 'relatorio.js');
-const html  = ler('index.html');
-
-// DOM mínimo: só o que _dgrClonarSecaoDom encosta.
-const noFalso = innerHTML => ({ innerHTML, cloneNode: () => noFalso(innerHTML) });
 
 const ctx = {
   console: { info() {}, warn() {}, error() {} },
@@ -31,11 +27,7 @@ const ctx = {
   MESES_ABREV_DG: ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'],
   MESES_NOME_DG:  ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'],
   document: {
-    _secoes: {},
-    querySelector(sel) {
-      const m = /^\[data-rel-secao="(.+)"\]$/.exec(sel);
-      return m ? (this._secoes[m[1]] || null) : null;
-    },
+    querySelector() { return null; },
     querySelectorAll() { return []; },
     getElementById() { return null; },
     createElement: () => ({ style: { cssText: '' }, replaceWith() {} }),
@@ -88,7 +80,8 @@ teste('seleção padrão é um array ordenado (a ordem é o que vira o relatóri
   const sel = ctx._dgrSelecaoCompleta();
   assert.ok(Array.isArray(sel));
   assert.equal(sel.map(s => s.aba).join(','), 'evolucao,detalhado,giro');
-  assert.equal(sel[0].secoes[0], 'evo-tabela');
+  assert.equal(sel[0].secoes.join(','),
+    'evo-tabela,evo-resumo,evo-saude,evo-variacao,evo-custo-abs,evo-grafico');
   assert.equal(sel[1].secoes.length, 5);
 });
 
