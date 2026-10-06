@@ -1755,10 +1755,16 @@ const SEM_CADASTRO_MODULO_LABEL = {
 // atual), mesmo critério de escopo já usado nos outros indicadores.
 function getMateriaisSemCadastroDoModulo(modulo) {
   const set = new Set();
+  // Memo por texto distinto dentro da varredura: são ~centenas de materiais
+  // em até 1 M de linhas, e getCatKeyDoCadastro normaliza (NFD + regex
+  // unicode) a cada chamada — sem isso, ~16 s por render da aba SAP.
+  const cadastrado = new Map();
   (state[modulo] || []).forEach(r => {
     const raw = String(r.materialOriginal ?? '').trim();
     if (!raw) return;
-    if (!getCatKeyDoCadastro(raw)) set.add(raw);
+    let ok = cadastrado.get(raw);
+    if (ok === undefined) { ok = !!getCatKeyDoCadastro(raw); cadastrado.set(raw, ok); }
+    if (!ok) set.add(raw);
   });
   return [...set].sort();
 }

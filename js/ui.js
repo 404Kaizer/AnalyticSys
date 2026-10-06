@@ -278,7 +278,10 @@ function restaurarBackup(file) {
 }
 
 function updatePageInfo(module) {
-  const data = getFilteredData(module);
+  // Todos os chamadores (renderEntradas/Saidas/Lancamentos/SAP/CustosSap)
+  // acabaram de resolver filtro+sort em _lastFiltered — refazer aqui
+  // dobrava o custo de cada render (sort de 1 M linhas ~9 s, 2x).
+  const data = _lastFiltered[module] || getFilteredData(module);
   const total = data.length;
   const page = module === 'custosSap' ? currentPageCustosSap : pages[module];
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -4841,6 +4844,37 @@ function buildAnaliticoDetailHtml(payload) {
     return isEstimated ? estimatedSaldoCell(value, estTitle) : realSaldoCell(value, realTitle);
   };
 
+  // Alertas de consistência da medição (só Aglomerante — silo medido/batido
+  // todo dia). Compara o quanto o físico mudou (Final − Inicial) com o que o
+  // SAP permite: (A) subiu mais que as entradas, (B) caiu mais que as saídas,
+  // (C) valor repetido com movimento líquido relevante. Ajuste positivo conta
+  // como entrada, negativo como saída.
+  // ponytail: tolerância fixa de 5 t pra todo aglomerante; se precisar por
+  // material/silo, vira campo no cadastro de Capacidades.
+  const ALERTA_TOL_KG = 5000;
+  const alertaAtivo = /AGLOMERANTE/i.test(getCategoriaPorGrupo(payload.material));
+  const alertaMedicao = (day) => {
+    if (!alertaAtivo || !day.hasLanc || day.finalIsEstimated) return null;
+    const ini = day.initialStock, fim = day.finalStock;
+    if (ini == null || fim == null) return null;
+    const aju = day.totalAju || 0;
+    const ent = Math.max(day.totalEnt || 0, 0) + Math.max(aju, 0);
+    const sai = Math.abs(day.totalSai || 0) + Math.max(-aju, 0);
+    const delta = fim - ini;
+    const t = (kg) => fmtKg(kg);
+    if (delta > ent + ALERTA_TOL_KG)
+      return `Aumento sem entrada: estoque subiu ${t(delta)} com ${t(ent)} de entrada no SAP. Medição errada ou entrada não registrada no SAP?`;
+    if (-delta > sai + ALERTA_TOL_KG)
+      return `Queda sem saída: estoque caiu ${t(-delta)} com ${t(sai)} de saída no SAP. Medição errada ou saída não registrada no SAP?`;
+    if (Math.abs(delta) < 0.5 && Math.abs(ent - sai) > ALERTA_TOL_KG)
+      return `Valor repetido: Est. Final igual ao Est. Inicial (${t(fim)}) com movimento líquido de ${t(ent - sai)} no SAP. Silo foi medido?`;
+    return null;
+  };
+  const alertaIcon = (msg) => msg
+    ? `<i class="ti ti-alert-octagon" style="color:var(--red);font-size:13px;margin-left:5px;cursor:help;vertical-align:-2px" title="${escapeHtml(msg)}"></i>`
+    : '';
+  let alertaCount = 0;
+
   // Var. Acumulada: soma contínua do diff de todos os dias (incluindo semanais não-terça).
   let _accum = 0;
   const dayAccum = payload.days.map(day => {
@@ -4899,12 +4933,14 @@ function buildAnaliticoDetailHtml(payload) {
           'Est. Inicial estimado — herdado do Est. Teórico anterior (sem lançamento real)'
         );
 
+    const alertaMsg = alertaMedicao(day);
+    if (alertaMsg) alertaCount++;
     const realCell = saldoCell(
       day.finalStock,
       day.finalIsEstimated,
       'Est. Final — confirmado por lançamento',
       'Est. Final estimado — sem lançamento nesta data'
-    );
+    ) + alertaIcon(alertaMsg);
 
     const varCell = (day.diff === null)
       ? emptyCell()
@@ -4951,6 +4987,11 @@ function buildAnaliticoDetailHtml(payload) {
     <div class="estimated-legend">
       <i class="ti ti-alert-triangle"></i>
       <span>Saldos marcados com <strong>Est.</strong> são estimados — não houve lançamento real nesta data. O sistema utilizou o Est. Teórico do período anterior como base.</span>
+    </div>` : '';
+  const alertaLegendaHtml = alertaCount ? `
+    <div class="estimated-legend" style="background:var(--red-bg);border-color:var(--red-border);color:var(--red)">
+      <i class="ti ti-alert-octagon"></i>
+      <span><strong>${alertaCount} dia${alertaCount !== 1 ? 's' : ''} com possível medição errada</strong> — Est. Final incoerente com as movimentações do SAP (tolerância de 5 t). Passe o mouse no ícone <i class="ti ti-alert-octagon" style="font-size:12px"></i> da coluna Est. Final para ver o motivo.</span>
     </div>` : '';
 
   return `
@@ -5005,6 +5046,7 @@ function buildAnaliticoDetailHtml(payload) {
     </div>
 
     ${legendaHtml}
+    ${alertaLegendaHtml}
 
     <div class="analitico-detail-table-toolbar">
       <button class="btn btn-sm detail-filter-btn" id="detail-filter-btn-${payload.key}" onclick="toggleDetailFilter(this)" data-active="0">
