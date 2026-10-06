@@ -5372,6 +5372,19 @@ function toggleAnaliticoDetailFullscreen() {
     : '<i class="ti ti-maximize"></i> <span>Expandir</span>';
 }
 
+// Oculta cards de resumo + alertas pra sobrar espaço pra tabela. A classe
+// fica no overlay (que não é recriado), então a escolha vale pras próximas
+// aberturas do modal até recarregar a página.
+function toggleAnaliticoDetailResumo() {
+  const overlay = document.getElementById('analitico-detail-overlay');
+  const btn = document.getElementById('analitico-detail-resumo-btn');
+  if (!overlay || !btn) return;
+  const oculto = overlay.classList.toggle('hide-resumo');
+  btn.innerHTML = oculto
+    ? '<i class="ti ti-eye"></i> <span>Mostrar resumo</span>'
+    : '<i class="ti ti-eye-off"></i> <span>Ocultar resumo</span>';
+}
+
 // Close popover on outside click
 document.addEventListener('mousedown', e => {
   if (_cfPopover && !_cfPopover.contains(e.target)) {
