@@ -442,6 +442,7 @@ function deleteOcorrencia(id) {
   persist(); // fallback local (IndexedDB)
   renderOcorrencias();
   _ocSyncDelete(id, rec?.userId);
+  window._varComDesvincularOc?.(id);
 }
 
 // ── Helpers ───────────────────────────────────────────────
@@ -2090,8 +2091,14 @@ function populateOcFiltros() {
 }
 
 // ── Modal nova/editar ocorrência ──────────────────────────
-function openOcorrenciaModal(id) {
+// `prefill` (opcional, só em nova): { central, material, descricao, onCriada }
+// — usado pelos Comentários de Variação da Visão Micro. onCriada(ocorrencia)
+// roda quando a ocorrência é salva; resetado a cada abertura, então fechar
+// sem salvar (inclusive por ESC) nunca dispara num "Nova Ocorrência" depois.
+let _ocAoCriar = null;
+function openOcorrenciaModal(id, prefill) {
   const o = id ? (state.ocorrencias || []).find(oc => oc.id === id) : null;
+  _ocAoCriar = prefill?.onCriada || null;
   populateOcFiltros();
   document.getElementById('oc-modal-title').textContent = o ? 'Editar Ocorrência' : 'Nova Ocorrência';
   document.getElementById('oc-form-id').value          = o?.id || '';
@@ -2104,6 +2111,16 @@ function openOcorrenciaModal(id) {
   document.getElementById('oc-form-descricao').value   = o?.descricao     || '';
   const motivoEl = document.getElementById('oc-form-motivo');
   if (motivoEl) motivoEl.value = o?.motivo || '';
+  if (prefill) {
+    // Valor fora das <option> do cadastro: injeta a opção pra não perdê-lo.
+    [['oc-form-central', prefill.central], ['oc-form-material', prefill.material]].forEach(([elId, v]) => {
+      const sel = document.getElementById(elId);
+      if (!sel || !v) return;
+      sel.value = v;
+      if (sel.value !== v) { sel.add(new Option(v, v)); sel.value = v; }
+    });
+    document.getElementById('oc-form-descricao').value = prefill.descricao || '';
+  }
 
   // Seção de escalonamento inicial — só em nova ocorrência
   const isNova = !o;
@@ -2237,6 +2254,7 @@ function submitOcorrenciaForm() {
   };
 
   saveOcorrencia(ocorrencia);
+  if (!id) _ocAoCriar?.(ocorrencia);
   closeOcorrenciaModal();
   populateOcFiltros();
   toast(id ? 'Ocorrência atualizada.' : 'Ocorrência registrada.', 'success');

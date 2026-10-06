@@ -6103,6 +6103,7 @@
 <script defer src="js/help-badges.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script defer src="js/ocorrencias.js"></script>
+<script defer src="js/variacao-comentarios.js"></script>
 <script defer src="js/admin.js"></script>
 <script defer src="js/inventario.js"></script>
 <script defer src="js/ncd.js"></script>
@@ -6208,6 +6209,36 @@
         <i class="ti ti-arrow-up-circle"></i> Escalonamento inicial
       </button>
       <button class="btn btn-primary" onclick="submitOcorrenciaForm()"><i class="ti ti-check"></i> Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL: Comentários de Variação — Visão Micro (js/variacao-comentarios.js) ═══ -->
+<div class="modal-overlay" id="varcom-modal" role="dialog" aria-modal="true">
+  <div class="modal-card" style="max-width:560px;width:100%">
+    <div class="modal-header">
+      <div style="min-width:0">
+        <span class="modal-title"><i class="ti ti-message-dots"></i> Comentários da variação</span>
+        <div class="varcom-sub" id="varcom-sub"></div>
+      </div>
+      <button class="modal-close" onclick="closeVarComModal()"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:14px">
+      <div class="varcom-var" id="varcom-var"></div>
+      <div class="varcom-lista" id="varcom-lista"></div>
+      <div class="oc-form-group" style="max-width:200px">
+        <label class="oc-label">Data</label>
+        <input type="date" id="varcom-data" class="oc-input">
+      </div>
+      <div class="oc-form-group">
+        <label class="oc-label">Comentário</label>
+        <textarea id="varcom-texto" class="oc-input oc-textarea" rows="3" placeholder="Motivo da variação…"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" style="margin-right:auto" onclick="varComAbrirOcorrencia()"><i class="ti ti-alert-octagon"></i> Abrir ocorrência</button>
+      <button class="btn" onclick="closeVarComModal()">Fechar</button>
+      <button class="btn btn-primary" onclick="varComAdicionar(this)"><i class="ti ti-plus"></i> Adicionar comentário</button>
     </div>
   </div>
 </div>

@@ -1006,6 +1006,8 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
   };
 
   const dayList = buildDayList();
+  // Rótulo do período pro modal de Comentários de Variação (variacao-comentarios.js).
+  const _varComPeriodo = `${start.toLocaleDateString('pt-BR')} a ${end.toLocaleDateString('pt-BR')}`;
 
     // Chave dos dois mapas = o ITEM da linha (material no modo central,
     // central no modo material) — ver o cabeçalho da função.
@@ -1714,7 +1716,7 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
           }</td>
           <td class="td-mono" style="color:${snapshot.pesoFimAusente ? 'var(--text3)' : 'var(--text)'}">${snapshot.pesoFimAusente ? '—' : fmtKg(snapshot.pesoFim)}</td>
           <td class="td-mono" style="color:var(--purple)">${fmtKg(snapshot.estTeorico)}</td>
-          <td class="td-mono ${dCls}" style="white-space:nowrap">${varSymbol(snapshot.diff)} ${fmtKg(Math.abs(snapshot.diff))}</td>
+          <td class="td-mono ${dCls}" style="white-space:nowrap">${varSymbol(snapshot.diff)} ${fmtKg(Math.abs(snapshot.diff))}${varComBtnHtml(central, mat, _varComPeriodo)}</td>
           <td class="td-mono ${_varAnt ? varClass(_varAnt.diff) : ''}" style="white-space:nowrap;opacity:.75${_varAnt ? '' : ';color:var(--text3)'}" title="${_varAnt ? `Variação de ${_varAnt.label} (Real − Teórico)` : 'Sem Est. Final no mês anterior'}">${_varAnt ? `${varSymbol(_varAnt.diff)} ${fmtKg(Math.abs(_varAnt.diff))}` : '—'}</td>
           <td style="text-align:right">${custoVarCell}</td>
         </tr>`;
