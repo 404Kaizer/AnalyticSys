@@ -4627,6 +4627,9 @@ async function init() {
   setupKeyboardShortcuts();
   initDropZones();
 
+  // Perfil insumos: boot enxuto, sem carregar os dados do resto do sistema.
+  if (window.currentUser?.role === 'insumos') { cobBootInsumos(); return; }
+
   await restoreAndRender();
   updateImportPrereqUI();
   // updateDashboard já foi chamado dentro de restoreAndRender — não chamar novamente

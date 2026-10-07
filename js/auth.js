@@ -267,13 +267,16 @@ window.AuthGate = (function () {
     const emailEl = $('auth-account-email');
     const roleEl = $('auth-account-role');
     if (emailEl) emailEl.textContent = user?.email || '—';
-    if (roleEl) roleEl.textContent = profile?.role === 'admin' ? 'Supervisor' : 'Usuário';
+    if (roleEl) roleEl.textContent = profile?.role === 'admin' ? 'Supervisor' : profile?.role === 'insumos' ? 'Insumos' : 'Usuário';
+    // Perfil insumos: o que some da tela é CSS (body.role-insumos, modules.css).
+    document.body.classList.toggle('role-insumos', profile?.role === 'insumos');
 
     // Supervisão só aparece pra quem é admin — botão no dropdown de perfil
     // (31/07, saiu da sidebar). Isso é só UI — a segurança de verdade está
     // nas políticas de RLS de cada tabela.
     const supervisaoBtn = $('account-switcher-supervisao-btn');
     const isAdmin = profile?.role === 'admin';
+    document.body.classList.toggle('role-admin', isAdmin); // Cobranças só p/ admin + insumos (modules.css)
     if (supervisaoBtn) supervisaoBtn.style.display = isAdmin ? '' : 'none';
 
     // Enviar alerta (broadcast) — mesmo critério de visibilidade da Supervisão.

@@ -195,6 +195,14 @@
         </span>
       </button>
 
+      <button class="tab-item" onclick="navigate('cobrancas')" data-page="cobrancas" data-label="Cobranças">
+        <span class="tab-icon" style="--tab-color: var(--red)"><i class="ti ti-file-alert"></i></span>
+        <span class="tab-text">
+          <span class="tab-title">Cobranças</span>
+          <span class="tab-sub">lançamento de notas fiscais</span>
+        </span>
+      </button>
+
       <button class="tab-item" onclick="navigate('ocorrencias')" data-page="ocorrencias" data-label="Ocorrências">
         <span class="tab-icon" style="--tab-color: var(--amber)"><i class="ti ti-alert-triangle"></i></span>
         <span class="tab-text">
@@ -2131,6 +2139,28 @@
         </div><!-- /inv-content -->
         </div><!-- /an-view-pane-inventario -->
 
+        </div>
+      </div>
+
+      <!-- COBRANÇAS (ver js/cobrancas.js) -->
+      <div class="page" id="page-cobrancas">
+        <div class="dg-tab-bar">
+          <button class="dg-tab-btn active" data-cob-tab="cobranca" onclick="cobSwitchTab('cobranca')"><i class="ti ti-file-alert"></i> Cobrança</button>
+          <button class="dg-tab-btn" data-cob-tab="alertas" onclick="cobSwitchTab('alertas')"><i class="ti ti-bell"></i> Alertas</button>
+          <button class="dg-tab-btn" data-cob-tab="justificativas" onclick="cobSwitchTab('justificativas')"><i class="ti ti-message-2"></i> Justificativas</button>
+          <button class="dg-tab-btn" data-cob-tab="desconsideradas" onclick="cobSwitchTab('desconsideradas')"><i class="ti ti-eye-off"></i> Desconsideradas</button>
+        </div>
+        <div class="dg-tab-pane active" id="cob-pane-cobranca">
+          <div class="empty-state"><i class="ti ti-file-alert"></i><p>Importe os relatórios de <strong>Pendências</strong> e <strong>SEFAZ</strong> em Importar Dados para montar a cobrança.</p></div>
+        </div>
+        <div class="dg-tab-pane" id="cob-pane-alertas">
+          <div class="empty-state"><i class="ti ti-bell"></i><p>Nenhum alerta.</p></div>
+        </div>
+        <div class="dg-tab-pane" id="cob-pane-justificativas">
+          <div class="empty-state"><i class="ti ti-message-2"></i><p>Nenhuma justificativa cadastrada.</p></div>
+        </div>
+        <div class="dg-tab-pane" id="cob-pane-desconsideradas">
+          <div class="empty-state"><i class="ti ti-eye-off"></i><p>Nenhuma nota desconsiderada.</p></div>
         </div>
       </div>
 
@@ -6115,6 +6145,7 @@
 <script defer src="js/agregados.js"></script>
 <script defer src="js/trend.js"></script>
 <script defer src="js/dai.js"></script>
+<script defer src="js/cobrancas.js"></script>
 
 <!-- ═══ MODAL: Nova/Editar Ocorrência ═══ -->
 <div class="modal-overlay" id="oc-modal" role="dialog" aria-modal="true">
