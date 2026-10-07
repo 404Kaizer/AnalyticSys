@@ -24,7 +24,7 @@ function cobIsInsumos() {
 function cobBootInsumos() {
   // Importar/Configurações do resto do sistema não rodam pra ele (as
   // seções ficam ocultas por CSS) — só os blocos da Cobrança.
-  pageRenderers.importar = () => {};
+  pageRenderers.importar = () => cobRenderImports();
   pageRenderers.configuracoes = () => { _cobCarregarCentrais(); cobRenderCadastros(); };
   navigate('cobrancas');
   cobIniciar();
@@ -44,6 +44,7 @@ function cobBootInsumos() {
 // ── Estado em memória (espelho das tabelas cob_*) ────────────
 const _cob = {
   cfop: [], fornecedores: [], centrais: [],
+  imports: {},                                   // tipo → linha de cob_imports
   filtro: { cfop: '', fornecedores: '', centrais: '' },
   editando: { cfop: null, fornecedores: null },   // pk em edição; '' = linha nova
   canal: null,
@@ -152,13 +153,16 @@ function cobIniciar() {
   _cob.iniciado = true;
 
   if (!cobIsInsumos()) {
-    const orig = pageRenderers.configuracoes;
-    pageRenderers.configuracoes = () => { orig(); cobRenderCadastros(); };
+    const origCfg = pageRenderers.configuracoes;
+    pageRenderers.configuracoes = () => { origCfg(); cobRenderCadastros(); };
+    const origImp = pageRenderers.importar;
+    pageRenderers.importar = () => { origImp(); cobRenderImports(); };
   }
   _cobRegistrarBusca();
   _cobCarregar('cfop');
   _cobCarregar('fornecedores');
   _cobCarregarCentrais();
+  _cobCarregarImports();
 
   const ch = window.supabaseClient.channel('cob_cadastros');
   Object.entries(COB_CADS).forEach(([tipo, cfg]) => {
@@ -168,6 +172,9 @@ function cobIniciar() {
       _cobAgendarRender(tipo);
     });
   });
+  // Importação nova (de qualquer um dos dois perfis) chega como 1 evento em
+  // cob_imports — os snapshots em si não têm realtime de propósito.
+  ch.on('postgres_changes', { event: '*', schema: 'public', table: 'cob_imports' }, () => _cobCarregarImports());
   _cob.canal = ch.subscribe(status => {
     if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') console.warn('[Cobranças] Canal realtime com problema:', status);
   });
@@ -343,17 +350,18 @@ function _cobLerArquivo(file) {
 }
 
 // Acha a linha de cabeçalho (nas 10 primeiras) que tenha todas as colunas
-// esperadas e devolve { campo: índiceDaColuna }.
-function _cobMapearCabecalho(rows, importCols) {
+// esperadas (menos as `opcionais`) e devolve { campo: índiceDaColuna }.
+function _cobMapearCabecalho(rows, importCols, opcionais = []) {
   for (let i = 0; i < Math.min(rows.length, 10); i++) {
     const heads = rows[i].map(h => normalizeText(h));
     const mapa = {};
+    let ok = true;
     for (const [campo, nomes] of Object.entries(importCols)) {
       const idx = heads.findIndex(h => nomes.some(n => h.startsWith(n)));
-      if (idx < 0) break;
-      mapa[campo] = idx;
+      if (idx >= 0) mapa[campo] = idx;
+      else if (!opcionais.includes(campo)) { ok = false; break; }
     }
-    if (Object.keys(mapa).length === Object.keys(importCols).length) return { linha: i, mapa };
+    if (ok) return { linha: i, mapa };
   }
   return null;
 }
@@ -402,6 +410,163 @@ async function cobCadImportar(tipo, ev) {
   }
   await _cobCarregar(tipo);
   toast(`Importação concluída: ${novos} novos, ${recs.length - novos} atualizados.`, 'success');
+}
+
+// ── Importações de Pendências e SEFAZ (Importar Dados) ───────
+// Cada importação SUBSTITUI a anterior de uma vez (RPC cob_substituir,
+// transação única no banco). Nomes/textos ficam exatamente como o Excel
+// exporta — só CNPJ (dígitos), número da NF, datas e valores são
+// convertidos.
+
+// Número da NF sem série e sem zeros à esquerda: "000338332/1" → "338332".
+const _cobNumero = v => String(v ?? '').split('/')[0].replace(/\D/g, '').replace(/^0+(?=\d)/, '');
+const _cobSerie  = v => String(v ?? '').split('/')[1]?.trim() || null;
+const _cobTxt    = v => { const s = String(v ?? '').trim(); return s || null; };
+
+function _cobDataISO(v) {
+  const m = fmtDate(v).match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : null;
+}
+function _cobDataHoraISO(v) {
+  const d = _cobDataISO(typeof v === 'number' ? Math.floor(v) : String(v ?? '').trim().slice(0, 10));
+  if (!d) return null;
+  if (typeof v === 'number') {   // serial do Excel com fração de dia
+    const min = Math.round((v % 1) * 1440);
+    return `${d}T${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}:00`;
+  }
+  const h = String(v).match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+  return `${d}T${h ? `${h[1].padStart(2, '0')}:${h[2]}:${h[3] || '00'}` : '00:00:00'}`;
+}
+
+const COB_IMPORTS = {
+  pendentes: {
+    rotulo: 'Pendências', unidade: 'notas',
+    cols: {
+      cnpj_comprador: ['CNPJ COMPRADOR'], fornecedor: ['FORNECEDOR'], cnpj_fornecedor: ['CNPJ DO FORNECEDOR'],
+      numero: ['DOCUMENTO'], dt_emissao: ['DATA DE EMISSAO'], valor: ['VALOR TOTAL'], status: ['STATUS'],
+    },
+    opcionais: ['status'],
+    // linhas cruas ({campo: célula}) → registros de cob_pendentes
+    montar(linhas) {
+      const porNf = new Map();
+      let invalidas = 0;
+      linhas.forEach(c => {
+        const r = {
+          cnpj_comprador: _cobCnpj(c.cnpj_comprador), fornecedor: _cobTxt(c.fornecedor),
+          cnpj_fornecedor: _cobCnpj(c.cnpj_fornecedor), numero: _cobNumero(c.numero),
+          dt_emissao: _cobDataISO(c.dt_emissao), valor: numXls(c.valor), status: _cobTxt(c.status),
+        };
+        if (r.cnpj_comprador.length !== 14 || r.cnpj_fornecedor.length !== 14 || !r.numero) { invalidas++; return; }
+        porNf.set(r.cnpj_fornecedor + '|' + r.numero, r);
+      });
+      return { rows: [...porNf.values()], invalidas };
+    },
+  },
+  sefaz: {
+    rotulo: 'SEFAZ', unidade: 'NFs',
+    cols: {
+      chave: ['CHAVE'], numero: ['NUMERO'], emissao: ['EMISSAO'], status: ['STATUS'], cnpj_emitente: ['CNPJ'],
+      nome: ['NOME'], municipio: ['MUNICIPIO'], uf: ['UF'], valor_unit: ['VALOR UNITARIO'], valor_total: ['VALOR TOTAL'],
+      volume: ['VOLUME'], cfop: ['CFOP'], evento_dest: ['EVENTO DEST'], transportador: ['TRANSPORTADOR'],
+      cnpj_transportador: ['CNPJ TRANSPORTADOR'], placa: ['PLACA'], material: ['MATERIAL'],
+    },
+    opcionais: ['municipio', 'uf', 'valor_unit', 'evento_dest', 'transportador', 'cnpj_transportador', 'placa'],
+    // Uma linha por ITEM no relatório → uma NF por chave, com os itens em lista.
+    montar(linhas) {
+      const porChave = new Map();
+      let invalidas = 0;
+      linhas.forEach(c => {
+        const chave = _cobDigitos(c.chave);
+        const cnpj = _cobCnpj(c.cnpj_emitente);
+        const numero = _cobNumero(c.numero);
+        if (!chave || cnpj.length !== 14 || !numero) { invalidas++; return; }
+        let nf = porChave.get(chave);
+        if (!nf) {
+          nf = {
+            chave, cnpj_emitente: cnpj, nome: _cobTxt(c.nome), numero, serie: _cobSerie(c.numero),
+            emissao: _cobDataHoraISO(c.emissao), status: _cobTxt(c.status), municipio: _cobTxt(c.municipio),
+            uf: _cobTxt(c.uf), transportador: _cobTxt(c.transportador),
+            cnpj_transportador: _cobDigitos(c.cnpj_transportador) || null, placa: _cobTxt(c.placa),
+            evento_dest: _cobTxt(c.evento_dest), itens: [],
+          };
+          porChave.set(chave, nf);
+        }
+        nf.itens.push({
+          material: _cobTxt(c.material), cfop: _cobDigitos(c.cfop) || null,
+          volume: num(c.volume),            // SEFAZ exporta volume com ponto decimal ("46.509")
+          valor_unit: numXls(c.valor_unit), valor_total: numXls(c.valor_total),
+        });
+      });
+      return { rows: [...porChave.values()], invalidas };
+    },
+  },
+};
+
+async function _cobCarregarImports() {
+  try {
+    const { data, error } = await window.supabaseClient.from('cob_imports').select('*');
+    if (error) throw error;
+    _cob.imports = Object.fromEntries((data || []).map(r => [r.tipo, r]));
+    cobRenderImports();
+  } catch (err) {
+    console.warn('[Cobranças] Falha ao carregar cob_imports:', err);
+  }
+}
+
+function _cobDescImport(tipo) {
+  const imp = _cob.imports[tipo];
+  if (!imp) return 'Nenhuma importação ainda.';
+  const quando = new Date(imp.data_hora).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+  const u = (typeof _msgsUsuariosPorId !== 'undefined' && _msgsUsuariosPorId[imp.user_id]) || null;
+  const quem = u ? (u.nome_exibicao || u.email) : '';
+  return `Última: ${imp.arquivo || '—'} · ${imp.registros ?? 0} ${COB_IMPORTS[tipo].unidade} · ${quando}${quem ? ' · ' + quem : ''}`;
+}
+
+function cobRenderImports() {
+  Object.keys(COB_IMPORTS).forEach(tipo => {
+    const el = document.getElementById('cob-import-info-' + tipo);
+    if (el) el.textContent = _cobDescImport(tipo);
+  });
+}
+
+async function cobImportar(tipo, ev) {
+  const file = ev.target.files?.[0];
+  ev.target.value = '';
+  if (!file) return;
+  const cfg = COB_IMPORTS[tipo];
+  let rows;
+  try { rows = await _cobLerArquivo(file); }
+  catch (err) { toast(err.message || 'Não foi possível ler o arquivo.', 'error'); return; }
+
+  const cab = _cobMapearCabecalho(rows, cfg.cols, cfg.opcionais);
+  if (!cab) {
+    const faltam = Object.entries(cfg.cols).filter(([k]) => !cfg.opcionais.includes(k)).map(([, n]) => n[0]);
+    toast(`Este não parece o relatório de ${cfg.rotulo}. Colunas esperadas: ${faltam.join(', ')}.`, 'error');
+    return;
+  }
+  const linhas = rows.slice(cab.linha + 1)
+    .filter(row => row.some(v => String(v ?? '').trim() !== ''))
+    .map(row => Object.fromEntries(Object.entries(cab.mapa).map(([campo, idx]) => [campo, row[idx]])));
+  const { rows: recs, invalidas } = cfg.montar(linhas);
+  if (!recs.length) { toast(`Nenhuma linha válida no relatório de ${cfg.rotulo}.`, 'error'); return; }
+
+  const atual = _cob.imports[tipo];
+  const msg = `Importar ${cfg.rotulo}: ${recs.length} ${cfg.unidade} de "${file.name}"?\n\n`
+    + (atual ? `Isto SUBSTITUI a importação atual (${atual.registros} ${cfg.unidade}, ${atual.arquivo}).` : 'Primeira importação.')
+    + (invalidas ? `\n${invalidas} linhas inválidas (sem CNPJ/número) serão ignoradas.` : '');
+  if (!confirm(msg)) return;
+
+  showLoadingOverlay(`Importando ${cfg.rotulo}`, `Gravando ${recs.length} ${cfg.unidade}...`);
+  try {
+    const { error } = await window.supabaseClient.rpc('cob_substituir', { p_tipo: tipo, p_arquivo: file.name, p_rows: recs });
+    if (error) throw error;
+    await _cobCarregarImports();
+    toast(`${cfg.rotulo} importado: ${recs.length} ${cfg.unidade}.`, 'success');
+  } catch (err) {
+    toast(`Falha ao importar ${cfg.rotulo}: ${err.message || err}`, 'error');
+  } finally {
+    hideLoadingOverlay();
+  }
 }
 
 // ── Busca global (topbar) ────────────────────────────────────

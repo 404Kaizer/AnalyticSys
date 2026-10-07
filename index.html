@@ -2825,6 +2825,46 @@
 
         </div>
 
+        <!-- Importações da Cobrança (js/cobrancas.js) — admin + insumos. Cada uma SUBSTITUI a anterior. -->
+        <div class="cob-insumos">
+          <div class="section-title">Cobranças</div>
+          <div class="import-grid">
+            <div class="import-card">
+              <div class="import-card-header">
+                <div class="import-icon" style="background:var(--amber-bg);color:var(--amber)"><i class="ti ti-file-alert"></i></div>
+                <div>
+                  <div class="import-card-title">Pendências</div>
+                  <div style="font-size:11px;color:var(--text3);font-family:var(--mono)">Notas não exportadas</div>
+                </div>
+              </div>
+              <div class="import-card-desc">Importe o relatório de Notas não exportadas cobrindo todo o período em aberto. Substitui a importação anterior — nota que não vier no arquivo conta como lançada.</div>
+              <div class="drop-zone" onclick="document.getElementById('file-cob-pendentes').click()">
+                <i class="ti ti-upload"></i>
+                Arraste ou clique para selecionar
+              </div>
+              <input type="file" id="file-cob-pendentes" class="file-input" accept=".xlsx,.xls,.csv" onchange="cobImportar('pendentes', event)">
+              <div class="import-card-desc" id="cob-import-info-pendentes" style="margin:10px 0 0">—</div>
+            </div>
+
+            <div class="import-card">
+              <div class="import-card-header">
+                <div class="import-icon" style="background:var(--accent-dim);color:var(--accent)"><i class="ti ti-building-bank"></i></div>
+                <div>
+                  <div class="import-card-title">SEFAZ</div>
+                  <div style="font-size:11px;color:var(--text3);font-family:var(--mono)">reportInbound · NFe</div>
+                </div>
+              </div>
+              <div class="import-card-desc">Importe o relatório do SEFAZ (CFOP, status, volume, material) do mesmo período das Pendências. Substitui a importação anterior.</div>
+              <div class="drop-zone" onclick="document.getElementById('file-cob-sefaz').click()">
+                <i class="ti ti-upload"></i>
+                Arraste ou clique para selecionar
+              </div>
+              <input type="file" id="file-cob-sefaz" class="file-input" accept=".xlsx,.xls,.csv" onchange="cobImportar('sefaz', event)">
+              <div class="import-card-desc" id="cob-import-info-sefaz" style="margin:10px 0 0">—</div>
+            </div>
+          </div>
+        </div>
+
         <!-- Histórico de importações -->
         <div class="section-title">Histórico de Importações</div>
         <div class="table-card">
