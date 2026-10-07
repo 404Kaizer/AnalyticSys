@@ -49,7 +49,8 @@ const _cob = {
   pendentes: [], sefaz: [], justificativas: [], desconsiderar: [],
   carga: null,                                   // Promise da carga (null = nunca carregou)
   res: null,                                     // resultado de cobCalcular
-  filtroCob: { regional: '', central: '', nivel: '', texto: '' },
+  filtroCob: { regional: new Set(), central: new Set(), nivel: new Set(), texto: '' },
+  mfPend: { regional: new Set(), central: new Set(), nivel: new Set() },   // seleção ainda não aplicada
   filtroAnot: { justificativas: '', desconsiderar: '' },
   detView: 'padrao',                             // Detalhamento: 'padrao' | nome do bloco à parte
   filtro: { cfop: '', fornecedores: '', centrais: '' },
@@ -813,15 +814,20 @@ const _cobKpi = (icon, label, valor, cls, sub) => `
   </div>`;
 
 const _cobVazio = (icon, txt, ncol) => `<tr><td colspan="${ncol}"><div class="empty-state"><i class="ti ${icon}"></i><p>${txt}</p></div></td></tr>`;
-const _cobTemFiltro = () => Object.values(_cob.filtroCob).some(Boolean);
 const _cobNumAlertas = res => res.fornNovos.length + res.canceladas.length + res.semSefaz.length + res.centraisNaoCad.length;
 
-function _cobOpcoes(id, todos, valores, sel) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  const uniq = [...new Set(sel ? [...valores, sel] : valores)].sort((a, b) => a.localeCompare(b, 'pt-BR'));
-  el.innerHTML = `<option value="">${todos}</option>` + uniq.map(v => `<option${v === sel ? ' selected' : ''}>${escapeHtml(v)}</option>`).join('');
-}
+// ── Filtros da aba Cobrança ──────────────────────────────────
+// Mesmo componente de seleção múltipla do resto do sistema (classes
+// micro-filter-* da Visão Micro/Ocorrências): marca → Aplicar. Cada módulo
+// tem a sua cópia enxuta do controle (ver ocToggleMicroFilter em
+// ocorrencias.js) — aqui com ids cmf*.
+const COB_MF = {
+  regional: { rot: 'Regional',    icon: 'ti-users-group',        busca: true },
+  central:  { rot: 'Central',     icon: 'ti-building-warehouse', busca: true },
+  nivel:    { rot: 'Criticidade', icon: 'ti-clock-exclamation',  busca: false },
+};
+const _cobFiltroVazio = (texto = '') => ({ regional: new Set(), central: new Set(), nivel: new Set(), texto });
+const _cobTemFiltro = () => { const f = _cob.filtroCob; return !!(f.texto || f.regional.size || f.central.size || f.nivel.size); };
 
 function _cobMontarPaneCobranca() {
   const pane = document.getElementById('cob-pane-cobranca');
@@ -831,24 +837,116 @@ function _cobMontarPaneCobranca() {
     pane.innerHTML = `
       <div class="cob-base" id="cob-base" style="text-align:right;margin-bottom:8px"></div>
       <div id="cob-resumo"></div>
-      <div class="cob-toolbar" id="cob-toolbar">
-        <select class="form-select" id="cob-f-regional" onchange="cobFiltrar('regional', this.value)"></select>
-        <select class="form-select" id="cob-f-central" onchange="cobFiltrar('central', this.value)"></select>
-        <select class="form-select" id="cob-f-nivel" onchange="cobFiltrar('nivel', this.value)">
-          <option value="">Todas as criticidades</option>
-          ${Object.entries(COB_NIVEIS).map(([k, n]) => `<option value="${k}">${n.rot} (${n.h})</option>`).join('')}
-        </select>
-        <input class="form-input" id="cob-f-texto" type="text" placeholder="Filtrar fornecedor, NF, material…" value="${escapeHtml(_cob.filtroCob.texto)}" oninput="cobFiltrar('texto', this.value)">
-        <button class="btn" onclick="cobLimparFiltros()" title="Limpar filtros"><i class="ti ti-filter-off"></i></button>
+      <div class="micro-filter-bar" id="cob-toolbar" style="margin-bottom:12px">
+        <div class="oc-search-wrap">
+          <i class="ti ti-search oc-search-icon"></i>
+          <input id="cob-f-texto" class="oc-search-input" type="text" placeholder="Buscar fornecedor, NF, material…" value="${escapeHtml(_cob.filtroCob.texto)}" oninput="cobFiltrar('texto', this.value)">
+        </div>
+        <div class="micro-filter-divider"></div>
+        ${Object.entries(COB_MF).map(([k, c]) => `
+        <div class="micro-filter-group" id="cmfg-${k}">
+          <button class="micro-filter-trigger" id="cmft-${k}" onclick="cobMfToggle('${k}')">
+            <i class="ti ${c.icon}"></i><span id="cmft-${k}-label">${c.rot}</span>
+            <i class="ti ti-chevron-down micro-filter-chev" id="cmfc-${k}"></i>
+          </button>
+          <div class="micro-filter-dropdown" id="cmfd-${k}">
+            ${c.busca ? `<div class="micro-filter-search-wrap"><i class="ti ti-search"></i>
+              <input class="micro-filter-search" id="cmfs-${k}" type="text" placeholder="Buscar ${c.rot.toLowerCase()}…" oninput="_cobMfLista('${k}', this.value)"></div>` : ''}
+            <div class="micro-filter-options" id="cmfo-${k}"></div>
+            <div class="micro-filter-footer">
+              <button class="btn btn-filter-clear" onclick="cobMfLimpar('${k}')"><i class="ti ti-filter-off"></i> Limpar</button>
+              <button class="btn" onclick="cobMfFechar('${k}')"><i class="ti ti-x"></i> Cancelar</button>
+              <button class="btn btn-primary" onclick="cobMfAplicar('${k}')"><i class="ti ti-check"></i> Aplicar</button>
+            </div>
+          </div>
+        </div>`).join('')}
+        <button class="btn btn-filter-clear" id="cob-mf-limpar" onclick="cobLimparFiltros()" style="display:none"><i class="ti ti-filter-off"></i> Limpar filtros</button>
       </div>
       <div id="cob-det"></div>`;
   }
   return pane;
 }
 
+function _cobMfOpcoes(k) {
+  const res = _cob.res;
+  if (!res) return [];
+  if (k === 'nivel') return Object.entries(COB_NIVEIS).map(([v, n]) => ({ v, rot: `${n.rot} (${n.h})` }));
+  const reg = _cob.filtroCob.regional;
+  const base = k === 'central' && reg.size ? res.cobraveis.filter(r => reg.has(r.regional)) : res.cobraveis;
+  return [...new Set(base.map(r => r[k]))].sort((a, b) => a.localeCompare(b, 'pt-BR')).map(v => ({ v, rot: v }));
+}
+
+function _cobMfLista(k, q = '') {
+  const el = document.getElementById('cmfo-' + k);
+  if (!el) return;
+  const ql = q.toLowerCase().trim(), pend = _cob.mfPend[k];
+  const ops = _cobMfOpcoes(k).filter(o => !ql || o.rot.toLowerCase().includes(ql));
+  el.innerHTML = ops.map(o => `<label class="micro-filter-option">
+      <input type="checkbox" value="${escapeHtml(o.v)}" ${pend.has(o.v) ? 'checked' : ''} onchange="_cobMfMarca('${k}', this)">
+      <span class="micro-filter-option-label" title="${escapeHtml(o.rot)}">${escapeHtml(o.rot)}</span>
+    </label>`).join('')
+    || '<div style="padding:12px 10px;color:var(--text3);font-size:12px;text-align:center">Nenhum resultado</div>';
+}
+
+function _cobMfMarca(k, cb) { cb.checked ? _cob.mfPend[k].add(cb.value) : _cob.mfPend[k].delete(cb.value); }
+
+function cobMfToggle(k) {
+  Object.keys(COB_MF).filter(x => x !== k).forEach(cobMfFechar);
+  const dd = document.getElementById('cmfd-' + k);
+  const aberto = dd.classList.toggle('open');
+  document.getElementById('cmfc-' + k)?.classList.toggle('open', aberto);
+  if (aberto) {
+    _cob.mfPend[k] = new Set(_cob.filtroCob[k]);
+    const s = document.getElementById('cmfs-' + k);
+    if (s) s.value = '';
+    _cobMfLista(k);
+    setTimeout(() => s?.focus(), 50);
+  }
+}
+function cobMfFechar(k) {
+  document.getElementById('cmfd-' + k)?.classList.remove('open');
+  document.getElementById('cmfc-' + k)?.classList.remove('open');
+}
+function cobMfAplicar(k) {
+  _cob.filtroCob[k] = new Set(_cob.mfPend[k]);
+  if (k === 'regional') {   // descarta centrais que ficaram fora das regionais escolhidas
+    const validas = new Set(_cobMfOpcoes('central').map(o => o.v));
+    _cob.filtroCob.central = new Set([..._cob.filtroCob.central].filter(c => validas.has(c)));
+  }
+  cobMfFechar(k);
+  _cobRenderCobranca();
+}
+function cobMfLimpar(k) { _cob.mfPend[k] = new Set(); cobMfAplicar(k); }
+
+// Rótulo do botão: "Regional" / "Regional: X" / "Regional [3]" — igual à Visão Micro.
+function _cobMfRotulos() {
+  Object.entries(COB_MF).forEach(([k, c]) => {
+    const btn = document.getElementById(`cmft-${k}`), label = document.getElementById(`cmft-${k}-label`);
+    if (!btn || !label) return;
+    const sel = _cob.filtroCob[k];
+    if (!sel.size) label.innerHTML = c.rot;
+    else if (sel.size === 1) {
+      const v = [...sel][0], t = k === 'nivel' ? COB_NIVEIS[v]?.rot || v : v;
+      label.innerHTML = `${c.rot}: <strong>${escapeHtml(t.length > 18 ? t.slice(0, 18) + '…' : t)}</strong>`;
+    } else label.innerHTML = `${c.rot} <span class="micro-filter-badge">${sel.size}</span>`;
+    btn.classList.toggle('active', sel.size > 0);
+  });
+  const limpar = document.getElementById('cob-mf-limpar');
+  if (limpar) limpar.style.display = _cobTemFiltro() ? '' : 'none';
+}
+
+// Clique fora fecha o dropdown sem aplicar (mesmo comportamento da Visão Micro).
+document.addEventListener('click', e => {
+  Object.keys(COB_MF).forEach(k => {
+    const g = document.getElementById('cmfg-' + k);
+    if (g && !g.contains(e.target)) cobMfFechar(k);
+  });
+});
+
+// Atalhos usados pelas tabelas (clicar na regional / no fornecedor).
 function cobFiltrar(campo, v) {
-  _cob.filtroCob[campo] = v || '';
-  if (campo === 'regional') _cob.filtroCob.central = '';
+  if (campo === 'texto') _cob.filtroCob.texto = v || '';
+  else { _cob.mfPend[campo] = new Set(v ? [v] : []); cobMfAplicar(campo); return; }
   _cobRenderCobranca();
 }
 function cobFiltrarTexto(v) {
@@ -857,7 +955,7 @@ function cobFiltrarTexto(v) {
   cobFiltrar('texto', v);
 }
 function cobLimparFiltros() {
-  _cob.filtroCob = { regional: '', central: '', nivel: '', texto: '' };
+  _cob.filtroCob = _cobFiltroVazio();
   const i = document.getElementById('cob-f-texto');
   if (i) i.value = '';
   _cobRenderCobranca();
@@ -865,8 +963,8 @@ function cobLimparFiltros() {
 
 function _cobFiltrarNfs(rows) {
   const f = _cob.filtroCob, ws = _cobPalavras(f.texto);
-  return rows.filter(r => (!f.regional || r.regional === f.regional) && (!f.central || r.central === f.central)
-    && (!f.nivel || r.nivel === f.nivel) && (!ws.length || _cobBusca(r, COB_CAMPOS_NF, ws)));
+  return rows.filter(r => (!f.regional.size || f.regional.has(r.regional)) && (!f.central.size || f.central.has(r.central))
+    && (!f.nivel.size || f.nivel.has(r.nivel)) && (!ws.length || _cobBusca(r, COB_CAMPOS_NF, ws)));
 }
 
 function _cobBaseTxt(res) {
@@ -878,10 +976,7 @@ function _cobBaseTxt(res) {
 function _cobRenderCobranca() {
   const res = _cob.res;
   if (!res || !_cobMontarPaneCobranca()) return;
-  const f = _cob.filtroCob;
-  _cobOpcoes('cob-f-regional', 'Todas as regionais', res.cobraveis.map(r => r.regional), f.regional);
-  _cobOpcoes('cob-f-central', 'Todas as centrais', res.cobraveis.filter(r => !f.regional || r.regional === f.regional).map(r => r.central), f.central);
-  document.getElementById('cob-f-nivel').value = f.nivel;
+  _cobMfRotulos();
   document.getElementById('cob-base').textContent = _cobBaseTxt(res);
 
   const resumo = document.getElementById('cob-resumo'), det = document.getElementById('cob-det');
@@ -1207,7 +1302,7 @@ function _cobIrParaTela(tab, termo) {
   navigate('cobrancas');
   cobSwitchTab(tab);
   if (tab === 'cobranca') {
-    _cob.filtroCob = { regional: '', central: '', nivel: '', texto: termo };
+    _cob.filtroCob = _cobFiltroVazio(termo);
     const i = document.getElementById('cob-f-texto');
     if (i) i.value = termo;
     _cobRenderCobranca();
