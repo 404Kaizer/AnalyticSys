@@ -346,7 +346,9 @@ const _persistirNomesOriginaisDebounced = (typeof debounce === 'function')
 // em vez de gravar uma linha por lançamento.
 //   modulo: 'entradas' | 'saidas' | 'lancamentos'
 //   nomeOriginal: valor bruto (materialOriginal) como veio do arquivo/formulário
-function registrarNomeOriginalMaterial(modulo, nomeOriginal) {
+//   qtd: ocorrências de uma vez — reaplicarPadronizacaoMateriais agrega por
+//        nome em vez de chamar 1× por registro (mesmo resultado gravado)
+function registrarNomeOriginalMaterial(modulo, nomeOriginal, qtd = 1) {
   const raw = String(nomeOriginal ?? '').trim();
   if (!raw) return;
 
@@ -377,8 +379,8 @@ function registrarNomeOriginalMaterial(modulo, nomeOriginal) {
     const found = (typeof findMaterialMatch === 'function') ? findMaterialMatch(raw) : null;
     const agora = new Date().toISOString();
 
-    entry.modulos[modulo] = (entry.modulos[modulo] || 0) + 1;
-    entry.ocorrencias += 1;
+    entry.modulos[modulo] = (entry.modulos[modulo] || 0) + qtd;
+    entry.ocorrencias += qtd;
     entry.materialCadastrado = !!found;
     entry.categoriaCadastrada = !!(found && found.categoria);
     entry.categoriaResolvida = (found && found.categoria) || '';
@@ -461,29 +463,53 @@ const CENTRAL_FIELDS_BY_MODULO = {
   custosSap: ['central']
 };
 
+// Incremental (06/10/2026): registro cujo resultado não muda é reaproveitado
+// (mesmo objeto) — só quem muda vira objeto novo, como antes. Centrais
+// repetem muito (500k registros, dezenas de nomes), então normalizarCentral
+// roda 1× por nome distinto. Devolve { alterados: Set<modulo> } para quem
+// chama decidir o que invalidar/gravar (ver aplicarMudancaCadastro, config.js).
 function reaplicarPadronizacaoCentrais(modulos = Object.keys(CENTRAL_FIELDS_BY_MODULO)) {
+  const porNome = new Map();
+  const centralDe = raw => {
+    let v = porNome.get(raw);
+    if (v === undefined) { v = normalizarCentral(raw); porNome.set(raw, v); }
+    return v;
+  };
+
   const aplicar = (rec, keys) => {
-    const out = { ...rec };
-    keys.forEach(k => {
-      if (out[k] === undefined) return;
+    let out = rec;
+    for (const [k, kOrig] of keys) {
+      if (rec[k] === undefined) continue;
       // Usa o valor original salvo (${k}Original) como fonte da reconversão.
       // Registros antigos (gravados antes desta função existir) não têm esse
       // campo — nesses casos, cai no valor atual como fallback (comportamento
       // anterior, sem reversão possível para eles).
-      const raw = String(out[`${k}Original`] ?? out[k] ?? '').trim();
-      if (!raw) return;
-      out[`${k}Original`] = out[`${k}Original`] ?? raw;
-      out[k] = normalizarCentral(raw);
-    });
+      const raw = String(rec[kOrig] ?? rec[k] ?? '').trim();
+      if (!raw) continue;
+      const original = rec[kOrig] ?? raw;
+      const central = centralDe(raw);
+      if (rec[kOrig] === original && rec[k] === central) continue;
+      if (out === rec) out = { ...rec };
+      out[kOrig] = original;
+      out[k] = central;
+    }
     return out;
   };
 
+  const alterados = new Set();
   for (const modulo of modulos) {
     if (!Array.isArray(state[modulo])) continue;
-    const keys = CENTRAL_FIELDS_BY_MODULO[modulo];
-    if (!keys) continue;
-    state[modulo] = state[modulo].map(rec => aplicar(rec, keys));
+    if (!CENTRAL_FIELDS_BY_MODULO[modulo]) continue;
+    const keys = CENTRAL_FIELDS_BY_MODULO[modulo].map(k => [k, `${k}Original`]);
+    let mudou = false;
+    state[modulo] = state[modulo].map(rec => {
+      const out = aplicar(rec, keys);
+      if (out !== rec) mudou = true;
+      return out;
+    });
+    if (mudou) alterados.add(modulo);
   }
+  return { alterados };
 }
 
 // ── Categoria de Material — lista fixa usada em todo o sistema ──────────
@@ -906,40 +932,87 @@ function normalizarMateriaisRecord(rec, keys) {
   return out;
 }
 
+// Incremental (06/10/2026) — mesmo resultado de antes, mas:
+// - material/categoria calculados 1× por nome distinto (500k registros
+//   costumam ter centenas de nomes; normalizar por registro custava segundos);
+// - registro cujo resultado não muda é reaproveitado (mesmo objeto) — só
+//   quem muda vira objeto novo, como antes.
+// Devolve { alterados: Set<modulo>, sapFonteAlterada } para quem chama
+// decidir o que invalidar/gravar (ver aplicarMudancaCadastro, config.js).
+// sapFonteAlterada = algum registro SAP ganhou materialOriginal agora: é o
+// único campo daqui que o boot NÃO reconstrói, então só nesse caso os chunks
+// SAP precisam ser regravados.
 function reaplicarPadronizacaoMateriais(modulos = ['entradas', 'saidas', 'lancamentos', 'sap']) {
   const categoriaModulos = new Set(CATEGORIA_MODULOS);
-
-  const aplicar = (rec, comCategoria, modulo) => {
-    const raw = String(rec.materialOriginal ?? rec.material ?? '').trim();
-    const out = raw
-      ? { ...rec, materialOriginal: rec.materialOriginal ?? raw, material: normalizarMaterial(raw) }
-      : { ...rec, materialOriginal: rec.materialOriginal ?? '', material: rec.material ?? '' };
-
-    if (comCategoria) {
-      // Captura diagnóstica (ponto 3): reprocessamento é o momento em que
-      // uma edição no cadastro de Materiais deveria "resolver" a categoria
-      // de registros já importados — se continuar sem categoria aqui, é
-      // sinal de que o nome ainda não bate com nenhum cadastro.
-      if (raw) registrarNomeOriginalMaterial(modulo, raw);
-
-      // categoriaOriginal preserva o valor digitado/importado originalmente,
-      // do mesmo jeito que materialOriginal preserva o nome bruto do material.
-      const catOriginal = String(
-        rec.categoriaOriginal ?? (rec.categoria && rec.categoria !== '—' ? rec.categoria : '')
-      ).trim();
-      const catPadrao = getCategoriaPorGrupo(raw || out.material);
-      out.categoriaOriginal = catOriginal;
-      out.categoria = catPadrao || catOriginal || '—';
-    }
-
-    return out;
+  const memo = fn => {
+    const cache = new Map();
+    return v => {
+      let r = cache.get(v);
+      if (r === undefined) { r = fn(v); cache.set(v, r); }
+      return r;
+    };
   };
+  const materialDe = memo(normalizarMaterial);
+  const categoriaDe = memo(getCategoriaPorGrupo);
+  const alterados = new Set();
+  let sapFonteAlterada = false;
 
   for (const modulo of modulos) {
     if (!Array.isArray(state[modulo])) continue;
     const comCategoria = categoriaModulos.has(modulo);
-    state[modulo] = state[modulo].map(rec => aplicar(rec, comCategoria, modulo));
+    // Captura diagnóstica (ponto 3): reprocessamento é o momento em que
+    // uma edição no cadastro de Materiais deveria "resolver" a categoria
+    // de registros já importados — se continuar sem categoria aqui, é
+    // sinal de que o nome ainda não bate com nenhum cadastro. Contado aqui
+    // e registrado 1× por nome no fim do módulo.
+    const ocorrencias = comCategoria ? new Map() : null; // raw -> { qtd, ultima }
+    let mudou = false;
+
+    state[modulo] = state[modulo].map((rec, i) => {
+      const raw = String(rec.materialOriginal ?? rec.material ?? '').trim();
+      const materialOriginal = rec.materialOriginal ?? raw;
+      const material = raw ? materialDe(raw) : (rec.material ?? '');
+      let categoriaOriginal, categoria;
+      if (comCategoria) {
+        if (raw) {
+          const o = ocorrencias.get(raw);
+          if (o) { o.qtd++; o.ultima = i; } else ocorrencias.set(raw, { qtd: 1, ultima: i });
+        }
+        // categoriaOriginal preserva o valor digitado/importado originalmente,
+        // do mesmo jeito que materialOriginal preserva o nome bruto do material.
+        categoriaOriginal = String(
+          rec.categoriaOriginal ?? (rec.categoria && rec.categoria !== '—' ? rec.categoria : '')
+        ).trim();
+        categoria = categoriaDe(raw || material) || categoriaOriginal || '—';
+      }
+
+      if (rec.materialOriginal === materialOriginal && rec.material === material &&
+          (!comCategoria || (rec.categoriaOriginal === categoriaOriginal && rec.categoria === categoria))) {
+        return rec;
+      }
+      mudou = true;
+      // '' não vai pro disco (compactSapRecords omite vazio) — não conta.
+      if (modulo === 'sap' && materialOriginal && rec.materialOriginal !== materialOriginal) sapFonteAlterada = true;
+      const out = { ...rec, materialOriginal, material };
+      if (comCategoria) {
+        out.categoriaOriginal = categoriaOriginal;
+        out.categoria = categoria;
+      }
+      return out;
+    });
+
+    if (ocorrencias) {
+      // Mesmo registro que 1 chamada por registro gerava: na ordem da 1ª
+      // aparição (cria cada entrada com o mesmo nome/ordem) e depois, com
+      // qtd 0, na ordem da última — grafias diferentes do mesmo nome caem
+      // na mesma entrada, e o "resultado mais recente" é o do último registro.
+      ocorrencias.forEach((o, raw) => registrarNomeOriginalMaterial(modulo, raw, o.qtd));
+      [...ocorrencias].sort((a, b) => a[1].ultima - b[1].ultima)
+        .forEach(([raw]) => registrarNomeOriginalMaterial(modulo, raw, 0));
+    }
+    if (mudou) alterados.add(modulo);
   }
+  return { alterados, sapFonteAlterada };
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -962,17 +1035,25 @@ function reaplicarPadronizacaoMateriais(modulos = ['entradas', 'saidas', 'lancam
 //                       nomes originais.
 // Uma CENTRAL só tem o motivo 'nao_cadastrado' — Filiais não têm campo de
 // categoria.
+// Roda a cada renderMateriais/renderFiliais sobre a base inteira: o lookup
+// é feito 1× por nome distinto (cache local), não por registro — normalizar
+// o texto de 500k+ registros a cada render custava segundos.
 function getPendenciasPadronizacao() {
   const materiaisPendentes = new Map();
   const centraisPendentes  = new Map();
 
   if (typeof findMaterialMatch === 'function') {
+    const matchPorNome = new Map(); // rawMat -> cadastro (null = não cadastrado)
     ['entradas', 'saidas', 'lancamentos', 'sap', 'custosSap'].forEach(mod => {
       (state[mod] || []).forEach(r => {
         const rawMat = String(r.materialOriginal ?? '').trim();
         if (!rawMat) return;
 
-        const found = findMaterialMatch(rawMat);
+        let found = matchPorNome.get(rawMat);
+        if (found === undefined) {
+          found = findMaterialMatch(rawMat);
+          matchPorNome.set(rawMat, found);
+        }
         let motivo = null;
         if (!found) motivo = 'nao_cadastrado';
         else if (!found.categoria) motivo = 'sem_categoria';
@@ -999,13 +1080,19 @@ function getPendenciasPadronizacao() {
 
   if (typeof getFilialLookupIndex === 'function' && typeof CENTRAL_FIELDS_BY_MODULO !== 'undefined') {
     const filIdx = getFilialLookupIndex();
+    const cadastradaPorNome = new Map(); // rawCentral -> boolean
     Object.entries(CENTRAL_FIELDS_BY_MODULO).forEach(([mod, fields]) => {
+      const camposOriginais = fields.map(f => `${f}Original`);
       (state[mod] || []).forEach(r => {
-        fields.forEach(f => {
-          const rawCentral = String(r[`${f}Original`] ?? '').trim();
+        camposOriginais.forEach(fo => {
+          const rawCentral = String(r[fo] ?? '').trim();
           if (!rawCentral) return;
-          const found = filIdx.exact.get(normalizeText(rawCentral));
-          if (found) return; // central já cadastrada — nada pendente
+          let cadastrada = cadastradaPorNome.get(rawCentral);
+          if (cadastrada === undefined) {
+            cadastrada = !!filIdx.exact.get(normalizeText(rawCentral));
+            cadastradaPorNome.set(rawCentral, cadastrada);
+          }
+          if (cadastrada) return; // central já cadastrada — nada pendente
 
           let entry = centraisPendentes.get(rawCentral);
           if (!entry) {

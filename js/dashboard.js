@@ -7939,7 +7939,11 @@ const pageRenderers = {
   filiais: () => renderFiliais(),
   materiais: () => renderMateriais(),
   ocorrencias: () => renderOcorrenciasPage(),
-  admin: () => { if (typeof renderAdminPage === 'function') renderAdminPage(); }
+  admin: () => { if (typeof renderAdminPage === 'function') renderAdminPage(); },
+  // Analítico/Inventário não se redesenham ao abrir (o usuário roda por
+  // período) — só quando o cadastro mudou desde a última vez que rodaram
+  // (ver aplicarMudancaCadastro, config.js).
+  analitico: () => { if (_analiticoDesatualizado) refazerAnaliticoAposCadastro(); }
 };
 
 // Páginas que são estáticas após o primeiro render (sem dados que mudam externamente)
@@ -8140,6 +8144,11 @@ async function restoreAndRender() {
     await nextFrame();
 
     // ── STEP 3: Padronizar materiais ─────────────────────────────────────
+    // INVARIANTE: tem de rodar em todo boot, DEPOIS dos syncs (STEP 1).
+    // aplicarMudancaCadastro (config.js) deixa de regravar os chunks SAP
+    // quando só o `material` padronizado mudou, contando com este passo
+    // para recalculá-lo a partir de materialOriginal. Pular este passo
+    // (ex.: "só reaplicar se o cadastro mudou") exige rever aquela regra.
     const totalRecs = (state.entradas?.length || 0) + (state.saidas?.length || 0) +
                       (state.lancamentos?.length || 0) + (state.sap?.length || 0);
     if (typeof migrarCategoriaLegadaMateriais === 'function') migrarCategoriaLegadaMateriais();

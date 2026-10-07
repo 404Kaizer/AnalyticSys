@@ -389,7 +389,7 @@ async function limparAnexosDaiOrfaos() {
   }
 }
 
-function buildStateSnapshot() {
+function buildStateSnapshot(semSap = false) {
   return {
     version: STATE_VERSION,
     savedAt: Date.now(),
@@ -401,7 +401,7 @@ function buildStateSnapshot() {
     entradas: state.entradas,
     saidas: state.saidas,
     lancamentos: state.lancamentos,
-    sap: compactSapRecords(state.sap),
+    sap: semSap ? [] : compactSapRecords(state.sap),
     custosSap: state.custosSap,
     imports: state.imports,
     ocorrencias: state.ocorrencias || [],
@@ -541,7 +541,35 @@ function applySavedState(saved) {
   return true;
 }
 
-async function persistStateNow() {
+// Cópias avulsas por coleção (chaves 'entradas', 'materiais'...) — até
+// 06/10/2026 toda gravação reescrevia cada coleção 2×: no snapshot
+// unificado (IDB_STATE_KEY) e de novo numa chave própria. loadState só lê
+// essas chaves quando o snapshot unificado NÃO existe (dispositivo que
+// nunca gravou nele), então a 2ª cópia dobrava o custo de todo save sem
+// ser usada. Agora não são mais gravadas — e são apagadas 1× por sessão,
+// depois de um snapshot unificado gravado com sucesso, para não ficarem
+// velhas no disco e "ressuscitarem" dado antigo se esse fallback um dia
+// rodar. 'sap' fica de fora: é o fallback legado do SAP (ver loadState).
+let _copiasAvulsasApagadas = false;
+async function _apagarCopiasAvulsas(db) {
+  if (_copiasAvulsasApagadas) return;
+  _copiasAvulsasApagadas = true;
+  try {
+    const tx = db.transaction(IDB_STORE, 'readwrite');
+    const store = tx.objectStore(IDB_STORE);
+    saveSnapshotKeys.filter(k => k !== 'sap').forEach(k => store.delete(k));
+    await new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = rej; });
+  } catch (err) {
+    _copiasAvulsasApagadas = false; // tenta de novo na próxima gravação
+    console.warn('[Persist] Falha ao apagar cópias avulsas antigas (não crítico):', err);
+  }
+}
+
+// semSap: pula a regravação dos chunks SAP — o passo mais caro (segundos em
+// 500k+ registros). Só para quem sabe que nada do SAP que vai pro disco
+// mudou: ver aplicarMudancaCadastro (config.js). O padrão continua sendo
+// gravar tudo.
+async function persistStateNow({ semSap = false } = {}) {
   const hasData = state.entradas.length  || state.saidas.length     ||
                   state.lancamentos.length || state.sap.length       ||
                   state.custosSap.length  || state.imports.length     ||
@@ -553,7 +581,7 @@ async function persistStateNow() {
   // buildStateSnapshot inclui compactSapRecords — pode ser O(600k).
   // Executa em microtask para ceder ao browser antes de serializar.
   await new Promise(r => setTimeout(r, 0));
-  const snapshot = buildStateSnapshot();
+  const snapshot = buildStateSnapshot(semSap);
   await new Promise(r => setTimeout(r, 0));
 
   try {
@@ -569,22 +597,17 @@ async function persistStateNow() {
       await new Promise(r => setTimeout(r, 0));
 
       // SAP em chunks — mais lento, mas snapshot principal já está seguro
-      await saveSapChunks(db, snapshot.sap || []);
-      await new Promise(r => setTimeout(r, 0));
-
-      const keysParaSalvar = saveSnapshotKeys.filter(k => k !== 'sap');
-      // Grava chaves individuais em batches para não travar
-      const BATCH = 4;
-      for (let i = 0; i < keysParaSalvar.length; i += BATCH) {
-        const batch = keysParaSalvar.slice(i, i + BATCH);
-        await Promise.all(batch.map(key => idbPut(db, key, snapshot[key])));
+      if (!semSap) {
+        await saveSapChunks(db, snapshot.sap || []);
         await new Promise(r => setTimeout(r, 0));
       }
 
       await idbPut(db, 'meta', { version: STATE_VERSION, savedAt: snapshot.savedAt, pendingWrite: false });
+      await _apagarCopiasAvulsas(db);
 
-      const sapCount = (snapshot.sap || []).length;
-      console.info(`[Persist] ✓ Salvo no IndexedDB | SAP: ${sapCount.toLocaleString('pt-BR')} reg.`);
+      console.info(semSap
+        ? '[Persist] ✓ Salvo no IndexedDB | SAP inalterado (chunks mantidos).'
+        : `[Persist] ✓ Salvo no IndexedDB | SAP: ${(snapshot.sap || []).length.toLocaleString('pt-BR')} reg.`);
       return true;
     }
   } catch (err) {

@@ -201,17 +201,10 @@ function deleteConfig(key) {
 // antes ficavam sem padronização.
 //
 // Isso é exatamente o que já acontece automaticamente ao salvar/importar um
-// novo cadastro (ver salvarMateriais/handleMateriaisImport/salvarFiliais/
-// handleFiliaisImport, que chamam reaplicarPadronizacaoMateriais/Centrais
-// + renderAll). Este botão expõe a mesma reaplicação sob demanda, para os
-// casos em que o cadastro foi editado de outra forma e as telas antigas
-// ficaram desatualizadas.
-//
-// Depois de reaplicar, atualiza TODAS as telas que dependem desses
-// cadastros: as tabelas de Entradas/Saídas/Lançamentos/SAP/Custos SAP e o
-// Dashboard Gerencial (via renderAll), o Dashboard Analítico — Visão Micro/
-// Regional (via rodarAnalitico, que já se auto-protege se não houver
-// período selecionado) e o Inventário, se já tiver sido gerado na sessão.
+// cadastro (todos passam por aplicarMudancaCadastro, abaixo). Este botão
+// expõe o mesmo fluxo sob demanda, com `forcar` — invalida todos os índices
+// mesmo sem mudança detectada, para os casos em que o cadastro foi editado
+// de outra forma e as telas ficaram desatualizadas.
 async function atualizarCadastros() {
   const btns = document.querySelectorAll('.js-atualizar-cadastros');
   btns.forEach(b => {
@@ -221,46 +214,9 @@ async function atualizarCadastros() {
   });
 
   try {
-    // 1) Reaplica a padronização usando o cadastro atual de Centrais/Materiais
-    //    sobre entradas/saidas/lancamentos/sap (materialOriginal/centralOriginal
-    //    já salvos em cada registro são a fonte — nada é perdido nem reimportado).
-    if (typeof reaplicarPadronizacaoCentrais === 'function')  reaplicarPadronizacaoCentrais();
-    if (typeof reaplicarPadronizacaoMateriais === 'function') reaplicarPadronizacaoMateriais();
-
-    // 2) Invalida todos os índices derivados — sem isso, telas com cache
-    //    (Lançamentos/SAP/Saídas/busca global) continuam mostrando os
-    //    valores antigos mesmo com o state já atualizado.
-    if (typeof invalidateMaterialLookup === 'function')   invalidateMaterialLookup();
-    if (typeof invalidateFilialLookup === 'function')     invalidateFilialLookup();
-    if (typeof invalidateLancIndex === 'function')        invalidateLancIndex();
-    if (typeof invalidateSapIndex === 'function')         invalidateSapIndex();
-    if (typeof invalidateSaidasIndex === 'function')      invalidateSaidasIndex();
-    if (typeof invalidateAllSearchIndexes === 'function') invalidateAllSearchIndexes();
-    if (typeof capInvalidarCache === 'function')          capInvalidarCache();
-
-    // 3) Salva o resultado.
-    if (typeof persistStateNow === 'function') await persistStateNow();
-    else persist();
-
-    // 4) Tabelas/telas "de base": Entradas/Saídas/Lançamentos/SAP/Custos SAP/
-    //    Imports/Configs/Ações/Filiais/Materiais + Dashboard Gerencial —
-    //    o mesmo conjunto já usado após importar um cadastro novo.
-    renderAll();
-
-    // 5) Dashboard Analítico (Visão Micro/Regional): rodarAnalitico() sem
-    //    argumentos usa o período já selecionado na tela; se nenhum período
-    //    foi selecionado ainda, ela mesma não faz nada (mesmo comportamento
-    //    usado em ui.js após excluir/editar lançamentos).
-    if (typeof rodarAnalitico === 'function') rodarAnalitico();
-
-    // 6) Inventário: só regenera se a tela já tiver conteúdo gerado nesta
-    //    sessão — evita disparar "Nenhum dado encontrado" para quem nunca
-    //    abriu o Inventário. O critério espelha o usado internamente por
-    //    invGerar/renderInventario (inv-content visível = já gerado).
-    const invJaGerado = document.getElementById('inv-content')?.style.display === '';
-    if (invJaGerado && typeof window.invGerar === 'function') window.invGerar();
-
+    const gravacao = aplicarMudancaCadastro({ materiais: true, centrais: true, forcar: true });
     toast('Cadastros reaplicados — Entradas, Saídas, Lançamentos, SAP e demais telas foram atualizados.');
+    await gravacao;
   } catch (err) {
     console.error('[AtualizarCadastros] Falha ao reaplicar cadastros:', err);
     toast('Falha ao atualizar cadastros. Veja o console para detalhes.', 'error');
@@ -270,6 +226,94 @@ async function atualizarCadastros() {
       if (b.dataset.origHtml) { b.innerHTML = b.dataset.origHtml; delete b.dataset.origHtml; }
     });
   }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// MUDANÇA NO CADASTRO DE MATERIAIS/CENTRAIS — fluxo único (06/10/2026)
+// ═══════════════════════════════════════════════════════════════════════
+// Todo caminho que altera state.materiais/state.filiais (cadastrar, editar,
+// excluir, limpar, importar planilha, "Importar de", Atualizar cadastros)
+// chama isto DEPOIS de mutar o cadastro. Faz só o necessário:
+// 1. Reaplica a padronização — incremental, só recria registro que mudou.
+// 2. Invalida os índices derivados dos módulos que mudaram. Antes só o
+//    botão Atualizar cadastros invalidava: cadastrar/editar deixava SAP,
+//    Lançamentos, busca, duplicatas e Capacidades com o material antigo
+//    até recarregar a página.
+// 3. Redesenha na hora só a tela aberta + a tabela do cadastro alterado
+//    (essas tabelas não se redesenham ao abrir Configurações). As outras
+//    páginas já se redesenham ao serem abertas (renderPage, dashboard.js);
+//    o Analítico/Inventário, que não, fica marcado e é recalculado ao
+//    abrir (pageRenderers.analitico).
+// 4. Grava DEPOIS de pintar a tela, e sem os chunks SAP (segundos em 500k+)
+//    quando nada do SAP que vai pro disco mudou. Invariante: o boot sempre
+//    sincroniza o cadastro da nuvem e SÓ DEPOIS reaplica a padronização de
+//    MATERIAIS nos 4 módulos a partir de materialOriginal (restoreAndRender,
+//    STEP 1 → STEP 3) — o `material` padronizado do SAP em disco nunca é
+//    usado sem ser recalculado. Centrais NÃO são reaplicadas no boot, então
+//    uma central do SAP que mudou obriga a gravar os chunks.
+// Síncrona até o render (erro aqui estoura na hora, antes de qualquer
+// toast); devolve a Promise da gravação.
+let _analiticoDesatualizado = false;
+
+function aplicarMudancaCadastro({ materiais = false, centrais = false, forcar = false } = {}) {
+  if (materiais) invalidateMaterialLookup();
+  if (centrais) invalidateFilialLookup();
+  const cen = centrais ? reaplicarPadronizacaoCentrais() : { alterados: new Set() };
+  const mat = materiais ? reaplicarPadronizacaoMateriais() : { alterados: new Set(), sapFonteAlterada: false };
+  const alterados = new Set([...cen.alterados, ...mat.alterados]);
+
+  // forcar (botão Atualizar cadastros): invalida tudo mesmo sem mudança
+  // detectada — o botão também conserta índice desatualizado por outro caminho.
+  const mudou = m => forcar || alterados.has(m);
+  if (mudou('lancamentos')) invalidateLancIndex();
+  if (mudou('sap')) invalidateSapIndex();
+  if (mudou('saidas')) invalidateSaidasIndex();
+  if (forcar || alterados.size) invalidateAllSearchIndexes();
+  // Capacidades: a assinatura do cache é só por contagem — trocar a
+  // categoria/grupo de um material não a derruba sozinha.
+  if (typeof capInvalidarCache === 'function') capInvalidarCache();
+
+  // Tabelas de cadastro: cada uma já redesenha os DOIS indicadores de
+  // pendência (varredura da base inteira) — por isso só a(s) que mudou.
+  if (materiais) renderMateriais();
+  if (centrais) renderFiliais();
+  updateImportPrereqUI();
+  const pagina = document.querySelector('.page.active')?.id?.replace('page-', '');
+  if (pagina === 'configuracoes') {
+    // O que renderAll redesenhava nesta página — sem loadHealthConfigInputs/
+    // updateParamGerais de pageRenderers.configuracoes, que recarregariam
+    // campos que o usuário pode estar editando.
+    renderConfigs();
+    renderAcoesRelatorio();
+    renderCapacidades();
+    if (typeof renderFatoresConversao === 'function') renderFatoresConversao();
+    initResizable();
+    _analiticoDesatualizado = true;
+  } else if (pagina === 'analitico') {
+    refazerAnaliticoAposCadastro();
+  } else {
+    // Só as páginas que renderAll cobria (atalho "material sem cadastro"
+    // aberto de dentro delas) — Ocorrências/Supervisão nunca dependeram disto.
+    if (['dashboard', 'entradas', 'saidas', 'lancamentos', 'sap', 'custosSap', 'importar'].includes(pagina)) pageRenderers[pagina]();
+    _analiticoDesatualizado = true;
+  }
+
+  return _gravarAposMudancaCadastro(!(mat.sapFonteAlterada || cen.alterados.has('sap')));
+}
+
+async function _gravarAposMudancaCadastro(semSap) {
+  await nextFrame(); // pinta a tela antes: a gravação trava a thread (structured clone)
+  await persistStateNow({ semSap });
+}
+
+// Mesmo critério que o botão Atualizar cadastros sempre usou: rodarAnalitico
+// sem argumentos usa o período da tela (e não faz nada sem período); o
+// Inventário só regenera se já foi gerado nesta sessão (inv-content visível).
+function refazerAnaliticoAposCadastro() {
+  _analiticoDesatualizado = false;
+  if (typeof rodarAnalitico === 'function') rodarAnalitico();
+  const invJaGerado = document.getElementById('inv-content')?.style.display === '';
+  if (invJaGerado && typeof window.invGerar === 'function') window.invGerar();
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -325,10 +369,11 @@ const _IMPORTAR_DE_CFG = {
     ordenar: (a, b) => String(a.origem).localeCompare(String(b.origem)),
     render: () => { if (typeof renderMateriais === 'function') renderMateriais(); },
     // Cadastro importado só passa a valer depois que os registros já
-    // existentes são reprocessados com ele. Capacidades não tem equivalente
-    // (a tabela é derivada dos lançamentos na hora do render), então lá a
+    // existentes são reprocessados com ele — aplicarMudancaCadastro faz isso
+    // (+ índices, telas e gravação). Capacidades não tem equivalente (a
+    // tabela é derivada dos lançamentos na hora do render), então lá a
     // chave é ausente e o passo some do overlay.
-    reaplicar: () => { if (typeof reaplicarPadronizacaoMateriais === 'function') reaplicarPadronizacaoMateriais(); },
+    mudanca: { materiais: true },
     reaplicarLabel: 'Repadronizando materiais já lançados',
     concluidoLabel: 'Materiais importados',
     boxId: 'novos-materiais-box',
@@ -345,7 +390,7 @@ const _IMPORTAR_DE_CFG = {
     rotulo: it => `${escapeHtml(it.origem)} <span style="color:var(--text3)">— ${escapeHtml(it.alias)}</span>`,
     ordenar: (a, b) => String(a.origem).localeCompare(String(b.origem)),
     render: () => { if (typeof renderFiliais === 'function') renderFiliais(); },
-    reaplicar: () => { if (typeof reaplicarPadronizacaoCentrais === 'function') reaplicarPadronizacaoCentrais(); },
+    mudanca: { centrais: true },
     reaplicarLabel: 'Repadronizando centrais já lançadas',
     concluidoLabel: 'Centrais importadas',
     boxId: 'novos-filiais-box',
@@ -397,7 +442,7 @@ const _IMPORTAR_DE_CFG = {
     rotulo: it => `${escapeHtml(it.grupo)}${it.fornecedor ? ` <span style="color:var(--text3)">— ${escapeHtml(it.fornecedor)}</span>` : ' <span style="color:var(--text3)">(padrão do grupo)</span>'} <span style="color:var(--text3)">— 1 ${escapeHtml(it.umOrigem)} = ${escapeHtml(String(it.fator))} ${escapeHtml(it.umDestino || 'KG')}</span>`,
     ordenar: (a, b) => String(a.grupo).localeCompare(String(b.grupo)) || String(a.fornecedor || '').localeCompare(String(b.fornecedor || '')),
     render: () => { if (typeof renderFatoresConversao === 'function') renderFatoresConversao(); },
-    // Sem `reaplicar`: ao contrário de Materiais/Filiais, não existe um
+    // Sem `mudanca`: ao contrário de Materiais/Filiais, não existe um
     // "reprocessar lançamentos antigos" aqui — um fator importado passa a
     // valer no próximo cálculo naturalmente (_lookupFatorConversao consulta
     // state.fatoresConversao a cada chamada, não guarda resultado velho pra
@@ -543,18 +588,22 @@ async function confirmarImportarDe(btn) {
   });
 
   // Overlay antes de qualquer trabalho pesado: importar o cadastro inteiro de
-  // um usuário reprocessa a base toda (repadronização + persistStateNow +
-  // renderAll) e trava a interface por segundos. Sem ele o clique parecia não
-  // ter feito nada. Fecha o modal primeiro pra não empilhar duas camadas.
+  // um usuário reprocessa a base e grava tudo — pode levar segundos. Sem ele
+  // o clique parecia não ter feito nada. Fecha o modal primeiro pra não
+  // empilhar duas camadas.
   closeModal('modal-importar-de');
   _setBtnLoading(btn, false);
 
+  // Materiais/Filiais: aplicarMudancaCadastro atualiza as telas ANTES de
+  // gravar — a ordem dos passos no overlay acompanha.
+  const passoSalvar = { id: 'impde-salvar', icon: 'ti-device-floppy', label: 'Salvando no banco local' };
+  const passoTelas  = { id: 'impde-telas',  icon: 'ti-refresh',       label: 'Atualizando as telas' };
   showLoadingOverlay(`Importando ${cfg.plural}`, `Trazendo ${novos.length} cadastro(s) de ${usuariosCount} usuário(s)...`);
   if (typeof loadingShowSteps === 'function') loadingShowSteps([
     { id: 'impde-copiar', icon: 'ti-copy',          label: `Copiando ${novos.length} ${novos.length === 1 ? cfg.singular : cfg.plural}` },
-    ...(cfg.reaplicar ? [{ id: 'impde-reaplicar', icon: 'ti-adjustments', label: cfg.reaplicarLabel }] : []),
-    { id: 'impde-salvar', icon: 'ti-device-floppy', label: 'Salvando no banco local' },
-    { id: 'impde-telas',  icon: 'ti-refresh',       label: 'Atualizando as telas' },
+    ...(cfg.mudanca
+      ? [{ id: 'impde-reaplicar', icon: 'ti-adjustments', label: cfg.reaplicarLabel }, passoTelas, passoSalvar]
+      : [passoSalvar, passoTelas]),
   ]);
 
   try {
@@ -565,33 +614,37 @@ async function confirmarImportarDe(btn) {
     cfg.upsert(novos);
     _lstepSet('impde-copiar', 'done'); _lbarSet(35);
 
-    if (cfg.reaplicar) {
-      _lstepSet('impde-reaplicar', 'running');
-      updateLoadingOverlay(cfg.reaplicarLabel + '...');
-      await nextFrame();
-      cfg.reaplicar();
-      _lstepSet('impde-reaplicar', 'done');
-    }
-    _lbarSet(60);
-
-    _lstepSet('impde-salvar', 'running');
-    updateLoadingOverlay('Salvando no banco local...');
-    await nextFrame();
-    await persistStateNow();
-    _lstepSet('impde-salvar', 'done'); _lbarSet(85);
-
-    _lstepSet('impde-telas', 'running');
-    updateLoadingOverlay('Atualizando as telas...');
-    await nextFrame();
     // Poda local dos pendentes ANTES do render: o que acabou de ser copiado
     // já está em cfg.lista(). Sem isto o alerta continuaria anunciando os
     // mesmos registros até a recontagem no servidor responder — o usuário
     // importa 75 capacidades e o sino segue dizendo "75 capacidades novas".
     const chavesAgora = new Set(cfg.lista().map(cfg.chave));
     _NOVOS_PENDENTES[tipo] = _itensNovosDe(tipo).filter(it => !chavesAgora.has(cfg.chave(it)));
-    renderAll();
-    updateImportPrereqUI();
-    _lstepSet('impde-telas', 'done'); _lbarSet(100);
+
+    if (cfg.mudanca) {
+      _lstepSet('impde-reaplicar', 'running');
+      updateLoadingOverlay(cfg.reaplicarLabel + '...');
+      await nextFrame();
+      const gravacao = aplicarMudancaCadastro(cfg.mudanca);
+      _lstepSet('impde-reaplicar', 'done'); _lstepSet('impde-telas', 'done');
+      _lstepSet('impde-salvar', 'running'); _lbarSet(70);
+      updateLoadingOverlay('Salvando no banco local...');
+      await gravacao;
+      _lstepSet('impde-salvar', 'done'); _lbarSet(100);
+    } else {
+      _lstepSet('impde-salvar', 'running');
+      updateLoadingOverlay('Salvando no banco local...');
+      await nextFrame();
+      await persistStateNow();
+      _lstepSet('impde-salvar', 'done'); _lbarSet(85);
+
+      _lstepSet('impde-telas', 'running');
+      updateLoadingOverlay('Atualizando as telas...');
+      await nextFrame();
+      renderAll();
+      updateImportPrereqUI();
+      _lstepSet('impde-telas', 'done'); _lbarSet(100);
+    }
 
     hideLoadingOverlay(cfg.concluidoLabel);
     toast(`${novos.length} ${cfg.plural} importado(s) de ${usuariosCount} usuário(s)`);
@@ -1259,7 +1312,7 @@ async function salvarNovoGrupoMaterial(btn) {
   _setBtnLoading(btn, true, 'Salvando...');
   if (!existente) {
     registrarGrupoMaterial(nomeDigitado);
-    await persistStateNow();
+    await persistStateNow({ semSap: true }); // só o catálogo de grupos mudou
   }
   _refreshGrupoMateriaisSelects();
   // _rebuildGrupoMateriaisOptions, não só `.value =`: um select de FORA de
@@ -1368,14 +1421,12 @@ async function salvarMateriaisIndividual(btn) {
   listPages.materiais = 0;
   closeModal('modal-materiais-individual');
   _setBtnLoading(btn, false);
-  reaplicarPadronizacaoMateriais();
-  await persistStateNow();
-  renderAll();
-  updateImportPrereqUI();
+  const gravacao = aplicarMudancaCadastro({ materiais: true });
   const msg = toEdit.length && !toCreate.length ? `${toEdit.length} material(is) atualizado(s)`
     : toCreate.length && !toEdit.length ? `${toCreate.length} material(is) cadastrado(s)`
     : `${toCreate.length + toEdit.length} material(is) salvo(s)`;
   toast(msg);
+  await gravacao;
 }
 
 // Atualiza cadastros existentes EM PLACE (localiza pela chave original
@@ -1540,6 +1591,17 @@ async function syncMateriaisFromSupabase() {
 }
 
 function upsertMateriais(items) {
+  // Índices montados 1× por chamada: na importação por planilha, buscar cada
+  // linha com findIndex(materialMatchKey) e varrer os grupos com
+  // normalizeText era O(linhas × cadastro) — segundos com milhares de itens.
+  // Mesmo critério de antes: casa com o PRIMEIRO registro de mesma chave.
+  const porChave = new Map();
+  state.materiais.forEach(m => {
+    const k = materialMatchKey(m);
+    if (!porChave.has(k)) porChave.set(k, m);
+  });
+  const gruposConhecidos = new Set((state.gruposMateriais || []).map(normalizeText));
+
   (items || []).forEach(item => {
     const src = item && typeof item === 'object' ? item : {};
     const rec = {
@@ -1550,13 +1612,23 @@ function upsertMateriais(items) {
     };
 
     const key = materialMatchKey(rec);
-    const idx = state.materiais.findIndex(f => materialMatchKey(f) === key);
-    if (idx >= 0) state.materiais[idx] = { ...state.materiais[idx], ...rec };
-    else state.materiais.unshift(rec);
+    const atual = porChave.get(key);
+    if (atual) {
+      const merged = { ...atual, ...rec };
+      state.materiais[state.materiais.indexOf(atual)] = merged;
+      porChave.set(key, merged);
+    } else {
+      state.materiais.unshift(rec);
+      porChave.set(key, rec);
+    }
     // Mantém o catálogo de Grupos SAP em sincronia — cobre tanto o cadastro
     // guiado quanto a importação por arquivo (handleMateriaisImport), já
     // que ambos passam por aqui.
-    registrarGrupoMaterial(rec.alias);
+    const grupoKey = normalizeText(rec.alias);
+    if (grupoKey && !gruposConhecidos.has(grupoKey)) {
+      registrarGrupoMaterial(rec.alias);
+      gruposConhecidos.add(grupoKey);
+    }
     _materiaisSyncUpsert(rec);
   });
   invalidateMaterialLookup();
@@ -1678,12 +1750,10 @@ async function handleMateriaisImport(event) {
         status: 'Importado', createdAt: Date.now()
       });
       listPages.materiais = 0;
-      reaplicarPadronizacaoMateriais();
+      const gravacao = aplicarMudancaCadastro({ materiais: true });
       _lstepSet('mat-norm', 'done'); _lstepSet('mat-save', 'running'); _lbarSet(85);
-      await persistStateNow();
+      await gravacao;
       _lstepSet('mat-save', 'done'); _lbarSet(100);
-      renderAll();
-      updateImportPrereqUI();
       closeModal('modal-materiais-individual');
       hideLoadingOverlay('Materiais importados');
       if (typeof loadingHideSteps === 'function') loadingHideSteps();
@@ -1742,11 +1812,7 @@ async function removerMaterial(id, btn) {
       const curIdx = state.materiais.findIndex(m => m.id === id);
       if (curIdx < 0) { _setBtnLoading(btn, false); return; }
       state.materiais.splice(curIdx, 1);
-      invalidateMaterialLookup();
-      reaplicarPadronizacaoMateriais();
-      await persistStateNow();
-      renderAll();
-      updateImportPrereqUI();
+      const gravacao = aplicarMudancaCadastro({ materiais: true });
       toast('Material removido');
       // Delete no Supabase é inofensivo mesmo se o registro nunca tiver
       // sido sincronizado (veio de importação em lote) — não acha nada.
@@ -1756,7 +1822,8 @@ async function removerMaterial(id, btn) {
       _supaDeleteOwned('materiais', { origem: rec.origem, alias: rec.alias })
         .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao excluir material na nuvem:', error); });
       // Não precisa _setBtnLoading(false) aqui — o botão em si some do DOM
-      // no próximo renderAll()/renderMateriais(), que redesenha a tabela.
+      // no renderMateriais() de aplicarMudancaCadastro, que redesenha a tabela.
+      await gravacao;
     }
   });
 }
@@ -1765,14 +1832,11 @@ async function limparMateriais() {
   if (!state.materiais.length) return toast('Nenhum material cadastrado', 'error');
   if (!confirm('Excluir todos os materiais cadastrados?')) return;
   state.materiais = [];
-  invalidateMaterialLookup();
-  reaplicarPadronizacaoMateriais();
-  await persistStateNow();
-  renderAll();
-  updateImportPrereqUI();
+  const gravacao = aplicarMudancaCadastro({ materiais: true });
   toast('Todos os materiais foram excluídos', 'error');
   window.supabaseClient?.from('materiais').delete().eq('user_id', window.currentUser?.id)
     .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao limpar materiais na nuvem:', error); });
+  await gravacao;
 }
 
 // Exporta a Padronização de Materiais para uma planilha Excel (.xlsx),
@@ -1962,7 +2026,7 @@ async function salvarNovoRegionalCentral(btn) {
   _setBtnLoading(btn, true, 'Salvando...');
   if (!existente) {
     registrarRegionalCentral(nomeDigitado);
-    await persistStateNow();
+    await persistStateNow({ semSap: true }); // só o catálogo de regionais mudou
   }
   _refreshRegionaisCentraisSelects();
   if (_novoRegionalCentralTarget) _novoRegionalCentralTarget.value = nomeFinal;
@@ -2035,14 +2099,12 @@ async function salvarFiliaisIndividual(btn) {
   if (toEdit.length) editarFiliais(toEdit);
   closeModal('modal-filiais-individual');
   _setBtnLoading(btn, false);
-  reaplicarPadronizacaoCentrais();
-  await persistStateNow();
-  renderAll();
-  updateImportPrereqUI();
+  const gravacao = aplicarMudancaCadastro({ centrais: true });
   const msg = toEdit.length && !toCreate.length ? `${toEdit.length} filial(is) atualizada(s)`
     : toCreate.length && !toEdit.length ? `${toCreate.length} filial(is) cadastrada(s)`
     : `${toCreate.length + toEdit.length} filial(is) salva(s)`;
   toast(msg);
+  await gravacao;
 }
 
 // Atualiza cadastros existentes EM PLACE — mesmo motivo de editarMateriais:
@@ -2275,10 +2337,8 @@ async function handleFiliaisImport(event) {
         registros: items.length, dataHora: new Date().toLocaleString('pt-BR'),
         status: 'Importado', createdAt: Date.now()
       });
-      reaplicarPadronizacaoCentrais();
-      await persistStateNow();
+      await aplicarMudancaCadastro({ centrais: true });
       _lstepSet('fil-save', 'done'); _lbarSet(100);
-      renderAll();
       closeModal('modal-filiais-individual');
       hideLoadingOverlay('Centrais importadas');
       if (typeof loadingHideSteps === 'function') loadingHideSteps();
@@ -2323,11 +2383,7 @@ async function removerFilial(pagedIndex) {
     action: () => {
       const curIdx = state.filiais.indexOf(rec);
       if (curIdx >= 0) state.filiais.splice(curIdx, 1);
-      invalidateFilialLookup();
-      reaplicarPadronizacaoCentrais();
-      persist();
-      renderAll();
-      updateImportPrereqUI();
+      aplicarMudancaCadastro({ centrais: true });
       // Delete no Supabase é inofensivo mesmo se o registro nunca tiver
       // sido sincronizado (veio de importação em lote) — não acha nada.
       // Escopado ao próprio user_id (ver _supaDeleteOwned, normalize.js):
@@ -2340,11 +2396,7 @@ async function removerFilial(pagedIndex) {
         ? originalIndex
         : 0;
       state.filiais.splice(insertAt, 0, snapshot);
-      invalidateFilialLookup();
-      reaplicarPadronizacaoCentrais();
-      persist();
-      renderAll();
-      updateImportPrereqUI();
+      aplicarMudancaCadastro({ centrais: true });
       _filiaisSyncUpsert(snapshot);
     },
   });
@@ -2354,14 +2406,11 @@ async function limparFiliais() {
   if (!state.filiais.length) return toast('Nenhuma filial cadastrada', 'error');
   if (!confirm('Excluir todas as filiais cadastradas?')) return;
   state.filiais = [];
-  invalidateFilialLookup();
-  reaplicarPadronizacaoCentrais();
-  await persistStateNow();
-  renderAll();
-  updateImportPrereqUI();
+  const gravacao = aplicarMudancaCadastro({ centrais: true });
   toast('Todas as filiais foram excluídas', 'error');
   window.supabaseClient?.from('filiais').delete().eq('user_id', window.currentUser?.id)
     .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao limpar filiais na nuvem:', error); });
+  await gravacao;
 }
 
 // Exporta a Padronização de Centrais para uma planilha Excel (.xlsx),
