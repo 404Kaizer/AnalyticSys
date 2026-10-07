@@ -6268,7 +6268,7 @@ function setSapFechOverrideEmLote(chaves, incluir) {
     window.supabaseClient.from('sap_fechamento_overrides').upsert(rows, { onConflict: 'chave' })
       .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao sincronizar override de fechamento:', error); });
   } else {
-    window.supabaseClient.from('sap_fechamento_overrides').delete().in('chave', chaves)
+    _supaDeleteInLotes(() => window.supabaseClient.from('sap_fechamento_overrides').delete(), 'chave', chaves)
       .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao remover override de fechamento na nuvem:', error); });
   }
 }
@@ -6358,7 +6358,7 @@ function setSapFechInvLockOverrideEmLote(chaves, desbloquear) {
     window.supabaseClient.from('sap_fech_inv_unlock_overrides').upsert(rows, { onConflict: 'chave' })
       .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao sincronizar desbloqueio de Inventário:', error); });
   } else {
-    window.supabaseClient.from('sap_fech_inv_unlock_overrides').delete().in('chave', chaves)
+    _supaDeleteInLotes(() => window.supabaseClient.from('sap_fech_inv_unlock_overrides').delete(), 'chave', chaves)
       .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao remover desbloqueio de Inventário na nuvem:', error); });
   }
 }

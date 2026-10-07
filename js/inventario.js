@@ -73,6 +73,14 @@
   // a UI (já atualizada localmente).
   function _invSyncToSupabase(keys) {
     if (!window.supabaseClient) return;
+    // BUG REAL (07/10): os imports (CSV e "Importar de outro usuário")
+    // podem tocar a MESMA chave mais de uma vez (linha repetida no CSV;
+    // dois usuários com a mesma Central+Cód SAP). Chave repetida no mesmo
+    // upsert faz o Postgres recusar o LOTE INTEIRO ("ON CONFLICT DO UPDATE
+    // command cannot affect row a second time") — tudo some no próximo
+    // reload. A linha enviada sai do mapa já mesclado, então deduplicar
+    // não perde nada.
+    keys = [...new Set(keys)];
     const rows = keys.map(k => {
       const j = invJustificativas[k] || {};
       return {

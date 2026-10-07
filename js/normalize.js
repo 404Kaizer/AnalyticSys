@@ -106,13 +106,28 @@ async function fetchAllRows(table, columns = '*') {
 async function _supaDeleteOwned(table, matchEq, matchIn, ownerId) {
   const uid = ownerId || window.currentUser?.id;
   if (!window.supabaseClient || !uid) return { error: null };
-  let query = window.supabaseClient.from(table).delete().eq('user_id', uid);
-  for (const [col, val] of Object.entries(matchEq || {})) query = query.eq(col, val);
-  if (matchIn) {
-    const [col, vals] = Object.entries(matchIn)[0];
-    query = query.in(col, vals);
+  const montar = () => {
+    let query = window.supabaseClient.from(table).delete().eq('user_id', uid);
+    for (const [col, val] of Object.entries(matchEq || {})) query = query.eq(col, val);
+    return query;
+  };
+  if (!matchIn) return montar();
+  const [col, vals] = Object.entries(matchIn)[0];
+  return _supaDeleteInLotes(montar, col, vals);
+}
+
+// DELETE com .in() vai inteiro na URL — lista grande estoura o limite do
+// servidor e a requisição falha (BUG REAL 07/10: "Bloquear (Inventário)"
+// com 69 kB de chaves → ERR_FAILED; a tela mostrava bloqueado e o banco
+// não). Divide em lotes; para no 1º erro e o devolve. montarQuery() deve
+// devolver um builder novo de .delete() a cada chamada.
+const SUPA_IN_LOTE = 50;
+async function _supaDeleteInLotes(montarQuery, col, vals) {
+  for (let i = 0; i < vals.length; i += SUPA_IN_LOTE) {
+    const { error } = await montarQuery().in(col, vals.slice(i, i + SUPA_IN_LOTE));
+    if (error) return { error };
   }
-  return query;
+  return { error: null };
 }
 
 // ═══════════════════════════════════════════════════════════════════════
