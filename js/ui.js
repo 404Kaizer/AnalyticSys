@@ -6763,9 +6763,8 @@ function _fechMgrRender() {
     const dtRegSafe     = escapeHtml(r.dtReg || '—');
     const rowClass = r._travadoPorInventario ? 'fechmgr-row-travado' : (r._statusExcluido ? '' : 'fechmgr-row-incluido');
     // Checkbox sempre habilitado (11/08) — mesmo travada, a linha pode ser
-    // selecionada pra "Desbloquear (Inventário)"; só Considerar/Desconsiderar
-    // não têm efeito prático enquanto a trava valer (isSapExcluidoPorFechamento
-    // checa o Inventário antes do override de qualquer forma).
+    // selecionada pra "Desbloquear (Inventário)"; Considerar/Desconsiderar
+    // ignoram linhas travadas (ver _fechMgrAplicarLote).
     const checkboxHtml = `<input type="checkbox" ${checked ? 'checked' : ''} onchange="_fechMgrToggleSelecao('${r._chave.replace(/'/g,"\\'")}', this.checked)">`;
     return `
     <tr class="${rowClass}">
@@ -6907,7 +6906,19 @@ window._fechMgrSelecionarTodosFiltrados = _fechMgrSelecionarTodosFiltrados;
 
 function _fechMgrAplicarLote(incluir) {
   if (!_fechMgrSelecionados.size) return;
-  const chaves = [..._fechMgrSelecionados];
+  // Linha com cadeado (travada pelo Inventário) não aceita Considerar/
+  // Desconsiderar — só "Desbloquear (Inventário)". Antes o override era
+  // gravado mesmo assim e passava a valer, escondido, quando a linha fosse
+  // desbloqueada. Usa todos os candidatos (não só o filtro atual) pra
+  // nunca deixar passar uma chave selecionada fora do filtro.
+  const travadas = new Set(_fechMgrGetTodosCandidatos().filter(r => r._travadoPorInventario).map(r => r._chave));
+  const selecionadas = [..._fechMgrSelecionados];
+  const chaves = selecionadas.filter(chave => !travadas.has(chave));
+  const ignorados = selecionadas.length - chaves.length;
+  if (!chaves.length) {
+    toast('Os registros selecionados estão travados pelo Inventário (cadeado). Use "Desbloquear (Inventário)" antes de considerar/desconsiderar.', 'error');
+    return;
+  }
   // Confirmação extra pra lotes grandes — "selecionar tudo o que bate no
   // filtro" tornou possível marcar milhares de registros em 2 cliques, e
   // Considerar/Desconsiderar afeta o cálculo de estoque em TODO o sistema
@@ -6922,9 +6933,10 @@ function _fechMgrAplicarLote(incluir) {
   }
   setSapFechOverrideEmLote(chaves, incluir);
   _fechMgrSelecionados.clear();
-  toast(incluir
+  toast((incluir
     ? `${chaves.length} registro(s) considerado(s) no cálculo de estoque.`
-    : `${chaves.length} registro(s) desconsiderado(s) do cálculo de estoque.`);
+    : `${chaves.length} registro(s) desconsiderado(s) do cálculo de estoque.`)
+    + (ignorados ? ` ${ignorados} ignorado(s) — travado(s) pelo Inventário.` : ''));
   _fechMgrRender();
   // Recalcula qualquer análise já aberta pra refletir a mudança imediatamente
   if (typeof updateDashboard === 'function') updateDashboard();

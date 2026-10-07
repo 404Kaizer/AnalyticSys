@@ -5019,7 +5019,7 @@ function renderSAP() {
     const _sapSemCad = !getCatKeyDoCadastro(r.materialOriginal);
     const fechBadgeHtml = isFechPattern
       ? (isFechTravadoInv
-          ? '<span class="badge-fechamento badge-fechamento--inventario" title="Documento SAP preenchido em uma justificativa do Inventário — sempre desconsiderado do cálculo de variação. Para reverter, apague o campo Documento SAP naquela justificativa.">Justificado no Inventário</span>'
+          ? '<span class="badge-fechamento badge-fechamento--inventario" title="Documento SAP preenchido em uma justificativa do Inventário — sempre desconsiderado do cálculo de variação. Para reverter, remova esse documento da lista Documento SAP naquela justificativa.">Justificado no Inventário</span>'
           : isFechExcluido
             ? '<span class="badge-fechamento" title="Ajuste de Fechamento Mensal — desconsiderado do cálculo de variação. Gerencie em Movimentações SAP → botão Fechamento.">Fechamento</span>'
             : '<span class="badge-fechamento badge-fechamento--incluido" title="Ajuste de Fechamento Mensal — reincluído manualmente no cálculo. Gerencie em Movimentações SAP → botão Fechamento.">Fechamento · incluído</span>')
