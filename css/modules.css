@@ -12993,3 +12993,9 @@ body:not(.role-insumos) .cob-so-insumos { display: none !important; }
 .mod-summary-hero .inv-kpi-card.kpi-amber .inv-kpi-value { color: var(--amber); }
 .mod-summary-hero .inv-kpi-card.kpi-teal::before { background: var(--teal); }
 .mod-summary-hero .inv-kpi-card.kpi-teal .inv-kpi-value { color: var(--teal); }
+/* Linha de NF clicável (abre o detalhe); amarela = justificada pelo analista */
+.cob-nf { cursor: pointer; }
+.cob-nf:hover td { background: var(--bg3); }
+.cob-nf.cob-justificada td { background: color-mix(in srgb, var(--amber) 16%, transparent); }
+.cob-nf.cob-justificada:hover td { background: color-mix(in srgb, var(--amber) 24%, transparent); }
+.cob-nf.cob-justificada td:first-child { box-shadow: inset 3px 0 0 var(--amber); }

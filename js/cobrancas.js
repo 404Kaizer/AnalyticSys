@@ -737,7 +737,8 @@ function cobCalcular(d, hoje) {
       materiais: [...new Set(itens.map(i => i.material).filter(Boolean))].join(' + '),
       cfops: [...new Set(itens.map(i => i.cfop).filter(Boolean))].join(', '),
       statusSefaz: s?.status || '', semSefaz: !s, semCentral: !c,
-      desviado: j?.desviado || '', justificativa: j?.motivo || '',
+      desviado: j?.desviado || '', justificativa: j?.motivo || '', just: j || null,
+      transportador: s?.transportador || '', placa: s?.placa || '',
       bloco: COB_BLOCOS[String(p.cnpj_fornecedor).slice(0, 8)] || null,
     };
     res.porChave.set(k, row);
@@ -1047,7 +1048,9 @@ function _cobLinhaNf(r) {
   const material = r.itens.length > 1
     ? r.itens.map(i => `<div class="cob-item">${escapeHtml(i.material || '—')} · ${_cobFmtNum(i.volume)} · ${money(i.valor_total)}</div>`).join('')
     : escapeHtml(r.materiais || '—');
-  return `<tr>
+  // Clique na linha abre o detalhe da NF (dados + justificativa + ações).
+  // Amarela = já tem justificativa/desvio registrado pelo analista.
+  return `<tr class="cob-nf${r.just ? ' cob-justificada' : ''}" onclick="cobAbrirNf('${r.k}')" title="${r.just ? 'Justificada — clique para ver' : 'Clique para ver / justificar'}">
     <td class="td-mono" title="${escapeHtml(r.centralNome)}">${escapeHtml(r.central)}${r.semCentral ? ` <span class="badge badge-red" title="CNPJ ${_cobFmtCnpj(r.cnpj_comprador)} não está no cadastro de centrais">?</span>` : ''}</td>
     <td>${escapeHtml(r.fornecedor)}</td>
     <td class="td-mono">${escapeHtml(r.numero)}${r.semSefaz ? ' <span class="badge badge-amber" title="Nota não encontrada no relatório do SEFAZ importado">sem SEFAZ</span>' : ''}</td>
@@ -1056,12 +1059,48 @@ function _cobLinhaNf(r) {
     <td class="td-mono" style="text-align:right">${r.semSefaz ? '—' : _cobFmtNum(r.volume)}</td>
     <td>${material}</td>
     <td class="td-mono">${escapeHtml(r.cfops || '—')}</td>
-    <td class="cob-just" title="${escapeHtml(r.desviado)}">${escapeHtml(r.desviado)}</td>
-    <td class="cob-just" title="${escapeHtml(r.justificativa)}">${escapeHtml(r.justificativa)}</td>
-    <td style="white-space:nowrap">
-      <button class="btn-icon" title="Justificar atraso / desvio" onclick="cobAbrirAnot('justificativas','${r.k}')"><i class="ti ti-message-2"></i></button>
-      <button class="btn-icon danger" title="Desconsiderar da cobrança" onclick="cobAbrirAnot('desconsiderar','${r.k}')"><i class="ti ti-eye-off"></i></button>
-    </td></tr>`;
+  </tr>`;
+}
+
+// ── Detalhe da NF (modal) ────────────────────────────────────
+const _cobInfo = (rot, val, full = false) => `<div${full ? ' style="grid-column:1/-1"' : ''}>
+  <div class="form-label" style="margin-bottom:2px">${rot}</div><div style="font-size:13px">${val || '<span style="color:var(--text3)">—</span>'}</div></div>`;
+
+function cobAbrirNf(k) {
+  const r = _cob.res?.porChave.get(k);
+  if (!r) return;
+  const n = COB_NIVEIS[r.nivel], j = r.just;
+  document.getElementById('cob-nf-title').innerHTML = `<i class="ti ti-file-invoice"></i> NF ${escapeHtml(r.numero)}`;
+  document.getElementById('cob-nf-sub').textContent = `${r.fornecedor} · ${r.cnpj_fmt}`;
+  const itens = r.itens.length
+    ? `<table style="margin-top:4px"><thead><tr><th>Material</th><th>CFOP</th><th style="text-align:right">Peso</th><th style="text-align:right">Valor</th></tr></thead><tbody>
+        ${r.itens.map(i => `<tr><td>${escapeHtml(i.material || '—')}</td><td class="td-mono">${escapeHtml(i.cfop || '—')}</td><td class="td-mono" style="text-align:right">${_cobFmtNum(i.volume)}</td><td class="td-mono" style="text-align:right">${money(i.valor_total)}</td></tr>`).join('')}
+      </tbody></table>`
+    : '<div style="color:var(--text3);font-size:12px">Nota não encontrada no relatório do SEFAZ importado.</div>';
+  const grade = 'display:grid;grid-template-columns:1fr 1fr;gap:12px 16px';
+  document.getElementById('cob-nf-body').innerHTML = `
+    <div style="${grade}">
+      ${_cobInfo('Central', `${escapeHtml(r.central)}${r.centralNome ? ` <span style="color:var(--text3)">— ${escapeHtml(r.centralNome)}</span>` : ''}`)}
+      ${_cobInfo('Regional', escapeHtml(r.regional))}
+      ${_cobInfo('Emissão', `<span class="badge ${n.badge}">${r.emissao_fmt}</span> ${r.dias === null ? '' : `há ${r.dias} dia(s) · ${n.rot}`}`)}
+      ${_cobInfo('Valor da NF', money(r.valor))}
+      ${_cobInfo('Status SEFAZ', escapeHtml(r.statusSefaz))}
+      ${_cobInfo('Transportador / Placa', [r.transportador, r.placa].filter(Boolean).map(escapeHtml).join(' · '))}
+      ${_cobInfo('Itens', itens, true)}
+    </div>
+    <div class="section-title" style="margin:18px 0 10px">Justificativa</div>
+    ${j ? `<div style="${grade};padding:12px;border-radius:var(--radius);background:var(--amber-bg);border:1px solid var(--amber-border)">
+        ${_cobInfo('Carga desviada para', escapeHtml(j.desviado || ''))}
+        ${_cobInfo('Informante', escapeHtml(j.informante || ''))}
+        ${_cobInfo('Motivo do atraso', escapeHtml(j.motivo || ''), true)}
+        ${_cobInfo('Dia da resposta', _cobFmtData(j.dia_resp))}
+      </div>`
+      : '<div style="color:var(--text3);font-size:12px">Nenhuma justificativa registrada para esta nota.</div>'}`;
+  document.getElementById('cob-nf-actions').innerHTML = `
+    <button class="btn admin-btn-danger" style="margin-right:auto" onclick="closeModal('cob-nf-modal');cobAbrirAnot('desconsiderar','${k}')"><i class="ti ti-eye-off"></i> Desconsiderar</button>
+    <button class="btn" onclick="closeModal('cob-nf-modal')">Fechar</button>
+    <button class="btn btn-primary" onclick="closeModal('cob-nf-modal');cobAbrirAnot('justificativas','${k}')"><i class="ti ti-message-2"></i> ${j ? 'Editar justificativa' : 'Justificar / informar desvio'}</button>`;
+  openModal('cob-nf-modal');
 }
 
 function cobDetView(v) { _cob.detView = v; _cobRenderCobranca(); }
@@ -1072,7 +1111,7 @@ function cobDetView(v) { _cob.detView = v; _cobRenderCobranca(); }
 function _cobDetalhamentoHtml(padrao, blocos) {
   const views = [['padrao', 'Padrão', padrao], ...blocos.map(([b, rs]) => [b, b, rs])];
   const [atual, , rows] = views.find(v => v[0] === _cob.detView) || views[0];
-  const ncol = 11;
+  const ncol = 8;
   const ord = (a, b) => a.central.localeCompare(b.central, 'pt-BR') || String(a.emissao || '').localeCompare(String(b.emissao || ''));
   const grupos = new Map();
   rows.forEach(r => { if (!grupos.has(r.regional)) grupos.set(r.regional, []); grupos.get(r.regional).push(r); });
@@ -1090,7 +1129,7 @@ function _cobDetalhamentoHtml(padrao, blocos) {
         `<button class="pim-month-pill${k === atual ? ' active' : ''}" type="button" onclick="cobDetView('${k}')">${rot} <b>${rs.length}</b></button>`).join('')}</div>
     </div>
     <div class="table-scroll" style="max-height:calc(100vh - 140px)"><table>
-      <thead><tr><th>Central</th><th>Fornecedor</th><th>NF</th><th>Emissão</th><th style="text-align:right">Valor</th><th style="text-align:right">Peso</th><th>Material</th><th>CFOP</th><th>Desviado</th><th>Justificativa</th><th></th></tr></thead>
+      <thead><tr><th>Central</th><th>Fornecedor</th><th>NF</th><th>Emissão</th><th style="text-align:right">Valor</th><th style="text-align:right">Peso</th><th>Material</th><th>CFOP</th></tr></thead>
       <tbody>${body || _cobVazio('ti-circle-check', vazio, ncol)}</tbody>
     </table></div></div>`;
 }
