@@ -522,19 +522,7 @@ function _cobQuem(r) {
   return u ? (u.nome_exibicao || u.email) : '';
 }
 
-function _cobDescImport(tipo) {
-  const imp = _cobVigente(tipo);
-  if (!imp) return 'Nenhuma importação vigente.';
-  const quem = _cobQuem(imp);
-  return `Vigente: ${imp.arquivo || '—'} · ${imp.registros ?? 0} ${COB_IMPORTS[tipo].unidade} · ${_cobQuando(imp)}${quem ? ' · ' + quem : ''}`;
-}
-
 function cobRenderImports() {
-  Object.keys(COB_IMPORTS).forEach(tipo => {
-    const el = document.getElementById('cob-import-info-' + tipo);
-    if (el) el.textContent = _cobDescImport(tipo);
-  });
-
   const tb = document.getElementById('tb-cob-imports');
   if (!tb) return;
   tb.innerHTML = _cob.imports.map(r => {
