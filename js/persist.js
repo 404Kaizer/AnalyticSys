@@ -13,6 +13,10 @@ let idbOpenPromise = null;
 let persistTimer = null;
 let persistInFlight = false;
 let persistQueued = false;
+// true se ALGUMA chamada de persist() desde a última gravação pediu a base
+// SAP (o padrão). Só quando todas pediram semSap a gravação pula os chunks
+// — uma gravação leve nunca "rebaixa" uma completa já pendente.
+let persistPrecisaSap = false;
 let stateHydrated = false;
 
 // ── Tombstone de exclusões pendentes ──────────────────────────────────────
@@ -638,9 +642,14 @@ function flushPersistQueue() {
 
   const run = () => {
     persistInFlight = true;
+    const semSap = !persistPrecisaSap;
+    persistPrecisaSap = false;
     Promise.resolve()
-      .then(() => persistStateNow())
-      .catch(err => console.warn('Falha na persistência assíncrona.', err))
+      .then(() => persistStateNow({ semSap }))
+      // Falhou uma gravação completa: a próxima (mesmo que leve) volta a
+      // incluir o SAP, como era antes de existir a gravação leve.
+      .then(ok => { if (ok !== true && !semSap) persistPrecisaSap = true; })
+      .catch(err => { if (!semSap) persistPrecisaSap = true; console.warn('Falha na persistência assíncrona.', err); })
       .finally(() => {
         persistInFlight = false;
         if (persistQueued) {
@@ -655,7 +664,11 @@ function flushPersistQueue() {
   setTimeout(run, 0);
 }
 
-function persist() {
+// semSap: true só para quem sabe que nada do SAP que vai pro disco mudou
+// (ex.: Considerar/Desconsiderar e Desbloquear/Bloquear do Fechamento) —
+// pula a regravação da base SAP inteira, que custa segundos.
+function persist({ semSap = false } = {}) {
+  if (!semSap) persistPrecisaSap = true;
   clearTimeout(persistTimer);
   persistTimer = setTimeout(() => {
     flushPersistQueue();

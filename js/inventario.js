@@ -51,6 +51,14 @@
     const h = window._inv_helpers;
     const st = h && h.state && h.state();
     if (!st) return;
+    // Documento SAP novo numa justificativa volta a travar no Fechamento
+    // (desbloqueio antigo perde validade) — ver retravarDocsInventarioLocal.
+    if (keys && keys.length && typeof retravarDocsInventarioLocal === 'function') {
+      const norm = v => splitDocsSap(v).map(_fechImportNormDoc); // mesma normalização do gatilho no banco
+      const docsAntes = new Map((st.invJustificativas || []).map(r => [r.k, new Set(norm(r.documentoSap))]));
+      retravarDocsInventarioLocal(keys.flatMap(k =>
+        norm(invJustificativas[k]?.documentoSap).filter(d => !docsAntes.get(k)?.has(d))));
+    }
     st.invJustificativas = Object.keys(invJustificativas).map(k => ({ k, ...invJustificativas[k] }));
     if (typeof window.persist === 'function') window.persist();
     if (keys && keys.length) _invSyncToSupabase(keys);

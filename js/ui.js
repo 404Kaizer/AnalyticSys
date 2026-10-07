@@ -6254,7 +6254,7 @@ function setSapFechOverrideEmLote(chaves, incluir) {
   chaves.forEach(k => { if (incluir) set.delete(k); else set.add(k); });
   state.sapFechamentoOverrides = [...set];
   invalidateFechOverrideCache();
-  if (typeof persist === 'function') persist();
+  if (typeof persist === 'function') persist({ semSap: true }); // só a lista de overrides mudou
 
   if (!window.supabaseClient) return;
   // Global por chave (08/08) — não mais escopado por dono da linha (ver
@@ -6349,7 +6349,7 @@ function setSapFechInvLockOverrideEmLote(chaves, desbloquear) {
   chaves.forEach(k => { if (desbloquear) set.add(k); else set.delete(k); });
   state.sapFechInvUnlockOverrides = [...set];
   invalidateFechInvUnlockCache();
-  if (typeof persist === 'function') persist();
+  if (typeof persist === 'function') persist({ semSap: true }); // só a lista de desbloqueios mudou
 
   if (!window.supabaseClient) return;
   // Mesmo padrão "global por chave" de setSapFechOverrideEmLote.
@@ -6361,6 +6361,21 @@ function setSapFechInvLockOverrideEmLote(chaves, desbloquear) {
     window.supabaseClient.from('sap_fech_inv_unlock_overrides').delete().in('chave', chaves)
       .then(({ error }) => { if (error) console.warn('[Supabase] Falha ao remover desbloqueio de Inventário na nuvem:', error); });
   }
+}
+
+// Re-trava local (07/10): espelha na sessão atual o gatilho do banco
+// trg_inv_just_relock_docs — Documento SAP adicionado numa justificativa
+// do Inventário perde os desbloqueios manuais das suas linhas. Só estado
+// local (vale pra analista também); quem apaga no banco é o gatilho.
+function retravarDocsInventarioLocal(docs) {
+  const alvo = new Set((docs || []).map(_fechImportNormDoc));
+  if (!alvo.size) return;
+  const antes = state.sapFechInvUnlockOverrides || [];
+  const depois = antes.filter(chave => !alvo.has(_fechImportNormDoc(chave.split('||')[0])));
+  if (depois.length === antes.length) return;
+  state.sapFechInvUnlockOverrides = depois;
+  invalidateFechInvUnlockCache();
+  if (typeof persist === 'function') persist({ semSap: true });
 }
 
 async function syncSapFechInvUnlockOverridesFromSupabase() {
@@ -6376,18 +6391,30 @@ async function syncSapFechInvUnlockOverridesFromSupabase() {
 
 // ── Realtime (11/08) — mesmo padrão de _fechRealtimeInit/Stop, tabela própria.
 let _fechInvUnlockChannel = null;
+let _fechInvUnlockResyncTimer = null;
 function _fechInvUnlockRealtimeInit() {
   if (!window.supabaseClient || !window.currentUser || _fechInvUnlockChannel) return;
-  const handle = (payload, tipo) => {
-    const row = tipo === 'DELETE' ? payload.old : payload.new;
-    if (!row?.chave) return;
-    const set = new Set(state.sapFechInvUnlockOverrides || []);
-    if (tipo === 'DELETE') set.delete(row.chave); else set.add(row.chave);
-    state.sapFechInvUnlockOverrides = [...set];
+  const rerender = () => {
     invalidateFechInvUnlockCache();
     if (typeof updateDashboard === 'function') updateDashboard();
     if (typeof renderModule === 'function' && document.getElementById('page-sap')?.classList.contains('active')) renderModule('sap');
     if (typeof _fechMgrRender === 'function' && document.getElementById('fech-manager-overlay')?.classList.contains('open')) _fechMgrRender();
+  };
+  const handle = (payload, tipo) => {
+    const row = tipo === 'DELETE' ? payload.old : payload.new;
+    if (!row?.chave) {
+      // A tabela não tem REPLICA IDENTITY FULL: DELETE chega só com o id.
+      // Relê a lista do banco (pequena) — 1 vez por rajada, já que o
+      // gatilho de re-trava (inv_justificativas, 07/10) apaga várias linhas.
+      if (tipo !== 'DELETE') return;
+      clearTimeout(_fechInvUnlockResyncTimer);
+      _fechInvUnlockResyncTimer = setTimeout(() => syncSapFechInvUnlockOverridesFromSupabase().then(rerender), 400);
+      return;
+    }
+    const set = new Set(state.sapFechInvUnlockOverrides || []);
+    if (tipo === 'DELETE') set.delete(row.chave); else set.add(row.chave);
+    state.sapFechInvUnlockOverrides = [...set];
+    rerender();
   };
   _fechInvUnlockChannel = window.supabaseClient
     .channel('sap_fech_inv_unlock_overrides_realtime')
