@@ -1107,7 +1107,9 @@ function cobAbrirNf(k) {
       </div>`
       : '<div style="color:var(--text3);font-size:12px">Nenhuma justificativa registrada para esta nota.</div>'}`;
   document.getElementById('cob-nf-actions').innerHTML = `
-    <button class="btn admin-btn-danger" style="margin-right:auto" onclick="closeModal('cob-nf-modal');cobAbrirAnot('desconsiderar','${k}')"><i class="ti ti-eye-off"></i> Desconsiderar</button>
+    <button class="btn admin-btn-danger" onclick="closeModal('cob-nf-modal');cobAbrirAnot('desconsiderar','${k}')"><i class="ti ti-eye-off"></i> Desconsiderar</button>
+    ${j ? `<button class="btn admin-btn-danger" onclick="cobExcluirJustDoModal('${k}')"><i class="ti ti-trash"></i> Excluir justificativa</button>` : ''}
+    <span style="margin-right:auto"></span>
     <button class="btn" onclick="closeModal('cob-nf-modal')">Fechar</button>
     <button class="btn btn-primary" onclick="closeModal('cob-nf-modal');cobAbrirAnot('justificativas','${k}')"><i class="ti ti-message-2"></i> ${j ? 'Editar justificativa' : 'Justificar / informar desvio'}</button>`;
   openModal('cob-nf-modal');
@@ -1281,12 +1283,18 @@ async function cobExcluirAnot(tipo, k) {
   const msg = tipo === 'justificativas'
     ? `Excluir a justificativa da NF ${numero}?`
     : `Excluir a desconsideração da NF ${numero}?\n\nSe a nota ainda estiver nas pendências, ela volta para a cobrança.`;
-  if (!confirm(msg)) return;
+  if (!confirm(msg)) return false;
   const { error } = await window.supabaseClient.from('cob_' + tipo).delete().eq('cnpj_fornecedor', cnpj).eq('numero', numero);
-  if (error) { toast('Falha ao excluir: ' + error.message, 'error'); return; }
+  if (error) { toast('Falha ao excluir: ' + error.message, 'error'); return false; }
   _cobAplicarAnot(tipo, { cnpj_fornecedor: cnpj, numero }, null);
   _cobRecalcular();
   toast(`${COB_ANOT[tipo].rotulo} excluída.`, 'success');
+  return true;
+}
+
+// Botão "Excluir justificativa" do detalhe da NF — fecha o modal só se excluiu.
+async function cobExcluirJustDoModal(k) {
+  if (await cobExcluirAnot('justificativas', k)) closeModal('cob-nf-modal');
 }
 
 // ── Busca global (topbar) ────────────────────────────────────
