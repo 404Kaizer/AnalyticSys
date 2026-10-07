@@ -51,6 +51,7 @@ const _cob = {
   res: null,                                     // resultado de cobCalcular
   filtroCob: { regional: '', central: '', nivel: '', texto: '' },
   filtroAnot: { justificativas: '', desconsiderar: '' },
+  detView: 'padrao',                             // Detalhamento: 'padrao' | nome do bloco à parte
   filtro: { cfop: '', fornecedores: '', centrais: '' },
   editando: { cfop: null, fornecedores: null },   // pk em edição; '' = linha nova
   canal: null,
@@ -902,8 +903,7 @@ function _cobRenderCobranca() {
       ${_cobKpi('ti-bell', 'Alertas', nAlertas, nAlertas ? 'kpi-red' : 'kpi-green', 'ver aba Alertas')}
     </div></div>
     <div class="cob-grid-2">${_cobRankingHtml(padrao, res.hojeISO)}${_cobPorFornecedorHtml(todas)}</div>
-    ${_cobTabelaNfs('Detalhamento de pendências', 'ti-list-details', padrao, true)}
-    ${blocos.map(([b, rs]) => _cobTabelaNfs(`Cobrança à parte — ${b}`, 'ti-package', rs, false)).join('')}`;
+    ${_cobDetalhamentoHtml(padrao, blocos)}`;
 }
 
 // Ranking por regional = os blocos "Total por regional" + "Emissão por
@@ -918,8 +918,6 @@ function _cobRankingHtml(rows, hojeISO) {
     por.set(r.regional, a);
   });
   const lin = [...por.entries()].sort((a, b) => b[1].total - a[1].total || a[0].localeCompare(b[0], 'pt-BR'));
-  const tot = { atencao: 0, urgente: 0, critico: 0, total: 0 };
-  lin.forEach(([, a]) => Object.keys(tot).forEach(k => { tot[k] += a[k]; }));
   const td = (v, cls) => `<td class="td-mono" style="text-align:right">${v ? `<span class="badge ${cls}">${v}</span>` : '<span style="color:var(--text3)">0</span>'}</td>`;
   const r = 'style="text-align:right"';
   return `<div class="table-card"><div class="table-header"><span class="table-title"><i class="ti ti-trophy"></i> Ranking por regional</span></div>
@@ -928,7 +926,6 @@ function _cobRankingHtml(rows, hojeISO) {
       <tbody>${lin.map(([reg, a]) => `<tr style="cursor:pointer" title="Filtrar esta regional" data-r="${escapeHtml(reg)}" onclick="cobFiltrar('regional', this.dataset.r)">
           <td>${escapeHtml(reg)}</td>${td(a.atencao, 'badge-blue')}${td(a.urgente, 'badge-amber')}${td(a.critico, 'badge-red')}<td class="td-mono" ${r}><b>${a.total}</b></td></tr>`).join('')
         || _cobVazio('ti-mood-happy', 'Nenhuma nota em cobrança.', 5)}</tbody>
-      ${lin.length ? `<tfoot><tr class="cob-grupo"><td>Total geral</td><td class="td-mono" ${r}>${tot.atencao}</td><td class="td-mono" ${r}>${tot.urgente}</td><td class="td-mono" ${r}>${tot.critico}</td><td class="td-mono" ${r}>${tot.total}</td></tr></tfoot>` : ''}
     </table></div></div>`;
 }
 
@@ -944,13 +941,12 @@ function _cobPorFornecedorHtml(rows) {
     </table></div></div>`;
 }
 
-function _cobLinhaNf(r, comRegional) {
+function _cobLinhaNf(r) {
   const n = COB_NIVEIS[r.nivel];
   const material = r.itens.length > 1
     ? r.itens.map(i => `<div class="cob-item">${escapeHtml(i.material || '—')} · ${_cobFmtNum(i.volume)} · ${money(i.valor_total)}</div>`).join('')
     : escapeHtml(r.materiais || '—');
   return `<tr>
-    ${comRegional ? `<td>${escapeHtml(r.regional)}</td>` : ''}
     <td class="td-mono" title="${escapeHtml(r.centralNome)}">${escapeHtml(r.central)}${r.semCentral ? ` <span class="badge badge-red" title="CNPJ ${_cobFmtCnpj(r.cnpj_comprador)} não está no cadastro de centrais">?</span>` : ''}</td>
     <td>${escapeHtml(r.fornecedor)}</td>
     <td class="td-mono">${escapeHtml(r.numero)}${r.semSefaz ? ' <span class="badge badge-amber" title="Nota não encontrada no relatório do SEFAZ importado">sem SEFAZ</span>' : ''}</td>
@@ -967,25 +963,34 @@ function _cobLinhaNf(r, comRegional) {
     </td></tr>`;
 }
 
-function _cobTabelaNfs(titulo, icon, rows, agrupar) {
-  const ncol = agrupar ? 11 : 12;
+function cobDetView(v) { _cob.detView = v; _cobRenderCobranca(); }
+
+// Detalhamento: uma tabela só, alternando entre a cobrança padrão e os
+// blocos à parte (Aditivos/Dovalle) pelos botões do cabeçalho. Sempre
+// agrupada por regional.
+function _cobDetalhamentoHtml(padrao, blocos) {
+  const views = [['padrao', 'Padrão', padrao], ...blocos.map(([b, rs]) => [b, b, rs])];
+  const [atual, , rows] = views.find(v => v[0] === _cob.detView) || views[0];
+  const ncol = 11;
   const ord = (a, b) => a.central.localeCompare(b.central, 'pt-BR') || String(a.emissao || '').localeCompare(String(b.emissao || ''));
+  const grupos = new Map();
+  rows.forEach(r => { if (!grupos.has(r.regional)) grupos.set(r.regional, []); grupos.get(r.regional).push(r); });
   let body = '';
-  if (agrupar) {
-    const grupos = new Map();
-    rows.forEach(r => { if (!grupos.has(r.regional)) grupos.set(r.regional, []); grupos.get(r.regional).push(r); });
-    [...grupos.entries()].sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0], 'pt-BR')).forEach(([reg, rs]) => {
-      body += `<tr class="cob-grupo"><td colspan="${ncol}">${escapeHtml(reg)} <span style="color:var(--text3);font-weight:500">· ${rs.length} nota${rs.length > 1 ? 's' : ''}</span></td></tr>`;
-      body += rs.sort(ord).map(r => _cobLinhaNf(r, false)).join('');
-    });
-  } else {
-    body = rows.slice().sort((a, b) => a.regional.localeCompare(b.regional, 'pt-BR') || ord(a, b)).map(r => _cobLinhaNf(r, true)).join('');
-  }
+  [...grupos.entries()].sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0], 'pt-BR')).forEach(([reg, rs]) => {
+    body += `<tr class="cob-grupo"><td colspan="${ncol}">${escapeHtml(reg)} <span style="color:var(--text3);font-weight:500">· ${rs.length} nota${rs.length > 1 ? 's' : ''}</span></td></tr>`;
+    body += rs.sort(ord).map(_cobLinhaNf).join('');
+  });
+  const vazio = `Nenhuma nota${_cobTemFiltro() ? ' para o filtro' : ''}.`
+    + (atual === 'padrao' && _cob.res.fora.hoje ? `<br>${_cob.res.fora.hoje} nota(s) emitida(s) hoje entram na cobrança amanhã (D-1).` : '');
   return `<div class="table-card" style="margin-bottom:16px">
-    <div class="table-header"><span class="table-title"><i class="ti ${icon}"></i> ${escapeHtml(titulo)} <span style="color:var(--text3);font-weight:500">· ${rows.length}</span></span></div>
-    <div class="table-scroll" style="max-height:640px"><table>
-      <thead><tr>${agrupar ? '' : '<th>Regional</th>'}<th>Central</th><th>Fornecedor</th><th>NF</th><th>Emissão</th><th style="text-align:right">Valor</th><th style="text-align:right">Peso</th><th>Material</th><th>CFOP</th><th title="Carga desviada">🔁</th><th title="Justificativa do atraso">⚠️</th><th></th></tr></thead>
-      <tbody>${body || _cobVazio('ti-circle-check', `Nenhuma nota${_cobTemFiltro() ? ' para o filtro' : ''}.`, ncol)}</tbody>
+    <div class="table-header">
+      <span class="table-title"><i class="ti ti-list-details"></i> Detalhamento de pendências</span>
+      <div class="table-toolbar">${views.map(([k, rot, rs]) =>
+        `<button class="pim-month-pill${k === atual ? ' active' : ''}" type="button" onclick="cobDetView('${k}')">${rot} <b>${rs.length}</b></button>`).join('')}</div>
+    </div>
+    <div class="table-scroll" style="max-height:calc(100vh - 140px)"><table>
+      <thead><tr><th>Central</th><th>Fornecedor</th><th>NF</th><th>Emissão</th><th style="text-align:right">Valor</th><th style="text-align:right">Peso</th><th>Material</th><th>CFOP</th><th>Desviado</th><th>Justificativa</th><th></th></tr></thead>
+      <tbody>${body || _cobVazio('ti-circle-check', vazio, ncol)}</tbody>
     </table></div></div>`;
 }
 
