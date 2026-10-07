@@ -4628,7 +4628,13 @@ async function init() {
   initDropZones();
 
   // Perfil insumos: boot enxuto, sem carregar os dados do resto do sistema.
-  if (window.currentUser?.role === 'insumos') { cobBootInsumos(); return; }
+  // A barra superior continua completa (relógio do Próx. lançamento incluso).
+  if (window.currentUser?.role === 'insumos') {
+    cobBootInsumos();
+    updateClock();
+    setInterval(updateClock, 30000);
+    return;
+  }
 
   await restoreAndRender();
   updateImportPrereqUI();

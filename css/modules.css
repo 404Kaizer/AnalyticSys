@@ -12964,20 +12964,14 @@ tr.sap-fechamento td {
 .inf-card .fech-foot-date { color: var(--inf-fg); }
 
 /* ══════════════════════════════════════════
-   PERFIL INSUMOS — só Cobranças, Importar e Configurações
+   PERFIL INSUMOS — menu só com Cobranças, Importar e Configurações
+   (barra superior completa, igual aos demais perfis)
    (body.role-insumos em auth.js; navigate() em ui.js barra as demais
    páginas). Em Importar/Configurações só ficam os blocos marcados
    .cob-insumos (cards da Cobrança, próximas etapas).
 ══════════════════════════════════════════ */
 body.role-insumos .tab-group-label,
 body.role-insumos .tab-item:not([data-page="cobrancas"]):not([data-page="importar"]):not([data-page="configuracoes"]),
-body.role-insumos .topbar-search,
-body.role-insumos .topbar-divider:has(+ .topbar-search),
-body.role-insumos #topbar-next-lanc,
-body.role-insumos #topbar-next-lanc + .topbar-stat-sep,
-body.role-insumos #notif-wrap,
-body.role-insumos #tools-wrap,
-body.role-insumos #online-users-wrap,
 body.role-insumos #page-importar > :not(.cob-insumos),
 body.role-insumos #page-configuracoes > :not(.cob-insumos) { display: none !important; }
 body:not(.role-admin):not(.role-insumos) .tab-item[data-page="cobrancas"] { display: none !important; }
