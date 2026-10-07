@@ -45,6 +45,12 @@ function cobBootInsumos() {
 const _cob = {
   cfop: [], fornecedores: [], centrais: [],
   imports: [],                                   // histórico (cob_imports), mais recente primeiro
+  // Tela Cobrança — carregados sob demanda (_cobCarregarCobranca)
+  pendentes: [], sefaz: [], justificativas: [], desconsiderar: [],
+  carga: null,                                   // Promise da carga (null = nunca carregou)
+  res: null,                                     // resultado de cobCalcular
+  filtroCob: { regional: '', central: '', nivel: '', texto: '' },
+  filtroAnot: { justificativas: '', desconsiderar: '' },
   filtro: { cfop: '', fornecedores: '', centrais: '' },
   editando: { cfop: null, fornecedores: null },   // pk em edição; '' = linha nova
   canal: null,
@@ -127,6 +133,7 @@ async function _cobCarregar(tipo) {
     _cob[tipo] = rows.map(r => _cobNorm(tipo, r)).sort(cfg.ordem);
     invalidateSearchIndex('cob_' + tipo);
     cobRenderCadastro(tipo);
+    _cobRecalcular();
   } catch (err) {
     console.warn(`[Cobranças] Falha ao carregar ${cfg.table}:`, err);
   }
@@ -141,6 +148,7 @@ async function _cobCarregarCentrais() {
     _cob.centrais = rows.map(r => _cobNorm('centrais', r));
     invalidateSearchIndex('cob_centrais');
     cobRenderCentrais();
+    _cobRecalcular();
   } catch (err) {
     console.warn('[Cobranças] Falha ao carregar centrais:', err);
   }
@@ -173,8 +181,21 @@ function cobIniciar() {
     });
   });
   // Importação nova (de qualquer um dos dois perfis) chega como 1 evento em
-  // cob_imports — os snapshots em si não têm realtime de propósito.
-  ch.on('postgres_changes', { event: '*', schema: 'public', table: 'cob_imports' }, () => _cobCarregarImports());
+  // cob_imports — os snapshots em si não têm realtime de propósito: a tela
+  // recarrega os dois uma vez (se já tiver carregado).
+  ch.on('postgres_changes', { event: '*', schema: 'public', table: 'cob_imports' }, () => {
+    _cobCarregarImports();
+    clearTimeout(_cob.snapTimer);
+    _cob.snapTimer = setTimeout(() => { if (_cob.carga) _cobRecarregarSnapshots(); }, 300);
+  });
+  // Justificativas / desconsiderações: linha a linha (chave cnpj+número).
+  ['justificativas', 'desconsiderar'].forEach(tipo => {
+    ch.on('postgres_changes', { event: '*', schema: 'public', table: 'cob_' + tipo }, p => {
+      if (!_cob.carga) return;
+      _cobAplicarAnot(tipo, p.old, p.eventType === 'DELETE' ? null : p.new);
+      _cobRecalcular();
+    });
+  });
   _cob.canal = ch.subscribe(status => {
     if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') console.warn('[Cobranças] Canal realtime com problema:', status);
   });
@@ -189,6 +210,7 @@ function _cobAplicar(tipo, pkVelho, novo) {
   if (novo) lista.push(_cobNorm(tipo, { ...novo }));
   _cob[tipo] = lista.sort(cfg.ordem);
   invalidateSearchIndex('cob_' + tipo);
+  _cobRecalcular();   // CFOP/fornecedor mudam quem entra na cobrança
 }
 
 const _cobRenderTimers = {};
@@ -599,17 +621,548 @@ async function cobImportar(tipo, ev) {
   }
 }
 
+// ═══════════════════════════════════════════════════════════
+// TELA COBRANÇA — carga, cálculo e painéis (Etapa 5)
+// ═══════════════════════════════════════════════════════════
+// Regras (decididas com o Hugo, out/2026):
+//   • pendente + SEFAZ ligam por CNPJ do fornecedor + número (sem série);
+//   • desconsiderada manual → aba Desconsideradas; Cancelada no SEFAZ →
+//     sai sozinha e aparece em Alertas;
+//   • emitida hoje (D-0) ainda não entra;
+//   • só CFOP com resumo VENDA/REMESSA (nota sem SEFAZ fica, marcada);
+//   • só fornecedor do cadastro com situação "cobrar" (fora da lista →
+//     Alertas, com Incluir/Ignorar);
+//   • ADITIBRAS/DOVALLE (raiz do CNPJ) vão pra blocos à parte;
+//   • criticidade em dias corridos: D-1 Atenção, D-2 Urgente, D-3+ Crítico.
+// ponytail: blocos por lista fixa de raízes — se surgirem outros, virar campo no cadastro de fornecedores.
+const COB_BLOCOS = { '49332665': 'Aditivos', '56910948': 'Aditivos', '14117052': 'Dovalle' };
+const COB_BLOCOS_ORDEM = ['Aditivos', 'Dovalle'];
+const COB_RESUMOS_COBRADOS = new Set(['VENDA', 'REMESSA']);
+const COB_NIVEIS = {
+  atencao: { rot: 'Atenção', h: '24h',  badge: 'badge-blue',  kpi: 'kpi-accent' },
+  urgente: { rot: 'Urgente', h: '48h',  badge: 'badge-amber', kpi: 'kpi-amber' },
+  critico: { rot: 'Crítico', h: '72h+', badge: 'badge-red',   kpi: 'kpi-red' },
+};
+const COB_MOTIVOS_DESC = ['DEVOLUÇÃO', 'RECUSADA', 'INDEVIDA', 'CANCELADA', 'NOTA MÃE', 'JUSTIFICADA'];
+// Campos buscáveis (filtro das telas + busca global)
+const COB_CAMPOS_NF   = ['regional', 'central', 'centralNome', 'fornecedor', 'cnpj', 'cnpj_fmt', 'numero', 'emissao_fmt', 'materiais', 'cfops', 'desviado', 'justificativa'];
+const COB_CAMPOS_ANOT = ['fornecedor', 'cnpj', 'cnpj_fmt', 'numero', 'central', 'regional', 'informante', 'desviado', 'motivo', 'justificativa'];
+
+const _cobChaveNf = r => r.cnpj_fornecedor + '|' + r.numero;
+const _cobFmtData = iso => iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '—';
+const _cobFmtNum  = n => Number(n || 0).toLocaleString('pt-BR', { maximumFractionDigits: 3 });
+const _cobBusca   = (r, campos, ws) => { const s = campos.map(k => r[k] ?? '').join(' ').toLowerCase(); return ws.every(w => s.includes(w)); };
+const _cobPalavras = t => String(t || '').trim().toLowerCase().split(/\s+/).filter(Boolean);
+
+// ── Carga (sob demanda: 1ª abertura da tela ou foco na busca global) ──
+function _cobCarregarCobranca() {
+  if (!_cob.carga) {
+    _cob.carga = Promise.all([
+      _cobRecarregarSnapshots(false),
+      ...['justificativas', 'desconsiderar'].map(async t => { _cob[t] = await _cobFetchAll('cob_' + t, '*', 'numero'); }),
+    ]).then(() => { _cob.pronto = true; _cobRecalcular(); })
+      .catch(err => {
+        _cob.carga = null;
+        console.warn('[Cobranças] Falha ao carregar a cobrança:', err);
+        toast('Falha ao carregar a Cobrança: ' + (err.message || err), 'error');
+      });
+  }
+  return _cob.carga;
+}
+
+async function _cobRecarregarSnapshots(recalc = true) {
+  const [p, s] = await Promise.all([_cobFetchAll('cob_pendentes', '*', 'id'), _cobFetchAll('cob_sefaz', '*', 'chave')]);
+  _cob.pendentes = p;
+  _cob.sefaz = s;
+  if (recalc) _cobRecalcular();
+}
+
+// Troca/remoção de uma justificativa/desconsideração no espelho local (idempotente).
+function _cobAplicarAnot(tipo, velho, novo) {
+  const kv = velho?.numero ? _cobChaveNf(velho) : null;
+  const kn = novo ? _cobChaveNf(novo) : null;
+  _cob[tipo] = _cob[tipo].filter(r => { const k = _cobChaveNf(r); return k !== kv && k !== kn; });
+  if (novo) _cob[tipo].push(novo);
+}
+
+function _cobRecalcular() {
+  clearTimeout(_cob.calcTimer);
+  _cob.calcTimer = setTimeout(() => {
+    if (!_cob.pronto) return;
+    _cob.res = cobCalcular({
+      pendentes: _cob.pendentes, sefaz: _cob.sefaz, cfop: _cob.cfop, fornecedores: _cob.fornecedores,
+      centrais: cobIsInsumos() ? _cob.centrais : (state.filiais || []),   // admin: o próprio cadastro
+      justificativas: _cob.justificativas, desconsiderar: _cob.desconsiderar,
+    }, new Date());
+    ['cob_cobranca', 'cob_justificativas', 'cob_desconsideradas'].forEach(invalidateSearchIndex);
+    cobRenderTela();
+  }, 60);
+}
+
+// ── Cálculo (puro: só depende dos dados recebidos e de "hoje") ──
+function cobCalcular(d, hoje) {
+  const hojeISO = localISODate(hoje);
+  const hojeMs = Date.parse(hojeISO);
+  const sefaz = new Map(d.sefaz.map(s => [s.cnpj_emitente + '|' + s.numero, s]));
+  const resumo = new Map(d.cfop.map(c => [c.cfop, c.resumo]));
+  const forn = new Map(d.fornecedores.map(f => [f.cnpj, f]));
+  const centrais = new Map();
+  d.centrais.forEach(c => { const k = _cobDigitos(c.cnpj); if (k && !centrais.has(k)) centrais.set(k, c); });
+  const just = new Map(d.justificativas.map(j => [_cobChaveNf(j), j]));
+  const desc = new Set(d.desconsiderar.map(_cobChaveNf));
+
+  const res = {
+    hojeISO, porChave: new Map(), cobraveis: [], cobranca: [], blocos: {},
+    canceladas: [], semSefaz: [], fornNovos: [], centraisNaoCad: [],
+    justificativas: [], desconsideradas: [], fora: { hoje: 0, cfop: 0, ignorados: 0, desconsideradas: 0 },
+  };
+  COB_BLOCOS_ORDEM.forEach(b => { res.blocos[b] = []; });
+  const fornNovos = new Map(), centraisNC = new Map();
+
+  for (const p of d.pendentes) {
+    const k = _cobChaveNf(p), s = sefaz.get(k), c = centrais.get(p.cnpj_comprador), j = just.get(k);
+    const itens = s?.itens || [];
+    const emissao = p.dt_emissao || (s?.emissao ? String(s.emissao).slice(0, 10) : null);
+    // ponytail: sem data de emissão em nenhum dos dois arquivos → tratada como crítica (a mais antiga).
+    const dias = emissao ? Math.round((hojeMs - Date.parse(emissao)) / 864e5) : null;
+    const row = {
+      k, regional: c?.regional || 'SEM CENTRAL CADASTRADA', central: c?.alias || '—', centralNome: c?.origem || '',
+      cnpj_comprador: p.cnpj_comprador, fornecedor: p.fornecedor || s?.nome || '',
+      cnpj: p.cnpj_fornecedor, cnpj_fmt: _cobFmtCnpj(p.cnpj_fornecedor), numero: p.numero,
+      emissao, emissao_fmt: _cobFmtData(emissao), dias,
+      nivel: dias === null || dias >= 3 ? 'critico' : dias === 2 ? 'urgente' : 'atencao',
+      valor: p.valor, itens, volume: itens.reduce((t, i) => t + (Number(i.volume) || 0), 0),
+      materiais: [...new Set(itens.map(i => i.material).filter(Boolean))].join(' + '),
+      cfops: [...new Set(itens.map(i => i.cfop).filter(Boolean))].join(', '),
+      statusSefaz: s?.status || '', semSefaz: !s, semCentral: !c,
+      desviado: j?.desviado || '', justificativa: j?.motivo || '',
+      bloco: COB_BLOCOS[String(p.cnpj_fornecedor).slice(0, 8)] || null,
+    };
+    res.porChave.set(k, row);
+
+    if (desc.has(k)) { res.fora.desconsideradas++; continue; }
+    if (s && /cancel/i.test(s.status || '')) { res.canceladas.push(row); continue; }
+    if (dias !== null && dias < 1) { res.fora.hoje++; continue; }
+    if (s && !itens.some(i => COB_RESUMOS_COBRADOS.has(resumo.get(i.cfop)))) { res.fora.cfop++; continue; }
+    const f = forn.get(p.cnpj_fornecedor);
+    if (!f) {
+      const a = fornNovos.get(p.cnpj_fornecedor) || { cnpj: p.cnpj_fornecedor, cnpj_fmt: row.cnpj_fmt, nome: row.fornecedor, notas: 0 };
+      a.notas++;
+      fornNovos.set(p.cnpj_fornecedor, a);
+      continue;
+    }
+    if (f.situacao === 'ignorar') { res.fora.ignorados++; continue; }
+    if (!s) res.semSefaz.push(row);
+    if (!c) {
+      const a = centraisNC.get(p.cnpj_comprador) || { cnpj: p.cnpj_comprador, cnpj_fmt: _cobFmtCnpj(p.cnpj_comprador), notas: 0 };
+      a.notas++;
+      centraisNC.set(p.cnpj_comprador, a);
+    }
+    res.cobraveis.push(row);
+    (row.bloco ? res.blocos[row.bloco] : res.cobranca).push(row);
+  }
+  res.fornNovos = [...fornNovos.values()].sort((a, b) => b.notas - a.notas);
+  res.centraisNaoCad = [...centraisNC.values()].sort((a, b) => b.notas - a.notas);
+
+  // Anotações com o contexto da nota (quando ela ainda está nas pendências).
+  const ctx = x => {
+    const r = res.porChave.get(_cobChaveNf(x));
+    return {
+      ...x, k: _cobChaveNf(x), cnpj: x.cnpj_fornecedor, cnpj_fmt: _cobFmtCnpj(x.cnpj_fornecedor),
+      fornecedor: r?.fornecedor || forn.get(x.cnpj_fornecedor)?.nome || '', central: r?.central || '—',
+      regional: r?.regional || '', emissao_fmt: r?.emissao_fmt || '—', emAberto: !!r,
+    };
+  };
+  res.justificativas = d.justificativas.map(x => ({ ...ctx(x), dia_resp_fmt: _cobFmtData(x.dia_resp) }));
+  res.desconsideradas = d.desconsiderar.map(x => ({ ...ctx(x), data_fmt: _cobFmtData(x.data) }));
+  return res;
+}
+
+// ── Telas ────────────────────────────────────────────────────
+pageRenderers.cobrancas = () => {
+  if (_cob.pronto) { _cobRecalcular(); return; }   // recalcula ao abrir (a data de referência pode ter virado)
+  const corpo = document.getElementById('cob-pane-cobranca');
+  if (corpo) corpo.innerHTML = '<div class="empty-state"><i class="ti ti-loader"></i><p>Carregando a cobrança…</p></div>';
+  _cobCarregarCobranca();
+};
+
+function cobRenderTela() {
+  if (!_cob.res) return;
+  _cobRenderCobranca();
+  _cobRenderAlertas();
+  _cobRenderAnot('justificativas');
+  _cobRenderAnot('desconsiderar');
+}
+
+function cobSwitchTab(tab) {
+  document.querySelectorAll('#page-cobrancas .dg-tab-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.cobTab === tab));
+  document.querySelectorAll('#page-cobrancas .dg-tab-pane').forEach(p =>
+    p.classList.toggle('active', p.id === 'cob-pane-' + tab));
+}
+
+const _cobKpi = (icon, label, valor, cls, sub) => `
+  <div class="inv-kpi-card inv-kpi-card-featured ${cls}">
+    <div class="inv-kpi-icon" style="background:var(--bg3)"><i class="ti ${icon}"></i></div>
+    <div class="inv-kpi-body">
+      <div class="inv-kpi-label">${escapeHtml(label)}</div>
+      <div class="inv-kpi-value">${valor.toLocaleString('pt-BR')}</div>
+      <div class="inv-kpi-unit">${sub || ''}</div>
+    </div>
+  </div>`;
+
+const _cobVazio = (icon, txt, ncol) => `<tr><td colspan="${ncol}"><div class="empty-state"><i class="ti ${icon}"></i><p>${txt}</p></div></td></tr>`;
+const _cobTemFiltro = () => Object.values(_cob.filtroCob).some(Boolean);
+const _cobNumAlertas = res => res.fornNovos.length + res.canceladas.length + res.semSefaz.length + res.centraisNaoCad.length;
+
+function _cobOpcoes(id, todos, valores, sel) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const uniq = [...new Set(sel ? [...valores, sel] : valores)].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  el.innerHTML = `<option value="">${todos}</option>` + uniq.map(v => `<option${v === sel ? ' selected' : ''}>${escapeHtml(v)}</option>`).join('');
+}
+
+function _cobMontarPaneCobranca() {
+  const pane = document.getElementById('cob-pane-cobranca');
+  if (pane && !pane.querySelector('#cob-f-texto')) {
+    pane.innerHTML = `
+      <div class="cob-toolbar">
+        <select class="form-select" id="cob-f-regional" onchange="cobFiltrar('regional', this.value)"></select>
+        <select class="form-select" id="cob-f-central" onchange="cobFiltrar('central', this.value)"></select>
+        <select class="form-select" id="cob-f-nivel" onchange="cobFiltrar('nivel', this.value)">
+          <option value="">Todas as criticidades</option>
+          ${Object.entries(COB_NIVEIS).map(([k, n]) => `<option value="${k}">${n.rot} (${n.h})</option>`).join('')}
+        </select>
+        <input class="form-input" id="cob-f-texto" type="text" placeholder="Filtrar fornecedor, NF, material…" value="${escapeHtml(_cob.filtroCob.texto)}" oninput="cobFiltrar('texto', this.value)">
+        <button class="btn" onclick="cobLimparFiltros()" title="Limpar filtros"><i class="ti ti-filter-off"></i></button>
+        <span class="cob-base" id="cob-base"></span>
+      </div>
+      <div id="cob-corpo"></div>`;
+  }
+  return pane;
+}
+
+function cobFiltrar(campo, v) {
+  _cob.filtroCob[campo] = v || '';
+  if (campo === 'regional') _cob.filtroCob.central = '';
+  _cobRenderCobranca();
+}
+function cobFiltrarTexto(v) {
+  const i = document.getElementById('cob-f-texto');
+  if (i) i.value = v;
+  cobFiltrar('texto', v);
+}
+function cobLimparFiltros() {
+  _cob.filtroCob = { regional: '', central: '', nivel: '', texto: '' };
+  const i = document.getElementById('cob-f-texto');
+  if (i) i.value = '';
+  _cobRenderCobranca();
+}
+
+function _cobFiltrarNfs(rows) {
+  const f = _cob.filtroCob, ws = _cobPalavras(f.texto);
+  return rows.filter(r => (!f.regional || r.regional === f.regional) && (!f.central || r.central === f.central)
+    && (!f.nivel || r.nivel === f.nivel) && (!ws.length || _cobBusca(r, COB_CAMPOS_NF, ws)));
+}
+
+function _cobBaseTxt(res) {
+  const p = _cobVigente('pendentes'), s = _cobVigente('sefaz');
+  const q = r => r ? `${r.arquivo} (${new Date(r.data_hora).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })})` : 'sem importação';
+  return `Pendências: ${q(p)} · SEFAZ: ${q(s)} · Referência: ${_cobFmtData(res.hojeISO)}`;
+}
+
+function _cobRenderCobranca() {
+  const res = _cob.res;
+  if (!res || !_cobMontarPaneCobranca()) return;
+  const f = _cob.filtroCob;
+  _cobOpcoes('cob-f-regional', 'Todas as regionais', res.cobraveis.map(r => r.regional), f.regional);
+  _cobOpcoes('cob-f-central', 'Todas as centrais', res.cobraveis.filter(r => !f.regional || r.regional === f.regional).map(r => r.central), f.central);
+  document.getElementById('cob-f-nivel').value = f.nivel;
+  document.getElementById('cob-base').textContent = _cobBaseTxt(res);
+
+  const corpo = document.getElementById('cob-corpo');
+  if (!_cob.pendentes.length) {
+    corpo.innerHTML = '<div class="empty-state"><i class="ti ti-file-alert"></i><p>Importe os relatórios de <strong>Pendências</strong> e <strong>SEFAZ</strong> em Importar Dados para montar a cobrança.</p></div>';
+    return;
+  }
+  const padrao = _cobFiltrarNfs(res.cobranca);
+  const blocos = COB_BLOCOS_ORDEM.map(b => [b, _cobFiltrarNfs(res.blocos[b])]);
+  const todas = padrao.concat(...blocos.map(([, r]) => r));
+  const soma = rs => rs.reduce((t, r) => t + (Number(r.valor) || 0), 0);
+  const nAlertas = _cobNumAlertas(res);
+
+  corpo.innerHTML = `
+    <div class="mod-summary-cards"><div class="mod-summary-hero">
+      ${_cobKpi('ti-file-alert', 'Em cobrança', padrao.length, 'kpi-teal', money(soma(padrao)))}
+      ${Object.entries(COB_NIVEIS).map(([k, n]) => {
+        const rs = padrao.filter(r => r.nivel === k);
+        return _cobKpi('ti-clock-exclamation', `${n.rot} · ${n.h}`, rs.length, n.kpi, money(soma(rs)));
+      }).join('')}
+      ${blocos.map(([b, rs]) => _cobKpi('ti-package', b, rs.length, 'kpi-purple', 'cobrança à parte')).join('')}
+      ${_cobKpi('ti-bell', 'Alertas', nAlertas, nAlertas ? 'kpi-red' : 'kpi-green', 'ver aba Alertas')}
+    </div></div>
+    <div class="cob-grid-2">${_cobRankingHtml(padrao, res.hojeISO)}${_cobPorFornecedorHtml(todas)}</div>
+    ${_cobTabelaNfs('Detalhamento de pendências', 'ti-list-details', padrao, true)}
+    ${blocos.map(([b, rs]) => _cobTabelaNfs(`Cobrança à parte — ${b}`, 'ti-package', rs, false)).join('')}`;
+}
+
+// Ranking por regional = os blocos "Total por regional" + "Emissão por
+// data" da planilha numa tabela só: 24h/48h/72h+ são exatamente D-1, D-2 e
+// D-3 para trás.
+function _cobRankingHtml(rows, hojeISO) {
+  const dia = n => { const t = new Date(Date.parse(hojeISO) - n * 864e5); return `${String(t.getUTCDate()).padStart(2, '0')}/${String(t.getUTCMonth() + 1).padStart(2, '0')}`; };
+  const por = new Map();
+  rows.forEach(r => {
+    const a = por.get(r.regional) || { atencao: 0, urgente: 0, critico: 0, total: 0 };
+    a[r.nivel]++; a.total++;
+    por.set(r.regional, a);
+  });
+  const lin = [...por.entries()].sort((a, b) => b[1].total - a[1].total || a[0].localeCompare(b[0], 'pt-BR'));
+  const tot = { atencao: 0, urgente: 0, critico: 0, total: 0 };
+  lin.forEach(([, a]) => Object.keys(tot).forEach(k => { tot[k] += a[k]; }));
+  const td = (v, cls) => `<td class="td-mono" style="text-align:right">${v ? `<span class="badge ${cls}">${v}</span>` : '<span style="color:var(--text3)">0</span>'}</td>`;
+  const r = 'style="text-align:right"';
+  return `<div class="table-card"><div class="table-header"><span class="table-title"><i class="ti ti-trophy"></i> Ranking por regional</span></div>
+    <div class="table-scroll" style="max-height:440px"><table>
+      <thead><tr><th>Regional</th><th ${r}>24h · ${dia(1)}</th><th ${r}>48h · ${dia(2)}</th><th ${r}>72h+ · até ${dia(3)}</th><th ${r}>Total</th></tr></thead>
+      <tbody>${lin.map(([reg, a]) => `<tr style="cursor:pointer" title="Filtrar esta regional" data-r="${escapeHtml(reg)}" onclick="cobFiltrar('regional', this.dataset.r)">
+          <td>${escapeHtml(reg)}</td>${td(a.atencao, 'badge-blue')}${td(a.urgente, 'badge-amber')}${td(a.critico, 'badge-red')}<td class="td-mono" ${r}><b>${a.total}</b></td></tr>`).join('')
+        || _cobVazio('ti-mood-happy', 'Nenhuma nota em cobrança.', 5)}</tbody>
+      ${lin.length ? `<tfoot><tr class="cob-grupo"><td>Total geral</td><td class="td-mono" ${r}>${tot.atencao}</td><td class="td-mono" ${r}>${tot.urgente}</td><td class="td-mono" ${r}>${tot.critico}</td><td class="td-mono" ${r}>${tot.total}</td></tr></tfoot>` : ''}
+    </table></div></div>`;
+}
+
+function _cobPorFornecedorHtml(rows) {
+  const por = new Map();
+  rows.forEach(r => { const a = por.get(r.cnpj) || { nome: r.fornecedor, cnpj: r.cnpj, notas: 0 }; a.notas++; por.set(r.cnpj, a); });
+  const lin = [...por.values()].sort((a, b) => b.notas - a.notas || a.nome.localeCompare(b.nome, 'pt-BR'));
+  return `<div class="table-card"><div class="table-header"><span class="table-title"><i class="ti ti-truck-delivery"></i> Notas faltantes por fornecedor</span></div>
+    <div class="table-scroll" style="max-height:440px"><table>
+      <thead><tr><th>Fornecedor</th><th style="text-align:right">Notas</th></tr></thead>
+      <tbody>${lin.map(f => `<tr style="cursor:pointer" title="Filtrar este fornecedor" onclick="cobFiltrarTexto('${f.cnpj}')"><td>${escapeHtml(f.nome)}</td><td class="td-mono" style="text-align:right"><b>${f.notas}</b></td></tr>`).join('')
+        || _cobVazio('ti-mood-happy', 'Nenhuma nota em cobrança.', 2)}</tbody>
+    </table></div></div>`;
+}
+
+function _cobLinhaNf(r, comRegional) {
+  const n = COB_NIVEIS[r.nivel];
+  const material = r.itens.length > 1
+    ? r.itens.map(i => `<div class="cob-item">${escapeHtml(i.material || '—')} · ${_cobFmtNum(i.volume)} · ${money(i.valor_total)}</div>`).join('')
+    : escapeHtml(r.materiais || '—');
+  return `<tr>
+    ${comRegional ? `<td>${escapeHtml(r.regional)}</td>` : ''}
+    <td class="td-mono" title="${escapeHtml(r.centralNome)}">${escapeHtml(r.central)}${r.semCentral ? ` <span class="badge badge-red" title="CNPJ ${_cobFmtCnpj(r.cnpj_comprador)} não está no cadastro de centrais">?</span>` : ''}</td>
+    <td>${escapeHtml(r.fornecedor)}</td>
+    <td class="td-mono">${escapeHtml(r.numero)}${r.semSefaz ? ' <span class="badge badge-amber" title="Nota não encontrada no relatório do SEFAZ importado">sem SEFAZ</span>' : ''}</td>
+    <td><span class="badge ${n.badge}" title="${r.dias === null ? 'Sem data de emissão' : `Há ${r.dias} dia(s) — ${n.rot}`}">${r.emissao_fmt}</span></td>
+    <td class="td-mono" style="text-align:right">${money(r.valor)}</td>
+    <td class="td-mono" style="text-align:right">${r.semSefaz ? '—' : _cobFmtNum(r.volume)}</td>
+    <td>${material}</td>
+    <td class="td-mono">${escapeHtml(r.cfops || '—')}</td>
+    <td class="cob-just" title="${escapeHtml(r.desviado)}">${escapeHtml(r.desviado)}</td>
+    <td class="cob-just" title="${escapeHtml(r.justificativa)}">${escapeHtml(r.justificativa)}</td>
+    <td style="white-space:nowrap">
+      <button class="btn-icon" title="Justificar atraso / desvio" onclick="cobAbrirAnot('justificativas','${r.k}')"><i class="ti ti-message-2"></i></button>
+      <button class="btn-icon danger" title="Desconsiderar da cobrança" onclick="cobAbrirAnot('desconsiderar','${r.k}')"><i class="ti ti-eye-off"></i></button>
+    </td></tr>`;
+}
+
+function _cobTabelaNfs(titulo, icon, rows, agrupar) {
+  const ncol = agrupar ? 11 : 12;
+  const ord = (a, b) => a.central.localeCompare(b.central, 'pt-BR') || String(a.emissao || '').localeCompare(String(b.emissao || ''));
+  let body = '';
+  if (agrupar) {
+    const grupos = new Map();
+    rows.forEach(r => { if (!grupos.has(r.regional)) grupos.set(r.regional, []); grupos.get(r.regional).push(r); });
+    [...grupos.entries()].sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0], 'pt-BR')).forEach(([reg, rs]) => {
+      body += `<tr class="cob-grupo"><td colspan="${ncol}">${escapeHtml(reg)} <span style="color:var(--text3);font-weight:500">· ${rs.length} nota${rs.length > 1 ? 's' : ''}</span></td></tr>`;
+      body += rs.sort(ord).map(r => _cobLinhaNf(r, false)).join('');
+    });
+  } else {
+    body = rows.slice().sort((a, b) => a.regional.localeCompare(b.regional, 'pt-BR') || ord(a, b)).map(r => _cobLinhaNf(r, true)).join('');
+  }
+  return `<div class="table-card" style="margin-bottom:16px">
+    <div class="table-header"><span class="table-title"><i class="ti ${icon}"></i> ${escapeHtml(titulo)} <span style="color:var(--text3);font-weight:500">· ${rows.length}</span></span></div>
+    <div class="table-scroll" style="max-height:640px"><table>
+      <thead><tr>${agrupar ? '' : '<th>Regional</th>'}<th>Central</th><th>Fornecedor</th><th>NF</th><th>Emissão</th><th style="text-align:right">Valor</th><th style="text-align:right">Peso</th><th>Material</th><th>CFOP</th><th title="Carga desviada">🔁</th><th title="Justificativa do atraso">⚠️</th><th></th></tr></thead>
+      <tbody>${body || _cobVazio('ti-circle-check', `Nenhuma nota${_cobTemFiltro() ? ' para o filtro' : ''}.`, ncol)}</tbody>
+    </table></div></div>`;
+}
+
+// ── Alertas ──────────────────────────────────────────────────
+function _cobRenderAlertas() {
+  const res = _cob.res, pane = document.getElementById('cob-pane-alertas');
+  const n = _cobNumAlertas(res);
+  const badge = document.getElementById('cob-alertas-count');
+  if (badge) { badge.textContent = n; badge.style.display = n ? '' : 'none'; }
+  if (!pane) return;
+  const sec = (icon, titulo, desc, head, linhas, ncol) => `<div class="table-card" style="margin-bottom:16px">
+    <div class="table-header"><span class="table-title"><i class="ti ${icon}"></i> ${titulo} <span style="color:var(--text3);font-weight:500">· ${linhas.length}</span></span></div>
+    <div class="import-card-desc" style="padding:0 16px 10px;margin:0">${desc}</div>
+    <div class="table-scroll" style="max-height:420px"><table><thead><tr>${head}</tr></thead>
+    <tbody>${linhas.join('') || _cobVazio('ti-circle-check', 'Nada aqui.', ncol)}</tbody></table></div></div>`;
+  const nfHead = '<th>Central</th><th>Fornecedor</th><th>NF</th><th>Emissão</th><th style="text-align:right">Valor</th>';
+  const nfTds = r => `<td class="td-mono">${escapeHtml(r.central)}</td><td>${escapeHtml(r.fornecedor)}</td><td class="td-mono">${escapeHtml(r.numero)}</td><td>${r.emissao_fmt}</td><td class="td-mono" style="text-align:right">${money(r.valor)}</td>`;
+  pane.innerHTML =
+    sec('ti-truck-delivery', 'Fornecedores fora da lista de cobrança',
+      'Notas de venda/remessa de fornecedores que ainda não estão no cadastro. Inclua na cobrança ou marque como consumo — a decisão fica gravada em Configurações.',
+      '<th>Fornecedor</th><th>CNPJ</th><th style="text-align:right">Notas</th><th></th>',
+      res.fornNovos.map(f => `<tr><td>${escapeHtml(f.nome)}</td><td class="td-mono">${f.cnpj_fmt}</td><td class="td-mono" style="text-align:right">${f.notas}</td>
+        <td style="white-space:nowrap"><button class="btn" onclick="cobDecidirFornecedor('${f.cnpj}','cobrar')"><i class="ti ti-plus"></i> Incluir na cobrança</button>
+        <button class="btn" onclick="cobDecidirFornecedor('${f.cnpj}','ignorar')"><i class="ti ti-ban"></i> Ignorar (consumo)</button></td></tr>`), 4)
+    + sec('ti-file-x', 'Canceladas no SEFAZ', 'Desconsideradas automaticamente da cobrança.',
+      nfHead + '<th>Status SEFAZ</th>', res.canceladas.map(r => `<tr>${nfTds(r)}<td><span class="badge badge-red">${escapeHtml(r.statusSefaz)}</span></td></tr>`), 6)
+    + sec('ti-file-unknown', 'Sem dados do SEFAZ',
+      'Pendentes que não estão no relatório do SEFAZ importado — sem CFOP para conferir. Continuam na cobrança, marcadas como "sem SEFAZ".',
+      nfHead, res.semSefaz.map(r => `<tr>${nfTds(r)}</tr>`), 5)
+    + sec('ti-map-pin-off', 'Centrais não cadastradas', 'CNPJs compradores das pendências que não estão no cadastro de centrais do admin.',
+      '<th>CNPJ comprador</th><th style="text-align:right">Notas</th>',
+      res.centraisNaoCad.map(c => `<tr><td class="td-mono">${c.cnpj_fmt}</td><td class="td-mono" style="text-align:right">${c.notas}</td></tr>`), 2);
+}
+
+async function cobDecidirFornecedor(cnpj, situacao) {
+  const f = _cob.res?.fornNovos.find(x => x.cnpj === cnpj);
+  if (!f) return;
+  const { data, error } = await window.supabaseClient.from('cob_fornecedores')
+    .upsert({ cnpj, nome: f.nome, situacao }, { onConflict: 'cnpj' }).select();
+  if (error) { toast('Falha ao salvar o fornecedor: ' + error.message, 'error'); return; }
+  _cobAplicar('fornecedores', cnpj, data?.[0] || { cnpj, nome: f.nome, situacao });
+  cobRenderCadastro('fornecedores');
+  toast(situacao === 'cobrar' ? `${f.nome} incluído na cobrança.` : `${f.nome} marcado como consumo (ignorado).`, 'success');
+}
+
+// ── Justificativas / Desconsideradas ─────────────────────────
+const COB_ANOT = {
+  justificativas: {
+    pane: 'cob-pane-justificativas', rotulo: 'Justificativa', icon: 'ti-message-2',
+    head: '<th>Fornecedor</th><th>NF</th><th>Central</th><th>Informante</th><th>Dia resp.</th><th>Desviado para</th><th>Motivo do atraso</th><th>Situação</th><th></th>',
+    tds: r => `<td>${escapeHtml(r.informante || '')}</td><td>${r.dia_resp_fmt}</td><td>${escapeHtml(r.desviado || '')}</td><td class="cob-just" title="${escapeHtml(r.motivo || '')}">${escapeHtml(r.motivo || '')}</td>`,
+  },
+  desconsiderar: {
+    pane: 'cob-pane-desconsideradas', rotulo: 'Desconsideração', icon: 'ti-eye-off',
+    head: '<th>Fornecedor</th><th>NF</th><th>Central</th><th>Motivo</th><th>Data</th><th>Justificativa</th><th>Situação</th><th></th>',
+    tds: r => `<td><span class="badge badge-purple">${escapeHtml(r.motivo || '—')}</span></td><td>${r.data_fmt}</td><td class="cob-just" title="${escapeHtml(r.justificativa || '')}">${escapeHtml(r.justificativa || '')}</td>`,
+  },
+};
+
+function cobFiltrarAnot(tipo, v) { _cob.filtroAnot[tipo] = v || ''; _cobRenderAnot(tipo); }
+
+function _cobRenderAnot(tipo) {
+  const cfg = COB_ANOT[tipo], pane = document.getElementById(cfg.pane);
+  if (!pane || !_cob.res) return;
+  if (!pane.querySelector('.cob-anot-corpo')) {
+    pane.innerHTML = `<div class="cob-toolbar"><input class="form-input" type="text" placeholder="Filtrar fornecedor, NF, motivo…" value="${escapeHtml(_cob.filtroAnot[tipo])}" oninput="cobFiltrarAnot('${tipo}', this.value)"></div><div class="cob-anot-corpo"></div>`;
+  }
+  const todas = tipo === 'justificativas' ? _cob.res.justificativas : _cob.res.desconsideradas;
+  const ws = _cobPalavras(_cob.filtroAnot[tipo]);
+  const lista = (ws.length ? todas.filter(r => _cobBusca(r, COB_CAMPOS_ANOT, ws)) : todas)
+    .slice().sort((a, b) => String(b.updated_at || '').localeCompare(String(a.updated_at || '')));
+  const ncol = (cfg.head.match(/<th/g) || []).length;
+  pane.querySelector('.cob-anot-corpo').innerHTML = `<div class="table-card"><div class="table-header"><span class="table-title"><i class="ti ${cfg.icon}"></i> ${tipo === 'justificativas' ? 'Justificativas' : 'Notas desconsideradas'} <span style="color:var(--text3);font-weight:500">· ${lista.length}</span></span></div>
+    <div class="table-scroll" style="max-height:640px"><table><thead><tr>${cfg.head}</tr></thead><tbody>
+    ${lista.map(r => `<tr><td>${escapeHtml(r.fornecedor || r.cnpj_fmt)}</td><td class="td-mono">${escapeHtml(r.numero)}</td><td class="td-mono">${escapeHtml(r.central)}</td>${cfg.tds(r)}
+      <td>${r.emAberto ? '<span class="badge badge-amber">Nas pendências</span>' : '<span class="badge badge-teal" title="A nota não está mais no relatório de pendências">Fora das pendências</span>'}</td>
+      <td style="white-space:nowrap"><button class="btn-icon" title="Editar" onclick="cobAbrirAnot('${tipo}','${r.k}')"><i class="ti ti-pencil"></i></button>
+      <button class="btn-icon danger" title="Excluir" onclick="cobExcluirAnot('${tipo}','${r.k}')"><i class="ti ti-trash"></i></button></td></tr>`).join('')
+      || _cobVazio(cfg.icon, `Nenhum registro${ws.length ? ' para o filtro' : ''}.`, ncol)}
+    </tbody></table></div></div>`;
+}
+
+// Modal único de Justificar / Desconsiderar (upsert por cnpj+número).
+let _cobModal = null;
+const _cobCampo = (k, rot, v, tipo = 'text', full = false, extra = '') => `<div class="form-group"${full ? ' style="grid-column:1/-1"' : ''}>
+  <label class="form-label">${rot}</label>
+  ${tipo === 'textarea'
+    ? `<textarea class="form-input" data-k="${k}" rows="3" style="width:100%;resize:vertical">${escapeHtml(v || '')}</textarea>`
+    : `<input class="form-input" type="${tipo}" data-k="${k}" value="${escapeHtml(v || '')}" style="width:100%" ${extra}>`}
+</div>`;
+
+function cobAbrirAnot(tipo, k) {
+  const [cnpj, numero] = k.split('|');
+  const r = _cob.res?.porChave.get(k);
+  const atual = _cob[tipo].find(x => _cobChaveNf(x) === k);
+  const forn = r?.fornecedor || _cob.fornecedores.find(f => f.cnpj === cnpj)?.nome || _cobFmtCnpj(cnpj);
+  const hoje = localISODate(new Date());
+  _cobModal = { tipo, cnpj, numero };
+  document.getElementById('cob-modal-title').innerHTML = tipo === 'justificativas'
+    ? '<i class="ti ti-message-2"></i> Justificar atraso / desvio' : '<i class="ti ti-eye-off"></i> Desconsiderar da cobrança';
+  document.getElementById('cob-modal-sub').textContent = `NF ${numero} · ${forn}${r ? ` · ${r.central} · emissão ${r.emissao_fmt}` : ''}`;
+  document.getElementById('cob-modal-fields').innerHTML = tipo === 'justificativas'
+    ? _cobCampo('informante', 'Informante', atual?.informante)
+      + _cobCampo('dia_resp', 'Dia da resposta', atual?.dia_resp || hoje, 'date')
+      + _cobCampo('desviado', 'Carga desviada para', atual?.desviado, 'text', true, 'placeholder="ex.: IQQ — deixe vazio se não foi desviada"')
+      + _cobCampo('motivo', 'Motivo do atraso', atual?.motivo, 'textarea', true)
+    : _cobCampo('motivo', 'Motivo', atual?.motivo, 'text', false, 'list="cob-dl-motivos" placeholder="ex.: DEVOLUÇÃO"')
+      + _cobCampo('data', 'Data', atual?.data || hoje, 'date')
+      + _cobCampo('justificativa', 'Justificativa', atual?.justificativa, 'textarea', true)
+      + `<datalist id="cob-dl-motivos">${COB_MOTIVOS_DESC.map(m => `<option value="${m}">`).join('')}</datalist>`;
+  openModal('cob-modal');
+  setTimeout(() => document.querySelector('#cob-modal-fields [data-k]')?.focus(), 50);
+}
+
+async function cobModalSalvar() {
+  const m = _cobModal;
+  if (!m) return;
+  const rec = { cnpj_fornecedor: m.cnpj, numero: m.numero };
+  document.querySelectorAll('#cob-modal-fields [data-k]').forEach(el => { rec[el.dataset.k] = el.value.trim() || null; });
+  if (m.tipo === 'desconsiderar') {
+    if (!rec.motivo) { toast('Informe o motivo.', 'error'); return; }
+    rec.motivo = rec.motivo.toUpperCase();
+  } else if (!rec.desviado && !rec.motivo) {
+    toast('Informe o motivo do atraso ou para onde a carga foi desviada.', 'error');
+    return;
+  }
+  const { data, error } = await window.supabaseClient.from('cob_' + m.tipo)
+    .upsert(rec, { onConflict: 'cnpj_fornecedor,numero' }).select();
+  if (error) { toast('Falha ao salvar: ' + error.message, 'error'); return; }
+  _cobAplicarAnot(m.tipo, rec, data?.[0] || rec);
+  closeModal('cob-modal');
+  _cobRecalcular();
+  toast(m.tipo === 'justificativas' ? 'Justificativa salva.' : 'Nota desconsiderada da cobrança.', 'success');
+}
+
+async function cobExcluirAnot(tipo, k) {
+  const [cnpj, numero] = k.split('|');
+  const msg = tipo === 'justificativas'
+    ? `Excluir a justificativa da NF ${numero}?`
+    : `Excluir a desconsideração da NF ${numero}?\n\nSe a nota ainda estiver nas pendências, ela volta para a cobrança.`;
+  if (!confirm(msg)) return;
+  const { error } = await window.supabaseClient.from('cob_' + tipo).delete().eq('cnpj_fornecedor', cnpj).eq('numero', numero);
+  if (error) { toast('Falha ao excluir: ' + error.message, 'error'); return; }
+  _cobAplicarAnot(tipo, { cnpj_fornecedor: cnpj, numero }, null);
+  _cobRecalcular();
+  toast(`${COB_ANOT[tipo].rotulo} excluída.`, 'success');
+}
+
 // ── Busca global (topbar) ────────────────────────────────────
 // Escopos da Cobrança entram na mesma busca do sistema (analitico.js):
 // admin ganha esses escopos além dos dele; insumos fica SÓ com eles.
-// Clicar num resultado leva direto ao cadastro, filtrado.
+// Clicar num resultado leva direto à tela/cadastro, já filtrado.
 const COB_GS = [
-  { scope: 'cob_cfop',         modKey: 'CFOP',       rotulo: 'CFOP',        icon: 'ti-receipt-tax',     tipo: 'cfop',
-    cols: [['CFOP', 'cfop'], ['Resumo', 'resumo'], ['Descrição', 'descricao']] },
-  { scope: 'cob_fornecedores', modKey: 'Fornecedor', rotulo: 'Fornecedores', icon: 'ti-truck-delivery', tipo: 'fornecedores',
-    cols: [['Fornecedor', 'nome'], ['CNPJ', 'cnpj_fmt'], ['Situação', 'situacao']] },
-  { scope: 'cob_centrais',     modKey: 'Central (consulta)', rotulo: 'Centrais', icon: 'ti-map-pin', tipo: 'centrais', soInsumos: true,
-    cols: [['Sigla', 'alias'], ['Original', 'origem'], ['CNPJ', 'cnpj_fmt'], ['Regional', 'regional']] },
+  { scope: 'cob_cobranca', modKey: 'Cobrança', rotulo: 'Cobrança', icon: 'ti-file-alert',
+    fonte: () => _cob.res?.cobraveis || [], campos: COB_CAMPOS_NF,
+    cols: [['Regional', 'regional'], ['Central', 'central'], ['Fornecedor', 'fornecedor'], ['NF', 'numero'], ['Emissão', 'emissao_fmt'], ['Material', 'materiais'], ['Valor', 'valor', 'money']],
+    abrir: r => _cobIrParaTela('cobranca', r.numero) },
+  { scope: 'cob_justificativas', modKey: 'Justificativa', rotulo: 'Justificativas', icon: 'ti-message-2',
+    fonte: () => _cob.res?.justificativas || [], campos: COB_CAMPOS_ANOT,
+    cols: [['Fornecedor', 'fornecedor'], ['NF', 'numero'], ['Central', 'central'], ['Informante', 'informante'], ['Desviado para', 'desviado'], ['Motivo', 'motivo']],
+    abrir: r => _cobIrParaTela('justificativas', r.numero) },
+  { scope: 'cob_desconsideradas', modKey: 'Desconsiderada', rotulo: 'Desconsideradas', icon: 'ti-eye-off',
+    fonte: () => _cob.res?.desconsideradas || [], campos: COB_CAMPOS_ANOT,
+    cols: [['Fornecedor', 'fornecedor'], ['NF', 'numero'], ['Central', 'central'], ['Motivo', 'motivo'], ['Data', 'data_fmt'], ['Justificativa', 'justificativa']],
+    abrir: r => _cobIrParaTela('desconsideradas', r.numero) },
+  { scope: 'cob_cfop', modKey: 'CFOP', rotulo: 'CFOP', icon: 'ti-receipt-tax',
+    fonte: () => _cob.cfop, campos: COB_CAMPOS.cfop,
+    cols: [['CFOP', 'cfop'], ['Resumo', 'resumo'], ['Descrição', 'descricao']],
+    abrir: r => _cobIrParaCadastro('cfop', r) },
+  { scope: 'cob_fornecedores', modKey: 'Fornecedor', rotulo: 'Fornecedores', icon: 'ti-truck-delivery',
+    fonte: () => _cob.fornecedores, campos: COB_CAMPOS.fornecedores,
+    cols: [['Fornecedor', 'nome'], ['CNPJ', 'cnpj_fmt'], ['Situação', 'situacao']],
+    abrir: r => _cobIrParaCadastro('fornecedores', r) },
+  { scope: 'cob_centrais', modKey: 'Central (consulta)', rotulo: 'Centrais', icon: 'ti-map-pin', soInsumos: true,
+    fonte: () => _cob.centrais, campos: COB_CAMPOS.centrais,
+    cols: [['Sigla', 'alias'], ['Original', 'origem'], ['CNPJ', 'cnpj_fmt'], ['Regional', 'regional']],
+    abrir: r => _cobIrParaCadastro('centrais', r) },
 ];
 
 function _cobRegistrarBusca() {
@@ -617,11 +1170,14 @@ function _cobRegistrarBusca() {
   const sel = document.getElementById('global-search-scope');
   if (sel && insumos) [...sel.options].forEach(o => { if (o.value !== 'todos') o.remove(); });
   COB_GS.filter(s => insumos || !s.soInsumos).forEach(s => {
-    _GS_SCOPES.push({ scope: s.scope, modKey: s.modKey, fonte: () => _cob[s.tipo], campos: COB_CAMPOS[s.tipo] });
+    _GS_SCOPES.push({ scope: s.scope, modKey: s.modKey, fonte: s.fonte, campos: s.campos });
     _GS_COLS[s.modKey] = s.cols;
-    moduleColors[s.modKey] = { bg: 'var(--red-bg)', color: 'var(--red)', icon: s.icon, abrir: r => _cobIrParaCadastro(s.tipo, r) };
+    moduleColors[s.modKey] = { bg: 'var(--red-bg)', color: 'var(--red)', icon: s.icon, abrir: s.abrir };
     if (sel) sel.add(new Option(s.rotulo, s.scope));
   });
+  // Os dados da Cobrança carregam sob demanda — ao focar a busca já puxa,
+  // pra não buscar no vazio antes de alguém abrir a tela.
+  document.getElementById('global-search-input')?.addEventListener('focus', () => _cobCarregarCobranca(), { once: true });
 }
 
 function _cobIrParaCadastro(tipo, r) {
@@ -635,16 +1191,20 @@ function _cobIrParaCadastro(tipo, r) {
   setTimeout(() => tb?.closest('.table-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
 }
 
-// ── Página ───────────────────────────────────────────────────
-pageRenderers.cobrancas = () => renderCobrancas();
-
-function renderCobrancas() {
-  // Etapa 2: só a estrutura. Cálculo e painéis entram na Etapa 5.
-}
-
-function cobSwitchTab(tab) {
-  document.querySelectorAll('#page-cobrancas .dg-tab-btn').forEach(b =>
-    b.classList.toggle('active', b.dataset.cobTab === tab));
-  document.querySelectorAll('#page-cobrancas .dg-tab-pane').forEach(p =>
-    p.classList.toggle('active', p.id === 'cob-pane-' + tab));
+function _cobIrParaTela(tab, termo) {
+  closeGlobalResults();
+  navigate('cobrancas');
+  cobSwitchTab(tab);
+  if (tab === 'cobranca') {
+    _cob.filtroCob = { regional: '', central: '', nivel: '', texto: termo };
+    const i = document.getElementById('cob-f-texto');
+    if (i) i.value = termo;
+    _cobRenderCobranca();
+  } else {
+    const tipo = tab === 'justificativas' ? 'justificativas' : 'desconsiderar';
+    _cob.filtroAnot[tipo] = termo;
+    const i = document.querySelector(`#${COB_ANOT[tipo].pane} .cob-toolbar input`);
+    if (i) i.value = termo;
+    _cobRenderAnot(tipo);
+  }
 }

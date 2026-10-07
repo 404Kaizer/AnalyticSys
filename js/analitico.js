@@ -4024,11 +4024,11 @@ function _gsUnificado(modKey, r) {
   return {
     _mod:      modKey,
     _central:  r.central || r.centralCompra || r.alias || '',
-    _material: r.material || r.origem || r.nome || r.resumo || '',
-    _doc:      r.documento || r.nf || r.os || r.codSap || r.cnpj_fmt || r.cnpj || r.cfop || '',
-    _data:     r.dtLanc || r.dtEmissao || r.dtDoc || r.created || '',
+    _material: r.material || r.materiais || r.origem || r.fornecedor || r.nome || r.resumo || '',
+    _doc:      r.documento || r.nf || r.os || r.codSap || r.numero || r.cnpj_fmt || r.cnpj || r.cfop || '',
+    _data:     r.dtLanc || r.dtEmissao || r.dtDoc || r.emissao_fmt || r.created || '',
     _peso:     r.peso != null && r.peso !== '' ? r.peso : (r.estoqueTotal ?? ''),
-    _valor:    r.valorTotal != null && r.valorTotal !== '' ? r.valorTotal : (r.custo ?? ''),
+    _valor:    r.valorTotal != null && r.valorTotal !== '' ? r.valorTotal : (r.valor ?? r.custo ?? ''),
   };
 }
 
