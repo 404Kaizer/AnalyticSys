@@ -26,8 +26,8 @@ function cobBootInsumos() {
   // seções ficam ocultas por CSS) — só os blocos da Cobrança.
   pageRenderers.importar = () => cobRenderImports();
   pageRenderers.configuracoes = () => { _cobCarregarCentrais(); cobRenderCadastros(); };
-  navigate('cobrancas');
   cobIniciar();
+  navigate('importar');   // tela inicial do perfil insumos
 
   // Barra superior completa: os mesmos inits do topbar que o boot normal
   // faz no STEP 5 de restoreAndRender (dashboard.js) + o alerta broadcast
