@@ -2412,7 +2412,7 @@
     const fiscal     = document.getElementById('inv-j-fiscal')?.value.trim();
     const saldo      = document.getElementById('inv-j-saldo')?.value;
     const custoSap   = document.getElementById('inv-j-custo-sap')?.value;
-    const docSap     = document.getElementById('inv-j-doc-sap')?.value;
+    const docSap     = _invDocSapLer('inv-j-doc-sap');
     return _invApplyJustValues(k, { op, fiscal, saldo, custoSap, docSap });
   }
 
@@ -2495,6 +2495,57 @@
         ${itens.map(op => `<option value="${op}" ${op === selecionado ? 'selected' : ''}>${op}</option>`).join('')}
       </optgroup>`).join('');
   }
+
+  // ── Lista de Nº de Documento SAP (07/10) ──────────────────
+  // Um input por documento + "Adicionar documento". Gravado como texto
+  // único "doc1, doc2" (ver splitDocsSap em ui.js). O oninput fica no
+  // contêiner — o evento dos inputs filhos sobe até ele, e add/remover
+  // disparam um 'input' sintético pra quem precisa reagir (lote).
+  function _invDocSapItemHtml(valor) {
+    return `<div class="inv-docsap-item" style="display:flex;gap:6px;align-items:center">
+        <input type="number" class="oc-input" style="flex:1;min-width:0" placeholder="Ex: 4500123456" value="${_invEscape(valor)}">
+        <button type="button" class="btn-icon" title="Remover documento" onclick="_invDocSapRemover(this)"><i class="ti ti-x"></i></button>
+      </div>`;
+  }
+
+  function _invDocSapListaHtml(id, valor, oninput = '') {
+    const docs = splitDocsSap(valor);
+    return `<div id="${id}" class="inv-docsap-lista" style="display:flex;flex-direction:column;gap:6px" ${oninput ? `oninput="${oninput}"` : ''}>
+        ${(docs.length ? docs : ['']).map(_invDocSapItemHtml).join('')}
+        <button type="button" class="inv-lote-link-btn" style="align-self:flex-start" onclick="_invDocSapAdicionar(this)"><i class="ti ti-plus"></i> Adicionar documento</button>
+      </div>`;
+  }
+
+  // Lê a lista → "doc1, doc2" (sem vazios/repetidos).
+  function _invDocSapLer(id) {
+    const el = document.getElementById(id);
+    if (!el) return '';
+    return [...new Set([...el.querySelectorAll('input')].flatMap(i => splitDocsSap(i.value)))].join(', ');
+  }
+
+  // Substitui a lista inteira (usado pelo "replicar" do lote).
+  function _invDocSapDefinir(id, valor) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.querySelectorAll('.inv-docsap-item').forEach(n => n.remove());
+    const docs = splitDocsSap(valor);
+    el.insertAdjacentHTML('afterbegin', (docs.length ? docs : ['']).map(_invDocSapItemHtml).join(''));
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
+  window._invDocSapAdicionar = function(btn) {
+    btn.insertAdjacentHTML('beforebegin', _invDocSapItemHtml(''));
+    btn.previousElementSibling.querySelector('input').focus();
+  };
+
+  // Último item só é limpo (a lista nunca fica sem input).
+  window._invDocSapRemover = function(btn) {
+    const lista = btn.closest('.inv-docsap-lista');
+    const item = btn.closest('.inv-docsap-item');
+    if (lista.querySelectorAll('.inv-docsap-item').length > 1) item.remove();
+    else item.querySelector('input').value = '';
+    lista.dispatchEvent(new Event('input', { bubbles: true }));
+  };
 
   function _invRenderJustModal(k) {
     const row = invRows.find(r => r.k === k);
@@ -2583,8 +2634,8 @@
             ${_invCustoSapCampoHtml({ inputId: 'inv-j-custo-sap', valor: row.custoMedioSap, custoMedioAuto: row.custoMedio, fonte: row.custoMedioFonte, oninput: `_invAtualizarCustoSapCard(${row.varKg})` })}
           </div>
           <div class="oc-form-group">
-            <label class="oc-label">Documento SAP <span class="oc-hint">nº do documento de ajuste no SAP (opcional, não aparece como coluna na tabela)</span></label>
-            <input id="inv-j-doc-sap" type="number" class="oc-input" placeholder="Ex: 4500123456" value="${j.documentoSap||''}">
+            <label class="oc-label">Documento SAP <span class="oc-hint">nº do(s) documento(s) de ajuste no SAP (opcional, não aparece como coluna na tabela)</span></label>
+            ${_invDocSapListaHtml('inv-j-doc-sap', j.documentoSap)}
           </div>
         </div>
         <div class="modal-footer" style="justify-content:space-between">
@@ -2633,7 +2684,7 @@
       fiscal:   (document.getElementById(`lote-fiscal-${idx}`)?.value || '').trim(),
       saldo:    document.getElementById(`lote-saldo-${idx}`)?.value ?? '',
       custoSap: document.getElementById(`lote-custosap-${idx}`)?.value ?? '',
-      docSap:   document.getElementById(`lote-docsap-${idx}`)?.value ?? '',
+      docSap:   _invDocSapLer(`lote-docsap-${idx}`),
     };
   }
 
@@ -2739,14 +2790,20 @@
   // Copia o valor do campo `campo` da linha idxOrigem pras demais linhas
   // selecionadas — só nas que ainda estão vazias nesse campo.
   window._invLoteReplicar = function(campo, idxOrigem) {
+    // docsap é uma lista de inputs (não tem .value) — lê/grava via helpers.
+    const ehDoc = campo === 'docsap';
     const elOrigem = document.getElementById(`lote-${campo}-${idxOrigem}`);
-    const valor = elOrigem ? elOrigem.value : '';
+    const valor = ehDoc ? _invDocSapLer(`lote-docsap-${idxOrigem}`) : (elOrigem ? elOrigem.value : '');
     if (valor === '' || valor == null) { toast('Preencha esse campo antes de replicar.', 'error'); return; }
     let aplicados = 0;
     _invLoteKeys.forEach((k, idx) => {
       if (idx === idxOrigem) return;
       const el = document.getElementById(`lote-${campo}-${idx}`);
       if (!el) return;
+      if (ehDoc) {
+        if (!_invDocSapLer(el.id)) { _invDocSapDefinir(el.id, valor); aplicados++; } // o 'input' sintético já chama _invLoteOnInput
+        return;
+      }
       if (el.value === '' || el.value == null) { el.value = valor; window._invLoteOnInput(k); aplicados++; }
     });
     toast(aplicados > 0 ? `Valor copiado para ${aplicados} linha(s).` : 'Nenhuma linha vazia nesse campo — todas já tinham valor.', aplicados > 0 ? 'success' : 'error');
@@ -2808,7 +2865,7 @@
       // detectar edição a partir daqui.
       const jaCompleta = !!(j.op && j.fiscal && j.saldo !== undefined && j.saldo !== '' && j.custoMedioSap !== undefined && j.custoMedioSap !== '');
       _invLoteState[k] = jaCompleta
-        ? { registrado: true, snapshot: { op: j.op||'', fiscal: j.fiscal||'', saldo: String(j.saldo??''), custoSap: String(j.custoMedioSap??''), docSap: String(j.documentoSap??'') } }
+        ? { registrado: true, snapshot: { op: j.op||'', fiscal: j.fiscal||'', saldo: String(j.saldo??''), custoSap: String(j.custoMedioSap??''), docSap: splitDocsSap(j.documentoSap).join(', ') } }
         : { registrado: false, snapshot: null };
 
       const vkCls = _varClass(row.varKg);
@@ -2851,7 +2908,7 @@
             </div>
             <div>
               ${_campoLabel('Documento SAP', 'docsap', idx)}
-              <input id="lote-docsap-${idx}" type="number" class="oc-input" style="width:100%" placeholder="Opcional" value="${j.documentoSap??''}" oninput="_invLoteOnInput('${k}')">
+              ${_invDocSapListaHtml(`lote-docsap-${idx}`, j.documentoSap, `_invLoteOnInput('${k}')`)}
             </div>
           </div>
         </div>`;
@@ -3318,7 +3375,8 @@
         custoMedioSap: idx['Custo Médio (R$/kg)'] !== undefined ? _invParseNumBR(cols[idx['Custo Médio (R$/kg)']]) : null,
         // Documento SAP é um número de documento (texto puro) — não usa o
         // parser pt-BR de decimais, senão "4500123456" viraria besteira.
-        documentoSap:  idx['Documento SAP'] !== undefined ? (cols[idx['Documento SAP']] || '').trim() : '',
+        // Vários documentos na mesma célula: separados por , ; ou espaço.
+        documentoSap:  idx['Documento SAP'] !== undefined ? splitDocsSap(cols[idx['Documento SAP']]).join(', ') : '',
       })).filter(r => r.central && r.material);
       if (!_invImportParsedRows.length) { toast('Nenhuma linha válida encontrada no CSV.', 'error'); return; }
       _invAbrirModalImportCategorias();

@@ -5741,6 +5741,13 @@ function invalidateFechInvUnlockCache() {
 // documento imediatamente, sem nenhuma ação de "sincronizar". Cachear
 // aqui reintroduziria o mesmo risco de staleness entre módulos já
 // evitado de propósito em _anStockCache (ver notas de analitico.js).
+// Uma justificativa pode ter VÁRIOS Nº de Documento SAP (07/10) — gravados
+// na mesma coluna texto documento_sap, separados por ", " (sem migração).
+// Aceita também espaço/";" como separador (CSV, dado colado à mão).
+function splitDocsSap(v) {
+  return String(v == null ? '' : v).split(/[\s,;]+/).filter(Boolean);
+}
+
 function _getInvJustDocSet() {
   // Map em vez de Set: guarda o valor ORIGINAL (como foi digitado) junto
   // com a chave normalizada, só para poder mostrar no tooltip do cadeado
@@ -5748,8 +5755,7 @@ function _getInvJustDocSet() {
   // em si continua sendo pela chave normalizada, sem mudança de lógica.
   const map = new Map();
   (state.invJustificativas || []).forEach(j => {
-    const doc = j && j.documentoSap;
-    if (doc && String(doc).trim()) map.set(_fechImportNormDoc(doc), String(doc).trim());
+    splitDocsSap(j && j.documentoSap).forEach(doc => map.set(_fechImportNormDoc(doc), doc));
   });
   return map;
 }
@@ -6736,7 +6742,7 @@ function _fechMgrRender() {
     // desbloqueada aqui. Cadeado aberto (11/08) marca quem foi desbloqueado
     // manualmente e voltou ao comportamento padrão (Incluído/Desconsiderado).
     const statusDot = r._travadoPorInventario
-      ? `<i class="ti ti-lock fechmgr-status-icon fechmgr-status-icon--travado" title="Travado — Documento SAP desta linha: '${escapeHtml(r._travadoDocSap)}'. Encontrado na justificativa do Inventário como: '${escapeHtml(r._travadoDocInvOriginal)}'. Selecione e use &quot;Desbloquear (Inventário)&quot; pra liberar, ou apague o campo Documento SAP naquela justificativa."></i>`
+      ? `<i class="ti ti-lock fechmgr-status-icon fechmgr-status-icon--travado" title="Travado — Documento SAP desta linha: '${escapeHtml(r._travadoDocSap)}'. Encontrado na justificativa do Inventário como: '${escapeHtml(r._travadoDocInvOriginal)}'. Selecione e use &quot;Desbloquear (Inventário)&quot; pra liberar, ou remova esse documento da lista Documento SAP naquela justificativa."></i>`
       : r._desbloqueadoManualmente
         ? `<i class="ti ti-lock-open fechmgr-status-icon fechmgr-status-icon--desbloqueado" title="Desbloqueado manualmente da trava do Inventário (Documento SAP: '${escapeHtml(r._travadoDocSap)}'). Volta ao comportamento padrão: ${r._statusExcluido ? 'Desconsiderado manualmente' : 'Incluído no cálculo'}. Use &quot;Bloquear (Inventário)&quot; pra travar de novo."></i>`
         : r._statusExcluido

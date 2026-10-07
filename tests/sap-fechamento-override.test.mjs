@@ -82,6 +82,16 @@ teste('Documento SAP justificado no Inventário: excluído mesmo sem override ma
   assert.equal(ctx.isSapExcluidoPorFechamento(registroFechamento()), true);
 });
 
+teste('vários Documentos SAP na mesma justificativa: cada um trava a sua linha', () => {
+  const ctx = montar({
+    sap: [], sapFechamentoOverrides: [],
+    invJustificativas: [{ documentoSap: '1400099999, 1400012345' }],
+  });
+  assert.equal(ctx.isSapExcluidoPorFechamento(registroFechamento()), true);
+  assert.equal(ctx.isSapExcluidoPorFechamento(registroFechamento({ documento: '1400099999' })), true);
+  assert.equal(ctx.isSapExcluidoPorFechamento(registroFechamento({ documento: '1400055555' })), false);
+});
+
 teste('Documento SAP justificado no Inventário: trava mesmo com override manual "considerar"', () => {
   const ctx = montar({
     sap: [], sapFechamentoOverrides: [],
