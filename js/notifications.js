@@ -329,6 +329,8 @@ const _ACTIVITY_MODULE_COLOR = {
   sap:         'var(--accent)',
   imports:     'var(--teal)',
   profiles:    'var(--red)',
+  cob_justificativas: 'var(--amber)',
+  cob_desconsiderar:  'var(--red)',
 };
 const _ACTIVITY_DEFAULT_COLOR = 'var(--text2)';
 const _AUTH_COLOR = 'var(--accent)';
@@ -686,13 +688,38 @@ function _activityIsIntegrable(row, count) {
     && window.currentUser?.role === 'admin';
 }
 
+// Cobranças (Insumos ↔ admin) — justificar/desconsiderar NF. A trigger
+// cob_activity_capture (banco) só grava pro "outro lado": ação do analista
+// chega pro admin, ação do admin chega pro analista. row_id = "cnpj|numero".
+function _activityCobTexto(row, count, ator) {
+  const ehJust = row.table_name === 'cob_justificativas';
+  if (!ehJust && row.table_name !== 'cob_desconsiderar') return null;
+  if (count > 1) {
+    const acao = ehJust ? 'mexeu em justificativas de' : 'mexeu em desconsiderações de';
+    return { title: `${ator} ${acao} ${count} notas na Cobrança`, body: '' };
+  }
+  const d = (row.operation === 'DELETE' ? row.old_data : row.new_data) || {};
+  const nf = d.numero || String(row.row_id || '').split('|')[1] || '';
+  const verbo = ehJust
+    ? { INSERT: 'justificou a NF', UPDATE: 'editou a justificativa da NF', DELETE: 'excluiu a justificativa da NF' }[row.operation]
+    : { INSERT: 'desconsiderou a NF', UPDATE: 'editou a desconsideração da NF', DELETE: 'devolveu à cobrança a NF' }[row.operation];
+  const forn = (typeof _cob !== 'undefined' && _cob.fornecedores.find(f => f.cnpj === d.cnpj_fornecedor)?.nome) || '';
+  const detalhe = ehJust
+    ? [d.desviado && `desviada para ${d.desviado}`, d.motivo].filter(Boolean).join(' · ')
+    : (row.operation === 'DELETE' ? '' : d.motivo || '');
+  return { title: `${ator} ${verbo} ${nf}`, body: [forn, detalhe].filter(Boolean).join(' — ') };
+}
+
 async function _activityEmitNotification(row, count) {
   const isAuth      = row.table_name === 'auth';
   const isAlertConf = row.table_name === 'admin_alert_confirmations';
   const actorLabel  = await _activityResolveActorLabel(row.actor_id);
 
   let title, body;
-  if (isAlertConf) {
+  const cob = _activityCobTexto(row, count, actorLabel);   // Cobranças: frase própria
+  if (cob) {
+    ({ title, body } = cob);
+  } else if (isAlertConf) {
     title = `${actorLabel} confirmou o alerta`;
     body  = '';
   } else if (isAuth) {
@@ -727,6 +754,7 @@ async function _activityEmitNotification(row, count) {
     integrable: _activityIsIntegrable(row, count),
     integratedRowId: row.row_id,
     integrated: false,
+    cobK: cob && count === 1 ? row.row_id : null,   // "cnpj|numero" — clique abre a NF na Cobrança
   });
   // Cache local recente só pro dropdown — o histórico completo já vive
   // na nuvem (activity_log), então não precisa crescer pra sempre aqui.
@@ -759,6 +787,9 @@ async function notifAbrirDetalheAtividade(notifId, event) {
   _notifRenderBadge();
   if (_notifOpen) _notifRenderDropdown();
   notifClose();
+
+  // Cobranças: abre a própria NF (ou a aba da anotação, se ela já saiu da cobrança).
+  if (n.cobK && typeof cobAbrirNfDeNotificacao === 'function') { cobAbrirNfDeNotificacao(n.cobK, n.activityTable); return; }
 
   const titleEl = document.getElementById('notif-detail-title');
   const bodyEl = document.getElementById('notif-detail-body');

@@ -1062,6 +1062,16 @@ function _cobLinhaNf(r) {
   </tr>`;
 }
 
+// Clique numa notificação de justificativa/desconsideração (notifications.js):
+// abre a NF se ela ainda estiver na cobrança; senão, a aba da anotação filtrada.
+async function cobAbrirNfDeNotificacao(k, tabela) {
+  navigate('cobrancas');
+  await _cobCarregarCobranca();
+  await new Promise(r => setTimeout(r, 150));   // ponytail: espera o recálculo agendado (_cobRecalcular, 60ms)
+  if (_cob.res?.cobraveis.some(r => r.k === k)) { cobSwitchTab('cobranca'); cobAbrirNf(k); return; }
+  _cobIrParaTela(tabela === 'cob_desconsiderar' ? 'desconsideradas' : 'justificativas', k.split('|')[1] || '');
+}
+
 // ── Detalhe da NF (modal) ────────────────────────────────────
 const _cobInfo = (rot, val, full = false) => `<div${full ? ' style="grid-column:1/-1"' : ''}>
   <div class="form-label" style="margin-bottom:2px">${rot}</div><div style="font-size:13px">${val || '<span style="color:var(--text3)">—</span>'}</div></div>`;
