@@ -44,7 +44,7 @@ function cobBootInsumos() {
 // ── Estado em memória (espelho das tabelas cob_*) ────────────
 const _cob = {
   cfop: [], fornecedores: [], centrais: [],
-  imports: {},                                   // tipo → linha de cob_imports
+  imports: [],                                   // histórico (cob_imports), mais recente primeiro
   filtro: { cfop: '', fornecedores: '', centrais: '' },
   editando: { cfop: null, fornecedores: null },   // pk em edição; '' = linha nova
   canal: null,
@@ -502,24 +502,31 @@ const COB_IMPORTS = {
   },
 };
 
+// ponytail: histórico limitado às 200 importações mais recentes; paginar se precisar de mais.
 async function _cobCarregarImports() {
   try {
-    const { data, error } = await window.supabaseClient.from('cob_imports').select('*');
+    const { data, error } = await window.supabaseClient.from('cob_imports').select('*')
+      .order('data_hora', { ascending: false }).limit(200);
     if (error) throw error;
-    _cob.imports = Object.fromEntries((data || []).map(r => [r.tipo, r]));
+    _cob.imports = data || [];
     cobRenderImports();
   } catch (err) {
     console.warn('[Cobranças] Falha ao carregar cob_imports:', err);
   }
 }
 
+const _cobVigente = tipo => _cob.imports.find(r => r.tipo === tipo && r.vigente);
+const _cobQuando  = r => new Date(r.data_hora).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'medium' });
+function _cobQuem(r) {
+  const u = (typeof _msgsUsuariosPorId !== 'undefined' && _msgsUsuariosPorId[r.user_id]) || null;
+  return u ? (u.nome_exibicao || u.email) : '';
+}
+
 function _cobDescImport(tipo) {
-  const imp = _cob.imports[tipo];
-  if (!imp) return 'Nenhuma importação ainda.';
-  const quando = new Date(imp.data_hora).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
-  const u = (typeof _msgsUsuariosPorId !== 'undefined' && _msgsUsuariosPorId[imp.user_id]) || null;
-  const quem = u ? (u.nome_exibicao || u.email) : '';
-  return `Última: ${imp.arquivo || '—'} · ${imp.registros ?? 0} ${COB_IMPORTS[tipo].unidade} · ${quando}${quem ? ' · ' + quem : ''}`;
+  const imp = _cobVigente(tipo);
+  if (!imp) return 'Nenhuma importação vigente.';
+  const quem = _cobQuem(imp);
+  return `Vigente: ${imp.arquivo || '—'} · ${imp.registros ?? 0} ${COB_IMPORTS[tipo].unidade} · ${_cobQuando(imp)}${quem ? ' · ' + quem : ''}`;
 }
 
 function cobRenderImports() {
@@ -527,6 +534,41 @@ function cobRenderImports() {
     const el = document.getElementById('cob-import-info-' + tipo);
     if (el) el.textContent = _cobDescImport(tipo);
   });
+
+  const tb = document.getElementById('tb-cob-imports');
+  if (!tb) return;
+  tb.innerHTML = _cob.imports.map(r => {
+    const total = r.total_arquivo && r.total_arquivo > r.registros
+      ? `<span style="font-size:10px;color:var(--text3);font-family:var(--mono);margin-left:4px" title="Linhas no arquivo">(de ${r.total_arquivo.toLocaleString('pt-BR')} linhas)</span>` : '';
+    const status = r.vigente
+      ? '<span class="badge badge-green"><i class="ti ti-circle-check"></i> Vigente</span>'
+      : '<span class="badge badge-teal" title="Dados substituídos por uma importação mais recente"><i class="ti ti-history"></i> Substituída</span>';
+    return `<tr>
+      <td>${escapeHtml(r.arquivo || '—')}</td>
+      <td><span class="badge badge-purple">${COB_IMPORTS[r.tipo]?.rotulo || r.tipo}</span></td>
+      <td class="td-mono">${(r.registros ?? 0).toLocaleString('pt-BR')} ${total}</td>
+      <td class="td-muted">${_cobQuando(r)}</td>
+      <td class="td-muted">${escapeHtml(_cobQuem(r) || '—')}</td>
+      <td>${status}</td>
+      <td style="width:56px"><button class="btn-icon danger" title="${r.vigente ? 'Excluir importação e os dados dela' : 'Remover do histórico'}" onclick="cobExcluirImport(${r.id})"><i class="ti ti-trash"></i></button></td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="7"><div class="empty-state"><i class="ti ti-file-off"></i><p>Nenhuma importação da Cobrança ainda.</p></div></td></tr>';
+  const pi = document.getElementById('pi-cob-imports');
+  if (pi) pi.textContent = `${_cob.imports.length} registros`;
+}
+
+async function cobExcluirImport(id) {
+  const r = _cob.imports.find(x => x.id === id);
+  if (!r) return;
+  const cfg = COB_IMPORTS[r.tipo];
+  const msg = r.vigente
+    ? `Excluir a importação vigente de ${cfg.rotulo} (${r.arquivo})?\n\nOs dados dela também serão apagados: a Cobrança fica sem ${cfg.rotulo} até a próxima importação.`
+    : `Remover do histórico a importação de ${cfg.rotulo} (${r.arquivo})?\n\nOs dados atuais não mudam.`;
+  if (!confirm(msg)) return;
+  const { error } = await window.supabaseClient.rpc('cob_excluir_import', { p_id: id });
+  if (error) { toast('Falha ao excluir: ' + error.message, 'error'); return; }
+  await _cobCarregarImports();
+  toast(r.vigente ? `Importação e dados de ${cfg.rotulo} excluídos.` : 'Removida do histórico.', 'success');
 }
 
 async function cobImportar(tipo, ev) {
@@ -550,7 +592,7 @@ async function cobImportar(tipo, ev) {
   const { rows: recs, invalidas } = cfg.montar(linhas);
   if (!recs.length) { toast(`Nenhuma linha válida no relatório de ${cfg.rotulo}.`, 'error'); return; }
 
-  const atual = _cob.imports[tipo];
+  const atual = _cobVigente(tipo);
   const msg = `Importar ${cfg.rotulo}: ${recs.length} ${cfg.unidade} de "${file.name}"?\n\n`
     + (atual ? `Isto SUBSTITUI a importação atual (${atual.registros} ${cfg.unidade}, ${atual.arquivo}).` : 'Primeira importação.')
     + (invalidas ? `\n${invalidas} linhas inválidas (sem CNPJ/número) serão ignoradas.` : '');
@@ -558,7 +600,7 @@ async function cobImportar(tipo, ev) {
 
   showLoadingOverlay(`Importando ${cfg.rotulo}`, `Gravando ${recs.length} ${cfg.unidade}...`);
   try {
-    const { error } = await window.supabaseClient.rpc('cob_substituir', { p_tipo: tipo, p_arquivo: file.name, p_rows: recs });
+    const { error } = await window.supabaseClient.rpc('cob_substituir', { p_tipo: tipo, p_arquivo: file.name, p_rows: recs, p_total: linhas.length });
     if (error) throw error;
     await _cobCarregarImports();
     toast(`${cfg.rotulo} importado: ${recs.length} ${cfg.unidade}.`, 'success');
