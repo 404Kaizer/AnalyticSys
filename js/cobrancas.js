@@ -826,8 +826,12 @@ function _cobOpcoes(id, todos, valores, sel) {
 function _cobMontarPaneCobranca() {
   const pane = document.getElementById('cob-pane-cobranca');
   if (pane && !pane.querySelector('#cob-f-texto')) {
+    // Filtros ficam colados no Detalhamento (logo acima dele), entre o
+    // resumo e a tabela — a barra é estática pra não perder o foco do input.
     pane.innerHTML = `
-      <div class="cob-toolbar">
+      <div class="cob-base" id="cob-base" style="text-align:right;margin-bottom:8px"></div>
+      <div id="cob-resumo"></div>
+      <div class="cob-toolbar" id="cob-toolbar">
         <select class="form-select" id="cob-f-regional" onchange="cobFiltrar('regional', this.value)"></select>
         <select class="form-select" id="cob-f-central" onchange="cobFiltrar('central', this.value)"></select>
         <select class="form-select" id="cob-f-nivel" onchange="cobFiltrar('nivel', this.value)">
@@ -836,9 +840,8 @@ function _cobMontarPaneCobranca() {
         </select>
         <input class="form-input" id="cob-f-texto" type="text" placeholder="Filtrar fornecedor, NF, material…" value="${escapeHtml(_cob.filtroCob.texto)}" oninput="cobFiltrar('texto', this.value)">
         <button class="btn" onclick="cobLimparFiltros()" title="Limpar filtros"><i class="ti ti-filter-off"></i></button>
-        <span class="cob-base" id="cob-base"></span>
       </div>
-      <div id="cob-corpo"></div>`;
+      <div id="cob-det"></div>`;
   }
   return pane;
 }
@@ -881,9 +884,12 @@ function _cobRenderCobranca() {
   document.getElementById('cob-f-nivel').value = f.nivel;
   document.getElementById('cob-base').textContent = _cobBaseTxt(res);
 
-  const corpo = document.getElementById('cob-corpo');
-  if (!_cob.pendentes.length) {
-    corpo.innerHTML = '<div class="empty-state"><i class="ti ti-file-alert"></i><p>Importe os relatórios de <strong>Pendências</strong> e <strong>SEFAZ</strong> em Importar Dados para montar a cobrança.</p></div>';
+  const resumo = document.getElementById('cob-resumo'), det = document.getElementById('cob-det');
+  const temDados = _cob.pendentes.length > 0;
+  document.getElementById('cob-toolbar').style.display = temDados ? '' : 'none';
+  if (!temDados) {
+    resumo.innerHTML = '<div class="empty-state"><i class="ti ti-file-alert"></i><p>Importe os relatórios de <strong>Pendências</strong> e <strong>SEFAZ</strong> em Importar Dados para montar a cobrança.</p></div>';
+    det.innerHTML = '';
     return;
   }
   const padrao = _cobFiltrarNfs(res.cobranca);
@@ -892,7 +898,7 @@ function _cobRenderCobranca() {
   const soma = rs => rs.reduce((t, r) => t + (Number(r.valor) || 0), 0);
   const nAlertas = _cobNumAlertas(res);
 
-  corpo.innerHTML = `
+  resumo.innerHTML = `
     <div class="mod-summary-cards"><div class="mod-summary-hero">
       ${_cobKpi('ti-file-alert', 'Em cobrança', padrao.length, 'kpi-teal', money(soma(padrao)))}
       ${Object.entries(COB_NIVEIS).map(([k, n]) => {
@@ -902,8 +908,8 @@ function _cobRenderCobranca() {
       ${blocos.map(([b, rs]) => _cobKpi('ti-package', b, rs.length, 'kpi-purple', 'cobrança à parte')).join('')}
       ${_cobKpi('ti-bell', 'Alertas', nAlertas, nAlertas ? 'kpi-red' : 'kpi-green', 'ver aba Alertas')}
     </div></div>
-    <div class="cob-grid-2">${_cobRankingHtml(padrao, res.hojeISO)}${_cobPorFornecedorHtml(todas)}</div>
-    ${_cobDetalhamentoHtml(padrao, blocos)}`;
+    <div class="cob-grid-2">${_cobRankingHtml(padrao, res.hojeISO)}${_cobPorFornecedorHtml(todas)}</div>`;
+  det.innerHTML = _cobDetalhamentoHtml(padrao, blocos);
 }
 
 // Ranking por regional = os blocos "Total por regional" + "Emissão por
