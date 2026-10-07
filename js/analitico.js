@@ -4024,8 +4024,8 @@ function _gsUnificado(modKey, r) {
   return {
     _mod:      modKey,
     _central:  r.central || r.centralCompra || r.alias || '',
-    _material: r.material || r.origem || '',
-    _doc:      r.documento || r.nf || r.os || r.codSap || r.cnpj || '',
+    _material: r.material || r.origem || r.nome || r.resumo || '',
+    _doc:      r.documento || r.nf || r.os || r.codSap || r.cnpj_fmt || r.cnpj || r.cfop || '',
     _data:     r.dtLanc || r.dtEmissao || r.dtDoc || r.created || '',
     _peso:     r.peso != null && r.peso !== '' ? r.peso : (r.estoqueTotal ?? ''),
     _valor:    r.valorTotal != null && r.valorTotal !== '' ? r.valorTotal : (r.custo ?? ''),
@@ -4071,10 +4071,12 @@ function _gsrBuscar(q, escopo) {
   // registro com todos os campos buscáveis concatenados. Sem teto de
   // resultados: o modal existe justamente para mostrar tudo.
   const hits = [];
-  alvos.forEach(({ scope, modKey }) => {
-    const records = state[scope] || [];
+  // `fonte`/`campos`: escopos que não vivem no state (Cobranças, ver
+  // _cobRegistrarBusca em cobrancas.js).
+  alvos.forEach(({ scope, modKey, fonte, campos }) => {
+    const records = (fonte ? fonte() : state[scope]) || [];
     if (!records.length) return;
-    const index = _getOrBuildIndex(scope, records, getSearchableFields(scope));
+    const index = _getOrBuildIndex(scope, records, campos || getSearchableFields(scope));
     for (let i = 0; i < records.length; i++) {
       const s = index[i] || '';
       if (tokens.every(t => s.includes(t))) hits.push({ modKey, r: records[i], txt: s });
@@ -4328,6 +4330,9 @@ function _gsrAbrirDetalhe(i) {
   if (!hit) return;
   // O detalhe tem z-index próprio por ID, um degrau acima do modal de
   // resultados (ver css/modules.css) — não precisa elevar nada aqui.
+  // Módulo com `abrir` próprio (Cobranças) leva direto à tela do registro.
+  const abrir = moduleColors[hit.modKey]?.abrir;
+  if (abrir) { abrir(hit.r); return; }
   _gsShowDetail(hit.modKey, hit.r);
 }
 
@@ -4638,6 +4643,7 @@ async function init() {
 
   await restoreAndRender();
   updateImportPrereqUI();
+  if (window.currentUser?.role === 'admin') cobIniciar();
   // updateDashboard já foi chamado dentro de restoreAndRender — não chamar novamente
 
   // Start clock

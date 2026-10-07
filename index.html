@@ -3809,6 +3809,65 @@
           <div id="shortcuts-list"></div>
         </div>
 
+        <!-- Cadastros da Cobrança (js/cobrancas.js) — admin + insumos -->
+        <div class="cob-insumos">
+          <div class="section-title">Cobranças — Cadastros</div>
+          <div class="table-card" style="margin-bottom:24px">
+            <div class="table-header">
+              <span class="table-title"><i class="ti ti-receipt-tax"></i> CFOP</span>
+              <div class="table-toolbar">
+                <input class="form-input" style="width:200px" type="text" placeholder="Filtrar…" oninput="cobCadFiltrar('cfop', this.value)">
+                <button class="btn" onclick="cobCadNovo('cfop')"><i class="ti ti-plus"></i> Novo Cadastro</button>
+                <input type="file" id="file-cob-cfop" class="file-input" accept=".xlsx,.xls,.csv" onchange="cobCadImportar('cfop', event)">
+                <button class="btn" onclick="document.getElementById('file-cob-cfop').click()" title="Colunas: CFOP, RESUMO, DESCRIÇÃO"><i class="ti ti-file-upload"></i> Importar em lote</button>
+              </div>
+            </div>
+            <div class="table-scroll" style="max-height:420px">
+              <table>
+                <thead><tr><th>CFOP</th><th>Resumo</th><th>Descrição</th><th></th></tr></thead>
+                <tbody id="tb-cob-cfop"></tbody>
+              </table>
+            </div>
+            <div class="pagination"><span class="page-info" id="pi-cob-cfop">0 registros</span></div>
+          </div>
+
+          <div class="table-card" style="margin-bottom:24px">
+            <div class="table-header">
+              <span class="table-title"><i class="ti ti-truck-delivery"></i> Fornecedores para Cobrança</span>
+              <div class="table-toolbar">
+                <input class="form-input" style="width:200px" type="text" placeholder="Filtrar…" oninput="cobCadFiltrar('fornecedores', this.value)">
+                <button class="btn" onclick="cobCadNovo('fornecedores')"><i class="ti ti-plus"></i> Novo Cadastro</button>
+                <input type="file" id="file-cob-fornecedores" class="file-input" accept=".xlsx,.xls,.csv" onchange="cobCadImportar('fornecedores', event)">
+                <button class="btn" onclick="document.getElementById('file-cob-fornecedores').click()" title="Colunas: FORNECEDOR, CNPJ"><i class="ti ti-file-upload"></i> Importar em lote</button>
+              </div>
+            </div>
+            <div class="table-scroll" style="max-height:420px">
+              <table>
+                <thead><tr><th>Fornecedor</th><th>CNPJ</th><th>Situação</th><th></th></tr></thead>
+                <tbody id="tb-cob-fornecedores"></tbody>
+              </table>
+            </div>
+            <div class="pagination"><span class="page-info" id="pi-cob-fornecedores">0 registros</span></div>
+          </div>
+
+          <!-- Centrais: só consulta, só pro perfil insumos (o admin já tem o cadastro completo acima) -->
+          <div class="table-card cob-so-insumos" style="margin-bottom:24px">
+            <div class="table-header">
+              <span class="table-title"><i class="ti ti-map-pin"></i> Centrais <span style="color:var(--text3);font-weight:500">(somente consulta)</span></span>
+              <div class="table-toolbar">
+                <input class="form-input" style="width:200px" type="text" placeholder="Filtrar…" oninput="cobCadFiltrar('centrais', this.value)">
+              </div>
+            </div>
+            <div class="table-scroll" style="max-height:420px">
+              <table>
+                <thead><tr><th>Sigla</th><th>Original</th><th>CNPJ</th><th>Regional</th></tr></thead>
+                <tbody id="tb-cob-centrais"></tbody>
+              </table>
+            </div>
+            <div class="pagination"><span class="page-info" id="pi-cob-centrais">0 registros</span></div>
+          </div>
+        </div>
+
       </div>
 
     </div>

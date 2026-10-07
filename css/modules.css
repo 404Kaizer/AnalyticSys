@@ -12975,3 +12975,5 @@ body.role-insumos .tab-item:not([data-page="cobrancas"]):not([data-page="importa
 body.role-insumos #page-importar > :not(.cob-insumos),
 body.role-insumos #page-configuracoes > :not(.cob-insumos) { display: none !important; }
 body:not(.role-admin):not(.role-insumos) .tab-item[data-page="cobrancas"] { display: none !important; }
+body:not(.role-admin):not(.role-insumos) .cob-insumos,
+body:not(.role-insumos) .cob-so-insumos { display: none !important; }
