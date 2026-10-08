@@ -1022,13 +1022,97 @@ function _cobRankingHtml(rows, hojeISO) {
   const lin = [...por.entries()].sort((a, b) => b[1].total - a[1].total || a[0].localeCompare(b[0], 'pt-BR'));
   const td = (v, cls) => `<td class="td-mono" style="text-align:right">${v ? `<span class="badge ${cls}">${v}</span>` : '<span style="color:var(--text3)">0</span>'}</td>`;
   const r = 'style="text-align:right"';
-  return `<div class="table-card"><div class="table-header"><span class="table-title"><i class="ti ti-trophy"></i> Ranking por regional</span></div>
+  return `<div class="table-card"><div class="table-header"><span class="table-title"><i class="ti ti-trophy"></i> Ranking por regional</span>
+      <div class="table-toolbar"><span style="font-size:11px;color:var(--text3)">Relatório:</span>
+        ${Object.entries(COB_NIVEIS).map(([k, n]) => `<button class="btn" onclick="cobRelatorioRanking('${k}')" title="Relatório das NFs em ${n.rot} (${n.h})"><i class="ti ti-file-text"></i> ${n.h}</button>`).join('')}
+      </div></div>
     <div class="table-scroll" style="max-height:440px"><table>
       <thead><tr><th>Regional</th><th ${r}>24h · ${dia(1)}</th><th ${r}>48h · ${dia(2)}</th><th ${r}>72h+ · até ${dia(3)}</th><th ${r}>Total</th></tr></thead>
       <tbody>${lin.map(([reg, a]) => `<tr style="cursor:pointer" title="Filtrar esta regional" data-r="${escapeHtml(reg)}" onclick="cobFiltrar('regional', this.dataset.r)">
           <td>${escapeHtml(reg)}</td>${td(a.atencao, 'badge-blue')}${td(a.urgente, 'badge-amber')}${td(a.critico, 'badge-red')}<td class="td-mono" ${r}><b>${a.total}</b></td></tr>`).join('')
         || _cobVazio('ti-mood-happy', 'Nenhuma nota em cobrança.', 5)}</tbody>
     </table></div></div>`;
+}
+
+// ── Relatório do Ranking (24h / 48h / 72h+) ──────────────────
+// Mesmo shell dos demais relatórios do sistema (_buildRankingShellHTML em
+// relatorio.js: faixa, logos Concrelagos + AnalyticSys, KPIs, rodapé, botão
+// imprimir). Usa as notas da cobrança padrão que o Ranking está mostrando
+// (ou seja, respeita os filtros aplicados na tela).
+const COB_REL_QUANDO = { atencao: 'há 24h', urgente: 'há 48h', critico: 'há 72h ou mais' };
+
+function cobRelatorioRanking(nivel) {
+  const res = _cob.res, n = COB_NIVEIS[nivel];
+  if (!res || !n) return;
+  const rows = _cobFiltrarNfs(res.cobranca).filter(r => r.nivel === nivel);
+  if (!rows.length) { toast(`Nenhuma nota em ${n.rot} (${n.h}) para gerar o relatório.`, 'error'); return; }
+
+  const geradoEm = new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+  const diaMenos = k => { const t = new Date(res.hojeISO + 'T00:00:00'); t.setDate(t.getDate() - k); return fmtPtDate(t); };
+  const periodo = { atencao: `Emissão em ${diaMenos(1)}`, urgente: `Emissão em ${diaMenos(2)}`, critico: `Emissão até ${diaMenos(3)}` }[nivel];
+  const nCentrais = new Set(rows.map(r => r.cnpj_comprador)).size;
+
+  const grupos = new Map();
+  rows.forEach(r => { if (!grupos.has(r.regional)) grupos.set(r.regional, []); grupos.get(r.regional).push(r); });
+  const ord = (a, b) => a.central.localeCompare(b.central, 'pt-BR') || String(a.emissao || '').localeCompare(String(b.emissao || ''));
+  const corpo = [...grupos.entries()]
+    .sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0], 'pt-BR'))
+    .map(([reg, rs]) => {
+      const nc = new Set(rs.map(r => r.cnpj_comprador)).size;
+      return `<tr class="cobr-reg"><td colspan="5"><i class="ti ti-users-group"></i>${_rankEsc(reg)}<span>${rs.length} NF${rs.length > 1 ? 's' : ''} · ${nc} ${nc > 1 ? 'centrais' : 'central'}</span></td></tr>`
+        + rs.sort(ord).map(r => `<tr>
+            <td class="rk-name">${_rankEsc(r.central)}${r.centralNome ? `<div class="rk-sub">${_rankEsc(r.centralNome)}</div>` : ''}</td>
+            <td>${_rankEsc(r.fornecedor)}</td>
+            <td class="cobr-mono">${_rankEsc(r.numero)}</td>
+            <td class="cobr-mono">${r.emissao_fmt}</td>
+            <td><span class="cobr-atraso cobr-${nivel}">${r.dias === null ? 'sem data' : `${r.dias} dia${r.dias > 1 ? 's' : ''}`}</span></td>
+          </tr>`).join('');
+    }).join('');
+
+  const bodyHtml = `
+    <style>
+      .cobr-reg td { background:var(--dgr-card-bg, rgba(255,255,255,.045)); border-top:2px solid var(--dgr-table-border-forte, rgba(255,255,255,.14)); font-size:12.5px; font-weight:800; color:var(--dgr-text-strong, #fff); padding:10px; }
+      .cobr-reg i { color:#f87171; margin-right:7px; }
+      .cobr-reg span { margin-left:10px; font-size:10px; font-weight:600; color:var(--dgr-text-dim, #94a3b8); font-family:'JetBrains Mono',monospace; }
+      .cobr-mono { font-family:'JetBrains Mono',monospace; }
+      .cobr-atraso { display:inline-block; padding:2px 8px; border-radius:4px; font-size:10px; font-weight:800; font-family:'JetBrains Mono',monospace; white-space:nowrap; }
+      .cobr-atencao { background:rgba(59,130,246,.14); border:1px solid rgba(59,130,246,.35); color:#93c5fd; }
+      .cobr-urgente { background:rgba(245,158,11,.14); border:1px solid rgba(245,158,11,.4); color:#fcd34d; }
+      .cobr-critico { background:rgba(239,68,68,.14); border:1px solid rgba(239,68,68,.4); color:#fca5a5; }
+      .rk-table tr { page-break-inside:avoid; }
+    </style>
+    <div class="rk-table-wrap">
+      <div class="rk-table-head">
+        <span class="rk-table-head-title">NFs pendentes de lançamento — ${n.rot} (${n.h})</span>
+        <span class="rk-table-head-cap">${rows.length} NF${rows.length > 1 ? 's' : ''} · agrupadas por regional</span>
+      </div>
+      <table class="rk-table">
+        <thead><tr><th>Central</th><th>Fornecedor</th><th>NF</th><th>Emissão</th><th>Atraso</th></tr></thead>
+        <tbody>${corpo}</tbody>
+      </table>
+    </div>
+    <div class="callout-regularizacao">
+      <div class="callout-regularizacao-title">⚠ Lançamento imediato</div>
+      <div class="callout-regularizacao-text">Lançar as notas fiscais acima no sistema ou informar ao setor de Insumos o motivo do atraso ou o desvio da carga.</div>
+    </div>`;
+
+  _openRelWindow(_buildRankingShellHTML({
+    periodoBadge: `Gerado em ${geradoEm}`,
+    periodo,
+    now: geradoEm,
+    kpis: [
+      { value: rows.length, label: rows.length !== 1 ? 'NFs pendentes' : 'NF pendente', color: n.badge === 'badge-red' ? '#ef4444' : n.badge === 'badge-amber' ? '#f59e0b' : '#3b82f6' },
+      { value: nCentrais,    label: nCentrais !== 1 ? 'centrais' : 'central',      color: '#22c55e' },
+      { value: grupos.size,  label: grupos.size !== 1 ? 'regionais' : 'regional',  color: '#3b82f6' },
+    ],
+  }, {
+    pageTitle: `Cobrança de NFs ${n.h} — ${geradoEm}`,
+    badge: 'Cobrança de NFs',
+    title: `NFs pendentes ${COB_REL_QUANDO[nivel]}`,
+    subtitle: `Notas fiscais de insumos emitidas ${COB_REL_QUANDO[nivel]} e ainda não lançadas no sistema, agrupadas por regional.`,
+    bodyHtml,
+    notaRodape: `Atraso em dias corridos desde a emissão da NF. Base — ${_cobBaseTxt(res)}.`,
+  }));
 }
 
 function _cobPorFornecedorHtml(rows) {
