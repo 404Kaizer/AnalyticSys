@@ -291,7 +291,12 @@ function anSetGroupMode(mode, onDone) {
       // sempre por central × material (independem do agrupamento da Micro) e
       // têm filtros próprios de regional/categoria — redesenhá-los zeraria
       // esses filtros e reanimaria os gráficos sem nenhum dado ter mudado.
-      renderAnaliticoMicro(window.__analiticoResults, window.__analiticoDtIni, window.__analiticoDtFim, true, { skipMacro: true });
+      // EXCEÇÃO: com NFs/OS pendentes consideradas o dado MUDA na troca — a
+      // Macro usa o estado do agrupamento ativo (por central × por material,
+      // ver renderMacroPanels) — e aí ela tem que ser recalculada.
+      const _temPend = [window._pendConsiderados, window._pendConsideradosMat]
+        .some(m => Object.values(m || {}).some(s => s && (s.nf || s.os)));
+      renderAnaliticoMicro(window.__analiticoResults, window.__analiticoDtIni, window.__analiticoDtFim, true, { skipMacro: !_temPend });
       if (typeof onDone === 'function') onDone();
     }
   );
@@ -2218,6 +2223,13 @@ function refreshMaterialCard(material) {
   if (typeof initHelpBadges === 'function') initHelpBadges();
   // Reaplica os filtros ativos ao card recém-criado (linhas/visibilidade).
   _applyMicroVisibility();
+
+  // Recalcula rankings/relatórios com o toggle novo — mesmo motivo de
+  // refreshCentralCard.
+  if (typeof renderMacroPanels === 'function') {
+    const th = typeof getHealthThresholds === 'function' ? getHealthThresholds() : {};
+    renderMacroPanels(window.__analiticoResults, th, window.__analiticoDtIni, window.__analiticoDtFim);
+  }
   return true;
 }
 window.refreshMaterialCard = refreshMaterialCard;

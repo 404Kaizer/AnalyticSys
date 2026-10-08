@@ -253,22 +253,6 @@ const moduleTableMap = {
   custosSap: 'tb-custos-sap'
 };
 
-const pageTitleMap = {
-  dashboard: { title: 'Dashboard Gerencial', sub: 'visão executiva consolidada' },
-  entradas: { title: 'Entradas (NF)', sub: 'notas fiscais que geram saldo de estoque' },
-  saidas: { title: 'Saídas (OS)', sub: 'ordens de serviço que consomem saldo' },
-  lancamentos: { title: 'Lançamentos', sub: 'saldo real por material e central' },
-  sap: { title: 'Movimentações SAP', sub: 'extrato consolidado de todas as movimentações' },
-  custosSap: { title: 'Custos SAP', sub: 'estoque e custo médio por material e central' },
-  analitico: { title: 'Dashboard Analítico', sub: 'análise de estoque por período, filial e fechamento de inventário' },
-  cobrancas: { title: 'Cobranças', sub: 'cobrança de lançamento de notas fiscais de insumos' },
-  importar: { title: 'Importar Dados', sub: 'importe arquivos .xlsx ou .csv para cada módulo' },
-  configuracoes: { title: 'Configurações', sub: 'parâmetros e informações de referência do sistema' },
-  ocorrencias: { title: 'Ocorrências', sub: 'solicitações abertas e gestão de ocorrências por central' },
-  admin: { title: 'Supervisão', sub: 'usuários e dados — acesso restrito ao supervisor' }
-};
-
-
 const themeLabels = {
   dark: 'Escuro',
   graphite: 'Grafite',

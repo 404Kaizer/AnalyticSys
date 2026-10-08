@@ -75,12 +75,6 @@ function navigate(page) {
   else navItems.forEach(n => n.classList.remove('active'));
   if (navByPage[page]) navByPage[page].classList.add('active');
 
-  const info = pageTitleMap[page] || { title: page, sub: '' };
-  const title = document.getElementById('page-title');
-  const sub = document.getElementById('page-sub');
-  if (title) title.textContent = info.title;
-  if (sub) sub.textContent = info.sub;
-
   if (!alreadyActive) renderPage(page);
   closeSidebar();
 
@@ -4532,13 +4526,12 @@ function togglePendConsideradosMat(material, tipo) {
 
   // Refresh cirúrgico do card daquele material (mesma filosofia de
   // refreshCentralCard). Se não for possível, cai pro render completo.
+  // Os dois caminhos recalculam a Visão Macro: no agrupamento por material
+  // ela injeta pendentes por este estado (ver renderMacroPanels).
   if (typeof refreshMaterialCard === 'function' && refreshMaterialCard(material)) return;
 
-  // skipMacro: a Visão Macro injeta pendentes pelo estado POR CENTRAL
-  // (_pendConsiderados), que este toggle não altera — redesenhá-la só
-  // reanimaria os donuts e zeraria os filtros próprios dela à toa.
   if (window.__analiticoResults && window.__analiticoDtIni && window.__analiticoDtFim) {
-    renderAnaliticoMicro(window.__analiticoResults, window.__analiticoDtIni, window.__analiticoDtFim, true, { skipMacro: true });
+    renderAnaliticoMicro(window.__analiticoResults, window.__analiticoDtIni, window.__analiticoDtFim, true);
   }
 }
 

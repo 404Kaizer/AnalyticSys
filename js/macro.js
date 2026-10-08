@@ -44,6 +44,9 @@ function renderMacroPanels(results, thresholds, dtIni, dtFim) {
   const byLevel    = { critico: [], urgente: [], atencao: [], bom: [] };
   const centralMap = {};   // central → { level, counts, worstDiff, regional }
   const matItems   = [];   // { central, mat, level, totalDiff, catKey, regional }
+  // Agrupamento ativo da Visão Micro (_anGroupMode, analitico.js) — decide
+  // qual estado de "Considerar NFs/OS" vale (ver injeção abaixo).
+  const _pendPorMat = typeof _anGroupMode !== 'undefined' && _anGroupMode === 'material';
 
   results.forEach(r => {
     const lancsByMat = new Map();
@@ -63,39 +66,41 @@ function renderMacroPanels(results, thresholds, dtIni, dtFim) {
     // Replica a mesma lógica de buildCentralCard (analitico.js) para que os
     // relatórios e rankings (window._rankByLevel) reflitam o estado de
     // "Considerar NFs/OS pendentes" do analista, e não fiquem presos aos
-    // dados originais do SAP.
-    const _pendStateCentral = (window._pendConsiderados || {})[r.central] || {};
-    const _pendCacheCentral = (window._pendCache        || {})[r.central] || {};
-    if (_pendStateCentral.nf && _pendCacheCentral.pendNF) {
-      (_pendCacheCentral.pendNF || []).forEach(e => {
-        const m = e.material || '—';
-        if (!sapByMat.has(m)) sapByMat.set(m, []);
-        sapByMat.get(m).push({
-          movimento: '101',
-          peso:      _convertNfPesoToKg(e.peso, e.um, e.material, e.fornecedor),
-          ref:       String(e.nf || ''),
-          documento: '',
-          material:  m,
-          dtLanc:    e.dtDescarga || e.dtEmissao || '',
-          _sintetico: true
-        });
+    // dados originais do SAP. O estado é o do agrupamento ATIVO da Micro
+    // (por central ou por material), igual ao card — senão o ranking diverge
+    // da tabela que está na tela.
+    const _pendOn = (mat, tipo) => !!(_pendPorMat
+      ? (window._pendConsideradosMat || {})[mat]
+      : (window._pendConsiderados    || {})[r.central])?.[tipo];
+    const _pendCacheCentral = (window._pendCache || {})[r.central] || {};
+    (_pendCacheCentral.pendNF || []).forEach(e => {
+      const m = e.material || '—';
+      if (!_pendOn(m, 'nf')) return;
+      if (!sapByMat.has(m)) sapByMat.set(m, []);
+      sapByMat.get(m).push({
+        movimento: '101',
+        peso:      _convertNfPesoToKg(e.peso, e.um, e.material, e.fornecedor),
+        ref:       String(e.nf || ''),
+        documento: '',
+        material:  m,
+        dtLanc:    e.dtDescarga || e.dtEmissao || '',
+        _sintetico: true
       });
-    }
-    if (_pendStateCentral.os && _pendCacheCentral.pendOS) {
-      (_pendCacheCentral.pendOS || []).forEach(e => {
-        const m = e.material || '—';
-        if (!sapByMat.has(m)) sapByMat.set(m, []);
-        sapByMat.get(m).push({
-          movimento: '201',
-          peso:      -Math.abs(num(e.peso)),
-          ref:       String(e.os || ''),
-          documento: '',
-          material:  m,
-          dtLanc:    e.dtEmissao || '',
-          _sintetico: true
-        });
+    });
+    (_pendCacheCentral.pendOS || []).forEach(e => {
+      const m = e.material || '—';
+      if (!_pendOn(m, 'os')) return;
+      if (!sapByMat.has(m)) sapByMat.set(m, []);
+      sapByMat.get(m).push({
+        movimento: '201',
+        peso:      -Math.abs(num(e.peso)),
+        ref:       String(e.os || ''),
+        documento: '',
+        material:  m,
+        dtLanc:    e.dtEmissao || '',
+        _sintetico: true
       });
-    }
+    });
 
     // Saúde e regional da central saem do card já montado na Visão Micro —
     // assim o donut nunca discorda do que o card exibe.
@@ -138,10 +143,18 @@ function renderMacroPanels(results, thresholds, dtIni, dtFim) {
       const sap   = sapByMat.get(mat)   || [];
       const prev  = (typeof _anGetSapStock === 'function')
         ? _anGetSapStock({ central: r.central, material: mat, dtIni }) : null;
+      // Est. Final: mesma fonte da Visão Micro (lançamento EXATO do último
+      // não-domingo do período; sem ele = AUSENTE). Sem o override o
+      // buildSnapshot caía no fallback legado (último dia COM lançamento no
+      // período), e a variação dos rankings divergia da Micro sempre que o
+      // operador não lançava no último dia. Cache já quente da Micro.
+      const fim   = (typeof _anGetLastPeriodStockFallback === 'function')
+        ? _anGetLastPeriodStockFallback({ central: r.central, material: mat, dtIni, dtFim }) : null;
       const snap  = buildSnapshot({
         lancs, sap,
         initialStockOverride:     prev?.value  ?? null,
         initialDateLabelOverride: prev?.dtLabel ?? null,
+        finalStockOverride:       fim && !fim.missing ? fim.value : null,
       });
       const diff   = snap.diff;
       const rawCat = (lancs[0]?.categoria || sap[0]?.categoria || '').trim().toUpperCase();

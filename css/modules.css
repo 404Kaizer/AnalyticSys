@@ -4564,7 +4564,6 @@ img { max-width: 100%; }
    RESPONSIVE — TABLET
 ══════════════════════════════════════════ */
 @media (max-width: 900px) {
-  .topbar-sub { display: none; }
   .topbar-divider { display: none; }
   .search-input { width: 140px; }
   .metrics-grid { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
