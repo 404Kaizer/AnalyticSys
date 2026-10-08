@@ -354,53 +354,57 @@ function getSapDuplicateKeys() {
   const cancelledKeys = new Set(); // pares anulados por estorno → amarelo
   const realDupKeys   = new Set(); // duplicatas reais            → vermelho
 
+  // Chave-base de todo registro: ref + central + depósito + material + |peso|
+  // (sem movimento, documento nem data). Uma duplicata real (PASSO 1) tem
+  // obrigatoriamente a mesma chave-base, e um par que se anula (PASSO 2)
+  // também — então só registros cuja base se repete podem cair em qualquer
+  // um dos dois. Montar a chave exata e os grupos só para esses evita
+  // milhões de strings e um objeto-dicionário com uma chave por registro
+  // (~4,7 s → ~2 s em 1 milhão). Resultado idêntico ao cálculo antigo.
+  const sap = state.sap || [];
+  const n = sap.length;
+  const bases = new Array(n);
+  const pesos = new Array(n);
+  const baseCount = new Map();
+  for (let i = 0; i < n; i++) {
+    const r = sap[i];
+    const pesoVal = num(r.peso);
+    const b = (r.ref || '').trim() + '||' + (r.central || '').trim() + '||' + (r.deposito || '').trim() + '||' +
+              (r.material || r.materialOriginal || '').trim() + '||' + Math.abs(pesoVal);
+    bases[i] = b;
+    pesos[i] = pesoVal;
+    baseCount.set(b, (baseCount.get(b) || 0) + 1);
+  }
+
   // ── PASSO 1: duplicatas reais ────────────────────────────────────────────
   // Mesmo movimento + ref + central + depósito + material + peso + dtLanc
   // aparecendo mais de uma vez = integração enviada em duplicidade.
   // Documento é excluído pois o estorno gera documento próprio.
-  const exactCounts = {};
-  (state.sap || []).forEach(r => {
-    const key = [
-      normMov(r.movimento),
-      (r.ref      || '').trim(),
-      (r.central  || '').trim(),
-      (r.deposito || '').trim(),
-      (r.material || r.materialOriginal || '').trim(),
-      String(num(r.peso)),
-      (r.dtLanc   || '').trim()
-    ].join('||');
-    exactCounts[key] = (exactCounts[key] || 0) + 1;
-  });
-  (state.sap || []).forEach(r => {
-    const key = [
-      normMov(r.movimento),
-      (r.ref      || '').trim(),
-      (r.central  || '').trim(),
-      (r.deposito || '').trim(),
-      (r.material || r.materialOriginal || '').trim(),
-      String(num(r.peso)),
-      (r.dtLanc   || '').trim()
-    ].join('||');
-    if (exactCounts[key] > 1) realDupKeys.add(getSapRecordKey(r));
-  });
+  const exactCounts = new Map();
+  const exatas = new Array(n);
+  for (let i = 0; i < n; i++) {
+    if (baseCount.get(bases[i]) < 2) continue;
+    const r = sap[i];
+    const key = normMov(r.movimento) + '||' + (r.ref || '').trim() + '||' + (r.central || '').trim() + '||' +
+                (r.deposito || '').trim() + '||' + (r.material || r.materialOriginal || '').trim() + '||' +
+                String(pesos[i]) + '||' + (r.dtLanc || '').trim();
+    exatas[i] = key;
+    exactCounts.set(key, (exactCounts.get(key) || 0) + 1);
+  }
+  for (let i = 0; i < n; i++) {
+    if (exatas[i] !== undefined && exactCounts.get(exatas[i]) > 1) realDupKeys.add(getSapRecordKey(sap[i]));
+  }
 
   // ── PASSO 2: pares que se anulam ────────────────────────────────────────
-  // Agrupa por ref + central + depósito + material + |peso| (sem movimento,
-  // sem documento, sem data) para casar originais com seus estornos.
-  const groups = {};
-  (state.sap || []).forEach(r => {
-    const mv      = normMov(r.movimento);
-    const pesoVal = num(r.peso);
-    const baseKey = [
-      (r.ref      || '').trim(),
-      (r.central  || '').trim(),
-      (r.deposito || '').trim(),
-      (r.material || r.materialOriginal || '').trim(),
-      Math.abs(pesoVal)
-    ].join('||');
-    if (!groups[baseKey]) groups[baseKey] = [];
-    groups[baseKey].push({ r, mv, pesoVal, used: false });
-  });
+  // Agrupa pela chave-base para casar originais com seus estornos.
+  const groups = new Map();
+  for (let i = 0; i < n; i++) {
+    if (baseCount.get(bases[i]) < 2) continue;
+    const r = sap[i];
+    let g = groups.get(bases[i]);
+    if (!g) { g = []; groups.set(bases[i], g); }
+    g.push({ r, mv: normMov(r.movimento), pesoVal: pesos[i], used: false });
+  }
 
   const consumePair = (entries, negTest, posTest) => {
     const negEntry = entries.find(e => !e.used && negTest(e));
@@ -417,9 +421,7 @@ function getSapDuplicateKeys() {
     return true;
   };
 
-  Object.values(groups).forEach(entries => {
-    if (entries.length < 2) return;
-
+  groups.forEach(entries => {
     // Consome pares estorno (102/864/863/552/802 negativo) + original positivo
     let found = true;
     while (found) found = consumePair(
@@ -623,22 +625,46 @@ function moduleSortBy(module, col) {
 }
 window.moduleSortBy = moduleSortBy;
 
+// Mesmo comparador de sempre, mas com as duas chaves (número e texto
+// "aaaammdd") calculadas 1× por linha em vez de 2× por comparação (4 regex +
+// parseFloat + localeCompare com options — ~11 s para ordenar 1 milhão), e
+// um Intl.Collator único (localeCompare com options cria um por chamada). A
+// ordem resultante é idêntica: mesmas comparações, sort estável.
+// O resultado fica guardado para a paginação: "próxima página" e
+// renderModule pedem o mesmo getFilteredData seguidas vezes, e cada um
+// reordenava tudo de novo.
+const _sortCollator = new Intl.Collator('pt-BR', { numeric: true });
+const _moduleSortCache = {};
 function _applyModuleSort(module, data) {
   const s = _moduleSortState[module];
   if (!s || !s.col) return data;
   const col = s.col;
   const dir = s.dir === 'asc' ? 1 : -1;
-  return [...data].sort((a, b) => {
-    let av = a[col] ?? '';
-    let bv = b[col] ?? '';
+  const c = _moduleSortCache[module];
+  if (c && c.data === data && c.len === data.length && c.col === col && c.dir === dir && c.versao === _dadosVersao) {
+    return c.result;
+  }
+  const n = data.length;
+  const nums = new Float64Array(n);
+  const textos = new Array(n);
+  const idx = new Array(n);
+  for (let i = 0; i < n; i++) {
+    const v = String(data[i][col] ?? '');
     // Comparação numérica para peso/custo/valor
-    const an = parseFloat(String(av).replace(/\./g,'').replace(',','.').replace(/[^\d.-]/g,''));
-    const bn = parseFloat(String(bv).replace(/\./g,'').replace(',','.').replace(/[^\d.-]/g,''));
-    if (!isNaN(an) && !isNaN(bn)) return (an - bn) * dir;
+    nums[i] = parseFloat(v.replace(/\./g,'').replace(',','.').replace(/[^\d.-]/g,''));
     // Datas dd/mm/aaaa → aaaa/mm/dd para comparação lexicográfica correta
-    const toISO = v => { const p = String(v).split('/'); return p.length === 3 ? `${p[2]}${p[1]}${p[0]}` : String(v); };
-    return toISO(av).localeCompare(toISO(bv), 'pt-BR', { numeric: true }) * dir;
+    const p = v.split('/');
+    textos[i] = p.length === 3 ? `${p[2]}${p[1]}${p[0]}` : v;
+    idx[i] = i;
+  }
+  idx.sort((x, y) => {
+    const an = nums[x], bn = nums[y];
+    if (!isNaN(an) && !isNaN(bn)) return (an - bn) * dir;
+    return _sortCollator.compare(textos[x], textos[y]) * dir;
   });
+  const result = idx.map(i => data[i]);
+  _moduleSortCache[module] = { data, len: n, col, dir, versao: _dadosVersao, result };
+  return result;
 }
 
 // ── Cache de índices que passam os filtros de coluna ─────────────────────
@@ -5485,20 +5511,11 @@ function _buildLancIndex() {
     _lancByCentral.get(c).push(r);
   }
   // Ordena cada bucket por data ASC (necessário para getPrePeriodLaunchStock)
+  const porData = (a, b) => (parseDateTs(a.dtLanc) ?? 0) - (parseDateTs(b.dtLanc) ?? 0);
   _lancByCentralMat.forEach(matMap => {
-    matMap.forEach((arr, mat) => {
-      arr.sort((a, b) => {
-        const da = parseDate(a.dtLanc), db = parseDate(b.dtLanc);
-        return (da ? da.getTime() : 0) - (db ? db.getTime() : 0);
-      });
-    });
+    matMap.forEach(arr => arr.sort(porData));
   });
-  _lancByCentral.forEach(arr => {
-    arr.sort((a, b) => {
-      const da = parseDate(a.dtLanc), db = parseDate(b.dtLanc);
-      return (da ? da.getTime() : 0) - (db ? db.getTime() : 0);
-    });
-  });
+  _lancByCentral.forEach(arr => arr.sort(porData));
   _lancIndexBuilt = true;
 }
 
@@ -5584,9 +5601,11 @@ function getLancsByCentralInPeriod(central, dtIni, dtFim) {
   const { byCentral } = getLancIndex();
   const arr = byCentral.get(central) || [];
   if (!dtIni && !dtFim) return arr;
+  // Timestamp em vez de Date (parseDateTs, dashboard.js) — mesma comparação
+  // (Date vira número no < e >), sem alocar um objeto por registro.
   return arr.filter(r => {
-    const d = parseDate(r.dtLanc);
-    if (!d) return false;
+    const d = parseDateTs(r.dtLanc);
+    if (d === null) return false;
     if (dtIni && d < dtIni) return false;
     if (dtFim && d > dtFim) return false;
     return true;
@@ -5599,8 +5618,8 @@ function getSapByCentralInPeriod(central, dtIni, dtFim) {
   const arr = byCentral.get(central) || [];
   if (!dtIni && !dtFim) return arr;
   return arr.filter(r => {
-    const d = parseDate(r.dtLanc);
-    if (!d) return false;
+    const d = parseDateTs(r.dtLanc); // ver getLancsByCentralInPeriod
+    if (d === null) return false;
     if (dtIni && d < dtIni) return false;
     if (dtFim && d > dtFim) return false;
     return true;
@@ -6157,10 +6176,15 @@ function renderSaidasSummary() {
 }
 window.renderSaidasSummary = renderSaidasSummary;
 
-function renderSapSummary() {
-  const el = document.getElementById('sap-summary-cards');
-  if (!el) return;
-  const data = _lastFiltered.sap || getFilteredData('sap');
+// Totais do resumo SAP — somar 1 milhão de registros custava ~0,7 s em TODO
+// render da página SAP (paginação, seleção, "ver todas"). Guardados por
+// (array filtrado, tamanho, _dadosVersao): o array é o mesmo enquanto
+// filtro/ordenação não mudam (ver _applyModuleSort). Só os números ficam em
+// cache; o HTML continua sendo refeito a cada chamada.
+let _sapSummaryCache = null;
+function _sapSummaryTotais(data) {
+  const c = _sapSummaryCache;
+  if (c && c.data === data && c.len === data.length && c.versao === _dadosVersao) return c;
   const { peso: totalPeso, custo: totalValor } = somarPesoCustoSap(data);
   const porMov = _agruparRegistros(data, r => normMov(r.movimento));
   const grupos = [...porMov.entries()].map(([cod, recs]) => {
@@ -6176,6 +6200,20 @@ function renderSapSummary() {
   const recsSaida   = data.filter(r => num(r.peso) < 0);
   const { peso: pesoEnt, custo: custoEnt } = somarPesoCustoSap(recsEntrada);
   const { peso: pesoSai, custo: custoSai } = somarPesoCustoSap(recsSaida);
+  _sapSummaryCache = {
+    data, len: data.length, versao: _dadosVersao,
+    totalPeso, totalValor, grupos, pesoEnt, custoEnt, pesoSai, custoSai,
+    nEnt: recsEntrada.length, nSai: recsSaida.length,
+  };
+  return _sapSummaryCache;
+}
+
+function renderSapSummary() {
+  const el = document.getElementById('sap-summary-cards');
+  if (!el) return;
+  const data = _lastFiltered.sap || getFilteredData('sap');
+  const t = _sapSummaryTotais(data);
+  const { totalPeso, totalValor, grupos, pesoEnt, custoEnt, pesoSai, custoSai } = t;
 
   // 101/801 (entrada) e 201 (saída) são os códigos principais de
   // movimentação no SAP — reaproveita o agrupamento por código (`grupos`,
@@ -6196,13 +6234,13 @@ function renderSapSummary() {
     extraHeroCards: [
       _heroSubCardHtml({
         icon: 'ti-package-import', iconBg: 'var(--green-bg)', iconColor: 'var(--green)', colorClass: 'kpi-green',
-        label: 'SAP · Total de Entradas', peso: pesoEnt, custo: custoEnt, count: recsEntrada.length,
+        label: 'SAP · Total de Entradas', peso: pesoEnt, custo: custoEnt, count: t.nEnt,
         title: 'Todos os registros com peso positivo no filtro atual',
         subtext: `${badgeKg(g101, '101')} · ${badgeKg(g801, '801')}`
       }),
       _heroSubCardHtml({
         icon: 'ti-package-export', iconBg: 'var(--red-bg)', iconColor: 'var(--red)', colorClass: 'kpi-red',
-        label: 'SAP · Total de Saídas', peso: Math.abs(pesoSai), custo: Math.abs(custoSai), count: recsSaida.length,
+        label: 'SAP · Total de Saídas', peso: Math.abs(pesoSai), custo: Math.abs(custoSai), count: t.nSai,
         title: 'Todos os registros com peso negativo no filtro atual',
         subtext: badgeKg(g201, '201')
       })

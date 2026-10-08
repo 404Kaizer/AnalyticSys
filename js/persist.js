@@ -173,16 +173,19 @@ function idbPut(db, key, value) {
 // O SAP pode ter milhões de registros — gravar tudo num único objeto IndexedDB
 // causa falha silenciosa. Salvamos em chunks de SAP_CHUNK_SIZE registros cada.
 
-async function saveSapChunks(db, records) {
-  if (!db || !Array.isArray(records)) return;
-  const compacted = compactSapRecords(records);
+// `compacted` já vem de compactSapRecords (buildStateSnapshot) — compactar
+// de novo aqui dava o mesmo resultado e custava ~1,4 s por gravação em 1 mi.
+async function saveSapChunks(db, compacted) {
+  if (!db || !Array.isArray(compacted)) return;
   const totalChunks = Math.ceil(compacted.length / SAP_CHUNK_SIZE) || 1;
 
   const oldMeta = await idbGet(db, SAP_META_KEY).catch(() => null);
   const oldChunks = oldMeta?.totalChunks || 0;
 
-  // Grava chunks novos em paralelo (batches de 10 para não travar a thread)
-  const BATCH = 10;
+  // Grava chunks novos em lotes pequenos: o put clona o chunk de forma
+  // síncrona (~60 ms por 10 mil registros), então um lote de 10 travava a
+  // tela ~0,6 s por vez; com 2, a travada fica em ~0,1 s entre respiros.
+  const BATCH = 2;
   for (let b = 0; b < totalChunks; b += BATCH) {
     const writes = [];
     for (let i = b; i < Math.min(b + BATCH, totalChunks); i++) {
@@ -668,6 +671,9 @@ function flushPersistQueue() {
 // (ex.: Considerar/Desconsiderar e Desbloquear/Bloquear do Fechamento) —
 // pula a regravação da base SAP inteira, que custa segundos.
 function persist({ semSap = false } = {}) {
+  // Toda edição passa por aqui — sinaliza aos caches de resultado
+  // (ordenação, resumo SAP) que os dados mudaram. Ver lookup.js.
+  if (typeof marcarDadosAlterados === 'function') marcarDadosAlterados();
   if (!semSap) persistPrecisaSap = true;
   clearTimeout(persistTimer);
   persistTimer = setTimeout(() => {
@@ -802,10 +808,23 @@ async function loadState() {
 // autoritativa e não cabem no localStorage.
 // No próximo boot, loadState() compara o savedAt deste snapshot com o do
 // IDB_STATE_KEY e usa o mais recente para os campos não-SAP.
+// BUG REAL (08/10/2026): com Saídas/Entradas/Lançamentos grandes, o
+// JSON.stringify daqui (1 mi+ de registros, a cada F5 ou fechamento) estourava
+// a memória da aba — "Aw, Snap" ao recarregar (3 de 3 crashes "javascript
+// OOM" medidos) — e, mesmo quando não estourava, passava dos ~5 MB do
+// localStorage: a cópia de emergência nunca chegava a ser gravada. Agora os
+// módulos de volume só entram quando cabem (base pequena, comportamento de
+// antes). Se não couberem, saem junto `imports` (senão o log listaria uma
+// importação sem os registros dela) e `custosSap` (volta do Supabase no
+// boot). O loadState mescla por chave: o que não está aqui fica do IndexedDB.
+const EMERGENCIA_MODULOS_VOLUME = ['entradas', 'saidas', 'lancamentos', 'custosSap', 'imports'];
+const EMERGENCIA_LIMITE_REGISTROS = 5000; // ponytail: limite fixo por módulo; o certo é medir o JSON, mas medir já exige montá-lo
 function _emergencySave() {
   clearTimeout(persistTimer); // cancela debounce pendente
   if (!stateHydrated) return;
   try {
+    const volumeCabe = ['entradas', 'saidas', 'lancamentos']
+      .every(k => (state[k] || []).length <= EMERGENCIA_LIMITE_REGISTROS);
     // Derivado de saveSnapshotKeys (fonte única) em vez de listado à mão —
     // esta lista já esqueceu campos novos duas vezes no passado
     // (notifications/invJustificativas, depois ajustesSistemicos/
@@ -813,6 +832,7 @@ function _emergencySave() {
     // dado com validade fiscal/auditoria num fechamento abrupto da aba.
     const snapshot = { version: STATE_VERSION, savedAt: Date.now() };
     for (const key of saveSnapshotKeys) {
+      if (!volumeCabe && EMERGENCIA_MODULOS_VOLUME.includes(key)) continue;
       // SAP excluído — chunks IDB são a fonte autoritativa e não cabem no localStorage.
       snapshot[key] = key === 'sap' ? [] : (state[key] || []);
     }

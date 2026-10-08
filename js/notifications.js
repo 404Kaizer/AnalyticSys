@@ -146,6 +146,11 @@ const _NOTIF_MANAGED_TYPES = new Set(['saude','ocorrencia','conferencia']);
 // ── Sincroniza state.notifications ───────────────────────
 function notifSync(healthScores) {
   if (!Array.isArray(state.notifications)) state.notifications = [];
+  // persist() regrava a base inteira (segundos com 1 mi+ de registros) e
+  // esta função roda 3× no boot e a cada Analisar — quase sempre chegando
+  // às mesmas notificações. Só grava se a lista mudou de fato (≤ ~250 itens,
+  // comparar custa ~1 ms).
+  const antes = JSON.stringify(state.notifications);
   const expected    = _notifCompute(healthScores);
   const expectedIds = new Set(expected.map(n=>n.id));
 
@@ -170,7 +175,7 @@ function notifSync(healthScores) {
   });
 
   _notifRenderBadge();
-  if (typeof persist==='function') persist();
+  if (typeof persist==='function' && JSON.stringify(state.notifications) !== antes) persist();
 }
 
 // ── Cálculo silencioso de saúde ao carregar ───────────────

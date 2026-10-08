@@ -232,10 +232,22 @@ function excluirImportacao(importId) {
   });
 }
 
+// Linha clicada → registro ATUAL no state. A posição vale na lista que está
+// desenhada (_lastFiltered, gravada por renderCustosSap), não numa lista
+// recalculada agora: com o render do Realtime agrupado (até 300 ms, ver
+// _custosSapAgendarRender), recalcular podia apontar para outro registro.
+// O objeto desenhado pode ter sido trocado por um UPDATE do Realtime, então
+// busca a versão atual pelo id; null = já foi apagado por outro usuário.
+function _custosSapRegistroDaLinha(absIndex) {
+  const exibido = (_lastFiltered.custosSap || getFilteredData('custosSap'))[absIndex];
+  if (!exibido) return null;
+  if (!exibido.id) return state.custosSap.includes(exibido) ? exibido : null;
+  return state.custosSap.find(r => r.id === exibido.id) || null;
+}
+
 function excluirCustosSap(absIndex) {
   if (window.currentUser?.role !== 'admin') { toast('Só o administrador pode excluir Custos SAP', 'error'); return; }
-  const filtered = getFilteredData('custosSap');
-  const rec = filtered[absIndex];
+  const rec = _custosSapRegistroDaLinha(absIndex);
   if (!rec) return;
 
   const originalIndex = state.custosSap.indexOf(rec);
@@ -407,13 +419,12 @@ function _atualizarRegistroCustosSap(rec, dados) {
 
 // Abre o modal "Novo Registro Manual" já na aba Custo SAP, preenchido com
 // os valores do registro `absIndex` (mesmo índice usado por
-// excluirCustosSap — posição em getFilteredData('custosSap'), não em
-// state.custosSap direto). Chamado pelo botão "Editar" da tabela Custos
+// excluirCustosSap — posição na lista desenhada, ver
+// _custosSapRegistroDaLinha). Chamado pelo botão "Editar" da tabela Custos
 // SAP (dashboard.js, admin only).
 function editarCustosSap(absIndex) {
   if (window.currentUser?.role !== 'admin') { toast('Só o administrador pode editar Custos SAP', 'error'); return; }
-  const filtered = getFilteredData('custosSap');
-  const rec = filtered[absIndex];
+  const rec = _custosSapRegistroDaLinha(absIndex);
   if (!rec) return;
 
   openModal('modal-manual');
@@ -1140,14 +1151,27 @@ function _custosSapRemoveLocal(rowId) {
 }
 
 let _custosSapChannel = null;
+// Uma importação de Custos SAP por outro usuário chega como ~10 mil eventos
+// seguidos (rajadas reais de 07/10). Renderizar a cada evento (~16 ms cada)
+// travava a tela de TODO navegador conectado por ~2,5 min. O dado entra na
+// memória na hora; a tela é redesenhada no máximo a cada 300 ms.
+let _custosSapRenderTimer = null;
+function _custosSapAgendarRender() {
+  if (_custosSapRenderTimer) return;
+  _custosSapRenderTimer = setTimeout(() => {
+    _custosSapRenderTimer = null;
+    if (typeof renderCustosSap === 'function') renderCustosSap();
+    if (typeof updateDashboard === 'function') updateDashboard();
+  }, 300);
+}
 function _custosSapRealtimeInit() {
   if (!window.supabaseClient || !window.currentUser || _custosSapChannel) return;
   const handle = (payload, tipo) => {
     const row = tipo === 'DELETE' ? payload.old : payload.new;
     if (!row) return;
     if (tipo === 'DELETE') _custosSapRemoveLocal(row.id); else _custosSapUpsertLocal(row);
-    if (typeof renderCustosSap === 'function') renderCustosSap();
-    if (typeof updateDashboard === 'function') updateDashboard();
+    if (typeof marcarDadosAlterados === 'function') marcarDadosAlterados();
+    _custosSapAgendarRender();
   };
   _custosSapChannel = window.supabaseClient
     .channel('custos_sap_realtime')

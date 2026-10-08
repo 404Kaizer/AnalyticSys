@@ -59,9 +59,9 @@ const CLOUD_BACKUP_MODULOS = ['entradas', 'saidas', 'lancamentos', 'sap'];
 
 // Throttle do reforço periódico — não repete o backup do mesmo módulo em
 // menos desse intervalo, mesmo que o timer de checagem rode com mais
-// frequência (ver cloudBackupPeriodicoInit). Reseta a cada boot (é só um
-// "não repita à toa nesta sessão", não uma trava persistida — o backup
-// pós-importação e o de outra sessão/aba já cobrem o resto).
+// frequência (ver cloudBackupPeriodicoInit). _cbLastBackupAt reseta a cada
+// boot; entre sessões quem manda é o savedAt do manifest na nuvem (ver
+// `opts.periodico` em _cbUploadModuloInterno).
 const CLOUD_BACKUP_PERIODIC_CHECK_MS = 30 * 60 * 1000;      // confere a cada 30min
 const CLOUD_BACKUP_PERIODIC_MIN_INTERVAL_MS = 3 * 60 * 60 * 1000; // mínimo 3h entre backups do mesmo módulo
 
@@ -143,6 +143,18 @@ async function _cbUploadModuloInterno(modulo, opts = {}) {
       .from(CLOUD_BACKUP_BUCKET).download(`${basePath}/manifest.json`);
     if (!error && data) manifestAntigo = JSON.parse(await data.text());
   } catch (_) { /* sem manifest antigo — primeira vez, normal */ }
+
+  // Reforço periódico: o intervalo mínimo era contado só nesta sessão
+  // (_cbLastBackupAt zera a cada boot), então TODA sessão reenviava os 4
+  // módulos inteiros aos 30 min (~100 MB e ~35 s de processamento na conta
+  // ADM), mesmo sem mudança nenhuma. O manifest da nuvem diz quando foi o
+  // último envio, de qualquer sessão ou aparelho. Só pula se esse envio foi
+  // recente E a contagem bate; com contagem diferente envia normalmente.
+  if (opts.periodico && manifestAntigo?.savedAt && manifestAntigo.totalRecords === registros.length &&
+      Date.now() - manifestAntigo.savedAt < CLOUD_BACKUP_PERIODIC_MIN_INTERVAL_MS) {
+    _cbLastBackupAt[modulo] = manifestAntigo.savedAt;
+    return true;
+  }
 
   if (!registros.length) {
     // Nada a fazer se nunca existiu backup, ou se isto não é uma exclusão
@@ -551,7 +563,7 @@ function cloudBackupPeriodicoInit() {
     CLOUD_BACKUP_MODULOS.forEach(modulo => {
       const ultimaVez = _cbLastBackupAt[modulo] || 0;
       if (agora - ultimaVez < CLOUD_BACKUP_PERIODIC_MIN_INTERVAL_MS) return;
-      _cbUploadModulo(modulo);
+      _cbUploadModulo(modulo, { periodico: true });
     });
   }, CLOUD_BACKUP_PERIODIC_CHECK_MS);
 }

@@ -8369,7 +8369,33 @@ async function restoreAndRender() {
  * Parse a date string "DD/MM/AAAA" → Date (midnight local).
  * Returns null for invalid strings.
  */
+// Cache string → timestamp: milhões de registros repetem poucos milhares de
+// datas, e parseDate roda por registro em todo filtro de período (regex +
+// split + new Date a cada chamada custava ~1 s por milhão). parseDate
+// devolve sempre um Date NOVO — há chamadores que mutam o resultado
+// (setHours/setDate) e um objeto compartilhado propagaria a mutação.
+// parseDateTs devolve o timestamp direto, para laços quentes que só comparam.
+// ponytail: teto = cache sem LRU, zerado ao passar de 200 mil chaves (só
+// strings entram; distintas reais são poucos milhares).
+const _parseDateCache = new Map();
+function parseDateTs(str) {
+  if (typeof str !== 'string') { const d = _parseDateSemCache(str); return d ? d.getTime() : null; }
+  let ts = _parseDateCache.get(str);
+  if (ts === undefined) {
+    const d = _parseDateSemCache(str);
+    ts = d ? d.getTime() : null;
+    if (_parseDateCache.size >= 200000) _parseDateCache.clear();
+    _parseDateCache.set(str, ts);
+  }
+  return ts;
+}
+
 function parseDate(str) {
+  const ts = parseDateTs(str);
+  return ts === null ? null : new Date(ts);
+}
+
+function _parseDateSemCache(str) {
   if (!str || str === '—') return null;
   // Accept DD/MM/AAAA or AAAA-MM-DD
   let d, m, y;

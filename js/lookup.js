@@ -34,14 +34,24 @@ function _getOrBuildIndex(scope, records, fields) {
   return index;
 }
 
+// Versão dos dados — sobe a cada mutação conhecida: persist() (toda edição
+// passa por ele) e as invalidações de índice abaixo (chamadas por
+// importação, exclusão e Realtime). Caches de resultado (ordenação, totais
+// do resumo SAP) comparam esta versão para não servir dado velho quando um
+// registro muda sem mudar o tamanho do array.
+let _dadosVersao = 0;
+function marcarDadosAlterados() { _dadosVersao++; }
+
 // Invalida o índice de um módulo (chame após importar ou remover registros).
 function invalidateSearchIndex(scope) {
   delete _searchIndex[scope];
+  _dadosVersao++;
 }
 
 // Invalida todos os índices de uma vez (ex: ao limpar tudo).
 function invalidateAllSearchIndexes() {
   for (const k of Object.keys(_searchIndex)) delete _searchIndex[k];
+  _dadosVersao++;
 }
 
 function recordMatchesSearch(record, query, fields) {
