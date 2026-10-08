@@ -3593,7 +3593,7 @@ const _DGR_NOMES = {
                 'dgFmtPeso', 'dgFmtPesoSigned',
                 '_daVarIrrelevante', '_daColorFor', '_daFmtPctSigned', '_daFmtMoneySigned',
                 '_daFmtCountSigned', '_daMaiorImpacto', '_daBuildRanking', '_daRenderRanking',
-                'calcHealthScore', 'classifyVariation', 'HEALTH_PENALTIES', '_dgVgBuildCentralHealthData',
+                '_daRenderRankingVariacao', 'calcHealthScore', 'classifyVariation', 'HEALTH_PENALTIES', '_dgVgBuildCentralHealthData',
                 '_DG_VG_NIVEL_COR', '_DG_VG_NIVEL_LABEL', '_DG_VG_NIVEL_ORDEM',
                 '_dgVgNivelBadgeHtml', '_dgVgSaudeDiffCor', 'abrirDetalheSaude', '_dgVgRenderSaudeTabela',
                 '_dgVgFiltrarSaudeLista', 'fecharDetalheSaude', 'abrirDetalheVariacao', 'fecharDetalheVariacao']
@@ -3868,7 +3868,7 @@ function _dgrExportaveis() {
     calcHealthScore, classifyVariation, HEALTH_PENALTIES,
     _daVarIrrelevante, _daColorFor, _daFmtPctSigned, _daFmtMoneySigned, _daFmtCountSigned,
     _daMaiorImpacto, _daBuildTabelaMaterial, _daBuildRanking,
-    _daRenderTabelaMaterial, _daRenderRanking,
+    _daRenderTabelaMaterial, _daRenderRanking, _daRenderRankingVariacao,
     _DG_VG_NIVEL_COR, _DG_VG_NIVEL_LABEL, _DG_VG_NIVEL_ORDEM,
     _dgVgNivelBadgeHtml, _dgVgSaudeDiffCor, abrirDetalheSaude, _dgVgRenderSaudeTabela,
     _dgVgFiltrarSaudeLista, fecharDetalheSaude, abrirDetalheVariacao, fecharDetalheVariacao

@@ -2132,9 +2132,9 @@ function _dgVgRenderExtremos(extRegional, extCentral, elId, dadosJs) {
 }
 
 // ── Modal "Detalhado" — Variação por Regional e Central ───────────────
-//    Reaproveita _daBuildRanking/_daRenderRanking (mesma tabela do
-//    Detalhado Analítico, colunas Caminhões/Carretas/IBCs/Variação/Custo),
-//    só que dentro de um modal em vez de rolar até a seção lá embaixo.
+//    Reaproveita _daBuildRanking (mesma agregação do Detalhado Analítico),
+//    mas renderiza com _daRenderRankingVariacao: Saúde + variação em kg por
+//    categoria + % + custo, em vez dos veículos do ranking lá embaixo.
 //
 //    Dois modos, pelo 2º argumento:
 //    - chave preenchida (vem de um card de extremo, ver _dgVgRenderExtremos):
@@ -2175,8 +2175,28 @@ function abrirDetalheVariacao(tipo, chave, periodo) {
     if (d.rotulo) titleEl.textContent += ` · ${d.rotulo}`;
   }
 
+  // Saúde de cada linha: central → mesmo nível do donut de Centrais;
+  // material (dentro de uma central) → nível do par; regional → pior nível
+  // entre suas centrais (mesma regra do cabeçalho de regional do Analítico
+  // micro, buildRegionalSummaryHtml).
+  const { linhas: saudeCen } = _dgVgBuildCentralHealthData(d.pares, d.thresholds, d.centrais);
+  const nivelCen = new Map(saudeCen.map(l => [l.central, l.level]));
+  let nivelFn = k => nivelCen.get(k);
+  if (colLabel === 'Material') {
+    const nivelMat = new Map(paresEscopo.map(p => [p.mat, p.levelSaude]));
+    nivelFn = k => nivelMat.get(k);
+  } else if (colLabel === 'Regional') {
+    const regDe = new Map((d.centrais || d.pares).map(c => [c.central, c.regional]));
+    const pior = new Map();
+    nivelCen.forEach((lvl, cen) => {
+      const r = regDe.get(cen), atual = pior.get(r);
+      if (!atual || _DG_VG_NIVEL_ORDEM[lvl] < _DG_VG_NIVEL_ORDEM[atual]) pior.set(r, lvl);
+    });
+    nivelFn = k => pior.get(k);
+  }
+
   const dados = _daBuildRanking(paresEscopo, pesoMedio, keyFn, d.totalEstTeoricoKpi, labelFn);
-  _daRenderRanking('dg-var-detalhe-body', dados, colLabel);
+  _daRenderRankingVariacao('dg-var-detalhe-body', dados, colLabel, nivelFn);
 
   overlay.classList.add('open');
   overlay.setAttribute('aria-hidden', 'false');
@@ -2703,7 +2723,11 @@ function _daBuildRanking(pares, pesoMedio, keyFn, totalEstTeoricoKpi, labelFn) {
     const estTeorico = m.estIni + m.entKg + m.saiKg + m.ajuKg; // teórico DO ESCOPO — só pra achar o diff do escopo
     const diff        = m.estFim - estTeorico;         // desfalque/sobra em kg DO ESCOPO
     return {
+      key: m.key,
       nome: labelFn ? labelFn(m.key) : m.key,
+      // kg crus por categoria (base dos veículos) — colunas do modal Ver
+      // detalhes (_daRenderRankingVariacao), que mostra variação, não veículo.
+      agregadoKg: m.caminhoesDiffKg, aglomeranteKg: m.carretasDiffKg, aditivoKg: m.ibcsDiffKg, diff,
       caminhoes: pesoMedio.caminhoes ? m.caminhoesDiffKg / pesoMedio.caminhoes : 0,
       carretas:  pesoMedio.carretas  ? m.carretasDiffKg  / pesoMedio.carretas  : 0,
       ibcs:      pesoMedio.ibcs      ? m.ibcsDiffKg      / pesoMedio.ibcs      : 0,
@@ -2723,9 +2747,13 @@ function _daBuildRanking(pares, pesoMedio, keyFn, totalEstTeoricoKpi, labelFn) {
     caminhoes:   t.caminhoes   + (l.caminhoes   || 0),
     carretas:    t.carretas    + (l.carretas    || 0),
     ibcs:        t.ibcs        + (l.ibcs        || 0),
+    agregadoKg:    t.agregadoKg    + l.agregadoKg,
+    aglomeranteKg: t.aglomeranteKg + l.aglomeranteKg,
+    aditivoKg:     t.aditivoKg     + l.aditivoKg,
+    diff:          t.diff          + l.diff,
     pctVariacao: t.pctVariacao + (l.pctVariacao || 0),
     custoTotal:  t.custoTotal  + (l.custoTotal  || 0)
-  }), { caminhoes: 0, carretas: 0, ibcs: 0, pctVariacao: 0, custoTotal: 0 });
+  }), { caminhoes: 0, carretas: 0, ibcs: 0, agregadoKg: 0, aglomeranteKg: 0, aditivoKg: 0, diff: 0, pctVariacao: 0, custoTotal: 0 });
 
   return { linhas, total };
 }
@@ -2877,6 +2905,47 @@ function _daRenderRanking(containerId, dados, colNomeLabel) {
         </thead>
         <tbody>${rowsHtml}</tbody>
         <tfoot>${totalHtml}</tfoot>
+      </table>
+    </div>`;
+}
+
+// Variante do ranking só pros modais "Ver detalhes" (abrirDetalheVariacao):
+// no lugar de Caminhões/Carretas/IBCs, a VARIAÇÃO em kg de cada categoria
+// (mesma soma com sinal que gera os veículos) + Saúde + financeiro. Pedido
+// do Hugo (08/10/2026). nivelFn(key) → nível ('critico'…'bom') ou null.
+function _daRenderRankingVariacao(containerId, dados, colNomeLabel, nivelFn) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  if (!dados.linhas.length) {
+    el.innerHTML = '<div class="dg-empty-riscos"><i class="ti ti-database-off"></i><span>Sem dados no período.</span></div>';
+    return;
+  }
+  const kg = v => `<td class="da-num" style="color:${_daColorFor(v)}">${varSymbol(v)} ${dgFmtPeso(Math.abs(v), 1)}</td>`;
+  const saude = k => {
+    const lvl = nivelFn(k);
+    return _DG_VG_NIVEL_COR[lvl] ? _dgVgNivelBadgeHtml(lvl) : '<span style="color:var(--text3)">—</span>';
+  };
+  const cols = l => `${kg(l.agregadoKg)}${kg(l.aglomeranteKg)}${kg(l.aditivoKg)}${kg(l.diff)}
+      <td class="da-num" style="color:${_daColorFor(l.pctVariacao)}">${_daFmtPctSigned(l.pctVariacao)}</td>
+      <td class="da-num" style="color:${_daColorFor(l.custoTotal)}">${_daFmtMoneySigned(l.custoTotal)}</td>`;
+
+  el.innerHTML = `
+    <div class="da-table-wrap">
+      <table class="da-table">
+        <thead>
+          <tr>
+            <th>${escapeHtml(colNomeLabel)}</th>
+            <th>Saúde</th>
+            <th class="da-num">Agregado</th>
+            <th class="da-num">Aglomerante</th>
+            <th class="da-num">Aditivo + Adição</th>
+            <th class="da-num">Variação</th>
+            <th class="da-num">% Variação</th>
+            <th class="da-num">Custo Total</th>
+          </tr>
+        </thead>
+        <tbody>${dados.linhas.map(l => `<tr><td>${escapeHtml(l.nome)}</td><td>${saude(l.key)}</td>${cols(l)}</tr>`).join('')}</tbody>
+        <tfoot><tr class="da-total-row"><td>Total</td><td></td>${cols(dados.total)}</tr></tfoot>
       </table>
     </div>`;
 }
