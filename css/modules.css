@@ -13009,3 +13009,10 @@ body.role-insumos #omfg-regional,
 body:not(.role-admin):not(.role-insumos) #omfg-motivo,
 body:not(.role-admin):not(.role-insumos) #omfg-fornecedor,
 body:not(.role-admin) #omfg-usuario { display: none !important; }
+/* Cobranças — números do Ranking maiores e centralizados; Detalhamento com fonte maior */
+.cob-rank td.cob-rank-num { text-align: center; font-size: 15px; }
+.cob-rank td.cob-rank-num .badge { font-size: 13.5px; padding: 3px 11px; }
+.cob-det-tabela td { font-size: 13.5px; }
+.cob-det-tabela td .badge { font-size: 12px; }
+.cob-det-tabela .cob-item { font-size: 12.5px; }
+.cob-det-tabela tr.cob-grupo td { font-size: 13.5px; }
