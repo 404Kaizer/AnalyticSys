@@ -1040,33 +1040,40 @@ function _cobRankingHtml(rows, hojeISO) {
 // imprimir). Usa as notas da cobrança padrão que o Ranking está mostrando
 // (ou seja, respeita os filtros aplicados na tela).
 const COB_REL_QUANDO = { atencao: 'há 24h', urgente: 'há 48h', critico: 'há 72h ou mais' };
+const _cobRelAtraso = r => `<span class="cobr-atraso cobr-${r.nivel}">${r.dias === null ? 'sem data' : `${r.dias} dia${r.dias > 1 ? 's' : ''}`}</span>`;
+const _cobRelCol = {
+  central:    ['Central', r => `<span class="rk-name">${_rankEsc(r.central)}</span>${r.centralNome ? `<div class="rk-sub">${_rankEsc(r.centralNome)}</div>` : ''}`],
+  fornecedor: ['Fornecedor', r => _rankEsc(r.fornecedor)],
+  nf:         ['NF', r => `<span class="cobr-mono">${_rankEsc(r.numero)}</span>`],
+  emissao:    ['Emissão', r => `<span class="cobr-mono">${r.emissao_fmt}</span>`],
+  atraso:     ['Atraso', _cobRelAtraso],
+  valor:      ['Valor', r => `<span class="cobr-mono">${money(r.valor)}</span>`, 'right'],
+  peso:       ['Peso', r => `<span class="cobr-mono">${r.semSefaz ? '—' : _cobFmtNum(r.volume)}</span>`, 'right'],
+  material:   ['Material', r => r.itens.length > 1
+                ? r.itens.map(i => `<div>${_rankEsc(i.material || '—')} · ${_cobFmtNum(i.volume)}</div>`).join('')
+                : _rankEsc(r.materiais || '—')],
+  cfop:       ['CFOP', r => `<span class="cobr-mono">${_rankEsc(r.cfops || '—')}</span>`],
+};
 
-function cobRelatorioRanking(nivel) {
-  const res = _cob.res, n = COB_NIVEIS[nivel];
-  if (!res || !n) return;
-  const rows = _cobFiltrarNfs(res.cobranca).filter(r => r.nivel === nivel);
-  if (!rows.length) { toast(`Nenhuma nota em ${n.rot} (${n.h}) para gerar o relatório.`, 'error'); return; }
-
+// Relatório da Cobrança no shell padrão do sistema (_buildRankingShellHTML,
+// relatorio.js: faixa, logos Concrelagos + AnalyticSys, KPIs, rodapé, botão
+// imprimir). Tabela agrupada por regional (linha de cabeçalho por regional),
+// igual ao Detalhamento. `destaque(r)` → classe extra da linha (ex.: amarela).
+function _cobGerarRelatorio({ rows, titulo, subtitulo, tabelaTitulo, periodo, cols, kpisExtra = [], kpiCor = '#ef4444', destaque, legenda }) {
+  const res = _cob.res;
   const geradoEm = new Date().toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
-  const diaMenos = k => { const t = new Date(res.hojeISO + 'T00:00:00'); t.setDate(t.getDate() - k); return fmtPtDate(t); };
-  const periodo = { atencao: `Emissão em ${diaMenos(1)}`, urgente: `Emissão em ${diaMenos(2)}`, critico: `Emissão até ${diaMenos(3)}` }[nivel];
   const nCentrais = new Set(rows.map(r => r.cnpj_comprador)).size;
-
   const grupos = new Map();
   rows.forEach(r => { if (!grupos.has(r.regional)) grupos.set(r.regional, []); grupos.get(r.regional).push(r); });
   const ord = (a, b) => a.central.localeCompare(b.central, 'pt-BR') || String(a.emissao || '').localeCompare(String(b.emissao || ''));
+  const th = cols.map(k => `<th${_cobRelCol[k][2] ? ' style="text-align:right"' : ''}>${_cobRelCol[k][0]}</th>`).join('');
   const corpo = [...grupos.entries()]
     .sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0], 'pt-BR'))
     .map(([reg, rs]) => {
       const nc = new Set(rs.map(r => r.cnpj_comprador)).size;
-      return `<tr class="cobr-reg"><td colspan="5"><i class="ti ti-users-group"></i>${_rankEsc(reg)}<span>${rs.length} NF${rs.length > 1 ? 's' : ''} · ${nc} ${nc > 1 ? 'centrais' : 'central'}</span></td></tr>`
-        + rs.sort(ord).map(r => `<tr>
-            <td class="rk-name">${_rankEsc(r.central)}${r.centralNome ? `<div class="rk-sub">${_rankEsc(r.centralNome)}</div>` : ''}</td>
-            <td>${_rankEsc(r.fornecedor)}</td>
-            <td class="cobr-mono">${_rankEsc(r.numero)}</td>
-            <td class="cobr-mono">${r.emissao_fmt}</td>
-            <td><span class="cobr-atraso cobr-${nivel}">${r.dias === null ? 'sem data' : `${r.dias} dia${r.dias > 1 ? 's' : ''}`}</span></td>
-          </tr>`).join('');
+      return `<tr class="cobr-reg"><td colspan="${cols.length}"><i class="ti ti-users-group"></i>${_rankEsc(reg)}<span>${rs.length} NF${rs.length > 1 ? 's' : ''} · ${nc} ${nc > 1 ? 'centrais' : 'central'}</span></td></tr>`
+        + rs.sort(ord).map(r => `<tr${destaque?.(r) ? ` class="${destaque(r)}"` : ''}>${cols.map(k =>
+            `<td${_cobRelCol[k][2] ? ' style="text-align:right"' : ''}>${_cobRelCol[k][1](r)}</td>`).join('')}</tr>`).join('');
     }).join('');
 
   const bodyHtml = `
@@ -1074,22 +1081,24 @@ function cobRelatorioRanking(nivel) {
       .cobr-reg td { background:var(--dgr-card-bg, rgba(255,255,255,.045)); border-top:2px solid var(--dgr-table-border-forte, rgba(255,255,255,.14)); font-size:12.5px; font-weight:800; color:var(--dgr-text-strong, #fff); padding:10px; }
       .cobr-reg i { color:#f87171; margin-right:7px; }
       .cobr-reg span { margin-left:10px; font-size:10px; font-weight:600; color:var(--dgr-text-dim, #94a3b8); font-family:'JetBrains Mono',monospace; }
-      .cobr-mono { font-family:'JetBrains Mono',monospace; }
+      .cobr-mono { font-family:'JetBrains Mono',monospace; white-space:nowrap; }
       .cobr-atraso { display:inline-block; padding:2px 8px; border-radius:4px; font-size:10px; font-weight:800; font-family:'JetBrains Mono',monospace; white-space:nowrap; }
       .cobr-atencao { background:rgba(59,130,246,.14); border:1px solid rgba(59,130,246,.35); color:#93c5fd; }
       .cobr-urgente { background:rgba(245,158,11,.14); border:1px solid rgba(245,158,11,.4); color:#fcd34d; }
       .cobr-critico { background:rgba(239,68,68,.14); border:1px solid rgba(239,68,68,.4); color:#fca5a5; }
+      .cobr-amarela td { background:rgba(250,204,21,.13); }
+      .cobr-amarela td:first-child { box-shadow:inset 3px 0 0 #facc15; }
+      .cobr-legenda { display:inline-flex; align-items:center; gap:8px; font-size:10.5px; color:var(--dgr-text-dim, #94a3b8); margin:0 0 12px; }
+      .cobr-legenda i { display:inline-block; width:14px; height:14px; border-radius:3px; background:rgba(250,204,21,.25); box-shadow:inset 3px 0 0 #facc15; }
       .rk-table tr { page-break-inside:avoid; }
     </style>
+    ${legenda ? `<div class="cobr-legenda"><i></i>${_rankEsc(legenda)}</div>` : ''}
     <div class="rk-table-wrap">
       <div class="rk-table-head">
-        <span class="rk-table-head-title">NFs pendentes de lançamento — ${n.rot} (${n.h})</span>
+        <span class="rk-table-head-title">${_rankEsc(tabelaTitulo)}</span>
         <span class="rk-table-head-cap">${rows.length} NF${rows.length > 1 ? 's' : ''} · agrupadas por regional</span>
       </div>
-      <table class="rk-table">
-        <thead><tr><th>Central</th><th>Fornecedor</th><th>NF</th><th>Emissão</th><th>Atraso</th></tr></thead>
-        <tbody>${corpo}</tbody>
-      </table>
+      <table class="rk-table"><thead><tr>${th}</tr></thead><tbody>${corpo}</tbody></table>
     </div>
     <div class="callout-regularizacao">
       <div class="callout-regularizacao-title">⚠ Lançamento imediato</div>
@@ -1101,18 +1110,60 @@ function cobRelatorioRanking(nivel) {
     periodo,
     now: geradoEm,
     kpis: [
-      { value: rows.length, label: rows.length !== 1 ? 'NFs pendentes' : 'NF pendente', color: n.badge === 'badge-red' ? '#ef4444' : n.badge === 'badge-amber' ? '#f59e0b' : '#3b82f6' },
-      { value: nCentrais,    label: nCentrais !== 1 ? 'centrais' : 'central',      color: '#22c55e' },
-      { value: grupos.size,  label: grupos.size !== 1 ? 'regionais' : 'regional',  color: '#3b82f6' },
+      { value: rows.length, label: rows.length !== 1 ? 'NFs pendentes' : 'NF pendente', color: kpiCor },
+      { value: nCentrais,   label: nCentrais !== 1 ? 'centrais' : 'central',     color: '#22c55e' },
+      { value: grupos.size, label: grupos.size !== 1 ? 'regionais' : 'regional', color: '#3b82f6' },
+      ...kpisExtra,
     ],
   }, {
-    pageTitle: `Cobrança de NFs ${n.h} — ${geradoEm}`,
+    pageTitle: `${titulo} — ${geradoEm}`,
     badge: 'Cobrança de NFs',
-    title: `NFs pendentes ${COB_REL_QUANDO[nivel]}`,
-    subtitle: `Notas fiscais de insumos emitidas ${COB_REL_QUANDO[nivel]} e ainda não lançadas no sistema, agrupadas por regional.`,
+    title: titulo,
+    subtitle: subtitulo,
     bodyHtml,
     notaRodape: `Atraso em dias corridos desde a emissão da NF. Base — ${_cobBaseTxt(res)}.`,
   }));
+}
+
+const _cobDiaMenos = k => { const t = new Date(_cob.res.hojeISO + 'T00:00:00'); t.setDate(t.getDate() - k); return fmtPtDate(t); };
+
+// Ranking: uma criticidade (24h / 48h / 72h+) da cobrança padrão, respeitando
+// os filtros da tela (= o que o Ranking está mostrando).
+function cobRelatorioRanking(nivel) {
+  const res = _cob.res, n = COB_NIVEIS[nivel];
+  if (!res || !n) return;
+  const rows = _cobFiltrarNfs(res.cobranca).filter(r => r.nivel === nivel);
+  if (!rows.length) { toast(`Nenhuma nota em ${n.rot} (${n.h}) para gerar o relatório.`, 'error'); return; }
+  _cobGerarRelatorio({
+    rows,
+    titulo: `NFs pendentes ${COB_REL_QUANDO[nivel]}`,
+    subtitulo: `Notas fiscais de insumos emitidas ${COB_REL_QUANDO[nivel]} e ainda não lançadas no sistema, agrupadas por regional.`,
+    tabelaTitulo: `NFs pendentes de lançamento — ${n.rot} (${n.h})`,
+    periodo: { atencao: `Emissão em ${_cobDiaMenos(1)}`, urgente: `Emissão em ${_cobDiaMenos(2)}`, critico: `Emissão até ${_cobDiaMenos(3)}` }[nivel],
+    cols: ['central', 'fornecedor', 'nf', 'emissao', 'atraso'],
+    kpiCor: { atencao: '#3b82f6', urgente: '#f59e0b', critico: '#ef4444' }[nivel],
+  });
+}
+
+// Detalhamento: cobrança padrão + ADITIBRAS (bloco Aditivos, linhas
+// amarelas), todas as criticidades, respeitando os filtros da tela.
+function cobRelatorioDetalhamento() {
+  const res = _cob.res;
+  if (!res) return;
+  const aditivos = _cobFiltrarNfs(res.blocos.Aditivos || []);
+  const rows = _cobFiltrarNfs(res.cobranca).concat(aditivos);
+  if (!rows.length) { toast('Nenhuma nota no detalhamento para gerar o relatório.', 'error'); return; }
+  _cobGerarRelatorio({
+    rows,
+    titulo: 'Detalhamento de pendências',
+    subtitulo: 'Notas fiscais de insumos pendentes de lançamento no sistema (cobrança padrão + ADITIBRAS), agrupadas por regional.',
+    tabelaTitulo: 'Detalhamento de pendências',
+    periodo: `Emissão até ${_cobDiaMenos(1)}`,
+    cols: ['central', 'fornecedor', 'nf', 'emissao', 'atraso', 'valor', 'peso', 'material', 'cfop'],
+    kpisExtra: [{ value: aditivos.length, label: 'ADITIBRAS', color: '#facc15' }],
+    destaque: r => r.bloco === 'Aditivos' ? 'cobr-amarela' : '',
+    legenda: aditivos.length ? 'Linhas amarelas: notas da ADITIBRAS (cobrança à parte)' : '',
+  });
 }
 
 function _cobPorFornecedorHtml(rows) {
@@ -1133,7 +1184,7 @@ function _cobLinhaNf(r) {
     ? r.itens.map(i => `<div class="cob-item">${escapeHtml(i.material || '—')} · ${_cobFmtNum(i.volume)} · ${money(i.valor_total)}</div>`).join('')
     : escapeHtml(r.materiais || '—');
   // Clique na linha abre o detalhe da NF (dados + justificativa + ações).
-  // Amarela = já tem justificativa/desvio registrado pelo analista.
+  // Azul = já tem justificativa/desvio registrado pelo analista.
   return `<tr class="cob-nf${r.just ? ' cob-justificada' : ''}" onclick="cobAbrirNf('${r.k}')" title="${r.just ? 'Justificada — clique para ver' : 'Clique para ver / justificar'}">
     <td class="td-mono" title="${escapeHtml(r.centralNome)}">${escapeHtml(r.central)}${r.semCentral ? ` <span class="badge badge-red" title="CNPJ ${_cobFmtCnpj(r.cnpj_comprador)} não está no cadastro de centrais">?</span>` : ''}</td>
     <td>${escapeHtml(r.fornecedor)}</td>
@@ -1183,7 +1234,7 @@ function cobAbrirNf(k) {
       ${_cobInfo('Itens', itens, true)}
     </div>
     <div class="section-title" style="margin:18px 0 10px">Justificativa</div>
-    ${j ? `<div style="${grade};padding:12px;border-radius:var(--radius);background:var(--amber-bg);border:1px solid var(--amber-border)">
+    ${j ? `<div style="${grade};padding:12px;border-radius:var(--radius);background:var(--accent-dim);border:1px solid var(--accent)">
         ${_cobInfo('Carga desviada para', escapeHtml(j.desviado || ''))}
         ${_cobInfo('Informante', escapeHtml(j.informante || ''))}
         ${_cobInfo('Motivo do atraso', escapeHtml(j.motivo || ''), true)}
@@ -1222,7 +1273,8 @@ function _cobDetalhamentoHtml(padrao, blocos) {
     <div class="table-header">
       <span class="table-title"><i class="ti ti-list-details"></i> Detalhamento de pendências</span>
       <div class="table-toolbar">${views.map(([k, rot, rs]) =>
-        `<button class="pim-month-pill${k === atual ? ' active' : ''}" type="button" onclick="cobDetView('${k}')">${rot} <b>${rs.length}</b></button>`).join('')}</div>
+        `<button class="pim-month-pill${k === atual ? ' active' : ''}" type="button" onclick="cobDetView('${k}')">${rot} <b>${rs.length}</b></button>`).join('')}
+        <button class="btn" onclick="cobRelatorioDetalhamento()" title="Relatório: cobrança padrão + ADITIBRAS (em amarelo)"><i class="ti ti-file-text"></i> Relatório</button></div>
     </div>
     <div class="table-scroll" style="max-height:calc(100vh - 140px)"><table>
       <thead><tr><th>Central</th><th>Fornecedor</th><th>NF</th><th>Emissão</th><th style="text-align:right">Valor</th><th style="text-align:right">Peso</th><th>Material</th><th>CFOP</th></tr></thead>
