@@ -1048,7 +1048,7 @@ const _cobRelCol = {
   emissao:    ['Emissão', r => `<span class="cobr-mono">${r.emissao_fmt}</span>`],
   atraso:     ['Atraso', _cobRelAtraso],
   valor:      ['Valor', r => `<span class="cobr-mono">${money(r.valor)}</span>`, 'right'],
-  peso:       ['Peso', r => `<span class="cobr-mono">${r.semSefaz ? '—' : _cobFmtNum(r.volume)}</span>`, 'right'],
+  peso:       ['Peso (ton)', r => `<span class="cobr-mono">${r.semSefaz ? '—' : _cobFmtNum(r.volume)}</span>`, 'right'],
   material:   ['Material', r => r.itens.length > 1
                 ? r.itens.map(i => `<div>${_rankEsc(i.material || '—')} · ${_cobFmtNum(i.volume)}</div>`).join('')
                 : _rankEsc(r.materiais || '—')],
@@ -1086,13 +1086,22 @@ function _cobGerarRelatorio({ rows, titulo, subtitulo, tabelaTitulo, periodo, co
       .cobr-atencao { background:rgba(59,130,246,.14); border:1px solid rgba(59,130,246,.35); color:#93c5fd; }
       .cobr-urgente { background:rgba(245,158,11,.14); border:1px solid rgba(245,158,11,.4); color:#fcd34d; }
       .cobr-critico { background:rgba(239,68,68,.14); border:1px solid rgba(239,68,68,.4); color:#fca5a5; }
+      .cobr-linha-atencao td { background:rgba(59,130,246,.07); }
+      .cobr-linha-urgente td { background:rgba(245,158,11,.08); }
+      .cobr-linha-critico td { background:rgba(239,68,68,.08); }
       .cobr-amarela td { background:rgba(250,204,21,.13); }
       .cobr-amarela td:first-child { box-shadow:inset 3px 0 0 #facc15; }
-      .cobr-legenda { display:inline-flex; align-items:center; gap:8px; font-size:10.5px; color:var(--dgr-text-dim, #94a3b8); margin:0 0 12px; }
-      .cobr-legenda i { display:inline-block; width:14px; height:14px; border-radius:3px; background:rgba(250,204,21,.25); box-shadow:inset 3px 0 0 #facc15; }
+      .cobr-legenda { display:flex; flex-wrap:wrap; align-items:center; gap:8px 20px; font-size:10.5px; color:var(--dgr-text-dim, #94a3b8); margin:0 0 12px; }
+      .cobr-legenda span { display:inline-flex; align-items:center; gap:7px; }
+      .cobr-legenda b { color:var(--dgr-text-dim2, #64748b); font-weight:800; text-transform:uppercase; letter-spacing:.05em; font-size:9px; }
+      .cobr-legenda i { display:inline-block; width:14px; height:14px; border-radius:3px; }
+      .cobr-sw-atencao { background:rgba(59,130,246,.30); border:1px solid rgba(59,130,246,.55); }
+      .cobr-sw-urgente { background:rgba(245,158,11,.30); border:1px solid rgba(245,158,11,.6); }
+      .cobr-sw-critico { background:rgba(239,68,68,.30); border:1px solid rgba(239,68,68,.6); }
+      .cobr-sw-amarela { background:rgba(250,204,21,.25); box-shadow:inset 3px 0 0 #facc15; }
       .rk-table tr { page-break-inside:avoid; }
     </style>
-    ${legenda ? `<div class="cobr-legenda"><i></i>${_rankEsc(legenda)}</div>` : ''}
+    ${legenda?.length ? `<div class="cobr-legenda"><b>Legenda</b>${legenda.map(([cls, txt]) => `<span><i class="cobr-sw-${cls}"></i>${_rankEsc(txt)}</span>`).join('')}</div>` : ''}
     <div class="rk-table-wrap">
       <div class="rk-table-head">
         <span class="rk-table-head-title">${_rankEsc(tabelaTitulo)}</span>
@@ -1159,10 +1168,15 @@ function cobRelatorioDetalhamento() {
     subtitulo: 'Notas fiscais de insumos pendentes de lançamento no sistema (cobrança padrão + ADITIBRAS), agrupadas por regional.',
     tabelaTitulo: 'Detalhamento de pendências',
     periodo: `Emissão até ${_cobDiaMenos(1)}`,
-    cols: ['central', 'fornecedor', 'nf', 'emissao', 'atraso', 'valor', 'peso', 'material', 'cfop'],
+    cols: ['central', 'fornecedor', 'nf', 'emissao', 'atraso', 'peso', 'material'],
     kpisExtra: [{ value: aditivos.length, label: 'ADITIBRAS', color: '#facc15' }],
-    destaque: r => r.bloco === 'Aditivos' ? 'cobr-amarela' : '',
-    legenda: aditivos.length ? 'Linhas amarelas: notas da ADITIBRAS (cobrança à parte)' : '',
+    // ADITIBRAS amarela tem prioridade; as demais pintadas de leve com a cor do atraso
+    destaque: r => r.bloco === 'Aditivos' ? 'cobr-amarela' : 'cobr-linha-' + r.nivel,
+    // legenda: [classe da amostra, texto]
+    legenda: [
+      ...Object.entries(COB_NIVEIS).map(([k, n]) => [k, `${n.rot} — ${COB_REL_QUANDO[k]}`]),
+      ...(aditivos.length ? [['amarela', 'ADITIBRAS (cobrança à parte)']] : []),
+    ],
   });
 }
 
