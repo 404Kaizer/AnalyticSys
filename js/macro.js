@@ -158,7 +158,10 @@ function renderMacroPanels(results, thresholds, dtIni, dtFim) {
       });
       const diff   = snap.diff;
       const rawCat = (lancs[0]?.categoria || sap[0]?.categoria || '').trim().toUpperCase();
-      const catKey = detectCatKey(rawCat) || detectCatFromMat(mat);
+      // Categoria do CADASTRO (r.materialCatKeyMap), a mesma do card da Visão
+      // Micro e do Gerencial. Antes, o par com só SAP no período (sem
+      // categoria no registro) caía no palpite pelo nome do material.
+      const catKey = r.materialCatKeyMap?.get(mat) || detectCatKey(rawCat) || detectCatFromMat(mat);
       const level  = classifyVariation(Math.abs(diff), catKey, thresholds);
 
       centralMap[r.central].counts[level]++;

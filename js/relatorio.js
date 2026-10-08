@@ -4390,6 +4390,7 @@ function _dgrEvoDetalheCardHtml(l, blocos = DGR_EVO_BLOCOS) {
     // seus); se o arquivo pesar, compartilhar um só objeto por período.
     detalhe: {
       rotulo: l.rotulo, pares: l.pares, thresholds,
+      centrais: _dgVgCentraisDoPeriodo(l.results),
       pesoMedio: l.pesoMedio || {}, totalEstTeoricoKpi: l.totalEstTeorico || 0
     },
     catFisicaPct: l.catFisicaPct || {},
