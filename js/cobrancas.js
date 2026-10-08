@@ -1103,10 +1103,10 @@ function _cobGerarRelatorio({ rows, titulo, subtitulo, tabelaTitulo, periodo, co
     </style>
     ${legenda?.length ? `<div class="cobr-legenda"><b>Legenda</b>${legenda.map(([cls, txt]) => `<span><i class="cobr-sw-${cls}"></i>${_rankEsc(txt)}</span>`).join('')}</div>` : ''}
     <div class="rk-table-wrap">
-      <div class="rk-table-head">
+      ${tabelaTitulo ? `<div class="rk-table-head">
         <span class="rk-table-head-title">${_rankEsc(tabelaTitulo)}</span>
         <span class="rk-table-head-cap">${rows.length} NF${rows.length > 1 ? 's' : ''} · agrupadas por regional</span>
-      </div>
+      </div>` : ''}
       <table class="rk-table"><thead><tr>${th}</tr></thead><tbody>${corpo}</tbody></table>
     </div>
     <div class="callout-regularizacao">
@@ -1166,7 +1166,7 @@ function cobRelatorioDetalhamento() {
     rows,
     titulo: 'Detalhamento de pendências',
     subtitulo: 'Notas fiscais de insumos pendentes de lançamento no sistema (cobrança padrão + ADITIBRAS), agrupadas por regional.',
-    tabelaTitulo: 'Detalhamento de pendências',
+    tabelaTitulo: '',   // o título do relatório já é "Detalhamento de pendências"
     periodo: `Emissão até ${_cobDiaMenos(1)}`,
     cols: ['central', 'fornecedor', 'nf', 'emissao', 'atraso', 'peso', 'material'],
     kpisExtra: [{ value: aditivos.length, label: 'ADITIBRAS', color: '#facc15' }],
