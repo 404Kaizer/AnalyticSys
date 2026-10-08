@@ -4133,8 +4133,9 @@ function _dgrEvolucaoTabelaHtml(periodos, blocos = DGR_EVO_BLOCOS) {
 // cima em âmbar, desfalque pra baixo em vermelho — mesma convenção de cor de
 // _dgrValCor/varSymbol), eixo esquerdo em kg/TON. Linha = Saúde (eixo
 // direito, 0–100). O Custo da Variação (R$) é só contexto: aparece no
-// tooltip, nunca definiu a altura da barra (decisão do Hugo, set/2026 — a
+// rótulo, nunca definiu a altura da barra (decisão do Hugo, set/2026 — a
 // leitura física é a que importa pro gráfico, o custo é derivado dela).
+// Valores escritos direto no gráfico, sem tooltip (Hugo, 08/10/2026).
 function _dgrEvolucaoChartHtml() {
   return `<div class="oc-chart-card">
     <div class="oc-chart-title"><i class="ti ti-chart-line" style="margin-right:5px"></i>Variação Física e Saúde, mês a mês</div>
@@ -4152,11 +4153,65 @@ function _dgrScriptEvolucao(periodos) {
   if (!cv || typeof Chart === 'undefined') return;
   var SERIE = ${JSON.stringify(serie)};
   function corFisica(v) { return v < -0.0001 ? '#f43f5e' : v > 0.0001 ? '#f59e0b' : '#64748b'; }
+  // Rótulos fixos: Variação Física + Custo (2 linhas) e a Saúde num selo
+  // verde. O rótulo da barra tenta, nesta ordem: além da ponta, dentro junto
+  // à ponta, dentro junto à base, do outro lado do zero — o primeiro que
+  // caiba na área do gráfico (sem invadir legenda/meses) e não cubra o ponto
+  // da Saúde do mesmo mês. O selo vai acima do ponto, ou abaixo se acima
+  // cruzar o rótulo da barra ou sair da área do gráfico.
+  var rotulos = {
+    id: 'dgrEvoRotulos',
+    afterDatasetsDraw: function(chart) {
+      var ctx = chart.ctx, t = _dgVgTheme(), area = chart.chartArea, H = 26;
+      var barras = chart.getDatasetMeta(0), linha = chart.getDatasetMeta(1);
+      ctx.save();
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      barras.data.forEach(function(bar, i) {
+        var p = SERIE[i], caixa = null;
+        var pt = linha.hidden ? null : linha.data[i];
+        if (!barras.hidden) {
+          var neg = p.fisica < 0, cabeDentro = Math.abs(bar.base - bar.y) >= H + 12;
+          var cands = [
+            { y: neg ? bar.y + 6 : bar.y - 6 - H, dentro: false, ok: true },
+            { y: neg ? bar.y - 6 - H : bar.y + 6, dentro: true, ok: cabeDentro },
+            { y: neg ? bar.base + 6 : bar.base - 6 - H, dentro: true, ok: cabeDentro },
+            { y: neg ? bar.base - 6 - H : bar.base + 6, dentro: false, ok: true }
+          ].filter(function(c) { return c.ok && c.y >= area.top && c.y + H <= area.bottom; });
+          // folga de 26px = ponto + selo (16px + 8 de afastamento), de qualquer lado
+          var c = cands.filter(function(c) { return !pt || pt.y < c.y - 26 || pt.y > c.y + H + 26; })[0]
+               || cands[0] || { y: neg ? bar.y + 6 : bar.y - 6 - H, dentro: false };
+          ctx.font = "700 11px 'DM Mono', monospace";
+          ctx.fillStyle = c.dentro ? '#fff' : corFisica(p.fisica);
+          ctx.fillText(dgFmtPesoSigned(p.fisica, 1), bar.x, c.y);
+          ctx.font = "600 10px 'DM Mono', monospace";
+          ctx.fillStyle = c.dentro ? '#fff' : t.textCol;
+          ctx.fillText(money(p.custo), bar.x, c.y + 13);
+          caixa = [c.y, c.y + H];
+        }
+        if (!pt || p.score == null) return;
+        var txt = p.score + '%';
+        ctx.font = "700 10px 'DM Mono', monospace";
+        var w = ctx.measureText(txt).width + 10, h = 16;
+        var acima = pt.y - 8 - h, abaixo = pt.y + 8;
+        var bateAcima = acima < area.top || (caixa && acima < caixa[1] && acima + h > caixa[0]);
+        var yS = bateAcima && abaixo + h <= area.bottom ? abaixo : acima;
+        ctx.fillStyle = '#10b981';
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(pt.x - w / 2, yS, w, h, 4); else ctx.rect(pt.x - w / 2, yS, w, h);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.fillText(txt, pt.x, yS + 3);
+      });
+      ctx.restore();
+    }
+  };
   var grafico = null;
   function desenhar() {
     var t = _dgVgTheme();
     if (grafico) { try { grafico.destroy(); } catch (e) {} }
     grafico = new Chart(cv, {
+      plugins: [rotulos],
       data: {
         labels: SERIE.map(function(p) { return p.rotulo; }),
         datasets: [
@@ -4174,15 +4229,11 @@ function _dgrScriptEvolucao(periodos) {
         responsive: true, maintainAspectRatio: false,
         plugins: {
           legend: { labels: { color: t.textCol, font: t.tickFont, usePointStyle: true, boxWidth: 10 } },
-          tooltip: { callbacks: { label: function(c) {
-            if (c.dataset.yAxisID === 'y2') return 'Saúde · ' + c.raw + '%';
-            var p = SERIE[c.dataIndex];
-            return ['Variação Física · ' + dgFmtPesoSigned(p.fisica, 1), 'Custo da Variação · ' + money(p.custo)];
-          } } }
+          tooltip: { enabled: false }
         },
         scales: {
           x:  { grid: { display: false }, ticks: { color: t.textCol, font: t.tickFont } },
-          y:  { position: 'left',  grid: { color: t.gridCol }, beginAtZero: true,
+          y:  { position: 'left',  grid: { color: t.gridCol }, beginAtZero: true, grace: '50%',
                 ticks: { color: t.textCol, font: t.tickFont, callback: function(v) { return dgFmtPeso(v, 1); } } },
           y2: { position: 'right', min: 0, max: 100, grid: { display: false },
                 ticks: { color: t.textCol, font: t.tickFont, callback: function(v) { return v + '%'; } } }
