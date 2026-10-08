@@ -2784,33 +2784,47 @@ function _daRenderTabelaMaterial(containerId, dados) {
     el.innerHTML = '<div class="dg-empty-riscos"><i class="ti ti-database-off"></i><span>Sem dados no período.</span></div>';
     return;
   }
-  const rowsHtml = dados.linhas.map(l => `
+  // Pesos SEMPRE em TON (kg ÷ 1000, sem o corte de DG_TON_THRESHOLD_KG do
+  // dgFmtPeso) — exceto Aditivo/Adição, que ficam em kg com o valor cru.
+  // Pedido do Hugo (08/10/2026). Custo Médio continua em R$/kg pra todos.
+  // Helpers locais (não globais) de propósito: vão junto no toString() que
+  // o relatório embute (_DGR_NOMES.detalhado), sem nome novo pra registrar.
+  const emKg   = catKey => catKey === 'aditivo' || catKey === 'adicao';
+  const peso   = (v, kg) => kg ? fmtKg(v) : (num(v) / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' TON';
+  const pesoS  = (v, kg) => Math.abs(num(v)) < 0.0001 ? peso(0, kg) : (num(v) > 0 ? '+' : '−') + peso(Math.abs(num(v)), kg);
+  const rowsHtml = dados.linhas.map(l => {
+    const kg = emKg(l.catKey);
+    return `
     <tr>
       <td>
         <span class="da-mat-name">${escapeHtml(l.mat)}</span>
         ${l.catKey ? `<span class="da-mat-cat">${escapeHtml(DG_VG_CATSUB_LABELS[l.catSubKey] || DG_VG_CAT_LABELS[l.catKey] || l.catKey)}</span>` : ''}
       </td>
-      <td class="da-num" style="color:var(--teal)">${dgFmtPeso(l.estIni)}</td>
-      <td class="da-num" style="color:var(--green)">${dgFmtPesoSigned(l.entKg)}</td>
-      <td class="da-num" style="color:var(--red)">${dgFmtPesoSigned(l.saiKg)}</td>
-      <td class="da-num dg-col-ajustes" style="color:${movValorCor(l.ajuKg, 'var(--amber)')}">${dgFmtPesoSigned(l.ajuKg)}</td>
-      <td class="da-num" style="color:var(--teal)">${dgFmtPeso(l.estTeorico)}</td>
-      <td class="da-num" style="color:var(--teal)">${dgFmtPeso(l.estFim)}</td>
+      <td class="da-num" style="color:var(--teal)">${peso(l.estIni, kg)}</td>
+      <td class="da-num" style="color:var(--green)">${pesoS(l.entKg, kg)}</td>
+      <td class="da-num" style="color:var(--red)">${pesoS(l.saiKg, kg)}</td>
+      <td class="da-num dg-col-ajustes" style="color:${movValorCor(l.ajuKg, 'var(--amber)')}">${pesoS(l.ajuKg, kg)}</td>
+      <td class="da-num" style="color:var(--teal)">${peso(l.estTeorico, kg)}</td>
+      <td class="da-num" style="color:var(--teal)">${peso(l.estFim, kg)}</td>
       <td class="da-num" style="color:${_daColorFor(l.pctVariacao)}">${_daFmtPctSigned(l.pctVariacao)}</td>
       <td class="da-num">${money(l.custoMedio)}/kg</td>
       <td class="da-num dg-col-ajustes" style="color:${_daColorFor(l.custoAjuste)}">${_daFmtMoneySigned(l.custoAjuste)}</td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
 
+  // Total mistura categorias → TON; só fica em kg quando TODAS as linhas são
+  // Aditivo/Adição (ex.: filtro de Categoria no relatório).
   const t = dados.total;
+  const totKg = dados.linhas.every(l => emKg(l.catKey));
   const totalHtml = `
     <tr class="da-total-row">
       <td>Total</td>
-      <td class="da-num" style="color:var(--teal)">${dgFmtPeso(t.estIni)}</td>
-      <td class="da-num" style="color:var(--green)">${dgFmtPesoSigned(t.entKg)}</td>
-      <td class="da-num" style="color:var(--red)">${dgFmtPesoSigned(t.saiKg)}</td>
-      <td class="da-num dg-col-ajustes" style="color:${movValorCor(t.ajuKg, 'var(--amber)')}">${dgFmtPesoSigned(t.ajuKg)}</td>
-      <td class="da-num" style="color:var(--teal)">${dgFmtPeso(t.estTeorico)}</td>
-      <td class="da-num" style="color:var(--teal)">${dgFmtPeso(t.estFim)}</td>
+      <td class="da-num" style="color:var(--teal)">${peso(t.estIni, totKg)}</td>
+      <td class="da-num" style="color:var(--green)">${pesoS(t.entKg, totKg)}</td>
+      <td class="da-num" style="color:var(--red)">${pesoS(t.saiKg, totKg)}</td>
+      <td class="da-num dg-col-ajustes" style="color:${movValorCor(t.ajuKg, 'var(--amber)')}">${pesoS(t.ajuKg, totKg)}</td>
+      <td class="da-num" style="color:var(--teal)">${peso(t.estTeorico, totKg)}</td>
+      <td class="da-num" style="color:var(--teal)">${peso(t.estFim, totKg)}</td>
       <td class="da-num" style="color:${_daColorFor(t.pctVariacao)}">${_daFmtPctSigned(t.pctVariacao)}</td>
       <td class="da-num">${money(t.custoMedio)}/kg</td>
       <td class="da-num dg-col-ajustes" style="color:${_daColorFor(t.custoAjuste)}">${_daFmtMoneySigned(t.custoAjuste)}</td>
