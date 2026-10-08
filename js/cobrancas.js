@@ -14,7 +14,7 @@
 // entradas/saídas/SAP etc., que nem são dele. O que some na tela é
 // controlado por body.role-insumos (auth.js) + CSS (modules.css).
 
-const COB_PAGINAS_INSUMOS = new Set(['cobrancas', 'importar', 'configuracoes']);
+const COB_PAGINAS_INSUMOS = new Set(['cobrancas', 'importar', 'configuracoes', 'ocorrencias']);
 
 function cobIsInsumos() {
   return window.currentUser?.role === 'insumos';
@@ -39,6 +39,14 @@ function cobBootInsumos() {
   if (typeof _msgsRealtimeInit === 'function') _msgsRealtimeInit();
   if (typeof adminAlertCheckPendente === 'function') adminAlertCheckPendente();
   if (typeof adminAlertRealtimeInit === 'function') adminAlertRealtimeInit();
+
+  // Ocorrências (só as dele — RLS + tipo 'insumos', ver ocorrencias.js).
+  if (typeof syncOcorrenciasFromSupabase === 'function') {
+    syncOcorrenciasFromSupabase().then(() => {
+      if (document.getElementById('page-ocorrencias')?.classList.contains('active')) renderOcorrenciasPage();
+    });
+  }
+  if (typeof _ocRealtimeInit === 'function') _ocRealtimeInit();
 }
 
 // ── Estado em memória (espelho das tabelas cob_*) ────────────
@@ -1211,6 +1219,21 @@ function _cobLinhaNf(r) {
   </tr>`;
 }
 
+// Atalho do detalhe da NF → Nova Ocorrência (tipo Insumos) já preenchida
+// com fornecedor, NF, central e transportador (ocorrencias.js).
+function cobAbrirOcorrencia(k) {
+  const r = _cob.res?.porChave.get(k);
+  if (!r || typeof openOcorrenciaModal !== 'function') return;
+  navigate('ocorrencias');
+  openOcorrenciaModal(null, {
+    tipo: 'insumos',
+    fornecedorCnpj: r.cnpj, fornecedorNome: r.fornecedor,
+    nfs: r.numero, transportador: r.transportador,
+    central: r.centralNome || undefined,
+    descricao: `NF ${r.numero} — ${r.fornecedor}, emitida em ${r.emissao_fmt}${r.dias !== null ? ` (${r.dias} dia(s) sem lançamento)` : ''}. `,
+  });
+}
+
 // Clique numa notificação de justificativa/desconsideração (notifications.js):
 // abre a NF se ela ainda estiver na cobrança; senão, a aba da anotação filtrada.
 async function cobAbrirNfDeNotificacao(k, tabela) {
@@ -1259,6 +1282,7 @@ function cobAbrirNf(k) {
     <button class="btn admin-btn-danger" onclick="closeModal('cob-nf-modal');cobAbrirAnot('desconsiderar','${k}')"><i class="ti ti-eye-off"></i> Desconsiderar</button>
     ${j ? `<button class="btn admin-btn-danger" onclick="cobExcluirJustDoModal('${k}')"><i class="ti ti-trash"></i> Excluir justificativa</button>` : ''}
     <span style="margin-right:auto"></span>
+    <button class="btn" onclick="closeModal('cob-nf-modal');cobAbrirOcorrencia('${k}')" title="Abrir ocorrência de Insumos já preenchida com esta NF"><i class="ti ti-alert-triangle"></i> Abrir ocorrência</button>
     <button class="btn" onclick="closeModal('cob-nf-modal')">Fechar</button>
     <button class="btn btn-primary" onclick="closeModal('cob-nf-modal');cobAbrirAnot('justificativas','${k}')"><i class="ti ti-message-2"></i> ${j ? 'Editar justificativa' : 'Justificar / informar desvio'}</button>`;
   openModal('cob-nf-modal');

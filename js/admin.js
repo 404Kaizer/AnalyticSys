@@ -32,7 +32,7 @@ const ADMIN_MODULOS = {
   regionais_centrais:       { label: 'Regionais',                  cols: ['nome', 'created_at'] },
   imports:                  { label: 'Log de Importações',         cols: ['arquivo', 'modulo', 'registros', 'total_arquivo', 'data_hora', 'status', 'status_tip', 'created_at'] },
   // Operacional
-  ocorrencias:              { label: 'Ocorrências',                cols: ['data_abertura', 'motivo', 'data_limite', 'central', 'material', 'operador', 'contato', 'descricao', 'concluida', 'data_conclusao', 'desc_conclusao', 'inconclusiva', 'data_inconclusiva', 'motivo_inconclusiva', 'hierarquia', 'criado_em', 'origem_ajuste_sistemico', 'dai_id', 'dai_numero', 'dai_tag', 'dai_item_id', 'numero', 'co_owners'] },
+  ocorrencias:              { label: 'Ocorrências',                cols: ['data_abertura', 'motivo', 'data_limite', 'central', 'material', 'operador', 'contato', 'descricao', 'concluida', 'data_conclusao', 'desc_conclusao', 'inconclusiva', 'data_inconclusiva', 'motivo_inconclusiva', 'hierarquia', 'criado_em', 'origem_ajuste_sistemico', 'dai_id', 'dai_numero', 'dai_tag', 'dai_item_id', 'numero', 'co_owners', 'tipo', 'fornecedor', 'cnpj_fornecedor', 'nfs', 'transportador'] },
   acoes_relatorio:          { label: 'Ações de Relatório',         cols: ['nivel', 'categorias', 'acoes', 'created'] },
   inv_justificativas:       { label: 'Justificativas de Inventário', cols: ['k', 'op', 'fiscal', 'saldo', 'custo_medio_sap', 'documento_sap'] },
   sap_fechamento_overrides: { label: 'Overrides de Fechamento SAP', cols: ['chave'] },

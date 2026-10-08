@@ -3036,6 +3036,63 @@
               </div>
             </div>
 
+            <!-- Categoria / Fornecedor (admin + insumos) e Usuário (só admin) — ver OC_MF_KEYS em ocorrencias.js -->
+            <div class="micro-filter-group" id="omfg-motivo">
+              <button class="micro-filter-trigger" id="omft-motivo" onclick="ocToggleMicroFilter('motivo')">
+                <i class="ti ti-tag"></i>
+                <span id="omft-motivo-label">Categoria</span>
+                <i class="ti ti-chevron-down micro-filter-chev" id="omfc-motivo"></i>
+              </button>
+              <div class="micro-filter-dropdown" id="omfd-motivo">
+                <div class="micro-filter-options" id="omfo-motivo"></div>
+                <div class="micro-filter-footer">
+                  <button class="btn btn-filter-clear" onclick="ocClearMicroFilter('motivo')"><i class="ti ti-filter-off"></i> Limpar</button>
+                  <button class="btn" onclick="ocCancelMicroFilter('motivo')"><i class="ti ti-x"></i> Cancelar</button>
+                  <button class="btn btn-primary" onclick="ocApplyMicroFilter('motivo')"><i class="ti ti-check"></i> Aplicar</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="micro-filter-group" id="omfg-fornecedor">
+              <button class="micro-filter-trigger" id="omft-fornecedor" onclick="ocToggleMicroFilter('fornecedor')">
+                <i class="ti ti-truck-delivery"></i>
+                <span id="omft-fornecedor-label">Fornecedor</span>
+                <i class="ti ti-chevron-down micro-filter-chev" id="omfc-fornecedor"></i>
+              </button>
+              <div class="micro-filter-dropdown" id="omfd-fornecedor">
+                <div class="micro-filter-search-wrap">
+                  <i class="ti ti-search"></i>
+                  <input class="micro-filter-search" id="omfs-fornecedor" type="text" placeholder="Buscar fornecedor…" oninput="ocFilterMicroOptions('fornecedor',this.value)">
+                </div>
+                <div class="micro-filter-options" id="omfo-fornecedor"></div>
+                <div class="micro-filter-footer">
+                  <button class="btn btn-filter-clear" onclick="ocClearMicroFilter('fornecedor')"><i class="ti ti-filter-off"></i> Limpar</button>
+                  <button class="btn" onclick="ocCancelMicroFilter('fornecedor')"><i class="ti ti-x"></i> Cancelar</button>
+                  <button class="btn btn-primary" onclick="ocApplyMicroFilter('fornecedor')"><i class="ti ti-check"></i> Aplicar</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="micro-filter-group" id="omfg-usuario">
+              <button class="micro-filter-trigger" id="omft-usuario" onclick="ocToggleMicroFilter('usuario')">
+                <i class="ti ti-users"></i>
+                <span id="omft-usuario-label">Usuário</span>
+                <i class="ti ti-chevron-down micro-filter-chev" id="omfc-usuario"></i>
+              </button>
+              <div class="micro-filter-dropdown" id="omfd-usuario">
+                <div class="micro-filter-search-wrap">
+                  <i class="ti ti-search"></i>
+                  <input class="micro-filter-search" id="omfs-usuario" type="text" placeholder="Buscar usuário…" oninput="ocFilterMicroOptions('usuario',this.value)">
+                </div>
+                <div class="micro-filter-options" id="omfo-usuario"></div>
+                <div class="micro-filter-footer">
+                  <button class="btn btn-filter-clear" onclick="ocClearMicroFilter('usuario')"><i class="ti ti-filter-off"></i> Limpar</button>
+                  <button class="btn" onclick="ocCancelMicroFilter('usuario')"><i class="ti ti-x"></i> Cancelar</button>
+                  <button class="btn btn-primary" onclick="ocApplyMicroFilter('usuario')"><i class="ti ti-check"></i> Aplicar</button>
+                </div>
+              </div>
+            </div>
+
             <!-- Filtro de período (31/07) — mesmo componente de calendário
                  já usado em Analítico/Dashboard Gerencial/Ausências
                  (js/calendar.js, pfx="oc"), filtra por dataAbertura. Sem os
@@ -6297,6 +6354,14 @@
           <option value="">Eu mesmo</option>
         </select>
       </div>
+      <!-- Tipo (Estoque | Insumos) — só admin, só em nova (ver ocFormSetTipo em ocorrencias.js) -->
+      <div class="oc-form-group" id="oc-form-tipo-wrap" style="display:none">
+        <label class="oc-label">Tipo de ocorrência</label>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">
+          <button type="button" class="oc-escalonar-nivel-btn" data-tipo="estoque" onclick="ocFormSetTipo('estoque')" style="--nivel-color:var(--accent);--nivel-bg:var(--accent-dim);--nivel-border:var(--accent-glow)"><i class="ti ti-box"></i><span>Estoque</span></button>
+          <button type="button" class="oc-escalonar-nivel-btn" data-tipo="insumos" onclick="ocFormSetTipo('insumos')" style="--nivel-color:var(--purple);--nivel-bg:var(--purple-bg);--nivel-border:var(--purple-border)"><i class="ti ti-file-invoice"></i><span>Insumos (notas / fornecedores)</span></button>
+        </div>
+      </div>
       <div class="oc-form-row">
         <div class="oc-form-group">
           <label class="oc-label">Data de abertura</label>
@@ -6307,20 +6372,35 @@
           <input type="date" id="oc-form-limite" class="oc-input">
         </div>
       </div>
-      <div class="oc-form-row">
+      <!-- Campos de Insumos (tipo insumos) -->
+      <div class="oc-form-row" data-oc-tipo="insumos">
         <div class="oc-form-group">
-          <label class="oc-label">Central <span class="oc-required">*</span></label>
-          <select id="oc-form-central" class="oc-input"></select>
+          <label class="oc-label">Fornecedor</label>
+          <select id="oc-form-fornecedor" class="oc-input"></select>
         </div>
         <div class="oc-form-group">
+          <label class="oc-label">NF(s) <span class="oc-hint">(separe por vírgula)</span></label>
+          <input type="text" id="oc-form-nfs" class="oc-input" placeholder="ex.: 13890, 13891">
+        </div>
+      </div>
+      <div class="oc-form-row">
+        <div class="oc-form-group">
+          <label class="oc-label">Central <span class="oc-required" id="oc-form-central-req">*</span></label>
+          <select id="oc-form-central" class="oc-input"></select>
+        </div>
+        <div class="oc-form-group" data-oc-tipo="estoque">
           <label class="oc-label">Material</label>
           <select id="oc-form-material" class="oc-input"></select>
+        </div>
+        <div class="oc-form-group" data-oc-tipo="insumos">
+          <label class="oc-label">Transportador</label>
+          <input type="text" id="oc-form-transportador" class="oc-input" placeholder="Nome da transportadora">
         </div>
       </div>
       <div class="oc-form-row">
         <div class="oc-form-group">
           <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
-            <label class="oc-label" style="margin:0">Operador / Regional</label>
+            <label class="oc-label" style="margin:0" id="oc-form-operador-label">Operador / Regional</label>
             <a href="https://platform.senior.com.br/senior-x/#/Gest%C3%A3o%20de%20Pessoas%20%7C%20HCM/2/43c072c8-de8c-4c4c-81b8-5d383daa8dcd%2FPainel%20de%20gest%C3%A3o%2FMeu%20painel%2FHierarquia?category=frame&link=https:%2F%2Fhcm.senior.com.br%2F%23%2Fhierarchy&helpUrl=https:%2F%2Fdocumentacao.senior.com.br%2Fseniorxplatform%2Fmanual-do-usuario%2Fhcm%2F%23painel-gestao%2Fdia-a-dia%2Festrutura-organizacional.htm&helpContext=&r=1" target="_blank" rel="noopener noreferrer" title="Buscar nome do funcionário na hierarquia (Senior X)" style="color:var(--text3);display:flex;align-items:center;flex-shrink:0"><i class="ti ti-user-search"></i></a>
           </div>
           <input type="text" id="oc-form-operador" class="oc-input" placeholder="Nome do operador ou regional">

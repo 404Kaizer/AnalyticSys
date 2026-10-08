@@ -125,6 +125,12 @@ function _ocToDbRow(o) {
     dai_tag: o.daiTag || null,
     dai_item_id: o.daiItemId || null,
     criado_por_nome: o.criadoPorNome || null,
+    // Ocorrência do setor de Insumos (ver OC_TIPOS) — notas/fornecedores.
+    tipo: o.tipo === 'insumos' ? 'insumos' : 'estoque',
+    fornecedor: o.fornecedor || null,
+    cnpj_fornecedor: o.cnpjFornecedor || null,
+    nfs: o.nfs || null,
+    transportador: o.transportador || null,
   };
 }
 
@@ -157,6 +163,11 @@ function _ocFromDbRow(row) {
     daiTag: row.dai_tag,
     daiItemId: row.dai_item_id,
     criadoPorNome: row.criado_por_nome || null,
+    tipo: row.tipo === 'insumos' ? 'insumos' : 'estoque',
+    fornecedor: row.fornecedor || null,
+    cnpjFornecedor: row.cnpj_fornecedor || null,
+    nfs: row.nfs || null,
+    transportador: row.transportador || null,
   };
 }
 
@@ -243,15 +254,20 @@ async function _ocMotivoRelevancia(row) {
   if (row.user_id === window.currentUser?.id) return 'proprio';
   const integrados = await _integracoesDoAdmin('ocorrencias');
   if (integrados.has(String(row.id))) return 'integrado';
-  if (!ocApareceAutoParaSupervisor(row)) return null;
+  // Pessoa aberta no filtro Usuário: continua relevante enquanto a sessão durar.
+  if (!ocApareceAutoParaSupervisor(row)) return _ocUsuariosCarregados.has(row.user_id) ? 'usuario' : null;
+  // Insumos entra sozinha na tela do admin, mas sem o aviso de "escalonada"
+  // (a notificação genérica de atividade já avisa).
+  if (row.tipo === 'insumos' && row.origem_ajuste_sistemico !== true && ocNivelAtual(row) < 2) return 'insumos';
   return row.origem_ajuste_sistemico === true ? 'dai' : 'escalonamento';
 }
 async function _ocEhRelevantePraMim(row) {
   return (await _ocMotivoRelevancia(row)) !== null;
 }
-function _ocUpsertLocal(row) {
+function _ocUpsertLocal(row, viaUsuario) {
   if (!Array.isArray(state.ocorrencias)) state.ocorrencias = [];
   const oc = _ocFromDbRow(row);
+  if (viaUsuario) oc._viaUsuario = true;   // só visível com o filtro Usuário (ver _ocListaBase)
   const meuId = window.currentUser?.id;
   // (o.userId || meuId): mesmo fallback do merge em syncOcorrenciasFromSupabase
   // — uma ocorrência recém-criada nesta sessão entra otimista no state ANTES
@@ -299,7 +315,7 @@ function _ocRealtimeInit() {
       const jaExistia = state.ocorrencias.some(o => o.id === row.id && (o.userId || meuId) === row.user_id);
       const motivo = await _ocMotivoRelevancia(row);
       if (motivo) {
-        _ocUpsertLocal(row);
+        _ocUpsertLocal(row, motivo === 'usuario');
         if (!jaExistia && (motivo === 'escalonamento' || motivo === 'dai') && typeof notifPushOcorrenciaSupervisor === 'function') {
           notifPushOcorrenciaSupervisor({
             ocorrenciaId: row.id,
@@ -476,9 +492,14 @@ function buildWhatsAppLink(numero, ocorrencia) {
   const material = escapeHtml(ocorrencia.material || '');
   const descricao = escapeHtml(ocorrencia.descricao || '');
   const dataLimite = fmtDateBR(ocorrencia.dataLimite);
+  const linhas = ocEhInsumos(ocorrencia)
+    ? [ocorrencia.fornecedor && `*Fornecedor:* ${escapeHtml(ocorrencia.fornecedor)}`,
+       ocorrencia.nfs && `*NF(s):* ${escapeHtml(ocorrencia.nfs)}`,
+       ocorrencia.transportador && `*Transportador:* ${escapeHtml(ocorrencia.transportador)}`,
+       ocorrencia.central && `*Central:* ${central}`].filter(Boolean).join('\n') + '\n'
+    : `*Central:* ${central}\n*Material:* ${material}\n`;
   const msg = `Olá! Estou entrando em contato referente a uma ocorrência aberta no AnalyticSys.\n\n` +
-    `*Central:* ${central}\n` +
-    `*Material:* ${material}\n` +
+    linhas +
     `*Prazo:* ${dataLimite}\n\n` +
     `*Descrição:*\n${descricao}\n\n` +
     `Por favor, verifique e nos retorne assim que possível. Obrigado!`;
@@ -538,8 +559,18 @@ function ocNivelInfo(nivel) {
 // syncOcorrenciasFromSupabase(). Separada em função nomeada só pra dar pra
 // testar sem precisar simular o fetch inteiro do Supabase.
 function ocApareceAutoParaSupervisor(row) {
-  return row.origem_ajuste_sistemico === true || ocNivelAtual(row) >= 2;
+  // Ocorrências do setor de Insumos aparecem sempre pro admin (decisão out/2026).
+  return row.origem_ajuste_sistemico === true || ocNivelAtual(row) >= 2 || row.tipo === 'insumos';
 }
+
+// Ocorrência de Insumos: notas/fornecedores/transportadores — sem material
+// e SEM escalonamento (decisão out/2026). Categorias próprias no lugar dos
+// motivos de estoque.
+const OC_MOTIVOS = {
+  estoque: ['Teste de canto', 'Verificação de notas fiscais', 'Vídeo de batida de silo', 'Cubagem de carretas', 'Aferição de material', 'Outro'],
+  insumos: ['NF com erro / divergência', 'Fornecedor', 'Transportador', 'Cancelamento', 'Devolução', 'Estorno', 'Erro de sistema', 'Correção de integração', 'Acordo', 'Outro'],
+};
+const ocEhInsumos = o => o?.tipo === 'insumos';
 
 // Detecta uma mudança de PRIORIDADE feita pelo Supervisor numa ocorrência
 // do usuário comum (escalonou/concluiu/marcou inconclusiva/reabriu/
@@ -581,7 +612,7 @@ function _ocDetectarMudancaPrioritaria(oldData, newData) {
 }
 
 function ocPodeEscalonar(o) {
-  if (o.concluida || o.inconclusiva) return false;
+  if (o.concluida || o.inconclusiva || ocEhInsumos(o)) return false;
   return ocNivelAtual(o) < OC_HIERARQUIA.length - 1;
 }
 
@@ -1423,7 +1454,7 @@ function renderOcorrencias() {
   // sentido pra um registro que nasce já concluído no mesmo dia, sem prazo
   // real) agora é decidida DENTRO de buildOcKPIs, métrica por métrica —
   // o donut e a contagem total continuam precisando ver as DAIs.
-  renderOcKPIs(state.ocorrencias);
+  renderOcKPIs(_ocListaBase());
   _renderOcLista(lista);
   // Cobre o filtro de período (calendar.js chama renderOcorrencias direto
   // ao completar o range, sem passar pelos outros pontos que já
@@ -1446,11 +1477,15 @@ const OC_STATUS_OPTIONS = [
   { value: 'concluida',        label: 'Concluídas' },
   { value: 'ajuste_sistemico', label: 'Ajuste Sistêmico' },
 ];
-const _OC_FILTER_KEY_LABELS = { status: 'Status', central: 'Central', material: 'Material', regional: 'Regional' };
+// motivo (Categoria) e fornecedor: admin + insumos; usuario: só admin
+// (visibilidade por CSS, modules.css). Usuário puxa do banco TODAS as
+// ocorrências da pessoa escolhida (ver _ocCarregarDoUsuario).
+const OC_MF_KEYS = ['status', 'central', 'material', 'regional', 'motivo', 'fornecedor', 'usuario'];
+const _OC_FILTER_KEY_LABELS = { status: 'Status', central: 'Central', material: 'Material', regional: 'Regional', motivo: 'Categoria', fornecedor: 'Fornecedor', usuario: 'Usuário' };
 const _ocMicroFilter = {
-  pending:  { status: new Set(), central: new Set(), material: new Set(), regional: new Set() },
-  applied:  { status: new Set(), central: new Set(), material: new Set(), regional: new Set() },
-  options:  { status: OC_STATUS_OPTIONS, central: [], material: [], regional: [] },
+  pending:  Object.fromEntries(OC_MF_KEYS.map(k => [k, new Set()])),
+  applied:  Object.fromEntries(OC_MF_KEYS.map(k => [k, new Set()])),
+  options:  { status: OC_STATUS_OPTIONS, central: [], material: [], regional: [], motivo: [], fornecedor: [], usuario: [] },
 };
 
 // Central → Regional (state.filiais) — ocorrências não têm campo regional
@@ -1520,7 +1555,7 @@ function ocToggleMicroFilter(key) {
   const dd = document.getElementById(`omfd-${key}`);
   const chev = document.getElementById(`omfc-${key}`);
   if (!dd || !chev) return;
-  const allKeys = ['status', 'central', 'material', 'regional'];
+  const allKeys = OC_MF_KEYS;
   // Fecha os outros dropdowns primeiro, revertendo pending não aplicado.
   allKeys.filter(k => k !== key).forEach(otherKey => {
     const otherDd = document.getElementById(`omfd-${otherKey}`);
@@ -1545,12 +1580,44 @@ function ocFilterMicroOptions(key, query) {
   _ocBuildOptionsList(key, query);
 }
 
-function ocApplyMicroFilter(key) {
+async function ocApplyMicroFilter(key) {
   _ocMicroFilter.applied[key] = new Set(_ocMicroFilter.pending[key]);
   _ocCloseMicroFilterDropdown(key);
   _ocSyncTriggerLabel(key);
   _ocSyncClearBtn();
+  if (key === 'usuario') await _ocCarregarDoUsuario([..._ocMicroFilter.applied.usuario]);
   renderOcorrencias();
+}
+
+// Filtro Usuário (admin): a tela normal do admin só tem as dele + integradas
+// + escalonadas/DAI/Insumos (regra de 31/07, ver syncOcorrenciasFromSupabase).
+// Escolher uma pessoa puxa do banco TODAS as ocorrências dela e mescla no
+// state marcadas `_viaUsuario` — fora do filtro elas não aparecem
+// (_ocListaBase), e no próximo boot o sync já as descarta (o banco manda).
+const _ocUsuariosCarregados = new Set();
+async function _ocCarregarDoUsuario(ids) {
+  const faltam = ids.filter(id => id && !_ocUsuariosCarregados.has(id));
+  if (!faltam.length || !window.supabaseClient) return;
+  try {
+    const { data, error } = await window.supabaseClient.from('ocorrencias').select('*').in('user_id', faltam);
+    if (error) throw error;
+    const meuId = window.currentUser?.id;
+    (data || []).forEach(row => {
+      const ja = state.ocorrencias.some(o => o.id === row.id && (o.userId || meuId) === row.user_id);
+      if (!ja) state.ocorrencias.push({ ..._ocFromDbRow(row), _viaUsuario: true });
+    });
+    faltam.forEach(id => _ocUsuariosCarregados.add(id));
+  } catch (err) {
+    toast('Falha ao carregar as ocorrências do usuário: ' + (err.message || err), 'error');
+  }
+}
+
+// Base da tela: sem filtro de Usuário, esconde o que só entrou por ele.
+function _ocListaBase() {
+  const usuarios = _ocMicroFilter.applied.usuario;
+  const meuId = window.currentUser?.id;
+  const todas = state.ocorrencias || [];
+  return usuarios.size ? todas.filter(o => usuarios.has(o.userId || meuId)) : todas.filter(o => !o._viaUsuario);
 }
 
 function ocCancelMicroFilter(key) {
@@ -1568,7 +1635,7 @@ function ocClearMicroFilter(key) {
 }
 
 function ocClearAllMicroFilters() {
-  ['status', 'central', 'material', 'regional'].forEach(key => {
+  OC_MF_KEYS.forEach(key => {
     _ocMicroFilter.pending[key] = new Set();
     _ocMicroFilter.applied[key] = new Set();
     _ocSyncTriggerLabel(key);
@@ -1604,14 +1671,14 @@ function _ocSyncClearBtn() {
   if (!btn) return;
   const f = _ocMicroFilter.applied;
   const hasPeriodo = !!document.getElementById('oc-dt-ini')?.value;
-  const hasAny = f.status.size || f.central.size || f.material.size || f.regional.size || hasPeriodo;
+  const hasAny = OC_MF_KEYS.some(k => f[k].size) || hasPeriodo;
   btn.style.display = hasAny ? '' : 'none';
 }
 
 // Fecha o dropdown aberto ao clicar fora dele, descartando qualquer edição
 // pendente não aplicada (mesmo comportamento do padrão em analitico.js).
 document.addEventListener('click', e => {
-  ['status', 'central', 'material', 'regional'].forEach(key => {
+  OC_MF_KEYS.forEach(key => {
     const group = document.getElementById(`omfg-${key}`);
     if (group && !group.contains(e.target)) {
       const dd = document.getElementById(`omfd-${key}`);
@@ -1671,7 +1738,7 @@ function ocToggleOrdenarDropdown() {
   if (!dd) return;
   // Fecha os dropdowns de filtro se algum estiver aberto (mesmo cuidado
   // do lado deles em relação a este) — revertendo pending não aplicado.
-  ['status', 'central', 'material', 'regional'].forEach(key => {
+  OC_MF_KEYS.forEach(key => {
     const otherDd = document.getElementById(`omfd-${key}`);
     if (otherDd?.classList.contains('open')) {
       _ocMicroFilter.pending[key] = new Set(_ocMicroFilter.applied[key]);
@@ -1715,11 +1782,14 @@ function getOcorrenciasFiltradas() {
   // Só resolve o mapa central→regional se o filtro estiver mesmo em uso —
   // evita varrer state.filiais à toa em toda renderização.
   const mapaRegional = fRegional.size ? _ocRegionalPorCentral() : null;
+  const fMotivo = _ocMicroFilter.applied.motivo, fFornecedor = _ocMicroFilter.applied.fornecedor;
 
-  return (state.ocorrencias || []).filter(o => {
+  return _ocListaBase().filter(o => {
     if (fStatus.size && ![...fStatus].some(s => ocStatusMatches(o, s))) return false;
     if (fCentral.size && !fCentral.has(o.central || '')) return false;
     if (fMaterial.size && !fMaterial.has(o.material || '')) return false;
+    if (fMotivo.size && !fMotivo.has(o.motivo || '')) return false;
+    if (fFornecedor.size && !fFornecedor.has(o.fornecedor || '')) return false;
     if (fRegional.size) {
       const reg = mapaRegional.get((o.central || '').trim());
       if (!reg || !fRegional.has(reg)) return false;
@@ -1727,7 +1797,7 @@ function getOcorrenciasFiltradas() {
     if (dtIni && (o.dataAbertura || '') < dtIni) return false;
     if (dtFim && (o.dataAbertura || '') > dtFim) return false;
     if (fBusca) {
-      const hay = [o.central, o.material, o.operador, o.descricao, o.id, o.numero, o.daiNumero, o.daiTag].join(' ').toLowerCase();
+      const hay = [o.central, o.material, o.operador, o.descricao, o.id, o.numero, o.daiNumero, o.daiTag, o.fornecedor, o.nfs, o.transportador, o.motivo].join(' ').toLowerCase();
       if (!hay.includes(fBusca)) return false;
     }
     return true;
@@ -1794,6 +1864,20 @@ function _ocFecharMenuCard() {
   document.getElementById('oc-card-menu')?.classList.remove('open');
 }
 
+// Chips do cabeçalho do card/detalhe: estoque → central + material;
+// insumos → selo "Insumos", categoria, fornecedor, NF(s) e central (se houver).
+function _ocChipsCabecalho(o) {
+  if (!ocEhInsumos(o)) {
+    return `<span class="oc-card-central"><i class="ti ti-building-warehouse"></i> ${escapeHtml(o.central || '—')}</span>
+      ${o.material ? `<span class="oc-card-material"><i class="ti ti-box"></i> ${escapeHtml(o.material)}</span>` : ''}`;
+  }
+  return `<span class="oc-badge oc-badge-purple"><i class="ti ti-file-invoice" style="margin-right:3px"></i>Insumos</span>
+    ${o.motivo ? `<span class="oc-card-material"><i class="ti ti-tag"></i> ${escapeHtml(o.motivo)}</span>` : ''}
+    ${o.fornecedor ? `<span class="oc-card-central" title="${escapeHtml(o.cnpjFornecedor || '')}"><i class="ti ti-truck-delivery"></i> ${escapeHtml(o.fornecedor)}</span>` : ''}
+    ${o.nfs ? `<span class="oc-card-material"><i class="ti ti-file-invoice"></i> NF ${escapeHtml(o.nfs)}</span>` : ''}
+    ${o.central ? `<span class="oc-card-material"><i class="ti ti-building-warehouse"></i> ${escapeHtml(o.central)}</span>` : ''}`;
+}
+
 function _renderOcLista(lista) {
   const el = document.getElementById('oc-lista');
   if (!el) return;
@@ -1814,8 +1898,7 @@ function _renderOcLista(lista) {
         <div class="oc-card-header-left">
           <span class="oc-badge ${statusCls[status]}">${isAjuste ? `<i class="ti ${o.concluida ? "ti-rubber-stamp" : "ti-clock-hour-4"}" style="margin-right:3px"></i>` : ''}${statusLabel[status]}</span>
           <span class="oc-card-id" title="${isAjuste ? 'Ocorrência interna: ' + escapeHtml(o.id) + (o.daiNumero ? ' · Nº fiscal: ' + escapeHtml(o.daiNumero) : '') : ''}">${isAjuste && (o.daiTag || o.daiNumero) ? escapeHtml(o.daiTag || o.daiNumero) : escapeHtml(o.numero || o.id)}</span>
-          <span class="oc-card-central"><i class="ti ti-building-warehouse"></i> ${escapeHtml(o.central || '—')}</span>
-          ${o.material ? `<span class="oc-card-material"><i class="ti ti-box"></i> ${escapeHtml(o.material)}</span>` : ''}
+          ${_ocChipsCabecalho(o)}
         </div>
         <div class="oc-card-header-right">
           <span class="oc-card-date-group">
@@ -1844,7 +1927,7 @@ function _renderOcLista(lista) {
         <div class="oc-card-desc">${escapeHtml(o.descricao || '')}</div>
         ${o.concluida && o.descConclusao ? `<div class="oc-card-conclusao"><i class="ti ti-circle-check"></i> ${escapeHtml(o.descConclusao)}</div>` : ''}
         ${o.inconclusiva && !o.concluida && o.motivoInconclusiva ? `<div class="oc-card-inconclusiva-obs"><i class="ti ti-alert-triangle"></i> ${escapeHtml(o.motivoInconclusiva)}</div>` : ''}
-        ${_buildOcHierarquiaBar(o)}
+        ${ocEhInsumos(o) ? '' : _buildOcHierarquiaBar(o)}
       </div>
 
       <div class="oc-card-footer">
@@ -1901,8 +1984,7 @@ function openOcDetailModal(id) {
 
   el.querySelector('.oc-detail-header').innerHTML = `
     <span class="oc-badge ${statusCls[status]}">${isAjuste ? `<i class="ti ${o.concluida ? "ti-rubber-stamp" : "ti-clock-hour-4"}" style="margin-right:3px"></i>` : ''}${statusLabel[status]}</span>
-    <span class="oc-card-central"><i class="ti ti-building-warehouse"></i> ${escapeHtml(o.central || '—')}</span>
-    ${o.material ? `<span class="oc-card-material"><i class="ti ti-box"></i> ${escapeHtml(o.material)}</span>` : ''}
+    ${_ocChipsCabecalho(o)}
     <span style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-left:auto" title="${isAjuste ? 'Ocorrência interna: ' + escapeHtml(o.id) + (o.daiNumero ? ' · Nº fiscal: ' + escapeHtml(o.daiNumero) : '') : ''}">${isAjuste && (o.daiTag || o.daiNumero) ? escapeHtml(o.daiTag || o.daiNumero) : escapeHtml(o.numero || o.id)}</span>`;
 
   el.querySelector('.oc-detail-dates').innerHTML = `
@@ -1926,7 +2008,14 @@ function openOcDetailModal(id) {
       <span class="oc-card-date-val">${fmtDateBR(o.dataInconclusiva)}</span>
     </span>` : ''}`;
 
-  el.querySelector('.oc-detail-desc').innerHTML = `
+  el.querySelector('.oc-detail-desc').innerHTML = (ocEhInsumos(o) ? `
+    <div class="oc-detail-section-label">Nota / fornecedor</div>
+    <div class="oc-detail-section-val" style="line-height:1.8">
+      Categoria: <strong>${escapeHtml(o.motivo || '—')}</strong><br>
+      Fornecedor: <strong>${escapeHtml(o.fornecedor || '—')}</strong>${o.cnpjFornecedor ? ` <span style="color:var(--text3)">(CNPJ ${escapeHtml(o.cnpjFornecedor)})</span>` : ''}<br>
+      NF(s): <strong>${escapeHtml(o.nfs || '—')}</strong> · Transportador: <strong>${escapeHtml(o.transportador || '—')}</strong><br>
+      Central: <strong>${escapeHtml(o.central || '—')}</strong>
+    </div>` : '') + `
     <div class="oc-detail-section-label">Descrição</div>
     <div class="oc-detail-section-val">${escapeHtml(o.descricao || '—')}</div>`;
 
@@ -2013,7 +2102,7 @@ function openOcDetailModal(id) {
 
   // Seção de hierarquia no modal de detalhe
   const hierEl = el.querySelector('.oc-detail-hierarquia');
-  if (hierEl) hierEl.innerHTML = isAjuste ? '' : _buildOcHierarquiaDetail(o);
+  if (hierEl) hierEl.innerHTML = isAjuste || ocEhInsumos(o) ? '' : _buildOcHierarquiaDetail(o);
 
   el.classList.add('open');
 }
@@ -2051,7 +2140,17 @@ function populateOcFiltros() {
     centrais.map(c => mapaRegional.get(c)).filter(Boolean)
   )].sort();
   _ocMicroFilter.options.regional = regionais.map(r => ({ value: r, label: r }));
-  ['status', 'central', 'material', 'regional'].forEach(key => {
+  const base = _ocListaBase();
+  const unicos = campo => [...new Set(base.map(o => o[campo]).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR')).map(v => ({ value: v, label: v }));
+  _ocMicroFilter.options.motivo = unicos('motivo');
+  _ocMicroFilter.options.fornecedor = unicos('fornecedor');
+  // Usuário (admin): todos os usuários do sistema (lista de presença) + ele mesmo.
+  const meuId = window.currentUser?.id;
+  _ocMicroFilter.options.usuario = [
+    { value: meuId, label: 'Eu' },
+    ..._ocUsuariosParaAtribuir().map(u => ({ value: u.id, label: u.nome_exibicao || u.email })),
+  ].filter(o => o.value);
+  OC_MF_KEYS.forEach(key => {
     _ocBuildOptionsList(key);
     _ocSyncTriggerLabel(key);
   });
@@ -2062,7 +2161,9 @@ function populateOcFiltros() {
   // formulário de Nova Ocorrência (mCentral abaixo), que continua
   // oferecendo o cadastro completo, diferente do filtro da toolbar acima.
   // Nome original tem prioridade sobre a sigla (mesmo padrão do DAI).
-  const stCentrals  = (state.filiais  || [])
+  // Perfil insumos não carrega state.filiais — usa as centrais do admin (cobrancas.js).
+  const filiais = (state.filiais || []).length ? state.filiais : (typeof _cob !== 'undefined' ? _cob.centrais : []);
+  const stCentrals  = filiais
     .map(f => (f.origem || f.alias || '').trim())
     .filter(Boolean)
     .sort();
@@ -2109,8 +2210,22 @@ function openOcorrenciaModal(id, prefill) {
   document.getElementById('oc-form-operador').value    = o?.operador      || '';
   document.getElementById('oc-form-contato').value     = o?.contato ? fmtPhoneDisplay(o.contato) : '';
   document.getElementById('oc-form-descricao').value   = o?.descricao     || '';
+
+  // Tipo: edição mantém o da ocorrência; nova → prefill, perfil insumos
+  // sempre Insumos, demais Estoque. Só o admin escolhe (nova).
+  const role = window.currentUser?.role;
+  const tipo = o ? (o.tipo || 'estoque') : (prefill?.tipo || (role === 'insumos' ? 'insumos' : 'estoque'));
+  document.getElementById('oc-form-tipo-wrap').style.display = !o && role === 'admin' ? '' : 'none';
+  _ocFormFornecedores(o?.cnpjFornecedor || prefill?.fornecedorCnpj, o?.fornecedor || prefill?.fornecedorNome);
+  document.getElementById('oc-form-nfs').value           = o?.nfs || prefill?.nfs || '';
+  document.getElementById('oc-form-transportador').value = o?.transportador || prefill?.transportador || '';
+  ocFormSetTipo(tipo, !o);
   const motivoEl = document.getElementById('oc-form-motivo');
-  if (motivoEl) motivoEl.value = o?.motivo || '';
+  const motivo = o?.motivo || prefill?.motivo || '';
+  if (motivoEl) {
+    motivoEl.value = motivo;
+    if (motivo && motivoEl.value !== motivo) { motivoEl.add(new Option(motivo, motivo)); motivoEl.value = motivo; }
+  }
   if (prefill) {
     // Valor fora das <option> do cadastro: injeta a opção pra não perdê-lo.
     [['oc-form-central', prefill.central], ['oc-form-material', prefill.material]].forEach(([elId, v]) => {
@@ -2126,7 +2241,7 @@ function openOcorrenciaModal(id, prefill) {
   const isNova = !o;
   const escToggle = document.getElementById('oc-form-esc-toggle');
   const escWrap   = document.getElementById('oc-form-esc-wrap');
-  if (escToggle) escToggle.style.display = isNova ? '' : 'none';
+  if (escToggle) escToggle.style.display = isNova && _ocFormTipo === 'estoque' ? '' : 'none';   // Insumos não escalona
   if (escWrap)   { escWrap.style.display = 'none'; escWrap.dataset.active = '0'; }
   if (isNova) _ocFormEscBuildNiveis();
   document.getElementById('oc-form-esc-motivo').value      = '';
@@ -2149,6 +2264,47 @@ function openOcorrenciaModal(id, prefill) {
 
   document.getElementById('oc-modal').classList.add('open');
   initPhoneMasks();
+}
+
+// ── Tipo da ocorrência no formulário (Estoque | Insumos) ──
+let _ocFormTipo = 'estoque';
+function ocFormSetTipo(tipo, isNova = true) {
+  _ocFormTipo = tipo === 'insumos' ? 'insumos' : 'estoque';
+  const ins = _ocFormTipo === 'insumos';
+  document.querySelectorAll('#oc-modal [data-oc-tipo]').forEach(el => { el.style.display = el.dataset.ocTipo === _ocFormTipo ? '' : 'none'; });
+  document.querySelectorAll('#oc-form-tipo-wrap [data-tipo]').forEach(b => b.classList.toggle('oc-escalonar-nivel-ativo', b.dataset.tipo === _ocFormTipo));
+  const motivoEl = document.getElementById('oc-form-motivo');
+  if (motivoEl) {
+    const atual = motivoEl.value;
+    motivoEl.innerHTML = '<option value="">Selecione um</option>' + OC_MOTIVOS[_ocFormTipo].map(m => `<option>${escapeHtml(m)}</option>`).join('');
+    if (OC_MOTIVOS[_ocFormTipo].includes(atual)) motivoEl.value = atual;
+  }
+  document.getElementById('oc-form-operador-label').textContent = ins ? 'Contato' : 'Operador / Regional';
+  document.getElementById('oc-form-operador').placeholder = ins ? 'Nome do contato (fornecedor, transportadora, central…)' : 'Nome do operador ou regional';
+  document.getElementById('oc-form-central-req').style.display = ins ? 'none' : '';
+  // Insumos não tem escalonamento (decisão out/2026).
+  const escToggle = document.getElementById('oc-form-esc-toggle');
+  const escWrap = document.getElementById('oc-form-esc-wrap');
+  if (escToggle) escToggle.style.display = isNova && !ins ? '' : 'none';
+  if (escWrap && ins) { escWrap.style.display = 'none'; escWrap.dataset.active = '0'; }
+}
+
+// Fornecedores do cadastro da Cobrança (cobrancas.js) — valor = CNPJ.
+function _ocFormFornecedores(cnpjSel, nomeSel) {
+  const sel = document.getElementById('oc-form-fornecedor');
+  if (!sel) return;
+  const lista = (typeof _cob !== 'undefined' ? _cob.fornecedores : []).slice().sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+  sel.innerHTML = '<option value="">Selecione o fornecedor (opcional)</option>'
+    + lista.map(f => `<option value="${f.cnpj}" data-nome="${escapeHtml(f.nome)}">${escapeHtml(f.nome)} — ${escapeHtml(f.cnpj_fmt || f.cnpj)}</option>`).join('');
+  if (cnpjSel) {
+    sel.value = cnpjSel;
+    if (sel.value !== cnpjSel) {   // fora do cadastro: mantém o que veio
+      const opt = new Option(nomeSel || cnpjSel, cnpjSel);
+      opt.dataset.nome = nomeSel || '';
+      sel.add(opt);
+      sel.value = cnpjSel;
+    }
+  }
 }
 
 function _ocFormEscBuildNiveis() {
@@ -2200,12 +2356,22 @@ function submitOcorrenciaForm() {
   // ocorrência nova sem atribuição (cai no fallback de _ocToDbRow).
   const atribuidoId = !id ? (document.getElementById('oc-form-atribuir')?.value || undefined) : undefined;
 
-  if (!central)   { toast('Informe a central.', 'error'); return; }
+  const existingTipo = id ? (state.ocorrencias || []).find(o => o.id === id)?.tipo : null;
+  const tipo = existingTipo || _ocFormTipo;
+  const ehInsumos = tipo === 'insumos';
+  const fornSel = document.getElementById('oc-form-fornecedor');
+  const fornOpt = fornSel?.selectedOptions?.[0];
+  const cnpjFornecedor = ehInsumos ? (fornSel?.value || null) : null;
+  const fornecedor = ehInsumos && cnpjFornecedor ? (fornOpt?.dataset.nome || fornOpt?.textContent || null) : null;
+  const nfs = ehInsumos ? document.getElementById('oc-form-nfs').value.trim() || null : null;
+  const transportador = ehInsumos ? document.getElementById('oc-form-transportador').value.trim() || null : null;
+
+  if (!central && !ehInsumos) { toast('Informe a central.', 'error'); return; }   // Insumos: central opcional
   if (!descricao) { toast('Informe a descrição da solicitação.', 'error'); return; }
 
   // Escalonamento inicial
   const escWrap  = document.getElementById('oc-form-esc-wrap');
-  const escAtivo = !id && escWrap?.dataset.active === '1';
+  const escAtivo = !id && !ehInsumos && escWrap?.dataset.active === '1';
   let hierarquiaInicial = [];
   if (escAtivo) {
     const escNivelBtn = document.querySelector('#oc-form-esc-nivel-opcoes .oc-escalonar-nivel-ativo');
@@ -2235,8 +2401,14 @@ function submitOcorrenciaForm() {
     dataAbertura: abertura,
     motivo:       motivo,
     dataLimite:   limite || null,
-    central,
-    material:     material || null,
+    central:      central || null,
+    material:     ehInsumos ? null : (material || null),
+    tipo,
+    fornecedor,
+    cnpjFornecedor,
+    nfs,
+    transportador,
+    _viaUsuario:  existing?._viaUsuario,   // continua só no filtro Usuário (admin)
     operador:     operador || null,
     contato:      contato,
     descricao,

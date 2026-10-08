@@ -12971,7 +12971,7 @@ tr.sap-fechamento td {
    .cob-insumos (cards da Cobrança, próximas etapas).
 ══════════════════════════════════════════ */
 body.role-insumos .tab-group-label,
-body.role-insumos .tab-item:not([data-page="cobrancas"]):not([data-page="importar"]):not([data-page="configuracoes"]),
+body.role-insumos .tab-item:not([data-page="cobrancas"]):not([data-page="importar"]):not([data-page="configuracoes"]):not([data-page="ocorrencias"]),
 body.role-insumos #page-importar > :not(.cob-insumos),
 body.role-insumos #page-configuracoes > :not(.cob-insumos) { display: none !important; }
 body:not(.role-admin):not(.role-insumos) .tab-item[data-page="cobrancas"] { display: none !important; }
@@ -12999,3 +12999,14 @@ body:not(.role-insumos) .cob-so-insumos { display: none !important; }
 .cob-nf.cob-justificada td { background: color-mix(in srgb, var(--accent) 16%, transparent); }
 .cob-nf.cob-justificada:hover td { background: color-mix(in srgb, var(--accent) 24%, transparent); }
 .cob-nf.cob-justificada td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+/* Ocorrências — perfil insumos: sem DAI, sem relatórios de estoque, sem
+   filtros de Material/Regional (ocorrências dele são de notas/fornecedores).
+   Categoria/Fornecedor só pra admin + insumos; Usuário só admin. */
+body.role-insumos #page-ocorrencias [onclick^="gerarRelatorio"],
+body.role-insumos #page-ocorrencias [onclick^="abrirSeletor"],
+body.role-insumos #page-ocorrencias [onclick^="abrirModalDai"],
+body.role-insumos #omfg-material,
+body.role-insumos #omfg-regional,
+body:not(.role-admin):not(.role-insumos) #omfg-motivo,
+body:not(.role-admin):not(.role-insumos) #omfg-fornecedor,
+body:not(.role-admin) #omfg-usuario { display: none !important; }
