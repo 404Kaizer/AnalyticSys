@@ -11367,6 +11367,40 @@ td:has(.lanc-central-edit:focus) {
 .dg-fz-ok > .ti { color: var(--accent); }
 .dg-fz-alerta  { background: var(--amber-bg); color: var(--amber); border-color: var(--amber-border); }
 
+/* Modal "Ver detalhes" do Custo Var. — custos dos materiais e paridade
+   Custos SAP × Saídas (ver _dcpRender, dashboard.js). */
+.dcp-topo { display: grid; grid-template-columns: minmax(320px, 1.1fr) 1fr; gap: 14px; margin-bottom: 14px; }
+@media (max-width: 900px) { .dcp-topo { grid-template-columns: 1fr; } }
+.dcp-donut-card { overflow: visible; }
+.dcp-donut-sub { font-size: 10.5px; font-family: var(--mono); color: var(--text3); margin: -8px 0 4px; }
+.dcp-summary { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.dcp-kpis { display: flex; flex-direction: column; gap: 10px; }
+.dcp-kpis .inv-kpi-value { font-size: 20px; }
+.dcp-legenda { font-size: 11.5px; color: var(--text3); line-height: 1.5; display: flex; flex-direction: column; gap: 6px; padding: 4px 2px; }
+.dcp-legenda strong { color: var(--text2); }
+.dcp-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 2px 9px; border-radius: 5px; border: 1px solid;
+  font-size: 10px; font-weight: 700; font-family: var(--mono);
+  letter-spacing: .04em; white-space: nowrap;
+}
+.dcp-filtros { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.dcp-filtro {
+  padding: 4px 11px; border-radius: 999px; border: 1px solid var(--border2);
+  background: transparent; color: var(--text2); font-size: 11.5px; font-weight: 600; cursor: pointer;
+}
+.dcp-filtro:hover { color: var(--text); background: var(--bg3); }
+.dcp-filtro.active { color: var(--dcp-cor, var(--accent)); border-color: var(--dcp-cor, var(--accent)); background: color-mix(in srgb, var(--dcp-cor, var(--accent)) 12%, transparent); }
+.dcp-exp {
+  border: none; background: transparent; color: var(--text3); cursor: pointer;
+  padding: 0 4px 0 0; vertical-align: middle;
+}
+.dcp-exp i { transition: transform .15s; display: inline-block; }
+.dcp-aberto .dcp-exp i { transform: rotate(90deg); }
+.dcp-table .dcp-central-row td { background: color-mix(in srgb, var(--bg3) 45%, transparent); font-size: 11.5px; }
+.dcp-table .dcp-central-row td:first-child { padding-left: 34px; }
+.dcp-central-nome { color: var(--text2); font-weight: 600; margin-right: 6px; }
+
 /* Botão "Ocultar Ajustes" (ver dgToggleOcultarAjustes, dashboard.js) —
    discreto por padrão, só destaca (âmbar) quando ativo, pra ficar claro
    que algo está escondido. */

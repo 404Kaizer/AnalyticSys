@@ -644,6 +644,8 @@
    em linha, então quebra linha e zera o padding de baixo pro rodapé. */
 .inv-kpi-card.dg-kpi-card-rodape { flex-wrap: wrap; row-gap: 14px; padding-bottom: 0; }
 .dg-kpi-card-rodape > .dg-kpi-detalhe-btn { width: calc(100% + 44px); margin: 0 -22px; padding-left: 22px; padding-right: 22px; }
+/* Card de destaque (Custo Var., padding 22px 26px). */
+.inv-kpi-card-featured.dg-kpi-card-rodape > .dg-kpi-detalhe-btn { width: calc(100% + 52px); margin: 0 -26px; padding-left: 26px; padding-right: 26px; }
 
 @media print {
   .dg-kpi-detalhe-btn { display: none; }

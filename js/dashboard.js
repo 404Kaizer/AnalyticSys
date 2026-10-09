@@ -519,6 +519,7 @@ function _dgFzHidratar(payload, meta) {
     thresholds: payload.thresholds,
     pares: payload.pares,
     consumoAnt: payload.consumoAnt || null,
+    saidasCusto: payload.saidasCusto || null, // ausente em fotografia anterior a 09/10/2026
     resumo: payload.resumo, avisos: payload.avisos || [],
     regras: payload.regras,
     results
@@ -571,6 +572,9 @@ function dgFotografiaGerar(ano, mes) {
     geradoEm: new Date().toISOString(),
     regras: { estIni: 'sap', estFim: 'custosSap' },
     thresholds, pares, consumoAnt, resumo, avisos,
+    // Saídas por central × material (kg, valor) — paridade Custos SAP ×
+    // Saídas do "Ver detalhes" do Custo Var. (_dgCustoParidadeDados).
+    saidasCusto: _dgSaidasCustoPorPar(results, dtIni, dtFim),
     results: results.map(_dgFzSerializarResult)
   };
   return { payload, resumo, avisos };
@@ -1958,7 +1962,7 @@ function renderDgVisaoGeralPdf(results, thresholds, dtIni, dtFim) {
   // centrais do período selecionado, para o badge/modal do card Variação.
   const sapFechExcluidosPeriodo = results.reduce((acc, r) => acc.concat(r.sapFechExcluidos || []), []);
 
-  _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais, sapFechExcluidosPeriodo, custoMovTotais, veiculosTotalKpi, results);
+  _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais, sapFechExcluidosPeriodo, custoMovTotais, veiculosTotalKpi, results, undefined, pares);
   _dgVgRenderHealthDonuts(pares, counts, scoreInfo, thresholds, null, results);
   _dgVgPopularFiltroSaude(pares);
   _dgVgRenderChartCategoriaFisica(catFisicaPct);
@@ -2054,7 +2058,10 @@ function _dgVgBotaoDetalhado(entries, title, colorVar) {
 //    sem abreviação M/K (fmtKg/money em vez de fmtKgShort/moneyShort).
 // `elId` opcional — default é o container FIXO da tela; o detalhe mensal da
 // Evolução (relatório) desenha num container próprio de cada mês.
-function _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais, fechExcluidos = [], custoMovTotais = {}, veiculos = {}, results = [], elId) {
+// pares (opcional): alimenta a linha de Custo Var. por categoria no card
+// Custo Var. (ver _dgVgCustoVarPorGrupoVeiculo). O botão "Ver detalhes" desse
+// card só existe na tela (sem elId) — no relatório não há o modal.
+function _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais, fechExcluidos = [], custoMovTotais = {}, veiculos = {}, results = [], elId, pares = null) {
   const el = document.getElementById(elId || 'dg-vg-kpis-hero');
   if (!el) return;
 
@@ -2143,6 +2150,27 @@ function _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais, f
       </span>
     </div>`;
 
+  // Custo Var. por categoria — mesmos grupos e ícones da linha de veículos do
+  // card Variação (Agregado→caminhão, Aglomerante→carreta, Aditivo+Adição→
+  // IBC), só que em R$ (Σ custoImplicado). Soma dos três = Custo Var. do card
+  // (pares sem categoria não existem — saem na origem como "sem cadastro").
+  const custoCat = pares ? _dgVgCustoVarPorGrupoVeiculo(pares) : null;
+  const custoCatRowHtml = custoCat ? `
+    <div class="da-veiculos-row">
+      <span class="da-veiculo-stat" style="color:${_daColorFor(custoCat.agregado)}" title="Agregado — custo da variação: ${escapeHtml(money(custoCat.agregado))}">
+        <i class="ti ti-truck"></i>${varSymbol(custoCat.agregado)} ${moneyShort(Math.abs(custoCat.agregado))}
+      </span>
+      <span class="da-veiculo-stat" style="color:${_daColorFor(custoCat.aglomerante)}" title="Aglomerante — custo da variação: ${escapeHtml(money(custoCat.aglomerante))}">
+        <i class="ti ti-container"></i>${varSymbol(custoCat.aglomerante)} ${moneyShort(Math.abs(custoCat.aglomerante))}
+      </span>
+      <span class="da-veiculo-stat" style="color:${_daColorFor(custoCat.ibc)}" title="Aditivo + Adição — custo da variação: ${escapeHtml(money(custoCat.ibc))}">
+        <i class="ti ti-box"></i>${varSymbol(custoCat.ibc)} ${moneyShort(Math.abs(custoCat.ibc))}
+      </span>
+    </div>` : '';
+  const btnCustoVar = !elId
+    ? `<button type="button" class="dg-kpi-detalhe-btn" onclick="event.stopPropagation();abrirDetalheCustoVar()" title="Custos dos materiais e paridade Custos SAP × Saídas">Ver detalhes <i class="ti ti-arrow-right"></i></button>`
+    : '';
+
   // Magnitude do percentual, sem sinal — o sinal de sobra/desfalque já vem
   // do varSymbol() (ícone padrão do sistema), então não repetimos "+ "/"− "
   // em texto aqui (evita redundância símbolo + sinal).
@@ -2167,17 +2195,19 @@ function _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais, f
           <div class="da-pct-caption">do Est. Teórico</div>
         </div>
       </div>
-      <div class="inv-kpi-card inv-kpi-card-featured" style="${featTopStyle(cstCol)}">
+      <div class="inv-kpi-card inv-kpi-card-featured${btnCustoVar ? ' dg-kpi-card-rodape' : ''}" style="${featTopStyle(cstCol)}">
         <div class="inv-kpi-body">
           <div class="inv-kpi-label"><i class="ti ${cstIcon}" style="color:${cstCol}"></i>Custo Var.</div>
           <div class="inv-kpi-value" style="color:${cstCol}">${varSymbol(custoTotal)} ${money(Math.abs(custoTotal))}</div>
           <div class="inv-kpi-unit">R$ bruto</div>
+          ${custoCatRowHtml}
         </div>
         <div class="da-pct-zone">
           <div class="da-pct-value" style="color:${cstCol}">${pctCusto === null ? '—' : varSymbol(custoTotal) + ' ' + pctAbsStr(pctCusto)}</div>
           <div class="da-pct-bar"><div class="da-pct-bar-fill" style="width:${pctBarWidth(pctCusto)}%;background:${cstCol}"></div></div>
           <div class="da-pct-caption">do Custo Teórico</div>
         </div>
+        ${btnCustoVar}
       </div>
     </div>
     <div class="inv-kpi-secondary">
@@ -2679,6 +2709,308 @@ function fecharDetalheVariacao() {
   if (!overlay) return;
   overlay.classList.remove('open');
   overlay.setAttribute('aria-hidden', 'true');
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// CUSTO VAR. — DETALHE: custos dos materiais + paridade Custos SAP × Saídas
+// ═══════════════════════════════════════════════════════════════════════
+// Botão "Ver detalhes" do card Custo Var. (Visão Geral). Lista o custo de
+// cada material considerado no estoque (pares do Gerencial — custo médio do
+// Custos SAP, o mesmo que valoriza a variação) e compara com o custo das
+// SAÍDAS do mesmo mês (valor total ÷ kg, módulo Saídas). Decisões do Hugo
+// (09/10/2026): faixas ≤1% / 1–3% / 3–5% / >5%; uma linha por material com
+// detalhe por central.
+//
+// Custo SAP de um material (várias centrais) = média dos custos de cada
+// central PONDERADA PELOS KG DE SAÍDA — mesma base de peso do custo das
+// Saídas, senão a diferença misturaria preço com "mix" de centrais. Sem
+// saída no mês: ponderada pelo Est. Final (só exibição, sem comparação).
+// Paridade geral (centro do donut) = 100% − desvio absoluto médio ponderado
+// pelo valor das saídas: 1 − Σ|custoSAP − custoSaídas|×kg ÷ Σ custoSaídas×kg.
+const DG_PARIDADE_FAIXAS = [            // limite superior de |diferença| (%)
+  { nivel: 'bom',     ate: 1,        label: 'PARIDADE' },
+  { nivel: 'atencao', ate: 3,        label: 'ATENÇÃO' },
+  { nivel: 'urgente', ate: 5,        label: 'URGENTE' },
+  { nivel: 'critico', ate: Infinity, label: 'CRÍTICO' }
+];
+const DG_PARIDADE_COR = { bom: '#10b981', atencao: '#f59e0b', urgente: '#f97316', critico: '#f43f5e', sem: '#64748b' };
+
+function _dgParidadeNivel(pctAbs) {
+  return DG_PARIDADE_FAIXAS.find(f => pctAbs <= f.ate + 1e-9).nivel;
+}
+
+// Saídas do período por central × material: { 'central|||mat': [kg, valor] }.
+// kg com a mesma conversão de unidade (TO/M³ → kg) do resto do sistema
+// (_convertNfPesoToKg); sinal preservado (devolução abate). Objeto simples
+// (não Map) porque também vai pra fotografia.
+function _dgSaidasCustoPorPar(results, dtIni, dtFim) {
+  ensureSaidasIndex();
+  const ini = dtIni.getTime(), fim = dtFim.getTime();
+  const out = {};
+  (results || []).forEach(r => {
+    (_saidasByCentral.get(r.central) || []).forEach(s => {
+      const ts = parseDateTs(s.dtEmissao);
+      if (ts === null || ts < ini || ts > fim) return;
+      const p = num(s.peso);
+      if (!p) return;
+      const kg = Math.sign(p) * _convertNfPesoToKg(p, s.um, s.material, s.fornecedor);
+      const k = r.central + '|||' + (s.material || '—');
+      const acc = out[k] || (out[k] = [0, 0]);
+      acc[0] += kg;
+      acc[1] += num(s.valorTotal);
+    });
+  });
+  return out;
+}
+
+// Monta tudo o que o modal mostra a partir do cache da Visão Geral
+// (window._dgVgLastData). Mês congelado: Saídas também da fotografia.
+function _dgCustoParidadeDados(d) {
+  const fz = d.results && d.results._fotografia;
+  const saidasFz = fz && fz.saidasCusto;
+  const saidas = saidasFz || _dgSaidasCustoPorPar(d.results, d.dtIni, d.dtFim);
+
+  const porMat = new Map();
+  d.pares.forEach(p => {
+    const [kgSai, valorSai] = saidas[p.central + '|||' + p.mat] || [0, 0];
+    if (!porMat.has(p.mat)) {
+      porMat.set(p.mat, { mat: p.mat, catKey: p.catKey, catSubKey: p.catSubKey, diff: 0, custoVar: 0, kgSai: 0, valorSai: 0, sapXkgSai: 0, sapXestFim: 0, estFim: 0, sapSoma: 0, sapN: 0, centrais: [] });
+    }
+    const m = porMat.get(p.mat);
+    m.diff += p.diff; m.custoVar += p.custoImplicado;
+    const temSai = kgSai > 0.0001;
+    if (temSai) { m.kgSai += kgSai; m.valorSai += valorSai; m.sapXkgSai += p.custoMed * kgSai; }
+    m.estFim += Math.max(0, p.estoqueFim || 0); m.sapXestFim += p.custoMed * Math.max(0, p.estoqueFim || 0);
+    if (p.custoMed > 0) { m.sapSoma += p.custoMed; m.sapN++; }
+    m.centrais.push({ central: p.central, regional: p.regional, diff: p.diff, custoVar: p.custoImplicado, custoSap: p.custoMed, kgSai: temSai ? kgSai : 0, valorSai: temSai ? valorSai : 0 });
+  });
+
+  const comparar = (custoSap, kgSai, valorSai) => {
+    if (!(kgSai > 0.0001) || !(valorSai > 0)) return { custoSai: null, difPct: null, nivel: 'sem', motivo: 'sem saída no mês' };
+    const custoSai = valorSai / kgSai;
+    if (!(custoSap > 0)) return { custoSai, difPct: null, nivel: 'sem', motivo: 'sem Custos SAP' };
+    const difPct = (custoSap - custoSai) / custoSai * 100;
+    return { custoSai, difPct, nivel: _dgParidadeNivel(Math.abs(difPct)) };
+  };
+
+  let desvio = 0, base = 0;
+  const materiais = [...porMat.values()].map(m => {
+    const custoSap = m.kgSai > 0.0001 ? m.sapXkgSai / m.kgSai
+                   : m.estFim > 0.0001 ? m.sapXestFim / m.estFim
+                   : (m.sapN ? m.sapSoma / m.sapN : 0);
+    const cmp = comparar(custoSap, m.kgSai, m.valorSai);
+    if (cmp.difPct !== null) { desvio += Math.abs(custoSap - cmp.custoSai) * m.kgSai; base += cmp.custoSai * m.kgSai; }
+    m.centrais.forEach(c => Object.assign(c, comparar(c.custoSap, c.kgSai, c.valorSai)));
+    m.centrais.sort((a, b) => Math.abs(b.custoVar) - Math.abs(a.custoVar));
+    return { ...m, custoSap, ...cmp };
+  }).sort((a, b) => Math.abs(b.custoVar) - Math.abs(a.custoVar));
+
+  const counts = { bom: 0, atencao: 0, urgente: 0, critico: 0, sem: 0 };
+  const meta   = { bom: { valor: 0, dif: 0 }, atencao: { valor: 0, dif: 0 }, urgente: { valor: 0, dif: 0 }, critico: { valor: 0, dif: 0 } };
+  materiais.forEach(m => {
+    counts[m.nivel]++;
+    if (meta[m.nivel]) { meta[m.nivel].valor += m.valorSai; meta[m.nivel].dif += (m.custoSap - m.custoSai) * m.kgSai; }
+  });
+  const desvioPct = base > 0 ? desvio / base * 100 : null;
+  return {
+    materiais, counts, meta,
+    paridade: desvioPct === null ? null : Math.max(0, 100 - desvioPct),
+    nivelGeral: desvioPct === null ? 'sem' : _dgParidadeNivel(desvioPct),
+    custoVarTotal: d.pares.reduce((s, p) => s + p.custoImplicado, 0),
+    saidasAoVivoEmMesFechado: !!fz && !saidasFz,
+    rotulo: d.dtIni ? `${MESES_NOME_DG[d.dtIni.getMonth()]}/${d.dtIni.getFullYear()}` : ''
+  };
+}
+
+let _dcpDados = null, _dcpFiltro = 'todos';
+
+function abrirDetalheCustoVar() {
+  const d = window._dgVgLastData;
+  const overlay = document.getElementById('dg-custo-detalhe-overlay');
+  if (!d || !overlay) return;
+  _dcpDados = _dgCustoParidadeDados(d);
+  _dcpFiltro = 'todos';
+  const t = document.getElementById('dg-custo-detalhe-title');
+  if (t) t.textContent = `Custo Var. — Custos dos materiais${_dcpDados.rotulo ? ' · ' + _dcpDados.rotulo : ''}`;
+  overlay.classList.add('open');
+  overlay.setAttribute('aria-hidden', 'false');
+  _dcpRender();
+}
+
+function fecharDetalheCustoVar() {
+  const overlay = document.getElementById('dg-custo-detalhe-overlay');
+  if (!overlay) return;
+  overlay.classList.remove('open');
+  overlay.setAttribute('aria-hidden', 'true');
+}
+
+function dcpFiltrar(nivel) { _dcpFiltro = nivel; _dcpRender(); }
+
+function dcpToggleMat(btn) {
+  const tr = btn.closest('tr');
+  const aberto = tr.classList.toggle('dcp-aberto');
+  let prox = tr.nextElementSibling;
+  while (prox && prox.classList.contains('dcp-central-row')) { prox.style.display = aberto ? '' : 'none'; prox = prox.nextElementSibling; }
+}
+
+function _dcpRender() {
+  const body = document.getElementById('dg-custo-detalhe-body');
+  const D = _dcpDados;
+  if (!body || !D) return;
+
+  // R$/kg com 4 casas — a comparação é em décimos de centavo (faixa de 1%).
+  const ckg = v => v === null || v === undefined ? '—' : 'R$ ' + num(v).toLocaleString('pt-BR', { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+  const ton = v => (num(v) / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' TON';
+  const tonS = v => Math.abs(num(v)) < 0.0001 ? ton(0) : (num(v) > 0 ? '+' : '−') + ton(Math.abs(num(v)));
+  const lbl = { bom: 'PARIDADE', atencao: 'ATENÇÃO', urgente: 'URGENTE', critico: 'CRÍTICO', sem: 'SEM COMPARAÇÃO' };
+  const badge = (nivel, motivo) => `<span class="dcp-badge" style="color:${DG_PARIDADE_COR[nivel]};background:${DG_PARIDADE_COR[nivel]}18;border-color:${DG_PARIDADE_COR[nivel]}40"${motivo ? ` title="${escapeHtml(motivo)}"` : ''}>${nivel === 'sem' ? escapeHtml(motivo || lbl.sem) : lbl[nivel]}</span>`;
+  const difTxt = v => v === null ? '—' : (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%';
+
+  const lista = D.materiais.filter(m => _dcpFiltro === 'todos' || m.nivel === _dcpFiltro);
+  const linhas = lista.map(m => `
+    <tr class="dcp-mat-row">
+      <td>
+        <button type="button" class="dcp-exp" onclick="dcpToggleMat(this)" title="Ver por central"><i class="ti ti-chevron-right"></i></button>
+        <span class="da-mat-name">${escapeHtml(m.mat)}</span>
+        ${m.catKey ? `<span class="da-mat-cat">${escapeHtml(DG_VG_CATSUB_LABELS[m.catSubKey] || DG_VG_CAT_LABELS[m.catKey] || m.catKey)}</span>` : ''}
+      </td>
+      <td class="da-num" style="color:${_daColorFor(m.diff)}">${tonS(m.diff)}</td>
+      <td class="da-num">${ckg(m.custoSap)}</td>
+      <td class="da-num" style="color:${_daColorFor(m.custoVar)}">${_daFmtMoneySigned(m.custoVar)}</td>
+      <td class="da-num">${ckg(m.custoSai)}</td>
+      <td class="da-num">${m.kgSai > 0 ? ton(m.kgSai) : '—'}</td>
+      <td class="da-num" style="color:${DG_PARIDADE_COR[m.nivel]}">${difTxt(m.difPct)}</td>
+      <td class="da-num">${badge(m.nivel, m.motivo)}</td>
+    </tr>
+    ${m.centrais.map(c => `
+    <tr class="dcp-central-row" style="display:none">
+      <td><span class="dcp-central-nome">${escapeHtml(c.central)}</span>${c.regional && c.regional !== '—' ? `<span class="da-mat-cat">${escapeHtml(c.regional)}</span>` : ''}</td>
+      <td class="da-num" style="color:${_daColorFor(c.diff)}">${tonS(c.diff)}</td>
+      <td class="da-num">${ckg(c.custoSap)}</td>
+      <td class="da-num" style="color:${_daColorFor(c.custoVar)}">${_daFmtMoneySigned(c.custoVar)}</td>
+      <td class="da-num">${ckg(c.custoSai)}</td>
+      <td class="da-num">${c.kgSai > 0 ? ton(c.kgSai) : '—'}</td>
+      <td class="da-num" style="color:${DG_PARIDADE_COR[c.nivel]}">${difTxt(c.difPct)}</td>
+      <td class="da-num">${badge(c.nivel, c.motivo)}</td>
+    </tr>`).join('')}`).join('');
+
+  const totDiff = lista.reduce((s, m) => s + m.diff, 0);
+  const totCusto = lista.reduce((s, m) => s + m.custoVar, 0);
+  const filtroBtn = (nivel, txt) => `<button type="button" class="dcp-filtro${_dcpFiltro === nivel ? ' active' : ''}" onclick="dcpFiltrar('${nivel}')"${nivel !== 'todos' ? ` style="--dcp-cor:${DG_PARIDADE_COR[nivel]}"` : ''}>${txt}</button>`;
+  const totalMat = D.materiais.length;
+
+  body.innerHTML = `
+    ${D.saidasAoVivoEmMesFechado ? `<div class="dg-fz-banner dg-fz-alerta"><i class="ti ti-alert-triangle"></i><span>Esta fotografia é anterior ao detalhamento de custos: o custo das Saídas abaixo foi calculado agora (as Saídas do mês fechado estão travadas). Refaça a fotografia em Admin → Fechamento para congelá-lo também.</span></div>` : ''}
+    <div class="dcp-topo">
+      <div class="oc-chart-card dcp-donut-card">
+        <div class="oc-chart-title"><i class="ti ti-scale"></i> Paridade Custos SAP × Saídas</div>
+        <div class="dcp-donut-sub">${totalMat - D.counts.sem} de ${totalMat} materiais comparados</div>
+        <div style="display:flex;justify-content:center"><div style="width:420px;max-width:96%">
+          <svg id="dg-custo-paridade-svg" viewBox="0 0 420 300" style="overflow:visible;width:100%;height:auto;display:block"></svg>
+        </div></div>
+        <div id="dg-custo-paridade-summary" class="dcp-summary"></div>
+      </div>
+      <div class="dcp-kpis">
+        <div class="inv-kpi-card"><div class="inv-kpi-body">
+          <div class="inv-kpi-label">Custo Var. (card)</div>
+          <div class="inv-kpi-value" style="color:${_daColorFor(D.custoVarTotal)}">${_daFmtMoneySigned(D.custoVarTotal)}</div>
+          <div class="inv-kpi-unit">Σ variação × custo Custos SAP de cada central × material</div>
+        </div></div>
+        <div class="inv-kpi-card"><div class="inv-kpi-body">
+          <div class="inv-kpi-label">Paridade geral</div>
+          <div class="inv-kpi-value" style="color:${DG_PARIDADE_COR[D.nivelGeral]}">${D.paridade === null ? '—' : D.paridade.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%'}</div>
+          <div class="inv-kpi-unit">100% − desvio médio ponderado pelo valor das saídas</div>
+        </div></div>
+        <div class="dcp-legenda">
+          <div><strong>Custo SAP</strong> — custo médio do Custos SAP do mês (o que valoriza a variação). No material, média das centrais ponderada pelos kg de saída (sem saída: pelo Est. Final).</div>
+          <div><strong>Custo Saídas</strong> — valor total ÷ kg das Saídas do mês (módulo Saídas).</div>
+          <div><strong>Faixas</strong> — Paridade até 1% · Atenção 1–3% · Urgente 3–5% · Crítico acima de 5%.</div>
+        </div>
+      </div>
+    </div>
+    <div class="dcp-filtros">
+      ${filtroBtn('todos', `Todos (${totalMat})`)}
+      ${['bom', 'atencao', 'urgente', 'critico', 'sem'].filter(n => D.counts[n]).map(n => filtroBtn(n, `${n === 'sem' ? 'Sem comparação' : lbl[n][0] + lbl[n].slice(1).toLowerCase()} (${D.counts[n]})`)).join('')}
+    </div>
+    <div class="da-table-wrap">
+      <table class="da-table dcp-table">
+        <thead><tr>
+          <th>Grupo SAP</th>
+          <th class="da-num">Variação</th>
+          <th class="da-num">Custo SAP</th>
+          <th class="da-num">Custo Var.</th>
+          <th class="da-num">Custo Saídas</th>
+          <th class="da-num">Kg Saídas</th>
+          <th class="da-num">Diferença</th>
+          <th class="da-num">Paridade</th>
+        </tr></thead>
+        <tbody>${linhas || '<tr><td colspan="8" style="text-align:center;color:var(--text3)">Nenhum material nesta faixa.</td></tr>'}</tbody>
+        <tfoot><tr class="da-total-row">
+          <td>Total${_dcpFiltro !== 'todos' ? ' (filtro)' : ''}</td>
+          <td class="da-num" style="color:${_daColorFor(totDiff)}">${tonS(totDiff)}</td>
+          <td class="da-num"></td>
+          <td class="da-num" style="color:${_daColorFor(totCusto)}">${_daFmtMoneySigned(totCusto)}</td>
+          <td class="da-num"></td><td class="da-num"></td><td class="da-num"></td><td class="da-num"></td>
+        </tr></tfoot>
+      </table>
+    </div>`;
+
+  _dcpRenderDonut(D);
+}
+
+// Mesmo desenho do donut de Saúde (_dgVgRenderHealthDonutSvg): fatias =
+// materiais por faixa; centro = paridade geral.
+function _dcpRenderDonut(D) {
+  const svgEl = document.getElementById('dg-custo-paridade-svg');
+  if (!svgEl) return;
+  const niveis = ['critico', 'urgente', 'atencao', 'bom'];
+  const lbl = { bom: 'PARIDADE', atencao: 'ATENÇÃO', urgente: 'URGENTE', critico: 'CRÍTICO' };
+  const total = niveis.reduce((s, n) => s + D.counts[n], 0);
+  const slices = niveis.filter(n => D.counts[n] > 0).map(n => {
+    const pct = total ? Math.round(D.counts[n] / total * 100) : 0;
+    const dif = D.meta[n].dif;
+    return {
+      value: D.counts[n], color: DG_PARIDADE_COR[n], label: lbl[n],
+      tipHtml: `<div style="display:flex;align-items:center;gap:7px;margin-bottom:8px">
+          <span style="width:10px;height:10px;border-radius:3px;background:${DG_PARIDADE_COR[n]};display:inline-block"></span>
+          <span style="font-weight:700;font-size:13px;color:var(--text)">${lbl[n]}</span>
+          <span style="margin-left:auto;font-family:var(--mono);font-size:11px;color:${DG_PARIDADE_COR[n]};font-weight:700">${D.counts[n]} (${pct}%)</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;font-family:var(--mono);font-size:10.5px">
+          <div style="color:var(--text3)">Valor das saídas</div><div style="font-weight:600">${money(D.meta[n].valor)}</div>
+          <div style="color:var(--text3)">SAP − Saídas (R$)</div><div style="font-weight:600">${dif >= 0 ? '+' : '−'} ${money(Math.abs(dif))}</div>
+        </div>`
+    };
+  });
+  const cor = DG_PARIDADE_COR[D.nivelGeral];
+  const centroTxt = D.paridade === null ? '—' : D.paridade.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
+  const centroLbl = D.nivelGeral === 'sem' ? 'SEM DADOS' : lbl[D.nivelGeral];
+  const score = D.paridade === null ? 0 : D.paridade;
+  _dgVgDrawDonutSvg(svgEl, slices, (CX, CY, ri) => {
+    const SR = ri - 8, sCirc = 2 * Math.PI * SR, sDash = (score / 100) * sCirc;
+    return `<circle cx="${CX}" cy="${CY}" r="${SR}" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="5" style="pointer-events:none"/>
+      <circle cx="${CX}" cy="${CY}" r="${SR}" fill="none" stroke="${cor}" stroke-width="5"
+        stroke-dasharray="${sDash.toFixed(1)} ${sCirc.toFixed(1)}" stroke-dashoffset="${(sCirc / 4).toFixed(1)}"
+        stroke-linecap="round" opacity="0.55" style="pointer-events:none"/>
+      <text class="dv-fit-text" data-max-width="92" x="${CX}" y="${CY + 4}" text-anchor="middle" font-size="30" font-weight="700" font-family="var(--mono)" fill="${cor}" style="pointer-events:none">${centroTxt}</text>
+      <text x="${CX}" y="${CY + 25}" text-anchor="middle" font-size="9" font-weight="700" font-family="var(--mono)" fill="${cor}" letter-spacing=".07em" opacity="0.9" style="pointer-events:none">${centroLbl}</text>`;
+  }, 6, { vbW: 420, vbH: 300, CX: 210, CY: 148, R: 104, ri: 60, calloutOffset: 22, elbowOffset: 44, tickLen: 22, calloutPctFontSize: 12, calloutLabelFontSize: 9.5 });
+
+  const summ = document.getElementById('dg-custo-paridade-summary');
+  if (summ) summ.innerHTML = niveis.filter(n => D.counts[n]).map(n => `<span class="dcp-badge" style="color:${DG_PARIDADE_COR[n]};background:${DG_PARIDADE_COR[n]}18;border-color:${DG_PARIDADE_COR[n]}35">
+      <span style="width:6px;height:6px;border-radius:50%;background:${DG_PARIDADE_COR[n]};display:inline-block"></span>${D.counts[n]} ${lbl[n]}</span>`).join('')
+    + (D.counts.sem ? `<span class="dcp-badge" style="color:${DG_PARIDADE_COR.sem};background:${DG_PARIDADE_COR.sem}18;border-color:${DG_PARIDADE_COR.sem}35">${D.counts.sem} SEM COMPARAÇÃO</span>` : '');
+}
+
+// Custo Var. (Σ custoImplicado) por grupo da linha de veículos do card.
+function _dgVgCustoVarPorGrupoVeiculo(pares) {
+  const out = { agregado: 0, aglomerante: 0, ibc: 0 };
+  (pares || []).forEach(p => {
+    const g = p.catKey === 'agregado' ? 'agregado' : p.catKey === 'aglomerante' ? 'aglomerante'
+            : (p.catKey === 'aditivo' || p.catKey === 'adicao') ? 'ibc' : null;
+    if (g) out[g] += p.custoImplicado || 0;
+  });
+  return out;
 }
 
 // Plugin customizado (sem dependência externa — mantém o app 100%

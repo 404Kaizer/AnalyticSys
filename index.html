@@ -6107,6 +6107,26 @@
      cheio da dimensão, mesmo dado do Detalhado Analítico, só que sem
      precisar rolar até lá). Reaproveita _daBuildRanking/_daRenderRanking —
      mesma tabela, mesmas colunas (Caminhões/Carretas/IBCs/Variação/Custo). -->
+<!-- MODAL: Custo Var. — custos dos materiais + paridade Custos SAP × Saídas.
+     Abre pelo "Ver detalhes" do card Custo Var. (dashboard.js:
+     abrirDetalheCustoVar / _dcpRender). -->
+<div class="bdm-overlay" id="dg-custo-detalhe-overlay" aria-hidden="true">
+  <div class="bdm-dialog bdm-dialog-wide" role="dialog" aria-modal="true" aria-labelledby="dg-custo-detalhe-title">
+    <div class="bdm-header">
+      <div class="bdm-header-text">
+        <div class="bdm-kicker">Custos SAP × Saídas</div>
+        <div class="bdm-title" id="dg-custo-detalhe-title">Custo Var.</div>
+      </div>
+      <button class="btn btn-primary" type="button" onclick="fecharDetalheCustoVar()">
+        <i class="ti ti-x"></i> <span>Fechar</span>
+      </button>
+    </div>
+    <div class="bdm-body">
+      <div id="dg-custo-detalhe-body"></div>
+    </div>
+  </div>
+</div>
+
 <div class="bdm-overlay" id="dg-var-detalhe-overlay" aria-hidden="true">
   <div class="bdm-dialog bdm-dialog-wide" role="dialog" aria-modal="true" aria-labelledby="dg-var-detalhe-title">
     <div class="bdm-header">

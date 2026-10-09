@@ -4371,7 +4371,7 @@ function _dgrEvoDetalheCardHtml(l, blocos = DGR_EVO_BLOCOS) {
         // preserva o da tela; o badge do mês abre o modal DO MÊS (_dgrFechModaisHtml).
         const fechTela = window._dgVgFechExcluidosAtual;
         _dgVgRenderKpisHero(l.kpi.varTotalFisica, l.kpi.custoTotal, estTotais, movTotais, fechRecs,
-                            custoMovTotais, veiculos, l.results, heroEl);
+                            custoMovTotais, veiculos, l.results, heroEl, l.pares);
         window._dgVgFechExcluidosAtual = fechTela;
         document.querySelector(`#${heroEl} .dg-fech-badge-compact`)?.setAttribute('onclick', `openFechModal('${l.id}')`);
       });
