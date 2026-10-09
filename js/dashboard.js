@@ -519,7 +519,10 @@ function _dgFzHidratar(payload, meta) {
     thresholds: payload.thresholds,
     pares: payload.pares,
     consumoAnt: payload.consumoAnt || null,
-    saidasCusto: payload.saidasCusto || null, // ausente em fotografia anterior a 09/10/2026
+    // Ausente (ou no formato antigo [kg, valor]) em fotografia anterior ao
+    // Custo Unit. das Saídas — _dgCustoParidadeDados cai no cálculo ao vivo.
+    saidasCusto: payload.saidasCusto || null,
+    saidasCustoV: payload.saidasCustoV || null,
     resumo: payload.resumo, avisos: payload.avisos || [],
     regras: payload.regras,
     results
@@ -575,6 +578,7 @@ function dgFotografiaGerar(ano, mes) {
     // Saídas por central × material (kg, valor) — paridade Custos SAP ×
     // Saídas do "Ver detalhes" do Custo Var. (_dgCustoParidadeDados).
     saidasCusto: _dgSaidasCustoPorPar(results, dtIni, dtFim),
+    saidasCustoV: DG_SAIDAS_CUSTO_V,
     results: results.map(_dgFzSerializarResult)
   };
   return { payload, resumo, avisos };
@@ -2717,16 +2721,23 @@ function fecharDetalheVariacao() {
 // Botão "Ver detalhes" do card Custo Var. (Visão Geral). Lista o custo de
 // cada material considerado no estoque (pares do Gerencial — custo médio do
 // Custos SAP, o mesmo que valoriza a variação) e compara com o custo das
-// SAÍDAS do mesmo mês (valor total ÷ kg, módulo Saídas). Decisões do Hugo
-// (09/10/2026): faixas ≤1% / 1–3% / 3–5% / >5%; uma linha por material com
-// detalhe por central.
+// SAÍDAS (módulo Saídas). Decisões do Hugo (09/10/2026): faixas ≤1% / 1–3% /
+// 3–5% / >5%; uma linha por material com detalhe por central.
 //
-// Custo SAP de um material (várias centrais) = média dos custos de cada
-// central PONDERADA PELOS KG DE SAÍDA — mesma base de peso do custo das
-// Saídas, senão a diferença misturaria preço com "mix" de centrais. Sem
-// saída no mês: ponderada pelo Est. Final (só exibição, sem comparação).
-// Paridade geral (centro do donut) = 100% − desvio absoluto médio ponderado
-// pelo valor das saídas: 1 − Σ|custoSAP − custoSaídas|×kg ÷ Σ custoSaídas×kg.
+// Custo Saídas (por central × material) = CUSTO UNIT. das saídas (R$/kg —
+// "o custo das saídas é referente ao peso em kg"), que muda conforme o
+// fornecedor: média ponderada pelos kg das saídas do mês; sem saída no mês,
+// a saída MAIS RECENTE de meses anteriores (várias no mesmo dia → média
+// ponderada delas). Não usa o Valor Total das Saídas (na base do Hugo ele
+// vinha ≈ peso, dando R$ 1,00/kg pra tudo). Ver _dgSaidasCustoPorPar.
+//
+// Material com várias centrais: os dois custos (SAP e Saídas) são médias das
+// centrais PONDERADAS PELOS MESMOS KG (os kg de saída que sustentam o custo
+// das Saídas de cada central), senão a diferença misturaria preço com "mix"
+// de centrais. Sem saída nenhuma: Custo SAP ponderado pelo Est. Final (só
+// exibição, sem comparação).
+// Paridade geral (centro do donut) = 100% − desvio absoluto médio ponderado:
+// 1 − Σ|custoSAP − custoSaídas|×kg ÷ Σ custoSaídas×kg.
 const DG_PARIDADE_FAIXAS = [            // limite superior de |diferença| (%)
   { nivel: 'bom',     ate: 1,        label: 'PARIDADE' },
   { nivel: 'atencao', ate: 3,        label: 'ATENÇÃO' },
@@ -2739,77 +2750,111 @@ function _dgParidadeNivel(pctAbs) {
   return DG_PARIDADE_FAIXAS.find(f => pctAbs <= f.ate + 1e-9).nivel;
 }
 
-// Saídas do período por central × material: { 'central|||mat': [kg, valor] }.
-// kg com a mesma conversão de unidade (TO/M³ → kg) do resto do sistema
-// (_convertNfPesoToKg); sinal preservado (devolução abate). Objeto simples
-// (não Map) porque também vai pra fotografia.
+// Custo das Saídas por central × material:
+//   { 'central|||mat': [kg, custoKg, ref, n] }
+//   kg     = kg das saídas que sustentam o custo (do mês, ou do dia da saída
+//            mais recente) — vira o PESO da média por material;
+//   custoKg= média do Custo Unit. ponderada por esses kg;
+//   ref    = 'mes' (saídas do mês) | 'dd/mm/aaaa' (última saída anterior);
+//   n      = nº de saídas usadas.
+// Só saídas com peso e custo > 0 (sem custo cadastrado não puxa a média pra
+// baixo; devolução não é preço de compra). kg com a mesma conversão de
+// unidade (TO/M³ → kg) do resto do sistema (_convertNfPesoToKg). Só os
+// materiais dos pares (r.allMats). Objeto simples porque vai pra fotografia.
 function _dgSaidasCustoPorPar(results, dtIni, dtFim) {
   ensureSaidasIndex();
   const ini = dtIni.getTime(), fim = dtFim.getTime();
   const out = {};
   (results || []).forEach(r => {
+    const mats = new Set(r.allMats || []);
+    const doMes = new Map(), anterior = new Map();
     (_saidasByCentral.get(r.central) || []).forEach(s => {
+      const mat = s.material || '—';
+      if (!mats.has(mat)) return;
+      const custo = num(s.custo), p = num(s.peso);
+      if (!(custo > 0) || !(p > 0)) return;
       const ts = parseDateTs(s.dtEmissao);
-      if (ts === null || ts < ini || ts > fim) return;
-      const p = num(s.peso);
-      if (!p) return;
-      const kg = Math.sign(p) * _convertNfPesoToKg(p, s.um, s.material, s.fornecedor);
-      const k = r.central + '|||' + (s.material || '—');
-      const acc = out[k] || (out[k] = [0, 0]);
-      acc[0] += kg;
-      acc[1] += num(s.valorTotal);
+      if (ts === null || ts > fim) return;
+      const kg = _convertNfPesoToKg(p, s.um, s.material, s.fornecedor);
+      if (ts >= ini) {
+        const a = doMes.get(mat) || { kg: 0, cxk: 0, n: 0 };
+        a.kg += kg; a.cxk += custo * kg; a.n++;
+        doMes.set(mat, a);
+      } else {
+        const a = anterior.get(mat);
+        if (!a || ts > a.ts) anterior.set(mat, { ts, kg, cxk: custo * kg, n: 1 });
+        else if (ts === a.ts) { a.kg += kg; a.cxk += custo * kg; a.n++; }
+      }
+    });
+    new Set([...doMes.keys(), ...anterior.keys()]).forEach(mat => {
+      const m = doMes.get(mat), a = anterior.get(mat);
+      const k = r.central + '|||' + mat;
+      if (m && m.kg > 0) out[k] = [m.kg, m.cxk / m.kg, 'mes', m.n];
+      else if (a && a.kg > 0) out[k] = [a.kg, a.cxk / a.kg, fmtPtDate(new Date(a.ts)), a.n];
     });
   });
   return out;
 }
+const DG_SAIDAS_CUSTO_V = 2; // formato de _dgSaidasCustoPorPar gravado na fotografia
 
 // Monta tudo o que o modal mostra a partir do cache da Visão Geral
-// (window._dgVgLastData). Mês congelado: Saídas também da fotografia.
+// (window._dgVgLastData). Mês congelado: Saídas também da fotografia (só se
+// ela já tiver o formato atual — fotografia antiga cai no cálculo ao vivo,
+// com aviso).
 function _dgCustoParidadeDados(d) {
   const fz = d.results && d.results._fotografia;
-  const saidasFz = fz && fz.saidasCusto;
+  const saidasFz = fz && fz.saidasCustoV === DG_SAIDAS_CUSTO_V ? fz.saidasCusto : null;
   const saidas = saidasFz || _dgSaidasCustoPorPar(d.results, d.dtIni, d.dtFim);
 
   const porMat = new Map();
   d.pares.forEach(p => {
-    const [kgSai, valorSai] = saidas[p.central + '|||' + p.mat] || [0, 0];
+    const [kgRef, custoSai, ref, n] = saidas[p.central + '|||' + p.mat] || [0, null, null, 0];
     if (!porMat.has(p.mat)) {
-      porMat.set(p.mat, { mat: p.mat, catKey: p.catKey, catSubKey: p.catSubKey, diff: 0, custoVar: 0, kgSai: 0, valorSai: 0, sapXkgSai: 0, sapXestFim: 0, estFim: 0, sapSoma: 0, sapN: 0, centrais: [] });
+      porMat.set(p.mat, { mat: p.mat, catKey: p.catKey, catSubKey: p.catSubKey, diff: 0, custoVar: 0, kgRef: 0, saiXkg: 0, sapXkg: 0, sapXestFim: 0, estFim: 0, sapSoma: 0, sapN: 0, refsMes: 0, refsAnt: 0, centrais: [] });
     }
     const m = porMat.get(p.mat);
     m.diff += p.diff; m.custoVar += p.custoImplicado;
-    const temSai = kgSai > 0.0001;
-    if (temSai) { m.kgSai += kgSai; m.valorSai += valorSai; m.sapXkgSai += p.custoMed * kgSai; }
+    // Par sem Custos SAP não entra na média do material (puxaria o Custo SAP
+    // pra baixo); continua na lista de centrais com o motivo.
+    if (kgRef > 0 && p.custoMed > 0) {
+      m.kgRef += kgRef; m.saiXkg += custoSai * kgRef; m.sapXkg += p.custoMed * kgRef;
+      if (ref === 'mes') m.refsMes++; else m.refsAnt++;
+    }
     m.estFim += Math.max(0, p.estoqueFim || 0); m.sapXestFim += p.custoMed * Math.max(0, p.estoqueFim || 0);
     if (p.custoMed > 0) { m.sapSoma += p.custoMed; m.sapN++; }
-    m.centrais.push({ central: p.central, regional: p.regional, diff: p.diff, custoVar: p.custoImplicado, custoSap: p.custoMed, kgSai: temSai ? kgSai : 0, valorSai: temSai ? valorSai : 0 });
+    m.centrais.push({ central: p.central, regional: p.regional, diff: p.diff, custoVar: p.custoImplicado, custoSap: p.custoMed, kgRef, custoSai, ref, n });
   });
 
-  const comparar = (custoSap, kgSai, valorSai) => {
-    if (!(kgSai > 0.0001) || !(valorSai > 0)) return { custoSai: null, difPct: null, nivel: 'sem', motivo: 'sem saída no mês' };
-    const custoSai = valorSai / kgSai;
-    if (!(custoSap > 0)) return { custoSai, difPct: null, nivel: 'sem', motivo: 'sem Custos SAP' };
+  const comparar = (custoSap, custoSai) => {
+    if (custoSai === null || custoSai === undefined) return { difPct: null, nivel: 'sem', motivo: 'sem saída registrada' };
+    if (!(custoSap > 0)) return { difPct: null, nivel: 'sem', motivo: 'sem Custos SAP' };
     const difPct = (custoSap - custoSai) / custoSai * 100;
-    return { custoSai, difPct, nivel: _dgParidadeNivel(Math.abs(difPct)) };
+    return { difPct, nivel: _dgParidadeNivel(Math.abs(difPct)) };
   };
 
   let desvio = 0, base = 0;
   const materiais = [...porMat.values()].map(m => {
-    const custoSap = m.kgSai > 0.0001 ? m.sapXkgSai / m.kgSai
+    const temRef = m.kgRef > 0;
+    const custoSap = temRef ? m.sapXkg / m.kgRef
                    : m.estFim > 0.0001 ? m.sapXestFim / m.estFim
                    : (m.sapN ? m.sapSoma / m.sapN : 0);
-    const cmp = comparar(custoSap, m.kgSai, m.valorSai);
-    if (cmp.difPct !== null) { desvio += Math.abs(custoSap - cmp.custoSai) * m.kgSai; base += cmp.custoSai * m.kgSai; }
-    m.centrais.forEach(c => Object.assign(c, comparar(c.custoSap, c.kgSai, c.valorSai)));
+    const custoSai = temRef ? m.saiXkg / m.kgRef : null;
+    const cmp = temRef ? comparar(custoSap, custoSai)
+              : m.centrais.some(c => c.custoSai !== null) ? { difPct: null, nivel: 'sem', motivo: 'sem Custos SAP' }
+              : { difPct: null, nivel: 'sem', motivo: 'sem saída registrada' };
+    if (cmp.difPct !== null) { desvio += Math.abs(custoSap - custoSai) * m.kgRef; base += custoSai * m.kgRef; }
+    // Origem do Custo Saídas do material: só do mês, só anteriores, ou misto.
+    const origem = !temRef ? null : !m.refsAnt ? 'média do mês' : !m.refsMes ? 'saídas anteriores' : 'mês + saídas anteriores';
+    m.centrais.forEach(c => Object.assign(c, comparar(c.custoSap, c.custoSai)));
     m.centrais.sort((a, b) => Math.abs(b.custoVar) - Math.abs(a.custoVar));
-    return { ...m, custoSap, ...cmp };
+    return { ...m, custoSap, custoSai, origem, ...cmp };
   }).sort((a, b) => Math.abs(b.custoVar) - Math.abs(a.custoVar));
 
   const counts = { bom: 0, atencao: 0, urgente: 0, critico: 0, sem: 0 };
   const meta   = { bom: { valor: 0, dif: 0 }, atencao: { valor: 0, dif: 0 }, urgente: { valor: 0, dif: 0 }, critico: { valor: 0, dif: 0 } };
   materiais.forEach(m => {
     counts[m.nivel]++;
-    if (meta[m.nivel]) { meta[m.nivel].valor += m.valorSai; meta[m.nivel].dif += (m.custoSap - m.custoSai) * m.kgSai; }
+    if (meta[m.nivel]) { meta[m.nivel].valor += m.custoSai * m.kgRef; meta[m.nivel].dif += (m.custoSap - m.custoSai) * m.kgRef; }
   });
   const desvioPct = base > 0 ? desvio / base * 100 : null;
   return {
@@ -2866,6 +2911,11 @@ function _dcpRender() {
   const lbl = { bom: 'PARIDADE', atencao: 'ATENÇÃO', urgente: 'URGENTE', critico: 'CRÍTICO', sem: 'SEM COMPARAÇÃO' };
   const badge = (nivel, motivo) => `<span class="dcp-badge" style="color:${DG_PARIDADE_COR[nivel]};background:${DG_PARIDADE_COR[nivel]}18;border-color:${DG_PARIDADE_COR[nivel]}40"${motivo ? ` title="${escapeHtml(motivo)}"` : ''}>${nivel === 'sem' ? escapeHtml(motivo || lbl.sem) : lbl[nivel]}</span>`;
   const difTxt = v => v === null ? '—' : (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%';
+  // Origem do Custo Saídas, embaixo do valor (mesmo estilo de .da-mat-cat).
+  const origemCentral = c => c.custoSai === null ? '' : c.ref === 'mes'
+    ? `<span class="da-mat-cat">média do mês · ${c.n} saída${c.n === 1 ? '' : 's'}</span>`
+    : `<span class="da-mat-cat dcp-ref-ant">última saída ${escapeHtml(c.ref)}</span>`;
+  const origemMat = m => m.origem ? `<span class="da-mat-cat${m.origem === 'média do mês' ? '' : ' dcp-ref-ant'}">${m.origem}</span>` : '';
 
   const lista = D.materiais.filter(m => _dcpFiltro === 'todos' || m.nivel === _dcpFiltro);
   const linhas = lista.map(m => `
@@ -2878,8 +2928,8 @@ function _dcpRender() {
       <td class="da-num" style="color:${_daColorFor(m.diff)}">${tonS(m.diff)}</td>
       <td class="da-num">${ckg(m.custoSap)}</td>
       <td class="da-num" style="color:${_daColorFor(m.custoVar)}">${_daFmtMoneySigned(m.custoVar)}</td>
-      <td class="da-num">${ckg(m.custoSai)}</td>
-      <td class="da-num">${m.kgSai > 0 ? ton(m.kgSai) : '—'}</td>
+      <td class="da-num">${ckg(m.custoSai)}${origemMat(m)}</td>
+      <td class="da-num">${m.kgRef > 0 ? ton(m.kgRef) : '—'}</td>
       <td class="da-num" style="color:${DG_PARIDADE_COR[m.nivel]}">${difTxt(m.difPct)}</td>
       <td class="da-num">${badge(m.nivel, m.motivo)}</td>
     </tr>
@@ -2889,8 +2939,8 @@ function _dcpRender() {
       <td class="da-num" style="color:${_daColorFor(c.diff)}">${tonS(c.diff)}</td>
       <td class="da-num">${ckg(c.custoSap)}</td>
       <td class="da-num" style="color:${_daColorFor(c.custoVar)}">${_daFmtMoneySigned(c.custoVar)}</td>
-      <td class="da-num">${ckg(c.custoSai)}</td>
-      <td class="da-num">${c.kgSai > 0 ? ton(c.kgSai) : '—'}</td>
+      <td class="da-num">${ckg(c.custoSai)}${origemCentral(c)}</td>
+      <td class="da-num">${c.kgRef > 0 ? ton(c.kgRef) : '—'}</td>
       <td class="da-num" style="color:${DG_PARIDADE_COR[c.nivel]}">${difTxt(c.difPct)}</td>
       <td class="da-num">${badge(c.nivel, c.motivo)}</td>
     </tr>`).join('')}`).join('');
@@ -2920,11 +2970,12 @@ function _dcpRender() {
         <div class="inv-kpi-card"><div class="inv-kpi-body">
           <div class="inv-kpi-label">Paridade geral</div>
           <div class="inv-kpi-value" style="color:${DG_PARIDADE_COR[D.nivelGeral]}">${D.paridade === null ? '—' : D.paridade.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%'}</div>
-          <div class="inv-kpi-unit">100% − desvio médio ponderado pelo valor das saídas</div>
+          <div class="inv-kpi-unit">100% − desvio médio ponderado pelos kg de saída</div>
         </div></div>
         <div class="dcp-legenda">
           <div><strong>Custo SAP</strong> — custo médio do Custos SAP do mês (o que valoriza a variação). No material, média das centrais ponderada pelos kg de saída (sem saída: pelo Est. Final).</div>
-          <div><strong>Custo Saídas</strong> — valor total ÷ kg das Saídas do mês (módulo Saídas).</div>
+          <div><strong>Custo Saídas</strong> — Custo Unit. (R$/kg) das Saídas, que muda conforme o fornecedor: média ponderada pelos kg das saídas do mês; sem saída no mês, a saída mais recente de meses anteriores.</div>
+          <div><strong>Kg Saídas</strong> — kg que sustentam o Custo Saídas (do mês, ou do dia da última saída).</div>
           <div><strong>Faixas</strong> — Paridade até 1% · Atenção 1–3% · Urgente 3–5% · Crítico acima de 5%.</div>
         </div>
       </div>
@@ -2978,7 +3029,7 @@ function _dcpRenderDonut(D) {
           <span style="margin-left:auto;font-family:var(--mono);font-size:11px;color:${DG_PARIDADE_COR[n]};font-weight:700">${D.counts[n]} (${pct}%)</span>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;font-family:var(--mono);font-size:10.5px">
-          <div style="color:var(--text3)">Valor das saídas</div><div style="font-weight:600">${money(D.meta[n].valor)}</div>
+          <div style="color:var(--text3)">Kg saídas × Custo Saídas</div><div style="font-weight:600">${money(D.meta[n].valor)}</div>
           <div style="color:var(--text3)">SAP − Saídas (R$)</div><div style="font-weight:600">${dif >= 0 ? '+' : '−'} ${money(Math.abs(dif))}</div>
         </div>`
     };

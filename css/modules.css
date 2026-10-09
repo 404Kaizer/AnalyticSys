@@ -11405,6 +11405,8 @@ td:has(.lanc-central-edit:focus) {
 .da-table.dcp-table thead th { padding-left: 12px; padding-right: 12px; }
 .dcp-dialog { max-width: min(1440px, 97vw); }
 .dcp-central-nome { color: var(--text2); font-weight: 600; margin-right: 6px; }
+/* Custo Saídas que veio de saída de mês anterior (não do mês analisado). */
+.da-mat-cat.dcp-ref-ant { color: var(--amber); }
 
 /* Botão "Ocultar Ajustes" (ver dgToggleOcultarAjustes, dashboard.js) —
    discreto por padrão, só destaca (âmbar) quando ativo, pra ficar claro
