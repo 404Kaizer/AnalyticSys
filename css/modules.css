@@ -11391,14 +11391,19 @@ td:has(.lanc-central-edit:focus) {
 }
 .dcp-filtro:hover { color: var(--text); background: var(--bg3); }
 .dcp-filtro.active { color: var(--dcp-cor, var(--accent)); border-color: var(--dcp-cor, var(--accent)); background: color-mix(in srgb, var(--dcp-cor, var(--accent)) 12%, transparent); }
-.dcp-exp {
-  border: none; background: transparent; color: var(--text3); cursor: pointer;
-  padding: 0 4px 0 0; vertical-align: middle;
-}
+.dcp-exp { color: var(--text3); padding-right: 4px; vertical-align: middle; }
 .dcp-exp i { transition: transform .15s; display: inline-block; }
 .dcp-aberto .dcp-exp i { transform: rotate(90deg); }
+.dcp-table .dcp-mat-row { cursor: pointer; }
+.dcp-table .dcp-central-row { cursor: default; }
 .dcp-table .dcp-central-row td { background: color-mix(in srgb, var(--bg3) 45%, transparent); font-size: 11.5px; }
 .dcp-table .dcp-central-row td:first-child { padding-left: 34px; }
+/* Nada abreviado: anula o "tbody td { max-width:240px; overflow:hidden;
+   text-overflow:ellipsis }" genérico (components.css). Se não couber, a
+   .da-table-wrap rola na horizontal em vez de cortar o texto. */
+.da-table.dcp-table td { max-width: none; overflow: visible; text-overflow: clip; padding-left: 12px; padding-right: 12px; }
+.da-table.dcp-table thead th { padding-left: 12px; padding-right: 12px; }
+.dcp-dialog { max-width: min(1440px, 97vw); }
 .dcp-central-nome { color: var(--text2); font-weight: 600; margin-right: 6px; }
 
 /* Botão "Ocultar Ajustes" (ver dgToggleOcultarAjustes, dashboard.js) —

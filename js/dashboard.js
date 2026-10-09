@@ -2846,8 +2846,9 @@ function fecharDetalheCustoVar() {
 
 function dcpFiltrar(nivel) { _dcpFiltro = nivel; _dcpRender(); }
 
-function dcpToggleMat(btn) {
-  const tr = btn.closest('tr');
+// el = a própria linha do material (clique em qualquer ponto dela).
+function dcpToggleMat(el) {
+  const tr = el.closest('tr');
   const aberto = tr.classList.toggle('dcp-aberto');
   let prox = tr.nextElementSibling;
   while (prox && prox.classList.contains('dcp-central-row')) { prox.style.display = aberto ? '' : 'none'; prox = prox.nextElementSibling; }
@@ -2868,9 +2869,9 @@ function _dcpRender() {
 
   const lista = D.materiais.filter(m => _dcpFiltro === 'todos' || m.nivel === _dcpFiltro);
   const linhas = lista.map(m => `
-    <tr class="dcp-mat-row">
+    <tr class="dcp-mat-row" onclick="dcpToggleMat(this)" title="Clique para ver por central">
       <td>
-        <button type="button" class="dcp-exp" onclick="dcpToggleMat(this)" title="Ver por central"><i class="ti ti-chevron-right"></i></button>
+        <span class="dcp-exp"><i class="ti ti-chevron-right"></i></span>
         <span class="da-mat-name">${escapeHtml(m.mat)}</span>
         ${m.catKey ? `<span class="da-mat-cat">${escapeHtml(DG_VG_CATSUB_LABELS[m.catSubKey] || DG_VG_CAT_LABELS[m.catKey] || m.catKey)}</span>` : ''}
       </td>
