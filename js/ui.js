@@ -223,7 +223,8 @@ function restaurarBackup(file) {
       _lstepSet('bkp-restore', 'running'); _lbarSet(35);
       const fields = ['entradas','saidas','lancamentos','sap','custosSap','imports','configs','filiais','materiais','ocorrencias'];
       fields.forEach(f => {
-        state[f] = Array.isArray(parsed[f]) ? parsed[f] : (state[f] || []);
+        // Mês fechado não muda por restauração (ver periodoPreservarFechados).
+        state[f] = Array.isArray(parsed[f]) ? periodoPreservarFechados(f, state[f], parsed[f]) : (state[f] || []);
       });
       // Backfill de id nos 5 módulos grandes (Fase 4) — um backup gerado
       // antes desta atualização não tem id nos registros; sem isso, eles
@@ -4979,7 +4980,12 @@ async function lrcConfirm() {
   const lancs = overlay._lancs || [];
   if (!lancs.length) return;
 
-  const toRemove = lancs.filter((_, i) => !_lrcChecked.has(i));
+  let toRemove = lancs.filter((_, i) => !_lrcChecked.has(i));
+  const _trava = periodoSepararFechados('lancamentos', toRemove);
+  if (_trava.bloqueados.length) {
+    periodoAvisarFechado(`excluir ${_trava.bloqueados.length} lançamento(s)`, _trava.meses);
+    toRemove = _trava.livres;
+  }
   if (toRemove.length) {
     if (typeof showLoadingOverlay === 'function') showLoadingOverlay('Resolvendo conflito', 'Excluindo lançamentos selecionados...');
     if (typeof loadingShowSteps === 'function') loadingShowSteps([
@@ -5019,6 +5025,7 @@ async function lrcDelete(idx) {
   const lancs = overlay._lancs || [];
   const target = lancs[idx];
   if (!target) return;
+  if (_periodoFechadoDoRegistro('lancamentos', target)) { periodoAvisarFechado('excluir este lançamento'); return; }
 
   const confirmed = await new Promise(resolve => {
     document.getElementById('lrc-confirm-inline')?.remove();
@@ -6055,6 +6062,52 @@ function isSapDocJustificadoInventario(r) {
   return _getInvJustDocSet().has(_fechImportNormDoc(r.documento));
 }
 
+// Candidatos Y11/Y12 por documento normalizado — só pra trava de período
+// abaixo. Cache pela identidade/tamanho de state.sap (importar troca o array).
+let _fechCandPorDocCache = null, _fechCandPorDocSrc = null, _fechCandPorDocLen = -1;
+function _fechCandidatosPorDoc() {
+  const sap = state.sap || [];
+  if (_fechCandPorDocCache && _fechCandPorDocSrc === sap && _fechCandPorDocLen === sap.length) return _fechCandPorDocCache;
+  const map = new Map();
+  for (const r of sap) {
+    const mv = String(r.movimento || '');
+    if (mv.indexOf('Y11') < 0 && mv.indexOf('Y12') < 0) continue; // pré-filtro barato
+    if (!isSapFechamentoPattern(r)) continue;
+    const d = _fechImportNormDoc(r.documento);
+    if (!d) continue;
+    if (!map.has(d)) map.set(d, []);
+    map.get(d).push(r);
+  }
+  _fechCandPorDocCache = map; _fechCandPorDocSrc = sap; _fechCandPorDocLen = sap.length;
+  return map;
+}
+
+// Trocar o Documento SAP de uma justificativa (k) de docsAntes → docsDepois
+// muda se as linhas Y11/Y12 daquele documento contam no cálculo
+// (isSapDocJustificadoInventario) — e elas podem ser de um mês já fechado,
+// mesmo com a justificativa num mês aberto. Devolve os meses fechados
+// ('MM/AAAA') que a troca alteraria; [] = pode gravar. Documento que
+// continua em OUTRA justificativa não muda nada e não conta.
+function periodoMesesFechadosDosDocs(k, docsAntes, docsDepois) {
+  const fechados = new Set(state.periodoFechamentos || []);
+  if (!fechados.size) return [];
+  const norm = v => new Set(splitDocsSap(v).map(_fechImportNormDoc).filter(Boolean));
+  const a = norm(docsAntes), b = norm(docsDepois);
+  const mudou = [...a].filter(d => !b.has(d)).concat([...b].filter(d => !a.has(d)));
+  if (!mudou.length) return [];
+  const outros = new Set();
+  (state.invJustificativas || []).forEach(j => {
+    if (j && j.k !== k) splitDocsSap(j.documentoSap).forEach(d => outros.add(_fechImportNormDoc(d)));
+  });
+  const idx = _fechCandidatosPorDoc();
+  const meses = new Set();
+  mudou.filter(d => !outros.has(d)).forEach(d => (idx.get(d) || []).forEach(r => {
+    const mk = _periodoMesDoRegistro('sap', r);
+    if (mk && fechados.has(mk)) meses.add(_periodoRotulo(mk));
+  }));
+  return [...meses].sort();
+}
+
 // Verdadeira função de decisão usada por TODO o sistema: um registro deve
 // ser desconsiderado do cálculo de variação/entradas/saídas se:
 //   (1) o Documento SAP está justificado em alguma linha do Inventário e a
@@ -6550,6 +6603,12 @@ function setSapFechOverrideEmLote(chaves, incluir) {
     toast('Somente o administrador pode alterar Ajustes de Fechamento.', 'error');
     return;
   }
+  const _travadas = chaves.filter(_periodoFechadoDaChaveSapFech);
+  if (_travadas.length) {
+    periodoAvisarFechado(`alterar ${_travadas.length} ajuste(s) de fechamento`);
+    chaves = chaves.filter(k => !_periodoFechadoDaChaveSapFech(k));
+    if (!chaves.length) return;
+  }
   const set = new Set(state.sapFechamentoOverrides || []);
   chaves.forEach(k => { if (incluir) set.delete(k); else set.add(k); });
   state.sapFechamentoOverrides = [...set];
@@ -6645,6 +6704,12 @@ function setSapFechInvLockOverrideEmLote(chaves, desbloquear) {
     toast('Somente o administrador pode alterar o bloqueio do Inventário.', 'error');
     return;
   }
+  const _travadas = chaves.filter(_periodoFechadoDaChaveSapFech);
+  if (_travadas.length) {
+    periodoAvisarFechado(`alterar o bloqueio de ${_travadas.length} ajuste(s)`);
+    chaves = chaves.filter(k => !_periodoFechadoDaChaveSapFech(k));
+    if (!chaves.length) return;
+  }
   const set = new Set(state.sapFechInvUnlockOverrides || []);
   chaves.forEach(k => { if (desbloquear) set.add(k); else set.delete(k); });
   state.sapFechInvUnlockOverrides = [...set];
@@ -6671,7 +6736,9 @@ function retravarDocsInventarioLocal(docs) {
   const alvo = new Set((docs || []).map(_fechImportNormDoc));
   if (!alvo.size) return;
   const antes = state.sapFechInvUnlockOverrides || [];
-  const depois = antes.filter(chave => !alvo.has(_fechImportNormDoc(chave.split('||')[0])));
+  // Desbloqueio de linha de mês fechado não re-trava (gatilho do banco
+  // também pula essas chaves).
+  const depois = antes.filter(chave => !alvo.has(_fechImportNormDoc(chave.split('||')[0])) || _periodoFechadoDaChaveSapFech(chave));
   if (depois.length === antes.length) return;
   state.sapFechInvUnlockOverrides = depois;
   invalidateFechInvUnlockCache();
@@ -6731,12 +6798,20 @@ function _fechInvUnlockRealtimeStop() {
 }
 
 // ═══════════════════════════════════════════════════════════
-// FECHAMENTO DE PERÍODO (mensal) — trava lançamentos/entradas/saídas/SAP/
-// justificativas/ajustes sistêmicos daquele mês pra quem não é ADM.
-// A garantia de verdade é a RLS (ver migração periodo_fechamento_inventario
-// no Supabase — policies de INSERT/UPDATE/DELETE checam
-// periodo_esta_fechado()); tudo aqui é só cache + UX (banner, toast cedo
-// em vez de esperar o erro do banco).
+// FECHAMENTO DE PERÍODO (mensal) — trava TUDO o que tem data naquele mês:
+// lançamentos/entradas/saídas/SAP (manual, importação, edição, exclusão,
+// exclusão de importação, restauração), Custos SAP, justificativas do
+// Inventário, ajustes sistêmicos e Ajustes de Fechamento Y11/Y12.
+//
+// Vale para TODOS, inclusive o ADM (decisão do Hugo, 09/10/2026): mudar algo
+// de um mês fechado = ADM reabre (com motivo), corrige e fecha de novo — o
+// que gera uma nova fotografia do Dashboard Gerencial (dashboard.js,
+// dgFotografia*). Anotações (ocorrências, comentários de variação, conclusão
+// de DAI no SAP) continuam livres.
+//
+// Na nuvem a garantia é a RLS (migração periodo_fechado_trava_total);
+// SAP/Saídas/Entradas importados só existem no IndexedDB de cada um, então
+// para eles as guardas DAQUI são a trava de verdade.
 // ═══════════════════════════════════════════════════════════
 async function syncPeriodoFechamentosFromSupabase() {
   try {
@@ -6760,21 +6835,89 @@ function isPeriodoFechadoDataBr(dataBr) {
   return m ? isPeriodoFechado(m[3], m[2]) : false;
 }
 
-// Mesma escolha de campo-data usada nas policies de RLS de cada tabela (ver
-// migração periodo_fechamento_inventario) — usada nos pontos de escrita
-// locais (_criarRegistro*, import.js; removerRegistro/excluirSelecionados,
-// dashboard.js) pra bloquear ANTES de mexer no estado local, em vez de só
-// depois de a nuvem já ter rejeitado (o registro ficava "preso" só local,
-// nunca sincronizando, dando falsa impressão de sucesso pro usuário comum).
-function _periodoFechadoDoRegistro(module, rec) {
-  if (!rec) return false;
+// 'AAAA-MM' do mês a que o registro pertence — mesma escolha de campo-data
+// das policies de RLS de cada tabela. null = sem data reconhecível (não trava,
+// igual ao banco). Módulos = chaves de state (custosSap usa ano/mes do próprio
+// registro, não uma data).
+function _periodoMesDoRegistro(module, rec) {
+  if (!rec) return null;
+  let dataBr;
   switch (module) {
-    case 'lancamentos': return isPeriodoFechadoDataBr(rec.dtLanc);
-    case 'entradas':    return isPeriodoFechadoDataBr(rec.dtDescarga || rec.dtEmissao);
-    case 'saidas':      return isPeriodoFechadoDataBr(rec.dtEmissao);
-    case 'sap':         return isPeriodoFechadoDataBr(rec.dtLanc || rec.dtDoc);
-    default: return false;
+    case 'lancamentos': dataBr = rec.dtLanc; break;
+    case 'entradas':    dataBr = rec.dtDescarga || rec.dtEmissao; break;
+    case 'saidas':      dataBr = rec.dtEmissao; break;
+    case 'sap':         dataBr = rec.dtLanc || rec.dtDoc; break;
+    case 'custosSap': {
+      const a = Number(String(rec.ano ?? '').trim()), m = Number(String(rec.mes ?? '').trim());
+      return (a >= 1000 && m >= 1 && m <= 12) ? `${a}-${String(m).padStart(2, '0')}` : null;
+    }
+    default: return null;
   }
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(String(dataBr || ''));
+  return m ? `${m[3]}-${m[2]}` : null;
+}
+
+// Usada em TODO ponto de escrita local (criar/editar/excluir/importar/
+// restaurar) pra bloquear ANTES de mexer no estado — sem exceção pro ADM.
+function _periodoFechadoDoRegistro(module, rec) {
+  const k = _periodoMesDoRegistro(module, rec);
+  return !!k && (state.periodoFechamentos || []).includes(k);
+}
+
+function _periodoRotulo(chave) {
+  const [a, m] = String(chave).split('-');
+  return `${m}/${a}`;
+}
+
+// Separa uma lista em registros de mês aberto (livres) e fechado
+// (bloqueados). meses = rótulos 'MM/AAAA' dos meses fechados atingidos.
+function periodoSepararFechados(module, recs) {
+  const fechados = new Set(state.periodoFechamentos || []);
+  if (!fechados.size) return { livres: recs || [], bloqueados: [], meses: [] };
+  const livres = [], bloqueados = [], meses = new Set();
+  (recs || []).forEach(r => {
+    const k = _periodoMesDoRegistro(module, r);
+    if (k && fechados.has(k)) { bloqueados.push(r); meses.add(k); }
+    else livres.push(r);
+  });
+  return { livres, bloqueados, meses: [...meses].sort().map(_periodoRotulo) };
+}
+
+function periodoAvisarFechado(acao, meses) {
+  const quais = meses && meses.length ? ` (${meses.join(', ')})` : '';
+  toast(`Período fechado${quais} — não é possível ${acao}. Para alterar, o ADM precisa reabrir o mês.`, 'error');
+}
+
+// Restauração/limpeza local não podem mudar mês fechado: os registros de mês
+// fechado que ESTE dispositivo já tem ficam exatamente como estão; a cópia que
+// chega só entra nos meses abertos — ou num mês fechado do qual este
+// dispositivo não tem nenhum registro (recuperação de base perdida, que é o
+// motivo de existir restauração).
+function periodoPreservarFechados(module, atual, novo) {
+  const fechados = new Set(state.periodoFechamentos || []);
+  if (!fechados.size) return novo;
+  const manter = [], mesesComLocal = new Set();
+  (atual || []).forEach(r => {
+    const k = _periodoMesDoRegistro(module, r);
+    if (k && fechados.has(k)) { manter.push(r); mesesComLocal.add(k); }
+  });
+  if (!manter.length) return novo;
+  const entra = (novo || []).filter(r => !mesesComLocal.has(_periodoMesDoRegistro(module, r)));
+  return [...entra, ...manter];
+}
+
+// Chave de override de Ajuste de Fechamento (getSapFechKey) → registro
+// "mínimo" com dtLanc, pra reusar _periodoFechadoDoRegistro('sap', …). Mesmo
+// split_part(chave, '||', 6) das policies de RLS dessas tabelas.
+function _periodoFechadoDaChaveSapFech(chave) {
+  return _periodoFechadoDoRegistro('sap', { dtLanc: String(chave || '').split('||')[5] || '' });
+}
+
+// Chave de justificativa do Inventário ('AAAA-MM|…') — mesmo prefixo das
+// policies de inv_justificativas (_periodo_fechado_key_prefixo).
+function _periodoFechadoDaChaveInv(k) {
+  const m = /^(\d{4})-(\d{2})\|/.exec(String(k || ''));
+  return !!m && isPeriodoFechado(m[1], m[2]);
 }
 
 async function periodoFecharMes(ano, mes) {
@@ -6786,12 +6929,18 @@ async function periodoFecharMes(ano, mes) {
   return true;
 }
 
-async function periodoReabrirMes(ano, mes) {
+// Reabrir exige motivo — o banco recusa sem ele (gatilho
+// _periodo_fechamento_guarda), registra em periodo_fechamento_log e tira a
+// fotografia do mês de vigência.
+async function periodoReabrirMes(ano, mes, motivo) {
+  motivo = String(motivo || '').trim();
+  if (!motivo) { toast('Informe o motivo da reabertura.', 'error'); return false; }
   const { error } = await window.supabaseClient.from('periodo_fechamentos')
-    .update({ fechado: false, reaberto_por: window.currentUser.id, reaberto_em: new Date().toISOString() })
+    .update({ fechado: false, reaberto_por: window.currentUser.id, reaberto_em: new Date().toISOString(), motivo_reabertura: motivo })
     .eq('ano', ano).eq('mes', mes);
   if (error) { toast('Falha ao reabrir o período: ' + error.message, 'error'); return false; }
   await syncPeriodoFechamentosFromSupabase();
+  if (typeof dgFotografiaDescartarCache === 'function') dgFotografiaDescartarCache(ano, mes);
   toast(`Período ${String(mes).padStart(2, '0')}/${ano} reaberto.`, 'success');
   return true;
 }
@@ -8926,10 +9075,11 @@ async function _restaurarModulosConfirmar() {
         const atual = new Map((state.invJustificativas || []).map(r => [r.k, r]));
         data.invJustificativas
           .filter(rec => !!(rec && (rec.op || rec.fiscal || rec.saldo || rec.custoMedioSap || rec.documentoSap)))
+          .filter(rec => !_periodoFechadoDaChaveInv(rec.k)) // mês fechado não muda por restauração
           .forEach(rec => { if (rec && rec.k) atual.set(rec.k, rec); });
         state.invJustificativas = [...atual.values()];
       } else {
-        state[m.key] = data[m.key];
+        state[m.key] = periodoPreservarFechados(m.key, state[m.key], data[m.key]);
       }
     });
 

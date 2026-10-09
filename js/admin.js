@@ -875,16 +875,49 @@ async function _adminPeriodoFechRender() {
 
   const listEl = document.getElementById('admin-periodo-fech-lista');
   if (!listEl) return;
-  const { data, error } = await window.supabaseClient
-    .from('periodo_fechamentos').select('ano, mes, fechado')
-    .order('ano', { ascending: false }).order('mes', { ascending: false });
+  const [{ data, error }, fotos, log] = await Promise.all([
+    window.supabaseClient.from('periodo_fechamentos').select('ano, mes, fechado')
+      .order('ano', { ascending: false }).order('mes', { ascending: false }),
+    dgFotografiaListar().catch(err => ({ erro: err })),
+    window.supabaseClient.from('periodo_fechamento_log').select('ano, mes, acao, motivo, em')
+      .order('em', { ascending: false }).limit(200)
+  ]);
   if (error) { listEl.innerHTML = `<div class="empty-state"><p>${_adminErroDetalhe(error)}</p></div>`; return; }
+  const fotoPorMes = new Map((Array.isArray(fotos) ? fotos : []).map(f => [`${f.ano}-${f.mes}`, f]));
+  const ultimaReab = new Map();
+  (log?.data || []).forEach(l => { if (l.acao === 'reabrir' && !ultimaReab.has(`${l.ano}-${l.mes}`)) ultimaReab.set(`${l.ano}-${l.mes}`, l); });
+  const esc = s => _adminEsc(String(s ?? ''));
+
+  const fotoHtml = (r) => {
+    if (!r.fechado) return '';
+    const f = fotoPorMes.get(`${r.ano}-${r.mes}`);
+    if (fotos && fotos.erro) return `<span style="color:var(--amber);font-size:11px"><i class="ti ti-alert-triangle"></i> fotografia: ${esc(_adminErroDetalhe(fotos.erro))}</span>`;
+    if (!f) return `<span style="color:var(--amber);font-size:11px"><i class="ti ti-camera-off"></i> sem fotografia</span>`;
+    const quando = new Date(f.gerado_em).toLocaleString('pt-BR');
+    return `<span style="color:var(--text3);font-size:11px" title="${esc(f.motivo ? 'Motivo: ' + f.motivo : '')}"><i class="ti ti-camera"></i> fotografia v${f.versao} · ${esc(quando)}${f.gerado_por_nome ? ' · ' + esc(f.gerado_por_nome) : ''}</span>`;
+  };
+  const reabHtml = (r) => {
+    const l = ultimaReab.get(`${r.ano}-${r.mes}`);
+    return l ? `<div style="font-size:11px;color:var(--text3)">Última reabertura: ${esc(new Date(l.em).toLocaleString('pt-BR'))} — ${esc(l.motivo || '—')}</div>` : '';
+  };
+
   listEl.innerHTML = (data || []).length
-    ? `<div style="font-size:11px;color:var(--text3);padding-top:10px">Histórico:</div>` + data.map(r => `
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
-        <span>${MESES_NOME_DG[r.mes - 1]}/${r.ano} — ${r.fechado ? '<i class="ti ti-lock" style="color:var(--danger,#e5484d)"></i> Fechado' : '<i class="ti ti-lock-open"></i> Aberto'}</span>
-        <button class="btn btn-sm" onclick="${r.fechado ? `adminPeriodoReabrirLinha(${r.ano},${r.mes})` : `adminPeriodoFecharLinha(${r.ano},${r.mes})`}">${r.fechado ? 'Reabrir' : 'Fechar de novo'}</button>
-      </div>`).join('')
+    ? `<div style="font-size:11px;color:var(--text3);padding-top:10px">Histórico:</div>` + data.map(r => {
+      const temFoto = fotoPorMes.has(`${r.ano}-${r.mes}`);
+      const botoes = r.fechado
+        ? `<button class="btn btn-sm" onclick="adminPeriodoFotografiaLinha(${r.ano},${r.mes},${temFoto})" title="${temFoto ? 'Recalcula com os dados de agora e grava uma nova versão (a atual fica guardada)' : 'Gera a fotografia com os dados de agora'}"><i class="ti ti-camera"></i> ${temFoto ? 'Refazer fotografia' : 'Gerar fotografia'}</button>
+           <button class="btn btn-sm" onclick="adminPeriodoReabrirLinha(${r.ano},${r.mes})">Reabrir</button>`
+        : `<button class="btn btn-sm" onclick="adminPeriodoFecharLinha(${r.ano},${r.mes})">Fechar de novo</button>`;
+      return `
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid var(--border)">
+        <div style="display:flex;flex-direction:column;gap:2px">
+          <span>${MESES_NOME_DG[r.mes - 1]}/${r.ano} — ${r.fechado ? '<i class="ti ti-lock" style="color:var(--danger,#e5484d)"></i> Fechado' : '<i class="ti ti-lock-open"></i> Aberto'}</span>
+          ${fotoHtml(r)}
+          ${reabHtml(r)}
+        </div>
+        <div style="display:flex;gap:6px">${botoes}</div>
+      </div>`;
+    }).join('')
     : '<div class="empty-state"><p>Nenhum período fechado ainda.</p></div>';
 }
 
@@ -892,11 +925,66 @@ async function adminPeriodoToggle() {
   const ano = Number(document.getElementById('admin-periodo-fech-ano')?.value);
   const mes = Number(document.getElementById('admin-periodo-fech-mes')?.value);
   if (!ano || !mes) return;
-  const ok = isPeriodoFechado(ano, mes) ? await periodoReabrirMes(ano, mes) : await periodoFecharMes(ano, mes);
-  if (ok) _adminPeriodoFechRender();
+  if (isPeriodoFechado(ano, mes)) await adminPeriodoReabrirLinha(ano, mes);
+  else await adminPeriodoFecharLinha(ano, mes);
 }
-async function adminPeriodoFecharLinha(ano, mes) { if (await periodoFecharMes(ano, mes)) _adminPeriodoFechRender(); }
-async function adminPeriodoReabrirLinha(ano, mes) { if (await periodoReabrirMes(ano, mes)) _adminPeriodoFechRender(); }
+
+// Fechar = conferência + fotografia PRIMEIRO, fechamento depois. Se a
+// gravação da fotografia falhar, o mês continua aberto (nada a desfazer).
+async function adminPeriodoFecharLinha(ano, mes) {
+  const rot = `${MESES_NOME_DG[mes - 1]}/${ano}`;
+  const gravou = await dgFotografiaGerarEGravar(ano, mes, null, {
+    titulo: `Fechar ${rot}`,
+    confirmLabel: 'Fechar período',
+    textoExtra: `Depois de fechado, <strong>ninguém (nem o ADM)</strong> consegue lançar, importar, editar ou excluir nada de ${rot}, e o Dashboard Gerencial do mês fica congelado com os números abaixo. Para corrigir depois, é preciso reabrir o mês com motivo.`
+  });
+  if (!gravou) return;
+  if (await periodoFecharMes(ano, mes)) _adminPeriodoFechRender();
+}
+
+// Reabrir exige motivo (o banco também recusa sem ele).
+async function adminPeriodoReabrirLinha(ano, mes) {
+  const motivo = await _adminPedirMotivo(`Reabrir ${MESES_NOME_DG[mes - 1]}/${ano}`,
+    'Ao reabrir, o mês volta a aceitar alterações e a fotografia do Dashboard Gerencial deixa de valer (fica guardada no histórico). Ao fechar de novo, uma nova fotografia é gerada.',
+    'Reabrir período');
+  if (!motivo) return;
+  if (await periodoReabrirMes(ano, mes, motivo)) _adminPeriodoFechRender();
+}
+
+// Gerar (mês fechado sem fotografia) ou refazer (nova versão — exige motivo).
+async function adminPeriodoFotografiaLinha(ano, mes, refazer) {
+  let motivo = null;
+  if (refazer) {
+    motivo = await _adminPedirMotivo(`Refazer a fotografia de ${MESES_NOME_DG[mes - 1]}/${ano}`,
+      'A fotografia será recalculada com os dados e cadastros de agora e passa a ser a oficial do mês. A versão atual fica guardada no histórico.',
+      'Continuar');
+    if (!motivo) return;
+  }
+  if (await dgFotografiaGerarEGravar(ano, mes, motivo)) _adminPeriodoFechRender();
+}
+
+// Modal de motivo (reaproveita o confirmarDestrutivo). Devolve o texto ou
+// null se cancelado/vazio.
+function _adminPedirMotivo(titulo, texto, confirmLabel) {
+  return new Promise(resolve => {
+    let resolvido = false;
+    confirmarDestrutivo({
+      title: titulo,
+      sub: 'Motivo obrigatório',
+      body: `<div style="font-size:12px;color:var(--text2);margin-bottom:10px">${texto}</div>
+        <textarea id="admin-motivo-txt" class="form-input" rows="3" style="width:100%;resize:vertical" placeholder="Descreva o motivo..."></textarea>`,
+      confirmLabel,
+      onConfirm: () => {
+        resolvido = true;
+        const v = (document.getElementById('admin-motivo-txt')?.value || '').trim();
+        if (!v) { toast('Informe o motivo.', 'error'); resolve(null); return; }
+        resolve(v);
+      }
+    });
+    setTimeout(() => document.getElementById('admin-motivo-txt')?.focus(), 50);
+    _dgAoFecharModal('modal-confirm-destrutivo', () => { if (!resolvido) resolve(null); });
+  });
+}
 
 // ── Seção: Usuários ─────────────────────────────────────────
 // silent=true é usado só pelo polling automático (a cada 30s) — evita

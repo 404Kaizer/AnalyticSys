@@ -1238,7 +1238,11 @@ async function checarWipePendente() {
       const jaProcessado = acked[row.modulo];
       if (jaProcessado && new Date(jaProcessado).getTime() >= new Date(row.solicitado_em).getTime()) continue;
       if (Array.isArray(state[row.modulo])) {
-        state[row.modulo] = [];
+        // Registros de mês fechado sobrevivem à limpeza (trava de período,
+        // ver periodoPreservarFechados em ui.js).
+        state[row.modulo] = (typeof periodoPreservarFechados === 'function')
+          ? periodoPreservarFechados(row.modulo, state[row.modulo], [])
+          : [];
         modulosLimpos.push(row.modulo);
         console.info(`[WipeLocal] "${row.modulo}" resetado localmente por pedido do ADM (${row.solicitado_em}).`);
         if (typeof toast === 'function') {

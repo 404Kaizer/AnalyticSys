@@ -11346,6 +11346,26 @@ td:has(.lanc-central-edit:focus) {
   background: var(--bg2);
   box-shadow: 0 1px 2px rgba(0,0,0,0.08);
 }
+.dg-esti-toggle-btn:disabled { opacity: .45; cursor: not-allowed; }
+
+/* Faixa de origem dos números do Gerencial (mês fechado) — ver
+   _dgRenderBannerFotografia, dashboard.js. */
+.dg-fz-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  border-radius: var(--radius);
+  font-size: 12.5px;
+  line-height: 1.45;
+  border: 1px solid var(--border2);
+}
+.dg-fz-banner > .ti { font-size: 17px; flex-shrink: 0; }
+.dg-fz-banner > span { flex: 1; }
+.dg-fz-ok      { background: var(--blue-bg, var(--bg3));  color: var(--text2); border-color: var(--blue-border, var(--border2)); }
+.dg-fz-ok > .ti { color: var(--accent); }
+.dg-fz-alerta  { background: var(--amber-bg); color: var(--amber); border-color: var(--amber-border); }
 
 /* Botão "Ocultar Ajustes" (ver dgToggleOcultarAjustes, dashboard.js) —
    discreto por padrão, só destaca (âmbar) quando ativo, pra ficar claro

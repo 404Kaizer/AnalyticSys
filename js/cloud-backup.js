@@ -418,7 +418,7 @@ async function restaurarBackupCondensadoSeNecessario() {
 
       const registros = await _cbRestaurarModulo(modulo);
       if (registros && registros.length) {
-        state[modulo] = registros;
+        state[modulo] = periodoPreservarFechados(modulo, state[modulo], registros);
         console.info(`[CloudBackup] "${modulo}": ${registros.length.toLocaleString('pt-BR')} registros restaurados/corrigidos da cópia condensada na nuvem.`);
         toast(`${registros.length.toLocaleString('pt-BR')} registro(s) de ${modulo} sincronizados da cópia de segurança na nuvem.`, 'success');
       }
@@ -498,7 +498,8 @@ async function restaurarBackupCondensadoAnterior(modulo) {
     toast(`Cópia anterior de ${modulo} não passou na verificação de integridade. Nada foi alterado.`, 'error');
     return false;
   }
-  state[modulo] = registros;
+  // Mês fechado não muda por restauração (ver periodoPreservarFechados, ui.js).
+  state[modulo] = periodoPreservarFechados(modulo, state[modulo], registros);
   if (typeof persist === 'function') persist();
   toast(`${registros.length.toLocaleString('pt-BR')} registro(s) de ${modulo} restaurados da cópia anterior.`, 'success');
   return true;
@@ -542,7 +543,8 @@ async function restaurarBackupCondensadoManual(modulo) {
     toast(`Restauração de ${modulo} abortada — a cópia não passou na verificação de integridade. Nada foi alterado.`, 'error');
     return false;
   }
-  state[modulo] = registros;
+  // Mês fechado não muda por restauração (ver periodoPreservarFechados, ui.js).
+  state[modulo] = periodoPreservarFechados(modulo, state[modulo], registros);
   if (typeof persist === 'function') persist();
   toast(`${registros.length.toLocaleString('pt-BR')} registro(s) de ${modulo} restaurados da nuvem.`, 'success');
   return true;

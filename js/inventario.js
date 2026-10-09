@@ -2121,7 +2121,7 @@
     el.innerHTML = fechado
       ? `<button type="button" class="alert-pulse-btn is-red" disabled style="margin-bottom:14px">
           <i class="ti ti-lock"></i>
-          Período fechado pelo administrador — ${window.currentUser?.role === 'admin' ? 'você ainda pode editar' : 'edições bloqueadas'}
+          Período fechado — edições bloqueadas${window.currentUser?.role === 'admin' ? ' (reabra o mês em Admin → Fechamento para alterar)' : ''}
         </button>`
       : '';
   }
@@ -2390,15 +2390,8 @@
   // Médio SAP no momento do Salvar — auto (Custos SAP) se o campo continuou
   // travado, ou o valor sobrescrito se o usuário desbloqueou.
   function _invApplyJustValues(k, { op, fiscal, saldo, custoSap, docSap }) {
-    // Guarda de UX — a garantia de verdade é a RLS (periodo_esta_fechado no
-    // Supabase); isto só evita a mutação local + toast tardio de erro.
-    if (window.currentUser?.role !== 'admin' && typeof isPeriodoFechado === 'function') {
-      const m = /^(\d{4})-(\d{2})\|/.exec(k);
-      if (m && isPeriodoFechado(m[1], m[2])) {
-        if (typeof toast === 'function') toast('Período fechado pelo administrador — não é possível editar.', 'error');
-        return false;
-      }
-    }
+    // Trava de período (vale pro ADM também) — ver _invJustTravada.
+    if (_invJustTravada(k, (invJustificativas[k] || {}).documentoSap, docSap, 'editar esta justificativa')) return false;
     invJustificativas[k] = { op, fiscal, saldo, custoMedioSap: custoSap, documentoSap: docSap };
     const row = invRows.find(r => r.k === k);
     if (row) {
@@ -2973,6 +2966,26 @@
   // pendente se a variação for relevante). Mesmo modal de confirmação
   // destrutiva usado em removerMaterial (config.js) e na importação
   // (import.js) — só muda title/sub/body/onConfirm.
+
+  // Trava de período fechado de uma justificativa (vale pro ADM também):
+  // (1) a própria justificativa é de mês fechado (prefixo 'AAAA-MM|' da
+  // chave, mesmo critério da RLS de inv_justificativas); ou (2) a troca do
+  // Documento SAP (antes → depois) mudaria se Ajustes de Fechamento de um mês
+  // fechado contam no cálculo (periodoMesesFechadosDosDocs, ui.js). acao =
+  // texto do aviso; null = só checa, sem aviso (lotes contam e avisam uma vez).
+  function _invJustTravada(k, docsAntes, docsDepois, acao) {
+    if (_periodoFechadoDaChaveInv(k)) {
+      if (acao) periodoAvisarFechado(acao);
+      return true;
+    }
+    const meses = periodoMesesFechadosDosDocs(k, docsAntes, docsDepois);
+    if (meses.length) {
+      if (acao) toast(`O Documento SAP alterado tem Ajuste de Fechamento de período fechado (${meses.join(', ')}) — não é possível ${acao}. Para alterar, o ADM precisa reabrir o período.`, 'error');
+      return true;
+    }
+    return false;
+  }
+
   // Reseta os campos derivados de uma linha pro estado "sem justificativa"
   // (mesmo cálculo de quando invGerar roda com just={}) — usado tanto pela
   // exclusão individual (invExcluirJust) quanto pela em massa
@@ -2993,6 +3006,7 @@
     if (!row) return;
     const j = invJustificativas[k] || {};
     if (!_invTemJustSalva(j)) return; // guarda extra — botão já vem desabilitado nesse caso
+    if (_invJustTravada(k, j.documentoSap, '', 'excluir esta justificativa')) return;
 
     const campoRow = (label, val) => val
       ? `<div style="display:flex;gap:8px;align-items:flex-start">
@@ -3037,10 +3051,15 @@
   // abre confirmação à toa, só avisa que não há nada a excluir.
   window.invExcluirJustLote = function() {
     if (_invSelected.size === 0) return;
-    const alvos = invRows.filter(r => _invSelected.has(r.k) && !r.semCadastro && _invTemJustSalva(invJustificativas[r.k] || {}));
-    if (alvos.length === 0) {
+    const comJust = invRows.filter(r => _invSelected.has(r.k) && !r.semCadastro && _invTemJustSalva(invJustificativas[r.k] || {}));
+    if (comJust.length === 0) {
       toast('Nenhuma das linhas selecionadas tem justificativa salva pra excluir.', 'error');
       return;
+    }
+    const alvos = comJust.filter(r => !_invJustTravada(r.k, (invJustificativas[r.k] || {}).documentoSap, '', null));
+    if (alvos.length < comJust.length) {
+      periodoAvisarFechado(`excluir ${comJust.length - alvos.length} justificativa(s) — ficaram de fora`);
+      if (!alvos.length) return;
     }
 
     confirmarDestrutivo({
@@ -3270,8 +3289,10 @@
     // Merge, não overwrite — mesmo critério do Importar CSV
     // (_invConfirmarImportCSV): o que já está preenchido localmente NUNCA é
     // apagado pelo import; só entra o que estava em branco.
+    let travadas = 0;
     selecionados.forEach(it => {
       const atual = invJustificativas[it.kDestino] || {};
+      if (_invJustTravada(it.kDestino, atual.documentoSap, atual.documentoSap || it.documentoSap || '', null)) { travadas++; return; }
       invJustificativas[it.kDestino] = {
         op: atual.op || it.op || '',
         fiscal: atual.fiscal || it.fiscal || '',
@@ -3286,7 +3307,8 @@
     closeModal('modal-importar-de-inv');
     _invSyncJustificativasToState(chavesTocadas);
     window.invGerar();
-    toast(`${selecionados.length} justificativa(s) importada(s) de ${usuariosCount} usuário(s)`);
+    toast(`${chavesTocadas.length} justificativa(s) importada(s) de ${usuariosCount} usuário(s)`);
+    if (travadas) periodoAvisarFechado(`importar ${travadas} justificativa(s) — ficaram de fora`);
   };
 
   // ── Importar CSV — preenche em massa as justificativas ──────
@@ -3471,7 +3493,7 @@
     const mesKey = invGetMesKey();
     const rowByK = new Map(invRows.map(r => [r.k, r]));
 
-    let atualizados = 0, naoEncontrados = 0, ignoradosCategoria = 0;
+    let atualizados = 0, naoEncontrados = 0, ignoradosCategoria = 0, travadas = 0;
     const chavesTocadas = [];
     _invImportParsedRows.forEach(imp => {
       if (!categoriasSelecionadas.has(imp.categoria)) { ignoradosCategoria++; return; }
@@ -3482,6 +3504,7 @@
       // Merge: só sobrescreve o campo se vier preenchido no CSV — célula
       // em branco não apaga uma justificativa já salva.
       const atual = invJustificativas[k] || {};
+      if (_invJustTravada(k, atual.documentoSap, imp.documentoSap || atual.documentoSap || '', null)) { travadas++; return; }
       invJustificativas[k] = {
         op:            imp.op || atual.op || '',
         fiscal:        imp.fiscal || atual.fiscal || '',
@@ -3500,7 +3523,8 @@
     const partes = [`${atualizados} atualizada${atualizados === 1 ? '' : 's'}`];
     if (naoEncontrados)     partes.push(`${naoEncontrados} não encontrada${naoEncontrados === 1 ? '' : 's'} no inventário deste mês`);
     if (ignoradosCategoria) partes.push(`${ignoradosCategoria} ignorada${ignoradosCategoria === 1 ? '' : 's'} (categoria não selecionada)`);
-    toast('Importação concluída: ' + partes.join(', ') + '.', naoEncontrados ? 'error' : 'success');
+    if (travadas)           partes.push(`${travadas} bloqueada${travadas === 1 ? '' : 's'} por período fechado`);
+    toast('Importação concluída: ' + partes.join(', ') + '.', (naoEncontrados || travadas) ? 'error' : 'success');
   };
 
   // ── renderInventario (chamado por anSwitchView ao entrar na Visão Inventário) ──

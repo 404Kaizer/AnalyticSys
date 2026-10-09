@@ -110,7 +110,22 @@ window.dgToggleOcultarAjustes = function () {
   _dgAplicarOcultarAjustesUI();
 };
 
-function buildDashboardGerencialResults(dtIni, dtFim) {
+// opts.aoVivo     — ignora a fotografia do mês fechado e calcula dos dados.
+// opts.fotografia — cálculo PARA a fotografia (ver dgFotografiaGerar): Est.
+//                   Inicial sempre pelo SAP (sem o toggle), Est. Final pelo
+//                   Custos SAP (_dgEstFimCustosSap) e grava o Est. de cada
+//                   material (r.estPorMat) + a regional (r.regional) no
+//                   resultado, pra fotografia não depender de nada vivo.
+function buildDashboardGerencialResults(dtIni, dtFim, opts = {}) {
+  // Mês fechado com fotografia carregada → os números congelados, sem
+  // recalcular nada (ver _dgFotografiaDoPeriodo).
+  if (!opts.aoVivo && !opts.fotografia) {
+    const fz = _dgFotografiaDoPeriodo(dtIni, dtFim);
+    if (fz) return fz.results;
+  }
+  const fotografia = !!opts.fotografia;
+  const _filIdxFz  = fotografia ? getFilialLookupIndex() : null;
+
   // Se dtIni/dtFim fornecidos, filtra por período; caso contrário usa todos os dados
   function inPeriod(dateStr) {
     if (!dtIni || !dtFim) return true;
@@ -294,6 +309,7 @@ function buildDashboardGerencialResults(dtIni, dtFim) {
 
     let somaPrimeiro = 0, somaUltimo = 0;
     const missingIniMats = [], missingFimMats = [];
+    const estPorMat = fotografia ? {} : null;
     allMats.forEach(mat => {
       // EST. INICIAL da central — por padrão, saldo TEÓRICO do SAP
       // (_anGetSapStock), a mesma fonte da Visão Micro e do Inventário; ou,
@@ -304,18 +320,28 @@ function buildDashboardGerencialResults(dtIni, dtFim) {
       // Central×Material — dois Est. Iniciais diferentes dentro da mesma
       // Visão Geral.
       const catKey = materialCatKeyMap.get(mat) || null;
-      const prev = !dtIni ? null : _dgGetEstIniStock({ central, material: mat, dtIni, dtFim, catKey });
+      const prev = !dtIni ? null
+        : fotografia ? _dgEstIniSap({ central, material: mat, dtIni })
+        : _dgGetEstIniStock({ central, material: mat, dtIni, dtFim, catKey });
       if (prev != null) {
         somaPrimeiro += prev.value;
       } else {
         missingIniMats.push(mat);
       }
 
-      const fim = dtFim ? getLastPeriodLaunchStock({ central, material: mat, dtFim }) : null;
+      const fim = !dtFim ? null
+        : fotografia ? _dgEstFimCustosSap({ central, material: mat, dtFim })
+        : getLastPeriodLaunchStock({ central, material: mat, dtFim });
       if (fim && !fim.missing) {
         somaUltimo += fim.value;
       } else {
         missingFimMats.push(mat);
+      }
+      if (estPorMat) {
+        estPorMat[mat] = {
+          ini: prev ? { value: prev.value, dtLabel: prev.dtLabel || null } : null,
+          fim: (fim && !fim.missing) ? { value: fim.value, dtLabel: fim.dtLabel || null, ancora: fim.ancoraLabel || null } : null
+        };
       }
     });
 
@@ -347,11 +373,323 @@ function buildDashboardGerencialResults(dtIni, dtFim) {
       matsSemCadastro: [...matsSemCadastroSet].sort(),
       materialCatKeyMap,
       materialCatSubKeyMap,
-      sapFechExcluidos, sapFechExcluidosByMat
+      sapFechExcluidos, sapFechExcluidosByMat,
+      ...(fotografia ? {
+        estPorMat,
+        regional: (_filIdxFz.exact.get(normalizeText(central))?.regional || '').trim() || '—'
+      } : {})
     });
   });
 
   return results;
+}
+
+// Est. Inicial da fotografia — sempre o saldo TEÓRICO do SAP (modo
+// "Importado"), nunca o toggle local de cada navegador (localStorage), senão
+// a fotografia dependeria de quem a gerou.
+function _dgEstIniSap({ central, material, dtIni }) {
+  return (typeof _anGetSapStock === 'function') ? _anGetSapStock({ central, material, dtIni }) : null;
+}
+
+// Est. Final de um mês FECHADO = estoque do Custos SAP daquele mês (decisão
+// do Hugo, 09/10/2026: "o estoque final já está em CUSTOS SAP"). Calculado
+// como o Est. Inicial do mês SEGUINTE (_anGetSapStock no dia 1º do próximo
+// mês): com o registro do mês no Custos SAP é exatamente o estoqueTotal dele;
+// sem registro, a mesma cascata pra trás + movimentações SAP que o Est.
+// Inicial já usa. Assim Est. Final de agosto ≡ Est. Inicial de setembro, por
+// construção. dtLabel = último dia do mês.
+function _dgEstFimCustosSap({ central, material, dtFim }) {
+  const prox = new Date(dtFim.getFullYear(), dtFim.getMonth() + 1, 1);
+  const r = _dgEstIniSap({ central, material, dtIni: prox });
+  return r ? { value: r.value, dtLabel: r.dtLabel, ancoraLabel: r.ancoraLabel || null, missing: false } : null;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// FOTOGRAFIA DO DASHBOARD GERENCIAL (mês fechado)
+// ═══════════════════════════════════════════════════════════════════════
+// Ao fechar um mês, o ADM gera a fotografia: o resultado completo do mês
+// (results por central, com os registros SAP/lançamentos do período, + os
+// pares Central×Material já classificados + limiares de saúde + regional +
+// comparativo da Visão de Consumo), gravado em dg_fotografias (JSON gzip em
+// base64). Num mês fechado o Gerencial inteiro (Visão Geral, Consumo, Giro,
+// Detalhado, Relatório Gerencial) lê SÓ daqui — nada que mude depois no
+// sistema (cadastro, Custos SAP, limiares, regional, toggle de Est. Inicial)
+// mexe nesses números. Refazer = nova versão (a anterior fica guardada).
+//
+// buildDashboardGerencialResults é síncrono e chamado de vários lugares; por
+// isso a fotografia é carregada ANTES (dgFotografiasPrefetch) e servida do
+// cache em memória (_dgFzCache) por _dgFotografiaDoPeriodo.
+// ponytail: cache só em memória (baixa de novo a cada sessão, ~1–2 MB por
+// mês); se pesar, guardar no IndexedDB por id.
+const DG_FZ_FORMATO = 1;
+const _dgFzCache  = new Map(); // 'AAAA-MM' → { id, versao, meta, fz } | { erro }
+const _dgFzMeta   = new Map(); // 'AAAA-MM' → linha de metadados (sem payload)
+
+function _dgFzChave(ano, mes) { return `${ano}-${String(mes).padStart(2, '0')}`; }
+
+// O período é EXATAMENTE um mês civil inteiro? (dia 1º 00:00:00.000 → último
+// dia do mesmo mês). Qualquer outro recorte (semana, meses somados, "até
+// ontem", o "período anterior equivalente" do comparativo) calcula ao vivo.
+function _dgMesInteiro(dtIni, dtFim) {
+  if (!(dtIni instanceof Date) || !(dtFim instanceof Date)) return null;
+  if (dtIni.getDate() !== 1 || dtIni.getHours() || dtIni.getMinutes() || dtIni.getSeconds() || dtIni.getMilliseconds()) return null;
+  if (dtFim.getFullYear() !== dtIni.getFullYear() || dtFim.getMonth() !== dtIni.getMonth()) return null;
+  const ultimo = new Date(dtIni.getFullYear(), dtIni.getMonth() + 1, 0).getDate();
+  if (dtFim.getDate() !== ultimo) return null;
+  return { ano: dtIni.getFullYear(), mes: dtIni.getMonth() + 1 };
+}
+
+function _dgFotografiaDoPeriodo(dtIni, dtFim) {
+  const m = _dgMesInteiro(dtIni, dtFim);
+  if (!m || !isPeriodoFechado(m.ano, m.mes)) return null;
+  const c = _dgFzCache.get(_dgFzChave(m.ano, m.mes));
+  return (c && c.fz) ? c.fz : null;
+}
+
+// Estado da fotografia do mês, pro banner da tela: 'aberto' | 'congelado' |
+// 'sem_fotografia' | 'erro'.
+function dgFotografiaEstado(ano, mes) {
+  if (!isPeriodoFechado(ano, mes)) return { estado: 'aberto' };
+  const c = _dgFzCache.get(_dgFzChave(ano, mes));
+  if (c && c.fz) return { estado: 'congelado', meta: c.meta };
+  if (c && c.erro) return { estado: 'erro', erro: c.erro };
+  return { estado: 'sem_fotografia' };
+}
+
+function dgFotografiaDescartarCache(ano, mes) {
+  _dgFzCache.delete(_dgFzChave(ano, mes));
+  _dgFzMeta.delete(_dgFzChave(ano, mes));
+}
+
+// ── Serialização ─────────────────────────────────────────────────────────
+// Maps viram listas de pares; lancsByMat/sapFechExcluidosByMat/
+// materiaisLanc* são reconstruídos na carga a partir das listas (mesma ordem
+// do cálculo original).
+function _dgFzSerializarResult(r) {
+  const idxLanc = new Map(r.lancsNoPeriodo.map((l, i) => [l, i]));
+  const idxDe = obj => Object.fromEntries(Object.entries(obj || {}).map(([mat, rec]) => [mat, idxLanc.get(rec)]));
+  return {
+    central: r.central, regional: r.regional,
+    totalEntradas: r.totalEntradas, totalSaidas: r.totalSaidas, totalAjustes: r.totalAjustes,
+    estoqueTeoricoMacro: r.estoqueTeoricoMacro, somaPrimeiro: r.somaPrimeiro, somaUltimo: r.somaUltimo,
+    variacaoEstoque: r.variacaoEstoque,
+    missingIniMats: r.missingIniMats, missingFimMats: r.missingFimMats,
+    allMats: r.allMats,
+    lancPrimeiroIdx: idxDe(r.materiaisLancPrimeiro),
+    lancUltimoIdx:   idxDe(r.materiaisLancUltimo),
+    sapNoPeriodo: r.sapNoPeriodo, lancsNoPeriodo: r.lancsNoPeriodo,
+    custoMedioPorMat: r.custoMedioPorMat,
+    matsSemCadastro: r.matsSemCadastro,
+    materialCatKeyMap: [...r.materialCatKeyMap],
+    materialCatSubKeyMap: [...r.materialCatSubKeyMap],
+    sapFechExcluidos: r.sapFechExcluidos,
+    estPorMat: r.estPorMat
+  };
+}
+
+function _dgFzHidratarResult(s) {
+  const porMat = arr => {
+    const m = new Map();
+    arr.forEach(x => { const k = x.material || '—'; if (!m.has(k)) m.set(k, []); m.get(k).push(x); });
+    return m;
+  };
+  const deIdx = obj => Object.fromEntries(Object.entries(obj || {}).map(([mat, i]) => [mat, s.lancsNoPeriodo[i]]));
+  return {
+    ...s,
+    lancsByMat: porMat(s.lancsNoPeriodo),
+    materiaisLancPrimeiro: deIdx(s.lancPrimeiroIdx),
+    materiaisLancUltimo:   deIdx(s.lancUltimoIdx),
+    materialCatKeyMap:    new Map(s.materialCatKeyMap),
+    materialCatSubKeyMap: new Map(s.materialCatSubKeyMap),
+    sapFechExcluidosByMat: porMat(s.sapFechExcluidos)
+  };
+}
+
+// Hidrata o payload: results ganham as Maps de volta e o array carrega a
+// própria fotografia (results._fotografia) — é por ele que _dgVgBuildPares,
+// os limiares, o giro e o comparativo de consumo sabem que estão num mês
+// congelado.
+function _dgFzHidratar(payload, meta) {
+  const results = payload.results.map(_dgFzHidratarResult);
+  const fz = {
+    ano: payload.ano, mes: payload.mes, meta,
+    thresholds: payload.thresholds,
+    pares: payload.pares,
+    consumoAnt: payload.consumoAnt || null,
+    resumo: payload.resumo, avisos: payload.avisos || [],
+    regras: payload.regras,
+    results
+  };
+  results._fotografia = fz;
+  return fz;
+}
+
+// ── Geração (ADM) ────────────────────────────────────────────────────────
+// Calcula tudo do mês a partir dos dados DESTE navegador (o do ADM, que tem a
+// base completa) e devolve { payload, resumo, avisos } — não grava nada.
+// Síncrona e pesada (mesmo custo de abrir o Gerencial do mês).
+function dgFotografiaGerar(ano, mes) {
+  const dtIni = new Date(ano, mes - 1, 1);
+  const dtFim = new Date(ano, mes, 0, 23, 59, 59);
+  const thresholds = getHealthThresholds();
+  // Saldos SAP/Custos SAP do zero — a fotografia não pode herdar um valor
+  // em cache de antes da última importação.
+  if (typeof _anClearStockCache === 'function') _anClearStockCache();
+
+  const results = buildDashboardGerencialResults(dtIni, dtFim, { fotografia: true });
+  const pares = _dgVgBuildPares(results, thresholds, dtIni, dtFim);
+
+  // Comparativo da Visão de Consumo congelado junto — mesmo cálculo da tela
+  // (período anterior equivalente, getPeriodoAnteriorEquivalente).
+  const { dtIniAnt, dtFimAnt } = getPeriodoAnteriorEquivalente(dtIni, dtFim);
+  const resultsAnt = buildDashboardGerencialResults(dtIniAnt, dtFimAnt);
+  const consumoAnt = resultsAnt.length ? {
+    totalSai: _dgVgMovimentacaoTotais(resultsAnt).totalSai || 0,
+    custoSai: _dgVgCustoMovimentacaoTotais(resultsAnt).custoSai || 0,
+    ..._dcCalcGiroCoberturaGeral(resultsAnt)
+  } : { totalSai: 0, custoSai: 0, giroGeral: 0, coberturaGeral: null };
+
+  // Resumo = os MESMOS números do topo da Visão Geral (renderDgVisaoGeralPdf).
+  const estTotais = _dgVgEstoqueTotais(pares);
+  const movTotais = _dgVgMovimentacaoTotais(results);
+  const resumo = {
+    centrais: results.length,
+    pares: pares.length,
+    varTotalFisica: Object.values(_dgVgVariacaoFisicaPorCategoria(pares)).reduce((a, b) => a + b, 0),
+    custoTotal: pares.reduce((s, p) => s + p.custoImplicado, 0),
+    estIni: estTotais.totalIni, estFim: estTotais.totalFim,
+    custoIni: estTotais.custoIni, custoFim: estTotais.custoFim,
+    entradas: movTotais.totalEnt, saidas: movTotais.totalSai, ajustes: movTotais.totalAju
+  };
+
+  const avisos = _dgFzConferencia(ano, mes, results, pares);
+  const payload = {
+    formato: DG_FZ_FORMATO, ano, mes,
+    geradoEm: new Date().toISOString(),
+    regras: { estIni: 'sap', estFim: 'custosSap' },
+    thresholds, pares, consumoAnt, resumo, avisos,
+    results: results.map(_dgFzSerializarResult)
+  };
+  return { payload, resumo, avisos };
+}
+
+// Conferência antes de fechar — só AVISA (o ADM confirma ou cancela).
+function _dgFzConferencia(ano, mes, results, pares) {
+  const avisos = [];
+  const rot = `${String(mes).padStart(2, '0')}/${ano}`;
+  const add = (nivel, texto) => avisos.push({ nivel, texto });
+
+  const custosDoMes = (state.custosSap || []).filter(r => Number(r.ano) === ano && Number(r.mes) === mes).length;
+  if (!custosDoMes) add('alerta', `Custos SAP de ${rot} não foi importado — o Est. Final e o custo médio vão usar o último mês disponível.`);
+
+  let semFim = 0, fimDeOutroMes = 0;
+  const ancoraDoMes = `${String(mes).padStart(2, '0')}/${ano}`;
+  results.forEach(r => Object.values(r.estPorMat || {}).forEach(e => {
+    if (!e.fim) semFim++;
+    else if (e.fim.ancora && e.fim.ancora !== ancoraDoMes) fimDeOutroMes++;
+  }));
+  if (semFim) add('alerta', `${semFim} par(es) Central×Material sem Est. Final (sem Cód SAP ou sem nenhum Custos SAP) — entram com 0.`);
+  if (fimDeOutroMes) add('info', `${fimDeOutroMes} par(es) sem registro de Custos SAP em ${rot} — Est. Final = último Custos SAP disponível + movimentações SAP até o fim do mês.`);
+
+  const semCadastro = new Set();
+  results.forEach(r => (r.matsSemCadastro || []).forEach(m => semCadastro.add(m)));
+  if (semCadastro.size) add('alerta', `${semCadastro.size} material(is) sem cadastro ficaram FORA do cálculo.`);
+
+  let ajustesFech = 0;
+  results.forEach(r => {
+    ajustesFech += (r.sapFechExcluidos || []).length;
+    (r.sapNoPeriodo || []).forEach(s => { if (isSapFechamentoPattern(s)) ajustesFech++; });
+  });
+  if (!ajustesFech) add('alerta', `Nenhum Ajuste de Fechamento (Y11/Y12) com lançamento em ${rot} foi importado — se o inventário já foi lançado no SAP, importe o SAP antes de fechar (depois de fechado, a importação desse mês fica bloqueada).`);
+  else add('info', `${ajustesFech} Ajuste(s) de Fechamento (Y11/Y12) do mês — a decisão de considerar/desconsiderar cada um fica congelada.`);
+
+  const ant = mes === 1 ? { ano: ano - 1, mes: 12 } : { ano, mes: mes - 1 };
+  if (!isPeriodoFechado(ant.ano, ant.mes)) add('info', `${String(ant.mes).padStart(2, '0')}/${ant.ano} (mês anterior) está aberto — o comparativo da Visão de Consumo foi tirado do cálculo atual dele.`);
+
+  if (!pares.length) add('alerta', `Nenhum dado de ${rot} encontrado neste navegador.`);
+  return avisos;
+}
+
+// ── Gravação / carga ─────────────────────────────────────────────────────
+async function _dgFzB64DeBlob(blob) {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(String(fr.result).split(',')[1] || '');
+    fr.onerror = () => reject(fr.error);
+    fr.readAsDataURL(blob);
+  });
+}
+
+// Grava a fotografia gerada como NOVA versão vigente do mês (RPC
+// dg_fotografia_salvar: só ADM; tira a anterior de vigência; exige motivo
+// quando já havia uma vigente). Devolve o id ou null.
+async function dgFotografiaSalvar(ano, mes, gerada, motivo) {
+  if (!_cbSuportado()) { toast('Este navegador não suporta compressão — não dá pra gravar a fotografia.', 'error'); return null; }
+  const json = JSON.stringify(gerada.payload);
+  const [hash, gz] = await Promise.all([_cbSha256Hex(json), _cbGzipString(json)]);
+  const b64 = await _dgFzB64DeBlob(gz);
+  const { data, error } = await window.supabaseClient.rpc('dg_fotografia_salvar', {
+    p_ano: ano, p_mes: mes, p_formato: DG_FZ_FORMATO, p_payload: b64,
+    p_tamanho: json.length, p_hash: hash, p_resumo: gerada.resumo,
+    p_motivo: motivo || null, p_nome: window.currentUser?.nome_completo || window.currentUser?.email || null
+  });
+  if (error) { toast('Falha ao gravar a fotografia: ' + error.message, 'error'); return null; }
+  dgFotografiaDescartarCache(ano, mes);
+  return data;
+}
+
+// Metadados das fotografias vigentes (sem o payload) — tela de Fechamento e
+// checagem de versão antes de usar o cache.
+async function dgFotografiaListar() {
+  const { data, error } = await window.supabaseClient.from('dg_fotografias')
+    .select('id, ano, mes, versao, gerado_em, gerado_por_nome, motivo, tamanho, resumo')
+    .eq('vigente', true);
+  if (error) throw error;
+  _dgFzMeta.clear();
+  (data || []).forEach(m => _dgFzMeta.set(_dgFzChave(m.ano, m.mes), m));
+  return data || [];
+}
+
+// Garante no cache a fotografia vigente de cada mês FECHADO da lista
+// ([{ano, mes}], mes 1–12). Confere a versão vigente no banco a cada chamada
+// (consulta leve, sem payload) e só baixa o payload quando mudou. Mês aberto
+// é ignorado. Nunca lança: erro fica registrado no cache (banner mostra).
+async function dgFotografiasPrefetch(meses) {
+  const fechados = (meses || []).filter(m => m && isPeriodoFechado(m.ano, m.mes));
+  if (!fechados.length || !window.supabaseClient) return;
+  let metas;
+  try {
+    const { data, error } = await window.supabaseClient.from('dg_fotografias')
+      .select('id, ano, mes, versao, gerado_em, gerado_por_nome, motivo, tamanho, hash, resumo')
+      .eq('vigente', true)
+      .in('ano', [...new Set(fechados.map(m => m.ano))]);
+    if (error) throw error;
+    metas = new Map((data || []).map(m => [_dgFzChave(m.ano, m.mes), m]));
+  } catch (err) {
+    fechados.forEach(m => _dgFzCache.set(_dgFzChave(m.ano, m.mes), { erro: err.message || String(err) }));
+    return;
+  }
+  for (const m of fechados) {
+    const k = _dgFzChave(m.ano, m.mes);
+    const meta = metas.get(k);
+    if (!meta) { _dgFzCache.delete(k); continue; }       // fechado sem fotografia
+    const atual = _dgFzCache.get(k);
+    if (atual && atual.fz && atual.id === meta.id) continue; // cache já é a vigente
+    try {
+      const { data, error } = await window.supabaseClient.from('dg_fotografias')
+        .select('payload').eq('id', meta.id).single();
+      if (error) throw error;
+      const blob = await (await fetch('data:application/gzip;base64,' + data.payload)).blob();
+      const json = await _cbGunzipBlob(blob);
+      if (await _cbSha256Hex(json) !== meta.hash) throw new Error('fotografia corrompida (hash não confere)');
+      const payload = JSON.parse(json);
+      if (payload.formato !== DG_FZ_FORMATO) throw new Error(`formato ${payload.formato} desconhecido`);
+      _dgFzCache.set(k, { id: meta.id, meta, fz: _dgFzHidratar(payload, meta) });
+    } catch (err) {
+      console.warn(`[Fotografia] Falha ao carregar ${k}:`, err);
+      _dgFzCache.set(k, { erro: err.message || String(err) });
+    }
+  }
 }
 
 // ── Funções de controle do filtro de período do Dashboard Gerencial ──
@@ -373,12 +711,20 @@ function rodarDashboardGerencial() {
     { id: 'dg-render', icon: 'ti-layout',      label: 'Renderizando abas e gráficos' },
   ]);
   if (typeof _lbarSet === 'function') _lbarSet(10);
-  requestAnimationFrame(() => setTimeout(() => {
+  requestAnimationFrame(() => setTimeout(async () => {
+    // Mês fechado: carrega (ou confere a versão de) a fotografia antes do
+    // cálculo — buildDashboardGerencialResults é síncrono e lê do cache.
+    const _ano = dtIni.getFullYear(), _mes = dtIni.getMonth() + 1;
+    if (isPeriodoFechado(_ano, _mes)) {
+      if (typeof updateLoadingOverlay === 'function') updateLoadingOverlay('Carregando a fotografia do mês fechado...');
+      await dgFotografiasPrefetch([{ ano: _ano, mes: _mes }]);
+    }
     if (typeof _lstepSet === 'function') { _lstepSet('dg-calc', 'running'); _lbarSet(20); }
     const emptyEl   = document.getElementById('dg-empty-state');
     const contentEl = document.getElementById('dg-content');
     if (emptyEl)   emptyEl.style.display   = 'none';
     if (contentEl) contentEl.style.display = '';
+    _dgRenderBannerFotografia(_ano, _mes);
     _renderDashboardConteudo(dtIni, dtFim);
     const relBtn = document.getElementById('dg-btn-relatorio-gerencial');
     if (relBtn) relBtn.disabled = !window._dgVgLastData;
@@ -393,6 +739,116 @@ function rodarDashboardGerencial() {
     if (typeof hideLoadingOverlay === 'function') hideLoadingOverlay('Dashboard atualizado');
     if (typeof loadingHideSteps === 'function') loadingHideSteps();
   }, 0));
+}
+
+// Faixa acima do conteúdo do Gerencial dizendo de onde vêm os números do mês
+// (#dg-fotografia-banner). Mês congelado também trava o toggle de Est.
+// Inicial — a fotografia já tem o Est. Inicial dela (sempre "Importado").
+function _dgRenderBannerFotografia(ano, mes) {
+  const el = document.getElementById('dg-fotografia-banner');
+  const st = dgFotografiaEstado(ano, mes);
+  const congelado = st.estado === 'congelado';
+  ['dg-esti-btn-sap', 'dg-esti-btn-lanc'].forEach(id => {
+    const b = document.getElementById(id);
+    if (!b) return;
+    b.disabled = congelado;
+    b.title = congelado ? 'Mês fechado — Est. Inicial congelado na fotografia (Importado)' : '';
+  });
+  if (!el) return;
+  const rot = `${MESES_NOME_DG[mes - 1]}/${ano}`;
+  const ehAdm = window.currentUser?.role === 'admin';
+  const btnGerar = ehAdm ? ` <button type="button" class="btn btn-sm" onclick="dgGerarFotografiaDoBanner(${ano},${mes})"><i class="ti ti-camera"></i> Gerar fotografia</button>` : '';
+  let html = '';
+  if (congelado) {
+    const m = st.meta || {};
+    const quando = m.gerado_em ? new Date(m.gerado_em).toLocaleString('pt-BR') : '—';
+    html = `<div class="dg-fz-banner dg-fz-ok"><i class="ti ti-lock"></i>
+      <span><strong>${rot} fechado</strong> — valores congelados na fotografia v${m.versao || 1} de ${escapeHtml(quando)}${m.gerado_por_nome ? ' por ' + escapeHtml(m.gerado_por_nome) : ''}. Nada alterado no sistema muda estes números. Est. Final = Custos SAP do mês.</span></div>`;
+  } else if (st.estado === 'sem_fotografia') {
+    html = `<div class="dg-fz-banner dg-fz-alerta"><i class="ti ti-alert-triangle"></i>
+      <span><strong>${rot} está fechado, mas ainda não tem fotografia</strong> — os valores abaixo são calculados ao vivo e podem mudar.${ehAdm ? '' : ' Peça ao ADM para gerar a fotografia.'}</span>${btnGerar}</div>`;
+  } else if (st.estado === 'erro') {
+    html = `<div class="dg-fz-banner dg-fz-alerta"><i class="ti ti-alert-triangle"></i>
+      <span><strong>Não foi possível carregar a fotografia oficial de ${rot}</strong> (${escapeHtml(st.erro)}). Os valores abaixo são calculados ao vivo e podem divergir — clique em Atualizar para tentar de novo.</span></div>`;
+  }
+  el.innerHTML = html;
+  el.style.display = html ? '' : 'none';
+}
+
+// Botão "Gerar fotografia" do banner (ADM, mês fechado sem fotografia).
+async function dgGerarFotografiaDoBanner(ano, mes) {
+  if (await dgFotografiaGerarEGravar(ano, mes, null)) rodarDashboardGerencial();
+}
+
+// Gera a fotografia do mês com os dados deste navegador e grava como nova
+// versão vigente. motivo: obrigatório quando já existe uma vigente (o banco
+// recusa sem). Mostra a conferência (avisos + números) e só grava depois do
+// OK. Devolve true se gravou.
+async function dgFotografiaGerarEGravar(ano, mes, motivo, opts = {}) {
+  if (window.currentUser?.role !== 'admin') { toast('Só o administrador gera a fotografia do período.', 'error'); return false; }
+  if (typeof showLoadingOverlay === 'function') showLoadingOverlay('Fotografia do mês', `Calculando ${String(mes).padStart(2, '0')}/${ano}...`);
+  await new Promise(r => setTimeout(r, 30));
+  let gerada;
+  try { gerada = dgFotografiaGerar(ano, mes); }
+  catch (err) {
+    if (typeof hideLoadingOverlay === 'function') hideLoadingOverlay();
+    console.error('[Fotografia] Falha ao calcular:', err);
+    toast('Falha ao calcular a fotografia: ' + (err.message || err), 'error');
+    return false;
+  }
+  if (typeof hideLoadingOverlay === 'function') hideLoadingOverlay();
+
+  const ok = await new Promise(resolve => {
+    confirmarDestrutivo({
+      title: opts.titulo || `Fotografia de ${String(mes).padStart(2, '0')}/${ano}`,
+      sub: 'Confira antes de gravar',
+      body: dgFotografiaConferenciaHtml(gerada, opts.textoExtra),
+      confirmLabel: opts.confirmLabel || 'Gravar fotografia',
+      onConfirm: () => resolve(true)
+    });
+    // Cancelar/fechar o modal sem confirmar: o onConfirm nunca roda.
+    _dgAoFecharModal('modal-confirm-destrutivo', () => resolve(false));
+  });
+  if (!ok) return false;
+
+  if (typeof showLoadingOverlay === 'function') showLoadingOverlay('Fotografia do mês', 'Gravando...');
+  const id = await dgFotografiaSalvar(ano, mes, gerada, motivo);
+  if (typeof hideLoadingOverlay === 'function') hideLoadingOverlay();
+  if (!id) return false;
+  toast(`Fotografia de ${String(mes).padStart(2, '0')}/${ano} gravada.`, 'success');
+  return true;
+}
+
+// Resolve quando o modal fechar (por qualquer caminho). O confirmarDestrutivo
+// fecha o modal ANTES de chamar onConfirm, então quem chama precisa ignorar
+// este aviso se o onConfirm já resolveu (Promise só resolve uma vez).
+function _dgAoFecharModal(id, fn) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const obs = new MutationObserver(() => {
+    if (!el.classList.contains('open')) { obs.disconnect(); setTimeout(fn, 0); }
+  });
+  obs.observe(el, { attributes: true, attributeFilter: ['class'] });
+}
+
+// Corpo da conferência: avisos (alerta/info) + os números que vão congelar.
+function dgFotografiaConferenciaHtml(gerada, textoExtra) {
+  const r = gerada.resumo || {};
+  const linha = (rotulo, valor) => `<div style="display:flex;justify-content:space-between;gap:12px;font-size:12px;padding:3px 0;border-bottom:1px solid var(--border2)"><span style="color:var(--text3)">${rotulo}</span><strong style="font-family:var(--mono)">${valor}</strong></div>`;
+  const avisos = (gerada.avisos || []).map(a => `
+    <div style="display:flex;gap:8px;align-items:flex-start;font-size:12px;padding:6px 8px;border-radius:6px;margin-bottom:6px;background:${a.nivel === 'alerta' ? 'var(--amber-bg)' : 'var(--surface2)'};color:${a.nivel === 'alerta' ? 'var(--amber)' : 'var(--text2)'}">
+      <i class="ti ${a.nivel === 'alerta' ? 'ti-alert-triangle' : 'ti-info-circle'}" style="margin-top:2px"></i><span>${escapeHtml(a.texto)}</span>
+    </div>`).join('');
+  return `
+    ${textoExtra ? `<div style="font-size:12px;color:var(--text2);margin-bottom:10px">${textoExtra}</div>` : ''}
+    ${avisos || '<div style="font-size:12px;color:var(--green);margin-bottom:8px"><i class="ti ti-circle-check"></i> Nenhum alerta na conferência.</div>'}
+    <div style="margin-top:10px">
+      ${linha('Variação total', dgFmtPesoSigned(r.varTotalFisica || 0))}
+      ${linha('Custo da variação', money(r.custoTotal || 0))}
+      ${linha('Est. Inicial total', dgFmtPeso(r.estIni || 0, 1))}
+      ${linha('Est. Final total (Custos SAP)', dgFmtPeso(r.estFim || 0, 1))}
+      ${linha('Centrais · pares Central×Material', `${r.centrais || 0} · ${r.pares || 0}`)}
+    </div>`;
 }
 
 function limparDashboardGerencial() {
@@ -529,7 +985,9 @@ function updateDashboard() {
 function _renderDashboardConteudo(dtIni, dtFim) {
   // ── Build base results (reuse) ──
   const results = buildDashboardGerencialResults(dtIni, dtFim);
-  const thresholds = getHealthThresholds();
+  // Mês fechado: limiares de saúde congelados junto com a fotografia.
+  const fz = results._fotografia || null;
+  const thresholds = fz ? fz.thresholds : getHealthThresholds();
 
   // ── 1. Visão Geral — KPIs executivos + gráficos consolidados (reformulada) ──
   renderDgVisaoGeralPdf(results, thresholds, dtIni, dtFim);
@@ -537,9 +995,10 @@ function _renderDashboardConteudo(dtIni, dtFim) {
   // ── 2. Visão de Consumo — KPIs com comparativo automático vs. período
   // anterior equivalente (mesma duração, encostado antes de dtIni) +
   // rankings de Saídas + Giro & Cobertura (migrado da Visão Geral, agora
-  // renderizado só a partir daqui — ver renderDgConsumo). ──
+  // renderizado só a partir daqui — ver renderDgConsumo). Mês congelado
+  // não recalcula o anterior: o comparativo vem da fotografia (consumoAnt). ──
   const { dtIniAnt, dtFimAnt } = getPeriodoAnteriorEquivalente(dtIni, dtFim);
-  const resultsAnt = (dtIniAnt && dtFimAnt) ? buildDashboardGerencialResults(dtIniAnt, dtFimAnt) : [];
+  const resultsAnt = (!fz && dtIniAnt && dtFimAnt) ? buildDashboardGerencialResults(dtIniAnt, dtFimAnt) : [];
   renderDgConsumo(results, resultsAnt, dtIni, dtFim);
 }
 
@@ -648,6 +1107,10 @@ function _dgResolveCssColor(varName, fallback) {
 //    de custo do Gerencial inteiro (Visão Geral, Visão de Consumo,
 //    Detalhamento por Material e Rankings todos herdam daqui).
 function _dgVgBuildPares(results, thresholds, dtIni, dtFim) {
+  // Mês fechado: os pares congelados na fotografia (já classificados com os
+  // limiares da época). Cópia rasa — quem chama pode anotar campos.
+  if (results._fotografia) return results._fotografia.pares.map(p => ({ ...p }));
+
   const pares = [];
   const filIdx = getFilialLookupIndex();
 
@@ -658,7 +1121,7 @@ function _dgVgBuildPares(results, thresholds, dtIni, dtFim) {
     r.sapNoPeriodo.forEach(s   => { const m = s.material  || '—'; if (!sapByMat.has(m))   sapByMat.set(m, []);   sapByMat.get(m).push(s); });
 
     const filRec   = filIdx.exact.get(normalizeText(r.central));
-    const regional = (filRec?.regional || '').trim() || '—';
+    const regional = r.regional ?? ((filRec?.regional || '').trim() || '—');
 
     r.allMats.forEach(mat => {
       const lancs  = lancsByMat.get(mat) || [];
@@ -688,8 +1151,12 @@ function _dgVgBuildPares(results, thresholds, dtIni, dtFim) {
         // acima. MESMA fonte usada em buildDashboardGerencialResults, senão
         // o Resumo do Período discorda deste Detalhado para o mesmo
         // material/período.
-        const prev = _dgGetEstIniStock({ central: r.central, material: mat, dtIni, dtFim, catKey });
-        const fim  = getLastPeriodLaunchStockWithFallback({ central: r.central, material: mat, dtIni, dtFim });
+        // Gerando a fotografia: Est. já resolvido em buildDashboardGerencialResults
+        // (SAP no início, Custos SAP no fim — ver opts.fotografia).
+        const est  = r.estPorMat ? (r.estPorMat[mat] || { ini: null, fim: null }) : null;
+        const prev = est ? est.ini : _dgGetEstIniStock({ central: r.central, material: mat, dtIni, dtFim, catKey });
+        const fim  = est ? (est.fim ? { ...est.fim, missing: false } : { missing: true })
+                         : getLastPeriodLaunchStockWithFallback({ central: r.central, material: mat, dtIni, dtFim });
         // Captura os mesmos valores já resolvidos pra calcular o diff —
         // usados pelos cards "Est. Inicial/Final Total" do resumo do
         // período (ver _dgVgEstoqueTotais). Ausente fica 0 (sem aviso,
@@ -719,7 +1186,7 @@ function _dgVgBuildPares(results, thresholds, dtIni, dtFim) {
         // no modo Calculado recalcula com a fonte SAP à parte, só pra
         // classificar — result e level "de exibição" (abaixo) continuam
         // seguindo o toggle normalmente.
-        diffSaude = (_dgEstIniMode === 'lanc')
+        diffSaude = (!est && _dgEstIniMode === 'lanc')
           ? buildSnapshot({
               lancs, sap,
               initialStockOverride: (typeof _anGetSapStock === 'function' ? _anGetSapStock({ central: r.central, material: mat, dtIni })?.value : null) ?? null,
@@ -937,7 +1404,8 @@ function _dgVgCentraisDoPeriodo(results) {
   const filIdx = getFilialLookupIndex();
   return results.map(r => ({
     central:  r.central,
-    regional: (filIdx.exact.get(normalizeText(r.central))?.regional || '').trim() || '—'
+    // r.regional = congelada na fotografia (mês fechado)
+    regional: r.regional ?? ((filIdx.exact.get(normalizeText(r.central))?.regional || '').trim() || '—')
   }));
 }
 
@@ -2552,7 +3020,7 @@ function _daBuildEntradasFlat(results) {
   const flat = [];
   results.forEach(r => {
     const filRec   = filIdx.exact.get(normalizeText(r.central));
-    const regional = (filRec?.regional || '').trim() || '—';
+    const regional = r.regional ?? ((filRec?.regional || '').trim() || '—');
     (r.sapNoPeriodo || []).forEach(s => {
       const cod = normMov(s.movimento);
       if (!CODIGOS_ENTRADA.has(cod)) return;
@@ -3049,10 +3517,13 @@ function _consumoKgSaidas(sapRecords) {
   return Math.abs(total);
 }
 
-function _giroSnapshotMaterial({ central, mat, lancs, sap, dtIni, dtFim, catKey }) {
-  const prev = _dgGetEstIniStock({ central, material: mat, dtIni, dtFim, catKey });
-  const fim = (typeof _anGetLastPeriodStockFallback === 'function')
-    ? _anGetLastPeriodStockFallback({ central, material: mat, dtIni, dtFim }) : null;
+// est = r.estPorMat[mat] quando o results é de fotografia (mês fechado): Est.
+// Inicial/Final congelados, os mesmos dos pares — nada vivo.
+function _giroSnapshotMaterial({ central, mat, lancs, sap, dtIni, dtFim, catKey, est }) {
+  const prev = est ? est.ini : _dgGetEstIniStock({ central, material: mat, dtIni, dtFim, catKey });
+  const fim = est ? (est.fim ? { ...est.fim, missing: false } : null)
+    : (typeof _anGetLastPeriodStockFallback === 'function')
+      ? _anGetLastPeriodStockFallback({ central, material: mat, dtIni, dtFim }) : null;
   return buildSnapshot({
     lancs, sap,
     initialStockOverride:     prev?.value   ?? null,
@@ -3174,7 +3645,7 @@ function buildGiroPorCentralMaterial(dtIni, dtFim, results) {
       // Est.Médio é de fato (Est. Inicial + Est. Final) ÷ 2 e não pode
       // divergir da Variação exibida ao lado.
       const catKey = (r.materialCatKeyMap && r.materialCatKeyMap.get(mat)) || null;
-      const snap = _giroSnapshotMaterial({ central: r.central, mat, lancs, sap, dtIni, dtFim, catKey });
+      const snap = _giroSnapshotMaterial({ central: r.central, mat, lancs, sap, dtIni, dtFim, catKey, est: r.estPorMat && r.estPorMat[mat] });
       const m = metricas(snap.totalEnt, _consumoKgSaidas(sap), (snap.pesoIni + snap.pesoFim) / 2);
       const variacao = snap.diff;
 
@@ -3226,7 +3697,9 @@ function renderDgGiro(results, dtIni, dtFim) {
   let totalEstMedioKg = 0;
   const matGiroMap = new Map(); // mat → { saidas, estMedio }
 
-  const now = new Date();
+  // Mês congelado: "últimos 30 dias" contados do fim do mês, não de hoje —
+  // senão o número mudaria todo dia (e zeraria depois de 30 dias).
+  const now = results._fotografia ? new Date(dtFim) : new Date();
   const dias30 = 30;
   const cutoff30 = new Date(now); cutoff30.setDate(now.getDate() - dias30);
 
@@ -3244,7 +3717,7 @@ function renderDgGiro(results, dtIni, dtFim) {
       const sap   = sapByMat.get(mat)||[];
       // Est. Inicial do SAP incluído — ver _giroSnapshotMaterial.
       const catKey = (r.materialCatKeyMap && r.materialCatKeyMap.get(mat)) || null;
-      const snap  = _giroSnapshotMaterial({ central: r.central, mat, lancs, sap, dtIni, dtFim, catKey });
+      const snap  = _giroSnapshotMaterial({ central: r.central, mat, lancs, sap, dtIni, dtFim, catKey, est: r.estPorMat && r.estPorMat[mat] });
 
       const saidas    = _consumoKgSaidas(sap);
       const estMedio  = (snap.pesoIni + snap.pesoFim) / 2;
@@ -3347,7 +3820,7 @@ function renderDgGiro(results, dtIni, dtFim) {
     r.allMats.forEach(mat => {
       const _sapMat = sapByMat.get(mat) || [];
       const catKey = (r.materialCatKeyMap && r.materialCatKeyMap.get(mat)) || null;
-      const snap = _giroSnapshotMaterial({ central: r.central, mat, lancs: lancsByMat.get(mat)||[], sap: _sapMat, dtIni, dtFim, catKey });
+      const snap = _giroSnapshotMaterial({ central: r.central, mat, lancs: lancsByMat.get(mat)||[], sap: _sapMat, dtIni, dtFim, catKey, est: r.estPorMat && r.estPorMat[mat] });
       saidasTotal   += _consumoKgSaidas(_sapMat);
       estMedioTotal += (snap.pesoIni + snap.pesoFim) / 2;
       entradasTotal += snap.totalEnt;
@@ -3821,12 +4294,15 @@ function _dcRenderKpiStrip(results, resultsAnt, ranking) {
   const el = document.getElementById('dg-cons-kpi-strip');
   if (!el) return;
 
+  // Mês congelado: o comparativo vem da fotografia (consumoAnt), não do
+  // período anterior recalculado agora.
+  const antFz = results._fotografia?.consumoAnt;
   const movAtual = _dgVgMovimentacaoTotais(results);
-  const movAnt   = resultsAnt.length ? _dgVgMovimentacaoTotais(resultsAnt) : { totalSai: 0 };
+  const movAnt   = antFz ? { totalSai: antFz.totalSai } : resultsAnt.length ? _dgVgMovimentacaoTotais(resultsAnt) : { totalSai: 0 };
   const custoAtual = _dgVgCustoMovimentacaoTotais(results);
-  const custoAnt   = resultsAnt.length ? _dgVgCustoMovimentacaoTotais(resultsAnt) : { custoSai: 0 };
+  const custoAnt   = antFz ? { custoSai: antFz.custoSai } : resultsAnt.length ? _dgVgCustoMovimentacaoTotais(resultsAnt) : { custoSai: 0 };
   const giroAtual = _dcCalcGiroCoberturaGeral(results);
-  const giroAnt   = resultsAnt.length ? _dcCalcGiroCoberturaGeral(resultsAnt) : { giroGeral: 0, coberturaGeral: null };
+  const giroAnt   = antFz ? { giroGeral: antFz.giroGeral, coberturaGeral: antFz.coberturaGeral } : resultsAnt.length ? _dcCalcGiroCoberturaGeral(resultsAnt) : { giroGeral: 0, coberturaGeral: null };
   const destaque = ranking[0] || null;
 
   el.innerHTML = `
@@ -4087,13 +4563,16 @@ function lancEditSave(cell) {
   const r = window._lancPageData?.[idx];
   if (!r) return;
 
-  // Guarda de período fechado — única edição inline que existe hoje pros
-  // 4 módulos grandes (Entradas/Saídas/SAP só têm criar+excluir, sem
-  // contenteditable). Reverte a célula pro valor original: o navegador já
-  // exibe o que o usuário digitou antes do blur chegar aqui.
-  if (window.currentUser?.role !== 'admin' && typeof _periodoFechadoDoRegistro === 'function' && _periodoFechadoDoRegistro('lancamentos', r)) {
+  // Guarda de período fechado (vale pro ADM também) — única edição inline
+  // que existe hoje pros 4 módulos grandes (Entradas/Saídas/SAP só têm
+  // criar+excluir, sem contenteditable). Reverte a célula pro valor
+  // original: o navegador já exibe o que o usuário digitou antes do blur
+  // chegar aqui. Data nova também conta: mover um lançamento PARA DENTRO de
+  // um mês fechado é alterar aquele mês.
+  if (_periodoFechadoDoRegistro('lancamentos', r)
+      || (field === 'dtLanc' && _periodoFechadoDoRegistro('lancamentos', { dtLanc: cell.textContent.trim() }))) {
     cell.textContent = _lancFieldDisplay(r, field);
-    toast('Período fechado pelo administrador — não é possível editar.', 'error');
+    periodoAvisarFechado('editar este lançamento');
     return;
   }
 
@@ -5476,8 +5955,15 @@ function atualizarBarraLoteCustosSap() {
 
 function excluirSelecionadosCustosSap() {
   if (window.currentUser?.role !== 'admin') { toast('Só o administrador pode excluir Custos SAP', 'error'); return; }
-  const selecionados = [...bulkSelected.custosSap];
+  let selecionados = [...bulkSelected.custosSap];
   if (!selecionados.length) return;
+  const _trava = periodoSepararFechados('custosSap', selecionados);
+  if (_trava.bloqueados.length) {
+    _trava.bloqueados.forEach(r => bulkSelected.custosSap.delete(r));
+    selecionados = _trava.livres;
+    periodoAvisarFechado(`excluir ${_trava.bloqueados.length} registro(s) de Custos SAP — foram ignorados`, _trava.meses);
+    if (!selecionados.length) { renderCustosSap(); return; }
+  }
 
   confirmarDestrutivo({
     title: 'Confirmar exclusão em massa',
@@ -6185,8 +6671,8 @@ function removerRegistro(module, index) {
   const data = getFilteredData(module);
   const actual = data[(module === 'custosSap' ? currentPageCustosSap : pages[module]) * PAGE_SIZE + index];
   if (!actual) return;
-  if (window.currentUser?.role !== 'admin' && typeof _periodoFechadoDoRegistro === 'function' && _periodoFechadoDoRegistro(module, actual)) {
-    toast('Período fechado pelo administrador — não é possível excluir.', 'error');
+  if (_periodoFechadoDoRegistro(module, actual)) {
+    periodoAvisarFechado('excluir este registro');
     return;
   }
   if (!confirm('Deseja realmente excluir este registro?')) return;
@@ -6306,12 +6792,12 @@ function excluirSelecionados(module) {
   let selecionados = [...bulkSelected[module]];
   if (!selecionados.length) return;
 
-  if (window.currentUser?.role !== 'admin' && typeof _periodoFechadoDoRegistro === 'function') {
-    const bloqueados = selecionados.filter(r => _periodoFechadoDoRegistro(module, r));
+  {
+    const { livres, bloqueados, meses } = periodoSepararFechados(module, selecionados);
     if (bloqueados.length) {
       bloqueados.forEach(r => bulkSelected[module].delete(r));
-      selecionados = selecionados.filter(r => !bloqueados.includes(r));
-      toast(`${bloqueados.length} registro(s) de período fechado foram ignorados.`, 'error');
+      selecionados = livres;
+      periodoAvisarFechado(`excluir ${bloqueados.length} registro(s) — foram ignorados`, meses);
       if (!selecionados.length) return;
     }
   }
@@ -6802,6 +7288,19 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
   // Só é aplicado ao state após todos os batches concluírem sem abort,
   // evitando que um abort tardio deixe o state com dados parciais.
   let _mergedResult = null;
+  // Mês fechado não recebe importação (vale pro ADM também). Os registros
+  // com data num período fechado saem ANTES do merge — depois seria tarde:
+  // o merge sobrescreve o registro existente de mesma chave e o modal de
+  // conflito pode excluir o lançamento manual do mês fechado.
+  let _fechadosIgnorados = 0;
+  const _fechadosMeses = new Set();
+  const _semFechados = (stateKey, recs) => {
+    const { livres, bloqueados, meses } = periodoSepararFechados(stateKey, recs);
+    _fechadosIgnorados += bloqueados.length;
+    meses.forEach(m => _fechadosMeses.add(m));
+    return livres;
+  };
+  let _custosLivres = null;
   try {
   // Mostra botão abortar no loading overlay
   const _abortRow = document.getElementById('loading-abort-row');
@@ -6865,7 +7364,7 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
         }, ['centralCompra','centralDestino']));
       });
     }
-    _mergedResult = await _mergeWithConflictCheck('Entrada', parsed.filter(r => r.material || r.nf));
+    _mergedResult = await _mergeWithConflictCheck('Entrada', _semFechados('entradas', parsed.filter(r => r.material || r.nf)));
   } else if (modulo === 'Saída') {
     const cm = extra.colMap || {};
     const ci = (field, fallback) => cm[field] !== undefined ? cm[field] : fallback;
@@ -6896,7 +7395,7 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
         }, ['central']));
       });
     }
-    _mergedResult = await _mergeWithConflictCheck('Saída', parsed.filter(r => r.material || r.os));
+    _mergedResult = await _mergeWithConflictCheck('Saída', _semFechados('saidas', parsed.filter(r => r.material || r.os)));
   } else if (modulo === 'Lançamento') {
     const cm = extra.colMap || {};
     const ci = (field, fallback) => cm[field] !== undefined ? cm[field] : fallback;
@@ -6938,7 +7437,7 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
         }, ['central']));
       });
     }
-    _mergedResult = await _mergeWithConflictCheck('Lançamento', parsed.filter(r => r.material));
+    _mergedResult = await _mergeWithConflictCheck('Lançamento', _semFechados('lancamentos', parsed.filter(r => r.material)));
   } else if (modulo === 'SAP') {
     // Usa mapeamento dinâmico de colunas (passado via extra.sapColMap) quando disponível.
     // Fallback para índices fixos do layout padrão MB51 caso o mapa não seja fornecido.
@@ -7000,7 +7499,7 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
         }, ['central']));
       });
     }
-    _mergedResult = await _mergeWithConflictCheck('SAP', parsed.filter(r => r.material || r.documento));
+    _mergedResult = await _mergeWithConflictCheck('SAP', _semFechados('sap', parsed.filter(r => r.material || r.documento)));
   } else if (modulo === 'Custos SAP') {
     // Conciliação de dois arquivos (14/08). `rows` é a MARDH — ela define o
     // universo (central × material × período) e o estoque; a MBEWH
@@ -7081,7 +7580,8 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
     extra._semCusto = _semCusto;
     console.info('[Custos SAP Import] ✓ MARDH:', total, 'linhas →', parsed.length, 'pares | MBEWH:', custoPorChave.size, 'custos | sem custo:', _semCusto);
 
-    _mergedResult = await _mergeWithConflictCheck('Custos SAP', parsed.filter(r => r.central || r.material));
+    _custosLivres = _semFechados('custosSap', parsed.filter(r => r.central || r.material));
+    _mergedResult = await _mergeWithConflictCheck('Custos SAP', _custosLivres);
   }
 
   // Aplica o resultado do merge ao state somente aqui, após todos os batches
@@ -7125,7 +7625,9 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
     // importar de verdade em 14/08, quando a reimportação mensal do mesmo
     // período virou o fluxo normal (conciliação MARDH + MBEWH).
     if (modulo === 'Custos SAP' && typeof _custosSapSyncUpsertBatch === 'function') {
-      const _fpsImportados = new Set(parsed.map(_fpCustosSap));
+      // Só os de mês aberto — o registro de mês fechado que já existe tem a
+      // mesma chave e iria junto, e a RLS recusaria o lote inteiro.
+      const _fpsImportados = new Set((_custosLivres || []).map(_fpCustosSap));
       await _custosSapSyncUpsertBatch(_mergedResult.filter(r => _fpsImportados.has(_fpCustosSap(r))));
     }
   }
@@ -7205,6 +7707,9 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
   // (decisão do Hugo, 14/08 — importar e sinalizar, não descartar estoque).
   if (extra._semCusto > 0) {
     toast(`${extra._semCusto.toLocaleString('pt-BR')} par(es) central × material sem custo na MBEWH — importados com custo zerado e sinalizados na tabela.`, 'info');
+  }
+  if (_fechadosIgnorados > 0) {
+    toast(`${_fechadosIgnorados.toLocaleString('pt-BR')} registro(s) de período fechado (${[..._fechadosMeses].join(', ')}) NÃO foram importados — o mês está travado. Para importá-los, o ADM precisa reabrir o período.`, 'error');
   }
 
   // Persiste em background e atualiza status sem bloquear a UI

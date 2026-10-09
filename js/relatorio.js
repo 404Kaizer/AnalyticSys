@@ -3934,6 +3934,9 @@ function _dgrPeriodosDoRelatorio(meses) {
 // arquivo (é sobre ele que os filtros recalculam).
 function _dgrCalcularPeriodo(p, thresholds) {
   const results = buildDashboardGerencialResults(p.dtIni, p.dtFim);
+  // Mês fechado (fotografia carregada antes, ver gerarRelatorioGerencialDashboard):
+  // limiares congelados junto — vão no período pra quem classifica depois.
+  if (results._fotografia) thresholds = results._fotografia.thresholds;
   const pares   = _dgVgBuildPares(results, thresholds, p.dtIni, p.dtFim);
 
   const pesoMedio = _daPesoMedioPorTipo(_daBuildEntradasFlat(results));
@@ -3951,7 +3954,7 @@ function _dgrCalcularPeriodo(p, thresholds) {
 
   return {
     id: p.id, rotulo: p.rotulo, titulo: p.titulo, geral: p.geral,
-    pares, results, pesoMedio, totalEstTeorico, catFisicaPct,
+    pares, results, pesoMedio, totalEstTeorico, catFisicaPct, thresholds,
     kpi: {
       varTotalFisica, custoTotal,
       estIni: estTotais.totalIni, estFim: estTotais.totalFim,
@@ -4349,7 +4352,7 @@ function _dgrEvoDetalheCardHtml(l, blocos = DGR_EVO_BLOCOS) {
   const titulo = (icone, texto) =>
     `<div class="section-title" style="margin:0 0 12px"><i class="ti ${icone}" style="font-size:13px;margin-right:6px"></i>${texto}</div>`;
 
-  const thresholds = getHealthThresholds();
+  const thresholds = l.thresholds || getHealthThresholds(); // congelados se o mês é fotografia
   const porRegionalKg = _dgVgAggKgPorChave(l.pares, p => p.regional);
   const porCentralKg  = _dgVgAggKgPorChave(l.pares, p => p.central);
   const fechRecs      = l.results.reduce((acc, r) => acc.concat(r.sapFechExcluidos || []), []);
@@ -5437,6 +5440,9 @@ window.gerarRelatorioGerencialDashboard = async function(tema = 'dark', selecao 
       const aba = window._RELATORIO_ABAS_REGISTRY.find(a => a.id === s.aba);
       return aba && aba.tipo === 'gerado';
     });
+
+    // Meses fechados saem da fotografia — carrega antes do cálculo síncrono.
+    await dgFotografiasPrefetch(mesesEscolhidos.map(m => ({ ano: m.ano, mes: m.mes + 1 })));
 
     // Cálculo mês a mês — o pesado do relatório. Cede a thread entre os
     // períodos pra o overlay repintar (mesmo motivo do relatório de Giro).
@@ -7078,6 +7084,9 @@ window.gerarRelatorioGiroUsina = async function() {
   if (!janela) return;
 
   document.getElementById('rel-giro-usina-modal')?.classList.remove('open');
+
+  // Meses fechados saem da fotografia — carrega antes do cálculo síncrono.
+  await dgFotografiasPrefetch(meses.map(m => ({ ano: m.ano, mes: m.mes + 1 })));
 
   const step  = (id, st) => { if (typeof _lstepSet === 'function') _lstepSet(id, st); };
   const barra = pct => { if (typeof _lbarSet === 'function') _lbarSet(pct); };

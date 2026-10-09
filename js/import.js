@@ -103,6 +103,23 @@ function excluirImportacao(importId) {
   const registros    = importRecord?.registros ?? 0;
   const dataHora     = importRecord?.dataHora  ?? '';
 
+  // Importação com registro em mês fechado não pode ser excluída (nem em
+  // parte): a exclusão é por importId e ainda é reaplicada no boot
+  // (markImportPendingDelete/reconcilePendingDeletes) — preservar só os do
+  // mês fechado deixaria registros órfãos que o boot apagaria do mesmo jeito.
+  const meses = new Set();
+  ['entradas', 'saidas', 'lancamentos', 'sap', 'custosSap'].forEach(mod => {
+    (state[mod] || []).forEach(r => {
+      if (r.importId !== importId || r.fonte === 'manual') return;
+      const k = _periodoMesDoRegistro(mod, r);
+      if (k && (state.periodoFechamentos || []).includes(k)) meses.add(_periodoRotulo(k));
+    });
+  });
+  if (meses.size) {
+    periodoAvisarFechado(`excluir esta importação — ela tem registros de ${[...meses].sort().join(', ')}`);
+    return;
+  }
+
   confirmarDestrutivo({
     title:        'Excluir importação',
     sub:          nomeArquivo,
@@ -249,6 +266,7 @@ function excluirCustosSap(absIndex) {
   if (window.currentUser?.role !== 'admin') { toast('Só o administrador pode excluir Custos SAP', 'error'); return; }
   const rec = _custosSapRegistroDaLinha(absIndex);
   if (!rec) return;
+  if (_periodoFechadoDoRegistro('custosSap', rec)) { periodoAvisarFechado('excluir este registro de Custos SAP'); return; }
 
   const originalIndex = state.custosSap.indexOf(rec);
   const snapshot = { ...rec };
@@ -296,17 +314,22 @@ function excluirCustosSap(absIndex) {
 // lote, e o caminho de volta é reimportar MARDH + MBEWH.
 async function zerarCustosSapImportados() {
   if (window.currentUser?.role !== 'admin') { toast('Só o administrador pode zerar Custos SAP', 'error'); return; }
-  const importados = (state.custosSap || []).filter(r => !r.fonte);
-  if (!importados.length) { toast('Não há Custos SAP importados para apagar', 'info'); return; }
-  const manuais = (state.custosSap || []).length - importados.length;
+  // Mês fechado fica de fora (aqui e na nuvem — lá a RLS já não deixa o
+  // DELETE por predicado alcançar essas linhas).
+  const _trava = periodoSepararFechados('custosSap', (state.custosSap || []).filter(r => !r.fonte));
+  const importados = _trava.livres;
+  if (!importados.length) { toast(_trava.bloqueados.length ? 'Todos os Custos SAP importados são de períodos fechados — nada a apagar.' : 'Não há Custos SAP importados para apagar', 'info'); return; }
+  const manuais = (state.custosSap || []).length - importados.length - _trava.bloqueados.length;
 
   if (!confirm(
     `Apagar ${importados.length.toLocaleString('pt-BR')} registro(s) de Custos SAP importados, aqui e na nuvem?\n\n` +
-    `${manuais.toLocaleString('pt-BR')} registro(s) cadastrados manualmente serão preservados.\n\n` +
-    'Não há como desfazer — a volta é reimportar MARDH + MBEWH.'
+    `${manuais.toLocaleString('pt-BR')} registro(s) cadastrados manualmente serão preservados.\n` +
+    (_trava.bloqueados.length ? `${_trava.bloqueados.length.toLocaleString('pt-BR')} registro(s) de períodos fechados (${_trava.meses.join(', ')}) também serão preservados.\n` : '') +
+    '\nNão há como desfazer — a volta é reimportar MARDH + MBEWH.'
   )) return;
 
-  state.custosSap = (state.custosSap || []).filter(r => !!r.fonte);
+  const _apagar = new Set(importados);
+  state.custosSap = (state.custosSap || []).filter(r => !_apagar.has(r));
   bulkSelected.custosSap.clear(); // pode ter apagado registro(s) que estavam marcados na seleção em massa
   persist();
   renderCustosSap();
@@ -348,6 +371,7 @@ function _criarRegistroCustosSap(dados) {
   });
 
   if (!rec.material || !rec.central || !rec.ano || !rec.mes || !rec.custo) return { ok: false, erro: 'Preencha material, central, ano, mês e custo' };
+  if (_periodoFechadoDoRegistro('custosSap', rec)) return { ok: false, erro: 'Período fechado — não é possível cadastrar Custos SAP nesse mês. Para alterar, o ADM precisa reabrir o período.' };
 
   // Aviso de duplicata — mesmo padrão de Lançamentos/Entradas.
   if (typeof _fpCustosSap === 'function') {
@@ -386,6 +410,11 @@ function _atualizarRegistroCustosSap(rec, dados) {
   const novoCentral = normalizarCentral(central);
   if (!novoMaterial || !novoCentral || !dados.ano || !dados.mes || !num(dados.custo)) {
     return { ok: false, erro: 'Preencha material, central, ano, mês e custo' };
+  }
+  // Mês de origem E de destino: mover um registro pra dentro de um mês
+  // fechado também altera aquele mês.
+  if (_periodoFechadoDoRegistro('custosSap', rec) || _periodoFechadoDoRegistro('custosSap', dados)) {
+    return { ok: false, erro: 'Período fechado — não é possível editar Custos SAP desse mês. Para alterar, o ADM precisa reabrir o período.' };
   }
 
   const candidato = {
@@ -426,6 +455,7 @@ function editarCustosSap(absIndex) {
   if (window.currentUser?.role !== 'admin') { toast('Só o administrador pode editar Custos SAP', 'error'); return; }
   const rec = _custosSapRegistroDaLinha(absIndex);
   if (!rec) return;
+  if (_periodoFechadoDoRegistro('custosSap', rec)) { periodoAvisarFechado('editar este registro de Custos SAP'); return; }
 
   openModal('modal-manual');
   setModulo('Custo SAP'); // popula os selects e zera _custosSapEditRec
@@ -632,8 +662,8 @@ function _criarRegistroEntrada(dados) {
   });
 
   // Guarda de período fechado — mesmo motivo de _criarRegistroLancamento.
-  if (window.currentUser?.role !== 'admin' && typeof _periodoFechadoDoRegistro === 'function' && _periodoFechadoDoRegistro('entradas', rec)) {
-    return { ok: false, erro: 'Período fechado pelo administrador — não é possível lançar nesse mês.' };
+  if (_periodoFechadoDoRegistro('entradas', rec)) {
+    return { ok: false, erro: 'Período fechado — não é possível lançar nesse mês. Para alterar, o ADM precisa reabrir o período.' };
   }
 
   // Aviso de duplicata — mesmo padrão de Lançamentos, não bloqueia.
@@ -707,8 +737,8 @@ function _criarRegistroSaida(dados) {
   });
 
   // Guarda de período fechado — mesmo motivo de _criarRegistroLancamento.
-  if (window.currentUser?.role !== 'admin' && typeof _periodoFechadoDoRegistro === 'function' && _periodoFechadoDoRegistro('saidas', rec)) {
-    return { ok: false, erro: 'Período fechado pelo administrador — não é possível lançar nesse mês.' };
+  if (_periodoFechadoDoRegistro('saidas', rec)) {
+    return { ok: false, erro: 'Período fechado — não é possível lançar nesse mês. Para alterar, o ADM precisa reabrir o período.' };
   }
 
   // Aviso de duplicata — mesmo padrão de Lançamentos/Entradas/Custos SAP.
@@ -780,8 +810,8 @@ function _criarRegistroLancamento(dados) {
   // Guarda de período fechado — checa ANTES de mexer no estado local. Sem
   // isso, a RLS bloqueia só o upsert na nuvem (fire-and-forget) e o
   // registro ficava "preso" só local pra sempre, parecendo salvo.
-  if (window.currentUser?.role !== 'admin' && typeof _periodoFechadoDoRegistro === 'function' && _periodoFechadoDoRegistro('lancamentos', rec)) {
-    return { ok: false, erro: 'Período fechado pelo administrador — não é possível lançar nesse mês.' };
+  if (_periodoFechadoDoRegistro('lancamentos', rec)) {
+    return { ok: false, erro: 'Período fechado — não é possível lançar nesse mês. Para alterar, o ADM precisa reabrir o período.' };
   }
 
   // Aviso de duplicata (não bloqueia — duplicata legítima é permitida por
@@ -1505,8 +1535,8 @@ function _criarRegistroSAP(dados) {
   });
 
   // Guarda de período fechado — mesmo motivo de _criarRegistroLancamento.
-  if (window.currentUser?.role !== 'admin' && typeof _periodoFechadoDoRegistro === 'function' && _periodoFechadoDoRegistro('sap', rec)) {
-    return { ok: false, erro: 'Período fechado pelo administrador — não é possível lançar nesse mês.' };
+  if (_periodoFechadoDoRegistro('sap', rec)) {
+    return { ok: false, erro: 'Período fechado — não é possível lançar nesse mês. Para alterar, o ADM precisa reabrir o período.' };
   }
 
   state.sap.unshift(rec);
