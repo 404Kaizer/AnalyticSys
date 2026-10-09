@@ -1808,6 +1808,77 @@ td.pending-cell  { color: var(--text3) !important; font-style: italic; font-size
   padding: 14px 18px 16px;
   border-bottom: 1px solid var(--border);
 }
+
+/* ── Divergências PUZL × SAP (card da Visão Micro) ── ver
+   buildDiagDivergenciaSection em ui.js. Reaproveita .bdm-diag-head,
+   .bdm-diag-details e .bdm-diag-list do Diagnóstico do modal. */
+.diagsec {
+  padding: 14px 18px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.diagsec-resumo { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.diagsec-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-radius: 6px;
+  font-family: var(--mono); font-size: 11px; font-weight: 700;
+}
+.diagsec-chip--erro   { background: var(--red-bg);   color: var(--red);   border: 1px solid var(--red-border); }
+.diagsec-chip--alerta { background: var(--amber-bg); color: var(--amber); border: 1px solid var(--amber-border); }
+/* Teto de altura: com muitos materiais divergentes a seção não pode
+   empurrar a tabela de análise para fora da tela. */
+.diagsec-lista {
+  display: flex; flex-direction: column; gap: 8px;
+  max-height: 480px; overflow-y: auto;
+}
+.diagsec-mat {
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--amber);
+  border-radius: var(--radius);
+  background: var(--bg2);
+  padding: 8px 12px 10px;
+}
+.diagsec-mat--erro { border-left-color: var(--red); }
+.diagsec-mat-nome {
+  font-family: var(--mono); font-size: 12.5px; font-weight: 700;
+  color: var(--text); display: flex; align-items: center; gap: 6px;
+}
+.diagsec-lado { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+.diagsec-lado + .diagsec-lado { padding-top: 8px; border-top: 1px dashed var(--border2); }
+.diagsec-lado-head { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; font-size: 11.5px; color: var(--text2); }
+.diagsec-lado-nums { font-family: var(--mono); font-size: 11px; }
+.diagsec-lado-tag {
+  font-family: var(--mono); font-size: 9.5px; font-weight: 700;
+  letter-spacing: .08em; text-transform: uppercase;
+  padding: 1px 7px; border-radius: 4px; border: 1px solid currentColor;
+}
+.diagsec-lado-ent { color: var(--green); }
+.diagsec-lado-sai { color: var(--red); }
+.diagsec-link {
+  margin-left: auto;
+  display: inline-flex; align-items: center; gap: 4px;
+  background: none; border: 1px solid var(--border); border-radius: 5px;
+  padding: 2px 8px; font-size: 11px; color: var(--accent); cursor: pointer;
+}
+.diagsec-link:hover { background: var(--bg3); }
+.diagsec-motivo { padding-left: 4px; }
+.diagsec-motivo > .diagsec-link { margin: 3px 0 0 24px; }
+.diagsec-acao { margin: 2px 0 0 24px; font-size: 11.5px; color: var(--text); }
+.diagsec-acao .ti { color: var(--accent); font-size: 11px; vertical-align: middle; }
+.diagsec-estrut { margin-top: 10px; }
+.diagsec-estrut > summary {
+  display: flex; align-items: center; gap: 7px;
+  cursor: pointer; user-select: none; list-style: none;
+  font-size: 11.5px; color: var(--text3);
+}
+.diagsec-estrut > summary::-webkit-details-marker { display: none; }
+.diagsec-estrut[open] > summary .bdm-diag-chev { transform: rotate(180deg); }
+.diagsec-estrut-n { font-family: var(--mono); font-size: 10.5px; }
+.diagsec-estrut-body {
+  display: flex; flex-direction: column; gap: 8px;
+  margin-top: 8px; max-height: 360px; overflow-y: auto;
+}
+.diagsec-estrut-item { display: flex; flex-direction: column; gap: 4px; }
+.diagsec-estrut-nome { font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--text2); }
 .pend-integ-chips {
   display: flex;
   flex-wrap: wrap;

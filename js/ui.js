@@ -1764,6 +1764,22 @@ const DIAG_CURTO = {
   'fator-volumetrico': 'Sem fator de conversão (m³)'
 };
 
+// O que o analista FAZ com cada motivo — a linha "→" da seção de
+// divergências do card (buildDiagDivergenciaSection). {doc} vira NF ou OS.
+// Motivo sem entrada aqui simplesmente fica sem a linha de ação.
+const DIAG_ACAO = {
+  'duplicada':         'Estornar no SAP a cópia extra — a 1ª é o lançamento legítimo.',
+  'transf-duplicada':  'Estornar no SAP o 862 lançado em duplicidade.',
+  'transf-incompleta': 'Lançar no SAP o movimento complementar (861/862) na outra central, ou conferir se o arquivo importado cobre o período dela.',
+  'pendente':          'Integrar a {doc} no SAP, ou conferir se ela foi cancelada e deve sair da PUZL.',
+  'estornada':         'A {doc} foi estornada no SAP mas segue ativa na PUZL — cancelar na PUZL ou relançar no SAP.',
+  'estorno-orfao':     'Estorno sem o lançamento original no período — conferir se o original caiu em outro período ou falta na base importada.',
+  'sem-ref-sap':       'Lançar a {doc} na PUZL, ou corrigir a Ref. do movimento no SAP se ela estiver errada.',
+  'peso':              'Mesma {doc} com peso diferente nos dois lados — corrigir o lado errado (valores na coluna Obs.).',
+  'sem-ref-puzl':      'Preencher o número da {doc} no registro da PUZL para permitir a conciliação.',
+  'fator-volumetrico': 'Cadastrar o fator de conversão (m³ → kg) do material/fornecedor.'
+};
+
 /**
  * Reconcilia um balde do SAP (Entradas ou Saídas de um material + central +
  * período) contra os registros da PUZL do mesmo escopo e explica a
@@ -2599,6 +2615,39 @@ function abrirDaiPorDocumentoSap(doc) {
 // quantos registros envolve e uma lista expansível com o rastro documento a
 // documento. Ver diagnosticarDivergenciaSapPuzl para como cada motivo é
 // identificado.
+// Lista registro a registro de um motivo (o "rastro" do diagnóstico).
+// Compartilhada entre o modal (_bdmDiagnosticoHtml) e a seção de
+// divergências do card (buildDiagDivergenciaSection) — mesmas colunas nos
+// dois lugares, para o analista reconhecer o registro de um no outro.
+function _bdmDiagListaHtml(detalhes) {
+  // Célula cortada por ellipsis (ver .bdm-diag-item > span) leva o valor
+  // inteiro no title — razão social de fornecedor não cabe em coluna
+  // nenhuma e não pode ficar inalcançável.
+  const cel = (v, cls) => {
+    const txt = String(v || '—');
+    return `<span class="${cls}" title="${escapeHtml(txt)}">${escapeHtml(txt)}</span>`;
+  };
+  return `
+    <div class="bdm-diag-list">
+      <div class="bdm-diag-item bdm-diag-item--head">
+        <span>Mov.</span><span>Ref.</span><span>Pedido / Forn.</span>
+        <span>Doc MIGO</span><span>Data</span><span>Peso</span><span>Obs.</span>
+      </div>
+      ${detalhes.map(d => `
+      <div class="bdm-diag-item">
+        <span>${d.cod ? movBadgeHtml(d.cod, 'sm') : ''}</span>
+        ${cel(d.ref,    'td-mono')}
+        ${cel(d.pedido, 'td-mono td-muted')}
+        ${cel(d.doc,    'td-mono td-muted')}
+        ${cel(d.dt,     'td-mono td-muted')}
+        ${d.semFator
+          ? `<span class="td-mono" style="color:var(--amber)" title="Sem fator de conversão cadastrado para ${escapeHtml(String(d.um || ''))} — valor exibido na unidade original, sem conversão"><i class="ti ti-alert-triangle" style="font-size:10px;margin-right:2px;vertical-align:middle"></i>${_fmtNum2(d.kg)} ${escapeHtml(String(d.um || ''))}</span>`
+          : `<span class="td-mono" style="color:${movValorCor(d.kg)}">${fmtKgSigned(d.kg)}</span>`}
+        ${cel(d.nota,   'td-muted')}
+      </div>`).join('')}
+    </div>`;
+}
+
 function _bdmDiagnosticoHtml(diag) {
   if (!diag || !diag.motivos || !diag.motivos.length) return '';
 
@@ -2609,33 +2658,7 @@ function _bdmDiagnosticoHtml(diag) {
     const det = (m.detalhes && m.detalhes.length)
       ? `<details class="bdm-diag-details">
           <summary>Ver ${m.detalhes.length}${m.count > m.detalhes.length ? ` de ${m.count}` : ''} registro(s)</summary>
-          <div class="bdm-diag-list">
-            <div class="bdm-diag-item bdm-diag-item--head">
-              <span>Mov.</span><span>Ref.</span><span>Pedido / Forn.</span>
-              <span>Doc MIGO</span><span>Data</span><span>Peso</span><span>Obs.</span>
-            </div>
-            ${m.detalhes.map(d => {
-              // Célula cortada por ellipsis (ver .bdm-diag-item > span) leva
-              // o valor inteiro no title — razão social de fornecedor não
-              // cabe em coluna nenhuma e não pode ficar inalcançável.
-              const cel = (v, cls) => {
-                const txt = String(v || '—');
-                return `<span class="${cls}" title="${escapeHtml(txt)}">${escapeHtml(txt)}</span>`;
-              };
-              return `
-              <div class="bdm-diag-item">
-                <span>${d.cod ? movBadgeHtml(d.cod, 'sm') : ''}</span>
-                ${cel(d.ref,    'td-mono')}
-                ${cel(d.pedido, 'td-mono td-muted')}
-                ${cel(d.doc,    'td-mono td-muted')}
-                ${cel(d.dt,     'td-mono td-muted')}
-                ${d.semFator
-                  ? `<span class="td-mono" style="color:var(--amber)" title="Sem fator de conversão cadastrado para ${escapeHtml(String(d.um || ''))} — valor exibido na unidade original, sem conversão"><i class="ti ti-alert-triangle" style="font-size:10px;margin-right:2px;vertical-align:middle"></i>${_fmtNum2(d.kg)} ${escapeHtml(String(d.um || ''))}</span>`
-                  : `<span class="td-mono" style="color:${movValorCor(d.kg)}">${fmtKgSigned(d.kg)}</span>`}
-                ${cel(d.nota,   'td-muted')}
-              </div>`;
-            }).join('')}
-          </div>
+          ${_bdmDiagListaHtml(m.detalhes)}
         </details>`
       : '';
     return `
@@ -2700,6 +2723,210 @@ function _bdmDiagnosticoHtml(diag) {
     </details>`;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// SEÇÃO "DIVERGÊNCIAS PUZL × SAP" DO CARD (Visão Micro)
+// ═══════════════════════════════════════════════════════════════════════════
+// O mesmo diagnóstico do modal (diagnosticarDivergenciaSapPuzl), trazido
+// para dentro do card e agrupado POR MATERIAL (decisão do Hugo, 09/10/2026):
+// no modal ele ficava três cliques abaixo da tabela e passava despercebido.
+// Não recalcula nada — recebe os diags que buildCentralCard já calculou
+// para as colunas Entradas/Saídas.
+//
+// Divide os motivos em dois grupos:
+//   • ACIONÁVEIS — erro/alerta e o saldo sem motivo. Ficam à vista.
+//   • ESTRUTURAIS — duplicata já estornada e transferência fora da
+//     comparação. Não pedem ação; ficam recolhidos no fim (decisão do Hugo).
+// NF/OS ausente no SAP não repete a lista: aponta para o botão de
+// pendentes da seção Integração SAP logo abaixo (decisão do Hugo).
+const DIAG_SEM_ACAO = new Set(['duplicada-estornada']);
+
+// Rastro registro a registro, guardado fora do DOM e só renderizado quando
+// o analista abre o <details> (_diagSecToggle): com dezenas de materiais ×
+// 2 lados × até 40 registros por motivo, montar tudo de saída custaria
+// milhares de nós que quase ninguém abre. Chave determinística, então cada
+// render sobrescreve a anterior em vez de acumular.
+const _diagSecStore = new Map();
+
+function _diagSecDetailsHtml(chave, detalhes, count) {
+  if (!detalhes || !detalhes.length) return '';
+  _diagSecStore.set(chave, detalhes);
+  return `<details class="bdm-diag-details" data-k="${escapeHtml(chave)}" ontoggle="_diagSecToggle(this)">
+      <summary>Ver ${detalhes.length}${count > detalhes.length ? ` de ${count}` : ''} registro(s)</summary>
+    </details>`;
+}
+
+function _diagSecToggle(el) {
+  if (!el.open || el.dataset.ok) return;
+  const det = _diagSecStore.get(el.dataset.k);
+  if (!det) return;
+  el.insertAdjacentHTML('beforeend', _bdmDiagListaHtml(det));
+  el.dataset.ok = '1';
+}
+
+// Abre o modal de Movimentações da célula Entradas/Saídas daquela linha da
+// tabela, com o Diagnóstico já expandido — o mesmo modal de clicar na
+// célula, para os dois caminhos nunca mostrarem coisas diferentes.
+function _diagSecAbrirModal(btn) {
+  const { central, mat, lado } = btn.dataset;
+  const body = btn.closest('.micro-filial-body');
+  const row  = body && [...body.querySelectorAll('tr.material-row')]
+    .find(tr => tr.dataset.central === central && tr.dataset.material === mat);
+  // Colunas 4 = Entradas, 5 = Saídas (ver o <thead> de buildCentralCard).
+  const trig = row && row.children[lado === 'sai' ? 5 : 4]?.querySelector('.bdm-trigger');
+  if (!trig) { if (row) row.scrollIntoView({ block: 'center', behavior: 'smooth' }); return; }
+  trig.dataset.abrirDiag = '1';
+  trig.click();
+}
+
+function _diagSecVerPendentes(btn, tipo) {
+  const body = btn.closest('.micro-filial-body');
+  const chip = body && body.querySelector(`.pend-integ-chip[data-tipo="${tipo}"][data-items]`);
+  if (chip) chip.click();
+  else body?.querySelector('.pend-integ-section')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+}
+
+function _diagSecMotivoHtml(m, chaveBase, docLabel) {
+  const est  = DIAG_TOM_ICONE[m.tom] || DIAG_TOM_ICONE.alerta;
+  const acao = DIAG_ACAO[m.chave] ? DIAG_ACAO[m.chave].replace(/\{doc\}/g, docLabel) : '';
+  const rastro = m.chave === 'pendente'
+    ? `<button class="diagsec-link" onclick="event.stopPropagation();_diagSecVerPendentes(this,'${docLabel}')">
+         <i class="ti ti-cloud-off"></i> Ver em ${docLabel === 'NF' ? 'NFs' : 'OS'} pendentes SAP
+       </button>`
+    : _diagSecDetailsHtml(`${chaveBase}|${m.chave}`, m.detalhes, m.count);
+  return `
+    <div class="diagsec-motivo">
+      <div class="bdm-diag-head">
+        <i class="ti ${est.icon}" style="color:${est.cor}"></i>
+        <span class="bdm-diag-label">${escapeHtml(m.label)}</span>
+        <span class="bdm-diag-kg" style="color:${movValorCor(m.kg)}">${fmtKgSigned(m.kg)}</span>
+        <span class="bdm-diag-count">${m.count} reg.</span>
+      </div>
+      ${acao ? `<div class="diagsec-acao"><i class="ti ti-arrow-right"></i> ${escapeHtml(acao)}</div>` : ''}
+      ${rastro}
+    </div>`;
+}
+
+/**
+ * @param {object[]} itens  { nome, central, mat, ent, sai } — ent/sai são
+ *                          retornos de diagnosticarDivergenciaSapPuzl
+ * @param {boolean}  isMat  card agrupado por material (itens são centrais)
+ */
+function buildDiagDivergenciaSection(itens, isMat = false) {
+  const LADO_LABEL = { ent: 'Entradas', sai: 'Saídas' };
+  const blocos = [];
+  const estruturais = [];
+  let totalSemMotivo = 0;
+
+  itens.forEach(it => {
+    const lados = [];
+    ['ent', 'sai'].forEach(lado => {
+      const d = it[lado];
+      if (!d) return;
+      const motivos = d.motivos || [];
+      const acion  = motivos.filter(m => m.tom !== 'estrutural' && !DIAG_SEM_ACAO.has(m.chave));
+      const resolv = motivos.filter(m => m.tom === 'estrutural' || DIAG_SEM_ACAO.has(m.chave));
+      const sobra  = Math.abs(num(d.naoExplicado)) >= 0.01 ? num(d.naoExplicado) : 0;
+      const temErro = acion.some(m => m.tom === 'erro');
+      if (acion.length || sobra) lados.push({ lado, d, acion, sobra, temErro });
+      totalSemMotivo += sobra;
+      const fora = d.transfExcluidas;
+      if (resolv.length || (fora && fora.count)) estruturais.push({ it, lado, resolv, fora });
+    });
+    if (lados.length) blocos.push({
+      it, lados,
+      temErro: lados.some(l => l.temErro),
+      mag: lados.reduce((s, l) => s + Math.abs(num(l.d.diff)), 0)
+    });
+  });
+
+  // Pior primeiro: quem tem erro antes de quem só tem alerta, e dentro de
+  // cada grupo a maior diferença em kg.
+  blocos.sort((a, b) => (b.temErro - a.temErro) || (b.mag - a.mag));
+
+  const nomeIcon = isMat ? 'ti-building-warehouse' : 'ti-box';
+  const ladoHead = (it, lado, d) => {
+    const sap  = num(d.sapComparavel);
+    const puzl = sap - num(d.diff);
+    return `
+      <div class="diagsec-lado-head">
+        <span class="diagsec-lado-tag diagsec-lado-${lado}">${LADO_LABEL[lado]}</span>
+        <span class="diagsec-lado-nums">SAP <b>${fmtKg(Math.abs(sap))}</b> · PUZL <b>${fmtKg(Math.abs(puzl))}</b> · diferença <b style="color:${movValorCor(d.diff)}">${fmtKgSigned(d.diff)}</b></span>
+        <button class="diagsec-link" data-central="${escapeHtml(it.central)}" data-mat="${escapeHtml(it.mat)}" data-lado="${lado}"
+          onclick="event.stopPropagation();_diagSecAbrirModal(this)" title="Abrir as movimentações com o diagnóstico expandido">
+          Ver movimentações <i class="ti ti-external-link"></i>
+        </button>
+      </div>`;
+  };
+
+  const blocosHtml = blocos.map(({ it, lados, temErro }) => `
+    <div class="diagsec-mat ${temErro ? 'diagsec-mat--erro' : 'diagsec-mat--alerta'}">
+      <div class="diagsec-mat-nome"><i class="ti ${nomeIcon}"></i> ${escapeHtml(it.nome)}</div>
+      ${lados.map(({ lado, d, acion, sobra }) => {
+        const doc  = lado === 'sai' ? 'OS' : 'NF';
+        const base = `${it.central}|${it.mat}|${lado}`;
+        return `
+        <div class="diagsec-lado">
+          ${ladoHead(it, lado, d)}
+          ${acion.map(m => _diagSecMotivoHtml(m, base, doc)).join('')}
+          ${sobra ? `
+          <div class="diagsec-motivo">
+            <div class="bdm-diag-head">
+              <i class="ti ti-help-circle" style="color:var(--red)"></i>
+              <span class="bdm-diag-label">Sem motivo identificado</span>
+              <span class="bdm-diag-kg" style="color:${movValorCor(sobra)}">${fmtKgSigned(sobra)}</span>
+              <span class="bdm-diag-count">—</span>
+            </div>
+            <div class="diagsec-acao"><i class="ti ti-arrow-right"></i> Nenhuma causa conhecida explica este saldo — conferir na mão em “Ver movimentações”.</div>
+          </div>` : ''}
+        </div>`;
+      }).join('')}
+    </div>`).join('');
+
+  const estrutHtml = estruturais.length ? `
+    <details class="diagsec-estrut">
+      <summary>
+        <i class="ti ti-arrows-right-left"></i>
+        Estruturais — sem ação necessária
+        <span class="diagsec-estrut-n">${estruturais.length} ${isMat ? 'central(is)' : 'material(is)'}/lado</span>
+        <i class="ti ti-chevron-down bdm-diag-chev"></i>
+      </summary>
+      <div class="diagsec-estrut-body">
+        ${estruturais.map(({ it, lado, resolv, fora }) => {
+          const base = `${it.central}|${it.mat}|${lado}`;
+          return `
+          <div class="diagsec-estrut-item">
+            <div class="diagsec-estrut-nome">${escapeHtml(it.nome)} · ${LADO_LABEL[lado]}</div>
+            ${resolv.map(m => _diagSecMotivoHtml(m, base, lado === 'sai' ? 'OS' : 'NF')).join('')}
+            ${fora && fora.count ? `
+            <div class="diagsec-motivo">
+              <div class="bdm-diag-head">
+                <i class="ti ti-arrows-right-left" style="color:var(--text3)"></i>
+                <span class="bdm-diag-label">Fora da comparação — a PUZL não registra transferência</span>
+                <span class="bdm-diag-kg" style="color:var(--text3)">${fmtKgSigned(fora.kg)}</span>
+                <span class="bdm-diag-count">${fora.count} reg.</span>
+              </div>
+              ${_diagSecDetailsHtml(`${base}|fora`, fora.detalhes, fora.count)}
+            </div>` : ''}
+          </div>`;
+        }).join('')}
+      </div>
+    </details>` : '';
+
+  const n = blocos.length;
+  const resumo = n
+    ? `<span class="diagsec-chip diagsec-chip--erro"><i class="ti ti-alert-circle"></i> ${n} ${isMat ? (n === 1 ? 'central' : 'centrais') : (n === 1 ? 'material' : 'materiais')} com divergência</span>
+       ${Math.abs(totalSemMotivo) >= 0.01 ? `<span class="diagsec-chip diagsec-chip--alerta"><i class="ti ti-help-circle"></i> sem motivo: ${fmtKgSigned(totalSemMotivo)}</span>` : ''}`
+    : `<span class="pend-integ-chip pend-integ-chip-ok"><i class="ti ti-circle-check" style="font-size:13px"></i> PUZL e SAP batem em ${isMat ? 'todas as centrais' : 'todos os materiais'}</span>`;
+
+  return `
+    <div class="diagsec">
+      <div class="micro-section-title"><i class="ti ti-stethoscope"></i> Divergências PUZL × SAP</div>
+      <div class="diagsec-resumo">${resumo}</div>
+      ${n ? `<div class="diagsec-lista">${blocosHtml}</div>` : ''}
+      ${estrutHtml}
+    </div>`;
+}
+
 // Renderiza o bloco de "Ajustes de Fechamento Mensal desconsiderados" no
 // resumo do modal de breakdown (Entradas/Saídas por material) — mostra a
 // soma de Peso e Custo Total, e uma lista expansível com cada registro
@@ -2760,6 +2987,11 @@ function openBreakdownModal(trigger) {
   // PUZL estão à mão) e trazido pronto — ver diagnosticarDivergenciaSapPuzl.
   let diag = null;
   try { diag = JSON.parse(decodeURIComponent(trigger.dataset.diag || '')); } catch(e) {}
+  // Aberto pela seção de divergências do card (_diagSecAbrirModal): o
+  // analista veio justamente pelo diagnóstico, então ele já abre expandido.
+  // Flag de uso único — o próximo clique direto na célula volta ao padrão.
+  const abrirDiag = !!trigger.dataset.abrirDiag;
+  delete trigger.dataset.abrirDiag;
   const title      = trigger.dataset.title  || '';
   const colorVar   = trigger.dataset.color  || 'var(--text)';
   const localCountRaw = trigger.dataset.localCount;
@@ -2885,6 +3117,10 @@ function openBreakdownModal(trigger) {
       <div class="bdm-summary-row">
         <span class="bdm-summary-compare">${registrosHtml}</span>
       </div>${_bdmDiagnosticoHtml(diag)}${_bdmFechExcluidosHtml(fechExcluidos)}`;
+    if (abrirDiag) {
+      const box = summaryEl.querySelector('.bdm-diag-box');
+      if (box) box.open = true;
+    }
 
     // Chips = filtro por código. Só o container dos chips é re-renderizado a
     // cada clique; o resto do resumo ("Registros") continua mostrando o total

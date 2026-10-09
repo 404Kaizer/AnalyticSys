@@ -1117,6 +1117,9 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
     // MESMO Est. Final da tabela (snapshot.pesoFim), pra os dois nunca
     // divergirem. Ver buildCapacidadeSection em capacidades.js.
     const capMatsInfo = [];
+    // Alimenta a seção "Divergências PUZL × SAP" — os mesmos diags das
+    // colunas Entradas/Saídas, ver buildDiagDivergenciaSection em ui.js.
+    const _diagItens = [];
 
     // ── Criticidade por material (badge ao lado do nome) ─────────────────
     // Reaproveita os mesmos thresholds/classificação usados no painel de
@@ -1322,6 +1325,7 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
       const diagSai = diagnosticarDivergenciaSapPuzl({
         sapRecords: natureza.saiRecords, puzlRecords: _saidasFiltradas, lado: 'sai', material: mat
       });
+      _diagItens.push({ nome: isMat ? central : mat, central, mat, ent: diagEnt, sai: diagSai });
 
       // Quando AUSENTE: busca os dois lançamentos mais próximos para tooltip
       // informativo. Continua ancorado em preCarryLanc, NÃO em preCarry: o
@@ -2013,6 +2017,8 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
               ? buildCapacidadeSection({ pares: capMatsInfo, colLabel: 'Central' })
               : buildCapacidadeSection({ central: r.central, materiais: capMatsInfo }))
           : ''}
+
+        ${buildDiagDivergenciaSection(_diagItens, isMat)}
 
         ${isMat
           ? buildPendIntegSectionMaterial({ material: r.material, pendNF: _pendListas.nf, pendOS: _pendListas.os })
