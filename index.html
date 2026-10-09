@@ -5980,6 +5980,26 @@
   </div>
 </div>
 
+<!-- Documentos de um motivo de divergência PUZL × SAP, agrupados por
+     material — aberto pela seção "Divergências PUZL × SAP" do card da
+     Visão Micro (openDiagMotivoModal, ui.js). Mesmo visual do modal de
+     pendentes acima. -->
+<div class="pim-overlay" id="dgm-overlay" aria-hidden="true" onclick="if (event.target === this) closeDiagMotivoModal()">
+  <div class="pim-dialog" role="dialog" aria-modal="true" aria-labelledby="dgm-title">
+    <div class="pim-header">
+      <div class="pim-header-text">
+        <div class="pim-kicker"><i class="ti ti-stethoscope"></i> Divergências PUZL × SAP</div>
+        <div class="pim-title" id="dgm-title">—</div>
+        <div class="pim-sub" id="dgm-sub">—</div>
+      </div>
+      <button class="btn btn-primary" type="button" onclick="closeDiagMotivoModal()">
+        <i class="ti ti-x"></i> <span>Fechar</span>
+      </button>
+    </div>
+    <div class="pim-body dgm-body" id="dgm-body"></div>
+  </div>
+</div>
+
 <div class="bdm-overlay" id="breakdown-modal-overlay" aria-hidden="true">
   <div class="bdm-dialog bdm-dialog-wide" role="dialog" aria-modal="true" aria-labelledby="bdm-title">
     <div class="bdm-header">

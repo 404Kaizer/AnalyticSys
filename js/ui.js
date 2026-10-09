@@ -1768,8 +1768,7 @@ const DIAG_CURTO = {
 
 // Frase do motivo para a seção de divergências do card: o rótulo com a
 // CONTAGEM e concordância ("16 OS pendentes…", "1 NF está…"), para o
-// analista entender o problema sem expandir. Os números dos documentos
-// vão à parte — ver _diagMotivoRefs.
+// analista entender o problema sem expandir.
 function _diagMotivoFrase(m, doc) {
   const n = m.count, um = n === 1;
   const docs = `${n} ${um ? doc : (doc === 'NF' ? 'NFs' : 'OS')}`;
@@ -1789,21 +1788,6 @@ function _diagMotivoFrase(m, doc) {
     case 'transf-incompleta':   return `${n} transferência${s} sem o 861/862 de contrapartida no SAP`;
     default:                    return m.curto || m.label;
   }
-}
-
-// Os números dos documentos envolvidos ("NF 120657, 120658, 120659 +7"),
-// tirados do rastro do próprio motivo. Só os 3 primeiros: o resto está a
-// um clique, e a linha precisa caber numa linha.
-function _diagMotivoRefs(m, doc) {
-  const refs = [...new Set((m.detalhes || []).map(d => String(d.ref || '').trim()))]
-    .filter(r => r && r !== '—');
-  if (!refs.length) return '';
-  // Rastro completo: conta documentos únicos (duas cópias da mesma NF são
-  // uma NF só). Rastro cortado nos 40: o melhor que se tem é m.count.
-  const total = m.count > (m.detalhes || []).length ? m.count : refs.length;
-  const resto = total - Math.min(refs.length, 3);
-  const rotulo = m.chave === 'estorno-orfao' || m.chave.startsWith('transf') ? 'Ref.' : doc;
-  return `${rotulo} ${refs.slice(0, 3).join(', ')}${resto > 0 ? ` +${resto}` : ''}`;
 }
 
 // O que o analista FAZ com cada motivo — a segunda linha, apagada, de cada
@@ -2788,27 +2772,23 @@ function _bdmDiagnosticoHtml(diag) {
 // pendentes da seção Integração SAP logo abaixo (decisão do Hugo).
 const DIAG_SEM_ACAO = new Set(['duplicada-estornada']);
 
-// Rastro registro a registro, guardado fora do DOM e só renderizado quando
-// o analista abre o motivo (_diagSecToggle): com dezenas de materiais ×
-// 2 lados × até 40 registros por motivo, montar tudo de saída custaria
-// milhares de nós que quase ninguém abre. Chave determinística, então cada
-// render sobrescreve a anterior em vez de acumular.
+// Grupos de cada card, guardados fora do DOM até o analista abrir o modal
+// (openDiagMotivoModal): o rastro de dezenas de materiais × até 40
+// registros por motivo não precisa existir em HTML enquanto ninguém olha.
+// Chave determinística (card + grupo), então cada render sobrescreve a
+// anterior em vez de acumular.
 const _diagSecStore = new Map();
-
-function _diagSecToggle(el) {
-  if (!el.open || el.dataset.ok) return;
-  const det = _diagSecStore.get(el.dataset.k);
-  if (!det) return;
-  el.insertAdjacentHTML('beforeend', _bdmDiagListaHtml(det));
-  el.dataset.ok = '1';
-}
+// Corpo do card que abriu o modal — de onde saem a tabela (Ver
+// movimentações) e o chip de pendentes.
+let _dgmCardBody = null;
 
 // Abre o modal de Movimentações da célula Entradas/Saídas daquela linha da
-// tabela, com o Diagnóstico já expandido — o mesmo modal de clicar na
-// célula, para os dois caminhos nunca mostrarem coisas diferentes.
+// tabela do card, com o Diagnóstico já expandido — o mesmo modal de clicar
+// na célula, para os dois caminhos nunca mostrarem coisas diferentes.
 function _diagSecAbrirModal(btn) {
   const { central, mat, lado } = btn.dataset;
-  const body = btn.closest('.micro-filial-body');
+  const body = _dgmCardBody;
+  closeDiagMotivoModal();
   const row  = body && [...body.querySelectorAll('tr.material-row')]
     .find(tr => tr.dataset.central === central && tr.dataset.material === mat);
   // Colunas 4 = Entradas, 5 = Saídas (ver o <thead> de buildCentralCard).
@@ -2825,190 +2805,158 @@ function _diagSecVerPendentes(btn, tipo) {
   else body?.querySelector('.pend-integ-section')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
 }
 
-// Uma linha por motivo: ícone · frase com a contagem e os números dos
-// documentos, com a ação apagada embaixo · kg. A linha INTEIRA é o
-// <summary> que abre o rastro — sem botão "Ver N registros" separado
-// ocupando uma terceira linha. O rótulo longo do diagnóstico fica no title.
-function _diagSecLinhaHtml({ icon, cor, titulo, refs = '', tituloLongo = '', acao = '', kg = null, count = 0, chave = '', detalhes = null, pendTipo = '' }) {
-  const linha = `
-      <i class="ti ${icon}" style="color:${cor}"></i>
-      <span class="diagsec-m-txt">
-        <span class="diagsec-m-label"${tituloLongo ? ` title="${escapeHtml(tituloLongo)}"` : ''}>${escapeHtml(titulo)}${refs ? `<span class="diagsec-m-refs" title="${escapeHtml(refs)}">${escapeHtml(refs)}</span>` : ''}</span>
-        ${acao ? `<span class="diagsec-m-acao">${escapeHtml(acao)}</span>` : ''}
-      </span>
-      <span class="diagsec-m-kg">${kg === null ? '' : fmtKgSigned(kg, 0)}</span>`;
-  // NF/OS ausente no SAP: o rastro é a lista de pendentes da seção
-  // Integração SAP, não uma cópia dela aqui.
-  if (pendTipo) {
-    return `<div class="diagsec-m">${linha}
-      <button class="diagsec-ico" title="Abrir ${pendTipo === 'NF' ? 'NFs' : 'OS'} pendentes SAP"
-        onclick="event.stopPropagation();_diagSecVerPendentes(this,'${pendTipo}')"><i class="ti ti-cloud-off"></i></button>
-    </div>`;
-  }
-  if (!detalhes || !detalhes.length) return `<div class="diagsec-m">${linha}<span></span></div>`;
-  _diagSecStore.set(chave, detalhes);
-  return `<details class="diagsec-m-wrap" data-k="${escapeHtml(chave)}" ontoggle="_diagSecToggle(this)">
-      <summary class="diagsec-m" title="Ver ${detalhes.length}${count > detalhes.length ? ` de ${count}` : ''} registro(s)">${linha}<i class="ti ti-chevron-down diagsec-chev"></i></summary>
-    </details>`;
+function openDiagMotivoModal(row) {
+  const g = _diagSecStore.get(row.dataset.k);
+  const overlay = document.getElementById('dgm-overlay');
+  if (!g || !overlay) return;
+  _dgmCardBody = row.closest('.micro-filial-body');
+
+  document.getElementById('dgm-title').textContent = g.titulo;
+  document.getElementById('dgm-sub').textContent = g.sub;
+  const LADO = { ent: 'Entradas', sai: 'Saídas' };
+  document.getElementById('dgm-body').innerHTML = g.blocos.map(b => `
+    <div class="dgm-bloco">
+      <div class="dgm-bloco-head">
+        <span class="dgm-bloco-nome">${escapeHtml(b.nome)}</span>
+        <span class="diagsec-lado-tag diagsec-lado-${b.lado}">${LADO[b.lado]}</span>
+        ${b.info ? `<span class="dgm-bloco-info">${escapeHtml(b.info)}</span>` : ''}
+        <span class="dgm-bloco-kg">${b.kg === null ? '' : fmtKgSigned(b.kg, 0)}</span>
+        <button class="diagsec-link" data-central="${escapeHtml(b.central)}" data-mat="${escapeHtml(b.mat)}" data-lado="${b.lado}"
+          onclick="_diagSecAbrirModal(this)" title="Abre as movimentações com o diagnóstico expandido">
+          Ver movimentações <i class="ti ti-external-link"></i>
+        </button>
+      </div>
+      ${b.detalhes && b.detalhes.length ? _bdmDiagListaHtml(b.detalhes) : ''}
+      ${b.detalhes && b.count > b.detalhes.length
+        ? `<div class="dgm-bloco-nota">Mostrando ${b.detalhes.length} de ${b.count} — o restante está em “Ver movimentações”.</div>` : ''}
+    </div>`).join('');
+
+  overlay.classList.add('open');
+  overlay.setAttribute('aria-hidden', 'false');
 }
 
-function _diagSecMotivoHtml(m, chaveBase, docLabel) {
-  const est = DIAG_TOM_ICONE[m.tom] || DIAG_TOM_ICONE.alerta;
-  return _diagSecLinhaHtml({
-    icon: est.icon, cor: est.cor,
-    titulo: _diagMotivoFrase(m, docLabel), refs: _diagMotivoRefs(m, docLabel), tituloLongo: m.label,
-    acao: DIAG_ACAO[m.chave] ? DIAG_ACAO[m.chave].replace(/\{doc\}/g, docLabel) : '',
-    kg: m.kg, count: m.count,
-    chave: `${chaveBase}|${m.chave}`, detalhes: m.detalhes,
-    pendTipo: m.chave === 'pendente' ? docLabel : ''
-  });
+function closeDiagMotivoModal() {
+  const overlay = document.getElementById('dgm-overlay');
+  if (!overlay) return;
+  overlay.classList.remove('open');
+  overlay.setAttribute('aria-hidden', 'true');
 }
 
 /**
+ * Seção "Divergências PUZL × SAP" do card: UMA LINHA POR MOTIVO (e por
+ * NF/OS — "NFs no SAP e não na PUZL" e "OS no SAP e não na PUZL" são
+ * problemas de páginas diferentes), somando todos os materiais. Clicar na
+ * linha abre o modal com os documentos agrupados por material (Hugo,
+ * 09/10/2026). Pendente de integração abre o modal de pendentes que já
+ * existe, na seção Integração SAP.
+ *
  * @param {object[]} itens  { nome, central, mat, ent, sai } — ent/sai são
  *                          retornos de diagnosticarDivergenciaSapPuzl
  * @param {boolean}  isMat  card agrupado por material (itens são centrais)
  */
 function buildDiagDivergenciaSection(itens, isMat = false) {
-  const LADO_LABEL = { ent: 'Entradas', sai: 'Saídas' };
-  const LADO_SIGLA = { ent: 'ENT', sai: 'SAI' };
   const DOC = { ent: 'NF', sai: 'OS' };
-  const blocos = [];
-  const estruturais = [];
-  let totalSemMotivo = 0;
+  const LADO = { ent: 'Entradas', sai: 'Saídas' };
+  const cardKey = itens.length ? (isMat ? `M|${itens[0].mat}` : `C|${itens[0].central}`) : '';
+  const escopo  = itens.length ? (isMat ? itens[0].mat : itens[0].central) : '';
+  const grupos = new Map();
+  const grupo = (k, init) => { if (!grupos.has(k)) grupos.set(k, { kg: 0, count: 0, blocos: [], ...init }); return grupos.get(k); };
+  const comDivergencia = new Set();
 
   itens.forEach(it => {
-    const lados = {};
     ['ent', 'sai'].forEach(lado => {
       const d = it[lado];
       if (!d) return;
-      const motivos = d.motivos || [];
-      const acion  = motivos.filter(m => m.tom !== 'estrutural' && !DIAG_SEM_ACAO.has(m.chave));
-      const resolv = motivos.filter(m => m.tom === 'estrutural' || DIAG_SEM_ACAO.has(m.chave));
-      const sobra  = Math.abs(num(d.naoExplicado)) >= 0.01 ? num(d.naoExplicado) : 0;
-      if (acion.length || sobra) lados[lado] = { d, acion, sobra, temErro: acion.some(m => m.tom === 'erro') || !!sobra };
-      totalSemMotivo += sobra;
+      const base = { nome: it.nome, central: it.central, mat: it.mat, lado };
+      (d.motivos || []).forEach(m => {
+        const estrut = m.tom === 'estrutural' || DIAG_SEM_ACAO.has(m.chave);
+        const g = estrut
+          ? grupo('estrut', { tipo: 'estrut', tom: 'estrutural' })
+          : grupo(`${m.chave}|${lado}`, { tipo: 'motivo', chave: m.chave, lado, tom: m.tom, label: m.label });
+        g.kg += m.kg; g.count += m.count;
+        if (!estrut) comDivergencia.add(it);
+        g.blocos.push({ ...base, kg: m.kg, count: m.count, detalhes: m.detalhes || [],
+          info: estrut ? (m.curto || m.label) : _diagMotivoFrase(m, DOC[lado]) });
+      });
+      const sobra = Math.abs(num(d.naoExplicado)) >= 0.01 ? num(d.naoExplicado) : 0;
+      if (sobra) {
+        const g = grupo('sobra', { tipo: 'sobra', tom: 'erro' });
+        g.kg += sobra;
+        g.blocos.push({ ...base, kg: sobra, info: 'Nenhuma causa conhecida explica este saldo' });
+        comDivergencia.add(it);
+      }
       const fora = d.transfExcluidas;
-      if (resolv.length || (fora && fora.count)) estruturais.push({ it, lado, resolv, fora });
-    });
-    const ls = Object.values(lados);
-    if (!ls.length) return;
-    // Linha fechada do material lista TODOS os problemas, maior primeiro,
-    // já com a frase específica — o analista identifica o que há sem
-    // expandir (Hugo, 09/10/2026). O que não couber vai pelo title.
-    const frases = Object.entries(lados)
-      .flatMap(([lado, l]) => [
-        ...l.acion.map(m => ({ kg: m.kg, txt: _diagMotivoFrase(m, DOC[lado]) })),
-        ...(l.sobra ? [{ kg: l.sobra, txt: `${fmtKgSigned(l.sobra, 0)} sem motivo identificado em ${LADO_LABEL[lado]}` }] : [])
-      ])
-      .sort((a, b) => Math.abs(b.kg) - Math.abs(a.kg))
-      .map(f => f.txt);
-    blocos.push({
-      it, lados, frases,
-      temErro: ls.some(l => l.temErro),
-      mag: ls.reduce((s, l) => s + Math.abs(num(l.d.diff)), 0)
+      if (fora && fora.count) {
+        const g = grupo('estrut', { tipo: 'estrut', tom: 'estrutural' });
+        g.count += fora.count;
+        g.blocos.push({ ...base, kg: fora.kg, count: fora.count, detalhes: fora.detalhes,
+          info: `${fora.count} transferência${fora.count === 1 ? '' : 's'} fora da comparação` });
+      }
     });
   });
 
-  // Pior primeiro: quem tem erro antes de quem só tem alerta, e dentro de
-  // cada grupo a maior diferença em kg.
-  blocos.sort((a, b) => (b.temErro - a.temErro) || (b.mag - a.mag));
+  // Ordem: erros pelo tamanho em kg, depois alertas, depois o saldo sem
+  // motivo e, por último, as estruturais.
+  const ORDEM = { motivo: 0, sobra: 1, estrut: 2 };
+  const lista = [...grupos.entries()].sort(([, a], [, b]) =>
+    (ORDEM[a.tipo] - ORDEM[b.tipo])
+    || ((a.tom === 'erro' ? 0 : 1) - (b.tom === 'erro' ? 0 : 1))
+    || (Math.abs(b.kg) - Math.abs(a.kg)));
 
-  // Cabeçalho de um lado aberto: o confronto SAP × PUZL e o atalho para o
-  // modal. A diferença não se repete aqui — já está na linha do material.
-  const ladoHead = (it, lado, d, rotulo = LADO_LABEL[lado]) => {
-    const sap  = num(d.sapComparavel);
-    const puzl = sap - num(d.diff);
+  const linhas = lista.map(([k, g]) => {
+    const nomes = [...new Set(g.blocos.map(b => b.nome))];
+    const qtd = `${nomes.length} ${isMat ? (nomes.length === 1 ? 'central' : 'centrais') : (nomes.length === 1 ? 'material' : 'materiais')}`;
+    let icon, cor, titulo, acao = '', pendTipo = '';
+    if (g.tipo === 'motivo') {
+      const est = DIAG_TOM_ICONE[g.tom] || DIAG_TOM_ICONE.alerta;
+      icon = est.icon; cor = est.cor;
+      // Frase com a contagem do grupo inteiro (todos os materiais).
+      titulo = _diagMotivoFrase({ chave: g.chave, count: g.count, label: g.label }, DOC[g.lado]);
+      acao = DIAG_ACAO[g.chave] ? DIAG_ACAO[g.chave].replace(/\{doc\}/g, DOC[g.lado]) : '';
+      if (g.chave === 'pendente') pendTipo = DOC[g.lado];
+      g.titulo = titulo;
+      g.sub = acao;
+    } else if (g.tipo === 'sobra') {
+      icon = 'ti-help-circle'; cor = 'var(--red)';
+      titulo = 'Saldo sem motivo identificado';
+      acao = 'Nenhuma causa conhecida explica a diferença — conferir nas movimentações.';
+      g.titulo = titulo; g.sub = acao;
+    } else {
+      icon = 'ti-arrows-right-left'; cor = 'var(--text3)';
+      titulo = 'Estruturais — sem ação necessária';
+      acao = 'Duplicatas já estornadas e transferências, que a PUZL não registra.';
+      g.titulo = titulo; g.sub = acao;
+    }
+    g.sub = escopo ? `${escopo} · ${g.sub}` : g.sub;
+    _diagSecStore.set(`${cardKey}|${k}`, g);
+    const click = pendTipo
+      ? `_diagSecVerPendentes(this,'${pendTipo}')`
+      : 'openDiagMotivoModal(this)';
     return `
-      <div class="diagsec-lado-head">
-        <span class="diagsec-lado-tag diagsec-lado-${lado}">${escapeHtml(rotulo)}</span>
-        <span class="diagsec-lado-nums">SAP ${fmtKg(Math.abs(sap), 0)} · PUZL ${fmtKg(Math.abs(puzl), 0)}</span>
-        <button class="diagsec-ico" data-central="${escapeHtml(it.central)}" data-mat="${escapeHtml(it.mat)}" data-lado="${lado}"
-          onclick="event.stopPropagation();_diagSecAbrirModal(this)" title="Ver movimentações (abre com o diagnóstico expandido)">
-          <i class="ti ti-external-link"></i>
-        </button>
+      <div class="diagsec-linha${g.tipo === 'estrut' ? ' diagsec-linha--estrut' : ''}" data-k="${escapeHtml(`${cardKey}|${k}`)}"
+        onclick="event.stopPropagation();${click}" title="${pendTipo ? `Abrir ${pendTipo === 'NF' ? 'NFs' : 'OS'} pendentes SAP` : 'Ver os documentos'}">
+        <i class="ti ${icon}" style="color:${cor}"></i>
+        <span class="diagsec-txt">
+          <span class="diagsec-titulo">${escapeHtml(titulo)}</span>
+          ${acao ? `<span class="diagsec-acao">${escapeHtml(acao)}</span>` : ''}
+        </span>
+        <span class="diagsec-qtd" title="${escapeHtml(nomes.join('\n'))}">${g.tipo === 'estrut' ? `${g.blocos.length} ocorrência${g.blocos.length === 1 ? '' : 's'}` : qtd}</span>
+        <span class="diagsec-kg">${g.tipo === 'estrut' ? '' : fmtKgSigned(g.kg, 0)}</span>
+        <i class="ti ${pendTipo ? 'ti-cloud-off' : 'ti-chevron-right'} diagsec-chev"></i>
       </div>`;
-  };
-
-  const blocosHtml = blocos.map(({ it, lados, temErro, frases }) => {
-    // Diferença colorida pela GRAVIDADE, não pelo sinal: aqui +60 t não é
-    // "entrou mais", é "diverge" — verde passaria a ideia errada.
-    const cel = lado => {
-      const l = lados[lado];
-      if (!l) return `<span class="diagsec-cel diagsec-cel--ok"><span class="diagsec-cel-k">${LADO_SIGLA[lado]}</span><i class="ti ti-check"></i></span>`;
-      return `<span class="diagsec-cel"><span class="diagsec-cel-k">${LADO_SIGLA[lado]}</span><b style="color:${l.temErro ? 'var(--red)' : 'var(--amber)'}">${fmtKgSigned(l.d.diff, 0)}</b></span>`;
-    };
-    const corpo = ['ent', 'sai'].filter(lado => lados[lado]).map(lado => {
-      const { d, acion, sobra } = lados[lado];
-      const base = `${it.central}|${it.mat}|${lado}`;
-      return `
-        <div class="diagsec-lado">
-          ${ladoHead(it, lado, d)}
-          ${acion.map(m => _diagSecMotivoHtml(m, base, DOC[lado])).join('')}
-          ${sobra ? _diagSecLinhaHtml({
-            icon: 'ti-help-circle', cor: 'var(--red)',
-            titulo: 'Sem motivo identificado',
-            acao: 'Nenhuma causa conhecida — conferir nas movimentações.',
-            kg: sobra
-          }) : ''}
-        </div>`;
-    }).join('');
-    return `
-      <details class="diagsec-mat">
-        <summary class="diagsec-row">
-          <i class="ti ti-chevron-right diagsec-row-chev"></i>
-          <span class="diagsec-nome">
-            <i class="ti ${temErro ? 'ti-alert-circle' : 'ti-alert-triangle'}" style="color:${temErro ? 'var(--red)' : 'var(--amber)'}"></i>
-            ${escapeHtml(it.nome)}
-          </span>
-          ${cel('ent')}${cel('sai')}
-          <span class="diagsec-maior" title="${escapeHtml(frases.join('\n'))}">${frases.map(f => escapeHtml(f)).join('<span class="diagsec-sep">·</span>')}</span>
-        </summary>
-        <div class="diagsec-body">${corpo}</div>
-      </details>`;
   }).join('');
 
-  const estrutHtml = estruturais.length ? `
-    <details class="diagsec-estrut">
-      <summary class="diagsec-row diagsec-row--estrut">
-        <i class="ti ti-chevron-right diagsec-row-chev"></i>
-        <span class="diagsec-nome"><i class="ti ti-arrows-right-left"></i> Estruturais — sem ação necessária</span>
-        <span class="diagsec-maior">${estruturais.length} ocorrência${estruturais.length === 1 ? '' : 's'} · duplicatas já estornadas e transferências</span>
-      </summary>
-      <div class="diagsec-body">
-        ${estruturais.map(({ it, lado, resolv, fora }) => {
-          const base = `${it.central}|${it.mat}|${lado}`;
-          return `
-          <div class="diagsec-lado">
-            <div class="diagsec-lado-head">
-              <span class="diagsec-lado-tag diagsec-lado-${lado}">${LADO_SIGLA[lado]}</span>
-              <span class="diagsec-lado-nome">${escapeHtml(it.nome)}</span>
-            </div>
-            ${resolv.map(m => _diagSecMotivoHtml(m, base, DOC[lado])).join('')}
-            ${fora && fora.count ? _diagSecLinhaHtml({
-              icon: 'ti-arrows-right-left', cor: 'var(--text3)',
-              titulo: `${fora.count} transferência${fora.count === 1 ? '' : 's'} fora da comparação`,
-              acao: 'A PUZL não registra transferência.',
-              kg: fora.kg, count: fora.count,
-              chave: `${base}|fora`, detalhes: fora.detalhes
-            }) : ''}
-          </div>`;
-        }).join('')}
-      </div>
-    </details>` : '';
-
-  const n = blocos.length;
+  const n = comDivergencia.size;
   const resumo = n
     ? `<span class="diagsec-chip diagsec-chip--erro"><i class="ti ti-alert-circle"></i> ${n} ${isMat ? (n === 1 ? 'central' : 'centrais') : (n === 1 ? 'material' : 'materiais')} com divergência</span>
-       ${Math.abs(totalSemMotivo) >= 0.01 ? `<span class="diagsec-chip diagsec-chip--alerta"><i class="ti ti-help-circle"></i> sem motivo: ${fmtKgSigned(totalSemMotivo, 0)}</span>` : ''}
-       <span class="diagsec-dica">Clique num ${isMat ? 'item' : 'material'} para ver os motivos e o que fazer</span>`
+       <span class="diagsec-dica">Clique num motivo para ver os documentos</span>`
     : `<span class="pend-integ-chip pend-integ-chip-ok"><i class="ti ti-circle-check" style="font-size:13px"></i> PUZL e SAP batem em ${isMat ? 'todas as centrais' : 'todos os materiais'}</span>`;
 
   return `
     <div class="diagsec">
       <div class="micro-section-title"><i class="ti ti-stethoscope"></i> Divergências PUZL × SAP</div>
       <div class="diagsec-resumo">${resumo}</div>
-      ${n || estruturais.length ? `<div class="diagsec-lista">${blocosHtml}${estrutHtml}</div>` : ''}
+      ${linhas ? `<div class="diagsec-lista">${linhas}</div>` : ''}
     </div>`;
 }
 

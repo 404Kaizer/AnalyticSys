@@ -1810,121 +1810,69 @@ td.pending-cell  { color: var(--text3) !important; font-style: italic; font-size
 }
 
 /* ── Divergências PUZL × SAP (card da Visão Micro) ── ver
-   buildDiagDivergenciaSection em ui.js. Fechada, cada material é UMA
-   linha (nome · ENT · SAI · maior motivo); aberta, os dois lados lado a
-   lado, um motivo por linha. A lista de registros reaproveita
-   .bdm-diag-list do Diagnóstico do modal. */
+   buildDiagDivergenciaSection em ui.js. Uma linha por motivo; os
+   documentos ficam no modal (#dgm-overlay, openDiagMotivoModal). */
 .diagsec {
   padding: 14px 18px 16px;
   border-bottom: 1px solid var(--border);
 }
-.diagsec-resumo { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; }
+.diagsec-resumo { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 10px; }
 .diagsec-chip {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 4px 10px; border-radius: 6px;
   font-family: var(--mono); font-size: 11px; font-weight: 700;
   text-transform: uppercase; letter-spacing: .03em;
 }
-.diagsec-chip--erro   { background: var(--red-bg);   color: var(--red);   border: 1px solid var(--red-border); }
-.diagsec-chip--alerta { background: var(--amber-bg); color: var(--amber); border: 1px solid var(--amber-border); }
+.diagsec-chip--erro { background: var(--red-bg); color: var(--red); border: 1px solid var(--red-border); }
 .diagsec-dica { font-size: 11px; color: var(--text3); }
-/* Teto de altura: com muitos materiais abertos a seção não pode empurrar
-   a tabela de análise para fora da tela. */
 .diagsec-lista {
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  max-height: 520px;
-  overflow-y: auto;
+  overflow: hidden;
 }
-.diagsec-mat + .diagsec-mat,
-.diagsec-estrut { border-top: 1px solid var(--border); }
-
-/* Linha do material (summary). Colunas fixas para ENT/SAI alinharem
-   entre materiais como numa tabela. */
-.diagsec-row {
+/* Colunas fixas para materiais e kg alinharem de uma linha para a outra,
+   como numa tabela. */
+.diagsec-linha {
   display: grid;
-  grid-template-columns: 14px minmax(140px, 220px) 150px 150px minmax(0, 1fr);
+  grid-template-columns: 16px minmax(0, 1fr) 130px 130px 16px;
   align-items: center;
   gap: 12px;
-  padding: 8px 12px;
+  padding: 8px 14px;
   cursor: pointer;
-  user-select: none;
-  list-style: none;
 }
-.diagsec-row::-webkit-details-marker { display: none; }
-.diagsec-row:hover { background: var(--bg3); }
-.diagsec-row--estrut { grid-template-columns: 14px auto minmax(0, 1fr); }
-.diagsec-row-chev { color: var(--text3); font-size: 13px; transition: transform .15s; }
-details[open] > .diagsec-row .diagsec-row-chev { transform: rotate(90deg); }
-details[open] > .diagsec-row { background: var(--bg2); }
-.diagsec-nome {
-  display: flex; align-items: center; gap: 6px; min-width: 0;
-  font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--text);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.diagsec-row--estrut .diagsec-nome { color: var(--text3); font-weight: 500; }
-.diagsec-row--estrut .diagsec-maior { color: var(--text3); }
-.diagsec-cel { display: flex; align-items: baseline; gap: 6px; font-family: var(--mono); font-size: 11.5px; white-space: nowrap; }
-.diagsec-cel-k { font-size: 9.5px; letter-spacing: .08em; color: var(--text3); }
-.diagsec-cel--ok .ti { color: var(--green); font-size: 12px; }
-.diagsec-maior {
-  font-size: 11px; color: var(--text2);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
-}
+.diagsec-linha + .diagsec-linha { border-top: 1px solid var(--border); }
+.diagsec-linha:hover { background: var(--bg3); }
+.diagsec-linha:hover .diagsec-chev { color: var(--accent); }
+.diagsec-txt { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.diagsec-titulo { font-size: 12.5px; font-weight: 500; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.diagsec-acao   { font-size: 11px; color: var(--text3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.diagsec-qtd { font-family: var(--mono); font-size: 11px; color: var(--text2); white-space: nowrap; }
+.diagsec-kg  { font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--text); white-space: nowrap; text-align: right; }
+.diagsec-chev { color: var(--text3); font-size: 13px; }
+.diagsec-linha--estrut .diagsec-titulo { color: var(--text3); font-weight: 400; }
 
-/* Corpo aberto: Entradas e Saídas lado a lado (cada uma ocupa a largura
-   toda quando é a única ou quando a tela é estreita). */
-.diagsec-body {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(460px, 1fr));
-  gap: 10px 18px;
-  padding: 4px 12px 12px 38px;
-  background: var(--bg2);
-}
-.diagsec-lado { display: flex; flex-direction: column; min-width: 0; }
-.diagsec-lado-head {
-  display: flex; align-items: center; gap: 10px;
-  padding: 6px 0 4px;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 2px;
-}
+/* Modal de um motivo: um bloco por material. */
+/* .pim-body zera o padding mais adiante no arquivo — daí a dupla classe. */
+.pim-body.dgm-body { padding: 6px 18px 16px; }
+.dgm-bloco { padding: 12px 0; }
+.dgm-bloco + .dgm-bloco { border-top: 1px solid var(--border); }
+.dgm-bloco-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.dgm-bloco-nome { font-family: var(--mono); font-size: 12.5px; font-weight: 700; color: var(--text); }
+.dgm-bloco-info { font-size: 11.5px; color: var(--text2); }
+.dgm-bloco-kg   { margin-left: auto; font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--text); }
+.dgm-bloco-nota { margin-top: 6px; font-size: 11px; color: var(--text3); }
+/* Sem teto próprio: o modal já rola, e uma lista rolando dentro dele
+   seria scroll dentro de scroll. */
+.dgm-body .bdm-diag-list { max-height: none; }
 .diagsec-lado-tag { font-family: var(--mono); font-size: 9.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
 .diagsec-lado-ent { color: var(--green); }
 .diagsec-lado-sai { color: var(--red); }
-.diagsec-lado-nums, .diagsec-lado-nome { font-family: var(--mono); font-size: 10.5px; color: var(--text3); }
-.diagsec-lado-nome { color: var(--text2); font-weight: 700; }
-.diagsec-ico {
-  margin-left: auto;
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 24px; height: 22px;
-  background: none; border: 1px solid transparent; border-radius: 5px;
-  color: var(--text3); cursor: pointer; font-size: 13px;
+.diagsec-link {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: none; border: 1px solid var(--border); border-radius: 5px;
+  padding: 2px 8px; font-size: 11px; color: var(--accent); cursor: pointer;
 }
-.diagsec-ico:hover { color: var(--accent); border-color: var(--border); background: var(--bg3); }
-
-/* Um motivo = uma linha (com a ação apagada logo abaixo do rótulo). */
-.diagsec-m {
-  display: grid;
-  grid-template-columns: 16px minmax(0, 1fr) auto 24px;
-  align-items: center;
-  gap: 8px;
-  padding: 5px 4px;
-  border-radius: 5px;
-  list-style: none;
-}
-.diagsec-m::-webkit-details-marker { display: none; }
-summary.diagsec-m { cursor: pointer; }
-summary.diagsec-m:hover { background: var(--bg3); }
-.diagsec-m > .diagsec-ico { margin-left: 0; }
-.diagsec-m-txt { display: flex; flex-direction: column; min-width: 0; }
-.diagsec-m-label { font-size: 12px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.diagsec-m-acao  { font-size: 11px; color: var(--text3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.diagsec-m-kg { font-family: var(--mono); font-size: 11.5px; font-weight: 600; color: var(--text); white-space: nowrap; text-align: right; }
-.diagsec-m-refs { margin-left: 8px; font-family: var(--mono); font-size: 10.5px; color: var(--text3); }
-.diagsec-sep { margin: 0 7px; color: var(--border2); }
-.diagsec-chev { color: var(--text3); font-size: 12px; justify-self: center; transition: transform .15s; }
-.diagsec-m-wrap[open] .diagsec-chev { transform: rotate(180deg); }
-.diagsec-m-wrap > .bdm-diag-list { margin: 2px 0 6px 24px; }
+.diagsec-link:hover { background: var(--bg3); }
 .pend-integ-chips {
   display: flex;
   flex-wrap: wrap;
