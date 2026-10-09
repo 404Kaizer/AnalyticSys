@@ -112,10 +112,10 @@ window.dgToggleOcultarAjustes = function () {
 
 // opts.aoVivo     — ignora a fotografia do mês fechado e calcula dos dados.
 // opts.fotografia — cálculo PARA a fotografia (ver dgFotografiaGerar): Est.
-//                   Inicial sempre pelo SAP (sem o toggle), Est. Final pelo
-//                   Custos SAP (_dgEstFimCustosSap) e grava o Est. de cada
-//                   material (r.estPorMat) + a regional (r.regional) no
-//                   resultado, pra fotografia não depender de nada vivo.
+//                   Inicial sempre pelo SAP (sem o toggle) e grava o Est. de
+//                   cada material (r.estPorMat) + a regional (r.regional) no
+//                   resultado, pra fotografia não depender de nada vivo. (O
+//                   Est. Final é o Custos SAP sempre, com ou sem fotografia.)
 function buildDashboardGerencialResults(dtIni, dtFim, opts = {}) {
   // Mês fechado com fotografia carregada → os números congelados, sem
   // recalcular nada (ver _dgFotografiaDoPeriodo).
@@ -329,9 +329,9 @@ function buildDashboardGerencialResults(dtIni, dtFim, opts = {}) {
         missingIniMats.push(mat);
       }
 
-      const fim = !dtFim ? null
-        : fotografia ? _dgEstFimCustosSap({ central, material: mat, dtFim })
-        : getLastPeriodLaunchStock({ central, material: mat, dtFim });
+      // EST. FINAL — sempre o estoque do Custos SAP, com o mês aberto ou
+      // fechado (ver _dgEstFimCustosSap).
+      const fim = !dtFim ? null : _dgEstFimCustosSap({ central, material: mat, dtFim });
       if (fim && !fim.missing) {
         somaUltimo += fim.value;
       } else {
@@ -391,16 +391,19 @@ function _dgEstIniSap({ central, material, dtIni }) {
   return (typeof _anGetSapStock === 'function') ? _anGetSapStock({ central, material, dtIni }) : null;
 }
 
-// Est. Final de um mês FECHADO = estoque do Custos SAP daquele mês (decisão
-// do Hugo, 09/10/2026: "o estoque final já está em CUSTOS SAP"). Calculado
-// como o Est. Inicial do mês SEGUINTE (_anGetSapStock no dia 1º do próximo
-// mês): com o registro do mês no Custos SAP é exatamente o estoqueTotal dele;
-// sem registro, a mesma cascata pra trás + movimentações SAP que o Est.
-// Inicial já usa. Assim Est. Final de agosto ≡ Est. Inicial de setembro, por
-// construção. dtLabel = último dia do mês.
+// EST. FINAL do Gerencial inteiro = estoque do Custos SAP, com o mês ABERTO ou
+// FECHADO (decisões do Hugo, 09/10/2026: "o estoque final já está em CUSTOS
+// SAP" e "independente do período estar fechado ou não"). Substitui o último
+// lançamento do operador (getLastPeriodLaunchStock*) no Gerencial.
+// Calculado como o saldo SAP do dia SEGUINTE a dtFim (_anGetSapStock, a mesma
+// função do Est. Inicial): com dtFim no último dia do mês e o registro do mês
+// no Custos SAP, é exatamente o estoqueTotal dele; sem registro (mês corrente,
+// MARDH ainda não importada) ou com dtFim no meio do mês, é o último Custos
+// SAP disponível + as movimentações SAP até dtFim. Assim Est. Final de agosto
+// ≡ Est. Inicial de setembro, por construção. dtLabel = dtFim.
 function _dgEstFimCustosSap({ central, material, dtFim }) {
-  const prox = new Date(dtFim.getFullYear(), dtFim.getMonth() + 1, 1);
-  const r = _dgEstIniSap({ central, material, dtIni: prox });
+  const diaSeguinte = new Date(dtFim.getFullYear(), dtFim.getMonth(), dtFim.getDate() + 1);
+  const r = _dgEstIniSap({ central, material, dtIni: diaSeguinte });
   return r ? { value: r.value, dtLabel: r.dtLabel, ancoraLabel: r.ancoraLabel || null, missing: false } : null;
 }
 
@@ -1151,12 +1154,13 @@ function _dgVgBuildPares(results, thresholds, dtIni, dtFim) {
         // acima. MESMA fonte usada em buildDashboardGerencialResults, senão
         // o Resumo do Período discorda deste Detalhado para o mesmo
         // material/período.
-        // Gerando a fotografia: Est. já resolvido em buildDashboardGerencialResults
-        // (SAP no início, Custos SAP no fim — ver opts.fotografia).
+        // EST. FINAL — Custos SAP (_dgEstFimCustosSap), MESMA fonte de
+        // buildDashboardGerencialResults. Gerando a fotografia: Est. já
+        // resolvido lá (SAP no início — ver opts.fotografia).
         const est  = r.estPorMat ? (r.estPorMat[mat] || { ini: null, fim: null }) : null;
         const prev = est ? est.ini : _dgGetEstIniStock({ central: r.central, material: mat, dtIni, dtFim, catKey });
         const fim  = est ? (est.fim ? { ...est.fim, missing: false } : { missing: true })
-                         : getLastPeriodLaunchStockWithFallback({ central: r.central, material: mat, dtIni, dtFim });
+                         : (_dgEstFimCustosSap({ central: r.central, material: mat, dtFim }) || { missing: true });
         // Captura os mesmos valores já resolvidos pra calcular o diff —
         // usados pelos cards "Est. Inicial/Final Total" do resumo do
         // período (ver _dgVgEstoqueTotais). Ausente fica 0 (sem aviso,
@@ -1235,9 +1239,9 @@ function _dgVgBuildPares(results, thresholds, dtIni, dtFim) {
 }
 
 // Est. Inicial / Est. Final Total — soma o estoqueIni/estoqueFim que
-// _dgVgBuildPares já resolve por par (mesma função usada no Inventário:
-// getPrePeriodLaunchStock / getLastPeriodLaunchStockWithFallback, em
-// ui.js) — sem custo extra de performance, só captura um valor que já
+// _dgVgBuildPares já resolve por par (Est. Inicial: _dgGetEstIniStock;
+// Est. Final: Custos SAP, _dgEstFimCustosSap) — sem custo extra de
+// performance, só captura um valor que já
 // era calculado e descartado. Ausente conta como 0, sem aviso (decisão
 // confirmada: diferente do Inventário, que mostra "X ausentes"). Custo
 // = Σ p.custoIni/p.custoFim (kg × Custos SAP do material naquele par, já
@@ -3521,9 +3525,9 @@ function _consumoKgSaidas(sapRecords) {
 // Inicial/Final congelados, os mesmos dos pares — nada vivo.
 function _giroSnapshotMaterial({ central, mat, lancs, sap, dtIni, dtFim, catKey, est }) {
   const prev = est ? est.ini : _dgGetEstIniStock({ central, material: mat, dtIni, dtFim, catKey });
+  // Est. Final pelo Custos SAP — mesma fonte dos pares (_dgEstFimCustosSap).
   const fim = est ? (est.fim ? { ...est.fim, missing: false } : null)
-    : (typeof _anGetLastPeriodStockFallback === 'function')
-      ? _anGetLastPeriodStockFallback({ central, material: mat, dtIni, dtFim }) : null;
+    : dtFim ? _dgEstFimCustosSap({ central, material: mat, dtFim }) : null;
   return buildSnapshot({
     lancs, sap,
     initialStockOverride:     prev?.value   ?? null,
@@ -3611,8 +3615,8 @@ function _giroNivelInfo(item) {
 //
 // A coluna Variação usa a conta da VISÃO MICRO (analitico.js), não a do
 // giro: Est.Final real − Est.Teórico, com Est.Inicial vindo do saldo
-// teórico do SAP (_anGetSapStock) e Est.Final do último lançamento do
-// período (_anGetLastPeriodStockFallback). Por isso são DOIS buildSnapshot
+// teórico do SAP (_anGetSapStock) e Est.Final do Custos SAP
+// (_dgEstFimCustosSap, desde 09/10/2026). Por isso são DOIS buildSnapshot
 // por material: o do giro é sem override (pesoIni = 0, como sempre foi na
 // tela de giro) e mudar isso alteraria giro/cobertura de todo o sistema.
 // Variação da central = soma da variação dos materiais, igual ao card da
