@@ -1375,13 +1375,18 @@
           <div class="micro-filter-bar" id="micro-filter-bar" style="display:none">
 
             <!-- Agrupamento dos cards: por Regional (regional → central →
-                 material) ou por Material (material → central) -->
+                 material), por Central (central → material, sem regional)
+                 ou por Material (material → central). Só ícone; o nome
+                 fica no title. -->
             <div class="micro-group-mode" id="micro-group-mode">
-              <button class="active" id="mgm-btn-regional" onclick="anSetGroupMode('regional')" title="Cards por central, agrupados por regional">
-                <i class="ti ti-users-group"></i> Por Regional
+              <button class="active" id="mgm-btn-regional" onclick="anSetGroupMode('regional')" title="Por Regional — cards por central, agrupados por regional" aria-label="Por Regional">
+                <i class="ti ti-users-group"></i>
               </button>
-              <button id="mgm-btn-material" onclick="anSetGroupMode('material')" title="Cards por material, com as centrais dentro">
-                <i class="ti ti-box"></i> Por Material
+              <button id="mgm-btn-central" onclick="anSetGroupMode('central')" title="Por Central — cards por central, sem agrupar por regional" aria-label="Por Central">
+                <i class="ti ti-building-warehouse"></i>
+              </button>
+              <button id="mgm-btn-material" onclick="anSetGroupMode('material')" title="Por Material — cards por material, com as centrais dentro" aria-label="Por Material">
+                <i class="ti ti-box"></i>
               </button>
             </div>
 

@@ -2898,7 +2898,7 @@ td.var-cell-zero .ti-circle-check     { color: var(--text3); }
   flex-shrink: 0;
 }
 
-/* ── Visão Micro — alternador de agrupamento (Por Regional × Por Material) ──
+/* ── Visão Micro — alternador de agrupamento (Regional × Central × Material) ──
    Segmentado compacto: mora na própria barra de filtros, então não pode ter
    o peso visual das abas de visão (.an-view-btn), que ficam acima. */
 .micro-group-mode {
@@ -2914,21 +2914,29 @@ td.var-cell-zero .ti-circle-check     { color: var(--text3); }
   display: flex;
   align-items: center;
   gap: 5px;
-  padding: 5px 10px;
+  padding: 5px 8px;
   border: none;
   border-radius: calc(var(--radius) - 2px);
   background: transparent;
   color: var(--text3);
-  font-family: var(--mono);
-  font-size: 11.5px;
-  font-weight: 600;
-  white-space: nowrap;
   cursor: pointer;
   transition: all .15s;
 }
-.micro-group-mode button i { font-size: 13px; }
+.micro-group-mode button i { font-size: 15px; }
 .micro-group-mode button:hover { color: var(--text2); background: var(--bg4); }
 .micro-group-mode button.active { color: var(--accent); background: var(--accent-dim); }
+
+/* Agrupamento "Por Central": o DOM é o mesmo do "Por Regional" (filtros,
+   foco e refresh de card continuam valendo), só que os blocos de regional
+   somem da caixa — display:contents "achata" grupo e corpo, e os cards
+   viram uma lista única. A ordem global (alfabética, ver rodarAnalitico)
+   vem do style.order de cada card. O display:none inline que o filtro de
+   regional põe no grupo continua escondendo os cards dele. */
+#an-micro-container.mgm-flat { display: flex; flex-direction: column; gap: 10px; }
+#an-micro-container.mgm-flat .regional-group,
+#an-micro-container.mgm-flat .regional-group-body { display: contents; }
+#an-micro-container.mgm-flat .regional-group-header-wrap { display: none; }
+#an-micro-container.mgm-flat .regional-group-body .micro-filial-card { margin-bottom: 0; }
 
 .micro-filter-group {
   position: relative;

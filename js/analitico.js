@@ -203,9 +203,14 @@ function _updateMicroContainerHeightLock(reset) {
 }
 
 // ═══════════════════════════════════════════════════════════
-// AGRUPAMENTO DA VISÃO MICRO — Por Regional × Por Material
+// AGRUPAMENTO DA VISÃO MICRO — Por Regional × Por Central × Por Material
 // ═══════════════════════════════════════════════════════════
 // 'regional' (padrão): regionais → cards de central → linhas de material.
+// 'central':           MESMO DOM do 'regional', com os blocos de regional
+//                      achatados por CSS (#an-micro-container.mgm-flat) —
+//                      lista única de cards de central. Toda a lógica de
+//                      filtro/foco/refresh que anda por .regional-group
+//                      continua valendo sem cópia.
 // 'material':          cards de material → linhas de central. Mesma
 //                      anatomia de card (donut, maiores variações,
 //                      capacidade, integração SAP, tabela) — o que muda é
@@ -259,7 +264,7 @@ function _anComOverlay(titulo, status, tarefa) {
 /**
  * Troca o agrupamento da Visão Micro.
  *
- * @param {'regional'|'material'} mode
+ * @param {'regional'|'central'|'material'} mode
  * @param {function} [onDone] - roda DEPOIS do re-render (e ainda atrás do
  *        overlay). Necessário porque o render é assíncrono agora: quem
  *        precisa mexer no DOM recém-criado — como microFocusFromMacro, que
@@ -268,7 +273,7 @@ function _anComOverlay(titulo, status, tarefa) {
  *        ativo ou sem análise carregada).
  */
 function anSetGroupMode(mode, onDone) {
-  const novo = mode === 'material' ? 'material' : 'regional';
+  const novo = (mode === 'material' || mode === 'central') ? mode : 'regional';
   const temDados = !!(window.__analiticoResults && window.__analiticoDtIni && window.__analiticoDtFim);
 
   if (novo === _anGroupMode || !temDados) {
@@ -277,14 +282,24 @@ function anSetGroupMode(mode, onDone) {
     return;
   }
 
+  // Regional ↔ Central é o mesmo DOM (só a classe do container muda, ver
+  // _anSyncGroupModeUI) — não há o que re-renderizar, só reaplicar filtros
+  // (o nível "regional" do tipo de variação liga/desliga) e o foco.
+  const soAchatar = novo !== 'material' && _anGroupMode !== 'material';
   _anGroupMode = novo;
   _anSyncGroupModeUI();
+  if (soAchatar) {
+    _applyMicroVisibility();
+    _updateCentralFocusAll();
+    if (typeof onDone === 'function') onDone();
+    return;
+  }
 
   const isMat = novo === 'material';
   _anComOverlay(
-    isMat ? 'Agrupando por material' : 'Agrupando por regional',
+    isMat ? 'Agrupando por material' : novo === 'central' ? 'Agrupando por central' : 'Agrupando por regional',
     isMat ? 'Montando os cards de material e suas centrais...'
-          : 'Remontando os cards de central por regional...',
+          : 'Remontando os cards de central...',
     () => {
       // silent: quem controla o overlay aqui é _anComOverlay.
       // skipMacro: os donuts da Visão Macro NÃO podem se mexer aqui. Eles são
@@ -306,9 +321,12 @@ window.anSetGroupMode = anSetGroupMode;
 // Sincroniza a barra de filtros com o agrupamento ativo: botões, legenda e
 // os controles que perdem o sentido em um dos modos.
 function _anSyncGroupModeUI() {
-  const isMat = _anGroupMode === 'material';
-  document.getElementById('mgm-btn-regional')?.classList.toggle('active', !isMat);
-  document.getElementById('mgm-btn-material')?.classList.toggle('active',  isMat);
+  const isMat  = _anGroupMode === 'material';
+  const semReg = _anGroupMode !== 'regional';   // material ou central: sem blocos de regional em tela
+  document.getElementById('mgm-btn-regional')?.classList.toggle('active', _anGroupMode === 'regional');
+  document.getElementById('mgm-btn-central')?.classList.toggle('active',  _anGroupMode === 'central');
+  document.getElementById('mgm-btn-material')?.classList.toggle('active', isMat);
+  document.getElementById('an-micro-container')?.classList.toggle('mgm-flat', _anGroupMode === 'central');
 
   // Capacidade filtra por situação de estoque × capacidade da CENTRAL —
   // no agrupamento por material o card não é uma central, então o filtro
@@ -320,9 +338,9 @@ function _anSyncGroupModeUI() {
   // não tem o que abrir — e o nível "Regionais" do filtro de tipo de
   // variação fica sem alvo (ver _applyMicroVisibility).
   const regBtn = document.getElementById('btn-toggle-regionais');
-  if (regBtn) regBtn.style.display = isMat ? 'none' : '';
+  if (regBtn) regBtn.style.display = semReg ? 'none' : '';
   const nivelReg = document.querySelector('#mfo-tipo-var-nivel input[value="regional"]')?.closest('.micro-filter-option');
-  if (nivelReg) nivelReg.style.display = isMat ? 'none' : '';
+  if (nivelReg) nivelReg.style.display = semReg ? 'none' : '';
 
   // O filtro de Saúde continua valendo, mas o que ele filtra troca de nome:
   // no agrupamento por material o nível é o do CARD do material (calculado
@@ -2156,6 +2174,7 @@ function refreshCentralCard(central, opts = {}) {
   }
 
   // Substitui o card antigo pelo novo na MESMA posição do DOM (sem reordenar)
+  newCard.style.order = oldCard.style.order;
   oldCard.replaceWith(newCard);
   // O card novo traz badges "?" (ex.: faixas de capacidade) que precisam ser
   // religados — o initHelpBadges do fim de rodarAnalitico não roda aqui.
@@ -2566,7 +2585,11 @@ function renderAnaliticoMicro(results, dtIni, dtFim, silent, opts = {}) {
   } else {
 
   results.forEach((r, idx) => {
-    _cardBuffer.push(buildCentralCard(r, idx, dtIni, dtFim, { entradasByCentral: _entradasByCentralMicro, entradasByCentralDestino: _entradasByCentralMicroDestino }));
+    const card = buildCentralCard(r, idx, dtIni, dtFim, { entradasByCentral: _entradasByCentralMicro, entradasByCentralDestino: _entradasByCentralMicroDestino });
+    // Ordem da lista achatada do agrupamento por central (results já vem
+    // em ordem alfabética de central) — sem efeito fora dele (ver .mgm-flat).
+    card.style.order = idx;
+    _cardBuffer.push(card);
   });
 
   // ── Group cards by regional ──────────────────────────────────────────────
@@ -2838,9 +2861,9 @@ function _updateRegionalFocus() {
  * recebem opacidade reduzida. Escopo limitado ao regional em questão.
  */
 function _updateCentralFocus(group) {
-  // Sem grupo (agrupamento por material): o escopo é o container inteiro,
-  // que ali já é a lista plana de cards.
-  const scope = group || document.getElementById('an-micro-container');
+  // Sem grupo (agrupamento por material) ou com os grupos achatados (por
+  // central): o escopo é o container inteiro, que ali é a lista plana de cards.
+  const scope = (_anGroupMode === 'regional' && group) || document.getElementById('an-micro-container');
   if (!scope) return;
   const cards = scope.querySelectorAll('.micro-filial-card');
   const anyOpen = Array.from(cards).some(c => c.querySelector('.micro-filial-body')?.classList.contains('open'));
@@ -2901,6 +2924,7 @@ function _microRecomputeOptions(key) {
   const passesTipo = (diff, level) => {
     if (!tipoActive) return true;
     if (!tipoNivel.has(level)) return true;
+    if (level === 'regional' && _anGroupMode === 'central') return true;  // grupos achatados: nível sem alvo
     const isDesfalque = diff < 0;
     const isSobra     = diff > 0;
     if (tipoFilter.has('desfalque') && tipoFilter.has('sobra')) return true;
@@ -3307,13 +3331,14 @@ function microFocusFromMacro(key, value) {
   // Cada ranking leva ao agrupamento que responde a pergunta dele:
   //   "Piores materiais"  → agrupamento por MATERIAL (o card já é o material
   //                         clicado, com as centrais dele dentro).
-  //   "Piores centrais"   → agrupamento por regional, como sempre.
+  //   "Piores centrais"   → agrupamento por regional (ou fica no por central,
+  //                         se já estiver nele — o card também é a central).
   // Quando o agrupamento muda, anSetGroupMode reconstrói a visão inteira
   // atrás do overlay — por isso o foco vai como callback, e não na linha de
   // baixo: ele precisa do DOM novo. Se o modo já for o certo, o callback
   // roda na hora e nada disso aparece pro usuário.
   if (typeof anSetGroupMode === 'function') {
-    anSetGroupMode(key === 'material' ? 'material' : 'regional', aplicarFoco);
+    anSetGroupMode(key === 'material' ? 'material' : (_anGroupMode === 'central' ? 'central' : 'regional'), aplicarFoco);
   } else {
     aplicarFoco();
   }
@@ -3565,6 +3590,7 @@ function _applyMicroVisibility() {
   const passesTipo = (diff, level) => {
     if (!tipoActive) return true;
     if (!tipoNivel.has(level)) return true;  // level not being filtered
+    if (level === 'regional' && _anGroupMode === 'central') return true;  // grupos achatados: nível sem alvo
     const isDesfalque = diff < 0;
     const isSobra     = diff > 0;
     if (tipoFilter.has('desfalque') && tipoFilter.has('sobra')) return true;
@@ -3712,7 +3738,13 @@ function toggleAllCentralis() {
     }
   });
   _updateToggleCentralisBtn();
-  if (_anGroupMode === 'material') _updateCentralFocus(null);
+  _updateCentralFocusAll();
+}
+
+// Recalcula o foco de todos os cards: por grupo no agrupamento por regional,
+// de uma vez só (container inteiro) nos demais.
+function _updateCentralFocusAll() {
+  if (_anGroupMode !== 'regional') _updateCentralFocus(null);
   else document.querySelectorAll('#an-micro-container .regional-group').forEach(_updateCentralFocus);
 }
 
