@@ -221,6 +221,22 @@ function _updateMicroContainerHeightLock(reset) {
 // regional, que é a leitura padrão do analista.
 let _anGroupMode = 'regional';
 
+// Montagem guardada da Visão Micro, por lado da troca: 'grupo' (regional e
+// central, mesmo DOM) e 'material'. A montagem que SAI de cena numa troca
+// fica aqui e volta instantânea na próxima troca — só a 1ª ida a cada lado
+// por análise paga o render. Guarda junto os caches de detalhe e de "sem
+// cadastro": eles são por ÍNDICE de card/linha e as chaves dos dois modos
+// colidem (card 0/linha 0 existe nos dois), então precisam voltar com o DOM.
+// Zerado sempre que o dado muda: render completo fora da troca (Analisar,
+// capacidades, fallback de toggles) e refresh de card (refreshCentralCard /
+// refreshMaterialCard).
+// ponytail: a montagem guardada fica tão atualizada quanto a que está em
+// tela — mudanças que hoje não re-renderizam a Micro (ex.: capacidade editada
+// com a Micro oculta) só aparecem no próximo Analisar, nos dois lados. Custo:
+// até uma montagem extra na memória. Upgrade = carimbo de versão do state.
+let _anMicroCache = {};
+const _anLadoCache = (mode) => mode === 'material' ? 'material' : 'grupo';
+
 // ── Overlay das trocas de visão (#view-loading) ──────────────────────────
 // Overlay PRÓPRIO, separado do #loading-overlay do boot (showLoadingOverlay/
 // hideLoadingOverlay, em format.js). Trocar de visão não tem etapas, não
@@ -286,6 +302,7 @@ function anSetGroupMode(mode, onDone) {
   // _anSyncGroupModeUI) — não há o que re-renderizar, só reaplicar filtros
   // (o nível "regional" do tipo de variação liga/desliga) e o foco.
   const soAchatar = novo !== 'material' && _anGroupMode !== 'material';
+  const ladoSai = _anLadoCache(_anGroupMode);
   _anGroupMode = novo;
   _anSyncGroupModeUI();
   if (soAchatar) {
@@ -295,26 +312,66 @@ function anSetGroupMode(mode, onDone) {
     return;
   }
 
+  // Troca de lado (material ↔ regional/central): guarda a montagem que sai
+  // e traz a do outro lado do cache, se já foi montada (ver _anMicroCache).
+  const container = document.getElementById('an-micro-container');
+  if (container) {
+    _anMicroCache[ladoSai] = {
+      nodes:  [...container.childNodes],
+      detail: window.__analiticoDetailCache,
+      semCad: window.__analiticoSemCadastroCache
+    };
+  }
+  const ladoEntra = _anLadoCache(novo);
+  const guardada = _anMicroCache[ladoEntra];
+  delete _anMicroCache[ladoEntra];   // volta a ser a montagem em tela
+
+  // skipMacro: os donuts da Visão Macro NÃO podem se mexer aqui. Eles são
+  // sempre por central × material (independem do agrupamento da Micro) e
+  // têm filtros próprios de regional/categoria — redesenhá-los zeraria
+  // esses filtros e reanimaria os gráficos sem nenhum dado ter mudado.
+  // EXCEÇÃO: com NFs/OS pendentes consideradas o dado MUDA na troca — a
+  // Macro usa o estado do agrupamento ativo (por central × por material,
+  // ver renderMacroPanels) — e aí ela tem que ser recalculada.
+  const _temPend = [window._pendConsiderados, window._pendConsideradosMat]
+    .some(m => Object.values(m || {}).some(s => s && (s.nf || s.os)));
+
+  const montar = () => {
+    if (guardada) _anRestaurarMontagem(guardada, !_temPend);
+    // silent: quem controla o overlay aqui é _anComOverlay.
+    // manterCache: este render é a troca, não dado novo — não pode zerar a
+    // montagem que acabou de ser guardada.
+    else renderAnaliticoMicro(window.__analiticoResults, window.__analiticoDtIni, window.__analiticoDtFim, true, { skipMacro: !_temPend, manterCache: true });
+    if (typeof onDone === 'function') onDone();
+  };
+
+  // Montagem guardada e Macro intocada: troca é só recolocar nós — sem overlay.
+  if (guardada && !_temPend) { montar(); return; }
+
   const isMat = novo === 'material';
   _anComOverlay(
     isMat ? 'Agrupando por material' : novo === 'central' ? 'Agrupando por central' : 'Agrupando por regional',
     isMat ? 'Montando os cards de material e suas centrais...'
           : 'Remontando os cards de central...',
-    () => {
-      // silent: quem controla o overlay aqui é _anComOverlay.
-      // skipMacro: os donuts da Visão Macro NÃO podem se mexer aqui. Eles são
-      // sempre por central × material (independem do agrupamento da Micro) e
-      // têm filtros próprios de regional/categoria — redesenhá-los zeraria
-      // esses filtros e reanimaria os gráficos sem nenhum dado ter mudado.
-      // EXCEÇÃO: com NFs/OS pendentes consideradas o dado MUDA na troca — a
-      // Macro usa o estado do agrupamento ativo (por central × por material,
-      // ver renderMacroPanels) — e aí ela tem que ser recalculada.
-      const _temPend = [window._pendConsiderados, window._pendConsideradosMat]
-        .some(m => Object.values(m || {}).some(s => s && (s.nf || s.os)));
-      renderAnaliticoMicro(window.__analiticoResults, window.__analiticoDtIni, window.__analiticoDtFim, true, { skipMacro: !_temPend });
-      if (typeof onDone === 'function') onDone();
-    }
+    montar
   );
+}
+
+// Recoloca em tela uma montagem guardada em _anMicroCache, deixando-a no
+// mesmo estado em que um render completo a deixaria: caches de detalhe do
+// lado certo, filtros limpos, tudo recolhido e (se pedido) Macro recalculada.
+function _anRestaurarMontagem(m, skipMacro) {
+  const container = document.getElementById('an-micro-container');
+  if (!container) return;
+  container.replaceChildren(...m.nodes);
+  window.__analiticoDetailCache      = m.detail;
+  window.__analiticoSemCadastroCache = m.semCad;
+  clearAllMicroFilters();
+  _anRecolherMicro();
+  if (!skipMacro && typeof renderMacroPanels === 'function') {
+    const th = typeof getHealthThresholds === 'function' ? getHealthThresholds() : {};
+    renderMacroPanels(window.__analiticoResults, th, window.__analiticoDtIni, window.__analiticoDtFim);
+  }
 }
 window.anSetGroupMode = anSetGroupMode;
 
@@ -2144,6 +2201,7 @@ function _anResumoFromCard(card) {
 
 function refreshCentralCard(central, opts = {}) {
   if (!window.__analiticoResults || !window.__analiticoDtIni || !window.__analiticoDtFim) return false;
+  _anMicroCache = {};   // dado mudou: a montagem guardada do outro lado ficou velha
 
   const r = window.__analiticoResults.find(item => item.central === central);
   if (!r) return false;
@@ -2222,6 +2280,7 @@ function refreshCentralCard(central, opts = {}) {
 function refreshMaterialCard(material) {
   if (_anGroupMode !== 'material') return false;
   if (!window.__analiticoResults || !window.__analiticoDtIni || !window.__analiticoDtFim) return false;
+  _anMicroCache = {};   // dado mudou: a montagem guardada do outro lado ficou velha
 
   const oldCard = Array.from(document.querySelectorAll('#an-micro-container .micro-filial-card'))
     .find(c => c.dataset.material === material);
@@ -2466,6 +2525,9 @@ function renderAnaliticoMicro(results, dtIni, dtFim, silent, opts = {}) {
   const container = document.getElementById('an-micro-container');
   if (!container) return;
   container.innerHTML = '';
+  // Render fora da troca de agrupamento = dado novo: a montagem guardada do
+  // outro lado ficou velha (ver _anMicroCache).
+  if (!opts.manterCache) _anMicroCache = {};
   window.__analiticoDetailCache = new Map();
   // Cache de materiais sem cadastro por central (chave: idx da central),
   // alimenta o modal aberto pelo chip "sem cadastro" do painel de saúde.
@@ -2587,7 +2649,8 @@ function renderAnaliticoMicro(results, dtIni, dtFim, silent, opts = {}) {
   results.forEach((r, idx) => {
     const card = buildCentralCard(r, idx, dtIni, dtFim, { entradasByCentral: _entradasByCentralMicro, entradasByCentralDestino: _entradasByCentralMicroDestino });
     // Ordem da lista achatada do agrupamento por central (results já vem
-    // em ordem alfabética de central) — sem efeito fora dele (ver .mgm-flat).
+    // ordenado por variação, maior desfalque primeiro — ver o sort acima) —
+    // sem efeito fora dele (ver .mgm-flat).
     card.style.order = idx;
     _cardBuffer.push(card);
   });
@@ -2720,6 +2783,13 @@ function renderAnaliticoMicro(results, dtIni, dtFim, silent, opts = {}) {
   }
   updateClock();
 
+  _anRecolherMicro();
+}  // end _rodarAnaliticoCore
+
+// Estado de saída de toda montagem da Visão Micro (render completo ou
+// montagem restaurada do cache): regionais e cards recolhidos, botões em
+// sincronia e piso de altura recalculado.
+function _anRecolherMicro() {
   // Ao analisar: recolhe regionais e centrais por padrão
   _regionaisExpanded = false;
   _centraisExpanded  = false;
@@ -2743,11 +2813,15 @@ function renderAnaliticoMicro(results, dtIni, dtFim, silent, opts = {}) {
   // Atualiza visual dos botões
   _updateToggleRegionaisBtn();
   _updateToggleCentralisBtn();
+  // Montagem restaurada pode voltar com cards/regionais esmaecidos pelo
+  // modo foco de antes — tudo recolhido, nada fica em foco.
+  _updateRegionalFocus();
+  _updateCentralFocusAll();
 
   // Fixa a altura mínima do container no estado sem filtro (nova análise
   // = reset legítimo, já que o conjunto de dados mudou por completo)
   _updateMicroContainerHeightLock(true);
-}  // end _rodarAnaliticoCore
+}
 
 // Abre modal listando os materiais sem cadastro de uma central específica
 // (chip "sem cadastro" do painel de saúde). Reaproveita o padrão visual
