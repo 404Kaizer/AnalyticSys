@@ -54,7 +54,7 @@ const _cob = {
   cfop: [], fornecedores: [], centrais: [],
   imports: [],                                   // histórico (cob_imports), mais recente primeiro
   // Tela Cobrança — carregados sob demanda (_cobCarregarCobranca)
-  pendentes: [], sefaz: [], justificativas: [], desconsiderar: [],
+  pendentes: [], sefaz: [], justificativas: [], desconsiderar: [], excecoes: [],
   carga: null,                                   // Promise da carga (null = nunca carregou)
   res: null,                                     // resultado de cobCalcular
   filtroCob: { regional: new Set(), central: new Set(), nivel: new Set(), texto: '' },
@@ -205,6 +205,9 @@ function cobIniciar() {
       _cobAplicarAnot(tipo, p.old, p.eventType === 'DELETE' ? null : p.new);
       _cobRecalcular();
     });
+  });
+  ch.on('postgres_changes', { event: '*', schema: 'public', table: 'cob_excecoes' }, () => {
+    if (_cob.carga) _cobRecarregarExcecoes().catch(err => console.warn('[Cobranças] Falha ao recarregar exceções:', err));
   });
   _cob.canal = ch.subscribe(status => {
     if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') console.warn('[Cobranças] Canal realtime com problema:', status);
@@ -445,8 +448,10 @@ async function cobCadImportar(tipo, ev) {
 }
 
 // ── Importações de Pendências e SEFAZ (Importar Dados) ───────
-// Cada importação SUBSTITUI a anterior de uma vez (RPC cob_substituir,
-// transação única no banco). Nomes/textos ficam exatamente como o Excel
+// Pendências: cada importação SUBSTITUI a anterior de uma vez. SEFAZ:
+// ACUMULA — NF nova entra, NF já importada (mesma chave) é atualizada, e
+// cada NF guarda a última importação que a trouxe (cob_sefaz.import_id).
+// As duas pela RPC cob_substituir (transação única no banco). Nomes/textos ficam exatamente como o Excel
 // exporta — só CNPJ (dígitos), número da NF, datas e valores são
 // convertidos.
 
@@ -560,9 +565,11 @@ function cobRenderImports() {
   tb.innerHTML = _cob.imports.map(r => {
     const total = r.total_arquivo && r.total_arquivo > r.registros
       ? `<span style="font-size:10px;color:var(--text3);font-family:var(--mono);margin-left:4px" title="Linhas no arquivo">(de ${r.total_arquivo.toLocaleString('pt-BR')} linhas)</span>` : '';
-    const status = r.vigente
-      ? '<span class="badge badge-green"><i class="ti ti-circle-check"></i> Vigente</span>'
-      : '<span class="badge badge-teal" title="Dados substituídos por uma importação mais recente"><i class="ti ti-history"></i> Substituída</span>';
+    const status = !r.vigente
+      ? '<span class="badge badge-teal" title="Dados substituídos por uma importação mais recente"><i class="ti ti-history"></i> Substituída</span>'
+      : r.tipo === 'sefaz'
+        ? '<span class="badge badge-green" title="NFs acumuladas com as demais importações do SEFAZ"><i class="ti ti-circle-check"></i> Ativa</span>'
+        : '<span class="badge badge-green"><i class="ti ti-circle-check"></i> Vigente</span>';
     return `<tr>
       <td>${escapeHtml(r.arquivo || '—')}</td>
       <td><span class="badge badge-purple">${COB_IMPORTS[r.tipo]?.rotulo || r.tipo}</span></td>
@@ -581,9 +588,13 @@ async function cobExcluirImport(id) {
   const r = _cob.imports.find(x => x.id === id);
   if (!r) return;
   const cfg = COB_IMPORTS[r.tipo];
-  const msg = r.vigente
-    ? `Excluir a importação vigente de ${cfg.rotulo} (${r.arquivo})?\n\nOs dados dela também serão apagados: a Cobrança fica sem ${cfg.rotulo} até a próxima importação.`
-    : `Remover do histórico a importação de ${cfg.rotulo} (${r.arquivo})?\n\nOs dados atuais não mudam.`;
+  // ponytail: NF que veio em várias importações do SEFAZ fica com a última —
+  // excluir essa última apaga a NF mesmo que uma anterior também a tivesse.
+  const msg = !r.vigente
+    ? `Remover do histórico a importação de ${cfg.rotulo} (${r.arquivo})?\n\nOs dados atuais não mudam.`
+    : r.tipo === 'sefaz'
+      ? `Excluir a importação de SEFAZ (${r.arquivo})?\n\nAs NFs trazidas (ou atualizadas por último) por ela serão apagadas. As das outras importações continuam.`
+      : `Excluir a importação vigente de ${cfg.rotulo} (${r.arquivo})?\n\nOs dados dela também serão apagados: a Cobrança fica sem ${cfg.rotulo} até a próxima importação.`;
   if (!confirm(msg)) return;
   const { error } = await window.supabaseClient.rpc('cob_excluir_import', { p_id: id });
   if (error) { toast('Falha ao excluir: ' + error.message, 'error'); return; }
@@ -613,8 +624,14 @@ async function cobImportar(tipo, ev) {
   if (!recs.length) { toast(`Nenhuma linha válida no relatório de ${cfg.rotulo}.`, 'error'); return; }
 
   const atual = _cobVigente(tipo);
-  const msg = `Importar ${cfg.rotulo}: ${recs.length} ${cfg.unidade} de "${file.name}"?\n\n`
-    + (atual ? `Isto SUBSTITUI a importação atual (${atual.registros} ${cfg.unidade}, ${atual.arquivo}).` : 'Primeira importação.')
+  let aviso = 'Primeira importação.';
+  if (tipo === 'sefaz') {
+    const ja = new Set(_cob.sefaz.map(s => s.chave));   // vazio se a Cobrança ainda não carregou
+    const repetidas = ja.size ? recs.filter(r => ja.has(r.chave)).length : 0;
+    aviso = ja.size ? `Acumula com o que já está importado: ${recs.length - repetidas} NFs novas, ${repetidas} já existentes (serão atualizadas).`
+                    : 'Acumula com o que já está importado: NFs novas entram, as já existentes são atualizadas.';
+  } else if (atual) aviso = `Isto SUBSTITUI a importação atual (${atual.registros} ${cfg.unidade}, ${atual.arquivo}).`;
+  const msg = `Importar ${cfg.rotulo}: ${recs.length} ${cfg.unidade} de "${file.name}"?\n\n` + aviso
     + (invalidas ? `\n${invalidas} linhas inválidas (sem CNPJ/número) serão ignoradas.` : '');
   if (!confirm(msg)) return;
 
@@ -643,10 +660,13 @@ async function cobImportar(tipo, ev) {
 //   • só fornecedor do cadastro com situação "cobrar" (fora da lista →
 //     Alertas, com Incluir/Ignorar);
 //   • ADITIBRAS/DOVALLE (raiz do CNPJ) vão pra blocos à parte;
+//   • nota que casa com uma regra de exceção (cob_excecoes) vai pro bloco
+//     à parte "Exceções" (só as que iriam pra cobrança padrão);
 //   • criticidade em dias corridos: D-1 Atenção, D-2 Urgente, D-3+ Crítico.
 // ponytail: blocos por lista fixa de raízes — se surgirem outros, virar campo no cadastro de fornecedores.
 const COB_BLOCOS = { '49332665': 'Aditivos', '56910948': 'Aditivos', '14117052': 'Dovalle' };
-const COB_BLOCOS_ORDEM = ['Aditivos', 'Dovalle'];
+const COB_BLOCO_EXC = 'Exceções';
+const COB_BLOCOS_ORDEM = ['Aditivos', 'Dovalle', COB_BLOCO_EXC];
 const COB_RESUMOS_COBRADOS = new Set(['VENDA', 'REMESSA']);
 const COB_NIVEIS = {
   atencao: { rot: 'Atenção', h: '24h',  badge: 'badge-blue',  kpi: 'kpi-accent' },
@@ -659,6 +679,11 @@ const COB_CAMPOS_NF   = ['regional', 'central', 'centralNome', 'fornecedor', 'cn
 const COB_CAMPOS_ANOT = ['fornecedor', 'cnpj', 'cnpj_fmt', 'numero', 'central', 'regional', 'informante', 'desviado', 'motivo', 'justificativa'];
 
 const _cobChaveNf = r => r.cnpj_fornecedor + '|' + r.numero;
+// Regra de exceção × nota: todos os critérios preenchidos precisam bater
+// (material: basta um item; emissão: período de/até, inclusivo).
+const _cobCasaExcecao = (x, r) => (!x.regional || x.regional === r.regional) && (!x.central || x.central === r.central)
+  && (!x.cnpj_fornecedor || x.cnpj_fornecedor === r.cnpj) && (!x.material || r.itens.some(i => i.material === x.material))
+  && (!x.emissao_de || (!!r.emissao && r.emissao >= x.emissao_de)) && (!x.emissao_ate || (!!r.emissao && r.emissao <= x.emissao_ate));
 const _cobFmtData = iso => iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '—';
 const _cobFmtNum  = n => Number(n || 0).toLocaleString('pt-BR', { maximumFractionDigits: 3 });
 const _cobBusca   = (r, campos, ws) => { const s = campos.map(k => r[k] ?? '').join(' ').toLowerCase(); return ws.every(w => s.includes(w)); };
@@ -670,6 +695,7 @@ function _cobCarregarCobranca() {
     _cob.carga = Promise.all([
       _cobRecarregarSnapshots(false),
       ...['justificativas', 'desconsiderar'].map(async t => { _cob[t] = await _cobFetchAll('cob_' + t, '*', 'numero'); }),
+      _cobRecarregarExcecoes(false),
     ]).then(() => { _cob.pronto = true; _cobRecalcular(); })
       .catch(err => {
         _cob.carga = null;
@@ -684,6 +710,12 @@ async function _cobRecarregarSnapshots(recalc = true) {
   const [p, s] = await Promise.all([_cobFetchAll('cob_pendentes', '*', 'id'), _cobFetchAll('cob_sefaz', '*', 'chave')]);
   _cob.pendentes = p;
   _cob.sefaz = s;
+  if (recalc) _cobRecalcular();
+}
+
+// Regras de exceção: lista pequena — recarrega inteira a cada mudança.
+async function _cobRecarregarExcecoes(recalc = true) {
+  _cob.excecoes = await _cobFetchAll('cob_excecoes', '*', 'id');
   if (recalc) _cobRecalcular();
 }
 
@@ -702,7 +734,7 @@ function _cobRecalcular() {
     _cob.res = cobCalcular({
       pendentes: _cob.pendentes, sefaz: _cob.sefaz, cfop: _cob.cfop, fornecedores: _cob.fornecedores,
       centrais: cobIsInsumos() ? _cob.centrais : (state.filiais || []),   // admin: o próprio cadastro
-      justificativas: _cob.justificativas, desconsiderar: _cob.desconsiderar,
+      justificativas: _cob.justificativas, desconsiderar: _cob.desconsiderar, excecoes: _cob.excecoes,
     }, new Date());
     ['cob_cobranca', 'cob_justificativas', 'cob_desconsideradas'].forEach(invalidateSearchIndex);
     cobRenderTela();
@@ -769,6 +801,7 @@ function cobCalcular(d, hoje) {
       a.notas++;
       centraisNC.set(p.cnpj_comprador, a);
     }
+    if (!row.bloco && d.excecoes.some(x => _cobCasaExcecao(x, row))) row.bloco = COB_BLOCO_EXC;
     res.cobraveis.push(row);
     (row.bloco ? res.blocos[row.bloco] : res.cobranca).push(row);
   }
@@ -803,6 +836,7 @@ function cobRenderTela() {
   _cobRenderAlertas();
   _cobRenderAnot('justificativas');
   _cobRenderAnot('desconsiderar');
+  if (document.getElementById('cob-exc-modal')?.classList.contains('open')) _cobRenderExcLista();
 }
 
 function cobSwitchTab(tab) {
@@ -979,7 +1013,8 @@ function _cobFiltrarNfs(rows) {
 function _cobBaseTxt(res) {
   const p = _cobVigente('pendentes'), s = _cobVigente('sefaz');
   const q = r => r ? `${r.arquivo} (${new Date(r.data_hora).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })})` : 'sem importação';
-  return `Pendências: ${q(p)} · SEFAZ: ${q(s)} · Referência: ${_cobFmtData(res.hojeISO)}`;
+  const ns = _cob.imports.filter(r => r.tipo === 'sefaz' && r.vigente).length;
+  return `Pendências: ${q(p)} · SEFAZ: ${ns > 1 ? `${ns} importações, última ` : ''}${q(s)} · Referência: ${_cobFmtData(res.hojeISO)}`;
 }
 
 function _cobRenderCobranca() {
@@ -1289,7 +1324,7 @@ function cobAbrirNf(k) {
 function cobDetView(v) { _cob.detView = v; _cobRenderCobranca(); }
 
 // Detalhamento: uma tabela só, alternando entre a cobrança padrão e os
-// blocos à parte (Aditivos/Dovalle) pelos botões do cabeçalho. Sempre
+// blocos à parte (Aditivos/Dovalle/Exceções) pelos botões do cabeçalho. Sempre
 // agrupada por regional.
 function _cobDetalhamentoHtml(padrao, blocos) {
   const views = [['padrao', 'Padrão', padrao], ...blocos.map(([b, rs]) => [b, b, rs])];
@@ -1310,12 +1345,84 @@ function _cobDetalhamentoHtml(padrao, blocos) {
       <span class="table-title"><i class="ti ti-list-details"></i> Detalhamento de pendências</span>
       <div class="table-toolbar">${views.map(([k, rot, rs]) =>
         `<button class="pim-month-pill${k === atual ? ' active' : ''}" type="button" onclick="cobDetView('${k}')">${rot} <b>${rs.length}</b></button>`).join('')}
+        <button class="btn" onclick="cobAbrirExcecoes()" title="Regras que tiram notas da cobrança padrão"><i class="ti ti-filter-cog"></i> Exceções</button>
         <button class="btn" onclick="cobRelatorioDetalhamento()" title="Relatório: cobrança padrão + ADITIBRAS (em amarelo)"><i class="ti ti-file-text"></i> Relatório</button></div>
     </div>
     <div class="table-scroll" style="max-height:calc(100vh - 140px)"><table class="cob-det-tabela">
       <thead><tr><th>Central</th><th>Fornecedor</th><th>NF</th><th>Emissão</th><th style="text-align:right">Peso</th><th>Material</th><th>CFOP</th></tr></thead>
       <tbody>${body || _cobVazio('ti-circle-check', vazio, ncol)}</tbody>
     </table></div></div>`;
+}
+
+// ── Exceções (regras que tiram notas da cobrança padrão) ─────
+// Critérios combinados (E); campo vazio = qualquer. Sem edição: exclui e
+// cria de novo. Casamento em _cobCasaExcecao, aplicado em cobCalcular.
+const COB_EXC_SELECTS = [['regional', 'Regional'], ['central', 'Central'], ['cnpj_fornecedor', 'Fornecedor'], ['material', 'Material']];
+const _cobNomeForn = cnpj => _cob.fornecedores.find(f => f.cnpj === cnpj)?.nome || _cobFmtCnpj(cnpj);
+
+function _cobExcOpcoes(k) {
+  const ord = (a, b) => a[1].localeCompare(b[1], 'pt-BR');
+  if (k === 'cnpj_fornecedor') return _cob.fornecedores.map(f => [f.cnpj, f.nome]).sort(ord);
+  const vals = new Set();
+  if (k === 'material') _cob.sefaz.forEach(s => (s.itens || []).forEach(i => i.material && vals.add(i.material)));
+  else {
+    (cobIsInsumos() ? _cob.centrais : (state.filiais || [])).forEach(c => { const v = k === 'central' ? c.alias : c.regional; if (v) vals.add(v); });
+    _cob.res?.porChave.forEach(r => { if (r[k] && r[k] !== '—') vals.add(r[k]); });
+  }
+  return [...vals].map(v => [v, v]).sort(ord);
+}
+
+function _cobExcTexto(x) {
+  const de = x.emissao_de ? _cobFmtData(x.emissao_de) : '…', ate = x.emissao_ate ? _cobFmtData(x.emissao_ate) : '…';
+  return [
+    x.regional && ['Regional', x.regional], x.central && ['Central', x.central],
+    x.cnpj_fornecedor && ['Fornecedor', _cobNomeForn(x.cnpj_fornecedor)], x.material && ['Material', x.material],
+    (x.emissao_de || x.emissao_ate) && ['Emissão', x.emissao_de === x.emissao_ate ? de : `${de} a ${ate}`],
+  ].filter(Boolean).map(([rot, v]) => `<span class="badge badge-purple" style="margin:1px 4px 1px 0">${rot}: ${escapeHtml(v)}</span>`).join('');
+}
+
+function cobAbrirExcecoes() {
+  document.getElementById('cob-exc-form').innerHTML = COB_EXC_SELECTS.map(([k, rot]) => `<div class="form-group">
+      <label class="form-label">${rot}</label>
+      <select class="form-select" data-k="${k}" style="width:100%"><option value="">Qualquer</option>
+        ${_cobExcOpcoes(k).map(([v, t]) => `<option value="${escapeHtml(v)}">${escapeHtml(t)}</option>`).join('')}</select>
+    </div>`).join('')
+    + _cobCampo('emissao_de', 'Emissão de', '', 'date') + _cobCampo('emissao_ate', 'Emissão até', '', 'date')
+    + _cobCampo('descricao', 'Descrição (opcional)', '', 'text', true, 'placeholder="ex.: TUPI — cobrança tratada direto com o fornecedor"');
+  _cobRenderExcLista();
+  openModal('cob-exc-modal');
+}
+
+function _cobRenderExcLista() {
+  const tb = document.getElementById('cob-exc-lista');
+  if (!tb) return;
+  const notas = _cob.res?.blocos[COB_BLOCO_EXC] || [];
+  tb.innerHTML = _cob.excecoes.map(x => `<tr>
+      <td>${_cobExcTexto(x)}</td>
+      <td class="cob-just" title="${escapeHtml(x.descricao || '')}">${escapeHtml(x.descricao || '')}</td>
+      <td class="td-mono" style="text-align:center">${notas.filter(r => _cobCasaExcecao(x, r)).length}</td>
+      <td style="width:40px"><button class="btn-icon danger" title="Excluir regra" onclick="cobExcluirExcecao(${x.id})"><i class="ti ti-trash"></i></button></td>
+    </tr>`).join('') || _cobVazio('ti-filter-off', 'Nenhuma regra de exceção.', 4);
+}
+
+async function cobSalvarExcecao() {
+  const rec = {};
+  document.querySelectorAll('#cob-exc-form [data-k]').forEach(el => { rec[el.dataset.k] = el.value.trim() || null; });
+  if (!Object.entries(rec).some(([k, v]) => k !== 'descricao' && v)) { toast('Preencha ao menos um critério.', 'error'); return; }
+  if (rec.emissao_de && rec.emissao_ate && rec.emissao_de > rec.emissao_ate) { toast('A data "de" é depois da data "até".', 'error'); return; }
+  const { error } = await window.supabaseClient.from('cob_excecoes').insert(rec);
+  if (error) { toast('Falha ao salvar a regra: ' + error.message, 'error'); return; }
+  document.querySelectorAll('#cob-exc-form [data-k]').forEach(el => { el.value = ''; });
+  await _cobRecarregarExcecoes();
+  toast('Regra de exceção criada.', 'success');
+}
+
+async function cobExcluirExcecao(id) {
+  if (!confirm('Excluir esta regra de exceção?\n\nAs notas dela voltam para a cobrança padrão.')) return;
+  const { error } = await window.supabaseClient.from('cob_excecoes').delete().eq('id', id);
+  if (error) { toast('Falha ao excluir: ' + error.message, 'error'); return; }
+  await _cobRecarregarExcecoes();
+  toast('Regra de exceção excluída.', 'success');
 }
 
 // ── Alertas ──────────────────────────────────────────────────
