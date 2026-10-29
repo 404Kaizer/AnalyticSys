@@ -19,6 +19,9 @@ const COB_PAGINAS_INSUMOS = new Set(['cobrancas', 'importar', 'configuracoes', '
 function cobIsInsumos() {
   return window.currentUser?.role === 'insumos';
 }
+// Perfil Usuário (role 'user') vê a Cobrança só pra consulta: botões de
+// edição levam .cob-edita (somem por CSS) e a RLS barra escrita no banco.
+const cobIsAdmin = () => window.currentUser?.role === 'admin';
 
 // Boot enxuto do perfil insumos — substitui restoreAndRender.
 function cobBootInsumos() {
@@ -126,10 +129,10 @@ function _cobNorm(tipo, r) {
 
 // ── Carga + tempo real ───────────────────────────────────────
 // ponytail: paginação por offset (range) — cadastros pequenos (centenas).
-async function _cobFetchAll(table, cols, ordem) {
+async function _cobFetchAll(table, cols, ordem, filtro = q => q) {
   const out = [];
   for (let de = 0; ; de += 1000) {
-    const { data, error } = await window.supabaseClient.from(table).select(cols).order(ordem).range(de, de + 999);
+    const { data, error } = await filtro(window.supabaseClient.from(table).select(cols)).order(ordem).range(de, de + 999);
     if (error) throw error;
     out.push(...data);
     if (data.length < 1000) return out;
@@ -149,12 +152,14 @@ async function _cobCarregar(tipo) {
   }
 }
 
-// Centrais do admin, só leitura (policy filiais_select_insumos). Recarrega
-// a cada abertura de Configurações — filiais não tem canal realtime.
+// Centrais do admin, só leitura (policies filiais_select_insumos /
+// filiais_select_cob_leitura) — pra quem não é admin. O perfil Usuário
+// também enxerga as próprias filiais, daí o neq. Recarrega a cada abertura
+// de Configurações (insumos) — filiais não tem canal realtime.
 async function _cobCarregarCentrais() {
-  if (!cobIsInsumos()) return;
+  if (cobIsAdmin()) return;
   try {
-    const rows = await _cobFetchAll('filiais', 'origem, alias, cnpj, regional', 'alias');
+    const rows = await _cobFetchAll('filiais', 'origem, alias, cnpj, regional', 'alias', q => q.neq('user_id', window.currentUser?.id));
     _cob.centrais = rows.map(r => _cobNorm('centrais', r));
     invalidateSearchIndex('cob_centrais');
     cobRenderCentrais();
@@ -733,7 +738,7 @@ function _cobRecalcular() {
     if (!_cob.pronto) return;
     _cob.res = cobCalcular({
       pendentes: _cob.pendentes, sefaz: _cob.sefaz, cfop: _cob.cfop, fornecedores: _cob.fornecedores,
-      centrais: cobIsInsumos() ? _cob.centrais : (state.filiais || []),   // admin: o próprio cadastro
+      centrais: cobIsAdmin() ? (state.filiais || []) : _cob.centrais,   // admin: o próprio cadastro
       justificativas: _cob.justificativas, desconsiderar: _cob.desconsiderar, excecoes: _cob.excecoes,
     }, new Date());
     ['cob_cobranca', 'cob_justificativas', 'cob_desconsideradas'].forEach(invalidateSearchIndex);
@@ -1312,12 +1317,12 @@ function cobAbrirNf(k) {
       </div>`
       : '<div style="color:var(--text3);font-size:12px">Nenhuma justificativa registrada para esta nota.</div>'}`;
   document.getElementById('cob-nf-actions').innerHTML = `
-    <button class="btn admin-btn-danger" onclick="closeModal('cob-nf-modal');cobAbrirAnot('desconsiderar','${k}')"><i class="ti ti-eye-off"></i> Desconsiderar</button>
-    ${j ? `<button class="btn admin-btn-danger" onclick="cobExcluirJustDoModal('${k}')"><i class="ti ti-trash"></i> Excluir justificativa</button>` : ''}
+    <button class="btn admin-btn-danger cob-edita" onclick="closeModal('cob-nf-modal');cobAbrirAnot('desconsiderar','${k}')"><i class="ti ti-eye-off"></i> Desconsiderar</button>
+    ${j ? `<button class="btn admin-btn-danger cob-edita" onclick="cobExcluirJustDoModal('${k}')"><i class="ti ti-trash"></i> Excluir justificativa</button>` : ''}
     <span style="margin-right:auto"></span>
-    <button class="btn" onclick="closeModal('cob-nf-modal');cobAbrirOcorrencia('${k}')" title="Abrir ocorrência de Insumos já preenchida com esta NF"><i class="ti ti-alert-triangle"></i> Abrir ocorrência</button>
+    <button class="btn cob-edita" onclick="closeModal('cob-nf-modal');cobAbrirOcorrencia('${k}')" title="Abrir ocorrência de Insumos já preenchida com esta NF"><i class="ti ti-alert-triangle"></i> Abrir ocorrência</button>
     <button class="btn" onclick="closeModal('cob-nf-modal')">Fechar</button>
-    <button class="btn btn-primary" onclick="closeModal('cob-nf-modal');cobAbrirAnot('justificativas','${k}')"><i class="ti ti-message-2"></i> ${j ? 'Editar justificativa' : 'Justificar / informar desvio'}</button>`;
+    <button class="btn btn-primary cob-edita" onclick="closeModal('cob-nf-modal');cobAbrirAnot('justificativas','${k}')"><i class="ti ti-message-2"></i> ${j ? 'Editar justificativa' : 'Justificar / informar desvio'}</button>`;
   openModal('cob-nf-modal');
 }
 
@@ -1401,7 +1406,7 @@ function _cobRenderExcLista() {
       <td>${_cobExcTexto(x)}</td>
       <td class="cob-just" title="${escapeHtml(x.descricao || '')}">${escapeHtml(x.descricao || '')}</td>
       <td class="td-mono" style="text-align:center">${notas.filter(r => _cobCasaExcecao(x, r)).length}</td>
-      <td style="width:40px"><button class="btn-icon danger" title="Excluir regra" onclick="cobExcluirExcecao(${x.id})"><i class="ti ti-trash"></i></button></td>
+      <td class="cob-edita" style="width:40px"><button class="btn-icon danger" title="Excluir regra" onclick="cobExcluirExcecao(${x.id})"><i class="ti ti-trash"></i></button></td>
     </tr>`).join('') || _cobVazio('ti-filter-off', 'Nenhuma regra de exceção.', 4);
 }
 
@@ -1444,7 +1449,7 @@ function _cobRenderAlertas() {
       'Notas de venda/remessa de fornecedores que ainda não estão no cadastro. Inclua na cobrança ou marque como consumo — a decisão fica gravada em Configurações.',
       '<th>Fornecedor</th><th>CNPJ</th><th style="text-align:right">Notas</th><th></th>',
       res.fornNovos.map(f => `<tr><td>${escapeHtml(f.nome)}</td><td class="td-mono">${f.cnpj_fmt}</td><td class="td-mono" style="text-align:right">${f.notas}</td>
-        <td style="white-space:nowrap"><button class="btn" onclick="cobDecidirFornecedor('${f.cnpj}','cobrar')"><i class="ti ti-plus"></i> Incluir na cobrança</button>
+        <td class="cob-edita" style="white-space:nowrap"><button class="btn" onclick="cobDecidirFornecedor('${f.cnpj}','cobrar')"><i class="ti ti-plus"></i> Incluir na cobrança</button>
         <button class="btn" onclick="cobDecidirFornecedor('${f.cnpj}','ignorar')"><i class="ti ti-ban"></i> Ignorar (consumo)</button></td></tr>`), 4)
     + sec('ti-file-x', 'Canceladas no SEFAZ', 'Desconsideradas automaticamente da cobrança.',
       nfHead + '<th>Status SEFAZ</th>', res.canceladas.map(r => `<tr>${nfTds(r)}<td><span class="badge badge-red">${escapeHtml(r.statusSefaz)}</span></td></tr>`), 6)
@@ -1498,7 +1503,7 @@ function _cobRenderAnot(tipo) {
     <div class="table-scroll" style="max-height:640px"><table><thead><tr>${cfg.head}</tr></thead><tbody>
     ${lista.map(r => `<tr><td>${escapeHtml(r.fornecedor || r.cnpj_fmt)}</td><td class="td-mono">${escapeHtml(r.numero)}</td><td class="td-mono">${escapeHtml(r.central)}</td>${cfg.tds(r)}
       <td>${r.emAberto ? '<span class="badge badge-amber">Nas pendências</span>' : '<span class="badge badge-teal" title="A nota não está mais no relatório de pendências">Fora das pendências</span>'}</td>
-      <td style="white-space:nowrap"><button class="btn-icon" title="Editar" onclick="cobAbrirAnot('${tipo}','${r.k}')"><i class="ti ti-pencil"></i></button>
+      <td class="cob-edita" style="white-space:nowrap"><button class="btn-icon" title="Editar" onclick="cobAbrirAnot('${tipo}','${r.k}')"><i class="ti ti-pencil"></i></button>
       <button class="btn-icon danger" title="Excluir" onclick="cobExcluirAnot('${tipo}','${r.k}')"><i class="ti ti-trash"></i></button></td></tr>`).join('')
       || _cobVazio(cfg.icon, `Nenhum registro${ws.length ? ' para o filtro' : ''}.`, ncol)}
     </tbody></table></div></div>`;
@@ -1593,11 +1598,11 @@ const COB_GS = [
     fonte: () => _cob.res?.desconsideradas || [], campos: COB_CAMPOS_ANOT,
     cols: [['Fornecedor', 'fornecedor'], ['NF', 'numero'], ['Central', 'central'], ['Motivo', 'motivo'], ['Data', 'data_fmt'], ['Justificativa', 'justificativa']],
     abrir: r => _cobIrParaTela('desconsideradas', r.numero) },
-  { scope: 'cob_cfop', modKey: 'CFOP', rotulo: 'CFOP', icon: 'ti-receipt-tax',
+  { scope: 'cob_cfop', modKey: 'CFOP', rotulo: 'CFOP', icon: 'ti-receipt-tax', soEditor: true,
     fonte: () => _cob.cfop, campos: COB_CAMPOS.cfop,
     cols: [['CFOP', 'cfop'], ['Resumo', 'resumo'], ['Descrição', 'descricao']],
     abrir: r => _cobIrParaCadastro('cfop', r) },
-  { scope: 'cob_fornecedores', modKey: 'Fornecedor', rotulo: 'Fornecedores', icon: 'ti-truck-delivery',
+  { scope: 'cob_fornecedores', modKey: 'Fornecedor', rotulo: 'Fornecedores', icon: 'ti-truck-delivery', soEditor: true,
     fonte: () => _cob.fornecedores, campos: COB_CAMPOS.fornecedores,
     cols: [['Fornecedor', 'nome'], ['CNPJ', 'cnpj_fmt'], ['Situação', 'situacao']],
     abrir: r => _cobIrParaCadastro('fornecedores', r) },
@@ -1611,7 +1616,9 @@ function _cobRegistrarBusca() {
   const insumos = cobIsInsumos();
   const sel = document.getElementById('global-search-scope');
   if (sel && insumos) [...sel.options].forEach(o => { if (o.value !== 'todos') o.remove(); });
-  COB_GS.filter(s => insumos || !s.soInsumos).forEach(s => {
+  // Perfil Usuário não tem os cadastros da Cobrança (ficam em Configurações).
+  const editor = insumos || cobIsAdmin();
+  COB_GS.filter(s => (insumos || !s.soInsumos) && (editor || !s.soEditor)).forEach(s => {
     _GS_SCOPES.push({ scope: s.scope, modKey: s.modKey, fonte: s.fonte, campos: s.campos });
     _GS_COLS[s.modKey] = s.cols;
     moduleColors[s.modKey] = { bg: 'var(--red-bg)', color: 'var(--red)', icon: s.icon, abrir: s.abrir };

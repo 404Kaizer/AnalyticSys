@@ -29,10 +29,9 @@ const _pageScrollPos = {};
 function navigate(page) {
   // Perfil insumos só enxerga as páginas da Cobrança (ver cobrancas.js) —
   // qualquer outro destino (atalho de teclado, link interno) cai nela.
-  // Cobranças em si é só de admin + insumos.
+  // Cobranças em si é de todos (perfil Usuário só consulta — cobrancas.js).
   const _role = window.currentUser?.role;
   if (_role === 'insumos' && !COB_PAGINAS_INSUMOS.has(page)) page = 'cobrancas';
-  else if (page === 'cobrancas' && _role !== 'admin' && _role !== 'insumos') page = 'analitico';
   // Inventário foi movido para uma "Visão" dentro do Dashboard Analítico
   // (alterna com a Visão Micro, compartilhando o mesmo período/toolbar).
   if (page === 'inventario') {

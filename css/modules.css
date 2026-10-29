@@ -13107,7 +13107,9 @@ body.role-insumos .tab-group-label,
 body.role-insumos .tab-item:not([data-page="cobrancas"]):not([data-page="importar"]):not([data-page="configuracoes"]):not([data-page="ocorrencias"]),
 body.role-insumos #page-importar > :not(.cob-insumos),
 body.role-insumos #page-configuracoes > :not(.cob-insumos) { display: none !important; }
-body:not(.role-admin):not(.role-insumos) .tab-item[data-page="cobrancas"] { display: none !important; }
+/* Perfil Usuário vê Cobranças só pra consulta: some tudo que edita
+   (.cob-edita) — a trava de verdade é a RLS (escrita só admin + insumos). */
+body:not(.role-admin):not(.role-insumos) .cob-edita,
 body:not(.role-admin):not(.role-insumos) .cob-insumos,
 body:not(.role-insumos) .cob-so-insumos { display: none !important; }
 

@@ -4767,7 +4767,7 @@ async function init() {
 
   await restoreAndRender();
   updateImportPrereqUI();
-  if (window.currentUser?.role === 'admin') cobIniciar();
+  cobIniciar();   // admin edita; perfil Usuário só consulta
   // updateDashboard já foi chamado dentro de restoreAndRender — não chamar novamente
 
   // Start clock
