@@ -7762,8 +7762,8 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
         const materialOriginal = String(r[ci('material', 6)] || '').trim();
         if (!materialOriginal) return null;
         registrarNomeOriginalMaterial('saidas', materialOriginal);
-        const peso = num(r[ci('peso', 9)]);
-        const custo = num(r[ci('custo', 10)]);
+        const peso = num(r[ci('peso', 10)]);
+        const custo = num(r[ci('custo', 11)]);
         const categoriaOriginal = String(r[ci('categoria', 4)] || '').trim();
         return stamp(normalizarCentraisRecord({
           importId,
@@ -7779,7 +7779,7 @@ async function processImportedRows(modulo, rows, fileName, extra = {}) {
           peso,
           um:               String(r[ci('um', -1)] || 'KG'),
           custo,
-          valorTotal:       num(r[ci('valorTotal', -1)]) || (peso * custo)
+          valorTotal:       peso * custo
         }, ['central']));
       });
     }
@@ -8425,10 +8425,11 @@ function buildSaidaColumnMap(headerRow) {
     categoria:  { exact: ['categoria','category','cat'] },
     fornecedor: { exact: ['fornecedor','cliente','supplier','customer'] },
     material:   { exact: ['material','produto','item','descricao','descrição','mat.'] },
-    peso:       { exact: ['peso','quantidade','qtde','qtd','weight','qty','quant.'] },
+    // Peso = "Total Real" (col. K); custo = "MÉDIA R$ POR KG" (col. L).
+    // Valor total não é lido: sempre peso × custo no processamento.
+    peso:       { exact: ['total real'] },
     um:         { exact: ['um','u.m.','unidade','unit'] },
-    custo:      { exact: ['custo','custo unit','custo unitario','custo unitário','preco','preço','valor unit'] },
-    valorTotal: { exact: ['valor total','total','valor','amount','montante'] },
+    custo:      { exact: ['media r$ por kg','media r$'] },
   };
   headerRow.forEach((cell, idx) => {
     const norm = n(cell);
