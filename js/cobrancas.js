@@ -1036,9 +1036,8 @@ function _cobRenderCobranca() {
     det.innerHTML = '';
     return;
   }
-  const padrao = _cobFiltrarNfs(res.cobranca);
-  const blocos = COB_BLOCOS_ORDEM.map(b => [b, _cobFiltrarNfs(res.blocos[b])]);
-  const todas = padrao.concat(...blocos.map(([, r]) => r));
+  const views = _cobDetViews(), padrao = views[0][2];
+  const blocos = views.slice(1).map(([b, , rs]) => [b, rs]);
   const soma = rs => rs.reduce((t, r) => t + (Number(r.valor) || 0), 0);
   const nAlertas = _cobNumAlertas(res);
 
@@ -1052,8 +1051,63 @@ function _cobRenderCobranca() {
       ${blocos.map(([b, rs]) => _cobKpi('ti-package', b, rs.length, 'kpi-purple', 'cobrança à parte')).join('')}
       ${_cobKpi('ti-bell', 'Alertas', nAlertas, nAlertas ? 'kpi-red' : 'kpi-green', 'ver aba Alertas')}
     </div></div>
-    <div class="cob-grid-2">${_cobRankingHtml(padrao, res.hojeISO)}${_cobPorFornecedorHtml(todas)}</div>`;
-  det.innerHTML = _cobDetalhamentoHtml(padrao, blocos);
+    <div class="cob-grid-2">${_cobRankingHtml(padrao, res.hojeISO)}${_cobPorFornecedorHtml(views.flatMap(v => v[2]))}</div>`;
+  det.innerHTML = _cobDetalhamentoHtml(views);
+  _cobCfInjetar('cobRank', 'cobForn', 'cobDet');
+}
+
+// Padrão + blocos à parte, já com os filtros da barra (sem os de coluna).
+function _cobDetViews() {
+  const res = _cob.res;
+  return [['padrao', 'Padrão', _cobFiltrarNfs(res.cobranca)], ...COB_BLOCOS_ORDEM.map(b => [b, b, _cobFiltrarNfs(res.blocos[b])])];
+}
+const _cobDetAtual = views => views.find(v => v[0] === _cob.detView) || views[0];
+
+// ── Filtros de coluna (mesmo motor das tabelas do sistema — ui.js) ──
+// Cada tabela da aba é um "módulo" do colFilterMeta: `fonte` = linhas já
+// com os filtros da barra/busca (base dos valores do dropdown), `render` =
+// redesenho ao aplicar. As tabelas são recriadas a cada render, então os
+// botões são reinjetados em _cobCfInjetar.
+const _cobCfSituacao = r => r.emAberto ? 'Nas pendências' : 'Fora das pendências';
+const _cobCfNf = ['central', 'fornecedor', 'numero', 'emissao_fmt', r => money(r.valor)];
+Object.assign(colFilterMeta, {
+  cobRank: { tbodyId: 'tb-cob-rank', fields: ['regional', 'atencao', 'urgente', 'critico', 'total'],
+    fonte: () => _cob.res ? _cobRankLinhas(_cobDetViews()[0][2]) : [], render: () => _cobRenderCobranca() },
+  cobForn: { tbodyId: 'tb-cob-forn', fields: ['nome', 'notas'],
+    fonte: () => _cob.res ? _cobFornLinhas(_cobDetViews().flatMap(v => v[2])) : [], render: () => _cobRenderCobranca() },
+  cobDet: { tbodyId: 'tb-cob-det', fields: ['central', 'fornecedor', 'numero', 'emissao_fmt', r => r.semSefaz ? '—' : _cobFmtNum(r.volume), 'materiais', 'cfops'],
+    fonte: () => _cob.res ? _cobDetAtual(_cobDetViews())[2] : [], render: () => _cobRenderCobranca() },
+  cobAlForn: { tbodyId: 'tb-cob-al-forn', fields: ['nome', 'cnpj_fmt', 'notas', null],
+    fonte: () => _cob.res?.fornNovos || [], render: () => _cobRenderAlertas() },
+  cobAlCanc: { tbodyId: 'tb-cob-al-canc', fields: [..._cobCfNf, 'statusSefaz'],
+    fonte: () => _cob.res?.canceladas || [], render: () => _cobRenderAlertas() },
+  cobAlSem: { tbodyId: 'tb-cob-al-sem', fields: _cobCfNf,
+    fonte: () => _cob.res?.semSefaz || [], render: () => _cobRenderAlertas() },
+  cobAlCentrais: { tbodyId: 'tb-cob-al-centrais', fields: ['cnpj_fmt', 'notas'],
+    fonte: () => _cob.res?.centraisNaoCad || [], render: () => _cobRenderAlertas() },
+  cobJust: { tbodyId: 'tb-cob-just', fields: [r => r.fornecedor || r.cnpj_fmt, 'numero', 'central', 'informante', 'dia_resp_fmt', 'desviado', 'motivo', _cobCfSituacao, null],
+    fonte: () => _cobAnotBase('justificativas'), render: () => _cobRenderAnot('justificativas') },
+  cobDesc: { tbodyId: 'tb-cob-desc', fields: [r => r.fornecedor || r.cnpj_fmt, 'numero', 'central', 'motivo', 'data_fmt', 'justificativa', _cobCfSituacao, null],
+    fonte: () => _cobAnotBase('desconsiderar'), render: () => _cobRenderAnot('desconsiderar') },
+});
+const _cobCf = (mod, rows) => rows.filter(r => recordPassesColFilters(mod, r));
+function _cobCfInjetar(...mods) {
+  mods.forEach(m => {
+    const tb = document.getElementById(colFilterMeta[m].tbodyId);
+    if (!tb) return;
+    injectColFilterButtons(tb.closest('table'), m);
+    updateAllColFilterIcons(m);
+  });
+}
+
+function _cobRankLinhas(rows) {
+  const por = new Map();
+  rows.forEach(r => {
+    const a = por.get(r.regional) || { regional: r.regional, atencao: 0, urgente: 0, critico: 0, total: 0 };
+    a[r.nivel]++; a.total++;
+    por.set(r.regional, a);
+  });
+  return [...por.values()].sort((a, b) => b.total - a.total || a.regional.localeCompare(b.regional, 'pt-BR'));
 }
 
 // Ranking por regional = os blocos "Total por regional" + "Emissão por
@@ -1061,14 +1115,8 @@ function _cobRenderCobranca() {
 // D-3 para trás.
 function _cobRankingHtml(rows, hojeISO) {
   const dia = n => { const t = new Date(Date.parse(hojeISO) - n * 864e5); return `${String(t.getUTCDate()).padStart(2, '0')}/${String(t.getUTCMonth() + 1).padStart(2, '0')}`; };
-  const por = new Map();
-  rows.forEach(r => {
-    const a = por.get(r.regional) || { atencao: 0, urgente: 0, critico: 0, total: 0 };
-    a[r.nivel]++; a.total++;
-    por.set(r.regional, a);
-  });
-  const lin = [...por.entries()].sort((a, b) => b[1].total - a[1].total || a[0].localeCompare(b[0], 'pt-BR'));
-  const td = (v, cls) => `<td class="td-mono cob-rank-num">${v ? `<span class="badge ${cls}">${v}</span>` : '<span style="color:var(--text3)">0</span>'}</td>`;
+  const lin = _cobCf('cobRank', _cobRankLinhas(rows));
+  const td =(v, cls) => `<td class="td-mono cob-rank-num">${v ? `<span class="badge ${cls}">${v}</span>` : '<span style="color:var(--text3)">0</span>'}</td>`;
   const r = 'style="text-align:center"';
   return `<div class="table-card"><div class="table-header"><span class="table-title"><i class="ti ti-trophy"></i> Ranking por regional</span>
       <div class="table-toolbar"><span style="font-size:11px;color:var(--text3)">Relatório:</span>
@@ -1076,8 +1124,8 @@ function _cobRankingHtml(rows, hojeISO) {
       </div></div>
     <div class="table-scroll" style="max-height:440px"><table class="cob-rank">
       <thead><tr><th>Regional</th><th ${r}>24h · ${dia(1)}</th><th ${r}>48h · ${dia(2)}</th><th ${r}>72h+ · até ${dia(3)}</th><th ${r}>Total</th></tr></thead>
-      <tbody>${lin.map(([reg, a]) => `<tr style="cursor:pointer" title="Filtrar esta regional" data-r="${escapeHtml(reg)}" onclick="cobFiltrar('regional', this.dataset.r)">
-          <td>${escapeHtml(reg)}</td>${td(a.atencao, 'badge-blue')}${td(a.urgente, 'badge-amber')}${td(a.critico, 'badge-red')}<td class="td-mono cob-rank-num"><b>${a.total}</b></td></tr>`).join('')
+      <tbody id="tb-cob-rank">${lin.map(a => `<tr style="cursor:pointer" title="Filtrar esta regional" data-r="${escapeHtml(a.regional)}" onclick="cobFiltrar('regional', this.dataset.r)">
+          <td>${escapeHtml(a.regional)}</td>${td(a.atencao, 'badge-blue')}${td(a.urgente, 'badge-amber')}${td(a.critico, 'badge-red')}<td class="td-mono cob-rank-num"><b>${a.total}</b></td></tr>`).join('')
         || _cobVazio('ti-mood-happy', 'Nenhuma nota em cobrança.', 5)}</tbody>
     </table></div></div>`;
 }
@@ -1202,12 +1250,13 @@ function cobRelatorioRanking(nivel) {
 }
 
 // Detalhamento: cobrança padrão + ADITIBRAS (bloco Aditivos, linhas
-// amarelas), todas as criticidades, respeitando os filtros da tela.
+// amarelas), todas as criticidades, respeitando os filtros da tela (barra +
+// colunas do Detalhamento).
 function cobRelatorioDetalhamento() {
   const res = _cob.res;
   if (!res) return;
-  const aditivos = _cobFiltrarNfs(res.blocos.Aditivos || []);
-  const rows = _cobFiltrarNfs(res.cobranca).concat(aditivos);
+  const aditivos = _cobCf('cobDet', _cobFiltrarNfs(res.blocos.Aditivos || []));
+  const rows = _cobCf('cobDet', _cobFiltrarNfs(res.cobranca)).concat(aditivos);
   if (!rows.length) { toast('Nenhuma nota no detalhamento para gerar o relatório.', 'error'); return; }
   _cobGerarRelatorio({
     rows,
@@ -1227,14 +1276,18 @@ function cobRelatorioDetalhamento() {
   });
 }
 
-function _cobPorFornecedorHtml(rows) {
+function _cobFornLinhas(rows) {
   const por = new Map();
   rows.forEach(r => { const a = por.get(r.cnpj) || { nome: r.fornecedor, cnpj: r.cnpj, notas: 0 }; a.notas++; por.set(r.cnpj, a); });
-  const lin = [...por.values()].sort((a, b) => b.notas - a.notas || a.nome.localeCompare(b.nome, 'pt-BR'));
-  return `<div class="table-card"><div class="table-header"><span class="table-title"><i class="ti ti-truck-delivery"></i> Notas faltantes por fornecedor</span></div>
+  return [...por.values()].sort((a, b) => b.notas - a.notas || a.nome.localeCompare(b.nome, 'pt-BR'));
+}
+
+function _cobPorFornecedorHtml(rows) {
+  const lin = _cobCf('cobForn', _cobFornLinhas(rows));
+  return `<div class="table-card"><div class="table-header"><span class="table-title"><i class="ti ti-truck-delivery"></i> Notas faltantes por fornecedor</span><div class="table-toolbar"></div></div>
     <div class="table-scroll" style="max-height:440px"><table>
       <thead><tr><th>Fornecedor</th><th style="text-align:center">Notas</th></tr></thead>
-      <tbody>${lin.map(f => `<tr style="cursor:pointer" title="Filtrar este fornecedor" onclick="cobFiltrarTexto('${f.cnpj}')"><td>${escapeHtml(f.nome)}</td><td class="td-mono" style="text-align:center"><b>${f.notas}</b></td></tr>`).join('')
+      <tbody id="tb-cob-forn">${lin.map(f => `<tr style="cursor:pointer" title="Filtrar este fornecedor" onclick="cobFiltrarTexto('${f.cnpj}')"><td>${escapeHtml(f.nome)}</td><td class="td-mono" style="text-align:center"><b>${f.notas}</b></td></tr>`).join('')
         || _cobVazio('ti-mood-happy', 'Nenhuma nota em cobrança.', 2)}</tbody>
     </table></div></div>`;
 }
@@ -1330,10 +1383,10 @@ function cobDetView(v) { _cob.detView = v; _cobRenderCobranca(); }
 
 // Detalhamento: uma tabela só, alternando entre a cobrança padrão e os
 // blocos à parte (Aditivos/Dovalle/Exceções) pelos botões do cabeçalho. Sempre
-// agrupada por regional.
-function _cobDetalhamentoHtml(padrao, blocos) {
-  const views = [['padrao', 'Padrão', padrao], ...blocos.map(([b, rs]) => [b, b, rs])];
-  const [atual, , rows] = views.find(v => v[0] === _cob.detView) || views[0];
+// agrupada por regional. Contagem das pills já com os filtros de coluna.
+function _cobDetalhamentoHtml(viewsBase) {
+  const views = viewsBase.map(([k, rot, rs]) => [k, rot, _cobCf('cobDet', rs)]);
+  const [atual, , rows] = _cobDetAtual(views);
   const ncol = 7;
   const ord = (a, b) => a.central.localeCompare(b.central, 'pt-BR') || String(a.emissao || '').localeCompare(String(b.emissao || ''));
   const grupos = new Map();
@@ -1343,7 +1396,7 @@ function _cobDetalhamentoHtml(padrao, blocos) {
     body += `<tr class="cob-grupo"><td colspan="${ncol}">${escapeHtml(reg)} <span style="color:var(--text3);font-weight:500">· ${rs.length} nota${rs.length > 1 ? 's' : ''}</span></td></tr>`;
     body += rs.sort(ord).map(_cobLinhaNf).join('');
   });
-  const vazio = `Nenhuma nota${_cobTemFiltro() ? ' para o filtro' : ''}.`
+  const vazio = `Nenhuma nota${_cobTemFiltro() || moduleHasColFilter('cobDet') ? ' para o filtro' : ''}.`
     + (atual === 'padrao' && _cob.res.fora.hoje ? `<br>${_cob.res.fora.hoje} nota(s) emitida(s) hoje entram na cobrança amanhã (D-1).` : '');
   return `<div class="table-card" style="margin-bottom:16px">
     <div class="table-header">
@@ -1355,7 +1408,7 @@ function _cobDetalhamentoHtml(padrao, blocos) {
     </div>
     <div class="table-scroll" style="max-height:calc(100vh - 140px)"><table class="cob-det-tabela">
       <thead><tr><th>Central</th><th>Fornecedor</th><th>NF</th><th>Emissão</th><th style="text-align:right">Peso</th><th>Material</th><th>CFOP</th></tr></thead>
-      <tbody>${body || _cobVazio('ti-circle-check', vazio, ncol)}</tbody>
+      <tbody id="tb-cob-det">${body || _cobVazio('ti-circle-check', vazio, ncol)}</tbody>
     </table></div></div>`;
 }
 
@@ -1437,28 +1490,33 @@ function _cobRenderAlertas() {
   const badge = document.getElementById('cob-alertas-count');
   if (badge) { badge.textContent = n; badge.style.display = n ? '' : 'none'; }
   if (!pane) return;
-  const sec = (icon, titulo, desc, head, linhas, ncol) => `<div class="table-card" style="margin-bottom:16px">
-    <div class="table-header"><span class="table-title"><i class="ti ${icon}"></i> ${titulo} <span style="color:var(--text3);font-weight:500">· ${linhas.length}</span></span></div>
+  // mod = módulo de filtro de coluna (colFilterMeta) da seção.
+  const sec = (icon, titulo, desc, head, mod, rows, linha, ncol) => {
+    const linhas = _cobCf(mod, rows).map(linha);
+    return `<div class="table-card" style="margin-bottom:16px">
+    <div class="table-header"><span class="table-title"><i class="ti ${icon}"></i> ${titulo} <span style="color:var(--text3);font-weight:500">· ${linhas.length}</span></span><div class="table-toolbar"></div></div>
     <div class="import-card-desc" style="padding:0 16px 10px;margin:0">${desc}</div>
     <div class="table-scroll" style="max-height:420px"><table><thead><tr>${head}</tr></thead>
-    <tbody>${linhas.join('') || _cobVazio('ti-circle-check', 'Nada aqui.', ncol)}</tbody></table></div></div>`;
+    <tbody id="${colFilterMeta[mod].tbodyId}">${linhas.join('') || _cobVazio('ti-circle-check', 'Nada aqui.', ncol)}</tbody></table></div></div>`;
+  };
   const nfHead = '<th>Central</th><th>Fornecedor</th><th>NF</th><th>Emissão</th><th style="text-align:right">Valor</th>';
   const nfTds = r => `<td class="td-mono">${escapeHtml(r.central)}</td><td>${escapeHtml(r.fornecedor)}</td><td class="td-mono">${escapeHtml(r.numero)}</td><td>${r.emissao_fmt}</td><td class="td-mono" style="text-align:right">${money(r.valor)}</td>`;
   pane.innerHTML =
     sec('ti-truck-delivery', 'Fornecedores fora da lista de cobrança',
       'Notas de venda/remessa de fornecedores que ainda não estão no cadastro. Inclua na cobrança ou marque como consumo — a decisão fica gravada em Configurações.',
-      '<th>Fornecedor</th><th>CNPJ</th><th style="text-align:right">Notas</th><th></th>',
-      res.fornNovos.map(f => `<tr><td>${escapeHtml(f.nome)}</td><td class="td-mono">${f.cnpj_fmt}</td><td class="td-mono" style="text-align:right">${f.notas}</td>
+      '<th>Fornecedor</th><th>CNPJ</th><th style="text-align:right">Notas</th><th></th>', 'cobAlForn',
+      res.fornNovos, f => `<tr><td>${escapeHtml(f.nome)}</td><td class="td-mono">${f.cnpj_fmt}</td><td class="td-mono" style="text-align:right">${f.notas}</td>
         <td class="cob-edita" style="white-space:nowrap"><button class="btn" onclick="cobDecidirFornecedor('${f.cnpj}','cobrar')"><i class="ti ti-plus"></i> Incluir na cobrança</button>
-        <button class="btn" onclick="cobDecidirFornecedor('${f.cnpj}','ignorar')"><i class="ti ti-ban"></i> Ignorar (consumo)</button></td></tr>`), 4)
+        <button class="btn" onclick="cobDecidirFornecedor('${f.cnpj}','ignorar')"><i class="ti ti-ban"></i> Ignorar (consumo)</button></td></tr>`, 4)
     + sec('ti-file-x', 'Canceladas no SEFAZ', 'Desconsideradas automaticamente da cobrança.',
-      nfHead + '<th>Status SEFAZ</th>', res.canceladas.map(r => `<tr>${nfTds(r)}<td><span class="badge badge-red">${escapeHtml(r.statusSefaz)}</span></td></tr>`), 6)
+      nfHead + '<th>Status SEFAZ</th>', 'cobAlCanc', res.canceladas, r => `<tr>${nfTds(r)}<td><span class="badge badge-red">${escapeHtml(r.statusSefaz)}</span></td></tr>`, 6)
     + sec('ti-file-unknown', 'Sem dados do SEFAZ',
       'Pendentes que não estão no relatório do SEFAZ importado — sem CFOP para conferir. Continuam na cobrança, marcadas como "sem SEFAZ".',
-      nfHead, res.semSefaz.map(r => `<tr>${nfTds(r)}</tr>`), 5)
+      nfHead, 'cobAlSem', res.semSefaz, r => `<tr>${nfTds(r)}</tr>`, 5)
     + sec('ti-map-pin-off', 'Centrais não cadastradas', 'CNPJs compradores das pendências que não estão no cadastro de centrais do admin.',
-      '<th>CNPJ comprador</th><th style="text-align:right">Notas</th>',
-      res.centraisNaoCad.map(c => `<tr><td class="td-mono">${c.cnpj_fmt}</td><td class="td-mono" style="text-align:right">${c.notas}</td></tr>`), 2);
+      '<th>CNPJ comprador</th><th style="text-align:right">Notas</th>', 'cobAlCentrais',
+      res.centraisNaoCad, c => `<tr><td class="td-mono">${c.cnpj_fmt}</td><td class="td-mono" style="text-align:right">${c.notas}</td></tr>`, 2);
+  _cobCfInjetar('cobAlForn', 'cobAlCanc', 'cobAlSem', 'cobAlCentrais');
 }
 
 async function cobDecidirFornecedor(cnpj, situacao) {
@@ -1475,12 +1533,12 @@ async function cobDecidirFornecedor(cnpj, situacao) {
 // ── Justificativas / Desconsideradas ─────────────────────────
 const COB_ANOT = {
   justificativas: {
-    pane: 'cob-pane-justificativas', rotulo: 'Justificativa', icon: 'ti-message-2',
+    pane: 'cob-pane-justificativas', rotulo: 'Justificativa', icon: 'ti-message-2', cf: 'cobJust',
     head: '<th>Fornecedor</th><th>NF</th><th>Central</th><th>Informante</th><th>Dia resp.</th><th>Desviado para</th><th>Motivo do atraso</th><th>Situação</th><th></th>',
     tds: r => `<td>${escapeHtml(r.informante || '')}</td><td>${r.dia_resp_fmt}</td><td>${escapeHtml(r.desviado || '')}</td><td class="cob-just" title="${escapeHtml(r.motivo || '')}">${escapeHtml(r.motivo || '')}</td>`,
   },
   desconsiderar: {
-    pane: 'cob-pane-desconsideradas', rotulo: 'Desconsideração', icon: 'ti-eye-off',
+    pane: 'cob-pane-desconsideradas', rotulo: 'Desconsideração', icon: 'ti-eye-off', cf: 'cobDesc',
     head: '<th>Fornecedor</th><th>NF</th><th>Central</th><th>Motivo</th><th>Data</th><th>Justificativa</th><th>Situação</th><th></th>',
     tds: r => `<td><span class="badge badge-purple">${escapeHtml(r.motivo || '—')}</span></td><td>${r.data_fmt}</td><td class="cob-just" title="${escapeHtml(r.justificativa || '')}">${escapeHtml(r.justificativa || '')}</td>`,
   },
@@ -1494,19 +1552,27 @@ function _cobRenderAnot(tipo) {
   if (!pane.querySelector('.cob-anot-corpo')) {
     pane.innerHTML = `<div class="cob-toolbar"><input class="form-input" type="text" placeholder="Filtrar fornecedor, NF, motivo…" value="${escapeHtml(_cob.filtroAnot[tipo])}" oninput="cobFiltrarAnot('${tipo}', this.value)"></div><div class="cob-anot-corpo"></div>`;
   }
-  const todas = tipo === 'justificativas' ? _cob.res.justificativas : _cob.res.desconsideradas;
-  const ws = _cobPalavras(_cob.filtroAnot[tipo]);
-  const lista = (ws.length ? todas.filter(r => _cobBusca(r, COB_CAMPOS_ANOT, ws)) : todas)
-    .slice().sort((a, b) => String(b.updated_at || '').localeCompare(String(a.updated_at || '')));
+  const lista = _cobCf(cfg.cf, _cobAnotBase(tipo));
+  const filtrado = _cobPalavras(_cob.filtroAnot[tipo]).length || moduleHasColFilter(cfg.cf);
   const ncol = (cfg.head.match(/<th/g) || []).length;
-  pane.querySelector('.cob-anot-corpo').innerHTML = `<div class="table-card"><div class="table-header"><span class="table-title"><i class="ti ${cfg.icon}"></i> ${tipo === 'justificativas' ? 'Justificativas' : 'Notas desconsideradas'} <span style="color:var(--text3);font-weight:500">· ${lista.length}</span></span></div>
-    <div class="table-scroll" style="max-height:640px"><table><thead><tr>${cfg.head}</tr></thead><tbody>
+  pane.querySelector('.cob-anot-corpo').innerHTML = `<div class="table-card"><div class="table-header"><span class="table-title"><i class="ti ${cfg.icon}"></i> ${tipo === 'justificativas' ? 'Justificativas' : 'Notas desconsideradas'} <span style="color:var(--text3);font-weight:500">· ${lista.length}</span></span><div class="table-toolbar"></div></div>
+    <div class="table-scroll" style="max-height:640px"><table><thead><tr>${cfg.head}</tr></thead><tbody id="${colFilterMeta[cfg.cf].tbodyId}">
     ${lista.map(r => `<tr><td>${escapeHtml(r.fornecedor || r.cnpj_fmt)}</td><td class="td-mono">${escapeHtml(r.numero)}</td><td class="td-mono">${escapeHtml(r.central)}</td>${cfg.tds(r)}
       <td>${r.emAberto ? '<span class="badge badge-amber">Nas pendências</span>' : '<span class="badge badge-teal" title="A nota não está mais no relatório de pendências">Fora das pendências</span>'}</td>
       <td class="cob-edita" style="white-space:nowrap"><button class="btn-icon" title="Editar" onclick="cobAbrirAnot('${tipo}','${r.k}')"><i class="ti ti-pencil"></i></button>
       <button class="btn-icon danger" title="Excluir" onclick="cobExcluirAnot('${tipo}','${r.k}')"><i class="ti ti-trash"></i></button></td></tr>`).join('')
-      || _cobVazio(cfg.icon, `Nenhum registro${ws.length ? ' para o filtro' : ''}.`, ncol)}
+      || _cobVazio(cfg.icon, `Nenhum registro${filtrado ? ' para o filtro' : ''}.`, ncol)}
     </tbody></table></div></div>`;
+  _cobCfInjetar(cfg.cf);
+}
+
+// Lista da aba com a busca de texto aplicada (sem os filtros de coluna).
+function _cobAnotBase(tipo) {
+  if (!_cob.res) return [];
+  const todas = tipo === 'justificativas' ? _cob.res.justificativas : _cob.res.desconsideradas;
+  const ws = _cobPalavras(_cob.filtroAnot[tipo]);
+  return (ws.length ? todas.filter(r => _cobBusca(r, COB_CAMPOS_ANOT, ws)) : todas)
+    .slice().sort((a, b) => String(b.updated_at || '').localeCompare(String(a.updated_at || '')));
 }
 
 // Modal único de Justificar / Desconsiderar (upsert por cnpj+número).

@@ -964,7 +964,10 @@ function getColUniqueValues(module, colIdx) {
   const field = meta.fields[colIdx];
   if (!field) return [];
 
-  const baseData = _COLFILTER_LIST_SCOPES.includes(module)
+  // meta.fonte: tabelas fora do state (ex.: Cobranças) entregam a própria
+  // base já com os filtros de texto/barra aplicados.
+  const baseData = meta.fonte ? meta.fonte()
+    : _COLFILTER_LIST_SCOPES.includes(module)
     ? _getScopeTextFilteredData(module)
     : _getModuleTextFilteredData(module);
 
@@ -1212,6 +1215,7 @@ function resetPageForModule(module) {
 }
 
 function renderModuleByName(module) {
+  if (colFilterMeta[module]?.render) return colFilterMeta[module].render();   // ver meta.fonte
   const map = {
     entradas: renderEntradas,
     saidas: renderSaidas,
