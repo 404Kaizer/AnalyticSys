@@ -2456,6 +2456,7 @@
               <button id="btn-manuais-lancamentos" class="btn btn-manuais-filter" onclick="toggleSomenteManuais('lancamentos')" title="Filtrar somente registros manuais"><i class="ti ti-pencil"></i> Manuais</button>
               <button id="btn-duplicatas-lancamentos" class="btn btn-duplicatas-filter" onclick="toggleSomenteDuplicatasLanc()" title="Filtrar somente lançamentos duplicados (mesma central, data e material)"><i class="ti ti-copy"></i> Duplicatas</button>
               <div id="pend-cad-lancamentos-box"></div>
+              <button class="btn" onclick="exportarLancamentosExcel()" title="Exportar os lançamentos filtrados para Excel (reimportável pelo Importar Dados)"><i class="ti ti-file-spreadsheet"></i> Exportar Excel</button>
               <button class="btn btn-primary" onclick="openModal('modal-manual'); setModulo('Lançamento')"><i class="ti ti-plus"></i> Adicionar</button>
             </div>
           </div>

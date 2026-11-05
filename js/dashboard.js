@@ -4912,6 +4912,23 @@ function renderLancamentos() {
   atualizarBarraLote('lancamentos');
 }
 
+// Exporta os lançamentos FILTRADOS na tela (todas as páginas) com as mesmas
+// colunas e cabeçalhos da tabela — buildLancamentoColumnMap reconhece esses
+// cabeçalhos, então o arquivo volta pelo Importar Dados → Lançamento.
+function exportarLancamentosExcel() {
+  const rows = _lastFiltered.lancamentos || [];
+  if (!rows.length) { toast('Nenhum lançamento para exportar', 'error'); return; }
+  if (typeof XLSX === 'undefined') { toast('Biblioteca XLSX não carregada.', 'error'); return; }
+  const aoa = [['Central Estoque', 'Dt. Lançamento', 'Fornecedor', 'Categoria', 'Material', 'Peso', 'UM', 'Custo Unit.', 'Valor Total']];
+  for (const r of rows) {
+    aoa.push([r.central || '', r.dtLanc || '', r.fornecedor || '', r.categoria || '', r.material || r.materialOriginal || '',
+      num(r.peso) || 0, r.um || '', num(r.custo) || 0, num(r.valorTotal) || 0]);
+  }
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), 'Lançamentos');
+  XLSX.writeFile(wb, `lancamentos_${new Date().toISOString().slice(0, 10)}.xlsx`);
+}
+
 
 // ── Edição inline — todos os campos dos lançamentos ─────────
 
@@ -8445,9 +8462,10 @@ function buildLancamentoColumnMap(headerRow) {
   const n = s => String(s ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
   const map = {};
   const defs = {
-    dtLanc:     { exact: ['data','data lancamento','data lançamento','dt lancamento','dt lançamento','dt.','dt lanc','dt. lanc','data lanc'],
+    dtLanc:     { exact: ['data','data lancamento','data lançamento','dt lancamento','dt lançamento','dt.','dt lanc','dt. lanc','data lanc','dt. lancamento'],
                   starts: ['data'] },
-    central:    { exact: ['central','centro','filial','unidade','plant'] },
+    central:    { exact: ['central','centro','filial','unidade','plant','central estoque'] },
+    fornecedor: { exact: ['fornecedor'] },
     material:   { exact: ['material','produto','item','descricao','descrição','mat.','material | fornecedor',
                           'mcc','cod material','codigo material','código material','cod. material'] },
     categoria:  { exact: ['categoria','category','cat'] },
