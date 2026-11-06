@@ -3047,6 +3047,9 @@ function openBreakdownModal(trigger) {
   // mesmo quando o par existe (limitação aceita: o valor de ver TODAS as
   // centrais numa lista só supera a precisão do pareamento neste modo).
   const mostrarCentralMaterial = trigger.dataset.mostrarCentralMaterial === '1';
+  // Card Ajustes do Gerencial: coluna de Justificativa + linha expansível
+  // com a DAI (ver _dgVgAjusteDetalheHtml em dashboard.js).
+  const detalheAjuste = trigger.dataset.detalheAjuste === '1';
 
   // Cabeçalho ganha (ou perde) as 2 colunas extras a cada abertura — o
   // modal é um único overlay fixo reaproveitado entre chamadas (ver
@@ -3059,6 +3062,10 @@ function openBreakdownModal(trigger) {
       theadRow.insertAdjacentHTML('afterbegin',
         '<th class="bdm-th-extra" data-sort-col="central">Central <i class="ti ti-selector mod-sort-icon"></i></th>'
         + '<th class="bdm-th-extra" data-sort-col="material">Material <i class="ti ti-selector mod-sort-icon"></i></th>');
+    }
+    if (detalheAjuste) {
+      theadRow.insertAdjacentHTML('afterbegin',
+        '<th class="bdm-th-extra" data-sort-col="just">Justificativa <i class="ti ti-selector mod-sort-icon"></i></th>');
     }
     // Usuário/Pedido/Doc MIGO/Dt. Registro somem no modo agregado (pedido
     // do Hugo) — fazem sentido no par (central, material) fixo do
@@ -3091,6 +3098,8 @@ function openBreakdownModal(trigger) {
   // uma transferência) é leitura corriqueira, então clicar num segundo chip
   // SOMA ao filtro em vez de trocar a seleção.
   const codsFiltro = new Set();
+  // Mesma lógica (Set vazio = sem filtro) pros chips de Justificativa.
+  const statusFiltro = new Set();
 
   // ── Sub-filtro do 862: TODOS | COM DESTINO | SEM DESTINO ────────────────
   // Um 862 é a saída da transferência; o 861 do outro centro é a chegada.
@@ -3153,7 +3162,7 @@ function openBreakdownModal(trigger) {
       </div>
       <div class="bdm-summary-row">
         <span class="bdm-summary-compare">${registrosHtml}</span>
-      </div>${_bdmDiagnosticoHtml(diag)}${_bdmFechExcluidosHtml(fechExcluidos)}`;
+      </div>${detalheAjuste ? '<div class="bdm-summary-row bdm-just-chips"></div>' : ''}${_bdmDiagnosticoHtml(diag)}${_bdmFechExcluidosHtml(fechExcluidos)}`;
     if (abrirDiag) {
       const box = summaryEl.querySelector('.bdm-diag-box');
       if (box) box.open = true;
@@ -3212,6 +3221,19 @@ function openBreakdownModal(trigger) {
     };
     _renderChips();
 
+    // Contador + filtro por Justificativa (sempre sobre o TOTAL, como os
+    // chips de código).
+    const justBox = summaryEl.querySelector('.bdm-just-chips');
+    const justCounts = { ok: 0, parcial: 0, sem: 0 };
+    if (justBox) entries.forEach(en => { justCounts[_dgVgAjusteStatus(en[5] && en[5].just)]++; });
+    const _renderJustChips = () => {
+      if (!justBox) return;
+      justBox.innerHTML = ['ok', 'parcial', 'sem'].map(st =>
+        `<button type="button" class="bdm-just-chip${statusFiltro.has(st) ? ' on' : ''}" data-st="${st}">${_dgVgAjusteBadgeHtml(st)} <b>${justCounts[st]}</b></button>`).join('');
+      justBox.classList.toggle('has-filter', statusFiltro.size > 0);
+    };
+    _renderJustChips();
+
     // Atribuição (não addEventListener): o modal reabre várias vezes na
     // mesma sessão e `onclick` substitui o handler anterior em vez de
     // empilhar um novo a cada abertura.
@@ -3239,6 +3261,15 @@ function openBreakdownModal(trigger) {
 
       // Clique em qualquer outro ponto do resumo fecha o menu aberto.
       summaryEl.querySelectorAll('.bdm-862-drop.open').forEach(d => d.classList.remove('open'));
+
+      const jChip = ev.target.closest('.bdm-just-chip');
+      if (jChip && summaryEl.contains(jChip)) {
+        const st = jChip.dataset.st;
+        if (statusFiltro.has(st)) statusFiltro.delete(st); else statusFiltro.add(st);
+        _renderJustChips();
+        renderRows(_busca());
+        return;
+      }
 
       const chip = ev.target.closest('.mv-badge-btn');
       if (!chip || !summaryEl.contains(chip)) return;
@@ -3451,7 +3482,10 @@ function openBreakdownModal(trigger) {
     const pedidoColHtml = mostrarCentralMaterial ? '' : `<td class="td-muted">${escapeHtml(pedidoCol || '—')}</td>`;
     const documentoColHtml = mostrarCentralMaterial ? '' : `<td class="td-muted">${documentoCell}</td>`;
     const dtRegColHtml = mostrarCentralMaterial ? '' : `<td class="td-muted">${escapeHtml(dtReg || '—')}</td>`;
-    const html = `<tr${_idxEstornados.has(_idx) ? ' class="bdm-row-estorno"' : ''}>
+    const justSt = detalheAjuste ? _dgVgAjusteStatus(extra && extra.just) : null;
+    const trCls = [_idxEstornados.has(_idx) ? 'bdm-row-estorno' : '', justSt ? 'bdm-aju-row' : ''].filter(Boolean).join(' ');
+    const html = `<tr${trCls ? ` class="${trCls}"` : ''}${justSt ? ` data-aju-i="${_idx}"` : ''}>
+      ${justSt ? `<td><i class="ti ti-chevron-right bdm-aju-chev"></i>${_dgVgAjusteBadgeHtml(justSt)}</td>` : ''}
       ${centralMaterialCols}
       <td>${movBadgeHtml(cod)}</td>
       ${usuarioCol}
@@ -3491,6 +3525,7 @@ function openBreakdownModal(trigger) {
        mostrarCentralMaterial ? '' : documentoCol,
        mostrarCentralMaterial ? '' : usuario,
        mostrarCentralMaterial ? '' : dtReg,
+       justSt ? { ok: 'justificado', parcial: 'parcial', sem: 'nao justificado' }[justSt] : '',
        ...valorFormas]
         .filter(Boolean).join(' ')
     );
@@ -3518,10 +3553,11 @@ function openBreakdownModal(trigger) {
       // estorno de −198.900 pertence ao lado do lançamento de +198.900 que
       // ele anula, não no extremo oposto da tabela. Ordenar pelo valor cru
       // separaria justamente o par que o analista quer conferir junto.
-      saldo:      Math.abs(num(value))
+      saldo:      Math.abs(num(value)),
+      just:       justSt ? { sem: 0, parcial: 1, ok: 2 }[justSt] : ''
     };
 
-    return { cod, value, html, searchText, sort, temPar };
+    return { cod, value, html, searchText, sort, temPar, justSt };
   });
 
   // ── Ordenação por coluna ────────────────────────────────────────────────
@@ -3585,6 +3621,20 @@ function openBreakdownModal(trigger) {
   }
   _syncSortHeaders();
 
+  // Expande/recolhe a justificativa do ajuste. O painel só é montado no
+  // clique (nada pré-renderizado pras centenas de linhas) e some no próximo
+  // renderRows (página/filtro/ordenação), como o resto da tabela.
+  tbody.onclick = !detalheAjuste ? null : (ev) => {
+    const tr = ev.target.closest('tr.bdm-aju-row');
+    if (!tr || !tbody.contains(tr)) return;
+    const det = tr.nextElementSibling;
+    if (det && det.classList.contains('bdm-aju-det')) { det.remove(); tr.classList.remove('bdm-aju-open'); return; }
+    const en = entries[+tr.dataset.ajuI];
+    tr.classList.add('bdm-aju-open');
+    tr.insertAdjacentHTML('afterend',
+      `<tr class="bdm-aju-det"><td colspan="${tr.children.length}">${_dgVgAjusteDetalheHtml(en[5], en[3])}</td></tr>`);
+  };
+
   // ── Renderiza a tabela + total, aplicando os dois filtros ────────────────
   // Chips (código) e busca (texto) se COMBINAM — os dois ativos ao mesmo
   // tempo restringem juntos, em vez de um sobrescrever o outro.
@@ -3600,6 +3650,7 @@ function openBreakdownModal(trigger) {
       (destino862 === 'com' ? r.temPar === true : r.temPar === false);
     const filtered = _ordenar(rows.filter(r =>
       (codsFiltro.size === 0 || codsFiltro.has(r.cod)) &&
+      (statusFiltro.size === 0 || statusFiltro.has(r.justSt)) &&
       passaDestino(r) &&
       (t === '' || r.searchText.includes(t))
     ));
@@ -3619,11 +3670,12 @@ function openBreakdownModal(trigger) {
     const motivos = [];
     if (codsFiltro.size) motivos.push(`código ${[...codsFiltro].join(', ')}`);
     if (destino862 !== 'todos') motivos.push(`862 ${destino862 === 'com' ? 'com' : 'sem'} destino`);
+    if (statusFiltro.size) motivos.push(`justificativa ${[...statusFiltro].join(', ')}`);
     if (t) motivos.push(`"${escapeHtml(term.trim())}"`);
 
     tbody.innerHTML = filtered.length
       ? pageItems.map(r => r.html).join('')
-      : `<tr><td colspan="${mostrarCentralMaterial ? 7 : 9}" style="text-align:center;color:var(--text3);padding:22px 16px">
+      : `<tr><td colspan="${(mostrarCentralMaterial ? 7 : 9) + (detalheAjuste ? 1 : 0)}" style="text-align:center;color:var(--text3);padding:22px 16px">
            Nenhum registro encontrado${motivos.length ? ` para ${motivos.join(' + ')}` : ''}
          </td></tr>`;
 
@@ -3635,7 +3687,7 @@ function openBreakdownModal(trigger) {
     //                                                       (ver _compareFiltradoHtml).
     // Nos dois últimos o par label+total padrão fica escondido pra não
     // repetir o total do SAP uma segunda vez na mesma linha.
-    const temFiltro = codsFiltro.size > 0 || destino862 !== 'todos' || t !== '';
+    const temFiltro = codsFiltro.size > 0 || statusFiltro.size > 0 || destino862 !== 'todos' || t !== '';
     const usaCompare = !!footerCompareEl && localTotal !== null;
 
     if (footerCompareEl) {

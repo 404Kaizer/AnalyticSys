@@ -1988,22 +1988,104 @@ function renderDgVisaoGeralPdf(results, thresholds, dtIni, dtFim) {
 // (ver mostrarCentralMaterial em openBreakdownModal/_dgVgBotaoDetalhado).
 function _dgVgColetarSapPorNatureza(results, natureza) {
   const out = [];
+  // Ajustes levam a justificativa (DAI) embutida — ver _dgVgAjusteJustInfo.
+  const daiPorDoc = natureza === 'aju' ? _daiIndexPorDocumentoSap() : null;
+  const daiPorId  = daiPorDoc && new Map((state.ajustesSistemicos || []).map(d => [d.id, d]));
   (results || []).forEach(r => {
     (r.sapNoPeriodo || []).forEach(s => {
       const p = num(s.peso);
       if (!p || classificarMovSap(normMov(s.movimento)) !== natureza) return;
       const ref = (s.ref && String(s.ref).trim()) ? String(s.ref).trim()
                 : (s.documento && String(s.documento).trim()) ? String(s.documento).trim() : '';
-      out.push([normMov(s.movimento), p, ref, String(s.usuario || '').trim(), String(s.dtLanc || s.dtDoc || '').trim(), {
+      const extra = {
         deposito: String(s.deposito || '').trim(), refRaw: String(s.ref || '').trim(),
         pedido: String(s.pedido || '').trim(), documento: String(s.documento || '').trim(),
         dtDoc: String(s.dtDoc || '').trim(), dtLanc: String(s.dtLanc || '').trim(), dtReg: String(s.dtReg || '').trim(),
         central: r.central, material: s.material || '—'
-      }]);
+      };
+      if (daiPorDoc) extra.just = _dgVgAjusteJustInfo(extra.documento, daiPorDoc, daiPorId);
+      out.push([normMov(s.movimento), p, ref, String(s.usuario || '').trim(), String(s.dtLanc || s.dtDoc || '').trim(), extra]);
     });
   });
   out.sort((a, b) => Math.abs(num(b[1])) - Math.abs(num(a[1])));
   return out;
+}
+
+// ── Justificativa de cada Ajuste (modal "Ver detalhes" do card Ajustes) ──
+// Rastreio pra diretoria (Hugo, 06/11/2026): cada linha expande mostrando
+// quem fez, por quê e se está justificado. A única fonte com analista/
+// motivo/anexos é a DAI, casada pelo nº do documento SAP — mesmo índice do
+// link da coluna Documento (_daiIndexPorDocumentoSap). Vai EMBUTIDO na tupla
+// (extra.just) porque o relatório exportado não tem state nem DAIs: só o que
+// veio no data-entries. 3 níveis (decisão do Hugo):
+//   ok      = DAI com ≥1 anexo   · parcial = DAI sem anexo
+//   sem     = nenhuma DAI com esse documento
+// ponytail: anexo de DAI não tem tipo, então "tem anexo" é o sinal de termo
+// assinado; se a diretoria exigir o Termo especificamente, tipar o anexo.
+function _dgVgAjusteJustInfo(documento, daiPorDoc, daiPorId) {
+  const hit = documento ? daiPorDoc.get(_normDocSap(documento)) : null;
+  const dai = hit && daiPorId.get(hit.daiId);
+  if (!dai) return null;
+  const item = _daiGetItens(dai).find(it => it.id === hit.itemId) || {};
+  // Links assinados — só existem durante a geração do relatório (ver
+  // _dgrAssinarAnexosDai); no app o download é o ZIP sob demanda.
+  const rel = window._dgVgAnexoUrlsRel;
+  return {
+    daiId: dai.id, rotulo: dai.tag || dai.numero || '', numero: dai.numero || '',
+    analista: dai.analista || '', dataOcorrido: dai.dataOcorrido || '',
+    descricao: dai.descricao || '', objetivo: item.objetivo || '',
+    informantes: _daiGetInformantes(dai).map(i => ({ nome: i.nome || '', cargo: i.cargo || '' })),
+    anexos: (dai.anexos || []).map(a => ({ nome: a.nome || 'arquivo', url: (rel && a.path && rel.links[a.path]) || '' })),
+    linksAte: rel ? rel.ate : ''
+  };
+}
+
+function _dgVgAjusteStatus(just) {
+  return !just ? 'sem' : (just.anexos && just.anexos.length) ? 'ok' : 'parcial';
+}
+
+function _dgVgAjusteBadgeHtml(st) {
+  const m = {
+    ok:      ['ti-circle-check', 'Justificado',     'var(--green, #10b981)', 'DAI registrada com anexo(s)'],
+    parcial: ['ti-alert-circle', 'Parcial',         'var(--amber, #f59e0b)', 'DAI registrada, mas sem nenhum anexo (termo/evidência)'],
+    sem:     ['ti-circle-x',     'Não justificado', 'var(--red, #f43f5e)',   'Nenhuma DAI registrada com este nº de documento SAP']
+  }[st];
+  return `<span class="bdm-just-badge" style="color:${m[2]}" title="${m[3]}"><i class="ti ${m[0]}"></i>${m[1]}</span>`;
+}
+
+// Painel da linha expandida. No app: "Abrir DAI" + ZIP sob demanda (nada é
+// baixado antes do clique). No relatório: um link assinado por anexo.
+function _dgVgAjusteDetalheHtml(extra, usuarioSap) {
+  const j = extra && extra.just, doc = (extra && extra.documento) || '';
+  const e = s => escapeHtml(String(s || ''));
+  const noApp = typeof baixarZipDai === 'function';
+  const campo = (label, valor, largo) => `<div class="bdm-just-campo${largo ? ' largo' : ''}"><span>${label}</span><div>${valor || '<span class="td-muted">—</span>'}</div></div>`;
+  const base = campo('Lançado no SAP por', e(usuarioSap)) + campo('Doc. SAP', e(doc));
+  if (!j) {
+    return `<div class="bdm-just-det">${_dgVgAjusteBadgeHtml('sem')}<div class="bdm-just-grid">${base}</div>
+      <div class="bdm-just-aviso">${doc ? 'Nenhuma DAI registrada com este documento SAP.' : 'Lançamento sem nº de documento SAP — não dá pra vincular a uma DAI.'}</div></div>`;
+  }
+  const infs = j.informantes.map(i => e(i.nome) + (i.cargo ? ` <span class="td-muted">(${e(i.cargo)})</span>` : '')).join('<br>');
+  const anexos = !j.anexos.length ? ''
+    : noApp
+      ? j.anexos.map(a => `<span class="bdm-just-anexo"><i class="ti ti-paperclip"></i>${e(a.nome)}</span>`).join('')
+        + `<button type="button" class="btn btn-sm" onclick="event.stopPropagation();baixarZipDai('${e(j.daiId)}')"><i class="ti ti-download"></i> Baixar ZIP</button>`
+      : j.anexos.map(a => a.url
+          ? `<a class="bdm-just-anexo" href="${e(a.url)}" target="_blank" rel="noopener"><i class="ti ti-download"></i>${e(a.nome)}</a>`
+          : `<span class="bdm-just-anexo" title="Arquivo não disponível fora do app"><i class="ti ti-paperclip"></i>${e(a.nome)}</span>`).join('')
+        + (j.linksAte ? `<span class="td-muted">links válidos até ${e(j.linksAte)}</span>` : '');
+  const abrir = noApp && doc
+    ? ` <button type="button" class="btn btn-sm" onclick="event.stopPropagation();abrirDaiPorDocumentoSap('${_normDocSap(doc)}')"><i class="ti ti-external-link"></i> Abrir DAI</button>` : '';
+  return `<div class="bdm-just-det">${_dgVgAjusteBadgeHtml(_dgVgAjusteStatus(j))}
+    <span class="bdm-just-dai"><i class="ti ti-file-text"></i>${e(j.rotulo)}${j.numero && j.numero !== j.rotulo ? ` · ${e(j.numero)}` : ''}</span>${abrir}
+    <div class="bdm-just-grid">
+      ${campo('Analista (DAI)', e(j.analista))}${base}
+      ${campo('Data do ocorrido', e(String(j.dataOcorrido).split('-').reverse().join('/')))}
+      ${campo('Função do movimento', e(j.objetivo))}
+      ${campo('Informantes', infs)}
+      ${campo('Motivo (descrição)', e(j.descricao).replace(/\n/g, '<br>'), true)}
+      ${campo(`Anexos (${j.anexos.length})`, anexos ? `<div class="bdm-just-anexos">${anexos}</div>` : '<span style="color:var(--amber, #f59e0b)">Nenhum arquivo anexado</span>', true)}
+    </div></div>`;
 }
 
 // Botão "Detalhado" — mesmo modal de Movimentações SAP do Dashboard
@@ -2016,7 +2098,7 @@ function _dgVgColetarSapPorNatureza(results, natureza) {
 // Vai como último filho do .inv-kpi-card, que ganha .dg-kpi-card-rodape:
 // vira uma faixa de rodapé "Ver detalhes →" de ponta a ponta do card (ver
 // .dg-kpi-detalhe-btn em components.css).
-function _dgVgBotaoDetalhado(entries, title, colorVar) {
+function _dgVgBotaoDetalhado(entries, title, colorVar, detalheAjuste = false) {
   if (!entries.length) return '';
   const encoded = encodeURIComponent(JSON.stringify(entries));
   return `<button type="button" class="dg-kpi-detalhe-btn"
@@ -2024,7 +2106,7 @@ function _dgVgBotaoDetalhado(entries, title, colorVar) {
     data-entries="${encoded}" data-fech-excluidos="" data-diag=""
     data-title="${escapeHtml(title)}" data-color="${escapeHtml(colorVar)}"
     data-local-count="" data-local-total="" data-mat="" data-central=""
-    data-mostrar-central-material="1"
+    data-mostrar-central-material="1" data-detalhe-ajuste="${detalheAjuste ? '1' : ''}"
     title="Ver detalhamento — ${escapeHtml(title)}">Ver detalhes <i class="ti ti-arrow-right"></i></button>`;
 }
 
@@ -2057,7 +2139,7 @@ function _dgVgRenderKpisHero(varTotalFisica, custoTotal, estTotais, movTotais, f
   const consumoEntries = _dgVgColetarSapPorNatureza(results, 'sai');
   const btnCompras = _dgVgBotaoDetalhado(comprasEntries, 'Compras', 'var(--green)');
   const btnConsumo = _dgVgBotaoDetalhado(consumoEntries, 'Consumo', 'var(--red)');
-  const btnAjustes = _dgVgBotaoDetalhado(_dgVgColetarSapPorNatureza(results, 'aju'), 'Ajustes dentro do Mês', 'var(--amber)');
+  const btnAjustes = _dgVgBotaoDetalhado(_dgVgColetarSapPorNatureza(results, 'aju'), 'Ajustes dentro do Mês', 'var(--amber)', true);
 
   const colorFor = v => v < -0.0001 ? 'var(--red)'    : v > 0.0001 ? 'var(--amber)'    : 'var(--teal)';
   const varCol = colorFor(varTotalFisica);

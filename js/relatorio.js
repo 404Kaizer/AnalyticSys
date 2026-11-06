@@ -3596,7 +3596,8 @@ const _DGR_NOMES = {
                 '_daRenderRankingVariacao', 'calcHealthScore', 'classifyVariation', 'HEALTH_PENALTIES', '_dgVgBuildCentralHealthData',
                 '_DG_VG_NIVEL_COR', '_DG_VG_NIVEL_LABEL', '_DG_VG_NIVEL_ORDEM',
                 '_dgVgNivelBadgeHtml', '_dgVgSaudeDiffCor', 'abrirDetalheSaude', '_dgVgRenderSaudeTabela',
-                '_dgVgFiltrarSaudeLista', 'fecharDetalheSaude', 'abrirDetalheVariacao', 'fecharDetalheVariacao']
+                '_dgVgFiltrarSaudeLista', 'fecharDetalheSaude', 'abrirDetalheVariacao', 'fecharDetalheVariacao',
+                '_dgVgAjusteStatus', '_dgVgAjusteBadgeHtml', '_dgVgAjusteDetalheHtml']
 };
 
 function _dgrScriptPrelude(chaves) {
@@ -3701,6 +3702,19 @@ function _dgrScriptDetalheBotao() {
 (function() {
   var PAGE_SIZE_BDM = 50;
   var _bdmRows = [], _bdmPage = 0, _bdmSortCol = 'dtLanc', _bdmSortDir = 'desc';
+  // Card Ajustes: coluna Justificativa + linha expansível (mesmas funções da
+  // tela, _dgVgAjuste*, embutidas pelo prelúdio detalheDash).
+  var _bdmEntries = [], _bdmJust = false, _bdmStatusFiltro = {}, _bdmJustCounts = {};
+  function _bdmTemStatusFiltro() { return Object.keys(_bdmStatusFiltro).length > 0; }
+  function _bdmRenderJustChips() {
+    var box = document.querySelector('#dgr-bdm-summary .bdm-just-chips');
+    if (!box) return;
+    box.innerHTML = ['ok', 'parcial', 'sem'].map(function(st) {
+      return '<button type="button" class="bdm-just-chip' + (_bdmStatusFiltro[st] ? ' on' : '') + '" data-st="' + st + '">'
+        + _dgVgAjusteBadgeHtml(st) + ' <b>' + (_bdmJustCounts[st] || 0) + '</b></button>';
+    }).join('');
+    box.classList.toggle('has-filter', _bdmTemStatusFiltro());
+  }
 
   function _bdmEsc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
@@ -3746,7 +3760,10 @@ function _dgrScriptDetalheBotao() {
     var infoEl = document.getElementById('dgr-bdm-page-info');
     if (!tbody) return;
     var t = String(term || '').trim().toLowerCase();
-    var filtrado = _bdmOrdenar(_bdmRows.filter(function(r) { return !t || r.searchText.indexOf(t) !== -1; }));
+    var temSt = _bdmTemStatusFiltro();
+    var filtrado = _bdmOrdenar(_bdmRows.filter(function(r) {
+      return (!t || r.searchText.indexOf(t) !== -1) && (!temSt || _bdmStatusFiltro[r.justSt]);
+    }));
 
     var totalPaginas = Math.max(1, Math.ceil(filtrado.length / PAGE_SIZE_BDM));
     _bdmPage = Math.min(Math.max(0, _bdmPage), totalPaginas - 1);
@@ -3754,7 +3771,7 @@ function _dgrScriptDetalheBotao() {
 
     tbody.innerHTML = filtrado.length
       ? pageItems.map(function(r) { return r.html; }).join('')
-      : '<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:22px 16px">Nenhum registro encontrado' + (t ? ' para "' + _bdmEsc(term.trim()) + '"' : '') + '</td></tr>';
+      : '<tr><td colspan="' + (_bdmJust ? 8 : 7) + '" style="text-align:center;color:var(--text3);padding:22px 16px">Nenhum registro encontrado' + (t ? ' para "' + _bdmEsc(term.trim()) + '"' : '') + '</td></tr>';
 
     if (infoEl) {
       infoEl.textContent = !filtrado.length ? '0 registros'
@@ -3763,7 +3780,7 @@ function _dgrScriptDetalheBotao() {
 
     var subtotal = filtrado.reduce(function(s, r) { return s + r.value; }, 0);
     if (totalEl) { totalEl.textContent = dgFmtPesoSigned(subtotal, 1); totalEl.style.color = _bdmCor(subtotal); }
-    if (labelEl) labelEl.textContent = t ? ('Total (' + filtrado.length + ' filtrado' + (filtrado.length === 1 ? '' : 's') + ')') : 'Total';
+    if (labelEl) labelEl.textContent = (t || temSt) ? ('Total ('+ filtrado.length + ' filtrado' + (filtrado.length === 1 ? '' : 's') + ')') : 'Total';
   }
 
   window.openBreakdownModal = function(trigger) {
@@ -3777,13 +3794,23 @@ function _dgrScriptDetalheBotao() {
     try { entries = JSON.parse(decodeURIComponent(trigger.dataset.entries || '[]')); } catch (e) {}
     var title = trigger.dataset.title || '';
     if (titleEl) titleEl.textContent = title + ' — Movimentações';
-    if (summaryEl) summaryEl.innerHTML = '<b>' + entries.length + '</b> registro(s) no SAP';
 
-    _bdmRows = entries.map(function(e) {
+    _bdmEntries = entries;
+    _bdmJust = trigger.dataset.detalheAjuste === '1';
+    _bdmStatusFiltro = {};
+    _bdmJustCounts = { ok: 0, parcial: 0, sem: 0 };
+    var trHead = document.querySelector('#dgr-bdm-thead tr');
+    var thExtra = trHead && trHead.querySelector('.bdm-th-extra');
+    if (thExtra) thExtra.remove();
+    if (_bdmJust && trHead) trHead.insertAdjacentHTML('afterbegin', '<th class="bdm-th-extra" data-sort-col="just">Justificativa <i class="ti ti-selector mod-sort-icon"></i></th>');
+
+    _bdmRows = entries.map(function(e, i) {
       var cod = e[0], value = e[1], ref = e[2], extra = e[5] || {};
       var central = extra.central || '', material = extra.material || '';
       var refRaw = extra.refRaw || ref || '', dtDoc = extra.dtDoc || '', dtLanc = extra.dtLanc || e[4] || '';
-      var html = '<tr>'
+      var st = _bdmJust ? _dgVgAjusteStatus(extra.just) : null;
+      if (st) _bdmJustCounts[st]++;
+      var html = (st ? '<tr class="bdm-aju-row" data-aju-i="' + i + '"><td><i class="ti ti-chevron-right bdm-aju-chev"></i>' + _dgVgAjusteBadgeHtml(st) + '</td>' : '<tr>')
         + '<td class="td-muted">' + _bdmEsc(central || '—') + '</td>'
         + '<td class="td-muted">' + _bdmEsc(material || '—') + '</td>'
         + '<td class="td-mono">' + _bdmEsc(cod || '—') + '</td>'
@@ -3793,11 +3820,36 @@ function _dgrScriptDetalheBotao() {
         + '<td class="td-mono" style="text-align:right;font-weight:600;color:' + _bdmCor(value) + '">' + dgFmtPesoSigned(value, 1) + '</td>'
         + '</tr>';
       return {
-        html: html, value: value,
-        searchText: [central, material, cod, refRaw, dtDoc, dtLanc].join(' ').toLowerCase(),
-        sort: { central: central, material: material, cod: cod, ref: refRaw, dtDoc: _bdmData(dtDoc), dtLanc: _bdmData(dtLanc), saldo: Math.abs(value) }
+        html: html, value: value, justSt: st,
+        searchText: [central, material, cod, refRaw, dtDoc, dtLanc, st ? { ok: 'justificado', parcial: 'parcial', sem: 'não justificado' }[st] : ''].join(' ').toLowerCase(),
+        sort: { central: central, material: material, cod: cod, ref: refRaw, dtDoc: _bdmData(dtDoc), dtLanc: _bdmData(dtLanc), saldo: Math.abs(value),
+                just: st ? { sem: 0, parcial: 1, ok: 2 }[st] : '' }
       };
     });
+
+    if (summaryEl) {
+      summaryEl.innerHTML = '<b>' + entries.length + '</b> registro(s) no SAP' + (_bdmJust ? '<div class="bdm-summary-row bdm-just-chips"></div>' : '');
+      _bdmRenderJustChips();
+      summaryEl.onclick = !_bdmJust ? null : function(ev) {
+        var chip = ev.target.closest('.bdm-just-chip');
+        if (!chip) return;
+        var st = chip.dataset.st;
+        if (_bdmStatusFiltro[st]) delete _bdmStatusFiltro[st]; else _bdmStatusFiltro[st] = true;
+        _bdmPage = 0;
+        _bdmRenderJustChips();
+        _bdmRenderRows(document.getElementById('dgr-bdm-search-input') ? document.getElementById('dgr-bdm-search-input').value : '');
+      };
+    }
+    var tbodyEl = document.getElementById('dgr-bdm-tbody');
+    if (tbodyEl) tbodyEl.onclick = !_bdmJust ? null : function(ev) {
+      var tr = ev.target.closest('tr.bdm-aju-row');
+      if (!tr) return;
+      var det = tr.nextElementSibling;
+      if (det && det.classList.contains('bdm-aju-det')) { det.remove(); tr.classList.remove('bdm-aju-open'); return; }
+      var en = _bdmEntries[+tr.dataset.ajuI];
+      tr.classList.add('bdm-aju-open');
+      tr.insertAdjacentHTML('afterend', '<tr class="bdm-aju-det"><td colspan="' + tr.children.length + '">' + _dgVgAjusteDetalheHtml(en[5], en[3]) + '</td></tr>');
+    };
 
     _bdmPage = 0; _bdmSortCol = 'dtLanc'; _bdmSortDir = 'desc';
     _bdmSyncSortHeaders();
@@ -3871,8 +3923,32 @@ function _dgrExportaveis() {
     _daRenderTabelaMaterial, _daRenderRanking, _daRenderRankingVariacao,
     _DG_VG_NIVEL_COR, _DG_VG_NIVEL_LABEL, _DG_VG_NIVEL_ORDEM,
     _dgVgNivelBadgeHtml, _dgVgSaudeDiffCor, abrirDetalheSaude, _dgVgRenderSaudeTabela,
-    _dgVgFiltrarSaudeLista, fecharDetalheSaude, abrirDetalheVariacao, fecharDetalheVariacao
+    _dgVgFiltrarSaudeLista, fecharDetalheSaude, abrirDetalheVariacao, fecharDetalheVariacao,
+    _dgVgAjusteStatus, _dgVgAjusteBadgeHtml, _dgVgAjusteDetalheHtml
   };
+}
+
+// Links assinados (60 dias, decisão do Hugo) dos anexos de DAI, pro botão de
+// download do detalhe de Ajustes funcionar no arquivo exportado (sem login).
+// UMA chamada pra todos; só texto vai pro arquivo, o download acontece no
+// clique. Só os links de DAIs que casam com algum ajuste do relatório entram
+// no HTML (ver _dgVgAjusteJustInfo) — os outros são assinados e descartados.
+// ponytail: assina todos os anexos de DAI (dezenas); se virar milhares,
+// assinar só os paths referenciados pelos ajustes do período.
+async function _dgrAssinarAnexosDai() {
+  const DIAS = 60;
+  const paths = [...new Set((state.ajustesSistemicos || []).flatMap(d => (d.anexos || []).map(a => a.path)).filter(Boolean))];
+  if (!paths.length || !window.supabaseClient) return null;
+  try {
+    const { data, error } = await window.supabaseClient.storage.from('solicitacoes-anexos').createSignedUrls(paths, DIAS * 86400);
+    if (error) throw error;
+    const links = {};
+    (data || []).forEach(x => { if (x && x.signedUrl && x.path) links[x.path] = x.signedUrl; });
+    return { links, ate: new Date(Date.now() + DIAS * 86400000).toLocaleDateString('pt-BR') };
+  } catch (err) {
+    console.warn('[Relatório] Falha ao gerar links dos anexos de DAI — relatório sai sem download.', err);
+    return null;
+  }
 }
 
 function _dgrSerializarValor(v) {
@@ -5489,9 +5565,11 @@ window.gerarRelatorioGerencialDashboard = async function(tema = 'dark', selecao 
     // Os dois I/O do relatório: o CSS do app (senão o HTML clonado chega
     // sem estilo nenhum) e o Chart.js (pra os gráficos serem gráficos de
     // verdade dentro do arquivo, não imagem).
-    const [cssApp, chartJs] = await Promise.all([_dgrCssApp(), _dgrChartJsEmbutido()]);
+    const [cssApp, chartJs, anexoUrls] = await Promise.all([_dgrCssApp(), _dgrChartJsEmbutido(), _dgrAssinarAnexosDai()]);
 
     // Monta o corpo 100% a partir da SELEÇÃO do usuário (ordem inclusa).
+    // _dgVgAnexoUrlsRel vale só durante o render (lido por _dgVgAjusteJustInfo).
+    window._dgVgAnexoUrlsRel = anexoUrls;
     let panesHtml = '';
     const abasIncluidas = [];
     secoesSelecionadas.forEach(({ aba: abaId, secoes: secoesIds }) => {
@@ -5508,6 +5586,7 @@ window.gerarRelatorioGerencialDashboard = async function(tema = 'dark', selecao 
       panesHtml += `<div class="rel-aba-pane${ativa}" data-aba-id="${aba.id}">${corpo}</div>`;
       abasIncluidas.push(aba);
     });
+    window._dgVgAnexoUrlsRel = null;
 
     const incluiu = id => abasIncluidas.some(a => a.id === id);
 
