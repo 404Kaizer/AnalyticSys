@@ -1233,8 +1233,12 @@ ${opts.cssApp ? `<style>${opts.cssApp}</style>` : ''}
      altura útil de retrato ~281mm e de paisagem ~194mm são bem
      diferentes). Por decisão explícita do usuário, o Gerencial passou a
      usar opts.pageOrientation:'retrato', travando A4 retrato só pra esse
-     relatório — os demais continuam com o mesmo comportamento de sempre. */
-  @page { size: ${opts.pageOrientation === 'retrato' ? 'A4 portrait' : opts.pageOrientation === 'livre' ? 'A4' : 'A4 landscape'}; margin: 8mm 10mm; }
+     relatório — os demais continuam com o mesmo comportamento de sempre.
+     A centralização caiu depois, e em 06/11/2026 o Gerencial voltou pra
+     'livre' a pedido do Hugo. 'livre' NÃO declara size: qualquer size
+     (até "A4" puro) faz o Chrome esconder o seletor Layout do diálogo de
+     impressão — sem size, Retrato/Paisagem e o papel ficam no diálogo. */
+  @page { ${opts.pageOrientation === 'livre' ? '' : `size: ${opts.pageOrientation === 'retrato' ? 'A4 portrait' : 'A4 landscape'};`} margin: 8mm 10mm; }
   * { box-sizing:border-box; margin:0; padding:0; }
 
   /* ── Variáveis de tema (Relatório Gerencial, jul/2026) ──────────────────
@@ -5710,6 +5714,26 @@ window.gerarRelatorioGerencialDashboard = async function(tema = 'dark', selecao 
         .dgr-evo-detalhe-row[hidden] { display:table-row !important; }
         .dgr-evo-tabela tbody tr.dgr-evo-mes-dimmed { opacity:1; }
         .dgr-evo-expand-btn { display:none; }
+        /* Sem cortes no papel (Hugo, 06/11/2026). Na lateral: wrapper com
+           scroll (.da-table-wrap) recortava a tabela larga — visível deixa o
+           Chrome encolher a página pra caber; gráfico (Chart.js grava a
+           largura da tela em px no canvas) encolhe junto, mantendo a
+           proporção. Entre páginas: card, linha de tabela, gráfico e bloco
+           de detalhe descem INTEIROS pra página seguinte em vez de partir;
+           título nunca fica sozinho no pé da página. Bloco maior que uma
+           página inteira o navegador ainda divide (não há como evitar). */
+        .rk-page .da-table-wrap { overflow:visible !important; }
+        .rk-page canvas, .rk-page img, .rk-page svg { max-width:100% !important; }
+        .rk-page canvas { height:auto !important; }
+        .rk-page tr, .rk-page canvas, .rk-page img, .rk-page svg,
+        .rk-page [class*="card"], .rk-page [class*="-box"], .rk-page [class*="-row"],
+        .rk-page .dgr-health-grid, .rk-page .dgr-chart-grid, .rk-page .dgr-kpi-secondary {
+          page-break-inside:avoid; break-inside:avoid;
+        }
+        .rk-page .dgr-section-title, .rk-page .dgr-chart-title, .rk-page .dgr-health-title,
+        .rk-page .rk-table-head, .rk-page h2, .rk-page h3, .rk-page h4 {
+          page-break-after:avoid; break-after:avoid;
+        }
       }
     `;
 
@@ -5741,7 +5765,7 @@ window.gerarRelatorioGerencialDashboard = async function(tema = 'dark', selecao 
     const html = _buildRankingShellHTML({
       periodoBadge, periodo: periodoBadge, now, kpis: []
     }, {
-      pageOrientation: 'retrato',
+      pageOrientation: 'livre',
       paginarSecoes: true,
       temaAlternavel: true,
       temaInicial: tema === 'light' ? 'light' : 'dark',
