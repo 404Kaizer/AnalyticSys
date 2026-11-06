@@ -432,16 +432,24 @@ function anSwitchView(view) {
   const btnPend  = document.getElementById('an-view-btn-pendencias');
   const panePend = document.getElementById('an-view-pane-pendencias');
 
+  // Operações (Mural, js/mural.js) — aba padrão; também opcional no DOM.
+  const btnOp  = document.getElementById('an-view-btn-operacoes');
+  const paneOp = document.getElementById('an-view-pane-operacoes');
+
   const isInv  = view === 'inventario';
   const isPend = view === 'pendencias' && !!panePend;
-  const isMicro = !isInv && !isPend;
+  const isOp   = view === 'operacoes' && !!paneOp;
+  const isMicro = !isInv && !isPend && !isOp;
 
   btnMicro.classList.toggle('active', isMicro);
   btnInv.classList.toggle('active', isInv);
   if (btnPend) btnPend.classList.toggle('active', isPend);
+  if (btnOp) btnOp.classList.toggle('active', isOp);
   paneMicro.style.display = isMicro ? '' : 'none';
   paneInv.style.display   = isInv   ? '' : 'none';
   if (panePend) panePend.style.display = isPend ? '' : 'none';
+  if (paneOp) paneOp.style.display = isOp ? '' : 'none';
+  if (isOp && typeof muralRender === 'function') muralRender();
 
   // Ao voltar para a Visão Micro, garante que o piso de altura esteja
   // correto — cobre o caso em que uma análise rodou enquanto esta aba
@@ -452,7 +460,9 @@ function anSwitchView(view) {
   // cada visão (ex.: "Visão Micro — Por Filial e Material"), já que a
   // própria aba selecionada acima já indica isso.
   if (caption) {
-    caption.textContent = isInv
+    caption.textContent = isOp
+      ? 'Fila de ação dos últimos 30 dias'
+      : isInv
       ? 'Fechamento de estoque por central e material'
       : isPend
         ? 'OS, NFs e lançamentos pendentes por central e material'

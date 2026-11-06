@@ -9433,7 +9433,9 @@ async function restoreAndRender() {
       if (typeof adminAlertCheckPendente === 'function') adminAlertCheckPendente();
       if (typeof adminAlertRealtimeInit === 'function') adminAlertRealtimeInit();
     }, 300);
-    // Foto do Mural de Operações — depois do boot, quando o navegador folga.
+    // Mural de Operações: mostra as fotos já publicadas e recalcula a do
+    // dono depois do boot, quando o navegador folga.
+    if (typeof muralRender === 'function') muralRender();
     if (typeof muralAgendarPublicacao === 'function') muralAgendarPublicacao();
   }
 }

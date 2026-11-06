@@ -73,6 +73,8 @@ function _varComRefreshBtns(central, material) {
     if (central != null && (b.dataset.central !== central || b.dataset.material !== material)) return;
     b.outerHTML = varComBtnHtml(b.dataset.central, b.dataset.material, b.dataset.periodo);
   });
+  // Comentário/ocorrência novo conta como ação do dono no Mural de Operações.
+  if (typeof muralRender === 'function') muralRender();
 }
 
 function showVarComTip(e, btn) {

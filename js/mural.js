@@ -328,6 +328,8 @@ async function muralPublicar({ forcar = false } = {}) {
     try { localStorage.setItem(chaveLocal, hash); } catch (_) { /* sem storage */ }
   }
   console.info(`[Mural] Foto calculada em ${Math.round(performance.now() - t0)} ms`);
+  // A aba Operações do próprio dono passa a mostrar a foto nova.
+  if (document.getElementById('mural-root') && typeof muralRecarregar === 'function') muralRecarregar();
 }
 
 // Debounce + ocioso: roda depois do boot e de cada importação, fora do
@@ -340,4 +342,484 @@ function muralAgendarPublicacao() {
     if (typeof requestIdleCallback === 'function') requestIdleCallback(go, { timeout: 15000 });
     else go();
   }, 3000);
+}
+
+// ═══════════════════════════════════════════════════════════
+// TELA "OPERAÇÕES" (Fase 1, entrega C)
+// ═══════════════════════════════════════════════════════════
+// Lê as fotos (a última e a anterior de cada categoria) e deriva na hora
+// tudo o que depende de ação humana: prazo, sem ação, escalonamento e
+// prioridade. Nada disso é gravado — muda sozinho quando alguém comenta ou
+// abre ocorrência (variacao_comentarios / ocorrencias).
+//
+// Regras confirmadas com o Hugo (06/11/2026):
+//   prazo para o dono agir: Crítico 2 · Urgente 5 · Atenção 10 dias;
+//   comentário renova o prazo UMA vez; Crítico só sai com ocorrência;
+//   prazo vencido ou ocorrência aberta com a variação crescendo → escalonado
+//   ao ADM (que é o Supervisor).
+
+const MURAL_PRAZO = { critico: 2, urgente: 5, atencao: 10 };
+const MURAL_GRAV  = { critico: 6, urgente: 3, atencao: 1, bom: 0 };
+const MURAL_TEND  = { deriva: 1.5, degrau: 1, serrote: 0.4, irregular: 1, poucos: 1, erro: 1.3 };
+const MURAL_NIVEL = {
+  critico: { label: 'CRÍTICO', cor: 'var(--red)',     icon: 'ti-flame' },
+  urgente: { label: 'URGENTE', cor: 'var(--urgente)', icon: 'ti-alert-circle' },
+  atencao: { label: 'ATENÇÃO', cor: 'var(--amber)',   icon: 'ti-alert-triangle' }
+};
+const MURAL_FORMATO_LABEL = {
+  deriva: 'Deriva', degrau: 'Degrau', serrote: 'Serrote', irregular: 'Irregular',
+  poucos: 'Poucos lançamentos', erro: 'Provável erro de lançamento'
+};
+const MURAL_FORMATO_DESC = {
+  deriva: 'cresce a cada lançamento', degrau: 'saltou uma vez e ficou', serrote: 'oscila e volta (ruído provável)',
+  irregular: 'sobe e desce sem padrão', poucos: 'menos de 3 lançamentos na janela', erro: 'lançamento acima da capacidade física'
+};
+const MURAL_STATUS = {
+  novo:        { label: 'Novo',              cor: 'var(--accent)' },
+  semAcao:     { label: 'Sem ação',          cor: 'var(--urgente)' },
+  tratamento:  { label: 'Em tratamento',     cor: 'var(--purple)' },
+  escalonado:  { label: 'Escalonado ao ADM', cor: 'var(--red)' },
+  monitorando: { label: 'Monitorando',       cor: 'var(--text3)' }
+};
+
+const _mo = { carregado: false, carregando: false, erro: null, fotos: [], donos: [], filtro: 'todos', ordem: 'prio', ids: null, idsLabel: '', auditoria: null };
+
+const _moDia = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
+const _moDiasEntre = (a, b) => Math.round((_moDia(b) - _moDia(a)) / 86400000);
+const _moIsoParaData = (iso) => iso ? new Date(String(iso).slice(0, 10) + 'T00:00:00') : null;
+const _moKg = (v) => (v < -0.05 ? '−' : v > 0.05 ? '+' : '') + Math.abs(v).toLocaleString('pt-BR', { maximumFractionDigits: 0 }) + ' kg';
+const _moRs = (v) => (v < -0.5 ? '−' : v > 0.5 ? '+' : '') + 'R$ ' + Math.abs(v).toLocaleString('pt-BR', { maximumFractionDigits: 0 });
+const _moEsc = (s) => escapeHtml(String(s ?? ''));
+const _moEhAdm = () => window.currentUser?.role === 'admin';
+const _moChave = (i) => i.central + '|' + i.material;
+const _moRsResidual = (i) => Math.abs(i.residual * (i.custoMed || 0));
+
+// ── Leitura das fotos ──────────────────────────────────────────────────────
+// Duas consultas: primeiro só (dia, categoria) dos últimos 10 dias, depois o
+// payload apenas da última e da penúltima foto de cada categoria — o ADM não
+// baixa dez dias de payload à toa.
+async function _muralCarregarFotos() {
+  const sb = window.supabaseClient;
+  const desde = new Date(); desde.setDate(desde.getDate() - 10);
+  const { data: idx, error: e1 } = await sb.from('mural_fotos')
+    .select('dia, categoria').gte('dia', localISODate(desde)).order('dia', { ascending: false });
+  if (e1) throw new Error(e1.message);
+  const porCat = new Map();
+  (idx || []).forEach(r => {
+    if (!porCat.has(r.categoria)) porCat.set(r.categoria, []);
+    if (porCat.get(r.categoria).length < 2) porCat.get(r.categoria).push(r.dia);
+  });
+  if (!porCat.size) return [];
+  const dias = [...new Set([...porCat.values()].flat())];
+  const { data, error: e2 } = await sb.from('mural_fotos')
+    .select('dia, categoria, payload, gerado_por, gerado_em')
+    .in('dia', dias).in('categoria', [...porCat.keys()]);
+  if (e2) throw new Error(e2.message);
+  const fotos = [];
+  porCat.forEach((ds, categoria) => {
+    const achar = d => (data || []).find(r => r.categoria === categoria && r.dia === d) || null;
+    const atual = achar(ds[0]);
+    if (atual) fotos.push({ categoria, atual, anterior: ds[1] ? achar(ds[1]) : null });
+  });
+  return fotos;
+}
+
+async function _muralCarregarDonos() {
+  const { data, error } = await window.supabaseClient
+    .from('analistas_categoria').select('categoria, analista_user_id, analista_nome');
+  if (error) throw new Error(error.message);
+  return data || [];
+}
+
+async function muralRecarregar() {
+  if (_mo.carregando || !window.supabaseClient) return;
+  _mo.carregando = true; _mo.erro = null;
+  muralRender();
+  try {
+    const [fotos, donos] = await Promise.all([_muralCarregarFotos(), _muralCarregarDonos()]);
+    _mo.fotos = fotos; _mo.donos = donos; _mo.carregado = true;
+  } catch (err) {
+    _mo.erro = err.message || String(err);
+  } finally {
+    _mo.carregando = false;
+    muralRender();
+  }
+}
+
+// ── Itens com o estado de ação derivado ───────────────────────────────────
+function _muralDonoDe(categoria) {
+  const d = _mo.donos.find(x => x.categoria === categoria);
+  return { uid: d?.analista_user_id || null, nome: (d?.analista_nome || '—').trim() };
+}
+
+// Ações registradas no par a partir de uma data: comentários (de qualquer
+// pessoa — o ADM também conta) e ocorrências em aberto. O analista só
+// enxerga as próprias ocorrências (RLS), mas a ocorrência aberta pelo modal
+// de comentário deixa rastro em variacao_comentarios (oc_id), visível a todos.
+function _muralAcoes(central, material, desde) {
+  const coms = (typeof _varComDe === 'function' ? _varComDe(central, material) : [])
+    .map(r => ({ ...r, quando: r.created_at ? new Date(r.created_at) : _moIsoParaData(r.data) }))
+    .filter(r => r.quando && _moDia(r.quando) >= desde);
+  const comentarios = coms.filter(r => !r.oc_id).map(r => r.quando).sort((a, b) => a - b);
+  const ocs = (Array.isArray(state.ocorrencias) ? state.ocorrencias : [])
+    .filter(o => o.central === central && o.material === material && !o.concluida
+              && _moIsoParaData(o.dataAbertura) && _moIsoParaData(o.dataAbertura) >= desde)
+    .map(o => ({ numero: o.numero || o.id, quando: _moIsoParaData(o.dataAbertura) }));
+  coms.filter(r => r.oc_id).forEach(r => {
+    const num = r.oc_numero || r.oc_id;
+    if (!ocs.some(o => o.numero === num)) ocs.push({ numero: num, quando: r.quando });
+  });
+  ocs.sort((a, b) => a.quando - b.quando);
+  return { comentarios, ocs };
+}
+
+function _muralValorEm(pontos, data) {
+  let v = null;
+  pontos.forEach(([dt, val]) => { const d = parseDate(dt); if (d && d <= data) v = val; });
+  return v;
+}
+
+function muralItensDerivados() {
+  const hoje = _moDia(new Date());
+  const itens = [];
+  _mo.fotos.forEach(f => {
+    const p = f.atual.payload || {};
+    const janelaIni = parseDate(p.janela?.ini) || hoje;
+    const anteriores = new Map(((f.anterior?.payload?.itens) || []).map(i => [_moChave(i), i]));
+    const dono = _muralDonoDe(f.categoria);
+    (p.itens || []).forEach(it => {
+      const entrada = it.entrada && !it.entrada.desdeInicio ? (parseDate(it.entrada.dt) || janelaIni) : janelaIni;
+      const { comentarios, ocs } = _muralAcoes(it.central, it.material, entrada);
+      const prazoDias = MURAL_PRAZO[it.nivel] || 10;
+      // Comentário renova o prazo uma vez (conta só o primeiro); Crítico só
+      // sai com ocorrência.
+      const base = (it.nivel !== 'critico' && comentarios.length) ? comentarios[0] : entrada;
+      const limite = _moDia(base); limite.setDate(limite.getDate() + prazoDias);
+      const temOc = ocs.length > 0;
+      const ultAcao = [...comentarios, ...ocs.map(o => o.quando)].sort((a, b) => b - a)[0] || null;
+      const diasSemAcao = Math.max(0, _moDiasEntre(ultAcao || entrada, hoje));
+      const monitorando = it.formato === 'serrote';
+      const vencido = !monitorando && !temOc && hoje > limite;
+      let ocCrescendo = false;
+      if (temOc) {
+        const vAbertura = _muralValorEm(it.pontos || [], ocs[0].quando);
+        ocCrescendo = vAbertura != null && Math.abs(it.v) > Math.abs(vAbertura) * 1.1;
+      }
+      const ant = anteriores.get(_moChave(it));
+      const novo = !ant && !!f.anterior;
+      const piorou = !!ant && Math.abs(it.v) > Math.abs(ant.v) + 0.01 && (MURAL_GRAV[it.nivel] > MURAL_GRAV[ant.nivel] || it.piorando);
+      const residual = it.v - (it.explicadoKg || 0);
+      const partes = [
+        ['Gravidade × tendência', (MURAL_GRAV[it.nivel] || 0) * (MURAL_TEND[it.formato] || 1)],
+        ['Impacto em R$', Math.log10(Math.abs(it.rs || 0) + 1)],
+        ['Dias sem ação × 0,3', Math.min(diasSemAcao, 10) * 0.3],
+        ['Meses seguidos fora da faixa', ((it.meses || 1) - 1) * 1.5],
+        ['Prazo vencido', vencido ? 3 : 0],
+        ['Ocorrência aberta e variação crescendo', ocCrescendo ? 2 : 0]
+      ];
+      const status = monitorando ? 'monitorando' : (vencido || ocCrescendo) ? 'escalonado' : temOc ? 'tratamento' : novo ? 'novo' : 'semAcao';
+      itens.push({ ...it, categoriaFoto: f.categoria, dono, entrada, limite, temOc, ocs, comentarios, diasSemAcao,
+        vencido, ocCrescendo, monitorando, novo, piorou, residual,
+        prioridade: partes.reduce((s, x) => s + x[1], 0), partes, status });
+    });
+  });
+  return itens;
+}
+
+// ── Render ─────────────────────────────────────────────────────────────────
+function _muralSpark(pontos, cor) {
+  const s = (pontos || []).map(p => p[1]);
+  if (s.length < 2) return '<span class="mo-hint">—</span>';
+  const w = 120, h = 36, min = Math.min(0, ...s), max = Math.max(0, ...s), r = (max - min) || 1;
+  const x = i => (2 + i * (w - 6) / (s.length - 1)).toFixed(1), y = v => (3 + (max - v) / r * (h - 8)).toFixed(1);
+  const pts = s.map((v, i) => `${x(i)},${y(v)}`).join(' ');
+  return `<svg class="mo-spark" viewBox="0 0 ${w} ${h}" aria-hidden="true">
+    <line x1="2" x2="${w - 2}" y1="${y(0)}" y2="${y(0)}" stroke="var(--border3)" stroke-dasharray="2 3"/>
+    <polygon points="${x(0)},${y(0)} ${pts} ${x(s.length - 1)},${y(0)}" fill="${cor}" opacity=".14"/>
+    <polyline points="${pts}" fill="none" stroke="${cor}" stroke-width="1.6" stroke-linejoin="round"/>
+    <circle cx="${x(s.length - 1)}" cy="${y(s[s.length - 1])}" r="2.6" fill="${cor}"/></svg>`;
+}
+
+function _muralPrazoHtml(it) {
+  if (it.monitorando) return '<span class="mo-meta"><i class="ti ti-info-circle"></i> sem prazo: ruído provável</span>';
+  if (it.temOc) return `<span class="mo-meta"><i class="ti ti-file-alert"></i> ocorrência aberta${it.ocCrescendo ? ' · <b class="mo-red">variação crescendo desde a abertura</b>' : ''}</span>`;
+  const d = _moDiasEntre(new Date(), it.limite);
+  const crit = it.nivel === 'critico';
+  if (d < 0) return `<span class="mo-meta mo-red"><i class="ti ti-clock-exclamation"></i> prazo vencido há ${-d} dia${d < -1 ? 's' : ''}${crit ? ' · Crítico exige ocorrência' : ''}</span>`;
+  return `<span class="mo-meta"><i class="ti ti-clock"></i> ${d === 0 ? 'prazo vence hoje' : `${d} dia${d > 1 ? 's' : ''} para agir`}${crit ? ' · exige ocorrência' : ''}</span>`;
+}
+
+function _muralItemHtml(it) {
+  const nv = MURAL_NIVEL[it.nivel] || MURAL_NIVEL.atencao;
+  const st = MURAL_STATUS[it.status];
+  const chips = [];
+  if (it.piorando) chips.push(['hot', 'ti-trending-up', 'piorando']);
+  if ((it.meses || 1) > 1) chips.push(['hot', 'ti-history', `${it.meses}º mês seguido`]);
+  if (!it.temOc && !it.monitorando && it.diasSemAcao > 0) chips.push(['warn', 'ti-clock', `sem ação há ${it.diasSemAcao} dia${it.diasSemAcao > 1 ? 's' : ''}`]);
+  if (it.capErro) chips.push(['warn', 'ti-alert-hexagon', 'acima da capacidade física']);
+  if (it.ocs.length) chips.push(['', 'ti-file-alert', it.ocs.map(o => o.numero).join(', ')]);
+  const pe = Math.min(100, Math.abs(it.explicadoKg || 0) / (Math.abs(it.v) || 1) * 100);
+  const explic = (it.explic || []).length
+    ? `<b class="mo-teal">${_moKg(it.explicadoKg)}</b> explicados · <b>${_moKg(it.residual)}</b> sem explicação`
+    : `Nada explicado por pendência ou divergência · <b>${_moKg(it.v)}</b> a investigar`;
+  const titleExplic = (it.explic || []).map(e => `${e.t}: ${_moKg(e.kg)}`).join('\n');
+  const titlePrio = it.partes.filter(p => p[1]).map(p => `${p[0]}: +${p[1].toFixed(1)}`).join('\n');
+  const pts = it.pontos || [];
+  const dataset = `data-central="${_moEsc(it.central)}" data-material="${_moEsc(it.material)}"`;
+  return `<article class="mo-item" style="--lv:${nv.cor}">
+    <div class="mo-stripe"></div>
+    <div class="mo-main">
+      <div class="mo-title">
+        <span class="mo-lvl"><i class="ti ${nv.icon}"></i>${nv.label}</span>
+        <span class="mo-mat">${_moEsc(it.material)}</span>
+        <span class="mo-where">· ${_moEsc(it.central)} · Reg. ${_moEsc(it.regional)}</span>
+        <span class="mo-shape mo-shape-${_moEsc(it.formato)}" title="${_moEsc(MURAL_FORMATO_DESC[it.formato] || '')}">${_moEsc(MURAL_FORMATO_LABEL[it.formato] || it.formato)}</span>
+      </div>
+      ${chips.length ? `<div class="mo-why">${chips.map(([c, i, t]) => `<span class="${c}"><i class="ti ${i}"></i>${_moEsc(t)}</span>`).join('')}</div>` : ''}
+      <div class="mo-explain" title="${_moEsc(titleExplic)}">
+        <div class="mo-track"><i style="width:${pe}%;background:var(--teal)"></i><i style="width:${100 - pe}%;background:${nv.cor};opacity:.75"></i></div>
+        <div class="mo-ex-text">${explic}</div>
+      </div>
+    </div>
+    <div class="mo-sparkbox">${_muralSpark(pts, nv.cor)}<small>${pts.length ? `${_moEsc(pts[0][0].slice(0, 5))} → ${_moEsc(pts[pts.length - 1][0].slice(0, 5))}` : ''}</small></div>
+    <div class="mo-num"><span class="mo-kg">${_moKg(it.v)}</span><span class="mo-rs">${it.custoMed ? _moRs(it.rs) : 'sem custo'}</span><span class="mo-prio" title="${_moEsc(titlePrio)}">prioridade <b>${it.prioridade.toFixed(1)}</b></span></div>
+    <div class="mo-foot">
+      <span class="mo-status" style="--sc:${st.cor}">${st.label}</span>
+      <span class="mo-meta"><i class="ti ti-user"></i> ${_moEsc(it.dono.nome)}</span>
+      ${_muralPrazoHtml(it)}
+      <div class="mo-actions">
+        <button class="btn btn-sm" onclick="muralVerNaMicro(this)" ${dataset}><i class="ti ti-chart-dots-2"></i> Ver na Micro</button>
+        <button class="btn btn-sm" onclick="muralComentar(this)" ${dataset} data-diff="${it.v}" data-periodo="${pts.length ? _moEsc(pts[0][0] + ' a ' + pts[pts.length - 1][0]) : ''}"><i class="ti ti-message-plus"></i> ${it.temOc ? 'Comentar' : 'Comentar / ocorrência'}</button>
+      </div>
+    </div>
+  </article>`;
+}
+
+function _muralFiltrar(itens) {
+  if (_mo.ids) return itens.filter(i => _mo.ids.has(_moChave(i)));
+  if (_mo.filtro === 'piorando') return itens.filter(i => i.piorando);
+  if (_mo.filtro === 'semacao')  return itens.filter(i => !i.temOc && !i.monitorando && i.diasSemAcao > 0);
+  if (_mo.filtro === 'vencido')  return itens.filter(i => i.status === 'escalonado');
+  return itens;
+}
+
+function _muralOrdenar(itens) {
+  const k = { prio: i => -i.prioridade, rs: i => -Math.abs(i.rs || 0), residual: i => -_moRsResidual(i) }[_mo.ordem] || (i => -i.prioridade);
+  return [...itens].sort((a, b) => k(a) - k(b));
+}
+
+function _muralKpisHtml(itens) {
+  const fila = itens.filter(i => !i.monitorando);
+  const semAcao = fila.filter(i => !i.temOc && i.diasSemAcao > 0).length;
+  const piorando = fila.filter(i => i.piorando).length;
+  const esc = fila.filter(i => i.status === 'escalonado').length;
+  const rs = fila.reduce((s, i) => s + _moRsResidual(i), 0);
+  const k = [
+    ['Na fila', fila.length, 'pares fora da faixa', 'var(--text)', 'ti-list-details'],
+    ['Sem ação', semAcao, 'nada feito desde que entrou', semAcao ? 'var(--urgente)' : 'var(--green)', 'ti-clock'],
+    ['Piorando', piorando, 'cresceu nos 3 últimos lançamentos', piorando ? 'var(--red)' : 'var(--green)', 'ti-trending-up'],
+    ['Escalonados', esc, 'prazo vencido ou ocorrência sem efeito', esc ? 'var(--red)' : 'var(--green)', 'ti-arrow-big-up-lines'],
+    ['R$ sem explicação', _moRs(rs).replace(/^[+−]/, ''), 'parte da variação sem causa', 'var(--amber)', 'ti-eye-off']
+  ];
+  return `<div class="mo-kpis">${k.map(([l, v, s, c, i]) =>
+    `<div class="mo-kpi"><span class="mo-kpi-label"><i class="ti ${i}"></i>${l}</span><span class="mo-kpi-val" style="color:${c}">${v}</span><span class="mo-kpi-sub">${s}</span></div>`).join('')}</div>`;
+}
+
+function _muralIdsAttr(arr) { return _moEsc(JSON.stringify(arr.map(_moChave))); }
+
+function _muralDesdeHtml(itens) {
+  const novos = itens.filter(i => i.novo), piores = itens.filter(i => i.piorou);
+  const resolvidos = [];
+  _mo.fotos.forEach(f => {
+    const atuais = new Set((f.atual.payload?.itens || []).map(_moChave));
+    (f.anterior?.payload?.itens || []).forEach(i => { if (!atuais.has(_moChave(i))) resolvidos.push(`${i.material} · ${i.central}`); });
+  });
+  const chip = (lbl, arr, cor, icon) => arr.length
+    ? `<button class="mo-since-chip" style="--fg:${cor}" onclick="muralFiltrarIds('${lbl}', this)" data-ids="${_muralIdsAttr(arr)}"><i class="ti ${icon}"></i><b>${arr.length}</b> ${lbl}</button>` : '';
+  const html = chip('novos', novos, 'var(--accent)', 'ti-plus') + chip('pioraram', piores, 'var(--red)', 'ti-trending-up')
+    + (resolvidos.length ? `<span class="mo-since-chip" style="--fg:var(--green)" title="${_moEsc(resolvidos.join('\n'))}"><i class="ti ti-check"></i><b>${resolvidos.length}</b> voltaram à faixa</span>` : '');
+  return `<div class="mo-since"><span class="mo-since-label">Desde a foto anterior</span>${html || '<span class="mo-hint">Nada mudou entre as duas últimas fotos.</span>'}</div>`;
+}
+
+function _muralPontosCegosHtml() {
+  const linhas = [];
+  const semCadPorDono = new Set(); // sem categoria é da BASE do dono, não da categoria: 1x por dono
+  _mo.fotos.forEach(f => {
+    const pc = f.atual.payload?.pontosCegos || {};
+    const add = (k, titulo, desc, cat) => { const x = pc[k]; if (x && x.total) linhas.push({ titulo: `${x.total} ${titulo}`, desc, ex: x.exemplos || [], cat }); };
+    add('semAncora', 'par(es) sem saldo do SAP', 'Sem Cód SAP ou sem Custos SAP: a variação não é calculada.', f.categoria);
+    add('semLancamento', 'par(es) sem lançamento na janela', 'Teve SAP, mas ninguém lançou o estoque em 30 dias.', f.categoria);
+    const dono = f.atual.gerado_por || f.categoria;
+    if (!semCadPorDono.has(dono)) {
+      semCadPorDono.add(dono);
+      add('semCadastro', 'material(is) sem categoria', 'Fora da saúde e sem dono até ser cadastrado.', `base de ${_muralDonoDe(f.categoria).nome}`);
+    }
+  });
+  if (_moEhAdm()) {
+    const hoje = _moDia(new Date());
+    _mo.donos.forEach(d => {
+      const f = _mo.fotos.find(x => x.categoria === d.categoria);
+      const dias = f ? _moDiasEntre(_moIsoParaData(f.atual.dia), hoje) : null;
+      if (dias == null || dias > 1) linhas.push({ titulo: `Foto de ${d.categoria} ${dias == null ? 'não publicada nos últimos 10 dias' : `atrasada há ${dias} dias`}`, desc: `Dono: ${d.analista_nome || '—'}. A fila dessa categoria pode estar desatualizada.`, ex: [], alerta: true });
+    });
+    const ref = new Date(); ref.setDate(1); ref.setMonth(ref.getMonth() - 1);
+    const temMesAnt = (state.custosSap || []).some(r => Number(r.ano) === ref.getFullYear() && Number(r.mes) === ref.getMonth() + 1);
+    if (!temMesAnt) linhas.push({ titulo: `Custos SAP de ${String(ref.getMonth() + 1).padStart(2, '0')}/${ref.getFullYear()} não importado`, desc: 'O Est. Inicial de todos os analistas fica ancorado num mês mais antigo.', ex: [], alerta: true });
+  }
+  if (!linhas.length) return '<p class="mo-hint">Nenhum ponto cego nas fotos atuais.</p>';
+  return linhas.map(l => `<div class="mo-blind${l.alerta ? ' mo-blind-alerta' : ''}"><b>${_moEsc(l.titulo)}</b>${l.cat ? `<span class="mo-cat">${_moEsc(l.cat)}</span>` : ''}<small>${_moEsc(l.desc)}${l.ex.length ? ` Ex.: ${_moEsc(l.ex.slice(0, 3).join('; '))}` : ''}</small></div>`).join('');
+}
+
+function _muralTimeHtml(itens) {
+  const hoje = _moDia(new Date());
+  const porDono = new Map();
+  _mo.donos.forEach(d => {
+    const k = d.analista_user_id || d.categoria;
+    if (!porDono.has(k)) porDono.set(k, { nome: d.analista_nome || '—', cats: [] });
+    porDono.get(k).cats.push(d.categoria);
+  });
+  const ativos = itens.filter(i => !i.monitorando);
+  const linhas = [...porDono.values()].map(d => {
+    const its = ativos.filter(i => d.cats.includes(i.categoriaFoto));
+    const fotos = _mo.fotos.filter(f => d.cats.includes(f.categoria));
+    const ultima = fotos.map(f => _moIsoParaData(f.atual.dia)).sort((a, b) => b - a)[0];
+    const atraso = ultima ? _moDiasEntre(ultima, hoje) : null;
+    const base = fotos[0]?.atual.payload?.base || {};
+    const rs = its.reduce((s, i) => s + _moRsResidual(i), 0);
+    const n = (v, c) => `<td${v ? ` style="color:${c}"` : ''}>${v}</td>`;
+    return `<tr onclick="muralFiltrarIds('fila de ${_moEsc(d.nome)}', this)" data-ids="${_muralIdsAttr(its)}">
+      <td><b>${_moEsc(d.nome)}</b><small>${_moEsc(d.cats.join(', '))}</small></td>
+      <td>${its.length}</td>${n(its.filter(i => i.piorando).length, 'var(--red)')}${n(its.filter(i => !i.temOc && i.diasSemAcao > 0).length, 'var(--urgente)')}${n(its.filter(i => i.status === 'escalonado').length, 'var(--red)')}
+      <td>${_moRs(rs).replace(/^[+−]/, '')}</td>
+      <td${atraso == null || atraso > 1 ? ' style="color:var(--red)"' : ''}>${atraso == null ? 'sem foto' : atraso === 0 ? 'hoje' : `há ${atraso} dia${atraso > 1 ? 's' : ''}`}<small>SAP ${_moEsc((base.sap || '—').slice(0, 5))} · lanç. ${_moEsc((base.lancamentos || '—').slice(0, 5))}</small></td></tr>`;
+  }).join('');
+  // Central na fila de mais de um analista: causa comum provável na central.
+  const donosPorCentral = new Map();
+  ativos.forEach(i => {
+    if (!donosPorCentral.has(i.central)) donosPorCentral.set(i.central, new Set());
+    donosPorCentral.get(i.central).add(i.dono.nome);
+  });
+  const multi = [...donosPorCentral].filter(([, s]) => s.size > 1).sort((a, b) => b[1].size - a[1].size);
+  return `<div class="mo-panel"><div class="mo-panel-head"><span class="mo-panel-title"><i class="ti ti-users"></i>Painel do time</span><span class="mo-hint" style="margin-left:auto">Clique num analista para ver a fila dele</span></div>
+    <div class="mo-scroll"><table class="mo-team"><thead><tr><th>Analista</th><th>Na fila</th><th>Piorando</th><th>Sem ação</th><th>Escalonados</th><th>R$ sem explicação</th><th>Foto</th></tr></thead><tbody>${linhas}</tbody></table></div>
+    ${multi.map(([c, s]) => `<div class="mo-multi"><i class="ti ti-alert-triangle"></i><span><b>${_moEsc(c)}</b> está na fila de ${s.size} analistas: ${_moEsc([...s].join(', '))}. Pode ser causa comum na central (operação, balança, gestão).</span>
+      <button class="mo-link" onclick="muralFiltrarIds('${_moEsc(c)}', this)" data-ids="${_muralIdsAttr(ativos.filter(i => i.central === c))}">Ver os itens →</button></div>`).join('')}</div>`;
+}
+
+function _muralAuditoriaHtml() {
+  const a = _mo.auditoria;
+  let corpo;
+  if (!a) corpo = '<p class="mo-hint">Compara a sua base completa com as fotos dos analistas: material fora da foto do dono e pares em que a variação discorda.</p>';
+  else if (a.erro) corpo = `<p class="mo-hint mo-red">${_moEsc(a.erro)}</p>`;
+  else {
+    const l = (arr, fmt) => arr.slice(0, 15).map(fmt).join('') + (arr.length > 15 ? `<small>+${arr.length - 15} outros</small>` : '');
+    corpo = `<p class="mo-hint">Rodada em ${_moEsc(a.quando)} (${a.ms} ms).</p>
+      <div class="mo-blind${a.fora.length ? ' mo-blind-alerta' : ''}"><b>${a.fora.length} par(es) fora da foto do dono</b><small>Fora da faixa na sua base, mas ausentes da foto da categoria.</small>${l(a.fora, x => `<small>• ${_moEsc(x.material)} · ${_moEsc(x.central)} (${_moEsc(x.categoria)}): ${_moKg(x.v)}</small>`)}</div>
+      <div class="mo-blind${a.diverg.length ? ' mo-blind-alerta' : ''}"><b>${a.diverg.length} par(es) com variação divergente</b><small>Sua base × foto do dono: base desatualizada ou importação incompleta de um dos lados.</small>${l(a.diverg, x => `<small>• ${_moEsc(x.material)} · ${_moEsc(x.central)}: ADM ${_moKg(x.vAdm)} × dono ${_moKg(x.vDono)}</small>`)}</div>
+      <div class="mo-blind${a.semCadastro ? ' mo-blind-alerta' : ''}"><b>${a.semCadastro} material(is) sem categoria na sua base</b><small>${_moEsc((a.semCadastroEx || []).slice(0, 5).join('; '))}</small></div>`;
+  }
+  return `<div class="mo-panel"><div class="mo-panel-head"><span class="mo-panel-title"><i class="ti ti-shield-search"></i>Auditoria de cobertura</span>
+    <button class="btn btn-sm" style="margin-left:auto" onclick="muralAuditar()"><i class="ti ti-player-play"></i> ${a ? 'Rodar de novo' : 'Rodar'}</button></div><div class="mo-panel-body">${corpo}</div></div>`;
+}
+
+function muralRender() {
+  const el = document.getElementById('mural-root');
+  if (!el) return;
+  if (!_mo.carregado && !_mo.carregando && !_mo.erro) { muralRecarregar(); return; }
+  const adm = _moEhAdm();
+  const cab = `<div class="mo-head"><div><h2>Mural de Operações</h2><p>O que está piorando, o que ninguém pegou e o que já tem explicação.</p></div>
+    <div class="mo-head-right"><span class="mo-hint"><i class="ti ti-clock"></i> Janela móvel de ${MURAL_JANELA_DIAS} dias até ontem</span>
+    <button class="btn btn-sm" onclick="muralRecarregar()" ${_mo.carregando ? 'disabled' : ''}><i class="ti ti-refresh"></i> ${_mo.carregando ? 'Carregando…' : 'Recarregar'}</button></div></div>`;
+  if (_mo.erro) { el.innerHTML = cab + `<div class="empty-state"><p>Não foi possível ler o Mural: ${_moEsc(_mo.erro)}</p></div>`; return; }
+  if (!_mo.carregado) { el.innerHTML = cab + '<div class="empty-state"><p>Carregando as fotos…</p></div>'; return; }
+  if (!_mo.fotos.length) {
+    el.innerHTML = cab + `<div class="empty-state"><p>${adm
+      ? 'Nenhum analista publicou foto nos últimos 10 dias. A foto sai sozinha quando o dono da categoria entra no sistema.'
+      : 'Sua foto ainda não foi publicada. Ela é calculada sozinha alguns segundos depois do carregamento e de cada importação.'}</p></div>`;
+    return;
+  }
+  const itens = muralItensDerivados();
+  const lista = _muralOrdenar(_muralFiltrar(itens));
+  const ativos = lista.filter(i => !i.monitorando), monit = lista.filter(i => i.monitorando);
+  const filtros = [['todos', adm ? 'Todos' : 'Minha fila'], ['piorando', 'Piorando'], ['semacao', 'Sem ação'], ['vencido', 'Escalonados']];
+  const cats = [...new Set(_mo.fotos.map(f => f.categoria))].join(', ');
+  const fotoInfo = _mo.fotos.map(f => `${f.categoria}: ${String(f.atual.dia).split('-').reverse().join('/')}`).join(' · ');
+  el.innerHTML = cab + _muralDesdeHtml(itens) + _muralKpisHtml(itens) + (adm ? _muralTimeHtml(itens) : '') +
+    `<div class="mo-grid">
+      <div class="mo-panel">
+        <div class="mo-panel-head">
+          <span class="mo-panel-title"><i class="ti ti-flame"></i>${adm ? 'Fila de ação · todas as categorias' : 'Minha fila · ' + _moEsc(cats)} · ${ativos.length}</span>
+          <div class="mo-filtros">${filtros.map(([k, l]) => `<button class="mo-chip${!_mo.ids && _mo.filtro === k ? ' on' : ''}" onclick="muralFiltro('${k}')">${l}</button>`).join('')}
+            ${_mo.ids ? `<button class="mo-chip on" onclick="muralFiltro('todos')">${_moEsc(_mo.idsLabel)} <i class="ti ti-x"></i></button>` : ''}
+            <select class="mo-sort" onchange="muralOrdem(this.value)" aria-label="Ordenar a fila">
+              <option value="prio"${_mo.ordem === 'prio' ? ' selected' : ''}>Ordenar: prioridade</option>
+              <option value="rs"${_mo.ordem === 'rs' ? ' selected' : ''}>Ordenar: impacto R$</option>
+              <option value="residual"${_mo.ordem === 'residual' ? ' selected' : ''}>Ordenar: R$ sem explicação</option>
+            </select></div>
+        </div>
+        <div class="mo-queue">${ativos.map(_muralItemHtml).join('') || '<div class="empty-state" style="padding:28px"><p>Nada nesta visão.</p></div>'}
+          ${monit.length ? `<div class="mo-group">Monitorando · formato Serrote (não gera alerta)</div>${monit.map(_muralItemHtml).join('')}` : ''}</div>
+        <div class="mo-foot-note mo-hint">Fotos: ${_moEsc(fotoInfo)}</div>
+      </div>
+      <div class="mo-aside">
+        <div class="mo-panel"><div class="mo-panel-head"><span class="mo-panel-title"><i class="ti ti-eye-off"></i>Pontos cegos</span></div><div class="mo-panel-body">${_muralPontosCegosHtml()}</div></div>
+        ${adm ? _muralAuditoriaHtml() : ''}
+        <div class="mo-panel"><div class="mo-panel-head"><span class="mo-panel-title"><i class="ti ti-clock"></i>Prazos para o dono agir</span></div><div class="mo-panel-body mo-rules">
+          ${Object.entries(MURAL_PRAZO).map(([k, d]) => `<span class="mo-lvl" style="--lv:${MURAL_NIVEL[k].cor}">${MURAL_NIVEL[k].label}</span><span>${d} dias${k === 'critico' ? ', só sai com ocorrência' : ''}</span>`).join('')}
+          <p class="mo-hint" style="grid-column:1/-1;margin:6px 0 0">Ação é comentar ou abrir ocorrência; o comentário renova o prazo uma vez. Prazo vencido, ou ocorrência aberta com a variação crescendo, escalona ao ADM.</p></div></div>
+      </div>
+    </div>`;
+}
+
+// ── Ações da tela ──────────────────────────────────────────────────────────
+function muralFiltro(f) { _mo.filtro = f; _mo.ids = null; muralRender(); }
+function muralOrdem(o) { _mo.ordem = o; muralRender(); }
+function muralFiltrarIds(label, el) {
+  try { _mo.ids = new Set(JSON.parse(el.dataset.ids || '[]')); } catch (_) { _mo.ids = null; }
+  _mo.idsLabel = label;
+  muralRender();
+  document.querySelector('#mural-root .mo-grid')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+function muralVerNaMicro(btn) {
+  if (typeof anSwitchView === 'function') anSwitchView('micro');
+  if (typeof microFocusFromMacro === 'function') microFocusFromMacro('material', btn.dataset.material);
+}
+// Reaproveita o modal de comentários da Visão Micro (que também abre a
+// ocorrência já preenchida). Ele lê a variação do <tr> mais próximo.
+function muralComentar(btn) {
+  const tr = document.createElement('tr');
+  tr.dataset.diff = btn.dataset.diff;
+  const b = document.createElement('button');
+  Object.assign(b.dataset, { central: btn.dataset.central, material: btn.dataset.material, periodo: btn.dataset.periodo });
+  tr.appendChild(b);
+  if (typeof openVarComModal === 'function') openVarComModal(b);
+}
+
+// Auditoria de cobertura (só ADM): o mesmo cálculo do dono, na base
+// completa do ADM, comparado com as fotos. Sob demanda — na base de ~1 mi de
+// registros não cabe no boot.
+async function muralAuditar() {
+  if (!_moEhAdm()) return;
+  if (typeof _anShowViewLoading === 'function') _anShowViewLoading('Auditando a cobertura', 'Calculando a fila na sua base completa...');
+  const t0 = performance.now();
+  try {
+    const calc = await muralCalcular(CATEGORIAS_MATERIAL);
+    const thresholds = getHealthThresholds();
+    const fotoPorPar = new Map();
+    _mo.fotos.forEach(f => (f.atual.payload?.itens || []).forEach(i => fotoPorPar.set(_moChave(i), i)));
+    const comFoto = new Set(_mo.fotos.map(f => f.categoria));
+    const fora = [], diverg = [];
+    Object.values(calc.porCategoria).forEach(({ itens }) => itens.forEach(i => {
+      const dono = fotoPorPar.get(_moChave(i));
+      if (!dono) { if (comFoto.has(i.categoria) && i.formato !== 'serrote') fora.push(i); return; }
+      if (Math.abs(i.v - dono.v) > (thresholds[i.catKey]?.bom || 0)) diverg.push({ ...i, vAdm: i.v, vDono: dono.v });
+    }));
+    _mo.auditoria = { quando: new Date().toLocaleString('pt-BR'), ms: Math.round(performance.now() - t0), fora, diverg,
+      semCadastro: calc.semCadastroTotal, semCadastroEx: calc.semCadastro };
+  } catch (err) {
+    _mo.auditoria = { erro: 'Falha na auditoria: ' + (err.message || err) };
+  } finally {
+    if (typeof _anHideViewLoading === 'function') _anHideViewLoading();
+    muralRender();
+  }
 }

@@ -1355,7 +1355,12 @@
 
           <!-- ═══ ALTERNÂNCIA DE VISÃO ═══ -->
           <div class="an-view-switch">
-            <button class="an-view-btn active" id="an-view-btn-micro" onclick="anSwitchView('micro')">
+            <!-- Mural de Operações (js/mural.js) — aba padrão: a fila de ação do
+                 analista, independente do período escolhido acima. -->
+            <button class="an-view-btn active" id="an-view-btn-operacoes" onclick="anSwitchView('operacoes')">
+              <i class="ti ti-target-arrow"></i> Operações
+            </button>
+            <button class="an-view-btn" id="an-view-btn-micro" onclick="anSwitchView('micro')">
               <i class="ti ti-chart-dots-2"></i> Visão Micro
             </button>
             <button class="an-view-btn" id="an-view-btn-inventario" onclick="anSwitchView('inventario')">
@@ -1365,11 +1370,16 @@
               <i class="ti ti-alert-square-rounded"></i> Visão Pendências
               <span class="an-view-btn-count" id="an-view-btn-pend-count" style="display:none">0</span>
             </button>
-            <span class="an-view-caption" id="an-view-caption">Saúde e criticidade por filial e material</span>
+            <span class="an-view-caption" id="an-view-caption">Fila de ação dos últimos 30 dias</span>
+          </div>
+
+          <!-- ═══ OPERAÇÕES (Mural) ═══ -->
+          <div class="an-view-pane active" id="an-view-pane-operacoes">
+            <div id="mural-root"></div>
           </div>
 
           <!-- ═══ MICRO ═══ -->
-          <div class="an-view-pane active" id="an-view-pane-micro">
+          <div class="an-view-pane" id="an-view-pane-micro" style="display:none">
 
           <!-- Barra de filtros da Visão Micro -->
           <div class="micro-filter-bar" id="micro-filter-bar" style="display:none">
