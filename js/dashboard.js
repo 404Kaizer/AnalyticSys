@@ -1,17 +1,14 @@
-// ── Modo de cálculo do EST. INICIAL do Dashboard Gerencial ──────────────
-// 'sap'  = IMPORTADO — saldo TEÓRICO do SAP em dtIni (_anGetSapStock), o
-//          padrão desde 13/08/2026 (ver comentários em
-//          buildDashboardGerencialResults/_dgVgBuildPares abaixo).
-// 'lanc' = CALCULADO — soma dos LANÇAMENTOS (módulo Lançamentos, mesmo
-//          getLancIndex usado no resto do sistema) do dia 31 do mês anterior
-//          a dtIni — ou dia 30 (ou o que for o último dia do mês), recuando
-//          pro sábado se cair domingo. Pedido explícito do Hugo: SEMPRE essa
-//          regra, pra TODOS os materiais — ver _dgGetEstIniFromLancamentos
-//          abaixo, que por isso NÃO reaproveita getPrePeriodLaunchStock
-//          (ui.js): aquela função tem uma exceção pra Agregado (usa a
-//          última TERÇA-feira, não o dia 31/30), regra de outras telas que
-//          não se aplica aqui.
-// O mesmo toggle vale pro EST. FINAL (ver _dgGetEstFimStock).
+// ── Modo de cálculo do EST. FINAL do Dashboard Gerencial (toggle) ───────
+// 'sap'  = IMPORTADO — Est. Final do Custos SAP (_dgEstFimCustosSap), o padrão.
+// 'lanc' = CALCULADO — soma dos LANÇAMENTOS (getLancIndex) do último dia do
+//          mês, recuando pro sábado se cair domingo — ver _dgGetEstFimStock.
+// O EST. INICIAL é SEMPRE o saldo TEÓRICO do SAP (_anGetSapStock), nos dois
+// modos (Hugo, 06/11/2026): assim o Calculado é a MESMA conta do Inventário e
+// da Visão Micro do Analítico (Ini SAP + Final lançamentos) e o custo bate
+// com o deles. Antes o Calculado também tirava o Est. Inicial dos
+// lançamentos do último dia do mês anterior.
+// O nome _dgEstIniMode/dgEstIniMode ficou por compatibilidade (localStorage
+// e onclick do index.html).
 // Persistido em localStorage — a escolha do usuário sobrevive a reload.
 let _dgEstIniMode = 'sap';
 try {
@@ -19,69 +16,36 @@ try {
   if (_dgEstIniSaved === 'lanc' || _dgEstIniSaved === 'sap') _dgEstIniMode = _dgEstIniSaved;
 } catch (e) { /* noop — localStorage indisponível */ }
 
-// Data-alvo do EST. INICIAL "Calculado": último dia do mês anterior a dtIni
-// (dia 0 do mês de dtIni = dia 31, 30, 29 ou 28, o que existir), recuando 1
-// dia pro sábado se cair domingo. dtIni no Dashboard Gerencial é sempre o
-// dia 1º do mês selecionado (ver rodarDashboardGerencial), então esta conta
-// sempre aponta pro fechamento do mês anterior.
-function _dgEstIniLancDate(dtIni) {
-  const d = dtIni instanceof Date ? dtIni : new Date(dtIni);
-  const targetDate = new Date(d.getFullYear(), d.getMonth(), 0);
-  targetDate.setHours(0, 0, 0, 0);
-  if (targetDate.getDay() === 0) targetDate.setDate(targetDate.getDate() - 1);
-  return targetDate;
-}
-
-// EST. INICIAL "Calculado" — soma literal dos LANÇAMENTOS do central+material
-// na data-alvo (ver _dgEstIniLancDate acima). Busca SOMENTE nessa data exata
-// — sem cascata pra outro dia se faltar lançamento (mesmo critério "AUSENTE"
-// de getLastPeriodLaunchStock/WithFallback, ui.js) — e sem a exceção semanal
-// de Agregado: aqui é sempre dia 31/30 do mês anterior, pra qualquer material.
-function _dgGetEstIniFromLancamentos({ central, material, dtIni }) {
-  const targetDate = _dgEstIniLancDate(dtIni);
-  const targetISO  = localISODate(targetDate);
-  const { byCentralMat } = getLancIndex();
-  const arr = byCentralMat.get(central)?.get(material || '—') || [];
-  if (!arr.length) return null;
-
-  let total = 0, found = false;
-  for (const rec of arr) {
-    const d = parseDate(rec.dtLanc);
-    if (d && localISODate(d) === targetISO) { total += num(rec.peso); found = true; }
-  }
-  if (!found) return null;
-  return { value: total, dtLabel: fmtPtDate(targetDate), date: targetDate };
-}
-
 // Fonte ÚNICA do EST. INICIAL pro Dashboard Gerencial inteiro (Visão Geral,
 // Visão de Consumo/Giro) — os três call sites (buildDashboardGerencialResults,
-// _dgVgBuildPares, _giroSnapshotMaterial) passam por aqui, senão a troca de
-// modo reintroduz o bug de "dois Est. Iniciais diferentes dentro da mesma
-// Visão Geral" que a migração pro SAP corrigiu (ver _dgVgBuildPares).
+// _dgVgBuildPares, _giroSnapshotMaterial) passam por aqui. Sempre o SAP,
+// independente do toggle (ver topo do arquivo).
 function _dgGetEstIniStock({ central, material, dtIni, dtFim, catKey }) {
-  if (_dgEstIniMode === 'lanc') {
-    return _dgGetEstIniFromLancamentos({ central, material, dtIni });
-  }
   return (typeof _anGetSapStock === 'function')
     ? _anGetSapStock({ central, material, dtIni })
     : getPrePeriodLaunchStock({ central, material, dtIni, dtFim, catKey });
 }
 
-// Fonte ÚNICA do EST. FINAL ao vivo, pelo mesmo toggle do Est. Inicial:
-// IMPORTADO = Custos SAP (_dgEstFimCustosSap); CALCULADO = soma dos
-// LANÇAMENTOS do último dia do mês de dtFim, recuando pro sábado se cair
-// domingo (Hugo, 06/11/2026). É a data-alvo do Est. Inicial Calculado do mês
-// seguinte, então reaproveita _dgGetEstIniFromLancamentos com dtIni = 1º dia
-// do mês seguinte — Est. Final de agosto ≡ Est. Inicial de setembro também no
-// Calculado. Sem lançamento nesse dia exato → ausente (0), sem cascata nem
-// fallback pro Custos SAP. A fotografia NÃO passa por aqui: segue sempre no
-// Custos SAP.
+// Fonte ÚNICA do EST. FINAL ao vivo, pelo toggle: IMPORTADO = Custos SAP
+// (_dgEstFimCustosSap); CALCULADO = soma literal dos LANÇAMENTOS do
+// central+material no último dia do mês de dtFim, recuando pro sábado se cair
+// domingo (Hugo, 06/11/2026) — mesma data de getLastPeriodLaunchStockWithFallback
+// (Inventário/Visão Micro) com o período sendo o mês inteiro. Busca SOMENTE
+// nessa data exata: sem lançamento → ausente (0), sem cascata nem fallback
+// pro Custos SAP, e sem a exceção semanal de Agregado. A fotografia NÃO passa
+// por aqui: segue sempre no Custos SAP.
 function _dgGetEstFimStock({ central, material, dtFim }) {
-  if (_dgEstIniMode === 'lanc') {
-    const r = _dgGetEstIniFromLancamentos({ central, material, dtIni: new Date(dtFim.getFullYear(), dtFim.getMonth() + 1, 1) });
-    return r ? { ...r, missing: false } : null;
+  if (_dgEstIniMode !== 'lanc') return _dgEstFimCustosSap({ central, material, dtFim });
+  const targetDate = new Date(dtFim.getFullYear(), dtFim.getMonth() + 1, 0);
+  if (targetDate.getDay() === 0) targetDate.setDate(targetDate.getDate() - 1);
+  const targetISO = localISODate(targetDate);
+  const arr = getLancIndex().byCentralMat.get(central)?.get(material || '—') || [];
+  let total = 0, found = false;
+  for (const rec of arr) {
+    const d = parseDate(rec.dtLanc);
+    if (d && localISODate(d) === targetISO) { total += num(rec.peso); found = true; }
   }
-  return _dgEstFimCustosSap({ central, material, dtFim });
+  return found ? { value: total, dtLabel: fmtPtDate(targetDate), date: targetDate, missing: false } : null;
 }
 
 function _dgUpdateEstIniToggleUI() {
@@ -329,11 +293,9 @@ function buildDashboardGerencialResults(dtIni, dtFim, opts = {}) {
     const missingIniMats = [], missingFimMats = [];
     const estPorMat = fotografia ? {} : null;
     allMats.forEach(mat => {
-      // EST. INICIAL da central — por padrão, saldo TEÓRICO do SAP
-      // (_anGetSapStock), a mesma fonte da Visão Micro e do Inventário; ou,
-      // no modo CALCULADO (toggle dgSetEstIniMode), o lançamento do operador
-      // no último dia do mês anterior (getPrePeriodLaunchStock) — ver
-      // _dgGetEstIniStock acima. Os dois modos usam a MESMA fonte aqui e em
+      // EST. INICIAL da central — saldo TEÓRICO do SAP (_anGetSapStock) nos
+      // dois modos, a mesma fonte da Visão Micro e do Inventário — ver
+      // _dgGetEstIniStock acima. A MESMA fonte aqui e em
       // _dgVgBuildPares, senão o total da central discorda dos pares
       // Central×Material — dois Est. Iniciais diferentes dentro da mesma
       // Visão Geral.
@@ -1176,11 +1138,10 @@ function _dgVgBuildPares(results, thresholds, dtIni, dtFim) {
       // negativo), então o Est. Teórico do Detalhado soma os três.
       const _nat = repartirSapPorNatureza(sap);
       if (dtIni && dtFim) {
-        // EST. INICIAL — por padrão, saldo TEÓRICO do SAP (_anGetSapStock),
-        // a mesma fonte da Visão Micro desde 13/08/2026 e do Inventário; ou,
-        // no modo CALCULADO (toggle dgSetEstIniMode), o LANÇAMENTO do
-        // operador no último dia do mês anterior — ver _dgGetEstIniStock
-        // acima. MESMA fonte usada em buildDashboardGerencialResults, senão
+        // EST. INICIAL — saldo TEÓRICO do SAP (_anGetSapStock) nos dois
+        // modos, a mesma fonte da Visão Micro desde 13/08/2026 e do
+        // Inventário — ver _dgGetEstIniStock acima. MESMA fonte usada em
+        // buildDashboardGerencialResults, senão
         // o Resumo do Período discorda deste Detalhado para o mesmo
         // material/período.
         // EST. FINAL — pelo toggle (_dgGetEstFimStock), MESMA fonte de
@@ -1236,6 +1197,10 @@ function _dgVgBuildPares(results, thresholds, dtIni, dtFim) {
       const semMov     = !lancs.length && !sap.length;
       const levelSaude = !catKey ? 'sem_cadastro' : semMov ? 'sem_movimento' : (neutroSaude ? 'bom' : classifyVariation(Math.abs(diffSaude), catKey, thresholds));
       const custoMed = (r.custoMedioPorMat || {})[mat] || 0;
+      // No CALCULADO, par sem movimento fica FORA do Custo Var. (Hugo,
+      // 06/11/2026) — o Inventário nem lista esses pares, e o custo tem que
+      // bater com o dele. Os kg (diff, Est. Inicial/Final Total) seguem.
+      const custoImplicado = (semMov && _dgEstIniMode === 'lanc') ? 0 : diff * custoMed;
 
       // custoIni/custoFim: custo do SALDO de estoque (kg × custo médio do
       // material) — usados pelos cards "Est. Inicial/Final Total" do resumo
@@ -1245,7 +1210,7 @@ function _dgVgBuildPares(results, thresholds, dtIni, dtFim) {
       pares.push({
         central: r.central, regional, mat, catKey, catSubKey, diff, level, neutro,
         diffSaude, levelSaude,
-        custoImplicado: diff * custoMed, estoqueIni, estoqueFim,
+        custoImplicado, estoqueIni, estoqueFim,
         custoIni: estoqueIni * custoMed, custoFim: estoqueFim * custoMed,
         entKg, saiKg, ajuKg, custoMed
       });

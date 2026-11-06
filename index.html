@@ -579,11 +579,11 @@
                 <div class="cal-picker-inner" id="dg-month-inner"></div>
               </div>
             </div>
-            <!-- Alternância do método de cálculo do EST. INICIAL e EST. FINAL —
-                 IMPORTADO (SAP / Custos SAP, padrão) ou CALCULADO (lançamento
-                 do operador no último dia do mês anterior / do mês). Ver
-                 _dgGetEstIniStock/_dgGetEstFimStock em dashboard.js. -->
-            <div class="dg-esti-toggle" title="Método de cálculo do Est. Inicial e do Est. Final">
+            <!-- Alternância do método de cálculo do EST. FINAL — IMPORTADO
+                 (Custos SAP, padrão) ou CALCULADO (lançamento do operador no
+                 último dia do mês). O Est. Inicial é sempre o SAP. Ver
+                 _dgGetEstFimStock em dashboard.js. -->
+            <div class="dg-esti-toggle" title="Método de cálculo do Est. Final (o Est. Inicial é sempre o saldo do SAP)">
               <button class="dg-esti-toggle-btn active" id="dg-esti-btn-sap" onclick="dgSetEstIniMode('sap')" type="button">Importado</button>
               <button class="dg-esti-toggle-btn" id="dg-esti-btn-lanc" onclick="dgSetEstIniMode('lanc')" type="button">Calculado</button>
             </div>
