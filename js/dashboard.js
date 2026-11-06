@@ -74,8 +74,8 @@ function _dgGetEstIniStock({ central, material, dtIni, dtFim, catKey }) {
 // seguinte, então reaproveita _dgGetEstIniFromLancamentos com dtIni = 1º dia
 // do mês seguinte — Est. Final de agosto ≡ Est. Inicial de setembro também no
 // Calculado. Sem lançamento nesse dia exato → ausente (0), sem cascata nem
-// fallback pro Custos SAP. Saúde e fotografia NÃO passam por aqui: seguem
-// sempre no Custos SAP.
+// fallback pro Custos SAP. A fotografia NÃO passa por aqui: segue sempre no
+// Custos SAP.
 function _dgGetEstFimStock({ central, material, dtFim }) {
   if (_dgEstIniMode === 'lanc') {
     const r = _dgGetEstIniFromLancamentos({ central, material, dtIni: new Date(dtFim.getFullYear(), dtFim.getMonth() + 1, 1) });
@@ -1207,27 +1207,13 @@ function _dgVgBuildPares(results, thresholds, dtIni, dtFim) {
         // o snapshot separa por sinal e não conhece o balde AJUSTES.
         entKg = _nat.totalEnt; saiKg = _nat.totalSai; ajuKg = _nat.totalAju;
 
-        // SAÚDE sempre pelo saldo TEÓRICO do SAP, nunca pelo modo Calculado
-        // do toggle acima — Saúde Geral é réplica dos donuts do Dashboard
-        // Analítico (_dgVgRenderHealthDonuts, "mesmo cálculo de percentual"),
-        // que nunca usa esse toggle (exclusivo do Gerencial, controla só a
-        // EXIBIÇÃO de Est. Inicial/Variação). Sem isso, trocar o toggle pra
-        // Calculado fazia os dois painéis classificarem central/material
-        // diferente, com percentuais de saúde divergentes pro mesmo período
-        // (decisão: consistência entre os dois painéis prevalece sobre o
-        // toggle). No modo padrão (SAP) é o MESMO diff, sem custo extra; só
-        // no modo Calculado recalcula com a fonte SAP à parte, só pra
-        // classificar — result e level "de exibição" (abaixo) continuam
-        // seguindo o toggle normalmente.
-        // Vale também pro Est. Final: no Calculado, a Saúde usa o Custos SAP.
-        const fimSaude = (!est && _dgEstIniMode === 'lanc') ? _dgEstFimCustosSap({ central: r.central, material: mat, dtFim }) : null;
-        diffSaude = (!est && _dgEstIniMode === 'lanc')
-          ? buildSnapshot({
-              lancs, sap,
-              initialStockOverride: (typeof _anGetSapStock === 'function' ? _anGetSapStock({ central: r.central, material: mat, dtIni })?.value : null) ?? null,
-              finalStockOverride:   fimSaude ? fimSaude.value : null
-            }).diff
-          : diff;
+        // SAÚDE segue o toggle, igual ao resto (Hugo, 06/11/2026). Antes, no
+        // Calculado, a Saúde recalculava pelo SAP à parte — mas o Est. Final
+        // do Custos SAP já vem AJUSTADO pelo inventário (Y11/Y12), então os
+        // gráficos mostravam variação ~0 enquanto a tabela/custo mostravam a
+        // dos lançamentos. Agora gráficos, Variação e Custo Var. saem do
+        // MESMO diff nos dois modos.
+        diffSaude = diff;
       } else {
         const snap = buildSnapshot({ lancs, sap });
         diff  = snap.diff;
