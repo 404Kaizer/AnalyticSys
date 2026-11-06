@@ -1197,10 +1197,7 @@ function _dgVgBuildPares(results, thresholds, dtIni, dtFim) {
       const semMov     = !lancs.length && !sap.length;
       const levelSaude = !catKey ? 'sem_cadastro' : semMov ? 'sem_movimento' : (neutroSaude ? 'bom' : classifyVariation(Math.abs(diffSaude), catKey, thresholds));
       const custoMed = (r.custoMedioPorMat || {})[mat] || 0;
-      // No CALCULADO, par sem movimento fica FORA do Custo Var. (Hugo,
-      // 06/11/2026) — o Inventário nem lista esses pares, e o custo tem que
-      // bater com o dele. Os kg (diff, Est. Inicial/Final Total) seguem.
-      const custoImplicado = (semMov && _dgEstIniMode === 'lanc') ? 0 : diff * custoMed;
+      const custoImplicado = diff * custoMed;
 
       // custoIni/custoFim: custo do SALDO de estoque (kg × custo médio do
       // material) — usados pelos cards "Est. Inicial/Final Total" do resumo
