@@ -5202,6 +5202,17 @@ window._RELATORIO_ABAS_REGISTRY = [
     // scripts, DEPOIS do prelúdio que declara as funções que ele chama.
     render: (ctx, ids) => {
       const blocos = ids.filter(id => DGR_EVO_BLOCOS.includes(id));
+      // 1 mês só (Hugo, 06/11/2026): não há o que comparar — sem tabela e
+      // sem gráfico mês a mês; o detalhe do mês (blocos marcados) vem aberto,
+      // direto na aba. Mesmo card da linha expandida, então os scripts
+      // (_dgrScriptEvoDetalhe, modais) funcionam sem mudança.
+      const meses = ctx.periodos.filter(p => !p.geral);
+      if (meses.length === 1) {
+        if (!blocos.length) return '';
+        const card = _dgrEvoDetalheCardHtml(meses[0], blocos);
+        ctx._evoDetalheCards = [card];
+        return _dgrSecaoHtml('evo-mes', meses[0].titulo || meses[0].rotulo, card.html, true);
+      }
       return ids.map(id => {
         if (id === 'evo-tabela') {
           const { html, cards } = _dgrEvolucaoTabelaHtml(ctx.periodos, blocos);
