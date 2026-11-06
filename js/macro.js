@@ -31,6 +31,31 @@ function _calcTrend(lancs, sap, dtIni, dtFim, prevValue) {
   return 'stable';
 }
 
+// ── Variação e nível de UM par na Visão Macro ─────────────────────────
+// Fonte única dos donuts da Macro e do cálculo silencioso das notificações
+// (notifSilentHealthCheck) — antes eram duas contas e o sino discordava da
+// tela: lá a categoria vinha do texto do registro e o Est. Final do último
+// dia com lançamento. Est. Inicial = saldo teórico do SAP; Est. Final =
+// lançamento exato do último não-domingo (AUSENTE sem ele), como na Micro.
+function _macroAvaliarPar({ central, mat, lancs, sap, dtIni, dtFim, catKeyMap, thresholds }) {
+  const prev = (typeof _anGetSapStock === 'function')
+    ? _anGetSapStock({ central, material: mat, dtIni }) : null;
+  const fim  = (typeof _anGetLastPeriodStockFallback === 'function')
+    ? _anGetLastPeriodStockFallback({ central, material: mat, dtIni, dtFim }) : null;
+  const diff = buildSnapshot({
+    lancs, sap,
+    initialStockOverride:     prev?.value  ?? null,
+    initialDateLabelOverride: prev?.dtLabel ?? null,
+    finalStockOverride:       fim && !fim.missing ? fim.value : null,
+  }).diff;
+  const rawCat = (lancs[0]?.categoria || sap[0]?.categoria || '').trim().toUpperCase();
+  // Categoria do CADASTRO (catKeyMap = r.materialCatKeyMap), a mesma do card
+  // da Visão Micro e do Gerencial; o palpite pelo texto/nome é só reserva.
+  const catKey = catKeyMap?.get(mat) || detectCatKey(rawCat) || detectCatFromMat(mat);
+  const level  = classifyVariation(Math.abs(diff), catKey, thresholds);
+  return { diff, catKey, level, prev, rawCat };
+}
+
 function _trendIcon(trend) {
   if (trend === 'worsening') return `<span title="Piorando" style="color:#f43f5e;font-size:11px;margin-left:4px">▲</span>`;
   if (trend === 'improving') return `<span title="Melhorando" style="color:#10b981;font-size:11px;margin-left:4px">▼</span>`;
@@ -125,44 +150,16 @@ function renderMacroPanels(results, thresholds, dtIni, dtFim) {
     // Alimenta o cálculo de saúde de fallback (logo após o laço de materiais).
     const _matDiffsCentral = [];
 
-    // Est. Inicial: saldo TEÓRICO do SAP (âncora Custos SAP + movimentações),
-    // mesma fonte da Visão Micro — ver _anGetSapTheoreticalStock em
-    // analitico.js. Antes vinha do lançamento do operador, o que fazia a
-    // Macro/Regional mostrar variação diferente da Micro pro mesmo material.
-    //
-    // Sumiu o cache local (preCache) porque _anGetSapStock já cacheia, e o
-    // cache dele é limpo a cada _rodarAnaliticoCore — como a Macro roda
-    // depois da Micro na mesma análise, aqui ele chega quente.
-    //
-    // Sumiu também o catKey que era calculado só pra esta chamada: ele
-    // existia pela regra de Agregado do getPrePeriodLaunchStock (lançamento
-    // semanal), e o saldo do SAP existe em qualquer data. O catKey da
-    // classificação, logo abaixo, é outro e continua como estava.
+    // Variação/nível do par: _macroAvaliarPar (topo do arquivo) — mesma conta
+    // do cálculo silencioso das notificações. _anGetSapStock e
+    // _anGetLastPeriodStockFallback já cacheiam, e a Macro roda depois da
+    // Micro na mesma análise, então aqui o cache chega quente.
     (r.allMats || []).forEach(mat => {
       const lancs = lancsByMat.get(mat) || [];
       const sap   = sapByMat.get(mat)   || [];
-      const prev  = (typeof _anGetSapStock === 'function')
-        ? _anGetSapStock({ central: r.central, material: mat, dtIni }) : null;
-      // Est. Final: mesma fonte da Visão Micro (lançamento EXATO do último
-      // não-domingo do período; sem ele = AUSENTE). Sem o override o
-      // buildSnapshot caía no fallback legado (último dia COM lançamento no
-      // período), e a variação dos rankings divergia da Micro sempre que o
-      // operador não lançava no último dia. Cache já quente da Micro.
-      const fim   = (typeof _anGetLastPeriodStockFallback === 'function')
-        ? _anGetLastPeriodStockFallback({ central: r.central, material: mat, dtIni, dtFim }) : null;
-      const snap  = buildSnapshot({
-        lancs, sap,
-        initialStockOverride:     prev?.value  ?? null,
-        initialDateLabelOverride: prev?.dtLabel ?? null,
-        finalStockOverride:       fim && !fim.missing ? fim.value : null,
+      const { diff, catKey, level, prev, rawCat } = _macroAvaliarPar({
+        central: r.central, mat, lancs, sap, dtIni, dtFim, catKeyMap: r.materialCatKeyMap, thresholds
       });
-      const diff   = snap.diff;
-      const rawCat = (lancs[0]?.categoria || sap[0]?.categoria || '').trim().toUpperCase();
-      // Categoria do CADASTRO (r.materialCatKeyMap), a mesma do card da Visão
-      // Micro e do Gerencial. Antes, o par com só SAP no período (sem
-      // categoria no registro) caía no palpite pelo nome do material.
-      const catKey = r.materialCatKeyMap?.get(mat) || detectCatKey(rawCat) || detectCatFromMat(mat);
-      const level  = classifyVariation(Math.abs(diff), catKey, thresholds);
 
       centralMap[r.central].counts[level]++;
       _matDiffsCentral.push({ mat, diff, catKey });

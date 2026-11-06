@@ -195,7 +195,8 @@ async function notifSilentHealthCheck() {
         typeof getHealthThresholds!=='function'||
         typeof buildSnapshot!=='function'||
         typeof classifyVariation!=='function'||
-        typeof detectCatKey!=='function') {
+        typeof detectCatKey!=='function'||
+        typeof _macroAvaliarPar!=='function') {
       notifSync(null); return;
     }
 
@@ -226,23 +227,26 @@ async function notifSilentHealthCheck() {
           if (!sapByMat.has(s.material)) sapByMat.set(s.material,[]);
           sapByMat.get(s.material).push(s);
         });
-        const matDiffs = (r.allMats||[]).map(mat => {
+        // Mesma conta dos donuts da Visão Macro (_macroAvaliarPar, macro.js):
+        // categoria do cadastro e Est. Final = lançamento do último
+        // não-domingo — é a nota da Macro que o Analítico manda pro sino
+        // (notifUpdateFromAnalytico), então as duas precisam bater.
+        const matDiffs = [];
+        (r.allMats||[]).forEach(mat => {
           const lancs = lancsByMat.get(mat)||[];
           const sap   = sapByMat.get(mat)||[];
-          const rawCat = ((lancs[0]||sap[0])?.categoria||'').trim().toUpperCase();
-          const catKey = detectCatKey(rawCat)||(typeof detectCatFromMat==='function'?detectCatFromMat(mat):null);
-          // Est. Inicial: saldo TEÓRICO do SAP, mesma fonte da Visão Micro /
-          // Inventário / Dashboard. Sem isso a criticidade notificada sairia
-          // de uma variação calculada sobre outra base que a das telas.
-          const prev  = typeof _anGetSapStock==='function'
-            ? _anGetSapStock({central:r.central,material:mat,dtIni})
-            : (typeof getPrePeriodLaunchStock==='function'
-                ? getPrePeriodLaunchStock({central:r.central,material:mat,dtIni,dtFim,catKey}) : null);
-          const snap  = buildSnapshot({lancs,sap,initialStockOverride:prev?.value??null});
-          const level  = classifyVariation(Math.abs(snap.diff), catKey, thresholds);
+          // Par sem movimento no período só existe pelo escopo histórico do
+          // Gerencial (Est. Inicial Total = Inventário); a Macro só avalia
+          // material com movimento. Sem este corte ele virava variação =
+          // −saldo do SAP (Est. Final ausente) e inflava os críticos do sino.
+          if (!lancs.length && !sap.length) return;
+          const { diff, catKey, level } = _macroAvaliarPar({
+            central: r.central, mat, lancs, sap, dtIni, dtFim, catKeyMap: r.materialCatKeyMap, thresholds
+          });
           matCounts[level]++;
-          return {diff:snap.diff, catKey};
+          matDiffs.push({ diff, catKey });
         });
+        // Sem material ou todos neutros → ok → bom, mesma regra do card/Macro.
         const {level: centralLevel} = calcHealthScore(matDiffs, null, null, thresholds);
         centralCounts[(!centralLevel||centralLevel==='ok') ? 'bom' : centralLevel]++;
       });
