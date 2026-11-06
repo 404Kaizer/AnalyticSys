@@ -8877,6 +8877,8 @@ async function handleImport(event, modulo) {
     } finally {
       hideLoadingOverlay('Importação concluída');
       if (typeof loadingHideSteps === 'function') loadingHideSteps();
+      // Foto do Mural de Operações com a base nova — em segundo plano.
+      if (typeof muralAgendarPublicacao === 'function') muralAgendarPublicacao();
     }
   };
   reader.onerror = () => {
@@ -9431,6 +9433,8 @@ async function restoreAndRender() {
       if (typeof adminAlertCheckPendente === 'function') adminAlertCheckPendente();
       if (typeof adminAlertRealtimeInit === 'function') adminAlertRealtimeInit();
     }, 300);
+    // Foto do Mural de Operações — depois do boot, quando o navegador folga.
+    if (typeof muralAgendarPublicacao === 'function') muralAgendarPublicacao();
   }
 }
 
