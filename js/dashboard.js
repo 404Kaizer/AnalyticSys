@@ -11,6 +11,7 @@
 //          (ui.js): aquela função tem uma exceção pra Agregado (usa a
 //          última TERÇA-feira, não o dia 31/30), regra de outras telas que
 //          não se aplica aqui.
+// O mesmo toggle vale pro EST. FINAL (ver _dgGetEstFimStock).
 // Persistido em localStorage — a escolha do usuário sobrevive a reload.
 let _dgEstIniMode = 'sap';
 try {
@@ -64,6 +65,23 @@ function _dgGetEstIniStock({ central, material, dtIni, dtFim, catKey }) {
   return (typeof _anGetSapStock === 'function')
     ? _anGetSapStock({ central, material, dtIni })
     : getPrePeriodLaunchStock({ central, material, dtIni, dtFim, catKey });
+}
+
+// Fonte ÚNICA do EST. FINAL ao vivo, pelo mesmo toggle do Est. Inicial:
+// IMPORTADO = Custos SAP (_dgEstFimCustosSap); CALCULADO = soma dos
+// LANÇAMENTOS do último dia do mês de dtFim, recuando pro sábado se cair
+// domingo (Hugo, 06/11/2026). É a data-alvo do Est. Inicial Calculado do mês
+// seguinte, então reaproveita _dgGetEstIniFromLancamentos com dtIni = 1º dia
+// do mês seguinte — Est. Final de agosto ≡ Est. Inicial de setembro também no
+// Calculado. Sem lançamento nesse dia exato → ausente (0), sem cascata nem
+// fallback pro Custos SAP. Saúde e fotografia NÃO passam por aqui: seguem
+// sempre no Custos SAP.
+function _dgGetEstFimStock({ central, material, dtFim }) {
+  if (_dgEstIniMode === 'lanc') {
+    const r = _dgGetEstIniFromLancamentos({ central, material, dtIni: new Date(dtFim.getFullYear(), dtFim.getMonth() + 1, 1) });
+    return r ? { ...r, missing: false } : null;
+  }
+  return _dgEstFimCustosSap({ central, material, dtFim });
 }
 
 function _dgUpdateEstIniToggleUI() {
@@ -329,9 +347,11 @@ function buildDashboardGerencialResults(dtIni, dtFim, opts = {}) {
         missingIniMats.push(mat);
       }
 
-      // EST. FINAL — sempre o estoque do Custos SAP, com o mês aberto ou
-      // fechado (ver _dgEstFimCustosSap).
-      const fim = !dtFim ? null : _dgEstFimCustosSap({ central, material: mat, dtFim });
+      // EST. FINAL — pelo toggle (_dgGetEstFimStock); gerando a fotografia,
+      // sempre o Custos SAP (não pode depender do navegador de quem gerou).
+      const fim = !dtFim ? null
+        : fotografia ? _dgEstFimCustosSap({ central, material: mat, dtFim })
+        : _dgGetEstFimStock({ central, material: mat, dtFim });
       if (fim && !fim.missing) {
         somaUltimo += fim.value;
       } else {
@@ -391,7 +411,8 @@ function _dgEstIniSap({ central, material, dtIni }) {
   return (typeof _anGetSapStock === 'function') ? _anGetSapStock({ central, material, dtIni }) : null;
 }
 
-// EST. FINAL do Gerencial inteiro = estoque do Custos SAP, com o mês ABERTO ou
+// EST. FINAL "Importado" (padrão; Calculado = lançamentos, ver
+// _dgGetEstFimStock) = estoque do Custos SAP, com o mês ABERTO ou
 // FECHADO (decisões do Hugo, 09/10/2026: "o estoque final já está em CUSTOS
 // SAP" e "independente do período estar fechado ou não"). Substitui o último
 // lançamento do operador (getLastPeriodLaunchStock*) no Gerencial.
@@ -763,7 +784,7 @@ function _dgRenderBannerFotografia(ano, mes) {
     const b = document.getElementById(id);
     if (!b) return;
     b.disabled = congelado;
-    b.title = congelado ? 'Mês fechado — Est. Inicial congelado na fotografia (Importado)' : '';
+    b.title = congelado ? 'Mês fechado — Est. Inicial e Final congelados na fotografia (Importado)' : '';
   });
   if (!el) return;
   const rot = `${MESES_NOME_DG[mes - 1]}/${ano}`;
@@ -1162,13 +1183,13 @@ function _dgVgBuildPares(results, thresholds, dtIni, dtFim) {
         // acima. MESMA fonte usada em buildDashboardGerencialResults, senão
         // o Resumo do Período discorda deste Detalhado para o mesmo
         // material/período.
-        // EST. FINAL — Custos SAP (_dgEstFimCustosSap), MESMA fonte de
+        // EST. FINAL — pelo toggle (_dgGetEstFimStock), MESMA fonte de
         // buildDashboardGerencialResults. Gerando a fotografia: Est. já
-        // resolvido lá (SAP no início — ver opts.fotografia).
+        // resolvido lá (sempre SAP — ver opts.fotografia).
         const est  = r.estPorMat ? (r.estPorMat[mat] || { ini: null, fim: null }) : null;
         const prev = est ? est.ini : _dgGetEstIniStock({ central: r.central, material: mat, dtIni, dtFim, catKey });
         const fim  = est ? (est.fim ? { ...est.fim, missing: false } : { missing: true })
-                         : (_dgEstFimCustosSap({ central: r.central, material: mat, dtFim }) || { missing: true });
+                         : (_dgGetEstFimStock({ central: r.central, material: mat, dtFim }) || { missing: true });
         // Captura os mesmos valores já resolvidos pra calcular o diff —
         // usados pelos cards "Est. Inicial/Final Total" do resumo do
         // período (ver _dgVgEstoqueTotais). Ausente fica 0 (sem aviso,
@@ -1198,11 +1219,13 @@ function _dgVgBuildPares(results, thresholds, dtIni, dtFim) {
         // no modo Calculado recalcula com a fonte SAP à parte, só pra
         // classificar — result e level "de exibição" (abaixo) continuam
         // seguindo o toggle normalmente.
+        // Vale também pro Est. Final: no Calculado, a Saúde usa o Custos SAP.
+        const fimSaude = (!est && _dgEstIniMode === 'lanc') ? _dgEstFimCustosSap({ central: r.central, material: mat, dtFim }) : null;
         diffSaude = (!est && _dgEstIniMode === 'lanc')
           ? buildSnapshot({
               lancs, sap,
               initialStockOverride: (typeof _anGetSapStock === 'function' ? _anGetSapStock({ central: r.central, material: mat, dtIni })?.value : null) ?? null,
-              finalStockOverride:   (fim && !fim.missing) ? fim.value : null
+              finalStockOverride:   fimSaude ? fimSaude.value : null
             }).diff
           : diff;
       } else {
@@ -3909,9 +3932,9 @@ function _consumoKgSaidas(sapRecords) {
 // Inicial/Final congelados, os mesmos dos pares — nada vivo.
 function _giroSnapshotMaterial({ central, mat, lancs, sap, dtIni, dtFim, catKey, est }) {
   const prev = est ? est.ini : _dgGetEstIniStock({ central, material: mat, dtIni, dtFim, catKey });
-  // Est. Final pelo Custos SAP — mesma fonte dos pares (_dgEstFimCustosSap).
+  // Est. Final pelo toggle — mesma fonte dos pares (_dgGetEstFimStock).
   const fim = est ? (est.fim ? { ...est.fim, missing: false } : null)
-    : dtFim ? _dgEstFimCustosSap({ central, material: mat, dtFim }) : null;
+    : dtFim ? _dgGetEstFimStock({ central, material: mat, dtFim }) : null;
   return buildSnapshot({
     lancs, sap,
     initialStockOverride:     prev?.value   ?? null,
