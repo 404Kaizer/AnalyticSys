@@ -4096,10 +4096,13 @@ function _dgrSwitchPeriodo(btn) {
 //    com o mês ANTERIOR da série (a "Geral" fica de fora — é o agregado do
 //    intervalo, não um ponto no tempo).
 //
-//    Veredito sobre 3 sinais (Hugo, 06/11/2026): Saúde Centrais e Saúde
-//    Materiais (subir é melhor) e |Variação Física| (cair é melhor). Algum
-//    melhorou e nenhum piorou = melhora; o inverso = piora; discordância
-//    (ou nada mudou) = misto. Base física, não
+//    Veredito (Hugo, 06/11/2026): a SAÚDE decide, a física desempata.
+//    Soma dos sinais de Saúde Centrais e Saúde Materiais (subir = +1, cair =
+//    −1): saldo positivo = melhora, negativo = piora. Saldo zero (as duas
+//    discordam ou nenhuma mudou) → decide |Variação Física| (cair = melhora,
+//    subir = piora); se ela também não mudou = misto. Antes era "algum
+//    melhorou e nenhum piorou", que dava MISTO com as duas saúdes caindo só
+//    porque a física melhorou. Base física, não
 //    monetária (decisão do Hugo, set/2026 — o custo é derivado da física,
 //    não o contrário). Deliberadamente NÃO é uma nota única ponderada —
 //    inventar um peso entre "saúde" e "física" seria esconder a decisão
@@ -4113,9 +4116,10 @@ function _dgrEvolucaoLinhas(periodos) {
     const dFisica   = ant ? Math.abs(p.kpi.varTotalFisica) - Math.abs(ant.kpi.varTotalFisica) : null;
     let veredito = null;
     if (ant) {
-      const sinais = [dScoreCen, dScore, -dFisica]; // positivo = melhorou
-      const melhor = sinais.some(s => s > 0.0001), pior = sinais.some(s => s < -0.0001);
-      veredito = melhor && !pior ? 'melhora' : pior && !melhor ? 'piora' : 'misto';
+      const sinal = v => v > 0.0001 ? 1 : v < -0.0001 ? -1 : 0; // +1 = melhorou
+      const saude = sinal(dScoreCen) + sinal(dScore);
+      const dir = saude !== 0 ? saude : sinal(-dFisica);
+      veredito = dir > 0 ? 'melhora' : dir < 0 ? 'piora' : 'misto';
     }
     return { ...p, dScore, dScoreCen, dFisica, veredito };
   });
@@ -4208,9 +4212,9 @@ function _dgrEvolucaoTabelaHtml(periodos, blocos = DGR_EVO_BLOCOS) {
     </table>
   </div>
   <div class="dgr-evo-nota">
-    Δ compara sempre com o mês anterior da série. "Leitura" combina três sinais: Saúde Centrais e
-    Saúde Materiais (subir é melhor) e Variação Física em módulo (cair é melhor). MELHORA = algum
-    melhorou e nenhum piorou; PIORA = o inverso; sinais discordantes aparecem como MISTO.
+    Δ compara sempre com o mês anterior da série. "Leitura": a Saúde (Centrais e Materiais, subir é
+    melhor) decide; quando as duas discordam ou não mudam, desempata a Variação Física em módulo
+    (cair é melhor). MISTO só quando nada disso define uma direção.
     <i class="ti ti-chevron-right"></i> em cada mês abre a Saúde Geral e a Variação por Regional/Central daquele mês.
   </div>`;
 
