@@ -4166,7 +4166,9 @@ function _dgrEvolucaoTabelaHtml(periodos, blocos = DGR_EVO_BLOCOS) {
   const corpo = linhas.map(l => {
     const v = l.veredito ? vered[l.veredito] : null;
     const card = cardPorId.get(l.id);
-    return `<tr class="dgr-evo-mes-row"${card ? ` onclick="_dgrEvoToggle(this, '${l.id}')" title="Ver o detalhamento deste mês"` : ''}>
+    // _dgrCorTema: as cores hex da linha viram var(--dgr-c-*) — o tema claro
+    // as escurece (ver ajustesCss), senão ficavam apagadas no fundo branco.
+    return _dgrCorTema(`<tr class="dgr-evo-mes-row"${card ? ` onclick="_dgrEvoToggle(this, '${l.id}')" title="Ver o detalhamento deste mês"` : ''}>
       <td style="font-weight:700">
         ${card ? `<button type="button" class="dgr-evo-expand-btn" tabindex="0">
           <i class="ti ti-chevron-right"></i>
@@ -4187,8 +4189,8 @@ function _dgrEvolucaoTabelaHtml(periodos, blocos = DGR_EVO_BLOCOS) {
       <td class="da-num">${v
         ? `<span style="color:${v.cor};font-weight:800;font-size:10px;letter-spacing:.05em"><i class="ti ${v.ic}"></i> ${v.txt}</span>`
         : '<span style="color:#64748b;font-size:10px">base</span>'}</td>
-    </tr>${card ? `
-    <tr class="dgr-evo-detalhe-row" data-mes="${l.id}" hidden><td colspan="13"><div class="dgr-evo-detalhe-box">${card.html}</div></td></tr>` : ''}`;
+    </tr>`) + (card ? `
+    <tr class="dgr-evo-detalhe-row" data-mes="${l.id}" hidden><td colspan="13"><div class="dgr-evo-detalhe-box">${card.html}</div></td></tr>` : '');
   }).join('');
 
   const html = `<div class="da-table-wrap dgr-evo-wrap">
@@ -4912,6 +4914,14 @@ function _dgrBuildGiroCoberturaHtml(d) {
 //    .dgr-table-wrap (sem page-break-inside:avoid, ao contrário de
 //    .rk-table-wrap do shell) pra paginar naturalmente na impressão em vez
 //    de forçar a tabela inteira numa página só. ───────────────────────────
+// `color:#rrggbb` → `color:var(--dgr-c-rrggbb, #rrggbb)`: sem a var definida
+// fica o hex de sempre; o CSS do relatório redefine as que precisam mudar por
+// tema (ver --dgr-c-* em ajustesCss). Não toca em background-color/fill.
+function _dgrCorTema(html) {
+  return html.replace(/(^|[^-\w])color:\s*#([0-9a-f]{6})\b/gi,
+    (m, pre, h) => `${pre}color:var(--dgr-c-${h.toLowerCase()}, #${h})`);
+}
+
 function _dgrValCor(v) {
   if (v === null || v === undefined || !Number.isFinite(v)) return '#64748b';
   return v < -0.0001 ? '#f43f5e' : v > 0.0001 ? '#f59e0b' : '#64748b';
@@ -5650,6 +5660,18 @@ window.gerarRelatorioGerencialDashboard = async function(tema = 'dark', selecao 
          Quebrar linha é melhor que rolar: em 100% o cabeçalho quebra em duas
          linhas e o " TON"/"R$" desce só quando falta espaço (acima de ~950px
          de largura nada quebra, a tabela fica igual à de antes). */
+      /* Indicadores mês a mês: fundo de card + cores dos valores por tema
+         (Hugo, 06/11/2026 — apagados, principalmente no tema claro). Os
+         hex da linha passam por _dgrCorTema; aqui só os que mudam. */
+      .dgr-evo-wrap { background:var(--dgr-card-bg, rgba(255,255,255,.045));
+                      border:1px solid var(--dgr-card-border, rgba(255,255,255,.09)); border-radius:12px; }
+      .dgr-evo-tabela thead th { color:var(--dgr-text-dim, #94a3b8); }
+      body { --dgr-c-94a3b8:#cbd5e1; }
+      body.dgr-tema-claro {
+        --dgr-c-94a3b8:#1e293b; --dgr-c-64748b:#475569;
+        --dgr-c-10b981:#047857; --dgr-c-f43f5e:#be123c;
+        --dgr-c-f59e0b:#b45309; --dgr-c-f97316:#c2410c;
+      }
       .dgr-evo-tabela { width:100%; }
       .dgr-evo-tabela th, .dgr-evo-tabela td {
         white-space:normal; max-width:none; overflow:visible; text-overflow:clip;
