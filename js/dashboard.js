@@ -2661,10 +2661,15 @@ function abrirDetalheVariacao(tipo, chave, periodo) {
   // micro, buildRegionalSummaryHtml).
   const { linhas: saudeCen } = _dgVgBuildCentralHealthData(d.pares, d.thresholds, d.centrais);
   const nivelCen = new Map(saudeCen.map(l => [l.central, l.level]));
-  let nivelFn = k => nivelCen.get(k);
+  let nivelFn = k => nivelCen.get(k), catFn = null;
   if (colLabel === 'Material') {
     const nivelMat = new Map(paresEscopo.map(p => [p.mat, p.levelSaude]));
     nivelFn = k => nivelMat.get(k);
+    // Lista de material: uma categoria só por linha → coluna Categoria no
+    // lugar de Agregado/Aglomerante/Aditivo (Hugo, 06/11/2026).
+    const catMat = new Map(paresEscopo.map(p => [p.mat,
+      (typeof DG_VG_CATSUB_LABELS !== 'undefined' && DG_VG_CATSUB_LABELS[p.catSubKey]) || DG_VG_CAT_LABELS[p.catKey] || '—']));
+    catFn = k => catMat.get(k) || '—';
   } else if (colLabel === 'Regional') {
     const regDe = new Map((d.centrais || d.pares).map(c => [c.central, c.regional]));
     const pior = new Map();
@@ -2676,7 +2681,7 @@ function abrirDetalheVariacao(tipo, chave, periodo) {
   }
 
   const dados = _daBuildRanking(paresEscopo, pesoMedio, keyFn, d.totalEstTeoricoKpi, labelFn);
-  _daRenderRankingVariacao('dg-var-detalhe-body', dados, colLabel, nivelFn);
+  _daRenderRankingVariacao('dg-var-detalhe-body', dados, colLabel, nivelFn, catFn);
 
   overlay.classList.add('open');
   overlay.setAttribute('aria-hidden', 'false');
@@ -3750,7 +3755,13 @@ function _daRenderRanking(containerId, dados, colNomeLabel) {
 // no lugar de Caminhões/Carretas/IBCs, a VARIAÇÃO em kg de cada categoria
 // (mesma soma com sinal que gera os veículos) + Saúde + financeiro. Pedido
 // do Hugo (08/10/2026). nivelFn(key) → nível ('critico'…'bom') ou null.
-function _daRenderRankingVariacao(containerId, dados, colNomeLabel, nivelFn) {
+// catFn(key) → rótulo da categoria (só na lista de Material): troca as 3
+// colunas por categoria por uma coluna Categoria (Hugo, 06/11/2026).
+// % Variação aqui é a PARTICIPAÇÃO da linha na listagem (Hugo, 06/11/2026):
+// |variação da linha| ÷ Σ |variação| das linhas, com o sinal da linha — as
+// linhas somam 100%. Não é a % sobre o Est. Teórico do período do
+// _daBuildRanking (essa segue nos rankings do Detalhado Analítico).
+function _daRenderRankingVariacao(containerId, dados, colNomeLabel, nivelFn, catFn) {
   const el = document.getElementById(containerId);
   if (!el) return;
   if (!dados.linhas.length) {
@@ -3762,9 +3773,17 @@ function _daRenderRankingVariacao(containerId, dados, colNomeLabel, nivelFn) {
     const lvl = nivelFn(k);
     return _DG_VG_NIVEL_COR[lvl] ? _dgVgNivelBadgeHtml(lvl) : '<span style="color:var(--text3)">—</span>';
   };
-  const cols = l => `${kg(l.agregadoKg)}${kg(l.aglomeranteKg)}${kg(l.aditivoKg)}${kg(l.diff)}
-      <td class="da-num" style="color:${_daColorFor(l.pctVariacao)}">${_daFmtPctSigned(l.pctVariacao)}</td>
-      <td class="da-num" style="color:${_daColorFor(l.custoTotal)}">${_daFmtMoneySigned(l.custoTotal)}</td>`;
+  const relevante = l => !_daVarIrrelevante(l.diff);
+  const somaAbs = dados.linhas.reduce((s, l) => s + (relevante(l) ? Math.abs(l.diff) : 0), 0);
+  const pctLinha = l => (somaAbs > 0 && relevante(l)) ? (l.diff / somaAbs) * 100 : 0;
+  const pctTotal = somaAbs > 0 ? '100,00%' : '—';
+  const custo = l => `<td class="da-num" style="color:${_daColorFor(l.custoTotal)}">${_daFmtMoneySigned(l.custoTotal)}</td>`;
+  const catsKg = l => catFn ? '' : `${kg(l.agregadoKg)}${kg(l.aglomeranteKg)}${kg(l.aditivoKg)}`;
+  const linha = l => `${catsKg(l)}${kg(l.diff)}
+      <td class="da-num" style="color:${_daColorFor(pctLinha(l))}">${_daFmtPctSigned(pctLinha(l))}</td>${custo(l)}`;
+  const t = dados.total;
+  const totalCols = `${catsKg(t)}${kg(t.diff)}<td class="da-num">${pctTotal}</td>${custo(t)}`;
+  const catTd = l => catFn ? `<td>${escapeHtml(catFn(l.key))}</td>` : '';
 
   el.innerHTML = `
     <div class="da-table-wrap">
@@ -3773,16 +3792,16 @@ function _daRenderRankingVariacao(containerId, dados, colNomeLabel, nivelFn) {
           <tr>
             <th>${escapeHtml(colNomeLabel)}</th>
             <th>Saúde</th>
-            <th class="da-num">Agregado</th>
+            ${catFn ? '<th>Categoria</th>' : `<th class="da-num">Agregado</th>
             <th class="da-num">Aglomerante</th>
-            <th class="da-num">Aditivo + Adição</th>
+            <th class="da-num">Aditivo + Adição</th>`}
             <th class="da-num">Variação</th>
-            <th class="da-num">% Variação</th>
+            <th class="da-num" title="Participação da linha na variação desta listagem (em módulo)">% Variação</th>
             <th class="da-num">Custo Total</th>
           </tr>
         </thead>
-        <tbody>${dados.linhas.map(l => `<tr><td>${escapeHtml(l.nome)}</td><td>${saude(l.key)}</td>${cols(l)}</tr>`).join('')}</tbody>
-        <tfoot><tr class="da-total-row"><td>Total</td><td></td>${cols(dados.total)}</tr></tfoot>
+        <tbody>${dados.linhas.map(l => `<tr><td>${escapeHtml(l.nome)}</td><td>${saude(l.key)}</td>${catTd(l)}${linha(l)}</tr>`).join('')}</tbody>
+        <tfoot><tr class="da-total-row"><td>Total</td><td></td>${catFn ? '<td></td>' : ''}${totalCols}</tr></tfoot>
       </table>
     </div>`;
 }

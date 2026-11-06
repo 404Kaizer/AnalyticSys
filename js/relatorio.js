@@ -3588,7 +3588,7 @@ const _DGR_NOMES = {
   // Botões de detalhamento dos donuts de Saúde Geral, dos 4 cards de extremo
   // e dos 2 gráficos de Variação (detalhe de cada mês da Evolução) — as
   // MESMAS funções da tela; os modais vêm clonados por _dgrClonarModaisDetalhe.
-  detalheDash: ['DG_VG_CAT_LABELS', 'DG_TON_THRESHOLD_KG',
+  detalheDash: ['DG_VG_CAT_LABELS', 'DG_VG_CATSUB_LABELS', 'DG_TON_THRESHOLD_KG',
                 'num', 'fmtKg', 'money', 'escapeHtml', 'varSymbol', 'movValorCor',
                 'dgFmtPeso', 'dgFmtPesoSigned',
                 '_daVarIrrelevante', '_daColorFor', '_daFmtPctSigned', '_daFmtMoneySigned',
