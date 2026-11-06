@@ -3454,8 +3454,18 @@ body.bdm-modal-acima .modal-overlay:not(.analitico-detail-overlay) { z-index: 70
    .bdm-body overflow-x abaixo). Mesmo padrão de largura dedicada já usado
    em .fechmgr-dialog, só que mais estreito (menos colunas). */
 .bdm-dialog-wide {
-  max-width: min(1080px, 96vw);
+  max-width: min(1440px, 97vw);
 }
+/* Modais "Ver detalhes": NADA abreviado, principalmente valores (Hugo,
+   06/11/2026). Anula o "tbody td { max-width:240px; overflow:hidden;
+   text-overflow:ellipsis }" genérico (components.css) — era ele que cortava
+   nomes e "R$ 60.401,…" — e o "table { table-layout:fixed }" genérico,
+   que dava largura igual a toda coluna e fazia o texto longo vazar pra
+   célula vizinha; auto dimensiona cada coluna pelo conteúdo. Teto de largura
+   subiu pra 1440px (mesmo padrão do .dcp-dialog); se ainda não couber,
+   .bdm-body/.da-table-wrap rolam na horizontal em vez de cortar. */
+.bdm-dialog-wide table { table-layout: auto; }
+.bdm-dialog-wide tbody td { max-width: none; overflow: visible; text-overflow: clip; }
 
 .bdm-header {
   display: flex;

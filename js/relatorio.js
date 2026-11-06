@@ -4026,7 +4026,11 @@ function _dgrCalcularPeriodo(p, thresholds) {
   const catFisicaPct = _dgVgVariacaoFisicaPercentualPorCategoria(
     _dgVgVariacaoFisicaPorCategoriaSplit(pares), _dgVgVolumeMovimentadoPorCategoria(results));
   const custoTotal     = pares.reduce((s, x) => s + x.custoImplicado, 0);
+  // Saúde de Materiais (pares Central × Material) e de Centrais — as MESMAS
+  // contas dos 2 donuts de Saúde Geral (_dgVgRenderHealthDonuts), pra a
+  // tabela da Evolução bater com o detalhe do mês.
   const scoreInfo      = _dgVgScoreFromCounts(_dgVgCounts(pares));
+  const scoreCenInfo   = _dgVgScoreFromCounts(_dgVgBuildCentralHealthData(pares, thresholds, results).counts);
 
   return {
     id: p.id, rotulo: p.rotulo, titulo: p.titulo, geral: p.geral,
@@ -4035,7 +4039,8 @@ function _dgrCalcularPeriodo(p, thresholds) {
       varTotalFisica, custoTotal,
       estIni: estTotais.totalIni, estFim: estTotais.totalFim,
       compras: movTotais.totalEnt, consumo: movTotais.totalSai,
-      score: scoreInfo.score, level: scoreInfo.level,
+      score: scoreInfo.score, level: scoreInfo.level,            // Materiais
+      scoreCen: scoreCenInfo.score, levelCen: scoreCenInfo.level, // Centrais
       pctVariacao: Math.abs(totalEstTeorico) > 0.0001 ? (varTotalFisica / totalEstTeorico) * 100 : null
     },
     giro: buildGiroPorCentralMaterial(p.dtIni, p.dtFim, results)
@@ -4091,8 +4096,10 @@ function _dgrSwitchPeriodo(btn) {
 //    com o mês ANTERIOR da série (a "Geral" fica de fora — é o agregado do
 //    intervalo, não um ponto no tempo).
 //
-//    Veredito: Saúde subindo e |Variação Física| caindo = melhora; o
-//    inverso = piora; sinais discordantes = misto. Base física, não
+//    Veredito sobre 3 sinais (Hugo, 06/11/2026): Saúde Centrais e Saúde
+//    Materiais (subir é melhor) e |Variação Física| (cair é melhor). Algum
+//    melhorou e nenhum piorou = melhora; o inverso = piora; discordância
+//    (ou nada mudou) = misto. Base física, não
 //    monetária (decisão do Hugo, set/2026 — o custo é derivado da física,
 //    não o contrário). Deliberadamente NÃO é uma nota única ponderada —
 //    inventar um peso entre "saúde" e "física" seria esconder a decisão
@@ -4101,19 +4108,16 @@ function _dgrEvolucaoLinhas(periodos) {
   const serie = periodos.filter(p => !p.geral);
   return serie.map((p, i) => {
     const ant = i > 0 ? serie[i - 1] : null;
-    const dScore  = ant ? p.kpi.score - ant.kpi.score : null;
-    const dFisica = ant ? Math.abs(p.kpi.varTotalFisica) - Math.abs(ant.kpi.varTotalFisica) : null;
+    const dScore    = ant ? p.kpi.score - ant.kpi.score : null;
+    const dScoreCen = ant ? p.kpi.scoreCen - ant.kpi.scoreCen : null;
+    const dFisica   = ant ? Math.abs(p.kpi.varTotalFisica) - Math.abs(ant.kpi.varTotalFisica) : null;
     let veredito = null;
     if (ant) {
-      const melhorSaude  = dScore > 0.0001,  piorSaude  = dScore < -0.0001;
-      const melhorFisica = dFisica < -0.0001, piorFisica = dFisica > 0.0001;
-      if (melhorSaude && !piorFisica) veredito = 'melhora';
-      else if (piorSaude && !melhorFisica) veredito = 'piora';
-      else if (melhorFisica && !piorSaude) veredito = 'melhora';
-      else if (piorFisica && !melhorSaude) veredito = 'piora';
-      else veredito = 'misto';
+      const sinais = [dScoreCen, dScore, -dFisica]; // positivo = melhorou
+      const melhor = sinais.some(s => s > 0.0001), pior = sinais.some(s => s < -0.0001);
+      veredito = melhor && !pior ? 'melhora' : pior && !melhor ? 'piora' : 'misto';
     }
-    return { ...p, dScore, dFisica, veredito };
+    return { ...p, dScore, dScoreCen, dFisica, veredito };
   });
 }
 
@@ -4172,13 +4176,15 @@ function _dgrEvolucaoTabelaHtml(periodos, blocos = DGR_EVO_BLOCOS) {
       <td class="da-num" style="color:#94a3b8">${dgFmtPeso(l.kpi.estFim, 1)}</td>
       <td class="da-num" style="color:${_dgrValCor(l.kpi.varTotalFisica)}">${dgFmtPesoSigned(l.kpi.varTotalFisica, 1)}</td>
       <td class="da-num" style="color:${_dgrValCor(l.kpi.custoTotal)}">${money(l.kpi.custoTotal)}</td>
+      <td class="da-num" style="color:${corNivel[l.kpi.levelCen] || '#94a3b8'};font-weight:700">${l.kpi.scoreCen}%</td>
+      <td class="da-num">${delta(l.dScoreCen, x => Math.abs(x).toFixed(0) + ' p.p.', false)}</td>
       <td class="da-num" style="color:${corNivel[l.kpi.level] || '#94a3b8'};font-weight:700">${l.kpi.score}%</td>
       <td class="da-num">${delta(l.dScore, x => Math.abs(x).toFixed(0) + ' p.p.', false)}</td>
       <td class="da-num">${v
         ? `<span style="color:${v.cor};font-weight:800;font-size:10px;letter-spacing:.05em"><i class="ti ${v.ic}"></i> ${v.txt}</span>`
         : '<span style="color:#64748b;font-size:10px">base</span>'}</td>
     </tr>${card ? `
-    <tr class="dgr-evo-detalhe-row" data-mes="${l.id}" hidden><td colspan="11"><div class="dgr-evo-detalhe-box">${card.html}</div></td></tr>` : ''}`;
+    <tr class="dgr-evo-detalhe-row" data-mes="${l.id}" hidden><td colspan="13"><div class="dgr-evo-detalhe-box">${card.html}</div></td></tr>` : ''}`;
   }).join('');
 
   const html = `<div class="da-table-wrap dgr-evo-wrap">
@@ -4192,16 +4198,19 @@ function _dgrEvolucaoTabelaHtml(periodos, blocos = DGR_EVO_BLOCOS) {
         <th class="da-num">Est. Final (Real)</th>
         <th class="da-num">Variação</th>
         <th class="da-num">Custo da Variação</th>
-        <th class="da-num">Saúde</th>
-        <th class="da-num">Δ Saúde</th>
+        <th class="da-num">Saúde Centrais</th>
+        <th class="da-num">Δ Centrais</th>
+        <th class="da-num">Saúde Materiais</th>
+        <th class="da-num">Δ Materiais</th>
         <th class="da-num">Leitura</th>
       </tr></thead>
       <tbody>${corpo}</tbody>
     </table>
   </div>
   <div class="dgr-evo-nota">
-    Δ compara sempre com o mês anterior da série. "Leitura" combina Saúde (subir é melhor)
-    e Variação Física em módulo (cair é melhor); sinais discordantes aparecem como MISTO.
+    Δ compara sempre com o mês anterior da série. "Leitura" combina três sinais: Saúde Centrais e
+    Saúde Materiais (subir é melhor) e Variação Física em módulo (cair é melhor). MELHORA = algum
+    melhorou e nenhum piorou; PIORA = o inverso; sinais discordantes aparecem como MISTO.
     <i class="ti ti-chevron-right"></i> em cada mês abre a Saúde Geral e a Variação por Regional/Central daquele mês.
   </div>`;
 
@@ -4224,7 +4233,7 @@ function _dgrEvolucaoChartHtml() {
 
 function _dgrScriptEvolucao(periodos) {
   const serie = _dgrEvolucaoLinhas(periodos).map(l => ({
-    rotulo: l.rotulo, fisica: l.kpi.varTotalFisica, custo: l.kpi.custoTotal, score: l.kpi.score
+    rotulo: l.rotulo, fisica: l.kpi.varTotalFisica, custo: l.kpi.custoTotal, score: l.kpi.score, scoreCen: l.kpi.scoreCen
   }));
   return `<script>
 (function() {
@@ -4232,23 +4241,27 @@ function _dgrScriptEvolucao(periodos) {
   if (!cv || typeof Chart === 'undefined') return;
   var SERIE = ${JSON.stringify(serie)};
   function corFisica(v) { return v < -0.0001 ? '#f43f5e' : v > 0.0001 ? '#f59e0b' : '#64748b'; }
-  // Rótulos fixos: Variação Física + Custo (2 linhas) e a Saúde num selo
-  // verde. O rótulo da barra tenta, nesta ordem: além da ponta, dentro junto
+  // As 2 linhas de Saúde (datasets 1 e 2), cada uma com a cor do seu selo.
+  var LINHAS = [{ k: 'scoreCen', label: 'Saúde Centrais', cor: '#38bdf8' },
+                { k: 'score',    label: 'Saúde Materiais', cor: '#10b981' }];
+  // Rótulos fixos: Variação Física + Custo (2 linhas) e cada Saúde num selo
+  // da cor da linha. O rótulo da barra tenta, nesta ordem: além da ponta, dentro junto
   // à ponta, dentro junto à base, do outro lado do zero — o primeiro que
-  // caiba na área do gráfico (sem invadir legenda/meses) e não cubra o ponto
-  // da Saúde do mesmo mês. O selo vai acima do ponto, ou abaixo se acima
-  // cruzar o rótulo da barra ou sair da área do gráfico.
+  // caiba na área do gráfico (sem invadir legenda/meses) e não cubra os pontos
+  // de Saúde do mesmo mês. Cada selo vai acima do ponto, ou abaixo se acima
+  // cruzar o rótulo da barra, o outro selo ou sair da área do gráfico.
   var rotulos = {
     id: 'dgrEvoRotulos',
     afterDatasetsDraw: function(chart) {
       var ctx = chart.ctx, t = _dgVgTheme(), area = chart.chartArea, H = 26;
-      var barras = chart.getDatasetMeta(0), linha = chart.getDatasetMeta(1);
+      var barras = chart.getDatasetMeta(0);
+      var metas = LINHAS.map(function(L, j) { return chart.getDatasetMeta(j + 1); });
       ctx.save();
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
       barras.data.forEach(function(bar, i) {
         var p = SERIE[i], caixa = null;
-        var pt = linha.hidden ? null : linha.data[i];
+        var pts = metas.map(function(m) { return m.hidden ? null : m.data[i]; });
         if (!barras.hidden) {
           var neg = p.fisica < 0, cabeDentro = Math.abs(bar.base - bar.y) >= H + 12;
           var cands = [
@@ -4258,7 +4271,7 @@ function _dgrScriptEvolucao(periodos) {
             { y: neg ? bar.base - 6 - H : bar.base + 6, dentro: false, ok: true }
           ].filter(function(c) { return c.ok && c.y >= area.top && c.y + H <= area.bottom; });
           // folga de 26px = ponto + selo (16px + 8 de afastamento), de qualquer lado
-          var c = cands.filter(function(c) { return !pt || pt.y < c.y - 26 || pt.y > c.y + H + 26; })[0]
+          var c = cands.filter(function(c) { return pts.every(function(pt) { return !pt || pt.y < c.y - 26 || pt.y > c.y + H + 26; }); })[0]
                || cands[0] || { y: neg ? bar.y + 6 : bar.y - 6 - H, dentro: false };
           ctx.font = "700 11px 'DM Mono', monospace";
           ctx.fillStyle = c.dentro ? '#fff' : corFisica(p.fisica);
@@ -4268,19 +4281,27 @@ function _dgrScriptEvolucao(periodos) {
           ctx.fillText(money(p.custo), bar.x, c.y + 13);
           caixa = [c.y, c.y + H];
         }
-        if (!pt || p.score == null) return;
-        var txt = p.score + '%';
-        ctx.font = "700 10px 'DM Mono', monospace";
-        var w = ctx.measureText(txt).width + 10, h = 16;
-        var acima = pt.y - 8 - h, abaixo = pt.y + 8;
-        var bateAcima = acima < area.top || (caixa && acima < caixa[1] && acima + h > caixa[0]);
-        var yS = bateAcima && abaixo + h <= area.bottom ? abaixo : acima;
-        ctx.fillStyle = '#10b981';
-        ctx.beginPath();
-        if (ctx.roundRect) ctx.roundRect(pt.x - w / 2, yS, w, h, 4); else ctx.rect(pt.x - w / 2, yS, w, h);
-        ctx.fill();
-        ctx.fillStyle = '#fff';
-        ctx.fillText(txt, pt.x, yS + 3);
+        var ocupado = caixa ? [caixa] : [];
+        LINHAS.forEach(function(L, j) {
+          var pt = pts[j], v = p[L.k];
+          if (!pt || v == null) return;
+          var txt = v + '%';
+          ctx.font = "700 10px 'DM Mono', monospace";
+          var w = ctx.measureText(txt).width + 10, h = 16;
+          var bate = function(y) {
+            return y < area.top || y + h > area.bottom
+              || ocupado.some(function(o) { return y < o[1] && y + h > o[0]; });
+          };
+          var acima = pt.y - 8 - h, abaixo = pt.y + 8;
+          var yS = !bate(acima) ? acima : !bate(abaixo) ? abaixo : acima;
+          ocupado.push([yS, yS + h]);
+          ctx.fillStyle = L.cor;
+          ctx.beginPath();
+          if (ctx.roundRect) ctx.roundRect(pt.x - w / 2, yS, w, h, 4); else ctx.rect(pt.x - w / 2, yS, w, h);
+          ctx.fill();
+          ctx.fillStyle = '#fff';
+          ctx.fillText(txt, pt.x, yS + 3);
+        });
       });
       ctx.restore();
     }
@@ -4297,12 +4318,13 @@ function _dgrScriptEvolucao(periodos) {
           { type: 'bar', label: 'Variação Física', yAxisID: 'y',
             data: SERIE.map(function(p) { return p.fisica; }),
             backgroundColor: SERIE.map(function(p) { return corFisica(p.fisica); }),
-            borderRadius: 3, order: 2 },
-          { type: 'line', label: 'Saúde', yAxisID: 'y2',
-            data: SERIE.map(function(p) { return p.score; }),
-            borderColor: '#10b981', backgroundColor: '#10b981',
-            borderWidth: 2, pointRadius: 4, tension: .3, order: 1 }
-        ]
+            borderRadius: 3, order: 2 }
+        ].concat(LINHAS.map(function(L) {
+          return { type: 'line', label: L.label, yAxisID: 'y2',
+            data: SERIE.map(function(p) { return p[L.k]; }),
+            borderColor: L.cor, backgroundColor: L.cor,
+            borderWidth: 2, pointRadius: 4, tension: .3, order: 1 };
+        }))
       },
       options: {
         responsive: true, maintainAspectRatio: false,
