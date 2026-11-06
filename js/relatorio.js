@@ -5655,11 +5655,13 @@ window.gerarRelatorioGerencialDashboard = async function(tema = 'dark', selecao 
                            color:var(--dgr-text-dim, #94a3b8); background:var(--dgr-card-bg, rgba(255,255,255,.03));
                            border:1px solid var(--dgr-card-border, rgba(255,255,255,.09));
                            border-radius:8px; padding:9px 12px; margin-bottom:6px; }
-      /* 11 colunas com nowrap não cabem em 100% — foi por isso que isto já
-         foi width:auto, empurrando a rolagem horizontal pro .da-table-wrap.
-         Quebrar linha é melhor que rolar: em 100% o cabeçalho quebra em duas
-         linhas e o " TON"/"R$" desce só quando falta espaço (acima de ~950px
-         de largura nada quebra, a tabela fica igual à de antes). */
+      /* Valores NUNCA quebram (Hugo, 06/11/2026 — "+284.491,6 / TON" em
+         duas linhas): td nowrap + table-layout:auto (o "table {
+         table-layout:fixed }" genérico dava a mesma largura a toda coluna),
+         então cada coluna fica com a largura do próprio valor — só o
+         suficiente. Quem ainda quebra é o CABEÇALHO, que cede espaço. Nas
+         13 colunas isto cabe na largura da página; tela estreita demais rola
+         no .da-table-wrap em vez de quebrar valor. */
       /* Indicadores mês a mês: fundo de card + cores dos valores por tema
          (Hugo, 06/11/2026 — apagados, principalmente no tema claro). Os
          hex da linha passam por _dgrCorTema; aqui só os que mudam. */
@@ -5672,9 +5674,9 @@ window.gerarRelatorioGerencialDashboard = async function(tema = 'dark', selecao 
         --dgr-c-10b981:#047857; --dgr-c-f43f5e:#be123c;
         --dgr-c-f59e0b:#b45309; --dgr-c-f97316:#c2410c;
       }
-      .dgr-evo-tabela { width:100%; }
+      .dgr-evo-tabela { width:100%; table-layout:auto; }
       .dgr-evo-tabela th, .dgr-evo-tabela td {
-        white-space:normal; max-width:none; overflow:visible; text-overflow:clip;
+        white-space:nowrap; max-width:none; overflow:visible; text-overflow:clip;
         padding-left:6px; padding-right:6px;
       }
       .dgr-evo-tabela thead th { white-space:normal; font-size:10px; letter-spacing:.04em; }
@@ -5686,7 +5688,7 @@ window.gerarRelatorioGerencialDashboard = async function(tema = 'dark', selecao 
                              color:var(--dgr-text-dim, #94a3b8); vertical-align:middle; line-height:1; }
       .dgr-evo-expand-btn i { display:inline-block; transition:transform .15s; }
       .dgr-evo-expand-btn.dgr-evo-expand-open i { transform:rotate(90deg); }
-      .dgr-evo-tabela .dgr-evo-detalhe-row td { padding:0; background:var(--dgr-card-bg, rgba(255,255,255,.02)); }
+      .dgr-evo-tabela .dgr-evo-detalhe-row td { padding:0; white-space:normal; background:var(--dgr-card-bg, rgba(255,255,255,.02)); }
       /* A tabela é larga (11 colunas nowrap) e rola dentro do .da-table-wrap;
          o detalhe do mês NÃO deve herdar essa largura. 100cqw = largura
          visível do wrapper (container query), e sticky prende o bloco na
