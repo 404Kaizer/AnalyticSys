@@ -551,7 +551,13 @@ function rodarAnalitico(iniOverride, fimOverride, onDone) {
     { id: 'an-saude',    icon: 'ti-heartbeat',           label: 'Calculando saúde e criticidade' },
     { id: 'an-render',   icon: 'ti-layout',              label: 'Renderizando resultados' },
   ]);
-  requestAnimationFrame(() => setTimeout(() => _rodarAnaliticoCore(dtIni, dtFim, onDone), 0));
+  // O Mural de Operações (aba Operações) atualiza junto com o Atualizar do
+  // Dashboard — depois da análise, para não disputar o processamento com ela.
+  const _aposAnalise = (res) => {
+    if (typeof muralAtualizar === 'function') muralAtualizar();
+    if (typeof onDone === 'function') onDone(res);
+  };
+  requestAnimationFrame(() => setTimeout(() => _rodarAnaliticoCore(dtIni, dtFim, _aposAnalise), 0));
 }
 
 // silent (opcional): quando true, suprime toast de "sem dados" e NÃO
