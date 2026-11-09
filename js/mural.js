@@ -1193,8 +1193,7 @@ document.addEventListener('click', e => {
 });
 
 // ── Três visões (como na Micro): por Regional, por Central, por Material ──
-// Grupos ordenados pela maior prioridade de dentro: o grupo mais urgente
-// vem primeiro, e os itens seguem a ordenação escolhida. Abertos por
+// Grupos e itens seguem a ordenação escolhida (ver _muralAgrupar). Abertos por
 // padrão: os 3 primeiros grupos (e, na visão Regional, as 2 primeiras
 // centrais de cada regional aberta); o resto fica recolhido.
 function _muralResumoGrupo(its) {
@@ -1210,10 +1209,18 @@ function _muralResumoGrupo(its) {
     <span class="mo-grp-num mo-hint">${_moRs(rLiq)}</span>`;
 }
 
+// A ordem dos GRUPOS segue a ordenação escolhida (Hugo, 09/11/2026):
+// prioridade = a maior de dentro; variação = |líquida do grupo| (o número da
+// linha); sem explicação = soma do que está sem explicação.
 function _muralAgrupar(its, chave) {
   const m = new Map();
   its.forEach(i => { const k = chave(i); if (!m.has(k)) m.set(k, []); m.get(k).push(i); });
-  return [...m].sort((a, b) => Math.max(...b[1].map(i => i.prioridade)) - Math.max(...a[1].map(i => i.prioridade)));
+  const peso = {
+    prio:     g => Math.max(...g.map(i => i.prioridade)),
+    kg:       g => Math.abs(g.reduce((s, i) => s + i.v, 0)),
+    residual: g => g.reduce((s, i) => s + _moKgResidual(i), 0)
+  }[_mo.ordem] || (g => Math.max(...g.map(i => i.prioridade)));
+  return [...m].sort((a, b) => peso(b[1]) - peso(a[1]));
 }
 
 function _muralGrupoAberto(key, padrao) { return _mo.abertos.has(key) ? _mo.abertos.get(key) : padrao; }
