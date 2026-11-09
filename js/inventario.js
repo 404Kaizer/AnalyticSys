@@ -2568,6 +2568,18 @@
     const _escape    = h ? h.escapeHtml : (s) => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     const vkCls    = _varClass(row.varKg);
     const cstSapCls = _varClass(row.custoSap);
+    // Justificativa operacional vazia: sugere o que o analista já registrou
+    // no mês (comentários com causa e ocorrências do Mural de Operações),
+    // para o fechamento receber o tratamento pronto. Só sugere — nada é
+    // salvo até o analista salvar o modal.
+    let _prefOp = '';
+    if (!j.op && typeof _varComDe === 'function') {
+      const [mesKey, central, mat] = String(k).split('|||');
+      _prefOp = _varComDe(central, mat)
+        .filter(c => String(c.data || '').startsWith(mesKey))
+        .map(c => `${String(c.data).split('-').reverse().slice(0, 2).join('/')} · ${c.oc_id ? `Ocorrência ${c.oc_numero || c.oc_id} aberta` : c.texto}`)
+        .join('\n');
+    }
 
     const temFila   = _invNavQueue.length > 1;
     const podeAnt   = _invNavIdx > 0;
@@ -2621,8 +2633,8 @@
             </div>
           </div>
           <div class="oc-form-group">
-            <label class="oc-label">Justificativa Operacional <span class="oc-hint">opcional</span></label>
-            <textarea id="inv-j-op" class="oc-input oc-textarea" rows="2" placeholder="Ex: falha no medidor da brita, perda por chuva...">${_escape(j.op||'')}</textarea>
+            <label class="oc-label">Justificativa Operacional <span class="oc-hint">${_prefOp ? 'sugerida a partir dos comentários do mês — revise antes de salvar' : 'opcional'}</span></label>
+            <textarea id="inv-j-op" class="oc-input oc-textarea" rows="${_prefOp ? 4 : 2}" placeholder="Ex: falha no medidor da brita, perda por chuva...">${_escape(j.op || _prefOp)}</textarea>
           </div>
           <div class="oc-form-group">
             <label class="oc-label">Justificativa Fiscal <span class="oc-hint">opcional — para inspeção</span></label>

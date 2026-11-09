@@ -61,6 +61,7 @@ function muralPontos(rows) {
 
 // Formato da série acumulada (valores na ordem dos lançamentos).
 //   deriva  → cresce a cada lançamento    degrau → saltou uma vez e ficou
+//   herdada → já existia no 1º lançamento da janela (o salto é o inicial)
 //   serrote → oscila e volta (ruído)      irregular → nenhum dos anteriores
 //   erro    → lançamento fisicamente impossível (capacidade)
 //   poucos  → menos de 3 lançamentos na janela
@@ -84,7 +85,14 @@ function muralFormato(valores, catKey, thresholds, { capErro = false } = {}) {
     return { formato: 'serrote', piorando: false };
   }
   const maiorPior = Math.max(0, ...piores.map(d => Math.abs(d)));
-  if (maiorPior >= MURAL_REGRAS.degrauFracao * Math.abs(vn)) return { formato: 'degrau', piorando: ult3 };
+  if (maiorPior >= MURAL_REGRAS.degrauFracao * Math.abs(vn)) {
+    // O maior salto é o INICIAL (de zero ao 1º lançamento): a diferença já
+    // existia antes da janela — não houve evento dentro dela. Continua na
+    // fila (tudo acima do limite é tratado antes do fechamento); muda só
+    // onde investigar.
+    const herdada = passos[0] * s > 0 && Math.abs(passos[0]) >= maiorPior;
+    return { formato: herdada ? 'herdada' : 'degrau', piorando: ult3 };
+  }
   if (piores.length >= MURAL_REGRAS.derivaFracao * passos.length && ult3) return { formato: 'deriva', piorando: true };
   return { formato: 'irregular', piorando: ult3 };
 }
@@ -127,7 +135,12 @@ function muralAvaliarPar({ central, mat, catKey, categoria, janela, lancsJan, sa
   const ult = pontos[pontos.length - 1];
   const v   = ult.v;
   const nivel = classifyVariation(Math.abs(v), catKey, thresholds);
-  if (nivel === 'bom') return { bom: true };
+  // Na faixa: vai para a aba "Na faixa" do Mural, em formato compacto
+  // [central, material, variação, regional, último lançamento].
+  if (nivel === 'bom') {
+    const fil = getFilialLookupIndex().exact.get(normalizeText(central));
+    return { bom: true, faixa: [central, mat, _r1(v), (fil?.regional || '').trim() || '—', ult.dt] };
+  }
 
   // Cascata até o último lançamento — fecha com v por construção da série.
   const dtUlt  = parseDate(ult.dt);
@@ -236,14 +249,21 @@ async function muralCalcular(categorias) {
   await yieldToUI();
 
   const porCategoria = {};
-  [...alvo].forEach(c => { porCategoria[c] = { itens: [], pontosCegos: { semAncora: [], semLancamento: [] } }; });
+  [...alvo].forEach(c => { porCategoria[c] = { itens: [], faixa: [], pontosCegos: { semAncora: [], semLancamento: [] }, lancDesde: null }; });
   let n = 0;
   for (const p of pares.values()) {
     if (!p.categoria || !alvo.has(p.categoria) || !p.catKey) continue;
+    // Primeiro lançamento da janela na base do dono: se começa tarde, a
+    // parte "herdada" mistura diferença antiga com o período sem lançamento.
+    p.lancs.forEach(l => {
+      const d = parseDate(l.dtLanc);
+      if (d && (!porCategoria[p.categoria].lancDesde || d < porCategoria[p.categoria].lancDesde)) porCategoria[p.categoria].lancDesde = d;
+    });
     const res = muralAvaliarPar({ central: p.central, mat: p.mat, catKey: p.catKey, categoria: p.categoria,
       janela, lancsJan: p.lancs, sapJan: p.sap, thresholds, ctx });
     const dest = porCategoria[p.categoria];
     if (res.item) dest.itens.push(res.item);
+    else if (res.faixa) dest.faixa.push(res.faixa);
     else if (res.pontoCego) dest.pontosCegos[res.pontoCego].push(`${p.central} · ${p.mat}`);
     if (++n % 25 === 0) await yieldToUI();
   }
@@ -305,10 +325,12 @@ async function muralPublicar({ forcar = false } = {}) {
   const calc = await muralCalcular(cats);
   const dia  = localISODate(new Date());
   for (const categoria of Object.keys(calc.porCategoria)) {
-    const { itens, pontosCegos } = calc.porCategoria[categoria];
+    const { itens, faixa, pontosCegos, lancDesde } = calc.porCategoria[categoria];
     const payload = {
-      versao: 1, janela: calc.janela, base: calc.base,
+      versao: 1, janela: calc.janela,
+      base: { ...calc.base, lancamentosDesde: lancDesde ? fmtPtDate(lancDesde) : null },
       itens,
+      faixa, // [central, material, variação, regional, último lançamento]
       pontosCegos: {
         semAncora:     { total: pontosCegos.semAncora.length,     exemplos: pontosCegos.semAncora.slice(0, 30) },
         semLancamento: { total: pontosCegos.semLancamento.length, exemplos: pontosCegos.semLancamento.slice(0, 30) },
@@ -360,7 +382,9 @@ function muralAgendarPublicacao() {
 
 const MURAL_PRAZO = { critico: 2, urgente: 5, atencao: 10 };
 const MURAL_GRAV  = { critico: 6, urgente: 3, atencao: 1, bom: 0 };
-const MURAL_TEND  = { deriva: 1.5, degrau: 1, serrote: 0.4, irregular: 1, poucos: 1, erro: 1.3 };
+// Tendência pesa a ORDEM da fila, não tira ninguém dela: tudo acima do limite
+// é tratado antes do fechamento (Hugo, 09/11/2026) — Serrote inclusive.
+const MURAL_TEND  = { deriva: 1.5, degrau: 1, herdada: 1, serrote: 0.4, irregular: 1, poucos: 1, erro: 1.3 };
 // Impacto na prioridade: o financeiro pesa mais (equilibra as categorias —
 // 1 kg de aditivo vale muito mais que 1 kg de areia), o físico entra junto
 // (Hugo, 09/11/2026). Financeiro = log10(R$); físico = log2(1 + vezes o
@@ -372,22 +396,32 @@ const MURAL_NIVEL = {
   atencao: { label: 'ATENÇÃO', cor: 'var(--amber)',   icon: 'ti-alert-triangle' }
 };
 const MURAL_FORMATO_LABEL = {
-  deriva: 'Deriva', degrau: 'Degrau', serrote: 'Serrote', irregular: 'Irregular',
+  deriva: 'Deriva', degrau: 'Degrau', herdada: 'Herdada', serrote: 'Serrote', irregular: 'Irregular',
   poucos: 'Poucos lançamentos', erro: 'Provável erro de lançamento'
 };
 const MURAL_FORMATO_DESC = {
-  deriva: 'cresce a cada lançamento', degrau: 'saltou uma vez e ficou', serrote: 'oscila e volta (ruído provável)',
+  deriva: 'cresce a cada lançamento', degrau: 'saltou uma vez dentro da janela e ficou',
+  herdada: 'já existia no 1º lançamento da janela: veja o fechamento anterior e o que foi pedido à central',
+  serrote: 'oscila e volta: confira cubagem e horário do lançamento',
   irregular: 'sobe e desce sem padrão', poucos: 'menos de 3 lançamentos na janela', erro: 'lançamento acima da capacidade física'
 };
 const MURAL_STATUS = {
   novo:        { label: 'Novo',              cor: 'var(--accent)' },
   semAcao:     { label: 'Sem ação',          cor: 'var(--urgente)' },
   tratamento:  { label: 'Em tratamento',     cor: 'var(--purple)' },
-  escalonado:  { label: 'Escalonado ao ADM', cor: 'var(--red)' },
-  monitorando: { label: 'Monitorando',       cor: 'var(--text3)' }
+  escalonado:  { label: 'Escalonado ao ADM', cor: 'var(--red)' }
 };
 
-const _mo = { carregado: false, carregando: false, erro: null, fotos: [], donos: [], filtro: 'todos', ordem: 'prio', ids: null, idsLabel: '', auditoria: null };
+// Prazo final de tudo: o fechamento (último dia útil do mês). Passado o do
+// mês corrente, vale o do próximo.
+function _muralFechamento(hoje) {
+  const ult = (a, m) => { const d = new Date(a, m + 1, 0); while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() - 1); d.setHours(0, 0, 0, 0); return d; };
+  const f = ult(hoje.getFullYear(), hoje.getMonth());
+  return hoje > f ? ult(hoje.getFullYear(), hoje.getMonth() + 1) : f;
+}
+
+const _mo = { carregado: false, carregando: false, erro: null, fotos: [], donos: [], avocacoes: [], avocDisponivel: false,
+  filtro: 'todos', ordem: 'prio', ids: null, idsLabel: '', auditoria: null, aba: 'fila' };
 
 const _moDia = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
 const _moDiasEntre = (a, b) => Math.round((_moDia(b) - _moDia(a)) / 86400000);
@@ -442,19 +476,66 @@ async function _muralCarregarDonos() {
   return data || [];
 }
 
+// Avocações ativas (o ADM assumiu o item no lugar do dono). Se a tabela
+// ainda não existir no banco, o recurso fica oculto — o resto do Mural
+// segue funcionando.
+async function _muralCarregarAvocacoes() {
+  const { data, error } = await window.supabaseClient.from('mural_avocacoes')
+    .select('id, central, material, categoria, motivo, obs, avocado_em').is('devolvido_em', null);
+  if (error) { _mo.avocDisponivel = false; return []; }
+  _mo.avocDisponivel = true;
+  return data || [];
+}
+
 async function muralRecarregar() {
   if (_mo.carregando || !window.supabaseClient) return;
   _mo.carregando = true; _mo.erro = null;
   muralRender();
   try {
-    const [fotos, donos] = await Promise.all([_muralCarregarFotos(), _muralCarregarDonos()]);
-    _mo.fotos = fotos; _mo.donos = donos; _mo.carregado = true;
+    const [fotos, donos, avocacoes] = await Promise.all([_muralCarregarFotos(), _muralCarregarDonos(), _muralCarregarAvocacoes()]);
+    _mo.fotos = fotos; _mo.donos = donos; _mo.avocacoes = avocacoes; _mo.carregado = true;
+    _muralAvisos();
   } catch (err) {
     _mo.erro = err.message || String(err);
   } finally {
     _mo.carregando = false;
     muralRender();
   }
+}
+
+// ── Avisos no sino ─────────────────────────────────────────────────────────
+// Só o que pede ação e só quando o quadro muda (o id leva o dia e a
+// contagem — ver notifSyncMural). O analista recebe os da própria fila
+// (a RLS já só entrega as fotos dele); o ADM, os de todos + foto atrasada.
+function _muralAvisos() {
+  if (typeof notifSyncMural !== 'function') return;
+  const itens = muralItensDerivados();
+  const hoje = _moDia(new Date()), dia = localISODate(hoje);
+  const av = [];
+  const add = (chave, n, level, title, body, filtro) => { if (n) av.push({ id: `mural-${chave}-${dia}-${n}`, level, title, body, filtro }); };
+  const plural = (n, s, p) => `${n} ${n === 1 ? s : p}`;
+  const esc = itens.filter(i => i.status === 'escalonado');
+  add('escalonados', esc.length, 'critico', `Mural: ${plural(esc.length, 'item escalonado', 'itens escalonados')} ao ADM`,
+    'Prazo vencido sem ocorrência, ou ocorrência aberta com a variação ainda crescendo.', 'vencido');
+  const vence = itens.filter(i => !i.temOc && !i.vencido && _moDiasEntre(hoje, i.limite) <= 1);
+  add('vence', vence.length, 'atencao', `Mural: ${plural(vence.length, 'prazo vence', 'prazos vencem')} até amanhã`,
+    'Comente a causa ou abra a ocorrência para não escalonar.', 'semtrat');
+  const novosCrit = itens.filter(i => i.novo && i.nivel === 'critico');
+  add('novos', novosCrit.length, 'atencao', `Mural: ${plural(novosCrit.length, 'novo item crítico', 'novos itens críticos')}`,
+    'Entraram na fila desde a foto anterior.', null);
+  const fech = _muralFechamento(hoje), dFech = _moDiasEntre(hoje, fech);
+  const semTrat = itens.filter(i => i.semTratamento).length;
+  if (dFech <= 5) add('fechamento', semTrat, 'critico', `Fechamento em ${dFech} dia${dFech === 1 ? '' : 's'}: ${plural(semTrat, 'item sem tratamento', 'itens sem tratamento')}`,
+    'Tudo acima do limite precisa ter a causa comentada ou ocorrência aberta antes do fechamento.', 'semtrat');
+  const avoc = itens.filter(i => i.avocado);
+  if (!_moEhAdm()) add('avocados', avoc.length, 'atencao', `Mural: ${plural(avoc.length, 'item seu foi avocado', 'itens seus foram avocados')} pelo ADM`,
+    avoc.map(i => `${i.material} · ${i.central}: ${i.avocado.motivo}`).slice(0, 3).join('; '), 'avocados');
+  if (_moEhAdm()) {
+    const atrasadas = _mo.donos.filter(d => { const f = _mo.fotos.find(x => x.categoria === d.categoria); return !f || _moDiasEntre(_moIsoParaData(f.atual.dia), hoje) > 1; });
+    add('fotos', atrasadas.length, 'atencao', `Mural: ${plural(atrasadas.length, 'categoria sem foto recente', 'categorias sem foto recente')}`,
+      atrasadas.map(d => d.categoria).join(', ') + ' — a fila dessa(s) categoria(s) pode estar desatualizada.', null);
+  }
+  notifSyncMural(av);
 }
 
 // ── Itens com o estado de ação derivado ───────────────────────────────────
@@ -472,16 +553,18 @@ function _muralAcoes(central, material, desde) {
     .map(r => ({ ...r, quando: r.created_at ? new Date(r.created_at) : _moIsoParaData(r.data) }))
     .filter(r => r.quando && _moDia(r.quando) >= desde);
   const comentarios = coms.filter(r => !r.oc_id).map(r => r.quando).sort((a, b) => a - b);
+  const ultCom = coms.filter(r => !r.oc_id).sort((a, b) => b.quando - a.quando)[0];
+  const causa = ultCom && typeof varComCausaDe === 'function' ? varComCausaDe(ultCom.texto) : null;
   const ocs = (Array.isArray(state.ocorrencias) ? state.ocorrencias : [])
     .filter(o => o.central === central && o.material === material && !o.concluida
               && _moIsoParaData(o.dataAbertura) && _moIsoParaData(o.dataAbertura) >= desde)
-    .map(o => ({ numero: o.numero || o.id, quando: _moIsoParaData(o.dataAbertura) }));
+    .map(o => ({ numero: o.numero || o.id, quando: _moIsoParaData(o.dataAbertura), limite: _moIsoParaData(o.dataLimite) }));
   coms.filter(r => r.oc_id).forEach(r => {
     const num = r.oc_numero || r.oc_id;
     if (!ocs.some(o => o.numero === num)) ocs.push({ numero: num, quando: r.quando });
   });
   ocs.sort((a, b) => a.quando - b.quando);
-  return { comentarios, ocs };
+  return { comentarios, ocs, causa };
 }
 
 function _muralValorEm(pontos, data) {
@@ -493,6 +576,7 @@ function _muralValorEm(pontos, data) {
 function muralItensDerivados() {
   const hoje = _moDia(new Date());
   const thresholds = getHealthThresholds();
+  const fechamento = _muralFechamento(hoje);
   const itens = [];
   _mo.fotos.forEach(f => {
     const p = f.atual.payload || {};
@@ -501,17 +585,25 @@ function muralItensDerivados() {
     const dono = _muralDonoDe(f.categoria);
     (p.itens || []).forEach(it => {
       const entrada = it.entrada && !it.entrada.desdeInicio ? (parseDate(it.entrada.dt) || janelaIni) : janelaIni;
-      const { comentarios, ocs } = _muralAcoes(it.central, it.material, entrada);
+      const { comentarios, ocs, causa } = _muralAcoes(it.central, it.material, entrada);
       const prazoDias = MURAL_PRAZO[it.nivel] || 10;
       // Comentário renova o prazo uma vez (conta só o primeiro); Crítico só
       // sai com ocorrência.
       const base = (it.nivel !== 'critico' && comentarios.length) ? comentarios[0] : entrada;
-      const limite = _moDia(base); limite.setDate(limite.getDate() + prazoDias);
+      let limite = _moDia(base); limite.setDate(limite.getDate() + prazoDias);
+      // Nunca depois do fechamento: tudo acima do limite é tratado antes dele.
+      const limitadoPeloFechamento = limite > fechamento;
+      if (limitadoPeloFechamento) limite = new Date(fechamento);
       const temOc = ocs.length > 0;
+      const semTratamento = !temOc && !comentarios.length;
       const ultAcao = [...comentarios, ...ocs.map(o => o.quando)].sort((a, b) => b - a)[0] || null;
       const diasSemAcao = Math.max(0, _moDiasEntre(ultAcao || entrada, hoje));
-      const monitorando = it.formato === 'serrote';
-      const vencido = !monitorando && !temOc && hoje > limite;
+      const vencido = !temOc && hoje > limite;
+      // Herdada × nova: o que já existia no 1º lançamento da janela e o que
+      // mudou dentro dela. Só tem sentido quando o 1º ponto vai no mesmo
+      // sentido da variação atual.
+      const p0 = (it.pontos && it.pontos.length) ? it.pontos[0][1] : 0;
+      const herdadaKg = (it.pontos?.length > 1 && Math.sign(p0) === Math.sign(it.v)) ? p0 : 0;
       let ocCrescendo = false;
       if (temOc) {
         const vAbertura = _muralValorEm(it.pontos || [], ocs[0].quando);
@@ -535,9 +627,11 @@ function muralItensDerivados() {
         ['Prazo vencido', vencido ? 3 : 0],
         ['Ocorrência aberta e variação crescendo', ocCrescendo ? 2 : 0]
       ];
-      const status = monitorando ? 'monitorando' : (vencido || ocCrescendo) ? 'escalonado' : temOc ? 'tratamento' : novo ? 'novo' : 'semAcao';
-      itens.push({ ...it, categoriaFoto: f.categoria, dono, entrada, limite, temOc, ocs, comentarios, diasSemAcao,
-        vencido, ocCrescendo, monitorando, novo, piorou, residual,
+      const status = (vencido || ocCrescendo) ? 'escalonado' : temOc ? 'tratamento' : novo ? 'novo' : 'semAcao';
+      const avocado = _mo.avocacoes.find(a => a.central === it.central && a.material === it.material) || null;
+      itens.push({ ...it, categoriaFoto: f.categoria, dono, avocado, causa, entrada, limite, limitadoPeloFechamento, fechamento,
+        temOc, semTratamento, ocs, comentarios, diasSemAcao, vencido, ocCrescendo, novo, piorou, residual,
+        herdadaKg, novaKg: it.v - herdadaKg,
         prioridade: partes.reduce((s, x) => s + x[1], 0), partes, status });
     });
   });
@@ -559,12 +653,30 @@ function _muralSpark(pontos, cor) {
 }
 
 function _muralPrazoHtml(it) {
-  if (it.monitorando) return '<span class="mo-meta"><i class="ti ti-info-circle"></i> sem prazo: ruído provável</span>';
-  if (it.temOc) return `<span class="mo-meta"><i class="ti ti-file-alert"></i> ocorrência aberta${it.ocCrescendo ? ' · <b class="mo-red">variação crescendo desde a abertura</b>' : ''}</span>`;
+  if (it.temOc) {
+    // A ocorrência é o pedido à central: se não for concluída, o item vai
+    // para o fechamento como "solicitação não concluída".
+    const lim = it.ocs.map(o => o.limite).filter(Boolean).sort((a, b) => a - b)[0];
+    const d = lim ? _moDiasEntre(new Date(), lim) : null;
+    const prazoOc = d == null ? '' : d < 0
+      ? ` · <b class="mo-red">prazo da central vencido há ${-d} dia${d < -1 ? 's' : ''}</b>`
+      : ` · central tem até ${fmtPtDate(lim).slice(0, 5)}${lim > it.fechamento ? ' <b class="mo-red">(depois do fechamento)</b>' : ''}`;
+    return `<span class="mo-meta"><i class="ti ti-file-alert"></i> ocorrência aberta${prazoOc}${it.ocCrescendo ? ' · <b class="mo-red">variação crescendo desde a abertura</b>' : ''}</span>`;
+  }
   const d = _moDiasEntre(new Date(), it.limite);
   const crit = it.nivel === 'critico';
-  if (d < 0) return `<span class="mo-meta mo-red"><i class="ti ti-clock-exclamation"></i> prazo vencido há ${-d} dia${d < -1 ? 's' : ''}${crit ? ' · Crítico exige ocorrência' : ''}</span>`;
-  return `<span class="mo-meta"><i class="ti ti-clock"></i> ${d === 0 ? 'prazo vence hoje' : `${d} dia${d > 1 ? 's' : ''} para agir`}${crit ? ' · exige ocorrência' : ''}</span>`;
+  const fech = it.limitadoPeloFechamento ? ` (fechamento ${fmtPtDate(it.fechamento).slice(0, 5)})` : '';
+  if (d < 0) return `<span class="mo-meta mo-red"><i class="ti ti-clock-exclamation"></i> prazo vencido há ${-d} dia${d < -1 ? 's' : ''}${fech}${crit ? ' · Crítico exige ocorrência' : ''}</span>`;
+  return `<span class="mo-meta${it.limitadoPeloFechamento ? ' mo-red' : ''}"><i class="ti ti-clock"></i> ${d === 0 ? 'prazo vence hoje' : `${d} dia${d > 1 ? 's' : ''} para agir`}${fech}${crit ? ' · exige ocorrência' : ''}</span>`;
+}
+
+// Onde procurar: o que já existia no 1º lançamento da janela (fechamento
+// anterior, pedido à central não concluído) × o que mudou dentro dela.
+// Só aparece quando a parte herdada pesa (≥ 30% da variação).
+function _muralHerdadaHtml(it) {
+  if (!it.herdadaKg || Math.abs(it.herdadaKg) < 0.3 * Math.abs(it.v)) return '';
+  const desde = it.pontos?.[0]?.[0]?.slice(0, 5) || '';
+  return `<div class="mo-ex-text"><b class="mo-herd">${_moKg(it.herdadaKg)}</b> já no 1º lançamento (${_moEsc(desde)}) · <b>${_moKg(it.novaKg)}</b> novos na janela</div>`;
 }
 
 function _muralItemHtml(it) {
@@ -573,9 +685,11 @@ function _muralItemHtml(it) {
   const chips = [];
   if (it.piorando) chips.push(['hot', 'ti-trending-up', 'piorando']);
   if ((it.meses || 1) > 1) chips.push(['hot', 'ti-history', `${it.meses}º mês seguido`]);
-  if (!it.temOc && !it.monitorando && it.diasSemAcao > 0) chips.push(['warn', 'ti-clock', `sem ação há ${it.diasSemAcao} dia${it.diasSemAcao > 1 ? 's' : ''}`]);
+  if (!it.temOc && it.diasSemAcao > 0) chips.push(['warn', 'ti-clock', `sem ação há ${it.diasSemAcao} dia${it.diasSemAcao > 1 ? 's' : ''}`]);
   if (it.capErro) chips.push(['warn', 'ti-alert-hexagon', 'acima da capacidade física']);
   if (it.ocs.length) chips.push(['', 'ti-file-alert', it.ocs.map(o => o.numero).join(', ')]);
+  if (it.avocado) chips.push(['adm', 'ti-shield-check', `avocado pelo ADM: ${it.avocado.motivo}`]);
+  if (it.causa) chips.push(['adm', 'ti-message-check', `causa: ${it.causa}`]);
   const pe = Math.min(100, Math.abs(it.explicadoKg || 0) / (Math.abs(it.v) || 1) * 100);
   const explic = (it.explic || []).length
     ? `<b class="mo-teal">${_moKg(it.explicadoKg)}</b> explicados · <b>${_moKg(it.residual)}</b> sem explicação`
@@ -597,17 +711,21 @@ function _muralItemHtml(it) {
       <div class="mo-explain" title="${_moEsc(titleExplic)}">
         <div class="mo-track"><i style="width:${pe}%;background:var(--teal)"></i><i style="width:${100 - pe}%;background:${nv.cor};opacity:.75"></i></div>
         <div class="mo-ex-text">${explic}</div>
+        ${_muralHerdadaHtml(it)}
       </div>
     </div>
     <div class="mo-sparkbox">${_muralSpark(pts, nv.cor)}<small>${pts.length ? `${_moEsc(pts[0][0].slice(0, 5))} → ${_moEsc(pts[pts.length - 1][0].slice(0, 5))}` : ''}</small></div>
     <div class="mo-num"><span class="mo-kg">${_moKg(it.v)}</span><span class="mo-rs">${it.custoMed ? _moRs(it.rs) : 'sem custo'}</span><span class="mo-prio" title="${_moEsc(titlePrio)}">prioridade <b>${it.prioridade.toFixed(1)}</b></span></div>
     <div class="mo-foot">
       <span class="mo-status" style="--sc:${st.cor}">${st.label}</span>
-      <span class="mo-meta"><i class="ti ti-user"></i> ${_moEsc(it.dono.nome)}</span>
+      <span class="mo-meta"><i class="ti ti-user"></i> ${it.avocado ? `ADM <span class="mo-hint">(${_moEsc(it.dono.nome)} acompanha)</span>` : _moEsc(it.dono.nome)}</span>
       ${_muralPrazoHtml(it)}
       <div class="mo-actions">
         <button class="btn btn-sm" onclick="muralVerNaMicro(this)" ${dataset}><i class="ti ti-chart-dots-2"></i> Ver na Micro</button>
         <button class="btn btn-sm" onclick="muralComentar(this)" ${dataset} data-diff="${it.v}" data-periodo="${pts.length ? _moEsc(pts[0][0] + ' a ' + pts[pts.length - 1][0]) : ''}"><i class="ti ti-message-plus"></i> ${it.temOc ? 'Comentar' : 'Comentar / ocorrência'}</button>
+        ${_moEhAdm() && _mo.avocDisponivel ? (it.avocado
+          ? `<button class="btn btn-sm" onclick="muralDevolver('${_moEsc(it.avocado.id)}')" title="Devolver a ${_moEsc(it.dono.nome)}"><i class="ti ti-arrow-back-up"></i> Devolver</button>`
+          : `<button class="btn btn-sm" onclick="muralAvocar(this)" ${dataset} data-categoria="${_moEsc(it.categoriaFoto)}" data-dono="${_moEsc(it.dono.nome)}" title="Assumir este item no lugar do dono"><i class="ti ti-shield-check"></i> Avocar</button>`) : ''}
       </div>
     </div>
   </article>`;
@@ -616,7 +734,9 @@ function _muralItemHtml(it) {
 function _muralFiltrar(itens) {
   if (_mo.ids) return itens.filter(i => _mo.ids.has(_moChave(i)));
   if (_mo.filtro === 'piorando') return itens.filter(i => i.piorando);
-  if (_mo.filtro === 'semacao')  return itens.filter(i => !i.temOc && !i.monitorando && i.diasSemAcao > 0);
+  if (_mo.filtro === 'semacao')  return itens.filter(i => !i.temOc && i.diasSemAcao > 0);
+  if (_mo.filtro === 'semtrat')  return itens.filter(i => i.semTratamento);
+  if (_mo.filtro === 'avocados') return itens.filter(i => i.avocado);
   if (_mo.filtro === 'vencido')  return itens.filter(i => i.status === 'escalonado');
   return itens;
 }
@@ -626,8 +746,25 @@ function _muralOrdenar(itens) {
   return [...itens].sort((a, b) => k(a) - k(b));
 }
 
+// Contagem regressiva do fechamento: tudo acima do limite precisa estar
+// tratado (comentário com a causa ou ocorrência aberta) antes dele; o
+// fechamento só ajusta o que sobrar sem explicação.
+function _muralFechamentoHtml(itens) {
+  const fech = _muralFechamento(_moDia(new Date()));
+  const dias = _moDiasEntre(new Date(), fech);
+  const semTrat = itens.filter(i => i.semTratamento);
+  const cor = dias <= 3 && semTrat.length ? 'var(--red)' : dias <= 7 && semTrat.length ? 'var(--urgente)' : 'var(--text2)';
+  return `<div class="mo-fech" style="--fc:${cor}"><i class="ti ti-calendar-due"></i>
+    <span><b>Fechamento ${dias === 0 ? 'hoje' : `em ${dias} dia${dias > 1 ? 's' : ''}`}</b> (${fmtPtDate(fech)})</span>
+    <span class="mo-hint">·</span><span><b>${itens.length}</b> acima do limite</span>
+    <span class="mo-hint">·</span>${semTrat.length
+      ? `<button class="mo-link" onclick="muralFiltro('semtrat')"><b>${semTrat.length}</b> ainda sem tratamento</button>`
+      : '<span class="mo-teal">todos com tratamento registrado</span>'}
+    <span class="mo-hint" style="margin-left:auto">O fechamento só ajusta o que ficar sem explicação ou pedido à central não concluído.</span></div>`;
+}
+
 function _muralKpisHtml(itens) {
-  const fila = itens.filter(i => !i.monitorando);
+  const fila = itens;
   const semAcao = fila.filter(i => !i.temOc && i.diasSemAcao > 0).length;
   const piorando = fila.filter(i => i.piorando).length;
   const esc = fila.filter(i => i.status === 'escalonado').length;
@@ -668,6 +805,23 @@ function _muralPontosCegosHtml() {
     const add = (k, titulo, desc, cat) => { const x = pc[k]; if (x && x.total) linhas.push({ titulo: `${x.total} ${titulo}`, desc, ex: x.exemplos || [], cat }); };
     add('semAncora', 'par(es) sem saldo do SAP', 'Sem Cód SAP ou sem Custos SAP: a variação não é calculada.', f.categoria);
     add('semLancamento', 'par(es) sem lançamento na janela', 'Teve SAP, mas ninguém lançou o estoque em 30 dias.', f.categoria);
+    // Base de lançamentos que começa depois do início da janela: a parte
+    // "herdada" dos itens mistura diferença antiga com o período sem lançamento.
+    const p = f.atual.payload || {};
+    const desde = parseDate(p.base?.lancamentosDesde), ini = parseDate(p.janela?.ini);
+    if (desde && ini && _moDiasEntre(ini, desde) > 3) {
+      linhas.push({ titulo: `Lançamentos só a partir de ${p.base.lancamentosDesde.slice(0, 5)}`, cat: f.categoria, ex: [],
+        desc: `A janela começa em ${p.janela.ini.slice(0, 5)}, mas a base do dono não tem lançamento antes disso. A parte "já no 1º lançamento" inclui esse período.` });
+    }
+    // Peso das OS divergindo do SAP sempre na mesma direção, em muitas OS: não
+    // é causa de um par, é problema de dado (origem dos pesos das Saídas).
+    const pesos = (p.itens || []).flatMap(i => (i.explic || []).filter(e => e.chave === 'peso' && e.lado === 'sai'));
+    const nOs = pesos.reduce((s, e) => s + (e.n || 0), 0), kgOs = pesos.reduce((s, e) => s + (e.kg || 0), 0);
+    const mesmoSentido = pesos.length && pesos.every(e => Math.sign(e.kg) === Math.sign(pesos[0].kg));
+    if (nOs >= 50 && mesmoSentido) {
+      linhas.push({ titulo: `${nOs.toLocaleString('pt-BR')} OS com peso PUZL ≠ SAP, todas no mesmo sentido`, cat: f.categoria, ex: [], alerta: true,
+        desc: `${kgOs < 0 ? 'O SAP baixa menos' : 'O SAP baixa mais'} que a PUZL: ${_moPeso(Math.abs(kgOs))} no total (${(Math.abs(kgOs) / nOs).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} kg por OS). Confira a origem dos pesos das Saídas (importação e OS repetidas) antes de usar essa parte como explicação.` });
+    }
     const dono = f.atual.gerado_por || f.categoria;
     if (!semCadPorDono.has(dono)) {
       semCadPorDono.add(dono);
@@ -697,7 +851,7 @@ function _muralTimeHtml(itens) {
     if (!porDono.has(k)) porDono.set(k, { nome: d.analista_nome || '—', cats: [] });
     porDono.get(k).cats.push(d.categoria);
   });
-  const ativos = itens.filter(i => !i.monitorando);
+  const ativos = itens;
   const linhas = [...porDono.values()].map(d => {
     const its = ativos.filter(i => d.cats.includes(i.categoriaFoto));
     const fotos = _mo.fotos.filter(f => d.cats.includes(f.categoria));
@@ -709,7 +863,7 @@ function _muralTimeHtml(itens) {
     const n = (v, c) => `<td${v ? ` style="color:${c}"` : ''}>${v}</td>`;
     return `<tr onclick="muralFiltrarIds('fila de ${_moEsc(d.nome)}', this)" data-ids="${_muralIdsAttr(its)}">
       <td><b>${_moEsc(d.nome)}</b><small>${_moEsc(d.cats.join(', '))}</small></td>
-      <td>${its.length}</td>${n(its.filter(i => i.piorando).length, 'var(--red)')}${n(its.filter(i => !i.temOc && i.diasSemAcao > 0).length, 'var(--urgente)')}${n(its.filter(i => i.status === 'escalonado').length, 'var(--red)')}
+      <td>${its.length}</td>${n(its.filter(i => i.piorando).length, 'var(--red)')}${n(its.filter(i => !i.temOc && i.diasSemAcao > 0).length, 'var(--urgente)')}${n(its.filter(i => i.status === 'escalonado').length, 'var(--red)')}${n(its.filter(i => i.semTratamento).length, 'var(--urgente)')}
       <td>${_moPeso(kgRes)}<small>${_moRs(rs).replace(/^[+−]/, '')}</small></td>
       <td${atraso == null || atraso > 1 ? ' style="color:var(--red)"' : ''}>${atraso == null ? 'sem foto' : atraso === 0 ? 'hoje' : `há ${atraso} dia${atraso > 1 ? 's' : ''}`}<small>SAP ${_moEsc((base.sap || '—').slice(0, 5))} · lanç. ${_moEsc((base.lancamentos || '—').slice(0, 5))}</small></td></tr>`;
   }).join('');
@@ -719,11 +873,20 @@ function _muralTimeHtml(itens) {
     if (!donosPorCentral.has(i.central)) donosPorCentral.set(i.central, new Set());
     donosPorCentral.get(i.central).add(i.dono.nome);
   });
-  const multi = [...donosPorCentral].filter(([, s]) => s.size > 1).sort((a, b) => b[1].size - a[1].size);
+  // Mais analistas e mais itens primeiro. Um bloco recolhido só, com um chip
+  // por central (Hugo, 09/11/2026: uma linha por central ocupava a tela).
+  const multi = [...donosPorCentral].filter(([, s]) => s.size > 1)
+    .map(([c, s]) => ({ c, s, its: ativos.filter(i => i.central === c) }))
+    .sort((a, b) => (b.s.size - a.s.size) || (b.its.length - a.its.length));
+  const multiHtml = multi.length ? `<details class="mo-multi">
+      <summary><i class="ti ti-alert-triangle"></i><b>${multi.length} centra${multi.length > 1 ? 'is' : 'l'}</b> na fila de mais de um analista
+        <span class="mo-hint">· pode ser causa comum na central (operação, balança, gestão)</span><i class="ti ti-chevron-down mo-multi-chev"></i></summary>
+      <div class="mo-multi-chips">${multi.map(({ c, s, its }) =>
+        `<button class="mo-chip" onclick="muralFiltrarIds('${_moEsc(c)}', this)" data-ids="${_muralIdsAttr(its)}" title="${_moEsc([...s].join(', '))}"><b>${_moEsc(c)}</b> ${s.size} analistas · ${its.length} ite${its.length > 1 ? 'ns' : 'm'}</button>`).join('')}</div>
+    </details>` : '';
   return `<div class="mo-panel"><div class="mo-panel-head"><span class="mo-panel-title"><i class="ti ti-users"></i>Painel do time</span><span class="mo-hint" style="margin-left:auto">Clique num analista para ver a fila dele</span></div>
-    <div class="mo-scroll"><table class="mo-team"><thead><tr><th>Analista</th><th>Na fila</th><th>Piorando</th><th>Sem ação</th><th>Escalonados</th><th>Sem explicação</th><th>Foto</th></tr></thead><tbody>${linhas}</tbody></table></div>
-    ${multi.map(([c, s]) => `<div class="mo-multi"><i class="ti ti-alert-triangle"></i><span><b>${_moEsc(c)}</b> está na fila de ${s.size} analistas: ${_moEsc([...s].join(', '))}. Pode ser causa comum na central (operação, balança, gestão).</span>
-      <button class="mo-link" onclick="muralFiltrarIds('${_moEsc(c)}', this)" data-ids="${_muralIdsAttr(ativos.filter(i => i.central === c))}">Ver os itens →</button></div>`).join('')}</div>`;
+    <div class="mo-scroll"><table class="mo-team"><thead><tr><th>Analista</th><th>Na fila</th><th>Piorando</th><th>Sem ação</th><th>Escalonados</th><th title="Ainda sem comentário com a causa nem ocorrência: não pode ir para o fechamento">Sem tratamento</th><th>Sem explicação</th><th>Foto</th></tr></thead><tbody>${linhas}</tbody></table></div>
+    ${multiHtml}</div>`;
 }
 
 function _muralAuditoriaHtml() {
@@ -760,25 +923,28 @@ function muralRender() {
   }
   const itens = muralItensDerivados();
   const lista = _muralOrdenar(_muralFiltrar(itens));
-  const ativos = lista.filter(i => !i.monitorando), monit = lista.filter(i => i.monitorando);
-  const filtros = [['todos', adm ? 'Todos' : 'Minha fila'], ['piorando', 'Piorando'], ['semacao', 'Sem ação'], ['vencido', 'Escalonados']];
+  const ativos = lista;
+  const filtros = [['todos', adm ? 'Todos' : 'Minha fila'], ['semtrat', 'Sem tratamento'], ['piorando', 'Piorando'], ['semacao', 'Sem ação'], ['vencido', 'Escalonados']];
+  if (itens.some(i => i.avocado)) filtros.push(['avocados', 'Avocados']);
   const cats = [...new Set(_mo.fotos.map(f => f.categoria))].join(', ');
   const fotoInfo = _mo.fotos.map(f => `${f.categoria}: ${String(f.atual.dia).split('-').reverse().join('/')}`).join(' · ');
-  el.innerHTML = cab + _muralDesdeHtml(itens) + _muralKpisHtml(itens) + (adm ? _muralTimeHtml(itens) : '') +
+  el.innerHTML = cab + _muralFechamentoHtml(itens) + _muralDesdeHtml(itens) + _muralKpisHtml(itens) + (adm ? _muralTimeHtml(itens) : '') +
     `<div class="mo-grid">
       <div class="mo-panel">
         <div class="mo-panel-head">
-          <span class="mo-panel-title"><i class="ti ti-flame"></i>${adm ? 'Fila de ação · todas as categorias' : 'Minha fila · ' + _moEsc(cats)} · ${ativos.length}</span>
-          <div class="mo-filtros">${filtros.map(([k, l]) => `<button class="mo-chip${!_mo.ids && _mo.filtro === k ? ' on' : ''}" onclick="muralFiltro('${k}')">${l}</button>`).join('')}
+          <div class="mo-abas" role="tablist">
+            <button class="mo-aba${_mo.aba !== 'faixa' ? ' on' : ''}" role="tab" aria-selected="${_mo.aba !== 'faixa'}" onclick="muralAba('fila')"><i class="ti ti-flame"></i>${adm ? 'Fila de ação' : 'Minha fila · ' + _moEsc(cats)} <b>${itens.length}</b></button>
+            <button class="mo-aba${_mo.aba === 'faixa' ? ' on' : ''}" role="tab" aria-selected="${_mo.aba === 'faixa'}" onclick="muralAba('faixa')"><i class="ti ti-circle-check"></i>Na faixa <b>${_muralFaixaLinhas().length}</b></button>
+          </div>
+          ${_mo.aba === 'faixa' ? '' : `<div class="mo-filtros">${filtros.map(([k, l]) => `<button class="mo-chip${!_mo.ids && _mo.filtro === k ? ' on' : ''}" onclick="muralFiltro('${k}')">${l}</button>`).join('')}
             ${_mo.ids ? `<button class="mo-chip on" onclick="muralFiltro('todos')">${_moEsc(_mo.idsLabel)} <i class="ti ti-x"></i></button>` : ''}
             <select class="mo-sort" onchange="muralOrdem(this.value)" aria-label="Ordenar a fila">
               <option value="prio"${_mo.ordem === 'prio' ? ' selected' : ''}>Ordenar: prioridade</option>
               <option value="kg"${_mo.ordem === 'kg' ? ' selected' : ''}>Ordenar: variação (kg)</option>
               <option value="residual"${_mo.ordem === 'residual' ? ' selected' : ''}>Ordenar: sem explicação (kg)</option>
-            </select></div>
+            </select></div>`}
         </div>
-        <div class="mo-queue">${ativos.map(_muralItemHtml).join('') || '<div class="empty-state" style="padding:28px"><p>Nada nesta visão.</p></div>'}
-          ${monit.length ? `<div class="mo-group">Monitorando · formato Serrote (não gera alerta)</div>${monit.map(_muralItemHtml).join('')}` : ''}</div>
+        ${_mo.aba === 'faixa' ? _muralFaixaHtml() : `<div class="mo-queue">${ativos.map(_muralItemHtml).join('') || '<div class="empty-state" style="padding:28px"><p>Nada nesta visão.</p></div>'}</div>`}
         <div class="mo-foot-note mo-hint">Fotos: ${_moEsc(fotoInfo)}</div>
       </div>
       <div class="mo-aside">
@@ -786,17 +952,55 @@ function muralRender() {
         ${adm ? _muralAuditoriaHtml() : ''}
         <div class="mo-panel"><div class="mo-panel-head"><span class="mo-panel-title"><i class="ti ti-clock"></i>Prazos para o dono agir</span></div><div class="mo-panel-body mo-rules">
           ${Object.entries(MURAL_PRAZO).map(([k, d]) => `<span class="mo-lvl" style="--lv:${MURAL_NIVEL[k].cor}">${MURAL_NIVEL[k].label}</span><span>${d} dias${k === 'critico' ? ', só sai com ocorrência' : ''}</span>`).join('')}
-          <p class="mo-hint" style="grid-column:1/-1;margin:6px 0 0">Ação é comentar ou abrir ocorrência; o comentário renova o prazo uma vez. Prazo vencido, ou ocorrência aberta com a variação crescendo, escalona ao ADM.</p></div></div>
+          <p class="mo-hint" style="grid-column:1/-1;margin:6px 0 0">Ação é comentar ou abrir ocorrência; o comentário renova o prazo uma vez. Prazo vencido, ou ocorrência aberta com a variação crescendo, escalona ao ADM. Nenhum prazo passa do fechamento.</p></div></div>
       </div>
     </div>`;
 }
 
+// ── Aba "Na faixa" ────────────────────────────────────────────────────────
+// Pares dentro do limite também ficam à vista (Hugo, 09/11/2026), separados
+// da fila. Ordem: mais perto de sair da faixa primeiro (% do limite "bom").
+function _muralFaixaLinhas() {
+  const thresholds = getHealthThresholds();
+  const linhas = [];
+  _mo.fotos.forEach(f => {
+    const catKey = detectCatKey(f.categoria);
+    const lim = thresholds[catKey]?.bom || 0;
+    const naFilaAntes = new Set((f.anterior?.payload?.itens || []).map(_moChave));
+    (f.atual.payload?.faixa || []).forEach(([central, material, v, regional, ult]) => {
+      linhas.push({ central, material, v, regional, ult, categoria: f.categoria, dono: _muralDonoDe(f.categoria).nome,
+        pct: lim ? Math.abs(v) / lim * 100 : 0, voltou: naFilaAntes.has(central + '|' + material) });
+    });
+  });
+  return linhas.sort((a, b) => b.pct - a.pct);
+}
+
+function _muralFaixaHtml() {
+  const linhas = _muralFaixaLinhas();
+  const semDado = _mo.fotos.some(f => !Array.isArray(f.atual.payload?.faixa));
+  if (!linhas.length) return `<div class="empty-state" style="padding:28px"><p>${semDado
+    ? 'As fotos atuais ainda não trazem os itens na faixa. A próxima foto de cada dono já traz.'
+    : 'Nenhum par na faixa nas fotos atuais.'}</p></div>`;
+  const adm = _moEhAdm();
+  return `<div class="mo-scroll mo-faixa-scroll"><table class="mo-team mo-faixa">
+    <thead><tr><th>Material · Central</th>${adm ? '<th>Dono</th>' : ''}<th>Variação</th><th title="Quanto da faixa &quot;bom&quot; da categoria a variação já ocupa">Uso da faixa</th><th>Último lanç.</th></tr></thead>
+    <tbody>${linhas.map(l => {
+      const cor = l.pct >= 80 ? 'var(--amber)' : 'var(--green)';
+      return `<tr><td><b>${_moEsc(l.material)}</b>${l.voltou ? ' <span class="mo-voltou" title="Estava na fila na foto anterior">voltou à faixa</span>' : ''}<small>${_moEsc(l.central)} · Reg. ${_moEsc(l.regional)} · ${_moEsc(l.categoria)}</small></td>
+        ${adm ? `<td><small style="font-size:12px">${_moEsc(l.dono)}</small></td>` : ''}
+        <td>${_moKg(l.v)}</td>
+        <td><span class="mo-uso"><i style="width:${Math.min(100, l.pct)}%;background:${cor}"></i></span>${Math.round(l.pct)}%</td>
+        <td>${_moEsc((l.ult || '—').slice(0, 5))}</td></tr>`;
+    }).join('')}</tbody></table></div>`;
+}
+
 // ── Ações da tela ──────────────────────────────────────────────────────────
-function muralFiltro(f) { _mo.filtro = f; _mo.ids = null; muralRender(); }
+function muralAba(a) { _mo.aba = a; muralRender(); }
+function muralFiltro(f) { _mo.filtro = f; _mo.ids = null; _mo.aba = 'fila'; muralRender(); }
 function muralOrdem(o) { _mo.ordem = o; muralRender(); }
 function muralFiltrarIds(label, el) {
   try { _mo.ids = new Set(JSON.parse(el.dataset.ids || '[]')); } catch (_) { _mo.ids = null; }
-  _mo.idsLabel = label;
+  _mo.idsLabel = label; _mo.aba = 'fila';
   muralRender();
   document.querySelector('#mural-root .mo-grid')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
@@ -815,6 +1019,55 @@ function muralComentar(btn) {
   if (typeof openVarComModal === 'function') openVarComModal(b);
 }
 
+// ── Avocar / devolver (só ADM) ─────────────────────────────────────────────
+// O ADM (Supervisor) é o único que troca o dono de um item: assume no lugar
+// do analista, com motivo e observação obrigatórios — o analista continua
+// vendo e é avisado. Devolver encerra a avocação (fica no histórico).
+const MURAL_MOTIVOS_AVOCAR = ['Prazo vencido sem ação', 'Exige decisão da gestão', 'Envolve mais de uma categoria na central', 'Analista ausente', 'Outro'];
+
+function muralAvocar(btn) {
+  const d = btn.dataset;
+  document.getElementById('mural-avocar-overlay')?.remove();
+  const ov = document.createElement('div');
+  ov.className = 'modal-overlay open';
+  ov.id = 'mural-avocar-overlay';
+  ov.style.zIndex = '10050';
+  ov.innerHTML = `<div class="modal" style="max-width:460px">
+    <div class="modal-title"><i class="ti ti-shield-check"></i> Avocar item para o ADM</div>
+    <div class="modal-sub">${_moEsc(d.material)} · ${_moEsc(d.central)}. ${_moEsc(d.dono)} continua vendo o item e é avisado(a), com o motivo abaixo.</div>
+    <label class="mo-hint" for="mural-av-motivo" style="display:block;margin-top:10px">Motivo</label>
+    <select class="form-input" id="mural-av-motivo" style="width:100%">${['', ...MURAL_MOTIVOS_AVOCAR].map(m => `<option value="${_moEsc(m)}">${m || 'Escolha um motivo'}</option>`).join('')}</select>
+    <label class="mo-hint" for="mural-av-obs" style="display:block;margin-top:10px">Observação para ${_moEsc(d.dono)} (obrigatória)</label>
+    <textarea class="form-input" id="mural-av-obs" rows="3" style="width:100%;resize:vertical"></textarea>
+    <div class="form-actions">
+      <button class="btn" type="button" onclick="document.getElementById('mural-avocar-overlay').remove()">Cancelar</button>
+      <button class="btn btn-primary" id="mural-av-ok" type="button" disabled>Avocar</button>
+    </div></div>`;
+  document.body.appendChild(ov);
+  const motivo = ov.querySelector('#mural-av-motivo'), obs = ov.querySelector('#mural-av-obs'), ok = ov.querySelector('#mural-av-ok');
+  const validar = () => { ok.disabled = !(motivo.value && obs.value.trim().length >= 5); };
+  motivo.addEventListener('change', validar); obs.addEventListener('input', validar);
+  ok.addEventListener('click', async () => {
+    ok.disabled = true;
+    const { error } = await window.supabaseClient.from('mural_avocacoes').insert({
+      central: d.central, material: d.material, categoria: d.categoria,
+      motivo: motivo.value, obs: obs.value.trim(), avocado_por: window.currentUser?.id
+    });
+    if (error) { ok.disabled = false; if (typeof toast === 'function') toast('Não foi possível avocar: ' + error.message, 'error'); return; }
+    ov.remove();
+    if (typeof toast === 'function') toast(`Item avocado. ${d.dono} será avisado(a).`, 'success');
+    muralRecarregar();
+  });
+}
+
+async function muralDevolver(id) {
+  const { error } = await window.supabaseClient.from('mural_avocacoes')
+    .update({ devolvido_em: new Date().toISOString(), devolvido_por: window.currentUser?.id }).eq('id', id);
+  if (error) { if (typeof toast === 'function') toast('Não foi possível devolver: ' + error.message, 'error'); return; }
+  if (typeof toast === 'function') toast('Item devolvido ao dono da categoria.', 'success');
+  muralRecarregar();
+}
+
 // Auditoria de cobertura (só ADM): o mesmo cálculo do dono, na base
 // completa do ADM, comparado com as fotos. Sob demanda — na base de ~1 mi de
 // registros não cabe no boot.
@@ -831,7 +1084,7 @@ async function muralAuditar() {
     const fora = [], diverg = [];
     Object.values(calc.porCategoria).forEach(({ itens }) => itens.forEach(i => {
       const dono = fotoPorPar.get(_moChave(i));
-      if (!dono) { if (comFoto.has(i.categoria) && i.formato !== 'serrote') fora.push(i); return; }
+      if (!dono) { if (comFoto.has(i.categoria)) fora.push(i); return; }
       if (Math.abs(i.v - dono.v) > (thresholds[i.catKey]?.bom || 0)) diverg.push({ ...i, vAdm: i.v, vDono: dono.v });
     }));
     _mo.auditoria = { quando: new Date().toLocaleString('pt-BR'), ms: Math.round(performance.now() - t0), fora, diverg,

@@ -101,6 +101,21 @@ function showVarComTip(e, btn) {
 }
 
 // ── Modal ───────────────────────────────────────────────────
+// Causa obrigatória do comentário (Hugo, 09/11/2026): é o tratamento que o
+// Mural de Operações exige antes do fechamento, e o que chega pronto para a
+// justificativa do Inventário.
+// ponytail: a causa vai no começo do próprio texto ("Causa: X. resto"), sem
+// coluna nova no banco — os comentários antigos continuam válidos. Se um dia
+// precisar filtrar/contar no SQL, vira coluna `causa` em variacao_comentarios.
+const VARCOM_CAUSAS = [
+  'Integração SAP pendente (NF/OS)', 'Duplicidade ou estorno no SAP', 'Peso divergente PUZL × SAP',
+  'Erro de lançamento do estoque', 'Medição / cubagem', 'Perda física', 'Consumo fora do traço',
+  'Transferência entre centrais', 'Em apuração com a central', 'Outro'
+];
+const _VARCOM_CAUSA_RE = /^Causa: ([^.]+)\.\s*/;
+function varComCausaDe(texto) { const m = _VARCOM_CAUSA_RE.exec(String(texto || '')); return m ? m[1] : null; }
+function _varComSemCausa(texto) { return String(texto || '').replace(_VARCOM_CAUSA_RE, ''); }
+
 function openVarComModal(btn) {
   _hideHelpTip();
   const diff = parseFloat(btn.closest('tr')?.dataset.diff) || 0;
@@ -110,6 +125,8 @@ function openVarComModal(btn) {
     `Variação${_varComCtx.periodo ? ` em ${escapeHtml(_varComCtx.periodo)}` : ''}: <span class="td-mono ${varClass(diff)}">${varSymbol(diff)} ${fmtKg(Math.abs(diff))}</span>`;
   document.getElementById('varcom-data').value  = _varComHoje();
   document.getElementById('varcom-texto').value = '';
+  const sel = document.getElementById('varcom-causa');
+  if (sel) sel.innerHTML = ['<option value="">Escolha a causa</option>', ...VARCOM_CAUSAS.map(c => `<option>${escapeHtml(c)}</option>`)].join('');
   _varComRenderLista();
   document.getElementById('varcom-modal').classList.add('open');
   document.getElementById('varcom-texto').focus();
@@ -136,7 +153,8 @@ function _varComRenderLista() {
       const ver = st ? `<button type="button" class="btn btn-sm" onclick="closeVarComModal();openOcDetailModal('${r.oc_id}')">Ver</button>` : '';
       return `<div class="varcom-item varcom-item-oc"><i class="ti ti-alert-octagon"></i><div class="varcom-item-body">${meta}<div>Ocorrência <strong>${escapeHtml(r.oc_numero || r.oc_id)}</strong> aberta${st ? ` · ${st}` : ''}</div></div>${ver}${excluir}</div>`;
     }
-    return `<div class="varcom-item"><i class="ti ti-message"></i><div class="varcom-item-body">${meta}<div class="varcom-item-txt">${escapeHtml(r.texto)}</div></div>${excluir}</div>`;
+    const causa = varComCausaDe(r.texto);
+    return `<div class="varcom-item"><i class="ti ti-message"></i><div class="varcom-item-body">${meta}${causa ? `<div class="varcom-causa">${escapeHtml(causa)}</div>` : ''}<div class="varcom-item-txt">${escapeHtml(_varComSemCausa(r.texto))}</div></div>${excluir}</div>`;
   }).join('') : `<div class="varcom-tip-vazio">Nenhum comentário ainda.</div>`;
 }
 
@@ -158,13 +176,16 @@ async function _varComInserir(row) {
 async function varComAdicionar(btn) {
   const data  = document.getElementById('varcom-data').value;
   const texto = document.getElementById('varcom-texto').value.trim();
+  const causa = document.getElementById('varcom-causa')?.value || '';
   if (!data)  { toast('Informe a data.', 'error'); return false; }
+  if (!causa) { toast('Escolha a causa da variação.', 'error'); return false; }
   if (!texto) { toast('Escreva o comentário.', 'error'); return false; }
   if (btn) btn.disabled = true;
-  const r = await _varComInserir({ central: _varComCtx.central, material: _varComCtx.material, data, texto });
+  const r = await _varComInserir({ central: _varComCtx.central, material: _varComCtx.material, data, texto: `Causa: ${causa}. ${texto}` });
   if (btn) btn.disabled = false;
   if (!r) return false;
   document.getElementById('varcom-texto').value = '';
+  document.getElementById('varcom-causa').value = '';
   toast('Comentário adicionado.', 'success');
   return true;
 }

@@ -178,6 +178,24 @@ function notifSync(healthScores) {
   if (typeof persist==='function' && JSON.stringify(state.notifications) !== antes) persist();
 }
 
+// ── Avisos do Mural de Operações (mural.js) ───────────────
+// Tipo próprio ('mural'), recalculado a cada leitura das fotos — notifSync
+// não mexe nele. O id carrega o dia e a contagem: mudou o quadro, o aviso
+// volta como não lido (aviso de MUDANÇA, não de estado repetido).
+function notifSyncMural(expected) {
+  if (!Array.isArray(state.notifications)) state.notifications = [];
+  const antes = JSON.stringify(state.notifications);
+  const ids = new Set(expected.map(n => n.id));
+  state.notifications = state.notifications.filter(n => n.type !== 'mural' || ids.has(n.id));
+  const existentes = new Set(state.notifications.map(n => n.id));
+  expected.forEach(n => {
+    if (!existentes.has(n.id)) state.notifications.unshift({ ...n, type: 'mural', source: 'mural', createdAt: Date.now(), read: false });
+  });
+  _notifRenderBadge();
+  if (document.getElementById('notif-dropdown')?.classList.contains('open')) _notifRenderDropdown();
+  if (typeof persist === 'function' && JSON.stringify(state.notifications) !== antes) persist();
+}
+
 // ── Cálculo silencioso de saúde ao carregar ───────────────
 async function notifSilentHealthCheck() {
   if (!Array.isArray(state.lancamentos)||!state.lancamentos.length) {
@@ -308,6 +326,7 @@ const _NTM = {
   saude:        { icon:'ti-heartbeat'       },
   ocorrencia:   { icon:'ti-alert-circle'    },
   conferencia:  { icon:'ti-calendar-event'  },
+  mural:        { icon:'ti-target-arrow'    },
   atividade:    { icon:'ti-bolt'            },
   auth:         { icon:'ti-fingerprint'     },
   // Prioridade do Supervisor (31/07) — ícone e cor próprios (ver
@@ -375,9 +394,14 @@ function notifNavigate(id, event) {
   event?.stopPropagation();
   const n = (state.notifications||[]).find(n=>n.id===id);
   if (n) { n.read=true; if(typeof persist==='function') persist(); }
-  const page = _NOTIF_ROUTE[id];
+  const page = _NOTIF_ROUTE[id] || (n?.type === 'mural' ? 'analitico' : null);
   notifClose();
   if (page && typeof navigate==='function') navigate(page);
+  // Aviso do Mural: abre a aba Operações já no filtro do aviso.
+  if (n?.type === 'mural') {
+    if (typeof anSwitchView === 'function') anSwitchView('operacoes');
+    if (n.filtro && typeof muralFiltro === 'function') muralFiltro(n.filtro);
+  }
   _notifRenderBadge();
 }
 

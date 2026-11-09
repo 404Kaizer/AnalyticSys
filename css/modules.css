@@ -2829,6 +2829,7 @@ tr.pend-injetado-ambos {
 .varcom-item-body { flex: 1; min-width: 0; font-size: 12.5px; }
 .varcom-item-meta { font-size: 10.5px; color: var(--text3); font-family: var(--mono); margin-bottom: 2px; }
 .varcom-item-txt { white-space: pre-wrap; overflow-wrap: anywhere; }
+.varcom-causa { display: inline-block; font-size: 10.5px; font-weight: 600; color: var(--teal); background: var(--teal-bg); border: 1px solid var(--teal-border); border-radius: 4px; padding: 0 6px; margin: 2px 0; }
 .varcom-del { background: none; border: none; color: var(--text3); cursor: pointer; padding: 2px; font-size: 14px; }
 .varcom-del:hover { color: var(--red); }
 
@@ -13264,6 +13265,27 @@ span.mo-since-chip { cursor: default; }
 .mo-track i { display: block; height: 100%; }
 .mo-ex-text { font-size: 11.5px; color: var(--text2); }
 .mo-ex-text b { font-family: var(--mono); font-weight: 500; }
+.mo-herd { color: var(--purple); }
+.mo-why span.adm { color: var(--teal); background: var(--teal-bg); border-color: var(--teal-border); }
+.mo-abas { display: flex; gap: 4px; }
+.mo-aba { border: 1px solid transparent; background: none; color: var(--text2); border-radius: var(--radius); padding: 5px 10px; font: inherit; font-size: 12px; font-weight: 500;
+  cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.mo-aba b { font-family: var(--mono); font-weight: 500; font-size: 11px; color: var(--text3); }
+.mo-aba:hover { color: var(--text); background: var(--bg3); }
+.mo-aba.on { color: var(--text); background: var(--bg3); border-color: var(--border2); }
+.mo-aba.on b { color: var(--accent); }
+.mo-faixa-scroll { max-height: 640px; overflow-y: auto; }
+.mo-faixa { min-width: 560px; }
+.mo-faixa td:first-child small { margin-top: 1px; }
+.mo-uso { display: inline-block; width: 70px; height: 6px; border-radius: 3px; background: var(--bg4); overflow: hidden; vertical-align: middle; margin-right: 8px; }
+.mo-uso i { display: block; height: 100%; }
+.mo-voltou { font-size: 10px; color: var(--green); background: var(--green-bg); border: 1px solid var(--green-border); border-radius: 4px; padding: 0 5px; margin-left: 4px; font-family: var(--font); }
+.mo-shape-herdada { color: var(--purple); border-color: var(--purple-border); border-style: dotted; }
+.mo-fech { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 10px 14px; border-radius: var(--radius-lg);
+  background: var(--bg2); border: 1px solid color-mix(in srgb, var(--fc) 35%, var(--border)); border-left: 3px solid var(--fc); font-size: 12.5px; color: var(--text2); }
+.mo-fech > .ti { color: var(--fc); font-size: 16px; }
+.mo-fech b { color: var(--text); font-family: var(--mono); font-weight: 500; }
+.mo-fech .mo-link b { color: var(--fc); }
 .mo-sparkbox { grid-area: spark; align-self: center; }
 .mo-spark { display: block; width: 124px; height: 38px; }
 .mo-sparkbox small { display: block; font-size: 10px; color: var(--text3); font-family: var(--mono); margin-top: 2px; }
@@ -13295,9 +13317,15 @@ span.mo-since-chip { cursor: default; }
 .mo-team small { display: block; color: var(--text3); font-size: 10.5px; font-family: var(--font); }
 .mo-team tbody tr { cursor: pointer; }
 .mo-team tbody tr:hover { background: var(--bg3); }
-.mo-multi { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 10px 14px; border-top: 1px solid var(--border); font-size: 12.5px; color: var(--text2); background: var(--urgente-bg); }
-.mo-multi > .ti { color: var(--urgente); }
+.mo-multi { border-top: 1px solid var(--border); font-size: 12.5px; color: var(--text2); background: var(--urgente-bg); }
+.mo-multi > summary { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 9px 14px; cursor: pointer; list-style: none; }
+.mo-multi > summary::-webkit-details-marker { display: none; }
+.mo-multi > summary > .ti-alert-triangle { color: var(--urgente); }
 .mo-multi b { color: var(--text); }
+.mo-multi-chev { margin-left: auto; transition: transform .15s; }
+.mo-multi[open] .mo-multi-chev { transform: rotate(180deg); }
+.mo-multi-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 14px 11px; max-height: 180px; overflow-y: auto; }
+.mo-multi-chips .mo-chip b { font-weight: 600; }
 .mo-link { background: none; border: none; padding: 0; color: var(--accent); cursor: pointer; font-size: 12px; font-family: var(--font); }
 
 @media (max-width: 1180px) {

@@ -6545,12 +6545,20 @@
     <div class="modal-body" style="display:flex;flex-direction:column;gap:14px">
       <div class="varcom-var" id="varcom-var"></div>
       <div class="varcom-lista" id="varcom-lista"></div>
-      <div class="oc-form-group" style="max-width:200px">
-        <label class="oc-label">Data</label>
-        <input type="date" id="varcom-data" class="oc-input">
+      <div style="display:flex;flex-wrap:wrap;gap:12px">
+        <div class="oc-form-group" style="width:170px">
+          <label class="oc-label" for="varcom-data">Data</label>
+          <input type="date" id="varcom-data" class="oc-input">
+        </div>
+        <!-- Causa obrigatória (lista fixa, VARCOM_CAUSAS) — é o que conta como
+             tratamento no Mural e o que chega pronto ao fechamento. -->
+        <div class="oc-form-group" style="flex:1;min-width:200px">
+          <label class="oc-label" for="varcom-causa">Causa</label>
+          <select id="varcom-causa" class="oc-input"></select>
+        </div>
       </div>
       <div class="oc-form-group">
-        <label class="oc-label">Comentário</label>
+        <label class="oc-label" for="varcom-texto">Comentário</label>
         <textarea id="varcom-texto" class="oc-input oc-textarea" rows="3" placeholder="Motivo da variação…"></textarea>
       </div>
     </div>
