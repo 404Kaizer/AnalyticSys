@@ -354,6 +354,17 @@ async function muralPublicar({ forcar = false } = {}) {
   if (document.getElementById('mural-root') && typeof muralRecarregar === 'function') muralRecarregar();
 }
 
+// Atualizar do Dashboard Analítico (rodarAnalitico): o dono recalcula e
+// publica a própria foto (que recarrega a tela no fim); o ADM e quem não é
+// dono de categoria só releem as fotos.
+async function muralAtualizar() {
+  try {
+    const cats = await _muralMinhasCategorias();
+    if (cats.length && state.lancamentos?.length) await muralPublicar();
+    else await muralRecarregar();
+  } catch (err) { console.warn('[Mural] Erro ao atualizar:', err); }
+}
+
 // Debounce + ocioso: roda depois do boot e de cada importação, fora do
 // caminho crítico (nunca dentro do overlay de carregamento).
 let _muralTimer = null;
@@ -438,6 +449,7 @@ const _moKgResidual = (i) => Math.abs(i.residual || 0);
 const _moPeso = (kg) => Math.abs(kg) >= 10000
   ? (kg / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' t'
   : kg.toLocaleString('pt-BR', { maximumFractionDigits: 0 }) + ' kg';
+const _moPesoSinal = (kg) => (kg < -0.05 ? '−' : kg > 0.05 ? '+' : '') + _moPeso(Math.abs(kg));
 
 // ── Leitura das fotos ──────────────────────────────────────────────────────
 // Duas consultas: primeiro só (dia, categoria) dos últimos 10 dias, depois o
@@ -770,6 +782,19 @@ function _muralKpisHtml(itens) {
   const esc = fila.filter(i => i.status === 'escalonado').length;
   const kgRes = fila.reduce((s, i) => s + _moKgResidual(i), 0);
   const rs = fila.reduce((s, i) => s + _moRsResidual(i), 0);
+  // Mesma conta das colunas do Painel do time: líquido com sinal e, embaixo,
+  // desfalque · sobra.
+  const soma = (f, cond) => fila.reduce((s, i) => s + (cond(i) ? f(i) : 0), 0);
+  const vLiq = soma(i => i.v, () => true), vDes = soma(i => i.v, i => i.v < 0), vSob = soma(i => i.v, i => i.v > 0);
+  const rLiq = soma(i => i.rs || 0, () => true), rDes = soma(i => i.rs || 0, i => i.v < 0), rSob = soma(i => i.rs || 0, i => i.v > 0);
+  const corSinal = v => v < -0.05 ? 'var(--red)' : v > 0.05 ? 'var(--amber)' : 'var(--text)';
+  // Os dois principais (Hugo, 09/11/2026) ficam em destaque numa linha
+  // própria; os demais, menores, embaixo — mesmo esquema de dois níveis do
+  // Resumo do Período do Gerencial.
+  const principais = [
+    ['Variação total', _moPesoSinal(vLiq), `${_moPesoSinal(vDes)} desfalque · ${_moPesoSinal(vSob)} sobra`, corSinal(vLiq), 'ti-scale'],
+    ['Custo da variação', _moRs(rLiq), `${_moRs(rDes)} desfalque · ${_moRs(rSob)} sobra`, corSinal(rLiq), 'ti-coin']
+  ];
   const k = [
     ['Na fila', fila.length, 'pares fora da faixa', 'var(--text)', 'ti-list-details'],
     ['Sem ação', semAcao, 'nada feito desde que entrou', semAcao ? 'var(--urgente)' : 'var(--green)', 'ti-clock'],
@@ -777,8 +802,10 @@ function _muralKpisHtml(itens) {
     ['Escalonados', esc, 'prazo vencido ou ocorrência sem efeito', esc ? 'var(--red)' : 'var(--green)', 'ti-arrow-big-up-lines'],
     ['Sem explicação', _moPeso(kgRes), `parte da variação sem causa · ${_moRs(rs).replace(/^[+−]/, '')}`, 'var(--amber)', 'ti-eye-off']
   ];
-  return `<div class="mo-kpis">${k.map(([l, v, s, c, i]) =>
-    `<div class="mo-kpi"><span class="mo-kpi-label"><i class="ti ${i}"></i>${l}</span><span class="mo-kpi-val" style="color:${c}">${v}</span><span class="mo-kpi-sub">${s}</span></div>`).join('')}</div>`;
+  const card = (cls) => ([l, v, s, c, i]) =>
+    `<div class="mo-kpi${cls}" style="--kc:${c}"><span class="mo-kpi-label"><i class="ti ${i}"></i>${l}</span><span class="mo-kpi-val" style="color:${c}">${v}</span><span class="mo-kpi-sub">${s}</span></div>`;
+  return `<div class="mo-kpis-hero">${principais.map(card(' mo-kpi-hero')).join('')}</div>
+    <div class="mo-kpis">${k.map(card('')).join('')}</div>`;
 }
 
 function _muralIdsAttr(arr) { return _moEsc(JSON.stringify(arr.map(_moChave))); }
@@ -860,10 +887,19 @@ function _muralTimeHtml(itens) {
     const base = fotos[0]?.atual.payload?.base || {};
     const kgRes = its.reduce((s, i) => s + _moKgResidual(i), 0);
     const rs = its.reduce((s, i) => s + _moRsResidual(i), 0);
+    // Variação e custo totais: soma COM SINAL (líquida, como a Variação Total
+    // do Gerencial) e, embaixo, quanto é desfalque e quanto é sobra.
+    const soma = (f, cond) => its.reduce((s, i) => s + (cond(i) ? f(i) : 0), 0);
+    const vLiq = soma(i => i.v, () => true), vDes = soma(i => i.v, i => i.v < 0), vSob = soma(i => i.v, i => i.v > 0);
+    const rLiq = soma(i => i.rs || 0, () => true), rDes = soma(i => i.rs || 0, i => i.v < 0), rSob = soma(i => i.rs || 0, i => i.v > 0);
+    const corSinal = v => v < -0.05 ? 'var(--red)' : v > 0.05 ? 'var(--amber)' : 'inherit';
     const n = (v, c) => `<td${v ? ` style="color:${c}"` : ''}>${v}</td>`;
     return `<tr onclick="muralFiltrarIds('fila de ${_moEsc(d.nome)}', this)" data-ids="${_muralIdsAttr(its)}">
       <td><b>${_moEsc(d.nome)}</b><small>${_moEsc(d.cats.join(', '))}</small></td>
-      <td>${its.length}</td>${n(its.filter(i => i.piorando).length, 'var(--red)')}${n(its.filter(i => !i.temOc && i.diasSemAcao > 0).length, 'var(--urgente)')}${n(its.filter(i => i.status === 'escalonado').length, 'var(--red)')}${n(its.filter(i => i.semTratamento).length, 'var(--urgente)')}
+      <td>${its.length}</td>
+      <td style="color:${corSinal(vLiq)}">${_moPesoSinal(vLiq)}<small>${_moPesoSinal(vDes)} · ${_moPesoSinal(vSob)}</small></td>
+      <td style="color:${corSinal(rLiq)}">${_moRs(rLiq)}<small>${_moRs(rDes)} · ${_moRs(rSob)}</small></td>
+      ${n(its.filter(i => i.piorando).length, 'var(--red)')}${n(its.filter(i => !i.temOc && i.diasSemAcao > 0).length, 'var(--urgente)')}${n(its.filter(i => i.status === 'escalonado').length, 'var(--red)')}${n(its.filter(i => i.semTratamento).length, 'var(--urgente)')}
       <td>${_moPeso(kgRes)}<small>${_moRs(rs).replace(/^[+−]/, '')}</small></td>
       <td${atraso == null || atraso > 1 ? ' style="color:var(--red)"' : ''}>${atraso == null ? 'sem foto' : atraso === 0 ? 'hoje' : `há ${atraso} dia${atraso > 1 ? 's' : ''}`}<small>SAP ${_moEsc((base.sap || '—').slice(0, 5))} · lanç. ${_moEsc((base.lancamentos || '—').slice(0, 5))}</small></td></tr>`;
   }).join('');
@@ -885,7 +921,7 @@ function _muralTimeHtml(itens) {
         `<button class="mo-chip" onclick="muralFiltrarIds('${_moEsc(c)}', this)" data-ids="${_muralIdsAttr(its)}" title="${_moEsc([...s].join(', '))}"><b>${_moEsc(c)}</b> ${s.size} analistas · ${its.length} ite${its.length > 1 ? 'ns' : 'm'}</button>`).join('')}</div>
     </details>` : '';
   return `<div class="mo-panel"><div class="mo-panel-head"><span class="mo-panel-title"><i class="ti ti-users"></i>Painel do time</span><span class="mo-hint" style="margin-left:auto">Clique num analista para ver a fila dele</span></div>
-    <div class="mo-scroll"><table class="mo-team"><thead><tr><th>Analista</th><th>Na fila</th><th>Piorando</th><th>Sem ação</th><th>Escalonados</th><th title="Ainda sem comentário com a causa nem ocorrência: não pode ir para o fechamento">Sem tratamento</th><th>Sem explicação</th><th>Foto</th></tr></thead><tbody>${linhas}</tbody></table></div>
+    <div class="mo-scroll"><table class="mo-team"><thead><tr><th>Analista</th><th>Na fila</th><th title="Soma com sinal das variações da fila. Embaixo: desfalque · sobra">Variação total</th><th title="Soma com sinal do custo das variações da fila. Embaixo: desfalque · sobra">Custo da variação</th><th>Piorando</th><th>Sem ação</th><th>Escalonados</th><th title="Ainda sem comentário com a causa nem ocorrência: não pode ir para o fechamento">Sem tratamento</th><th>Sem explicação</th><th>Foto</th></tr></thead><tbody>${linhas}</tbody></table></div>
     ${multiHtml}</div>`;
 }
 
@@ -910,9 +946,9 @@ function muralRender() {
   if (!el) return;
   if (!_mo.carregado && !_mo.carregando && !_mo.erro) { muralRecarregar(); return; }
   const adm = _moEhAdm();
-  const cab = `<div class="mo-head"><div><h2>Mural de Operações</h2><p>O que está piorando, o que ninguém pegou e o que já tem explicação.</p></div>
-    <div class="mo-head-right"><span class="mo-hint"><i class="ti ti-clock"></i> Janela móvel de ${MURAL_JANELA_DIAS} dias até ontem</span>
-    <button class="btn btn-sm" onclick="muralRecarregar()" ${_mo.carregando ? 'disabled' : ''}><i class="ti ti-refresh"></i> ${_mo.carregando ? 'Carregando…' : 'Recarregar'}</button></div></div>`;
+  // Sem cabeçalho nem botão (Hugo, 09/11/2026): o Mural atualiza sozinho no
+  // boot, depois de cada importação e junto com o Atualizar do Dashboard.
+  const cab = '';
   if (_mo.erro) { el.innerHTML = cab + `<div class="empty-state"><p>Não foi possível ler o Mural: ${_moEsc(_mo.erro)}</p></div>`; return; }
   if (!_mo.carregado) { el.innerHTML = cab + '<div class="empty-state"><p>Carregando as fotos…</p></div>'; return; }
   if (!_mo.fotos.length) {
@@ -945,7 +981,7 @@ function muralRender() {
             </select></div>`}
         </div>
         ${_mo.aba === 'faixa' ? _muralFaixaHtml() : `<div class="mo-queue">${ativos.map(_muralItemHtml).join('') || '<div class="empty-state" style="padding:28px"><p>Nada nesta visão.</p></div>'}</div>`}
-        <div class="mo-foot-note mo-hint">Fotos: ${_moEsc(fotoInfo)}</div>
+        <div class="mo-foot-note mo-hint">Janela móvel de ${MURAL_JANELA_DIAS} dias até ontem · Fotos: ${_moEsc(fotoInfo)}</div>
       </div>
       <div class="mo-aside">
         <div class="mo-panel"><div class="mo-panel-head"><span class="mo-panel-title"><i class="ti ti-eye-off"></i>Pontos cegos</span></div><div class="mo-panel-body">${_muralPontosCegosHtml()}</div></div>
