@@ -361,6 +361,11 @@ function muralAgendarPublicacao() {
 const MURAL_PRAZO = { critico: 2, urgente: 5, atencao: 10 };
 const MURAL_GRAV  = { critico: 6, urgente: 3, atencao: 1, bom: 0 };
 const MURAL_TEND  = { deriva: 1.5, degrau: 1, serrote: 0.4, irregular: 1, poucos: 1, erro: 1.3 };
+// Impacto na prioridade: o financeiro pesa mais (equilibra as categorias —
+// 1 kg de aditivo vale muito mais que 1 kg de areia), o físico entra junto
+// (Hugo, 09/11/2026). Financeiro = log10(R$); físico = log2(1 + vezes o
+// limite Crítico da categoria). ponytail: pesos a calibrar com o uso.
+const MURAL_PESO_IMPACTO = { financeiro: 1, fisico: 0.5 };
 const MURAL_NIVEL = {
   critico: { label: 'CRÍTICO', cor: 'var(--red)',     icon: 'ti-flame' },
   urgente: { label: 'URGENTE', cor: 'var(--urgente)', icon: 'ti-alert-circle' },
@@ -393,6 +398,12 @@ const _moEsc = (s) => escapeHtml(String(s ?? ''));
 const _moEhAdm = () => window.currentUser?.role === 'admin';
 const _moChave = (i) => i.central + '|' + i.material;
 const _moRsResidual = (i) => Math.abs(i.residual * (i.custoMed || 0));
+// O FÍSICO manda (Hugo, 09/11/2026); R$ fica como informação secundária.
+const _moKgResidual = (i) => Math.abs(i.residual || 0);
+// Totais em toneladas a partir de 10 t, como o Gerencial; abaixo, em kg.
+const _moPeso = (kg) => Math.abs(kg) >= 10000
+  ? (kg / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' t'
+  : kg.toLocaleString('pt-BR', { maximumFractionDigits: 0 }) + ' kg';
 
 // ── Leitura das fotos ──────────────────────────────────────────────────────
 // Duas consultas: primeiro só (dia, categoria) dos últimos 10 dias, depois o
@@ -481,6 +492,7 @@ function _muralValorEm(pontos, data) {
 
 function muralItensDerivados() {
   const hoje = _moDia(new Date());
+  const thresholds = getHealthThresholds();
   const itens = [];
   _mo.fotos.forEach(f => {
     const p = f.atual.payload || {};
@@ -509,9 +521,15 @@ function muralItensDerivados() {
       const novo = !ant && !!f.anterior;
       const piorou = !!ant && Math.abs(it.v) > Math.abs(ant.v) + 0.01 && (MURAL_GRAV[it.nivel] > MURAL_GRAV[ant.nivel] || it.piorando);
       const residual = it.v - (it.explicadoKg || 0);
+      // Físico normalizado pela categoria: quantas vezes a variação passa do
+      // limite Crítico (600 kg de aditivo pesa como 26 t de cimento, não
+      // como 600 kg de areia).
+      const limCritico = thresholds[it.catKey]?.urgente || 0;
+      const vezesLimite = limCritico ? Math.abs(it.v) / limCritico : 0;
       const partes = [
         ['Gravidade × tendência', (MURAL_GRAV[it.nivel] || 0) * (MURAL_TEND[it.formato] || 1)],
-        ['Impacto em R$', Math.log10(Math.abs(it.rs || 0) + 1)],
+        ['Impacto financeiro (R$)', MURAL_PESO_IMPACTO.financeiro * Math.log10(Math.abs(it.rs || 0) + 1)],
+        [`Impacto físico (${vezesLimite.toFixed(1)}× o limite Crítico)`, MURAL_PESO_IMPACTO.fisico * Math.log2(1 + vezesLimite)],
         ['Dias sem ação × 0,3', Math.min(diasSemAcao, 10) * 0.3],
         ['Meses seguidos fora da faixa', ((it.meses || 1) - 1) * 1.5],
         ['Prazo vencido', vencido ? 3 : 0],
@@ -604,7 +622,7 @@ function _muralFiltrar(itens) {
 }
 
 function _muralOrdenar(itens) {
-  const k = { prio: i => -i.prioridade, rs: i => -Math.abs(i.rs || 0), residual: i => -_moRsResidual(i) }[_mo.ordem] || (i => -i.prioridade);
+  const k = { prio: i => -i.prioridade, kg: i => -Math.abs(i.v || 0), residual: i => -_moKgResidual(i) }[_mo.ordem] || (i => -i.prioridade);
   return [...itens].sort((a, b) => k(a) - k(b));
 }
 
@@ -613,13 +631,14 @@ function _muralKpisHtml(itens) {
   const semAcao = fila.filter(i => !i.temOc && i.diasSemAcao > 0).length;
   const piorando = fila.filter(i => i.piorando).length;
   const esc = fila.filter(i => i.status === 'escalonado').length;
+  const kgRes = fila.reduce((s, i) => s + _moKgResidual(i), 0);
   const rs = fila.reduce((s, i) => s + _moRsResidual(i), 0);
   const k = [
     ['Na fila', fila.length, 'pares fora da faixa', 'var(--text)', 'ti-list-details'],
     ['Sem ação', semAcao, 'nada feito desde que entrou', semAcao ? 'var(--urgente)' : 'var(--green)', 'ti-clock'],
     ['Piorando', piorando, 'cresceu nos 3 últimos lançamentos', piorando ? 'var(--red)' : 'var(--green)', 'ti-trending-up'],
     ['Escalonados', esc, 'prazo vencido ou ocorrência sem efeito', esc ? 'var(--red)' : 'var(--green)', 'ti-arrow-big-up-lines'],
-    ['R$ sem explicação', _moRs(rs).replace(/^[+−]/, ''), 'parte da variação sem causa', 'var(--amber)', 'ti-eye-off']
+    ['Sem explicação', _moPeso(kgRes), `parte da variação sem causa · ${_moRs(rs).replace(/^[+−]/, '')}`, 'var(--amber)', 'ti-eye-off']
   ];
   return `<div class="mo-kpis">${k.map(([l, v, s, c, i]) =>
     `<div class="mo-kpi"><span class="mo-kpi-label"><i class="ti ${i}"></i>${l}</span><span class="mo-kpi-val" style="color:${c}">${v}</span><span class="mo-kpi-sub">${s}</span></div>`).join('')}</div>`;
@@ -685,12 +704,13 @@ function _muralTimeHtml(itens) {
     const ultima = fotos.map(f => _moIsoParaData(f.atual.dia)).sort((a, b) => b - a)[0];
     const atraso = ultima ? _moDiasEntre(ultima, hoje) : null;
     const base = fotos[0]?.atual.payload?.base || {};
+    const kgRes = its.reduce((s, i) => s + _moKgResidual(i), 0);
     const rs = its.reduce((s, i) => s + _moRsResidual(i), 0);
     const n = (v, c) => `<td${v ? ` style="color:${c}"` : ''}>${v}</td>`;
     return `<tr onclick="muralFiltrarIds('fila de ${_moEsc(d.nome)}', this)" data-ids="${_muralIdsAttr(its)}">
       <td><b>${_moEsc(d.nome)}</b><small>${_moEsc(d.cats.join(', '))}</small></td>
       <td>${its.length}</td>${n(its.filter(i => i.piorando).length, 'var(--red)')}${n(its.filter(i => !i.temOc && i.diasSemAcao > 0).length, 'var(--urgente)')}${n(its.filter(i => i.status === 'escalonado').length, 'var(--red)')}
-      <td>${_moRs(rs).replace(/^[+−]/, '')}</td>
+      <td>${_moPeso(kgRes)}<small>${_moRs(rs).replace(/^[+−]/, '')}</small></td>
       <td${atraso == null || atraso > 1 ? ' style="color:var(--red)"' : ''}>${atraso == null ? 'sem foto' : atraso === 0 ? 'hoje' : `há ${atraso} dia${atraso > 1 ? 's' : ''}`}<small>SAP ${_moEsc((base.sap || '—').slice(0, 5))} · lanç. ${_moEsc((base.lancamentos || '—').slice(0, 5))}</small></td></tr>`;
   }).join('');
   // Central na fila de mais de um analista: causa comum provável na central.
@@ -701,7 +721,7 @@ function _muralTimeHtml(itens) {
   });
   const multi = [...donosPorCentral].filter(([, s]) => s.size > 1).sort((a, b) => b[1].size - a[1].size);
   return `<div class="mo-panel"><div class="mo-panel-head"><span class="mo-panel-title"><i class="ti ti-users"></i>Painel do time</span><span class="mo-hint" style="margin-left:auto">Clique num analista para ver a fila dele</span></div>
-    <div class="mo-scroll"><table class="mo-team"><thead><tr><th>Analista</th><th>Na fila</th><th>Piorando</th><th>Sem ação</th><th>Escalonados</th><th>R$ sem explicação</th><th>Foto</th></tr></thead><tbody>${linhas}</tbody></table></div>
+    <div class="mo-scroll"><table class="mo-team"><thead><tr><th>Analista</th><th>Na fila</th><th>Piorando</th><th>Sem ação</th><th>Escalonados</th><th>Sem explicação</th><th>Foto</th></tr></thead><tbody>${linhas}</tbody></table></div>
     ${multi.map(([c, s]) => `<div class="mo-multi"><i class="ti ti-alert-triangle"></i><span><b>${_moEsc(c)}</b> está na fila de ${s.size} analistas: ${_moEsc([...s].join(', '))}. Pode ser causa comum na central (operação, balança, gestão).</span>
       <button class="mo-link" onclick="muralFiltrarIds('${_moEsc(c)}', this)" data-ids="${_muralIdsAttr(ativos.filter(i => i.central === c))}">Ver os itens →</button></div>`).join('')}</div>`;
 }
@@ -753,8 +773,8 @@ function muralRender() {
             ${_mo.ids ? `<button class="mo-chip on" onclick="muralFiltro('todos')">${_moEsc(_mo.idsLabel)} <i class="ti ti-x"></i></button>` : ''}
             <select class="mo-sort" onchange="muralOrdem(this.value)" aria-label="Ordenar a fila">
               <option value="prio"${_mo.ordem === 'prio' ? ' selected' : ''}>Ordenar: prioridade</option>
-              <option value="rs"${_mo.ordem === 'rs' ? ' selected' : ''}>Ordenar: impacto R$</option>
-              <option value="residual"${_mo.ordem === 'residual' ? ' selected' : ''}>Ordenar: R$ sem explicação</option>
+              <option value="kg"${_mo.ordem === 'kg' ? ' selected' : ''}>Ordenar: variação (kg)</option>
+              <option value="residual"${_mo.ordem === 'residual' ? ' selected' : ''}>Ordenar: sem explicação (kg)</option>
             </select></div>
         </div>
         <div class="mo-queue">${ativos.map(_muralItemHtml).join('') || '<div class="empty-state" style="padding:28px"><p>Nada nesta visão.</p></div>'}
