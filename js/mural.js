@@ -1106,7 +1106,7 @@ function muralRender() {
       <div class="mo-panel">
         <div class="mo-panel-head">
           <div class="mo-abas" role="tablist">
-            <button class="mo-aba${_mo.aba !== 'faixa' ? ' on' : ''}" role="tab" aria-selected="${_mo.aba !== 'faixa'}" onclick="muralAba('fila')"><i class="ti ti-flame"></i>${adm ? 'Fila de ação' : 'Minha fila · ' + _moEsc(cats)} <b>${base.length}</b></button>
+            <button class="mo-aba${_mo.aba !== 'faixa' ? ' on' : ''}" role="tab" aria-selected="${_mo.aba !== 'faixa'}" onclick="muralAba('fila')"><i class="ti ti-flame"></i>${adm ? 'Fila de ação' : 'Minha fila · ' + _moEsc(cats)} <b>${lista.length}</b></button>
             <button class="mo-aba${_mo.aba === 'faixa' ? ' on' : ''}" role="tab" aria-selected="${_mo.aba === 'faixa'}" onclick="muralAba('faixa')"><i class="ti ti-circle-check"></i>Na faixa <b>${_muralFaixaFiltradas().length}</b></button>
           </div>
           ${_mo.aba === 'faixa' ? '' : `<div class="mo-filtros">${filtros.map(([k, l]) => `<button class="mo-chip${!_mo.ids && _mo.filtro === k ? ' on' : ''}" onclick="muralFiltro('${k}')">${l}</button>`).join('')}
@@ -1456,14 +1456,22 @@ async function muralAuditar() {
 // da base local (o ADM tem a base completa; o analista, a da categoria dele).
 // Mesma conta serve à gaveta do Raio-X e às Movimentações (modal da Micro).
 // Âncora sempre no saldo do SAP no início do período, como o Mural.
-//   'mes'  → do dia 1 até ontem: a variação principal do Mural (padrão)
-//   '30d'  → a janela do Mural, atravessando o fechamento
+//   'mes'  → do dia 1 até ontem: a variação principal do Mural
+//   '30d'  → a janela do Mural, atravessando o fechamento (padrão do Raio-X)
 //   'dash' → o período escolhido no Dashboard Analítico
-const MURAL_RX_PERIODOS = [['mes', 'Mês atual'], ['30d', '30 dias'], ['dash', 'Período do Dashboard']];
+//   'invs' → inventário a inventário: uma barra por mês fechado (o resto da
+//            gaveta cobre os últimos MURAL_RX_MESES meses até ontem)
+//   'inv:AAAA-MM' → dia a dia do mês fechado AAAA-MM (clique na barra)
+const MURAL_RX_PERIODOS = [['mes', 'Mês atual'], ['30d', '30 dias'], ['invs', 'Inventários'], ['dash', 'Período do Dashboard']];
 
 function _muralRxPeriodo(periodo) {
   const J = muralJanela();
   if (periodo === '30d') return { ini: J.ini, fim: J.fim };
+  if (periodo === 'invs') return { ini: new Date(J.fim.getFullYear(), J.fim.getMonth() - MURAL_RX_MESES, 1), fim: J.fim };
+  if (String(periodo).startsWith('inv:')) {
+    const [a, m] = periodo.slice(4).split('-').map(Number);
+    return { ini: new Date(a, m - 1, 1), fim: new Date(a, m, 0) };
+  }
   if (periodo === 'dash') {
     const i = document.getElementById('an-dt-ini')?.value, f = document.getElementById('an-dt-fim')?.value;
     if (!i || !f) return null;
@@ -1523,54 +1531,177 @@ function muralRaioXCalcular(central, mat, catKey, periodo) {
   };
 }
 
-// Gráfico da variação acumulada dia a dia: pontos nos lançamentos, faixa
-// "bom" sombreada, linhas do limite e do Crítico, virada de mês tracejada
-// (fechamento) e marcas das ações (comentário/ocorrência) no eixo.
-// ponytail: tooltip nativo (<title>) em vez de um balão próprio; trocar se o
-// analista pedir leitura mais rápida no hover.
-function _muralRxChart(rx, lim, acoes) {
-  const n = rx.rows.length;
-  if (!n) return '';
-  const W = 740, H = 250, L = 66, R = 12, T = 14, B = 30;
-  const vals = rx.acc.slice(0, rx.iUlt >= 0 ? rx.iUlt + 1 : 0);
+// ── Peças comuns dos gráficos do Raio-X (dia a dia e inventários) ────────
+const MO_RX_DIM = { W: 740, H: 274, L: 84, R: 12, T: 24, B: 50 };
+const _moRxF = v => v.toFixed(1);
+// Cor em hex porque _showTip (macro.js) pinta a borda do balão com ela.
+const _moRxHex = v => v < -0.05 ? '#f43f5e' : v > 0.05 ? '#f59e0b' : '#7b85a0';
+const _moRxNivel = (v, lim) => { const a = Math.abs(v); return a <= lim.bom ? ['NA FAIXA', '#10b981'] : a <= lim.atencao ? ['ATENÇÃO', '#f59e0b'] : a <= lim.urgente ? ['URGENTE', '#f97316'] : ['CRÍTICO', '#f43f5e']; };
+const _moRxLinha = (rot, val, cor) => `<div style="color:var(--text3)">${rot}</div><div style="color:${cor || 'var(--text)'};text-align:right">${val}</div>`;
+// Balão no padrão dos donuts da Macro, mostrado por delegação na gaveta.
+const _moRxTip = (cor, titulo, dir, grade, extra = '') => encodeURIComponent(`<div style="display:flex;align-items:center;gap:7px;margin-bottom:8px">
+    <span style="width:10px;height:10px;border-radius:3px;background:${cor};flex-shrink:0"></span>
+    <span style="font-weight:700;font-size:13px;color:var(--text)">${titulo}</span>
+    <span style="margin-left:auto;font-family:var(--mono);font-size:11px;color:${cor};font-weight:700">${dir}</span></div>
+  ${grade ? `<div style="display:grid;grid-template-columns:auto auto;gap:5px 14px;font-family:var(--mono);font-size:11px">${grade}</div>` : ''}${extra}`);
+
+// Escala vertical, faixa "bom", tracejados de limite/crítico, rótulos no
+// eixo da esquerda (fora da área do gráfico, pulando os que ficariam a
+// menos de 14 px de outro), linha do zero e legenda.
+function _muralRxEixo(vals, lim) {
+  const { W, H, L, R, T, B } = MO_RX_DIM, f = _moRxF;
   const maxAbs = Math.max(0, ...vals.map(Math.abs));
   const linhas = [[lim.bom, 'limite'], ...(maxAbs > lim.atencao ? [[lim.urgente, 'crítico']] : [])].filter(([v]) => v > 0);
   let yMax = Math.max(0, ...vals, ...linhas.map(([v]) => v)), yMin = Math.min(0, ...vals, ...linhas.map(([v]) => -v));
   const pad = (yMax - yMin) * 0.08 || 1; yMax += pad; yMin -= pad;
-  const x = i => L + (n > 1 ? i * (W - L - R) / (n - 1) : (W - L - R) / 2);
   const y = v => T + (yMax - v) / (yMax - yMin) * (H - T - B);
-  const ultV = vals.length ? vals[vals.length - 1] : 0;
-  const cor = ultV < -0.05 ? 'var(--red)' : ultV > 0.05 ? 'var(--amber)' : 'var(--text2)';
-  const f = v => v.toFixed(1);
-  const pts = vals.map((v, i) => `${f(x(i))},${f(y(v))}`).join(' ');
-  const xEvery = Math.max(1, Math.ceil(n / 8));
+  const corLinha = rot => rot === 'crítico' ? 'var(--red)' : 'var(--green)';
   const svg = [];
   if (lim.bom > 0) svg.push(`<rect x="${L}" y="${f(y(lim.bom))}" width="${W - L - R}" height="${f(y(-lim.bom) - y(lim.bom))}" fill="var(--green)" opacity=".07"/>`);
   linhas.forEach(([v, rot]) => [v, -v].forEach(s => svg.push(
-    `<line x1="${L}" x2="${W - R}" y1="${f(y(s))}" y2="${f(y(s))}" stroke="${rot === 'crítico' ? 'var(--red)' : 'var(--green)'}" stroke-dasharray="5 4" opacity=".55"/>`,
-    `<text x="${W - R - 4}" y="${f(y(s) - 4)}" text-anchor="end" class="mo-rx-ax">${rot} ${_moPesoSinal(s)}</text>`)));
-  [yMax - pad, 0, yMin + pad].forEach(v => svg.push(`<text x="${L - 8}" y="${f(y(v) + 4)}" text-anchor="end" class="mo-rx-ax">${_moPesoSinal(v)}</text>`));
+    `<line x1="${L}" x2="${W - R}" y1="${f(y(s))}" y2="${f(y(s))}" stroke="${corLinha(rot)}" stroke-dasharray="5 4" opacity=".55"/>`)));
+  const ticks = [];
+  [[0, 'var(--text3)'], ...linhas.flatMap(([v, rot]) => [[v, corLinha(rot)], [-v, corLinha(rot)]]),
+   [Math.max(0, ...vals), 'var(--text3)'], [Math.min(0, ...vals), 'var(--text3)']]
+    .forEach(([v, c]) => { if (!ticks.some(t => Math.abs(y(t[0]) - y(v)) < 14)) ticks.push([v, c]); });
+  ticks.forEach(([v, c]) => svg.push(`<text x="${L - 8}" y="${f(y(v) + 4)}" text-anchor="end" class="mo-rx-ax" style="fill:${c}">${_moPesoSinal(v)}</text>`));
   svg.push(`<line x1="${L}" x2="${W - R}" y1="${f(y(0))}" y2="${f(y(0))}" stroke="var(--border3)"/>`);
+  const leg = linhas.map(([v, rot]) => `<span><i style="border-color:${corLinha(rot)}"></i>${rot === 'crítico' ? 'Crítico' : 'Limite da faixa'} ±${_moPeso(v)}</span>`).join('');
+  return { y, svg, leg };
+}
+const _muralRxSvg = (svg, leg, rotulo) => `<svg class="mo-rx-chart" viewBox="0 0 ${MO_RX_DIM.W} ${MO_RX_DIM.H}" role="img" aria-label="${rotulo}">${svg.join('')}</svg>
+  ${leg ? `<div class="mo-rx-leg">${leg}</div>` : ''}`;
+
+// Gráfico da variação acumulada dia a dia: pontos nos lançamentos (balão),
+// fechamento em roxo na virada do mês e marcas das ações embaixo.
+function _muralRxChart(rx, lim, acoes) {
+  const n = rx.rows.length;
+  if (!n) return '';
+  const { W, H, L, R, T, B } = MO_RX_DIM, f = _moRxF;
+  const vals = rx.acc.slice(0, rx.iUlt >= 0 ? rx.iUlt + 1 : 0);
+  const { y, svg, leg } = _muralRxEixo(vals, lim);
+  const x = i => L + (n > 1 ? i * (W - L - R) / (n - 1) : (W - L - R) / 2);
+  const ultV = vals.length ? vals[vals.length - 1] : 0;
+  const cor = ultV < -0.05 ? 'var(--red)' : ultV > 0.05 ? 'var(--amber)' : 'var(--text2)';
+  const pts = vals.map((v, i) => `${f(x(i))},${f(y(v))}`).join(' ');
+  const xEvery = Math.max(1, Math.ceil(n / 8));
+  const idxMarcas = svg.length;
   rx.dayList.forEach((d, i) => {
-    if (i > 0 && d.getDate() === 1) svg.push(`<line x1="${f(x(i))}" x2="${f(x(i))}" y1="${T}" y2="${H - B}" stroke="var(--text3)" stroke-dasharray="3 3"/>`,
-      `<text x="${f(x(i) + 4)}" y="${T + 10}" class="mo-rx-ax">fechamento</text>`);
-    if (i % xEvery === 0 || i === n - 1) svg.push(`<text x="${f(x(i))}" y="${H - 8}" text-anchor="${i === n - 1 ? 'end' : i === 0 ? 'start' : 'middle'}" class="mo-rx-ax">${fmtPtDate(d).slice(0, 5)}</text>`);
+    // Fechamento (virada do mês): linha roxa contínua entre o último dia do
+    // mês e o dia 1, trecho anterior levemente apagado (já ajustado no
+    // fechamento) e etiqueta — não se confunde com limite/crítico/ações.
+    if (i > 0 && d.getDate() === 1) {
+      const xm = (x(i - 1) + x(i)) / 2, lx = xm + 90 > W - R ? xm - 88 : xm + 4; // etiqueta vira p/ a esquerda perto da borda
+      svg.push(`<rect x="${L}" y="${T}" width="${f(xm - L)}" height="${H - B - T}" fill="var(--bg)" opacity=".35"/>`,
+        `<line x1="${f(xm)}" x2="${f(xm)}" y1="2" y2="${H - B}" stroke="var(--purple)" stroke-width="2.5"/>`,
+        `<rect x="${f(lx)}" y="2" width="84" height="18" rx="4" fill="var(--purple)"/>`,
+        `<text x="${f(lx + 42)}" y="15" text-anchor="middle" font-size="11.5" font-weight="700" fill="#fff" font-family="var(--mono)">FECHAMENTO</text>`);
+    }
+    if ((i % xEvery === 0 && n - 1 - i >= xEvery / 2) || i === n - 1) svg.push(`<text x="${f(x(i))}" y="${H - 8}" text-anchor="${i === n - 1 ? 'end' : i === 0 ? 'start' : 'middle'}" class="mo-rx-ax">${fmtPtDate(d).slice(0, 5)}</text>`);
   });
   if (vals.length > 1) svg.push(`<polygon points="${f(x(0))},${f(y(0))} ${pts} ${f(x(vals.length - 1))},${f(y(0))}" fill="${cor}" opacity=".12"/>`,
     `<polyline points="${pts}" fill="none" stroke="${cor}" stroke-width="2" stroke-linejoin="round"/>`);
   rx.rows.forEach((r, i) => {
     if (!r.hasLanc) return;
     const v = rx.acc[i], c = v < -0.05 ? 'var(--red)' : v > 0.05 ? 'var(--amber)' : 'var(--text2)';
-    const tip = `${r.dateLabel}\nAcumulada: ${_moKg(v)}\nNo lançamento: ${_moKg(r.diff || 0)}\nEst. Final: ${fmtKg(r.finalStock)} · Teórico: ${fmtKg(r.theoreticalStock)}`;
-    svg.push(`<circle cx="${f(x(i))}" cy="${f(y(v))}" r="${i === rx.iUlt ? 5 : 3.5}" fill="${c}" stroke="var(--bg2)" stroke-width="1.5"><title>${_moEsc(tip)}</title></circle>`);
+    const [nv, nvCor] = _moRxNivel(v, lim);
+    const mov = (r.theoreticalStock ?? 0) - (r.initialStock ?? 0);
+    const grade = _moRxLinha('Variação acumulada', _moKg(v), _moRxHex(v))
+      + _moRxLinha('No lançamento', _moKg(r.diff || 0), _moRxHex(r.diff || 0))
+      + _moRxLinha('Est. Inicial', fmtKg(r.initialStock ?? 0)) + _moRxLinha('Movimentos SAP', fmtKgSigned(mov))
+      + _moRxLinha('Est. Teórico', fmtKg(r.theoreticalStock ?? 0), 'var(--purple)') + _moRxLinha('Est. Final', fmtKg(r.finalStock ?? 0), 'var(--teal)')
+      + (r.lancCount > 1 ? _moRxLinha('Lançamentos no dia', r.lancCount, '#f59e0b') : '');
+    const tip = _moRxTip(_moRxHex(v), r.dateLabel, `<span style="color:${nvCor}">${nv}</span>`, grade);
+    svg.push(`<circle class="mo-rx-pt" cx="${f(x(i))}" cy="${f(y(v))}" r="${i === rx.iUlt ? 5 : 3.5}" fill="${c}" stroke="var(--bg2)" stroke-width="1.5" data-tip="${tip}" data-col="${_moRxHex(v)}"/>`);
   });
+  // Comentários e ocorrências: uma marca por dia — linha vertical na cor
+  // (azul = comentário, vermelho = ocorrência) e um selo com a quantidade
+  // embaixo; o grupo inteiro é a área de hover do balão (Hugo, 09/11/2026:
+  // o triângulo pequeno quase não aparecia). Vai atrás da linha e dos pontos.
+  const porDia = new Map();
   acoes.forEach(a => {
     const i = rx.dayList.findIndex(d => _moDia(d).getTime() === _moDia(a.quando).getTime());
-    if (i < 0) return;
-    const cx = x(i), cy = H - B + 1;
-    svg.push(`<path d="M${f(cx - 5)},${f(cy + 8)} L${f(cx + 5)},${f(cy + 8)} L${f(cx)},${f(cy)} Z" fill="${a.oc ? 'var(--red)' : 'var(--accent)'}"><title>${_moEsc(a.titulo + (a.texto ? '\n' + a.texto : ''))}</title></path>`);
+    if (i >= 0) { if (!porDia.has(i)) porDia.set(i, []); porDia.get(i).push(a); }
   });
-  return `<svg class="mo-rx-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Variação acumulada dia a dia">${svg.join('')}</svg>`;
+  const marcas = [...porDia].map(([i, as]) => {
+    const cx = x(i), cy = H - B + 13, cor = as.some(a => a.oc) ? '#f43f5e' : '#3b82f6';
+    const lista = as.map(a => `<div style="display:flex;gap:7px;margin-top:6px"><span style="width:8px;height:8px;border-radius:50%;margin-top:5px;flex-shrink:0;background:${a.oc ? '#f43f5e' : '#3b82f6'}"></span>
+      <div><div style="font-size:11.5px;color:var(--text3)">${_moEsc(a.titulo)}</div>
+      <div style="font-size:12.5px;color:var(--text);white-space:pre-wrap;max-height:120px;overflow:hidden">${_moEsc(a.texto) || '—'}</div></div></div>`).join('');
+    const titulo = as.length > 1 ? `${as.length} ações` : (as[0].oc ? 'Ocorrência' : 'Comentário');
+    const tip = _moRxTip(cor, titulo, fmtPtDate(as[0].quando).slice(0, 5), '', lista);
+    return `<g class="mo-rx-pt mo-rx-acao" data-tip="${tip}" data-col="${cor}">
+      <rect x="${f(cx - 9)}" y="${T}" width="18" height="${H - B - T + 22}" fill="transparent"/>
+      <line x1="${f(cx)}" x2="${f(cx)}" y1="${T}" y2="${f(cy - 9)}" stroke="${cor}" stroke-width="1.5" stroke-dasharray="3 3"/>
+      <circle cx="${f(cx)}" cy="${f(cy)}" r="9" fill="${cor}"/>
+      <text x="${f(cx)}" y="${f(cy + 4)}" text-anchor="middle" font-size="11" font-weight="700" fill="#fff" font-family="var(--mono)">${as.length > 1 ? as.length : (as[0].oc ? '!' : '✎')}</text></g>`;
+  });
+  svg.splice(idxMarcas, 0, ...marcas);
+  return _muralRxSvg(svg, leg, 'Variação acumulada dia a dia');
+}
+
+// ── Inventário a inventário ────────────────────────────────────────────────
+// Variação de cada mês fechado, do inventário anterior (saldo do SAP no
+// dia 1, que já traz o ajuste do fechamento) ao inventário do mês (último
+// lançamento do mês) — a mesma conta da coluna "mês anterior" da Visão Micro
+// (_anGetVarMesAnterior). Mais o mês em aberto, como no Mural.
+const MURAL_RX_MESES = 6;
+function _muralRxMeses(central, mat, catKey) {
+  const J = muralJanela(), out = [];
+  const nomeMes = d => d.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '') + '/' + String(d.getFullYear()).slice(2);
+  for (let k = MURAL_RX_MESES; k >= 1; k--) {
+    const ini = new Date(J.fim.getFullYear(), J.fim.getMonth() - k, 1);
+    const fim = new Date(ini.getFullYear(), ini.getMonth() + 1, 0);
+    const ate = new Date(fim); ate.setHours(23, 59, 59, 999);
+    const anc = _anGetSapStock({ central, material: mat, dtIni: ini });
+    const fimStock = _anGetLastPeriodStockFallback({ central, material: mat, dtIni: ini, dtFim: fim });
+    const nat = repartirSapPorNatureza((getSapIndex().byCentralMat.get(central)?.get(mat) || []).filter(r => {
+      const d = parseDate(r.dtLanc);
+      return d && d >= ini && d <= ate && getCatKeyDoCadastro(r.materialOriginal) && !isSapExcluidoPorFechamento(r);
+    }));
+    const teo = (anc?.value ?? 0) + nat.totalEnt + nat.totalSai + nat.totalAju;
+    const ok = fimStock && !fimStock.missing;
+    out.push({ chave: `${ini.getFullYear()}-${String(ini.getMonth() + 1).padStart(2, '0')}`, rot: nomeMes(ini),
+      // Sem saldo do Custos SAP no início, a "variação" seria o estoque inteiro.
+      anc, nat, teo, estFim: ok ? fimStock.value : null, dtFim: ok ? fimStock.dtLabel : null, v: ok && anc ? fimStock.value - teo : null,
+      falta: !anc ? 'sem âncora' : 'sem inv.' });
+  }
+  const atual = muralRaioXCalcular(central, mat, catKey, 'mes');
+  if (atual) {
+    const s = atual.payload.summary;
+    out.push({ chave: 'mes', rot: nomeMes(atual.ini), aberto: true, anc: s.pesoIniAusente ? null : { value: s.pesoIni, dtLabel: s.dtIniLabel.replace('Saldo SAP em ', '') },
+      nat: { totalEnt: s.totalEnt, totalSai: s.totalSai, totalAju: s.totalAju }, teo: s.estTeorico,
+      estFim: s.pesoFimAusente ? null : s.pesoFim, dtFim: s.pesoFimAusente ? null : s.dtFimLabel.replace('Último lançamento: ', ''), v: s.pesoFimAusente ? null : s.diff });
+  }
+  return out;
+}
+
+// Uma barra por inventário; clique abre o dia a dia daquele mês.
+function _muralRxBarras(meses, lim) {
+  const { W, H, L, R, B } = MO_RX_DIM, f = _moRxF;
+  const { y, svg, leg } = _muralRxEixo(meses.filter(m => m.v != null).map(m => m.v), lim);
+  const slot = (W - L - R) / meses.length, bw = Math.min(56, slot * 0.56);
+  meses.forEach((m, i) => {
+    const cx = L + slot * i + slot / 2;
+    svg.push(`<text x="${f(cx)}" y="${H - 22}" text-anchor="middle" class="mo-rx-ax" style="fill:var(--text2)">${_moEsc(m.rot)}</text>`,
+      `<text x="${f(cx)}" y="${H - 6}" text-anchor="middle" class="mo-rx-ax">${m.aberto ? 'em aberto' : 'inventário'}</text>`);
+    if (m.v == null) { svg.push(`<text x="${f(cx)}" y="${f(y(0) - 6)}" text-anchor="middle" class="mo-rx-ax">${m.falta || 'sem lanç.'}</text>`); return; }
+    const c = _moRxHex(m.v), [nv, nvCor] = _moRxNivel(m.v, lim);
+    const y0 = y(0), y1 = y(m.v), top = Math.min(y0, y1), h = Math.max(2, Math.abs(y1 - y0));
+    const grade = _moRxLinha('Variação', _moKg(m.v), c)
+      + _moRxLinha(`Est. Inicial${m.anc ? ` (${_moEsc(m.anc.dtLabel)})` : ''}`, m.anc ? fmtKg(m.anc.value) : '—')
+      + _moRxLinha('Entradas SAP', fmtKgSigned(m.nat.totalEnt), 'var(--green)') + _moRxLinha('Saídas SAP', fmtKgSigned(m.nat.totalSai), 'var(--red)')
+      + _moRxLinha('Ajustes SAP', fmtKgSigned(m.nat.totalAju), 'var(--amber)')
+      + _moRxLinha('Est. Teórico', fmtKg(m.teo), 'var(--purple)') + _moRxLinha(`Est. Final (${_moEsc(m.dtFim || '')})`, fmtKg(m.estFim), 'var(--teal)');
+    const tip = _moRxTip(c, `${m.rot}${m.aberto ? ' · em aberto' : ''}`, `<span style="color:${nvCor}">${nv}</span>`, grade,
+      '<div style="margin-top:8px;font-size:11.5px;color:var(--text3)">Clique para ver o dia a dia do mês</div>');
+    const rot = _moPesoSinal(m.v), ly = m.v < 0 ? top + h + 15 : top - 6;
+    svg.push(`<g class="mo-rx-pt mo-rx-barra" data-tip="${tip}" data-col="${c}" onclick="muralRaioXPeriodo('${m.aberto ? 'mes' : 'inv:' + m.chave}')">
+      <rect x="${f(cx - slot / 2 + 2)}" y="${MO_RX_DIM.T}" width="${f(slot - 4)}" height="${H - B - MO_RX_DIM.T}" fill="transparent"/>
+      <rect x="${f(cx - bw / 2)}" y="${f(top)}" width="${f(bw)}" height="${f(h)}" rx="3" fill="${c}" opacity="${m.aberto ? .45 : .85}"${m.aberto ? ` stroke="${c}" stroke-dasharray="4 3"` : ''}/>
+      <text x="${f(cx)}" y="${f(ly)}" text-anchor="middle" class="mo-rx-ax" style="fill:${c};font-weight:600">${rot}</text></g>`);
+  });
+  return _muralRxSvg(svg, leg, 'Variação de inventário a inventário');
 }
 
 // Comentários e ocorrências do par dentro do período.
@@ -1597,7 +1728,7 @@ function _muralRxItem(central, mat) {
   return { it, catKey: it?.catKey || getCatKeyDoCadastro(mat) };
 }
 
-function muralRaioX(central, mat, periodo = 'mes') {
+function muralRaioX(central, mat, periodo = '30d') { // abre sempre em 30 dias (Hugo, 09/11/2026)
   const { it, catKey } = _muralRxItem(central, mat);
   const rx = muralRaioXCalcular(central, mat, catKey, periodo);
   if (!rx) { toast('Escolha um período válido no Dashboard Analítico primeiro.', 'error'); return; }
@@ -1607,6 +1738,12 @@ function muralRaioX(central, mat, periodo = 'mes') {
     document.body.insertAdjacentHTML('beforeend',
       '<div class="mo-scrim" id="mo-scrim" onclick="muralRaioXFechar()"></div><aside class="mo-drawer" id="mo-drawer" aria-label="Raio-X do item" aria-hidden="true"></aside>');
     dr = document.getElementById('mo-drawer');
+    // Tooltip dos pontos do gráfico: o mesmo balão dos donuts da Macro.
+    if (typeof _showTip === 'function') {
+      dr.addEventListener('mouseover', e => { const p = e.target.closest?.('.mo-rx-pt'); if (p) _showTip(e, decodeURIComponent(p.dataset.tip), p.dataset.col); });
+      dr.addEventListener('mousemove', e => { if (e.target.closest?.('.mo-rx-pt')) _moveTip(e); });
+      dr.addEventListener('mouseout', e => { if (e.target.closest?.('.mo-rx-pt')) _hideTip(); });
+    }
     document.addEventListener('keydown', e => {
       if (e.key === 'Escape' && dr.classList.contains('open') && !document.querySelector('.modal-overlay.open')) muralRaioXFechar();
     });
@@ -1622,6 +1759,7 @@ function muralRaioX(central, mat, periodo = 'mes') {
 function muralRaioXAbrir(el) { muralRaioX(el.dataset.central, el.dataset.material); }
 function muralRaioXPeriodo(periodo) { if (_mo.rx) { _mo.rx.manterScroll = true; muralRaioX(_mo.rx.central, _mo.rx.mat, periodo); } }
 function muralRaioXFechar() {
+  if (typeof _hideTip === 'function') _hideTip();
   document.getElementById('mo-drawer')?.classList.remove('open');
   document.getElementById('mo-drawer')?.setAttribute('aria-hidden', 'true');
   document.getElementById('mo-scrim')?.classList.remove('open');
@@ -1675,7 +1813,8 @@ function _muralRxHtml(rx, it, catKey) {
   const acoes = _muralRxAcoes(central, material, rx.ini, rx.fim);
   const temDash = !!_muralRxPeriodo('dash');
   const dataset = `data-central="${_moEsc(central)}" data-material="${_moEsc(material)}"`;
-  const abas = MURAL_RX_PERIODOS.map(([k, rot]) => `<button class="mo-aba${rx.periodo === k ? ' on' : ''}"${k === 'dash' && !temDash ? ' disabled title="Sem período no Dashboard"' : ''} onclick="muralRaioXPeriodo('${k}')">${rot}</button>`).join('');
+  const modoInvs = rx.periodo === 'invs', modoInv = String(rx.periodo).startsWith('inv:');
+  const abas = MURAL_RX_PERIODOS.map(([k, rot]) => `<button class="mo-aba${rx.periodo === k || (k === 'invs' && modoInv) ? ' on' : ''}"${k === 'dash' && !temDash ? ' disabled title="Sem período no Dashboard"' : ''} onclick="muralRaioXPeriodo('${k}')">${rot}</button>`).join('');
   const v = rx.iUlt >= 0 ? rx.acc[rx.iUlt] : 0;
   const nivel = rx.iUlt >= 0 ? classifyVariation(Math.abs(v), catKey, thresholds) : null;
   const nv = MURAL_NIVEL[nivel];
@@ -1689,12 +1828,34 @@ function _muralRxHtml(rx, it, catKey) {
       <span class="mo-meta"><i class="ti ti-user"></i>${_moEsc(it.avocado ? 'ADM' : it.dono?.nome || '')}</span>`
     : '<span class="mo-hint">Este par não está na fila de ação.</span>';
   const card = (rot, val, sub, c) => `<div><small>${rot}</small><b${c ? ` style="color:${c}"` : ''}>${val}</b>${sub ? `<span>${_moEsc(sub)}</span>` : ''}</div>`;
-  const resumo = `<div class="mo-dr-sum">
+  // Inventário a inventário: resumo da reincidência em vez da cascata.
+  const meses = modoInvs ? _muralRxMeses(central, material, catKey) : null;
+  let resumo;
+  if (modoInvs) {
+    const fechados = meses.filter(m => !m.aberto && m.v != null);
+    const ult = fechados[fechados.length - 1];
+    const fora = fechados.filter(m => classifyVariation(Math.abs(m.v), catKey, thresholds) !== 'bom');
+    let seq = 0;
+    for (let i = fechados.length - 1; i >= 0; i--) {
+      const m = fechados[i];
+      if (!ult || Math.sign(m.v) !== Math.sign(ult.v) || classifyVariation(Math.abs(m.v), catKey, thresholds) === 'bom') break;
+      seq++;
+    }
+    const media = fechados.length ? fechados.reduce((t, m) => t + m.v, 0) / fechados.length : 0;
+    resumo = `<div class="mo-dr-sum">
+      ${card('Último inventário', ult ? _moKg(ult.v) : '—', ult ? `${ult.rot}${custo ? ' · ' + _moRs(ult.v * custo) : ''}` : 'sem inventário', ult ? cor(ult.v) : '')}
+      ${card('Fora da faixa', `${fora.length} de ${fechados.length}`, `inventários dos últimos ${MURAL_RX_MESES} meses`, fora.length ? 'var(--amber)' : '')}
+      ${card('Seguidos no mesmo sentido', String(seq), seq > 1 ? 'reincidente até o último inventário' : seq ? 'só o último inventário' : 'último inventário na faixa', seq > 1 ? 'var(--red)' : '')}
+      ${card('Média por inventário', fechados.length ? _moKg(media) : '—', 'meses fechados', cor(media))}
+    </div>`;
+  } else {
+    resumo = `<div class="mo-dr-sum">
       ${card('Variação', rx.iUlt >= 0 ? _moKg(v) : '—', custo ? _moRs(v * custo) : (nv ? nv.label : ''), cor(v))}
       ${card('Est. Inicial', s.pesoIniAusente ? '—' : fmtKg(s.pesoIni), s.dtIniLabel)}
       ${card('Est. Teórico', fmtKg(s.estTeorico), 'Ini + Ent + Saí + Aju')}
       ${card('Est. Final', s.pesoFimAusente ? '—' : fmtKg(s.pesoFim), s.dtFimLabel)}
     </div>`;
+  }
   const explicKg = rx.explic.reduce((t, e) => t + e.kg, 0);
   const explic = rx.explic.length
     ? rx.explic.map(e => `<li><span>${_moEsc(e.t)} <small class="mo-hint">(${e.n})</small></span><b class="mo-teal">${_moKg(e.kg)}</b></li>`).join('')
@@ -1721,11 +1882,14 @@ function _muralRxHtml(rx, it, catKey) {
       <button class="btn btn-sm mo-dr-x" onclick="muralRaioXFechar()" aria-label="Fechar o Raio-X"><i class="ti ti-x"></i></button>
     </div>
     <div class="mo-dr-body">
-      <div class="mo-dr-periodo"><div class="mo-abas" role="tablist">${abas}</div><span class="mo-hint">${periodoTxt}</span></div>
+      <div class="mo-dr-periodo"><div class="mo-abas" role="tablist">${abas}</div><span class="mo-hint">${periodoTxt}</span>
+        ${modoInv ? `<button class="mo-link" onclick="muralRaioXPeriodo('invs')"><i class="ti ti-arrow-left"></i> todos os inventários</button>` : ''}</div>
       ${resumo}
-      ${sec('ti-chart-line', `Variação acumulada · ${rx.isSemanal ? 'semanal (terça)' : 'diária'}${nv ? ` <span class="mo-lvl" style="--lv:${nv.cor}">${nv.label}</span>` : nivel === 'bom' ? ' <span class="mo-hint">na faixa</span>' : ''}`,
-        (rx.temDados ? `<div class="mo-dr-chart">${_muralRxChart(rx, lim, acoes)}</div><p class="mo-hint">Passe o mouse nos pontos (lançamentos) e nos triângulos (comentários e ocorrências).</p>` : '<p class="mo-hint">Sem lançamentos nem movimentos SAP deste par na sua base, nesse período.</p>'))}
-      ${sec('ti-arrows-diff', 'Explicado × sem explicação (PUZL × SAP)', `<ul class="mo-rx-list">${explic}</ul>`)}
+      ${modoInvs
+        ? sec('ti-chart-bar', 'Variação de inventário a inventário', `<div class="mo-dr-chart">${_muralRxBarras(meses, lim)}</div><p class="mo-hint">Cada barra vai do inventário do mês anterior ao do mês. Passe o mouse para a cascata do mês; clique para o dia a dia.</p>`)
+        : sec('ti-chart-line', `Variação acumulada · ${rx.isSemanal ? 'semanal (terça)' : 'diária'}${modoInv ? ' · inventário de ' + _moEsc(rx.ini.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })) : ''}${nv ? ` <span class="mo-lvl" style="--lv:${nv.cor}">${nv.label}</span>` : nivel === 'bom' ? ' <span class="mo-hint">na faixa</span>' : ''}`,
+          (rx.temDados ? `<div class="mo-dr-chart">${_muralRxChart(rx, lim, acoes)}</div><p class="mo-hint">Passe o mouse nos pontos (lançamentos) e nas marcas embaixo: azul = comentário, vermelho = ocorrência.</p>` : '<p class="mo-hint">Sem lançamentos nem movimentos SAP deste par na sua base, nesse período.</p>'))}
+      ${modoInvs ? '' : sec('ti-arrows-diff', 'Explicado × sem explicação (PUZL × SAP)', `<ul class="mo-rx-list">${explic}</ul>`)}
       ${hip.length ? sec('ti-list-check', 'O que conferir', `<ul class="mo-dr-hip">${hip.map(h => `<li>${_moEsc(h)}</li>`).join('')}</ul>`) : ''}
       ${sec('ti-history', 'Histórico de ações no período', `<ul class="mo-rx-list mo-rx-acoes">${hist}</ul>`)}
       ${prio ? sec('ti-sort-descending', 'Por que está nesta posição da fila', `<div class="mo-dr-prio">${prio}</div>`) : ''}
