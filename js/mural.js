@@ -771,6 +771,9 @@ function _muralHerdadaHtml(it) {
 function _muralItemHtml(it) {
   const nv = MURAL_NIVEL[it.nivel] || MURAL_NIVEL.atencao;
   const st = MURAL_STATUS[it.status];
+  // Número e gráfico na cor do SINAL, padrão do sistema: desfalque vermelho,
+  // sobra âmbar. A cor do nível fica na etiqueta e na faixa lateral.
+  const corV = it.v < -0.05 ? 'var(--red)' : it.v > 0.05 ? 'var(--amber)' : 'var(--text2)';
   const chips = [];
   if (it.piorando) chips.push(['hot', 'ti-trending-up', 'piorando']);
   if ((it.meses || 1) > 1) chips.push(['hot', 'ti-history', `${it.meses}º mês seguido`]);
@@ -804,9 +807,10 @@ function _muralItemHtml(it) {
         ${_muralHerdadaHtml(it)}
       </div>
     </div>
-    <div class="mo-sparkbox">${_muralSpark(pts, nv.cor, it.atual ? it.desde : null)}<small>${pts.length ? `${_moEsc(pts[0][0].slice(0, 5))} → ${_moEsc(pts[pts.length - 1][0].slice(0, 5))}` : ''}</small></div>
-    <div class="mo-num"><span class="mo-kg" title="${it.atual === false ? 'Sem lançamento no mês ainda: mostrando o acumulado de 30 dias' : 'Variação atual: desde o dia 1 do mês (após o fechamento anterior)'}">${_moKg(it.v)}</span><span class="mo-rs">${it.custoMed ? _moRs(it.rs) : 'sem custo'}</span>${
-      it.v30 != null ? `<span class="mo-30" title="Acumulado dos últimos 30 dias, atravessando o fechamento">${it.atual === false ? 'sem lançamento no mês · ' : ''}30 dias: ${_moKg(it.v30)}</span>` : ''}<span class="mo-prio" title="${_moEsc(titlePrio)}">prioridade <b>${it.prioridade.toFixed(1)}</b></span></div>
+    <div class="mo-sparkbox">${_muralSpark(pts, corV, it.atual ? it.desde : null)}<small>${pts.length ? `${_moEsc(pts[0][0].slice(0, 5))} → ${_moEsc(pts[pts.length - 1][0].slice(0, 5))}` : ''}</small></div>
+    <div class="mo-num"><span class="mo-kg" style="color:${corV}" title="${it.atual === false ? 'Sem lançamento no mês ainda: mostrando o acumulado de 30 dias' : 'Variação atual: desde o dia 1 do mês (após o fechamento anterior)'}">${_moKg(it.v)}</span><span class="mo-rs">${it.custoMed ? _moRs(it.rs) : 'sem custo'}</span>${
+      it.v30 != null ? `<span class="mo-30" title="Acumulado dos últimos 30 dias, atravessando o fechamento">${it.atual === false ? 'sem lançamento no mês · ' : ''}30 dias: ${_moKg(it.v30)}</span>`
+        : '<span class="mo-30 mo-antiga" title="Foto calculada pela versão anterior do Mural: o número é o acumulado de 30 dias. A variação do mês aparece quando o dono da categoria entrar ou clicar em Atualizar.">foto antiga · acumulado 30 dias</span>'}<span class="mo-prio" title="${_moEsc(titlePrio)}">prioridade <b>${it.prioridade.toFixed(1)}</b></span></div>
     <div class="mo-foot">
       <span class="mo-status" style="--sc:${st.cor}">${st.label}</span>
       <span class="mo-meta"><i class="ti ti-user"></i> ${it.avocado ? `ADM <span class="mo-hint">(${_moEsc(it.dono.nome)} acompanha)</span>` : _moEsc(it.dono.nome)}</span>
@@ -1287,7 +1291,7 @@ function _muralFaixaHtml() {
       const cor = l.pct >= 80 ? 'var(--amber)' : 'var(--green)';
       return `<tr><td><b>${_moEsc(l.material)}</b>${l.voltou ? ' <span class="mo-voltou" title="Estava na fila na foto anterior">voltou à faixa</span>' : ''}<small>${_moEsc(l.central)} · Reg. ${_moEsc(l.regional)} · ${_moEsc(l.categoria)}</small></td>
         ${adm ? `<td><small style="font-size:12px">${_moEsc(l.dono)}</small></td>` : ''}
-        <td>${_moKg(l.v)}${l.v30 != null ? `<small>30 dias: ${_moKg(l.v30)}</small>` : ''}</td>
+        <td style="color:${l.v < -0.05 ? 'var(--red)' : l.v > 0.05 ? 'var(--amber)' : 'inherit'}">${_moKg(l.v)}${l.v30 != null ? `<small>30 dias: ${_moKg(l.v30)}</small>` : ''}</td>
         <td><span class="mo-uso"><i style="width:${Math.min(100, l.pct)}%;background:${cor}"></i></span>${Math.round(l.pct)}%</td>
         <td>${_moEsc((l.ult || '—').slice(0, 5))}</td></tr>`;
     }).join('')}</tbody></table></div>`;
