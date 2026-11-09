@@ -13397,6 +13397,7 @@ body:has(.mo-drawer.open), body:has(.mo-drawer.open) .page-content { overflow: h
 .mo-rx-leg i { display: inline-block; width: 18px; border-top: 2px dashed; vertical-align: middle; margin-right: 6px; opacity: .8; }
 .mo-rx-pt { cursor: pointer; transition: r .12s, stroke-width .12s; }
 .mo-rx-chart circle.mo-rx-pt:hover { r: 7; stroke-width: 2.5; }
+.mo-rx-acao { cursor: pointer; }
 .mo-rx-acao circle { transition: r .12s; }
 .mo-rx-barra { cursor: pointer; }
 .mo-rx-barra:hover rect:nth-child(2) { opacity: 1; stroke: var(--text); stroke-width: 1.5; }
@@ -13408,7 +13409,9 @@ body:has(.mo-drawer.open), body:has(.mo-drawer.open) .page-content { overflow: h
 .mo-rx-list b { font-family: var(--mono); font-weight: 500; white-space: nowrap; }
 .mo-rx-list .mo-rx-tot { border-top: 1px solid var(--border); padding-top: 6px; }
 .mo-rx-acoes { max-height: 260px; overflow-y: auto; overscroll-behavior: contain; }
-.mo-rx-acoes li { justify-content: flex-start; align-items: flex-start; }
+.mo-rx-acoes li { justify-content: flex-start; align-items: flex-start; border-radius: 6px; padding: 4px 6px; margin: 0 -6px; }
+.mo-rx-acoes li.mo-rx-flash { animation: moRxFlash 2.4s ease-out; }
+@keyframes moRxFlash { 0%, 35% { background: var(--accent-dim); box-shadow: inset 3px 0 0 var(--accent); } 100% { background: transparent; box-shadow: inset 3px 0 0 transparent; } }
 .mo-rx-acoes li > .ti { margin-top: 3px; color: var(--accent); }
 .mo-rx-acoes li > .ti.mo-red { color: var(--red); }
 @media (max-width: 720px) { .mo-dr-sum { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
@@ -13423,3 +13426,11 @@ body:has(.mo-drawer.open), body:has(.mo-drawer.open) .page-content { overflow: h
   .mo-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .mo-kpis-hero { grid-template-columns: minmax(0, 1fr); }
 }
+/* Raio-X: botão e janela do gráfico expandido (muralRxExpandir) */
+.mo-dr-chart { position: relative; }
+.mo-rx-exp { position: absolute; top: 6px; right: 6px; z-index: 1; opacity: .8; }
+.mo-rx-exp:hover { opacity: 1; }
+.mo-rx-exp-ov { z-index: 320; padding: 24px; }
+.mo-rx-exp-box { width: min(1400px, 100%); max-height: 100%; overflow: auto; background: var(--bg2); border: 1px solid var(--border2); border-radius: var(--radius-lg); padding: 16px 18px; box-shadow: 0 24px 60px rgba(0, 0, 0, .45); }
+.mo-rx-exp-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; font-size: 15px; }
+.mo-rx-exp-box .mo-rx-ax { font-size: 14px; }
