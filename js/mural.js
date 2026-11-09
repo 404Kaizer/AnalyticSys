@@ -136,7 +136,7 @@ function muralAvaliarPar({ central, mat, catKey, categoria, janela, lancsJan, sa
   if (!prev) return { pontoCego: 'semAncora' };
   if (!lancsJan.length) return { pontoCego: 'semLancamento' };
 
-  const isSemanal = catKey === 'agregado';
+  const isSemanal = isCatKeySemanal(catKey);
   const rows = _anSerieDiaria({
     dayList: janela.dayList, lancsMat: lancsJan, sapMat: sapJan,
     preCarry: { value: prev.value, date: prev.date }, isSemanal
@@ -1144,7 +1144,7 @@ function _muralFiltrosHtml(itens) {
       opcoes = lista.length ? lista.map((v, n) => `<label class="micro-filter-option" for="mof-${x.k}-${n}">
           <input type="checkbox" id="mof-${x.k}-${n}" ${marc.has(v) ? 'checked' : ''} data-v="${_moEsc(v)}" onchange="muralFiltroMarcar('${x.k}', this)">
           <span class="micro-filter-option-label" title="${_moEsc(nome(v))}">${_moEsc(nome(v))}</span></label>`).join('')
-        : '<div style="padding:12px 10px;color:var(--text3);font-size:12px;text-align:center">Nenhum resultado</div>';
+        : '<div style="padding:12px 10px;color:var(--text3);font-size:13.5px;text-align:center">Nenhum resultado</div>';
     }
     return `<div class="micro-filter-group mo-fg" data-k="${x.k}">
       <button class="micro-filter-trigger${ap.size ? ' active' : ''}" onclick="muralFiltroAbrir('${x.k}')"><i class="ti ${x.icon}"></i><span>${_moEsc(rotulo)}</span><i class="ti ti-chevron-down micro-filter-chev${aberto ? ' open' : ''}"></i></button>
@@ -1297,7 +1297,7 @@ function _muralFaixaHtml() {
     <tbody>${linhas.map(l => {
       const cor = l.pct >= 80 ? 'var(--amber)' : 'var(--green)';
       return `<tr><td><b>${_moEsc(l.material)}</b>${l.voltou ? ' <span class="mo-voltou" title="Estava na fila na foto anterior">voltou à faixa</span>' : ''}<small>${_moEsc(l.central)} · Reg. ${_moEsc(l.regional)} · ${_moEsc(l.categoria)}</small></td>
-        ${adm ? `<td><small style="font-size:12px">${_moEsc(l.dono)}</small></td>` : ''}
+        ${adm ? `<td><small style="font-size:13.5px">${_moEsc(l.dono)}</small></td>` : ''}
         <td style="color:${l.v < -0.05 ? 'var(--red)' : l.v > 0.05 ? 'var(--amber)' : 'inherit'}">${_moKg(l.v)}${l.v30 != null ? `<small>30 dias: ${_moKg(l.v30)}</small>` : ''}</td>
         <td><span class="mo-uso"><i style="width:${Math.min(100, l.pct)}%;background:${cor}"></i></span>${Math.round(l.pct)}%</td>
         <td>${_moEsc((l.ult || '—').slice(0, 5))}</td></tr>`;

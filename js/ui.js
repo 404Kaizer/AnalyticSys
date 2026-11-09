@@ -7875,6 +7875,13 @@ const HEALTH_DEFAULTS = {
   adicao:      { bom: 30,    atencao: 60,    urgente: 90    }
 };
 
+// Conferência SEMANAL (toda terça): Agregado e Adição (Hugo, 09/11/2026).
+// Aglomerante e Aditivo são diários. Fonte única — Micro, Ausentes,
+// carry do Inventário e Mural leem daqui.
+function isCatKeySemanal(catKey) {
+  return catKey === 'agregado' || catKey === 'agregado_graudo' || catKey === 'agregado_miudo' || catKey === 'adicao';
+}
+
 // Detect category from categoria field
 function detectCatKey(categoria) {
   const c = String(categoria || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().trim();
@@ -8055,7 +8062,7 @@ function getPrevDayLaunchStock({ central, material, dtIni, catKey }) {
   const arr = byCentralMat.get(central)?.get(materialKey) || [];
   if (!arr.length) return null;
 
-  const isAgregado = catKey === 'agregado' || catKey === 'agregado_graudo' || catKey === 'agregado_miudo';
+  const isAgregado = isCatKeySemanal(catKey); // Agregado e Adição (semanais)
   const isPrimeiroDiaMes = dtIniDate.getDate() === 1;
   const dtIniISO = localISODate(dtIniDate);
 

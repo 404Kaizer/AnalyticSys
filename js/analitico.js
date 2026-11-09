@@ -1043,7 +1043,7 @@ window.sortMicroTable = sortMicroTable;
 // fecha com o Est. Final − Est. Teórico do período.
 //
 //   preCarry  = { value, date } | null — ponto de partida do carry
-//   isSemanal = Agregado (conferência semanal, terça obrigatória)
+//   isSemanal = Agregado/Adição (conferência semanal, terça obrigatória — isCatKeySemanal)
 function _anSerieDiaria({ dayList, lancsMat, sapMat, preCarry, isSemanal }) {
   const dateKey = (d) => {
     const dt = d instanceof Date ? d : parseDate(d);
@@ -1517,7 +1517,7 @@ function buildCentralCard(r, idx, dtIni, dtFim, opts = {}) {
       const matCategoria    = getCategoriaPorGrupo(mat);
       const matCatKey       = _catKeyOf(rc, mat);
       const matSemCadastro  = !matCatKey;
-      const isSemanal       = matCatKey === 'agregado';
+      const isSemanal       = isCatKeySemanal(matCatKey);
 
       // ── Est. Inicial do card de resumo ──────────────────────────────────
       // Saldo TEÓRICO do SAP em dtIni−1 (âncora Custos SAP + movimentações),

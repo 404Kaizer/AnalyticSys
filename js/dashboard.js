@@ -5303,7 +5303,7 @@ function _ausComputar(dtIni, dtFim) {
     // para o resultado exibir isso visivelmente (decisão confirmada).
     const catKey      = getCatKeyDoCadastro(materialOriginal);
     const semCadastro = !catKey;
-    const isSemanal    = catKey === 'agregado';
+    const isSemanal    = isCatKeySemanal(catKey);
     const esperadosISO = isSemanal ? esperadosSemanal : esperadosDiario;
     if (!esperadosISO.length) return;
 
