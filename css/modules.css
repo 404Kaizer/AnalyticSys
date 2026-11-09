@@ -13299,6 +13299,7 @@ span.mo-since-chip { cursor: default; }
 .mo-uso i { display: block; height: 100%; }
 .mo-voltou { font-size: 10px; color: var(--green); background: var(--green-bg); border: 1px solid var(--green-border); border-radius: 4px; padding: 0 5px; margin-left: 4px; font-family: var(--font); }
 .mo-shape-herdada { color: var(--purple); border-color: var(--purple-border); border-style: dotted; }
+.mo-shape-inicio { color: var(--text2); border-style: dotted; }
 .mo-fech { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 10px 14px; border-radius: var(--radius-lg);
   background: var(--bg2); border: 1px solid color-mix(in srgb, var(--fc) 35%, var(--border)); border-left: 3px solid var(--fc); font-size: 12.5px; color: var(--text2); }
 .mo-fech > .ti { color: var(--fc); font-size: 16px; }
@@ -13311,6 +13312,7 @@ span.mo-since-chip { cursor: default; }
 .mo-kg { font-family: var(--mono); font-size: 15px; font-weight: 500; color: var(--lv); white-space: nowrap; }
 .mo-rs { font-family: var(--mono); font-size: 12px; color: var(--text2); white-space: nowrap; }
 .mo-prio { font-size: 10.5px; color: var(--text3); cursor: help; }
+.mo-30 { font-family: var(--mono); font-size: 10.5px; color: var(--text3); white-space: nowrap; cursor: help; }
 .mo-prio b { font-family: var(--mono); color: var(--text); }
 .mo-foot { grid-area: foot; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .mo-status { font-size: 11px; font-weight: 500; border-radius: 999px; padding: 2px 9px; color: var(--sc);
