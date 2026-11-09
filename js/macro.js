@@ -32,10 +32,9 @@ function _calcTrend(lancs, sap, dtIni, dtFim, prevValue) {
 }
 
 // ── Variação e nível de UM par na Visão Macro ─────────────────────────
-// Fonte única dos donuts da Macro e do cálculo silencioso das notificações
-// (notifSilentHealthCheck) — antes eram duas contas e o sino discordava da
-// tela: lá a categoria vinha do texto do registro e o Est. Final do último
-// dia com lançamento. Est. Inicial = saldo teórico do SAP; Est. Final =
+// Fonte única dos donuts da Macro (o sino usava a mesma conta até 09/11/2026,
+// quando a saúde saiu das notificações): a categoria vem do cadastro, não do
+// texto do registro. Est. Inicial = saldo teórico do SAP; Est. Final =
 // lançamento exato do último não-domingo (AUSENTE sem ele), como na Micro.
 function _macroAvaliarPar({ central, mat, lancs, sap, dtIni, dtFim, catKeyMap, thresholds }) {
   const prev = (typeof _anGetSapStock === 'function')
@@ -420,12 +419,9 @@ function macroApplyFilter() {
 
   _renderDonut('centrais', centralCounts, top5centrais, centralLevelMeta, centralScore, nCentrals, centralItemsByLevel);
   _renderDonut('mats',     matCounts,     top5mats,     matLevelMeta,     matScore,     nMats,     matItemsByLevel);
-
-  // Expõe os scores para o sistema de notificações
-  window._macroHealthScores = { centralScore, matScore };
-  if (typeof notifUpdateFromAnalytico === 'function') {
-    notifUpdateFromAnalytico(centralScore, matScore, _macroState._dtIni, _macroState._dtFim);
-  }
+  // A saúde saiu do sino (09/11/2026), mas cada Analisar seguia atualizando
+  // os avisos de ocorrência vencida/urgente por aqui — mantém isso (~1 ms).
+  if (typeof notifSync === 'function') notifSync();
 }
 window.macroApplyFilter = macroApplyFilter;
 

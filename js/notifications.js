@@ -4,33 +4,18 @@
 // SISTEMA DE NOTIFICAÇÕES — notifications.js
 // ═══════════════════════════════════════════════════════════
 
-// Limiares de saúde espelham calcHealthScore em ui.js:
-//   score >= 80  → ok       (sem alerta)
-//   score >= 55  → atencao
-//   score >= 30  → urgente
-//   score <  30  → critico
-const NOTIF_CONF_WARN_DAYS = 2;
-
+// Saúde (centrais/materiais) e lembretes de conferência saíram do sino em
+// 09/11/2026 (decisão do Hugo): a saúde repetia a Visão Macro/Mural e
+// custava um Gerencial inteiro no boot; o fechamento já é avisado pelo Mural.
 const NOTIF_SRC = {
-  SAUDE_CENTRAIS:  'saude-centrais',
-  SAUDE_MATERIAIS: 'saude-materiais',
   OC_VENCIDA:      'oc-vencida',
   OC_URGENTE:      'oc-urgente',
-  CONF_TERCA:      'conf-terca',
-  CONF_MENSAL:     'conf-mensal',
 };
 
 function _notifEsc(s) {
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
-function _notifFmtDate(d) {
-  return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();
-}
-function _lastWorkingDay(year, month) {
-  const d = new Date(year, month+1, 0);
-  while (d.getDay()===0||d.getDay()===6) d.setDate(d.getDate()-1);
-  return d;
-}
+// Usada pelo Analítico (analitico.js) — não é mais do sino.
 function _nextTuesday() {
   const d = new Date(); d.setHours(0,0,0,0);
   if (d.getDay()===2) return d;
@@ -38,57 +23,10 @@ function _nextTuesday() {
   return d;
 }
 
-// Converte score numérico para level usando os limiares do sistema
-function _notifScoreToLevel(score) {
-  if (score >= 80) return 'ok';
-  if (score >= 55) return 'atencao';
-  if (score >= 30) return 'urgente';
-  return 'critico';
-}
-
-// Rótulos amigáveis para cada level
-const _NOTIF_LEVEL_LABEL = { ok:'Ok', atencao:'Atenção', urgente:'Urgente', critico:'Crítico' };
-
-// Período de referência: 01/mm → ontem
-function _notifPeriodoLabel() {
-  const today = new Date(); today.setHours(0,0,0,0);
-  const ontem = new Date(today); ontem.setDate(ontem.getDate()-1);
-  const ini   = new Date(today.getFullYear(), today.getMonth(), 1);
-  return `${_notifFmtDate(ini)} a ${_notifFmtDate(ontem)}`;
-}
-
 // ── Calcula conjunto esperado de notificações ─────────────
-function _notifCompute(healthScores) {
+function _notifCompute() {
   const result  = [];
   const today   = new Date(); today.setHours(0,0,0,0);
-  // Usa o período passado pelo analítico se disponível, senão o período silencioso
-  const periodo = healthScores?.periodoLabel || _notifPeriodoLabel();
-
-  // Saúde das centrais — usa limiares do sistema
-  if (healthScores?.centralScore != null) {
-    const s   = healthScores.centralScore;
-    const lvl = _notifScoreToLevel(s);
-    if (lvl !== 'ok') {
-      result.push({ id: NOTIF_SRC.SAUDE_CENTRAIS, type:'saude',
-        level: lvl === 'urgente' ? 'atencao' : lvl,
-        title: `Saúde das centrais: ${s}% · ${_NOTIF_LEVEL_LABEL[lvl]}`,
-        body:  `Período analisado: ${periodo}. A saúde geral das centrais está em ${s}% (${_NOTIF_LEVEL_LABEL[lvl]}). Acesse o Dashboard Analítico para identificar os materiais críticos.`,
-        source: NOTIF_SRC.SAUDE_CENTRAIS });
-    }
-  }
-
-  // Saúde dos materiais — usa limiares do sistema
-  if (healthScores?.matScore != null) {
-    const s   = healthScores.matScore;
-    const lvl = _notifScoreToLevel(s);
-    if (lvl !== 'ok') {
-      result.push({ id: NOTIF_SRC.SAUDE_MATERIAIS, type:'saude',
-        level: lvl === 'urgente' ? 'atencao' : lvl,
-        title: `Saúde dos materiais: ${s}% · ${_NOTIF_LEVEL_LABEL[lvl]}`,
-        body:  `Período analisado: ${periodo}. A saúde geral dos materiais está em ${s}% (${_NOTIF_LEVEL_LABEL[lvl]}). Acesse o Dashboard Analítico para detalhes.`,
-        source: NOTIF_SRC.SAUDE_MATERIAIS });
-    }
-  }
 
   // Ocorrências vencidas
   const ocs = Array.isArray(state?.ocorrencias) ? state.ocorrencias : [];
@@ -110,53 +48,29 @@ function _notifCompute(healthScores) {
     body:  `${urg.length} ocorrência${urg.length!==1?'s':''} vence${urg.length!==1?'m':''} em até 2 dias. Verifique Ocorrências.`,
     source: NOTIF_SRC.OC_URGENTE });
 
-  // Conferência semanal (terça)
-  const terca = _nextTuesday();
-  const diffT = Math.round((terca-today)/86400000);
-  if (diffT<=NOTIF_CONF_WARN_DAYS) {
-    const label = diffT===0?'hoje':diffT===1?'amanhã':`em ${diffT} dias`;
-    result.push({ id: NOTIF_SRC.CONF_TERCA, type:'conferencia', level:'info',
-      title: `Conferência semanal ${label}`,
-      body:  `A terça-feira de conferência é ${label} (${_notifFmtDate(terca)}). Certifique-se de lançar os estoques.`,
-      source: NOTIF_SRC.CONF_TERCA });
-  }
-
-  // Fechamento mensal (último dia útil)
-  const lastUtil = _lastWorkingDay(today.getFullYear(), today.getMonth());
-  const diffM = Math.round((lastUtil-today)/86400000);
-  if (diffM>=0 && diffM<=NOTIF_CONF_WARN_DAYS) {
-    const label = diffM===0?'hoje':diffM===1?'amanhã':`em ${diffM} dias`;
-    result.push({ id: NOTIF_SRC.CONF_MENSAL, type:'conferencia', level:'info',
-      title: `Fechamento mensal ${label}`,
-      body:  `O último dia útil do mês é ${label} (${_notifFmtDate(lastUtil)}). Faça o fechamento mensal de estoque.`,
-      source: NOTIF_SRC.CONF_MENSAL });
-  }
-
   return result;
 }
 
-// Tipos calculados/recalculados por _notifCompute a cada chamada de
-// notifSync. Preparado para a Etapa 3: notificações de 'atividade' (via
-// Realtime) são inseridas por fora deste ciclo (ver notifPushActivity,
-// a ser criado na próxima etapa) e não devem ser removidas aqui — sem
-// isso, a primeira recomputação de saúde depois de uma notificação de
-// atividade a apagaria da lista sem nenhum motivo relacionado a ela.
+// Tipos recalculados por _notifCompute a cada notifSync — os que não vêm
+// mais no resultado somem da lista. 'saude' e 'conferencia' continuam aqui
+// só para limpar as cópias antigas guardadas no navegador (nunca mais são
+// gerados). Atividade/Mural/Supervisor entram por fora deste ciclo.
 const _NOTIF_MANAGED_TYPES = new Set(['saude','ocorrencia','conferencia']);
 
 // ── Sincroniza state.notifications ───────────────────────
-function notifSync(healthScores) {
+function notifSync() {
   if (!Array.isArray(state.notifications)) state.notifications = [];
-  // persist() regrava a base inteira (segundos com 1 mi+ de registros) e
-  // esta função roda 3× no boot e a cada Analisar — quase sempre chegando
-  // às mesmas notificações. Só grava se a lista mudou de fato (≤ ~250 itens,
-  // comparar custa ~1 ms).
+  // persist() regrava a base inteira (segundos com 1 mi+ de registros) —
+  // só grava se a lista mudou de fato (≤ ~250 itens, comparar custa ~1 ms).
   const antes = JSON.stringify(state.notifications);
-  const expected    = _notifCompute(healthScores);
+  const expected    = _notifCompute();
   const expectedIds = new Set(expected.map(n=>n.id));
 
   // Remove as que não se aplicam mais — só entre os tipos que este
-  // cálculo de fato gerencia (saude/ocorrencia/conferencia).
-  state.notifications = state.notifications.filter(n=>!_NOTIF_MANAGED_TYPES.has(n.type) || expectedIds.has(n.id));
+  // cálculo de fato gerencia (saude/ocorrencia/conferencia) — e as cópias
+  // antigas de atividade que o filtro de 09/11 já não deixaria entrar.
+  state.notifications = state.notifications.filter(n =>
+    (!_NOTIF_MANAGED_TYPES.has(n.type) || expectedIds.has(n.id)) && !_activityGuardadaEhRuido(n));
 
   // Adiciona novas
   const existingIds = new Set(state.notifications.map(n=>n.id));
@@ -194,88 +108,6 @@ function notifSyncMural(expected) {
   _notifRenderBadge();
   if (document.getElementById('notif-dropdown')?.classList.contains('open')) _notifRenderDropdown();
   if (typeof persist === 'function' && JSON.stringify(state.notifications) !== antes) persist();
-}
-
-// ── Cálculo silencioso de saúde ao carregar ───────────────
-async function notifSilentHealthCheck() {
-  if (!Array.isArray(state.lancamentos)||!state.lancamentos.length) {
-    notifSync(null); return;
-  }
-  try {
-    const today = new Date(); today.setHours(0,0,0,0);
-    const yesterday = new Date(today); yesterday.setDate(yesterday.getDate()-1);
-    const dtIni = new Date(today.getFullYear(),today.getMonth(),1);
-    const dtFim = yesterday;
-    if (dtFim<dtIni) { notifSync(null); return; }
-
-    if (typeof buildDashboardGerencialResults!=='function'||
-        typeof calcHealthScore!=='function'||
-        typeof getHealthThresholds!=='function'||
-        typeof buildSnapshot!=='function'||
-        typeof classifyVariation!=='function'||
-        typeof detectCatKey!=='function'||
-        typeof _macroAvaliarPar!=='function') {
-      notifSync(null); return;
-    }
-
-    await yieldToUI();
-    const results = buildDashboardGerencialResults(dtIni, dtFim);
-    if (!results?.length) { notifSync(null); return; }
-    await yieldToUI();
-
-    const thresholds = getHealthThresholds();
-    const _scoreFromCounts = counts => {
-      const total = Object.values(counts).reduce((s,n)=>s+n,0);
-      if (!total) return 100;
-      const penalty = (counts.atencao||0)*0.2 + (counts.urgente||0)*0.5 + (counts.critico||0)*1.0;
-      return Math.max(0, Math.round((1 - penalty/total)*100));
-    };
-
-    const centralCounts = {bom:0, atencao:0, urgente:0, critico:0};
-    const matCounts     = {bom:0, atencao:0, urgente:0, critico:0};
-
-    // Processa centrais em batches de 5 com yield para não bloquear o thread
-    const BATCH = 5;
-    for (let i = 0; i < results.length; i += BATCH) {
-      results.slice(i, i + BATCH).forEach(r => {
-        // Usa lancsByMat já computado pelo buildDashboardGerencialResults
-        const lancsByMat = r.lancsByMat || new Map();
-        const sapByMat   = new Map();
-        (r.sapNoPeriodo||[]).forEach(s => {
-          if (!sapByMat.has(s.material)) sapByMat.set(s.material,[]);
-          sapByMat.get(s.material).push(s);
-        });
-        // Mesma conta dos donuts da Visão Macro (_macroAvaliarPar, macro.js):
-        // categoria do cadastro e Est. Final = lançamento do último
-        // não-domingo — é a nota da Macro que o Analítico manda pro sino
-        // (notifUpdateFromAnalytico), então as duas precisam bater.
-        const matDiffs = [];
-        (r.allMats||[]).forEach(mat => {
-          const lancs = lancsByMat.get(mat)||[];
-          const sap   = sapByMat.get(mat)||[];
-          // Par sem movimento no período só existe pelo escopo histórico do
-          // Gerencial (Est. Inicial Total = Inventário); a Macro só avalia
-          // material com movimento. Sem este corte ele virava variação =
-          // −saldo do SAP (Est. Final ausente) e inflava os críticos do sino.
-          if (!lancs.length && !sap.length) return;
-          const { diff, catKey, level } = _macroAvaliarPar({
-            central: r.central, mat, lancs, sap, dtIni, dtFim, catKeyMap: r.materialCatKeyMap, thresholds
-          });
-          matCounts[level]++;
-          matDiffs.push({ diff, catKey });
-        });
-        // Sem material ou todos neutros → ok → bom, mesma regra do card/Macro.
-        const {level: centralLevel} = calcHealthScore(matDiffs, null, null, thresholds);
-        centralCounts[(!centralLevel||centralLevel==='ok') ? 'bom' : centralLevel]++;
-      });
-      await yieldToUI(); // yield entre batches
-    }
-
-    notifSync({ centralScore: _scoreFromCounts(centralCounts), matScore: _scoreFromCounts(matCounts) });
-  } catch(err) {
-    console.warn('[Notif] Erro no check silencioso:',err);
-    notifSync(null);
-  }
 }
 
 // ── Badge ─────────────────────────────────────────────────
@@ -382,12 +214,8 @@ function _notifTimeAgo(ts) {
 
 // Mapa source → página de destino
 const _NOTIF_ROUTE = {
-  [NOTIF_SRC.SAUDE_CENTRAIS]:  'analitico',
-  [NOTIF_SRC.SAUDE_MATERIAIS]: 'analitico',
   [NOTIF_SRC.OC_VENCIDA]:      'ocorrencias',
   [NOTIF_SRC.OC_URGENTE]:      'ocorrencias',
-  [NOTIF_SRC.CONF_TERCA]:      'lancamentos',
-  [NOTIF_SRC.CONF_MENSAL]:     'lancamentos',
 };
 
 function notifNavigate(id, event) {
@@ -519,43 +347,6 @@ function notifMarkAllRead() {
   _notifRenderBadge();
   _notifRenderDropdown();
 }
-function notifUpdateFromAnalytico(centralScore, matScore, dtIni, dtFim) {
-  let periodoLabel = null;
-  if (dtIni && dtFim) {
-    const ini = dtIni instanceof Date ? dtIni : new Date(dtIni);
-    const fim = dtFim instanceof Date ? dtFim : new Date(dtFim);
-    periodoLabel = `${_notifFmtDate(ini)} a ${_notifFmtDate(fim)}`;
-  }
-  notifSync({
-    centralScore: typeof centralScore==='number' ? centralScore : null,
-    matScore:     typeof matScore    ==='number' ? matScore     : null,
-    periodoLabel,
-  });
-}
-function notifBoot() {
-  if (!Array.isArray(state.notifications)) state.notifications=[];
-
-  // Descarta notificações de atividade já lidas — só limpeza local (essa
-  // lista nem é o registro de verdade, que continua intacto no
-  // activity_log). Não mexe nos tipos "gerenciados" (saude/ocorrencia/
-  // conferencia, ver _NOTIF_MANAGED_TYPES): esses representam uma
-  // condição em aberto, não um evento pontual — sumir com a versão lida
-  // faria o aviso reaparecer como não lido enquanto a condição persistir.
-  const antes = state.notifications.length;
-  const _TIPOS_PONTUAIS = new Set(['atividade', 'escalonamento', 'dai', 'acao-supervisor']);
-  state.notifications = state.notifications.filter(n => !_TIPOS_PONTUAIS.has(n.type) || !n.read);
-  if (state.notifications.length !== antes && typeof persist === 'function') persist();
-
-  _notifRenderBadge();
-  // Delay generoso — o cálculo silencioso de saúde é pesado (percorre todos os dados).
-  // Só executa quando o browser está ocioso para não travar a UI logo após o boot.
-  if (typeof requestIdleCallback === 'function') {
-    requestIdleCallback(() => notifSilentHealthCheck(), { timeout: 10000 });
-  } else {
-    setTimeout(() => notifSilentHealthCheck(), 5000);
-  }
-}
-
 // ═══════════════════════════════════════════════════════════
 // SOM + TOAST DE ATIVIDADE — infraestrutura (Fase 5, Etapa 1)
 // ═══════════════════════════════════════════════════════════
@@ -721,6 +512,27 @@ function _activityIsIntegrable(row, count) {
     && window.currentUser?.role === 'admin';
 }
 
+// O que da atividade de terceiros ainda vira aviso no sino (09/11/2026,
+// decisão do Hugo — o resto era ruído): Cobranças, confirmação de alerta,
+// CRIAÇÃO de ocorrência/DAI e o "Integrar" do ADM. O activity_log continua
+// guardando tudo para auditoria; Supervisor/Mural têm caminhos próprios.
+const _ATIV_SEMPRE  = new Set(['cob_justificativas', 'cob_desconsiderar', 'admin_alert_confirmations']);
+const _ATIV_CRIACAO = new Set(['ocorrencias', 'ajustes_sistemicos']);   // ajustes_sistemicos = DAI
+function _activityEhRelevante(row, count) {
+  return _ATIV_SEMPRE.has(row.table_name)
+    || (row.operation === 'INSERT' && _ATIV_CRIACAO.has(row.table_name))
+    || _activityIsIntegrable(row, count);
+}
+// Limpa as cópias antigas já guardadas no navegador (ver notifSync).
+// ponytail: a cópia guardada não tem a operação, então edição antiga de
+// ocorrência/DAI fica até sair pelo limite de 200 — gravar `operation` na
+// notificação se isso incomodar.
+function _activityGuardadaEhRuido(n) {
+  if (n.type === 'auth') return true;
+  if (n.type !== 'atividade') return false;
+  return !n.integrable && !_ATIV_SEMPRE.has(n.activityTable) && !_ATIV_CRIACAO.has(n.activityTable);
+}
+
 // Cobranças (Insumos ↔ admin) — justificar/desconsiderar NF. A trigger
 // cob_activity_capture (banco) só grava pro "outro lado": ação do analista
 // chega pro admin, ação do admin chega pro analista. row_id = "cnpj|numero".
@@ -744,7 +556,8 @@ function _activityCobTexto(row, count, ator) {
 }
 
 async function _activityEmitNotification(row, count) {
-  const isAuth      = row.table_name === 'auth';
+  if (!_activityEhRelevante(row, count)) return;
+  const isAuth     = row.table_name === 'auth';
   const isAlertConf = row.table_name === 'admin_alert_confirmations';
   const actorLabel  = await _activityResolveActorLabel(row.actor_id);
 
@@ -1184,7 +997,7 @@ function adminAlertRealtimeStop() {
 Object.assign(window,{
   notifToggle,notifClose,notifOpen,
   notifMarkRead,notifMarkAllRead,notifNavigate,notifIntegrar,
-  notifSync,notifBoot,notifUpdateFromAnalytico,notifSilentHealthCheck,
+  notifSync,
   notifPlaySound,notifShowActivityToast,notifHideActivityToast,
   notifAbrirDetalheAtividade,
   notifPushOcorrenciaSupervisor,notifAbrirOcorrenciaPrioritaria,notifPushMudancaOcorrencia,

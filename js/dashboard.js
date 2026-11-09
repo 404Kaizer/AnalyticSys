@@ -9313,19 +9313,11 @@ async function restoreAndRender() {
     // novo em qualquer reboot da mesma aba.
     if (typeof cloudBackupPeriodicoInit === 'function') cloudBackupPeriodicoInit();
     _lstepSet('notif', 'done');
-    _lbarSet(70);
-    await nextFrame();
-
-    // ── STEP 6: Saúde do estoque ──────────────────────────────────────────
-    _lstepSet('health', 'running');
-    updateLoadingOverlay('Calculando saúde do estoque...', 'Inicializando o sistema');
-    await yieldToUI();
-    if (typeof notifSilentHealthCheck === 'function') {
-      await notifSilentHealthCheck();
-    }
-    _lstepSet('health', 'done');
     _lbarSet(75);
     await nextFrame();
+
+    // (STEP 6 — saúde do estoque para o sino — removido em 09/11/2026: o
+    // sino não mostra mais saúde; a nota continua na Visão Macro.)
 
     // ── STEP 6.5: Pré-carregar Dashboard Analítico com "Última terça"
     // ────────────────────────────────────────────────────────────────────
