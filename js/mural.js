@@ -127,6 +127,25 @@ function muralEfeitoDivergencia(lado, kg) {
 
 const _r1 = v => Math.round(v * 10) / 10;
 
+// Parte explicada de um trecho: divergência PUZL × SAP do par (mesma
+// reconciliação por referência da Visão Micro). nat = repartirSapPorNatureza
+// do SAP do trecho; entradas/saidas = PUZL da central (qualquer material).
+// Usada pelo cálculo do Mural e pelo Raio-X.
+function _muralExplicacao({ central, mat, nat, desde, ate, entradas, saidas }) {
+  const noTrecho = (dt) => { const d = parseDate(dt); return d && d >= desde && d <= ate; };
+  const puzlEnt = (entradas || []).filter(e => e.material === mat && noTrecho(e.dtDescarga || e.dtEmissao));
+  const puzlSai = (saidas   || []).filter(s => s.material === mat && noTrecho(s.dtEmissao));
+  const explic = [];
+  [['ent', nat.entRecords, puzlEnt], ['sai', nat.saiRecords, puzlSai]].forEach(([lado, sapRecords, puzlRecords]) => {
+    const diag = diagnosticarDivergenciaSapPuzl({ sapRecords, puzlRecords, lado, material: mat });
+    diag.motivos.forEach(m => {
+      if (!MURAL_EXPLICA.has(m.chave) || Math.abs(m.kg) < 0.01) return;
+      explic.push({ chave: m.chave, lado, n: m.count, t: m.curto, kg: _r1(muralEfeitoDivergencia(lado, m.kg)) });
+    });
+  });
+  return explic;
+}
+
 // ── Cálculo de um par (lê o state; sem DOM) ────────────────────────────────
 // lancsJan/sapJan: registros do par JÁ recortados na janela (SAP sem os
 // excluídos por fechamento). Devolve { item } (fora da faixa), { bom: true },
@@ -171,11 +190,21 @@ function muralAvaliarPar({ central, mat, catKey, categoria, janela, lancsJan, sa
   const ultP = base.pontos[base.pontos.length - 1];
   const v = ultP.v;
   const nivel = classifyVariation(Math.abs(v), catKey, thresholds);
+  // Semanal (Agregado/Adição): a variação vale até o último lançamento —
+  // da terça ou de um dia depois dela. Sem lançamento na última terça da
+  // janela nem depois → terça pendente (Hugo, 09/11/2026).
+  let tercaPendente = null;
+  if (isSemanal) {
+    const ter = new Date(janela.fim);
+    while (ter.getDay() !== 2) ter.setDate(ter.getDate() - 1);
+    if (!(parseDate(ult.dt) >= ter)) tercaPendente = fmtPtDate(ter);
+  }
   // Na faixa: vai para a aba "Na faixa" do Mural, em formato compacto
-  // [central, material, variação atual, regional, último lançamento, 30 dias].
+  // [central, material, variação atual, regional, último lançamento, 30 dias,
+  //  terça pendente].
   if (nivel === 'bom') {
     const fil = getFilialLookupIndex().exact.get(normalizeText(central));
-    return { bom: true, faixa: [central, mat, _r1(v), (fil?.regional || '').trim() || '—', ultP.dt, _r1(v30)] };
+    return { bom: true, faixa: [central, mat, _r1(v), (fil?.regional || '').trim() || '—', ultP.dt, _r1(v30), tercaPendente] };
   }
 
   // Cascata até o último lançamento — fecha com a variação atual por
@@ -190,17 +219,8 @@ function muralAvaliarPar({ central, mat, catKey, categoria, janela, lancsJan, sa
 
   // Parte explicada: divergência PUZL × SAP do par, no mesmo trecho da
   // variação atual (mesma reconciliação por referência da Visão Micro).
-  const naJanela = (dt) => { const d = parseDate(dt); return d && d >= base.desde && d <= dtUlt; };
-  const puzlEnt = (ctx.entradasPorCentral.get(central) || []).filter(e => e.material === mat && naJanela(e.dtDescarga || e.dtEmissao));
-  const puzlSai = (ctx.saidasPorCentral.get(central)   || []).filter(s => s.material === mat && naJanela(s.dtEmissao));
-  const explic = [];
-  [['ent', nat.entRecords, puzlEnt], ['sai', nat.saiRecords, puzlSai]].forEach(([lado, sapRecords, puzlRecords]) => {
-    const diag = diagnosticarDivergenciaSapPuzl({ sapRecords, puzlRecords, lado, material: mat });
-    diag.motivos.forEach(m => {
-      if (!MURAL_EXPLICA.has(m.chave) || Math.abs(m.kg) < 0.01) return;
-      explic.push({ chave: m.chave, lado, n: m.count, t: m.curto, kg: _r1(muralEfeitoDivergencia(lado, m.kg)) });
-    });
-  });
+  const explic = _muralExplicacao({ central, mat, nat, desde: base.desde, ate: dtUlt,
+    entradas: ctx.entradasPorCentral.get(central), saidas: ctx.saidasPorCentral.get(central) });
   const explicadoKg = _r1(explic.reduce((s, e) => s + e.kg, 0));
 
   const capErro = typeof classificarEstoqueCapacidade === 'function'
@@ -245,7 +265,7 @@ function muralAvaliarPar({ central, mat, catKey, categoria, janela, lancsJan, sa
     primeiroMes: [base.pontos[0].dt, _r1(base.pontos[0].v)],
     explicadoKg, explic,
     pontos: pontos.map(p => [p.dt, _r1(p.v)]),
-    cascata, entrada, meses, capErro
+    cascata, entrada, meses, capErro, tercaPendente
   } };
 }
 
@@ -779,6 +799,7 @@ function _muralItemHtml(it) {
   if ((it.meses || 1) > 1) chips.push(['hot', 'ti-history', `${it.meses}º mês seguido`]);
   if (it.reincidente) chips.push(['hot', 'ti-repeat', `reincidente: ${_moKg(it.anteriorKg)} antes do mês, mesmo sentido`]);
   if (!it.temOc && it.diasSemAcao > 0) chips.push(['warn', 'ti-clock', `sem ação há ${it.diasSemAcao} dia${it.diasSemAcao > 1 ? 's' : ''}`]);
+  if (it.tercaPendente) chips.push(['warn', 'ti-calendar-x', `lançamento da terça ${it.tercaPendente.slice(0, 5)} pendente`]);
   if (it.capErro) chips.push(['warn', 'ti-alert-hexagon', 'acima da capacidade física']);
   if (it.ocs.length) chips.push(['', 'ti-file-alert', it.ocs.map(o => o.numero).join(', ')]);
   if (it.avocado) chips.push(['adm', 'ti-shield-check', `avocado pelo ADM: ${it.avocado.motivo}`]);
@@ -796,7 +817,7 @@ function _muralItemHtml(it) {
     <div class="mo-main">
       <div class="mo-title">
         <span class="mo-lvl"><i class="ti ${nv.icon}"></i>${nv.label}</span>
-        <span class="mo-mat">${_moEsc(it.material)}</span>
+        <span class="mo-mat mo-rx-link" onclick="muralRaioXAbrir(this)" ${dataset} title="Abrir o Raio-X">${_moEsc(it.material)}</span>
         <span class="mo-where">· ${_moEsc(it.central)} · Reg. ${_moEsc(it.regional)}</span>
         <span class="mo-shape mo-shape-${_moEsc(it.formato)}" title="${_moEsc(MURAL_FORMATO_DESC[it.formato] || '')}">${_moEsc(MURAL_FORMATO_LABEL[it.formato] || it.formato)}</span>
       </div>
@@ -807,7 +828,7 @@ function _muralItemHtml(it) {
         ${_muralHerdadaHtml(it)}
       </div>
     </div>
-    <div class="mo-sparkbox">${_muralSpark(pts, corV, it.atual ? it.desde : null)}<small>${pts.length ? `${_moEsc(pts[0][0].slice(0, 5))} → ${_moEsc(pts[pts.length - 1][0].slice(0, 5))}` : ''}</small></div>
+    <div class="mo-sparkbox mo-rx-link" onclick="muralRaioXAbrir(this)" ${dataset} title="Abrir o Raio-X">${_muralSpark(pts, corV, it.atual ? it.desde : null)}<small>${pts.length ? `${_moEsc(pts[0][0].slice(0, 5))} → ${_moEsc(pts[pts.length - 1][0].slice(0, 5))}` : ''}</small></div>
     <div class="mo-num"><span class="mo-kg" style="color:${corV}" title="${it.atual === false ? 'Sem lançamento no mês ainda: mostrando o acumulado de 30 dias' : 'Variação atual: desde o dia 1 do mês (após o fechamento anterior)'}">${_moKg(it.v)}</span><span class="mo-rs">${it.custoMed ? _moRs(it.rs) : 'sem custo'}</span>${
       it.v30 != null ? `<span class="mo-30" title="Acumulado dos últimos 30 dias, atravessando o fechamento">${it.atual === false ? 'sem lançamento no mês · ' : ''}30 dias: ${_moKg(it.v30)}</span>`
         : '<span class="mo-30 mo-antiga" title="Foto calculada pela versão anterior do Mural: o número é o acumulado de 30 dias. A variação do mês aparece quando o dono da categoria entrar ou clicar em Atualizar.">foto antiga · acumulado 30 dias</span>'}<span class="mo-prio" title="${_moEsc(titlePrio)}">prioridade <b>${it.prioridade.toFixed(1)}</b></span></div>
@@ -816,6 +837,7 @@ function _muralItemHtml(it) {
       <span class="mo-meta"><i class="ti ti-user"></i> ${it.avocado ? `ADM <span class="mo-hint">(${_moEsc(it.dono.nome)} acompanha)</span>` : _moEsc(it.dono.nome)}</span>
       ${_muralPrazoHtml(it)}
       <div class="mo-actions">
+        <button class="btn btn-sm btn-primary" onclick="muralRaioXAbrir(this)" ${dataset}><i class="ti ti-zoom-scan"></i> Raio-X</button>
         <button class="btn btn-sm" onclick="muralVerNaMicro(this)" ${dataset}><i class="ti ti-chart-dots-2"></i> Ver na Micro</button>
         <button class="btn btn-sm" onclick="muralComentar(this)" ${dataset} data-diff="${it.v}" data-periodo="${pts.length ? _moEsc(pts[0][0] + ' a ' + pts[pts.length - 1][0]) : ''}"><i class="ti ti-message-plus"></i> ${it.temOc ? 'Comentar' : 'Comentar / ocorrência'}</button>
         ${_moEhAdm() && _mo.avocDisponivel ? (it.avocado
@@ -1273,8 +1295,8 @@ function _muralFaixaLinhas() {
     const catKey = detectCatKey(f.categoria);
     const lim = thresholds[catKey]?.bom || 0;
     const naFilaAntes = new Set((f.anterior?.payload?.itens || []).map(_moChave));
-    (f.atual.payload?.faixa || []).forEach(([central, material, v, regional, ult, v30]) => {
-      linhas.push({ central, material, v, v30, regional, ult, categoria: f.categoria, dono: _muralDonoDe(f.categoria).nome,
+    (f.atual.payload?.faixa || []).forEach(([central, material, v, regional, ult, v30, terPend]) => {
+      linhas.push({ central, material, v, v30, regional, ult, terPend, categoria: f.categoria, dono: _muralDonoDe(f.categoria).nome,
         pct: lim ? Math.abs(v) / lim * 100 : 0, voltou: naFilaAntes.has(central + '|' + material) });
     });
   });
@@ -1300,7 +1322,7 @@ function _muralFaixaHtml() {
         ${adm ? `<td><small style="font-size:13.5px">${_moEsc(l.dono)}</small></td>` : ''}
         <td style="color:${l.v < -0.05 ? 'var(--red)' : l.v > 0.05 ? 'var(--amber)' : 'inherit'}">${_moKg(l.v)}${l.v30 != null ? `<small>30 dias: ${_moKg(l.v30)}</small>` : ''}</td>
         <td><span class="mo-uso"><i style="width:${Math.min(100, l.pct)}%;background:${cor}"></i></span>${Math.round(l.pct)}%</td>
-        <td>${_moEsc((l.ult || '—').slice(0, 5))}</td></tr>`;
+        <td>${_moEsc((l.ult || '—').slice(0, 5))}${l.terPend ? ` <span class="mo-pend" title="Sem lançamento na última terça">terça ${_moEsc(l.terPend.slice(0, 5))} pendente</span>` : ''}</td></tr>`;
     }).join('')}</tbody></table></div>`;
 }
 
@@ -1405,4 +1427,208 @@ async function muralAuditar() {
     if (typeof _anHideViewLoading === 'function') _anHideViewLoading();
     muralRender();
   }
+}
+
+// ── Raio-X do item ─────────────────────────────────────────────────────────
+// Detalhe de um par da fila (Hugo, 09/11/2026): gráfico da variação
+// acumulada dia a dia, parte explicada e ações do período e, embaixo, o MESMO
+// detalhe diário da Visão Micro (cards da cascata + tabela com os movimentos
+// SAP de cada dia), no modal de detalhe dela. Calculado na hora a partir da
+// base local (o ADM tem a base completa; o analista, a da categoria dele).
+// Âncora sempre no saldo do SAP no início do período, como o Mural.
+//   'mes'  → do dia 1 até ontem: a variação principal do Mural (padrão)
+//   '30d'  → a janela do Mural, atravessando o fechamento
+//   'dash' → o período escolhido no Dashboard Analítico
+const MURAL_RX_PERIODOS = [['mes', 'Mês atual'], ['30d', '30 dias'], ['dash', 'Período do Dashboard']];
+
+function _muralRxPeriodo(periodo) {
+  const J = muralJanela();
+  if (periodo === '30d') return { ini: J.ini, fim: J.fim };
+  if (periodo === 'dash') {
+    const i = document.getElementById('an-dt-ini')?.value, f = document.getElementById('an-dt-fim')?.value;
+    if (!i || !f) return null;
+    const p = { ini: new Date(i + 'T00:00:00'), fim: new Date(f + 'T00:00:00') };
+    return isNaN(p.ini) || isNaN(p.fim) || p.ini > p.fim ? null : p;
+  }
+  return { ini: new Date(J.fim.getFullYear(), J.fim.getMonth(), 1), fim: J.fim };
+}
+
+function muralRaioXCalcular(central, mat, catKey, periodo) {
+  const p = _muralRxPeriodo(periodo);
+  if (!p) return null;
+  const dayList = [];
+  for (const d = new Date(p.ini); d <= p.fim; d.setDate(d.getDate() + 1)) dayList.push(new Date(d));
+  const ate = new Date(p.fim); ate.setHours(23, 59, 59, 999);
+  const noPer = r => { const d = parseDate(r.dtLanc); return d && d >= p.ini && d <= ate; };
+  const lancs = (getLancIndex().byCentralMat.get(central)?.get(mat) || []).filter(noPer);
+  const sap = (getSapIndex().byCentralMat.get(central)?.get(mat) || []).filter(r => noPer(r) && !isSapExcluidoPorFechamento(r));
+  const anc = _anGetSapStock({ central, material: mat, dtIni: p.ini });
+  const isSemanal = isCatKeySemanal(catKey);
+  const rows = _anSerieDiaria({ dayList, lancsMat: lancs, sapMat: sap,
+    preCarry: anc ? { value: anc.value, date: anc.date } : null, isSemanal });
+  let acum = 0;
+  const acc = rows.map(r => (acum += r.diff || 0));
+  let iUlt = -1;
+  rows.forEach((r, i) => { if (r.hasLanc) iUlt = i; });
+
+  // Cascata até o último lançamento — fecha com a variação, como no Mural.
+  const dtUlt = iUlt >= 0 ? new Date(dayList[iUlt]) : new Date(p.fim);
+  dtUlt.setHours(23, 59, 59, 999);
+  const nat = repartirSapPorNatureza(sap.filter(r => parseDate(r.dtLanc) <= dtUlt));
+  const cods = (recs, vazio) => _codsLabel(recs.map(r => [normMov(r.movimento)]), vazio);
+  const ini = anc ? anc.value : 0;
+  const estTeorico = ini + nat.totalEnt + nat.totalSai + nat.totalAju;
+  ensureSaidasIndex();
+  const explic = _muralExplicacao({ central, mat, nat, desde: p.ini, ate: dtUlt,
+    entradas: (state.entradas || []).filter(e => (e.centralDestino || e.centralCompra || '') === central),
+    saidas: _saidasByCentral.get(central) });
+  const ultLabel = iUlt >= 0 ? rows[iUlt].dateLabel : '';
+  return {
+    periodo, ini: p.ini, fim: p.fim, dayList, rows, acc, iUlt, explic, isSemanal,
+    temDados: lancs.length > 0 || sap.length > 0,
+    payload: {
+      key: 'mural-rx', central, material: mat, catKey, isSemanal,
+      periodLabel: `${fmtPtDate(p.ini)} a ${fmtPtDate(p.fim)}`,
+      summary: {
+        pesoIni: ini, pesoIniAusente: !anc, dtIniLabel: anc ? `Saldo SAP em ${anc.dtLabel}` : 'Sem âncora no Custos SAP',
+        totalEnt: nat.totalEnt, entLabel: cods(nat.entRecords, 'Sem entradas no período'),
+        totalSai: nat.totalSai, saiLabel: cods(nat.saiRecords, 'Sem saídas no período'),
+        totalAju: nat.totalAju, ajuLabel: cods(nat.ajuRecords, 'Sem ajustes no período'),
+        estTeorico, pesoFim: iUlt >= 0 ? rows[iUlt].finalStock : 0, pesoFimAusente: iUlt < 0,
+        dtFimLabel: iUlt >= 0 ? `Último lançamento: ${ultLabel}` : 'Sem lançamento no período',
+        fimFallback: false, diff: iUlt >= 0 ? acc[iUlt] : 0, absentNearest: null
+      },
+      days: rows
+    }
+  };
+}
+
+// Gráfico da variação acumulada dia a dia: pontos nos lançamentos, faixa
+// "bom" sombreada, linhas do limite e do Crítico, virada de mês tracejada
+// (fechamento) e marcas das ações (comentário/ocorrência) no eixo.
+// ponytail: tooltip nativo (<title>) em vez de um balão próprio; trocar se o
+// analista pedir leitura mais rápida no hover.
+function _muralRxChart(rx, lim, acoes) {
+  const n = rx.rows.length;
+  if (!n) return '';
+  const W = 1000, H = 260, L = 70, R = 18, T = 14, B = 30;
+  const vals = rx.acc.slice(0, rx.iUlt >= 0 ? rx.iUlt + 1 : 0);
+  const maxAbs = Math.max(0, ...vals.map(Math.abs));
+  const linhas = [[lim.bom, 'limite'], ...(maxAbs > lim.atencao ? [[lim.urgente, 'crítico']] : [])].filter(([v]) => v > 0);
+  let yMax = Math.max(0, ...vals, ...linhas.map(([v]) => v)), yMin = Math.min(0, ...vals, ...linhas.map(([v]) => -v));
+  const pad = (yMax - yMin) * 0.08 || 1; yMax += pad; yMin -= pad;
+  const x = i => L + (n > 1 ? i * (W - L - R) / (n - 1) : (W - L - R) / 2);
+  const y = v => T + (yMax - v) / (yMax - yMin) * (H - T - B);
+  const ultV = vals.length ? vals[vals.length - 1] : 0;
+  const cor = ultV < -0.05 ? 'var(--red)' : ultV > 0.05 ? 'var(--amber)' : 'var(--text2)';
+  const f = v => v.toFixed(1);
+  const pts = vals.map((v, i) => `${f(x(i))},${f(y(v))}`).join(' ');
+  const xEvery = Math.max(1, Math.ceil(n / 10));
+  const svg = [];
+  if (lim.bom > 0) svg.push(`<rect x="${L}" y="${f(y(lim.bom))}" width="${W - L - R}" height="${f(y(-lim.bom) - y(lim.bom))}" fill="var(--green)" opacity=".07"/>`);
+  linhas.forEach(([v, rot]) => [v, -v].forEach(s => svg.push(
+    `<line x1="${L}" x2="${W - R}" y1="${f(y(s))}" y2="${f(y(s))}" stroke="${rot === 'crítico' ? 'var(--red)' : 'var(--green)'}" stroke-dasharray="5 4" opacity=".55"/>`,
+    `<text x="${W - R - 4}" y="${f(y(s) - 4)}" text-anchor="end" class="mo-rx-ax">${rot} ${_moPesoSinal(s)}</text>`)));
+  [yMax - pad, 0, yMin + pad].forEach(v => svg.push(`<text x="${L - 8}" y="${f(y(v) + 4)}" text-anchor="end" class="mo-rx-ax">${_moPesoSinal(v)}</text>`));
+  svg.push(`<line x1="${L}" x2="${W - R}" y1="${f(y(0))}" y2="${f(y(0))}" stroke="var(--border3)"/>`);
+  rx.dayList.forEach((d, i) => {
+    if (i > 0 && d.getDate() === 1) svg.push(`<line x1="${f(x(i))}" x2="${f(x(i))}" y1="${T}" y2="${H - B}" stroke="var(--text3)" stroke-dasharray="3 3"/>`,
+      `<text x="${f(x(i) + 4)}" y="${T + 10}" class="mo-rx-ax">fechamento</text>`);
+    if (i % xEvery === 0 || i === n - 1) svg.push(`<text x="${f(x(i))}" y="${H - 8}" text-anchor="middle" class="mo-rx-ax">${fmtPtDate(d).slice(0, 5)}</text>`);
+  });
+  if (vals.length > 1) svg.push(`<polygon points="${f(x(0))},${f(y(0))} ${pts} ${f(x(vals.length - 1))},${f(y(0))}" fill="${cor}" opacity=".12"/>`,
+    `<polyline points="${pts}" fill="none" stroke="${cor}" stroke-width="2" stroke-linejoin="round"/>`);
+  rx.rows.forEach((r, i) => {
+    if (!r.hasLanc) return;
+    const v = rx.acc[i], c = v < -0.05 ? 'var(--red)' : v > 0.05 ? 'var(--amber)' : 'var(--text2)';
+    const tip = `${r.dateLabel}\nAcumulada: ${_moKg(v)}\nNo lançamento: ${_moKg(r.diff || 0)}\nEst. Final: ${fmtKg(r.finalStock)} · Teórico: ${fmtKg(r.theoreticalStock)}`;
+    svg.push(`<circle cx="${f(x(i))}" cy="${f(y(v))}" r="${i === rx.iUlt ? 5 : 3.5}" fill="${c}" stroke="var(--bg2)" stroke-width="1.5"><title>${_moEsc(tip)}</title></circle>`);
+  });
+  acoes.forEach(a => {
+    const i = rx.dayList.findIndex(d => _moDia(d).getTime() === _moDia(a.quando).getTime());
+    if (i < 0) return;
+    const cx = x(i), cy = H - B + 1;
+    svg.push(`<path d="M${f(cx - 5)},${f(cy + 8)} L${f(cx + 5)},${f(cy + 8)} L${f(cx)},${f(cy)} Z" fill="${a.oc ? 'var(--red)' : 'var(--accent)'}"><title>${_moEsc(a.titulo + (a.texto ? '\n' + a.texto : ''))}</title></path>`);
+  });
+  return `<svg class="mo-rx-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Variação acumulada dia a dia">${svg.join('')}</svg>`;
+}
+
+// Comentários e ocorrências do par dentro do período.
+function _muralRxAcoes(central, mat, ini, fim) {
+  const ate = new Date(fim); ate.setHours(23, 59, 59, 999);
+  const noPer = d => d && d >= ini && d <= ate;
+  const coms = (typeof _varComDe === 'function' ? _varComDe(central, mat) : [])
+    .map(r => ({ quando: r.created_at ? new Date(r.created_at) : _moIsoParaData(r.data), oc: !!r.oc_id,
+      titulo: `${r.oc_id ? 'Ocorrência ' + (r.oc_numero || '') : 'Comentário'} · ${r.autor_nome || '—'}`, texto: r.texto || '' }))
+    .filter(a => noPer(a.quando));
+  const ocs = (Array.isArray(state.ocorrencias) ? state.ocorrencias : [])
+    .filter(o => o.central === central && o.material === mat && noPer(_moIsoParaData(o.dataAbertura)))
+    .map(o => ({ quando: _moIsoParaData(o.dataAbertura), oc: true,
+      titulo: `Ocorrência ${o.numero || o.id}${o.concluida ? ' (concluída)' : ''}`, texto: o.descricao || '' }));
+  return [...coms, ...ocs].sort((a, b) => a.quando - b.quando);
+}
+
+function muralRaioX(central, mat, periodo = 'mes') {
+  const it = (_mo._ultItens || []).find(i => i.central === central && i.material === mat);
+  const catKey = it?.catKey || getCatKeyDoCadastro(mat);
+  const rx = muralRaioXCalcular(central, mat, catKey, periodo);
+  if (!rx) { toast('Escolha um período válido no Dashboard Analítico primeiro.', 'error'); return; }
+  _mo.rx = { central, mat };
+  window.__analiticoDetailCache = window.__analiticoDetailCache || new Map();
+  // ponytail: chave fixa — resolver um conflito de lançamentos dentro do
+  // modal redesenha só a parte da Micro (sem o topo do Raio-X); reabrir.
+  window.__analiticoDetailCache.set('mural-rx', rx.payload);
+  openAnaliticoDetailModal('mural-rx');
+  const sub = document.getElementById('analitico-detail-sub');
+  if (sub) sub.textContent = `${central} · Raio-X · ${rx.payload.periodLabel}`;
+  document.getElementById('analitico-detail-body')?.insertAdjacentHTML('afterbegin', _muralRxHtml(rx, it, catKey));
+}
+function muralRaioXAbrir(el) { muralRaioX(el.dataset.central, el.dataset.material); }
+function muralRaioXPeriodo(periodo) { if (_mo.rx) muralRaioX(_mo.rx.central, _mo.rx.mat, periodo); }
+
+function _muralRxHtml(rx, it, catKey) {
+  const { central, material } = rx.payload;
+  const thresholds = getHealthThresholds();
+  const lim = thresholds[catKey] || { bom: 0, atencao: 0, urgente: 0 };
+  const acoes = _muralRxAcoes(central, material, rx.ini, rx.fim);
+  const temDash = !!_muralRxPeriodo('dash');
+  const abas = MURAL_RX_PERIODOS.map(([k, rot]) => `<button class="mo-aba${rx.periodo === k ? ' on' : ''}"${k === 'dash' && !temDash ? ' disabled title="Sem período no Dashboard"' : ''} onclick="muralRaioXPeriodo('${k}')">${rot}</button>`).join('');
+  const v = rx.iUlt >= 0 ? rx.acc[rx.iUlt] : 0;
+  const nivel = rx.iUlt >= 0 ? classifyVariation(Math.abs(v), catKey, thresholds) : null;
+  const nv = MURAL_NIVEL[nivel];
+  const nvIt = it && (MURAL_NIVEL[it.nivel] || MURAL_NIVEL.atencao);
+  const fila = it ? `<span class="mo-hint">Na fila:</span>
+      <span class="mo-lvl" style="--lv:${nvIt.cor}"><i class="ti ${nvIt.icon}"></i>${nvIt.label}</span>
+      <span class="mo-shape mo-shape-${_moEsc(it.formato)}">${_moEsc(MURAL_FORMATO_LABEL[it.formato] || it.formato)}</span>
+      ${MURAL_STATUS[it.status] ? `<span class="mo-status" style="--sc:${MURAL_STATUS[it.status].cor}">${MURAL_STATUS[it.status].label}</span>` : ''}
+      <span class="mo-meta"><i class="ti ti-user"></i>${_moEsc(it.avocado ? 'ADM' : it.dono?.nome || '')}</span>`
+    : '<span class="mo-hint">Este par não está na fila de ação.</span>';
+  const explicKg = rx.explic.reduce((s, e) => s + e.kg, 0);
+  const explic = rx.explic.length
+    ? rx.explic.map(e => `<li><span>${_moEsc(e.t)} <small class="mo-hint">(${e.n})</small></span><b class="mo-teal">${_moKg(e.kg)}</b></li>`).join('')
+      + `<li class="mo-rx-tot"><span>Sem explicação</span><b>${_moKg(v - explicKg)}</b></li>`
+    : '<li class="mo-hint">Nada explicado por pendência ou divergência PUZL × SAP no período.</li>';
+  const lista = acoes.length
+    ? acoes.slice().reverse().map(a => `<li><i class="ti ${a.oc ? 'ti-file-alert mo-red' : 'ti-message'}"></i><div><small class="mo-hint">${fmtPtDate(a.quando)} · ${_moEsc(a.titulo)}</small><div>${_moEsc(a.texto) || '—'}</div></div></li>`).join('')
+    : '<li class="mo-hint">Nenhum comentário ou ocorrência no período.</li>';
+  const corV = v < -0.05 ? 'var(--red)' : v > 0.05 ? 'var(--amber)' : 'inherit';
+  return `<section class="mo-rx">
+    <div class="mo-rx-top">
+      <div class="mo-abas" role="tablist">${abas}</div>
+      <div class="mo-rx-fila">${fila}</div>
+    </div>
+    <div class="mo-rx-panel">
+      <div class="mo-rx-head">
+        <span class="mo-panel-title"><i class="ti ti-chart-line"></i>Variação acumulada · ${rx.isSemanal ? 'semanal (terça)' : 'diária'}</span>
+        <span class="mo-rx-v" style="color:${corV}">${rx.iUlt >= 0 ? _moKg(v) : 'sem lançamento'}</span>
+        ${nv ? `<span class="mo-lvl" style="--lv:${nv.cor}"><i class="ti ${nv.icon}"></i>${nv.label}</span>` : nivel === 'bom' ? '<span class="mo-hint">na faixa</span>' : ''}
+        ${rx.iUlt >= 0 ? `<span class="mo-hint">até ${_moEsc(rx.rows[rx.iUlt].dateLabel.slice(0, 5))} · passe o mouse nos pontos</span>` : ''}
+      </div>
+      ${rx.temDados ? _muralRxChart(rx, lim, acoes) : '<div class="mo-hint" style="padding:18px">Sem lançamentos nem movimentos SAP deste par na sua base, nesse período.</div>'}
+    </div>
+    <div class="mo-rx-cols">
+      <div class="mo-rx-panel"><span class="mo-panel-title"><i class="ti ti-arrows-diff"></i>Parte explicada (PUZL × SAP)</span><ul class="mo-rx-list">${explic}</ul></div>
+      <div class="mo-rx-panel"><span class="mo-panel-title"><i class="ti ti-history"></i>Ações no período</span><ul class="mo-rx-list mo-rx-acoes">${lista}</ul></div>
+    </div>
+  </section>`;
 }

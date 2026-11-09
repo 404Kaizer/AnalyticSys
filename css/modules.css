@@ -13285,6 +13285,11 @@ span.mo-since-chip { cursor: default; }
 .mo-grp-tag { font-size: 12px; color: var(--urgente); background: var(--urgente-bg); border: 1px solid var(--urgente-border); border-radius: 4px; padding: 0 6px; }
 .mo-grp-tag.mo-red { color: var(--red); background: var(--red-bg); border-color: var(--red-border); }
 .mo-grp-2 .mo-item { padding-left: 16px; }
+/* Grupo aberto esmaece os irmãos fechados — no nível de fora (regionais) e no
+   de dentro (centrais da regional aberta). Mesmo 0.35/0.7 da Micro. */
+.mo-grp { transition: opacity .2s ease; }
+*:has(> details.mo-grp[open]) > details.mo-grp:not([open]) { opacity: .35; }
+*:has(> details.mo-grp[open]) > details.mo-grp:not([open]):hover { opacity: .7; }
 .mo-abas { display: flex; gap: 4px; }
 .mo-aba { border: 1px solid transparent; background: none; color: var(--text2); border-radius: var(--radius); padding: 5px 10px; font: inherit; font-size: 13.5px; font-weight: 500;
   cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
@@ -13298,6 +13303,7 @@ span.mo-since-chip { cursor: default; }
 .mo-uso { display: inline-block; width: 70px; height: 6px; border-radius: 3px; background: var(--bg4); overflow: hidden; vertical-align: middle; margin-right: 8px; }
 .mo-uso i { display: block; height: 100%; }
 .mo-voltou { font-size: 11.5px; color: var(--green); background: var(--green-bg); border: 1px solid var(--green-border); border-radius: 4px; padding: 0 5px; margin-left: 4px; font-family: var(--font); }
+.mo-pend { font-size: 11.5px; color: var(--amber); background: var(--amber-bg); border: 1px solid var(--amber-border); border-radius: 4px; padding: 0 5px; margin-left: 4px; font-family: var(--font); white-space: nowrap; }
 .mo-shape-herdada { color: var(--purple); border-color: var(--purple-border); border-style: dotted; }
 .mo-shape-inicio { color: var(--text2); border-style: dotted; }
 .mo-fech { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 10px 14px; border-radius: var(--radius-lg);
@@ -13348,6 +13354,31 @@ span.mo-since-chip { cursor: default; }
 .mo-multi-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 14px 11px; max-height: 180px; overflow-y: auto; }
 .mo-multi-chips .mo-chip b { font-weight: 600; }
 .mo-link { background: none; border: none; padding: 0; color: var(--accent); cursor: pointer; font-size: 13.5px; font-family: var(--font); }
+
+/* Raio-X do item (topo do modal de detalhe da Micro, ver muralRaioX) */
+.mo-rx-link { cursor: pointer; }
+.mo-mat.mo-rx-link:hover { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+.mo-sparkbox.mo-rx-link:hover { opacity: .8; }
+.mo-rx { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
+.mo-rx-top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
+.mo-rx-top .mo-aba:disabled { opacity: .45; cursor: not-allowed; }
+.mo-rx-fila { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin-left: auto; font-size: 13px; }
+.mo-rx-panel { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; min-width: 0; }
+.mo-rx-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-bottom: 6px; }
+.mo-rx-v { font-family: var(--mono); font-size: 18px; font-weight: 500; }
+.mo-rx-chart { display: block; width: 100%; height: auto; }
+.mo-rx-ax { font-family: var(--mono); font-size: 11px; fill: var(--text3); }
+.mo-rx-chart circle, .mo-rx-chart path { cursor: help; }
+.mo-rx-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.mo-rx-list { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13.5px; }
+.mo-rx-list li { display: flex; justify-content: space-between; gap: 10px; }
+.mo-rx-list b { font-family: var(--mono); font-weight: 500; white-space: nowrap; }
+.mo-rx-list .mo-rx-tot { border-top: 1px solid var(--border); padding-top: 6px; }
+.mo-rx-acoes { max-height: 220px; overflow-y: auto; }
+.mo-rx-acoes li { justify-content: flex-start; align-items: flex-start; }
+.mo-rx-acoes li > .ti { margin-top: 3px; color: var(--accent); }
+.mo-rx-acoes li > .ti.mo-red { color: var(--red); }
+@media (max-width: 900px) { .mo-rx-cols { grid-template-columns: minmax(0, 1fr); } .mo-rx-fila { margin-left: 0; } }
 
 @media (max-width: 1180px) {
   .mo-grid { grid-template-columns: minmax(0, 1fr); }
