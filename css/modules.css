@@ -13268,6 +13268,23 @@ span.mo-since-chip { cursor: default; }
 .mo-ex-text b { font-family: var(--mono); font-weight: 500; }
 .mo-herd { color: var(--purple); }
 .mo-why span.adm { color: var(--teal); background: var(--teal-bg); border-color: var(--teal-border); }
+.mo-filter-bar { margin: 0; flex-wrap: wrap; }
+.mo-filter-bar .mo-limpar { margin-left: auto; }
+.mo-grp > summary { list-style: none; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 10px 14px; cursor: pointer;
+  border-bottom: 1px solid var(--border); font-size: 13px; }
+.mo-grp > summary::-webkit-details-marker { display: none; }
+.mo-grp-1 > summary { background: var(--bg3); }
+.mo-grp-2 > summary { padding-left: 30px; background: color-mix(in srgb, var(--bg3) 45%, transparent); font-size: 12.5px; }
+.mo-grp > summary:hover { color: var(--text); background: var(--bg4); }
+.mo-grp-chev { color: var(--text3); transition: transform .15s; }
+.mo-grp[open] > summary .mo-grp-chev { transform: rotate(90deg); }
+.mo-grp-tit { font-weight: 600; }
+.mo-grp-res { margin-left: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.mo-grp-n { font-size: 11.5px; color: var(--text2); }
+.mo-grp-num { font-family: var(--mono); font-size: 12px; min-width: 70px; text-align: right; }
+.mo-grp-tag { font-size: 10.5px; color: var(--urgente); background: var(--urgente-bg); border: 1px solid var(--urgente-border); border-radius: 4px; padding: 0 6px; }
+.mo-grp-tag.mo-red { color: var(--red); background: var(--red-bg); border-color: var(--red-border); }
+.mo-grp-2 .mo-item { padding-left: 16px; }
 .mo-abas { display: flex; gap: 4px; }
 .mo-aba { border: 1px solid transparent; background: none; color: var(--text2); border-radius: var(--radius); padding: 5px 10px; font: inherit; font-size: 12px; font-weight: 500;
   cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }

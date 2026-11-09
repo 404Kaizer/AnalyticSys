@@ -958,19 +958,23 @@ function muralRender() {
     return;
   }
   const itens = muralItensDerivados();
-  const lista = _muralOrdenar(_muralFiltrar(itens));
+  _mo._ultItens = itens;
+  // Filtros da barra valem para KPIs e fila; fechamento, "desde a foto
+  // anterior" e Painel do time continuam mostrando o quadro inteiro.
+  const base = _muralAplicarFiltros(itens);
+  const lista = _muralOrdenar(_muralFiltrar(base));
   const ativos = lista;
   const filtros = [['todos', adm ? 'Todos' : 'Minha fila'], ['semtrat', 'Sem tratamento'], ['piorando', 'Piorando'], ['semacao', 'Sem ação'], ['vencido', 'Escalonados']];
   if (itens.some(i => i.avocado)) filtros.push(['avocados', 'Avocados']);
   const cats = [...new Set(_mo.fotos.map(f => f.categoria))].join(', ');
   const fotoInfo = _mo.fotos.map(f => `${f.categoria}: ${String(f.atual.dia).split('-').reverse().join('/')}`).join(' · ');
-  el.innerHTML = cab + _muralFechamentoHtml(itens) + _muralDesdeHtml(itens) + _muralKpisHtml(itens) + (adm ? _muralTimeHtml(itens) : '') +
+  el.innerHTML = cab + _muralFechamentoHtml(itens) + _muralDesdeHtml(itens) + _muralFiltrosHtml(itens) + _muralKpisHtml(base) + (adm ? _muralTimeHtml(itens) : '') +
     `<div class="mo-grid">
       <div class="mo-panel">
         <div class="mo-panel-head">
           <div class="mo-abas" role="tablist">
-            <button class="mo-aba${_mo.aba !== 'faixa' ? ' on' : ''}" role="tab" aria-selected="${_mo.aba !== 'faixa'}" onclick="muralAba('fila')"><i class="ti ti-flame"></i>${adm ? 'Fila de ação' : 'Minha fila · ' + _moEsc(cats)} <b>${itens.length}</b></button>
-            <button class="mo-aba${_mo.aba === 'faixa' ? ' on' : ''}" role="tab" aria-selected="${_mo.aba === 'faixa'}" onclick="muralAba('faixa')"><i class="ti ti-circle-check"></i>Na faixa <b>${_muralFaixaLinhas().length}</b></button>
+            <button class="mo-aba${_mo.aba !== 'faixa' ? ' on' : ''}" role="tab" aria-selected="${_mo.aba !== 'faixa'}" onclick="muralAba('fila')"><i class="ti ti-flame"></i>${adm ? 'Fila de ação' : 'Minha fila · ' + _moEsc(cats)} <b>${base.length}</b></button>
+            <button class="mo-aba${_mo.aba === 'faixa' ? ' on' : ''}" role="tab" aria-selected="${_mo.aba === 'faixa'}" onclick="muralAba('faixa')"><i class="ti ti-circle-check"></i>Na faixa <b>${_muralFaixaFiltradas().length}</b></button>
           </div>
           ${_mo.aba === 'faixa' ? '' : `<div class="mo-filtros">${filtros.map(([k, l]) => `<button class="mo-chip${!_mo.ids && _mo.filtro === k ? ' on' : ''}" onclick="muralFiltro('${k}')">${l}</button>`).join('')}
             ${_mo.ids ? `<button class="mo-chip on" onclick="muralFiltro('todos')">${_moEsc(_mo.idsLabel)} <i class="ti ti-x"></i></button>` : ''}
@@ -978,9 +982,11 @@ function muralRender() {
               <option value="prio"${_mo.ordem === 'prio' ? ' selected' : ''}>Ordenar: prioridade</option>
               <option value="kg"${_mo.ordem === 'kg' ? ' selected' : ''}>Ordenar: variação (kg)</option>
               <option value="residual"${_mo.ordem === 'residual' ? ' selected' : ''}>Ordenar: sem explicação (kg)</option>
-            </select></div>`}
+            </select>
+            <button class="btn btn-sm" onclick="muralGruposTodos(true)" title="Expandir todos os grupos"><i class="ti ti-arrows-maximize"></i></button>
+            <button class="btn btn-sm" onclick="muralGruposTodos(false)" title="Recolher todos os grupos"><i class="ti ti-arrows-minimize"></i></button></div>`}
         </div>
-        ${_mo.aba === 'faixa' ? _muralFaixaHtml() : `<div class="mo-queue">${ativos.map(_muralItemHtml).join('') || '<div class="empty-state" style="padding:28px"><p>Nada nesta visão.</p></div>'}</div>`}
+        ${_mo.aba === 'faixa' ? _muralFaixaHtml() : `<div class="mo-queue">${_muralFilaHtml(ativos)}</div>`}
         <div class="mo-foot-note mo-hint">Janela móvel de ${MURAL_JANELA_DIAS} dias até ontem · Fotos: ${_moEsc(fotoInfo)}</div>
       </div>
       <div class="mo-aside">
@@ -991,6 +997,177 @@ function muralRender() {
           <p class="mo-hint" style="grid-column:1/-1;margin:6px 0 0">Ação é comentar ou abrir ocorrência; o comentário renova o prazo uma vez. Prazo vencido, ou ocorrência aberta com a variação crescendo, escalona ao ADM. Nenhum prazo passa do fechamento.</p></div></div>
       </div>
     </div>`;
+}
+
+// ── Filtros (mesmo visual e comportamento dos da Visão Micro) ─────────────
+// Multisseleção com busca, Limpar/Cancelar/Aplicar. Estado próprio do Mural
+// (não mexe no _microFilter da Micro). Os filtros de dimensão (regional,
+// central, categoria, material, dono, tipo) valem também para "Na faixa".
+const MURAL_FILTROS = [
+  { k: 'regional',  label: 'Regional',  icon: 'ti-users-group',         dim: true,  de: i => i.regional || '—' },
+  { k: 'central',   label: 'Central',   icon: 'ti-building-warehouse',  dim: true,  de: i => i.central },
+  { k: 'categoria', label: 'Categoria', icon: 'ti-tag',                 dim: true,  de: i => i.categoriaFoto || i.categoria },
+  { k: 'material',  label: 'Material',  icon: 'ti-box',                 dim: true,  de: i => i.material },
+  { k: 'nivel',     label: 'Nível',     icon: 'ti-heartbeat',           dim: false, de: i => i.nivel,
+    nome: v => (MURAL_NIVEL[v] || {}).label || v, ordem: ['critico', 'urgente', 'atencao'] },
+  { k: 'tipo',      label: 'Tipo',      icon: 'ti-arrows-diff',         dim: true,  de: i => i.v < 0 ? 'desfalque' : 'sobra',
+    nome: v => v === 'desfalque' ? 'Desfalque' : 'Sobra', ordem: ['desfalque', 'sobra'] },
+  { k: 'formato',   label: 'Formato',   icon: 'ti-chart-line',          dim: false, de: i => i.formato, nome: v => MURAL_FORMATO_LABEL[v] || v },
+  { k: 'status',    label: 'Situação',  icon: 'ti-progress-check',      dim: false, de: i => i.status, nome: v => (MURAL_STATUS[v] || {}).label || v,
+    ordem: ['escalonado', 'semAcao', 'novo', 'tratamento'] },
+  { k: 'dono',      label: 'Dono',      icon: 'ti-user',                dim: true,  de: i => i.avocado ? 'ADM' : i.dono.nome, soAdm: true }
+];
+_mo.f = Object.fromEntries(MURAL_FILTROS.map(x => [x.k, new Set()]));
+_mo.fPend = null; _mo.fAberto = null; _mo.fBusca = '';
+_mo.grupo = 'regional'; _mo.abertos = new Map();
+
+function _muralFiltroDef(k) { return MURAL_FILTROS.find(x => x.k === k); }
+function _muralFiltrosAtivos() { return MURAL_FILTROS.some(x => _mo.f[x.k].size); }
+
+// Linha da aba "Na faixa" no mesmo formato que os filtros esperam.
+function _muralFaixaComoItem(l) { return { regional: l.regional, central: l.central, categoriaFoto: l.categoria, material: l.material, v: l.v, dono: { nome: l.dono } }; }
+
+function _muralAplicarFiltros(itens, soDimensao) {
+  return itens.filter(i => MURAL_FILTROS.every(x => {
+    if (!_mo.f[x.k].size || (soDimensao && !x.dim)) return true;
+    return _mo.f[x.k].has(x.de(i));
+  }));
+}
+
+function _muralOpcoes(k, itens) {
+  const def = _muralFiltroDef(k);
+  const vals = new Set(itens.map(def.de));
+  if (def.dim) _muralFaixaLinhas().forEach(l => vals.add(def.de(_muralFaixaComoItem(l))));
+  const arr = [...vals].filter(v => v != null && v !== '');
+  return def.ordem ? def.ordem.filter(v => vals.has(v)) : arr.sort((a, b) => String(a).localeCompare(String(b), 'pt-BR'));
+}
+
+function _muralFiltrosHtml(itens) {
+  const adm = _moEhAdm();
+  const grupos = [['regional', 'ti-users-group', 'Por Regional — regional → central → itens'],
+                  ['central', 'ti-building-warehouse', 'Por Central — central → itens'],
+                  ['material', 'ti-box', 'Por Material — material → centrais']];
+  const filtros = MURAL_FILTROS.filter(x => !x.soAdm || adm).map(x => {
+    const ap = _mo.f[x.k], aberto = _mo.fAberto === x.k;
+    const nome = x.nome || (v => v);
+    const rotulo = ap.size === 1 ? nome([...ap][0]) : ap.size > 1 ? `${x.label} (${ap.size})` : x.label;
+    let opcoes = '';
+    if (aberto) {
+      const marc = _mo.fPend || ap, q = _mo.fBusca.toLowerCase();
+      const lista = _muralOpcoes(x.k, itens).filter(v => !q || String(nome(v)).toLowerCase().includes(q));
+      opcoes = lista.length ? lista.map((v, n) => `<label class="micro-filter-option" for="mof-${x.k}-${n}">
+          <input type="checkbox" id="mof-${x.k}-${n}" ${marc.has(v) ? 'checked' : ''} data-v="${_moEsc(v)}" onchange="muralFiltroMarcar('${x.k}', this)">
+          <span class="micro-filter-option-label" title="${_moEsc(nome(v))}">${_moEsc(nome(v))}</span></label>`).join('')
+        : '<div style="padding:12px 10px;color:var(--text3);font-size:12px;text-align:center">Nenhum resultado</div>';
+    }
+    return `<div class="micro-filter-group mo-fg" data-k="${x.k}">
+      <button class="micro-filter-trigger${ap.size ? ' active' : ''}" onclick="muralFiltroAbrir('${x.k}')"><i class="ti ${x.icon}"></i><span>${_moEsc(rotulo)}</span><i class="ti ti-chevron-down micro-filter-chev${aberto ? ' open' : ''}"></i></button>
+      <div class="micro-filter-dropdown${aberto ? ' open' : ''}">
+        <div class="micro-filter-search-wrap"><i class="ti ti-search"></i>
+          <input class="micro-filter-search" id="mof-busca-${x.k}" type="text" placeholder="Buscar ${x.label.toLowerCase()}…" value="${_moEsc(aberto ? _mo.fBusca : '')}" oninput="muralFiltroBuscar('${x.k}', this.value)"></div>
+        <div class="micro-filter-options" id="mof-op-${x.k}">${opcoes}</div>
+        <div class="micro-filter-footer">
+          <button class="btn btn-filter-clear" onclick="muralFiltroLimpar('${x.k}')"><i class="ti ti-filter-off"></i> Limpar</button>
+          <button class="btn" onclick="muralFiltroFechar()"><i class="ti ti-x"></i> Cancelar</button>
+          <button class="btn btn-primary" onclick="muralFiltroAplicar('${x.k}')"><i class="ti ti-check"></i> Aplicar</button>
+        </div></div></div>`;
+  }).join('');
+  return `<div class="micro-filter-bar mo-filter-bar">
+    <div class="micro-group-mode">${grupos.map(([g, i, t]) => `<button class="${_mo.grupo === g ? 'active' : ''}" onclick="muralGrupo('${g}')" title="${t}" aria-label="${t}"><i class="ti ${i}"></i></button>`).join('')}</div>
+    <div class="micro-filter-divider"></div>
+    ${filtros}
+    ${_muralFiltrosAtivos() ? '<button class="btn btn-sm mo-limpar" onclick="muralFiltrosLimparTodos()"><i class="ti ti-filter-off"></i> Limpar filtros</button>' : ''}
+  </div>`;
+}
+
+function muralFiltroAbrir(k) {
+  if (_mo.fAberto === k) return muralFiltroFechar();
+  _mo.fAberto = k; _mo.fPend = new Set(_mo.f[k]); _mo.fBusca = '';
+  muralRender();
+  document.getElementById(`mof-busca-${k}`)?.focus();
+}
+function muralFiltroFechar() { _mo.fAberto = null; _mo.fPend = null; _mo.fBusca = ''; muralRender(); }
+function muralFiltroMarcar(k, el) { if (!_mo.fPend) return; el.checked ? _mo.fPend.add(el.dataset.v) : _mo.fPend.delete(el.dataset.v); }
+// Busca só redesenha a lista de opções, para o campo não perder o foco.
+function muralFiltroBuscar(k, q) {
+  _mo.fBusca = q;
+  const box = document.getElementById(`mof-op-${k}`); if (!box) return;
+  const tmp = document.createElement('div'); tmp.innerHTML = _muralFiltrosHtml(_mo._ultItens || []);
+  const novo = tmp.querySelector(`#mof-op-${k}`); if (novo) box.innerHTML = novo.innerHTML;
+}
+function muralFiltroAplicar(k) { _mo.f[k] = new Set(_mo.fPend || []); muralFiltroFechar(); }
+function muralFiltroLimpar(k) { _mo.f[k] = new Set(); muralFiltroFechar(); }
+function muralFiltrosLimparTodos() { MURAL_FILTROS.forEach(x => { _mo.f[x.k] = new Set(); }); _mo.ids = null; _mo.filtro = 'todos'; muralFiltroFechar(); }
+// Clique fora do dropdown aberto = Cancelar (como na Micro).
+document.addEventListener('click', e => {
+  if (!_mo.fAberto) return;
+  if (e.target.closest?.('.mo-fg')) return;   // dentro do próprio filtro
+  if (!e.target.isConnected) return;          // botão que o próprio render acabou de trocar
+  muralFiltroFechar();
+});
+
+// ── Três visões (como na Micro): por Regional, por Central, por Material ──
+// Grupos ordenados pela maior prioridade de dentro: o grupo mais urgente
+// vem primeiro, e os itens seguem a ordenação escolhida. Abertos por
+// padrão: os 3 primeiros grupos (e, na visão Regional, as 2 primeiras
+// centrais de cada regional aberta); o resto fica recolhido.
+function _muralResumoGrupo(its) {
+  const vLiq = its.reduce((s, i) => s + i.v, 0), rLiq = its.reduce((s, i) => s + (i.rs || 0), 0);
+  const cont = k => its.filter(i => i.nivel === k).length;
+  const esc = its.filter(i => i.status === 'escalonado').length, semT = its.filter(i => i.semTratamento).length;
+  const cor = v => v < -0.05 ? 'var(--red)' : v > 0.05 ? 'var(--amber)' : 'var(--text2)';
+  return `<span class="mo-grp-n">${its.length} ite${its.length === 1 ? 'm' : 'ns'}</span>
+    ${['critico', 'urgente', 'atencao'].map(k => cont(k) ? `<span class="mo-lvl" style="--lv:${MURAL_NIVEL[k].cor}">${cont(k)} ${MURAL_NIVEL[k].label}</span>` : '').join('')}
+    ${esc ? `<span class="mo-grp-tag mo-red">${esc} escalonado${esc > 1 ? 's' : ''}</span>` : ''}
+    ${semT ? `<span class="mo-grp-tag">${semT} sem tratamento</span>` : ''}
+    <span class="mo-grp-num" style="color:${cor(vLiq)}">${_moPesoSinal(vLiq)}</span>
+    <span class="mo-grp-num mo-hint">${_moRs(rLiq)}</span>`;
+}
+
+function _muralAgrupar(its, chave) {
+  const m = new Map();
+  its.forEach(i => { const k = chave(i); if (!m.has(k)) m.set(k, []); m.get(k).push(i); });
+  return [...m].sort((a, b) => Math.max(...b[1].map(i => i.prioridade)) - Math.max(...a[1].map(i => i.prioridade)));
+}
+
+function _muralGrupoAberto(key, padrao) { return _mo.abertos.has(key) ? _mo.abertos.get(key) : padrao; }
+
+function _muralGrupoHtml(key, titulo, sub, its, aberto, corpo, nivel) {
+  return `<details class="mo-grp mo-grp-${nivel}" data-g="${_moEsc(key)}" ${aberto ? 'open' : ''} ontoggle="muralGrupoToggle(this)">
+    <summary><i class="ti ti-chevron-right mo-grp-chev"></i><span class="mo-grp-tit">${_moEsc(titulo)}</span>${sub ? `<span class="mo-hint">${_moEsc(sub)}</span>` : ''}
+      <span class="mo-grp-res">${_muralResumoGrupo(its)}</span></summary>
+    <div class="mo-grp-corpo">${corpo}</div></details>`;
+}
+
+function _muralFilaHtml(lista) {
+  if (!lista.length) return '<div class="empty-state" style="padding:28px"><p>Nada nesta visão.</p></div>';
+  const g = _mo.grupo;
+  if (g === 'material') {
+    return _muralAgrupar(lista, i => i.material).map(([mat, its], n) => {
+      const key = 'mat|' + mat;
+      return _muralGrupoHtml(key, mat, `${its[0].categoriaFoto} · ${new Set(its.map(i => i.central)).size} central(is)`, its, _muralGrupoAberto(key, n < 3), its.map(_muralItemHtml).join(''), 1);
+    }).join('');
+  }
+  if (g === 'central') {
+    return _muralAgrupar(lista, i => i.central).map(([cen, its], n) => {
+      const key = 'cen|' + cen;
+      return _muralGrupoHtml(key, cen, `Reg. ${its[0].regional}`, its, _muralGrupoAberto(key, n < 3), its.map(_muralItemHtml).join(''), 1);
+    }).join('');
+  }
+  return _muralAgrupar(lista, i => i.regional || '—').map(([reg, its], n) => {
+    const key = 'reg|' + reg;
+    const centrais = _muralAgrupar(its, i => i.central).map(([cen, ic], m) => {
+      const k2 = 'reg|' + reg + '|' + cen;
+      return _muralGrupoHtml(k2, cen, '', ic, _muralGrupoAberto(k2, n < 3 && m < 2), ic.map(_muralItemHtml).join(''), 2);
+    }).join('');
+    return _muralGrupoHtml(key, `Regional ${reg}`, `${new Set(its.map(i => i.central)).size} central(is)`, its, _muralGrupoAberto(key, n < 3), centrais, 1);
+  }).join('');
+}
+
+function muralGrupo(g) { _mo.grupo = g; muralRender(); }
+function muralGrupoToggle(el) { _mo.abertos.set(el.dataset.g, el.open); }
+function muralGruposTodos(abrir) {
+  document.querySelectorAll('#mural-root details.mo-grp').forEach(d => { d.open = abrir; _mo.abertos.set(d.dataset.g, abrir); });
 }
 
 // ── Aba "Na faixa" ────────────────────────────────────────────────────────
@@ -1011,8 +1188,12 @@ function _muralFaixaLinhas() {
   return linhas.sort((a, b) => b.pct - a.pct);
 }
 
+function _muralFaixaFiltradas() {
+  return _muralFaixaLinhas().filter(l => _muralAplicarFiltros([_muralFaixaComoItem(l)], true).length);
+}
+
 function _muralFaixaHtml() {
-  const linhas = _muralFaixaLinhas();
+  const linhas = _muralFaixaFiltradas();
   const semDado = _mo.fotos.some(f => !Array.isArray(f.atual.payload?.faixa));
   if (!linhas.length) return `<div class="empty-state" style="padding:28px"><p>${semDado
     ? 'As fotos atuais ainda não trazem os itens na faixa. A próxima foto de cada dono já traz.'
